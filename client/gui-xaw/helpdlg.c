@@ -10,14 +10,13 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
-#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
 
 #include <X11/Intrinsic.h>
 #include <X11/StringDefs.h>
@@ -817,12 +816,8 @@ static void help_update_wonder(const struct help_item *pitem,
       xaw_set_label(help_improvement_req_data,
 		    advances[imp->tech_req].name);
     }
-    if (tech_exists(imp->obsolete_by)) {
-      xaw_set_label(help_wonder_obsolete_data,
-		    advances[imp->obsolete_by].name);
-    } else {
-      xaw_set_label(help_wonder_obsolete_data, _("(Never)"));
-    }
+    xaw_set_label(help_wonder_obsolete_data,
+		  advances[imp->obsolete_by].name);
     create_tech_tree(help_tech_tree, 0, imp->tech_req, 3);
   }
   else {
@@ -928,7 +923,7 @@ static void help_update_tech(const struct help_item *pitem, char *title, int i)
 		get_unit_type(j)->name);
     } unit_type_iterate_end;
 
-    for (j = 0; j < game.num_tech_types; j++) {
+    for(j=0; j<game.num_tech_types; ++j) {
       if(i==advances[j].req[0]) {
 	if(advances[j].req[1]==A_NONE)
 	  sprintf(buf+strlen(buf), _("Allows %s.\n"), 
@@ -1106,9 +1101,7 @@ static void help_update_dialog(const struct help_item *pitem)
 
   /* figure out what kind of item is required for pitem ingo */
 
-  for (top = pitem->topic; *top == ' '; top++) {
-    /* nothing */
-  }
+  for(top=pitem->topic; *top==' '; ++top);
 
   switch(pitem->type) {
   case HELP_IMPROVEMENT:
@@ -1162,7 +1155,7 @@ static int help_tree_destroy_children(Widget w)
 		XtNnumChildren, &cnt,
 		NULL);
 
-  for (; cnt > 0; cnt--, children++) {
+  for(; cnt>0; --cnt, ++children) {
     if(XtIsSubclass(*children, commandWidgetClass)) {
       Widget par;
       XtVaGetValues(*children, XtNtreeParent, &par, NULL);

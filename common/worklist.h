@@ -13,6 +13,7 @@
 #ifndef FC__WORKLIST_H
 #define FC__WORKLIST_H
 
+#include "genlist.h"
 #include "shared.h"		/* MAX_LEN_NAME */
 
 #define MAX_LEN_WORKLIST 16
@@ -45,10 +46,5 @@ void worklist_advance(struct worklist *pwl);
 
 void copy_worklist(struct worklist *dst, const struct worklist *src);
 void worklist_remove(struct worklist *pwl, int idx);
-bool worklist_append(struct worklist *pwl, int id, bool is_unit);
-bool worklist_insert(struct worklist *pwl, int id, bool is_unit, int idx);
-bool are_worklists_equal(const struct worklist *wlist1,
-			 const struct worklist *wlist2);
-
 
 #endif /* FC__WORKLIST_H */

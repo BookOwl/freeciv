@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -20,8 +19,8 @@
 #include <string.h>
 
 #ifdef GENERATING_MAC  /* mac header(s) */
-#include <Controls.h>
 #include <Dialogs.h>
+#include <Controls.h>
 #endif
 
 #include "fcintl.h"
@@ -56,6 +55,9 @@ int main(int argc, char *argv[])
   /* initialize server */
   srv_init();
 
+  /* disallow running as root -- too dangerous */
+  dont_run_as_root(argv[0], "freeciv_server");
+
   /* parse command-line arguments... */
 
 #ifdef GENERATING_MAC
@@ -89,8 +91,6 @@ int main(int argc, char *argv[])
 	showhelp = TRUE;
 	break;
       }
-    } else if ((option = get_option("--bind", argv, &inx, argc))) {
-      srvarg.bind_addr = option;
     } else if ((option = get_option("--read", argv, &inx, argc)))
       srvarg.script_filename = option;
     else if ((option = get_option("--quitidle", argv, &inx, argc))) {
@@ -127,7 +127,6 @@ int main(int argc, char *argv[])
 
   if (showhelp) {
     fprintf(stderr, _("Usage: %s [option ...]\nValid options are:\n"), argv[0]);
-    fprintf(stderr, _("  -b  --bind ADDR\tListen for clients on ADDR\n"));
 #ifdef DEBUG
     fprintf(stderr, _("  -d, --debug NUM\tSet debug log level (0 to 4,"
 		      " or 4:file1,min,max:...)\n"));
@@ -139,7 +138,7 @@ int main(int argc, char *argv[])
     fprintf(stderr, _("  -h, --help\t\tPrint a summary of the options\n"));
     fprintf(stderr, _("  -i, --info INFO\tExtra info for the metaserver\n"));
     fprintf(stderr, _("  -l, --log FILE\tUse FILE as logfile\n"));
-    fprintf(stderr, _("  -m, --meta\t\tNotify metaserver and send server's info\n"));
+    fprintf(stderr, _("  -m, --meta\t\tnotify metaserver and send server's info\n"));
     fprintf(stderr, _("  -M, --Metaserver ADDR\tSet ADDR as metaserver address\n"));
 
     fprintf(stderr, _("  -p, --port PORT\tListen for clients on port PORT\n"));
@@ -150,13 +149,8 @@ int main(int argc, char *argv[])
     exit(EXIT_SUCCESS);
   }
 
-  /* disallow running as root -- too dangerous */
-  dont_run_as_root(argv[0], "freeciv_server");
-
   /* have arguments, call the main server loop... */
   srv_main();
-
-  /* Technically, we won't ever get here. We exit via server_quit. */
 
   /* suppress warnings */
   logdebug_suppress_warning;

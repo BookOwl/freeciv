@@ -109,12 +109,6 @@ enum unit_flag_id {
   F_ADD_TO_CITY,      /* unit can add to city population */
   F_FANATIC,          /* Only Fundamentalist government can build
 			 these units */
-  F_GAMELOSS,         /* Losing this unit means losing the game */
-  F_UNIQUE,           /* A player can only have one unit of this type */
-  F_UNBRIBABLE,       /* Cannot be bribed */
-  F_UNDISBANDABLE,    /* Cannot be disbanded, won't easily go away */
-  F_SUPERSPY,         /* Always wins diplomatic contests */
-  F_NOHOME,           /* Has no homecity */
   F_LAST
 };
 #define F_MAX 64
@@ -173,7 +167,6 @@ struct unit_type {
   int defense_strength;
   int move_rate;
   int tech_requirement;
-  int impr_requirement;
   int vision_range;
   int transport_capacity;
   int hp;
@@ -187,7 +180,7 @@ struct unit_type {
   int happy_cost;  /* unhappy people in home city */
   int shield_cost; /* normal upkeep cost */
   int food_cost;   /* settler food cost */
-  int gold_cost;   /* gold upkeep */
+  int gold_cost;   /* gold upkeep (n/a now, maybe later) */
 
   int paratroopers_range; /* only valid for F_PARATROOPERS */
   int paratroopers_mr_req;
@@ -227,8 +220,8 @@ int utype_happy_cost(struct unit_type *ut, struct government *g);
 int utype_gold_cost(struct unit_type *ut, struct government *g);
 
 int can_upgrade_unittype(struct player *pplayer, Unit_Type_id id);
-int unit_upgrade_price(const struct player * const pplayer,
-		       const Unit_Type_id from, const Unit_Type_id to);
+int unit_upgrade_price(struct player *pplayer, Unit_Type_id from,
+		       Unit_Type_id to);
 
 Unit_Type_id find_unit_type_by_name(const char *s);
 
@@ -245,8 +238,8 @@ void role_unit_precalcs(void);
 int num_role_units(int role);
 Unit_Type_id get_role_unit(int role, int index);
 Unit_Type_id best_role_unit(struct city *pcity, int role);
-Unit_Type_id best_role_unit_for_player(struct player *pplayer, int role);
 
+void unit_type_free(Unit_Type_id id);
 void unit_types_free(void);
 
 #define unit_type_iterate(m_i)                                                \

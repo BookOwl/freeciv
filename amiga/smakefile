@@ -69,7 +69,7 @@ LNFLAGS0 = RESOPT LINK ${DEBFLAGS} ${CPU_MATH} LINK NOICONS NOVERSION TO
 LNFLAGS1 = WITH
 
 ####################################################################
-##### Any stuff after this line should be compiler independent #####
+##### Any stuff after this line should be compiler independant #####
 ####################################################################
 
 OBJDIR  = ${OBJDIR1}/
@@ -86,17 +86,17 @@ COMMONOBJS = ${OBJDIR}common/astring.o ${OBJDIR}common/capability.o ${OBJDIR}com
  ${OBJDIR}common/shared.o ${OBJDIR}common/spaceship.o ${OBJDIR}common/support.o ${OBJDIR}common/tech.o \
  ${OBJDIR}common/timing.o ${OBJDIR}common/unit.o ${OBJDIR}common/unittype.o ${OBJDIR}common/version.o \
  ${OBJDIR}common/worklist.o \
- ${OBJDIR}common/aicore/cm.o
+
 COMMONDIRS = ${INC}`cd` ${INCDIRS} ${INC}${FREECIV_DIR}common ${INC}${FREECIV_DIR}common/aicore
 
 AIOBJS = ${OBJDIR}ai/advattitude.o ${OBJDIR}ai/advdomestic.o ${OBJDIR}ai/advforeign.o \
  ${OBJDIR}ai/advisland.o ${OBJDIR}ai/advleader.o ${OBJDIR}ai/advmilitary.o ${OBJDIR}ai/advscience.o \
- ${OBJDIR}ai/advspace.o ${OBJDIR}ai/advtrade.o ${OBJDIR}ai/aiair.o ${OBJDIR}ai/aicity.o ${OBJDIR}ai/aidata.o \
+ ${OBJDIR}ai/advspace.o ${OBJDIR}ai/advtrade.o ${OBJDIR}ai/aicity.o ${OBJDIR}ai/aidata.o \
  ${OBJDIR}ai/aihand.o ${OBJDIR}ai/ailog.o ${OBJDIR}ai/aitech.o ${OBJDIR}ai/aitools.o ${OBJDIR}ai/aiunit.o \
- ${OBJDIR}ai/aidiplomat.o
+ 
 AIDIRS = ${INC}`cd` ${INCDIRS} ${INC}${FREECIV_DIR}common ${INC}${FREECIV_DIR}server
 
-SERVEROBJS = $(OBJDIR)server/airgoto.o ${OBJDIR}server/autoattack.o ${OBJDIR}server/barbarian.o ${OBJDIR}server/cityhand.o \
+SERVEROBJS = ${OBJDIR}server/autoattack.o ${OBJDIR}server/barbarian.o ${OBJDIR}server/cityhand.o \
  ${OBJDIR}server/citytools.o ${OBJDIR}server/cityturn.o ${OBJDIR}server/civserver.o \
  ${OBJDIR}server/console.o ${OBJDIR}server/diplhand.o ${OBJDIR}server/diplomats.o ${OBJDIR}server/gamehand.o \
  ${OBJDIR}server/gamelog.o ${OBJDIR}server/gotohand.o ${OBJDIR}server/handchat.o \
@@ -109,7 +109,7 @@ SERVERDIRS = ${INC}`cd` ${INCDIRS} ${INC}${FREECIV_DIR}server ${INC}${FREECIV_DI
 
 AMIGASERVEROBJS = ${OBJDIR}amigaserver.o
 
-CLIENTOBJS = ${OBJDIR}client/attribute.o ${OBJDIR}client/audio.o ${OBJDIR}client/audio_amiga.o ${OBJDIR}client/audio_none.o ${OBJDIR}client/chatline_common.o ${OBJDIR}client/citydlg_common.o ${OBJDIR}client/cityrepdata.o ${OBJDIR}client/civclient.o ${OBJDIR}client/climap.o ${OBJDIR}client/climisc.o \
+CLIENTOBJS = ${OBJDIR}client/attribute.o ${OBJDIR}client/audio.o ${OBJDIR}client/audio_amiga.o ${OBJDIR}client/audio_none.o ${OBJDIR}client/chatline_common.o ${OBJDIR}client/citydlg_common.o ${OBJDIR}client/cityrepdata.o ${OBJDIR}client/civclient.o ${OBJDIR}client/climisc.o \
  ${OBJDIR}client/clinet.o ${OBJDIR}client/control.o ${OBJDIR}client/goto.o ${OBJDIR}client/helpdata.o ${OBJDIR}client/mapctrl_common.o ${OBJDIR}client/mapview_common.o ${OBJDIR}client/messagewin_common.o \
  ${OBJDIR}client/options.o ${OBJDIR}client/packhand.o ${OBJDIR}client/plrdlg_common.o ${OBJDIR}client/repodlgs_common.o ${OBJDIR}client/tilespec.o ${OBJDIR}client/agents/agents.o ${OBJDIR}client/agents/cma_core.o ${OBJDIR}client/agents/cma_fec.o
 CLIENTDIRS = ${INC}`cd` ${INCDIRS} ${INC}${FREECIV_DIR}client ${INC}${FREECIV_DIR}common ${INC}${FREECIV_DIR}common/aicore \
@@ -688,7 +688,7 @@ ${LOCALEDIR}sv.mo: ${FREECIV_DIR}po/sv.po
 
 # The installation process
 
-install: dirs civserver civclient locale
+install: dirs civserver civclient
   delete ${DESTDIR}/\#? ALL
   copy ReadMe ${DESTDIR}
   copy ReadMe.info ${DESTDIR}
@@ -702,17 +702,17 @@ install: dirs civserver civclient locale
   copy Freeciv.start.info ${DESTDIR}
   copy Icons ${DESTDIR}/Icons all
   copy Icons.info ${DESTDIR}
-  copy locale/\#? ${DESTDIR}/locale
   copy ${FREECIV_DIR}data/\#?.(ilbm|txt|sav|serv) ${DESTDIR}/data
   copy ${FREECIV_DIR}data/trident.tilespec ${DESTDIR}/data
   copy ${FREECIV_DIR}data/trident_shields.tilespec ${DESTDIR}/data
   copy ${FREECIV_DIR}data/civ1/\#?.ruleset ${DESTDIR}/data/civ1
   copy ${FREECIV_DIR}data/civ2/\#?.ruleset ${DESTDIR}/data/civ2
-  copy ${FREECIV_DIR}data/classic/\#?.ruleset ${DESTDIR}/data/classic
   copy ${FREECIV_DIR}data/default/\#?.ruleset ${DESTDIR}/data/default
+  copy ${FREECIV_DIR}data/history/\#?.ruleset ${DESTDIR}/data/history
   copy ${FREECIV_DIR}data/nation/\#?.ruleset ${DESTDIR}/data/nation
   copy ${FREECIV_DIR}data/misc/\#?.(ilbm|spec) ${DESTDIR}/data/misc
   copy ${FREECIV_DIR}data/scenario/\#?.sav ${DESTDIR}/data/scenario
+  copy ${FREECIV_DIR}data/stdsounds/\#?.(ilbm|ruleset|spec) ${DESTDIR}/data/stdsounds
   copy ${FREECIV_DIR}data/trident/\#?.(ilbm|ruleset|spec) ${DESTDIR}/data/trident
   copy ${FREECIV_DIR}README ${DESTDIR}/README.org
   copy ${FREECIV_DIR}*(README.~(bak\#?)|BUGS|TODO|HOWTO\#?|NEWS|AUTHORS|PEOPLE|HOWTOPLAY|COPYING|INSTALL) ${DESTDIR}

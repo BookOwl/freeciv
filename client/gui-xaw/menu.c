@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -39,7 +38,6 @@
 #include "dialogs.h"
 #include "finddlg.h"
 #include "gotodlg.h"
-#include "gui_main.h"
 #include "gui_stuff.h"
 #include "helpdlg.h"
 #include "mapctrl.h" 
@@ -129,11 +127,7 @@ static struct MenuEntry kingdom_menu_entries[]={
 
 static struct MenuEntry view_menu_entries[]={
     { { N_("Map Grid"), 0             }, "ctl-g", MENU_VIEW_SHOW_MAP_GRID, 0 },
-    { { N_("National Borders"), 0     }, "ctl-b",
-      MENU_VIEW_SHOW_NATIONAL_BORDERS, 0 },
     { { N_("City Names"), 0           }, "ctl-n", MENU_VIEW_SHOW_CITY_NAMES, 0 },
-    { { N_("City Growth"), 0          }, "ctl-r",
-      MENU_VIEW_SHOW_CITY_GROWTH, 0 },
     { { N_("City Productions"), 0     }, "ctl-p", MENU_VIEW_SHOW_CITY_PRODUCTIONS, 0 },
     { { 0                             },      "", MENU_SEPARATOR_LINE, 0 },
     { { N_("Terrain"), 0              },      "", MENU_VIEW_SHOW_TERRAIN, 0 },
@@ -186,7 +180,6 @@ static struct MenuEntry order_menu_entries[]={
     { { N_("Patrol"), 0               },     "q", MENU_ORDER_PATROL, 0 },
     { { N_("Go to"), 0                },     "g", MENU_ORDER_GOTO, 0 },
     { { N_("Go/Airlift to City"), 0   },     "l", MENU_ORDER_GOTO_CITY, 0 },
-    { { N_("Return to nearest city"), 0 },    "", MENU_ORDER_RETURN, 0 },
     { { 0                             },      "", MENU_SEPARATOR_LINE, 0 },
     { { N_("Disband Unit"), 0         },     "D", MENU_ORDER_DISBAND, 0 },
     { { N_("Help Build Wonder"), 0    },     "b", MENU_ORDER_BUILD_WONDER, 0 },
@@ -250,7 +243,7 @@ static char *menu_entry_text(enum MenuIndex menu, int ent, int var, char *terr);
 *****************************************************************/
 void update_menus(void)
 {
-  if (!can_client_change_view()) {
+  if(get_client_state()!=CLIENT_GAME_RUNNING_STATE) {
     XtSetSensitive(menus[MENU_REPORT]->button, False);
     XtSetSensitive(menus[MENU_ORDER]->button, False);
     XtSetSensitive(menus[MENU_VIEW]->button, False);
@@ -279,19 +272,10 @@ void update_menus(void)
     }
 
     XtSetSensitive(menus[MENU_REPORT]->button, True);
-    XtSetSensitive(menus[MENU_ORDER]->button,
-		   punit && can_client_issue_orders());
+    XtSetSensitive(menus[MENU_ORDER]->button, (punit != NULL));
     XtSetSensitive(menus[MENU_VIEW]->button, True);
     XtSetSensitive(menus[MENU_KINGDOM]->button, True);
 
-    menu_entry_sensitive(MENU_KINGDOM, MENU_KINGDOM_RATES,
-                         can_client_issue_orders());
-    menu_entry_sensitive(MENU_KINGDOM, MENU_KINGDOM_WORKLISTS,
-                         can_client_issue_orders());
-    menu_entry_sensitive(MENU_KINGDOM, MENU_KINGDOM_REVOLUTION,
-                         can_client_issue_orders());
-    menu_entry_sensitive(MENU_VIEW, MENU_VIEW_SHOW_CITY_GROWTH,
-			 draw_city_names);
     menu_entry_sensitive(MENU_VIEW, MENU_VIEW_SHOW_TERRAIN, 1);
     menu_entry_sensitive(MENU_VIEW, MENU_VIEW_SHOW_COASTLINE, !draw_terrain);
     menu_entry_sensitive(MENU_VIEW, MENU_VIEW_SHOW_ROADS_RAILS, 1);
@@ -317,7 +301,7 @@ void update_menus(void)
     menu_entry_sensitive(MENU_REPORT, MENU_REPORT_SPACESHIP,
 			 (game.player_ptr->spaceship.state!=SSHIP_NONE));
 
-    if (punit && can_client_issue_orders()) {
+    if(punit) {
       enum tile_terrain_type  ttype;
       struct tile_type *      tinfo;
 
@@ -363,8 +347,6 @@ void update_menus(void)
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_AUTO_ATTACK, 
 			   (can_unit_do_auto(punit)
 			    && !unit_flag(punit, F_SETTLERS)));
-      menu_entry_sensitive(MENU_ORDER, MENU_ORDER_DISBAND,
-			   !unit_flag(punit, F_UNDISBANDABLE));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_AUTO_EXPLORE, 
 			   can_unit_do_activity(punit, ACTIVITY_EXPLORE));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_CONNECT, 
@@ -377,8 +359,6 @@ void update_menus(void)
 			   unit_can_help_build_wonder_here(punit));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_TRADEROUTE,
 			   unit_can_est_traderoute_here(punit));
-      menu_entry_sensitive(MENU_ORDER, MENU_ORDER_RETURN,
-			   !(is_air_unit(punit) || is_heli_unit(punit)));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_DIPLOMAT_DLG,
 			   (is_diplomat_unit(punit)
 			    && diplomat_can_do_action(punit, DIPLOMAT_ANY_ACTION,
@@ -479,7 +459,7 @@ static void game_menu_callback(Widget w, XtPointer client_data,
     disconnect_from_server();
     break;
   case MENU_GAME_QUIT:
-    xaw_ui_exit();
+    exit(EXIT_SUCCESS);
     break;
   }
 }
@@ -520,16 +500,8 @@ static void view_menu_callback(Widget w, XtPointer client_data,
   case MENU_VIEW_SHOW_MAP_GRID:
     key_map_grid_toggle();
     break;
-  case MENU_VIEW_SHOW_NATIONAL_BORDERS:
-    key_map_borders_toggle();
-    break;
   case MENU_VIEW_SHOW_CITY_NAMES:
     key_city_names_toggle();
-    menu_entry_sensitive(MENU_VIEW, MENU_VIEW_SHOW_CITY_GROWTH,
-			 draw_city_names);
-    break;
-  case MENU_VIEW_SHOW_CITY_GROWTH:
-    key_city_growth_toggle();
     break;
   case MENU_VIEW_SHOW_CITY_PRODUCTIONS:
     key_city_productions_toggle();
@@ -659,11 +631,6 @@ static void orders_menu_callback(Widget w, XtPointer client_data,
   case MENU_ORDER_GOTO_CITY:
     if(get_unit_in_focus())
       popup_goto_dialog();
-    break;
-  case MENU_ORDER_RETURN:
-    if (get_unit_in_focus()) {
-      request_unit_return(get_unit_in_focus());
-    }
     break;
   case MENU_ORDER_DISBAND:
     key_unit_disband();
@@ -827,7 +794,7 @@ int is_menu_item_active(enum MenuIndex menu, enum MenuID id)
   struct Menu *pmenu = menus[menu];
   int i;
 
-  for (i = 0; pmenu->entries[i].id != MENU_END_OF_LIST; i++) {
+  for(i=0; pmenu->entries[i].id != MENU_END_OF_LIST; ++i) {
     if(pmenu->entries[i].id==id) {
       return XtIsSensitive(pmenu->entries[i].w);
     }
@@ -857,13 +824,13 @@ void create_menu(enum MenuIndex menu, char *name, struct MenuEntry entries[],
   /* Calculate the longest string in this menu so if the font
    * is fixed then we will know where to put the accelerator key.- Serrada */
   litem=lacel=0;
-  for (i = 0; entries[i].id != MENU_END_OF_LIST; i++) {
+  for(i=0; entries[i].id != MENU_END_OF_LIST; ++i) {
     if (entries[i].id != MENU_SEPARATOR_LINE) {
       lstr=strlen(entries[i].acel);
       if (lacel<lstr) {
 	lacel=lstr;
       }
-      for (j = 0; entries[i].text[j]; j++) {
+      for(j=0; entries[i].text[j]; ++j) {
 	xlt=_(entries[i].text[j]);
 	lstr=strlen(xlt);
 	if (strstr(xlt, "%s")) {
@@ -890,7 +857,7 @@ void create_menu(enum MenuIndex menu, char *name, struct MenuEntry entries[],
   mymenu->shell=XtCreatePopupShell("menu", simpleMenuWidgetClass, 
 				   mymenu->button, NULL, 0);
 
-  for (i = 0; entries[i].id != MENU_END_OF_LIST; i++) {
+  for(i=0; entries[i].id != MENU_END_OF_LIST; ++i) {
     if (entries[i].id == MENU_SEPARATOR_LINE) {
       entries[i].w = XtCreateManagedWidget(NULL, smeLineObjectClass, 
 					   mymenu->shell, NULL, 0);
@@ -915,7 +882,7 @@ void menu_entry_rename(enum MenuIndex menu, enum MenuID id, int var, char *terr)
   int i;
   char *item;
 
-  for (i = 0; pmenu->entries[i].id != MENU_END_OF_LIST; i++) {
+  for(i=0; pmenu->entries[i].id != MENU_END_OF_LIST; ++i) {
     if(pmenu->entries[i].id==id) {
       item=menu_entry_text(menu, i, var, terr);
       XtVaSetValues(pmenu->entries[i].w, XtNlabel, item, NULL);
@@ -932,7 +899,7 @@ void menu_entry_sensitive(enum MenuIndex menu, enum MenuID id, Bool s)
   struct Menu *pmenu = menus[menu];
   int i;
 
-  for (i = 0; pmenu->entries[i].id != MENU_END_OF_LIST; i++) {
+  for(i=0; pmenu->entries[i].id != MENU_END_OF_LIST; ++i) {
     if(pmenu->entries[i].id==id) {
       XtSetSensitive(pmenu->entries[i].w, (s ? True : False));
       return;

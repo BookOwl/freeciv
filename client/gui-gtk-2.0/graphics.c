@@ -62,7 +62,11 @@ GdkCursor *		patrol_cursor;
 ***************************************************************************/
 bool isometric_view_supported(void)
 {
+#ifdef WIN32_NATIVE
+  return FALSE;
+#else
   return TRUE;
+#endif
 }
 
 /***************************************************************************
@@ -291,9 +295,9 @@ void dtor_sprite( SPRITE *mysprite )
  Returns the filename extensions the client supports
  Order is important.
 ***************************************************************************/
-const char **gfx_fileextensions(void)
+char **gfx_fileextensions(void)
 {
-  static const char *ext[] =
+  static char *ext[] =
   {
     "png",
     "xpm",
@@ -336,20 +340,19 @@ struct Sprite *load_gfxfile(const char *filename)
 /***************************************************************************
    Deletes a sprite.  These things can use a lot of memory.
 ***************************************************************************/
-void free_sprite(SPRITE * s)
+void free_sprite(SPRITE *s)
 {
   if (s->pixmap) {
     g_object_unref(s->pixmap);
-    s->pixmap = NULL;
   }
   if (s->mask) {
     g_object_unref(s->mask);
-    s->mask = NULL;
   }
   if (s->pixbuf) {
     g_object_unref(s->pixbuf);
   }
   free(s);
+  return;
 }
 
 /***************************************************************************
@@ -496,7 +499,7 @@ void sprite_get_bounding_box(SPRITE * sprite, int *start_x,
     }
   }
 
-  g_object_unref(mask_image);
+/*  g_object_unref(mask_image);*/
 }
 
 /*********************************************************************
@@ -547,7 +550,7 @@ GdkPixbuf *gdk_pixbuf_new_from_sprite(SPRITE *src)
 	}
       }
     }
-    g_object_unref(img);
+/*    g_object_unref(img);*/
   }
 
   return dst;
@@ -559,10 +562,6 @@ GdkPixbuf *gdk_pixbuf_new_from_sprite(SPRITE *src)
  ********************************************************************/
 GdkPixbuf *sprite_get_pixbuf(SPRITE *sprite)
 {
-  if (!sprite) {
-    return NULL;
-  }
-  
   if (!sprite->pixbuf) {
     sprite->pixbuf = gdk_pixbuf_new_from_sprite(sprite);
   }

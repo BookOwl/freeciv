@@ -11,29 +11,13 @@
    GNU General Public License for more details.
 ***********************************************************************/
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <assert.h>
 #include <string.h>
 
 #include "astring.h"
-#include "packets.h"
-#include "support.h"
-
 #include "chatline_g.h"
 
 #include "chatline_common.h"
-#include "clinet.h"
-
-/**************************************************************************
-  Send the message as a chat to the server.
-**************************************************************************/
-void send_chat(const char *message)
-{
-  dsend_packet_chat_msg_req(&aconnection, message);
-}
 
 static int frozen_level = 0;
 static struct astring remaining = ASTRING_INIT;

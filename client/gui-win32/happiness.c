@@ -10,11 +10,9 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
-
 #include <windows.h>
 #include <windowsx.h>
 
@@ -392,7 +390,13 @@ static void refresh_happiness_bitmap(HBITMAP bmp,
   HBITMAP old;
   RECT rc;
   int i;
-  enum citizen_type citizens[MAX_CITY_SIZE];
+  int citizen_type;
+  int n1 = pcity->ppl_happy[index];
+  int n2 = n1 + pcity->ppl_content[index];
+  int n3 = n2 + pcity->ppl_unhappy[index];
+  int n4 = n3 + pcity->ppl_angry[index];
+  int n5 = n4 + pcity->ppl_elvis;
+  int n6 = n5 + pcity->ppl_scientist;
   int num_citizens = pcity->size;
   int pix_width = HAPPINESS_PIX_WIDTH * SMALL_TILE_WIDTH;
   int offset = MIN(SMALL_TILE_WIDTH, pix_width / num_citizens);
@@ -404,14 +408,24 @@ static void refresh_happiness_bitmap(HBITMAP bmp,
   rc.right=pix_width;
   rc.bottom=SMALL_TILE_HEIGHT;
   FillRect(hdc,&rc,(HBRUSH)GetClassLong(root_window,GCL_HBRBACKGROUND));
-
-  get_city_citizen_types(pcity, index, citizens);
-
   for (i = 0; i < num_citizens; i++) {
-    draw_sprite(get_citizen_sprite(citizens[i], i, pcity),
-		hdc, i * offset, 0);
+    if (i < n1)
+      citizen_type = 5 + i % 2;
+    else if (i < n2)
+      citizen_type = 3 + i % 2;
+    else if (i < n3)
+      citizen_type = 7 + i % 2;
+    else if (i < n4)
+      citizen_type = 9 + i % 2;
+    else if (i < n5)
+      citizen_type = 0;
+    else if (i < n6)
+      citizen_type = 1;
+    else
+      citizen_type = 2;
+    draw_sprite(sprites.citizen[citizen_type],hdc,
+		i*offset,0);
   }
-
   SelectObject(hdc,old);
   DeleteDC(hdc);
 }

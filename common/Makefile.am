@@ -1,10 +1,8 @@
 ## Process this file with automake to produce Makefile.in
 
-SUBDIRS=	aicore
-
 noinst_LIBRARIES = libcivcommon.a
 
-INCLUDES = -I../intl -I$(srcdir)/aicore
+INCLUDES = -I../intl
 
 ## Above, note -I../intl instead of -I$(top_srdir/intl) is deliberate.
 
@@ -21,18 +19,16 @@ libcivcommon_a_SOURCES = \
 		combat.h	\
 		connection.c	\
 		connection.h	\
+		create_lsend.pl	\
 		dataio.c	\
 		dataio.h	\
 		diptreaty.c	\
 		diptreaty.h	\
-		effects.c	\
-		effects.h	\
 		events.h	\
 		fcintl.c	\
 		fcintl.h	\
 		game.c		\
 		game.h		\
-		generate_packets.py \
 		genlist.c	\
 		genlist.h	\
 		government.c	\
@@ -57,13 +53,10 @@ libcivcommon_a_SOURCES = \
 		netintf.h	\
 		packets.c	\
 		packets.h	\
-		packets_gen.c	\
-		packets_gen.h	\
-		packets.def	\
+		packets_lsend.c	\
+		packets_lsend.h	\
 		player.c	\
 		player.h	\
-		pqueue.c	\
-		pqueue.h	\
 		mem.c           \
 		mem.h		\
 		rand.c		\
@@ -95,6 +88,3 @@ libcivcommon_a_SOURCES = \
 		worklist.h	\
 		version.c	\
 		version.h
-
-packets_gen.h packets_gen.c: packets.def generate_packets.py
-	./generate_packets.py

@@ -14,58 +14,28 @@
 #define FC__AITOOLS_H
 
 #include "shared.h"		/* bool type */
-#include "unit.h"		/* enum ai_unit_task */
-#include "unittype.h"		/* Unit_Type_id */
 
 struct ai_choice;
 struct city;
 struct government;
 struct player;
-struct pf_path;
-
-#ifdef DEBUG
-#define CHECK_UNIT(punit)                                        \
- (assert(punit),                                                 \
-  assert(punit->type < U_LAST),                                  \
-  assert(punit->owner < MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS),   \
-  assert(find_unit_by_id(punit->id)))
-#else
-#define CHECK_UNIT(punit) assert(TRUE)
-#endif
+struct unit;
 
 enum bodyguard_enum {
   BODYGUARD_WANTED=-1,
   BODYGUARD_NONE
 };
 
-#define FERRY_WANTED      -1      /* For passengers in need of a boat */
-#define FERRY_AVAILABLE   -1      /* For boats looking for a passenger */
-/* The below is used by both passengers and ferries.  Passengers use it to 
- * say they don't have a ferry and don't need one.  Ferries use it to say 
- * that they do not have a passenger-in-charge, but are not available for 
- * bookings yet (might carry some passengers still). */
-#define FERRY_NONE         0
-
-int military_amortize(struct player *pplayer, struct city *pcity, 
-                      int value, int delay, int build_cost);
-int stack_cost(struct unit *pdef);
-
-bool ai_unit_execute_path(struct unit *punit, struct pf_path *path);
-bool ai_unit_gothere(struct unit *punit);
-bool ai_gothere(struct player *pplayer, struct unit *punit, 
-                int dest_x, int dest_y);
-bool ai_unit_goto(struct unit *punit, int x, int y);
-
-void ai_unit_new_role(struct unit *punit, enum ai_unit_task task, 
-                      int x, int y);
+void ai_unit_new_role(struct unit *punit, enum ai_unit_task utask);
 bool ai_unit_make_homecity(struct unit *punit, struct city *pcity);
-bool ai_unit_attack(struct unit *punit, int x, int y);
+void ai_unit_attack(struct unit *punit, int x, int y);
 bool ai_unit_move(struct unit *punit, int x, int y);
 
 struct city *dist_nearest_city(struct player *pplayer, int x, int y,
                                bool everywhere, bool enemy);
 
 void ai_government_change(struct player *pplayer, int gov);
+
 int ai_gold_reserve(struct player *pplayer);
 
 void init_choice(struct ai_choice *choice);
@@ -75,8 +45,5 @@ void ai_advisor_choose_building(struct city *pcity, struct ai_choice *choice);
 bool ai_assess_military_unhappiness(struct city *pcity, struct government *g);
 
 int ai_evaluate_government(struct player *pplayer, struct government *g);
-bool ai_wants_no_science(struct player *pplayer);
-
-bool is_player_dangerous(struct player *pplayer, struct player *aplayer);
 
 #endif  /* FC__AITOOLS_H */

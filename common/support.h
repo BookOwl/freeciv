@@ -20,8 +20,8 @@
   See also mem.h, netintf.h, rand.h, and see support.c for more comments.
 ***********************************************************************/
 
-#include <stdarg.h>
 #include <stdlib.h>		/* size_t */
+#include <stdarg.h>
 
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
@@ -62,7 +62,6 @@ bool my_isalpha(char c);
 bool my_isdigit(char c);
 bool my_isprint(char c);
 bool my_isspace(char c);
-bool my_isupper(char c);
 char my_toupper(char c);
 char my_tolower(char c);
 

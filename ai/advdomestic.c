@@ -10,11 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <stdio.h>
 #include <string.h>
 
@@ -23,10 +18,10 @@
 #include "government.h"
 #include "log.h"
 #include "map.h"
-#include "mem.h"
 #include "rand.h"
-#include "unit.h"
 #include "unittype.h"
+#include "unit.h"
+#include "mem.h"
 
 #include "citytools.h"
 #include "settlers.h"
@@ -34,9 +29,9 @@
 
 #include "advmilitary.h"
 #include "aicity.h"
-#include "aidata.h"
 #include "aitools.h"
 #include "aiunit.h"
+#include "aidata.h"
 
 #include "advdomestic.h"
 
@@ -70,7 +65,7 @@ static int ai_eval_threat_land(struct player *pplayer, struct city *pcity)
                || (ai->threats.invasions
                    && is_water_adjacent_to_tile(pcity->x, pcity->y));
 
-  return vulnerable ? TRADE_WEIGHTING + 2 : 1; /* trump coinage, and sam */
+  return vulnerable ? 20 : 1; /* WAG */
 }
 
 /**************************************************************************
@@ -85,8 +80,7 @@ static int ai_eval_threat_sea(struct player *pplayer, struct city *pcity)
     return 40;
   }
 
-  /* trump coinage, and wall, and sam */
-  return ai->threats.sea ? TRADE_WEIGHTING + 3 : 1;
+  return ai->threats.sea ? 30 : 1; /* WAG */
 }
 
 /**************************************************************************
@@ -109,7 +103,8 @@ static int ai_eval_threat_air(struct player *pplayer, struct city *pcity)
                    || is_water_adjacent_to_tile(pcity->x, pcity->y) 
                    || city_got_building(pcity, B_PALACE));
 
-  return vulnerable ? TRADE_WEIGHTING + 1 : 1; /* trump coinage */
+  /* 50 is a magic number inherited from Syela */
+  return vulnerable ? 40 : 1;
 }
 
 /**************************************************************************
@@ -160,8 +155,8 @@ static int ai_eval_threat_missile(struct player *pplayer, struct city *pcity)
                     || city_got_building(pcity, B_PALACE);
 
   /* Only build missile defence if opponent builds them, and we are in
-     a vulnerable spot. Trump coinage but not wall or coastal. */
-  return (ai->threats.missile && vulnerable) ? TRADE_WEIGHTING + 1 : 1;
+     a vulnerable spot. FIXME: 10 is a totally arbitrary Syelaism. - Per */
+  return (ai->threats.missile && vulnerable) ? 10 : 1;
 }
 
 /**************************************************************************
@@ -262,7 +257,7 @@ static int ocean_workers(struct city *pcity)
   int i = 0;
 
   city_map_checked_iterate(pcity->x, pcity->y, cx, cy, mx, my) {
-    if (is_ocean(map_get_terrain(mx, my))) {
+    if (map_get_terrain(mx, my) == T_OCEAN) {
       /* This is a kluge; wasn't getting enough harbors because often
        * everyone was stuck farming grassland. */
       i++;
@@ -421,9 +416,7 @@ void ai_eval_buildings(struct city *pcity)
   sci = ((sci + pcity->trade_prod) * t)/2;
   tax = ((tax + pcity->trade_prod) * t)/2;
   /* don't need libraries!! */
-  if (ai_wants_no_science(pplayer)) {
-    sci = 0;
-  }
+  if (pplayer->research.researching == A_NONE) sci = 0;
 
   est_food = 2 * pcity->ppl_scientist + 2 * pcity->ppl_taxman
            + pcity->food_surplus; 
@@ -534,7 +527,11 @@ void ai_eval_buildings(struct city *pcity)
       values[id] = road_trade(pcity) * t;
       break;
     case B_CAPITAL:
-      values[id] = TRADE_WEIGHTING; /* a kind of default */
+      /* rationale: If cost is N and benefit is N gold per MORT turns, want is
+       * TRADE_WEIGHTING * 100 / MORT. This is comparable, thus the same weight 
+      values[id] = TRADE_WEIGHTING * 999 / MORT; / * trust me * /
+      -- Syela */
+      values[id] = -60 * TRADE_WEIGHTING / MORT; /* want ~50 */
       break;
   
     /* unhappiness relief */
@@ -791,21 +788,11 @@ void ai_eval_buildings(struct city *pcity)
       } unit_list_iterate_end;
       break;
     case B_APOLLO:
-      if (game.spacerace) {
-        values[id] = values[B_CAPITAL] + 1; /* trump coinage and defenses */
-      }
+      if (game.spacerace) 
+        values[id] = values[B_CAPITAL]+1;
       break;
-    case B_UNITED:
-      values[id] = values[B_CAPITAL] + 4; /* trump coinage and defenses */
-      break;
-    case B_LIGHTHOUSE:
-      values[id] = values[B_CAPITAL] + 4; /* trump coinage and defenses */
-      break;
-    case B_MAGELLAN:
-      values[id] = values[B_CAPITAL] + 4; /* trump coinage and defenses */
-      break;
-    /* also, MAGELLAN is special cased in ai_manage_buildings() */
-    /* ignoring MANHATTAN and STATUE */
+
+    /* ignoring APOLLO, LIGHTHOUSE, MAGELLAN, MANHATTEN, STATUE, UNITED */
     } /* end switch */
   } impr_type_iterate_end;
 
@@ -817,7 +804,8 @@ void ai_eval_buildings(struct city *pcity)
         values[id]-= improvement_upkeep(pcity, id) * t;
         values[id] = (values[id] <= 0 
           ? 0 : (values[id] * SHIELD_WEIGHTING * 100) / MORT);
-      } else {
+      }
+      else {
         /* bias against wonders when total production is small */
         values[id] *= (tprod < 50 ? 100/(50-tprod): 100);
       }
@@ -825,9 +813,9 @@ void ai_eval_buildings(struct city *pcity)
       /* handle H_PROD here? -- Syela */
       j = improvement_value(id);
       pcity->ai.building_want[id] = values[id] / j;
-    } else {
-      pcity->ai.building_want[id] = -values[id];
     }
+    else 
+      pcity->ai.building_want[id] = -values[id];
 
     if (values[id] != 0) 
       freelog(LOG_DEBUG, "ai_eval_buildings: %s wants %s with desire %d.",
@@ -956,8 +944,7 @@ void domestic_advisor_choose_build(struct player *pplayer, struct city *pcity,
 
   unit_type = best_role_unit(pcity, F_SETTLERS);
 
-  if (unit_type != U_LAST
-      && est_food > utype_food_cost(get_unit_type(unit_type), gov)) {
+  if (est_food > utype_food_cost(get_unit_type(unit_type), gov)) {
     /* settler_want calculated in settlers.c called from ai_manage_city() */
     int want = pcity->ai.settler_want;
 
@@ -986,8 +973,7 @@ void domestic_advisor_choose_build(struct player *pplayer, struct city *pcity,
 
   unit_type = best_role_unit(pcity, F_CITIES);
 
-  if (unit_type != U_LAST
-      && est_food >= utype_food_cost(get_unit_type(unit_type), gov)) {
+  if (est_food > utype_food_cost(get_unit_type(unit_type), gov)) {
     /* founder_want calculated in settlers.c, called from ai_manage_city(). */
     int want = pcity->ai.founder_want;
 
@@ -1012,27 +998,31 @@ void domestic_advisor_choose_build(struct player *pplayer, struct city *pcity,
 
   {
     struct ai_choice cur;
-
-    init_choice(&cur);
+    
     ai_advisor_choose_building(pcity, &cur);
+    /* Allowing buy of peaceful units after much testing. -- Syela */
+    /* want > 100 means BUY RIGHT NOW */
+    /* if (choice->want > 100) choice->want = 100; */
     copy_if_better_choice(&cur, choice);
   }
 
+  /* FIXME: rather !is_valid_choice() --rwetmore */
   if (choice->want == 0) {
     /* Oh dear, better think of something! */
     unit_type = best_role_unit(pcity, F_TRADE_ROUTE);
     
-    choice->want = 1;
+    if (unit_type == U_LAST) {
+      unit_type = best_role_unit(pcity, F_DIPLOMAT);
+      /* Someday, real diplomat code will be here! */
+    }
+    
     if (unit_type != U_LAST) {
+      choice->want = 1;
       choice->type = CT_NONMIL;
       choice->choice = unit_type;
-    } else {
-      /* Capitalization is last resort */
-      choice->type = CT_BUILDING;
-      choice->choice = B_CAPITAL;
     }
   }
-
+  
   /* If we don't do following, we buy caravans in city X when we should be
    * saving money to buy defenses for city Y. -- Syela */
   if (choice->want >= 200) choice->want = 199;

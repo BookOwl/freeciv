@@ -10,13 +10,13 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 
 #include <X11/Intrinsic.h>
 #include <X11/StringDefs.h>
@@ -218,11 +218,15 @@ void create_rates_dialog(void)
 void rates_ok_command_callback(Widget w, XtPointer client_data, 
 			       XtPointer call_data)
 {
+  struct packet_player_request packet;
+  
   XtSetSensitive(main_form, TRUE);
   XtDestroyWidget(rates_dialog_shell);
 
-  dsend_packet_player_rates(&aconnection, rates_tax_value, rates_lux_value,
-			    rates_sci_value);
+  packet.tax=rates_tax_value;
+  packet.science=rates_sci_value;
+  packet.luxury=rates_lux_value;
+  send_packet_player_request(&aconnection, &packet, PACKET_PLAYER_RATES);
 }
 
 /**************************************************************************

@@ -2,16 +2,12 @@
 
 name=_("Brazilian")
 plural=_("?plural:Brazilians")
-class=_("Modern")
-legend=_("Brazil was founded as a colony of Portugal but became \
-independent in 1822AD. It is the only country in the New World that \
-has been the seat of a monarchy.")
 leader="Dom Pedro I", "Princesa Isabel", "Marechal Deodoro",
        "Tancredo Neves", "Juscelino Kubitscheck", "Getúlio Vargas"
 leader_sex="Male", "Female", "Male", "Male", "Male", "Male"
 flag = "f.brasil"
 flag_alt = "-"
-city_style = "Tropical"
+city_style = "European"
 
 ruler_titles = { "government",      "male_title",      "female_title"
                  "Despotism",       _("Dictator"),     _("Dictatrix")
@@ -21,13 +17,16 @@ ruler_titles = { "government",      "male_title",      "female_title"
 		 "Fundamentalism",  _("Director-President"), _("Director-President")
 }
 
+attack=0
+expand=1
+civilized=0
+advisors=100,100,100,100,100,100,100
 init_techs=""
 tech_goals = "Ceremonial Burial", "Code of Laws", "Bridge Building",
              "Flight", "Banking", "Conscription", "The Corporation",
              "Labor Union"
 wonder="Marco Polo's Embassy"
 government="Republic"
-civilwar_nations = "chilean"
 
 cities =
     "São Paulo", "Rio de Janeiro (river)", "Salvador", "Fortaleza",

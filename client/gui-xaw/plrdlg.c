@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -26,7 +25,6 @@
 #include <X11/Xaw/Command.h>
 #include <X11/Xaw/List.h>
 
-#include "diptreaty.h"
 #include "fcintl.h"
 #include "game.h"
 #include "packets.h"
@@ -34,7 +32,6 @@
 #include "support.h"
 
 #include "chatline.h"
-#include "civclient.h"
 #include "climisc.h"
 #include "clinet.h"
 #include "diplodlg.h"
@@ -90,16 +87,6 @@ void popup_players_dialog(void)
   XtPopup(players_dialog_shell, XtGrabNone);
 }
 
-/****************************************************************
-  Closes the player list dialog.
-*****************************************************************/
-void popdown_players_dialog(void)
-{
-  if (players_dialog_shell) {
-    XtDestroyWidget(players_dialog_shell);
-    players_dialog_shell = 0;
-  }
-}
 
 /****************************************************************
 ...
@@ -312,8 +299,16 @@ void players_list_callback(Widget w, XtPointer client_data,
     XtSetSensitive(players_vision_command,
 		   gives_shared_vision(game.player_ptr, pplayer));
 
-    XtSetSensitive(players_meet_command, can_meet_with_player(pplayer));
-    XtSetSensitive(players_int_command, can_intel_with_player(pplayer));
+    if (pplayer->is_alive
+        && pplayer != game.player_ptr
+        && player_has_embassy(game.player_ptr, pplayer)) {
+      if(pplayer->is_connected)
+	XtSetSensitive(players_meet_command, TRUE);
+      else
+	XtSetSensitive(players_meet_command, FALSE);
+      XtSetSensitive(players_int_command, TRUE);
+      return;
+    }
   }
   XtSetSensitive(players_meet_command, FALSE);
   XtSetSensitive(players_int_command, FALSE);
@@ -326,7 +321,8 @@ void players_list_callback(Widget w, XtPointer client_data,
 void players_close_callback(Widget w, XtPointer client_data, 
 			      XtPointer call_data)
 {
-  popdown_players_dialog();
+  XtDestroyWidget(players_dialog_shell);
+  players_dialog_shell=0;
 }
 
 /****************************************************************
@@ -343,13 +339,20 @@ void plrdlg_msg_close(Widget w)
 void players_meet_callback(Widget w, XtPointer client_data, 
 			      XtPointer call_data)
 {
-  XawListReturnStruct *ret = XawListShowCurrent(players_list);
+  XawListReturnStruct *ret;
 
-  if (ret->list_index != XAW_LIST_NONE) {
+  ret=XawListShowCurrent(players_list);
+
+  if(ret->list_index!=XAW_LIST_NONE) {
     int player_index = list_index_to_player_index[ret->list_index];
+    if(player_has_embassy(game.player_ptr, &game.players[player_index])) {
+      struct packet_diplomacy_info pa;
 
-    if (can_meet_with_player(&game.players[player_index])) {
-      dsend_packet_diplomacy_init_meeting_req(&aconnection, player_index);
+      pa.plrno0=game.player_idx;
+      pa.plrno1=player_index;
+      pa.plrno_from=pa.plrno0;
+      send_packet_diplomacy_info(&aconnection, PACKET_DIPLOMACY_INIT_MEETING,
+				 &pa);
     }
     else {
       append_output_window(_("Game: You need an embassy to establish"
@@ -364,14 +367,14 @@ void players_meet_callback(Widget w, XtPointer client_data,
 void players_intel_callback(Widget w, XtPointer client_data, 
 			    XtPointer call_data)
 {
-  XawListReturnStruct *ret = XawListShowCurrent(players_list);
+  XawListReturnStruct *ret;
 
-  if (ret->list_index != XAW_LIST_NONE) {
+  ret=XawListShowCurrent(players_list);
+
+  if(ret->list_index!=XAW_LIST_NONE) {
     int player_index = list_index_to_player_index[ret->list_index];
-
-    if (can_intel_with_player(&game.players[player_index])) {
+    if(player_has_embassy(game.player_ptr, &game.players[player_index]))
       popup_intel_dialog(&game.players[player_index]);
-    }
   }
 }
 
@@ -381,14 +384,14 @@ void players_intel_callback(Widget w, XtPointer client_data,
 void players_war_callback(Widget w, XtPointer client_data, 
                           XtPointer call_data)
 {
-  XawListReturnStruct *ret = XawListShowCurrent(players_list);
-
-  if (ret->list_index != XAW_LIST_NONE) {
-    int player_index = list_index_to_player_index[ret->list_index];
-
-    /* can be any pact clause */
-    dsend_packet_diplomacy_cancel_pact(&aconnection, player_index,
-				       CLAUSE_CEASEFIRE);
+  XawListReturnStruct *ret;
+  
+  ret=XawListShowCurrent(players_list);
+  if(ret->list_index!=XAW_LIST_NONE) {
+    struct packet_generic_integer pa;    
+    pa.value=ret->list_index;
+    send_packet_generic_integer(&aconnection, PACKET_PLAYER_CANCEL_PACT,
+				&pa);
   }
 }
 
@@ -398,27 +401,29 @@ void players_war_callback(Widget w, XtPointer client_data,
 void players_vision_callback(Widget w, XtPointer client_data, 
                           XtPointer call_data)
 {
-  XawListReturnStruct *ret = XawListShowCurrent(players_list);
-
-  if (ret->list_index != XAW_LIST_NONE) {
-    int player_index = list_index_to_player_index[ret->list_index];
-
-    dsend_packet_diplomacy_cancel_pact(&aconnection, player_index,
-				       CLAUSE_VISION);
+  XawListReturnStruct *ret;
+  
+  ret=XawListShowCurrent(players_list);
+  if(ret->list_index!=XAW_LIST_NONE) {
+    struct packet_generic_integer pa;    
+    pa.value=ret->list_index;
+    send_packet_generic_integer(&aconnection, PACKET_PLAYER_REMOVE_VISION,
+				&pa);
   }
 }
 
 /**************************************************************************
 ...
 **************************************************************************/
-void players_sship_callback(Widget w, XtPointer client_data,
+void players_sship_callback(Widget w, XtPointer client_data, 
 			    XtPointer call_data)
 {
-  XawListReturnStruct *ret = XawListShowCurrent(players_list);
+  XawListReturnStruct *ret;
 
-  if (ret->list_index != XAW_LIST_NONE) {
+  ret=XawListShowCurrent(players_list);
+
+  if(ret->list_index!=XAW_LIST_NONE) {
     int player_index = list_index_to_player_index[ret->list_index];
-
     popup_spaceship_dialog(&game.players[player_index]);
   }
 }

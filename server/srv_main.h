@@ -25,8 +25,6 @@ struct server_arguments {
   char metaserver_info_line[256];
   char metaserver_addr[256];
   unsigned short int metaserver_port;
-  /* address this server is to listen on (NULL => INADDR_ANY) */
-  char *bind_addr;
   /* this server's listen port */
   int port;
   /* the log level */
@@ -44,20 +42,19 @@ struct server_arguments {
 
 void srv_init(void);
 void srv_main(void);
-void server_quit(void);
 
 bool handle_packet_input(struct connection *pconn, void *packet, int type);
+void lost_connection_to_client(struct connection *pconn);
+void accept_new_player(char *name, struct connection *pconn);
 void start_game(void);
 void save_game(char *orig_filename);
 void pick_ai_player_name(Nation_Type_id nation, char *newname);
-void send_all_info(struct conn_list *dest);
-void check_for_full_turn_done(void);
 
 void dealloc_id(int id);
+bool is_id_allocated(int id);
 void alloc_id(int id);
 int get_next_id_number(void);
 void server_game_free(void);
-void check_for_full_turn_done(void);
 
 extern struct server_arguments srvarg;
 

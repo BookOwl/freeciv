@@ -5,14 +5,13 @@ EXTRA_DIST =			\
 	BUGS			\
 	CodingStyle		\
 	HACKING			\
-	INSTALL.Cygwin		\
 	HOWTOPLAY		\
+	INSTALL.Cygwin		\
 	PEOPLE			\
-	README.AI		\
 	README.agents		\
+	README.AI		\
 	README.attributes 	\
 	README.cma		\
-	README.effects		\
 	README.graphics		\
 	README.rulesets		\
 	README.sound		\
@@ -27,9 +26,13 @@ EXTRA_DIST =			\
 	de/README.de		\
 	de/README.rulesets.de	\
 	de/README.sound.de	\
+	fr/BUGS.fr		\
 	fr/HOWTOPLAY.fr		\
 	fr/INSTALL.fr		\
+	fr/NEWS.fr		\
+	fr/README.cma.fr	\
 	fr/README.fr		\
+	fr/README.graphics.fr	\
 	it/HOWTOPLAY.it		\
 	it/INSTALL.it		\
 	it/README.cma.it	\
@@ -37,13 +40,12 @@ EXTRA_DIST =			\
 	ja/BUGS.ja		\
 	ja/HOWTOPLAY.ja		\
 	ja/NEWS.ja		\
-	ja/README.ja		\
 	ja/README.cma.ja	\
+	ja/README.ja		\
 	ja/README_Japanese.ja	\
 	nl/BUGS.nl		\
 	nl/HOWTOPLAY.nl		\
 	nl/LEESMIJ		\
-	nl/NEWS.nl		\
 	nl/README.cma.nl	\
 	nl/README.nl		\
 	nl/README.rulesets.nl	\
@@ -51,9 +53,9 @@ EXTRA_DIST =			\
 	sv/BUGS.sv		\
 	sv/CodingStyle.sv	\
 	sv/HOWTOPLAY.sv		\
-	sv/README.sv		\
 	sv/README.agents.sv	\
 	sv/README.attributes.sv	\
 	sv/README.cma.sv	\
 	sv/README.graphics.sv	\
-	sv/README.sound.sv
+	sv/README.sound.sv	\
+	sv/README.sv

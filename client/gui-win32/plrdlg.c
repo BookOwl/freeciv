@@ -10,21 +10,19 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
-#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 
 #include <windows.h>
 #include <windowsx.h>
 #include <commctrl.h>
 
-#include "diptreaty.h"
 #include "fcintl.h"
 #include "game.h"
 #include "packets.h"
@@ -33,7 +31,6 @@
 #include "support.h"
 
 #include "chatline.h"
-#include "civclient.h"
 #include "climisc.h"
 #include "clinet.h"
 #include "gui_main.h"
@@ -63,11 +60,10 @@ static int sort_column=2;
 /******************************************************************
 
 *******************************************************************/
-static void players_meet(int player_index)
+void players_meet(int player_index)
 {
-  if (can_meet_with_player(&game.players[player_index])) {
+  if (player_has_embassy(game.player_ptr,&game.players[player_index])) {
     struct packet_diplomacy_info pa;
-
     pa.plrno0=game.player_idx;
     pa.plrno1=player_index;
     pa.plrno_from=pa.plrno0;
@@ -83,43 +79,39 @@ static void players_meet(int player_index)
 /******************************************************************
 
 *******************************************************************/
-static void players_war(int player_index)
+void players_war(int player_index)
 {
-  struct packet_generic_values packet;
-
-  packet.value1 = CLAUSE_CEASEFIRE; /* can be any pact clause */
-  packet.id = player_index;
-  send_packet_generic_values(&aconnection, PACKET_PLAYER_CANCEL_PACT,
-			     &packet);
+  struct packet_generic_integer pa;  
+  pa.value = player_index;
+  send_packet_generic_integer(&aconnection, PACKET_PLAYER_CANCEL_PACT,
+			      &pa);
 }
 
 /******************************************************************
 
 *******************************************************************/
-static void players_vision(int player_index)
+void players_vision(int player_index)
 {
-  struct packet_generic_values packet;
-
-  packet.value1 = CLAUSE_VISION;
-  packet.id = player_index;
-  send_packet_generic_values(&aconnection, PACKET_PLAYER_CANCEL_PACT,
-			     &packet);
+  struct packet_generic_integer pa;  
+  pa.value = player_index;
+  send_packet_generic_integer(&aconnection, PACKET_PLAYER_REMOVE_VISION,
+			      &pa);
 }
 
 /******************************************************************
 
 *******************************************************************/
-static void players_intel(int player_index)
+void players_intel(int player_index)
 {
-  if (can_intel_with_player(&game.players[player_index])) {
+  if(player_has_embassy(game.player_ptr, &game.players[player_index]))
     popup_intel_dialog(&game.players[player_index]);
-  } 
+  
 }
 
 /******************************************************************
 
 *******************************************************************/
-static void players_sship(int player_index)
+void players_sship(int player_index)
 {
   popup_spaceship_dialog(&game.players[player_index]);
 }
@@ -128,7 +120,7 @@ static void players_sship(int player_index)
  * Builds the text for the cells of a row in the player report. If
  * update is 1, only the changable entries are build.
  */
-static void build_row(const char **row, int i, int update)
+static void build_row(char **row, int i, int update)
 {
   static char namebuf[MAX_LEN_NAME],  aibuf[2], dsbuf[32],
       repbuf[32], statebuf[32], idlebuf[32];
@@ -207,12 +199,11 @@ static void build_row(const char **row, int i, int update)
 /******************************************************************
 
 *******************************************************************/
-static int CALLBACK sort_proc(LPARAM lParam1, LPARAM lParam2,
-			      LPARAM lParamSort)
+int CALLBACK sort_proc(LPARAM lParam1,LPARAM lParam2,LPARAM lParamSort)
 {
   char text1[128];
   char text2[128];
-  const char *row_texts[NUM_COLUMNS];
+  char *row_texts[NUM_COLUMNS];
   build_row(row_texts,lParam1,0);
   sz_strlcpy(text1,row_texts[lParamSort]);
   build_row(row_texts,lParam2,0);
@@ -245,10 +236,19 @@ static void enable_buttons(int player_index)
   EnableWindow(GetDlgItem(players_dialog, ID_PLAYERS_VISION),
 	       gives_shared_vision(game.player_ptr, pplayer));
 
-  EnableWindow(GetDlgItem(players_dialog, ID_PLAYERS_MEET),
-               can_meet_with_player(pplayer));
-  EnableWindow(GetDlgItem(players_dialog, ID_PLAYERS_INT),
-               can_intel_with_player(pplayer));
+  if (pplayer->is_alive 
+      && pplayer != game.player_ptr
+      && player_has_embassy(game.player_ptr, pplayer)) {
+    if (pplayer->is_connected)
+      EnableWindow(GetDlgItem(players_dialog,ID_PLAYERS_MEET), TRUE);
+    else
+      EnableWindow(GetDlgItem(players_dialog,ID_PLAYERS_MEET), FALSE);
+    EnableWindow(GetDlgItem(players_dialog,ID_PLAYERS_INT), TRUE);
+    return;
+  }
+
+  EnableWindow(GetDlgItem(players_dialog,ID_PLAYERS_MEET), FALSE);
+  EnableWindow(GetDlgItem(players_dialog,ID_PLAYERS_INT), FALSE);
 }
 
 /******************************************************************
@@ -347,11 +347,11 @@ static LONG CALLBACK players_proc(HWND dlg,UINT message,
 /******************************************************************
 
 *******************************************************************/
-static void create_players_dialog(void)
+void create_players_dialog()
 {
   int i;
   static char *titles_[NUM_COLUMNS] =
-    { N_("Name"), N_("Nation"), N_("AI"),
+    { N_("Name"), N_("Nation"), N_("Ai"),
       N_("Embassy"), N_("Dipl.State"), N_("Vision"), N_("Reputation"),
       N_("State"), N_("Host"), N_("Idle")
     };
@@ -411,7 +411,7 @@ update_players_dialog(void)
   if (players_dialog && !is_plrdlg_frozen()) {
     LV_ITEM lvi;
     HWND lv;
-    const char *row_texts[NUM_COLUMNS];
+    char *row_texts[NUM_COLUMNS];
     int i,row;
     lv=GetDlgItem(players_dialog,ID_PLAYERS_LIST);
     ListView_DeleteAllItems(lv);

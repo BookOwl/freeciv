@@ -2,13 +2,22 @@
 Willkommen bei Freeciv 1.14
 ===========================
 
-Dies ist Version 1.14.0.
+Dies ist Version 1.14.1
 
-Dank geht an alle unsere Entwickler, die daran gearbeitet haben.
+Der Dank geht an alle unsere Entwickler, die daran gearbeitet haben.
 
 Diese Version enthält eine Menge Änderungen, die unten skizziert sind. 
 Diejenigen, die an den Einzelheiten der Änderungen interessiert sind,
 sollten einen Blick in die ChangeLog Datei werfen.
+
+ÄNDERUNGEN SEIT VERSION 1.14.0
+
+ - Als Standard wird nun der Client für GTK+-2.0 verwendet.
+ - Viele Verbesserungen am GTK+-2.0 Client.
+ - Der GTK+-2.0 Client sollte sich nun auch für Win32 übersetzen lassen.
+ - Spieler können sich nun zu Teams zusammenschließen.
+ - Der Server arbeitet nun mit UTF-8 Locale.
+ - Eine Menge Fehler wurden ausgemerzt.
 
 ÄNDERUNGEN SEIT VERSION 1.13.0
 

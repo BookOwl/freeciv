@@ -10,22 +10,21 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
-#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 
 #include "fcintl.h"
 #include "game.h"
 #include "log.h"
 #include "player.h"
-#include "shared.h" /* ARRAY_SIZE */
 #include "support.h"
+#include "shared.h" /* ARRAY_SIZE */
 
 #include "tech.h"
 
@@ -37,8 +36,7 @@ struct advance advances[A_LAST];
 static const char *flag_names[] = {
   "Bonus_Tech", "Boat_Fast", "Bridge", "Railroad", "Fortress",
   "Watchtower", "Population_Pollution_Inc", "Trade_Revenue_Reduce",
-  "Airbase", "Farmland", "Reduce_Trireme_Loss1", "Reduce_Trireme_Loss2", 
-  "Build_Airborne"
+  "Airbase", "Farmland", "Reduce_Trireme_Loss1", "Reduce_Trireme_Loss2"
 };
 /* Note that these strings must correspond with the enums in tech_flag_id,
    in common/tech.h */
@@ -67,7 +65,6 @@ void set_invention(struct player *pplayer, Tech_Type_id tech,
 
   if (value == TECH_KNOWN) {
     game.global_advances[tech]++;
-    improvements_update_obsolete();
   }
 }
 
@@ -81,7 +78,8 @@ bool is_tech_a_req_for_goal(struct player *pplayer, Tech_Type_id tech,
   if (tech == goal) {
     return FALSE;
   } else {
-    return BV_ISSET(pplayer->research.inventions[goal].required_techs, tech);
+    return TEST_BIT(pplayer->research.inventions[goal].
+		    required_techs[tech / 8], tech % 8);
   }
 }
 
@@ -95,21 +93,15 @@ static void build_required_techs_helper(struct player *pplayer,
 {
   /* The is_tech_a_req_for_goal condition is true if the tech is
    * already marked */
-  if (!tech_is_available(pplayer, tech)
+  if (tech == A_NONE || !tech_exists(tech)
       || get_invention(pplayer, tech) == TECH_KNOWN
       || is_tech_a_req_for_goal(pplayer, tech, goal)) {
     return;
   }
 
   /* Mark the tech as required for the goal */
-  BV_SET(pplayer->research.inventions[goal].required_techs, tech);
-
-  if (advances[tech].req[0] == goal || advances[tech].req[1] == goal) {
-    freelog(LOG_FATAL, _("tech \"%s\": requires itself"),
-	    advances[goal].name);
-    assert(0);
-    exit(EXIT_FAILURE);
-  }
+  pplayer->research.inventions[goal].required_techs[tech / 8] |=
+      (1 << (tech % 8));
 
   build_required_techs_helper(pplayer, advances[tech].req[0], goal);
   build_required_techs_helper(pplayer, advances[tech].req[1], goal);
@@ -121,10 +113,11 @@ static void build_required_techs_helper(struct player *pplayer,
 **************************************************************************/
 static void build_required_techs(struct player *pplayer, Tech_Type_id goal)
 {
+  Tech_Type_id i;
   int counter;
 
-  //if(goal==0) freelog(LOG_NORMAL, "foobar %d",get_invention(pplayer, goal));
-  BV_CLR_ALL(pplayer->research.inventions[goal].required_techs);
+  memset(pplayer->research.inventions[goal].required_techs, 0,
+	 sizeof(pplayer->research.inventions[goal].required_techs));
 
   if (get_invention(pplayer, goal) == TECH_KNOWN) {
     pplayer->research.inventions[goal].num_required_techs = 0;
@@ -140,8 +133,8 @@ static void build_required_techs(struct player *pplayer, Tech_Type_id goal)
   pplayer->research.inventions[goal].num_required_techs = 1;
 
   counter = 0;
-  tech_type_iterate(i) {
-    if (i == A_NONE || !is_tech_a_req_for_goal(pplayer, i, goal)) {
+  for (i = A_FIRST; i < game.num_tech_types; i++) {
+    if (!is_tech_a_req_for_goal(pplayer, i, goal)) {
       continue;
     }
 
@@ -155,29 +148,10 @@ static void build_required_techs(struct player *pplayer, Tech_Type_id goal)
     pplayer->research.inventions[goal].num_required_techs++;
     pplayer->research.inventions[goal].bulbs_required +=
 	base_total_bulbs_required(pplayer, i);
-  } tech_type_iterate_end;
+  }
 
   /* Undo the changes made above */
   pplayer->research.techs_researched -= counter;
-}
-
-/**************************************************************************
-  Returns TRUE iff the given tech is ever reachable by the given player
-  by checking tech tree limitations.
-**************************************************************************/
-bool tech_is_available(struct player *pplayer, Tech_Type_id id)
-{
-  if (!tech_exists(id)) {
-    return FALSE;
-  }
-
-  if (advances[id].root_req != A_NONE
-      && get_invention(pplayer, advances[id].root_req) != TECH_KNOWN) {
-    /* This tech requires knowledge of another tech before being 
-     * available. Prevents sharing of untransferable techs. */
-    return FALSE;
-  }
-  return TRUE;
 }
 
 /**************************************************************************
@@ -186,14 +160,11 @@ bool tech_is_available(struct player *pplayer, Tech_Type_id id)
 **************************************************************************/
 void update_research(struct player *pplayer)
 {
+  Tech_Type_id i;
   enum tech_flag_id flag;
 
-  /* This assert does not work. Triggered by AI players in new
-   * games. */
-  /* assert(get_invention(pplayer, A_NONE) == TECH_KNOWN); */
-
-  tech_type_iterate(i) {
-    if (!tech_is_available(pplayer, i)) {
+  for (i = 0; i < game.num_tech_types; i++) {
+    if (!tech_exists(i)) {
       set_invention(pplayer, i, TECH_UNKNOWN);
     } else {
       if (get_invention(pplayer, i) == TECH_REACHABLE) {
@@ -207,16 +178,16 @@ void update_research(struct player *pplayer)
       }
     }
     build_required_techs(pplayer, i);
-  } tech_type_iterate_end;
+  }
 
   for (flag = 0; flag < TF_LAST; flag++) {
     pplayer->research.num_known_tech_with_flag[flag] = 0;
 
-    tech_type_iterate(i) {
+    for (i = A_FIRST; i < game.num_tech_types; i++) {
       if (get_invention(pplayer, i) == TECH_KNOWN && tech_flag(i, flag)) {
 	pplayer->research.num_known_tech_with_flag[flag]++;
       }
-    } tech_type_iterate_end;
+    }
   }
 }
 
@@ -228,15 +199,14 @@ static Tech_Type_id get_next_tech_rec(struct player *pplayer,
 {
   Tech_Type_id sub_goal;
 
-  if (!tech_is_available(pplayer, goal)
-      || get_invention(pplayer, goal) == TECH_KNOWN) {
-    return A_UNSET;
+  if (!tech_exists(goal) || get_invention(pplayer, goal) == TECH_KNOWN) {
+    return A_NONE;
   }
   if (get_invention(pplayer, goal) == TECH_REACHABLE) {
     return goal;
   }
   sub_goal = get_next_tech_rec(pplayer, advances[goal].req[0]);
-  if (sub_goal != A_UNSET) {
+  if (sub_goal != A_NONE) {
     return sub_goal;
   } else {
     return get_next_tech_rec(pplayer, advances[goal].req[1]);
@@ -251,9 +221,9 @@ static Tech_Type_id get_next_tech_rec(struct player *pplayer,
 **************************************************************************/
 Tech_Type_id get_next_tech(struct player *pplayer, Tech_Type_id goal)
 {
-  if (!tech_is_available(pplayer, goal)
-      || get_invention(pplayer, goal) == TECH_KNOWN) {
-    return A_UNSET;
+  if (goal == A_NONE || !tech_exists(goal) ||
+      get_invention(pplayer, goal) == TECH_KNOWN) {
+    return A_NONE;
   }
   return (get_next_tech_rec(pplayer, goal));
 }
@@ -280,10 +250,12 @@ Returns A_LAST if none match.
 **************************************************************************/
 Tech_Type_id find_tech_by_name(const char *s)
 {
-  tech_type_iterate(i) {
+  Tech_Type_id i;
+
+  for( i=0; i<game.num_tech_types; i++ ) {
     if (strcmp(advances[i].name, s)==0)
       return i;
-  } tech_type_iterate_end;
+  }
   return A_LAST;
 }
 
@@ -414,9 +386,10 @@ int base_total_bulbs_required(struct player *pplayer, Tech_Type_id tech)
 	GAME_DEFAULT_RESEARCHCOST;
     break;
   default:
-    die("Invalid tech_cost_style %d %d", game.rgame.tech_cost_style,
-	tech_cost_style);
-    cost = 0;
+    freelog(LOG_ERROR, "Invalid tech_cost_style %d %d",
+	    game.rgame.tech_cost_style, tech_cost_style);
+    assert(0);
+    exit(EXIT_FAILURE);
   }
 
   /* Research becomes more expensive. */
@@ -479,18 +452,9 @@ int base_total_bulbs_required(struct player *pplayer, Tech_Type_id tech)
     break;
 
   default:
-    die("Invalid tech_leakage %d", game.rgame.tech_leakage);
-  }
-
-  /* Assign a science penalty to the AI at easier skill levels.  This code
-   * can also be adpoted to create an extra-hard AI skill level where the AI
-   * gets science benefits */
-
-  /* FIXME: the is_server is a kludge to unbreak CVS. GB promises 
-   * to fix correctly a.s.a.p. 2003/5/18 -mck */
-  if (is_server && pplayer->ai.control) {
-    assert(pplayer->ai.science_cost > 0);
-    cost = (cost * pplayer->ai.science_cost) / 100;
+    freelog(LOG_ERROR, "Invalid tech_leakage %d", game.rgame.tech_leakage);
+    assert(0);
+    exit(EXIT_FAILURE);
   }
 
   /* If we have many players, tech cost may drop to 0.  */
@@ -544,12 +508,13 @@ static int precalc_tech_data_helper(Tech_Type_id tech, bool *counted)
 **************************************************************************/
 void precalc_tech_data()
 {
+  Tech_Type_id tech;
   bool counted[A_LAST];
 
-  tech_type_iterate(tech) {
+  for (tech = A_FIRST; tech < game.num_tech_types; tech++) {
     memset(counted, 0, sizeof(counted));
     advances[tech].num_reqs = precalc_tech_data_helper(tech, counted);
-  } tech_type_iterate_end;
+  }
 }
 
 /**************************************************************************
@@ -557,7 +522,12 @@ void precalc_tech_data()
 **************************************************************************/
 bool is_future_tech(Tech_Type_id tech)
 {
-  return tech == A_FUTURE;
+  /*
+   * Future techs can be identify in two ways: the "tech >=
+   * game.num_tech_types" condition and the "tech == A_NONE"
+   * condition. FIXME: clean this up.
+   */
+  return (tech >= game.num_tech_types) || (tech == A_NONE);
 }
 
 /**************************************************************************
@@ -568,10 +538,7 @@ const char *get_tech_name(struct player *pplayer, Tech_Type_id tech)
 {
   static char buffer[200];
 
-  if (tech == A_NOINFO) {
-    my_snprintf(buffer, sizeof(buffer), _("(Unknown)"));
-  } else if (!is_future_tech(tech)) {
-    assert(tech_exists(tech));
+  if (!is_future_tech(tech)) {
     my_snprintf(buffer, sizeof(buffer), "%s", advances[tech].name);
   } else {
     my_snprintf(buffer, sizeof(buffer), _("Future Tech. %d"),
@@ -594,7 +561,7 @@ bool techs_have_fixed_costs()
 /***************************************************************
  De-allocate resources associated with the given tech.
 ***************************************************************/
-static void tech_free(Tech_Type_id tech)
+void tech_free(Tech_Type_id tech)
 {
   struct advance *p = &advances[tech];
 

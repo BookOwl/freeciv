@@ -15,10 +15,10 @@
 #include <config.h>
 #endif
 
-#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 
 #include <libraries/mui.h>
 #include <mui/NListview_MCC.h>
@@ -770,7 +770,8 @@ static void help_update_tech(const struct help_item *pitem, char *title, int i)
 	} unit_type_iterate_end;
 
 
-	for (j = 0; j < game.num_tech_types; j++) {
+	for (j = 0; j < game.num_tech_types; ++j)
+	{
 	  Object *o, *button;
 	  if (i == advances[j].req[0])
 	  {
@@ -961,9 +962,7 @@ static void help_update_dialog(const struct help_item *pitem)
 
   /* figure out what kind of item is required for pitem ingo */
 
-  for (top = pitem->topic; *top == ' '; top++) {
-    /* nothing */
-  }
+  for (top = pitem->topic; *top == ' '; ++top);
 
   switch (pitem->type)
   {

@@ -454,19 +454,6 @@ tiles = { "row", "column", "tag"
  17,  8, "city.t_food_8"
  17,  9, "city.t_food_9"
 
-; Veteran Levels: up to 9 military honors for experienced units
-                                                                                
- 17, 10, "unit.vet_0"
- 17, 11, "unit.vet_1"
- 17, 12, "unit.vet_2"
- 17, 13, "unit.vet_3"
- 17, 14, "unit.vet_4"
- 17, 15, "unit.vet_5"
- 17, 16, "unit.vet_6"
- 17, 17, "unit.vet_7"
- 17, 18, "unit.vet_8"
- 17, 19, "unit.vet_9"
-
  15,  0, "city.t_shields_0"
  15,  1, "city.t_shields_1"
  15,  2, "city.t_shields_2"
@@ -493,8 +480,6 @@ tiles = { "row", "column", "tag"
 ; These should probably be handled differently and have
 ; a different size...
 
- 16, 12, "upkeep.gold"
- 16, 13, "upkeep.gold2"
  16, 15, "upkeep.food"
  16, 16, "upkeep.food2"
  16, 17, "upkeep.unhappy"

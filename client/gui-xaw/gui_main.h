@@ -17,7 +17,7 @@
 
 #include "gui_main_g.h"
 
-void xaw_ui_exit(void);
+void main_quit_freeciv(void);
 void main_show_info_popup(XEvent *event);
 
 extern Atom         wm_delete_window;
@@ -25,7 +25,6 @@ extern Display     *display;
 extern int          display_depth;
 extern int          screen_number;
 extern GC           civ_gc; 
-extern GC           border_line_gc; 
 extern GC           fill_bg_gc;
 extern GC           fill_tile_gc;
 extern GC           font_gc;
@@ -34,6 +33,8 @@ extern Pixmap       gray50;
 extern Pixmap       gray25;
 extern Pixmap       single_tile_pixmap;
 extern Pixmap       map_canvas_store;
+extern int          map_canvas_store_twidth;
+extern int          map_canvas_store_theight;
 extern Pixmap       overview_canvas_store;
 extern int          overview_canvas_store_width;
 extern int          overview_canvas_store_height;

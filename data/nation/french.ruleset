@@ -2,10 +2,8 @@
 
 name=_("French")
 plural=_("?plural:French")
-class=_("Modern")
-leader="Napoleon", "Charlemagne", "Louis XIV", "Charles de Gaulle",
-       "Vercingetorix", "Chlodwig", "Charles Martel"
-leader_sex="Male", "Male", "Male", "Male", "Male", "Male", "Male"
+leader="Napoleon", "Louis XIV", "Charles de Gaulle", "Vercingetorix", "Chlodwig"
+leader_sex="Male", "Male", "Male", "Male", "Male"
 flag="f.france"
 flag_alt = "-"
 city_style = "European"
@@ -14,13 +12,16 @@ ruler_titles = { "government",      "male_title",      "female_title"
                  "Fundamentalism",  _("Archbishop"),   _("Archbishop")
                }
 
+attack=2
+expand=2
+civilized=2
+advisors=100,100,100,100,100,100,100
 init_techs=""
 
 tech_goals = "Monarchy", "Chivalry", "Philosophy", "The Republic",
              "Monotheism", "Engineering", "Navigation", "Railroad"
 wonder="Magellan's Expedition"
 government="Republic"
-civilwar_nations = "canadian"
 
 cities =
   "Paris", "Lyon", "Marseille", "Lille", "Bordeaux",

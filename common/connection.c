@@ -10,35 +10,37 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
 #include <assert.h>
-#include <errno.h>
 #include <string.h>
+#include <errno.h>
 
-#ifdef HAVE_SYS_SELECT_H
-#include <sys/select.h>
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
 #endif
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
 #endif
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#ifdef HAVE_SYS_TIME_H
+#include <sys/time.h>
 #endif
+
+#ifdef HAVE_SYS_SELECT_H
+#include <sys/select.h>
+#endif
+
 #ifdef HAVE_WINSOCK
 #include <winsock.h>
 #endif
 
 #include "fcintl.h"
 #include "game.h"		/* game.all_connections */
-#include "hash.h"
 #include "log.h"
 #include "mem.h"
 #include "netintf.h"
-#include "packets.h"
 #include "support.h"		/* mystr(n)casecmp */
 
 #include "connection.h"
@@ -91,7 +93,7 @@ enum cmdlevel_id cmdlevel_named(const char *token)
   enum cmdlevel_id i;
   size_t len = strlen(token);
 
-  for (i = 0; i < ALLOW_NUM; i++) {
+  for (i = 0; i < ALLOW_NUM; ++i) {
     if (strncmp(levelnames[i], token, len) == 0) {
       return i;
     }
@@ -122,7 +124,7 @@ void close_socket_set_callback(CLOSE_FUN fun)
 /**************************************************************************
   Read data from socket, and check if a packet is ready.
   Returns:
-    -1  :  an error occurred - you should close the socket
+    -1  :  an error occured - you should close the socket
     >0  :  number of bytes read
     =0  :  non-blocking sockets only; no data read, would block
 **************************************************************************/
@@ -130,9 +132,8 @@ int read_socket_data(int sock, struct socket_packet_buffer *buffer)
 {
   int didget;
 
-  freelog(LOG_DEBUG, "try reading %d bytes", buffer->nsize - buffer->ndata);
-  didget = my_readsocket(sock, (char *) (buffer->data + buffer->ndata),
-			 buffer->nsize - buffer->ndata);
+  didget=my_readsocket(sock, (char *)(buffer->data+buffer->ndata),
+		       MAX_LEN_PACKET-buffer->ndata);
 
   if (didget > 0) {
     buffer->ndata+=didget;
@@ -200,7 +201,6 @@ static int write_socket_data(struct connection *pc,
 
     if (FD_ISSET(pc->sock, &writefs)) {
       nblock=MIN(buf->ndata-start, MAX_LEN_PACKET);
-      freelog(LOG_DEBUG,"trying to write %d limit=%d",nblock,limit);
       if((nput=my_writesocket(pc->sock, 
 			      (const char *)buf->data+start, nblock)) == -1) {
 #ifdef NONBLOCKING_SOCKETS
@@ -248,7 +248,7 @@ void flush_connection_send_buffer_all(struct connection *pc)
 /**************************************************************************
   flush'em
 **************************************************************************/
-static void flush_connection_send_buffer_packets(struct connection *pc)
+void flush_connection_send_buffer_packets(struct connection *pc)
 {
   if(pc && pc->used && pc->send_buffer->ndata >= MAX_LEN_PACKET) {
     write_socket_data(pc, pc->send_buffer, MAX_LEN_PACKET-1);
@@ -281,8 +281,6 @@ static bool add_connection_data(struct connection *pc,
 
     buf = pc->send_buffer;
 
-    freelog(LOG_DEBUG, "add %d bytes to %d (space=%d)", len, buf->ndata,
-	    buf->nsize);
     /* room for more? */
     if(buf->nsize - buf->ndata < len) {
       buf->nsize += MAX_LEN_PACKET;
@@ -316,7 +314,6 @@ void send_connection_data(struct connection *pc, const unsigned char *data,
 			  int len)
 {
   if (pc && pc->used) {
-    pc->statistics.bytes_send += len;
     if(pc->send_buffer->do_buffer_sends > 0) {
       flush_connection_send_buffer_packets(pc);
       if (!add_connection_data(pc, data, len)) {
@@ -356,7 +353,7 @@ void connection_do_unbuffer(struct connection *pc)
   if (pc && pc->used) {
     pc->send_buffer->do_buffer_sends--;
     if (pc->send_buffer->do_buffer_sends < 0) {
-      freelog(LOG_ERROR, "Too many calls to unbuffer %s!", pc->username);
+      freelog(LOG_ERROR, "Too many calls to unbuffer %s!", pc->name);
       pc->send_buffer->do_buffer_sends = 0;
     }
     if(pc->send_buffer->do_buffer_sends == 0)
@@ -381,38 +378,38 @@ void conn_list_do_unbuffer(struct conn_list *dest)
 }
 
 /***************************************************************
-  Find connection by exact user name, from game.all_connections,
+  Find connection by exact name, from game.all_connections,
   case-insensitve.  Returns NULL if not found.
 ***************************************************************/
-struct connection *find_conn_by_user(const char *user_name)
+struct connection *find_conn_by_name(const char *name)
 {
   conn_list_iterate(game.all_connections, pconn) {
-    if (mystrcasecmp(user_name, pconn->username)==0) {
+    if (mystrcasecmp(name, pconn->name)==0) {
       return pconn;
     }
-  } conn_list_iterate_end;
+  }
+  conn_list_iterate_end;
   return NULL;
 }
 
 /***************************************************************
-  Like find_conn_by_username(), but allow unambigous prefix
+  Like find_conn_by_name(), but allow unambigous prefix
   (ie abbreviation).
   Returns NULL if could not match, or if ambiguous or other
   problem, and fills *result with characterisation of
   match/non-match (see shared.[ch])
 ***************************************************************/
 static const char *connection_accessor(int i) {
-  return conn_list_get(&game.all_connections, i)->username;
+  return conn_list_get(&game.all_connections, i)->name;
 }
-
-struct connection *find_conn_by_user_prefix(const char *user_name,
-                                            enum m_pre_result *result)
+struct connection *find_conn_by_name_prefix(const char *name,
+					    enum m_pre_result *result)
 {
   int ind;
 
   *result = match_prefix(connection_accessor,
 			 conn_list_size(&game.all_connections),
-			 MAX_LEN_NAME-1, mystrncasecmp, user_name, &ind);
+			 MAX_LEN_NAME-1, mystrncasecmp, name, &ind);
   
   if (*result < M_PRE_AMBIGUOUS) {
     return conn_list_get(&game.all_connections, ind);
@@ -456,7 +453,7 @@ struct socket_packet_buffer *new_socket_packet_buffer(void)
 /**************************************************************************
   Free malloced struct
 **************************************************************************/
-static void free_socket_packet_buffer(struct socket_packet_buffer *buf)
+void free_socket_packet_buffer(struct socket_packet_buffer *buf)
 {
   if (buf) {
     if (buf->data) {
@@ -481,9 +478,9 @@ const char *conn_description(const struct connection *pconn)
 
   buffer[0] = '\0';
 
-  if (*pconn->username != '\0') {
+  if (*pconn->name != '\0') {
     my_snprintf(buffer, sizeof(buffer), _("%s from %s"),
-		pconn->username, pconn->addr); 
+		pconn->name, pconn->addr); 
   } else {
     sz_strlcpy(buffer, "server");
   }
@@ -518,113 +515,3 @@ int get_next_request_id(int old_request_id)
   assert(result);
   return result;
 }
-
-/**************************************************************************
- ...
-**************************************************************************/
-void free_compression_queue(struct connection *pc)
-{
-#ifdef USE_COMPRESSION
-  if (pc->compression.queue_size > 0) {
-    free(pc->compression.queued_packets);
-    pc->compression.queued_packets = NULL;
-  }
-  pc->compression.queue_size = 0;
-#endif
-}
-
-/**************************************************************************
- ...
-**************************************************************************/
-static void init_packet_hashs(struct connection *pc)
-{
-  enum packet_type i;
-
-  pc->phs.sent = fc_malloc(sizeof(*pc->phs.sent) * PACKET_LAST);
-  pc->phs.received = fc_malloc(sizeof(*pc->phs.received) * PACKET_LAST);
-  pc->phs.variant = fc_malloc(sizeof(*pc->phs.variant) * PACKET_LAST);
-
-  for (i = 0; i < PACKET_LAST; i++) {
-    pc->phs.sent[i] = NULL;
-    pc->phs.received[i] = NULL;
-    pc->phs.variant[i] = -1;
-  }
-}
-
-/**************************************************************************
- ...
-**************************************************************************/
-static void free_packet_hashes(struct connection *pc)
-{
-  int i;
-
-  for (i = 0; i < PACKET_LAST; i++) {
-    if (pc->phs.sent[i] != NULL) {
-      struct hash_table *hash = pc->phs.sent[i];
-      while (hash_num_entries(hash) > 0) {
-	const void *key = hash_key_by_number(hash, 0);
-	hash_delete_entry(hash, key);
-	free((void *) key);
-      }
-      hash_free(hash);
-      pc->phs.sent[i] = NULL;
-    }
-    if (pc->phs.received[i] != NULL) {
-      struct hash_table *hash = pc->phs.received[i];
-      while (hash_num_entries(hash) > 0) {
-	const void *key = hash_key_by_number(hash, 0);
-	hash_delete_entry(hash, key);
-	free((void *) key);
-      }
-      hash_free(hash);
-      pc->phs.received[i] = NULL;
-    }
-  }
-  free(pc->phs.sent);
-  pc->phs.sent = NULL;
-  free(pc->phs.received);
-  pc->phs.received = NULL;
-  free(pc->phs.variant);
-  pc->phs.variant = NULL;
-}
-
-/**************************************************************************
- ...
-**************************************************************************/
-void connection_common_init(struct connection *pconn)
-{
-  pconn->established = FALSE;
-  pconn->used = TRUE;
-  pconn->last_write = 0;
-  pconn->buffer = new_socket_packet_buffer();
-  pconn->send_buffer = new_socket_packet_buffer();
-  pconn->statistics.bytes_send = 0;
-
-  init_packet_hashs(pconn);
-
-#ifdef USE_COMPRESSION
-  pconn->compression.frozen_level = 0;
-  pconn->compression.queued_packets = NULL;
-  pconn->compression.queue_size = 0;
-#endif
-}
-
-/**************************************************************************
- ...
-**************************************************************************/
-void connection_common_close(struct connection *pconn)
-{
-  my_closesocket(pconn->sock);
-  pconn->used = FALSE;
-  pconn->established = FALSE;
-
-  free_socket_packet_buffer(pconn->buffer);
-  pconn->buffer = NULL;
-
-  free_socket_packet_buffer(pconn->send_buffer);
-  pconn->send_buffer = NULL;
-
-  free_compression_queue(pconn);
-  free_packet_hashes(pconn);
-}
-
