@@ -1,0 +1,511 @@
+                          Freeciv Hacker's Guide
+			  
+This guide is intended to be a help for developers, wanting to mess with
+Freeciv program. 
+
+Here and there, you'll see some comments marked as [...], containing more
+personal thoughts on the design, why it looks like it does, and sometimes what 
+went wrong. I hope developers will find that interesting too.
+
+===========================================================================
+Basic
+===========================================================================
+Freeciv is a client/server civilization style of game, written in C.
+The client is pretty dumb. Almost all calculations is performed on the
+server. 
+
+[It wasn't like this always. Originally more code was placed in the
+common/ dir, allowing the client to do some of the world updates itself. 
+The end_of_turn city-refresh was for example performed both on the server 
+and on the client. However things got quite complex, more and more info
+was needed on the client-side(security problem). Little by little we moved 
+more code to the server, and as of 1.5 the client is quite dumb -PU]
+
+===========================================================================
+Server
+===========================================================================
+General:
+
+The server main loop basically looks like:
+
+  while(server_state==RUN_GAME_STATE) { /* looped once per turn */
+    do_ai_stuff();   /* do the ai controlled players */
+    sniff_packets(); /* get player requests and handle them */
+    end_turn();      /* main turn update */
+    game_next_year();
+  }
+
+
+Most time is spend in the sniff_packets() function, where a select()
+call waits for packets or input on stdin(server-op commands).
+
+===========================================================================
+Data Structures
+===========================================================================
+If you study the code, you'll soon come upon the genlist constructs.
+The genlist is a simple double-linked list, into which any kind of 
+data can be inserted. The basic genlist is only used in a few places,
+as it's completely type-unsafe(void*).
+However the genlist is used as a "base-class" for some typesafe versions,
+which are used all over the program. unit_list is just one example:
+
+struct unit_list {
+  struct genlist list;
+};
+
+Here's an example of how to use an iterator, to scan a genlist:
+
+{
+  struct unit_list *punit_list;
+  struct genlist_iterator myiter;
+  .....
+  
+  genlist_iterator_init(&myiter, &punit_list->list, 0);
+  for(; ITERATOR_PTR(myiter); ITERATOR_NEXT(myiter)) {
+    punit=(struct unit *)ITERATOR_PTR(myiter);
+    if(unit_can_defend_here(punit) && rate_unit(punit, aunit)>bestvalue) {
+      bestvalue=rate_unit(punit, aunit);
+      bestdef=punit;
+    }
+  }
+}
+
+First the iterator is initialized with the list.
+
+ITERATOR_PTR(myiter) is a macro, returning a void* to the element
+pointed to by the iterator, NULL if the iterator doesn't point to
+an element.
+ITERATOR_NEXT(myiter) moves the iterator one element forward.
+
+Careful! The above idiom with the for-construct can be pretty lethal!
+If you inside the for-loop removes the element pointed to by myiter,
+then ITERATOR_NEXT(myiter) will probably return garbage.
+
+The following example shows a correct way of removing genlist elements
+while iterating through the list.
+
+  for(; ITERATOR_PTR(myiter);) {
+    struct unit *punit2=(struct unit *)ITERATOR_PTR(myiter);
+    ITERATOR_NEXT(myiter); /* !!! */
+    send_remove_unit(0, punit2->id);
+    game_remove_unit(punit2->id);
+  }
+
+As of 1.5.3 a number of high-level macros for scanning genlists have
+been made. The above loop can now be written as:
+
+  unit_list_iterate(punit_list, punit)
+    send_remove_unit(0, punit->id);
+    game_remove_unit(punit->id);
+  unit_list_iterate_end;
+
+[The genlist was in theory a good idea. However the implementation turned
+out quite crappy. The typecasting shouldn't have been necessary and using
+some more macro-magic, the much-used scan_all_the_list case could have
+been handled much more elegant. Well Claus just did this for 1.5.3 -PU]
+
+=========================================================================
+Network and Packets
+=========================================================================
+The basic netcode is located in server/sernet.c and client/clinet.c.
+Notice the XtAppAddInput() call in client, that tells Xt to call
+the callback functions, when something happens on the client socket.
+
+All information passed between the server and clients, is send as
+serialized packet structures. These packets structures are all
+defined in common/packets.h.
+
+For each packet, there's two corresponding send and receive functions:
+
+int send_packet_unit_combat(struct connection *pc, 
+                            struct packet_unit_combat *packet);
+struct packet_unit_combat *recieve_packet_unit_combat(struct connection *pc);
+
+Each of these functions (de-)serializes a bytestream representation of
+the corresponding packet. Each entry in a packet-structure is
+(de-)serialized using architecture independent function such as
+get_int32() and put_int32().
+
+To demonstrate the route for a packet through the system, here's how
+a unit disband is performed.
+
+1)  A player disbands a unit.
+2)  The client initializes a packet_unit_request structure, and calls the
+    packet layer with this structure and packet type: PACKET_UNIT_DISBAND
+3)  The packet layer serializes the structure, wraps it up in a packet
+    containing the type, the packetlength and the serialized data. Finally
+    the data is send to the server.
+4)  On the server the packet is read. Based on the type, the corresponding
+    deserialize function is called. 
+5)  a packet_unit_request is initialized with the bytestream.
+6)  Finally the corresponding packet-handler(handle_unit_disband) function
+    is called with the newly constructed structure.
+7)  The handler function checks if the disband request is legal(is the sender
+    really the owner of the unit) etc.
+8)  The unit is disbanded=> wipe_unit() => send_remove_unit().
+9)  Now an integer, containing the id of the disbanded unit is
+    wrapped into a packet along with the type PACKET_REMOVE_UNIT:
+    send_packet_generic_integer
+10) The packet is serialized and send across the network
+11) On the client the packet is deserialized into a packet_generic_integer
+    structure
+12) The corresponding client handler function is now called 
+    handle_remove_unit(), and finally the unit is disbanded.
+    
+Notice that both packets involved in this scenery was generic packets.
+That is the packet structures involved, are used in various requests
+and updated. The packet_unit_request is for example also used for
+the packets PACKET_UNIT_BUILD_CITY and PACKET_UNIT_CHANGE_HOMECITY.
+
+When adding a new packet type, then check to see if you can reuse
+some of the existing packet types. This saves you the trouble of
+writing new serialize/deserialize functions.
+
+[The packet system started out as a pain and it stayed that way all the time. 
+After using Java's object serialize system, this handcoded serialize
+code really feels like the stoneage. That said, I fear it requires some
+advanced pre-processing system etc to automate the task for C structures. -PU]
+
+=========================================================================
+Graphics
+=========================================================================
+Currently the graphics is stored in the xpm fileformat, and accordingly
+loaded using libxpm.
+
+If you alter the graphics, then notice that after saving the new xpm
+file, you must manually mark the first color as transparent. Look at
+the original xpm-files, to see how this is done. Failing to do this
+results in crash(the mask-pixmaps will not be generated).
+
+Each terrain tile is drawn in 16 versions, all the combinations with
+with a green border in one of the main directions. Hills, mountains,
+forests and rivers are treated in special cases.
+
+[IMO we should have gotten rid of libxpm long ago. The graphics should
+be drawn in 24bit, and then quantized runtime, if the client is displayed
+on a pseudocolor display. 
+The current tile system should be converted to something like civ2's.
+They get away with drawing way less tiles, and it looks better. -PU]
+
+=========================================================================
+Diplomacy
+=========================================================================
+A few words about the diplomacy system. When a diplomacy meeting is
+established, a Treaty structure is created on both of the clients and
+on the server. All these structures are updated concurrently as clauses
+are added and removed.
+
+[There might be a bug somewhere in this system, if a player involved in
+diplomacy loses link. I'm not sure the server Treaty is removed, making
+it impossible to establish a new Treaty between the two players -PU]
+
+=========================================================================
+Map and Fog of War
+=========================================================================
+The map is maintained in a pretty straightforward C array, containing
+X*Y tiles. However the 'known' field needs a comment.
+
+struct tile {
+  ...
+  unsigned short known;
+  ...
+};
+
+On the server the known fields is considered to be a bitvector, one
+bit for each player, 0==tile unknown, 1==tile known.
+On the client this field contains one of the following 3 values:
+
+enum known_type {
+ TILE_UNKNOWN, TILE_KNOWN_FOGGED, TILE_KNOWN
+};
+
+The values TILE_UNKNOWN, TILE_KNOWN are straightforward. TILE_FOGGED
+is a tile of which the user knows the terrain (inclusive cities, roads,
+ etc...).
+
+Because of how the tile-drawing system works, the client has to know the
+terrain and specials of tiles adjacent to TILE_KNOWN and TILE_KNOWN_FOGGED
+tiles. This is done by sending the adjacent tiles with the value
+TILE_UNKNOWN. To keep track of which tiles have been sent and for fast
+lookup the server has a bitvector sent similar to known. [You could do
+this by seeing if the tile in question already have a known tile adjacent,
+in which case the value would already would have been sent.]
+
+We keep track of fog of war by counting the number of units and cities
+[and nifty future things like radar outposts] of each client that can
+see the tile. This requires a number per player, per tile, so each tile
+has a short[]. Every time a unit/city/miscellaneous can observe a tile
+1 is added to its player's number at the tile, and when it can't observe
+any more (killed/moved/pillaged) 1 is subtracted. In addition to the
+initialization/loading of a game this array is manipulated with the
+void unfog_area(struct player *pplayer, int x, int y, int len)
+and
+void fog_area(struct player *pplayer, int x, int y, int len)
+functions. "int len" is the radius of the area that should be
+fogged/unfogged, ie a len of 1 is a normal unit. In addition to keeping
+track of fog of war, these functions also make sure to reveal TILE_UNKNOWN
+tiles you get near, and send info about TILE_UNKNOWN tiles near that the
+client need for te drawing. They then send the tiles to
+void send_tile_info(struct player *dest, int x, int y)
+which then sets the correct known_type and sends the tile to the client.
+There are a number of functions like 
+void teleport_unit_sight_points(int src_x, int src_y, int dest_x, int dest_y,
+				struct unit* punit)
+and
+void map_unfog_city_area(struct city *pcity)
+that can be called for specific purposes like, say, moving a unit's sight
+point when you move the unit. These all call fog_area and unfog_area in
+turn.
+
+[Beware of using map_adjust_y. If you have a 80x50 map and then iterate
+around the tile 40,49 you can get values like 40,50, which is not a
+tile. if you map_adjust the y value it will return 40,49 . If you then
+think this should count as a unit seeing tile 40,49 and add a sight
+point for it at 40,49 fog of war gets out of sync. This will usually
+result in a wrap error on some point, as you unfog a square twice and it
+wraps around to 65536. This should get caught by the server and the error
+reported. I suggest using the is_real_tile function to test the tiles.
+unfog_area and fog_area tests their tiles this way. Remember to recode
+the is_real_tile function when we switch to isometric view.]
+
+If you want to just show the terrain and cities of the square the
+function show_area does this. The tiles remain fogged.
+If you play without fog of war all the values of the seen arrays are
+initialized to 1. So you are using the exact same code, you just never
+get down to 0. As changes in the "fogginess" of the tiles are only sent
+to the client when the value shifts between zero and non-zero, no
+redundant packages are sent. You can even switch fog of war on/off
+in game just by adding/subtracting 1 to all the tiles.
+
+We only send city and terrain updates to the players who can see the
+tile. So a city (or improvement) can exist in a square that is known and
+fogged and not be shown on the map. Likewise, you can see a city in a
+fogged square even if the city doesn't exist (it will be removed when
+you see the tile again). This is done by 1) only sending info to players
+who can see a tile 2) keeping track of what info has been sent so the
+game can be saved. For the purpose of 2) each player has a map on the
+server (consisting of player_tile's and dumb_city's) where the relevant
+information is kept.
+
+[An alternative solution would be to give each tile a list
+of the units and cities that observe it. IMO this would not be any
+easier than just counting, and would have no benefits. The current
+solution also gives the possibility to reveal squares as you like,
+say near a radar tower tile special. Very flexible.]
+
+[If I were to recode this, I'd drop the ugly TILE_KNOWN_NODRAW value,
+and have the server tell me exactly which kind of graphics should be
+drawn at each tile. -PU [Removed, but we still send the tiles. It
+seemed wise to remove it as it was really misused in the clients with
+people calling tile_is_known(x,y), which would return true for
+TILE_KNOWN_NODRAW... -Thue]]
+
+[The barbarians and the ai take their map info directly from the server,
+so they can currently ignore fog of war, and they do so. I really think
+that the ideal AI wouldn't be cheating like this.]
+
+If there is anything I have explained inadequately in this section you
+can ask me on <thue@diku.dk>.
+-Thue
+
+=========================================================================
+Client GUI- Athena 
+=========================================================================
+The client GUI is written using athena-widgets. A few comments on this 
+could prove useful for anyone wishing to write new dialogs or improve
+on the current ones.
+
+Widgets:
+--------
+When you create new widgets for a dialog, like:
+
+  players_form = XtVaCreateManagedWidget("playersform", 
+				       formWidgetClass, 
+				       players_dialog_shell, NULL);
+
+then put the widget properties in the app-default file 'Freeciv', instead
+of hardcoding them. For the widget created above, the following entries
+in the app-default file applies:
+
+*playersform.background:          lightblue
+*playersform.resizable:           true
+*playersform.top:                 chainTop
+*playersform.bottom:              chainBottom
+*playersform.left:                chainLeft
+*playersform.right:               chainRight
+
+Pixcomm and Canvas:
+-------------------
+The Pixcomm is a subclassed Command-widget, which can displays a Pixmap
+instead of a string, on top of a button(command). The Pixcomm widget
+should be used all places where this kind of high-level functionality
+is required. 
+
+The Canvas widget is more low-level. One have to write an expose(redraw)
+event-handler for each widget. The widget generates events on resize
+and mousebuttons.
+
+[Reading any Xt documentation, will tell you how powerful widget
+subclassing is. So I went trough great troubles subclassing the
+command widget. It was not before long I got mails from unhappy Xaw3d
+(and derives) users, that the client keeps crashing on them. Turns
+out that subclassing from any widgets but Core, chains the new
+widgets to libXaw. In hindsight I should just subclassed the Canvas
+widget and add more highlevel functionality. -PU]
+
+===========================================================================
+Misc - The idea trashcan 
+===========================================================================
+[Currently all of the major entities - units, cities, players, contains
+an unique id. This id is really only required when a reference to an entity
+is to be serialized(saved or distributed over the net). However in the
+current code, the id is also used for comparing, looking up and in general
+referencing entities. This results in a lot of mess and unnecessary duplicate
+functions. Often when programming, one wonders if some function needs
+the id or a pointer when referring to an entity. -PU]
+
+[Currently there's a 1-to-1 mapping between players and connections. Some
+interesting results could be achieved, if more connections could be attached
+to a single player(race). That way 2 persons could play cooperate, splitting 
+the work between them. -PU]
+
+===========================================================================
+
+Player-related entities in Freeciv - by rp@win.tue.nl 
++ by dwp@mso.anu.edu.au
+
+Freeciv is confused about the meaning of 'player'.  As a participant in
+Freeciv games, you'll notice that the participants are called 'players'.
+At the same time, players seem to be identified with civilizations.
+On the other hand, civilizations seem to be identified by 'race':
+every player chooses a race at the start of the game.
+
+In the data structures, a 'player' identifies a civilization, not a user.
+
+----
+  THE PLAN:
+
+There are four player-related entities:
+
++ player
+  A civilization, with a capital, cities, units, an income, etc.
+
++ race
+  A type of civilization (except that very little actually depends on
+  race, and the oddity exists that each player must be of different race)
+
++ user
+  Identifies 'someone out there', usually a human user running a civclient
+  (this is the plan; it is not yet implemented).
+
++ connection
+  Records a client connection; like a user, but disappears when the user 
+  disconnects, whereas for real users we may want to remember them between 
+  connections.
+
+Where do these entities exist?
+
+Races aren't actually used for annything that matters; for them,
+so the question isn't very interesting.
+
+Players (more aptly named, 'civilizations'), exist in games.  Except in
+the context of a running game, the entity makes no sense.  Players and
+their status are part of savefiles.  A game can be saved and restarted
+on a different server; the players will be the same.  A new game will
+have new players.  Players exist in common/ (even games do) but a
+client only has one instantiated player.
+
+The reason to introduce users is client-side server commands.  It must
+be possible to assign different levels of access to commands to different
+users.  Attaching it to players is not good enough: the information must
+survive the addition and removal of other players, the start or restart
+of a game, reconnections by the same user even from different computers,
+or transferral of the game to a different server.  However, a user
+may have different levels of access in different games.
+
+While they last, connections are sufficient identification for users.
+The user entity will allow users to be identified when they reconnect.
+
+Ideally, users would be identified with unique global ids, handed out
+by a 'registry service' similar to the metaserver, but this would be
+too cumbersome in practice.  So the plan is to make users persist in
+a server session (even whan a game is started, or restarted when that
+option is added) and make them persist across games (when a saved
+game is loaded in a different server session).
+
+Users will be created when they first connect to a server, remembered by
+the running server and in savefiles.  Upon connecting, the client will
+be sent a unique session id, generated when the server started, plus a
+fresh user id; it will store them in a ~/.civcookie file, and send it
+back when trying to reconnect.  This will allow the identity of users
+to be protected.  'Protected' players will only allow the same user to
+reconnect; 'unprotected' ones allow anyone to connect; server commands
+and probably client options will be available to control this.
+
+Player names will be assigned to users, not players.
+
+The server maintains a default access level, which is used for new
+users and unprotected ones.
+
+----
+  THE PRESENT IMPLEMENTATION:
+
+Currently access levels are stored in the connection struct.  This allows 
+access levels to be assigned to each individual connected player, which 
+would not be the case if they were directly assigned to the player struct 
+(due to the fact that the players array changes when players are added or 
+removed).
+
+But that's it.
+
+Players are still created before the game is started, and player names
+still belong to players.  Access levels exist in client and server, 
+but only the server uses them.  User ids are not yet implemented;
+Server ids do not exist at all.
+
+Commands to protect/unprotect users do not yet exist; they would serve 
+no useful purpose.
+
+Access levels can set for individual users, including AI players with 
+a connected observer, but only while someone is connected; they will not 
+be remembered when the user disconnects.
+
+===========================================================================
+Mini Style Guide
+===========================================================================
+
+If you want to hack Freeciv, and want your patches to be accepted, it
+helps to follow some simple style rules:
+
+- Use K&R indentation style with indentation 2 (when in doubt, use
+  "indent -kr -i2").  However, do not re-indent areas of code you are
+  not modifying or creating.
+
+- Order include files consistently:  First state all system include
+  files with <> in alphabetic order, then all Freeciv include files
+  with "", sorted by directory (common, server, ...) and then by
+  alphabetic order, with a blank line between the sections.  This helps
+  to avoid adding unnecessary or duplicated include files.
+
+- If you use a system specific feature, don't add #ifdef __CRAY__ or
+  something like that.  Rather write a check for that feature for
+  configure.in, and use a meaningful macro name in the source.
+
+- Always prototype global functions in the appropriate header file.
+  Local functions should always be declared as static.
+
+- Don't use C++-style comments (i.e., // comments).
+
+- If you send patches, use "diff -u" (or "diff -r -u").  For further
+  information, see <http://www.freeciv.org/contribute.html>.  Also,
+  name patch files descriptively (e.g. "fix-foo-bug-0.diff" is good,
+  but "freeciv.diff" is not).
+
+- When doing a "diff" for a patch, be sure to exclude unnecessary files
+  by using the "-X" argument to "diff".  E.g.:
+
+    % diff -ruN -Xdiff_ignore freeciv_cvs freeciv >/tmp/fix-foo-bug-0.diff
+
+  A suggested "diff_ignore" file is included in the Freeciv distribution.
+
+===========================================================================

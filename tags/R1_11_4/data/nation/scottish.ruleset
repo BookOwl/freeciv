@@ -1,0 +1,39 @@
+[nation_scottish]
+
+name=_("Scottish")
+plural=_("?plural:Scottish")
+leader="Charles", "James", "Robert the Bruce", "William Wallace",
+  "Mary Stuart"
+leader_sex="Male", "Male", "Male", "Male",
+  "Female"
+flag="f.scotland"
+flag_alt = "f.united_kingdom"
+city_style = "European"
+
+ruler_titles = { "government",  "male_title",         "female_title"
+                 "Republic",    _("Speaker"),         _("Speaker")
+                 "Democracy",   _("Prime Minister"),  _("Prime Minister")
+               }
+
+attack=1
+expand=1
+civilized=2
+advisors=100,100,100,100,100,100,100
+
+tech_goals="Monarchy","Iron Working","Trade","Navigation","Railroad","Steel",
+           "Industrialization"
+wonder="Hoover Dam"
+government="Democracy"
+
+cities =
+  "Edinburgh", "Glasgow", "Aberdeen", "Perth", "Dundee", "Inverness",
+  "Stirling", "Hamilton", "Motherwell", "Dunfermline", "Falkirk",
+  "Kilmarnock", "Dunfries", "East Kilbride", "Coatbridge", "Dumbarton",
+  "Lanark", "St. Andrews", "Kirkcaldy", "Fort William", "Bathgate",
+  "Irvine", "Cumbernauld", "Johnstone", "Livingstone", "Lockerbie",
+  "Oban", "Leven", "Paisley", "Peterhead", "Prestwick", "Stranraer",
+  "Airdrie", "Troon", "Ullapool", "Ayr", "Aviemore", "Lerwick", "Largs",
+  "Bellshill", "Wick", "Larkhall", "Cowdenbeath", "Gretna", "Brechin",
+  "Helensburgh", "Dunblane", "Montrose", "Kilwinning", "Monifieth",
+  "Dunbar", "Cumnock", "Bothwell", "Callander", "Portree", "Whitebridge",
+  "Newton Stewart"
