@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -119,7 +118,6 @@ GtkWidget *turn_done_button;
 GtkWidget *unit_info_label;
 GtkWidget *unit_info_frame;
 
-static GtkWidget *unit_pixmap_table;
 static GtkWidget *unit_pixmap;
 static GtkWidget *unit_pixmap_button;
 static GtkWidget *unit_below_pixmap[MAX_NUM_UNITS_BELOW];
@@ -192,7 +190,7 @@ static gint keyboard_handler(GtkWidget *w, GdkEventKey *ev)
 {
   /* inputline history code */
   if (GTK_WIDGET_HAS_FOCUS(inputline) || !GTK_WIDGET_IS_SENSITIVE(top_vbox)) {
-    const char *data = NULL;
+    void *data = NULL;
     gint keypress = FALSE;
 
     if (ev->keyval == GDK_Up) {
@@ -217,28 +215,6 @@ static gint keyboard_handler(GtkWidget *w, GdkEventKey *ev)
       }
     }
 
-    if (ev->keyval == GDK_Page_Up) {
-      GtkAdjustment *adj;
-      gint nval;
-
-      keypress = TRUE;
-
-      adj = gtk_range_get_adjustment(GTK_RANGE(text_scrollbar));
-      nval = adj->value - adj->page_increment;
-      gtk_adjustment_set_value(adj, nval);
-    }
-
-    if(ev->keyval == GDK_Page_Down) {
-      GtkAdjustment *adj;
-      gint nval;
-
-      keypress = TRUE;
-
-      adj = gtk_range_get_adjustment(GTK_RANGE(text_scrollbar));
-      nval = adj->value + adj->page_increment;
-      gtk_adjustment_set_value(adj, nval);
-    }
-		
     if (data)
       gtk_entry_set_text(GTK_ENTRY(inputline), data);
 
@@ -455,105 +431,6 @@ static GtkWidget *detached_widget_fill(GtkWidget *ahbox)
 }
 
 /**************************************************************************
-  Called to build the unit_below pixmap table.  This is the table on the
-  left of the screen that shows all of the inactive units in the current
-  tile.
-
-  It may be called again if the tileset changes.
-**************************************************************************/
-static void populate_unit_pixmap_table(void)
-{
-  int i;
-  GtkWidget *table = unit_pixmap_table;
- 
-  /* 135 below is rough value (could be more intelligent) --dwp */
-  num_units_below = 135 / (int) NORMAL_TILE_WIDTH;
-  num_units_below = CLIP(1, num_units_below, MAX_NUM_UNITS_BELOW);
-
-  gtk_table_resize(GTK_TABLE(table), 2, num_units_below);
-
-  /* Note, we ref this and other widgets here so that we can unref them
-   * in reset_unit_table. */
-  unit_pixmap = gtk_pixcomm_new(root_window, UNIT_TILE_WIDTH, 
-                                UNIT_TILE_HEIGHT);
-  gtk_widget_ref(unit_pixmap);
-  gtk_pixcomm_clear(GTK_PIXCOMM(unit_pixmap), TRUE);
-  unit_pixmap_button = gtk_event_box_new();
-  gtk_widget_ref(unit_pixmap_button);
-  gtk_container_add(GTK_CONTAINER(unit_pixmap_button), unit_pixmap);
-  gtk_table_attach_defaults(GTK_TABLE(table), unit_pixmap_button, 0, 1, 0, 1);
-  gtk_signal_connect(GTK_OBJECT(unit_pixmap_button), "button_press_event",
-                     GTK_SIGNAL_FUNC(select_unit_pixmap_callback), 
-                     GINT_TO_POINTER(-1));
-
-  for(i = 0; i < num_units_below; i++) {
-    unit_below_pixmap[i] = gtk_pixcomm_new(root_window, UNIT_TILE_WIDTH,
-                                           UNIT_TILE_HEIGHT);
-    gtk_widget_ref(unit_below_pixmap[i]);
-    unit_below_pixmap_button[i] = gtk_event_box_new();
-    gtk_widget_ref(unit_below_pixmap_button[i]);
-    gtk_container_add(GTK_CONTAINER(unit_below_pixmap_button[i]),
-                      unit_below_pixmap[i]);
-    gtk_signal_connect(GTK_OBJECT(unit_below_pixmap_button[i]),
-                       "button_press_event",
-                        GTK_SIGNAL_FUNC(select_unit_pixmap_callback),
-                        GINT_TO_POINTER(i));
-      
-    gtk_table_attach_defaults(GTK_TABLE(table), unit_below_pixmap_button[i],
-                              i, i + 1, 1, 2);
-    gtk_widget_set_usize(unit_below_pixmap[i],
-                         UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT);
-    gtk_pixcomm_clear(GTK_PIXCOMM(unit_below_pixmap[i]), TRUE);
-  }
-
-  more_arrow_pixmap = gtk_pixmap_new(sprites.right_arrow->pixmap, NULL);
-  gtk_widget_ref(more_arrow_pixmap);
-  gtk_pixmap_set_build_insensitive(GTK_PIXMAP(more_arrow_pixmap), FALSE);
-  gtk_table_attach_defaults(GTK_TABLE(table), more_arrow_pixmap, 4, 5, 1, 2);
-
-  gtk_widget_show_all(table);
-}
-
-/**************************************************************************
-  Called when the tileset is changed to reset the unit pixmap table.
-**************************************************************************/
-void reset_unit_table(void)
-{
-  int i;
-
-  /* Unreference all of the widgets that we're about to reallocate, thus
-   * avoiding a memory leak. Remove them from the container first, just
-   * to be safe. Note, the widgets are ref'd in
-   * populatate_unit_pixmap_table. */
-  gtk_container_remove(GTK_CONTAINER(unit_pixmap_table),
-		       unit_pixmap_button);
-  gtk_widget_unref(unit_pixmap);
-  gtk_widget_unref(unit_pixmap_button);
-  for (i = 0; i < num_units_below; i++) {
-    gtk_container_remove(GTK_CONTAINER(unit_pixmap_table),
-			 unit_below_pixmap_button[i]);
-    gtk_widget_unref(unit_below_pixmap[i]);
-    gtk_widget_unref(unit_below_pixmap_button[i]);
-  }
-  gtk_container_remove(GTK_CONTAINER(unit_pixmap_table),
-		       more_arrow_pixmap);
-  gtk_widget_unref(more_arrow_pixmap);
-
-  populate_unit_pixmap_table();
-
-  /* We have to force a redraw of the units.  And we explicitly have
-   * to force a redraw of the focus unit, which is normally only
-   * redrawn when the focus changes. We also have to force the 'more'
-   * arrow to go away, both by explicitly hiding it and telling it to
-   * do so (this will be reset immediately afterwards if necessary,
-   * but we have to make the *internal* state consistent). */
-  gtk_widget_hide(more_arrow_pixmap);
-  set_unit_icons_more_arrow(FALSE);
-  set_unit_icon(-1, get_unit_in_focus());
-  update_unit_pix_label(get_unit_in_focus());
-}
-
-/**************************************************************************
  do the heavy lifting for the widget setup.
 **************************************************************************/
 static void setup_widgets(void)
@@ -641,7 +518,6 @@ static void setup_widgets(void)
 
   /* citizens for taxrates */
   for (i = 0; i < 10; i++) {
-    enum citizen_type c = i < 5 ? CITIZEN_SCIENTIST : CITIZEN_TAXMAN;
     ebox = gtk_event_box_new();
     gtk_widget_set_events(ebox, GDK_BUTTON_PRESS_MASK);
 
@@ -650,7 +526,7 @@ static void setup_widgets(void)
     gtk_signal_connect(GTK_OBJECT(ebox), "button_press_event",
                        GTK_SIGNAL_FUNC(taxrates_callback), GINT_TO_POINTER(i));
 
-    econ_label[i] = gtk_pixmap_new(get_citizen_pixmap(c, i, NULL), NULL);
+    econ_label[i] = gtk_pixmap_new(get_citizen_pixmap(i < 5 ? 1 : 2), NULL);
     gtk_pixmap_set_build_insensitive(GTK_PIXMAP(econ_label[i]), FALSE);
     gtk_container_add(GTK_CONTAINER(ebox), econ_label[i]);
   }
@@ -665,8 +541,7 @@ static void setup_widgets(void)
   flake_label = gtk_pixmap_new(sprites.cooling[0]->pixmap, NULL);
   gtk_pixmap_set_build_insensitive(GTK_PIXMAP(flake_label), FALSE);
 
-  government_label
-    = gtk_pixmap_new(get_citizen_pixmap(CITIZEN_UNHAPPY, 0, NULL), NULL);
+  government_label= gtk_pixmap_new(sprites.citizen[7]->pixmap, NULL);
   gtk_pixmap_set_build_insensitive(GTK_PIXMAP(government_label), FALSE);
 
   timeout_label = gtk_label_new("");
@@ -714,14 +589,43 @@ static void setup_widgets(void)
   box = gtk_hbox_new(FALSE,0);
   gtk_box_pack_start(GTK_BOX(avbox), box, FALSE, FALSE, 0);
 
-  table = gtk_table_new(0, 0, FALSE);
+  table = gtk_table_new(2, num_units_below, FALSE);
   gtk_box_pack_start(GTK_BOX(box), table, FALSE, FALSE, 5);
 
   gtk_table_set_row_spacings(GTK_TABLE(table), 2);
   gtk_table_set_col_spacings(GTK_TABLE(table), 2);
 
-  unit_pixmap_table = table;
-  populate_unit_pixmap_table();
+  unit_pixmap = gtk_pixcomm_new(root_window, UNIT_TILE_WIDTH, 
+                                UNIT_TILE_HEIGHT);
+  gtk_pixcomm_clear(GTK_PIXCOMM(unit_pixmap), TRUE);
+  unit_pixmap_button = gtk_event_box_new();
+  gtk_container_add(GTK_CONTAINER(unit_pixmap_button), unit_pixmap);
+  gtk_table_attach_defaults(GTK_TABLE(table), unit_pixmap_button, 0, 1, 0, 1);
+  gtk_signal_connect(GTK_OBJECT(unit_pixmap_button), "button_press_event",
+                     GTK_SIGNAL_FUNC(select_unit_pixmap_callback), 
+                     GINT_TO_POINTER(-1));
+
+  for(i = 0; i < num_units_below; i++) {
+    unit_below_pixmap[i] = gtk_pixcomm_new(root_window, UNIT_TILE_WIDTH,
+                                           UNIT_TILE_HEIGHT);
+    unit_below_pixmap_button[i] = gtk_event_box_new();
+    gtk_container_add(GTK_CONTAINER(unit_below_pixmap_button[i]),
+                      unit_below_pixmap[i]);
+    gtk_signal_connect(GTK_OBJECT(unit_below_pixmap_button[i]),
+                       "button_press_event",
+                        GTK_SIGNAL_FUNC(select_unit_pixmap_callback),
+                        GINT_TO_POINTER(i));
+      
+    gtk_table_attach_defaults(GTK_TABLE(table), unit_below_pixmap_button[i],
+                              i, i + 1, 1, 2);
+    gtk_widget_set_usize(unit_below_pixmap[i],
+                         UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT);
+    gtk_pixcomm_clear(GTK_PIXCOMM(unit_below_pixmap[i]), TRUE);
+  }
+
+  more_arrow_pixmap = gtk_pixmap_new(sprites.right_arrow->pixmap, NULL);
+  gtk_pixmap_set_build_insensitive(GTK_PIXMAP(more_arrow_pixmap), FALSE);
+  gtk_table_attach_defaults(GTK_TABLE(table), more_arrow_pixmap, 4, 5, 1, 2);
 
   /* Map canvas and scrollbars */
 
@@ -844,7 +748,7 @@ void ui_main(int argc, char **argv)
      in the next release.  */
 # ifdef HAVE_PUTENV
     if(strcmp(setlocale(LC_CTYPE, (const char *)NULL), "C") == 0)
-      putenv((char *) "LC_CTYPE=en_US.ISO8859-1");
+      putenv("LC_CTYPE=en_US.ISO8859-1");
 # endif
 #endif
 
@@ -925,9 +829,9 @@ void ui_main(int argc, char **argv)
   gdk_gc_set_fill(fill_tile_gc, GDK_STIPPLED);
 
   {
-    char d1[] = {0x03, 0x0c, 0x03, 0x0c};
-    char d2[] = {0x08, 0x02, 0x08, 0x02};
-    char d3[] = {0xAA, 0x55, 0xAA, 0x55};
+    unsigned char d1[] = {0x03, 0x0c, 0x03, 0x0c};
+    unsigned char d2[] = {0x08, 0x02, 0x08, 0x02};
+    unsigned char d3[] = {0xAA, 0x55, 0xAA, 0x55};
 
     gray50 = gdk_bitmap_create_from_data(root_window, d1, 4, 4);
     gray25 = gdk_bitmap_create_from_data(root_window, d2, 4, 4);
@@ -951,6 +855,11 @@ void ui_main(int argc, char **argv)
 
   tilespec_load_tiles();
 
+  /* 135 below is rough value (could be more intelligent) --dwp */
+  num_units_below = 135 / (int) NORMAL_TILE_WIDTH;
+  num_units_below = MIN(num_units_below, MAX_NUM_UNITS_BELOW);
+  num_units_below = MAX(num_units_below, 1);
+  
   setup_widgets();
   load_intro_gfx();
   load_cursors();
@@ -1105,7 +1014,7 @@ static gint show_info_popup(GtkWidget *w, GdkEventButton *ev)
 	    population_to_text(civ_population(game.player_ptr)),
 	    textyear(game.year), game.turn,
 	    game.player_ptr->economic.gold,
-	    player_get_expected_income(game.player_ptr),
+	    turn_gold_difference,
 	    game.player_ptr->economic.tax,
 	    game.player_ptr->economic.luxury,
 	    game.player_ptr->economic.science,

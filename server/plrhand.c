@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -55,10 +54,6 @@ static void package_player_info(struct player *plr,
                                 struct packet_player_info *packet,
                                 struct player *receiver,
                                 enum plr_info_level min_info_level);
-static void tech_researched(struct player* plr);
-static int choose_goal_tech(struct player *plr);
-static enum plr_info_level player_info_level(struct player *plr,
-					     struct player *receiver);
 
 /**************************************************************************
 ...
@@ -375,7 +370,7 @@ void found_new_future_tech(struct player *pplayer)
 /**************************************************************************
 Player has researched a new technology
 **************************************************************************/
-static void tech_researched(struct player* plr)
+void tech_researched(struct player* plr)
 {
   /* plr will be notified when new tech is chosen */
 
@@ -424,7 +419,7 @@ void update_tech(struct player *plr, int bulbs)
 /**************************************************************************
 ...
 **************************************************************************/
-static int choose_goal_tech(struct player *plr)
+int choose_goal_tech(struct player *plr)
 {
   int sub_goal;
 
@@ -611,10 +606,9 @@ void get_a_tech(struct player *pplayer, struct player *target)
 		   get_tech_name(pplayer, i),
 		   get_nation_name_plural(target->nation));
 
-  notify_player_ex(target, -1, -1, E_ENEMY_DIPLOMAT_THEFT,
-                   _("Game: The %s stole %s from you!"),
-		   get_nation_name_plural(pplayer->nation),
-		   get_tech_name(pplayer, i));
+  notify_player(target, _("Game: The %s stole %s from you!"),
+		get_nation_name_plural(pplayer->nation),
+		get_tech_name(pplayer, i));
 
   notify_embassies(pplayer, target,
 		   _("Game: The %s have stolen %s from the %s."),
@@ -816,11 +810,6 @@ void handle_player_cancel_pact(struct player *pplayer, int other_player)
   /* can't break a pact with yourself */
   if (pplayer == pplayer2)
     return;
-
-  /* can't break a pact with a team member */
-  if (pplayer->team != TEAM_NONE && pplayer->team == pplayer2->team) {
-    return;
-  }
 
   /* check what the new status will be, and what will happen to our
      reputation */
@@ -1123,7 +1112,6 @@ static void package_player_common(struct player *plr,
   sz_strlcpy(packet->name, plr->name);
   packet->nation=plr->nation;
   packet->is_male=plr->is_male;
-  packet->team = plr->team;
   packet->city_style=plr->city_style;
 
   packet->is_alive=plr->is_alive;
@@ -1240,8 +1228,8 @@ static void package_player_info(struct player *plr,
 /**************************************************************************
   ...
 **************************************************************************/
-static enum plr_info_level player_info_level(struct player *plr,
-					     struct player *receiver)
+enum plr_info_level player_info_level(struct player *plr,
+                                      struct player *receiver)
 {
   if (plr == receiver)
     return INFO_FULL;
@@ -1342,7 +1330,8 @@ void server_remove_player(struct player *pplayer)
   /* Not allowed after a game has started */
   if (!(game.is_new_game && (server_state==PRE_GAME_STATE ||
 			     server_state==SELECT_RACES_STATE))) {
-    die("You can't remove players after the game has started!");
+    freelog(LOG_FATAL, "You can't remove players after the game has started!");
+    abort();
   }
 
   freelog(LOG_NORMAL, _("Removing player %s."), pplayer->name);
@@ -1523,7 +1512,7 @@ research etc.  Players are both thrown into anarchy and gold is
 split between both players.
                                - Kris Bubendorfer 
 ***********************************************************************/
-static struct player *split_player(struct player *pplayer)
+struct player *split_player(struct player *pplayer)
 {
   int *nations_used, i, num_nations_avail=game.playable_nation_count, pick;
   int newplayer = game.nplayers;

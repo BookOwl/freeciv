@@ -37,8 +37,12 @@
 static void handle_alloc_failure(size_t size, const char *called_as,
 				 int line, const char *file)
 {
-  die("Out of memory trying to %s %lu bytes at line %d of %s.", called_as,
-      (unsigned long) size, line, file);
+  freelog(LOG_FATAL, _("Out of memory trying to %s %lu bytes at line %d of %s."),
+	  called_as, (unsigned long)size, line, file);
+  /*
+   * Do anything else here (cleanups? safe-save??)
+   */
+  exit(EXIT_FAILURE);
 }
 
 /**********************************************************************

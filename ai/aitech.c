@@ -11,10 +11,6 @@
    GNU General Public License for more details.
 ***********************************************************************/
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <stdio.h>
 #include <string.h>
 
@@ -35,6 +31,40 @@
 #include "aitools.h"
 
 #include "aitech.h"
+
+/**************************************************************************
+.. AI got some tech goals, and should try to fulfill them. 
+**************************************************************************/
+
+/**************************************************************************
+.. calculate next government wish.
+**************************************************************************/
+static Tech_Type_id get_government_tech(struct player *plr)
+{
+  int goal = get_nation_by_plr(plr)->goals.government;
+  int subgoal = get_government(goal)->subgoal;
+  
+  if (can_change_to_government(plr, goal)) {
+    freelog(LOG_DEBUG, "get_gov_tech (%s): have %d", plr->name, goal);
+    return A_NONE;
+  }
+
+  if (subgoal >= 0) {
+    struct government *subgov = get_government(subgoal);
+    if (get_invention(plr, subgov->required_tech) == TECH_KNOWN) {
+      freelog(LOG_DEBUG, "get_gov_tech (%s): have sub %d %s",
+	      plr->name, goal, subgov->name);
+      return get_government(goal)->required_tech;
+    } else {
+      freelog(LOG_DEBUG, "get_gov_tech (%s): do sub %d %s",
+	      plr->name, goal, subgov->name);
+      return subgov->required_tech;
+    }
+  } else {
+    freelog(LOG_DEBUG, "get_gov_tech (%s): no sub %d", plr->name, goal);
+    return get_government(goal)->required_tech;
+  }
+}
 
 /**************************************************************************
   Returns tech corresponding to players wonder goal from nations[],
@@ -79,6 +109,14 @@ static void ai_next_tech_goal_default(struct player *pplayer,
       break; /* remove this to restore old functionality -- Syela */
     }
   } 
+  tech = get_government_tech(pplayer);
+  if (tech != A_NONE && tech_exists(tech)) {
+    dist = num_unknown_techs_for_goal(pplayer, tech);
+    if (dist < bestdist) { 
+      bestdist = dist;
+      goal = tech;
+    }
+  }
   tech = get_wonder_tech(pplayer);
   if (tech != A_NONE) {
     dist = num_unknown_techs_for_goal(pplayer, tech);
@@ -195,8 +233,9 @@ static void ai_select_tech_goal(struct player *pplayer, struct ai_choice *choice
 void ai_next_tech_goal(struct player *pplayer)
 {
   struct ai_choice bestchoice, curchoice;
-
-  init_choice(&bestchoice);
+  
+  bestchoice.choice = A_NONE;      
+  bestchoice.want   = 0;
 
   ai_select_tech_goal(pplayer, &curchoice);
   copy_if_better_choice(&curchoice, &bestchoice); /* not dealing with the rest */

@@ -20,8 +20,6 @@ struct city;
 struct Clause;
 struct player;
 struct player_spaceship;
-struct unit;
-
 typedef int cid;
 typedef int wid;
 
@@ -36,8 +34,8 @@ void client_change_all(cid x, cid y);
 
 void format_duration(char *buffer, int buffer_size, int duration);
 
-const char *get_embassy_status(struct player *me, struct player *them);
-const char *get_vision_status(struct player *me, struct player *them);
+char *get_embassy_status(struct player *me, struct player *them);
+char *get_vision_status(struct player *me, struct player *them);
 void client_diplomacy_clause_string(char *buf, int bufsiz,
 				    struct Clause *pclause);
 

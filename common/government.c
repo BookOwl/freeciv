@@ -10,11 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
@@ -285,7 +280,7 @@ void governments_alloc(int num)
 /***************************************************************
  De-allocate resources associated with the given government.
 ***************************************************************/
-static void government_free(struct government *gov)
+void government_free(struct government *gov)
 {
   free(gov->ruler_titles);
   gov->ruler_titles = NULL;

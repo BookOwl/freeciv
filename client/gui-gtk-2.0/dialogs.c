@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -36,7 +35,6 @@
 #include "support.h"
 
 #include "chatline.h"
-#include "citydlg.h"
 #include "civclient.h"
 #include "clinet.h"
 #include "control.h"
@@ -68,9 +66,6 @@ static GList      *sorted_races_list = NULL; /* contains a list of race
 					      name. Is valid as long
 					      as the races_dialog is
 					      poped up. */
-/******************************************************************/
-static GtkWidget  *notify_dialog_shell;
-
 /******************************************************************/
 static GtkWidget  *spy_tech_shell;
 static GtkWidget  *spy_advances_list;
@@ -142,27 +137,38 @@ static int connect_unit_y;
 /****************************************************************
 ...
 *****************************************************************/
+gint deleted_callback(GtkWidget *w, GdkEvent *ev, gpointer data)
+{
+  return FALSE;
+}
+
+
+/****************************************************************
+...
+*****************************************************************/
 void popup_notify_dialog(char *caption, char *headline, char *lines)
 {
+  GtkWidget *shell;
   GtkWidget *label, *headline_label, *sw;
-
-  notify_dialog_shell = gtk_dialog_new_with_buttons(
+  
+  shell = gtk_dialog_new_with_buttons(
 	caption,
 	GTK_WINDOW(toplevel),
 	GTK_DIALOG_MODAL,
 	GTK_STOCK_CLOSE,
 	GTK_RESPONSE_CLOSE,
 	NULL);
-  gtk_dialog_set_default_response(GTK_DIALOG(notify_dialog_shell),
-    GTK_RESPONSE_CLOSE);
-  g_signal_connect(notify_dialog_shell, "response",
+  gtk_dialog_set_default_response(GTK_DIALOG(shell), GTK_RESPONSE_CLOSE);
+  g_signal_connect(shell, "response",
 		   G_CALLBACK(gtk_widget_destroy), NULL);
-  g_signal_connect(notify_dialog_shell, "destroy",
-		   G_CALLBACK(gtk_widget_destroyed), &notify_dialog_shell);
-  gtk_widget_set_name(notify_dialog_shell, "Freeciv");
+  g_signal_connect(shell, "destroy",
+		   G_CALLBACK(deleted_callback), NULL);
+  gtk_widget_set_name(shell, "Freeciv");
+
+  gtk_container_border_width(GTK_CONTAINER(GTK_DIALOG(shell)->vbox), 5);
 
   headline_label = gtk_label_new(headline);   
-  gtk_box_pack_start(GTK_BOX(GTK_DIALOG(notify_dialog_shell)->vbox),
+  gtk_box_pack_start(GTK_BOX(GTK_DIALOG(shell)->vbox),
 		     headline_label, FALSE, FALSE, 0);
   gtk_widget_set_name(headline_label, "notify label");
 
@@ -179,104 +185,139 @@ void popup_notify_dialog(char *caption, char *headline, char *lines)
   gtk_label_set_justify(GTK_LABEL(label), GTK_JUSTIFY_LEFT);
   gtk_misc_set_alignment(GTK_MISC(label), 0.0, 0.0);
 
-  gtk_box_pack_start(GTK_BOX(GTK_DIALOG(notify_dialog_shell)->vbox), sw,
-    TRUE, TRUE, 0);
+  gtk_box_pack_start(GTK_BOX(GTK_DIALOG(shell)->vbox), sw, TRUE, TRUE, 0);
 
-  gtk_widget_show_all(GTK_DIALOG(notify_dialog_shell)->vbox);
+  gtk_widget_show_all(GTK_DIALOG(shell)->vbox);
 
-  gtk_widget_set_size_request(notify_dialog_shell, -1, 265);
-  gtk_window_set_position(GTK_WINDOW(notify_dialog_shell),
-    GTK_WIN_POS_CENTER_ON_PARENT);
-  gtk_window_present(GTK_WINDOW(notify_dialog_shell));
-}
-
-/****************************************************************
- Closes the notify dialog.
-*****************************************************************/
-void popdown_notify_dialog(void)
-{
-  if (notify_dialog_shell) {
-    gtk_widget_destroy(notify_dialog_shell);
-  }
+  gtk_widget_set_size_request(shell, -1, 265);
+  gtk_window_set_position(GTK_WINDOW(shell), GTK_WIN_POS_CENTER_ON_PARENT);
+  gtk_window_present(GTK_WINDOW(shell));
 }
 
 /****************************************************************
 ...
 *****************************************************************/
-static void notify_goto_callback(GtkWidget *w, gint response_id)
+
+/* surely this should use genlists??  --dwp */
+struct widget_list {
+  GtkWidget *w;
+  int x,y;
+  struct widget_list *next;
+};
+static struct widget_list *notify_goto_widget_list = NULL;
+
+static void notify_goto_widget_remove(GtkWidget *w)
 {
-  struct city *pcity = NULL;
-  int x, y;
-
-  x = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(w), "x"));
-  y = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(w), "y"));
-
-  switch (response_id) {
-  case 1:
-    center_tile_mapcanvas(x, y);
-    break;
-  case 2:
-    pcity = map_get_city(x, y);
-
-    if (center_when_popup_city) {
-      center_tile_mapcanvas(x, y);
-    }
-
-    if (pcity) {
-      popup_city_dialog(pcity, 0);
-    }
-    break;
+  struct widget_list *cur, *tmp;
+  cur=notify_goto_widget_list;
+  if (!cur)
+    return;
+  if (cur && cur->w == w) {
+    cur = cur->next;
+    free(notify_goto_widget_list);
+    notify_goto_widget_list = cur;
+    return;
   }
-  gtk_widget_destroy(w);
+  for (; cur->next && cur->next->w!= w; cur=cur->next);
+  if (cur->next) {
+    tmp = cur->next;
+    cur->next = cur->next->next;
+    free(tmp);
+  }
+}
+
+static void notify_goto_find_widget(GtkWidget *w, int *x, int *y)
+{
+  struct widget_list *cur;
+  *x=0;
+  *y=0;
+  for (cur = notify_goto_widget_list; cur && cur->w !=w; cur = cur->next);
+  if (cur) {
+    *x = cur->x;
+    *y = cur->y;
+  }
+}
+
+static void notify_goto_add_widget_coords(GtkWidget *w, int  x, int y)
+{
+  struct widget_list *newwidget;
+  newwidget = fc_malloc(sizeof(struct widget_list));
+  newwidget->w = w;
+  newwidget->x = x;
+  newwidget->y = y;
+  newwidget->next = notify_goto_widget_list;
+  notify_goto_widget_list = newwidget;
+}
+
+static void notify_goto_command_callback(GtkWidget *w, gpointer data)
+{
+  int x,y;
+  notify_goto_find_widget(w, &x, &y);
+  center_tile_mapcanvas(x, y);
+  notify_goto_widget_remove(w);
+
+  gtk_widget_destroy(w->parent->parent->parent);
+  gtk_widget_set_sensitive(top_vbox, TRUE);
+}
+
+static void notify_no_goto_command_callback(GtkWidget *w, gpointer data)
+{
+  notify_goto_widget_remove(w);
+  gtk_widget_destroy(w->parent->parent->parent);
+  gtk_widget_set_sensitive(top_vbox, TRUE);
+}
+
+static gint notify_deleted_callback(GtkWidget *widget, GdkEvent *event,
+				    gpointer data)
+{
+  notify_goto_widget_remove(widget);
+  gtk_widget_set_sensitive(top_vbox, TRUE);
+  return FALSE;
 }
 
 /****************************************************************
 ...
 *****************************************************************/
-void popup_notify_goto_dialog(char *headline, char *lines, int x, int y)
+void popup_notify_goto_dialog(char *headline, char *lines,int x, int y)
 {
-  GtkWidget *shell, *label, *goto_command, *popcity_command;
+  GtkWidget *notify_dialog_shell, *notify_command, *notify_goto_command;
+  GtkWidget *notify_label;
   
-  shell = gtk_dialog_new_with_buttons(headline,
-        GTK_WINDOW(toplevel),
-        0,
-        GTK_STOCK_CLOSE,
-        GTK_RESPONSE_CLOSE,
-        NULL);
-  gtk_dialog_set_default_response(GTK_DIALOG(shell), GTK_RESPONSE_ACCEPT);
-  gtk_window_set_position(GTK_WINDOW(shell), GTK_WIN_POS_MOUSE);
-
-  label = gtk_label_new(lines);
-  gtk_container_add(GTK_CONTAINER(GTK_DIALOG(shell)->vbox), label);
-  gtk_widget_show(label);
-  
-  goto_command = gtk_stockbutton_new(GTK_STOCK_JUMP_TO,
-	_("_Goto location"));
-  gtk_dialog_add_action_widget(GTK_DIALOG(shell), goto_command, 1);
-  gtk_widget_show(goto_command);
-
-  popcity_command = gtk_stockbutton_new(GTK_STOCK_ZOOM_IN,
-	_("_Popup City"));
-  gtk_dialog_add_action_widget(GTK_DIALOG(shell), popcity_command, 2);
-  gtk_widget_show(popcity_command);
-
-
-  if (x == -1 || y == -1) {
-    gtk_widget_set_sensitive(goto_command, FALSE);
-    gtk_widget_set_sensitive(popcity_command, FALSE);
-  } else {
-    struct city *pcity;
-
-    pcity = map_get_city(x, y);
-    gtk_widget_set_sensitive(popcity_command,
-      (pcity && city_owner(pcity) == game.player_ptr));
+  if (!is_real_tile(x, y)) {
+    popup_notify_dialog(_("Message:"), headline, lines);
+    return;
   }
+  notify_dialog_shell = gtk_dialog_new();
+  gtk_signal_connect( GTK_OBJECT(notify_dialog_shell),"delete_event",
+	GTK_SIGNAL_FUNC(notify_deleted_callback),NULL );
 
-  g_object_set_data(G_OBJECT(shell), "x", GINT_TO_POINTER(x));
-  g_object_set_data(G_OBJECT(shell), "y", GINT_TO_POINTER(y));
+  gtk_window_set_title( GTK_WINDOW( notify_dialog_shell ), headline );
 
-  g_signal_connect(shell, "response", G_CALLBACK(notify_goto_callback), NULL);
-  gtk_widget_show(shell);
+  notify_label=gtk_label_new(lines);
+  gtk_box_pack_start( GTK_BOX( GTK_DIALOG(notify_dialog_shell)->vbox ),
+	notify_label, TRUE, TRUE, 0 );
+
+  notify_command = gtk_button_new_with_label(_("Close"));
+  gtk_box_pack_start( GTK_BOX( GTK_DIALOG(notify_dialog_shell)->action_area ),
+	notify_command, TRUE, TRUE, 0 );
+
+  notify_goto_command = gtk_button_new_with_label(_("Goto and Close"));
+  gtk_box_pack_start( GTK_BOX( GTK_DIALOG(notify_dialog_shell)->action_area ),
+	notify_goto_command, TRUE, TRUE, 0 );
+  
+  gtk_signal_connect(GTK_OBJECT(notify_command), "clicked",
+		GTK_SIGNAL_FUNC(notify_no_goto_command_callback), NULL);
+  gtk_signal_connect(GTK_OBJECT(notify_goto_command), "clicked",
+		GTK_SIGNAL_FUNC(notify_goto_command_callback), NULL);
+  notify_goto_add_widget_coords(notify_goto_command, x, y);
+
+  gtk_set_relative_position(toplevel, notify_dialog_shell, 25, 25);
+
+  gtk_widget_show_all( GTK_DIALOG(notify_dialog_shell)->vbox );
+  gtk_widget_show_all( GTK_DIALOG(notify_dialog_shell)->action_area );
+  gtk_widget_show(notify_dialog_shell);
+
+  gtk_widget_set_sensitive(top_vbox, FALSE);
 }
 
 
@@ -294,6 +335,7 @@ static void diplomat_bribe_callback(GtkWidget *w, gpointer data)
     packet.value = diplomat_target_id;
     send_packet_generic_integer(&aconnection, PACKET_INCITE_INQ, &packet);
    }
+
 }
  
 /****************************************************************
@@ -2207,7 +2249,7 @@ static void races_command_callback(GtkWidget *w, gint response_id)
   packet.city_style = city_style_idx[selected_style];
   sz_strlcpy(packet.name, (char*)s);
   
-  if (!is_sane_name(packet.name)) {
+  if(!get_sane_name(packet.name)) {
     append_output_window(_("You must type a legal name."));
     return;
   }
@@ -2216,6 +2258,16 @@ static void races_command_callback(GtkWidget *w, gint response_id)
 
   /* reset this variable */
   is_name_unique = FALSE;
+}
+
+
+/**************************************************************************
+  Destroys its widget.  Usefull for a popdown callback on pop-ups that
+  won't get resused.
+**************************************************************************/
+void destroy_me_callback( GtkWidget *w, gpointer data)
+{
+  gtk_widget_destroy(w);
 }
 
 
@@ -2252,30 +2304,4 @@ gboolean taxrates_callback(GtkWidget *w, GdkEventButton *ev, gpointer data)
   }
   send_packet_player_request(&aconnection, &packet, PACKET_PLAYER_RATES);
   return TRUE;
-}
-
-
-/**************************************************************************
-...
-**************************************************************************/
-static void nuke_children(gpointer data, gpointer user_data)
-{
-  if (data != user_data) {
-    if (GTK_IS_WINDOW(data) && GTK_WINDOW(data)->type == GTK_WINDOW_TOPLEVEL) {
-      gtk_widget_destroy(GTK_WIDGET(data));
-    }
-  }
-}
-
-/********************************************************************** 
-  This function is called when the client disconnects or the game is
-  over.  It should close all dialog windows for that game.
-***********************************************************************/
-void popdown_all_game_dialogs(void)
-{
-  GList *res;
-
-  res = gtk_window_list_toplevels();
-  g_list_foreach(res, nuke_children, toplevel);
-  g_list_free(res);
 }

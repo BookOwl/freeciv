@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -738,8 +737,16 @@ void diplomat_incite(struct player *pplayer, struct unit *pdiplomat,
     return;
   }
 
-  /* Get incite cost. */
-  revolt_cost = city_incite_cost(pplayer, pcity);
+  /* Update incite cost. */
+  if (pcity->incite_revolt_cost == -1) {
+    freelog (LOG_ERROR, "Incite cost -1 in diplomat_incite by %s for %s",
+	     pplayer->name, pcity->name);
+    city_incite_cost (pcity);
+  }
+  revolt_cost = pcity->incite_revolt_cost;
+
+  /* Special deal for former owners! */
+  if (pplayer->player_no == pcity->original) revolt_cost /= 2;
 
   /* If player doesn't have enough gold, can't incite a revolt. */
   if (pplayer->economic.gold < revolt_cost) {
@@ -1110,9 +1117,6 @@ static bool diplomat_infiltrate_city (struct player *pplayer, struct player *cpl
 			 _("Game: Your %s has been eliminated defending"
 			   " against a %s in %s."), unit_name(punit->type),
 			 unit_name(pdiplomat->type), pcity->name);
-	notify_player_ex(pplayer, pcity->x, pcity->y, E_ENEMY_DIPLOMAT_FAILED,
-			 _("Game: An enemy %s has been eliminated defending"
-			   " %s."), unit_name(punit->type), pcity->name);
 
 	wipe_unit_safe(punit, &myiter);
       } else {
@@ -1226,7 +1230,8 @@ static void maybe_cause_incident(enum diplomat_actions action, struct player *of
     y = victim_unit->y;
     victim_player = unit_owner(victim_unit);
   } else {
-    die("No victim in call to maybe_cause_incident()");
+    freelog(LOG_FATAL, "No victim in call to maybe_cause_incident()");
+    abort();
   }
 
   if (!pplayers_at_war(offender, victim_player) &&
@@ -1276,7 +1281,8 @@ static void maybe_cause_incident(enum diplomat_actions action, struct player *of
     case DIPLOMAT_SABOTAGE:
       /* You can only do these when you are at war, so we should never
  	 get inside this "if" */
-      die("Bug in maybe_cause_incident()");
+      freelog(LOG_FATAL, "Bug in maybe_cause_incident()");
+      abort();
     }
     switch (ds) {
     case DS_WAR:
@@ -1295,7 +1301,8 @@ static void maybe_cause_incident(enum diplomat_actions action, struct player *of
       punishment = GAME_MAX_REPUTATION/5;
       break;
     default:
-      die("Illegal diplstate in maybe_cause_incident.");
+      freelog(LOG_FATAL, "Illegal diplstate in maybe_cause_incident.");
+      abort();
     }
     offender->reputation = MAX(offender->reputation - punishment, 0);
     victim_player->diplstates[offender->player_no].has_reason_to_cancel = 2;

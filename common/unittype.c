@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -569,7 +568,7 @@ Unit_Type_id best_role_unit(struct city *pcity, int role)
 /**************************************************************************
   Frees the memory associated with this unit type.
 **************************************************************************/
-static void unit_type_free(Unit_Type_id id)
+void unit_type_free(Unit_Type_id id)
 {
   struct unit_type *p = get_unit_type(id);
 

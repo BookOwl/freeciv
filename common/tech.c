@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -37,8 +36,7 @@ struct advance advances[A_LAST];
 static const char *flag_names[] = {
   "Bonus_Tech", "Boat_Fast", "Bridge", "Railroad", "Fortress",
   "Watchtower", "Population_Pollution_Inc", "Trade_Revenue_Reduce",
-  "Airbase", "Farmland", "Reduce_Trireme_Loss1", "Reduce_Trireme_Loss2", 
-  "Build_Airborne"
+  "Airbase", "Farmland", "Reduce_Trireme_Loss1", "Reduce_Trireme_Loss2"
 };
 /* Note that these strings must correspond with the enums in tech_flag_id,
    in common/tech.h */
@@ -388,8 +386,10 @@ int base_total_bulbs_required(struct player *pplayer, Tech_Type_id tech)
 	GAME_DEFAULT_RESEARCHCOST;
     break;
   default:
-    die("Invalid tech_cost_style %d %d", game.rgame.tech_cost_style,
-	tech_cost_style);
+    freelog(LOG_ERROR, "Invalid tech_cost_style %d %d",
+	    game.rgame.tech_cost_style, tech_cost_style);
+    assert(0);
+    exit(EXIT_FAILURE);
   }
 
   /* Research becomes more expensive. */
@@ -452,7 +452,9 @@ int base_total_bulbs_required(struct player *pplayer, Tech_Type_id tech)
     break;
 
   default:
-    die("Invalid tech_leakage %d", game.rgame.tech_leakage);
+    freelog(LOG_ERROR, "Invalid tech_leakage %d", game.rgame.tech_leakage);
+    assert(0);
+    exit(EXIT_FAILURE);
   }
 
   /* If we have many players, tech cost may drop to 0.  */
@@ -559,7 +561,7 @@ bool techs_have_fixed_costs()
 /***************************************************************
  De-allocate resources associated with the given tech.
 ***************************************************************/
-static void tech_free(Tech_Type_id tech)
+void tech_free(Tech_Type_id tech)
 {
   struct advance *p = &advances[tech];
 

@@ -10,11 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <assert.h>
 #include <string.h>
 
@@ -138,9 +133,9 @@ static const char *effect_type_names[] = {
   Convert effect range names to enum; case insensitive;
   returns EFR_LAST if can't match.
 **************************************************************************/
-enum effect_range effect_range_from_str(const char *str)
+Eff_Range_id effect_range_from_str(const char *str)
 {
-  enum effect_range ret_id;
+  Eff_Range_id ret_id;
 
   assert(ARRAY_SIZE(effect_range_names) == EFR_LAST);
 
@@ -156,7 +151,7 @@ enum effect_range effect_range_from_str(const char *str)
 /**************************************************************************
   Return effect range name; NULL if bad id.
 **************************************************************************/
-const char *effect_range_name(enum effect_range id)
+const char *effect_range_name(Eff_Range_id id)
 {
   assert(ARRAY_SIZE(effect_range_names) == EFR_LAST);
 
@@ -171,9 +166,9 @@ const char *effect_range_name(enum effect_range id)
   Convert effect type names to enum; case insensitive;
   returns EFT_LAST if can't match.
 **************************************************************************/
-enum effect_type effect_type_from_str(const char *str)
+Eff_Type_id effect_type_from_str(const char *str)
 {
-  enum effect_type ret_id;
+  Eff_Type_id ret_id;
 
   assert(ARRAY_SIZE(effect_type_names) == EFT_LAST);
 
@@ -189,7 +184,7 @@ enum effect_type effect_type_from_str(const char *str)
 /**************************************************************************
   Return effect type name; NULL if bad id.
 **************************************************************************/
-const char *effect_type_name(enum effect_type id)
+const char *effect_type_name(Eff_Type_id id)
 {
   assert(ARRAY_SIZE(effect_type_names) == EFT_LAST);
 
@@ -203,7 +198,7 @@ const char *effect_type_name(enum effect_type id)
 /**************************************************************************
   Frees the memory associated with this improvement.
 **************************************************************************/
-static void improvement_free(Impr_Type_id id)
+void improvement_free(Impr_Type_id id)
 {
   struct impr_type *p = get_improvement_type(id);
 
@@ -449,7 +444,7 @@ bool could_player_eventually_build_improvement(struct player *p,
 
   if (impr->effect) {
     struct impr_effect *peffect = impr->effect;
-    enum effect_type type;
+    Eff_Type_id type;
 
     /* This if for a spaceship component is asked */
     while ((type = peffect->type) != EFT_LAST) {
@@ -482,7 +477,7 @@ bool could_player_eventually_build_improvement(struct player *p,
 /**************************************************************************
 ...
 **************************************************************************/
-static bool could_player_build_improvement(struct player *p, Impr_Type_id id)
+bool could_player_build_improvement(struct player *p, Impr_Type_id id)
 {
   if (!could_player_eventually_build_improvement(p, id))
     return FALSE;
@@ -511,7 +506,7 @@ bool can_player_build_improvement(struct player *p, Impr_Type_id id)
 **************************************************************************/
 void mark_improvement(struct city *pcity,Impr_Type_id id,Impr_Status status)
 {
-  enum effect_range equiv_range;
+  Eff_Range_id equiv_range;
   Impr_Status *improvements,*equiv_list[EFR_LAST];
   struct player *pplayer;
 

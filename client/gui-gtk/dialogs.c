@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -36,17 +35,13 @@
 #include "support.h"
 
 #include "chatline.h"
-#include "cityrep.h"	/* for popdown_city_report_dialog */
 #include "civclient.h"
 #include "clinet.h"
 #include "control.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "mapview.h"
-#include "messagewin.h"	/* for popdown_meswin_dialog */
 #include "options.h"
-#include "plrdlg.h"	/* for popdown_players_dialog */
-#include "repodlgs.h"	/* for popdown_xxx_dialog */
 #include "tilespec.h"
 
 #include "dialogs.h"
@@ -74,9 +69,6 @@ static GList      *sorted_races_list = NULL; /* contains a list of race
 					      name. Is valid as long
 					      as the races_dialog is
 					      poped up. */
-/******************************************************************/
-static GtkWidget  *notify_dialog_shell;
-
 /******************************************************************/
 static GtkWidget  *spy_tech_shell;
 static GtkWidget  *spy_advances_list;
@@ -154,7 +146,8 @@ struct connect_data {
 *****************************************************************/
 static void notify_command_callback(GtkWidget *w, GtkWidget *t)
 {
-  popdown_notify_dialog();
+  gtk_widget_destroy( t );
+  gtk_widget_set_sensitive( top_vbox, TRUE );
 }
 
 /****************************************************************
@@ -172,7 +165,7 @@ gint deleted_callback(GtkWidget *w, GdkEvent *ev, gpointer data)
 *****************************************************************/
 void popup_notify_dialog(char *caption, char *headline, char *lines)
 {
-  GtkWidget *notify_command;
+  GtkWidget *notify_dialog_shell, *notify_command;
   GtkWidget *notify_label, *notify_headline, *notify_scrolled;
   GtkAccelGroup *accel=gtk_accel_group_new();
   
@@ -231,18 +224,6 @@ void popup_notify_dialog(char *caption, char *headline, char *lines)
   gtk_widget_show( notify_dialog_shell );
 
   gtk_widget_set_sensitive( top_vbox, FALSE );
-}
-
-/****************************************************************
- Closes the notify dialog.
-*****************************************************************/
-void popdown_notify_dialog(void)
-{
-  if (notify_dialog_shell) {
-    gtk_widget_destroy(notify_dialog_shell);
-    gtk_widget_set_sensitive(top_vbox, TRUE);
-    notify_dialog_shell = NULL;
-  }
 }
 
 /****************************************************************
@@ -687,7 +668,7 @@ static int create_advances_list(struct player *pplayer,
 {  
   GtkWidget *close_command, *scrolled;
   int i, j;
-  static const char *title_[1] = { N_("Select Advance to Steal") };
+  static gchar *title_[1] = { N_("Select Advance to Steal") };
   static gchar **title;
   GtkAccelGroup *accel=gtk_accel_group_new();
 
@@ -760,7 +741,7 @@ static int create_advances_list(struct player *pplayer,
   }
 
   if(j == 0) {
-    static const char *row_[1] = { N_("NONE") };
+    static gchar *row_[1] = { N_("NONE") };
     static gchar **row;
     
     if (!row) row = intl_slist(1, row_);
@@ -786,7 +767,7 @@ static int create_improvements_list(struct player *pplayer,
   GtkWidget *close_command, *scrolled;
   int j;
   gchar *row[1];
-  static const char *title_[1] = { N_("Select Improvement to Sabotage") };
+  static gchar *title_[1] = { N_("Select Improvement to Sabotage") };
   static gchar **title;
   GtkAccelGroup *accel=gtk_accel_group_new();
 
@@ -1441,8 +1422,7 @@ static void popup_mes_close(GtkWidget *dialog_shell)
   GtkWidget *parent =
       gtk_object_get_data(GTK_OBJECT(dialog_shell), "parent");
   void (*close_callback) (gpointer) =
-      (void (*)(gpointer)) gtk_object_get_data(GTK_OBJECT(dialog_shell),
-					       "close_callback");
+      gtk_object_get_data(GTK_OBJECT(dialog_shell), "close_callback");
   gpointer close_callback_data =
       gtk_object_get_data(GTK_OBJECT(dialog_shell), "close_callback_data");
   struct button_descr *buttons =
@@ -1466,8 +1446,7 @@ static gint popup_mes_del_callback(GtkWidget * widget, GdkEvent * event,
 {
   GtkWidget *dialog_shell = GTK_WIDGET(data);
   void (*close_callback) (gpointer) =
-      (void (*)(gpointer)) gtk_object_get_data(GTK_OBJECT(dialog_shell),
-					       "close_callback");
+      gtk_object_get_data(GTK_OBJECT(dialog_shell), "close_callback");
 
   if (close_callback) {
     popup_mes_close(dialog_shell);
@@ -2327,7 +2306,7 @@ static void races_buttons_callback(GtkWidget *w, gpointer data)
   packet.city_style = city_style_idx[selected_style];
   sz_strlcpy(packet.name, (char*)s);
   
-  if (!is_sane_name(packet.name)) {
+  if(!get_sane_name(packet.name)) {
     append_output_window(_("You must type a legal name."));
     return;
   }
@@ -2383,18 +2362,3 @@ void taxrates_callback(GtkWidget *w, GdkEventButton *ev, gpointer data)
 }
 
 void dummy_close_callback(gpointer data){}
-
-/********************************************************************** 
-  This function is called when the client disconnects or the game is
-  over.  It should close all dialog windows for that game.
-***********************************************************************/
-void popdown_all_game_dialogs(void)
-{
-  popdown_city_report_dialog();
-  popdown_meswin_dialog();
-  popdown_science_dialog();
-  popdown_economy_report_dialog();
-  popdown_activeunits_report_dialog();
-  popdown_players_dialog();
-  popdown_notify_dialog();
-}

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -64,9 +63,11 @@
                           "~/.freeciv"
 #endif
 
-static char *grouping = NULL;
-static char *grouping_sep = NULL;
-static size_t grouping_sep_len = 0;
+/* Cached locale numeric formatting information.
+   Defaults are as appropriate for the US. */
+static char *grouping = "\3";
+static char *grouping_sep = ",";
+static size_t grouping_sep_len = 1;
 
 /***************************************************************
   Take a string containing multiple lines and create a copy where
@@ -278,7 +279,7 @@ int get_tokens(const char *str, char **tokens, size_t num_tokens,
   works for numbers >= zero.) The actually number used for the
   formatting is: nr*10^decade_exponent
 ***************************************************************/
-static const char *general_int_to_text(int nr, int decade_exponent)
+const char *general_int_to_text(int nr, int decade_exponent)
 {
   static char buf[64]; /* Note that we'll be filling this in right to left. */
   char *grp = grouping;
@@ -371,21 +372,22 @@ static bool is_iso_latin1(char ch)
 /***************************************************************
   This is used in sundry places to make sure that names of cities,
   players etc. do not contain yucky characters of various sorts.
-  Returns TRUE iff the name is acceptable.
+  Returns the input argument if it points to an acceptable name,
+  otherwise returns NULL.
   FIXME:  Not internationalised.
 ***************************************************************/
-bool is_sane_name(const char *name)
+const char *get_sane_name(const char *name)
 {
   const char *cp;
 
   /* must not be NULL or empty */
   if (!name || *name == '\0') {
-    return FALSE;
+    return NULL; 
   }
 
   /* must begin and end with some non-space character */
   if ((*name == ' ') || (*(strchr(name, '\0') - 1) == ' ')) {
-    return FALSE;
+    return NULL; 
   }
 
   /* must be composed entirely of printable ISO 8859-1 characters */
@@ -393,11 +395,11 @@ bool is_sane_name(const char *name)
     /* nothing */
   }
   if (*cp != '\0') {
-    return FALSE;
+    return NULL; 
   }
 
   /* otherwise, it's okay... */
-  return TRUE;
+  return name;
 }
 
 /***************************************************************
@@ -458,7 +460,7 @@ char *skip_leading_spaces(char *s)
   Removes leading spaces in string pointed to by 's'.
   Note 's' must point to writeable memory!
 ***************************************************************************/
-static void remove_leading_spaces(char *s)
+void remove_leading_spaces(char *s)
 {
   char *t;
   
@@ -476,7 +478,7 @@ static void remove_leading_spaces(char *s)
   Terminates string pointed to by 's' to remove traling spaces;
   Note 's' must point to writeable memory!
 ***************************************************************************/
-static void remove_trailing_spaces(char *s)
+void remove_trailing_spaces(char *s)
 {
   char *t;
   size_t len;
@@ -508,7 +510,7 @@ void remove_leading_trailing_spaces(char *s)
 /***************************************************************************
   As remove_trailing_spaces(), for specified char.
 ***************************************************************************/
-static void remove_trailing_char(char *s, char trailing)
+void remove_trailing_char(char *s, char trailing)
 {
   char *t;
   
@@ -646,19 +648,6 @@ int cat_snprintf(char *str, size_t n, const char *format, ...)
   return (int) (ret + len);
 }
 
-void die(const char *format, ...)
-{
-  va_list ap;
-
-  va_start(ap, format);
-  vreal_freelog(LOG_FATAL, format, ap);
-  va_end(ap);
-
-  assert(FALSE);
-
-  exit(EXIT_FAILURE);
-}
-
 /***************************************************************************
   Returns string which gives users home dir, as specified by $HOME.
   Gets value once, and then caches result.
@@ -750,8 +739,7 @@ char *user_username(void)
 ***************************************************************************/
 static const char **get_data_dirs(int *num_dirs)
 {
-  const char *path;
-  char *path2, *tok;
+  char *path, *path2, *tok;
   static int num = 0;
   static const char **dirs = NULL;
 
@@ -1018,14 +1006,6 @@ char *datafilename_required(const char *filename)
 ***************************************************************************/
 void init_nls(void)
 {
-  /* 
-   * Setup the cached locale numeric formatting information. Defaults
-   * are as appropriate for the US.
-   */
-  grouping = mystrdup("\3");
-  grouping_sep = mystrdup(",");
-  grouping_sep_len = strlen(grouping_sep);
-
 #ifdef ENABLE_NLS
 #ifdef WIN32_NATIVE
   /* set LANG by hand if it is not set */
@@ -1106,11 +1086,10 @@ void init_nls(void)
 	/* nothing */
       }
       len++;
-      free(grouping);
       grouping = fc_malloc(len);
       memcpy(grouping, lc->grouping, len);
     }
-    free(grouping_sep);
+
     grouping_sep = mystrdup(lc->thousands_sep);
     grouping_sep_len = strlen(grouping_sep);
   }

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -21,7 +20,6 @@
 #include "fcintl.h"
 #include "game.h"
 #include "log.h"
-#include "nation.h"
 #include "map.h"
 #include "mem.h"
 #include "packets.h"
@@ -54,8 +52,6 @@ static void map_clear_sent(int x, int y, struct player *pplayer);
 static void set_unknown_tiles_to_unsent(struct player *pplayer);
 static void shared_vision_change_seen(int x, int y, struct player *pplayer, int change);
 static int map_get_seen(int x, int y, struct player *pplayer);
-static void map_change_own_seen(int x, int y, struct player *pplayer,
-				int change);
 
 /**************************************************************************
 Used only in global_warming() and nuclear_winter() below.
@@ -370,7 +366,7 @@ void send_tile_info(struct conn_list *dest, int x, int y)
   Send the tile information, as viewed by pplayer, to all specified
   connections.   The tile info is sent even if pplayer doesn't see or
   know the tile (setting appropriate info.known), as required for
-  client drawing requirements in some cases (see doc/HACKING).
+  client drawing requirements in some cases (see freeciv_hackers_guide.txt).
   Also updates pplayer knowledge if known and seen, else used old.
   pplayer==NULL means send "real" data, for observers
 **************************************************************************/
@@ -439,7 +435,16 @@ static void increment_pending_seen(struct player *pplayer, int x, int y)
 static void decrement_pending_seen(struct player *pplayer, int x, int y)
 {
   struct player_tile *plr_tile = map_get_player_tile(x, y, pplayer);
-  assert(plr_tile->pending_seen != 0);
+  if (plr_tile->pending_seen == 0) {
+    /*
+     * WARNING: This used to be an assert. Changed for S1_14 only.
+     * 
+     * We got a core dump report here before release of 1.14.0 which 
+     * could not be traced and fixed, so we do this to be on the safe 
+     * side. This fix is not in cvs head. -- Per
+     */
+    return;
+  }
   plr_tile->pending_seen -= 1;
 }
 
@@ -827,7 +832,7 @@ void map_change_seen(int x, int y, struct player *pplayer, int change)
 /***************************************************************
 ...
 ***************************************************************/
-static int map_get_own_seen(int x, int y, struct player *pplayer)
+int map_get_own_seen(int x, int y, struct player *pplayer)
 {
   int own_seen = map_get_player_tile(x, y, pplayer)->own_seen;
   if (own_seen != 0)
@@ -838,8 +843,7 @@ static int map_get_own_seen(int x, int y, struct player *pplayer)
 /***************************************************************
 ...
 ***************************************************************/
-static void map_change_own_seen(int x, int y, struct player *pplayer,
-				int change)
+void map_change_own_seen(int x, int y, struct player *pplayer, int change)
 {
   map_get_player_tile(x, y, pplayer)->own_seen += change;
 }
@@ -1252,11 +1256,6 @@ void handle_player_remove_vision(struct player *pplayer,
   pplayer2 = get_player(packet->value);
   if (pplayer == pplayer2 || !pplayer2->is_alive
       || !gives_shared_vision(pplayer, pplayer2)) {
-    return;
-  }
-
-  /* Do not allow team mates to backstab */
-  if (pplayer->team != TEAM_NONE && pplayer->team == pplayer2->team) {
     return;
   }
 

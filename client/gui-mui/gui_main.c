@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -75,6 +74,7 @@
 #include "ratesdlg.h"
 #include "repodlgs_g.h"
 #include "spaceshipdlg_g.h"
+#include "support.h"
 #include "tilespec.h"
 #include "wldlg.h"
 
@@ -1380,8 +1380,7 @@ void ui_main(int argc, char *argv[])
       main_bulb_sprite = MakeBorderSprite(sprites.bulb[0]);
       main_sun_sprite = MakeBorderSprite(sprites.warming[0]);
       main_flake_sprite = MakeBorderSprite(sprites.cooling[0]);
-      main_government_sprite
-	= MakeBorderSprite(get_citizen_sprite(CITIZEN_UNHAPPY, 0, NULL));
+      main_government_sprite = MakeBorderSprite(sprites.citizen[7]);
       main_timeout_text = TextObject, End;
 
       econ_group = HGroup, GroupSpacing(0), End;

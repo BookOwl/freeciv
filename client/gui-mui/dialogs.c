@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -1634,7 +1633,7 @@ static void nations_ok(void)
 
   sz_strlcpy(packet.name, (char*)s);
   
-  if (!is_sane_name(packet.name)) {
+  if(!get_sane_name(packet.name)) {
     append_output_window(_("You must type a legal name."));
     return;
   }
@@ -1892,13 +1891,4 @@ void popup_upgrade_dialog(struct unit *punit)
 			     NULL);
     }
   }
-}
-
-/********************************************************************** 
-  This function is called when the client disconnects or the game is
-  over.  It should close all dialog windows for that game.
-***********************************************************************/
-void popdown_all_game_dialogs(void)
-{
-  /* TODO */
 }

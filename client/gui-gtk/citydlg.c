@@ -56,17 +56,13 @@
 
 #include "citydlg.h"
 
-struct city_dialog;
-
 /* get 'struct dialog_list' and related functions: */
 #define SPECLIST_TAG dialog
 #define SPECLIST_TYPE struct city_dialog
-#define SPECLIST_STATIC
 #include "speclist.h"
 
 #define SPECLIST_TAG dialog
 #define SPECLIST_TYPE struct city_dialog
-#define SPECLIST_STATIC
 #include "speclist_c.h"
 
 #define dialog_list_iterate(dialoglist, pdialog) \
@@ -185,6 +181,7 @@ struct city_dialog {
 
   Impr_Type_id sell_id;
 
+  int first_elvis, first_scientist, first_taxman;
   int cwidth;
 
   /* This is used only to avoid too many refreshes. */
@@ -316,23 +313,6 @@ static void close_callback(GtkWidget * w, gpointer data);
 static void switch_city_callback(GtkWidget * w, gpointer data);
 
 /****************************************************************
-  Called to set the dimensions of the city dialog, both on
-  startup and if the tileset is changed.
-*****************************************************************/
-static void init_citydlg_dimensions(void)
-{
-  if (is_isometric) {
-    canvas_width = 4 * NORMAL_TILE_WIDTH;
-    canvas_height = 4 * NORMAL_TILE_HEIGHT;
-    MAX_UNIT_ROWS = (int) (100 / (UNIT_TILE_HEIGHT));
-  } else {
-    canvas_width = 5 * NORMAL_TILE_WIDTH;
-    canvas_height = 5 * NORMAL_TILE_HEIGHT;
-    MAX_UNIT_ROWS = (int) (100 / (UNIT_TILE_HEIGHT + 6));
-  }
-}
-
-/****************************************************************
 ...
 *****************************************************************/
 static void initialize_city_dialogs(void)
@@ -344,7 +324,15 @@ static void initialize_city_dialogs(void)
   assert(!city_dialogs_have_been_initialised);
 
   dialog_list_init(&dialog_list);
-  init_citydlg_dimensions();
+  if (is_isometric) {
+    canvas_width = 4 * NORMAL_TILE_WIDTH;
+    canvas_height = 4 * NORMAL_TILE_HEIGHT;
+    MAX_UNIT_ROWS = (int) (100 / (UNIT_TILE_HEIGHT));
+  } else {
+    canvas_width = 5 * NORMAL_TILE_WIDTH;
+    canvas_height = 5 * NORMAL_TILE_HEIGHT;
+    MAX_UNIT_ROWS = (int) (100 / (UNIT_TILE_HEIGHT + 6));
+  }
 
   NUM_UNITS_SHOWN = (int) (MAX_UNIT_ROWS * 500) / (UNIT_TILE_WIDTH);
 
@@ -360,25 +348,6 @@ static void initialize_city_dialogs(void)
   info_label_style[RED]->fg[GTK_STATE_NORMAL] = red;
 
   city_dialogs_have_been_initialised = TRUE;
-}
-
-/****************************************************************
-  Called when the tileset changes.
-*****************************************************************/
-void reset_city_dialogs(void)
-{
-  if (!city_dialogs_have_been_initialised) {
-    return;
-  }
-
-  init_citydlg_dimensions();
-
-  dialog_list_iterate(dialog_list, pdialog) {
-    /* There's no reasonable way to resize a GtkPixcomm, so we don't try.
-       Instead we just redraw the overview within the existing area.  The
-       player has to close and reopen the dialog to fix this. */
-    city_dialog_update_map(pdialog);
-  } dialog_list_iterate_end;
 }
 
 /****************************************************************
@@ -571,7 +540,7 @@ static GtkWidget *create_city_info_table(GtkWidget **info_label)
   int i;
   GtkWidget *hbox, *table, *label;
 
-  const char *output_label[NUM_INFO_FIELDS] = { N_("Food:"),
+  char *output_label[NUM_INFO_FIELDS] = { N_("Food:"),
     N_("Prod:"),
     N_("Trade:"),
     N_("Gold"),
@@ -625,7 +594,7 @@ static void create_and_append_overview_page(struct city_dialog *pdialog)
   GtkWidget *halves, *hbox, *vbox, *page, *align;
   GtkWidget *frame, *table, *label, *scrolledwin;
 
-  const char *improvement_title[] = { N_("City improvements"),
+  char *improvement_title[] = { N_("City improvements"),
     N_("Upkeep")
   };
 
@@ -1272,13 +1241,13 @@ static void create_and_append_misc_page(struct city_dialog *pdialog)
 
   char *tab_title = _("_Misc. Settings");
 
-  const char *new_citizens_label[] = {
+  char *new_citizens_label[] = {
     N_("Entertainers"),
     N_("Scientists"),
     N_("Taxmen")
   };
 
-  const char *city_opts_label[NUM_CITY_OPTS] = {
+  char *city_opts_label[NUM_CITY_OPTS] = {
     N_("Land units"),
     N_("Sea units"),
     N_("Helicopters"),
@@ -1286,7 +1255,7 @@ static void create_and_append_misc_page(struct city_dialog *pdialog)
     N_("Disband if build settler at size 1")
   };
 
-  const char *misc_whichtab_label[NUM_PAGES] = {
+  char *misc_whichtab_label[NUM_PAGES] = {
     N_("City Overview page"),
     N_("Units page"),
     N_("Worklist page"),
@@ -1647,10 +1616,9 @@ static void city_dialog_update_title(struct city_dialog *pdialog)
 *****************************************************************/
 static void city_dialog_update_citizens(struct city_dialog *pdialog)
 {
-  int i;
+  int i, n;
   struct city *pcity = pdialog->pcity;
   int width;
-  enum citizen_type citizens[MAX_CITY_SIZE];
 
   /* If there is not enough space we stack the icons. We draw from left to */
   /* right. width is how far we go to the right for each drawn pixmap. The */
@@ -1668,14 +1636,44 @@ static void city_dialog_update_citizens(struct city_dialog *pdialog)
 
   gtk_pixcomm_clear(GTK_PIXCOMM(pdialog->citizen_pixmap), TRUE);
 
-  get_city_citizen_types(pcity, 4, citizens);
-
-  for (i = 0; i < pcity->size; i++) {
+  i = 0;	/* tracks the # of the citizen we are currently placing. */
+  for (n = 0; n < pcity->ppl_happy[4]; n++, i++) {
     gtk_pixcomm_copyto(GTK_PIXCOMM(pdialog->citizen_pixmap),
-		       get_citizen_sprite(citizens[i], i, pcity),
-		       i * width, 0, TRUE);
+		       get_citizen_sprite(5 + i % 2), i * width, 0, TRUE);
   }
 
+  for (n = 0; n < pcity->ppl_content[4]; n++, i++) {
+    gtk_pixcomm_copyto(GTK_PIXCOMM(pdialog->citizen_pixmap),
+		       get_citizen_sprite(3 + i % 2), i * width, 0, TRUE);
+  }
+
+  for (n = 0; n < pcity->ppl_unhappy[4]; n++, i++) {
+    gtk_pixcomm_copyto(GTK_PIXCOMM(pdialog->citizen_pixmap),
+		       get_citizen_sprite(7 + i % 2), i * width, 0, TRUE);
+  }
+
+  for (n = 0; n < pcity->ppl_angry[4]; n++, i++) {
+    gtk_pixcomm_copyto(GTK_PIXCOMM(pdialog->citizen_pixmap),
+		       get_citizen_sprite(9 + i % 2), i * width, 0, TRUE);
+  }
+
+  pdialog->first_elvis = i;
+  for (n = 0; n < pcity->ppl_elvis; n++, i++) {
+    gtk_pixcomm_copyto(GTK_PIXCOMM(pdialog->citizen_pixmap),
+		       get_citizen_sprite(0), i * width, 0, TRUE);
+  }
+
+  pdialog->first_scientist = i;
+  for (n = 0; n < pcity->ppl_scientist; n++, i++) {
+    gtk_pixcomm_copyto(GTK_PIXCOMM(pdialog->citizen_pixmap),
+		       get_citizen_sprite(1), i * width, 0, TRUE);
+  }
+
+  pdialog->first_taxman = i;
+  for (n = 0; n < pcity->ppl_taxman; n++, i++) {
+    gtk_pixcomm_copyto(GTK_PIXCOMM(pdialog->citizen_pixmap),
+		       get_citizen_sprite(2), i * width, 0, TRUE);
+  }
 /*  gtk_widget_set_sensitive(pdialog->citizen_pixmap,*/
 /*                           !cma_is_city_under_agent(pcity, NULL));*/
 }
@@ -2750,26 +2748,19 @@ static void citizens_callback(GtkWidget * w, GdkEventButton * ev,
   struct packet_city_request packet;
   int citnum;
   enum specialist_type type;
-  enum citizen_type citizens[MAX_CITY_SIZE];
 
   if (ev->x > (pcity->size - 1) * pdialog->cwidth + SMALL_TILE_WIDTH)
     return;			/* no citizen that far to the right */
 
   citnum = MIN(pcity->size - 1, ev->x / pdialog->cwidth);
 
-  get_city_citizen_types(pcity, 4, citizens);
-
-  switch (citizens[citnum]) {
-  case CITIZEN_ELVIS:
-    type = SP_ELVIS;
-    break;
-  case CITIZEN_SCIENTIST:
-    type = SP_SCIENTIST;
-    break;
-  case CITIZEN_TAXMAN:
+  if (citnum >= pdialog->first_taxman) {
     type = SP_TAXMAN;
-    break;
-  default:
+  } else if (citnum >= pdialog->first_scientist) {
+    type = SP_SCIENTIST;
+  } else if (citnum >= pdialog->first_elvis) {
+    type = SP_ELVIS;
+  } else {
     return;
   }
 
@@ -2957,7 +2948,7 @@ static void change_callback(GtkWidget * w, gpointer data)
   GtkWidget *cshell, *button, *scrolled;
   struct city_dialog *pdialog;
   int i;
-  static const gchar *title_[4] =
+  static gchar *title_[4] =
       { N_("Type"), N_("Info"), N_("Cost"), N_("Turns") };
   static gchar **title = NULL;
   GtkAccelGroup *accel = gtk_accel_group_new();

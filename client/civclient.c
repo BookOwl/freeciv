@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -78,7 +77,7 @@
    needed (hence, it is not 'extern'd in civclient.h) */
 bool is_server = FALSE;
 
-static char tile_set_name[512] = "\0";
+char tile_set_name[512] = "\0";
 char sound_plugin_name[512] = "\0";
 char sound_set_name[512] = "\0";
 char server_host[512] = "\0";
@@ -90,6 +89,9 @@ bool auto_connect = FALSE; /* TRUE = skip "Connect to Freeciv Server" dialog */
 static enum client_states client_state = CLIENT_BOOT_STATE;
 
 int seconds_to_turndone;
+
+int last_turn_gold_amount;
+int turn_gold_difference;
 
 /* TRUE if an end turn request is blocked by busy agents */
 bool waiting_for_end_turn = FALSE;
@@ -107,13 +109,13 @@ static void client_remove_all_cli_conn(void);
 **************************************************************************/
 int main(int argc, char *argv[])
 {
-  int i, loglevel;
-  int ui_options = 0;
-  bool ui_separator = FALSE;
+  int i;
+  int loglevel;
   char *logfile=NULL;
   char *option=NULL;
 
   init_nls();
+  dont_run_as_root(argv[0], "freeciv_client");
   audio_init();
 
   /* default argument values are set in options.c */
@@ -122,10 +124,7 @@ int main(int argc, char *argv[])
   i = 1;
 
   while (i < argc) {
-   if (ui_separator) {
-     argv[1 + ui_options] = argv[i];
-     ui_options++;
-   } else if (is_option("--help", argv[i])) {
+   if (is_option("--help", argv[i])) {
     fprintf(stderr, _("Usage: %s [option ...]\n"
 		      "Valid options are:\n"), argv[0]);
     fprintf(stderr, _("  -a, --autoconnect\tSkip connect dialog\n"));
@@ -148,9 +147,6 @@ int main(int argc, char *argv[])
     fprintf(stderr, _("  -t, --tiles FILE\t"
 		      "Use data file FILE.tilespec for tiles\n"));
     fprintf(stderr, _("  -v, --version\t\tPrint the version number\n"));
-    fprintf(stderr, _("      --\t\t"
-		      "Pass any following options to the UI.\n"
-		      "\t\t\tTry \"%s -- --help\" for more.\n"), argv[0]);
     exit(EXIT_SUCCESS);
    } else if (is_option("--version",argv[i])) {
     fprintf(stderr, "%s %s\n", freeciv_name_version(), client_string);
@@ -180,21 +176,12 @@ int main(int argc, char *argv[])
       }
    } else if ((option = get_option("--tiles", argv, &i, argc)))
       sz_strlcpy(tile_set_name, option);
-   else if (is_option("--", argv[i])) {
-     ui_separator = TRUE;
-   } else { 
+   else { 
       fprintf(stderr, _("Unrecognized option: \"%s\"\n"), argv[i]);
       exit(EXIT_FAILURE);
    }
    i++;
   } /* of while */
-
-  /* Remove all options except those intended for the UI. */
-  argv[1 + ui_options] = NULL;
-  argc = 1 + ui_options;
-
-  /* disallow running as root -- too dangerous */
-  dont_run_as_root(argv[0], "freeciv_client");
 
   log_init(logfile, loglevel, NULL);
 
@@ -237,6 +224,7 @@ int main(int argc, char *argv[])
   audio_play_music("music_start", NULL);
 
   /* run gui-specific client */
+
   ui_main(argc, argv);
 
   /* termination */
@@ -468,10 +456,6 @@ void handle_packet_input(void *packet, int type)
     handle_thaw_hint();
     break;
 
-  case PACKET_PING_INFO:
-    handle_ping_info((struct packet_ping_info *) packet);
-    break;
-
   default:
     freelog(LOG_ERROR, "Received unknown packet (type %d) from server!", type);
     /* Old clients (<= some 1.11.5-devel, capstr +1.11) used to exit()
@@ -676,7 +660,6 @@ void set_client_state(enum client_states newstate)
     }
     else if(client_state==CLIENT_PRE_GAME_STATE) {
       popdown_all_city_dialogs();
-      popdown_all_game_dialogs();
       close_all_diplomacy_dialogs();
       set_unit_focus_no_center(NULL);
       clear_notify_window();
@@ -695,7 +678,7 @@ void set_client_state(enum client_states newstate)
 	exit(EXIT_FAILURE);
       } else {
 	server_autoconnect();
-	auto_connect = FALSE;	/* don't try this again */
+        auto_connect = 0;  /* don't try this again */
       }
     } else {
       gui_server_connect();

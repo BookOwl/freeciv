@@ -139,16 +139,6 @@ void popup_city_report_dialog(bool make_modal)
   gtk_window_present(GTK_WINDOW(city_dialog_shell));
 }
 
-/****************************************************************
- Closes the city report dialog.
-****************************************************************/
-void popdown_city_report_dialog(void)
-{
-  if (city_dialog_shell) {
-    gtk_widget_destroy(city_dialog_shell);
-  }
-}
-
 
 /****************************************************************
 ...

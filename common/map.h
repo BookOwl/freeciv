@@ -229,15 +229,11 @@ void reset_move_costs(int x, int y);
 /*
  * Returns true if the step yields a new valid map position. If yes
  * (dest_x, dest_y) is set to the new map position.
- *
- * Direct calls to DIR_DXY should be avoided and DIRSTEP should be
- * used. But to allow dest and src to be the same, as in
- *    MAPSTEP(x, y, x, y, dir)
- * we bend this rule here.
  */
 #define MAPSTEP(dest_x, dest_y, src_x, src_y, dir)	\
-(    (dest_x) = (src_x) + DIR_DX[(dir)],   		\
-     (dest_y) = (src_y) + DIR_DY[(dir)],		\
+(    DIRSTEP(dest_x, dest_y, dir),			\
+     (dest_x) += (src_x),		   		\
+     (dest_y) += (src_y),   				\
      normalize_map_pos(&(dest_x), &(dest_y)))
 
 struct city *map_get_city(int x, int y);
@@ -247,6 +243,8 @@ enum tile_special_type map_get_special(int x, int y);
 void map_set_terrain(int x, int y, enum tile_terrain_type ter);
 void map_set_special(int x, int y, enum tile_special_type spe);
 void map_clear_special(int x, int y, enum tile_special_type spe);
+void tile_init(struct tile *ptile);
+void tile_free(struct tile *ptile);
 bool is_real_tile(int x, int y);
 bool is_normal_map_pos(int x, int y);
 
@@ -286,6 +284,7 @@ bool is_tiles_adjacent(int x0, int y0, int x1, int y1);
 bool is_move_cardinal(int start_x, int start_y, int end_x, int end_y);
 int map_move_cost(struct unit *punit, int x, int y);
 struct tile_type *get_tile_type(enum tile_terrain_type type);
+void tile_type_free(enum tile_terrain_type type);
 void tile_types_free(void);
 enum tile_terrain_type get_terrain_by_name(const char * name);
 const char *get_terrain_name(enum tile_terrain_type type);
@@ -309,7 +308,7 @@ int get_tile_trade_base(struct tile * ptile);
 int get_tile_infrastructure_set(struct tile * ptile);
 const char *map_get_infrastructure_text(int spe);
 int map_get_infrastructure_prerequisite(int spe);
-enum tile_special_type get_preferred_pillage(int pset);
+int get_preferred_pillage(int pset);
 
 void map_irrigate_tile(int x, int y);
 void map_mine_tile(int x, int y);

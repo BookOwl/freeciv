@@ -11,34 +11,24 @@
    GNU General Public License for more details.
 ***********************************************************************/
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <stdio.h>
 #include <stdlib.h>
 
 #include "city.h"
-#include "combat.h"
 #include "game.h"
 #include "government.h"
 #include "log.h"
 #include "map.h"
-#include "mem.h"
 #include "packets.h"
 #include "player.h"
 #include "shared.h"
 #include "unit.h"
 
-#include "airgoto.h"
-#include "barbarian.h"
+#include "unithand.h"
 #include "citytools.h"
 #include "cityturn.h"
-#include "gotohand.h"
 #include "maphand.h"
 #include "plrhand.h"
-#include "settlers.h"
-#include "unithand.h"
 #include "unittools.h"
 
 #include "aicity.h"
@@ -48,142 +38,17 @@
 #include "aitools.h"
 
 /**************************************************************************
-  Create a virtual unit to use in build want estimation
+  Ensure unit sanity
 **************************************************************************/
-struct unit *create_unit_virtual(struct player *pplayer, int x, int y,
-				 Unit_Type_id type, bool make_veteran)
-{
-  struct unit *punit;
-  punit=fc_calloc(1, sizeof(struct unit));
-
-  punit->type = type;
-  punit->owner = pplayer->player_no;
-  CHECK_MAP_POS(x, y);
-  punit->x = x;
-  punit->y = y;
-  punit->goto_dest_x = 0;
-  punit->goto_dest_y = 0;
-  punit->veteran = make_veteran;
-  punit->homecity = 0;
-  punit->upkeep = 0;
-  punit->upkeep_food = 0;
-  punit->upkeep_gold = 0;
-  punit->unhappiness = 0;
-  /* A unit new and fresh ... */
-  punit->foul = FALSE;
-  punit->fuel = unit_type(punit)->fuel;
-  punit->hp = unit_type(punit)->hp;
-  punit->moves_left = unit_move_rate(punit);
-  punit->moved = FALSE;
-  punit->paradropped = FALSE;
-  if (is_barbarian(pplayer)) {
-    punit->fuel = BARBARIAN_LIFE;
-  }
-  /* AI.control is probably always true... */
-  punit->ai.control = FALSE;
-  punit->ai.ai_role = AIUNIT_NONE;
-  punit->ai.ferryboat = 0;
-  punit->ai.passenger = 0;
-  punit->ai.bodyguard = 0;
-  punit->ai.charge = 0;
-  punit->bribe_cost = -1; /* flag value */
-  punit->transported_by = -1;
-  punit->pgr = NULL;
-  set_unit_activity(punit, ACTIVITY_IDLE);
-
-  return punit;
-}
-
-/**************************************************************************
-  Free the memory used by virtual unit
-  It is assumed (since it's virtual) that it's not registered or 
-  listed anywhere.
-**************************************************************************/
-void destroy_unit_virtual(struct unit *punit)
-{
-  if (punit->pgr) {
-    /* Should never happen, but do it anyway for completeness */
-    free(punit->pgr->pos);
-    free(punit->pgr);
-    punit->pgr = NULL;
-  }
-
-  free(punit);
-}
-
-/**************************************************************************
-  This will eventually become the ferry-enabled goto. For now, it just
-  wraps ai_unit_goto()
-**************************************************************************/
-bool ai_unit_gothere(struct unit *punit)
-{
-  assert(punit->goto_dest_x != -1 && punit->goto_dest_y != -1);
-  if (ai_unit_goto(punit, punit->goto_dest_x, punit->goto_dest_y)) {
-    return TRUE; /* ... and survived */
-  } else {
-    return FALSE; /* we died */
-  }
-}
-
-/**************************************************************************
-  Go to specified destination but do not disturb existing role or activity
-  and do not clear the role's destination. Return FALSE iff we died.
-
-  FIXME: add some logging functionality to replace GOTO_LOG()
-**************************************************************************/
-bool ai_unit_goto(struct unit *punit, int x, int y)
-{
-  enum goto_result result;
-  int oldx = punit->goto_dest_x, oldy = punit->goto_dest_y;
-  enum unit_activity activity = punit->activity;
-
-  /* TODO: log error on same_pos with punit->x|y */
-  punit->goto_dest_x = x;
-  punit->goto_dest_y = y;
-  handle_unit_activity_request(punit, ACTIVITY_GOTO);
-  result = do_unit_goto(punit, GOTO_MOVE_ANY, FALSE);
-  if (result != GR_DIED) {
-    handle_unit_activity_request(punit, activity);
-    punit->goto_dest_x = oldx;
-    punit->goto_dest_y = oldy;
-    return TRUE;
-  }
-  return FALSE;
-}
-
-/**************************************************************************
-  Ensure unit sanity by telling charge that we won't bodyguard it anymore,
-  add and remove city spot reservation, and set destination.
-**************************************************************************/
-void ai_unit_new_role(struct unit *punit, enum ai_unit_task task, int x, int y)
+void ai_unit_new_role(struct unit *punit, enum ai_unit_task task)
 {
   struct unit *charge = find_unit_by_id(punit->ai.charge);
-
-  if (punit->activity == ACTIVITY_GOTO) {
-    /* It would indicate we're going somewhere otherwise */
-    handle_unit_activity_request(punit, ACTIVITY_IDLE);
-  }
-
-  if (punit->ai.ai_role == AIUNIT_BUILD_CITY) {
-    assert(is_normal_map_pos(punit->goto_dest_x, punit->goto_dest_y));
-    remove_city_from_minimap(punit->goto_dest_x, punit->goto_dest_y);
-  }
-
   if (charge && (charge->ai.bodyguard == punit->id)) {
     /* ensure we don't let the unit believe we bodyguard it */
-    charge->ai.bodyguard = BODYGUARD_NONE;
+    charge->ai.bodyguard = BODYGUARD_NONE; 
   }
   punit->ai.charge = BODYGUARD_NONE;
-
   punit->ai.ai_role = task;
-/* TODO:
-  punit->goto_dest_x = x;
-  punit->goto_dest_y = y; */
-
-  if (punit->ai.ai_role == AIUNIT_BUILD_CITY) {
-    assert(is_normal_map_pos(x, y));
-    add_city_to_minimap(x, y);
-  }
 }
 
 /**************************************************************************
@@ -217,6 +82,8 @@ bool ai_unit_make_homecity(struct unit *punit, struct city *pcity)
   been moved to (x, y) which is a valid, safe coordinate, and that our
   bodyguard has not. This is an ai_unit_* auxiliary function, do not use 
   elsewhere.
+
+  FIXME: packetify requests too
 **************************************************************************/
 static void ai_unit_bodyguard_move(int unitid, int x, int y)
 {
@@ -231,6 +98,7 @@ static void ai_unit_bodyguard_move(int unitid, int x, int y)
   assert(punit != NULL);
 
   if (!is_tiles_adjacent(x, y, bodyguard->x, bodyguard->y)) {
+    BODYGUARD_LOG(LOG_DEBUG, bodyguard, "is too far from its charge");
     return;
   }
 
@@ -240,8 +108,11 @@ static void ai_unit_bodyguard_move(int unitid, int x, int y)
     return;
   }
 
+  BODYGUARD_LOG(LOG_DEBUG, bodyguard, "was dragged along by charge");
+
   handle_unit_activity_request(bodyguard, ACTIVITY_IDLE);
   (void) ai_unit_move(bodyguard, x, y);
+  handle_unit_activity_request(bodyguard, ACTIVITY_FORTIFYING);
 }
 
 /**************************************************************************
@@ -283,7 +154,6 @@ void ai_unit_attack(struct unit *punit, int x, int y)
   pmove.x = x;
   pmove.y = y;
   pmove.unid = punit->id;
-  handle_unit_activity_request(punit, ACTIVITY_IDLE);
   handle_move_unit(unit_owner(punit), &pmove);
 
   if (find_unit_by_id(sanity) && same_pos(x, y, punit->x, punit->y)) {
@@ -325,7 +195,7 @@ bool ai_unit_move(struct unit *punit, int x, int y)
   }
 
   /* don't leave bodyguard behind */
-  if (has_bodyguard(punit)
+  if (has_bodyguard(punit) 
       && (bodyguard = find_unit_by_id(punit->ai.bodyguard))
       && same_pos(punit->x, punit->y, bodyguard->x, bodyguard->y)
       && bodyguard->moves_left == 0) {
@@ -347,7 +217,6 @@ bool ai_unit_move(struct unit *punit, int x, int y)
   pmove.x = x;
   pmove.y = y;
   pmove.unid = punit->id;
-  handle_unit_activity_request(punit, ACTIVITY_IDLE);
   handle_move_unit(unit_owner(punit), &pmove);
 
   /* handle the results */
@@ -391,43 +260,28 @@ struct city *dist_nearest_city(struct player *pplayer, int x, int y,
 }
 
 /**************************************************************************
-  Is it a city/fortress or will the whole stack die in an attack
-  TODO: use new killstack thing
-**************************************************************************/
-bool is_stack_vulnerable(int x, int y)
-{
-  return !(map_get_city(x, y) != NULL ||
-	   map_has_special(x, y, S_FORTRESS) ||
-	   map_has_special(x, y, S_AIRBASE) );
-}
-
-/**************************************************************************
-  Change government, pretty fast...
+.. change government,pretty fast....
 **************************************************************************/
 void ai_government_change(struct player *pplayer, int gov)
 {
   struct packet_player_request preq;
-
-  if (gov == pplayer->government) {
+  if (gov == pplayer->government)
     return;
-  }
-  preq.government = gov;
-  pplayer->revolution = 0;
-  pplayer->government = game.government_when_anarchy;
+  preq.government=gov;
+  pplayer->revolution=0;
+  pplayer->government=game.government_when_anarchy;
   handle_player_government(pplayer, &preq);
   pplayer->revolution = -1; /* yes, I really mean this. -- Syela */
 }
 
 /**************************************************************************
-  Credits the AI wants to have in reserves. We need some gold to bribe
-  and incite cities.
-
-  "I still don't trust this function" -- Syela
+... Credits the AI wants to have in reserves.
 **************************************************************************/
 int ai_gold_reserve(struct player *pplayer)
 {
   int i = total_player_citizens(pplayer)*2;
   return MAX(pplayer->ai.maxbuycost, i);
+/* I still don't trust this function -- Syela */
 }
 
 /**************************************************************************
@@ -454,13 +308,6 @@ void adjust_choice(int value, struct ai_choice *choice)
 void copy_if_better_choice(struct ai_choice *cur, struct ai_choice *best)
 {
   if (cur->want > best->want) {
-    freelog(LOG_DEBUG, "Overriding choice (%s, %d) with (%s, %d)",
-	    (best->type == CT_BUILDING ? 
-	     get_improvement_name(best->choice) : unit_types[best->choice].name), 
-	    best->want, 
-	    (cur->type == CT_BUILDING ? 
-	     get_improvement_name(cur->choice) : unit_types[cur->choice].name), 
-	    cur->want);
     best->choice =cur->choice;
     best->want = cur->want;
     best->type = cur->type;
@@ -578,4 +425,80 @@ bool ai_assess_military_unhappiness(struct city *pcity,
  
   if (unhap < 0) unhap = 0;
   return unhap > 0;
+}
+
+/**********************************************************************
+  Evaluate a government form, still pretty sketchy.
+
+  This evaluation should be more dynamic (based on players current
+  needs, like expansion, at war, etc, etc). -SKi
+
+  0 is my first attempt at government evaluation
+  1 is new evaluation based on patch from rizos -SKi
+**********************************************************************/
+int ai_evaluate_government (struct player *pplayer, struct government *g)
+{
+  int current_gov      = pplayer->government;
+  int shield_surplus   = 0;
+  int food_surplus     = 0;
+  int trade_prod       = 0;
+  int shield_need      = 0;
+  int food_need        = 0;
+  bool gov_overthrown   = FALSE;
+  int score;
+
+  pplayer->government = g->index;
+
+  city_list_iterate(pplayer->cities, pcity) {
+    city_refresh(pcity);
+
+    /* the lines that follow are copied from ai_manage_city -
+       we don't need the sell_obsolete_buildings */
+    auto_arrange_workers(pcity);
+    if (ai_fix_unhappy (pcity))
+      ai_scientists_taxmen(pcity);
+
+    trade_prod     += pcity->trade_prod;
+    if (pcity->shield_prod > 0)
+      shield_surplus += pcity->shield_surplus;
+    else
+      shield_need    += pcity->shield_surplus;
+    if (pcity->food_surplus > 0)
+      food_surplus   += pcity->food_surplus;
+    else
+      food_need      += pcity->food_surplus;
+
+    if (city_unhappy(pcity)) {
+      /* the following is essential to prevent falling into anarchy */
+      if (pcity->anarchy > 0
+	  && government_has_flag(g, G_REVOLUTION_WHEN_UNHAPPY)) 
+        gov_overthrown = TRUE;
+    }
+  } city_list_iterate_end;
+
+  pplayer->government = current_gov;
+
+  /* Restore all cities. */
+  city_list_iterate(pplayer->cities, pcity) {
+    city_refresh(pcity);
+
+    /* the lines that follow are copied from ai_manage_city -
+       we don't need the sell_obsolete_buildings */
+    auto_arrange_workers(pcity);
+    if (ai_fix_unhappy (pcity))
+      ai_scientists_taxmen(pcity);
+  } city_list_iterate_end;
+  sync_cities();
+
+  score =
+    3 * trade_prod
+  + 2 * shield_surplus + 2 * food_surplus
+  - 4 * shield_need - 4 * food_need;
+
+  score = gov_overthrown ? 0 : MAX(score, 0);
+
+  freelog(LOG_DEBUG, "a_e_g (%12s) = score=%3d; trade=%3d; shield=%3d/%3d; "
+                     "food=%3d/%3d;", g->name, score, trade_prod, 
+                     shield_surplus, shield_need, food_surplus, food_need);
+  return score;
 }

@@ -11,10 +11,6 @@
    GNU General Public License for more details.
 ***********************************************************************/
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include "city.h"
 #include "tech.h"
 
@@ -31,6 +27,7 @@
 void foreign_advisor_choose_tech(struct player *pplayer, 
 				 struct ai_choice *choice)
 {
+  choice->choice = A_NONE;
+  choice->want   = 0;
   /* this function haven't been implemented yet */
-  init_choice(choice);
 }

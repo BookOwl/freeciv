@@ -173,7 +173,7 @@
 #define ALWAYS_APPLY_AT_SERVER                          FALSE
 
 #define NUM_SPECIALISTS_ROLES				3
-#define MAX_FIELDS_USED	       	                        (CITY_TILES - 1)
+#define MAX_FIELDS_USED	       	(CITY_MAP_SIZE * CITY_MAP_SIZE - 4 - 1)
 #define MAX_COMBINATIONS				100
 
 #define SAVED_PARAMETER_SIZE				29
@@ -1298,10 +1298,12 @@ static void add_combination(int fields_used,
 
   /* Insert the given combination. */
   if (invalid_slot_for_insert == NULL) {
-    die("No more free combinations left. You may increase "
-	"MAX_COMBINATIONS or \nreport this error to "
-	"freeciv-dev@freeciv.org.\nCurrent MAX_COMBINATIONS=%d",
-	MAX_COMBINATIONS);
+    freelog(LOG_FATAL,
+	    "No more free combinations left. You may increase "
+	    "MAX_COMBINATIONS or \nreport this error to "
+	    "freeciv-dev@freeciv.org.\nCurrent MAX_COMBINATIONS=%d",
+	    MAX_COMBINATIONS);
+    exit(EXIT_FAILURE);
   }
 
   memcpy(invalid_slot_for_insert, combination, sizeof(struct combination));
@@ -1821,10 +1823,12 @@ static void handle_city(struct city *pcity)
     cma_release_city(pcity);
 
 #if (IS_DEVEL_VERSION || IS_BETA_VERSION)
-    die("CMA: %s has changed multiple times. This may be "
-	"an error in freeciv or bad luck. Please contact "
-	"<freeciv-dev@freeciv.org>. The CMA will detach "
-	"itself from the city now.", pcity->name);
+    freelog(LOG_ERROR, _("CMA: %s has changed multiple times. This may be "
+			 "an error in freeciv or bad luck. Please contact "
+			 "<freeciv-dev@freeciv.org>. The CMA will detach "
+			 "itself from the city now."), pcity->name);
+    assert(0);
+    exit(EXIT_FAILURE);
 #endif
   }
 
@@ -1998,7 +2002,7 @@ bool cma_is_city_under_agent(struct city *pcity,
 /****************************************************************************
 ...
 *****************************************************************************/
-const char *cma_get_stat_name(enum cma_stat stat)
+const char *const cma_get_stat_name(enum cma_stat stat)
 {
   switch (stat) {
   case FOOD:

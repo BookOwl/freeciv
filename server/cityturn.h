@@ -28,11 +28,12 @@ void auto_arrange_workers(struct city *pcity); /* will arrange the workers */
 void add_adjust_workers(struct city *pcity);   /* will add workers */
 
 void city_reduce_size(struct city *pcity, int pop_loss);
+void city_increase_size(struct city *pcity);
 void send_global_city_turn_notifications(struct conn_list *dest);
 void send_city_turn_notifications(struct conn_list *dest, struct city *pcity);
 void begin_cities_turn(struct player *pplayer);
 void update_city_activities(struct player *pplayer);
-int city_incite_cost(struct player *pplayer, struct city *pcity);
+void city_incite_cost(struct city *pcity);
 void remove_obsolete_buildings_city(struct city *pcity, bool refresh);
 void remove_obsolete_buildings(struct player *pplayer);
 

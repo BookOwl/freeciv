@@ -5,10 +5,6 @@
 	LATER REFINEMENT:  BButton and one-line BTextView
 */
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <support/Debug.h>
 #include "InputView.hpp"
 #include "Defs.hpp"

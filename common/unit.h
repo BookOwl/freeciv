@@ -13,6 +13,7 @@
 #ifndef FC__UNIT_H
 #define FC__UNIT_H
 
+#include "genlist.h"
 #include "terrain.h"		/* enum tile_special_type */
 #include "unittype.h"
 
@@ -50,7 +51,7 @@ enum diplomat_client_actions {
 enum ai_unit_task { AIUNIT_NONE, AIUNIT_AUTO_SETTLER, AIUNIT_BUILD_CITY,
                     AIUNIT_DEFEND_HOME, AIUNIT_ATTACK, AIUNIT_FORTIFY,
                     AIUNIT_RUNAWAY, AIUNIT_ESCORT, AIUNIT_EXPLORE,
-                    AIUNIT_PILLAGE, AIUNIT_RECOVER };
+                    AIUNIT_PILLAGE };
 
 enum goto_move_restriction {
   GOTO_MOVE_ANY,
@@ -207,6 +208,7 @@ bool is_unit_activity_on_tile(enum unit_activity activity, int x, int y);
 int get_unit_tile_pillage_set(int x, int y);
 bool is_military_unit(struct unit *punit);           /* !set !dip !cara */
 bool is_diplomat_unit(struct unit *punit);
+bool is_ground_threat(struct player *pplayer, struct unit *punit);
 bool is_square_threatened(struct player *pplayer, int x, int y);
 bool is_field_unit(struct unit *punit);              /* ships+aero */
 bool is_hiding_unit(struct unit *punit);
@@ -258,6 +260,7 @@ enum unit_move_result test_unit_move_to_tile(Unit_Type_id type,
 					     int src_y, int dest_x,
 					     int dest_y, bool igzoc);
 bool unit_type_really_ignores_zoc(Unit_Type_id type);
+bool zoc_ok_move_gen(struct unit *punit, int x1, int y1, int x2, int y2);
 bool zoc_ok_move(struct unit *punit, int x, int y);
 
 bool is_build_or_clean_activity(enum unit_activity activity);

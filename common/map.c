@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -65,6 +64,8 @@ static const char *tile_special_type_names[] =
   N_("Airbase"),
   N_("Fallout")
 };
+
+extern bool is_server;
 
 #define MAP_TILE(x,y)	(map.tiles + map_inx(x, y))
 
@@ -198,29 +199,6 @@ void map_init(void)
   map.have_specials         = FALSE;
   map.have_rivers_overlay   = FALSE;
   map.have_huts             = FALSE;
-}
-
-/***************************************************************
-...
-***************************************************************/
-static void tile_init(struct tile *ptile)
-{
-  ptile->terrain  = T_UNKNOWN;
-  ptile->special  = S_NO_SPECIAL;
-  ptile->known    = 0;
-  ptile->sent     = 0;
-  ptile->city     = NULL;
-  unit_list_init(&ptile->units);
-  ptile->worked   = NULL; /* pointer to city working tile */
-  ptile->assigned = 0; /* bitvector */
-}
-
-/***************************************************************
-...
-***************************************************************/
-static void tile_free(struct tile *ptile)
-{
-  unit_list_unlink_all(&ptile->units);
 }
 
 /**************************************************************************
@@ -675,7 +653,7 @@ int map_get_infrastructure_prerequisite(int spe)
 /***************************************************************
 ...
 ***************************************************************/
-enum tile_special_type get_preferred_pillage(int pset)
+int get_preferred_pillage(int pset)
 {
   if (contains_special(pset, S_FARMLAND))
     return S_FARMLAND;
@@ -1075,7 +1053,7 @@ static int tile_move_cost_ai(struct tile *tile0, struct tile *tile1,
 /***************************************************************
  ...
 ***************************************************************/
-static void debug_log_move_costs(const char *str, int x, int y, struct tile *tile0)
+static void debug_log_move_costs(char *str, int x, int y, struct tile *tile0)
 {
   /* the %x don't work so well for oceans, where
      move_cost[]==-3 ,.. --dwp
@@ -1155,6 +1133,29 @@ int map_move_cost(struct unit *punit, int x, int y)
 bool is_tiles_adjacent(int x0, int y0, int x1, int y1)
 {
   return real_map_distance(x0, y0, x1, y1) == 1;
+}
+
+/***************************************************************
+...
+***************************************************************/
+void tile_init(struct tile *ptile)
+{
+  ptile->terrain  = T_UNKNOWN;
+  ptile->special  = S_NO_SPECIAL;
+  ptile->known    = 0;
+  ptile->sent     = 0;
+  ptile->city     = NULL;
+  unit_list_init(&ptile->units);
+  ptile->worked   = NULL; /* pointer to city working tile */
+  ptile->assigned = 0; /* bitvector */
+}
+
+/***************************************************************
+...
+***************************************************************/
+void tile_free(struct tile *ptile)
+{
+  unit_list_unlink_all(&ptile->units);
 }
 
 /***************************************************************
@@ -1564,7 +1565,7 @@ bool is_move_cardinal(int start_x, int start_y, int end_x, int end_y)
 /**************************************************************************
   Free memory which is associated with this terrain type.
 **************************************************************************/
-static void tile_type_free(enum tile_terrain_type type)
+void tile_type_free(enum tile_terrain_type type)
 {
   struct tile_type *p = get_tile_type(type);
 

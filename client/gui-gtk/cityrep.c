@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -86,25 +85,6 @@ static GtkWidget *city_change_all_to_list;
 static GtkWidget *city_select_command;
 
 static int city_dialog_shell_is_modal;
-
-/*******************************************************************
- Replacement for the Gtk+ standard compare function for CLISTs,
- to enable correct sorting of numbers included in text strings.
-*******************************************************************/
-static gint report_sort(GtkCList *report,
-			gconstpointer ptr1, gconstpointer ptr2)
-{
-  const GtkCListRow *row1 = ptr1;
-  const GtkCListRow *row2 = ptr2;
-  const char *buf1, *buf2;
-
-  /* Retrieve the text of the fields... */
-  buf1 = GTK_CELL_TEXT(row1->cell[report->sort_column])->text;
-  buf2 = GTK_CELL_TEXT(row2->cell[report->sort_column])->text;
-
-  /* ...and perform a comparison. */
-  return cityrepfield_compare(buf1, buf2);
-}
 
 /****************************************************************
  Sort cities by column...
@@ -183,19 +163,6 @@ void popup_city_report_dialog(bool make_modal)
    }
 }
 
-/****************************************************************
- Closes the city report dialog.
-****************************************************************/
-void popdown_city_report_dialog(void)
-{
-  if (city_dialog_shell) {
-    if (city_dialog_shell_is_modal) {
-      gtk_widget_set_sensitive(top_vbox, TRUE);
-    }
-    gtk_widget_destroy(city_dialog_shell);
-    city_dialog_shell = NULL;
-  }
-}
 
 /****************************************************************
 ...
@@ -284,8 +251,7 @@ static void select_impr_or_unit_callback(GtkWidget *w, gpointer data)
   cid cid = GPOINTER_TO_INT(data);
   gint i;
   GtkObject *parent = GTK_OBJECT(w->parent);
-  TestCityFunc test_func =
-      (TestCityFunc) gtk_object_get_data(parent, "freeciv_test_func");
+  TestCityFunc test_func = gtk_object_get_data(parent, "freeciv_test_func");
   bool change_prod = 
     GPOINTER_TO_INT(gtk_object_get_data(parent, "freeciv_change_prod"));
 
@@ -691,8 +657,6 @@ static void create_city_report_dialog(bool make_modal)
   gtk_widget_show_all( GTK_DIALOG(city_dialog_shell)->vbox );
   gtk_widget_show_all( GTK_DIALOG(city_dialog_shell)->action_area );
 
-  gtk_clist_set_compare_func(GTK_CLIST(city_list), report_sort);
-
   gtk_widget_add_accelerator(close_command, "clicked",
 	accel, GDK_Escape, 0, 0);
 
@@ -955,7 +919,7 @@ Handle callbacks from the "change all" dialog.
 *****************************************************************/
 static void city_change_all_dialog_callback(GtkWidget *w, gpointer data)
 {
-  const char *cmd = (const char *)data;
+  char *cmd = (char *)data;
 
   if (cmd) {
     GList *selection_from, *selection_to;
@@ -999,8 +963,8 @@ static void city_change_all_callback(GtkWidget * w, gpointer data)
   GList *selection;
   gint row;
   struct city *pcity;
-  static const char *title_[2][1] = { {N_("From:")},
-				      {N_("To:")}
+  static gchar *title_[2][1] = { {N_("From:")},
+				 {N_("To:")}
   };
   static gchar **title[2];
   int i, j;
@@ -1134,7 +1098,7 @@ static void city_change_all_callback(GtkWidget * w, gpointer data)
 			action_area), button, TRUE, FALSE, 0);
     gtk_signal_connect(GTK_OBJECT(button), "clicked",
 		       GTK_SIGNAL_FUNC(city_change_all_dialog_callback),
-		       (gpointer)"change");
+		       "change");
     gtk_widget_show(button);
 
     button = gtk_button_new_with_label(_("Cancel"));
@@ -1193,7 +1157,11 @@ static void city_buy_callback(GtkWidget *w, gpointer data)
 *****************************************************************/
 static void city_close_callback(GtkWidget *w, gpointer data)
 {
-  popdown_city_report_dialog();
+
+  if(city_dialog_shell_is_modal)
+     gtk_widget_set_sensitive(top_vbox, TRUE);
+   gtk_widget_destroy(city_dialog_shell);
+   city_dialog_shell=NULL;
 }
 
 /****************************************************************
@@ -1398,7 +1366,7 @@ static void popup_city_report_config_dialog(void)
 *****************************************************************/
 static void create_city_report_config_dialog(void)
 {
-  GtkWidget *config_label, *config_ok_command, *box, *vbox;
+  GtkWidget *config_label, *config_ok_command;
   struct city_report_spec *spec;
   int i;
   
@@ -1410,24 +1378,11 @@ static void create_city_report_config_dialog(void)
   gtk_box_pack_start(GTK_BOX(GTK_DIALOG(config_shell)->vbox), config_label,
 			FALSE, FALSE, 0);
 
-  box = gtk_hbox_new(TRUE,0);
-  gtk_widget_show(box);
-  gtk_box_pack_start(GTK_BOX(GTK_DIALOG(config_shell)->vbox), box,
-		     FALSE, FALSE, 0);
-
-  vbox = gtk_vbox_new(FALSE, 0);
-  gtk_widget_show(vbox);
-  gtk_box_pack_start(GTK_BOX(box), vbox, FALSE, FALSE, 0);
-
   for(i=1, spec=city_report_specs+i; i<NUM_CREPORT_COLS; i++, spec++) {
-    if (i == NUM_CREPORT_COLS / 2 + 1) {
-      vbox = gtk_vbox_new(FALSE, 0);
-      gtk_widget_show(vbox);
-      gtk_box_pack_start(GTK_BOX(box), vbox, FALSE, FALSE, 0);
-    }
     config_toggle[i] = gtk_check_button_new_with_label(spec->explanation);
 
-    gtk_box_pack_start(GTK_BOX(vbox), config_toggle[i], FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(GTK_DIALOG(config_shell)->vbox), config_toggle[i],
+			FALSE, FALSE, 0);
   }
 
   config_ok_command = gtk_button_new_with_label(_("Close"));

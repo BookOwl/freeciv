@@ -24,14 +24,6 @@
  */
 #define POWER_DIVIDER 	(POWER_FACTOR * 3)
 
-/* Simple military power macros */
-#define DEFENCE_POWER(punit) \
- (unit_type(punit)->defense_strength * unit_type(punit)->hp \
-  * unit_type(punit)->firepower)
-#define ATTACK_POWER(punit) \
- (unit_type(punit)->attack_strength * unit_type(punit)->hp \
-  * unit_type(punit)->firepower)
-
 struct player;
 struct city;
 struct unit;
@@ -40,7 +32,8 @@ struct ai_choice;
 extern Unit_Type_id simple_ai_types[U_LAST];
 
 void ai_manage_units(struct player *pplayer); 
-int could_unit_move_to_tile(struct unit *punit, int dest_x, int dest_y);
+int could_unit_move_to_tile(struct unit *punit, int src_x, int src_y,
+			    int dest_x, int dest_y);
 int look_for_charge(struct player *pplayer, struct unit *punit,
                     struct unit **aunit, struct city **acity);
 
@@ -54,10 +47,13 @@ int build_cost_balanced(Unit_Type_id type);
 int base_unit_belligerence_primitive(Unit_Type_id type, bool veteran,
 				     int moves_left, int hp);
 int unit_belligerence_basic(struct unit *punit);
+int unit_belligerence(struct unit *punit);
+int unit_vulnerability_basic(struct unit *punit, struct unit *pdef);
 int unit_vulnerability_virtual(struct unit *punit);
 int unit_vulnerability_virtual2(Unit_Type_id att_type, Unit_Type_id def_type,
 				int x, int y, bool fortified, bool veteran,
 				bool use_alternative_hp, int alternative_hp);
+int unit_vulnerability(struct unit *punit, struct unit *pdef);
 int kill_desire(int benefit, int attack, int loss, int vuln, int attack_count);
 int military_amortize(int value, int delay, int build_cost);
 

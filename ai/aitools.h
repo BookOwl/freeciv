@@ -14,28 +14,19 @@
 #define FC__AITOOLS_H
 
 #include "shared.h"		/* bool type */
-#include "unit.h"		/* enum ai_unit_task */
-#include "unittype.h"		/* Unit_Type_id */
 
 struct ai_choice;
 struct city;
 struct government;
 struct player;
+struct unit;
 
 enum bodyguard_enum {
   BODYGUARD_WANTED=-1,
   BODYGUARD_NONE
 };
 
-struct unit *create_unit_virtual(struct player *pplayer, int x, int y,
-				 Unit_Type_id type, bool make_veteran);
-void destroy_unit_virtual(struct unit *punit);
-bool is_stack_vulnerable(int x, int y);
-
-bool ai_unit_gothere(struct unit *punit);
-bool ai_unit_goto(struct unit *punit, int x, int y);
-void ai_unit_new_role(struct unit *punit, enum ai_unit_task task, int x, int y);
-
+void ai_unit_new_role(struct unit *punit, enum ai_unit_task utask);
 bool ai_unit_make_homecity(struct unit *punit, struct city *pcity);
 void ai_unit_attack(struct unit *punit, int x, int y);
 bool ai_unit_move(struct unit *punit, int x, int y);
@@ -44,6 +35,7 @@ struct city *dist_nearest_city(struct player *pplayer, int x, int y,
                                bool everywhere, bool enemy);
 
 void ai_government_change(struct player *pplayer, int gov);
+
 int ai_gold_reserve(struct player *pplayer);
 
 void init_choice(struct ai_choice *choice);

@@ -23,10 +23,10 @@
   Includes cmdlevel stuff, which is connection-based.
 ***************************************************************************/
 
-#include "shared.h"		/* MAX_LEN_ADDR, bool type */
+#include "shared.h"		/* MAX_LEN_ADDR */
+#include "shared.h"		/* bool type */
 
 struct player;
-struct timer_list;
 
 #define MAX_LEN_PACKET   4096
 #define MAX_LEN_CAPSTR    512
@@ -51,7 +51,7 @@ enum cmdlevel_id {    /* access levels for users to issue commands        */
 
 /***************************************************************************
   On the distinction between nations(formerly races), players, and users,
-  see doc/HACKING
+  see freeciv_hackers_guide.txt
 ***************************************************************************/
 
 /* get 'struct conn_list' and related functions: */
@@ -96,9 +96,8 @@ struct connection {
   struct socket_packet_buffer *buffer;
   struct socket_packet_buffer *send_buffer;
   time_t last_write;
+  bool ponged;		        /* have received a PACKET_CONN_PONG? */
 
-  double ping_time;
-  
   struct conn_list self;	/* list with this connection as single element */
   char name[MAX_LEN_NAME];
   char addr[MAX_LEN_ADDR];
@@ -150,12 +149,6 @@ struct connection {
      * Will increase for every received packet.
      */
     int last_request_id_seen;
-
-    /* 
-     * The start times of the PACKET_CONN_PING which have been sent
-     * but weren't PACKET_CONN_PONGed yet? 
-     */
-    struct timer_list *ping_timers;
   } server;
 
   /*
@@ -186,6 +179,7 @@ void close_socket_set_callback(CLOSE_FUN fun);
 
 int read_socket_data(int sock, struct socket_packet_buffer *buffer);
 void flush_connection_send_buffer_all(struct connection *pc);
+void flush_connection_send_buffer_packets(struct connection *pc);
 void send_connection_data(struct connection *pc, const unsigned char *data,
 			  int len);
 

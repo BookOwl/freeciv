@@ -30,7 +30,6 @@
 #define GAMELOG_REVOLT 11
 #define GAMELOG_GENO 12
 #define GAMELOG_TREATY 13
-#define GAMELOG_TEAM 15
 #define GAMELOG_STATUS 16
 #define GAMELOG_RANK 17
 #define GAMELOG_LAST 18
@@ -55,7 +54,7 @@
 
 void gamelog_init(char *filename);
 void gamelog_set_level(int level);
-void gamelog(int level, const char *message, ...)
+void gamelog(int level, char *message, ...)
              fc__attribute((format (printf, 2, 3)));
 void gamelog_map(void);
 void gamelog_save(void);

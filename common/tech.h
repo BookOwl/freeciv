@@ -53,7 +53,6 @@ enum tech_flag_id {
   TF_FARMLAND,  /* "Settler" unit types can build farmland */
   TF_REDUCE_TRIREME_LOSS1, /* Reduces chance of Trireme being lost at sea */
   TF_REDUCE_TRIREME_LOSS2, /* Reduces chance of Trireme being lost at sea */
-  TF_BUILD_AIRBORNE, /* Player can build air units */
   TF_LAST
 };
 
@@ -116,6 +115,7 @@ const char *get_tech_name(struct player *pplayer, Tech_Type_id tech);
 
 void precalc_tech_data(void);
 
+void tech_free(Tech_Type_id tech);
 void techs_free(void);
 
 extern struct advance advances[];

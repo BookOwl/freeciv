@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -55,6 +54,7 @@ int map_view_x0, map_view_y0;
 
 static void pixmap_put_overlay_tile(Pixmap pixmap, int x, int y,
  				    struct Sprite *ssprite);
+static void show_city_descriptions(void);
 static void put_line(Pixmap pm, int x, int y, int dir);
 
 /* the intro picture is held in this pixmap, which is scaled to
@@ -62,24 +62,32 @@ static void put_line(Pixmap pm, int x, int y, int dir);
 Pixmap scaled_intro_pixmap;
 int scaled_intro_pixmap_width, scaled_intro_pixmap_height;
 
+/**************************************************************************
+Finds the pixel coordinates of a tile.  Beside setting the results in
+canvas_x,canvas_y it returns whether the tile is inside the visible map.
 
-/***********************************************************************
-  This function can be used by mapview_common code to determine the
-  location and dimensions of the mapview canvas.
-***********************************************************************/
-void get_mapview_dimensions(int *map_view_topleft_map_x,
-			    int *map_view_topleft_map_y,
-			    int *map_view_pixel_width,
-			    int *map_view_pixel_height)
+This function is almost identical between all GUI's.
+**************************************************************************/
+static int get_canvas_xy(int map_x, int map_y, int *canvas_x,
+			 int *canvas_y)
 {
   Dimension width, height;
 
-  *map_view_topleft_map_x = map_view_x0;
-  *map_view_topleft_map_y = map_view_y0;
   XtVaGetValues(map_canvas, XtNwidth, &width, XtNheight, &height, NULL);
 
-  *map_view_pixel_width = (Dimension)width;
-  *map_view_pixel_height = (Dimension)height;
+  return map_pos_to_canvas_pos(map_x, map_y, canvas_x, canvas_y,
+			       map_view_x0, map_view_y0, width, height);
+}
+
+/**************************************************************************
+Finds the map coordinates corresponding to pixel coordinates.
+
+This function is almost identical between all GUI's.
+**************************************************************************/
+void get_map_xy(int canvas_x, int canvas_y, int *map_x, int *map_y)
+{
+  canvas_pos_to_map_pos(canvas_x, canvas_y, map_x, map_y, map_view_x0,
+			map_view_y0);
 }
 
 /**************************************************************************
@@ -234,16 +242,13 @@ void update_info_label(void)
 
   d=0;
   for(;d<(game.player_ptr->economic.luxury)/10;d++)
-    xaw_set_bitmap(econ_label[d],
-		   get_citizen_pixmap(CITIZEN_ELVIS, d, NULL));
+    xaw_set_bitmap(econ_label[d], get_citizen_pixmap(0) ); /* elvis tile */
  
   for(;d<(game.player_ptr->economic.science+game.player_ptr->economic.luxury)/10;d++)
-    xaw_set_bitmap(econ_label[d],
-		   get_citizen_pixmap(CITIZEN_SCIENTIST, d, NULL));
+    xaw_set_bitmap(econ_label[d], get_citizen_pixmap(1) ); /* scientist tile */
  
    for(;d<10;d++)
-    xaw_set_bitmap(econ_label[d],
-		   get_citizen_pixmap(CITIZEN_TAXMAN, d, NULL));
+    xaw_set_bitmap(econ_label[d], get_citizen_pixmap(2) ); /* taxman tile */
  
   update_timeout_label();
 }
@@ -314,10 +319,10 @@ Pixmap get_thumb_pixmap(int onoff)
 /**************************************************************************
 ...
 **************************************************************************/
-Pixmap get_citizen_pixmap(enum citizen_type type, int cnum,
-			  struct city *pcity)
+Pixmap get_citizen_pixmap(int frame)
 {
-  return get_citizen_sprite(type, cnum, pcity)->pixmap;
+  frame = CLIP(0, frame, NUM_TILES_CITIZEN-1);
+  return sprites.citizen[frame]->pixmap;
 }
 
 
@@ -338,7 +343,7 @@ void set_indicator_icons(int bulb, int sol, int flake, int gov)
 
   if (game.government_count==0) {
     /* not sure what to do here */
-    gov_sprite = get_citizen_sprite(CITIZEN_UNHAPPY, 0, NULL);
+    gov_sprite = sprites.citizen[7]; 
   } else {
     gov_sprite = get_government(gov)->sprite;
   }
@@ -346,31 +351,109 @@ void set_indicator_icons(int bulb, int sol, int flake, int gov)
 }
 
 /**************************************************************************
-  Draw a single frame of animation.  This function needs to clear the old
-  image and draw the new one.  It must flush output to the display.
+...
 **************************************************************************/
-void draw_unit_animation_frame(struct unit *punit,
-			       bool first_frame, bool last_frame,
-			       int old_canvas_x, int old_canvas_y,
-			       int new_canvas_x, int new_canvas_y)
+bool tile_visible_mapcanvas(int x, int y)
 {
-  /* Clear old sprite. */
-  XCopyArea(display, map_canvas_store, XtWindow(map_canvas), civ_gc,
-	    old_canvas_x, old_canvas_y, UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT,
-	    old_canvas_x, old_canvas_y);
+  return (y>=map_view_y0 && y<map_view_y0+map_canvas_store_theight &&
+	  ((x>=map_view_x0 && x<map_view_x0+map_canvas_store_twidth) ||
+	   (x+map.xsize>=map_view_x0 && 
+	    x+map.xsize<map_view_x0+map_canvas_store_twidth)));
+}
 
-  /* Draw the new sprite. */
-  XCopyArea(display, map_canvas_store, single_tile_pixmap, civ_gc,
-	    new_canvas_x, new_canvas_y, UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT, 0,
-	    0);
-  put_unit_pixmap(punit, single_tile_pixmap, 0, 0);
+/**************************************************************************
+...
+**************************************************************************/
+bool tile_visible_and_not_on_border_mapcanvas(int x, int y)
+{
+  return ((y>=map_view_y0+2 || (y >= map_view_y0 && map_view_y0 == 0))
+	  && (y<map_view_y0+map_canvas_store_theight-2 ||
+	      (y<map_view_y0+map_canvas_store_theight &&
+	       map_view_y0 + map_canvas_store_theight-EXTRA_BOTTOM_ROW == map.ysize))
+	  && ((x>=map_view_x0+2 && x<map_view_x0+map_canvas_store_twidth-2) ||
+	      (x+map.xsize>=map_view_x0+2
+	       && x+map.xsize<map_view_x0+map_canvas_store_twidth-2)));
+}
 
-  /* Write to screen. */
-  XCopyArea(display, single_tile_pixmap, XtWindow(map_canvas), civ_gc, 0, 0,
-	    UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT, new_canvas_x, new_canvas_y);
+/**************************************************************************
+Animates punit's "smooth" move from (x0,y0) to (x0+dx,y0+dy).
+Note: Works only for adjacent-square moves.
+(Tiles need not be square.)
+**************************************************************************/
+void move_unit_map_canvas(struct unit *punit, int x0, int y0, int dx, int dy)
+{
+  static struct timer *anim_timer = NULL; 
+  int dest_x, dest_y, is_real;
 
-  /* Flush. */
-  XSync(display, 0);
+  /* only works for adjacent-square moves */
+  if ((dx < -1) || (dx > 1) || (dy < -1) || (dy > 1) ||
+      ((dx == 0) && (dy == 0))) {
+    return;
+  }
+
+  dest_x = x0 + dx;
+  dest_y = y0 + dy;
+  is_real = normalize_map_pos(&dest_x, &dest_y);
+  assert(is_real);
+
+  if (player_can_see_unit(game.player_ptr, punit) &&
+      (tile_visible_mapcanvas(x0, y0) ||
+       tile_visible_mapcanvas(dest_x, dest_y))) {
+    int i, steps;
+    int start_x, start_y;
+    int this_x, this_y;
+
+    if (smooth_move_unit_steps < 2) {
+      steps = 2;
+    } else if (smooth_move_unit_steps >
+	       MIN(NORMAL_TILE_WIDTH, NORMAL_TILE_HEIGHT)) {
+      steps = MIN(NORMAL_TILE_WIDTH, NORMAL_TILE_HEIGHT);
+    } else {
+      steps = smooth_move_unit_steps;
+    }
+
+    get_canvas_xy(x0, y0, &start_x, & start_y);
+
+    this_x = start_x;
+    this_y = start_y;
+
+    for (i = 1; i <= steps; i++) {
+      anim_timer = renew_timer_start(anim_timer, TIMER_USER, TIMER_ACTIVE);
+
+      XCopyArea(display, map_canvas_store, XtWindow(map_canvas), civ_gc,
+		this_x, this_y, NORMAL_TILE_WIDTH, NORMAL_TILE_HEIGHT,
+		this_x, this_y);
+
+      this_x = start_x + (dx * ((i * NORMAL_TILE_WIDTH) / steps));
+      this_y = start_y + (dy * ((i * NORMAL_TILE_HEIGHT) / steps));
+
+      XCopyArea(display, map_canvas_store, single_tile_pixmap, civ_gc,
+		this_x, this_y, NORMAL_TILE_WIDTH, NORMAL_TILE_HEIGHT,
+		0, 0);
+      put_unit_pixmap(punit, single_tile_pixmap, 0, 0);
+
+      XCopyArea(display, single_tile_pixmap, XtWindow(map_canvas), civ_gc,
+		0, 0, NORMAL_TILE_WIDTH, NORMAL_TILE_HEIGHT,
+		this_x, this_y);
+
+      XSync(display, 0);
+      if (i < steps) {
+	usleep_since_timer_start(anim_timer, 10000);
+      }
+    }
+  }
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+void get_center_tile_mapcanvas(int *x, int *y)
+{
+  Dimension width, height;
+  XtVaGetValues(map_canvas, XtNwidth, &width, XtNheight, &height, NULL);
+
+  /* This sets the pointers x and y */
+  get_map_xy(width/2, height/2, x, y);
 }
 
 /**************************************************************************
@@ -627,6 +710,16 @@ void update_map_canvas(int x, int y, int width, int height,
 }
 
 /**************************************************************************
+ Update (only) the visible part of the map
+**************************************************************************/
+void update_map_canvas_visible(void)
+{
+  update_map_canvas(map_view_x0, map_view_y0,
+		    map_canvas_store_twidth, map_canvas_store_theight, 1);
+  show_city_descriptions();
+}
+
+/**************************************************************************
 ...
 **************************************************************************/
 void update_map_canvas_scrollbars(void)
@@ -649,69 +742,69 @@ void update_city_descriptions(void)
 }
 
 /**************************************************************************
-Draw at x = left of string, y = top of string.
+Draw at x = center of string, y = top of string.
 **************************************************************************/
 static void draw_shadowed_string(XFontStruct * font, GC font_gc,
-				 enum color_std foreground,
-				 enum color_std shadow,
-				 int x, int y, const char *string)
+					  int x, int y, const char *string)
 {
-  Window wndw = XtWindow(map_canvas);
-  size_t len = strlen(string);
+  Window wndw=XtWindow(map_canvas);
+  int len=strlen(string);
+  int wth=XTextWidth(font, string, len);
+  int xs=x-wth/2;
+  int ys=y+font->ascent;
 
-  y += font->ascent;
+  XSetForeground(display, font_gc, colors_standard[COLOR_STD_BLACK]);
+  XDrawString(display, wndw, font_gc, xs+1, ys+1, string, len);
 
-  XSetForeground(display, font_gc, colors_standard[shadow]);
-  XDrawString(display, wndw, font_gc, x + 1, y + 1, string, len);
-
-  XSetForeground(display, font_gc, colors_standard[foreground]);
-  XDrawString(display, wndw, font_gc, x, y, string, len);
+  XSetForeground(display, font_gc, colors_standard[COLOR_STD_WHITE]);
+  XDrawString(display, wndw, font_gc, xs, ys, string, len);
 }
 
 /**************************************************************************
 ...
 **************************************************************************/
-void show_city_desc(struct city *pcity, int canvas_x, int canvas_y)
+static void show_city_descriptions(void)
 {
-  char buffer[512], buffer2[512];
-  enum color_std color;
-  int w, w2;
+  int x, y;
 
-  canvas_x += NORMAL_TILE_WIDTH / 2;
-  canvas_y += NORMAL_TILE_HEIGHT;
+  if (!draw_city_names && !draw_city_productions)
+    return;
 
-  get_city_mapview_name_and_growth(pcity, buffer, sizeof(buffer),
-				   buffer2, sizeof(buffer2), &color);
+  for (y = 0; y < map_canvas_store_theight; ++y) {
+    for (x = 0; x < map_canvas_store_twidth; ++x) {
+      int rx = map_view_x0 + x;
+      int ry = map_view_y0 + y;
+      struct city *pcity;
 
-  w = XTextWidth(main_font_struct, buffer, strlen(buffer));
-  if (buffer2[0] != '\0') {
-    /* HACK: put a character's worth of space between the two strings. */
-    w += XTextWidth(main_font_struct, "M", 1);
-  }
-  w2 = XTextWidth(main_font_struct, buffer2, strlen(buffer2));
+      if (!normalize_map_pos(&rx, &ry))
+        continue;
 
-  draw_shadowed_string(main_font_struct, font_gc,
-		       COLOR_STD_WHITE, COLOR_STD_BLACK,
-		       canvas_x - (w + w2) / 2,
-		       canvas_y, buffer);
+      if((pcity=map_get_city(rx, ry))) {
 
-  draw_shadowed_string(prod_font_struct, prod_font_gc, color,
-		       COLOR_STD_BLACK,
-		       canvas_x - (w + w2) / 2 + w,
-		       canvas_y, buffer2);
+	if (draw_city_names) {
+	  draw_shadowed_string(main_font_struct, font_gc,
+			       x*NORMAL_TILE_WIDTH+NORMAL_TILE_WIDTH/2,
+			       (y+1)*NORMAL_TILE_HEIGHT,
+			       pcity->name);
+	}
 
-  if (draw_city_productions && (pcity->owner == game.player_idx)) {
-    if (draw_city_names) {
-      canvas_y += main_font_struct->ascent + main_font_struct->descent;
+	if (draw_city_productions && (pcity->owner==game.player_idx)) {
+	  char buffer[512];
+	
+          get_city_mapview_production(pcity, buffer, sizeof(buffer));
+
+	  draw_shadowed_string(prod_font_struct, prod_font_gc,
+			       x*NORMAL_TILE_WIDTH+NORMAL_TILE_WIDTH/2,
+			       (y+1)*NORMAL_TILE_HEIGHT +
+			         (draw_city_names ?
+				   main_font_struct->ascent +
+				     main_font_struct->descent :
+				   0),
+			       buffer);
+	}
+
+      }
     }
-
-    get_city_mapview_production(pcity, buffer, sizeof(buffer));
-    w = XTextWidth(prod_font_struct, buffer, strlen(buffer));
-
-    draw_shadowed_string(prod_font_struct, prod_font_gc,
-			 COLOR_STD_WHITE, COLOR_STD_BLACK,
-			 canvas_x - w / 2,
-			 canvas_y, buffer);
   }
 }
 
@@ -1130,10 +1223,14 @@ void draw_segment(int src_x, int src_y, int dir)
 {
   int dest_x, dest_y, is_real;
 
-  assert(get_drawn(src_x, src_y, dir) > 0);
-
   is_real = MAPSTEP(dest_x, dest_y, src_x, src_y, dir);
   assert(is_real);
+
+  /* A previous line already marks the place */
+  if (get_drawn(src_x, src_y, dir)) {
+    increment_drawn(src_x, src_y, dir);
+    return;
+  }
 
   if (tile_visible_mapcanvas(src_x, src_y)) {
     put_line(map_canvas_store, src_x, src_y, dir);
@@ -1144,15 +1241,49 @@ void draw_segment(int src_x, int src_y, int dir)
     put_line(map_canvas_store, dest_x, dest_y, DIR_REVERSE(dir));
     put_line(XtWindow(map_canvas), dest_x, dest_y, DIR_REVERSE(dir));
   }
+
+  increment_drawn(src_x, src_y, dir);
 }
 
 /**************************************************************************
-  This function is called when the tileset is changed.
+This is somewhat inefficient, but I simply can't feel any performance
+penalty so I will be lazy...
 **************************************************************************/
-void tileset_changed(void)
+void undraw_segment(int src_x, int src_y, int dir)
 {
-  /* PORTME */
-  /* Here you should do any necessary redraws (for instance, the city
-   * dialogs usually need to be resized).
-   */
+  int dest_x, dest_y, is_real;
+  int drawn = get_drawn(src_x, src_y, dir);
+
+  is_real = MAPSTEP(dest_x, dest_y, src_x, src_y, dir);
+  assert(is_real);
+
+  assert(drawn > 0);
+  /* If we walk on a path twice it looks just like walking on it once. */
+  if (drawn > 1) {
+    decrement_drawn(src_x, src_y, dir);
+    return;
+  }
+
+  decrement_drawn(src_x, src_y, dir);
+  refresh_tile_mapcanvas(src_x, src_y, TRUE);
+  refresh_tile_mapcanvas(dest_x, dest_y, TRUE);
+  if (NORMAL_TILE_WIDTH%2 == 0 || NORMAL_TILE_HEIGHT%2 == 0) {
+    int is_real;
+
+    if (dir == DIR8_NORTHEAST) {
+      /* Since the tile doesn't have a middle we draw an extra pixel
+         on the adjacent tile when drawing in this direction. */
+      dest_x = src_x + 1;
+      dest_y = src_y;
+      is_real = normalize_map_pos(&dest_x, &dest_y);
+      assert(is_real);
+      refresh_tile_mapcanvas(dest_x, dest_y, TRUE);
+    } else if (dir == DIR8_SOUTHWEST) {	/* the same */
+      dest_x = src_x;
+      dest_y = src_y + 1;
+      is_real = normalize_map_pos(&dest_x, &dest_y);
+      assert(is_real);
+      refresh_tile_mapcanvas(dest_x, dest_y, TRUE);
+    }
+  }
 }

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -54,7 +53,7 @@ static int improvement_upkeep_asmiths(struct city *pcity, Impr_Type_id i,
 
 /* Iterate a city map, from the center (the city) outwards */
 
-int city_map_iterate_outwards_indices[CITY_TILES][2] =
+int city_map_iterate_outwards_indices[(CITY_MAP_SIZE*CITY_MAP_SIZE)-4][2] =
 {
   { 2, 2 },
 
@@ -72,6 +71,9 @@ struct citystyle *city_styles = NULL;
 
 /* from server/unittools.h */
 void send_unit_info(struct player *dest, struct unit *punit);
+
+/* from client/civclient.c or server/srv_main.c */
+extern bool is_server;
 
 /**************************************************************************
 ...
@@ -102,9 +104,9 @@ bool is_city_center(int city_x, int city_y)
 Finds the city map coordinate for a given map position and a city
 center. Returns whether the map position is inside of the city map.
 **************************************************************************/
-static bool base_map_to_city_map(int *city_map_x, int *city_map_y,
-				 int city_center_x, int city_center_y,
-				 int map_x, int map_y)
+bool base_map_to_city_map(int *city_map_x, int *city_map_y,
+			 int city_center_x, int city_center_y,
+			 int map_x, int map_y)
 {
   assert(is_real_tile(map_x, map_y));
   city_map_checked_iterate(city_center_x, city_center_y, cx, cy, mx, my) {
@@ -318,7 +320,7 @@ struct player *city_owner(struct city *pcity)
  terr_gate (terrain) or spec_gate (specials), or if the building has no
  terrain/special requirements.
 **************************************************************************/
-bool city_has_terr_spec_gate(struct city *pcity, Impr_Type_id id)
+static bool city_has_terr_spec_gate(struct city *pcity, Impr_Type_id id)
 {
   struct impr_type *impr;
   enum tile_terrain_type *terr_gate;
@@ -367,7 +369,7 @@ bool can_eventually_build_improvement(struct city *pcity, Impr_Type_id id)
  owner has the required tech, but if all other pre reqs are fulfiled? 
  modularized so the AI can choose the tech it wants -- Syela 
 **************************************************************************/
-static bool could_build_improvement(struct city *pcity, Impr_Type_id id)
+bool could_build_improvement(struct city *pcity, Impr_Type_id id)
 {
   struct impr_type *impr;
 
@@ -1045,14 +1047,15 @@ bool city_rapture_grow(struct city *pcity)
 **************************************************************************/
 struct city *city_list_find_id(struct city_list *This, int id)
 {
-  if (id != 0) {
-    city_list_iterate(*This, pcity) {
-      if (pcity->id == id) {
-	return pcity;
-      }
-    } city_list_iterate_end;
-  }
+  if(id != 0) {
+    struct genlist_iterator myiter;
 
+    genlist_iterator_init(&myiter, &This->list, 0);
+    
+    for(; ITERATOR_PTR(myiter); ITERATOR_NEXT(myiter))
+    if(((struct city *)ITERATOR_PTR(myiter))->id==id)
+	return ITERATOR_PTR(myiter);
+  }
   return NULL;
 }
 
@@ -1061,11 +1064,13 @@ struct city *city_list_find_id(struct city_list *This, int id)
 **************************************************************************/
 struct city *city_list_find_name(struct city_list *This, const char *name)
 {
-  city_list_iterate(*This, pcity) {
-    if (mystrcasecmp(name, pcity->name) == 0) {
-      return pcity;
-    }
-  } city_list_iterate_end;
+  struct genlist_iterator myiter;
+
+  genlist_iterator_init(&myiter, &This->list, 0);
+
+  for(; ITERATOR_PTR(myiter); ITERATOR_NEXT(myiter))
+    if(mystrcasecmp(name, ((struct city *)ITERATOR_PTR(myiter))->name) == 0)
+      return ITERATOR_PTR(myiter);
 
   return NULL;
 }
@@ -1120,7 +1125,7 @@ int citygov_free_food(struct city *pcity, struct government *gov)
 /**************************************************************************
 ...
 **************************************************************************/
-static int citygov_free_gold(struct city *pcity, struct government *gov)
+int citygov_free_gold(struct city *pcity, struct government *gov)
 {
   if (gov->free_gold == G_CITY_SIZE_FREE) {
     return pcity->size;

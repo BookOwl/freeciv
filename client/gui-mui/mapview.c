@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -76,21 +75,6 @@ int get_map_x_visible(void)
 int get_map_y_visible(void)
 {
   return xget(main_map_area, MUIA_Map_VertVisible);
-}
-
-/***********************************************************************
-  This function can be used by mapview_common code to determine the
-  location and dimensions of the mapview canvas.
-***********************************************************************/
-void get_mapview_dimensions(int *map_view_topleft_map_x,
-			    int *map_view_topleft_map_y,
-			    int *map_view_pixel_width,
-			    int *map_view_pixel_height)
-{
-  *map_view_topleft_map_x = xget(main_map_area, MUIA_Map_HorizFirst);
-  *map_view_topleft_map_y = xget(main_map_area, MUIA_Map_VertFirst);
-  *map_view_pixel_width = _mwidth(main_map_area);	/* !! */
-  *map_view_pixel_height = _mheight(main_map_area);	/* !! */
 }
 
 /**************************************************************************
@@ -223,16 +207,13 @@ void update_info_label(void)
 
   d = 0;
   for (; d < (game.player_ptr->economic.luxury) / 10; d++)
-    set(main_econ_sprite[d], MUIA_Sprite_Sprite,
-	get_citizen_sprite(CITIZEN_ELVIS, d, NULL));
+    set(main_econ_sprite[d], MUIA_Sprite_Sprite, get_citizen_sprite(0));
 
   for (; d < (game.player_ptr->economic.science + game.player_ptr->economic.luxury) / 10; d++)
-    set(main_econ_sprite[d], MUIA_Sprite_Sprite,
-	get_citizen_sprite(CITIZEN_SCIENTIST, d, NULL));
+    set(main_econ_sprite[d], MUIA_Sprite_Sprite, get_citizen_sprite(1));
 
   for (; d < 10; d++)
-    set(main_econ_sprite[d], MUIA_Sprite_Sprite,
-	get_citizen_sprite(CITIZEN_TAXMAN, d, NULL));
+    set(main_econ_sprite[d], MUIA_Sprite_Sprite, get_citizen_sprite(2));
 
   update_timeout_label();
 }
@@ -356,7 +337,7 @@ void set_indicator_icons(int bulb, int sol, int flake, int gov)
   if (game.government_count == 0)
   {
     /* not sure what to do here */
-    gov_sprite = get_citizen_sprite(CITIZEN_UNHAPPY, 0, NULL);
+    gov_sprite = sprites.citizen[7];
   }
   else
   {
@@ -366,11 +347,96 @@ void set_indicator_icons(int bulb, int sol, int flake, int gov)
 }
 
 /**************************************************************************
-  This function has been replaced by draw_unit_animation_frame().
+Finds the pixel coordinates of a tile.  Beside setting the results in
+canvas_x,canvas_y it returns whether the tile is inside the visible
+map.
+
+This function is almost identical between all GUI's.
+**************************************************************************/
+int get_canvas_xy(int map_x, int map_y, int *canvas_x, int *canvas_y)
+{
+  int map_view_x0 = xget(main_map_area, MUIA_Map_HorizFirst);
+  int map_view_y0 = xget(main_map_area, MUIA_Map_VertFirst);
+  int width = _mwidth(main_map_area);	/* !! */
+  int height = _mheight(main_map_area);	/* !! */
+
+  return map_pos_to_canvas_pos(map_x, map_y, canvas_x, canvas_y,
+			       map_view_x0, map_view_y0, width, height);
+}
+
+/**************************************************************************
+Finds the map coordinates corresponding to pixel coordinates.
+
+This function is almost identical between all GUI's.
+**************************************************************************/
+void get_map_xy(int canvas_x, int canvas_y, int *map_x, int *map_y)
+{
+  int map_view_x0 = xget(main_map_area, MUIA_Map_HorizFirst);
+  int map_view_y0 = xget(main_map_area, MUIA_Map_VertFirst);
+
+  canvas_pos_to_map_pos(canvas_x, canvas_y, map_x, map_y, map_view_x0,
+			map_view_y0);
+}
+
+/**************************************************************************
+ GUI Independ (with new access functions)
+**************************************************************************/
+bool tile_visible_mapcanvas(int x, int y)
+{
+  if (is_isometric) {
+    int dummy_x, dummy_y; /* well, it needs two pointers... */
+    return get_canvas_xy(x, y, &dummy_x, &dummy_y);
+  } else {
+    int map_view_x0 = get_map_x_start();
+    int map_view_y0 = get_map_y_start();
+    int map_canvas_store_twidth = get_map_x_visible();
+    int map_canvas_store_theight = get_map_y_visible();
+
+    return (y>=map_view_y0 && y<map_view_y0+map_canvas_store_theight &&
+	    ((x>=map_view_x0 && x<map_view_x0+map_canvas_store_twidth) ||
+	     (x+map.xsize>=map_view_x0 && 
+	      x+map.xsize<map_view_x0+map_canvas_store_twidth)));
+  }
+}
+
+/**************************************************************************
+ GUI Independ (with new access functions)
+**************************************************************************/
+bool tile_visible_and_not_on_border_mapcanvas(int x, int y)
+{
+  if (is_isometric) {
+    int canvas_x, canvas_y;
+    int width, height;
+    width = _mwidth(main_map_area);
+    height = _mheight(main_map_area);
+
+    get_canvas_xy(x, y, &canvas_x, &canvas_y);
+
+    return canvas_x > NORMAL_TILE_WIDTH/2
+      && canvas_x < (width - 3*NORMAL_TILE_WIDTH/2)
+      && canvas_y >= NORMAL_TILE_HEIGHT
+      && canvas_y < height - 3 * NORMAL_TILE_HEIGHT/2;
+  } else {
+    int map_view_x0 = get_map_x_start();
+    int map_view_y0 = get_map_y_start();
+    int map_canvas_store_twidth = get_map_x_visible();
+    int map_canvas_store_theight = get_map_y_visible();
+
+    return ((y>=map_view_y0+2 || (y >= map_view_y0 && map_view_y0 == 0))
+	    && (y<map_view_y0+map_canvas_store_theight-2 ||
+		(y<map_view_y0+map_canvas_store_theight &&
+		 map_view_y0 + map_canvas_store_theight-EXTRA_BOTTOM_ROW == map.ysize))
+	    && ((x>=map_view_x0+2 && x<map_view_x0+map_canvas_store_twidth-2) ||
+		(x+map.xsize>=map_view_x0+2
+		 && x+map.xsize<map_view_x0+map_canvas_store_twidth-2)));
+  }
+}
+
+/**************************************************************************
+...
 **************************************************************************/
 void move_unit_map_canvas(struct unit *punit, int x0, int y0, int dx, int dy)
 {
-#error
   int dest_x, dest_y, is_real;
   /* only works for adjacent-square moves */
   if ((dx < -1) || (dx > 1) || (dy < -1) || (dy > 1) ||
@@ -393,6 +459,19 @@ void move_unit_map_canvas(struct unit *punit, int x0, int y0, int dx, int dy)
        tile_visible_mapcanvas(dest_x, dest_y))) {
     DoMethod(main_map_area, MUIM_Map_MoveUnit, punit, x0, y0, dx, dy, dest_x, dest_y);
   }
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+void get_center_tile_mapcanvas(int *x, int *y)
+{
+  int width, height;
+  width = _mwidth(main_map_area);
+  height = _mheight(main_map_area);
+
+  /* This sets the pointers x and y */
+  get_map_xy(width/2, height/2, x, y);
 }
 
 /**************************************************************************
@@ -454,10 +533,9 @@ void refresh_overview_viewrect(void)
 }
 
 /**************************************************************************
-  FIXME: this function has been moved into mapview_common.  See
-  MUIM_Map_ShowCityDescriptions.
+...
 **************************************************************************/
-void show_city_descriptions(void)
+static void show_city_descriptions(void)
 {
   if (!draw_city_names && !draw_city_productions)
     return;
@@ -481,6 +559,33 @@ void update_map_canvas(int x, int y, int width, int height,
 		       bool write_to_screen)
 {
   DoMethod(main_map_area, MUIM_Map_Refresh, x, y, width, height, write_to_screen);
+}
+
+/**************************************************************************
+ Update (only) the visible part of the map
+**************************************************************************/
+void update_map_canvas_visible(void)
+{
+  int map_view_x0 = xget(main_map_area, MUIA_Map_HorizFirst);
+  int map_view_y0 = xget(main_map_area, MUIA_Map_VertFirst);
+  int map_canvas_store_twidth = get_map_x_visible();
+  int map_canvas_store_theight = get_map_y_visible();
+
+  if (is_isometric) {
+    /* just find a big rectangle that includes the whole visible area. The
+       invisible tiles will not be drawn. */
+    int width, height;
+
+    width = height = map_canvas_store_twidth + map_canvas_store_theight;
+    update_map_canvas(map_view_x0,
+		      map_view_y0 - map_canvas_store_twidth,
+		      width, height, TRUE);
+  } else {
+    update_map_canvas(map_view_x0, map_view_y0,
+		      map_canvas_store_twidth,map_canvas_store_theight, TRUE);
+  }
+
+  show_city_descriptions();
 }
 
 /**************************************************************************
@@ -525,12 +630,10 @@ void draw_segment(int src_x, int src_y, int dir)
 }
 
 /**************************************************************************
-  This function is called when the tileset is changed.
+remove the line from src_x,src_y -> dest_x,dest_y on both map_canvas and
+map_canvas_store.
 **************************************************************************/
-void tileset_changed(void)
+void undraw_segment(int src_x, int src_y, int dir)
 {
-  /* PORTME */
-  /* Here you should do any necessary redraws (for instance, the city
-   * dialogs usually need to be resized).
-   */
+  DoMethod(main_map_area, MUIM_Map_UndrawSegment, src_x, src_y, dir);
 }

@@ -10,11 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
@@ -167,7 +162,7 @@ double unit_win_chance(struct unit *attacker, struct unit *defender)
 /**************************************************************************
   a wrapper that returns whether or not a unit ignores citywalls
 **************************************************************************/
-static bool unit_ignores_citywalls(struct unit *punit)
+bool unit_ignores_citywalls(struct unit *punit)
 {
   return (unit_flag(punit, F_IGWALL));
 }

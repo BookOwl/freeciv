@@ -1,9 +1,5 @@
 /* gotodlg.cpp */
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include "MainWindow.hpp"
 #include "Defs.hpp"
 #include "gotodlg.h"

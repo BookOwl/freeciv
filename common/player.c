@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -72,7 +71,6 @@ void player_init(struct player *plr)
   plr->is_male = TRUE;
   plr->government=game.default_government;
   plr->nation=MAX_NUM_NATIONS;
-  plr->team = TEAM_NONE;
   plr->capital = FALSE;
   unit_list_init(&plr->units);
   city_list_init(&plr->cities);
@@ -357,26 +355,6 @@ int num_known_tech_with_flag(struct player *pplayer, enum tech_flag_id flag)
 }
 
 /**************************************************************************
-  Return the expected net income of the player this turn.  This includes
-  tax revenue and upkeep, but not one-time purchases or found gold.
-**************************************************************************/
-int player_get_expected_income(struct player *pplayer)
-{
-  int income = 0;
-
-  city_list_iterate(pplayer->cities, pcity) {
-    impr_type_iterate(impr_id) {
-      if (city_got_building(pcity, impr_id)) {
-	income -= improvement_upkeep(pcity, impr_id);
-      }
-    } impr_type_iterate_end;
-    income += pcity->tax_total;
-  } city_list_iterate_end;
-
-  return income;
-}
-
-/**************************************************************************
  Returns TRUE iff the player knows at least one tech which has the
  given flag.
 **************************************************************************/
@@ -426,7 +404,7 @@ void player_limit_to_government_rates(struct player *pplayer)
     } else if (pplayer->economic.luxury < maxrate) {
       pplayer->economic.luxury += 10;
     } else {
-      die("byebye");
+      abort();
     }
     surplus -= 10;
   }
@@ -554,7 +532,8 @@ const char *diplstate_text(const enum diplstate_type type)
 
   if (type < DS_LAST)
     return Q_(ds_names[type]);
-  die("Bad diplstate_type in diplstate_text: %d", type);
+  freelog(LOG_FATAL, "Bad diplstate_type in diplstate_text: %d", type);
+  abort();
 }
 
 /***************************************************************

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -44,7 +43,6 @@
 #include "support.h"
 
 #include "chatline.h"
-#include "cityrep.h"	/* for popdown_city_report_dialog */
 #include "civclient.h"
 #include "clinet.h"
 #include "control.h" /* request_xxx and set_unit_focus */
@@ -53,17 +51,10 @@
 #include "gui_stuff.h"
 #include "mapctrl.h"
 #include "mapview.h"
-#include "messagewin.h"	/* for popdown_meswin_dialog */
 #include "options.h"
-#include "plrdlg.h"	/* for popdown_players_dialog */
-#include "repodlgs.h"	/* for popdown_xxx_dialog */
 #include "tilespec.h"
 
 #include "dialogs.h"
-
-/******************************************************************/
-void popdown_notify_dialog(void);
-static Widget notify_dialog_shell;
 
 /******************************************************************/
 static Widget races_dialog_shell=NULL;
@@ -163,7 +154,7 @@ int unit_to_use_to_pillage;
 int caravan_city_id;
 int caravan_unit_id;
 
-bool diplomat_dialog_open = FALSE;
+int diplomat_dialog_open = 0;
 int diplomat_id;
 int diplomat_target_id;
 
@@ -183,7 +174,8 @@ static int connect_unit_y;
 static void notify_command_callback(Widget w, XtPointer client_data, 
 				    XtPointer call_data)
 {
-  popdown_notify_dialog();
+  XtDestroyWidget(XtParent(XtParent(w)));
+  XtSetSensitive(toplevel, TRUE);
 }
 
 /****************************************************************
@@ -207,7 +199,7 @@ static void select_random_race(void)
 *****************************************************************/
 void popup_notify_dialog(char *caption, char *headline, char *lines)
 {
-  Widget notify_form, notify_command;
+  Widget notify_dialog_shell, notify_form, notify_command;
   Widget notify_headline, notify_label;
   Dimension width, width2;
   
@@ -246,18 +238,6 @@ void popup_notify_dialog(char *caption, char *headline, char *lines)
   xaw_set_relative_position(toplevel, notify_dialog_shell, 25, 5);
   XtPopup(notify_dialog_shell, XtGrabNone);
   XtSetSensitive(toplevel, FALSE);
-}
-
-/****************************************************************
-  Closes the notification dialog.
-*****************************************************************/
-void popdown_notify_dialog(void)
-{
-  if (notify_dialog_shell) {
-    XtDestroyWidget(notify_dialog_shell);
-    XtSetSensitive(toplevel, TRUE);
-    notify_dialog_shell = 0;
-  }
 }
 
 /****************************************************************
@@ -475,7 +455,7 @@ static void diplomat_sabotage_callback(Widget w, XtPointer client_data,
 				       XtPointer call_data)
 {
   destroy_message_dialog(w);
-  diplomat_dialog_open = FALSE;
+  diplomat_dialog_open=0;
 
   if(find_unit_by_id(diplomat_id) && 
      find_city_by_id(diplomat_target_id)) { 
@@ -499,7 +479,7 @@ static void diplomat_embassy_callback(Widget w, XtPointer client_data,
 				      XtPointer call_data)
 {
   destroy_message_dialog(w);
-  diplomat_dialog_open = FALSE;
+  diplomat_dialog_open=0;
 
   if(find_unit_by_id(diplomat_id) && 
      (find_city_by_id(diplomat_target_id))) { 
@@ -522,7 +502,7 @@ static void diplomat_investigate_callback(Widget w, XtPointer client_data,
 					  XtPointer call_data)
 {
   destroy_message_dialog(w);
-  diplomat_dialog_open = FALSE;
+  diplomat_dialog_open=0;
 
   if(find_unit_by_id(diplomat_id) && 
      (find_city_by_id(diplomat_target_id))) { 
@@ -562,7 +542,7 @@ static void spy_poison_callback(Widget w, XtPointer client_data,
 				XtPointer call_data)
 {
   destroy_message_dialog(w);
-  diplomat_dialog_open = FALSE;
+  diplomat_dialog_open=0;
 
   if(find_unit_by_id(diplomat_id) && 
      (find_city_by_id(diplomat_target_id))) { 
@@ -585,7 +565,7 @@ static void diplomat_steal_callback(Widget w, XtPointer client_data,
 				    XtPointer call_data)
 {
   destroy_message_dialog(w);
-  diplomat_dialog_open = FALSE;
+  diplomat_dialog_open=0;
 
   if(find_unit_by_id(diplomat_id) && 
      find_city_by_id(diplomat_target_id)) { 
@@ -914,7 +894,7 @@ has happened to the city during latency.  Therefore we must initialize
 pvictim to NULL and account for !pvictim in create_advances_list. -- Syela */
   
   destroy_message_dialog(w);
-  diplomat_dialog_open = FALSE;
+  diplomat_dialog_open=0;
 
   if(!spy_tech_shell){
     Position x, y;
@@ -941,7 +921,7 @@ static void spy_request_sabotage_list(Widget w, XtPointer client_data,
 				      XtPointer call_data)
 {
   destroy_message_dialog(w);
-  diplomat_dialog_open = FALSE;
+  diplomat_dialog_open=0;
 
   if(find_unit_by_id(diplomat_id) &&
      (find_city_by_id(diplomat_target_id))) {
@@ -1019,7 +999,7 @@ static void diplomat_incite_callback(Widget w, XtPointer client_data,
   struct packet_generic_integer packet;
 
   destroy_message_dialog(w);
-  diplomat_dialog_open = FALSE;
+  diplomat_dialog_open=0;
 
   if(find_unit_by_id(diplomat_id) && 
      (pcity=find_city_by_id(diplomat_target_id))) { 
@@ -1073,7 +1053,7 @@ static void diplomat_keep_moving_callback(Widget w, XtPointer client_data,
   struct city *pcity;
   
   destroy_message_dialog(w);
-  diplomat_dialog_open = FALSE;
+  diplomat_dialog_open=0;
 
   if( (punit=find_unit_by_id(diplomat_id))
       && (pcity=find_city_by_id(diplomat_target_id))
@@ -1093,7 +1073,7 @@ static void diplomat_keep_moving_callback(Widget w, XtPointer client_data,
 static void diplomat_cancel_callback(Widget w, XtPointer a, XtPointer b)
 {
   destroy_message_dialog(w);
-  diplomat_dialog_open = FALSE;
+  diplomat_dialog_open=0;
 
   process_diplomat_arrival(NULL, 0);
 }
@@ -1170,7 +1150,7 @@ void popup_diplomat_dialog(struct unit *punit, int dest_x, int dest_y)
 	XtSetSensitive(XtNameToWidget(shl, "*button6"), FALSE);
     }
 
-    diplomat_dialog_open = TRUE;
+    diplomat_dialog_open=1;
   }else{ 
     if((ptunit=unit_list_get(&map_get_tile(dest_x, dest_y)->units, 0))){
       /* Spy/Diplomat acting against a unit */
@@ -1199,7 +1179,7 @@ void popup_diplomat_dialog(struct unit *punit, int dest_x, int dest_y)
 /****************************************************************
 ...
 *****************************************************************/
-bool diplomat_dialog_is_open(void)
+int diplomat_dialog_is_open(void)
 {
   return diplomat_dialog_open;
 }
@@ -1300,7 +1280,7 @@ void popup_caravan_dialog(struct unit *punit,
 /****************************************************************
 ...
 *****************************************************************/
-bool caravan_dialog_is_open(void)
+int caravan_dialog_is_open(void)
 {
   return BOOL_VAL(caravan_dialog);
 }
@@ -2183,9 +2163,6 @@ void races_toggles_set_sensitive(struct packet_nations_used *packet)
   }
 }
 
-/* We store this value locally in case it changes globally. */
-static int nation_count;
-
 /**************************************************************************
 ...
 **************************************************************************/
@@ -2208,8 +2185,6 @@ void races_toggles_callback(Widget w, XtPointer client_data,
 			 races_leader_pick_menubutton,
 			 NULL);
 
-  nation_count = game.nation_count;
-
   for(j=0; j<leader_count; j++) {
     entry =
       XtVaCreateManagedWidget(leaders[j],
@@ -2217,7 +2192,7 @@ void races_toggles_callback(Widget w, XtPointer client_data,
 			      races_leader_pick_popupmenu,
 			      NULL);
     XtAddCallback(entry, XtNcallback, races_leader_pick_callback,
-		  INT_TO_XTPOINTER(nation_count * j + race));
+		  INT_TO_XTPOINTER(MAX_NUM_NATIONS * race + j));
   }
 
   races_leader_set_values(race, myrand(leader_count));
@@ -2234,8 +2209,8 @@ void races_toggles_callback(Widget w, XtPointer client_data,
 void races_leader_pick_callback(Widget w, XtPointer client_data,
 				XtPointer call_data)
 {
-  int lead = XTPOINTER_TO_INT(client_data) / nation_count;
-  int race = XTPOINTER_TO_INT(client_data) - (nation_count * lead);
+  int race = XTPOINTER_TO_INT(client_data) / MAX_NUM_NATIONS;
+  int lead = XTPOINTER_TO_INT(client_data) - (MAX_NUM_NATIONS * race);
 
   races_leader_set_values(race, lead);
 }
@@ -2389,7 +2364,7 @@ void races_ok_command_callback(Widget w, XtPointer client_data,
   packet.city_style = city_style_idx[selected_style];
   sz_strlcpy(packet.name, (char*)dp);
   
-  if (!is_sane_name(packet.name)) {
+  if(!get_sane_name(packet.name)) {
     append_output_window(_("You must type a legal name."));
     return;
   }
@@ -2471,19 +2446,4 @@ void taxrates_callback(Widget w, XtPointer client_data, XtPointer call_data)
   }
   send_packet_player_request(&aconnection, &packet, PACKET_PLAYER_RATES);
 
-}
-
-/********************************************************************** 
-  This function is called when the client disconnects or the game is
-  over.  It should close all dialog windows for that game.
-***********************************************************************/
-void popdown_all_game_dialogs(void)
-{
-  popdown_city_report_dialog();
-  popdown_meswin_dialog();
-  popdown_science_dialog();
-  popdown_economy_report_dialog();
-  popdown_activeunits_report_dialog();
-  popdown_players_dialog();
-  popdown_notify_dialog();
 }

@@ -68,8 +68,8 @@ struct fz_FILE_s {
   (If errno is 0, and using FZ_ZLIB, probably had zlib error
   Z_MEM_ERROR.  Wishlist: better interface for errors?)
 ***************************************************************/
-fz_FILE *fz_from_file(const char *filename, const char *in_mode,
-		      enum fz_method method, int compress_level)
+fz_FILE *fz_fopen(const char *filename, const char *in_mode,
+		  enum fz_method method, int compress_level)
 {
   fz_FILE *fp;
   char mode[64];
@@ -128,25 +128,9 @@ fz_FILE *fz_from_file(const char *filename, const char *in_mode,
     break;
   default:
     /* Should never happen */
-    die("Internal error: Bad fz_fromFile method: %d", fp->method);
+    freelog(LOG_FATAL, "Internal error: Bad fz_fopen method: %d", fp->method);
+    abort();
   }
-  return fp;
-}
-
-/***************************************************************
-  Open uncompressed stream for reading/writing.
-***************************************************************/
-fz_FILE *fz_from_stream(FILE *stream)
-{
-  fz_FILE *fp;
-
-  if (!stream) {
-    return NULL;
-  }
-
-  fp = fc_malloc(sizeof(*fp));
-  fp->method = FZ_PLAIN;
-  fp->u.plain = stream;
   return fp;
 }
 
@@ -176,7 +160,8 @@ int fz_fclose(fz_FILE *fp)
     break;
   default:
     /* Should never happen */
-    die("Internal error: Bad fz_fclose method: %d", fp->method);
+    freelog(LOG_FATAL, "Internal error: Bad fz_fclose method: %d", fp->method);
+    abort();
   }
   free(fp);
   return retval;
@@ -202,7 +187,8 @@ char *fz_fgets(char *buffer, int size, fz_FILE *fp)
     break;
   default:
     /* Should never happen */
-    die("Internal error: Bad fz_fgets method: %d", fp->method);
+    freelog(LOG_FATAL, "Internal error: Bad fz_fgets method: %d", fp->method);
+    abort();
   }
   return retval;
 }
@@ -245,7 +231,8 @@ int fz_fprintf(fz_FILE *fp, const char *format, ...)
     break;
   default:
     /* Should never happen */
-    die("Internal error: Bad fz_fprintf method: %d", fp->method);
+    freelog(LOG_FATAL, "Internal error: Bad fz_fprintf method: %d", fp->method);
+    abort();
   }
   va_end(ap);
   return retval;
@@ -273,7 +260,8 @@ int fz_ferror(fz_FILE *fp)
     break;
   default:
     /* Should never happen */
-    die("Internal error: Bad fz_ferror method: %d", fp->method);
+    freelog(LOG_FATAL, "Internal error: Bad fz_ferror method: %d", fp->method);
+    abort();
   }
   return retval;
 }
@@ -309,7 +297,8 @@ const char *fz_strerror(fz_FILE *fp)
     break;
   default:
     /* Should never happen */
-    die("Internal error: Bad fz_strerror method: %d", fp->method);
+    freelog(LOG_FATAL, "Internal error: Bad fz_strerror method: %d", fp->method);
+    abort();
   }
   return retval;
 }

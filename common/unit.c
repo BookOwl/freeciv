@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -76,8 +75,10 @@ int unit_move_rate(struct unit *punit)
     break;
 
   default:
-    die("In common/unit.c:unit_move_rate: illegal move type %d",
-	unit_type(punit)->move_type);
+    freelog(LOG_FATAL, "In common/unit.c: function unit_move_rate");
+    freelog(LOG_FATAL, "Illegal move type %d", unit_type(punit)->move_type);
+    assert(0);
+    exit(EXIT_FAILURE);
   }
   
   if (move_rate < SINGLE_MOVE && unit_type(punit)->move_rate > 0) {
@@ -357,7 +358,7 @@ bool is_diplomat_unit(struct unit *punit)
 /**************************************************************************
 ...
 **************************************************************************/
-static bool is_ground_threat(struct player *pplayer, struct unit *punit)
+bool is_ground_threat(struct player *pplayer, struct unit *punit)
 {
   return (pplayers_at_war(pplayer, unit_owner(punit))
 	  && (unit_flag(punit, F_DIPLOMAT)
@@ -599,8 +600,7 @@ bool can_unit_continue_current_activity(struct unit *punit)
 {
   enum unit_activity current = punit->activity;
   enum tile_special_type target = punit->activity_target;
-  enum unit_activity current2 = 
-              (current == ACTIVITY_FORTIFIED) ? ACTIVITY_FORTIFYING : current;
+  int current2 = current == ACTIVITY_FORTIFIED ? ACTIVITY_FORTIFYING : current;
   bool result;
 
   if (punit->connecting)
@@ -833,7 +833,6 @@ bool is_unit_activity_on_tile(enum unit_activity activity, int x, int y)
 int get_unit_tile_pillage_set(int x, int y)
 {
   enum tile_special_type tgt_ret = S_NO_SPECIAL;
-
   unit_list_iterate(map_get_tile(x, y)->units, punit)
     if(punit->activity==ACTIVITY_PILLAGE)
       tgt_ret |= punit->activity_target;
@@ -934,7 +933,9 @@ const char *unit_activity_text(struct unit *punit)
        return (text);
      }
    default:
-    die("Unknown unit activity %d in unit_activity_text()", punit->activity);
+    freelog(LOG_FATAL, "Unknown unit activity %d in unit_activity_text()",
+	    punit->activity);
+    exit(EXIT_FAILURE);
   }
 }
 
@@ -943,11 +944,13 @@ const char *unit_activity_text(struct unit *punit)
 **************************************************************************/
 struct unit *unit_list_find(struct unit_list *This, int id)
 {
-  unit_list_iterate(*This, punit) {
-    if (punit->id == id) {
-      return punit;
-    }
-  } unit_list_iterate_end;
+  struct genlist_iterator myiter;
+
+  genlist_iterator_init(&myiter, &This->list, 0);
+
+  for(; ITERATOR_PTR(myiter); ITERATOR_NEXT(myiter))
+    if(((struct unit *)ITERATOR_PTR(myiter))->id==id)
+      return ITERATOR_PTR(myiter);
 
   return NULL;
 }
@@ -1215,8 +1218,7 @@ bool can_step_taken_wrt_to_zoc(Unit_Type_id type,
 /**************************************************************************
 ...
 **************************************************************************/
-static bool zoc_ok_move_gen(struct unit *punit, int x1, int y1, int x2,
-			    int y2)
+bool zoc_ok_move_gen(struct unit *punit, int x1, int y1, int x2, int y2)
 {
   return can_step_taken_wrt_to_zoc(punit->type, unit_owner(punit),
 				   x1, y1, x2, y2);

@@ -144,10 +144,6 @@
   - Now uses hash.c
 **************************************************************************/
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -290,9 +286,7 @@ void section_file_free(struct section_file *file)
   sbuf_free(file->sb);
   file->sb = NULL;
 
-  if (file->filename) {
-    free(file->filename);
-  }
+  free(file->filename);
   file->filename = NULL;
 }
 
@@ -359,11 +353,11 @@ static struct entry *new_entry(struct sbuffer *sb, const char *name,
 /**************************************************************************
 ...
 **************************************************************************/
-static bool section_file_read_dup(struct section_file *sf,
-      	      	      	      	  const char *filename,
-      	      	      	      	  struct inputfile *inf,
-				  bool allow_duplicates)
+static bool section_file_load_dup(struct section_file *sf,
+				 const char *filename,
+				 bool allow_duplicates)
 {
+  struct inputfile *inf;
   struct section *psection = NULL;
   struct entry *pentry;
   bool table_state = FALSE;	/* 1 when within tabular format */
@@ -376,23 +370,16 @@ static bool section_file_read_dup(struct section_file *sf,
   struct athing columns_tab;	        /* astrings for column headings */
   struct astring *columns = NULL;	/* -> columns_tab.ptr */
 
+  inf = inf_open(filename, datafilename);
   if (!inf) {
     return FALSE;
   }
   section_file_init(sf);
-  if (filename) {
-    sf->filename = mystrdup(filename);
-  } else {
-    sf->filename = NULL;
-  }
+  sf->filename = mystrdup(filename);
   ath_init(&columns_tab, sizeof(struct astring));
   sb = sf->sb;
 
-  if (filename) {
-    freelog(LOG_VERBOSE, "Reading registry from \"%s\"", filename);
-  } else {
-    freelog(LOG_VERBOSE, "Reading registry");
-  }
+  freelog(LOG_VERBOSE, "Reading file \"%s\"", filename);
 
   while(!inf_at_eof(inf)) {
     if (inf_token(inf, INF_TOK_EOL))
@@ -525,11 +512,7 @@ static bool section_file_read_dup(struct section_file *sf,
   }
   
   if (table_state) {
-    if (filename) {
-      freelog(LOG_FATAL, "finished registry %s before end of table\n", filename);
-    } else {
-      freelog(LOG_FATAL, "finished registry before end of table\n");
-    }
+    freelog(LOG_FATAL, "finished file %s before end of table\n", filename);
     exit(EXIT_FAILURE);
   }
 
@@ -554,9 +537,7 @@ static bool section_file_read_dup(struct section_file *sf,
 bool section_file_load(struct section_file *my_section_file,
 		      const char *filename)
 {
-  struct inputfile *inf = inf_from_file(filename, datafilename);
-
-  return section_file_read_dup(my_section_file, filename, inf, TRUE);
+  return section_file_load_dup(my_section_file, filename, TRUE);
 }
 
 /**************************************************************************
@@ -565,20 +546,7 @@ bool section_file_load(struct section_file *my_section_file,
 bool section_file_load_nodup(struct section_file *my_section_file,
 			    const char *filename)
 {
-  struct inputfile *inf = inf_from_file(filename, datafilename);
-
-  return section_file_read_dup(my_section_file, filename, inf, FALSE);
-}
-
-/**************************************************************************
-...
-**************************************************************************/
-bool section_file_load_from_stream(struct section_file *my_section_file,
-				   fz_FILE * stream)
-{
-  struct inputfile *inf = inf_from_stream(stream, datafilename);
-
-  return section_file_read_dup(my_section_file, NULL, inf, TRUE);
+  return section_file_load_dup(my_section_file, filename, FALSE);
 }
 
 /**************************************************************************
@@ -597,13 +565,13 @@ bool section_file_load_from_stream(struct section_file *my_section_file,
 
  If compression_level is non-zero, then compress using zlib.  (Should
  only supply non-zero compression_level if already know that HAVE_LIBZ.)
- Below simply specifies FZ_ZLIB method, since fz_fromFile() automatically
+ Below simply specifies FZ_ZLIB method, since fz_fopen() automatically
  changes to FZ_PLAIN method when level==0.
 **************************************************************************/
 bool section_file_save(struct section_file *my_section_file, const char *filename,
 		      int compression_level)
 {
-  fz_FILE *fs = fz_from_file(filename, "w", FZ_ZLIB, compression_level);
+  fz_FILE *fs = fz_fopen(filename, "w", FZ_ZLIB, compression_level);
 
   struct genlist_iterator ent_iter, save_iter, col_iter;
   struct entry *pentry, *col_pentry;
@@ -751,7 +719,7 @@ bool section_file_save(struct section_file *my_section_file, const char *filenam
 /**************************************************************************
 ...
 **************************************************************************/
-char *secfile_lookup_str(struct section_file *my_section_file, const char *path, ...)
+char *secfile_lookup_str(struct section_file *my_section_file, char *path, ...)
 {
   struct entry *pentry;
   char buf[MAX_LEN_BUFFER];
@@ -781,7 +749,7 @@ char *secfile_lookup_str(struct section_file *my_section_file, const char *path,
   put into (*ival).
 **************************************************************************/
 char *secfile_lookup_str_int(struct section_file *my_section_file, 
-			     int *ival, const char *path, ...)
+			     int *ival, char *path, ...)
 {
   struct entry *pentry;
   char buf[MAX_LEN_BUFFER];
@@ -811,7 +779,7 @@ char *secfile_lookup_str_int(struct section_file *my_section_file,
 ...
 **************************************************************************/
 void secfile_insert_int(struct section_file *my_section_file,
-			int val, const char *path, ...)
+			int val, char *path, ...)
 {
   struct entry *pentry;
   char buf[MAX_LEN_BUFFER];
@@ -833,7 +801,7 @@ void secfile_insert_int(struct section_file *my_section_file,
 **************************************************************************/
 void secfile_insert_int_comment(struct section_file *my_section_file,
 				int val, const char *const comment,
-				const char *path, ...)
+				char *path, ...)
 {
   struct entry *pentry;
   char buf[MAX_LEN_BUFFER];
@@ -854,7 +822,7 @@ void secfile_insert_int_comment(struct section_file *my_section_file,
 ...
 **************************************************************************/
 void secfile_insert_bool(struct section_file *my_section_file,
-			 bool val, const char *path, ...)
+			 bool val, char *path, ...)
 {
   struct entry *pentry;
   char buf[MAX_LEN_BUFFER];
@@ -881,7 +849,7 @@ void secfile_insert_bool(struct section_file *my_section_file,
 ...
 **************************************************************************/
 void secfile_insert_str(struct section_file *my_section_file,
-			const char *sval, const char *path, ...)
+			char *sval, char *path, ...)
 {
   struct entry *pentry;
   char buf[MAX_LEN_BUFFER];
@@ -901,7 +869,7 @@ void secfile_insert_str(struct section_file *my_section_file,
 **************************************************************************/
 void secfile_insert_str_comment(struct section_file *my_section_file,
 				char *sval, const char *const comment,
-				const char *path, ...)
+				char *path, ...)
 {
   struct entry *pentry;
   char buf[MAX_LEN_BUFFER];
@@ -920,7 +888,7 @@ void secfile_insert_str_comment(struct section_file *my_section_file,
 ...
 **************************************************************************/
 int secfile_lookup_int(struct section_file *my_section_file, 
-		       const char *path, ...)
+		       char *path, ...)
 {
   struct entry *pentry;
   char buf[MAX_LEN_BUFFER];
@@ -951,7 +919,7 @@ int secfile_lookup_int(struct section_file *my_section_file,
   entry does not exist.  If the entry exists as a string, then die.
 **************************************************************************/
 int secfile_lookup_int_default(struct section_file *my_section_file,
-			       int def, const char *path, ...)
+			       int def, char *path, ...)
 {
   struct entry *pentry;
   char buf[MAX_LEN_BUFFER];
@@ -976,7 +944,7 @@ int secfile_lookup_int_default(struct section_file *my_section_file,
 ...
 **************************************************************************/
 bool secfile_lookup_bool(struct section_file *my_section_file, 
-		       const char *path, ...)
+		       char *path, ...)
 {
   struct entry *pentry;
   char buf[MAX_LEN_BUFFER];
@@ -1013,7 +981,7 @@ bool secfile_lookup_bool(struct section_file *my_section_file,
   entry does not exist.  If the entry exists as a string, then die.
 **************************************************************************/
 bool secfile_lookup_bool_default(struct section_file *my_section_file,
-				 bool def, const char *path, ...)
+				 bool def, char *path, ...)
 {
   struct entry *pentry;
   char buf[MAX_LEN_BUFFER];
@@ -1046,7 +1014,7 @@ bool secfile_lookup_bool_default(struct section_file *my_section_file,
   entry does not exist.  If the entry exists as an int, then die.
 **************************************************************************/
 char *secfile_lookup_str_default(struct section_file *my_section_file, 
-				 const char *def, const char *path, ...)
+				 char *def, char *path, ...)
 {
   struct entry *pentry;
   char buf[MAX_LEN_BUFFER];
@@ -1057,7 +1025,7 @@ char *secfile_lookup_str_default(struct section_file *my_section_file,
   va_end(ap);
 
   if(!(pentry=section_file_lookup_internal(my_section_file, buf))) {
-    return (char *) def;
+    return def;
   }
 
   if(!pentry->svalue) {
@@ -1073,7 +1041,7 @@ char *secfile_lookup_str_default(struct section_file *my_section_file,
 ...
 **************************************************************************/
 bool section_file_lookup(struct section_file *my_section_file, 
-			 const char *path, ...)
+			char *path, ...)
 {
   char buf[MAX_LEN_BUFFER];
   va_list ap;
@@ -1319,7 +1287,7 @@ void secfilehash_free(struct section_file *file)
  If none, returns 0.
 **************************************************************************/
 int secfile_lookup_vec_dimen(struct section_file *my_section_file, 
-			     const char *path, ...)
+			     char *path, ...)
 {
   char buf[MAX_LEN_BUFFER];
   va_list ap;
@@ -1342,7 +1310,7 @@ int secfile_lookup_vec_dimen(struct section_file *my_section_file,
  If the vector does not exist, returns NULL ands sets (*dimen) to 0.
 **************************************************************************/
 int *secfile_lookup_int_vec(struct section_file *my_section_file,
-			    int *dimen, const char *path, ...)
+			    int *dimen, char *path, ...)
 {
   char buf[MAX_LEN_BUFFER];
   va_list ap;
@@ -1373,7 +1341,7 @@ int *secfile_lookup_int_vec(struct section_file *my_section_file,
  If the vector does not exist, returns NULL ands sets (*dimen) to 0.
 **************************************************************************/
 char **secfile_lookup_str_vec(struct section_file *my_section_file,
-			      int *dimen, const char *path, ...)
+			      int *dimen, char *path, ...)
 {
   char buf[MAX_LEN_BUFFER];
   va_list ap;
@@ -1496,7 +1464,7 @@ static char *moutstr(char *str)
   returned are in the order they appeared in the original file.
 ***************************************************************/
 char **secfile_get_secnames_prefix(struct section_file *my_section_file,
-				   const char *prefix, int *num)
+				   char *prefix, int *num)
 {
   char **ret;
   int len, i;

@@ -15,7 +15,6 @@
 This module contains various general - mostly highlevel - functions
 used throughout the client.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -337,7 +336,7 @@ void client_change_all(cid x, cid y)
 /***************************************************************************
 Return a string indicating one nation's embassy status with another
 ***************************************************************************/
-const char *get_embassy_status(struct player *me, struct player *them)
+char *get_embassy_status(struct player *me, struct player *them)
 {
   if (me == them) return "-";
   if (player_has_embassy(me, them)) {
@@ -354,7 +353,7 @@ const char *get_embassy_status(struct player *me, struct player *them)
 /***************************************************************************
 Return a string indicating one nation's shaed vision status with another
 ***************************************************************************/
-const char *get_vision_status(struct player *me, struct player *them)
+char *get_vision_status(struct player *me, struct player *them)
 {
   if (gives_shared_vision(me, them)) {
     if (gives_shared_vision(them, me))

@@ -216,7 +216,7 @@ void boot_help_texts(void)
   sec = secfile_get_secnames_prefix(sf, "help_", &nsec);
 
   for(isec=0; isec<nsec; isec++) {
-    const char *gen_str =
+    char *gen_str =
       secfile_lookup_str_default(sf, NULL, "%s.generate", sec[isec]);
     
     if (gen_str) {
@@ -311,7 +311,8 @@ void boot_help_texts(void)
 	    }
 	  } impr_type_iterate_end;
 	} else {
-	  die("Bad current_type %d", current_type);
+	  freelog(LOG_FATAL, "Bad current_type %d", current_type);
+	  exit(EXIT_FAILURE);
 	}
 	genlist_sort(&category_nodes, help_item_compar);
 	help_list_iterate(category_nodes, ptmp) {

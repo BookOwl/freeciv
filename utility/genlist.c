@@ -10,18 +10,11 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <stdlib.h>
 
 #include "mem.h"
 #include "genlist.h"
 
-static struct genlist_link *find_genlist_position(struct genlist *pgenlist,
-						  int pos);
 
 /************************************************************************
   Initialize a genlist.
@@ -188,8 +181,8 @@ void genlist_iterator_init(struct genlist_iterator *iter,
   For pos out of range returns the null_link.
   Traverses list either forwards or backwards for best efficiency.
 ************************************************************************/
-static struct genlist_link *find_genlist_position(struct genlist *pgenlist,
-						  int pos)
+struct genlist_link *
+find_genlist_position(struct genlist *pgenlist, int pos)
 {
   struct genlist_link *plink;
 

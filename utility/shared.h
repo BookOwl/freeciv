@@ -15,24 +15,6 @@
 
 #include <stdlib.h>		/* size_t */
 
-#if __BEOS__
-#include <posix/be_prim.h>
-#define __bool_true_false_are_defined 1
-#else
-#ifdef HAVE_STDBOOL_H
-#include <stdbool.h>
-#else /* Implement <stdbool.h> ourselves */
-#undef bool
-#undef true
-#undef false
-#undef __bool_true_false_are_defined
-#define bool fc_bool
-#define true  1
-#define false 0
-#define __bool_true_false_are_defined 1
-typedef unsigned int fc_bool;
-#endif /* ! HAVE_STDBOOL_H */
-#endif /* ! __BEOS__ */
 
 /* Want to use GCC's __attribute__ keyword to check variadic
  * parameters to printf-like functions, without upsetting other
@@ -65,16 +47,14 @@ typedef unsigned int fc_bool;
    another unreachable condition. */
 #define FC_INFINITY    	(1000 * 1000 * 1000)
 
-#ifdef TRUE
-#undef TRUE
+#ifndef TRUE
+#define TRUE (1)
+#endif
+#ifndef FALSE
+#define FALSE (0)
 #endif
 
-#ifdef FALSE
-#undef FALSE
-#endif
-
-#define TRUE true
-#define FALSE false
+typedef int bool;
 
 #ifndef MAX
 #define MAX(x,y) (((x)>(y))?(x):(y))
@@ -84,13 +64,6 @@ typedef unsigned int fc_bool;
     ((this)<(lower)?(lower):(this)>(upper)?(upper):(this))
 
 #define BOOL_VAL(x) ((x)!=0)
-
-/*
- * DIVIDE() divides and rounds down, rather than just divides and
- * rounds toward 0.  It is assumed that the divisor is positive.
- */
-#define DIVIDE(n, d) \
-    ( (n) / (d) - (( (n) < 0 && (n) % (d) < 0 ) ? 1 : 0) )
 
 /* Deletes bit no in val,
    moves all bits larger than no one down,
@@ -140,16 +113,20 @@ char * get_option(const char *option_name,char **argv,int *i,int argc);
 bool is_option(const char *option_name,char *option);
 int get_tokens(const char *str, char **tokens, size_t num_tokens,
 	       const char *delimiterset);
+const char *general_int_to_text(int nr, int decade_exponent);
 const char *int_to_text(int nr);
 const char *population_to_text(int thousand_citizen);
 
-bool is_sane_name(const char *name);
+const char *get_sane_name(const char *name);
 const char *textyear(int year);
 int compare_strings(const void *first, const void *second);
 int compare_strings_ptrs(const void *first, const void *second);
 
 char *skip_leading_spaces(char *s);
+void remove_leading_spaces(char *s);
+void remove_trailing_spaces(char *s);
 void remove_leading_trailing_spaces(char *s);
+void remove_trailing_char(char *s, char trailing);
 int wordwrap_string(char *s, int len);
 
 bool check_strlen(const char *str, size_t len, const char *errmsg);
@@ -162,9 +139,6 @@ size_t loud_strlcpy(char *buffer, const char *str, size_t len,
 char *end_of_strn(char *str, int *nleft);
 int cat_snprintf(char *str, size_t n, const char *format, ...)
      fc__attribute((format (printf, 3, 4)));
-
-void die(const char *format, ...)
-     fc__attribute((format (printf, 1, 2))) fc__attribute((noreturn));
 
 char *user_home_dir(void);
 char *user_username(void);

@@ -10,11 +10,10 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
+ 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
-#endif
-
+#endif   
 #include <windows.h>
 #include <windowsx.h>
 #include <commctrl.h>
@@ -94,7 +93,7 @@ struct city_dialog {
   int present_y;
   Impr_Type_id sell_id;
   
-  enum citizen_type citizen_type[NUM_CITIZENS_SHOWN];
+  int citizen_type[NUM_CITIZENS_SHOWN];
   int support_unit_ids[NUM_UNITS_SHOWN];
   int present_unit_ids[NUM_UNITS_SHOWN];
   int change_list_ids[B_LAST+1+U_LAST+1];
@@ -611,18 +610,52 @@ void city_dialog_update_citizens(HDC hdc,struct city_dialog *pdialog)
   RECT rc;
   HBITMAP oldbit;
   oldbit=SelectObject(citydlgdc,pdialog->citizen_bmp);
-  enum citizen_type citizens[MAX_CITY_SIZE];
 
-  get_city_citizen_types(pcity, 4, citizens);
 
-  for (i = 0; i < pcity->size && i < NUM_CITIZENS_SHOWN; i++) {
-    if (pdialog->citizen_type[i] != citizens[i]) {
-      pdialog->citizen_type[i] = citizens[i];
-      draw_sprite(get_citizen_sprite(citizens[i], i, pcity), citydlgdc,
+  for(i=0, n=0; n<pcity->ppl_happy[4] && i<NUM_CITIZENS_SHOWN; n++, i++)
+    if(pdialog->citizen_type[i]!=5 && pdialog->citizen_type[i]!=6) {
+      pdialog->citizen_type[i]=5+i%2;
+      draw_sprite(get_citizen_sprite(pdialog->citizen_type[i]),citydlgdc,
+		  SMALL_TILE_WIDTH*i,0);
+    }
+  for(n=0; n<pcity->ppl_content[4] && i<NUM_CITIZENS_SHOWN; n++, i++)
+    if(pdialog->citizen_type[i]!=3 && pdialog->citizen_type[i]!=4) {
+      pdialog->citizen_type[i]=3+i%2;
+      draw_sprite(get_citizen_sprite(pdialog->citizen_type[i]),citydlgdc,
+		  SMALL_TILE_WIDTH*i,0);  
+    }
+  for(n=0; n<pcity->ppl_unhappy[4] && i<NUM_CITIZENS_SHOWN; n++, i++)
+    if(pdialog->citizen_type[i]!=7 && pdialog->citizen_type[i]!=8) {
+      pdialog->citizen_type[i]=7+i%2;
+      draw_sprite(get_citizen_sprite(pdialog->citizen_type[i]),citydlgdc,
+		  SMALL_TILE_WIDTH*i,0);
+    }
+  for (n = 0; n < pcity->ppl_angry[4] && i < NUM_CITIZENS_SHOWN; n++, i++)
+    if (pdialog->citizen_type[i] != 9 && pdialog->citizen_type[i] != 10) {
+      pdialog->citizen_type[i] = 9 + i % 2;
+      draw_sprite(get_citizen_sprite(pdialog->citizen_type[i]), citydlgdc,
 		  SMALL_TILE_WIDTH * i, 0);
     }
-  }
-
+  for(n=0; n<pcity->ppl_elvis && i<NUM_CITIZENS_SHOWN; n++, i++)
+    if(pdialog->citizen_type[i]!=0) {
+      pdialog->citizen_type[i]=0;
+      draw_sprite(get_citizen_sprite(pdialog->citizen_type[i]),citydlgdc,
+		  SMALL_TILE_WIDTH*i,0);
+      
+     }
+  for(n=0; n<pcity->ppl_scientist && i<NUM_CITIZENS_SHOWN; n++, i++)
+    if(pdialog->citizen_type[i]!=1) {
+      pdialog->citizen_type[i]=1;
+      draw_sprite(get_citizen_sprite(pdialog->citizen_type[i]),citydlgdc,
+		  SMALL_TILE_WIDTH*i,0);
+    }
+  for(n=0; n<pcity->ppl_taxman && i<NUM_CITIZENS_SHOWN; n++, i++)
+    if(pdialog->citizen_type[i]!=2) {
+      pdialog->citizen_type[i]=2;
+      draw_sprite(get_citizen_sprite(pdialog->citizen_type[i]),citydlgdc,
+		  SMALL_TILE_WIDTH*i,0);
+    }
+  
   if (i<NUM_CITIZENS_SHOWN) {
     rc.left=i*SMALL_TILE_WIDTH;
     rc.right=NUM_CITIZENS_SHOWN*SMALL_TILE_WIDTH;
@@ -635,7 +668,7 @@ void city_dialog_update_citizens(HDC hdc,struct city_dialog *pdialog)
   }
   
   for(; i<NUM_CITIZENS_SHOWN; i++) {
-    pdialog->citizen_type[i] = CITIZEN_LAST;    
+    pdialog->citizen_type[i]=-1;    
   }   
   
   BitBlt(hdc,pdialog->pop_x,pdialog->pop_y,

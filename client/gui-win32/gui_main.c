@@ -10,11 +10,9 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
-
 #include <windows.h>
 #include <winsock.h>
 #include <windowsx.h>
@@ -499,7 +497,7 @@ static VOID CALLBACK socket_timer(HWND  hwnd,UINT uMsg,UINT idEvent,DWORD  dwTim
 /**************************************************************************
   This pops down every dialog
 **************************************************************************/
-void popdown_all_game_dialogs(void)
+void popdown_everything(void)
 {
   RECT rc;
   fcwin_close_all_childs(root_window);

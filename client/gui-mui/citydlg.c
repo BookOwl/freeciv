@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -99,7 +98,8 @@ static void set_cityopt_values(struct city_dialog *pdialog);
 /******************************************************************
 * functions in cma_fec.c but as static
 ******************************************************************/
-static const char *get_city_growth_string(struct city *pcity, int surplus)
+static const char *const get_city_growth_string(struct city *pcity,
+						int surplus)
 {
   int stock, cost, turns;
   static char buffer[50];
@@ -1114,21 +1114,18 @@ static void city_citizen(struct city_citizen_msg *msg)
   struct city_dialog *pdialog = msg->pdialog;
   struct city *pcity = pdialog->pcity;
 
-  switch (msg->type)  {
-  case CITIZEN_ELVIS:
+  switch (msg->type)
+  {
+  case 0:
     request_city_change_specialist(pcity, SP_ELVIS, SP_SCIENTIST);
     break;
 
-  case CITIZEN_SCIENTIST:
+  case 1:
     request_city_change_specialist(pcity, SP_SCIENTIST, SP_TAXMAN);
     break;
 
-  case CITIZEN_TAXMAN:
-    request_city_change_specialist(pcity, SP_TAXMAN, SP_ELVIS);
-    break;
-
   default:
-    assert(FALSE);
+    request_city_change_specialist(pcity, SP_TAXMAN, SP_ELVIS);
     break;
   }
 }
@@ -1937,9 +1934,8 @@ static void city_dialog_update_map(struct city_dialog *pdialog)
 *****************************************************************/
 static void city_dialog_update_citizens(struct city_dialog *pdialog)
 {
-  int i;
+  int n;
   struct city *pcity = pdialog->pcity;
-  enum citizen_type citizens[MAX_CITY_SIZE];
 
   DoMethod(pdialog->citizen_group, MUIM_Group_InitChange);
   if (pdialog->citizen2_group)
@@ -1950,26 +1946,64 @@ static void city_dialog_update_citizens(struct city_dialog *pdialog)
 
   pdialog->citizen2_group = HGroup, GroupSpacing(0), End;
 
-  /* Get a list of the citizens. */
-  get_city_citizen_types(pcity, 4, citizens);
+  /* maybe add an i < NUM_CITIZENS_SHOWN check into every loop with own counter i */
 
-  for (i = 0; i < pcity->size; i++) {
-    Object *o = MakeSprite(get_citizen_sprite(citizens[i], i, pcity));
-
-    if (o) {
+  for (n = 0; n < pcity->ppl_happy[4]; n++)
+  {
+    Object *o = MakeSprite(get_citizen_sprite(5 + n % 2));
+    if (o)
       DoMethod(pdialog->citizen2_group, OM_ADDMEMBER, o);
+  }
 
-      /* HACK: set sensitivity on widgets */
-      switch (citizens[i]) {
-      case CITIZEN_ELVIS:
-      case CITIZEN_SCIENTIST:
-      case CITIZEN_TAXMAN:
-	DoMethod(o, MUIM_Notify, MUIA_Pressed, FALSE, o, 5, MUIM_CallHook,
-		 &civstandard_hook, city_citizen, pdialog, citizens[i]);
-	break;
-      default:
-	break;
-      }
+  for (n = 0; n < pcity->ppl_content[4]; n++)
+  {
+    Object *o = MakeSprite(get_citizen_sprite(3 + n % 2));
+    if (o)
+      DoMethod(pdialog->citizen2_group, OM_ADDMEMBER, o);
+  }
+
+
+  for (n = 0; n < pcity->ppl_unhappy[4]; n++)
+  {
+    Object *o = MakeSprite(get_citizen_sprite(7 + n % 2));
+    if (o)
+      DoMethod(pdialog->citizen2_group, OM_ADDMEMBER, o);
+  }
+
+  for (n = 0; n < pcity->ppl_angry[4]; n++) {
+    Object *o = MakeSprite(get_citizen_sprite(9 + n % 2));
+    if (o)
+      DoMethod(pdialog->citizen2_group, OM_ADDMEMBER, o);
+  }
+
+  for (n = 0; n < pcity->ppl_elvis; n++)
+  {
+    Object *o = MakeSprite(get_citizen_sprite(0));
+    if (o)
+    {
+      DoMethod(pdialog->citizen2_group, OM_ADDMEMBER, o);
+      DoMethod(o, MUIM_Notify, MUIA_Pressed, FALSE, o, 5, MUIM_CallHook, &civstandard_hook, city_citizen, pdialog, 0);
+    }
+  }
+
+  for (n = 0; n < pcity->ppl_scientist; n++)
+  {
+    Object *o = MakeSprite(get_citizen_sprite(1));
+    if (o)
+    {
+      DoMethod(pdialog->citizen2_group, OM_ADDMEMBER, o);
+      DoMethod(o, MUIM_Notify, MUIA_Pressed, FALSE, o, 5, MUIM_CallHook, &civstandard_hook, city_citizen, pdialog, 1);
+    }
+  }
+
+  for (n = 0; n < pcity->ppl_taxman; n++)
+  {
+    Object *o = MakeSprite(get_citizen_sprite(2));
+
+    if (o)
+    {
+      DoMethod(pdialog->citizen2_group, OM_ADDMEMBER, o);
+      DoMethod(o, MUIM_Notify, MUIA_Pressed, FALSE, o, 5, MUIM_CallHook, &civstandard_hook, city_citizen, pdialog, 2);
     }
   }
 
@@ -2456,17 +2490,34 @@ static void refresh_happiness_dialog(struct city_dialog *pdialog)
   for(i=0;i<5;i++)
   {
     int j;
+    int n1 = pcity->ppl_happy[i];
+    int n2 = n1 + pcity->ppl_content[i];
+    int n3 = n2 + pcity->ppl_unhappy[i];
+    int n4 = n3 + pcity->ppl_elvis;
+    int n5 = n4 + pcity->ppl_scientist;
     int num_citizens = pcity->size;
-    enum citizen_type citizens[MAX_CITY_SIZE];
 
     DoMethod(pdialog->happiness_citizen_group[i],MUIM_Group_InitChange);
     DisposeAllChilds(pdialog->happiness_citizen_group[i]);
 
-    get_city_citizen_types(pcity, i, citizens);
-
     for (j = 0; j < num_citizens; j++) {
-      obj = MakeSprite(get_citizen_sprite(citizens[j], j, pcity));
-      if (obj) {
+      int citizen_type;
+      Object *obj;
+      if (j < n1)
+        citizen_type = 5 + j % 2;
+      else if (j < n2)
+        citizen_type = 3 + j % 2;
+      else if (j < n3)
+        citizen_type = 7 + j % 2;
+      else if (j < n4)
+        citizen_type = 0;
+      else if (j < n5)
+        citizen_type = 1;
+      else
+        citizen_type = 2;
+
+      if ((obj = MakeSprite(get_citizen_sprite(citizen_type))))
+      {
 	DoMethod(pdialog->happiness_citizen_group[i], OM_ADDMEMBER, obj);
       }
     }

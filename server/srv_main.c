@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -116,7 +115,7 @@ static bool handle_request_join_game(struct connection *pconn,
 static void handle_turn_done(struct player *pplayer);
 static void send_select_nation(struct player *pplayer);
 static void check_for_full_turn_done(void);
-static void srv_loop(void);
+
 
 /* this is used in strange places, and is 'extern'd where
    needed (hence, it is not 'extern'd in srv_main.h) */
@@ -177,9 +176,6 @@ void srv_init(void)
 
   srvarg.extra_metaserver_info[0] = '\0';
 
-  /* initialize teams */
-  team_init();
-
   /* mark as initialized */
   has_been_srv_init = TRUE;
 
@@ -188,89 +184,32 @@ void srv_init(void)
 }
 
 /**************************************************************************
-  Returns TRUE if any one game end condition is fulfilled, FALSE otherwise
+...
 **************************************************************************/
 static bool is_game_over(void)
 {
-  int barbs = 0, alive = 0;
-  bool all_allied;
-  struct player *victor = NULL;
+  int barbs = 0;
+  int alive = 0;
 
-  /* quit if we are past the year limit */
-  if (game.year > game.end_year) {
-    notify_conn(&game.est_connections, 
-       _("Game ended in a draw as end year exceeded"));
-    gamelog(GAMELOG_NORMAL, _("Game ended in a draw as end year exceeded"));
+  if (game.year > game.end_year)
     return TRUE;
-  }
 
-  /* count barbarians */
   players_iterate(pplayer) {
     if (is_barbarian(pplayer)) {
       barbs++;
     }
   } players_iterate_end;
 
-  /* the game does not quit if we are playing solo */
-  if (game.nplayers == (barbs + 1)) {
+  if (game.nplayers == (barbs + 1))
     return FALSE;
-  }
 
-  /* count the living */
   players_iterate(pplayer) {
     if (pplayer->is_alive && !is_barbarian(pplayer)) {
       alive++;
-      victor = pplayer;
     }
   } players_iterate_end;
 
-  /* quit if we have team victory */
-  team_iterate(pteam) {
-    if (team_count_members_alive(pteam->id) == alive) {
-      notify_conn(&game.est_connections, 
-          _("Team victory to %s"), pteam->name);
-      gamelog(GAMELOG_NORMAL, _("Team victory to %s"), pteam->name);
-      gamelog(GAMELOG_TEAM, "TEAMVICTORY %s", pteam->name);
-      return TRUE;
-    }
-  } team_iterate_end;
-
-  /* quit if only one player is left alive */
-  if (alive == 1) {
-    notify_conn(&game.est_connections, 
-        _("Game ended in victory for %s"), victor->name);
-    gamelog(GAMELOG_NORMAL, _("Game ended in victory for %s"), 
-        victor->name);
-    gamelog(GAMELOG_TEAM, "SINGLEWINNER %s", victor->name);
-    return TRUE;
-  } else if (alive == 0) {
-    notify_conn(&game.est_connections, _("Game ended in a draw"));
-    gamelog(GAMELOG_NORMAL, _("Game ended in a draw"));
-    gamelog(GAMELOG_TEAM, "NOWINNER");
-    return TRUE;
-  }
-
-  /* quit if all players are allied to each other */
-  all_allied = TRUE;
-  players_iterate(pplayer) {
-    players_iterate(aplayer) {
-      if (!pplayers_allied(pplayer, aplayer)) {
-        all_allied = FALSE;
-        break;
-      }
-    } players_iterate_end;
-    if (!all_allied) {
-      break;
-    }
-  } players_iterate_end;
-  if (all_allied) {
-    notify_conn(&game.est_connections, _("Game ended in allied victory"));
-    gamelog(GAMELOG_NORMAL, _("Game ended in allied victory"));
-    gamelog(GAMELOG_TEAM, "ALLIEDVICTORY");
-    return TRUE;
-  }
-
-  return FALSE;
+  return (alive <= 1);
 }
 
 /**************************************************************************
@@ -603,16 +542,7 @@ void start_game(void)
 
   server_state=SELECT_RACES_STATE; /* loaded ??? */
   force_end_of_sniff = TRUE;
-}
-
-/**************************************************************************
- Quit the server and exit.
-**************************************************************************/
-void server_quit(void)
-{
-  server_game_free();
-  close_connections_and_socket();
-  exit(EXIT_SUCCESS);
+  game.turn_start = time(NULL);
 }
 
 /**************************************************************************
@@ -647,7 +577,7 @@ static void handle_report_request(struct connection *pconn,
     break;
   case REPORT_SERVER_OPTIONS: /* obsolete */
   default:
-    notify_conn(dest, _("Game: request for unknown report (type %d)"), type);
+    notify_conn(dest, "Game: request for unknown report (type %d)", type);
   }
 }
 
@@ -662,7 +592,7 @@ void dealloc_id(int id)
 /**************************************************************************
 ...
 **************************************************************************/
-static bool is_id_allocated(int id)
+bool is_id_allocated(int id)
 {
   return TEST_BIT(used_ids[id / 8], id % 8);
 }
@@ -929,7 +859,7 @@ bool handle_packet_input(struct connection *pconn, void *packet, int type)
     handle_patrol_route(pplayer, (struct packet_goto_route *)packet);
     break;
   case PACKET_CONN_PONG:
-    handle_conn_pong(pconn);
+    pconn->ponged = TRUE;
     break;
   case PACKET_UNIT_AIRLIFT:
     handle_unit_airlift(pplayer, (struct packet_unit_request *)packet);
@@ -1181,7 +1111,7 @@ static void introduce_game_to_connection(struct connection *pconn)
    */
   show_players(pconn);
 
-  /* notify_conn(dest, _("Waiting for the server to start the game.")); */
+  /* notify_conn(dest, "Waiting for the server to start the game."); */
   /* I would put this here, but then would need another message when
      the game is started. --dwp */
 }
@@ -1713,8 +1643,9 @@ void pick_ai_player_name(Nation_Type_id nation, char *newname)
 *************************************************************************/
 static int mark_nation_as_used (int nation) 
 {
-  if (num_nations_avail <= 0) {	/* no more unused nation */
-    die("Argh! ran out of nations!");
+  if(num_nations_avail <= 0) {/* no more unused nation */
+      freelog(LOG_FATAL, _("Argh! ran out of nations!"));
+      exit(EXIT_FAILURE);
   }
 
    nations_used[nations_avail[num_nations_avail-1]]=nations_used[nation];
@@ -1851,9 +1782,8 @@ static void main_loop(void)
 
     conn_list_do_unbuffer(&game.game_connections);
 
-    if (is_game_over()) {
+    if (is_game_over()) 
       server_state=GAME_OVER_STATE;
-    }
   }
 
   /* 
@@ -1863,10 +1793,12 @@ static void main_loop(void)
 }
 
 /**************************************************************************
-  Server initialization.
+Server initialization.
 **************************************************************************/
 void srv_main(void)
 {
+  int i;
+
   /* make sure it's initialized */
   if (!has_been_srv_init) {
     srv_init();
@@ -1879,6 +1811,13 @@ void srv_main(void)
   gamelog_set_level(GAMELOG_FULL);
   gamelog(GAMELOG_NORMAL, _("Starting new log"));
   
+#ifdef GENERATING_MAC	/* mac beta notice */
+  con_puts(C_COMMENT, "");
+  con_puts(C_COMMENT, "This is an alpha/beta version of MacFreeciv.");
+  con_puts(C_COMMENT, "Visit http://www.geocities.com/SiliconValley/Orchard/8738/MFC/index.html");
+  con_puts(C_COMMENT, "for new versions of this project and information about it.");
+  con_puts(C_COMMENT, "");
+#endif
 #if IS_BETA_VERSION
   con_puts(C_COMMENT, "");
   con_puts(C_COMMENT, beta_message());
@@ -1907,7 +1846,7 @@ void srv_main(void)
   (void) send_server_info_to_metaserver(TRUE, FALSE);
 
   /* accept new players, wait for serverop to start..*/
-  server_state = PRE_GAME_STATE;
+  server_state=PRE_GAME_STATE;
 
   /* load a script file */
   if (srvarg.script_filename
@@ -1915,52 +1854,13 @@ void srv_main(void)
     exit(EXIT_FAILURE);
   }
 
-  /* Run server loop */
-  while (TRUE) {
-    srv_loop();
-    if (game.timeout == -1) {
-      server_quit();
-    }
-
-    send_game_state(&game.est_connections, CLIENT_GAME_OVER_STATE);
-    report_scores(TRUE);
-    show_map_to_all();
-    notify_player(NULL, _("Game: The game is over..."));
-    gamelog(GAMELOG_NORMAL, _("The game is over!"));
-    if (game.save_nturns > 0) {
-      save_game_auto();
-    }
-
-    /* Remain in GAME_OVER_STATE until players log out */
-    while (conn_list_size(&game.est_connections) > 0) {
-      (void) sniff_packets();
-    }
-
-    /* Reset server */
-    server_game_free();
-    game_init();
-    game.is_new_game = TRUE;
-    server_state = PRE_GAME_STATE;
-  }
-
-  /* Technically, we won't ever get here. We exit via server_quit. */
-}
-
-/**************************************************************************
-  Server loop, run to set up one game.
-**************************************************************************/
-static void srv_loop(void)
-{
-  int i;
-
   freelog(LOG_NORMAL, _("Now accepting new client connections."));
-  while(server_state == PRE_GAME_STATE) {
+  while(server_state==PRE_GAME_STATE)
     sniff_packets(); /* Accepting commands. */
-  }
 
   (void) send_server_info_to_metaserver(TRUE, FALSE);
 
-  if (game.is_new_game) {
+  if(game.is_new_game) {
     load_rulesets();
     /* otherwise rulesets were loaded when savegame was loaded */
   }
@@ -1973,9 +1873,9 @@ main_start_players:
   send_rulesets(&game.est_connections);
 
   num_nations_avail = game.playable_nation_count;
-  for (i = 0; i < game.playable_nation_count; i++) {
-    nations_avail[i] = i;
-    nations_used[i] = i;
+  for(i=0; i<game.playable_nation_count; i++) {
+    nations_avail[i]=i;
+    nations_used[i]=i;
   }
 
   if (game.auto_ai_toggle) {
@@ -1998,7 +1898,7 @@ main_start_players:
     }
   } players_iterate_end;
 
-  while(server_state == SELECT_RACES_STATE) {
+  while(server_state==SELECT_RACES_STATE) {
     bool flag = FALSE;
 
     sniff_packets();
@@ -2010,14 +1910,14 @@ main_start_players:
       }
     } players_iterate_end;
 
-    if (!flag) {
+    if(!flag) {
       if (game.nplayers > 0) {
-	server_state = RUN_GAME_STATE;
+	server_state=RUN_GAME_STATE;
       } else {
 	con_write(C_COMMENT,
 		  _("Last player has disconnected: will need to restart."));
-	server_state = PRE_GAME_STATE;
-	while(server_state == PRE_GAME_STATE) {
+	server_state=PRE_GAME_STATE;
+	while(server_state==PRE_GAME_STATE) {
 	  sniff_packets();
 	}
 	goto main_start_players;
@@ -2025,32 +1925,29 @@ main_start_players:
     }
   }
 
-  if (game.randseed == 0) {
+  if(game.randseed == 0) {
     /* We strip the high bit for now because neither game file nor
        server options can handle unsigned ints yet. - Cedric */
     game.randseed = time(NULL) & (MAX_UINT32 >> 1);
   }
  
-  if (!myrand_is_init()) {
+  if(!myrand_is_init())
     mysrand(game.randseed);
-  }
 
-#ifdef TEST_RANDOM /* not defined anywhere, set it if you want it */
+#ifdef TEST_RANDOM		/* not defined anywhere, set it if you want it */
   test_random1(200);
   test_random1(2000);
   test_random1(20000);
   test_random1(200000);
 #endif
     
-  if (game.is_new_game) {
+  if(game.is_new_game)
     generate_ai_players();
-  }
    
   /* if we have a tile map, and map.generator==0, call map_fractal_generate
      anyway, to make the specials and huts */
-  if (map_is_empty() || (map.generator == 0 && game.is_new_game)) {
+  if(map_is_empty() || (map.generator == 0 && game.is_new_game))
     map_fractal_generate();
-  }
 
   if (map.num_continents == 0) {
     assign_continent_numbers();
@@ -2060,7 +1957,7 @@ main_start_players:
   gamelog_map();
   /* start the game */
 
-  server_state = RUN_GAME_STATE;
+  server_state=RUN_GAME_STATE;
   (void) send_server_info_to_metaserver(TRUE, FALSE);
 
   if(game.is_new_game) {
@@ -2071,29 +1968,15 @@ main_start_players:
       player_map_allocate(pplayer);
       init_tech(pplayer, game.tech);
       player_limit_to_government_rates(pplayer);
-      pplayer->economic.gold = game.gold;
+      pplayer->economic.gold=game.gold;
     } players_iterate_end;
-    game.max_players = game.nplayers;
+    game.max_players=game.nplayers;
 
     /* we don't want random start positions in a scenario which already
-       provides them. -- Gudy */
-    if(map.num_start_positions == 0) {
+       provides them.  -- Gudy */
+    if(map.num_start_positions==0) {
       create_start_positions();
     }
-  }
-
-  /* Set up alliances based on team selections */
-  if (game.is_new_game) {
-   players_iterate(pplayer) {
-     players_iterate(pdest) {
-      if (pplayer->team == pdest->team && pplayer->team != TEAM_NONE
-          && pplayer->player_no != pdest->player_no) {
-        pplayer->diplstates[pdest->player_no].type = DS_ALLIANCE;
-        give_shared_vision(pplayer, pdest);
-        pplayer->embassy |= (1 << pdest->player_no);
-      }
-    } players_iterate_end;
-   } players_iterate_end;
   }
 
   initialize_move_costs(); /* this may be the wrong place to do this */
@@ -2109,17 +1992,12 @@ main_start_players:
     } players_iterate_end;
   }
   
-  /* We want to reset the timer as late as possible but before the info is
-   * sent to the clients */
-  game.turn_start = time(NULL);
-
   lsend_packet_generic_empty(&game.est_connections, PACKET_FREEZE_HINT);
   send_all_info(&game.game_connections);
   lsend_packet_generic_empty(&game.est_connections, PACKET_THAW_HINT);
   
-  if(game.is_new_game) {
+  if(game.is_new_game)
     init_new_game();
-  }
 
   game.is_new_game = FALSE;
 
@@ -2127,6 +2005,22 @@ main_start_players:
 
   /*** Where the action is. ***/
   main_loop();
+
+  send_game_state(&game.est_connections, CLIENT_GAME_OVER_STATE);
+
+  report_scores(TRUE);
+  show_map_to_all();
+  notify_player(NULL, _("Game: The game is over..."));
+  gamelog(GAMELOG_NORMAL, _("The game is over!"));
+  if (game.save_nturns > 0) save_game_auto();
+
+  while (server_state == GAME_OVER_STATE) {
+    force_end_of_sniff = FALSE;
+    sniff_packets();
+  }
+
+  close_connections_and_socket();
+  server_game_free();
 }
 
 /**************************************************************************
@@ -2139,6 +2033,5 @@ void server_game_free()
   } players_iterate_end;
 
   nation_city_names_free(misc_city_names);
-  misc_city_names = NULL;
   game_free();
 }

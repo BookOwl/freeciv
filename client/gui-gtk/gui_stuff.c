@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -74,7 +73,7 @@ void gtk_set_bitmap(GtkWidget *w, GdkPixmap *pm)
 /**************************************************************************
 ...
 **************************************************************************/
-void gtk_set_label(GtkWidget *w, const char *text)
+void gtk_set_label(GtkWidget *w, char *text)
 {
   char *str;
 
@@ -127,7 +126,7 @@ GtkWidget *gtk_accelbutton_new(const gchar *label, GtkAccelGroup *accel)
   (This is not directly gui/gtk related, but it fits in here
   because so far it is used for doing i18n for gtk titles...)
 **************************************************************************/
-char **intl_slist(int n, const char **s)
+char **intl_slist(int n, char **s)
 {
   char **ret = fc_malloc(n * sizeof(char*));
   int i;

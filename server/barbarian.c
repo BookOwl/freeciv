@@ -65,7 +65,7 @@ bool is_land_barbarian(struct player *pplayer)
   return (pplayer->ai.barbarian_type == LAND_BARBARIAN);
 }
 
-static bool is_sea_barbarian(struct player *pplayer)
+bool is_sea_barbarian(struct player *pplayer)
 {
   return (pplayer->ai.barbarian_type == SEA_BARBARIAN);
 }
@@ -100,7 +100,8 @@ static struct player *create_barbarian_player(bool land)
   } players_iterate_end;
 
   if( newplayer >= MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS ) {
-    die("Too many players?");
+    freelog( LOG_FATAL, "Too many players?");
+    abort();
   }
 
   barbarians = &game.players[newplayer];
@@ -175,7 +176,8 @@ on land, if not enough land but some sea free, load some of them on boats,
 otherwise (not much land and no sea) kill enemy unit and stay in a village.
 The return value indicates if the explorer survived entering the vilage.
 **************************************************************************/
-bool unleash_barbarians(int x, int y)
+
+bool unleash_barbarians(struct player* victim, int x, int y)
 {
   struct player *barbarians;
   int unit, unit_cnt, land_cnt=0, sea_cnt=0;

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -26,6 +25,7 @@
 #include <X11/Xaw/MenuButton.h>
 #include <X11/Xaw/SimpleMenu.h>
 #include <X11/Xaw/SmeBSB.h>
+#include <X11/Xaw/Command.h>
 #include <X11/Xaw/List.h>
 #include <X11/Xaw/Viewport.h>
 #include <X11/Xaw/AsciiText.h>  
@@ -114,6 +114,7 @@ struct city_dialog {
   
   Impr_Type_id sell_id;
   
+  int *citizen_type;
   int support_unit_base;
   int present_unit_base;
   char improvlist_names[B_LAST+1][64];
@@ -127,22 +128,9 @@ struct city_dialog {
   int is_modal;
 };
 
-#define SPECLIST_TAG dialog
-#define SPECLIST_TYPE struct city_dialog
-#define SPECLIST_STATIC
-#include "speclist.h"
+static struct genlist dialog_list;
+static int dialog_list_has_been_initialised;
 
-#define SPECLIST_TAG dialog
-#define SPECLIST_TYPE struct city_dialog
-#define SPECLIST_STATIC
-#include "speclist_c.h"
-
-#define dialog_list_iterate(dialoglist, pdialog) \
-    TYPED_LIST_ITERATE(struct city_dialog, dialoglist, pdialog)
-#define dialog_list_iterate_end  LIST_ITERATE_END
-
-static struct dialog_list dialog_list;
-static bool dialog_list_has_been_initialised = FALSE;
 
 static struct city_dialog *get_city_dialog(struct city *pcity);
 static struct city_dialog *create_city_dialog(struct city *pcity, bool make_modal);
@@ -319,18 +307,20 @@ static void get_contents_of_worklist(struct city_dialog *pdialog,
 *****************************************************************/
 struct city_dialog *get_city_dialog(struct city *pcity)
 {
-  if (!dialog_list_has_been_initialised) {
-    dialog_list_init(&dialog_list);
-    dialog_list_has_been_initialised = TRUE;
+  struct genlist_iterator myiter;
+
+  if(!dialog_list_has_been_initialised) {
+    genlist_init(&dialog_list);
+    dialog_list_has_been_initialised=1;
   }
+  
+  genlist_iterator_init(&myiter, &dialog_list, 0);
+    
+  for(; ITERATOR_PTR(myiter); ITERATOR_NEXT(myiter))
+    if(((struct city_dialog *)ITERATOR_PTR(myiter))->pcity==pcity)
+      return ITERATOR_PTR(myiter);
 
-  dialog_list_iterate(dialog_list, pdialog) {
-    if (pdialog->pcity == pcity) {
-      return pdialog;
-    }
-  } dialog_list_iterate_end;
-
-  return NULL;
+  return 0;
 }
 
 /****************************************************************
@@ -440,8 +430,8 @@ void popdown_all_city_dialogs(void)
   if(!dialog_list_has_been_initialised) {
     return;
   }
-  while (dialog_list_size(&dialog_list) > 0) {
-    close_city_dialog(dialog_list_get(&dialog_list, 0));
+  while(genlist_size(&dialog_list)) {
+    close_city_dialog(genlist_get(&dialog_list,0));
   }
   popdown_cityopt_dialog();
 }
@@ -511,7 +501,7 @@ struct city_dialog *create_city_dialog(struct city *pcity, bool make_modal)
     icon_pixmap =
 	XCreateBitmapFromData(display,
 			      RootWindowOfScreen(XtScreen(toplevel)),
-			      cityicon_bits,
+			      (char *) cityicon_bits,
 			      cityicon_width, cityicon_height);
   }
 
@@ -543,8 +533,7 @@ struct city_dialog *create_city_dialog(struct city *pcity, bool make_modal)
 			    pdialog->main_form,
 			    XtNfromVert, 
 			    pdialog->cityname_label,
-			    XtNbitmap,
-			    get_citizen_pixmap(CITIZEN_TAXMAN, 0, pcity),
+			    XtNbitmap, get_citizen_pixmap(2),
 			    NULL);
 
 
@@ -930,6 +919,8 @@ struct city_dialog *create_city_dialog(struct city *pcity, bool make_modal)
 
   pdialog->citizen_labels=
     fc_malloc(pdialog->num_citizens_shown * sizeof(Widget));
+  pdialog->citizen_type=
+    fc_malloc(pdialog->num_citizens_shown * sizeof(int));
 
   pdialog->support_unit_pixcomms=
     fc_malloc(pdialog->num_units_shown * sizeof(Widget));
@@ -946,8 +937,7 @@ struct city_dialog *create_city_dialog(struct city *pcity, bool make_modal)
 			    XtNfromVert, pdialog->cityname_label,
 			    XtNfromHoriz, 
 			      (XtArgVal)pdialog->citizen_labels[i-1],
-			    XtNbitmap,
-			    get_citizen_pixmap(CITIZEN_TAXMAN, 0, pcity),
+			    XtNbitmap, get_citizen_pixmap(2),
 			    NULL);
 
 
@@ -1042,11 +1032,15 @@ struct city_dialog *create_city_dialog(struct city *pcity, bool make_modal)
   XtAddCallback(pdialog->cityopt_command, XtNcallback, cityopt_callback,
 		(XtPointer)pdialog);
 
-  dialog_list_insert(&dialog_list, pdialog);
+  genlist_insert(&dialog_list, pdialog, 0);
 
   for(i=0; i<B_LAST+1; i++)
     pdialog->improvlist_names_ptrs[i]=0;
 
+  for(i=0; i<pdialog->num_citizens_shown; i++)
+    pdialog->citizen_type[i]=-1;
+
+  
   XtRealizeWidget(pdialog->shell);
 
   refresh_city_dialog(pdialog->pcity);
@@ -1570,54 +1564,102 @@ void city_dialog_update_map(struct city_dialog *pdialog)
 *****************************************************************/
 void city_dialog_update_citizens(struct city_dialog *pdialog)
 {
-  int i;
+  int i, n;
   struct city *pcity=pdialog->pcity;
-  enum citizen_type citizens[MAX_CITY_SIZE];
 
-  get_city_citizen_types(pcity, 4, citizens);
+  i=0;
 
-  for (i = 0; i < pcity->size && i < pdialog->num_citizens_shown; i++) {
-    xaw_set_bitmap(pdialog->citizen_labels[i],
-		   get_citizen_pixmap(citizens[i], i, pcity));
+  for(n=0; n<pcity->ppl_happy[4] && i<pdialog->num_citizens_shown; n++, i++)
+    if(pdialog->citizen_type[i]!=5 &&  pdialog->citizen_type[i]!=6) {
+      pdialog->citizen_type[i]=5+i%2;
+      xaw_set_bitmap(pdialog->citizen_labels[i], 
+		     get_citizen_pixmap(pdialog->citizen_type[i]));
+      XtSetSensitive(pdialog->citizen_labels[i], FALSE);
+      XtRemoveAllCallbacks(pdialog->citizen_labels[i], XtNcallback);
+    }
+  if(n<pcity->ppl_happy[4]) goto city_dialog_update_citizens_overflow;
 
-    /* HACK: set sensitivity/callbacks on the widget */
-    XtRemoveAllCallbacks(pdialog->citizen_labels[i], XtNcallback);
-    switch (citizens[i]) {
-    case CITIZEN_ELVIS:
-      XtAddCallback(pdialog->citizen_labels[i], XtNcallback,
-		    elvis_callback, (XtPointer)pdialog);
+  for(n=0; n<pcity->ppl_content[4] && i<pdialog->num_citizens_shown; n++, i++)
+    if(pdialog->citizen_type[i]!=3 && pdialog->citizen_type[i]!=4) {
+      pdialog->citizen_type[i]=3+i%2;
+      xaw_set_bitmap(pdialog->citizen_labels[i], 
+		     get_citizen_pixmap(pdialog->citizen_type[i]));
+      XtSetSensitive(pdialog->citizen_labels[i], FALSE);
+      XtRemoveAllCallbacks(pdialog->citizen_labels[i], XtNcallback);
+    }
+  if(n<pcity->ppl_content[4]) goto city_dialog_update_citizens_overflow;
+
+  for(n=0; n<pcity->ppl_unhappy[4] && i<pdialog->num_citizens_shown; n++, i++)
+    if(pdialog->citizen_type[i]!=7 && pdialog->citizen_type[i]!=8) {
+      pdialog->citizen_type[i]=7+i%2;
+      xaw_set_bitmap(pdialog->citizen_labels[i],
+		     get_citizen_pixmap(pdialog->citizen_type[i]));
+      XtRemoveAllCallbacks(pdialog->citizen_labels[i], XtNcallback);
+      XtSetSensitive(pdialog->citizen_labels[i], FALSE);
+    }
+  if(n<pcity->ppl_unhappy[4]) goto city_dialog_update_citizens_overflow;
+
+  for (n = 0; n < pcity->ppl_angry[4] && i < pdialog->num_citizens_shown;
+       n++, i++)
+    if (pdialog->citizen_type[i] != 9 && pdialog->citizen_type[i] != 10) {
+      pdialog->citizen_type[i] = 9 + i % 2;
+      xaw_set_bitmap(pdialog->citizen_labels[i],
+		     get_citizen_pixmap(pdialog->citizen_type[i]));
+      XtRemoveAllCallbacks(pdialog->citizen_labels[i], XtNcallback);
+      XtSetSensitive(pdialog->citizen_labels[i], FALSE);
+    }
+  if (n < pcity->ppl_angry[4])
+    goto city_dialog_update_citizens_overflow;
+
+  for(n=0; n<pcity->ppl_elvis && i<pdialog->num_citizens_shown; n++, i++)
+    if(pdialog->citizen_type[i]!=0) {
+      xaw_set_bitmap(pdialog->citizen_labels[i], get_citizen_pixmap(0));
+      pdialog->citizen_type[i]=0;
+      XtRemoveAllCallbacks(pdialog->citizen_labels[i], XtNcallback);
+      XtAddCallback(pdialog->citizen_labels[i], XtNcallback, elvis_callback,
+		    (XtPointer)pdialog);
       XtSetSensitive(pdialog->citizen_labels[i], TRUE);
-      break;
-    case CITIZEN_SCIENTIST:
-      XtAddCallback(pdialog->citizen_labels[i], XtNcallback,
-		    scientist_callback, (XtPointer)pdialog);
+    }
+  if(n<pcity->ppl_elvis) goto city_dialog_update_citizens_overflow;
+
+  for(n=0; n<pcity->ppl_scientist && i<pdialog->num_citizens_shown; n++, i++)
+    if(pdialog->citizen_type[i]!=1) {
+      xaw_set_bitmap(pdialog->citizen_labels[i], get_citizen_pixmap(1));
+      pdialog->citizen_type[i]=1;
+      XtRemoveAllCallbacks(pdialog->citizen_labels[i], XtNcallback);
+      XtAddCallback(pdialog->citizen_labels[i], XtNcallback, scientist_callback,
+		    (XtPointer)pdialog);
       XtSetSensitive(pdialog->citizen_labels[i], TRUE);
-      break;
-    case CITIZEN_TAXMAN:
+    }
+  if(n<pcity->ppl_scientist) goto city_dialog_update_citizens_overflow;
+
+  for(n=0; n<pcity->ppl_taxman && i<pdialog->num_citizens_shown; n++, i++)
+    if(pdialog->citizen_type[i]!=2) {
+      xaw_set_bitmap(pdialog->citizen_labels[i], get_citizen_pixmap(2));
+      pdialog->citizen_type[i]=2;
+      XtRemoveAllCallbacks(pdialog->citizen_labels[i], XtNcallback);
       XtAddCallback(pdialog->citizen_labels[i], XtNcallback, taxman_callback,
 		    (XtPointer)pdialog);
       XtSetSensitive(pdialog->citizen_labels[i], TRUE);
-      break;      
-    default:
-      XtSetSensitive(pdialog->citizen_labels[i], FALSE);
-      XtRemoveAllCallbacks(pdialog->citizen_labels[i], XtNcallback);
-      break;
     }
-  }
-
-  if (i >= pdialog->num_citizens_shown && i < pcity->size) {
-    i = pdialog->num_citizens_shown - 1;
-    xaw_set_bitmap(pdialog->citizen_labels[i], sprites.right_arrow->pixmap);
-    XtSetSensitive(pdialog->citizen_labels[i], FALSE);
-    XtRemoveAllCallbacks(pdialog->citizen_labels[i], XtNcallback);
-    return;
-  }
+  if(n<pcity->ppl_taxman) goto city_dialog_update_citizens_overflow;
 
   for(; i<pdialog->num_citizens_shown; i++) {
     xaw_set_bitmap(pdialog->citizen_labels[i], None);
     XtSetSensitive(pdialog->citizen_labels[i], FALSE);
     XtRemoveAllCallbacks(pdialog->citizen_labels[i], XtNcallback);
   }
+
+  return;
+
+city_dialog_update_citizens_overflow:
+
+  i=pdialog->num_citizens_shown-1;
+  xaw_set_bitmap(pdialog->citizen_labels[i], sprites.right_arrow->pixmap);
+  XtSetSensitive(pdialog->citizen_labels[i], FALSE);
+  XtRemoveAllCallbacks(pdialog->citizen_labels[i], XtNcallback);
+
+  return;
 }
 
 /****************************************************************
@@ -1874,16 +1916,16 @@ void city_dialog_update_improvement_list(struct city_dialog *pdialog)
 void citydlg_btn_select_citymap(Widget w, XEvent *event)
 {
   XButtonEvent *ev=&event->xbutton;
-  struct city *pcity = NULL;
+  struct genlist_iterator myiter;
+  struct city *pcity;
 
-  dialog_list_iterate(dialog_list, pdialog) {
-    if (pdialog->map_canvas == w) {
-      pcity = pdialog->pcity;
+  genlist_iterator_init(&myiter, &dialog_list, 0);
+    
+  for(; ITERATOR_PTR(myiter); ITERATOR_NEXT(myiter))
+    if(((struct city_dialog *)ITERATOR_PTR(myiter))->map_canvas==w)
       break;
-    }
-  } dialog_list_iterate_end;
 
-  if(pcity) {
+  if((pcity=((struct city_dialog *)ITERATOR_PTR(myiter))->pcity)) {
     int xtile, ytile;
     struct packet_city_request packet;
 
@@ -2466,9 +2508,10 @@ void close_city_dialog(struct city_dialog *pdialog)
     XtDestroyWidget(pdialog->worklist_shell);
 
   XtDestroyWidget(pdialog->shell);
-  dialog_list_unlink(&dialog_list, pdialog);
+  genlist_unlink(&dialog_list, pdialog);
 
   free(pdialog->citizen_labels);
+  free(pdialog->citizen_type);
 
   free(pdialog->support_unit_pixcomms);
   free(pdialog->present_unit_pixcomms);
@@ -2500,12 +2543,14 @@ void citydlg_key_close(Widget w)
 *****************************************************************/
 void citydlg_msg_close(Widget w)
 {
-  dialog_list_iterate(dialog_list, pdialog) {
-    if (pdialog->shell == w) {
-      close_city_dialog(pdialog);
+  struct genlist_iterator myiter;
+
+  genlist_iterator_init(&myiter, &dialog_list, 0);
+  for(; ITERATOR_PTR(myiter); ITERATOR_NEXT(myiter))
+    if(((struct city_dialog *)ITERATOR_PTR(myiter))->shell==w) {
+      close_city_dialog((struct city_dialog *)ITERATOR_PTR(myiter));
       return;
     }
-  } dialog_list_iterate_end;
 }
 
 /****************************************************************

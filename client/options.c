@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -23,7 +22,6 @@
 
 #include "audio.h"
 #include "clinet.h"
-#include "civclient.h"
 #include "events.h"
 #include "fcintl.h"
 #include "log.h"
@@ -69,38 +67,29 @@ bool concise_city_production = FALSE;
 bool auto_turn_done = FALSE;
 bool meta_accelerators = TRUE;
 bool map_scrollbars = TRUE;
-bool ask_city_name = TRUE;
-bool popup_new_cities = TRUE;
 
-#define GEN_INT_OPTION(oname, desc) { #oname, desc, COT_INT, \
-                                      &oname, NULL, NULL, 0, NULL, \
-                                       NULL, NULL }
-#define GEN_BOOL_OPTION(oname, desc) { #oname, desc, COT_BOOL, \
-                                       NULL, &oname, NULL, 0, NULL, \
-                                       NULL, NULL }
-#define GEN_STR_OPTION(oname, desc, str_defaults, callback) \
-                                    { #oname, desc, COT_STR, \
-                                      NULL, NULL, oname, sizeof(oname), \
-                                      callback, str_defaults, NULL }
+#define GEN_INT_OPTION(name, desc) { #name, desc, COT_INT, \
+                                     &name, NULL, NULL, 0, NULL, NULL }
+#define GEN_BOOL_OPTION(name, desc) { #name, desc, COT_BOOL, \
+                                      NULL, &name, NULL, 0, NULL, NULL }
+#define GEN_STR_OPTION(name, desc, dflt) { #name, desc, COT_STR, \
+                                     NULL, NULL, name, sizeof(name), \
+                                     dflt, NULL }
 #define GEN_OPTION_TERMINATOR { NULL, NULL, COT_BOOL, \
-                                NULL, NULL, NULL, 0, NULL, NULL, NULL }
+                                NULL, NULL, NULL, 0, NULL }
 
 client_option options[] = {
   GEN_STR_OPTION(default_player_name,       N_("Default player's username"),
-		 NULL, NULL), 
-  GEN_STR_OPTION(default_server_host,       N_("Default server"),
-		 NULL, NULL),
+		 NULL), 
+  GEN_STR_OPTION(default_server_host,       N_("Default server"), NULL),
   GEN_INT_OPTION(default_server_port,       N_("Default server's port")),
-  GEN_STR_OPTION(default_metaserver,        N_("Default metaserver"),
-		 NULL, NULL),
+  GEN_STR_OPTION(default_metaserver,        N_("Default metaserver"), NULL),
   GEN_STR_OPTION(default_tile_set_name,     N_("Default tileset"),
-		 get_tileset_list, NULL),
-  GEN_STR_OPTION(current_tile_set_name, N_("Current tileset (EXPERIMENTAL)"),
-		  get_tileset_list, tilespec_reread_callback),
+		 get_tileset_list),
   GEN_STR_OPTION(default_sound_set_name,    N_("Default name of sound set"),
-		 get_soundset_list, NULL),
+		 get_soundset_list),
   GEN_STR_OPTION(default_sound_plugin_name, N_("Default sound plugin"),
-		 get_soundplugin_list, NULL),
+		 get_soundplugin_list),
 
   GEN_BOOL_OPTION(solid_color_behind_units, N_("Solid unit background color")),
   GEN_BOOL_OPTION(sound_bell_at_new_turn,   N_("Sound bell at new turn")),
@@ -118,8 +107,6 @@ client_option options[] = {
   GEN_BOOL_OPTION(auto_turn_done,           N_("End Turn when done moving")),
   GEN_BOOL_OPTION(meta_accelerators,        N_("Use Alt/Meta for accelerators (GTK only)")),
   GEN_BOOL_OPTION(map_scrollbars,	    N_("Show Map Scrollbars (GTK only)")),
-  GEN_BOOL_OPTION(ask_city_name,            N_("Prompt for city names")),
-  GEN_BOOL_OPTION(popup_new_cities,         N_("Pop up city dialog for new cities")),
   GEN_OPTION_TERMINATOR
 };
 #undef GEN_INT_OPTION
@@ -131,7 +118,6 @@ client_option options[] = {
 
 bool draw_map_grid = FALSE;
 bool draw_city_names = TRUE;
-bool draw_city_growth = TRUE;
 bool draw_city_productions = FALSE;
 bool draw_terrain = TRUE;
 bool draw_coastline = FALSE;
@@ -152,7 +138,6 @@ bool draw_fog_of_war = TRUE;
 view_option view_options[] = {
   VIEW_OPTION(draw_map_grid),
   VIEW_OPTION(draw_city_names),
-  VIEW_OPTION(draw_city_growth),
   VIEW_OPTION(draw_city_productions),
   VIEW_OPTION(draw_terrain),
   VIEW_OPTION(draw_coastline),
@@ -185,10 +170,7 @@ int sorted_events[E_LAST];
  * to be sorted.
  */
 static struct {
-  const char *enum_name;
-  char *tag_name;
-  const char *descr_orig;
-  const char *descr;
+  char *enum_name, *tag_name, *descr_orig, *descr;
   enum event_type event;
 } events[] = {
   GEN_EV(N_("City: Building Unavailable Item"),       E_CITY_CANTBUILD),
@@ -292,16 +274,16 @@ static void save_cma_preset(struct section_file *file, char *name,
 			    int inx);
 static void load_cma_preset(struct section_file *file, int inx);
 
-static void save_global_worklist(struct section_file *file, const char *path, 
+static void save_global_worklist(struct section_file *file, char *path, 
                                  int wlinx, struct worklist *pwl);
 
-static void load_global_worklist(struct section_file *file, const char *path,
-				 int wlinx, struct worklist *pwl);
+static void load_global_worklist(struct section_file *file, char *path, 
+                                 int wlinx, struct worklist *pwl);
 
 /**************************************************************************
   Returns the translated description of the given event.
 **************************************************************************/
-const char *get_message_text(enum event_type event)
+const char *const get_message_text(enum event_type event)
 {
   assert(event >= 0 && event < E_LAST);
 
@@ -503,8 +485,8 @@ void load_ruleset_specific_options(void)
   /* load global worklists */
   for (i = 0; i < MAX_NUM_WORKLISTS; i++) {
     game.player_ptr->worklists[i].is_valid =
-	secfile_lookup_bool_default(&sf, FALSE,
-				    "worklists.worklist%d.is_valid", i);
+                secfile_lookup_int_default(&sf, FALSE,
+                                          "worklists.worklist%d.is_valid", i);
     strcpy(game.player_ptr->worklists[i].name,
            secfile_lookup_str_default(&sf, "",
                                       "worklists.worklist%d.name", i));
@@ -568,8 +550,8 @@ void save_options(void)
   /* insert global worklists */
   for(i = 0; i < MAX_NUM_WORKLISTS; i++){
     if (game.player_ptr->worklists[i].is_valid) {
-      secfile_insert_bool(&sf, game.player_ptr->worklists[i].is_valid,
-			  "worklists.worklist%d.is_valid", i);
+      secfile_insert_int(&sf, game.player_ptr->worklists[i].is_valid,
+                         "worklists.worklist%d.is_valid", i);
       secfile_insert_str(&sf, game.player_ptr->worklists[i].name,
                          "worklists.worklist%d.name", i);
       save_global_worklist(&sf, "worklists.worklist%d", i, 
@@ -607,7 +589,7 @@ void save_options(void)
 static void load_cma_preset(struct section_file *file, int inx)
 {
   struct cma_parameter parameter;
-  const char *name;
+  char *name;
   int i;
 
   name = secfile_lookup_str_default(file, "preset", 
@@ -619,7 +601,7 @@ static void load_cma_preset(struct section_file *file, int inx)
 	secfile_lookup_int_default(file, 0, "cma.preset%d.factor%d", inx, i);
   }
   parameter.require_happy =
-      secfile_lookup_bool_default(file, FALSE, "cma.preset%d.reqhappy", inx);
+      secfile_lookup_int_default(file, 0, "cma.preset%d.reqhappy", inx);
   parameter.factor_target =
       secfile_lookup_int_default(file, 0, "cma.preset%d.factortarget", inx);
   parameter.happy_factor =
@@ -644,8 +626,8 @@ static void save_cma_preset(struct section_file *file, char *name,
     secfile_insert_int(file, pparam->factor[i],
 		       "cma.preset%d.factor%d", inx, i);
   }
-  secfile_insert_bool(file, pparam->require_happy,
-		      "cma.preset%d.reqhappy", inx);
+  secfile_insert_int(file, pparam->require_happy,
+		     "cma.preset%d.reqhappy", inx);
   secfile_insert_int(file, pparam->factor_target,
 		     "cma.preset%d.factortarget", inx);
   secfile_insert_int(file, pparam->happy_factor,
@@ -655,7 +637,7 @@ static void save_cma_preset(struct section_file *file, char *name,
 /****************************************************************
 ... 
 *****************************************************************/
-const char *get_sound_tag_for_event(enum event_type event)
+const char *const get_sound_tag_for_event(enum event_type event)
 {
   if (event == E_NOEVENT) {
     return NULL;
@@ -673,8 +655,8 @@ const char *get_sound_tag_for_event(enum event_type event)
 /****************************************************************
  loads global worklist from rc file
 *****************************************************************/
-static void load_global_worklist(struct section_file *file, const char *path,
-				 int wlinx, struct worklist *pwl)
+static void load_global_worklist(struct section_file *file, char *path, 
+                                  int wlinx, struct worklist *pwl)
 {
   char efpath[64];
   char idpath[64];
@@ -712,8 +694,8 @@ static void load_global_worklist(struct section_file *file, const char *path,
 /****************************************************************
  saves global worklist to rc file
 *****************************************************************/
-static void save_global_worklist(struct section_file *file, const char *path,
-				 int wlinx, struct worklist *pwl)
+static void save_global_worklist(struct section_file *file, char *path, 
+                                  int wlinx, struct worklist *pwl)
 {
   char efpath[64];
   char idpath[64];

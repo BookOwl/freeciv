@@ -19,17 +19,14 @@
 #ifndef FC__INPUTFILE_H
 #define FC__INPUTFILE_H
 
-#include "ioz.h"
 #include "shared.h"		/* bool type */
 
 struct inputfile;		/* opaque */
 
 typedef char *(*datafilename_fn_t)(const char *filename);
 
-struct inputfile *inf_from_file(const char *filename,
-				datafilename_fn_t datafn);
-struct inputfile *inf_from_stream(fz_FILE * stream,
-				  datafilename_fn_t datafn);
+struct inputfile *inf_open(const char *filename,
+			   datafilename_fn_t datafn);
 void inf_close(struct inputfile *inf);
 bool inf_at_eof(struct inputfile *inf);
 
@@ -50,5 +47,6 @@ const char *inf_token_required(struct inputfile *inf, enum inf_token_type type);
 int inf_discard_tokens(struct inputfile *inf, enum inf_token_type type);
 
 void inf_die(struct inputfile *inf, const char *message);
+void inf_warn(struct inputfile *inf, const char *message);
 
 #endif  /* FC__INPUTFILE_H */

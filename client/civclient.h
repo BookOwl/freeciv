@@ -39,6 +39,7 @@ enum client_states get_client_state(void);
 
 void client_remove_cli_conn(struct connection *pconn);
 
+extern char tile_set_name[512];
 extern char sound_plugin_name[512];
 extern char sound_set_name[512];
 extern char server_host[512];
@@ -49,7 +50,9 @@ extern bool auto_connect;
 extern bool waiting_for_end_turn;
 extern bool turn_done_sent;
 
+extern int turn_gold_difference;
 extern int seconds_to_turndone;
+extern int last_turn_gold_amount;
 
 void wait_till_request_got_processed(int request_id);
 bool client_is_observer(void);

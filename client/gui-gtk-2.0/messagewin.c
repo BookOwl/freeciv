@@ -78,16 +78,6 @@ void popup_meswin_dialog(void)
     update_meswin_dialog();
 }
 
-/**************************************************************************
- Closes the message window dialog.
-**************************************************************************/
-void popdown_meswin_dialog(void)
-{
-  if (meswin_dialog_shell) {
-    gtk_widget_destroy(meswin_dialog_shell);
-  }
-}
-
 /****************************************************************
 ...
 *****************************************************************/

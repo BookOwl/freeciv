@@ -25,8 +25,6 @@ libcivai_a_SOURCES = \
 		advspace.h	\
 		advtrade.c	\
 		advtrade.h	\
-		aiair.c		\
-		aiair.h		\
 		aicity.c	\
 		aicity.h	\
 		aidata.c	\
@@ -40,6 +38,4 @@ libcivai_a_SOURCES = \
 		aitools.c	\
 		aitools.h	\
 		aiunit.c	\
-		aiunit.h	\
-		aidiplomat.c	\
-		aidiplomat.h
+		aiunit.h

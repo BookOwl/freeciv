@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -88,16 +87,6 @@ void popup_players_dialog(void)
   XtPopup(players_dialog_shell, XtGrabNone);
 }
 
-/****************************************************************
-  Closes the player list dialog.
-*****************************************************************/
-void popdown_players_dialog(void)
-{
-  if (players_dialog_shell) {
-    XtDestroyWidget(players_dialog_shell);
-    players_dialog_shell = 0;
-  }
-}
 
 /****************************************************************
 ...
@@ -332,7 +321,8 @@ void players_list_callback(Widget w, XtPointer client_data,
 void players_close_callback(Widget w, XtPointer client_data, 
 			      XtPointer call_data)
 {
-  popdown_players_dialog();
+  XtDestroyWidget(players_dialog_shell);
+  players_dialog_shell=0;
 }
 
 /****************************************************************
