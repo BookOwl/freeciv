@@ -1,0 +1,87 @@
+/********************************************************************** 
+ Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 2, or (at your option)
+   any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+***********************************************************************/
+#ifndef FC__SHARED_H
+#define FC__SHARED_H
+
+/* Note: the capability string is now in capstr.c --dwp */
+/* Version stuff is now in version.h --dwp */
+
+#define BUG_EMAIL_ADDRESS "bugs@cvs.freeciv.org"
+#define WEBSITE_URL "http://www.freeciv.org"
+
+#define BROADCAST_EVENT -2
+
+#define MAX_NUM_PLAYERS  14
+#define MAX_NUM_ITEMS   200	/* eg, unit_types */
+#define MAX_NUM_TECH_LIST 10
+#define MAX_LEN_NAME     32
+#define MAX_LEN_ADDR     32
+
+#ifndef TRUE
+#define TRUE (1)
+#endif
+#ifndef FALSE
+#define FALSE (0)
+#endif
+
+#ifndef MAX
+#define MAX(x,y) (((x)>(y))?(x):(y))
+#define MIN(x,y) (((x)<(y))?(x):(y))
+#endif
+#define CLIP(lower,this,upper) \
+    ((this)<(lower)?(lower):(this)>(upper)?(upper):(this))
+
+#define WIPEBIT(val, no) ((~(-1<<no))&val)  |   ((  (-1<<(no+1)) &val) >>1)
+
+#define MAX_UINT32 0xFFFFFFFF
+
+typedef unsigned int RANDOM_TYPE;
+
+char *n_if_vowel(char ch);
+char *create_centered_string(char *s);
+
+char * get_option(const char *option_name,char **argv,int *i,int argc);
+int is_option(const char *option_name,char *option);
+char *int_to_text(int nr);
+char *get_sane_name(char *name);
+char *textyear(int year);
+int mystrcasecmp(const char *str0, const char *str1);
+int string_ptr_compare(const void *first, const void *second);
+
+char *mystrerror(int errnum);
+void myusleep(unsigned long usec);
+
+RANDOM_TYPE myrand(RANDOM_TYPE size);
+void mysrand(RANDOM_TYPE seed);
+void save_restore_random(void);
+
+char *skip_leading_spaces(char *s);
+void remove_trailing_spaces(char *s);
+void remove_trailing_char(char *s, char trailing);
+int wordwrap_string(char *s, int len);
+
+char *user_home_dir(void);
+char *user_username(void);
+char *datafilename(const char *filename);
+char *datafilename_required(const char *filename);
+
+void init_nls(void);
+void dont_run_as_root(const char *argv0, const char *fallback);
+
+/*Mac constants-resource IDs*/
+enum DITL_ids{
+  kChatDITL=133,
+  kCityDITL=140
+};
+
+#endif  /* FC__SHARED_H */
