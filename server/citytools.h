@@ -13,9 +13,9 @@
 #ifndef FC__CITYTOOLS_H
 #define FC__CITYTOOLS_H
 
-#include "city.h"
-#include "nation.h"		/* for struct city_name */
 #include "packets.h"
+#include "city.h"
+#include "nation.h" /* for struct city_name */
 
 #define FOOD_WEIGHTING 19
 #define SHIELD_WEIGHTING 17
@@ -67,14 +67,13 @@ void package_city(struct city *pcity, struct packet_city_info *packet,
 		  bool dipl_invest);
 
 void reality_check_city(struct player *pplayer,int x, int y);
-bool update_dumb_city(struct player *pplayer, struct city *pcity);
-void refresh_dumb_city(struct city *pcity);
+void update_dumb_city(struct player *pplayer, struct city *pcity);
 
 void create_city(struct player *pplayer, const int x, const int y,
 		 const char *name);
 void remove_city(struct city *pcity);
 
-void establish_trade_route(struct city *pc1, struct city *pc2);
+int establish_trade_route(struct city *pc1, struct city *pc2);
 void remove_trade_route(struct city *pc1, struct city *pc2);
 
 void do_sell_building(struct player *pplayer, struct city *pcity, int id);
@@ -91,10 +90,10 @@ extern struct city_name *misc_city_names;
 bool city_can_work_tile(struct city *pcity, int city_x, int city_y);
 void server_remove_worker_city(struct city *pcity, int city_x, int city_y);
 void server_set_worker_city(struct city *pcity, int city_x, int city_y);
-bool update_city_tile_status_map(struct city *pcity, int map_x, int map_y);
+void update_city_tile_status_map(struct city *pcity, int map_x, int map_y);
+void update_city_tile_status(struct city *pcity, int city_x, int city_y);
 void sync_cities(void);
 bool can_place_worker_here(struct city *pcity, int city_x, int city_y);
 void check_city_workers(struct player *pplayer);
-void city_landlocked_sell_coastal_improvements(int x, int y);
 
 #endif  /* FC__CITYTOOLS_H */

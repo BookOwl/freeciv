@@ -10,13 +10,13 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 
 #include <gtk/gtk.h>
 
@@ -29,7 +29,6 @@
 #include "support.h"
 
 #include "clinet.h"
-
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "mapview.h"

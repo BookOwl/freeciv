@@ -10,19 +10,11 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <stdlib.h>
 
 #include "mem.h"
-
 #include "genlist.h"
 
-static struct genlist_link *find_genlist_position(struct genlist *pgenlist,
-						  int pos);
 
 /************************************************************************
   Initialize a genlist.
@@ -169,6 +161,19 @@ void genlist_insert(struct genlist *pgenlist, void *data, int pos)
   pgenlist->nelements++;
 }
 
+/************************************************************************
+  Initialize a genlist_iterator, for specified genlist and position
+  of initial element.  If pos is out of range the link will be null_link
+  (which will generally be interpreted as the iterator being finished).
+  Recall 'pos' can be -1 meaning the last element.
+************************************************************************/
+void genlist_iterator_init(struct genlist_iterator *iter,
+				struct genlist *pgenlist, int pos)
+{
+  iter->list=pgenlist;
+  iter->link=find_genlist_position(pgenlist, pos);
+}
+
 
 /************************************************************************
   Returns a pointer to the genlist link structure at the specified
@@ -176,8 +181,8 @@ void genlist_insert(struct genlist *pgenlist, void *data, int pos)
   For pos out of range returns the null_link.
   Traverses list either forwards or backwards for best efficiency.
 ************************************************************************/
-static struct genlist_link *find_genlist_position(struct genlist *pgenlist,
-						  int pos)
+struct genlist_link *
+find_genlist_position(struct genlist *pgenlist, int pos)
 {
   struct genlist_link *plink;
 
@@ -203,7 +208,7 @@ static struct genlist_link *find_genlist_position(struct genlist *pgenlist,
 /************************************************************************
  Sort the elements of a genlist.
  
- The comparison function should be a function usable by qsort; note
+ The comparison function should be a function useable by qsort; note
  that the const void * arguments to compar should really be "pointers to
  void*", where the void* being pointed to are the genlist dataptrs.
  That is, there are two levels of indirection.
@@ -219,7 +224,7 @@ void genlist_sort(struct genlist *pgenlist,
   static void **sortbuf = 0;
   static int n_alloc = 0;
   
-  struct genlist_link *myiter;
+  struct genlist_iterator myiter;
   int i, n;
 
   if(compar==NULL) {
@@ -237,15 +242,15 @@ void genlist_sort(struct genlist *pgenlist,
     n_alloc = n+10;
     sortbuf = (void **)fc_realloc(sortbuf, n_alloc*sizeof(void*));
   }
-
-  myiter = find_genlist_position(pgenlist, 0);  
+  
+  genlist_iterator_init(&myiter, pgenlist, 0);
   for(i=0; i<n; i++, ITERATOR_NEXT(myiter)) {
     sortbuf[i] = ITERATOR_PTR(myiter);
   }
   
   qsort(sortbuf, n, sizeof(void*), compar);
   
-  myiter = find_genlist_position(pgenlist, 0);  
+  genlist_iterator_init(&myiter, pgenlist, 0);
   for(i=0; i<n; i++, ITERATOR_NEXT(myiter)) {
      ITERATOR_PTR(myiter) = sortbuf[i];
   }

@@ -10,12 +10,10 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
-#include <assert.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -35,23 +33,30 @@
 /**************************************************************************
   Formulate a name for this connection, prefering the player name when
   available and unambiguous (since this is the "standard" case), else
-  use the username.
+  connection name and/or player name.  Player name is always "plain",
+  and connection name in brackets.  If connection name includes player
+  name, assume connection name is a "modified" player name and don't use
+  both (eg "(1-Shaka)" instead of "Shaka (1-Shaka)").  
 **************************************************************************/
 static void form_chat_name(struct connection *pconn, char *buffer, size_t len)
 {
   struct player *pplayer = pconn->player;
 
-  if (!pplayer || strcmp(pplayer->name, ANON_PLAYER_NAME) == 0) {
-    my_snprintf(buffer, len, "(%s)", pconn->username);
+  if (!pplayer) {
+    my_snprintf(buffer, len, "(%s)", pconn->name);
+  } else if (conn_list_size(&pplayer->connections)==1) {
+    (void) mystrlcpy(buffer, pplayer->name, len);
+  } else if (strstr(pconn->name, pplayer->name)) {
+    /* Fixme: strstr above should be case-independent */
+    my_snprintf(buffer, len, "(%s)", pconn->name);
   } else {
-    my_snprintf(buffer, len, "%s", pplayer->name);
+    my_snprintf(buffer, len, "%s (%s)", pplayer->name, pconn->name);
   }
 }
 				
 /**************************************************************************
   Complain to sender that name was ambiguous.
-  'player_conn' is 0 for player names, 1 for connection names,
-  2 for attempt to send to an anonymous player.
+  'player_conn' is 0 for player names, 1 for connection names.
 **************************************************************************/
 static void complain_ambiguous(struct connection *pconn, const char *name,
 			       int player_conn)
@@ -59,21 +64,12 @@ static void complain_ambiguous(struct connection *pconn, const char *name,
   struct packet_generic_message genmsg;
   genmsg.x = genmsg.y = genmsg.event = -1;
 
-  switch(player_conn) {
-  case 0:
+  if (player_conn==0) {
     my_snprintf(genmsg.message, sizeof(genmsg.message),
 		_("Game: %s is an ambiguous player name-prefix."), name);
-    break;
-  case 1:
+  } else {
     my_snprintf(genmsg.message, sizeof(genmsg.message),
 		_("Game: %s is an ambiguous connection name-prefix."), name);
-    break;
-  case 2:
-    my_snprintf(genmsg.message, sizeof(genmsg.message),
-                _("Game: %s is an anonymous name. Use connection name"), name);
-    break;
-  default:
-    assert(0);
   }
   send_packet_generic_message(pconn, PACKET_CHAT_MSG, &genmsg);
 }
@@ -138,7 +134,7 @@ static void chat_msg_to_player_multi(struct connection *sender,
      to a single connection, and send there.  (For a player, send to
      all clients connected as that player, in multi-connect case);
   3. Or it may be intended for all allied players.
-  4. Else send to all connections (game.game_connections).
+  4. Else send to all connections (game.est_connections).
 
   In case 2, there can sometimes be ambiguity between player and
   connection names.  By default this tries to match player name first,
@@ -167,7 +163,7 @@ void handle_chat_msg(struct connection *pconn,
   genmsg.x = -1;
   genmsg.y = -1;
   genmsg.event =-1;
-  for (cp = packet->message; *cp != '\0'; cp++)
+  for (cp = packet->message; *cp != '\0'; ++cp)
     if(!my_isprint(*cp & 0x7f)) {
       *cp='\0';
       break;
@@ -243,7 +239,7 @@ void handle_chat_msg(struct connection *pconn,
 
     double_colon = (*(cp+1) == ':');
     if (double_colon) {
-      conn_dest = find_conn_by_user_prefix(name, &match_result_conn);
+      conn_dest = find_conn_by_name_prefix(name, &match_result_conn);
       if (match_result_conn == M_PRE_AMBIGUOUS) {
 	complain_ambiguous(pconn, name, 1);
 	return;
@@ -259,10 +255,6 @@ void handle_chat_msg(struct connection *pconn,
 	complain_ambiguous(pconn, name, 0);
 	return;
       }
-      if (pdest && strcmp(pdest->name, ANON_PLAYER_NAME) == 0) {
-        complain_ambiguous(pconn, name, 2);
-        return;
-      }
       if (pdest && match_result_player < M_PRE_AMBIGUOUS) {
 	int nconn = conn_list_size(&pdest->connections);
 	if (nconn==1) {
@@ -274,7 +266,7 @@ void handle_chat_msg(struct connection *pconn,
 	}
 	/* else try for connection name match before complaining */
       }
-      conn_dest = find_conn_by_user_prefix(name, &match_result_conn);
+      conn_dest = find_conn_by_name_prefix(name, &match_result_conn);
       if (match_result_conn == M_PRE_AMBIGUOUS) {
 	complain_ambiguous(pconn, name, 1);
 	return;
@@ -312,6 +304,6 @@ void handle_chat_msg(struct connection *pconn,
   form_chat_name(pconn, sender_name, sizeof(sender_name));
   my_snprintf(genmsg.message, sizeof(genmsg.message),
 	      "<%s> %s", sender_name, packet->message);
-  lsend_packet_generic_message(&game.game_connections, PACKET_CHAT_MSG, 
+  lsend_packet_generic_message(&game.est_connections, PACKET_CHAT_MSG, 
 			       &genmsg);
 }

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -66,7 +65,9 @@ static const char *tile_special_type_names[] =
   N_("Fallout")
 };
 
-#define MAP_TILE(x,y)	(map.tiles + map_pos_to_index(x, y))
+extern bool is_server;
+
+#define MAP_TILE(x,y)	(map.tiles + map_inx(x, y))
 
 /***************************************************************
 ...
@@ -175,7 +176,6 @@ bool map_is_empty(void)
 ***************************************************************/
 void map_init(void)
 {
-  map.topology_id = MAP_DEFAULT_TOPO;
   map.xsize                 = MAP_DEFAULT_WIDTH;
   map.ysize                 = MAP_DEFAULT_HEIGHT;
   map.seed                  = MAP_DEFAULT_SEED;
@@ -199,46 +199,6 @@ void map_init(void)
   map.have_specials         = FALSE;
   map.have_rivers_overlay   = FALSE;
   map.have_huts             = FALSE;
-}
-
-/***************************************************************
-...
-***************************************************************/
-static void tile_init(struct tile *ptile)
-{
-  ptile->terrain  = T_UNKNOWN;
-  ptile->special  = S_NO_SPECIAL;
-  ptile->known    = 0;
-  ptile->continent = 0;
-  ptile->city     = NULL;
-  unit_list_init(&ptile->units);
-  ptile->worked   = NULL; /* pointer to city working tile */
-  ptile->assigned = 0; /* bitvector */
-  ptile->owner    = NULL; /* Tile not claimed by any nation. */
-}
-
-/**************************************************************************
-  Return the player who owns this tile (or NULL if none).
-**************************************************************************/
-struct player *map_get_owner(int x, int y)
-{
-  return MAP_TILE(x, y)->owner;
-}
-
-/**************************************************************************
-  Set the owner of a tile (may be NULL).
-**************************************************************************/
-void map_set_owner(int x, int y, struct player *owner)
-{
-  MAP_TILE(x, y)->owner = owner;
-}
-
-/***************************************************************
-...
-***************************************************************/
-static void tile_free(struct tile *ptile)
-{
-  unit_list_unlink_all(&ptile->units);
 }
 
 /**************************************************************************
@@ -409,29 +369,6 @@ int count_terrain_near_tile(int x, int y, enum tile_terrain_type t)
   return count;
 }
 
-/****************************************************************************
-  Return the terrain flag matching the given string, or TER_LAST if there's
-  no match.
-****************************************************************************/
-enum terrain_flag_id terrain_flag_from_str(const char *s)
-{
-  enum terrain_flag_id flag;
-  const char *flag_names[] = {
-    /* Must match terrain flags in terrain.h. */
-    "NoBarbs"
-  };
-
-  assert(ARRAY_SIZE(flag_names) == TER_COUNT);
-
-  for (flag = TER_FIRST; flag < TER_LAST; flag++) {
-    if (mystrcasecmp(flag_names[flag], s) == 0) {
-      return flag;
-    }
-  }
-
-  return TER_LAST;
-}
-
 /***************************************************************
   determines if any tile close to x,y has special spe
 ***************************************************************/
@@ -466,9 +403,8 @@ int count_special_near_tile(int x, int y, enum tile_special_type spe)
 bool is_at_coast(int x, int y)
 {
   cartesian_adjacent_iterate(x, y, x1, y1) {
-    if (is_ocean(map_get_terrain(x1, y1))) {
+    if (map_get_terrain(x1, y1) == T_OCEAN)
       return TRUE;
-    }
   } cartesian_adjacent_iterate_end;
 
   return FALSE;
@@ -481,9 +417,9 @@ bool is_coastline(int x, int y)
 {
   adjc_iterate(x, y, x1, y1) {
     enum tile_terrain_type ter = map_get_terrain(x1, y1);
-    if (!is_ocean(ter) && ter != T_UNKNOWN) {
+    if (ter != T_OCEAN
+	&& ter != T_UNKNOWN)
       return TRUE;
-    }
   } adjc_iterate_end;
 
   return FALSE;
@@ -613,9 +549,8 @@ the tile.
 bool is_sea_usable(int x, int y)
 {
   map_city_radius_iterate(x, y, x1, y1) {
-    if (!is_ocean(map_get_terrain(x1, y1))) {
+    if (map_get_terrain(x1, y1) != T_OCEAN)
       return TRUE;
-    }
   } map_city_radius_iterate_end;
 
   return FALSE;
@@ -718,7 +653,7 @@ int map_get_infrastructure_prerequisite(int spe)
 /***************************************************************
 ...
 ***************************************************************/
-enum tile_special_type get_preferred_pillage(int pset)
+int get_preferred_pillage(int pset)
 {
   if (contains_special(pset, S_FARMLAND))
     return S_FARMLAND;
@@ -745,7 +680,7 @@ bool is_water_adjacent_to_tile(int x, int y)
   struct tile *ptile;
 
   ptile = map_get_tile(x, y);
-  if (is_ocean(ptile->terrain)
+  if (ptile->terrain == T_OCEAN
       || ptile->terrain == T_RIVER
       || tile_has_special(ptile, S_RIVER)
       || tile_has_special(ptile, S_IRRIGATION))
@@ -753,7 +688,7 @@ bool is_water_adjacent_to_tile(int x, int y)
 
   cartesian_adjacent_iterate(x, y, x1, y1) {
     ptile = map_get_tile(x1, y1);
-    if (is_ocean(ptile->terrain)
+    if (ptile->terrain == T_OCEAN
 	|| ptile->terrain == T_RIVER
 	|| tile_has_special(ptile, S_RIVER)
 	|| tile_has_special(ptile, S_IRRIGATION))
@@ -899,7 +834,7 @@ void map_irrigate_tile(int x, int y)
   }
   else if (result != T_LAST) {
     map_set_terrain(x, y, result);
-    if (is_ocean(result)) {
+    if (result == T_OCEAN) {
       clear_infrastructure(x, y);
       clear_dirtiness(x, y);
       map_clear_special(x, y, S_RIVER);	/* FIXME: When rest of code can handle
@@ -924,7 +859,7 @@ void map_mine_tile(int x, int y)
     map_set_special(x, y, S_MINE);
   else if (result != T_LAST) {
     map_set_terrain(x, y, result);
-    if (is_ocean(result)) {
+    if (result == T_OCEAN) {
       clear_infrastructure(x, y);
       clear_dirtiness(x, y);
       map_clear_special(x, y, S_RIVER);	/* FIXME: When rest of code can handle
@@ -942,7 +877,7 @@ void map_mine_tile(int x, int y)
 void change_terrain(int x, int y, enum tile_terrain_type type)
 {
   map_set_terrain(x, y, type);
-  if (is_ocean(type)) {
+  if (type == T_OCEAN) {
     clear_infrastructure(x, y);
     clear_dirtiness(x, y);
     map_clear_special(x, y, S_RIVER);	/* FIXME: When rest of code can handle
@@ -992,7 +927,7 @@ bool can_reclaim_ocean(int x, int y)
     return TRUE;
 
   adjc_iterate(x, y, x1, y1) {
-    if (!is_ocean(map_get_tile(x1, y1)->terrain))
+    if (map_get_tile(x1, y1)->terrain != T_OCEAN)
       if (--landtiles == 0)
 	return TRUE;	
   } adjc_iterate_end;
@@ -1015,7 +950,7 @@ bool can_channel_land(int x, int y)
     return TRUE;
 
   adjc_iterate(x, y, x1, y1) {
-    if (is_ocean(map_get_tile(x1, y1)->terrain))
+    if (map_get_tile(x1, y1)->terrain == T_OCEAN)
       if (--oceantiles == 0)
 	return TRUE;
   } adjc_iterate_end;
@@ -1090,25 +1025,25 @@ static int tile_move_cost_ptrs(struct unit *punit, struct tile *t1,
 static int tile_move_cost_ai(struct tile *tile0, struct tile *tile1,
 			     int x, int y, int x1, int y1, int maxcost)
 {
-  CHECK_MAP_POS(x, y);
+  assert(is_real_tile(x, y));
   assert(!is_server
 	 || (tile0->terrain != T_UNKNOWN && tile1->terrain != T_UNKNOWN));
 
-  if (is_ocean(tile0->terrain) && is_ocean(tile1->terrain)) {
+  if (tile0->terrain == T_OCEAN && tile1->terrain == T_OCEAN) {
     return MOVE_COST_FOR_VALID_SEA_STEP;
   }
 
-  if (is_ocean(tile0->terrain)
+  if (tile0->terrain == T_OCEAN
       && (tile1->city || tile1->terrain == T_UNKNOWN)) {
     return MOVE_COST_FOR_VALID_SEA_STEP;
   }
 
-  if (is_ocean(tile1->terrain)
+  if (tile1->terrain == T_OCEAN
       && (tile0->city || tile0->terrain == T_UNKNOWN)) {
     return MOVE_COST_FOR_VALID_SEA_STEP;
   }
 
-  if (is_ocean(tile0->terrain) || is_ocean(tile1->terrain)) {
+  if (tile0->terrain == T_OCEAN || tile1->terrain == T_OCEAN) {
     return maxcost;
   }
 
@@ -1118,7 +1053,7 @@ static int tile_move_cost_ai(struct tile *tile0, struct tile *tile1,
 /***************************************************************
  ...
 ***************************************************************/
-static void debug_log_move_costs(const char *str, int x, int y, struct tile *tile0)
+static void debug_log_move_costs(char *str, int x, int y, struct tile *tile0)
 {
   /* the %x don't work so well for oceans, where
      move_cost[]==-3 ,.. --dwp
@@ -1203,6 +1138,29 @@ bool is_tiles_adjacent(int x0, int y0, int x1, int y1)
 /***************************************************************
 ...
 ***************************************************************/
+void tile_init(struct tile *ptile)
+{
+  ptile->terrain  = T_UNKNOWN;
+  ptile->special  = S_NO_SPECIAL;
+  ptile->known    = 0;
+  ptile->sent     = 0;
+  ptile->city     = NULL;
+  unit_list_init(&ptile->units);
+  ptile->worked   = NULL; /* pointer to city working tile */
+  ptile->assigned = 0; /* bitvector */
+}
+
+/***************************************************************
+...
+***************************************************************/
+void tile_free(struct tile *ptile)
+{
+  unit_list_unlink_all(&ptile->units);
+}
+
+/***************************************************************
+...
+***************************************************************/
 struct tile *map_get_tile(int x, int y)
 {
   return MAP_TILE(x, y);
@@ -1211,7 +1169,7 @@ struct tile *map_get_tile(int x, int y)
 /***************************************************************
 ...
 ***************************************************************/
-unsigned short map_get_continent(int x, int y)
+signed short map_get_continent(int x, int y)
 {
   return MAP_TILE(x, y)->continent;
 }
@@ -1223,6 +1181,7 @@ void map_set_continent(int x, int y, int val)
 {
   MAP_TILE(x, y)->continent = val;
 }
+
 
 /***************************************************************
 ...
@@ -1309,14 +1268,6 @@ void map_clear_special(int x, int y, enum tile_special_type spe)
 }
 
 /***************************************************************
-  Remove any specials which may exist at these map co-ordinates.
-***************************************************************/
-void map_clear_all_specials(int x, int y)
-{
-  MAP_TILE(x, y)->special = S_NO_SPECIAL;
-}
-
-/***************************************************************
 ...
 ***************************************************************/
 struct city *map_get_city(int x, int y)
@@ -1343,7 +1294,7 @@ bool same_pos(int x1, int y1, int x2, int y2)
   return (x1 == x2 && y1 == y2);
 }
 
-bool is_real_map_pos(int x, int y)
+bool is_real_tile(int x, int y)
 {
   return normalize_map_pos(&x, &y);
 }
@@ -1362,38 +1313,16 @@ bool is_normal_map_pos(int x, int y)
 }
 
 /**************************************************************************
-  If the position is real, it will be normalized and TRUE will be returned.
-  If the position is unreal, it will be left unchanged and FALSE will be
-  returned.
-
-  Note, we need to leave x and y with sane values even in the unreal case.
-  Some callers may for instance call nearest_real_pos on these values.
+Normalizes the map position. Returns TRUE if it is real, FALSE otherwise.
 **************************************************************************/
 bool normalize_map_pos(int *x, int *y)
 {
-  int nat_x, nat_y;
+  while (*x < 0)
+    *x += map.xsize;
+  while (*x >= map.xsize)
+    *x -= map.xsize;
 
-  /* Normalization is best done in native coordinatees. */
-  map_to_native_pos(&nat_x, &nat_y, *x, *y);
-
-  /* If the position is out of range in a non-wrapping direction, it is
-   * unreal. */
-  if (!((topo_has_flag(TF_WRAPX) || (nat_x >= 0 && nat_x < map.xsize))
-	&& (topo_has_flag(TF_WRAPY) || (nat_y >= 0 && nat_y < map.ysize)))) {
-    return FALSE;
-  }
-
-  /* Wrap in X and Y directions, as needed. */
-  if (topo_has_flag(TF_WRAPX)) {
-    nat_x = FC_WRAP(nat_x, map.xsize);
-  }
-  if (topo_has_flag(TF_WRAPY)) {
-    nat_y = FC_WRAP(nat_y, map.ysize);
-  }
-
-  /* Now transform things back to map coordinates. */
-  native_to_map_pos(x, y, nat_x, nat_y);
-  return TRUE;
+  return (0 <= *y && *y < map.ysize);
 }
 
 /**************************************************************************
@@ -1402,20 +1331,15 @@ position is normalized.
 **************************************************************************/
 void nearest_real_pos(int *x, int *y)
 {
-  int nat_x, nat_y;
-
-  map_to_native_pos(&nat_x, &nat_y, *x, *y);
-  if (!topo_has_flag(TF_WRAPX)) {
-    nat_x = CLIP(0, nat_x, map.xsize - 1);
-  }
-  if (!topo_has_flag(TF_WRAPY)) {
-    nat_y = CLIP(0, nat_y, map.ysize - 1);
-  }
-  native_to_map_pos(x, y, nat_x, nat_y);
-
-  if (!normalize_map_pos(x, y)) {
-    assert(FALSE);
-  }
+  if (*y < 0)
+    *y = 0;
+  else if (*y >= map.ysize)
+    *y = map.ysize - 1;
+  
+  while (*x < 0)
+    *x += map.xsize;
+  while (*x >= map.xsize)
+    *x -= map.xsize;
 }
 
 /**************************************************************************
@@ -1426,51 +1350,35 @@ int map_num_tiles(void)
   return map.xsize * map.ysize;
 }
 
-/****************************************************************************
-  Topology function to find the vector which has the minimum "real"
-  distance between the map positions (x0, y0) and (x1, y1).  If there is
-  more than one vector with equal distance, no guarantee is made about
-  which is found.
+/**************************************************************************
+Topology function to find the vector which has the minimum "real"
+distance between the map positions (x0, y0) and (x1, y1).  If there is
+more than one vector with equal distance, no guarantee is made about
+which is found.
 
-  Real distance is defined as the larger of the distances in the x and y
-  direction; since units can travel diagonally this is the "real" distance
-  a unit has to travel to get from point to point.
+Real distance is defined as the larger of the distances in the x and y
+direction; since units can travel diagonally this is the "real" distance
+a unit has to travel to get from point to point.
 
-  (See also: real_map_distance, map_distance, and sq_map_distance.)
+(See also: real_map_distance, map_distance, and sq_map_distance.)
 
-  With the standard topology the ranges of the return value are:
-    -map.xsize/2 <= dx <= map.xsize/2
-    -map.ysize   <  dy <  map.ysize
-****************************************************************************/
+The ranges of the return values are currently:
+-map.xsize/2 < dx <= map.xsize/2
+-map.ysize   < dy <  map.ysize
+**************************************************************************/
 void map_distance_vector(int *dx, int *dy, int x0, int y0, int x1, int y1)
 {
-  if (topo_has_flag(TF_WRAPX) || topo_has_flag(TF_WRAPY)) {
-    /* Wrapping is done in native coordinates. */
-    map_to_native_pos(&x0, &y0, x0, y0);
-    map_to_native_pos(&x1, &y1, x1, y1);
+  CHECK_MAP_POS(x0, y0);
+  CHECK_MAP_POS(x1, y1);
 
-    /* Find the "native" distance vector. This corresponds closely to the
-     * map distance vector but is easier to wrap. */
-    *dx = x1 - x0;
-    *dy = y1 - y0;
-    if (topo_has_flag(TF_WRAPX)) {
-      /* Wrap dx to be in [-map.xsize/2, map.xsize/2). */
-      *dx = FC_WRAP(*dx + map.xsize / 2, map.xsize) - map.xsize / 2;
-    }
-    if (topo_has_flag(TF_WRAPY)) {
-      /* Wrap dy to be in [-map.ysize/2, map.ysize/2). */
-      *dy = FC_WRAP(*dy + map.ysize / 2, map.ysize) - map.ysize / 2;
-    }
+  *dx = x1 - x0;
 
-    /* Convert the native delta vector back to a pair of map positions. */
-    x1 = x0 + *dx;
-    y1 = y0 + *dy;
-    native_to_map_pos(&x0, &y0, x0, y0);
-    native_to_map_pos(&x1, &y1, x1, y1);
+  if (*dx > map.xsize / 2) {
+    *dx -= map.xsize;
+  } else if (*dx <= -map.xsize / 2) {
+    *dx += map.xsize;
   }
 
-  /* Find the final (map) vector. */
-  *dx = x1 - x0;
   *dy = y1 - y0;
 }
 
@@ -1488,7 +1396,7 @@ void rand_neighbour(int x0, int y0, int *x, int *y)
     DIR8_SOUTHWEST, DIR8_SOUTH, DIR8_SOUTHEAST
   };
 
-  CHECK_MAP_POS(x0, y0);
+  assert(is_real_tile(x0, y0));
 
   /* This clever loop by Trent Piepho will take no more than
    * 8 tries to find a valid direction. */
@@ -1513,11 +1421,10 @@ void rand_neighbour(int x0, int y0, int *x, int *y)
 **************************************************************************/
 void rand_map_pos(int *x, int *y)
 {
-  int nat_x = myrand(map.xsize), nat_y = myrand(map.ysize);
-
-  /* Don't pass non-deterministic expressions to native_to_map_pos! */
-  native_to_map_pos(x, y, nat_x, nat_y);
-  CHECK_MAP_POS(*x, *y);
+  do {
+    *x = myrand(map.xsize);
+    *y = myrand(map.ysize);
+  } while (!is_normal_map_pos(*x, *y));
 }
 
 /**************************************************************************
@@ -1544,7 +1451,8 @@ const char *dir_get_name(enum direction8 dir)
   case DIR8_NORTHWEST:
     return "NW";
   default:
-    return "[Undef]";
+    assert(0);
+    return "[Bad Direction]";
   }
 }
 
@@ -1607,26 +1515,6 @@ enum direction8 dir_ccw(enum direction8 dir)
 }
 
 /**************************************************************************
-  Returns TRUE iff the given direction is a valid one.
-**************************************************************************/
-bool is_valid_dir(enum direction8 dir)
-{
-  switch (dir) {
-  case DIR8_NORTH:
-  case DIR8_NORTHEAST:
-  case DIR8_EAST:
-  case DIR8_SOUTHEAST:
-  case DIR8_SOUTH:
-  case DIR8_SOUTHWEST:
-  case DIR8_WEST:
-  case DIR8_NORTHWEST:
-    return TRUE;
-  default:
-    return FALSE;
-  }
-}
-
-/**************************************************************************
 Return true and sets dir to the direction of the step if (end_x,
 end_y) can be reached from (start_x, start_y) in one step. Return
 false otherwise (value of dir is unchanged in this case).
@@ -1677,7 +1565,7 @@ bool is_move_cardinal(int start_x, int start_y, int end_x, int end_y)
 /**************************************************************************
   Free memory which is associated with this terrain type.
 **************************************************************************/
-static void tile_type_free(enum tile_terrain_type type)
+void tile_type_free(enum tile_terrain_type type)
 {
   struct tile_type *p = get_tile_type(type);
 

@@ -267,15 +267,12 @@ This way 'easy' will be more easy --- a frequently requested feature.
 DIFFICULTY LEVELS
 =================
 
-There are currently four difficulty levels: 'easy', 'medium', 
-'hard' and 'experimental'.  The 'hard' level is no-holds-barred, 
-while 'medium' has a number of handicaps.  In 'easy', the AI 
-also does random stupid things through the ai_fuzzy function. The
-'experimental' level is only for coding - you can gate new code
-with the H_EXPERIMENTAL handicap and test 'experimental' level
-AIs against 'hard' level AIs.
+There are currently three difficulty levels: 'easy', 'medium' and
+'hard'.  The 'hard' level is no-holds-barred, while 'medium' has a
+number of handicaps.  In 'easy', the AI also does random stupid things
+through the ai_fuzzy function. 
 
-Other handicaps used are:
+The handicaps used are:
   H_RATES, can't set its rates beyond government limits
   H_TARGETS, can't target anything it doesn't know exists
   H_HUTS, doesn't know which unseen tiles have huts on them
@@ -288,41 +285,66 @@ use.
 THINGS THAT NEED TO BE FIXED
 ============================
 
+* The AI difficulty levels aren't fully implemented.  Either add more
+handicaps to 'easy', or use easy diplomacy mode.
+* AI doesn't understand when to become DEMOCRACY or FUNDAMENTALIST.
+Actually it doesn't evalute governments much at all.
 * Cities don't realize units are on their way to defend it.
 * AI doesn't understand that some wonders are obsolete, that some 
 wonders become obsolete, and doesn't upgrade units.
 * AI doesn't understand how to favor trade when it needs luxury.
 * AI builds cities without regard to danger at that location.
+* Food tiles should be less wanted if city can't expand.
 * AI won't build cross-country roads outside of city radii.
 [Note: There is patch that permits the AI to build cross country
 roads/rail.  Unfortunately, it makes it too easy for the AI to be
-invaded. Addendum: Can someone actually test this? Defeating an AI 
-that uses roads is more fun, but is it really that much easier?]
+invaded.]
+* Non-military units need to stop going where they will be killed.
 * Locally_zero_minimap is not implemented when wilderness tiles 
 change.
+* Settlers won't treat about-to-be-built ferryboats as ferryboats.
 * If no path to chosen victim is found, new victim should be chosen.
 * AI doesn't know how to make trade routes or when.  It should try to 
 build trade routes for its best cities (most building bonuses and 
 least corruption) by moving caravans there and changing homecity.
+* Boats sometimes sail away from landlocked would-be passengers.
 * Ferryboats crossing at sea might lead to unwanted behavior.
 * Emergencies in two cities at once aren't handled properly.
 * AI sometimes will get locked into a zero science rate and stay 
 there.
 * Explorers will not use ferryboats to get to new lands to explore.
+* AI autoattack is never activated (probably a good thing too) (PR#1340)
 * AI sometimes believes that wasting a horde of weak military units to
 kill one enemy is profitable (PR#1340)
 * Stop building ships and shore defense in landlocked cities with a
 pond adjacent.
 * Make the AI building evaluation code use the new buildings.ruleset.
+* Create a function that gives a statistically exact value for a units
+chance of winning a battle.  [Now done.  What about expected number
+of hit points remaing, or the variance?  Can we come up with clever
+ways for the ai to use this information?]
+* Make a function that can generate a warmap for airplanes.
+* Convert the ai_manage_diplomat() function to use the warmap.
+* Make the AI respect FoW. (They don't get much bigger than this...)
+* Move goto code to common code
+* Teach the AI to Fortify units in non-city strategic positions. Also, it
+needs to not idle all it's units every turn, breaking 2 turn fortify.
+* Teach the AI to leave units alone in a turn to regain hit points. (it
+seems to have no concept of this at all!)
+* Stop the AI from trying to buy capitalization...
 * Fix the AI valuation of supermarket. (It currently never builds it).
 See farmland_food() and ai_eval_buildings() in advdomestic.c
 * Teach the AI to coordinate the units in an attack (ok, this one is a bit
 big...)
+* Teach the AI to use ferryboats to transport explorers to unexplored land.
+See ai_manage_explorer() and ai_manage_ferryboat().
 
 
 THINGS PEOPLE ARE WORKING ON (for latest info ask on AI list)
 ===============================================================
 
+* teach AI to use planes and missiles. [GB]
+* teach AI to use diplomats [Per]
 * teach AI to do diplomacy (see Diplomacy section) [Per]
 
 
@@ -332,10 +354,15 @@ IDEA SPACE
 * Friendly cities can be used as beachheads
 * Assess_danger should acknowledge positive feedback between multiple 
 attackers
+* Urgency and grave_danger should probably be ints showing magnitude 
+of danger
 * It would be nice for bodyguard and charge to meet en-route more 
 elegantly.
 * It may be correct to starve workers instead of allowing disorder to 
-continue.  Ideal if CM code or similar is used here.
+continue.  Ideal if CMA code or similar is used here.
+* Bodyguards could be used much more often.  Actually it would be nice
+if the bodyguard code was taken out and shot, too.  Then rewritten, of
+course.
 * struct choice should have a priority indicator in it.  This will
 reduce the number of "special" want values and remove the necessity to
 have want capped, thus reducing confusion.

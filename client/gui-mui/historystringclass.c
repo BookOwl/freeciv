@@ -10,16 +10,14 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
-#include <errno.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <errno.h>
 
 #include <support.h>
 
@@ -34,121 +32,69 @@
 
 #include "muistuff.h"
 
-#define INPUTLINE_MAXLINES 200
-
-struct StringNode
-{
-  struct MinNode  minnode;
-  UWORD strlen;
-  UBYTE str[1];
-};
+#define INPUTLINE_MAXLINES 20
+#define INPUTLINE_MAXCHARS 256
 
 struct HistoryString_Data
 {
   struct Hook edit_hook;
 
   /* History stuff */
-  APTR mempool;
-
-  int lines;
-
-  struct StringNode *current;
-  struct MinList    stringlist;
+  char lines[INPUTLINE_MAXLINES][INPUTLINE_MAXCHARS];
+  int line;
+  int maxline;
 };
+
 
 HOOKPROTO(string_edit, int, struct SGWork *sgw, ULONG *msg)
 {
-  DECLARG_3(a0, struct Hook *, hook, a2, struct SGWork *, sgw, a1, ULONG *, msg)
-
   struct HistoryString_Data *data = hook->h_Data;
-  APTR MemPool = data->mempool;
+  if (*msg != SGH_KEY) return 0;
 
-  if (*msg == SGH_KEY)
+  if (sgw->EditOp == EO_ENTER)
   {
-    struct StringNode *entry;
-    ULONG len;
-
-    if (sgw->EditOp == EO_ENTER)
+    if (data->line >= INPUTLINE_MAXLINES - 1 && data->line)
     {
-      data->current = NULL;   /* reset pointer */
-      len = sgw->NumChars;
-
-      if (len != 0)
-      {
-        if (data->lines == INPUTLINE_MAXLINES)
-        {
-          data->lines--;
-          entry = (struct StringNode *)RemTail((struct List *)&data->stringlist);
-          FreePooled(MemPool, entry, sizeof(struct StringNode) + entry->strlen);
-        }
-
-        entry = AllocPooled(MemPool, sizeof(struct StringNode) + len);
-
-        if (entry)
-        {
-          data->lines++;
-          entry->strlen = len;
-          strcpy(entry->str, sgw->WorkBuffer);
-          AddHead((struct List *)&data->stringlist, (struct Node *)&entry->minnode);
-        }
-      }
+      /* The end of the histrory buffer is reached */
+      CopyMem(data->lines[1],data->lines[0],INPUTLINE_MAXCHARS*(INPUTLINE_MAXLINES-1));
+      data->maxline = --data->line;
     }
-    else
+
+    if (data->line < INPUTLINE_MAXLINES - 1)
     {
-      if (sgw->IEvent->ie_Class == IECLASS_RAWKEY)
+      /* Copy the current line to the history buffer */
+      mystrlcpy(data->lines[data->line],sgw->WorkBuffer,INPUTLINE_MAXCHARS);
+      data->maxline = ++data->line;
+      data->lines[data->line][0] = 0;
+    }
+  } else
+  {
+    if (sgw->IEvent->ie_Class == IECLASS_RAWKEY)
+    {
+      switch (sgw->IEvent->ie_Code)
       {
-        entry = data->current;
+        case  CURSORUP:
+	      if(data->line)
+	      {
+                data->line--;
+	        mystrlcpy(sgw->WorkBuffer,data->lines[data->line],INPUTLINE_MAXCHARS);
+                sgw->Actions |= SGA_USE;
+                sgw->BufferPos = sgw->NumChars = strlen(sgw->WorkBuffer);
+	      }
+	      break;
 
-        switch (sgw->IEvent->ie_Code)
-        {
-          case  CURSORUP:
-          {
-            if ( entry == NULL )
-            {
-              entry = (struct StringNode *)data->stringlist.mlh_Head;
-            }
-            else
-            {
-              entry = (struct StringNode *)entry->minnode.mln_Succ;
-            }
-
-            if ( entry->minnode.mln_Succ == NULL )
-              return 0;
-
-            break;
-          }
-
-          case  CURSORDOWN:
-          {
-            if ( entry == NULL )
-              return 0;
-
-            entry = (struct StringNode *)entry->minnode.mln_Pred;
-
-            if ( entry->minnode.mln_Pred == NULL )
-            {
-              data->current       = NULL;
-              sgw->WorkBuffer[0]  = '\0';
-              sgw->BufferPos      = sgw->NumChars = 0;
-              sgw->Actions       |= SGA_USE;
-              return 0;
-            }
-
-            break;
-          }
-
-          default: return 0;
-        }
-
-        data->current    = entry;
-        sgw->BufferPos   = sgw->NumChars = entry->strlen;
-        sgw->Actions    |= SGA_USE;
-
-        strcpy(sgw->WorkBuffer, entry->str);
-      }
+        case  CURSORDOWN:
+	      if (data->line < data->maxline)
+	      {
+                data->line++;
+	        mystrlcpy(sgw->WorkBuffer,data->lines[data->line],INPUTLINE_MAXCHARS);
+                sgw->Actions |= SGA_USE;
+                sgw->BufferPos = sgw->NumChars = strlen(sgw->WorkBuffer);
+	      }
+	      break;
+      }	     
     }
   }
-
   return 0;
 }
 
@@ -159,34 +105,17 @@ static ULONG HistoryString_New(struct IClass *cl, Object * o, struct opSet *msg)
     struct HistoryString_Data *data = (struct HistoryString_Data *) INST_DATA(cl, o);
     data->edit_hook.h_Entry = (HOOKFUNC)string_edit;
     data->edit_hook.h_Data = data;
-
-    data->stringlist.mlh_Head     = (struct MinNode *) &data->stringlist.mlh_Tail;
-    data->stringlist.mlh_TailPred = (struct MinNode *) &data->stringlist.mlh_Head;
-
-		if (!(data->mempool = CreatePool(MEMF_PUBLIC,1024,1024))) /* pool is accessed by another task only */
-		{
-			CoerceMethod(cl,o,OM_DISPOSE);
-			return NULL;
-		}
-
     set(o,MUIA_String_EditHook, &data->edit_hook);
   }
   return (ULONG) o;
-}
-
-static ULONG HistoryString_Dispose(struct IClass *cl, Object *o, Msg msg)
-{
-  struct HistoryString_Data *data = (struct HistoryString_Data *) INST_DATA(cl, o);
-  if (data->mempool) DeletePool(data->mempool);
-	return NULL;
 }
 
 DISPATCHERPROTO(HistoryString_Dispatcher)
 {
   switch (msg->MethodID)
   {
-	  case OM_NEW: return HistoryString_New(cl, obj, (struct opSet *) msg);
-	  case OM_DISPOSE: return HistoryString_Dispose(cl, obj, msg);
+  case OM_NEW:
+    return HistoryString_New(cl, obj, (struct opSet *) msg);
   }
   return (DoSuperMethodA(cl, obj, msg));
 }
@@ -205,4 +134,3 @@ VOID delete_historystring_class(void)
   if (CL_HistoryString)
     MUI_DeleteCustomClass(CL_HistoryString);
 }
-

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -18,13 +17,12 @@
 #include <assert.h>
 #include <string.h>
 
-#include "fcintl.h"
 #include "mem.h"
-
-#include "citydlg_g.h"
-#include "mapview_g.h"
 #include "messagewin_g.h"
 #include "options.h"
+#include "fcintl.h"
+#include "mapview_g.h"
+#include "citydlg_g.h"
 
 #include "messagewin_common.h"
 
@@ -107,8 +105,8 @@ void clear_notify_window(void)
 void add_notify_window(struct packet_generic_message *packet)
 {
   const size_t min_msg_len = 50;
-  const char *game_prefix1 = "Game: ";
-  const char *game_prefix2 = _("Game: ");
+  char *game_prefix1 = "Game: ";
+  char *game_prefix2 = _("Game: ");
   size_t gp_len1 = strlen(game_prefix1);
   size_t gp_len2 = strlen(game_prefix2);
   char *s = fc_malloc(MAX(strlen(packet->message), min_msg_len) + 1);
@@ -200,15 +198,12 @@ void meswin_popup_city(int message_index)
       center_tile_mapcanvas(x, y);
     }
 
-    if (pcity && city_owner(pcity) == game.player_ptr) {
+    if (pcity) {
       /* If the event was the city being destroyed, pcity will be NULL
-       * and we'd better not try to pop it up.  It's also possible that
-       * events will happen on enemy cities; we generally don't want to pop
-       * those dialogs up either (although it's hard to be certain).
-       *
-       * In both cases, it would be better if the popup button weren't
-       * highlighted at all - this is left up to the GUI. */
-      popup_city_dialog(pcity, FALSE);
+       * and we'd better not try to pop it up.  In this case, it would
+       * be better if the popup button weren't highlighted at all, but
+       * that's OK. */
+      popup_city_dialog(pcity, 0);
     }
   }
 }

@@ -32,8 +32,6 @@ void lsend_packet_map_info(struct conn_list *dest,
 			 const struct packet_map_info *pinfo);
 void lsend_packet_game_info(struct conn_list *dest, 
 			  const struct packet_game_info *pinfo);
-void lsend_packet_ping_info(struct conn_list *dest,
-			  const struct packet_ping_info *packet);
 void lsend_packet_player_info(struct conn_list *dest, 
 			    const struct packet_player_info *pinfo);
 void lsend_packet_conn_info(struct conn_list *dest,
@@ -44,16 +42,10 @@ void lsend_packet_move_unit(struct conn_list *dest,
 			  const struct packet_move_unit *request);
 void lsend_packet_unit_info(struct conn_list *dest,
 			  const struct packet_unit_info *req);
-void lsend_packet_short_unit(struct conn_list *dest,
-			   const struct packet_short_unit *req);
-void lsend_packet_login_request(struct conn_list *dest, 
-			      const struct packet_login_request *request);
-void lsend_packet_login_reply(struct conn_list *dest, 
-                            const struct packet_login_reply *reply);
-void lsend_packet_authentication_request(struct conn_list *dest,
-                          const struct packet_authentication_request *request);
-void lsend_packet_authentication_reply(struct conn_list *dest,
-                              const struct packet_authentication_reply *reply);
+void lsend_packet_req_join_game(struct conn_list *dest, 
+			      const struct packet_req_join_game *request);
+void lsend_packet_join_game_reply(struct conn_list *dest, 
+			        const struct packet_join_game_reply *reply);
 void lsend_packet_alloc_nation(struct conn_list *dest, 
 			     const struct packet_alloc_nation *packet);
 void lsend_packet_generic_message(struct conn_list *dest, enum packet_type type,
@@ -108,11 +100,9 @@ void lsend_packet_sabotage_list(struct conn_list *dest,
 			      const struct packet_sabotage_list *packet);
 void lsend_packet_goto_route(struct conn_list *dest,
                            const struct packet_goto_route *packet,
-			   enum packet_type packet_type);
+			   enum goto_route_type type);
 void lsend_packet_attribute_chunk(struct conn_list *dest,
 				struct packet_attribute_chunk *packet);
 void lsend_packet_generic_empty(struct conn_list *dest, enum packet_type type);
 void lsend_packet_nations_used(struct conn_list *dest,
 			     const struct packet_nations_used *packet);
-void lsend_packet_endgame_report(struct conn_list *dest, enum packet_type pt,
-                               const struct packet_endgame_report *packet);

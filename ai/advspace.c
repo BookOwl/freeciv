@@ -11,16 +11,11 @@
    GNU General Public License for more details.
 ***********************************************************************/
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <assert.h>
 
 #include "government.h"
 #include "packets.h"
 #include "spaceship.h"
-
 #include "spacerace.h"
 
 #include "advspace.h"

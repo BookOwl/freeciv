@@ -10,18 +10,17 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
-#include <assert.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
+#include <stdlib.h>
+#include <assert.h>
 
-#include <gdk/gdkkeysyms.h>
 #include <gtk/gtk.h>
+#include <gdk/gdkkeysyms.h>
 
 #include "fcintl.h"
 #include "game.h"
@@ -30,19 +29,16 @@
 #include "shared.h"
 #include "support.h"
 
+#include "cityrep.h"
 #include "civclient.h"
 #include "clinet.h"
-#include "repodlgs_common.h"
-#include "control.h"
-
-#include "cityrep.h"
 #include "dialogs.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "helpdlg.h"
 #include "optiondlg.h"
 
-
+#include "repodlgs_common.h"
 #include "repodlgs.h"
 
 /******************************************************************/
@@ -68,12 +64,7 @@ static void economy_close_callback(GtkWidget * w, gpointer data);
 static void economy_selloff_callback(GtkWidget * w, gpointer data);
 static void economy_list_callback(GtkWidget * w, gint row, gint column);
 static void economy_list_ucallback(GtkWidget * w, gint row, gint column);
-
-struct economy_row {
-  int is_impr;
-  int type;
-};
-static struct economy_row economy_row_type[U_LAST + B_LAST];
+static int economy_improvement_type[B_LAST];
 
 static GtkWidget *economy_dialog_shell = NULL;
 static GtkWidget *economy_label2;
@@ -95,17 +86,6 @@ static GtkWidget *activeunits_list;
 static GtkWidget *upgrade_command;
 
 static int activeunits_dialog_shell_is_modal;
-
-/******************************************************************/
-static void create_endgame_report(struct packet_endgame_report *packet);
-static void endgame_destroy_callback(GtkObject *object, gpointer data);
-
-static GtkWidget *endgame_report_shell;
-static GtkWidget *scores_list;
-static GtkWidget *close_endgame_command;
-static GtkWidget *sw;
-
-#define NUM_SCORE_COLS 14                
 /******************************************************************/
 
 /******************************************************************
@@ -139,19 +119,6 @@ void popup_science_dialog(bool make_modal)
   }
 }
 
-/****************************************************************
- Closes the science dialog.
-*****************************************************************/
-void popdown_science_dialog(void)
-{
-  if (science_dialog_shell) {
-    if (science_dialog_shell_is_modal) {
-      gtk_widget_set_sensitive(top_vbox, TRUE);
-    }
-    gtk_widget_destroy(science_dialog_shell);
-    science_dialog_shell = NULL;
-  }
-}
 
 /****************************************************************
 ...
@@ -270,8 +237,6 @@ void science_change_callback(GtkWidget *widget, gpointer data)
   } else {
     gfloat pct;
 
-    gtk_widget_set_sensitive(science_change_menu_button,
-			     can_client_issue_orders());
     my_snprintf(text, sizeof(text), "%d/%d",
 		game.player_ptr->research.bulbs_researched,
 		total_bulbs_required(game.player_ptr));
@@ -317,9 +282,13 @@ void science_goal_callback(GtkWidget *widget, gpointer data)
 /****************************************************************
 ...
 *****************************************************************/
-static void science_close_callback(GtkWidget * widget, gpointer data)
+void science_close_callback(GtkWidget *widget, gpointer data)
 {
-  popdown_science_dialog();
+
+  if(science_dialog_shell_is_modal)
+    gtk_widget_set_sensitive(top_vbox, TRUE);
+  gtk_widget_destroy(science_dialog_shell);
+  science_dialog_shell=NULL;
 }
 
 /****************************************************************
@@ -441,7 +410,7 @@ void science_dialog_update(void)
    * hist will hold afterwards the techid of the current choice
    */
   hist=0;
-  if (!is_future_tech(game.player_ptr->research.researching)) {
+  if (game.player_ptr->research.researching!=A_NONE) {
     for(i=A_FIRST; i<game.num_tech_types; i++) {
       if(get_invention(game.player_ptr, i)!=TECH_REACHABLE)
 	continue;
@@ -488,8 +457,6 @@ void science_dialog_update(void)
 
   gtk_option_menu_set_menu(GTK_OPTION_MENU(science_change_menu_button), 
 			   popupmenu);
-  gtk_widget_set_sensitive(science_change_menu_button,
-			   can_client_issue_orders());
 
   gtk_widget_destroy(goalmenu);
   goalmenu = gtk_menu_new();
@@ -500,7 +467,7 @@ void science_dialog_update(void)
 	      steps);
   gtk_set_label(science_goal_label,text);
 
-  if (game.player_ptr->ai.tech_goal == A_UNSET) {
+  if (game.player_ptr->ai.tech_goal==A_NONE) {
     item = gtk_menu_item_new_with_label(advances[A_NONE].name);
     gtk_menu_append(GTK_MENU(goalmenu), item);
   }
@@ -510,10 +477,9 @@ void science_dialog_update(void)
    */
   hist=0;
   for(i=A_FIRST; i<game.num_tech_types; i++) {
-    if (tech_is_available(game.player_ptr, i)
-        && get_invention(game.player_ptr, i) != TECH_KNOWN
-        && advances[i].req[0] != A_LAST && advances[i].req[1] != A_LAST
-        && num_unknown_techs_for_goal(game.player_ptr, i) < 11) {
+    if(get_invention(game.player_ptr, i) != TECH_KNOWN &&
+       advances[i].req[0] != A_LAST && advances[i].req[1] != A_LAST &&
+       num_unknown_techs_for_goal(game.player_ptr, i) < 11) {
       if (i==game.player_ptr->ai.tech_goal)
 	hist=i;
       sorting_list = g_list_append(sorting_list, GINT_TO_POINTER(i));
@@ -541,8 +507,6 @@ void science_dialog_update(void)
 
   gtk_option_menu_set_menu(GTK_OPTION_MENU(science_goal_menu_button), 
 			   goalmenu);
-  gtk_widget_set_sensitive(science_goal_menu_button,
-			   can_client_issue_orders());
   }
 }
 
@@ -571,19 +535,6 @@ void popup_economy_report_dialog(bool make_modal)
    }
 }
 
-/****************************************************************
- Close the economy report dialog.
-****************************************************************/
-void popdown_economy_report_dialog(void)
-{
-  if (economy_dialog_shell) {
-    if (economy_dialog_shell_is_modal) {
-      gtk_widget_set_sensitive(top_vbox, TRUE);
-    }
-    gtk_widget_destroy(economy_dialog_shell);
-    economy_dialog_shell = NULL;
-  }
-}
 
 /****************************************************************
 ...
@@ -591,8 +542,8 @@ void popdown_economy_report_dialog(void)
 void create_economy_report_dialog(bool make_modal)
 {
   GtkWidget *close_command, *scrolled;
-  static const char *titles_[4] = { N_("Building Name"), N_("Count"),
-				    N_("Cost"), N_("U Total") };
+  static gchar *titles_[4] = { N_("Building Name"), N_("Count"),
+			      N_("Cost"), N_("U Total") };
   static gchar **titles;
   int    i;
   GtkAccelGroup *accel=gtk_accel_group_new();
@@ -670,19 +621,12 @@ void create_economy_report_dialog(bool make_modal)
 *****************************************************************/
 void economy_list_callback(GtkWidget *w, gint row, gint column)
 {
-  int i = economy_row_type[row].type;
-  
-  if (economy_row_type[row].is_impr == TRUE) {
-    bool is_sellable = (i >= 0 && i < game.num_impr_types && !is_wonder(i));
+  int i = economy_improvement_type[row];
+  bool is_sellable = (i >= 0 && i < game.num_impr_types && !is_wonder(i));
 
-    gtk_widget_set_sensitive(sellobsolete_command, is_sellable
-			     && can_client_issue_orders()
-			     && improvement_obsolete(game.player_ptr, i));
-    gtk_widget_set_sensitive(sellall_command, is_sellable
-			     && can_client_issue_orders());
-  } else {
-    gtk_widget_set_sensitive(sellall_command, can_client_issue_orders());
-  }
+  gtk_widget_set_sensitive(sellobsolete_command, is_sellable
+			   && improvement_obsolete(game.player_ptr, i));
+  gtk_widget_set_sensitive(sellall_command, is_sellable);
 }
 
 /****************************************************************
@@ -697,9 +641,13 @@ void economy_list_ucallback(GtkWidget *w, gint row, gint column)
 /****************************************************************
 ...
 *****************************************************************/
-static void economy_close_callback(GtkWidget * w, gpointer data)
+void economy_close_callback(GtkWidget *w, gpointer data)
 {
-  popdown_economy_report_dialog();
+
+  if(economy_dialog_shell_is_modal)
+     gtk_widget_set_sensitive(top_vbox, TRUE);
+  gtk_widget_destroy(economy_dialog_shell);
+  economy_dialog_shell=NULL;
 }
 
 /****************************************************************
@@ -707,64 +655,41 @@ static void economy_close_callback(GtkWidget * w, gpointer data)
 *****************************************************************/
 void economy_selloff_callback(GtkWidget *w, gpointer data)
 {
-  int count = 0, gold = 0;
-  struct economy_row row_type;
+  int i,count=0,gold=0;
+  struct genlist_iterator myiter;
+  struct city *pcity;
+  struct packet_city_request packet;
   char str[64];
-  GList *selection;
-  int row;
+  GList              *selection;
+  gint                row;
 
   while ((selection = GTK_CLIST(economy_list)->selection)) {
     row = GPOINTER_TO_INT(selection->data);
 
-    row_type = economy_row_type[row];
-    
-    if (row_type.is_impr == TRUE) {
-      city_list_iterate(game.player_ptr->cities, pcity) {
-	if (!pcity->did_sell && city_got_building(pcity, row_type.type)
-	    && (data
- 	        || improvement_obsolete(game.player_ptr, row_type.type)
-		|| wonder_replacement(pcity, row_type.type))) {
- 	  count++;
-	  gold += improvement_value(row_type.type);
-	  city_sell_improvement(pcity, row_type.type);
-	}
-      } city_list_iterate_end;
-      
-      if (count) {
- 	my_snprintf(str, sizeof(str), _("Sold %d %s for %d gold"),
- 		    count, get_improvement_name(row_type.type), gold);
-      } else {
- 	my_snprintf(str, sizeof(str), _("No %s could be sold"),
-		get_improvement_name(row_type.type));
-      }
-    } else {
-      /* With this code only units supported by cities will be disbanded
-       * That's like this because it is a non-sense of selling units with
-       * no upkeep */
-      city_list_iterate(game.player_ptr->cities, pcity) {
- 	unit_list_iterate(pcity->units_supported, punit) {
- 	  /* We don't sell obsolete units when sell obsolete is clicked. 
- 	   * Indeed, unlike improvements, obsolete units can fight like
-	   * up-to-date ones */
- 	  if (punit->type == row_type.type && data) {
- 	    count++;
- 	    request_unit_disband(punit);
- 	  }
- 	} unit_list_iterate_end;
-      } city_list_iterate_end;
-      
-      if (count > 0) {
- 	my_snprintf(str, sizeof(str), "Disbanded %d %s", count,
- 		    unit_name(row_type.type));
-      } else {
- 	my_snprintf(str, sizeof(str), "No %s could be disbanded", 
- 		    unit_name(row_type.type));
-      }
+  i=economy_improvement_type[row];
+
+  genlist_iterator_init(&myiter, &game.player_ptr->cities.list, 0);
+  for(; ITERATOR_PTR(myiter);ITERATOR_NEXT(myiter)) {
+    pcity=(struct city *)ITERATOR_PTR(myiter);
+    if(!pcity->did_sell && city_got_building(pcity, i) && 
+       (data ||
+	improvement_obsolete(game.player_ptr,i) ||
+        wonder_replacement(pcity, i) ))  {
+	count++; gold+=improvement_value(i);
+        packet.city_id=pcity->id;
+        packet.build_id=i;
+        send_packet_city_request(&aconnection, &packet, PACKET_CITY_SELL);
     }
- 
-    gtk_clist_unselect_row(GTK_CLIST(economy_list), row, 0);
-    popup_notify_dialog(_("Sell-Off:"),_("Results"), str);
-    
+  }
+  if(count)  {
+    my_snprintf(str, sizeof(str), _("Sold %d %s for %d gold"),
+		count, get_improvement_name(i), gold);
+  } else {
+    my_snprintf(str, sizeof(str), _("No %s could be sold"),
+		get_improvement_name(i));
+  }
+  gtk_clist_unselect_row(GTK_CLIST(economy_list),row,0);
+  popup_notify_dialog(_("Sell-Off:"),_("Results"),str);
   }
   return;
 }
@@ -774,11 +699,9 @@ void economy_selloff_callback(GtkWidget *w, gpointer data)
 *****************************************************************/
 void economy_report_dialog_update(void)
 {
-  if (is_report_dialogs_frozen()) {
-    return;
-  }
-  if (economy_dialog_shell) {
-    int tax, total, i, entries_used, nbr_impr;
+  if(is_report_dialogs_frozen()) return;
+  if(economy_dialog_shell) {
+    int tax, total, i, entries_used;
     char   buf0 [64];
     char   buf1 [64];
     char   buf2 [64];
@@ -786,7 +709,6 @@ void economy_report_dialog_update(void)
     gchar *row  [4];
     char economy_total[48];
     struct improvement_entry entries[B_LAST];
-    struct unit_entry entries_units[U_LAST];
 
     gtk_clist_freeze(GTK_CLIST(economy_list));
     gtk_clist_clear(GTK_CLIST(economy_list));
@@ -808,26 +730,7 @@ void economy_report_dialog_update(void)
 
       gtk_clist_append(GTK_CLIST(economy_list), row);
 
-      economy_row_type[i].is_impr = TRUE;
-      economy_row_type[i].type = p->type;
-    }
-
-    nbr_impr = entries_used;
-    entries_used = 0;
-    get_economy_report_units_data(entries_units, &entries_used, &total);
-
-    for (i = 0; i < entries_used; i++) {
-      my_snprintf(buf0, sizeof(buf0), "%-20s",
-		  unit_name(entries_units[i].type));
-      my_snprintf(buf1, sizeof(buf1), "%5d", entries_units[i].count);
-      my_snprintf(buf2, sizeof(buf2), "%5d", entries_units[i].cost);
-      my_snprintf(buf3, sizeof(buf3), "%6d", entries_units[i].total_cost);
-
-      gtk_clist_append(GTK_CLIST(economy_list), row);
-
-      economy_row_type[i + nbr_impr].is_impr = FALSE;
-      economy_row_type[i + nbr_impr].type = entries_units[i].type;
-      
+      economy_improvement_type[i] = p->type;
     }
 
     my_snprintf(economy_total, sizeof(economy_total),
@@ -845,7 +748,7 @@ void economy_report_dialog_update(void)
  
 ****************************************************************/
 
-#define AU_COL 7
+#define AU_COL 6
 
 /****************************************************************
 ...
@@ -865,19 +768,6 @@ void popup_activeunits_report_dialog(bool make_modal)
    }
 }
 
-/****************************************************************
- Closes the units report dialog.
-****************************************************************/
-void popdown_activeunits_report_dialog(void)
-{
-  if (activeunits_dialog_shell) {
-    if (activeunits_dialog_shell_is_modal) {
-      gtk_widget_set_sensitive(top_vbox, TRUE);
-    }
-    gtk_widget_destroy(activeunits_dialog_shell);
-    activeunits_dialog_shell = NULL;
-  }
-}
 
 /****************************************************************
 ...
@@ -885,9 +775,9 @@ void popdown_activeunits_report_dialog(void)
 void create_activeunits_report_dialog(bool make_modal)
 {
   GtkWidget *close_command, *refresh_command;
-  static const char *titles_[AU_COL]
+  static gchar *titles_[AU_COL]
     = { N_("Unit Type"), N_("U"), N_("In-Prog"), N_("Active"),
-	N_("Shield"), N_("Food"), N_("Gold") };
+	N_("Shield"), N_("Food") };
   static gchar **titles;
   int    i;
   GtkAccelGroup *accel=gtk_accel_group_new();
@@ -962,7 +852,7 @@ void activeunits_list_callback(GtkWidget *w, gint row, gint column)
 {
   if ((unit_type_exists(activeunits_type[row])) &&
       (can_upgrade_unittype(game.player_ptr, activeunits_type[row]) != -1))
-    gtk_widget_set_sensitive(upgrade_command, can_client_issue_orders());
+    gtk_widget_set_sensitive(upgrade_command, TRUE);
 }
 
 /****************************************************************
@@ -1023,9 +913,13 @@ void activeunits_upgrade_callback(GtkWidget *w, gpointer data)
 /****************************************************************
 ...
 *****************************************************************/
-static void activeunits_close_callback(GtkWidget * w, gpointer data)
+void activeunits_close_callback(GtkWidget *w, gpointer data)
 {
-  popdown_activeunits_report_dialog();
+
+  if(activeunits_dialog_shell_is_modal)
+     gtk_widget_set_sensitive(top_vbox, TRUE);
+  gtk_widget_destroy(activeunits_dialog_shell);
+  activeunits_dialog_shell = NULL;
 }
 
 /****************************************************************
@@ -1045,7 +939,7 @@ void activeunits_report_dialog_update(void)
     int active_count;
     int upkeep_shield;
     int upkeep_food;
-    int upkeep_gold;   
+    /* int upkeep_gold;   FIXME: add gold when gold is implemented --jjm */
     int building_count;
   };
   if(is_report_dialogs_frozen()) return;
@@ -1070,7 +964,6 @@ void activeunits_report_dialog_update(void)
       if (punit->homecity) {
 	unitarray[punit->type].upkeep_shield += punit->upkeep;
 	unitarray[punit->type].upkeep_food += punit->upkeep_food;
-	unitarray[punit->type].upkeep_gold += punit->upkeep_gold;
       }
     }
     unit_list_iterate_end;
@@ -1092,7 +985,6 @@ void activeunits_report_dialog_update(void)
         my_snprintf(buf[3], sizeof(buf[3]), "%9d", unitarray[i].active_count);
         my_snprintf(buf[4], sizeof(buf[4]), "%9d", unitarray[i].upkeep_shield);
         my_snprintf(buf[5], sizeof(buf[5]), "%9d", unitarray[i].upkeep_food);
-	my_snprintf(buf[6], sizeof(buf[6]), "%9d", unitarray[i].upkeep_gold);
 
 	gtk_clist_append( GTK_CLIST( activeunits_list ), row );
 
@@ -1101,147 +993,22 @@ void activeunits_report_dialog_update(void)
 	unittotals.active_count += unitarray[i].active_count;
 	unittotals.upkeep_shield += unitarray[i].upkeep_shield;
 	unittotals.upkeep_food += unitarray[i].upkeep_food;
-	unittotals.upkeep_gold += unitarray[i].upkeep_gold;
 	unittotals.building_count += unitarray[i].building_count;
       }
     } unit_type_iterate_end;
 
     /* horrible kluge, but I can't get gtk_label_set_justify() to work --jjm */
     my_snprintf(activeunits_total, sizeof(activeunits_total),
-	    _("Totals:                     %s%9d%s%9d%s%9d%s%9d%s%9d"),
+	    _("Totals:                     %s%9d%s%9d%s%9d%s%9d"),
 	    "        ", unittotals.building_count,
 	    " ", unittotals.active_count,
 	    " ", unittotals.upkeep_shield,
-	    " ", unittotals.upkeep_food,
-	    " ", unittotals.upkeep_gold);
+	    " ", unittotals.upkeep_food);
     gtk_set_label(activeunits_label2, activeunits_total); 
 
     gtk_widget_show_all(activeunits_list);
     gtk_clist_thaw(GTK_CLIST(activeunits_list));
 
     activeunits_list_ucallback(NULL, 0, 0);
-  }
-}
-
-/****************************************************************
-
-                      FINAL REPORT DIALOG
- 
-****************************************************************/
-
-/****************************************************************
-  Prepare the Final Report dialog, and fill it with 
-  statistics for each player.
-*****************************************************************/
-static void create_endgame_report(struct packet_endgame_report *packet)
-{
-  static gchar **titles;
-  GtkAccelGroup *accel = gtk_accel_group_new();
-  char *row[NUM_SCORE_COLS];
-  char stat[NUM_SCORE_COLS][64];
-  int i;
-
-  static const char *titles_[NUM_SCORE_COLS] = {
-    N_("Player\n"),
-    N_("Score\n"),
-    N_("Population\n"),
-    N_("Trade\n(M goods)"),
-    N_("Production\n(M tons)"),
-    N_("Cities\n"),
-    N_("Technologies\n"),
-    N_("Military Service\n(months)"),
-    N_("Wonders\n"),
-    N_("Research Speed\n(%)"),
-    N_("Land Area\n(sq. mi.)"),
-    N_("Settled Area\n(sq. mi.)"),
-    N_("Literacy\n(%)"),
-    N_("Spaceship\n")
-  };
-
-  for (i = 0; i < ARRAY_SIZE(row); i++) {
-    row[i] = stat[i];
-  }      
-
-  if (!titles) {
-    titles = intl_slist(NUM_SCORE_COLS, titles_);
-  }
-
-  endgame_report_shell = gtk_dialog_new();
-  gtk_signal_connect(GTK_OBJECT(endgame_report_shell), "delete_event",
-                     GTK_SIGNAL_FUNC(endgame_destroy_callback), NULL);
-
-  gtk_accel_group_attach(accel, GTK_OBJECT(endgame_report_shell));
-  gtk_window_set_title(GTK_WINDOW(endgame_report_shell), 
-                       _("The Greatest Civilizations in the world."));
-  scores_list = gtk_clist_new_with_titles(NUM_SCORE_COLS, titles);
-
-  sw = gtk_scrolled_window_new(NULL, NULL);
-  gtk_container_add(GTK_CONTAINER(sw), scores_list);
-  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sw),
-                                 GTK_POLICY_AUTOMATIC,
-                                 GTK_POLICY_AUTOMATIC);
-  gtk_widget_set_usize(sw, 700, 420); 
-
-  for (i = 0; i < NUM_SCORE_COLS; i++) {
-    gtk_clist_set_column_auto_resize(GTK_CLIST(scores_list), i, TRUE);
-  }
-
-  gtk_box_pack_start(GTK_BOX(GTK_DIALOG(endgame_report_shell)->vbox),
-                     sw, TRUE, TRUE, 0);
-
-  close_endgame_command = gtk_accelbutton_new(_("C_lose"), accel);
-  gtk_box_pack_start(GTK_BOX(GTK_DIALOG(endgame_report_shell)->action_area),
-                     close_endgame_command, TRUE, TRUE, 0);
-  GTK_WIDGET_SET_FLAGS(close_endgame_command, GTK_CAN_DEFAULT);
-  gtk_widget_grab_default(close_endgame_command);
-  gtk_signal_connect(GTK_OBJECT(close_endgame_command), "clicked",
-                     GTK_SIGNAL_FUNC(endgame_destroy_callback), NULL);
-
-  gtk_widget_show_all(GTK_DIALOG(endgame_report_shell)->vbox);
-  gtk_widget_show_all(GTK_DIALOG(endgame_report_shell)->action_area);
-
-  /* Insert score statistics into table. */
-  gtk_clist_freeze(GTK_CLIST(scores_list));
-  gtk_clist_clear(GTK_CLIST(scores_list));
-  for (i = 0; i < packet->nscores; i++) {
-    my_snprintf(stat[0], sizeof(stat[0]), "%s", get_player(packet->id[i])->name);
-    my_snprintf(stat[1], sizeof(stat[1]), "%d", packet->score[i]);
-    my_snprintf(stat[2], sizeof(stat[2]), "%d", packet->pop[i]);
-    my_snprintf(stat[3], sizeof(stat[3]), "%d", packet->bnp[i]);
-    my_snprintf(stat[4], sizeof(stat[4]), "%d", packet->mfg[i]);
-    my_snprintf(stat[5], sizeof(stat[5]), "%d", packet->cities[i]);
-    my_snprintf(stat[6], sizeof(stat[6]), "%d", packet->techs[i]);
-    my_snprintf(stat[7], sizeof(stat[7]), "%d", packet->mil_service[i]);
-    my_snprintf(stat[8], sizeof(stat[8]), "%d", packet->wonders[i]);
-    my_snprintf(stat[9], sizeof(stat[9]), "%d", packet->research[i]);
-    my_snprintf(stat[10], sizeof(stat[10]), "%d", packet->landarea[i]);
-    my_snprintf(stat[11], sizeof(stat[11]), "%d", packet->settledarea[i]);
-    my_snprintf(stat[12], sizeof(stat[12]), "%d", packet->literacy[i]);
-    my_snprintf(stat[13], sizeof(stat[13]), "%d", packet->spaceship[i]);
-    gtk_clist_append(GTK_CLIST(scores_list), row);
-  }
-  gtk_clist_thaw(GTK_CLIST(scores_list));
-}
-
-/**************************************************************************
-  Show a dialog with player statistics at endgame.
-**************************************************************************/
-void popup_endgame_report_dialog(struct packet_endgame_report *packet)
-{
-  if (!endgame_report_shell) {
-    create_endgame_report(packet);
-    gtk_set_relative_position(toplevel, endgame_report_shell, 10, 10);
-    gtk_widget_show(endgame_report_shell);
-  }
-}
-
-/**************************************************************************
-  Close the endgame report.
-**************************************************************************/
-static void endgame_destroy_callback(GtkObject *object, gpointer data)
-{
-  if (endgame_report_shell) {
-    gtk_widget_destroy(endgame_report_shell);
-    endgame_report_shell = NULL;
   }
 }

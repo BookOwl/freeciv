@@ -15,10 +15,6 @@
   This file was auto-generated, by create_lsend.pl (must be run manually)
 **********************************************************************/
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include "packets.h"
 
 void lsend_packet_diplomacy_info(struct conn_list *dest, enum packet_type pt,
@@ -85,14 +81,6 @@ void lsend_packet_game_info(struct conn_list *dest,
   conn_list_iterate_end;
 }
 
-void lsend_packet_ping_info(struct conn_list *dest,
-			  const struct packet_ping_info *packet)
-{
-  conn_list_iterate(*dest, pconn)
-    send_packet_ping_info(pconn, packet);
-  conn_list_iterate_end;
-}
-
 void lsend_packet_player_info(struct conn_list *dest, 
 			    const struct packet_player_info *pinfo)
 {
@@ -133,43 +121,19 @@ void lsend_packet_unit_info(struct conn_list *dest,
   conn_list_iterate_end;
 }
 
-void lsend_packet_short_unit(struct conn_list *dest,
-			   const struct packet_short_unit *req)
+void lsend_packet_req_join_game(struct conn_list *dest, 
+			      const struct packet_req_join_game *request)
 {
   conn_list_iterate(*dest, pconn)
-    send_packet_short_unit(pconn, req);
+    send_packet_req_join_game(pconn, request);
   conn_list_iterate_end;
 }
 
-void lsend_packet_login_request(struct conn_list *dest, 
-			      const struct packet_login_request *request)
+void lsend_packet_join_game_reply(struct conn_list *dest, 
+			        const struct packet_join_game_reply *reply)
 {
   conn_list_iterate(*dest, pconn)
-    send_packet_login_request(pconn, request);
-  conn_list_iterate_end;
-}
-
-void lsend_packet_login_reply(struct conn_list *dest, 
-                            const struct packet_login_reply *reply)
-{
-  conn_list_iterate(*dest, pconn)
-    send_packet_login_reply(pconn, reply);
-  conn_list_iterate_end;
-}
-
-void lsend_packet_authentication_request(struct conn_list *dest,
-                          const struct packet_authentication_request *request)
-{
-  conn_list_iterate(*dest, pconn)
-    send_packet_authentication_request(pconn, request);
-  conn_list_iterate_end;
-}
-
-void lsend_packet_authentication_reply(struct conn_list *dest,
-                              const struct packet_authentication_reply *reply)
-{
-  conn_list_iterate(*dest, pconn)
-    send_packet_authentication_reply(pconn, reply);
+    send_packet_join_game_reply(pconn, reply);
   conn_list_iterate_end;
 }
 
@@ -377,10 +341,10 @@ void lsend_packet_sabotage_list(struct conn_list *dest,
 
 void lsend_packet_goto_route(struct conn_list *dest,
                            const struct packet_goto_route *packet,
-			   enum packet_type packet_type)
+			   enum goto_route_type type)
 {
   conn_list_iterate(*dest, pconn)
-    send_packet_goto_route(pconn, packet, packet_type);
+    send_packet_goto_route(pconn, packet, type);
   conn_list_iterate_end;
 }
 
@@ -404,14 +368,6 @@ void lsend_packet_nations_used(struct conn_list *dest,
 {
   conn_list_iterate(*dest, pconn)
     send_packet_nations_used(pconn, packet);
-  conn_list_iterate_end;
-}
-
-void lsend_packet_endgame_report(struct conn_list *dest, enum packet_type pt,
-                               const struct packet_endgame_report *packet)
-{
-  conn_list_iterate(*dest, pconn)
-    send_packet_endgame_report(pconn, pt, packet);
   conn_list_iterate_end;
 }
 

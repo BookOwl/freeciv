@@ -10,10 +10,7 @@
 ; The AI does not know the value of Partial_Invis, nor does this
 ; work against the AI, since it knows all. It does not know anything 
 ; about air units at all. It does not build No_Land_Attack, Missile 
-; or Nuclear units. It values GameLoss units at 1/10th its usual value
-; and therefore would not easily build it, but if it does, it does not 
-; protect it from harm. NoHome units are likely to be given a homecity
-; by the AI, because it is rather stupid in this regard.
+; or Nuclear units.
 ;
 ; You should sort role units from worst to better, as often the best
 ; available role unit of a given sort will be picked by choosing
@@ -23,6 +20,10 @@
 [datafile]
 description="Default unit_type data for Freeciv"
 options="1.9"
+
+[units_adjust]
+firepower_factor=1     ; Divide hitpoints by this value. It has to be 
+                       ; set higher than zero.
 
 ; Below: The individual units, one per section.
 ;
@@ -47,13 +48,11 @@ options="1.9"
 ;		  for no alternate graphic.
 ; tech_req      = required advance, names from techs.ruleset, or special:
 ;                 "None" => available from start; "Never" => never available
-; impr_req	= required city improvement, names from buildings.ruleset
 ; obsolete_by   = can be upgraded to and made obsolete by another unit by name
 ; move_type     = "Land" or "Sea" or "Air" or "Heli"
 ; transport_cap = Number of units (ground, or air/missiles, depending on flags)
 ; fuel          = number of turns air units can fly before they crash. For
-;                 barbarians this is used as lifetime instead. If this is zero,
-;                 the unit has unlimited fuel, despite flying.
+;                 barbarians this is used as lifetime instead
 ; uk_*          = upkeep costs, these are used as base values in the game
 ;		  (NOTE: gold upkeep is still not implemented)
 ; flags         = special flag strings
@@ -103,22 +102,6 @@ options="1.9"
 ;		  (see cities.ruleset for limitation of this ability)
 ; "Fanatic"	= can only be built by governments that allow them
 ;		  (see data/civ2/governments.ruleset, Fanaticism government)
-; "Unique"	= a player can only have one of these units in the game at
-;		  the same time; barbarians cannot use this at present
-; "GameLoss"	= losing one of these units means you lose the game, but it
-;		  is produced without homecity and upkeep
-; "Unbribable"	= this unit cannot be bribed
-; "Undisbandable" = this unit cannot be disbanded, will not drown, and will not
-;		  disband due to lack of shields to upkeep it in homecity;
-;		  if not given enough food to upkeep it, homecity will shrink 
-;		  every turn it cannot do so, however
-; "SuperSpy"	= this unit always wins diplomatic contests, that is, unless
-;		  it encounters another SuperSpy, in which case defender wins;
-;		  can also be used on non-diplomat units, in which case it can
-;		  protect cities from diplomats; also 100% spy survival chance
-; "NoHome"	= this unit has no homecity and will be free of all upkeep, and
-;		  therefore will not revolt along with its city of origin should
-;		  it be incited
 ;
 ; Following flag strings require extra fields:
 ;  "Paratroopers"
@@ -708,7 +691,7 @@ uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = "Horse"
+flags         = ""
 roles         = "AttackFast"
 
 [unit_crusaders]
@@ -1316,7 +1299,7 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 flags         = ""
-roles         = "DefendGood"
+roles         = ""
 
 [unit_aegis_cruiser]
 name          = _("AEGIS Cruiser")
@@ -1344,7 +1327,7 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 flags         = "AEGIS"
-roles         = "DefendGood"
+roles         = ""
 
 [unit_battleship]
 name          = _("Battleship")
@@ -1385,13 +1368,13 @@ sound_move    = "m_submarine"
 sound_move_alt = "m_generic"
 sound_fight   = "f_submarine"
 sound_fight_alt = "f_generic"
-build_cost    = 50
+build_cost    = 60
 pop_cost      = 0
-attack        = 15
+attack        = 10
 defense       = 2
 hitpoints     = 30
 firepower     = 2
-move_rate     = 5
+move_rate     = 3
 vision_range  = 2
 transport_cap = 8
 fuel          = 0
@@ -1763,45 +1746,11 @@ uk_happy      = 0
 uk_shield     = 0
 uk_food       = 0
 uk_gold       = 0
-flags         = "IgZOC", "NonMil", "Unbribable",
-                "Undisbandable", "SuperSpy", "NoHome"
+flags         = "IgZOC", "NonMil"
 roles         = "BarbarianLeader"
 helptext      = _("\
 When barbarian leader is killed on a tile without any defending units, \
 the 100 gold ransom is paid, but only to land units and helicopters.\
-")
-
-[unit_awacs]
-name          = _("AWACS")
-move_type     = "Air"
-tech_req      = "Advanced Flight"
-obsolete_by   = "None"
-graphic       = "u.awacs"
-graphic_alt   = "u.bomber"  ; backwards compatibility
-sound_move    = "m_awacs"
-sound_move_alt = "m_generic"
-sound_fight   = "f_awacs"
-sound_fight_alt = "f_generic"
-build_cost    = 140
-pop_cost      = 0
-attack        = 0
-defense       = 1
-hitpoints     = 20
-firepower     = 1
-move_rate     = 16
-vision_range  = 5
-transport_cap = 0
-fuel          = 2
-uk_happy      = 1
-uk_shield     = 1
-uk_food       = 0
-uk_gold       = 0
-flags         = ""
-roles         = ""
-helptext      = _("\
-The AWACS (Airborne Warning and Control System) is an airplane with an \
-advanced radar that can determine the location of enemy units over a \
-wide area.\
 ")
 
 [u_specials]

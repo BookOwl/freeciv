@@ -90,12 +90,8 @@
    
 ***************************************************************************/
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
-#include <assert.h>
 #include <string.h>
+#include <assert.h>
 
 #include "log.h"
 #include "mem.h"
@@ -185,11 +181,11 @@ unsigned int hash_fval_string(const void *vkey, unsigned int num_buckets)
   const char *key = (const char*)vkey;
   unsigned long result=0;
 
-  for (; *key != '\0'; key++) {
+  for(; *key != '\0'; ++key) {
     result *= 5; 
     result += *key;
   }
-  result &= 0xFFFFFFFF; /* To make results independent of sizeof(long) */
+  result &= 0xFFFFFFFF; /* To make results independant of sizeof(long) */
   return (result % num_buckets);
 }
 
@@ -452,7 +448,9 @@ static struct hash_bucket *internal_lookup(const struct hash_table *h,
       }
       break;
     default:
-      die("Bad value %d in switch(bucket->used)", (int) bucket->used);
+      freelog(LOG_FATAL, "Bad value %d in switch(bucket->used)",
+	      (int)bucket->used);
+      exit(EXIT_FAILURE);
     }
     i++;
     if (i==h->num_buckets) {
@@ -463,8 +461,8 @@ static struct hash_bucket *internal_lookup(const struct hash_table *h,
   if (deleted) {
     return deleted;
   }
-  die("Full hash table -- and somehow did not resize!!");
-  return NULL;
+  freelog(LOG_FATAL, "Full hash table -- and somehow did not resize!!");
+  exit(EXIT_FAILURE);
 }
 
 /**************************************************************************
@@ -613,8 +611,9 @@ const void *hash_key_by_number(const struct hash_table *h,
       return bucket->key;
     counter++;
   }
-  die("never reached");
-  return NULL;
+  /* never reached */
+  assert(0);
+  exit(EXIT_FAILURE);
 }
 
 /**************************************************************************

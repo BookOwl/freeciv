@@ -10,15 +10,16 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
-#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
 
+#include <X11/Intrinsic.h>
+#include <X11/StringDefs.h>
 #include <X11/Intrinsic.h>
 #include <X11/StringDefs.h>
 
@@ -31,7 +32,6 @@
 #include <X11/Xaw/SmeBSB.h>
 #include <X11/Xaw/SmeLine.h>
 
-#include "climap.h"
 #include "fcintl.h"
 #include "game.h"
 #include "map.h"
@@ -58,6 +58,8 @@
 
 #include "mapctrl.h"
 
+/* Update the workers for a city on the map, when the update is received */
+struct city *city_workers_display = NULL;
 /* Color to use to display the workers */
 int city_workers_color=COLOR_STD_WHITE;
 
@@ -105,36 +107,80 @@ static void popit(int xin, int yin, int xtile, int ytile)
   static struct map_position cross_list[2+1];
   struct map_position *cross_head = cross_list;
   int i;
+  char s[512];
+  struct city *pcity;
   struct unit *punit;
-  char *content;
+  struct tile *ptile=map_get_tile(xtile, ytile);
+
   
-  if (tile_get_known(xtile, ytile)>=TILE_KNOWN_FOGGED) {
+  if(ptile->known>=TILE_KNOWN_FOGGED) {
     Widget p=XtCreatePopupShell("popupinfo", simpleMenuWidgetClass,
 				map_canvas, NULL, 0);
-    content = popup_info_text(xtile,ytile);
-    /* content is provided to us as a single string with multiple lines,
-       but xaw doens't support multi-line labels.  So we break it up.
-       We mangle it in the process, but who cares?  It's never going to be
-       used again anyway. */
-    while (1) {
-      char *end = strchr(content, '\n'); 
-      if (end) {
-	*end='\0';
-      }
-      XtCreateManagedWidget(content, smeBSBObjectClass, p, NULL, 0);
-      if (end) {
-	content = end+1;
-      } else {
-	break;
-      }
+    my_snprintf(s, sizeof(s), _("Terrain: %s"),
+		map_get_tile_info_text(xtile, ytile));
+    XtCreateManagedWidget(s, smeBSBObjectClass, p, NULL, 0);
+
+    my_snprintf(s, sizeof(s), _("Food/Prod/Trade: %s"),
+		map_get_tile_fpt_text(xtile, ytile));
+    XtCreateManagedWidget(s, smeBSBObjectClass, p, NULL, 0);
+
+    if (tile_has_special(ptile, S_HUT)) {
+      XtCreateManagedWidget(_("Minor Tribe Village"), smeBSBObjectClass,
+			    p, NULL, 0);
+    }
+    
+    if((pcity=map_get_city(xtile, ytile))) {
+      my_snprintf(s, sizeof(s), _("City: %s(%s) %s"), pcity->name,
+		  get_nation_name(city_owner(pcity)->nation),
+		  city_got_citywalls(pcity) ? _("with City Walls") : "");
+      XtCreateManagedWidget(s, smeBSBObjectClass, p, NULL, 0);
     }
 
-    punit = find_visible_unit(map_get_tile(xtile, ytile));
-    if (punit && (punit->activity == ACTIVITY_GOTO || punit->connecting)) {
-      cross_head->x = goto_dest_x(punit);
-      cross_head->y = goto_dest_y(punit);
-      cross_head++;
+    if(get_tile_infrastructure_set(ptile)) {
+      sz_strlcpy(s, _("Infrastructure: "));
+      sz_strlcat(s, map_get_infrastructure_text(ptile->special));
+      XtCreateManagedWidget(s, smeBSBObjectClass, p, NULL, 0);
     }
+
+    if((punit=find_visible_unit(ptile)) && !pcity) {
+      char cn[64];
+      struct unit_type *ptype=unit_type(punit);
+      cn[0]='\0';
+      if(punit->owner==game.player_idx) {
+	struct city *pcity;
+	pcity=player_find_city_by_id(game.player_ptr, punit->homecity);
+	if(pcity)
+	  my_snprintf(cn, sizeof(cn), "/%s", pcity->name);
+      }
+      my_snprintf(s, sizeof(s), _("Unit: %s(%s%s)"), ptype->name,
+		  get_nation_name(unit_owner(punit)->nation), cn);
+      XtCreateManagedWidget(s, smeBSBObjectClass, p, NULL, 0);
+
+      if(punit->owner==game.player_idx)  {
+	char uc[64] = "";
+	if(unit_list_size(&ptile->units)>=2) {
+	  my_snprintf(uc, sizeof(uc), _("  (%d more)"),
+		      unit_list_size(&ptile->units) - 1);
+	}
+        my_snprintf(s, sizeof(s),
+		_("A:%d D:%d FP:%d HP:%d/%d%s%s"), ptype->attack_strength, 
+	        ptype->defense_strength, ptype->firepower, punit->hp, 
+	        ptype->hp, punit->veteran?_(" V"):"", uc);
+
+        if(punit->activity==ACTIVITY_GOTO)  {
+	  cross_head->x = punit->goto_dest_x;
+	  cross_head->y = punit->goto_dest_y;
+	  cross_head++;
+        }
+      } else {
+        my_snprintf(s, sizeof(s),
+		    _("A:%d D:%d FP:%d HP:%d0%%"), ptype->attack_strength, 
+		    ptype->defense_strength, ptype->firepower, 
+		    (punit->hp*100/ptype->hp + 9)/10 );
+      }
+      XtCreateManagedWidget(s, smeBSBObjectClass, p, NULL, 0);
+    }
+
     cross_head->x = xtile;
     cross_head->y = ytile;
     cross_head++;
@@ -192,7 +238,18 @@ void popupinfo_popdown_callback(Widget w, XtPointer client_data,
 **************************************************************************/
 void mapctrl_btn_wakeup(XEvent *event)
 {
-  wakeup_button_pressed(event->xbutton.x, event->xbutton.y);
+  int map_x, map_y, is_real;
+  XButtonEvent *ev=&event->xbutton;
+
+  if(get_client_state()!=CLIENT_GAME_RUNNING_STATE)
+    return;
+
+  map_x = map_view_x0 + ev->x / NORMAL_TILE_WIDTH;
+  map_y = map_view_y0 + ev->y / NORMAL_TILE_HEIGHT;
+  is_real = normalize_map_pos(&map_x, &map_y);
+  assert(is_real);
+
+  wakeup_sentried_units(map_x, map_y);
 }
 
 /**************************************************************************
@@ -203,17 +260,35 @@ void mapctrl_btn_mapcanvas(XEvent *event)
   int x, y;
   XButtonEvent *ev=&event->xbutton;
 
-  if (!can_client_change_view()) {
+  if(get_client_state()!=CLIENT_GAME_RUNNING_STATE)
     return;
-  }
 
-  if (ev->button == Button1) {
-    action_button_pressed(ev->x, ev->y);
-  } else if (canvas_to_map_pos(&x, &y, ev->x, ev->y)
-	     && (ev->button == Button2 || ev->state & ControlMask)) {
+  get_map_xy(ev->x, ev->y, &x, &y);
+
+  if (ev->button==Button1)
+    do_map_click(x, y);
+  else if (ev->button==Button2||ev->state&ControlMask)
     popit(ev->x, ev->y, x, y);
-  } else if (ev->button == Button3) {
-    recenter_button_pressed(ev->x, ev->y);
+  else if (ev->button == Button3) {
+    center_tile_mapcanvas(x, y);
+  }
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+void update_line(int window_x, int window_y)
+{
+  int x, y, old_x, old_y;
+
+  if ((hover_state == HOVER_GOTO || hover_state == HOVER_PATROL)
+      && draw_goto_line) {
+    get_map_xy(window_x, window_y, &x, &y);
+
+    get_line_dest(&old_x, &old_y);
+    if (!same_pos(old_x, old_y, x, y)) {
+      draw_line(x, y);
+    }
   }
 }
 
@@ -240,21 +315,64 @@ void create_line_at_mouse_pos(void)
 }
 
 /**************************************************************************
+  Adjust the position of city workers from the mapcanvas
+**************************************************************************/
+void mapctrl_btn_adjust_workers(XEvent *event)
+{
+  int map_x, map_y, x, y, is_valid;
+  XButtonEvent *ev=&event->xbutton;
+  struct city *pcity;
+  struct packet_city_request packet;
+  enum city_tile_type wrk;
+
+  if(get_client_state()!=CLIENT_GAME_RUNNING_STATE)
+    return;
+
+  map_x = map_view_x0 + ev->x / NORMAL_TILE_WIDTH;
+  map_y = map_view_y0 + ev->y / NORMAL_TILE_HEIGHT;
+  is_valid = normalize_map_pos(&map_x, &map_y);
+  assert(is_valid);
+
+  if (!(pcity = find_city_near_tile(map_x, map_y)))
+    return;
+
+  is_valid = map_to_city_map(&x, &y, pcity, map_x, map_y);
+  assert(is_valid);
+
+  packet.city_id=pcity->id;
+  packet.worker_x=x;
+  packet.worker_y=y;
+
+  wrk = get_worker_city(pcity, x, y);
+  if(wrk==C_TILE_WORKER)
+    send_packet_city_request(&aconnection, &packet, 
+			     PACKET_CITY_MAKE_SPECIALIST);
+  else if(wrk==C_TILE_EMPTY)
+    send_packet_city_request(&aconnection, &packet, 
+			     PACKET_CITY_MAKE_WORKER);
+
+  /* When the city info packet is received, update the workers on the map*/
+  city_workers_display = pcity;
+
+  return;
+}
+
+/**************************************************************************
   Draws the on the map the tiles the given city is using
 **************************************************************************/
 void mapctrl_key_city_workers(XEvent *event)
 {
-  int x,y;
+  int x,y, is_real;
   XButtonEvent *ev=&event->xbutton;
   struct city *pcity;
 
-  if (!can_client_change_view()) {
+  if(get_client_state()!=CLIENT_GAME_RUNNING_STATE)
     return;
-  }
 
-  if (!canvas_to_map_pos(&x, &y, ev->x, ev->y)) {
-    return;
-  }
+  x = map_view_x0 + ev->x / NORMAL_TILE_WIDTH;
+  y = map_view_y0 + ev->y / NORMAL_TILE_HEIGHT;
+  is_real = normalize_map_pos(&x, &y);
+  assert(is_real);
 
   pcity = find_city_near_tile(x,y);
   if(!pcity) return;
@@ -270,18 +388,26 @@ void mapctrl_key_city_workers(XEvent *event)
 void mapctrl_btn_overviewcanvas(XEvent *event)
 {
   int xtile, ytile;
-  XButtonEvent *ev = &event->xbutton;
+  XButtonEvent *ev=&event->xbutton;
 
-  if (!can_client_change_view()) {
-    return;
-  }
+  xtile=ev->x/2-(map.xsize/2-(map_view_x0+map_canvas_store_twidth/2));
+  ytile=ev->y/2;
 
-  overview_to_map_pos(&xtile, &ytile, event->xbutton.x, event->xbutton.y);
+  if(get_client_state()!=CLIENT_GAME_RUNNING_STATE)
+     return;
 
   if(ev->button==Button1)
     do_unit_goto(xtile,ytile);
   else if(ev->button==Button3)
     center_tile_mapcanvas(xtile, ytile);
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+void focus_to_next_unit(void)
+{
+  advance_unit_focus();
 }
 
 /**************************************************************************

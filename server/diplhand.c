@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -18,8 +17,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "diptreaty.h"
-#include "events.h"
 #include "fcintl.h"
 #include "game.h"
 #include "log.h"
@@ -28,33 +25,22 @@
 #include "packets.h"
 #include "player.h"
 #include "unit.h"
+#include "events.h"
 
 #include "citytools.h"
 #include "cityturn.h"
+#include "diptreaty.h"
 #include "gamelog.h"
 #include "maphand.h"
 #include "plrhand.h"
 #include "settlers.h"
 #include "unittools.h"
 
-#include "advdiplomacy.h"
-
 #include "diplhand.h"
 
-#define SPECLIST_TAG treaty
-#define SPECLIST_TYPE struct Treaty
-#include "speclist.h"
-
-#define SPECLIST_TAG treaty
-#define SPECLIST_TYPE struct Treaty
-#include "speclist_c.h"
-
-#define treaty_list_iterate(list, p) \
-    TYPED_LIST_ITERATE(struct Treaty, list, p)
-#define treaty_list_iterate_end  LIST_ITERATE_END
-
-static struct treaty_list treaties;
+static struct genlist treaties;
 static bool did_init_treaties;
+
 
 /**************************************************************************
 Checks if the player numbers in the packet are sane.
@@ -92,18 +78,21 @@ static bool check_packet(struct packet_diplomacy_info *packet, bool check_other)
 **************************************************************************/
 struct Treaty *find_treaty(struct player *plr0, struct player *plr1)
 {
-  if (!did_init_treaties) {
-    treaty_list_init(&treaties);
+  struct genlist_iterator myiter;
+  
+  if(!did_init_treaties) {
+    genlist_init(&treaties);
     did_init_treaties = TRUE;
   }
 
-  treaty_list_iterate(treaties, ptreaty) {
-    if ((ptreaty->plr0 == plr0 && ptreaty->plr1 == plr1) ||
-	(ptreaty->plr0 == plr1 && ptreaty->plr1 == plr0)) {
+  genlist_iterator_init(&myiter, &treaties, 0);
+  
+  for(; ITERATOR_PTR(myiter); ITERATOR_NEXT(myiter)) {
+    struct Treaty *ptreaty=(struct Treaty *)ITERATOR_PTR(myiter);
+    if((ptreaty->plr0==plr0 && ptreaty->plr1==plr1) ||
+       (ptreaty->plr0==plr1 && ptreaty->plr1==plr0))
       return ptreaty;
-    }
-  } treaty_list_iterate_end;
-
+  }
   return NULL;
 }
 
@@ -149,18 +138,6 @@ void handle_diplomacy_accept_treaty(struct player *pplayer,
       if (pclause->from == pplayer) {
 	switch(pclause->type) {
 	case CLAUSE_ADVANCE:
-          if (!tech_is_available(other, pclause->value)) {
-	    /* It is impossible to give a technology to a civilization that
-	     * can never possess it (the client should enforce this). */
-	    freelog(LOG_ERROR, "Treaty: The %s can't have tech %s",
-                    get_nation_name_plural(other->nation),
-                    advances[pclause->value].name);
-	    notify_player(pplayer,
-                          _("Game: The %s can't accept %s."),
-                          get_nation_name_plural(other->nation),
-                          advances[pclause->value].name);
-	    return;
-          }
 	  if (get_invention(pplayer, pclause->value) != TECH_KNOWN) {
 	    freelog(LOG_ERROR,
                     "The %s don't know tech %s, but try to give it to the %s.",
@@ -195,22 +172,6 @@ void handle_diplomacy_accept_treaty(struct player *pplayer,
 	    return;
 	  }
 	  break;
-	case CLAUSE_ALLIANCE:
-          if (!pplayer_can_ally(pplayer, other)) {
-	    notify_player(pplayer,
-			  _("Game: You are at war with one of %s's "
-			    "allies - an alliance with %s is impossible."),
-			  other->name, other->name);
-            return;
-          }
-          if (!pplayer_can_ally(other, pplayer)) {
-	    notify_player(pplayer,
-			  _("Game: %s is at war with one of your allies "
-			    "- an alliance with %s is impossible."),
-			  other->name, other->name);
-            return;
-          }
-          break;
 	case CLAUSE_GOLD:
 	  if (pplayer->economic.gold < pclause->value) {
 	    notify_player(pplayer,
@@ -293,21 +254,6 @@ void handle_diplomacy_accept_treaty(struct player *pplayer,
 	    goto cleanup;
 	  }
 	  break;
-	case CLAUSE_ALLIANCE:
-          /* We need to recheck this way since things might have
-           * changed. */
-          if (!pplayer_can_ally(other, pplayer)) {
-	    notify_player(pplayer,
-			  _("Game: %s is at war with one of your "
-			    "allies - an alliance with %s is impossible."),
-			  other->name, other->name);
-	    notify_player(other,
-			  _("Game: You are at war with one of %s's "
-			    "allies - an alliance with %s is impossible."),
-			  pplayer->name, pplayer->name);
-	    goto cleanup;
-          }
-          break;
 	case CLAUSE_GOLD:
 	  if (other->economic.gold < pclause->value) {
 	    notify_player(plr0,
@@ -327,13 +273,6 @@ void handle_diplomacy_accept_treaty(struct player *pplayer,
       }
     } clause_list_iterate_end;
 
-    if (plr0->ai.control) {
-      ai_treaty_accepted(plr0, plr1, ptreaty);
-    }
-    if (plr1->ai.control) {
-      ai_treaty_accepted(plr1, plr0, ptreaty);
-    }
-
     clause_list_iterate(ptreaty->clauses, pclause) {
       pgiver = pclause->from;
       pdest = (plr0==pgiver) ? plr1 : plr0;
@@ -344,11 +283,6 @@ void handle_diplomacy_accept_treaty(struct player *pplayer,
          * and try to give us the same tech at the same time. This
          * should be handled discreetly instead of giving a core dump. */
         if (get_invention(pdest, pclause->value) == TECH_KNOWN) {
-	  freelog(LOG_VERBOSE,
-                  "The %s already know tech %s, that %s want to give them.",
-		  get_nation_name_plural(pdest->nation),
-		  advances[pclause->value].name,
-		  get_nation_name_plural(pgiver->nation));
           break;
         }
 	notify_player_ex(pdest, -1, -1, E_TECH_GAIN,
@@ -374,9 +308,6 @@ void handle_diplomacy_accept_treaty(struct player *pplayer,
 	notify_player(pdest, _("Game: You get %d gold."), pclause->value);
 	pgiver->economic.gold -= pclause->value;
 	pdest->economic.gold += pclause->value;
-	gamelog(GAMELOG_TECH, _("%s acquire %d gold from %s"),
-		get_nation_name_plural(pdest->nation), pclause->value, 
-		get_nation_name_plural(pgiver->nation));
 	break;
       case CLAUSE_MAP:
 	give_map_from_player_to_player(pgiver, pdest);
@@ -407,9 +338,6 @@ void handle_diplomacy_accept_treaty(struct player *pplayer,
 			   _("Game: You give city of %s to %s."),
 			   pcity->name, pdest->name);
 
-          gamelog(GAMELOG_TECH, _("%s acquire the city %s from %s"),
-		  get_nation_name_plural(pdest->nation), pcity->name, 
-		  get_nation_name_plural(pgiver->nation));
 	  transfer_city(pdest, pcity, -1, TRUE, TRUE, FALSE);
 	  break;
 	}
@@ -448,12 +376,9 @@ void handle_diplomacy_accept_treaty(struct player *pplayer,
 	notify_player_ex(pdest, -1, -1, E_TREATY_ALLIANCE,
 			 _("Game: You agree on an alliance with %s."),
 			 pgiver->name);
-	gamelog(GAMELOG_TECH, _("%s agree on an alliance with %s"),
-		get_nation_name_plural(pdest->nation), 
-		get_nation_name_plural(pgiver->nation));
 	check_city_workers(plr0);
 	check_city_workers(plr1);
-	break;
+	break;          
       case CLAUSE_VISION:
 	give_shared_vision(pgiver, pdest);
 	notify_player_ex(pgiver, -1, -1, E_TREATY_SHARED_VISION,
@@ -462,35 +387,18 @@ void handle_diplomacy_accept_treaty(struct player *pplayer,
 	notify_player_ex(pdest, -1, -1, E_TREATY_SHARED_VISION,
 			 _("Game: %s gives you shared vision."),
 			 pgiver->name);
-	gamelog(GAMELOG_TECH, _("%s share vision with %s"),
-		get_nation_name_plural(pdest->nation), 
-		get_nation_name_plural(pgiver->nation));
 	break;
-      case CLAUSE_LAST:
-        freelog(LOG_ERROR, "Received bad clause type");
-        break;
       }
 
     } clause_list_iterate_end;
-  cleanup:
-    treaty_list_unlink(&treaties, ptreaty);
+  cleanup:      
+    genlist_unlink(&treaties, ptreaty);
     free(ptreaty);
     send_player_info(plr0, NULL);
     send_player_info(plr1, NULL);
   }
 }
 
-/****************************************************************************
-  Create an embassy. pplayer gets an embassy with aplayer.
-****************************************************************************/
-void establish_embassy(struct player *pplayer, struct player *aplayer)
-{
-  /* Establish the embassy. */
-  pplayer->embassy |= (1 << aplayer->player_no);
-  send_player_info(pplayer, pplayer);
-  send_player_info(pplayer, aplayer);  /* update player dialog with embassy */
-  send_player_info(aplayer, pplayer);  /* INFO_EMBASSY level info */
-}
 
 /**************************************************************************
 ...
@@ -514,14 +422,9 @@ void handle_diplomacy_remove_clause(struct player *pplayer,
 				 PACKET_DIPLOMACY_REMOVE_CLAUSE, packet);
       lsend_packet_diplomacy_info(&plr1->connections, 
 				 PACKET_DIPLOMACY_REMOVE_CLAUSE, packet);
-      if (plr0->ai.control) {
-        ai_treaty_evaluate(plr0, plr1, ptreaty);
-      }
-      if (plr1->ai.control) {
-        ai_treaty_evaluate(plr1, plr0, ptreaty);
-      }
     }
   }
+
 }
 
 /**************************************************************************
@@ -552,7 +455,7 @@ void handle_diplomacy_create_clause(struct player *pplayer,
        */
       if (packet->clause_type == CLAUSE_CITY){
 	struct city *pcity = find_city_by_id(packet->value);
-	if (pcity && !map_is_known_and_seen(pcity->x, pcity->y, plr1))
+	if (pcity && !map_get_known_and_seen(pcity->x, pcity->y, plr1))
 	  give_citymap_from_player_to_player(pcity, plr0, plr1);
       }
 
@@ -562,12 +465,6 @@ void handle_diplomacy_create_clause(struct player *pplayer,
       lsend_packet_diplomacy_info(&plr1->connections, 
 				 PACKET_DIPLOMACY_CREATE_CLAUSE, 
 				 packet);
-      if (plr0->ai.control) {
-        ai_treaty_evaluate(plr0, plr1, ptreaty);
-      }
-      if (plr1->ai.control) {
-        ai_treaty_evaluate(plr1, plr0, ptreaty);
-      }
     }
   }
 }
@@ -597,7 +494,7 @@ static void really_diplomacy_cancel_meeting(struct player *pplayer,
 			       &packet);
     notify_player(pplayer, _("Game: Meeting with %s canceled."), 
 		  pplayer2->name);
-    treaty_list_unlink(&treaties, ptreaty);
+    genlist_unlink(&treaties, ptreaty);
     free(ptreaty);
   }
 }
@@ -636,20 +533,20 @@ void handle_diplomacy_init(struct player *pplayer,
   plr0=&game.players[packet->plrno0];
   plr1=&game.players[packet->plrno1];
 
-  assert(plr0 != plr1);
-
   if (!find_treaty(plr0, plr1)) {
-    if (is_barbarian(plr0) || is_barbarian(plr1)) {
-      notify_player(plr0, _("Your diplomatic envoy was decapitated!"));
+    if (plr0->ai.control || plr1->ai.control) {
+      notify_player(plr0, _("AI controlled players cannot participate in "
+			    "diplomatic meetings."));
       return;
     }
 
-    if (could_meet_with_player(plr0, plr1)) {
+    if (player_has_embassy(plr0, plr1) && plr0->is_connected && 
+	plr0->is_alive && plr1->is_connected && plr1->is_alive) {
       struct Treaty *ptreaty;
 
       ptreaty=fc_malloc(sizeof(struct Treaty));
       init_treaty(ptreaty, plr0, plr1);
-      treaty_list_insert(&treaties, ptreaty);
+      genlist_insert(&treaties, ptreaty, 0);
 
       pa.plrno0=plr0->player_no;
       pa.plrno1=plr1->player_no;
@@ -682,7 +579,6 @@ void send_diplomatic_meetings(struct connection *dest)
     return;
   }
   players_iterate(other_player) {
-
     if ( (ptreaty=find_treaty(pplayer, other_player))) {
       struct packet_diplomacy_info packet;
       

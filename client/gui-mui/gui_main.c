@@ -10,15 +10,14 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
-#include <errno.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <errno.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -75,6 +74,7 @@
 #include "ratesdlg.h"
 #include "repodlgs_g.h"
 #include "spaceshipdlg_g.h"
+#include "support.h"
 #include "tilespec.h"
 #include "wldlg.h"
 
@@ -303,14 +303,6 @@ static struct NewMenu MenuData[] =
 };
 
 /**************************************************************************
- Update the connected users list at pregame state.
-**************************************************************************/
-void update_conn_list_dialog(void)
-{
-  /* PORTME */
-}
-
-/**************************************************************************
 ...
 **************************************************************************/
 void sound_bell(void)
@@ -323,6 +315,7 @@ void sound_bell(void)
 *****************************************************************/
 static void inputline_return(void)	/* from chatline.c */
 {
+  struct packet_generic_message apacket;
   char *theinput;
   int contents;
 
@@ -331,7 +324,8 @@ static void inputline_return(void)	/* from chatline.c */
 
   if (*theinput)
   {
-    send_chat(theinput);
+    mystrlcpy(apacket.message, theinput, MAX_LEN_MSG-MAX_LEN_USERNAME+1);
+    send_packet_generic_message(&aconnection, PACKET_CHAT_MSG, &apacket);
     contents = TRUE;
   }
   else
@@ -349,31 +343,36 @@ static void control_callback(ULONG * value)
 {
   if (*value)
   {
-    switch (*value) {
-    case UNIT_NORTH:
-      key_unit_move(DIR8_NORTH);
-      break;
-    case UNIT_SOUTH:
-      key_unit_move(DIR8_SOUTH);
-      break;
-    case UNIT_EAST:
-      key_unit_move(DIR8_EAST);
-      break;
-    case UNIT_WEST:
-      key_unit_move(DIR8_WEST);
-      break;
-    case UNIT_NORTH_EAST:
-      key_unit_move(DIR8_NORTHEAST);
-      break;
-    case UNIT_NORTH_WEST:
-      key_unit_move(DIR8_NORTHWEST);
-      break;
-    case UNIT_SOUTH_EAST:
-      key_unit_move(DIR8_SOUTHEAST);
-      break;
-    case UNIT_SOUTH_WEST:
-      key_unit_move(DIR8_SOUTHWEST);
-      break;
+    if (is_isometric)
+    {
+      switch (*value)
+      {
+	case UNIT_NORTH: key_move_north_west(); break;
+	case UNIT_SOUTH: key_move_south_east(); break;
+	case UNIT_EAST: key_move_north_east(); break;
+	case UNIT_WEST: key_move_south_west(); break;
+	case UNIT_NORTH_EAST: key_move_north(); break;
+	case UNIT_NORTH_WEST: key_move_west(); break;
+	case UNIT_SOUTH_EAST: key_move_east(); break;
+	case UNIT_SOUTH_WEST: key_move_south();break;
+      }
+    } else
+    {
+      switch (*value)
+      {
+	case UNIT_NORTH: key_move_north(); break;
+	case UNIT_SOUTH: key_move_south(); break;
+	case UNIT_EAST: key_move_east(); break;
+	case UNIT_WEST: key_move_west(); break;
+	case UNIT_NORTH_EAST: key_move_north_east(); break;
+	case UNIT_NORTH_WEST: key_move_north_west(); break;
+	case UNIT_SOUTH_EAST: key_move_south_east(); break;
+	case UNIT_SOUTH_WEST: key_move_south_west();break;
+      }
+    }
+
+    switch (*value)
+    {
     case UNIT_POPUP_CITY:
       {
 	struct unit *punit;
@@ -413,10 +412,11 @@ static void control_callback(ULONG * value)
       }
       break;
     case END_TURN:
-      key_end_turn();
+      if (get_client_state() == CLIENT_GAME_RUNNING_STATE)
+        key_end_turn();
       break;
     case NEXT_UNIT:
-      advance_unit_focus();
+      advance_unit_focus();	/*focus_to_next_unit(); */
       break;
 
     case MENU_GAME_OPTIONS:
@@ -712,7 +712,7 @@ void do_unit_function(struct unit *punit, ULONG value)
   else
   {
     if(can_unit_do_activity(punit, ACTIVITY_IDLE)) {
-      set_unit_focus_and_select(punit);
+      request_unit_selected(punit);
     }
   }
 }
@@ -727,9 +727,8 @@ static void taxrates_callback(LONG * number)
   int delta = 10;
   struct packet_player_request packet;
 
-  if (!can_client_issue_orders()) {
+  if (get_client_state() != CLIENT_GAME_RUNNING_STATE)
     return;
-  }
 
   i = (size_t) * number;
 
@@ -873,7 +872,8 @@ static int init_gui(void)
 #ifdef ENABLE_NLS
   struct NewMenu *nm;
 
-  for (nm = MenuData; nm->nm_Type != NM_END; nm++) {
+  for(nm = MenuData; nm->nm_Type != NM_END; ++nm)
+  {
     if(nm->nm_Label != NM_BARLABEL)
       nm->nm_Label = _(nm->nm_Label);
   }
@@ -1183,7 +1183,8 @@ void remove_net_input(void)
 **************************************************************************/
 void update_menus(void) /* from menu.c */
 {
-  if (!can_client_change_view()) {
+  if (get_client_state() != CLIENT_GAME_RUNNING_STATE)
+  {
     menu_title_sensitive(MENU_REPORT, FALSE);
     menu_title_sensitive(MENU_ORDER, FALSE);
     menu_title_sensitive(MENU_VIEW, FALSE);
@@ -1206,18 +1207,14 @@ void update_menus(void) /* from menu.c */
     }
 
     menu_title_sensitive(MENU_REPORT, TRUE);
-    menu_title_sensitive(MENU_ORDER, punit
-			 ? can_client_issue_orders() : FALSE);
+    menu_title_sensitive(MENU_ORDER, punit ? TRUE : FALSE);
     menu_title_sensitive(MENU_VIEW, TRUE);
     menu_title_sensitive(MENU_KINGDOM, TRUE);
 
-    menu_title_sensitive(MENU_KINGDOM_TAX_RATE, can_client_issue_orders());
-    menu_title_sensitive(MENU_KINGDOM_WORKLISTS, can_client_issue_orders());
-    menu_title_sensitive(MENU_KINGDOM_REVOLUTION, can_client_issue_orders());
-
     menu_entry_sensitive(MENU_REPORT_SPACESHIP, (game.player_ptr->spaceship.state != SSHIP_NONE));
 
-    if (punit && can_client_issue_orders()) {
+    if (punit)
+    {
       const char *chgfmt = _("Change to %s");
       static char irrtext[64];
       static char mintext[64];
@@ -1307,7 +1304,7 @@ void update_menus(void) /* from menu.c */
       }
       else
       {
-        sz_strlcpy(transtext, _("Transform Terrain"));
+        sz_strlcpy(transtext, _("Transform terrain"));
       }
 
       if (map_has_special(punit->x, punit->y, S_ROAD))
@@ -1345,7 +1342,7 @@ void ui_init(void)
 }
 
 /****************************************************************
- Entry for the client dependent part of the client
+ Entry for the client dependend part of the client
 *****************************************************************/
 void ui_main(int argc, char *argv[])
 {
@@ -1383,8 +1380,7 @@ void ui_main(int argc, char *argv[])
       main_bulb_sprite = MakeBorderSprite(sprites.bulb[0]);
       main_sun_sprite = MakeBorderSprite(sprites.warming[0]);
       main_flake_sprite = MakeBorderSprite(sprites.cooling[0]);
-      main_government_sprite
-	= MakeBorderSprite(get_citizen_sprite(CITIZEN_UNHAPPY, 0, NULL));
+      main_government_sprite = MakeBorderSprite(sprites.citizen[7]);
       main_timeout_text = TextObject, End;
 
       econ_group = HGroup, GroupSpacing(0), End;

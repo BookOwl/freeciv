@@ -2,15 +2,15 @@
 
 name = _("Kenyan")
 plural = _("?plural:Kenyans")
-class=_("Modern")
 leader = "Kenyatta"
 leader_sex = "Male"
 flag = "f.kenya"
 flag_alt = "-"
-city_style = "Tropical"
+city_style = "European"
 attack = 2
 expand = 2
 civilized = 1
+advisors=100,100,100,100,100,100,100
 init_techs=""
 tech_goals="Monarchy","Warrior Code","Iron Working","Navigation"
 wonder="Sun Tzu's War Academy"

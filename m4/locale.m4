@@ -14,7 +14,6 @@ AC_DEFUN([AM_LANGINFO_CODESET],
       [Define if you have <langinfo.h> and nl_langinfo(CODESET).])
   fi
 ])
-
 AC_DEFUN([AM_LIBCHARSET],
 [
   AC_CACHE_CHECK([for libcharset], am_cv_libcharset,

@@ -15,20 +15,16 @@ normal_tile_width  = 30
 normal_tile_height = 30
 small_tile_width   = 15
 small_tile_height  = 20
-
 is_isometric = 0
-
-; Do not blend hills and mountains together.
-is_mountainous = 0
-
-; Use roadstyle 1 (old non-iso style)
-roadstyle = 1
 
 ; Font to use to draw city names:
 city_names_font = "9x15bold"
 
 ; Font to use to draw city productions:
 city_productions_font = "6x13"
+
+; Should flags be drawn as transparent:  (else opaque)
+flags_are_transparent = 1
 
 ; These are special because they get freed and reloaded
 ; as required:
@@ -45,9 +41,7 @@ files =
   "trident/units.spec",
   "trident/flags.spec",
   "trident/roads.spec",
-  "misc/buildings.spec",
   "misc/space.spec",
-;  "misc/techs.spec",
   "misc/treaty.spec",
   "trident/cities.spec",
   "trident/explosions.spec"

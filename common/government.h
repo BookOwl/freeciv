@@ -134,16 +134,7 @@ struct government
   int   fixed_corruption_distance;
   int   corruption_distance_factor;
   int   extra_corruption_distance;
-  int   corruption_max_distance_cap;
   
-  /* waste modifiers, see governments.ruleset for more detail */
-  int   waste_level;
-  int   waste_modifier;
-  int   fixed_waste_distance;
-  int   waste_distance_factor;
-  int   extra_waste_distance;
-  int   waste_max_distance_cap;
-    
   /* other flags: bits in enum government_flag_id order,
      use government_has_flag() to access */
   int   flags;
@@ -196,19 +187,7 @@ bool can_change_to_government(struct player *pplayer, int government);
 void set_ruler_title(struct government *gov, int nation, 
                      const char *male, const char *female);
 void governments_alloc(int num);
+void government_free(struct government *gov);
 void governments_free(void);
-
-#define government_iterate(gov)                                             \
-{                                                                           \
-  int GI_index;                                                             \
-                                                                            \
-  for (GI_index = 0; GI_index < game.government_count; GI_index++) {        \
-    struct government *gov = get_government(GI_index);                      \
-    {
-
-#define government_iterate_end                                              \
-    }                                                                       \
-  }                                                                         \
-}
 
 #endif  /* FC__GOVERNMENT_H */

@@ -24,14 +24,13 @@
 #include <string.h>
 
 #include "fcintl.h"
-#include "game.h"
-#include "log.h"
 #include "mem.h"
+#include "log.h"
 #include "support.h"
+#include "game.h"
 
-#include "agents.h"
 #include "attribute.h"
-
+#include "agents.h"
 #include "cma_fec.h"
 
 #define RESULT_COLUMNS		10
@@ -40,7 +39,7 @@
 
 struct cma_preset {
   char *descr;
-  struct cm_parameter parameter;
+  struct cma_parameter parameter;
 };
 
 #define SPECLIST_TAG preset
@@ -100,7 +99,7 @@ void cmafec_free(void)
  Sets the front-end parameter.
 **************************************************************************/
 void cmafec_set_fe_parameter(struct city *pcity,
-			     const struct cm_parameter *const parameter)
+			     const struct cma_parameter *const parameter)
 {
   cma_set_parameter(ATTR_CITY_CMAFE_PARAMETER, pcity->id, parameter);
 }
@@ -109,13 +108,13 @@ void cmafec_set_fe_parameter(struct city *pcity,
  Return the front-end parameter for the given city. Returns a dummy
  parameter if no parameter was set.
 *****************************************************************/
-void cmafec_get_fe_parameter(struct city *pcity, struct cm_parameter *dest)
+void cmafec_get_fe_parameter(struct city *pcity, struct cma_parameter *dest)
 {
-  struct cm_parameter parameter;
+  struct cma_parameter parameter;
 
   /* our fe_parameter could be stale. our agents parameter is uptodate */
   if (cma_is_city_under_agent(pcity, &parameter)) {
-    cm_copy_parameter(dest, &parameter);
+    cma_copy_parameter(dest, &parameter);
     cmafec_set_fe_parameter(pcity, dest);
   } else {
     if (!cma_get_parameter(ATTR_CITY_CMAFE_PARAMETER, pcity->id, dest)) {
@@ -130,8 +129,6 @@ void cmafec_get_fe_parameter(struct city *pcity, struct cm_parameter *dest)
 
       dest->happy_factor = 1;
       dest->require_happy = FALSE;
-      dest->allow_disorder = FALSE;
-      dest->allow_specialists = TRUE;
       dest->factor_target = FT_SURPLUS;
 
       cmafec_set_fe_parameter(pcity, dest);
@@ -142,7 +139,7 @@ void cmafec_get_fe_parameter(struct city *pcity, struct cm_parameter *dest)
 /**************************************************************************
  Adds a preset.
 **************************************************************************/
-void cmafec_preset_add(const char *descr_name, struct cm_parameter *pparam)
+void cmafec_preset_add(const char *descr_name, struct cma_parameter *pparam)
 {
   struct cma_preset *ppreset = fc_malloc(sizeof(struct cma_preset));
 
@@ -151,7 +148,7 @@ void cmafec_preset_add(const char *descr_name, struct cm_parameter *pparam)
     preset_list_has_been_initialized = TRUE;
   }
 
-  cm_copy_parameter(&ppreset->parameter, pparam);
+  cma_copy_parameter(&ppreset->parameter, pparam);
   ppreset->descr = fc_malloc(MAX_LEN_PRESET_NAME);
   (void) mystrlcpy(ppreset->descr, descr_name, MAX_LEN_PRESET_NAME);
   preset_list_insert(&preset_list, ppreset);
@@ -189,7 +186,7 @@ char *cmafec_preset_get_descr(int index)
 /**************************************************************************
  Returns the indexed preset's parameter.
 **************************************************************************/
-const struct cm_parameter *cmafec_preset_get_parameter(int index)
+const struct cma_parameter *const cmafec_preset_get_parameter(int index)
 {
   struct cma_preset *ppreset;
 
@@ -203,14 +200,14 @@ const struct cm_parameter *cmafec_preset_get_parameter(int index)
  Returns the index of the preset which matches the given
  parameter. Returns -1 if no preset could be found.
 **************************************************************************/
-int cmafec_preset_get_index_of_parameter(const struct cm_parameter
+int cmafec_preset_get_index_of_parameter(const struct cma_parameter
 					 *const parameter)
 {
   int i;
 
   for (i = 0; i < preset_list_size(&preset_list); i++) {
     struct cma_preset *ppreset = preset_list_get(&preset_list, i);
-    if (cm_are_parameter_equal(&ppreset->parameter, parameter)) {
+    if (cma_are_parameter_equal(&ppreset->parameter, parameter)) {
       return i;
     }
   }
@@ -228,9 +225,9 @@ int cmafec_preset_num(void)
 /**************************************************************************
 ...
 **************************************************************************/
-const char *cmafec_get_short_descr_of_city(struct city *pcity)
+const char *const cmafec_get_short_descr_of_city(struct city *pcity)
 {
-  struct cm_parameter parameter;
+  struct cma_parameter parameter;
 
   if (!cma_is_city_under_agent(pcity, &parameter)) {
     return _("none");
@@ -243,8 +240,8 @@ const char *cmafec_get_short_descr_of_city(struct city *pcity)
  Returns the description of the matching preset or "custom" if no
  preset could be found.
 **************************************************************************/
-const char *cmafec_get_short_descr(const struct cm_parameter *const
-				   parameter)
+const char *const cmafec_get_short_descr(const struct cma_parameter *const
+					 parameter)
 {
   int index = cmafec_preset_get_index_of_parameter(parameter);
 
@@ -258,7 +255,8 @@ const char *cmafec_get_short_descr(const struct cm_parameter *const
 /**************************************************************************
 ...
 **************************************************************************/
-static const char *get_city_growth_string(struct city *pcity, int surplus)
+static const char *const get_city_growth_string(struct city *pcity,
+						int surplus)
 {
   int stock, cost, turns;
   static char buffer[50];
@@ -292,7 +290,8 @@ static const char *get_city_growth_string(struct city *pcity, int surplus)
 /**************************************************************************
 ...
 **************************************************************************/
-static const char *get_prod_complete_string(struct city *pcity, int surplus)
+static const char *const get_prod_complete_string(struct city *pcity,
+						  int surplus)
 {
   int stock, cost, turns;
   static char buffer[50];
@@ -335,11 +334,11 @@ static const char *get_prod_complete_string(struct city *pcity, int surplus)
 /**************************************************************************
 ...
 **************************************************************************/
-const char *cmafec_get_result_descr(struct city *pcity,
-				    const struct cm_result *const
-				    result,
-				    const struct cm_parameter *const
-				    parameter)
+const char *const cmafec_get_result_descr(struct city *pcity,
+					  const struct cma_result *const
+					  result,
+					  const struct cma_parameter *const
+					  parameter)
 {
   int j;
   char buf[RESULT_COLUMNS][BUFFER_SIZE];
