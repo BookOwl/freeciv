@@ -10,11 +10,9 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/ 
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
-#endif
-
+#endif 
 #include <string.h>  
 #include <stdlib.h>
 #include <windows.h>
@@ -34,15 +32,6 @@
 #include "mapview_g.h"
 #include "tilespec.h"   
 
-#include "drop_cursor.xbm"
-#include "drop_cursor_mask.xbm"
-#include "goto_cursor.xbm"
-#include "goto_cursor_mask.xbm"
-#include "nuke_cursor.xbm"
-#include "nuke_cursor_mask.xbm"
-#include "patrol_cursor.xbm"
-#include "patrol_cursor_mask.xbm"
-
 #include "graphics.h"
 #define CACHE_SIZE 32
 
@@ -52,24 +41,14 @@ struct Sprite_cache {
   HBITMAP mask;
 };
 
-extern HINSTANCE freecivhinst;
-
 static struct Sprite_cache sprite_cache[CACHE_SIZE];
 static int cache_id_count=0;
 static SPRITE *sprcache;
 static HBITMAP bitmapcache;
 SPRITE *intro_gfx_sprite=NULL;
 SPRITE *radar_gfx_sprite=NULL;
-static HBITMAP stipple;
-static HBITMAP fogmask;
-
-HCURSOR goto_cursor;
-HCURSOR drop_cursor;
-HCURSOR nuke_cursor;
-HCURSOR patrol_cursor;
-
-static void scale_cursor(int old_w, int old_h, int new_w, int new_h,
-			 char *old_bits, char *new_bits, bool flip);
+static SPRITE fog_sprite;
+static HDC hdcbig,hdcsmall;
 
 /**************************************************************************
 
@@ -82,112 +61,12 @@ load_intro_gfx(void)
 }
 
 /**************************************************************************
-  Scales and converts an .xbm cursor so win32 can use it.
-**************************************************************************/
-static void scale_cursor(int old_w, int old_h, int new_w, int new_h,
-			 char *old_bits, char *new_bits, bool flip)
-{
-  int x, y;
-  int bytew;
-
-  bytew = 1;
-  while(bytew < old_w) {
-    bytew <<= 1;
-  }
-  for (x = 0; x < new_w * new_h / 8; x++) {
-    new_bits[x] = 0;
-  }
-
-  for (y = 0; y < old_h; y++) {
-    for (x = 0; x < old_w; x++) {
-      int old_byte_pos, old_bit_pos;
-      int new_byte_pos, new_bit_pos;
-
-      old_byte_pos = (x + y * bytew) / 8;
-      old_bit_pos  = (x + y * bytew) % 8;
-      new_byte_pos = (x + y * new_w) / 8;
-      new_bit_pos  = (x + y * new_w) % 8;
-
-      if (old_bits[old_byte_pos] & (1 << old_bit_pos)) {
-	new_bits[new_byte_pos] |= (128 >> new_bit_pos);
-      }
-    }
-  }
-  if (flip) {
-    for (x = 0; x < new_w * new_h / 8; x++) {
-      new_bits[x] = ~new_bits[x];
-    }
-  }
-}
-
-/**************************************************************************
 
 **************************************************************************/
 void
 load_cursors(void)
 {
-  /* For some reason win32 lets you enter a cursor size, which
-   * only works as long as it's this size. */
-  int width = GetSystemMetrics(SM_CXCURSOR);
-  int height = GetSystemMetrics(SM_CYCURSOR);
-
-  char *new_bits = fc_malloc(width * height / 8);
-  char *new_mask_bits = fc_malloc(width * height / 8);
-
-  scale_cursor(goto_cursor_width, goto_cursor_height,
-	       width, height,
-	       goto_cursor_mask_bits, new_mask_bits, TRUE);
-  scale_cursor(goto_cursor_width, goto_cursor_height,
-	       width, height,
-	       goto_cursor_bits, new_bits, FALSE);
-
-  goto_cursor = CreateCursor(freecivhinst,
-			     goto_cursor_x_hot, goto_cursor_y_hot,
-			     width, height,
-			     new_mask_bits,
-			     new_bits);
-
-  scale_cursor(drop_cursor_width, drop_cursor_height,
-	       width, height,
-	       drop_cursor_mask_bits, new_mask_bits, TRUE);
-  scale_cursor(drop_cursor_width, drop_cursor_height,
-	       width, height,
-	       drop_cursor_bits, new_bits, FALSE);
-
-  drop_cursor = CreateCursor(freecivhinst,
-			     drop_cursor_x_hot, drop_cursor_y_hot,
-			     width, height,
-			     new_mask_bits,
-			     new_bits);
-
-  scale_cursor(nuke_cursor_width, nuke_cursor_height,
-	       width, height,
-	       nuke_cursor_mask_bits, new_mask_bits, TRUE);
-  scale_cursor(nuke_cursor_width, nuke_cursor_height,
-	       width, height,
-	       nuke_cursor_bits, new_bits, FALSE);
-
-  nuke_cursor = CreateCursor(freecivhinst,
-			     nuke_cursor_x_hot, nuke_cursor_y_hot,
-			     width, height,
-			     new_mask_bits,
-			     new_bits);
-
-  scale_cursor(patrol_cursor_width, patrol_cursor_height,
-	       width, height,
-	       patrol_cursor_mask_bits, new_mask_bits, TRUE);
-  scale_cursor(patrol_cursor_width, patrol_cursor_height,
-	       width, height,
-	       patrol_cursor_bits, new_bits, FALSE);
-
-  patrol_cursor = CreateCursor(freecivhinst,
-			       patrol_cursor_x_hot, patrol_cursor_y_hot,
-			       width, height,
-			       new_mask_bits,
-			       new_bits);
-
-  free(new_bits);
-  free(new_mask_bits);
+	/* PORTME */
 }
 
 /**************************************************************************
@@ -211,10 +90,10 @@ free_intro_radar_sprites(void)
 /**************************************************************************
 
 **************************************************************************/
-const char **
+char **
 gfx_fileextensions(void)
 {
-  static const char *ext[] =
+  static char *ext[] =
   {
     "png",
     NULL
@@ -276,114 +155,89 @@ static void sprite2hbitmap(struct Sprite *s,HBITMAP *bmp, HBITMAP *mask)
   }
 }
 
-/****************************************************************************
-  Create a new sprite by cropping and taking only the given portion of
-  the image.
-****************************************************************************/
-struct Sprite *crop_sprite(struct Sprite *source,
-			   int x, int y, int width, int height,
-			   struct Sprite *mask,
-			   int mask_offset_x, int mask_offset_y)
+/**************************************************************************
+
+**************************************************************************/
+struct Sprite *
+crop_sprite(struct Sprite *source,
+                           int x, int y, int width, int height)
 {
   SPRITE *mysprite;
   HDC hdc;
-  HDC hdcbig;
-  HDC hdcsmall;
   HBITMAP smallbitmap;
   HBITMAP smallmask;
   HBITMAP bigbitmap;
   HBITMAP bigmask;
   HBITMAP bigsave;
   HBITMAP smallsave;
-
-  hdc = GetDC(root_window);
-  mysprite = NULL;
-
-  hdcbig = CreateCompatibleDC(hdc);
-  hdcsmall = CreateCompatibleDC(hdc);
-
-  if (sprcache != source) {
-    if (bitmapcache) {
-      DeleteObject(bitmapcache);
+  hdc=GetDC(root_window);
+  mysprite=NULL;
+  if (!hdcbig)
+    hdcbig=CreateCompatibleDC(hdc);
+  if (!hdcsmall)
+    hdcsmall=CreateCompatibleDC(hdc);
+  if (sprcache!=source)
+    {
+      if (bitmapcache) DeleteObject(bitmapcache);
+      sprcache=source;
+      bitmapcache=BITMAP2HBITMAP(&(source->bmp));
     }
-    sprcache = source;
-    bitmapcache = BITMAP2HBITMAP(&(source->bmp));
-  }
-  bigbitmap = bitmapcache;
-  if (!bigbitmap) {
-    freelog(LOG_FATAL,"BITMAP2HBITMAP failed");
-    return NULL;
-  }
-  if (!(hdcsmall && hdcbig)) {
-    freelog(LOG_FATAL,"CreateCompatibleDC failed");
-  }
-  if (!(smallbitmap = CreateCompatibleBitmap(hdc, width, height))) {
-    freelog(LOG_FATAL,"CreateCompatibleBitmap failed");
-    return NULL;
-  }
+  bigbitmap=bitmapcache;
+  if (!bigbitmap)
+    {
+      freelog(LOG_FATAL,"BITMAP2HBITMAP failed");
+      return NULL;
+    }
+  if (!(hdcsmall&&hdcbig))
+    {
+      freelog(LOG_FATAL,"CreateCompatibleDC failed");
+    }
+  if (!(smallbitmap=CreateCompatibleBitmap(hdc,width,height)))
+    {
+      freelog(LOG_FATAL,"CreateCompatibleBitmap failed");
+      return NULL;
+    }
   
-  bigsave = SelectObject(hdcbig, bigbitmap);
-  smallsave = SelectObject(hdcsmall, smallbitmap);
-  BitBlt(hdcsmall, 0, 0, width, height, hdcbig, x, y, SRCCOPY);
-  smallmask = NULL;
+  bigsave=SelectObject(hdcbig,bigbitmap);
+  smallsave=SelectObject(hdcsmall,smallbitmap);
+  BitBlt(hdcsmall,0,0,width,height,hdcbig,x,y,SRCCOPY);
+  smallmask=NULL;
 
-  if (source->has_mask) {
-    bigmask = BITMAP2HBITMAP(&source->mask);
-    SelectObject(hdcbig, bigmask);
-    if ((smallmask = CreateBitmap(width,height, 1, 1, NULL))) {
-      SelectObject(hdcsmall, smallmask);
-      BitBlt(hdcsmall, 0, 0, width, height, hdcbig, x, y, SRCCOPY);
+  if (source->has_mask)
+    {
+      bigmask=BITMAP2HBITMAP(&source->mask);
+      SelectObject(hdcbig,bigmask);
+      if ((smallmask=CreateBitmap(width,height,1,1,NULL)))
+        {
+          SelectObject(hdcsmall,smallmask);
+          BitBlt(hdcsmall,0,0,width,height,hdcbig,x,y,SRCCOPY);
+        }
+      SelectObject(hdcbig,bigbitmap);
+      DeleteObject(bigmask);
     }
-    SelectObject(hdcbig, bigbitmap);
-    DeleteObject(bigmask);
-  }
 
-  if (mask && mask->has_mask) {
-    bigmask = BITMAP2HBITMAP(&mask->mask);
-    SelectObject(hdcbig, bigmask);
-    if (!smallmask) {
-      smallmask = CreateBitmap(width,height, 1, 1, NULL);
-      SelectObject(hdcsmall, smallmask);
+  mysprite=fc_malloc(sizeof(struct Sprite));
+  mysprite->cache_id=0;
+  mysprite->width=width;
+  mysprite->height=height;
+  HBITMAP2BITMAP(smallbitmap,&mysprite->bmp);
+  mysprite->has_mask=0;
+  if (smallmask)
+    {
+      mysprite->has_mask=1;
+      HBITMAP2BITMAP(smallmask,&mysprite->mask);
     }
-    BitBlt(hdcsmall, 0, 0, width, height, hdcbig,
-	   x - mask_offset_x, y - mask_offset_y, SRCPAINT);
-    
-    SelectObject(hdcbig, bigbitmap);
-    DeleteObject(bigmask);
-  }
 
-  mysprite = fc_malloc(sizeof(struct Sprite));
-  mysprite->cache_id = 0;
-  mysprite->width = width;
-  mysprite->height = height;
-  HBITMAP2BITMAP(smallbitmap, &mysprite->bmp);
-  mysprite->has_mask = 0;
-  if (smallmask) {
-    mysprite->has_mask = 1;
-    HBITMAP2BITMAP(smallmask, &mysprite->mask);
-  }
-
-  SelectObject(hdcbig, bigsave);
-  SelectObject(hdcsmall, smallsave);
-  ReleaseDC(root_window, hdc);
-  DeleteDC(hdcbig);
-  DeleteDC(hdcsmall);
-  if (smallmask) {
-    DeleteObject(smallmask);
-  }
+  SelectObject(hdcbig,bigsave);
+  SelectObject(hdcsmall,smallsave);
+  ReleaseDC(root_window,hdc);
+  if (smallmask) DeleteObject(smallmask);
   DeleteObject(smallbitmap);
-
+     
+   
   return mysprite;
 }
 
-/****************************************************************************
-  Find the dimensions of the sprite.
-****************************************************************************/
-void get_sprite_dimensions(struct Sprite *sprite, int *width, int *height)
-{
-  *width = sprite->width;
-  *height = sprite->height;
-}
 
 /**************************************************************************
 
@@ -393,21 +247,35 @@ void init_fog_bmp(void)
   int x,y;
   HBITMAP old;
   HDC hdc;
+  HBITMAP fog;
   if (!is_isometric)
     return;
   hdc=CreateCompatibleDC(NULL);
-  stipple = CreateCompatibleBitmap(hdc,NORMAL_TILE_WIDTH,NORMAL_TILE_HEIGHT);
-  fogmask = CreateCompatibleBitmap(hdc,NORMAL_TILE_WIDTH,NORMAL_TILE_HEIGHT);
-  old = SelectObject(hdc, stipple);
+  fog=CreateCompatibleBitmap(hdc,NORMAL_TILE_WIDTH,NORMAL_TILE_HEIGHT);
+  old=SelectObject(hdc,fog);
   BitBlt(hdc,0,0,NORMAL_TILE_WIDTH,NORMAL_TILE_HEIGHT,NULL,0,0,BLACKNESS);
+  SelectObject(hdc,old);
+  fog_sprite.width=NORMAL_TILE_WIDTH;
+  fog_sprite.height=NORMAL_TILE_HEIGHT;
+  HBITMAP2BITMAP(fog,&fog_sprite.bmp);
+  DeleteObject(fog);
+  fog_sprite.has_mask=1;
+  fog=BITMAP2HBITMAP(&sprites.black_tile->mask);
+  old=SelectObject(hdc,fog);
   for(x=0;x<NORMAL_TILE_WIDTH;x++)
     for(y=0;y<NORMAL_TILE_HEIGHT;y++)
       {
-	if ((x+y)&1)
-	  SetPixel(hdc, x, y, RGB(255,255,255));
+        if (!GetPixel(hdc,x,y))
+          {
+            if ((x+y)&1)
+              SetPixel(hdc,x,y,RGB(255,255,255));
+          }
       }
-  SelectObject(hdc, old);
-  DeleteDC(hdc);  
+  SelectObject(hdc,old);
+  HBITMAP2BITMAP(fog,&fog_sprite.mask);
+  DeleteObject(fog);
+  DeleteObject(hdc);
+  
 }
 
 /***************************************************************************
@@ -570,11 +438,11 @@ void draw_sprite(struct Sprite *sprite, HDC hdc, int x, int y)
 /**************************************************************************
 
 **************************************************************************/
-static void draw_sprite_part_with_mask(struct Sprite *sprite,
-				       struct Sprite *sprite_mask,
-				       HDC hdc,
-				       int x, int y,int w, int h,
-				       int xsrc, int ysrc)
+void  draw_sprite_part_with_mask(struct Sprite *sprite,
+				 struct Sprite *sprite_mask,
+				 HDC hdc,
+				 int x, int y,int w, int h,
+				 int xsrc, int ysrc)
 {
   HDC hdccomp;
   HDC hdcmask;
@@ -619,80 +487,37 @@ void draw_sprite_part(struct Sprite *sprite,HDC hdc,
 
 **************************************************************************/
 void draw_fog_part(HDC hdc,int x, int y,int w, int h,
-		   int xsrc, int ysrc, struct Sprite *sprite_mask)
+		   int xsrc, int ysrc)
 {
-  HDC hdcmask;
-  HDC hdcsrc;
-
-  HBITMAP tempmask;
-  HBITMAP tempsrc;
-
-  HBITMAP maskbit;
-  HBITMAP dummy;
-
-  if (!is_isometric)
-    return;
-
-  if (xsrc < 0) {
-    x -= xsrc;
-    w += xsrc;
-    xsrc = 0;
-  }
-  if (ysrc < 0) {
-    y -= ysrc;
-    h += ysrc;
-    ysrc = 0;
-  }
-
-  sprite2hbitmap(sprite_mask,&dummy,&maskbit);
-
-  hdcsrc = CreateCompatibleDC(NULL);
-  tempsrc = SelectObject(hdcsrc, maskbit); 
-
-  hdcmask = CreateCompatibleDC(NULL);
-  tempmask = SelectObject(hdcmask, fogmask); 
-
-  BitBlt(hdcmask,0,0,w,h,hdcsrc,xsrc,ysrc,SRCCOPY);
-  
-  SelectObject(hdcsrc, stipple);
-
-  BitBlt(hdcmask,0,0,w,h,hdcsrc,xsrc,ysrc,SRCPAINT);
-
-  SelectObject(hdcsrc, tempsrc);
-  DeleteDC(hdcsrc);
-
-  BitBlt(hdc,x,y,w,h,hdcmask,0,0,SRCAND);
-
-  SelectObject(hdcmask, tempmask);
-  DeleteDC(hdcmask);
+  if (is_isometric)
+    draw_sprite_part(&fog_sprite,hdc,x,y,w,h,xsrc,ysrc);
 }
 
-#if 0
 /**************************************************************************
 
 **************************************************************************/
-static void crop_sprite_real(struct Sprite *source)
+void  crop_sprite_real(struct Sprite *source)
 {
 } 
-#endif
         
 /**************************************************************************
 
 **************************************************************************/
-void free_sprite(struct Sprite *s)
+void
+free_sprite(struct Sprite *s)
 {
-  if (s->has_mask) {
-    free(s->mask.bmBits);
-  }
-
+  if (s->has_mask)
+    {
+      free(s->mask.bmBits);
+    }
+  
+  
   free(s->bmp.bmBits);
-
+  
   free(s);
-  if (bitmapcache) {
+  if (bitmapcache)
     DeleteObject(bitmapcache);
-    bitmapcache=NULL;
-  }
-  sprcache = NULL;
+  sprcache=NULL;
 }
 
 /**************************************************************************

@@ -1,14 +1,16 @@
 ## Process this file with automake to produce Makefile.in
 
-SUBDIRS=	aicore
-
 noinst_LIBRARIES = libcivcommon.a
 
-AM_CPPFLAGS = -I../intl -I$(top_srcdir)/utility -I$(srcdir)/aicore
+INCLUDES = -I../intl
 
-## Above, note -I../intl instead of -I$(top_srcdir/intl) is deliberate.
+## Above, note -I../intl instead of -I$(top_srdir/intl) is deliberate.
 
 libcivcommon_a_SOURCES = \
+		astring.c       \
+		astring.h       \
+		capability.c	\
+		capability.h	\
 		capstr.c	\
 		capstr.h	\
 		city.c		\
@@ -17,40 +19,67 @@ libcivcommon_a_SOURCES = \
 		combat.h	\
 		connection.c	\
 		connection.h	\
+		create_lsend.pl	\
 		dataio.c	\
 		dataio.h	\
 		diptreaty.c	\
 		diptreaty.h	\
-		effects.c	\
-		effects.h	\
 		events.h	\
-		fc_types.h	\
+		fcintl.c	\
+		fcintl.h	\
 		game.c		\
 		game.h		\
-		generate_packets.py \
+		genlist.c	\
+		genlist.h	\
 		government.c	\
 		government.h	\
+		hash.c		\
+		hash.h		\
 		idex.c		\
 		idex.h		\
 		improvement.c	\
 		improvement.h	\
+		inputfile.c	\
+		inputfile.h	\
+		ioz.c		\
+		ioz.h		\
+		log.c		\
+		log.h		\
 		map.c		\
 		map.h		\
 		nation.c        \
 		nation.h        \
+		netintf.c	\
+		netintf.h	\
 		packets.c	\
 		packets.h	\
-		packets_gen.c	\
-		packets_gen.h	\
-		packets.def	\
+		packets_lsend.c	\
+		packets_lsend.h	\
 		player.c	\
 		player.h	\
+		mem.c           \
+		mem.h		\
+		rand.c		\
+		rand.h		\
+		registry.c	\
+		registry.h	\
+		sbuffer.c	\
+		sbuffer.h	\
+		shared.c	\
+		shared.h	\
 		spaceship.c	\
 		spaceship.h	\
+		speclist.h	\
+		speclist_c.h	\
+		specvec.h	\
+		specvec_c.h	\
+		support.c	\
+		support.h	\
 		tech.c		\
 		tech.h		\
-		terrain.c	\
 		terrain.h	\
+		timing.c	\
+		timing.h	\
 		unit.c		\
 		unit.h		\
 		unittype.c	\
@@ -59,18 +88,3 @@ libcivcommon_a_SOURCES = \
 		worklist.h	\
 		version.c	\
 		version.h
-
-BUILT_SOURCES = packets_gen.c packets_gen.h
-
-# ./generate_packets makes both packets_gen.[ch]
-# Feed the dependence through a fake intermediate file to avoid
-# a race condition in a parallel build (like make -j2).
-packets_gen.h packets_gen.c: packets_generate
-.INTERMEDIATE: packets_generate
-packets_generate: packets.def generate_packets.py
-	./generate_packets.py
-	touch packets_generate
-
-#libcivcommon_a_DEPENDENCIES = ../utility/libcivutility.a
-#libcivcommon_a_LIBADD       = ../utility/libcivutility.a
-

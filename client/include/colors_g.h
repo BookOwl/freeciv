@@ -27,10 +27,6 @@ enum color_std {
   COLOR_STD_LAST
 };
 
-enum line_type {
-  LINE_NORMAL, LINE_BORDER, LINE_TILE_FRAME, LINE_GOTO
-};
-
 enum Display_color_type {
   BW_DISPLAY, GRAYSCALE_DISPLAY, COLOR_DISPLAY
 };
@@ -38,5 +34,6 @@ enum Display_color_type {
 enum Display_color_type get_visual(void);
 void init_color_system(void);
 void free_color_system(void);
+void color_error(void);
 
 #endif  /* FC__COLORS_G_H */

@@ -15,9 +15,11 @@
 
 #include "shared.h"
 
-#include "fc_types.h"
-
+struct player;
+struct city;
+struct government;
 struct Sprite;			/* opaque; client-gui specific */
+struct unit;
 
 typedef int Unit_Type_id;
 /*
@@ -107,16 +109,6 @@ enum unit_flag_id {
   F_ADD_TO_CITY,      /* unit can add to city population */
   F_FANATIC,          /* Only Fundamentalist government can build
 			 these units */
-  F_GAMELOSS,         /* Losing this unit means losing the game */
-  F_UNIQUE,           /* A player can only have one unit of this type */
-  F_UNBRIBABLE,       /* Cannot be bribed */
-  F_UNDISBANDABLE,    /* Cannot be disbanded, won't easily go away */
-  F_SUPERSPY,         /* Always wins diplomatic contests */
-  F_NOHOME,           /* Has no homecity */
-  F_NO_VETERAN,       /* Cannot increase veteran level */
-  F_BOMBARDER,        /* Has the ability to bombard */
-  F_CITYBUSTER,       /* Gets double firepower against cities */
-  F_NOBUILD,          /* Unit cannot be built (barb leader etc) */
   F_LAST
 };
 #define F_MAX 64
@@ -152,27 +144,12 @@ enum unit_role_id {
   L_BARBARIAN_LEADER,   /* barbarian leader */
   L_BARBARIAN_SEA,      /* sea raider unit */
   L_BARBARIAN_SEA_TECH, /* sea raider unit, global tech required */
-  L_CITIES,		/* can found cities */
-  L_SETTLERS,		/* can improve terrain */
-  L_GAMELOSS,		/* loss results in loss of game */
-  L_DIPLOMAT,		/* can do diplomat actions */
   L_LAST
 };
 #define L_MAX 64
 
 BV_DEFINE(bv_flags, F_MAX);
 BV_DEFINE(bv_roles, L_MAX);
-
-struct veteran_type {
-    /* client */
-    char name[MAX_LEN_NAME];			/* level/rank name */
-
-    /* server */
-    double power_fact;				/* combat/work speed/diplomatic
-  						   power factor */
-    int move_bonus;
-};
-
 struct unit_type {
   char name[MAX_LEN_NAME];
   char name_orig[MAX_LEN_NAME];	      /* untranslated */
@@ -184,13 +161,12 @@ struct unit_type {
   char sound_fight_alt[MAX_LEN_NAME];
   struct Sprite *sprite;
   enum unit_move_type move_type;
-  int build_cost;			/* Use wrappers to access this. */
+  int build_cost;
   int pop_cost;  /* number of workers the unit contains (e.g., settlers, engineers)*/
   int attack_strength;
   int defense_strength;
   int move_rate;
   int tech_requirement;
-  int impr_requirement;		/* should be Impr_Type_id */
   int vision_range;
   int transport_capacity;
   int hp;
@@ -204,18 +180,12 @@ struct unit_type {
   int happy_cost;  /* unhappy people in home city */
   int shield_cost; /* normal upkeep cost */
   int food_cost;   /* settler food cost */
-  int gold_cost;   /* gold upkeep */
+  int gold_cost;   /* gold upkeep (n/a now, maybe later) */
 
   int paratroopers_range; /* only valid for F_PARATROOPERS */
   int paratroopers_mr_req;
   int paratroopers_mr_sub;
 
-  /* Additional values for the expanded veteran system */
-  struct veteran_type veteran[MAX_VET_LEVELS];
-
-  /* Values for bombardment */
-  int bombard_rate;
-  
   char *helptext;
 };
 
@@ -235,13 +205,10 @@ bool is_air_unittype(Unit_Type_id id);
 bool is_heli_unittype(Unit_Type_id id);
 bool is_ground_unittype(Unit_Type_id id);
 
-int unit_build_shield_cost(Unit_Type_id id);
-int unit_buy_gold_cost(Unit_Type_id id, int shields_in_stock);
-int unit_disband_shields(Unit_Type_id id);
+int unit_value(Unit_Type_id id);
 int unit_pop_value(Unit_Type_id id);
 
 const char *unit_name(Unit_Type_id id);
-const char *unit_name_orig(Unit_Type_id id);
 const char *unit_class_name(Unit_Class_id id);
 
 const char *get_unit_name(Unit_Type_id id);
@@ -253,11 +220,10 @@ int utype_happy_cost(struct unit_type *ut, struct government *g);
 int utype_gold_cost(struct unit_type *ut, struct government *g);
 
 int can_upgrade_unittype(struct player *pplayer, Unit_Type_id id);
-int unit_upgrade_price(const struct player * const pplayer,
-		       const Unit_Type_id from, const Unit_Type_id to);
+int unit_upgrade_price(struct player *pplayer, Unit_Type_id from,
+		       Unit_Type_id to);
 
-Unit_Type_id find_unit_type_by_name(const char *name);
-Unit_Type_id find_unit_type_by_name_orig(const char *name_orig);
+Unit_Type_id find_unit_type_by_name(const char *s);
 
 enum unit_move_type unit_move_type_from_str(const char *s);
 Unit_Class_id unit_class_from_str(const char *s);
@@ -272,9 +238,8 @@ void role_unit_precalcs(void);
 int num_role_units(int role);
 Unit_Type_id get_role_unit(int role, int index);
 Unit_Type_id best_role_unit(struct city *pcity, int role);
-Unit_Type_id best_role_unit_for_player(struct player *pplayer, int role);
-Unit_Type_id first_role_unit_for_player(struct player *pplayer, int role);
 
+void unit_type_free(Unit_Type_id id);
 void unit_types_free(void);
 
 #define unit_type_iterate(m_i)                                                \

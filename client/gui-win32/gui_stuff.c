@@ -10,9 +10,8 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/ 
-
 #ifdef HAVE_CONFIG_H
-#include <config.h>
+#include "config.h"
 #endif
 
 #include "genlist.h"
@@ -251,7 +250,7 @@ static LONG APIENTRY layout_wnd_proc(HWND hWnd,
 /**************************************************************************
 
 **************************************************************************/
-void init_layoutwindow(void)
+void init_layoutwindow()
 {
   WNDCLASS *wndclass;
   wndclass=fc_malloc(sizeof(WNDCLASS));
@@ -333,7 +332,7 @@ HWND fcwin_create_layouted_window(WNDPROC user_wndproc,
 /**************************************************************************
 
 **************************************************************************/
-static struct fcwin_box * fcwin_box_new(int horiz, HWND owner, int same_size)
+struct fcwin_box * fcwin_box_new(int horiz, HWND owner, int same_size)
 {
   struct fcwin_box *fcb;
   fcb=fc_malloc(sizeof(struct fcwin_box));
@@ -447,10 +446,9 @@ static void win_text_minsize(HWND hWnd,POINT *rcmin,char *text)
   if ((font=GetWindowFont(hWnd)))
     old=SelectObject(hdc,font);
   textrect.top=0;
-  textrect.right=640;
+  textrect.right=10000;
   textrect.left=0;
-  textrect.bottom=480;
-  DrawText(hdc,text,strlen(text),&textrect,DT_CALCRECT | DT_WORDBREAK);
+  DrawText(hdc,text,strlen(text),&textrect,DT_CALCRECT);
   if (font)
     SelectObject(hdc,old);
   ReleaseDC(hWnd,hdc);
@@ -547,7 +545,7 @@ void fcwin_box_add_win(struct fcwin_box *box,
 /**************************************************************************
 
 **************************************************************************/
-static void button_minsize(LPPOINT minsize, void *data)
+void button_minsize(LPPOINT minsize, void *data)
 {
   win_minsize(minsize,data);
   minsize->x=minsize->x+4;
@@ -836,8 +834,8 @@ static void tab_setsize(RECT *size, void *data)
   RECT rc;
   RECT rcclient;
   struct fcwin_win_data *wd;
+  struct genlist_iterator myiter;
   struct tab_data *td=data;
-  struct genlist_link *myiter;
   MoveWindow(td->win,size->left,size->top,size->right-size->left,
 	     size->bottom-size->top,TRUE);
   rc.left=size->left;
@@ -845,7 +843,7 @@ static void tab_setsize(RECT *size, void *data)
   rc.top=size->top;
   rc.bottom=size->bottom;
   TabCtrl_AdjustRect(td->win,FALSE,&rc);
-  myiter = td->tabslist.head_link;
+  genlist_iterator_init(&myiter,&td->tabslist,0);
   for(;ITERATOR_PTR(myiter);ITERATOR_NEXT(myiter)) {
     win=(HWND)ITERATOR_PTR(myiter);
     wd=(struct fcwin_win_data *)GetWindowLong(win,GWL_USERDATA);
@@ -866,11 +864,11 @@ static void tab_minsize(POINT *min,void *data)
   RECT rc;
   HWND win;
   struct fcwin_win_data *wd;
-  struct genlist_link *myiter;
+  struct genlist_iterator myiter;
   struct tab_data *td=data;
   min->x=0;
   min->y=0;
-  myiter = td->tabslist.head_link;
+  genlist_iterator_init(&myiter,&td->tabslist,0);
   for(;ITERATOR_PTR(myiter);ITERATOR_NEXT(myiter)) {
     POINT box_min;
     win=(HWND)ITERATOR_PTR(myiter);
@@ -988,7 +986,7 @@ static void combo_minsize(POINT *minsize,void *data)
 /**************************************************************************
 
 **************************************************************************/
-static void combo_setsize(LPRECT size, void *data)
+void combo_setsize(LPRECT size,void *data)
 {
   struct list_data *ld=data;
   MoveWindow(ld->win,size->left,size->top,
@@ -1142,12 +1140,12 @@ void fcwin_box_calc_sizes(struct fcwin_box *box, POINT *minsize)
   int i;
   POINT biggest_minsize;
   struct fcwin_box_item *fbi;
-  struct genlist_link *myiter;
+  struct genlist_iterator myiter;
   minsize->x=0;
   minsize->y=0;   
   biggest_minsize.x=0;
   biggest_minsize.y=0;
-  myiter = box->item_list.head_link;
+  genlist_iterator_init(&myiter,&box->item_list,0);
   for(i=0; ITERATOR_PTR(myiter); ITERATOR_NEXT(myiter)) {
     fbi=(struct fcwin_box_item *)ITERATOR_PTR(myiter);
     fbi->minsize(&fbi->min,fbi->data);
@@ -1184,7 +1182,7 @@ void fcwin_box_calc_sizes(struct fcwin_box *box, POINT *minsize)
   }
   if (box->same_size)
     {
-      myiter = box->item_list.head_link;
+      genlist_iterator_init(&myiter,&box->item_list,0);
       for(;ITERATOR_PTR(myiter);ITERATOR_NEXT(myiter)) {
 	fbi=(struct fcwin_box_item *)ITERATOR_PTR(myiter);
 	fbi->min.x=minsize->x;
@@ -1199,7 +1197,7 @@ void fcwin_box_calc_sizes(struct fcwin_box *box, POINT *minsize)
 	minsize->y*=i;
 	biggest_minsize.y*=i;
       }
-      myiter = box->item_list.head_link;
+      genlist_iterator_init(&myiter,&box->item_list,0);
       for(;ITERATOR_PTR(myiter);ITERATOR_NEXT(myiter)) {
 	fbi=(struct fcwin_box_item *)ITERATOR_PTR(myiter);
 	if (box->horiz) {
@@ -1261,7 +1259,7 @@ static int fcwin_box_layoutitem(struct fcwin_box *box,
 void fcwin_box_do_layout(struct fcwin_box *box, LPRECT size)
 {
   struct fcwin_box_item *fbi;
-  struct genlist_link *myiter;
+  struct genlist_iterator myiter;
   int r;     
   int akku;       /* Doing some kind of 
                      Bresenhams line drawing algorithm */
@@ -1277,7 +1275,7 @@ void fcwin_box_do_layout(struct fcwin_box *box, LPRECT size)
       ||(size->bottom-size->top<box->biggest_minsize.y)) {
     box->biggest_minsize.x=box->minsize.x;
     box->biggest_minsize.y=box->minsize.y;
-    myiter = box->item_list.head_link;
+    genlist_iterator_init(&myiter,&box->item_list,0);
     for(;ITERATOR_PTR(myiter);ITERATOR_NEXT(myiter)) {
       fbi=(struct fcwin_box_item *)ITERATOR_PTR(myiter);
       fbi->biggest_min.x=fbi->min.x;
@@ -1297,8 +1295,8 @@ void fcwin_box_do_layout(struct fcwin_box *box, LPRECT size)
     r=size->left;
   else
     r=size->top;
+  genlist_iterator_init(&myiter,&box->item_list,0);
   akku=0;
-  myiter = box->item_list.head_link;
   for(;ITERATOR_PTR(myiter);ITERATOR_NEXT(myiter)) {
     fbi=(struct fcwin_box_item *)ITERATOR_PTR(myiter);
    
@@ -1360,10 +1358,10 @@ void my_get_win_border(HWND hWnd,int *w,int *h)
 /**************************************************************************
 
 **************************************************************************/
-char *convertnl2crnl(const char *str)
+char *convertnl2crnl(char *str)
 {
   int i;
-  const char *old;
+  char *old;
   char *buf;
   char *newbuf;
   old=str;

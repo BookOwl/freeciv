@@ -2,12 +2,8 @@
 
 name=_("Silesian")
 plural=_("?plural:Silesians")
-class=_("Historical")
-legend=_("Silesia is a region of southern Poland that was at one time an \
-independent kingdom.")
-leader = "Wladislaw the Exile", "Henryk the Godfearing", "Josef Kozdon",
-         "Jan Kustos"
-leader_sex = "Male", "Male", "Male", "Male"
+leader="Wladislaw the Exile", "Henryk the Godfearing"
+leader_sex="Male", "Male"
 flag="f.silesia"
 flag_alt = "-"
 city_style = "European"
@@ -16,23 +12,23 @@ ruler_titles = { "government",      "male_title",      "female_title",
                  "Monarchy",        _("Prince"),         _("Princess")
                  "Democracy",       _("Prime Minister"), _("Prime Minister")
                }
+attack=0
+expand=2
+civilized=1
+advisors=100,100,100,100,100,100,100
 init_techs=""
-init_buildings=""
 
-tech_goals="The Republic", "Trade", "Feudalism", "Railroad", "Steel"
-wonder="Great Wall" ; Yes, we had own great wall ( iso-8859-2 ("Wa鲁y 娄l卤skie") )
+tech_goals="The Republic", "Trade", "Navigation", "Railroad", "Steel"
+wonder="Great Wall" ; Yes, we had own great wall ( iso-8896-2 ("Wa硑 眘kie") )
 government="Democracy"
-civilwar_nations = "polish"
 
 ; if you want your favourite city to be in more prominent place, go ahead
 ; only leave first 3 cities where they are
 
 cities =
-  "Wroclaw", "Opole", "Katowice", "Legnica", "Zielona G贸ra (hills, grassland)",
-  "Glog贸w (forest)", "Boleslawiec", "Walbrzych", "Gliwice", "Rybnik (river)", 
-  "Jelenia Gora (mountains)", "Swidnica", "Lubin", "Chojn贸w", "Malczyce", 
-  "Klodzko", "Bytom", "Oswiecim", "Zlotoryja", "Bielany", "Zgorzelec", 
-  "Zary", "Bystrzyca (river)", "Zagan", "Bogatynia", 
-  "Chocian贸w", "Nowa S贸l", "Zabrze", "Sosnowiec (forest)",
-  "Rokitki", "Luban", "Polkowice", "Lubiaz", "Kedzierzyn-Kozle",
-  "Chorz贸w", "Bielsko", "Cieszyn"
+  "Wroclaw", "Legnica", "Opole", "Katowice", "Zielona G髍a", "Glog體",
+  "Boleslawiec", "Walbrzych", "Gliwice", "Rybnik", "Jelenia Gora",
+  "Swidnica", "Lubin", "Chojn體", "Malczyce", "Klodzko", "Bytom",
+  "Oswiecim", "Zlotoryja", "Bielany", "Zgorzelec", "Zary", "Bystrzyca",
+  "Zagan", "Bogatynia", "Chocian體", "Nowa S髄", "Zabrze", "Sosnowiec",
+  "Rokitki", "Luban", "Polkowice", "Lubiaz", "Kedziezyn-Kozle"

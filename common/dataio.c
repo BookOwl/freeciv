@@ -23,20 +23,20 @@
 #include <config.h>
 #endif
 
-#include <assert.h>
-#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
+#include <limits.h>
 
-#ifdef HAVE_ARPA_INET_H
-#include <arpa/inet.h>
+#ifdef HAVE_SYS_TYPES_H
+#include <sys/types.h>
 #endif
 #ifdef HAVE_NETINET_IN_H
 #include <netinet/in.h>
 #endif
-#ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
+#ifdef HAVE_ARPA_INET_H
+#include <arpa/inet.h>
 #endif
 #ifdef HAVE_WINSOCK
 #include <winsock.h>
@@ -46,12 +46,15 @@
 #include "events.h"
 #include "log.h"
 #include "mem.h"
-#include "player.h"
 #include "support.h"
 #include "tech.h"
 #include "worklist.h"
 
 #include "dataio.h"
+
+static const int city_map_index[20] = {
+  1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 21, 22, 23
+};
 
 /**************************************************************************
 ...
@@ -381,18 +384,41 @@ void dio_put_tech_list(struct data_out *dout, const int *value)
 /**************************************************************************
 ...
 **************************************************************************/
-void dio_put_worklist(struct data_out *dout, const struct worklist *pwl)
+void dio_put_worklist(struct data_out *dout, const struct worklist *pwl,
+		      bool real_wl)
 {
   dio_put_bool8(dout, pwl->is_valid);
 
   if (pwl->is_valid) {
     int i, length = worklist_length(pwl);
 
+    if (real_wl) {
+      dio_put_string(dout, pwl->name);
+    } else {
+      dio_put_string(dout, "\0");
+    }
+
     dio_put_uint8(dout, length);
     for (i = 0; i < length; i++) {
       dio_put_uint8(dout, pwl->wlefs[i]);
       dio_put_uint8(dout, pwl->wlids[i]);
     }
+  }
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+void dio_put_city_map(struct data_out *dout, const char *value)
+{
+  int i;
+
+  for (i = 0; i < 20; i += 5) {
+    dio_put_uint8(dout, (value[city_map_index[i]] - '0') * 81 +
+		  (value[city_map_index[i + 1]] - '0') * 27 +
+		  (value[city_map_index[i + 2]] - '0') * 9 +
+		  (value[city_map_index[i + 3]] - '0') * 3 +
+		  (value[city_map_index[i + 4]] - '0') * 1);
   }
 }
 
@@ -481,22 +507,6 @@ void dio_get_bool32(struct data_in *din, bool * dest)
 /**************************************************************************
 ...
 **************************************************************************/
-void dio_get_sint8(struct data_in *din, int *dest)
-{
-  int tmp;
-
-  dio_get_uint8(din, &tmp);
-  if (dest) {
-    if (tmp > 0x7f) {
-      tmp -= 0x100;
-    }
-    *dest = tmp;
-  }
-}
-
-/**************************************************************************
-...
-**************************************************************************/
 void dio_get_sint16(struct data_in *din, int *dest)
 {
   int tmp;
@@ -543,7 +553,7 @@ void dio_get_string(struct data_in *din, char *dest, size_t max_dest_size)
   c = ADD_TO_POINTER(din->src, din->current);
 
   /* avoid using strlen (or strcpy) on an (unsigned char*)  --dwp */
-  for (offset = 0; offset < remaining && c[offset] != '\0'; offset++) {
+  for (offset = 0; c[offset] != '\0' && offset < remaining; offset++) {
     /* nothing */
   }
 
@@ -582,7 +592,6 @@ void dio_get_bit_string(struct data_in *din, char *dest,
 
   dio_get_uint16(din, &npack);
   if (npack >= max_dest_size) {
-      freelog(LOG_NORMAL, "Have size for %d, got %d",max_dest_size,npack);
     din->bad_bit_string = TRUE;
     dest[0] = '\0';
     return;
@@ -605,6 +614,55 @@ void dio_get_bit_string(struct data_in *din, char *dest,
 
   if (din->too_short) {
     din->bad_bit_string = TRUE;
+  }
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+void dio_get_city_map(struct data_in *din, char *dest, size_t max_dest_size)
+{
+  int i;
+
+  if (dest) {
+    assert(max_dest_size >= 26);
+    dest[0] = '2';
+    dest[4] = '2';
+    dest[12] = '1';
+    dest[20] = '2';
+    dest[24] = '2';
+    dest[25] = '\0';
+  }
+
+  if (!enough_data(din, 4)) {
+    if (dest) {
+      for (i = 0; i < 20;) {
+	int j;
+
+	for (j = 0; j < 5; j++) {
+	  dest[city_map_index[i++]] = '0';
+	}
+      }
+    }
+    return;
+  }
+
+  for (i = 0; i < 20;) {
+    int j;
+
+    dio_get_uint8(din, &j);
+
+    if (dest) {
+      dest[city_map_index[i++]] = '0' + j / 81;
+      j %= 81;
+      dest[city_map_index[i++]] = '0' + j / 27;
+      j %= 27;
+      dest[city_map_index[i++]] = '0' + j / 9;
+      j %= 9;
+      dest[city_map_index[i++]] = '0' + j / 3;
+      j %= 3;
+      dest[city_map_index[i++]] = '0' + j;
+    }
   }
 }
 
@@ -637,7 +695,7 @@ void dio_get_worklist(struct data_in *din, struct worklist *pwl)
   if (pwl->is_valid) {
     int i, length;
 
-    strcpy(pwl->name,"xyz");
+    dio_get_string(din, pwl->name, MAX_LEN_NAME);
 
     dio_get_uint8(din, &length);
 
@@ -693,51 +751,4 @@ void dio_get_uint16_vec8(struct data_in *din, int **values, int stop_value)
   if (values) {
     (*values)[inx] = stop_value;
   }
-}
-
-void dio_get_diplstate(struct data_in *din, struct player_diplstate *pds)
-{
-  dio_get_uint8(din, (int *) &pds->type);
-  dio_get_uint16(din, &pds->turns_left);
-  dio_get_uint16(din, &pds->contact_turns_left);
-  dio_get_uint8(din, &pds->has_reason_to_cancel);
-}
-
-void dio_put_diplstate(struct data_out *dout,
-		       const struct player_diplstate *pds)
-{
-  dio_put_uint8(dout, pds->type);
-  dio_put_uint16(dout, pds->turns_left);
-  dio_put_uint16(dout, pds->contact_turns_left);
-  dio_put_uint8(dout, pds->has_reason_to_cancel);
-}
-
-void dio_get_effect(struct data_in *din, struct impr_effect *peffect)
-{
-  dio_get_uint8(din, (int *) &(peffect->type));
-  dio_get_uint8(din, (int *) &(peffect->range));
-  dio_get_sint16(din, &peffect->amount);
-  dio_get_uint8(din, &peffect->survives);
-  dio_get_uint8(din, (int *) &peffect->cond_bldg);
-  dio_get_uint8(din, &peffect->cond_gov);
-  dio_get_uint8(din, &peffect->cond_adv);
-  dio_get_uint8(din, (int *) &(peffect->cond_eff));
-  dio_get_uint8(din, (int *) &(peffect->aff_unit));
-  dio_get_sint16(din, (int *) &(peffect->aff_terr));
-  dio_get_uint16(din, (int *) &(peffect->aff_spec));
-}
-
-void dio_put_effect(struct data_out *dout, const struct impr_effect *peffect)
-{
-  dio_put_uint8(dout, peffect->type);
-  dio_put_uint8(dout, peffect->range);
-  dio_put_sint16(dout, peffect->amount);
-  dio_put_uint8(dout, peffect->survives);
-  dio_put_uint8(dout, peffect->cond_bldg);
-  dio_put_uint8(dout, peffect->cond_gov);
-  dio_put_uint8(dout, peffect->cond_adv);
-  dio_put_uint8(dout, peffect->cond_eff);
-  dio_put_uint8(dout, peffect->aff_unit);
-  dio_put_sint16(dout, peffect->aff_terr);
-  dio_put_uint16(dout, peffect->aff_spec);
 }

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -18,14 +17,12 @@
 #include <assert.h>
 #include <string.h>
 
-#include "fcintl.h"
-#include "map.h"
 #include "mem.h"
-
-#include "citydlg_g.h"
-#include "mapview_g.h"
 #include "messagewin_g.h"
 #include "options.h"
+#include "fcintl.h"
+#include "mapview_g.h"
+#include "citydlg_g.h"
 
 #include "messagewin_common.h"
 
@@ -105,14 +102,14 @@ void clear_notify_window(void)
 /**************************************************************************
 ...
 **************************************************************************/
-void add_notify_window(char *message, int x, int y, enum event_type event)
+void add_notify_window(struct packet_generic_message *packet)
 {
   const size_t min_msg_len = 50;
-  const char *game_prefix1 = "Game: ";
-  const char *game_prefix2 = _("Game: ");
+  char *game_prefix1 = "Game: ";
+  char *game_prefix2 = _("Game: ");
   size_t gp_len1 = strlen(game_prefix1);
   size_t gp_len2 = strlen(game_prefix2);
-  char *s = fc_malloc(MAX(strlen(message), min_msg_len) + 1);
+  char *s = fc_malloc(MAX(strlen(packet->message), min_msg_len) + 1);
   int i, nspc;
 
   change = TRUE;
@@ -122,12 +119,12 @@ void add_notify_window(char *message, int x, int y, enum event_type event)
     messages = fc_realloc(messages, messages_alloc * sizeof(*messages));
   }
 
-  if (strncmp(message, game_prefix1, gp_len1) == 0) {
-    strcpy(s, message + gp_len1);
-  } else if (strncmp(message, game_prefix2, gp_len2) == 0) {
-    strcpy(s, message + gp_len2);
+  if (strncmp(packet->message, game_prefix1, gp_len1) == 0) {
+    strcpy(s, packet->message + gp_len1);
+  } else if (strncmp(packet->message, game_prefix2, gp_len2) == 0) {
+    strcpy(s, packet->message + gp_len2);
   } else {
-    strcpy(s, message);
+    strcpy(s, packet->message);
   }
 
   nspc = min_msg_len - strlen(s);
@@ -135,11 +132,11 @@ void add_notify_window(char *message, int x, int y, enum event_type event)
     strncat(s, "                                                  ", nspc);
   }
 
-  messages[messages_total].x = x;
-  messages[messages_total].y = y;
-  messages[messages_total].event = event;
+  messages[messages_total].x = packet->x;
+  messages[messages_total].y = packet->y;
+  messages[messages_total].event = packet->event;
   messages[messages_total].descr = s;
-  messages[messages_total].location_ok = (x != -1 && y != -1);
+  messages[messages_total].location_ok = (packet->x != -1 && packet->y != -1);
   messages[messages_total].visited = FALSE;
   messages_total++;
 
@@ -201,15 +198,12 @@ void meswin_popup_city(int message_index)
       center_tile_mapcanvas(x, y);
     }
 
-    if (pcity && city_owner(pcity) == game.player_ptr) {
+    if (pcity) {
       /* If the event was the city being destroyed, pcity will be NULL
-       * and we'd better not try to pop it up.  It's also possible that
-       * events will happen on enemy cities; we generally don't want to pop
-       * those dialogs up either (although it's hard to be certain).
-       *
-       * In both cases, it would be better if the popup button weren't
-       * highlighted at all - this is left up to the GUI. */
-      popup_city_dialog(pcity, FALSE);
+       * and we'd better not try to pop it up.  In this case, it would
+       * be better if the popup button weren't highlighted at all, but
+       * that's OK. */
+      popup_city_dialog(pcity, 0);
     }
   }
 }

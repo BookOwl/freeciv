@@ -18,16 +18,17 @@
 struct connection;
 struct conn_list;
 
-void page_conn(struct conn_list *dest, const char *caption, const char *headline,
-	       const char *lines);
+void page_conn(struct conn_list *dest, char *caption, char *headline,
+	       char *lines);
+void page_conn_etype(struct conn_list *dest, char *caption, char *headline,
+		     char *lines, int event);
 
 void make_history_report(void);
 void report_wonders_of_the_world(struct conn_list *dest);
 void report_top_five_cities(struct conn_list *dest);
-bool is_valid_demography(const char *demography, const char **error_message);
+bool is_valid_demography(const char *demographics, char **error_message);
 void report_demographics(struct connection *pconn);
-void report_progress_scores(void);
-void report_final_scores(void);
+void report_scores(bool final);
 
 /* See also report_server_options() in stdinhand.h */
 

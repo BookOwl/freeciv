@@ -10,18 +10,18 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
-#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
+#include <assert.h>
 
-#include <gdk/gdkkeysyms.h>
 #include <gtk/gtk.h>
+#include <gdk/gdkkeysyms.h>
 
 #include "city.h"
 #include "fcintl.h"
@@ -32,24 +32,21 @@
 #include "support.h"
 #include "unit.h"
 
-#include "cityrepdata.h"
-#include "civclient.h"
-#include "climisc.h"
-#include "clinet.h"
-#include "cma_fec.h"
-#include "options.h"
-#include "packhand.h"
-
 #include "chatline.h"
 #include "citydlg.h"
+#include "cityrepdata.h"
+#include "clinet.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "mapview.h"
-#include "mapctrl.h"    /* is_city_hilited() */
+#include "packhand.h"
 #include "optiondlg.h"
+#include "options.h"
 #include "repodlgs.h"
+#include "climisc.h"
 
 #include "cityrep.h"
+#include "cma_fec.h"
 
 #define NEG_VAL(x)  ((x)<0 ? (x) : (-x))
 #define CMA_NONE	(-1)
@@ -88,25 +85,6 @@ static GtkWidget *city_change_all_to_list;
 static GtkWidget *city_select_command;
 
 static int city_dialog_shell_is_modal;
-
-/*******************************************************************
- Replacement for the Gtk+ standard compare function for CLISTs,
- to enable correct sorting of numbers included in text strings.
-*******************************************************************/
-static gint report_sort(GtkCList *report,
-			gconstpointer ptr1, gconstpointer ptr2)
-{
-  const GtkCListRow *row1 = ptr1;
-  const GtkCListRow *row2 = ptr2;
-  const char *buf1, *buf2;
-
-  /* Retrieve the text of the fields... */
-  buf1 = GTK_CELL_TEXT(row1->cell[report->sort_column])->text;
-  buf2 = GTK_CELL_TEXT(row2->cell[report->sort_column])->text;
-
-  /* ...and perform a comparison. */
-  return cityrepfield_compare(buf1, buf2);
-}
 
 /****************************************************************
  Sort cities by column...
@@ -172,32 +150,19 @@ static void get_city_table_header(char *text[], int n)
 ****************************************************************/
 void popup_city_report_dialog(bool make_modal)
 {
-  if (!city_dialog_shell) {
-    city_dialog_shell_is_modal = make_modal;
+  if(!city_dialog_shell) {
+      city_dialog_shell_is_modal=make_modal;
+    
+      if(make_modal)
+	gtk_widget_set_sensitive(top_vbox, FALSE);
+      
+      create_city_report_dialog(make_modal);
+      gtk_set_relative_position(toplevel, city_dialog_shell, 10, 10);
 
-    if (make_modal) {
-      gtk_widget_set_sensitive(top_vbox, FALSE);
-    }
-
-    create_city_report_dialog(make_modal);
-    gtk_set_relative_position(toplevel, city_dialog_shell, 10, 10);
-  }
-  gtk_window_show(GTK_WINDOW(city_dialog_shell));
-  hilite_cities_from_canvas();
+      gtk_widget_show(city_dialog_shell);
+   }
 }
 
-/****************************************************************
- Closes the city report dialog.
-****************************************************************/
-void popdown_city_report_dialog(void)
-{
-  if (city_dialog_shell) {
-    if (city_dialog_shell_is_modal) {
-      gtk_widget_set_sensitive(top_vbox, TRUE);
-    }
-    gtk_window_hide(GTK_WINDOW(city_dialog_shell));
-  }
-}
 
 /****************************************************************
 ...
@@ -286,8 +251,7 @@ static void select_impr_or_unit_callback(GtkWidget *w, gpointer data)
   cid cid = GPOINTER_TO_INT(data);
   gint i;
   GtkObject *parent = GTK_OBJECT(w->parent);
-  TestCityFunc test_func =
-      (TestCityFunc) gtk_object_get_data(parent, "freeciv_test_func");
+  TestCityFunc test_func = gtk_object_get_data(parent, "freeciv_test_func");
   bool change_prod = 
     GPOINTER_TO_INT(gtk_object_get_data(parent, "freeciv_change_prod"));
 
@@ -313,8 +277,13 @@ static void select_impr_or_unit_callback(GtkWidget *w, gpointer data)
 
       connection_do_buffer(&aconnection);  
       for (; selection; selection = g_list_next(selection)) {
-	last_request_id = city_change_production(city_from_glist(selection),
-						 is_unit, id);
+	struct packet_city_request packet;
+
+	packet.city_id = city_from_glist(selection)->id;
+	packet.build_id = id;
+	packet.is_build_id_unit_id = is_unit;
+	last_request_id = send_packet_city_request(&aconnection, &packet,
+						   PACKET_CITY_CHANGE);
       }
 
       connection_do_unbuffer(&aconnection);
@@ -391,7 +360,7 @@ static void select_cma_callback(GtkWidget * w, gpointer data)
   GtkObject *parent = GTK_OBJECT(w->parent);
   bool change_cma =
       GPOINTER_TO_INT(gtk_object_get_data(parent, "freeciv_change_cma"));
-  struct cm_parameter parameter;
+  struct cma_parameter parameter;
 
   /* If this is not the change button but the select cities button. */
   if (!change_cma) {
@@ -408,7 +377,7 @@ static void select_cma_callback(GtkWidget * w, gpointer data)
       } else if (index == CMA_NONE && !controlled) {
 	select = 1;
       } else if (index >= 0 && controlled &&
-		 cm_are_parameter_equal(&parameter,
+		 cma_are_parameter_equal(&parameter,
 					 cmafec_preset_get_parameter(index))) {
 	select = 1;
       }
@@ -454,7 +423,7 @@ static void select_cma_callback(GtkWidget * w, gpointer data)
 static void append_cma_to_menu(GtkWidget * menu, bool change_cma)
 {
   int i;
-  struct cm_parameter parameter;
+  struct cma_parameter parameter;
   GtkWidget *w;
 
   if (change_cma) {
@@ -511,8 +480,8 @@ static void append_cma_to_menu(GtkWidget * menu, bool change_cma)
       found = 0;
       city_list_iterate(game.player_ptr->cities, pcity) {
 	if (cma_is_city_under_agent(pcity, &parameter) &&
-	    cm_are_parameter_equal(&parameter,
-				   cmafec_preset_get_parameter(i))) {
+	    cma_are_parameter_equal(&parameter,
+				    cmafec_preset_get_parameter(i))) {
 	  found = 1;
 	  break;
 	}
@@ -688,8 +657,6 @@ static void create_city_report_dialog(bool make_modal)
   gtk_widget_show_all( GTK_DIALOG(city_dialog_shell)->vbox );
   gtk_widget_show_all( GTK_DIALOG(city_dialog_shell)->action_area );
 
-  gtk_clist_set_compare_func(GTK_CLIST(city_list), report_sort);
-
   gtk_widget_add_accelerator(close_command, "clicked",
 	accel, GDK_Escape, 0, 0);
 
@@ -701,12 +668,11 @@ static void create_city_report_dialog(bool make_modal)
 *****************************************************************/
 static void city_list_callback(GtkWidget *w, gint row, gint column)
 {
-  gtk_widget_set_sensitive(city_change_command, can_client_issue_orders());
-  gtk_widget_set_sensitive(city_select_command, can_client_issue_orders());
   if (GTK_CLIST(city_list)->selection) {
+    gtk_widget_set_sensitive(city_change_command, TRUE);
     gtk_widget_set_sensitive(city_center_command, TRUE);
     gtk_widget_set_sensitive(city_popup_command, TRUE);
-    gtk_widget_set_sensitive(city_buy_command, can_client_issue_orders());
+    gtk_widget_set_sensitive(city_buy_command, TRUE);
   } else {
     gtk_widget_set_sensitive(city_center_command, FALSE);
     gtk_widget_set_sensitive(city_popup_command, FALSE);
@@ -763,12 +729,12 @@ city_select_coastal_callback(GtkWidget *w, gpointer data)
 
   gtk_clist_unselect_all( GTK_CLIST(city_list));
 
-  for (i = 0; i < GTK_CLIST(city_list)->rows; i++) {
-    struct city* pcity = gtk_clist_get_row_data(GTK_CLIST(city_list), i);
-    
-    if (is_ocean_near_tile(pcity->x, pcity->y)) {
-      gtk_clist_select_row(GTK_CLIST(city_list), i, 0);
-    }
+  for(i = 0; i < GTK_CLIST(city_list)->rows; i++)
+  {
+      struct city* pcity = gtk_clist_get_row_data(GTK_CLIST(city_list),i);
+
+      if (is_terrain_near_tile(pcity->x, pcity->y, T_OCEAN))
+	gtk_clist_select_row(GTK_CLIST(city_list),i,0);
   }
 
   return TRUE;
@@ -920,7 +886,7 @@ city_select_callback(GtkWidget *w, GdkEvent *event, gpointer data)
                               TRUE, FALSE, city_unit_present, FALSE);
 
   append_impr_or_unit_to_menu(menu, _("Improvements in City"), FALSE, TRUE, 
-                              FALSE, TRUE, city_building_present, FALSE);
+                              FALSE, TRUE, city_got_building, FALSE);
 
   append_impr_or_unit_to_menu(menu, _("Available Improvements"), FALSE, TRUE,
 			      FALSE, FALSE, city_can_build_impr_or_unit,
@@ -953,7 +919,7 @@ Handle callbacks from the "change all" dialog.
 *****************************************************************/
 static void city_change_all_dialog_callback(GtkWidget *w, gpointer data)
 {
-  const char *cmd = (const char *)data;
+  char *cmd = (char *)data;
 
   if (cmd) {
     GList *selection_from, *selection_to;
@@ -997,8 +963,8 @@ static void city_change_all_callback(GtkWidget * w, gpointer data)
   GList *selection;
   gint row;
   struct city *pcity;
-  static const char *title_[2][1] = { {N_("From:")},
-				      {N_("To:")}
+  static gchar *title_[2][1] = { {N_("From:")},
+				 {N_("To:")}
   };
   static gchar **title[2];
   int i, j;
@@ -1132,7 +1098,7 @@ static void city_change_all_callback(GtkWidget * w, gpointer data)
 			action_area), button, TRUE, FALSE, 0);
     gtk_signal_connect(GTK_OBJECT(button), "clicked",
 		       GTK_SIGNAL_FUNC(city_change_all_dialog_callback),
-		       (gpointer)"change");
+		       "change");
     gtk_widget_show(button);
 
     button = gtk_button_new_with_label(_("Cancel"));
@@ -1157,8 +1123,32 @@ static void city_buy_callback(GtkWidget *w, gpointer data)
 
   g_assert(current);
 
-  for (; current; current = g_list_next(current)) {
-    cityrep_buy(city_from_glist(current));
+  for(; current; current = g_list_next(current))
+  {
+      struct city *pcity = city_from_glist (current);
+      int value;
+      const char *name;
+      char buf[512];
+
+      value=city_buy_cost(pcity);    
+      if(pcity->is_building_unit)
+	name=get_unit_type(pcity->currently_building)->name;
+      else
+	name=get_impr_name_ex(pcity, pcity->currently_building);
+
+      if (game.player_ptr->economic.gold >= value)
+	{
+	  struct packet_city_request packet;
+	  packet.city_id=pcity->id;
+	  send_packet_city_request(&aconnection, &packet, PACKET_CITY_BUY);
+	}
+      else
+	{
+	  my_snprintf(buf, sizeof(buf),
+		      _("Game: %s costs %d gold and you only have %d gold."),
+		      name,value,game.player_ptr->economic.gold);
+	  append_output_window(buf);
+	}
   }
 }
 
@@ -1167,7 +1157,11 @@ static void city_buy_callback(GtkWidget *w, gpointer data)
 *****************************************************************/
 static void city_close_callback(GtkWidget *w, gpointer data)
 {
-  popdown_city_report_dialog();
+
+  if(city_dialog_shell_is_modal)
+     gtk_widget_set_sensitive(top_vbox, TRUE);
+   gtk_widget_destroy(city_dialog_shell);
+   city_dialog_shell=NULL;
 }
 
 /****************************************************************
@@ -1340,45 +1334,6 @@ void city_report_dialog_update_city(struct city *pcity)
 }
 
 /****************************************************************
- After a selection rectangle is defined, make the cities that
- are hilited on the canvas exclusively hilited in the
- City List window.
-*****************************************************************/
-void hilite_cities_from_canvas(void)
-{
-  gint i;
-
-  if (!city_dialog_shell) return;
-
-  gtk_clist_unselect_all(GTK_CLIST(city_list));
-
-  for(i = 0; i < GTK_CLIST(city_list)->rows; i++)
-  {
-    struct city *pcity = gtk_clist_get_row_data(GTK_CLIST(city_list), i);
-
-    if (is_city_hilited(pcity)) {
-      gtk_clist_select_row(GTK_CLIST(city_list), i, 0);
-    }
-  }
-}
-
-/****************************************************************
- Toggle a city's hilited status.
-*****************************************************************/
-void toggle_city_hilite(struct city *pcity, bool on_off)
-{
-  gint i;
-
-  if (!city_dialog_shell) return;
-
-  i = gtk_clist_find_row_from_data(GTK_CLIST(city_list), pcity);
-
-  on_off ?
-	gtk_clist_select_row(GTK_CLIST(city_list), i, 0):
-	gtk_clist_unselect_row(GTK_CLIST(city_list), i, 0);
-}
-
-/****************************************************************
 
 		      CITY REPORT CONFIGURE DIALOG
  
@@ -1411,7 +1366,7 @@ static void popup_city_report_config_dialog(void)
 *****************************************************************/
 static void create_city_report_config_dialog(void)
 {
-  GtkWidget *config_label, *config_ok_command, *box, *vbox;
+  GtkWidget *config_label, *config_ok_command;
   struct city_report_spec *spec;
   int i;
   
@@ -1423,24 +1378,11 @@ static void create_city_report_config_dialog(void)
   gtk_box_pack_start(GTK_BOX(GTK_DIALOG(config_shell)->vbox), config_label,
 			FALSE, FALSE, 0);
 
-  box = gtk_hbox_new(TRUE,0);
-  gtk_widget_show(box);
-  gtk_box_pack_start(GTK_BOX(GTK_DIALOG(config_shell)->vbox), box,
-		     FALSE, FALSE, 0);
-
-  vbox = gtk_vbox_new(FALSE, 0);
-  gtk_widget_show(vbox);
-  gtk_box_pack_start(GTK_BOX(box), vbox, FALSE, FALSE, 0);
-
   for(i=1, spec=city_report_specs+i; i<NUM_CREPORT_COLS; i++, spec++) {
-    if (i == NUM_CREPORT_COLS / 2 + 1) {
-      vbox = gtk_vbox_new(FALSE, 0);
-      gtk_widget_show(vbox);
-      gtk_box_pack_start(GTK_BOX(box), vbox, FALSE, FALSE, 0);
-    }
     config_toggle[i] = gtk_check_button_new_with_label(spec->explanation);
 
-    gtk_box_pack_start(GTK_BOX(vbox), config_toggle[i], FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(GTK_DIALOG(config_shell)->vbox), config_toggle[i],
+			FALSE, FALSE, 0);
   }
 
   config_ok_command = gtk_button_new_with_label(_("Close"));

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -20,8 +19,8 @@
 #include <string.h>
 
 #ifdef GENERATING_MAC  /* mac header(s) */
-#include <Controls.h>
 #include <Dialogs.h>
+#include <Controls.h>
 #endif
 
 #include "fcintl.h"
@@ -56,6 +55,9 @@ int main(int argc, char *argv[])
   /* initialize server */
   srv_init();
 
+  /* disallow running as root -- too dangerous */
+  dont_run_as_root(argv[0], "freeciv_server");
+
   /* parse command-line arguments... */
 
 #ifdef GENERATING_MAC
@@ -66,7 +68,7 @@ int main(int argc, char *argv[])
   inx = 1;
   while (inx < argc) {
     if ((option = get_option("--file", argv, &inx, argc)))
-      sz_strlcpy(srvarg.load_filename, option);
+      srvarg.load_filename = option;
     else if (is_option("--help", argv[inx])) {
       showhelp = TRUE;
       break;
@@ -89,8 +91,6 @@ int main(int argc, char *argv[])
 	showhelp = TRUE;
 	break;
       }
-    } else if ((option = get_option("--bind", argv, &inx, argc))) {
-      srvarg.bind_addr = option;
     } else if ((option = get_option("--read", argv, &inx, argc)))
       srvarg.script_filename = option;
     else if ((option = get_option("--quitidle", argv, &inx, argc))) {
@@ -98,8 +98,6 @@ int main(int argc, char *argv[])
 	showhelp = TRUE;
 	break;
       }
-    } else if (is_option("--exit-on-end", argv[inx])) {
-      srvarg.exit_on_end = TRUE;
     } else if ((option = get_option("--info", argv, &inx, argc))) {
       sz_strlcpy(srvarg.extra_metaserver_info, option);
     } else if ((option = get_option("--debug", argv, &inx, argc))) {
@@ -109,12 +107,6 @@ int main(int argc, char *argv[])
 	showhelp = TRUE;
 	break;
       }
-    } else if (is_option("--auth", argv[inx])) {
-      srvarg.auth_enabled = TRUE;
-    } else if (is_option("--Guests", argv[inx])) {
-      srvarg.auth_allow_guests = TRUE;
-    } else if (is_option("--Newusers", argv[inx])) {
-      srvarg.auth_allow_newusers = TRUE;
     } else if (is_option("--version", argv[inx]))
       showvers = TRUE;
     else {
@@ -135,10 +127,6 @@ int main(int argc, char *argv[])
 
   if (showhelp) {
     fprintf(stderr, _("Usage: %s [option ...]\nValid options are:\n"), argv[0]);
-    fprintf(stderr, _("  -a  --auth\t\tEnable server authentication.\n"));
-    fprintf(stderr, _("  -G  --Guests\t\tAllow guests to login if auth is enabled.\n"));
-    fprintf(stderr, _("  -N  --Newusers\tAllow new users to login if auth is enabled.\n"));
-    fprintf(stderr, _("  -b  --bind ADDR\tListen for clients on ADDR\n"));
 #ifdef DEBUG
     fprintf(stderr, _("  -d, --debug NUM\tSet debug log level (0 to 4,"
 		      " or 4:file1,min,max:...)\n"));
@@ -150,26 +138,22 @@ int main(int argc, char *argv[])
     fprintf(stderr, _("  -h, --help\t\tPrint a summary of the options\n"));
     fprintf(stderr, _("  -i, --info INFO\tExtra info for the metaserver\n"));
     fprintf(stderr, _("  -l, --log FILE\tUse FILE as logfile\n"));
-    fprintf(stderr, _("  -m, --meta\t\tNotify metaserver and send server's info\n"));
+    fprintf(stderr, _("  -m, --meta\t\tnotify metaserver and send server's info\n"));
     fprintf(stderr, _("  -M, --Metaserver ADDR\tSet ADDR as metaserver address\n"));
 
     fprintf(stderr, _("  -p, --port PORT\tListen for clients on port PORT\n"));
     fprintf(stderr, _("  -q, --quitidle TIME\tQuit if no players for TIME seconds\n"));
-    fprintf(stderr, _("  -e, --exit-on-end\t"
-		      "When a game ends, exit instead of restarting\n"));
     fprintf(stderr, _("  -r, --read FILE\tRead startup script FILE\n"));
     fprintf(stderr, _("  -v, --version\t\tPrint the version number\n"));
     fprintf(stderr, _("Report bugs to <%s>.\n"), BUG_EMAIL_ADDRESS);
     exit(EXIT_SUCCESS);
   }
 
-  /* disallow running as root -- too dangerous */
-  dont_run_as_root(argv[0], "freeciv_server");
-
   /* have arguments, call the main server loop... */
   srv_main();
 
-  /* Technically, we won't ever get here. We exit via server_quit. */
+  /* suppress warnings */
+  logdebug_suppress_warning;
 
   /* done */
   exit(EXIT_SUCCESS);

@@ -22,6 +22,7 @@
 
 #include "fcintl.h"
 #include "game.h"
+#include "genlist.h"
 #include "map.h"
 #include "mem.h"
 #include "packets.h"
@@ -44,7 +45,6 @@
 #include "spaceship.h"
 #include "tilespec.h"
 #include "climisc.h"
-#include "text.h"
 
 #include "spaceshipdlg.h"
 
@@ -58,15 +58,8 @@ struct spaceship_dialog {
   GtkWidget *close_command;
 };
 
-#define SPECLIST_TAG dialog
-#define SPECLIST_TYPE struct spaceship_dialog
-#include "speclist.h"
 
-#define dialog_list_iterate(dialoglist, pdialog) \
-    TYPED_LIST_ITERATE(struct spaceship_dialog, dialoglist, pdialog)
-#define dialog_list_iterate_end  LIST_ITERATE_END
-
-static struct dialog_list dialog_list;
+static struct genlist dialog_list;
 static bool dialog_list_has_been_initialised = FALSE;
 
 static struct spaceship_dialog *get_spaceship_dialog(struct player *pplayer);
@@ -81,16 +74,18 @@ static void spaceship_dialog_update_info(struct spaceship_dialog *pdialog);
 *****************************************************************/
 struct spaceship_dialog *get_spaceship_dialog(struct player *pplayer)
 {
+  struct genlist_iterator myiter;
+  
   if (!dialog_list_has_been_initialised) {
-    dialog_list_init(&dialog_list);
+    genlist_init(&dialog_list);
     dialog_list_has_been_initialised = TRUE;
   }
 
-  dialog_list_iterate(dialog_list, pdialog) {
-    if (pdialog->pplayer == pplayer) {
-      return pdialog;
-    }
-  } dialog_list_iterate_end;
+  genlist_iterator_init(&myiter, &dialog_list, 0);
+  
+  for(; ITERATOR_PTR(myiter); ITERATOR_NEXT(myiter))
+    if(((struct spaceship_dialog *)ITERATOR_PTR(myiter))->pplayer==pplayer)
+      return ITERATOR_PTR(myiter);
 
   return NULL;
 }
@@ -168,7 +163,7 @@ static void spaceship_destroy_callback(GtkWidget *w, gpointer data)
 {
   struct spaceship_dialog *pdialog = (struct spaceship_dialog *)data;
   
-  dialog_list_unlink(&dialog_list, pdialog);
+  genlist_unlink(&dialog_list, pdialog);
 
   free(pdialog);
 }
@@ -181,7 +176,11 @@ static void spaceship_response(GtkWidget *w, gint response)
   switch (response) {
   case GTK_RESPONSE_ACCEPT:
     {
-      send_packet_spaceship_launch(&aconnection);
+      struct packet_spaceship_action packet;
+
+      packet.action = SSHIP_ACT_LAUNCH;
+      packet.num = 0;
+      send_packet_spaceship_action(&aconnection, &packet);
     }
     break;
 
@@ -207,8 +206,10 @@ struct spaceship_dialog *create_spaceship_dialog(struct player *pplayer)
 				NULL,
 				0,
 				NULL);
-  setup_dialog(pdialog->shell, toplevel);
-
+  if (dialogs_on_top) {
+    gtk_window_set_transient_for(GTK_WINDOW(pdialog->shell),
+				 GTK_WINDOW(toplevel));
+  }
   gtk_widget_set_name(pdialog->shell, "Freeciv");
 
   gtk_window_set_position(GTK_WINDOW(pdialog->shell), GTK_WIN_POS_MOUSE);
@@ -249,7 +250,7 @@ struct spaceship_dialog *create_spaceship_dialog(struct player *pplayer)
   gtk_box_pack_start(GTK_BOX(hbox), pdialog->info_label, FALSE, FALSE, 0);
   gtk_widget_set_name(pdialog->info_label, "spaceship label");
 
-  dialog_list_insert(&dialog_list, pdialog);
+  genlist_insert(&dialog_list, pdialog, 0);
 
   gtk_widget_show_all(GTK_DIALOG(pdialog->shell)->vbox);
 

@@ -33,9 +33,6 @@ tiles = { "row", "column","tag"
   2,    0,  "t.grassland1"
   2,    1, "t.grassland2"
 
-  2,	0, "t.t_river1"
-  2,	1, "t.t_river2"
-
   3,    0, "t.forest1"
   3,    1, "t.forest2"
 
@@ -52,6 +49,8 @@ tiles = { "row", "column","tag"
   8,    0, "t.swamp1"
 
   9,    0, "t.jungle1"
+
+  10,   0, "t.ocean1"
 
 ; Terrain special resources:
 
@@ -131,11 +130,9 @@ is_pixel_border = 1
 
 tiles = { "row", "column","tag"
   0, 0, "t.dither_tile"
-  0, 0, "tx.darkness"
   0, 1, "tx.fog"
   0, 2, "t.black_tile"
-  0, 2, "t.unknown1"
-  0, 3, "t.ocean1"
+  0, 3, "t.coast_color"
 
   0, 4, "user.attention"
 }

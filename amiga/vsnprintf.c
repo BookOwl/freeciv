@@ -41,15 +41,11 @@ Dirk Stöcker <stoecker@epost.de>
 2000-12-28
 */
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <limits.h>
-#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 
 static char * __ultoa(register unsigned long, char *, int, int, char *);
 static void __find_arguments(const char *, va_list, void ***);

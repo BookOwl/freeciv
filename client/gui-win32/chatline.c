@@ -10,13 +10,10 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/   
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
-
 #include <windows.h>
-#include <windowsx.h>
 
 #include "fcintl.h"
 #include "game.h"
@@ -50,6 +47,9 @@
 #include <stdio.h>
 
 #include "gui_main.h"
+#include <windows.h>
+#include <windowsx.h>
+
 
 /**************************************************************************
  Handles WM_COMMAND messages from the chatline
@@ -58,14 +58,15 @@
  A backup of the string (without the newline) is sent to the server
  Is there a nicer way to handle this?
 **************************************************************************/
-void handle_chatline(void)
+void handle_chatline()
 {
   static char msg_buf[MAX_LEN_MSG-MAX_LEN_USERNAME+1];
   char msg_buf2[MAX_LEN_MSG-MAX_LEN_USERNAME+1];
-
+  struct packet_generic_message apacket;
   GetWindowText(hchatline,msg_buf2,sizeof(msg_buf2));
   if (strchr(msg_buf2,'\n')) {
-    send_chat(msg_buf);
+    sz_strlcpy(apacket.message, msg_buf);
+    send_packet_generic_message(&aconnection, PACKET_CHAT_MSG,&apacket);
     SetWindowText(hchatline,"");
   } else {
     sz_strlcpy(msg_buf, msg_buf2);
@@ -75,7 +76,7 @@ void handle_chatline(void)
 /**************************************************************************
 
 **************************************************************************/
-static void append_output_window_real(const char *astring)
+void append_output_window_real(char *astring)
 {
   int len;
   len=Edit_GetTextLength(logoutput_win);
@@ -85,19 +86,18 @@ static void append_output_window_real(const char *astring)
 }
 
 /**************************************************************************
-  Appends the string to the chat output window.  The string should be
-  inserted on its own line, although it will have no newline.
+
 **************************************************************************/
-void real_append_output_window(const char *astring, int conn_id)
+void real_append_output_window(const char *astring) 
+     /* We need to add \r to lineends */ 
 {
-  const char *str;
+
+  char *str;
   char *str2;
   char buf[512];
-
   str=astring;
   while((str2=strchr(str,'\n')))
     {
-      /* HACK: We need to add \r to lineends. */
       strncpy(buf,str,str2-str);
       buf[str2-str]=0;
       strcat(buf,"\r\n");

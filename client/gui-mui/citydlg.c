@@ -10,11 +10,11 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -38,8 +38,6 @@
 #include "packets.h"
 #include "player.h"
 #include "shared.h"
-
-#include "text.h"
 
 #include "cityrep.h"
 #include "clinet.h"
@@ -70,6 +68,10 @@
 #define SPECLIST_TYPE struct city_dialog
 #include "speclist.h"
 
+#define SPECLIST_TAG dialog
+#define SPECLIST_TYPE struct city_dialog
+#include "speclist_c.h"
+
 #define dialog_list_iterate(dialoglist, pdialog) \
     TYPED_LIST_ITERATE(struct city_dialog, dialoglist, pdialog)
 #define dialog_list_iterate_end  LIST_ITERATE_END
@@ -96,7 +98,8 @@ static void set_cityopt_values(struct city_dialog *pdialog);
 /******************************************************************
 * functions in cma_fec.c but as static
 ******************************************************************/
-static const char *get_city_growth_string(struct city *pcity, int surplus)
+static const char *const get_city_growth_string(struct city *pcity,
+						int surplus)
 {
   int stock, cost, turns;
   static char buffer[50];
@@ -143,14 +146,14 @@ static const char *const get_prod_complete_string(struct city *pcity,
 
   stock = pcity->shield_stock;
   if (pcity->is_building_unit) {
-    cost = unit_build_shield_cost(pcity->currently_building);
+    cost = get_unit_type(pcity->currently_building)->build_cost;
   } else {
     if (pcity->currently_building == B_CAPITAL) {
       my_snprintf(buffer, sizeof(buffer),
 		  get_improvement_type(pcity->currently_building)->name);
       return buffer;
     }
-    cost = impr_build_shield_cost(pcity->currently_building);
+    cost = get_improvement_type(pcity->currently_building)->build_cost;
   }
 
   stock += surplus;
@@ -195,7 +198,6 @@ struct city_info
   Object *growth_text;
 
   Object *corruption_text;
-  Object *waste_text;
   Object *pollution_text;
 };
 
@@ -268,6 +270,71 @@ struct city_dialog
   int sell_id;
   Object *sell_wnd;
 };
+
+/****************************************************************
+ ...
+*****************************************************************/
+static void request_city_change_production(struct city *pcity, int id, bool is_unit_id)
+{
+  struct packet_city_request packet;
+
+  packet.city_id = pcity->id;
+  packet.build_id = id;
+  packet.is_build_id_unit_id = is_unit_id;
+
+  send_packet_city_request(&aconnection, &packet, PACKET_CITY_CHANGE);
+}
+/****************************************************************
+ ...
+*****************************************************************/
+static void request_city_change_specialist(struct city *pcity, int from, int to)
+{
+  struct packet_city_request packet;
+
+  packet.city_id = pcity->id;
+  packet.specialist_from = from;
+  packet.specialist_to = to;
+
+  send_packet_city_request(&aconnection, &packet, PACKET_CITY_CHANGE_SPECIALIST);
+}
+/****************************************************************
+ ...
+*****************************************************************/
+static void request_city_toggle_worker(struct city *pcity, int xtile, int ytile)
+{
+  if(is_valid_city_coords(xtile, ytile))
+  {
+    struct packet_city_request packet;
+    packet.city_id = pcity->id;
+    packet.worker_x = xtile;
+    packet.worker_y = ytile;
+
+    if (pcity->city_map[xtile][ytile] == C_TILE_WORKER)
+      send_packet_city_request(&aconnection, &packet, PACKET_CITY_MAKE_SPECIALIST);
+    else if (pcity->city_map[xtile][ytile] == C_TILE_EMPTY)
+      send_packet_city_request(&aconnection, &packet, PACKET_CITY_MAKE_WORKER);
+  }
+}
+/****************************************************************
+ ...
+*****************************************************************/
+static void request_city_buy(struct city *pcity)
+{
+  struct packet_city_request packet;
+  packet.city_id = pcity->id;
+  send_packet_city_request(&aconnection, &packet, PACKET_CITY_BUY);
+}
+/****************************************************************
+ ...
+*****************************************************************/
+static void request_city_sell(struct city *pcity, int sell_id)
+{
+  struct packet_city_request packet;
+
+  packet.city_id = pcity->id;
+  packet.build_id = sell_id;
+  send_packet_city_request(&aconnection, &packet, PACKET_CITY_SELL);
+}
 
 /* End GUI Independed */
 
@@ -578,8 +645,7 @@ HOOKPROTO(city_prod_display, int, char **array, APTR msg)
 
 	  }
 
-	  my_snprintf(cost, sizeof(cost),
-		      "%d", unit_build_shield_cost(which));
+	  my_snprintf(cost, sizeof(cost), "%d", get_unit_type(which)->build_cost);
 	  my_snprintf(rounds, sizeof(rounds), "%d",
 		      city_turns_to_build(pcity, which, TRUE, TRUE));
 	}
@@ -612,7 +678,7 @@ HOOKPROTO(city_prod_display, int, char **array, APTR msg)
 
       if (which != B_CAPITAL)
       {
-	my_snprintf(cost, sizeof(cost), "%d", impr_build_shield_cost(which));
+	my_snprintf(cost, sizeof(cost), "%d", get_improvement_type(which)->build_cost);
 	my_snprintf(rounds, sizeof(rounds), "%d",
 		    city_turns_to_build(pcity, which, FALSE, TRUE));
       }
@@ -690,8 +756,7 @@ static void city_close(struct city_dialog **ppdialog)
 static void city_buy_yes(struct popup_message_data *data)
 {
   struct city *pcity = (struct city *) data->data;
-
-  city_buy_production(pcity);
+  request_city_buy(pcity);
   destroy_message_dialog(data->wnd);
 }
 
@@ -715,9 +780,8 @@ static void city_sell_yes(struct popup_message_data *data)
 {
   struct city_dialog *pdialog = (struct city_dialog *) data->data;
 
-  if (pdialog->sell_id >= 0) {
-    city_sell_improvement(pdialog->pcity, pdialog->sell_id);
-  }
+  if (pdialog->sell_id >= 0)
+    request_city_sell(pdialog->pcity, pdialog->sell_id);
 
   destroy_message_dialog(data->wnd);
   pdialog->sell_wnd = NULL;
@@ -766,13 +830,14 @@ static void misc_next_callback(struct city_dialog **ppdialog)
 /****************************************************************
  Callback for the City Name String
 *****************************************************************/
-static void city_rename_callback(struct city_dialog **ppdialog)
+static void city_rename(struct city_dialog **ppdialog)
 {
   struct city_dialog *pdialog = *ppdialog;
-  char *name = (char*)xget(pdialog->name_transparentstring,
-			   MUIA_TransparentString_Contents);
+  struct packet_city_request packet;
 
-  city_rename(pdialog->pcity, name);
+  packet.city_id=pdialog->pcity->id;
+  sz_strlcpy(packet.name, (char*)xget(pdialog->name_transparentstring, MUIA_TransparentString_Contents));
+  send_packet_city_request(&aconnection, &packet, PACKET_CITY_RENAME);
 }
 
 /**************************************************************************
@@ -793,8 +858,20 @@ static void city_unitlist(struct city_dialog **ppdialog)
 static void city_activate_units(struct city_dialog **ppdialog)
 {
   struct city_dialog *pdialog = *ppdialog;
+  int x=pdialog->pcity->x,y=pdialog->pcity->y;
+  struct unit_list *punit_list = &map_get_tile(x,y)->units;
+  struct unit *pmyunit = NULL;
 
-  activate_all_units(pdialog->pcity->x, pdialog->pcity->y);
+  if(unit_list_size(punit_list))  {
+    unit_list_iterate((*punit_list), punit) {
+      if(game.player_idx==punit->owner) {
+	pmyunit = punit;
+	request_new_unit_activity(punit, ACTIVITY_IDLE);
+      }
+    } unit_list_iterate_end;
+    if (pmyunit)
+      set_unit_focus(pmyunit);
+  }
 }
 
 /**************************************************************************
@@ -810,7 +887,8 @@ static void city_change(struct city_dialog **ppdialog)
 *****************************************************************/
 static void commit_city_worklist(struct worklist *pwl, void *data)
 {
-  struct city_dialog *pdialog = data;
+  struct packet_city_request packet;
+  struct city_dialog *pdialog = (struct city_dialog *) data;
   int k, id;
   bool is_unit;
 
@@ -843,8 +921,13 @@ static void commit_city_worklist(struct worklist *pwl, void *data)
 	(!is_unit && can_build_improvement(pdialog->pcity, id))) {
       /* ...but we're not yet building it, then switch. */
       if (!same_as_current_build) {
+
 	/* Change the current target */
-	city_change_production(pdialog->pcity, is_unit, id);
+	packet.city_id = pdialog->pcity->id;
+	packet.build_id = id;
+	packet.is_build_id_unit_id = is_unit;
+	send_packet_city_request(&aconnection, &packet,
+				 PACKET_CITY_CHANGE);
       }
 
       /* This item is now (and may have always been) the current
@@ -855,7 +938,10 @@ static void commit_city_worklist(struct worklist *pwl, void *data)
   }
 
   /* Send the rest of the worklist on its way. */
-  city_set_worklist(pdialog->pcity, pwl);
+  packet.city_id = pdialog->pcity->id;
+  copy_worklist(&packet.worklist, pwl);
+  packet.worklist.name[0] = '\0';
+  send_packet_city_request(&aconnection, &packet, PACKET_CITY_WORKLIST);
 }
 
 /****************************************************************
@@ -995,8 +1081,8 @@ static void city_sell(struct city_dialog **ppdialog)
     if (is_wonder(i))
       return;
 
-    my_snprintf(buf, sizeof(buf), _("Sell %s for %d gold?"),
-		get_impr_name_ex(pdialog->pcity, i), impr_sell_gold(i));
+    my_snprintf(buf, sizeof(buf), _("Sell %s for %d gold?"), get_impr_name_ex(pdialog->pcity, i),
+	    improvement_value(i));
 
     pdialog->sell_id = i;
     pdialog->sell_wnd = popup_message_dialog(pdialog->wnd,
@@ -1017,9 +1103,7 @@ static void city_click(struct city_map_msg *msg)
   int xtile = msg->click->x;
   int ytile = msg->click->y;
 
-  if (is_valid_city_coords(xtile, ytile)) {
-    city_toggle_worker(pcity, xtile, ytile);
-  }
+  request_city_toggle_worker(pcity, xtile, ytile);
 }
 
 /**************************************************************************
@@ -1028,27 +1112,22 @@ static void city_click(struct city_map_msg *msg)
 static void city_citizen(struct city_citizen_msg *msg)
 {
   struct city_dialog *pdialog = msg->pdialog;
-  Specialist_type_id from = msg->type, to;
+  struct city *pcity = pdialog->pcity;
 
-  switch (from)  {
-  case CITIZEN_ELVIS:
-    to = SP_SCIENTIST;
+  switch (msg->type)
+  {
+  case 0:
+    request_city_change_specialist(pcity, SP_ELVIS, SP_SCIENTIST);
     break;
 
-  case CITIZEN_SCIENTIST:
-    to = SP_TAXMAN;
-    break;
-
-  case CITIZEN_TAXMAN:
-    to = SP_ELVIST;
+  case 1:
+    request_city_change_specialist(pcity, SP_SCIENTIST, SP_TAXMAN);
     break;
 
   default:
-    assert(FALSE);
-    return;
+    request_city_change_specialist(pcity, SP_TAXMAN, SP_ELVIS);
+    break;
   }
-
-  city_change_specialist(pdialog->pcity, from, to);
 }
 
 /**************************************************************************
@@ -1056,7 +1135,7 @@ static void city_citizen(struct city_citizen_msg *msg)
 **************************************************************************/
 static void city_present(struct city_unit_msg *data)
 {
-  set_unit_focus_and_select(data->punit);
+  request_unit_selected(data->punit);
 }
 
 /****************************************************************
@@ -1103,7 +1182,7 @@ static void city_prod_change(struct city_prod **ppcprod)
     else
       which--;
 
-    city_change_production(pcprod->pcity, is_unit, which);
+    request_city_change_production(pcprod->pcity, which, is_unit);
     city_prod_destroy(ppcprod);
   }
 }
@@ -1146,7 +1225,7 @@ static void city_prod_help(struct city_prod **ppcprod)
 static void city_cma_changed(struct city_dialog **ppdialog)
 {
   struct city_dialog *pdialog = *ppdialog; 
-  struct cm_parameter param;
+  struct cma_parameter param;
   int i;
 
   cmafec_get_fe_parameter(pdialog->pcity, &param);
@@ -1154,6 +1233,7 @@ static void city_cma_changed(struct city_dialog **ppdialog)
     param.minimal_surplus[i] = (int)xget(pdialog->minimal_surplus_slider[i],MUIA_Numeric_Value);
     param.factor[i] = (int)xget(pdialog->factor_slider[i],MUIA_Numeric_Value);
   }
+  param.factor_target = FT_SURPLUS;
   param.require_happy = xget(pdialog->celebrate_check, MUIA_Selected);
   param.happy_factor = xget(pdialog->factor_slider[6],MUIA_Numeric_Value);
 
@@ -1182,11 +1262,11 @@ static void city_cma_changed(struct city_dialog **ppdialog)
 static void city_cma_change(struct city_dialog **ppdialog)
 {
   struct city_dialog *pdialog = *ppdialog; 
-  struct cm_result result;
-  struct cm_parameter param;
+  struct cma_result result;
+  struct cma_parameter param;
 
   cmafec_get_fe_parameter(pdialog->pcity, &param);
-  cm_query_result(pdialog->pcity, &param, &result);
+  cma_query_result(pdialog->pcity, &param, &result);
   cma_apply_result(pdialog->pcity, &result);
 }
 
@@ -1196,7 +1276,7 @@ static void city_cma_change(struct city_dialog **ppdialog)
 static void city_cma_permanent(struct city_dialog **ppdialog)
 {
   struct city_dialog *pdialog = *ppdialog;
-  struct cm_parameter param;
+  struct cma_parameter param;
 
   cmafec_get_fe_parameter(pdialog->pcity, &param);
   cma_put_city_under_agent(pdialog->pcity, &param);
@@ -1268,7 +1348,7 @@ void popup_city_production_dialog(struct city *pcity)
         DoMethod(pcprod->available_listview, MUIM_NList_InsertSingle, i + 1, MUIV_NList_Insert_Bottom);
 
         if (i == pcity->currently_building && !pcity->is_building_unit)
-         current = pos++;
+         current = ++pos;
 
         pos++;
       }
@@ -1288,7 +1368,7 @@ void popup_city_production_dialog(struct city *pcity)
         DoMethod(pcprod->available_listview, MUIM_NList_InsertSingle, i + 10000, MUIV_NList_Insert_Bottom);
 
         if(i == pcity->currently_building && pcity->is_building_unit)
-         current = pos++;
+         current = ++pos;
 
         pos++;
       }
@@ -1341,8 +1421,6 @@ static Object *create_city_info(struct city_info *info)
 	Child, VSpace(1), Child, VSpace(1),
 	Child, TextObject, MUIA_Font, MUIV_Font_Tiny, MUIA_Text_Contents, _("Corruption:"), End,
 	Child, info->corruption_text = TextObject, MUIA_Font, MUIV_Font_Tiny, End,
-	Child, TextObject, MUIA_Font, MUIV_Font_Tiny, MUIA_Text_Contents, _("Waste:"), End,
-	Child, info->waste_text = TextObject, MUIA_Font, MUIV_Font_Tiny, End,
 	Child, TextObject, MUIA_Font, MUIV_Font_Tiny, MUIA_Text_Contents, _("Pollution:"), End,
 	Child, info->pollution_text = TextObject, MUIA_Font, MUIV_Font_Tiny, End,
 	End;
@@ -1699,10 +1777,7 @@ static struct city_dialog *create_city_dialog(struct city *pcity)
 
     if (pdialog->name_transparentstring)
     {
-      DoMethod(pdialog->name_transparentstring, MUIM_Notify,
-	       MUIA_TransparentString_Acknowledge, MUIV_EveryTime, app, 4,
-	       MUIM_CallHook, &civstandard_hook, city_rename_callback,
-	       pdialog);
+      DoMethod(pdialog->name_transparentstring, MUIM_Notify, MUIA_TransparentString_Acknowledge, MUIV_EveryTime, app, 4, MUIM_CallHook, &civstandard_hook, city_rename, pdialog);
     }
 
     for (i=0;i<6;i++)
@@ -1757,17 +1832,27 @@ static void city_dialog_update_building(struct city_dialog *pdialog)
   struct city *pcity = pdialog->pcity;
   int max_shield, shield;
 
-  set(pdialog->buy_button, MUIA_Disabled, city_can_buy(pcity));
+  set(pdialog->buy_button, MUIA_Disabled, pcity->did_buy);
   set(pdialog->sell_button, MUIA_Disabled, pcity->did_sell || pdialog->sell_wnd);
 
   get_city_dialog_production(pcity, buf, sizeof(buf));
 
-  shield = pcity->shield_stock;
   if (pcity->is_building_unit) {
-    max_shield = unit_build_shield_cost(pcity->currently_building);
+    shield = pcity->shield_stock;
+    max_shield = get_unit_type(pcity->currently_building)->build_cost;
     descr = get_unit_type(pcity->currently_building)->name;
   } else {
-    max_shield = impr_build_shield_cost(pcity->currently_building);
+    if (pcity->currently_building == B_CAPITAL) {
+      /* You can't buy Capitalization */
+      set(pdialog->buy_button, MUIA_Disabled, TRUE);
+
+      shield = 0;
+      max_shield = 1;
+    } else {
+      shield = pcity->shield_stock;
+      max_shield =
+	  get_improvement_type(pcity->currently_building)->build_cost;
+    }
     descr = get_impr_name_ex(pcity, pcity->currently_building);
   }
 
@@ -1808,7 +1893,7 @@ static void city_dialog_update_information(struct city_dialog *pdialog, struct c
   pollutionstyle = (pcity->pollution >= 10) ? RED : NORMAL;
 
   settextf(info->food_text, "%2d (%+2d)", pcity->food_prod, pcity->food_surplus);
-  settextf(info->shield_text, "%2d (%+2d)", pcity->shield_prod + pcity->shield_waste, pcity->shield_surplus);
+  settextf(info->shield_text, "%2d (%+2d)", pcity->shield_prod, pcity->shield_surplus);
   settextf(info->trade_text, "%2d (%+2d)", pcity->trade_prod + pcity->corruption, pcity->trade_prod);
   settextf(info->gold_text, "%2d (%+2d)", pcity->tax_total, city_gold_surplus(pcity));
   settextf(info->luxury_text, "%2d", pcity->luxury_total);
@@ -1831,7 +1916,6 @@ static void city_dialog_update_information(struct city_dialog *pdialog, struct c
   }
 
   settextf(info->corruption_text, "%ld", pcity->corruption);
-  settextf(info->waste_text, "%ld", pcity->shield_waste);
   settextf(info->pollution_text, "%ld", pcity->pollution);
 }
 
@@ -1850,9 +1934,8 @@ static void city_dialog_update_map(struct city_dialog *pdialog)
 *****************************************************************/
 static void city_dialog_update_citizens(struct city_dialog *pdialog)
 {
-  int i;
+  int n;
   struct city *pcity = pdialog->pcity;
-  struct citizen_type citizens[MAX_CITY_SIZE];
 
   DoMethod(pdialog->citizen_group, MUIM_Group_InitChange);
   if (pdialog->citizen2_group)
@@ -1863,26 +1946,64 @@ static void city_dialog_update_citizens(struct city_dialog *pdialog)
 
   pdialog->citizen2_group = HGroup, GroupSpacing(0), End;
 
-  /* Get a list of the citizens. */
-  get_city_citizen_types(pcity, 4, citizens);
+  /* maybe add an i < NUM_CITIZENS_SHOWN check into every loop with own counter i */
 
-  for (i = 0; i < pcity->size; i++) {
-    Object *o = MakeSprite(get_citizen_sprite(citizens[i], i, pcity));
-
-    if (o) {
+  for (n = 0; n < pcity->ppl_happy[4]; n++)
+  {
+    Object *o = MakeSprite(get_citizen_sprite(5 + n % 2));
+    if (o)
       DoMethod(pdialog->citizen2_group, OM_ADDMEMBER, o);
+  }
 
-      /* HACK: set sensitivity on widgets */
-      switch (citizens[i]) {
-      case CITIZEN_ELVIS:
-      case CITIZEN_SCIENTIST:
-      case CITIZEN_TAXMAN:
-	DoMethod(o, MUIM_Notify, MUIA_Pressed, FALSE, o, 5, MUIM_CallHook,
-		 &civstandard_hook, city_citizen, pdialog, citizens[i]);
-	break;
-      default:
-	break;
-      }
+  for (n = 0; n < pcity->ppl_content[4]; n++)
+  {
+    Object *o = MakeSprite(get_citizen_sprite(3 + n % 2));
+    if (o)
+      DoMethod(pdialog->citizen2_group, OM_ADDMEMBER, o);
+  }
+
+
+  for (n = 0; n < pcity->ppl_unhappy[4]; n++)
+  {
+    Object *o = MakeSprite(get_citizen_sprite(7 + n % 2));
+    if (o)
+      DoMethod(pdialog->citizen2_group, OM_ADDMEMBER, o);
+  }
+
+  for (n = 0; n < pcity->ppl_angry[4]; n++) {
+    Object *o = MakeSprite(get_citizen_sprite(9 + n % 2));
+    if (o)
+      DoMethod(pdialog->citizen2_group, OM_ADDMEMBER, o);
+  }
+
+  for (n = 0; n < pcity->ppl_elvis; n++)
+  {
+    Object *o = MakeSprite(get_citizen_sprite(0));
+    if (o)
+    {
+      DoMethod(pdialog->citizen2_group, OM_ADDMEMBER, o);
+      DoMethod(o, MUIM_Notify, MUIA_Pressed, FALSE, o, 5, MUIM_CallHook, &civstandard_hook, city_citizen, pdialog, 0);
+    }
+  }
+
+  for (n = 0; n < pcity->ppl_scientist; n++)
+  {
+    Object *o = MakeSprite(get_citizen_sprite(1));
+    if (o)
+    {
+      DoMethod(pdialog->citizen2_group, OM_ADDMEMBER, o);
+      DoMethod(o, MUIM_Notify, MUIA_Pressed, FALSE, o, 5, MUIM_CallHook, &civstandard_hook, city_citizen, pdialog, 1);
+    }
+  }
+
+  for (n = 0; n < pcity->ppl_taxman; n++)
+  {
+    Object *o = MakeSprite(get_citizen_sprite(2));
+
+    if (o)
+    {
+      DoMethod(pdialog->citizen2_group, OM_ADDMEMBER, o);
+      DoMethod(o, MUIM_Notify, MUIA_Pressed, FALSE, o, 5, MUIM_CallHook, &civstandard_hook, city_citizen, pdialog, 2);
     }
   }
 
@@ -2121,8 +2242,8 @@ static void city_dialog_update_improvement_list(struct city_dialog *pdialog)
 static void refresh_cma_dialog(struct city_dialog *pdialog)
 {
   struct city *pcity = pdialog->pcity;
-  struct cm_result result;
-  struct cm_parameter param;
+  struct cma_result result;
+  struct cma_parameter param;
   int controlled = cma_is_city_under_agent(pcity, NULL);
   int preset_index;
   int i;
@@ -2130,7 +2251,7 @@ static void refresh_cma_dialog(struct city_dialog *pdialog)
   cmafec_get_fe_parameter(pcity, &param);
 
   /* fill in result label */
-  cm_query_result(pcity, &param, &result);
+  cma_query_result(pcity, &param, &result);
 
   if (!result.found_a_valid) {
     for (i = 0; i < 10; i++)
@@ -2234,8 +2355,61 @@ static void refresh_happiness_dialog(struct city_dialog *pdialog)
 
 
   /* BUILDINGS */
-  settext(pdialog->happiness_citizen_text[2],
-	  get_happiness_buildings(pcity));
+  faces = 0;
+  bptr = buf;
+  nleft = sizeof(buf);
+  my_snprintf(bptr, nleft, _("Buildings: "));
+  bptr = end_of_strn(bptr, &nleft);
+
+  if (city_got_building(pcity, B_TEMPLE)) {
+    faces++;
+    my_snprintf(bptr, nleft, get_improvement_name(B_TEMPLE));
+    bptr = end_of_strn(bptr, &nleft);
+    my_snprintf(bptr, nleft, _(". "));
+    bptr = end_of_strn(bptr, &nleft);
+  }
+  if (city_got_building(pcity, B_COURTHOUSE) && g->corruption_level == 0) {
+    faces++;
+    my_snprintf(bptr, nleft, get_improvement_name(B_COURTHOUSE));
+    bptr = end_of_strn(bptr, &nleft);
+    my_snprintf(bptr, nleft, _(". "));
+    bptr = end_of_strn(bptr, &nleft);
+  }
+  if (city_got_building(pcity, B_COLOSSEUM)) {
+    faces++;
+    my_snprintf(bptr, nleft, get_improvement_name(B_COLOSSEUM));
+    bptr = end_of_strn(bptr, &nleft);
+    my_snprintf(bptr, nleft, _(". "));
+    bptr = end_of_strn(bptr, &nleft);
+  }
+  /* hack for eliminating gtk_set_line_wrap() -mck */
+  if (faces > 2) {
+    /* sizeof("Buildings: ") */
+    my_snprintf(bptr, nleft, _("\n              "));
+    bptr = end_of_strn(bptr, &nleft);
+  }
+  if (city_got_effect(pcity, B_CATHEDRAL)) {
+    faces++;
+    my_snprintf(bptr, nleft, get_improvement_name(B_CATHEDRAL));
+    bptr = end_of_strn(bptr, &nleft);
+    if (!city_got_building(pcity, B_CATHEDRAL)) {
+      my_snprintf(bptr, nleft, _("("));
+      bptr = end_of_strn(bptr, &nleft);
+      my_snprintf(bptr, nleft, get_improvement_name(B_MICHELANGELO));
+      bptr = end_of_strn(bptr, &nleft);
+      my_snprintf(bptr, nleft, _(")"));
+      bptr = end_of_strn(bptr, &nleft);
+    }
+    my_snprintf(bptr, nleft, _(". "));
+    bptr = end_of_strn(bptr, &nleft);
+  }
+
+  if (faces == 0) {
+    my_snprintf(bptr, nleft, _("None. "));
+    bptr = end_of_strn(bptr, &nleft);
+  }
+
+  settext(pdialog->happiness_citizen_text[2], buf);
 
 
   /* UNITS */
@@ -2264,26 +2438,86 @@ static void refresh_happiness_dialog(struct city_dialog *pdialog)
   settext(pdialog->happiness_citizen_text[3], buf);
 
   /* WONDERS */
-  settext(pdialog->happiness_citizen_text[4],
-	  get_happiness_wonders(pcity));
+  faces = 0;
+  bptr = buf;
+  nleft = sizeof(buf);
+
+  my_snprintf(bptr, nleft, _("Wonders: "));
+  bptr = end_of_strn(bptr, &nleft);
+
+  if (city_affected_by_wonder(pcity, B_HANGING)) {
+    faces++;
+    my_snprintf(bptr, nleft, get_improvement_name(B_HANGING));
+    bptr = end_of_strn(bptr, &nleft);
+    my_snprintf(bptr, nleft, _(". "));
+    bptr = end_of_strn(bptr, &nleft);
+  }
+  if (city_affected_by_wonder(pcity, B_BACH)) {
+    faces++;
+    my_snprintf(bptr, nleft, get_improvement_name(B_BACH));
+    bptr = end_of_strn(bptr, &nleft);
+    my_snprintf(bptr, nleft, _(". "));
+    bptr = end_of_strn(bptr, &nleft);
+  }
+  /* hack for eliminating gtk_set_line_wrap() -mck */
+  if (faces > 1) {
+    /* sizeof("Wonders: ") */
+    my_snprintf(bptr, nleft, _("\n              "));
+    bptr = end_of_strn(bptr, &nleft);
+  }
+  if (city_affected_by_wonder(pcity, B_SHAKESPEARE)) {
+    faces++;
+    my_snprintf(bptr, nleft, get_improvement_name(B_SHAKESPEARE));
+    bptr = end_of_strn(bptr, &nleft);
+    my_snprintf(bptr, nleft, _(". "));
+    bptr = end_of_strn(bptr, &nleft);
+  }
+  if (city_affected_by_wonder(pcity, B_CURE)) {
+    faces++;
+    my_snprintf(bptr, nleft, get_improvement_name(B_CURE));
+    bptr = end_of_strn(bptr, &nleft);
+    my_snprintf(bptr, nleft, _(". "));
+    bptr = end_of_strn(bptr, &nleft);
+  }
+
+  if (faces == 0) {
+    my_snprintf(bptr, nleft, _("None. "));
+  }
+
+  settext(pdialog->happiness_citizen_text[4], buf);
 
   /* the citizen's */
   for(i=0;i<5;i++)
   {
     int j;
+    int n1 = pcity->ppl_happy[i];
+    int n2 = n1 + pcity->ppl_content[i];
+    int n3 = n2 + pcity->ppl_unhappy[i];
+    int n4 = n3 + pcity->ppl_elvis;
+    int n5 = n4 + pcity->ppl_scientist;
     int num_citizens = pcity->size;
-    struct citizen_type citizens[MAX_CITY_SIZE];
 
     DoMethod(pdialog->happiness_citizen_group[i],MUIM_Group_InitChange);
     DisposeAllChilds(pdialog->happiness_citizen_group[i]);
 
-    get_city_citizen_types(pcity, i, citizens);
-
     for (j = 0; j < num_citizens; j++) {
+      int citizen_type;
       Object *obj;
+      if (j < n1)
+        citizen_type = 5 + j % 2;
+      else if (j < n2)
+        citizen_type = 3 + j % 2;
+      else if (j < n3)
+        citizen_type = 7 + j % 2;
+      else if (j < n4)
+        citizen_type = 0;
+      else if (j < n5)
+        citizen_type = 1;
+      else
+        citizen_type = 2;
 
-      obj = MakeSprite(get_citizen_sprite(citizens[j], j, pcity));
-      if (obj) {
+      if ((obj = MakeSprite(get_citizen_sprite(citizen_type))))
+      {
 	DoMethod(pdialog->happiness_citizen_group[i], OM_ADDMEMBER, obj);
       }
     }

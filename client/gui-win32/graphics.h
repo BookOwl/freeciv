@@ -35,20 +35,19 @@ struct Sprite
   int height;
   int cache_id;
 };
-
-struct canvas
-{
-  HDC hdc;
-  HBITMAP bitmap;
-};
-
 void draw_sprite(struct Sprite *sprite,HDC hdc,int x, int y);
 void draw_sprite_part(struct Sprite *sprite,HDC hdc,
 		       int x, int y, int w, int h,int xsrc,int ysrc);
+void draw_sprite_part_with_mask(struct Sprite *sprite,
+				struct Sprite *sprite_mask,
+				HDC hdc,
+				int x, int y, int w, int h,
+				int xsrc, int ysrc);
 void init_fog_bmp(void);
 void draw_fog_part(HDC hdc,int x, int y,int w, int h,
-		   int xsrc, int ysrc, struct Sprite *sprite_mask);
+		   int xsrc, int ysrc);
 
+SPRITE *get_citizen_sprite(int frame);
 extern HBITMAP BITMAP2HBITMAP(BITMAP *bmp);
 extern SPRITE *intro_gfx_sprite;
 extern SPRITE *radar_gfx_sprite;

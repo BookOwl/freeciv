@@ -10,87 +10,76 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
-#include <assert.h>
-#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
+#include <assert.h>
 
-#ifdef HAVE_ARPA_INET_H
-#include <arpa/inet.h>
-#endif
-#ifdef HAVE_NETDB_H
-#include <netdb.h>
-#endif
-#ifdef HAVE_NETINET_IN_H
-#include <netinet/in.h>
-#endif
-#ifdef HAVE_PWD_H
-#include <pwd.h>
-#endif
-#ifdef HAVE_SYS_SELECT_H
-#include <sys/select.h>
-#endif
-#ifdef HAVE_SYS_SOCKET_H
-#include <sys/socket.h>
-#endif
-#ifdef HAVE_SYS_TIME_H
-#include <sys/time.h>
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
 #endif
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
 #endif
+#ifdef HAVE_SYS_SOCKET_H
+#include <sys/socket.h>
+#endif
 #ifdef HAVE_SYS_UIO_H
 #include <sys/uio.h>
 #endif
-#ifdef HAVE_SYS_UTSNAME_H
-#include <sys/utsname.h>
+#ifdef HAVE_SYS_TIME_H
+#include <sys/time.h>
 #endif
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
+
+#ifdef HAVE_PWD_H
+#include <pwd.h>
 #endif
+
+#ifdef HAVE_SYS_SELECT_H
+#include <sys/select.h>
+#endif
+
 #ifdef HAVE_WINSOCK
 #include <winsock.h>
 #endif
 
+#ifdef HAVE_SYS_UTSNAME_H
+#include <sys/utsname.h>
+#endif
+
 #include "capstr.h"
-#include "dataio.h"
 #include "fcintl.h"
 #include "game.h"
-#include "hash.h"
 #include "log.h"
 #include "mem.h"
 #include "netintf.h"
 #include "packets.h"
 #include "support.h"
 #include "version.h"
+#include "hash.h"
 
-#include "agents.h"
 #include "chatline_g.h"
 #include "civclient.h"
 #include "climisc.h"
-#include "connectdlg_g.h"
 #include "dialogs_g.h"		/* popdown_races_dialog() */
 #include "gui_main_g.h"		/* add_net_input(), remove_net_input() */
-#include "mapview_common.h"	/* unqueue_mapview_update */
-#include "menu_g.h"
 #include "messagewin_g.h"
 #include "options.h"
 #include "packhand.h"
 #include "plrdlg_g.h"
 #include "repodlgs_g.h"
+#include "agents.h"
+#include "mapview_common.h"	/* unqueue_mapview_update */
 
 #include "clinet.h"
 
 struct connection aconnection;
-static int socklan;
-static struct server_list *lan_servers;
-static union my_sockaddr server_addr;
+static struct sockaddr_in server_addr;
 
 /**************************************************************************
   Close socket and cleanup.  This one doesn't print a message, so should
@@ -98,17 +87,23 @@ static union my_sockaddr server_addr;
 **************************************************************************/
 static void close_socket_nomessage(struct connection *pc)
 {
-  connection_common_close(pc);
+  pc->used = FALSE;
+  pc->established = FALSE;
+  my_closesocket(pc->sock);
+
+  /* make sure not to use these accidently: */
+  free_socket_packet_buffer(pc->buffer);
+  free_socket_packet_buffer(pc->send_buffer);
+  pc->buffer = NULL;
+  pc->send_buffer = NULL;
+
   remove_net_input();
   popdown_races_dialog(); 
-  close_connection_dialog();
 
   reports_force_thaw();
   
   set_client_state(CLIENT_PRE_GAME_STATE);
   agents_disconnect();
-  update_menus();
-  client_remove_all_cli_conn();
 }
 
 /**************************************************************************
@@ -125,14 +120,14 @@ static void close_socket_callback(struct connection *pc)
   Connect to a civserver instance -- or at least try to.  On success,
   return 0; on failure, put an error message in ERRBUF and return -1.
 **************************************************************************/
-int connect_to_server(const char *username, const char *hostname, int port,
+int connect_to_server(char *name, char *hostname, int port,
 		      char *errbuf, int errbufsize)
 {
   if (get_server_address(hostname, port, errbuf, errbufsize) != 0) {
     return -1;
   }
 
-  if (try_to_connect(username, errbuf, errbufsize) != 0) {
+  if (try_to_connect(name, errbuf, errbufsize) != 0) {
     return -1;
   }
   return 0;
@@ -146,7 +141,7 @@ int connect_to_server(const char *username, const char *hostname, int port,
    - return 0 on success
      or put an error message in ERRBUF and return -1 on failure
 **************************************************************************/
-int get_server_address(const char *hostname, int port, char *errbuf,
+int get_server_address(char *hostname, int port, char *errbuf,
 		       int errbufsize)
 {
   if (port == 0)
@@ -156,11 +151,12 @@ int get_server_address(const char *hostname, int port, char *errbuf,
   if (!hostname)
     hostname = "localhost";
 
-  if (!net_lookup_service(hostname, port, &server_addr)) {
-    (void) mystrlcpy(errbuf, _("Failed looking up host."), errbufsize);
+  if (!fc_lookup_host(hostname, &server_addr)) {
+    (void) mystrlcpy(errbuf, _("Failed looking up host"), errbufsize);
     return -1;
   }
 
+  server_addr.sin_port = htons(port);
   return 0;
 }
 
@@ -169,59 +165,63 @@ int get_server_address(const char *hostname, int port, char *errbuf,
    - try to create a TCP socket and connect it to `server_addr'
    - if successful:
 	  - start monitoring the socket for packets from the server
-	  - send a "login request" packet to the server
+	  - send a "join game request" packet to the server
       and - return 0
    - if unable to create the connection, close the socket, put an error
      message in ERRBUF and return the Unix error code (ie., errno, which
      will be non-zero).
 **************************************************************************/
-int try_to_connect(const char *username, char *errbuf, int errbufsize)
+int try_to_connect(char *user_name, char *errbuf, int errbufsize)
 {
-  struct packet_server_join_req req;
+  struct packet_req_join_game req;
 
-  /* connection in progress? wait. */
-  if (aconnection.used) {
-    (void) mystrlcpy(errbuf, _("Connection in progress."), errbufsize);
-    return -1;
-  }
-  
   if ((aconnection.sock = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
-    (void) mystrlcpy(errbuf, mystrerror(), errbufsize);
+    (void) mystrlcpy(errbuf, mystrerror(errno), errbufsize);
     return -1;
   }
 
-  if (connect(aconnection.sock, &server_addr.sockaddr,
+  if (connect(aconnection.sock, (struct sockaddr *) &server_addr,
       sizeof(server_addr)) == -1) {
-    (void) mystrlcpy(errbuf, mystrerror(), errbufsize);
+    (void) mystrlcpy(errbuf, mystrerror(errno), errbufsize);
     my_closesocket(aconnection.sock);
     aconnection.sock = -1;
-#ifdef WIN32_NATIVE
-    return -1;
-#else
     return errno;
-#endif
   }
 
-  connection_common_init(&aconnection);
+  if (aconnection.buffer) {
+    /* didn't close cleanly previously? */
+    freelog(LOG_ERROR, "Unexpected buffers in try_to_connect()");
+    /* get newly initialized ones instead */
+    free_socket_packet_buffer(aconnection.buffer);
+    aconnection.buffer = NULL;
+    free_socket_packet_buffer(aconnection.send_buffer);
+    aconnection.send_buffer = NULL;
+  }
+
+  aconnection.buffer = new_socket_packet_buffer();
+  aconnection.send_buffer = new_socket_packet_buffer();
+  aconnection.last_write = 0;
   aconnection.client.last_request_id_used = 0;
   aconnection.client.last_processed_request_id_seen = 0;
   aconnection.client.request_id_of_currently_handled_packet = 0;
   aconnection.incoming_packet_notify = notify_about_incoming_packet;
   aconnection.outgoing_packet_notify = notify_about_outgoing_packet;
+  aconnection.used = TRUE;
 
   /* call gui-dependent stuff in gui_main.c */
   add_net_input(aconnection.sock);
 
   /* now send join_request package */
 
+  sz_strlcpy(req.short_name, user_name);
   req.major_version = MAJOR_VERSION;
   req.minor_version = MINOR_VERSION;
   req.patch_version = PATCH_VERSION;
   sz_strlcpy(req.version_label, VERSION_LABEL);
   sz_strlcpy(req.capability, our_capability);
-  sz_strlcpy(req.username, username);
+  sz_strlcpy(req.name, user_name);
   
-  send_packet_server_join_req(&aconnection, &req);
+  send_packet_req_join_game(&aconnection, &req);
 
   return 0;
 }
@@ -241,7 +241,7 @@ socket becomes writeable and there is still data which should be sent
 to the server.
 
 Returns:
-    -1  :  an error occurred - you should close the socket
+    -1  :  an error occured - you should close the socket
     >0  :  number of bytes read
     =0  :  no data read, would block
 **************************************************************************/
@@ -289,7 +289,7 @@ static int read_from_connection(struct connection *pc, bool block)
       }
 
       freelog(LOG_NORMAL, "error in select() return=%d errno=%d (%s)",
-	      n, errno, mystrerror());
+	      n, errno, strerror(errno));
       return -1;
     }
 
@@ -317,18 +317,15 @@ void input_from_server(int fd)
 
   if (read_from_connection(&aconnection, FALSE) >= 0) {
     enum packet_type type;
+    bool result;
+    void *packet;
 
     while (TRUE) {
-      bool result;
-      void *packet = get_packet_from_connection(&aconnection,
-						&type, &result);
-
+      packet = get_packet_from_connection(&aconnection, &type, &result);
       if (result) {
-	assert(packet != NULL);
 	handle_packet_input(packet, type);
-	free(packet);
+	packet = NULL;
       } else {
-	assert(packet == NULL);
 	break;
       }
     }
@@ -336,7 +333,7 @@ void input_from_server(int fd)
     close_socket_callback(&aconnection);
   }
 
-  unqueue_mapview_updates();
+  unqueue_mapview_update();
 }
 
 /**************************************************************************
@@ -358,19 +355,17 @@ void input_from_server_till_request_got_processed(int fd,
   while (TRUE) {
     if (read_from_connection(&aconnection, TRUE) >= 0) {
       enum packet_type type;
+      bool result;
+      void *packet;
 
       while (TRUE) {
-	bool result;
-	void *packet = get_packet_from_connection(&aconnection,
-						  &type, &result);
+	packet = get_packet_from_connection(&aconnection, &type, &result);
 	if (!result) {
-	  assert(packet == NULL);
 	  break;
 	}
 
-	assert(packet != NULL);
 	handle_packet_input(packet, type);
-	free(packet);
+	packet = NULL;
 
 	if (type == PACKET_PROCESSING_FINISHED) {
 	  freelog(LOG_DEBUG, "ifstrgp: expect=%d, seen=%d",
@@ -390,7 +385,7 @@ void input_from_server_till_request_got_processed(int fd,
   }
 
 out:
-  unqueue_mapview_updates();
+  unqueue_mapview_update();
 }
 
 #ifdef WIN32_NATIVE
@@ -487,6 +482,10 @@ static char *win_uname()
 #endif
 
 
+#define SPECLIST_TAG server
+#define SPECLIST_TYPE struct server
+#include "speclist_c.h"
+
 /**************************************************************************
  Create the list of servers from the metaserver
  The result must be free'd with delete_server_list() when no
@@ -495,9 +494,9 @@ static char *win_uname()
 struct server_list *create_server_list(char *errbuf, int n_errbuf)
 {
   struct server_list *server_list;
-  union my_sockaddr addr;
+  struct sockaddr_in addr;
   int s;
-  fz_FILE *f;
+  FILE *f;
   char *proxy_url;
   char urlbuf[512];
   char *urlpath;
@@ -533,10 +532,8 @@ struct server_list *create_server_list(char *errbuf, int n_errbuf)
 	port = 80;
       }
       s[0] = '\0';
-      s++;
-      while (my_isdigit(s[0])) {
-	s++;
-      }
+      ++s;
+      while (my_isdigit(s[0])) {++s;}
     } else {
       port = 80;
       if (!(s = strchr(server,'/'))) {
@@ -546,7 +543,7 @@ struct server_list *create_server_list(char *errbuf, int n_errbuf)
 
     if (s[0] == '/') {
       s[0] = '\0';
-      s++;
+      ++s;
     } else if (s[0] != '\0') {
       (void) mystrlcpy(errbuf, _("Invalid $http_proxy value, cannot "
 				 "find separating '/'"), n_errbuf);
@@ -556,18 +553,20 @@ struct server_list *create_server_list(char *errbuf, int n_errbuf)
     urlpath = s;
   }
 
-  if (!net_lookup_service(server, port, &addr)) {
+  if (!fc_lookup_host(server, &addr)) {
     (void) mystrlcpy(errbuf, _("Failed looking up host"), n_errbuf);
     return NULL;
   }
   
+  addr.sin_port = htons(port);
+  
   if((s = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
-    (void) mystrlcpy(errbuf, mystrerror(), n_errbuf);
+    (void) mystrlcpy(errbuf, mystrerror(errno), n_errbuf);
     return NULL;
   }
   
-  if(connect(s, &addr.sockaddr, sizeof (addr)) == -1) {
-    (void) mystrlcpy(errbuf, mystrerror(), n_errbuf);
+  if(connect(s, (struct sockaddr *) &addr, sizeof (addr)) == -1) {
+    (void) mystrlcpy(errbuf, mystrerror(errno), n_errbuf);
     my_closesocket(s);
     return NULL;
   }
@@ -598,9 +597,28 @@ struct server_list *create_server_list(char *errbuf, int n_errbuf)
               VERSION_STRING,
               client_string,
               machine_string,
-              default_tileset_name);
+              default_tile_set_name);
 
-  f = my_querysocket(s, str, strlen(str));
+#ifdef HAVE_FDOPEN
+  f=fdopen(s,"r+");
+  fwrite(str,1,strlen(str),f);
+  fflush(f);
+#else
+  {
+    int i;
+
+    f=tmpfile();
+    my_writesocket(s,str,strlen(str));
+    
+    while ((i = my_readsocket(s, str, sizeof(str))) > 0)
+      fwrite(str,1,i,f);
+    fflush(f);
+
+    my_closesocket(s);
+
+    fseek(f,0,SEEK_SET);
+  }
+#endif
 
 #define NEXT_FIELD p=strstr(p,"<TD>"); if(!p) continue; p+=4;
 #define END_FIELD  p=strstr(p,"</TD>"); if(!p) continue; *p++='\0';
@@ -609,7 +627,7 @@ struct server_list *create_server_list(char *errbuf, int n_errbuf)
   server_list = fc_malloc(sizeof(struct server_list));
   server_list_init(server_list);
 
-  while(fz_fgets(str, 512, f)) {
+  while(fgets(str, 512, f)) {
     if((0 == strncmp(str, "<TR BGCOLOR",11)) && strchr(str, '\n')) {
       char *name,*port,*version,*status,*players,*metastring;
       char *p;
@@ -637,7 +655,7 @@ struct server_list *create_server_list(char *errbuf, int n_errbuf)
       server_list_insert(server_list, pserver);
     }
   }
-  fz_fclose(f);
+  fclose(f);
 
   return server_list;
 }
@@ -661,205 +679,4 @@ void delete_server_list(struct server_list *server_list)
 
   server_list_unlink_all(server_list);
 	free(server_list);
-}
-
-/**************************************************************************
-  Broadcast an UDP package to all servers on LAN, requesting information 
-  about the server. The packet is send to all Freeciv servers in the same
-  multicast group as the client.
-**************************************************************************/
-int begin_lanserver_scan(void)
-{
-  union my_sockaddr addr;
-  struct data_out dout;
-  int sock, opt = 1;
-  unsigned char buffer[MAX_LEN_PACKET];
-  struct ip_mreq mreq;
-  const char *group;
-  unsigned char ttl;
-  size_t size;
-
-  /* Create a socket for broadcasting to servers. */
-  if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-    freelog(LOG_ERROR, "socket failed: %s", mystrerror());
-    return 0;
-  }
-
-  if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR,
-                 (char *)&opt, sizeof(opt)) == -1) {
-    freelog(LOG_ERROR, "SO_REUSEADDR failed: %s", mystrerror());
-  }
-
-  /* Set the UDP Multicast group IP address. */
-  group = get_multicast_group();
-  memset(&addr, 0, sizeof(addr));
-  addr.sockaddr_in.sin_family = AF_INET;
-  addr.sockaddr_in.sin_addr.s_addr = inet_addr(get_multicast_group());
-  addr.sockaddr_in.sin_port = htons(SERVER_LAN_PORT);
-
-  /* Set the Time-to-Live field for the packet  */
-  ttl = SERVER_LAN_TTL;
-  if (setsockopt(sock, IPPROTO_IP, IP_MULTICAST_TTL, (const char*)&ttl, 
-                 sizeof(ttl))) {
-    freelog(LOG_ERROR, "setsockopt failed: %s", mystrerror());
-    return 0;
-  }
-
-  if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (const char*)&opt, 
-                 sizeof(opt))) {
-    freelog(LOG_ERROR, "setsockopt failed: %s", mystrerror());
-    return 0;
-  }
-
-  dio_output_init(&dout, buffer, sizeof(buffer));
-  dio_put_uint8(&dout, SERVER_LAN_VERSION);
-  size = dio_output_used(&dout);
- 
-
-  if (sendto(sock, buffer, size, 0, &addr.sockaddr,
-      sizeof(addr)) < 0) {
-    freelog(LOG_ERROR, "sendto failed: %s", mystrerror());
-    return 0;
-  } else {
-    freelog(LOG_DEBUG, ("Sending request for server announcement on LAN."));
-  }
-
-  my_closesocket(sock);
-
-  /* Create a socket for listening for server packets. */
-  if ((socklan = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-    freelog(LOG_ERROR, "socket failed: %s", mystrerror());
-    return 0;
-  }
-
-  my_nonblock(socklan);
-
-  if (setsockopt(socklan, SOL_SOCKET, SO_REUSEADDR,
-                 (char *)&opt, sizeof(opt)) == -1) {
-    freelog(LOG_ERROR, "SO_REUSEADDR failed: %s", mystrerror());
-  }
-                                                                               
-  memset(&addr, 0, sizeof(addr));
-  addr.sockaddr_in.sin_family = AF_INET;
-  addr.sockaddr_in.sin_addr.s_addr = htonl(INADDR_ANY); 
-  addr.sockaddr_in.sin_port = htons(SERVER_LAN_PORT + 1);
-
-  if (bind(socklan, &addr.sockaddr, sizeof(addr)) < 0) {
-    freelog(LOG_ERROR, "bind failed: %s", mystrerror());
-    return 0;
-  }
-
-  mreq.imr_multiaddr.s_addr = inet_addr(group);
-  mreq.imr_interface.s_addr = htonl(INADDR_ANY);
-  if (setsockopt(socklan, IPPROTO_IP, IP_ADD_MEMBERSHIP, 
-                 (const char*)&mreq, sizeof(mreq)) < 0) {
-    freelog(LOG_ERROR, "setsockopt failed: %s", mystrerror());
-    return 0;
-  }
-
-  lan_servers = fc_malloc(sizeof(struct server_list));
-  server_list_init(lan_servers);
-
-  return 1;
-}
-
-/**************************************************************************
-  Listens for UDP packets broadcasted from a server that responded
-  to the request-packet sent from the client. 
-**************************************************************************/
-struct server_list *get_lan_server_list(void) {
-
-# if defined(__VMS) && !defined(_DECC_V4_SOURCE)
-    size_t fromlen;
-# else
-    int fromlen;
-# endif
-  union my_sockaddr fromend;
-  struct hostent *from;
-  char msgbuf[128];
-  int type;
-  struct data_in din;
-  char servername[512];
-  char port[256];
-  char version[256];
-  char status[256];
-  char players[256];
-  char metastring[1024];
-  fd_set readfs, exceptfs;
-  struct timeval tv;
-
-  FD_ZERO(&readfs);
-  FD_ZERO(&exceptfs);
-  FD_SET(socklan, &exceptfs);
-  FD_SET(socklan, &readfs);
-  tv.tv_sec = 0;
-  tv.tv_usec = 0;
-
-  if (select(socklan + 1, &readfs, NULL, &exceptfs, &tv) == -1) {
-    freelog(LOG_ERROR, "select failed: %s", mystrerror());
-  }
-
-  if (!FD_ISSET(socklan, &readfs)) {
-    return lan_servers;
-  }
-
-  dio_input_init(&din, msgbuf, sizeof(msgbuf));
-  fromlen = sizeof(fromend);
-
-  /* Try to receive a packet from a server. */ 
-  if (0 < recvfrom(socklan, msgbuf, sizeof(msgbuf), 0,
-                   &fromend.sockaddr, &fromlen)) {
-    struct server *pserver;
-
-    dio_get_uint8(&din, &type);
-    if (type != SERVER_LAN_VERSION) {
-      return lan_servers;
-    }
-    dio_get_string(&din, servername, sizeof(servername));
-    dio_get_string(&din, port, sizeof(port));
-    dio_get_string(&din, version, sizeof(version));
-    dio_get_string(&din, status, sizeof(status));
-    dio_get_string(&din, players, sizeof(players));
-    dio_get_string(&din, metastring, sizeof(metastring));
-
-    if (!mystrcasecmp("none", servername)) {
-      from = gethostbyaddr((char *) &fromend.sockaddr_in.sin_addr,
-			   sizeof(fromend.sockaddr_in.sin_addr), AF_INET);
-      sz_strlcpy(servername, inet_ntoa(fromend.sockaddr_in.sin_addr));
-    }
-
-    /* UDP can send duplicate or delayed packets. */
-    server_list_iterate(*lan_servers, aserver) {
-      if (!mystrcasecmp(aserver->name, servername) 
-          && !mystrcasecmp(aserver->port, port)) {
-        return lan_servers;
-      } 
-    } server_list_iterate_end;
-
-    freelog(LOG_DEBUG,
-            ("Received a valid announcement from a server on the LAN."));
-    
-    pserver =  (struct server*)fc_malloc(sizeof(struct server));
-    pserver->name = mystrdup(servername);
-    pserver->port = mystrdup(port);
-    pserver->version = mystrdup(version);
-    pserver->status = mystrdup(status);
-    pserver->players = mystrdup(players);
-    pserver->metastring = mystrdup(metastring);
-
-    server_list_insert(lan_servers, pserver);
-  } else {
-    return lan_servers;
-  }                                       
-
-  return lan_servers;
-}
-
-/**************************************************************************
-  Closes the socket listening on the lan and frees the list of LAN servers.
-**************************************************************************/
-void finish_lanserver_scan(void) 
-{
-  my_closesocket(socklan);
-  delete_server_list(lan_servers);
 }

@@ -33,28 +33,27 @@ The info string should look like this:
 #include <config.h>
 #endif
 
-#include <errno.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
+#include <stdlib.h>
+#include <errno.h>
 
-#ifdef HAVE_NETINET_IN_H
-#include <netinet/in.h>
-#endif
-#ifdef HAVE_SYS_SOCKET_H
-#include <sys/socket.h>
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
 #endif
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
 #endif
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif
-#ifdef HAVE_ARPA_INET_H
-#include <arpa/inet.h>
+#ifdef HAVE_SYS_SOCKET_H
+#include <sys/socket.h>
 #endif
 #ifdef HAVE_WINSOCK
 #include <winsock.h>
+#endif
+
+#ifdef HAVE_OPENTRANSPORT
+#include <OpenTransport.h>
+#include <OpenTptInternet.h>
 #endif
 
 #include "dataio.h"
@@ -72,8 +71,13 @@ The info string should look like this:
 
 bool server_is_open = FALSE;
 
+#ifdef GENERATING_MAC    /* mac network globals */
+TEndpointInfo meta_info;
+EndpointRef meta_ep;
+InetAddress serv_addr;
+#else /* Unix network globals */
 static int			sockfd=0;
-static union my_sockaddr   	meta_addr;
+#endif /* end network global selector */
 
 
 /*************************************************************************
@@ -81,7 +85,7 @@ static union my_sockaddr   	meta_addr;
   This is a function (instead of a define) to keep meta.h clean of
   including config.h and version.h
 *************************************************************************/
-const char *default_meta_server_info_string(void)
+char *default_meta_server_info_string(void)
 {
 #if IS_BETA_VERSION
   return "unstable pre-" NEXT_STABLE_VERSION ": beware";
@@ -135,8 +139,15 @@ static bool send_to_metaserver(char *desc, char *info)
 
   dio_output_init(&dout, buffer, sizeof(buffer));
 
+#ifdef GENERATING_MAC       /* mac alternate networking */
+  struct TUnitData xmit;
+  OSStatus err;
+  xmit.udata.maxlen = MAX_LEN_PACKET;
+  xmit.udata.buf=buffer;
+#else  
   if(sockfd<=0)
     return FALSE;
+#endif
 
   dio_put_uint16(&dout, 0);
   dio_put_uint8(&dout, PACKET_UDP_PCKT);
@@ -148,7 +159,12 @@ static bool send_to_metaserver(char *desc, char *info)
   dio_output_rewind(&dout);
   dio_put_uint16(&dout, size);
 
+#ifdef GENERATING_MAC  /* mac networking */
+  xmit.udata.len=strlen((const char *)buffer);
+  err=OTSndUData(meta_ep, &xmit);
+#else
   my_writesocket(sockfd, buffer, size);
+#endif
   return TRUE;
 }
 
@@ -159,10 +175,14 @@ void server_close_udp(void)
 {
   server_is_open = FALSE;
 
+#ifdef GENERATING_MAC  /* mac networking */
+  OTUnbind(meta_ep);
+#else
   if(sockfd<=0)
     return;
   my_closesocket(sockfd);
   sockfd=0;
+#endif
 }
 
 /*************************************************************************
@@ -179,20 +199,38 @@ static void metaserver_failed(void)
 *************************************************************************/
 void server_open_udp(void)
 {
-  char *metaname = srvarg.metaserver_addr;
-  int metaport;
-  union my_sockaddr bind_addr;
+  char *servername=srvarg.metaserver_addr;
+  bool bad;
+#ifdef GENERATING_MAC  /* mac networking */
+  OSStatus err1;
+  OSErr err2;
+  InetSvcRef ref=OTOpenInternetServices(kDefaultInternetServicesPath, 0, &err1);
+  InetHostInfo hinfo;
+#else
+  struct sockaddr_in serv_addr;
+#endif
   
   /*
-   * Fill in the structure "meta_addr" with the address of the
+   * Fill in the structure "serv_addr" with the address of the
    * server that we want to connect with, checks if server address 
    * is valid, both decimal-dotted and name.
    */
-  metaport = srvarg.metaserver_port;
-  if (!net_lookup_service(metaname, metaport, &meta_addr)) {
-    freelog(LOG_ERROR, _("Metaserver: bad address: [%s:%d]."),
-      metaname,
-      metaport);
+#ifdef GENERATING_MAC  /* mac networking */
+  if (err1 == 0) {
+    err1=OTInetStringToAddress(ref, servername, &hinfo);
+    serv_addr.fHost=hinfo.addrs[0];
+    bad = ((serv_addr.fHost == 0) || (err1 != 0));
+  } else {
+    freelog(LOG_NORMAL, _("Error opening OpenTransport (Id: %g)"),
+	    err1);
+    bad=true;
+  }
+#else
+  bad = !fc_lookup_host(servername, &serv_addr);
+  serv_addr.sin_port = htons(srvarg.metaserver_port);
+#endif
+  if (bad) {
+    freelog(LOG_ERROR, _("Metaserver: bad address: [%s]."), servername);
     metaserver_failed();
     return;
   }
@@ -200,9 +238,15 @@ void server_open_udp(void)
   /*
    * Open a UDP socket (an Internet datagram socket).
    */
-  if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
+#ifdef GENERATING_MAC  /* mac networking */
+  meta_ep=OTOpenEndpoint(OTCreateConfiguration(kUDPName), 0, &meta_info, &err1);
+  bad = (err1 != 0);
+#else  
+  bad = ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1);
+#endif
+  if (bad) {
     freelog(LOG_ERROR, "Metaserver: can't open datagram socket: %s",
-	    mystrerror());
+	    mystrerror(errno));
     metaserver_failed();
     return;
   }
@@ -211,25 +255,21 @@ void server_open_udp(void)
    * Bind any local address for us and
    * associate datagram socket with server.
    */
-  if (!net_lookup_service(srvarg.bind_addr, 0, &bind_addr)) {
-    freelog(LOG_ERROR, _("Metaserver: bad address: [%s:%d]."),
-	    srvarg.bind_addr, 0);
-    metaserver_failed();
-  }
-
-  /* set source IP */
-  if (bind(sockfd, &bind_addr.sockaddr, sizeof(bind_addr)) == -1) {
-    freelog(LOG_ERROR, "Metaserver: bind failed: %s", mystrerror());
+#ifdef GENERATING_MAC  /* mac networking */
+  if (OTBind(meta_ep, NULL, NULL) != 0) {
+    freelog(LOG_ERROR, "Metaserver: can't bind local address: %s",
+	    mystrerror(errno));
     metaserver_failed();
     return;
   }
-
+#else
   /* no, this is not weird, see man connect(2) --vasc */
-  if (connect(sockfd, &meta_addr.sockaddr, sizeof(meta_addr))==-1) {
-    freelog(LOG_ERROR, "Metaserver: connect failed: %s", mystrerror());
+  if (connect(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr))==-1) {
+    freelog(LOG_ERROR, "Metaserver: connect failed: %s", mystrerror(errno));
     metaserver_failed();
     return;
   }
+#endif
 
   server_is_open = TRUE;
 }

@@ -15,6 +15,6 @@
 
 #include "cityrep_g.h"
 
-void popdown_city_report_dialog(void);
+/* nothing else */
 
 #endif  /* FC__CITYREP_H */

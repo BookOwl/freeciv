@@ -11,16 +11,11 @@
    GNU General Public License for more details.
 ***********************************************************************/
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <assert.h>
 
 #include "government.h"
 #include "packets.h"
 #include "spaceship.h"
-
 #include "spacerace.h"
 
 #include "advspace.h"
@@ -30,53 +25,59 @@
  *  AJS, 19990610
  */
 
-bool ai_spaceship_autoplace(struct player *pplayer, struct player_spaceship *ship)
+int ai_spaceship_autoplace(struct player *pplayer, struct player_spaceship *ship)
 {
-  enum spaceship_place_type type;
-  int num, i;
-  bool retval = FALSE;
+  struct government *g = get_gov_pplayer(pplayer);
+  struct packet_spaceship_action packet;
+  int i,retval=0;
   
   while (ship->modules > (ship->habitation + ship->life_support
 		       + ship->solar_panels)) {
     
-    type =
-      (ship->habitation==0)   ? SSHIP_PLACE_HABITATION :
-      (ship->life_support==0) ? SSHIP_PLACE_LIFE_SUPPORT :
-      (ship->solar_panels==0) ? SSHIP_PLACE_SOLAR_PANELS :
+    bool nice = government_has_hint(g, G_IS_NICE);
+    /* "nice" governments prefer to keep success 100%;
+     * others build habitation first (for score?)  (Thanks Massimo.)
+     */
+
+    packet.action =
+      (ship->habitation==0)   ? SSHIP_ACT_PLACE_HABITATION :
+      (ship->life_support==0) ? SSHIP_ACT_PLACE_LIFE_SUPPORT :
+      (ship->solar_panels==0) ? SSHIP_ACT_PLACE_SOLAR_PANELS :
       ((ship->habitation < ship->life_support)
        && (ship->solar_panels*2 >= ship->habitation + ship->life_support + 1))
-                              ? SSHIP_PLACE_HABITATION :
+                              ? SSHIP_ACT_PLACE_HABITATION :
       (ship->solar_panels*2 < ship->habitation + ship->life_support)
-                              ? SSHIP_PLACE_SOLAR_PANELS :
+                              ? SSHIP_ACT_PLACE_SOLAR_PANELS :
       (ship->life_support<ship->habitation)
-                              ? SSHIP_PLACE_LIFE_SUPPORT :
-      ((ship->life_support <= ship->habitation)
+                              ? SSHIP_ACT_PLACE_LIFE_SUPPORT :
+      (nice && (ship->life_support <= ship->habitation)
        && (ship->solar_panels*2 >= ship->habitation + ship->life_support + 1))
-                              ? SSHIP_PLACE_LIFE_SUPPORT :
-                                SSHIP_PLACE_SOLAR_PANELS;
+                              ? SSHIP_ACT_PLACE_LIFE_SUPPORT :
+      (nice)                  ? SSHIP_ACT_PLACE_SOLAR_PANELS :
+                                SSHIP_ACT_PLACE_HABITATION;
 
-    if (type == SSHIP_PLACE_HABITATION) {
-      num = ship->habitation + 1;
-    } else if(type == SSHIP_PLACE_LIFE_SUPPORT) {
-      num = ship->life_support + 1;
+    if (packet.action == SSHIP_ACT_PLACE_HABITATION) {
+      packet.num = ship->habitation + 1;
+    } else if(packet.action == SSHIP_ACT_PLACE_LIFE_SUPPORT) {
+      packet.num = ship->life_support + 1;
     } else {
-      num = ship->solar_panels + 1;
+      packet.num = ship->solar_panels + 1;
     }
-    assert(num <= NUM_SS_MODULES / 3);
+    assert(packet.num<=NUM_SS_MODULES/3);
 
-    handle_spaceship_place(pplayer, type, num);
-    retval = TRUE;
+    handle_spaceship_action(pplayer, &packet);
+    retval=1;
   }
   while (ship->components > ship->fuel + ship->propulsion) {
     if (ship->fuel <= ship->propulsion) {
-      type = SSHIP_PLACE_FUEL;
-      num = ship->fuel + 1;
+      packet.action = SSHIP_ACT_PLACE_FUEL;
+      packet.num = ship->fuel + 1;
     } else {
-      type = SSHIP_PLACE_PROPULSION;
-      num = ship->propulsion + 1;
+      packet.action = SSHIP_ACT_PLACE_PROPULSION;
+      packet.num = ship->propulsion + 1;
     }
-    handle_spaceship_place(pplayer, type, num);
-    retval = TRUE;
+    handle_spaceship_action(pplayer, &packet);
+    retval=1;
   }
   while (ship->structurals > num_spaceship_structurals_placed(ship)) {
     /* Want to choose which structurals are most important.
@@ -88,9 +89,9 @@ bool ai_spaceship_autoplace(struct player *pplayer, struct player_spaceship *shi
     
     if (!ship->structure[0]) {
       /* if we don't have the first structural, place that! */
-      type = SSHIP_PLACE_STRUCTURAL;
-      num = 0;
-      handle_spaceship_place(pplayer, type, num);
+      packet.action = SSHIP_ACT_PLACE_STRUCTURAL;
+      packet.num = 0;
+      handle_spaceship_action(pplayer, &packet);
     }
     
     if (ship->habitation >= 1
@@ -145,10 +146,10 @@ bool ai_spaceship_autoplace(struct player *pplayer, struct player_spaceship *shi
     while(!ship->structure[structurals_info[req].required]) {
       req = structurals_info[req].required;
     }
-    type = SSHIP_PLACE_STRUCTURAL;
-    num = req;
-    handle_spaceship_place(pplayer, type, num);
-    retval = TRUE;
+    packet.action = SSHIP_ACT_PLACE_STRUCTURAL;
+    packet.num = req;
+    handle_spaceship_action(pplayer, &packet);
+    retval=1;
   }
   return retval;
 }

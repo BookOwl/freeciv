@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -27,7 +26,6 @@
 #include "government.h"
 #include "log.h"
 #include "map.h"
-#include "mem.h"
 #include "player.h"
 #include "rand.h"
 #include "shared.h"
@@ -39,19 +37,13 @@
 #include "gamelog.h"
 #include "maphand.h"
 #include "plrhand.h"
-#include "sanitycheck.h"
 #include "settlers.h"
 #include "spacerace.h"
 #include "srv_main.h"
 #include "unittools.h"
-#include "unithand.h"
-
-#include "cm.h"
 
 #include "advdomestic.h"
 #include "aicity.h"
-#include "aidata.h"
-#include "ailog.h"
 #include "aitools.h"		/* for ai_advisor_choose_building/ai_choice */
 
 #include "cityturn.h"
@@ -62,7 +54,7 @@ static void city_populate(struct city *pcity);
 static bool worklist_change_build_target(struct player *pplayer,
 					 struct city *pcity);
 
-static bool city_distribute_surplus_shields(struct player *pplayer,
+static void city_distribute_surplus_shields(struct player *pplayer,
 					    struct city *pcity);
 static bool city_build_building(struct player *pplayer, struct city *pcity);
 static bool city_build_unit(struct player *pplayer, struct city *pcity);
@@ -74,18 +66,25 @@ static void upgrade_unit_prod(struct city *pcity);
 static void obsolete_building_test(struct city *pcity, int b1, int b2);
 static void pay_for_buildings(struct player *pplayer, struct city *pcity);
 
+static void sanity_check_city(struct city *pcity);
+
 static bool disband_city(struct city *pcity);
 
 static void define_orig_production_values(struct city *pcity);
 static void update_city_activity(struct player *pplayer, struct city *pcity);
 static void nullify_caravan_and_disband_plus(struct city *pcity);
 
+static void worker_loop(struct city *pcity, int *foodneed,
+			int *prodneed, int *workers);
+
+static void advisor_choose_build(struct player *pplayer, struct city *pcity);
+
 /**************************************************************************
 ...
 **************************************************************************/
 void city_refresh(struct city *pcity)
 {
-   generic_city_refresh(pcity, TRUE, send_unit_info);
+   generic_city_refresh(pcity, TRUE);
    /* AI would calculate this 1000 times otherwise; better to do it
       once -- Syela */
    pcity->ai.trade_want =
@@ -120,10 +119,12 @@ void remove_obsolete_buildings_city(struct city *pcity, bool refresh)
       notify_player_ex(pplayer, pcity->x, pcity->y, E_IMP_SOLD, 
 		       _("Game: %s is selling %s (obsolete) for %d."),
 		       pcity->name, get_improvement_name(i), 
-		       impr_sell_gold(i));
+		       improvement_value(i));
       sold = TRUE;
     }
   } built_impr_iterate_end;
+
+  if (sold) update_all_effects();
 
   if (sold && refresh) {
     city_refresh(pcity);
@@ -143,126 +144,172 @@ void remove_obsolete_buildings(struct player *pplayer)
 }
 
 /**************************************************************************
-  Rearrange workers according to a cm_result struct.  The caller must make
-  sure that the result is valid.
+You need to call sync_cities for the affected cities to be synced with the
+client.
 **************************************************************************/
-void apply_cmresult_to_city(struct city *pcity, struct cm_result *cmr)
+static void worker_loop(struct city *pcity, int *foodneed,
+			int *prodneed, int *workers)
 {
-  /* The caller had better check this! */
-  if (!cmr->found_a_valid) {
-    freelog(LOG_ERROR, "apply_cmresult_to_city() called with non-valid "
-            "cm_result");
-    assert(0);
-    return;
-  }
+  int bx, by, best, cur;
+  int conflict[5][5];
+  int e, pwr, luxneed = 0; /* I should have thought of this earlier, it is so simple */
 
-  /* Now apply results */
-  city_map_checked_iterate(pcity->x, pcity->y, x, y, mapx, mapy) {
-    if (pcity->city_map[x][y] == C_TILE_WORKER
-        && !is_city_center(x, y)
-        && !cmr->worker_positions_used[x][y]) {
-      server_remove_worker_city(pcity, x, y);
-    }
-    if (pcity->city_map[x][y] != C_TILE_WORKER
-        && !is_city_center(x, y)
-        && cmr->worker_positions_used[x][y]) {
-      server_set_worker_city(pcity, x, y);
-    }
+  city_refresh(pcity);
+  luxneed = 2 * (2 * pcity->ppl_angry[4] + pcity->ppl_unhappy[4] -
+		 pcity->ppl_happy[4]);
+  pwr = (2 * city_tax_bonus(pcity)) / 100;
+  luxneed += pwr * pcity->ppl_elvis;
+  if (luxneed < 0) luxneed = 0;
+
+  e = (luxneed + pwr - 1) / pwr;
+  if (e > (*workers - 1)) e = *workers - 1; /* stops the repeated emergencies. -- Syela */
+
+/* If I were real clever, I would optimize trade by luxneed and tax_bonus -- Syela */
+
+  *foodneed -= 2 * (*workers - 1 - e);
+  *prodneed -= (*workers - 1 - e);
+
+  freelog(LOG_DEBUG, "%s, %d workers, %d luxneed, %d e",
+	  pcity->name, *workers, luxneed, e);
+  freelog(LOG_DEBUG, "%s, a4 %d u4 %d h4 %d pwr %d elv %d",
+	  pcity->name, pcity->ppl_angry[4], pcity->ppl_unhappy[4],
+	  pcity->ppl_happy[4], pwr, pcity->ppl_elvis);
+
+  if (city_happy(pcity) && wants_to_be_bigger(pcity) && pcity->size > 4)
+    *foodneed += 1;
+
+  freelog(LOG_DEBUG, "%s, foodneed %d prodneed %d",
+	  pcity->name, *foodneed, *prodneed);
+
+  /* better than nothing, not as good as a global worker allocation -- Syela */
+  memset(conflict, 0, sizeof(conflict));
+  city_map_checked_iterate(pcity->x, pcity->y, cx, cy, mx, my) {
+      conflict[cx][cy] = -1 - minimap[mx][my];
   } city_map_checked_iterate_end;
-  specialist_type_iterate(sp) {
-    pcity->specialists[sp] = cmr->specialists[sp];
-  } specialist_type_iterate_end;
+
+  do {
+    /* try to work near the city */
+    bx = 0;
+    by = 0;
+    best = 0;
+
+    city_map_iterate_outwards(x, y) {
+      if (can_place_worker_here(pcity, x, y)
+	  && city_can_work_tile(pcity, x, y)) {
+        cur = city_tile_value(pcity,x,y,*foodneed,*prodneed) - conflict[x][y];
+	if (cur > best) {
+	  bx = x;
+	  by = y;
+	  best = cur;
+	}
+      }
+    } city_map_iterate_outwards_end;
+    if (bx != 0 || by != 0) {
+      server_set_worker_city(pcity, bx, by);
+      (*workers)--; /* amazing what this did with no parens! -- Syela */
+      *foodneed -= city_get_food_tile(bx,by,pcity) - 2;
+      *prodneed -= city_get_shields_tile(bx,by,pcity) - 1;
+    }
+  } while(*workers != 0 && (bx != 0 || by != 0));
+  *foodneed += 2 * (*workers - 1 - e);
+  *prodneed += (*workers - 1 - e);
+  if (*prodneed > 0) {
+    freelog(LOG_VERBOSE, "Ignored prodneed? in %s (%d)",
+	 pcity->name, *prodneed);
+  }
 }
 
 /**************************************************************************
-  You need to call sync_cities so that the affected cities are synced with 
-  the client.
+You need to call sync_cities for the affected cities to be synced with the
+client.
+**************************************************************************/
+void add_adjust_workers(struct city *pcity)
+{
+  int workers=pcity->size;
+  int iswork=0;
+  int toplace;
+  int foodneed;
+  int prodneed = 0;
+
+  city_map_iterate(x, y) {
+    if (get_worker_city(pcity, x, y)==C_TILE_WORKER) 
+      iswork++;
+  } city_map_iterate_end;
+  iswork--; /* City center */
+
+  if (iswork+city_specialists(pcity)>workers) {
+    freelog(LOG_ERROR, "Encountered an inconsistency in "
+	    "add_adjust_workers() for city %s", pcity->name);
+    auto_arrange_workers(pcity);
+    sync_cities();
+    return;
+  }
+
+  if (iswork + city_specialists(pcity) == workers) {
+    return;
+  }
+
+  toplace = workers-(iswork+city_specialists(pcity));
+  foodneed = -pcity->food_surplus;
+  prodneed = -pcity->shield_surplus;
+
+  worker_loop(pcity, &foodneed, &prodneed, &toplace);
+
+  pcity->ppl_elvis+=toplace;
+  return;
+}
+
+/**************************************************************************
+You need to call sync_cities for the affected cities to be synced with the
+client.
 **************************************************************************/
 void auto_arrange_workers(struct city *pcity)
 {
-  struct cm_parameter cmp;
-  struct cm_result cmr;
-  struct player *pplayer = city_owner(pcity);
+  struct government *g = get_gov_pcity(pcity);
+  int workers = pcity->size;
+  int taxwanted,sciwanted;
+  int foodneed, prodneed;
 
-  cm_init_parameter(&cmp);
+  city_map_iterate(x, y) {
+    if (get_worker_city(pcity, x, y) == C_TILE_WORKER
+	&& !is_city_center(x, y))
+      server_remove_worker_city(pcity, x, y);
+  } city_map_iterate_end;
+  
+  foodneed=(pcity->size *2 -city_get_food_tile(2,2, pcity)) + settler_eats(pcity);
+  prodneed = 0;
+  prodneed -= city_get_shields_tile(2,2,pcity);
+  prodneed -= citygov_free_shield(pcity, g);
 
-  /* HACK: make sure everything is up-to-date before continuing.  This may
-   * result in recursive calls to auto_arrange_workers, but it's better
-   * to have these calls here than while we're reassigning workers (when
-   * they will be fatal). */
-  map_city_radius_iterate(pcity->x, pcity->y, map_x, map_y) {
-    update_city_tile_status_map(pcity, map_x, map_y);
-  } map_city_radius_iterate_end;
-
-  sanity_check_city(pcity);
-  cm_clear_cache(pcity);
-
-  cmp.require_happy = FALSE;
-  cmp.allow_disorder = FALSE;
-  cmp.allow_specialists = TRUE;
-
-  /* We used to look at pplayer->ai.xxx_priority to determine the values
-   * to be used here.  However that doesn't work at all because those values
-   * are on a different scale.  Later the ai may wish to adjust its
-   * priorities - this should be done via a separate set of variables. */
-  if (pcity->size > 1) {
-    cmp.factor[FOOD] = 10;
-  } else {
-    /* Growing to size 2 is the highest priority. */
-    cmp.factor[FOOD] = 20;
-  }
-  cmp.factor[SHIELD] = 5;
-  cmp.factor[TRADE] = 0; /* Trade only provides gold/science. */
-  cmp.factor[GOLD] = 2;
-  cmp.factor[LUXURY] = 0; /* Luxury only influences happiness. */
-  cmp.factor[SCIENCE] = 2;
-  cmp.happy_factor = 0;
-
-  cmp.minimal_surplus[FOOD] = 1;
-  cmp.minimal_surplus[SHIELD] = 1;
-  cmp.minimal_surplus[TRADE] = 0;
-  cmp.minimal_surplus[GOLD] = -FC_INFINITY;
-  cmp.minimal_surplus[LUXURY] = 0;
-  cmp.minimal_surplus[SCIENCE] = 0;
-
-  cm_query_result(pcity, &cmp, &cmr);
-
-  if (!cmr.found_a_valid) {
-    if (!pplayer->ai.control) {
-      /* Drop surpluses and try again. */
-      cmp.minimal_surplus[FOOD] = 0;
-      cmp.minimal_surplus[SHIELD] = 0;
-      cm_query_result(pcity, &cmp, &cmr);
-
-      if (!cmr.found_a_valid) {
-	/* Emergency management.  Get _some_ result. */
-        cm_init_emergency_parameter(&cmp);
-	cm_query_result(pcity, &cmp, &cmr);
-      }
-    } else {
-      cmp.minimal_surplus[FOOD] = 0;
-      cmp.minimal_surplus[SHIELD] = 0;
-      cmp.minimal_surplus[GOLD] = -FC_INFINITY;
-      cm_query_result(pcity, &cmp, &cmr);
-
-      if (!cmr.found_a_valid) {
-	cmp.minimal_surplus[FOOD] = -(pcity->food_stock);
-	cmp.minimal_surplus[TRADE] = -FC_INFINITY;
-	cm_query_result(pcity, &cmp, &cmr);
-      }
-
-      if (!cmr.found_a_valid) {
-	CITY_LOG(LOG_DEBUG, pcity, "emergency management");
-        cm_init_emergency_parameter(&cmp);
-	cm_query_result(pcity, &cmp, &cmr);
-      }
+  unit_list_iterate(pcity->units_supported, this_unit) {
+    int shield_cost = utype_shield_cost(unit_type(this_unit), g);
+    if (shield_cost > 0) {
+      prodneed += shield_cost;
     }
   }
-  assert(cmr.found_a_valid);
+  unit_list_iterate_end;
+  
+  taxwanted=pcity->ppl_taxman;
+  sciwanted=pcity->ppl_scientist;
+  pcity->ppl_taxman=0;
+  pcity->ppl_scientist=0;
+  pcity->ppl_elvis=0;
 
-  apply_cmresult_to_city(pcity, &cmr);
+  worker_loop(pcity, &foodneed, &prodneed, &workers);
 
-  sanity_check_city(pcity);
+  while (workers > 0 && (taxwanted > 0 || sciwanted > 0)) {
+    if (taxwanted > 0) {
+      workers--;
+      pcity->ppl_taxman++;
+      taxwanted--;
+    } 
+    if (sciwanted > 0 && workers > 0) {
+      workers--;
+      pcity->ppl_scientist++;
+      sciwanted--;
+    }
+  }
+  pcity->ppl_elvis=workers;
 
   city_refresh(pcity);
 }
@@ -307,15 +354,14 @@ void send_city_turn_notifications(struct conn_list *dest, struct city *pcity)
     turns_growth = (city_granary_size(pcity->size) - pcity->food_stock - 1)
 		   / pcity->food_surplus;
 
-    if (!city_got_effect(pcity,B_GRANARY) && !pcity->is_building_unit
-	&& pcity->currently_building == B_GRANARY
-	&& pcity->shield_surplus > 0) {
-      turns_granary = (impr_build_shield_cost(B_GRANARY)
-		       - pcity->shield_stock) / pcity->shield_surplus;
+    if (!city_got_effect(pcity,B_GRANARY) && !pcity->is_building_unit &&
+	(pcity->currently_building == B_GRANARY) && (pcity->shield_surplus > 0)) {
+      turns_granary = (improvement_value(B_GRANARY) - pcity->shield_stock)
+		      / pcity->shield_surplus;
       /* if growth and granary completion occur simultaneously, granary
 	 preserves food.  -AJS */
-      if (turns_growth < 5 && turns_granary < 5
-	  && turns_growth < turns_granary) {
+      if ((turns_growth < 5) && (turns_granary < 5) &&
+	  (turns_growth < turns_granary)) {
 	notify_conn_ex(dest, pcity->x, pcity->y,
 			 E_CITY_GRAN_THROTTLE,
 			 _("Game: Suggest throttling growth in %s to use %s "
@@ -324,7 +370,10 @@ void send_city_turn_notifications(struct conn_list *dest, struct city *pcity)
       }
     }
 
-    can_grow = city_can_grow_to(pcity, pcity->size + 1);
+    can_grow = (city_got_building(pcity, B_AQUEDUCT)
+		|| pcity->size < game.aqueduct_size)
+      && (city_got_building(pcity, B_SEWER)
+	  || pcity->size < game.sewer_size);
 
     if ((turns_growth <= 0) && !city_celebrating(pcity) && can_grow) {
       notify_conn_ex(dest, pcity->x, pcity->y,
@@ -346,19 +395,26 @@ void send_city_turn_notifications(struct conn_list *dest, struct city *pcity)
 /**************************************************************************
 ...
 **************************************************************************/
+void begin_cities_turn(struct player *pplayer)
+{
+  city_list_iterate(pplayer->cities, pcity)
+     define_orig_production_values(pcity);
+  city_list_iterate_end;
+}
+
+/**************************************************************************
+...
+**************************************************************************/
 void update_city_activities(struct player *pplayer)
 {
   int gold;
   gold=pplayer->economic.gold;
   pplayer->got_tech = FALSE;
-  pplayer->research.bulbs_last_turn = 0;
   city_list_iterate(pplayer->cities, pcity)
      update_city_activity(pplayer, pcity);
   city_list_iterate_end;
   pplayer->ai.prev_gold = gold;
-  /* This test include the cost of the units because pay_for_units is called
-   * in update_city_activity */
-  if (gold - (gold - pplayer->economic.gold) * 3 < 0) {
+  if (gold-(gold-pplayer->economic.gold)*3<0) {
     notify_player_ex(pplayer, -1, -1, E_LOW_ON_FUNDS,
 		     _("Game: WARNING, we're LOW on FUNDS sire."));  
   }
@@ -369,35 +425,32 @@ void update_city_activities(struct player *pplayer)
 }
 
 /**************************************************************************
-  Reduce the city size.  Return TRUE if the city survives the population
-  loss.
+...
 **************************************************************************/
-bool city_reduce_size(struct city *pcity, int pop_loss)
+void city_reduce_size(struct city *pcity, int pop_loss)
 {
-  if (pop_loss == 0) {
-    return TRUE;
-  }
-
   if (pcity->size <= pop_loss) {
+    remove_city_from_minimap(pcity->x, pcity->y);
     remove_city(pcity);
-    return FALSE;
+    return;
   }
   pcity->size -= pop_loss;
 
-  /* Cap the food stock at the new granary size. */
+  /*
+   * Cap the food stock at the new granary size.
+   */
   if (pcity->food_stock > city_granary_size(pcity->size)) {
     pcity->food_stock = city_granary_size(pcity->size);
   }
 
-  /* First try to kill off the specialists */
   while (pop_loss > 0 && city_specialists(pcity) > 0) {
-    if (pcity->specialists[SP_TAXMAN] > 0) {
-      pcity->specialists[SP_TAXMAN]--;
-    } else if (pcity->specialists[SP_SCIENTIST] > 0) {
-      pcity->specialists[SP_SCIENTIST]--;
+    if(pcity->ppl_taxman > 0) {
+      pcity->ppl_taxman--;
+    } else if(pcity->ppl_scientist > 0) {
+      pcity->ppl_scientist--;
     } else {
-      assert(pcity->specialists[SP_ELVIS] > 0);
-      pcity->specialists[SP_ELVIS]--; 
+      assert(pcity->ppl_elvis > 0);
+      pcity->ppl_elvis--; 
     }
     pop_loss--;
   }
@@ -407,27 +460,15 @@ bool city_reduce_size(struct city *pcity, int pop_loss)
     city_refresh(pcity);
     send_city_info(city_owner(pcity), pcity);
   } else {
-    /* Take it out on workers */
-    city_map_iterate(x, y) {
-      if (get_worker_city(pcity, x, y) == C_TILE_WORKER
-          && !is_city_center(x, y) && pop_loss > 0) {
-        server_remove_worker_city(pcity, x, y);
-        pop_loss--;
-      }
-    } city_map_iterate_end;
-    /* Then rearrange workers */
-    assert(pop_loss == 0);
     auto_arrange_workers(pcity);
     sync_cities();
   }
-  sanity_check_city(pcity);
-  return TRUE;
 }
 
 /**************************************************************************
 Note: We do not send info about the city to the clients as part of this function
 **************************************************************************/
-static void city_increase_size(struct city *pcity)
+void city_increase_size(struct city *pcity)
 {
   struct player *powner = city_owner(pcity);
   bool have_square;
@@ -499,22 +540,24 @@ static void city_increase_size(struct city *pcity)
        is_city_option_set(pcity, CITYO_NEW_TAXMAN))) {
 
     if (is_city_option_set(pcity, CITYO_NEW_EINSTEIN)) {
-      pcity->specialists[SP_SCIENTIST]++;
+      pcity->ppl_scientist++;
     } else { /* now pcity->city_options & (1<<CITYO_NEW_TAXMAN) is true */
-      pcity->specialists[SP_TAXMAN]++;
+      pcity->ppl_taxman++;
     }
 
   } else {
-    pcity->specialists[SP_TAXMAN]++; /* or else city is !sane */
-    auto_arrange_workers(pcity);
+    add_adjust_workers(pcity);
   }
 
   city_refresh(pcity);
 
+  if (powner->ai.control) /* don't know if we need this -- Syela */
+    if (ai_fix_unhappy(pcity))
+      ai_scientists_taxmen(pcity);
+
   notify_player_ex(powner, pcity->x, pcity->y, E_CITY_GROWTH,
                    _("Game: %s grows to size %d."), pcity->name, pcity->size);
 
-  sanity_check_city(pcity);
   sync_cities();
 }
 
@@ -537,11 +580,10 @@ static void city_populate(struct city *pcity)
      * you want to disband a unit that is draining your food
      * reserves.  Hence, I'll assume food upkeep > 0 units. -- jjm
      */
-    unit_list_iterate_safe(pcity->units_supported, punit) {
-      if (unit_type(punit)->food_cost > 0 
-          && !unit_flag(punit, F_UNDISBANDABLE)) {
+    unit_list_iterate(pcity->units_supported, punit) {
+      if (unit_type(punit)->food_cost > 0) {
 	char *utname = unit_type(punit)->name;
-	wipe_unit(punit);
+	wipe_unit_safe(punit, &myiter);
 	notify_player_ex(city_owner(pcity), pcity->x, pcity->y, E_UNIT_LOST,
 			 _("Game: Famine feared in %s, %s lost!"), 
 			 pcity->name, utname);
@@ -553,7 +595,8 @@ static void city_populate(struct city *pcity)
 	  pcity->food_stock=0;
 	return;
       }
-    } unit_list_iterate_safe_end;
+    }
+    unit_list_iterate_end;
     notify_player_ex(city_owner(pcity), pcity->x, pcity->y, E_CITY_FAMINE,
 		     _("Game: Famine causes population loss in %s."),
 		     pcity->name);
@@ -568,11 +611,11 @@ static void city_populate(struct city *pcity)
 /**************************************************************************
 ...
 **************************************************************************/
-void advisor_choose_build(struct player *pplayer, struct city *pcity)
+static void advisor_choose_build(struct player *pplayer, struct city *pcity)
 {
   struct ai_choice choice;
-  Impr_Type_id id = -1;
-  int want=0;
+  int id = -1;
+  int want = 0;
 
   init_choice(&choice);
   if (!city_owner(pcity)->ai.control) {
@@ -586,9 +629,9 @@ void advisor_choose_build(struct player *pplayer, struct city *pcity)
   id = choice.choice;
   want = choice.want;
 
-  if (id >= 0 && id < B_LAST && want > 0) {
+  if (id != -1 && id != B_LAST && want > 0) {
     change_build_target(pplayer, pcity, id, FALSE, E_IMP_AUTO);
-    /* making something. */
+    /* making something. */    
     return;
   }
 
@@ -597,7 +640,7 @@ void advisor_choose_build(struct player *pplayer, struct city *pcity)
     if (can_build_improvement(pcity, i) && i != B_PALACE) {
       id = i;
       break;
-    }
+    } 
   } impr_type_iterate_end;
   if (id >= 0 && id < B_LAST) {
     change_build_target(pplayer, pcity, id, FALSE, E_IMP_AUTO);
@@ -675,7 +718,7 @@ static bool worklist_change_build_target(struct player *pplayer,
 	target = new_target;
       }
     } else if (!is_unit && !can_build_improvement(pcity, target)) {
-      Impr_Type_id new_target = improvement_upgrades_to(pcity, target);
+      int new_target = improvement_upgrades_to(pcity, target);
 
       /* If the city can never build this improvement, drop it. */
       if (!can_eventually_build_improvement(pcity, new_target)) {
@@ -761,12 +804,10 @@ static bool worklist_change_build_target(struct player *pplayer,
 ...
 **************************************************************************/
 static void obsolete_building_test(struct city *pcity, int b1, int b2)
-{
-  if (pcity->currently_building == b1
-      && !pcity->is_building_unit
-      && can_build_improvement(pcity, b2)) {
-    pcity->currently_building = b2;
-  }
+{ 
+  if (pcity->currently_building==b1 && 
+      can_build_improvement(pcity, b2))
+    pcity->currently_building=b2;
 }
 
 /**************************************************************************
@@ -844,57 +885,29 @@ static void upgrade_unit_prod(struct city *pcity)
 }
 
 /**************************************************************************
-  Disband units if we don't have enough shields to support them.  Returns
-  FALSE if the _city_ is disbanded as a result.
+...
 **************************************************************************/
-static bool city_distribute_surplus_shields(struct player *pplayer,
+static void city_distribute_surplus_shields(struct player *pplayer,
 					    struct city *pcity)
 {
   struct government *g = get_gov_pplayer(pplayer);
 
-  if (pcity->shield_surplus < 0) {
-    unit_list_iterate_safe(pcity->units_supported, punit) {
-      if (utype_shield_cost(unit_type(punit), g) > 0
-	  && pcity->shield_surplus < 0
-          && !unit_flag(punit, F_UNDISBANDABLE)) {
+  while (pcity->shield_surplus < 0) {
+    unit_list_iterate(pcity->units_supported, punit) {
+      if (utype_shield_cost(unit_type(punit), g) > 0) {
 	notify_player_ex(pplayer, pcity->x, pcity->y, E_UNIT_LOST,
 			 _("Game: %s can't upkeep %s, unit disbanded."),
 			 pcity->name, unit_type(punit)->name);
-        handle_unit_disband(pplayer, punit->id);
-	/* pcity->shield_surplus is automatically updated. */
+	wipe_unit_safe(punit, &myiter);
+	break;
       }
-    } unit_list_iterate_safe_end;
-  }
-
-  if (pcity->shield_surplus < 0) {
-    /* Special case: F_UNDISBANDABLE. This nasty unit won't go so easily.
-     * It'd rather make the citizens pay in blood for their failure to upkeep
-     * it! If we make it here all normal units are already disbanded, so only
-     * undisbandable ones remain. */
-    unit_list_iterate_safe(pcity->units_supported, punit) {
-      int upkeep = utype_shield_cost(unit_type(punit), g);
-
-      if (upkeep > 0 && pcity->shield_surplus < 0) {
-	assert(unit_flag(punit, F_UNDISBANDABLE));
-	notify_player_ex(pplayer, pcity->x, pcity->y, E_UNIT_LOST,
-			 _("Game: Citizens in %s perish for their failure to "
-			 "upkeep %s!"), pcity->name, unit_type(punit)->name);
-	if (!city_reduce_size(pcity, 1)) {
-	  return FALSE;
-	}
-
-	/* No upkeep for the unit this turn. */
-	pcity->shield_surplus += upkeep;
-      }
-    } unit_list_iterate_safe_end;
+    }
+    unit_list_iterate_end;
   }
 
   /* Now we confirm changes made last turn. */
   pcity->shield_stock += pcity->shield_surplus;
   pcity->before_change_shields = pcity->shield_stock;
-  pcity->last_turns_shield_surplus = pcity->shield_surplus;
-
-  return TRUE;
 }
 
 /**************************************************************************
@@ -904,11 +917,9 @@ static bool city_build_building(struct player *pplayer, struct city *pcity)
 {
   bool space_part;
 
-  if (get_current_construction_bonus(pcity, EFT_PROD_TO_GOLD) > 0) {
+  if (pcity->currently_building == B_CAPITAL) {
     assert(pcity->shield_surplus >= 0);
-    /* pcity->before_change_shields already contains the surplus from
-     * this turn. */
-    pplayer->economic.gold += pcity->before_change_shields;
+    pplayer->economic.gold += pcity->shield_surplus;
     pcity->before_change_shields = 0;
     pcity->shield_stock = 0;
   }
@@ -922,32 +933,32 @@ static bool city_build_building(struct player *pplayer, struct city *pcity)
 						   currently_building));
     return TRUE;
   }
-  if (pcity->shield_stock
-      >= impr_build_shield_cost(pcity->currently_building)) {
+  if (pcity->shield_stock >= improvement_value(pcity->currently_building)) {
     if (pcity->currently_building == B_PALACE) {
-      city_list_iterate(pplayer->cities, palace) {
-	if (city_got_building(palace, B_PALACE)) {
-	  city_remove_improvement(palace, B_PALACE);
-	  break;
-	}
-      } city_list_iterate_end;
+      city_list_iterate(pplayer->cities, palace)
+	  if (city_got_building(palace, B_PALACE)) {
+	city_remove_improvement(palace, B_PALACE);
+	break;
+      }
+      city_list_iterate_end;
     }
 
     space_part = TRUE;
-    if (get_current_construction_bonus(pcity, EFT_SS_STRUCTURAL) > 0) {
+    if (pcity->currently_building == B_SSTRUCTURAL) {
       pplayer->spaceship.structurals++;
-    } else if (get_current_construction_bonus(pcity, EFT_SS_COMPONENT) > 0) {
+    } else if (pcity->currently_building == B_SCOMP) {
       pplayer->spaceship.components++;
-    } else if (get_current_construction_bonus(pcity, EFT_SS_MODULE) > 0) {
+    } else if (pcity->currently_building == B_SMODULE) {
       pplayer->spaceship.modules++;
     } else {
       space_part = FALSE;
       city_add_improvement(pcity, pcity->currently_building);
+      update_all_effects();
     }
     pcity->before_change_shields -=
-	impr_build_shield_cost(pcity->currently_building);
-    pcity->shield_stock -= impr_build_shield_cost(pcity->currently_building);
-    pcity->turn_last_built = game.turn;
+	improvement_value(pcity->currently_building);
+    pcity->shield_stock -= improvement_value(pcity->currently_building);
+    pcity->turn_last_built = game.year;
     /* to eliminate micromanagement */
     if (is_wonder(pcity->currently_building)) {
       game.global_wonders[pcity->currently_building] = pcity->id;
@@ -979,21 +990,13 @@ static bool city_build_building(struct player *pplayer, struct city *pcity)
 			       "you gain 2 immediate advances."),
 		    improvement_types[B_DARWIN].name);
 
-      if (pplayer->research.researching == A_UNSET) {
-        choose_random_tech(pplayer);
-      }
       do_free_cost(pplayer);
       first = pplayer->research.researching;
-      found_new_tech(pplayer, pplayer->research.researching, TRUE, TRUE, 
-                     A_NONE);
+      found_new_tech(pplayer, pplayer->research.researching, TRUE, TRUE);
 
-      if (pplayer->research.researching == A_UNSET) {
-        choose_random_tech(pplayer);
-      }
       do_free_cost(pplayer);
       second = pplayer->research.researching;
-      found_new_tech(pplayer, pplayer->research.researching, TRUE, TRUE,
-                     A_NONE);
+      found_new_tech(pplayer, pplayer->research.researching, TRUE, TRUE);
 
       (void) mystrlcpy(buffer, get_tech_name(pplayer, first),
 		       sizeof(buffer));
@@ -1039,25 +1042,11 @@ static bool city_build_unit(struct player *pplayer, struct city *pcity)
 {
   upgrade_unit_prod(pcity);
 
-  /* We must make a special case for barbarians here, because they are
-     so dumb. Really. They don't know the prerequisite techs for units
-     they build!! - Per */
-  if (!can_build_unit_direct(pcity, pcity->currently_building)
-      && !is_barbarian(pplayer)) {
-    notify_player_ex(pplayer, pcity->x, pcity->y, E_CITY_CANTBUILD,
-        _("Game: %s is building %s, which is no longer available."),
-        pcity->name, unit_name(pcity->currently_building));
-    freelog(LOG_VERBOSE, _("%s's %s tried build %s, which is not available"),
-            pplayer->name, pcity->name, unit_name(pcity->currently_building));            
-    return TRUE;
-  }
-  if (pcity->shield_stock
-      >= unit_build_shield_cost(pcity->currently_building)) {
+  if (pcity->shield_stock >= unit_value(pcity->currently_building)) {
     int pop_cost = unit_pop_value(pcity->currently_building);
 
     /* Should we disband the city? -- Massimo */
-    if (pcity->size == pop_cost
-	&& is_city_option_set(pcity, CITYO_DISBAND)) {
+    if (pcity->size == pop_cost && is_city_option_set(pcity, CITYO_DISBAND)) {
       return !disband_city(pcity);
     }
 
@@ -1071,7 +1060,7 @@ static bool city_build_unit(struct player *pplayer, struct city *pcity)
     assert(pop_cost == 0 || pcity->size >= pop_cost);
 
     /* don't update turn_last_built if we returned above */
-    pcity->turn_last_built = game.turn;
+    pcity->turn_last_built = game.year;
 
     (void) create_unit(pplayer, pcity->x, pcity->y, pcity->currently_building,
 		       do_make_unit_veteran(pcity, pcity->currently_building),
@@ -1086,13 +1075,10 @@ static bool city_build_unit(struct player *pplayer, struct city *pcity)
 
     /* to eliminate micromanagement, we only subtract the unit's
        cost */
-    pcity->before_change_shields
-      -= unit_build_shield_cost(pcity->currently_building);
-    pcity->shield_stock
-      -= unit_build_shield_cost(pcity->currently_building);
+    pcity->before_change_shields -= unit_value(pcity->currently_building);
+    pcity->shield_stock -= unit_value(pcity->currently_building);
 
-    notify_player_ex(pplayer, pcity->x, pcity->y, E_UNIT_BUILT,
-		     /* TRANS: <city> is finished building <unit/building>. */
+    notify_player_ex(pplayer, pcity->x, pcity->y, E_UNIT_BUILD,
 		     _("Game: %s is finished building %s."),
 		     pcity->name,
 		     unit_types[pcity->currently_building].name);
@@ -1104,11 +1090,8 @@ static bool city_build_unit(struct player *pplayer, struct city *pcity)
 
     /* If there's something in the worklist, change the build
        target. If there's nothing there, worklist_change_build_target
-       won't do anything, unless the unit built is unique. */
-    if (!worklist_change_build_target(pplayer, pcity) 
-        && unit_type_flag(pcity->currently_building, F_UNIQUE)) {
-      advisor_choose_build(pplayer, pcity);
-    }
+       won't do anything. */
+    (void) worklist_change_build_target(pplayer, pcity);
   }
   return TRUE;
 }
@@ -1119,12 +1102,8 @@ return 1 otherwise
 **************************************************************************/
 static bool city_build_stuff(struct player *pplayer, struct city *pcity)
 {
-  if (!city_distribute_surplus_shields(pplayer, pcity)) {
-    return FALSE;
-  }
-
+  city_distribute_surplus_shields(pplayer, pcity);
   nullify_caravan_and_disband_plus(pcity);
-  define_orig_production_values(pcity);
 
   if (!pcity->is_building_unit) {
     return city_build_building(pplayer, pcity);
@@ -1173,7 +1152,8 @@ static void check_pollution(struct city *pcity)
 	continue;
       }
 
-      if (!terrain_has_flag(map_get_terrain(mx, my), TER_NO_POLLUTION)
+      if ((map_get_terrain(mx, my) != T_OCEAN
+	   && map_get_terrain(mx, my) <= T_TUNDRA)
 	  && !map_has_special(mx, my, S_POLLUTION)) {
 	map_set_special(mx, my, S_POLLUTION);
 	send_tile_info(NULL, mx, my);
@@ -1189,84 +1169,63 @@ static void check_pollution(struct city *pcity)
 }
 
 /**************************************************************************
-  Returns the cost to incite a city. This depends on the size of the city,
-  the number of happy, unhappy and angry citizens, whether it is
-  celebrating, how close it is to the capital, how many units it has and
-  upkeeps, presence of courthouse and its buildings and wonders.
+...
 **************************************************************************/
-int city_incite_cost(struct player *pplayer, struct city *pcity)
+static void sanity_check_city(struct city *pcity)
+{
+  int size=pcity->size;
+  int iswork=0;
+  city_map_iterate(x, y) {
+    if (get_worker_city(pcity, x, y)==C_TILE_WORKER) 
+	iswork++;
+  } city_map_iterate_end;
+  iswork--;
+  if (iswork+city_specialists(pcity)!=size) {
+    freelog(LOG_ERROR,
+	    "%s is bugged: size:%d workers:%d elvis: %d tax:%d sci:%d",
+	    pcity->name, size, iswork, pcity->ppl_elvis,
+	    pcity->ppl_taxman, pcity->ppl_scientist); 
+    auto_arrange_workers(pcity);
+    sync_cities();
+  }
+}
+
+/**************************************************************************
+  Sets the incite_revolt_cost field in the given city.
+**************************************************************************/
+void city_incite_cost(struct city *pcity)
 {
   struct government *g = get_gov_pcity(pcity);
   struct city *capital;
-  int dist, size, cost;
-
+  int dist;
+  
   if (city_got_building(pcity, B_PALACE)) {
-    return INCITE_IMPOSSIBLE_COST;
-  }
-
-  /* Gold factor */
-  cost = city_owner(pcity)->economic.gold + 1000;
-
-  unit_list_iterate(map_get_tile(pcity->x,pcity->y)->units, punit) {
-    cost += (unit_build_shield_cost(punit->type)
-	     * game.incite_cost.unit_factor);
-  } unit_list_iterate_end;
-
-  /* Buildings */
-  built_impr_iterate(pcity, i) {
-    cost += impr_build_shield_cost(i) * game.incite_cost.improvement_factor;
-  } built_impr_iterate_end;
-
-  /* Stability bonuses */
-  if (g->index != game.government_when_anarchy) {
-    if (!city_unhappy(pcity)) {
-      cost *= 2;
-    }
-    if (city_celebrating(pcity)) {
-      cost *= 2;
-    }
-  }
-
-  /* City is empty */
-  if (unit_list_size(&map_get_tile(pcity->x,pcity->y)->units) == 0) {
-    cost /= 2;
-  }
-
-  /* Buy back is cheap, conquered cities are also cheap */
-  if (pcity->owner != pcity->original) {
-    if (pplayer->player_no == pcity->original) {
-      cost /= 2;            /* buy back: 50% price reduction */
-    } else {
-      cost = cost * 2 / 3;  /* buy conquered: 33% price reduction */
-    }
-  }
-
-  /* Distance from capital */
-  capital = find_palace(city_owner(pcity));
-  if (capital) {
-    int tmp = map_distance(capital->x, capital->y, pcity->x, pcity->y);
-    dist = MIN(32, tmp);
+    pcity->incite_revolt_cost = INCITE_IMPOSSIBLE_COST;
   } else {
-    /* No capital? Take max penalty! */
-    dist = 32;
+    pcity->incite_revolt_cost = city_owner(pcity)->economic.gold + 1000;
+    capital = find_palace(city_owner(pcity));
+    if (capital) {
+      int tmp = map_distance(capital->x, capital->y, pcity->x, pcity->y);
+      dist = MIN(32, tmp);
+    } else {
+      /* No capital? Take max penalty! */
+      dist = 32;
+    }
+    if (city_got_building(pcity, B_COURTHOUSE)) {
+      dist /= 2; /* courthouse halves the distance penalty */
+    }
+    if (g->fixed_corruption_distance != 0) {
+      dist = MIN(g->fixed_corruption_distance, dist);
+    }
+    pcity->incite_revolt_cost /= (dist + 3);
+    pcity->incite_revolt_cost *= pcity->size;
+    if (city_unhappy(pcity)) {
+      pcity->incite_revolt_cost /= 2;
+    }
+    if (unit_list_size(&map_get_tile(pcity->x,pcity->y)->units)==0) {
+      pcity->incite_revolt_cost /= 2;
+    }
   }
-  if (city_got_building(pcity, B_COURTHOUSE)) {
-    dist /= 4;
-  }
-  if (g->fixed_corruption_distance != 0) {
-    dist = MIN(g->fixed_corruption_distance, dist);
-  }
-
-  size = MAX(1, pcity->size
-                + pcity->ppl_happy[4]
-                - pcity->ppl_unhappy[4]
-                - pcity->ppl_angry[4] * 3);
-  cost *= size;
-  cost *= game.incite_cost.total_factor;
-  cost = cost / (dist + 3);
-  cost /= 100;
-
-  return cost;
 }
 
 /**************************************************************************
@@ -1274,15 +1233,8 @@ int city_incite_cost(struct player *pplayer, struct city *pcity)
 **************************************************************************/
 static void define_orig_production_values(struct city *pcity)
 {
-  /* Remember what this city is building last turn, so that on the next turn
-   * the player can switch production to something else and then change it
-   * back without penalty.  This has to be updated _before_ production for
-   * this turn is calculated, so that the penalty will apply if the player
-   * changes production away from what has just been completed.  This makes
-   * sense if you consider what this value means: all the shields in the
-   * city have been dedicated toward the project that was chosen last turn,
-   * so the player shouldn't be penalized if the governor has to pick
-   * something different.  See city_change_production_penalty(). */
+  /* remember what this city is building at start of turn,
+     so user can switch production back without penalty */
   pcity->changed_from_id = pcity->currently_building;
   pcity->changed_from_is_unit = pcity->is_building_unit;
 
@@ -1322,6 +1274,12 @@ static void update_city_activity(struct player *pplayer, struct city *pcity)
   struct government *g = get_gov_pcity(pcity);
 
   city_refresh(pcity);
+
+  /* the AI often has widespread disorder when the Gardens or Oracle
+     become obsolete.  This is a quick hack to prevent this.  980805 -- Syela */
+  while (pplayer->ai.control && city_unhappy(pcity)) {
+    if (ai_make_elvis(pcity) == 0) break;
+  } /* putting this lower in the routine would basically be cheating. -- Syela */
 
   /* reporting of celebrations rewritten, copying the treatment of disorder below,
      with the added rapture rounds count.  991219 -- Jing */
@@ -1364,7 +1322,6 @@ static void update_city_activity(struct player *pplayer, struct city *pcity)
       pcity->airlift=FALSE;
     update_tech(pplayer, pcity->science_total);
     pplayer->economic.gold+=pcity->tax_total;
-    pay_for_units(pplayer, pcity);
     pay_for_buildings(pplayer, pcity);
 
     if(city_unhappy(pcity)) { 
@@ -1384,6 +1341,7 @@ static void update_city_activity(struct player *pplayer, struct city *pcity)
       pcity->anarchy=0;
     }
     check_pollution(pcity);
+    city_incite_cost(pcity);
 
     send_city_info(NULL, pcity);
     if (pcity->anarchy>2 && government_has_flag(g, G_REVOLUTION_WHEN_UNHAPPY)) {
@@ -1422,14 +1380,13 @@ static bool disband_city(struct city *pcity)
 		     do_make_unit_veteran(pcity, pcity->currently_building),
 		     pcity->id, -1);
 
-  /* Shift all the units supported by pcity (including the new unit)
-   * to rcity.  transfer_city_units does not make sure no units are
-   * left floating without a transport, but since all units are
-   * transferred this is not a problem. */
+  /* shift all the units supported by pcity (including the new unit)
+     to rcity.  transfer_city_units does not make sure no units are
+     left floating without a transport, but since all units are
+     transfered this is not a problem. */
   transfer_city_units(pplayer, pplayer, &pcity->units_supported, rcity, pcity, -1, TRUE);
 
-  notify_player_ex(pplayer, x, y, E_UNIT_BUILT,
-		   /* TRANS: Settler production leads to disbanded city. */
+  notify_player_ex(pplayer, x, y, E_UNIT_BUILD,
 		   _("Game: %s is disbanded into %s."), 
 		   pcity->name, unit_types[pcity->currently_building].name);
   gamelog(GAMELOG_UNIT, _("%s (%i, %i) disbanded into %s by the %s"),

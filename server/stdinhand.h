@@ -14,24 +14,21 @@
 #define FC__STDINHAND_H
 
 #include "connection.h"		/* enum cmdlevel_id */
-#include "fc_types.h"
+
+struct player;
 
 #define SERVER_COMMAND_PREFIX '/'
   /* the character to mark chatlines as server commands */
 
-void stdinhand_init(void);
-void stdinhand_turn(void);
-void stdinhand_free(void);
-
-bool handle_stdin_input(struct connection *caller, char *str, bool check);
+void handle_stdin_input(struct connection *caller, char *str);
 void report_server_options(struct conn_list *dest, int which);
-void report_settable_server_options(struct connection *dest, int which);
 void set_ai_level_direct(struct player *pplayer, int level);
 void set_ai_level_directer(struct player *pplayer, int level);
 bool read_init_script(struct connection *caller, char *script_filename);
 void show_players(struct connection *caller);
 
-bool load_command(struct connection *caller, char *arg, bool check);
+void quit_game(struct connection *caller);
+void load_command(struct connection *caller, char *arg);
 
 
 void toggle_ai_player_direct(struct connection *caller,

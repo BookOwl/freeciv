@@ -13,13 +13,14 @@
 #ifndef FC__MAPVIEW_G_H
 #define FC__MAPVIEW_G_H
 
+#include "mapview_common.h"
 #include "shared.h"		/* bool type */
 
-#include "fc_types.h"
+struct unit;
+struct city;
 
-#include "mapview_common.h"
-
-struct Sprite;
+bool tile_visible_mapcanvas(int x, int y);
+bool tile_visible_and_not_on_border_mapcanvas(int x, int y);
 
 void update_info_label(void);
 void update_unit_info_label(struct unit *punit);
@@ -28,57 +29,29 @@ void update_turn_done_button(bool do_restore);
 void update_city_descriptions(void);
 void set_indicator_icons(int bulb, int sol, int flake, int gov);
 
-void map_size_changed(void);
-struct canvas *canvas_create(int width, int height);
-void canvas_free(struct canvas *store);
-struct canvas *get_overview_window(void);
+void set_overview_dimensions(int x, int y);
+void overview_update_tile(int x, int y);
 
-void show_city_desc(struct canvas *pcanvas, int canvas_x, int canvas_y,
-		    struct city *pcity, int *width, int *height);
-void prepare_show_city_descriptions(void);
+void center_tile_mapcanvas(int x, int y);
+void get_center_tile_mapcanvas(int *x, int *y);
 
-void canvas_put_sprite(struct canvas *pcanvas,
-		       int canvas_x, int canvas_y, struct Sprite *sprite,
-		       int offset_x, int offset_y, int width, int height);
-void canvas_put_sprite_full(struct canvas *pcanvas, 
-			    int canvas_x, int canvas_y,
-			    struct Sprite *sprite);
-void canvas_put_sprite_fogged(struct canvas *pcanvas,
-			      int canvas_x, int canvas_y,
-			      struct Sprite *psprite,
-			      bool fog, int fog_x, int fog_y);
-void canvas_put_rectangle(struct canvas *pcanvas,
-			  enum color_std color,
-			  int canvas_x, int canvas_y, int width, int height);
-void canvas_fill_sprite_area(struct canvas *pcanvas,
-			     struct Sprite *psprite, enum color_std color,
-			     int canvas_x, int canvas_y);
-void canvas_fog_sprite_area(struct canvas *pcanvas, struct Sprite *psprite,
-			    int canvas_x, int canvas_y);
-void canvas_put_line(struct canvas *pcanvas, enum color_std color,
-		     enum line_type ltype, int start_x, int start_y,
-		     int dx, int dy);
-void canvas_copy(struct canvas *dest, struct canvas *src,
-		 int src_x, int src_y, int dest_x, int dest_y,
-		 int width, int height);
-
-void flush_mapcanvas(int canvas_x, int canvas_y,
-		     int pixel_width, int pixel_height);
-void dirty_rect(int canvas_x, int canvas_y,
-		int pixel_width, int pixel_height);
-void dirty_all(void);
-void flush_dirty(void);
-void gui_flush(void);
-
+void update_map_canvas(int x, int y, int width, int height,
+		       bool write_to_screen);
+void update_map_canvas_visible(void);
 void update_map_canvas_scrollbars(void);
-void update_map_canvas_scrollbars_size(void);
 
 void put_cross_overlay_tile(int x,int y);
-void put_city_worker(struct canvas *pcanvas,
-		     enum color_std color, enum city_tile_type worker,
-		     int canvas_x, int canvas_y);
+void put_city_workers(struct city *pcity, int color);
 
-void draw_selection_rectangle(int canvas_x, int canvas_y, int w, int h);
-void tileset_changed(void);
+void move_unit_map_canvas(struct unit *punit, int x0, int y0, int dx, int dy);
+void decrease_unit_hp_smooth(struct unit *punit0, int hp0, 
+			     struct unit *punit1, int hp1);
+void put_nuke_mushroom_pixmaps(int x, int y);
+
+void refresh_overview_canvas(void);
+void refresh_overview_viewrect(void);
+
+void draw_segment(int src_x, int src_y, int dir);
+void undraw_segment(int src_x, int src_y, int dir);
 
 #endif  /* FC__MAPVIEW_G_H */

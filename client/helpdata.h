@@ -31,8 +31,8 @@ const struct help_item *get_help_item_spec(const char *name,
 void help_iter_start(void);
 const struct help_item *help_iter_next(void);
 
-char *helptext_building(char *buf, size_t bufsz, Impr_Type_id which,
-			const char *user_text);
+void helptext_improvement(char *buf, int which, const char *user_text);
+void helptext_wonder(char *buf, int which, const char *user_text);
 void helptext_unit(char *buf, int i, const char *user_text);
 void helptext_tech(char *buf, int i, const char *user_text);
 void helptext_terrain(char *buf, int i, const char *user_text);
@@ -45,5 +45,7 @@ char *helptext_unit_upkeep_str(int i);
         help_iter_start();                \
         while((pitem=help_iter_next())) {   
 #define help_items_iterate_end }}
+
+extern char long_buffer[64000];
 
 #endif  /* FC__HELPDATA_H */

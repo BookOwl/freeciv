@@ -15,6 +15,6 @@
 
 #include "plrdlg_g.h"
 
-void popdown_players_dialog(void);
+/* nothing else */
 
 #endif  /* FC__PLRDLG_H */

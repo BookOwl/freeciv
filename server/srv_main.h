@@ -13,13 +13,11 @@
 #ifndef FC__SRV_MAIN_H
 #define FC__SRV_MAIN_H
 
-#include "fc_types.h"
 #include "game.h"
 #include "packets.h"
 
 struct connection;
-
-BV_DEFINE(bv_draw, MAX_NUM_PLAYERS);
+struct unit;
 
 struct server_arguments {
   /* metaserver information */
@@ -27,8 +25,6 @@ struct server_arguments {
   char metaserver_info_line[256];
   char metaserver_addr[256];
   unsigned short int metaserver_port;
-  /* address this server is to listen on (NULL => INADDR_ANY) */
-  char *bind_addr;
   /* this server's listen port */
   int port;
   /* the log level */
@@ -36,39 +32,29 @@ struct server_arguments {
   /* filenames */
   char *log_filename;
   char *gamelog_filename;
-  char load_filename[512]; /* FIXME: may not be long enough? use MAX_PATH? */
+  char *load_filename;
   char *script_filename;
   /* extra info for the metaserver */
   char extra_metaserver_info[256];
   /* quit if there no players after a given time interval */
   int quitidle;
-  /* exit the server on game ending */
-  bool exit_on_end;
-  /* what kind of end game we should use */
-  bv_draw draw;
-  /* authentication options */
-  bool auth_enabled;            /* defaults to FALSE */
-  bool auth_allow_guests;       /* defaults to TRUE */
-  bool auth_allow_newusers;     /* defaults to TRUE */
 };
 
-void init_game_seed(void);
 void srv_init(void);
 void srv_main(void);
-void server_quit(void);
 
 bool handle_packet_input(struct connection *pconn, void *packet, int type);
+void lost_connection_to_client(struct connection *pconn);
+void accept_new_player(char *name, struct connection *pconn);
 void start_game(void);
 void save_game(char *orig_filename);
 void pick_ai_player_name(Nation_Type_id nation, char *newname);
-void send_all_info(struct conn_list *dest);
-void check_for_full_turn_done(void);
 
 void dealloc_id(int id);
+bool is_id_allocated(int id);
 void alloc_id(int id);
 int get_next_id_number(void);
 void server_game_free(void);
-void check_for_full_turn_done(void);
 
 extern struct server_arguments srvarg;
 

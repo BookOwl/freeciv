@@ -15,25 +15,25 @@
 
 #include "mapview_g.h"
 
-void check_mapstore(void);
-void map_resize(void);
-void init_map_win(void);
+void pixmap_put_tile(HDC hdc, int x, int y, int abs_x0, int abs_y0,
+                     int citymode);
+void put_city_tile_output(HDC hdc, int x, int y,
+                          int food, int shield, int trade);    
+void put_unit_pixmap(struct unit *punit, HDC hdc,int x,int y);
+void pixmap_frame_tile_red(HDC hdc, int x, int y);
+void put_unit_city_overlays(struct unit *punit, HDC hdc, int x, int y);
+void get_map_xy(int canvas_x, int canvas_y, int *map_x, int *map_y);
+void put_one_tile_full(HDC hdc, int x, int y,
+		       int canvas_x, int canvas_y, int citymode);
+void check_mapstore();
+void map_resize();
+void init_map_win();
 void map_expose(HDC hdc);
 void overview_expose(HDC hdc);
 void map_handle_hscroll(int pos);
 void map_handle_vscroll(int pos);
-
-/* These values are stored in the mapview_canvas struct now. */
-#define map_view_x mapview_canvas.map_x0
-#define map_view_y mapview_canvas.map_y0
-#define map_win_width mapview_canvas.width
-#define map_win_height mapview_canvas.height
-#define map_view_width mapview_canvas.tile_width
-#define map_view_height mapview_canvas.tile_height
-#define mapstorebitmap		(mapview_canvas.store->bitmap)
-
-/* Use of these wrapper functions is deprecated. */
-#define get_canvas_xy(map_x, map_y, canvas_x, canvas_y) \
-  map_to_canvas_pos(canvas_x, canvas_y, map_x, map_y)
-
+extern int map_view_x;
+extern int map_view_y;
+extern int map_view_width;
+extern int map_view_height;
 #endif  /* FC__MAPVIEW_H */

@@ -10,13 +10,13 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/ 
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
-
+ 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>     
 #include <windows.h>
 #include <windowsx.h>
 
@@ -264,8 +264,14 @@ static LONG CALLBACK ratesdlg_proc(HWND hWnd,
 	  break;
 	case IDOK:
 	  DestroyWindow(hWnd);
-	  dsend_packet_player_rates(&aconnection, rates_tax_value,
-				    rates_lux_value, rates_sci_value);
+	  { 
+	    struct packet_player_request packet;                
+	    packet.tax=rates_tax_value;
+	    packet.science=rates_sci_value;
+	    packet.luxury=rates_lux_value;
+	    send_packet_player_request(&aconnection, &packet,
+				       PACKET_PLAYER_RATES);  
+	  }
 	  break;
 	}
       break;

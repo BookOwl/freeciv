@@ -26,6 +26,7 @@
 #include "city.h"
 #include "fcintl.h"
 #include "game.h"
+#include "genlist.h"
 #include "government.h"
 #include "mem.h"
 #include "shared.h"
@@ -84,13 +85,13 @@ static GPtrArray *help_history;
 static int	  help_history_pos;
 
 
-static const char *help_ilabel_name[6] =
+static char *help_ilabel_name[6] =
 { N_("Cost:"), NULL, N_("Upkeep:"), NULL, N_("Requirement:"), NULL };
 
-static const char *help_wlabel_name[6] =
+static char *help_wlabel_name[6] =
 { N_("Cost:"), NULL, N_("Requirement:"), NULL, N_("Obsolete by:"), NULL };
 
-static const char *help_ulabel_name[5][5] =
+static char *help_ulabel_name[5][5] =
 {
     { N_("Cost:"),		NULL, NULL, N_("Attack:"),	NULL },
     { N_("Defense:"),		NULL, NULL, N_("Move:")	,	NULL },
@@ -99,16 +100,13 @@ static const char *help_ulabel_name[5][5] =
     { N_("Requirement:"),	NULL, NULL, N_("Obsolete by:"),	NULL }
 };
 
-static const char *help_tlabel_name[4][5] =
+static char *help_tlabel_name[4][5] =
 {
     { N_("Move/Defense:"),	NULL, NULL, N_("Food/Res/Trade:"),	NULL },
     { N_("Sp1 F/R/T:"),		NULL, NULL, N_("Sp2 F/R/T:"),		NULL },
     { N_("Road Rslt/Time:"),	NULL, NULL, N_("Irrig. Rslt/Time:"),	NULL },
     { N_("Mine Rslt/Time:"),	NULL, NULL, N_("Trans. Rslt/Time:"),	NULL }
 };
-
-/* HACK: we use a static string for convenience. */
-static char long_buffer[64000];
 
 
 static void create_help_dialog(void);
@@ -430,7 +428,12 @@ static void create_help_dialog(void)
 						  GTK_STOCK_CLOSE,
 						  GTK_RESPONSE_CLOSE,
 						  NULL);
-  setup_dialog(help_dialog_shell, toplevel);
+  if (dialogs_on_top) {
+    gtk_window_set_transient_for(GTK_WINDOW(help_dialog_shell),
+				 GTK_WINDOW(toplevel));
+  }
+  gtk_window_set_type_hint(GTK_WINDOW(help_dialog_shell),
+			   GDK_WINDOW_TYPE_HINT_NORMAL);
   gtk_dialog_set_default_response(GTK_DIALOG(help_dialog_shell),
 				  GTK_RESPONSE_CLOSE);
   gtk_widget_set_name(help_dialog_shell, "Freeciv");
@@ -684,32 +687,32 @@ static void create_help_page(enum help_page_type type)
 static void help_update_improvement(const struct help_item *pitem,
 				    char *title, int which)
 {
-  char buf[64000];
+  char *buf = &long_buffer[0];
   
   create_help_page(HELP_IMPROVEMENT);
   
   if (which<game.num_impr_types) {
     struct impr_type *imp = &improvement_types[which];
-    sprintf(buf, "%d", impr_build_shield_cost(which));
-    gtk_label_set_text(GTK_LABEL(help_ilabel[1]), buf);
+    sprintf(buf, "%d", imp->build_cost);
+    gtk_set_label(help_ilabel[1], buf);
     sprintf(buf, "%d", imp->upkeep);
-    gtk_label_set_text(GTK_LABEL(help_ilabel[3]), buf);
+    gtk_set_label(help_ilabel[3], buf);
     if (imp->tech_req == A_LAST) {
-      gtk_label_set_text(GTK_LABEL(help_ilabel[5]), _("(Never)"));
+      gtk_set_label(help_ilabel[5], _("(Never)"));
     } else {
-      gtk_label_set_text(GTK_LABEL(help_ilabel[5]), advances[imp->tech_req].name);
+      gtk_set_label(help_ilabel[5], advances[imp->tech_req].name);
     }
 /*    create_tech_tree(help_improvement_tree, 0, imp->tech_req, 3);*/
   }
   else {
-    gtk_label_set_text(GTK_LABEL(help_ilabel[1]), "0");
-    gtk_label_set_text(GTK_LABEL(help_ilabel[3]), "0");
-    gtk_label_set_text(GTK_LABEL(help_ilabel[5]), _("(Never)"));
+    gtk_set_label(help_ilabel[1], "0");
+    gtk_set_label(help_ilabel[3], "0");
+    gtk_set_label(help_ilabel[5], _("(Never)"));
 /*    create_tech_tree(help_improvement_tree, 0, game.num_tech_types, 3);*/
   }
   gtk_widget_show(help_itable);
 
-  helptext_building(buf, sizeof(buf), which, pitem->text);
+  helptext_improvement(buf, which, pitem->text);
   gtk_text_buffer_set_text(help_text, buf, -1);
   gtk_widget_show(help_text_sw);
 }
@@ -720,36 +723,36 @@ static void help_update_improvement(const struct help_item *pitem,
 static void help_update_wonder(const struct help_item *pitem,
 			       char *title, int which)
 {
-  char buf[64000];
+  char *buf = &long_buffer[0];
 
   create_help_page(HELP_WONDER);
 
   if (which<game.num_impr_types) {
     struct impr_type *imp = &improvement_types[which];
-    sprintf(buf, "%d", impr_build_shield_cost(which));
-    gtk_label_set_text(GTK_LABEL(help_wlabel[1]), buf);
+    sprintf(buf, "%d", imp->build_cost);
+    gtk_set_label(help_wlabel[1], buf);
     if (imp->tech_req == A_LAST) {
-      gtk_label_set_text(GTK_LABEL(help_wlabel[3]), _("(Never)"));
+      gtk_set_label(help_wlabel[3], _("(Never)"));
     } else {
-      gtk_label_set_text(GTK_LABEL(help_wlabel[3]), advances[imp->tech_req].name);
+      gtk_set_label(help_wlabel[3], advances[imp->tech_req].name);
     }
     if (tech_exists(imp->obsolete_by)) {
-      gtk_label_set_text(GTK_LABEL(help_wlabel[5]), advances[imp->obsolete_by].name);
+      gtk_set_label(help_wlabel[5], advances[imp->obsolete_by].name);
     } else {
-      gtk_label_set_text(GTK_LABEL(help_wlabel[5]), _("(Never)"));
+      gtk_set_label(help_wlabel[5], _("(Never)"));
     }
 /*    create_tech_tree(help_improvement_tree, 0, imp->tech_req, 3);*/
   }
   else {
     /* can't find wonder */
-    gtk_label_set_text(GTK_LABEL(help_wlabel[1]), "0");
-    gtk_label_set_text(GTK_LABEL(help_wlabel[3]), _("(Never)"));
-    gtk_label_set_text(GTK_LABEL(help_wlabel[5]), _("None"));
+    gtk_set_label(help_wlabel[1], "0");
+    gtk_set_label(help_wlabel[3], _("(Never)"));
+    gtk_set_label(help_wlabel[5], _("None"));
 /*    create_tech_tree(help_improvement_tree, 0, game.num_tech_types, 3); */
   }
   gtk_widget_show(help_wtable);
 
-  helptext_building(buf, sizeof(buf), which, pitem->text);
+  helptext_wonder(buf, which, pitem->text);
   gtk_text_buffer_set_text(help_text, buf, -1);
   gtk_widget_show(help_text_sw);
 }
@@ -766,31 +769,31 @@ static void help_update_unit_type(const struct help_item *pitem,
 
   if (i<game.num_unit_types) {
     struct unit_type *utype = get_unit_type(i);
-    sprintf(buf, "%d", unit_build_shield_cost(i));
-    gtk_label_set_text(GTK_LABEL(help_ulabel[0][1]), buf);
+    sprintf(buf, "%d", utype->build_cost);
+    gtk_set_label(help_ulabel[0][1], buf);
     sprintf(buf, "%d", utype->attack_strength);
-    gtk_label_set_text(GTK_LABEL(help_ulabel[0][4]), buf);
+    gtk_set_label(help_ulabel[0][4], buf);
     sprintf(buf, "%d", utype->defense_strength);
-    gtk_label_set_text(GTK_LABEL(help_ulabel[1][1]), buf);
+    gtk_set_label(help_ulabel[1][1], buf);
     sprintf(buf, "%d", utype->move_rate/3);
-    gtk_label_set_text(GTK_LABEL(help_ulabel[1][4]), buf);
+    gtk_set_label(help_ulabel[1][4], buf);
     sprintf(buf, "%d", utype->firepower);
-    gtk_label_set_text(GTK_LABEL(help_ulabel[2][1]), buf);
+    gtk_set_label(help_ulabel[2][1], buf);
     sprintf(buf, "%d", utype->hp);
-    gtk_label_set_text(GTK_LABEL(help_ulabel[2][4]), buf);
-    gtk_label_set_text(GTK_LABEL(help_ulabel[3][1]), helptext_unit_upkeep_str(i));
+    gtk_set_label(help_ulabel[2][4], buf);
+    gtk_set_label(help_ulabel[3][1], helptext_unit_upkeep_str(i));
     sprintf(buf, "%d", utype->vision_range);
-    gtk_label_set_text(GTK_LABEL(help_ulabel[3][4]), buf);
+    gtk_set_label(help_ulabel[3][4], buf);
     if(utype->tech_requirement==A_LAST) {
-      gtk_label_set_text(GTK_LABEL(help_ulabel[4][1]), _("(Never)"));
+      gtk_set_label(help_ulabel[4][1], _("(Never)"));
     } else {
-      gtk_label_set_text(GTK_LABEL(help_ulabel[4][1]), advances[utype->tech_requirement].name);
+      gtk_set_label(help_ulabel[4][1], advances[utype->tech_requirement].name);
     }
 /*    create_tech_tree(help_improvement_tree, 0, utype->tech_requirement, 3);*/
     if(utype->obsoleted_by==-1) {
-      gtk_label_set_text(GTK_LABEL(help_ulabel[4][4]), _("None"));
+      gtk_set_label(help_ulabel[4][4], _("None"));
     } else {
-      gtk_label_set_text(GTK_LABEL(help_ulabel[4][4]), get_unit_type(utype->obsoleted_by)->name);
+      gtk_set_label(help_ulabel[4][4], get_unit_type(utype->obsoleted_by)->name);
     }
 
     helptext_unit(buf, i, pitem->text);
@@ -798,30 +801,23 @@ static void help_update_unit_type(const struct help_item *pitem,
     gtk_text_buffer_set_text(help_text, buf, -1);
     gtk_widget_show(help_text_sw);
 
-    gtk_pixcomm_freeze(GTK_PIXCOMM(unit_tile));
-    {
-      struct canvas store;
-
-      store.type = CANVAS_PIXCOMM;
-      store.v.pixcomm = GTK_PIXCOMM(unit_tile);
-      create_overlay_unit(&store, i);
-    }
-    gtk_pixcomm_thaw(GTK_PIXCOMM(unit_tile));
+    create_overlay_unit(unit_tile
+    , i);
     gtk_widget_show(unit_tile);
   }
   else {
-    gtk_label_set_text(GTK_LABEL(help_ulabel[0][1]), "0");
-    gtk_label_set_text(GTK_LABEL(help_ulabel[0][4]), "0");
-    gtk_label_set_text(GTK_LABEL(help_ulabel[1][1]), "0");
-    gtk_label_set_text(GTK_LABEL(help_ulabel[1][4]), "0");
-    gtk_label_set_text(GTK_LABEL(help_ulabel[2][1]), "0");
-    gtk_label_set_text(GTK_LABEL(help_ulabel[2][4]), "0");
-    gtk_label_set_text(GTK_LABEL(help_ulabel[3][1]), "0");
-    gtk_label_set_text(GTK_LABEL(help_ulabel[3][4]), "0");
+    gtk_set_label(help_ulabel[0][1], "0");
+    gtk_set_label(help_ulabel[0][4], "0");
+    gtk_set_label(help_ulabel[1][1], "0");
+    gtk_set_label(help_ulabel[1][4], "0");
+    gtk_set_label(help_ulabel[2][1], "0");
+    gtk_set_label(help_ulabel[2][4], "0");
+    gtk_set_label(help_ulabel[3][1], "0");
+    gtk_set_label(help_ulabel[3][4], "0");
 
-    gtk_label_set_text(GTK_LABEL(help_ulabel[4][1]), _("(Never)"));
+    gtk_set_label(help_ulabel[4][1], _("(Never)"));
 /*    create_tech_tree(help_improvement_tree, 0, A_LAST, 3);*/
-    gtk_label_set_text(GTK_LABEL(help_ulabel[4][4]), _("None"));
+    gtk_set_label(help_ulabel[4][4], _("None"));
 
     gtk_text_buffer_set_text(help_text, buf, -1);
     gtk_widget_show(help_text_sw);
@@ -875,6 +871,12 @@ static void help_update_tech(const struct help_item *pitem, char *title, int i)
 
     helptext_tech(buf, i, pitem->text);
     len = strlen(buf);
+    if (advances[i].helptext) {
+      if (len) strcat(buf, "\n");
+      sprintf(buf+len, "%s\n", _(advances[i].helptext));
+      len = strlen(buf);
+    }
+
     my_chomp(buf, len);
 
     w = gtk_text_view_new();
@@ -985,96 +987,112 @@ static void help_update_terrain(const struct help_item *pitem,
 
   create_help_page(HELP_TERRAIN);
 
-  if (i < T_COUNT) {
-    sprintf(buf, "%d/%d.%d",
-	    tile_types[i].movement_cost,
-	    (int)(tile_types[i].defense_bonus/10),
-	    tile_types[i].defense_bonus%10);
-    gtk_label_set_text(GTK_LABEL(help_tlabel[0][1]), buf);
+  if (i < T_COUNT)
+    {
+      sprintf (buf, "%d/%d.%d",
+	       tile_types[i].movement_cost,
+	       (int)(tile_types[i].defense_bonus/10), tile_types[i].defense_bonus%10);
+      gtk_set_label (help_tlabel[0][1], buf);
 
-    sprintf(buf, "%d/%d/%d",
-	    tile_types[i].food,
-	    tile_types[i].shield,
-	    tile_types[i].trade);
-    gtk_label_set_text(GTK_LABEL(help_tlabel[0][4]), buf);
+      sprintf (buf, "%d/%d/%d",
+	       tile_types[i].food,
+	       tile_types[i].shield,
+	       tile_types[i].trade);
+      gtk_set_label (help_tlabel[0][4], buf);
 
-    if (*(tile_types[i].special_1_name)) {
-      sprintf(buf, _("%s F/R/T:"),
-	       tile_types[i].special_1_name);
-      gtk_label_set_text(GTK_LABEL(help_tlabel[1][0]), buf);
-      sprintf(buf, "%d/%d/%d",
-	      tile_types[i].food_special_1,
-	      tile_types[i].shield_special_1,
-	      tile_types[i].trade_special_1);
-      gtk_label_set_text(GTK_LABEL(help_tlabel[1][1]), buf);
-    } else {
-      gtk_label_set_text(GTK_LABEL(help_tlabel[1][0]), "");
-      gtk_label_set_text(GTK_LABEL(help_tlabel[1][1]), "");
+      if (*(tile_types[i].special_1_name))
+	{
+	  sprintf (buf, _("%s F/R/T:"),
+		   tile_types[i].special_1_name);
+	  gtk_set_label (help_tlabel[1][0], buf);
+	  sprintf (buf, "%d/%d/%d",
+		   tile_types[i].food_special_1,
+		   tile_types[i].shield_special_1,
+		   tile_types[i].trade_special_1);
+	  gtk_set_label (help_tlabel[1][1], buf);
+	} else {
+	  gtk_set_label (help_tlabel[1][0], "");
+	  gtk_set_label (help_tlabel[1][1], "");
+	}
+
+      if (*(tile_types[i].special_2_name))
+	{
+	  sprintf (buf, _("%s F/R/T:"),
+		   tile_types[i].special_2_name);
+	  gtk_set_label (help_tlabel[1][3], buf);
+	  sprintf (buf, "%d/%d/%d",
+		   tile_types[i].food_special_2,
+		   tile_types[i].shield_special_2,
+		   tile_types[i].trade_special_2);
+	  gtk_set_label (help_tlabel[1][4], buf);
+	} else {
+	  gtk_set_label (help_tlabel[1][3], "");
+	  gtk_set_label (help_tlabel[1][4], "");
+	}
+
+      if (tile_types[i].road_trade_incr > 0)
+	{
+	  sprintf (buf, _("+%d Trade / %d"),
+		   tile_types[i].road_trade_incr,
+		   tile_types[i].road_time);
+	}
+      else if (tile_types[i].road_time > 0)
+	{
+	  sprintf (buf, _("no extra / %d"),
+		   tile_types[i].road_time);
+	}
+      else
+	{
+	  strcpy (buf, _("n/a"));
+	}
+      gtk_set_label (help_tlabel[2][1], buf);
+
+      strcpy (buf, _("n/a"));
+      if (tile_types[i].irrigation_result == i)
+	{
+	  if (tile_types[i].irrigation_food_incr > 0)
+	    {
+	      sprintf (buf, _("+%d Food / %d"),
+		       tile_types[i].irrigation_food_incr,
+		       tile_types[i].irrigation_time);
+	    }
+	}
+      else if (tile_types[i].irrigation_result != T_LAST)
+	{
+	  sprintf (buf, "%s / %d",
+		   tile_types[tile_types[i].irrigation_result].terrain_name,
+		   tile_types[i].irrigation_time);
+	}
+      gtk_set_label (help_tlabel[2][4], buf);
+
+      strcpy (buf, _("n/a"));
+      if (tile_types[i].mining_result == i)
+	{
+	  if (tile_types[i].mining_shield_incr > 0)
+	    {
+	      sprintf (buf, _("+%d Res. / %d"),
+		       tile_types[i].mining_shield_incr,
+		       tile_types[i].mining_time);
+	    }
+	}
+      else if (tile_types[i].mining_result != T_LAST)
+	{
+	  sprintf (buf, "%s / %d",
+		   tile_types[tile_types[i].mining_result].terrain_name,
+		   tile_types[i].mining_time);
+	}
+      gtk_set_label (help_tlabel[3][1], buf);
+
+      if (tile_types[i].transform_result != T_LAST)
+	{
+	  sprintf (buf, "%s / %d",
+		   tile_types[tile_types[i].transform_result].terrain_name,
+		   tile_types[i].transform_time);
+	} else {
+	  strcpy (buf, "n/a");
+	}
+      gtk_set_label (help_tlabel[3][4], buf);
     }
-
-    if (*(tile_types[i].special_2_name)) {
-      sprintf(buf, _("%s F/R/T:"),
-	      tile_types[i].special_2_name);
-      gtk_label_set_text(GTK_LABEL(help_tlabel[1][3]), buf);
-      sprintf(buf, "%d/%d/%d",
-	      tile_types[i].food_special_2,
-	      tile_types[i].shield_special_2,
-	      tile_types[i].trade_special_2);
-      gtk_label_set_text(GTK_LABEL(help_tlabel[1][4]), buf);
-    } else {
-      gtk_label_set_text(GTK_LABEL(help_tlabel[1][3]), "");
-      gtk_label_set_text(GTK_LABEL(help_tlabel[1][4]), "");
-    }
-
-    if (tile_types[i].road_trade_incr > 0) {
-      sprintf(buf, _("+%d Trade / %d"),
-	      tile_types[i].road_trade_incr,
-	      tile_types[i].road_time);
-    } else if (tile_types[i].road_time > 0) {
-      sprintf(buf, _("no extra / %d"),
-	      tile_types[i].road_time);
-    } else {
-      strcpy(buf, _("n/a"));
-    }
-    gtk_label_set_text(GTK_LABEL(help_tlabel[2][1]), buf);
-
-    strcpy(buf, _("n/a"));
-    if (tile_types[i].irrigation_result == i) {
-      if (tile_types[i].irrigation_food_incr > 0) {
-	sprintf(buf, _("+%d Food / %d"),
-		tile_types[i].irrigation_food_incr,
-		tile_types[i].irrigation_time);
-      }
-    } else if (tile_types[i].irrigation_result != T_NONE) {
-      sprintf(buf, "%s / %d",
-	      tile_types[tile_types[i].irrigation_result].terrain_name,
-	      tile_types[i].irrigation_time);
-    }
-    gtk_label_set_text(GTK_LABEL(help_tlabel[2][4]), buf);
-
-    strcpy(buf, _("n/a"));
-    if (tile_types[i].mining_result == i) {
-      if (tile_types[i].mining_shield_incr > 0) {
-	sprintf(buf, _("+%d Res. / %d"),
-		tile_types[i].mining_shield_incr,
-		tile_types[i].mining_time);
-      }
-    } else if (tile_types[i].mining_result != T_NONE) {
-      sprintf(buf, "%s / %d",
-	      tile_types[tile_types[i].mining_result].terrain_name,
-	      tile_types[i].mining_time);
-    }
-    gtk_label_set_text(GTK_LABEL(help_tlabel[3][1]), buf);
-
-    if (tile_types[i].transform_result != T_NONE) {
-      sprintf(buf, "%s / %d",
-	       tile_types[tile_types[i].transform_result].terrain_name,
-	       tile_types[i].transform_time);
-    } else {
-      strcpy(buf, "n/a");
-    }
-    gtk_label_set_text(GTK_LABEL(help_tlabel[3][4]), buf);
-  }
 
   helptext_terrain(buf, i, pitem->text);
   

@@ -13,11 +13,8 @@
 #ifndef FC__AILOG_H
 #define FC__AILOG_H
 
-#include "fc_types.h"
-
-#include "gotohand.h"		/* enum goto_result */
-
-struct ai_data;
+struct unit;
+struct city;
 
 /* 
  * Change these and remake to watch logs from a specific 
@@ -27,13 +24,11 @@ struct ai_data;
 #define LOGLEVEL_UNIT LOG_DEBUG
 #define LOGLEVEL_GOTO LOG_DEBUG
 #define LOGLEVEL_CITY LOG_DEBUG
-#define LOGLEVEL_BUILD LOG_DEBUG
-#define LOGLEVEL_HUNT LOG_DEBUG
 
-void PLAYER_LOG(int level, struct player *pplayer, struct ai_data *ai,
-                const char *msg, ...);
 void CITY_LOG(int level, struct city *pcity, const char *msg, ...);
 void UNIT_LOG(int level, struct unit *punit, const char *msg, ...);
+void GOTO_LOG(int level, struct unit *punit, enum goto_result result,
+              const char *msg, ...);
 void BODYGUARD_LOG(int level, struct unit *punit, const char *msg);
 
 #endif  /* FC__AILOG_H */

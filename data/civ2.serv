@@ -3,9 +3,9 @@
 # Use this as, eg, "./ser -r data/civ2.serv" 
 #
 # Civ2 start:
-set startunits cc
+set settlers 2
+set explorer 0
 rulesetdir civ2
 #
 # Minor civ2 rules:
 set civstyle 2
-set borders 0

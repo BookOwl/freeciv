@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -23,30 +22,27 @@
 
 #include "astring.h"
 #include "fcintl.h"
-#include "government.h"
 #include "log.h"
 #include "map.h"
 #include "mem.h"
 #include "support.h"
 #include "unit.h"
 
+#include "chatline.h"
+#include "cityrep.h"
 #include "civclient.h"
 #include "clinet.h"
 #include "control.h"
-#include "options.h"
-#include "packhand.h"
-
-#include "chatline.h"
-#include "cityrep.h"
 #include "dialogs.h"
 #include "finddlg.h"
 #include "gotodlg.h"
 #include "gui_stuff.h"
 #include "helpdlg.h"
-#include "mapctrl.h"		/* center_on_unit */
+#include "mapctrl.h"   /* center_on_unit */
 #include "messagedlg.h"
 #include "messagewin.h"
 #include "optiondlg.h"
+#include "options.h"
 #include "plrdlg.h"
 #include "ratesdlg.h"
 #include "repodlgs.h"
@@ -76,15 +72,13 @@ enum MenuID {
   MENU_GAME_DISCONNECT,
   MENU_GAME_QUIT,
   
-  MENU_GOVERNMENT_TAX_RATE,
-  MENU_GOVERNMENT_FIND_CITY,
-  MENU_GOVERNMENT_WORKLISTS,
-  MENU_GOVERNMENT_REVOLUTION,
+  MENU_KINGDOM_TAX_RATE,
+  MENU_KINGDOM_FIND_CITY,
+  MENU_KINGDOM_WORKLISTS,
+  MENU_KINGDOM_REVOLUTION,
 
   MENU_VIEW_SHOW_MAP_GRID,
-  MENU_VIEW_SHOW_NATIONAL_BORDERS,
   MENU_VIEW_SHOW_CITY_NAMES,
-  MENU_VIEW_SHOW_CITY_GROWTH_TURNS,
   MENU_VIEW_SHOW_CITY_PRODUCTIONS,
   MENU_VIEW_SHOW_TERRAIN,
   MENU_VIEW_SHOW_COASTLINE,
@@ -112,19 +106,14 @@ enum MenuID {
   MENU_ORDER_SENTRY,
   MENU_ORDER_PILLAGE,
   MENU_ORDER_HOMECITY,
-  MENU_ORDER_UNLOAD_TRANSPORTER,
-  MENU_ORDER_LOAD,
   MENU_ORDER_UNLOAD,
   MENU_ORDER_WAKEUP_OTHERS,
   MENU_ORDER_AUTO_SETTLER,   /* shared with AUTO_ATTACK */
   MENU_ORDER_AUTO_EXPLORE,
-  MENU_ORDER_CONNECT_ROAD,
-  MENU_ORDER_CONNECT_RAIL,
-  MENU_ORDER_CONNECT_IRRIGATE,
+  MENU_ORDER_CONNECT,
   MENU_ORDER_PATROL,
   MENU_ORDER_GOTO,
   MENU_ORDER_GOTO_CITY,
-  MENU_ORDER_RETURN,
   MENU_ORDER_DISBAND,
   MENU_ORDER_DIPLOMAT_DLG,
   MENU_ORDER_NUKE,
@@ -204,20 +193,20 @@ static void game_menu_callback(gpointer callback_data,
 /****************************************************************
 ...
 *****************************************************************/
-static void government_menu_callback(gpointer callback_data,
+static void kingdom_menu_callback(gpointer callback_data,
 				  guint callback_action, GtkWidget *widget)
 {
   switch(callback_action) {
-  case MENU_GOVERNMENT_TAX_RATE:
+  case MENU_KINGDOM_TAX_RATE:
     popup_rates_dialog();
     break;
-  case MENU_GOVERNMENT_FIND_CITY:
+  case MENU_KINGDOM_FIND_CITY:
     popup_find_dialog();
     break;
-  case MENU_GOVERNMENT_WORKLISTS:
+  case MENU_KINGDOM_WORKLISTS:
     popup_worklists_report(game.player_ptr);
     break;
-  case MENU_GOVERNMENT_REVOLUTION:
+  case MENU_KINGDOM_REVOLUTION:
     popup_revolution_dialog();
     break;
   }
@@ -236,20 +225,9 @@ static void view_menu_callback(gpointer callback_data, guint callback_action,
     if (draw_map_grid ^ GTK_CHECK_MENU_ITEM(widget)->active)
       key_map_grid_toggle();
     break;
-  case MENU_VIEW_SHOW_NATIONAL_BORDERS:
-    if (draw_borders ^ GTK_CHECK_MENU_ITEM(widget)->active) {
-      key_map_borders_toggle();
-    }
-    break;
   case MENU_VIEW_SHOW_CITY_NAMES:
-    if (draw_city_names ^ GTK_CHECK_MENU_ITEM(widget)->active) {
+    if (draw_city_names ^ GTK_CHECK_MENU_ITEM(widget)->active)
       key_city_names_toggle();
-      menus_set_sensitive("<main>/_View/City G_rowth", draw_city_names);
-    }
-    break;
-  case MENU_VIEW_SHOW_CITY_GROWTH_TURNS:
-    if (draw_city_growth ^ GTK_CHECK_MENU_ITEM(widget)->active)
-      key_city_growth_toggle();
     break;
   case MENU_VIEW_SHOW_CITY_PRODUCTIONS:
     if (draw_city_productions ^ GTK_CHECK_MENU_ITEM(widget)->active)
@@ -381,14 +359,8 @@ static void orders_menu_callback(gpointer callback_data,
    case MENU_ORDER_HOMECITY:
     key_unit_homecity();
     break;
-  case MENU_ORDER_UNLOAD_TRANSPORTER:
-    key_unit_unload_all();
-    break;
-  case MENU_ORDER_LOAD:
-    request_unit_load(get_unit_in_focus(), NULL);
-    break;
-  case MENU_ORDER_UNLOAD:
-    request_unit_unload(get_unit_in_focus());
+   case MENU_ORDER_UNLOAD:
+    key_unit_unload();
     break;
    case MENU_ORDER_WAKEUP_OTHERS:
     key_unit_wakeup_others();
@@ -400,14 +372,8 @@ static void orders_menu_callback(gpointer callback_data,
    case MENU_ORDER_AUTO_EXPLORE:
     key_unit_auto_explore();
     break;
-   case MENU_ORDER_CONNECT_ROAD:
-    key_unit_connect(ACTIVITY_ROAD);
-    break;
-   case MENU_ORDER_CONNECT_RAIL:
-    key_unit_connect(ACTIVITY_RAILROAD);
-    break;
-   case MENU_ORDER_CONNECT_IRRIGATE:
-    key_unit_connect(ACTIVITY_IRRIGATE);
+   case MENU_ORDER_CONNECT:
+    key_unit_connect();
     break;
    case MENU_ORDER_PATROL:
     key_unit_patrol();
@@ -418,11 +384,6 @@ static void orders_menu_callback(gpointer callback_data,
    case MENU_ORDER_GOTO_CITY:
     if(get_unit_in_focus())
       popup_goto_dialog();
-    break;
-   case MENU_ORDER_RETURN:
-    if (get_unit_in_focus()) {
-      request_unit_return(get_unit_in_focus());
-    }
     break;
    case MENU_ORDER_DISBAND:
     key_unit_disband();
@@ -611,28 +572,23 @@ static GtkItemFactoryEntry menu_items[]	=
 	game_menu_callback,	MENU_GAME_DISCONNECT					},
   { "/" N_("Game") "/" N_("_Quit"),			"<control>q",
 	gtk_main_quit,		0							},
-  /* Government menu ... */
-  { "/" N_("_Government"),				NULL,
+  /* Kingdom menu ... */
+  { "/" N_("_Kingdom"),					NULL,
 	NULL,			0,					"<Branch>"	},
-  { "/" N_("Government") "/tearoff1",			NULL,
+  { "/" N_("Kingdom") "/tearoff1",			NULL,
 	NULL,			0,					"<Tearoff>"	},
-  { "/" N_("Government") "/" N_("_Tax Rates"),		"<shift>t",
-	government_menu_callback,MENU_GOVERNMENT_TAX_RATE				},
-  { "/" N_("Government") "/sep1",				NULL,
+  { "/" N_("Kingdom") "/" N_("_Tax Rates"),		"<shift>t",
+	kingdom_menu_callback,	MENU_KINGDOM_TAX_RATE					},
+  { "/" N_("Kingdom") "/sep1",				NULL,
 	NULL,			0,					"<Separator>"	},
-  { "/" N_("Government") "/" N_("_Find City"),		"<shift>f",
-	government_menu_callback,MENU_GOVERNMENT_FIND_CITY				},
-  { "/" N_("Government") "/" N_("Work_lists"),		"<shift>l",
-	government_menu_callback,MENU_GOVERNMENT_WORKLISTS				},
-  { "/" N_("Government") "/sep2",				NULL,
+  { "/" N_("Kingdom") "/" N_("_Find City"),		"<shift>f",
+	kingdom_menu_callback,	MENU_KINGDOM_FIND_CITY					},
+  { "/" N_("Kingdom") "/" N_("Work_lists"),		"<shift>l",
+	kingdom_menu_callback,	MENU_KINGDOM_WORKLISTS					},
+  { "/" N_("Kingdom") "/sep2",				NULL,
 	NULL,			0,					"<Separator>"	},
-  { "/" N_("Government") "/" N_("_Change Government"),  NULL,
-	NULL,           0,                  "<Branch>"    },
-  { "/" N_("Government") "/" N_("_Change Government") "/" N_("_Revolution!"),
-                                                 "<shift>r",
-	government_menu_callback,	MENU_GOVERNMENT_REVOLUTION     },
-  { "/" N_("_Government") "/" N_("_Change Government") "/sep1", NULL,
-	NULL,			0,			"<Separator>"	},
+  { "/" N_("Kingdom") "/" N_("_Revolution"),	        "<shift>r",
+	kingdom_menu_callback,	MENU_KINGDOM_REVOLUTION					},
   /* View menu ... */
   { "/" N_("_View"),					NULL,
 	NULL,			0,					"<Branch>"	},
@@ -640,13 +596,8 @@ static GtkItemFactoryEntry menu_items[]	=
 	NULL,			0,					"<Tearoff>"	},
   { "/" N_("View") "/" N_("Map _Grid"),			"<control>g",
 	view_menu_callback,	MENU_VIEW_SHOW_MAP_GRID,		"<CheckItem>"	},
-  { "/" N_("View") "/" N_("National _Borders"),		"<control>b",
-	view_menu_callback,	MENU_VIEW_SHOW_NATIONAL_BORDERS,	"<CheckItem>"	},
   { "/" N_("View") "/" N_("City _Names"),		"<control>n",
 	view_menu_callback,	MENU_VIEW_SHOW_CITY_NAMES,		"<CheckItem>"	},
-  { "/" N_("View") "/" N_("City G_rowth"),		"<control>r",
-	view_menu_callback,	MENU_VIEW_SHOW_CITY_GROWTH_TURNS,
-	"<CheckItem>"	},
   { "/" N_("View") "/" N_("City _Productions"),		"<control>p",
 	view_menu_callback,	MENU_VIEW_SHOW_CITY_PRODUCTIONS,	"<CheckItem>"	},
   { "/" N_("View") "/sep1",				NULL,
@@ -716,12 +667,8 @@ static GtkItemFactoryEntry menu_items[]	=
 	NULL,			0,					"<Separator>"	},
   { "/" N_("Orders") "/" N_("Make _Homecity"),		"h",
 	orders_menu_callback,	MENU_ORDER_HOMECITY					},
-  { "/" N_("Orders") "/" N_("_Unload Transporter"),	"u",
-	orders_menu_callback,	MENU_ORDER_UNLOAD_TRANSPORTER					},
-  { "/" N_("Orders") "/" N_("Load"), "",
-    orders_menu_callback, MENU_ORDER_LOAD},
-  { "/" N_("Orders") "/" N_("Unload"), "",
-    orders_menu_callback, MENU_ORDER_UNLOAD},
+  { "/" N_("Orders") "/" N_("_Unload"),			"u",
+	orders_menu_callback,	MENU_ORDER_UNLOAD					},
   { "/" N_("Orders") "/" N_("Wake up o_thers"),		"<shift>w",
 	orders_menu_callback,	MENU_ORDER_WAKEUP_OTHERS				},
   { "/" N_("Orders") "/sep3",				NULL,
@@ -730,23 +677,17 @@ static GtkItemFactoryEntry menu_items[]	=
 	orders_menu_callback,	MENU_ORDER_AUTO_SETTLER					},
   { "/" N_("Orders") "/" N_("Auto E_xplore"),		"x",
 	orders_menu_callback,	MENU_ORDER_AUTO_EXPLORE					},
-  {"/" N_("Orders") "/" N_("_Connect") "/" N_("_Road"), "<ctrl><shift>r",
-   orders_menu_callback, MENU_ORDER_CONNECT_ROAD},
-  {"/" N_("Orders") "/" N_("_Connect") "/" N_("Rai_l"), "<ctrl><shift>l",
-   orders_menu_callback, MENU_ORDER_CONNECT_RAIL},
-  {"/" N_("Orders") "/" N_("_Connect") "/" N_("_Irrigate"), "<ctrl><shift>i",
-   orders_menu_callback, MENU_ORDER_CONNECT_IRRIGATE},
+  { "/" N_("Orders") "/" N_("_Connect"),		"<shift>c",
+	orders_menu_callback,	MENU_ORDER_CONNECT					},
   { "/" N_("Orders") "/" N_("Patrol (_Q)"),		"q",
 	orders_menu_callback,	MENU_ORDER_PATROL					},
   { "/" N_("Orders") "/" N_("_Go to"),			"g",
 	orders_menu_callback,	MENU_ORDER_GOTO						},
   { "/" N_("Orders") "/" N_("Go|Airlift to City"),	"l",
 	orders_menu_callback,	MENU_ORDER_GOTO_CITY					},
-  { "/" N_("Orders") "/" N_("Return to nearest city"),	"<shift>g",
-	orders_menu_callback,	MENU_ORDER_RETURN },
   { "/" N_("Orders") "/sep4",				NULL,
 	NULL,			0,					"<Separator>"	},
-  { "/" N_("Orders") "/" N_("_Disband Unit"),		"<shift>d",
+  { "/" N_("Orders") "/" N_("Disband Unit"),		"<shift>d",
 	orders_menu_callback,	MENU_ORDER_DISBAND					},
   { "/" N_("Orders") "/" N_("Diplomat|Spy Actions"),	"d",
 	orders_menu_callback,	MENU_ORDER_DIPLOMAT_DLG					},
@@ -842,7 +783,7 @@ static GtkItemFactoryEntry menu_items[]	=
 
   Path should include underscores like in the menu itself.
 *****************************************************************/
-static const char *translate_menu_path(const char *path, bool remove_uline)
+static const char *translate_menu_path(const char *path, int remove_uline)
 {
 #ifndef ENABLE_NLS
   static char res[100];
@@ -908,9 +849,8 @@ void setup_menus(GtkWidget *window, GtkWidget **menubar)
 
   item_factory=gtk_item_factory_new(GTK_TYPE_MENU_BAR, "<main>", accel);
    
-  for (i = 0; i < nmenu_items; i++) {
-    menu_items[i].path =
-	mystrdup(translate_menu_path(menu_items[i].path, FALSE));
+  for(i=0; i<nmenu_items; i++) {
+    menu_items[i].path = mystrdup(translate_menu_path(menu_items[i].path, 0));
   }
   
   gtk_item_factory_create_items(item_factory, nmenu_items, menu_items, NULL);
@@ -932,7 +872,7 @@ static void menus_set_sensitive(const char *path, int sensitive)
 {
   GtkWidget *item;
 
-  path = translate_menu_path(path, TRUE);
+  path = translate_menu_path(path, 1);
   
   if(!(item=gtk_item_factory_get_widget(item_factory, path))) {
     freelog(LOG_ERROR,
@@ -952,7 +892,7 @@ static void menus_set_active(const char *path, int active)
 {
   GtkWidget *item;
 
-  path = translate_menu_path(path, TRUE);
+  path = translate_menu_path(path, 1);
 
   if (!(item = gtk_item_factory_get_widget(item_factory, path))) {
     freelog(LOG_ERROR,
@@ -973,7 +913,7 @@ static void menus_set_shown(const char *path, int shown)
 {
   GtkWidget *item;
   
-  path = translate_menu_path(path, TRUE);
+  path = translate_menu_path(path, 1);
   
   if(!(item=gtk_item_factory_get_widget(item_factory, path))) {
     freelog(LOG_ERROR, "Can't show non-existent menu %s.", path);
@@ -997,7 +937,7 @@ static void menus_rename(const char *path, char *s)
 {
   GtkWidget *item;
   
-  path = translate_menu_path(path, TRUE);
+  path = translate_menu_path(path, 1);
   
   if(!(item=gtk_item_factory_get_widget(item_factory, path))) {
     freelog(LOG_ERROR, "Can't rename non-existent menu %s.", path);
@@ -1013,86 +953,34 @@ static void menus_rename(const char *path, char *s)
 
 
 /****************************************************************
-  The player has chosen a government from the menu.
-*****************************************************************/
-static void government_callback(GtkMenuItem *item, gpointer data)
-{
-  set_government_choice(GPOINTER_TO_INT(data));
-}
-
-/****************************************************************
 Note: the menu strings should contain underscores as in the
 menu_items struct. The underscores will be removed elsewhere if
 the string is used for a lookup via gtk_item_factory_get_widget()
 *****************************************************************/
 void update_menus(void)
 {
-  if (!can_client_change_view()) {
+  if(get_client_state()!=CLIENT_GAME_RUNNING_STATE) {
     menus_set_sensitive("<main>/_Reports", FALSE);
-    menus_set_sensitive("<main>/_Government", FALSE);
+    menus_set_sensitive("<main>/_Kingdom", FALSE);
     menus_set_sensitive("<main>/_View", FALSE);
     menus_set_sensitive("<main>/_Orders", FALSE);
   } else {
     struct unit *punit;
-    GtkWidget *item;
-    const char *path =
-	translate_menu_path("<main>/_Government/_Change Government", TRUE);
-    GtkWidget *parent = gtk_item_factory_get_widget(item_factory, path);
-
-    if (parent) {
-      int i;
-      GList *iter, *iter_next;
-
-      /* remove previous government entries. */
-      iter = gtk_container_children(GTK_CONTAINER(parent));
-      for (iter = g_list_nth(iter, 2); iter; iter = iter_next) {
-        iter_next = iter->next;
-
-        gtk_container_remove(GTK_CONTAINER(parent), GTK_WIDGET(iter->data));
-      }
-
-      /* add new government entries. */
-      for (i = 0; i < game.government_count; i++) {
-        struct government *g = &governments[i];
-
-        if (i != game.government_when_anarchy) {
-          item = gtk_menu_item_new_with_label(g->name);
-          gtk_widget_show(item);
-
-          gtk_signal_connect(GTK_OBJECT(item), "activate",
-            GTK_SIGNAL_FUNC(government_callback), GINT_TO_POINTER(g->index));
-
-          if (!can_change_to_government(game.player_ptr, i)) {
-            gtk_widget_set_sensitive(item, FALSE);
-	  }
-
-          gtk_menu_shell_append(GTK_MENU_SHELL(parent), item);
-          gtk_widget_show(item);
-        }
-      }
-    }
-
     menus_set_sensitive("<main>/_Reports", TRUE);
-    menus_set_sensitive("<main>/_Government", TRUE);
+    menus_set_sensitive("<main>/_Kingdom", TRUE);
     menus_set_sensitive("<main>/_View", TRUE);
-    menus_set_sensitive("<main>/_Orders", can_client_issue_orders());
+    menus_set_sensitive("<main>/_Orders", !client_is_observer());
 
-    menus_set_sensitive("<main>/_Government/_Tax Rates",
-			can_client_issue_orders());
-    menus_set_sensitive("<main>/_Government/Work_lists",
-			can_client_issue_orders());
-    menus_set_sensitive("<main>/_Government/_Change Government",
-			can_client_issue_orders());
+    menus_set_sensitive("<main>/_Kingdom/_Tax Rates", !client_is_observer());
+    menus_set_sensitive("<main>/_Kingdom/Work_lists", !client_is_observer());
+    menus_set_sensitive("<main>/_Kingdom/_Revolution",
+			!client_is_observer());
 
     menus_set_sensitive("<main>/_Reports/S_paceship",
 			(game.player_ptr->spaceship.state!=SSHIP_NONE));
 
     menus_set_active("<main>/_View/Map _Grid", draw_map_grid);
-    menus_set_sensitive("<main>/_View/National _Borders", game.borders > 0);
-    menus_set_active("<main>/_View/National _Borders", draw_borders);
     menus_set_active("<main>/_View/City _Names", draw_city_names);
-    menus_set_sensitive("<main>/_View/City G_rowth", draw_city_names);
-    menus_set_active("<main>/_View/City G_rowth", draw_city_growth);
     menus_set_active("<main>/_View/City _Productions", draw_city_productions);
     menus_set_active("<main>/_View/Terrain", draw_terrain);
     menus_set_active("<main>/_View/Coastline", draw_coastline);
@@ -1111,7 +999,7 @@ void update_menus(void)
 
     /* Remaining part of this function: Update Orders menu */
 
-    if (!can_client_issue_orders()) {
+    if (client_is_observer()) {
       return;
     }
 
@@ -1121,7 +1009,7 @@ void update_menus(void)
       char *transfmt = _("Transf_orm to %s");
       char irrtext[128], mintext[128], transtext[128];
       char *roadtext;
-      Terrain_type_id  ttype;
+      enum tile_terrain_type  ttype;
       struct tile_type *      tinfo;
 
       sz_strlcpy(irrtext, _("Build _Irrigation"));
@@ -1159,14 +1047,8 @@ void update_menus(void)
 			  can_unit_do_activity(punit, ACTIVITY_PILLAGE));
       menus_set_sensitive("<main>/_Orders/Make _Homecity",
 			  can_unit_change_homecity(punit));
-      menus_set_sensitive("<main>/_Orders/_Unload Transporter",
+      menus_set_sensitive("<main>/_Orders/_Unload",
 			  get_transporter_capacity(punit)>0);
-      menus_set_sensitive("<main>/_Orders/Load",
-	can_unit_load(punit, find_transporter_for_unit(punit,
-						       punit->x, punit->y)));
-      menus_set_sensitive("<main>/_Orders/Unload",
-	(can_unit_unload(punit, find_unit_by_id(punit->transported_by))
-	 && can_unit_exist_at_tile(punit, punit->x, punit->y)));
       menus_set_sensitive("<main>/_Orders/Wake up o_thers", 
 			  is_unit_activity_on_tile(ACTIVITY_SENTRY,
                                                    punit->x, punit->y));
@@ -1174,16 +1056,10 @@ void update_menus(void)
                           can_unit_do_auto(punit));
       menus_set_sensitive("<main>/_Orders/Auto E_xplore",
                           can_unit_do_activity(punit, ACTIVITY_EXPLORE));
-      menus_set_sensitive("<main>/_Orders/_Connect/_Road",
-                          can_unit_do_connect(punit, ACTIVITY_ROAD));
-      menus_set_sensitive("<main>/_Orders/_Connect/Rai_l",
-                          can_unit_do_connect(punit, ACTIVITY_RAILROAD));
-      menus_set_sensitive("<main>/_Orders/_Connect/_Irrigate",
-                          can_unit_do_connect(punit, ACTIVITY_IRRIGATE));
-      menus_set_sensitive("<main>/_Orders/Return to nearest city",
-			  !(is_air_unit(punit) || is_heli_unit(punit)));
-      menus_set_sensitive("<main>/_Orders/_Disband Unit",
-                          !unit_flag(punit, F_UNDISBANDABLE));
+      menus_set_sensitive("<main>/_Orders/_Connect",
+                          can_unit_do_connect(punit, ACTIVITY_IDLE));
+      menus_set_sensitive("<main>/_Orders/Patrol (_Q)",
+                          can_unit_do_activity(punit, ACTIVITY_PATROL));
       menus_set_sensitive("<main>/_Orders/Diplomat|Spy Actions",
                           (is_diplomat_unit(punit)
                            && diplomat_can_do_action(punit, DIPLOMAT_ANY_ACTION,
@@ -1213,31 +1089,32 @@ void update_menus(void)
 	  road_activity=ACTIVITY_ROAD;  
 	}
 	menus_rename("<main>/_Orders/Build _Road", roadtext);
-      } else {
-	menus_rename("<main>/_Orders/Build _Road", _("Build _Road"));
       }
+      else
+	menus_rename("<main>/_Orders/Build _Road", _("Build _Road"));
 
       ttype = map_get_tile(punit->x, punit->y)->terrain;
       tinfo = get_tile_type(ttype);
-      if (tinfo->irrigation_result != T_NONE
-	  && tinfo->irrigation_result != ttype) {
-	my_snprintf(irrtext, sizeof(irrtext), irrfmt,
-		    (get_tile_type(tinfo->irrigation_result))->terrain_name);
-      } else if (map_has_special(punit->x, punit->y, S_IRRIGATION)
-		 && player_knows_techs_with_flag(game.player_ptr,
-						 TF_FARMLAND)) {
-	sz_strlcpy(irrtext, _("Bu_ild Farmland"));
-      }
-      if (tinfo->mining_result != T_NONE
-	  && tinfo->mining_result != ttype) {
-	my_snprintf(mintext, sizeof(mintext), minfmt,
-		    (get_tile_type(tinfo->mining_result))->terrain_name);
-      }
-      if (tinfo->transform_result != T_NONE
-	  && tinfo->transform_result != ttype) {
-	my_snprintf(transtext, sizeof(transtext), transfmt,
-		    (get_tile_type(tinfo->transform_result))->terrain_name);
-      }
+      if ((tinfo->irrigation_result != T_LAST) && (tinfo->irrigation_result != ttype))
+	{
+	  my_snprintf (irrtext, sizeof(irrtext), irrfmt,
+		   (get_tile_type(tinfo->irrigation_result))->terrain_name);
+	}
+      else if (map_has_special(punit->x, punit->y, S_IRRIGATION) &&
+	       player_knows_techs_with_flag(game.player_ptr, TF_FARMLAND))
+	{
+	  sz_strlcpy (irrtext, _("Bu_ild Farmland"));
+	}
+      if ((tinfo->mining_result != T_LAST) && (tinfo->mining_result != ttype))
+	{
+	  my_snprintf (mintext, sizeof(mintext), minfmt,
+		   (get_tile_type(tinfo->mining_result))->terrain_name);
+	}
+      if ((tinfo->transform_result != T_LAST) && (tinfo->transform_result != ttype))
+	{
+	  my_snprintf (transtext, sizeof(transtext), transfmt,
+		   (get_tile_type(tinfo->transform_result))->terrain_name);
+	}
 
       menus_rename("<main>/_Orders/Build _Irrigation", irrtext);
       menus_rename("<main>/_Orders/Build _Mine", mintext);

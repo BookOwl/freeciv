@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -24,9 +23,9 @@
 #include "government.h"
 #include "mem.h"
 #include "player.h"
-#include "shared.h"
 #include "support.h"
 #include "tech.h"
+#include "shared.h"
 
 #include "unittype.h"
 
@@ -45,17 +44,14 @@ static const char *flag_names[] = {
   "AEGIS", "Fighter", "Marines", "Partial_Invis", "Settlers", "Diplomat",
   "Trireme", "Nuclear", "Spy", "Transform", "Paratroopers",
   "Airbase", "Cities", "IgTired", "Missile_Carrier", "No_Land_Attack",
-  "AddToCity", "Fanatic", "GameLoss", "Unique", "Unbribable", 
-  "Undisbandable", "SuperSpy", "NoHome", "NoVeteran", "Bombarder",
-  "CityBuster", "NoBuild"
+  "AddToCity", "Fanatic"
 };
 static const char *role_names[] = {
   "FirstBuild", "Explorer", "Hut", "HutTech", "Partisan",
   "DefendOk", "DefendGood", "AttackFast", "AttackStrong",
   "Ferryboat", "Barbarian", "BarbarianTech", "BarbarianBoat",
   "BarbarianBuild", "BarbarianBuildTech", "BarbarianLeader",
-  "BarbarianSea", "BarbarianSeaTech", "Cities", "Settlers",
-  "GameLoss", "Diplomat"
+  "BarbarianSea", "BarbarianSeaTech"
 };
 static const char *unit_class_names[] = {
   "Air",
@@ -192,36 +188,12 @@ bool unit_has_role(Unit_Type_id id, int role)
   return BV_ISSET(unit_types[id].roles, role - L_FIRST);
 }
 
-/****************************************************************************
-  Returns the number of shields it takes to build this unit.
-****************************************************************************/
-int unit_build_shield_cost(Unit_Type_id id)
+/**************************************************************************
+...
+**************************************************************************/
+int unit_value(Unit_Type_id id)
 {
-  return unit_types[id].build_cost;
-}
-
-/****************************************************************************
-  Returns the amount of gold it takes to rush this unit.
-****************************************************************************/
-int unit_buy_gold_cost(Unit_Type_id id, int shields_in_stock)
-{
-  int cost = 0, missing = unit_types[id].build_cost - shields_in_stock;
-
-  if (missing > 0) {
-    cost = 2 * missing + (missing * missing) / 20;
-  }
-  if (shields_in_stock == 0) {
-    cost *= 2;
-  }
-  return cost;
-}
-
-/****************************************************************************
-  Returns the number of shields received when this unit is disbanded.
-****************************************************************************/
-int unit_disband_shields(Unit_Type_id id)
-{
-  return unit_types[id].build_cost / 2;
+  return (unit_types[id].build_cost);
 }
 
 /**************************************************************************
@@ -233,20 +205,13 @@ int unit_pop_value(Unit_Type_id id)
 }
 
 /**************************************************************************
-  Return the (translated) name of the unit type.
+...
 **************************************************************************/
 const char *unit_name(Unit_Type_id id)
 {
   return (unit_types[id].name);
 }
 
-/**************************************************************************
-  Return the original (untranslated) name of the unit type.
-**************************************************************************/
-const char *unit_name_orig(Unit_Type_id id)
-{
-  return unit_types[id].name_orig;
-}
 /**************************************************************************
 ...
 **************************************************************************/
@@ -290,41 +255,39 @@ const char *unit_class_name(Unit_Class_id id)
 **************************************************************************/
 const char *get_units_with_flag_string(int flag)
 {
-  int count = num_role_units(flag);
+  int count=num_role_units(flag);
 
-  if (count == 1) {
-    return mystrdup(unit_name(get_role_unit(flag, 0)));
-  }
+  if(count==1)
+    return mystrdup(unit_name(get_role_unit(flag,0)));
 
-  if (count > 0) {
+  if(count > 0) {
     struct astring astr;
 
     astr_init(&astr);
-    astr_minsize(&astr, 1);
+    astr_minsize(&astr,1);
     astr.str[0] = 0;
 
-    while ((count--) > 0) {
-      int u = get_role_unit(flag, count);
+    while((count--) > 0) {
+      int u = get_role_unit(flag,count);
       const char *unitname = unit_name(u);
 
       /* there should be something like astr_append() */
-      astr_minsize(&astr, astr.n + strlen(unitname));
-      strcat(astr.str, unitname);
+      astr_minsize(&astr,astr.n+strlen(unitname));
+      strcat(astr.str,unitname);
 
-      if (count == 1) {
-	const char *and_str = _(" and ");
-
-        astr_minsize(&astr, astr.n + strlen(and_str));
+      if(count==1) {
+	char *and_str = _(" and ");
+        astr_minsize(&astr,astr.n+strlen(and_str));
         strcat(astr.str, and_str);
-      } else {
-        if (count != 0) {
-	  const char *and_comma = Q_("?and:, ");
+      }
+      else {
+        if(count != 0) {
+	  char *and_comma = Q_("?and:, ");
 
 	  astr_minsize(&astr, astr.n + strlen(and_comma));
 	  strcat(astr.str, and_comma);
-        } else {
-	  return astr.str;
-	}
+        }
+        else return astr.str;
       }
     }
   }
@@ -348,44 +311,28 @@ int can_upgrade_unittype(struct player *pplayer, Unit_Type_id id)
 }
 
 /**************************************************************************
-  Return the cost (gold) of upgrading a single unit of the specified type
-  to the new type.  This price could (but currently does not) depend on
-  other attributes (like nation or government type) of the player the unit
-  belongs to.
+...
 **************************************************************************/
-int unit_upgrade_price(const struct player *const pplayer,
-		       const Unit_Type_id from, const Unit_Type_id to)
+int unit_upgrade_price(struct player *pplayer, Unit_Type_id from,
+		       Unit_Type_id to)
 {
-  return unit_buy_gold_cost(to, unit_disband_shields(from));
+  int total, build;
+  build = unit_value(from)/2;
+  total = unit_value(to);
+  if (build>=total)
+    return 0;
+  return (total-build)*2+(total-build)*(total-build)/20; 
 }
 
 /**************************************************************************
-  Returns the unit type that has the given (translated) name.
-  Returns U_LAST if none match.
+Does a linear search of unit_types[].name
+Returns U_LAST if none match.
 **************************************************************************/
-Unit_Type_id find_unit_type_by_name(const char *name)
+Unit_Type_id find_unit_type_by_name(const char *s)
 {
-  /* Does a linear search of unit_types[].name */
   unit_type_iterate(i) {
-    if (strcmp(unit_types[i].name, name) == 0) {
+    if (strcmp(unit_types[i].name, s)==0)
       return i;
-    }
-  } unit_type_iterate_end;
-
-  return U_LAST;
-}
-
-/**************************************************************************
-  Returns the unit type that has the given original (untranslated) name.
-  Returns U_LAST if none match.
-**************************************************************************/
-Unit_Type_id find_unit_type_by_name_orig(const char *name_orig)
-{
-  /* Does a linear search of unit_types[].name_orig. */
-  unit_type_iterate(i) {
-    if (mystrcasecmp(unit_types[i].name_orig, name_orig) == 0) {
-      return i;
-    }
   } unit_type_iterate_end;
 
   return U_LAST;
@@ -471,41 +418,15 @@ player has a coastal city.
 **************************************************************************/
 bool can_player_build_unit_direct(struct player *p, Unit_Type_id id)
 {
-  Impr_Type_id impr_req;
-  Tech_Type_id tech_req;
-
   if (!unit_type_exists(id))
     return FALSE;
   if (unit_type_flag(id, F_NUCLEAR) && game.global_wonders[B_MANHATTEN] == 0)
     return FALSE;
-  if (unit_type_flag(id, F_NOBUILD)) {
-    return FALSE;
-  }
   if (unit_type_flag(id, F_FANATIC)
       && !government_has_flag(get_gov_pplayer(p), G_FANATIC_TROOPS))
     return FALSE;
   if (get_invention(p,unit_types[id].tech_requirement)!=TECH_KNOWN)
     return FALSE;
-  if (unit_type_flag(id, F_UNIQUE)) {
-    /* FIXME: This could be slow if we have lots of units. We could
-     * consider keeping an array of unittypes updated with this info 
-     * instead. */
-    unit_list_iterate(p->units, punit) {
-      if (punit->type == id) { 
-        return FALSE;
-      }
-    } unit_list_iterate_end;
-  }
-
-  /* If the unit has a building requirement, we check to see if the player
-   * can build that building.  Note that individual cities may not have
-   * that building, so they still may not be able to build the unit. */
-  impr_req = unit_types[id].impr_requirement;
-  tech_req = get_improvement_type(impr_req)->tech_req;
-  if (impr_req != B_LAST && get_invention(p, tech_req) != TECH_KNOWN) {
-    return FALSE;
-  }
-
   return TRUE;
 }
 
@@ -530,17 +451,11 @@ with future tech.  returns 0 if unit is obsolete.
 **************************************************************************/
 bool can_player_eventually_build_unit(struct player *p, Unit_Type_id id)
 {
-  if (!unit_type_exists(id)) {
+  if (!unit_type_exists(id))
     return FALSE;
-  }
-  if (unit_type_flag(id, F_NOBUILD)) {
-    return FALSE;
-  }
-  while (unit_type_exists((id = unit_types[id].obsoleted_by))) {
-    if (can_player_build_unit_direct(p, id)) {
+  while(unit_type_exists((id = unit_types[id].obsoleted_by)))
+    if (can_player_build_unit_direct(p, id))
 	return FALSE;
-    }
-  }
   return TRUE;
 }
 
@@ -651,53 +566,9 @@ Unit_Type_id best_role_unit(struct city *pcity, int role)
 }
 
 /**************************************************************************
-Return "best" unit the player can build, with given role/flag.
-Returns U_LAST if none match. "Best" means highest unit type id.
-
-TODO: Cache the result per player?
-**************************************************************************/
-Unit_Type_id best_role_unit_for_player(struct player *pplayer, int role)
-{
-  int j;
-
-  assert((role >= 0 && role < F_LAST) || (role >= L_FIRST && role < L_LAST));
-
-  for(j = n_with_role[role]-1; j >= 0; j--) {
-    Unit_Type_id utype = with_role[role][j];
-
-    if (can_player_build_unit(pplayer, utype)) {
-      return utype;
-    }
-  }
-
-  return U_LAST;
-}
-
-/**************************************************************************
-  Return first unit the player can build, with given role/flag.
-  Returns U_LAST if none match.  Used eg when placing starting units.
-**************************************************************************/
-Unit_Type_id first_role_unit_for_player(struct player *pplayer, int role)
-{
-  int j;
-
-  assert((role >= 0 && role < F_LAST) || (role >= L_FIRST && role < L_LAST));
-
-  for(j = 0; j < n_with_role[role]; j++) {
-    Unit_Type_id utype = with_role[role][j];
-
-    if (can_player_build_unit(pplayer, utype)) {
-      return utype;
-    }
-  }
-
-  return U_LAST;
-}
-
-/**************************************************************************
   Frees the memory associated with this unit type.
 **************************************************************************/
-static void unit_type_free(Unit_Type_id id)
+void unit_type_free(Unit_Type_id id)
 {
   struct unit_type *p = get_unit_type(id);
 

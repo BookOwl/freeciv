@@ -10,20 +10,18 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
-#include <gdk/gdkkeysyms.h>
 #include <gtk/gtk.h>
+#include <gdk/gdkkeysyms.h>
 
 #include "events.h"
 #include "fcintl.h"
 
-#include "options.h"
-
 #include "gui_main.h"
+#include "options.h"
 
 #include "messagedlg.h"
 

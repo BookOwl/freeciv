@@ -10,22 +10,20 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
-#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <string.h>
 
 #include "fcintl.h"
+#include "game.h"
 #include "log.h"
 #include "map.h"
 #include "mem.h"
-#include "score.h"
-#include "srv_main.h"
 #include "support.h"
 
 #include "gamelog.h"
@@ -33,56 +31,40 @@
 int gamelog_level;		/* also accessed from stdinhand.c */
 static char *gamelog_filename;
 
-/* Stuff for gamelog_save() */
-struct player_score_entry {
-  int idx;
-  int value;
-};
-
 /**************************************************************************
-  Filename can be NULL, which means no logging.
-**************************************************************************/
+filename can be NULL, which means no logging.
+***************************************************************************/
 void gamelog_init(char *filename)
 {
   gamelog_level = GAMELOG_FULL;
-  if (filename && strlen(filename) > 0) {
-    gamelog_filename = filename;
-  } else {
-    gamelog_filename = NULL;
-  }
+  gamelog_filename = filename;
 }
 
-/**************************************************************************
-  ...
-**************************************************************************/
+/**************************************************************************/
 void gamelog_set_level(int level)
 {
   gamelog_level = level;
 }
 
-/**************************************************************************
-  ...
-**************************************************************************/
-void gamelog(int level, const char *message, ...)
+/**************************************************************************/
+void gamelog(int level, char *message, ...)
 {
   va_list args;
   char buf[512];
   FILE *fs;
 
-  if (!gamelog_filename) {
+  if (!gamelog_filename)
     return;
-  }
-  if (level > gamelog_level) {
+  if (level > gamelog_level)
     return;
-  }
 
-  fs = fopen(gamelog_filename, "a");
+  fs=fopen(gamelog_filename, "a");
   if (!fs) {
     freelog(LOG_FATAL, _("Couldn't open gamelogfile \"%s\" for appending."), 
 	    gamelog_filename);
     exit(EXIT_FAILURE);
   }
-
+  
   va_start(args, message);
   my_vsnprintf(buf, sizeof(buf), message, args);
   if (level == GAMELOG_MAP) {
@@ -107,42 +89,45 @@ void gamelog(int level, const char *message, ...)
   fclose(fs);
 }
 
-/**************************************************************************
-  ...
-**************************************************************************/
+
 void gamelog_map(void)
 {
-  int nat_x, nat_y, map_x, map_y;
-  char *hline = fc_calloc(map.xsize + 1, sizeof(char));
+  int x, y;
+  char *hline = fc_calloc(map.xsize+1, sizeof(char));
 
-  for (nat_y = 0; nat_y < map.ysize; nat_y++) {
-    for (nat_x = 0; nat_x < map.xsize; nat_x++) {
-      NATIVE_TO_MAP_POS(&map_x, &map_y, nat_x, nat_y);
-      hline[nat_x] = is_ocean(map_get_terrain(map_x, map_y)) ? ' ' : '.';
+  for (y = 0; y < map.ysize; y++) {
+    for (x = 0; x < map.xsize; x++) {
+      if (regular_map_pos_is_normal(x, y)) {
+	hline[x] = (map_get_terrain(x, y) == T_OCEAN) ? ' ' : '.';
+      } else {
+	hline[x] = '#';
+      }
     }
     gamelog(GAMELOG_MAP, "%s", hline);
   }
   free(hline);
 }
 
-/**************************************************************************
-  ...
-**************************************************************************/
+/*Stuff for gamelog_save()*/
+struct player_score_entry {
+  int idx;
+  int value;
+};
+
 static int secompare1(const void *a, const void *b)
 {
   return (((const struct player_score_entry *)b)->value -
 	  ((const struct player_score_entry *)a)->value);
 }
 
-/**************************************************************************
-  Every time we save the game, we also output to the gamelog the score
-  and status info.
-**************************************************************************/
-void gamelog_save(void) {
-  int i, count = 0, highest = -1;
-  struct player *highest_plr = NULL;
+void gamelog_save(void){
+  /* lifted from historian_largest() */
+  int i, count = 0;
   char buffer[4096];
-  struct player_score_entry size[game.nplayers], rank[game.nplayers];
+  struct player_score_entry *size=
+    fc_malloc(sizeof(struct player_score_entry) * game.nplayers);
+  struct player_score_entry *rank=
+    fc_malloc(sizeof(struct player_score_entry) * game.nplayers);
 
   players_iterate(pplayer) {
     if (!is_barbarian(pplayer)) {
@@ -150,28 +135,45 @@ void gamelog_save(void) {
       rank[count].idx = pplayer->player_no;
       size[count].value = total_player_citizens(pplayer);
       size[count].idx = pplayer->player_no;
-      if (rank[count].value > highest) {
-        highest = rank[count].value;
-        highest_plr = pplayer;
-      }
       count++;
     }
   } players_iterate_end;
 
-  /* Draws and team victories */
-  count = 0;
-  players_iterate(pplayer) {
-    if (!is_barbarian(pplayer)) {
-      if ((BV_ISSET_ANY(srvarg.draw)
-           && BV_ISSET(srvarg.draw, pplayer->player_no))
-          || (pplayer->team != TEAM_NONE
-              && pplayer->team == highest_plr->team)) {
-        /* We win a shared victory, so equal the score. */
-        rank[count].value = highest;
+  /* average game scores for teams */
+  team_iterate(pteam) {
+    int team_members = 0;
+    int count = 0;
+    int team_score = 0;
+    int team_size = 0;
+
+    /* sum team score */
+    players_iterate(pplayer) {
+      if (pplayer->team == pteam->id) {
+        team_members++;
+        team_score += rank[count].value;
+        team_size += size[count].value;
       }
       count++;
+    } players_iterate_end;
+
+    if (team_members == 0) {
+      continue;
     }
-  } players_iterate_end;
+
+    /* average them */
+    team_score = floor(team_score / team_members);
+    team_size = floor(team_size / team_members);
+
+    /* set scores to average */
+    count = 0;
+    players_iterate(pplayer) {
+      if (pplayer->team == pteam->id) {
+        rank[count].value = team_score;
+        size[count].value = team_size;
+      }
+      count++;
+    } players_iterate_end;
+  } team_iterate_end;
 
   qsort(size, count, sizeof(struct player_score_entry), secompare1);
   buffer[0] = 0;
@@ -183,6 +185,7 @@ void gamelog_save(void) {
 		 size[i].value);
   }
   gamelog(GAMELOG_EOT,buffer);
+  free(size);
   qsort(rank, count, sizeof(struct player_score_entry), secompare1);
   buffer[0] = 0;
   for (i = 0; i < count; i++) {
@@ -194,12 +197,14 @@ void gamelog_save(void) {
   gamelog(GAMELOG_RANK,buffer);
   buffer[0] = 0;
   for (i = 0; i < count; i++) {
-    cat_snprintf(buffer, sizeof(buffer),
-		 "%s,%i,%i,%i|",
-		 game.players[rank[i].idx].name,
-		 game.players[rank[i].idx].ai.control ? 1 : 0 *
-		 game.players[rank[i].idx].ai.skill_level,
-		 game.players[rank[i].idx].is_connected, rank[i].value);
+    cat_snprintf(buffer, sizeof(buffer),    
+         "%s,%i,%i,%i|",
+         game.players[rank[i].idx].name,
+         game.players[rank[i].idx].ai.control * game.players[rank[i].idx].ai.skill_level,
+         game.players[rank[i].idx].is_connected,
+         rank[i].value);
   }
   gamelog(GAMELOG_STATUS, buffer);
+
+  free(rank);
 }

@@ -122,7 +122,7 @@ static void rates_set_values(int tax, int no_tax_scroll,
   if(tax!=rates_tax_value) {
     my_snprintf(buf, sizeof(buf), "%3d%%", tax);
     if (strcmp(buf, GTK_LABEL(rates_tax_label)->label) != 0)
-	gtk_label_set_text(GTK_LABEL(rates_tax_label), buf);
+	gtk_set_label(rates_tax_label,buf);
     if(!no_tax_scroll)
     {
 	g_signal_handler_block(rates_tax_adj, rates_tax_sig);
@@ -135,7 +135,7 @@ static void rates_set_values(int tax, int no_tax_scroll,
   if(lux!=rates_lux_value) {
     my_snprintf(buf, sizeof(buf), "%3d%%", lux);
     if (strcmp(buf, GTK_LABEL(rates_lux_label)->label) != 0)
-	gtk_label_set_text(GTK_LABEL(rates_lux_label), buf);
+	gtk_set_label(rates_lux_label,buf);
     if(!no_lux_scroll)
     {
 	g_signal_handler_block(rates_lux_adj, rates_lux_sig);
@@ -148,7 +148,7 @@ static void rates_set_values(int tax, int no_tax_scroll,
   if(sci!=rates_sci_value) {
     my_snprintf(buf, sizeof(buf), "%3d%%", sci);
     if (strcmp(buf, GTK_LABEL(rates_sci_label)->label) != 0)
-	gtk_label_set_text(GTK_LABEL(rates_sci_label),buf);
+	gtk_set_label(rates_sci_label,buf);
     if(!no_sci_scroll)
     {
 	g_signal_handler_block(rates_sci_adj, rates_sci_sig);
@@ -197,8 +197,13 @@ static void rates_changed_callback(GtkAdjustment *adj)
 static void rates_command_callback(GtkWidget *w, gint response_id)
 {
   if (response_id == GTK_RESPONSE_OK) {
-    dsend_packet_player_rates(&aconnection, rates_tax_value, rates_lux_value,
-			      rates_sci_value);
+    struct packet_player_request packet;
+  
+
+    packet.tax=rates_tax_value;
+    packet.science=rates_sci_value;
+    packet.luxury=rates_lux_value;
+    send_packet_player_request(&aconnection, &packet, PACKET_PLAYER_RATES);
   }
   gtk_widget_destroy(rates_dialog_shell);
 }
@@ -232,7 +237,12 @@ static GtkWidget *create_rates_dialog(void)
 	GTK_STOCK_OK,
 	GTK_RESPONSE_OK,
 	NULL);
-  setup_dialog(shell, toplevel);
+  if (dialogs_on_top) {
+    gtk_window_set_transient_for(GTK_WINDOW(shell),
+				 GTK_WINDOW(toplevel));
+  }
+  gtk_window_set_type_hint(GTK_WINDOW(shell),
+			   GDK_WINDOW_TYPE_HINT_NORMAL);
   gtk_dialog_set_default_response(GTK_DIALOG(shell), GTK_RESPONSE_OK);
   gtk_window_set_position(GTK_WINDOW(shell), GTK_WIN_POS_MOUSE);
 
@@ -346,7 +356,7 @@ void popup_rates_dialog(void)
   my_snprintf(buf, sizeof(buf), _("%s max rate: %d%%"),
       get_government_name(game.player_ptr->government),
       get_government_max_rate(game.player_ptr->government));
-  gtk_label_set_text(GTK_LABEL(rates_gov_label), buf);
+  gtk_set_label(rates_gov_label, buf);
   
   gtk_window_present(GTK_WINDOW(rates_dialog_shell));
 }
@@ -362,26 +372,21 @@ static GtkWidget *option_dialog_shell;
 **************************************************************************/
 static void option_ok_command_callback(GtkWidget *widget, gpointer data)
 {
+  client_option *o;
   const char *dp;
   bool b;
-  int val;
+  int i;
 
-  client_options_iterate(o) {
+  for (o = options; o->name; o++) {
     switch (o->type) {
     case COT_BOOL:
       b = *(o->p_bool_value);
       *(o->p_bool_value) = GTK_TOGGLE_BUTTON(o->p_gui_data)->active;
-      if (b != *(o->p_bool_value) && o->change_callback) {
-	(o->change_callback)(o);
-      }
       break;
     case COT_INT:
-      val = *(o->p_int_value);
+      i = *(o->p_int_value);
       dp = gtk_entry_get_text(GTK_ENTRY(o->p_gui_data));
       sscanf(dp, "%d", o->p_int_value);
-      if (val != *(o->p_int_value) && o->change_callback) {
-	(o->change_callback)(o);
-      }
       break;
     case COT_STR:
       if (o->p_string_vals) {
@@ -389,9 +394,6 @@ static void option_ok_command_callback(GtkWidget *widget, gpointer data)
 					(GTK_COMBO(o->p_gui_data)->entry));
 	if (strcmp(o->p_string_value, new_value)) {
 	  mystrlcpy(o->p_string_value, new_value, o->string_length);
-	  if (o->change_callback) {
-	    (o->change_callback)(o);
-	  }
 	}
       } else {
 	mystrlcpy(o->p_string_value,
@@ -400,7 +402,7 @@ static void option_ok_command_callback(GtkWidget *widget, gpointer data)
       }
       break;
     }
-  } client_options_iterate_end;
+  }
 
   if (map_scrollbars) {
     gtk_widget_show(map_horizontal_scrollbar);
@@ -409,11 +411,7 @@ static void option_ok_command_callback(GtkWidget *widget, gpointer data)
     gtk_widget_hide(map_horizontal_scrollbar);
     gtk_widget_hide(map_vertical_scrollbar);
   }
-  if (fullscreen_mode) {
-    gtk_window_fullscreen(GTK_WINDOW(toplevel));
-  } else {
-    gtk_window_unfullscreen(GTK_WINDOW(toplevel));
-  }
+
   option_dialog_shell = NULL;
 }
 
@@ -424,6 +422,7 @@ static void option_ok_command_callback(GtkWidget *widget, gpointer data)
 static void create_option_dialog(void)
 {
   GtkWidget *label, *table;
+  client_option *o;
   int i;
 
   option_dialog_shell = gtk_dialog_new_with_buttons(_("Set local options"),
@@ -432,7 +431,12 @@ static void create_option_dialog(void)
 	GTK_STOCK_CLOSE,
 	GTK_RESPONSE_CLOSE,
 	NULL);
-  setup_dialog(option_dialog_shell, toplevel);
+  if (dialogs_on_top) {
+    gtk_window_set_transient_for(GTK_WINDOW(option_dialog_shell),
+				 GTK_WINDOW(toplevel));
+  }
+  gtk_window_set_type_hint(GTK_WINDOW(option_dialog_shell),
+			   GDK_WINDOW_TYPE_HINT_NORMAL);
   gtk_dialog_set_default_response(GTK_DIALOG(option_dialog_shell),
 				  GTK_RESPONSE_CLOSE);
   g_signal_connect(option_dialog_shell, "response",
@@ -441,12 +445,15 @@ static void create_option_dialog(void)
 		   G_CALLBACK(option_ok_command_callback), NULL);
   gtk_window_set_position (GTK_WINDOW(option_dialog_shell), GTK_WIN_POS_MOUSE);
 
-  table = gtk_table_new(num_options, 2, FALSE);
+  for (o = options, i = 0; o->name; o++, i++) {
+    /* nothing */
+  }
+
+  table = gtk_table_new(i, 2, FALSE);
   gtk_box_pack_start(GTK_BOX(GTK_DIALOG(option_dialog_shell)->vbox),
 		     table, FALSE, FALSE, 0);
 
-  i = 0;
-  client_options_iterate(o) {
+  for (o = options, i = 0; o->name; o++, i++) {
     switch (o->type) {
     case COT_BOOL:
       label = gtk_label_new(_(o->description));
@@ -489,8 +496,7 @@ static void create_option_dialog(void)
 		       0, 0);
       break;
     }
-    i++;
-  } client_options_iterate_end;
+  }
 
   gtk_widget_show_all( GTK_DIALOG( option_dialog_shell )->vbox );
 }
@@ -500,13 +506,14 @@ static void create_option_dialog(void)
 *****************************************************************/
 void popup_option_dialog(void)
 {
+  client_option *o;
   char valstr[64];
 
   if (!option_dialog_shell) {
     create_option_dialog();
   }
 
-  client_options_iterate(o) {
+  for (o = options; o->name; o++) {
     switch (o->type) {
     case COT_BOOL:
       gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(o->p_gui_data),
@@ -535,7 +542,7 @@ void popup_option_dialog(void)
       }
       break;
     }
-  } client_options_iterate_end;
+  }
 
   gtk_widget_show(option_dialog_shell);
 }

@@ -55,6 +55,32 @@ void gtk_set_relative_position(GtkWidget *ref, GtkWidget *w, int px, int py)
   gtk_window_move(GTK_WINDOW(w), x, y);
 }
 
+
+/**************************************************************************
+...
+**************************************************************************/
+void gtk_set_label(GtkWidget *w, char *text)
+{
+  const char *str;
+
+  if (!GTK_IS_LABEL(w))
+    return;
+  str = gtk_label_get_text(GTK_LABEL(w));
+  if(strcmp(str, text) != 0) {
+    gtk_label_set_text(GTK_LABEL(w), text);
+    gtk_expose_now(w);
+  }
+}
+
+
+/**************************************************************************
+...
+**************************************************************************/
+GtkWidget *gtk_accelbutton_new(const gchar *label, GtkAccelGroup *accel)
+{
+  return gtk_button_new_with_mnemonic(label);
+}
+
 /**************************************************************************
 ...
 **************************************************************************/
@@ -95,7 +121,7 @@ GtkWidget *gtk_stockbutton_new(const gchar *stock, const gchar *label_text)
   (This is not directly gui/gtk related, but it fits in here
   because so far it is used for doing i18n for gtk titles...)
 **************************************************************************/
-void intl_slist(int n, const char **s, bool *done)
+void intl_slist(int n, char **s, bool *done)
 {
   int i;
 
@@ -235,23 +261,5 @@ void gtk_tree_view_focus(GtkTreeView *view)
     gtk_tree_view_set_cursor(view, path, NULL, FALSE);
     gtk_tree_path_free(path);
     gtk_widget_grab_focus(GTK_WIDGET(view));
-  }
-}
-
-/**********************************************************************
-  This function handles new windows which are subwindows to the
-  toplevel window. It must be called on every dialog in the game,
-  so fullscreen windows are handled properly by the window manager.
-***********************************************************************/
-void setup_dialog(GtkWidget *shell, GtkWidget *parent)
-{
-  if (dialogs_on_top || fullscreen_mode) {
-    gtk_window_set_transient_for(GTK_WINDOW(shell),
-                                 GTK_WINDOW(parent));
-    gtk_window_set_type_hint(GTK_WINDOW(shell),
-                             GDK_WINDOW_TYPE_HINT_UTILITY);
-  } else {
-    gtk_window_set_type_hint(GTK_WINDOW(shell),
-                             GDK_WINDOW_TYPE_HINT_NORMAL);
   }
 }

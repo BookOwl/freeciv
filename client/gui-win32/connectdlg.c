@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/   
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -36,7 +35,6 @@
 #include "climisc.h"
 #include "clinet.h"
 #include "colors.h"
-#include "connectdlg_common.h"
 #include "connectdlg.h"
 #include "control.h"
 #include "dialogs.h"
@@ -50,7 +48,6 @@
 #include "menu.h"
 #include "optiondlg.h"
 #include "options.h"
-#include "packhand_gen.h"
 #include "spaceshipdlg.h"
 #include "tilespec.h"
 
@@ -81,47 +78,67 @@ enum new_game_dlg_ids {
 };
 
 static struct t_server_button server_buttons[]={{NULL,N_("Start Game"),
-						 "/start"},
+						 "start"},
 						{NULL,N_("Save Game"),
-						 "/save"},
+						 "save"},
 						{NULL,N_("End Game"),
-						 "/quit"},
+						 "quit"},
 						{NULL,N_("Get Score"),
-						 "/score"}};
+						 "score"}};
+static HANDLE server_process=INVALID_HANDLE_VALUE;
+static HANDLE stdin_pipe[2];
+static HANDLE stdout_pipe[2];
+static HANDLE stderr_pipe[2];
+static HWND server_window;
+static HWND server_output;
+static HWND server_commandline;
 static HWND main_menu;
 static char saved_games_dirname[MAX_PATH+1]=".";
 
 static void new_game_callback(HWND w,void * data);
-
-
-
-/*************************************************************************
- PORTME
-*************************************************************************/
-void handle_authentication_req(enum authentication_type type, char *message)
+/**************************************************************************
+  Tests if the client has started the server.
+**************************************************************************/
+static int is_server_running()
 {
+  return (server_process!=INVALID_HANDLE_VALUE);
 }
 
 /**************************************************************************
- PORTME 
+  Kills the server if the client has started it (atexit handler)
 **************************************************************************/
-void handle_game_load(struct packet_game_load *packet)
-{ 
+static void kill_server()
+{
+  if (is_server_running()) {
+    TerminateProcess(server_process,0);
+    CloseHandle(server_process);
+    server_process=INVALID_HANDLE_VALUE;
+  }
 }
 
 /**************************************************************************
- PORTME 
+ Finds the lowest port which can be used for the 
+ server (starting at the default 5555)
 **************************************************************************/
-void really_close_connection_dialog(void)
+static int min_free_port()
 {
+  int port, n, s;
+  struct sockaddr_in tmp;
+
+  s=socket(AF_INET, SOCK_STREAM, 0);
+  n=INADDR_ANY;
+  port=5554; /* make looping convinient */
+  do {
+    port++;
+    memset(&tmp,0,sizeof(struct sockaddr_in));
+    tmp.sin_family=AF_INET;
+    tmp.sin_port=htons(port);
+    memcpy(&tmp.sin_addr, &n, sizeof(long));
+  } while( bind(s,(struct sockaddr*) &tmp, sizeof(struct sockaddr_in)) );
+  my_closesocket(s);
+  return(port);
 }
 
-/*************************************************************************
- PORTME
-*************************************************************************/
-void close_connection_dialog()
-{
-}
 
 /*************************************************************************
 
@@ -152,6 +169,24 @@ static void add_server_control_buttons()
   fcwin_redo_layout(root_window);
    
 }
+ 
+/*************************************************************************
+  Exit without killing the server
+*************************************************************************/
+void quit_client_only()
+{
+  CloseHandle(server_process);
+  server_process=INVALID_HANDLE_VALUE;
+  exit(0);
+}
+ 
+/*************************************************************************
+ 
+*************************************************************************/
+void show_server_window()
+{
+  ShowWindow(server_window,SW_SHOWNORMAL);
+}
 
 /**************************************************************************
 
@@ -160,11 +195,11 @@ static void connect_callback()
 {
   char errbuf[512];
   char portbuf[10];
-  Edit_GetText(GetDlgItem(tab_childs[0],ID_CONNECTDLG_NAME),user_name,512);
+  Edit_GetText(GetDlgItem(tab_childs[0],ID_CONNECTDLG_NAME),player_name,512);
   Edit_GetText(GetDlgItem(tab_childs[0],ID_CONNECTDLG_HOST),server_host,512);
   Edit_GetText(GetDlgItem(tab_childs[0],ID_CONNECTDLG_PORT),portbuf,10);
   sscanf(portbuf, "%d", &server_port);
-  if (connect_to_server(user_name,server_host,server_port,
+  if (connect_to_server(player_name,server_host,server_port,
 			errbuf,sizeof(errbuf))!=-1)
     {
       DestroyWindow(connect_dlg);
@@ -358,7 +393,7 @@ gui_server_connect_real(void)
 		       TRUE,TRUE,5);
   fcwin_box_add_box(hbox,vbox,FALSE,FALSE,5);
   vbox=fcwin_vbox_new(tab_childs[0],FALSE);
-  fcwin_box_add_edit(vbox,user_name,40,ID_CONNECTDLG_NAME,0,
+  fcwin_box_add_edit(vbox,player_name,40,ID_CONNECTDLG_NAME,0,
 		     TRUE,TRUE,10);
   fcwin_box_add_edit(vbox,server_host,40,ID_CONNECTDLG_HOST,0,
 		     TRUE,TRUE,10);
@@ -410,11 +445,11 @@ static int try_to_autoconnect()
     freelog(LOG_FATAL,
             _("Failed to contact server \"%s\" at port "
               "%d as \"%s\" after %d attempts"),
-            server_host, server_port, user_name, count);
+            server_host, server_port, player_name, count);
     exit(EXIT_FAILURE);
   }
 
-  switch (try_to_connect(user_name, errbuf, sizeof(errbuf))) {
+  switch (try_to_connect(player_name, errbuf, sizeof(errbuf))) {
   case 0:                       /* Success! */
     return FALSE;               /* Do not call this
                                    function again */
@@ -426,7 +461,7 @@ static int try_to_autoconnect()
     freelog(LOG_FATAL,
             _("Error contacting server \"%s\" at port %d "
               "as \"%s\":\n %s\n"),
-            server_host, server_port, user_name, errbuf);
+            server_host, server_port, player_name, errbuf);
     exit(EXIT_FAILURE);     
   }
 }
@@ -456,7 +491,7 @@ void server_autoconnect()
   my_snprintf(buf, sizeof(buf),
               _("Auto-connecting to server \"%s\" at port %d "
                 "as \"%s\" every %d.%d second(s) for %d times"),
-              server_host, server_port, user_name,
+              server_host, server_port, player_name,
               AUTOCONNECT_INTERVAL / 1000,AUTOCONNECT_INTERVAL % 1000, 
               MAX_AUTOCONNECT_ATTEMPTS);
   append_output_window(buf);
@@ -464,7 +499,7 @@ void server_autoconnect()
     freelog(LOG_FATAL,
             _("Error contacting server \"%s\" at port %d "
               "as \"%s\":\n %s\n"),
-            server_host, server_port, user_name, buf);
+            server_host, server_port, player_name, buf);
     exit(EXIT_FAILURE);
   }
   printf("server_autoconnect\n");
@@ -477,43 +512,105 @@ void server_autoconnect()
 }
 
 /**************************************************************************
+  Sends a server command to the stdin pipe
+**************************************************************************/
+static void send_server_commandline(char *s)
+{
+  DWORD wlen;
+  WriteFile(stdin_pipe[1],s,strlen(s),&wlen,NULL);
+  WriteFile(stdin_pipe[1],"\n",1,&wlen,NULL);
+}
+
+/**************************************************************************
+
+**************************************************************************/
+static void append_server_output(char *buf)
+{
+  int len;
+  len=Edit_GetTextLength(server_output);
+  if (len>(32767-strlen(buf))) {
+    Edit_SetSel(server_output,0,len);
+  } else {
+    Edit_SetSel(server_output,len,len);
+  }
+  Edit_ReplaceSel(server_output,buf);
+  if (len==Edit_GetTextLength(server_output)) {
+    SetWindowText(server_output,buf);   
+  }
+}
+
+/**************************************************************************
+
+**************************************************************************/
+static void check_server_output(HANDLE pipe)
+{
+  char buf[1024];
+  DWORD rlen;
+  if (!PeekNamedPipe(pipe,NULL,0,NULL,&rlen,NULL))
+    return;
+  if (rlen<=0)
+    return;
+  rlen=MIN(sizeof(buf)-1,rlen);
+  if (ReadFile(pipe,buf,rlen,&rlen,NULL)) {
+    buf[rlen]=0;
+    append_server_output(buf);
+  }
+  
+}
+
+/**************************************************************************
+
+**************************************************************************/
+void handle_pipe_and_process(void)
+{
+  if (!server_window)
+    return;
+  check_server_output(stdout_pipe[0]);
+  check_server_output(stderr_pipe[0]);
+  if (is_server_running()&&(WaitForSingleObject(server_process,0)==WAIT_OBJECT_0)) {
+    CloseHandle(server_process);
+    server_process=INVALID_HANDLE_VALUE;
+    remove_server_control_buttons();
+  }
+}
+
+/**************************************************************************
 
 **************************************************************************/
 static void save_game()
 {
   OPENFILENAME ofn;
-  char dirname[MAX_PATH + 1];
-  char savecmd[MAX_PATH + 10];
-  char szfile[MAX_PATH] = "\0";
-
-  strcpy(szfile, "");
-  ofn.lStructSize = sizeof(OPENFILENAME);
-  ofn.hwndOwner = root_window;
-  ofn.hInstance = freecivhinst;
-  ofn.lpstrFilter = NULL;
-  ofn.lpstrCustomFilter = NULL;
-  ofn.nMaxCustFilter = 0;
-  ofn.nFilterIndex = 1;
-  ofn.lpstrFile = szfile;
-  ofn.nMaxFile = sizeof(szfile);
-  ofn.lpstrFileTitle = NULL;
-  ofn.nMaxFileTitle = 0;
-  ofn.lpstrInitialDir = NULL;
-  ofn.lpstrTitle = "Save Game";
-  ofn.nFileOffset = 0;
-  ofn.nFileExtension = 0;
-  ofn.lpstrDefExt = NULL;
-  ofn.lCustData = 0;
-  ofn.lpfnHook = NULL;
-  ofn.lpTemplateName = NULL;
-  ofn.Flags = OFN_EXPLORER;
-  GetCurrentDirectory(MAX_PATH, dirname);
+  char dirname[MAX_PATH+1];
+  char savecmd[MAX_PATH+10];
+  char szfile[MAX_PATH]="\0";
+  strcpy(szfile,"");
+  ofn.lStructSize=sizeof(OPENFILENAME);
+  ofn.hwndOwner=root_window;
+  ofn.hInstance=freecivhinst;
+  ofn.lpstrFilter=NULL;
+  ofn.lpstrCustomFilter=NULL;
+  ofn.nMaxCustFilter=0;
+  ofn.nFilterIndex=1;
+  ofn.lpstrFile=szfile;
+  ofn.nMaxFile=sizeof(szfile);
+  ofn.lpstrFileTitle=NULL;
+  ofn.nMaxFileTitle=0;
+  ofn.lpstrInitialDir=NULL;
+  ofn.lpstrTitle="Save Game";
+  ofn.nFileOffset=0;
+  ofn.nFileExtension=0;
+  ofn.lpstrDefExt=NULL;
+  ofn.lCustData=0;
+  ofn.lpfnHook=NULL;
+  ofn.lpTemplateName=NULL;
+  ofn.Flags=OFN_EXPLORER;
+  GetCurrentDirectory(MAX_PATH,dirname);
   SetCurrentDirectory(saved_games_dirname);
   if (GetSaveFileName(&ofn)) {
-    GetCurrentDirectory(MAX_PATH, saved_games_dirname);
-    my_snprintf(savecmd, sizeof(savecmd),
-		"/save %s", ofn.lpstrFile);
-    send_chat(savecmd);
+    GetCurrentDirectory(MAX_PATH,saved_games_dirname);
+    my_snprintf(savecmd,sizeof(savecmd),
+		"save %s",ofn.lpstrFile);
+    send_server_commandline(savecmd);
   }
   SetCurrentDirectory(dirname);
 
@@ -525,16 +622,12 @@ static void save_game()
 void handle_server_buttons(HWND button)
 {
   int i;
-
-  for (i = 0; i < ARRAY_SIZE(server_buttons); i++) {
-    if (server_buttons[i].button == button) {
-      if (strcmp(server_buttons[i].command, "/save") == 0) {
+  for(i=0;i<ARRAY_SIZE(server_buttons);i++) {
+    if (server_buttons[i].button==button) {
+      if (strcmp(server_buttons[i].command,"save")==0) {
 	save_game();
       } else {
-	if (strcmp(server_buttons[i].command, "/quit") == 0) {
-	  remove_server_control_buttons();
-	}
-	send_chat(server_buttons[i].command);
+	send_server_commandline(server_buttons[i].command);
       }
       break;
     }
@@ -544,44 +637,355 @@ void handle_server_buttons(HWND button)
 /**************************************************************************
 
 **************************************************************************/
-static void load_game_callback(HWND w, void * data)
+static LONG CALLBACK server_window_proc(HWND dlg,UINT message,
+					WPARAM wParam,LPARAM lParam)
 {
-  if (is_server_running() || client_start_server()) {
-    char dirname[MAX_PATH + 1];
-    OPENFILENAME ofn;
-    char filename[MAX_PATH + 1];
-
-    filename[0] = '\0';
-    destroy_message_dialog(w);
-    ZeroMemory(&ofn, sizeof(ofn));
-    ofn.lStructSize = sizeof(OPENFILENAME);
-    ofn.hwndOwner = root_window;
-    ofn.hInstance = (HINSTANCE)GetWindowLong(root_window, GWL_HINSTANCE);
-    ofn.lpstrTitle = "Load Game"; 
-    ofn.lpstrFile = filename;
-    ofn.nMaxFile = sizeof(filename);
-    ofn.Flags = OFN_EXPLORER;
-    GetCurrentDirectory(MAX_PATH, dirname);
-    if (data != NULL) {
-      SetCurrentDirectory((char *)data);
+  int i;
+  HWND controlwnd;
+  switch(message) {
+  case WM_CLOSE:
+    ShowWindow(dlg,SW_HIDE);
+    break;
+  case WM_DESTROY:
+    server_window=NULL;
+    break;
+  case WM_SIZE:
+  case WM_GETMINMAXINFO:
+    break;
+  case WM_COMMAND:
+    controlwnd=(HWND)lParam;
+    if (controlwnd==server_commandline) {
+      char *crpos;
+      char buf[512];
+      GetWindowText(controlwnd,buf,sizeof(buf));
+      if (strchr(buf,'\n')) {
+	if ((crpos=strchr(buf,'\r')))
+	  crpos[0]=0;
+	if ((crpos=strchr(buf,'\n')))
+	  crpos[0]=0;
+	send_server_commandline(buf);
+	SetWindowText(controlwnd,"");
+      }
     } else {
-      SetCurrentDirectory(saved_games_dirname);
+      for(i=0;i<ARRAY_SIZE(server_buttons);i++) {
+	if (server_buttons[i].button==controlwnd) {
+	  send_server_commandline(server_buttons[i].command);
+	  break;
+	}
+      }
     }
-    if (GetOpenFileName(&ofn)) {
-      char message[512];
+    
+    break;
+  default:
+    return DefWindowProc(dlg,message,wParam,lParam);
+  }
+  return 0;
+}
 
-      GetCurrentDirectory(MAX_PATH, saved_games_dirname);
-      SetCurrentDirectory(dirname);
- 
-      add_server_control_buttons();
-      my_snprintf(message, sizeof(message), "/load %s", ofn.lpstrFile);
-      send_chat(message);
-      send_packet_single_playerlist_req(&aconnection);
 
+/**************************************************************************
+
+**************************************************************************/
+static void output_minsize(POINT *minsize, void *data)
+{
+  minsize->x=500;
+  minsize->y=100;
+}
+
+/**************************************************************************
+
+**************************************************************************/
+static void output_setsize(RECT *rc, void *data)
+{
+  MoveWindow((HWND)data,rc->left,rc->top,rc->right-rc->left,
+	     rc->bottom-rc->top,TRUE);
+}
+
+/**************************************************************************
+
+**************************************************************************/
+static void output_del(void *data)
+{
+  DestroyWindow((HWND)data);
+}
+
+/**************************************************************************
+ Creates the server window (which shows stdout and stderr of the server)
+**************************************************************************/
+static void create_server_window()
+{
+  SECURITY_ATTRIBUTES sa;
+  struct fcwin_box *vbox;
+  memset(&sa,0,sizeof(sa));
+  sa.nLength=sizeof(sa);
+  sa.bInheritHandle=TRUE;
+  
+  if (stdout_pipe[0]==NULL) {
+    if (!CreatePipe(&stdout_pipe[0],&stdout_pipe[1],&sa,1024)) {
+      freelog(LOG_FATAL,_("Cannot create pipe"));
+      exit(1);
+    }
+    if (!CreatePipe(&stderr_pipe[0],&stderr_pipe[1],&sa,1024)) {
+      freelog(LOG_FATAL,_("Cannot create pipe"));
+      exit(1);
+    }
+    if (!CreatePipe(&stdin_pipe[0],&stdin_pipe[1],&sa,1024)) {
+      freelog(LOG_FATAL,_("Cannot create pipe"));
+      exit(1);
+    }
+  }
+  server_window=fcwin_create_layouted_window(server_window_proc,
+					     _("Game Control"),
+					     WS_OVERLAPPEDWINDOW,
+					     CW_USEDEFAULT,CW_USEDEFAULT,
+					     root_window,NULL,
+					     FAKE_CHILD,
+					     NULL);
+  vbox=fcwin_vbox_new(server_window,FALSE);
+  server_output=CreateWindowEx(WS_EX_CLIENTEDGE,
+			       "EDIT",
+			       "",
+			       WS_CHILD | ES_READONLY | WS_VISIBLE | 
+			       WS_VSCROLL | ES_LEFT | ES_WANTRETURN |
+			       ES_MULTILINE | ES_AUTOVSCROLL,
+			       0, 0, 0, 0,
+			       server_window,
+			       NULL,
+			       freecivhinst,
+			       NULL);      
+  fcwin_box_add_generic(vbox,output_minsize,output_setsize,output_del,
+			server_output,
+			TRUE,TRUE,5);
+  fcwin_set_box(server_window,vbox);
+  atexit(kill_server);
+}
+
+/**************************************************************************
+
+**************************************************************************/
+char getc_from_pipe()
+{
+  char tmp[2];
+  DWORD rlen; 
+  tmp[1]='\0';
+  while(WaitForSingleObject(server_process,0)!=WAIT_OBJECT_0) {
+    rlen=1;
+    tmp[0]=' ';;
+    if (ReadFile(stdout_pipe[0],tmp,rlen,&rlen,NULL)&&(rlen==1)) {
+      append_server_output(tmp);
+      return tmp[0];
     } else {
-      SetCurrentDirectory(dirname);
-      gui_server_connect();
+      Sleep(100);
     }
+  }
+  return '\0';  
+}
+
+
+/**************************************************************************
+
+**************************************************************************/
+void get_line_from_pipe(char *buf, int bufsize) {
+  int i;
+  i=0;
+  do {
+    buf[i]=getc_from_pipe();
+    i++;
+  } while((i<bufsize)&&(buf[i-1]!='\n')&&(buf[i-1]!=0));
+  i--;
+  buf[i]=0;
+  if ((i>0)&&(buf[i-1]=='\r'))
+    buf[i-1]=0;
+}
+
+/**************************************************************************
+
+**************************************************************************/
+bool wait_for_prompt()
+{
+  char tmp;
+  do {
+    tmp=getc_from_pipe();
+  } while((tmp!='\0')&&(tmp!='>'));
+  if (tmp=='>')
+    return TRUE;
+  append_output_window("Server exited unexpected");
+  return FALSE;
+}
+
+
+/*****************************************************************************
+
+*****************************************************************************/
+static void start_server(char *cmdline)
+{
+  STARTUPINFO si;
+  PROCESS_INFORMATION pi;
+  if (!server_window)
+    create_server_window();
+  ZeroMemory(&si,sizeof(si));
+  si.cb=sizeof(si);
+  si.hStdOutput=stdout_pipe[1];
+  si.hStdInput=stdin_pipe[0];
+  si.hStdError=stderr_pipe[1];
+  si.dwFlags=STARTF_USESTDHANDLES;
+  
+  if (!CreateProcess(NULL,cmdline,NULL,NULL,TRUE,
+		     DETACHED_PROCESS|NORMAL_PRIORITY_CLASS,
+		     NULL,NULL,&si,&pi))
+    {
+      MessageBox(NULL,"Cannot start the server","Freeciv",MB_OK|MB_ICONEXCLAMATION);
+      exit(1);
+    }
+  CloseHandle(pi.hThread);
+  server_process=pi.hProcess;
+  show_server_window();
+  if (!wait_for_prompt()) {
+    gui_server_connect();
+    return;
+  }
+  send_server_commandline("cmdlevel ctrl first");
+  if (!wait_for_prompt())
+    gui_server_connect();
+}
+
+
+
+/**************************************************************************
+ Starts the server without arguments.
+**************************************************************************/
+void start_server_for_new_game()
+{
+  char cmdline[512];
+  server_port=min_free_port();
+  my_snprintf(cmdline,sizeof(cmdline),"civserver -p %d",server_port);
+  start_server(cmdline);   
+}
+
+/*************************************************************************
+
+*************************************************************************/
+static LONG CALLBACK playername_proc(HWND win,UINT message,
+				     WPARAM wParam,LPARAM lParam)
+{
+  switch(message) 
+    {
+    case WM_CREATE:
+    case WM_CLOSE:
+    case WM_DESTROY:
+    case WM_GETMINMAXINFO:
+    case WM_SIZE:
+      break;
+    case WM_COMMAND:
+      if (LOWORD(wParam)==IDOK) {
+	char buf[512];
+	int i;
+	char *name;
+	GetWindowText((HWND)lParam,buf,sizeof(buf));
+	name=buf;
+	for(i=strlen(name);(i>0)&&(name[i]!='(');i--);
+	name[i-1]=0;
+	strcpy(player_name,name);
+	server_autoconnect();
+	add_server_control_buttons();
+	if (Button_GetCheck(GetDlgItem(win,IDYES))==BST_CHECKED) {
+	  struct packet_generic_message apacket;
+	  mystrlcpy(apacket.message,"/start", MAX_LEN_MSG-MAX_LEN_USERNAME+1);
+	  send_packet_generic_message(&aconnection, PACKET_CHAT_MSG, &apacket);
+	}
+	DestroyWindow(win);
+      }
+      break;
+    default:
+      return DefWindowProc(win,message,wParam,lParam);
+    }
+  return 0;
+}
+
+/*************************************************************************
+
+*************************************************************************/
+static void get_player_name()
+{
+  char buf[512];
+  char tmp;
+  struct fcwin_box *vbox;
+  HWND win;
+  send_server_commandline("list");
+  do {
+    tmp=getc_from_pipe();
+  } while((tmp!='-')&&(tmp!='\0'));
+  win=fcwin_create_layouted_window(playername_proc,_("Select connection"),
+				   WS_OVERLAPPEDWINDOW,
+				   0,0,root_window,
+				   NULL,
+				   REAL_CHILD,
+				   NULL);
+  vbox=fcwin_vbox_new(win,FALSE);
+  fcwin_box_add_static(vbox,_("Choose player to be"),0,SS_LEFT,TRUE,FALSE,5);
+  fcwin_box_add_checkbox(vbox,_("Start game automatically?"),IDYES,0,TRUE,FALSE,5);
+  get_line_from_pipe(buf,sizeof(buf));
+  get_line_from_pipe(buf,sizeof(buf));
+  while((buf[0]!=0)&&(buf[0]!='-')) { 
+    if (strchr(buf,'(')==NULL) { /* No players, thats a scenarion file */
+      fcwin_set_box(win,vbox);
+      DestroyWindow(win);
+      wait_for_prompt();
+      new_game_callback(NULL,NULL);
+      return;
+    }
+    fcwin_box_add_button(vbox,buf,IDOK,0,TRUE,FALSE,5);
+    get_line_from_pipe(buf,sizeof(buf));
+  }
+  fcwin_set_box(win,vbox);
+  ShowWindow(win,SW_SHOWNORMAL);
+}
+
+/*************************************************************************
+ Starts the server with -f option to load a game
+*************************************************************************/
+static void start_server_load_game(char *filename)
+{
+  char cmdline[512];
+  server_port=min_free_port();
+  my_snprintf(cmdline,sizeof(cmdline),"civserver -p %d -f \"%s\"",
+	      server_port,filename);
+  start_server(cmdline);
+  if (is_server_running())
+    get_player_name();
+}
+
+/**************************************************************************
+
+**************************************************************************/
+static void load_game_callback(HWND w,void * data)
+{
+  char dirname[MAX_PATH+1];
+  OPENFILENAME ofn;
+  char filename[MAX_PATH+1];
+  filename[0]='\0';
+  destroy_message_dialog(w);
+  ZeroMemory(&ofn,sizeof(ofn));
+  ofn.lStructSize=sizeof(OPENFILENAME);
+  ofn.hwndOwner=root_window;
+  ofn.hInstance=(HINSTANCE)GetWindowLong(root_window,GWL_HINSTANCE);
+  ofn.lpstrTitle="Load Game"; 
+  ofn.lpstrFile=filename;
+  ofn.nMaxFile=sizeof(filename);
+  ofn.Flags=OFN_EXPLORER;
+  GetCurrentDirectory(MAX_PATH,dirname);
+  if (data!=NULL) {
+    SetCurrentDirectory((char *)data);
+  } else {
+    SetCurrentDirectory(saved_games_dirname);
+  }
+  if (GetOpenFileName(&ofn)) {
+    GetCurrentDirectory(MAX_PATH,saved_games_dirname);
+    SetCurrentDirectory(dirname);
+    start_server_load_game(ofn.lpstrFile);
+  } else {
+    SetCurrentDirectory(dirname);
+    gui_server_connect();
   }
 }
 
@@ -647,31 +1051,34 @@ static void handle_hscroll(HWND hWnd,HWND hWndCtl,UINT code,int pos)
 static void set_new_game_params(HWND win)
 {
   int aifill;
-  char aifill_str[MAX_LEN_MSG - MAX_LEN_USERNAME + 1];
-
-  if (!is_server_running()) {
-    client_start_server();
-  }
-
-  GetWindowText(GetDlgItem(win,ID_NAME),user_name,512);
+  struct packet_generic_message apacket;
+  if (!is_server_running())
+    start_server_for_new_game();
+  GetWindowText(GetDlgItem(win,ID_NAME),player_name,512);
+  server_autoconnect();
   add_server_control_buttons();
   if (IsDlgButtonChecked(win,ID_EASY)) {
-    send_chat("/easy");
+    mystrlcpy(apacket.message, "/easy", MAX_LEN_MSG-MAX_LEN_USERNAME+1);
   } else if (IsDlgButtonChecked(win,ID_MEDIUM)) {
-    send_chat("/normal");
+    mystrlcpy(apacket.message, "/normal", MAX_LEN_MSG-MAX_LEN_USERNAME+1);
   } else {
-    send_chat("/hard");
+    mystrlcpy(apacket.message, "/hard", MAX_LEN_MSG-MAX_LEN_USERNAME+1);   
   }
+  send_packet_generic_message(&aconnection, PACKET_CHAT_MSG, &apacket);
 #if 0 
-  send_chat("/set autotoggle 1");
+  mystrlcpy(apacket.message, "/set autotoggle 1",
+	    MAX_LEN_MSG-MAX_LEN_USERNAME+1);
+  send_packet_generic_message(&aconnection, PACKET_CHAT_MSG, &apacket);
 #endif
   aifill=ScrollBar_GetPos(GetDlgItem(win,ID_AIFILL));
-
-  my_snprintf(aifill_str, sizeof(aifill_str), "/set aifill %d", aifill);
-  send_chat(aifill_str);
+  my_snprintf(apacket.message, MAX_LEN_MSG-MAX_LEN_USERNAME+1,
+	      "/set aifill %d", aifill);
+  send_packet_generic_message(&aconnection, PACKET_CHAT_MSG, &apacket);
    
   if (Button_GetCheck(GetDlgItem(win,ID_STARTGAME))==BST_CHECKED) {
-    send_chat("/start");
+    struct packet_generic_message apacket;
+    mystrlcpy(apacket.message,"/start", MAX_LEN_MSG-MAX_LEN_USERNAME+1);
+    send_packet_generic_message(&aconnection, PACKET_CHAT_MSG, &apacket);
   }
 }
 
@@ -737,7 +1144,7 @@ static void new_game_callback(HWND w,void * data)
   vbox=fcwin_vbox_new(win,FALSE);
   hbox=fcwin_hbox_new(win,FALSE);
   fcwin_box_add_static(hbox,_("Your name:"),0,SS_LEFT,FALSE,FALSE,5);
-  fcwin_box_add_edit(hbox,user_name,30,ID_NAME,0,TRUE,TRUE,5);
+  fcwin_box_add_edit(hbox,player_name,30,ID_NAME,0,TRUE,TRUE,5);
   fcwin_box_add_box(vbox,hbox,FALSE,FALSE,5);
   hbox=fcwin_hbox_new(win,FALSE);
   fcwin_box_add_static(hbox,_("Difficulty:"),0,SS_LEFT,FALSE,FALSE,5);
@@ -796,7 +1203,10 @@ static void join_game_callback(HWND w,void *data)
 **************************************************************************/
 void gui_server_connect()
 {
-  client_kill_server();
+  kill_server();
+  remove_server_control_buttons();
+  if (server_window)
+    ShowWindow(server_window,SW_HIDE);
   main_menu=popup_message_dialog(root_window,
                                  _("Start a game"),
                                  _("What do you wish to to?"),

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -34,11 +33,7 @@
 #include "gui_main.h"
 #include "muistuff.h"
 
-/**************************************************************************
-  Appends the string to the chat output window.  The string should be
-  inserted on its own line, although it will have no newline.
-**************************************************************************/
-void real_append_output_window(const char *astring, int conn_id)
+void real_append_output_window(const char *astring)
 {
   DoMethod(main_output_listview, MUIM_NList_Insert, astring, -2, MUIV_List_Insert_Bottom);
   set(main_output_listview,MUIA_NList_First,  MUIV_NList_First_Bottom);

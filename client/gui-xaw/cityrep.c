@@ -10,14 +10,14 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
-#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
+#include <assert.h>
 
 #include <X11/Intrinsic.h>
 #include <X11/StringDefs.h>
@@ -53,7 +53,6 @@
 #include "optiondlg.h"
 #include "options.h"
 #include "repodlgs.h"
-#include "text.h"
 
 #include "cityrep.h"
 
@@ -191,19 +190,6 @@ void popup_city_report_dialog(bool make_modal)
    }
 }
 
-/****************************************************************
-  Closes the cityrep dialog.
-****************************************************************/
-void popdown_city_report_dialog(void)
-{
-  if (city_dialog_shell) {
-    if (city_dialog_shell_is_modal) {
-      XtSetSensitive(main_form, TRUE);
-    }
-    XtDestroyWidget(city_dialog_shell);
-    city_dialog_shell = 0;
-  }
-}
 
 /****************************************************************
 ...
@@ -211,7 +197,7 @@ void popdown_city_report_dialog(void)
 void create_city_report_dialog(bool make_modal)
 {
   Widget close_command;
-  const char *report_title;
+  char *report_title;
   
   city_dialog_shell =
     I_T(XtVaCreatePopupShell("reportcitypopup", 
@@ -224,14 +210,14 @@ void create_city_report_dialog(bool make_modal)
 				      city_dialog_shell,
 				      NULL);   
 
-  report_title=get_centered_report_title(_("Cities"));
+  report_title=get_report_title(_("Cities"));
   city_label = XtVaCreateManagedWidget("reportcitylabel", 
 				       labelWidgetClass, 
 				       city_form,
 				       XtNlabel, 
 				       report_title,
 				       NULL);
-  free((void *) report_title);
+  free(report_title);
   city_list_label = XtVaCreateManagedWidget("reportcitylistlabel", 
 				            labelWidgetClass, 
 				            city_form,
@@ -328,7 +314,8 @@ void city_list_callback(Widget w, XtPointer client_data,
     XtSetSensitive(city_change_command, TRUE);
     XtSetSensitive(city_center_command, TRUE);
     XtSetSensitive(city_popup_command, TRUE);
-    XtSetSensitive(city_buy_command, city_can_buy(pcity));
+    XtSetSensitive(city_buy_command, !pcity->did_buy && 
+         !(!pcity->is_building_unit && pcity->currently_building==B_CAPITAL));
     if (city_popupmenu)
       XtDestroyWidget(city_popupmenu);
 
@@ -384,6 +371,7 @@ void city_change_callback(Widget w, XtPointer client_data,
 
   if(ret->list_index!=XAW_LIST_NONE && 
      (pcity=cities_in_list[ret->list_index])) {
+    struct packet_city_request packet;
     cid my_cid = (cid) XTPOINTER_TO_INT(client_data);
     Boolean unit;
     int build_nr;
@@ -391,21 +379,47 @@ void city_change_callback(Widget w, XtPointer client_data,
     unit = cid_is_unit(my_cid);
     build_nr = cid_id(my_cid);
 
-    city_change_production(pcity, unit, build_nr);
+    packet.city_id=pcity->id;
+    packet.build_id=build_nr;
+    packet.is_build_id_unit_id=unit;
+    send_packet_city_request(&aconnection, &packet, PACKET_CITY_CHANGE);
   }
 }
 
 /****************************************************************
 ...
 *****************************************************************/
-void city_buy_callback(Widget w, XtPointer client_data, XtPointer call_data)
+void city_buy_callback(Widget w, XtPointer client_data, 
+			 XtPointer call_data)
 {
-  XawListReturnStruct *ret = XawListShowCurrent(city_list);
+  XawListReturnStruct *ret=XawListShowCurrent(city_list);
 
-  if (ret->list_index != XAW_LIST_NONE) {
-    struct city *pcity = cities_in_list[ret->list_index];
-    if (pcity) {
-      cityrep_buy(pcity);
+  if(ret->list_index!=XAW_LIST_NONE) {
+    struct city *pcity;
+    if((pcity=cities_in_list[ret->list_index])) {
+      int value;
+      const char *name;
+      char buf[512];
+
+      value=city_buy_cost(pcity);    
+      if(pcity->is_building_unit)
+	name=get_unit_type(pcity->currently_building)->name;
+      else
+	name=get_impr_name_ex(pcity, pcity->currently_building);
+
+      if (game.player_ptr->economic.gold >= value)
+	{
+	  struct packet_city_request packet;
+	  packet.city_id=pcity->id;
+	  send_packet_city_request(&aconnection, &packet, PACKET_CITY_BUY);
+	}
+      else
+	{
+	  my_snprintf(buf, sizeof(buf),
+		      _("Game: %s costs %d gold and you only have %d gold."),
+		      name,value,game.player_ptr->economic.gold);
+	  append_output_window(buf);
+	}
     }
   }
 }
@@ -422,20 +436,20 @@ void city_chgall_callback(Widget w, XtPointer client_data,
 /****************************************************************
 ...
 *****************************************************************/
-void city_refresh_callback(Widget w, XtPointer client_data,
-			   XtPointer call_data)
-{
-  /* added by Syela - I find this very useful */
-  XawListReturnStruct *ret = XawListShowCurrent(city_list);
+void city_refresh_callback(Widget w, XtPointer client_data, XtPointer call_data)
+{ /* added by Syela - I find this very useful */
+  XawListReturnStruct *ret=XawListShowCurrent(city_list);
+  struct city *pcity;
+  struct packet_generic_integer packet;
 
-  if (ret->list_index != XAW_LIST_NONE) {
-    struct city *pcity = cities_in_list[ret->list_index];
-
-    if (pcity) {
-      dsend_packet_city_refresh(&aconnection, pcity->id);
+  if (ret->list_index!=XAW_LIST_NONE) {
+    if ((pcity=cities_in_list[ret->list_index])) {
+      packet.value = pcity->id;
+      send_packet_generic_integer(&aconnection, PACKET_CITY_REFRESH, &packet);
     }
   } else {
-    dsend_packet_city_refresh(&aconnection, 0);
+    packet.value = 0;
+    send_packet_generic_integer(&aconnection, PACKET_CITY_REFRESH, &packet);
   }
 }
 
@@ -445,7 +459,10 @@ void city_refresh_callback(Widget w, XtPointer client_data,
 void city_close_callback(Widget w, XtPointer client_data, 
 			 XtPointer call_data)
 {
-  popdown_city_report_dialog();
+  if(city_dialog_shell_is_modal)
+     XtSetSensitive(main_form, TRUE);
+  XtDestroyWidget(city_dialog_shell);
+  city_dialog_shell=0;
 }
 
 /****************************************************************
@@ -511,7 +528,7 @@ void city_report_dialog_update(void)
     Dimension width;
     static int n_alloc = 0;
     static char **city_list_text = NULL;
-    const char *report_title;
+    char *report_title;
 
     n = city_list_size(&game.player_ptr->cities);
     freelog(LOG_DEBUG, "%d cities in report", n);
@@ -525,13 +542,13 @@ void city_report_dialog_update(void)
 				  n_alloc*sizeof(*cities_in_list));
       city_list_text = fc_realloc(city_list_text, n_alloc*sizeof(char*));
       for(j=n_prev; j<n_alloc; j++) {
-	city_list_text[j] = fc_malloc(MAX_LEN_CITY_TEXT);
+	city_list_text[j] = malloc(MAX_LEN_CITY_TEXT);
       }
     }
        
-    report_title=get_centered_report_title(_("Cities"));
+    report_title=get_report_title(_("Cities"));
     xaw_set_label(city_label, report_title);
-    free((void *) report_title);
+    free(report_title);
 
     xaw_set_label(city_list_label, get_city_table_header());
     
@@ -622,24 +639,6 @@ void city_report_dialog_update_city(struct city *pcity)
     }
   }
   city_report_dialog_update();
-}
-
-/****************************************************************
- After a selection rectangle is defined, make the cities that
- are hilited on the canvas exclusively hilited in the
- City List window.
-*****************************************************************/
-void hilite_cities_from_canvas(void)
-{
-  /* PORTME */
-}
-
-/****************************************************************
- Toggle a city's hilited status.
-*****************************************************************/
-void toggle_city_hilite(struct city *pcity, bool on_off)
-{
-  /* PORTME */
 }
 
 /****************************************************************
@@ -1083,7 +1082,7 @@ static void chgall_refresh_command_callback(Widget w,
   state->fr_count = collect_cids2(cids);
   name_and_sort_items(cids, state->fr_count, items, FALSE, NULL);
   for (i = 0; i < state->fr_count; i++) {
-    state->fr_list[i] = mystrdup(items[i].descr);
+    state->fr_list[i] = strdup(items[i].descr);
     state->fr_cids[i] = items[i].cid;
   }
   XawListChange(state->w.fr, state->fr_list, state->fr_count, 0, FALSE);
@@ -1091,7 +1090,7 @@ static void chgall_refresh_command_callback(Widget w,
   state->to_count = collect_cids3(cids);
   name_and_sort_items(cids, state->to_count, items, TRUE, NULL);
   for (i = 0; i < state->to_count; i++) {
-    state->to_list[i] = mystrdup(items[i].descr);
+    state->to_list[i] = strdup(items[i].descr);
     state->to_cids[i] = items[i].cid;
   }
   XawListChange(state->w.to, state->to_list, state->to_count, 0, FALSE);

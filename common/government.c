@@ -10,11 +10,8 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
+#include <stdlib.h>
+#include <string.h>
 #include <assert.h>
 
 #include "game.h"
@@ -66,6 +63,9 @@ static const char *flag_names[] = {
   "Fanatic_Troops", "No_Unhappy_Citizens", "Convert_Tithes_To_Money",
   "Reduced_Research"
 };
+static const char *hint_names[] = {
+  "Is_Nice", "Favors_Growth"
+};
 
 /***************************************************************
   Convert flag names to enum; case insensitive;
@@ -85,54 +85,65 @@ enum government_flag_id government_flag_from_str(const char *s)
   return G_LAST_FLAG;
 }
 
-/****************************************************************************
-  Returns TRUE iff the given government has the given flag.
-****************************************************************************/
+/***************************************************************
+...
+***************************************************************/
 bool government_has_flag(const struct government *gov,
-			 enum government_flag_id flag)
+			enum government_flag_id flag)
 {
   assert(flag>=G_FIRST_FLAG && flag<G_LAST_FLAG);
   return TEST_BIT(gov->flags, flag);
 }
 
-/****************************************************************************
-  Does a linear search of the governments to find the one that matches the
-  given (translated) name.  Returns NULL if none match.
-****************************************************************************/
+/***************************************************************
+  Convert hint names to enum; case insensitive;
+  returns G_LAST_HINT if can't match.
+***************************************************************/
+enum government_hint_id government_hint_from_str(const char *s)
+{
+  enum government_hint_id i;
+
+  assert(ARRAY_SIZE(hint_names) == G_LAST_HINT);
+  
+  for(i=G_FIRST_HINT; i<G_LAST_HINT; i++) {
+    if (mystrcasecmp(hint_names[i], s)==0) {
+      return i;
+    }
+  }
+  return G_LAST_HINT;
+}
+
+/***************************************************************
+...
+***************************************************************/
+bool government_has_hint(const struct government *gov,
+			enum government_hint_id hint)
+{
+  assert(hint>=G_FIRST_HINT && hint<G_LAST_HINT);
+  return TEST_BIT(gov->hints, hint);
+}
+
+/***************************************************************
+...
+***************************************************************/
 struct government *find_government_by_name(const char *name)
 {
-  government_iterate(gov) {
-    if (mystrcasecmp(gov->name, name) == 0) {
-      return gov;
-    }
-  } government_iterate_end;
+  int i;
 
+  for (i = 0; i < game.government_count; ++i) {
+    if (mystrcasecmp(governments[i].name, name) == 0) {
+      return &governments[i];
+    }
+  }
   return NULL;
 }
 
-/****************************************************************************
-  Does a linear search of the governments to find the one that matches the
-  given original (untranslated) name.  Returns NULL if none match.
-****************************************************************************/
-struct government *find_government_by_name_orig(const char *name)
-{
-  government_iterate(gov) {
-    if (mystrcasecmp(gov->name_orig, name) == 0) {
-      return gov;
-    }
-  } government_iterate_end;
-
-  return NULL;
-}
-
-/****************************************************************************
-  Return the government with the given ID.
-****************************************************************************/
+/***************************************************************
+...
+***************************************************************/
 struct government *get_government(int gov)
 {
-  assert(game.government_count > 0 && gov >= 0
-	 && gov < game.government_count);
-  assert(governments[gov].index == gov);
+  assert(game.government_count > 0 && gov >= 0 && gov < game.government_count);
   return &governments[gov];
 }
 
@@ -145,10 +156,10 @@ struct government *get_gov_pplayer(struct player *pplayer)
   return get_government(pplayer->government);
 }
 
-/****************************************************************************
-  Return the government of the player who owns the city.
-****************************************************************************/
-struct government *get_gov_pcity(const struct city *pcity)
+/***************************************************************
+...
+***************************************************************/
+struct government *get_gov_pcity(struct city *pcity)
 {
   assert(pcity != NULL);
   return get_gov_pplayer(city_owner(pcity));
@@ -230,15 +241,12 @@ bool can_change_to_government(struct player *pplayer, int government)
 	 government >= 0 && government < game.government_count);
 
   req = governments[government].required_tech;
-  if (!tech_is_available(pplayer, req)) {
-    /* If the technology doesn't "exist" or if there is no way we can
-     * ever get it, then we can't change to the gov type even if we have
-     * a wonder that would otherwise allow it. */
+  if (!tech_exists(req))
     return FALSE;
-  } else {
-    return (get_invention(pplayer, req) == TECH_KNOWN
+  else 
+    return (req == A_NONE
+	    || (get_invention(pplayer, req) == TECH_KNOWN)
 	    || player_owns_active_govchange_wonder(pplayer));
-  }
 }
 
 /***************************************************************
@@ -265,20 +273,14 @@ void set_ruler_title(struct government *gov, int nation,
 ***************************************************************/
 void governments_alloc(int num)
 {
-  int index;
-
   governments = fc_calloc(num, sizeof(struct government));
   game.government_count = num;
-
-  for (index = 0; index < num; index++) {
-    governments[index].index = index;
-  }
 }
 
 /***************************************************************
  De-allocate resources associated with the given government.
 ***************************************************************/
-static void government_free(struct government *gov)
+void government_free(struct government *gov)
 {
   free(gov->ruler_titles);
   gov->ruler_titles = NULL;
@@ -292,9 +294,11 @@ static void government_free(struct government *gov)
 ***************************************************************/
 void governments_free(void)
 {
-  government_iterate(gov) {
-    government_free(gov);
-  } government_iterate_end;
+  int i;
+
+  for (i = 0; i < game.government_count; i++) {
+    government_free(get_government(i));
+  }
   free(governments);
   governments = NULL;
   game.government_count = 0;

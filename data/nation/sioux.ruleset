@@ -2,7 +2,6 @@
 
 name=_("Sioux")
 plural=_("?plural:Sioux")
-class=_("Historical")
 leader="Sitting Bull", "Crazy Horse", "Little Crow", "Red Cloud"
 leader_sex="Male", "Male", "Male", "Male"
 flag="f.cheyenne"
@@ -14,12 +13,14 @@ ruler_titles = { "government",      "male_title",      "female_title"
                  "Monarchy",        _("Great Chief"),  _("Great Chief")
                }
 
+attack=2
+expand=0
+civilized=1
+advisors=100,100,100,100,100,100,100
 init_techs=""
-init_buildings=""
 tech_goals = "Monarchy", "Philosophy", "The Republic", "Iron Working"
 wonder="Sun Tzu's War Academy"
 government="Republic"
-civilwar_nations = "american"
 
 ;big problem I use names of more known battles between Indians and USA
 

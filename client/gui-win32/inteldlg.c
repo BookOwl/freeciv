@@ -10,13 +10,13 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 
 #include <windows.h>
 #include <windowsx.h>
@@ -164,13 +164,4 @@ popup_intel_dialog(struct player *p)
     intel_create_dialog(p);
     ShowWindow(intel_dialog,SW_SHOWNORMAL);
   }
-}
-
-/****************************************************************************
-  Update the intelligence dialog for the given player.  This is called by
-  the core client code when that player's information changes.
-****************************************************************************/
-void update_intel_dialog(struct player *p)
-{
-  /* PORTME */
 }

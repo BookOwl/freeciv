@@ -19,12 +19,16 @@
 
 
 void mapctrl_key_city_workers(XEvent *event);
+void mapctrl_btn_adjust_workers(XEvent *event);
 
 void mapctrl_btn_mapcanvas(XEvent *event);
 void mapctrl_btn_overviewcanvas(XEvent *event);
 void mapctrl_btn_wakeup(XEvent *event);
 
+void focus_to_next_unit(void);
 void center_on_unit(void);
+
+void update_line(int window_x, int window_y);
 
 extern int city_workers_color;
 

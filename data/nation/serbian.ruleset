@@ -2,10 +2,6 @@
 
 name=_("Serbian")
 plural=_("?plural:Serbians")
-class=_("Modern")
-legend=_("Serbia is part of the region of the Southern Slavs that was \
-conquered by the Ottomans after the collapse of the Byzantine Empire.  \
-During most of the 20th century it was part of the Yugoslav Federation.")
 leader="Vlastimir", "Caslav", "Vojislav", "Mihailo", "Bodin", "Nemanja",
        "Stefan Prvovjencani", "Stefan Uros", "Milutin", "Dusan",
        "Karadorde Petrovic", "Milos Obrenovic", "Aleksandar Petrovic",
@@ -22,14 +18,16 @@ ruler_titles = { "government",      "male_title",      "female_title"
                  "Democracy",       _("President"),    _("President")
                }
 
+attack=2
+expand=0
+civilized=2
+advisors=100,100,100,100,100,100,100
 init_techs=""
-init_buildings=""
 
 tech_goals="The Republic", "The Wheel", "Iron Working", "Construction",
            "Railroad", "Automobile"
 wonder="Sun Tzu's War Academy"
 government="Monarchy"
-civilwar_nations = "slovenian"
 
 cities =
   "Beograd", "Novi Sad", "Nis", "Subotica", "Zrenjanin", "Pancevo",

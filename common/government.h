@@ -15,8 +15,8 @@
 
 #include "shared.h"
 
-#include "fc_types.h"
-
+struct city;
+struct player;
 struct Sprite;			/* opaque; client-gui specific */
 
 #define G_MAGIC (127)		/* magic constant, used as flag value */
@@ -75,6 +75,7 @@ struct government
   char  graphic_str[MAX_LEN_NAME];
   char  graphic_alt[MAX_LEN_NAME];
   int   required_tech;		/* tech required to change to this gov */
+  int   subgoal;		/* for AI; another government or -1 */
 
   struct ruler_title *ruler_titles;
   int   num_ruler_titles;
@@ -133,19 +134,13 @@ struct government
   int   fixed_corruption_distance;
   int   corruption_distance_factor;
   int   extra_corruption_distance;
-  int   corruption_max_distance_cap;
   
-  /* waste modifiers, see governments.ruleset for more detail */
-  int   waste_level;
-  int   waste_modifier;
-  int   fixed_waste_distance;
-  int   waste_distance_factor;
-  int   extra_waste_distance;
-  int   waste_max_distance_cap;
-    
   /* other flags: bits in enum government_flag_id order,
      use government_has_flag() to access */
   int   flags;
+  /* other hints: bits in enum government_hint_id order,
+     use government_has_hint() to access */
+  int   hints;
 
   struct Sprite *sprite;
   
@@ -153,7 +148,8 @@ struct government
 };
 
 /* This should possibly disappear; we don't bother sending these to client;
- * See code in aitech.c for what the fields mean */
+   see code in ai_city.c: ai_manage_cities() for what they mean...
+*/
 struct ai_gov_tech_hint {
   int tech;
   int turns_factor;
@@ -170,14 +166,16 @@ extern struct ai_gov_tech_hint ai_gov_tech_hints[MAX_NUM_TECH_LIST];
 
 struct government *get_government(int gov);
 struct government *get_gov_pplayer(struct player *pplayer);
-struct government *get_gov_pcity(const struct city *pcity);
+struct government *get_gov_pcity(struct city *pcity);
 
 struct government *find_government_by_name(const char *name);
-struct government *find_government_by_name_orig(const char *name);
 
 enum government_flag_id government_flag_from_str(const char *s);
 bool government_has_flag(const struct government *gov,
 			enum government_flag_id flag);
+enum government_hint_id government_hint_from_str(const char *s);
+bool government_has_hint(const struct government *gov,
+			enum government_hint_id hint);
 
 int get_government_max_rate(int type);
 int get_government_civil_war_prob(int type);
@@ -189,19 +187,7 @@ bool can_change_to_government(struct player *pplayer, int government);
 void set_ruler_title(struct government *gov, int nation, 
                      const char *male, const char *female);
 void governments_alloc(int num);
+void government_free(struct government *gov);
 void governments_free(void);
-
-#define government_iterate(gov)                                             \
-{                                                                           \
-  int GI_index;                                                             \
-                                                                            \
-  for (GI_index = 0; GI_index < game.government_count; GI_index++) {        \
-    struct government *gov = get_government(GI_index);                      \
-    {
-
-#define government_iterate_end                                              \
-    }                                                                       \
-  }                                                                         \
-}
 
 #endif  /* FC__GOVERNMENT_H */

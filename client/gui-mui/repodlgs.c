@@ -10,15 +10,14 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
-#include <assert.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
+#include <stdlib.h>
+#include <assert.h>
 
 #include <libraries/mui.h>
 #include <mui/NListview_MCC.h>
@@ -99,6 +98,24 @@ void update_report_dialogs(void)
 }
 
 /****************************************************************
+...
+****************************************************************/
+char *get_report_title(char *report_name)
+{
+  char buf[512];
+
+  my_snprintf(buf, sizeof(buf), _("%s\n%s of the %s\n%s %s: %s"),
+	  report_name,
+	  get_government_name(game.player_ptr->government),
+	  get_nation_name_plural(game.player_ptr->nation),
+	  get_ruler_title(game.player_ptr->government, game.player_ptr->is_male, game.player_ptr->nation),
+	  game.player_ptr->name,
+	  textyear(game.year));
+
+  return mystrdup(buf);
+}
+
+/****************************************************************
  Callback for the Goal popup (cycle)
 ****************************************************************/
 static void science_goal(ULONG * newgoal)
@@ -106,7 +123,7 @@ static void science_goal(ULONG * newgoal)
   int i;
   int to = -1;
 
-  if (game.player_ptr->ai.tech_goal == A_UNSET)
+  if (game.player_ptr->ai.tech_goal == A_NONE)
     if (help_goal_entries[*newgoal] == (STRPTR) advances[A_NONE].name)
       to = 0;
   for (i = A_FIRST; i < game.num_tech_types; i++)
@@ -192,7 +209,8 @@ void popup_science_dialog(bool make_modal)
     help_goal_entries = NULL;
   }
 
-  if (!is_future_tech(game.player_ptr->research.researching)) {
+  if (game.player_ptr->research.researching != A_NONE)
+  {
     for (i = A_FIRST, j = 0; i < game.num_tech_types; i++)
     {
       if (get_invention(game.player_ptr, i) != TECH_REACHABLE)
@@ -222,24 +240,22 @@ void popup_science_dialog(bool make_modal)
 
   for (i = A_FIRST, j = 0; i < game.num_tech_types; i++)
   {
-    if (tech_is_available(game.player_ptr, i)
-	&& get_invention(game.player_ptr, i) != TECH_KNOWN &&
-	&& advances[i].req[0] != A_LAST && advances[i].req[1] != A_LAST
-	&& num_unknown_techs_for_goal(game.player_ptr, i) < 11)
+    if (get_invention(game.player_ptr, i) != TECH_KNOWN &&
+	advances[i].req[0] != A_LAST && advances[i].req[1] != A_LAST &&
+	num_unknown_techs_for_goal(game.player_ptr, i) < 11)
       j++;
   }
-  if (game.player_ptr->ai.tech_goal == A_UNSET) {
+  if (game.player_ptr->ai.tech_goal == A_NONE)
     j++;
-  }
 
   if (j)
   {
     if ((help_goal_entries = (STRPTR *) malloc((j + 2) * sizeof(STRPTR))))
     {
       j = 0;
-      if (game.player_ptr->ai.tech_goal == A_UNSET) {
+      if (game.player_ptr->ai.tech_goal == A_NONE)
 	help_goal_entries[j++] = advances[A_NONE].name;
-      }
+
 
       for (i = A_FIRST; i < game.num_tech_types; i++)
       {
@@ -299,7 +315,7 @@ void popup_science_dialog(bool make_modal)
 
   if (science_wnd)
   {
-    const char *report_title = get_report_title(_("Science Advisor"));
+    char *report_title = get_report_title(_("Science Advisor"));
     int turns_to_advance = tech_turns_to_advance(game.player_ptr);
 
     if (turns_to_advance == FC_INFINITY) {
@@ -309,6 +325,7 @@ void popup_science_dialog(bool make_modal)
 	       PL_("%s\n(%d turn/advance)", "%s\n(%d turns/advance)",
 		   turns_to_advance), report_title, turns_to_advance);
     }
+    free(report_title);
 
     DoMethod(science_cycle_group, MUIM_Group_InitChange);
     {
@@ -484,10 +501,35 @@ static void trade_sell(int *data)
 {
   struct improvement_entry *entry;
   DoMethod(trade_imprv_listview, MUIM_NList_GetEntry, MUIV_NList_GetEntry_Active, &entry);
-  if (entry) {
-    char str[1024];
+  if (entry)
+  {
+    Impr_Type_id i = entry->type;
+    int count = 0, gold = 0;
+    char str[128];
 
-    sell_all_improvements(entry->type, data == NULL, str, sizeof(str));
+    city_list_iterate(game.player_ptr->cities, pcity)
+      if (!pcity->did_sell && city_got_building(pcity, i) &&
+	  (*data || improvement_obsolete(game.player_ptr, i) || wonder_replacement(pcity, i)))
+    {
+      struct packet_city_request packet;
+
+      count++;
+      gold += improvement_value(i);
+
+      packet.city_id = pcity->id;
+      packet.build_id = i;
+      send_packet_city_request(&aconnection, &packet, PACKET_CITY_SELL);
+    }
+    city_list_iterate_end
+
+    if (count)
+    {
+      my_snprintf(str, sizeof(str), _("Sold %d %s for %d gold"), count, get_improvement_name(i), gold);
+    }
+    else
+    {
+      my_snprintf(str, sizeof(str), _("No %s could be sold"), get_improvement_name(i));
+    }
     popup_notify_dialog(_("Sell-Off:"), _("Results"), str);
   }
 }
@@ -524,9 +566,11 @@ static void create_trade_report_dialog(void)
 	End,
     End;
 
-  if (trade_wnd) {
-    set(trade_title_text, MUIA_Text_Contents,
-	get_report_title(_("Trade Advisor")));
+  if (trade_wnd)
+  {
+    char *report_title = report_title = get_report_title(_("Trade Advisor"));
+    set(trade_title_text, MUIA_Text_Contents, report_title);
+    free(report_title);
 
     DoMethod(trade_wnd, MUIM_Notify, MUIA_Window_CloseRequest, TRUE, trade_wnd, 3, MUIM_Set, MUIA_Window_Open, FALSE);
     DoMethod(trade_close_button, MUIM_Notify, MUIA_Pressed, FALSE, trade_wnd, 3, MUIM_Set, MUIA_Window_Open, FALSE);
@@ -542,6 +586,7 @@ static void create_trade_report_dialog(void)
 void economy_report_dialog_update(void)
 {
   int tax, total;
+  char *report_title;
   static struct improvement_entry entries[B_LAST];
   int i, entries_used = 0;
 
@@ -551,8 +596,11 @@ void economy_report_dialog_update(void)
   if (!trade_wnd)
     return;
 
-  set(trade_title_text, MUIA_Text_Contents,
-      get_report_title(_("Trade Advisor")));
+  if ((report_title = get_report_title(_("Trade Advisor"))))
+  {
+    set(trade_title_text, MUIA_Text_Contents, report_title);
+    free(report_title);
+  }
 
   set(trade_imprv_listview, MUIA_NList_Quiet, TRUE);
   DoMethod(trade_imprv_listview, MUIM_NList_Clear);
@@ -768,8 +816,10 @@ void create_activeunits_report_dialog(bool make_modal)
 
   if (actunit_wnd)
   {
-    set(actunit_title_text, MUIA_Text_Contents,
-	get_report_title(_("Military Report")))
+    char *report_title;
+    report_title = get_report_title(_("Military Report"));
+    set(actunit_title_text, MUIA_Text_Contents, report_title);
+    free(report_title);
     set(actunit_upgrade_button, MUIA_Disabled, TRUE);
 
     DoMethod(actunit_wnd, MUIM_Notify, MUIA_Window_CloseRequest, TRUE, actunit_wnd, 3, MUIM_Set, MUIA_Window_Open, FALSE);
@@ -794,6 +844,7 @@ void activeunits_report_dialog_update(void)
     int building_count;
   };
 
+  char *report_title;
   int i;
   struct actunit_units_entry entry;
   struct repoinfo unitarray[U_LAST];
@@ -803,8 +854,9 @@ void activeunits_report_dialog_update(void)
   if (is_report_dialogs_frozen())
     return;
 
-  set(actunit_title_text, MUIA_Text_Contents,
-      get_report_title(_("Military Report")));
+  report_title = get_report_title(_("Military Report"));
+  set(actunit_title_text, MUIA_Text_Contents, report_title);
+  free(report_title);
 
   memset(unitarray, '\0', sizeof(unitarray));
   unit_list_iterate(game.player_ptr->units, punit)
@@ -844,37 +896,4 @@ void activeunits_report_dialog_update(void)
   } unit_type_iterate_end;
 
   set(actunit_units_listview, MUIA_NList_Quiet, FALSE);
-}
-
-/****************************************************************
-  Show a dialog with player statistics at endgame.
-  TODO: Display all statistics in packet_endgame_report.
-*****************************************************************/
-void popup_endgame_report_dialog(struct packet_endgame_report *packet)
-{
-  char buffer[150 * MAX_NUM_PLAYERS];
-  int i;
- 
-  buffer[0] = '\0';
-  for (i = 0; i < packet->nscores; i++) {
-    cat_snprintf(buffer, sizeof(buffer),
-                 PL_("%2d: The %s ruler %s scored %d point\n",
-                     "%2d: The %s ruler %s scored %d points\n",
-                     packet->score[i]),
-                 i + 1,
-                 get_nation_name(get_player(packet->id[i])->nation),
-                 get_player(packet->id[i])->name,
-                 packet->score[i]);
-  }
-  popup_notify_dialog(_("Final Report:"),
-                      _("The Greatest Civilizations in the world."),
-                      buffer);
-}
-
-/*************************************************************************
-  Server options dialog
-*************************************************************************/
-void popup_settable_options_dialog(void)
-{
-  /* PORT ME */
 }

@@ -44,7 +44,6 @@
 #include "unit.h"
 
 #include "gotohand.h"
-#include "maphand.h"
 #include "plrhand.h"
 #include "srv_main.h"
 #include "unithand.h"
@@ -112,33 +111,6 @@ static struct unit *search_best_target(struct player *pplayer,
     }
 
     /*
-     * Make sure the player can see both the location and the unit at that
-     * location, before allowing an auto-attack.  Without this, units attack
-     * into locations they cannot see, and maybe submarines are made
-     * erroneously visible too.
-     *
-     * Note, cheating AI may attack units it cannot see unless it has
-     * H_TARGETS handicap, but currently AI never uses auto-attack.
-     */
-    if (ai_handicap(pplayer, H_TARGETS)
-	&& !can_player_see_unit(pplayer, enemy)) {
-      freelog(LOG_DEBUG, "can't see %s at (%d,%d)", unit_name(enemy->type),
-              x, y);
-      continue;
-    }
-
-    /*
-     * Without this check, missiles are made useless for auto-attack as they
-     * get triggered by fighters and bombers and end up being wasted when they
-     * cannot engage.
-     */
-    if (!can_unit_attack_all_at_tile(punit, x, y)) {
-      freelog(LOG_DEBUG, "%s at (%d,%d) cannot attack at (%d,%d)",
-	      unit_name(punit->type), punit->x, punit->y, x, y);
-      continue;
-    }
-
-    /*
      *  perhaps there is a better algorithm in the ai-package -- fisch
      */
     score = (unit_type(enemy)->defense_strength + (enemy->hp / 2)
@@ -154,7 +126,7 @@ static struct unit *search_best_target(struct player *pplayer,
 
   enemy = best_enemy;
   
-  freelog(LOG_DEBUG, "chosen target=%s (%d/%d)",
+  freelog(LOG_DEBUG,"choosen target=%s (%d/%d)",
 	  get_unit_name(enemy->type), enemy->x,enemy->y);
 
   if((unit_type(enemy)->defense_strength) >
@@ -194,7 +166,8 @@ static void auto_attack_with_unit(struct player *pplayer, struct city *pcity,
 		   unit_owner(enemy)->name, unit_name(enemy->type));
   
   set_unit_activity(punit, ACTIVITY_GOTO);
-  set_goto_dest(punit, enemy->x, enemy->y);
+  punit->goto_dest_x=enemy->x;
+  punit->goto_dest_y=enemy->y;
   
   send_unit_info(NULL, punit);
   (void) do_unit_goto(punit, GOTO_MOVE_ANY, FALSE);
@@ -203,7 +176,8 @@ static void auto_attack_with_unit(struct player *pplayer, struct city *pcity,
   
   if (punit) {
     set_unit_activity(punit, ACTIVITY_GOTO);
-    set_goto_dest(punit, pcity->x, pcity->y);
+    punit->goto_dest_x=pcity->x;
+    punit->goto_dest_y=pcity->y;
     send_unit_info(NULL, punit);
     
     (void) do_unit_goto(punit, GOTO_MOVE_ANY, FALSE);
@@ -257,7 +231,7 @@ static void auto_attack_player(struct player *pplayer)
     if(punit->ai.control
        && is_military_unit(punit)
        && punit->activity == ACTIVITY_GOTO
-       && punit->moves_left == unit_move_rate(punit)) {
+       && punit->moves_left == unit_type(punit)->move_rate) {
       (void) do_unit_goto(punit, GOTO_MOVE_ANY, FALSE);
     }
   }
@@ -270,13 +244,14 @@ static void auto_attack_player(struct player *pplayer)
 void auto_attack(void)
 {
   static struct timer *t = NULL;      /* alloc once, never free */
+  int i;
 
   t = renew_timer_start(t, TIMER_CPU, TIMER_DEBUG);
 
   /* re-use shuffle order from civserver.c */
-  shuffled_players_iterate(pplayer) {
-    auto_attack_player(pplayer);
-  } shuffled_players_iterate_end;
+  for (i = 0; i < game.nplayers; i++) {
+    auto_attack_player(shuffled_player(i));
+  }
   if (timer_in_use(t)) {
     freelog(LOG_VERBOSE, "autoattack consumed %g milliseconds.",
 	    1000.0*read_timer_seconds(t));

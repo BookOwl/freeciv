@@ -10,13 +10,12 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
-#include <stdarg.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <string.h>
 
 #ifdef HAVE_LIBREADLINE
@@ -36,8 +35,6 @@ static bool console_prompt_is_showing = FALSE;
 static bool console_rfcstyle = FALSE;
 #ifdef HAVE_LIBREADLINE
 static bool readline_received_enter = TRUE;
-#else
-static int con_dump(enum rfc_status rfc_status, const char *message, ...);
 #endif
 
 /************************************************************************
@@ -76,20 +73,18 @@ static void con_update_prompt(void)
 }
 
 /************************************************************************
-  Initialize logging via console.
+Initialize logging via console.
 ************************************************************************/
 void con_log_init(const char *log_filename, int log_level)
 {
-  bool has_file = (log_filename && strlen(log_filename) > 0);
-
-  log_init(log_filename, log_level, has_file ? NULL : con_handle_log);
+  log_init(log_filename, log_level, (log_filename ? NULL : con_handle_log));
+  logdebug_suppress_warning;
 }
 
-#ifndef HAVE_LIBREADLINE
 /************************************************************************
 Write to console without line-break, don't print prompt.
 ************************************************************************/
-static int con_dump(enum rfc_status rfc_status, const char *message, ...)
+int con_dump(enum rfc_status rfc_status, const char *message, ...)
 {
   static char buf[MAX_LEN_CONSOLE_LINE];
   va_list args;
@@ -109,7 +104,6 @@ static int con_dump(enum rfc_status rfc_status, const char *message, ...)
   console_prompt_is_showing = FALSE;
   return (int) strlen(buf);
 }
-#endif
 
 /************************************************************************
 Write to console and add line-break, and show prompt if required.

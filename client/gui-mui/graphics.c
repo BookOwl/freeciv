@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -36,7 +35,6 @@
 #include "map.h"
 #include "options.h"
 
-#include "climap.h"
 #include "climisc.h"
 #include "colors.h"
 #include "control.h"
@@ -68,9 +66,9 @@ void free_sprite(struct Sprite *sprite)
 /****************************************************************
  Return the gfx file extension the client supports
 *****************************************************************/
-const char **gfx_fileextensions(void)
+char **gfx_fileextensions(void)
 {
-  static const char *ext[] =
+  static char *ext[] =
   {
     "png",
     "ilbm",
@@ -387,6 +385,14 @@ int render_sprites(APTR drawhandle)
   }
 
   return TRUE;
+}
+
+/****************************************************************
+ Returns a cititen sprite
+*****************************************************************/
+struct Sprite *get_citizen_sprite(int frame)
+{
+  return sprites.citizen[CLIP(0, frame, NUM_TILES_CITIZEN - 1)];
 }
 
 /****************************************************************
@@ -869,7 +875,8 @@ void put_unit_tile(struct RastPort *rp, struct unit *punit, int x1, int y1)
     }
     else
     {
-      put_sprite_overlay(rp, sprites[0], x1, y1);
+      if (flags_are_transparent) put_sprite_overlay(rp, sprites[0], x1, y1);
+      else put_sprite(rp, sprites[0], x1, y1);
     }
 
     for (i = 1; i < count; i++)
@@ -942,13 +949,14 @@ void put_tile(struct RastPort *rp, int x, int y, int canvas_x, int canvas_y, int
     }
 
     if (draw_coastline && !draw_terrain) {
-      Terrain_type_id t1 = map_get_terrain(x, y), t2;
+      enum tile_terrain_type t1 = map_get_terrain(x, y), t2;
       int x1 = x-1, y1 = y;
       SetAPen(rp,GetColorPen(COLOR_STD_OCEAN));
       if (normalize_map_pos(&x1, &y1)) {
 	t2 = map_get_terrain(x1, y1);
 	/* left side */
-	if (is_ocean(t1) ^ is_ocean(t2)) {
+	if ((t1 == T_OCEAN) ^ (t2 == T_OCEAN))
+	{
 	  Move(rp, canvas_x, canvas_y);
 	  Draw(rp, canvas_x, canvas_y + NORMAL_TILE_HEIGHT-1);
 	}
@@ -957,7 +965,8 @@ void put_tile(struct RastPort *rp, int x, int y, int canvas_x, int canvas_y, int
       x1 = x; y1 = y-1;
       if (normalize_map_pos(&x1, &y1)) {
 	t2 = map_get_terrain(x1, y1);
-	if (is_ocean(t1) ^ is_ocean(t2)) {
+	if ((t1 == T_OCEAN) ^ (t2 == T_OCEAN))
+	{
 	  Move(rp, canvas_x, canvas_y);
 	  Draw(rp, canvas_x + NORMAL_TILE_WIDTH-1, canvas_y);
 	}
@@ -970,10 +979,10 @@ void put_tile(struct RastPort *rp, int x, int y, int canvas_x, int canvas_y, int
 
   if (!citymode) {
     /* put any goto lines on the tile. */
-    if (is_real_map_pos(x, y)) {
+    if (is_real_tile(x, y)) {
       int dir;
       for (dir = 0; dir < 8; dir++) {
-	if (is_drawn_line(x, y, dir)) {
+	if (get_drawn(x, y, dir)) {
 	  put_line(rp, 0,0,x, y, dir);
 	}
       }
@@ -984,7 +993,7 @@ void put_tile(struct RastPort *rp, int x, int y, int canvas_x, int canvas_y, int
       int line_x = x - 1;
       int line_y = y;
       if (normalize_map_pos(&line_x, &line_y)
-	  && is_drawn_line(line_x, line_y, 2)) {
+	  && get_drawn(line_x, line_y, 2)) {
 	/* it is really only one pixel in the top right corner */
 	put_line(rp, 0,0,line_x, line_y, 2);
       }
@@ -1239,7 +1248,7 @@ static void put_tile_iso(struct RastPort *rp, int x, int y,
     return;
   }
 
-  assert(is_real_map_pos(x, y));
+  assert(is_real_tile(x, y));
   normalize_map_pos(&x, &y);
   fog = tile_get_known(x, y) == TILE_KNOWN_FOGGED && draw_fog_of_war;
   pcity = map_get_city(x, y);
@@ -1267,7 +1276,7 @@ static void put_tile_iso(struct RastPort *rp, int x, int y,
   }
 
   if (draw_terrain) {
-    if (is_ocean(map_get_terrain(x, y))) { /* coasts */
+    if (map_get_terrain(x, y) == T_OCEAN) { /* coasts */
       int dx, dy;
 
       /* top */
@@ -1343,13 +1352,13 @@ static void put_tile_iso(struct RastPort *rp, int x, int y,
   }
 
   if (draw_coastline && !draw_terrain) {
-    Terrain_type_id t1 = map_get_terrain(x, y), t2;
+    enum tile_terrain_type t1 = map_get_terrain(x, y), t2;
     int x1, y1;
     SetAPen(rp,GetColorPen(COLOR_STD_OCEAN));
     x1 = x; y1 = y-1;
     if (normalize_map_pos(&x1, &y1)) {
       t2 = map_get_terrain(x1, y1);
-      if (draw & D_M_R && (is_ocean(t1) ^ is_ocean(t2))) {
+      if (draw & D_M_R && ((t1 == T_OCEAN) ^ (t2 == T_OCEAN))) {
       	Move(rp, canvas_x + NORMAL_TILE_WIDTH/2, canvas_y);
       	Draw(rp, canvas_x + NORMAL_TILE_WIDTH, canvas_y+NORMAL_TILE_HEIGHT/2);
       }
@@ -1357,7 +1366,7 @@ static void put_tile_iso(struct RastPort *rp, int x, int y,
     x1 = x-1; y1 = y;
     if (normalize_map_pos(&x1, &y1)) {
       t2 = map_get_terrain(x1, y1);
-      if (draw & D_M_L && (is_ocean(t1) ^ is_ocean(t2))) {
+      if (draw & D_M_L && ((t1 == T_OCEAN) ^ (t2 == T_OCEAN))) {
       	Move(rp, canvas_x, canvas_y + NORMAL_TILE_HEIGHT/2);
       	Draw(rp, canvas_x+NORMAL_TILE_WIDTH/2, canvas_y);
       }

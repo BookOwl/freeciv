@@ -28,13 +28,13 @@
 #define MINOR_VERSION		14
 #endif
 #ifndef PATCH_VERSION
-#define PATCH_VERSION		99
+#define PATCH_VERSION		2
 #endif
 #ifndef VERSION_LABEL
-#define VERSION_LABEL		"-devel"
+#define VERSION_LABEL		""
 #endif
 #ifndef IS_DEVEL_VERSION
-#define IS_DEVEL_VERSION	1
+#define IS_DEVEL_VERSION	0
 #endif
 #ifndef IS_BETA_VERSION
 #define IS_BETA_VERSION		0
@@ -42,12 +42,12 @@
 
 /* This is only used if IS_BETA_VERSION is true. */
 #ifndef NEXT_STABLE_VERSION
-#define NEXT_STABLE_VERSION	"1.13.0"
+#define NEXT_STABLE_VERSION	"1.14.2"
 #endif
 /* This is only used in version.c, and only if IS_BETA_VERSION is true.
    The month[] array is defined in version.c (index: 1==Jan, 2==Feb, ...). */
 #ifndef NEXT_RELEASE_MONTH
-#define NEXT_RELEASE_MONTH	(month[6])
+#define NEXT_RELEASE_MONTH	(month[9])
 #endif
 
 #ifndef VERSION_STRING
@@ -61,8 +61,6 @@
 /* version informational strings */
 const char *freeciv_name_version(void);
 const char *word_version(void);
-
-const char *freeciv_motto(void);
 
 /* If returns NULL, not a beta version. */
 const char *beta_message(void);

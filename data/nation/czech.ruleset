@@ -2,9 +2,7 @@
 
 name = _("Czech")
 plural = _("?plural:Czechs")
-class=_("Modern")
-legend=_("Today's Czech Republic was until 1993 part of Czechoslovakia, \
-which had been until 1918 part of the Austro-Hungarian Empire.")
+
 leader = "Jan Lucembursky", "Otakar II", "Karel IV", "Vaclav", "Jiri z Podebrad",
          "Jan Zizka", "Jan Hus", "Zavis z Falknstejna", "Libuse",
          "Kunhuta", "Alzbeta Pomoranska", "Eliska Premyslovna", "Anezka",
@@ -23,15 +21,17 @@ ruler_titles = { "government",      "male_title",      "female_title"
                  "Despotism",       _("Thane"),        _("Prophetess")
                }
 
+attack = 2
+expand = 0
+civilized = 0
+advisors = 100,100,100,100,100,100,100
 init_techs=""
-init_buildings=""
 
 tech_goals = "Iron Working", "Literacy", "Astronomy", "Bridge Building",
              "The Republic", "Metallurgy", "Medicine", "University",
              "Explosives"
 wonder = "Shakespeare's Theatre"
 government = "Republic"
-civilwar_nations = "croatian"
 
 cities =
         "Praha", "Brno", "Ostrava", "Plzen", "Hradec Kralove",

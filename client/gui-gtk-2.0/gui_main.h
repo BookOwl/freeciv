@@ -15,33 +15,13 @@
 
 #include <gtk/gtk.h>
 
-#include "gtkpixcomm.h"
 #include "gui_main_g.h"
-
-enum canvas_type {
-  CANVAS_PIXMAP,
-  CANVAS_PIXCOMM,
-  CANVAS_PIXBUF
-};
-
-struct canvas
-{
-  enum canvas_type type;
-
-  union {
-    GdkPixmap *pixmap;
-    GtkPixcomm *pixcomm;
-    GdkPixbuf *pixbuf;
-  } v;
-};
 
 /* network string charset conversion */
 gchar *ntoh_str(const gchar *netstr);
 
 extern PangoFontDescription *        main_font;
 extern PangoFontDescription *        city_productions_font;
-
-extern bool fullscreen_mode;
 
 extern GdkGC *          civ_gc;
 extern GdkGC *          mask_fg_gc;
@@ -50,12 +30,20 @@ extern GdkGC *          fill_bg_gc;
 extern GdkGC *          fill_tile_gc;
 extern GdkGC *          thin_line_gc;
 extern GdkGC *          thick_line_gc;
-extern GdkGC *          border_line_gc;
 extern GdkPixmap *      gray50;
 extern GdkPixmap *      gray25;
 extern GdkPixmap *      black50;
 extern GdkPixmap *      mask_bitmap;
-#define single_tile_pixmap (mapview_canvas.single_tile->pixmap)
+extern GdkPixmap *      map_canvas_store;
+extern int              map_canvas_store_twidth;
+extern int              map_canvas_store_theight;
+extern GdkPixmap *      overview_canvas_store;
+extern int              overview_canvas_store_width;
+extern int              overview_canvas_store_height;
+extern GdkPixmap *      single_tile_pixmap;
+extern int              single_tile_pixmap_width;
+extern int              single_tile_pixmap_height;
+extern GdkPixmap *      gray50_tile_pixmap;
 extern GtkTextView *	main_message_area;
 extern GtkWidget *      text_scrollbar;
 extern GtkWidget *      toplevel;
@@ -67,12 +55,6 @@ extern GtkWidget *      bulb_label;
 extern GtkWidget *      sun_label;
 extern GtkWidget *      flake_label;
 extern GtkWidget *      government_label;
-extern GtkTooltips *	main_tips;
-extern GtkWidget *	econ_ebox;
-extern GtkWidget *	bulb_ebox;
-extern GtkWidget *	sun_ebox;
-extern GtkWidget *	flake_ebox;
-extern GtkWidget *	government_ebox;
 extern GtkWidget *      map_canvas;             /* GtkDrawingArea */
 extern GtkWidget *      overview_canvas;        /* GtkDrawingArea */
 extern GtkWidget *      timeout_label;
@@ -82,7 +64,5 @@ extern GtkWidget *      unit_info_frame;
 extern GtkWidget *      map_horizontal_scrollbar;
 extern GtkWidget *      map_vertical_scrollbar;
 extern GdkWindow *      root_window;
-
-void reset_unit_table(void);
 
 #endif  /* FC__GUI_MAIN_H */

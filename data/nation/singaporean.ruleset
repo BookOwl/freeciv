@@ -14,16 +14,13 @@
 
 name=_("Singaporean")
 plural=_("?plural:Singaporeans")
-class=_("Modern")
-legend=_("Singapore is a mercantile city-state located at the southernmost \
-tip of the Malaysian Peninsula")
 leader="Tengku Long", "Stamford Raffles", "W.A. Pickering", "Ong Teng Cheong",
   "S.R. Nathan", "Lee Kuan Yew", "Yusof bin Ishak", "Ah Beng", "Ah Lian"
 leader_sex="Male", "Male", "Male", "Male",
   "Male", "Male", "Male", "Male", "Female"
 flag="f.singapore"
 flag_alt = "-"
-city_style = "Asian"
+city_style = "European"
 
 ruler_titles = { "government",	"male_title",		"female_title"
 		 "Despotism",	_("Ah"),		_("Ah")
@@ -33,8 +30,11 @@ ruler_titles = { "government",	"male_title",		"female_title"
 		 "Democracy",	_("Prime Minister"),	_("Prime Minister")
 }
 
+attack=1
+expand=2
+civilized=2
+advisors=100,100,100,100,100,100,100
 init_techs=""
-init_buildings=""
 tech_goals = "Monarchy", "Iron Working", "Trade", "Monotheism", "Navigation",
   "Railroad", "Steel", "Industrialization"
 wonder="J.S. Bach's Cathedral"

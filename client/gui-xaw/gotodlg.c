@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -98,9 +97,8 @@ void popup_goto_dialog(void)
   Dimension width, height;
   Boolean no_player_cities = !(city_list_size(&game.player_ptr->cities));
 
-  if (!can_client_issue_orders()) {
+  if(get_client_state()!=CLIENT_GAME_RUNNING_STATE)
     return;
-  }
   if(get_unit_in_focus()==0)
     return;
 
@@ -223,10 +221,8 @@ void update_goto_dialog(Widget goto_list)
     city_list_iterate(game.players[i].cities, pcity) {
       char name[MAX_LEN_NAME+3];
       sz_strlcpy(name, pcity->name);
-      /* FIXME: should use unit_can_airlift_to(). */
-      if (pcity->airlift) {
+      if (pcity->improvements[B_AIRPORT] == I_ACTIVE)
 	sz_strlcat(name, "(A)");
-      }
       city_name_ptrs[j++]=mystrdup(name);
     }
     city_list_iterate_end;

@@ -2,13 +2,31 @@
 Welcome to Freeciv 1.14
 =======================
 
-This is release 1.14.0.
+This is release 1.14.2.
 
 Thanks again to all our developers, who continue to work so hard.
 
 This release includes lots of changes, outlined below.  Those who
 are interested in seeing the detailed changes should check the
 ChangeLog file.
+
+WHAT'S CHANGED SINCE 1.14.1
+ - important compile fixes for some platforms
+ - game balance adjustments:
+	x all buildings except wonders and space parts 30% cheaper
+	x some wonders cheaper: Colossus, Copernicus, Isaac Newton's,
+          King Richard's, Oracle and Shakespeare's
+	x submarine has more attack and movement, and costs less
+ - reputation recovery fixed (now much slower)
+ - a few other minor bugfixes
+
+WHAT'S CHANGED SINCE 1.14.0
+ - The GTK+-2.0 client is now built by default.
+ - Lots of improvements to the GTK+-2.0 client.
+ - The GTK+-2.0 client should now compile for Win32.
+ - Teams are supported.
+ - Civserver now works on UTF-8 locales.
+ - Lots of bug fixes.
 
 WHAT'S CHANGED SINCE 1.13.0
  - Unique city names, you no longer can name your cities the same,
@@ -154,7 +172,7 @@ WHAT'S CHANGED SINCE 1.11.4
  - Deserts are created primarily 15 to 35 degrees off the equator.
  - Only arctic tiles generated at poles.
  - The server will report when a new government becomes available.
- - Changed wording of message "famine feared" to "famine occurred". New
+ - Changed wording of message "famine feared" to "famine occured". New
   "famine feared" message just before food runs out.
  - "wonder soon build" message when another player is about to complete
    a wonder.

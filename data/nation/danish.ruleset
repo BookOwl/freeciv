@@ -2,23 +2,16 @@
 
 name=_("Danish")
 plural=_("?plural:Danes")
-class=_("Modern")
-; /* TRANS: The third letter in "Blatand" should be */
-; /* TRANS: A+00E5 LATIN SMALL LETTER A WITH RING if available in */
-; /* TRANS: your charset.  In ISO-8859-1 (ISO Latin 1) this is 0xE5. */
-legend=_("The founding of the Danish kingdom is generally assigned to the \
-reign of Harald Blatand, who unified what is now Denmark between 958AD and \
-988AD.")
 leader=
-  "Gudfred", "Gorm den Gamle", "Harald BlÃ¥tand", "Svend TveskÃ¦g",
+  "Gudfred", "Gorm den Gamle", "Harald Blåtand", "Svend Tveskæg",
   "Knud den Store", "Hardeknud", "Svend", "Knud", "Valdemar",
   "Valdemar den Store", "Valdemar Sejr", "Erik Klipping",
-  "Valdemar Atterdag", "Margrethe I", "Christian IV", "Dag Hammarskjold"
+  "Valdemar Atterdag", "Margrethe I", "Christian IV"
 leader_sex=
   "Male", "Male", "Male", "Male",
   "Male", "Male", "Male", "Male", "Male",
   "Male", "Male", "Male",
-  "Male", "Female", "Male", "Male"
+  "Male", "Female", "Male"
 flag="f.denmark"
 flag_alt = "-"
 city_style = "European"
@@ -26,22 +19,24 @@ ruler_titles = { "government",      "male_title",      "female_title"
                  "Democracy",       _("Prime Minister"), _("Prime Minister")
                }
 
+attack=1
+expand=2
+civilized=1
+advisors=100,100,100,100,100,100,100
 init_techs=""
-init_buildings=""
 
 tech_goals = "Monarchy", "Chivalry", "Trade", "Theology", "University",
              "Navigation", "Railroad"
 wonder="Magellan's Expedition"
 government="Democracy"
-civilwar_nations = "english", "icelandic"
 
 cities =
-  "KÃ¸benhavn", "Aarhus", "Odense", "Aalborg", "Esbjerg", "Randers",
-  "Frederikshavn", "HelsingÃ¸r", "Roskilde", "Slagelse", "SÃ¸nderborg",
-  "Ã…benrÃ¥", "Haderslev", "Vejle", "Holstebro", "Hirtshals", "Tylstrup",
-  "Skagen", "HjÃ¸rring", "Blokhus", "NÃ¸rresundby", "Hanstholm", "Thisted",
-  "LÃ¸gstÃ¸r", "ThyborÃ¸n", "Skive", "Hadsund", "Ã…lestrup", "GrenÃ¥",
-  "Struer", "Herning", "Silkeborg", "Yding", "SkovhÃ¸j", "Give", "Tarm",
-  "Varde", "Assens", "Nyborg", "FÃ¥borg", "KorsÃ¸r", "NÃ¦stved", "Vordingborg",
-  "Nakskov", "RÃ¸dby", "BirkerÃ¸d", "NykÃ¸bing", "RÃ¸nne", "Allinge", "NeksÃ¸",
-  "Fredericia", "GodthÃ¥b", "JulianehÃ¥b", "Daneborg"
+  "København", "Århus", "Odense", "Ålborg", "Esbjerg", "Randers",
+  "Frederikshavn", "Helsingør", "Roskilde", "Slagelse", "Sønderborg",
+  "Åbenrå", "Haderslev", "Vejle", "Holstebro", "Hirtshals", "Tylstrup",
+  "Skagen", "Hjørring", "Blokhus", "Nørresundby", "Hanstholm", "Thisted",
+  "Løgstør", "Thyborøn", "Skive", "Hadsund", "Ålestrup", "Grenå",
+  "Struer", "Herning", "Silkeborg", "Yding", "Skovhøj", "Give", "Tarm",
+  "Varde", "Assens", "Nyborg", "Fåborg", "Korsør", "Næstved", "Vordingborg",
+  "Nakskov", "Rødby", "Birkerød", "Nykøbing", "Rønne", "Allinge", "Neksø",
+  "Fredericia", "Godthåb", "Julianehåb", "Daneborg"

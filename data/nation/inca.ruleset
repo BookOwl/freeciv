@@ -2,29 +2,25 @@
 
 name=_("Inca")
 plural=_("?plural:Incas")
-class=_("Historical")
-legend=_("The Inca were an Amerind people of the Northern Andes who \
-conquered an empire stretching along the west coast of South America \
-from what is now southern Chile nearly to the Equator. They had the bad \
-timing to do it just a few decades before the Spanish conquistadores \
-arrived in their part of the world in the mid-1500s AD.")
 leader="Tupac", "Manco Capac", "Atahualpa", "Pachacuti"
 leader_sex="Male", "Male", "Male", "Male"
 flag="f.peru"
 flag_alt = "-"
-city_style = "Tropical"
+city_style = "Classical"
 
 ruler_titles = { "government",      "male_title",      "female_title"
                  "Despotism",       _("Warlord"),      _("Warlord")
                }
 
+attack=2
+expand=2
+civilized=2
+advisors=100,100,100,100,100,100,100
 init_techs=""
-init_buildings=""
 
 tech_goals="Monarchy","Chivalry","Philosophy","Monotheism", "Invention"
 wonder="Great Wall"
 government="Monarchy"
-civilwar_nations = "aztec"
 
 cities =
   "Cuzco", "Machu Picchu","Tiahuanaco", "Nazca", "Paracas",

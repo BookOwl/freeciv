@@ -21,7 +21,7 @@ dnl   FC_CHECK_X_LIB(Xext, XShapeCombineMask)
 dnl     [etc.]
 dnl   LIBS="$X_LIBS $X_EXTRA_LIBS $LIBS"
 dnl
-AC_DEFUN([FC_CHECK_X_LIB], [
+AC_DEFUN(FC_CHECK_X_LIB, [
  AC_MSG_CHECKING([for $2 in X library -l$1])
 
  dnl Use a cache variable name containing both the library and function name,
@@ -54,28 +54,8 @@ AC_DEFUN([FC_CHECK_X_LIB], [
     ac_tr_lib=HAVE_LIB`echo $1 | sed -e 's/[^a-zA-Z0-9_]/_/g' \
     -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`
     changequote([, ])dnl
-
-    # The HAVE_LIBX** values are defined in FC_CHECK_X_LIB, but we need an
-    # AH_TEMPLATE for them so that autoheader will know about them.
-    AH_TEMPLATE([HAVE_LIBX11], [Define if the X11 lib is available])
-    AH_TEMPLATE([HAVE_LIBXEXT], [Define if the Xext lib is available])
-    AH_TEMPLATE([HAVE_LIBXT], [Define if the Xt lib is available])
-    AH_TEMPLATE([HAVE_LIBXMU], [Define if the Xmu lib is available])
-    AH_TEMPLATE([HAVE_LIBXPM], [Define if the Xpm lib is available])
-    AH_TEMPLATE([HAVE_LIBXAW], [Define if the Xaw lib is to be used])
-    AH_TEMPLATE([HAVE_LIBXAW3D], [Define if the Xaw3d lib is to be used])
-    if (test $ac_tr_lib == HAVE_LIBX11     \
-        || test $ac_tr_lib == HAVE_LIBXEXT \
-        || test $ac_tr_lib == HAVE_LIBXT   \
-        || test $ac_tr_lib == HAVE_LIBXMU  \
-        || test $ac_tr_lib == HAVE_LIBXPM  \
-        || test $ac_tr_lib == HAVE_LIBXAW  \
-        || test $ac_tr_lib == HAVE_LIBXAW3D); then
-      AC_DEFINE_UNQUOTED($ac_tr_lib)
-      X_EXTRA_LIBS="-l$1 $X_EXTRA_LIBS"
-    else
-      AC_MSG_ERROR([Invalid define of $ac_tr_lib in $1])
-    fi
+    AC_DEFINE_UNQUOTED($ac_tr_lib)
+    X_EXTRA_LIBS="-l$1 $X_EXTRA_LIBS"
    ], [$3])
  else
   AC_MSG_RESULT(no)
@@ -91,7 +71,7 @@ dnl example: FC_EXPAND_DIR(LOCALEDIR, "$datadir/locale")
 dnl eg, then: AC_DEFINE_UNQUOTED(LOCALEDIR, "$LOCALEDIR")
 dnl by Alexandre Oliva 
 dnl from http://www.cygnus.com/ml/automake/1998-Aug/0040.html
-AC_DEFUN([FC_EXPAND_DIR], [
+AC_DEFUN(FC_EXPAND_DIR, [
         $1=$2
         $1=`(
             test "x$prefix" = xNONE && prefix="$ac_default_prefix"
@@ -112,7 +92,7 @@ dnl If user specifies "yes" (default), then use /usr/local if it looks
 dnl likely, else set to "no".
 dnl Doesn't do any cache stuff.
 dnl
-AC_DEFUN([FC_XPM_PATHS],
+AC_DEFUN(FC_XPM_PATHS,
 [AC_MSG_CHECKING(extra paths for Xpm)
 dnl General Xpm prefix:
 dnl "no" means no prefix is required, "yes" means try /usr/local
@@ -187,7 +167,7 @@ dnl   if test -n "$fc_x_proto_value"; then
 dnl     AC_DEFINE_UNQUOTED(FUNCPROTO, $fc_x_proto_value)
 dnl   fi
 dnl
-AC_DEFUN([FC_CHECK_X_PROTO_DEFINE],
+AC_DEFUN(FC_CHECK_X_PROTO_DEFINE,
 [AC_REQUIRE([FC_CHECK_X_PROTO_FETCH])dnl
 AC_MSG_CHECKING(for Xfuncproto control definition $1)
 # Search for the requested defined variable; return it's value:
@@ -221,7 +201,7 @@ dnl
 dnl Example use:
 dnl   AC_REQUIRE([FC_CHECK_X_PROTO_FETCH])
 dnl
-AC_DEFUN([FC_CHECK_X_PROTO_FETCH],
+AC_DEFUN(FC_CHECK_X_PROTO_FETCH,
 [AC_REQUIRE([AC_PATH_X])dnl
 AC_MSG_CHECKING(whether Xfuncproto was supplied)
 dnl May override determined defines with explicit argument:
@@ -315,7 +295,7 @@ dnl   if test "x$fc_x_proto_FUNCPROTO" != "xno"; then
 dnl     echo Compile using FUNCPROTO=$fc_x_proto_FUNCPROTO
 dnl   fi
 dnl
-AC_DEFUN([FC_CHECK_X_PROTO_FUNCPROTO_COMPILE],
+AC_DEFUN(FC_CHECK_X_PROTO_FUNCPROTO_COMPILE,
 [AC_REQUIRE([AC_PATH_XTRA])dnl
 AC_LANG_SAVE
 AC_LANG_C
@@ -360,7 +340,7 @@ dnl   if test "x$fc_x_proto_NARROWPROTO" != "xno"; then
 dnl     echo Compile using NARROWPROTO=$fc_x_proto_NARROWPROTO
 dnl   fi
 dnl
-AC_DEFUN([FC_CHECK_X_PROTO_NARROWPROTO_WORKS],
+AC_DEFUN(FC_CHECK_X_PROTO_NARROWPROTO_WORKS,
 [AC_REQUIRE([AC_PATH_XTRA])dnl
 AC_LANG_SAVE
 AC_LANG_C

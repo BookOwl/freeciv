@@ -26,8 +26,10 @@
 #undef IS_DEVEL_VERSION
 #undef IS_BETA_VERSION
 #undef VERSION_STRING
-#undef DEBUG
-#undef NDEBUG
+#undef HAVE_ICONV
+#undef ICONV_CONST
+#undef HAVE_LIBCHARSET
+#undef HAVE_LANGINFO_CODESET
 #undef HAVE_LIBICE
 #undef HAVE_LIBSM
 #undef HAVE_LIBX11
@@ -65,8 +67,6 @@
 #undef ESD
 #undef SDL
 #undef WINMM
-#undef HAVE_GETTIMEOFDAY
-#undef HAVE_WORKING_FORK
 @BOTTOM@
 
 #endif /* FC_CONFIG_H */

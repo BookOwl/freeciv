@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -58,10 +57,8 @@ HOOKPROTONH(goto_cities_display, void, char **array, struct city *pcity)
 {
   static char name[80];
   sz_strlcpy(name, pcity->name);
-  /* FIXME: should use unit_can_airlift_to(). */
-  if (pcity->airlift) {
+  if (pcity->improvements[B_AIRPORT] == I_ACTIVE)
     sz_strlcat(name, "(A)");
-  }
   *array = name;
 }
 

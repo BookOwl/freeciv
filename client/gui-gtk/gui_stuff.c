@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -19,14 +18,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <gdk/gdkkeysyms.h>
 #include <gtk/gtk.h>
+#include <gdk/gdkkeysyms.h>
 
 #include "fcintl.h"
 #include "mem.h"
 
 #include "options.h"
-
 #include "gui_main.h"
 
 #include "gui_stuff.h"
@@ -64,40 +62,6 @@ void gtk_set_relative_position(GtkWidget *ref, GtkWidget *w, int px, int py)
 /**************************************************************************
 ...
 **************************************************************************/
-void gtk_window_hide(GtkWindow *window)
-{
-  GtkWidget *widget;
-
-  g_return_if_fail(GTK_IS_WINDOW(window));
-
-  widget = GTK_WIDGET(window);
-
-  if (GTK_WIDGET_MAPPED(widget)) {
-    gdk_window_withdraw(widget->window);
-  }
-}
-
-/**************************************************************************
-...
-**************************************************************************/
-void gtk_window_show(GtkWindow *window)
-{
-  GtkWidget *widget;
-
-  g_return_if_fail(GTK_IS_WINDOW(window));
-
-  widget = GTK_WIDGET(window);
-
-  if (GTK_WIDGET_MAPPED(widget)) {
-    gdk_window_show(widget->window);
-  } else {
-    gtk_widget_show(widget);
-  }
-}
-
-/**************************************************************************
-...
-**************************************************************************/
 void gtk_set_bitmap(GtkWidget *w, GdkPixmap *pm)
 {
   if (!GTK_IS_PIXMAP(w))
@@ -109,7 +73,7 @@ void gtk_set_bitmap(GtkWidget *w, GdkPixmap *pm)
 /**************************************************************************
 ...
 **************************************************************************/
-void gtk_set_label(GtkWidget *w, const char *text)
+void gtk_set_label(GtkWidget *w, char *text)
 {
   char *str;
 
@@ -162,7 +126,7 @@ GtkWidget *gtk_accelbutton_new(const gchar *label, GtkAccelGroup *accel)
   (This is not directly gui/gtk related, but it fits in here
   because so far it is used for doing i18n for gtk titles...)
 **************************************************************************/
-char **intl_slist(int n, const char **s)
+char **intl_slist(int n, char **s)
 {
   char **ret = fc_malloc(n * sizeof(char*));
   int i;

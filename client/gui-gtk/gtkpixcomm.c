@@ -33,10 +33,6 @@
  * that we no longer need to insert it inside a GtkEventBox. -vasc
  */
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include "gtkpixcomm.h"
 
 static void gtk_pixcomm_class_init (GtkPixcommClass *cclass);
@@ -56,7 +52,7 @@ gtk_pixcomm_get_type (void)
     {
       static const GtkTypeInfo pixcomm_info =
       {
-	(char *)"GtkPixcomm",
+	"GtkPixcomm",
 	sizeof (GtkPixcomm),
 	sizeof (GtkPixcommClass),
 	(GtkClassInitFunc) gtk_pixcomm_class_init,

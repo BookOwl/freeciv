@@ -4,20 +4,17 @@
 pkgdatadir = $(datadir)/@PACKAGE@/misc
 
 pkgdata_DATA =          \
-	buildings.png	\
-	buildings.spec	\
-	chiefs.png	\
+	chiefs.xpm	\
 	chiefs.spec	\
-	flags.spec	\
-	intro.png	\
-	radar.png	\
-	shields.png	\
+	intro.xpm	\
+	radar.xpm	\
+	shields.xpm	\
 	shields.spec	\
-	small.png	\
+	small.xpm	\
 	small.spec	\
-	space.png	\
+	space.xpm	\
 	space.spec	\
-	treaty.png	\
+	treaty.xpm	\
 	treaty.spec
 
 EXTRA_DIST = $(pkgdata_DATA)

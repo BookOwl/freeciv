@@ -13,7 +13,7 @@
 #ifndef FC__GUISTUFF_H
 #define FC__GUISTUFF_H
 void mydrawrect(HDC hdc, int x, int y,int w,int h);
-char *convertnl2crnl(const char *str);
+char *convertnl2crnl(char *str);
 void my_get_win_border(HWND hWnd,int *w,int *h);
 int fcwin_listview_add_row(HWND lv,int row_nr,int columns,char **row);
 struct fcwin_box;
@@ -23,7 +23,7 @@ typedef void (*t_fcsetsize)(RECT *,void *);
 typedef void (*t_fcdelwidget)(void *);
 
 /* has to be called once */
-void init_layoutwindow(void);
+void init_layoutwindow();
 enum childwin_mode {
   REAL_CHILD,
   JUST_CLEANUP,

@@ -2,30 +2,28 @@
 
 name=_("Estonian")
 plural=_("?plural:Estonians")
-class=_("Modern")
-legend=_("Estonia is a small country on the south shore of the eastern \
-Baltic Sea.  Its people and language are closely related to those of \
-Finland.")
-leader="Kalevipoeg", "Lembitu", "Carl Robert Jakobson", "Konstantin P√§ts",
-  "Tunne Kelam", "Lennart Meri", "Mart Laar"
+leader="Kalevipoeg", "Lembitu", "Carl Robert Jakobson", "Konstatin P‰ts",
+  "Tunne Kelam", "Lennart Meri"
 leader_sex="Male", "Male", "Male", "Male",
-  "Male", "Male", "Male"
+  "Male", "Male"
 flag="f.estonia"
 flag_alt = "-"
 city_style = "European"
 
+attack=2
+expand=1
+civilized=1
+advisors=100,100,100,100,100,100,100
 init_techs=""
-init_buildings=""
 tech_goals = "Monarchy","Chivalry","The Republic","Democracy","Conscription"
 wonder="United Nations"
 government = "Democracy"
-civilwar_nations = "danish", "dutch"
 
 cities =
-  "Tallinn", "Tartu", "Narva", "Kohtla-J√§rve", "P√§rnu",
-  "Viljandi", "Rakvere", "Valga", "V√µru", "Sillam√§e",
-  "Kuressaare", "Haapsalu", "Kivi√µli", "Tapa", "Paide",
-  "Maardu", "Paldiski", "T√ºri", "Keila", "Elva",
-  "Kunda", "P√µltsamaa", "Sindi", "K√§rdla", "T√µrva",
-  "Otep√§√§", "Kilingi-N√µmme", "Mustvee", "Antsla", "M√µisak√ºla",
+  "Tallinn", "Tartu", "Narva", "Kohtla-J‰rve", "P‰rnu",
+  "Viljandi", "Rakvere", "Valga", "Vıru", "Sillam‰e",
+  "Kuressaare", "Haapsalu", "Kiviıli", "Tapa", "Paide",
+  "Maardu", "Paldiski", "T¸ri", "Keila", "Elva",
+  "Kunda", "Pıltsamaa", "Sindi", "K‰rdla", "Tırva",
+  "Otep‰‰", "Kilingi-Nımme", "Mustvee", "Antsla", "Mıisak¸la",
   "Suure-Jaani", "Kallaste", "Mustla"

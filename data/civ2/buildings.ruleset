@@ -28,8 +28,6 @@ options="1.10.1"
 name		= _("Airport")
 tech_req	= "Radio"
 bldg_req	= "None"
-graphic		= "b.airport"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"
@@ -63,8 +61,6 @@ Two cities with Airports can airlift one unit per turn. \
 name		= _("Aqueduct")
 tech_req	= "Construction"
 bldg_req	= "None"
-graphic		= "b.airport"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"
@@ -81,17 +77,18 @@ effect		=
     }
 sound		= "b_aqueduct"
 sound_alt	= "b_generic"
-helptext	= _("\
-Allows a city to grow larger than size 8.  A Sewer System is also\
- required for a city to grow larger than size 12.\
-")
+; FIXME: use this help text when gen-impr implemented...
+; /* (ignore for gettext until fixed)
+; helptext	= _("\
+; Allows a city to grow larger than size 8.  A Sewer System is also\
+;  required for a city to grow larger than size 12.\
+; ")
+; */
 
 [building_bank]
 name		= _("Bank")
 tech_req	= "Banking"
 bldg_req	= "Marketplace"
-graphic		= "b.bank"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"
@@ -119,8 +116,6 @@ Together with the Marketplace improvement, a Bank increases the\
 name		= _("Barracks")
 tech_req	= "None"
 bldg_req	= "None"
-graphic		= "b.barracks"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"
@@ -150,8 +145,6 @@ With a Barracks, each new land unit built in a city will\
 name		= _("Barracks II")
 tech_req	= "Gunpowder"
 bldg_req	= "None"
-graphic		= "b.barracks"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"
@@ -181,8 +174,6 @@ With a Barracks, each new land unit built in a city will\
 name		= _("Barracks III")
 tech_req	= "Mobile Warfare"
 bldg_req	= "None"
-graphic		= "b.barracks"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"
@@ -212,8 +203,6 @@ With a Barracks, each new land unit built in a city will\
 name		= _("Cathedral")
 tech_req	= "Monotheism"
 bldg_req	= "None"
-graphic		= "b.cathedral"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"
@@ -245,8 +234,6 @@ A Cathedral makes 3 unhappy citizens content in a city, making it\
 name		= _("City Walls")
 tech_req	= "Masonry"
 bldg_req	= "None"
-graphic		= "b.city_walls"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"
@@ -256,13 +243,13 @@ obsolete_by	= "None"
 is_wonder	= 0
 build_cost	= 80
 upkeep		= 0
-sabotage	= 50
+sabotage	= 100
 effect		=
-    { "type", "range", "amount", "cond_bldg", "aff_unit"
+    { "type", "range", "amount", "cond_eff", "aff_unit"
 	"Unit_Defend", "City", 300, "", "Land"
 	"Unit_No_Lose_Pop", "City", 0, "", "Land"
-	"Spy_Resistant", "Local", 50
-	"Spy_Resistant", "Local", -50, "Palace"
+	"Spy_Resistant", "Building", 50
+	"Spy_Resistant", "Building", -50, "Capital_City"
     }
 sound		= "b_city_walls"
 sound_alt	= "b_generic"
@@ -278,8 +265,6 @@ City Walls make it easier to defend a city.  They triple the defence\
 name		= _("Coastal Defense")
 tech_req	= "Metallurgy"
 bldg_req	= "None"
-graphic		= "b.coastal_defense"
-graphic_alt	= "-"
 terr_gate	= "Ocean"
 ;spec_gate	=
 equiv_range	= "City"
@@ -305,8 +290,6 @@ Increases the defence strength of units within a city by a factor\
 name		= _("Colosseum")
 tech_req	= "Construction"
 bldg_req	= "None"
-graphic		= "b.colosseum"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"
@@ -333,8 +316,6 @@ Entertains the citizens of a city, making 3 unhappy citizens content. \
 name		= _("Courthouse")
 tech_req	= "Code of Laws"
 bldg_req	= "None"
-graphic		= "b.courthouse"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"
@@ -347,14 +328,14 @@ upkeep		= 1
 sabotage	= 100
 effect		=
     { "type", "range", "amount", "cond_gov"
-	"Corrupt_Pct", "City", 50
+	"Reduce_Corrupt", "City", 50
 	"Make_Content", "City", 1, "Democracy"
-	"Revolt_Dist_Pct", "City", 50
+	"Revolt_Dist", "City", 50
     }
 sound		= "b_courthouse"
 sound_alt	= "b_generic"
 helptext	= _("\
-Reduces the corruption and waste in a city by 50%.  Under a Democracy, a\
+Reduces the corruption in a city by 50%.  Under a Democracy, a\
  Courthouse makes 1 unhappy citizen content. \
  Also halves the effective distance to the capital, for the purpose\
  of calculating revolt cost.\
@@ -364,8 +345,6 @@ Reduces the corruption and waste in a city by 50%.  Under a Democracy, a\
 name		= _("Factory")
 tech_req	= "Industrialization"
 bldg_req	= "None"
-graphic		= "b.factory"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"
@@ -391,8 +370,6 @@ Increases the shield production in a city by 50%.  This increase may\
 name		= _("Granary")
 tech_req	= "Pottery"
 bldg_req	= "None"
-graphic		= "b.granary"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"
@@ -423,8 +400,6 @@ name		= _("Harbour")
 tech_req	= "Seafaring"
 bldg_req	= "None"
 terr_gate	= "Ocean"
-graphic		= "b.harbour"
-graphic_alt	= "-"
 ;spec_gate	=
 equiv_range	= "City"
 ;equiv_dupl	=
@@ -449,8 +424,6 @@ Gives one extra food resource on all Ocean squares.  The city needs\
 name		= _("Hydro Plant")
 tech_req	= "Electronics"
 bldg_req	= "None"
-graphic		= "b.hydro_plant"
-graphic_alt	= "-"
 terr_gate	= "Mountains"
 spec_gate	= "River"
 equiv_range	= "City"
@@ -464,8 +437,8 @@ sabotage	= 100
 effect		=
     { "type", "range", "amount", "cond_bldg"
 	"Prod_Bonus", "City", 50, "Factory"
-	"Pollu_Prod_Pct", "City", 50
-	"Pollu_Prod_Pct", "City", -50, "Recycling Center"
+	"Pollu_Adj_Prod", "City", 50
+	"Pollu_Adj_Prod", "City", -50, "Recycling Center"
     }
 sound		= "b_hydro_plant"
 sound_alt	= "b_generic"
@@ -488,8 +461,6 @@ A city can only have one Hydro Plant, Power Plant, or\
 name		= _("Library")
 tech_req	= "Writing"
 bldg_req	= "None"
-graphic		= "b.library"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"
@@ -515,8 +486,6 @@ Increases the science output in a city by 50%.\
 name		= _("Marketplace")
 tech_req	= "Currency"
 bldg_req	= "None"
-graphic		= "b.marketplace"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"
@@ -543,8 +512,6 @@ Increases the luxury and tax output in a city by 50%.\
 name		= _("Mass Transit")
 tech_req	= "Mass Production"
 bldg_req	= "None"
-graphic		= "b.mass_transit"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"
@@ -557,7 +524,7 @@ upkeep		= 4
 sabotage	= 100
 effect		=
     { "type", "range", "amount"
-	"Pollu_Pop_Pct", "City", 0
+	"Pollu_Set_Pop", "City", 0
     }
 sound		= "b_mass_transit"
 sound_alt	= "b_generic"
@@ -571,8 +538,6 @@ Neutralizes the pollution generated by the population. \
 name		= _("Mfg. Plant")
 tech_req	= "Robotics"
 bldg_req	= "Factory"
-graphic		= "b.mfg_plant"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"
@@ -599,8 +564,6 @@ Together with a Factory, a Manufacturing Plant increases the shield\
 name		= _("Nuclear Plant")
 tech_req	= "Nuclear Power"
 bldg_req	= "None"
-graphic		= "b.nuclear_plant"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"
@@ -614,8 +577,8 @@ sabotage	= 100
 effect		=
     { "type", "range", "amount", "cond_bldg"
 	"Prod_Bonus", "City", 50, "Factory"
-	"Pollu_Prod_Pct", "City", 50
-	"Pollu_Prod_Pct", "City", -50, "Recycling Center"
+	"Pollu_Adj_Prod", "City", 50
+	"Pollu_Adj_Prod", "City", -50, "Recycling Center"
     }
 sound		= "b_nuclear_plant"
 sound_alt	= "b_generic"
@@ -640,8 +603,6 @@ A city can only have one Hydro Plant, Power Plant, or\
 name		= _("Offshore Platform")
 tech_req	= "Miniaturization"
 bldg_req	= "None"
-graphic		= "b.offshore_platform"
-graphic_alt	= "-"
 terr_gate	= "Ocean"
 ;spec_gate	=
 equiv_range	= "City"
@@ -667,8 +628,6 @@ Adds 1 extra shield resource on all Ocean squares in a city.  The\
 name		= _("Palace")
 tech_req	= "Masonry"
 bldg_req	= "None"
-graphic		= "b.palace"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "Player"
@@ -704,8 +663,6 @@ Take good care of your capital, as its loss may result in your\
 name		= _("Police Station")
 tech_req	= "Communism"
 bldg_req	= "None"
-graphic		= "b.police_station"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"
@@ -733,8 +690,6 @@ Reduces the unhappiness caused by military units outside the city\
 name		= _("Port Facility")
 tech_req	= "Amphibious Warfare"
 bldg_req	= "None"
-graphic		= "b.port_facility"
-graphic_alt	= "-"
 terr_gate	= "Ocean"
 ;spec_gate	=
 equiv_range	= "City"
@@ -762,8 +717,6 @@ Allows a city to build veteran sea units.  Also, damaged sea units\
 name		= _("Power Plant")
 tech_req	= "Refining"
 bldg_req	= "None"
-graphic		= "b.power_plant"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"
@@ -796,8 +749,6 @@ A city can only have one Hydro Plant, Power Plant, or\
 name		= _("Recycling Center")
 tech_req	= "Recycling"
 bldg_req	= "None"
-graphic		= "b.recycling_center"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"
@@ -810,13 +761,13 @@ upkeep		= 2
 sabotage	= 100
 effect		=
     { "type", "range", "amount"
-	"Pollu_Prod_Pct", "City", 34
+	"Pollu_Adj_Prod", "City", 34
     }
 sound		= "b_recycling_center"
 sound_alt	= "b_generic"
 ; /* xgettext:no-c-format */
 helptext	= _("\
-Building a Recycling Center reduces the amount of pollution\
+Building a recycling center reduces the amount of pollution\
  generated by production in a city by 66%.\
 ")
 
@@ -824,8 +775,6 @@ Building a Recycling Center reduces the amount of pollution\
 name		= _("Research Lab")
 tech_req	= "Computers"
 bldg_req	= "Library"
-graphic		= "b.research_lab"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"
@@ -843,7 +792,7 @@ effect		=
 sound		= "b_research_lab"
 sound_alt	= "b_generic"
 helptext	= _("\
-Together with a Library, a Research Lab increases the science\
+Together with a Library , a Research Lab increases the science\
  production of a city by 100%. \
 Together with a Library and a University, a Research Lab increases\
  the science production of a city by 150%.\
@@ -853,8 +802,6 @@ Together with a Library and a University, a Research Lab increases\
 name		= _("SAM Battery")
 tech_req	= "Rocketry"
 bldg_req	= "None"
-graphic		= "b.sam_battery"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"
@@ -881,8 +828,6 @@ Doubles the defense of all units inside the city when attacked by\
 name		= _("SDI Defense")
 tech_req	= "Laser"
 bldg_req	= "None"
-graphic		= "b.sdi_defense"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"
@@ -912,8 +857,6 @@ Protects a city from attacks from Nuclear units.  Nuclear attacks\
 name		= _("Sewer System")
 tech_req	= "Sanitation"
 bldg_req	= "Aqueduct"
-graphic		= "b.sewer_system"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"
@@ -930,17 +873,18 @@ effect		=
     }
 sound		= "b_sewer_system"
 sound_alt	= "b_generic"
-helptext	= _("\
-Allows a city to grow larger than size 12.  An Aqueduct is first\
- required for a city to grow larger than size 8.\
-")
+; FIXME: use this help text when gen-impr implemented...
+; /* (ignore for gettext until fixed)
+; helptext	= _("\
+; Allows a city to grow larger than size 12.  An Aqueduct is first\
+;  required for a city to grow larger than size 8.\
+; ")
+; */
 
 [building_solar_plant]
 name		= _("Solar Plant")
 tech_req	= "Never"		; "Environmentalism"
 bldg_req	= "None"
-graphic		= "b.solar_plant"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"
@@ -954,7 +898,7 @@ sabotage	= 100
 effect		=
     { "type", "range", "amount", "cond_bldg"
 	"Prod_Bonus", "City", 50, "Factory"
-	"Pollu_Prod_Pct", "City", 0
+	"Pollu_Set_Prod", "City", 0
 	"Slow_Global_Warm", "World", 10
     }
 sound		= "b_solar_plant"
@@ -978,8 +922,6 @@ A city can only have one Solar Plant, Hydro Plant, Power Plant, or\
 name		= _("Space Component")
 tech_req	= "Plastics"
 bldg_req	= "None"
-graphic		= "b.space_component"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "None"
@@ -991,8 +933,8 @@ build_cost	= 160
 upkeep		= 0
 sabotage	= 100
 effect		=
-    { "type", "range"
-	"SS_Component", "Local"
+    { "type", "range", "amount"
+	"Space_Part", "None", 2
     }
 sound		= "b_space_component"
 sound_alt	= "b_generic"
@@ -1009,8 +951,6 @@ Before you can build any spaceship parts, the Apollo Program wonder\
 name		= _("Space Module")
 tech_req	= "Superconductors"
 bldg_req	= "None"
-graphic		= "b.space_modules"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "None"
@@ -1022,8 +962,8 @@ build_cost	= 320
 upkeep		= 0
 sabotage	= 100
 effect		=
-    { "type", "range"
-	"SS_Module", "Local"
+    { "type", "range", "amount"
+	"Space_Part", "None", 3
     }
 sound		= "b_space_module"
 sound_alt	= "b_generic"
@@ -1049,8 +989,6 @@ Before you can build any spaceship parts, the Apollo Program wonder\
 name		= _("Space Structural")
 tech_req	= "Space Flight"
 bldg_req	= "None"
-graphic		= "b.space_structural"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "None"
@@ -1062,8 +1000,8 @@ build_cost	= 80
 upkeep		= 0
 sabotage	= 100
 effect		=
-    { "type", "range"
-	"SS_Structural", "Local"
+    { "type", "range", "amount"
+	"Space_Part", "None", 1
     }
 sound		= "b_space_structural"
 sound_alt	= "b_generic"
@@ -1080,8 +1018,6 @@ Before you can build any spaceship parts, the Apollo Program wonder\
 name		= _("Stock Exchange")
 tech_req	= "Economics"
 bldg_req	= "Bank"
-graphic		= "b.stock_exchange"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"
@@ -1109,8 +1045,6 @@ Together with a Marketplace and a Bank, a Stock Exchange boosts\
 name		= _("Super Highways")
 tech_req	= "Automobile"
 bldg_req	= "None"
-graphic		= "b.super_highways"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"
@@ -1138,8 +1072,6 @@ Increases trade resources by 50% on all squares with roads or\
 name		= _("Supermarket")
 tech_req	= "Refrigeration"
 bldg_req	= "None"
-graphic		= "b.supermarket"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"
@@ -1167,8 +1099,6 @@ Increases the food resources by 50% on each farmland square which\
 name		= _("Temple")
 tech_req	= "Ceremonial Burial"
 bldg_req	= "None"
-graphic		= "b.temple"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"
@@ -1196,8 +1126,6 @@ Makes one unhappy citizen content.  Both the Mysticism advance\
 name		= _("University")
 tech_req	= "University"
 bldg_req	= "Library"
-graphic		= "b.university"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"
@@ -1224,8 +1152,6 @@ Together with a Library, a University increases the science\
 name		= _("Apollo Program")
 tech_req	= "Space Flight"
 bldg_req	= "None"
-graphic		= "b.apollo_program"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "None"
@@ -1238,7 +1164,7 @@ upkeep		= 0
 sabotage	= 0
 effect		=
     { "type", "range", "survives"
-	"Reveal_Map", "Player", 0
+	"Reveal_Map", "None", 0
 	"Enable_Space", "World", 1
     }
 sound		= "w_apollo_program"
@@ -1253,8 +1179,6 @@ Entire map becomes visible for the player who owns it. \
 name		= _("A.Smith's Trading Co.")
 tech_req	= "Economics"
 bldg_req	= "None"
-graphic		= "b.asmiths_trading_co"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "Player"
@@ -1280,8 +1204,6 @@ City improvements which would normally have an upkeep of 1 are free\
 name		= _("Colossus")
 tech_req	= "Bronze Working"
 bldg_req	= "None"
-graphic		= "b.colossus"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"
@@ -1307,8 +1229,6 @@ Each square around the city where this wonder is built that is already\
 name		= _("Copernicus' Observatory")
 tech_req	= "Astronomy"
 bldg_req	= "None"
-graphic		= "b.copernicus_observatory"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"
@@ -1334,8 +1254,6 @@ Boosts science production by 50% in the city where it is built.\
 name		= _("Cure For Cancer")
 tech_req	= "Genetic Engineering"
 bldg_req	= "None"
-graphic		= "b.cure_for_cancer"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "Player"
@@ -1361,8 +1279,6 @@ This stunning technological achievement makes one unhappy\
 name		= _("Darwin's Voyage")
 tech_req	= "Railroad"
 bldg_req	= "None"
-graphic		= "b.darwins_voyage"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "None"
@@ -1375,7 +1291,7 @@ upkeep		= 0
 sabotage	= 0
 effect		=
     { "type", "range", "amount"
-	"Give_Imm_Adv", "Player", 2
+	"Give_Imm_Adv", "None", 2
     }
 sound		= "w_darwins_voyage"
 sound_alt	= "w_generic"
@@ -1389,8 +1305,6 @@ Charles Darwin's voyage sparked the discovery of the evolution\
 name		= _("Eiffel Tower")
 tech_req	= "Never"		; "Steam Engine"
 bldg_req	= "None"
-graphic		= "b.eiffel_tower"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "None"
@@ -1403,7 +1317,7 @@ upkeep		= 0
 sabotage	= 0
 effect		=
     { "type", "range", "amount"
-	"Improve_Rep", "Player", 25
+	"Improve_Rep", "None", 25
     }
 sound		= "w_eiffel_tower"
 sound_alt	= "w_generic"
@@ -1419,8 +1333,6 @@ When built, every civilization's attitude toward you is improved\
 name		= _("Great Library")
 tech_req	= "Literacy"
 bldg_req	= "None"
-graphic		= "b.great_library"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "None"
@@ -1433,7 +1345,7 @@ upkeep		= 0
 sabotage	= 0
 effect		=
     { "type", "range", "amount"
-	"Adv_Parasite", "Player", 2
+	"Adv_Parasite", "None", 2
     }
 sound		= "w_great_library"
 sound_alt	= "w_generic"
@@ -1446,8 +1358,6 @@ The civilization which builds the Great Library gets every advance\
 name		= _("Great Wall")
 tech_req	= "Masonry"
 bldg_req	= "None"
-graphic		= "b.great_wall"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "Player"
@@ -1476,8 +1386,6 @@ Works as a City Wall in all cities.\
 name		= _("Hanging Gardens")
 tech_req	= "Pottery"
 bldg_req	= "None"
-graphic		= "b.hanging_gardens"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "Player"
@@ -1507,8 +1415,6 @@ Makes one content citizen happy in every city. Makes two extra\
 name		= _("Hoover Dam")
 tech_req	= "Electronics"
 bldg_req	= "None"
-graphic		= "b.hoover_dam"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "Player"
@@ -1522,8 +1428,8 @@ sabotage	= 0
 effect		=
     { "type", "range", "amount", "cond_bldg"
 	"Prod_Bonus", "Player", 50, "Factory"
-	"Pollu_Prod_Pct", "Player", 50
-	"Pollu_Prod_Pct", "Player", -50, "Recycling Center"
+	"Pollu_Adj_Prod", "Player", 50
+	"Pollu_Adj_Prod", "Player", -50, "Recycling Center"
     }
 sound		= "w_hoover_dam"
 sound_alt	= "w_generic"
@@ -1536,8 +1442,6 @@ Works as if you had a Hydro Plant in every city.  (This reduces\
 name		= _("Isaac Newton's College")
 tech_req	= "Theory of Gravity"
 bldg_req	= "None"
-graphic		= "b.isaac_newtons_college"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"
@@ -1563,8 +1467,6 @@ Boosts science production by 100% in the city where it is built.\
 name		= _("J.S. Bach's Cathedral")
 tech_req	= "Theology"
 bldg_req	= "None"
-graphic		= "b.js_bachs_cathedral"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "Player"
@@ -1589,8 +1491,6 @@ Makes two unhappy citizens content in every city.\
 name		= _("King Richard's Crusade")
 tech_req	= "Engineering"
 bldg_req	= "None"
-graphic		= "b.king_richards_crusade"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"
@@ -1616,8 +1516,6 @@ Adds one extra shield resource on every square around the city\
 name		= _("Leonardo's Workshop")
 tech_req	= "Invention"
 bldg_req	= "None"
-graphic		= "b.leonardos_workshop"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "Player"
@@ -1642,8 +1540,6 @@ Upgrades one obsolete unit per game turn.\
 name		= _("Lighthouse")
 tech_req	= "Map Making"
 bldg_req	= "None"
-graphic		= "b.lighthouse"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "Player"
@@ -1672,8 +1568,6 @@ Gives all sea units 1 additional movement point and eliminates the\
 name		= _("Magellan's Expedition")
 tech_req	= "Navigation"
 bldg_req	= "None"
-graphic		= "b.magellans_expedition"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "Player"
@@ -1698,8 +1592,6 @@ Gives all sea units 2 additional movement points.\
 name		= _("Manhattan Project")
 tech_req	= "Nuclear Fission"
 bldg_req	= "None"
-graphic		= "b.manhattan_project"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "None"
@@ -1723,8 +1615,6 @@ sound_alt	= "w_generic"
 name		= _("Marco Polo's Embassy")
 tech_req	= "Trade"
 bldg_req	= "None"
-graphic		= "b.marco_polos_embassy"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "None"
@@ -1737,7 +1627,7 @@ upkeep		= 0
 sabotage	= 0
 effect		=
     { "type", "range"
-	"Have_Embassies", "Player"
+	"Have_Embassies", "None"
     }
 sound		= "w_marco_polos_embassy"
 sound_alt	= "w_generic"
@@ -1749,8 +1639,6 @@ The player who owns it gets an embassy with all players.\
 name		= _("Michelangelo's Chapel")
 tech_req	= "Monotheism"
 bldg_req	= "None"
-graphic		= "b.michelangelos_chapel"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "Player"
@@ -1782,8 +1670,6 @@ Counts as having a Cathedral in each of your cities.  This makes 3\
 name		= _("Oracle")
 tech_req	= "Mysticism"
 bldg_req	= "None"
-graphic		= "b.oracle"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "Player"
@@ -1809,8 +1695,6 @@ Doubles the effect of Temples, in all cities.\
 name		= _("Pyramids")
 tech_req	= "Masonry"
 bldg_req	= "None"
-graphic		= "b.pyramids"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "Player"
@@ -1835,8 +1719,6 @@ Counts as having a Granary in every city.\
 name		= _("SETI Program")
 tech_req	= "Computers"
 bldg_req	= "None"
-graphic		= "b.seti_program"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "Player"
@@ -1862,8 +1744,6 @@ Boosts science production in each city with a Library by 50%. \
 name		= _("Shakespeare's Theatre")
 tech_req	= "Medicine"
 bldg_req	= "None"
-graphic		= "b.shakespeares_theatre"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"
@@ -1888,8 +1768,6 @@ Makes all unhappy citizens content, in the city where it is located.\
 name		= _("Statue of Liberty")
 tech_req	= "Democracy"
 bldg_req	= "None"
-graphic		= "b.statue_of_liberty"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "None"
@@ -1902,8 +1780,8 @@ upkeep		= 0
 sabotage	= 0
 effect		=
     { "type", "range"
-	"Any_Government", "Player"
-	"No_Anarchy", "Player"
+	"Any_Government", "None"
+	"No_Anarchy", "None"
     }
 sound		= "w_statue_of_liberty"
 sound_alt	= "w_generic"
@@ -1917,8 +1795,6 @@ Allows you to choose any government, including those that have not yet\
 name		= _("Sun Tzu's War Academy")
 tech_req	= "Feudalism"
 bldg_req	= "None"
-graphic		= "b.sun_tzus_war_academy"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "Player"
@@ -1946,8 +1822,6 @@ All your new ground units become veterans (for all cities). \
 name		= _("United Nations")
 tech_req	= "Communism"
 bldg_req	= "None"
-graphic		= "b.united_nations"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "Player"
@@ -1984,8 +1858,6 @@ Units regain two extra hitpoints per turn.\
 name		= _("Women's Suffrage")
 tech_req	= "Industrialization"
 bldg_req	= "None"
-graphic		= "b.womens_suffrage"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "Player"
@@ -2014,8 +1886,6 @@ Counts as a Police Station in every city.  (That is, for each city,\
 name		= _("Capitalization")
 tech_req	= "The Corporation"
 bldg_req	= "None"
-graphic		= "b.capitalization"
-graphic_alt	= "-"
 ;terr_gate	=
 ;spec_gate	=
 equiv_range	= "City"

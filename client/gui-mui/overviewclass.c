@@ -10,15 +10,14 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
-#include <errno.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <errno.h>
 
 #include <intuition/intuitionbase.h>
 #include <libraries/mui.h>
@@ -180,7 +179,8 @@ static LONG Overview_GetMapPen(struct Overview_Data *data, LONG x, LONG y)
       }
       else
       {
-	if (is_ocean(ptile->terrain)) {
+	if (ptile->terrain == T_OCEAN)
+	{
 	  return data->pen_ocean;
 	}
 	else
@@ -428,8 +428,8 @@ static ULONG Overview_Setup(struct IClass * cl, Object * o, Msg msg)
   if (!DoSuperMethodA(cl, o, msg))
     return FALSE;
 
-  data->ov_ScaleX = OVERVIEW_TILE_WIDTH;
-  data->ov_ScaleY = OVERVIEW_TILE_HEIGHT;
+  data->ov_ScaleX = 2;
+  data->ov_ScaleY = 2;
 
   data->ov_BufferWidth = ((data->ov_MapWidth * data->ov_ScaleX + 15) / 16) * 16;
   data->ov_BufferHeight = data->ov_MapHeight * data->ov_ScaleY;
@@ -448,7 +448,8 @@ static ULONG Overview_Setup(struct IClass * cl, Object * o, Msg msg)
 
     MUI_RequestIDCMP(o, IDCMP_MOUSEBUTTONS);
 
-    if (can_client_change_view()) {
+    if (get_client_state() == CLIENT_GAME_RUNNING_STATE)
+    {
       Overview_FillBuffer(data);
     }
 
@@ -508,7 +509,8 @@ static ULONG Overview_Draw(struct IClass * cl, Object * o, struct MUIP_Draw * ms
 
   DoSuperMethodA(cl, o, (Msg) msg);
 
-  if (can_client_change_view()) {
+  if (get_client_state() == CLIENT_GAME_RUNNING_STATE)
+  {
     LONG scalex = data->ov_ScaleX;
     LONG scaley = data->ov_ScaleY;
 

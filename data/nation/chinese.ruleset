@@ -2,29 +2,28 @@
 
 name=_("Chinese")
 plural=_("?plural:Chinese")
-class=_("Modern")
-legend=_("China has the largest population of any nation on earth.")
-leader="Mao Zedong", "Sun Yat-Sen", "Cixi", "Wu Zetian", "Li Shimin",
-       "Liu Bang", "Qin Shihuang", "Liu Bei", "Cao Cao", "Sun Quan",
-       "Jiang Qing"
-leader_sex="Male", "Male", "Female", "Female", "Male", "Male", "Male",
-           "Male", "Male", "Male", "Female"
+leader="Mao", "Cixi", "Wu Zetian", "Li Shimin", "Liu Bang", "Qin Shihuang",
+       "Liu Bei", "Cao Cao", "Sun Quan"
+leader_sex="Male", "Female", "Female", "Male", "Male", "Male",
+           "Male", "Male", "Male"
 flag="f.china"
 flag_alt = "-"
-city_style = "Asian"
+city_style = "Classical"
 ruler_titles = { "government",      "male_title",      "female_title"
                  "Monarchy",        _("Emperor"),      _("Dowager")
                  "Communism",       _("Chairman"),     _("Chairperson")
                }
 
+attack=1
+expand=1
+civilized=2
+advisors=100,100,100,100,100,100,100
 init_techs=""
-init_buildings=""
 
 tech_goals = "Monarchy", "Trade", "Philosophy", "Bridge Building",
              "Railroad", "Communism"
 wonder="Great Wall"
 government="Communism"
-civilwar_nations = "vietnamese", "japanese", "korean"
 
 cities =
   "Beijing", "Shanghai", "Guangzhou", "Nanjing", "Tianjin",

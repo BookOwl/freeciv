@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -24,57 +23,10 @@
 #include "unit.h"
 
 #include "gotohand.h"
-#include "plrhand.h"
 
-#include "aidata.h"
 #include "ailog.h"
 
 /* General AI logging functions */
-
-/**************************************************************************
-  Log player messages, they will appear like this
-    2: perrin [ti12 co6 lo5 e]  Increased love for a (now 9)
-  where ti is timer, co countdown and lo love for target, who is e.
-**************************************************************************/
-void PLAYER_LOG(int level, struct player *pplayer, struct ai_data *ai, 
-                const char *msg, ...)
-{
-  char targetbuffer[250];
-  char buffer[500];
-  char buffer2[500];
-  va_list ap;
-  int minlevel = MIN(LOGLEVEL_CITY, level);
-
-  if (pplayer->debug) {
-    minlevel = LOG_NORMAL;
-  } else if (minlevel > fc_log_level) {
-    return;
-  }
-
-  if (ai->diplomacy.target) {
-    my_snprintf(targetbuffer, sizeof(targetbuffer), "[ti%d co%d lo%d %s] ",
-                ai->diplomacy.timer, ai->diplomacy.countdown,
-                pplayer->ai.love[ai->diplomacy.target->player_no],
-                ai->diplomacy.target->name);
-  }
-  my_snprintf(buffer, sizeof(buffer), "%s %s%s%s ", pplayer->name,
-              ai->diplomacy.target ? targetbuffer : "",
-              ai->diplomacy.spacerace_leader &&
-              ai->diplomacy.spacerace_leader->player_no == pplayer->player_no ? 
-                "(spacelead) " : "",
-              ai->diplomacy.alliance_leader->player_no == pplayer->player_no ?
-                "(*)" : "");
-
-  va_start(ap, msg);
-  my_vsnprintf(buffer2, sizeof(buffer2), msg, ap);
-  va_end(ap);
-
-  cat_snprintf(buffer, sizeof(buffer), buffer2);
-  if (pplayer->debug) {
-    notify_conn(&game.est_connections, buffer);
-  }
-  freelog(minlevel, buffer);
-}
 
 /**************************************************************************
   Log city messages, they will appear like this
@@ -87,9 +39,7 @@ void CITY_LOG(int level, struct city *pcity, const char *msg, ...)
   va_list ap;
   int minlevel = MIN(LOGLEVEL_CITY, level);
 
-  if (pcity->debug) {
-    minlevel = LOG_NORMAL;
-  } else if (minlevel > fc_log_level) {
+  if (minlevel > fc_log_level) {
     return;
   }
 
@@ -104,17 +54,12 @@ void CITY_LOG(int level, struct city *pcity, const char *msg, ...)
   va_end(ap);
 
   cat_snprintf(buffer, sizeof(buffer), buffer2);
-  if (pcity->debug) {
-    notify_conn(&game.est_connections, buffer);
-  }
   freelog(minlevel, buffer);
 }
 
 /**************************************************************************
   Log unit messages, they will appear like this
-    2: c's Archers[139] (5,35)->(0,0){0,0} stays to defend city
-  where [] is unit id, ()->() are coordinates present and goto, and
-  {,} contains bodyguard and ferryboat ids.
+    2: c's Archers[139] (5,35)->(0,0){0} stays to defend city
 **************************************************************************/
 void UNIT_LOG(int level, struct unit *punit, const char *msg, ...)
 {
@@ -122,48 +67,53 @@ void UNIT_LOG(int level, struct unit *punit, const char *msg, ...)
   char buffer2[500];
   va_list ap;
   int minlevel = MIN(LOGLEVEL_UNIT, level);
-  int gx, gy;
-  bool messwin = FALSE; /* output to message window */
 
-  if (punit->debug) {
-    minlevel = LOG_NORMAL;
-  } else {
-    /* Are we a virtual unit evaluated in a debug city?. */
-    if (punit->id == 0) {
-      struct city *pcity = map_get_city(punit->x, punit->y);
-
-      if (pcity && pcity->debug) {
-        minlevel = LOG_NORMAL;
-        messwin = TRUE;
-      }
-    }
-    if (minlevel > fc_log_level) {
-      return;
-    }
+  if (minlevel > fc_log_level) {
+    return;
   }
 
-  if (is_goto_dest_set(punit)) {
-    gx = goto_dest_x(punit);
-    gy = goto_dest_y(punit);
-  } else {
-    gx = gy = -1;
-  }
-  
-  my_snprintf(buffer, sizeof(buffer), "%s's %s[%d] (%d,%d)->(%d,%d){%d,%d} ",
+  my_snprintf(buffer, sizeof(buffer), "%s's %s[%d] (%d,%d)->(%d,%d){%d} ",
               unit_owner(punit)->name, unit_type(punit)->name,
               punit->id, punit->x, punit->y,
-	      gx, gy,
-              punit->ai.bodyguard, punit->ai.ferryboat);
+              punit->goto_dest_x, punit->goto_dest_y, 
+              punit->ai.bodyguard);
 
   va_start(ap, msg);
   my_vsnprintf(buffer2, sizeof(buffer2), msg, ap);
   va_end(ap);
 
   cat_snprintf(buffer, sizeof(buffer), buffer2);
-  if (punit->debug || messwin) {
-    notify_conn(&game.est_connections, buffer);
-  }
   freelog(minlevel, buffer);
+}
+
+/**************************************************************************
+  Log goto message if the goto fails. They will appear like this
+    2: a's Explorer[105] on GOTO (3,25)->(5,23) failed : exploring territory
+**************************************************************************/
+void GOTO_LOG(int level, struct unit *punit, enum goto_result result, 
+              const char *msg, ...)
+{
+  int minlevel = MIN(LOGLEVEL_GOTO, level);
+
+  if (minlevel <= fc_log_level && (result == GR_FAILED || result == GR_FOUGHT)) {
+    char buffer[500];
+    char buffer2[500];
+    va_list ap;
+
+    my_snprintf(buffer, sizeof(buffer),
+                "%s's %s[%d] on GOTO (%d,%d)->(%d,%d) %s : ",
+                unit_owner(punit)->name, unit_type(punit)->name,
+                punit->id, punit->x, punit->y,
+                punit->goto_dest_x, punit->goto_dest_y,
+               (result == GR_FAILED) ? "failed" : "fought");
+
+    va_start(ap, msg);
+    my_vsnprintf(buffer2, sizeof(buffer2), msg, ap);
+    va_end(ap);
+
+    cat_snprintf(buffer, sizeof(buffer), buffer2);
+    freelog(minlevel, buffer);
+  }
 }
 
 /**************************************************************************
@@ -178,11 +128,9 @@ void BODYGUARD_LOG(int level, struct unit *punit, const char *msg)
   struct unit *pcharge;
   struct city *pcity;
   int x = -1, y = -1, id = -1;
-  const char *s = "none";
+  char *s = "none";
 
-  if (punit->debug) {
-    minlevel = LOG_NORMAL;
-  } else if (minlevel > fc_log_level) {
+  if (minlevel > fc_log_level) {
     return;
   }
 
@@ -204,8 +152,5 @@ void BODYGUARD_LOG(int level, struct unit *punit, const char *msg)
               unit_owner(punit)->name, unit_type(punit)->name,
               punit->id, punit->x, punit->y, s, id, x, y);
   cat_snprintf(buffer, sizeof(buffer), msg);
-  if (punit->debug) {
-    notify_conn(&game.est_connections, buffer);
-  }
   freelog(minlevel, buffer);
 }

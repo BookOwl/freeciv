@@ -2,7 +2,9 @@
 
 noinst_LIBRARIES = libagents.a
 
-AM_CPPFLAGS = -I. -I$(srcdir)/.. -I$(top_srcdir)/common/aicore -I$(srcdir)/../include -I$(top_srcdir)/utility -I$(top_srcdir)/common -I../../intl -I$(srcdir)/../gui-gtk @CLIENT_CFLAGS@
+## INCLUDES = -I.. -I../gui-gtk -I../include -I$(top_srcdir)/common -I../intl -I/usr/lib/glib/include @CLIENT_CFLAGS@
+
+INCLUDES = -I. -I$(srcdir)/.. -I$(srcdir)/../include -I$(top_srcdir)/common -I../../intl -I$(srcdir)/../gui-gtk @CLIENT_CFLAGS@
 
 libagents_a_SOURCES = 		\
 	agents.c		\
@@ -10,6 +12,4 @@ libagents_a_SOURCES = 		\
 	cma_core.c 		\
 	cma_core.h 		\
 	cma_fec.c		\
-	cma_fec.h		\
-	sha.c                   \
-	sha.h                   
+	cma_fec.h 

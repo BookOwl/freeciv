@@ -10,13 +10,7 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/  
-
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <windows.h>
-
 #include "colors.h"
 
 
@@ -74,4 +68,13 @@ void
 init_color_system(void)
 {
   alloc_standard_colors();
+}
+
+/**************************************************************************
+
+**************************************************************************/
+void
+color_error(void)
+{
+	/* PORTME */
 }

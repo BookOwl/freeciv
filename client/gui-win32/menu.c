@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/  
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -25,7 +24,6 @@
 #include "capability.h"
 #include "fcintl.h"
 #include "log.h"
-#include "government.h"
 #include "map.h"
 #include "mem.h"
 #include "support.h"
@@ -48,7 +46,6 @@
 #include "messagewin.h"
 #include "optiondlg.h"
 #include "options.h"
-#include "packhand.h"
 #include "plrdlg.h"
 #include "ratesdlg.h"
 #include "repodlgs.h"
@@ -74,13 +71,11 @@ enum MenuID {
   IDM_GAME_DISCONNECT,
   IDM_GAME_QUIT,
   
-  IDM_GOVERNMENT_MENU,
-  IDM_GOVERNMENT_TAX,
-  IDM_GOVERNMENT_CITY,
-  IDM_GOVERNMENT_WORK,
-  IDM_GOVERNMENT_REVOLUTION,
-  IDM_GOVERNMENT_CHANGE_FIRST,
-  IDM_GOVERNMENT_CHANGE_LAST = IDM_GOVERNMENT_CHANGE_FIRST + (G_MAGIC - 1),
+  IDM_KINGDOM_MENU,
+  IDM_KINGDOM_TAX,
+  IDM_KINGDOM_CITY,
+  IDM_KINGDOM_WORK,
+  IDM_KINGDOM_REVOLUTION,
 
   IDM_VIEW_MENU,
   IDM_VIEW_GRID, 
@@ -122,12 +117,9 @@ enum MenuID {
   IDM_ORDERS_AUTOSETTLER,
   IDM_ORDERS_AUTOATTACK,
   IDM_ORDERS_AUTOEXPLORE,
-  IDM_ORDERS_CONNECT_ROAD,
-  IDM_ORDERS_CONNECT_RAIL,
-  IDM_ORDERS_CONNECT_IRRIGATE,
+  IDM_ORDERS_CONNECT,
   IDM_ORDERS_GOTO,
   IDM_ORDERS_AIRLIFT,
-  IDM_ORDERS_RETURN,
 
   IDM_ORDERS_DISBAND,
   IDM_ORDERS_WONDER,
@@ -211,7 +203,7 @@ struct my_menu {
 /**************************************************************************
 
 **************************************************************************/
-HACCEL my_create_menu_acceltable(void)
+HACCEL my_create_menu_acceltable()
 {
   return CreateAcceleratorTable(menuaccel,accelcount);
 }
@@ -239,8 +231,8 @@ static void my_add_menu_accelerator(char *item,int cmd)
   plus++;
   tab++;
   /* fkeys */
-  if ((*plus == 'F') && (my_isdigit(plus[1]))) {
-    if (my_isdigit(plus[2]))
+  if ((*plus=='F')&&(isdigit(plus[1]))) {
+    if (isdigit(plus[2]))
       newaccel.key=VK_F10+(plus[2]-'0');
     else
       newaccel.key=VK_F1+(plus[1]-'1');
@@ -295,16 +287,13 @@ static struct my_menu main_menu[]={
   {N_("_Disconnect"),IDM_GAME_DISCONNECT},
   {N_("_Quit") "\tCtl+Q",IDM_GAME_QUIT},
   {NULL,0},
-  {N_("Gov_ernment"), IDM_SUBMENU},
-  {N_("Tax Rates") "\tShift+T", IDM_GOVERNMENT_TAX},
+  {N_("_Kingdom"),IDM_SUBMENU},
+  {N_("Tax Rates") "\tShift+T",IDM_KINGDOM_TAX},
   { "",IDM_SEPARATOR},
-  {N_("_Find City") "\tCtl+F", IDM_GOVERNMENT_CITY},
-  {N_("Work_lists") "\tShift+L", IDM_GOVERNMENT_WORK},
+  {N_("_Find City") "\tCtl+F",IDM_KINGDOM_CITY},
+  {N_("Work_lists") "\tShift+L",IDM_KINGDOM_WORK},
   { "",IDM_SEPARATOR},
-  {N_("_Change Government"), IDM_SUBMENU},
-  {N_("_Revolution"), IDM_GOVERNMENT_REVOLUTION},
-  {"", IDM_SEPARATOR},
-  {NULL, 0},
+  {N_("_Revolution"),IDM_KINGDOM_REVOLUTION}, 
   {NULL,0},
   {N_("_View"),IDM_SUBMENU},
   {N_("Map _Grid") "\tCtl+G",IDM_VIEW_GRID},
@@ -349,14 +338,9 @@ static struct my_menu main_menu[]={
   {N_("Auto Settler") "\tA",IDM_ORDERS_AUTOSETTLER},
   {N_("Auto Attack") "\tShift+A",IDM_ORDERS_AUTOATTACK},
   {N_("Auto E_xplore") "\tX",IDM_ORDERS_AUTOEXPLORE},
-  {N_("Connect"), IDM_SUBMENU},
-  {N_("_Road") "\tCtl+Shift+R", IDM_ORDERS_CONNECT_ROAD},
-  {N_("Rai_l") "\tCtl+Shift+L", IDM_ORDERS_CONNECT_RAIL},
-  {N_("_Irrigate") "\tCtl+Shift+I", IDM_ORDERS_CONNECT_IRRIGATE},
-  {NULL, 0},
+  {N_("_Connect") "\tShift+C",IDM_ORDERS_CONNECT},
   {N_("_Go to") "\tG",IDM_ORDERS_GOTO},
   {N_("Go/Airlift to City") "\tL",IDM_ORDERS_AIRLIFT},
-  {N_("Return to nearest city") "\tShift+G", IDM_ORDERS_RETURN},
   { "",IDM_SEPARATOR},
   {N_("Disband Unit") "\tShift+D",IDM_ORDERS_DISBAND},
   {N_("Help Build Wonder") "\tShift+B",IDM_ORDERS_WONDER},
@@ -450,7 +434,7 @@ static int my_append_menu(HMENU menu, struct my_menu *item, HMENU submenu)
 /**************************************************************************
 
 **************************************************************************/
-static HMENU my_create_menu(struct my_menu **items)
+HMENU my_create_menu(struct my_menu **items)
 {
   HMENU menu;
   if ((*items)->id==IDM_BEGIN) {
@@ -482,36 +466,34 @@ static HMENU my_create_menu(struct my_menu **items)
 /**************************************************************************
 
 **************************************************************************/
-static void handle_numpad(int code)
+void handle_numpad(int code)
 {
-  switch (code) { 
-  case IDM_NUMPAD_BASE + 1:
-    key_unit_move(DIR8_SOUTHWEST);
-    break;
-  case IDM_NUMPAD_BASE + 2:
-    key_unit_move(DIR8_SOUTH);
-    break;
-  case IDM_NUMPAD_BASE + 3:
-    key_unit_move(DIR8_SOUTHEAST);
-    break;
-  case IDM_NUMPAD_BASE + 4:
-    key_unit_move(DIR8_WEST);
-    break;
-  case IDM_NUMPAD_BASE + 5:
-    advance_unit_focus();
-    break;
-  case IDM_NUMPAD_BASE + 6:
-    key_unit_move(DIR8_EAST);
-    break;
-  case IDM_NUMPAD_BASE + 7:
-    key_unit_move(DIR8_NORTHWEST);
-    break;
-  case IDM_NUMPAD_BASE + 8:
-    key_unit_move(DIR8_NORTH);
-    break;
-  case IDM_NUMPAD_BASE + 9:
-    key_unit_move(DIR8_NORTHEAST);
-    break;
+  if (is_isometric) {
+    switch (code)
+      {
+      case IDM_NUMPAD_BASE+1: key_move_south(); break;
+      case IDM_NUMPAD_BASE+2: key_move_south_east(); break;
+      case IDM_NUMPAD_BASE+3: key_move_east(); break;
+      case IDM_NUMPAD_BASE+4: key_move_south_west(); break;
+      case IDM_NUMPAD_BASE+5: focus_to_next_unit(); break;
+      case IDM_NUMPAD_BASE+6: key_move_north_east(); break;
+      case IDM_NUMPAD_BASE+7: key_move_west(); break;
+      case IDM_NUMPAD_BASE+8: key_move_north_west(); break;
+      case IDM_NUMPAD_BASE+9: key_move_north(); break;
+      }
+  } else {
+    switch (code) 
+      { 
+      case IDM_NUMPAD_BASE+1: key_move_south_west(); break;
+      case IDM_NUMPAD_BASE+2: key_move_south(); break;
+      case IDM_NUMPAD_BASE+3: key_move_south_east(); break;
+      case IDM_NUMPAD_BASE+4: key_move_west(); break;
+      case IDM_NUMPAD_BASE+5: focus_to_next_unit(); break;
+      case IDM_NUMPAD_BASE+6: key_move_east(); break;
+      case IDM_NUMPAD_BASE+7: key_move_north_west(); break;
+      case IDM_NUMPAD_BASE+8: key_move_north(); break;
+      case IDM_NUMPAD_BASE+9: key_move_north_east(); break;
+      }
   }
 }
 
@@ -561,16 +543,16 @@ void handle_menu(int code)
     case IDM_GAME_QUIT:
       exit(EXIT_SUCCESS);
       break;
-    case IDM_GOVERNMENT_TAX:
+    case IDM_KINGDOM_TAX:
       popup_rates_dialog();
       break;
-    case IDM_GOVERNMENT_CITY:
+    case IDM_KINGDOM_CITY:
       popup_find_dialog();
       break;
-    case IDM_GOVERNMENT_WORK:
+    case IDM_KINGDOM_WORK:
       popup_worklists_report(game.player_ptr);
       break;
-    case IDM_GOVERNMENT_REVOLUTION:
+    case IDM_KINGDOM_REVOLUTION:
       popup_revolution_dialog();
       break;
     case IDM_VIEW_GRID:
@@ -686,14 +668,9 @@ void handle_menu(int code)
       if(get_unit_in_focus())
 	request_new_unit_activity(get_unit_in_focus(), road_activity);
       break;
-    case IDM_ORDERS_CONNECT_ROAD:
-      request_unit_connect(ACTIVITY_ROAD);
-      break;
-    case IDM_ORDERS_CONNECT_RAIL:
-      request_unit_connect(ACTIVITY_RAILROAD);
-      break;
-    case IDM_ORDERS_CONNECT_IRRIGATE:
-      request_unit_connect(ACTIVITY_IRRIGATE);
+    case IDM_ORDERS_CONNECT:
+      if(get_unit_in_focus())
+	request_unit_connect();
       break;
     case IDM_ORDERS_POLLUTION:
       if(can_unit_paradrop(get_unit_in_focus()))
@@ -723,7 +700,7 @@ void handle_menu(int code)
       break;
     case IDM_ORDERS_UNLOAD:
       if(get_unit_in_focus())
-	request_unit_unload_all(get_unit_in_focus());
+	request_unit_unload(get_unit_in_focus());
       break;
     case IDM_ORDERS_WAKEUP:
       if(get_unit_in_focus())
@@ -736,11 +713,6 @@ void handle_menu(int code)
     case IDM_ORDERS_AIRLIFT:
       if(get_unit_in_focus())
 	popup_goto_dialog();
-      break;
-    case IDM_ORDERS_RETURN:
-      if (get_unit_in_focus()) {
-	request_unit_return(get_unit_in_focus());
-      }
       break;
     case IDM_ORDERS_DISBAND:
       if(get_unit_in_focus())
@@ -856,10 +828,6 @@ void handle_menu(int code)
       handle_chatline();
       break;
     default:
-      if ((enum MenuID)code >= IDM_GOVERNMENT_CHANGE_FIRST
-	   && (enum MenuID)code <= IDM_GOVERNMENT_CHANGE_LAST) {
-	set_government_choice((enum MenuID)code - IDM_GOVERNMENT_CHANGE_FIRST);
-      }
       break;
     }
 }
@@ -876,7 +844,7 @@ static void my_rename_menu(HMENU hmenu,int id,char *newstr)
 /**************************************************************************
 
 **************************************************************************/
-HMENU create_mainmenu(void)
+HMENU create_mainmenu()
 {
   struct my_menu *items=main_menu;
   return my_create_menu(&items);
@@ -891,8 +859,9 @@ update_menus(void)
   enum MenuID id;
   HMENU menu;
   menu=GetMenu(root_window);
-  if (!can_client_issue_orders()) {
-      for(id = IDM_GOVERNMENT_MENU + 1; id < IDM_HELP_MENU; id++)
+  if (get_client_state()!=CLIENT_GAME_RUNNING_STATE)
+    {
+      for(id=IDM_KINGDOM_MENU+1;id<IDM_HELP_MENU;id++)
 	my_enable_menu(menu,id,FALSE);
       
       my_enable_menu(menu,IDM_GAME_LOCAL_OPT,FALSE);
@@ -904,197 +873,171 @@ update_menus(void)
       my_enable_menu(menu,IDM_GAME_EXPORT,TRUE);
       my_enable_menu(menu,IDM_GAME_CLEAR,TRUE);
       my_enable_menu(menu,IDM_GAME_DISCONNECT,TRUE);
-  } else {
-    struct unit *punit;
-    HMENU govts;
-    int i;
-
-    for (id = IDM_GOVERNMENT_MENU + 1; id < IDM_HELP_MENU; id++) {
-      my_enable_menu(menu, id, TRUE);
     }
-
-    for (i = IDM_GOVERNMENT_CHANGE_FIRST; i <= IDM_GOVERNMENT_CHANGE_LAST;
-	 i++) {
-      DeleteMenu(menu, i, MF_BYCOMMAND);
-    }
-
-    /* WARNING: These numbers are very dependent on the menu layout */
-    govts = GetSubMenu(GetSubMenu(menu, 1), 5); 
-
-    for (i = 0; i < game.government_count; i++) {
-      if (i != game.government_when_anarchy) {
-	AppendMenu(govts, MF_STRING, IDM_GOVERNMENT_CHANGE_FIRST + i,
-		   governments[i].name);
-	my_enable_menu(menu, IDM_GOVERNMENT_CHANGE_FIRST + i, 
-		       can_change_to_government(game.player_ptr, i));
-      }
-    }
-
-    my_enable_menu(menu, IDM_GOVERNMENT_TAX, can_client_issue_orders());
-    my_enable_menu(menu, IDM_GOVERNMENT_WORK, can_client_issue_orders());
-    my_enable_menu(menu, IDM_GOVERNMENT_REVOLUTION,
-		   can_client_issue_orders());
-
-    my_enable_menu(menu, IDM_GAME_LOCAL_OPT,TRUE);
-    my_enable_menu(menu, IDM_GAME_MESSAGE_OPT,TRUE);
-    my_enable_menu(menu, IDM_GAME_SAVE_SETTINGS,TRUE);
-    my_enable_menu(menu, IDM_GAME_PLAYERS,TRUE);
-    my_enable_menu(menu, IDM_GAME_SERVER_INIT,TRUE);
-    my_enable_menu(menu, IDM_GAME_SERVER_OPT_ON,TRUE);
-    my_enable_menu(menu, IDM_GAME_EXPORT,TRUE);
-    my_enable_menu(menu, IDM_GAME_CLEAR,TRUE);
-    my_enable_menu(menu, IDM_GAME_DISCONNECT,TRUE);
-
-    my_enable_menu(menu, IDM_REPORTS_SPACESHIP,
-		   game.player_ptr->spaceship.state =! SSHIP_NONE);
-    if(!(punit = get_unit_in_focus())) {
-      for (id = IDM_ORDERS_MENU + 1; id < IDM_REPORTS_MENU; id++) {
-	my_enable_menu(menu,id,FALSE);
-      }
-    } else {
-      char *chgfmt = _("Change to %s");
-      char *transfmt = _("Transform to %s");
-      char irrtext[128], mintext[128], transtext[128];
-      char *roadtext;
-      Terrain_type_id  ttype;
-      struct tile_type *tinfo;
-
-      sz_strlcpy(irrtext, _("Build Irrigation"));
-      sz_strlcpy(mintext, _("Build Mine"));
-      sz_strlcpy(transtext, _("Transform Terrain"));
-
-      my_enable_menu(menu, IDM_ORDERS_AUTOSETTLER,
-		     (can_unit_do_auto(punit)
-		      && unit_flag(punit, F_SETTLERS)));
-
-      my_enable_menu(menu, IDM_ORDERS_AUTOATTACK,
-		     (can_unit_do_auto(punit)
-		      && !unit_flag(punit, F_SETTLERS)));
-
-      my_enable_menu(menu,IDM_ORDERS_BUILDCITY,
-		     ((punit) || unit_can_help_build_wonder_here(punit)
-		      || can_unit_add_or_build_city(punit)));
-      my_enable_menu(menu, IDM_ORDERS_FORTRESS,
+  else
+    {
+      struct unit *punit;
+      for(id=IDM_KINGDOM_MENU+1;id<IDM_HELP_MENU;id++)
+	my_enable_menu(menu,id,TRUE);
+      
+      my_enable_menu(menu,IDM_GAME_LOCAL_OPT,TRUE);
+      my_enable_menu(menu,IDM_GAME_MESSAGE_OPT,TRUE);
+      my_enable_menu(menu,IDM_GAME_SAVE_SETTINGS,TRUE);
+      my_enable_menu(menu,IDM_GAME_PLAYERS,TRUE);
+      my_enable_menu(menu,IDM_GAME_SERVER_INIT,TRUE);
+      my_enable_menu(menu,IDM_GAME_SERVER_OPT_ON,TRUE);
+      my_enable_menu(menu,IDM_GAME_EXPORT,TRUE);
+      my_enable_menu(menu,IDM_GAME_CLEAR,TRUE);
+      my_enable_menu(menu,IDM_GAME_DISCONNECT,TRUE);
+      
+      my_enable_menu(menu,IDM_REPORTS_SPACESHIP,
+		     game.player_ptr->spaceship.state=!SSHIP_NONE);
+      if((punit=get_unit_in_focus())) {
+	char *chgfmt = _("Change to %s");
+	char *transfmt = _("Transform to %s");
+	char irrtext[128], mintext[128], transtext[128];
+	char *roadtext;
+	enum tile_terrain_type  ttype;
+	struct tile_type *      tinfo;
+	
+	sz_strlcpy(irrtext, _("Build Irrigation"));
+	sz_strlcpy(mintext, _("Build Mine"));
+	sz_strlcpy(transtext, _("Transform Terrain"));
+	
+        my_enable_menu(menu,IDM_ORDERS_AUTOSETTLER,
+                          (can_unit_do_auto(punit)
+                           && unit_flag(punit, F_SETTLERS)));
+	
+	my_enable_menu(menu,IDM_ORDERS_AUTOATTACK,
+		       (can_unit_do_auto(punit)
+			&& !unit_flag(punit, F_SETTLERS)));
+	
+	my_enable_menu(menu,IDM_ORDERS_BUILDCITY,
+		       ((punit) || unit_can_help_build_wonder_here(punit) || 
+			can_unit_add_or_build_city(punit)));
+	my_enable_menu(menu,IDM_ORDERS_FORTRESS,
 		       can_unit_do_activity(punit, ACTIVITY_FORTRESS));
-      my_enable_menu(menu, IDM_ORDERS_AIRBASE,
-		     can_unit_do_activity(punit, ACTIVITY_AIRBASE));
-      my_enable_menu(menu, IDM_ORDERS_ROAD,
-		     can_unit_do_activity(punit, ACTIVITY_ROAD)
-		     || can_unit_do_activity(punit, ACTIVITY_RAILROAD));
-      my_enable_menu(menu, IDM_ORDERS_CONNECT_ROAD,
-		     can_unit_do_connect(punit, ACTIVITY_ROAD));
-      my_enable_menu(menu, IDM_ORDERS_CONNECT_RAIL,
-		     can_unit_do_connect(punit, ACTIVITY_RAILROAD));
-      my_enable_menu(menu, IDM_ORDERS_CONNECT_IRRIGATE,
-		     can_unit_do_connect(punit, ACTIVITY_IRRIGATE));
-      my_enable_menu(menu, IDM_ORDERS_POLLUTION,
-		     can_unit_do_activity(punit, ACTIVITY_POLLUTION)
-		     || can_unit_paradrop(punit));
+	my_enable_menu(menu,IDM_ORDERS_AIRBASE,
+		       can_unit_do_activity(punit, ACTIVITY_AIRBASE));
+	my_enable_menu(menu,IDM_ORDERS_ROAD,
+		       can_unit_do_activity(punit, ACTIVITY_ROAD) ||
+		       can_unit_do_activity(punit, ACTIVITY_RAILROAD));
+	my_enable_menu(menu,IDM_ORDERS_CONNECT,
+		       can_unit_do_connect(punit, ACTIVITY_IDLE));
+	my_enable_menu(menu,IDM_ORDERS_POLLUTION,
+		       can_unit_do_activity(punit, ACTIVITY_POLLUTION) ||
+		       can_unit_paradrop(punit));
 
-      my_enable_menu(menu, IDM_ORDERS_WAKEUP,
-		     is_unit_activity_on_tile(ACTIVITY_SENTRY,
-					      punit->x, punit->y));
-      my_enable_menu(menu, IDM_ORDERS_WONDER,
-		     unit_can_help_build_wonder_here(punit));       
-      my_enable_menu(menu, IDM_ORDERS_TROUTE,
-		     unit_can_est_traderoute_here(punit));
-      if (unit_flag(punit, F_CITIES)
-	  && map_get_city(punit->x, punit->y)) {
-	my_rename_menu(menu,IDM_ORDERS_BUILDCITY,_("Add to City"));
-      } else {
-	my_rename_menu(menu,IDM_ORDERS_BUILDCITY,_("Build City"));
+	my_enable_menu(menu,IDM_ORDERS_WAKEUP,
+		       is_unit_activity_on_tile(ACTIVITY_SENTRY,
+						punit->x, punit->y));
+	my_enable_menu(menu,IDM_ORDERS_WONDER,
+		       unit_can_help_build_wonder_here(punit));       
+	my_enable_menu(menu,IDM_ORDERS_TROUTE,
+		       unit_can_est_traderoute_here(punit));
+	if (unit_flag(punit, F_CITIES)
+	    && map_get_city(punit->x, punit->y))
+	  {
+	    my_rename_menu(menu,IDM_ORDERS_BUILDCITY,_("Add to City"));
+	  }
+	else
+	  {
+	    my_rename_menu(menu,IDM_ORDERS_BUILDCITY,_("Build City"));
+	  }
+	ttype = map_get_tile(punit->x, punit->y)->terrain;
+	tinfo = get_tile_type(ttype);    
+	if ((tinfo->irrigation_result != T_LAST) && (tinfo->irrigation_result != ttype))
+	  {
+	    my_snprintf (irrtext, sizeof(irrtext), chgfmt,
+			 (get_tile_type(tinfo->irrigation_result))->terrain_name);
+	  }
+	else if (map_has_special(punit->x, punit->y, S_IRRIGATION) &&
+		 player_knows_techs_with_flag(game.player_ptr, TF_FARMLAND))
+	  {
+	    sz_strlcpy (irrtext, _("Build Farmland"));
+	  }
+	if ((tinfo->mining_result != T_LAST) && (tinfo->mining_result != ttype))
+	  {
+          my_snprintf (mintext, sizeof(mintext), chgfmt,
+		       (get_tile_type(tinfo->mining_result))->terrain_name);
+	  }
+	if ((tinfo->transform_result != T_LAST) && (tinfo->transform_result != ttype))
+	  {
+	    my_snprintf (transtext, sizeof(transtext), transfmt,
+			 (get_tile_type(tinfo->transform_result))->terrain_name);
+	  }
+	if (unit_flag(punit, F_PARATROOPERS)) {
+	  my_rename_menu(menu,IDM_ORDERS_POLLUTION, _("Paradrop"));
+	} else {
+	  my_rename_menu(menu,IDM_ORDERS_POLLUTION, _("Clean Pollution"));
+	}       
+	my_rename_menu(menu,IDM_ORDERS_IRRIGATION,irrtext);
+	my_rename_menu(menu,IDM_ORDERS_FOREST,mintext);
+	my_rename_menu(menu,IDM_ORDERS_TRANSFORM,transtext);
+	if (map_has_special(punit->x, punit->y, S_ROAD)) {
+	  roadtext = _("Build Railroad");
+	  road_activity=ACTIVITY_RAILROAD;
+	} else {
+	  roadtext = _("Build Road");
+	  road_activity=ACTIVITY_ROAD;
+	}     
+	my_rename_menu(menu,IDM_ORDERS_ROAD,roadtext);
+	my_enable_menu(menu,IDM_ORDERS_FALLOUT,
+		       can_unit_do_activity(punit, ACTIVITY_FALLOUT));
+	my_enable_menu(menu,IDM_ORDERS_FORTIFY,
+		       can_unit_do_activity(punit, ACTIVITY_FORTIFYING));
+	my_enable_menu(menu,IDM_ORDERS_SENTRY,
+		       can_unit_do_activity(punit, ACTIVITY_SENTRY));
+	my_enable_menu(menu,IDM_ORDERS_PILLAGE,
+		       can_unit_do_activity(punit, ACTIVITY_PILLAGE));
+	my_enable_menu(menu,IDM_ORDERS_AUTOEXPLORE,
+		       can_unit_do_activity(punit, ACTIVITY_EXPLORE));
+	my_enable_menu(menu,IDM_ORDERS_FOREST,
+		       can_unit_do_activity(punit, ACTIVITY_MINE));
+	my_enable_menu(menu,IDM_ORDERS_IRRIGATION,
+		       can_unit_do_activity(punit, ACTIVITY_IRRIGATE));
+	my_enable_menu(menu,IDM_ORDERS_TRANSFORM,
+		       can_unit_do_activity(punit, ACTIVITY_TRANSFORM));
+	my_enable_menu(menu,IDM_ORDERS_HOME,
+		       can_unit_change_homecity(punit));
+	my_enable_menu(menu,IDM_ORDERS_EXPLODE,
+		       unit_flag(punit, F_NUCLEAR));
+	my_enable_menu(menu,IDM_ORDERS_UNLOAD,
+		       get_transporter_capacity(punit)>0);
       }
-      ttype = map_get_tile(punit->x, punit->y)->terrain;
-      tinfo = get_tile_type(ttype);    
-      if (tinfo->irrigation_result != T_NONE
-	  && tinfo->irrigation_result != ttype) {
-	my_snprintf(irrtext, sizeof(irrtext), chgfmt,
-		    (get_tile_type(tinfo->irrigation_result))->terrain_name);
-      } else if (map_has_special(punit->x, punit->y, S_IRRIGATION)
-		 && player_knows_techs_with_flag(game.player_ptr,
-						 TF_FARMLAND)) {
-	sz_strlcpy(irrtext, _("Build Farmland"));
-      }
-      if (tinfo->mining_result != T_NONE && tinfo->mining_result != ttype) {
-	my_snprintf(mintext, sizeof(mintext), chgfmt,
-		    (get_tile_type(tinfo->mining_result))->terrain_name);
-      }
-      if (tinfo->transform_result != T_NONE
-	  && tinfo->transform_result != ttype) {
-	my_snprintf(transtext, sizeof(transtext), transfmt,
-		    (get_tile_type(tinfo->transform_result))->terrain_name);
-      }
-      if (unit_flag(punit, F_PARATROOPERS)) {
-	my_rename_menu(menu, IDM_ORDERS_POLLUTION, _("Paradrop"));
-      } else {
-	my_rename_menu(menu, IDM_ORDERS_POLLUTION, _("Clean Pollution"));
-      }
-      my_rename_menu(menu, IDM_ORDERS_IRRIGATION, irrtext);
-      my_rename_menu(menu, IDM_ORDERS_FOREST, mintext);
-      my_rename_menu(menu, IDM_ORDERS_TRANSFORM, transtext);
-      if (map_has_special(punit->x, punit->y, S_ROAD)) {
-	roadtext = _("Build Railroad");
-	road_activity = ACTIVITY_RAILROAD;
-      } else {
-	roadtext = _("Build Road");
-	road_activity = ACTIVITY_ROAD;
-      }
-      my_rename_menu(menu, IDM_ORDERS_ROAD, roadtext);
-      my_enable_menu(menu, IDM_ORDERS_FALLOUT,
-		     can_unit_do_activity(punit, ACTIVITY_FALLOUT));
-      my_enable_menu(menu, IDM_ORDERS_FORTIFY,
-		     can_unit_do_activity(punit, ACTIVITY_FORTIFYING));
-      my_enable_menu(menu, IDM_ORDERS_SENTRY,
-		     can_unit_do_activity(punit, ACTIVITY_SENTRY));
-      my_enable_menu(menu, IDM_ORDERS_PILLAGE,
-		     can_unit_do_activity(punit, ACTIVITY_PILLAGE));
-      my_enable_menu(menu, IDM_ORDERS_AUTOEXPLORE,
-		     can_unit_do_activity(punit, ACTIVITY_EXPLORE));
-      my_enable_menu(menu, IDM_ORDERS_FOREST,
-		     can_unit_do_activity(punit, ACTIVITY_MINE));
-      my_enable_menu(menu, IDM_ORDERS_IRRIGATION,
-		     can_unit_do_activity(punit, ACTIVITY_IRRIGATE));
-      my_enable_menu(menu, IDM_ORDERS_TRANSFORM,
-		     can_unit_do_activity(punit, ACTIVITY_TRANSFORM));
-      my_enable_menu(menu, IDM_ORDERS_HOME,
-		     can_unit_change_homecity(punit));
-      my_enable_menu(menu, IDM_ORDERS_EXPLODE,
-		     unit_flag(punit, F_NUCLEAR));
-      my_enable_menu(menu, IDM_ORDERS_UNLOAD,
-		     get_transporter_capacity(punit)>0);
+      CheckMenuItem(menu,IDM_VIEW_GRID,MF_BYCOMMAND |
+		    (draw_map_grid?MF_CHECKED:MF_UNCHECKED));
+      CheckMenuItem(menu,IDM_VIEW_NAMES,MF_BYCOMMAND |
+		    (draw_city_names?MF_CHECKED:MF_UNCHECKED));
+      CheckMenuItem(menu,IDM_VIEW_PROD,MF_BYCOMMAND |
+		    (draw_city_productions?MF_CHECKED:MF_UNCHECKED));
+      CheckMenuItem(menu,IDM_VIEW_TERRAIN,MF_BYCOMMAND |
+		    (draw_terrain?MF_CHECKED:MF_UNCHECKED));
+      my_enable_menu(menu,IDM_VIEW_COASTLINE,!draw_terrain);
+      CheckMenuItem(menu,IDM_VIEW_COASTLINE,MF_BYCOMMAND |
+		    (draw_coastline?MF_CHECKED:MF_UNCHECKED));
+      CheckMenuItem(menu,IDM_VIEW_ROADS,MF_BYCOMMAND |
+		    draw_roads_rails?MF_CHECKED:MF_UNCHECKED);
+      CheckMenuItem(menu,IDM_VIEW_IRRIGATION,MF_BYCOMMAND |
+		    draw_irrigation?MF_CHECKED:MF_UNCHECKED);
+      CheckMenuItem(menu,IDM_VIEW_MINES,MF_BYCOMMAND | 
+		    draw_mines?MF_CHECKED:MF_UNCHECKED);
+      CheckMenuItem(menu,IDM_VIEW_FORTRESS,MF_BYCOMMAND | 
+		    draw_fortress_airbase?MF_CHECKED:MF_UNCHECKED);
+      CheckMenuItem(menu,IDM_VIEW_SPECIALS,MF_BYCOMMAND |
+		    (draw_specials?MF_CHECKED:MF_UNCHECKED));
+      CheckMenuItem(menu,IDM_VIEW_POLLUTION,MF_BYCOMMAND |
+		    (draw_pollution?MF_CHECKED:MF_UNCHECKED));
+      CheckMenuItem(menu,IDM_VIEW_CITIES,MF_BYCOMMAND |
+		    (draw_cities?MF_CHECKED:MF_UNCHECKED));
+      CheckMenuItem(menu,IDM_VIEW_UNITS,MF_BYCOMMAND |
+		    (draw_units?MF_CHECKED:MF_UNCHECKED));
+      my_enable_menu(menu,IDM_VIEW_FOCUS_UNIT,
+		     !draw_units); 
+      CheckMenuItem(menu,IDM_VIEW_FOCUS_UNIT,MF_BYCOMMAND |
+		    (draw_focus_unit?MF_CHECKED:MF_UNCHECKED));
+      CheckMenuItem(menu,IDM_VIEW_FOG_OF_WAR,MF_BYCOMMAND |
+		    (draw_fog_of_war?MF_CHECKED:MF_UNCHECKED));
+      
     }
-    CheckMenuItem(menu, IDM_VIEW_GRID, MF_BYCOMMAND
-		  | (draw_map_grid ? MF_CHECKED : MF_UNCHECKED));
-    CheckMenuItem(menu, IDM_VIEW_NAMES, MF_BYCOMMAND
-		  | (draw_city_names ? MF_CHECKED : MF_UNCHECKED));
-    CheckMenuItem(menu, IDM_VIEW_PROD, MF_BYCOMMAND
-		  | (draw_city_productions ? MF_CHECKED : MF_UNCHECKED));
-    CheckMenuItem(menu, IDM_VIEW_TERRAIN, MF_BYCOMMAND
-		  | (draw_terrain ? MF_CHECKED : MF_UNCHECKED));
-    my_enable_menu(menu, IDM_VIEW_COASTLINE, !draw_terrain);
-    CheckMenuItem(menu, IDM_VIEW_COASTLINE ,MF_BYCOMMAND
-		  | (draw_coastline ? MF_CHECKED : MF_UNCHECKED));
-    CheckMenuItem(menu, IDM_VIEW_ROADS, MF_BYCOMMAND
-		  | draw_roads_rails ? MF_CHECKED : MF_UNCHECKED);
-    CheckMenuItem(menu, IDM_VIEW_IRRIGATION, MF_BYCOMMAND
-		  | draw_irrigation ? MF_CHECKED : MF_UNCHECKED);
-    CheckMenuItem(menu, IDM_VIEW_MINES, MF_BYCOMMAND
-		  | draw_mines ? MF_CHECKED : MF_UNCHECKED);
-    CheckMenuItem(menu, IDM_VIEW_FORTRESS, MF_BYCOMMAND
-		  | draw_fortress_airbase ? MF_CHECKED : MF_UNCHECKED);
-    CheckMenuItem(menu, IDM_VIEW_SPECIALS, MF_BYCOMMAND
-		  | (draw_specials ? MF_CHECKED : MF_UNCHECKED));
-    CheckMenuItem(menu, IDM_VIEW_POLLUTION, MF_BYCOMMAND
-		  | (draw_pollution ? MF_CHECKED : MF_UNCHECKED));
-    CheckMenuItem(menu, IDM_VIEW_CITIES, MF_BYCOMMAND
-		  | (draw_cities ? MF_CHECKED : MF_UNCHECKED));
-    CheckMenuItem(menu, IDM_VIEW_UNITS, MF_BYCOMMAND
-		  | (draw_units ? MF_CHECKED : MF_UNCHECKED));
-    my_enable_menu(menu, IDM_VIEW_FOCUS_UNIT,
-		   !draw_units); 
-    CheckMenuItem(menu, IDM_VIEW_FOCUS_UNIT, MF_BYCOMMAND
-		  | (draw_focus_unit ? MF_CHECKED : MF_UNCHECKED));
-    CheckMenuItem(menu, IDM_VIEW_FOG_OF_WAR, MF_BYCOMMAND
-		  | (draw_fog_of_war ? MF_CHECKED : MF_UNCHECKED));
-  }
 }

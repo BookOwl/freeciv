@@ -16,14 +16,14 @@
 #endif
 
 #include <string.h>
+#include <assert.h>
 
 #include <SDL.h>
 #include <SDL_mixer.h>
 
+#include "audio.h"
 #include "log.h"
 #include "support.h"
-
-#include "audio.h"
 
 #include "audio_sdl.h"
 
@@ -127,36 +127,6 @@ static void my_wait(void)
 }
 
 /**************************************************************************
-  Quit SDL.  If the video is still in use (by gui-sdl), just quit the
-  subsystem.
-
-  This will need to be changed if SDL is used elsewhere.
-**************************************************************************/
-static void quit_sdl_audio(void)
-{
-  if (SDL_WasInit(SDL_INIT_VIDEO)) {
-    SDL_QuitSubSystem(SDL_INIT_AUDIO);
-  } else {
-    SDL_Quit();
-  }
-}
-
-/**************************************************************************
-  Init SDL.  If the video is already in use (by gui-sdl), just init the
-  subsystem.
-
-  This will need to be changed if SDL is used elsewhere.
-**************************************************************************/
-static int init_sdl_audio(void)
-{
-  if (SDL_WasInit(SDL_INIT_VIDEO)) {
-    return SDL_InitSubSystem(SDL_INIT_AUDIO | SDL_INIT_NOPARACHUTE);
-  } else {
-    return SDL_Init(SDL_INIT_AUDIO | SDL_INIT_NOPARACHUTE);
-  }
-}
-
-/**************************************************************************
   Clean up.
 **************************************************************************/
 static void my_shutdown(void)
@@ -175,7 +145,7 @@ static void my_shutdown(void)
   Mix_FreeMusic(mus);
 
   Mix_CloseAudio();
-  quit_sdl_audio();
+  SDL_Quit();
 }
 
 /**************************************************************************
@@ -189,14 +159,14 @@ static bool my_init(void)
   const int audio_channels = 2;
   int i;
 
-  if (init_sdl_audio() < 0) {
+  if (SDL_Init(SDL_INIT_AUDIO) < 0) {
     return FALSE;
   }
 
   if (Mix_OpenAudio(audio_rate, audio_format, audio_channels, 4096) < 0) {
     freelog(LOG_ERROR, "Error calling Mix_OpenAudio");
     /* try something else */
-    quit_sdl_audio();
+    SDL_Quit();
     return FALSE;
   }
 

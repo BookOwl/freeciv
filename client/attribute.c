@@ -15,8 +15,10 @@
 #include <config.h>
 #endif
 
+#include <string.h>
 #include <assert.h>
 
+#include "clinet.h"
 #include "dataio.h"
 #include "fcintl.h"
 #include "game.h"
@@ -24,8 +26,6 @@
 #include "log.h"
 #include "mem.h"
 #include "packets.h"
-
-#include "clinet.h"
 
 #include "attribute.h"
 
@@ -316,18 +316,15 @@ void attribute_set(int key, int id, int x, int y, size_t data_length,
   }
 
   if (data_length != 0) {
-    if (!hash_insert(attribute_hash, pkey, pvalue)) {
-      assert(FALSE);
-    }
+    bool inserted = hash_insert(attribute_hash, pkey, pvalue);
+    assert(inserted);
   }
 }
 
 /****************************************************************************
  Low-level function to get an attribute. If data hasn't enough space
- to hold the attribute data isn't set to the attribute. Returns the
- actual size of the attribute. Can be zero if the attribute is
- unset. To get the size of an attribute use 
-   size = attribute_get(key, id, x, y, 0, NULL)
+ to hold the attribute attribute_get aborts. Returns the actual size
+ of the attribute. Can be zero if the attribute is unset.
 *****************************************************************************/
 size_t attribute_get(int key, int id, int x, int y, size_t max_data_length,
 		  void *data)
@@ -359,9 +356,21 @@ size_t attribute_get(int key, int id, int x, int y, size_t max_data_length,
   dio_input_init(&din, pvalue, 0xffffffff);
   dio_get_uint32(&din, &length);
 
-  if (length <= max_data_length) {
-    dio_get_memory(&din, data, length);
+  if(max_data_length < length){
+    freelog(LOG_FATAL, "attribute: max_data_length=%d, length found=%d (!)\n"
+          "It is quite possible that the server (this client was attached to) "
+          "loaded an old savegame that was created prior to "
+          "certain interface changes in your client. If you have access to "
+          "the savegame, editing the file and removing entries beginning with "
+          "\"attribute_block_\" may alleviate the problem (though you will " 
+          "lose some non-critical client data). If you still encounter this, "
+          "submit a bug report to <freeciv-dev@freeciv.org>", 
+          (unsigned int) max_data_length, length);
+
+    exit(EXIT_FAILURE);
   }
+
+  dio_get_memory(&din, data, length);
 
   freelog(ATTRIBUTE_LOG_LEVEL, "  found length=%d", length);
   return length;

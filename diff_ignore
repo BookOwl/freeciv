@@ -6,14 +6,11 @@
 *.o
 *.orig
 *.patch
-*.png
 *.pot
 *.pox
 *.rej
 *.swp
 *.wav
-*_gen.c
-*_gen.h
 *~
 .#*
 .deps
@@ -28,7 +25,6 @@ aclocal.m4
 autom4te.cache
 cat-id-tbl.c
 charset.alias
-civ
 civclient
 civgame*.sav
 *.sav.gz
@@ -44,7 +40,6 @@ config.sub
 configure
 core
 depcomp
-freeciv_user_database
 freeciv-*.tar.gz
 install-sh
 libintl.h
@@ -52,7 +47,6 @@ missing
 mkinstalldirs
 ref-add.sed
 ref-del.sed
-ser
 stamp-cat-id
 stamp-h
 stamp-h1

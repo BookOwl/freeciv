@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -18,6 +17,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 
 #include <mui/NListview_MCC.h>
 #include <libraries/mui.h>
@@ -45,7 +45,6 @@
 #include "gui_main.h"
 #include "mapview.h"
 #include "options.h"
-#include "packhand.h"
 
 #include "muistuff.h"
 #include "mapclass.h"
@@ -56,7 +55,8 @@
 *****************************************************************/
 void request_player_revolution(void)
 {
-  start_revolution();
+  struct packet_player_request packet;
+  send_packet_player_request(&aconnection, &packet, PACKET_PLAYER_REVOLUTION);
 }
 /****************************************************************
  ...
@@ -108,8 +108,7 @@ static void notify_close(Object **pwnd)
 /****************************************************************
  Popup the notify window
 *****************************************************************/
-void popup_notify_dialog(const char *caption, const char *headline,
-			 const char *lines)
+void popup_notify_dialog(char *caption, char *headline, char *lines)
 {
   Object *wnd;
   Object *listview;
@@ -166,8 +165,7 @@ static void notify_goto_close(struct notify_goto_close_arg *obj)
 /****************************************************************
 ...
 *****************************************************************/
-void popup_notify_goto_dialog(const char *headline, const char *lines,
-			      int x, int y)
+void popup_notify_goto_dialog(char *headline, char *lines,int x, int y)
 {
   Object *wnd;
   Object *close_button;
@@ -203,8 +201,13 @@ void popup_notify_goto_dialog(const char *headline, const char *lines,
 *****************************************************************/
 static void diplomat_bribe_yes(struct popup_message_data *data)
 {
-  request_diplomat_action(DIPLOMAT_BRIBE, diplomat_id,
-			  diplomat_target_id, 0);
+  struct packet_diplomat_action req;
+
+  req.action_type=DIPLOMAT_BRIBE;
+  req.diplomat_id=diplomat_id;
+  req.target_id=diplomat_target_id;
+
+  send_packet_diplomat_action(&aconnection, &req);
 
   message_close(data);
 }
@@ -274,10 +277,17 @@ static void advance_steal(struct spy_data *data)
   if(which)
   {
     which-=100;
-    if (find_unit_by_id(diplomat_id) && 
-	find_city_by_id(diplomat_target_id)) { 
-      request_diplomat_action(DIPLOMAT_STEAL, diplomat_id,
-			      diplomat_target_id, which);
+    if(find_unit_by_id(diplomat_id) && 
+       find_city_by_id(diplomat_target_id))
+    { 
+      struct packet_diplomat_action req;
+
+      req.action_type=DIPLOMAT_STEAL;
+      req.value=which;
+      req.diplomat_id=diplomat_id;
+      req.target_id=diplomat_target_id;
+			
+      send_packet_diplomat_action(&aconnection, &req);
     }
   }
 
@@ -373,8 +383,14 @@ static void imprv_sabotage(struct spy_data *data)
   {
     if(find_unit_by_id(diplomat_id) && find_city_by_id(diplomat_target_id))
     { 
-      request_diplomat_action(DIPLOMAT_SABOTAGE, diplomat_id,
-			      diplomat_target_id, which - 100 + 1);
+      struct packet_diplomat_action req;
+    
+      req.action_type=DIPLOMAT_SABOTAGE;
+      req.value=which-100+1;
+      req.diplomat_id=diplomat_id;
+      req.target_id=diplomat_target_id;
+
+      send_packet_diplomat_action(&aconnection, &req);
     }
   }
 
@@ -431,7 +447,7 @@ static void create_improvements_list(struct city *pcity)
 
     DoMethod(listview, MUIM_NList_InsertSingle, 100-1,MUIV_NList_Insert_Bottom);
     built_impr_iterate(pcity, i) {
-      if (get_improvement_type(i)->sabotage > 0) {
+      if (i != B_PALACE && !is_wonder(i))
       {
         DoMethod(listview, MUIM_NList_InsertSingle, i+100,MUIV_NList_Insert_Bottom);
         any_improvements = TRUE;
@@ -456,9 +472,14 @@ static void create_improvements_list(struct city *pcity)
 *****************************************************************/
 static void diplomat_incite_yes(struct popup_message_data *data)
 {
-  request_diplomat_action(DIPLOMAT_INCITE, diplomat_id,
-			  diplomat_target_id, 0);
+  struct packet_diplomat_action req;
 
+  req.action_type=DIPLOMAT_INCITE;
+  req.diplomat_id=diplomat_id;
+  req.target_id=diplomat_target_id;
+
+  send_packet_diplomat_action(&aconnection, &req);
+  
   message_close(data);
   process_diplomat_arrival(NULL, 0);
 }
@@ -514,8 +535,13 @@ static void diplomat_embassy(struct popup_message_data *data)
 
    if(find_unit_by_id(diplomat_id) && 
      (find_city_by_id(diplomat_target_id))) { 
-    request_diplomat_action(DIPLOMAT_EMBASSY, diplomat_id,
-			    diplomat_target_id, 0);
+    struct packet_diplomat_action req;
+    
+    req.action_type=DIPLOMAT_EMBASSY;
+    req.diplomat_id=diplomat_id;
+    req.target_id=diplomat_target_id;
+    
+    send_packet_diplomat_action(&aconnection, &req);
   }
   process_diplomat_arrival(NULL, 0);
 }
@@ -530,8 +556,13 @@ static void diplomat_investigate(struct popup_message_data *data)
 
   if(find_unit_by_id(diplomat_id) && 
      (find_city_by_id(diplomat_target_id))) { 
-    request_diplomat_action(DIPLOMAT_INVESTIGATE, diplomat_id,
-			    diplomat_target_id, 0);
+    struct packet_diplomat_action req;
+
+    req.action_type=DIPLOMAT_INVESTIGATE;
+    req.diplomat_id=diplomat_id;
+    req.target_id=diplomat_target_id;
+
+    send_packet_diplomat_action(&aconnection, &req);
   }
   process_diplomat_arrival(NULL, 0);
 }
@@ -546,8 +577,14 @@ static void diplomat_sabotage(struct popup_message_data *data)
 
   if(find_unit_by_id(diplomat_id) && 
      find_city_by_id(diplomat_target_id)) { 
-    request_diplomat_action(DIPLOMAT_SABOTAGE, diplomat_id,
-			    diplomat_target_id, -1);
+    struct packet_diplomat_action req;
+    
+    req.action_type=DIPLOMAT_SABOTAGE;
+    req.diplomat_id=diplomat_id;
+    req.target_id=diplomat_target_id;
+    req.value = -1;
+
+    send_packet_diplomat_action(&aconnection, &req);
   }
   process_diplomat_arrival(NULL, 0);
 }
@@ -562,8 +599,14 @@ static void diplomat_steal(struct popup_message_data *data)
 
   if(find_unit_by_id(diplomat_id) && 
      find_city_by_id(diplomat_target_id)) { 
-    request_diplomat_action(DIPLOMAT_STEAL, diplomat_id,
-			    diplomat_target_id, 0);
+    struct packet_diplomat_action req;
+
+    req.action_type=DIPLOMAT_STEAL;
+    req.diplomat_id=diplomat_id;
+    req.target_id=diplomat_target_id;
+    req.value=0;
+
+    send_packet_diplomat_action(&aconnection, &req);
   }
   process_diplomat_arrival(NULL, 0);
 }
@@ -618,8 +661,11 @@ static void diplomat_move(struct popup_message_data *data)
   if( (punit=find_unit_by_id(diplomat_id))
       && (pcity=find_city_by_id(diplomat_target_id))
       && !same_pos(punit->x, punit->y, pcity->x, pcity->y)) {
-    request_diplomat_action(DIPLOMAT_MOVE, diplomat_id,
-			    diplomat_target_id, 0);
+    struct packet_diplomat_action req;
+    req.action_type = DIPLOMAT_MOVE;
+    req.diplomat_id = diplomat_id;
+    req.target_id = diplomat_target_id;
+    send_packet_diplomat_action(&aconnection, &req);
   }
   process_diplomat_arrival(NULL, 0);
 }
@@ -645,7 +691,13 @@ static void spy_poison(struct popup_message_data *data)
 
   if(find_unit_by_id(diplomat_id) &&
     (find_city_by_id(diplomat_target_id))) {
-    request_diplomat_action(SPY_POISON, diplomat_id, diplomat_target_id, 0);
+    struct packet_diplomat_action req;
+
+    req.action_type=SPY_POISON;
+    req.diplomat_id=diplomat_id;
+    req.target_id=diplomat_target_id;
+
+    send_packet_diplomat_action(&aconnection, &req);
   }
   process_diplomat_arrival(NULL, 0);
 }
@@ -661,8 +713,13 @@ static void spy_request_sabotage_list(struct popup_message_data *data)
 
   if(find_unit_by_id(diplomat_id) &&
      (find_city_by_id(diplomat_target_id))) {
-    request_diplomat_action(SPY_GET_SABOTAGE_LIST, diplomat_id,
-			    diplomat_target_id, 0);
+    struct packet_diplomat_action req;
+ 
+    req.action_type = SPY_GET_SABOTAGE_LIST;
+    req.diplomat_id = diplomat_id;
+    req.target_id = diplomat_target_id;
+
+    send_packet_diplomat_action(&aconnection, &req);
   }
 }
 
@@ -698,9 +755,14 @@ static void spy_steal(struct popup_message_data *data)
 *****************************************************************/
 static void spy_sabotage_unit(struct popup_message_data *data)
 {
-  request_diplomat_action(SPY_SABOTAGE_UNIT, diplomat_id,
-			  diplomat_target_id, 0);
-
+  struct packet_diplomat_action req;
+  
+  req.action_type=SPY_SABOTAGE_UNIT;
+  req.diplomat_id=diplomat_id;
+  req.target_id=diplomat_target_id;
+  
+  send_packet_diplomat_action(&aconnection, &req);
+  
   message_close(data);
 }
 
@@ -795,7 +857,7 @@ void popup_diplomat_dialog(struct unit *punit, int dest_x, int dest_y)
 
       if(diplomat_can_do_action(punit, DIPLOMAT_INVESTIGATE, dest_x, dest_y))
       {
-      	msg_dlg[i].label = _("_Investigate city");
+      	msg_dlg[i].label = _("_Investigate city (free)");
       	msg_dlg[i].function = (APTR)diplomat_investigate;
       	msg_dlg[i].data = NULL;
       	i++;
@@ -973,19 +1035,15 @@ void popup_caravan_dialog(struct unit *punit, struct city *phomecity, struct cit
   my_snprintf(buf, sizeof(buf),_("Your caravan from %s reaches the city of %s.\nWhat now?"),
           phomecity->name, pdestcity->name);
 
-  if (can_cities_trade(phomecity, pdestcity))
+  if(can_establish_trade_route(phomecity, pdestcity))
   {
     struct caravan_data *cd = malloc_struct(struct caravan_data);
     if(cd)
     {
       cd->caravan_city_id = pdestcity->id;
       cd->caravan_unit_id = punit->id;
-      if (can_establish_trade_route(phomecity, pdestcity))
-      {
-        msg_dlg[i].label = _("_Establish traderoute");
-      } else {
-	 msg_dlg[i].label = _("_Enter Marketplace");
-      }
+
+      msg_dlg[i].label = _("_Establish traderoute");
       msg_dlg[i].function = (APTR)caravan_establish;
       msg_dlg[i].data = (APTR)cd;
       i++;
@@ -1371,7 +1429,7 @@ static void unitsel_unit(struct unit **ppunit)
   struct unit *punit = *ppunit;
 
   if(punit && punit->owner == game.player_idx) {
-    set_unit_focus_and_select(punit);
+    request_unit_selected(punit);
   }
   set(unitsel_wnd, MUIA_Window_Open, FALSE);
 }
@@ -1394,6 +1452,7 @@ static void unitsel_ready_all(struct tile **pptile)
       {
         struct unit *punit=unit_list_get(&ptile->units, i);
         if(punit) {
+          request_new_unit_activity(punit, ACTIVITY_IDLE);
           set_unit_focus(punit);
         }
       }
@@ -1532,16 +1591,16 @@ Nation_Type_id get_active_nation(void)
 static void nations_nation_active(void)
 {
   int i, leader_count;
-  struct leader *leaders;
+  char **leaders;
   Object *list = (Object*)xget(nations_leader_poplist,MUIA_Popobject_Object);
   Nation_Type_id nation = get_active_nation();
 
   set(nations_flag_sprite, MUIA_Sprite_Sprite, get_nation_by_idx(nation)->flag_sprite);
 
-  leaders = get_nation_leaders(nation, &leader_count);
-  setstring(nations_leader_string, leaders[0].name);
+  leaders = get_nation_leader_names( nation, &leader_count);
+  setstring(nations_leader_string, leaders[0]);
 
-  set(nations_sex_radio, MUIA_Radio_Active, leaders[0].is_male);
+  set(nations_sex_radio, MUIA_Radio_Active, get_nation_leader_sex(nation,leaders[0])?0:1);
 
   if(list)
   {
@@ -1574,7 +1633,7 @@ static void nations_ok(void)
 
   sz_strlcpy(packet.name, (char*)s);
   
-  if (!is_sane_name(packet.name)) {
+  if(!get_sane_name(packet.name)) {
     append_output_window(_("You must type a legal name."));
     return;
   }
@@ -1832,13 +1891,4 @@ void popup_upgrade_dialog(struct unit *punit)
 			     NULL);
     }
   }
-}
-
-/********************************************************************** 
-  This function is called when the client disconnects or the game is
-  over.  It should close all dialog windows for that game.
-***********************************************************************/
-void popdown_all_game_dialogs(void)
-{
-  /* TODO */
 }

@@ -10,15 +10,14 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
-#include <errno.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <errno.h>
 
 #include <intuition/intuitionbase.h>
 #include <libraries/mui.h>
@@ -172,7 +171,7 @@ HOOKPROTO(worklistview_display, void, char **array, struct worklist_entry *entry
       case  0:
             /* id is improvement */
             mystrlcpy(buf,get_improvement_info(id,pcity),64);
-	    my_snprintf(buf2, 64, "%d", impr_build_shield_cost(id));
+	    my_snprintf(buf2, 64, "%d", get_improvement_type(id)->build_cost);
 
 	    *array++ = get_improvement_name(id);
 	    *array++ = buf;
@@ -185,7 +184,7 @@ HOOKPROTO(worklistview_display, void, char **array, struct worklist_entry *entry
       case  1:
 	    /* id is unit */
             mystrlcpy(buf,get_unit_info(id),64);
-	    my_snprintf(buf2, 64, "%d", unit_build_shield_cost(id));
+	    my_snprintf(buf2, 64, "%d", get_unit_type(id)->build_cost);
 
 	    *array++ = unit_name(id);
 	    *array++ = buf;

@@ -11,10 +11,7 @@
    GNU General Public License for more details.
 ***********************************************************************/
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
+#include <string.h>
 #include <stdlib.h>		/* getenv() */
 
 #include "connection.h"		/* MAX_LEN_CAPSTR */
@@ -73,7 +70,15 @@ const char * const our_capability = our_capability_internal;
  * are not directly related to the capability strings discussed here.)
  */
 
-#define CAPABILITY "+Freeciv.Devel.2004.Sep.5"
+#define CAPABILITY "+1.14.0 conn_info team"
+  
+/* "+1.14.0" is protocol for 1.14.0 release.
+  
+   "conn_info" is sending the conn_id field. To preserve compatability
+   with old clients trying to connect this should persist across releases.
+
+   "team" is support for player teams.
+*/
 
 void init_our_capability(void)
 {

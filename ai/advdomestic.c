@@ -10,11 +10,7 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
+#include <stdio.h>
 #include <string.h>
 
 #include "city.h"
@@ -22,9 +18,10 @@
 #include "government.h"
 #include "log.h"
 #include "map.h"
-#include "mem.h"
-#include "unit.h"
+#include "rand.h"
 #include "unittype.h"
+#include "unit.h"
+#include "mem.h"
 
 #include "citytools.h"
 #include "settlers.h"
@@ -32,10 +29,9 @@
 
 #include "advmilitary.h"
 #include "aicity.h"
-#include "aidata.h"
-#include "ailog.h"
 #include "aitools.h"
 #include "aiunit.h"
+#include "aidata.h"
 
 #include "advdomestic.h"
 
@@ -55,7 +51,7 @@
 static int ai_eval_threat_land(struct player *pplayer, struct city *pcity)
 {
   struct ai_data *ai = ai_data_get(pplayer);
-  Continent_id continent;
+  int continent;
   bool vulnerable;
 
   /* make easy AI dumb */
@@ -69,7 +65,7 @@ static int ai_eval_threat_land(struct player *pplayer, struct city *pcity)
                || (ai->threats.invasions
                    && is_water_adjacent_to_tile(pcity->x, pcity->y));
 
-  return vulnerable ? TRADE_WEIGHTING + 2 : 1; /* trump coinage, and sam */
+  return vulnerable ? 20 : 1; /* WAG */
 }
 
 /**************************************************************************
@@ -84,22 +80,7 @@ static int ai_eval_threat_sea(struct player *pplayer, struct city *pcity)
     return 40;
   }
 
-  /* trump coinage, and wall, and sam */
-  if (is_ocean(map_get_terrain(pcity->x, pcity->y))) {
-    return ai->threats.ocean[-map_get_continent(pcity->x, pcity->y)]
-           ? TRADE_WEIGHTING + 3 : 1;
-  } else {
-    adjc_iterate(pcity->x, pcity->y, x2, y2) {
-      if (is_ocean(map_get_terrain(x2, y2))) {
-        Continent_id ocean_number = map_get_continent(x2, y2);
-
-        if (ai->threats.ocean[-ocean_number]) {
-          return TRADE_WEIGHTING + 3;
-        }
-      }
-    } adjc_iterate_end;
-  }
-  return 1;
+  return ai->threats.sea ? 30 : 1; /* WAG */
 }
 
 /**************************************************************************
@@ -108,7 +89,7 @@ static int ai_eval_threat_sea(struct player *pplayer, struct city *pcity)
 static int ai_eval_threat_air(struct player *pplayer, struct city *pcity)
 {
   struct ai_data *ai = ai_data_get(pplayer);
-  Continent_id continent;
+  int continent;
   bool vulnerable;
 
   /* make easy AI dumber */
@@ -122,7 +103,8 @@ static int ai_eval_threat_air(struct player *pplayer, struct city *pcity)
                    || is_water_adjacent_to_tile(pcity->x, pcity->y) 
                    || city_got_building(pcity, B_PALACE));
 
-  return vulnerable ? TRADE_WEIGHTING + 1 : 1; /* trump coinage */
+  /* 50 is a magic number inherited from Syela */
+  return vulnerable ? 40 : 1;
 }
 
 /**************************************************************************
@@ -136,7 +118,7 @@ static int ai_eval_threat_air(struct player *pplayer, struct city *pcity)
 static int ai_eval_threat_nuclear(struct player *pplayer, struct city *pcity)
 {
   struct ai_data *ai = ai_data_get(pplayer);
-  Continent_id continent;
+  int continent;
   int vulnerable = 1;
 
   /* make easy AI really dumb, like it was before */
@@ -167,14 +149,39 @@ static int ai_eval_threat_nuclear(struct player *pplayer, struct city *pcity)
 static int ai_eval_threat_missile(struct player *pplayer, struct city *pcity)
 {
   struct ai_data *ai = ai_data_get(pplayer);
-  Continent_id continent = map_get_continent(pcity->x, pcity->y);
+  int continent = map_get_continent(pcity->x, pcity->y);
   bool vulnerable = is_water_adjacent_to_tile(pcity->x, pcity->y)
                     || ai->threats.continent[continent]
                     || city_got_building(pcity, B_PALACE);
 
   /* Only build missile defence if opponent builds them, and we are in
-     a vulnerable spot. Trump coinage but not wall or coastal. */
-  return (ai->threats.missile && vulnerable) ? TRADE_WEIGHTING + 1 : 1;
+     a vulnerable spot. FIXME: 10 is a totally arbitrary Syelaism. - Per */
+  return (ai->threats.missile && vulnerable) ? 10 : 1;
+}
+
+/**************************************************************************
+Get value of best usable tile on city map.
+**************************************************************************/
+static int ai_best_tile_value(struct city *pcity)
+{
+  int best = 0;
+  int food;
+
+  /* food = (pcity->size * 2 - get_food_tile(2,2, pcity)) + settler_eats(pcity); */
+  /* Following simply works better, as far as I can tell. */
+  food = 0;
+  
+  city_map_iterate(x, y) {
+    if (can_place_worker_here(pcity, x, y)) {
+      int value = city_tile_value(pcity, x, y, food, 0);
+      
+      if (value > best) {
+	best = value;
+      }
+    }
+  } city_map_iterate_end;
+  
+  return best;
 }
 
 /**************************************************************************
@@ -199,7 +206,7 @@ static int impr_happy_val(struct city *pcity, int happy, int tileval)
   /* How much one rebeling citizen counts - 16 is debatable value */
 #define SADVAL 16
   /* Number of elvises in the city */
-  int elvis = pcity->specialists[SP_ELVIS];
+  int elvis = pcity->ppl_elvis;
   /* Raw number of unhappy people */
   int sad = pcity->ppl_unhappy[0];
   /* Final number of content people */
@@ -234,8 +241,8 @@ static int impr_happy_val(struct city *pcity, int happy, int tileval)
   while (happy > 0) { happy--; value += SADVAL; }
   
   freelog(LOG_DEBUG, "%s: %d elvis %d sad %d content %d size %d val",
-	  pcity->name, pcity->specialists[SP_ELVIS], pcity->ppl_unhappy[4],
-	  pcity->ppl_content[4], pcity->size, value);
+		pcity->name, pcity->ppl_elvis, pcity->ppl_unhappy[4],
+		pcity->ppl_content[4], pcity->size, value);
 
   return value;
 #undef SADVAL
@@ -250,7 +257,7 @@ static int ocean_workers(struct city *pcity)
   int i = 0;
 
   city_map_checked_iterate(pcity->x, pcity->y, cx, cy, mx, my) {
-    if (is_ocean(map_get_terrain(mx, my))) {
+    if (map_get_terrain(mx, my) == T_OCEAN) {
       /* This is a kluge; wasn't getting enough harbors because often
        * everyone was stuck farming grassland. */
       i++;
@@ -384,89 +391,6 @@ static int pollution_benefit(struct player *pplayer, struct city *pcity,
   return cost;
 }
 
-/****************************************************************************
-  Return TRUE if the given wonder is already being built by pcity owner in
-  another city (if so we probably don't want to build it here, although
-  we may want to start building it and switch later).
-****************************************************************************/
-static bool built_elsewhere(struct city *pcity, Impr_Type_id wonder)
-{
-  city_list_iterate(city_owner(pcity)->cities, acity) {
-    if (pcity != acity && !acity->is_building_unit
-	&& pcity->currently_building == wonder) {
-      return TRUE;
-    }
-  } city_list_iterate_end;
-
-  return FALSE;
-}
-
-/**************************************************************************
-  Returns the city_tile_value of the worst tile worked by pcity 
-  (not including the city center).  Returns 0 if no tiles are worked.
-**************************************************************************/
-static int worst_worker_tile_value(struct city *pcity)
-{
-  int worst = 0;
-
-  city_map_iterate(x, y) {
-    if (is_city_center(x, y)) {
-      continue;
-    }
-    if (get_worker_city(pcity, x, y) == C_TILE_WORKER) {
-      int tmp = city_tile_value(pcity, x, y, 0, 0);
-
-      if (tmp < worst || worst == 0) {
-	worst = tmp;
-      }
-    }
-  } city_map_iterate_end;
-
-  return worst;
-}
-
-/**************************************************************************
-  Get city_tile_value of best unused tile available to pcity.  Returns
-  0 if no tiles are available.
-**************************************************************************/
-static int best_free_tile_value(struct city *pcity)
-{
-  int best = 0;
-
-  city_map_iterate(x, y) {
-    if (get_worker_city(pcity, x, y) == C_TILE_EMPTY) {
-      int tmp = city_tile_value(pcity, x, y, 0, 0);
-      
-      if (tmp > best) {
-	best = tmp;
-      }
-    }
-  } city_map_iterate_end;
-  
-  return best;
-}
-
-/**************************************************************************
-  Returns the amount of food consumed by pcity's units.
-**************************************************************************/
-static int settler_eats(struct city *pcity)
-{
-  struct government *gov = get_gov_pcity(pcity);
-  int free_food = citygov_free_food(pcity, gov);
-  int eat = 0;
-
-  unit_list_iterate(pcity->units_supported, this_unit) {
-    int food_cost = utype_food_cost(unit_type(this_unit), gov);
-
-    adjust_city_free_cost(&free_food, &food_cost);
-    if (food_cost > 0) {
-      eat += food_cost;
-    }
-  } unit_list_iterate_end;
-
-  return eat;
-}
-
 /**************************************************************************
   Evaluate the current desirability of all city improvements for the given 
   city to update pcity->ai.building_want.
@@ -492,34 +416,28 @@ void ai_eval_buildings(struct city *pcity)
   sci = ((sci + pcity->trade_prod) * t)/2;
   tax = ((tax + pcity->trade_prod) * t)/2;
   /* don't need libraries!! */
-  if (ai_wants_no_science(pplayer)) {
-    sci = 0;
-  }
+  if (pplayer->research.researching == A_NONE) sci = 0;
 
-  est_food = (2 * pcity->specialists[SP_SCIENTIST]
-	      + 2 * pcity->specialists[SP_TAXMAN]
-	      + pcity->food_surplus);
+  est_food = 2 * pcity->ppl_scientist + 2 * pcity->ppl_taxman
+           + pcity->food_surplus; 
   prod = 
     (pcity->shield_prod * SHIELD_WEIGHTING * 100) / city_shield_bonus(pcity);
   needpower = (city_got_building(pcity, B_MFG) ? 2 :
               (city_got_building(pcity, B_FACTORY) ? 1 : 0));
-  val = best_free_tile_value(pcity);
+  val = ai_best_tile_value(pcity);
   wwtv = worst_worker_tile_value(pcity);
 
   /* because the benefit doesn't come immediately, and to stop stupidity   */
   /* the AI used to really love granaries for nascent cities, which is OK  */
   /* as long as they aren't rated above Settlers and Laws is above Pottery */
   /* -- Syela */
-  grana = MAX(2, pcity->size);
+  grana = MAX(2,pcity->size);
   food  = food_weighting(grana);
   grana = food_weighting(grana + 1);
   hunger = 1;
   j = (pcity->size * 2) + settler_eats(pcity) - pcity->food_prod;
-  if (j >= 0
-      && pcity->specialists[SP_SCIENTIST] <= 0
-      && pcity->specialists[SP_TAXMAN] <= 0) {
-    hunger += j + 1;
-  }
+  if (j >= 0 && pcity->ppl_scientist <= 0 && pcity->ppl_taxman <= 0) 
+    hunger += j+1;
 
   /* rationale: barracks effectively doubles prod if building military units */
   /* if half our production is military, effective gain is 1/2 city prod     */
@@ -569,7 +487,7 @@ void ai_eval_buildings(struct city *pcity)
         /* how long (== how much food) till we grow big enough? 
          * j = num_pop_rollover * biggest_granary_size - current_food */
         j = (k+1) - MIN(k, pcity->size);
-	j *= city_granary_size(MAX(k, pcity->size));
+        j*= (MAX(k, pcity->size)+1) * game.foodbox;
         j-= pcity->food_stock;
   
         /* value = some odd factors / food_required */
@@ -603,14 +521,17 @@ void ai_eval_buildings(struct city *pcity)
     case B_MARKETPLACE:
     case B_BANK:
     case B_STOCK:
-      values[id] = (tax + 3 * pcity->specialists[SP_TAXMAN]
-		    + pcity->specialists[SP_ELVIS] * wwtv) / 2;
+      values[id] = (tax + 3*pcity->ppl_taxman + pcity->ppl_elvis*wwtv)/2;
       break;
     case B_SUPERHIGHWAYS:
       values[id] = road_trade(pcity) * t;
       break;
     case B_CAPITAL:
-      values[id] = TRADE_WEIGHTING; /* a kind of default */
+      /* rationale: If cost is N and benefit is N gold per MORT turns, want is
+       * TRADE_WEIGHTING * 100 / MORT. This is comparable, thus the same weight 
+      values[id] = TRADE_WEIGHTING * 999 / MORT; / * trust me * /
+      -- Syela */
+      values[id] = -60 * TRADE_WEIGHTING / MORT; /* want ~50 */
       break;
   
     /* unhappiness relief */
@@ -712,9 +633,8 @@ void ai_eval_buildings(struct city *pcity)
         && pplayer->spaceship.structurals < NUM_SS_STRUCTURALS)
         values[id] = -80;
       break;
-    default:
-      /* ignored: AIRPORT, PALACE, and POLICE and the rest. -- Syela*/
-      break;
+
+      /* ignored: AIRPORT, PALACE, and POLICE. -- Syela*/
     } /* end switch */
   } impr_type_iterate_end;
 
@@ -868,23 +788,11 @@ void ai_eval_buildings(struct city *pcity)
       } unit_list_iterate_end;
       break;
     case B_APOLLO:
-      if (game.spacerace) {
-        values[id] = values[B_CAPITAL] + 1; /* trump coinage and defenses */
-      }
+      if (game.spacerace) 
+        values[id] = values[B_CAPITAL]+1;
       break;
-    case B_UNITED:
-      values[id] = values[B_CAPITAL] + 4; /* trump coinage and defenses */
-      break;
-    case B_LIGHTHOUSE:
-      values[id] = values[B_CAPITAL] + 4; /* trump coinage and defenses */
-      break;
-    case B_MAGELLAN:
-      values[id] = values[B_CAPITAL] + 4; /* trump coinage and defenses */
-      break;
-    default:
-	/* also, MAGELLAN is special cased in ai_manage_buildings() */
-	/* ignoring MANHATTAN and STATUE */
-      break;
+
+    /* ignoring APOLLO, LIGHTHOUSE, MAGELLAN, MANHATTEN, STATUE, UNITED */
     } /* end switch */
   } impr_type_iterate_end;
 
@@ -896,21 +804,22 @@ void ai_eval_buildings(struct city *pcity)
         values[id]-= improvement_upkeep(pcity, id) * t;
         values[id] = (values[id] <= 0 
           ? 0 : (values[id] * SHIELD_WEIGHTING * 100) / MORT);
-      } else {
+      }
+      else {
         /* bias against wonders when total production is small */
         values[id] *= (tprod < 50 ? 100/(50-tprod): 100);
       }
 
       /* handle H_PROD here? -- Syela */
-      j = impr_build_shield_cost(id);
+      j = improvement_value(id);
       pcity->ai.building_want[id] = values[id] / j;
-    } else {
-      pcity->ai.building_want[id] = -values[id];
     }
+    else 
+      pcity->ai.building_want[id] = -values[id];
 
     if (values[id] != 0) 
-      CITY_LOG(LOG_DEBUG, pcity, "ai_eval_buildings: wants %s with desire %d.",
-               get_improvement_name(id), pcity->ai.building_want[id]);
+      freelog(LOG_DEBUG, "ai_eval_buildings: %s wants %s with desire %d.",
+        pcity->name, get_improvement_name(id), pcity->ai.building_want[id]);
   } impr_type_iterate_end;
 
   return;
@@ -922,13 +831,12 @@ void ai_eval_buildings(struct city *pcity)
  * advanced enough to build caravans, the corresponding tech will be 
  * stimulated.
  ***************************************************************************/
-static void ai_choose_help_wonder(struct city *pcity,
-				  struct ai_choice *choice)
+static void ai_choose_help_wonder(struct player *pplayer, struct city *pcity,
+                           struct ai_choice *choice)
 {
-  struct player *pplayer = city_owner(pcity);
   /* Continent where the city is --- we won't be aiding any wonder 
    * construction on another continent */
-  Continent_id continent = map_get_continent(pcity->x, pcity->y);
+  int continent = map_get_continent(pcity->x, pcity->y);
   /* Total count of caravans available or already being built 
    * on this continent */
   int caravans = 0;
@@ -951,11 +859,10 @@ static void ai_choose_help_wonder(struct city *pcity,
   city_list_iterate(pplayer->cities, acity) {
     if (acity->is_building_unit
         && unit_type_flag(acity->currently_building, F_HELP_WONDER)
-        && (acity->shield_stock
-	    >= unit_build_shield_cost(acity->currently_building))
-        && map_get_continent(acity->x, acity->y) == continent) {
+        && acity->shield_stock >=
+             get_unit_type(acity->currently_building)->build_cost
+        && map_get_continent(acity->x, acity->y) == continent)
       caravans++;
-    }
   } city_list_iterate_end;
 
   /* Check all wonders in our cities being built, if one isn't worth a little
@@ -977,8 +884,8 @@ static void ai_choose_help_wonder(struct city *pcity,
         && is_wonder(acity->currently_building)
         && map_get_continent(acity->x, acity->y) == continent
         && acity != pcity
-        && (build_points_left(acity)
-	    > unit_build_shield_cost(unit_type) * caravans)) {
+        && build_points_left(acity) >
+             get_unit_type(unit_type)->build_cost * caravans) {
       
       /* Desire for the wonder we are going to help - as much as we want to
        * build it we want to help building it as well. */
@@ -1012,11 +919,12 @@ static void ai_choose_help_wonder(struct city *pcity,
   } city_list_iterate_end;
 }
 
-/************************************************************************** 
-  This function should fill the supplied choice structure.
+/********************************************************************** 
+This function should assign a value, want and type to choice (that means what
+to build and how important it is).
 
-  If want is 0, this advisor doesn't want anything.
-***************************************************************************/
+If want is 0, this advisor doesn't want anything.
+***********************************************************************/
 void domestic_advisor_choose_build(struct player *pplayer, struct city *pcity,
 				   struct ai_choice *choice)
 {
@@ -1027,79 +935,97 @@ void domestic_advisor_choose_build(struct player *pplayer, struct city *pcity,
   /* Food surplus assuming that workers and elvii are already accounted for
    * and properly balanced. */
   int est_food = pcity->food_surplus
-                 + 2 * pcity->specialists[SP_SCIENTIST]
-                 + 2 * pcity->specialists[SP_TAXMAN];
+                 + 2 * pcity->ppl_scientist
+                 + 2 * pcity->ppl_taxman;
 
   init_choice(choice);
 
-  /* Find out desire for settlers (terrain improvers) */
+  /* Find out desire for settlers */
+
   unit_type = best_role_unit(pcity, F_SETTLERS);
 
-  if (unit_type != U_LAST
-      && est_food > utype_food_cost(get_unit_type(unit_type), gov)) {
-    /* settler_want calculated in settlers.c called from ai_manage_cities() */
+  if (est_food > utype_food_cost(get_unit_type(unit_type), gov)) {
+    /* settler_want calculated in settlers.c called from ai_manage_city() */
     int want = pcity->ai.settler_want;
 
     /* Allowing multiple settlers per city now. I think this is correct.
      * -- Syela */
-
+    
     if (want > 0) {
-      CITY_LOG(LOG_DEBUG, pcity, "desires terrain improvers with passion %d", 
-               want);
+      freelog(LOG_DEBUG, "%s (%d, %d) desires settlers with passion %d",
+              pcity->name, pcity->x, pcity->y, want);
       choice->want = want;
       choice->type = CT_NONMIL;
       ai_choose_role_unit(pplayer, pcity, choice, F_SETTLERS, want);
+      
+    } else if (want < 0) {
+      /* Negative value is a hack to tell us that we need boats to colonize.
+       * abs(want) is desire for the boats. */
+      choice->want = 0 - want;
+      choice->type = CT_NONMIL;
+      choice->choice = unit_type; /* default */
+      ai_choose_ferryboat(pplayer, pcity, choice);
     }
-    /* Terrain improvers don't use boats (yet) */
   }
 
   /* Find out desire for city founders */
   /* Basically, copied from above and adjusted. -- jjm */
+
   unit_type = best_role_unit(pcity, F_CITIES);
 
-  if (unit_type != U_LAST
-      && est_food >= utype_food_cost(get_unit_type(unit_type), gov)) {
-    /* founder_want calculated in settlers.c, called from ai_manage_cities(). */
+  if (est_food > utype_food_cost(get_unit_type(unit_type), gov)) {
+    /* founder_want calculated in settlers.c, called from ai_manage_city(). */
     int want = pcity->ai.founder_want;
 
     if (want > choice->want) {
-      CITY_LOG(LOG_DEBUG, pcity, "desires founders with passion %d", want);
+      freelog(LOG_DEBUG, "%s (%d, %d) desires founders with passion %d",
+              pcity->name, pcity->x, pcity->y, want);
       choice->want = want;
-      choice->need_boat = pcity->ai.founder_boat;
       choice->type = CT_NONMIL;
       ai_choose_role_unit(pplayer, pcity, choice, F_CITIES, want);
       
     } else if (want < -choice->want) {
       /* We need boats to colonize! */
-      CITY_LOG(LOG_DEBUG, pcity, "desires founders with passion %d and asks"
-	       " for a boat", want);
       choice->want = 0 - want;
       choice->type = CT_NONMIL;
       choice->choice = unit_type; /* default */
-      choice->need_boat = TRUE;
-      ai_choose_role_unit(pplayer, pcity, choice, L_FERRYBOAT, -want);
+      ai_choose_ferryboat(pplayer, pcity, choice);
     }
   }
 
+  /* Consider building caravan-type units to aid wonder construction */  
+  ai_choose_help_wonder(pplayer, pcity, choice);
+
   {
     struct ai_choice cur;
-
-    init_choice(&cur);
-    /* Consider building caravan-type units to aid wonder construction */  
-    ai_choose_help_wonder(pcity, &cur);
-    copy_if_better_choice(&cur, choice);
-
-    init_choice(&cur);
-    /* Consider city improvments */
+    
     ai_advisor_choose_building(pcity, &cur);
+    /* Allowing buy of peaceful units after much testing. -- Syela */
+    /* want > 100 means BUY RIGHT NOW */
+    /* if (choice->want > 100) choice->want = 100; */
     copy_if_better_choice(&cur, choice);
   }
 
-  if (choice->want >= 200) {
-    /* If we don't do following, we buy caravans in city X when we should be
-     * saving money to buy defenses for city Y. -- Syela */
-    choice->want = 199;
+  /* FIXME: rather !is_valid_choice() --rwetmore */
+  if (choice->want == 0) {
+    /* Oh dear, better think of something! */
+    unit_type = best_role_unit(pcity, F_TRADE_ROUTE);
+    
+    if (unit_type == U_LAST) {
+      unit_type = best_role_unit(pcity, F_DIPLOMAT);
+      /* Someday, real diplomat code will be here! */
+    }
+    
+    if (unit_type != U_LAST) {
+      choice->want = 1;
+      choice->type = CT_NONMIL;
+      choice->choice = unit_type;
+    }
   }
+  
+  /* If we don't do following, we buy caravans in city X when we should be
+   * saving money to buy defenses for city Y. -- Syela */
+  if (choice->want >= 200) choice->want = 199;
 
   return;
 }

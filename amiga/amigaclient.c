@@ -14,18 +14,14 @@ produces that results. Maybe rename main() to main2() and name your preparse
 function main() and call main2() afterwards. This depends on your compiler.
 */
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 /* remove usage of strerror prototype */
 #define strerror strerror_unuse
 
 #include <ctype.h>
-#include <errno.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
+#include <stdlib.h>
+#include <errno.h>
 #include <time.h>
 
 #include <workbench/startup.h>

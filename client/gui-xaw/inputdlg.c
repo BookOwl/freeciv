@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -69,8 +68,8 @@ void inputdlg_key_ok(Widget w)
 /****************************************************************
 ...
 *****************************************************************/
-Widget input_dialog_create(Widget parent, const char *dialogname, 
-			   const char *text, const char *postinputtest,
+Widget input_dialog_create(Widget parent, char *dialogname, 
+			   char *text, char *postinputtest,
 			   XtCallbackProc ok_callback,
 			   XtPointer ok_cli_data, 
 			   XtCallbackProc cancel_callback,

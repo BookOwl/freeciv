@@ -57,22 +57,15 @@ struct Diplomacy_dialog {
   GtkListStore *store;
 };
 
-#define SPECLIST_TAG dialog
-#define SPECLIST_TYPE struct Diplomacy_dialog
-#include "speclist.h"
-
-#define dialog_list_iterate(dialoglist, pdialog) \
-    TYPED_LIST_ITERATE(struct Diplomacy_dialog, dialoglist, pdialog)
-#define dialog_list_iterate_end  LIST_ITERATE_END
-
-static struct dialog_list dialog_list;
-static bool dialog_list_list_has_been_initialised = FALSE;
+static struct genlist diplomacy_dialogs;
+static int diplomacy_dialogs_list_has_been_initialised;
 
 static struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0, 
 						 struct player *plr1);
 
-static struct Diplomacy_dialog *find_diplomacy_dialog(int other_player_id);
-static void popup_diplomacy_dialog(int other_player_id);
+static struct Diplomacy_dialog *find_diplomacy_dialog(struct player *plr0, 
+					       struct player *plr1);
+static void popup_diplomacy_dialog(struct player *plr0, struct player *plr1);
 static void diplomacy_dialog_map_callback(GtkWidget *w, gpointer data);
 static void diplomacy_dialog_seamap_callback(GtkWidget *w, gpointer data);
 static void diplomacy_dialog_tech_callback(GtkWidget *w, gpointer data);
@@ -80,9 +73,7 @@ static void diplomacy_dialog_city_callback(GtkWidget *w, gpointer data);
 static void diplomacy_dialog_ceasefire_callback(GtkWidget *w, gpointer data);
 static void diplomacy_dialog_peace_callback(GtkWidget *w, gpointer data);
 static void diplomacy_dialog_alliance_callback(GtkWidget *w, gpointer data);
-static void diplomacy_dialog_team_callback(GtkWidget *w, gpointer data);
 static void diplomacy_dialog_vision_callback(GtkWidget *w, gpointer data);
-static void diplomacy_dialog_embassy_callback(GtkWidget *w, gpointer data);
 static void close_diplomacy_dialog(struct Diplomacy_dialog *pdialog);
 static void update_diplomacy_dialog(struct Diplomacy_dialog *pdialog);
 static void diplo_dialog_returnkey(GtkWidget *w, gpointer data);
@@ -90,95 +81,92 @@ static void diplo_dialog_returnkey(GtkWidget *w, gpointer data);
 /****************************************************************
 ...
 *****************************************************************/
-void handle_diplomacy_accept_treaty(int counterpart, bool I_accepted,
-				    bool other_accepted)
+void handle_diplomacy_accept_treaty(struct packet_diplomacy_info *pa)
 {
-  struct Diplomacy_dialog *pdialog = find_diplomacy_dialog(counterpart);
-
-  if (!pdialog) {
-    return;
+  struct Diplomacy_dialog *pdialog;
+  
+  if ((pdialog = find_diplomacy_dialog(&game.players[pa->plrno0],
+				       &game.players[pa->plrno1]))) {
+    if (pa->plrno_from == game.player_idx) {
+      pdialog->treaty.accept0 = !pdialog->treaty.accept0;
+    } else {
+      pdialog->treaty.accept1 = !pdialog->treaty.accept1;
+    }
+    update_diplomacy_dialog(pdialog);
   }
-
-  pdialog->treaty.accept0 = I_accepted;
-  pdialog->treaty.accept1 = other_accepted;
-
-  update_diplomacy_dialog(pdialog);
 }
 
 /****************************************************************
 ...
 *****************************************************************/
-void handle_diplomacy_init_meeting(int counterpart, int initiated_from)
+void handle_diplomacy_init_meeting(struct packet_diplomacy_info *pa)
 {
-  popup_diplomacy_dialog(counterpart);
-}
-
-
-/****************************************************************
-...
-*****************************************************************/
-void handle_diplomacy_cancel_meeting(int counterpart, int initiated_from)
-{
-  struct Diplomacy_dialog *pdialog = find_diplomacy_dialog(counterpart);
-
-  if (!pdialog) {
-    return;
-  }
-
-  close_diplomacy_dialog(pdialog);
+  popup_diplomacy_dialog(&game.players[pa->plrno0], 
+			 &game.players[pa->plrno1]);
 }
 
 /****************************************************************
 ...
 *****************************************************************/
-void handle_diplomacy_create_clause(int counterpart, int giver,
-				    enum clause_type type, int value)
+void handle_diplomacy_cancel_meeting(struct packet_diplomacy_info *pa)
 {
-  struct Diplomacy_dialog *pdialog = find_diplomacy_dialog(counterpart);
-
-  if (!pdialog) {
-    return;
-  }
-
-  add_clause(&pdialog->treaty, get_player(giver), type, value);
-  update_diplomacy_dialog(pdialog);
+  struct Diplomacy_dialog *pdialog;
+  
+  if((pdialog=find_diplomacy_dialog(&game.players[pa->plrno0],
+				    &game.players[pa->plrno1])))
+    close_diplomacy_dialog(pdialog);
 }
 
 /****************************************************************
 ...
 *****************************************************************/
-void handle_diplomacy_remove_clause(int counterpart, int giver,
-				    enum clause_type type, int value)
+void handle_diplomacy_create_clause(struct packet_diplomacy_info *pa)
 {
-  struct Diplomacy_dialog *pdialog = find_diplomacy_dialog(counterpart);
-
-  if (!pdialog) {
-    return;
+  struct Diplomacy_dialog *pdialog;
+  
+  if((pdialog=find_diplomacy_dialog(&game.players[pa->plrno0],
+				&game.players[pa->plrno1]))) {
+    add_clause(&pdialog->treaty, &game.players[pa->plrno_from],
+	       pa->clause_type, pa->value);
+    update_diplomacy_dialog(pdialog);
   }
 
-  remove_clause(&pdialog->treaty, get_player(giver), type, value);
-  update_diplomacy_dialog(pdialog);
 }
+
+/****************************************************************
+...
+*****************************************************************/
+void handle_diplomacy_remove_clause(struct packet_diplomacy_info *pa)
+{
+  struct Diplomacy_dialog *pdialog;
+
+  if((pdialog=find_diplomacy_dialog(&game.players[pa->plrno0],
+				&game.players[pa->plrno1]))) {
+    remove_clause(&pdialog->treaty, &game.players[pa->plrno_from],
+		  pa->clause_type, pa->value);
+    
+    update_diplomacy_dialog(pdialog);
+  }
+
+}
+
+
+
 
 /****************************************************************
 popup the dialog 10% inside the main-window 
 *****************************************************************/
-static void popup_diplomacy_dialog(int other_player_id)
+static void popup_diplomacy_dialog(struct player *plr0, struct player *plr1)
 {
-  struct Diplomacy_dialog *pdialog = find_diplomacy_dialog(other_player_id);
-
-  if (game.player_ptr->ai.control) {
-    return;			/* Don't show if we are AI controlled. */
-  }
-
-  if (!pdialog) {
-    pdialog =
-	create_diplomacy_dialog(game.player_ptr,
-				get_player(other_player_id));
+  struct Diplomacy_dialog *pdialog;
+  
+  if (!(pdialog = find_diplomacy_dialog(plr0, plr1))) {
+    pdialog = create_diplomacy_dialog(plr0, plr1);
   }
 
   gtk_window_present(GTK_WINDOW(pdialog->shell));
 }
+
 
 /****************************************************************
 ...
@@ -237,18 +225,16 @@ static void popup_add_menu(GtkMenuShell *parent, gpointer data)
     menu = gtk_menu_new();
 
     for (i = 1, flag = FALSE; i < game.num_tech_types; i++) {
-      if (get_invention(plr0, i) == TECH_KNOWN
-	  && (get_invention(plr1, i) == TECH_UNKNOWN
-	      || get_invention(plr1, i) == TECH_REACHABLE)
-          && tech_is_available(plr1, i)) {
+      if (get_invention(plr0, i) == TECH_KNOWN && 
+	  (get_invention(plr1, i) == TECH_UNKNOWN || 
+	   get_invention(plr1, i) == TECH_REACHABLE)) {
 	item = gtk_menu_item_new_with_label(advances[i].name);
 
 	gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
 	g_signal_connect(item, "activate",
 			 G_CALLBACK(diplomacy_dialog_tech_callback),
-			 GINT_TO_POINTER((plr0->player_no << 24) |
-					 (plr1->player_no << 16) |
-					 i));
+			 GUINT_TO_POINTER(plr0->player_no * 10000 +
+					  plr1->player_no * 100 + i));
 	flag = TRUE;
       }
     }
@@ -281,7 +267,7 @@ static void popup_add_menu(GtkMenuShell *parent, gpointer data)
     }
 
     city_list_iterate(plr0->cities, pcity) {
-      if (!is_capital(pcity)) {
+      if (!city_got_effect(pcity, B_PALACE)) {
 	city_list_ptrs[i] = pcity;
 	i++;
       }
@@ -297,9 +283,9 @@ static void popup_add_menu(GtkMenuShell *parent, gpointer data)
       gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
       g_signal_connect(item, "activate",
 		       G_CALLBACK(diplomacy_dialog_city_callback),
-			 GINT_TO_POINTER((plr0->player_no << 24) |
-					 (plr1->player_no << 16) |
-					 city_list_ptrs[j]->id));
+		       GUINT_TO_POINTER(city_list_ptrs[j]->id * 1024 +
+					plr0->player_no * 32 +
+					plr1->player_no));
     }
     free(city_list_ptrs);
 
@@ -324,19 +310,6 @@ static void popup_add_menu(GtkMenuShell *parent, gpointer data)
   gtk_widget_show(item);
 
 
-  /* Give embassy. */
-  item = gtk_menu_item_new_with_mnemonic(_("Give _embassy"));
-  g_object_set_data(G_OBJECT(item), "plr", plr);
-  g_signal_connect(item, "activate",
-		   G_CALLBACK(diplomacy_dialog_embassy_callback), pdialog);
-
-  if (player_has_embassy(plr1, plr0)) {
-    gtk_widget_set_sensitive(item, FALSE);
-  }
-  gtk_menu_shell_append(GTK_MENU_SHELL(parent), item);
-  gtk_widget_show(item);
-
-
   /* Pacts. */
   if (plr == pdialog->treaty.plr0) {
     menu = gtk_menu_new();
@@ -355,25 +328,13 @@ static void popup_add_menu(GtkMenuShell *parent, gpointer data)
     g_signal_connect(item, "activate",
 		     G_CALLBACK(diplomacy_dialog_alliance_callback), pdialog);
 
-    if (plr0->team != TEAM_NONE && plr0->team == plr1->team) {
-      const struct player_diplstate *ds = pplayer_get_diplstate(plr0, plr1);
-
-      item = gtk_menu_item_new_with_mnemonic(Q_("?diplomatic_state:Team"));
-      gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
-      g_signal_connect(item, "activate",
-                       G_CALLBACK(diplomacy_dialog_team_callback), pdialog);
-      if (ds->type == DS_TEAM) {
-        gtk_widget_set_sensitive(item, FALSE);
-      }
-    }
-
     item = gtk_menu_item_new_with_mnemonic(_("_Pacts"));
     gtk_menu_item_set_submenu(GTK_MENU_ITEM(item), menu);
     gtk_menu_shell_append(GTK_MENU_SHELL(parent), item);
     gtk_widget_show_all(item);
   }
 }
-
+                                                                                
 /****************************************************************
 ...
 *****************************************************************/
@@ -389,12 +350,15 @@ static void row_callback(GtkTreeView *view, GtkTreePath *path,
   i = 0; 
   clause_list_iterate(pdialog->treaty.clauses, pclause) {
     if (i == index[0]) {
-      dsend_packet_diplomacy_remove_clause_req(&aconnection,
-					       pdialog->treaty.plr1->
-					       player_no,
-					       pclause->from->player_no,
-					       pclause->type,
-					       pclause->value);
+      struct packet_diplomacy_info pa;
+
+      pa.plrno0 = pdialog->treaty.plr0->player_no;
+      pa.plrno1 = pdialog->treaty.plr1->player_no;
+      pa.plrno_from = pclause->from->player_no;
+      pa.clause_type = pclause->type;
+      pa.value = pclause->value;
+      send_packet_diplomacy_info(&aconnection, PACKET_DIPLOMACY_REMOVE_CLAUSE,
+				 &pa);
       return;
     }
     i++;
@@ -409,7 +373,7 @@ static void diplomacy_destroy(GtkWidget *w, gpointer data)
 {
   struct Diplomacy_dialog *pdialog = (struct Diplomacy_dialog *)data;
 
-  dialog_list_unlink(&dialog_list, pdialog);
+  genlist_unlink(&diplomacy_dialogs, pdialog);
   free(pdialog);
 }
 
@@ -419,20 +383,24 @@ static void diplomacy_destroy(GtkWidget *w, gpointer data)
 static void diplomacy_response(GtkWidget *w, gint response, gpointer data)
 {
   struct Diplomacy_dialog *pdialog = (struct Diplomacy_dialog *)data;
+  struct packet_diplomacy_info pa;
 
   switch (response) {
   case GTK_RESPONSE_ACCEPT:
 
-
-    dsend_packet_diplomacy_accept_treaty_req(&aconnection,
-					     pdialog->treaty.plr1->
-					     player_no);
+    pa.plrno0 = pdialog->treaty.plr0->player_no;
+    pa.plrno1 = pdialog->treaty.plr1->player_no;
+    pa.plrno_from = game.player_idx;
+    send_packet_diplomacy_info(&aconnection, PACKET_DIPLOMACY_ACCEPT_TREATY,
+			       &pa);
     break;
 
   default:
-    dsend_packet_diplomacy_cancel_meeting_req(&aconnection,
-					      pdialog->treaty.plr1->
-					      player_no);
+    pa.plrno0 = game.player_idx;
+    pa.plrno1 = pdialog->treaty.plr1->player_no;
+    pa.plrno_from = pa.plrno0;
+    send_packet_diplomacy_info(&aconnection, PACKET_DIPLOMACY_CANCEL_MEETING, 
+			       &pa);
     gtk_widget_destroy(w);
     break; 
   }
@@ -455,7 +423,7 @@ static struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0,
 
   pdialog = fc_malloc(sizeof(*pdialog));
 
-  dialog_list_insert(&dialog_list, pdialog);
+  genlist_insert(&diplomacy_dialogs, pdialog, 0);
   init_treaty(&pdialog->treaty, plr0, plr1);
 
   shell = gtk_dialog_new_with_buttons(_("Diplomacy meeting"),
@@ -463,7 +431,10 @@ static struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0,
 				      0,
 				      NULL);
   pdialog->shell = shell;
-  setup_dialog(shell, toplevel);
+  if (dialogs_on_top) {
+    gtk_window_set_transient_for(GTK_WINDOW(shell),
+				 GTK_WINDOW(toplevel));
+  }
   g_signal_connect(shell, "destroy",
 		   G_CALLBACK(diplomacy_destroy), pdialog);
   g_signal_connect(shell, "response",
@@ -555,10 +526,10 @@ static struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0,
 
   menubar = gtk_menu_bar_new();
   gtk_table_attach_defaults(GTK_TABLE(table), menubar, 1, 2, 1, 2);
-
+                                                                                
   menu = gtk_menu_new();
   pdialog->menu0 = menu;
-
+                                                                                
   menuitem = gtk_image_menu_item_new_with_mnemonic(_("_Add Clause..."));
   gtk_image_menu_item_set_image(GTK_IMAGE_MENU_ITEM(menuitem),
 		  		gtk_image_new_from_stock(GTK_STOCK_ADD,
@@ -567,7 +538,7 @@ static struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0,
   gtk_menu_shell_append(GTK_MENU_SHELL(menubar), menuitem);
   g_object_set_data(G_OBJECT(menu), "plr", plr0);
   g_signal_connect(menu, "show", G_CALLBACK(popup_add_menu), pdialog);
-
+                                                                                
 
   /* them. */
   vbox = gtk_vbox_new(FALSE, 18);
@@ -611,10 +582,10 @@ static struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0,
 
   menubar = gtk_menu_bar_new();
   gtk_table_attach_defaults(GTK_TABLE(table), menubar, 1, 2, 1, 2);
-
+                                                                                
   menu = gtk_menu_new();
   pdialog->menu1 = menu;
-
+                                                                                
   menuitem = gtk_image_menu_item_new_with_mnemonic(_("_Add Clause..."));
   gtk_image_menu_item_set_image(GTK_IMAGE_MENU_ITEM(menuitem),
 		  		gtk_image_new_from_stock(GTK_STOCK_ADD,
@@ -666,39 +637,45 @@ static void update_diplomacy_dialog(struct Diplomacy_dialog *pdialog)
 *****************************************************************/
 static void diplomacy_dialog_tech_callback(GtkWidget *w, gpointer data)
 {
-  size_t choice = GPOINTER_TO_UINT(data);
-  int giver = (choice >> 24) & 0xff, dest = (choice >> 16) & 0xff, other;
-  int tech = choice & 0xffff;
+  size_t choice;
+  struct packet_diplomacy_info pa;
+  
+  choice = GPOINTER_TO_UINT(data);
 
-  if (giver == game.player_idx) {
-    other = dest;
-  } else {
-    other = giver;
-  }
-
-  dsend_packet_diplomacy_create_clause_req(&aconnection, other, giver,
-					   CLAUSE_ADVANCE, tech);
+  pa.plrno0 = choice / 10000;
+  pa.plrno1 = (choice / 100) % 100;
+  pa.clause_type = CLAUSE_ADVANCE;
+  pa.plrno_from = pa.plrno0;
+  pa.value = choice % 100;
+    
+  send_packet_diplomacy_info(&aconnection, PACKET_DIPLOMACY_CREATE_CLAUSE,
+			     &pa);
 }
 
 /****************************************************************
 Callback for trading cities
 			      - Kris Bubendorfer
 *****************************************************************/
-static void diplomacy_dialog_city_callback(GtkWidget * w, gpointer data)
+static void diplomacy_dialog_city_callback(GtkWidget *w, gpointer data)
 {
-  size_t choice = GPOINTER_TO_UINT(data);
-  int giver = (choice >> 24) & 0xff, dest = (choice >> 16) & 0xff, other;
-  int city = choice & 0xffff;
+  size_t choice;
+  struct packet_diplomacy_info pa;
+  
+  choice = GPOINTER_TO_UINT(data);
 
-  if (giver == game.player_idx) {
-    other = dest;
-  } else {
-    other = giver;
-  }
+  pa.value = choice/1024;
+  choice -= pa.value * 1024;
+  pa.plrno0 = choice/32;
+  choice -= pa.plrno0 * 32;
+  pa.plrno1 = choice;
+ 
+  pa.clause_type = CLAUSE_CITY;
+  pa.plrno_from = pa.plrno0;
 
-  dsend_packet_diplomacy_create_clause_req(&aconnection, other, giver,
-					   CLAUSE_CITY, city);
+  send_packet_diplomacy_info(&aconnection, PACKET_DIPLOMACY_CREATE_CLAUSE,
+			     &pa);
 }
+
 
 /****************************************************************
 ...
@@ -706,13 +683,18 @@ static void diplomacy_dialog_city_callback(GtkWidget * w, gpointer data)
 static void diplomacy_dialog_map_callback(GtkWidget *w, gpointer data)
 {
   struct Diplomacy_dialog *pdialog = (struct Diplomacy_dialog *)data;
+  struct packet_diplomacy_info pa;
   struct player *pgiver;
   
   pgiver = (struct player *)g_object_get_data(G_OBJECT(w), "plr");
-
-  dsend_packet_diplomacy_create_clause_req(&aconnection,
-					   pdialog->treaty.plr1->player_no,
-					   pgiver->player_no, CLAUSE_MAP, 0);
+  
+  pa.plrno0 = pdialog->treaty.plr0->player_no;
+  pa.plrno1 = pdialog->treaty.plr1->player_no;
+  pa.clause_type = CLAUSE_MAP;
+  pa.plrno_from = pgiver->player_no;
+  pa.value = 0;
+  send_packet_diplomacy_info(&aconnection, PACKET_DIPLOMACY_CREATE_CLAUSE,
+			     &pa);
 }
 
 /****************************************************************
@@ -721,14 +703,18 @@ static void diplomacy_dialog_map_callback(GtkWidget *w, gpointer data)
 static void diplomacy_dialog_seamap_callback(GtkWidget *w, gpointer data)
 {
   struct Diplomacy_dialog *pdialog = (struct Diplomacy_dialog *)data;
+  struct packet_diplomacy_info pa;
   struct player *pgiver;
   
   pgiver = (struct player *)g_object_get_data(G_OBJECT(w), "plr");
-
-  dsend_packet_diplomacy_create_clause_req(&aconnection,
-					   pdialog->treaty.plr1->player_no,
-					   pgiver->player_no, CLAUSE_SEAMAP,
-					   0);
+  
+  pa.plrno0 = pdialog->treaty.plr0->player_no;
+  pa.plrno1 = pdialog->treaty.plr1->player_no;
+  pa.clause_type = CLAUSE_SEAMAP;
+  pa.plrno_from = pgiver->player_no;
+  pa.value = 0;
+  send_packet_diplomacy_info(&aconnection, PACKET_DIPLOMACY_CREATE_CLAUSE,
+			     &pa);
 }
 
 /****************************************************************
@@ -738,11 +724,15 @@ static void diplomacy_dialog_add_pact_clause(GtkWidget *w, gpointer data,
 					     int type)
 {
   struct Diplomacy_dialog *pdialog = (struct Diplomacy_dialog *)data;
-
-  dsend_packet_diplomacy_create_clause_req(&aconnection,
-					   pdialog->treaty.plr1->player_no,
-					   pdialog->treaty.plr0->player_no,
-					   type, 0);
+  struct packet_diplomacy_info pa;
+  
+  pa.plrno0 = pdialog->treaty.plr0->player_no;
+  pa.plrno1 = pdialog->treaty.plr1->player_no;
+  pa.clause_type = type;
+  pa.plrno_from = pdialog->treaty.plr0->player_no;
+  pa.value = 0;
+  send_packet_diplomacy_info(&aconnection, PACKET_DIPLOMACY_CREATE_CLAUSE,
+			     &pa);
 }
 
 /****************************************************************
@@ -772,39 +762,21 @@ static void diplomacy_dialog_alliance_callback(GtkWidget *w, gpointer data)
 /****************************************************************
 ...
 *****************************************************************/
-static void diplomacy_dialog_team_callback(GtkWidget *w, gpointer data)
-{
-  diplomacy_dialog_add_pact_clause(w, data, CLAUSE_TEAM);
-}
-
-/****************************************************************
-...
-*****************************************************************/
 static void diplomacy_dialog_vision_callback(GtkWidget *w, gpointer data)
 {
-  struct Diplomacy_dialog *pdialog = (struct Diplomacy_dialog *) data;
-  struct player *pgiver =
-      (struct player *) g_object_get_data(G_OBJECT(w), "plr");
+  struct Diplomacy_dialog *pdialog = (struct Diplomacy_dialog *)data;
+  struct packet_diplomacy_info pa;
+  struct player *pgiver;
 
-  dsend_packet_diplomacy_create_clause_req(&aconnection,
-					   pdialog->treaty.plr1->player_no,
-					   pgiver->player_no, CLAUSE_VISION,
-					   0);
-}
+  pgiver = (struct player *)g_object_get_data(G_OBJECT(w), "plr");
 
-/****************************************************************
-...
-*****************************************************************/
-static void diplomacy_dialog_embassy_callback(GtkWidget *w, gpointer data)
-{
-  struct Diplomacy_dialog *pdialog = (struct Diplomacy_dialog *) data;
-  struct player *pgiver =
-      (struct player *) g_object_get_data(G_OBJECT(w), "plr");
-
-  dsend_packet_diplomacy_create_clause_req(&aconnection,
-					   pdialog->treaty.plr1->player_no,
-					   pgiver->player_no, CLAUSE_EMBASSY,
-					   0);
+  pa.plrno0 = pdialog->treaty.plr0->player_no;
+  pa.plrno1 = pdialog->treaty.plr1->player_no;
+  pa.clause_type = CLAUSE_VISION;
+  pa.plrno_from = pgiver->player_no;
+  pa.value = 0;
+  send_packet_diplomacy_info(&aconnection, PACKET_DIPLOMACY_CREATE_CLAUSE,
+			     &pa);
 }
 
 
@@ -819,22 +791,25 @@ void close_diplomacy_dialog(struct Diplomacy_dialog *pdialog)
 /*****************************************************************
 ...
 *****************************************************************/
-static struct Diplomacy_dialog *find_diplomacy_dialog(int other_player_id)
+static struct Diplomacy_dialog *find_diplomacy_dialog(struct player *plr0, 
+						      struct player *plr1)
 {
-  struct player *plr0 = game.player_ptr, *plr1 = get_player(other_player_id);
+  struct genlist_iterator myiter;
 
-  if(!dialog_list_list_has_been_initialised) {
-    dialog_list_init(&dialog_list);
-    dialog_list_list_has_been_initialised = TRUE;
+  if(!diplomacy_dialogs_list_has_been_initialised) {
+    genlist_init(&diplomacy_dialogs);
+    diplomacy_dialogs_list_has_been_initialised=1;
   }
-
-  dialog_list_iterate(dialog_list, pdialog) {
-    if ((pdialog->treaty.plr0 == plr0 && pdialog->treaty.plr1 == plr1) ||
-	(pdialog->treaty.plr0 == plr1 && pdialog->treaty.plr1 == plr0)) {
+  
+  genlist_iterator_init(&myiter, &diplomacy_dialogs, 0);
+    
+  for(; ITERATOR_PTR(myiter); ITERATOR_NEXT(myiter)) {
+    struct Diplomacy_dialog *pdialog=
+      (struct Diplomacy_dialog *)ITERATOR_PTR(myiter);
+    if((pdialog->treaty.plr0==plr0 && pdialog->treaty.plr1==plr1) ||
+       (pdialog->treaty.plr0==plr1 && pdialog->treaty.plr1==plr0))
       return pdialog;
-    }
-  } dialog_list_iterate_end;
-
+  }
   return NULL;
 }
 
@@ -843,16 +818,24 @@ static struct Diplomacy_dialog *find_diplomacy_dialog(int other_player_id)
 *****************************************************************/
 static void diplo_dialog_returnkey(GtkWidget *w, gpointer data)
 {
-  struct Diplomacy_dialog *pdialog = (struct Diplomacy_dialog *) data;
-  struct player *pgiver =
-      (struct player *) g_object_get_data(G_OBJECT(w), "plr");
-  int amount = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(w));
+  struct Diplomacy_dialog *pdialog = (struct Diplomacy_dialog *)data;
+
+  struct player *pgiver;
+  int amount;
   
+  pgiver = (struct player *)g_object_get_data(G_OBJECT(w), "plr");
+  amount = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(w));
+
   if (amount >= 0 && amount <= pgiver->economic.gold) {
-    dsend_packet_diplomacy_create_clause_req(&aconnection,
-					     pdialog->treaty.plr1->
-					     player_no, pgiver->player_no,
-					     CLAUSE_GOLD, amount);
+    struct packet_diplomacy_info pa;
+
+    pa.plrno0 = pdialog->treaty.plr0->player_no;
+    pa.plrno1 = pdialog->treaty.plr1->player_no;
+    pa.clause_type = CLAUSE_GOLD;
+    pa.plrno_from = pgiver->player_no;
+    pa.value = amount;
+    send_packet_diplomacy_info(&aconnection, PACKET_DIPLOMACY_CREATE_CLAUSE,
+			       &pa);
     gtk_spin_button_set_value(GTK_SPIN_BUTTON(w), 0.0);
   } else {
     append_output_window(_("Game: Invalid amount of gold specified."));
@@ -864,11 +847,14 @@ static void diplo_dialog_returnkey(GtkWidget *w, gpointer data)
 *****************************************************************/
 void close_all_diplomacy_dialogs(void)
 {
-  if (!dialog_list_list_has_been_initialised) {
+  struct Diplomacy_dialog *pdialog;
+  
+  if (!diplomacy_dialogs_list_has_been_initialised) {
     return;
   }
 
-  while (dialog_list_size(&dialog_list) > 0) {
-    close_diplomacy_dialog(dialog_list_get(&dialog_list, 0));
+  while (genlist_size(&diplomacy_dialogs) > 0) {
+    pdialog = genlist_get(&diplomacy_dialogs, 0);
+    close_diplomacy_dialog(pdialog);
   }
 }

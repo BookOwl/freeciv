@@ -2,7 +2,6 @@
 
 name=_("Dutch")
 plural=_("?plural:Dutch")
-class=_("Modern")
 leader="Willem", "Maurits", "Emma", "Wilhelmina", "Juliana", "Beatrix"
 leader_sex="Male", "Male", "Female", "Female", "Female", "Female"
 flag="f.netherlands"
@@ -12,14 +11,16 @@ ruler_titles = { "government",      "male_title",      "female_title"
                  "Democracy",       _("Prime Minister"), _("Prime Minister")
                }
 
+attack=2
+expand=2
+civilized=0
+advisors=100,100,100,100,100,100,100
 init_techs=""
-init_buildings=""
 
 tech_goals = "Map Making", "The Republic", "Trade", "Navigation",
   "Economics", "Democracy"
 wonder="Magellan's Expedition"
 government="Democracy"
-civilwar_nations = "boer"
 
 ;names from the Golden Age, from Holland circling outward
 ;later important towns added at the end

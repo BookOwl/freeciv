@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -28,6 +27,7 @@
 
 #include "fcintl.h"
 #include "game.h"
+#include "genlist.h"
 #include "map.h"
 #include "mem.h"
 #include "packets.h"
@@ -63,16 +63,8 @@ struct spaceship_dialog
   Object *launch_button;
 };
 
-#define SPECLIST_TAG dialog
-#define SPECLIST_TYPE struct spaceship_dialog
-#include "speclist.h"
-
-#define dialog_list_iterate(dialoglist, pdialog) \
-    TYPED_LIST_ITERATE(struct spaceship_dialog, dialoglist, pdialog)
-#define dialog_list_iterate_end  LIST_ITERATE_END
-
-static struct dialog_list dialog_list;
-static bool dialog_list_has_been_initialised = FALSE;
+static struct genlist dialog_list;
+static int dialog_list_has_been_initialised;
 
 struct spaceship_dialog *get_spaceship_dialog(struct player *pplayer);
 struct spaceship_dialog *create_spaceship_dialog(struct player *pplayer);
@@ -86,18 +78,21 @@ void spaceship_dialog_update_info(struct spaceship_dialog *pdialog);
 *****************************************************************/
 struct spaceship_dialog *get_spaceship_dialog(struct player *pplayer)
 {
-  if (!dialog_list_has_been_initialised) {
-    dialog_list_init(&dialog_list);
-    dialog_list_has_been_initialised = TRUE;
+  struct genlist_iterator myiter;
+
+  if (!dialog_list_has_been_initialised)
+  {
+    genlist_init(&dialog_list);
+    dialog_list_has_been_initialised = 1;
   }
 
-  dialog_list_iterate(dialog_list, pdialog) {
-    if (pdialog->pplayer == pplayer) {
-      return pdialog;
-    }
-  } dialog_list_iterate_end;
+  genlist_iterator_init(&myiter, &dialog_list, 0);
 
-  return NULL;
+  for (; ITERATOR_PTR(myiter); ITERATOR_NEXT(myiter))
+    if (((struct spaceship_dialog *) ITERATOR_PTR(myiter))->pplayer == pplayer)
+      return ITERATOR_PTR(myiter);
+
+  return 0;
 }
 
 /****************************************************************
@@ -243,7 +238,7 @@ struct spaceship_dialog *create_spaceship_dialog(struct player *pplayer)
 
     DoMethod(app, OM_ADDMEMBER, pdialog->wnd);
 
-    dialog_list_insert(&dialog_list, pdialog);
+    genlist_insert(&dialog_list, pdialog, 0);
     refresh_spaceship_dialog(pdialog->pplayer);
     return pdialog;
   }

@@ -14,28 +14,25 @@
 #define FC__DIALOGS_G_H
 
 #include "shared.h"		/* bool type */
-
-#include "fc_types.h"
-#include "nation.h"		/* Nation_Type_id */
 #include "terrain.h"		/* enum tile_special_type */
 
-struct packet_nations_selected_info;
+struct tile;
+struct unit;
+struct city;
+struct packet_nations_used;
 
-void popup_notify_goto_dialog(const char *headline, const char *lines,
-			      int map_x, int map_y);
-void popup_notify_dialog(const char *caption, const char *headline,
-			 const char *lines);
+void popup_notify_goto_dialog(char *headline, char *lines, int x, int y);
+void popup_notify_dialog(char *caption, char *headline, char *lines);
 
 void popup_races_dialog(void);
 void popdown_races_dialog(void);
 
 void popup_unit_select_dialog(struct tile *ptile);
 
-void races_toggles_set_sensitive(bool *nations_used);
+void races_toggles_set_sensitive(struct packet_nations_used *packet);
 
 void popup_revolution_dialog(void);
-void popup_government_dialog(int governments,
-			     struct government **government);
+void popup_government_dialog(void);
 void popup_caravan_dialog(struct unit *punit,
 			  struct city *phomecity, struct city *pdestcity);
 bool caravan_dialog_is_open(void);
@@ -46,7 +43,6 @@ void popup_bribe_dialog(struct unit *punit);
 void popup_sabotage_dialog(struct city *pcity);
 void popup_pillage_dialog(struct unit *punit,
 			  enum tile_special_type may_pillage);
-
-void popdown_all_game_dialogs(void);
+void popup_unit_connect_dialog (struct unit *punit, int dest_x, int dest_y);
 
 #endif  /* FC__DIALOGS_G_H */

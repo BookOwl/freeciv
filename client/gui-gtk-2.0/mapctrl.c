@@ -29,7 +29,6 @@
 #include "chatline.h"
 #include "citydlg.h"
 #include "civclient.h"
-#include "climap.h"
 #include "clinet.h"
 #include "climisc.h"
 #include "colors.h"
@@ -43,10 +42,11 @@
 #include "menu.h"
 #include "tilespec.h"
 #include "cma_core.h"
-#include "text.h"
 
 #include "mapctrl.h"
 
+/* Update the workers for a city on the map, when the update is received */
+struct city *city_workers_display = NULL;
 /* Color to use to display the workers */
 int city_workers_color=COLOR_STD_WHITE;
 
@@ -66,32 +66,143 @@ static gboolean popit_button_release(GtkWidget *w, GdkEventButton *event)
 **************************************************************************/
 static void popit(GdkEventButton *event, int xtile, int ytile)
 {
-  GtkWidget *p;
+  GtkWidget *p, *b;
   static struct map_position cross_list[2 + 1];
   struct map_position *cross_head = cross_list;
-  int i;
+  int i, count = 0;
   int popx, popy;
+  char s[512];
+  struct city *pcity;
   struct unit *punit;
-  bool is_orders;
+  struct tile *ptile = map_get_tile(xtile, ytile);
 
   if(tile_get_known(xtile, ytile) >= TILE_KNOWN_FOGGED) {
     p=gtk_window_new(GTK_WINDOW_POPUP);
     gtk_widget_set_app_paintable(p, TRUE);
     gtk_container_set_border_width(GTK_CONTAINER(p), 4);
-    gtk_container_add(GTK_CONTAINER(p), gtk_label_new(popup_info_text(xtile, ytile)));
-    
-    punit = find_visible_unit(map_get_tile(xtile, ytile));
+    b=gtk_vbox_new(FALSE, 0);
+    gtk_container_add(GTK_CONTAINER(p), b);
 
-    is_orders = show_unit_orders(punit);
+#ifdef DEBUG    
+    my_snprintf(s, sizeof(s), _("Location: (%d, %d)"), xtile, ytile);
+    gtk_widget_new(GTK_TYPE_LABEL, "GtkWidget::parent", b,
+				    "GtkLabel::label", s, NULL);
+    count++;
+#endif /* DEBUG */
 
-    if (punit && is_goto_dest_set(punit)) {
-      cross_head->x = goto_dest_x(punit);
-      cross_head->y = goto_dest_y(punit);
-      cross_head++;
+    my_snprintf(s, sizeof(s), _("Terrain: %s"),
+		map_get_tile_info_text(xtile, ytile));
+    gtk_widget_new(GTK_TYPE_LABEL, "GtkWidget::parent", b,
+				   "GtkLabel::label", s, NULL);
+    count++;
+
+    my_snprintf(s, sizeof(s), _("Food/Prod/Trade: %s"),
+		map_get_tile_fpt_text(xtile, ytile));
+    gtk_widget_new(GTK_TYPE_LABEL,  "GtkWidget::parent", b,
+				    "GtkLabel::label", s, NULL);
+    count++;
+
+    if (tile_has_special(ptile, S_HUT)) {
+      gtk_widget_new(GTK_TYPE_LABEL, "GtkWidget::parent", b,
+				     "GtkLabel::label",
+				     _("Minor Tribe Village"), NULL);
+      count++;
     }
+    
+    if((pcity = map_get_city(xtile, ytile))) {
+      my_snprintf(s, sizeof(s), _("City: %s(%s)"), pcity->name,
+		  get_nation_name(city_owner(pcity)->nation));
+      gtk_widget_new(GTK_TYPE_LABEL, "GtkWidget::parent", b,
+				     "GtkLabel::label", s, NULL);
+      count++;
+
+      if (city_got_citywalls(pcity)) {
+        gtk_widget_new(GTK_TYPE_LABEL, "GtkWidget::parent", b,
+		       "GtkLabel::label", _("with City Walls"), NULL);
+	count++;
+      }
+    }
+
+    if(get_tile_infrastructure_set(ptile)) {
+      sz_strlcpy(s, _("Infrastructure: "));
+      sz_strlcat(s, map_get_infrastructure_text(ptile->special));
+      gtk_widget_new(GTK_TYPE_LABEL, "GtkWidget::parent", b,
+				     "GtkLabel::label", s, NULL);
+      count++;
+    }
+    
+    sz_strlcpy(s, _("Activity: "));
+    if (concat_tile_activity_text(s, sizeof(s), xtile, ytile)) {
+      gtk_widget_new(GTK_TYPE_LABEL, "GtkWidget::parent", b,
+		     "GtkLabel::label", s, NULL);
+      count++;
+    }
+    
+    if((punit = find_visible_unit(ptile)) && !pcity) {
+      char cn[64];
+      struct unit_type *ptype = unit_type(punit);
+      cn[0] = '\0';
+      if(punit->owner == game.player_idx) {
+	struct city *pcity;
+	pcity=player_find_city_by_id(game.player_ptr, punit->homecity);
+	if(pcity)
+	  my_snprintf(cn, sizeof(cn), "/%s", pcity->name);
+      }
+      my_snprintf(s, sizeof(s), _("Unit: %s(%s%s)"), ptype->name,
+		  get_nation_name(unit_owner(punit)->nation), cn);
+      gtk_widget_new(GTK_TYPE_LABEL, "GtkWidget::parent", b,
+				     "GtkLabel::label", s, NULL);
+      count++;
+
+      if(punit->owner == game.player_idx)  {
+	char uc[64] = "";
+	if(unit_list_size(&ptile->units) >= 2) {
+	  my_snprintf(uc, sizeof(uc), _("  (%d more)"),
+		      unit_list_size(&ptile->units) - 1);
+	}
+        my_snprintf(s, sizeof(s), _("A:%d D:%d FP:%d HP:%d/%d%s%s"),
+		    ptype->attack_strength, 
+		    ptype->defense_strength, ptype->firepower, punit->hp, 
+		    ptype->hp, punit->veteran ? _(" V") : "", uc);
+
+        if(punit->activity == ACTIVITY_GOTO || punit->connecting)  {
+	  cross_head->x = punit->goto_dest_x;
+	  cross_head->y = punit->goto_dest_y;
+	  cross_head++;
+        }
+      } else {
+        struct unit *apunit;
+        
+        /* calculate chance to win */
+        if ((apunit = get_unit_in_focus())) {
+          /* chance to win when active unit is attacking the selected unit */
+          int att_chance = unit_win_chance(apunit, punit) * 100;
+
+          /* chance to win when selected unit is attacking the active unit */
+          int def_chance = (1.0 - unit_win_chance(punit, apunit)) * 100;
+
+          my_snprintf(s, sizeof(s), _("Chance to win: A:%d%% D:%d%%"),
+               att_chance, def_chance);
+          gtk_widget_new(GTK_TYPE_LABEL, "GtkWidget::parent", b,
+                                         "GtkLabel::label", s, NULL);
+          count++;
+        }
+
+        my_snprintf(s, sizeof(s), _("A:%d D:%d FP:%d HP:%d0%%"),
+		    ptype->attack_strength, 
+		    ptype->defense_strength, ptype->firepower, 
+		    (punit->hp * 100 / ptype->hp + 9) / 10 );
+      }
+      gtk_widget_new(GTK_TYPE_LABEL, "GtkWidget::parent", b,
+				     "GtkLabel::label", s, NULL);
+      count++;
+    }
+
     cross_head->x = xtile;
     cross_head->y = ytile;
     cross_head++;
+
+    gtk_widget_show_all(b);
 
     cross_head->x = -1;
     for (i = 0; cross_list[i].x >= 0; i++) {
@@ -99,15 +210,15 @@ static void popit(GdkEventButton *event, int xtile, int ytile)
     }
     g_signal_connect(p, "destroy",
 		     G_CALLBACK(popupinfo_popdown_callback),
-		     GINT_TO_POINTER(is_orders));
+		     cross_list);
 
     /* displace popup so as not to obscure it by the mouse cursor */
     popx= event->x_root + 16;
-    popy= event->y_root;
+    popy= event->y_root - (8 * count);
     if (popy < 0)
       popy = 0;      
     gtk_window_move(GTK_WINDOW(p), popx, popy);
-    gtk_widget_show_all(p);
+    gtk_widget_show(p);
     gdk_pointer_grab(p->window, TRUE, GDK_BUTTON_RELEASE_MASK,
 		     NULL, NULL, event->time);
     gtk_grab_add(p);
@@ -122,22 +233,27 @@ static void popit(GdkEventButton *event, int xtile, int ytile)
 **************************************************************************/
 void popupinfo_popdown_callback(GtkWidget *w, gpointer data)
 {
-  bool full = GPOINTER_TO_INT(data);
+  struct map_position *cross_list=(struct map_position *)data;
 
-  if (full) {
-    update_map_canvas_visible();
-  } else {
-    dirty_all();
+  while (cross_list->x >= 0) {
+    refresh_tile_mapcanvas(cross_list->x, cross_list->y, TRUE);
+    cross_list++;
   }
 }
 
  /**************************************************************************
 ...
 **************************************************************************/
-static void name_new_city_callback(GtkWidget * w, gpointer data)
+static void name_new_city_callback(GtkWidget *w, gpointer data)
 {
-  dsend_packet_unit_build_city(&aconnection, GPOINTER_TO_INT(data),
-			       input_dialog_get_input(w));
+  size_t unit_id;
+  
+  if((unit_id = (size_t)data)) {
+    struct packet_unit_request req;
+    req.unit_id = unit_id;
+    sz_strlcpy(req.name, input_dialog_get_input(w));
+    send_packet_unit_request(&aconnection, &req, PACKET_UNIT_BUILD_CITY);
+  }
   input_dialog_destroy(w);
 }
 
@@ -166,115 +282,31 @@ void set_turn_done_button_state(bool state)
   gtk_widget_set_sensitive(turn_done_button, state);
 }
 
-/**************************************************************************
- Handle 'Mouse button released'. Because of the quickselect feature,
- the release of both left and right mousebutton can launch the goto.
-**************************************************************************/
-gboolean butt_release_mapcanvas(GtkWidget *w, GdkEventButton *ev, gpointer data)
-{
-  if (ev->button == 1 || ev->button == 3) {
-    release_goto_button(ev->x, ev->y);
-  }
-  if(ev->button == 3 && (rbutton_down || hover_state != HOVER_NONE))  {
-    release_right_button(ev->x, ev->y);
-  }
-
-  return TRUE;
-}
 
 /**************************************************************************
- Handle all mouse button press on canvas.
- Future feature: User-configurable mouse clicks.
+...
 **************************************************************************/
 gboolean butt_down_mapcanvas(GtkWidget *w, GdkEventButton *ev, gpointer data)
 {
   int xtile, ytile;
-  bool is_real;
-  struct city *pcity = NULL;
-
-  if (!can_client_change_view()) {
+  
+  if(get_client_state() != CLIENT_GAME_RUNNING_STATE)
     return TRUE;
-  }
-
+  
   gtk_widget_grab_focus(map_canvas);
-  is_real = canvas_to_map_pos(&xtile, &ytile, ev->x, ev->y);
-  if (is_real) {
-    pcity = map_get_city(xtile, ytile);
+
+  get_map_xy(ev->x, ev->y, &xtile, &ytile);
+
+  if ((ev->button == 1) && (ev->state & GDK_SHIFT_MASK)) {
+    adjust_workers(w, ev);
+    wakeup_sentried_units(xtile, ytile);
+  } else if (ev->button == 1) {
+    do_map_click(xtile, ytile);
+  } else if ((ev->button == 2) || (ev->state & GDK_CONTROL_MASK)) {
+    popit(ev, xtile, ytile);
+  } else if (ev->button == 3) {
+    center_tile_mapcanvas(xtile, ytile);
   }
-
-  switch (ev->button) {
-
-  case 1: /* LEFT mouse button */
-
-    /* <SHIFT> + <CONTROL> + LMB : Adjust workers. */
-    if ((ev->state & GDK_SHIFT_MASK) && (ev->state & GDK_CONTROL_MASK)) {
-      adjust_workers_button_pressed(ev->x, ev->y);
-    }
-    /* <CONTROL> + LMB : Quickselect a sea unit. */
-    else if (ev->state & GDK_CONTROL_MASK) {
-      action_button_pressed(ev->x, ev->y, SELECT_SEA);
-    }
-    /* <SHIFT> + LMB: Copy Production. */
-    else if(is_real && (ev->state & GDK_SHIFT_MASK)) {
-      clipboard_copy_production(xtile, ytile);
-    }
-    /* LMB in Area Selection mode. */
-    else if(tiles_hilited_cities) {
-      if (is_real) {
-        toggle_tile_hilite(xtile, ytile);
-      }
-    }
-    /* Plain LMB click. */
-    else {
-      action_button_pressed(ev->x, ev->y, SELECT_POPUP);
-    }
-    break;
-
-  case 2: /* MIDDLE mouse button */
-
-    /* <CONTROL> + MMB: Wake up sentries. */
-    if (ev->state & GDK_CONTROL_MASK) {
-      wakeup_button_pressed(ev->x, ev->y);
-    }
-    /* Plain Middle click. */
-    else if(is_real) {
-      popit(ev, xtile, ytile);
-    }
-    break;
-
-  case 3: /* RIGHT mouse button */
-
-    /* <CONTROL> + RMB : Quickselect a land unit. */
-    if (ev->state & GDK_CONTROL_MASK) {
-      action_button_pressed(ev->x, ev->y, SELECT_LAND);
-    }
-    /* <SHIFT> + RMB: Paste Production. */
-    else if(ev->state & GDK_SHIFT_MASK) {
-      clipboard_paste_production(pcity);
-      cancel_tile_hiliting();
-    }
-    /* Plain RMB click. */
-    else {
-      /*  A foolproof user will depress button on canvas,
-       *  release it on another widget, and return to canvas
-       *  to find rectangle still active.
-       */
-      if (rectangle_active) {
-        release_right_button(ev->x, ev->y);
-        return TRUE;
-      }
-      cancel_tile_hiliting();
-      if (hover_state == HOVER_NONE) {
-        anchor_selection_rectangle(ev->x, ev->y);
-        rbutton_down = TRUE; /* causes rectangle updates */
-      }
-    }
-    break;
-
-  default:
-    break;
-  }
-
 
   return TRUE;
 }
@@ -287,56 +319,78 @@ void create_line_at_mouse_pos(void)
   int x, y;
 
   gdk_window_get_pointer(map_canvas->window, &x, &y, 0);
-  if (x >= 0 && y >= 0
-      && x < mapview_canvas.width && y < mapview_canvas.width) {
-    update_line(x, y);
-  } else {
-    gdk_window_get_pointer(overview_canvas->window, &x, &y, 0);
-    if (x >= 0 && y >= 0
-	&& x < OVERVIEW_TILE_WIDTH * map.xsize
-	&& y < OVERVIEW_TILE_WIDTH * map.ysize) {
-      overview_update_line(x, y);
+
+  update_line(x, y);
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+void update_line(int window_x, int window_y)
+{
+  int x, y, old_x, old_y;
+
+  if ((hover_state == HOVER_GOTO || hover_state == HOVER_PATROL)
+      && draw_goto_line) {
+    get_map_xy(window_x, window_y, &x, &y);
+
+    get_line_dest(&old_x, &old_y);
+    if (!same_pos(old_x, old_y, x, y)) {
+      draw_line(x, y);
     }
   }
 }
 
 /**************************************************************************
- The Area Selection rectangle. Called by center_tile_mapcanvas() and
- when the mouse pointer moves.
+...
 **************************************************************************/
-void update_rect_at_mouse_pos(void)
+gboolean move_mapcanvas(GtkWidget *widget, GdkEventMotion *event, gpointer data)
 {
-  int canvas_x, canvas_y;
+  update_line(event->x, event->y);
+  return TRUE;
+}
 
-  if (!rbutton_down) {
+/**************************************************************************
+  Adjust the position of city workers from the mapcanvas
+**************************************************************************/
+void adjust_workers(GtkWidget *widget, GdkEventButton *ev)
+{
+  int x, y, map_x, map_y, is_valid;
+  struct city *pcity;
+  struct packet_city_request packet;
+  enum city_tile_type wrk;
+
+  if (get_client_state() != CLIENT_GAME_RUNNING_STATE) {
     return;
   }
 
-  /* Reading the mouse pos here saves event queueing. */
-  gdk_window_get_pointer(map_canvas->window, &canvas_x, &canvas_y, NULL);
-  update_selection_rectangle(canvas_x, canvas_y);
-}
+  get_map_xy(ev->x, ev->y, &map_x, &map_y);
 
-/**************************************************************************
-...
-**************************************************************************/
-gboolean move_mapcanvas(GtkWidget *w, GdkEventMotion *ev, gpointer data)
-{
-  update_line(ev->x, ev->y);
-  update_rect_at_mouse_pos();
-  if (keyboardless_goto_button_down && hover_state == HOVER_NONE) {
-    maybe_activate_keyboardless_goto(ev->x, ev->y);
+  pcity = find_city_near_tile(map_x, map_y);
+  if (!pcity) {
+    return;
   }
-  return TRUE;
-}
 
-/**************************************************************************
-...
-**************************************************************************/
-gboolean move_overviewcanvas(GtkWidget *w, GdkEventMotion *ev, gpointer data)
-{
-  overview_update_line(ev->x, ev->y);
-  return TRUE;
+  if (cma_is_city_under_agent(pcity, NULL)) {
+    return;
+  }
+
+  is_valid = map_to_city_map(&x, &y, pcity, map_x, map_y);
+  assert(is_valid);
+
+  packet.city_id = pcity->id;
+  packet.worker_x = x;
+  packet.worker_y = y;
+  
+  wrk = get_worker_city(pcity, x, y);
+  if(wrk == C_TILE_WORKER)
+    send_packet_city_request(&aconnection, &packet, 
+			    PACKET_CITY_MAKE_SPECIALIST);
+  else if(wrk == C_TILE_EMPTY)
+    send_packet_city_request(&aconnection, &packet, PACKET_CITY_MAKE_WORKER);
+
+  /* When the city info packet is received, update the workers on the map*/
+  city_workers_display = pcity;
 }
 
 /**************************************************************************
@@ -349,14 +403,25 @@ gboolean butt_down_overviewcanvas(GtkWidget *w, GdkEventButton *ev, gpointer dat
   if (ev->type != GDK_BUTTON_PRESS)
     return TRUE; /* Double-clicks? Triple-clicks? No thanks! */
 
-  overview_to_map_pos(&xtile, &ytile, ev->x, ev->y);
-
-  if (can_client_change_view() && (ev->button == 3)) {
-    center_tile_mapcanvas(xtile, ytile);
-  } else if (can_client_issue_orders() && (ev->button == 1)) {
-    do_map_click(xtile, ytile, SELECT_POPUP);
+  if (is_isometric) {
+    xtile = ev->x / 2 - (map.xsize / 2 -
+			 (map_view_x0 +
+			  (map_canvas_store_twidth +
+			   map_canvas_store_theight) / 2));
+  } else {
+    xtile = ev->x / 2 - (map.xsize / 2 -
+			 (map_view_x0 + map_canvas_store_twidth / 2));
   }
+  ytile = ev->y / 2;
+  
+  if(get_client_state() != CLIENT_GAME_RUNNING_STATE)
+     return TRUE;
 
+  if (ev->button == 1) {
+    do_unit_goto(xtile, ytile);
+  } else if (ev->button == 3) {
+    center_tile_mapcanvas(xtile, ytile);
+  }
   return TRUE;
 }
 
@@ -373,8 +438,31 @@ void center_on_unit(void)
 **************************************************************************/
 void key_city_workers(GtkWidget *w, GdkEventKey *ev)
 {
-  int x, y;
+  int x,y;
+  struct city *pcity;
+
+  if (get_client_state() != CLIENT_GAME_RUNNING_STATE) {
+    return;
+  }
   
   gdk_window_get_pointer(map_canvas->window, &x, &y, NULL);
-  key_city_overlay(x, y);
+  get_map_xy(x, y, &x, &y);
+
+  pcity = find_city_near_tile(x, y);
+  if (!pcity) {
+    return;
+  }
+
+  /* Shade tiles on usage */
+  city_workers_color = (city_workers_color % 3) + 1;
+  put_city_workers(pcity, city_workers_color);
+}
+
+
+/**************************************************************************
+...
+**************************************************************************/
+void focus_to_next_unit(void)
+{
+  advance_unit_focus();
 }

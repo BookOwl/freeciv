@@ -1,14 +1,53 @@
 =======================
-Welkom bij Freeciv 1.13
+Welkom bij Freeciv 1.14
 =======================
 
-Dit is versie 1.13.0.
+Dit is versie 1.14.1.
 
 Opnieuw dank aan alle ontwikkelaars, die doorgaan met zo hard te werken.
 
 Deze versie bevat vele wijzigingen. Degenen die geïnteresseerd zijn in de
 detail-wijzigingen kunnen in het ChangeLog bestand kijken (Engels).
 
+WAT IS ANDERS SINDS 1.14.0
+ - De GTK+-2.0 client wordt nu standaard gebouwd.
+ - Heel veel verbeteringen aan de GTK+-2.0 client.
+ - De GTK+-2.0 client compileert nu ook onder Win32.
+ - Teams worden ondersteund.
+ - Civserver werkt nu met de UTF-8 locale.
+ - Heel veel fouten verbeterd.
+
+WAT IS ANDERS SINDS 1.13.0
+ - Unieke stadsnamen; u kunt niet langer alle steden dezelfde naam geven. Dit
+   is als optie ook globaal af te dwingen.
+ - Een nieuwe kaartgenerator (generator 5) die mooie fractalkaarten maakt.
+ - U kunt nu opgeslagen spelen vanaf de serverprompt laden.
+ - U kunt nu de opdracht-argumenten van de client als standaard opslaan.
+ - Specialisten worden nu eerst uit de tevreden stedelingen geronseld, i.p.v.
+   uit de ontevreden-. Dit maakt het moeilijker om onrusten te bestrijden met
+   belastingsbeambten en wetenschappers.
+ - U begint nu standaard zonder vooruitgangen en angry citizens staat
+   standaard aan, ofschoon ze slechts zelden optreden.
+ - Het algoritme voor het berekenen van de belastingsopbrengst is veranderd.
+   Het is nu niet langer mogelijk om 100% effect te krijgen uit 60% keuze van
+   belastingsdruk.
+ - Er is een nieuwe, meer historisch correcte versie van de spelregels
+   ingesloten.
+ - Er is een optie om het effect van onlusten en festiviteiten enkele beurten
+   te vertragen. Zie 'show rapturedelay' in de server.
+ - De reeks van sommige 'beurt-klaar'-effecten is gehergroepeerd.
+ - Diverse KI-verbeteringen. Hij zou nu eenheden en verbeteringen iets
+   intelligenter moeten bouwen en kopen.
+ - Veel interne verbeteringen in de code die later zullen leiden tot meer
+   mogelijkheden.
+ - Nieuwe /fix en /unfix opdrachten om wijzigingen na het begin van het spel
+   te bevriezen.
+ - De serveropdrachten 'rulesout', 'log', 'freestyle' en 'crash' zijn
+   verwijderd, terwijl 'rfcstyle' nu schakelt tussen 'rfcstyle' en
+   'freestyle'.
+ - civ2 spelregels komen nu beter overeen met de civ2 standaard.
+ - Een werkelijk enorme hoeveelheid fouten zijn verbeterd.
+   
 WAT IS ANDERS SINDS 1.12.0
 
  - Burgemeester staat u toe om werkers en specialisten in de steden te

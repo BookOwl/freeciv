@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -49,6 +48,9 @@
 
 #include "muistuff.h"
 #include "mapclass.h"
+
+/* Update the workers for a city on the map, when the update is received */
+struct city *city_workers_display = NULL;
 
 /****************************************************************
 ...
@@ -103,19 +105,29 @@ int main_map_click(struct Map_Click **click)
   return 0;
 }
 
+
+/**************************************************************************
+...
+**************************************************************************/
+void update_line(int window_x, int window_y)
+{
+  int x, y, old_x, old_y;
+
+  if ((hover_state == HOVER_GOTO || hover_state == HOVER_PATROL)
+      && draw_goto_line) {
+    get_map_xy(window_x, window_y, &x, &y);
+
+    get_line_dest(&old_x, &old_y);
+    if (!same_pos(old_x, old_y, x, y)) {
+      draw_line(x, y);
+    }
+  }
+}
+
 /**************************************************************************
 ...
 **************************************************************************/
 void create_line_at_mouse_pos(void)
 {
   update_line(xget(main_map_area,MUIA_Map_MouseX),xget(main_map_area,MUIA_Map_MouseY));
-}
-
-/**************************************************************************
- The Area Selection rectangle. Called by center_tile_mapcanvas() and
- when the mouse pointer moves.
-**************************************************************************/
-void update_rect_at_mouse_pos(void)
-{
-  /* PORTME */
 }

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -27,6 +26,7 @@
 #include <X11/Xaw/MenuButton.h>
 #include <X11/Xaw/SimpleMenu.h>
 #include <X11/Xaw/SmeBSB.h>
+#include <X11/Xaw/Command.h>
 #include <X11/Xaw/List.h>
 #include <X11/Xaw/Viewport.h>
 #include <X11/Xaw/AsciiText.h>  
@@ -584,13 +584,13 @@ void worklist_id_to_name(char buf[], int id, bool is_unit,
 {
   if (is_unit)
     sprintf(buf, "%s (%d)",
-	    get_unit_name(id), unit_build_shield_cost(id));
+	    get_unit_name(id), get_unit_type(id)->build_cost);
   else if (pcity)
     sprintf(buf, "%s (%d)",
-	    get_impr_name_ex(pcity, id), impr_build_shield_cost(id));
+	    get_impr_name_ex(pcity, id), get_improvement_type(id)->build_cost);
   else
     sprintf(buf, "%s (%d)",
-	    get_improvement_name(id), impr_build_shield_cost(id));
+	    get_improvement_name(id), get_improvement_type(id)->build_cost);
 }
 
 

@@ -2,61 +2,9 @@
 
 name=_("American")
 plural=_("?plural:Americans")
-class=_("Modern")
-legend=_("Formally named the United States of America.  Independent from \
-Great Britain after a revolution in 1776-1783AD.")
-leader="George Washington",
-       "John Adams",
-       "Thomas Jefferson", 
-       "James Madison",
-       "James Monroe",
-       "John Quincy Adams",
-       "Andrew Jackson",
-       "Martin Van Buren",
-       "William Henry Harrison",
-       "John Tyler",
-       "James Polk",
-       "Zachary Taylor",
-       "Millard Filmore",
-       "Franklin Pierce",
-       "James Buchanan",
-       "Abraham Lincoln",
-       "Andew Johnson", 
-       "Ulysses S. Grant",
-       "Rutherford Hayes",
-       "James Garfield",
-       "Chester Alan Arthur",
-       "Grover Cleveland",
-       "Benjamin Harrison",
-       "William McKinley",
-       "Theodore Roosevelt",
-       "William Howard Taft",
-       "Woodrow Wilson",
-       "Warren Harding",
-       "Calvin Coolidge",
-       "Herbert Hoover",
-       "Franklin D. Roosevelt",
-       "Harry S. Truman",
-       "Dwight Eisenhower",
-       "John F. Kennedy", 
-       "Lyndon Johnson",
-       "Richard Nixon",
-       "Gerald W. Ford",
-       "Jimmy Carter",
-       "Ronald Reagan",
-       "George H. W. Bush",
-       "Bill Clinton",
-       "George W. Bush",
-       "Eleanor Roosevelt"
-leader_sex="Male", "Male", "Male", "Male", "Male", 
-           "Male", "Male", "Male", "Male", "Male", 
-           "Male", "Male", "Male", "Male", "Male", 
-           "Male", "Male", "Male", "Male", "Male", 
-           "Male", "Male", "Male", "Male", "Male", 
-           "Male", "Male", "Male", "Male", "Male", 
-           "Male", "Male", "Male", "Male", "Male", 
-           "Male", "Male", "Male", "Male", "Male", 
-           "Male", "Male", "Female"
+leader="Lincoln", "Washington", "Franklin D. Roosevelt",
+       "J.F. Kennedy", "Eleanore Roosevelt"
+leader_sex="Male", "Male", "Male", "Male", "Female"
 flag="f.usa"
 flag_alt = "-"
 city_style = "European"
@@ -65,13 +13,15 @@ ruler_titles = { "government",      "male_title",      "female_title"
                  "Fundamentalism",  _("Reverend"),     _("Reverend")
                }
 
+attack=0
+expand=1
+civilized=2
+advisors=100,100,100,100,100,100,100
 init_techs=""
-init_buildings=""
 tech_goals = "The Republic", "Trade", "Engineering", "Democracy",
              "Railroad", "Explosives", "Automobile"
 wonder="Statue of Liberty"
 government="Democracy"
-civilwar_nations = "filipino"
 
 cities =
   "Washington", "New York", "Boston", "Philadelphia", "Los Angeles",

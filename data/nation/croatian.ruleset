@@ -2,11 +2,6 @@
 
 name=_("Croatian")
 plural=_("?plural:Croatians")
-class=_("Modern")
-legend=_("Croatia is the region of the Southern Slavs that was held by the \
-Austro-Hungarian Empire, rather than coming under Ottoman rule after the \
-collapse of Byzantium. During most of the 20th century it was part of the \
-Yugoslav Federation.")
 leader="Ljudevit Posavski", "Borna", "Trpimir", "Domagoj", "Branimir",
        "Tomislav", "Stjepan Drzislav", "Petar Kresimir IV", "Zvonimir",
        "Nikola Subic Zrinski", "Matija Gubec", "Petar Zrinski",
@@ -25,14 +20,16 @@ ruler_titles = { "government",      "male_title",      "female_title"
 	         "Democracy",       _("President"),    _("President")
                }
 
+attack=1
+expand=1
+civilized=2
+advisors=100,100,100,100,100,100,100
 init_techs=""
-init_buildings=""
 
 tech_goals="The Republic", "Trade", "Engineering", "Democracy",
            "Railroad", "Explosives", "Automobile"
 wonder="Hoover Dam"
 government="Republic"
-civilwar_nations = "slovenian"
 
 cities =
   "Zagreb", "Split", "Osijek", "Rijeka", "Varazdin", "Rovinj",

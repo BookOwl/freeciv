@@ -10,14 +10,13 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
-#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
 
 #include <X11/Intrinsic.h>
 #include <X11/StringDefs.h>
@@ -90,9 +89,6 @@ static Widget help_terrain_road_result_time, help_terrain_road_result_time_data;
 static Widget help_terrain_irrigation_result_time, help_terrain_irrigation_result_time_data;
 static Widget help_terrain_mining_result_time, help_terrain_mining_result_time_data;
 static Widget help_terrain_transform_result_time, help_terrain_transform_result_time_data;
-
-/* HACK: we use a static string for convenience. */
-static char long_buffer[64000];
 
 static void create_help_page(enum help_page_type type);
 
@@ -766,13 +762,13 @@ static void create_help_page(enum help_page_type type)
 static void help_update_improvement(const struct help_item *pitem,
 				    char *title, int which)
 {
-  char buf[64000];
+  char *buf = &long_buffer[0];
   
   create_help_page(HELP_IMPROVEMENT);
   
   if (which<game.num_impr_types) {
     struct impr_type *imp = &improvement_types[which];
-    sprintf(buf, "%d ", impr_build_shield_cost(which));
+    sprintf(buf, "%d ", imp->build_cost);
     xaw_set_label(help_improvement_cost_data, buf);
     sprintf(buf, "%d ", imp->upkeep);
     xaw_set_label(help_improvement_upkeep_data, buf);
@@ -794,7 +790,7 @@ static void help_update_improvement(const struct help_item *pitem,
     create_tech_tree(help_tech_tree, 0, A_LAST, 3);
   }
   set_title_topic(pitem);
-  helptext_building(buf, sizeof(buf), which, pitem->text);
+  helptext_improvement(buf, which, pitem->text);
   XtVaSetValues(help_text, XtNstring, buf, NULL);
 }
   
@@ -804,13 +800,13 @@ static void help_update_improvement(const struct help_item *pitem,
 static void help_update_wonder(const struct help_item *pitem,
 			       char *title, int which)
 {
-  char buf[64000];
+  char *buf = &long_buffer[0];
   
   create_help_page(HELP_WONDER);
 
   if (which<game.num_impr_types) {
     struct impr_type *imp = &improvement_types[which];
-    sprintf(buf, "%d ", impr_build_shield_cost(which));
+    sprintf(buf, "%d ", imp->build_cost);
     xaw_set_label(help_improvement_cost_data, buf);
     sprintf(buf, "%d ", imp->variant);
     xaw_set_label(help_wonder_variant_data, buf);
@@ -820,12 +816,8 @@ static void help_update_wonder(const struct help_item *pitem,
       xaw_set_label(help_improvement_req_data,
 		    advances[imp->tech_req].name);
     }
-    if (tech_exists(imp->obsolete_by)) {
-      xaw_set_label(help_wonder_obsolete_data,
-		    advances[imp->obsolete_by].name);
-    } else {
-      xaw_set_label(help_wonder_obsolete_data, _("(Never)"));
-    }
+    xaw_set_label(help_wonder_obsolete_data,
+		  advances[imp->obsolete_by].name);
     create_tech_tree(help_tech_tree, 0, imp->tech_req, 3);
   }
   else {
@@ -837,7 +829,7 @@ static void help_update_wonder(const struct help_item *pitem,
     create_tech_tree(help_tech_tree, 0, game.num_tech_types, 3); 
   }
   set_title_topic(pitem);
-  helptext_building(buf, sizeof(buf), which, pitem->text);
+  helptext_wonder(buf, which, pitem->text);
   XtVaSetValues(help_text, XtNstring, buf, NULL);
 }
 
@@ -852,7 +844,7 @@ static void help_update_unit_type(const struct help_item *pitem,
   create_help_page(HELP_UNIT);
   if (i<game.num_unit_types) {
     struct unit_type *utype = get_unit_type(i);
-    sprintf(buf, "%d ", unit_build_shield_cost(i));
+    sprintf(buf, "%d ", utype->build_cost);
     xaw_set_label(help_unit_cost_data, buf);
     sprintf(buf, "%d ", utype->attack_strength);
     xaw_set_label(help_unit_attack_data, buf);
@@ -931,7 +923,7 @@ static void help_update_tech(const struct help_item *pitem, char *title, int i)
 		get_unit_type(j)->name);
     } unit_type_iterate_end;
 
-    for (j = 0; j < game.num_tech_types; j++) {
+    for(j=0; j<game.num_tech_types; ++j) {
       if(i==advances[j].req[0]) {
 	if(advances[j].req[1]==A_NONE)
 	  sprintf(buf+strlen(buf), _("Allows %s.\n"), 
@@ -1043,7 +1035,7 @@ static void help_update_terrain(const struct help_item *pitem,
 		       tile_types[i].irrigation_time);
 	    }
 	}
-      else if (tile_types[i].irrigation_result != T_NONE)
+      else if (tile_types[i].irrigation_result != T_LAST)
 	{
 	  sprintf (buf, "%s / %d",
 		   tile_types[tile_types[i].irrigation_result].terrain_name,
@@ -1061,7 +1053,7 @@ static void help_update_terrain(const struct help_item *pitem,
 		       tile_types[i].mining_time);
 	    }
 	}
-      else if (tile_types[i].mining_result != T_NONE)
+      else if (tile_types[i].mining_result != T_LAST)
 	{
 	  sprintf (buf, "%s / %d",
 		   tile_types[tile_types[i].mining_result].terrain_name,
@@ -1069,7 +1061,7 @@ static void help_update_terrain(const struct help_item *pitem,
 	}
       xaw_set_label (help_terrain_mining_result_time_data, buf);
 
-      if (tile_types[i].transform_result != T_NONE)
+      if (tile_types[i].transform_result != T_LAST)
 	{
 	  sprintf (buf, "%s / %d",
 		   tile_types[tile_types[i].transform_result].terrain_name,
@@ -1109,9 +1101,7 @@ static void help_update_dialog(const struct help_item *pitem)
 
   /* figure out what kind of item is required for pitem ingo */
 
-  for (top = pitem->topic; *top == ' '; top++) {
-    /* nothing */
-  }
+  for(top=pitem->topic; *top==' '; ++top);
 
   switch(pitem->type) {
   case HELP_IMPROVEMENT:
@@ -1165,7 +1155,7 @@ static int help_tree_destroy_children(Widget w)
 		XtNnumChildren, &cnt,
 		NULL);
 
-  for (; cnt > 0; cnt--, children++) {
+  for(; cnt>0; --cnt, ++children) {
     if(XtIsSubclass(*children, commandWidgetClass)) {
       Widget par;
       XtVaGetValues(*children, XtNtreeParent, &par, NULL);

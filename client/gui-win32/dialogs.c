@@ -9,16 +9,14 @@
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
-***********************************************************************/
-
+***********************************************************************/        
 #ifdef HAVE_CONFIG_H
 #include <config.h>
-#endif
+#endif      
 
-#include <assert.h>
-#include <stdarg.h>
 #include <string.h>
-
+#include <stdarg.h>
+#include <assert.h>
 #include <windows.h>
 #include <windowsx.h>
  
@@ -34,21 +32,16 @@
 #include "rand.h"
 #include "support.h"
  
+#include "chatline.h"
 #include "civclient.h"
 #include "clinet.h"
 #include "control.h"
-#include "tilespec.h"
-#include "packhand.h"
-#include "text.h"
-
-#include "chatline.h"
-#include "dialogs.h"
 #include "gui_stuff.h"
-#include "graphics.h"
-#include "mapctrl.h"
 #include "mapview.h"
+#include "tilespec.h"
 #include "gui_main.h" 
                              
+#include "dialogs.h"
 #define POPUP_MESSAGEDLG_IDBASE 500
 #define UNITSELECT_CLOSE 300
 #define UNITSELECT_READY_ALL 301
@@ -99,10 +92,11 @@ struct message_dialog {
   struct fcwin_box *vbox;
   struct message_dialog_button *firstbutton; 
 };
+static int is_showing_unit_connect_dialog;
+static int unit_to_use_to_connect;
+static int connect_unit_x,connect_unit_y;
 
 static HWND races_dlg;
-static HWND races_class;
-static HWND races_legend;
 int selected_leader_sex;
 int selected_style;
 struct fcwin_box *government_box;
@@ -161,12 +155,10 @@ static LONG CALLBACK notify_goto_proc(HWND dlg,UINT message,
 }
 
 /**************************************************************************
-  Popup a dialog to display information about an event that has a
-  specific location.  The user should be given the option to goto that
-  location.
+
 **************************************************************************/
-void popup_notify_goto_dialog(const char *headline, const char *lines,
-			      int x, int y)
+void
+popup_notify_goto_dialog(char *headline, char *lines, int x, int y)
 {
   POINT *pt;
   struct fcwin_box *hbox;
@@ -225,10 +217,10 @@ static LONG CALLBACK notify_proc(HWND hWnd,
 }
 
 /**************************************************************************
-  Popup a generic dialog to display some generic information.
+
 **************************************************************************/
-void popup_notify_dialog(const char *caption, const char *headline,
-			 const char *lines)
+void
+popup_notify_dialog(char *caption, char *headline, char *lines)
 {
   HWND dlg;
   dlg=fcwin_create_layouted_window(notify_proc,caption,WS_OVERLAPPEDWINDOW,
@@ -280,26 +272,12 @@ static void update_radio_buttons(int id)
 }
 
 
-
-/**************************************************************************
-
-**************************************************************************/
-static void update_nation_info()
-{
-  SetWindowText(races_class, 
-		get_nation_by_idx(selected_nation)->class);
-  SetWindowText(races_legend,
-		get_nation_by_idx(selected_nation)->legend);
-}
-
-
 /**************************************************************************
 
 **************************************************************************/
 static void select_random_race(HWND hWnd)
 {
   selected_nation=myrand(game.playable_nation_count);
-  update_nation_info();
   update_radio_buttons(0);
 }
 
@@ -308,18 +286,19 @@ static void select_random_race(HWND hWnd)
 **************************************************************************/
 static void select_random_leader(HWND hWnd)
 {
+  char **leaders;
   int j,leader_num;
-  struct leader *leaders = get_nation_leaders(selected_nation, &leader_num);
-
+  leaders=get_nation_leader_names(selected_nation,&leader_num);
   ComboBox_ResetContent(GetDlgItem(hWnd,ID_RACESDLG_LEADER));
-  for (j = 0; j < leader_num; j++) {
-    ComboBox_AddString(GetDlgItem(hWnd,ID_RACESDLG_LEADER), leaders[j].name);
-  }
+  for(j=0;j<leader_num;j++)
+    {
+      ComboBox_AddString(GetDlgItem(hWnd,ID_RACESDLG_LEADER),leaders[j]);
+    }
   selected_leader=myrand(leader_num);
   ComboBox_SetCurSel(GetDlgItem(hWnd,ID_RACESDLG_LEADER),selected_leader);
-  SetWindowText(GetDlgItem(hWnd,ID_RACESDLG_LEADER),
-		leaders[selected_leader].name);
-  if (leaders[selected_leader].is_male) {
+  SetWindowText(GetDlgItem(hWnd,ID_RACESDLG_LEADER),leaders[selected_leader]);
+  if (get_nation_leader_sex(selected_nation,
+			    leaders[selected_leader])) {
     selected_leader_sex=ID_RACESDLG_MALE;
     CheckRadioButton(hWnd,ID_RACESDLG_MALE,ID_RACESDLG_FEMALE,
 		     ID_RACESDLG_MALE);
@@ -335,19 +314,21 @@ static void select_random_leader(HWND hWnd)
 **************************************************************************/
 static void do_select(HWND hWnd)
 {
-  bool is_male = (selected_leader_sex == ID_RACESDLG_MALE);
-  int city_style = city_style_idx[selected_style - ID_RACESDLG_STYLE_BASE];
-  char name[MAX_LEN_NAME];
+  struct packet_alloc_nation packet;
+  packet.nation_no=selected_nation;
+  packet.is_male=(selected_leader_sex==ID_RACESDLG_MALE)?1:0;
+  packet.city_style=city_style_idx[selected_style-ID_RACESDLG_STYLE_BASE];
+ 
  
   ComboBox_GetText(GetDlgItem(hWnd,ID_RACESDLG_LEADER),
-		   name,MAX_LEN_NAME);
+		   packet.name,MAX_LEN_NAME);
  
-  if (!is_sane_name(name)) {
-    append_output_window(_("You must type a legal name."));
-    return;
-  }
-  dsend_packet_nation_select_req(&aconnection, selected_nation, is_male,
-				 name, city_style);
+  if (!get_sane_name(packet.name))
+    {
+      append_output_window(_("You must type a legal name."));
+      return;
+    }
+  send_packet_alloc_nation(&aconnection,&packet);  
 }
 
 
@@ -414,12 +395,10 @@ static LONG CALLBACK racesdlg_proc(HWND hWnd,
 	  } else if ((id>=ID_RACESDLG_NATION_BASE)&&
 		     (id<ID_RACESDLG_NATION_BASE+game.playable_nation_count)) {
 	    selected_nation=id-ID_RACESDLG_NATION_BASE;
-	    update_nation_info();
 	    if (!name_edited) {
 	      select_random_leader(hWnd);
 	    }
 	    update_radio_buttons(id);
-    
 	  }
 
 	  break;
@@ -451,7 +430,7 @@ static void add_nations(struct fcwin_box *vbox)
   struct fcwin_box *hbox;
   struct fcwin_box *vboxes[NATIONS_PER_ROW];
   struct genlist nation_list;
-  struct genlist_link *myiter;
+  struct genlist_iterator myiter;
   genlist_init(&nation_list);
   for(i=0; i<game.playable_nation_count; i++) { 
     /* Don't use a NULL pointer */
@@ -461,7 +440,7 @@ static void add_nations(struct fcwin_box *vbox)
   for(i=0;i<NATIONS_PER_ROW;i++) {  
     vboxes[i]=fcwin_vbox_new(races_dlg,TRUE);
   }
-  myiter = nation_list.head_link;
+  genlist_iterator_init(&myiter,&nation_list,0);
   i=0;
   for(;ITERATOR_PTR(myiter);ITERATOR_NEXT(myiter),i++) {
     int id;
@@ -502,21 +481,9 @@ void popup_races_dialog(void)
   fcwin_box_add_groupbox(vbox,_("Select nation and name"),
 			 grp_box,WS_GROUP,TRUE,TRUE,5);
   add_nations(grp_box);
+  grp_box=fcwin_vbox_new(races_dlg,FALSE);
   
-  hbox = fcwin_hbox_new(races_dlg, FALSE);
-  fcwin_box_add_static(hbox, _("Class:"), 0, SS_LEFT, FALSE,FALSE, 0);
   
-  races_class = fcwin_box_add_static(hbox, "content", 0, SS_LEFT, TRUE, TRUE,5);
-  
-  fcwin_box_add_box(vbox, hbox, FALSE, FALSE, 0);
- 
-  grp_box = fcwin_vbox_new(races_dlg, FALSE);
-  races_legend = fcwin_box_add_static(grp_box, "content\n\n\nc", SS_LEFT,
-				      0, FALSE, FALSE, 5);
-  fcwin_box_add_groupbox(vbox, _("Description"), grp_box,
-			 0, FALSE, FALSE, 5);
-
-  grp_box=fcwin_vbox_new(races_dlg,FALSE);  
   fcwin_box_add_groupbox(vbox,_("Your leader name"),grp_box,
 			 0,FALSE,FALSE,5);
   fcwin_box_add_combo(grp_box,10,ID_RACESDLG_LEADER,CBS_DROPDOWN,
@@ -561,9 +528,9 @@ void popup_races_dialog(void)
   CheckRadioButton(races_dlg,
 		   ID_RACESDLG_STYLE_BASE,ID_RACESDLG_STYLE_BASE+b_s_num-1,
 		   ID_RACESDLG_STYLE_BASE);
-  fcwin_set_box(races_dlg, vbox);
   select_random_race(races_dlg);
   select_random_leader(races_dlg);
+  fcwin_set_box(races_dlg,vbox);
   ShowWindow(races_dlg,SW_SHOWNORMAL);
 }
 
@@ -609,7 +576,7 @@ static int number_of_rows(int n)
 /**************************************************************************
 
 **************************************************************************/     
-static void popdown_unit_select_dialog(void)
+void popdown_unit_select_dialog()
 {
   if (unit_select_main)
     DestroyWindow(unit_select_main);
@@ -618,8 +585,11 @@ static void popdown_unit_select_dialog(void)
 /**************************************************************************
 
 **************************************************************************/
-static LONG APIENTRY unitselect_proc(HWND hWnd, UINT message,
-				     UINT wParam, LONG lParam)
+LONG APIENTRY unitselect_proc (
+                           HWND hWnd,
+                           UINT message,
+                           UINT wParam,
+                           LONG lParam)
 {
   int id;
   int i;
@@ -646,6 +616,7 @@ static LONG APIENTRY unitselect_proc(HWND hWnd, UINT message,
 	    struct unit *punit = player_find_unit_by_id(game.player_ptr,
 							unit_select_ids[i]);
 	    if(punit) {
+	      request_new_unit_activity(punit, ACTIVITY_IDLE);
 	      set_unit_focus(punit);
 	    }
 	  }  
@@ -657,6 +628,7 @@ static LONG APIENTRY unitselect_proc(HWND hWnd, UINT message,
 	      struct unit *punit=player_find_unit_by_id(game.player_ptr,
 							unit_select_ids[id]);
 	      if(punit && punit->owner == game.player_idx) {
+		request_new_unit_activity(punit, ACTIVITY_IDLE);
 		set_unit_focus(punit);
 	      }   
 	    }
@@ -716,10 +688,8 @@ popup_unit_select_dialog(struct tile *ptile)
   POINT pt;
   RECT rc,rc2;
   HBITMAP old;
-  HDC unitsel_dc;
-  struct unit *unit_list[unit_list_size(&ptile->units)];
+  static HDC unitsel_dc;
   
-  fill_tile_unit_list(ptile, unit_list);
   
   /* unit select box might already be open; if so, close it */
   if (unit_select_main) {
@@ -738,7 +708,8 @@ popup_unit_select_dialog(struct tile *ptile)
 				      NULL)))
     return;
   hdc=GetDC(unit_select_main);
-  unitsel_dc=CreateCompatibleDC(NULL);
+  if (!unitsel_dc)
+    unitsel_dc=CreateCompatibleDC(hdc);
   n=unit_list_size(&ptile->units);
   r=number_of_rows(n);
   c=number_of_columns(n);
@@ -746,7 +717,7 @@ popup_unit_select_dialog(struct tile *ptile)
   max_height=0;
   for(i=0;i<n;i++)
     {
-      struct unit *punit = unit_list[i];
+      struct unit *punit=unit_list_get(&ptile->units, i);
       struct unit_type *punittemp=unit_type(punit);
       struct city *pcity;
       unit_select_ids[i]=punit->id;
@@ -774,8 +745,7 @@ popup_unit_select_dialog(struct tile *ptile)
   max_height+=4;
   for (i=0;i<n;i++)
     {
-      struct canvas canvas_store = {unitsel_dc, NULL};
-      struct unit *punit=unit_list[i];
+      struct unit *punit=unit_list_get(&ptile->units, i);
       struct unit_type *punittemp=unit_type(punit);
       struct city *pcity;
       pcity=player_find_city_by_id(game.player_ptr, punit->homecity);
@@ -796,7 +766,8 @@ popup_unit_select_dialog(struct tile *ptile)
       SelectObject(unitsel_dc,unit_select_bitmaps[i]);
       BitBlt(unitsel_dc,0,0,UNIT_TILE_WIDTH,UNIT_TILE_HEIGHT,NULL,
 	     0,0,WHITENESS);
-      put_unit_full(punit,&canvas_store,0,0);
+      put_unit_pixmap(punit,unitsel_dc,0,0);
+      SelectObject(unitsel_dc,old);
       unit_select_but[i]=CreateWindow("BUTTON",NULL,
 				      WS_CHILD | WS_VISIBLE | BS_BITMAP,
 				      (i/r)*max_width,
@@ -811,8 +782,6 @@ popup_unit_select_dialog(struct tile *ptile)
 		  (LPARAM)unit_select_bitmaps[i]);
       
     }
-  SelectObject(unitsel_dc,old);
-  DeleteDC(unitsel_dc);
   unit_select_no=i;
   win_height=r*max_height;
   win_width=c*max_width;
@@ -854,7 +823,7 @@ popup_unit_select_dialog(struct tile *ptile)
 /**************************************************************************
 
 **************************************************************************/
-void races_toggles_set_sensitive(bool *nations_used)
+void races_toggles_set_sensitive(struct packet_nations_used *packet)
 {
   int i;
 
@@ -862,12 +831,9 @@ void races_toggles_set_sensitive(bool *nations_used)
     EnableWindow(GetDlgItem(races_dlg, ID_RACESDLG_NATION_BASE + i), TRUE);
   }
 
-  for (i = 0; i < game.playable_nation_count; i++) {
-    Nation_Type_id nation = i;
-
-    if (!nations_used[i]) {
-      continue;
-    }
+  freelog(LOG_DEBUG, "%d nations used:", packet->num_nations_used);
+  for (i = 0; i < packet->num_nations_used; i++) {
+    int nation = packet->nations_used[i];
 
     freelog(LOG_DEBUG, "  [%d]: %d", i, nation);
 
@@ -885,7 +851,10 @@ void races_toggles_set_sensitive(bool *nations_used)
 *****************************************************************/
 static void revolution_callback_yes(HWND w, void * data)
 {
-  start_revolution();
+  struct packet_player_request packet;
+ 
+  send_packet_player_request(&aconnection, &packet, PACKET_PLAYER_REVOLUTION);
+ 
   destroy_message_dialog(w);
 }
  
@@ -916,7 +885,10 @@ void popup_revolution_dialog(void)
 **************************************************************************/ 
 static void government_callback(HWND w, void *data)
 {
-  dsend_packet_player_government(&aconnection, (size_t)data);
+  struct packet_player_request packet;
+ 
+  packet.government=(size_t)data;
+  send_packet_player_request(&aconnection, &packet, PACKET_PLAYER_GOVERNMENT);
  
   destroy_message_dialog(w);
   is_showing_government_dialog=0;
@@ -924,45 +896,50 @@ static void government_callback(HWND w, void *data)
          
 /****************************************************************
 ...
-*****************************************************************/
-void popup_government_dialog(int governments, struct government **government)
+*****************************************************************/              
+void
+popup_government_dialog(void)
 {
   HWND hWnd;
-  int i, id[MAX_NUM_GOVERNMENTS];
+  int visible[MAX_NUM_GOVERNMENTS];
+  int id[MAX_NUM_GOVERNMENTS];
   char *names[MAX_NUM_GOVERNMENTS];
-
+  int i,j;
+  j=0;
   if (is_showing_government_dialog) return;
-  is_showing_government_dialog = 1;
-
-  for (i = 0; i < governments; i++) {
-    names[i] = government[i]->name;
-    id[i] = government[i]->index;
-  }
-
-  for (; i < MAX_NUM_GOVERNMENTS; i++) {
-    names[i] = NULL;
-  }
-
+  is_showing_government_dialog=1;
+  for (i=0; i<game.government_count;i++)
+    {
+      struct government *g = &governments[i];    
+      if (i == game.government_when_anarchy) continue;    
+      names[j]=g->name;
+      id[j]=g->index;
+      visible[j]=TRUE;
+      if(!can_change_to_government(game.player_ptr, i))     
+	visible[j]=FALSE;
+      j++;
+    }
+  for (;j<MAX_NUM_GOVERNMENTS;j++)
+    {
+      names[j]=NULL;
+    }
   /* just a quick hack */
-  hWnd = popup_message_dialog(NULL, _("Choose Your New Government"),
-			      _("Select government type:"),
-			      names[0], government_callback, id[0],
-			      names[1], government_callback, id[1],
-			      names[2], government_callback, id[2],
-			      names[3], government_callback, id[3],
-			      names[4], government_callback, id[4],
-			      names[5], government_callback, id[5],
-			      names[6], government_callback, id[6],
-			      names[7], government_callback, id[7],
-			      names[8], government_callback, id[8],
-			      names[9], government_callback, id[9], 
-			      0);
-  for (i = 0; i < governments; i++) {
-    bool can_change =
-	can_change_to_government(game.player_ptr, government[i]->index);
-
-    message_dialog_button_set_sensitive(hWnd, i, can_change);
-  }
+  hWnd=popup_message_dialog(NULL,_("Choose Your New Government"),
+		       _("Select government type:"),
+		       names[0],government_callback,id[0],
+		       names[1],government_callback,id[1],
+		       names[2],government_callback,id[2],
+		       names[3],government_callback,id[3],
+		       names[4],government_callback,id[4],
+		       names[5],government_callback,id[5],
+		       names[6],government_callback,id[6],
+		       names[7],government_callback,id[7],
+		       names[8],government_callback,id[8],
+		       names[9],government_callback,id[9],
+		       0);
+  for (j=0;j<MAX_NUM_GOVERNMENTS;j++)
+    if (names[j])
+      message_dialog_button_set_sensitive(hWnd,j,visible[j]);
 }
  
 /****************************************************************
@@ -970,7 +947,11 @@ void popup_government_dialog(int governments, struct government **government)
 *****************************************************************/
 static void caravan_establish_trade_callback(HWND w, void * data)
 {
-  dsend_packet_unit_establish_trade(&aconnection, caravan_unit_id);
+  struct packet_unit_request req;
+  req.unit_id=caravan_unit_id;
+  req.city_id=caravan_city_id;
+  req.name[0]='\0';
+  send_packet_unit_request(&aconnection, &req, PACKET_UNIT_ESTABLISH_TRADE);
  
   destroy_message_dialog(w);
   caravan_dialog = 0;
@@ -983,7 +964,11 @@ static void caravan_establish_trade_callback(HWND w, void * data)
 *****************************************************************/
 static void caravan_help_build_wonder_callback(HWND w, void * data)
 {
-  dsend_packet_unit_help_build_wonder(&aconnection, caravan_unit_id);
+  struct packet_unit_request req;
+  req.unit_id=caravan_unit_id;
+  req.city_id=caravan_city_id;
+  req.name[0]='\0';
+  send_packet_unit_request(&aconnection, &req, PACKET_UNIT_HELP_BUILD_WONDER);
  
   destroy_message_dialog(w);
   caravan_dialog = 0;
@@ -996,6 +981,21 @@ static void caravan_help_build_wonder_callback(HWND w, void * data)
 *****************************************************************/
 static void caravan_keep_moving_callback(HWND w, void * data)
 {
+#if 0   /* Now don't want to move at all in this case --dwp */
+  struct unit *punit;
+  struct city *pcity;
+ 
+  if((punit=find_unit_by_id(caravan_unit_id)) &&
+     (pcity=find_city_by_id(caravan_city_id))) {
+    struct unit req_unit;
+ 
+    req_unit=*punit;
+    req_unit.x=pcity->x;
+    req_unit.y=pcity->y;
+    send_unit_info(&req_unit);
+  }
+#endif
+ 
   destroy_message_dialog(w);
   caravan_dialog = 0;
   process_caravan_arrival(NULL);
@@ -1011,8 +1011,7 @@ popup_caravan_dialog(struct unit *punit,
                           struct city *phomecity, struct city *pdestcity)
 {
   char buf[128];
-  bool can_establish, can_trade;
-  
+ 
   my_snprintf(buf, sizeof(buf),
               _("Your caravan from %s reaches the city of %s.\nWhat now?"),
               phomecity->name, pdestcity->name);
@@ -1020,20 +1019,15 @@ popup_caravan_dialog(struct unit *punit,
   caravan_city_id=pdestcity->id; /* callbacks need these */
   caravan_unit_id=punit->id;
  
-  can_trade = can_cities_trade(phomecity, pdestcity);
-  can_establish = can_trade
-  		  && can_establish_trade_route(phomecity, pdestcity);
-  
   caravan_dialog=popup_message_dialog(NULL,
                            /*"caravandialog"*/_("Your Caravan Has Arrived"),
                            buf,
-                           (can_establish ? _("Establish _Traderoute") :
-  			   _("Enter Marketplace")),caravan_establish_trade_callback, 0,
+                           _("Establish _Traderoute"),caravan_establish_trade_callback, 0,
                            _("Help build _Wonder"),caravan_help_build_wonder_callback, 0,
                            _("_Keep moving"),caravan_keep_moving_callback, 0,
                            0);
  
-  if (!can_trade)
+  if(!can_establish_trade_route(phomecity, pdestcity))
     {
       message_dialog_button_set_sensitive(caravan_dialog,0,FALSE);
     }
@@ -1059,8 +1053,13 @@ static void diplomat_investigate_callback(HWND w, void * data)
  
   if(find_unit_by_id(diplomat_id) &&
      (find_city_by_id(diplomat_target_id))) {
-    request_diplomat_action(DIPLOMAT_INVESTIGATE, diplomat_id,
-			    diplomat_target_id, 0);
+    struct packet_diplomat_action req;
+ 
+    req.action_type=DIPLOMAT_INVESTIGATE;
+    req.diplomat_id=diplomat_id;
+    req.target_id=diplomat_target_id;
+ 
+    send_packet_diplomat_action(&aconnection, &req);
   }
  
   process_diplomat_arrival(NULL, 0);
@@ -1075,8 +1074,14 @@ static void diplomat_steal_callback(HWND w, void * data)
  
   if(find_unit_by_id(diplomat_id) &&
      find_city_by_id(diplomat_target_id)) {
-    request_diplomat_action(DIPLOMAT_STEAL, diplomat_id,
-			    diplomat_target_id, 0);
+    struct packet_diplomat_action req;
+ 
+    req.action_type=DIPLOMAT_STEAL;
+    req.diplomat_id=diplomat_id;
+    req.target_id=diplomat_target_id;
+    req.value=0;
+ 
+    send_packet_diplomat_action(&aconnection, &req);
   }
  
   process_diplomat_arrival(NULL, 0);
@@ -1091,8 +1096,14 @@ static void diplomat_sabotage_callback(HWND w, void * data)
  
   if(find_unit_by_id(diplomat_id) &&
      find_city_by_id(diplomat_target_id)) {
-    request_diplomat_action(DIPLOMAT_SABOTAGE, diplomat_id,
-			    diplomat_target_id, -1);
+    struct packet_diplomat_action req;
+ 
+    req.action_type=DIPLOMAT_SABOTAGE;
+    req.diplomat_id=diplomat_id;
+    req.target_id=diplomat_target_id;
+    req.value = -1;
+ 
+    send_packet_diplomat_action(&aconnection, &req);
   }
  
   process_diplomat_arrival(NULL, 0);
@@ -1105,8 +1116,13 @@ static void diplomat_embassy_callback(HWND w, void * data)
  
   if(find_unit_by_id(diplomat_id) &&
      (find_city_by_id(diplomat_target_id))) {
-    request_diplomat_action(DIPLOMAT_EMBASSY, diplomat_id,
-			    diplomat_target_id, 0);
+    struct packet_diplomat_action req;
+ 
+    req.action_type=DIPLOMAT_EMBASSY;
+    req.diplomat_id=diplomat_id;
+    req.target_id=diplomat_target_id;
+ 
+    send_packet_diplomat_action(&aconnection, &req);
   }
  
   process_diplomat_arrival(NULL, 0);
@@ -1116,9 +1132,15 @@ static void diplomat_embassy_callback(HWND w, void * data)
 *****************************************************************/
 static void spy_sabotage_unit_callback(HWND w, void * data)
 {
-  request_diplomat_action(SPY_SABOTAGE_UNIT, diplomat_id,
-			  diplomat_target_id, 0);
 
+  struct packet_diplomat_action req;
+  
+  req.action_type=SPY_SABOTAGE_UNIT;
+  req.diplomat_id=diplomat_id;
+  req.target_id=diplomat_target_id;
+  
+  send_packet_diplomat_action(&aconnection, &req);
+  
   destroy_message_dialog(w);
 }
 
@@ -1132,7 +1154,13 @@ static void spy_poison_callback(HWND w, void * data)
 
   if(find_unit_by_id(diplomat_id) &&
      (find_city_by_id(diplomat_target_id))) {
-    request_diplomat_action(SPY_POISON, diplomat_id, diplomat_target_id, 0);
+    struct packet_diplomat_action req;
+
+    req.action_type=SPY_POISON;
+    req.diplomat_id=diplomat_id;
+    req.target_id=diplomat_target_id;
+
+    send_packet_diplomat_action(&aconnection, &req);
   }
 
   process_diplomat_arrival(NULL, 0);
@@ -1208,8 +1236,14 @@ static LONG CALLBACK spy_tech_proc(HWND dlg,UINT message,WPARAM wParam,
 	  steal_advance=advance_type[steal_advance];
 	  if(find_unit_by_id(diplomat_id) && 
 	     find_city_by_id(diplomat_target_id)) { 
-	    request_diplomat_action(DIPLOMAT_STEAL, diplomat_id,
-				    diplomat_target_id, steal_advance);
+	    struct packet_diplomat_action req;
+	    
+	    req.action_type=DIPLOMAT_STEAL;
+	    req.value=steal_advance;
+	    req.diplomat_id=diplomat_id;
+	    req.target_id=diplomat_target_id;
+	    
+	    send_packet_diplomat_action(&aconnection, &req);
 	  }
 	  
 	  
@@ -1282,8 +1316,13 @@ static void spy_request_sabotage_list(HWND w, void * data)
 
   if(find_unit_by_id(diplomat_id) &&
      (find_city_by_id(diplomat_target_id))) {
-    request_diplomat_action(SPY_GET_SABOTAGE_LIST, diplomat_id,
-			    diplomat_target_id, 0);
+    struct packet_diplomat_action req;
+
+    req.action_type = SPY_GET_SABOTAGE_LIST;
+    req.diplomat_id = diplomat_id;
+    req.target_id = diplomat_target_id;
+
+    send_packet_diplomat_action(&aconnection, &req);
   }
 }
 
@@ -1293,9 +1332,14 @@ static void spy_request_sabotage_list(HWND w, void * data)
 **************************************************************************/
 static void diplomat_bribe_yes_callback(HWND w, void * data)
 {
-  request_diplomat_action(DIPLOMAT_BRIBE, diplomat_id,
-			  diplomat_target_id, 0);
+  struct packet_diplomat_action req;
 
+  req.action_type=DIPLOMAT_BRIBE;
+  req.diplomat_id=diplomat_id;
+  req.target_id=diplomat_target_id;
+
+  send_packet_diplomat_action(&aconnection, &req);
+  
   destroy_message_dialog(w);
 }
 
@@ -1314,12 +1358,14 @@ static void diplomat_bribe_no_callback(HWND w, void * data)
 *****************************************************************/
 static void diplomat_bribe_callback(HWND w, void * data)
 {
+  struct packet_generic_integer packet;
 
   destroy_message_dialog(w);
   
-  if (find_unit_by_id(diplomat_id)
-      && find_unit_by_id(diplomat_target_id)) { 
-    dsend_packet_unit_bribe_inq(&aconnection, diplomat_target_id);
+  if(find_unit_by_id(diplomat_id) && 
+     find_unit_by_id(diplomat_target_id)) { 
+    packet.value = diplomat_target_id;
+    send_packet_generic_integer(&aconnection, PACKET_INCITE_INQ, &packet);
    }
 
 }
@@ -1330,11 +1376,8 @@ static void diplomat_bribe_callback(HWND w, void * data)
 void popup_bribe_dialog(struct unit *punit)
 {
   char buf[128];
-  if (unit_flag(punit, F_UNBRIBABLE)) {
-    popup_message_dialog(root_window, _("Ooops..."),
-                         _("This unit cannot be bribed!"),
-                         diplomat_bribe_no_callback, 0, 0);
-  } else if(game.player_ptr->economic.gold>=punit->bribe_cost) {
+  
+  if(game.player_ptr->economic.gold>=punit->bribe_cost) {
     my_snprintf(buf, sizeof(buf),
                 _("Bribe unit for %d gold?\nTreasury contains %d gold."), 
                 punit->bribe_cost, game.player_ptr->economic.gold);
@@ -1365,7 +1408,7 @@ static void create_improvements_list(struct player *pplayer,
   improvement_type[j++] = -1;
   
   impr_type_iterate(i) {
-    if (get_improvement_type(i)->sabotage > 0) {
+    if(i != B_PALACE && pcity->improvements[i] && !is_wonder(i)) {
       ListBox_AddString(lb,get_impr_name_ex(pcity,i));
       improvement_type[j++] = i;
     }  
@@ -1417,9 +1460,15 @@ static LONG CALLBACK spy_sabotage_proc(HWND dlg,UINT message,WPARAM wParam,
 	  sabotage_improvement=improvement_type[sabotage_improvement];
 	  if(find_unit_by_id(diplomat_id) && 
 	     find_city_by_id(diplomat_target_id)) { 
-	    request_diplomat_action(DIPLOMAT_SABOTAGE, diplomat_id,
-				    diplomat_target_id,
-				    sabotage_improvement + 1);
+	    struct packet_diplomat_action req;
+	    
+	    req.action_type=DIPLOMAT_SABOTAGE;
+	    req.value=sabotage_improvement+1;
+
+	    req.diplomat_id=diplomat_id;
+	    req.target_id=diplomat_target_id;
+	    
+	    send_packet_diplomat_action(&aconnection, &req);
 	  }
 	  
 	}
@@ -1474,9 +1523,14 @@ void popup_sabotage_dialog(struct city *pcity)
 *****************************************************************/
 static void diplomat_incite_yes_callback(HWND w, void * data)
 {
-  request_diplomat_action(DIPLOMAT_INCITE, diplomat_id,
-			  diplomat_target_id, 0);
+  struct packet_diplomat_action req;
 
+  req.action_type=DIPLOMAT_INCITE;
+  req.diplomat_id=diplomat_id;
+  req.target_id=diplomat_target_id;
+
+  send_packet_diplomat_action(&aconnection, &req);
+  
   destroy_message_dialog(w);
 
   process_diplomat_arrival(NULL, 0);
@@ -1498,11 +1552,16 @@ static void diplomat_incite_no_callback(HWND w, void * data)
 *****************************************************************/
 static void diplomat_incite_callback(HWND w, void * data)
 {
-  destroy_message_dialog(w);
-  diplomat_dialog_open = 0;
+  struct city *pcity;
+  struct packet_generic_integer packet;
 
-  if (find_unit_by_id(diplomat_id) && find_city_by_id(diplomat_target_id)) {
-    dsend_packet_city_incite_inq(&aconnection, diplomat_target_id);
+  destroy_message_dialog(w);
+  diplomat_dialog_open=0;
+  
+  if(find_unit_by_id(diplomat_id) && 
+     (pcity=find_city_by_id(diplomat_target_id))) { 
+    packet.value = diplomat_target_id;
+    send_packet_generic_integer(&aconnection, PACKET_INCITE_INQ, &packet);
   }
 }
 
@@ -1592,16 +1651,16 @@ void popup_diplomat_dialog(struct unit *punit, int dest_x, int dest_y)
       if(!diplomat_can_do_action(punit, DIPLOMAT_INCITE, dest_x, dest_y))
        message_dialog_button_set_sensitive(shl,4,FALSE);
     }else{
-       shl = popup_message_dialog(root_window, /*"spydialog"*/
-		_("Choose Your Spy's Strategy"), buf,
- 		_("Establish _Embassy"), diplomat_embassy_callback, 0,
-		_("_Investigate City"), diplomat_investigate_callback, 0,
-		_("_Poison City"), spy_poison_callback,0,
- 		_("Industrial _Sabotage"), spy_request_sabotage_list, 0,
- 		_("Steal _Technology"), spy_steal_popup, 0,
- 		_("Incite a _Revolt"), diplomat_incite_callback, 0,
- 		_("_Cancel"), diplomat_cancel_callback, 0,
-		0);
+       shl=popup_message_dialog(root_window, /*"spydialog"*/
+				_("Choose Your Spy's Strategy"), buf,
+ 			      _("Establish _Embassy"), diplomat_embassy_callback, 0,
+ 			      _("_Investigate City (free)"), diplomat_investigate_callback, 0,
+ 			      _("_Poison City"), spy_poison_callback,0,
+ 			      _("Industrial _Sabotage"), spy_request_sabotage_list, 0,
+ 			      _("Steal _Technology"), spy_steal_popup, 0,
+ 			      _("Incite a _Revolt"), diplomat_incite_callback, 0,
+ 			      _("_Cancel"), diplomat_cancel_callback, 0,
+ 			      0);
  
       if(!diplomat_can_do_action(punit, DIPLOMAT_EMBASSY, dest_x, dest_y))
        message_dialog_button_set_sensitive(shl,0,FALSE);
@@ -1722,8 +1781,7 @@ void popup_pillage_dialog(struct unit *punit,
 /**************************************************************************
 
 **************************************************************************/
-HWND popup_message_dialog(HWND parent, char *dialogname,
-			  const char *text, ...)
+HWND popup_message_dialog(HWND parent,char *dialogname, char *text, ...)
 {
   int idcount;
   va_list args;
@@ -1846,4 +1904,84 @@ static LONG APIENTRY msgdialog_proc (
     }
   return (0);  
   
+}
+
+#define ACTIVITY_OFFSET 1000
+static LONG CALLBACK connectDialogProc(HWND hWnd,
+				       UINT message, 
+				       WPARAM wParam,
+				       LPARAM lParam)
+{
+  switch(message) {
+  case WM_COMMAND:
+    if (LOWORD(wParam)>ACTIVITY_OFFSET) {
+      int activity;
+      struct unit* punit;
+      activity=LOWORD(wParam)-ACTIVITY_OFFSET;
+      punit = find_unit_by_id(unit_to_use_to_connect);
+      
+      if (punit) {
+	if (activity != ACTIVITY_IDLE) {
+	  struct packet_unit_connect req;
+	  req.activity_type = activity;
+	  req.unit_id = punit->id;
+	  req.dest_x = connect_unit_x;
+	  req.dest_y = connect_unit_y;
+	  send_packet_unit_connect(&aconnection, &req);
+	}
+	else {
+	  update_unit_info_label(punit);
+	}
+      }
+      DestroyWindow(hWnd);
+      is_showing_unit_connect_dialog=0;
+    } else if (LOWORD(wParam)==IDCANCEL) {
+      DestroyWindow(hWnd);
+      is_showing_unit_connect_dialog=0;
+    }
+    break;
+  case WM_CLOSE:
+    DestroyWindow(hWnd);
+    is_showing_unit_connect_dialog=0;
+    break;
+  case WM_SIZE:
+  case WM_GETMINMAXINFO:
+  case WM_DESTROY:
+    break;
+  default:
+    return DefWindowProc(hWnd,message,wParam,lParam);
+  }
+  return TRUE;
+}
+
+void
+popup_unit_connect_dialog(struct unit *punit, int dest_x, int dest_y)
+{
+  struct fcwin_box *vbox;
+  int activity;
+  HWND hdlg;
+  if(is_showing_unit_connect_dialog) return;
+  is_showing_unit_connect_dialog=1;
+  unit_to_use_to_connect=punit->id;
+  connect_unit_x=dest_x;
+  connect_unit_y=dest_y;
+
+  hdlg=fcwin_create_layouted_window(connectDialogProc,_("Connect"),
+				    WS_OVERLAPPEDWINDOW,
+				    CW_USEDEFAULT,CW_USEDEFAULT,
+				    root_window,NULL,
+				    REAL_CHILD,
+				    NULL);
+  vbox=fcwin_vbox_new(hdlg,FALSE);
+  fcwin_box_add_static(vbox,_("Choose unit activity:"),
+		       0,SS_LEFT,FALSE,FALSE,10);
+  for (activity = ACTIVITY_IDLE + 1; activity < ACTIVITY_LAST; activity++) {
+    if (! can_unit_do_connect (punit, activity)) continue;
+    fcwin_box_add_button(vbox,get_activity_text(activity),
+			 ACTIVITY_OFFSET+activity,0,FALSE,FALSE,10);
+   
+  }
+  fcwin_box_add_button(vbox,_("Cancel"),IDCANCEL,0,FALSE,FALSE,20);
+  fcwin_set_box(hdlg,vbox);
+  ShowWindow(hdlg,SW_SHOWNORMAL);
 }

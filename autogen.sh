@@ -5,9 +5,6 @@ DIE=0
 package=freeciv
 srcfile=client/civclient.h
 
-SRCDIR=`dirname $0`
-BUILDDIR=`pwd`
-
 # Uncomment the line below to debug this file
 #DEBUG=defined
 
@@ -108,11 +105,8 @@ version_check ()
   fi
 }
 
-# Chdir to the srcdir, then run auto* tools.
-cd $SRCDIR
-
 [ -f $srcfile ] || {
-  echo "Are you sure $SRCDIR is a valid source directory?"
+  echo "You must run this script in the top-level $package directory"
   exit 1
 }
 
@@ -193,17 +187,12 @@ autoconf || {
   echo "autoconf failed"
   exit 1
 }
-echo "+ generating automake files..."
-(cd data/nation; sh Makefile.am.sh >Makefile.am)
 echo "+ running automake ... "
 automake -a -c || {
   echo
   echo "automake failed"
   exit 1
 }
-
-# Chdir back to the builddir before the configure step.
-cd $BUILDDIR
 
 # now remove the cache, because it can be considered dangerous in this case
 echo "+ removing config.cache ... "
@@ -219,21 +208,21 @@ else
 fi
 echo
 
-$SRCDIR/configure $FC_NEWARGLINE || {
+./configure $FC_NEWARGLINE || {
   echo
   echo "configure failed"
   exit 1
 }
 
 # Reverse changes to make tree sane
-[ -f $SRCDIR/configure.old ] && { 
-  mv $SRCDIR/configure.old $SRCDIR/configure.in 
+[ -f configure.old ] && { 
+  mv configure.old configure.in 
 }
-[ -f $SRCDIR/configure.old2 ] && { 
-  mv $SRCDIR/configure.old2 $SRCDIR/configure.ac 
+[ -f configure.old2 ] && { 
+  mv configure.old2 configure.ac 
 }
-[ -f $SRCDIR/acconfig.h ] && { 
-  mv $SRCDIR/acconfig.h $SRCDIR/acconfig.old
+[ -f acconfig.h ] && { 
+  mv acconfig.h acconfig.old
 }
 
 # abort if we did --help

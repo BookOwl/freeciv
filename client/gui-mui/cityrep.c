@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -18,6 +17,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 
 #include <mui/NListview_MCC.h>
 #include <libraries/mui.h>
@@ -90,7 +90,7 @@ HOOKPROTONH(cityrep_display, int, char **array, struct city *pcity)
           sz_strlcat(buf[j], city_report_specs[i].title2);
       }
       array[j] = buf[j];
-      j++;
+      ++j;
     }
   }
   return 0;
@@ -160,11 +160,33 @@ static void cityrep_buy(void)
 {
   struct city *pcity;
 
-  DoMethod(cityrep_listview, MUIM_NList_GetEntry, MUIV_NList_GetEntry_Active,
-	   &pcity);
+  DoMethod(cityrep_listview, MUIM_NList_GetEntry, MUIV_NList_GetEntry_Active, &pcity);
 
-  if (pcity) {
-    cityrep_buy(pcity);
+  if (pcity)
+  {
+    int value;
+    char *name;
+    char buf[512];
+
+    value=city_buy_cost(pcity);    
+    if(pcity->is_building_unit)
+      name=get_unit_type(pcity->currently_building)->name;
+    else
+      name=get_impr_name_ex(pcity, pcity->currently_building);
+
+    if(game.player_ptr->economic.gold >= value)
+    {
+      struct packet_city_request packet;
+      packet.city_id=pcity->id;
+      send_packet_city_request(&aconnection, &packet, PACKET_CITY_BUY);
+    }
+    else
+    {
+      my_snprintf(buf, sizeof(buf),
+        _("Game: %s costs %d gold and you only have %d gold."),
+        name,value,game.player_ptr->economic.gold);
+      append_output_window(buf);
+    }
   }
 }
 
@@ -240,7 +262,7 @@ static void cityrep_configure_ok(void)
   LONG i, j = 0;
 
   buffer[j++] = ','; /* the name! */
-  for(i = 1; i < NUM_CREPORT_COLS; i++)
+  for(i = 1; i < NUM_CREPORT_COLS; ++i)
   {
     if((city_report_specs[i].show = xget(cityrep_configure_objects[i], MUIA_Selected)))
       buffer[j++] = ',';
@@ -292,12 +314,12 @@ static void cityrep_configure(void)
         if((o = MakeLabel(city_report_specs[i].explanation)))
           DoMethod(group, OM_ADDMEMBER, o);
         else
-          err++;
+          ++err;
 
         if((cityrep_configure_objects[i] = MakeCheck(city_report_specs[i].explanation, FALSE)))
           DoMethod(group, OM_ADDMEMBER, cityrep_configure_objects[i]);
         else
-          err++;
+          ++err;
       }
       if(!err)
       {
@@ -316,7 +338,7 @@ static void cityrep_configure(void)
 
   if(config_wnd)
   {
-    for (i = 0; i < NUM_CREPORT_COLS; i++)
+    for(i = 0; i < NUM_CREPORT_COLS; ++i)
       setcheckmark(cityrep_configure_objects[i], city_report_specs[i].show);
     set(config_wnd, MUIA_Window_Open, TRUE);
   }
@@ -334,7 +356,7 @@ static void create_city_report_dialog(void)
   LONG i, j = 0;
 
   format[j++] = ','; /* the name! */
-  for (i = 1; i < NUM_CREPORT_COLS; i++)
+  for(i = 1; i < NUM_CREPORT_COLS; ++i)
   {
     if(city_report_specs[i].show)
       format[j++] = ',';
@@ -374,9 +396,14 @@ static void create_city_report_dialog(void)
 	End,
     End;
 
-  if (cityrep_wnd) {
-    set(cityrep_title_text, MUIA_Text_Contents,
-	get_report_title(_("City Report")));
+  if (cityrep_wnd)
+  {
+    char *report_title = get_report_title(_("City Report"));
+    if (report_title)
+    {
+      set(cityrep_title_text, MUIA_Text_Contents, report_title);
+      free(report_title);
+    }
 
     set(cityrep_change_button, MUIA_Disabled, TRUE);
     set(cityrep_center_button, MUIA_Disabled, TRUE);
@@ -403,13 +430,16 @@ static void create_city_report_dialog(void)
 *****************************************************************/
 void city_report_dialog_update(void)
 {
+  char *report_title;
+
   if (!cityrep_wnd)
     return;
   if (is_report_dialogs_frozen())
     return;
 
-  set(cityrep_title_text, MUIA_Text_Contents,
-      get_report_title(_("City Advisor")));
+  report_title = get_report_title(_("City Advisor"));
+  set(cityrep_title_text, MUIA_Text_Contents, report_title);
+  free(report_title);
 
   set(cityrep_listview, MUIA_NList_Quiet, TRUE);
   DoMethod(cityrep_listview, MUIM_NList_Clear);
@@ -468,22 +498,4 @@ void popup_city_report_dialog(bool make_modal)
     city_report_dialog_update();
     set(cityrep_wnd, MUIA_Window_Open, TRUE);
   }
-}
-
-/****************************************************************
- After a selection rectangle is defined, make the cities that
- are hilited on the canvas exclusively hilited in the
- City List window.
-*****************************************************************/
-void hilite_cities_from_canvas(void)
-{
-  /* PORTME */
-}
-
-/****************************************************************
- Toggle a city's hilited status.
-*****************************************************************/
-void toggle_city_hilite(struct city *pcity, bool on_off)
-{
-  /* PORTME */
 }

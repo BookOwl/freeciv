@@ -13,7 +13,8 @@ options="1.9"
 
 ; Below: nations data in sections [nation_*] for
 ; all nations available. If you want to have more
-; nations just add one at the end.
+; nations just add one at the end. There is a maximum
+; of 63 nations however. I hope it is enough :-)
 ;
 ; Notes:
 ;
@@ -25,7 +26,15 @@ options="1.9"
 ;                 preferred flag icon
 ; flag_alt      = alternate flag icon string, or "-"
 ;
-; The following AI hints are currently not used, but may be in the future:
+; Next are some hints for AI, as defined in struct player_race
+; Ask the guy who designed this struct for more explanation :-)
+; AFAIK some of them are not implemented yet.
+;
+; attack        = c 0 = optimize for food, 2 =  optimize for prod
+;                 c0 = large amount of buildings, 2 = units
+; expand        = c0 = transform first ,  2 = build cities first
+; civilized     = c 0 = do not use nukes,  2 = use nukes, lots of pollution
+; advisors      = some kind of advisors, not implemented anyway
 ; tech_goals    = technology goals, up to 10
 ; wonder        = primary wonder
 ; government    = wanted government
@@ -36,6 +45,9 @@ options="1.9"
 ; default cities for your nation. See doc/README.rulesets for information
 ; on marking up cities with terrain information.
 ;
+
+; Note: do not change the following order for default nations.ruleset,
+; or nations in savegames will become wrong.
 
 *include "nation/roman.ruleset"
 *include "nation/babylonian.ruleset"
@@ -63,7 +75,6 @@ options="1.9"
 *include "nation/danish.ruleset"
 *include "nation/dutch.ruleset"
 *include "nation/swedish.ruleset"
-*include "nation/swiss.ruleset"
 *include "nation/japanese.ruleset"
 *include "nation/portuguese.ruleset"
 *include "nation/finnish.ruleset"
@@ -99,12 +110,10 @@ options="1.9"
 *include "nation/croatian.ruleset"
 *include "nation/slovenian.ruleset"
 *include "nation/serbian.ruleset"
-*include "nation/ethiopian.ruleset"
-*include "nation/afghani.ruleset"
-*include "nation/icelandic.ruleset"
 
 ;
-; observer and barbarians MUST go last in THIS order
+; barbarians MUST go last
 ;
-*include "nation/observer.ruleset"
 *include "nation/barbarian.ruleset"
+
+*include "nation/misc_cities.ruleset"

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -28,6 +27,7 @@
 
 #include "fcintl.h"
 #include "game.h"
+#include "genlist.h"
 #include "government.h"
 #include "map.h"
 #include "mem.h"
@@ -72,17 +72,6 @@ struct Diplomacy_dialog {
   Object *plr0_pacts_button;
   Object *plr0_pacts_menu;
 };
-
-#define SPECLIST_TAG dialog
-#define SPECLIST_TYPE struct Diplomacy_dialog
-#include "speclist.h"
-
-#define dialog_list_iterate(dialoglist, pdialog) \
-    TYPED_LIST_ITERATE(struct Diplomacy_dialog, dialoglist, pdialog)
-#define dialog_list_iterate_end  LIST_ITERATE_END
-
-static struct dialog_list dialog_list;
-static bool dialog_list_list_has_been_initialised = FALSE;
 
 void request_diplomacy_cancel_meeting(struct Treaty *treaty)
 {
@@ -141,6 +130,10 @@ void request_diplomacy_accept_treaty(struct Treaty *treaty, int from)
 
 struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0, 
 						 struct player *plr1);
+
+static struct genlist diplomacy_dialogs;
+static int diplomacy_dialogs_list_has_been_initialised;
+
 struct Diplomacy_dialog *find_diplomacy_dialog(struct player *plr0, 
 					       struct player *plr1);
 void popup_diplomacy_dialog(struct player *plr0, struct player *plr1);
@@ -256,10 +249,7 @@ static int fill_diplomacy_tech_menu(Object *menu_title, struct Diplomacy_dialog 
 
   for(i=1, flag=0; i<game.num_tech_types; i++)
   {
-    if (get_invention(plr0, i) == TECH_KNOWN 
-        && (get_invention(plr1, i) == TECH_UNKNOWN
-            || get_invention(plr1, i) == TECH_REACHABLE)
-        && tech_is_available(plr1, i))
+    if(get_invention(plr0, i)==TECH_KNOWN && (get_invention(plr1, i)==TECH_UNKNOWN || get_invention(plr1, i)==TECH_REACHABLE))
     {
       entry = MUI_MakeObject(MUIO_Menuitem,advances[i].name,NULL,0,0);
       set(entry,MUIA_UserData,i);
@@ -290,7 +280,7 @@ static int fill_diplomacy_city_menu(Object *menu_title, struct Diplomacy_dialog 
   Object *entry;
 
   city_list_iterate(plr0->cities, pcity) {
-    if (!is_capital(pcity)) {
+    if(!city_got_effect(pcity, B_PALACE)){
       entry = MUI_MakeObject(MUIO_Menuitem,pcity->name,NULL,0,0);
       set(entry,MUIA_UserData,pcity->id);
       DoMethod(entry,MUIM_Notify,MUIA_Menuitem_Trigger, MUIV_EveryTime, entry,6, MUIM_CallHook, &civstandard_hook, diplomacy_city, pdialog, plr0->player_no,entry);
@@ -542,7 +532,7 @@ struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0,
     Object *menu_strip;
     Object *menu_title;
 
-    dialog_list_insert(&dialog_list, pdialog);
+    genlist_insert(&diplomacy_dialogs, pdialog, 0);
     init_treaty(&pdialog->treaty, plr0, plr1);
 
     pdialog->plr0_maps_menu = menu_strip = MenustripObject,
@@ -706,7 +696,7 @@ static void close_diplomacy_dialog(struct Diplomacy_dialog *pdialog)
     set(pdialog->wnd,MUIA_Window_Open,FALSE);
     DoMethod(app,OM_REMMEMBER,pdialog->wnd);
     MUI_DisposeObject(pdialog->wnd);
-    dialog_list_unlink(&dialog_list, pdialog);
+    genlist_unlink(&diplomacy_dialogs, pdialog);
     FreeVec(pdialog);
   }
 }
@@ -717,19 +707,22 @@ static void close_diplomacy_dialog(struct Diplomacy_dialog *pdialog)
 struct Diplomacy_dialog *find_diplomacy_dialog(struct player *plr0, 
 					       struct player *plr1)
 {
-  if(!dialog_list_list_has_been_initialised) {
-    dialog_list_init(&dialog_list);
-    dialog_list_list_has_been_initialised = 1;
+  struct genlist_iterator myiter;
+
+  if(!diplomacy_dialogs_list_has_been_initialised) {
+    genlist_init(&diplomacy_dialogs);
+    diplomacy_dialogs_list_has_been_initialised=1;
   }
-
-  dialog_list_iterate(dialog_list, pdialog) {
-    if ((pdialog->treaty.plr0 == plr0 && pdialog->treaty.plr1 == plr1) ||
-	(pdialog->treaty.plr0 == plr1 && pdialog->treaty.plr1 == plr0)) {
+  
+  genlist_iterator_init(&myiter, &diplomacy_dialogs, 0);
+    
+  for(; ITERATOR_PTR(myiter); ITERATOR_NEXT(myiter)) {
+    struct Diplomacy_dialog *pdialog= (struct Diplomacy_dialog *)ITERATOR_PTR(myiter);
+    if((pdialog->treaty.plr0==plr0 && pdialog->treaty.plr1==plr1) ||
+       (pdialog->treaty.plr0==plr1 && pdialog->treaty.plr1==plr0))
       return pdialog;
-    }
-  } dialog_list_iterate_end;
-
-  return NULL;
+  }
+  return 0;
 }
 
 /*****************************************************************
@@ -739,11 +732,11 @@ void close_all_diplomacy_dialogs(void)
 {
   struct Diplomacy_dialog *pdialog;
   
-  if (!dialog_list_list_has_been_initialised) {
+  if (!diplomacy_dialogs_list_has_been_initialised) {
     return;
   }
-
-  while (dialog_list_size(&dialog_list) > 0) {
-    close_diplomacy_dialog(dialog_list_get(&dialog_list, 0));
+  while (genlist_size(&diplomacy_dialogs)) {
+    pdialog = genlist_get(&diplomacy_dialogs, 0);
+    close_diplomacy_dialog(pdialog);
   }
 }

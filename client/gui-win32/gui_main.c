@@ -10,18 +10,15 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
-
 #include <windows.h>
 #include <winsock.h>
 #include <windowsx.h>
 #include <commctrl.h>
 #include <richedit.h>
 
-#include "fciconv.h"
 #include "fcintl.h"
 #include "game.h"
 #include "log.h"
@@ -76,6 +73,8 @@ int main_win_width;
 int main_win_height;
 int map_win_x;
 int map_win_y;
+int map_win_width;
+int map_win_height;
 int taxinfoline_y;
 int indicator_y;
 int overview_win_x;
@@ -93,15 +92,10 @@ const static RECT textwin_size={0,1,0,100};
 struct fcwin_box *main_win_box;
 struct fcwin_box *output_box;
 
-client_option gui_options[] = {
-  /* None. */
-};
-const int num_gui_options = ARRAY_SIZE(gui_options);
-
 /**************************************************************************
 
 **************************************************************************/
-static void HandleRMouse(int x, int y)
+void HandleRMouse(int x, int y)
 {
   SetFocus(root_window);
 }
@@ -109,7 +103,7 @@ static void HandleRMouse(int x, int y)
 /**************************************************************************
 
 **************************************************************************/
-static void HandleLMouse(int x, int y)
+void HandleLMouse(int x, int y)
 {
   SetFocus(root_window);
   if ((x>overview_win_x)&&(x<overview_win_x+overview_win_width)
@@ -123,7 +117,7 @@ static void HandleLMouse(int x, int y)
 /**************************************************************************
 
  **************************************************************************/
-static void HandlePaint(HDC hdc)
+void HandlePaint(HDC hdc)
 {
   overview_expose(hdc);
 }
@@ -131,16 +125,17 @@ static void HandlePaint(HDC hdc)
 /**************************************************************************
 
 **************************************************************************/
-void do_mainwin_layout(void)
+void do_mainwin_layout()
 {
   fcwin_redo_layout(root_window);
  
 }
 
+
 /**************************************************************************
 
 **************************************************************************/
-void set_overview_win_dim(int w, int h)
+void set_overview_win_dim(int w,int h)
 {
   overview_win_width=w;
   overview_win_height=h;
@@ -148,28 +143,15 @@ void set_overview_win_dim(int w, int h)
   do_mainwin_layout();
   
 }
-
-static void Handle_Hscroll(HWND hWnd, HWND hWndCtl, UINT code, int pos)
+void Handle_Hscroll(HWND hWnd,HWND hWndCtl,UINT code,int pos)
 {
-  int PosCur, PosMax, PosMin, id, xstep, ystep;
-  get_mapview_scroll_step(&xstep, &ystep);
+  int PosCur,PosMax,PosMin,id;
   PosCur=ScrollBar_GetPos(hWndCtl);
   ScrollBar_GetRange(hWndCtl,&PosMin,&PosMax);
-  id=GetDlgCtrlID(hWndCtl);
   switch(code)
     {
-    case SB_LINELEFT: 
-      if (id==ID_MAPHSCROLL)
-	PosCur -= xstep;
-      if (id==ID_MAPVSCROLL)
-	PosCur -= ystep;
-      break;
-    case SB_LINERIGHT: 
-      if (id==ID_MAPHSCROLL)
-	PosCur += xstep;
-      if (id==ID_MAPVSCROLL)
-	PosCur += ystep;
-      break;
+    case SB_LINELEFT: PosCur--; break;
+    case SB_LINERIGHT: PosCur++; break;
     case SB_PAGELEFT: PosCur-=(PosMax-PosMin+1)/10; break;
     case SB_PAGERIGHT: PosCur+=(PosMax-PosMin+1)/10; break;
     case SB_LEFT: PosCur=PosMin; break;
@@ -177,6 +159,7 @@ static void Handle_Hscroll(HWND hWnd, HWND hWndCtl, UINT code, int pos)
     case SB_THUMBTRACK: PosCur=pos; break;
     case SB_THUMBPOSITION:
     case SB_ENDSCROLL:
+      id=GetDlgCtrlID(hWndCtl);
       if (id==ID_MAPHSCROLL)
 	map_handle_hscroll(PosCur);
       if (id==ID_MAPVSCROLL)
@@ -305,15 +288,18 @@ static void map_setsize(LPRECT newsize, void *data)
   MoveWindow(map_scroll_h,map_win_x,map_win_y+map_win_height,
 	     map_win_width,15,TRUE);
   
-  map_canvas_resized(mw, mh);
+  map_resize();
 }
 
 
 /**************************************************************************
 
 **************************************************************************/
-static LONG APIENTRY FreecivWndProc(HWND hWnd, UINT message,
-				    UINT wParam, LONG lParam)
+LONG APIENTRY FreecivWndProc (
+                           HWND hWnd,
+                           UINT message,
+                           UINT wParam,
+                           LONG lParam)
 {
   HDC hdc;
   PAINTSTRUCT ps;
@@ -372,7 +358,7 @@ static LONG APIENTRY FreecivWndProc(HWND hWnd, UINT message,
 /**************************************************************************
 
 **************************************************************************/
-static void create_main_window(void)
+void create_main_window()
 {
   HINSTANCE riched;
   struct fcwin_box *upper;
@@ -462,12 +448,7 @@ static void create_main_window(void)
 			       FALSE,FALSE,10);
   
   fcwin_set_box(root_window,main_win_box);
-  init_mapcanvas_and_overview();
-
-  /* Need to set these so the version number shows up properly */
-  overview_win_width = 160;
-  overview_win_height = 100;
-
+  init_map_win();
   init_color_system();
 }
 
@@ -477,7 +458,7 @@ static void create_main_window(void)
 static VOID CALLBACK blink_timer(HWND hwnd, UINT uMsg, UINT idEvent,
 				 DWORD dwTime)
 {
-  if (can_client_change_view()) {
+  if (get_client_state() == CLIENT_GAME_RUNNING_STATE) {
     check_mapstore();
   }
 
@@ -510,12 +491,13 @@ static VOID CALLBACK socket_timer(HWND  hwnd,UINT uMsg,UINT idEvent,DWORD  dwTim
           break;
         }
     }           
+  handle_pipe_and_process();
 } 
 
 /**************************************************************************
   This pops down every dialog
 **************************************************************************/
-void popdown_all_game_dialogs(void)
+void popdown_everything(void)
 {
   RECT rc;
   fcwin_close_all_childs(root_window);
@@ -530,7 +512,6 @@ void popdown_all_game_dialogs(void)
 **************************************************************************/
 void ui_init(void)
 {
-  init_character_encodings(NULL);
 }
 
 /**************************************************************************
@@ -557,7 +538,6 @@ ui_main(int argc, char *argv[])
   UpdateWindow(root_window);
   tilespec_load_tiles();
   init_fog_bmp();
-  load_cursors();
 
   freecivaccel=my_create_menu_acceltable();
  
@@ -578,14 +558,6 @@ ui_main(int argc, char *argv[])
     }      
 }
 
-
-/**************************************************************************
- Update the connected users list at pregame state.
-**************************************************************************/
-void update_conn_list_dialog(void)
-{
-  /* PORTME */
-}
 
 /**************************************************************************
 

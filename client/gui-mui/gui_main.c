@@ -10,15 +10,14 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
-#include <errno.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <errno.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -75,6 +74,7 @@
 #include "ratesdlg.h"
 #include "repodlgs_g.h"
 #include "spaceshipdlg_g.h"
+#include "support.h"
 #include "tilespec.h"
 #include "wldlg.h"
 
@@ -91,11 +91,6 @@
 #include "worklistclass.h"
 
 const char *client_string = "gui-mui";
-
-client_option gui_options[] = {
-  /* None. */
-};
-const int num_gui_options = ARRAY_SIZE(gui_options);
 
 /**************************************************************************
   Print extra usage information, including one line help on each option,
@@ -308,14 +303,6 @@ static struct NewMenu MenuData[] =
 };
 
 /**************************************************************************
- Update the connected users list at pregame state.
-**************************************************************************/
-void update_conn_list_dialog(void)
-{
-  /* PORTME */
-}
-
-/**************************************************************************
 ...
 **************************************************************************/
 void sound_bell(void)
@@ -328,6 +315,7 @@ void sound_bell(void)
 *****************************************************************/
 static void inputline_return(void)	/* from chatline.c */
 {
+  struct packet_generic_message apacket;
   char *theinput;
   int contents;
 
@@ -336,7 +324,8 @@ static void inputline_return(void)	/* from chatline.c */
 
   if (*theinput)
   {
-    send_chat(theinput);
+    mystrlcpy(apacket.message, theinput, MAX_LEN_MSG-MAX_LEN_USERNAME+1);
+    send_packet_generic_message(&aconnection, PACKET_CHAT_MSG, &apacket);
     contents = TRUE;
   }
   else
@@ -354,31 +343,36 @@ static void control_callback(ULONG * value)
 {
   if (*value)
   {
-    switch (*value) {
-    case UNIT_NORTH:
-      key_unit_move(DIR8_NORTH);
-      break;
-    case UNIT_SOUTH:
-      key_unit_move(DIR8_SOUTH);
-      break;
-    case UNIT_EAST:
-      key_unit_move(DIR8_EAST);
-      break;
-    case UNIT_WEST:
-      key_unit_move(DIR8_WEST);
-      break;
-    case UNIT_NORTH_EAST:
-      key_unit_move(DIR8_NORTHEAST);
-      break;
-    case UNIT_NORTH_WEST:
-      key_unit_move(DIR8_NORTHWEST);
-      break;
-    case UNIT_SOUTH_EAST:
-      key_unit_move(DIR8_SOUTHEAST);
-      break;
-    case UNIT_SOUTH_WEST:
-      key_unit_move(DIR8_SOUTHWEST);
-      break;
+    if (is_isometric)
+    {
+      switch (*value)
+      {
+	case UNIT_NORTH: key_move_north_west(); break;
+	case UNIT_SOUTH: key_move_south_east(); break;
+	case UNIT_EAST: key_move_north_east(); break;
+	case UNIT_WEST: key_move_south_west(); break;
+	case UNIT_NORTH_EAST: key_move_north(); break;
+	case UNIT_NORTH_WEST: key_move_west(); break;
+	case UNIT_SOUTH_EAST: key_move_east(); break;
+	case UNIT_SOUTH_WEST: key_move_south();break;
+      }
+    } else
+    {
+      switch (*value)
+      {
+	case UNIT_NORTH: key_move_north(); break;
+	case UNIT_SOUTH: key_move_south(); break;
+	case UNIT_EAST: key_move_east(); break;
+	case UNIT_WEST: key_move_west(); break;
+	case UNIT_NORTH_EAST: key_move_north_east(); break;
+	case UNIT_NORTH_WEST: key_move_north_west(); break;
+	case UNIT_SOUTH_EAST: key_move_south_east(); break;
+	case UNIT_SOUTH_WEST: key_move_south_west();break;
+      }
+    }
+
+    switch (*value)
+    {
     case UNIT_POPUP_CITY:
       {
 	struct unit *punit;
@@ -418,10 +412,11 @@ static void control_callback(ULONG * value)
       }
       break;
     case END_TURN:
-      key_end_turn();
+      if (get_client_state() == CLIENT_GAME_RUNNING_STATE)
+        key_end_turn();
       break;
     case NEXT_UNIT:
-      advance_unit_focus();
+      advance_unit_focus();	/*focus_to_next_unit(); */
       break;
 
     case MENU_GAME_OPTIONS:
@@ -590,7 +585,7 @@ static void control_callback(ULONG * value)
       key_unit_wait();
       break;
     case MENU_ORDER_UNLOAD:
-      key_unit_unload_all();
+      key_unit_unload();
       break;
     case MENU_ORDER_WAKEUP_OTHERS:
       key_unit_wakeup_others();
@@ -710,14 +705,14 @@ void do_unit_function(struct unit *punit, ULONG value)
   if (value != UNIT_ACTIVATE)
   {
     struct unit *punit_oldfocus = get_unit_in_focus();
-    set_unit_focus(punit);
+    set_unit_focus_no_center(punit);
     control_callback(&value);
-    set_unit_focus(punit_oldfocus);
+    set_unit_focus_no_center(punit_oldfocus);
   }
   else
   {
     if(can_unit_do_activity(punit, ACTIVITY_IDLE)) {
-      set_unit_focus_and_select(punit);
+      request_unit_selected(punit);
     }
   }
 }
@@ -732,9 +727,8 @@ static void taxrates_callback(LONG * number)
   int delta = 10;
   struct packet_player_request packet;
 
-  if (!can_client_issue_orders()) {
+  if (get_client_state() != CLIENT_GAME_RUNNING_STATE)
     return;
-  }
 
   i = (size_t) * number;
 
@@ -878,7 +872,8 @@ static int init_gui(void)
 #ifdef ENABLE_NLS
   struct NewMenu *nm;
 
-  for (nm = MenuData; nm->nm_Type != NM_END; nm++) {
+  for(nm = MenuData; nm->nm_Type != NM_END; ++nm)
+  {
     if(nm->nm_Label != NM_BARLABEL)
       nm->nm_Label = _(nm->nm_Label);
   }
@@ -1188,7 +1183,8 @@ void remove_net_input(void)
 **************************************************************************/
 void update_menus(void) /* from menu.c */
 {
-  if (!can_client_change_view()) {
+  if (get_client_state() != CLIENT_GAME_RUNNING_STATE)
+  {
     menu_title_sensitive(MENU_REPORT, FALSE);
     menu_title_sensitive(MENU_ORDER, FALSE);
     menu_title_sensitive(MENU_VIEW, FALSE);
@@ -1211,23 +1207,19 @@ void update_menus(void) /* from menu.c */
     }
 
     menu_title_sensitive(MENU_REPORT, TRUE);
-    menu_title_sensitive(MENU_ORDER, punit
-			 ? can_client_issue_orders() : FALSE);
+    menu_title_sensitive(MENU_ORDER, punit ? TRUE : FALSE);
     menu_title_sensitive(MENU_VIEW, TRUE);
     menu_title_sensitive(MENU_KINGDOM, TRUE);
 
-    menu_title_sensitive(MENU_KINGDOM_TAX_RATE, can_client_issue_orders());
-    menu_title_sensitive(MENU_KINGDOM_WORKLISTS, can_client_issue_orders());
-    menu_title_sensitive(MENU_KINGDOM_REVOLUTION, can_client_issue_orders());
-
     menu_entry_sensitive(MENU_REPORT_SPACESHIP, (game.player_ptr->spaceship.state != SSHIP_NONE));
 
-    if (punit && can_client_issue_orders()) {
+    if (punit)
+    {
       const char *chgfmt = _("Change to %s");
       static char irrtext[64];
       static char mintext[64];
       static char transtext[64];
-      Terrain_type_id ttype;
+      enum tile_terrain_type ttype;
       struct tile_type *tinfo;
 
       set(main_menu, MUIA_Window_Menustrip, NULL);
@@ -1264,6 +1256,7 @@ void update_menus(void) /* from menu.c */
       menu_entry_sensitive(MENU_ORDER_AUTO_ATTACK, (can_unit_do_auto(punit) && !unit_flag(punit, F_SETTLERS)));
       menu_entry_sensitive(MENU_ORDER_AUTO_EXPLORE, can_unit_do_activity(punit, ACTIVITY_EXPLORE));
       menu_entry_sensitive(MENU_ORDER_CONNECT, can_unit_do_connect(punit, ACTIVITY_IDLE));
+      menu_entry_sensitive(MENU_ORDER_PATROL, can_unit_do_activity(punit, ACTIVITY_PATROL));
       menu_entry_sensitive(MENU_ORDER_GOTO_CITY, any_cities);
       menu_entry_sensitive(MENU_ORDER_BUILD_WONDER, unit_can_help_build_wonder_here(punit));
       menu_entry_sensitive(MENU_ORDER_TRADEROUTE, unit_can_est_traderoute_here(punit));
@@ -1282,37 +1275,44 @@ void update_menus(void) /* from menu.c */
 
       ttype = map_get_tile(punit->x, punit->y)->terrain;
       tinfo = get_tile_type(ttype);
-      if ((tinfo->irrigation_result != T_NONE)
-	  && (tinfo->irrigation_result != ttype)) {
-	my_snprintf(irrtext, sizeof(irrtext), chgfmt,
-		    (get_tile_type(tinfo->irrigation_result))->terrain_name);
-      } else if (map_has_special(punit->x, punit->y, S_IRRIGATION)
-		 && player_knows_techs_with_flag(game.player_ptr,
-						 TF_FARMLAND)) {
+      if ((tinfo->irrigation_result != T_LAST) && (tinfo->irrigation_result != ttype))
+      {
+	my_snprintf(irrtext, sizeof(irrtext), chgfmt, (get_tile_type(tinfo->irrigation_result))->terrain_name);
+      }
+      else if (map_has_special(punit->x, punit->y, S_IRRIGATION) &&
+	       player_knows_techs_with_flag(game.player_ptr, TF_FARMLAND))
+      {
 	sz_strlcpy(irrtext, _("Build Farmland"));
-      } else {
+      }
+      else
+      {
         sz_strlcpy(irrtext, _("Build Irrigation"));
       }
 
-      if ((tinfo->mining_result != T_NONE)
-	  && (tinfo->mining_result != ttype)) {
-	my_snprintf(mintext, sizeof(mintext), chgfmt,
-		    (get_tile_type(tinfo->mining_result))->terrain_name);
-      } else {
+      if ((tinfo->mining_result != T_LAST) && (tinfo->mining_result != ttype))
+      {
+	my_snprintf(mintext, sizeof(mintext), chgfmt, (get_tile_type(tinfo->mining_result))->terrain_name);
+      }
+      else
+      {
         sz_strlcpy(mintext, _("Build Mine"));
       }
 
-      if ((tinfo->transform_result != T_NONE)
-	  && (tinfo->transform_result != ttype)) {
-	my_snprintf(transtext, sizeof(transtext), chgfmt,
-		    (get_tile_type(tinfo->transform_result))->terrain_name);
-      } else {
-        sz_strlcpy(transtext, _("Transform Terrain"));
+      if ((tinfo->transform_result != T_LAST) && (tinfo->transform_result != ttype))
+      {
+	my_snprintf(transtext, sizeof(transtext), chgfmt, (get_tile_type(tinfo->transform_result))->terrain_name);
+      }
+      else
+      {
+        sz_strlcpy(transtext, _("Transform terrain"));
       }
 
-      if (map_has_special(punit->x, punit->y, S_ROAD)) {
+      if (map_has_special(punit->x, punit->y, S_ROAD))
+      {
 	menu_entry_rename(MENU_ORDER_ROAD, _("Build Railroad"), FALSE);
-      } else {
+      }
+      else
+      {
 	menu_entry_rename(MENU_ORDER_ROAD, _("Build Road"), FALSE);
       }
       menu_entry_rename(MENU_ORDER_IRRIGATE, irrtext, FALSE);
@@ -1342,7 +1342,7 @@ void ui_init(void)
 }
 
 /****************************************************************
- Entry for the client dependent part of the client
+ Entry for the client dependend part of the client
 *****************************************************************/
 void ui_main(int argc, char *argv[])
 {
@@ -1380,14 +1380,7 @@ void ui_main(int argc, char *argv[])
       main_bulb_sprite = MakeBorderSprite(sprites.bulb[0]);
       main_sun_sprite = MakeBorderSprite(sprites.warming[0]);
       main_flake_sprite = MakeBorderSprite(sprites.cooling[0]);
-      {
-	/* HACK: the UNHAPPY citizen is used for the government
-	 * when we don't know any better. */
-	struct citizen_type c = {.type = CITIZEN_UNHAPPY};
-	struct Sprite *sprite = get_citizen_sprite(c, 0, NULL);
-
-	main_government_sprite = MakeBorderSprite(sprite);
-      }
+      main_government_sprite = MakeBorderSprite(sprites.citizen[7]);
       main_timeout_text = TextObject, End;
 
       econ_group = HGroup, GroupSpacing(0), End;

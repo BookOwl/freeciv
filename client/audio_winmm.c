@@ -15,6 +15,8 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
+#include <string.h>
 /************************************************************************* 
  This two includes are misordered, but it does not compile otherwise
 *************************************************************************/
@@ -22,6 +24,7 @@
 #include <mmsystem.h>
 
 #include "fcintl.h"
+#include "log.h"
 #include "support.h"
 
 #include "audio.h"

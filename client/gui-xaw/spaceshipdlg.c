@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -24,6 +23,7 @@
 #include <X11/Xaw/Label.h>
 #include <X11/Xaw/Command.h>
 #include <X11/Xaw/SimpleMenu.h>
+#include <X11/Xaw/Command.h>
 #include <X11/Xaw/List.h>
 #include <X11/Xaw/Viewport.h>
 #include <X11/Xaw/AsciiText.h>  
@@ -34,6 +34,7 @@
 
 #include "fcintl.h"
 #include "game.h"
+#include "genlist.h"
 #include "map.h"
 #include "mem.h"
 #include "packets.h"
@@ -53,7 +54,6 @@
 #include "mapctrl.h"
 #include "mapview.h"
 #include "repodlgs.h"
-#include "text.h"
 #include "tilespec.h"
 #include "climisc.h"
 
@@ -70,16 +70,8 @@ struct spaceship_dialog {
   Widget close_command;
 };
 
-#define SPECLIST_TAG dialog
-#define SPECLIST_TYPE struct spaceship_dialog
-#include "speclist.h"
-
-#define dialog_list_iterate(dialoglist, pdialog) \
-    TYPED_LIST_ITERATE(struct spaceship_dialog, dialoglist, pdialog)
-#define dialog_list_iterate_end  LIST_ITERATE_END
-
-static struct dialog_list dialog_list;
-static bool dialog_list_has_been_initialised = FALSE;
+static struct genlist dialog_list;
+static int dialog_list_has_been_initialised;
 
 struct spaceship_dialog *get_spaceship_dialog(struct player *pplayer);
 struct spaceship_dialog *create_spaceship_dialog(struct player *pplayer);
@@ -96,18 +88,20 @@ void spaceship_launch_callback(Widget w, XtPointer client_data, XtPointer call_d
 *****************************************************************/
 struct spaceship_dialog *get_spaceship_dialog(struct player *pplayer)
 {
-  if (!dialog_list_has_been_initialised) {
-    dialog_list_init(&dialog_list);
-    dialog_list_has_been_initialised = TRUE;
+  struct genlist_iterator myiter;
+
+  if(!dialog_list_has_been_initialised) {
+    genlist_init(&dialog_list);
+    dialog_list_has_been_initialised=1;
   }
+  
+  genlist_iterator_init(&myiter, &dialog_list, 0);
+    
+  for(; ITERATOR_PTR(myiter); ITERATOR_NEXT(myiter))
+    if(((struct spaceship_dialog *)ITERATOR_PTR(myiter))->pplayer==pplayer)
+      return ITERATOR_PTR(myiter);
 
-  dialog_list_iterate(dialog_list, pdialog) {
-    if (pdialog->pplayer == pplayer) {
-      return pdialog;
-    }
-  } dialog_list_iterate_end;
-
-  return NULL;
+  return 0;
 }
 
 /****************************************************************
@@ -236,7 +230,7 @@ struct spaceship_dialog *create_spaceship_dialog(struct player *pplayer)
   XtAddCallback(pdialog->close_command, XtNcallback, spaceship_close_callback,
 		(XtPointer)pdialog);
 
-  dialog_list_insert(&dialog_list, pdialog);
+  genlist_insert(&dialog_list, pdialog, 0);
 
   XtRealizeWidget(pdialog->shell);
 
@@ -344,7 +338,7 @@ void spaceship_dialog_update_image(struct spaceship_dialog *pdialog)
 void close_spaceship_dialog(struct spaceship_dialog *pdialog)
 {
   XtDestroyWidget(pdialog->shell);
-  dialog_list_unlink(&dialog_list, pdialog);
+  genlist_unlink(&dialog_list, pdialog);
 
   free(pdialog);
 }
@@ -362,12 +356,14 @@ void spaceshipdlg_key_close(Widget w)
 *****************************************************************/
 void spaceshipdlg_msg_close(Widget w)
 {
-  dialog_list_iterate(dialog_list, pdialog) {
-    if (pdialog->shell == w) {
-      close_spaceship_dialog(pdialog);
+  struct genlist_iterator myiter;
+
+  genlist_iterator_init(&myiter, &dialog_list, 0);
+  for(; ITERATOR_PTR(myiter); ITERATOR_NEXT(myiter))
+    if(((struct spaceship_dialog *)ITERATOR_PTR(myiter))->shell==w) {
+      close_spaceship_dialog((struct spaceship_dialog *)ITERATOR_PTR(myiter));
       return;
     }
-  } dialog_list_iterate_end;
 }
 
 
@@ -383,9 +379,12 @@ void spaceship_close_callback(Widget w, XtPointer client_data, XtPointer call_da
 /****************************************************************
 ...
 *****************************************************************/
-void spaceship_launch_callback(Widget w, XtPointer client_data,
-			       XtPointer call_data)
+void spaceship_launch_callback(Widget w, XtPointer client_data, XtPointer call_data)
 {
-  send_packet_spaceship_launch(&aconnection);
+  struct packet_spaceship_action packet;
+
+  packet.action = SSHIP_ACT_LAUNCH;
+  packet.num = 0;
+  send_packet_spaceship_action(&aconnection, &packet);
   /* close_spaceship_dialog((struct spaceship_dialog *)client_data); */
 }

@@ -10,11 +10,10 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
+ 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
-#endif
-
+#endif   
 #include <windows.h>
 #include <windowsx.h>
 #include <commctrl.h>
@@ -31,10 +30,8 @@
 #include "shared.h"
 #include "support.h"
  
-#include "climap.h"
 #include "climisc.h"
 #include "cityrep.h"
-#include "cma_fe.h"
 #include "colors.h"
 #include "control.h"
 #include "dialogs.h"
@@ -50,13 +47,12 @@
 #include "wldlg.h"   
 #include "gui_main.h"
 #include "citydlg.h"
-#include "text.h"
 
 #define NUM_UNITS_SHOWN  12
 #define NUM_CITIZENS_SHOWN 25   
 #define ID_CITYOPT_RADIO 100
 #define ID_CITYOPT_TOGGLE 200
-#define NUM_TABS 6
+#define NUM_TABS 5
 struct city_dialog {
   struct city *pcity;
   HBITMAP map_bmp;
@@ -97,6 +93,7 @@ struct city_dialog {
   int present_y;
   Impr_Type_id sell_id;
   
+  int citizen_type[NUM_CITIZENS_SHOWN];
   int support_unit_ids[NUM_UNITS_SHOWN];
   int present_unit_ids[NUM_UNITS_SHOWN];
   int change_list_ids[B_LAST+1+U_LAST+1];
@@ -115,6 +112,7 @@ extern HFONT font_12courier;
 extern HFONT font_12arial;
 extern HINSTANCE freecivhinst;
 extern HWND root_window;
+static HDC citydlgdc;
 static int city_map_width;
 static int city_map_height;
 static struct genlist dialog_list;
@@ -149,13 +147,13 @@ static LONG APIENTRY citydlg_config_proc(HWND hWnd,
 static WNDPROC tab_procs[NUM_TABS]={citydlg_overview_proc,
 				    worklist_editor_proc,
 				    happiness_proc,
-				    cma_proc,
+				    /*	 cma_proc, */
 				    trade_page_proc,citydlg_config_proc};
 enum t_tab_pages {
   PAGE_OVERVIEW=0,
   PAGE_WORKLIST,
   PAGE_HAPPINESS,
-  PAGE_CMA, 
+  /*   PAGE_CMA, */
   PAGE_TRADE,
   PAGE_CONFIG
 };
@@ -169,8 +167,7 @@ enum t_tab_pages {
 
 void refresh_city_dialog(struct city *pcity)
 {
-  HDC hdc;
-  HDC hdcsrc;
+  HDC hdc; 
   HBITMAP old;
   struct city_dialog *pdialog;
   if((pdialog=get_city_dialog(pcity))) {
@@ -184,12 +181,10 @@ void refresh_city_dialog(struct city *pcity)
     ReleaseDC(pdialog->tab_childs[0],hdc);
 
     hdc=GetDC(pdialog->tab_childs[PAGE_HAPPINESS]);
-    hdcsrc = CreateCompatibleDC(NULL);
-    old=SelectObject(hdcsrc,pdialog->map_bmp);
+    old=SelectObject(citydlgdc,pdialog->map_bmp);
     BitBlt(hdc,pdialog->maph.x,pdialog->maph.y,city_map_width,
-	   city_map_height,hdcsrc,0,0,SRCCOPY);
-    SelectObject(hdcsrc, old);
-    DeleteDC(hdcsrc);
+	   city_map_height,citydlgdc,0,0,SRCCOPY);
+    SelectObject(citydlgdc,old);
     ReleaseDC(pdialog->tab_childs[PAGE_HAPPINESS],hdc);
     
     city_dialog_update_improvement_list(pdialog);  
@@ -208,7 +203,6 @@ void refresh_city_dialog(struct city *pcity)
     if (pdialog != NULL) {
       update_worklist_editor_win(pdialog->tab_childs[PAGE_WORKLIST]);
     }
-    refresh_cma_dialog(pcity, REFRESH_ALL);
   }
   else if (pdialog) {
       EnableWindow(pdialog->buy_but,FALSE);
@@ -270,14 +264,12 @@ void city_dialog_update_improvement_list(struct city_dialog *pdialog)
     strings[0] = items[item].descr;
     strings[1] = buf;
 
-    /* This takes effects (like Adam Smith's) into account. */
-    my_snprintf(buf, sizeof(buf), "%d",
-		improvement_upkeep(pdialog->pcity, id));
+    my_snprintf(buf, sizeof(buf), "%d", get_improvement_type(id)->upkeep);
    
     row=fcwin_listview_add_row(pdialog->buildings_list,
 			   item, 2, strings);
     pdialog->building_cids[row]=items[item].cid;
-    total += improvement_upkeep(pdialog->pcity, id);
+    total += get_improvement_type(id)->upkeep;
   }
   lvc.mask=LVCF_TEXT;
   lvc.pszText=buf;
@@ -296,10 +288,8 @@ void city_dialog_update_present_units(HDC hdc,struct city_dialog *pdialog, int u
 {
   int i;
   struct unit_list *plist;
-  struct genlist_link *myiter;
+  struct genlist_iterator myiter;
   struct unit *punit;
-  struct canvas canvas_store = {hdc, NULL};
-
   if(unitid) {
     for(i=0; i<NUM_UNITS_SHOWN; i++)
       if(pdialog->present_unit_ids[i]==unitid)
@@ -313,7 +303,8 @@ void city_dialog_update_present_units(HDC hdc,struct city_dialog *pdialog, int u
   } else {
     plist = &(map_get_tile(pdialog->pcity->x, pdialog->pcity->y)->units);
   }
-  myiter = plist->list.head_link; 
+  
+  genlist_iterator_init(&myiter, &(plist->list), 0);
   
   for(i=0; i<NUM_UNITS_SHOWN&&ITERATOR_PTR(myiter); ITERATOR_NEXT(myiter),i++)
     {
@@ -327,9 +318,9 @@ void city_dialog_update_present_units(HDC hdc,struct city_dialog *pdialog, int u
       rc.right=rc.left+NORMAL_TILE_WIDTH;
       rc.bottom=rc.top+SMALL_TILE_HEIGHT+NORMAL_TILE_HEIGHT;
       FillRect(hdc,&rc,(HBRUSH)GetClassLong(pdialog->mainwindow,GCL_HBRBACKGROUND));
-      put_unit_full(punit,&canvas_store,
-		    pdialog->pop_x+i*(SMALL_TILE_WIDTH+NORMAL_TILE_WIDTH),
-		    pdialog->present_y); 
+      put_unit_pixmap(punit,hdc,
+		      pdialog->pop_x+i*(SMALL_TILE_WIDTH+NORMAL_TILE_WIDTH),
+		      pdialog->present_y); 
       pdialog->present_unit_ids[i]=punit->id;       
       
     }
@@ -353,10 +344,8 @@ void city_dialog_update_supported_units(HDC hdc, struct city_dialog *pdialog,
 {
   int i;
   struct unit_list *plist;
-  struct genlist_link *myiter;
+  struct genlist_iterator myiter;
   struct unit *punit;    
-  struct canvas canvas_store = {hdc, NULL};
-
   if(unitid) {
     for(i=0; i<NUM_UNITS_SHOWN; i++)
       if(pdialog->support_unit_ids[i]==unitid)
@@ -369,13 +358,11 @@ void city_dialog_update_supported_units(HDC hdc, struct city_dialog *pdialog,
   } else {
     plist = &(pdialog->pcity->units_supported);
   }      
-  myiter = plist->list.head_link;
+  genlist_iterator_init(&myiter, &(plist->list), 0); 
      
   for(i=0; i<NUM_UNITS_SHOWN&&ITERATOR_PTR(myiter); ITERATOR_NEXT(myiter),i++)
     {
       RECT rc;
-      struct canvas store = {hdc, NULL};
-
       punit=(struct unit*)ITERATOR_PTR(myiter);
       if(unitid && punit->id!=unitid)
 	continue;     
@@ -384,12 +371,12 @@ void city_dialog_update_supported_units(HDC hdc, struct city_dialog *pdialog,
       rc.right=rc.left+NORMAL_TILE_WIDTH;
       rc.bottom=rc.top+SMALL_TILE_HEIGHT+NORMAL_TILE_HEIGHT;
       FillRect(hdc,&rc,(HBRUSH)GetClassLong(pdialog->mainwindow,GCL_HBRBACKGROUND));
-      put_unit_full(punit,&canvas_store,
-		    pdialog->pop_x+i*(SMALL_TILE_WIDTH+NORMAL_TILE_WIDTH),
-		    pdialog->supported_y);
-      put_unit_city_overlays(punit, &store,
-		pdialog->pop_x + i * (SMALL_TILE_WIDTH + NORMAL_TILE_WIDTH),
-		pdialog->supported_y + NORMAL_TILE_HEIGHT);
+      put_unit_pixmap(punit,hdc,
+		      pdialog->pop_x+i*(SMALL_TILE_WIDTH+NORMAL_TILE_WIDTH),
+		      pdialog->supported_y);
+      put_unit_city_overlays(punit,hdc,
+		      pdialog->pop_x+i*(SMALL_TILE_WIDTH+NORMAL_TILE_WIDTH),
+		      pdialog->supported_y);
       pdialog->support_unit_ids[i]=punit->id;    
     }
   for(; i<NUM_UNITS_SHOWN; i++) {   
@@ -424,10 +411,9 @@ void city_dialog_update_pollution(struct city_dialog *pdialog)
 void city_dialog_update_storage(struct city_dialog *pdialog)   
 {
   char buf[512];
-  struct city *pcity = pdialog->pcity;
-
+  struct city *pcity=pdialog->pcity;
   my_snprintf(buf, sizeof(buf), _("Granary: %3d/%-3d"), pcity->food_stock,
-	      city_granary_size(pcity->size));   
+          game.foodbox*(pcity->size+1));   
   SetWindowText(pdialog->storage_area[0],buf);
   SetWindowText(pdialog->storage_area[1],buf);
 }
@@ -443,7 +429,7 @@ void city_dialog_update_production(struct city_dialog *pdialog)
   my_snprintf(buf, sizeof(buf),
 	      _("Food:    %2d (%+2d)\nProd:    %2d (%+2d)\nTrade:   %2d (%+2d)"),
 	      pcity->food_prod, pcity->food_surplus,
-	      pcity->shield_prod + pcity->shield_waste, pcity->shield_surplus,
+	      pcity->shield_prod, pcity->shield_surplus,
 	      pcity->trade_prod+pcity->corruption, pcity->trade_prod);              
   SetWindowText(pdialog->prod_area[0],buf);
   SetWindowText(pdialog->prod_area[1],buf);
@@ -473,11 +459,10 @@ void city_dialog_update_output(struct city_dialog *pdialog)
 
 void city_dialog_update_building(struct city_dialog *pdialog)
 {
-  char buf2[100], buf[32];
-  const char *descr;
+  char buf2[100], buf[32], *descr;
   struct city *pcity=pdialog->pcity;    
   
-  EnableWindow(pdialog->buy_but, city_can_buy(pcity));
+  EnableWindow(pdialog->buy_but,!pcity->did_buy);
   EnableWindow(pdialog->sell_but, !pcity->did_sell);
 
   get_city_dialog_production(pcity, buf, sizeof(buf));
@@ -485,6 +470,10 @@ void city_dialog_update_building(struct city_dialog *pdialog)
   if (pcity->is_building_unit) {
     descr = get_unit_type(pcity->currently_building)->name;
   } else {
+    if (pcity->currently_building == B_CAPITAL) {
+      /* You can't buy Capitalization. */
+      EnableWindow(pdialog->buy_but, FALSE);
+    }
     descr = get_impr_name_ex(pcity, pcity->currently_building);
   }
 
@@ -495,29 +484,118 @@ void city_dialog_update_building(struct city_dialog *pdialog)
  
 }
 
+/****************************************************************
+Isometric.
+*****************************************************************/
+static void city_dialog_update_map_iso(HDC hdc,struct city_dialog *pdialog)
+{
+  struct city *pcity = pdialog->pcity;
+  int city_x,city_y;
+  
+  /* We have to draw the tiles in a particular order, so its best
+     to avoid using any iterator macro. */
+  for (city_x = 0; city_x<CITY_MAP_SIZE; city_x++)
+    for (city_y = 0; city_y<CITY_MAP_SIZE; city_y++) {
+      int map_x, map_y;
+      if (is_valid_city_coords(city_x, city_y)
+          && city_map_to_map(&map_x, &map_y, pcity, city_x, city_y)) {
+        if (tile_get_known(map_x, map_y)) {
+          int canvas_x, canvas_y;
+          city_pos_to_canvas_pos(city_x, city_y, &canvas_x, &canvas_y);
+          put_one_tile_full(hdc, map_x, map_y,
+                            canvas_x, canvas_y, 1);
+        }
+      }
+    }
+  
+  /* We have to put the output afterwards or it will be covered. */
+  city_map_checked_iterate(pcity->x, pcity->y, x, y, map_x, map_y) {
+    if (tile_get_known(map_x, map_y)) {
+      int canvas_x, canvas_y;
+      city_pos_to_canvas_pos(x, y, &canvas_x, &canvas_y);
+      if (pcity->city_map[x][y]==C_TILE_WORKER) {
+        put_city_tile_output(hdc,
+                             canvas_x, canvas_y,
+                             city_get_food_tile(x, y, pcity),
+                             city_get_shields_tile(x, y, pcity), 
+                             city_get_trade_tile(x, y, pcity));
+      }
+    }
+  } city_map_checked_iterate_end;
+
+  /* This sometimes will draw one of the lines on top of a city or
+     unit pixmap. This should maybe be moved to put_one_tile_pixmap()
+     to fix this, but maybe it wouldn't be a good idea because the
+     lines would get obscured. */
+  city_map_checked_iterate(pcity->x, pcity->y, x, y, map_x, map_y) {
+    if (tile_get_known(map_x, map_y)) {
+      int canvas_x, canvas_y;
+      city_pos_to_canvas_pos(x, y, &canvas_x, &canvas_y);
+      if (pcity->city_map[x][y]==C_TILE_UNAVAILABLE) {
+        pixmap_frame_tile_red(hdc,
+			      canvas_x, canvas_y);
+      }
+    }
+  } city_map_checked_iterate_end;
+
+}
+
+/****************************************************************
+Overhead
+*****************************************************************/
+static void city_dialog_update_map_ovh(HDC hdc,struct city_dialog *pdialog)
+{
+  int y,x;
+  struct city *pcity;
+  pcity=pdialog->pcity;
+  for(y=0; y<CITY_MAP_SIZE; y++)
+    for(x=0; x<CITY_MAP_SIZE; x++) {
+      int map_x, map_y;
+
+      if (is_valid_city_coords(x, y)
+	  && city_map_to_map(&map_x, &map_y, pcity, x, y)
+	  && tile_get_known(map_x, map_y)) {
+	pixmap_put_tile(citydlgdc, map_x, map_y,
+			x*NORMAL_TILE_WIDTH,
+			y*NORMAL_TILE_HEIGHT,1);
+        if(pcity->city_map[x][y]==C_TILE_WORKER)
+          put_city_tile_output(citydlgdc, NORMAL_TILE_WIDTH*x,
+			       y*NORMAL_TILE_HEIGHT,
+                               city_get_food_tile(x, y, pcity),
+                               city_get_shields_tile(x, y, pcity),
+                               city_get_trade_tile(x, y, pcity));
+	else if(pcity->city_map[x][y]==C_TILE_UNAVAILABLE)
+	  pixmap_frame_tile_red(citydlgdc, x*NORMAL_TILE_WIDTH,
+				y*NORMAL_TILE_HEIGHT);
+      }
+      else {
+	BitBlt(citydlgdc,x*NORMAL_TILE_WIDTH,
+	       y*NORMAL_TILE_HEIGHT,
+	       NORMAL_TILE_WIDTH,
+	       NORMAL_TILE_HEIGHT,
+	       NULL,0,0,BLACKNESS);
+      }
+    }
+  
+}
 /**************************************************************************
 									   ...
 **************************************************************************/
 void city_dialog_update_map(HDC hdc,struct city_dialog *pdialog)
 {
-  HDC hdcsrc;
   HBITMAP oldbit;
-  struct canvas store;
-
-  hdcsrc = CreateCompatibleDC(NULL);
-  oldbit=SelectObject(hdcsrc,pdialog->map_bmp);
-  BitBlt(hdcsrc,0,0,pdialog->map_w,pdialog->map_h,
+  oldbit=SelectObject(citydlgdc,pdialog->map_bmp);
+  BitBlt(citydlgdc,0,0,pdialog->map_w,pdialog->map_h,
 	 NULL,0,0,BLACKNESS);
-
-  store.hdc = hdcsrc;
-  store.bitmap = NULL;
-  city_dialog_redraw_map(pdialog->pcity, &store);
+  if (is_isometric)
+    city_dialog_update_map_iso(citydlgdc,pdialog);
+  else
+    city_dialog_update_map_ovh(citydlgdc,pdialog);
                            
   BitBlt(hdc,pdialog->map.x,pdialog->map.y,city_map_width,
 	 city_map_height,
-	 hdcsrc,0,0,SRCCOPY);
-  SelectObject(hdcsrc,oldbit);
-  DeleteDC(hdcsrc);
+	 citydlgdc,0,0,SRCCOPY);
+  SelectObject(citydlgdc,oldbit);
 }
 
 /**************************************************************************
@@ -527,40 +605,77 @@ void city_dialog_update_map(HDC hdc,struct city_dialog *pdialog)
 
 void city_dialog_update_citizens(HDC hdc,struct city_dialog *pdialog)
 {
-  HDC hdcsrc;
-  int i;
+  int i, n;
   struct city *pcity=pdialog->pcity;
   RECT rc;
   HBITMAP oldbit;
-  struct citizen_type citizens[MAX_CITY_SIZE];
+  oldbit=SelectObject(citydlgdc,pdialog->citizen_bmp);
 
-  hdcsrc = CreateCompatibleDC(NULL);
-  oldbit=SelectObject(hdcsrc,pdialog->citizen_bmp);
 
-  get_city_citizen_types(pcity, 4, citizens);
-
-  for (i = 0; i < pcity->size && i < NUM_CITIZENS_SHOWN; i++) {
-      draw_sprite(get_citizen_sprite(citizens[i], i, pcity), hdcsrc,
+  for(i=0, n=0; n<pcity->ppl_happy[4] && i<NUM_CITIZENS_SHOWN; n++, i++)
+    if(pdialog->citizen_type[i]!=5 && pdialog->citizen_type[i]!=6) {
+      pdialog->citizen_type[i]=5+i%2;
+      draw_sprite(get_citizen_sprite(pdialog->citizen_type[i]),citydlgdc,
+		  SMALL_TILE_WIDTH*i,0);
+    }
+  for(n=0; n<pcity->ppl_content[4] && i<NUM_CITIZENS_SHOWN; n++, i++)
+    if(pdialog->citizen_type[i]!=3 && pdialog->citizen_type[i]!=4) {
+      pdialog->citizen_type[i]=3+i%2;
+      draw_sprite(get_citizen_sprite(pdialog->citizen_type[i]),citydlgdc,
+		  SMALL_TILE_WIDTH*i,0);  
+    }
+  for(n=0; n<pcity->ppl_unhappy[4] && i<NUM_CITIZENS_SHOWN; n++, i++)
+    if(pdialog->citizen_type[i]!=7 && pdialog->citizen_type[i]!=8) {
+      pdialog->citizen_type[i]=7+i%2;
+      draw_sprite(get_citizen_sprite(pdialog->citizen_type[i]),citydlgdc,
+		  SMALL_TILE_WIDTH*i,0);
+    }
+  for (n = 0; n < pcity->ppl_angry[4] && i < NUM_CITIZENS_SHOWN; n++, i++)
+    if (pdialog->citizen_type[i] != 9 && pdialog->citizen_type[i] != 10) {
+      pdialog->citizen_type[i] = 9 + i % 2;
+      draw_sprite(get_citizen_sprite(pdialog->citizen_type[i]), citydlgdc,
 		  SMALL_TILE_WIDTH * i, 0);
-  }
-
+    }
+  for(n=0; n<pcity->ppl_elvis && i<NUM_CITIZENS_SHOWN; n++, i++)
+    if(pdialog->citizen_type[i]!=0) {
+      pdialog->citizen_type[i]=0;
+      draw_sprite(get_citizen_sprite(pdialog->citizen_type[i]),citydlgdc,
+		  SMALL_TILE_WIDTH*i,0);
+      
+     }
+  for(n=0; n<pcity->ppl_scientist && i<NUM_CITIZENS_SHOWN; n++, i++)
+    if(pdialog->citizen_type[i]!=1) {
+      pdialog->citizen_type[i]=1;
+      draw_sprite(get_citizen_sprite(pdialog->citizen_type[i]),citydlgdc,
+		  SMALL_TILE_WIDTH*i,0);
+    }
+  for(n=0; n<pcity->ppl_taxman && i<NUM_CITIZENS_SHOWN; n++, i++)
+    if(pdialog->citizen_type[i]!=2) {
+      pdialog->citizen_type[i]=2;
+      draw_sprite(get_citizen_sprite(pdialog->citizen_type[i]),citydlgdc,
+		  SMALL_TILE_WIDTH*i,0);
+    }
+  
   if (i<NUM_CITIZENS_SHOWN) {
     rc.left=i*SMALL_TILE_WIDTH;
     rc.right=NUM_CITIZENS_SHOWN*SMALL_TILE_WIDTH;
     rc.top=0;
     rc.bottom=SMALL_TILE_HEIGHT;
-    FillRect(hdcsrc,&rc,
+    FillRect(citydlgdc,&rc,
 	     (HBRUSH)GetClassLong(pdialog->mainwindow,GCL_HBRBACKGROUND));
-    FrameRect(hdcsrc,&rc,
+    FrameRect(citydlgdc,&rc,
 	      (HBRUSH)GetClassLong(pdialog->mainwindow,GCL_HBRBACKGROUND));
   }
-    
+  
+  for(; i<NUM_CITIZENS_SHOWN; i++) {
+    pdialog->citizen_type[i]=-1;    
+  }   
+  
   BitBlt(hdc,pdialog->pop_x,pdialog->pop_y,
 	 NUM_CITIZENS_SHOWN*SMALL_TILE_WIDTH,
 	 SMALL_TILE_HEIGHT,
-	 hdcsrc,0,0,SRCCOPY);
-  SelectObject(hdcsrc,oldbit);
-  DeleteDC(hdcsrc);
+	 citydlgdc,0,0,SRCCOPY);
+  SelectObject(citydlgdc,oldbit);
 }
 
 /**************************************************************************
@@ -689,11 +804,10 @@ static void CityDlgCreate(HWND hWnd,struct city_dialog *pdialog)
   struct fcwin_box *child_vbox;
   struct fcwin_box *left_labels;
   struct fcwin_box *grp_box;
-  struct cma_gui_initdata *cmadata = fc_malloc(sizeof(struct cma_gui_initdata));
   struct worklist_window_init wl_init;
   void *user_data[NUM_TABS];
   static char *titles_[NUM_TABS]={N_("City Overview"),N_("Worklist"),
-				  N_("Happiness"),  N_("CMA"), 
+				  N_("Happiness"), /* N_("CMA"), */
 				  N_("Trade Routes"),
 				  N_("Misc. Settings")};
   static char *titles[NUM_TABS];
@@ -711,16 +825,24 @@ static void CityDlgCreate(HWND hWnd,struct city_dialog *pdialog)
   pdialog->supported_y=pdialog->map.y+pdialog->map_h+12;
   pdialog->present_y=pdialog->supported_y+NORMAL_TILE_HEIGHT+12+4+SMALL_TILE_HEIGHT;
   ybut=pdialog->present_y+NORMAL_TILE_HEIGHT+12+4+SMALL_TILE_HEIGHT;
+  if (!citydlgdc) {
+    hdc=GetDC(pdialog->mainwindow);
+    citydlgdc=CreateCompatibleDC(hdc);
+    ReleaseDC(pdialog->mainwindow,hdc);
+  }
     
   hdc=GetDC(pdialog->mainwindow);
-  pdialog->map_bmp = CreateCompatibleBitmap(hdc, city_map_width,
-					    city_map_height);
+  pdialog->map_bmp=CreateCompatibleBitmap(hdc,5*NORMAL_TILE_WIDTH,
+					  5*NORMAL_TILE_HEIGHT);
   pdialog->citizen_bmp=CreateCompatibleBitmap(hdc,
 					      NUM_CITIZENS_SHOWN*
 					      SMALL_TILE_WIDTH,
 					      SMALL_TILE_HEIGHT);
   ReleaseDC(pdialog->mainwindow,hdc);
-
+  for (i=0;i<NUM_CITIZENS_SHOWN;i++)
+    {
+      pdialog->citizen_type[i]=-1;
+    }
   pdialog->full_win=fcwin_vbox_new(hWnd,FALSE);
   fcwin_box_add_generic(pdialog->full_win,upper_min,upper_set,NULL,NULL,
 			FALSE,FALSE,0);
@@ -728,9 +850,7 @@ static void CityDlgCreate(HWND hWnd,struct city_dialog *pdialog)
     user_data[i]=pdialog;
   }
   user_data[PAGE_WORKLIST] = &wl_init;
-  cmadata->pcity = pdialog->pcity;
-  cmadata->pdialog = NULL;
-  user_data[PAGE_CMA] = cmadata;
+  
   wl_init.pwl = &pdialog->pcity->worklist;
   wl_init.pcity = pdialog->pcity;
   wl_init.parent = pdialog->mainwindow;
@@ -856,11 +976,28 @@ static void CityDlgCreate(HWND hWnd,struct city_dialog *pdialog)
 **************************************************************************/
 
 
+static void activate_unit(struct unit *punit)
+{
+  if((punit->activity!=ACTIVITY_IDLE || punit->ai.control)
+     && can_unit_do_activity(punit, ACTIVITY_IDLE))
+    request_new_unit_activity(punit, ACTIVITY_IDLE);
+  set_unit_focus(punit);
+}    
+
+/**************************************************************************
+...
+**************************************************************************/
+
+
 static void buy_callback_yes(HWND w, void * data)
 {
-  struct city_dialog *pdialog = data;
-
-  city_buy_production(pdialog->pcity);
+  struct city_dialog *pdialog;
+  struct packet_city_request packet;
+ 
+  pdialog=(struct city_dialog *)data;
+ 
+  packet.city_id=pdialog->pcity->id;
+  send_packet_city_request(&aconnection, &packet, PACKET_CITY_BUY);
  
   destroy_message_dialog(w);
 }
@@ -879,10 +1016,10 @@ static void buy_callback_no(HWND w, void * data)
 **************************************************************************/
         
 
-static void buy_callback(struct city_dialog *pdialog)
+void buy_callback(struct city_dialog *pdialog)
 {
   int value;
-  const char *name;
+  char *name;
   char buf[512];    
    if(pdialog->pcity->is_building_unit) {
     name=get_unit_type(pdialog->pcity->currently_building)->name;
@@ -915,9 +1052,14 @@ static void buy_callback(struct city_dialog *pdialog)
 *****************************************************************/
 static void sell_callback_yes(HWND w, void * data)
 {
-  struct city_dialog *pdialog = data;
-
-  city_sell_improvement(pdialog->pcity, pdialog->sell_id);
+  struct city_dialog *pdialog;
+  struct packet_city_request packet;
+ 
+  pdialog=(struct city_dialog *)data;
+ 
+  packet.city_id=pdialog->pcity->id;
+  packet.build_id=pdialog->sell_id;
+  send_packet_city_request(&aconnection, &packet, PACKET_CITY_SELL);
  
   destroy_message_dialog(w);
 }
@@ -935,7 +1077,7 @@ static void sell_callback_no(HWND w, void * data)
 /****************************************************************
 ...
 *****************************************************************/            
-static void sell_callback(struct city_dialog *pdialog)
+void sell_callback(struct city_dialog *pdialog)
 {
   char buf[100];
   if (pdialog->id_selected<0) {
@@ -949,7 +1091,7 @@ static void sell_callback(struct city_dialog *pdialog)
   pdialog->sell_id = pdialog->id_selected;
   my_snprintf(buf, sizeof(buf), _("Sell %s for %d gold?"),
 	      get_impr_name_ex(pdialog->pcity, pdialog->id_selected),
-	      impr_sell_gold(pdialog->id_selected));
+	      improvement_value(pdialog->id_selected));
   
   popup_message_dialog(pdialog->mainwindow, /*"selldialog" */
 		       _("Sell It!"), buf, _("_Yes"),
@@ -1021,7 +1163,12 @@ static LONG CALLBACK changedlg_proc(HWND hWnd,
 	case ID_PRODCHANGE_CHANGE:
 	  if (sel>=0)
 	    {
-	      city_change_production(pdialog->pcity, is_unit, idx);
+	      struct packet_city_request packet;  
+	      packet.city_id=pdialog->pcity->id;
+	      packet.build_id=idx;
+	      packet.is_build_id_unit_id=is_unit;
+	      
+	      send_packet_city_request(&aconnection, &packet, PACKET_CITY_CHANGE);
 	      DestroyWindow(hWnd);
 	    }
 	  break;
@@ -1042,7 +1189,7 @@ static LONG CALLBACK changedlg_proc(HWND hWnd,
 **************************************************************************/
 
      
-static void change_callback(struct city_dialog *pdialog)
+void change_callback(struct city_dialog *pdialog)
 {
   HWND dlg;
   
@@ -1124,7 +1271,8 @@ static void change_callback(struct city_dialog *pdialog)
 *****************************************************************/
 static void commit_city_worklist(struct worklist *pwl, void *data)
 {
-  struct city_dialog *pdialog = data;
+  struct packet_city_request packet;
+  struct city_dialog *pdialog = (struct city_dialog *) data;
   int k, id;
   bool is_unit;
 
@@ -1157,8 +1305,13 @@ static void commit_city_worklist(struct worklist *pwl, void *data)
         (!is_unit && can_build_improvement(pdialog->pcity, id))) {
       /* ...but we're not yet building it, then switch. */
       if (!same_as_current_build) {
+
         /* Change the current target */
-	city_change_production(pdialog->pcity, is_unit, id);
+        packet.city_id = pdialog->pcity->id;
+        packet.build_id = id;
+        packet.is_build_id_unit_id = is_unit;
+        send_packet_city_request(&aconnection, &packet,
+                                 PACKET_CITY_CHANGE);
       }
 
       /* This item is now (and may have always been) the current
@@ -1169,7 +1322,10 @@ static void commit_city_worklist(struct worklist *pwl, void *data)
   }
 
   /* Send the rest of the worklist on its way. */
-  city_set_worklist(pdialog->pcity, pwl);
+  packet.city_id = pdialog->pcity->id;
+  copy_worklist(&packet.worklist, pwl);
+  packet.worklist.name[0] = '\0';
+  send_packet_city_request(&aconnection, &packet, PACKET_CITY_WORKLIST);
 }
 
 /**************************************************************************
@@ -1179,10 +1335,13 @@ static void commit_city_worklist(struct worklist *pwl, void *data)
 
 static void rename_city_callback(HWND w, void * data)
 {
-  struct city_dialog *pdialog = data;
+  struct city_dialog *pdialog;
+  struct packet_city_request packet;
  
-  if (pdialog) {
-    city_rename(pdialog->pcity, input_dialog_get_input(w));
+  if((pdialog=(struct city_dialog *)data)) {
+    packet.city_id=pdialog->pcity->id;
+    sz_strlcpy(packet.name, input_dialog_get_input(w));
+    send_packet_city_request(&aconnection, &packet, PACKET_CITY_RENAME);
   }
  
   input_dialog_destroy(w);
@@ -1191,7 +1350,7 @@ static void rename_city_callback(HWND w, void * data)
 /****************************************************************
 ...
 *****************************************************************/    
-static void rename_callback(struct city_dialog *pdialog)
+void rename_callback(struct city_dialog *pdialog)
 {
   input_dialog_create(pdialog->mainwindow,
                       /*"shellrenamecity"*/_("Rename City"),
@@ -1280,7 +1439,7 @@ static void supported_units_activate_close_callback(HWND w, void * data){
   destroy_message_dialog(w);
  
   if((punit=player_find_unit_by_id(game.player_ptr, (size_t)data))) {
-    set_unit_focus(punit);
+    activate_unit(punit);
     if((pcity=player_find_city_by_id(game.player_ptr, punit->homecity)))
       if((pdialog=get_city_dialog(pcity)))
         CityDlgClose(pdialog);
@@ -1292,15 +1451,28 @@ static void supported_units_activate_close_callback(HWND w, void * data){
 **************************************************************************/
 
 
-static void activate_callback(struct city_dialog *pdialog)
+void activate_callback(struct city_dialog *pdialog)
 {
-  activate_all_units(pdialog->pcity->x, pdialog->pcity->y);
+  int x=pdialog->pcity->x,y=pdialog->pcity->y;
+  struct unit_list *punit_list = &map_get_tile(x,y)->units;
+  struct unit *pmyunit = NULL;
+ 
+  if(unit_list_size(punit_list))  {
+    unit_list_iterate((*punit_list), punit) {
+      if(game.player_idx==punit->owner) {
+        pmyunit = punit;
+        request_new_unit_activity(punit, ACTIVITY_IDLE);
+      }
+    } unit_list_iterate_end;
+    if (pmyunit)
+      set_unit_focus(pmyunit);
+  }
 }      
 
 /****************************************************************
 ...
 *****************************************************************/
-static void show_units_callback(struct city_dialog *pdialog)
+void show_units_callback(struct city_dialog *pdialog)
 {
   struct tile *ptile = map_get_tile(pdialog->pcity->x, pdialog->pcity->y);
  
@@ -1354,7 +1526,7 @@ static void present_units_activate_callback(HWND w, void * data)
   struct unit *punit;
  
   if((punit=player_find_unit_by_id(game.player_ptr, (size_t)data)))
-    set_unit_focus(punit);
+    activate_unit(punit);
   destroy_message_dialog(w);
 }
  
@@ -1370,7 +1542,7 @@ static void present_units_activate_close_callback(HWND w, void * data)
   destroy_message_dialog(w);
  
   if((punit=player_find_unit_by_id(game.player_ptr, (size_t)data))) {
-    set_unit_focus(punit);
+    activate_unit(punit);
     if((pcity=map_get_city(punit->x, punit->y)))
       if((pdialog=get_city_dialog(pcity)))
        CityDlgClose(pdialog);
@@ -1408,7 +1580,7 @@ static void present_units_fortify_callback(HWND w, void * data)
 **************************************************************************/
 
 
-static void unitupgrade_callback_yes(HWND w, void * data)
+void unitupgrade_callback_yes(HWND w, void * data)
 {
   struct unit *punit;
  
@@ -1422,7 +1594,7 @@ static void unitupgrade_callback_yes(HWND w, void * data)
 /****************************************************************
 ...
 *****************************************************************/
-static void unitupgrade_callback_no(HWND w, void * data)
+void unitupgrade_callback_no(HWND w, void * data)
 {
   destroy_message_dialog(w);
 }
@@ -1430,31 +1602,54 @@ static void unitupgrade_callback_no(HWND w, void * data)
 /****************************************************************
 ...
 *****************************************************************/       
-static void upgrade_callback(HWND w, void * data)
+void upgrade_callback(HWND w, void * data)
 {
-  struct unit *punit = player_find_unit_by_id(game.player_ptr,
-					      (size_t) data);
+  struct unit *punit;
   char buf[512];
-
-  if (!punit) {
-    return;
+  int ut1,ut2;
+  int value;
+ 
+  if((punit=player_find_unit_by_id(game.player_ptr, (size_t)data))) {
+    ut1=punit->type;
+    /* printf("upgrade_callback for %s\n", unit_types[ut1].name); */
+ 
+    ut2=can_upgrade_unittype(game.player_ptr,ut1);
+ 
+    if (ut2==-1) {
+      /* this shouldn't generally happen, but it is conceivable */
+      my_snprintf(buf, sizeof(buf),
+                  _("Sorry: cannot upgrade %s."), unit_types[ut1].name);
+      popup_message_dialog(NULL, /*"upgradenodialog"*/_("Upgrade Unit!"), buf,
+                           _("Darn"), unitupgrade_callback_no, 0,
+                           NULL);
+    } else {
+      value=unit_upgrade_price(game.player_ptr, ut1, ut2);
+ 
+      if(game.player_ptr->economic.gold>=value) {
+        my_snprintf(buf, sizeof(buf), _("Upgrade %s to %s for %d gold?\n"
+               "Treasury contains %d gold."),
+               unit_types[ut1].name, unit_types[ut2].name,
+               value, game.player_ptr->economic.gold);
+        popup_message_dialog(NULL,
+                             /*"upgradedialog"*/_("Upgrade Obsolete Units"), buf,
+                             _("_Yes"),
+                               unitupgrade_callback_yes, (void *)(punit->id),
+                             _("_No"),
+                               unitupgrade_callback_no, 0,
+                             NULL);
+      } else {
+        my_snprintf(buf, sizeof(buf), _("Upgrading %s to %s costs %d gold.\n"
+               "Treasury contains %d gold."),
+               unit_types[ut1].name, unit_types[ut2].name,
+               value, game.player_ptr->economic.gold);
+        popup_message_dialog(NULL,
+                             /*"upgradenodialog"*/_("Upgrade Unit!"), buf,
+                             _("Darn"), unitupgrade_callback_no, 0,
+                             NULL);
+      }
+    }
+    destroy_message_dialog(w);
   }
-
-  if (get_unit_upgrade_info(buf, sizeof(buf), punit) == UR_OK) {
-    popup_message_dialog(NULL,
-			 _("Upgrade Obsolete Units"), buf,
-			 _("_Yes"),
-			 unitupgrade_callback_yes, (void *)(punit->id),
-			 _("_No"),
-			 unitupgrade_callback_no, 0,
-			 NULL);
-  } else {
-    popup_message_dialog(NULL, _("Upgrade Unit!"), buf,
-			 _("Darn"), unitupgrade_callback_no, 0,
-			 NULL);
-  }
-
-  destroy_message_dialog(w);
 }
 
 /**************************************************************************
@@ -1462,16 +1657,15 @@ static void upgrade_callback(HWND w, void * data)
 **************************************************************************/
 
 
-static void city_dlg_click_supported(struct city_dialog *pdialog, int n)
+void city_dlg_click_supported(struct city_dialog *pdialog, int n)
 {
   struct unit *punit;
   struct city *pcity;  
-  HWND wd;
-
   if((punit=player_find_unit_by_id(game.player_ptr, 
 				   pdialog->support_unit_ids[n])) &&
-     (pcity = find_city_by_id(punit->homecity))) {   
-    wd = popup_message_dialog(NULL,
+     (pcity=map_get_city(punit->x, punit->y)) &&
+     (pdialog=get_city_dialog(pcity))) {   
+      popup_message_dialog(NULL,
            /*"supportunitsdialog"*/ _("Unit Commands"),
            unit_description(punit),
            _("_Activate unit"),
@@ -1481,10 +1675,7 @@ static void city_dlg_click_supported(struct city_dialog *pdialog, int n)
            _("_Disband unit"),
              present_units_disband_callback, punit->id,
            _("_Cancel"),
-             present_units_cancel_callback, 0, 0, NULL);
-    if (unit_flag(punit, F_UNDISBANDABLE)) {
-      message_dialog_button_set_sensitive(wd, 3, FALSE);
-    }
+             present_units_cancel_callback, 0, 0,NULL);
   }
 }
 
@@ -1493,7 +1684,7 @@ static void city_dlg_click_supported(struct city_dialog *pdialog, int n)
 **************************************************************************/
 
 
-static void city_dlg_click_present(struct city_dialog *pdialog, int n)
+void city_dlg_click_present(struct city_dialog *pdialog,int n)
 {
   struct unit *punit;
   struct city *pcity;
@@ -1530,9 +1721,6 @@ static void city_dlg_click_present(struct city_dialog *pdialog, int n)
 	 || !can_unit_do_activity(punit, ACTIVITY_FORTIFYING)) {
        message_dialog_button_set_sensitive(wd,3, FALSE);
      }
-     if (unit_flag(punit, F_UNDISBANDABLE)) {
-       message_dialog_button_set_sensitive(wd,4, FALSE);
-     }
      if (punit->homecity == pcity->id) {
        message_dialog_button_set_sensitive(wd,5, FALSE);
      }
@@ -1545,9 +1733,59 @@ static void city_dlg_click_present(struct city_dialog *pdialog, int n)
 /**************************************************************************
 ...
 **************************************************************************/
-static void city_dlg_click_citizens(struct city_dialog *pdialog, int n)
+
+
+void city_dlg_click_map(struct city_dialog *pdialog,int x,int y)
+{ 
+  struct packet_city_request packet;    
+  struct city *pcity;
+  pcity=pdialog->pcity;
+  packet.city_id=pcity->id;
+  packet.worker_x=x;
+  packet.worker_y=y;
+  
+  if(pcity->city_map[x][y]==C_TILE_WORKER)
+    send_packet_city_request(&aconnection, &packet,
+			     PACKET_CITY_MAKE_SPECIALIST);
+  else if(pcity->city_map[x][y]==C_TILE_EMPTY)
+    send_packet_city_request(&aconnection, &packet, PACKET_CITY_MAKE_WORKER);
+  
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+
+
+void city_dlg_click_citizens(struct city_dialog *pdialog,int n)
 {
-  city_rotate_specialist(pdialog->pcity, n);
+  struct packet_city_request packet;
+  if (pdialog->citizen_type[n]<0)
+    return;
+  if (pdialog->citizen_type[n]>2)
+    return;
+  packet.city_id=pdialog->pcity->id;
+  switch (pdialog->citizen_type[n])
+    {
+    case 0: /* elvis */
+      packet.specialist_from=SP_ELVIS;
+      packet.specialist_to=SP_SCIENTIST;
+      send_packet_city_request(&aconnection, &packet,
+			       PACKET_CITY_CHANGE_SPECIALIST);   
+      break;
+    case 1: /* scientist */
+      packet.specialist_from=SP_SCIENTIST;
+      packet.specialist_to=SP_TAXMAN;   
+      send_packet_city_request(&aconnection, &packet,
+			       PACKET_CITY_CHANGE_SPECIALIST);  
+      break;
+    case 2: /* taxman */
+      packet.specialist_from=SP_TAXMAN;
+      packet.specialist_to=SP_ELVIS;   
+      send_packet_city_request(&aconnection, &packet,
+			       PACKET_CITY_CHANGE_SPECIALIST);   
+      break;
+    }
 }
 
 /**************************************************************************
@@ -1584,12 +1822,10 @@ static void city_dlg_mouse(struct city_dialog *pdialog, int x, int y,
       if ((x>=pdialog->map.x)&&(x<(pdialog->map.x+pdialog->map_w)))
 	{
 	  int tile_x,tile_y;
-	  xr = x - pdialog->map.x;
-	  yr = y - pdialog->map.y;
-
-	  if (canvas_to_city_pos(&tile_x, &tile_y, xr, yr)) {
-	    city_toggle_worker(pdialog->pcity, tile_x, tile_y);
-	  }
+	  xr=x-pdialog->map.x;
+	  yr=y-pdialog->map.y;
+	  canvas_pos_to_city_pos(xr,yr,&tile_x,&tile_y);
+	  city_dlg_click_map(pdialog,tile_x,tile_y);
 	}
     }
   xr=x-pdialog->pop_x;
@@ -1621,7 +1857,6 @@ static LONG CALLBACK citydlg_overview_proc(HWND win, UINT message,
 {
   HBITMAP old;
   HDC hdc;
-  HDC hdcsrc;
   PAINTSTRUCT ps;
   int n,i;
   struct city_dialog *pdialog;
@@ -1639,14 +1874,11 @@ static LONG CALLBACK citydlg_overview_proc(HWND win, UINT message,
       break;
     case WM_PAINT:
       hdc=BeginPaint(win,(LPPAINTSTRUCT)&ps);
-      hdcsrc = CreateCompatibleDC(NULL);
-
-      old=SelectObject(hdcsrc,pdialog->map_bmp);
+      old=SelectObject(citydlgdc,pdialog->map_bmp);
       BitBlt(hdc,pdialog->map.x,pdialog->map.y,
 	     pdialog->map_w,pdialog->map_h,
-	     hdcsrc,0,0,SRCCOPY);
-      SelectObject(hdcsrc,old);
-      DeleteDC(hdcsrc);
+	     citydlgdc,0,0,SRCCOPY);
+      SelectObject(citydlgdc,old);
       city_dialog_update_supported_units(hdc,pdialog, 0);
       city_dialog_update_present_units(hdc,pdialog, 0); 
       EndPaint(win,(LPPAINTSTRUCT)&ps);
@@ -1690,10 +1922,12 @@ static LONG CALLBACK citydlg_overview_proc(HWND win, UINT message,
 **************************************************************************/
 
 
-static LONG APIENTRY CitydlgWndProc(HWND hWnd, UINT message,
-				    UINT wParam, LONG lParam)
+LONG APIENTRY CitydlgWndProc (
+                           HWND hWnd,
+                           UINT message,
+                           UINT wParam,
+                           LONG lParam)
 {
-  HDC hdcsrc;
   HBITMAP old;
   LPNMHDR nmhdr;
   HDC hdc;
@@ -1727,13 +1961,11 @@ static LONG APIENTRY CitydlgWndProc(HWND hWnd, UINT message,
       break;
     case WM_PAINT:
       hdc=BeginPaint(hWnd,(LPPAINTSTRUCT)&ps);
-      hdcsrc = CreateCompatibleDC(NULL);
-      old=SelectObject(hdcsrc,pdialog->citizen_bmp);
+      old=SelectObject(citydlgdc,pdialog->citizen_bmp);
       BitBlt(hdc,pdialog->pop_x,pdialog->pop_y,
 	     SMALL_TILE_WIDTH*NUM_CITIZENS_SHOWN,SMALL_TILE_HEIGHT,
-	     hdcsrc,0,0,SRCCOPY);
-      SelectObject(hdcsrc,old);
-      DeleteDC(hdcsrc);
+	     citydlgdc,0,0,SRCCOPY);
+      SelectObject(citydlgdc,old);
       /*
       city_dialog_update_map(hdc,pdialog);
       city_dialog_update_citizens(hdc,pdialog); */
@@ -1820,8 +2052,13 @@ static void initialize_city_dialogs(void)
   assert(!city_dialogs_have_been_initialised);
 
   genlist_init(&dialog_list);
-  city_map_width = get_citydlg_canvas_width();
-  city_map_height = get_citydlg_canvas_height();
+  if (is_isometric) {
+      city_map_width=4*NORMAL_TILE_WIDTH;
+      city_map_height=4*NORMAL_TILE_HEIGHT;
+    } else {
+      city_map_width=5*NORMAL_TILE_WIDTH;
+      city_map_height=5*NORMAL_TILE_HEIGHT;
+    }
   city_dialogs_have_been_initialised=1;
 }
 
@@ -1832,10 +2069,11 @@ static void initialize_city_dialogs(void)
 
 struct city_dialog *get_city_dialog(struct city *pcity)
 {   
-  struct genlist_link *myiter;
+  struct genlist_iterator myiter;
   if (!city_dialogs_have_been_initialised)
     initialize_city_dialogs();
-  myiter = dialog_list.head_link;  
+    
+  genlist_iterator_init(&myiter, &dialog_list, 0);
   
   for(; ITERATOR_PTR(myiter); ITERATOR_NEXT(myiter))
     if(((struct city_dialog *)ITERATOR_PTR(myiter))->pcity==pcity)
@@ -1879,7 +2117,7 @@ popdown_city_dialog(struct city *pcity)
 **************************************************************************/
 
 
-static void popdown_cityopt_dialog(void)
+void popdown_cityopt_dialog()
 {
 }
 
@@ -1898,34 +2136,6 @@ popdown_all_city_dialogs(void)
     CityDlgClose(genlist_get(&dialog_list,0));
   }
   popdown_cityopt_dialog();     
-}
-
-/**************************************************************************
-...
-**************************************************************************/
-void citydlg_tileset_change(void)
-{
-  struct genlist_link *myiter;
-  if (!city_dialogs_have_been_initialised)
-    initialize_city_dialogs();
-
-  city_map_width = get_citydlg_canvas_width();
-  city_map_height = get_citydlg_canvas_height();
-
-  myiter = dialog_list.head_link;
-  for(; ITERATOR_PTR(myiter); ITERATOR_NEXT(myiter)) {
-    HDC hdc;
-    struct city_dialog *pdialog = (struct city_dialog *)ITERATOR_PTR(myiter);
-    DeleteObject(pdialog->map_bmp);
-    hdc = GetDC(pdialog->mainwindow);
-    pdialog->map_bmp = CreateCompatibleBitmap(hdc, city_map_width,
-					      city_map_height);
-    ReleaseDC(pdialog->mainwindow, hdc);
-    pdialog->map_w = city_map_width;
-    pdialog->map_h = city_map_height;
-    resize_city_dialog(pdialog);
-    refresh_city_dialog(pdialog->pcity);
-  }
 }
 
 /**************************************************************************
@@ -2027,6 +2237,7 @@ LONG APIENTRY citydlg_config_proc(HWND hWnd,
     case WM_COMMAND:
       if (pdialog) {
 	struct city *pcity=pdialog->pcity;
+	struct packet_generic_values packet;   
 	int i,new_options;
 	new_options=0;
 	for(i=0;i<NUM_CITYOPT_TOGGLES;i++)
@@ -2036,7 +2247,10 @@ LONG APIENTRY citydlg_config_proc(HWND hWnd,
 	  new_options |= (1<<CITYO_NEW_EINSTEIN); 
 	else if (IsDlgButtonChecked(hWnd,ID_CITYOPT_RADIO+2))
 	  new_options |= (1<<CITYO_NEW_TAXMAN);  
-	dsend_packet_city_options_req(&aconnection, pcity->id, new_options);
+	packet.value1=pcity->id;
+	packet.value2=new_options;
+	send_packet_generic_values(&aconnection, PACKET_CITY_OPTIONS,
+				   &packet); 
       }
       break;
     default: 
@@ -2083,7 +2297,6 @@ static  LONG CALLBACK happiness_proc(HWND win, UINT message,
   int x,y;
   struct city_dialog *pdialog;
   HDC hdc;
-  HDC hdcsrc;
   HBITMAP old;
   PAINTSTRUCT ps;
   pdialog=fcwin_get_user_data(win);
@@ -2105,22 +2318,19 @@ static  LONG CALLBACK happiness_proc(HWND win, UINT message,
       if ((x>=pdialog->maph.x)&&(x<(pdialog->maph.x+pdialog->map_w))&&
 	  (y>=pdialog->maph.y)&&(y<(pdialog->maph.y+pdialog->map_h))) {
 	int tile_x,tile_y;
-
-	if (canvas_to_city_pos(&tile_x, &tile_y,
-			       x-pdialog->maph.x, y-pdialog->maph.y)) {
-	  city_toggle_worker(pdialog->pcity, tile_x, tile_y);
-	}
+	canvas_pos_to_city_pos(x-pdialog->maph.x,
+			       y-pdialog->maph.y,
+			       &tile_x,&tile_y);
+	city_dlg_click_map(pdialog,tile_x,tile_y);
       }
       break;
     case WM_PAINT:
       hdc=BeginPaint(win,(LPPAINTSTRUCT)&ps);
-      hdcsrc = CreateCompatibleDC(NULL);
-      old=SelectObject(hdcsrc,pdialog->map_bmp); 
+      old=SelectObject(citydlgdc,pdialog->map_bmp); 
       BitBlt(hdc,pdialog->maph.x,pdialog->maph.y,
 	     pdialog->map_w,pdialog->map_h,
-	     hdcsrc,0,0,SRCCOPY);
-      SelectObject(hdcsrc,old);
-      DeleteDC(hdcsrc);
+	     citydlgdc,0,0,SRCCOPY);
+      SelectObject(citydlgdc,old);
       repaint_happiness_box(pdialog->happiness,hdc); 
       EndPaint(win,(LPPAINTSTRUCT)&ps);
       break;

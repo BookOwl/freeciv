@@ -2,26 +2,24 @@
 
 name=_("Bavarian")
 plural=_("?plural:Bavarians")
-class=_("Historical")
-legend=_("Bavaria, before national unification in 1870AD, was one of the \
-largest of the German kingdoms.") 
-leader = "Tassilo III", "Welf I", "Ludwig II", "Maximilian", "Adelheid",
-         "Max II Emanuel", "Joseph"
-leader_sex = "Male", "Male", "Male", "Male", "Female", "Male", "Male"
+leader = "Ludwig II", "Maximilian", "Joseph", "F.J.Strauss"
+leader_sex = "Male", "Male", "Male", "Male"
 flag="f.bavarian"
 flag_alt = "-"
 city_style = "European"
 
+attack=1
+expand=2
+civilized=2
+advisors=100,100,100,100,100,100,100
 init_techs=""
-init_buildings=""
 tech_goals = "Monarchy", "Feudalism", "Gunpowder", "Railroad",
              "Explosives"
 wonder= "Leonardo's Workshop"
 government = "Monarchy"
-civilwar_nations = "german"
 
 cities =
-  "MÃ¼nchen", "Regensburg", "Ingolstadt", "Landshut", "Rosenheim",
-  "EichstÃ¤tt", "Passau",  "Straubing", "MÃ¼hldorf", "Freising",
-  "Deggendorf", "Erding", "Freilassing", "AltÃ¶tting", "Pfaffenhofen",
+  "München", "Regensburg", "Ingolstadt", "Landshut", "Rosenheim",
+  "Eichstätt", "Passau",  "Straubing", "Mühldorf", "Freising",
+  "Deggendorf", "Erding", "Freilassing", "Altötting", "Pfaffenhofen",
   "Vilshofen", "Plattling", "Traunstein", "Burghausen", "Dingolfing"

@@ -9,9 +9,8 @@ pkgdata_DATA = \
 	trident_shields.tilespec	\
 	helpdata.txt	\
 	civ1.serv	\
-	civ2.serv	\
-	history.serv
+	civ2.serv
 
 EXTRA_DIST = $(pkgdata_DATA)
 
-SUBDIRS = misc flags isotrident trident default civ1 civ2 scenario nation history
+SUBDIRS = misc isotrident trident default civ1 civ2 scenario nation history

@@ -10,65 +10,19 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
+#include <stdio.h>
+#include <stdlib.h>
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
-#include "game.h"
+#include "genlist.h"
 #include "log.h"
 #include "mem.h"
 #include "player.h"
 
 #include "diptreaty.h"
 
-/**************************************************************************
-  Returns TRUE iff pplayer could do diplomancy in the game at all.
-  These values are set by player in stdinhand.c.
-**************************************************************************/
-bool diplomacy_possible(struct player *pplayer, struct player *aplayer)
-{
-  return  (game.diplomacy == 0      /* Unlimited diplomacy */
-	   || (game.diplomacy == 1  /* Human diplomacy only */
-	       && !pplayer->ai.control 
-	       && !aplayer->ai.control)
-	   || (game.diplomacy == 2  /* AI diplomacy only */
-	       && pplayer->ai.control
-	       && aplayer->ai.control)
-	   || (game.diplomacy == 3  /* Team diplomacy only */
-	       && pplayer->team != TEAM_NONE
-	       && pplayer->team == aplayer->team));
-}
-
-/**************************************************************************
-  Returns TRUE iff pplayer could do diplomatic meetings with aplayer.
-**************************************************************************/
-bool could_meet_with_player(struct player *pplayer, struct player *aplayer)
-{
-  return (pplayer->is_alive
-          && aplayer->is_alive
-          && pplayer != aplayer
-          && diplomacy_possible(pplayer,aplayer)
-          && (player_has_embassy(aplayer, pplayer) 
-              || player_has_embassy(pplayer, aplayer)
-              || pplayer->diplstates[aplayer->player_no].contact_turns_left > 0
-              || aplayer->diplstates[pplayer->player_no].contact_turns_left > 0)
-          && (aplayer->is_connected || aplayer->ai.control)
-          && (pplayer->is_connected || pplayer->ai.control));
-}
-
-/**************************************************************************
-  Returns TRUE iff pplayer could do diplomatic meetings with aplayer.
-**************************************************************************/
-bool could_intel_with_player(struct player *pplayer, struct player *aplayer)
-{
-  return (pplayer->is_alive
-          && aplayer->is_alive
-          && pplayer != aplayer
-          && (pplayer->diplstates[aplayer->player_no].contact_turns_left > 0
-              || aplayer->diplstates[pplayer->player_no].contact_turns_left > 0
-              || player_has_embassy(pplayer, aplayer)));
-}
+#define SPECLIST_TAG clause
+#define SPECLIST_TYPE struct Clause
+#include "speclist_c.h"
 
 /****************************************************************
 ...
@@ -83,16 +37,6 @@ void init_treaty(struct Treaty *ptreaty,
   clause_list_init(&ptreaty->clauses);
 }
 
-/****************************************************************
-  Free the clauses of a treaty.
-*****************************************************************/
-void clear_treaty(struct Treaty *ptreaty)
-{
-  clause_list_iterate(ptreaty->clauses, pclause) {
-    free(pclause);
-  } clause_list_iterate_end;
-  clause_list_unlink_all(&ptreaty->clauses);
-}
 
 /****************************************************************
 ...
@@ -124,25 +68,12 @@ bool add_clause(struct Treaty *ptreaty, struct player *pfrom,
 		enum clause_type type, int val)
 {
   struct Clause *pclause;
-  enum diplstate_type ds = 
-                     pplayer_get_diplstate(ptreaty->plr0, ptreaty->plr1)->type;
 
   if (type == CLAUSE_ADVANCE && !tech_exists(val)) {
     freelog(LOG_ERROR, "Illegal tech value %i in clause.", val);
     return FALSE;
   }
   
-  if (is_pact_clause(type)
-      && ((ds == DS_PEACE && type == CLAUSE_PEACE)
-          || (ds == DS_ALLIANCE && type == CLAUSE_ALLIANCE)
-          || (ds == DS_CEASEFIRE && type == CLAUSE_CEASEFIRE))) {
-    /* we already have this diplomatic state */
-    freelog(LOG_ERROR, "Illegal treaty suggested between %s and %s - they "
-                       "already have this treaty level.", ptreaty->plr0->name, 
-                       ptreaty->plr1->name);
-    return FALSE;
-  }
-
   clause_list_iterate(ptreaty->clauses, pclause) {
     if(pclause->type==type
        && pclause->from==pfrom

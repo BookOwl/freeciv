@@ -10,11 +10,9 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
-
 #include <windows.h>
 #include <windowsx.h>
 
@@ -25,13 +23,11 @@
 #include "mem.h"
 #include "support.h"
 
-#include "text.h"
-#include "tilespec.h"
-
 #include "graphics.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "happiness.h"
+#include "tilespec.h"
 
 #define HAPPINESS_PIX_WIDTH 23
 
@@ -229,8 +225,64 @@ static void happiness_dialog_update_luxury(struct happiness_dlg
 static void happiness_dialog_update_buildings(struct happiness_dlg
                                               *pdialog)
 {
-  SetWindowText(pdialog->mod_label[BUILDINGS],
-		get_happiness_buildings(pdialog->pcity));
+  int faces = 0;
+  char buf[512], *bptr = buf;
+  int nleft = sizeof(buf);
+  struct city *pcity = pdialog->pcity;
+  struct government *g = get_gov_pcity(pcity);
+
+  my_snprintf(bptr, nleft, _("Buildings: "));
+  bptr = end_of_strn(bptr, &nleft);
+
+  if (city_got_building(pcity, B_TEMPLE)) {
+    faces++;
+    my_snprintf(bptr, nleft, get_improvement_name(B_TEMPLE));
+    bptr = end_of_strn(bptr, &nleft);
+    my_snprintf(bptr, nleft, _(". "));
+    bptr = end_of_strn(bptr, &nleft);
+  }
+  if (city_got_building(pcity, B_COURTHOUSE) && g->corruption_level == 0) {
+    faces++;
+    my_snprintf(bptr, nleft, get_improvement_name(B_COURTHOUSE));
+    bptr = end_of_strn(bptr, &nleft);
+    my_snprintf(bptr, nleft, _(". "));
+    bptr = end_of_strn(bptr, &nleft);
+  }
+  if (city_got_building(pcity, B_COLOSSEUM)) {
+    faces++;
+    my_snprintf(bptr, nleft, get_improvement_name(B_COLOSSEUM));
+    bptr = end_of_strn(bptr, &nleft);
+    my_snprintf(bptr, nleft, _(". "));
+    bptr = end_of_strn(bptr, &nleft);
+  }
+  /* hack for eliminating gtk_set_line_wrap() -mck */
+  if (faces > 2) {
+    /* sizeof("Buildings: ") */
+    my_snprintf(bptr, nleft, _("\n              "));
+    bptr = end_of_strn(bptr, &nleft);
+  }
+  if (city_got_effect(pcity, B_CATHEDRAL)) {
+    faces++;
+    my_snprintf(bptr, nleft, get_improvement_name(B_CATHEDRAL));
+    bptr = end_of_strn(bptr, &nleft);
+    if (!city_got_building(pcity, B_CATHEDRAL)) {
+      my_snprintf(bptr, nleft, _("("));
+      bptr = end_of_strn(bptr, &nleft);
+      my_snprintf(bptr, nleft, get_improvement_name(B_MICHELANGELO));
+      bptr = end_of_strn(bptr, &nleft);
+      my_snprintf(bptr, nleft, _(")"));
+      bptr = end_of_strn(bptr, &nleft);
+    }
+    my_snprintf(bptr, nleft, _(". "));
+    bptr = end_of_strn(bptr, &nleft);
+  }
+
+  if (faces == 0) {
+    my_snprintf(bptr, nleft, _("None. "));
+    bptr = end_of_strn(bptr, &nleft);
+  }
+
+  SetWindowText(pdialog->mod_label[BUILDINGS], buf);
 }
 
 /**************************************************************************
@@ -279,8 +331,53 @@ static void happiness_dialog_update_units(struct happiness_dlg *pdialog)
 static void happiness_dialog_update_wonders(struct happiness_dlg
                                             *pdialog)
 {
-  SetWindowText(pdialog->mod_label[WONDERS],
-		get_happiness_wonders(pdialog->pcity));
+  int faces = 0;
+  char buf[512], *bptr = buf;
+  int nleft = sizeof(buf);
+  struct city *pcity = pdialog->pcity;
+
+  my_snprintf(bptr, nleft, _("Wonders: "));
+  bptr = end_of_strn(bptr, &nleft);
+
+  if (city_affected_by_wonder(pcity, B_HANGING)) {
+    faces++;
+    my_snprintf(bptr, nleft, get_improvement_name(B_HANGING));
+    bptr = end_of_strn(bptr, &nleft);
+    my_snprintf(bptr, nleft, _(". "));
+    bptr = end_of_strn(bptr, &nleft);
+  }
+  if (city_affected_by_wonder(pcity, B_BACH)) {
+    faces++;
+    my_snprintf(bptr, nleft, get_improvement_name(B_BACH));
+    bptr = end_of_strn(bptr, &nleft);
+    my_snprintf(bptr, nleft, _(". "));
+    bptr = end_of_strn(bptr, &nleft);
+  }
+  /* hack for eliminating gtk_set_line_wrap() -mck */
+  if (faces > 1) {
+    /* sizeof("Wonders: ") */
+    my_snprintf(bptr, nleft, _("\n              "));
+    bptr = end_of_strn(bptr, &nleft);
+  }
+  if (city_affected_by_wonder(pcity, B_SHAKESPEARE)) {
+    faces++;
+    my_snprintf(bptr, nleft, get_improvement_name(B_SHAKESPEARE));
+    bptr = end_of_strn(bptr, &nleft);
+    my_snprintf(bptr, nleft, _(". "));
+    bptr = end_of_strn(bptr, &nleft);
+  }
+  if (city_affected_by_wonder(pcity, B_CURE)) {
+    faces++;
+    my_snprintf(bptr, nleft, get_improvement_name(B_CURE));
+    bptr = end_of_strn(bptr, &nleft);
+    my_snprintf(bptr, nleft, _(". "));
+    bptr = end_of_strn(bptr, &nleft);
+  }
+
+  if (faces == 0) {
+    my_snprintf(bptr, nleft, _("None. "));
+  }
+  SetWindowText(pdialog->mod_label[WONDERS], buf);
 }
 
 /**************************************************************************
@@ -293,7 +390,13 @@ static void refresh_happiness_bitmap(HBITMAP bmp,
   HBITMAP old;
   RECT rc;
   int i;
-  struct citizen_type citizens[MAX_CITY_SIZE];
+  int citizen_type;
+  int n1 = pcity->ppl_happy[index];
+  int n2 = n1 + pcity->ppl_content[index];
+  int n3 = n2 + pcity->ppl_unhappy[index];
+  int n4 = n3 + pcity->ppl_angry[index];
+  int n5 = n4 + pcity->ppl_elvis;
+  int n6 = n5 + pcity->ppl_scientist;
   int num_citizens = pcity->size;
   int pix_width = HAPPINESS_PIX_WIDTH * SMALL_TILE_WIDTH;
   int offset = MIN(SMALL_TILE_WIDTH, pix_width / num_citizens);
@@ -305,14 +408,24 @@ static void refresh_happiness_bitmap(HBITMAP bmp,
   rc.right=pix_width;
   rc.bottom=SMALL_TILE_HEIGHT;
   FillRect(hdc,&rc,(HBRUSH)GetClassLong(root_window,GCL_HBRBACKGROUND));
-
-  get_city_citizen_types(pcity, index, citizens);
-
   for (i = 0; i < num_citizens; i++) {
-    draw_sprite(get_citizen_sprite(citizens[i], i, pcity),
-		hdc, i * offset, 0);
+    if (i < n1)
+      citizen_type = 5 + i % 2;
+    else if (i < n2)
+      citizen_type = 3 + i % 2;
+    else if (i < n3)
+      citizen_type = 7 + i % 2;
+    else if (i < n4)
+      citizen_type = 9 + i % 2;
+    else if (i < n5)
+      citizen_type = 0;
+    else if (i < n6)
+      citizen_type = 1;
+    else
+      citizen_type = 2;
+    draw_sprite(sprites.citizen[citizen_type],hdc,
+		i*offset,0);
   }
-
   SelectObject(hdc,old);
   DeleteDC(hdc);
 }

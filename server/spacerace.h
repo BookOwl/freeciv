@@ -13,10 +13,9 @@
 #ifndef FC__SPACERACE_H
 #define FC__SPACERACE_H
 
-#include "fc_types.h"
-#include "packets.h"
-
+struct player;
 struct player_spaceship;
+struct packet_spaceship_action;
 struct conn_list;
 
 void spaceship_calc_derived(struct player_spaceship *ship);
@@ -24,8 +23,8 @@ void send_spaceship_info(struct player *src, struct conn_list *dest);
 void spaceship_lost(struct player *pplayer);
 void check_spaceship_arrivals(void);
 
+void handle_spaceship_action(struct player *pplayer, 
+			     struct packet_spaceship_action *packet);
 void handle_spaceship_launch(struct player *pplayer);
-void handle_spaceship_place(struct player *pplayer,
-			    enum spaceship_place_type type, int num);
 
 #endif /* FC__SPACERACE_H */

@@ -2,33 +2,30 @@
 
 name=_("Mordor")
 plural=_("?plural:Mordors")
-class=_("Fictional")
-legend=_("The armies of the Dark Lord Sauron, from J.R.R. Tolkien's \
-Middle Earth fantasies.")
-leader="Sauron", "Angmar", "Gorthaur", "Melkor"
-leader_sex="Male", "Male", "Male", "Male"
+leader="Sauron", "Angmar", "Gorthaur"
+leader_sex="Male", "Male", "Male"
 flag = "f.mordor"
 flag_alt = "-"
-city_style = "Tropical"
+city_style = "Classical"
 
 ruler_titles = { "government",      "male_title",      "female_title"
                  "Despotism",       _("Overlord"),     _("Overlord")
                  "Monarchy",        _("Dark Lord"),    _("Dark Lord")
 }
 
+attack=0
+expand=2
+civilized=2
+advisors=100,100,100,100,100,100,100
 init_techs=""
-init_buildings=""
 tech_goals = "Monarchy", "Bronze Working", "Iron Working", "Construction"
 wonder="Sun Tzu's War Academy"
 government="Monarchy"
-civilwar_nations = "dunedain"
 
 cities =
-  "Barad-D没r", "Durthang", "Orodruin", "Morannon", "Dol Guldur",
+  "Barad-D鹯", "Durthang", "Orodruin", "Morannon", "Dol Guldur",
   "Minas Morgul", "Cirith Ungol", "Moria", "Angmar", "Gorgoroth",
-  "Morgai", "Nurn", "Khand", "Rh没n", "Harad", "Dagorlad", "Ephel D煤ath",
-  "Ered Lithui", "Emyn Muil", "N煤rnen", "Poros", "Harnen", "Lugb煤rz",
-  "Angband", "Carn D没m", "Utumno", "Amon Amarth",  "Thangorodrim", 
-  "Orthanc", "Angrenost", "Mount Fang", "Cirith Gorgor", "Moontower", 
-  "Hells of Iron", "Ud没n", "Havens of Umbar", "Phurunargian", "Khand", 
-  "Rh没n", "Sammath Naur"
+  "Morgai", "Nurn", "Khand", "Rh鹡", "Harad", "Dagorlad", "Ephel D鷄th",
+  "Ered Lithui", "Emyn Muil", "N鷕nen", "Poros", "Harnen", "Lugb鷕z",
+  "Angband", "Carn D鹠", "Utumno", "Amon Amarth", "Uruk-hai", "Olog-hai",
+  "Azog", "Bolg", "Gorbag", "Shagrat", "Grishn醟h", "Glamhoth"

@@ -15,23 +15,23 @@
 
 #include "shared.h"		/* bool type */
 
-#include "fc_types.h"
+struct city;
 
 /* abbreviate long city names to this length in the city report: */
 #define REPORT_CITYNAME_ABBREV 15
 
 /* Number of city report columns: have to set this manually now... */
-#define NUM_CREPORT_COLS 33
+#define NUM_CREPORT_COLS 14
 
 struct city_report_spec {
   bool show;			/* modify this to customize */
   int width;			/* 0 means variable; rightmost only */
   int space;			/* number of leading spaces (see below) */
-  const char *title1;		/* already translated or NULL */
-  const char *title2;		/* already translated or NULL */
-  const char *explanation;	/* already translated */ 
-  const char *(*func)(const struct city *);
-  const char *tagname;		/* for save_options */
+  char *title1;			/* already translated or NULL */
+  char *title2;			/* already translated or NULL */
+  char *explanation;		/* already translated */ 
+  char *(*func)(struct city*);
+  char *tagname;		/* for save_options */
 };
 
 extern struct city_report_spec city_report_specs[];
@@ -59,10 +59,8 @@ extern struct city_report_spec city_report_specs[];
 */
 int num_city_report_spec(void);
 bool *city_report_spec_show_ptr(int i);
-const char *city_report_spec_tagname(int i);
+char *city_report_spec_tagname(int i);
 
 void init_city_report_data(void);
-
-int cityrepfield_compare(const char *field1, const char *field2);
 
 #endif  /* FC__CITYREPDATA_H */

@@ -17,7 +17,6 @@
 
 #include "gtkpixcomm.h"
 
-#include "citydlg_common.h"
 #include "mapview_g.h"
 #include "mapview_common.h"
 
@@ -27,17 +26,34 @@ struct unit;
 struct city;
 
 GdkPixmap *get_thumb_pixmap(int onoff);
+GdkPixmap *get_citizen_pixmap(int frame);
+SPRITE *get_citizen_sprite(int frame);
 
 gboolean overview_canvas_expose(GtkWidget *w, GdkEventExpose *ev, gpointer data);
 gboolean map_canvas_expose(GtkWidget *w, GdkEventExpose *ev, gpointer data);
 gboolean map_canvas_configure(GtkWidget *w, GdkEventConfigure *ev,
 			      gpointer data);
 
+void put_city_tile_output(GdkDrawable *pm, int canvas_x, int canvas_y, 
+			  int food, int shield, int trade);
 void put_unit_gpixmap(struct unit *punit, GtkPixcomm *p);
 
 void put_unit_gpixmap_city_overlays(struct unit *punit, GtkPixcomm *p);
+void put_one_tile_full(GdkDrawable *pm, int x, int y,
+		       int canvas_x, int canvas_y, int citymode);
+void pixmap_frame_tile_red(GdkDrawable *pm,
+			   int canvas_x, int canvas_y);
+void pixmap_put_tile(GdkDrawable *pm, int x, int y,
+		     int canvas_x, int canvas_y, int citymode);
+void pixmap_put_black_tile(GdkDrawable *pm,
+			   int canvas_x, int canvas_y);
 
 void scrollbar_jump_callback(GtkAdjustment *adj, gpointer hscrollbar);
 void update_map_canvas_scrollbars_size(void);
+
+void get_map_xy(int canvas_x, int canvas_y, int *map_x, int *map_y);
+
+/* contains the x0, y0 coordinates of the upper left corner block */
+extern int map_view_x0, map_view_y0;
 
 #endif  /* FC__MAPVIEW_H */

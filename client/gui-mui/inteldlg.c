@@ -10,13 +10,13 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 
 #include <libraries/mui.h>
 #include <mui/NListview_MCC.h>
@@ -168,13 +168,4 @@ static void intel_create_dialog(struct player *p)
     DoMethod(intel_wnd, MUIM_Notify, MUIA_Window_CloseRequest, TRUE, app, 3, MUIM_CallHook, &civstandard_hook, intel_close);
     DoMethod(app, OM_ADDMEMBER, intel_wnd);
   }
-}
-
-/****************************************************************************
-  Update the intelligence dialog for the given player.  This is called by
-  the core client code when that player's information changes.
-****************************************************************************/
-void update_intel_dialog(struct player *p)
-{
-  /* PORTME */
 }

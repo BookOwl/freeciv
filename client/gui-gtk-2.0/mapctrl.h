@@ -20,14 +20,15 @@
 struct unit;
 
 void key_city_workers(GtkWidget *w, GdkEventKey *ev);
+void adjust_workers(GtkWidget *widget, GdkEventButton *ev);
 
-gboolean butt_release_mapcanvas(GtkWidget *w, GdkEventButton *ev, gpointer data);
 gboolean butt_down_mapcanvas(GtkWidget *w, GdkEventButton *ev, gpointer data);
 gboolean butt_down_overviewcanvas(GtkWidget *w, GdkEventButton *ev, gpointer data);
-gboolean move_mapcanvas(GtkWidget *w, GdkEventMotion *ev, gpointer data);
-gboolean move_overviewcanvas(GtkWidget *w, GdkEventMotion *ev, gpointer data);
+gboolean move_mapcanvas(GtkWidget *widget, GdkEventMotion *event, gpointer data);
+void update_line(int window_x, int window_y);
 
 void center_on_unit(void);
+void focus_to_next_unit(void);
 void popupinfo_popdown_callback(GtkWidget *w, gpointer data);
 
 /* Color to use to display the workers */

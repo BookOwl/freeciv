@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -19,8 +18,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <gdk/gdkkeysyms.h>
 #include <gtk/gtk.h>
+#include <gdk/gdkkeysyms.h>
 
 #include "fcintl.h"
 #include "game.h"
@@ -30,10 +29,9 @@
 #include "support.h"
 #include "unit.h"
 
-#include "civclient.h"
 #include "clinet.h"
+#include "civclient.h"
 #include "control.h"
-
 #include "dialogs.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
@@ -76,7 +74,9 @@ void popup_goto_dialog(void)
   GtkWidget *scrolled;
   GtkAccelGroup *accel=gtk_accel_group_new();
 
-  if (!can_client_issue_orders() || !get_unit_in_focus()) {
+  if(get_client_state()!=CLIENT_GAME_RUNNING_STATE)
+    return;
+  if (!get_unit_in_focus()) {
     return;
   }
 
@@ -198,10 +198,8 @@ static void update_goto_dialog(GtkWidget *goto_list)
     if(!all_cities && i!=game.player_idx) continue;
     city_list_iterate(game.players[i].cities, pcity) {
       sz_strlcpy(name, pcity->name);
-      /* FIXME: should use unit_can_airlift_to(). */
-      if (pcity->airlift) {
+      if (pcity->improvements[B_AIRPORT] == I_ACTIVE)
 	sz_strlcat(name, "(A)");
-      }
       gtk_clist_append( GTK_CLIST( goto_list ), row );
     }
     city_list_iterate_end;

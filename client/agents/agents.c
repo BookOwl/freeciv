@@ -11,26 +11,20 @@
    GNU General Public License for more details.
 ***********************************************************************/
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <assert.h>
-#include <stdarg.h>
 #include <string.h>
 
 #include "capability.h"
 #include "hash.h"
-#include "log.h"
 #include "mem.h"
-#include "timing.h"
-
 #include "civclient.h"
+#include "log.h"
 #include "clinet.h"
+#include "timing.h"
+#include "mapctrl_g.h"
+
 #include "cma_core.h"
 #include "cma_fec.h"
-#include "mapctrl_g.h"
-#include "sha.h"
 
 #include "agents.h"
 
@@ -43,21 +37,20 @@
 
 struct my_agent;
 
-union arguments {
-  int int_arg;
-  struct map_position pos_arg;
-};
-
 struct call {
   struct my_agent *agent;
-  enum oct { OCT_NEW_TURN, OCT_UNIT, OCT_CITY, OCT_TILE } type;
+  enum oct { OCT_NEW_TURN, OCT_UNIT, OCT_CITY } type;
   enum callback_type cb_type;
-  union arguments arg;
+  int arg;
 };
 
 #define SPECLIST_TAG call
 #define SPECLIST_TYPE struct call
 #include "speclist.h"
+
+#define SPECLIST_TAG call
+#define SPECLIST_TYPE struct call
+#include "speclist_c.h"
 
 #define call_list_iterate(calllist, pcall) \
     TYPED_LIST_ITERATE(struct call, calllist, pcall)
@@ -84,65 +77,26 @@ static bool initialized = FALSE;
 static int frozen_level;
 static bool currently_running = FALSE;
 
-/****************************************************************************
-  Return TRUE iff the two agent calls are equal.
-****************************************************************************/
-static bool calls_are_equal(const struct call *pcall1,
-			    const struct call *pcall2)
-{
-  if (pcall1->type != pcall2->type && pcall1->cb_type != pcall2->cb_type) {
-    return FALSE;
-  }
-
-  switch (pcall1->type) {
-  case OCT_UNIT:
-  case OCT_CITY:
-    return (pcall1->arg.int_arg == pcall2->arg.int_arg);
-  case OCT_TILE:
-    return (pcall1->arg.pos_arg.x == pcall2->arg.pos_arg.x
-	    && pcall1->arg.pos_arg.y == pcall2->arg.pos_arg.y);
-  case OCT_NEW_TURN:
-    return TRUE;
-  }
-
-  assert(0);
-  return FALSE;
-}
-
 /***********************************************************************
  If the call described by the given arguments isn't contained in
  agents.calls list add the call to this list.
 ***********************************************************************/
 static void enqueue_call(struct my_agent *agent,
 			 enum oct type,
-			 enum callback_type cb_type, ...)
+			 enum callback_type cb_type, int arg)
 {
-  va_list ap;
   struct call *pcall2;
-  union arguments arg;
-
-  va_start(ap, cb_type);
 
   if (client_is_observer()) {
     return;
   }
 
-  switch (type) {
-  case OCT_UNIT:
-  case OCT_CITY:
-    arg.int_arg = va_arg(ap, int);
-    break;
-  case OCT_TILE:
-    arg.pos_arg.x = va_arg(ap, int);
-    arg.pos_arg.y = va_arg(ap, int);
-    break;
-  case OCT_NEW_TURN:
-    /* nothing */
-    break;
-  default:
-    assert(0);
-  }
-  va_end(ap);
+  call_list_iterate(agents.calls, pcall) {
+    if (pcall->type == type && pcall->cb_type == cb_type
+	&& pcall->arg == arg && pcall->agent == agent) {
+      return;
+    }
+  } call_list_iterate_end;
 
   pcall2 = fc_malloc(sizeof(struct call));
 
@@ -150,13 +104,6 @@ static void enqueue_call(struct my_agent *agent,
   pcall2->type = type;
   pcall2->cb_type = cb_type;
   pcall2->arg = arg;
-
-  call_list_iterate(agents.calls, pcall) {
-    if (calls_are_equal(pcall, pcall2)) {
-      free(pcall2);
-      return;
-    }
-  } call_list_iterate_end;
 
   call_list_insert(&agents.calls, pcall2);
 
@@ -210,12 +157,9 @@ static void execute_call(const struct call *call)
   if (call->type == OCT_NEW_TURN) {
     call->agent->agent.turn_start_notify();
   } else if (call->type == OCT_UNIT) {
-    call->agent->agent.unit_callbacks[call->cb_type] (call->arg.int_arg);
+    call->agent->agent.unit_callbacks[call->cb_type] (call->arg);
   } else if (call->type == OCT_CITY) {
-    call->agent->agent.city_callbacks[call->cb_type] (call->arg.int_arg);
-  } else if (call->type == OCT_TILE) {
-    call->agent->agent.tile_callbacks[call->cb_type]
-	(call->arg.pos_arg.x, call->arg.pos_arg.y);
+    call->agent->agent.city_callbacks[call->cb_type] (call->arg);
   } else {
     assert(0);
   }
@@ -291,7 +235,7 @@ static void thaw(void)
 /***********************************************************************
  Helper.
 ***********************************************************************/
-static struct my_agent *find_agent_by_name(const char *agent_name)
+static struct my_agent *find_agent_by_name(char *agent_name)
 {
   int i;
 
@@ -352,7 +296,6 @@ void agents_init(void)
   /* Add init calls of agents here */
   cma_init();
   cmafec_init();
-  /*simple_historian_init();*/
 }
 
 /***********************************************************************
@@ -367,6 +310,7 @@ void agents_free(void)
    * for a simple disconnect and a client quit. for right now, we just
    * let the OS free the memory on exit instead of doing it ourselves. */
   /* cmafec_free(); */
+  cma_free();
 
   for (;;) {
     struct call *pcall = remove_and_return_a_call();
@@ -498,7 +442,7 @@ void agents_new_turn(void)
       continue;
     }
     if (agent->agent.turn_start_notify) {
-      enqueue_call(agent, OCT_NEW_TURN, CB_LAST);
+      enqueue_call(agent, OCT_NEW_TURN, CB_LAST, 0);
     }
   }
   /*
@@ -511,8 +455,8 @@ void agents_new_turn(void)
  Called from client/packhand.c. A call is created and added to the
  list of outstanding calls if an agent wants to be informed about this
  event and the change wasn't caused by the agent. We then try (this
- may not be successful in every case since we can be frozen or another
- call_handle_methods may be running higher up on the stack) to execute
+ may no be successfull in every case since we can be frozen or another
+ call_handle_methods is running higher up on the stack) to execute
  all outstanding calls.
 ***********************************************************************/
 void agents_unit_changed(struct unit *punit)
@@ -612,7 +556,6 @@ void agents_city_changed(struct city *pcity)
       enqueue_call(agent, OCT_CITY, CB_CHANGE, pcity->id);
     }
   }
-
   call_handle_methods();
 }
 
@@ -671,83 +614,10 @@ void agents_city_remove(struct city *pcity)
 }
 
 /***********************************************************************
- Called from client/packhand.c. See agents_unit_changed for a generic
- documentation.
- Tiles got removed because of FOW.
-***********************************************************************/
-void agents_tile_remove(int x, int y)
-{
-  int i;
-
-  freelog(LOG_DEBUG, "A: agents_tile_remove(tile=(%d, %d))", x, y);
-
-  for (i = 0; i < agents.entries_used; i++) {
-    struct my_agent *agent = &agents.entries[i];
-
-    if (is_outstanding_request(agent)) {
-      continue;
-    }
-    if (agent->agent.tile_callbacks[CB_REMOVE]) {
-      enqueue_call(agent, OCT_TILE, CB_REMOVE, x, y);
-    }
-  }
-
-  call_handle_methods();
-}
-
-/***********************************************************************
- Called from client/packhand.c. See agents_unit_changed for a generic
- documentation.
-***********************************************************************/
-void agents_tile_changed(int x, int y)
-{
-  int i;
-
-  freelog(LOG_DEBUG, "A: agents_tile_changed(tile=(%d, %d))", x, y);
-
-  for (i = 0; i < agents.entries_used; i++) {
-    struct my_agent *agent = &agents.entries[i];
-
-    if (is_outstanding_request(agent)) {
-      continue;
-    }
-    if (agent->agent.tile_callbacks[CB_CHANGE]) {
-      enqueue_call(agent, OCT_TILE, CB_CHANGE, x, y);
-    }
-  }
-
-  call_handle_methods();
-}
-
-/***********************************************************************
- Called from client/packhand.c. See agents_unit_changed for a generic
- documentation.
-***********************************************************************/
-void agents_tile_new(int x, int y)
-{
-  int i;
-
-  freelog(LOG_DEBUG, "A: agents_tile_new(tile=(%d, %d))", x, y);
-
-  for (i = 0; i < agents.entries_used; i++) {
-    struct my_agent *agent = &agents.entries[i];
-
-    if (is_outstanding_request(agent)) {
-      continue;
-    }
-    if (agent->agent.tile_callbacks[CB_NEW]) {
-      enqueue_call(agent, OCT_TILE, CB_NEW, x, y);
-    }
-  }
-
-  call_handle_methods();
-}
-
-/***********************************************************************
  Called from an agent. This function will return until the last
  request has been processed by the server.
 ***********************************************************************/
-void wait_for_requests(const char *agent_name, int first_request_id,
+void wait_for_requests(char *agent_name, int first_request_id,
 		       int last_request_id)
 {
   struct my_agent *agent = find_agent_by_name(agent_name);
@@ -784,7 +654,7 @@ void wait_for_requests(const char *agent_name, int first_request_id,
 /***********************************************************************
  Adds a specific call for the given agent.
 ***********************************************************************/
-void cause_a_unit_changed_for_agent(const char *name_of_calling_agent,
+void cause_a_unit_changed_for_agent(char *name_of_calling_agent,
 				    struct unit *punit)
 {
   struct my_agent *agent = find_agent_by_name(name_of_calling_agent);
@@ -797,7 +667,7 @@ void cause_a_unit_changed_for_agent(const char *name_of_calling_agent,
 /***********************************************************************
  Adds a specific call for the given agent.
 ***********************************************************************/
-void cause_a_city_changed_for_agent(const char *name_of_calling_agent,
+void cause_a_city_changed_for_agent(char *name_of_calling_agent,
 				    struct city *pcity)
 {
   struct my_agent *agent = find_agent_by_name(name_of_calling_agent);

@@ -14,24 +14,17 @@
 #define FC__GAME_H
 
 #include <time.h>	/* time_t */
-
 #ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
 #endif
 
-#include "shared.h"
-
 #include "connection.h"		/* struct conn_list */
-#include "fc_types.h"
 #include "improvement.h"	/* Impr_Status */
+#include "shared.h"
 #include "player.h"
 
-/* Changing these will probably break network compatability. */
-#define MAX_LEN_DEMOGRAPHY 16
-#define MAX_LEN_ALLOW_TAKE 16
-#define MAX_ID_LEN 33
-#define MAX_GRANARY_INIS 24
-#define MAX_LEN_STARTUNIT 16
+#define MAX_LEN_DEMOGRAPHY  16
+#define MAX_LEN_ALLOW_CONNECT 16
 
 enum server_states { 
   PRE_GAME_STATE, 
@@ -49,6 +42,9 @@ enum client_states {
   CLIENT_GAME_OVER_STATE
 };
 
+struct unit;
+struct city;
+
 #define OVERFLIGHT_NOTHING  1
 #define OVERFLIGHT_FRIGHTEN 2
 
@@ -58,10 +54,9 @@ enum client_states {
 struct civ_game {
   bool is_new_game;		/* 1 for games never started */
   int version;
-  char id[MAX_ID_LEN];		/* server only */
   int civstyle;
   int gold;
-  char start_units[MAX_LEN_STARTUNIT];
+  int settlers, explorer;
   int dispersion;
   int tech;
   int skill_level;
@@ -75,7 +70,6 @@ struct civ_game {
   int netwait;
   time_t last_ping;
   int pingtimeout;
-  int pingtime;
   time_t turn_start;
   int end_year;
   int year;
@@ -86,7 +80,6 @@ struct civ_game {
   int cityfactor;
   int citymindist;
   int civilwarsize;
-  int contactturns;
   int rapturedelay;
   int min_players, max_players, nplayers;
   int aifill;
@@ -98,6 +91,7 @@ struct civ_game {
   int unhappysize;
   bool angrycitizen;
   char *startmessage;
+  int conn_id;			/* client-only: id client known to server as */
   int player_idx;
   struct player *player_ptr;
   struct player players[MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS];
@@ -109,6 +103,9 @@ struct civ_game {
          /* global_wonders[] may also be (-1), or the id of a city
 	    which no longer exists, if the wonder has been destroyed */
   Impr_Status improvements[B_LAST];        /* impr. with equiv_range==World */
+  struct geff_vector effects;		   /* effects with range==World */
+  struct ceff_vector destroyed_effects;	   /* list of effects that have survived
+					      building destruction */
 
   int heating; /* Number of polluted squares. */
   int globalwarming; /* Total damage done. (counts towards a warming event.) */
@@ -156,20 +153,12 @@ struct civ_game {
   int playable_nation_count;
   int styles_count;
 
-  int terrain_count;
-
   int watchtower_extra_vision;
   int watchtower_vision;
   int allowed_city_names;
 
-  int borders;		/* distance of border from city; 0=disabled. */
-  bool happyborders;
-  int diplomacy;        /* who can do it */
-  bool slow_invasions;  /* land units lose all movement landing on shores */
-
   char rulesetdir[MAX_LEN_NAME];
   int firepower_factor;		/* See README.rulesets */
-
   struct {
     int cathedral_plus;		/* eg Theology */
     int cathedral_minus;	/* eg Communism */
@@ -189,14 +178,6 @@ struct civ_game {
 
   /* values from game.ruleset */
   struct {
-    struct {
-      char name[MAX_LEN_NAME];
-      int min_size, bonus;
-    } specialists[SP_COUNT];
-    bool changable_tax;
-    int forced_science; /* only relevant if !changable_tax */
-    int forced_luxury;
-    int forced_gold;
     int min_city_center_food;
     int min_city_center_shield;
     int min_city_center_trade;
@@ -205,28 +186,19 @@ struct civ_game {
     int hut_overflight;
     bool pillage_select;
     int nuke_contamination;
-    int granary_food_ini[MAX_GRANARY_INIS];
-    int granary_num_inis;
+    int granary_food_ini;
     int granary_food_inc;
     int tech_cost_style;
     int tech_leakage;
-    int tech_cost_double_year;
 
-    /* Items given to all players at game start.  Server only. */
+    /* 
+     * Advances given to all players at game start.
+     */
     int global_init_techs[MAX_NUM_TECH_LIST];
-    int global_init_buildings[MAX_NUM_BUILDING_LIST];
-
-    bool killstack;
   } rgame;
-  
-  struct {
-    int improvement_factor;
-    int unit_factor;
-    int total_factor;
-  } incite_cost;
 
   char demography[MAX_LEN_DEMOGRAPHY];
-  char allow_take[MAX_LEN_ALLOW_TAKE];
+  char allow_connect[MAX_LEN_ALLOW_CONNECT];
 
   /* used by the map editor to control game_save; could be used by the server too */
   struct {
@@ -236,21 +208,20 @@ struct civ_game {
     bool save_starts; /* start positions will be auto generated */
     bool save_private_map; /* FoW map; will be created if not saved */
   } save_options;
-
-  int trireme_loss_chance[MAX_VET_LEVELS];
-  int work_veteran_chance[MAX_VET_LEVELS];
-  int veteran_chance[MAX_VET_LEVELS];
-  int revolution_length; /* 0=> random length, else the fixated length */
+  /* Used by mapeditor to load only the map */
+  struct {
+    bool load_random;
+    bool load_players;
+    bool load_known; /* Only makes sense if the players are loaded. */
+    bool load_starts; /* Should be done if the players are loaded. */
+    bool load_private_map; /* Only makes sense if the players are loaded. */
+    bool load_settings;
+  } load_options;
 };
 
 /* Unused? */
 struct lvldat {
   int advspeed;
-};
-
-/* Server setting types.  Changing these will break network compatability. */
-enum sset_type {
-  SSET_BOOL, SSET_INT, SSET_STRING
 };
 
 void game_init(void);
@@ -267,20 +238,22 @@ struct unit *find_unit_by_id(int id);
 struct city *find_city_by_id(int id);
 
 void game_remove_player(struct player *pplayer);
+void game_remove_all_players(void);
 void game_renumber_players(int plrno);
 
 void game_remove_unit(struct unit *punit);
 void game_remove_city(struct city *pcity);
 int total_player_citizens(struct player *pplayer);
+int civ_score(struct player *pplayer);
 void initialize_globals(void);
 
 void translate_data_names(void);
 
 struct player *get_player(int player_id);
-bool is_valid_player_id(int player_id);
 int get_num_human_and_ai_players(void);
+void update_island_impr_effect(int oldmax, int maxcont);
 
-const char *population_to_text(int thousand_citizen);
+void update_all_effects(void);
 
 extern struct civ_game game;
 extern bool is_server;
@@ -293,7 +266,13 @@ extern bool is_server;
 #define GAME_MIN_GOLD            0
 #define GAME_MAX_GOLD            5000
 
-#define GAME_DEFAULT_START_UNITS  "ccx"
+#define GAME_DEFAULT_SETTLERS    2
+#define GAME_MIN_SETTLERS        1
+#define GAME_MAX_SETTLERS        10
+
+#define GAME_DEFAULT_EXPLORER    1
+#define GAME_MIN_EXPLORER        0
+#define GAME_MAX_EXPLORER        10
 
 #define GAME_DEFAULT_DISPERSION  0
 #define GAME_MIN_DISPERSION      0
@@ -335,20 +314,6 @@ extern bool is_server;
 
 #define GAME_DEFAULT_FOGOFWAR        TRUE
 
-/* 0 means no national borders.  Performance dropps quickly as the border
- * distance increases (o(n^2) or worse). */
-#define GAME_DEFAULT_BORDERS         7
-#define GAME_MIN_BORDERS             0
-#define GAME_MAX_BORDERS             24
-
-#define GAME_DEFAULT_HAPPYBORDERS    TRUE
-
-#define GAME_DEFAULT_SLOW_INVASIONS  TRUE
-
-#define GAME_DEFAULT_DIPLOMACY       0
-#define GAME_MIN_DIPLOMACY           0
-#define GAME_MAX_DIPLOMACY           4
-
 #define GAME_DEFAULT_DIPLCHANCE      80
 #define GAME_MIN_DIPLCHANCE          1
 #define GAME_MAX_DIPLCHANCE          99
@@ -372,10 +337,6 @@ extern bool is_server;
 #define GAME_DEFAULT_CIVILWARSIZE    10
 #define GAME_MIN_CIVILWARSIZE        6
 #define GAME_MAX_CIVILWARSIZE        1000
-
-#define GAME_DEFAULT_CONTACTTURNS    20
-#define GAME_MIN_CONTACTTURNS        0
-#define GAME_MAX_CONTACTTURNS        100
 
 #define GAME_DEFAULT_RAPTUREDELAY    1
 #define GAME_MIN_RAPTUREDELAY        1
@@ -413,8 +374,6 @@ extern bool is_server;
 
 #define GAME_DEFAULT_SPACERACE       TRUE
 
-#define GAME_DEFAULT_TURNBLOCK       TRUE
-
 #define GAME_DEFAULT_AUTO_AI_TOGGLE  FALSE
 
 #define GAME_DEFAULT_TIMEOUT         0
@@ -437,10 +396,6 @@ extern bool is_server;
 #define GAME_DEFAULT_NETWAIT         4
 #define GAME_MIN_NETWAIT             0
 #define GAME_MAX_NETWAIT             20
-
-#define GAME_DEFAULT_PINGTIME        20
-#define GAME_MIN_PINGTIME            1
-#define GAME_MAX_PINGTIME            1800
 
 #define GAME_DEFAULT_PINGTIMEOUT     60
 #define GAME_MIN_PINGTIMEOUT         60
@@ -475,7 +430,7 @@ extern bool is_server;
 #define GAME_OLD_DEFAULT_SKILL_LEVEL 5  /* normal; for old save games */
 
 #define GAME_DEFAULT_DEMOGRAPHY      "NASRLPEMOqrb"
-#define GAME_DEFAULT_ALLOW_TAKE      "HAhad"
+#define GAME_DEFAULT_ALLOW_CONNECT   "NHAhad"
 
 #define GAME_DEFAULT_COMPRESS_LEVEL 6    /* if we have compression */
 #define GAME_MIN_COMPRESS_LEVEL     0
@@ -498,20 +453,6 @@ extern bool is_server;
 #define GAME_MIN_ALLOWED_CITY_NAMES 0
 #define GAME_MAX_ALLOWED_CITY_NAMES 3
 
-#define GAME_DEFAULT_REVOLUTION_LENGTH 0
-#define GAME_MIN_REVOLUTION_LENGTH 0
-#define GAME_MAX_REVOLUTION_LENGTH 10
-
 #define GAME_START_YEAR -4000
-
-#define specialist_type_iterate(sp)					    \
-{									    \
-  int sp;                                                                   \
-                                                                            \
-  for (sp = 0; sp < SP_COUNT; sp++) {
-
-#define specialist_type_iterate_end                                         \
-  }                                                                         \
-}
 
 #endif  /* FC__GAME_H */

@@ -62,7 +62,11 @@ GdkCursor *		patrol_cursor;
 ***************************************************************************/
 bool isometric_view_supported(void)
 {
+#ifdef WIN32_NATIVE
+  return FALSE;
+#else
   return TRUE;
+#endif
 }
 
 /***************************************************************************
@@ -163,17 +167,14 @@ void load_intro_gfx(void)
   return;
 }
 
-/****************************************************************************
-  Create a new sprite by cropping and taking only the given portion of
-  the image.
-****************************************************************************/
+/***************************************************************************
+return newly allocated sprite cropped from source
+***************************************************************************/
 struct Sprite *crop_sprite(struct Sprite *source,
 			   int x, int y,
-			   int width, int height,
-			   struct Sprite *mask,
-			   int mask_offset_x, int mask_offset_y)
+			   int width, int height)
 {
-  GdkPixmap *mypixmap, *mymask = NULL;
+  GdkPixmap *mypixmap, *mask = NULL;
 
   mypixmap = gdk_pixmap_new(root_window, width, height, -1);
 
@@ -181,40 +182,16 @@ struct Sprite *crop_sprite(struct Sprite *source,
 		    width, height);
 
   if (source->has_mask) {
-    mymask = gdk_pixmap_new(NULL, width, height, 1);
-    gdk_draw_rectangle(mymask, mask_bg_gc, TRUE, 0, 0, -1, -1);
+    mask = gdk_pixmap_new(NULL, width, height, 1);
+    gdk_draw_rectangle(mask, mask_bg_gc, TRUE, 0, 0, -1, -1);
 
-    gdk_draw_drawable(mymask, mask_fg_gc, source->mask,
+    gdk_draw_drawable(mask, mask_fg_gc, source->mask,
 		      x, y, 0, 0, width, height);
   }
 
-  if (mask) {
-    if (mymask) {
-      gdk_gc_set_function(mask_fg_gc, GDK_AND);
-      gdk_draw_drawable(mymask, mask_fg_gc, mask->mask,
-			x - mask_offset_x, y - mask_offset_y,
-			0, 0, width, height);
-      gdk_gc_set_function(mask_fg_gc, GDK_OR);
-    } else {
-      mymask = gdk_pixmap_new(NULL, width, height, 1);
-      gdk_draw_rectangle(mymask, mask_bg_gc, TRUE, 0, 0, -1, -1);
-
-      gdk_draw_drawable(mymask, mask_fg_gc, source->mask,
-			x, y, 0, 0, width, height);
-    }
-  }
-
-  return ctor_sprite_mask(mypixmap, mymask, width, height);
+  return ctor_sprite_mask(mypixmap, mask, width, height);
 }
 
-/****************************************************************************
-  Find the dimensions of the sprite.
-****************************************************************************/
-void get_sprite_dimensions(struct Sprite *sprite, int *width, int *height)
-{
-  *width = sprite->width;
-  *height = sprite->height;
-}
 
 /***************************************************************************
 ...
@@ -318,9 +295,9 @@ void dtor_sprite( SPRITE *mysprite )
  Returns the filename extensions the client supports
  Order is important.
 ***************************************************************************/
-const char **gfx_fileextensions(void)
+char **gfx_fileextensions(void)
 {
-  static const char *ext[] =
+  static char *ext[] =
   {
     "png",
     "xpm",
@@ -363,57 +340,53 @@ struct Sprite *load_gfxfile(const char *filename)
 /***************************************************************************
    Deletes a sprite.  These things can use a lot of memory.
 ***************************************************************************/
-void free_sprite(SPRITE * s)
+void free_sprite(SPRITE *s)
 {
   if (s->pixmap) {
     g_object_unref(s->pixmap);
-    s->pixmap = NULL;
   }
   if (s->mask) {
     g_object_unref(s->mask);
-    s->mask = NULL;
   }
   if (s->pixbuf) {
     g_object_unref(s->pixbuf);
   }
   free(s);
+  return;
 }
 
 /***************************************************************************
  ...
 ***************************************************************************/
-void create_overlay_unit(struct canvas *pcanvas, int i)
+void create_overlay_unit(GtkWidget *pixcomm, int i)
 {
   enum color_std bg_color;
-  int x1, x2, y1, y2;
-  int width, height;
-  struct unit_type *type = get_unit_type(i);
-
-  sprite_get_bounding_box(type->sprite, &x1, &y1, &x2, &y2);
-  if (pcanvas->type == CANVAS_PIXBUF) {
-    width = gdk_pixbuf_get_width(pcanvas->v.pixbuf);
-    height = gdk_pixbuf_get_height(pcanvas->v.pixbuf);
-  } else {
-    /* Guess */
-    width = UNIT_TILE_WIDTH;
-    height = UNIT_TILE_HEIGHT;
-  }
-
+  
   /* Give tile a background color, based on the type of unit */
-  switch (type->move_type) {
+  switch (get_unit_type(i)->move_type) {
     case LAND_MOVING: bg_color = COLOR_STD_GROUND; break;
     case SEA_MOVING:  bg_color = COLOR_STD_OCEAN;  break;
     case HELI_MOVING: bg_color = COLOR_STD_YELLOW; break;
     case AIR_MOVING:  bg_color = COLOR_STD_CYAN;   break;
     default:	      bg_color = COLOR_STD_BLACK;  break;
   }
-  canvas_put_rectangle(pcanvas, bg_color, 0, 0, width, height);
+  gtk_pixcomm_freeze(GTK_PIXCOMM(pixcomm));
+  gtk_pixcomm_fill(GTK_PIXCOMM(pixcomm), colors_standard[bg_color]);
+
+  /* If we're using flags, put one on the tile */
+  if(!solid_color_behind_units)  {
+    struct Sprite *flag=get_nation_by_plr(game.player_ptr)->flag_sprite;
+
+    gtk_pixcomm_copyto(GTK_PIXCOMM(pixcomm), flag, 0, 0);
+  }
 
   /* Finally, put a picture of the unit in the tile */
-  canvas_put_sprite(pcanvas, 0, 0, type->sprite, 
-      (x2 + x1 - width) / 2, (y1 + y2 - height) / 2, 
-      UNIT_TILE_WIDTH - (x2 + x1 - width) / 2, 
-      UNIT_TILE_HEIGHT - (y1 + y2 - height) / 2);
+  if(i<game.num_unit_types) {
+    struct Sprite *s=get_unit_type(i)->sprite;
+
+    gtk_pixcomm_copyto(GTK_PIXCOMM(pixcomm), s, 0, 0);
+  }
+  gtk_pixcomm_thaw(GTK_PIXCOMM(pixcomm));
 }
 
 /***************************************************************************
@@ -526,7 +499,7 @@ void sprite_get_bounding_box(SPRITE * sprite, int *start_x,
     }
   }
 
-  g_object_unref(mask_image);
+/*  g_object_unref(mask_image);*/
 }
 
 /*********************************************************************
@@ -538,7 +511,7 @@ SPRITE *crop_blankspace(SPRITE *s)
 
   sprite_get_bounding_box(s, &x1, &y1, &x2, &y2);
 
-  return crop_sprite(s, x1, y1, x2 - x1 + 1, y2 - y1 + 1, NULL, -1, -1);
+  return crop_sprite(s, x1, y1, x2 - x1 + 1, y2 - y1 + 1);
 }
 
 /*********************************************************************
@@ -577,7 +550,7 @@ GdkPixbuf *gdk_pixbuf_new_from_sprite(SPRITE *src)
 	}
       }
     }
-    g_object_unref(img);
+/*    g_object_unref(img);*/
   }
 
   return dst;
@@ -589,10 +562,6 @@ GdkPixbuf *gdk_pixbuf_new_from_sprite(SPRITE *src)
  ********************************************************************/
 GdkPixbuf *sprite_get_pixbuf(SPRITE *sprite)
 {
-  if (!sprite) {
-    return NULL;
-  }
-  
   if (!sprite->pixbuf) {
     sprite->pixbuf = gdk_pixbuf_new_from_sprite(sprite);
   }

@@ -17,7 +17,6 @@
 
 #include "cityrep_g.h"
 
-void popdown_city_report_dialog(void);
 
 void cityrep_msg_close(Widget w);
 

@@ -10,41 +10,35 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
-#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 
-#include <gdk/gdkkeysyms.h>
 #include <gtk/gtk.h>
+#include <gdk/gdkkeysyms.h>
 
-#include "diptreaty.h"
 #include "fcintl.h"
 #include "game.h"
-#include "log.h"
-#include "nation.h"
 #include "packets.h"
+#include "nation.h"
 #include "player.h"
 #include "support.h"
 
-#include "civclient.h"
+#include "chatline.h"
 #include "climisc.h"
 #include "clinet.h"
-#include "text.h"
-#include "tilespec.h"
-
-#include "chatline.h"
-#include "colors.h"
-#include "graphics.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "inteldlg.h"
 #include "spaceshipdlg.h"
+#include "colors.h"
+#include "graphics.h"
+#include "log.h"
 
 #include "plrdlg.h"
 
@@ -76,7 +70,7 @@ static void players_list_callback(GtkWidget *w, gint row, gint column);
 static void players_list_ucallback(GtkWidget *w, gint row, gint column);
 static void players_sship_callback(GtkWidget *w, gpointer data);
 
-#define NUM_COLUMNS 14		/* number of columns in total */
+#define NUM_COLUMNS 12    /* number of columns in total */
 #define DEF_SORT_COLUMN 2 /* default sort column (1 = nation) */
 
 /****************************************************************
@@ -89,17 +83,6 @@ void popup_players_dialog(void)
     gtk_set_relative_position(toplevel, players_dialog_shell, 25, 25);
 
     gtk_widget_show(players_dialog_shell);
-  }
-}
-
-/****************************************************************
- Closes the players dialog.
-*****************************************************************/
-void popdown_players_dialog(void)
-{
-  if (players_dialog_shell) {
-    gtk_widget_destroy(players_dialog_shell);
-    players_dialog_shell = NULL;
   }
 }
 
@@ -136,16 +119,14 @@ static void sort_players_callback(GtkButton *button, gpointer *data)
 *****************************************************************/
 void create_players_dialog(void)
 {
-  static const char *titles_[NUM_COLUMNS] =
-      { N_("Name"), N_("Flag"), N_("Nation"),
-	N_("Border"), N_("Team"), N_("AI"),
-	N_("Embassy"), N_("Dipl.State"), N_("Vision"), N_("Reputation"),
-	N_("State"), N_("Host"), N_("Idle"), N_("Ping")
+  static gchar *titles_[NUM_COLUMNS] =
+      { N_("Name"), N_("Flag"), N_("Nation"), N_("Team"), N_("Ai"),
+    N_("Embassy"), N_("Dipl.State"), N_("Vision"), N_("Reputation"),
+    N_("State"), N_("Host"), N_("Idle")
   };
   static gchar **titles;
   int i;
   GtkAccelGroup *accel = gtk_accel_group_new();
-  GtkWidget *sw;
 
   /* initialises the indexes, necessary for update_players_dialog */
   for (i = 0; i < MAX_NUM_PLAYERS; i++) {
@@ -156,8 +137,6 @@ void create_players_dialog(void)
   if (!titles) titles = intl_slist(NUM_COLUMNS, titles_);
 
   players_dialog_shell = gtk_dialog_new();
-  gtk_window_set_default_size(GTK_WINDOW(players_dialog_shell), -1, 270);
-
   gtk_box_set_homogeneous(GTK_BOX
 			  (GTK_DIALOG(players_dialog_shell)->action_area),
 			  0);
@@ -172,12 +151,8 @@ void create_players_dialog(void)
   for(i=0; i<NUM_COLUMNS; i++)
     gtk_clist_set_column_auto_resize (GTK_CLIST (players_list), i, TRUE);
 
-  sw = gtk_scrolled_window_new(NULL, NULL);
-  gtk_container_add(GTK_CONTAINER(sw), players_list);
-  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sw),
-				 GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
   gtk_box_pack_start(GTK_BOX(GTK_DIALOG(players_dialog_shell)->vbox),
-	sw, TRUE, TRUE, 0);
+	players_list, TRUE, TRUE, 0);
 
   players_close_command=gtk_accelbutton_new(_("C_lose"), accel);
   gtk_box_pack_start(GTK_BOX(GTK_DIALOG(players_dialog_shell)->action_area),
@@ -269,15 +244,13 @@ void create_players_dialog(void)
  * Builds the text for the cells of a row in the player report. If
  * update is 1, only the changable entries are build.
  */
-static void build_row(const char **row, int i, int update)
+static void build_row(char **row, int i, int update)
 {
   static char namebuf[MAX_LEN_NAME], flagbuf[1], aibuf[2], dsbuf[32],
       repbuf[32], statebuf[32], idlebuf[32];
-  static const char *colbuf = "";
   const struct player_diplstate *pds;
 
-  /* we assume that the player's name, flag,
-   * nation and color never change. */
+  /* we assume that neither name, team nor the nation of a player changes */
   if (update == 0) {
     /* the playername */
     my_snprintf(namebuf, sizeof(namebuf), "%-16s", game.players[i].name);
@@ -290,14 +263,11 @@ static void build_row(const char **row, int i, int update)
     /* the nation */
     row[2] = (char *) get_nation_name(game.players[i].nation);
 
-    /* the nation color, empty since it's a block of color (no text). */
-    row[3] = colbuf;
-
     /* the team */
     if (game.players[i].team != TEAM_NONE) {
-      row[4] = (char *) team_get_by_id(game.players[i].team)->name;
+      row[3] = (char *) team_get_by_id(game.players[i].team)->name;
     } else {
-      row[4] = (char *) "";
+      row[3] = (char *) "";
     }
   }
 
@@ -348,15 +318,14 @@ static void build_row(const char **row, int i, int update)
 	      reputation_text(game.players[i].reputation));
 
   /* assemble the whole lot */
-  row[5] = aibuf;
-  row[6] = get_embassy_status(game.player_ptr, &game.players[i]);
-  row[7] = dsbuf;
-  row[8] = get_vision_status(game.player_ptr, &game.players[i]);
-  row[9] = repbuf;
-  row[10] = statebuf;
-  row[11] = (char *) player_addr_hack(&game.players[i]);	/* Fixme */
-  row[12] = idlebuf;
-  row[13] = get_ping_time_text(&game.players[i]);
+  row[4] = aibuf;
+  row[5] = get_embassy_status(game.player_ptr, &game.players[i]);
+  row[6] = dsbuf;
+  row[7] = get_vision_status(game.player_ptr, &game.players[i]);
+  row[8] = repbuf;
+  row[9] = statebuf;
+  row[10] = (char *) player_addr_hack(&game.players[i]);	/* Fixme */
+  row[11] = idlebuf;
 }
 
 #define MIN_DIMENSION 5
@@ -390,7 +359,7 @@ static void build_flag(int playerindex)
   assert(flag_w >= MIN_DIMENSION && flag_h >= MIN_DIMENSION);
   
   /* croping */
-  croped = crop_sprite(flag, start_x, start_y, flag_w, flag_h, NULL, -1, -1);
+  croped = crop_sprite(flag, start_x, start_y, flag_w, flag_h);
 
   /* scaling */
   newflag_h = GTK_CLIST(players_list)->row_height;
@@ -416,15 +385,12 @@ void update_players_dialog(void)
 {
   if (players_dialog_shell && !is_plrdlg_frozen()) {
     GdkColor *state_col;
-    GtkStyle *style;
-    const char *row_texts[NUM_COLUMNS];
+    char *row_texts[NUM_COLUMNS];
     int i, j, row, sort_needed = 0;
 
     gtk_clist_freeze(GTK_CLIST(players_list));
 
-    players_iterate(pplayer) {
-      int i = pplayer->player_no;
-
+    for (i = 0; i < game.nplayers; i++) {
       /* skip barbarians */
       if (is_barbarian(&game.players[i])) {
 	continue;
@@ -437,7 +403,7 @@ void update_players_dialog(void)
 	 */
 	row = GTK_CLIST(players_list)->rows;
 	build_row(row_texts, i, 0);
-	gtk_clist_append(GTK_CLIST(players_list), (gchar **)row_texts);
+	gtk_clist_append(GTK_CLIST(players_list), row_texts);
 	gtk_clist_set_row_data(GTK_CLIST(players_list), row,
 			       &(listindex_to_playerindex[row]));
 
@@ -456,7 +422,7 @@ void update_players_dialog(void)
 	 * The nation already had a row in the player report. In that
 	 * case we just update the row. 
 	 */
-	for (j = 5; j < NUM_COLUMNS; j++) {
+	for (j = 4; j < NUM_COLUMNS; j++) {
 	  gtk_clist_set_text(GTK_CLIST(players_list), row, j,
 			     row_texts[j]);
 	}
@@ -468,20 +434,12 @@ void update_players_dialog(void)
 	state_col = colors_standard[COLOR_STD_RED];
 	break;
       case DS_ALLIANCE:
-      case DS_TEAM:
 	state_col = colors_standard[COLOR_STD_GROUND];
 	break;
       default:
 	state_col = colors_standard[COLOR_STD_BLACK];
       }
       gtk_clist_set_foreground(GTK_CLIST(players_list), row, state_col);
-      /* Make the background of column 3 match the nation's border colour. */
-      style = gtk_style_new();
-      style->fg[GTK_STATE_NORMAL]
-	      = *(colors_standard[player_color(pplayer)]);
-      style->base[GTK_STATE_NORMAL]
-	      = *(colors_standard[player_color(pplayer)]);
-      gtk_clist_set_cell_style(GTK_CLIST(players_list), row, 3, style);
     }
 
     if (sort_needed) {
@@ -495,7 +453,7 @@ void update_players_dialog(void)
 
     gtk_clist_thaw(GTK_CLIST(players_list));
     gtk_widget_show_all(players_list);
-  } players_iterate_end;
+  }
 }
 
 /**************************************************************************
@@ -519,18 +477,25 @@ void players_list_callback(GtkWidget * w, gint row, gint column)
     break;
   default:
     gtk_widget_set_sensitive(players_war_command,
-			     can_client_issue_orders()
-			     && game.player_idx != player_index);
+			     game.player_idx != player_index);
   }
 
   gtk_widget_set_sensitive(players_vision_command,
-			   can_client_issue_orders()
-			   && gives_shared_vision(game.player_ptr, pplayer));
+			   gives_shared_vision(game.player_ptr, pplayer));
 
-  gtk_widget_set_sensitive(players_meet_command,
-                           can_meet_with_player(pplayer));
-  gtk_widget_set_sensitive(players_int_command,
-                           can_intel_with_player(pplayer));
+  if (pplayer->is_alive 
+      && pplayer != game.player_ptr
+      && player_has_embassy(game.player_ptr, pplayer)) {
+    if (pplayer->is_connected)
+      gtk_widget_set_sensitive(players_meet_command, TRUE);
+    else
+      gtk_widget_set_sensitive(players_meet_command, FALSE);
+    gtk_widget_set_sensitive(players_int_command, TRUE);
+    return;
+  }
+
+  gtk_widget_set_sensitive(players_meet_command, FALSE);
+  gtk_widget_set_sensitive(players_int_command, FALSE);
 }
 
 void players_list_ucallback(GtkWidget *w, gint row, gint column)
@@ -542,9 +507,10 @@ void players_list_ucallback(GtkWidget *w, gint row, gint column)
 /**************************************************************************
 ...
 **************************************************************************/
-static void players_button_callback(GtkWidget * w, gpointer data)
+void players_button_callback(GtkWidget *w, gpointer data)
 {
-  popdown_players_dialog();
+  gtk_widget_destroy(players_dialog_shell);
+  players_dialog_shell = NULL;
 }
 
 /**************************************************************************
@@ -562,9 +528,16 @@ void players_meet_callback(GtkWidget *w, gpointer data)
   row = GPOINTER_TO_INT(selection->data);
   player_index = LI_2_PI(row);
 
-  if (can_meet_with_player(&game.players[player_index])) {
-    dsend_packet_diplomacy_init_meeting_req(&aconnection, player_index);
-  } else {
+  if(player_has_embassy(game.player_ptr, &game.players[player_index])) {
+    struct packet_diplomacy_info pa;
+  
+    pa.plrno0=game.player_idx;
+    pa.plrno1=player_index;
+    pa.plrno_from=pa.plrno0;
+    send_packet_diplomacy_info(&aconnection, PACKET_DIPLOMACY_INIT_MEETING,
+        		       &pa);
+  }
+  else {
     append_output_window(_("Game: You need an embassy to "
 			   "establish a diplomatic meeting."));
   }
@@ -576,30 +549,43 @@ void players_meet_callback(GtkWidget *w, gpointer data)
 void players_war_callback(GtkWidget *w, gpointer data)
 {
   GList *selection = GTK_CLIST(players_list)->selection;
+  gint row;
+  int player_index;
 
-  if (!selection) {
+  if (!selection)
     return;
-  } else {
-    gint row = GPOINTER_TO_INT(selection->data);
-    /* can be any pact clause */
-    dsend_packet_diplomacy_cancel_pact(&aconnection, LI_2_PI(row),
-				       CLAUSE_CEASEFIRE);
+  else {
+    struct packet_generic_integer pa;    
+
+    row = GPOINTER_TO_INT(selection->data);
+    player_index = LI_2_PI(row);
+
+    pa.value = player_index;
+    send_packet_generic_integer(&aconnection, PACKET_PLAYER_CANCEL_PACT,
+				&pa);
   }
 }
 
 /**************************************************************************
-  ...
+...
 **************************************************************************/
 void players_vision_callback(GtkWidget *w, gpointer data)
 {
   GList *selection = GTK_CLIST(players_list)->selection;
+  gint row;
+  int player_index;
 
-  if (!selection) {
+  if (!selection)
     return;
-  } else {
-    gint row = GPOINTER_TO_INT(selection->data);
-    dsend_packet_diplomacy_cancel_pact(&aconnection, LI_2_PI(row),
-				       CLAUSE_VISION);
+  else {
+    struct packet_generic_integer pa;    
+
+    row = GPOINTER_TO_INT(selection->data);
+    player_index = LI_2_PI(row);
+
+    pa.value = player_index;
+    send_packet_generic_integer(&aconnection, PACKET_PLAYER_REMOVE_VISION,
+				&pa);
   }
 }
 
@@ -618,9 +604,8 @@ void players_intel_callback(GtkWidget *w, gpointer data)
   row = GPOINTER_TO_INT(selection->data);
   player_index = LI_2_PI(row);
 
-  if (can_intel_with_player(&game.players[player_index])) {
+  if(player_has_embassy(game.player_ptr, &game.players[player_index]))
     popup_intel_dialog(&game.players[player_index]);
-  }
 }
 
 /**************************************************************************

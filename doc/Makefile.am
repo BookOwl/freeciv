@@ -1,23 +1,61 @@
 ## Process this file with automake to produce Makefile.in
 
-SUBDIRS = man de fr it ja nl sv
 
 EXTRA_DIST =			\
 	BUGS			\
 	CodingStyle		\
 	HACKING			\
-	INSTALL.Cygwin		\
 	HOWTOPLAY		\
+	INSTALL.Cygwin		\
 	PEOPLE			\
-	README.AI		\
 	README.agents		\
+	README.AI		\
 	README.attributes 	\
 	README.cma		\
-	README.delta		\
-	README.effects		\
-	README.ftwl		\
 	README.graphics		\
 	README.rulesets		\
-	README.scorelog		\
 	README.sound		\
-	TODO
+	TODO			\
+	de/BUGS.de		\
+	de/HOWTOPLAY.de		\
+	de/INHALT		\
+	de/INSTALL.de		\
+	de/INSTALL.debian.de	\
+	de/NEWS.de		\
+	de/README.cma.de	\
+	de/README.de		\
+	de/README.rulesets.de	\
+	de/README.sound.de	\
+	fr/BUGS.fr		\
+	fr/HOWTOPLAY.fr		\
+	fr/INSTALL.fr		\
+	fr/NEWS.fr		\
+	fr/README.cma.fr	\
+	fr/README.fr		\
+	fr/README.graphics.fr	\
+	it/HOWTOPLAY.it		\
+	it/INSTALL.it		\
+	it/README.cma.it	\
+	it/README.it		\
+	ja/BUGS.ja		\
+	ja/HOWTOPLAY.ja		\
+	ja/NEWS.ja		\
+	ja/README.cma.ja	\
+	ja/README.ja		\
+	ja/README_Japanese.ja	\
+	nl/BUGS.nl		\
+	nl/HOWTOPLAY.nl		\
+	nl/LEESMIJ		\
+	nl/README.cma.nl	\
+	nl/README.nl		\
+	nl/README.rulesets.nl	\
+	nl/TODO.nl		\
+	sv/BUGS.sv		\
+	sv/CodingStyle.sv	\
+	sv/HOWTOPLAY.sv		\
+	sv/README.agents.sv	\
+	sv/README.attributes.sv	\
+	sv/README.cma.sv	\
+	sv/README.graphics.sv	\
+	sv/README.sound.sv	\
+	sv/README.sv

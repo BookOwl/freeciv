@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -288,14 +287,17 @@ void popup_rates_dialog(void)
 ************************************************************************* */
 static void option_ok(void)
 {
-  client_options_iterate(o) {
+  client_option *o;
+
+  for (o = options; o->name; ++o)
+  {
     Object *obj = (Object *) o->p_gui_data;
     if (obj)
     {
       if (o->type == COT_BOOL) *(o->p_bool_value) = xget(obj, MUIA_Selected);
       else if (o->type == COT_INT) *(o->p_int_value) = xget(obj, MUIA_String_Integer);
     }
-  } client_options_iterate_end;
+  }
 
   update_map_canvas_visible();
 }
@@ -306,6 +308,7 @@ static void option_ok(void)
 static void create_option_dialog(void)
 {
   static Object * option_wnd;
+  client_option *o;
 
   if (!option_wnd)
   {
@@ -330,7 +333,8 @@ static void create_option_dialog(void)
 
     if (option_wnd)
     {
-      client_options_iterate(o) {
+      for (o = options; o->name; ++o)
+      {
       	Object *obj, *label;
 
 	if (o->type == COT_BOOL) obj = MakeCheck(_(o->description), FALSE);
@@ -347,7 +351,7 @@ static void create_option_dialog(void)
 	    DoMethod(group, OM_ADDMEMBER, obj);
 	  } else o->p_gui_data = NULL;
 	} else o->p_gui_data = NULL;
-      } client_options_iterate_end;
+      }
 
       DoMethod(option_wnd, MUIM_Notify, MUIA_Window_CloseRequest, TRUE, option_wnd, 3, MUIM_Set, MUIA_Window_Open, FALSE);
       DoMethod(ok_button, MUIM_Notify, MUIA_Pressed, FALSE, option_wnd, 3, MUIM_CallHook, &civstandard_hook, option_ok);
@@ -359,14 +363,15 @@ static void create_option_dialog(void)
 
   if (option_wnd)
   {
-    client_options_iterate(o) {
+    for (o = options; o->name; ++o)
+    {
       Object *obj = (Object *) o->p_gui_data;
       if (obj)
       {
       	if (o->type == COT_BOOL) setcheckmark(obj, *(o->p_bool_value));
 	else if (o->type == COT_INT) set(obj,MUIA_String_Integer,*(o->p_int_value));
       }
-    } client_options_iterate_end;
+    }
 
     set(option_wnd, MUIA_Window_Open, TRUE);
   }

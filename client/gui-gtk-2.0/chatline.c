@@ -42,12 +42,14 @@ int		history_pos;
 **************************************************************************/
 void inputline_return(GtkEntry *w, gpointer data)
 {
+  struct packet_generic_message apacket;
   const char *theinput;
 
   theinput = gtk_entry_get_text(w);
   
   if (*theinput) {
-    send_chat(theinput);
+    mystrlcpy(apacket.message, theinput, MAX_LEN_MSG-MAX_LEN_USERNAME+1);
+    send_packet_generic_message(&aconnection, PACKET_CHAT_MSG, &apacket);
 
     if (genlist_size(&history_list) >= MAX_CHATLINE_HISTORY) {
       void *data;
@@ -65,39 +67,24 @@ void inputline_return(GtkEntry *w, gpointer data)
 }
 
 /**************************************************************************
-  Appends the string to the chat output window.  The string should be
-  inserted on its own line, although it will have no newline.
+...
 **************************************************************************/
-void real_append_output_window(const char *astring, int conn_id)
+void real_append_output_window(const char *astring)
 {
- GtkWidget *sw;
- GtkAdjustment *slider;
- bool scroll;
-
- GtkTextBuffer *buf;
- GtkTextIter i;
+  GtkTextBuffer *buf;
+  GtkTextIter i;
+  GtkTextMark *mark;
   
- sw = gtk_widget_get_parent(GTK_WIDGET(main_message_area));
- slider = gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(sw));
-
- /* scroll forward only if slider is near the bottom */
- scroll = ((slider->value + slider->page_size) >=
- 	   (slider->upper - slider->step_increment));
-
   buf = gtk_text_view_get_buffer(GTK_TEXT_VIEW(main_message_area));
   gtk_text_buffer_get_end_iter(buf, &i);
   gtk_text_buffer_insert(buf, &i, "\n", -1);
   gtk_text_buffer_insert(buf, &i, astring, -1);
 
   /* have to use a mark, or this won't work properly */
-  if (scroll) {
-    GtkTextMark *mark;
-
-    gtk_text_buffer_get_end_iter(buf, &i);
-    mark = gtk_text_buffer_create_mark(buf, NULL, &i, FALSE);
-    gtk_text_view_scroll_mark_onscreen(GTK_TEXT_VIEW(main_message_area), mark);
-    gtk_text_buffer_delete_mark(buf, mark);
-  }
+  gtk_text_buffer_get_end_iter(buf, &i);
+  mark = gtk_text_buffer_create_mark(buf, NULL, &i, FALSE);
+  gtk_text_view_scroll_mark_onscreen(GTK_TEXT_VIEW(main_message_area), mark);
+  gtk_text_buffer_delete_mark(buf, mark);
 }
 
 /**************************************************************************

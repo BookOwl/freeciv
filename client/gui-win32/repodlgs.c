@@ -10,19 +10,18 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/   
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
-
-#include <assert.h>          
+ 
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-
+#include <stdlib.h>
+#include <assert.h>          
 #include <windows.h>
 #include <windowsx.h>
 #include <commctrl.h>
+
 
 #include "fcintl.h"
 #include "game.h"
@@ -33,7 +32,6 @@
  
 #include "cityrep.h"
 #include "civclient.h"
-#include "climisc.h"
 #include "dialogs.h"
 #include "gui_stuff.h"
 #include "gui_main.h"
@@ -41,7 +39,6 @@
 #include "optiondlg.h"    
 #include "repodlgs_common.h"
 #include "repodlgs.h"
-#include "text.h"
 
 static HWND economy_dlg;
 static HWND activeunits_dlg;
@@ -51,6 +48,26 @@ extern HWND root_window;
 extern struct connection aconnection;               
 int economy_improvement_type[B_LAST];   
 int activeunits_type[U_LAST]; 
+
+/**************************************************************************
+
+**************************************************************************/
+char *
+get_report_title(char *report_name)
+{
+ static char buf[512];
+ 
+  my_snprintf(buf, sizeof(buf), _("%s\n%s of the %s\n%s %s: %s"),
+          report_name,
+          get_government_name(game.player_ptr->government),
+          get_nation_name_plural(game.player_ptr->nation),
+          get_ruler_title(game.player_ptr->government,
+                          game.player_ptr->is_male, game.player_ptr->nation),
+          game.player_ptr->name,
+          textyear(game.year));
+ 
+  return buf;      
+}
 
 /**************************************************************************
 
@@ -72,12 +89,22 @@ void
 science_dialog_update(void)
 {
  
-  char text[512];
-  int i, hist, id, steps;
+  char text[512], rate[128];
+  int i, hist, id, turns_to_advance;
+  char *report_title;
 
   if (!science_dlg) return;            
-  sz_strlcpy(text, get_report_title(_("Science")));
-  sz_strlcat(text, science_dialog_text());
+  report_title=get_report_title(_("Science"));
+  sz_strlcpy(text, report_title);
+  turns_to_advance = tech_turns_to_advance(game.player_ptr);
+  if (turns_to_advance == FC_INFINITY) {
+    my_snprintf(rate, sizeof(rate), _("\n(no research)"));
+  } else {
+    my_snprintf(rate, sizeof(rate),
+		PL_("\n(%d turn/advance)", "\n(%d turns/advance)",
+		    turns_to_advance), turns_to_advance);
+  }
+  sz_strlcat(text, rate);
   SetWindowText(GetDlgItem(science_dlg,ID_SCIENCE_TOP),text);
   ListBox_ResetContent(GetDlgItem(science_dlg,ID_SCIENCE_LIST));
   for (i=A_FIRST;i<game.num_tech_types;i++)
@@ -95,32 +122,35 @@ science_dialog_update(void)
 	      total_bulbs_required(game.player_ptr));
   SetWindowText(GetDlgItem(science_dlg,ID_SCIENCE_PROG),text);
   ComboBox_ResetContent(GetDlgItem(science_dlg,ID_SCIENCE_RESEARCH));
-  if (!is_future_tech(game.player_ptr->research.researching)) {
-    for (i = A_FIRST; i < game.num_tech_types; i++) {
-      if (get_invention(game.player_ptr, i) != TECH_REACHABLE) {
-	continue;
-      }
-
-      id = ComboBox_AddString(GetDlgItem(science_dlg, ID_SCIENCE_RESEARCH),
-			      advances[i].name);
-      ComboBox_SetItemData(GetDlgItem(science_dlg, ID_SCIENCE_RESEARCH),
-			   id, i);
-      if (i == game.player_ptr->research.researching) {
-	ComboBox_SetCurSel(GetDlgItem(science_dlg, ID_SCIENCE_RESEARCH),
-			   id);
-      }
+  if (game.player_ptr->research.researching!=A_NONE)
+    {
+      for (i=A_FIRST; i<game.num_tech_types; i++)
+	{
+	  if (get_invention(game.player_ptr,i)!=TECH_REACHABLE)
+	    continue;
+	  
+	  id=ComboBox_AddString(GetDlgItem(science_dlg,ID_SCIENCE_RESEARCH),
+				advances[i].name);
+	  ComboBox_SetItemData(GetDlgItem(science_dlg,ID_SCIENCE_RESEARCH),
+			       id,i);
+	  if (i==game.player_ptr->research.researching)
+	    {
+	      ComboBox_SetCurSel(GetDlgItem(science_dlg,
+					    ID_SCIENCE_RESEARCH)
+				 ,id);
+	    }
+	}
     }
-  } else {
-    /* FIXME future tech */
-  }
+  else
+    {
+      /* FIXME future tech */
+    }
   ComboBox_ResetContent(GetDlgItem(science_dlg,ID_SCIENCE_GOAL));
     hist=0;
   for(i=A_FIRST; i<game.num_tech_types; i++) {
-    if (tech_is_available(game.player_ptr, i)
-        && get_invention(game.player_ptr, i) != TECH_KNOWN
-        && advances[i].req[0] != A_LAST && advances[i].req[1] != A_LAST
-        && (num_unknown_techs_for_goal(game.player_ptr, i) < 11
-	    || i == game.player_ptr->ai.tech_goal)) {
+    if(get_invention(game.player_ptr, i) != TECH_KNOWN &&
+       advances[i].req[0] != A_LAST && advances[i].req[1] != A_LAST &&
+       num_unknown_techs_for_goal(game.player_ptr, i) < 11) {
       id=ComboBox_AddString(GetDlgItem(science_dlg,ID_SCIENCE_GOAL),
 			    advances[i].name);
       ComboBox_SetItemData(GetDlgItem(science_dlg,ID_SCIENCE_GOAL),
@@ -130,11 +160,10 @@ science_dialog_update(void)
 			   id);
       
     }
-  }
-  steps = num_unknown_techs_for_goal(game.player_ptr,
-                                     game.player_ptr->ai.tech_goal);
-  my_snprintf(text, sizeof(text),
-	      PL_("(%d step)", "(%d steps)", steps), steps);
+  }   
+  my_snprintf(text, sizeof(text), _("(%d steps)"),
+	      num_unknown_techs_for_goal(game.player_ptr,
+					 game.player_ptr->ai.tech_goal));
   SetWindowText(GetDlgItem(science_dlg,ID_SCIENCE_STEPS),text);
   fcwin_redo_layout(science_dlg);
 }
@@ -147,7 +176,7 @@ static LONG CALLBACK science_proc(HWND hWnd,
 				  WPARAM wParam,
 				  LPARAM lParam)
 {
-  int to, steps;
+  int to;
   switch(message)
     {
     case WM_CREATE:
@@ -164,10 +193,10 @@ static LONG CALLBACK science_proc(HWND hWnd,
 	    to=ComboBox_GetCurSel(GetDlgItem(hWnd,ID_SCIENCE_RESEARCH));
 	    if (to!=LB_ERR) {
 	      char text[512];
-
-	      to = ComboBox_GetItemData(GetDlgItem(hWnd,
-						   ID_SCIENCE_RESEARCH),
-					to);
+	      struct packet_player_request packet;
+	      to=ComboBox_GetItemData(GetDlgItem(hWnd,
+						 ID_SCIENCE_RESEARCH),
+				      to);
 	      
 	      if (IsDlgButtonChecked(hWnd, ID_SCIENCE_HELP)) {
 		popup_help_dialog_typed(advances[to].name, HELP_TECH);
@@ -177,7 +206,9 @@ static LONG CALLBACK science_proc(HWND hWnd,
 			    game.player_ptr->research.bulbs_researched,
 			    total_bulbs_required(game.player_ptr));
 		SetWindowText(GetDlgItem(hWnd,ID_SCIENCE_PROG),text);
-		dsend_packet_player_research(&aconnection, to);
+		packet.tech=to;
+		send_packet_player_request(&aconnection, &packet,
+					   PACKET_PLAYER_RESEARCH);  
 	      }
 	    }
 	  }
@@ -187,15 +218,14 @@ static LONG CALLBACK science_proc(HWND hWnd,
 	    to=ComboBox_GetCurSel(GetDlgItem(hWnd,ID_SCIENCE_GOAL));
 	    if (to!=LB_ERR) {
 	      char text[512];
-
-	      to = ComboBox_GetItemData(GetDlgItem(hWnd, ID_SCIENCE_GOAL),
-					to);
-	      steps = num_unknown_techs_for_goal(game.player_ptr, to);
-	      my_snprintf(text, sizeof(text), 
-	                  PL_("(%d step)", "(%d steps)", steps),
-			  steps);
-	      SetWindowText(GetDlgItem(hWnd,ID_SCIENCE_STEPS), text);
-	      dsend_packet_player_tech_goal(&aconnection, to);
+	      struct packet_player_request packet;
+	      to=ComboBox_GetItemData(GetDlgItem(hWnd,ID_SCIENCE_GOAL),to);
+	      my_snprintf(text, sizeof(text), _("(%d steps)"),
+			  num_unknown_techs_for_goal(game.player_ptr, to));
+	      SetWindowText(GetDlgItem(hWnd,ID_SCIENCE_STEPS),text);       
+	      packet.tech=to;
+	      send_packet_player_request(&aconnection, &packet, 
+					 PACKET_PLAYER_TECH_GOAL); 
 	    }
 	  }
 	  break;
@@ -274,6 +304,7 @@ economy_report_dialog_update(void)
    
   HWND lv;
   int tax, total, i, entries_used;
+  char  *report_title;
   char   buf0 [64];
   char   buf1 [64];
   char   buf2 [64];
@@ -285,8 +316,9 @@ economy_report_dialog_update(void)
   if(is_report_dialogs_frozen()) return;      
   if(!economy_dlg) return;
   lv=GetDlgItem(economy_dlg,ID_TRADEREP_LIST);
-  SetWindowText(GetDlgItem(economy_dlg, ID_TRADEREP_TOP),
-		get_report_title(_("Economy")));
+  report_title=get_report_title(_("Economy"));
+  SetWindowText(GetDlgItem(economy_dlg,ID_TRADEREP_TOP),
+		report_title);
   ListView_DeleteAllItems(lv);
   row[0] = buf0;
   row[1] = buf1;
@@ -323,18 +355,46 @@ economy_report_dialog_update(void)
 **************************************************************************/
 static void economy_dlg_sell(HWND hWnd,int data)
 {
-  HWND lv = GetDlgItem(hWnd, ID_TRADEREP_LIST);
-  char str[1024];
-  int row, n = ListView_GetItemCount(lv);
-
-  for (row = 0; row < n; row++) {
+  HWND lv;
+  int n,i,count=0,gold=0;
+  struct genlist_iterator myiter;
+  struct city *pcity;
+  struct packet_city_request packet;
+  char str[64];
+  int row;
+  lv=GetDlgItem(hWnd,ID_TRADEREP_LIST);
+  n=ListView_GetItemCount(lv);
+  
+  for(row=0;row<n;row++)
     if (ListView_GetItemState(lv,row,LVIS_SELECTED)) {
-      sell_all_improvements(economy_improvement_type[row],
-			    data == 0, str, sizeof(str));
+       
+      i=economy_improvement_type[row];
+      
+      genlist_iterator_init(&myiter, &game.player_ptr->cities.list, 0);
+      for(; ITERATOR_PTR(myiter);ITERATOR_NEXT(myiter)) {
+	pcity=(struct city *)ITERATOR_PTR(myiter);
+	if(!pcity->did_sell && city_got_building(pcity, i) &&
+	   (data ||
+	    improvement_obsolete(game.player_ptr,i) ||
+	    wonder_replacement(pcity, i) ))  {
+	  count++; gold+=improvement_value(i);
+	  packet.city_id=pcity->id;
+	  packet.build_id=i;
+	  send_packet_city_request(&aconnection, &packet, PACKET_CITY_SELL);
+	}            
+      }
+      if(count)  {
+	my_snprintf(str, sizeof(str), _("Sold %d %s for %d gold"),
+		    count, get_improvement_name(i), gold);
+      } else {
+	my_snprintf(str, sizeof(str), _("No %s could be sold"),
+		    get_improvement_name(i));
+      }      
+      
       ListView_SetItemState(lv,row,0,LVIS_SELECTED);
       popup_notify_dialog(_("Sell-Off:"),_("Results"),str);
-    }
-  }
+    }   
+  return ;
 }
 
 /**************************************************************************
@@ -437,8 +497,7 @@ popup_economy_report_dialog(bool make_modal)
 *****************************************************************/
 static void upgrade_callback_yes(HWND w, void * data)
 {
-  dsend_packet_unit_type_upgrade(&aconnection, (size_t)data);
-  destroy_message_dialog(w);
+  send_packet_unittype_info(&aconnection,(size_t)data,PACKET_UNITTYPE_UPGRADE);  destroy_message_dialog(w);
 }
  
 /****************************************************************
@@ -558,12 +617,13 @@ activeunits_report_dialog_update(void)
 
     struct repoinfo unitarray[U_LAST];
     struct repoinfo unittotals;
+    char  *report_title;
 
     char *row[AU_COL];
     char   buf[AU_COL][64];
 
-    SetWindowText(GetDlgItem(activeunits_dlg, ID_MILITARY_TOP),
-		  get_report_title(_("Units")));
+    report_title=get_report_title(_("Units"));
+    SetWindowText(GetDlgItem(activeunits_dlg,ID_MILITARY_TOP),report_title);
     lv=GetDlgItem(activeunits_dlg,ID_MILITARY_LIST);
     ListView_DeleteAllItems(lv);
     for (i = 0; i < ARRAY_SIZE(row); i++) {
@@ -683,37 +743,4 @@ popup_activeunits_report_dialog(bool make_modal)
     }
   activeunits_report_dialog_update();
   ShowWindow(activeunits_dlg,SW_SHOWNORMAL);
-}
-
-/****************************************************************
-  Show a dialog with player statistics at endgame.
-  TODO: Display all statistics in packet_endgame_report.
-*****************************************************************/
-void popup_endgame_report_dialog(struct packet_endgame_report *packet)
-{
-  char buffer[150 * MAX_NUM_PLAYERS];
-  int i;
- 
-  buffer[0] = '\0';
-  for (i = 0; i < packet->nscores; i++) {
-    cat_snprintf(buffer, sizeof(buffer),
-                 PL_("%2d: The %s ruler %s scored %d point\n",
-                     "%2d: The %s ruler %s scored %d points\n",
-                     packet->score[i]),
-                 i + 1,
-                 get_nation_name(get_player(packet->id[i])->nation),
-                 get_player(packet->id[i])->name,
-                 packet->score[i]);
-  }
-  popup_notify_dialog(_("Final Report:"),
-                      _("The Greatest Civilizations in the world."),
-                      buffer);
-}
-
-/*************************************************************************
-  Server options dialog
-*************************************************************************/
-void popup_settable_options_dialog(void)
-{
-  /* PORT ME */
 }

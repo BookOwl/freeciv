@@ -15,13 +15,14 @@
 
 #include <gtk/gtk.h>
 
-#include "shared.h"
-
+GtkWidget *gtk_accelbutton_new(const gchar *label, GtkAccelGroup *accel);
 GtkWidget *gtk_stockbutton_new(const gchar *stock, const gchar *label_text);
+void gtk_set_label(GtkWidget *w, char *text);
+void gtk_set_bitmap(GtkWidget *w, GdkPixmap *pm);
 void gtk_expose_now(GtkWidget *w);
 void gtk_set_relative_position(GtkWidget *ref, GtkWidget *w, int px, int py);
 
-void intl_slist(int n, const char **s, bool *done);
+void intl_slist(int n, char **s, bool *done);
 
 /* the standard GTK+ 2.0 API is braindamaged. this is slightly better! */
 
@@ -49,6 +50,5 @@ void itree_unselect(GtkTreeSelection *selection, ITree *it);
 
 gint gtk_tree_selection_get_row(GtkTreeSelection *selection);
 void gtk_tree_view_focus(GtkTreeView *view);
-void setup_dialog(GtkWidget *shell, GtkWidget *parent);
 
 #endif  /* FC__GUI_STUFF_H */

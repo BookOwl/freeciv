@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -21,12 +20,12 @@
 #include "events.h"
 #include "fcintl.h"
 #include "game.h"
+#include "gamelog.h"
 #include "log.h"
 #include "packets.h"
 #include "shared.h"
 #include "spaceship.h"
 
-#include "gamelog.h"
 #include "plrhand.h"
 #include "srv_main.h"
 
@@ -191,14 +190,20 @@ void handle_spaceship_launch(struct player *pplayer)
 /**************************************************************************
 ...
 **************************************************************************/
-void handle_spaceship_place(struct player *pplayer,
-			    enum spaceship_place_type type, int num)
+void handle_spaceship_action(struct player *pplayer, 
+			     struct packet_spaceship_action *packet)
 {
   struct player_spaceship *ship = &pplayer->spaceship;
+  int action = packet->action;
+  int num = packet->num;
   
   if (ship->state == SSHIP_NONE) {
     notify_player(pplayer, _("Game: Spaceship action received,"
 			     " but you don't have a spaceship!"));
+    return;
+  }
+  if (action == SSHIP_ACT_LAUNCH) {
+    handle_spaceship_launch(pplayer);
     return;
   }
   if (ship->state >= SSHIP_LAUNCHED) {
@@ -206,7 +211,7 @@ void handle_spaceship_place(struct player *pplayer,
 			     " spaceship after launch!"));
     return;
   }
-  if (type == SSHIP_PLACE_STRUCTURAL) {
+  if (action == SSHIP_ACT_PLACE_STRUCTURAL) {
     if (num<0 || num>=NUM_SS_STRUCTURALS || ship->structure[num]) {
       return;
     }
@@ -225,7 +230,7 @@ void handle_spaceship_place(struct player *pplayer,
     send_spaceship_info(pplayer, NULL);
     return;
   }
-  if (type == SSHIP_PLACE_FUEL) {
+  if (action == SSHIP_ACT_PLACE_FUEL) {
     if (ship->fuel != num-1) {
       return;
     }
@@ -244,7 +249,7 @@ void handle_spaceship_place(struct player *pplayer,
     send_spaceship_info(pplayer, NULL);
     return;
   }
-  if (type == SSHIP_PLACE_PROPULSION) {
+  if (action == SSHIP_ACT_PLACE_PROPULSION) {
     if (ship->propulsion != num-1) {
       return;
     }
@@ -263,7 +268,7 @@ void handle_spaceship_place(struct player *pplayer,
     send_spaceship_info(pplayer, NULL);
     return;
   }
-  if (type == SSHIP_PLACE_HABITATION) {
+  if (action == SSHIP_ACT_PLACE_HABITATION) {
     if (ship->habitation != num-1) {
       return;
     }
@@ -283,7 +288,7 @@ void handle_spaceship_place(struct player *pplayer,
     send_spaceship_info(pplayer, NULL);
     return;
   }
-  if (type == SSHIP_PLACE_LIFE_SUPPORT) {
+  if (action == SSHIP_ACT_PLACE_LIFE_SUPPORT) {
     if (ship->life_support != num-1) {
       return;
     }
@@ -303,7 +308,7 @@ void handle_spaceship_place(struct player *pplayer,
     send_spaceship_info(pplayer, NULL);
     return;
   }
-  if (type == SSHIP_PLACE_SOLAR_PANELS) {
+  if (action == SSHIP_ACT_PLACE_SOLAR_PANELS) {
     if (ship->solar_panels != num-1) {
       return;
     }
@@ -323,8 +328,8 @@ void handle_spaceship_place(struct player *pplayer,
     send_spaceship_info(pplayer, NULL);
     return;
   }
-  freelog(LOG_ERROR, "Received unknown spaceship place type %d from %s",
-       type, pplayer->name);
+  freelog(LOG_ERROR, "Received unknown spaceship action %d from %s",
+       action, pplayer->name);
 }
 
 /**************************************************************************
@@ -345,11 +350,15 @@ Use shuffled order to randomly resolve ties.
 **************************************************************************/
 void check_spaceship_arrivals(void)
 {
+  int i;
   double arrival, best_arrival = 0.0;
   struct player *best_pplayer = NULL;
+  struct player *pplayer;
+  struct player_spaceship *ship;
 
-  shuffled_players_iterate(pplayer) {
-    struct player_spaceship *ship = &pplayer->spaceship;
+  for(i=0; i<game.nplayers; i++) {
+    pplayer = shuffled_player(i);
+    ship = &pplayer->spaceship;
     
     if (ship->state == SSHIP_LAUNCHED) {
       arrival = ship->launch_year + ship->travel_time;
@@ -359,7 +368,7 @@ void check_spaceship_arrivals(void)
 	best_pplayer = pplayer;
       }
     }
-  } shuffled_players_iterate_end;
+  }
   if (best_pplayer) {
     best_pplayer->spaceship.state = SSHIP_ARRIVED;
     server_state = GAME_OVER_STATE;

@@ -15,32 +15,33 @@
 This module contains various general - mostly highlevel - functions
 used throughout the client.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
 #include <assert.h>
-#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "city.h"
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+
+#include "astring.h"
 #include "diptreaty.h"
 #include "fcintl.h"
 #include "game.h"
 #include "log.h"
 #include "map.h"
+#include "city.h"
 #include "packets.h"
-#include "spaceship.h"
 #include "support.h"
 
-#include "chatline_g.h"
 #include "citydlg_g.h"
 #include "cityrep_g.h"
 #include "civclient.h"
-#include "climap.h"
+#include "chatline_g.h"
 #include "clinet.h"
 #include "control.h"
 #include "mapview_g.h"
@@ -48,9 +49,156 @@ used throughout the client.
 #include "packhand.h"
 #include "plrdlg_common.h"
 #include "repodlgs_common.h"
+#include "spaceship.h"
 #include "tilespec.h"
 
 #include "climisc.h"
+
+static void renumber_island_impr_effect(int old, int newnumber);
+
+#define MAX_NUM_CONT 32767   /* max portable value in signed short */
+
+/* Static data used to keep track of continent numbers in client:
+ * maximum value used, and array of recycled values which can be used.
+ * (Could used signed short, but int is easier and storage here will
+ * be fairly small.)
+ */
+static int max_cont_used = 0;
+static struct athing recyc_conts;   /* .n is number available */
+static bool recyc_init = FALSE;	    /* for first init of recyc_conts */
+static int *recyc_ptr = NULL;	    /* set to recyc_conts.ptr (void* vs int*) */
+
+/**************************************************************************
+  Initialise above data, or re-initialize (eg, new map).
+**************************************************************************/
+void climap_init_continents(void)
+{
+  if (!recyc_init) {
+    /* initialize with size first time: */
+    ath_init(&recyc_conts, sizeof(int));
+    recyc_init = TRUE;
+  }
+  update_island_impr_effect(-1, 0);
+  ath_free(&recyc_conts);
+  recyc_ptr = NULL;
+  max_cont_used = 0;
+}
+
+/**************************************************************************
+  Recycle a continent number.
+  (Ie, number is no longer used, and may be re-used later.)
+**************************************************************************/
+static void recycle_continent_num(int cont)
+{
+  assert(cont>0 && cont<=max_cont_used);          /* sanity */
+  ath_minnum(&recyc_conts, recyc_conts.n+1);
+  recyc_ptr = recyc_conts.ptr;
+  recyc_ptr[recyc_conts.n-1] = cont;
+  freelog(LOG_DEBUG, "clicont: recycling %d (max %d recyc %d)",
+	  cont, max_cont_used, (unsigned int)recyc_conts.n);
+}
+
+/**************************************************************************
+  Obtain an unused continent number: a recycled number if available,
+  or increase the maximum.
+**************************************************************************/
+static int new_continent_num(void)
+{
+  int ret;
+  
+  if (recyc_conts.n>0) {
+    ret = recyc_ptr[--recyc_conts.n];
+  } else {
+    assert(max_cont_used<MAX_NUM_CONT);
+    ret = ++max_cont_used;
+    update_island_impr_effect(max_cont_used-1, max_cont_used);
+  }
+  freelog(LOG_DEBUG, "clicont: new %d (max %d, recyc %d)",
+	  ret, max_cont_used, (unsigned int)recyc_conts.n);
+  return ret;
+}
+
+/**************************************************************************
+  Recursively renumber the client continent at (x,y) with continent
+  number 'new'.  Ie, renumber (x,y) tile and recursive adjacent
+  known land tiles with the same previous continent ('old').
+**************************************************************************/
+static void climap_renumber_continent(int x, int y, int newnumber)
+{
+  int old;
+
+  if( !normalize_map_pos(&x, &y) )
+    return;
+
+  old = map_get_continent(x,y);
+
+  /* some sanity checks: */
+  assert(tile_get_known(x,y) >= TILE_KNOWN_FOGGED);
+  assert(map_get_terrain(x,y) != T_OCEAN);
+  assert(old>0 && old<=max_cont_used);
+  
+  renumber_island_impr_effect(old, newnumber);
+
+  map_set_continent(x,y,newnumber);
+  adjc_iterate(x, y, i, j) {
+    if (tile_get_known(i, j) >= TILE_KNOWN_FOGGED
+	&& map_get_terrain(i, j) != T_OCEAN
+	&& map_get_continent(i, j) == old) {
+      climap_renumber_continent(i, j, newnumber);
+    }
+  }
+  adjc_iterate_end;
+}
+
+/**************************************************************************
+  Update continent numbers when (x,y) becomes known (if (x,y) land).
+  Check neighbouring known land tiles: the first continent number
+  found becomes the continent value of this tile.  Any other continents
+  found are numbered to this continent (ie, continents are merged)
+  and previous continent values are recycled.  If no neighbours are
+  numbered, use a new number. 
+**************************************************************************/
+void climap_update_continents(int x, int y)
+{
+  struct tile *ptile = map_get_tile(x,y);
+  int con, this_con;
+
+  if(ptile->terrain == T_OCEAN) return;
+
+  this_con = -1;
+  adjc_iterate(x, y, i, j) {
+    if (tile_get_known(i, j) >= TILE_KNOWN_FOGGED
+	&& map_get_terrain(i, j) != T_OCEAN) {
+      con = map_get_continent(i, j);
+      if (con > 0) {
+	if (this_con == -1) {
+	  ptile->continent = this_con = con;
+	} else if (con != this_con) {
+	  freelog(LOG_DEBUG,
+		  "renumbering client continent %d to %d at (%d %d)", con,
+		  this_con, x, y);
+	  climap_renumber_continent(i, j, this_con);
+	  recycle_continent_num(con);
+	}
+      }
+    }
+  }
+  adjc_iterate_end;
+
+  if(this_con==-1) {
+    ptile->continent = new_continent_num();
+    freelog(LOG_DEBUG, "new client continent %d at (%d %d)",
+	    ptile->continent, x, y);
+  }
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+void client_init_player(struct player *plr)
+{
+  player_init_island_imprs(plr, max_cont_used);
+}
 
 /**************************************************************************
 ...
@@ -77,7 +225,7 @@ void client_remove_unit(struct unit *punit)
 	  unit_name(punit->type), punit->x, punit->y, hc);
 
   if (punit == ufocus) {
-    set_unit_focus(NULL);
+    set_unit_focus_no_center(NULL);
     game_remove_unit(punit);
     punit = ufocus = NULL;
     advance_unit_focus();
@@ -95,11 +243,6 @@ void client_remove_unit(struct unit *punit)
 
   pcity = map_get_city(x, y);
   if (pcity) {
-    if (can_player_see_units_in_city(game.player_ptr, pcity)) {
-      pcity->client.occupied =
-	(unit_list_size(&(map_get_tile(pcity->x, pcity->y)->units)) > 0);
-    }
-
     refresh_city_dialog(pcity);
     freelog(LOG_DEBUG, "map city %s, %s, (%d %d)", pcity->name,
 	    get_nation_name(city_owner(pcity)->nation), pcity->x, pcity->y);
@@ -112,7 +255,7 @@ void client_remove_unit(struct unit *punit)
 	    get_nation_name(city_owner(pcity)->nation), pcity->x, pcity->y);
   }
 
-  refresh_tile_mapcanvas(x, y, FALSE);
+  refresh_tile_mapcanvas(x, y, TRUE);
 }
 
 /**************************************************************************
@@ -136,14 +279,13 @@ void client_remove_city(struct city *pcity)
     city_remove_improvement(pcity, i);
   } built_impr_iterate_end;
 
-  if (effect_update) {
-    /* nothing yet */
-  }
+  if (effect_update)
+    update_all_effects();
 
   popdown_city_dialog(pcity);
   game_remove_city(pcity);
   city_report_dialog_update();
-  refresh_tile_mapcanvas(x, y, FALSE);
+  refresh_tile_mapcanvas(x, y, TRUE);
 }
 
 /**************************************************************************
@@ -154,6 +296,7 @@ void client_change_all(cid x, cid y)
 {
   int fr_id = cid_id(x), to_id = cid_id(y);
   bool fr_is_unit = cid_is_unit(x), to_is_unit = cid_is_unit(y);
+  struct packet_city_request packet;
   char buf[512];
   int last_request_id = 0;
 
@@ -178,7 +321,11 @@ void client_change_all(cid x, cid y)
 	 (!to_is_unit &&
 	  can_build_improvement (pcity, to_id))))
       {
-	last_request_id = city_change_production(pcity, to_is_unit, to_id);
+	packet.city_id = pcity->id;
+	packet.build_id = to_id;
+	packet.is_build_id_unit_id = to_is_unit;
+	last_request_id = send_packet_city_request(&aconnection, &packet,
+						   PACKET_CITY_CHANGE);
       }
   } city_list_iterate_end;
 
@@ -187,47 +334,36 @@ void client_change_all(cid x, cid y)
 }
 
 /***************************************************************************
-  Return a string indicating one nation's embassy status with another
+Return a string indicating one nation's embassy status with another
 ***************************************************************************/
-const char *get_embassy_status(struct player *me, struct player *them)
+char *get_embassy_status(struct player *me, struct player *them)
 {
-  if (me == them
-      || !them->is_alive
-      || !me->is_alive) {
-    return "-";
-  }
+  if (me == them) return "-";
   if (player_has_embassy(me, them)) {
-    if (player_has_embassy(them, me)) {
+    if (player_has_embassy(them, me))
       return Q_("?embassy:Both");
-    } else {
+    else
       return Q_("?embassy:Yes");
-    }
-  } else if (player_has_embassy(them, me)) {
+  } else if (player_has_embassy(them, me))
     return Q_("?embassy:With Us");
-  } else if (me->diplstates[them->player_no].contact_turns_left > 0
-             || them->diplstates[me->player_no].contact_turns_left > 0) {
-    return Q_("?embassy:Contact");
-  } else {
+  else
     return "";
-  }
 }
 
 /***************************************************************************
-  Return a string indicating one nation's shaed vision status with another
+Return a string indicating one nation's shaed vision status with another
 ***************************************************************************/
-const char *get_vision_status(struct player *me, struct player *them)
+char *get_vision_status(struct player *me, struct player *them)
 {
   if (gives_shared_vision(me, them)) {
-    if (gives_shared_vision(them, me)) {
+    if (gives_shared_vision(them, me))
       return Q_("?vision:Both");
-    } else {
+    else
       return Q_("?vision:To Them");
-    }
-  } else if (gives_shared_vision(them, me)) {
+  } else if (gives_shared_vision(them, me))
     return Q_("?vision:To Us");
-  } else {
+  else
     return "";
-  }
 }
 
 /**************************************************************************
@@ -277,22 +413,12 @@ void client_diplomacy_clause_string(char *buf, int bufsiz,
   case CLAUSE_ALLIANCE:
     my_snprintf(buf, bufsiz, _("The parties create an alliance"));
     break;
-  case CLAUSE_TEAM:
-    my_snprintf(buf, bufsiz, _("The parties resume the research pool"));
-    break;
   case CLAUSE_VISION:
     my_snprintf(buf, bufsiz, _("The %s gives shared vision"),
 		get_nation_name_plural(pclause->from->nation));
     break;
-  case CLAUSE_EMBASSY:
-    my_snprintf(buf, bufsiz, _("The %s gives an embassy"),
-                get_nation_name_plural(pclause->from->nation));
-    break;
   default:
-    assert(FALSE);
-    if (bufsiz > 0) {
-      *buf = '\0';
-    }
+    if (bufsiz > 0) *buf = '\0';
     break;
   }
 }
@@ -341,6 +467,20 @@ int client_cooling_sprite(void)
   return index;
 }
 
+/************************************************************************
+ A tile's "known" field is used by the server to store whether _each_
+ player knows the tile.  Client-side, it's used as an enum known_type
+ to track whether the tile is known/fogged/unknown.
+
+ Judicious use of this function also makes things very convenient for
+ civworld, since it uses both client and server-style storage; since it
+ uses the stock tilespec.c file, this function serves as a wrapper.
+*************************************************************************/
+enum known_type tile_get_known(int x, int y)
+{
+  return (enum known_type) map_get_tile(x, y)->known;
+}
+
 /**************************************************************************
 Find something sensible to display. This is used to overwrite the
 intro gfx.
@@ -350,7 +490,7 @@ void center_on_something(void)
   struct city *pcity;
   struct unit *punit;
 
-  if (!can_client_change_view()) {
+  if (get_client_state() != CLIENT_GAME_RUNNING_STATE) {
     return;
   }
 
@@ -371,27 +511,91 @@ void center_on_something(void)
     center_tile_mapcanvas(punit->x, punit->y);
   } else {
     /* Just any known tile will do; search near the middle first. */
-    int center_map_x, center_map_y;
-
-    NATIVE_TO_MAP_POS(&center_map_x, &center_map_y,
-		      map.xsize / 2, map.ysize / 2);
-
-    /* Iterate outward from the center tile.  We have to give a radius that
-     * is guaranteed to be larger than the map will be.  Although this is
-     * a misuse of map.xsize and map.ysize (which are native dimensions),
-     * it should give a sufficiently large radius. */
-    iterate_outward(center_map_x, center_map_y,
-		    map.xsize + map.ysize, x, y) {
+    iterate_outward(map.xsize / 2, map.ysize / 2,
+		    MAX(map.xsize / 2, map.ysize / 2), x, y) {
       if (tile_get_known(x, y) != TILE_UNKNOWN) {
 	center_tile_mapcanvas(x, y);
-	return;
+	goto OUT;
       }
-    } iterate_outward_end;
-
+    }
+    iterate_outward_end;
     /* If we get here we didn't find a known tile.
        Refresh a random place to clear the intro gfx. */
-    center_tile_mapcanvas(center_map_x, center_map_y);
+    center_tile_mapcanvas(map.xsize / 2, map.ysize / 2);
+  OUT:
+    ;				/* do nothing */
   }
+}
+
+/**************************************************************************
+Format a duration, in seconds, so it comes up in minutes or hours if
+that would be more meaningful.
+(7 characters, maximum.  Enough for, e.g., "99h 59m".)
+**************************************************************************/
+void format_duration(char *buffer, int buffer_size, int duration)
+{
+  if (duration < 0)
+    duration = 0;
+  if (duration < 60)
+    my_snprintf(buffer, buffer_size, Q_("?seconds:%02ds"),
+		duration);
+  else if (duration < 3600)	/* < 60 minutes */
+    my_snprintf(buffer, buffer_size, Q_("?mins/secs:%02dm %02ds"),
+		duration/60, duration%60);
+  else if (duration < 360000)	/* < 100 hours */
+    my_snprintf(buffer, buffer_size, Q_("?hrs/mns:%02dh %02dm"),
+		duration/3600, (duration/60)%60);
+  else if (duration < 8640000)	/* < 100 days */
+    my_snprintf(buffer, buffer_size, Q_("?dys/hrs:%02dd %02dh"),
+		duration/86400, (duration/3600)%24);
+  else
+    my_snprintf(buffer, buffer_size, Q_("?duration:overflow"));
+}
+
+/**************************************************************************
+ Concats buf with activity progress text for given tile. Returns
+ number of activities.
+**************************************************************************/
+int concat_tile_activity_text(char *buf, int buf_size, int x, int y)
+{
+  int activity_total[ACTIVITY_LAST];
+  int activity_units[ACTIVITY_LAST];
+  int num_activities = 0;
+  int remains, turns, i, mr, au;
+  struct tile *ptile = map_get_tile(x, y);
+
+  memset(activity_total, 0, sizeof(activity_total));
+  memset(activity_units, 0, sizeof(activity_units));
+
+  unit_list_iterate(ptile->units, punit) {
+    mr = get_unit_type(punit->type)->move_rate;
+    au = (mr > 0) ? mr / SINGLE_MOVE : 1;
+    activity_total[punit->activity] += punit->activity_count;
+    if (punit->moves_left > 0) {
+      /* current turn */
+      activity_total[punit->activity] += au;
+    }
+    activity_units[punit->activity] += au;
+  }
+  unit_list_iterate_end;
+
+  for (i = 0; i < ACTIVITY_LAST; i++) {
+    if (is_build_or_clean_activity(i) && activity_units[i] > 0) {
+      if (num_activities > 0)
+	(void) mystrlcat(buf, "/", buf_size);
+      remains = map_activity_time(i, x, y) - activity_total[i];
+      if (remains > 0) {
+	turns = 1 + (remains + activity_units[i] - 1) / activity_units[i];
+      } else {
+	/* activity will be finished this turn */
+	turns = 1;
+      }
+      cat_snprintf(buf, buf_size, "%s(%d)", get_activity_text(i), turns);
+      num_activities++;
+    }
+  }
+
+  return num_activities;
 }
 
 /**************************************************************************
@@ -528,19 +732,6 @@ bool city_unit_present(struct city *pcity, cid cid)
   return FALSE;
 }
 
-/****************************************************************************
-  A TestCityFunc to tell whether the item is a building and is present.
-****************************************************************************/
-bool city_building_present(struct city *pcity, cid cid)
-{
-  if (!cid_is_unit(cid)) {
-    int impr_type = cid_id(cid);
-
-    return city_got_building(pcity, impr_type);
-  }
-  return FALSE;
-}
-
 /**************************************************************************
  Helper for name_and_sort_items.
 **************************************************************************/
@@ -559,7 +750,7 @@ static int my_cmp(const void *p1, const void *p2)
  struct items and also sort it.
 
  section 0: normal buildings
- section 1: Capitalization
+ section 1: B_CAPITAL
  section 2: F_NONMIL units
  section 3: other units
  section 4: wonders
@@ -579,15 +770,15 @@ void name_and_sort_items(int *pcids, int num_cids, struct item *items,
 
     if (is_unit) {
       name = get_unit_name(id);
-      cost = unit_build_shield_cost(id);
+      cost = get_unit_type(id)->build_cost;
       pitem->section = unit_type_flag(id, F_NONMIL) ? 2 : 3;
     } else {
       name = get_impr_name_ex(pcity, id);
-      if (building_has_effect(id, EFT_PROD_TO_GOLD)) {
+      if (id == B_CAPITAL) {
 	cost = -1;
 	pitem->section = 1;
       } else {
-	cost = impr_build_shield_cost(id);
+	cost = get_improvement_type(id)->build_cost;
 	if (is_wonder(id)) {
       	  pitem->section = 4;
         } else {
@@ -847,20 +1038,131 @@ int num_present_units_in_city(struct city *pcity)
 }
 
 /**************************************************************************
+  Moves all improvements from the 'old' continent to the 'new' one.
+**************************************************************************/
+void renumber_island_impr_effect(int old, int newnumber)
+{
+  int i;
+  bool changed = FALSE;
+
+  players_iterate(plr) {
+    Impr_Status *oldimpr, *newimpr;
+    struct geff_vector *oldv, *newv;
+    struct eff_global *olde, *newe;
+
+    assert(plr->island_improv != NULL);
+    oldimpr=&plr->island_improv[game.num_impr_types*old];
+    newimpr=&plr->island_improv[game.num_impr_types*newnumber];
+
+    oldv=&plr->island_effects[old];
+    newv=&plr->island_effects[newnumber];
+
+    /* First move any island-range effects to the new vector. */
+    for (i=0; i<geff_vector_size(oldv); i++) {
+      olde=geff_vector_get(oldv, i);
+
+      if (olde->eff.impr!=B_LAST) {
+	changed=TRUE;
+	newe = append_geff(newv);
+	newe->eff	 = olde->eff;
+	newe->cityid	 = olde->cityid;
+	olde->eff.impr	 = B_LAST;   /* Mark the old entry as unused. */
+      }
+    }
+
+    /* Now move all city improvements across. */
+    impr_type_iterate(i) {
+      if (oldimpr[i]!=I_NONE) {
+	newimpr[i]=oldimpr[i];
+	oldimpr[i]=I_NONE;
+
+	/* Obsolete or redundant buildings don't change the effects. */
+	if (newimpr[i]==I_ACTIVE) {
+	  changed=TRUE;  
+	}
+      }
+    } impr_type_iterate_end;
+  } players_iterate_end;
+
+  /* If anything was changed, then we need to update the effects. */
+  if (changed)
+    update_all_effects();
+}
+
+/**************************************************************************
+  Returns a description of the given spaceship. The string doesn't
+  have to be freed. If pship is NULL returns a text with the same
+  format as the final one but with dummy values.
+**************************************************************************/
+char *get_spaceship_descr(struct player_spaceship *pship)
+{
+  static char buf[512];
+  char arrival[16], travel_buf[100], mass_buf[100];
+
+  if (!pship) {
+    return _("Population:       1234\n"
+	     "Support:           100 %\n"
+	     "Energy:            100 %\n"
+	     "Mass:            12345 tons\n"
+	     "Travel time:      1234 years\n"
+	     "Success prob.:     100 %\n"
+	     "Year of arrival:  1234 AD");
+  }
+
+  if (pship->propulsion > 0) {
+    my_snprintf(travel_buf, sizeof(travel_buf),
+		_("Travel time:     %5.1f years"),
+		(float) (0.1 * ((int) (pship->travel_time * 10.0))));
+  } else {
+    my_snprintf(travel_buf, sizeof(travel_buf),
+		"%s", _("Travel time:        N/A     "));
+  }
+
+  if (pship->state == SSHIP_LAUNCHED) {
+    sz_strlcpy(arrival, textyear((int) (pship->launch_year
+					+ (int) pship->travel_time)));
+  } else {
+    sz_strlcpy(arrival, "-   ");
+  }
+
+  my_snprintf(mass_buf, sizeof(mass_buf),
+	      PL_("Mass:            %5d ton",
+		  "Mass:            %5d tons", pship->mass), pship->mass);
+
+  my_snprintf(buf, sizeof(buf),
+	      _("Population:      %5d\n"
+		"Support:         %5d %%\n"
+		"Energy:          %5d %%\n"
+		"%s\n"
+		"%s\n"
+		"Success prob.:   %5d %%\n"
+		"Year of arrival: %8s"),
+	      pship->population,
+	      (int) (pship->support_rate * 100.0),
+	      (int) (pship->energy_rate * 100.0),
+	      mass_buf,
+	      travel_buf, (int) (pship->success_rate * 100.0), arrival);
+  return buf;
+}
+
+/**************************************************************************
   Creates a struct packet_generic_message packet and injects it via
   handle_chat_msg.
 **************************************************************************/
-void create_event(int x, int y, enum event_type event,
-		  const char *format, ...)
+void create_event(int x, int y, int event, const char *format, ...)
 {
   va_list ap;
-  char message[MAX_LEN_MSG];
+  struct packet_generic_message packet;
+
+  packet.x = x;
+  packet.y = y;
+  packet.event = event;
 
   va_start(ap, format);
-  my_vsnprintf(message, sizeof(message), format, ap);
+  my_vsnprintf(packet.message, sizeof(packet.message), format, ap);
   va_end(ap);
 
-  handle_chat_msg(message, x, y, event, aconnection.id);
+  handle_chat_msg(&packet);
 }
 
 /**************************************************************************
@@ -927,120 +1229,4 @@ void reports_force_thaw(void)
   plrdlg_force_thaw();
   report_dialogs_force_thaw();
   output_window_force_thaw();
-}
-
-/*************************************************************************
-...
-*************************************************************************/
-enum known_type map_get_known(int x, int y, struct player *pplayer)
-{
-  assert(pplayer == game.player_ptr);
-  return tile_get_known(x, y);
-}
-
-/**************************************************************************
-  Find city nearest to given unit and optionally return squared city
-  distance Parameter sq_dist may be NULL. Returns NULL only if no city is
-  known. Favors punit owner's cities over other cities if equally distant.
-**************************************************************************/
-struct city *get_nearest_city(struct unit *punit, int *sq_dist)
-{
-  struct city *pcity_near;
-  int pcity_near_dist;
-
-  if ((pcity_near = map_get_city(punit->x, punit->y))) {
-    pcity_near_dist = 0;
-  } else {
-    pcity_near = NULL;
-    pcity_near_dist = -1;
-    players_iterate(pplayer) {
-      city_list_iterate(pplayer->cities, pcity_current) {
-        int dist = sq_map_distance(pcity_current->x, pcity_current->y,
-				   punit->x, punit->y);
-        if (pcity_near_dist == -1 || dist < pcity_near_dist
-	    || (dist == pcity_near_dist
-		&& punit->owner == pcity_current->owner)) {
-          pcity_near = pcity_current;
-          pcity_near_dist = dist;
-        }
-      } city_list_iterate_end;
-    } players_iterate_end;
-  }
-
-  if (sq_dist) {
-    *sq_dist = pcity_near_dist;
-  }
-
-  return pcity_near;
-}
-
-/**************************************************************************
-  Called when the "Buy" button is pressed in the city report for every
-  selected city. Checks for coinage and sufficient funds or request the
-  purchase if everything is ok.
-**************************************************************************/
-void cityrep_buy(struct city *pcity)
-{
-  int value = city_buy_cost(pcity);
-
-  if (get_current_construction_bonus(pcity, EFT_PROD_TO_GOLD) > 0) {
-    char buf[512];
-
-    assert(!pcity->is_building_unit);
-    my_snprintf(buf, sizeof(buf),
-		_("Game: You don't buy %s in %s!"),
-		improvement_types[pcity->currently_building].name,
-		pcity->name);
-    append_output_window(buf);
-    return;
-  }
-
-  if (game.player_ptr->economic.gold >= value) {
-    city_buy_production(pcity);
-  } else {
-    char buf[512];
-    const char *name;
-
-    if (pcity->is_building_unit) {
-      name = get_unit_type(pcity->currently_building)->name;
-    } else {
-      name = get_impr_name_ex(pcity, pcity->currently_building);
-    }
-
-    my_snprintf(buf, sizeof(buf),
-		_("Game: %s costs %d gold and you only have %d gold."),
-		name, value, game.player_ptr->economic.gold);
-    append_output_window(buf);
-  }
-}
-
-void common_taxrates_callback(int i)
-{
-  int tax_end, lux_end, sci_end, tax, lux, sci;
-  int delta = 10;
-
-  if (!can_client_issue_orders()) {
-    return;
-  }
-
-  lux_end = game.player_ptr->economic.luxury;
-  sci_end = lux_end + game.player_ptr->economic.science;
-  tax_end = 100;
-
-  lux = game.player_ptr->economic.luxury;
-  sci = game.player_ptr->economic.science;
-  tax = game.player_ptr->economic.tax;
-
-  i *= 10;
-  if (i < lux_end) {
-    lux -= delta;
-    sci += delta;
-  } else if (i < sci_end) {
-    sci -= delta;
-    tax += delta;
-  } else {
-    tax -= delta;
-    lux += delta;
-  }
-  dsend_packet_player_rates(&aconnection, tax, lux, sci);
 }

@@ -15,14 +15,7 @@
 
 #include <gtk/gtk.h>
 
-#include "gtkpixcomm.h"
 #include "gui_main_g.h"
-
-struct canvas
-{
-  GdkPixmap *pixmap;	/* if NULL, the pixcomm is drawn to instead. */
-  GtkPixcomm *pixcomm;
-};
 
 extern GdkFont *        main_fontset;
 extern GdkFont *        prod_fontset;
@@ -33,12 +26,19 @@ extern GdkGC *          fill_bg_gc;
 extern GdkGC *          fill_tile_gc;
 extern GdkGC *          thin_line_gc;
 extern GdkGC *          thick_line_gc;
-extern GdkGC *          border_line_gc;
 extern GdkPixmap *      gray50;
 extern GdkPixmap *      gray25;
 extern GdkPixmap *      black50;
 extern GdkPixmap *      mask_bitmap;
-#define single_tile_pixmap (mapview_canvas.single_tile->pixmap)
+extern GdkPixmap *      map_canvas_store;
+extern int              map_canvas_store_twidth;
+extern int              map_canvas_store_theight;
+extern GdkPixmap *      overview_canvas_store;
+extern int              overview_canvas_store_width;
+extern int              overview_canvas_store_height;
+extern GdkPixmap *      single_tile_pixmap;
+extern int              single_tile_pixmap_width;
+extern int              single_tile_pixmap_height;
 extern GtkText *        main_message_area;
 extern GtkWidget *      text_scrollbar;
 extern GtkWidget *      toplevel;
@@ -59,7 +59,5 @@ extern GtkWidget *      unit_info_frame;
 extern GtkWidget *      map_horizontal_scrollbar;
 extern GtkWidget *      map_vertical_scrollbar;
 extern GdkWindow *      root_window;
-
-void reset_unit_table(void);
 
 #endif  /* FC__GUI_MAIN_H */

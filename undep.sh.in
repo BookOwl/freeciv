@@ -27,7 +27,7 @@ fi
 @SERVER_TRUE@SSUBDIRS="ai server"
 @SERVER_FALSE@SSUBDIRS=""
 
-SUBDIRS="common common/aicore $SSUBDIRS $CSUBDIRS"
+SUBDIRS="common $SSUBDIRS $CSUBDIRS"
 
 for subdir in $SUBDIRS ; do
 
@@ -52,10 +52,12 @@ s/^DEPS_MAGIC.*//
 s/^-include $(DEP_FILES)//
 s/^%\.o: %\.c/.c.o:/
 s/\@echo\ '"'"'$(COMPILE) -c $<'"'"'; \\/$(COMPILE) -c $</
+s/$(COMPILE) -Wp,-MD,\.deps\/$(\*F)\.P -c $<//
 s/	$(COMPILE) -Wp,-MD,\.deps\/$(\*F)\.pp -c $</junknever:/
 ' $name.bak > $name
 
-# Above, COMPILE substitution line is appropriate for automake 1.4
-# It has an embedded tab character after the s/
+# Above, first COMPILE substitution line is appropriate
+# for automake 1.3, second is for automake 1.4
+# The second one has an embedded tab character after the s/
 
 done

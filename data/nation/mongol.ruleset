@@ -2,29 +2,26 @@
 
 name=_("Mongol")
 plural=_("?plural:Mongols")
-class=_("Historical")
-legend=_("In the centuries after their unification by Genghis Khan, the \
-Mongols conquered the largest empire in human history, encompassing most \
-of the continent of Asia.  They became notorious for the utter ruthlessness \
-in warfare.")
-leader="Genghis", "Bortai", "Ogodei", "Bayan", "Timur", "Batu", "Tokhtamysh"
-leader_sex="Male", "Female", "Male", "Male", "Male", "Male", "Male"
+leader="Genghis", "Ogodei", "Timur", "Batu", "Tokhtamysh"
+leader_sex="Male", "Male", "Male", "Male", "Male"
 flag="f.mongolia"
 flag_alt = "-"
-city_style = "Asian"
+city_style = "European"
 ruler_titles = { "government",      "male_title",      "female_title"
                  "Despotism",       _("Khan"),         _("Khan")
                  "Monarchy",        _("Great Khan"),   _("Great Khan")
                }
 
+attack=2
+expand=2
+civilized=0
+advisors=100,100,100,100,100,100,100
 init_techs=""
-init_buildings=""
 
 tech_goals = "Monarchy",  "Chivalry", "Trade", "Bridge Building",
              "Railroad"
 wonder="Sun Tzu's War Academy"
 government="Monarchy"
-civilwar_nations = "chinese", "russian"
 
 cities =
   "Almaligh", "Khotan", "Turfan", "Samarkand", "Bokhara", "Tashkent",

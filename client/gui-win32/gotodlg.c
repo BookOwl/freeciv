@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -140,9 +139,8 @@ popup_goto_dialog(void)
   struct fcwin_box *vbox;
   if (goto_dialog)
     return;
-  if (!can_client_change_view()) {
+  if (get_client_state()!=CLIENT_GAME_RUNNING_STATE)
     return;
-  }
   if (get_unit_in_focus()==0)
     return;
 
@@ -189,10 +187,8 @@ static void update_goto_dialog(HWND list)
     if(!show_all_cities && i!=game.player_idx) continue;
     city_list_iterate(game.players[i].cities, pcity) {
       sz_strlcpy(name, pcity->name);
-      /* FIXME: should use unit_can_airlift_to(). */
-      if (pcity->airlift) {
+      if (pcity->improvements[B_AIRPORT] == I_ACTIVE)
         sz_strlcat(name, "(A)");
-      }
       j=ListBox_AddString(list,name);
       ListBox_SetItemData(list,j,pcity->id);
     }

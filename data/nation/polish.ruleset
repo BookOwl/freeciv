@@ -2,7 +2,6 @@
 
 name=_("Polish")
 plural=_("?plural:Polish")
-class=_("Modern")
 leader="Mieszko I", "Wladyslaw Lokietek", "Kazimierz Wielki", "Jadwiga",
        "Wladyslaw Jagiello", "Stefan Batory", "Jan III Sobieski",
        "Stanislaw Poniatowski", "Kosciuszko", "Pilsudski"
@@ -21,21 +20,23 @@ ruler_titles = { "government",      "male_title",      "female_title"
                  "Democracy",       _("Prezydent"),    _("Prezydent")
                }
 
+attack=2
+expand=1
+civilized=2
+advisors=100,100,100,100,100,100,100
 init_techs=""
-init_buildings=""
 tech_goals = "The Republic", "Trade", "Engineering", "Monotheism",
              "Gunpowder", "Railroad"
 wonder="Copernicus' Observatory"
 government="Democracy"
-civilwar_nations = "lithuanian", "silesian"
 
 cities =
- "Gniezno", "Krak贸w", "Warszawa (river)", "Wroclaw", "Poznan", 
- "Gdansk (ocean)", "Szczecin", "L贸dz", "Torun", "Bydgoszcz", "Lublin", 
+ "Gniezno", "Krak體", "Warszawa (river)", "Wroclaw", "Poznan", 
+ "Gdansk (ocean)", "Szczecin", "L骴z", "Torun", "Bydgoszcz", "Lublin", 
  "Czestochowa", "Olsztyn", "Wloclawek", "Radom", "Kolobrzeg (ocean)", 
- "Kielce", "Bialystok", "Plock", "Rzesz贸w", "Tarn贸w", "Katowice", 
+ "Kielce", "Bialystok", "Plock", "Rzesz體", "Tarn體", "Katowice", 
  "Bielsko-Biala", "Sandomierz", "Legnica", "Walbrzych", "Gdynia", 
- "Koszalin", "Slupsk", "Piotrk贸w", "Konin", "Kalisz", "Krosno", 
+ "Koszalin", "Slupsk", "Piotrk體", "Konin", "Kalisz", "Krosno", 
  "Przemysl", "Tarnobrzeg", "Zamosc", "Chelm", "Suwalki", "Elblag", 
  "Zakopane (mountains)", "Oswiecim", "Glogow", "Jawor", 
  "Zielona Gora (hills, forest)",  "Jelenia Gora (hills)",

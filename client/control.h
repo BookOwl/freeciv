@@ -24,41 +24,31 @@ enum cursor_hover_state {
   HOVER_PATROL
 };
 
-/* Selecting unit from a stack without popup. */
-enum quickselect_type {
-  SELECT_POPUP = 0, SELECT_SEA, SELECT_LAND
-};
-
 extern int hover_unit; /* unit hover_state applies to */
 extern enum cursor_hover_state hover_state;
-extern enum unit_activity connect_activity;
 extern bool draw_goto_line;
 extern bool non_ai_unit_focus;
 
-void do_move_unit(struct unit *punit, struct unit *target_unit);
+void do_move_unit(struct unit *punit, struct packet_unit_info *pinfo);
 void do_unit_goto(int x, int y);
 void do_unit_nuke(struct unit *punit);
 void do_unit_paradrop_to(struct unit *punit, int x, int y);
 void do_unit_patrol_to(struct unit *punit, int x, int y);
-void do_unit_connect(struct unit *punit, int x, int y,
-		     enum unit_activity activity);
-void do_map_click(int xtile, int ytile, enum quickselect_type qtype);
+void do_map_click(int xtile, int ytile);
 
-void set_hover_state(struct unit *punit, enum cursor_hover_state state,
-		     enum unit_activity activity);
+void set_hover_state(struct unit *punit, enum cursor_hover_state state);
+void handle_advance_focus(struct packet_generic_integer *packet);
 void request_center_focus_unit(void);
 void request_move_unit_direction(struct unit *punit, int dir);
 void request_new_unit_activity(struct unit *punit, enum unit_activity act);
 void request_new_unit_activity_targeted(struct unit *punit,
 					enum unit_activity act,
 					enum tile_special_type tgt);
-void request_unit_load(struct unit *pcargo, struct unit *ptransporter);
-void request_unit_unload(struct unit *pcargo);
 void request_unit_auto(struct unit *punit);
 void request_unit_build_city(struct unit *punit);
 void request_unit_caravan_action(struct unit *punit, enum packet_type action);
 void request_unit_change_homecity(struct unit *punit);
-void request_unit_connect(enum unit_activity activity);
+void request_unit_connect(void);
 void request_unit_disband(struct unit *punit);
 void request_unit_fortify(struct unit *punit);
 void request_unit_goto(void);
@@ -67,19 +57,15 @@ void request_unit_nuke(struct unit *punit);
 void request_unit_paradrop(struct unit *punit);
 void request_unit_patrol(void);
 void request_unit_pillage(struct unit *punit);
+void request_unit_selected(struct unit *punit);
 void request_unit_sentry(struct unit *punit);
-void request_unit_unload_all(struct unit *punit);
+void request_unit_unload(struct unit *punit);
 void request_unit_airlift(struct unit *punit, struct city *pcity);
-void request_unit_return(struct unit *punit);
 void request_unit_upgrade(struct unit *punit);
 void request_unit_wait(struct unit *punit);
 void request_unit_wakeup(struct unit *punit);
-void request_diplomat_action(enum diplomat_actions action, int dipl_id,
-			     int target_id, int value);
 void request_toggle_map_grid(void);
-void request_toggle_map_borders(void);
 void request_toggle_city_names(void);
-void request_toggle_city_growth(void);
 void request_toggle_city_productions(void);
 void request_toggle_terrain(void);
 void request_toggle_coastline(void);
@@ -100,6 +86,7 @@ void auto_center_on_focus_unit(void);
 void advance_unit_focus(void);
 struct unit *get_unit_in_focus(void);
 void set_unit_focus(struct unit *punit);
+void set_unit_focus_no_center(struct unit *punit);
 void set_unit_focus_and_select(struct unit *punit);
 void update_unit_focus(void);
 struct unit *find_visible_unit(struct tile *ptile);
@@ -111,9 +98,7 @@ void process_caravan_arrival(struct unit *punit);
 void process_diplomat_arrival(struct unit *pdiplomat, int victim_id);
 
 void key_cancel_action(void);
-void key_center_capital(void);
 void key_city_names_toggle(void);
-void key_city_growth_toggle(void);
 void key_city_productions_toggle(void);
 void key_terrain_toggle(void);
 void key_coastline_toggle(void);
@@ -129,17 +114,21 @@ void key_focus_unit_toggle(void);
 void key_fog_of_war_toggle(void);
 void key_end_turn(void);
 void key_map_grid_toggle(void);
-void key_map_borders_toggle(void);
-void key_quickselect(enum quickselect_type qtype);
-void key_recall_previous_focus_unit(void);
-void key_unit_move(enum direction8 gui_dir);
+void key_move_north(void);
+void key_move_north_east(void);
+void key_move_east(void);
+void key_move_south_east(void);
+void key_move_south(void);
+void key_move_south_west(void);
+void key_move_west(void);
+void key_move_north_west(void);
 void key_unit_airbase(void);
 void key_unit_auto_attack(void);
 void key_unit_auto_explore(void);
 void key_unit_auto_settle(void);
 void key_unit_build_city(void);
 void key_unit_build_wonder(void);
-void key_unit_connect(enum unit_activity activity);
+void key_unit_connect(void);
 void key_unit_diplomat_actions(void);
 void key_unit_disband(void);
 void key_unit_done(void);
@@ -159,7 +148,7 @@ void key_unit_road(void);
 void key_unit_sentry(void);
 void key_unit_traderoute(void);
 void key_unit_transform(void);
-void key_unit_unload_all(void);
+void key_unit_unload(void);
 void key_unit_wait(void);
 void key_unit_wakeup_others(void);
 

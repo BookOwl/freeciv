@@ -2,10 +2,9 @@
 
 name=_("Swedish")
 plural=_("?plural:Swedes")
-class=_("Modern")
 
 leader=
-  "Erik SegergÃ¤ll", "Olof SkÃ¶tkonung", "Gustav Vasa", "Erik", "Karl",
+  "Erik Segergäll", "Olof Skötkonung", "Gustav Vasa", "Erik", "Karl",
   "Christine"
 
 leader_sex="Male", "Male", "Male", "Male", "Male", "Female"
@@ -16,85 +15,87 @@ ruler_titles = { "government",      "male_title",      "female_title"
                  "Democracy",       _("Prime Minister"), _("Prime Minister")
                }
 
+attack=2
+expand=2
+civilized=0
+advisors=100,100,100,100,100,100,100
 init_techs=""
-init_buildings=""
 
 tech_goals = "Map Making", "The Republic", "Trade", "Gunpowder"
 wonder="Magellan's Expedition"
 government="Democracy"
-civilwar_nations = "viking"
 
 ; /* <-- avoid gettext warnings
 ;
 ;  Kort upplysning om ortnamnens betydelser och ursprung
 ;  =====================================================
 ;
-;  BIRKA betyder BjÃ¶rkÃ¶
+;  BIRKA betyder Björkö
 ;
-;  BORG (kÃ¤lla: VÃ¥ra ord)
-;    fornsvenska islÃ¤nska <borg>; gemensamt germanskt ord (tyska
-;    <Burg>, engelska <Borough>), beslÃ¤ktat med [berg]
+;  BORG (källa: Våra ord)
+;    fornsvenska islänska <borg>; gemensamt germanskt ord (tyska
+;    <Burg>, engelska <Borough>), besläktat med [berg]
 ;
-;  HULT (kÃ¤lla: VÃ¥ra ord)
-;    skogsdunge, liten skog: fornsvenska <hult>, islÃ¤ndska <holt>;
-;    gemensamt germanskt ord (tyska <Holz> trÃ¤, skog) med slÃ¤ktingar i
-;    ett flertal andra indoeuropeiska sprÃ¥k
+;  HULT (källa: Våra ord)
+;    skogsdunge, liten skog: fornsvenska <hult>, isländska <holt>;
+;    gemensamt germanskt ord (tyska <Holz> trä, skog) med släktingar i
+;    ett flertal andra indoeuropeiska språk
 ;
 ;  HUS
-;    fornsvenska islÃ¤ndska <hÃºs>; gemensamt germanskt ord (tyska
-;    <Haus>, engelska <house>) av dunkelt ursprung; jÃ¤mfÃ¶r [hos],
+;    fornsvenska isländska <hús>; gemensamt germanskt ord (tyska
+;    <Haus>, engelska <house>) av dunkelt ursprung; jämför [hos],
 ;    [hysa]
 ;
-;  KIRUNA samiska <giron>, fjÃ¤llripa
+;  KIRUNA samiska <giron>, fjällripa
 ;
-;  KÃ–PING (kÃ¤lla: VÃ¥ra ord)
-;    fornsvenska <kÃ¸punger> handelsplats; jÃ¤mfÃ¶r islÃ¤ndska <kaupangr>,
-;    sammansÃ¤ttning av [kÃ¶pa] och <-angr> (fornsvenska <-anger>) Ã¤ng,
-;    grÃ¤splats
+;  KÖPING (källa: Våra ord)
+;    fornsvenska <køpunger> handelsplats; jämför isländska <kaupangr>,
+;    sammansättning av [köpa] och <-angr> (fornsvenska <-anger>) äng,
+;    gräsplats
 ;
-;  JOKK samiska bÃ¤ck
+;  JOKK samiska bäck
 ;
 ;  OR flodmynning (i till exempel <Orsa>)
 ;
-;  SAL (kÃ¤lla: VÃ¥ra ord)
-;    fornsvenska <sal>, islÃ¤ndska <salr>; gemensamt germanskt ord
-;    (tyska <Saal>), troligen med grundbetydelsen 'stort hus fÃ¶r
-;    gÃ¤stabud; boning' (i ortnamn till exempel <Sala>, <Uppsala>)
+;  SAL (källa: Våra ord)
+;    fornsvenska <sal>, isländska <salr>; gemensamt germanskt ord
+;    (tyska <Saal>), troligen med grundbetydelsen 'stort hus för
+;    gästabud; boning' (i ortnamn till exempel <Sala>, <Uppsala>)
 ;
-;  TORP (kÃ¤lla: VÃ¥ra ord)
-;    fornsvenska islÃ¤ndska <Ã¾orp> liten utgÃ¥rd, nyodling; gÃ¥rd, by,
+;  TORP (källa: Våra ord)
+;    fornsvenska isländska <şorp> liten utgård, nyodling; gård, by,
 ;    norska <torp>; gemensamt germanskt ord (tyska <Dorf> by, se
-;    [tÃ¶lp]), mÃ¶jligen med grundbetydelsen 'hus'
+;    [tölp]), möjligen med grundbetydelsen 'hus'
 ;
-;  TUN (kÃ¤lla: VÃ¥ra ord)
-;    gÃ¥rdsplats (om fornnordiska fÃ¶rhÃ¥llanden): av islÃ¤ndska <tÃºn>
-;    inhÃ¤gnad jord, hemmaÃ¤gor (i svenska ortnamn som <Tuna>, <Sigtuna>
-;    med flera); gemensamt germanskt ord (tyska <Zaun> gÃ¤rdesgÃ¥rd,
-;    engelska <town> stad) med ursprunglig betydelse 'hÃ¤gnad,
-;    gÃ¤rdsgÃ¥rd' (gotlÃ¤ndska <tun> gÃ¤rdsgÃ¥rd) och med motsvarighet i
-;    keltiska sprÃ¥k
+;  TUN (källa: Våra ord)
+;    gårdsplats (om fornnordiska förhållanden): av isländska <tún>
+;    inhägnad jord, hemmaägor (i svenska ortnamn som <Tuna>, <Sigtuna>
+;    med flera); gemensamt germanskt ord (tyska <Zaun> gärdesgård,
+;    engelska <town> stad) med ursprunglig betydelse 'hägnad,
+;    gärdsgård' (gotländska <tun> gärdsgård) och med motsvarighet i
+;    keltiska språk
 ;
 ;
-;  Tillordningen namn -> landskap Ã¤r huvudsakligen gjord enligt
-;  fÃ¶ljande:
+;  Tillordningen namn -> landskap är huvudsakligen gjord enligt
+;  följande:
 ;
-;    "holm", "Ã¶" ("a" i Birka), "sjÃ¶", "hamn", "sund" -> ocean
-;    "bro", "Ã¥" -> river
-;    "Ã¥s" -> hills
-;    "kÃ¶ping" -> grassland
+;    "holm", "ö" ("a" i Birka), "sjö", "hamn", "sund" -> ocean
+;    "bro", "å" -> river
+;    "ås" -> hills
+;    "köping" -> grassland
 ;
 ; */ <-- avoid gettext warnings
 
 cities =
  "Stockholm (ocean)", "Uppsala", "Sollentuna", "Sigtuna",
- "Birka (ocean)", "NorrkÃ¶ping (grassland)", "LinkÃ¶ping (grassland)",
- "Ã–rebro (river)", "GÃ¤vle", "VÃ¤sterÃ¥s (hills)", "GÃ¶teborg",
- "Karlstad", "VÃ¤xjÃ¶ (ocean)", "Kalmar", "Visby", "MalmÃ¶ (ocean)",
- "Helsingborg", "Ystad",  "Lund", "LuleÃ¥ (river)",
- "Kiruna (mountains)", "Halmstad", "Ã–stersund (ocean)",
- "NykÃ¶ping (grassland)", "SÃ¶derhamn (ocean)", "Sundsvall (ocean)",
- "PiteÃ¥ (river)", "SkellefteÃ¥ (river)", "UmeÃ¥ (river)",
- "JÃ¶nkÃ¶ping (grassland)", "Kristianstad",
- "Karlskrona", "Mora", "Oskarshamn (ocean)", "HÃ¤ssleholm (ocean)",
- "Falun", "Viborg", "HolmgÃ¥rd (ocean)", "Orsa (ocean, river)",
- "TrollhÃ¤ttan", "Jokkmokk (river)"
+ "Birka (ocean)", "Norrköping (grassland)", "Linköping (grassland)",
+ "Örebro (river)", "Gävle", "Västerås (hills)", "Göteborg",
+ "Karlstad", "Växjö (ocean)", "Kalmar", "Visby", "Malmö (ocean)",
+ "Helsingborg", "Ystad",  "Lund", "Luleå (river)",
+ "Kiruna (mountains)", "Halmstad", "Östersund (ocean)",
+ "Nyköping (grassland)", "Söderhamn (ocean)", "Sundsvall (ocean)",
+ "Piteå (river)", "Skellefteå (river)", "Umeå (river)",
+ "Jönköping (grassland)", "Kristianstad",
+ "Karlskrona", "Mora", "Oskarshamn (ocean)", "Hässleholm (ocean)",
+ "Falun", "Viborg", "Holmgård (ocean)", "Orsa (ocean, river)",
+ "Trollhättan", "Jokkmokk (river)"

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -19,8 +18,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <gdk_imlib.h>
 #include <gtk/gtk.h>
+
+#include <gdk_imlib.h>
+#include "gtkpixcomm.h"
 
 #include "game.h"
 #include "log.h"
@@ -31,24 +32,22 @@
 #include "version.h"
 
 #include "climisc.h"
+#include "colors.h"
+#include "gui_main.h"
 #include "mapview_g.h"
 #include "options.h"
 #include "tilespec.h"
 
-#include "colors.h"
-#include "gtkpixcomm.h"
-#include "gui_main.h"
+#include "graphics.h"
 
-#include "drop_cursor.xbm"
-#include "drop_cursor_mask.xbm"
 #include "goto_cursor.xbm"
 #include "goto_cursor_mask.xbm"
+#include "drop_cursor.xbm"
+#include "drop_cursor_mask.xbm"
 #include "nuke_cursor.xbm"
 #include "nuke_cursor_mask.xbm"
 #include "patrol_cursor.xbm"
 #include "patrol_cursor_mask.xbm"
-
-#include "graphics.h"
 
 SPRITE *		intro_gfx_sprite;
 SPRITE *		radar_gfx_sprite;
@@ -162,17 +161,14 @@ void load_intro_gfx( void )
   return;
 }
 
-/****************************************************************************
-  Create a new sprite by cropping and taking only the given portion of
-  the image.
-****************************************************************************/
+/***************************************************************************
+return newly allocated sprite cropped from source
+***************************************************************************/
 struct Sprite *crop_sprite(struct Sprite *source,
 			   int x, int y,
-			   int width, int height,
-			   struct Sprite *mask,
-			   int mask_offset_x, int mask_offset_y)
+			   int width, int height)
 {
-  GdkPixmap *mypixmap, *mymask = NULL;
+  GdkPixmap *mypixmap, *mask = NULL;
 
   mypixmap = gdk_pixmap_new(root_window, width, height, -1);
 
@@ -180,40 +176,16 @@ struct Sprite *crop_sprite(struct Sprite *source,
 		  width, height);
 
   if (source->has_mask) {
-    mymask = gdk_pixmap_new(mask_bitmap, width, height, 1);
-    gdk_draw_rectangle(mymask, mask_bg_gc, TRUE, 0, 0, -1, -1 );
+    mask = gdk_pixmap_new(mask_bitmap, width, height, 1);
+    gdk_draw_rectangle(mask, mask_bg_gc, TRUE, 0, 0, -1, -1 );
 
-    gdk_draw_pixmap(mymask, mask_fg_gc, source->mask,
+    gdk_draw_pixmap(mask, mask_fg_gc, source->mask,
 		    x, y, 0, 0, width, height);
   }
 
-  if (mask) {
-    if (mymask) {
-      gdk_gc_set_function(mask_fg_gc, GDK_AND);
-      gdk_draw_pixmap(mymask, mask_fg_gc, mask->mask,
-		      x - mask_offset_x, y - mask_offset_y,
-		      0, 0, width, height);
-      gdk_gc_set_function(mask_fg_gc, GDK_OR);
-    } else {
-      mymask = gdk_pixmap_new(NULL, width, height, 1);
-      gdk_draw_rectangle(mymask, mask_bg_gc, TRUE, 0, 0, -1, -1);
-
-      gdk_draw_pixmap(mymask, mask_fg_gc, source->mask,
-                       x, y, 0, 0, width, height);
-    }
-  }
-
-  return ctor_sprite_mask(mypixmap, mymask, width, height);
+  return ctor_sprite_mask(mypixmap, mask, width, height);
 }
 
-/****************************************************************************
-  Find the dimensions of the sprite.
-****************************************************************************/
-void get_sprite_dimensions(struct Sprite *sprite, int *width, int *height)
-{
-  *width = sprite->width;
-  *height = sprite->height;
-}
 
 /***************************************************************************
 ...
@@ -279,9 +251,25 @@ void load_cursors(void)
   gdk_bitmap_unref(mask);
 }
 
+#ifdef UNUSED
 /***************************************************************************
- Create a new sprite with the given pixmap, dimensions, and
- (optional) mask.
+...
+***************************************************************************/
+static SPRITE *ctor_sprite( GdkPixmap *mypixmap, int width, int height )
+{
+    SPRITE *mysprite = fc_malloc(sizeof(SPRITE));
+
+    mysprite->pixmap	= mypixmap;
+    mysprite->width	= width;
+    mysprite->height	= height;
+    mysprite->has_mask	= 0;
+
+    return mysprite;
+}
+#endif
+
+/***************************************************************************
+...
 ***************************************************************************/
 SPRITE *ctor_sprite_mask( GdkPixmap *mypixmap, GdkPixmap *mask, 
 			  int width, int height )
@@ -315,12 +303,12 @@ void dtor_sprite( SPRITE *mysprite )
  Returns the filename extensions the client supports
  Order is important.
 ***************************************************************************/
-const char **gfx_fileextensions(void)
+char **gfx_fileextensions(void)
 {
-  static const char *ext[] =
+  static char *ext[] =
   {
-    "png",
     "xpm",
+    "png",
     NULL
   };
 
@@ -338,7 +326,7 @@ struct Sprite *load_gfxfile(const char *filename)
   int		 w, h;
 
   if(!(im=gdk_imlib_load_image((char*)filename))) {
-    freelog(LOG_FATAL, "Failed reading graphics file: %s", filename);
+    freelog(LOG_FATAL, "Failed reading XPM file: %s", filename);
     exit(EXIT_FAILURE);
   }
 
@@ -366,11 +354,11 @@ struct Sprite *load_gfxfile(const char *filename)
 /***************************************************************************
    Deletes a sprite.  These things can use a lot of memory.
 ***************************************************************************/
-void free_sprite(SPRITE * s)
+void free_sprite(SPRITE *s)
 {
   gdk_imlib_free_pixmap(s->pixmap);
-  s->pixmap = NULL;
   free(s);
+  return;
 }
 
 /***************************************************************************
@@ -504,13 +492,13 @@ SPRITE* sprite_scale(SPRITE *src, int new_w, int new_h)
   xoffset = 0;
   xremsum = new_w / 2;
 
-  for (x = 0; x < new_w; x++) {
+  for (x = 0; x < new_w; ++x) {
     xoffset_table[x] = xoffset;
     xoffset += xadd;
     xremsum += xremadd;
     if (xremsum >= new_w) {
       xremsum -= new_w;
-      xoffset++;
+      ++xoffset;
     }
   }
 
@@ -525,8 +513,8 @@ SPRITE* sprite_scale(SPRITE *src, int new_w, int new_h)
     dst->mask = gdk_pixmap_new(root_window, new_w, new_h, 1);
     gdk_draw_rectangle(dst->mask, mask_bg_gc, TRUE, 0, 0, -1, -1);
 
-    for (y = 0; y < new_h; y++) {
-      for (x = 0; x < new_w; x++) {
+    for (y = 0; y < new_h; ++y) {
+      for (x = 0; x < new_w; ++x) {
 	pixel = gdk_image_get_pixel(xi_src, xoffset_table[x], yoffset);
 	gdk_image_put_pixel(xi_dst, x, y, pixel);
 
@@ -539,14 +527,14 @@ SPRITE* sprite_scale(SPRITE *src, int new_w, int new_h)
       yremsum += yremadd;
       if (yremsum >= new_h) {
 	yremsum -= new_h;
-	yoffset++;
+	++yoffset;
       }
     }
 
     gdk_image_destroy(xb_src);
   } else {
-    for (y = 0; y < new_h; y++) {
-      for (x = 0; x < new_w; x++) {
+    for (y = 0; y < new_h; ++y) {
+      for (x = 0; x < new_w; ++x) {
 	pixel = gdk_image_get_pixel(xi_src, xoffset_table[x], yoffset);
 	gdk_image_put_pixel(xi_dst, x, y, pixel);
       }
@@ -555,7 +543,7 @@ SPRITE* sprite_scale(SPRITE *src, int new_w, int new_h)
       yremsum += yremadd;
       if (yremsum >= new_h) {
 	yremsum -= new_h;
-	yoffset++;
+	++yoffset;
       }
     }
   }
@@ -648,5 +636,5 @@ SPRITE *crop_blankspace(SPRITE *s)
 
   sprite_get_bounding_box(s, &x1, &y1, &x2, &y2);
 
-  return crop_sprite(s, x1, y1, x2 - x1 + 1, y2 - y1 + 1, NULL, -1, -1);
+  return crop_sprite(s, x1, y1, x2 - x1 + 1, y2 - y1 + 1);
 }

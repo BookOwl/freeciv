@@ -13,29 +13,9 @@
 description="Civ2 unit_type data for Freeciv (approximate)"
 options="1.9"
 
-[veteran_system]
-; What are the names of the levels?
-veteran_names = _("green"), _("veteran")
-
-; The percentage chance of increasing level through combat
-veteran_raise_chance = 50, 0
-
-; Power factors are as a percentage.
-; +50% is represented by 150
-veteran_power_fact = 100, 150
-
-; The percentage chance of a settler/engineer increasing level through
-; performing useful work (per turn)
-veteran_work_raise_chance = 0, 0
-
-; The chances of a trireme being lost at sea when not adjacent to a
-; land tile.
-veteran_highseas_loss_pct = 50, 50
-
-; The additional number of movement points granted for different veteran
-; levels.  These are thirds of points, so to increase movement
-; by a whole point 3 must be specified.
-veteran_move_bonus = 0, 0
+[units_adjust]
+firepower_factor=1     ; Divide hitpoints by this value. It has to be
+                       ; set higher than zero.
 
 ; Below: The individual units, one per section.
 ;
@@ -111,8 +91,8 @@ uk_happy      = 0
 uk_shield     = 1
 uk_food       = 1
 uk_gold       = 0
-flags         = "Settlers", "NonMil", "Airbase", "AddToCity", "Cities", "NoVeteran"
-roles         = "Settlers", "Cities"
+flags         = "Settlers", "NonMil", "Airbase", "AddToCity", "Cities"
+roles         = ""
 helptext      = _("\
 Settlers are one of the key units in the game.  They can be used to\
  found new cities, irrigate land, build roads, railroads,\
@@ -155,8 +135,8 @@ uk_happy      = 0
 uk_shield     = 1
 uk_food       = 1
 uk_gold       = 0
-flags         = "Settlers", "NonMil", "Transform", "Airbase", "AddToCity", "Cities", "NoVeteran"
-roles         = "Settlers", "Cities"
+flags         = "Settlers", "NonMil", "Transform", "Airbase", "AddToCity", "Cities"
+roles         = ""
 helptext      = _("\
 Engineers are similar to Settlers, but they work twice as fast and\
  move twice as fast.  Engineers may also perform major terrain\
@@ -648,7 +628,7 @@ uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = "Horse"
+flags         = ""
 roles         = "AttackFast"
 
 [unit_crusaders]
@@ -1512,8 +1492,8 @@ uk_happy      = 0
 uk_shield     = 0
 uk_food       = 0
 uk_gold       = 0
-flags         = "Diplomat", "IgZOC", "NonMil", "NoVeteran"
-roles         = "Diplomat"
+flags         = "Diplomat", "IgZOC", "NonMil"
+roles         = ""
 helptext      = _("\
 - A Diplomat can establish embassies with other civilizations\
  by moving into another player's city.\
@@ -1559,7 +1539,7 @@ uk_shield     = 0
 uk_food       = 0
 uk_gold       = 0
 flags         = "Diplomat", "IgZOC", "NonMil", "Spy"
-roles         = "Diplomat"
+roles         = ""
 helptext      = _("\
 A Spy is a full time professional and as such is much more\
  skilled in the arts of espionage than her Diplomat predecessor.\
@@ -1682,7 +1662,7 @@ Explorers are very useful for mapping unknown territory.\
 name          = _("Barbarian Leader")
 move_type     = "Land"
 tech_req      = "None"
-obsolete_by   = "None"
+obsolete_by   = "Settlers"    ; Ugly hack, to prevent anyone from building it
 graphic       = "u.barbarian_leader"
 graphic_alt   = "u.diplomat"
 sound_move    = "m_barbarian_leader"
@@ -1703,7 +1683,7 @@ uk_happy      = 0
 uk_shield     = 0
 uk_food       = 0
 uk_gold       = 0
-flags         = "IgZOC", "NonMil", "NoBuild"
+flags         = "IgZOC", "NonMil"
 roles         = "BarbarianLeader"
 helptext      = _("\
 When barbarian leader is killed on a tile without any defending units, \

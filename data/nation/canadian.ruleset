@@ -2,9 +2,8 @@
 
 name=_("Canadian")
 plural=_("?plural:Canadians")
-class=_("Modern")
-leader="Pierre Trudeau", "John A. MacDonald", "John Diefenbaker", "Mackenzie King"
-leader_sex="Male", "Male", "Male", "Male"
+leader="Pierre Trudeau", "John A. MacDonald", "John Diefenbaker"
+leader_sex="Male", "Male", "Male"
 flag="f.canada"
 flag_alt = "f.united_kingdom"
 city_style = "European"
@@ -12,13 +11,15 @@ ruler_titles = { "government",      "male_title",         "female_title"
                  "Democracy",       _("Prime Minister"),  _("Prime Minister")
                }
 
+attack=0
+expand=1
+civilized=0
+advisors=100,100,100,100,100,100,100
 init_techs=""
-init_buildings=""
 tech_goals = "The Republic", "Trade", "Engineering", "Democracy",
              "Railroad", "Explosives", "Automobile"
 wonder="Cure For Cancer"
 government="Democracy"
-civilwar_nations = "american"
 
 cities =
   "Ottawa", "Toronto", "Vancouver", "Montreal", "Quebec", "Winnipeg",

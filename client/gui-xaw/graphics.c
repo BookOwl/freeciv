@@ -10,13 +10,10 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
-#include <ctype.h>
-#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,7 +21,11 @@
 #include <X11/Xlib.h>
 #include <X11/Intrinsic.h>
 
-#include <png.h>
+#ifdef XPM_H_NO_X11
+#include <xpm.h>
+#else
+#include <X11/xpm.h>
+#endif
 
 #include "fcintl.h"
 #include "game.h"
@@ -61,7 +62,6 @@ Cursor drop_cursor;
 Cursor nuke_cursor;
 Cursor patrol_cursor;
 
-static struct Sprite *ctor_sprite(Pixmap mypixmap, int width, int height);
 static struct Sprite *ctor_sprite_mask(Pixmap mypixmap, Pixmap mask, 
  				       int width, int height);
 
@@ -70,7 +70,7 @@ static struct Sprite *ctor_sprite_mask(Pixmap mypixmap, Pixmap mask,
 ***************************************************************************/
 bool isometric_view_supported(void)
 {
-  return TRUE;
+  return FALSE;
 }
 
 /***************************************************************************
@@ -161,63 +161,28 @@ void load_intro_gfx(void)
   return;
 }
 
-/****************************************************************************
-  Create a new sprite by cropping and taking only the given portion of
-  the image.
-****************************************************************************/
+/***************************************************************************
+return newly allocated sprite cropped from source
+***************************************************************************/
 struct Sprite *crop_sprite(struct Sprite *source,
-			   int x, int y, int width, int height,
-			   struct Sprite *mask,
-			   int mask_offset_x, int mask_offset_y)
+			   int x, int y, int width, int height)
 {
-  Pixmap mypixmap, mymask;
   GC plane_gc;
+  Pixmap mypixmap, mask;
 
   mypixmap = XCreatePixmap(display, root_window,
 			   width, height, display_depth);
   XCopyArea(display, source->pixmap, mypixmap, civ_gc, 
 	    x, y, width, height, 0, 0);
 
-  if (source->has_mask) {
-    mymask = XCreatePixmap(display, root_window, width, height, 1);
+  mask = XCreatePixmap(display, root_window, width, height, 1);
 
-    plane_gc = XCreateGC(display, mymask, 0, NULL);
-    XCopyArea(display, source->mask, mymask, plane_gc, 
-	      x, y, width, height, 0, 0);
-    XFreeGC(display, plane_gc);
+  plane_gc = XCreateGC(display, mask, 0, NULL);
+  XCopyArea(display, source->mask, mask, plane_gc, 
+	    x, y, width, height, 0, 0);
+  XFreeGC(display, plane_gc);
 
-    if (mask) {
-      XGCValues values;
-
-      values.function = GXand;
-
-      plane_gc = XCreateGC(display, mymask, GCFunction, &values);
-      XCopyArea(display, mask->mask, mymask, plane_gc,
-		x - mask_offset_x, y - mask_offset_y, width, height, 0, 0);
-      XFreeGC(display, plane_gc);
-    }
-
-    return ctor_sprite_mask(mypixmap, mymask, width, height);
-  } else if (mask) {
-    mymask = XCreatePixmap(display, root_window, width, height, 1);
-
-    plane_gc = XCreateGC(display, mymask, 0, NULL);
-    XCopyArea(display, source->mask, mymask, plane_gc, 
-	      x, y, width, height, 0, 0);
-    XFreeGC(display, plane_gc);
-    return ctor_sprite_mask(mypixmap, mymask, width, height);
-  } else {
-    return ctor_sprite(mypixmap, width, height);
-  }
-}
-
-/****************************************************************************
-  Find the dimensions of the sprite.
-****************************************************************************/
-void get_sprite_dimensions(struct Sprite *sprite, int *width, int *height)
-{
-  *width = sprite->width;
-  *height = sprite->height;
+  return ctor_sprite_mask(mypixmap, mask, width, height);
 }
 
 /***************************************************************************
@@ -235,11 +200,11 @@ void load_cursors(void)
 
   /* goto */
   pixmap =
-      XCreateBitmapFromData(display, root_window, goto_cursor_bits,
+      XCreateBitmapFromData(display, root_window, (char *) goto_cursor_bits,
 			    goto_cursor_width, goto_cursor_height);
   mask =
       XCreateBitmapFromData(display, root_window,
-			    goto_cursor_mask_bits,
+			    (char *) goto_cursor_mask_bits,
 			    goto_cursor_mask_width, goto_cursor_mask_height);
   goto_cursor = XCreatePixmapCursor(display, pixmap, mask,
 				    &white, &black,
@@ -249,11 +214,11 @@ void load_cursors(void)
 
   /* drop */
   pixmap =
-      XCreateBitmapFromData(display, root_window, drop_cursor_bits,
+      XCreateBitmapFromData(display, root_window, (char *) drop_cursor_bits,
 			    drop_cursor_width, drop_cursor_height);
   mask =
       XCreateBitmapFromData(display, root_window,
-			    drop_cursor_mask_bits,
+			    (char *) drop_cursor_mask_bits,
 			    drop_cursor_mask_width, drop_cursor_mask_height);
   drop_cursor = XCreatePixmapCursor(display, pixmap, mask,
 				    &white, &black,
@@ -263,11 +228,11 @@ void load_cursors(void)
 
   /* nuke */
   pixmap =
-      XCreateBitmapFromData(display, root_window, nuke_cursor_bits,
+      XCreateBitmapFromData(display, root_window, (char *) nuke_cursor_bits,
 			    nuke_cursor_width, nuke_cursor_height);
   mask =
       XCreateBitmapFromData(display, root_window,
-			    nuke_cursor_mask_bits,
+			    (char *) nuke_cursor_mask_bits,
 			    nuke_cursor_mask_width, nuke_cursor_mask_height);
   nuke_cursor = XCreatePixmapCursor(display, pixmap, mask,
 				    &white, &black,
@@ -278,11 +243,11 @@ void load_cursors(void)
   /* patrol */
   pixmap =
       XCreateBitmapFromData(display, root_window,
-			    patrol_cursor_bits, patrol_cursor_width,
+			    (char *) patrol_cursor_bits, patrol_cursor_width,
 			    patrol_cursor_height);
   mask =
       XCreateBitmapFromData(display, root_window,
-			    patrol_cursor_mask_bits,
+			    (char *) patrol_cursor_mask_bits,
 			    patrol_cursor_mask_width,
 			    patrol_cursor_mask_height);
   patrol_cursor = XCreatePixmapCursor(display, pixmap, mask,
@@ -292,6 +257,7 @@ void load_cursors(void)
   XFreePixmap(display, mask);
 }
 
+#ifdef UNUSED
 /***************************************************************************
 ...
 ***************************************************************************/
@@ -301,10 +267,10 @@ static struct Sprite *ctor_sprite(Pixmap mypixmap, int width, int height)
   mysprite->pixmap=mypixmap;
   mysprite->width=width;
   mysprite->height=height;
-  mysprite->pcolorarray = NULL;
   mysprite->has_mask=0;
   return mysprite;
 }
+#endif
 
 /***************************************************************************
 ...
@@ -318,20 +284,37 @@ static struct Sprite *ctor_sprite_mask(Pixmap mypixmap, Pixmap mask,
 
   mysprite->width=width;
   mysprite->height=height;
-  mysprite->pcolorarray = NULL;
   mysprite->has_mask=1;
   return mysprite;
 }
+
+
+
+#ifdef UNUSED
+/***************************************************************************
+...
+***************************************************************************/
+void dtor_sprite(struct Sprite *mysprite)
+{
+  XFreePixmap(display, mysprite->pixmap);
+  if(mysprite->has_mask)
+    XFreePixmap(display, mysprite->mask);
+  free_colors(mysprite->pcolorarray, mysprite->ncols);
+  free(mysprite->pcolorarray);
+  free(mysprite);
+
+}
+#endif
 
 /***************************************************************************
  Returns the filename extensions the client supports
  Order is important.
 ***************************************************************************/
-const char **gfx_fileextensions(void)
+char **gfx_fileextensions(void)
 {
-  static const char *ext[] =
+  static char *ext[] =
   {
-    "png",
+    "xpm",
     NULL
   };
 
@@ -339,203 +322,55 @@ const char **gfx_fileextensions(void)
 }
 
 /***************************************************************************
-  Converts an image to a pixmap...
-***************************************************************************/
-static Pixmap image2pixmap(XImage *xi)
-{
-  Pixmap ret;
-  XGCValues values;
-  GC gc;
-  
-  ret = XCreatePixmap(display, root_window, xi->width, xi->height, xi->depth);
-
-  values.foreground = 1;
-  values.background = 0;
-  gc = XCreateGC(display, ret, GCForeground | GCBackground, &values);
-
-  XPutImage(display, ret, gc, xi, 0, 0, 0, 0, xi->width, xi->height);
-  XFreeGC(display, gc);
-  return ret;
-}
-
-/***************************************************************************
 ...
 ***************************************************************************/
 struct Sprite *load_gfxfile(const char *filename)
 {
-  png_structp pngp;
-  png_infop infop;
-  png_int_32 width, height, x, y;
-  FILE *fp;
-  int npalette, ntrans;
-  png_colorp palette;
-  png_bytep trans;
-  png_bytep buf, pb;
-  png_uint_32 stride;
-  unsigned long *pcolorarray;
-  bool *ptransarray;
   struct Sprite *mysprite;
-  XImage *xi;
-  int has_mask;
-
-  fp = fopen(filename, "rb");
-  if (!fp) {
-    freelog(LOG_FATAL, _("Failed reading PNG file: %s"), filename);
-    exit(EXIT_FAILURE);
-  }
-
-  pngp = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-  if (!pngp) {
-    freelog(LOG_FATAL, _("Failed creating PNG struct"));
-    exit(EXIT_FAILURE);
-  }
-
-  infop = png_create_info_struct(pngp);
-  if (!infop) {
-    freelog(LOG_FATAL, _("Failed creating PNG struct"));
-    exit(EXIT_FAILURE);
-  }
+  Pixmap mypixmap, mask_bitmap;
+  int err;
+  XpmAttributes attributes;
   
-  if (setjmp(pngp->jmpbuf)) {
-    freelog(LOG_FATAL, _("Failed while reading PNG file: %s"), filename);
+  attributes.extensions = NULL;
+  attributes.valuemask = XpmCloseness|XpmColormap;
+  attributes.colormap = cmap;
+  attributes.closeness = 40000;
+
+again:
+  
+  if((err=XpmReadFileToPixmap(display, root_window, (char*)filename, &mypixmap, 
+			      &mask_bitmap, &attributes))!=XpmSuccess) {
+    if(err==XpmColorError || err==XpmColorFailed) {
+      color_error();
+      goto again;
+    }
+    freelog(LOG_FATAL, _("Failed reading XPM file: %s"), filename);
     exit(EXIT_FAILURE);
   }
 
-  png_init_io(pngp, fp);
+  mysprite=fc_malloc(sizeof(struct Sprite));
+  
+  mysprite->pixmap=mypixmap;
+  mysprite->mask=mask_bitmap;
+  mysprite->has_mask=(mask_bitmap!=0);
+  mysprite->width=attributes.width;
+  mysprite->height=attributes.height;
 
-  png_set_strip_16(pngp);
-  png_set_packing(pngp);
-
-  png_read_info(pngp, infop);
-  width = png_get_image_width(pngp, infop);
-  height = png_get_image_height(pngp, infop);
-
-  if (png_get_PLTE(pngp, infop, &palette, &npalette)) {
-    int i;
-    XColor *mycolors;
-
-    pcolorarray = fc_malloc(npalette * sizeof(*pcolorarray));
-
-    mycolors = fc_malloc(npalette * sizeof(*mycolors));
-
-    for (i = 0; i < npalette; i++) {
-      mycolors[i].red  = palette[i].red << 8;
-      mycolors[i].green = palette[i].green << 8;
-      mycolors[i].blue = palette[i].blue << 8;
-    }
-
-    alloc_colors(mycolors, npalette);
-
-    for (i = 0; i < npalette; i++) {
-      pcolorarray[i] = mycolors[i].pixel;
-    }
-
-    free(mycolors);
-  } else {
-    freelog(LOG_FATAL, _("PNG file has no palette: %s"), filename);
-    exit(EXIT_FAILURE);
-  }
-
-  has_mask = png_get_tRNS(pngp, infop, &trans, &ntrans, NULL);
-
-  if (has_mask) {
-    int i;
-
-    ptransarray = fc_calloc(npalette, sizeof(*ptransarray));
-
-    for (i = 0; i < ntrans; i++) {
-      ptransarray[trans[i]] = TRUE;
-    }
-  } else {
-    ptransarray = NULL;
-  }
-
-  png_read_update_info(pngp, infop);
-
-  {
-    png_bytep *row_pointers;
-
-    stride = png_get_rowbytes(pngp, infop);
-    buf = fc_malloc(stride * height);
-
-    row_pointers = fc_malloc(height * sizeof(png_bytep));
-
-    for (y = 0, pb = buf; y < height; y++, pb += stride) {
-      row_pointers[y] = pb;
-    }
-
-    png_read_image(pngp, row_pointers);
-    png_read_end(pngp, infop);
-    fclose(fp);
-
-    free(row_pointers);
-    png_destroy_read_struct(&pngp, &infop, NULL);
-  }
-
-  mysprite = fc_malloc(sizeof(*mysprite));
-
-
-  xi = XCreateImage(display, DefaultVisual(display, screen_number),
-		    display_depth, ZPixmap, 0, NULL, width, height, 32, 0);
-  xi->data = fc_calloc(xi->bytes_per_line * xi->height, 1);
-
-  pb = buf;
-  for (y = 0; y < height; y++) {
-    for (x = 0; x < width; x++) {
-      XPutPixel(xi, x, y, pcolorarray[pb[x]]);
-    }
-    pb += stride;
-  }
-  mysprite->pixmap = image2pixmap(xi);
-  XDestroyImage(xi);
-
-  if (has_mask) {
-    XImage *xm;
-
-    xm = XCreateImage(display, DefaultVisual(display, screen_number),
-		      1, XYBitmap, 0, NULL, width, height, 8, 0);
-    xm->data = fc_calloc(xm->bytes_per_line * xm->height, 1);
-
-    pb = buf;
-    for (y = 0; y < height; y++) {
-      for (x = 0; x < width; x++) {
-	XPutPixel(xm, x, y, !ptransarray[pb[x]]);
-      }
-      pb += stride;
-    }
-    mysprite->mask = image2pixmap(xm);
-    XDestroyImage(xm);
-  }
-
-  mysprite->has_mask = has_mask;
-  mysprite->width = width;
-  mysprite->height = height;
-  mysprite->pcolorarray = pcolorarray;
-  mysprite->ncols = npalette;
-
-  if (has_mask) {
-    free(ptransarray);
-  }
-  free(buf);
   return mysprite;
 }
 
 /***************************************************************************
    Deletes a sprite.  These things can use a lot of memory.
+   
+   (How/why does this differ from dtor_sprite() ?  --dwp)
 ***************************************************************************/
 void free_sprite(struct Sprite *s)
 {
-  XFreePixmap(display, s->pixmap);
-  if (s->has_mask) {
-    XFreePixmap(display, s->mask);
-  }
-  if (s->pcolorarray) {
-    free_colors(s->pcolorarray, s->ncols);
-    free(s->pcolorarray);
-    s->pcolorarray = NULL;
-  }
+  if(s->pixmap) XFreePixmap(display,s->pixmap);
+  if(s->has_mask) XFreePixmap(display,s->mask);
   free(s);
 }
+
 
 /***************************************************************************
 ...
@@ -546,7 +381,7 @@ Pixmap create_overlay_unit(int i)
   enum color_std bg_color;
   
   pm=XCreatePixmap(display, root_window, 
-		   UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT, display_depth);
+		   NORMAL_TILE_WIDTH, NORMAL_TILE_HEIGHT, display_depth);
 
   /* Give tile a background color, based on the type of unit */
   switch (get_unit_type(i)->move_type) {
@@ -558,7 +393,7 @@ Pixmap create_overlay_unit(int i)
   }
   XSetForeground(display, fill_bg_gc, colors_standard[bg_color]);
   XFillRectangle(display, pm, fill_bg_gc, 0,0, 
-		 UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT);
+		 NORMAL_TILE_WIDTH,NORMAL_TILE_HEIGHT);
 
   /* If we're using flags, put one on the tile */
   if(!solid_color_behind_units)  {

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -89,15 +88,4 @@ const char *beta_message(void)
 #else
   return NULL;
 #endif
-}
-
-/***************************************************************************
-  Return the Freeciv motto.
-  (The motto is common code:
-   only one instance of the string in the source;
-   only one time gettext needs to translate it. --jjm)
-***************************************************************************/
-const char *freeciv_motto(void)
-{
-  return _("'Cause civilization should be free!");
 }

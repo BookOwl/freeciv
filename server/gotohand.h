@@ -23,13 +23,11 @@
 enum goto_result {
   GR_DIED,               /* pretty obvious that */ 
   GR_ARRIVED,            /* arrived to the destination */
-  GR_OUT_OF_MOVEPOINTS,  /* no moves left */ 
-  GR_WAITING,            /* waiting due to danger, has moves */
+  GR_OUT_OF_MOVEPOINTS,  /* either no moves left or plane refueling */ 
   GR_FOUGHT,             /* was stopped due to fighting, has moves */
   GR_FAILED              /* failed for some other reason, has moves */
 };
 
-bool is_dist_finite(int dist);
 enum goto_result do_unit_goto(struct unit *punit,
 			      enum goto_move_restriction restriction,
 			      bool trigger_special_ability);
@@ -48,20 +46,14 @@ int air_can_move_between(int moves, int src_x, int src_y,
 bool goto_is_sane(struct unit *punit, int x, int y, bool omni);
 
 struct move_cost_map {
-  unsigned char *cost;
-  unsigned char *seacost;
-  unsigned char *vector;
-  int size;
-
+  unsigned char *cost[MAP_MAX_WIDTH];
+  unsigned char *seacost[MAP_MAX_WIDTH];
+  unsigned char *vector[MAP_MAX_WIDTH];
   struct city *warcity; /* so we know what we're dealing with here */
   struct unit *warunit; /* so we know what we're dealing with here */
   int orig_x, orig_y;
 };
 
 extern struct move_cost_map warmap;
-
-#define WARMAP_COST(x, y) (warmap.cost[map_pos_to_index(x, y)])
-#define WARMAP_SEACOST(x, y) (warmap.seacost[map_pos_to_index(x, y)])
-#define WARMAP_VECTOR(x, y) (warmap.vector[map_pos_to_index(x, y)])
 
 #endif  /* FC__GOTOHAND_H */

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -26,7 +25,6 @@
 
 #include "climisc.h"
 #include "clinet.h"
-
 #include "gui_main.h"
 #include "gui_stuff.h"
 
@@ -40,12 +38,14 @@ int		history_pos;
 **************************************************************************/
 void inputline_return(GtkWidget *w, gpointer data)
 {
+  struct packet_generic_message apacket;
   char *theinput;
 
   theinput = gtk_entry_get_text(GTK_ENTRY(w));
   
   if (*theinput) {
-    send_chat(theinput);
+    mystrlcpy(apacket.message, theinput, MAX_LEN_MSG-MAX_LEN_USERNAME+1);
+    send_packet_generic_message(&aconnection, PACKET_CHAT_MSG, &apacket);
 
     if (genlist_size(&history_list) >= MAX_CHATLINE_HISTORY) {
       void *data;
@@ -63,28 +63,18 @@ void inputline_return(GtkWidget *w, gpointer data)
 }
 
 /**************************************************************************
-  Appends the string to the chat output window.  The string should be
-  inserted on its own line, although it will have no newline.
+...
 **************************************************************************/
-void real_append_output_window(const char *astring, int conn_id)
+void real_append_output_window(const char *astring)
 {
-  bool scroll;
-  GtkAdjustment *slider =
-    gtk_range_get_adjustment(GTK_RANGE(text_scrollbar));
-
-  /* scroll forward only if slider is near the bottom */
-  scroll = ((slider->value + slider->page_size) >=
-	    (slider->upper - slider->step_increment));
-
   gtk_text_freeze(GTK_TEXT(main_message_area));
   gtk_text_insert(GTK_TEXT(main_message_area), NULL, NULL, NULL, "\n", -1);
   gtk_text_insert(GTK_TEXT(main_message_area), NULL, NULL, NULL, astring,
 		  -1);
   gtk_text_thaw(GTK_TEXT(main_message_area));
 
-  if (scroll) {
-    gtk_range_default_vmotion(GTK_RANGE(text_scrollbar), 0, 10000);
-  }
+  /* move the scrollbar forward by a ridiculous amount */
+  gtk_range_default_vmotion(GTK_RANGE(text_scrollbar), 0, 10000);
 }
 
 /**************************************************************************

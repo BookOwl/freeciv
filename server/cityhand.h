@@ -13,15 +13,40 @@
 #ifndef FC__CITYHAND_H
 #define FC__CITYHAND_H
 
-#include "fc_types.h"
-
-#include "hand_gen.h"
-
+struct player;
+struct city;
 struct connection;
 struct conn_list;
 
-void really_handle_city_sell(struct player *pplayer, struct city *pcity,
-			     Impr_Type_id id);
+struct packet_city_info;
+struct packet_city_request;
+struct packet_generic_integer;
+struct packet_generic_values;
+
+
+void handle_city_change_specialist(struct player *pplayer, 
+				   struct packet_city_request *preq);
+void handle_city_make_specialist(struct player *pplayer, 
+				 struct packet_city_request *preq);
+void handle_city_make_worker(struct player *pplayer, 
+			     struct packet_city_request *preq);
+void handle_city_sell(struct player *pplayer, 
+		      struct packet_city_request *preq);
+void really_handle_city_sell(struct player *pplayer, struct city *pcity, int id);
+void handle_city_buy(struct player *pplayer, struct packet_city_request *preq);
 void really_handle_city_buy(struct player *pplayer, struct city *pcity);
+void handle_city_refresh(struct player *pplayer, struct packet_generic_integer *preq);
+void handle_city_change(struct player *pplayer, 
+			struct packet_city_request *preq);
+void handle_city_worklist(struct player *pplayer, 
+			struct packet_city_request *preq);
+void handle_city_rename(struct player *pplayer, 
+			struct packet_city_request *preq);
+
+
+void handle_city_options(struct player *pplayer,
+ 			 struct packet_generic_values *preq);
+void handle_city_name_suggest_req(struct connection *pconn,
+				  struct packet_generic_integer *packet);
 
 #endif  /* FC__CITYHAND_H */

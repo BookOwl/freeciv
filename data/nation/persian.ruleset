@@ -2,9 +2,6 @@
 
 name=_("Persian")
 plural=_("?plural:Persians")
-class=_("Historical")
-legend=_("The first Persian (Achaemenid) Empire lasted from 550BC to 330BC; \
-the second (Sassanid) from 226AD to 642AD.")
 leader="Cyrus", "Darius", "Xerxes", "Ardashir"
 leader_sex="Male", "Male", "Male", "Male"
 flag="f.iran"
@@ -15,13 +12,15 @@ ruler_titles = { "government",      "male_title",      "female_title"
                  "Monarchy",        _("Shah"),         _("Shah")
                }
 
+attack=1
+expand=2
+civilized=0
+advisors=100,100,100,100,100,100,100
 init_techs=""
-init_buildings=""
 tech_goals = "Polytheism", "Philosophy", "Trade", "Engineering",
              "Iron Working", "Railroad"
 wonder="Hanging Gardens"
 government="Monarchy"
-civilwar_nations = "babylonian", "arab"
 
 ;first are ancient cities in latin version
 
@@ -31,5 +30,5 @@ cities =
   "Zadrakarta", "Herat", "Drapsaka", "Karmana", "Pura", ;modern cities
   "Teheran", "Isfahan", "Tabriz", "Hamadan", "Rasht",
   "Ahraz", "Shiraz", "Kerman", "Yazd", "Mashhad", "Zahedan",
-  "Bushehr", "Qazrin", "Lhasa", "Bulgar", "Hormuz",
+  "Bushehr", "Qazrin", "Lhasa", "Bulgar", "Hormuz", "Baghdad",
   "Esfahan", "Mosul"

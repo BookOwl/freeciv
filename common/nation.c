@@ -15,13 +15,10 @@
    Functions for handling the nations and teams.
 ***********************************************************************/
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
+#include <stdlib.h>
+#include <string.h>
 #include <assert.h>
 
-#include "fcintl.h"
 #include "game.h"
 #include "government.h"
 #include "log.h"
@@ -29,6 +26,8 @@
 #include "player.h"
 #include "support.h"
 #include "tech.h"
+#include "config.h"
+#include "fcintl.h"
 
 #include "nation.h"
 
@@ -56,7 +55,7 @@ static bool bounds_check_nation_id(Nation_Type_id nid, int loglevel,
 }
 
 /***************************************************************
-Find nation by (translated) name
+...
 ***************************************************************/
 Nation_Type_id find_nation_by_name(const char *name)
 {
@@ -66,25 +65,11 @@ Nation_Type_id find_nation_by_name(const char *name)
      if(mystrcasecmp(name, get_nation_name (i)) == 0)
 	return i;
 
-  return NO_NATION_SELECTED;
+  return -1;
 }
 
 /***************************************************************
-Find nation by (untranslated) original name
-***************************************************************/
-Nation_Type_id find_nation_by_name_orig(const char *name)
-{
-  int i;
-
-  for(i=0; i<game.nation_count; i++)
-     if(mystrcasecmp(name, get_nation_name_orig (i)) == 0)
-	return i;
-
-  return NO_NATION_SELECTED;
-}
-
-/***************************************************************
-Returns (translated) name of the nation
+Returns name of the nation
 ***************************************************************/
 const char *get_nation_name(Nation_Type_id nation)
 {
@@ -95,36 +80,16 @@ const char *get_nation_name(Nation_Type_id nation)
 }
 
 /***************************************************************
-Returns (untranslated) original name of the nation
-***************************************************************/
-const char *get_nation_name_orig(Nation_Type_id nation)
-{
-  if (!bounds_check_nation_id(nation, LOG_ERROR, "get_nation_name_orig")) {
-    return "";
-  }
-  return nations[nation].name_orig;
-}
-
-/***************************************************************
 Returns pointer to the array of the nation leader names, and
 sets dim to number of leaders.
 ***************************************************************/
-struct leader *get_nation_leaders(Nation_Type_id nation, int *dim)
+char **get_nation_leader_names(Nation_Type_id nation, int *dim)
 {
   if (!bounds_check_nation_id(nation, LOG_FATAL, "get_nation_leader_names")) {
-    die("wrong nation %d", nation);
+    exit(EXIT_FAILURE);
   }
   *dim = nations[nation].leader_count;
-  return nations[nation].leaders;
-}
-
-/****************************************************************************
-  Returns pointer to the preferred set of nations that can fork from the
-  nation.  The array is terminated by a NO_NATION_SELECTED value.
-****************************************************************************/
-Nation_Type_id* get_nation_civilwar(Nation_Type_id nation)
-{
-  return nations[nation].civilwar_nations;
+  return nations[nation].leader_name;
 }
 
 /***************************************************************
@@ -138,12 +103,14 @@ bool get_nation_leader_sex(Nation_Type_id nation, const char *name)
   if (!bounds_check_nation_id(nation, LOG_ERROR, "get_nation_leader_sex")) {
     return FALSE;
   }
-  for (i = 0; i < nations[nation].leader_count; i++) {
-    if (strcmp(nations[nation].leaders[i].name, name) == 0) {
-      return nations[nation].leaders[i].is_male;
-    }
+  for( i=0; i < nations[nation].leader_count; i++ ) {
+    if (strcmp(nations[nation].leader_name[i], name) == 0)
+      break;
   }
-  return TRUE;
+  if( i <  nations[nation].leader_count )
+    return nations[nation].leader_is_male[i];
+  else
+    return TRUE;
 }
 
 /***************************************************************
@@ -152,16 +119,16 @@ checks if given leader name exist for given nation.
 bool check_nation_leader_name(Nation_Type_id nation, const char *name)
 {
   int i;
+  bool found = FALSE;
   
   if (!bounds_check_nation_id(nation, LOG_ERROR, "check_nation_leader_name")) {
     return TRUE;			/* ? */
   }
-  for (i = 0; i < nations[nation].leader_count; i++) {
-    if (strcmp(name, nations[nation].leaders[i].name) == 0) {
-      return TRUE;
-    }
+  for( i=0; i<nations[nation].leader_count; i++) {
+    if (strcmp(name, nations[nation].leader_name[i]) == 0)
+      found = TRUE;
   }
-  return FALSE;
+  return found;
 }
 
 /***************************************************************
@@ -182,7 +149,7 @@ struct nation_type *get_nation_by_plr(struct player *plr)
 {
   assert(plr != NULL);
   if (!bounds_check_nation_id(plr->nation, LOG_FATAL, "get_nation_by_plr")) {
-    die("wrong nation %d", plr->nation);
+    exit(EXIT_FAILURE);
   }
   return &nations[plr->nation];
 }
@@ -193,7 +160,7 @@ struct nation_type *get_nation_by_plr(struct player *plr)
 struct nation_type *get_nation_by_idx(Nation_Type_id nation)
 {
   if (!bounds_check_nation_id(nation, LOG_FATAL, "get_nation_by_idx")) {
-    die("wrong nation %d", nation);
+    exit(EXIT_FAILURE);
   }
   return &nations[nation];
 }
@@ -205,41 +172,6 @@ void nations_alloc(int num)
 {
   nations = (struct nation_type *)fc_calloc(num, sizeof(struct nation_type));
   game.nation_count = num;
-}
-
-/***************************************************************
- De-allocate resources associated with the given nation.
-***************************************************************/
-static void nation_free(Nation_Type_id nation)
-{
-  int i;
-  struct nation_type *p = get_nation_by_idx(nation);
-
-  for (i = 0; i < p->leader_count; i++) {
-    free(p->leaders[i].name);
-  }
-  if (p->leaders) {
-    free(p->leaders);
-    p->leaders = NULL;
-  }
-  
-  if (p->class) {
-    free(p->class);
-    p->class = NULL;
-  }
-  
-  if (p->legend) {
-    free(p->legend);
-    p->legend = NULL;
-  }
-
-  if (p->civilwar_nations) {
-    free(p->civilwar_nations);
-    p->civilwar_nations = NULL;
-  }
-
-  nation_city_names_free(p->city_names);
-  p->city_names = NULL;
 }
 
 /***************************************************************
@@ -260,6 +192,21 @@ void nations_free()
   free(nations);
   nations = NULL;
   game.nation_count = 0;
+}
+
+/***************************************************************
+ De-allocate resources associated with the given nation.
+***************************************************************/
+void nation_free(Nation_Type_id nation)
+{
+  int i;
+  struct nation_type *p = get_nation_by_idx(nation);
+
+  for (i = 0; i < p->leader_count; i++) {
+    free(p->leader_name[i]);
+  }
+
+  nation_city_names_free(p->city_names);
 }
 
 /***************************************************************
@@ -289,7 +236,7 @@ Returns nation's city style
 int get_nation_city_style(Nation_Type_id nation)
 {
   if (!bounds_check_nation_id(nation, LOG_FATAL, "get_nation_city_style")) {
-    die("wrong nation %d", nation);
+    exit(EXIT_FAILURE);
   }
   return nations[nation].city_style;
 }
@@ -365,7 +312,9 @@ void team_add_player(struct player *pplayer, const char *team_name)
     }
     /* check if too many teams */
     if (team_id == TEAM_NONE) {
-      die("Impossible: Too many teams!");
+      freelog(LOG_ERROR, "Impossible: Too many teams!");
+      assert(FALSE);
+      exit(EXIT_FAILURE);
     }
     /* add another team */
     teams[team_id].id = team_id;

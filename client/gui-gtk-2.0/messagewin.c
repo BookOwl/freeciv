@@ -150,7 +150,7 @@ static void meswin_cell_data_func(GtkTreeViewColumn *col,
 *****************************************************************/
 static void create_meswin_dialog(void)
 {
-  static const char *titles[1] = { N_("Messages") };
+  static char *titles[1] = { N_("Messages") };
   static bool titles_done;
   GtkCellRenderer *renderer;
   GtkTreeViewColumn *col;
@@ -163,7 +163,12 @@ static void create_meswin_dialog(void)
   	NULL,
 	0,
 	NULL);
-  setup_dialog(meswin_shell, toplevel);
+  if (dialogs_on_top) {
+    gtk_window_set_transient_for(GTK_WINDOW(meswin_shell),
+				 GTK_WINDOW(toplevel));
+  }
+  gtk_window_set_type_hint(GTK_WINDOW(meswin_shell),
+			   GDK_WINDOW_TYPE_HINT_NORMAL);
   gtk_dialog_set_default_response(GTK_DIALOG(meswin_shell),
 	GTK_RESPONSE_CLOSE);
   gtk_window_set_default_size(GTK_WINDOW(meswin_shell), 520, 300);

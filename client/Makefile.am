@@ -4,9 +4,6 @@
 ##    SUBDIRS = @gui_sources@
 ## but that doesn't work properly for "make dist"
 
-if CLIENT_GUI_SDL
-GUI_SUBDIR = gui-sdl
-endif
 if CLIENT_GUI_GTK
 GUI_SUBDIR = gui-gtk
 endif
@@ -25,14 +22,9 @@ endif
 if CLIENT_GUI_WIN32
 GUI_SUBDIR = gui-win32
 endif
-if CLIENT_GUI_FTWL
-GUI_SUBDIR = gui-ftwl
-LIBFTWL = ../utility/ftwl/libftwl.a
-endif
 
 ALL_ESD_FILES=audio_esd.c audio_esd.h
 ALL_SDL_FILES=audio_sdl.c audio_sdl.h
-ALL_ALSA_FILES=audio_alsa.c audio_alsa.h
 ALL_WINMM_FILES=audio_winmm.c audio_winmm.h
 ALL_AMIGA_FILES=audio_amiga.c audio_amiga.h
 
@@ -41,9 +33,6 @@ ESD_FILES=$(ALL_ESD_FILES)
 endif
 if SDL
 SDL_FILES=$(ALL_SDL_FILES)
-endif
-if ALSA
-ALSA_FILES=$(ALL_ALSA_FILES)
 endif
 if WINMM
 WINMM_FILES=$(ALL_WINMM_FILES)
@@ -68,7 +57,6 @@ EXTRA_DIST= 	gui-mui/autogroupclass.c         \
 		gui-mui/diplodlg.c               \
 		gui-mui/diplodlg.h               \
 		gui-mui/finddlg.c                \
-		gui-mui/finddlg.h                \
 		gui-mui/gamedlgs.c               \
 		gui-mui/gotodlg.c                \
 		gui-mui/gotodlg.h                \
@@ -83,7 +71,6 @@ EXTRA_DIST= 	gui-mui/autogroupclass.c         \
 		gui-mui/inputdlg.c               \
 		gui-mui/inputdlg.h               \
 		gui-mui/inteldlg.c               \
-		gui-mui/inteldlg.h               \
 		gui-mui/mapclass.c               \
 		gui-mui/mapclass.h               \
 		gui-mui/mapctrl.c                \
@@ -91,7 +78,6 @@ EXTRA_DIST= 	gui-mui/autogroupclass.c         \
 		gui-mui/mapview.c                \
 		gui-mui/mapview.h                \
 		gui-mui/messagedlg.c             \
-		gui-mui/messagedlg.h             \
 		gui-mui/messagewin.c             \
 		gui-mui/messagewin.h             \
 		gui-mui/muistuff.c               \
@@ -103,7 +89,6 @@ EXTRA_DIST= 	gui-mui/autogroupclass.c         \
 		gui-mui/overviewclass.h          \
 		gui-mui/plrdlg.c                 \
 		gui-mui/plrdlg.h                 \
-		gui-mui/ratesdlg.h               \
 		gui-mui/repodlgs.c               \
 		gui-mui/repodlgs.h               \
 		gui-mui/scrollbuttonclass.c      \
@@ -119,7 +104,6 @@ EXTRA_DIST= 	gui-mui/autogroupclass.c         \
 		\
 		$(ALL_ESD_FILES)                 \
 		$(ALL_SDL_FILES)                 \
-		$(ALL_ALSA_FILES)                \
 		$(ALL_WINMM_FILES)		 \
 		$(ALL_AMIGA_FILES)
 
@@ -138,11 +122,11 @@ SUBDIRS = $(GUI_SUBDIR) $(CLI_INCLUDE) agents
 
 bin_PROGRAMS = civclient
 
-AM_CPPFLAGS = -I$(top_srcdir)/utility -I$(srcdir)/include -I$(top_srcdir)/common -I$(top_srcdir)/common/aicore -I../intl -I$(srcdir)/agents @SOUND_CFLAGS@
+INCLUDES = -I$(srcdir)/include -I$(top_srcdir)/common -I../intl -I$(srcdir)/agents @SOUND_CFLAGS@
 
 ## Above, note -I../intl instead of -I$(top_srdir/intl) is deliberate.
 
-civclient_SOURCES = $(ESD_FILES) $(SDL_FILES) $(ALSA_FILES) $(WINMM_FILES) \
+civclient_SOURCES = $(ESD_FILES) $(SDL_FILES) $(WINMM_FILES) \
 	attribute.h	\
 	attribute.c	\
 	citydlg_common.c \
@@ -153,12 +137,8 @@ civclient_SOURCES = $(ESD_FILES) $(SDL_FILES) $(ALSA_FILES) $(WINMM_FILES) \
 	civclient.h	\
 	chatline_common.c \
 	chatline_common.h \
-	connectdlg_common.c \
-	connectdlg_common.h \
 	climisc.c	\
 	climisc.h	\
-	climap.c	\
-	climap.h	\
 	clinet.c	\
 	clinet.h	\
 	control.c	\
@@ -175,16 +155,12 @@ civclient_SOURCES = $(ESD_FILES) $(SDL_FILES) $(ALSA_FILES) $(WINMM_FILES) \
 	messagewin_common.h \
 	packhand.c	\
 	packhand.h	\
-	packhand_gen.h	\
-	packhand_gen.c	\
 	plrdlg_common.c \
 	plrdlg_common.h \
 	options.c	\
 	options.h	\
 	repodlgs_common.c \
 	repodlgs_common.h \
-	text.c	\
-	text.h	\
 	tilespec.c	\
 	tilespec.h	\
 	audio.c         \
@@ -193,12 +169,9 @@ civclient_SOURCES = $(ESD_FILES) $(SDL_FILES) $(ALSA_FILES) $(WINMM_FILES) \
 	audio_none.h
 
 civclient_LDFLAGS = @CLIENT_LDFLAGS@
-fc_civclient_libs =	../utility/libcivutility.a	\
-			$(LIBFTWL)			\
-			../common/libcivcommon.a	\
-			../common/aicore/libaicore.a	\
-			agents/libagents.a		\
-		 	@gui_sources@/libguiclient.a
-civclient_DEPENDENCIES = $(fc_civclient_libs)
-civclient_LDADD        = $(fc_civclient_libs) $(fc_civclient_libs) \
-	@INTLLIBS@ @CLIENT_LIBS@ @SOUND_LIBS@
+civclient_DEPENDENCIES = @gui_sources@/libguiclient.a \
+	../common/libcivcommon.a agents/libagents.a
+civclient_LDADD        = @gui_sources@/libguiclient.a \
+	../common/libcivcommon.a @INTLLIBS@ @gui_sources@/libguiclient.a \
+	../common/libcivcommon.a @CLIENT_LIBS@ agents/libagents.a \
+	@CLIENT_LIBS@ @SOUND_LIBS@

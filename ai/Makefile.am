@@ -2,42 +2,40 @@
 
 noinst_LIBRARIES = libcivai.a
 
-AM_CPPFLAGS = -I$(top_srcdir)/utility -I$(srcdir)/../common -I$(srcdir)/../server -I../intl -I$(top_srcdir)/common/aicore
+INCLUDES = -I$(srcdir)/../common -I$(srcdir)/../server -I../intl
 
 ## Above, note -I../intl instead of -I$(top_srdir/intl) is deliberate.
 
 libcivai_a_SOURCES = \
+		advattitude.c	\
+		advattitude.h	\
 		advdomestic.c	\
 		advdomestic.h	\
+		advforeign.c	\
+		advforeign.h	\
+		advisland.c	\
+		advisland.h	\
+		advleader.c	\
+		advleader.h	\
 		advmilitary.c	\
 		advmilitary.h	\
-		advdiplomacy.c	\
-		advdiplomacy.h	\
+		advscience.c	\
+		advscience.h	\
 		advspace.c	\
 		advspace.h	\
-		aiair.c		\
-		aiair.h		\
+		advtrade.c	\
+		advtrade.h	\
 		aicity.c	\
 		aicity.h	\
 		aidata.c	\
 		aidata.h	\
-		aiexplorer.c	\
-		aiexplorer.h	\
-		aiferry.c	\
-		aiferry.h	\
 		aihand.c	\
 		aihand.h	\
-		aihunt.c	\
-		aihunt.h	\
 		ailog.c		\
 		ailog.h		\
-		aisettler.c	\
-		aisettler.h	\
 		aitech.c	\
 		aitech.h	\
 		aitools.c	\
 		aitools.h	\
 		aiunit.c	\
-		aiunit.h	\
-		aidiplomat.c	\
-		aidiplomat.h
+		aiunit.h

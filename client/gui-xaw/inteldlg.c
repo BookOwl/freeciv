@@ -10,13 +10,13 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 
 #include <X11/Intrinsic.h>
 #include <X11/StringDefs.h>
@@ -205,13 +205,4 @@ void intel_close_command_callback(Widget w, XtPointer client_data,
   XtSetSensitive(main_form, TRUE);
   XtDestroyWidget(intel_dialog_shell);
   intel_dialog_shell=0;
-}
-
-/****************************************************************************
-  Update the intelligence dialog for the given player.  This is called by
-  the core client code when that player's information changes.
-****************************************************************************/
-void update_intel_dialog(struct player *p)
-{
-  /* PORTME */
 }

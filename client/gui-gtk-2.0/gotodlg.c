@@ -130,7 +130,11 @@ static void create_goto_dialog(void)
     ("_Goto"),
     CMD_GOTO,
     NULL);
-  setup_dialog(dshell, toplevel);
+  if (dialogs_on_top) {
+    gtk_window_set_transient_for(GTK_WINDOW(dshell),
+				 GTK_WINDOW(toplevel));
+  }
+
   gtk_window_set_position(GTK_WINDOW(dshell), GTK_WIN_POS_MOUSE);
   gtk_dialog_set_default_response(GTK_DIALOG(dshell), CMD_GOTO);
   g_signal_connect(dshell, "destroy",
@@ -204,7 +208,10 @@ popup the dialog
 *****************************************************************/
 void popup_goto_dialog(void)
 {
-  if (!can_client_issue_orders() || !get_unit_in_focus()) {
+  if (get_client_state()!= CLIENT_GAME_RUNNING_STATE) {
+    return;
+  }
+  if (!get_unit_in_focus()) {
     return;
   }
 
@@ -253,8 +260,10 @@ static void update_goto_dialog(GtkToggleButton *button)
     city_list_iterate(game.players[i].cities, pcity) {
       gtk_list_store_append(store, &it);
 
-      /* FIXME: should use unit_can_airlift_to(). */
-      gtk_list_store_set(store, &it, 0, pcity->name, 1, pcity->airlift, -1);
+      gtk_list_store_set(store, &it,
+        0, pcity->name,
+        1, (pcity->improvements[B_AIRPORT] == I_ACTIVE),
+        -1);
     }
     city_list_iterate_end;
   }

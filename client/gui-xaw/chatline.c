@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -42,47 +41,46 @@
 **************************************************************************/
 void chatline_key_send(Widget w)
 {
+  struct packet_generic_message apacket;
   String theinput;
   String empty="";
 
   XtVaGetValues(w, XtNstring, &theinput, NULL);
   
   if(*theinput) {
-    send_chat(theinput);
+    mystrlcpy(apacket.message, theinput, MAX_LEN_MSG-MAX_LEN_USERNAME+1);
+    send_packet_generic_message(&aconnection, PACKET_CHAT_MSG, &apacket);
   }
 
   XtVaSetValues(w, XtNstring, empty, NULL);
 }
 
 /**************************************************************************
-  Appends the string to the chat output window.  The string should be
-  inserted on its own line, although it will have no newline.
+ this is properly a bad way to append to a text widget. Using the 
+ "useStringInPlace" resource and doubling mem alloc'ing would be better.  
+ Nope - tried it and many other variations and it wasn't any better. 
+ I'll replace this widget with a widget supportting hyperlinks later, so
+ leth's forget the problem.
+
+ There seems to be an Xaw problem with doing both wrap and scroll:
+ its supposed to automatically scroll to end when we change the insertion
+ point, but if a line is wrapped the scroll lags behind a line, and
+ stays behind on subsequent additions, until the too-long line scrolls
+ off the top.  (I tried setting the insert position to the last char,
+ instead of the start of line as below, but that didn't help.)  So we
+ split the line ourselves.  I'm just using a fixed length split; should
+ perhaps check and use width of output window (but font size?)  -dwp
+
+ Now uses window's font size and width.  Assumes fixed-width font.  --jjm
 **************************************************************************/
-void real_append_output_window(const char *astring, int conn_id)
+void real_append_output_window(const char *input_string)
 {
-  /* this is properly a bad way to append to a text widget. Using the 
-   * "useStringInPlace" resource and doubling mem alloc'ing would be better.  
-   * Nope - tried it and many other variations and it wasn't any better. 
-   * I'll replace this widget with a widget supportting hyperlinks later, so
-   * leth's forget the problem.
-   *
-   * There seems to be an Xaw problem with doing both wrap and scroll:
-   * its supposed to automatically scroll to end when we change the insertion
-   * point, but if a line is wrapped the scroll lags behind a line, and
-   * stays behind on subsequent additions, until the too-long line scrolls
-   * off the top.  (I tried setting the insert position to the last char,
-   * instead of the start of line as below, but that didn't help.)  So we
-   * split the line ourselves.  I'm just using a fixed length split; should
-   * perhaps check and use width of output window (but font size?)  -dwp
-   *
-   * Now uses window's font size and width.  Assumes fixed-width font.  --jjm
-   */
   static int m_width=0;
 
   Dimension windowwth;
   int maxlinelen;
   String theoutput;
-  char *newout, *rmcr, *astring2 = mystrdup(astring);
+  char *newout, *rmcr, *astring = mystrdup(input_string);
 
   if (!m_width) {
     /* Sometimes XtVaGetValues has garbage for the XtNfont; see PR#6452.
@@ -103,13 +101,13 @@ void real_append_output_window(const char *astring, int conn_id)
   freelog(LOG_DEBUG, "m_width %d windowwth %d maxlinelen %d",
 	  m_width, (int)windowwth, maxlinelen);
 
-  if (strlen(astring2) > maxlinelen) {
-    wordwrap_string(astring2, maxlinelen);
+  if (strlen(astring) > maxlinelen) {
+    wordwrap_string(astring, maxlinelen);
   }
   
   XtVaGetValues(outputwindow_text, XtNstring, &theoutput, NULL);
-  newout=fc_malloc(strlen(astring2)+strlen(theoutput)+2);
-  sprintf(newout, "%s\n%s", theoutput, astring2);
+  newout=fc_malloc(strlen(astring)+strlen(theoutput)+2);
+  sprintf(newout, "%s\n%s", theoutput, astring);
 
   /* calc carret position - last line, first pos */ 
   for(rmcr=newout+strlen(newout); rmcr>newout; rmcr--)
@@ -123,7 +121,7 @@ void real_append_output_window(const char *astring, int conn_id)
   XawTextEnableRedisplay(outputwindow_text);
   
   free(newout);
-  free(astring2);
+  free(astring);
 }
 
 /**************************************************************************

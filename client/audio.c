@@ -15,39 +15,40 @@
 #include <config.h>
 #endif
 
+#include <string.h>
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
-#include "capability.h"
+#include "audio.h"
+#include "support.h"
 #include "fcintl.h"
 #include "log.h"
+#include "capability.h"
 #include "mem.h"
-#include "registry.h"
 #include "shared.h"
-#include "support.h"
+#include "registry.h"
+#include "audio_none.h"
+
+#ifdef ESD
+#include "audio_esd.h"
+#endif
+
+#ifdef SDL
+#include "audio_sdl.h"
+#endif
+
+#ifdef WINMM
+#include "audio_winmm.h"
+#endif
 
 #ifdef AMIGA
 #include "audio_amiga.h"
 #endif
-#ifdef ESD
-#include "audio_esd.h"
-#endif
-#include "audio_none.h"
-#ifdef SDL
-#include "audio_sdl.h"
-#endif
-#ifdef WINMM
-#include "audio_winmm.h"
-#endif
-#ifdef ALSA
-#include "audio_alsa.h"
-#endif
 
 #include "audio.h"
 
-#define MAX_NUM_PLUGINS		4
+#define MAX_NUM_PLUGINS		3
 #define SNDSPEC_SUFFIX		".soundspec"
 
 /* keep it open throughout */
@@ -160,9 +161,6 @@ void audio_init()
 #ifdef SDL
   audio_sdl_init();
 #endif
-#ifdef ALSA
-  audio_alsa_init();
-#endif
 #ifdef WINMM
   audio_winmm_init();
 #endif
@@ -177,7 +175,7 @@ void audio_init()
 **************************************************************************/
 static const char *soundspec_fullname(const char *soundset_name)
 {
-  const char *soundset_default = "stdsounds";	/* Do not i18n! */
+  char *soundset_default = "stdsounds";	/* Do not i18n! */
   char *fname = fc_malloc(strlen(soundset_name) + strlen(SNDSPEC_SUFFIX) + 1);
   char *dname;
 
@@ -219,7 +217,7 @@ void audio_real_init(const char *const spec_name,
   if (num_plugins_used == 1) {
     /* We only have the dummy plugin, skip the code but issue an advertise */
     freelog(LOG_NORMAL, _("No real audio plugin present, "
-      "proceeding with sound support disabled"));
+      "Proceeding with sound support disabled"));
     freelog(LOG_NORMAL,
       _("For sound support, install either esound or SDL_mixer"));
     freelog(LOG_NORMAL, 
@@ -276,14 +274,11 @@ void audio_real_init(const char *const spec_name,
     return;
   }
 
-#ifdef SDL
-  if (audio_select_plugin("sdl")) return; 
-#endif
 #ifdef ESD
   if (audio_select_plugin("esd")) return; 
 #endif
-#ifdef ALSA
-  if (audio_select_plugin("alsa")) return;
+#ifdef SDL
+  if (audio_select_plugin("sdl")) return; 
 #endif
 #ifdef WINMM
   if (audio_select_plugin("winmm")) return;
@@ -391,7 +386,7 @@ void audio_shutdown()
   Returns a string which list all available plugins. You don't have to
   free the string.
 **************************************************************************/
-const char *audio_get_all_plugin_names()
+const char *const audio_get_all_plugin_names()
 {
   static char buffer[100];
   int i;

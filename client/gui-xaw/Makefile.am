@@ -1,11 +1,11 @@
 ## Process this file with automake to produce Makefile.in
 
 noinst_LIBRARIES = libguiclient.a
-AM_CPPFLAGS = -I. -I$(srcdir)/.. -I$(srcdir)/../include -I$(top_srcdir)/utility -I$(top_srcdir)/common -I../../intl -I$(top_srcdir)/common/aicore -I../../intl -I$(srcdir)/../agents @CLIENT_CFLAGS@
+INCLUDES = -I. -I$(srcdir)/.. -I$(srcdir)/../include -I$(top_srcdir)/common -I../../intl @CLIENT_CFLAGS@
 
 ## Above, note -I../../intl instead of -I$(top_srdir/intl) is deliberate.
-# The AM_CPPFLAGS "-I." is so resources.c includes the locally generated 
-# Freeciv.h in the builddir, in preference to the one 
+# The INCLUDES "-I." is so resources.c includes the locally generated 
+# Freeciv.h in the compliation dir, in preference to the one 
 # in the source dir (when compiling from another dir). --dwp
 
 BUILT_SOURCES = Freeciv.h
@@ -33,8 +33,6 @@ libguiclient_a_SOURCES = \
 	citydlg.h	\
 	cityrep.c	\
 	cityrep.h	\
-	cma_fe.c        \
-	cma_fe.h        \
 	colors.c	\
 	colors.h	\
 	connectdlg.c	\
@@ -44,7 +42,6 @@ libguiclient_a_SOURCES = \
 	diplodlg.c	\
 	diplodlg.h	\
 	finddlg.c	\
-	finddlg.h	\
 	gotodlg.c	\
 	gotodlg.h	\
 	graphics.c	\
@@ -58,7 +55,6 @@ libguiclient_a_SOURCES = \
 	inputdlg.c	\
 	inputdlg.h	\
 	inteldlg.c	\
-	inteldlg.h	\
 	mapctrl.c	\
 	mapctrl.h	\
 	mapview.c	\
@@ -66,7 +62,6 @@ libguiclient_a_SOURCES = \
 	menu.c		\
 	menu.h		\
 	messagedlg.c	\
-	messagedlg.h	\
 	messagewin.c	\
 	messagewin.h	\
 	optiondlg.c	\
@@ -77,7 +72,6 @@ libguiclient_a_SOURCES = \
 	plrdlg.c	\
 	plrdlg.h	\
 	ratesdlg.c	\
-	ratesdlg.h	\
 	repodlgs.c	\
 	repodlgs.h	\
 	resources.c	\

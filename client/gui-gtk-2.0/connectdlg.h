@@ -13,12 +13,8 @@
 #ifndef FC__CONNECTDLG_H
 #define FC__CONNECTDLG_H
 
-#include <gtk/gtk.h>
-
-#include "shared.h"
-
 #include "connectdlg_g.h"
 
-GtkWidget *create_file_selection(const char *title, bool is_save);
+/* nothing to add */
 
 #endif  /* FC__CONNECTDLG_H */

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -24,21 +23,19 @@
 #include "mem.h"
 #include "support.h"
 
-#include "text.h"
-#include "tilespec.h"
-
 #include "graphics.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
-#include "mapview.h"
-
 #include "happiness.h"
+#include "tilespec.h"
 
 /* semi-arbitrary number that controls the width of the happiness widget */
 #define HAPPINESS_PIX_WIDTH 23
 
 #define NUM_HAPPINESS_MODIFIERS 5
 
+static struct genlist happiness_list;
+static int happiness_list_has_been_initialised;
 enum { CITIES, LUXURIES, BUILDINGS, UNITS, WONDERS };
 
 struct happiness_dialog {
@@ -49,17 +46,6 @@ struct happiness_dialog {
   GtkWidget *hlabels[NUM_HAPPINESS_MODIFIERS];
   GtkWidget *close;
 };
-
-#define SPECLIST_TAG dialog
-#define SPECLIST_TYPE struct happiness_dialog
-#include "speclist.h"
-
-#define dialog_list_iterate(dialoglist, pdialog) \
-    TYPED_LIST_ITERATE(struct happiness_dialog, dialoglist, pdialog)
-#define dialog_list_iterate_end  LIST_ITERATE_END
-
-static struct dialog_list dialog_list;
-static bool dialog_list_has_been_initialised = FALSE;
 
 static GdkPixmap *create_happiness_pixmap(struct city *pcity, int index);
 static struct happiness_dialog *get_happiness_dialog(struct city *pcity);
@@ -81,16 +67,18 @@ static void happiness_dialog_update_wonders(struct happiness_dialog
 *****************************************************************/
 static struct happiness_dialog *get_happiness_dialog(struct city *pcity)
 {
-  if (!dialog_list_has_been_initialised) {
-    dialog_list_init(&dialog_list);
-    dialog_list_has_been_initialised = TRUE;
+  struct genlist_iterator myiter;
+
+  if (!happiness_list_has_been_initialised) {
+    genlist_init(&happiness_list);
+    happiness_list_has_been_initialised = 1;
   }
 
-  dialog_list_iterate(dialog_list, pdialog) {
-    if (pdialog->pcity == pcity) {
-      return pdialog;
-    }
-  } dialog_list_iterate_end;
+  genlist_iterator_init(&myiter, &happiness_list, 0);
+
+  for (; ITERATOR_PTR(myiter); ITERATOR_NEXT(myiter))
+    if (((struct happiness_dialog *) ITERATOR_PTR(myiter))->pcity == pcity)
+      return ITERATOR_PTR(myiter);
 
   return NULL;
 }
@@ -138,12 +126,12 @@ static struct happiness_dialog *create_happiness_dialog(struct city *pcity)
 
   gtk_widget_show_all(pdialog->shell);
 
-  if (!dialog_list_has_been_initialised) {
-    dialog_list_init(&dialog_list);
-    dialog_list_has_been_initialised = TRUE;
+  if (!happiness_list_has_been_initialised) {
+    genlist_init(&happiness_list);
+    happiness_list_has_been_initialised = 1;
   }
 
-  dialog_list_insert(&dialog_list, pdialog);
+  genlist_insert(&happiness_list, pdialog, 0);
 
   refresh_happiness_dialog(pcity);
 
@@ -156,7 +144,13 @@ static struct happiness_dialog *create_happiness_dialog(struct city *pcity)
 static GdkPixmap *create_happiness_pixmap(struct city *pcity, int index)
 {
   int i;
-  struct citizen_type citizens[MAX_CITY_SIZE];
+  int citizen_type;
+  int n1 = pcity->ppl_happy[index];
+  int n2 = n1 + pcity->ppl_content[index];
+  int n3 = n2 + pcity->ppl_unhappy[index];
+  int n4 = n3 + pcity->ppl_angry[index];
+  int n5 = n4 + pcity->ppl_elvis;
+  int n6 = n5 + pcity->ppl_scientist;
   int num_citizens = pcity->size;
   int pix_width = HAPPINESS_PIX_WIDTH * SMALL_TILE_WIDTH;
   int offset = MIN(SMALL_TILE_WIDTH, pix_width / num_citizens);
@@ -164,14 +158,27 @@ static GdkPixmap *create_happiness_pixmap(struct city *pcity, int index)
 
   GdkPixmap *happiness_pixmap = gdk_pixmap_new(root_window, true_pix_width,
 					       SMALL_TILE_HEIGHT, -1);
-  struct canvas canvas = {happiness_pixmap};
-
-  get_city_citizen_types(pcity, index, citizens);
 
   for (i = 0; i < num_citizens; i++) {
-    canvas_put_sprite_full(&canvas,
-			   i * offset, 0,
-			   get_citizen_sprite(citizens[i], i, pcity));
+    if (i < n1)
+      citizen_type = 5 + i % 2;
+    else if (i < n2)
+      citizen_type = 3 + i % 2;
+    else if (i < n3)
+      citizen_type = 7 + i % 2;
+    else if (i < n4)
+      citizen_type = 9 + i % 2;
+    else if (i < n5)
+      citizen_type = 0;
+    else if (i < n6)
+      citizen_type = 1;
+    else
+      citizen_type = 2;
+
+    gdk_draw_pixmap(happiness_pixmap, civ_gc,
+		    sprites.citizen[citizen_type]->pixmap,
+		    0, 0, i * offset, 0, SMALL_TILE_WIDTH,
+		    SMALL_TILE_HEIGHT);
   }
 
   return happiness_pixmap;
@@ -206,7 +213,7 @@ void close_happiness_dialog(struct city *pcity)
   struct happiness_dialog *pdialog = get_happiness_dialog(pcity);
 
   gtk_widget_hide(pdialog->shell);
-  dialog_list_unlink(&dialog_list, pdialog);
+  genlist_unlink(&happiness_list, pdialog);
 
   gtk_widget_destroy(pdialog->shell);
   free(pdialog);
@@ -276,8 +283,64 @@ static void happiness_dialog_update_luxury(struct happiness_dialog
 static void happiness_dialog_update_buildings(struct happiness_dialog
 					      *pdialog)
 {
-  gtk_set_label(pdialog->hlabels[BUILDINGS],
-		get_happiness_buildings(pdialog->pcity));
+  int faces = 0;
+  char buf[512], *bptr = buf;
+  int nleft = sizeof(buf);
+  struct city *pcity = pdialog->pcity;
+  struct government *g = get_gov_pcity(pcity);
+
+  my_snprintf(bptr, nleft, _("Buildings: "));
+  bptr = end_of_strn(bptr, &nleft);
+
+  if (city_got_building(pcity, B_TEMPLE)) {
+    faces++;
+    my_snprintf(bptr, nleft, get_improvement_name(B_TEMPLE));
+    bptr = end_of_strn(bptr, &nleft);
+    my_snprintf(bptr, nleft, _(". "));
+    bptr = end_of_strn(bptr, &nleft);
+  }
+  if (city_got_building(pcity, B_COURTHOUSE) && g->corruption_level == 0) {
+    faces++;
+    my_snprintf(bptr, nleft, get_improvement_name(B_COURTHOUSE));
+    bptr = end_of_strn(bptr, &nleft);
+    my_snprintf(bptr, nleft, _(". "));
+    bptr = end_of_strn(bptr, &nleft);
+  }
+  if (city_got_building(pcity, B_COLOSSEUM)) {
+    faces++;
+    my_snprintf(bptr, nleft, get_improvement_name(B_COLOSSEUM));
+    bptr = end_of_strn(bptr, &nleft);
+    my_snprintf(bptr, nleft, _(". "));
+    bptr = end_of_strn(bptr, &nleft);
+  }
+  /* hack for eliminating gtk_set_line_wrap() -mck */
+  if (faces > 2) {
+    /* sizeof("Buildings: ") */
+    my_snprintf(bptr, nleft, _("\n              "));
+    bptr = end_of_strn(bptr, &nleft);
+  }
+  if (city_got_effect(pcity, B_CATHEDRAL)) {
+    faces++;
+    my_snprintf(bptr, nleft, get_improvement_name(B_CATHEDRAL));
+    bptr = end_of_strn(bptr, &nleft);
+    if (!city_got_building(pcity, B_CATHEDRAL)) {
+      my_snprintf(bptr, nleft, _("("));
+      bptr = end_of_strn(bptr, &nleft);
+      my_snprintf(bptr, nleft, get_improvement_name(B_MICHELANGELO));
+      bptr = end_of_strn(bptr, &nleft);
+      my_snprintf(bptr, nleft, _(")"));
+      bptr = end_of_strn(bptr, &nleft);
+    }
+    my_snprintf(bptr, nleft, _(". "));
+    bptr = end_of_strn(bptr, &nleft);
+  }
+
+  if (faces == 0) {
+    my_snprintf(bptr, nleft, _("None. "));
+    bptr = end_of_strn(bptr, &nleft);
+  }
+
+  gtk_set_label(pdialog->hlabels[BUILDINGS], buf);
 }
 
 /**************************************************************************
@@ -327,8 +390,54 @@ static void happiness_dialog_update_units(struct happiness_dialog *pdialog)
 static void happiness_dialog_update_wonders(struct happiness_dialog
 					    *pdialog)
 {
-  gtk_set_label(pdialog->hlabels[WONDERS],
-		get_happiness_wonders(pdialog->pcity));
+  int faces = 0;
+  char buf[512], *bptr = buf;
+  int nleft = sizeof(buf);
+  struct city *pcity = pdialog->pcity;
+
+  my_snprintf(bptr, nleft, _("Wonders: "));
+  bptr = end_of_strn(bptr, &nleft);
+
+  if (city_affected_by_wonder(pcity, B_HANGING)) {
+    faces++;
+    my_snprintf(bptr, nleft, get_improvement_name(B_HANGING));
+    bptr = end_of_strn(bptr, &nleft);
+    my_snprintf(bptr, nleft, _(". "));
+    bptr = end_of_strn(bptr, &nleft);
+  }
+  if (city_affected_by_wonder(pcity, B_BACH)) {
+    faces++;
+    my_snprintf(bptr, nleft, get_improvement_name(B_BACH));
+    bptr = end_of_strn(bptr, &nleft);
+    my_snprintf(bptr, nleft, _(". "));
+    bptr = end_of_strn(bptr, &nleft);
+  }
+  /* hack for eliminating gtk_set_line_wrap() -mck */
+  if (faces > 1) {
+    /* sizeof("Wonders: ") */
+    my_snprintf(bptr, nleft, _("\n              "));
+    bptr = end_of_strn(bptr, &nleft);
+  }
+  if (city_affected_by_wonder(pcity, B_SHAKESPEARE)) {
+    faces++;
+    my_snprintf(bptr, nleft, get_improvement_name(B_SHAKESPEARE));
+    bptr = end_of_strn(bptr, &nleft);
+    my_snprintf(bptr, nleft, _(". "));
+    bptr = end_of_strn(bptr, &nleft);
+  }
+  if (city_affected_by_wonder(pcity, B_CURE)) {
+    faces++;
+    my_snprintf(bptr, nleft, get_improvement_name(B_CURE));
+    bptr = end_of_strn(bptr, &nleft);
+    my_snprintf(bptr, nleft, _(". "));
+    bptr = end_of_strn(bptr, &nleft);
+  }
+
+  if (faces == 0) {
+    my_snprintf(bptr, nleft, _("None. "));
+  }
+
+  gtk_set_label(pdialog->hlabels[WONDERS], buf);
 }
 
 /**************************************************************************

@@ -2,10 +2,6 @@
 
 name=_("Lithuanian")
 plural=_("?plural:Lithuanians")
-class=_("Modern")
-legend=_("Lithuania is a small country on the south coast of the Baltic \
-Sea, northeast of Poland.  Lithuanian is the most archaic and complex of \
-the northern Indo-European languages")
 leader="Gediminas", "Mindaugas", "Vytautas", "Antanas Smetona"
 leader_sex="Male", "Male", "Male", "Male"
 flag="f.lithuania"
@@ -15,12 +11,14 @@ ruler_titles = { "government",      "male_title",         "female_title"
                  "Monarchy",      _("Great Duke"),      _("Great Duchess")
 }
 
+attack=2
+expand=1
+civilized=1
+advisors=100,100,100,100,100,100,100
 init_techs=""
-init_buildings=""
 tech_goals = "Monarchy","Chivalry","The Republic","Railroad","Explosives"
 wonder="Copernicus' Observatory"
 government = "Republic"
-civilwar_nations = "polish", "danish"
 
 cities =
   "Vilnius", "Kaunas", "Klaipeda", "Siauliai",

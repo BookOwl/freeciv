@@ -12,10 +12,6 @@
 
 ***********************************************************************/
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include "game.h"
 
 #include "chatline.h"
@@ -53,7 +49,7 @@ static void xaw_mouse_moved(Widget w, XEvent *event, String *argv, Cardinal *arg
 
 static void xaw_btn_adjust_workers(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  adjust_workers_button_pressed(event->xbutton.x, event->xbutton.y);
+  mapctrl_btn_adjust_workers(event);
 }
 
 static void xaw_btn_select_citymap(Widget w, XEvent *event, String *argv, Cardinal *argc)
@@ -143,7 +139,7 @@ static void xaw_key_end_turn(Widget w, XEvent *event, String *argv, Cardinal *ar
 
 static void xaw_key_focus_to_next_unit(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  advance_unit_focus();
+  focus_to_next_unit();
 }
 
 static void xaw_key_map_grid_toggle(Widget w, XEvent *event, String *argv, Cardinal *argc)
@@ -151,215 +147,161 @@ static void xaw_key_map_grid_toggle(Widget w, XEvent *event, String *argv, Cardi
   key_map_grid_toggle();
 }
 
-/*************************************************************************
-  Called when the key to toggle borders is pressed.
-**************************************************************************/
-static void xaw_key_map_borders_toggle(Widget w, XEvent *event,
-				       String *argv, Cardinal *argc)
-{
-  key_map_borders_toggle();
-}
-
 static void xaw_key_move_north(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  key_unit_move(DIR8_NORTH);
+  key_move_north();
 }
 
 static void xaw_key_move_north_east(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  key_unit_move(DIR8_NORTHEAST);
+  key_move_north_east();
 }
 
 static void xaw_key_move_east(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  key_unit_move(DIR8_EAST);
+  key_move_east();
 }
 
 static void xaw_key_move_south_east(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  key_unit_move(DIR8_SOUTHEAST);
+  key_move_south_east();
 }
 
 static void xaw_key_move_south(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  key_unit_move(DIR8_SOUTH);
+  key_move_south();
 }
 
 static void xaw_key_move_south_west(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  key_unit_move(DIR8_SOUTHWEST);
+  key_move_south_west();
 }
 
 static void xaw_key_move_west(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  key_unit_move(DIR8_WEST);
+  key_move_west();
 }
 
 static void xaw_key_move_north_west(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  key_unit_move(DIR8_NORTHWEST);
+  key_move_north_west();
 }
 
 static void xaw_key_open_city_report(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_change_view() &&
+  if(get_client_state()==CLIENT_GAME_RUNNING_STATE &&
      is_menu_item_active(MENU_REPORT, MENU_REPORT_CITIES))
     popup_city_report_dialog(0);
 }
 
 static void xaw_key_open_demographics(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_change_view() &&
+  if(get_client_state()==CLIENT_GAME_RUNNING_STATE &&
      is_menu_item_active(MENU_REPORT, MENU_REPORT_DEMOGRAPHIC))
     send_report_request(REPORT_DEMOGRAPHIC);
 }
 
 static void xaw_key_open_economy_report(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_change_view() &&
+  if(get_client_state()==CLIENT_GAME_RUNNING_STATE &&
      is_menu_item_active(MENU_REPORT, MENU_REPORT_ECONOMY))
     popup_economy_report_dialog(0);
 }
 
-/****************************************************************************
-  Invoked when the key binding for government->find_city is pressed.
-****************************************************************************/
-static void xaw_key_open_find_city(Widget w, XEvent *event,
-				   String *argv, Cardinal *argc)
+static void xaw_key_open_find_city(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_change_view()
-      && is_menu_item_active(MENU_GOVERNMENT, MENU_GOVERNMENT_FIND_CITY)) {
+  if(get_client_state()==CLIENT_GAME_RUNNING_STATE &&
+     is_menu_item_active(MENU_KINGDOM, MENU_KINGDOM_FIND_CITY))
     popup_find_dialog();
-  }
 }
 
 static void xaw_key_open_goto_airlift(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_change_view() &&
+  if(get_client_state()==CLIENT_GAME_RUNNING_STATE &&
      is_menu_item_active(MENU_ORDER, MENU_ORDER_GOTO_CITY))
     popup_goto_dialog();
 }
 
 static void xaw_key_open_messages(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_change_view() &&
+  if(get_client_state()==CLIENT_GAME_RUNNING_STATE &&
      is_menu_item_active(MENU_REPORT, MENU_REPORT_MESSAGES))
     popup_meswin_dialog();
 }
 
 static void xaw_key_open_players(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_change_view() &&
+  if(get_client_state()==CLIENT_GAME_RUNNING_STATE &&
      is_menu_item_active(MENU_REPORT, MENU_REPORT_PLAYERS))
     popup_players_dialog();
 }
 
-/****************************************************************************
-  Invoked when the key binding for government->rates is pressed.
-****************************************************************************/
-static void xaw_key_open_rates(Widget w, XEvent *event,
-			       String *argv, Cardinal *argc)
+static void xaw_key_open_rates(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_change_view()
-      && is_menu_item_active(MENU_GOVERNMENT, MENU_GOVERNMENT_RATES)) {
+  if(get_client_state()==CLIENT_GAME_RUNNING_STATE &&
+     is_menu_item_active(MENU_KINGDOM, MENU_KINGDOM_RATES))
     popup_rates_dialog();
-  }
 }
 
-/****************************************************************************
-  Invoked when the key binding for government->revolution is pressed.
-****************************************************************************/
-static void xaw_key_open_revolution(Widget w, XEvent *event,
-				    String *argv, Cardinal *argc)
+static void xaw_key_open_revolution(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_change_view()
-      && is_menu_item_active(MENU_GOVERNMENT, MENU_GOVERNMENT_REVOLUTION)) {
+  if(get_client_state()==CLIENT_GAME_RUNNING_STATE &&
+     is_menu_item_active(MENU_KINGDOM, MENU_KINGDOM_REVOLUTION))
     popup_revolution_dialog();
-  }
 }
 
 static void xaw_key_open_science_report(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_change_view() &&
+  if(get_client_state()==CLIENT_GAME_RUNNING_STATE &&
      is_menu_item_active(MENU_REPORT, MENU_REPORT_SCIENCE))
     popup_science_dialog(0);
 }
 
 static void xaw_key_open_spaceship(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_change_view() &&
+  if(get_client_state()==CLIENT_GAME_RUNNING_STATE &&
      is_menu_item_active(MENU_REPORT, MENU_REPORT_SPACESHIP))
     popup_spaceship_dialog(game.player_ptr);
 }
 
-/****************************************************************************
-  Invoked when the key binding for report->top_five_cities is pressed.
-****************************************************************************/
-static void xaw_key_open_top_five(Widget w, XEvent *event,
-				  String *argv, Cardinal *argc)
+static void xaw_key_open_top_five(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_change_view()
-      && is_menu_item_active(MENU_REPORT, MENU_REPORT_TOP_CITIES)) {
+  if(get_client_state()==CLIENT_GAME_RUNNING_STATE &&
+     is_menu_item_active(MENU_REPORT, MENU_REPORT_TOP_CITIES))
     send_report_request(REPORT_TOP_5_CITIES);
-  }
 }
 
-/****************************************************************************
-  Invoked when the key binding for report->units is pressed.
-****************************************************************************/
-static void xaw_key_open_units_report(Widget w, XEvent *event,
-				      String *argv, Cardinal *argc)
+static void xaw_key_open_units_report(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_change_view()
-      && is_menu_item_active(MENU_REPORT, MENU_REPORT_UNITS)) {
+  if(get_client_state()==CLIENT_GAME_RUNNING_STATE &&
+     is_menu_item_active(MENU_REPORT, MENU_REPORT_UNITS))
     popup_activeunits_report_dialog(0);
-  }
 }
 
-/****************************************************************************
-  Invoked when the key binding for report->wonders is pressed.
-****************************************************************************/
 static void xaw_key_open_wonders(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_change_view() &&
+  if(get_client_state()==CLIENT_GAME_RUNNING_STATE &&
      is_menu_item_active(MENU_REPORT, MENU_REPORT_WOW))
     send_report_request(REPORT_WONDERS_OF_THE_WORLD);
 }
 
-/****************************************************************************
-  Invoked when the key binding for government->worklists is pressed.
-****************************************************************************/
-static void xaw_key_open_worklists(Widget w, XEvent *event,
-				   String *argv, Cardinal *argc)
+static void xaw_key_open_worklists(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_change_view()
-      && is_menu_item_active(MENU_GOVERNMENT, MENU_GOVERNMENT_WORKLISTS)) {
+  if(get_client_state()==CLIENT_GAME_RUNNING_STATE &&
+     is_menu_item_active(MENU_KINGDOM, MENU_KINGDOM_WORKLISTS))
     popup_worklists_dialog(game.player_ptr);
-  }
 }
 
-/****************************************************************************
-  Invoked when the key binding for orders->airbase is pressed.
-****************************************************************************/
-static void xaw_key_unit_airbase(Widget w, XEvent *event,
-				 String *argv, Cardinal *argc)
+static void xaw_key_unit_airbase(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_issue_orders()
-      && is_menu_item_active(MENU_ORDER, MENU_ORDER_AIRBASE)) {
+  if(is_menu_item_active(MENU_ORDER, MENU_ORDER_AIRBASE))
     key_unit_airbase();
-  }
 }
 
-/****************************************************************************
-  Invoked when the key binding for orders->auto_attack is pressed.
-****************************************************************************/
-static void xaw_key_unit_auto_attack(Widget w, XEvent *event,
-				     String *argv, Cardinal *argc)
+static void xaw_key_unit_auto_attack(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_issue_orders()
-      && is_menu_item_active(MENU_ORDER, MENU_ORDER_AUTO_ATTACK)) {
+  if(is_menu_item_active(MENU_ORDER, MENU_ORDER_AUTO_ATTACK))
     key_unit_auto_attack();
-  }
 }
 
 static void xaw_key_unit_auto_attack_or_settle(Widget w, XEvent *event, String *argv, Cardinal *argc)
@@ -414,22 +356,10 @@ static void xaw_key_unit_build_wonder(Widget w, XEvent *event, String *argv, Car
     key_unit_build_wonder();
 }
 
-static void xaw_key_unit_connect_road(Widget w, XEvent *event, String *argv, Cardinal *argc)
+static void xaw_key_unit_connect(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if(is_menu_item_active(MENU_ORDER, MENU_ORDER_CONNECT_ROAD))
-    key_unit_connect(ACTIVITY_ROAD);
-}
-
-static void xaw_key_unit_connect_rail(Widget w, XEvent *event, String *argv, Cardinal *argc)
-{
-  if(is_menu_item_active(MENU_ORDER, MENU_ORDER_CONNECT_RAIL))
-    key_unit_connect(ACTIVITY_RAILROAD);
-}
-
-static void xaw_key_unit_connect_irrigate(Widget w, XEvent *event, String *argv, Cardinal *argc)
-{
-  if(is_menu_item_active(MENU_ORDER, MENU_ORDER_CONNECT_IRRIGATE))
-    key_unit_connect(ACTIVITY_IRRIGATE);
+  if(is_menu_item_active(MENU_ORDER, MENU_ORDER_CONNECT))
+    key_unit_connect();
 }
 
 static void xaw_key_unit_diplomat_spy_action(Widget w, XEvent *event, String *argv, Cardinal *argc)
@@ -570,93 +500,40 @@ static void xaw_key_unit_road_or_traderoute(Widget w, XEvent *event, String *arg
   }
 }
 
-/****************************************************************************
-  Invoked when the key binding for orders->sentry is pressed.
-****************************************************************************/
-static void xaw_key_unit_sentry(Widget w, XEvent *event,
-				String *argv, Cardinal *argc)
+static void xaw_key_unit_sentry(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (is_menu_item_active(MENU_ORDER, MENU_ORDER_SENTRY)) {
+  if(is_menu_item_active(MENU_ORDER, MENU_ORDER_SENTRY))
     key_unit_sentry();
-  }
 }
 
-/****************************************************************************
-  Invoked when the key binding for orders->make_traderout is pressed.
-****************************************************************************/
-static void xaw_key_unit_traderoute(Widget w, XEvent *event,
-				    String *argv, Cardinal *argc)
+static void xaw_key_unit_traderoute(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (is_menu_item_active(MENU_ORDER, MENU_ORDER_TRADEROUTE)) {
+  if(is_menu_item_active(MENU_ORDER, MENU_ORDER_TRADEROUTE))
     key_unit_traderoute();
-  }
 }
 
-/****************************************************************************
-  Invoked when the key binding for orders->transform is pressed.
-****************************************************************************/
-static void xaw_key_unit_transform(Widget w, XEvent *event,
-				   String *argv, Cardinal *argc)
+static void xaw_key_unit_transform(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (is_menu_item_active(MENU_ORDER, MENU_ORDER_TRANSFORM)) {
+  if(is_menu_item_active(MENU_ORDER, MENU_ORDER_TRANSFORM))
     key_unit_transform();
-  }
 }
 
-/****************************************************************************
-  Invoked when the key binding for orders->unload_transporter is pressed.
-****************************************************************************/
-static void xaw_key_unit_unload_all(Widget w, XEvent *event,
-				    String *argv, Cardinal *argc)
+static void xaw_key_unit_unload(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (is_menu_item_active(MENU_ORDER, MENU_ORDER_UNLOAD_TRANSPORTER)) {
-    key_unit_unload_all();
-  }
+  if(is_menu_item_active(MENU_ORDER, MENU_ORDER_UNLOAD))
+    key_unit_unload();
 }
 
-/****************************************************************************
-  Invoked when the key binding for orders->load is pressed.
-****************************************************************************/
-static void xaw_key_unit_load(Widget w, XEvent *event,
-			      String *argv, Cardinal *argc)
+static void xaw_key_unit_wait(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_issue_orders()
-      && is_menu_item_active(MENU_ORDER, MENU_ORDER_LOAD)) {
-    request_unit_load(get_unit_in_focus(), NULL);
-  }
-}
-
-/****************************************************************************
-  Invoked when the key binding for orders->unload is pressed.
-****************************************************************************/
-static void xaw_key_unit_unload(Widget w, XEvent *event,
-				String *argv, Cardinal *argc)
-{
-  if (can_client_issue_orders()
-      && is_menu_item_active(MENU_ORDER, MENU_ORDER_UNLOAD)) {
-    request_unit_unload(get_unit_in_focus());
-  }
-}
-/****************************************************************************
-  Invoked when the key binding for orders->wait is pressed.
-****************************************************************************/
-static void xaw_key_unit_wait(Widget w, XEvent *event,
-			      String *argv, Cardinal *argc)
-{
-  if (is_menu_item_active(MENU_ORDER, MENU_ORDER_WAIT)) {
+  if(is_menu_item_active(MENU_ORDER, MENU_ORDER_WAIT))
     key_unit_wait();
-  }
 }
 
-/****************************************************************************
-  Invoked when the key binding for orders->wakeup_others is pressed.
-****************************************************************************/
-static void xaw_key_unit_wakeup_others(Widget w, XEvent *event,
-				       String *argv, Cardinal *argc)
+static void xaw_key_unit_wakeup_others(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (is_menu_item_active(MENU_ORDER, MENU_ORDER_WAKEUP_OTHERS)) {
+  if(is_menu_item_active(MENU_ORDER, MENU_ORDER_WAKEUP_OTHERS))
     key_unit_wakeup_others();
-  }
 }
 
 static void xaw_msg_close_city(Widget w, XEvent *event, String *argv, Cardinal *argc)
@@ -706,7 +583,7 @@ static void xaw_msg_close_units_report(Widget w, XEvent *event, String *argv, Ca
 
 static void xaw_msg_quit_freeciv(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  xaw_ui_exit();
+  main_quit_freeciv();
 }
 
 /*******************************************************************************
@@ -734,7 +611,6 @@ static XtActionsRec Actions[] = {
   { "key-end-turn", xaw_key_end_turn },
   { "key-focus-to-next-unit", xaw_key_focus_to_next_unit },
   { "key-map-grid-toggle", xaw_key_map_grid_toggle },
-  { "key-map-borders-toggle", xaw_key_map_borders_toggle },
   { "key-move-north", xaw_key_move_north },
   { "key-move-north-east", xaw_key_move_north_east },
   { "key-move-east", xaw_key_move_east },
@@ -766,9 +642,7 @@ static XtActionsRec Actions[] = {
   { "key-unit-build-city", xaw_key_unit_build_city },
   { "key-unit-build-city-or-wonder", xaw_key_unit_build_city_or_wonder },
   { "key-unit-build-wonder", xaw_key_unit_build_wonder },
-  { "key-unit-connect-road", xaw_key_unit_connect_road },
-  { "key-unit-connect-rail", xaw_key_unit_connect_rail },
-  { "key-unit-connect-irrigate", xaw_key_unit_connect_irrigate },
+  { "key-unit-connect", xaw_key_unit_connect },
   { "key-unit-diplomat-spy-action", xaw_key_unit_diplomat_spy_action },
   { "key-unit-disband", xaw_key_unit_disband },
   { "key-unit-done", xaw_key_unit_done },
@@ -791,8 +665,6 @@ static XtActionsRec Actions[] = {
   { "key-unit-traderoute", xaw_key_unit_traderoute },
   { "key-unit-sentry", xaw_key_unit_sentry },
   { "key-unit-transform", xaw_key_unit_transform },
-  { "key-unit-unload-all", xaw_key_unit_unload_all },
-  { "key-unit-load", xaw_key_unit_load },
   { "key-unit-unload", xaw_key_unit_unload },
   { "key-unit-wait", xaw_key_unit_wait },
   { "key-unit-wakeup-others", xaw_key_unit_wakeup_others },

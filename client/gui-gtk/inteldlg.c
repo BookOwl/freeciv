@@ -10,13 +10,13 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 
 #include <gtk/gtk.h>
 
@@ -29,7 +29,6 @@
 #include "support.h"
 
 #include "clinet.h"
-
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "mapview.h"
@@ -199,13 +198,4 @@ void intel_close_command_callback(GtkWidget *w, gpointer data)
   gtk_widget_set_sensitive(top_vbox, TRUE);
   gtk_widget_destroy(intel_dialog_shell);
   intel_dialog_shell=NULL;
-}
-
-/****************************************************************************
-  Update the intelligence dialog for the given player.  This is called by
-  the core client code when that player's information changes.
-****************************************************************************/
-void update_intel_dialog(struct player *p)
-{
-  /* PORTME */
 }

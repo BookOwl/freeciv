@@ -10,24 +10,19 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
 #include <assert.h>
-#include <stdio.h> /* for remove() */ 
 
-#include "events.h"
 #include "fcintl.h"
 #include "improvement.h"
 #include "log.h"
 #include "mem.h"
 #include "packets.h"
 #include "rand.h"
-#include "registry.h"
-#include "shared.h"
-#include "support.h"
+#include "events.h"
 
 #include "maphand.h"
 #include "plrhand.h"
@@ -35,192 +30,127 @@
 
 #include "gamehand.h"
 
-#define NUMBER_OF_TRIES 500
-#ifndef __VMS
-#  define CHALLENGE_ROOT ".freeciv-tmp"
-#else /*VMS*/
-#  define CHALLENGE_ROOT "freeciv-tmp"
-#endif
 
-static char challenge_filename[MAX_LEN_PATH];
-
-/****************************************************************************
-  Initialize the game.id variable to a random string of characters.
-****************************************************************************/
-static void init_game_id(void)
-{
-  static const char chars[] =
-    "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-  int i;
-
-  for (i = 0; i < sizeof(game.id) - 1; i++) {
-    game.id[i] = chars[myrand(sizeof(chars) - 1)];
-  }
-  game.id[i] = '\0';
-}
-
-/****************************************************************************
-  Place a starting unit for the player.
-****************************************************************************/
-static void place_starting_unit(int x, int y, struct player *pplayer,
-				char crole)
-{
-  Unit_Type_id utype;
-  enum unit_flag_id role;
-
-  assert(!is_non_allied_unit_tile(map_get_tile(x, y), pplayer));
-
-  /* For scenarios or dispersion, huts may coincide with player starts (in 
-   * other cases, huts are avoided as start positions).  Remove any such hut,
-   * and make sure to tell the client, since we may have already sent this
-   * tile (with the hut) earlier: */
-  if (map_has_special(x, y, S_HUT)) {
-    map_clear_special(x, y, S_HUT);
-    send_tile_info(NULL, x, y);
-    freelog(LOG_VERBOSE, "Removed hut on start position for %s",
-	    pplayer->name);
-  }
-
-  /* Expose visible area. */
-  circle_iterate(x, y, game.rgame.init_vis_radius_sq, cx, cy) {
-    show_area(pplayer, cx, cy, 0);
-  } circle_iterate_end;
-
-  switch(crole) {
-	case 'c': role = L_CITIES; break;
-	case 'w': role = L_SETTLERS; break;
-	case 'x': role = L_EXPLORER; break;
-	case 'k': role = L_GAMELOSS; break;
-	case 's': role = L_DIPLOMAT; break;
-	case 'f': role = L_FERRYBOAT; break;
-	case 'd': role = L_DEFEND_OK; break;
-	case 'D': role = L_DEFEND_GOOD; break;
-	case 'a': role = L_ATTACK_FAST; break;
-	case 'A': role = L_ATTACK_STRONG; break;
-	default: assert(FALSE);
-  }
-
-  /* Create the unit of an appropriate type, if it exists */
-  if (num_role_units(role) > 0) {
-    utype = first_role_unit_for_player(pplayer, role);
-    if (utype == U_LAST) {
-      utype = get_role_unit(role, 0);
-    }
-    (void) create_unit(pplayer, x, y, utype, FALSE, 0, -1);
-  }
-}
-
-/****************************************************************************
-  Initialize a new game: place the players' units onto the map, etc.
-****************************************************************************/
+/**************************************************************************
+...
+**************************************************************************/
 void init_new_game(void)
 {
-  const int NO_START_POS = -1;
-  int start_pos[game.nplayers];
-  bool pos_used[map.num_start_positions];
-  int i, num_used = 0;
+  int i, j, x, y;
+  int dx, dy;
+  Unit_Type_id utype;
+  int start_pos[MAX_NUM_PLAYERS]; /* indices into map.start_positions[] */
 
-  init_game_id();
-
-  /* Shuffle starting positions around so that they match up with the
-   * desired players. */
-
-  /* First set up some data fields. */
-  freelog(LOG_VERBOSE, "Placing players at start positions.");
-  for (i = 0; i < map.num_start_positions; i++) {
-    Nation_Type_id n = map.start_positions[i].nation;
-
-    pos_used[i] = FALSE;
-    freelog(LOG_VERBOSE, "%3d : (%2d,%2d) : %d : %s",
-	    i, map.start_positions[i].x, map.start_positions[i].y,
-	    n, (n >= 0 ? get_nation_name(n) : ""));
-  }
-  players_iterate(pplayer) {
-    start_pos[pplayer->player_no] = NO_START_POS;
-  } players_iterate_end;
-
-  /* Second, assign a nation to a start position for that nation. */
-  freelog(LOG_VERBOSE, "Assigning matching nations.");
-  players_iterate(pplayer) {
-    for (i = 0; i < map.num_start_positions; i++) {
-      assert(pplayer->nation != NO_NATION_SELECTED);
-      if (pplayer->nation == map.start_positions[i].nation) {
-	freelog(LOG_VERBOSE, "Start_pos %d matches player %d (%s).",
-		i, pplayer->player_no, get_nation_name(pplayer->nation));
-	start_pos[pplayer->player_no] = i;
-	pos_used[i] = TRUE;
-	num_used++;
+  if (!map.fixed_start_positions) {
+    /* except in a scenario which provides them,
+       shuffle the start positions around... */
+    assert(game.nplayers==map.num_start_positions);
+    for (i=0; i<game.nplayers;i++) { /* no advantage to the romans!! */
+      j=myrand(game.nplayers);
+      x=map.start_positions[j].x;
+      y=map.start_positions[j].y;
+      map.start_positions[j].x=map.start_positions[i].x;
+      map.start_positions[j].y=map.start_positions[i].y;
+      map.start_positions[i].x=x;
+      map.start_positions[i].y=y;
+    }
+    for(i=0; i<game.nplayers; i++) {
+      start_pos[i] = i;
+    } 
+  } else {
+  /* In a scenario, choose starting positions by nation.
+     If there are too few starts for number of nations, assign
+     to nations with specific starts first, then assign rest
+     to random from remainder.  (Would be better to label start
+     positions by nation etc, but this will do for now. --dwp)
+  */
+    const int npos = map.num_start_positions;
+    bool *pos_used = fc_calloc(npos, sizeof(bool));
+    int nrem = npos;		/* remaining unused starts */
+    
+    for(i=0; i<game.nplayers; i++) {
+      int nation = game.players[i].nation;
+      if (nation < npos) {
+	start_pos[i] = nation;
+	pos_used[nation] = TRUE;
+	nrem--;
+      } else {
+	start_pos[i] = npos;
       }
     }
-  } players_iterate_end;
-
-  /* Third, assign players randomly to the remaining start positions. */
-  freelog(LOG_VERBOSE, "Assigning random nations.");
-  players_iterate(pplayer) {
-    if (start_pos[pplayer->player_no] == NO_START_POS) {
-      int which = myrand(map.num_start_positions - num_used);
-
-      for (i = 0; i < map.num_start_positions; i++) {
-	if (!pos_used[i]) {
-	  if (which == 0) {
-	    freelog(LOG_VERBOSE,
-		    "Randomly assigning player %d (%s) to pos %d.",
-		    pplayer->player_no, get_nation_name(pplayer->nation), i);
-	    start_pos[pplayer->player_no] = i;
-	    pos_used[i] = TRUE;
-	    num_used++;
+    for(i=0; i<game.nplayers; i++) {
+      if (start_pos[i] == npos) {
+	int k;
+	assert(nrem>0);
+	k = myrand(nrem);
+	for(j=0; j<npos; j++) {
+	  if (!pos_used[j] && (0==k--)) {
+	    start_pos[i] = j;
+	    pos_used[j] = TRUE;
+	    nrem--;
 	    break;
 	  }
-	  which--;
 	}
+	assert(start_pos[i] != npos);
       }
     }
-    assert(start_pos[pplayer->player_no] != NO_START_POS);
-  } players_iterate_end;
+    free(pos_used);
+    pos_used = NULL;
+  }
 
   /* Loop over all players, creating their initial units... */
-  players_iterate(pplayer) {
-    struct start_position pos
-      = map.start_positions[start_pos[pplayer->player_no]];
-
-    /* don't give any units to observer */
-    if (pplayer->is_observer) {
-      continue;
-    }
-
-    /* Place the first unit. */
-    place_starting_unit(pos.x, pos.y, pplayer, game.start_units[0]);
-  } players_iterate_end;
-
-  /* Place all other units. */
-  players_iterate(pplayer) {
-    int i, x, y;
-    struct start_position p
-      = map.start_positions[start_pos[pplayer->player_no]];
-
-    /* don't give any units to observer */
-    if (pplayer->is_observer) {
-      continue;
-    }
-
-    for (i = 1; i < strlen(game.start_units); i++) {
-      do {
-	x = p.x + myrand(2 * game.dispersion + 1) - game.dispersion;
-	y = p.y + myrand(2 * game.dispersion + 1) - game.dispersion;
-      } while (!(normalize_map_pos(&x, &y)
-		 && map_get_continent(p.x, p.y) == map_get_continent(x, y)
-		 && !is_ocean(map_get_terrain(x, y))
-		 && !is_non_allied_unit_tile(map_get_tile(x, y),
-					     pplayer)));
-
-
+  for (i = 0; i < game.nplayers; i++) {
+    /* Start positions are warranted to be land. */
+    x = map.start_positions[start_pos[i]].x;
+    y = map.start_positions[start_pos[i]].y;
+    /* Loop over all initial units... */
+    for (j = 0; j < (game.settlers + game.explorer); j++) {
+      /* Determine a place to put the unit within the dispersion area.
+         (Always put first unit on start position.) */
+      if (((game.dispersion <= 0) || (j == 0))
+	  && !is_non_allied_unit_tile(map_get_tile(x, y), get_player(i))) {
+	dx = x;
+	dy = y;
+      } else {
+	do {
+	  dx = x + myrand(2 * game.dispersion + 1) - game.dispersion;
+	  dy = y + myrand(2 * game.dispersion + 1) - game.dispersion;
+	  (void) normalize_map_pos(&dx, &dy);
+	} while (!(is_real_tile(dx, dy)
+                   && map_get_continent(x, y) == map_get_continent(dx, dy)
+                   && map_get_terrain(dx, dy) != T_OCEAN
+                   && !is_non_allied_unit_tile(map_get_tile(dx, dy),
+                    			       get_player(i))));
+      }
+      /* For scenarios or dispersion, huts may coincide with player
+	 starts (in other cases, huts are avoided as start positions).
+	 Remove any such hut, and make sure to tell the client, since
+	 we may have already sent this tile (with the hut) earlier:
+      */
+      if (map_has_special(dx, dy, S_HUT)) {
+        map_clear_special(dx, dy, S_HUT);
+	send_tile_info(NULL, dx, dy);
+        freelog(LOG_VERBOSE, "Removed hut on start position for %s",
+		game.players[i].name);
+      }
+      /* Expose visible area. */
+      circle_iterate(dx, dy, game.rgame.init_vis_radius_sq, cx, cy) {
+	show_area(&game.players[i], cx, cy, 0);
+      } circle_iterate_end;
       /* Create the unit of an appropriate type. */
-      place_starting_unit(x, y, pplayer, game.start_units[i]);
+      utype = get_role_unit((j < game.settlers) ? F_CITIES : L_EXPLORER, 0);
+      (void) create_unit(&game.players[i], dx, dy, utype, FALSE, 0, -1);
     }
-  } players_iterate_end;
+  }
 
   /* Initialise list of improvements with world-wide equiv_range */
   improvement_status_init(game.improvements, ARRAY_SIZE(game.improvements));
+
+  /* Free vector of effects with world-wide range. */
+  geff_vector_free(&game.effects);
+
+  /* Free vector of destroyed effects */
+  ceff_vector_free(&game.destroyed_effects);
 }
 
 /**************************************************************************
@@ -228,7 +158,7 @@ void init_new_game(void)
 **************************************************************************/
 void send_start_turn_to_clients(void)
 {
-  lsend_packet_start_turn(&game.game_connections);
+  lsend_packet_generic_empty(&game.est_connections, PACKET_START_TURN);
 }
 
 /**************************************************************************
@@ -248,27 +178,29 @@ void send_year_to_clients(int year)
 
   apacket.year = year;
   apacket.turn = game.turn;
-  lsend_packet_new_year(&game.game_connections, &apacket);
+  lsend_packet_new_year(&game.est_connections, &apacket);
 
   /* Hmm, clients could add this themselves based on above packet? */
-  notify_conn_ex(&game.game_connections, -1, -1, E_NEXT_YEAR, _("Year: %s"),
+  notify_conn_ex(&game.est_connections, -1, -1, E_NEXT_YEAR, _("Year: %s"),
 		 textyear(year));
 }
 
 
 /**************************************************************************
-  Send specified state; should be a CLIENT_GAME_*_STATE ?
+  Send specifed state; should be a CLIENT_GAME_*_STATE ?
   (But note client also changes state from other events.)
 **************************************************************************/
 void send_game_state(struct conn_list *dest, int state)
 {
-  dlsend_packet_game_state(dest, state);
+  struct packet_generic_integer pack;
+  pack.value=state;
+  lsend_packet_generic_integer(dest, PACKET_GAME_STATE, &pack);
 }
 
 
 /**************************************************************************
   Send game_info packet; some server options and various stuff...
-  dest==NULL means game.game_connections
+  dest==NULL means game.est_connections
 **************************************************************************/
 void send_game_info(struct conn_list *dest)
 {
@@ -276,7 +208,7 @@ void send_game_info(struct conn_list *dest)
   int i;
 
   if (!dest)
-    dest = &game.game_connections;
+    dest = &game.est_connections;
 
   ginfo.gold = game.gold;
   ginfo.tech = game.tech;
@@ -293,7 +225,6 @@ void send_game_info(struct conn_list *dest)
   ginfo.heating = game.heating;
   ginfo.nuclearwinter = game.nuclearwinter;
   ginfo.cooling = game.cooling;
-  ginfo.diplomacy = game.diplomacy;
   ginfo.techpenalty = game.techpenalty;
   ginfo.foodbox = game.foodbox;
   ginfo.civstyle = game.civstyle;
@@ -351,7 +282,7 @@ int update_timeout(void)
     game.timeoutint += game.timeoutintinc;
 
     if (game.timeout > GAME_MAX_TIMEOUT) {
-      notify_conn_ex(&game.game_connections, -1, -1, E_NOEVENT,
+      notify_conn_ex(&game.est_connections, -1, -1, E_NOEVENT,
 		     _("The turn timeout has exceeded its maximum value, "
 		       "fixing at its maximum"));
       freelog(LOG_DEBUG, "game.timeout exceeded maximum value");
@@ -359,7 +290,7 @@ int update_timeout(void)
       game.timeoutint = 0;
       game.timeoutinc = 0;
     } else if (game.timeout < 0) {
-      notify_conn_ex(&game.game_connections, -1, -1, E_NOEVENT,
+      notify_conn_ex(&game.est_connections, -1, -1, E_NOEVENT,
 		     _("The turn timeout is smaller than zero, "
 		       "fixing at zero."));
       freelog(LOG_DEBUG, "game.timeout less than zero");
@@ -376,76 +307,4 @@ int update_timeout(void)
 	  game.timeoutint - game.timeoutcounter);
 
   return game.timeout;
-}
-
-/************************************************************************** 
-find a suitably random file that we can write too, and return it's name.
-**************************************************************************/
-const char *create_challenge_filename(void)
-{
-  int i;
-  unsigned int tmp = 0;
-
-  /* find a suitable file to place the challenge in, we'll remove the file
-   * once the challenge is  */
-#ifndef CHALLENGE_PATH
-  sz_strlcpy(challenge_filename, user_home_dir());
-  sz_strlcat(challenge_filename, "/");
-  sz_strlcat(challenge_filename, CHALLENGE_ROOT);
-#else
-  sz_strlcpy(challenge_filename, CHALLENGE_PATH);
-#endif
-
-  for (i = 0; i < NUMBER_OF_TRIES; i++) {
-    char test_str[MAX_LEN_PATH];
-
-    sz_strlcpy(test_str, challenge_filename);
-    tmp = time(NULL);
-    cat_snprintf(test_str, MAX_LEN_PATH, "-%d", tmp);
-
-    /* file doesn't exist but we can create one and write to it */
-    if (!is_reg_file_for_access(test_str, FALSE) &&
-        is_reg_file_for_access(test_str, TRUE)) {
-      cat_snprintf(challenge_filename, MAX_LEN_PATH, "-%d", tmp);
-      break;
-    } else {
-      die("we can't seem to write to the filesystem!");
-    }
-  }
-
-  return challenge_filename;
-}
-
-/************************************************************************** 
-opens a file specified by the packet and compares the packet values with
-the file values. Sends an answer to the client once it's done.
-**************************************************************************/
-void handle_single_want_hack_req(struct connection *pc, int challenge)
-{
-  struct section_file file;
-  int entropy = 0;
-  bool could_load = TRUE;
-  bool you_have_hack = FALSE;
-
-  if (section_file_load_nodup(&file, challenge_filename)) {
-    entropy = secfile_lookup_int_default(&file, 0, "challenge.entropy");
-    section_file_free(&file);
-  } else {
-    freelog(LOG_ERROR, "couldn't load temporary file: %s", challenge_filename);
-    could_load = FALSE;
-  }
-
-  you_have_hack = (could_load && entropy && entropy == challenge);
-
-  if (you_have_hack) {
-    pc->access_level = ALLOW_HACK;
-  }
-
-  /* remove temp file */
-  if (remove(challenge_filename) != 0) {
-    freelog(LOG_ERROR, "couldn't remove temporary file: %s",
-            challenge_filename);
-  }
-
-  dsend_packet_single_want_hack_reply(pc, you_have_hack);
 }

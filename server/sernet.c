@@ -10,72 +10,69 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
-#include <assert.h>
-#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <errno.h>
+#include <assert.h>
 
-#ifdef HAVE_ARPA_INET_H
-#include <arpa/inet.h>
-#endif
-#ifdef HAVE_NETDB_H
-#include <netdb.h>
-#endif
-#ifdef HAVE_NETINET_IN_H
-#include <netinet/in.h>
-#endif
-#ifdef HAVE_PWD_H
-#include <pwd.h>
-#endif
-#ifdef HAVE_LIBREADLINE
-#include <readline/history.h>
-#include <readline/readline.h>
-#endif
-#ifdef HAVE_SYS_SELECT_H
-#include <sys/select.h>
-#endif
-#ifdef HAVE_SYS_SOCKET_H
-#include <sys/socket.h>
-#endif
-#ifdef HAVE_SYS_TIME_H
-#include <sys/time.h>
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
 #endif
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
 #endif
+#ifdef HAVE_SYS_TIME_H
+#include <sys/time.h>
+#endif
+#ifdef HAVE_PWD_H
+#include <pwd.h>
+#endif
+
+#ifdef HAVE_SYS_SELECT_H
+#include <sys/select.h>
+#endif
+
+#ifdef HAVE_SYS_SOCKET_H
+#include <sys/socket.h>
+#endif
+#ifdef HAVE_NETDB_H
+#include <netdb.h>
+#endif
 #ifdef HAVE_SYS_UIO_H
 #include <sys/uio.h>
 #endif
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#ifdef HAVE_NETINET_IN_H
+#include <netinet/in.h>
+#endif
+#ifdef HAVE_ARPA_INET_H
+#include <arpa/inet.h>
 #endif
 #ifdef HAVE_WINSOCK
 #include <winsock.h>
 #endif
 
-#include "capability.h"
-#include "dataio.h"
-#include "events.h"
+#ifdef HAVE_LIBREADLINE
+#include <readline/readline.h>
+#include <readline/history.h>
+#endif
+
 #include "fcintl.h"
 #include "log.h"
 #include "mem.h"
 #include "netintf.h"
 #include "packets.h"
+#include "plrhand.h"
 #include "shared.h"
 #include "support.h"
-#include "timing.h"
-
-#include "connecthand.h"
+#include "capability.h"
 #include "console.h"
 #include "meta.h"
-#include "plrhand.h"
 #include "srv_main.h"
 #include "stdinhand.h"
 
@@ -88,7 +85,6 @@ TEndpointInfo serv_info;
 EndpointRef serv_ep;
 #else
 static int sock;
-static int socklan;
 #endif
 
 #if defined(__VMS)
@@ -109,38 +105,25 @@ static int socklan;
    void user_interrupt_callback();
 #endif
 
-#define SPECLIST_TAG timer
-#define SPECLIST_TYPE struct timer
-#include "speclist.h"
-
 #define PROCESSING_TIME_STATISTICS 0
 
 static int server_accept_connection(int sockfd);
 static void start_processing_request(struct connection *pconn,
 				     int request_id);
 static void finish_processing_request(struct connection *pconn);
-static void ping_connection(struct connection *pconn);
-static void send_ping_times_to_all(void);
-
-static void get_lanserver_announcement(void);
-static void send_lanserver_response(void);
 
 static bool no_input = FALSE;
 
 /*****************************************************************************
   This happens if you type an EOF character with nothing on the current line.
 *****************************************************************************/
+#ifndef SOCKET_ZERO_ISNT_STDIN
 static void handle_stdin_close(void)
 {
-  /* Note this function may be called even if SOCKET_ZERO_ISNT_STDIN, so
-   * the preprocessor check has to come inside the function body.  But
-   * perhaps we want to do this even when SOCKET_ZERO_ISNT_STDIN? */
-#ifndef SOCKET_ZERO_ISNT_STDIN
   freelog(LOG_NORMAL, _("Server cannot read standard input. Ignoring input."));
   no_input = TRUE;
-#endif
 }
-
+#endif
 #ifdef HAVE_LIBREADLINE
 /****************************************************************************/
 
@@ -170,7 +153,7 @@ static void handle_readline_input_callback(char *line)
     add_history(line);
 
   con_prompt_enter();		/* just got an 'Enter' hit */
-  (void) handle_stdin_input((struct connection*)NULL, line, FALSE);
+  handle_stdin_input((struct connection*)NULL, line);
 
   readline_handled_input = TRUE;
 }
@@ -181,23 +164,20 @@ static void handle_readline_input_callback(char *line)
 *****************************************************************************/
 void close_connection(struct connection *pconn)
 {
-  while (timer_list_size(pconn->server.ping_timers) > 0) {
-    struct timer *timer = timer_list_get(pconn->server.ping_timers, 0);
-
-    timer_list_unlink(pconn->server.ping_timers, timer);
-    free_timer(timer);
-  }
-  assert(timer_list_size(pconn->server.ping_timers) == 0);
-  timer_list_unlink_all(pconn->server.ping_timers);
-
   /* safe to do these even if not in lists: */
   conn_list_unlink(&game.all_connections, pconn);
   conn_list_unlink(&game.est_connections, pconn);
   conn_list_unlink(&game.game_connections, pconn);
 
+  my_closesocket(pconn->sock);
+  pconn->used = FALSE;
+  pconn->established = FALSE;
   pconn->player = NULL;
   pconn->access_level = ALLOW_NONE;
-  connection_common_close(pconn);
+  free_socket_packet_buffer(pconn->buffer);
+  free_socket_packet_buffer(pconn->send_buffer);
+  pconn->buffer = NULL;
+  pconn->send_buffer = NULL;
 }
 
 /*****************************************************************************
@@ -206,30 +186,27 @@ void close_connection(struct connection *pconn)
 void close_connections_and_socket(void)
 {
   int i;
-  lsend_packet_server_shutdown(&game.all_connections);
+
+  struct packet_generic_message gen_packet;
+  gen_packet.message[0]='\0';
+
+  lsend_packet_generic_message(&game.all_connections, PACKET_SERVER_SHUTDOWN,
+			       &gen_packet);
 
   for(i=0; i<MAX_NUM_CONNECTIONS; i++) {
     if(connections[i].used) {
       close_connection(&connections[i]);
     }
-    conn_list_unlink_all(&connections[i].self);
   }
-
-  /* Remove the game connection lists and make sure they are empty. */
-  assert(conn_list_size(&game.all_connections) == 0);
-  conn_list_unlink_all(&game.all_connections);
-  assert(conn_list_size(&game.est_connections) == 0);
-  conn_list_unlink_all(&game.est_connections);
-  assert(conn_list_size(&game.game_connections) == 0);
-  conn_list_unlink_all(&game.game_connections);
-
   my_closesocket(sock);
-  my_closesocket(socklan);
 
 #ifdef HAVE_LIBREADLINE
   if (history_file) {
     write_history(history_file);
     history_truncate_file(history_file, HISTORY_LENGTH);
+  }
+  if (readline_initialized) {
+    rl_callback_handler_remove();
   }
 #endif
 
@@ -360,7 +337,7 @@ int sniff_packets(void)
       }
 
       rl_initialize();
-      rl_callback_handler_install((char *) "> ", handle_readline_input_callback);
+      rl_callback_handler_install("> ", handle_readline_input_callback);
       rl_attempted_completion_function = freeciv_completion;
 
       readline_initialized = TRUE;
@@ -372,10 +349,8 @@ int sniff_packets(void)
   if(year!=game.year) {
     if (server_state == RUN_GAME_STATE) year=game.year;
   }
-  if (game.timeout == 0) {
-    /* Just in case someone sets timeout we keep game.turn_start updated */
+  if (game.timeout == 0)
     game.turn_start = time(NULL);
-  }
   
   while(TRUE) {
     con_prompt_on();		/* accepting new input */
@@ -386,9 +361,8 @@ int sniff_packets(void)
       return 2;
     }
 
-    get_lanserver_announcement();
 
-    /* end server if no players for 'srvarg.quitidle' seconds */
+    /* quit server if no players for 'srvarg.quitidle' seconds */
     if (srvarg.quitidle != 0 && server_state != PRE_GAME_STATE) {
       static time_t last_noplayers;
       if(conn_list_size(&game.est_connections) == 0) {
@@ -399,12 +373,8 @@ int sniff_packets(void)
 	    freelog(LOG_NORMAL, srvarg.metaserver_info_line);
 	    (void) send_server_info_to_metaserver(TRUE, FALSE);
 
-            server_state = GAME_OVER_STATE;
-            force_end_of_sniff = TRUE;
-            conn_list_iterate(game.est_connections, pconn) {
-              lost_connection_to_client(pconn);
-              close_connection(pconn);
-            } conn_list_iterate_end;
+	    close_connections_and_socket();
+	    exit(EXIT_SUCCESS);
 	  }
 	} else {
 	  last_noplayers = time(NULL);
@@ -421,45 +391,33 @@ int sniff_packets(void)
       }
     }
 
-    /* Pinging around for statistics */
-    if (time(NULL) > (game.last_ping + game.pingtime)) {
-      /* send data about the previous run */
-      send_ping_times_to_all();
+    /* send PACKET_CONN_PING & cut mute players */
+    if ((time(NULL)>game.last_ping + game.pingtimeout)) {
+      for(i=0; i<MAX_NUM_CONNECTIONS; i++) {
+	struct connection *pconn = &connections[i];
+	if (pconn->used) {
+	  send_packet_generic_empty(pconn, PACKET_CONN_PING);
 
-      conn_list_iterate(game.game_connections, pconn) {
-	if (!pconn->used) {
-	  continue;
+	  if (pconn->ponged) {
+	    pconn->ponged = FALSE;
+	  } else {
+	    freelog(LOG_NORMAL, "cut connection %s due to ping timeout",
+		    conn_description(pconn));
+	    close_socket_callback(pconn);
+	  }
 	}
-
-	if ((timer_list_size(pconn->server.ping_timers) > 0
-	     &&
-	     read_timer_seconds(timer_list_get(pconn->server.ping_timers, 0))
-	     > game.pingtimeout) || pconn->ping_time > game.pingtimeout) {
-	  /* cut mute players */
-	  freelog(LOG_NORMAL, "cut connection %s due to ping timeout",
-		  conn_description(pconn));
-	  close_socket_callback(pconn);
-	} else {
-	  ping_connection(pconn);
-	}
-      } conn_list_iterate_end;
-      game.last_ping = time(NULL);
-    }
-
-    /* if we've waited long enough after a failure, respond to the client */
-    for (i = 0; i < MAX_NUM_CONNECTIONS; i++) {
-      struct connection *pconn = &connections[i];
-
-      if (pconn->server.status == AS_FAILED
-          && pconn->server.authentication_stop > 0
-          && time(NULL) >= pconn->server.authentication_stop) {
-        unfail_authentication(pconn);
       }
+      game.last_ping = time(NULL);
     }
 
     /* Don't wait if timeout == -1 (i.e. on auto games) */
     if (server_state != PRE_GAME_STATE && game.timeout == -1) {
       (void) send_server_info_to_metaserver(FALSE, FALSE);
+
+      /* kick out of the srv_main loop */
+      if (server_state == GAME_OVER_STATE) {
+	server_state = PRE_GAME_STATE;
+      }
       return 0;
     }
 
@@ -525,10 +483,8 @@ int sniff_packets(void)
 #endif /* !__VMS */
       }
     }
-    if (game.timeout == 0) {
-      /* Just in case someone sets timeout we keep game.turn_start updated */
+    if (game.timeout == 0)
       game.turn_start = time(NULL);
-    }
 
     if(FD_ISSET(sock, &exceptfs)) {	     /* handle Ctrl-Z suspend/resume */
       continue;
@@ -551,7 +507,7 @@ int sniff_packets(void)
 #ifdef SOCKET_ZERO_ISNT_STDIN
     if (!no_input && (bufptr = my_read_console())) {
       con_prompt_enter();	/* will need a new prompt, regardless */
-      handle_stdin_input((struct connection *)NULL, bufptr, FALSE);
+      handle_stdin_input((struct connection *)NULL, bufptr);
     }
 #else  /* !SOCKET_ZERO_ISNT_STDIN */
     if(!no_input && FD_ISSET(0, &readfs)) {    /* input from server operator */
@@ -567,7 +523,8 @@ int sniff_packets(void)
       char buf[BUF_SIZE+1];
       
       if((didget=read(0, buf, BUF_SIZE))==-1) {
-	die("read from stdin failed");
+	freelog(LOG_FATAL, "read from stdin failed");
+	exit(EXIT_FAILURE);
       }
 
       if(didget==0) {
@@ -576,7 +533,7 @@ int sniff_packets(void)
 
       *(buf+didget)='\0';
       con_prompt_enter();	/* will need a new prompt, regardless */
-      handle_stdin_input((struct connection *)NULL, buf, FALSE);
+      handle_stdin_input((struct connection *)NULL, buf);
 #endif /* !HAVE_LIBREADLINE */
     }
     else
@@ -614,10 +571,7 @@ int sniff_packets(void)
 					 pconn->server.
 					 last_request_id_seen);
 		command_ok = handle_packet_input(pconn, packet, type);
-		if (packet) {
-		  free(packet);
-		  packet = NULL;
-		}
+		packet = NULL;
 
 		finish_processing_request(pconn);
 		connection_do_unbuffer(pconn);
@@ -692,7 +646,7 @@ static const char *makeup_connection_name(int *id)
     if (!find_player_by_name(name)
 	&& !find_player_by_user(name)
 	&& !find_conn_by_id(i)
-	&& !find_conn_by_user(name)) {
+	&& !find_conn_by_name(name)) {
       *id = i;
       return name;
     }
@@ -715,56 +669,52 @@ static int server_accept_connection(int sockfd)
 # endif
 
   int new_sock;
-  union my_sockaddr fromend;
+  struct sockaddr_in fromend;
   struct hostent *from;
   int i;
 
   fromlen = sizeof(fromend);
 
-  if ((new_sock = accept(sockfd, &fromend.sockaddr, &fromlen)) == -1) {
-    freelog(LOG_ERROR, "accept failed: %s", mystrerror());
+  if ((new_sock=accept(sockfd, (struct sockaddr *) &fromend, &fromlen)) == -1) {
+    freelog(LOG_ERROR, "accept failed: %s", mystrerror(errno));
     return -1;
   }
 
   my_nonblock(new_sock);
 
-  from =
-      gethostbyaddr((char *) &fromend.sockaddr_in.sin_addr,
-		    sizeof(fromend.sockaddr_in.sin_addr), AF_INET);
+  from=gethostbyaddr((char *)&fromend.sin_addr, sizeof(fromend.sin_addr),
+		     AF_INET);
 
   for(i=0; i<MAX_NUM_CONNECTIONS; i++) {
     struct connection *pconn = &connections[i];
     if (!pconn->used) {
-      connection_common_init(pconn);
+      pconn->used = TRUE;
       pconn->sock = new_sock;
+      pconn->established = FALSE;
       pconn->observer = FALSE;
       pconn->player = NULL;
+      pconn->buffer = new_socket_packet_buffer();
+      pconn->send_buffer = new_socket_packet_buffer();
+      pconn->last_write = 0;
+      pconn->ponged = TRUE;
+      pconn->first_packet = TRUE;
+      pconn->byte_swap = FALSE;
       pconn->capability[0] = '\0';
       pconn->access_level = access_level_for_next_connection();
       pconn->delayed_disconnect = FALSE;
       pconn->notify_of_writable_data = NULL;
       pconn->server.currently_processed_request_id = 0;
       pconn->server.last_request_id_seen = 0;
-      pconn->server.authentication_tries = 0;
-      pconn->server.authentication_stop = 0;
-      pconn->server.status = AS_NOT_ESTABLISHED;
-      pconn->server.ping_timers =
-	  fc_malloc(sizeof(*pconn->server.ping_timers));
-      timer_list_init(pconn->server.ping_timers);
-      pconn->ping_time = -1.0;
       pconn->incoming_packet_notify = NULL;
       pconn->outgoing_packet_notify = NULL;
 
-      sz_strlcpy(pconn->username, makeup_connection_name(&pconn->id));
+      sz_strlcpy(pconn->name, makeup_connection_name(&pconn->id));
       sz_strlcpy(pconn->addr,
-		 (from ? from->
-		  h_name : inet_ntoa(fromend.sockaddr_in.sin_addr)));
+		 (from ? from->h_name : inet_ntoa(fromend.sin_addr)));
 
       conn_list_insert_back(&game.all_connections, pconn);
   
-      freelog(LOG_VERBOSE, "connection (%s) from %s", 
-              pconn->username, pconn->addr);
-      ping_connection(pconn);
+      freelog(LOG_VERBOSE, "connection (%s) from %s", pconn->name, pconn->addr);
       return 0;
     }
   }
@@ -775,73 +725,37 @@ static int server_accept_connection(int sockfd)
 
 /********************************************************************
  open server socket to be used to accept client connections
- and open a server socket for server LAN announcements.
 ********************************************************************/
 int server_open_socket(void)
 {
   /* setup socket address */
-  union my_sockaddr src;
-  union my_sockaddr addr;
-  struct ip_mreq mreq;
-  const char *group;
+  struct sockaddr_in src;
   int opt;
 
-  /* Create socket for client connections. */
   if((sock = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
-    die("socket failed: %s", mystrerror());
+    freelog(LOG_FATAL, "socket failed: %s", mystrerror(errno));
+    exit(EXIT_FAILURE);
   }
 
   opt=1; 
   if(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, 
 		(char *)&opt, sizeof(opt)) == -1) {
-    freelog(LOG_ERROR, "SO_REUSEADDR failed: %s", mystrerror());
+    freelog(LOG_ERROR, "SO_REUSEADDR failed: %s", mystrerror(errno));
   }
 
-  if (!net_lookup_service(srvarg.bind_addr, srvarg.port, &src)) {
-    freelog(LOG_ERROR, _("Server: bad address: [%s:%d]."),
-	    srvarg.bind_addr, srvarg.port);
-    exit(EXIT_FAILURE);
-  }
+  memset(&src, 0, sizeof(src));
+  src.sin_family = AF_INET;
+  src.sin_addr.s_addr = htonl(INADDR_ANY);
+  src.sin_port = htons(srvarg.port);
 
-  if(bind(sock, &src.sockaddr, sizeof (src)) == -1) {
-    freelog(LOG_FATAL, "bind failed: %s", mystrerror());
+  if(bind(sock, (struct sockaddr *) &src, sizeof (src)) == -1) {
+    freelog(LOG_FATAL, "bind failed: %s", mystrerror(errno));
     exit(EXIT_FAILURE);
   }
 
   if(listen(sock, MAX_NUM_CONNECTIONS) == -1) {
-    freelog(LOG_FATAL, "listen failed: %s", mystrerror());
+    freelog(LOG_FATAL, "listen failed: %s", mystrerror(errno));
     exit(EXIT_FAILURE);
-  }
-
-  /* Create socket for server LAN announcements */
-  if ((socklan = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-     freelog(LOG_ERROR, "socket failed: %s", mystrerror());
-  }
-
-  if (setsockopt(socklan, SOL_SOCKET, SO_REUSEADDR,
-                 (char *)&opt, sizeof(opt)) == -1) {
-    freelog(LOG_ERROR, "SO_REUSEADDR failed: %s", mystrerror());
-  }
-
-  my_nonblock(socklan);
-
-  group = get_multicast_group();
-
-  memset(&addr, 0, sizeof(addr));
-  addr.sockaddr_in.sin_family = AF_INET;
-  addr.sockaddr_in.sin_addr.s_addr = htonl(INADDR_ANY);
-  addr.sockaddr_in.sin_port = htons(SERVER_LAN_PORT);
-
-  if (bind(socklan, &addr.sockaddr, sizeof(addr)) < 0) {
-    freelog(LOG_ERROR, "bind failed: %s", mystrerror());
-  }
-
-  mreq.imr_multiaddr.s_addr = inet_addr(group);
-  mreq.imr_interface.s_addr = htonl(INADDR_ANY);
-
-  if (setsockopt(socklan, IPPROTO_IP, IP_ADD_MEMBERSHIP,
-                 (const char*)&mreq, sizeof(mreq)) < 0) {
-    freelog(LOG_ERROR, "setsockopt failed: %s", mystrerror());
   }
 
   close_socket_set_callback(close_socket_callback);
@@ -865,6 +779,7 @@ void init_connections(void)
     pconn->used = FALSE;
     conn_list_init(&pconn->self);
     conn_list_insert(&pconn->self, pconn);
+    pconn->route = NULL;
   }
 #if defined(__VMS)
   {
@@ -886,7 +801,7 @@ static void start_processing_request(struct connection *pconn,
   assert(pconn->server.currently_processed_request_id == 0);
   freelog(LOG_DEBUG, "start processing packet %d from connection %d",
 	  request_id, pconn->id);
-  send_packet_processing_started(pconn);
+  send_packet_generic_empty(pconn, PACKET_PROCESSING_STARTED);
   pconn->server.currently_processed_request_id = request_id;
 }
 
@@ -898,202 +813,6 @@ static void finish_processing_request(struct connection *pconn)
   assert(pconn->server.currently_processed_request_id);
   freelog(LOG_DEBUG, "finish processing packet %d from connection %d",
 	  pconn->server.currently_processed_request_id, pconn->id);
-  send_packet_processing_finished(pconn);
+  send_packet_generic_empty(pconn, PACKET_PROCESSING_FINISHED);
   pconn->server.currently_processed_request_id = 0;
-}
-
-/**************************************************************************
-...
-**************************************************************************/
-static void ping_connection(struct connection *pconn)
-{
-  freelog(LOG_DEBUG, "sending ping to %s (open=%d)",
-	  conn_description(pconn),
-	  timer_list_size(pconn->server.ping_timers));
-  timer_list_insert_back(pconn->server.ping_timers,
-			 new_timer_start(TIMER_USER, TIMER_ACTIVE));
-  send_packet_conn_ping(pconn);
-}
-
-/**************************************************************************
-...
-**************************************************************************/
-void handle_conn_pong(struct connection *pconn)
-{
-  struct timer *timer;
-
-  if (timer_list_size(pconn->server.ping_timers) == 0) {
-    freelog(LOG_NORMAL, "got unexpected pong from %s",
-	    conn_description(pconn));
-    return;
-  }
-
-  timer = timer_list_get(pconn->server.ping_timers, 0);
-  timer_list_unlink(pconn->server.ping_timers, timer);
-  pconn->ping_time = read_timer_seconds_free(timer);
-  freelog(LOG_DEBUG, "got pong from %s (open=%d); ping time = %fs",
-	  conn_description(pconn),
-	  timer_list_size(pconn->server.ping_timers), pconn->ping_time);
-}
-
-/**************************************************************************
-...
-**************************************************************************/
-static void send_ping_times_to_all(void)
-{
-  struct packet_conn_ping_info packet;
-  int i;
-
-  i = 0;
-  conn_list_iterate(game.game_connections, pconn) {
-    if (!pconn->used) {
-      continue;
-    }
-    i++;
-  } conn_list_iterate_end;
-
-  packet.connections = i;
-
-  i = 0;
-  conn_list_iterate(game.game_connections, pconn) {
-    if (!pconn->used) {
-      continue;
-    }
-    packet.conn_id[i] = pconn->id;
-    packet.ping_time[i] = pconn->ping_time;
-    i++;
-  } conn_list_iterate_end;
-  lsend_packet_conn_ping_info(&game.est_connections, &packet);
-}
-
-/********************************************************************
-  Listen for UDP packets multicasted from clients requesting
-  announcement of servers on the LAN.
-********************************************************************/
-static void get_lanserver_announcement(void)
-{
-  char msgbuf[128];
-  struct data_in din;
-  int type;
-  fd_set readfs, exceptfs;
-  struct timeval tv;
-
-  FD_ZERO(&readfs);
-  FD_ZERO(&exceptfs);
-  FD_SET(socklan, &exceptfs);
-  FD_SET(socklan, &readfs);
-
-  tv.tv_sec = 0;
-  tv.tv_usec = 0;
-
-  if (select(socklan + 1, &readfs, NULL, &exceptfs, &tv) == -1) {
-    freelog(LOG_ERROR, "select failed: %s", mystrerror());
-  }
-
-  if (FD_ISSET(socklan, &readfs)) {
-    if (0 < recvfrom(socklan, msgbuf, sizeof(msgbuf), 0, NULL, NULL)) {
-      dio_input_init(&din, msgbuf, 1);
-      dio_get_uint8(&din, &type);
-      if (type == SERVER_LAN_VERSION) {
-        freelog(LOG_DEBUG, "Received request for server LAN announcement.");
-        send_lanserver_response();
-      } else {
-        freelog(LOG_DEBUG,
-                "Received invalid request for server LAN announcement.");
-      }
-    }
-  }
-}
-
-/********************************************************************
-  This function broadcasts an UDP packet to clients with
-  that requests information about the server state.
-********************************************************************/
-static void send_lanserver_response(void)
-{
-  unsigned char buffer[MAX_LEN_PACKET];
-  unsigned char hostname[512];
-  unsigned char port[256];
-  unsigned char version[256];
-  unsigned char players[256];
-  unsigned char status[256];
-  struct data_out dout;
-  union my_sockaddr addr;
-  int socksend, setting = 1;
-  const char *group;
-  size_t size;
-  unsigned char ttl;
-
-  /* Create a socket to broadcast to client. */
-  if ((socksend = socket(AF_INET,SOCK_DGRAM, 0)) < 0) {
-    freelog(LOG_ERROR, "socket failed: %s", mystrerror());
-    return;
-  }
-
-  /* Set the UDP Multicast group IP address of the packet. */
-  group = get_multicast_group();
-  memset(&addr, 0, sizeof(addr));
-  addr.sockaddr_in.sin_family = AF_INET;
-  addr.sockaddr_in.sin_addr.s_addr = inet_addr(group);
-  addr.sockaddr_in.sin_port = htons(SERVER_LAN_PORT + 1);
-
-  /* Set the Time-to-Live field for the packet.  */
-  ttl = SERVER_LAN_TTL;
-  if (setsockopt(socksend, IPPROTO_IP, IP_MULTICAST_TTL, 
-                 (const char*)&ttl, sizeof(ttl))) {
-    freelog(LOG_ERROR, "setsockopt failed: %s", mystrerror());
-    return;
-  }
-
-  if (setsockopt(socksend, SOL_SOCKET, SO_BROADCAST, 
-                 (const char*)&setting, sizeof(setting))) {
-    freelog(LOG_ERROR, "setsockopt failed: %s", mystrerror());
-    return;
-  }
-
-  /* Create a description of server state to send to clients.  */
-  if (my_gethostname(hostname, sizeof(hostname)) != 0) {
-    sz_strlcpy(hostname, "none");
-  }
-
-  my_snprintf(version, sizeof(version), "%d.%d.%d%s",
-              MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION, VERSION_LABEL);
-
-  switch (server_state) {
-  case PRE_GAME_STATE:
-    my_snprintf(status, sizeof(status), "Pregame");
-    break;
-  case RUN_GAME_STATE:
-    my_snprintf(status, sizeof(status), "Running");
-    break;
-  case GAME_OVER_STATE:
-    my_snprintf(status, sizeof(status), "Game over");
-    break;
-  default:
-    my_snprintf(status, sizeof(status), "Waiting");
-  }
-
-   my_snprintf(players, sizeof(players), "%d",
-               get_num_human_and_ai_players());
-   my_snprintf(port, sizeof(port), "%d",
-              srvarg.port );
-
-  dio_output_init(&dout, buffer, sizeof(buffer));
-  dio_put_uint8(&dout, SERVER_LAN_VERSION);
-  dio_put_string(&dout, hostname);
-  dio_put_string(&dout, port);
-  dio_put_string(&dout, version);
-  dio_put_string(&dout, status);
-  dio_put_string(&dout, players);
-  dio_put_string(&dout, srvarg.metaserver_info_line);
-  size = dio_output_used(&dout);
-
-  /* Sending packet to client with the information gathered above. */
-  if (sendto(socksend, buffer,  size, 0, &addr.sockaddr,
-      sizeof(addr)) < 0) {
-    freelog(LOG_ERROR, "sendto failed: %s", mystrerror());
-    return;
-  }
-
-  my_closesocket(socksend);
 }

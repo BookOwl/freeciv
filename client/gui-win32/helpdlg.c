@@ -10,16 +10,14 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
-
-#include <assert.h>
+ 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include <assert.h>
 #include <windows.h>
 #include <windowsx.h>
  
@@ -51,9 +49,7 @@
 #define ID_HELP_IMPROVEMENT_LINK 112
 #define ID_HELP_WONDER_LINK 113
 
-/* HACK: we use a static string for convenience. */
-static char long_buffer[64000];
-
+extern char long_buffer[64000];
 extern HINSTANCE freecivhinst;
 extern HWND root_window;
 static HWND helpdlg_win;
@@ -470,13 +466,13 @@ void create_help_dialog()
 static void help_update_improvement(const struct help_item *pitem,
                                     char *title, int which)
 {
-  char buf[64000];
+  char *buf = &long_buffer[0];
  
   create_help_page(HELP_IMPROVEMENT);
  
   if (which<B_LAST) {
     struct impr_type *imp = &improvement_types[which];
-    sprintf(buf, "%d", impr_build_shield_cost(which));
+    sprintf(buf, "%d", imp->build_cost);
     SetWindowText(help_ilabel[1], buf);
     sprintf(buf, "%d", imp->upkeep);
     SetWindowText(help_ilabel[3], buf);
@@ -493,7 +489,7 @@ static void help_update_improvement(const struct help_item *pitem,
     SetWindowText(help_ilabel[5], _("(Never)"));
 /*    create_tech_tree(help_improvement_tree, 0, game.num_tech_types, 3);*/
   }
-  helptext_building(buf, sizeof(buf), which, pitem->text);
+  helptext_improvement(buf, which, pitem->text);
   set_help_text(buf);
 
 }
@@ -503,25 +499,20 @@ static void help_update_improvement(const struct help_item *pitem,
 static void help_update_wonder(const struct help_item *pitem,
                                char *title, int which)
 {
-  char buf[64000];
+  char *buf = &long_buffer[0];
  
   create_help_page(HELP_WONDER);
  
   if (which<B_LAST) {
     struct impr_type *imp = &improvement_types[which];
-    sprintf(buf, "%d", impr_build_shield_cost(which));
+    sprintf(buf, "%d", imp->build_cost);
     SetWindowText(help_ilabel[1], buf);
     if (imp->tech_req == A_LAST) {
       SetWindowText(help_ilabel[3], _("(Never)"));
     } else {
       SetWindowText(help_ilabel[3], advances[imp->tech_req].name);
     }
-    if (tech_exists(imp->obsolete_by)) {
-      SetWindowText(help_ilabel[5], advances[imp->obsolete_by].name);
-    } else {
-      SetWindowText(help_ilabel[5], _("(Never)"));
-    }
-
+    SetWindowText(help_ilabel[5], advances[imp->obsolete_by].name);
     /*    create_tech_tree(help_improvement_tree, 0, imp->tech_req, 3);*/
   }
   else {
@@ -532,7 +523,7 @@ static void help_update_wonder(const struct help_item *pitem,
 /*    create_tech_tree(help_improvement_tree, 0, game.num_tech_types, 3); */
   }
  
-  helptext_building(buf, sizeof(buf), which, pitem->text);
+  helptext_wonder(buf, which, pitem->text);
   set_help_text(buf);
 }                            
 
@@ -546,99 +537,116 @@ static void help_update_terrain(const struct help_item *pitem,
   
   create_help_page(HELP_TERRAIN);
 
-  if (i < T_COUNT) {
-    sprintf(buf, "%d/%d.%d",
-	    tile_types[i].movement_cost,
-	    (int)(tile_types[i].defense_bonus/10),
-	    tile_types[i].defense_bonus%10);
-    SetWindowText (help_tlabel[0][1], buf);
+  if (i < T_COUNT)
+    {
+      sprintf (buf, "%d/%d.%d",
+	       tile_types[i].movement_cost,
+	       (int)(tile_types[i].defense_bonus/10), tile_types[i].defense_bonus%10);
+      SetWindowText (help_tlabel[0][1], buf);
 
-    sprintf(buf, "%d/%d/%d",
-	    tile_types[i].food,
-	    tile_types[i].shield,
-	    tile_types[i].trade);
-    SetWindowText(help_tlabel[0][4], buf);
+      sprintf (buf, "%d/%d/%d",
+	       tile_types[i].food,
+	       tile_types[i].shield,
+	       tile_types[i].trade);
+      SetWindowText (help_tlabel[0][4], buf);
 
-    if (*(tile_types[i].special_1_name)) {
-      sprintf(buf, _("%s F/R/T:"),
-	      tile_types[i].special_1_name);
-      SetWindowText(help_tlabel[1][0], buf);
-      sprintf(buf, "%d/%d/%d",
-	      tile_types[i].food_special_1,
-	      tile_types[i].shield_special_1,
-	      tile_types[i].trade_special_1);
-      SetWindowText(help_tlabel[1][1], buf);
-    } else {
-      SetWindowText(help_tlabel[1][0], " ");
-      SetWindowText(help_tlabel[1][1], " ");
+      if (*(tile_types[i].special_1_name))
+	{
+	  sprintf (buf, _("%s F/R/T:"),
+		   tile_types[i].special_1_name);
+	  SetWindowText (help_tlabel[1][0], buf);
+	  sprintf (buf, "%d/%d/%d",
+		   tile_types[i].food_special_1,
+		   tile_types[i].shield_special_1,
+		   tile_types[i].trade_special_1);
+	  SetWindowText (help_tlabel[1][1], buf);
+	} else {
+	  SetWindowText (help_tlabel[1][0], " ");
+	  SetWindowText (help_tlabel[1][1], " ");
+	}
+
+      if (*(tile_types[i].special_2_name))
+	{
+	  sprintf (buf, _("%s F/R/T:"),
+		   tile_types[i].special_2_name);
+	  SetWindowText (help_tlabel[1][3], buf);
+	  sprintf (buf, "%d/%d/%d",
+		   tile_types[i].food_special_2,
+		   tile_types[i].shield_special_2,
+		   tile_types[i].trade_special_2);
+	  SetWindowText (help_tlabel[1][4], buf);
+	} else {
+	  SetWindowText (help_tlabel[1][3], " ");
+	  SetWindowText (help_tlabel[1][4], " ");
+	}
+
+      if (tile_types[i].road_trade_incr > 0)
+	{
+	  sprintf (buf, _("+%d Trade / %d"),
+		   tile_types[i].road_trade_incr,
+		   tile_types[i].road_time);
+	}
+      else if (tile_types[i].road_time > 0)
+	{
+	  sprintf (buf, _("no extra / %d"),
+		   tile_types[i].road_time);
+	}
+      else
+	{
+	  strcpy (buf, _("n/a"));
+	}
+      SetWindowText (help_tlabel[2][1], buf);
+
+      strcpy (buf, _("n/a"));
+      if (tile_types[i].irrigation_result == i)
+	{
+	  if (tile_types[i].irrigation_food_incr > 0)
+	    {
+	      sprintf (buf, _("+%d Food / %d"),
+		       tile_types[i].irrigation_food_incr,
+		       tile_types[i].irrigation_time);
+	    }
+	}
+      else if (tile_types[i].irrigation_result != T_LAST)
+	{
+	  sprintf (buf, "%s / %d",
+		   tile_types[tile_types[i].irrigation_result].terrain_name,
+		   tile_types[i].irrigation_time);
+	}
+      SetWindowText (help_tlabel[2][4], buf);
+
+      strcpy (buf, _("n/a"));
+      if (tile_types[i].mining_result == i)
+	{
+	  if (tile_types[i].mining_shield_incr > 0)
+	    {
+	      sprintf (buf, _("+%d Res. / %d"),
+		       tile_types[i].mining_shield_incr,
+		       tile_types[i].mining_time);
+	    }
+	}
+      else if (tile_types[i].mining_result != T_LAST)
+	{
+	  sprintf (buf, "%s / %d",
+		   tile_types[tile_types[i].mining_result].terrain_name,
+		   tile_types[i].mining_time);
+	}
+      SetWindowText (help_tlabel[3][1], buf);
+
+      if (tile_types[i].transform_result != T_LAST)
+	{
+	  sprintf (buf, "%s / %d",
+		   tile_types[tile_types[i].transform_result].terrain_name,
+		   tile_types[i].transform_time);
+	} else {
+	  strcpy (buf, "n/a");
+	}
+      SetWindowText (help_tlabel[3][4], buf);
     }
-
-    if (*(tile_types[i].special_2_name)) {
-      sprintf(buf, _("%s F/R/T:"),
-	      tile_types[i].special_2_name);
-      SetWindowText(help_tlabel[1][3], buf);
-      sprintf(buf, "%d/%d/%d",
-	      tile_types[i].food_special_2,
-	      tile_types[i].shield_special_2,
-	      tile_types[i].trade_special_2);
-      SetWindowText(help_tlabel[1][4], buf);
-    } else {
-      SetWindowText(help_tlabel[1][3], " ");
-      SetWindowText(help_tlabel[1][4], " ");
-    }
-
-    if (tile_types[i].road_trade_incr > 0) {
-      sprintf(buf, _("+%d Trade / %d"),
-	      tile_types[i].road_trade_incr,
-	      tile_types[i].road_time);
-    } else if (tile_types[i].road_time > 0) {
-      sprintf(buf, _("no extra / %d"),
-	      tile_types[i].road_time);
-    } else {
-      strcpy(buf, _("n/a"));
-    }
-    SetWindowText(help_tlabel[2][1], buf);
-
-    strcpy(buf, _("n/a"));
-    if (tile_types[i].irrigation_result == i) {
-      if (tile_types[i].irrigation_food_incr > 0) {
-	sprintf(buf, _("+%d Food / %d"),
-		tile_types[i].irrigation_food_incr,
-		tile_types[i].irrigation_time);
-      }
-    } else if (tile_types[i].irrigation_result != T_NONE) {
-      sprintf(buf, "%s / %d",
-	      tile_types[tile_types[i].irrigation_result].terrain_name,
-	      tile_types[i].irrigation_time);
-    }
-    SetWindowText(help_tlabel[2][4], buf);
-
-    strcpy(buf, _("n/a"));
-    if (tile_types[i].mining_result == i) {
-      if (tile_types[i].mining_shield_incr > 0) {
-	sprintf(buf, _("+%d Res. / %d"),
-		tile_types[i].mining_shield_incr,
-		tile_types[i].mining_time);
-      }
-    } else if (tile_types[i].mining_result != T_NONE) {
-      sprintf(buf, "%s / %d",
-	      tile_types[tile_types[i].mining_result].terrain_name,
-	      tile_types[i].mining_time);
-    }
-    SetWindowText(help_tlabel[3][1], buf);
-
-    if (tile_types[i].transform_result != T_NONE) {
-      sprintf(buf, "%s / %d",
-	      tile_types[tile_types[i].transform_result].terrain_name,
-	      tile_types[i].transform_time);
-    } else {
-      strcpy(buf, "n/a");
-    }
-    SetWindowText(help_tlabel[3][4], buf);
-  }
 
   helptext_terrain(buf, i, pitem->text);
   set_help_text(buf);
+
 }
 
 /*************************************************************************
@@ -687,7 +695,7 @@ static void help_update_unit_type(const struct help_item *pitem,
   unit_num=i;
   if (i<game.num_unit_types) {
     struct unit_type *utype = get_unit_type(i);
-    sprintf(buf, "%d", unit_build_shield_cost(i));
+    sprintf(buf, "%d", utype->build_cost);
     SetWindowText(help_ulabel[0][1], buf);
     sprintf(buf, "%d", utype->attack_strength);
     SetWindowText(help_ulabel[0][4], buf);
@@ -750,6 +758,10 @@ static void help_update_tech(const struct help_item *pitem, char *title, int i)
 	  TECH_TREE_EXPANDED_DEPTH, NULL);
     */
     helptext_tech(buf, i, pitem->text);
+    if (advances[i].helptext) {
+      if (strlen(buf)) strcat(buf, "\n");
+      sprintf(buf+strlen(buf), "%s\n", _(advances[i].helptext));
+    }
     wordwrap_string(buf, 68);
     fcwin_box_add_static(helpdlg_page_vbox,buf,0,SS_LEFT,FALSE,FALSE,5);
 
@@ -784,7 +796,7 @@ static void help_update_tech(const struct help_item *pitem, char *title, int i)
 			   0,FALSE,FALSE,5);
     } unit_type_iterate_end;
 
-    for (j = 0; j < game.num_tech_types; j++) {
+    for(j=0; j<game.num_tech_types; ++j) {
       if(i==advances[j].req[0]) {
         if(advances[j].req[1]==A_NONE) {
 	  hbox=fcwin_hbox_new(helpdlg_win,FALSE);
@@ -847,9 +859,7 @@ static void help_update_dialog(const struct help_item *pitem)
   char *top;
   /* figure out what kind of item is required for pitem ingo */
 
-  for (top = pitem->topic; *top == ' '; top++) {
-    /* nothing */
-  }
+  for(top=pitem->topic; *top==' '; ++top);
   SetWindowText(helpdlg_text,"");
 
   switch(pitem->type) {

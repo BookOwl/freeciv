@@ -19,8 +19,7 @@
 
 void create_line_at_mouse_pos(void);
 
-/* Use of these wrapper functions is deprecated. */
-#define get_canvas_xy(map_x, map_y, canvas_x, canvas_y) \
-  map_to_canvas_pos(canvas_x, canvas_y, map_x, map_y)
+int get_canvas_xy(int map_x, int map_y, int *canvas_x, int *canvas_y);
+void get_map_xy(int canvas_x, int canvas_y, int *map_x, int *map_y);
 
 #endif  /* FC__MAPVIEW_H */
