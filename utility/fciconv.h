@@ -34,9 +34,4 @@ char *local_to_internal_string_malloc(const char *text);
 void fc_fprintf(FILE *stream, const char *format, ...)
       fc__attribute((format (printf, 2, 3)));
 
-char *convert_string(const char *text,
-		     const char *from,
-		     const char *to,
-		     char *buf, size_t bufsz);
-
 #endif /* FC__FCICONV_H */

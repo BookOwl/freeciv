@@ -252,7 +252,6 @@ void game_init(void)
   game.onsetbarbarian = GAME_DEFAULT_ONSETBARBARIAN;
   game.nbarbarians = 0;
   game.occupychance= GAME_DEFAULT_OCCUPYCHANCE;
-  game.autoattack = GAME_DEFAULT_AUTOATTACK;
   game.revolution_length = GAME_DEFAULT_REVOLUTION_LENGTH;
 
   game.heating     = 0;
@@ -566,10 +565,10 @@ void translate_data_names(void)
     tthis->terrain_name = ((strcmp(tthis->terrain_name_orig, "") != 0)
 			   ? Q_(tthis->terrain_name_orig) : "");
 
-    tthis->special[0].name = ((strcmp(tthis->special[0].name_orig, "") != 0)
-			      ? Q_(tthis->special[0].name_orig) : "");
-    tthis->special[1].name = ((strcmp(tthis->special[1].name_orig, "") != 0)
-			      ? Q_(tthis->special[1].name_orig) : "");
+    tthis->special_1_name = ((strcmp(tthis->special_1_name_orig, "") != 0)
+			     ? Q_(tthis->special_1_name_orig) : "");
+    tthis->special_2_name = ((strcmp(tthis->special_2_name_orig, "") != 0)
+			     ? Q_(tthis->special_2_name_orig) : "");
   } terrain_type_iterate_end;
 
   government_iterate(tthis) {

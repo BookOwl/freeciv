@@ -684,10 +684,6 @@ struct tile *get_center_tile_mapcanvas(void)
 void center_tile_mapcanvas(struct tile *ptile)
 {
   int gui_x, gui_y;
-  static bool first = TRUE;
-
-  assert(!first || !can_slide);
-  first = FALSE;
 
   map_to_gui_pos(&gui_x, &gui_y, ptile->x, ptile->y);
 
@@ -2322,6 +2318,7 @@ void overview_to_map_pos(int *map_x, int *map_y,
 {
   int ntl_x = overview_x / OVERVIEW_TILE_SIZE + overview.map_x0;
   int ntl_y = overview_y / OVERVIEW_TILE_SIZE + overview.map_y0;
+  struct tile *ptile;
 
   if (MAP_IS_ISOMETRIC && !topo_has_flag(TF_WRAPX)) {
     /* Clip half tile left and right.  See comment in map_to_overview_pos. */
@@ -2329,10 +2326,12 @@ void overview_to_map_pos(int *map_x, int *map_y,
   }
 
   NATURAL_TO_MAP_POS(map_x, map_y, ntl_x, ntl_y);
-  if (!normalize_map_pos(map_x, map_y)) {
-    /* All positions on the overview should be valid. */
-    assert(FALSE);
-  }
+
+  /* HACK: there are reports of normalize_map_pos failing here, so we use
+   * nearest_real_tile instead. */
+  ptile = nearest_real_tile(*map_x, *map_y);
+  *map_x = ptile->x;
+  *map_y = ptile->y;
 }
 
 /**************************************************************************

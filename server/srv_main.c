@@ -68,6 +68,7 @@
 #include "timing.h"
 #include "version.h"
 
+#include "autoattack.h"
 #include "barbarian.h"
 #include "cityhand.h"
 #include "citytools.h"
@@ -156,7 +157,6 @@ void init_game_seed(void)
     /* We strip the high bit for now because neither game file nor
        server options can handle unsigned ints yet. - Cedric */
     game.seed = time(NULL) & (MAX_UINT32 >> 1);
-    freelog(LOG_DEBUG, "Setting game.seed:%d", game.seed);
   }
  
   if (!myrand_is_init()) {
@@ -601,6 +601,9 @@ static void end_phase(void)
 
   do_reveal_effects();
   do_have_embassies_effect();
+
+  freelog(LOG_DEBUG, "Auto-Attack phase");
+  auto_attack();
 }
 
 /**************************************************************************

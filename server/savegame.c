@@ -1303,7 +1303,7 @@ static void worklist_load(struct section_file *file,
       }
 
       if ((pwl->wlefs[i] <= WEF_END) || (pwl->wlefs[i] >= WEF_LAST) ||
-	  pwl->wlefs[i] == WEF_UNIT ||
+	  ((pwl->wlefs[i] == WEF_UNIT) && !unit_type_exists(pwl->wlids[i])) ||
 	  ((pwl->wlefs[i] == WEF_IMPR) && !improvement_exists(pwl->wlids[i]))) {
 	pwl->wlefs[i] = WEF_END;
 	pwl->wlids[i] = 0;
@@ -1342,7 +1342,7 @@ static void worklist_load_old(struct section_file *file,
 	name = old_unit_type_name(id-68);
 	pwl->wlefs[i] = WEF_UNIT;
 	pwl->wlids[i] = find_unit_type_by_name_orig(name);
-	end = (pwl->wlids[i] < 0 || pwl->wlids[i] >= game.num_unit_types);
+	end = !unit_type_exists(pwl->wlids[i]);
       } else {				/* must be an improvement id */
 	name = old_impr_type_name(id);
 	pwl->wlefs[i] = WEF_IMPR;
@@ -3209,9 +3209,6 @@ void game_load(struct section_file *file)
 			     1.10.0 */
     game.occupychance = secfile_lookup_int_default(file, game.occupychance,
 						   "game.occupychance");
-    game.autoattack = secfile_lookup_bool_default(file,
-						  GAME_DEFAULT_AUTOATTACK,
-                                                  "game.autoattack");
     game.seed = secfile_lookup_int_default(file, game.seed,
 					   "game.randseed");
     game.allowed_city_names =
@@ -3668,7 +3665,6 @@ void game_save(struct section_file *file)
   secfile_insert_int(file, game.onsetbarbarian, "game.onsetbarbs");
   secfile_insert_int(file, game.revolution_length, "game.revolen");
   secfile_insert_int(file, game.occupychance, "game.occupychance");
-  secfile_insert_bool(file, game.autoattack, "game.autoattack");
   secfile_insert_str(file, game.demography, "game.demography");
   secfile_insert_int(file, game.borders, "game.borders");
   secfile_insert_bool(file, game.happyborders, "game.happyborders");

@@ -1552,7 +1552,8 @@ void tilespec_setup_unit_type(int id)
   struct unit_type *ut = get_unit_type(id);
   
   ut->sprite = lookup_sprite_tag_alt(ut->graphic_str, ut->graphic_alt,
-				     TRUE, "unit_type", ut->name);
+				     unit_type_exists(id), "unit_type",
+				     ut->name);
 
   /* should maybe do something if NULL, eg generic default? */
 }
@@ -1772,9 +1773,8 @@ void tilespec_setup_tile_type(Terrain_type_id terrain)
     }
   }
 
-  for (i = 0; i < MAX_NUM_SPECIALS; i++) {
-    const char *name = tt->special[i].name;
-
+  for (i=0; i<2; i++) {
+    const char *name = (i != 0) ? tt->special_2_name : tt->special_1_name;
     if (name[0] != '\0') {
       draw->special[i]
 	= lookup_sprite_tag_alt(tt->special[i].graphic_str,

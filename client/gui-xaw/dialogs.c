@@ -1241,9 +1241,8 @@ static void revolution_callback_no(Widget w, XtPointer client_data,
 /****************************************************************
 ...
 *****************************************************************/
-void popup_revolution_dialog(int government)
+void popup_revolution_dialog(void)
 {
-  assert(government == game.government_when_anarchy);
   popup_message_dialog(toplevel, "revolutiondialog", 
 		       _("You say you wanna revolution?"),
 		       revolution_callback_yes, 0, 0,
@@ -2179,7 +2178,7 @@ void races_disconnect_command_callback(Widget w, XtPointer client_data,
 void races_quit_command_callback(Widget w, XtPointer client_data, 
 				 XtPointer call_data)
 {
-  ui_exit();
+  exit(EXIT_SUCCESS);
 }
 
 /**************************************************************************

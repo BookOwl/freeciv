@@ -440,7 +440,7 @@ bool can_build_unit(const struct city *pcity, Unit_Type_id id)
   if (!can_build_unit_direct(pcity, id)) {
     return FALSE;
   }
-  while ((id = unit_types[id].obsoleted_by) != -1) {
+  while (unit_type_exists((id = unit_types[id].obsoleted_by))) {
     if (can_player_build_unit_direct(city_owner(pcity), id)) {
 	return FALSE;
     }
@@ -530,9 +530,9 @@ static int base_get_shields_tile(const struct tile *ptile,
   int s;
 
   if (contains_special(spec_t, S_SPECIAL_1)) {
-    s = get_tile_type(tile_t)->special[0].shield;
+    s = get_tile_type(tile_t)->shield_special_1;
   } else if (contains_special(spec_t, S_SPECIAL_2)) {
-    s = get_tile_type(tile_t)->special[1].shield;
+    s = get_tile_type(tile_t)->shield_special_2;
   } else {
     s = get_tile_type(tile_t)->shield;
   }
@@ -635,9 +635,9 @@ static int base_get_trade_tile(const struct tile *ptile,
   int t;
 
   if (contains_special(spec_t, S_SPECIAL_1)) {
-    t = get_tile_type(tile_t)->special[0].trade;
+    t = get_tile_type(tile_t)->trade_special_1;
   } else if (contains_special(spec_t, S_SPECIAL_2)) {
-    t = get_tile_type(tile_t)->special[1].trade;
+    t = get_tile_type(tile_t)->trade_special_2;
   } else {
     t = get_tile_type(tile_t)->trade;
   }
@@ -762,9 +762,9 @@ static int base_get_food_tile(const struct tile *ptile,
   }
 
   if (contains_special(tile.special, S_SPECIAL_1)) {
-    f = type->special[0].food;
+    f = type->food_special_1;
   } else if (contains_special(tile.special, S_SPECIAL_2)) {
-    f = type->special[1].food;
+    f = type->food_special_2;
   } else {
     f = type->food;
   }

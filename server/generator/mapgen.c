@@ -1000,12 +1000,8 @@ void map_fractal_generate(bool autosize)
   /* save the current random state: */
   RANDOM_STATE rstate = get_myrand_state();
  
-  if (map.seed == 0) {
-    /* Create a "random" map seed.  Note the call to myrand() which will
-     * depend on the game seed. */
+  if (map.seed==0)
     map.seed = (myrand(MAX_UINT32) ^ time(NULL)) & (MAX_UINT32 >> 1);
-    freelog(LOG_DEBUG, "Setting map.seed:%d", map.seed);
-  }
 
   mysrand(map.seed);
 
@@ -1112,8 +1108,8 @@ static void adjust_terrain_param(void)
 
   mountain_pct = factor * map.steepness * 90;
 
-  /* 40 % if wetness == 50 & */
-  forest_pct = factor * (map.wetness * 60 + 1000) ; 
+  /* 27 % if wetness == 50 & */
+  forest_pct = factor * (map.wetness * 40 + 700) ; 
   jungle_pct = forest_pct * (MAX_COLATITUDE - TROPICAL_LEVEL) /
                (MAX_COLATITUDE * 2);
   forest_pct -= jungle_pct;
@@ -1122,8 +1118,10 @@ static void adjust_terrain_param(void)
   river_pct = (100 - polar) * (3 + map.wetness / 12) / 100;
 
   /* 6 %  if wetness == 50 && temperature == 50 */
-  swamp_pct = factor * (map.wetness * 6 + map.temperature * 6);
-  desert_pct = factor * (map.temperature * 10 + (100 - map.wetness) * 10) ;
+  swamp_pct = factor * MAX(0, 
+			   (map.wetness * 9 - 150 + map.temperature * 6));
+  desert_pct =factor * MAX(0,
+		(map.temperature * 15 - 250 + (100 - map.wetness) * 10)) ;
 }
 
 /****************************************************************************
@@ -1197,20 +1195,20 @@ static void add_specials(int prob)
     if (!is_ocean(ttype)
 	&& !is_special_close(ptile) 
 	&& myrand(1000) < prob) {
-      if (tile_types[ttype].special[0].name[0] != '\0'
-	  && (tile_types[ttype].special[1].name[0] == '\0'
+      if (tile_types[ttype].special_1_name[0] != '\0'
+	  && (tile_types[ttype].special_2_name[0] == '\0'
 	      || (myrand(100) < 50))) {
 	map_set_special(ptile, S_SPECIAL_1);
-      } else if (tile_types[ttype].special[1].name[0] != '\0') {
+      } else if (tile_types[ttype].special_2_name[0] != '\0') {
 	map_set_special(ptile, S_SPECIAL_2);
       }
     } else if (is_ocean(ttype) && near_safe_tiles(ptile) 
 	       && myrand(1000) < prob && !is_special_close(ptile)) {
-      if (tile_types[ttype].special[0].name[0] != '\0'
-	  && (tile_types[ttype].special[1].name[0] == '\0'
+      if (tile_types[ttype].special_1_name[0] != '\0'
+	  && (tile_types[ttype].special_2_name[0] == '\0'
 	      || (myrand(100) < 50))) {
         map_set_special(ptile, S_SPECIAL_1);
-      } else if (tile_types[ttype].special[1].name[0] != '\0') {
+      } else if (tile_types[ttype].special_2_name[0] != '\0') {
 	map_set_special(ptile, S_SPECIAL_2);
       }
     }

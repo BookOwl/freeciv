@@ -52,7 +52,6 @@ char default_sound_plugin_name[512] = "\0";
 
 /** Local Options: **/
 
-bool save_options_on_exit = TRUE;
 bool solid_color_behind_units = FALSE;
 bool sound_bell_at_new_turn = FALSE;
 int  smooth_move_unit_msec = 30;
@@ -78,8 +77,6 @@ bool show_task_icons = TRUE;
 bool update_city_text_in_refresh_tile = TRUE;
 
 static client_option common_options[] = {
-  GEN_BOOL_OPTION(save_options_on_exit,
-		  N_("Save the options when exiting the game")),
   GEN_STR_OPTION(default_user_name,        N_("Default player's login name"),
 		 NULL, NULL), 
   GEN_STR_OPTION(default_server_host,       N_("Default server"),
@@ -727,10 +724,8 @@ static void load_global_worklist(struct section_file *file, const char *path,
         secfile_lookup_int_default(file, 0, idpath,wlinx, i);
 
       if ((pwl->wlefs[i] <= WEF_END) || (pwl->wlefs[i] >= WEF_LAST) ||
-          (pwl->wlefs[i] == WEF_UNIT
-	   && (pwl->wlids[i] < 0 || pwl->wlids[i] >= game.num_unit_types))
-	   || ((pwl->wlefs[i] == WEF_IMPR)
-	       && !improvement_exists(pwl->wlids[i]))) {
+          ((pwl->wlefs[i] == WEF_UNIT) && !unit_type_exists(pwl->wlids[i])) ||
+          ((pwl->wlefs[i] == WEF_IMPR) && !improvement_exists(pwl->wlids[i]))) {
         pwl->wlefs[i] = WEF_END;
         pwl->wlids[i] = 0;
         end = TRUE;

@@ -382,11 +382,6 @@ static void check_players(void)
 	assert(pplayer->diplstates[pplayer2->player_no].turns_left
 	       == pplayer2->diplstates[pplayer->player_no].turns_left);
       }
-      if (pplayers_allied(pplayer, pplayer2)
-          && pplayer->is_alive
-          && pplayer2->is_alive) {
-        assert(pplayer_can_ally(pplayer, pplayer2));
-      }
     } players_iterate_end;
 
     if (pplayer->revolution_finishes == -1) {

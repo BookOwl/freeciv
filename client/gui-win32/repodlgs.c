@@ -496,15 +496,14 @@ static LONG CALLBACK activeunits_proc(HWND hWnd,
       
     case WM_NOTIFY:
       if (sel>=0) {
-	CHECK_UNIT_TYPE(activeunits_type[sel]);
-	if (can_upgrade_unittype(game.player_ptr,
-				 activeunits_type[sel]) != -1) {
+	if ((unit_type_exists(activeunits_type[sel])) &&
+	    (can_upgrade_unittype(game.player_ptr,
+				  activeunits_type[sel]) != -1))    
 	  EnableWindow(GetDlgItem(activeunits_dlg,ID_MILITARY_UPGRADE),
 		       TRUE);
-	} else {
+	else
 	  EnableWindow(GetDlgItem(activeunits_dlg,ID_MILITARY_UPGRADE),
 		       FALSE);
-	}
       }
       break;
     case WM_COMMAND:    
@@ -522,9 +521,9 @@ static LONG CALLBACK activeunits_proc(HWND hWnd,
 	    {
 	      char buf[512];
 	      int ut1,ut2;     
-
 	      ut1 = activeunits_type[sel];
-	      CHECK_UNIT_TYPE(ut1);
+	      if (!(unit_type_exists (ut1)))
+		break;
 	      ut2=can_upgrade_unittype(game.player_ptr,activeunits_type[sel]);
 	      my_snprintf(buf, sizeof(buf),
 			  _("Upgrade as many %s to %s as possible for %d gold each?\n"
@@ -592,9 +591,9 @@ activeunits_report_dialog_update(void)
 
     unit_list_iterate_end;
     city_list_iterate(game.player_ptr->cities,pcity) {
-      if (pcity->is_building_unit) {
+      if (pcity->is_building_unit &&
+          (unit_type_exists (pcity->currently_building)))
         (unitarray[pcity->currently_building].building_count)++;
-      }
     }
     city_list_iterate_end;
 

@@ -33,7 +33,6 @@
 #include "aicity.h"
 #include "aidata.h"
 #include "aidiplomat.h"
-#include "aiferry.h"
 #include "aihand.h"
 #include "aihunt.h"
 #include "ailog.h"
@@ -820,10 +819,8 @@ static void process_attacker_want(struct city *pcity,
     
     if ((move_type == LAND_MOVING || (move_type == SEA_MOVING && shore))
         && tech_req != A_LAST
-        && (tech_dist > 0 
-            || unit_types[unit_type].obsoleted_by == -1
-            || !can_build_unit_direct(pcity, 
-                                      unit_types[unit_type].obsoleted_by))
+        && (tech_dist > 0 ||
+            !can_build_unit_direct(pcity, unit_types[unit_type].obsoleted_by))
         && unit_types[unit_type].attack_strength > 0 /* or we'll get SIGFPE */
         && move_type == orig_move_type) {
       /* TODO: Case for Airport. -- Raahul */
@@ -969,8 +966,6 @@ This function
 3. calculates the relevant stats of the victim.
 4. finds the best attacker for this type of victim (in process_attacker_want)
 5. if we still want to attack, records the best attacker in choice.
-If the target is overseas, the function might suggest building a ferry
-to carry a land attack unit, instead of the land attack unit itself.
 **************************************************************************/
 static void kill_something_with(struct player *pplayer, struct city *pcity, 
 				struct unit *myunit, struct ai_choice *choice)
@@ -990,6 +985,8 @@ static void kill_something_with(struct player *pplayer, struct city *pcity,
   struct city *acity;
   /* Defender of the target city/tile */
   struct unit *pdef; 
+  /* Coordinates of the boat */
+  struct tile *boat_tile = NULL;
   /* Type of the boat (real or a future one) */
   Unit_Type_id boattype = U_LAST;
   bool go_by_boat;
@@ -1013,6 +1010,21 @@ static void kill_something_with(struct player *pplayer, struct city *pcity,
     freelog(LOG_ERROR, "ERROR: Attempting to deal with non-trivial"
             " unit_type in kill_something_with");
     return;
+  }
+
+  if (is_ground_unit(myunit)) {
+    int boatid = find_boat(pplayer, &boat_tile, 2);
+    ferryboat = player_find_unit_by_id(pplayer, boatid);
+  }
+
+  if (ferryboat) {
+    boattype = ferryboat->type;
+  } else {
+    boattype = best_role_unit_for_player(pplayer, L_FERRYBOAT);
+    if (boattype == U_LAST) {
+      /* We pretend that we can have the simplest boat -- to stimulate tech */
+      boattype = get_role_unit(L_FERRYBOAT, 0);
+    }
   }
 
   best_choice.want = find_something_to_kill(pplayer, myunit, &ptile);
@@ -1048,28 +1060,9 @@ static void kill_something_with(struct player *pplayer, struct city *pcity,
       return;
     }
 
-    if (is_ground_unit(myunit)) {
-      int boatid = aiferry_find_boat(myunit, 1, NULL);
-      ferryboat = find_unit_by_id(boatid);
-
-      if (ferryboat) {
-        boattype = ferryboat->type;
-      } else {
-        boattype = best_role_unit_for_player(pplayer, L_FERRYBOAT);
-        if (boattype == U_LAST) {
-          /* We pretend that we can have the simplest boat --
-	   * to stimulate tech */
-          boattype = get_role_unit(L_FERRYBOAT, 0);
-        }
-      }
-      assert(SEA_MOVING == unit_types[boattype].move_type);
-
-      go_by_boat = !(WARMAP_COST(ptile) <= (MIN(6, move_rate) * THRESHOLD)
-                     && goto_is_sane(myunit, acity->tile, TRUE));
-    } else {
-      /* else never needs a boat */
-      go_by_boat = FALSE;
-    }
+    go_by_boat = (is_ground_unit(myunit)
+                  && !(WARMAP_COST(ptile) <= (MIN(6, move_rate) * THRESHOLD)
+                       && goto_is_sane(myunit, acity->tile, TRUE)));
 
     move_time = turns_to_enemy_city(myunit->type, acity, move_rate, 
                                     go_by_boat, ferryboat, boattype);
@@ -1124,32 +1117,19 @@ static void kill_something_with(struct player *pplayer, struct city *pcity,
                           &best_choice, NULL, U_LAST);
   } else { 
     /* Attract a boat to our city or retain the one that's already here */
-    assert(is_ground_unit(myunit));
     best_choice.need_boat = TRUE;
     process_attacker_want(pcity, benefit, def_type, def_vet, ptile, 
                           &best_choice, ferryboat, boattype);
   }
 
   if (best_choice.want > choice->want) {
-    /* We want attacker more than what we have selected before */
+    /* We want attacker more that what we have selected before */
     copy_if_better_choice(&best_choice, choice);
-    CITY_LOG(LOG_DEBUG, pcity, "ksw: %s has chosen attacker, %s, want=%d",
-            pcity->name, unit_types[choice->choice].name, choice->want);
-
-    if (go_by_boat && !ferryboat) { /* need a new ferry */
-      /* We might need a new boat even if there are boats free,
-       * if they are blockaded or in inland seas*/
-      assert(is_ground_unit(myunit));
+    if (go_by_boat && !ferryboat) {
       ai_choose_role_unit(pplayer, pcity, choice, L_FERRYBOAT, choice->want);
-      if (SEA_MOVING == unit_types[choice->choice].move_type) {
-        struct ai_data *ai = ai_data_get(pplayer);
-
-        freelog(LOG_DEBUG,
-                "%s has chosen attacker ferry, %s, want=%d, %d of %d free",
-                pcity->name, unit_types[choice->choice].name, choice->want,
-                ai->stats.available_boats, ai->stats.boats);
-      } /* else can not build ferries yet */
     }
+    freelog(LOG_DEBUG, "%s has chosen attacker, %s, want=%d",
+            pcity->name, unit_types[choice->choice].name, choice->want);
   } 
 }
 
@@ -1397,9 +1377,7 @@ void military_advisor_choose_build(struct player *pplayer, struct city *pcity,
     destroy_unit_virtual(virtualunit);
   }
 
-  /* Consider a land attacker or a ferried land attacker
-   * (in which case, we might want a ferry before an attacker)
-   */
+  /* Consider a land attacker */
   unit_type = ai_choose_attacker(pcity, LAND_MOVING);
   if (unit_type >= 0) {
     virtualunit = create_unit_virtual(pplayer, pcity, unit_type, 1);

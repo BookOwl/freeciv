@@ -125,8 +125,7 @@ static void place_starting_unit(struct tile *ptile, struct player *pplayer,
       utype = get_role_unit(role, 0);
     }
 
-    /* We cannot currently handle sea units as start units.
-     * TODO: remove this code block when we can. */
+    /* We cannot currently handle sea units as start units. */
     if (unit_types[utype].move_type == SEA_MOVING) {
       freelog(LOG_ERROR, _("Sea moving start units are not yet supported, "
                            "%s not created."), unit_types[utype].name);

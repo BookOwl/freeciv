@@ -91,14 +91,24 @@ struct tile_type {
   int shield;
   int trade;
 
-#define MAX_NUM_SPECIALS 2
+  const char *special_1_name; /* Translated string - doesn't need freeing. */
+  char special_1_name_orig[MAX_LEN_NAME]; /* untranslated copy */
+  int food_special_1;
+  int shield_special_1;
+  int trade_special_1;
+
+  const char *special_2_name; /* Translated string - doesn't need freeing. */
+  char special_2_name_orig[MAX_LEN_NAME]; /* untranslated copy */
+  int food_special_2;
+  int shield_special_2;
+  int trade_special_2;
+
+  /* I would put the above special data in this struct too,
+     but don't want to make unnecessary changes right now --dwp */
   struct {
-    const char *name; /* Translated string - doesn't need freeing. */
-    char name_orig[MAX_LEN_NAME];
-    int food, shield, trade;
     char graphic_str[MAX_LEN_NAME];
     char graphic_alt[MAX_LEN_NAME];
-  } special[MAX_NUM_SPECIALS];
+  } special[2];
 
   int road_trade_incr;
   int road_time;

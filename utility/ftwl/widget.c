@@ -300,6 +300,7 @@ void handle_destroyed_widgets(void)
     return;
   }
 
+  freelog(LOG_NORMAL, "handle destroy");
   widget_list_iterate(deferred_destroyed_widgets, pwidget) {
     if ((pwidget->tooltip && pwidget->tooltip_shown)
 	|| dragged_widget == pwidget || selected_widget == pwidget
@@ -327,7 +328,7 @@ void sw_mainloop(void (*input_callback)(int socket))
 {
   sw_paint_all();
 
-  while (TRUE) {
+  while (1) {
     struct be_event event;
     struct timeval timeout;
 
@@ -396,9 +397,9 @@ void sw_mainloop(void (*input_callback)(int socket))
 	  printf("WARNING: unhandled key stroke\n");
 	}
       }
-      break;
-    case BE_NO_EVENT:
-      break;
+      break;	    
+    default:
+      assert(0);
     }
   }
 }
