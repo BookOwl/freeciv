@@ -1,0 +1,112 @@
+Here is a list of recent and past contributors to Freeciv:
+
+  Original authors, otherwise known as the Great Danes:
+  (They are no longer involved, please don't mail them!)
+  
+     Peter Joachim Unold  <pjunold@daimi.aau.dk>
+     Claus Leth Gregersen <leth@daimi.aau.dk>
+     Allan Ove Kjeldbjerg <allan@daimi.aau.dk>
+
+  Present administrators:
+
+     Mitch Davis          <mjd@alphalink.com.au>
+     David Pfitzner       <dwp@mso.anu.edu.au>
+
+  Coders for 1.7:                 (since 1.6.6)
+
+     Trent Piepho <xyzzy@u.washington.edu> (Core)
+     John Stonebraker <ppaqebb@surfshop.net> (AI)
+     David Pfitzner <dwp@mso.anu.edu.au> (Patches)
+     Cedric Tefft <cedric@earthling.net>
+     Reinier Post <rp@win.tue.nl>
+     Kris Bubendorfer <Kris.Bubendorfer@MCS.VUW.AC.NZ> (diplomats)
+     Peter Schaefer <schaefer@malaga.math.uni-augsburg.de>
+     Massimo Campostrini <campo@mailbox.difi.unipi.it>
+     Sverker Wiberg <sverkerw@Update.UU.SE>
+     Markus Linnala <maage@cs.tut.fi>
+     Trevor Pering <pering@tongass.EECS.Berkeley.EDU>
+     Dee Jay Randall <randal@cs.uregina.ca>
+     Markus Linnala <maage@cs.tut.fi>
+     Finn Arne Gangstad <finnag@guardian.no>
+     Paul Cameron <pmcamero@socs.uts.EDU.AU>
+     Daniel Gudlat <gudlat@informatik.hu-berlin.de> (Earth scenarios)
+     Christian Grothoff <ma0035@stud.uni-wuppertal.de> (Europe scenario)
+     Mirar <mirar@idonex.se>
+     Greg Wooledge <wooledge@kellnet.com>
+     Falk Hueffner <falk.hueffner@student.uni-tuebingen.de> (Space Race)
+     Anthony J. Stuckey <stuckey@jaka.ece.uiuc.edu>
+     Patrick Smith <patsmith@pobox.com>
+     Rizos Sakellariou <rizos@cs.rice.edu> 
+     Sergey Shkonda <serg@bcs.zp.ua>
+     Matthew Hunt <mph@pobox.com>
+     Mika Korhonen <mikak@ee.oulu.fi>
+     Robert Donn <squirk@ihug.co.nz>
+     Alex Rhomberg <rhomberg@ife.ee.ethz.ch>
+     Mark Brown <broonie@tardis.ed.ac.uk>
+     Jason Merrill <jason@yorick.cygnus.com>
+     Michael Bickel <Michael.Bickel@informatik.uni-erlangen.de>
+
+  GTK+ Port:
+
+     Per I Mathisen <permath@ifi.ntnu.no>
+     Vasco Alexandre da Silva Costa <vasc@camoes.rnl.ist.utl.pt>
+
+  Bug reports and testing:
+
+     Andrew E. Schulman <andrex@alw.nih.gov>
+     Nicolas Brunel <brunel@ham.esil.univ-mrs.fr>
+     Ben Korvemaker <benjamin@cs.ualberta.ca>
+     Walter Misar <misar@rbg.informatik.tu-darmstadt.de>
+
+  Packaging:
+
+     Lalo Martins <lalo@debian.org> (Debian)
+
+  Website hosting:
+
+     Tracy Reed <treed@ultraviolet.org> (What a guy - thanks Tracy!)
+
+  Website design:
+
+     Martin Willemoes Hansen <martin_w_hansen@my-dejanews.com>
+
+  Mailing list hosting:
+
+     John Goerzen <jgoerzen@complete.org> (+Java civclient project)
+     Ryan Rehder <twolf@kc.net> (freeciv.midsun.com: Mar '98 to Nov '98)
+
+  These people helped us previous to the 1.7 series:
+
+     James Blackwell <innocent@mercury.merconline.com> (Docs, co-admin)
+     Olav Andree Brevik <olavb@ifi.uio.no>
+     Carl Bartels <cb@bravo436.chem.mcgill.ca>
+     Alexander Mai <st002279@HRZPUB.tu-darmstadt.de>  (OS/2 patches)
+     Olli Helenius <ollhel@jytol.fi>
+     Frank Muzzulini <muzz@albatross.pond.sub.org>
+     Seth Golub <seth@thehouse.org>
+     Jake Kesinger <kesinger@math.ttu.edu>
+     Sam Holden <sholden@pgrad.cs.usyd.edu.au> (GNU-Win32 patch)
+     Markus L. Noga <ut6e@rz.uni-karlsruhe.de>
+
+     Erik Vasaasen (Freeciv motto), Peter Mains (metaserver), Rene
+     Schalburg (startup scripts), Robert H. Forsman Jr (canvas
+     widget), Warwick Allison, Stephan Boettcher, Matthias Gessl,
+     Thomas Kraube, Brian Thomas, Troels Valsted Hansen (Amiga),
+     Peter Skov (help buttons), Peter Meerwald (OS/2), Michael
+     Hohensee (icons, HOWTOPLAY), Rajala Ilkka, Richard Braakman
+     and Jan Echternach.
+
+  And finally...
+
+     The guys in the DAIMI labs, who playtested early versions of
+     Freeciv for the Great Danes.
+
+     The members of the freeciv-dev mailing list, coders and non-
+     coders alike.  You've all made valuable comments and contributions.
+
+     Sid Meier, for slight inspiration ;)
+
+  If we have missed someone or details have changed, please accept our
+  apologies and let us know.
+
+                    The Freeciv Team.
