@@ -239,12 +239,12 @@ static void get_contents_of_production(struct city_dialog *pdialog,
 
   if (pdialog) {
     pcity=pdialog->pcity;
-    foodprod=pcity->prod[O_FOOD];
-    foodsurplus = pcity->surplus[O_FOOD];
-    shieldprod=pcity->prod[O_SHIELD] + pcity->waste[O_SHIELD];
-    shieldsurplus = pcity->surplus[O_SHIELD];
-    tradeprod = pcity->surplus[O_TRADE] + pcity->waste[O_TRADE];
-    tradesurplus = pcity->surplus[O_TRADE];
+    foodprod=pcity->food_prod;
+    foodsurplus=pcity->food_surplus;
+    shieldprod=pcity->shield_prod + pcity->shield_waste;
+    shieldsurplus=pcity->shield_surplus;
+    tradeprod=pcity->trade_prod+pcity->corruption;
+    tradesurplus=pcity->trade_prod;
   }
 
   my_snprintf(retbuf, n,
@@ -270,10 +270,10 @@ static void get_contents_of_output(struct city_dialog *pdialog,
 
   if (pdialog) {
     pcity=pdialog->pcity;
-    goldtotal=pcity->prod[O_GOLD];
-    goldsurplus = pcity->surplus[O_GOLD];
-    luxtotal=pcity->prod[O_LUXURY];
-    scitotal=pcity->prod[O_SCIENCE];
+    goldtotal=pcity->tax_total;
+    goldsurplus=city_gold_surplus(pcity, pcity->tax_total);
+    luxtotal=pcity->luxury_total;
+    scitotal=pcity->science_total;
   }
 
   my_snprintf(retbuf, n, 
@@ -494,7 +494,7 @@ struct city_dialog *create_city_dialog(struct city *pcity, bool make_modal)
   Dimension widthPrev, borderPrev, internalPrev, spacePrev;
   Widget relative;
   struct citizen_type c = {.type = CITIZEN_SPECIALIST,
-			   .spec_type = DEFAULT_SPECIALIST};
+			   .spec_type = SP_TAXMAN};
 
   if (NORMAL_TILE_HEIGHT<45) dummy_improvement_list[5]=0;
 
@@ -2023,7 +2023,7 @@ static void change_help_callback(Widget w, XtPointer client_data,
 
     if (is_unit) {
       popup_help_dialog_typed(get_unit_type(idx)->name, HELP_UNIT);
-    } else if(is_great_wonder(idx)) {
+    } else if(is_wonder(idx)) {
       popup_help_dialog_typed(get_improvement_name(idx), HELP_WONDER);
     } else {
       popup_help_dialog_typed(get_improvement_name(idx), HELP_IMPROVEMENT);
@@ -2213,7 +2213,7 @@ void commit_city_worklist(struct worklist *pwl, void *data)
     /* Very special case: If we are currently building a wonder we
        allow the construction to continue, even if we the wonder is
        finished elsewhere, ie unbuildable. */
-    if (k == 0 && !is_unit && is_great_wonder(id) && same_as_current_build) {
+    if (k == 0 && !is_unit && is_wonder(id) && same_as_current_build) {
       worklist_remove(pwl, k);
       break;
     }
@@ -2288,7 +2288,7 @@ void sell_callback(Widget w, XtPointer client_data, XtPointer call_data)
       if (n == ret->list_index) {
 	char buf[512];
 
-	if (!can_city_sell_building(pdialog->pcity, i)) {
+	if (is_wonder(i)) {
 	  return;
 	}
 

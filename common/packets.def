@@ -92,13 +92,9 @@ Syntax:
      available at runtime. If you have a capability named
      "new_version" a field line may look like this:
        COORD x; add-cap(new_version)
-     when making an optional capability manditory, go through and remove
-     the add-cap flag for it while leaving the field intact.
 
      remove-cap: don't transfer this field if the given capability is
-     available at runtime.  When making an optional capability manditory,
-     go through and remove entirely any fields marked as remove-cap with
-     that capability.
+     available at runtime.
 
      dsend: request the creation of a dsend_packet_* function.  This is
      similar to a send function but instead of taking a packet struct
@@ -177,13 +173,14 @@ type REPORT_TYPE	= uint8(enum report_type)
 type AUTH_TYPE		= uint8(enum authentication_type)
 type CITY_MAP		= uint8(enum city_tile_type)
 type IMPR_RANGE		= uint8(enum impr_range)
-type IMPR_GENUS		= uint8(enum impr_genus_id)
 type DIRECTION		= uint8(enum direction8)
 type ORDERS		= uint8(enum unit_orders)
 type SSET_TYPE		= uint8(enum sset_type)
-type REQ_TYPE	        = uint8(enum req_type)
-type REQ_RANGE		= uint8(enum req_range)
+
+# typedefs for effects
 type EFFECT_TYPE	= uint8(enum effect_type)
+type EFFECT_RANGE	= uint8(enum effect_range)
+type EFFECT_REQ_TYPE	= uint8(enum effect_req_type)
 
 # typedefs for IDs
 type PLAYER 		= UINT8
@@ -351,12 +348,13 @@ PACKET_GAME_INFO=15; is-info,sc
   UINT8 angrycitizen;
   UINT8 techpenalty;
   UINT8 foodbox;
+  UINT8 civstyle;
   UINT8 diplomacy;
 
   BOOL spacerace;
 
   UINT8 global_advances[A_LAST]; diff
-  UINT16 great_wonders[B_LAST]; diff
+  UINT16 global_wonders[B_LAST]; diff
 end
 
 PACKET_MAP_INFO=16; is-info,sc,lsend
@@ -397,19 +395,18 @@ PACKET_CITY_INFO=21; is-info,sc,lsend
 
   UINT8 ppl_happy[5], ppl_content[5], ppl_unhappy[5], ppl_angry[5];
 
-  UINT8 specialists[SP_MAX];
+  UINT8 specialists[SP_COUNT];
 
-  SINT16 surplus[O_MAX];
-  UINT16 waste[O_MAX];
-  UINT16 prod[O_MAX];
-  SINT16 citizen_base[O_MAX];
-  SINT16 usage[O_MAX];
-  UINT16 food_stock, shield_stock;
+  UINT16 food_prod, shield_prod, trade_prod;
+  SINT16 food_surplus, shield_surplus, tile_trade;
+  UINT16 food_stock, shield_stock, corruption;
 
   UINT16 trade[NUM_TRADEROUTES];
   UINT8 trade_value[NUM_TRADEROUTES];
 
-  UINT16 pollution;
+  UINT16 luxury_total, tax_total, science_total;
+
+  UINT16 pollution, shield_waste;
 
   UINT8 currently_building;
   BOOL is_building_unit;
@@ -536,7 +533,7 @@ end
 PACKET_PLAYER_INFO=39; is-info,sc
   PLAYER playerno; key 
   STRING name[MAX_LEN_NAME];
-  STRING username[MAX_LEN_NAME];
+  STRING username[MAX_LEN_NAME]; add-cap(username_info)
 
   BOOL is_male;
   GOVERNMENT government;
@@ -569,8 +566,6 @@ PACKET_PLAYER_INFO=39; is-info,sc
   uint32(unsigned int) gives_shared_vision;
   BIT_STRING inventions[A_LAST+1];
   SINT16 love[MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS];
-
-  UINT16 small_wonders[B_LAST]; diff
 end
 
 PACKET_PLAYER_TURN_DONE=40;cs
@@ -614,13 +609,12 @@ PACKET_UNIT_INFO=49; is-info,sc,lsend
   CITY homecity;
 
   UINT8 veteran;
-  BOOL ai, paradropped;
-  BOOL transported, done_moving;
+  BOOL ai, paradropped, connecting, transported, done_moving;
 
   UNIT_TYPE type;
   UNIT transported_by; /* Only valid if transported is set. */
   UINT8 movesleft, hp, fuel, activity_count;
-  UINT8 unhappiness, upkeep[O_MAX], occupy;
+  UINT8 unhappiness, upkeep, upkeep_food, upkeep_gold, occupy;
   COORD goto_dest_x,goto_dest_y;
   ACTIVITY activity;
   SPECIAL activity_target;
@@ -857,9 +851,14 @@ end
 
 # Information about the ping times of the connections.
 PACKET_CONN_PING_INFO=87; sc,lsend
-  UINT8 connections;
-  CONNECTION conn_id[MAX_NUM_CONNECTIONS:connections];
-  float1000000(float) ping_time[MAX_NUM_CONNECTIONS:connections];
+  # "Old" values
+  UINT8 old_connections; remove-cap(conn_ping_info)
+  CONNECTION old_conn_id[MAX_NUM_PLAYERS:connections]; remove-cap(conn_ping_info)
+  float1000000(float) old_ping_time[MAX_NUM_PLAYERS:connections]; remove-cap(conn_ping_info)
+
+  UINT8 connections; add-cap(conn_ping_info)
+  CONNECTION conn_id[MAX_NUM_CONNECTIONS:connections]; add-cap(conn_ping_info)
+  float1000000(float) ping_time[MAX_NUM_CONNECTIONS:connections]; add-cap(conn_ping_info)
 end
 
 PACKET_CONN_PING=88;sc
@@ -941,7 +940,6 @@ PACKET_RULESET_UNIT=96;sc,lsend
   UINT8 move_rate;
   TECH tech_requirement;
   UINT8 impr_requirement;
-  GOVERNMENT gov_requirement;
   UINT8 vision_range;
   UINT8 transport_capacity;
   UINT8 hp;
@@ -950,7 +948,9 @@ PACKET_RULESET_UNIT=96;sc,lsend
   UINT8 fuel;
 
   UINT8 happy_cost;   # unhappy people in home city
-  UINT8 upkeep[O_MAX]; # normal upkeep cost (food, gold, shields)
+  UINT8 shield_cost;   # normal upkeep cost
+  UINT8 food_cost;   # settler food cost
+  UINT8 gold_cost;   # gold upkeep (n/a now, maybe later)
 
   UINT8 paratroopers_range;  # max range of paratroopers, F_PARATROOPERS
   UINT8 paratroopers_mr_req;
@@ -969,16 +969,16 @@ PACKET_RULESET_UNIT=96;sc,lsend
 end
 
 PACKET_RULESET_GAME=97;sc,lsend
-  UINT8 default_specialist, num_specialist_types;
-  STRING specialist_name[SP_MAX:num_specialist_types][MAX_LEN_NAME];
-  STRING specialist_short_name[SP_MAX:num_specialist_types][MAX_LEN_NAME];
-  UINT8 specialist_min_size[SP_MAX:num_specialist_types];
-  UINT8 specialist_bonus[SP_MAX * O_MAX];
+  STRING specialist_name[SP_COUNT][MAX_LEN_NAME];
+  UINT8 specialist_min_size[SP_COUNT];
+  UINT8 specialist_bonus[SP_COUNT];
   BOOL changable_tax;
   UINT8 forced_science;
   UINT8 forced_luxury;
   UINT8 forced_gold;
-  UINT8 min_city_center_output[O_MAX];
+  UINT8 min_city_center_food;
+  UINT8 min_city_center_shield;
+  UINT8 min_city_center_trade;
   UINT8 min_dist_bw_cities;
   UINT8 init_vis_radius_sq;
   UINT8 hut_overflight;
@@ -1031,21 +1031,42 @@ PACKET_RULESET_GOVERNMENT=100;sc,lsend
   UINT8 rapture_size;
       
   UINT8 unit_happy_cost_factor;
-  UINT8 unit_upkeep_factor[O_MAX];
+  UINT8 unit_shield_cost_factor;
+  UINT8 unit_food_cost_factor;
+  UINT8 unit_gold_cost_factor;
       
   UINT8 free_happy;
-  UINT8 free_upkeep[O_MAX];
+  UINT8 free_shield;
+  UINT8 free_food;
+  UINT8 free_gold;
+      
+  UINT8 trade_before_penalty;
+  UINT8 shields_before_penalty;
+  UINT8 food_before_penalty;
+      
+  UINT8 celeb_trade_before_penalty;
+  UINT8 celeb_shields_before_penalty;
+  UINT8 celeb_food_before_penalty;
+      
+  UINT8 trade_bonus;
+  UINT8 shield_bonus;
+  UINT8 food_bonus;
+      
+  UINT8 celeb_trade_bonus;
+  UINT8 celeb_shield_bonus;
+  UINT8 celeb_food_bonus;
 
-  UINT8 output_before_penalty[O_MAX];
-  UINT8 celeb_output_before_penalty[O_MAX];
-  UINT8 output_inc_tile[O_MAX];
-  UINT8 celeb_output_inc_tile[O_MAX];
+  UINT16 corruption_level;
+  UINT8 fixed_corruption_distance;
+  UINT8 corruption_distance_factor;
+  UINT8 extra_corruption_distance;
+  UINT8 corruption_max_distance_cap;
 
-  UINT16 waste_level[O_MAX];
-  UINT8 fixed_waste_distance[O_MAX];
-  UINT8 waste_distance_factor[O_MAX];
-  UINT8 extra_waste_distance[O_MAX];
-  UINT8 waste_max_distance_cap[O_MAX];
+  UINT16 waste_level;
+  UINT8 fixed_waste_distance;
+  UINT8 waste_distance_factor;
+  UINT8 extra_waste_distance;
+  UINT8 waste_max_distance_cap;
       
   UINT16 flags;
       
@@ -1074,10 +1095,16 @@ PACKET_RULESET_TERRAIN_CONTROL=101;sc,lsend
 
   UINT16 fortress_defense_bonus;        /* % added to defense if fortress */
   UINT16 road_superhighway_trade_bonus;  # % added to trade if road/s-highway
-  UINT16 rail_tile_bonus[O_MAX];        /* % added to output if railroad */
+  UINT16 rail_food_bonus;               /* % added to food if railroad */
+  UINT16 rail_shield_bonus;             /* % added to shield if railroad */
+  UINT16 rail_trade_bonus;              /* % added to trade if railroad */
   UINT16 farmland_supermarket_food_bonus;# % added to food if farm/s-market
-  UINT8 pollution_tile_penalty[O_MAX]; /* % taken from output if polluted */
-  UINT8 fallout_tile_penalty[O_MAX]; /* % taken from output if polluted */
+  UINT16 pollution_food_penalty;        /* % subtr. from food if polluted */
+  UINT16 pollution_shield_penalty;      /* % subtr. from shield if polluted */
+  UINT16 pollution_trade_penalty;       /* % subtr. from trade if polluted */
+  UINT16 fallout_food_penalty;          /* % subtr. from food if fallout */
+  UINT16 fallout_shield_penalty;        /* % subtr. from shield if fallout */
+  UINT16 fallout_trade_penalty;         /* % subtr. from trade if fallout */
 end
 
 PACKET_RULESET_NATION=102;sc,lsend
@@ -1087,7 +1114,7 @@ PACKET_RULESET_NATION=102;sc,lsend
   STRING name_plural[MAX_LEN_NAME];
   STRING graphic_str[MAX_LEN_NAME];
   STRING graphic_alt[MAX_LEN_NAME];
-  STRING category[MAX_LEN_NAME];
+  STRING class[MAX_LEN_NAME];
   STRING legend[MAX_LEN_MSG];
 
   UINT8 city_style;
@@ -1111,12 +1138,13 @@ end
 
 PACKET_RULESET_BUILDING=104;sc,lsend
   IMPROVEMENT id;
-  IMPR_GENUS genus;
   STRING name[MAX_LEN_NAME];
   STRING graphic_str[MAX_LEN_NAME];
   STRING graphic_alt[MAX_LEN_NAME];
   TECH tech_req, obsolete_by;
   IMPROVEMENT bldg_req, replaced_by;
+  BOOL is_wonder;
+  IMPR_RANGE equiv_range;
   UINT16 build_cost;
   UINT8 upkeep, sabotage;
   STRING soundtag[MAX_LEN_NAME];
@@ -1126,6 +1154,10 @@ PACKET_RULESET_BUILDING=104;sc,lsend
   TERRAIN terr_gate[255:terr_gate_count];
   UINT8 spec_gate_count;
   SPECIAL spec_gate[255:spec_gate_count];
+  UINT8 equiv_dupl_count;
+  IMPROVEMENT equiv_dupl[255:equiv_dupl_count];
+  UINT8 equiv_repl_count;
+  IMPROVEMENT equiv_repl[255:equiv_repl_count];
 end
 
 PACKET_RULESET_TERRAIN=105;sc,lsend
@@ -1140,15 +1172,21 @@ PACKET_RULESET_TERRAIN=105;sc,lsend
   UINT8 movement_cost;
   UINT8 defense_bonus;
 
-  UINT8 output[O_MAX];
+  UINT8 food;
+  UINT8 shield;
+  UINT8 trade;
 
   STRING special_1_name[MAX_LEN_NAME];
-  UINT8 output_special_1[O_MAX];
+  UINT8 food_special_1;
+  UINT8 shield_special_1;
+  UINT8 trade_special_1;
   STRING graphic_str_special_1[MAX_LEN_NAME];
   STRING graphic_alt_special_1[MAX_LEN_NAME];
 
   STRING special_2_name[MAX_LEN_NAME];
-  UINT8 output_special_2[O_MAX];
+  UINT8 food_special_2;
+  UINT8 shield_special_2;
+  UINT8 trade_special_2;
   STRING graphic_str_special_2[MAX_LEN_NAME];
   STRING graphic_alt_special_2[MAX_LEN_NAME];
 
@@ -1189,6 +1227,10 @@ PACKET_RULESET_CONTROL=106;sc,lsend
   UINT8 num_unit_types;
   UINT8 num_impr_types;
   UINT8 num_tech_types;
+  UINT8 rtech_cathedral_plus;
+  UINT8 rtech_cathedral_minus;
+  UINT8 rtech_colosseum_plus;
+  UINT8 rtech_temple_plus;
   TECH_LIST rtech_partisan_req[MAX_NUM_TECH_LIST]; 
   UINT8 government_when_anarchy;
   UINT8 default_government;
@@ -1211,7 +1253,8 @@ end
  Below are the packets that control single-player mode.  
 *********************************************************/
 PACKET_SINGLE_WANT_HACK_REQ=108;cs,handle-per-conn,no-handle
- STRING token[MAX_LEN_NAME];
+ UINT32 old_token; remove-cap(new_hack)
+ STRING token[MAX_LEN_NAME]; add-cap(new_hack)
 end
 
 PACKET_SINGLE_WANT_HACK_REPLY=109;sc,dsend
@@ -1261,17 +1304,17 @@ PACKET_RULESET_CACHE_GROUP=120;sc,lsend
 
   UINT8 num_elements;
   IMPROVEMENT source_buildings[255:num_elements];
-  REQ_RANGE ranges[255:num_elements];
+  EFFECT_RANGE ranges[255:num_elements];
   BOOL survives[255:num_elements];
 end
 
 PACKET_RULESET_CACHE_EFFECT=121;sc,lsend
   IMPROVEMENT id;
   EFFECT_TYPE effect_type;
-  REQ_RANGE range;
+  EFFECT_RANGE range;
   BOOL survives;
   SINT32 eff_value;
-  REQ_TYPE req_type;
+  EFFECT_REQ_TYPE req_type;
   SINT32 req_value;
   SINT32 group_id;
 end

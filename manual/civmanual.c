@@ -57,6 +57,8 @@
 #include "commands.h"
 #include "settings.h"
 
+#include "stdinhand_info.h"
+
 enum manuals {
   MANUAL_SETTINGS,
   MANUAL_COMMANDS,
@@ -227,7 +229,6 @@ static bool manual_command(void)
       fprintf(doc, "</tr>\n");
       terrain_type_iterate(id) {
 	struct tile_type *ptype = get_tile_type(id);
-	int s;
 
 	if (ptype->defense_bonus == 0) {
 	  /* Must be a disabled piece of terrain */
@@ -238,18 +239,21 @@ static bool manual_command(void)
 		ptype->graphic_str,
 		IMAGE_END, get_terrain_name(id));
 	fprintf(doc, "<td>%d / %d / %d</td>",
-		ptype->output[O_FOOD], ptype->output[O_SHIELD],
-		ptype->output[O_TRADE]);
+		ptype->food, ptype->shield, ptype->trade);
 
-	for (s = 0; s < MAX_NUM_SPECIALS; s++) {
-	  fprintf(doc, "<td>%s%s%s %s</td>", IMAGE_BEGIN,
-		  ptype->special[s].graphic_str, IMAGE_END,
-		  ptype->special[s].name);
-	  fprintf(doc, "<td>%d / %d / %d</td>",
-		  ptype->special[s].output[O_FOOD],
-		  ptype->special[s].output[O_SHIELD],
-		  ptype->special[s].output[O_TRADE]);
-	}
+	fprintf(doc, "<td>%s%s%s %s</td>", IMAGE_BEGIN,
+		ptype->special[0].graphic_str, IMAGE_END,
+		ptype->special_1_name);
+	fprintf(doc, "<td>%d / %d / %d</td>",
+		ptype->food_special_1, ptype->shield_special_1,
+		ptype->trade_special_1);
+
+	fprintf(doc, "<td>%s%s%s", IMAGE_BEGIN,
+		ptype->special[1].graphic_str, IMAGE_END);
+	fprintf(doc, " %s</td>", ptype->special_2_name);
+	fprintf(doc, "<td>%d / %d / %d</td>",
+		ptype->food_special_2, ptype->shield_special_2,
+		ptype->trade_special_2);
 
 	fprintf(doc, "<td>%d</td>\n", ptype->movement_cost);
 	fprintf(doc, "<td>%d0%%</td><td>%d</td><td>%d</td><td>%d</td>\n",
@@ -296,7 +300,7 @@ static bool manual_command(void)
 	struct impr_type *pimpr = get_improvement_type(id);
 	char buf[64000];
 
-	if (is_great_wonder(id)) {
+	if (pimpr->is_wonder) {
 	  continue;
 	}
 
@@ -325,7 +329,7 @@ static bool manual_command(void)
 	struct impr_type *pimpr = get_improvement_type(id);
 	char buf[64000];
 
-	if (!is_great_wonder(id)) {
+	if (!pimpr->is_wonder) {
 	  continue;
 	}
 

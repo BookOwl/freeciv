@@ -665,7 +665,7 @@ void economy_list_callback(GtkWidget *w, gint row, gint column)
   int i = economy_row_type[row].type;
   
   if (economy_row_type[row].is_impr == TRUE) {
-    bool is_sellable = (improvement_exists(i) && can_sell_building(i));
+    bool is_sellable = (i >= 0 && i < game.num_impr_types && !is_wonder(i));
 
     gtk_widget_set_sensitive(sellobsolete_command, is_sellable
 			     && can_client_issue_orders()
@@ -913,10 +913,9 @@ void create_activeunits_report_dialog(bool make_modal)
 *****************************************************************/
 void activeunits_list_callback(GtkWidget *w, gint row, gint column)
 {
-  CHECK_UNIT_TYPE(activeunits_type[row]);
-  if (can_upgrade_unittype(game.player_ptr, activeunits_type[row]) != -1) {
+  if ((unit_type_exists(activeunits_type[row])) &&
+      (can_upgrade_unittype(game.player_ptr, activeunits_type[row]) != -1))
     gtk_widget_set_sensitive(upgrade_command, can_client_issue_orders());
-  }
 }
 
 /****************************************************************
@@ -951,7 +950,8 @@ void activeunits_upgrade_callback(GtkWidget *w, gpointer data)
   row = GPOINTER_TO_INT(selection->data);
 
   ut1 = activeunits_type[row];
-  CHECK_UNIT_TYPE(ut1);
+  if (!(unit_type_exists (ut1)))
+    return;
   /* puts(unit_types[ut1].name); */
 
   ut2 = can_upgrade_unittype(game.player_ptr, activeunits_type[row]);
@@ -1020,16 +1020,16 @@ void activeunits_report_dialog_update(void)
     unit_list_iterate(game.player_ptr->units, punit) {
       (unitarray[punit->type].active_count)++;
       if (punit->homecity) {
-	unitarray[punit->type].upkeep_shield += punit->upkeep[O_SHIELD];
-	unitarray[punit->type].upkeep_food += punit->upkeep[O_FOOD];
-	unitarray[punit->type].upkeep_gold += punit->upkeep[O_GOLD];
+	unitarray[punit->type].upkeep_shield += punit->upkeep;
+	unitarray[punit->type].upkeep_food += punit->upkeep_food;
+	unitarray[punit->type].upkeep_gold += punit->upkeep_gold;
       }
     }
     unit_list_iterate_end;
     city_list_iterate(game.player_ptr->cities,pcity) {
-      if (pcity->is_building_unit) {
+      if (pcity->is_building_unit &&
+	  (unit_type_exists (pcity->currently_building)))
 	(unitarray[pcity->currently_building].building_count)++;
-      }
     }
     city_list_iterate_end;
 

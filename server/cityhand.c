@@ -106,7 +106,7 @@ void handle_city_make_specialist(struct player *pplayer, int city_id,
   }
   if (is_worker_here(pcity, worker_x, worker_y)) {
     server_remove_worker_city(pcity, worker_x, worker_y);
-    pcity->specialists[DEFAULT_SPECIALIST]++;
+    pcity->specialists[SP_ELVIS]++;
     city_refresh(pcity);
     sync_cities();
   } else {
@@ -172,7 +172,7 @@ void really_handle_city_sell(struct player *pplayer, struct city *pcity,
     return;
   }
 
-  if (!can_city_sell_building(pcity, id))
+  if (!can_sell_building(pcity, id))
     return;
 
   pcity->did_sell=TRUE;

@@ -406,12 +406,11 @@ void popup_unit_upgrade_dlg(struct unit *pUnit, bool city)
   
   ut1 = pUnit->type;
   
-  if (pUnit_Upgrade_Dlg) {
+  if (pUnit_Upgrade_Dlg || !unit_type_exists(ut1)) {
     /* just in case */
     flush_dirty();
     return;
   }
-  CHECK_UNIT_TYPE(ut1);
     
   pUnit_Upgrade_Dlg = MALLOC(sizeof(struct SMALL_DLG));
 
@@ -4144,8 +4143,8 @@ void popup_races_dialog(void)
     pText_Name = create_text_surf_smaller_that_w(pStr, pTmp_Surf->w - 4);
     SDL_SetAlpha(pText_Name, 0x0, 0x0);
     
-    if (pNation->category && *(pNation->category) != '\0') {
-      copy_chars_to_string16(pStr, pNation->category);
+    if (pNation->class && *(pNation->class) != '\0') {
+      copy_chars_to_string16(pStr, pNation->class);
       change_ptsize16(pStr, 10);
       pText_Class = create_text_surf_smaller_that_w(pStr, pTmp_Surf->w - 4);
       SDL_SetAlpha(pText_Class, 0x0, 0x0);

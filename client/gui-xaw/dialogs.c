@@ -2186,7 +2186,7 @@ void races_disconnect_command_callback(Widget w, XtPointer client_data,
 void races_quit_command_callback(Widget w, XtPointer client_data, 
 				 XtPointer call_data)
 {
-  ui_exit();
+  exit(EXIT_SUCCESS);
 }
 
 /**************************************************************************

@@ -71,7 +71,8 @@
 
 #include "stdinhand.h"
 
-#define TOKEN_DELIMITERS " \t\n,"
+/* Import */
+#include "stdinhand_info.h"
 
 static enum cmdlevel_id default_access_level = ALLOW_INFO;
 static enum cmdlevel_id   first_access_level = ALLOW_CTRL;
@@ -95,7 +96,7 @@ static bool start_command(struct connection *caller, char *name, bool check);
 static bool end_command(struct connection *caller, char *str, bool check);
 
 enum vote_type {
-  VOTE_NONE, VOTE_YES, VOTE_NO
+  VOTE_NONE, VOTE_UNUSED, VOTE_YES, VOTE_NO
 };
 struct voting {
   char command[MAX_LEN_CONSOLE_LINE]; /* [0] == \0 if none in action */
@@ -689,8 +690,7 @@ static int handicap_of_skill_level(int level)
                         | H_DIPLOMAT | H_LIMITEDHUTS | H_DEFENSIVE
 			| H_DIPLOMACY | H_REVOLUTION,
  /* easy */	H_RATES | H_TARGETS | H_HUTS | H_NOPLANES 
-                        | H_DIPLOMAT | H_LIMITEDHUTS | H_DEFENSIVE
-                        | H_REVOLUTION,
+                        | H_DIPLOMAT | H_LIMITEDHUTS | H_DEFENSIVE,
 		H_NONE,
  /* medium */	H_RATES | H_TARGETS | H_HUTS | H_DIPLOMAT,
 		H_NONE,
@@ -1886,7 +1886,7 @@ static bool show_command(struct connection *caller, char *str, bool check)
 #define cmd_reply_show(string)  cmd_reply(CMD_SHOW, caller, C_COMMENT, string)
 
 #define OPTION_NAME_SPACE 13
-  /* under 16, so it fits into 80 cols more easily - rp */
+  /* under SSET_MAX_LEN, so it fits into 80 cols more easily - rp */
 
   cmd_reply_show(horiz_line);
   switch(level) {
@@ -3326,7 +3326,7 @@ bool handle_stdin_input(struct connection *caller, char *str, bool check)
     /* Check if the vote command would succeed. */
     if (handle_stdin_input(caller, full_command, TRUE)) {
       last_vote++;
-      notify_player(NULL, _("New vote (number %d) by %s: %s."), last_vote, 
+      notify_player(NULL, _("New vote, no. %d, by %s: %s."), last_vote, 
                     caller->player->name, full_command);
       sz_strlcpy(votes[idx].command, full_command);
       votes[idx].vote_no = last_vote;
@@ -4025,7 +4025,7 @@ static char *generic_generator(const char *text, int state, int num,
      variable to 0. */
   if (state == 0) {
     list_index = 0;
-    len = strlen(mytext);
+    len = strlen (mytext);
   }
 
   /* Return the next name which partially matches: */
@@ -4033,7 +4033,7 @@ static char *generic_generator(const char *text, int state, int num,
     name = index2str(list_index);
     list_index++;
 
-    if (mystrncasecmp(name, mytext, len) == 0) {
+    if (mystrncasecmp (name, mytext, len) == 0) {
       free(mytext);
       return internal_to_local_string_malloc(name);
     }
@@ -4419,4 +4419,38 @@ char **freeciv_completion(char *text, int start, int end)
 }
 
 #endif /* HAVE_LIBREADLINE */
+
+/********************************************************************
+Returns whether the specified server setting (option) can currently
+be changed.  Does not indicate whether it can be changed by clients.
+*********************************************************************/
+bool sset_is_changeable(int idx)
+{
+  struct settings_s *op = &settings[idx];
+
+  switch(op->sclass) {
+  case SSET_MAP_SIZE:
+  case SSET_MAP_GEN:
+    /* Only change map options if we don't yet have a map: */
+    return map_is_empty();
+  case SSET_MAP_ADD:
+  case SSET_PLAYERS:
+  case SSET_GAME_INIT:
+
+  case SSET_RULES:
+    /* Only change start params and most rules if we don't yet have a map,
+     * or if we do have a map but its a scenario one (ie, the game has
+     * never actually been started).
+     */
+    return (map_is_empty() || game.is_new_game);
+  case SSET_RULES_FLEXIBLE:
+  case SSET_META:
+    /* These can always be changed: */
+    return TRUE;
+  default:
+    freelog(LOG_ERROR, "Unexpected case %d in %s line %d",
+            op->sclass, __FILE__, __LINE__);
+    return FALSE;
+  }
+}
 

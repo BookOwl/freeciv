@@ -449,6 +449,22 @@ char *city_name_suggestion(struct player *pplayer, struct tile *ptile)
   return tempname;
 }
 
+/****************************************************************************
+  Return TRUE iff the city can sell the given improvement.
+****************************************************************************/
+bool can_sell_building(struct city *pcity, Impr_Type_id id)
+{
+  return (city_got_building(pcity, id) ? !is_wonder(id) : FALSE);
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+struct city *find_city_wonder(Impr_Type_id id)
+{
+  return (find_city_by_id(game.global_wonders[id]));
+}
+
 /**************************************************************************
   calculate the remaining build points 
 **************************************************************************/
@@ -486,6 +502,42 @@ int do_make_unit_veteran(struct city *pcity, Unit_Type_id id)
   }
   
   return 0;
+}
+
+/**************************************************************************
+  Return the cached shield bonus rate.  Don't confuse this with
+  get_city_shield_bonus which recomputes the value from scratch.
+**************************************************************************/
+int city_shield_bonus(struct city *pcity)
+{
+  return pcity->shield_bonus;
+}
+
+/**************************************************************************
+  Return the cached luxury bonus rate.  Don't confuse this with
+  get_city_luxury_bonus which recomputes the value from scratch.
+**************************************************************************/
+int city_luxury_bonus(struct city *pcity)
+{
+  return pcity->luxury_bonus;
+}
+
+/**************************************************************************
+  Return the cached tax bonus rate.  Don't confuse this with
+  get_city_tax_bonus which recomputes the value from scratch.
+**************************************************************************/
+int city_tax_bonus(struct city *pcity)
+{
+  return pcity->tax_bonus;
+}
+
+/**************************************************************************
+  Return the cached science bonus rate.  Don't confuse this with
+  get_city_science_bonus which recomputes the value from scratch.
+**************************************************************************/
+int city_science_bonus(struct city *pcity)
+{
+  return pcity->science_bonus;
 }
 
 /*********************************************************************
@@ -649,19 +701,17 @@ static void raze_city(struct city *pcity)
 {
   int razechance = game.razechance;
 
+  /* We don't use city_remove_improvement here as the global effects
+     stuff has already been handled by transfer_city */
+  pcity->improvements[game.palace_building] = I_NONE;
+
   /* land barbarians are more likely to destroy city improvements */
   if (is_land_barbarian(city_owner(pcity)))
     razechance += 30;
 
   built_impr_iterate(pcity, i) {
-    if (is_small_wonder(i)) {
-      /* small wonders are always razed
-       * This is not strictly necessary as transfer_city()
-       * would remove small wonders anyway. */
-      pcity->improvements[i] = I_NONE;
-    }
-    if (is_improvement(i) && (myrand(100) < razechance)) {
-      pcity->improvements[i] = I_NONE;
+    if (!is_wonder(i) && (myrand(100) < razechance)) {
+      pcity->improvements[i]=I_NONE;
     }
   } built_impr_iterate_end;
 
@@ -745,7 +795,7 @@ void transfer_city(struct player *ptaker, struct city *pcity,
   struct unit_list old_city_units;
   struct player *pgiver = city_owner(pcity);
   int old_trade_routes[NUM_TRADEROUTES];
-  bool had_palace = is_capital(pcity);
+  bool had_palace = pcity->improvements[game.palace_building] != I_NONE;
   char old_city_name[MAX_LEN_NAME];
 
   assert(pgiver != ptaker);
@@ -768,9 +818,7 @@ void transfer_city(struct player *ptaker, struct city *pcity,
      global effects for the new city owner) */
   built_impr_iterate(pcity, i) {
     city_remove_improvement(pcity, i);
-    if (!is_small_wonder(i)) {
-      pcity->improvements[i] = I_ACTIVE;
-    }
+    pcity->improvements[i] = I_ACTIVE;
   } built_impr_iterate_end;
 
   give_citymap_from_player_to_player(pcity, pgiver, ptaker);
@@ -1025,7 +1073,7 @@ void remove_city(struct city *pcity)
   int o;
   struct player *pplayer = city_owner(pcity);
   struct tile *ptile = pcity->tile;
-  bool had_palace = is_capital(pcity);
+  bool had_palace = pcity->improvements[game.palace_building] != I_NONE;
   char *city_name = mystrdup(pcity->name);
 
   built_impr_iterate(pcity, i) {
@@ -1294,7 +1342,7 @@ static void package_dumb_city(struct player* pplayer, struct tile *ptile,
   packet->unhappy = pdcity->unhappy;
 
   if (pcity && player_has_traderoute_with_city(pplayer, pcity)) {
-    packet->tile_trade = pcity->citizen_base[O_TRADE];
+    packet->tile_trade = pcity->tile_trade;
   } else {
     packet->tile_trade = 0;
   }
@@ -1524,22 +1572,28 @@ void package_city(struct city *pcity, struct packet_city_info *packet,
     packet->ppl_unhappy[i]=pcity->ppl_unhappy[i];
     packet->ppl_angry[i]=pcity->ppl_angry[i];
   }
-  specialist_type_iterate(sp) {
-    packet->specialists[sp] = pcity->specialists[sp];
-  } specialist_type_iterate_end;
+  packet->specialists[SP_ELVIS] = pcity->specialists[SP_ELVIS];
+  packet->specialists[SP_SCIENTIST] = pcity->specialists[SP_SCIENTIST];
+  packet->specialists[SP_TAXMAN] = pcity->specialists[SP_TAXMAN];
   for (i = 0; i < NUM_TRADEROUTES; i++) {
     packet->trade[i]=pcity->trade[i];
     packet->trade_value[i]=pcity->trade_value[i];
   }
 
-  output_type_iterate(o) {
-    packet->surplus[o] = pcity->surplus[o];
-    packet->waste[o] = pcity->waste[o];
-    packet->prod[o] = pcity->prod[o];
-    packet->citizen_base[o] = pcity->citizen_base[o];
-    packet->usage[o] = pcity->usage[o];
-  } output_type_iterate_end;
-
+  packet->food_prod=pcity->food_prod;
+  packet->food_surplus=pcity->food_surplus;
+  packet->shield_prod=pcity->shield_prod;
+  packet->shield_surplus=pcity->shield_surplus;
+  packet->trade_prod=pcity->trade_prod;
+  packet->tile_trade=pcity->tile_trade;
+  packet->corruption=pcity->corruption;
+  
+  packet->shield_waste=pcity->shield_waste;
+    
+  packet->luxury_total=pcity->luxury_total;
+  packet->tax_total=pcity->tax_total;
+  packet->science_total=pcity->science_total;
+  
   packet->food_stock=pcity->food_stock;
   packet->shield_stock=pcity->shield_stock;
   packet->pollution=pcity->pollution;
@@ -1722,7 +1776,7 @@ void establish_trade_route(struct city *pc1, struct city *pc2)
 void do_sell_building(struct player *pplayer, struct city *pcity,
 		      Impr_Type_id id)
 {
-  if (can_city_sell_building(pcity, id)) {
+  if (!is_wonder(id)) {
     pplayer->economic.gold += impr_sell_gold(id);
     building_lost(pcity, id);
   }
@@ -1763,8 +1817,8 @@ void change_build_target(struct player *pplayer, struct city *pcity,
   }
 
   /* Is the city no longer building a wonder? */
-  if (!pcity->is_building_unit && is_great_wonder(pcity->currently_building) &&
-      (event != E_IMP_AUTO && event != E_WORKLIST)) {
+  if(!pcity->is_building_unit && is_wonder(pcity->currently_building) &&
+     (event != E_IMP_AUTO && event != E_WORKLIST)) {
     /* If the build target is changed because of an advisor's suggestion or
        because the worklist advances, then the wonder was completed -- 
        don't announce that the player has *stopped* building that wonder. 
@@ -1815,7 +1869,7 @@ void change_build_target(struct player *pplayer, struct city *pcity,
 
   /* If the city is building a wonder, tell the rest of the world
      about it. */
-  if (!pcity->is_building_unit && is_great_wonder(pcity->currently_building)) {
+  if (!pcity->is_building_unit && is_wonder(pcity->currently_building)) {
     notify_player_ex(NULL, pcity->tile, E_WONDER_STARTED,
 		     _("Game: The %s have started building The %s in %s."),
 		     get_nation_name_plural(pplayer->nation),
@@ -1975,7 +2029,7 @@ static bool update_city_tile_status(struct city *pcity, int city_x,
   case C_TILE_WORKER:
     if (!is_available) {
       server_set_tile_city(pcity, city_x, city_y, C_TILE_UNAVAILABLE);
-      pcity->specialists[DEFAULT_SPECIALIST]++; /* keep city sanity */
+      pcity->specialists[SP_ELVIS]++; /* keep city sanity */
       auto_arrange_workers(pcity); /* will place the displaced */
       city_refresh(pcity);
       send_city_info(NULL, pcity);
@@ -2051,7 +2105,7 @@ void city_landlocked_sell_coastal_improvements(struct tile *ptile)
       built_impr_iterate(pcity, impr) {
         int i = 0;
 
-        if (!can_city_sell_building(pcity, impr)) {
+        if (is_wonder(impr)) {
           continue;
         }
 

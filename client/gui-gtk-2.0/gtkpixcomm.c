@@ -246,7 +246,7 @@ gtk_pixcomm_expose(GtkWidget *widget, GdkEventExpose *ev)
         break;
 
       case OP_COPY:
-        if (rop->src->mask) {
+        if (rop->src->has_mask) {
           gdk_gc_set_clip_mask(civ_gc, rop->src->mask);
           gdk_gc_set_clip_origin(civ_gc, x + rop->x, y + rop->y);
 

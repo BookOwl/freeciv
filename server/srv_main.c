@@ -68,6 +68,7 @@
 #include "timing.h"
 #include "version.h"
 
+#include "autoattack.h"
 #include "barbarian.h"
 #include "cityhand.h"
 #include "citytools.h"
@@ -156,7 +157,6 @@ void init_game_seed(void)
     /* We strip the high bit for now because neither game file nor
        server options can handle unsigned ints yet. - Cedric */
     game.seed = time(NULL) & (MAX_UINT32 >> 1);
-    freelog(LOG_DEBUG, "Setting game.seed:%d", game.seed);
   }
  
   if (!myrand_is_init()) {
@@ -203,9 +203,6 @@ void srv_init(void)
 
   /* init character encodings. */
   init_character_encodings(FC_DEFAULT_DATA_ENCODING, FALSE);
-
-  /* Initialize callbacks. */
-  game.callbacks.unit_deallocate = dealloc_id;
 
   /* done */
   return;
@@ -518,7 +515,7 @@ static void begin_phase(bool is_new_phase)
     freelog(LOG_DEBUG, "beginning player turn for #%d (%s)",
 	    pplayer->player_no, pplayer->name);
     /* human players also need this for building advice */
-    ai_data_phase_init(pplayer, is_new_phase);
+    ai_data_turn_init(pplayer);
     ai_manage_buildings(pplayer);
   } players_iterate_end;
 
@@ -602,12 +599,15 @@ static void end_phase(void)
   nocity_send = FALSE;
   players_iterate(pplayer) {
     send_player_cities(pplayer);
-    ai_data_phase_done(pplayer);
+    ai_data_turn_done(pplayer);
   } players_iterate_end;
   flush_packets();  /* to curb major city spam */
 
   do_reveal_effects();
   do_have_embassies_effect();
+
+  freelog(LOG_DEBUG, "Auto-Attack phase");
+  auto_attack();
 }
 
 /**************************************************************************
@@ -1218,11 +1218,11 @@ static char* find_common_class(void)
       continue;  
     }
     nation = get_nation_by_idx(pplayer->nation);
-    assert(nation->category != NULL);
+    assert(nation->class != NULL);
     if (class == NULL) {
        /* Set the class. */
-      class = nation->category;
-    } else if (strcmp(nation->category, class) != 0) {
+      class = nation->class;
+    } else if (strcmp(nation->class, class) != 0) {
       /* Multiple classes are already being used. */
       return NULL;
     }
@@ -1245,7 +1245,7 @@ static Nation_Type_id select_random_nation(const char* class)
     struct nation_type *nation = get_nation_by_idx(i);
 
     if (nations_available[i]
-	&& (class == NULL || strcmp(nation->category, class) == 0)) {
+	&& (class == NULL || strcmp(nation->class, class) == 0)) {
       available[count] = i;
       count++;
     }
@@ -1811,6 +1811,8 @@ main_start_players:
   if(game.is_new_game) {
     /* Before the player map is allocated (and initiailized)! */
     game.fogofwar_old = game.fogofwar;
+
+    allot_island_improvs();
 
     players_iterate(pplayer) {
       player_map_allocate(pplayer);

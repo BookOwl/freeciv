@@ -194,14 +194,14 @@ Reset the movecosts of the warmap.
 **************************************************************************/
 static void init_warmap(struct tile *orig_tile, enum unit_move_type move_type)
 {
-  if (warmap.size != MAP_INDEX_SIZE) {
+  if (warmap.size != MAX_MAP_INDEX) {
     warmap.cost = fc_realloc(warmap.cost,
-			     MAP_INDEX_SIZE * sizeof(*warmap.cost));
+			     MAX_MAP_INDEX * sizeof(*warmap.cost));
     warmap.seacost = fc_realloc(warmap.seacost,
-				MAP_INDEX_SIZE * sizeof(*warmap.seacost));
+				MAX_MAP_INDEX * sizeof(*warmap.seacost));
     warmap.vector = fc_realloc(warmap.vector,
-			       MAP_INDEX_SIZE * sizeof(*warmap.vector));
-    warmap.size = MAP_INDEX_SIZE;
+			       MAX_MAP_INDEX * sizeof(*warmap.vector));
+    warmap.size = MAX_MAP_INDEX;
   }
 
   init_queue();
@@ -211,12 +211,12 @@ static void init_warmap(struct tile *orig_tile, enum unit_move_type move_type)
   case HELI_MOVING:
   case AIR_MOVING:
     assert(sizeof(*warmap.cost) == sizeof(char));
-    memset(warmap.cost, MAXCOST, MAP_INDEX_SIZE * sizeof(char));
+    memset(warmap.cost, MAXCOST, map.xsize * map.ysize);
     WARMAP_COST(orig_tile) = 0;
     break;
   case SEA_MOVING:
     assert(sizeof(*warmap.seacost) == sizeof(char));
-    memset(warmap.seacost, MAXCOST, MAP_INDEX_SIZE * sizeof(char));
+    memset(warmap.seacost, MAXCOST, map.xsize * map.ysize);
     WARMAP_SEACOST(orig_tile) = 0;
     break;
   default:
@@ -572,7 +572,7 @@ static bool find_the_shortest_path(struct unit *punit,
   int maxcost = MAXCOST;
   int move_cost, total_cost;
   int straight_dir = 0;	/* init to silence compiler warning */
-  dir_vector local_vector[MAP_INDEX_SIZE];
+  dir_vector local_vector[MAX_MAP_INDEX];
 #define LOCAL_VECTOR(ptile) local_vector[(ptile)->index]
   struct unit *pcargo;
   /* 
@@ -818,7 +818,7 @@ static bool find_the_shortest_path(struct unit *punit,
   /*** Succeeded. The vector at the destination indicates which way we get there.
      Now backtrack to remove all the blind paths ***/
   assert(sizeof(*warmap.vector) == sizeof(char));
-  memset(warmap.vector, 0, MAP_INDEX_SIZE * sizeof(char));
+  memset(warmap.vector, 0, map.xsize * map.ysize);
 
   init_queue();
   add_to_mapqueue(0, dest_tile);
@@ -1414,6 +1414,33 @@ enum goto_result do_unit_goto(struct unit *punit,
   send_unit_info(NULL, punit);
   return status;
 }
+
+/**************************************************************************
+Calculate and return cost (in terms of move points) for unit to move
+to specified destination.
+Currently only used in autoattack.c
+**************************************************************************/
+int calculate_move_cost(struct unit *punit, struct tile *dest_tile)
+{
+  /* perhaps we should do some caching -- fisch */
+
+  if (is_air_unit(punit) || is_heli_unit(punit)) {
+    /* The warmap only really knows about land and sea
+       units, so for these we just assume cost = distance.
+       (times 3 for road factor).
+       (Could be wrong if there are things in the way.)
+    */
+    return SINGLE_MOVE * real_map_distance(punit->tile, dest_tile);
+  }
+
+  generate_warmap(NULL, punit);
+
+  if (is_sailing_unit(punit))
+    return WARMAP_SEACOST(dest_tile);
+  else /* ground unit */
+    return WARMAP_COST(dest_tile);
+}
+
 
 /**************************************************************************
  Returns true if the airspace at given map position _looks_ safe to

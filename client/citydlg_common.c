@@ -173,12 +173,14 @@ void city_dialog_redraw_map(struct city *pcity,
 		       get_citydlg_canvas_width(),
 		       get_citydlg_canvas_height());
 
-  mapview_layer_iterate(layer) {
-    citydlg_known_iterate(pcity, city_x, city_y,
-			  ptile, canvas_x, canvas_y) {
-      put_one_tile(pcanvas, layer, ptile, canvas_x, canvas_y, TRUE);
-    } citydlg_known_iterate_end;
-  } mapview_layer_iterate_end;
+  citydlg_known_iterate(pcity, city_x, city_y,
+			ptile, canvas_x, canvas_y) {
+    if (is_isometric) {
+      put_one_tile_iso(pcanvas, ptile, canvas_x, canvas_y, TRUE);
+    } else {
+      put_one_tile(pcanvas, ptile, canvas_x, canvas_y, TRUE);
+    }
+  } citydlg_known_iterate_end;
 
   /* We have to put the output afterwards or it will be covered
    * in iso-view. */
@@ -238,7 +240,7 @@ void get_city_dialog_production(struct city *pcity,
 
   if (get_current_construction_bonus(pcity, EFT_PROD_TO_GOLD) > 0) {
     my_snprintf(buffer, buffer_len, _("%3d gold per turn"),
-		MAX(0, pcity->surplus[O_SHIELD]));
+		MAX(0, pcity->shield_surplus));
   } else {
     char time[50];
 
@@ -279,8 +281,7 @@ void get_city_dialog_production_full(char *buffer, size_t buffer_len,
 {
   if (!is_unit && building_has_effect(id, EFT_PROD_TO_GOLD)) {
     my_snprintf(buffer, buffer_len, _("%s (XX) %d/turn"),
-		get_impr_name_ex(pcity, id),
-		MAX(0, pcity->surplus[O_SHIELD]));
+		get_impr_name_ex(pcity, id), MAX(0, pcity->shield_surplus));
   } else {
     int turns = city_turns_to_build(pcity, id, is_unit, TRUE);
     const char *name;
@@ -329,15 +330,13 @@ void get_city_dialog_production_row(char *buf[], size_t column_size, int id,
     }
     my_snprintf(buf[2], column_size, "%d", unit_build_shield_cost(id));
   } else {
-    struct player *pplayer = game.player_ptr;
-
     /* Total & turns left meaningless on capitalization */
     if (building_has_effect(id, EFT_PROD_TO_GOLD)) {
-      my_snprintf(buf[0], column_size, get_improvement_name(id));
+      my_snprintf(buf[0], column_size, get_improvement_type(id)->name);
       buf[1][0] = '\0';
       my_snprintf(buf[2], column_size, "---");
     } else {
-      my_snprintf(buf[0], column_size, get_improvement_name(id));
+      my_snprintf(buf[0], column_size, get_improvement_type(id)->name);
 
       /* from city.c get_impr_name_ex() */
       if (pcity && is_building_replaced(pcity, id)) {
@@ -345,21 +344,12 @@ void get_city_dialog_production_row(char *buf[], size_t column_size, int id,
       } else {
 	const char *state = "";
 
-	if (is_great_wonder(id)) {
-          if (improvement_obsolete(pplayer, id)) {
-            state = _("Obsolete");
-          } else if (great_wonder_was_built(id)) {
-            state = _("Built");
-          } else {
-            state = _("Great Wonder");
-          }
-	}
-	if (is_small_wonder(id)) {
-	  state = _("Small Wonder");
-	  if (find_city_from_small_wonder(pplayer, id)) {
+	if (is_wonder(id)) {
+	  state = _("Wonder");
+	  if (game.global_wonders[id] != 0) {
 	    state = _("Built");
 	  }
-	  if (improvement_obsolete(pplayer, id)) {
+	  if (wonder_obsolete(id)) {
 	    state = _("Obsolete");
 	  }
 	}
@@ -375,7 +365,7 @@ void get_city_dialog_production_row(char *buf[], size_t column_size, int id,
   if (pcity) {
     if (!is_unit && building_has_effect(id, EFT_PROD_TO_GOLD)) {
       my_snprintf(buf[3], column_size, _("%d/turn"),
-		  MAX(0, pcity->surplus[O_SHIELD]));
+		  MAX(0, pcity->shield_surplus));
     } else {
       int turns = city_turns_to_build(pcity, id, is_unit, FALSE);
       if (turns < 999) {

@@ -292,9 +292,9 @@ void found_new_tech(struct player *plr, int tech_found, bool was_discovery,
 
     /* Alert the owners of any wonders that have been made obsolete */
     impr_type_iterate(id) {
-      if (is_great_wonder(id) && great_wonder_was_built(id) &&
+      if (game.global_wonders[id] != 0 && is_wonder(id) &&
 	  improvement_types[id].obsolete_by == tech_found &&
-	  (pcity = find_city_from_great_wonder(id))) {
+	  (pcity = find_city_by_id(game.global_wonders[id]))) {
 	notify_player_ex(city_owner(pcity), NULL, E_WONDER_OBSOLETE,
 	                 _("Game: Discovery of %s OBSOLETES %s in %s!"), 
 	                 get_tech_name(city_owner(pcity), tech_found),
@@ -420,16 +420,19 @@ void found_new_tech(struct player *plr, int tech_found, bool was_discovery,
    * Inform player about his new tech.
    */
   send_player_info(plr, plr);
-
+  
   /*
-   * Update all cities in case the tech changed some effects. This is
-   * inefficient; it could be optimized if it's found to be a problem.  But
-   * techs aren't researched that often.
+   * Update all cities if the new tech affects happiness.
    */
-  cities_iterate(pcity) {
-    city_refresh(pcity);
-    send_city_info(city_owner(pcity), pcity);
-  } cities_iterate_end;
+  if (tech_found == game.rtech.cathedral_plus
+      || tech_found == game.rtech.cathedral_minus
+      || tech_found == game.rtech.colosseum_plus
+      || tech_found == game.rtech.temple_plus) {
+    city_list_iterate(plr->cities, pcity) {
+      city_refresh(pcity);
+      send_city_info(plr, pcity);
+    } city_list_iterate_end;
+  }
 
   /*
    * Send all player an updated info of the owner of the Marco Polo
@@ -1478,10 +1481,6 @@ static void package_player_common(struct player *plr,
 
   packet->turn_done=plr->turn_done;
   packet->nturns_idle=plr->nturns_idle;
-
-  for (i = 0; i < B_LAST /*game.num_impr_types */ ; i++) {
-    packet->small_wonders[i] = plr->small_wonders[i];
-  }
 }
 
 /**************************************************************************
@@ -2017,8 +2016,9 @@ static struct player *split_player(struct player *pplayer)
   give_map_from_player_to_player(pplayer, cplayer);
 
   /* Not sure if this is necessary, but might be a good idea
-   * to avoid doing some ai calculations with bogus data. */
-  ai_data_phase_init(cplayer, TRUE);
+     to avoid doing some ai calculations with bogus data:
+  */
+  ai_data_turn_init(cplayer);
   assess_danger_player(cplayer);
   if (pplayer->ai.control) {
     assess_danger_player(pplayer);

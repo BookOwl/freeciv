@@ -323,43 +323,25 @@ void handle_unit_disband(struct player *pplayer, int unit_id)
   if (!punit) {
     return;
   }
+  pcity = map_get_city(punit->tile);
 
-  if (unit_flag(punit, F_UNDISBANDABLE)) {
-    /* refuse to kill ourselves */
+  if (!unit_flag(punit, F_UNDISBANDABLE)) { /* refuse to kill ourselves */
+    if (pcity) {
+      pcity->shield_stock += unit_disband_shields(punit->type);
+      /* If we change production later at this turn. No penalty is added. */
+      pcity->disbanded_shields += unit_disband_shields(punit->type);
+
+      /* Note: Nowadays it's possible to disband unit in allied city and
+       * your ally receives those shields. Should it be like this? Why not?
+       * That's why we must use city_owner instead of pplayer -- Zamar */
+      send_city_info(city_owner(pcity), pcity);
+    }
+    wipe_unit(punit);
+  } else {
     notify_player_ex(unit_owner(punit), punit->tile, E_NOEVENT,
               _("Game: %s refuses to disband!"), unit_name(punit->type));
     return;
   }
-
-  pcity = map_get_city(punit->tile);
-  if (pcity) {
-    /* If you disband inside a city, it gives some shields to that city.
-     *
-     * Note: Nowadays it's possible to disband unit in allied city and
-     * your ally receives those shields. Should it be like this? Why not?
-     * That's why we must use city_owner instead of pplayer -- Zamar */
-
-    if (unit_flag(punit, F_HELP_WONDER)) {
-      /* Count this just like a caravan that was added to a wonder.
-       * However don't actually give the city the extra shields unless
-       * they are building a wonder (but switching to a wonder later in
-       * the turn will give the extra shields back). */
-      pcity->caravan_shields += unit_build_shield_cost(punit->type);
-      if (unit_can_help_build_wonder(punit, pcity)) {
-	pcity->shield_stock += unit_build_shield_cost(punit->type);
-      } else {
-	pcity->shield_stock += unit_disband_shields(punit->type);
-      }
-    } else {
-      pcity->shield_stock += unit_disband_shields(punit->type);
-      /* If we change production later at this turn. No penalty is added. */
-      pcity->disbanded_shields += unit_disband_shields(punit->type);
-    }
-
-    send_city_info(city_owner(pcity), pcity);
-  }
-
-  wipe_unit(punit);
 }
 
 /**************************************************************************
@@ -455,7 +437,7 @@ static void city_add_unit(struct player *pplayer, struct unit *punit)
   assert(unit_pop_value(punit->type) > 0);
   pcity->size += unit_pop_value(punit->type);
   /* Make the new people something, otherwise city fails the checks */
-  pcity->specialists[DEFAULT_SPECIALIST] += unit_pop_value(punit->type);
+  pcity->specialists[SP_TAXMAN] += unit_pop_value(punit->type);
   auto_arrange_workers(pcity);
   wipe_unit(punit);
   send_city_info(NULL, pcity);

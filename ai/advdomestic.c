@@ -147,6 +147,11 @@ void domestic_advisor_choose_build(struct player *pplayer, struct city *pcity,
   struct government *gov = get_gov_pplayer(pplayer);
   /* Unit type with certain role */
   Unit_Type_id unit_type;
+  /* Food surplus assuming that workers and elvii are already accounted for
+   * and properly balanced. */
+  int est_food = pcity->food_surplus
+                 + 2 * pcity->specialists[SP_SCIENTIST]
+                 + 2 * pcity->specialists[SP_TAXMAN];
 
   init_choice(choice);
 
@@ -154,8 +159,7 @@ void domestic_advisor_choose_build(struct player *pplayer, struct city *pcity,
   unit_type = best_role_unit(pcity, F_SETTLERS);
 
   if (unit_type != U_LAST
-      && pcity->surplus[O_FOOD] > utype_upkeep_cost(get_unit_type(unit_type),
-			 	                    gov, O_FOOD)) {
+      && est_food > utype_food_cost(get_unit_type(unit_type), gov)) {
     /* settler_want calculated in settlers.c called from ai_manage_cities() */
     int want = pcity->ai.settler_want;
 
@@ -177,8 +181,7 @@ void domestic_advisor_choose_build(struct player *pplayer, struct city *pcity,
   unit_type = best_role_unit(pcity, F_CITIES);
 
   if (unit_type != U_LAST
-      && pcity->surplus[O_FOOD] >= utype_upkeep_cost(get_unit_type(unit_type),
-				                     gov, O_FOOD)) {
+      && est_food >= utype_food_cost(get_unit_type(unit_type), gov)) {
     /* founder_want calculated in settlers.c, called from ai_manage_cities(). */
     int want = pcity->ai.founder_want;
 
@@ -191,12 +194,8 @@ void domestic_advisor_choose_build(struct player *pplayer, struct city *pcity,
       
     } else if (want < -choice->want) {
       /* We need boats to colonize! */
-      /* We might need boats even if there are boats free,
-       * if they are blockaded or in inland seas. */
-      struct ai_data *ai = ai_data_get(pplayer);
       CITY_LOG(LOG_DEBUG, pcity, "desires founders with passion %d and asks"
-	       " for a new boat (%d of %d free)",
-	       want, ai->stats.available_boats, ai->stats.boats);
+	       " for a boat", want);
       choice->want = 0 - want;
       choice->type = CT_NONMIL;
       choice->choice = unit_type; /* default */

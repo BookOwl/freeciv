@@ -150,16 +150,13 @@ void cityresult_fill(struct player *pplayer,
       /* We cannot read city center from cache */
 
       /* Food */
-      result->citymap[i][j].food
-	= base_city_get_output_tile(i, j, pcity, FALSE, O_FOOD);
+      result->citymap[i][j].food = base_city_get_food_tile(i, j, pcity, FALSE);
 
       /* Shields */
-      result->citymap[i][j].shield
-	= base_city_get_output_tile(i, j, pcity, FALSE, O_SHIELD);
+      result->citymap[i][j].shield =base_city_get_shields_tile(i, j, pcity, FALSE);
 
       /* Trade */
-      result->citymap[i][j].trade
-	= base_city_get_output_tile(i, j, pcity, FALSE, O_TRADE);
+      result->citymap[i][j].trade = base_city_get_trade_tile(i, j, pcity, FALSE);
 
       sum = result->citymap[i][j].food * ai->food_priority
             + result->citymap[i][j].trade * ai->science_priority
@@ -230,14 +227,14 @@ void cityresult_fill(struct player *pplayer,
      * never make cities. */
     if (game.fulltradesize == 1) {
       result->corruption = ai->science_priority
-	* city_waste(pcity, O_TRADE,
-		     result->citymap[result->o_x][result->o_y].trade
-		     + result->citymap[2][2].trade);
+	* city_corruption(pcity, 
+			  result->citymap[result->o_x][result->o_y].trade
+			  + result->citymap[2][2].trade);
     } else {
       result->corruption = 0;
     }
     result->waste = ai->shield_priority
-      * city_waste(pcity, O_SHIELD,
+      * city_waste(pcity,
 		   result->citymap[result->o_x][result->o_y].shield
 		   + result->citymap[2][2].shield);
   } else {
@@ -245,13 +242,13 @@ void cityresult_fill(struct player *pplayer,
      * is possible (with notradesize) that we _gain_ value here. */
     pcity->size++;
     result->corruption = ai->science_priority
-      * (city_waste(pcity, O_TRADE,
-		    result->citymap[result->o_x][result->o_y].trade)
-	 - pcity->waste[O_TRADE]);
+      * (city_corruption(pcity,
+			 result->citymap[result->o_x][result->o_y].trade)
+	 - pcity->corruption);
     result->waste = ai->shield_priority
-      * (city_waste(pcity, O_SHIELD,
+      * (city_waste(pcity,
 		    result->citymap[result->o_x][result->o_y].shield)
-	 - pcity->waste[O_SHIELD]);
+	 - pcity->shield_waste);
     pcity->size--;
   }
   result->total -= result->corruption;
@@ -444,8 +441,8 @@ static void city_desirability(struct player *pplayer, struct ai_data *ai,
 **************************************************************************/
 void ai_settler_init(struct player *pplayer)
 {
-  cachemap = fc_realloc(cachemap, MAP_INDEX_SIZE * sizeof(*cachemap));
-  memset(cachemap, -1, MAP_INDEX_SIZE * sizeof(*cachemap));
+  cachemap = fc_realloc(cachemap, MAX_MAP_INDEX * sizeof(*cachemap));
+  memset(cachemap, -1, MAX_MAP_INDEX * sizeof(*cachemap));
 }
 
 /**************************************************************************
@@ -530,20 +527,17 @@ static bool settler_map_iterate(struct pf_parameter *parameter,
 
   pf_destroy_map(map);
 
-  assert(!found || 0 <= best->result);
   return found;
 }
 
 /**************************************************************************
   Find nearest and best city placement or (TODO) a city to immigrate to.
 
-  Option look_for_boat forces us to find a (real) boat before cosidering
-  going overseas.  Option use_virt_boat allows to use virtual boat but only
+  Option look_for_boat forces to find a boat before cosidering going 
+  overseas.  Option use_virt_boat allows to use virtual boat but only
   if punit is in a coastal city right now (should only be used by 
   virtual units).  I guess it won't hurt to remove this condition, PF 
   will just give no positions.
-  If (!look_for_boat && !use_virt_boat), will not consider placements
-  overseas.
 **************************************************************************/
 void find_best_city_placement(struct unit *punit, struct cityresult *best,
 			      bool look_for_boat, bool use_virt_boat)
@@ -553,8 +547,6 @@ void find_best_city_placement(struct unit *punit, struct cityresult *best,
   struct unit *ferry = NULL;
 
   assert(pplayer->ai.control);
-  /* Only virtual units may use virtual boats: */
-  assert(0 == punit->id || !use_virt_boat);
 
   best->tile = NULL;
   best->result = 0;
@@ -599,7 +591,6 @@ void find_best_city_placement(struct unit *punit, struct cityresult *best,
       ferry->tile = punit->tile;
     }
 
-    assert(SEA_MOVING == unit_type(ferry)->move_type);
     pft_fill_unit_overlap_param(&parameter, ferry);
     parameter.get_TB = no_fights_or_unknown;
 
@@ -617,7 +608,4 @@ void find_best_city_placement(struct unit *punit, struct cityresult *best,
       destroy_unit_virtual(ferry);
     }
   }
-  /* If we use a virtual boat, we must have permission and be emigrating: */
-  assert(!best->virt_boat || use_virt_boat);
-  assert(!best->virt_boat || best->overseas);
 }

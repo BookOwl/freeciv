@@ -144,12 +144,8 @@ char *create_centered_string(const char *s)
   *i can be increased to get next string in the array argv[].
   It is an error for the option to exist but be an empty string.
   This doesn't use freelog() because it is used before logging is set up.
-
-  The argv strings are assumed to be in the local encoding; the returned
-  string is in the internal encoding.
 **************************************************************************/
-char *get_option_malloc(const char *option_name,
-			char **argv, int *i, int argc)
+char *get_option(const char *option_name, char **argv, int *i, int argc)
 {
   int len = strlen(option_name);
 
@@ -174,7 +170,7 @@ char *get_option_malloc(const char *option_name,
       }
     }
 
-    return local_to_internal_string_malloc(opt);
+    return opt;
   }
 
   return NULL;
@@ -1082,8 +1078,7 @@ struct datafile_list datafilelist_infix(const char *subpath,
 
   /* First assemble a full list of names. */
   for (dir_num = 0; dirs[dir_num]; dir_num++) {
-    size_t len = (subpath ? strlen(subpath) : 0) + strlen(dirs[dir_num]) + 2;
-    char path[len];
+    char path[PATH_MAX];
     DIR *dir;
     struct dirent *entry;
 
@@ -1450,9 +1445,6 @@ char *get_multicast_group(void)
 /***************************************************************************
   Interpret ~/ in filename as home dir
   New path is returned in buf of size buf_size
-
-  This may fail if the path is too long.  It is better to use
-  interpret_tilde_alloc.
 ***************************************************************************/
 void interpret_tilde(char* buf, size_t buf_size, const char* filename)
 {
@@ -1465,31 +1457,6 @@ void interpret_tilde(char* buf, size_t buf_size, const char* filename)
   }
 }
 
-/***************************************************************************
-  Interpret ~/ in filename as home dir
-
-  The new path is returned in buf, as a newly allocated buffer.  The new
-  path will always be allocated and written, even if there is no ~ present.
-***************************************************************************/
-char *interpret_tilde_alloc(const char* filename)
-{
-  if (filename[0] == '~' && filename[1] == '/') {
-    const char *home = user_home_dir();
-    size_t sz;
-    char *buf;
-
-    filename += 2; /* Skip past "~/" */
-    sz = strlen(home) + strlen(filename) + 2;
-    buf = fc_malloc(sz);
-    my_snprintf(buf, sz, "%s/%s", home, filename);
-    return buf;
-  } else if (filename[0] == '~' && filename[1] == '\0') {
-    return mystrdup(user_home_dir());
-  } else  {
-    return mystrdup(filename);
-  }
-}
-
 /**************************************************************************
   If the directory "pathname" does not exist, recursively create all
   directories until it does.
@@ -1497,30 +1464,31 @@ char *interpret_tilde_alloc(const char* filename)
 bool make_dir(const char *pathname)
 {
   char *dir;
-  char *path = NULL;
+  char file[PATH_MAX];
+  char path[PATH_MAX];
 
-  path = interpret_tilde_alloc(pathname);
-  dir = path;
-  do {
-    dir = strchr(dir, '/');
-    /* We set the current / with 0, and restore it afterwards */
-    if (dir) {
-      *dir = 0;
-    }
+  interpret_tilde(file, sizeof(file), pathname);
+  path[0] = '\0';
+
+#ifndef WIN32_NATIVE
+  /* Ensure we are starting from the root in absolute pathnames. */
+  if (file[0] == '/') {
+    sz_strlcat(path, "/");
+  }
+#endif
+
+  for (dir = strtok(file, "/"); dir; dir = strtok(NULL, "/")) {
+    sz_strlcat(path, dir);
 
 #ifdef WIN32_NATIVE
     mkdir(path);
 #else
     mkdir(path, 0755);
 #endif
-      
-    if (dir) {
-      *dir = '/';
-      dir++;
-    }
-  } while (dir);
 
-  free(path);
+    sz_strlcat(path, "/");
+  }
+
   return TRUE;
 }
 

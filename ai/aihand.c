@@ -157,8 +157,8 @@ static void ai_manage_taxes(struct player *pplayer)
     cmp.require_happy = TRUE;    /* note this one */
     cmp.allow_disorder = FALSE;
     cmp.allow_specialists = TRUE;
-    cmp.factor[O_FOOD] = 20;
-    cmp.minimal_surplus[O_GOLD] = -FC_INFINITY;
+    cmp.factor[FOOD] = 20;
+    cmp.minimal_surplus[GOLD] = -FC_INFINITY;
 
     city_list_iterate(pplayer->cities, pcity) {
       cm_clear_cache(pcity);
@@ -167,7 +167,7 @@ static void ai_manage_taxes(struct player *pplayer)
       total_cities++;
 
       if (cmr.found_a_valid
-          && pcity->surplus[O_FOOD] > 0
+          && pcity->food_surplus > 0
           && pcity->size >= g->rapture_size
 	  && city_can_grow_to(pcity, pcity->size + 1)) {
         pcity->ai.celebrate = TRUE;
@@ -294,9 +294,7 @@ void ai_best_government(struct player *pplayer)
       if (government_has_flag(gov, G_FANATIC_TROOPS)) {
         bonus += 3; /* WAG */
       }
-      output_type_iterate(o) {
-	val += gov->output_inc_tile[o];
-      } output_type_iterate_end;
+      val += gov->trade_bonus + gov->shield_bonus + gov->food_bonus;
 
       val += (val * bonus) / 100;
 

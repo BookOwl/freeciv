@@ -62,7 +62,7 @@ static void popup_chgall_dialog (Widget parent);
 
 /******************************************************************/
 static Widget config_shell;
-static Widget *config_toggle;
+static Widget config_toggle[NUM_CREPORT_COLS];
 
 void create_city_report_config_dialog(void);
 void popup_city_report_config_dialog(void);
@@ -125,8 +125,7 @@ static void get_city_text(struct city *pcity, char *text, int n)
     if(spec->space>0)
       cat_snprintf(text, n, "%*s", spec->space, " ");
 
-    cat_snprintf(text, n, "%*s", spec->width,
-		 (spec->func)(pcity, spec->data));
+    cat_snprintf(text, n, "%*s", spec->width, (spec->func)(pcity));
   }
 }
 
@@ -694,8 +693,6 @@ void create_city_report_config_dialog(void)
 					     labelWidgetClass, 
 					     config_form, NULL));
 
-  config_toggle = fc_realloc(config_toggle,
-			     NUM_CREPORT_COLS * sizeof(*config_toggle));
   for(i=1, spec=city_report_specs+i; i<NUM_CREPORT_COLS; i++, spec++) {
     my_snprintf(buf, sizeof(buf), "%-32s", spec->explanation);
     above = (i==1)?config_label:config_optlabel;

@@ -58,7 +58,7 @@ BV_DEFINE(bv_id, MAX_NUM_ID);
 struct ai_data {
   /* Precalculated info about city improvements */
   enum ai_improvement_status impr_calc[MAX_NUM_ITEMS];
-  enum req_range impr_range[MAX_NUM_ITEMS];
+  enum effect_range impr_range[MAX_NUM_ITEMS];
 
   /* AI diplomacy and opinions on other players */
   struct {
@@ -141,8 +141,8 @@ struct ai_data {
 };
 
 void ai_data_init(struct player *pplayer);
-void ai_data_phase_init(struct player *pplayer, bool is_new_phase);
-void ai_data_phase_done(struct player *pplayer);
+void ai_data_turn_init(struct player *pplayer);
+void ai_data_turn_done(struct player *pplayer);
 
 void ai_data_init(struct player *pplayer);
 void ai_data_analyze_rulesets(struct player *pplayer);

@@ -93,7 +93,8 @@
 ***********************************************************************/
 
 /**************************************************************************
-  It returns the request id of the outgoing packet (or 0 if pc->is_server).
+It returns the request id of the outgoing packet or 0 if the packet
+was no request (i.e. server sends packet).
 **************************************************************************/
 int send_packet_data(struct connection *pc, unsigned char *data, int len)
 {
@@ -103,7 +104,7 @@ int send_packet_data(struct connection *pc, unsigned char *data, int len)
   freelog(BASIC_PACKET_LOG_LEVEL, "sending packet type=%s(%d) len=%d",
 	  get_packet_name(data[2]), data[2], len);
 
-  if (!pc->is_server) {
+  if (!is_server) {
     pc->client.last_request_id_used =
 	get_next_request_id(pc->client.last_request_id_used);
     result = pc->client.last_request_id_used;
@@ -453,7 +454,8 @@ void *get_packet_from_connection(struct connection *pc,
     packets_stats[packet_type].size += size;
 
     packet_counter++;
-    if (packet_counter % 100 == 0) {
+    if ((is_server && (packet_counter % 10 == 0))
+	|| (!is_server && (packet_counter % 1000 == 0))) {
       int i, sum = 0;
 
       freelog(LOG_NORMAL, "Received packets:");

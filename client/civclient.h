@@ -59,15 +59,11 @@ bool client_is_observer(void);
 void real_timer_callback(void);
 bool can_client_issue_orders(void);
 bool can_client_change_view(void);
-bool can_meet_with_player(const struct player *pplayer);
-bool can_intel_with_player(const struct player *pplayer);
+bool can_meet_with_player(struct player *pplayer);
+bool can_intel_with_player(struct player *pplayer);
 
 void client_game_init(void);
 void client_game_free(void);
 void ui_exit(void);
-
-/* Set in GUI code. */
-extern const char * const gui_character_encoding;
-extern const bool gui_use_transliteration;
 
 #endif  /* FC__CIVCLIENT_H */

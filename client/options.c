@@ -52,7 +52,6 @@ char default_sound_plugin_name[512] = "\0";
 
 /** Local Options: **/
 
-bool save_options_on_exit = TRUE;
 bool solid_color_behind_units = FALSE;
 bool sound_bell_at_new_turn = FALSE;
 int  smooth_move_unit_msec = 30;
@@ -78,130 +77,37 @@ bool show_task_icons = TRUE;
 bool update_city_text_in_refresh_tile = TRUE;
 
 static client_option common_options[] = {
-  GEN_BOOL_OPTION(save_options_on_exit,
-		  N_("Save the options when exiting the game"),
-		  N_("If this option is selected, options will be saved "
-		     "automatically when you exit Freeciv."),
-		  COC_MISCELLANEOUS),
-  GEN_STR_OPTION(default_user_name,
-		 N_("Default player's login name"),
-		 N_("This is the default login username that will be used "
-		    "in the connection dialogs or with the -a command-line "
-		    "parameter."),
-		 COC_MISCELLANEOUS, NULL, NULL),
-  GEN_STR_OPTION(default_server_host,
-		 N_("Default server"),
-		 N_("This is the default server hostname that will be used "
-		    "in the connection dialogs or with the -a command-line "
-		    "parameter."),
-		 COC_MISCELLANEOUS, NULL, NULL),
-  GEN_INT_OPTION(default_server_port,
-		 N_("Default server's port"),
-		 N_("This is the default server port that will be used "
-		    "in the connection dialogs or with the -a command-line "
-		    "parameter."),
-		 COC_MISCELLANEOUS),
-  GEN_STR_OPTION(default_metaserver,
-		 N_("Default metaserver"),
-		 N_("The metaserver is a host that the client contacts to "
-		    "find out about games on the internet.  Don't change "
-		    "this from its default value unless you know what "
-		    "you're doing."),
-		 COC_MISCELLANEOUS, NULL, NULL),
-  GEN_STR_OPTION(default_sound_set_name,
-		 N_("Default name of sound set"),
-		 N_("This is the sound set that will be used.  Changing "
-		    "this is the same as using the -S command-line "
-		    "parameter."),
-		 COC_MISCELLANEOUS, get_soundset_list, NULL),
-  GEN_STR_OPTION(default_sound_plugin_name,
-		 N_("Default sound plugin"),
-		 N_("If you have a problem with sound, try changing the "
-		    "sound plugin.  The new plugin won't take effect until "
-		    "you restart Freeciv.  Changing this is the same as "
-		    "using the -P command-line option."),
-		 COC_MISCELLANEOUS, get_soundplugin_list, NULL),
-  GEN_STR_OPTION(default_tileset_name, N_("Tileset"),
-		 N_("By changing this option you change the active tileset. "
-		    "This is the same as using the -t command-line "
-		    "parameter."),
-		 COC_MISCELLANEOUS,
+  GEN_STR_OPTION(default_user_name,        N_("Default player's login name"),
+		 NULL, NULL), 
+  GEN_STR_OPTION(default_server_host,       N_("Default server"),
+		 NULL, NULL),
+  GEN_INT_OPTION(default_server_port,       N_("Default server's port")),
+  GEN_STR_OPTION(default_metaserver,        N_("Default metaserver"),
+		 NULL, NULL),
+  GEN_STR_OPTION(default_sound_set_name,    N_("Default name of sound set"),
+		 get_soundset_list, NULL),
+  GEN_STR_OPTION(default_sound_plugin_name, N_("Default sound plugin"),
+		 get_soundplugin_list, NULL),
+  GEN_STR_OPTION(default_tileset_name,     N_("Tileset"),
 		 get_tileset_list, tilespec_reread_callback),
 
-  GEN_BOOL_OPTION(solid_color_behind_units,
-		  N_("Solid unit background color"),
-		  N_("Setting this option will cause units on the map "
-		     "view to be drawn with a solid background color "
-		     "instead of the flag backdrop."),
-		  COC_GRAPHICS),
-  GEN_BOOL_OPTION(sound_bell_at_new_turn, N_("Sound bell at new turn"),
-		  N_("Set this option to have a \"bell\" event be generated "
-		     "at the start of a new turn.  You can control the "
-		     "behavior of the \"bell\" event by editing the message "
-		     "options."),
-		  COC_INTERFACE),
+  GEN_BOOL_OPTION(solid_color_behind_units, N_("Solid unit background color")),
+  GEN_BOOL_OPTION(sound_bell_at_new_turn,   N_("Sound bell at new turn")),
   GEN_INT_OPTION(smooth_move_unit_msec,
-		 N_("Unit movement animation time (milliseconds)"),
-		 N_("This option controls how long unit \"animation\" takes "
-		    "when a unit moves on the map view.  Set it to 0 to "
-		    "disable animation entirely."),
-		 COC_GRAPHICS),
+		 N_("Unit movement animation time (milliseconds)")),
   GEN_INT_OPTION(smooth_center_slide_msec,
-		 N_("Mapview recentering time (milliseconds)"),
-		 N_("When the map view is recentered, it will slide "
-		    "smoothly over the map to its new position.  This "
-		    "option controls how long this slide lasts.  Set it to "
-		    "0 to disable mapview sliding entirely."),
-		 COC_GRAPHICS),
-  GEN_BOOL_OPTION(do_combat_animation, N_("Show combat animation"),
-		  N_("If this option is disabled them combat animation "
-		     "between units on the mapview will be turned off."),
-		  COC_GRAPHICS),
-  GEN_BOOL_OPTION(ai_popup_windows, N_("Popup dialogs in AI Mode"),
-		  N_("If this option is disabled then when watching an AI "
-		     "player, dialog windows will not be popped up like "
-		     "normal."),
-		  COC_INTERFACE),
-  GEN_BOOL_OPTION(ai_manual_turn_done, N_("Manual Turn Done in AI Mode"),
-		  N_("If this option is disabled, then you will not have "
-		     "to press the turn done button manually when watching "
-		     "an AI player."),
-		  COC_INTERFACE),
-  GEN_BOOL_OPTION(auto_center_on_unit,      N_("Auto Center on Units"),
-		  N_("Set this option to have the active unit centered "
-		     "automatically when the unit focus changes."),
-		  COC_INTERFACE),
-  GEN_BOOL_OPTION(auto_center_on_combat,    N_("Auto Center on Combat"),
-		  N_("Set this option to have any combat be centered "
-		     "automatically.  Disabled this will speed up the time "
-		     "between turns but may cause you to miss combat "
-		     "entirely."),
-		  COC_INTERFACE),
-  GEN_BOOL_OPTION(wakeup_focus,             N_("Focus on Awakened Units"),
-		  N_("Set this option to have newly awoken units be "
-		     "focused automatically."),
-		  COC_INTERFACE),
-  GEN_BOOL_OPTION(center_when_popup_city,   N_("Center map when Popup city"),
-		  N_("If this option is set then when a city dialog is "
-		     "popped up, the city will be centered automatically."),
-		  COC_INTERFACE),
-  GEN_BOOL_OPTION(concise_city_production,  N_("Concise City Production"),
-		  N_("Set this option to make the city production (as shown "
-		     "in the city dialog) to be more compact."),
-		  COC_INTERFACE),
-  GEN_BOOL_OPTION(auto_turn_done,           N_("End Turn when done moving"),
-		  N_("If this option is set then when all your units are "
-		     "done moving the turn will be ended for you "
-		     "automatically."),
-		  COC_INTERFACE),
-  GEN_BOOL_OPTION(ask_city_name,            N_("Prompt for city names"),
-		  N_("If this option is disabled then city names will be "
-		     "chosen for you automatically by the server."),
-		  COC_INTERFACE),
-  GEN_BOOL_OPTION(popup_new_cities, N_("Pop up city dialog for new cities"),
-		  N_("If this option is set then a newly-founded city will "
-		     "havce its city dialog popped up automatically."),
-		  COC_INTERFACE),
+		 N_("Mapview recentering time (milliseconds)")),
+  GEN_BOOL_OPTION(do_combat_animation,      N_("Show combat animation")),
+  GEN_BOOL_OPTION(ai_popup_windows,         N_("Popup dialogs in AI Mode")),
+  GEN_BOOL_OPTION(ai_manual_turn_done,      N_("Manual Turn Done in AI Mode")),
+  GEN_BOOL_OPTION(auto_center_on_unit,      N_("Auto Center on Units")),
+  GEN_BOOL_OPTION(auto_center_on_combat,    N_("Auto Center on Combat")),
+  GEN_BOOL_OPTION(wakeup_focus,             N_("Focus on Awakened Units")),
+  GEN_BOOL_OPTION(center_when_popup_city,   N_("Center map when Popup city")),
+  GEN_BOOL_OPTION(concise_city_production,  N_("Concise City Production")),
+  GEN_BOOL_OPTION(auto_turn_done,           N_("End Turn when done moving")),
+  GEN_BOOL_OPTION(ask_city_name,            N_("Prompt for city names")),
+  GEN_BOOL_OPTION(popup_new_cities,         N_("Pop up city dialog for new cities")),
 };
 #undef GEN_INT_OPTION
 #undef GEN_BOOL_OPTION
@@ -569,6 +475,11 @@ void load_general_options(void)
       secfile_lookup_int_default(&sf, messages_where[i],
 				 "%s.message_where_%02d", prefix, i);
   }
+  for (i = 1; i < num_city_report_spec(); i++) {
+    bool *ip = city_report_spec_show_ptr(i);
+    *ip = secfile_lookup_bool_default(&sf, *ip, "%s.city_report_%s", prefix,
+				     city_report_spec_tagname(i));
+  }
   
   for(i = 1; i < num_player_dlg_columns; i++) {
     bool *show = &(player_dlg_columns[i].show);
@@ -619,14 +530,6 @@ void load_ruleset_specific_options(void)
                                       "worklists.worklist%d.name", i));
     load_global_worklist(&sf, "worklists.worklist%d", i, 
                          &(game.player_ptr->worklists[i]));
-  }
-
-  /* Load city report columns (which include some ruleset data). */
-  for (i = 1; i < num_city_report_spec(); i++) {
-    bool *ip = city_report_spec_show_ptr(i);
-
-    *ip = secfile_lookup_bool_default(&sf, *ip, "client.city_report_%s",
-				     city_report_spec_tagname(i));
   }
 
   section_file_free(&sf);
@@ -732,15 +635,16 @@ static void load_cma_preset(struct section_file *file, int inx)
 {
   struct cm_parameter parameter;
   const char *name;
+  int i;
 
   name = secfile_lookup_str_default(file, "preset", 
 				    "cma.preset%d.name", inx);
-  output_type_iterate(i) {
+  for (i = 0; i < NUM_STATS; i++) {
     parameter.minimal_surplus[i] =
 	secfile_lookup_int_default(file, 0, "cma.preset%d.minsurp%d", inx, i);
     parameter.factor[i] =
 	secfile_lookup_int_default(file, 0, "cma.preset%d.factor%d", inx, i);
-  } output_type_iterate_end;
+  }
   parameter.require_happy =
       secfile_lookup_bool_default(file, FALSE, "cma.preset%d.reqhappy", inx);
   parameter.happy_factor =
@@ -758,13 +662,15 @@ static void save_cma_preset(struct section_file *file, char *name,
 			    const struct cm_parameter *const pparam,
 			    int inx)
 {
+  int i;
+
   secfile_insert_str(file, name, "cma.preset%d.name", inx);
-  output_type_iterate(i) {
+  for (i = 0; i < NUM_STATS; i++) {
     secfile_insert_int(file, pparam->minimal_surplus[i],
 		       "cma.preset%d.minsurp%d", inx, i);
     secfile_insert_int(file, pparam->factor[i],
 		       "cma.preset%d.factor%d", inx, i);
-  } output_type_iterate_end;
+  }
   secfile_insert_bool(file, pparam->require_happy,
 		      "cma.preset%d.reqhappy", inx);
   secfile_insert_int(file, pparam->happy_factor,
@@ -818,10 +724,8 @@ static void load_global_worklist(struct section_file *file, const char *path,
         secfile_lookup_int_default(file, 0, idpath,wlinx, i);
 
       if ((pwl->wlefs[i] <= WEF_END) || (pwl->wlefs[i] >= WEF_LAST) ||
-          (pwl->wlefs[i] == WEF_UNIT
-	   && (pwl->wlids[i] < 0 || pwl->wlids[i] >= game.num_unit_types))
-	   || ((pwl->wlefs[i] == WEF_IMPR)
-	       && !improvement_exists(pwl->wlids[i]))) {
+          ((pwl->wlefs[i] == WEF_UNIT) && !unit_type_exists(pwl->wlids[i])) ||
+          ((pwl->wlefs[i] == WEF_IMPR) && !improvement_exists(pwl->wlids[i]))) {
         pwl->wlefs[i] = WEF_END;
         pwl->wlids[i] = 0;
         end = TRUE;

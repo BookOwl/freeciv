@@ -45,29 +45,26 @@ static int get_tile_value(struct tile *ptile)
   int value, irrig_bonus, mine_bonus;
 
   /* Give one point for each food / shield / trade produced. */
-  value = 0;
-  output_type_iterate(o) {
-    value += get_output_tile(ptile, o);
-  } output_type_iterate_end;
+  value = (get_food_tile(ptile)
+	   + get_shields_tile(ptile)
+	   + get_trade_tile(ptile));
 
   old_terrain = ptile->terrain;
   old_special = ptile->special;
 
   map_set_special(ptile, S_ROAD);
   map_irrigate_tile(ptile);
-  irrig_bonus = -value;
-  output_type_iterate(o) {
-    irrig_bonus += get_output_tile(ptile, o);
-  } output_type_iterate_end;
+  irrig_bonus = (get_food_tile(ptile)
+		 + get_shields_tile(ptile)
+		 + get_trade_tile(ptile)) - value;
 
   ptile->terrain = old_terrain;
   ptile->special = old_special;
   map_set_special(ptile, S_ROAD);
   map_mine_tile(ptile);
-  mine_bonus = -value;
-  output_type_iterate(o) {
-    mine_bonus += get_output_tile(ptile, o);
-  } output_type_iterate_end;
+  mine_bonus = (get_food_tile(ptile)
+		+ get_shields_tile(ptile)
+		+ get_trade_tile(ptile)) - value;
 
   ptile->terrain = old_terrain;
   ptile->special = old_special;
@@ -186,7 +183,7 @@ void create_start_positions(enum start_mode mode)
   struct tile *ptile;
   int k, sum;
   struct start_filter_data data;
-  int tile_value_aux[MAP_INDEX_SIZE], tile_value[MAP_INDEX_SIZE];
+  int tile_value_aux[MAX_MAP_INDEX], tile_value[MAX_MAP_INDEX];
   int min_goodies_per_player = 2000;
   int total_goodies = 0;
   /* this is factor is used to maximize land used in extreme little maps */

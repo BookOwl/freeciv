@@ -125,8 +125,7 @@ static void place_starting_unit(struct tile *ptile, struct player *pplayer,
       utype = get_role_unit(role, 0);
     }
 
-    /* We cannot currently handle sea units as start units.
-     * TODO: remove this code block when we can. */
+    /* We cannot currently handle sea units as start units. */
     if (unit_types[utype].move_type == SEA_MOVING) {
       freelog(LOG_ERROR, _("Sea moving start units are not yet supported, "
                            "%s not created."), unit_types[utype].name);
@@ -248,6 +247,9 @@ void init_new_game(void)
       place_starting_unit(ptile, pplayer, game.start_units[i]);
     }
   } players_iterate_end;
+
+  /* Initialise list of improvements with world-wide equiv_range */
+  improvement_status_init(game.improvements, ARRAY_SIZE(game.improvements));
 }
 
 /**************************************************************************
@@ -323,6 +325,7 @@ void send_game_info(struct conn_list *dest)
   ginfo.diplomacy = game.diplomacy;
   ginfo.techpenalty = game.techpenalty;
   ginfo.foodbox = game.foodbox;
+  ginfo.civstyle = game.civstyle;
   ginfo.spacerace = game.spacerace;
   ginfo.unhappysize = game.unhappysize;
   ginfo.angrycitizen = game.angrycitizen;
@@ -333,7 +336,7 @@ void send_game_info(struct conn_list *dest)
   for (i = 0; i < A_LAST /*game.num_tech_types */ ; i++)
     ginfo.global_advances[i] = game.global_advances[i];
   for (i = 0; i < B_LAST /*game.num_impr_types */ ; i++)
-    ginfo.great_wonders[i] = game.great_wonders[i];
+    ginfo.global_wonders[i] = game.global_wonders[i];
   /* the following values are computed every
      time a packet_game_info packet is created */
   if (game.timeout != 0) {
@@ -442,6 +445,10 @@ static const char *get_challenge_fullname(struct connection *pc)
 **************************************************************************/
 const char *new_challenge_filename(struct connection *pc)
 {
+  if (!has_capability("new_hack", pc->capability)) {
+    return "";
+  }
+
   gen_challenge_filename(pc);
   return get_challenge_filename(pc);
 }
@@ -458,6 +465,11 @@ void handle_single_want_hack_req(struct connection *pc,
   struct section_file file;
   char *token = NULL;
   bool you_have_hack = FALSE;
+
+  if (!has_capability("new_hack", pc->capability)) {
+    dsend_packet_single_want_hack_reply(pc, FALSE);
+    return ;
+  }
 
   if (section_file_load_nodup(&file, get_challenge_fullname(pc))) {
     token = secfile_lookup_str_default(&file, NULL, "challenge.token");
