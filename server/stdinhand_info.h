@@ -4,21 +4,18 @@
    it under the terms of the GNU General Public License as published by
    the Free Software Foundation; either version 2, or (at your option)
    any later version.
-                                                                                                                             
+                                                                                
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
+#ifndef FC__STDINHAND_C_H
+#define FC__STDINHAND_C_H
 
-#include "common_types.h"
+bool sset_is_changeable(int idx);
 
-struct tr_string_data;
+#define SSET_MAX_LEN  16             /* max setting name length (plus nul) */
+#define TOKEN_DELIMITERS " \t\n,"
 
-void tr_init(void);
-void tr_draw_string(struct osda *target, enum be_draw_type draw_type,
-		    const struct ct_point *position,
-		    const struct ct_string *string);
-void tr_string_get_size(struct ct_size *size, const struct ct_string *string);
-void tr_prepare_string(struct ct_string *string);
-void tr_free_string(struct ct_string *string);
+#endif
