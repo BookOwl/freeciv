@@ -56,6 +56,8 @@
 #include "commands.h"
 #include "settings.h"
 
+#include "stdinhand_info.h"
+
 enum manuals {
   MANUAL_SETTINGS,
   MANUAL_COMMANDS,

@@ -43,7 +43,7 @@ be_color be_get_color(int red, int green, int blue)
 }
 
 /*************************************************************************
-  Set a pixel in a given buffer (dest) to a given color (color).
+  ...
 *************************************************************************/
 static void set_color(be_color color, unsigned char *dest)
 {
@@ -53,7 +53,7 @@ static void set_color(be_color color, unsigned char *dest)
 }
 
 /*************************************************************************
-  Transform drawing type to blitting mask.
+  ...
 *************************************************************************/
 static unsigned char get_mask(enum be_draw_type draw_type)
 {
@@ -68,9 +68,13 @@ static unsigned char get_mask(enum be_draw_type draw_type)
 }
 
 /*************************************************************************
-  Will copy all pixels which have a mask != MASK_UNKNOWN from src to dest.
-  mask is src.
+ Will copy all pixels which have a mask != 0 from src to dest.
+ mask is src.
+
+  Two versions of image_blit_masked will follow. The first is the
+  vanilla one. The other is a testbed for optimizations.
 *************************************************************************/
+#if 1
 static void image_blit_masked(const struct ct_size *size,
 			      const struct image *src,
 			      const struct ct_point *src_pos,
@@ -93,7 +97,7 @@ static void image_blit_masked(const struct ct_size *size,
     IMAGE_CHECK(dest, dest_pos->x, dest_y);
 
     for (x = 0; x < width; x++) {
-      if (psrc[3] != MASK_UNKNOWN) {
+      if (psrc[3] != 0) {
 	memcpy(pdest, psrc, 4);
       }
       psrc += 4;
@@ -101,11 +105,135 @@ static void image_blit_masked(const struct ct_size *size,
     }
   }
 }
+#else
+#define DUFFS_LOOP8(pixel_copy_increment, width)			\
+{ int n = (width+7)/8;							\
+	switch (width & 7) {						\
+	case 0: do {	pixel_copy_increment;				\
+	case 7:		pixel_copy_increment;				\
+	case 6:		pixel_copy_increment;				\
+	case 5:		pixel_copy_increment;				\
+	case 4:		pixel_copy_increment;				\
+	case 3:		pixel_copy_increment;				\
+	case 2:		pixel_copy_increment;				\
+	case 1:		pixel_copy_increment;				\
+		} while ( --n > 0 );					\
+	}								\
+}
+/* 4-times unrolled loop */
+#define DUFFS_LOOP4(pixel_copy_increment, width)			\
+{ int n = (width+3)/4;							\
+	switch (width & 3) {						\
+	case 0: do {	pixel_copy_increment;				\
+	case 3:		pixel_copy_increment;				\
+	case 2:		pixel_copy_increment;				\
+	case 1:		pixel_copy_increment;				\
+		} while ( --n > 0 );					\
+	}								\
+}
+#define rdtscll(val) __asm__ __volatile__ ("rdtsc" : "=A" (val))
+#define PREFETCH(x) __asm__ __volatile__ ("prefetchnta %0": : "m"(*(char *)(x)))
+static void image_blit_masked(const struct ct_size *size,
+			      const struct image *src,
+			      const struct ct_point *src_pos,
+			      struct image *dest,
+			      const struct ct_point *dest_pos)
+{
+  int y;
+  int width = size->width;
+  unsigned long long start, end;
+  static unsigned long long total_clocks = 0, total_pixels = 0;
+  static int total_blits = 0;//, total_solid = 0;
+
+  rdtscll(start);
+
+  for (y = 0; y < size->height; y++) {
+    int src_y = y + src_pos->y;
+    unsigned char *psrc = IMAGE_GET_ADDRESS(src, src_pos->x, src_y);
+
+    int dest_y = y + dest_pos->y;
+    unsigned char *pdest = IMAGE_GET_ADDRESS(dest, dest_pos->x, dest_y);
+
+    /*
+    PREFETCH(psrc);
+    PREFETCH(psrc + 16);
+    PREFETCH(psrc + 32);
+    PREFETCH(psrc + 64);
+    */
+
+#if 1
+    {
+	int x;
+
+    for (x = 0; x < width; x++) {
+      switch (0) {
+      case 0:
+	if (psrc[3] != 0) {
+	  memcpy(pdest, psrc, 4);
+	}
+	break;
+
+      case 1:
+	{
+	  unsigned int t = *((unsigned int *) psrc);
+	  unsigned int *tp = (unsigned int *) pdest;
+
+	  if ((t & 0xff000000) != 0) {
+	    *tp = t;
+	  }
+	}
+	break;
+
+      case 2:
+	{
+	  unsigned int t = *((unsigned int *) psrc);
+	  unsigned int *tp = (unsigned int *) pdest;
+	  unsigned int s = *tp;
+
+	  if ((t & 0xff000000) != 0) {
+	    s = t;
+	  }
+	  *tp = s;
+	}
+	break;
+      }
+
+      psrc += 4;
+      pdest += 4;
+    }
+    }
+#else
+    DUFFS_LOOP4( {
+		if (psrc[3] != 0) {
+		    memcpy(pdest, psrc, 4);
+		}
+		psrc += 4; 
+		pdest += 4;
+    }
+		 , width);
+#endif
+  }
+  rdtscll(end);
+  total_clocks += (end - start);
+  total_pixels += (size->width * size->height);
+  total_blits++;
+  if((total_blits%1000)==0) {
+      printf("%f clocks per pixel\n",(float)total_clocks/total_pixels);
+  }
+
+  /*if (trans == 0) {
+    total_solid++;
+  }
+  */
+  /* printf("%f solid blits\n",(float)total_solid/total_blits); */
+  /* printf("%d transparent pixel vs %d\n",trans,non_trans); */
+}
+#endif
 
 /*************************************************************************
   Will copy all pixels which have a mask == MASK_ALPHA from src to
   dest with transparency.  Will copy all pixels which have a mask 
-  == MASK_OPAQUE from src to dest without transparency.
+  == MASK_OPAQUE from src to dest.
 *************************************************************************/
 static void image_blit_masked_trans(const struct ct_size *size,
 				    const struct image *src,
@@ -126,7 +254,7 @@ static void image_blit_masked_trans(const struct ct_size *size,
 
       IMAGE_CHECK(src, src_x, src_y);
 
-      if (mask_value != MASK_UNKNOWN) {
+      if (mask_value != 0) {
 	int dest_x = x + dest_pos->x;
 	int dest_y = y + dest_pos->y;
 
@@ -158,9 +286,7 @@ static void image_blit_masked_trans(const struct ct_size *size,
 }
 
 /*************************************************************************
-  Make one image inherit the blitting mask of another.
-
-  ( Why isn't this function here? It does not seem to be necessary. )
+  ...
 *************************************************************************/
 static void update_masks(const struct ct_size *size,
 			 const struct image *src,
@@ -221,13 +347,22 @@ static void clip_two_regions(const struct image *dest,
   real_dest_pos.x += dx;
   real_dest_pos.y += dy;
 
+  /*
+    printf("  after clip:\n");
+    printf("    size=(%dx%d)\n", real_size.width, real_size.height);
+    printf("     src=(%d,%d) (%dx%d)\n", real_src_pos.x, real_src_pos.y,
+	   src->width, src->height);
+    printf("    dest=(%d,%d) (%dx%d)\n", real_dest_pos.x, real_dest_pos.y,
+	   dest->width, dest->height);
+  */
+
   *size=real_size;
   *src_pos=real_src_pos;
   *dest_pos=real_dest_pos;
 }
 
 /*************************************************************************
-  Changes the mask in dest for all != MASK_UNKNOWN src masks.
+  Changes the mask in dest for all !=0 src masks.
 *************************************************************************/
 static void set_mask_masked(const struct ct_size *size,
 			    const struct image *src,
@@ -252,7 +387,7 @@ static void set_mask_masked(const struct ct_size *size,
     IMAGE_CHECK(dest, real_dest_pos.x, y + real_dest_pos.y);
 
     for (x = 0; x < real_size.width; x++) {
-      if (psrc[3] != MASK_UNKNOWN) {
+      if (psrc[3] != 0) {
 	pdest[3] = mask;
       }
       psrc+=4;
@@ -262,8 +397,7 @@ static void set_mask_masked(const struct ct_size *size,
 }
 
 /*************************************************************************
-  Blit one image onto another, using transparency value given on all
-  pixels that have alpha mask set.
+  ...
 *************************************************************************/
 static void image_copy(struct image *dest,
 		       struct image *src,
@@ -285,8 +419,7 @@ static void image_copy(struct image *dest,
 }
 
 /*************************************************************************
-  Blit one osda onto another, using transparency value given on all 
-  pixels that have alpha mask set. dest_pos and src_pos can be NULL.
+  dest_pos and src_pos can be NULL
 *************************************************************************/
 void be_copy_osda_to_osda(struct osda *dest,
 			  struct osda *src,
@@ -315,7 +448,7 @@ void be_copy_osda_to_osda(struct osda *dest,
 }
 
 /*************************************************************************
-  See be_draw_bitmap() below.
+  ...
 *************************************************************************/
 static void draw_mono_bitmap(struct image *image,
 			     enum be_draw_type draw_type,
@@ -346,7 +479,7 @@ static void draw_mono_bitmap(struct image *image,
 }
 
 /*************************************************************************
-  See be_draw_bitmap() below.
+  ...
 *************************************************************************/
 static void draw_alpha_bitmap(struct image *image,
 			      enum be_draw_type draw_type,
@@ -384,8 +517,7 @@ static void draw_alpha_bitmap(struct image *image,
 }
 
 /*************************************************************************
-  Draw the given bitmap (ie a 1bpp pixmap) on the given osda in the given
-  color and at the givne position, using the given drawing type.
+  ...
 *************************************************************************/
 void be_draw_bitmap(struct osda *target, enum be_draw_type draw_type,
 		    be_color color,
@@ -403,7 +535,7 @@ void be_draw_bitmap(struct osda *target, enum be_draw_type draw_type,
 }
 
 /*************************************************************************
-  Allocate and initialize an osda (off-screen drawing area).
+  ...
 *************************************************************************/
 struct osda *be_create_osda(int width, int height)
 {
@@ -419,7 +551,7 @@ struct osda *be_create_osda(int width, int height)
 }
 
 /*************************************************************************
-  Free an allocated osda.
+  ...
 *************************************************************************/
 void be_free_osda(struct osda *osda)
 {
@@ -432,8 +564,7 @@ void be_free_osda(struct osda *osda)
 }
 
 /*************************************************************************
-  Set the alpha mask of pixels in a given region of an image.  The alpha
-  mask can be MASK_UNKNOWN, MASK_ALPHA or MASK_OPAQUE.
+  ...
 *************************************************************************/
 void image_set_mask(const struct image *image, const struct ct_rect *rect,
 		    unsigned char mask)
@@ -449,14 +580,12 @@ void image_set_mask(const struct image *image, const struct ct_rect *rect,
 }
 
 /*************************************************************************
-  Make all pixels in the given rectangle on the given osda to be drawn
-  transparently if an image we draw on this osda contains MASK_ALPHA
-  pixels in this region.
+  ...
 *************************************************************************/
 void be_set_transparent(struct osda *osda, const struct ct_rect *rect)
 {
-  image_set_mask(osda->image, rect, MASK_UNKNOWN);
-  osda->has_transparent_pixels = TRUE; /* probably */
+  image_set_mask(osda->image, rect, 0);
+  osda->has_transparent_pixels = TRUE;
 }
 
 
@@ -464,7 +593,7 @@ void be_set_transparent(struct osda *osda, const struct ct_rect *rect)
 
 
 /*************************************************************************
-  Draw an empty rectangle in given osda with given drawing type.
+  ...
 *************************************************************************/
 void be_draw_rectangle(struct osda *target, enum be_draw_type draw_type,
 		       const struct ct_rect *spec,
@@ -490,7 +619,7 @@ void be_draw_rectangle(struct osda *target, enum be_draw_type draw_type,
 }
 
 /*************************************************************************
-  Draw a vertical line (only).
+  ...
 *************************************************************************/
 static void draw_vline(struct image *image, unsigned char *src,
 		       int x, int y0, int y1, int line_width, bool dashed)
@@ -513,7 +642,7 @@ static void draw_vline(struct image *image, unsigned char *src,
 }
 
 /*************************************************************************
-  Draw a horisontal line (only).
+  ...
 *************************************************************************/
 static void draw_hline(struct image *image, unsigned char *src,
 		       int y, int x0, int x1, int line_width, bool dashed)
@@ -536,7 +665,7 @@ static void draw_hline(struct image *image, unsigned char *src,
 }
 
 /*************************************************************************
-  Draw any line.
+  ...
 *************************************************************************/
 static void draw_line(struct image *image, unsigned char *src,
 		      int x1, int y1, int x2, int y2, int line_width,
@@ -586,7 +715,7 @@ static void draw_line(struct image *image, unsigned char *src,
 }
 
 /*************************************************************************
-  Draw a line in given osda with given drawing type.
+  ...
 *************************************************************************/
 void be_draw_line(struct osda *target, enum be_draw_type draw_type,
 		  const struct ct_point *start,
@@ -619,13 +748,16 @@ void be_draw_line(struct osda *target, enum be_draw_type draw_type,
     draw_hline(target->image, tmp, start2.y, MIN(start2.x, end2.x),
 	       MAX(start2.x, end2.x), line_width, dashed);
   } else {
+    assert(ct_point_in_rect(start, &bounds));
+    assert(ct_point_in_rect(end, &bounds));
+
     draw_line(target->image, tmp, start->x, start->y, end->x, end->y,
 	      line_width, dashed);
   }
 }
 
 /*************************************************************************
-  Fill a square region in given osda with given colour and drawing type.
+  ...
 *************************************************************************/
 void be_draw_region(struct osda *target, enum be_draw_type draw_type,
 		    const struct ct_rect *region, be_color color)
@@ -659,7 +791,7 @@ void be_draw_region(struct osda *target, enum be_draw_type draw_type,
 }
 
 /*************************************************************************
-  Return TRUE iff pixel in given osda is transparent or out of bounds.
+  ...
 *************************************************************************/
 bool be_is_transparent_pixel(struct osda *osda, const struct ct_point *pos)
 {
@@ -705,32 +837,39 @@ void be_draw_sprite(struct osda *target, enum be_draw_type draw_type,
 }
 
 /*************************************************************************
-  Write an image buffer to file.
+  ...
 *************************************************************************/
 void be_write_osda_to_file(struct osda *osda, const char *filename)
 {
   FILE *file;
-  unsigned char *line_buffer = malloc(3 * osda->image->width), *pout;
-  int x, y;
 
   file = fopen(filename, "w");
 
-  for (y = 0; y < osda->image->height; y++) {
-    pout = line_buffer;
+  fprintf(file, "P6\n");
+  fprintf(file, "%d %d\n", osda->image->width, osda->image->height);
+  fprintf(file, "255\n");
 
-    for (x = 0; x < osda->image->width; x++) {
-      IMAGE_CHECK(osda->image, x, y);
-      memcpy(pout, IMAGE_GET_ADDRESS(osda->image, x, y), 3);
-      pout += 3;
+  {
+    unsigned char *line_buffer = malloc(3 * osda->image->width), *pout;
+    int x, y;
+
+    for (y = 0; y < osda->image->height; y++) {
+      pout = line_buffer;
+
+      for (x = 0; x < osda->image->width; x++) {
+	IMAGE_CHECK(osda->image, x, y);
+	memcpy(pout, IMAGE_GET_ADDRESS(osda->image, x, y), 3);
+	pout += 3;
+      }
+      fwrite(line_buffer, 3 * osda->image->width, 1, file);
     }
-    fwrite(line_buffer, 3 * osda->image->width, 1, file);
+    free(line_buffer);
   }
-  free(line_buffer);
   fclose(file);
 }
 
 /*************************************************************************
-  Copy image buffer src to dest without doing any alpha-blending.
+  ...
 *************************************************************************/
 void image_copy_full(struct image *src, struct image *dest,
 		     struct ct_rect *region)
@@ -751,7 +890,7 @@ void image_copy_full(struct image *src, struct image *dest,
 }
 
 /*************************************************************************
-  Allocate and initialize an image struct.
+  ...
 *************************************************************************/
 struct image *image_create(int width, int height)
 {
@@ -770,7 +909,7 @@ struct image *image_create(int width, int height)
 }
 
 /*************************************************************************
-  Free an image struct.
+  ...
 *************************************************************************/
 void image_destroy(struct image *image)
 {
@@ -779,7 +918,7 @@ void image_destroy(struct image *image)
 }
 
 /*************************************************************************
-  Put size of osda into size.
+  ...
 *************************************************************************/
 void be_osda_get_size(struct ct_size *size, const struct osda *osda)
 {

@@ -11,7 +11,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Freeciv 1.15\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2004-10-04 22:03+0200\n"
+"POT-Creation-Date: 2004-10-06 18:07+0200\n"
 "PO-Revision-Date: 1999-09-13 10:22+0200\n"
 "Last-Translator: Genevieve Gracian <ggracian@free.fr>\n"
 "Language-Team: <freeciv-l10n-fr@yahoogroupes.fr>\n"
@@ -3072,7 +3072,7 @@ msgstr "(%d,%d) d'océan a été gagné sur la terre"
 msgid "Not reporting to the metaserver in this game."
 msgstr "Pas de rapport au métaserveur pour cette partie."
 
-#: server/meta.c:372
+#: server/meta.c:406
 #, c-format
 msgid "Metaserver: bad address: [%s:%d]."
 msgstr "Métaserveur: erreur d'adresse : [%s:%d]."
