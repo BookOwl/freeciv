@@ -31,10 +31,6 @@
    Modified to use rand_state struct by David Pfitzner <dwp@mso.anu.edu.au>
 *************************************************************************/
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <assert.h>
 
 #include "log.h"

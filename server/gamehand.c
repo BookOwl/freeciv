@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -37,17 +36,10 @@
 **************************************************************************/
 void init_new_game(void)
 {
-  static const char chars[] =
-      "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
   int i, j, x, y;
   int dx, dy;
   Unit_Type_id utype;
   int start_pos[MAX_NUM_PLAYERS]; /* indices into map.start_positions[] */
-
-  for (i = 0; i < sizeof(game.id) - 1; i++) {
-    game.id[i] = chars[myrand(sizeof(chars) - 1)];
-  }
-  game.id[i] = '\0';
 
   if (!map.fixed_start_positions) {
     /* except in a scenario which provides them,

@@ -46,5 +46,4 @@ files =
   "misc/space.spec",
   "misc/treaty.spec",
   "isotrident/nuke.spec",
-  "isotrident/cities.spec",
-  "isotrident/morecities.spec"
+  "isotrident/cities.spec"

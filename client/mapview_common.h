@@ -44,28 +44,27 @@ constant).
 void refresh_tile_mapcanvas(int x, int y, bool write_to_screen);
 enum color_std get_grid_color(int x1, int y1, int x2, int y2);
 
-bool get_canvas_xy(int map_x, int map_y, int *canvas_x, int *canvas_y);
-void get_map_xy(int canvas_x, int canvas_y, int *map_x, int *map_y);
+bool map_pos_to_canvas_pos(int map_x, int map_y,
+			  int *canvas_x, int *canvas_y,
+			  int map_view_topleft_map_x,
+			  int map_view_topleft_map_y,
+			  int map_view_pixel_width,
+			  int map_view_pixel_height);
+void canvas_pos_to_map_pos(int canvas_x, int canvas_y,
+			   int *map_x, int *map_y,
+			   int map_view_topleft_map_x,
+			   int map_view_topleft_map_y);
 
-void get_center_tile_mapcanvas(int *map_x, int *map_y);
 void base_center_tile_mapcanvas(int map_x, int map_y,
 				int *map_view_topleft_map_x,
 				int *map_view_topleft_map_y,
 				int map_view_map_width,
 				int map_view_map_height);
-
-void update_map_canvas_visible(void);
 				
 struct city *find_city_near_tile(int x, int y);
 
 void get_city_mapview_production(struct city *pcity,
                                  char *buf, size_t buf_len);
-void get_city_mapview_name_and_growth(struct city *pcity,
-				      char *name_buffer,
-				      size_t name_buffer_len,
-				      char *growth_buffer,
-				      size_t growth_buffer_len,
-				      enum color_std *grwoth_color);
 
 void queue_mapview_update(void);
 void unqueue_mapview_update(void);

@@ -11,10 +11,6 @@
    GNU General Public License for more details.
 ***********************************************************************/
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -45,7 +41,6 @@
 #include "unittools.h"
 
 #include "advmilitary.h"
-#include "aiair.h"
 #include "aicity.h"
 #include "aihand.h"
 #include "aitools.h"
@@ -629,19 +624,15 @@ static struct city *wonder_on_continent(struct player *pplayer, int cont)
 }
 
 /**************************************************************************
-  Return whether we should stay and defend a square, usually a city. Will
-  protect allied cities temporarily.
-
-  FIXME: We should check for fortresses here.
+Returns whether we stayed in the (eventual) city on the square to defend it.
 **************************************************************************/
-static bool stay_and_defend(struct unit *punit)
+static bool stay_and_defend_city(struct unit *punit)
 {
   struct city *pcity = map_get_city(punit->x, punit->y);
   bool has_defense = FALSE;
 
-  if (!pcity) {
-    return FALSE;
-  }
+  if (!pcity) return FALSE;
+  if (pcity->owner != punit->owner) return FALSE;
 
   unit_list_iterate(map_get_tile(pcity->x, pcity->y)->units, pdef) {
     if (assess_defense_unit(pcity, punit, FALSE) >= 0
@@ -656,7 +647,7 @@ static bool stay_and_defend(struct unit *punit)
     /* change homecity to this city */
     if (ai_unit_make_homecity(punit, pcity)) {
       /* Very important, or will not stay -- Syela */
-      ai_unit_new_role(punit, AIUNIT_DEFEND_HOME, -1, -1);
+      ai_unit_new_role(punit, AIUNIT_DEFEND_HOME);
       return TRUE;
     }
   }
@@ -760,15 +751,13 @@ static int stack_attack_value(int x, int y)
 }
 
 /*************************************************************************
-  Mark invasion possibilities of punit in the surrounding cities. The
+  Mark an invasion threat of punit in the surrounding cities. The
   given radius limites the area which is searched for cities. The
   center of the area is either the unit itself (dest == FALSE) or the
   destiniation of the current goto (dest == TRUE). The invasion threat
   is marked in pcity->ai.invasion via ORing the "which" argument (to
   tell attack from sea apart from ground unit attacks). Note that
   "which" should only have one bit set.
-
-  If dest == TRUE then a valid goto is presumed.
 **************************************************************************/
 static void invasion_funct(struct unit *punit, bool dest, int radius,
 			   int which)
@@ -1104,7 +1093,7 @@ static void ai_military_bodyguard(struct player *pplayer, struct unit *punit)
     y = acity->y; 
   } else { 
     /* should be impossible */
-    ai_unit_new_role(punit, AIUNIT_NONE, -1 , -1);
+    ai_unit_new_role(punit, AIUNIT_NONE);
     return;
   }
   
@@ -1126,7 +1115,7 @@ static void ai_military_bodyguard(struct player *pplayer, struct unit *punit)
       }
     } else {
       /* can't possibly get there to help */
-      ai_unit_new_role(punit, AIUNIT_NONE, -1, -1);
+      ai_unit_new_role(punit, AIUNIT_NONE);
     }
   } else {
     /* I had these guys set to just fortify, which is so dumb. -- Syela */
@@ -1145,8 +1134,7 @@ static void ai_military_bodyguard(struct player *pplayer, struct unit *punit)
 **************************************************************************/
 int find_beachhead(struct unit *punit, int dest_x, int dest_y, int *x, int *y)
 {
-  int ok, best = 0;
-  enum tile_terrain_type t;
+  int ok, t, best = 0;
 
   adjc_iterate(dest_x, dest_y, x1, y1) {
     ok = 0;
@@ -1364,6 +1352,9 @@ handled properly.  There should be a way to do it with dir_ok but I'm tired now.
   /* Dead unit shouldn't reach this point */
   assert(player_find_unit_by_id(pplayer, id) != NULL);
   
+  /* in case we need to change */
+  punit->ai.ai_role = AIUNIT_NONE; /* this can't be right -- Per */
+
   if (!same_pos(punit->x, punit->y, x, y)) {
     return 1;			/* moved */
   } else {
@@ -1490,9 +1481,9 @@ static void ai_military_findjob(struct player *pplayer,struct unit *punit)
     if (can_unit_do_activity(punit, ACTIVITY_PILLAGE)
 	&& is_land_barbarian(pplayer))
       /* land barbarians pillage */
-      ai_unit_new_role(punit, AIUNIT_PILLAGE, -1, -1);
+      ai_unit_new_role(punit, AIUNIT_PILLAGE);
     else
-      ai_unit_new_role(punit, AIUNIT_ATTACK, -1, -1);
+      ai_unit_new_role(punit, AIUNIT_ATTACK);
     return;
   }
 
@@ -1509,19 +1500,19 @@ static void ai_military_findjob(struct player *pplayer,struct unit *punit)
       punit->ai.ai_role = AIUNIT_ESCORT; /* do not use ai_unit_new_role() */
       return;
     } else {
-      ai_unit_new_role(punit, AIUNIT_NONE, -1, -1);
+      ai_unit_new_role(punit, AIUNIT_NONE);
     }
   }
 
   /* ok, what if I'm somewhere new? - ugly, kludgy code by Syela */
-  if (stay_and_defend(punit)) {
+  if (stay_and_defend_city(punit)) {
     UNIT_LOG(LOG_DEBUG, punit, "stays to defend city");
     return;
   }
 
   if (q > 0) {
     if (pcity->ai.urgency != 0) {
-      ai_unit_new_role(punit, AIUNIT_DEFEND_HOME, -1, -1);
+      ai_unit_new_role(punit, AIUNIT_DEFEND_HOME);
       return;
     }
   }
@@ -1547,27 +1538,27 @@ Therefore, it will consider becoming a bodyguard. -- Syela */
 
   }
   if (q > val && ai_fuzzy(pplayer, TRUE)) {
-    ai_unit_new_role(punit, AIUNIT_DEFEND_HOME, -1, -1);
+    ai_unit_new_role(punit, AIUNIT_DEFEND_HOME);
     return;
   }
   /* this is bad; riflemen might rather attack if val is low -- Syela */
   if (acity) {
-    ai_unit_new_role(punit, AIUNIT_ESCORT, acity->x, acity->y);
+    ai_unit_new_role(punit, AIUNIT_ESCORT);
     punit->ai.charge = acity->id;
     freelog(LOG_DEBUG, "%s@(%d, %d) going to defend %s@(%d, %d)",
 		  unit_type(punit)->name, punit->x, punit->y,
 		  acity->name, acity->x, acity->y);
   } else if (aunit) {
-    ai_unit_new_role(punit, AIUNIT_ESCORT, aunit->x, aunit->y);
+    ai_unit_new_role(punit, AIUNIT_ESCORT);
     punit->ai.charge = aunit->id;
     freelog(LOG_DEBUG, "%s@(%d, %d) going to defend %s@(%d, %d)",
 		  unit_type(punit)->name, punit->x, punit->y,
 		  unit_type(aunit)->name, aunit->x, aunit->y);
   } else if (ai_unit_attack_desirability(punit->type) != 0 ||
       (pcity && !same_pos(pcity->x, pcity->y, punit->x, punit->y)))
-     ai_unit_new_role(punit, AIUNIT_ATTACK, -1, -1);
+     ai_unit_new_role(punit, AIUNIT_ATTACK);
   else {
-    ai_unit_new_role(punit, AIUNIT_DEFEND_HOME, -1, -1); /* for default */
+    ai_unit_new_role(punit, AIUNIT_DEFEND_HOME); /* for default */
   }
 }
 
@@ -1583,7 +1574,7 @@ static void ai_military_gohome(struct player *pplayer,struct unit *punit)
 		 punit->id,punit->x,punit->y,pcity->x,pcity->y); 
     if (same_pos(punit->x, punit->y, pcity->x, pcity->y)) {
       freelog(LOG_DEBUG, "INHOUSE. GOTO AI_NONE(%d)", punit->id);
-      ai_unit_new_role(punit, AIUNIT_NONE, -1, -1);
+      ai_unit_new_role(punit, AIUNIT_NONE);
       /* aggro defense goes here -- Syela */
       punit = ai_military_rampage(punit, 2); /* 2 is better than pillage */
     } else {
@@ -1624,14 +1615,10 @@ int find_something_to_kill(struct player *pplayer, struct unit *punit, int *x, i
 p_a_w isn't called, and we end up not wanting ironclads and therefore never
 learning steam engine, even though ironclads would be very useful. -- Syela */
 
-  /*** Part 1: Calculate targets ***/
-  /* This horrible piece of code attempts to calculate the attractiveness of
-   * enemy cities as targets for our units, by checking how many units are
-   * going towards it or are near it already.
-   */
-
-  /* First calculate in nearby units */
+  /* this is horrible, but I need to do something like this somewhere. 
+     -- Syela */
   players_iterate(aplayer) {
+    /* AI will try to conquer only enemy cities. -- Nb */
     if (!pplayers_at_war(pplayer, aplayer)) {
       continue;
     }
@@ -1642,9 +1629,7 @@ learning steam engine, even though ironclads would be very useful. -- Syela */
     } city_list_iterate_end;
   } players_iterate_end;
 
-  /* Second, calculate in units on their way there, and mark targets for
-   * invasion */
-  unit_list_iterate(pplayer->units, aunit) {
+  unit_list_iterate(pplayer->units, aunit)
     if (aunit == punit) continue;
     if (aunit->activity == ACTIVITY_GOTO &&
        (pcity = map_get_city(aunit->goto_dest_x, aunit->goto_dest_y))) {
@@ -1667,14 +1652,13 @@ learning steam engine, even though ironclads would be very useful. -- Syela */
       if (aunit->activity == ACTIVITY_GOTO) invasion_funct(aunit, TRUE, 1, 1);
       invasion_funct(aunit, FALSE, 2, 1);
     }
-  } unit_list_iterate_end;
+  unit_list_iterate_end;
 /* end horrible initialization subroutine */
         
   pcity = map_get_city(punit->x, punit->y);
 
-  if (pcity && (punit->id == 0 || pcity->id == punit->homecity)) {
+  if (pcity && (punit->id == 0 || pcity->id == punit->homecity))
     unhap = ai_assess_military_unhappiness(pcity, get_gov_pplayer(pplayer));
-  }
 
   *x = punit->x; *y = punit->y;
   ab = unit_belligerence_basic(punit);
@@ -1978,7 +1962,7 @@ static void ai_military_attack(struct player *pplayer, struct unit *punit)
       return; /* we died */
     }
 
-    if (stay_and_defend(punit)) {
+    if (stay_and_defend_city(punit)) {
       /* This city needs defending, don't go outside! */
       UNIT_LOG(LOG_DEBUG, punit, "stayed to defend %s", 
                map_get_city(punit->x, punit->y)->name);
@@ -2271,14 +2255,26 @@ static void ai_manage_military(struct player *pplayer, struct unit *punit)
   if (punit->activity != ACTIVITY_IDLE)
     handle_unit_activity_request(punit, ACTIVITY_IDLE);
 
+  punit->ai.ai_role = AIUNIT_NONE; /* this can't be right -- Per */
   /* was getting a bad bug where a settlers caused a defender to leave home */
   /* and then all other supported units went on DEFEND_HOME/goto */
   ai_military_findjob(pplayer, punit);
 
+#ifdef DEBUG
+  {
+    struct city *pcity;
+    if (unit_flag(punit, F_FIELDUNIT)
+	&& (pcity = map_get_city(punit->x, punit->y))) {
+      freelog(LOG_DEBUG, "%s in %s is going to %d", unit_name(punit->type),
+	      pcity->name, punit->ai.ai_role);
+    }
+  }
+#endif
+
   switch (punit->ai.ai_role) {
   case AIUNIT_AUTO_SETTLER:
   case AIUNIT_BUILD_CITY:
-    ai_unit_new_role(punit, AIUNIT_NONE, -1, -1);
+    ai_unit_new_role(punit, AIUNIT_NONE);
     break;
   case AIUNIT_DEFEND_HOME:
     ai_military_gohome(pplayer, punit);
@@ -2304,14 +2300,18 @@ static void ai_manage_military(struct player *pplayer, struct unit *punit)
     assert(FALSE);
   }
 
-  /* If we are still alive, either sentry or fortify. */
   if ((punit = find_unit_by_id(id))) {
-    if (unit_list_find(&(map_get_tile(punit->x, punit->y)->units),
-        punit->ai.ferryboat)) {
-      handle_unit_activity_request(punit, ACTIVITY_SENTRY);
-    } else if (punit->activity == ACTIVITY_IDLE) {
-      handle_unit_activity_request(punit, ACTIVITY_FORTIFYING);
-    }
+    if (punit->activity != ACTIVITY_IDLE &&
+        punit->activity != ACTIVITY_GOTO)
+      handle_unit_activity_request(punit, ACTIVITY_IDLE); 
+
+    if (punit->moves_left > 0) {
+      if (unit_list_find(&(map_get_tile(punit->x, punit->y)->units),
+          punit->ai.ferryboat))
+        handle_unit_activity_request(punit, ACTIVITY_SENTRY);
+      else 
+        handle_unit_activity_request(punit, ACTIVITY_FORTIFYING);
+    } /* better than doing nothing */
   }
 }
 
@@ -2389,9 +2389,6 @@ static void ai_manage_unit(struct player *pplayer, struct unit *punit)
     return;
   } else if (get_transporter_capacity(punit) > 0) {
     ai_manage_ferryboat(pplayer, punit);
-    return;
-  } else if (is_air_unit(punit)) {
-    ai_manage_airunit(pplayer, punit);
     return;
   } else if (is_military_unit(punit)) {
     if (punit->moves_left == 0) return; /* can't do anything with no moves */
@@ -2596,8 +2593,10 @@ static void ai_manage_diplomat(struct player *pplayer, struct unit *pdiplomat)
       city_list_iterate(aplayer->cities, acity)
 	if (handicap && !map_get_known(acity->x, acity->y, pplayer)) continue;
 	if (continent != map_get_continent(acity->x, acity->y)) continue;
+	city_incite_cost(acity);
 	/* figure our incite cost */
-	oic = city_incite_cost(pplayer, acity);
+	oic = acity->incite_revolt_cost;
+	if (pplayer->player_no == acity->original) oic = oic / 2;
 	rmd=real_map_distance(pdiplomat->x, pdiplomat->y, acity->x, acity->y);
 	if (!ctarget || (dist > rmd)) {
 	  if (!has_emb || acity->steal == 0 || (oic < 

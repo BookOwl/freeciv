@@ -37,22 +37,20 @@
 
 #define BUFFER_SIZE             64
 
-#define SPECLIST_TAG dialog
+#define SPECLIST_TAG cma_dialog
 #define SPECLIST_TYPE struct cma_dialog
-#define SPECLIST_STATIC1
 #include "speclist.h"
 
-#define SPECLIST_TAG dialog
+#define SPECLIST_TAG cma_dialog
 #define SPECLIST_TYPE struct cma_dialog
-#define SPECLIST_STATIC1
 #include "speclist_c.h"
 
-#define dialog_list_iterate(dialoglist, pdialog) \
-    TYPED_LIST_ITERATE(struct cma_dialog, dialoglist, pdialog)
-#define dialog_list_iterate_end  LIST_ITERATE_END
+#define cma_dialog_list_iterate(presetlist, ppreset) \
+    TYPED_LIST_ITERATE(struct cma_dialog, presetlist, ppreset)
+#define cma_dialog_list_iterate_end  LIST_ITERATE_END
 
-static struct dialog_list dialog_list;
-static bool dialog_list_has_been_initialised = FALSE;
+static struct cma_dialog_list cma_dialog_list;
+static int cma_dialog_list_has_been_initialised;
 
 static int allow_refreshes = 1;
 
@@ -84,11 +82,11 @@ static void set_hscales(const struct cma_parameter *const parameter,
 /**************************************************************************
 ...
 **************************************************************************/
-static void ensure_initialised_dialog_list(void)
+static void ensure_initialised_cma_dialog_list(void)
 {
-  if (!dialog_list_has_been_initialised) {
-    dialog_list_init(&dialog_list);
-    dialog_list_has_been_initialised = TRUE;
+  if (!cma_dialog_list_has_been_initialised) {
+    cma_dialog_list_init(&cma_dialog_list);
+    cma_dialog_list_has_been_initialised = 1;
   }
 }
 
@@ -99,7 +97,7 @@ void close_cma_dialog(struct city *pcity)
 {
   struct cma_dialog *pdialog = get_cma_dialog(pcity);
 
-  dialog_list_unlink(&dialog_list, pdialog);
+  cma_dialog_list_unlink(&cma_dialog_list, pdialog);
 
   gtk_widget_destroy(pdialog->shell);
   free(pdialog);
@@ -110,13 +108,13 @@ void close_cma_dialog(struct city *pcity)
 *****************************************************************/
 struct cma_dialog *get_cma_dialog(struct city *pcity)
 {
-  ensure_initialised_dialog_list();
+  ensure_initialised_cma_dialog_list();
 
-  dialog_list_iterate(dialog_list, pdialog) {
+  cma_dialog_list_iterate(cma_dialog_list, pdialog) {
     if (pdialog->pcity == pcity) {
       return pdialog;
     }
-  } dialog_list_iterate_end;
+  } cma_dialog_list_iterate_end;
 
   return NULL;
 }
@@ -130,7 +128,7 @@ struct cma_dialog *create_cma_dialog(struct city *pcity, GtkAccelGroup *accel)
   struct cma_parameter param;
   GtkWidget *frame, *page, *hbox, *label, *table;
   GtkWidget *vbox, *scrolledwindow, *hscale;
-  static const char *preset_title_[] = { N_("Presets") };
+  static gchar *preset_title_[] = { N_("Presets") };
   static gchar **preset_title = NULL;
   int i;
 
@@ -304,9 +302,9 @@ struct cma_dialog *create_cma_dialog(struct city *pcity, GtkAccelGroup *accel)
 
   gtk_widget_show_all(pdialog->shell);
 
-  ensure_initialised_dialog_list();
+  ensure_initialised_cma_dialog_list();
 
-  dialog_list_insert(&dialog_list, pdialog);
+  cma_dialog_list_insert(&cma_dialog_list, pdialog);
 
   update_cma_preset_list(pdialog);
 
@@ -381,7 +379,7 @@ static void update_cma_preset_list(struct cma_dialog *pdialog)
       gtk_clist_insert(GTK_CLIST(pdialog->preset_list), i, row);
     }
   } else {
-    static const char *info_message_[4] = {
+    static char *info_message_[4] = {
       N_("For information on:"),
       N_("CMA and presets"),
       N_("including sample presets,"),

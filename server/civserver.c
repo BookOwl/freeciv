@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -55,6 +54,9 @@ int main(int argc, char *argv[])
 
   /* initialize server */
   srv_init();
+
+  /* disallow running as root -- too dangerous */
+  dont_run_as_root(argv[0], "freeciv_server");
 
   /* parse command-line arguments... */
 
@@ -146,9 +148,6 @@ int main(int argc, char *argv[])
     fprintf(stderr, _("Report bugs to <%s>.\n"), BUG_EMAIL_ADDRESS);
     exit(EXIT_SUCCESS);
   }
-
-  /* disallow running as root -- too dangerous */
-  dont_run_as_root(argv[0], "freeciv_server");
 
   /* have arguments, call the main server loop... */
   srv_main();

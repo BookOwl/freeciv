@@ -13,9 +13,11 @@
 #ifndef FC__CITY_H
 #define FC__CITY_H
 
+#include "genlist.h"
 #include "improvement.h"
 #include "unit.h"		/* struct unit_list */
 #include "worklist.h"
+
 
 struct player;
 struct government;
@@ -180,6 +182,7 @@ struct ai_choice {
 
 struct ai_city {
   int workremain;
+  int ai_role;
 
   /* building desirabilities - easiest to handle them here -- Syela */
   int building_want[B_LAST];    /* not sure these will always be < 256 */
@@ -266,10 +269,6 @@ struct city {
   enum city_tile_type city_map[CITY_MAP_SIZE][CITY_MAP_SIZE];
 
   struct unit_list units_supported;
-
-  /* TRUE iff there units in the town. Only set at the client. */
-  bool occupied;	      
-
   int steal;		      /* diplomats steal once; for spies, gets harder */
   /* turn states */
   bool did_buy;

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -543,8 +542,8 @@ void popup_economy_report_dialog(bool make_modal)
 void create_economy_report_dialog(bool make_modal)
 {
   GtkWidget *close_command, *scrolled;
-  static const char *titles_[4] = { N_("Building Name"), N_("Count"),
-				    N_("Cost"), N_("U Total") };
+  static gchar *titles_[4] = { N_("Building Name"), N_("Count"),
+			      N_("Cost"), N_("U Total") };
   static gchar **titles;
   int    i;
   GtkAccelGroup *accel=gtk_accel_group_new();
@@ -657,6 +656,8 @@ void economy_close_callback(GtkWidget *w, gpointer data)
 void economy_selloff_callback(GtkWidget *w, gpointer data)
 {
   int i,count=0,gold=0;
+  struct genlist_iterator myiter;
+  struct city *pcity;
   struct packet_city_request packet;
   char str[64];
   GList              *selection;
@@ -667,7 +668,9 @@ void economy_selloff_callback(GtkWidget *w, gpointer data)
 
   i=economy_improvement_type[row];
 
-  city_list_iterate(game.player_ptr->cities, pcity) {
+  genlist_iterator_init(&myiter, &game.player_ptr->cities.list, 0);
+  for(; ITERATOR_PTR(myiter);ITERATOR_NEXT(myiter)) {
+    pcity=(struct city *)ITERATOR_PTR(myiter);
     if(!pcity->did_sell && city_got_building(pcity, i) && 
        (data ||
 	improvement_obsolete(game.player_ptr,i) ||
@@ -677,8 +680,7 @@ void economy_selloff_callback(GtkWidget *w, gpointer data)
         packet.build_id=i;
         send_packet_city_request(&aconnection, &packet, PACKET_CITY_SELL);
     }
-  } city_list_iterate_end;
-
+  }
   if(count)  {
     my_snprintf(str, sizeof(str), _("Sold %d %s for %d gold"),
 		count, get_improvement_name(i), gold);
@@ -773,7 +775,7 @@ void popup_activeunits_report_dialog(bool make_modal)
 void create_activeunits_report_dialog(bool make_modal)
 {
   GtkWidget *close_command, *refresh_command;
-  static const char *titles_[AU_COL]
+  static gchar *titles_[AU_COL]
     = { N_("Unit Type"), N_("U"), N_("In-Prog"), N_("Active"),
 	N_("Shield"), N_("Food") };
   static gchar **titles;

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -89,6 +88,7 @@ static void put_overlay_tile_gpixmap(GtkPixcomm *p,
 static void put_unit_pixmap(struct unit *punit, GdkPixmap *pm,
 			    int canvas_x, int canvas_y);
 static void put_line(GdkDrawable *pm, int x, int y, int dir);
+static void show_city_descriptions(void);
 
 static void put_unit_pixmap_draw(struct unit *punit, GdkPixmap *pm,
 				 int canvas_x, int canvas_y,
@@ -119,21 +119,6 @@ static SPRITE *scaled_intro_sprite = NULL;
 
 static GtkObject *map_hadj, *map_vadj;
 
-
-/***********************************************************************
-  This function can be used by mapview_common code to determine the
-  location and dimensions of the mapview canvas.
-***********************************************************************/
-void get_mapview_dimensions(int *map_view_topleft_map_x,
-			    int *map_view_topleft_map_y,
-			    int *map_view_pixel_width,
-			    int *map_view_pixel_height)
-{
-  *map_view_topleft_map_x = map_view_x0;
-  *map_view_topleft_map_y = map_view_y0;
-  gdk_window_get_size(map_canvas->window,
-		      map_view_pixel_width, map_view_pixel_height);
-}
 
 /**************************************************************************
 ...
@@ -239,6 +224,34 @@ void pixmap_put_tile(GdkDrawable *pm, int x, int y,
       }
     }
   }
+}
+
+/**************************************************************************
+Finds the pixel coordinates of a tile.  Beside setting the results in
+canvas_x,canvas_y it returns whether the tile is inside the visible
+map.
+
+This function is almost identical between all GUI's.
+**************************************************************************/
+static int get_canvas_xy(int map_x, int map_y, int *canvas_x,
+			 int *canvas_y)
+{
+  int width, height;
+
+  gdk_window_get_size(map_canvas->window, &width, &height);
+  return map_pos_to_canvas_pos(map_x, map_y, canvas_x, canvas_y,
+			       map_view_x0, map_view_y0, width, height);
+}
+
+/**************************************************************************
+Finds the map coordinates corresponding to pixel coordinates.
+
+This function is almost identical between all GUI's.
+**************************************************************************/
+void get_map_xy(int canvas_x, int canvas_y, int *map_x, int *map_y)
+{
+  canvas_pos_to_map_pos(canvas_x, canvas_y, map_x, map_y, map_view_x0,
+			map_view_y0);
 }
 
 /**************************************************************************
@@ -690,6 +703,18 @@ void move_unit_map_canvas(struct unit *punit, int x0, int y0, int dx, int dy)
       }
     }
   }
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+void get_center_tile_mapcanvas(int *x, int *y)
+{
+  int width, height;
+  gdk_window_get_size(map_canvas->window, &width, &height);
+
+  /* This sets the pointers x and y */
+  get_map_xy(width/2, height/2, x, y);
 }
 
 /**************************************************************************
@@ -1284,6 +1309,28 @@ void update_map_canvas(int x, int y, int width, int height,
 }
 
 /**************************************************************************
+ Update (only) the visible part of the map
+**************************************************************************/
+void update_map_canvas_visible(void)
+{
+  if (is_isometric) {
+    /* just find a big rectangle that includes the whole visible area. The
+       invisible tiles will not be drawn. */
+    int width, height;
+
+    width = height = map_canvas_store_twidth + map_canvas_store_theight;
+    update_map_canvas(map_view_x0,
+		      map_view_y0 - map_canvas_store_twidth,
+		      width, height, TRUE);
+  } else {
+    update_map_canvas(map_view_x0, map_view_y0,
+		      map_canvas_store_twidth,map_canvas_store_theight, TRUE);
+  }
+
+  show_city_descriptions();
+}
+
+/**************************************************************************
  Update display of descriptions associated with cities on the main map.
 **************************************************************************/
 void update_city_descriptions(void)
@@ -1296,67 +1343,26 @@ void update_city_descriptions(void)
 **************************************************************************/
 static void show_desc_at_tile(PangoLayout *layout, int x, int y)
 {
-  static char buffer[512], buffer2[32];
+  static char buffer[512];
   struct city *pcity;
   if ((pcity = map_get_city(x, y))) {
     int canvas_x, canvas_y;
-    PangoRectangle rect, rect2;
-    enum color_std color;
-    int extra_width = 0;
+    PangoRectangle rect;
 
     get_canvas_xy(x, y, &canvas_x, &canvas_y);
     if (draw_city_names) {
-      get_city_mapview_name_and_growth(pcity, buffer, sizeof(buffer),
-				       buffer2, sizeof(buffer2), &color);
-
+      my_snprintf(buffer, sizeof(buffer), "%s", pcity->name);
+      
       pango_layout_set_font_description(layout, main_font);
-      if (buffer2[0] != '\0') {
-	/* HACK: put a character's worth of space between the two strings. */
-	pango_layout_set_text(layout, "M", -1);
-	pango_layout_get_pixel_extents(layout, &rect, NULL);
-	extra_width = rect.width;
-      }
       pango_layout_set_text(layout, buffer, -1);
+
       pango_layout_get_pixel_extents(layout, &rect, NULL);
-      rect.width += extra_width;
-
-      if (draw_city_growth && pcity->owner == game.player_idx) {
-	/* We need to know the size of the growth text before
-	   drawing anything. */
-	pango_layout_set_font_description(layout, city_productions_font);
-	pango_layout_set_text(layout, buffer2, -1);
-	pango_layout_get_pixel_extents(layout, &rect2, NULL);
-
-	/* Now return the layout to its previous state. */
-	pango_layout_set_font_description(layout, main_font);
-	pango_layout_set_text(layout, buffer, -1);
-      } else {
-	rect2.width = 0;
-      }
-
       gtk_draw_shadowed_string(map_canvas->window,
 			   toplevel->style->black_gc,
 			   toplevel->style->white_gc,
-			   canvas_x + NORMAL_TILE_WIDTH / 2
-			       - (rect.width + rect2.width) / 2,
+			   canvas_x + NORMAL_TILE_WIDTH / 2 - rect.width / 2,
 			   canvas_y + NORMAL_TILE_HEIGHT +
 			   PANGO_ASCENT(rect), layout);
-
-      if (draw_city_growth && pcity->owner == game.player_idx) {
-	pango_layout_set_font_description(layout, city_productions_font);
-	pango_layout_set_text(layout, buffer2, -1);
-	gdk_gc_set_foreground(civ_gc, colors_standard[color]);
-	gtk_draw_shadowed_string(map_canvas->window,
-			toplevel->style->black_gc,
-			civ_gc,
-			canvas_x + NORMAL_TILE_WIDTH / 2
-				 - (rect.width + rect2.width) / 2
-				 + rect.width,
-			canvas_y + NORMAL_TILE_HEIGHT +
-			PANGO_ASCENT(rect) + rect.height / 2
-				 - rect2.height / 2, layout);
-
-      }
     }
 
     if (draw_city_productions && (pcity->owner==game.player_idx)) {
@@ -1386,7 +1392,7 @@ static void show_desc_at_tile(PangoLayout *layout, int x, int y)
 /**************************************************************************
 ...
 **************************************************************************/
-void show_city_descriptions(void)
+static void show_city_descriptions()
 {
   PangoLayout *layout;
 
@@ -2307,15 +2313,4 @@ static void pixmap_put_tile_iso(GdkDrawable *pm, int x, int y,
 				 sprites.tx.fortress,
 				 offset_x, offset_y_unit,
 				 width, height_unit, fog);
-}
-
-/**************************************************************************
-  This function is called when the tileset is changed.
-**************************************************************************/
-void tileset_changed(void)
-{
-  /* PORTME */
-  /* Here you should do any necessary redraws (for instance, the city
-   * dialogs usually need to be resized).
-   */
 }

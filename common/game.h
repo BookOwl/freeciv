@@ -25,7 +25,6 @@
 
 #define MAX_LEN_DEMOGRAPHY  16
 #define MAX_LEN_ALLOW_CONNECT 16
-#define MAX_ID_LEN 33
 
 enum server_states { 
   PRE_GAME_STATE, 
@@ -55,7 +54,6 @@ struct city;
 struct civ_game {
   bool is_new_game;		/* 1 for games never started */
   int version;
-  char id[MAX_ID_LEN];		/* server only */
   int civstyle;
   int gold;
   int settlers, explorer;
@@ -72,7 +70,6 @@ struct civ_game {
   int netwait;
   time_t last_ping;
   int pingtimeout;
-  int pingtime;
   time_t turn_start;
   int end_year;
   int year;
@@ -399,10 +396,6 @@ extern bool is_server;
 #define GAME_DEFAULT_NETWAIT         4
 #define GAME_MIN_NETWAIT             0
 #define GAME_MAX_NETWAIT             20
-
-#define GAME_DEFAULT_PINGTIME        20
-#define GAME_MIN_PINGTIME            1
-#define GAME_MAX_PINGTIME            1800
 
 #define GAME_DEFAULT_PINGTIMEOUT     60
 #define GAME_MIN_PINGTIMEOUT         60

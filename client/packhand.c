@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -338,12 +337,6 @@ void handle_city_info(struct packet_city_info *packet)
 		pcity->shield_surplus != packet->shield_surplus ||
 		pcity->shield_stock != packet->shield_stock)) {
       update_descriptions = TRUE;
-    } else if (draw_city_names && draw_city_growth &&
-	       (pcity->food_stock != packet->food_stock ||
-		pcity->food_surplus != packet->food_surplus)) {
-      /* If either the food stock or surplus have changed, the time-to-grow
-	 is likely to have changed as well. */
-      update_descriptions = TRUE;
     }
 
     /* update the descriptions if necessary */
@@ -444,9 +437,6 @@ void handle_city_info(struct packet_city_info *packet)
     update_improvement_from_packet(pcity, i, packet->improvements[i] == '1',
                                    &need_effect_update);
   } impr_type_iterate_end;
-
-  pcity->occupied =
-      (unit_list_size(&(map_get_tile(pcity->x, pcity->y)->units)) > 0);
 
   popup = (city_is_new && get_client_state()==CLIENT_GAME_RUNNING_STATE && 
            pcity->owner==game.player_idx) || packet->diplomat_investigate;
@@ -569,7 +559,6 @@ void handle_short_city(struct packet_short_city *packet)
   
   pcity->size=packet->size;
   pcity->tile_trade = packet->tile_trade;
-  pcity->occupied = packet->occupied;
 
   if (packet->happy) {
     pcity->ppl_happy[4]   = pcity->size;
@@ -928,9 +917,6 @@ void handle_unit_info(struct packet_unit_info *packet)
         return;
       }
       if(pcity)  {
-	pcity->occupied =
-	    (unit_list_size(&(map_get_tile(pcity->x, pcity->y)->units)) > 0);
-
         if(pcity->id==punit->homecity)
 	  repaint_city = TRUE;
 	else
@@ -938,7 +924,6 @@ void handle_unit_info(struct packet_unit_info *packet)
       }
       
       if((pcity=map_get_city(punit->x, punit->y)))  {
-	pcity->occupied = TRUE;
         if(pcity->id == punit->homecity)
 	  repaint_city = TRUE;
 	else
@@ -1179,7 +1164,6 @@ void handle_player_info(struct packet_player_info *pinfo)
 
   pplayer->nation=pinfo->nation;
   pplayer->is_male=pinfo->is_male;
-  pplayer->team = pinfo->team;
 
   pplayer->economic.gold=pinfo->gold;
   pplayer->economic.tax=pinfo->tax;
@@ -1298,7 +1282,6 @@ void handle_conn_info(struct packet_conn_info *pinfo)
       pconn = fc_calloc(1, sizeof(struct connection));
       pconn->buffer = NULL;
       pconn->send_buffer = NULL;
-      pconn->ping_time = -1.0;
       if (pplayer) {
 	conn_list_insert_back(&pplayer->connections, pconn);
       }
@@ -1325,27 +1308,6 @@ void handle_conn_info(struct packet_conn_info *pinfo)
     sz_strlcpy(pconn->name, pinfo->name);
     sz_strlcpy(pconn->addr, pinfo->addr);
     sz_strlcpy(pconn->capability, pinfo->capability);
-  }
-  update_players_dialog();
-}
-
-/*************************************************************************
-...
-**************************************************************************/
-void handle_ping_info(struct packet_ping_info *packet)
-{
-  int i;
-
-  for (i = 0; i < packet->connections; i++) {
-    struct connection *pconn = find_conn_by_id(packet->conn_id[i]);
-
-    if (!pconn) {
-      continue;
-    }
-
-    pconn->ping_time = packet->ping_time[i];
-    freelog(LOG_DEBUG, "conn-id=%d, ping=%fs", pconn->id,
-	    pconn->ping_time);
   }
   update_players_dialog();
 }
@@ -1710,11 +1672,6 @@ void handle_ruleset_control(struct packet_ruleset_control *packet)
 
   city_styles_alloc(packet->style_count);
   tilespec_alloc_city_tiles(game.styles_count);
-
-  for(i = 0; i < MAX_NUM_TEAMS; i++) {
-    mystrlcpy(team_get_by_id(i)->name, packet->team_name[i],
-              MAX_LEN_NAME);
-  }
 }
 
 /**************************************************************************

@@ -10,10 +10,9 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/ 
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
-#endif
+#endif  
 
 #include <stdio.h>
 #include <assert.h>
@@ -88,8 +87,10 @@ int map_view_height;
 
 extern int seconds_to_turndone;   
 void update_map_canvas_scrollbars_size(void);
+static void show_city_descriptions(HDC hdc);     
 void refresh_overview_viewrect_real(HDC hdcp);
 void set_overview_win_dim(int w,int h);
+static int get_canvas_xy(int map_x, int map_y, int *canvas_x, int *canvas_y);
 static void put_one_tile(HDC mapstoredc,int x, int y, enum draw_type draw);
 void put_one_tile_full(HDC hdc, int x, int y,
 			      int canvas_x, int canvas_y, int citymode);
@@ -108,22 +109,6 @@ static void dither_tile(HDC hdc, struct Sprite **dither,
 static void put_line(HDC hdc, int x, int y, 
 		     int dir, bool write_to_screen);
 static void draw_rates(HDC hdc);
-
-/***********************************************************************
-  This function can be used by mapview_common code to determine the
-  location and dimensions of the mapview canvas.
-***********************************************************************/
-void get_mapview_dimensions(int *map_view_topleft_map_x,
-			    int *map_view_topleft_map_y,
-			    int *map_view_pixel_width,
-			    int *map_view_pixel_height)
-{
-  *map_view_topleft_map_x = map_view_x;
-  *map_view_topleft_map_y = map_view_y;
-  *map_view_pixel_width = map_win_width;
-  *map_view_pixel_height = map_win_height;
-}
-
 /**************************************************************************
 
 **************************************************************************/
@@ -201,7 +186,7 @@ void map_expose(HDC hdc)
 	     mapstoredc,0,0,SRCCOPY);
       SelectObject(mapstoredc,old);
       DeleteDC(mapstoredc);
-      show_city_descriptions();
+      show_city_descriptions(hdc);
     }
 } 
 
@@ -719,6 +704,15 @@ void center_tile_mapcanvas(int x, int y)
 
 **************************************************************************/
 void
+get_center_tile_mapcanvas(int *x, int *y)
+{
+  get_map_xy(map_win_width/2,map_win_height/2,x,y);    
+}
+
+/**************************************************************************
+
+**************************************************************************/
+void
 update_map_canvas(int x, int y, int width, int height,
 		  bool write_to_screen)
 {
@@ -756,7 +750,7 @@ update_map_canvas(int x, int y, int width, int height,
 	       scr_x,
 	       scr_y,
 	       SRCCOPY);
-	show_city_descriptions();	/* is this necessary? */
+	show_city_descriptions(whdc);
 	ReleaseDC(map_window,whdc);
       }
   } else {
@@ -851,7 +845,7 @@ update_map_canvas(int x, int y, int width, int height,
 	     (height + width) * NORMAL_TILE_HEIGHT/2 + NORMAL_TILE_HEIGHT/2,
 	     mapstoredc,
 	     canvas_start_x,canvas_start_y,SRCCOPY);
-      show_city_descriptions(); /* is this necessary? */
+      show_city_descriptions(hdc);
       ReleaseDC(map_window,hdc);
     }
 
@@ -859,6 +853,29 @@ update_map_canvas(int x, int y, int width, int height,
   }
   SelectObject(mapstoredc,old);
   DeleteDC(mapstoredc);
+}
+
+/**************************************************************************
+
+**************************************************************************/
+void
+update_map_canvas_visible(void)
+{
+  if (is_isometric)
+    {
+      int width,height;
+      width=height=map_view_width+map_view_height;
+      update_map_canvas(map_view_x,
+			map_view_y-map_view_width,
+			width,height, TRUE); 
+      /*
+	update_map_canvas(0,0,map.xsize,map.ysize,1); */
+    }
+  else
+    {
+      update_map_canvas(map_view_x,map_view_y,
+			map_view_width,map_view_height, TRUE);
+    }
 }
 
 /**************************************************************************
@@ -951,15 +968,10 @@ static void show_desc_at_tile(HDC hdc,int x, int y)
 /**************************************************************************
 
 **************************************************************************/
-void show_city_descriptions(void)
+static void show_city_descriptions(HDC hdc)
 {
-  HDC hdc;
-
   if (!draw_city_names && !draw_city_productions)
     return;
-
-  /* TODO: hdc should be stored statically */
-  hdc = GetDC(map_window);
   SetBkMode(hdc,TRANSPARENT);
 
   if (is_isometric ) {
@@ -990,8 +1002,7 @@ void show_city_descriptions(void)
       }
     }
   }
-
-  ReleaseDC(map_window, hdc);
+  
 }
 
 /**************************************************************************
@@ -1446,6 +1457,33 @@ void map_handle_vscroll(int pos)
         map_view_y;
   update_map_canvas_visible();
   refresh_overview_viewrect();
+}
+
+/**************************************************************************
+Finds the pixel coordinates of a tile.  Beside setting the results in
+canvas_x,canvas_y it returns whether the tile is inside the visible
+map.
+
+This function is almost identical between all GUI's.
+**************************************************************************/
+static int get_canvas_xy(int map_x, int map_y, int *canvas_x,
+			 int *canvas_y)
+{
+  return map_pos_to_canvas_pos(map_x, map_y, canvas_x, canvas_y,
+			       map_view_x, map_view_y, map_win_width,
+			       map_win_height);
+}
+
+
+/**************************************************************************
+Finds the map coordinates corresponding to pixel coordinates.
+
+This function is almost identical between all GUI's.
+**************************************************************************/
+void get_map_xy(int canvas_x, int canvas_y, int *map_x, int *map_y)
+{
+  canvas_pos_to_map_pos(canvas_x, canvas_y, map_x, map_y, map_view_x,
+			map_view_y);
 }
 
 /**************************************************************************
@@ -2090,15 +2128,4 @@ xel
       }
     }
   }
-}
-
-/**************************************************************************
-  This function is called when the tileset is changed.
-**************************************************************************/
-void tileset_changed(void)
-{
-  /* PORTME */
-  /* Here you should do any necessary redraws (for instance, the city
-   * dialogs usually need to be resized).
-   */
 }

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -485,7 +484,7 @@ Load the worklist elements specified by path, given the arguments
 plrno and wlinx, into the worklist pointed to by pwl.
 ***************************************************************/
 static void worklist_load(struct section_file *file,
-			  const char *path, int plrno, int wlinx,
+			  char *path, int plrno, int wlinx,
 			  struct worklist *pwl)
 {
   char efpath[64];
@@ -527,7 +526,7 @@ plrno and wlinx, into the worklist pointed to by pwl.
 Assumes original save-file format.  Use for backward compatibility.
 ***************************************************************/
 static void worklist_load_old(struct section_file *file,
-			      const char *path, int plrno, int wlinx,
+			      char *path, int plrno, int wlinx,
 			      struct worklist *pwl)
 {
   int i, id;
@@ -578,17 +577,6 @@ static void player_load(struct player *plr, int plrno,
   sz_strlcpy(plr->username,
 	     secfile_lookup_str_default(file, "", "player%d.username", plrno));
   plr->nation=secfile_lookup_int(file, "player%d.race", plrno);
-
-  /* not all players have teams */
-  if (section_file_lookup(file, "player%d.team", plrno)) {
-    char tmp[MAX_LEN_NAME];
-
-    sz_strlcpy(tmp, secfile_lookup_str(file, "player%d.team", plrno));
-    team_add_player(plr, tmp);
-    plr->team = team_find_by_name(tmp);
-  } else {
-    plr->team = TEAM_NONE;
-  }
   if (is_barbarian(plr)) {
     plr->nation=game.nation_count-1;
   }
@@ -721,6 +709,7 @@ static void player_load(struct player *plr, int plrno,
     struct city *pcity;
     
     pcity=fc_malloc(sizeof(struct city));
+    pcity->ai.ai_role = AICITY_NONE;
     pcity->ai.trade_want = TRADE_WEIGHTING;
     memset(pcity->ai.building_want, 0, sizeof(pcity->ai.building_want));
     pcity->ai.workremain = 1; /* there's always work to be done! */
@@ -901,6 +890,8 @@ static void player_load(struct player *plr, int plrno,
     }
 
     map_set_city(pcity->x, pcity->y, pcity);
+
+    pcity->incite_revolt_cost = -1; /* flag value */
 
     city_list_insert_back(&plr->cities, pcity);
   }
@@ -1214,7 +1205,7 @@ Save the worklist elements specified by path, given the arguments
 plrno and wlinx, from the worklist pointed to by pwl.
 ***************************************************************/
 static void worklist_save(struct section_file *file,
-			  const char *path, int plrno, int wlinx,
+			  char *path, int plrno, int wlinx,
 			  struct worklist *pwl)
 {
   char efpath[64];
@@ -1245,10 +1236,6 @@ static void player_save(struct player *plr, int plrno,
   secfile_insert_str(file, plr->name, "player%d.name", plrno);
   secfile_insert_str(file, plr->username, "player%d.username", plrno);
   secfile_insert_int(file, plr->nation, "player%d.race", plrno);
-  if (plr->team != TEAM_NONE) {
-    secfile_insert_str(file, (char *) team_get_by_id(plr->team)->name, 
-                       "player%d.team", plrno);
-  }
   secfile_insert_int(file, plr->government, "player%d.government", plrno);
   secfile_insert_int(file, plr->embassy, "player%d.embassy", plrno);
 
@@ -1715,7 +1702,7 @@ void game_load(struct section_file *file)
   int i;
   enum server_states tmp_server_state;
   char *savefile_options;
-  const char *string;
+  char *string;
 
   game.version = secfile_lookup_int_default(file, 0, "game.version");
   tmp_server_state = (enum server_states)
@@ -1829,7 +1816,6 @@ void game_load(struct section_file *file)
     game.aifill = secfile_lookup_int_default(file, 0, "game.aifill");
 
     game.scorelog = secfile_lookup_bool_default(file, FALSE, "game.scorelog");
-    sz_strlcpy(game.id, secfile_lookup_str_default(file, "", "game.id"));
 
     game.fogofwar = secfile_lookup_bool_default(file, FALSE, "game.fogofwar");
     game.fogofwar_old = game.fogofwar;
@@ -2182,7 +2168,6 @@ void game_save(struct section_file *file)
   secfile_insert_str(file, game.save_name, "game.save_name");
   secfile_insert_int(file, game.aifill, "game.aifill");
   secfile_insert_bool(file, game.scorelog, "game.scorelog");
-  secfile_insert_str(file, game.id, "game.id");
   secfile_insert_bool(file, game.fogofwar, "game.fogofwar");
   secfile_insert_bool(file, game.spacerace, "game.spacerace");
   secfile_insert_bool(file, game.auto_ai_toggle, "game.auto_ai_toggle");

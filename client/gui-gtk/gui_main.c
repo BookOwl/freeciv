@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -191,7 +190,7 @@ static gint keyboard_handler(GtkWidget *w, GdkEventKey *ev)
 {
   /* inputline history code */
   if (GTK_WIDGET_HAS_FOCUS(inputline) || !GTK_WIDGET_IS_SENSITIVE(top_vbox)) {
-    const char *data = NULL;
+    void *data = NULL;
     gint keypress = FALSE;
 
     if (ev->keyval == GDK_Up) {
@@ -216,28 +215,6 @@ static gint keyboard_handler(GtkWidget *w, GdkEventKey *ev)
       }
     }
 
-    if (ev->keyval == GDK_Page_Up) {
-      GtkAdjustment *adj;
-      gint nval;
-
-      keypress = TRUE;
-
-      adj = gtk_range_get_adjustment(GTK_RANGE(text_scrollbar));
-      nval = adj->value - adj->page_increment;
-      gtk_adjustment_set_value(adj, nval);
-    }
-
-    if(ev->keyval == GDK_Page_Down) {
-      GtkAdjustment *adj;
-      gint nval;
-
-      keypress = TRUE;
-
-      adj = gtk_range_get_adjustment(GTK_RANGE(text_scrollbar));
-      nval = adj->value + adj->page_increment;
-      gtk_adjustment_set_value(adj, nval);
-    }
-		
     if (data)
       gtk_entry_set_text(GTK_ENTRY(inputline), data);
 
@@ -771,7 +748,7 @@ void ui_main(int argc, char **argv)
      in the next release.  */
 # ifdef HAVE_PUTENV
     if(strcmp(setlocale(LC_CTYPE, (const char *)NULL), "C") == 0)
-      putenv((char *) "LC_CTYPE=en_US.ISO8859-1");
+      putenv("LC_CTYPE=en_US.ISO8859-1");
 # endif
 #endif
 
@@ -852,9 +829,9 @@ void ui_main(int argc, char **argv)
   gdk_gc_set_fill(fill_tile_gc, GDK_STIPPLED);
 
   {
-    char d1[] = {0x03, 0x0c, 0x03, 0x0c};
-    char d2[] = {0x08, 0x02, 0x08, 0x02};
-    char d3[] = {0xAA, 0x55, 0xAA, 0x55};
+    unsigned char d1[] = {0x03, 0x0c, 0x03, 0x0c};
+    unsigned char d2[] = {0x08, 0x02, 0x08, 0x02};
+    unsigned char d3[] = {0xAA, 0x55, 0xAA, 0x55};
 
     gray50 = gdk_bitmap_create_from_data(root_window, d1, 4, 4);
     gray25 = gdk_bitmap_create_from_data(root_window, d2, 4, 4);

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -64,9 +63,11 @@
                           "~/.freeciv"
 #endif
 
-static char *grouping = NULL;
-static char *grouping_sep = NULL;
-static size_t grouping_sep_len = 0;
+/* Cached locale numeric formatting information.
+   Defaults are as appropriate for the US. */
+static char *grouping = "\3";
+static char *grouping_sep = ",";
+static size_t grouping_sep_len = 1;
 
 /***************************************************************
   Take a string containing multiple lines and create a copy where
@@ -371,21 +372,22 @@ static bool is_iso_latin1(char ch)
 /***************************************************************
   This is used in sundry places to make sure that names of cities,
   players etc. do not contain yucky characters of various sorts.
-  Returns TRUE iff the name is acceptable.
+  Returns the input argument if it points to an acceptable name,
+  otherwise returns NULL.
   FIXME:  Not internationalised.
 ***************************************************************/
-bool is_sane_name(const char *name)
+const char *get_sane_name(const char *name)
 {
   const char *cp;
 
   /* must not be NULL or empty */
   if (!name || *name == '\0') {
-    return FALSE;
+    return NULL; 
   }
 
   /* must begin and end with some non-space character */
   if ((*name == ' ') || (*(strchr(name, '\0') - 1) == ' ')) {
-    return FALSE;
+    return NULL; 
   }
 
   /* must be composed entirely of printable ISO 8859-1 characters */
@@ -393,11 +395,11 @@ bool is_sane_name(const char *name)
     /* nothing */
   }
   if (*cp != '\0') {
-    return FALSE;
+    return NULL; 
   }
 
   /* otherwise, it's okay... */
-  return TRUE;
+  return name;
 }
 
 /***************************************************************
@@ -737,8 +739,7 @@ char *user_username(void)
 ***************************************************************************/
 static const char **get_data_dirs(int *num_dirs)
 {
-  const char *path;
-  char *path2, *tok;
+  char *path, *path2, *tok;
   static int num = 0;
   static const char **dirs = NULL;
 
@@ -1005,14 +1006,6 @@ char *datafilename_required(const char *filename)
 ***************************************************************************/
 void init_nls(void)
 {
-  /* 
-   * Setup the cached locale numeric formatting information. Defaults
-   * are as appropriate for the US.
-   */
-  grouping = mystrdup("\3");
-  grouping_sep = mystrdup(",");
-  grouping_sep_len = strlen(grouping_sep);
-
 #ifdef ENABLE_NLS
 #ifdef WIN32_NATIVE
   /* set LANG by hand if it is not set */
@@ -1093,11 +1086,10 @@ void init_nls(void)
 	/* nothing */
       }
       len++;
-      free(grouping);
       grouping = fc_malloc(len);
       memcpy(grouping, lc->grouping, len);
     }
-    free(grouping_sep);
+
     grouping_sep = mystrdup(lc->thousands_sep);
     grouping_sep_len = strlen(grouping_sep);
   }

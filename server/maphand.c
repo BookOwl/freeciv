@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -21,7 +20,6 @@
 #include "fcintl.h"
 #include "game.h"
 #include "log.h"
-#include "nation.h"
 #include "map.h"
 #include "mem.h"
 #include "packets.h"
@@ -368,7 +366,7 @@ void send_tile_info(struct conn_list *dest, int x, int y)
   Send the tile information, as viewed by pplayer, to all specified
   connections.   The tile info is sent even if pplayer doesn't see or
   know the tile (setting appropriate info.known), as required for
-  client drawing requirements in some cases (see doc/HACKING).
+  client drawing requirements in some cases (see freeciv_hackers_guide.txt).
   Also updates pplayer knowledge if known and seen, else used old.
   pplayer==NULL means send "real" data, for observers
 **************************************************************************/
@@ -1249,11 +1247,6 @@ void handle_player_remove_vision(struct player *pplayer,
   pplayer2 = get_player(packet->value);
   if (pplayer == pplayer2 || !pplayer2->is_alive
       || !gives_shared_vision(pplayer, pplayer2)) {
-    return;
-  }
-
-  /* Do not allow team mates to backstab */
-  if (pplayer->team != TEAM_NONE && pplayer->team == pplayer2->team) {
     return;
   }
 

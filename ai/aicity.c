@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -178,6 +177,12 @@ static void ai_city_choose_build(struct player *pplayer, struct city *pcity)
     }
   }
   else {
+
+/* obsolete code destroyed */
+/*  military_advisor_choose_build(pplayer, pcity, &curchoice); */
+/* this is now handled in manage_city thanks to our friend ->ai.choice */
+/*  copy_if_better_choice(&curchoice, &bestchoice); */
+
     copy_if_better_choice(&pcity->ai.choice, &bestchoice);
 
     if (bestchoice.want <= 100 || pcity->ai.urgency == 0) { /* soldier at 101 cannot be denied */
@@ -199,7 +204,7 @@ static void ai_city_choose_build(struct player *pplayer, struct city *pcity)
                    unit_name(bestchoice.choice) :
 		   get_improvement_name(bestchoice.choice)),
 		  bestchoice.want);
-    if (!pcity->is_building_unit && is_wonder(pcity->currently_building) &&
+    if(!pcity->is_building_unit && is_wonder(pcity->currently_building) &&
        (is_unit_choice_type(bestchoice.type) ||
         bestchoice.choice != pcity->currently_building))
       notify_player_ex(NULL, pcity->x, pcity->y, E_WONDER_STOPPED,
@@ -398,11 +403,14 @@ static void ai_spend_gold(struct player *pplayer)
              > pcity->food_stock + pcity->food_surplus) {
         /* Don't build settlers in size 1 cities unless we grow next turn */
         continue;
-      } else if (city_list_size(&pplayer->cities) > 6) {
-          /* Don't waste precious money buying settlers late game
-           * since this raises taxes, and we want science. Adjust this
-           * again when our tax algorithm is smarter. */
+      } else {
+        if (city_list_size(&pplayer->cities) <= 8) {
+          /* Make AI get gold for settlers early game */
+          pplayer->ai.maxbuycost = MAX(pplayer->ai.maxbuycost, buycost);
+        } else if (city_list_size(&pplayer->cities) > 25) {
+          /* Don't waste precious money buying settlers late game */
           continue;
+        }
       }
     } else {
       /* We are not a settler. Therefore we increase the cash need we
@@ -538,6 +546,46 @@ we don't rely on the seamap being current since we will recalculate. -- Syela */
 void ai_choose_ferryboat(struct player *pplayer, struct city *pcity, struct ai_choice *choice)
 {
   ai_choose_role_unit(pplayer, pcity, choice, L_FERRYBOAT,  choice->want);
+}
+
+/************************************************************************** 
+  don't ask me why this is in aicity, I can't even remember -- Syela 
+**************************************************************************/
+static Unit_Type_id ai_choose_attacker(struct city *pcity,
+                                       enum unit_move_type which)
+{
+  Unit_Type_id bestid = 0; /* ??? Zero is legal value! (Settlers by default) */
+  int best = 0;
+  int cur;
+
+  simple_ai_unit_type_iterate(i) {
+    cur = ai_unit_attack_desirability(i);
+    if (which == unit_types[i].move_type) {
+      if (can_build_unit(pcity, i) && (cur > best || (cur == best &&
+ get_unit_type(i)->build_cost <= get_unit_type(bestid)->build_cost))) {
+        best = cur;
+        bestid = i;
+      }
+    }
+  } simple_ai_unit_type_iterate_end;
+
+  return bestid;
+}
+
+/************************************************************************** 
+  ...
+**************************************************************************/
+Unit_Type_id ai_choose_attacker_ground(struct city *pcity)
+{
+  return(ai_choose_attacker(pcity, LAND_MOVING));
+}
+
+/************************************************************************** 
+  ...
+**************************************************************************/
+Unit_Type_id ai_choose_attacker_sailing(struct city *pcity)
+{
+  return(ai_choose_attacker(pcity, SEA_MOVING));
 }
 
 /************************************************************************** 

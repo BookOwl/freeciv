@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -26,6 +25,7 @@
 #include <X11/Xaw/MenuButton.h>
 #include <X11/Xaw/SimpleMenu.h>
 #include <X11/Xaw/SmeBSB.h>
+#include <X11/Xaw/Command.h>
 #include <X11/Xaw/List.h>
 #include <X11/Xaw/Viewport.h>
 #include <X11/Xaw/AsciiText.h>  
@@ -128,22 +128,9 @@ struct city_dialog {
   int is_modal;
 };
 
-#define SPECLIST_TAG dialog
-#define SPECLIST_TYPE struct city_dialog
-#define SPECLIST_STATIC
-#include "speclist.h"
+static struct genlist dialog_list;
+static int dialog_list_has_been_initialised;
 
-#define SPECLIST_TAG dialog
-#define SPECLIST_TYPE struct city_dialog
-#define SPECLIST_STATIC
-#include "speclist_c.h"
-
-#define dialog_list_iterate(dialoglist, pdialog) \
-    TYPED_LIST_ITERATE(struct city_dialog, dialoglist, pdialog)
-#define dialog_list_iterate_end  LIST_ITERATE_END
-
-static struct dialog_list dialog_list;
-static bool dialog_list_has_been_initialised = FALSE;
 
 static struct city_dialog *get_city_dialog(struct city *pcity);
 static struct city_dialog *create_city_dialog(struct city *pcity, bool make_modal);
@@ -320,18 +307,20 @@ static void get_contents_of_worklist(struct city_dialog *pdialog,
 *****************************************************************/
 struct city_dialog *get_city_dialog(struct city *pcity)
 {
-  if (!dialog_list_has_been_initialised) {
-    dialog_list_init(&dialog_list);
-    dialog_list_has_been_initialised = TRUE;
+  struct genlist_iterator myiter;
+
+  if(!dialog_list_has_been_initialised) {
+    genlist_init(&dialog_list);
+    dialog_list_has_been_initialised=1;
   }
+  
+  genlist_iterator_init(&myiter, &dialog_list, 0);
+    
+  for(; ITERATOR_PTR(myiter); ITERATOR_NEXT(myiter))
+    if(((struct city_dialog *)ITERATOR_PTR(myiter))->pcity==pcity)
+      return ITERATOR_PTR(myiter);
 
-  dialog_list_iterate(dialog_list, pdialog) {
-    if (pdialog->pcity == pcity) {
-      return pdialog;
-    }
-  } dialog_list_iterate_end;
-
-  return NULL;
+  return 0;
 }
 
 /****************************************************************
@@ -441,8 +430,8 @@ void popdown_all_city_dialogs(void)
   if(!dialog_list_has_been_initialised) {
     return;
   }
-  while (dialog_list_size(&dialog_list) > 0) {
-    close_city_dialog(dialog_list_get(&dialog_list, 0));
+  while(genlist_size(&dialog_list)) {
+    close_city_dialog(genlist_get(&dialog_list,0));
   }
   popdown_cityopt_dialog();
 }
@@ -512,7 +501,7 @@ struct city_dialog *create_city_dialog(struct city *pcity, bool make_modal)
     icon_pixmap =
 	XCreateBitmapFromData(display,
 			      RootWindowOfScreen(XtScreen(toplevel)),
-			      cityicon_bits,
+			      (char *) cityicon_bits,
 			      cityicon_width, cityicon_height);
   }
 
@@ -1043,7 +1032,7 @@ struct city_dialog *create_city_dialog(struct city *pcity, bool make_modal)
   XtAddCallback(pdialog->cityopt_command, XtNcallback, cityopt_callback,
 		(XtPointer)pdialog);
 
-  dialog_list_insert(&dialog_list, pdialog);
+  genlist_insert(&dialog_list, pdialog, 0);
 
   for(i=0; i<B_LAST+1; i++)
     pdialog->improvlist_names_ptrs[i]=0;
@@ -1927,16 +1916,16 @@ void city_dialog_update_improvement_list(struct city_dialog *pdialog)
 void citydlg_btn_select_citymap(Widget w, XEvent *event)
 {
   XButtonEvent *ev=&event->xbutton;
-  struct city *pcity = NULL;
+  struct genlist_iterator myiter;
+  struct city *pcity;
 
-  dialog_list_iterate(dialog_list, pdialog) {
-    if (pdialog->map_canvas == w) {
-      pcity = pdialog->pcity;
+  genlist_iterator_init(&myiter, &dialog_list, 0);
+    
+  for(; ITERATOR_PTR(myiter); ITERATOR_NEXT(myiter))
+    if(((struct city_dialog *)ITERATOR_PTR(myiter))->map_canvas==w)
       break;
-    }
-  } dialog_list_iterate_end;
 
-  if(pcity) {
+  if((pcity=((struct city_dialog *)ITERATOR_PTR(myiter))->pcity)) {
     int xtile, ytile;
     struct packet_city_request packet;
 
@@ -2519,7 +2508,7 @@ void close_city_dialog(struct city_dialog *pdialog)
     XtDestroyWidget(pdialog->worklist_shell);
 
   XtDestroyWidget(pdialog->shell);
-  dialog_list_unlink(&dialog_list, pdialog);
+  genlist_unlink(&dialog_list, pdialog);
 
   free(pdialog->citizen_labels);
   free(pdialog->citizen_type);
@@ -2554,12 +2543,14 @@ void citydlg_key_close(Widget w)
 *****************************************************************/
 void citydlg_msg_close(Widget w)
 {
-  dialog_list_iterate(dialog_list, pdialog) {
-    if (pdialog->shell == w) {
-      close_city_dialog(pdialog);
+  struct genlist_iterator myiter;
+
+  genlist_iterator_init(&myiter, &dialog_list, 0);
+  for(; ITERATOR_PTR(myiter); ITERATOR_NEXT(myiter))
+    if(((struct city_dialog *)ITERATOR_PTR(myiter))->shell==w) {
+      close_city_dialog((struct city_dialog *)ITERATOR_PTR(myiter));
       return;
     }
-  } dialog_list_iterate_end;
 }
 
 /****************************************************************

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -39,6 +38,7 @@
 #include "cityturn.h"
 #include "gamelog.h"
 #include "maphand.h"
+#include "player.h"
 #include "plrhand.h"
 #include "sernet.h"
 #include "settlers.h"
@@ -1030,6 +1030,7 @@ void create_city(struct player *pplayer, const int x, const int y,
 
   pcity->city_options = CITYOPT_DEFAULT;
   
+  pcity->ai.ai_role = AICITY_NONE;
   pcity->ai.trade_want = TRADE_WEIGHTING; 
   memset(pcity->ai.building_want, 0, sizeof(pcity->ai.building_want));
   pcity->ai.workremain = 1; /* there's always work to be done! */
@@ -1066,6 +1067,8 @@ void create_city(struct player *pplayer, const int x, const int y,
   auto_arrange_workers(pcity);
 
   city_refresh(pcity);
+
+  city_incite_cost(pcity);
 
   /* Put vision back to normal, if fortress acted as a watchtower */
   if (player_knows_techs_with_flag(pplayer, TF_WATCHTOWER)
@@ -1391,7 +1394,6 @@ static void package_dumb_city(struct player* pplayer, int x, int y,
     packet->capital = FALSE;
 
   packet->walls = pdcity->has_walls;
-  packet->occupied = pdcity->occupied;
 
   if (pcity && player_has_traderoute_with_city(pplayer, pcity)) {
     packet->tile_trade = pcity->tile_trade;
@@ -1678,8 +1680,6 @@ void update_dumb_city(struct player *pplayer, struct city *pcity)
   sz_strlcpy(pdcity->name, pcity->name);
   pdcity->size = pcity->size;
   pdcity->has_walls = city_got_citywalls(pcity);
-  pdcity->occupied =
-      (unit_list_size(&(map_get_tile(pcity->x, pcity->y)->units)) > 0);
   pdcity->owner = pcity->owner;
 }
 
@@ -1797,7 +1797,7 @@ void change_build_target(struct player *pplayer, struct city *pcity,
 			 int target, bool is_unit, int event)
 {
   char *name;
-  const char *source;
+  char *source;
 
   /* If the city is already building this thing, don't do anything */
   if (pcity->is_building_unit == is_unit &&

@@ -13,8 +13,6 @@
 #ifndef FC__AILOG_H
 #define FC__AILOG_H
 
-#include "gotohand.h"		/* enum goto_result */
-
 struct unit;
 struct city;
 
@@ -26,7 +24,6 @@ struct city;
 #define LOGLEVEL_UNIT LOG_DEBUG
 #define LOGLEVEL_GOTO LOG_DEBUG
 #define LOGLEVEL_CITY LOG_DEBUG
-#define LOGLEVEL_BUILD LOG_DEBUG
 
 void CITY_LOG(int level, struct city *pcity, const char *msg, ...);
 void UNIT_LOG(int level, struct unit *punit, const char *msg, ...);

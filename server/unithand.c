@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -236,8 +235,8 @@ void handle_incite_inq(struct connection *pconn,
 		       struct packet_generic_integer *packet)
 {
   struct player *pplayer = pconn->player;
-  struct city *pcity = find_city_by_id(packet->value);
-  struct unit *punit = find_unit_by_id(packet->value);
+  struct city *pcity=find_city_by_id(packet->value);
+  struct unit *punit=find_unit_by_id(packet->value);
   struct packet_generic_values req;
 
   if (!pplayer) {
@@ -245,16 +244,18 @@ void handle_incite_inq(struct connection *pconn,
 	    conn_description(pconn));
     return;
   }
-  if (pcity) {
-    req.value1 = city_incite_cost(pplayer, pcity);
-    req.id = packet->value;
+  if(pcity)  {
+    city_incite_cost(pcity);
+    req.id=packet->value;
+    req.value1=pcity->incite_revolt_cost;
+    if(pplayer->player_no == pcity->original) req.value1/=2;
     send_packet_generic_values(pconn, PACKET_INCITE_COST, &req);
     return;
   }
-  if (punit) {
+  if(punit)  {
     punit->bribe_cost = unit_bribe_cost(punit);
-    req.id = packet->value;
-    req.value1 = punit->bribe_cost;
+    req.id=packet->value;
+    req.value1=punit->bribe_cost;
     send_packet_generic_values(pconn, PACKET_INCITE_COST, &req);
   }
 }
@@ -537,18 +538,20 @@ static void city_add_unit(struct player *pplayer, struct unit *punit)
 static void city_build(struct player *pplayer, struct unit *punit,
 		       char *name)
 {
-  if (!is_sane_name(name)) {
+  const char *city_name = get_sane_name(name);
+
+  if (!city_name) {
     notify_player_ex(pplayer, punit->x, punit->y, E_NOEVENT,
 		     _("Game: Let's not build a city with "
 		       "such a stupid name."));
     return;
   }
 
-  if (!is_allowed_city_name(pplayer, name, punit->x, punit->y, TRUE)) {
+  if (!is_allowed_city_name(pplayer, city_name, punit->x, punit->y, TRUE)) {
     return;
   }
 
-  create_city(pplayer, punit->x, punit->y, name);
+  create_city(pplayer, punit->x, punit->y, city_name);
   wipe_unit(punit);
 }
 
@@ -629,13 +632,13 @@ already made all neccesary checks.
 **************************************************************************/
 static void handle_unit_attack_request(struct unit *punit, struct unit *pdefender)
 {
+  int o;
   struct player *pplayer = unit_owner(punit);
   struct packet_unit_combat combat;
   struct unit *plooser, *pwinner;
   struct unit old_punit = *punit;	/* Used for new ship algorithm. -GJW */
   struct city *pcity;
   int def_x = pdefender->x, def_y = pdefender->y;
-  struct packet_unit_info unit_att_packet, unit_def_packet;
   
   freelog(LOG_DEBUG, "Start attack: %s's %s against %s's %s.",
 	  pplayer->name, unit_type(punit)->name, 
@@ -716,37 +719,17 @@ static void handle_unit_attack_request(struct unit *punit, struct unit *pdefende
     
   combat.attacker_unit_id=punit->id;
   combat.defender_unit_id=pdefender->id;
-  combat.attacker_hp=punit->hp;
-  combat.defender_hp=pdefender->hp;
+  combat.attacker_hp=punit->hp / game.firepower_factor;
+  combat.defender_hp=pdefender->hp / game.firepower_factor;
   combat.make_winner_veteran=pwinner->veteran?1:0;
-
-  package_unit(punit, &unit_att_packet, FALSE, FALSE, UNIT_INFO_IDENTITY, 0,
-	       FALSE);
-  package_unit(pdefender, &unit_def_packet, FALSE, FALSE, UNIT_INFO_IDENTITY,
-	       0, FALSE);
   
-  players_iterate(other_player) {
-    if (map_get_known_and_seen(punit->x, punit->y, other_player) ||
-	map_get_known_and_seen(def_x, def_y, other_player)) {
-
-      /* 
-       * Special case for attacking/defending:
-       * 
-       * Normally the player doesn't get the information about the
-       * units inside a city. However for attacking/defending the
-       * player has to know the unit of the other side.
-       */
-
-      lsend_packet_unit_info(&other_player->connections, &unit_att_packet);
-      lsend_packet_unit_info(&other_player->connections, &unit_def_packet);
-      lsend_packet_unit_combat(&other_player->connections, &combat);
+  for(o=0; o<game.nplayers; o++)
+    if (map_get_known_and_seen(punit->x, punit->y, get_player(o)) ||
+	map_get_known_and_seen(def_x, def_y, get_player(o))) {
+      lsend_packet_unit_combat(&game.players[o].connections, &combat);
     }
-  } players_iterate_end;
-
   conn_list_iterate(game.game_connections, pconn) {
     if (!pconn->player && pconn->observer) {
-      send_packet_unit_info(pconn, &unit_att_packet);
-      send_packet_unit_info(pconn, &unit_def_packet);
       send_packet_unit_combat(pconn, &combat);
     }
   } conn_list_iterate_end;
@@ -1216,7 +1199,8 @@ static void handle_unit_activity_dependencies(struct unit *punit,
       punit->ai.control = FALSE;
       break;
     default: 
-      ; /* do nothing */
+      /* do nothing */
+      break;
     }
     break;
   case ACTIVITY_EXPLORE:
@@ -1224,16 +1208,12 @@ static void handle_unit_activity_dependencies(struct unit *punit,
     if (punit->moves_left > 0) {
       int id = punit->id;
       bool more_to_explore = ai_manage_explorer(punit);
-
-      if ((punit = find_unit_by_id(id))) {
-	if (more_to_explore) {
-	  /* ai_manage_explorer sets the activity to idle, so we reset
-	   * it. */
-	  set_unit_activity(punit, ACTIVITY_EXPLORE);
-	  send_unit_info(NULL, punit);
-	} else {
-	  punit->ai.control = FALSE;
-	}
+      /* ai_manage_explorer sets the activity to idle, so we reset it */
+      if ((punit = find_unit_by_id(id)) && more_to_explore) {
+	set_unit_activity(punit, ACTIVITY_EXPLORE);
+	send_unit_info(NULL, punit);
+      } else if (punit) {
+        punit->ai.control = FALSE;
       }
     }
     break;

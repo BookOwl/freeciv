@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -99,7 +98,8 @@ static void set_cityopt_values(struct city_dialog *pdialog);
 /******************************************************************
 * functions in cma_fec.c but as static
 ******************************************************************/
-static const char *get_city_growth_string(struct city *pcity, int surplus)
+static const char *const get_city_growth_string(struct city *pcity,
+						int surplus)
 {
   int stock, cost, turns;
   static char buffer[50];

@@ -49,6 +49,7 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>		/* usleep, fcntl, gethostname */
@@ -152,7 +153,7 @@ const char *mystrerror(int errnum)
 
 
 /***************************************************************
-  Suspend execution for the specified number of microseconds.
+  Suspend execution for the specified number of milliseconds.
 ***************************************************************/
 void myusleep(unsigned long usec)
 {
@@ -225,9 +226,6 @@ size_t mystrlcpy(char *dest, const char *src, size_t n)
 #endif
 }
 
-/**********************************************************************
- ...
-***********************************************************************/
 size_t mystrlcat(char *dest, const char *src, size_t n)
 {
   assert(dest != NULL);

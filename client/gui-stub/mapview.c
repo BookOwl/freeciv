@@ -1,26 +1,7 @@
 /* mapview.c -- PLACEHOLDER */
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include "mapview.h"
 
-/***********************************************************************
-  This function can be used by mapview_common code to determine the
-  location and dimensions of the mapview canvas.
-***********************************************************************/
-void get_mapview_dimensions(int *map_view_topleft_map_x,
-			    int *map_view_topleft_map_y,
-			    int *map_view_pixel_width,
-			    int *map_view_pixel_height)
-{
-  /* PORTME */
-  *map_view_topleft_map_x = map_view_x0;
-  *map_view_topleft_map_y = map_view_y0;
-  *map_view_pixel_width = canvas_width;
-  *map_view_pixel_height = canvas_height;
-}
 
 bool tile_visible_mapcanvas(int x, int y)
 {
@@ -82,10 +63,8 @@ center_tile_mapcanvas(int x, int y)
 	/* PORTME */
 }
 
-/**************************************************************************
-  Show descriptions for all cities visible on the map canvas.
-**************************************************************************/
-void show_city_descriptions(void)
+void
+get_center_tile_mapcanvas(int *x, int *y)
 {
 	/* PORTME */
 }
@@ -93,6 +72,12 @@ void show_city_descriptions(void)
 void
 update_map_canvas(int tile_x, int tile_y, int width, int height,
 		  bool write_to_screen)
+{
+	/* PORTME */
+}
+
+void
+update_map_canvas_visible(void)
 {
 	/* PORTME */
 }
@@ -164,15 +149,4 @@ void draw_segment(int src_x, int src_y, int dir)
 void undraw_segment(int src_x, int src_y, int dir)
 {
 	/* PORTME */
-}
-
-/**************************************************************************
-  This function is called when the tileset is changed.
-**************************************************************************/
-void tileset_changed(void)
-{
-  /* PORTME */
-  /* Here you should do any necessary redraws (for instance, the city
-   * dialogs usually need to be resized).
-   */
 }

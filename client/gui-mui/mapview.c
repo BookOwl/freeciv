@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -76,21 +75,6 @@ int get_map_x_visible(void)
 int get_map_y_visible(void)
 {
   return xget(main_map_area, MUIA_Map_VertVisible);
-}
-
-/***********************************************************************
-  This function can be used by mapview_common code to determine the
-  location and dimensions of the mapview canvas.
-***********************************************************************/
-void get_mapview_dimensions(int *map_view_topleft_map_x,
-			    int *map_view_topleft_map_y,
-			    int *map_view_pixel_width,
-			    int *map_view_pixel_height)
-{
-  *map_view_topleft_map_x = xget(main_map_area, MUIA_Map_HorizFirst);
-  *map_view_topleft_map_y = xget(main_map_area, MUIA_Map_VertFirst);
-  *map_view_pixel_width = _mwidth(main_map_area);	/* !! */
-  *map_view_pixel_height = _mheight(main_map_area);	/* !! */
 }
 
 /**************************************************************************
@@ -363,6 +347,38 @@ void set_indicator_icons(int bulb, int sol, int flake, int gov)
 }
 
 /**************************************************************************
+Finds the pixel coordinates of a tile.  Beside setting the results in
+canvas_x,canvas_y it returns whether the tile is inside the visible
+map.
+
+This function is almost identical between all GUI's.
+**************************************************************************/
+int get_canvas_xy(int map_x, int map_y, int *canvas_x, int *canvas_y)
+{
+  int map_view_x0 = xget(main_map_area, MUIA_Map_HorizFirst);
+  int map_view_y0 = xget(main_map_area, MUIA_Map_VertFirst);
+  int width = _mwidth(main_map_area);	/* !! */
+  int height = _mheight(main_map_area);	/* !! */
+
+  return map_pos_to_canvas_pos(map_x, map_y, canvas_x, canvas_y,
+			       map_view_x0, map_view_y0, width, height);
+}
+
+/**************************************************************************
+Finds the map coordinates corresponding to pixel coordinates.
+
+This function is almost identical between all GUI's.
+**************************************************************************/
+void get_map_xy(int canvas_x, int canvas_y, int *map_x, int *map_y)
+{
+  int map_view_x0 = xget(main_map_area, MUIA_Map_HorizFirst);
+  int map_view_y0 = xget(main_map_area, MUIA_Map_VertFirst);
+
+  canvas_pos_to_map_pos(canvas_x, canvas_y, map_x, map_y, map_view_x0,
+			map_view_y0);
+}
+
+/**************************************************************************
  GUI Independ (with new access functions)
 **************************************************************************/
 bool tile_visible_mapcanvas(int x, int y)
@@ -448,6 +464,19 @@ void move_unit_map_canvas(struct unit *punit, int x0, int y0, int dx, int dy)
 /**************************************************************************
 ...
 **************************************************************************/
+void get_center_tile_mapcanvas(int *x, int *y)
+{
+  int width, height;
+  width = _mwidth(main_map_area);
+  height = _mheight(main_map_area);
+
+  /* This sets the pointers x and y */
+  get_map_xy(width/2, height/2, x, y);
+}
+
+/**************************************************************************
+...
+**************************************************************************/
 void set_map_xy_start(int new_map_view_x0, int new_map_view_y0)
 {
   SetAttrs(main_map_area,
@@ -506,7 +535,7 @@ void refresh_overview_viewrect(void)
 /**************************************************************************
 ...
 **************************************************************************/
-void show_city_descriptions(void)
+static void show_city_descriptions(void)
 {
   if (!draw_city_names && !draw_city_productions)
     return;
@@ -530,6 +559,33 @@ void update_map_canvas(int x, int y, int width, int height,
 		       bool write_to_screen)
 {
   DoMethod(main_map_area, MUIM_Map_Refresh, x, y, width, height, write_to_screen);
+}
+
+/**************************************************************************
+ Update (only) the visible part of the map
+**************************************************************************/
+void update_map_canvas_visible(void)
+{
+  int map_view_x0 = xget(main_map_area, MUIA_Map_HorizFirst);
+  int map_view_y0 = xget(main_map_area, MUIA_Map_VertFirst);
+  int map_canvas_store_twidth = get_map_x_visible();
+  int map_canvas_store_theight = get_map_y_visible();
+
+  if (is_isometric) {
+    /* just find a big rectangle that includes the whole visible area. The
+       invisible tiles will not be drawn. */
+    int width, height;
+
+    width = height = map_canvas_store_twidth + map_canvas_store_theight;
+    update_map_canvas(map_view_x0,
+		      map_view_y0 - map_canvas_store_twidth,
+		      width, height, TRUE);
+  } else {
+    update_map_canvas(map_view_x0, map_view_y0,
+		      map_canvas_store_twidth,map_canvas_store_theight, TRUE);
+  }
+
+  show_city_descriptions();
 }
 
 /**************************************************************************
@@ -580,15 +636,4 @@ map_canvas_store.
 void undraw_segment(int src_x, int src_y, int dir)
 {
   DoMethod(main_map_area, MUIM_Map_UndrawSegment, src_x, src_y, dir);
-}
-
-/**************************************************************************
-  This function is called when the tileset is changed.
-**************************************************************************/
-void tileset_changed(void)
-{
-  /* PORTME */
-  /* Here you should do any necessary redraws (for instance, the city
-   * dialogs usually need to be resized).
-   */
 }

@@ -1,9 +1,5 @@
 /* gui_main.c -- PLACEHOLDER */
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <stdio.h>
 
 #include "gui_main.h"

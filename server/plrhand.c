@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -812,11 +811,6 @@ void handle_player_cancel_pact(struct player *pplayer, int other_player)
   if (pplayer == pplayer2)
     return;
 
-  /* can't break a pact with a team member */
-  if (pplayer->team != TEAM_NONE && pplayer->team == pplayer2->team) {
-    return;
-  }
-
   /* check what the new status will be, and what will happen to our
      reputation */
   switch(old_type) {
@@ -1118,7 +1112,6 @@ static void package_player_common(struct player *plr,
   sz_strlcpy(packet->name, plr->name);
   packet->nation=plr->nation;
   packet->is_male=plr->is_male;
-  packet->team = plr->team;
   packet->city_style=plr->city_style;
 
   packet->is_alive=plr->is_alive;

@@ -11,7 +11,6 @@
    GNU General Public License for more details.
 
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -336,7 +335,7 @@ void ui_main(int argc, char *argv[])
   
   icon_pixmap = XCreateBitmapFromData(display,
 				      RootWindowOfScreen(XtScreen(toplevel)),
-				      freeciv_bits,
+				      (char *) freeciv_bits,
 				      freeciv_width, freeciv_height);
   XtVaSetValues(toplevel, XtNiconPixmap, icon_pixmap, NULL);
 

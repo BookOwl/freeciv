@@ -65,13 +65,6 @@ typedef int bool;
 
 #define BOOL_VAL(x) ((x)!=0)
 
-/*
- * DIVIDE() divides and rounds down, rather than just divides and
- * rounds toward 0.  It is assumed that the divisor is positive.
- */
-#define DIVIDE(n, d) \
-    ( (n) / (d) - ( (n) < 0 && (n) % (d) < 0 ) )
-
 /* Deletes bit no in val,
    moves all bits larger than no one down,
    and inserts a zero at the top. */
@@ -124,7 +117,7 @@ const char *general_int_to_text(int nr, int decade_exponent);
 const char *int_to_text(int nr);
 const char *population_to_text(int thousand_citizen);
 
-bool is_sane_name(const char *name);
+const char *get_sane_name(const char *name);
 const char *textyear(int year);
 int compare_strings(const void *first, const void *second);
 int compare_strings_ptrs(const void *first, const void *second);

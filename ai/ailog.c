@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -129,7 +128,7 @@ void BODYGUARD_LOG(int level, struct unit *punit, const char *msg)
   struct unit *pcharge;
   struct city *pcity;
   int x = -1, y = -1, id = -1;
-  const char *s = "none";
+  char *s = "none";
 
   if (minlevel > fc_log_level) {
     return;

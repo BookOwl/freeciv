@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -55,6 +54,7 @@ int map_view_x0, map_view_y0;
 
 static void pixmap_put_overlay_tile(Pixmap pixmap, int x, int y,
  				    struct Sprite *ssprite);
+static void show_city_descriptions(void);
 static void put_line(Pixmap pm, int x, int y, int dir);
 
 /* the intro picture is held in this pixmap, which is scaled to
@@ -62,24 +62,32 @@ static void put_line(Pixmap pm, int x, int y, int dir);
 Pixmap scaled_intro_pixmap;
 int scaled_intro_pixmap_width, scaled_intro_pixmap_height;
 
+/**************************************************************************
+Finds the pixel coordinates of a tile.  Beside setting the results in
+canvas_x,canvas_y it returns whether the tile is inside the visible map.
 
-/***********************************************************************
-  This function can be used by mapview_common code to determine the
-  location and dimensions of the mapview canvas.
-***********************************************************************/
-void get_mapview_dimensions(int *map_view_topleft_map_x,
-			    int *map_view_topleft_map_y,
-			    int *map_view_pixel_width,
-			    int *map_view_pixel_height)
+This function is almost identical between all GUI's.
+**************************************************************************/
+static int get_canvas_xy(int map_x, int map_y, int *canvas_x,
+			 int *canvas_y)
 {
   Dimension width, height;
 
-  *map_view_topleft_map_x = map_view_x0;
-  *map_view_topleft_map_y = map_view_y0;
   XtVaGetValues(map_canvas, XtNwidth, &width, XtNheight, &height, NULL);
 
-  *map_view_pixel_width = (Dimension)width;
-  *map_view_pixel_height = (Dimension)height;
+  return map_pos_to_canvas_pos(map_x, map_y, canvas_x, canvas_y,
+			       map_view_x0, map_view_y0, width, height);
+}
+
+/**************************************************************************
+Finds the map coordinates corresponding to pixel coordinates.
+
+This function is almost identical between all GUI's.
+**************************************************************************/
+void get_map_xy(int canvas_x, int canvas_y, int *map_x, int *map_y)
+{
+  canvas_pos_to_map_pos(canvas_x, canvas_y, map_x, map_y, map_view_x0,
+			map_view_y0);
 }
 
 /**************************************************************************
@@ -437,6 +445,18 @@ void move_unit_map_canvas(struct unit *punit, int x0, int y0, int dx, int dy)
 }
 
 /**************************************************************************
+...
+**************************************************************************/
+void get_center_tile_mapcanvas(int *x, int *y)
+{
+  Dimension width, height;
+  XtVaGetValues(map_canvas, XtNwidth, &width, XtNheight, &height, NULL);
+
+  /* This sets the pointers x and y */
+  get_map_xy(width/2, height/2, x, y);
+}
+
+/**************************************************************************
 Centers the mapview around (x, y).
 
 This function is almost identical between all GUI's.
@@ -690,6 +710,16 @@ void update_map_canvas(int x, int y, int width, int height,
 }
 
 /**************************************************************************
+ Update (only) the visible part of the map
+**************************************************************************/
+void update_map_canvas_visible(void)
+{
+  update_map_canvas(map_view_x0, map_view_y0,
+		    map_canvas_store_twidth, map_canvas_store_theight, 1);
+  show_city_descriptions();
+}
+
+/**************************************************************************
 ...
 **************************************************************************/
 void update_map_canvas_scrollbars(void)
@@ -712,29 +742,28 @@ void update_city_descriptions(void)
 }
 
 /**************************************************************************
-Draw at x = left of string, y = top of string.
+Draw at x = center of string, y = top of string.
 **************************************************************************/
 static void draw_shadowed_string(XFontStruct * font, GC font_gc,
-				 enum color_std foreground,
-				 enum color_std shadow,
-				 int x, int y, const char *string)
+					  int x, int y, const char *string)
 {
-  Window wndw = XtWindow(map_canvas);
-  size_t len = strlen(string);
+  Window wndw=XtWindow(map_canvas);
+  int len=strlen(string);
+  int wth=XTextWidth(font, string, len);
+  int xs=x-wth/2;
+  int ys=y+font->ascent;
 
-  y += font->ascent;
+  XSetForeground(display, font_gc, colors_standard[COLOR_STD_BLACK]);
+  XDrawString(display, wndw, font_gc, xs+1, ys+1, string, len);
 
-  XSetForeground(display, font_gc, colors_standard[shadow]);
-  XDrawString(display, wndw, font_gc, x + 1, y + 1, string, len);
-
-  XSetForeground(display, font_gc, colors_standard[foreground]);
-  XDrawString(display, wndw, font_gc, x, y, string, len);
+  XSetForeground(display, font_gc, colors_standard[COLOR_STD_WHITE]);
+  XDrawString(display, wndw, font_gc, xs, ys, string, len);
 }
 
 /**************************************************************************
 ...
 **************************************************************************/
-void show_city_descriptions(void)
+static void show_city_descriptions(void)
 {
   int x, y;
 
@@ -750,47 +779,30 @@ void show_city_descriptions(void)
       if (!normalize_map_pos(&rx, &ry))
         continue;
 
-      if ((pcity = map_get_city(rx, ry))) {
-	char buffer[512], buffer2[512];
-	enum color_std color;
-	int w, w2;
+      if((pcity=map_get_city(rx, ry))) {
 
-	get_city_mapview_name_and_growth(pcity, buffer, sizeof(buffer),
-					 buffer2, sizeof(buffer2), &color);
-
-	w = XTextWidth(main_font_struct, buffer, strlen(buffer));
-	if (buffer2[0] != '\0') {
-	  /* HACK: put a character's worth of space between the two strings. */
-	  w += XTextWidth(main_font_struct, "M", 1);
+	if (draw_city_names) {
+	  draw_shadowed_string(main_font_struct, font_gc,
+			       x*NORMAL_TILE_WIDTH+NORMAL_TILE_WIDTH/2,
+			       (y+1)*NORMAL_TILE_HEIGHT,
+			       pcity->name);
 	}
-	w2 = XTextWidth(main_font_struct, buffer2, strlen(buffer2));
 
-	draw_shadowed_string(main_font_struct, font_gc,
-			     COLOR_STD_WHITE, COLOR_STD_BLACK,
-			     x * NORMAL_TILE_WIDTH +
-			     NORMAL_TILE_WIDTH / 2 - (w + w2) / 2,
-			     (y + 1) * NORMAL_TILE_HEIGHT, buffer);
-
-	draw_shadowed_string(prod_font_struct, prod_font_gc, color,
-			     COLOR_STD_BLACK,
-			     x * NORMAL_TILE_WIDTH + NORMAL_TILE_WIDTH / 2 -
-			     (w + w2) / 2 + w, (y + 1) * NORMAL_TILE_HEIGHT,
-			     buffer2);
-
-	if (draw_city_productions && (pcity->owner == game.player_idx)) {
-	  int yoffset = (draw_city_names ? main_font_struct->ascent +
-			 main_font_struct->descent : 0);
-
+	if (draw_city_productions && (pcity->owner==game.player_idx)) {
+	  char buffer[512];
+	
           get_city_mapview_production(pcity, buffer, sizeof(buffer));
-	  w = XTextWidth(prod_font_struct, buffer, strlen(buffer));
 
 	  draw_shadowed_string(prod_font_struct, prod_font_gc,
-			       COLOR_STD_WHITE, COLOR_STD_BLACK,
-			       x * NORMAL_TILE_WIDTH +
-			       NORMAL_TILE_WIDTH / 2 - w / 2,
-			       (y + 1) * NORMAL_TILE_HEIGHT +
-			       yoffset, buffer);
+			       x*NORMAL_TILE_WIDTH+NORMAL_TILE_WIDTH/2,
+			       (y+1)*NORMAL_TILE_HEIGHT +
+			         (draw_city_names ?
+				   main_font_struct->ascent +
+				     main_font_struct->descent :
+				   0),
+			       buffer);
 	}
+
       }
     }
   }
@@ -1274,15 +1286,4 @@ void undraw_segment(int src_x, int src_y, int dir)
       refresh_tile_mapcanvas(dest_x, dest_y, TRUE);
     }
   }
-}
-
-/**************************************************************************
-  This function is called when the tileset is changed.
-**************************************************************************/
-void tileset_changed(void)
-{
-  /* PORTME */
-  /* Here you should do any necessary redraws (for instance, the city
-   * dialogs usually need to be resized).
-   */
 }

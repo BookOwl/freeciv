@@ -9,11 +9,10 @@
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
-***********************************************************************/
-
+***********************************************************************/        
 #ifdef HAVE_CONFIG_H
 #include <config.h>
-#endif
+#endif      
 
 #include <string.h>
 #include <stdarg.h>
@@ -321,10 +320,11 @@ static void do_select(HWND hWnd)
   ComboBox_GetText(GetDlgItem(hWnd,ID_RACESDLG_LEADER),
 		   packet.name,MAX_LEN_NAME);
  
-  if (!is_sane_name(packet.name)) {
-    append_output_window(_("You must type a legal name."));
-    return;
-  }
+  if (!get_sane_name(packet.name))
+    {
+      append_output_window(_("You must type a legal name."));
+      return;
+    }
   send_packet_alloc_nation(&aconnection,&packet);  
 }
 

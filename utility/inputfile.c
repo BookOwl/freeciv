@@ -63,10 +63,6 @@
 
 ***********************************************************************/
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
@@ -125,7 +121,7 @@ static const char *get_token_comma(struct inputfile *inf);
 static const char *get_token_value(struct inputfile *inf);
 
 struct {
-  const char *name;
+  char *name;
   get_token_fn_t func;
 }
 static tok_tab[INF_TOK_LAST] =

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -116,7 +115,7 @@ enum sset_type {
 #define TOKEN_DELIMITERS " \t\n,"
 
 struct settings_s {
-  const char *name;
+  char *name;
   enum sset_class sclass;
   enum sset_to_client to_client;
 
@@ -124,7 +123,7 @@ struct settings_s {
    * Sould be less than 42 chars (?), or shorter if the values may
    * have more than about 4 digits.  Don't put "." on the end.
    */
-  const char *short_help;
+  char *short_help;
 
   /*
    * May be empty string, if short_help is sufficient.  Need not
@@ -132,7 +131,7 @@ struct settings_s {
    * be wrapped (and indented) automatically.  Should have punctuation
    * etc, and should end with a "."
    */
-  const char *extra_help;
+  char *extra_help;
   enum sset_type type;
 
   /* 
@@ -154,7 +153,7 @@ struct settings_s {
 
   /*** string part ***/
   char *string_value;
-  const char *string_default_value;
+  char *string_default_value;
   bool (*string_validate)(const char *, char **);
   size_t string_value_size;	/* max size we can write into string_value */
 };
@@ -727,15 +726,11 @@ static struct settings_s settings[] = {
 	     "wait at all."), NULL, 
 	  GAME_MIN_NETWAIT, GAME_MAX_NETWAIT, GAME_DEFAULT_NETWAIT)
 
-  GEN_INT("pingtime", game.pingtime, SSET_META, SSET_TO_CLIENT,
-	  N_("Seconds between PINGs"),
-	  N_("The civserver will poll the clients with a PING request "
-	     "each time this period elapses."), NULL, 
-	  GAME_MIN_PINGTIME, GAME_MAX_PINGTIME, GAME_DEFAULT_PINGTIME)
-
   GEN_INT("pingtimeout", game.pingtimeout, SSET_META, SSET_TO_CLIENT,
-	  N_("Time to cut a client"),
-	  N_("If a client doesn't reply to a PONG in this time the "
+	  N_("Maximum seconds between PINGs"),
+	  N_("The civserver will poll the clients with a PING request "
+	     "each time this period elapses. If a client doesn't reply "
+	     "with a PONG before the next server PING request the "
 	     "client is disconnected."), NULL, 
 	  GAME_MIN_PINGTIMEOUT, GAME_MAX_PINGTIMEOUT, GAME_DEFAULT_PINGTIMEOUT)
 
@@ -922,11 +917,11 @@ static PlayerNameStatus test_player_name(char* name)
   Commands - can be recognised by unique prefix
 **************************************************************************/
 struct command {
-  const char *name;             /* name - will be matched by unique prefix   */
-  enum cmdlevel_id level;  	/* access level required to use the command  */
-  const char *synopsis;	   	/* one or few-line summary of usage */
-  const char *short_help;	/* one line (about 70 chars) description */
-  const char *extra_help;	/* extra help information; will be line-wrapped */
+  char *name;              /* name - will be matched by unique prefix   */
+  enum cmdlevel_id level;  /* access level required to use the command  */
+  char *synopsis;	   /* one or few-line summary of usage */
+  char *short_help;	   /* one line (about 70 chars) description */
+  char *extra_help;	   /* extra help information; will be line-wrapped */
 };
 
 /* Order here is important: for ambiguous abbreviations the first
@@ -951,7 +946,6 @@ enum command_id {
   
   /* mostly non-harmful: */
   CMD_SET,
-  CMD_TEAM,
   CMD_FIX,
   CMD_UNFIX,
   CMD_RULESETDIR,
@@ -1077,15 +1071,6 @@ static const struct command commands[] = {
   {"set",	ALLOW_CTRL,
    N_("set <option-name> <value>"),
    N_("Set server option."), NULL
-  },
-  {"team",	ALLOW_CTRL,
-   N_("team <player> [team]"),
-   N_("Change, add or remove a player's team affiliation."),
-   N_("Sets a player as member of a team. If no team specified, the "
-      "player is set teamless. Use \"\" if names contain whitespace. "
-      "A team is a group of players that start out allied, with shared "
-      "vision and embassies, and fight together to achieve team victory "
-      "with averaged individual scores.")
   },
   {"fix",       ALLOW_CTRL,
    N_("fix <option-name>"),
@@ -1372,7 +1357,7 @@ static void cmd_reply_line(enum command_id cmd, struct connection *caller,
 			   enum rfc_status rfc_status, const char *prefix,
 			   const char *line)
 {
-  const char *cmdname = cmd < CMD_NUM ? commands[cmd].name :
+  char *cmdname = cmd < CMD_NUM ? commands[cmd].name :
                   cmd == CMD_AMBIGUOUS ? _("(ambiguous)") :
                   cmd == CMD_UNRECOGNIZED ? _("(unknown)") :
 			"(?!?)";  /* this case is a bug! */
@@ -1627,8 +1612,7 @@ static int handicap_of_skill_level(int level)
   int h[11] = { -1,
 		H_NONE,
 		H_NONE,
-		H_RATES | H_TARGETS | H_HUTS | H_NOPLANES 
-		                | H_LIMITEDHUTS | H_DEFENSIVE,
+		H_RATES | H_TARGETS | H_HUTS | H_DEFENSIVE,
 		H_NONE,
 		H_RATES | H_TARGETS | H_HUTS,
 		H_NONE,
@@ -1829,7 +1813,7 @@ static void remove_player(struct connection *caller, char *arg)
 /**************************************************************************
 ...
 **************************************************************************/
-static void generic_not_implemented(struct connection *caller, const char *cmd)
+static void generic_not_implemented(struct connection *caller, char *cmd)
 {
   cmd_reply(CMD_RENAME, caller, C_FAIL,
 	    _("Sorry, the '%s' command is not implemented yet."), cmd);
@@ -2674,59 +2658,6 @@ static bool is_ok_opt_name_value_sep_char(char c)
 /******************************************************************
   ...
 ******************************************************************/
-static void team_command(struct connection *caller, char *str) 
-{
-  struct player *pplayer;
-  enum m_pre_result match_result;
-  char buf[MAX_LEN_CONSOLE_LINE];
-  char *arg[2];
-  int ntokens = 0;
-
-  if (server_state != PRE_GAME_STATE) {
-    cmd_reply(CMD_TEAM, caller, C_SYNTAX,
-              _("Cannot change teams once game has begun."));
-    return;
-  }
-
-  if (str != NULL || strlen(str) > 0) {
-    sz_strlcpy(buf, str);
-    ntokens = get_tokens(buf, arg, 2, TOKEN_DELIMITERS);
-  }
-  if (ntokens > 2 || ntokens < 1) {
-    cmd_reply(CMD_TEAM, caller, C_SYNTAX,
-	      _("Undefined argument.  Usage: team <player> [team]."));
-    return;
-  }
-
-  pplayer = find_player_by_name_prefix(arg[0], &match_result);
-  if (pplayer == NULL) {
-    cmd_reply_no_such_player(CMD_TEAM, caller, arg[0], match_result);
-    return;
-  }
-
-  if (pplayer->team != TEAM_NONE) {
-    team_remove_player(pplayer);
-  }
-
-  if (ntokens == 1) {
-    /* Remove from team */
-    cmd_reply(CMD_TEAM, caller, C_OK, _("Player %s is made teamless."), 
-        pplayer->name);
-    return;
-  }
-
-  if (!is_sane_name(arg[1])) {
-    cmd_reply(CMD_TEAM, caller, C_SYNTAX, _("Bad team name."));
-    return;
-  }
-  team_add_player(pplayer, arg[1]);
-  cmd_reply(CMD_TEAM, caller, C_OK, _("Player %s set to team %s."),
-	    pplayer->name, team_get_by_id(pplayer->team)->name);
-}
-
-/******************************************************************
-  ...
-******************************************************************/
 static void set_command(struct connection *caller, char *str) 
 {
   char command[MAX_LEN_CONSOLE_LINE], arg[MAX_LEN_CONSOLE_LINE], *cptr_s, *cptr_d;
@@ -3221,15 +3152,12 @@ void handle_stdin_input(struct connection *caller, char *str)
   case CMD_SET:
     set_command(caller,arg);
     break;
-  case CMD_TEAM:
-    team_command(caller, arg);
-    break;
-  case CMD_FIX:
-    fix_command(caller,arg, CMD_FIX);
-    break;
-  case CMD_UNFIX:
-    fix_command(caller, arg, CMD_UNFIX);
-    break;
+   case CMD_FIX:
+     fix_command(caller,arg, CMD_FIX);
+     break;
+   case CMD_UNFIX:
+     fix_command(caller, arg, CMD_UNFIX);
+     break;
   case CMD_RULESETDIR:
     set_rulesetdir(caller, arg);
     break;
@@ -3665,10 +3593,6 @@ void show_players(struct connection *caller)
 	cat_snprintf(buf2, sizeof(buf2), _(", nation %s"),
 		     get_nation_name_plural(pplayer->nation));
       }
-      if (pplayer->team != TEAM_NONE) {
-        cat_snprintf(buf2, sizeof(buf2), (", team %s"),
-                     team_get_by_id(pplayer->team)->name);
-      }
       my_snprintf(buf, sizeof(buf), "%s (%s)", pplayer->name, buf2);
       
       n = conn_list_size(&pplayer->connections);
@@ -3939,7 +3863,7 @@ returns whether the characters before the start position in rl_line_buffer
 is of the form [non-alpha]*cmd[non-alpha]*
 allow_fluff changes the regexp to [non-alpha]*cmd[non-alpha].*
 **************************************************************************/
-static bool contains_str_before_start(int start, const char *cmd, bool allow_fluff)
+static bool contains_str_before_start(int start, char *cmd, bool allow_fluff)
 {
   char *str_itr = rl_line_buffer;
   int cmd_len = strlen(cmd);

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -69,6 +68,8 @@ static struct unit *find_best_air_unit_to_refuel(struct player *pplayer,
 						 int x, int y, bool missile);
 static struct unit *choose_more_important_refuel_target(struct unit *punit1,
 							struct unit *punit2);
+static bool is_airunit_refuel_point(int x, int y, struct player *pplayer,
+				   Unit_Type_id type, bool unit_is_on_tile);
 static bool maybe_cancel_patrol_due_to_enemy(struct unit *punit);
 
 /**************************************************************************
@@ -212,9 +213,9 @@ void unit_versus_unit(struct unit *attacker, struct unit *defender)
   }
   while (attacker->hp>0 && defender->hp>0) {
     if (myrand(attackpower+defensepower) >= defensepower) {
-      defender->hp -= attack_firepower;
+      defender->hp -= attack_firepower * game.firepower_factor;
     } else {
-      attacker->hp -= defense_firepower;
+      attacker->hp -= defense_firepower * game.firepower_factor;
     }
   }
   if (attacker->hp<0) attacker->hp = 0;
@@ -783,23 +784,16 @@ static void update_unit_activity(struct unit *punit)
   int id = punit->id;
   int mr = unit_type(punit)->move_rate;
   bool unit_activity_done = FALSE;
-  enum unit_activity activity = punit->activity;
+  int activity = punit->activity;
   enum ocean_land_change solvency = OLC_NONE;
   struct tile *ptile = map_get_tile(punit->x, punit->y);
 
-  if (activity != ACTIVITY_IDLE && activity != ACTIVITY_FORTIFIED
-      && activity != ACTIVITY_GOTO && activity != ACTIVITY_EXPLORE
-      && activity != ACTIVITY_PATROL) {
-    /*  We don't need the activity_count for the above */
-    if (punit->moves_left > 0) {
-      /* 
-       * To allow a settler to begin a task with no moves left without
-       * it counting toward the time to finish 
-       */
-      punit->activity_count += mr / SINGLE_MOVE;
-    } else if (mr == 0) {
-      punit->activity_count += 1;
-    }
+  /* to allow a settler to begin a task with no moves left
+     without it counting toward the time to finish */
+  if (punit->moves_left > 0) {
+    punit->activity_count += mr/SINGLE_MOVE;
+  } else if (mr == 0) {
+    punit->activity_count += 1;
   }
 
   unit_restore_movepoints(pplayer, punit);
@@ -827,12 +821,12 @@ static void update_unit_activity(struct unit *punit)
   }
 
   if (activity==ACTIVITY_PILLAGE) {
-    if (punit->activity_target == S_NO_SPECIAL) { /* case for old save files */
+    if (punit->activity_target == S_NO_SPECIAL) {	/* case for old save files */
       if (punit->activity_count >= 1) {
-	enum tile_special_type what =
+	int what =
 	  get_preferred_pillage(
-	       get_tile_infrastructure_set(map_get_tile(punit->x, punit->y)));
-
+	    get_tile_infrastructure_set(
+	      map_get_tile(punit->x, punit->y)));
 	if (what != S_NO_SPECIAL) {
 	  map_clear_special(punit->x, punit->y, what);
 	  send_tile_info(NULL, punit->x, punit->y);
@@ -856,18 +850,17 @@ static void update_unit_activity(struct unit *punit)
 	}
       }
     }
-    else if (total_activity_targeted(punit->x, punit->y, ACTIVITY_PILLAGE, 
-                                     punit->activity_target) >= 1) {
+    else if (total_activity_targeted (punit->x, punit->y,
+				      ACTIVITY_PILLAGE, punit->activity_target) >= 1) {
       enum tile_special_type what_pillaged = punit->activity_target;
-
       map_clear_special(punit->x, punit->y, what_pillaged);
-      unit_list_iterate (map_get_tile(punit->x, punit->y)->units, punit2) {
+      unit_list_iterate (map_get_tile(punit->x, punit->y)->units, punit2)
         if ((punit2->activity == ACTIVITY_PILLAGE) &&
 	    (punit2->activity_target == what_pillaged)) {
 	  set_unit_activity(punit2, ACTIVITY_IDLE);
 	  send_unit_info(NULL, punit2);
 	}
-      } unit_list_iterate_end;
+      unit_list_iterate_end;
       send_tile_info(NULL, punit->x, punit->y);
       
       /* If a watchtower has been pillaged, reduce sight to normal */
@@ -1572,8 +1565,8 @@ void resolve_unit_stack(int x, int y, bool verbose)
 /**************************************************************************
 ...
 **************************************************************************/
-bool is_airunit_refuel_point(int x, int y, struct player *pplayer,
-			     Unit_Type_id type, bool unit_is_on_tile)
+static bool is_airunit_refuel_point(int x, int y, struct player *pplayer,
+				   Unit_Type_id type, bool unit_is_on_tile)
 {
   struct player_tile *plrtile = map_get_player_tile(x, y, pplayer);
 
@@ -1777,8 +1770,11 @@ static void server_remove_unit(struct unit *punit)
      are built, so that no two settlers head towards the same city
      spot, we need to ensure this reservation is cleared should
      the settler die on the way. */
-  if (unit_owner(punit)->ai.control) {
-    ai_unit_new_role(punit, AIUNIT_NONE, -1, -1);
+  if (unit_owner(punit)->ai.control 
+      && punit->ai.ai_role == AIUNIT_AUTO_SETTLER) {
+    if (normalize_map_pos(&punit->goto_dest_x, &punit->goto_dest_y)) {
+      remove_city_from_minimap(punit->goto_dest_x, punit->goto_dest_y);
+    }
   }
 
   remove_unit_sight_points(punit);
@@ -2007,7 +2003,7 @@ void package_unit(struct unit *punit, struct packet_unit_info *packet,
   packet->veteran = punit->veteran;
   packet->type = punit->type;
   packet->movesleft = punit->moves_left;
-  packet->hp = punit->hp;
+  packet->hp = punit->hp / game.firepower_factor;
   packet->activity = punit->activity;
   packet->activity_count = punit->activity_count;
   packet->unhappiness = punit->unhappiness;
@@ -2047,19 +2043,12 @@ void send_unit_info_to_onlookers(struct conn_list *dest, struct unit *punit,
 
   conn_list_iterate(*dest, pconn) {
     struct player *pplayer = pconn->player;
-    bool can_see_tile = (map_get_known_and_seen(info.x, info.y, pplayer)
-			 || map_get_known_and_seen(x, y, pplayer));
-    bool can_see_unit = (player_can_see_unit(pplayer, punit)
-			 || player_can_see_unit_at_location(pplayer, punit,
-							    x, y));
-    bool outside_city =
-	((pplayer && pplayers_allied(unit_owner(punit), pplayer))
-	 || (!map_get_city(punit->x, punit->y) || !map_get_city(x, y)));
-
-    if (!pplayer && !pconn->observer) {
-      continue;
-    }
-    if (!pplayer || (can_see_tile && can_see_unit && outside_city)) {
+    if (!pplayer && !pconn->observer) continue;
+    if (!pplayer 
+        || ((map_get_known_and_seen(info.x, info.y, pplayer)
+             || map_get_known_and_seen(x, y, pplayer))
+            && (player_can_see_unit(pplayer, punit)
+                || player_can_see_unit_at_location(pplayer, punit, x, y)))) {
       send_packet_unit_info(pconn, &info);
     }
   }
@@ -2435,7 +2424,7 @@ static bool hut_get_barbarians(struct unit *punit)
     int punit_y = punit->y;
     Unit_Type_id type = punit->type;
 
-    ok = unleash_barbarians(punit_x, punit_y);
+    ok = unleash_barbarians(pplayer, punit_x, punit_y);
 
     if (ok) {
       notify_player_ex(pplayer, punit_x, punit_y, E_HUT_BARB,
@@ -2477,8 +2466,7 @@ static bool unit_enter_hut(struct unit *punit)
 {
   struct player *pplayer = unit_owner(punit);
   bool ok = TRUE;
-  int hut_chance = myrand(12);
-  
+
   if (game.rgame.hut_overflight==OVERFLIGHT_NOTHING && is_air_unit(punit)) {
     return ok;
   }
@@ -2492,14 +2480,8 @@ static bool unit_enter_hut(struct unit *punit)
 		       " they scatter in terror."));
     return ok;
   }
-  
-  /* AI with H_LIMITEDHUTS only gets 25 gold (or barbs if unlucky) */
-  if (pplayer->ai.control && ai_handicap(pplayer, H_LIMITEDHUTS) 
-      && hut_chance != 10) {
-    hut_chance = 0;
-  }
 
-  switch (hut_chance) {
+  switch (myrand(12)) {
   case 0:
     hut_get_gold(punit, 25);
     break;

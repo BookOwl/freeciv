@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -58,10 +57,7 @@ bool draw_goto_line = TRUE;
 static struct unit *punit_attacking = NULL;
 static struct unit *punit_defending = NULL;
 
-/*
- * This variable is TRUE iff a NON-AI controlled unit was focused this
- * turn.
- */
+/* this variable is TRUE iff a NON-AI controlled unit moved this turn */
 bool non_ai_unit_focus;
 
 /*************************************************************************/
@@ -221,19 +217,14 @@ void advance_unit_focus(void)
 
   set_unit_focus(punit_focus);
 
-  /* 
-   * Is the unit which just lost focus a non-AI unit? If yes this
-   * enables the auto end turn. 
-   */
+  /* A unit moved, was it a good enough condition for auto end turn 
+   * once no more units can be moved? */
   if (punit_old_focus && !punit_old_focus->ai.control) {
     non_ai_unit_focus = TRUE;
   }
 
-  /* 
-   * Handle auto-turn-done mode: If a unit was in focus (did move),
-   * but now none are (no more to move) and there was at least one
-   * non-AI unit this turn which was focused, then fake a Turn Done
-   * keypress.
+  /* Handle auto-turn-done mode:  If a unit was in focus (did move),
+   * but now none are (no more to move), then fake a Turn Done keypress.
    */
   if (auto_turn_done && punit_old_focus && !punit_focus && non_ai_unit_focus) {
     key_end_turn();
@@ -944,19 +935,6 @@ void request_toggle_city_names(void)
     return;
 
   draw_city_names ^= 1;
-  update_map_canvas_visible();
-}
- 
- /**************************************************************************
- Toggle display of city growth (turns-to-grow)
-**************************************************************************/
-void request_toggle_city_growth(void)
-{
-  if (get_client_state() != CLIENT_GAME_RUNNING_STATE) {
-    return;
-  }
-
-  draw_city_growth = !draw_city_growth;
   update_map_canvas_visible();
 }
 
@@ -1757,15 +1735,6 @@ void key_map_grid_toggle(void)
 void key_city_names_toggle(void)
 {
   request_toggle_city_names();
-}
-
-/**************************************************************************
-  Toggles the "show city growth turns" option by passing off the
-  request to another function...
-**************************************************************************/
-void key_city_growth_toggle(void)
-{
-  request_toggle_city_growth();
 }
 
 /**************************************************************************

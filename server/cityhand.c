@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -384,22 +383,24 @@ void handle_city_change(struct player *pplayer,
 void handle_city_rename(struct player *pplayer, 
 			struct packet_city_request *preq)
 {
+  const char *cp;
   struct city *pcity = player_find_city_by_id(pplayer, preq->city_id);
 
   if (!pcity) {
     return;
   }
 
-  if (!is_sane_name(preq->name)) {
+  cp = get_sane_name(preq->name);
+  if (!cp) {
     notify_player(pplayer, _("Game: %s is not a valid name."), preq->name);
     return;
   }
 
-  if (!is_allowed_city_name(pplayer, preq->name, pcity->x, pcity->y, TRUE)) {
+  if (!is_allowed_city_name(pplayer, cp, pcity->x, pcity->y, TRUE)) {
     return;
   }
 
-  sz_strlcpy(pcity->name, preq->name);
+  sz_strlcpy(pcity->name, cp);
   city_refresh(pcity);
   send_city_info(NULL, pcity);
 }

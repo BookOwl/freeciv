@@ -16,10 +16,10 @@ dnl client/server should always have the same major and minor versions
 dnl different patch versions are compatible
 MAJOR_VERSION=1
 MINOR_VERSION=14
-PATCH_VERSION=1
-VERSION_LABEL="-devel"
-IS_DEVEL_VERSION=1
-IS_BETA_VERSION=0
+PATCH_VERSION=0
+VERSION_LABEL="-beta2"
+IS_DEVEL_VERSION=0
+IS_BETA_VERSION=1
 
 VERSION=${MAJOR_VERSION}.${MINOR_VERSION}.${PATCH_VERSION}${VERSION_LABEL}
 
@@ -361,16 +361,6 @@ if test x$client != xno; then
       AC_DEFINE_UNQUOTED(NARROWPROTO, $fc_x_proto_value, [Narrowproto])
     fi
 
-    dnl Check for libpng
-    AC_CHECK_LIB(png, png_read_image, [X_LIBS="$X_LIBS -lpng"],
-	AC_MSG_ERROR([Could not find PNG library (libpng).]))
-    AC_CHECK_HEADER(png.h, ,
-	AC_MSG_ERROR([libpng found but not png.h.
-You may need to install a libpng \"development\" package.]))
-
-    dnl Force check for zlib (needed for PNG loading)
-    WITH_ZLIB="yes"
-
     dnl Try to get additional Xpm paths:
     FC_XPM_PATHS
 
@@ -534,10 +524,10 @@ dnl Include CLIENT_LIBS in zlib tests below because some X11R4 installations
 dnl contain their own libz which may be too old a version to have gzgets().
 if test "$WITH_ZLIB" = "yes"; then
     AC_CHECK_LIB(z, gzgets, , 
-        AC_MSG_ERROR([Could not find zlib library.]), 
+        AC_MSG_ERROR([Specified --with-zlib but did not find zlib library.]), 
         $CLIENT_LIBS)
     AC_CHECK_HEADER(zlib.h, , 
-        AC_MSG_ERROR([zlib found but not zlib.h.  
+        AC_MSG_ERROR([Specified --with-zlib; zlib found but not zlib.h.  
 You may need to install a zlib \"development\" package.]))
 
 elif test "$WITH_ZLIB" = "maybe"; then
@@ -577,13 +567,9 @@ AC_FUNC_STRCOLL
 AC_FUNC_VPRINTF
 AC_FUNC_VSNPRINTF
 
-AC_CHECK_FUNCS(fileno gethostname getpwuid inet_aton \
+AC_CHECK_FUNCS(fileno gethostname getpwuid gettimeofday inet_aton \
                select snooze strerror strcasecmp strncasecmp \
                strlcat strlcpy strstr usleep vsnprintf uname)
-
-AC_MSG_CHECKING(for working gettimeofday)
-  FC_CHECK_GETTIMEOFDAY_RUNTIME(,AC_DEFINE(HAVE_GETTIMEOFDAY, 1,
-	[Define if the gettimeofday function works and is sane.]),)
 
 dnl The use of both AC_FUNC_VSNPRINTF and AC_CHECK_FUNCS(vsnprintf) is
 dnl deliberate.

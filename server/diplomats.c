@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -738,8 +737,16 @@ void diplomat_incite(struct player *pplayer, struct unit *pdiplomat,
     return;
   }
 
-  /* Get incite cost. */
-  revolt_cost = city_incite_cost(pplayer, pcity);
+  /* Update incite cost. */
+  if (pcity->incite_revolt_cost == -1) {
+    freelog (LOG_ERROR, "Incite cost -1 in diplomat_incite by %s for %s",
+	     pplayer->name, pcity->name);
+    city_incite_cost (pcity);
+  }
+  revolt_cost = pcity->incite_revolt_cost;
+
+  /* Special deal for former owners! */
+  if (pplayer->player_no == pcity->original) revolt_cost /= 2;
 
   /* If player doesn't have enough gold, can't incite a revolt. */
   if (pplayer->economic.gold < revolt_cost) {
@@ -1110,9 +1117,6 @@ static bool diplomat_infiltrate_city (struct player *pplayer, struct player *cpl
 			 _("Game: Your %s has been eliminated defending"
 			   " against a %s in %s."), unit_name(punit->type),
 			 unit_name(pdiplomat->type), pcity->name);
-	notify_player_ex(pplayer, pcity->x, pcity->y, E_ENEMY_DIPLOMAT_FAILED,
-			 _("Game: An enemy %s has been eliminated defending"
-			   " %s."), unit_name(punit->type), pcity->name);
 
 	wipe_unit_safe(punit, &myiter);
       } else {

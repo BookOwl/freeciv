@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -72,7 +71,6 @@ void player_init(struct player *plr)
   plr->is_male = TRUE;
   plr->government=game.default_government;
   plr->nation=MAX_NUM_NATIONS;
-  plr->team = TEAM_NONE;
   plr->capital = FALSE;
   unit_list_init(&plr->units);
   city_list_init(&plr->cities);

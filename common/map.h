@@ -229,15 +229,11 @@ void reset_move_costs(int x, int y);
 /*
  * Returns true if the step yields a new valid map position. If yes
  * (dest_x, dest_y) is set to the new map position.
- *
- * Direct calls to DIR_DXY should be avoided and DIRSTEP should be
- * used. But to allow dest and src to be the same, as in
- *    MAPSTEP(x, y, x, y, dir)
- * we bend this rule here.
  */
 #define MAPSTEP(dest_x, dest_y, src_x, src_y, dir)	\
-(    (dest_x) = (src_x) + DIR_DX[(dir)],   		\
-     (dest_y) = (src_y) + DIR_DY[(dir)],		\
+(    DIRSTEP(dest_x, dest_y, dir),			\
+     (dest_x) += (src_x),		   		\
+     (dest_y) += (src_y),   				\
      normalize_map_pos(&(dest_x), &(dest_y)))
 
 struct city *map_get_city(int x, int y);
@@ -312,7 +308,7 @@ int get_tile_trade_base(struct tile * ptile);
 int get_tile_infrastructure_set(struct tile * ptile);
 const char *map_get_infrastructure_text(int spe);
 int map_get_infrastructure_prerequisite(int spe);
-enum tile_special_type get_preferred_pillage(int pset);
+int get_preferred_pillage(int pset);
 
 void map_irrigate_tile(int x, int y);
 void map_mine_tile(int x, int y);

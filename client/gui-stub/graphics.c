@@ -1,9 +1,5 @@
 /* graphics.c -- PLACEHOLDER */
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <stdlib.h>
 
 #include "graphics.h"
@@ -40,20 +36,15 @@ free_intro_radar_sprites(void)
 	/* PORTME */
 }
 
-/**************************************************************************
-  Return a NULL-terminated, permanently allocated array of possible
-  graphics types extensions.  Extensions listed first will be checked
-  first.
-**************************************************************************/
-const char **
+char **
 gfx_fileextensions(void)
 {
 	/* PORTME */
 
   /* hack to allow stub to run */
-  static const char *ext[] =
+  static char *ext[] =
   {
-    "png",
+    "xpm",
     NULL
   };
 

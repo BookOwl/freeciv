@@ -10,11 +10,10 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/   
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
-
+ 
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -358,6 +357,8 @@ static void economy_dlg_sell(HWND hWnd,int data)
 {
   HWND lv;
   int n,i,count=0,gold=0;
+  struct genlist_iterator myiter;
+  struct city *pcity;
   struct packet_city_request packet;
   char str[64];
   int row;
@@ -368,8 +369,10 @@ static void economy_dlg_sell(HWND hWnd,int data)
     if (ListView_GetItemState(lv,row,LVIS_SELECTED)) {
        
       i=economy_improvement_type[row];
-
-      city_list_iterate(game.player_ptr->cities, pcity) {      
+      
+      genlist_iterator_init(&myiter, &game.player_ptr->cities.list, 0);
+      for(; ITERATOR_PTR(myiter);ITERATOR_NEXT(myiter)) {
+	pcity=(struct city *)ITERATOR_PTR(myiter);
 	if(!pcity->did_sell && city_got_building(pcity, i) &&
 	   (data ||
 	    improvement_obsolete(game.player_ptr,i) ||
@@ -379,8 +382,7 @@ static void economy_dlg_sell(HWND hWnd,int data)
 	  packet.build_id=i;
 	  send_packet_city_request(&aconnection, &packet, PACKET_CITY_SELL);
 	}            
-      } city_list_iterate_end;
-
+      }
       if(count)  {
 	my_snprintf(str, sizeof(str), _("Sold %d %s for %d gold"),
 		    count, get_improvement_name(i), gold);

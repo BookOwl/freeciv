@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -37,8 +36,7 @@ struct advance advances[A_LAST];
 static const char *flag_names[] = {
   "Bonus_Tech", "Boat_Fast", "Bridge", "Railroad", "Fortress",
   "Watchtower", "Population_Pollution_Inc", "Trade_Revenue_Reduce",
-  "Airbase", "Farmland", "Reduce_Trireme_Loss1", "Reduce_Trireme_Loss2", 
-  "Build_Airborne"
+  "Airbase", "Farmland", "Reduce_Trireme_Loss1", "Reduce_Trireme_Loss2"
 };
 /* Note that these strings must correspond with the enums in tech_flag_id,
    in common/tech.h */

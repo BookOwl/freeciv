@@ -1,9 +1,5 @@
 /* connectdlg.cpp */
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <Alert.h>
 #include "Defs.hpp"
 #include "connectdlg.hpp"

@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "audio.h"
 #include "support.h"
 #include "fcintl.h"
 #include "log.h"
@@ -174,7 +175,7 @@ void audio_init()
 **************************************************************************/
 static const char *soundspec_fullname(const char *soundset_name)
 {
-  const char *soundset_default = "stdsounds";	/* Do not i18n! */
+  char *soundset_default = "stdsounds";	/* Do not i18n! */
   char *fname = fc_malloc(strlen(soundset_name) + strlen(SNDSPEC_SUFFIX) + 1);
   char *dname;
 
@@ -385,7 +386,7 @@ void audio_shutdown()
   Returns a string which list all available plugins. You don't have to
   free the string.
 **************************************************************************/
-const char *audio_get_all_plugin_names()
+const char *const audio_get_all_plugin_names()
 {
   static char buffer[100];
   int i;

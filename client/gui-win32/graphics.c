@@ -10,11 +10,9 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/ 
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
-#endif
-
+#endif 
 #include <string.h>  
 #include <stdlib.h>
 #include <windows.h>
@@ -92,10 +90,10 @@ free_intro_radar_sprites(void)
 /**************************************************************************
 
 **************************************************************************/
-const char **
+char **
 gfx_fileextensions(void)
 {
-  static const char *ext[] =
+  static char *ext[] =
   {
     "png",
     NULL

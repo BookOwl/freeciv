@@ -11,34 +11,24 @@
    GNU General Public License for more details.
 ***********************************************************************/
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <stdio.h>
 #include <stdlib.h>
 
 #include "city.h"
-#include "combat.h"
 #include "game.h"
 #include "government.h"
 #include "log.h"
 #include "map.h"
-#include "mem.h"
 #include "packets.h"
 #include "player.h"
 #include "shared.h"
 #include "unit.h"
 
-#include "airgoto.h"
-#include "barbarian.h"
+#include "unithand.h"
 #include "citytools.h"
 #include "cityturn.h"
-#include "gotohand.h"
 #include "maphand.h"
 #include "plrhand.h"
-#include "settlers.h"
-#include "unithand.h"
 #include "unittools.h"
 
 #include "aicity.h"
@@ -48,97 +38,17 @@
 #include "aitools.h"
 
 /**************************************************************************
-  Create a virtual unit to use in build want estimation
+  Ensure unit sanity
 **************************************************************************/
-struct unit *create_unit_virtual(struct player *pplayer, int x, int y,
-				 Unit_Type_id type, bool make_veteran)
-{
-  struct unit *punit;
-  punit=fc_calloc(1, sizeof(struct unit));
-
-  punit->type = type;
-  punit->owner = pplayer->player_no;
-  CHECK_MAP_POS(x, y);
-  punit->x = x;
-  punit->y = y;
-  punit->goto_dest_x = 0;
-  punit->goto_dest_y = 0;
-  punit->veteran = make_veteran;
-  punit->homecity = 0;
-  punit->upkeep = 0;
-  punit->upkeep_food = 0;
-  punit->upkeep_gold = 0;
-  punit->unhappiness = 0;
-  /* A unit new and fresh ... */
-  punit->foul = FALSE;
-  punit->fuel = unit_type(punit)->fuel;
-  punit->hp = unit_type(punit)->hp;
-  punit->moves_left = unit_move_rate(punit);
-  punit->moved = FALSE;
-  punit->paradropped = FALSE;
-  if (is_barbarian(pplayer)) {
-    punit->fuel = BARBARIAN_LIFE;
-  }
-  /* AI.control is probably always true... */
-  punit->ai.control = FALSE;
-  punit->ai.ai_role = AIUNIT_NONE;
-  punit->ai.ferryboat = 0;
-  punit->ai.passenger = 0;
-  punit->ai.bodyguard = 0;
-  punit->ai.charge = 0;
-  punit->bribe_cost = -1; /* flag value */
-  punit->transported_by = -1;
-  punit->pgr = NULL;
-  set_unit_activity(punit, ACTIVITY_IDLE);
-
-  return punit;
-}
-
-/**************************************************************************
-  Free the memory used by virtual unit
-  It is assumed (since it's virtual) that it's not registered or 
-  listed anywhere.
-**************************************************************************/
-void destroy_unit_virtual(struct unit *punit)
-{
-  if (punit->pgr) {
-    /* Should never happen, but do it anyway for completeness */
-    free(punit->pgr->pos);
-    free(punit->pgr);
-    punit->pgr = NULL;
-  }
-
-  free(punit);
-}
-
-/**************************************************************************
-  Ensure unit sanity by telling charge that we won't bodyguard it anymore,
-  add and remove city spot reservation, and set destination.
-**************************************************************************/
-void ai_unit_new_role(struct unit *punit, enum ai_unit_task task, int x, int y)
+void ai_unit_new_role(struct unit *punit, enum ai_unit_task task)
 {
   struct unit *charge = find_unit_by_id(punit->ai.charge);
-
-  if (punit->ai.ai_role == AIUNIT_BUILD_CITY) {
-    assert(is_normal_map_pos(punit->goto_dest_x, punit->goto_dest_y));
-    remove_city_from_minimap(punit->goto_dest_x, punit->goto_dest_y);
-  }
-
   if (charge && (charge->ai.bodyguard == punit->id)) {
     /* ensure we don't let the unit believe we bodyguard it */
-    charge->ai.bodyguard = BODYGUARD_NONE;
+    charge->ai.bodyguard = BODYGUARD_NONE; 
   }
   punit->ai.charge = BODYGUARD_NONE;
-
   punit->ai.ai_role = task;
-/* TODO:
-  punit->goto_dest_x = x;
-  punit->goto_dest_y = y; */
-
-  if (punit->ai.ai_role == AIUNIT_BUILD_CITY) {
-    assert(is_normal_map_pos(x, y));
-    add_city_to_minimap(x, y);
-  }
 }
 
 /**************************************************************************
@@ -188,6 +98,7 @@ static void ai_unit_bodyguard_move(int unitid, int x, int y)
   assert(punit != NULL);
 
   if (!is_tiles_adjacent(x, y, bodyguard->x, bodyguard->y)) {
+    BODYGUARD_LOG(LOG_DEBUG, bodyguard, "is too far from its charge");
     return;
   }
 
@@ -196,6 +107,8 @@ static void ai_unit_bodyguard_move(int unitid, int x, int y)
     BODYGUARD_LOG(LOG_DEBUG, bodyguard, "was left behind by charge");
     return;
   }
+
+  BODYGUARD_LOG(LOG_DEBUG, bodyguard, "was dragged along by charge");
 
   handle_unit_activity_request(bodyguard, ACTIVITY_IDLE);
   (void) ai_unit_move(bodyguard, x, y);
@@ -282,7 +195,7 @@ bool ai_unit_move(struct unit *punit, int x, int y)
   }
 
   /* don't leave bodyguard behind */
-  if (has_bodyguard(punit)
+  if (has_bodyguard(punit) 
       && (bodyguard = find_unit_by_id(punit->ai.bodyguard))
       && same_pos(punit->x, punit->y, bodyguard->x, bodyguard->y)
       && bodyguard->moves_left == 0) {
@@ -347,17 +260,6 @@ struct city *dist_nearest_city(struct player *pplayer, int x, int y,
 }
 
 /**************************************************************************
-  Is it a city/fortress or will the whole stack die in an attack
-  TODO: use new killstack thing
-**************************************************************************/
-int is_stack_vulnerable(int x, int y)
-{
-  return !(map_get_city(x, y) != NULL ||
-	   map_has_special(x, y, S_FORTRESS) ||
-	   map_has_special(x, y, S_AIRBASE) );
-}
-
-/**************************************************************************
 .. change government,pretty fast....
 **************************************************************************/
 void ai_government_change(struct player *pplayer, int gov)
@@ -373,15 +275,13 @@ void ai_government_change(struct player *pplayer, int gov)
 }
 
 /**************************************************************************
-  Credits the AI wants to have in reserves. We need some gold to bribe
-  and incite cities.
-
-  "I still don't trust this function" -- Syela
+... Credits the AI wants to have in reserves.
 **************************************************************************/
 int ai_gold_reserve(struct player *pplayer)
 {
   int i = total_player_citizens(pplayer)*2;
   return MAX(pplayer->ai.maxbuycost, i);
+/* I still don't trust this function -- Syela */
 }
 
 /**************************************************************************
@@ -408,13 +308,6 @@ void adjust_choice(int value, struct ai_choice *choice)
 void copy_if_better_choice(struct ai_choice *cur, struct ai_choice *best)
 {
   if (cur->want > best->want) {
-    freelog(LOG_DEBUG, "Overriding choice (%s, %d) with (%s, %d)",
-	    (best->type == CT_BUILDING ? 
-	     get_improvement_name(best->choice) : unit_types[best->choice].name), 
-	    best->want, 
-	    (cur->type == CT_BUILDING ? 
-	     get_improvement_name(cur->choice) : unit_types[cur->choice].name), 
-	    cur->want);
     best->choice =cur->choice;
     best->want = cur->want;
     best->type = cur->type;

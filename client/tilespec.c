@@ -42,11 +42,9 @@
 #include "support.h"
 #include "unit.h"
 
-#include "civclient.h" /* for get_client_state() */
 #include "climisc.h" /* for tile_get_known() */
 #include "control.h" /* for fill_xxx */
 #include "graphics_g.h"
-#include "mapview_g.h" /* for update_map_canvas_visible */
 #include "options.h" /* for fill_xxx */
 
 #include "tilespec.h"
@@ -57,7 +55,6 @@ char *main_intro_filename;
 char *minimap_intro_filename;
 
 struct named_sprites sprites;
-char current_tile_set_name[512];
 
 const int DIR4_TO_DIR8[4] = {DIR8_NORTH, DIR8_SOUTH, DIR8_EAST, DIR8_WEST};
 
@@ -142,7 +139,7 @@ const char **get_tileset_list(void)
 ***********************************************************************/
 static char *tilespec_fullname(const char *tileset_name)
 {
-  const char *tileset_default;
+  char *tileset_default;
   char *fname, *dname;
 
   if (isometric_view_supported()) {
@@ -208,152 +205,24 @@ static void check_tilespec_capabilities(struct section_file *file,
 ***********************************************************************/
 static char *tilespec_gfx_filename(const char *gfx_filename)
 {
-  const char  *gfx_current_fileext;
-  const char **gfx_fileexts = gfx_fileextensions();
+  char **gfx_fileexts;
+  char *full_name,*real_full_name,*gfx_current_fileext;
+
+  gfx_fileexts = gfx_fileextensions();
 
   while((gfx_current_fileext = *gfx_fileexts++))
   {
-    char *full_name =
-	fc_malloc(strlen(gfx_filename) + strlen(gfx_current_fileext) + 2);
-    char *real_full_name;
-
+    full_name = fc_malloc(strlen(gfx_filename)+strlen(gfx_current_fileext)+2);
     sprintf(full_name,"%s.%s",gfx_filename,gfx_current_fileext);
 
     real_full_name = datafilename(full_name);
     free(full_name);
-    if (real_full_name) {
-      return mystrdup(real_full_name);
-    }
+    if(real_full_name) return mystrdup(real_full_name);
   }
 
   freelog(LOG_FATAL, _("Couldn't find a supported gfx file extension for %s"),
 	  gfx_filename);
   exit(EXIT_FAILURE);
-}
-
-/**********************************************************************
-  Frees the tilespec toplevel data, in preparation for re-reading it.
-
-  See tilespec_read_toplevel().
-***********************************************************************/
-static void tilespec_free_toplevel(void)
-{
-  if (city_names_font) {
-    free(city_names_font);
-    city_names_font = NULL;
-  }
-  if (city_productions_font_name) {
-    free(city_productions_font_name);
-    city_productions_font_name = NULL;
-  }
-  if (main_intro_filename) {
-    free(main_intro_filename);
-    main_intro_filename = NULL;
-  }
-  if (minimap_intro_filename) {
-    free(minimap_intro_filename);
-    minimap_intro_filename = NULL;
-  }
-  /* FIXME: free spec_filenames */
-}
-
-/**********************************************************************
-  Read a new tilespec in from scratch.
-
-  Unlike the initial reading code, which reads pieces one at a time,
-  this gets rid of the old data and reads in the new all at once.
-
-  It will also call the necessary functions to redraw the graphics.
-***********************************************************************/
-void tilespec_reread(const char *tileset_name)
-{
-  int id;
-  int center_x, center_y;
-  enum client_states state = get_client_state();
-
-  freelog(LOG_NORMAL, "Loading tileset %s.", tileset_name);
-
-  /* Step 0:  Record old data.
-   *
-   * We record the current mapcanvas center, etc.
-   */
-  get_center_tile_mapcanvas(&center_x, &center_y);
-
-  /* Step 1:  Cleanup.
-   *
-   * We free all old data in preparation for re-reading it.
-   */
-  tilespec_free_tiles();
-  tilespec_free_city_tiles(game.styles_count);
-  tilespec_free_toplevel();
-
-  /* Step 2:  Read.
-   *
-   * We read in the new tileset.  This should be pretty straightforward.
-   */
-  tilespec_read_toplevel(tileset_name);
-  tilespec_load_tiles();
-
-  /* Step 3: Setup
-   *
-   * This is a seriously sticky problem.  On startup, we build a hash
-   * from all the sprite data. Then, when we connect to a server, the
-   * server sends us ruleset data a piece at a time and we use this data
-   * to assemble the sprite structures.  But if we change while connected
-   *  we have to reassemble all of these.  This should just involve
-   * calling tilespec_setup_*** on everything.  But how do we tell what
-   * "everything" is?
-   *
-   * The below code just does things straightforwardly, by setting up
-   * each possible sprite again.  Hopefully it catches everything, and
-   * doesn't mess up too badly if we change tilesets while not connected
-   * to a server.
-   */
-  if (state < CLIENT_SELECT_RACE_STATE) {
-    /* The ruleset data is not sent until this point. */
-    return;
-  }
-  for (id = T_FIRST; id < T_COUNT; id++) {
-    tilespec_setup_tile_type(id);
-  }
-  unit_type_iterate(id) {
-    tilespec_setup_unit_type(id);
-  } unit_type_iterate_end;
-  for (id = 0; id < game.government_count; id++) {
-    tilespec_setup_government(id);
-  }
-  for (id = 0; id < game.nation_count; id++) {
-    tilespec_setup_nation_flag(id);
-  }
-
-  /* tilespec_load_tiles reverts the city tile pointers to 0.  This
-     is a workaround. */
-  tilespec_alloc_city_tiles(game.styles_count);
-  for (id = 0; id < game.styles_count; id++) {
-    tilespec_setup_city_tiles(id);
-  }
-
-  /* Step 4:  Draw.
-   *
-   * Do any necessary redraws.
-   */
-  if (state < CLIENT_GAME_RUNNING_STATE) {
-    /* Unless the client state is playing a game or in gameover,
-       we don't want/need to redraw. */
-    return;
-  }
-  tileset_changed();
-  center_tile_mapcanvas(center_x, center_y);
-}
-
-/**************************************************************************
-  This is merely a wrapper for tilespec_reread (above) for use in
-  options.c and the client local options dialog.
-**************************************************************************/
-void tilespec_reread_callback(struct client_option *option)
-{
-  assert(option->p_string_value && *option->p_string_value);
-  tilespec_reread(option->p_string_value);
 }
 
 /**********************************************************************
@@ -450,8 +319,6 @@ void tilespec_read_toplevel(const char *tileset_name)
   section_file_free(file);
   freelog(LOG_VERBOSE, "finished reading %s", fname);
   free(fname);
-
-  sz_strlcpy(current_tile_set_name, tileset_name);
 }
 
 /**********************************************************************
@@ -462,8 +329,8 @@ static void tilespec_load_one(const char *spec_filename)
 {
   struct section_file the_file, *file = &the_file;
   struct Sprite *big_sprite = NULL, *small_sprite;
-  const char *gfx_filename, *gfx_current_fileext, **gfx_fileexts;
-  char **gridnames, **tags;
+  char *gfx_filename,*gfx_current_fileext;
+  char **gridnames, **tags, **gfx_fileexts;
   int num_grids, num_tags;
   int i, j, k;
   int x_top_left, y_top_left, dx, dy;
@@ -1037,6 +904,7 @@ static int fill_city_sprite_array(struct Sprite **sprs, struct city *pcity,
 				  int *solid_bg)
 {
   struct Sprite **save_sprs=sprs;
+  struct tile *ptile = map_get_tile(pcity->x, pcity->y);
 
   *solid_bg = 0;
   if (!no_backdrop) {
@@ -1048,9 +916,8 @@ static int fill_city_sprite_array(struct Sprite **sprs, struct city *pcity,
     }
   }
 
-  if (pcity->occupied) {
+  if (genlist_size(&(ptile->units.list)) > 0)
     *sprs++ = get_city_occupied_sprite(pcity);
-  }
 
   *sprs++ = get_city_sprite(pcity);
 
@@ -1086,14 +953,14 @@ static int fill_city_sprite_array(struct Sprite **sprs, struct city *pcity,
 int fill_city_sprite_array_iso(struct Sprite **sprs, struct city *pcity)
 {
   struct Sprite **save_sprs=sprs;
+  struct tile *ptile = map_get_tile(pcity->x, pcity->y);
 
   if (!no_backdrop) {
     *sprs++ = get_city_nation_flag_sprite(pcity);
   }
 
-  if (pcity->occupied) {
+  if (genlist_size(&(ptile->units.list)) > 0)
     *sprs++ = get_city_occupied_sprite(pcity);
-  }
 
   *sprs++ = get_city_sprite(pcity);
 

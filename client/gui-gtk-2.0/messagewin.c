@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -28,6 +27,7 @@
 #include "mem.h"
 #include "packets.h"
 #include "player.h"
+#include "log.h"
 #include "chatline.h"
 #include "citydlg.h"
 #include "clinet.h"

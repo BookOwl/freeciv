@@ -23,7 +23,6 @@ struct conn_list;
 struct dumb_city{
   int id;
   bool has_walls;
-  bool occupied;
   char name[MAX_LEN_NAME];
   unsigned short size;
   unsigned char owner;

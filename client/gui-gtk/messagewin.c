@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -112,7 +111,7 @@ static void meswin_not_visited_item (gint n)
 *****************************************************************/
 void create_meswin_dialog(void)
 {
-  static const char *titles_[1] = { N_("Messages") };
+  static gchar *titles_[1] = { N_("Messages") };
   static gchar **titles;
   GtkWidget *scrolled;
   GtkAccelGroup *accel = gtk_accel_group_new();

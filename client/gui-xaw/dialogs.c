@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -2365,7 +2364,7 @@ void races_ok_command_callback(Widget w, XtPointer client_data,
   packet.city_style = city_style_idx[selected_style];
   sz_strlcpy(packet.name, (char*)dp);
   
-  if (!is_sane_name(packet.name)) {
+  if(!get_sane_name(packet.name)) {
     append_output_window(_("You must type a legal name."));
     return;
   }

@@ -19,11 +19,6 @@
 struct unit;
 struct city;
 
-void get_mapview_dimensions(int *map_view_topleft_map_x,
-			    int *map_view_topleft_map_y,
-			    int *map_view_pixel_width,
-			    int *map_view_pixel_height);
-
 bool tile_visible_mapcanvas(int x, int y);
 bool tile_visible_and_not_on_border_mapcanvas(int x, int y);
 
@@ -38,11 +33,11 @@ void set_overview_dimensions(int x, int y);
 void overview_update_tile(int x, int y);
 
 void center_tile_mapcanvas(int x, int y);
-
-void show_city_descriptions(void);
+void get_center_tile_mapcanvas(int *x, int *y);
 
 void update_map_canvas(int x, int y, int width, int height,
 		       bool write_to_screen);
+void update_map_canvas_visible(void);
 void update_map_canvas_scrollbars(void);
 
 void put_cross_overlay_tile(int x,int y);
@@ -58,7 +53,5 @@ void refresh_overview_viewrect(void);
 
 void draw_segment(int src_x, int src_y, int dir);
 void undraw_segment(int src_x, int src_y, int dir);
-
-void tileset_changed(void);
 
 #endif  /* FC__MAPVIEW_G_H */

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -29,6 +28,7 @@
 #include <proto/graphics.h>
 
 #include "city.h"
+#include "colors.h"
 #include "fcintl.h"
 #include "game.h"
 #include "genlist.h"

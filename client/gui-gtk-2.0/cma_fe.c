@@ -21,6 +21,7 @@
 #include "fcintl.h"
 #include "events.h"
 #include "game.h"
+#include "log.h"
 #include "mem.h"
 #include "support.h"
 

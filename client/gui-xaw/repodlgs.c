@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -30,6 +29,7 @@
 #include <X11/Xaw/Command.h>
 #include <X11/Xaw/List.h>
 #include <X11/Xaw/MenuButton.h>
+#include <X11/Xaw/SimpleMenu.h>
 #include <X11/Xaw/SmeBSB.h>
 #include <X11/Xaw/Toggle.h>
 
@@ -671,26 +671,25 @@ void create_economy_report_dialog(bool make_modal)
 
 
 /****************************************************************
-  Called when a building type is selected in the economy list.
+...
 *****************************************************************/
 void economy_list_callback(Widget w, XtPointer client_data, 
 			 XtPointer call_data)
 {
-  XawListReturnStruct *ret = XawListShowCurrent(economy_list);
+  XawListReturnStruct *ret;
+  int i;
+  ret = XawListShowCurrent(economy_list);
 
-  if (ret->list_index != XAW_LIST_NONE) {
-    /* The user has selected an improvement type. */
-    int i = economy_improvement_type[ret->list_index];
-    bool is_sellable = (i >= 0 && i < game.num_impr_types && !is_wonder(i));
-
-    XtSetSensitive(sellobsolete_command, is_sellable
-		   && improvement_obsolete(game.player_ptr, i));
-    XtSetSensitive(sellall_command, is_sellable);
-  } else {
-    /* No selection has been made. */
-    XtSetSensitive(sellobsolete_command, FALSE);
-    XtSetSensitive(sellall_command, FALSE);
+  if(ret->list_index!=XAW_LIST_NONE) {
+    i = economy_improvement_type[ret->list_index];
+    if (i >= 0 && i < game.num_impr_types && !is_wonder(i)) {
+      XtSetSensitive(sellobsolete_command, TRUE);
+      XtSetSensitive(sellall_command, TRUE);
+    }
+    return;
   }
+  XtSetSensitive(sellobsolete_command, FALSE);
+  XtSetSensitive(sellall_command, FALSE);
 }
 
 /****************************************************************
@@ -721,6 +720,8 @@ void economy_selloff_callback(Widget w, XtPointer client_data,
 			    XtPointer call_data)
 {
   int i,count=0,gold=0;
+  struct genlist_iterator myiter;
+  struct city *pcity;
   struct packet_city_request packet;
   char str[64];
   XawListReturnStruct *ret=XawListShowCurrent(economy_list);
@@ -729,7 +730,9 @@ void economy_selloff_callback(Widget w, XtPointer client_data,
 
   i=economy_improvement_type[ret->list_index];
 
-  city_list_iterate(game.player_ptr->cities, pcity) {
+  genlist_iterator_init(&myiter, &game.player_ptr->cities.list, 0);
+  for(; ITERATOR_PTR(myiter);ITERATOR_NEXT(myiter)) {
+    pcity=(struct city *)ITERATOR_PTR(myiter);
     if(!pcity->did_sell && city_got_building(pcity, i) && 
        (client_data ||
 	improvement_obsolete(game.player_ptr,i) ||
@@ -739,8 +742,7 @@ void economy_selloff_callback(Widget w, XtPointer client_data,
         packet.build_id=i;
         send_packet_city_request(&aconnection, &packet, PACKET_CITY_SELL);
     }
-  } city_list_iterate_end;
-
+  }
   if(count)  {
     my_snprintf(str, sizeof(str), _("Sold %d %s for %d gold"),
 		count, get_improvement_name(i), gold);

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -40,6 +39,7 @@
 #include "game.h"
 
 void dealloc_id(int id);
+extern bool is_server;
 struct civ_game game;
 
 /*
@@ -656,7 +656,6 @@ void game_init(void)
   game.netwait       = GAME_DEFAULT_NETWAIT;
   game.last_ping     = 0;
   game.pingtimeout   = GAME_DEFAULT_PINGTIMEOUT;
-  game.pingtime      = GAME_DEFAULT_PINGTIME;
   game.end_year      = GAME_DEFAULT_END_YEAR;
   game.year          = GAME_START_YEAR;
   game.turn          = 0;
@@ -717,6 +716,7 @@ void game_init(void)
 
   sz_strlcpy(game.rulesetdir, GAME_DEFAULT_RULESETDIR);
 
+  game.firepower_factor = 1;
   game.num_unit_types = 0;
   game.num_impr_types = 0;
   game.num_tech_types = 0;

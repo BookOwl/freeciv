@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -48,7 +47,7 @@ void gamelog_set_level(int level)
 }
 
 /**************************************************************************/
-void gamelog(int level, const char *message, ...)
+void gamelog(int level, char *message, ...)
 {
   va_list args;
   char buf[512];
@@ -68,20 +67,16 @@ void gamelog(int level, const char *message, ...)
   
   va_start(args, message);
   my_vsnprintf(buf, sizeof(buf), message, args);
-  if (level == GAMELOG_MAP) {
-    if (buf[0] == '(') {
-      /* KLUGE!! FIXME: remove when we fix the gamelog format --jjm */
+  if (level==GAMELOG_MAP){
+    if (buf[0] == '(')  /* KLUGE!! FIXME: remove when we fix the gamelog format --jjm */
       fprintf(fs, "%i %s\n", game.year, buf);
-    } else {
+    else
       fprintf(fs,"%s\n", buf);
-    }
-  } else if (level == GAMELOG_EOT) {
+  } else if (level == GAMELOG_EOT){
     fprintf(fs,"*** %s\n", buf);
-  } else if (level == GAMELOG_RANK) {
+  } else if (level == GAMELOG_RANK){
     fprintf(fs,"RANK %s\n", buf);
-  } else if (level == GAMELOG_TEAM) {
-    fprintf(fs,"%s\n", buf);
-  } else if (level == GAMELOG_STATUS) {
+  } else if (level == GAMELOG_STATUS){   
     fprintf(fs, "STATUS %s\n", buf);
   } else {
     fprintf(fs, "%i %s\n", game.year,buf);
@@ -139,38 +134,6 @@ void gamelog_save(void){
       count++;
     }
   } players_iterate_end;
-
-  /* average game scores for teams */
-  team_iterate(pteam) {
-    int team_members = 0;
-    int count = 0;
-    int team_score = 0;
-    int team_size = 0;
-
-    /* sum team score */
-    players_iterate(pplayer) {
-      if (pplayer->team == pteam->id) {
-        team_members++;
-        team_score += rank[count].value;
-        team_size += size[count].value;
-      }
-      count++;
-    } players_iterate_end;
-
-    /* average them */
-    team_score = floor(team_score / team_members);
-    team_size = floor(team_size / team_members);
-
-    /* set scores to average */
-    count = 0;
-    players_iterate(pplayer) {
-      if (pplayer->team == pteam->id) {
-        rank[count].value = team_score;
-        size[count].value = team_size;
-      }
-      count++;
-    } players_iterate_end;
-  } team_iterate_end;
 
   qsort(size, count, sizeof(struct player_score_entry), secompare1);
   buffer[0] = 0;
