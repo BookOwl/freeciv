@@ -1,0 +1,12 @@
+config.cache
+Makefile
+config.h
+config.log
+config.status
+stamp-h
+undep.sh
+civclient
+civserver
+.deps
+*.sav
+*.sav.gz
