@@ -365,11 +365,12 @@ struct city_dialog *create_city_dialog(struct city *pcity, int make_modal)
     XtVaCreateManagedWidget("citymapcanvas", 
 			    xfwfcanvasWidgetClass,
 			    pdialog->sub_form,
-			    "exposeProc", (XtArgVal)city_map_canvas_expose,
-			    "exposeProcData", (XtArgVal)pdialog,
-			    XtNfromHoriz, (XtArgVal)pdialog->production_label,
-			    XtNwidth, NORMAL_TILE_WIDTH*5,
-			    XtNheight, NORMAL_TILE_HEIGHT*5,
+			    "exposeProc", 
+			    (XtArgVal)city_map_canvas_expose,
+			    "exposeProcData", 
+			    (XtArgVal)pdialog,
+			    XtNfromHoriz, 
+			    (XtArgVal)pdialog->production_label,
 			    NULL);
 
   
@@ -457,9 +458,8 @@ struct city_dialog *create_city_dialog(struct city *pcity, int make_modal)
     XtVaCreateManagedWidget("supportunitcanvas",
 			    pixcommWidgetClass,
 			    pdialog->main_form,
-			    XtNfromVert, pdialog->support_unit_label,
-			    XtNwidth, NORMAL_TILE_WIDTH,
-			    XtNheight, NORMAL_TILE_HEIGHT+NORMAL_TILE_HEIGHT/2,
+			    XtNfromVert, 
+			    pdialog->support_unit_label,
 			    NULL);
   pdialog->support_unit_ids[0]=-1;
 
@@ -469,10 +469,11 @@ struct city_dialog *create_city_dialog(struct city *pcity, int make_modal)
       XtVaCreateManagedWidget("supportunitcanvas",
 			      pixcommWidgetClass,
 			      pdialog->main_form,
-			      XtNfromVert, pdialog->support_unit_label,
-			      XtNfromHoriz, (XtArgVal)pdialog->support_unit_pixcomms[i-1],
-			      XtNwidth, NORMAL_TILE_WIDTH,
-			      XtNheight, NORMAL_TILE_HEIGHT+NORMAL_TILE_HEIGHT/2,
+			      XtNfromVert, 
+			      pdialog->support_unit_label,
+			      XtNfromHoriz, 
+			      (XtArgVal)pdialog->support_unit_pixcomms[i-1],
+			      XtNinternalHeight, 0,
 			      NULL);
     pdialog->support_unit_ids[i]=-1;
   }
@@ -489,9 +490,8 @@ struct city_dialog *create_city_dialog(struct city *pcity, int make_modal)
     XtVaCreateManagedWidget("presentunitcanvas",
     			    pixcommWidgetClass,
 			    pdialog->main_form,
-			    XtNfromVert, pdialog->present_unit_label,
-			    XtNwidth, NORMAL_TILE_WIDTH,
-			    XtNheight, NORMAL_TILE_HEIGHT,
+			    XtNfromVert, 
+			    pdialog->present_unit_label,
 			    NULL);
   pdialog->present_unit_ids[0]=-1;
 
@@ -500,11 +500,10 @@ struct city_dialog *create_city_dialog(struct city *pcity, int make_modal)
       XtVaCreateManagedWidget("presentunitcanvas",
 			      pixcommWidgetClass,
 			      pdialog->main_form,
-			      XtNfromVert, pdialog->present_unit_label,
+			      XtNfromVert, 
+			      pdialog->present_unit_label,
 			      XtNfromHoriz, 
 			      (XtArgVal)pdialog->support_unit_pixcomms[i-1],
-			      XtNwidth, NORMAL_TILE_WIDTH,
-			      XtNheight, NORMAL_TILE_HEIGHT,
 			      NULL);
     pdialog->present_unit_ids[i]=-1;
   }

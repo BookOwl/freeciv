@@ -26,6 +26,7 @@
 #include <plrhand.h>
 #include <aitools.h>
 #include <aiunit.h>
+void ai_calculate_city_value(int isle);
 
 
 struct ai_map_struct ai_map;
@@ -113,7 +114,6 @@ struct city *dist_nearest_enemy_city(struct player *pplayer, int x, int y)
 {
   struct player *pplay;
   struct city *pc=NULL;
-  struct city *pcity=NULL;
   int i;
   int dist=40;
   for(i=0; i<game.nplayers; i++) {
@@ -121,45 +121,18 @@ struct city *dist_nearest_enemy_city(struct player *pplayer, int x, int y)
     if (pplay!=pplayer) {
       city_list_iterate(pplay->cities, pcity) {
         if (map_distance(x, y, pcity->x, pcity->y)<dist 
-         && map_get_continent(x, y)==map_get_continent(pcity->x, pcity->y)
-         && (pplayer==NULL || map_get_known(x,y,pplayer))) 
-           { 
-           dist=map_distance(x, y, pcity->x, pcity->y);
-           pc=pcity;
-           }
+            && map_get_continent(x, y)==
+	       map_get_continent(pcity->x, pcity->y)) { 
+          dist=map_distance(x, y, pcity->x, pcity->y);
+	  
+          pc=pcity;
+        }
       }
       city_list_iterate_end;
     }
   }
   return  pc;
 }
-
-
-struct unit *dist_nearest_enemy_unit(struct player *pplayer, int x, int y)
-{
-  struct player *pplay;
-  struct unit *pu=NULL;
-  struct unit *punit=NULL;
-  int i;
-  int dist=40;
-  for(i=0; i<game.nplayers; i++) {
-    pplay=&game.players[i];
-    if (pplay!=pplayer) {
-      unit_list_iterate(pplay->units, punit) {
-        if (map_distance(x, y, punit->x, punit->y)<dist 
-         && map_get_continent(x, y)==map_get_continent(punit->x, punit->y)
-         && map_get_known(x,y,pplayer)) 
-           { 
-           dist=map_distance(x, y, punit->x, punit->y);
-           pu=punit;
-           }
-      }
-      unit_list_iterate_end;
-    }
-  }
-  return  pu;
-}
-
 
 int ai_city_spot_value(int xp, int yp) 
 {
@@ -264,49 +237,7 @@ void ai_update_player_island_info(struct player *pplayer)
   unit_list_iterate_end;
 }
 
-/**************************************************************************
-..... can we find a military target?........
-**************************************************************************/
-int ai_military_findtarget(struct player *pplayer,struct unit *punit)
-{
-struct city *pcity;
-struct unit *penemyunit;
-
-int myreturn=0;
-int agression=0;
-int closestcity;
-int closestunit;
-
-/* Pick out units that have attack=defense or better */
-agression=10*(get_attack_power(punit)/10+1-get_defense_power(punit)/10);
-if (agression<=0) { agression=0; }
-/* was <0, thus pikemen became aggressive? -- Syela */
-else { agression+=5; }
-pcity=dist_nearest_enemy_city(pplayer,punit->x,punit->y); 
-penemyunit=dist_nearest_enemy_unit(pplayer,punit->x,punit->y); 
-if (pcity)
-   {
-   closestcity=map_distance(punit->x,punit->y,pcity->x,pcity->y);
-   if (closestcity < agression*2 )
-      {
-      myreturn=1;
-      }
-   }
-if (penemyunit)
-   {
-   closestunit=map_distance(punit->x,punit->y,penemyunit->x,penemyunit->y);
-    if (closestunit < agression*2 )
-      {
-      myreturn=1;
-      }
-   }
-
-return(myreturn);
-}
-
 /* -----------------------------GOVERNMENT------------------------------ */
-
-
 
 /**************************************************************************
 .. change government,pretty fast....

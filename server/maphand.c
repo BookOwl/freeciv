@@ -114,11 +114,11 @@ void send_all_known_tiles(struct player *dest)
       
       connection_do_buffer(pplayer->conn);
       for(y=0; y<map.ysize; y++)
-        for(x=0; x<map.xsize; x++)
-          if(map_get_known(x, y, pplayer)) {
-            map_clear_known(x, y, pplayer);
-            light_square(pplayer, x, y, 0);
-          }
+	for(x=0; x<map.xsize; x++)
+	  if(map_get_known(x, y, pplayer)) {
+	    map_clear_known(x, y, pplayer);
+	    light_square(pplayer, x, y, 0);
+	  }
       connection_do_unbuffer(pplayer->conn);
     }
 }

@@ -36,7 +36,7 @@ struct unit_type unit_types[U_LAST]={
   {"Riflemen",  22, LAND_MOVING,  40,  0,  5,  4,  1*3, A_CONSCRIPTION,1,  0, 20, 1, -1, 0},
   {"Marines",   40, LAND_MOVING,  60,  F_MARINES,  8,  5,  1*3, A_AMPHIBIOUS,  1,  0, 20, 1, -1, 0},
   {"Paratroopers", 0, LAND_MOVING,  60,  0,  6,  4,  1*3, A_COMBINED,  1,  0, 20, 1, -1, 0},
-  {"Mech. Inf.",17, LAND_MOVING,  50,  0,  6,  6,  3*3, A_LABOR,       1,  0, 30, 1, -1, 0},
+  {"Mech. Inf", 17, LAND_MOVING,  50,  0,  6,  6,  3*3, A_LABOR,       1,  0, 30, 1, -1, 0},
   {"Horsemen",  8,  LAND_MOVING,  20,  F_HORSE,  2,  1,  2*3,  A_HORSEBACK,   1,  0, 10, 1, U_KNIGHTS, 0},
   {"Chariot",   9,  LAND_MOVING,  30,  F_HORSE,  3,  1,  2*3, A_WHEEL, 1,  0, 10, 1, U_KNIGHTS, 0},
   {"Elephants", 0,  LAND_MOVING,  40,  0, 4, 1, 2*3, A_POLYTHEISM, 1, 0, 10, 1, U_CRUSADERS, 0}, 
@@ -52,8 +52,8 @@ struct unit_type unit_types[U_LAST]={
   {"Fighter",   12, AIR_MOVING,   60,  F_FIGHTER  | F_FIELDUNIT,  4,  3, 10*3, A_FLIGHT, 1,  0, 20, 2, U_SFIGHTER, 1},
   {"Bomber",    3,  AIR_MOVING,  120,  F_FIELDUNIT|F_ONEATTACK, 12,  1,  8*3, A_ADVANCED,    2,  0, 20, 2, U_SBOMBER, 2},
   {"Helicopter", 44, HELI_MOVING,  100,  F_ONEATTACK |F_FIELDUNIT,  10,  3, 6*3, A_COMBINED, 1, 0, 20, 2, -1, 6},
-  {"Stealth Fighter",47, AIR_MOVING,   80,  F_FIELDUNIT| F_FIGHTER,  8,  4, 14*3, A_STEALTH,1,  0, 20, 2, -1, 1},
-  {"Stealth Bomber", 46, AIR_MOVING,  160, F_FIELDUNIT|F_ONEATTACK, 14,  5,  8*3, A_STEALTH, 2,  0, 20, 2, -1, 2},
+  {"Stlth Fighter",47, AIR_MOVING,   80,  F_FIELDUNIT| F_FIGHTER,  8,  4, 14*3, A_STEALTH,1,  0, 20, 2, -1, 1},
+  {"Stlth Bomber", 46, AIR_MOVING,  160, F_FIELDUNIT|F_ONEATTACK, 14,  5,  8*3, A_STEALTH, 2,  0, 20, 2, -1, 2},
   {"Trireme",   27, SEA_MOVING,   40,  F_FIELDUNIT,  1,  1,  3*3, A_MAPMAKING, 1,  2, 10, 1, U_CARAVEL, 0},
   {"Caravel",   23, SEA_MOVING,   40,  0,  2,  1,  3*3, A_NAVIGATION,  1,  3, 10, 1, U_GALLEON, 0},
   {"Galleon",   35, SEA_MOVING,   40,  0,  0,  2,  4*3, A_MAGNETISM,   1,  4, 20, 1, U_TRANSPORT, 0},
@@ -66,7 +66,7 @@ struct unit_type unit_types[U_LAST]={
   {"Submarine", 25, SEA_MOVING,   60,  F_FIELDUNIT|F_SUBMARINE, 10,  2,  3*3, A_COMBUSTION,  2,  8, 30, 1, -1, 0},
   {"Carrier",   6,  SEA_MOVING,  160,  F_FIELDUNIT|F_CARRIER,  1, 9,  5*3, A_ADVANCED,    2,  8, 40, 2, -1, 0},
   {"Transport", 26, SEA_MOVING,   50,  0,  0,  3,  5*3, A_INDUSTRIALIZATION,   2,  8, 30, 1, -1, 0},
-  {"Cruise Missile",30,AIR_MOVING,   60,  F_FIELDUNIT | F_MISSILE | F_ONEATTACK, 18,  0,  12*3, A_ROCKETRY,  1, 0, 10, 3, -1, 1},
+  {"Cruise Mis.",30,AIR_MOVING,   60,  F_FIELDUNIT | F_MISSILE | F_ONEATTACK, 18,  0,  12*3, A_ROCKETRY,  1, 0, 10, 3, -1, 1},
   {"Nuclear",   20, AIR_MOVING,  160,  F_FIELDUNIT | F_ONEATTACK | F_MISSILE, 99,  0, 16*3, A_ROCKETRY,     1,  0, 10, 1, -1, 1},
   {"Diplomat",  11, LAND_MOVING,  30,  F_DIPLOMAT | F_IGZOC | F_NONMIL,  0,  0,  2*3, A_WRITING,  1,  0, 10, 1, U_SPY, 0},
   {"Spy",       41, LAND_MOVING,  30,  F_DIPLOMAT | F_IGZOC | F_NONMIL,  0,  0,  3*3, A_ESPIONAGE,1,  0, 10, 1, -1, 0},
@@ -463,12 +463,10 @@ int can_upgrade_unittype(struct player *pplayer, enum unit_type_id id)
   if (get_invention(pplayer, 
 		    unit_types[id].tech_requirement)!=TECH_KNOWN)
     return -1;
-  if (unit_types[id].obsoleted_by == -1)
-    return -1;
   if (get_invention(pplayer,
 		    unit_types[unit_types[id].obsoleted_by].tech_requirement)!=TECH_KNOWN) 
     return -1;
-  while (unit_types[id].obsoleted_by!=-1 && get_invention(pplayer, 
+  while (get_invention(pplayer, 
 		       unit_types[unit_types[id].obsoleted_by].tech_requirement)==TECH_KNOWN) {
     id = unit_types[id].obsoleted_by;
   }

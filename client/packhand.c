@@ -16,15 +16,12 @@
 #include <chatline.h>
 #include <plrdlg.h>
 #include <civclient.h>
-#include <graphics.h>
 
 extern int seconds_to_turndone;
 extern int turn_gold_difference;
 extern int last_turn_gold_amount;
 extern int did_advance_tech_this_turn;
 extern char name[512];
-extern struct Sprite *intro_gfx_sprite;
-extern struct Sprite *radar_gfx_sprite;
 
 
 /**************************************************************************
@@ -95,8 +92,6 @@ void handle_game_state(struct packet_generic_integer *packet)
 
     if(get_unit_in_focus())
       center_tile_mapcanvas(get_unit_in_focus()->x, get_unit_in_focus()->y);
-    if(intro_gfx_sprite) { free_sprite(intro_gfx_sprite); intro_gfx_sprite=NULL; };
-    if(radar_gfx_sprite) { free_sprite(radar_gfx_sprite); radar_gfx_sprite=NULL; };
   }
 }
 

@@ -3,8 +3,8 @@
                            =========================
 		       
 This archive contains Freeciv version 1.5, a free Civilization clone for 
-Unix and X. This version only allows multiplayer games, and limited support
-for AI players.
+Unix and X. This version only allows multiplayer games, which means you 
+can't play against AI computer-players.
 
 
 Compiling and installing:
@@ -30,18 +30,17 @@ Server:
   >h
   Available commands
   -------------------------------------
-  c P       - cut connection to player
-  h         - this help
-  l         - list players
-  q         - quit game and shutdown server
-  remove P  - fully remove player from game
-  score     - show current score
-  show      - list server options
-  help      - help on server options
-  set       - set options
-  s         - start game
-  meta S    - set the metastring to S
-  ai <name> - set player <NAME> to be an ai player
+  c P      - cut connection to player
+  h        - this help
+  l        - list players
+  q        - quit game and shutdown server
+  remove P - fully remove player from game
+  score    - show current score
+  show     - list server options
+  help     - help on server options
+  set      - set options
+  s        - start game
+  meta S   - set the metastring to S
 
   Now use the 'set' command to set the various variables for the game. 
   You can get a list of the variables with the 'show' command.
@@ -66,15 +65,6 @@ Client:
 
   % civclient -server io
 
-Computer Player:
-   For each computer player that you wish to have, you must start a client
-   as if you were going to play multiple games. The person then issues the
-   command with the <ai> command like this:
-   > ai HumanKiller
-   Once the person running the client starts the game, and after the player
-   races has been picked, the clients that are AI controlled by the server
-   can be closed, as the server will now run that player.
-
 Server:
   When everybody has joined (use the (l)ist command to see who's in), the
   server-op starts the game with the (s)start command:
@@ -82,7 +72,6 @@ Server:
   starting game.
 
 And the game is on!
-
 
 
 Playing the game:
@@ -108,10 +97,7 @@ Use the 'Players' dialog to see who has announced their end of turn, and who
 you're waiting for.  (Hey feller, are you asleep or what?? ;).
 
 Use the input line at the bottom of the window for broadcasting messages to
-other players. The server is smart enough to perform "name completion", so
-if  you type "pet:", it will pick find a player name that matches the part
-of the name you typed.
-
+other players.
 You can send a message to an individual player (say, 'peter') like so:
 
   peter: move that armor away *NOW*!
@@ -181,7 +167,7 @@ The Freeciv team maintains a bug-list at the Freeciv homepage(address below).
 Homepage:
 =========
 We maintain a homepage for the game at:
-  http://freeciv.ultraviolet.org/index.html
+  http://www.daimi.aau.dk/~allan/freeciv.html
 
 You should check out the page, as it contains much more information than
 this file and the online help. This is also where we'll inform people about 

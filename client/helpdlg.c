@@ -33,10 +33,7 @@
 #include <tech.h>
 #include <game.h>
 #include <helpdlg.h>
-#include <dialogs.h>
-#include <graphics.h>
 
-extern int UNIT_TILES;
 extern Widget toplevel, main_form;
 
 Widget help_dialog_shell;
@@ -62,7 +59,6 @@ Widget help_unit_move, help_unit_move_data;
 Widget help_unit_hp, help_unit_hp_data;
 Widget help_unit_fp, help_unit_fp_data;
 Widget help_unit_cost, help_unit_cost_data;
-Widget help_unit_tile;
 
 enum help_page_type {HELP_TEXT, HELP_UNIT, HELP_IMPROVEMENT, HELP_WONDER, HELP_TECH} help_type;
 
@@ -283,9 +279,8 @@ void create_tech_tree(Widget tree, Widget parent, int tech, int levels)
   Widget l;
   int type=get_invention(game.player_ptr, tech);
   char *bg="";
-  char label[MAX_LENGTH_NAME+3];
   
-  switch(type) {
+   switch(type) {
     case TECH_UNKNOWN:
       bg=TREE_NODE_UNKNOWN_TECH_BG;
       break;
@@ -295,17 +290,13 @@ void create_tech_tree(Widget tree, Widget parent, int tech, int levels)
     case TECH_REACHABLE:
       bg=TREE_NODE_REACHABLE_TECH_BG;
       break;
-  }
+   }
   
-  sprintf(label,"%s:%d",advances[tech].name,
-                        tech_goal_turns(game.player_ptr,tech));
-  
-
   if(parent) {
     l=XtVaCreateManagedWidget("treenode", 
 			      commandWidgetClass, 
 			      tree,
-			      XtNlabel, label,
+			      XtNlabel, advances[tech].name,
 			      XtNtreeParent, parent,
 			      NULL);
   }
@@ -313,7 +304,7 @@ void create_tech_tree(Widget tree, Widget parent, int tech, int levels)
     l=XtVaCreateManagedWidget("treenode", 
 			      commandWidgetClass, 
 			      tree,
-			      XtNlabel, label,
+			      XtNlabel, advances[tech].name,
 			      NULL);
   }
 
@@ -475,15 +466,6 @@ void create_help_page(enum help_page_type type)
 					       labelWidgetClass, 
 					       help_right_form,
 					       NULL);
-    help_unit_tile=XtVaCreateManagedWidget("helpunittile",
-    					   labelWidgetClass,
-					   help_right_form,
-					   XtNwidth, NORMAL_TILE_WIDTH,
-					   XtNheight, NORMAL_TILE_HEIGHT,
-					   NULL);  
-    XtAddCallback(help_unit_tile,
-                  XtNdestroyCallback,free_bitmap_destroy_callback,
-		  NULL);
     help_unit_fp=XtVaCreateManagedWidget("helpunitfp", 
 					  labelWidgetClass, 
 					  help_right_form,
@@ -601,7 +583,6 @@ void help_update_dialog(struct help_item *pitem)
   for(i=0; i<U_LAST; ++i) {
     if(!strcmp(top, get_unit_type(i)->name)) {
        char buf[64];
-       Pixmap pm;
        create_help_page(HELP_UNIT);
        sprintf(buf, "%d ", get_unit_type(i)->build_cost);
        xaw_set_label(help_unit_cost_data, buf);
@@ -621,15 +602,13 @@ void help_update_dialog(struct help_item *pitem)
 	 xaw_set_label(help_improvement_req_data, "None");
        else {
 	 xaw_set_label(help_improvement_req_data, advances[get_unit_type(i)->tech_requirement].name);
-	 create_tech_tree(help_improvement_tree, 0, get_unit_type(i)->tech_requirement, 3);
+	  create_tech_tree(help_improvement_tree, 0, get_unit_type(i)->tech_requirement, 3);
        }
        if(get_unit_type(i)->obsoleted_by==-1)
 	 xaw_set_label(help_wonder_obsolete_data, "None");
-       else
-	 xaw_set_label(help_wonder_obsolete_data, get_unit_type(get_unit_type(i)->obsoleted_by)->name);
-
-       xaw_set_bitmap(help_unit_tile, create_overlay_unit(i));
-       set_title_topic(pitem);
+      else
+	xaw_set_label(help_wonder_obsolete_data, advances[get_unit_type(i)->obsoleted_by].name);
+      set_title_topic(pitem);
        return;
     }
   }

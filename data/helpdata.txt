@@ -500,11 +500,6 @@ building, then it'll be automatically sold.
 ---
 # Airport
 Allows a city to produce veteran air units.
-
-Two cities with airports can airlift one unit per turn. 
-Airlifting instantly transports the unit from one city to another
-and will use all of the unit's MP.  A unit must have some MP left
-to be airlifted.
 ---
 # Aqueduct
 Allows a city to grow larger than size 8.
@@ -534,9 +529,8 @@ this by 1.
 ---
 # City Walls
 City Walls make it easier to defend a city.  They triple the defence
-strength of units within the city against ground and helicopter
-units.  They are uneffective aginst airborne and sea units as well
-as Artillery and Howitzers.  City Walls also prevent the loss of
+strength of units within the city, unless the attacking unit is
+airborne or an Artillery unit.  City Walls also prevent the loss of 
 population which occurs when a defending unit is destroyed.
 %% Am I right here?  Needs checking.
 ---
@@ -781,7 +775,6 @@ improvements.
 # Nuclear Fission
 ---
 # Nuclear Power
-Gives sea units one extra move.
 ---
 # Philosophy
 The first player to research philosophy gets an immediate advance.
@@ -927,8 +920,6 @@ Anarchy.
 ---
 # Sun Tzu's War Academy
 All your new ground units become veterans.
-The chance of a unit becoming a veteran after a battle increases
-from 50% to 100%
 ---
 # United Nations
 Units regains one extra hitpoint per turn.
@@ -1070,7 +1061,6 @@ small amount of health for every turn not spent in a city.
 # Horsemen
 ---
 # Howitzer
-This unit ignores the effect of City Walls.
 ---
 # Ironclad
 ---

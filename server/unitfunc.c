@@ -35,15 +35,9 @@
 #include <aiunit.h>
 void do_unit_goto(struct player *pplayer, struct unit *punit);
 
-/******************************************************************************
-  bribe an enemy unit
-  rules:
-  1) can't bribe a unit if owner runs a democracy
-  2) if player don't have enough money
-  3) can't bribe a unit unless it's the only unit on the square. 
-     (this is handled outside this function)
-  if these conditions are fulfilled, the unit will be bribed
-****************************************************************************/
+/***************************************************************
+...
+***************************************************************/
 void diplomat_bribe(struct player *pplayer, struct unit *pdiplomat, struct unit *pvictim)
 {
   if(pplayer->economic.gold>=pvictim->bribe_cost) {
@@ -68,12 +62,9 @@ void diplomat_bribe(struct player *pplayer, struct unit *pdiplomat, struct unit 
   }
 }
 
-/****************************************************************************
-  diplomat try to steal a tech from an enemy city
-  rules:
-  1) if there is a spy in the city the attempt will fail.
-  2) if there has already been stolen from this city the attempt will fail
-****************************************************************************/
+/***************************************************************
+...
+***************************************************************/
 void diplomat_get_tech(struct player *pplayer, struct unit *pdiplomat, 
 		       struct city  *city)
 {
@@ -141,10 +132,7 @@ void diplomat_get_tech(struct player *pplayer, struct unit *pdiplomat,
 }
 
 /**************************************************************************
- Inciting a revolution will fail if
- 1) the attacked player is running a democracy
- 2) the attacker don't have enough credits
- 3) there is a defending spy in the city
+...
 **************************************************************************/
 void diplomat_incite(struct player *pplayer, struct unit *pdiplomat, struct city *pcity)
 {
@@ -208,12 +196,7 @@ void diplomat_incite(struct player *pplayer, struct unit *pdiplomat, struct city
 }
 
 /**************************************************************************
-Sabotage of enemy building, build order will fail if:
- 1) there is a defending spy in the city.
- 2) there is a chance it'll fail if the sabotage is a building
- The sabotage will be 50/50 between wiping the current production or
- an existing building.
- NOTE: Wonders and palace can't be sabotaged
+...
 **************************************************************************/
 void diplomat_sabotage(struct player *pplayer, struct unit *pdiplomat, struct city *pcity)
 {
@@ -283,15 +266,9 @@ void diplomat_sabotage(struct player *pplayer, struct unit *pdiplomat, struct ci
   wipe_unit(0, pdiplomat);
 }
 
-/***************************************************************************
-Restore adds move points/hitpoints and upgrade units if player
-have leonardo's workshop.
-Air units have to be on carriers or cities or they'll be wiped.
-Missiles will have to be on submarines or in citites or they'll be wiped
-choppers out of city will loose 1 hitpoint every turn.
-triremes will be wiped with 50% chance 
-if they're not close to land, and player  don't have lighthouse.
-****************************************************************************/
+/***************************************************************
+...
+***************************************************************/
 void player_restore_units(struct player *pplayer)
 {
   struct city *pcity;
@@ -352,11 +329,9 @@ void player_restore_units(struct player *pplayer)
   unit_list_iterate_end;
 }
 
-/****************************************************************************
-  add hitpoints to the unit, hp_gain_coord returns the amount to add
-  united nations will speed up the process by 2 hp's / turn, means helicopters
-  will actually not loose hp's every turn if player have that wonder.
-*****************************************************************************/
+/***************************************************************
+...
+***************************************************************/
 void unit_restore_hitpoints(struct player *pplayer, struct unit *punit)
 {
   struct city *pcity;
@@ -373,19 +348,16 @@ void unit_restore_hitpoints(struct player *pplayer, struct unit *punit)
 }
   
 
-/***************************************************************************
- move points are trivial, only modifiers to the base value is if it's
-  sea units and the player has certain wonders/techs
-***************************************************************************/
+/***************************************************************
+...
+***************************************************************/
 void unit_restore_movepoints(struct player *pplayer, struct unit *punit)
 {
   punit->moves_left=unit_move_rate(punit);
 }
 
 /**************************************************************************
-  after a battle this routine is called to decide whether or not the unit
-  should become a veteran, if unit isn't already.
-  there is a 50/50% chance for it to happend, (100% if player got SUNTZU)
+...
 **************************************************************************/
 void maybe_make_veteran(struct unit *punit)
 {
@@ -401,60 +373,11 @@ void maybe_make_veteran(struct unit *punit)
 }
 
 /**************************************************************************
-  This is the basic unit versus unit combat routine.
-  1) ALOT of modifiers bonuses etc is added to the 2 units rates.
-  2) the combat loop, which continues until one of the units are dead
-  3) the aftermath, the looser (and potentially the stack which is below it)
-     is wiped, and the winner gets a chance of gaining veteran status
+...
 **************************************************************************/
 void unit_versus_unit(struct unit *attacker, struct unit *defender)
 {
-  int attackpower=get_total_attack_power(attacker,defender);
-  int defensepower=get_total_defense_power(attacker,defender);
-
-  log(LOG_DEBUG, "attack:%d, defense:%d\n", attackpower, defensepower);
-  if (!attackpower) {
-      attacker->hp=0; 
-  } else if (!defensepower) {
-      defender->hp=0;
-  }
-  while (attacker->hp>0 && defender->hp>0) {
-    if (myrand(attackpower+defensepower)>= defensepower) {
-      defender->hp=defender->hp-get_unit_type(attacker->type)->firepower;
-    } else {
-      if (is_sailing_unit(defender) && map_get_city(defender->x, defender->y))
-	attacker->hp=attacker->hp-1;              /* pearl harbour */
-      else
-	attacker->hp=attacker->hp-get_unit_type(defender->type)->firepower;
-    }
-  }
-  if (attacker->hp<0) attacker->hp=0;
-  if (defender->hp<0) defender->hp=0;
-
-  if (attacker->hp)
-    maybe_make_veteran(attacker); 
-  else if (defender->hp)
-    maybe_make_veteran(defender);
-}
-
-/***************************************************************************
- return the modified attack power of a unit.  Currently they aren't any
- modifications...
-***************************************************************************/
-int get_total_attack_power(struct unit *attacker, struct unit *defender)
-{
   int attackpower=get_attack_power(attacker);
-
-  return attackpower;
-}
-
-/***************************************************************************
- return the modified defense power of a unit.
- An veteran aegis cruiser in a mountain city with SAM and SDI defense 
- being attacked by a missile gets defense 288.
-***************************************************************************/
-int get_total_defense_power(struct unit *attacker, struct unit *defender)
-{
   int defensepower=get_defense_power(defender);
   if (unit_flag(defender->type, F_PIKEMEN) && unit_flag(attacker->type, F_HORSE)) 
     defensepower*=2;
@@ -479,15 +402,33 @@ int get_total_defense_power(struct unit *attacker, struct unit *defender)
        map_get_city(defender->x, defender->y)) && 
       is_ground_unit(defender))
     defensepower*=1.5;
+  log(LOG_DEBUG, "attack:%d, defense:%d\n", attackpower, defensepower);
+  while (attacker->hp>0 && defender->hp>0) {
+    if (!attackpower) {
+      attacker->hp= 0; 
+    } else if (!defensepower) {
+      defender->hp= 0;
+    } else if (myrand(attackpower+defensepower)>= defensepower) {
+      defender->hp=defender->hp-get_unit_type(attacker->type)->firepower;
+    } else {
+      if (is_sailing_unit(defender) && map_get_city(defender->x, defender->y))
+	attacker->hp=attacker->hp-1;              /* pearl harbour */
+      else
+	attacker->hp=attacker->hp-get_unit_type(defender->type)->firepower;
 
-  return defensepower;
+    }
+  }
+  if (attacker->hp<0) attacker->hp=0;
+  if (defender->hp<0) defender->hp=0;
+
+  if (attacker->hp)
+    maybe_make_veteran(attacker); 
+  else if (defender->hp)
+    maybe_make_veteran(defender);
 }
 
 /**************************************************************************
- creates a unit, and set it's initial values, and put it into the right 
- lists.
- TODO: Maybe this procedure should refresh its homecity? so it'll show up 
- immediately on the clients? (refresh_city + send_city_info)
+...
 **************************************************************************/
 void create_unit(struct player *pplayer, int x, int y, enum unit_type_id type,
 		 int make_veteran, int homecity_id)
@@ -525,9 +466,7 @@ void create_unit(struct player *pplayer, int x, int y, enum unit_type_id type,
 
 
 /**************************************************************************
-  Removes the unit from the game, and notifies the clients.
-  TODO: Find out if the homecity is refreshed and resend when this happends
-  otherwise (refresh_city(homecity) + send_city(homecity))
+...
 **************************************************************************/
 void send_remove_unit(struct player *pplayer, int unit_id)
 {
@@ -544,7 +483,7 @@ void send_remove_unit(struct player *pplayer, int unit_id)
 }
 
 /**************************************************************************
-  iterate through all units and update them.
+...
 **************************************************************************/
 void update_unit_activities(struct player *pplayer)
 {
@@ -554,7 +493,7 @@ void update_unit_activities(struct player *pplayer)
 }
 
 /**************************************************************************
-  assign a new task to a unit.
+...
 **************************************************************************/
 void set_unit_activity(struct unit *punit, enum unit_activity new_activity)
 {
@@ -563,9 +502,7 @@ void set_unit_activity(struct unit *punit, enum unit_activity new_activity)
 }
 
 /**************************************************************************
-  progress settlers in their current tasks, 
-  and units that is pillaging.
-  also move units that is on a goto.
+...
 **************************************************************************/
 void update_unit_activity(struct player *pplayer, struct unit *punit)
 {
@@ -639,11 +576,7 @@ void update_unit_activity(struct player *pplayer, struct unit *punit)
 
 
 /**************************************************************************
- nuke a square
- 1) remove all units on the square
- 2) half the size of the city on the square
- if it isn't a city square or an ocean square then with 50% chance 
- add some pollution, then notify the client about the changes.
+...
 **************************************************************************/
 void do_nuke_tile(int x, int y)
 {
@@ -669,7 +602,7 @@ void do_nuke_tile(int x, int y)
 }
 
 /**************************************************************************
-  nuke all the squares in a 3x3 square around the center of the explosion
+...
 **************************************************************************/
 void do_nuclear_explosion(int x, int y)
 {
@@ -681,11 +614,7 @@ void do_nuclear_explosion(int x, int y)
 
 
 /**************************************************************************
-Move the unit if possible 
-  if the unit has less moves than it costs to enter a square, we roll the dice:
-  1) either succeed
-  2) or have it's moves set to 0
-  a unit can always move atleast once
+...
 **************************************************************************/
 int try_move_unit(struct unit *punit, int dest_x, int dest_y) 
 {
@@ -696,8 +625,7 @@ int try_move_unit(struct unit *punit, int dest_x, int dest_y)
   return punit->moves_left;
 }
 /**************************************************************************
-  go by airline, if both cities have an airport and neither has been used this
-  turn the unit will be transported by it and have it's moves set to 0
+...
 **************************************************************************/
 int do_airline(struct unit *punit, int x, int y)
 {
@@ -716,11 +644,9 @@ int do_airline(struct unit *punit, int x, int y)
   city1->airlift=0;
   city2->airlift=0;
   punit->moves_left = 0;
-  unit_list_unlink(&map_get_tile(punit->x, punit->y)->units, punit);
   punit->x = x;
   punit->y = y;
   send_unit_info(&game.players[punit->owner], punit, 0);
-  unit_list_insert(&map_get_tile(x, y)->units, punit);
   notify_player_ex(&game.players[punit->owner], punit->x, punit->y, E_NOEVENT,
 		   "Game: unit transported succesfully.");
   return 1;
@@ -728,8 +654,7 @@ int do_airline(struct unit *punit, int x, int y)
 
 
 /**************************************************************************
-  called when a player conquers a city, remove buildings (not wonders and always palace) with game.razechance% chance
-  set the city's shield stock to 0
+...
 **************************************************************************/
 void raze_city(struct city *pcity)
 {
@@ -747,9 +672,7 @@ void raze_city(struct city *pcity)
 }
 
 /**************************************************************************
-  if target has more techs than pplayer, pplayer will get a random of these
-  the clients will both be notified.
-  TODO: Players with embassies in these countries should be notified aswell
+...
 **************************************************************************/
 void get_a_tech(struct player *pplayer, struct player *target)
 {
@@ -789,8 +712,9 @@ void get_a_tech(struct player *pplayer, struct player *target)
   }
 }
 
+
 /**************************************************************************
-  finds a spot around pcity and place a partisan.
+...
 **************************************************************************/
 int place_partisan(struct city *pcity)
 {
@@ -821,13 +745,7 @@ int place_partisan(struct city *pcity)
 }
 
 /**************************************************************************
-  if requirements to make partisans when a city is conquered is fullfilled
-  this routine makes alot of partisan based on the city's size.
-  To be candidate for partisans the following things must be satisfied:
-  1) Guerilla warfare must be known by atleast 1 player
-  2) The owner of the city is the original player.
-  3) The player must know about communism and gunpowder
-  4) the player must run either a democracy or a communist society.
+...
 **************************************************************************/
 void make_partisans(struct city *pcity)
 {
@@ -846,6 +764,7 @@ void make_partisans(struct city *pcity)
     partisans = 8;
   
   while (partisans && place_partisan(pcity)) partisans--;
+ 
 }
 
 
@@ -916,9 +835,7 @@ void kill_unit(struct player *dest, struct unit *punit)
 }
 
 /**************************************************************************
-  send the unit to the players who need the info 
-  dest = NULL means all players, dosend means send even if the player 
-  can't see the unit.
+...
 **************************************************************************/
 void send_unit_info(struct player *dest, struct unit *punit, int dosend)
 {
@@ -948,7 +865,7 @@ void send_unit_info(struct player *dest, struct unit *punit, int dosend)
 }
 
 /**************************************************************************
-  simply puts the settler unit into goto
+...
 **************************************************************************/
 int auto_settler_do_goto(struct player *pplayer, struct unit *punit, int x, int y)
 {
@@ -962,7 +879,7 @@ int auto_settler_do_goto(struct player *pplayer, struct unit *punit, int x, int 
 }
 
 /********************************************************************
-  find some work for the settler
+...
 *********************************************************************/
 void auto_settler_findwork(struct player *pplayer, struct unit *punit) 
 {
@@ -1016,9 +933,8 @@ void auto_settler_findwork(struct player *pplayer, struct unit *punit)
     punit->ai.control=0;
 }
 
-/************************************************************************** 
-  run through all the players settlers and let those on ai.control work 
-  automagically
+/**************************************************************************
+...
 **************************************************************************/
 void auto_settlers_player(struct player *pplayer) 
 {
@@ -1039,8 +955,7 @@ void auto_settlers_player(struct player *pplayer)
 }
 
 /**************************************************************************
-  Do the auto_settler stuff for all the players. 
-  TODO: This should be moved into the update_player loop i think
+...
 **************************************************************************/
 void auto_settlers()
 {
@@ -1049,7 +964,3 @@ void auto_settlers()
     auto_settlers_player(&game.players[i]);
   }
 }
-
-
-
-

@@ -78,22 +78,29 @@ int sniff_packets(void)
   int i;
   int max_desc;
   fd_set readfs;
+  time_t time_at_tick_start, time_diff;
   struct timeval tv;
-  static time_t time_at_turn_end;
+  static int sec_counter;
   static int year;
   
   if(year!=game.year) {
-    time_at_turn_end = time(NULL) + game.timeout;
     year=game.year;
+    sec_counter=0;
   }
   
+  time_at_tick_start=time(NULL);
+  time_diff=0;
+  
+  /* sec_counter=0;*/
+    
   while(1) {
     if(force_end_of_sniff) {
       force_end_of_sniff=0;
       return 2;
     }
     
-    tv.tv_sec=1; tv.tv_usec=0;
+    tv.tv_sec=1;
+    tv.tv_usec= 0;
     
     MY_FD_ZERO(&readfs);
     FD_SET(0, &readfs);	
@@ -108,8 +115,9 @@ int sniff_packets(void)
     }
     
     if(select(max_desc+1, &readfs, NULL, NULL, &tv)==0) { /* timeout */
+      sec_counter++;
       send_server_info_to_metaserver(0);
-      if(game.timeout && time(NULL)>time_at_turn_end) {
+      if(game.timeout!=0 && sec_counter>game.timeout) {
 	return 0;
       }
       continue;
@@ -151,7 +159,6 @@ int sniff_packets(void)
     }
     break;
   }
-  if(game.timeout && time(NULL)>time_at_turn_end) return 0;
   return 1;
 }
   

@@ -13,22 +13,9 @@
 #ifndef __AIUNIT_H
 #define __AIUNIT_H
 
-enum ai_unit_task { AIUNIT_NONE, AIUNIT_AUTO_SETTLER, AIUNIT_BUILD_CITY,
-                    AIUNIT_DEFEND_HOME, AIUNIT_ATTACK, AIUNIT_FORTIFY,
-                    AIUNIT_RUNAWAY, AIUNIT_ESCORT};
+enum ai_unit_task { AIUNIT_NONE, AIUNIT_AUTO_SETTLER, AIUNIT_BUILD_CITY};
 
 void ai_manage_units(struct player *pplayer); 
 int ai_want_settlers(struct player *pplayer, int cont);
-
-void ai_manage_military(struct player *pplayer,struct unit *punit);
-void ai_military_findjob(struct player *pplayer,struct unit *punit);
-void ai_military_gohome(struct player *pplayer,struct unit *punit);
-void ai_military_attack(struct player *pplayer,struct unit *punit);
-
-void ai_manage_unit(struct player *pplayer, struct unit *punit);
-void ai_manage_settler(struct player *pplayer, struct unit *punit);
-void ai_manage_caravan(struct player *pplayer, struct unit *punit);
-const char *get_a_name(struct player *pplayer);
-
 
 #endif

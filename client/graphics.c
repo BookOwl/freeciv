@@ -14,14 +14,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#include <X11/Xlib.h>
 #include <X11/Intrinsic.h>
 #include <xpm.h>
 
 #include <shared.h>
 #include <log.h>
-#include <unit.h>
-#include <game.h>
 #include <graphics.h>
 #include <colors.h>
 #include <climisc.h>
@@ -30,15 +27,11 @@ extern int display_depth;
 extern Widget map_canvas;
 extern Display *display;
 extern XColor colors[MAX_COLORS];
-extern GC fill_bg_gc;
 extern GC civ_gc, font_gc;
 extern Colormap cmap;
 extern Widget toplevel;
 extern Window root_window;
 extern XFontStruct *main_font_struct;
-extern int use_solid_color_behind_units;
-
-#define FLAG_TILES       14*20
 
 struct Sprite **tile_sprites;
 struct Sprite *intro_gfx_sprite;
@@ -136,7 +129,7 @@ void load_tile_gfx(void)
     
     tile_sprites[i++]=ctor_sprite(mypixmap, 
 				  SMALL_TILE_WIDTH, SMALL_TILE_HEIGHT);
-  }
+ }
 
   UNIT_TILES = i;
   for(y=0; y<unit_sprite->height; y+=NORMAL_TILE_HEIGHT)
@@ -163,8 +156,6 @@ void load_tile_gfx(void)
 
       XFreeGC(display, plane_gc);
     }
-  free_sprite(unit_sprite);
-  free_sprite(big_sprite);
 }
 
 
@@ -263,40 +254,6 @@ again:
   return mysprite;
 }
 
-/***************************************************************************
-   Deletes a sprite.  These things can use a lot of memory.
-***************************************************************************/
-void free_sprite(struct Sprite *s)
-{
-  if(s->pixmap) XFreePixmap(display,s->pixmap);
-  if(s->has_mask) XFreePixmap(display,s->mask);
-  free(s);
-}
 
-/***************************************************************************
-...
-***************************************************************************/
-Pixmap create_overlay_unit(int i)
-{
-  Pixmap pm;
-  struct Sprite *s=get_tile_sprite(get_unit_type(i)->graphics+UNIT_TILES);
-  
-  pm=XCreatePixmap(display, root_window, NORMAL_TILE_WIDTH, NORMAL_TILE_HEIGHT, display_depth);
-  if(use_solid_color_behind_units)  {
-    XSetForeground(display, fill_bg_gc, colors_standard[COLOR_STD_RACE0+game.player_ptr->race]);
-    XFillRectangle(display, pm, fill_bg_gc, 0,0, NORMAL_TILE_WIDTH,NORMAL_TILE_HEIGHT);
-  } else {
-	struct Sprite *flag=get_tile_sprite(game.player_ptr->race + FLAG_TILES);
-	XCopyArea(display, flag->pixmap, pm, civ_gc, 0,0,
-	          flag->width,flag->height, 0,0);
-  };
 
-  XSetClipOrigin(display,civ_gc,0,0);
-  XSetClipMask(display,civ_gc,s->mask);
-  XCopyArea(display, s->pixmap, pm, civ_gc,
-  	    0,0, s->width,s->height, 0,0 );
-  XSetClipMask(display,civ_gc,None);
-
-  return(pm);
-}
 
