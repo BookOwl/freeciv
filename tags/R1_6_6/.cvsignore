@@ -1,0 +1,9 @@
+config.cache
+Makefile
+config.h
+config.log
+config.status
+stamp-h
+civclient
+civserver
+.deps
