@@ -55,7 +55,7 @@ int max_improvement_id;
 static int city_sort_id;
 static int city_sort_order;
 static HMENU menu_shown; 
-static HWND *sort_buttons;
+static HWND sort_buttons[NUM_CREPORT_COLS];
 HWND cityrep_list;
 typedef bool TestCityFunc(struct city *, int);     
 
@@ -300,8 +300,7 @@ static void get_city_text(struct city *pcity, char *buf[], int n)
   for(i=0, spec=city_report_specs; i<NUM_CREPORT_COLS; i++, spec++) {
     buf[i][0]='\0';
     if(!spec->show) continue;
-    my_snprintf(buf[i], n, "%*s", NEG_VAL(spec->width)-2,
-		(spec->func)(pcity, spec->data)); 
+    my_snprintf(buf[i], n, "%*s", NEG_VAL(spec->width)-2, (spec->func)(pcity)); 
   }
 }
 
@@ -682,7 +681,7 @@ static LONG CALLBACK cityrep_changeall_proc(HWND hWnd,
 	    id=ListBox_GetCurSel(GetDlgItem(hWnd,ID_PRODCHANGE_FROM));
 	    if (id==LB_ERR)
 	      {
-		append_output_window(_("Select a unit or improvement"
+		append_output_window(_("Game: Select a unit or improvement"
 				       " to change production from."));
 		break;        
 	      }
@@ -691,13 +690,13 @@ static LONG CALLBACK cityrep_changeall_proc(HWND hWnd,
 	    id=ListBox_GetCurSel(GetDlgItem(hWnd,ID_PRODCHANGE_TO));
 	    if (id==LB_ERR)
 	      {
-		append_output_window(_("Select a unit or improvement"
+		append_output_window(_("Game: Select a unit or improvement"
 				       " to change production to."));
 		break;          
 	      }
 	    to=ListBox_GetItemData(GetDlgItem(hWnd,ID_PRODCHANGE_TO),id);
 	    if (from==to) {
-	      append_output_window(_("That's the same thing!"));
+	      append_output_window(_("Game: That's the same thing!"));
 	      break;
 	    }
 	    client_change_all(from,to);
@@ -867,8 +866,8 @@ static void list_del(void *data)
 **************************************************************************/
 static void city_report_create(HWND hWnd)
 {
-  static char **titles;
-  static char (*buf)[64];   
+  static char *titles   [NUM_CREPORT_COLS];
+  static char  buf      [NUM_CREPORT_COLS][64];   
   struct city_report_spec *spec;        
   struct fcwin_box *vbox;
   struct fcwin_box *hbox;
@@ -890,35 +889,24 @@ static void city_report_create(HWND hWnd)
 			TRUE,TRUE,5);
   fcwin_box_add_box(vbox,hbox,FALSE,FALSE,5);
   
-  if (titles) {
-    free(titles);
-  }
-  if (buf) {
-    free(buf);
-  }
-  if (sort_buttons) {
-    free(sort_buttons);
-  }
-  
-  titles = fc_malloc(sizeof(*titles) * NUM_CREPORT_COLS);
-  buf = fc_malloc(sizeof(*buf) * NUM_CREPORT_COLS);
-  sort_buttons = fc_malloc(sizeof(*sort_buttons) * NUM_CREPORT_COLS);
-
+ 
   for (i=0;i<NUM_CREPORT_COLS;i++)
     titles[i]=buf[i];
   
   get_city_table_header(titles, sizeof(buf[0]));  
   for(i=0, spec=city_report_specs; i<NUM_CREPORT_COLS; i++, spec++) {         
-    if (spec->show) {
-      sort_buttons[i]=CreateWindow("BUTTON", titles[i], WS_CHILD | WS_VISIBLE
-				   | BS_MULTILINE, 0, 0, 0, 0, hWnd,
-				   (HMENU)(ID_CITYREP_SORTBASE+i),
-				   freecivhinst, NULL);
-      SendMessage(sort_buttons[i], WM_SETFONT, (WPARAM)font_12courier,
-		  MAKELPARAM(TRUE,0));
-    } else {
-      sort_buttons[i] = NULL;
-    }
+    if (spec->show)
+      {
+	sort_buttons[i]=CreateWindow("BUTTON",titles[i],
+				     WS_CHILD | WS_VISIBLE | BS_MULTILINE,
+				     0,0,0,0,
+				     hWnd,
+				     (HMENU)(ID_CITYREP_SORTBASE+i),
+				     freecivhinst,
+				     NULL);
+	SendMessage(sort_buttons[i],
+		    WM_SETFONT,(WPARAM) font_12courier,MAKELPARAM(TRUE,0));
+ 				           }
   }
 
   cityrep_list=CreateWindow("LISTBOX",NULL,WS_CHILD | WS_VISIBLE | 
@@ -1072,24 +1060,21 @@ static LONG APIENTRY city_report_proc(HWND hWnd,
 
 **************************************************************************/
 void
-popup_city_report_dialog(bool raise)
+popup_city_report_dialog(bool make_modal)
 {
-  if (!hCityRep) {
-    hCityRep =
-      fcwin_create_layouted_window(city_report_proc,_("City Report"),
-				   WS_OVERLAPPED | WS_SYSMENU | WS_MINIMIZEBOX
-				    | WS_MAXIMIZEBOX | WS_THICKFRAME,
-				   CW_USEDEFAULT, CW_USEDEFAULT,
-				   root_window, NULL, JUST_CLEANUP, NULL);
+  if (hCityRep) return;
+  hCityRep=
+    fcwin_create_layouted_window(city_report_proc,_("City Report"),
+				 WS_OVERLAPPED | WS_SYSMENU | WS_MINIMIZEBOX | 
+				 WS_MAXIMIZEBOX | WS_THICKFRAME,
+				 CW_USEDEFAULT,CW_USEDEFAULT,
+				 root_window,NULL,
+				 JUST_CLEANUP,
+				 NULL);
   
-    hChangeAll = NULL;
-    city_report_dialog_update();
-  }
-
-  ShowWindow(hCityRep, SW_SHOWNORMAL);
-  if (raise) {
-    SetFocus(hCityRep);
-  }
+  hChangeAll=NULL;
+  city_report_dialog_update();
+  ShowWindow(hCityRep,SW_SHOWNORMAL);
 }
 
 /**************************************************************************

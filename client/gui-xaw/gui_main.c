@@ -69,9 +69,6 @@
 
 const char *client_string = "gui-xaw";
 
-const char * const gui_character_encoding = NULL;
-const bool gui_use_transliteration = TRUE;
-
 client_option gui_options[] = {
   /* None. */
 };
@@ -83,6 +80,8 @@ static AppResources appResources;
 static int unit_ids[MAX_NUM_UNITS_BELOW];  
 
 static void setup_widgets(void);
+void fill_econ_label_pixmaps(void);
+void fill_unit_below_pixmaps(void);
 
 /**************************************************************************
 ...
@@ -206,16 +205,6 @@ XtInputId x_input_id;
 XtIntervalId x_interval_id;
 Atom wm_delete_window;
 
-/****************************************************************************
-  Called by the tileset code to set the font size that should be used to
-  draw the city names and productions.
-****************************************************************************/
-void set_city_names_font_sizes(int my_city_names_font_size,
-			       int my_city_productions_font_size)
-{
-  freelog(LOG_ERROR, "Unimplemented set_city_names_font_sizes.");
-  /* PORTME */
-}
 
 #ifdef UNUSED
 /**************************************************************************
@@ -275,7 +264,7 @@ static Boolean toplevel_work_proc(XtPointer client_data)
 **************************************************************************/
 void ui_init(void)
 {
-
+  init_character_encodings(NULL, TRUE);
 }
 
 /**************************************************************************
@@ -358,13 +347,14 @@ void ui_main(int argc, char *argv[])
     char **missing_charset_list_return;
     int missing_charset_count_return;
     char *def_string_return;
-    char *city_names_font, *city_productions_font_name;
 
     values.graphics_exposures = False;
     civ_gc = XCreateGC(display, root_window, GCGraphicsExposures, &values);
 
+    free(city_names_font);
     city_names_font = mystrdup("-*-*-*-*-*--14-*");
 
+    free(city_productions_font_name);
     city_productions_font_name = mystrdup("-*-*-*-*-*--14-*");
 
     main_font_set = XCreateFontSet(display, city_names_font,
@@ -452,14 +442,8 @@ void ui_main(int argc, char *argv[])
   InitializeActions(app_context);
 
   /* Do this outside setup_widgets() so after tiles are loaded */
-  for(i=0;i<10;i++)  {
-    struct Sprite *s = i < 5 ? sprites.tax_science : sprites.tax_gold;
 
-    XtVaSetValues(econ_label[i], XtNbitmap,
-		  s->pixmap, NULL);
-    XtAddCallback(econ_label[i], XtNcallback, taxrates_callback,
-		  INT_TO_XTPOINTER(i));
-  }
+  fill_econ_label_pixmaps();
 		
   XtAddCallback(map_horizontal_scrollbar, XtNjumpProc, 
 		scrollbar_jump_callback, NULL);
@@ -480,15 +464,9 @@ void ui_main(int argc, char *argv[])
 
   init_mapcanvas_and_overview();
 
-  for(i=0; i<num_units_below; i++)
-    unit_below_pixmap[i]=XCreatePixmap(display, XtWindow(overview_canvas), 
-				       UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT, 
-				       display_depth);  
+  fill_unit_below_pixmaps();
 
-  set_indicator_icons(client_research_sprite(),
-		      client_warming_sprite(),
-		      client_cooling_sprite(),
-		      client_government_sprite());
+  set_indicator_icons(0, 0, 0, 0);
 
   wm_delete_window = XInternAtom(XtDisplay(toplevel), "WM_DELETE_WINDOW", 0);
   XSetWMProtocols(display, XtWindow(toplevel), &wm_delete_window, 1);
@@ -853,10 +831,9 @@ void end_turn_callback(Widget w, XtPointer client_data, XtPointer call_data)
 **************************************************************************/
 void timer_callback(XtPointer client_data, XtIntervalId * id)
 {
-  int msec = real_timer_callback() * 1000;
-
-  x_interval_id = XtAppAddTimeOut(app_context, msec,
+  x_interval_id = XtAppAddTimeOut(app_context, TIMER_INTERVAL,
 				  timer_callback, NULL);
+  real_timer_callback();
 }
 
 /**************************************************************************
@@ -905,16 +882,60 @@ void set_unit_icons_more_arrow(bool onoff)
   }
 }
 
-/****************************************************************************
-  Enqueue a callback to be called during an idle moment.  The 'callback'
-  function should be called sometimes soon, and passed the 'data' pointer
-  as its data.
-****************************************************************************/
-void add_idle_callback(void (callback)(void *), void *data)
-{
-  /* PORTME */
+/**************************************************************************
+  Called to fill econ_label pixmaps (showing tax/lux/sci rates).
 
-  /* This is a reasonable fallback if it's not ported. */
-  freelog(LOG_ERROR, "Unimplemented add_idle_callback.");
-  (callback)(data);
+  It may be called again if the tileset changes.
+**************************************************************************/
+void fill_econ_label_pixmaps(void)
+{
+  int i;
+  int econ_label_count = 10;
+
+  for(i = 0; i < econ_label_count; i++) {
+    struct Sprite *s = i < 5 ? sprites.tax_science : sprites.tax_gold;
+
+    XtVaSetValues(econ_label[i], XtNbitmap,
+		  s->pixmap, NULL);
+    XtAddCallback(econ_label[i], XtNcallback, taxrates_callback,
+		  INT_TO_XTPOINTER(i));
+  }
+}
+
+/**************************************************************************
+  Called to fill unit_below pixmaps. They are on the left of the
+  screen that shows all of the inactive units in the current tile.
+
+  It may be called again if the tileset changes.
+**************************************************************************/
+void fill_unit_below_pixmaps(void)
+{
+  long i;
+
+  for (i = 0; i < num_units_below; i++) {
+    unit_below_pixmap[i] = XCreatePixmap(display, XtWindow(overview_canvas),
+					 UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT,
+					 display_depth);
+  }
+}
+
+/**************************************************************************
+  Called when the tileset is changed to reset indicators pixmaps.
+**************************************************************************/
+void reset_econ_label_pixmaps(void)
+{
+  fill_econ_label_pixmaps();
+}
+
+/**************************************************************************
+  Called when the tileset is changed to reset unit pixmaps.
+**************************************************************************/
+void reset_unit_below_pixmaps(void)
+{
+  long i;
+
+  for (i = 0; i < num_units_below; i++) {
+    XFreePixmap(display, unit_below_pixmap[i]);
+  }
+  fill_unit_below_pixmaps();
 }

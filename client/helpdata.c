@@ -56,27 +56,11 @@ static const char * const help_type_names[] = {
 #define help_list_iterate_end  LIST_ITERATE_END
 
 static struct genlist_link *help_nodes_iterator;
-static struct help_list *help_nodes;
+static struct help_list help_nodes;
 static bool help_nodes_init = FALSE;
 /* helpnodes_init is not quite the same as booted in boot_help_texts();
    latter can be 0 even after call, eg if couldn't find helpdata.txt.
 */
-
-/****************************************************************
-  Initialize.
-*****************************************************************/
-void helpdata_init(void)
-{
-  help_nodes = help_list_new();
-}
-
-/****************************************************************
-  Clean up.
-*****************************************************************/
-void helpdata_done(void)
-{
-  help_list_free(help_nodes);
-}
 
 /****************************************************************
   Make sure help_nodes is initialised.
@@ -87,6 +71,7 @@ void helpdata_done(void)
 static void check_help_nodes_init(void)
 {
   if (!help_nodes_init) {
+    help_list_init(&help_nodes);
     help_nodes_init = TRUE;    /* before help_iter_start to avoid recursion! */
     help_iter_start();
   }
@@ -103,7 +88,7 @@ void free_help_texts(void)
     free(ptmp->text);
     free(ptmp);
   } help_list_iterate_end;
-  help_list_unlink_all(help_nodes);
+  help_list_unlink_all(&help_nodes);
 }
 
 /****************************************************************************
@@ -251,15 +236,18 @@ void boot_help_texts(void)
 	   to change that now.  --dwp
 	*/
 	char name[2048];
-	struct help_list *category_nodes = help_list_new();
+	struct help_list category_nodes;
 	
+	help_list_init(&category_nodes);
 	if (current_type == HELP_UNIT) {
 	  unit_type_iterate(i) {
-	    pitem = new_help_item(current_type);
-	    my_snprintf(name, sizeof(name), " %s", unit_name(i));
-	    pitem->topic = mystrdup(name);
-	    pitem->text = mystrdup("");
-	    help_list_append(category_nodes, pitem);
+	    if (unit_type_exists(i)) {
+	      pitem = new_help_item(current_type);
+	      my_snprintf(name, sizeof(name), " %s", unit_name(i));
+	      pitem->topic = mystrdup(name);
+	      pitem->text = mystrdup("");
+	      help_list_insert_back(&category_nodes, pitem);
+	    }
 	  } unit_type_iterate_end;
 	} else if (current_type == HELP_TECH) {
 	  tech_type_iterate(i) {
@@ -269,7 +257,7 @@ void boot_help_texts(void)
 			  get_tech_name(game.player_ptr, i));
 	      pitem->topic = mystrdup(name);
 	      pitem->text = mystrdup("");
-	      help_list_append(category_nodes, pitem);
+	      help_list_insert_back(&category_nodes, pitem);
 	    }
 	  } tech_type_iterate_end;
 	} else if (current_type == HELP_TERRAIN) {
@@ -280,7 +268,7 @@ void boot_help_texts(void)
 			  tile_types[i].terrain_name);
 	      pitem->topic = mystrdup(name);
 	      pitem->text = mystrdup("");
-	      help_list_append(category_nodes, pitem);
+	      help_list_insert_back(&category_nodes, pitem);
 	    }
 	  }
 	  /* Add special Civ2-style river help text if it's supplied. */
@@ -291,7 +279,7 @@ void boot_help_texts(void)
 	    strcpy(long_buffer, _(terrain_control.river_help_text));
 	    wordwrap_string(long_buffer, 68);
 	    pitem->text = mystrdup(long_buffer);
-	    help_list_append(category_nodes, pitem);
+	    help_list_insert_back(&category_nodes, pitem);
 	  }
 	} else if (current_type == HELP_GOVERNMENT) {
 	  government_iterate(gov) {
@@ -299,39 +287,38 @@ void boot_help_texts(void)
 	    my_snprintf(name, sizeof(name), " %s", gov->name);
 	    pitem->topic = mystrdup(name);
 	    pitem->text = mystrdup("");
-	    help_list_append(category_nodes, pitem);
+	    help_list_insert_back(&category_nodes, pitem);
 	  } government_iterate_end;
 	} else if (current_type == HELP_IMPROVEMENT) {
 	  impr_type_iterate(i) {
-	    if (improvement_exists(i) && !is_great_wonder(i)) {
+	    if (improvement_exists(i) && !is_wonder(i)) {
 	      pitem = new_help_item(current_type);
 	      my_snprintf(name, sizeof(name), " %s",
 			  improvement_types[i].name);
 	      pitem->topic = mystrdup(name);
 	      pitem->text = mystrdup("");
-	      help_list_append(category_nodes, pitem);
+	      help_list_insert_back(&category_nodes, pitem);
 	    }
 	  } impr_type_iterate_end;
 	} else if (current_type == HELP_WONDER) {
 	  impr_type_iterate(i) {
-	    if (improvement_exists(i) && is_great_wonder(i)) {
+	    if (improvement_exists(i) && is_wonder(i)) {
 	      pitem = new_help_item(current_type);
 	      my_snprintf(name, sizeof(name), " %s",
 			  improvement_types[i].name);
 	      pitem->topic = mystrdup(name);
 	      pitem->text = mystrdup("");
-	      help_list_append(category_nodes, pitem);
+	      help_list_insert_back(&category_nodes, pitem);
 	    }
 	  } impr_type_iterate_end;
 	} else {
 	  die("Bad current_type %d", current_type);
 	}
-	help_list_sort(category_nodes, help_item_compar);
+	help_list_sort(&category_nodes, help_item_compar);
 	help_list_iterate(category_nodes, ptmp) {
-	  help_list_append(help_nodes, ptmp);
+	  help_list_insert_back(&help_nodes, ptmp);
 	} help_list_iterate_end;
-	help_list_unlink_all(category_nodes);
-        help_list_free(category_nodes);
+	help_list_unlink_all(&category_nodes);
 	continue;
       }
     }
@@ -359,7 +346,7 @@ void boot_help_texts(void)
     paras = NULL;
     wordwrap_string(long_buffer, 68);
     pitem->text=mystrdup(long_buffer);
-    help_list_append(help_nodes, pitem);
+    help_list_insert_back(&help_nodes, pitem);
   }
 
   free(sec);
@@ -383,7 +370,7 @@ void boot_help_texts(void)
 int num_help_items(void)
 {
   check_help_nodes_init();
-  return help_list_size(help_nodes);
+  return help_list_size(&help_nodes);
 }
 
 /****************************************************************
@@ -396,7 +383,7 @@ const struct help_item *get_help_item(int pos)
   int size;
   
   check_help_nodes_init();
-  size = help_list_size(help_nodes);
+  size = help_list_size(&help_nodes);
   if (pos < 0 || pos > size) {
     freelog(LOG_ERROR, "Bad index %d to get_help_item (size %d)", pos, size);
     return NULL;
@@ -404,7 +391,7 @@ const struct help_item *get_help_item(int pos)
   if (pos == size) {
     return NULL;
   }
-  return help_list_get(help_nodes, pos);
+  return help_list_get(&help_nodes, pos);
 }
 
 /****************************************************************
@@ -468,7 +455,7 @@ get_help_item_spec(const char *name, enum help_page_type htype, int *pos)
 void help_iter_start(void)
 {
   check_help_nodes_init();
-  help_nodes_iterator = help_nodes->list->head_link;
+  help_nodes_iterator = help_nodes.list.head_link;
 }
 
 /****************************************************************
@@ -518,18 +505,11 @@ const struct help_item *help_iter_next(void)
 char *helptext_building(char *buf, size_t bufsz, Impr_Type_id which,
 			const char *user_text)
 {
-  struct impr_type *imp;
-
+  struct impr_type *imp = &improvement_types[which];
+  
   assert(buf);
   buf[0] = '\0';
 
-  if (!improvement_exists(which)) {
-    freelog(LOG_ERROR, "Unknown building %d.", which);
-    return buf;
-  }
-
-  imp = &improvement_types[which];
-  
   if (imp->helptext && imp->helptext[0] != '\0') {
     my_snprintf(buf + strlen(buf), bufsz - strlen(buf),
 		"%s\n\n", _(imp->helptext));
@@ -599,7 +579,7 @@ char *helptext_building(char *buf, size_t bufsz, Impr_Type_id which,
   unit_type_iterate(utype) {
     const struct unit_type *u = get_unit_type(utype);
 
-    if (u->impr_requirement == which) {
+    if (unit_type_exists(utype) && u->impr_requirement == which) {
       if (u->tech_requirement != A_LAST) {
 	my_snprintf(buf + strlen(buf), bufsz - strlen(buf),
 		    _("* Allows %s (with %s).\n"), u->name,
@@ -664,19 +644,13 @@ void helptext_unit(char *buf, int i, const char *user_text)
   struct unit_type *utype;
 
   assert(buf&&user_text);
-  utype = get_unit_type(i);
-  if (!utype) {
-    freelog(LOG_ERROR, "Unknown unit %d.", i);
+  if (!unit_type_exists(i)) {
     strcpy(buf, user_text);
     return;
   }
+  utype = get_unit_type(i);
   
   buf[0] = '\0';
-  if (utype->gov_requirement != G_MAGIC) {
-    sprintf(buf + strlen(buf),
-	    _("* Can only be built with %s as government.\n"), 
-            get_government_name(utype->gov_requirement));
-  }
   if (unit_type_flag(i, F_NOBUILD)) {
     sprintf(buf + strlen(buf),
 	    _("* May not be built in cities.\n"));
@@ -998,12 +972,6 @@ void helptext_tech(char *buf, int i, const char *user_text)
   assert(buf&&user_text);
   strcpy(buf, user_text);
 
-  if (!tech_exists(i)) {
-    freelog(LOG_ERROR, "Unknown tech %d.", i);
-    strcpy(buf, user_text);
-    return;
-  }
-
   if (get_invention(game.player_ptr, i) != TECH_KNOWN) {
     if (get_invention(game.player_ptr, i) == TECH_REACHABLE) {
       sprintf(buf + strlen(buf),
@@ -1053,6 +1021,14 @@ void helptext_tech(char *buf, int i, const char *user_text)
   if (tech_flag(i, TF_POPULATION_POLLUTION_INC))
     sprintf(buf + strlen(buf), _("* Increases the pollution generated by "
 				 "the population.\n"));
+  if (game.rtech.cathedral_plus == i)
+    sprintf(buf + strlen(buf), _("* Improves the effect of Cathedrals.\n"));
+  if (game.rtech.cathedral_minus == i)
+    sprintf(buf + strlen(buf), _("* Reduces the effect of Cathedrals.\n"));
+  if (game.rtech.colosseum_plus == i)
+    sprintf(buf + strlen(buf), _("* Improves the effect of Colosseums.\n"));
+  if (game.rtech.temple_plus == i)
+    sprintf(buf + strlen(buf), _("* Improves the effect of Temples.\n"));
 
   if (tech_flag(i, TF_BRIDGE)) {
     const char *units_str = get_units_with_flag_string(F_SETTLERS);
@@ -1108,10 +1084,8 @@ void helptext_terrain(char *buf, int i, const char *user_text)
   
   buf[0] = '\0';
   
-  if (i < 0 || i >= T_COUNT) {
-    freelog(LOG_ERROR, "Unknown terrain %d.", i);
+  if (i<0 || i>=T_COUNT)
     return;
-  }
   pt = &tile_types[i];
 
   if (terrain_has_flag(i, TER_NO_POLLUTION)) {
@@ -1159,248 +1133,13 @@ void helptext_terrain(char *buf, int i, const char *user_text)
 *****************************************************************/
 void helptext_government(char *buf, int i, const char *user_text)
 {
-  struct government *gov;
-  bool active_types[O_MAX];
-
-  /* Try to guess which output types that are active in this 
-   * game by checking if _any_ government uses it. */
-  memset(active_types, FALSE, sizeof(active_types));
-  government_iterate(g) {
-    output_type_iterate(ot) {
-      if (g->unit_upkeep_factor[ot] > 0 || g->free_upkeep[ot] > 0) {
-        active_types[ot] = TRUE;
-      }
-    } output_type_iterate_end;
-  } government_iterate_end;
+  struct government *gov = get_government(i);
   
   buf[0] = '\0';
-
-  if (i < 0 || i >= game.government_count) {
-    freelog(LOG_ERROR, "Unknown government %d.", i);
-    return;
-  }
-
-  gov = get_government(i);
+  
   if (gov->helptext[0] != '\0') {
     sprintf(buf, "%s\n\n", _(gov->helptext));
   }
-  if (gov->required_tech != A_NONE) {
-    sprintf(buf + strlen(buf), _("Requires the %s technology.\n\n"),
-            advances[gov->required_tech].name);
-  }
-  if (gov->max_rate < 100 && game.rgame.changable_tax) {
-    sprintf(buf + strlen(buf), 
-            _("The maximum rate you can set for science, "
-	      "gold, or luxuries is %d%%.\n\n"), gov->max_rate);
-  } else if (game.rgame.changable_tax) {
-    sprintf(buf + strlen(buf), 
-            _("Has unlimited science/gold/luxuries rates.\n\n"));
-  }
-  sprintf(buf + strlen(buf), 
-          _("Chance of civil war is %d%% if you lose your capital.\n\n"),
-          gov->civil_war);
-  if (gov->empire_size_inc > 0) {
-    sprintf(buf + strlen(buf),
-	    _("The first unhappy citizen in each city "
-	      "due to civilization size will appear when you have %d "
-	      "cities."), game.cityfactor + gov->empire_size_mod);
-    sprintf(buf + strlen(buf),
-	    _("  Every %d cities after this will "
-	      "result in one more unhappy citizen in each city."),
-            gov->empire_size_inc);
-  } else {
-    sprintf(buf + strlen(buf),
-	    _("One unhappy citizen in each city due "
-	      "to civilization size will appear when you have %d cities."),
-            game.cityfactor + gov->empire_size_mod);
-  }
-
-  sprintf(buf + strlen(buf), _("\n\nFeatures:\n"));
-  if (gov->martial_law_max > 0) {
-    sprintf(buf + strlen(buf),
-	    _("* You may impose martial law.  Each "
-	      "military unit inside a city, up to a maximum of %d, will "
-	      "force %d unhappy citizens to become content.\n"),
-            gov->martial_law_max, gov->martial_law_per);
-  }
-  if (gov->unit_happy_cost_factor > 0) {
-    sprintf(buf + strlen(buf),
-	    _("* Military units away from home and "
-	      "field units will cause unhappiness.\n"));
-    if (gov->free_happy == G_CITY_SIZE_FREE) {
-      sprintf(buf + strlen(buf),
-	      _("* Each of your cities will avoid "
-		"as much unhappiness caused by units as its city size.\n"));
-    } else if (gov->free_happy > 0) {
-      sprintf(buf + strlen(buf),
-	      _("* Each of your cities will avoid %d "
-		"unhappiness that would otherwise be caused by units.\n"), 
-              gov->free_happy);
-    }
-  }
-  output_type_iterate(ot) {
-    if (gov->free_upkeep[ot] == G_CITY_SIZE_FREE) {
-      sprintf(buf + strlen(buf),
-	      _("* Each of your cities will avoid "
-		"paying for as much %s upkeep as their city size.\n"),
-              get_output_name(ot));
-    } else if (gov->free_upkeep[ot] > 0) {
-      sprintf(buf + strlen(buf),
-	      _("* Each of your cities will avoid "
-		"paying %d %s towards unit upkeep.\n"), 
-              gov->free_upkeep[ot], get_output_name(ot));
-    }
-  } output_type_iterate_end;
-  if (gov->unit_happy_cost_factor > 1) {
-    sprintf(buf + strlen(buf),
-	    _("* Military units cause %d times normal unhappiness.\n"),
-	    gov->unit_happy_cost_factor);
-  }
-  output_type_iterate(ot) {
-    if (!active_types[ot]) {
-      continue;
-    }
-    if (gov->unit_upkeep_factor[ot] == 1) {
-      sprintf(buf + strlen(buf),
-	      _("* You pay normal %s upkeep for "
-		"your units.\n"), get_output_name(ot));
-    } else if (gov->unit_upkeep_factor[ot] > 1) {
-      sprintf(buf + strlen(buf),
-	      _("* You pay %d times normal %s "
-		"upkeep for your units.\n"), gov->unit_upkeep_factor[ot],
-              get_output_name(ot));
-    } else if (gov->unit_upkeep_factor[ot] == 0) {
-      sprintf(buf + strlen(buf),
-	      _("* You do not pay %s upkeep for "
-		"any of your units.\n"), get_output_name(ot));
-    }
-  } output_type_iterate_end;
-  output_type_iterate(ot) {
-    if (gov->output_before_penalty[ot] > 0
-        && gov->output_before_penalty[ot] 
-           == gov->celeb_output_before_penalty[ot]) {
-      sprintf(buf + strlen(buf),
-	      _("* Each worked tile that gives more "
-		"than %d %s will suffer a -1 penalty.\n"), 
-              gov->output_before_penalty[ot], get_output_name(ot));
-    } else if (gov->output_before_penalty[ot] > 0) {
-      sprintf(buf + strlen(buf),
-	      _("* Each worked tile that gives more than %d %s will "
-		"suffer a -1 penalty when not celebrating.\n"), 
-              gov->output_before_penalty[ot], get_output_name(ot));
-    }
-  } output_type_iterate_end;
-  output_type_iterate(ot) {
-    if (gov->celeb_output_before_penalty[ot] > 0
-        && gov->celeb_output_before_penalty[ot] 
-           != gov->output_before_penalty[ot]) {
-      sprintf(buf + strlen(buf),
-	      _("* Each worked tile that gives more "
-		"than %d %s will suffer a -1 penalty when celebrating.\n"), 
-              gov->celeb_output_before_penalty[ot], get_output_name(ot));
-    }
-  } output_type_iterate_end;
-  output_type_iterate(ot) {
-    if (gov->output_inc_tile[ot] > 0
-        && gov->output_inc_tile[ot] == gov->celeb_output_inc_tile[ot]) {
-      sprintf(buf + strlen(buf),
-	      _("* Each worked tile with at least 1 "
-		"%s will yield %d additional %s.\n"), get_output_name(ot), 
-              gov->output_inc_tile[ot], get_output_name(ot));
-    } else if (gov->output_inc_tile[ot] > 0) {
-      sprintf(buf + strlen(buf),
-	      _("* Each worked tile with at least 1 "
-		"%s will yield %d additional %s when not celebrating.\n"), 
-              get_output_name(ot), gov->output_inc_tile[ot], 
-              get_output_name(ot));
-    }
-  } output_type_iterate_end;
-  output_type_iterate(ot) {
-    if (gov->celeb_output_inc_tile[ot] > 0
-        && gov->celeb_output_inc_tile[ot] != gov->output_inc_tile[ot]) {
-      sprintf(buf + strlen(buf),
-	      _("* Each worked tile with at least 1 "
-		"%s will yield %d additional %s when celebrating.\n"), 
-	      get_output_name(ot), gov->celeb_output_inc_tile[ot], 
-	      get_output_name(ot));
-    }
-  } output_type_iterate_end;
-  output_type_iterate(ot) {
-    if (gov->waste[ot].level > 0) {
-      sprintf(buf + strlen(buf), _("* %s production will suffer "
-				   "waste.\n"), get_output_name(ot));
-    }
-  } output_type_iterate_end;
-  if (government_has_flag(gov, G_RAPTURE_CITY_GROWTH)) {
-    sprintf(buf + strlen(buf),
-	    _("* You may grow your cities by "
-	      "means of celebrations.  Your cities must be at least "
-	      "size %d before they can grown in this manner.\n"),
-            gov->rapture_size);
-  }
-  if (government_has_flag(gov, G_BUILD_VETERAN_DIPLOMAT)) {
-    sprintf(buf + strlen(buf), _("* Diplomatic units will be veteran "
-				 "when built.\n"));
-  }
-  if (government_has_flag(gov, G_REVOLUTION_WHEN_UNHAPPY)) {
-    sprintf(buf + strlen(buf),
-	    _("* Government will fall into anarchy "
-	      "if any city is in disorder for more than two turns in "
-	      "a row.\n"));
-  }
-  if (government_has_flag(gov, G_UNBRIBABLE)) {
-    sprintf(buf + strlen(buf), _("* Your units and cities cannot be "
-				 "bribed or incited.\n"));
-  }
-  if (government_has_flag(gov, G_INSPIRES_PARTISANS)) {
-    int n;
-
-    sprintf(buf + strlen(buf), _("* Partisans appear when "
-				 "cities are taken by the enemy.  "));
-    if (game.rtech.u_partisan != A_LAST
-        && game.rtech.u_partisan != A_NONE) {
-      sprintf(buf + strlen(buf), _("Requires %s technology.  "),
-              advances[game.rtech.u_partisan].name);
-    }
-    for (n = 0; n < MAX_NUM_TECH_LIST; n++) {
-      int tech = game.rtech.partisan_req[n];
-
-      if (tech == A_LAST) {
-        break;
-      }
-      sprintf(buf + strlen(buf), _("Requires %s technology.  "),
-              advances[tech].name);
-    }
-    sprintf(buf + strlen(buf), "\n");
-  }
-  if (government_has_flag(gov, G_FANATIC_TROOPS)) {
-    sprintf(buf + strlen(buf), _("* Pays no upkeep for fanatics.\n"));
-  }
-  if (government_has_flag(gov, G_HAS_SENATE)) {
-    sprintf(buf + strlen(buf),
-	    _("* Has a senate that may throw "
-	      "the government into anarchy if war is declared while "
-	      "reputation is low.\n"));
-  }
-  if (government_has_flag(gov, G_NO_UNHAPPY_CITIZENS)) {
-    sprintf(buf + strlen(buf), _("* Has no unhappy citizens.\n"));
-  }
-  if (government_has_flag(gov, G_CONVERT_TITHES_TO_MONEY)) {
-    sprintf(buf + strlen(buf),
-	    _("* Buildings that normally confer "
-	      "bonuses against unhappiness will instead give gold.\n"));
-  }
-  if (government_has_flag(gov, G_REDUCED_RESEARCH)) {
-    sprintf(buf + strlen(buf), _("* Research costs doubled.\n"));
-  }
-  unit_type_iterate(ut) {
-    struct unit_type *utype = get_unit_type(ut);
-
-    if (utype->gov_requirement == i) {
-      sprintf(buf + strlen(buf),
-	      _("* Allows you to build %s.\n"), unit_name(ut));
-    }
-  } unit_type_iterate_end;
   strcat(buf, user_text);
   wordwrap_string(buf, 68);
 }
@@ -1411,36 +1150,35 @@ void helptext_government(char *buf, int i, const char *user_text)
 char *helptext_unit_upkeep_str(int i)
 {
   static char buf[128];
-  struct unit_type *utype;
-  int any = 0;
+  struct unit_type *utype = get_unit_type(i);
 
-  utype = get_unit_type(i);
-  if (!utype) {
-    freelog(LOG_ERROR, "Unknown unit %d.", i);
-    return "";
-  }
-
-
-  buf[0] = '\0';
-  output_type_iterate(o) {
-    if (utype->upkeep[o] > 0) {
-      /* TRANS: "2 Food" or ", 1 shield" */
-      cat_snprintf(buf, sizeof(buf), _("%s%d %s"),
-	      (any > 0 ? ", " : ""), utype->upkeep[o],
-	      get_output_name(o));
+  if (utype->shield_cost > 0 || utype->food_cost > 0
+      || utype->gold_cost > 0 || utype->happy_cost > 0) {
+    int any = 0;
+    buf[0] = '\0';
+    if (utype->shield_cost > 0) {
+      sprintf(buf+strlen(buf), _("%s%d shield"),
+	      (any > 0 ? ", " : ""), utype->shield_cost);
       any++;
     }
-  } output_type_iterate_end;
-  if (utype->happy_cost > 0) {
-    /* TRANS: "2 unhappy" or ", 1 unhappy" */
-    cat_snprintf(buf, sizeof(buf), _("%s%d unhappy"),
-	    (any > 0 ? ", " : ""), utype->happy_cost);
-    any++;
-  }
-
-  if (any == 0) {
+    if (utype->food_cost > 0) {
+      sprintf(buf+strlen(buf), _("%s%d food"),
+	      (any > 0 ? ", " : ""), utype->food_cost);
+      any++;
+    }
+    if (utype->happy_cost > 0) {
+      sprintf(buf+strlen(buf), _("%s%d unhappy"),
+	      (any > 0 ? ", " : ""), utype->happy_cost);
+      any++;
+    }
+    if (utype->gold_cost > 0) {
+      sprintf(buf+strlen(buf), _("%s%d gold"),
+	      (any > 0 ? ", " : ""), utype->gold_cost);
+      any++;
+    }
+  } else {
     /* strcpy(buf, _("None")); */
-    snprintf(buf, sizeof(buf), "%d", 0);
+    sprintf(buf, "%d", 0);
   }
   return buf;
 }

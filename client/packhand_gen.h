@@ -64,7 +64,8 @@ void handle_diplomacy_accept_treaty(int counterpart, bool I_accepted, bool other
 void handle_page_msg(char *message, enum event_type event);
 struct packet_conn_info;
 void handle_conn_info(struct packet_conn_info *packet);
-void handle_conn_ping_info(int connections, int *conn_id, float *ping_time);
+struct packet_conn_ping_info;
+void handle_conn_ping_info(struct packet_conn_ping_info *packet);
 void handle_conn_ping(void);
 void handle_before_new_year(void);
 void handle_start_turn(void);
@@ -94,17 +95,15 @@ void handle_ruleset_terrain(struct packet_ruleset_terrain *packet);
 struct packet_ruleset_control;
 void handle_ruleset_control(struct packet_ruleset_control *packet);
 void handle_single_want_hack_reply(bool you_have_hack);
-struct packet_ruleset_choices;
-void handle_ruleset_choices(struct packet_ruleset_choices *packet);
 struct packet_game_load;
 void handle_game_load(struct packet_game_load *packet);
 struct packet_options_settable_control;
 void handle_options_settable_control(struct packet_options_settable_control *packet);
 struct packet_options_settable;
 void handle_options_settable(struct packet_options_settable *packet);
-struct packet_ruleset_effect;
-void handle_ruleset_effect(struct packet_ruleset_effect *packet);
-struct packet_ruleset_effect_req;
-void handle_ruleset_effect_req(struct packet_ruleset_effect_req *packet);
+struct packet_ruleset_cache_group;
+void handle_ruleset_cache_group(struct packet_ruleset_cache_group *packet);
+struct packet_ruleset_cache_effect;
+void handle_ruleset_cache_effect(struct packet_ruleset_cache_effect *packet);
 
 #endif /* FC__PACKHAND_GEN_H */

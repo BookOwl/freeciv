@@ -5,9 +5,7 @@
 
 AC_DEFUN([FC_GTK_CLIENT],
 [
-  if test "$client" = yes ; then
-    AC_MSG_WARN([Not checking for GTK; use --enable-client=gtk to enable])
-  elif test "$client" = gtk ; then
+  if test "$client" = gtk || test "$client" = yes ; then
     AM_PATH_GTK(1.2.5,
       [
         AM_PATH_GDK_IMLIB(1.9.2,

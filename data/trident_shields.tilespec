@@ -20,23 +20,25 @@ is_isometric = 0
 
 ; offset the flags by this amount when drawing units
 flag_offset_x = 0
-flag_offset_y = 2
+flag_offset_y = 0
 
 ; Do not blend hills and mountains together.
 is_mountainous = 0
 
-; Use fogstyle 0 (old iso style)
-fogstyle = 2
+; Use fogstyle 1 (old non-iso style)
+fogstyle = 0
 
 ; Use roadstyle 1 (old non-iso style)
 roadstyle = 1
 
 ; Use darkness style 3 (15 sprites)
-darkness_style = 4
+darkness_style = 3
+ 
+; Font to use to draw city names:
+city_names_font = "9x15bold"
 
-; Font size (points) to use to draw city names and productions:
-city_names_font_size = 10
-city_productions_font_size = 10
+; Font to use to draw city productions:
+city_productions_font = "6x13"
 
 ; These are special because they get freed and reloaded
 ; as required:
@@ -51,14 +53,12 @@ files =
   "trident/tiles.spec",
   "misc/small.spec",
   "trident/units.spec",
-  "trident/select.spec",
   "misc/flags.spec",
   "trident/roads.spec",
   "misc/buildings.spec",
   "misc/space.spec",
 ;  "misc/techs.spec",
   "misc/treaty.spec",
-  "trident/fog.spec",
   "trident/cities.spec",
   "trident/explosions.spec",
   "trident/auto_ll.spec",

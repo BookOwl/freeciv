@@ -125,8 +125,7 @@ static void place_starting_unit(struct tile *ptile, struct player *pplayer,
       utype = get_role_unit(role, 0);
     }
 
-    /* We cannot currently handle sea units as start units.
-     * TODO: remove this code block when we can. */
+    /* We cannot currently handle sea units as start units. */
     if (unit_types[utype].move_type == SEA_MOVING) {
       freelog(LOG_ERROR, _("Sea moving start units are not yet supported, "
                            "%s not created."), unit_types[utype].name);
@@ -248,6 +247,9 @@ void init_new_game(void)
       place_starting_unit(ptile, pplayer, game.start_units[i]);
     }
   } players_iterate_end;
+
+  /* Initialise list of improvements with world-wide equiv_range */
+  improvement_status_init(game.improvements, ARRAY_SIZE(game.improvements));
 }
 
 /**************************************************************************
@@ -255,7 +257,7 @@ void init_new_game(void)
 **************************************************************************/
 void send_start_turn_to_clients(void)
 {
-  lsend_packet_start_turn(game.game_connections);
+  lsend_packet_start_turn(&game.game_connections);
 }
 
 /**************************************************************************
@@ -275,10 +277,10 @@ void send_year_to_clients(int year)
 
   apacket.year = year;
   apacket.turn = game.turn;
-  lsend_packet_new_year(game.game_connections, &apacket);
+  lsend_packet_new_year(&game.game_connections, &apacket);
 
   /* Hmm, clients could add this themselves based on above packet? */
-  notify_conn_ex(game.game_connections, NULL, E_NEXT_YEAR, _("Year: %s"),
+  notify_conn_ex(&game.game_connections, NULL, E_NEXT_YEAR, _("Year: %s"),
 		 textyear(year));
 }
 
@@ -302,9 +304,8 @@ void send_game_info(struct conn_list *dest)
   struct packet_game_info ginfo;
   int i;
 
-  if (!dest) {
-    dest = game.game_connections;
-  }
+  if (!dest)
+    dest = &game.game_connections;
 
   ginfo.gold = game.gold;
   ginfo.tech = game.tech;
@@ -319,13 +320,12 @@ void send_game_info(struct conn_list *dest)
   ginfo.nplayers = game.nplayers;
   ginfo.globalwarming = game.globalwarming;
   ginfo.heating = game.heating;
-  ginfo.warminglevel = game.warminglevel;
   ginfo.nuclearwinter = game.nuclearwinter;
   ginfo.cooling = game.cooling;
-  ginfo.coolinglevel = game.coolinglevel;
   ginfo.diplomacy = game.diplomacy;
   ginfo.techpenalty = game.techpenalty;
   ginfo.foodbox = game.foodbox;
+  ginfo.civstyle = game.civstyle;
   ginfo.spacerace = game.spacerace;
   ginfo.unhappysize = game.unhappysize;
   ginfo.angrycitizen = game.angrycitizen;
@@ -336,7 +336,7 @@ void send_game_info(struct conn_list *dest)
   for (i = 0; i < A_LAST /*game.num_tech_types */ ; i++)
     ginfo.global_advances[i] = game.global_advances[i];
   for (i = 0; i < B_LAST /*game.num_impr_types */ ; i++)
-    ginfo.great_wonders[i] = game.great_wonders[i];
+    ginfo.global_wonders[i] = game.global_wonders[i];
   /* the following values are computed every
      time a packet_game_info packet is created */
   if (game.timeout != 0) {
@@ -347,7 +347,7 @@ void send_game_info(struct conn_list *dest)
     ginfo.seconds_to_turndone = -1;
   }
 
-  conn_list_iterate(dest, pconn) {
+  conn_list_iterate(*dest, pconn) {
     /* ? fixme: check for non-players: */
     ginfo.player_idx = (pconn->player ? pconn->player->player_no : -1);
     send_packet_game_info(pconn, &ginfo);
@@ -380,7 +380,7 @@ int update_timeout(void)
     game.timeoutint += game.timeoutintinc;
 
     if (game.timeout > GAME_MAX_TIMEOUT) {
-      notify_conn_ex(game.game_connections, NULL, E_NOEVENT,
+      notify_conn_ex(&game.game_connections, NULL, E_NOEVENT,
 		     _("The turn timeout has exceeded its maximum value, "
 		       "fixing at its maximum"));
       freelog(LOG_DEBUG, "game.timeout exceeded maximum value");
@@ -388,7 +388,7 @@ int update_timeout(void)
       game.timeoutint = 0;
       game.timeoutinc = 0;
     } else if (game.timeout < 0) {
-      notify_conn_ex(game.game_connections, NULL, E_NOEVENT,
+      notify_conn_ex(&game.game_connections, NULL, E_NOEVENT,
 		     _("The turn timeout is smaller than zero, "
 		       "fixing at zero."));
       freelog(LOG_DEBUG, "game.timeout less than zero");
@@ -445,40 +445,12 @@ static const char *get_challenge_fullname(struct connection *pc)
 **************************************************************************/
 const char *new_challenge_filename(struct connection *pc)
 {
+  if (!has_capability("new_hack", pc->capability)) {
+    return "";
+  }
+
   gen_challenge_filename(pc);
   return get_challenge_filename(pc);
-}
-
-
-/************************************************************************** 
-  Call this on a connection with HACK access to send it a set of ruleset
-  choices.  Probably this should be called immediately when granting
-  HACK access to a connection.
-**************************************************************************/
-static void send_ruleset_choices(struct connection *pc)
-{
-  struct packet_ruleset_choices packet;
-  static const char **rulesets = NULL;
-  int i;
-
-  if (pc->access_level != ALLOW_HACK) {
-    freelog(LOG_ERROR, "Trying to send ruleset choices to "
-	    "unprivilidged client.");
-    return;
-  }
-
-  if (!rulesets) {
-    /* This is only read once per server invocation.  Add a new ruleset
-     * and you have to restart the server. */
-    rulesets = datafilelist(RULESET_SUFFIX);
-  }
-
-  for (i = 0; i < MAX_NUM_RULESETS && rulesets[i]; i++) {
-    sz_strlcpy(packet.rulesets[i], rulesets[i]);
-  }
-  packet.ruleset_count = i;
-
-  send_packet_ruleset_choices(pc, &packet);
 }
 
 
@@ -493,6 +465,11 @@ void handle_single_want_hack_req(struct connection *pc,
   struct section_file file;
   char *token = NULL;
   bool you_have_hack = FALSE;
+
+  if (!has_capability("new_hack", pc->capability)) {
+    dsend_packet_single_want_hack_reply(pc, FALSE);
+    return ;
+  }
 
   if (section_file_load_nodup(&file, get_challenge_fullname(pc))) {
     token = secfile_lookup_str_default(&file, NULL, "challenge.token");
@@ -509,6 +486,4 @@ void handle_single_want_hack_req(struct connection *pc,
   }
 
   dsend_packet_single_want_hack_reply(pc, you_have_hack);
-
-  send_ruleset_choices(pc);
 }

@@ -51,7 +51,8 @@ struct cma_preset {
     TYPED_LIST_ITERATE(struct cma_preset, presetlist, ppreset)
 #define preset_list_iterate_end  LIST_ITERATE_END
 
-static struct preset_list *preset_list = NULL;
+static struct preset_list preset_list;
+static bool preset_list_has_been_initialized = FALSE;
 
 /****************************************************************************
  Is called if the game removes a city. It will clear the 
@@ -69,8 +70,9 @@ void cmafec_init(void)
 {
   struct agent self;
 
-  if (preset_list == NULL) {
-    preset_list = preset_list_new();
+  if (!preset_list_has_been_initialized) {
+    preset_list_init(&preset_list);
+    preset_list_has_been_initialized = TRUE;
   }
 
   memset(&self, 0, sizeof(self));
@@ -88,7 +90,6 @@ void cmafec_free(void)
   while (cmafec_preset_num() > 0) {
     cmafec_preset_remove(0);
   }
-  preset_list_free(preset_list);
 }
 
 /**************************************************************************
@@ -129,14 +130,15 @@ void cmafec_preset_add(const char *descr_name, struct cm_parameter *pparam)
 {
   struct cma_preset *ppreset = fc_malloc(sizeof(struct cma_preset));
 
-  if (preset_list == NULL) {
-    preset_list = preset_list_new();
+  if (!preset_list_has_been_initialized) {
+    preset_list_init(&preset_list);
+    preset_list_has_been_initialized = TRUE;
   }
 
   cm_copy_parameter(&ppreset->parameter, pparam);
   ppreset->descr = fc_malloc(MAX_LEN_PRESET_NAME);
   (void) mystrlcpy(ppreset->descr, descr_name, MAX_LEN_PRESET_NAME);
-  preset_list_prepend(preset_list, ppreset);
+  preset_list_insert(&preset_list, ppreset);
 }
 
 /**************************************************************************
@@ -148,8 +150,8 @@ void cmafec_preset_remove(int index)
 
   assert(index >= 0 && index < cmafec_preset_num());
 
-  ppreset = preset_list_get(preset_list, index);
-  preset_list_unlink(preset_list, ppreset);
+  ppreset = preset_list_get(&preset_list, index);
+  preset_list_unlink(&preset_list, ppreset);
 
   free(ppreset->descr);
   free(ppreset);
@@ -164,7 +166,7 @@ char *cmafec_preset_get_descr(int index)
 
   assert(index >= 0 && index < cmafec_preset_num());
 
-  ppreset = preset_list_get(preset_list, index);
+  ppreset = preset_list_get(&preset_list, index);
   return ppreset->descr;
 }
 
@@ -177,7 +179,7 @@ const struct cm_parameter *cmafec_preset_get_parameter(int index)
 
   assert(index >= 0 && index < cmafec_preset_num());
 
-  ppreset = preset_list_get(preset_list, index);
+  ppreset = preset_list_get(&preset_list, index);
   return &ppreset->parameter;
 }
 
@@ -190,8 +192,8 @@ int cmafec_preset_get_index_of_parameter(const struct cm_parameter
 {
   int i;
 
-  for (i = 0; i < preset_list_size(preset_list); i++) {
-    struct cma_preset *ppreset = preset_list_get(preset_list, i);
+  for (i = 0; i < preset_list_size(&preset_list); i++) {
+    struct cma_preset *ppreset = preset_list_get(&preset_list, i);
     if (cm_are_parameter_equal(&ppreset->parameter, parameter)) {
       return i;
     }
@@ -204,7 +206,7 @@ int cmafec_preset_get_index_of_parameter(const struct cm_parameter
 **************************************************************************/
 int cmafec_preset_num(void)
 {
-  return preset_list_size(preset_list);
+  return preset_list_size(&preset_list);
 }
 
 /**************************************************************************
@@ -331,9 +333,9 @@ const char *cmafec_get_result_descr(struct city *pcity,
     for (j = 0; j < RESULT_COLUMNS; j++)
       my_snprintf(buf[j], BUFFER_SIZE, "---");
   } else {
-    output_type_iterate(j) {
+    for (j = 0; j < NUM_STATS; j++) {
       my_snprintf(buf[j], BUFFER_SIZE, "%+3d", result->surplus[j]);
-    } output_type_iterate_end;
+    }
 
     my_snprintf(buf[6], BUFFER_SIZE, "%d/%s%s",
 		pcity->size - cm_count_specialist(pcity, result),
@@ -341,9 +343,9 @@ const char *cmafec_get_result_descr(struct city *pcity,
 		result->happy ? _(" happy") : "");
 
     my_snprintf(buf[7], BUFFER_SIZE, "%s",
-		get_city_growth_string(pcity, result->surplus[O_FOOD]));
+		get_city_growth_string(pcity, result->surplus[FOOD]));
     my_snprintf(buf[8], BUFFER_SIZE, "%s",
-		get_prod_complete_string(pcity, result->surplus[O_SHIELD]));
+		get_prod_complete_string(pcity, result->surplus[SHIELD]));
     my_snprintf(buf[9], BUFFER_SIZE, "%s",
 		cmafec_get_short_descr(parameter));
   }
@@ -357,8 +359,8 @@ const char *cmafec_get_result_descr(struct city *pcity,
 		"    People (W/E/S/T): %s\n"
 		"          City grows: %s\n"
 		"Production completed: %s"),
-	      buf[9], buf[O_FOOD], buf[O_GOLD], buf[O_SHIELD], buf[O_LUXURY],
-	      buf[O_TRADE], buf[O_SCIENCE], buf[6], buf[7], buf[8]);
+	      buf[9], buf[FOOD], buf[GOLD], buf[SHIELD], buf[LUXURY],
+	      buf[TRADE], buf[SCIENCE], buf[6], buf[7], buf[8]);
 
   freelog(LOG_DEBUG, "\n%s", buffer);
   return buffer;

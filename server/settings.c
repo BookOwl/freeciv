@@ -16,7 +16,6 @@
 #endif
 
 #include "fcintl.h"
-#include "log.h"
 
 #include "map.h"
 
@@ -151,7 +150,6 @@ static bool startunits_callback(const char *value, const char **error_string)
       have_founder = TRUE;
       continue;
     }
-    /* TODO: add 'f' back in here when we can support ferry units */
     if (strchr("cwxksdDaA", value[i])) {
       continue;
     }
@@ -434,8 +432,6 @@ struct settings_s settings[] = {
   /* Game initialization parameters (only affect the first start of the game,
    * and not reloads).  Can not be changed after first start of game.
    */
-  /* TODO: Add this line back when we can support Ferry units */
-  /* "    f   = Ferryboat (eg., Trireme)\n" */
   GEN_STRING("startunits", game.start_units,
 	     SSET_GAME_INIT, SSET_SOCIOLOGY, SSET_VITAL, SSET_TO_CLIENT,
              N_("List of players' initial units"),
@@ -473,9 +469,7 @@ struct settings_s settings[] = {
 	  N_("Number of initial techs per player"), 
 	  N_("At the beginning of the game, each player is given this "
 	     "many technologies. The technologies chosen are random for "
-	     "each player. Depending on the value of tech_cost_style in "
-             "the ruleset, a big value for techlevel can make the next "
-             "techs really expensive."), NULL,
+	     "each player."), NULL,
 	  GAME_MIN_TECHLEVEL, GAME_MAX_TECHLEVEL, GAME_DEFAULT_TECHLEVEL)
 
   GEN_INT("researchcost", game.researchcost,
@@ -578,6 +572,15 @@ struct settings_s settings[] = {
 	  GAME_MIN_UNHAPPYSIZE, GAME_MAX_UNHAPPYSIZE,
 	  GAME_DEFAULT_UNHAPPYSIZE)
 
+  GEN_BOOL("angrycitizen", game.angrycitizen,
+	   SSET_RULES, SSET_SOCIOLOGY, SSET_SITUATIONAL, SSET_TO_CLIENT,
+	  N_("Whether angry citizens are enabled"),
+	  N_("Introduces angry citizens like in civilization II. Angry "
+	     "citizens have to become unhappy before any other class "
+	     "of citizens may be considered. See also unhappysize, "
+	     "cityfactor and governments."), NULL, 
+	  GAME_DEFAULT_ANGRYCITIZEN)
+
   GEN_INT("cityfactor", game.cityfactor,
 	  SSET_RULES, SSET_SOCIOLOGY, SSET_RARE, SSET_TO_CLIENT,
 	  N_("Number of cities for higher unhappiness"),
@@ -617,6 +620,13 @@ struct settings_s settings[] = {
 	     "percentage chance to be destroyed."), NULL, 
 	  GAME_MIN_RAZECHANCE, GAME_MAX_RAZECHANCE, GAME_DEFAULT_RAZECHANCE)
 
+  GEN_INT("civstyle", game.civstyle,
+	  SSET_RULES, SSET_MILITARY, SSET_RARE, SSET_TO_CLIENT,
+          N_("civstyle is an obsolete setting"),
+          N_("This setting is obsolete; it does nothing in the current "
+	     "version. It will be removed from future versions."), NULL,
+	  GAME_MIN_CIVSTYLE, GAME_MAX_CIVSTYLE, GAME_DEFAULT_CIVSTYLE)
+
   GEN_INT("occupychance", game.occupychance,
 	  SSET_RULES, SSET_MILITARY, SSET_RARE, SSET_TO_CLIENT,
 	  N_("Chance of moving into tile after attack"),
@@ -628,13 +638,6 @@ struct settings_s settings[] = {
 	     "the percent chance of \"occupying\" territory."), NULL, 
 	  GAME_MIN_OCCUPYCHANCE, GAME_MAX_OCCUPYCHANCE, 
 	  GAME_DEFAULT_OCCUPYCHANCE)
-
-  GEN_BOOL("autoattack", game.autoattack, SSET_RULES_FLEXIBLE, SSET_MILITARY,
-         SSET_SITUATIONAL, SSET_TO_CLIENT,
-         N_("Turn on/off server-side autoattack"),
-         N_("If set to on, units with move left will automatically "
-            "consider attacking enemy units that move adjacent to them."), 
-         NULL, GAME_DEFAULT_AUTOATTACK)
 
   GEN_INT("killcitizen", game.killcitizen,
 	  SSET_RULES, SSET_MILITARY, SSET_RARE, SSET_TO_CLIENT,
@@ -695,11 +698,12 @@ struct settings_s settings[] = {
   GEN_INT("diplomacy", game.diplomacy,
 	  SSET_RULES, SSET_MILITARY, SSET_SITUATIONAL, SSET_TO_CLIENT,
 	  N_("Ability to do diplomacy with other players"),
-	  N_("0 = default; diplomacy is enabled for everyone.\n"
-	     "1 = diplomacy is only allowed between human players.\n"
-	     "2 = diplomacy is only allowed between AI players.\n"
-             "3 = diplomacy is restricted to teams.\n"
-             "4 = diplomacy is disabled for everyone."), NULL,
+	  N_("0 = default; diplomacy is enabled for everyone.\n\n"
+	     "1 = diplomacy is only allowed between human players.\n\n"
+	     "2 = diplomacy is only allowed between AI players.\n\n"
+             "3 = diplomacy is restricted to teams.\n\n"
+             "4 = diplomacy is disabled for everyone.\n\n"
+             "You can always do diplomacy with players on your team."), NULL,
 	  GAME_MIN_DIPLOMACY, GAME_MAX_DIPLOMACY, GAME_DEFAULT_DIPLOMACY)
 
   GEN_INT("citynames", game.allowed_city_names,
@@ -1035,37 +1039,3 @@ struct settings_s settings[] = {
 
 /* The number of settings, not including the END. */
 const int SETTINGS_NUM = ARRAY_SIZE(settings) - 1;
-
-/****************************************************************************
-  Returns whether the specified server setting (option) can currently
-  be changed.  Does not indicate whether it can be changed by clients.
-****************************************************************************/
-bool sset_is_changeable(int idx)
-{
-  struct settings_s *op = &settings[idx];
-
-  switch(op->sclass) {
-  case SSET_MAP_SIZE:
-  case SSET_MAP_GEN:
-    /* Only change map options if we don't yet have a map: */
-    return map_is_empty();
-  case SSET_MAP_ADD:
-  case SSET_PLAYERS:
-  case SSET_GAME_INIT:
-
-  case SSET_RULES:
-    /* Only change start params and most rules if we don't yet have a map,
-     * or if we do have a map but its a scenario one (ie, the game has
-     * never actually been started).
-     */
-    return (map_is_empty() || game.is_new_game);
-  case SSET_RULES_FLEXIBLE:
-  case SSET_META:
-    /* These can always be changed: */
-    return TRUE;
-  default:
-    freelog(LOG_ERROR, "Unexpected case %d in %s line %d",
-            op->sclass, __FILE__, __LINE__);
-    return FALSE;
-  }
-}

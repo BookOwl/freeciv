@@ -157,8 +157,8 @@ static void ai_manage_taxes(struct player *pplayer)
     cmp.require_happy = TRUE;    /* note this one */
     cmp.allow_disorder = FALSE;
     cmp.allow_specialists = TRUE;
-    cmp.factor[O_FOOD] = 20;
-    cmp.minimal_surplus[O_GOLD] = -FC_INFINITY;
+    cmp.factor[FOOD] = 20;
+    cmp.minimal_surplus[GOLD] = -FC_INFINITY;
 
     city_list_iterate(pplayer->cities, pcity) {
       cm_clear_cache(pcity);
@@ -167,7 +167,7 @@ static void ai_manage_taxes(struct player *pplayer)
       total_cities++;
 
       if (cmr.found_a_valid
-          && pcity->surplus[O_FOOD] > 0
+          && pcity->food_surplus > 0
           && pcity->size >= g->rapture_size
 	  && city_can_grow_to(pcity, pcity->size + 1)) {
         pcity->ai.celebrate = TRUE;
@@ -294,9 +294,7 @@ void ai_best_government(struct player *pplayer)
       if (government_has_flag(gov, G_FANATIC_TROOPS)) {
         bonus += 3; /* WAG */
       }
-      output_type_iterate(o) {
-	val += gov->output_inc_tile[o];
-      } output_type_iterate_end;
+      val += gov->trade_bonus + gov->shield_bonus + gov->food_bonus;
 
       val += (val * bonus) / 100;
 
@@ -311,7 +309,7 @@ void ai_best_government(struct player *pplayer)
       generic_city_refresh(acity, TRUE, NULL);
       auto_arrange_workers(acity);
     } city_list_iterate_end;
-    ai->govt_reeval = CLIP(5, city_list_size(pplayer->cities), 20);
+    ai->govt_reeval = CLIP(5, city_list_size(&pplayer->cities), 20);
   }
   ai->govt_reeval--;
 
@@ -351,21 +349,11 @@ static void ai_manage_government(struct player *pplayer)
   /* Crank up tech want */
   if (get_invention(pplayer, ai->goal.govt.req) == TECH_KNOWN) {
     return; /* already got it! */
-  } else if (ai->goal.govt.val > 0) {
-    /* We have few cities in the beginning, compensate for this to ensure
-     * that we are sufficiently forward-looking. */
-    int want = MAX(ai->goal.govt.val, 100);
-
-    if (pplayer->government == game.default_government) {
-      /* Default government is the crappy one we start in (like Despotism).
-       * We want something better pretty soon! */
-      want += 25 * game.turn;
-    }
-    pplayer->ai.tech_want[ai->goal.govt.req] += want;
-    TECH_LOG(LOG_DEBUG, pplayer, ai->goal.govt.req, "+ %d for %s in "
-             "ai_manage_government", want,
-             get_government_name(ai->goal.govt.idx));
   }
+  pplayer->ai.tech_want[ai->goal.govt.req] += ai->goal.govt.val;
+  freelog(LOG_DEBUG, "%s wants %s with want %d", pplayer->name,
+          get_tech_name(pplayer, ai->goal.govt.req), 
+          pplayer->ai.tech_want[ai->goal.govt.req]);
 }
 
 /**************************************************************************
@@ -398,7 +386,6 @@ void ai_do_last_activities(struct player *pplayer)
   ai_manage_cities(pplayer);
   ai_manage_tech(pplayer); 
   ai_manage_spaceship(pplayer);
-  ai_data_phase_done(pplayer);
 }
 
 /**************************************************************************

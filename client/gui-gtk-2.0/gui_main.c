@@ -51,16 +51,12 @@
 #include "colors.h"
 #include "connectdlg.h"
 #include "control.h"
-#include "cma_fe.h"
 #include "dialogs.h"
-#include "diplodlg.h"
 #include "gotodlg.h"
 #include "graphics.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
-#include "happiness.h"
 #include "helpdata.h"                   /* boot_help_texts() */
-#include "inteldlg.h"
 #include "mapctrl.h"
 #include "mapview.h"
 #include "menu.h"
@@ -87,7 +83,9 @@ GdkPixmap *overview_canvas_store;       /* this pixmap acts as a backing store
 int overview_canvas_store_width = 2 * 80;
 int overview_canvas_store_height = 2 * 50;
 
+bool fullscreen_mode = TRUE;
 bool enable_tabs = TRUE;
+bool solid_unit_icon_bg = FALSE;
 bool better_fog = TRUE;
 
 GtkWidget *toplevel;
@@ -96,7 +94,6 @@ GtkWidget *toplevel_tabs;
 GtkWidget *top_vbox;
 GtkWidget *top_notebook, *bottom_notebook;
 
-int city_names_font_size = 0, city_productions_font_size = 0;
 PangoFontDescription *main_font;
 PangoFontDescription *city_productions_font;
 
@@ -136,43 +133,18 @@ GtkWidget *sun_ebox;
 GtkWidget *flake_ebox;
 GtkWidget *government_ebox;
 
-const char * const gui_character_encoding = "UTF-8";
-const bool gui_use_transliteration = FALSE;
-
 client_option gui_options[] = {
-  /* This option is the same as the one in gui-gtk */
-  GEN_BOOL_OPTION(map_scrollbars, N_("Show Map Scrollbars"),
-		  N_("Disable this option to hide the scrollbars on the "
-		     "map view."),
-		  COC_INTERFACE),
-  /* This option is the same as the one in gui-gtk */
-  GEN_BOOL_OPTION(keyboardless_goto, N_("Keyboardless goto"),
-		  N_("If this option is set then a goto may be initiated "
-		     "by left-clicking and then holding down the mouse "
-		     "button while dragging the mouse onto a different "
-		     "tile."),
-		  COC_INTERFACE),
-  GEN_BOOL_OPTION(dialogs_on_top, N_("Keep dialogs on top"),
-		  N_("If this option is set then dialog windows will always "
-		     "remain in front of the main Freeciv window. "
-		     "Disabling this has no effect in fullscreen mode."),
-		  COC_INTERFACE),
-  GEN_BOOL_OPTION(show_task_icons, N_("Show worklist task icons"),
-		  N_("Disabling this will turn off the unit and building "
-		     "icons in the worklist dialog and the production "
-		     "tab of the city dialog."),
-		  COC_GRAPHICS),
-  GEN_BOOL_OPTION(enable_tabs, N_("Enable status report tabs"),
-		  N_("If this option is enabled then report dialogs will "
-		     "be shown as separate tabs rather than in popup "
-		     "dialogs."),
-		  COC_INTERFACE),
+  GEN_BOOL_OPTION(meta_accelerators,	N_("Use Alt/Meta for accelerators")),
+  GEN_BOOL_OPTION(map_scrollbars,	N_("Show Map Scrollbars")),
+  GEN_BOOL_OPTION(keyboardless_goto,	N_("Keyboardless goto")),
+  GEN_BOOL_OPTION(dialogs_on_top,	N_("Keep dialogs on top")),
+  GEN_BOOL_OPTION(show_task_icons,	N_("Show worklist task icons")),
+  GEN_BOOL_OPTION(fullscreen_mode,	N_("Fullscreen Mode")),
+  GEN_BOOL_OPTION(enable_tabs,		N_("Enable status report tabs")),
+  GEN_BOOL_OPTION(solid_unit_icon_bg,
+		  N_("Solid unit icon background color in city dialog")),
   GEN_BOOL_OPTION(better_fog,
-		  N_("Better fog-of-war drawing"),
-		  N_("If this is enabled then a better method is used for "
-		     "drawing fog-of-war.  It is not any slower but will "
-		     "consume about twice as much memory."),
-		  COC_GRAPHICS)
+		  N_("Better fog-of-war drawing"))
 };
 const int num_gui_options = ARRAY_SIZE(gui_options);
 
@@ -216,26 +188,6 @@ static gboolean select_unit_pixmap_callback(GtkWidget *w, GdkEvent *ev,
 static gint timer_callback(gpointer data);
 gboolean show_conn_popup(GtkWidget *view, GdkEventButton *ev, gpointer data);
 static gboolean quit_dialog_callback(void);
-
-
-/****************************************************************************
-  Called by the tileset code to set the font size that should be used to
-  draw the city names and productions.
-****************************************************************************/
-void set_city_names_font_sizes(int my_city_names_font_size,
-			       int my_city_productions_font_size)
-{
-  /* This function may be called before the fonts are allocated.  So we
-   * save the values for later. */
-  city_names_font_size = my_city_names_font_size;
-  city_productions_font_size = my_city_productions_font_size;
-  if (main_font) {
-    pango_font_description_set_size(main_font,
-				    PANGO_SCALE * city_names_font_size);
-    pango_font_description_set_size(city_productions_font,
-				    PANGO_SCALE * city_productions_font_size);
-  }
-}
 
 /**************************************************************************
 ...
@@ -308,10 +260,10 @@ gboolean inputline_handler(GtkWidget *w, GdkEventKey *ev)
   if (ev->keyval == GDK_Up) {
     keypress = TRUE;
 
-    if (history_pos < genlist_size(history_list) - 1)
+    if (history_pos < genlist_size(&history_list) - 1)
       history_pos++;
 
-    data = genlist_get(history_list, history_pos);
+    data = genlist_get(&history_list, history_pos);
   }
 
   if (ev->keyval == GDK_Down) {
@@ -321,7 +273,7 @@ gboolean inputline_handler(GtkWidget *w, GdkEventKey *ev)
       history_pos--;
 
     if (history_pos >= 0) {
-      data = genlist_get(history_list, history_pos);
+      data = genlist_get(&history_list, history_pos);
     } else {
       data = "";
     }
@@ -624,8 +576,8 @@ static void populate_unit_pixmap_table(void)
     gtk_pixcomm_clear(GTK_PIXCOMM(unit_below_pixmap[i]));
   }
 
-  more_arrow_pixmap
-    = gtk_image_new_from_pixbuf(sprite_get_pixbuf(sprites.right_arrow));
+  more_arrow_pixmap = gtk_image_new_from_pixmap(sprites.right_arrow->pixmap,
+						NULL);
   gtk_widget_ref(more_arrow_pixmap);
   gtk_table_attach_defaults(GTK_TABLE(table), more_arrow_pixmap, 4, 5, 1, 2);
 
@@ -829,16 +781,14 @@ static void setup_widgets(void)
                      G_CALLBACK(taxrates_callback), GINT_TO_POINTER(i));
 
     sprite = i < 5 ? sprites.tax_science : sprites.tax_gold;
-    econ_label[i] = gtk_image_new_from_pixbuf(sprite_get_pixbuf(sprite));
+    econ_label[i] = gtk_image_new_from_pixmap(sprite->pixmap, sprite->mask);
     gtk_container_add(GTK_CONTAINER(ebox), econ_label[i]);
   }
 
   /* science, environmental, govt, timeout */
-  bulb_label = gtk_image_new_from_pixbuf(sprite_get_pixbuf(sprites.bulb[0]));
-  sun_label
-    = gtk_image_new_from_pixbuf(sprite_get_pixbuf(sprites.warming[0]));
-  flake_label
-    = gtk_image_new_from_pixbuf(sprite_get_pixbuf(sprites.cooling[0]));
+  bulb_label = gtk_image_new_from_pixmap(sprites.bulb[0]->pixmap, NULL);
+  sun_label = gtk_image_new_from_pixmap(sprites.warming[0]->pixmap, NULL);
+  flake_label = gtk_image_new_from_pixmap(sprites.cooling[0]->pixmap, NULL);
   {
     /* HACK: the UNHAPPY citizen is used for the government
      * when we don't know any better. */
@@ -846,7 +796,7 @@ static void setup_widgets(void)
 
     sprite = get_citizen_sprite(c, 0, NULL);
   }
-  government_label = gtk_image_new_from_pixbuf(sprite_get_pixbuf(sprite));
+  government_label = gtk_image_new_from_pixmap(sprite->pixmap, sprite->mask);
 
   for (i = 0; i < 4; i++) {
     GtkWidget *w;
@@ -1043,7 +993,7 @@ static void setup_widgets(void)
   gtk_widget_hide(more_arrow_pixmap);
 
   if (enable_tabs) {
-    popup_meswin_dialog(FALSE);
+    popup_meswin_dialog();
   }
 
   gtk_notebook_set_current_page(GTK_NOTEBOOK(top_notebook), 0);
@@ -1060,7 +1010,25 @@ static void setup_widgets(void)
 **************************************************************************/
 void ui_init(void)
 {
+  gchar *s;
+
+  init_character_encodings("UTF-8", FALSE);
+
   log_set_callback(log_callback_utf8);
+
+  /* convert inputs */
+  s = g_locale_to_utf8(user_name, -1, NULL, NULL, NULL);
+  sz_strlcpy(user_name, s);
+  g_free(s);
+
+  /* this is silly, but i don't want the UI to barf on erroneous input */
+  s = g_locale_to_utf8(metaserver, -1, NULL, NULL, NULL);
+  sz_strlcpy(metaserver, s);
+  g_free(s);
+
+  s = g_locale_to_utf8(server_host, -1, NULL, NULL, NULL);
+  sz_strlcpy(server_host, s);
+  g_free(s);
 }
 
 /**************************************************************************
@@ -1143,8 +1111,6 @@ void ui_main(int argc, char **argv)
   g_object_ref(style);
   city_productions_font = style->font_desc;
 
-  set_city_names_font_sizes(city_names_font_size, city_productions_font_size);
-
   fill_bg_gc = gdk_gc_new(root_window);
 
   /* for isometric view. always create. the tileset can change at run time. */
@@ -1168,9 +1134,9 @@ void ui_main(int argc, char **argv)
   gdk_gc_set_fill(fill_tile_gc, GDK_STIPPLED);
 
   {
-    char d1[] = {0x03, 0x0c, 0x03, 0x0c};
-    char d2[] = {0x08, 0x02, 0x08, 0x02};
-    char d3[] = {0xAA, 0x55, 0xAA, 0x55};
+    unsigned char d1[] = {0x03, 0x0c, 0x03, 0x0c};
+    unsigned char d2[] = {0x08, 0x02, 0x08, 0x02};
+    unsigned char d3[] = {0xAA, 0x55, 0xAA, 0x55};
 
     gray50 = gdk_bitmap_create_from_data(root_window, d1, 4, 4);
     gray25 = gdk_bitmap_create_from_data(root_window, d2, 4, 4);
@@ -1195,14 +1161,10 @@ void ui_main(int argc, char **argv)
   tilespec_load_tiles();
 
   setup_widgets();
+  load_intro_gfx();
   load_cursors();
-  cma_fe_init();
-  diplomacy_dialog_init();
-  happiness_dialog_init();
-  intel_dialog_init();
-  spaceship_dialog_init();
 
-  history_list = genlist_new();
+  genlist_init(&history_list);
   history_pos = -1;
 
   gtk_widget_show(toplevel);
@@ -1215,11 +1177,6 @@ void ui_main(int argc, char **argv)
 
   gtk_main();
 
-  spaceship_dialog_done();
-  intel_dialog_done();
-  happiness_dialog_done();
-  diplomacy_dialog_done();
-  cma_fe_done();
   free_color_system();
   tilespec_free_tiles();
 }
@@ -1387,11 +1344,8 @@ static gboolean select_unit_pixmap_callback(GtkWidget *w, GdkEvent *ev,
 **************************************************************************/
 static gint timer_callback(gpointer data)
 {
-  double seconds = real_timer_callback();
-
-  timer_id = gtk_timeout_add(seconds * 1000, timer_callback, NULL);
-
-  return FALSE;
+  real_timer_callback();
+  return TRUE;
 }
 
 /**************************************************************************
@@ -1520,7 +1474,7 @@ static void quit_dialog_response(GtkWidget *dialog, gint response)
 {
   gtk_widget_destroy(dialog);
   if (response == GTK_RESPONSE_YES) {
-    ui_exit();
+    exit(EXIT_SUCCESS);
   }
 }
 
@@ -1561,33 +1515,3 @@ static gboolean quit_dialog_callback(void)
   return TRUE;
 }
 
-struct callback {
-  void (*callback)(void *data);
-  void *data;
-};
-
-/****************************************************************************
-  A wrapper for the callback called through add_idle_callback.
-****************************************************************************/
-static gint idle_callback_wrapper(gpointer data)
-{
-  struct callback *cb = data;
-
-  (cb->callback)(cb->data);
-  free(cb);
-  return 0;
-}
-
-/****************************************************************************
-  Enqueue a callback to be called during an idle moment.  The 'callback'
-  function should be called sometimes soon, and passed the 'data' pointer
-  as its data.
-****************************************************************************/
-void add_idle_callback(void (callback)(void *), void *data)
-{
-  struct callback *cb = fc_malloc(sizeof(*cb));
-
-  cb->callback = callback;
-  cb->data = data;
-  gtk_idle_add(idle_callback_wrapper, cb);
-}

@@ -25,7 +25,6 @@ if SERVER
 SERVER_FILES = \
 	civ1.serv \
 	civ2.serv \
-	default.serv \
 	history.serv
 else
 SERVER_FILES =
@@ -44,7 +43,6 @@ EXTRA_DIST = \
 	helpdata.txt	\
 	civ1.serv	\
 	civ2.serv	\
-	default.serv	\
 	history.serv
 
 if CLIENT

@@ -94,22 +94,23 @@ static void get_units_report_data(struct units_entry *entries,
     (entries[pUnit->type].active_count)++;
     (total->active_count)++;
     if (pUnit->homecity) {
-      entries[pUnit->type].upkeep_shield += pUnit->upkeep[O_SHIELD];
-      total->upkeep_shield += pUnit->upkeep[O_SHIELD];
-      entries[pUnit->type].upkeep_food += pUnit->upkeep[O_FOOD];
-      total->upkeep_food += pUnit->upkeep[O_FOOD];
-      entries[pUnit->type].upkeep_gold += pUnit->upkeep[O_GOLD];
-      total->upkeep_gold += pUnit->upkeep[O_GOLD];
+      entries[pUnit->type].upkeep_shield += pUnit->upkeep;
+      total->upkeep_shield += pUnit->upkeep;
+      entries[pUnit->type].upkeep_food += pUnit->upkeep_food;
+      total->upkeep_food += pUnit->upkeep_food;
+      entries[pUnit->type].upkeep_gold += pUnit->upkeep_gold;
+      total->upkeep_gold += pUnit->upkeep_gold;
     }
   } unit_list_iterate_end;
     
   city_list_iterate(game.player_ptr->cities, pCity) {
-    if (pCity->is_building_unit) {
-      (entries[pCity->currently_building].building_count)++;
-      (total->building_count)++;
-      entries[pCity->currently_building].soonest_completions =
-	MIN(entries[pCity->currently_building].soonest_completions,
-	    city_turns_to_build(pCity,
+    if (pCity->is_building_unit &&
+      (unit_type_exists(pCity->currently_building))) {
+        (entries[pCity->currently_building].building_count)++;
+	(total->building_count)++;
+        entries[pCity->currently_building].soonest_completions =
+		MIN(entries[pCity->currently_building].soonest_completions,
+			city_turns_to_build(pCity,
 				pCity->currently_building, TRUE, TRUE));
     }
   } city_list_iterate_end;
@@ -172,10 +173,9 @@ static int popup_upgrade_unit_callback(struct GUI *pWidget)
   
   ut1 = MAX_ID - pWidget->ID;
   
-  if (pUnits_Upg_Dlg) {
+  if (pUnits_Upg_Dlg || !unit_type_exists(ut1)) {
     return 1;
   }
-  CHECK_UNIT_TYPE(ut1);
   
   set_wstate(pWidget, FC_WS_NORMAL);
   pSellected_Widget = NULL;
@@ -2515,7 +2515,7 @@ void science_dialog_update(void)
     /* ------------------------------------- */
 
     city_list_iterate(game.player_ptr->cities, pCity) {
-      curent_output += pCity->prod[O_SCIENCE];
+      curent_output += pCity->science_total;
     } city_list_iterate_end;
 
     if (curent_output <= 0) {

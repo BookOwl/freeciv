@@ -122,7 +122,7 @@ struct connection {
 
   double ping_time;
   
-  struct conn_list *self;     /* list with this connection as single element */
+  struct conn_list self;     /* list with this connection as single element */
   char username[MAX_LEN_NAME];
   char addr[MAX_LEN_ADDR];
 
@@ -147,8 +147,6 @@ struct connection {
   void (*notify_of_writable_data) (struct connection * pc,
 				   bool data_available_and_socket_full);
 
-  /* Determines whether client or server behavior should be used. */
-  bool is_server;
   struct {
     /* 
      * Increases for every packet send to the server.

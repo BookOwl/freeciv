@@ -124,26 +124,10 @@ static enum Display_color_type display_color_type;  /* practically unused */
 static gint timer_id;                               /*       ditto        */
 static gint gdk_input_id;
 
-const char * const gui_character_encoding = NULL;
-const bool gui_use_transliteration = TRUE;
-
 client_option gui_options[] = {
-  /* This option is the same as the one in gui-gtk-2.0 */
-  GEN_BOOL_OPTION(meta_accelerators, N_("Use Alt/Meta for accelerators"),
-		  N_("Uses the Alt or Meta keys for keyboard accelerators."),
-		  COC_INTERFACE),
-  /* This option is the same as the one in gui-gtk-2.0 */
-  GEN_BOOL_OPTION(map_scrollbars, N_("Show Map Scrollbars"),
-		  N_("Disable this option to hide the scrollbars on the "
-		     "map view."),
-		  COC_INTERFACE),
-  /* This option is the same as the one in gui-gtk-2.0 */
-  GEN_BOOL_OPTION(keyboardless_goto, N_("Keyboardless goto"),
-		  N_("If this option is set then a goto may be initiated "
-		     "by left-clicking and then holding down the mouse "
-		     "button while dragging the mouse onto a different "
-		     "tile."),
-		  COC_INTERFACE),
+  GEN_BOOL_OPTION(meta_accelerators, N_("Use Alt/Meta for accelerators")),
+  GEN_BOOL_OPTION(map_scrollbars, N_("Show Map Scrollbars")),
+  GEN_BOOL_OPTION(keyboardless_goto, N_("Keyboardless goto")),
 };
 const int num_gui_options = ARRAY_SIZE(gui_options);
 
@@ -167,17 +151,6 @@ static GtkWidget *detached_widget_fill(GtkWidget *ahbox);
 static void select_unit_pixmap_callback(GtkWidget *w, GdkEvent *ev, 
                                         gpointer data);
 static gint timer_callback(gpointer data);
-
-/****************************************************************************
-  Called by the tileset code to set the font size that should be used to
-  draw the city names and productions.
-****************************************************************************/
-void set_city_names_font_sizes(int my_city_names_font_size,
-			       int my_city_productions_font_size)
-{
-  freelog(LOG_ERROR, "Unimplemented set_city_names_font_sizes.");
-  /* PORTME */
-}
 
 /**************************************************************************
   Print extra usage information, including one line help on each option,
@@ -219,10 +192,10 @@ static gint keyboard_handler(GtkWidget *w, GdkEventKey *ev)
     if (ev->keyval == GDK_Up) {
       keypress = TRUE;
 
-      if (history_pos < genlist_size(history_list) - 1)
+      if (history_pos < genlist_size(&history_list) - 1)
         history_pos++;
 
-      data = genlist_get(history_list, history_pos);
+      data = genlist_get(&history_list, history_pos);
     }
 
     if (ev->keyval == GDK_Down) {
@@ -232,7 +205,7 @@ static gint keyboard_handler(GtkWidget *w, GdkEventKey *ev)
         history_pos--;
 
       if (history_pos >= 0) {
-        data = genlist_get(history_list, history_pos);
+        data = genlist_get(&history_list, history_pos);
       } else {
         data = "";
       }
@@ -835,7 +808,7 @@ static void setup_widgets(void)
 **************************************************************************/
 void ui_init(void)
 {
-
+  init_character_encodings(NULL, TRUE);
 }
 
 /**************************************************************************
@@ -973,7 +946,7 @@ void ui_main(int argc, char **argv)
   load_intro_gfx();
   load_cursors();
 
-  history_list = genlist_new();
+  genlist_init(&history_list);
   history_pos = -1;
 
   gtk_widget_show(toplevel);
@@ -1090,7 +1063,6 @@ static void select_unit_pixmap_callback(GtkWidget *w, GdkEvent *ev,
 static gint timer_callback(gpointer data)
 {
   real_timer_callback();
-  freelog(LOG_ERROR, "FIXME: Need to update timer.");
   return TRUE;
 }
 
@@ -1208,18 +1180,4 @@ void remove_net_input(void)
 {
   gdk_input_remove(gdk_input_id);
   gdk_window_set_cursor(root_window, NULL);
-}
-
-/****************************************************************************
-  Enqueue a callback to be called during an idle moment.  The 'callback'
-  function should be called sometimes soon, and passed the 'data' pointer
-  as its data.
-****************************************************************************/
-void add_idle_callback(void (callback)(void *), void *data)
-{
-  /* PORTME */
-
-  /* This is a reasonable fallback if it's not ported. */
-  freelog(LOG_ERROR, "Unimplemented add_idle_callback.");
-  (callback)(data);
 }

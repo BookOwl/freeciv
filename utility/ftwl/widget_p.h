@@ -82,33 +82,33 @@ struct sw_widget {
   bool has_border_color;
   be_color border_color;
 
-  void (*destroy) (struct sw_widget *widget);
-  void (*entered) (struct sw_widget *widget);
-  void (*left) (struct sw_widget *widget);
-  void (*click) (struct sw_widget *widget);
-  bool(*key) (struct sw_widget *widget, const struct be_key *key,
+  void (*destroy) (struct sw_widget * widget);
+  void (*entered) (struct sw_widget * widget);
+  void (*left) (struct sw_widget * widget);
+  void (*click) (struct sw_widget * widget);
+  bool(*key) (struct sw_widget * widget, const struct be_key * key,
 	      void *data);
   void *key_data;
-  void (*draw) (struct sw_widget *widget);
-  void (*draw_extra_background) (struct sw_widget *widget,
-				 const struct ct_rect* rect);
-  void (*drag_start) (struct sw_widget *widget,
-		      const struct ct_point *mouse,
+  void (*draw) (struct sw_widget * widget);
+  void (*draw_extra_background) (struct sw_widget * widget,
+				 const struct ct_rect * rect);
+  void (*drag_start) (struct sw_widget * widget,
+		      const struct ct_point * mouse,
 		      enum be_mouse_button button);
-  void (*drag_move) (struct sw_widget *widget,
-		     const struct ct_point *start_position,
-		     const struct ct_point *current_position,
+  void (*drag_move) (struct sw_widget * widget,
+		     const struct ct_point * start_position,
+		     const struct ct_point * current_position,
 		     enum be_mouse_button button);
-  void (*drag_end) (struct sw_widget *widget, enum be_mouse_button button);
+  void (*drag_end) (struct sw_widget * widget, enum be_mouse_button button);
 
-  void (*click_start) (struct sw_widget *widget,
-		       const struct ct_point *mouse,
+  void (*click_start) (struct sw_widget * widget,
+		       const struct ct_point * mouse,
 		       enum be_mouse_button button, int state, void *data);
   void *click_start_data;
 
   union {
     struct {
-      struct widget_list *children;
+      struct widget_list children;
       struct osda *target;
       struct ct_string *title;
       struct ct_point pos_at_drag_start;
@@ -119,7 +119,7 @@ struct sw_widget {
       int depth;
       struct sw_widget *list;
       struct osda *canvas_background;
-      struct region_list *to_flush;
+      struct region_list to_flush;
       void (*user_drag_start) (struct sw_widget * widget,
 			       const struct ct_point * mouse,
 			       enum be_mouse_button button);
@@ -131,7 +131,7 @@ struct sw_widget {
 			     enum be_mouse_button button);
     } window;
     struct {
-      struct osda *gfx;
+      struct odsa *gfx;
     } icon;
     struct {
       struct ct_string *text[NUM_WIDGET_FACES];
@@ -159,9 +159,9 @@ struct sw_widget {
     struct {
       struct ct_point offset;
       struct sw_widget *window;
-      void (*callback1) (struct sw_widget *widget, void *data);
+      void (*callback1) (struct sw_widget * widget, void *data);
       void *callback1_data;
-      void (*callback2) (struct sw_widget *widget, void *data);
+      void (*callback2) (struct sw_widget * widget, void *data);
       void *callback2_data;
       int columns, rows;
       struct sw_widget **items;
@@ -185,7 +185,7 @@ struct sw_widget {
 };
 
 extern struct sw_widget *root_window;
-extern struct widget_list *deferred_destroyed_widgets;
+extern struct widget_list deferred_destroyed_widgets;
 
 void handle_callbacks(void);
 void get_select_timeout(struct timeval *timeout);

@@ -49,7 +49,8 @@
     TYPED_LIST_ITERATE(struct cma_dialog, dialoglist, pdialog)
 #define dialog_list_iterate_end  LIST_ITERATE_END
 
-static struct dialog_list *dialog_list;
+static struct dialog_list dialog_list;
+static bool dialog_list_has_been_initialised = FALSE;
 
 static int allow_refreshes = 1;
 
@@ -80,17 +81,12 @@ static void set_hscales(const struct cm_parameter *const parameter,
 /**************************************************************************
 ...
 **************************************************************************/
-void cma_fe_init()
+static void ensure_initialised_dialog_list(void)
 {
-  dialog_list = dialog_list_new();
-}
-
-/**************************************************************************
-...
-**************************************************************************/
-void cma_fe_done()
-{
-  dialog_list_free(dialog_list);
+  if (!dialog_list_has_been_initialised) {
+    dialog_list_init(&dialog_list);
+    dialog_list_has_been_initialised = TRUE;
+  }
 }
 
 /**************************************************************************
@@ -112,7 +108,7 @@ static void cma_dialog_destroy_callback(GtkWidget *w, gpointer data)
 
   g_object_unref(pdialog->tips);
 
-  dialog_list_unlink(dialog_list, pdialog);
+  dialog_list_unlink(&dialog_list, pdialog);
   free(pdialog);
 }
 
@@ -121,6 +117,8 @@ static void cma_dialog_destroy_callback(GtkWidget *w, gpointer data)
 *****************************************************************/
 struct cma_dialog *get_cma_dialog(struct city *pcity)
 {
+  ensure_initialised_dialog_list();
+
   dialog_list_iterate(dialog_list, pdialog) {
     if (pdialog->pcity == pcity) {
       return pdialog;
@@ -204,6 +202,7 @@ struct cma_dialog *create_cma_dialog(struct city *pcity)
   struct cm_parameter param;
   GtkWidget *frame, *page, *hbox, *label, *table;
   GtkWidget *vbox, *sw, *hscale, *button, *align;
+  int i;
   GtkListStore *store;
   GtkCellRenderer *rend;
   GtkWidget *view;
@@ -246,8 +245,8 @@ struct cma_dialog *create_cma_dialog(struct city *pcity)
       		   G_CALLBACK(button_press_callback), pdialog);
 
   gtk_tooltips_set_tip(pdialog->tips, view,
-		       _("For information on\n"
-		         "the citizen governor and governor presets,\n"
+		       _("For information on:\n"
+		         "CMA and presets\n"
 			 "including sample presets,\n"
 		         "see README.cma."),
 		       "");
@@ -306,7 +305,7 @@ struct cma_dialog *create_cma_dialog(struct city *pcity)
 
   /* Minimal Surplus and Factor */
 
-  table = gtk_table_new(O_COUNT + 2, 3, TRUE);
+  table = gtk_table_new(NUM_STATS + 2, 3, TRUE);
   gtk_box_pack_start(GTK_BOX(vbox), table, FALSE, FALSE, 2);
 
   label = gtk_label_new(_("Minimal Surplus"));
@@ -316,8 +315,8 @@ struct cma_dialog *create_cma_dialog(struct city *pcity)
   gtk_misc_set_alignment(GTK_MISC(label), 0.1, 0.5);
   gtk_table_attach_defaults(GTK_TABLE(table), label, 2, 3, 0, 1);
 
-  output_type_iterate(i) {
-    label = gtk_label_new(get_output_name(i));
+  for (i = 0; i < NUM_STATS; i++) {
+    label = gtk_label_new(cm_get_stat_name(i));
     gtk_table_attach_defaults(GTK_TABLE(table), label, 0, 1, i + 1, i + 2);
     gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
 
@@ -343,18 +342,18 @@ struct cma_dialog *create_cma_dialog(struct city *pcity)
 
     g_signal_connect(pdialog->factor[i], "value_changed",
 		     G_CALLBACK(hscale_changed), pdialog);
-  } output_type_iterate_end;
+  }
 
   /* Happy Surplus and Factor */
 
   label = gtk_label_new(_("Celebrate"));
   gtk_table_attach_defaults(GTK_TABLE(table), label, 0, 1,
-			    O_COUNT + 1, O_COUNT + 2);
+			    NUM_STATS + 1, NUM_STATS + 2);
   gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
 
   hbox = gtk_hbox_new(FALSE, 0);
   gtk_table_attach_defaults(GTK_TABLE(table), hbox, 1, 2,
-			    O_COUNT + 1, O_COUNT + 2);
+			    NUM_STATS + 1, NUM_STATS + 2);
 
   pdialog->happy_button = gtk_check_button_new();
   gtk_box_pack_start(GTK_BOX(hbox), pdialog->happy_button, FALSE, FALSE,
@@ -365,16 +364,16 @@ struct cma_dialog *create_cma_dialog(struct city *pcity)
   g_signal_connect(pdialog->happy_button, "toggled",
 		   G_CALLBACK(hscale_changed), pdialog);
 
-  pdialog->factor[O_COUNT] =
+  pdialog->factor[NUM_STATS] =
       GTK_ADJUSTMENT(gtk_adjustment_new(0, 0, 50, 1, 0, 0));
 
-  hscale = gtk_hscale_new(GTK_ADJUSTMENT(pdialog->factor[O_COUNT]));
+  hscale = gtk_hscale_new(GTK_ADJUSTMENT(pdialog->factor[NUM_STATS]));
   gtk_table_attach_defaults(GTK_TABLE(table), hscale, 2, 3,
-			    O_COUNT + 1, O_COUNT + 2);
+			    NUM_STATS + 1, NUM_STATS + 2);
   gtk_scale_set_digits(GTK_SCALE(hscale), 0);
   gtk_scale_set_value_pos(GTK_SCALE(hscale), GTK_POS_LEFT);
 
-  g_signal_connect(pdialog->factor[O_COUNT],
+  g_signal_connect(pdialog->factor[NUM_STATS],
 		   "value_changed",
 		   G_CALLBACK(hscale_changed), pdialog);
 
@@ -407,7 +406,9 @@ struct cma_dialog *create_cma_dialog(struct city *pcity)
 
   gtk_widget_show_all(pdialog->shell);
 
-  dialog_list_prepend(dialog_list, pdialog);
+  ensure_initialised_dialog_list();
+
+  dialog_list_insert(&dialog_list, pdialog);
 
   update_cma_preset_list(pdialog);
 
@@ -456,12 +457,12 @@ void refresh_cma_dialog(struct city *pcity, enum cma_refresh refresh)
     gtk_image_set_from_stock(GTK_IMAGE(pdialog->active_image),
 	GTK_STOCK_YES, GTK_ICON_SIZE_DND);
     gtk_label_set_text_with_mnemonic(GTK_LABEL(pdialog->active_label),
-	_("Governor Enabl_ed"));
+	_("CMA Enabl_ed"));
   } else {
     gtk_image_set_from_stock(GTK_IMAGE(pdialog->active_image),
 	GTK_STOCK_NO, GTK_ICON_SIZE_DND);
     gtk_label_set_text_with_mnemonic(GTK_LABEL(pdialog->active_label),
-	_("Governor Disabl_ed"));
+	_("CMA Disabl_ed"));
   }
   gtk_widget_set_sensitive(pdialog->result_label, controlled);
 }
@@ -700,15 +701,17 @@ static void cma_active_callback(GtkWidget *w, gpointer data)
 static void set_hscales(const struct cm_parameter *const parameter,
 			struct cma_dialog *pdialog)
 {
+  int i;
+
   allow_refreshes = 0;
-  output_type_iterate(i) {
+  for (i = 0; i < NUM_STATS; i++) {
     gtk_adjustment_set_value(pdialog->minimal_surplus[i],
 			     parameter->minimal_surplus[i]);
     gtk_adjustment_set_value(pdialog->factor[i], parameter->factor[i]);
-  } output_type_iterate_end;
+  }
   gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(pdialog->happy_button),
 			       parameter->require_happy);
-  gtk_adjustment_set_value(pdialog->factor[O_COUNT],
+  gtk_adjustment_set_value(pdialog->factor[NUM_STATS],
 			   parameter->happy_factor);
   allow_refreshes = 1;
 }
@@ -720,19 +723,20 @@ static void hscale_changed(GtkAdjustment *get, gpointer data)
 {
   struct cma_dialog *pdialog = (struct cma_dialog *) data;
   struct cm_parameter param;
+  int i;
 
   if (!allow_refreshes) {
     return;
   }
 
   cmafec_get_fe_parameter(pdialog->pcity, &param);
-  output_type_iterate(i) {
+  for (i = 0; i < NUM_STATS; i++) {
     param.minimal_surplus[i] = (int) (pdialog->minimal_surplus[i]->value);
     param.factor[i] = (int) (pdialog->factor[i]->value);
-  } output_type_iterate_end;
+  }
   param.require_happy =
       (GTK_TOGGLE_BUTTON(pdialog->happy_button)->active ? 1 : 0);
-  param.happy_factor = (int) (pdialog->factor[O_COUNT]->value);
+  param.happy_factor = (int) (pdialog->factor[NUM_STATS]->value);
 
   /* save the change */
   cmafec_set_fe_parameter(pdialog->pcity, &param);

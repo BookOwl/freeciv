@@ -618,7 +618,7 @@ static int ai_rampage_want(struct unit *punit, struct tile *ptile)
        * Note that we do not specially encourage attacks against
        * cities: rampage is a hit-n-run operation. */
       if (!is_stack_vulnerable(ptile) 
-          && unit_list_size(ptile->units) > 1) {
+          && unit_list_size(&(ptile->units)) > 1) {
         benefit = (benefit * punit->hp) / unit_type(punit)->hp;
       }
       
@@ -804,10 +804,7 @@ static void ai_military_bodyguard(struct player *pplayer, struct unit *punit)
 
   if (!same_pos(punit->tile, ptile)) {
     if (goto_is_sane(punit, ptile, TRUE)) {
-      if (!ai_unit_goto(punit, ptile)) {
-        /* We died */
-        return;
-      }
+      (void) ai_unit_goto(punit, ptile);
     } else {
       /* can't possibly get there to help */
       ai_unit_new_role(punit, AIUNIT_NONE, NULL);
@@ -1541,7 +1538,7 @@ int find_something_to_kill(struct player *pplayer, struct unit *punit,
        * and conquer it in one turn.  
        * This variable enables total carnage. -- Syela */
       victim_count 
-        = unit_list_size(acity->tile->units) + 1;
+        = unit_list_size(&((acity->tile)->units)) + 1;
 
       if (!COULD_OCCUPY(punit) && !pdef) {
         /* Nothing there to bash and we can't occupy! 
@@ -1900,7 +1897,7 @@ static void ai_manage_caravan(struct player *pplayer, struct unit *punit)
     if ((pcity = wonder_on_continent(pplayer, 
                                      map_get_continent(punit->tile))) 
         && unit_flag(punit, F_HELP_WONDER)
-        && build_points_left(pcity) > (pcity->surplus[O_SHIELD] * 2)) {
+        && build_points_left(pcity) > (pcity->shield_surplus * 2)) {
       if (!same_pos(pcity->tile, punit->tile)) {
         if (punit->moves_left == 0) {
           return;
@@ -2076,7 +2073,8 @@ void ai_manage_military(struct player *pplayer, struct unit *punit)
 
   /* If we are still alive, either sentry or fortify. */
   if ((punit = find_unit_by_id(id))) {
-    if (unit_list_find(punit->tile->units, punit->ai.ferryboat)) {
+    if (unit_list_find(&((punit->tile)->units),
+        punit->ai.ferryboat)) {
       handle_unit_activity_request(punit, ACTIVITY_SENTRY);
     } else if (punit->activity == ACTIVITY_IDLE) {
       handle_unit_activity_request(punit, ACTIVITY_FORTIFYING);
@@ -2217,6 +2215,44 @@ void ai_manage_units(struct player *pplayer)
 }
 
 /**************************************************************************
+ Assign tech wants for techs to get better units with given role/flag.
+ Returns the best we can build so far, or U_LAST if none.  (dwp)
+**************************************************************************/
+Unit_Type_id ai_wants_role_unit(struct player *pplayer, struct city *pcity,
+                                int role, int want)
+{
+  Unit_Type_id iunit;
+  Tech_Type_id itech;
+  int i, n;
+
+  n = num_role_units(role);
+  for (i=n-1; i>=0; i--) {
+    iunit = get_role_unit(role, i);
+    if (can_build_unit(pcity, iunit)) {
+      return iunit;
+    } else {
+      /* careful; might be unable to build for non-tech reason... */
+      itech = get_unit_type(iunit)->tech_requirement;
+      if (get_invention(pplayer, itech) != TECH_KNOWN) {
+	pplayer->ai.tech_want[itech] += want;
+      }
+    }
+  }
+  return U_LAST;
+}
+
+/**************************************************************************
+ As ai_wants_role_unit, but also set choice->choice if we can build something.
+**************************************************************************/
+void ai_choose_role_unit(struct player *pplayer, struct city *pcity,
+			 struct ai_choice *choice, int role, int want)
+{
+  Unit_Type_id iunit = ai_wants_role_unit(pplayer, pcity, role, want);
+  if (iunit != U_LAST)
+    choice->choice = iunit;
+}
+
+/**************************************************************************
  Whether unit_type test is on the "upgrade path" of unit_type base,
  even if we can't upgrade now.
 **************************************************************************/
@@ -2248,7 +2284,7 @@ static void ai_manage_barbarian_leader(struct player *pplayer, struct unit *lead
 
   if (leader->moves_left == 0 || 
       (!is_ocean(map_get_terrain(leader->tile)) &&
-       unit_list_size(leader->tile->units) > 1) ) {
+       unit_list_size(&(leader->tile->units)) > 1) ) {
       handle_unit_activity_request(leader, ACTIVITY_SENTRY);
       return;
   }
@@ -2370,7 +2406,7 @@ void update_simple_ai_types(void)
   int i = 0;
 
   unit_type_iterate(id) {
-    if (!unit_type_flag(id, F_NONMIL)
+    if (unit_type_exists(id) && !unit_type_flag(id, F_NONMIL)
 	&& !unit_type_flag(id, F_MISSILE)
 	&& !unit_type_flag(id, F_NO_LAND_ATTACK)
         && get_unit_type(id)->move_type != AIR_MOVING

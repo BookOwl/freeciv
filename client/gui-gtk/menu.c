@@ -196,7 +196,7 @@ static void game_menu_callback(gpointer callback_data,
     disconnect_from_server();
     break;
   case MENU_GAME_QUIT:
-    ui_exit();
+    exit(EXIT_SUCCESS);
   }
 }
 
@@ -457,7 +457,7 @@ static void reports_menu_callback(gpointer callback_data,
     popup_activeunits_report_dialog(0);
     break;
   case MENU_REPORT_PLAYERS:
-    popup_players_dialog(TRUE);
+    popup_players_dialog();
     break;
    case MENU_REPORT_ECONOMY:
     popup_economy_report_dialog(0);
@@ -472,7 +472,7 @@ static void reports_menu_callback(gpointer callback_data,
     send_report_request(REPORT_TOP_5_CITIES);
     break;
   case MENU_REPORT_MESSAGES:
-    popup_meswin_dialog(TRUE);
+    popup_meswin_dialog();
     break;
    case MENU_REPORT_DEMOGRAPHIC:
     send_report_request(REPORT_DEMOGRAPHIC);

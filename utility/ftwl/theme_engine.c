@@ -59,6 +59,7 @@ struct button_callback {
 
 static char *current_theme;
 static char current_res[30];
+static int theme_bytes_per_pixel;
 
 /*************************************************************************
   Initialize theme engine and look for theme directory containing the
@@ -81,6 +82,34 @@ void te_init(const char *theme, char *example_file)
 	    current_theme, current_res);
     exit(EXIT_FAILURE);
   }
+}
+
+/*************************************************************************
+  Initialize colour model from a palette file.
+*************************************************************************/
+void te_init_colormodel(char *name)
+{
+  char filename[512];
+  struct section_file file;
+  char *realname;
+
+  my_snprintf(filename, sizeof(filename), "themes/%s/%s/%s",
+	      current_theme, current_res, name);
+
+  section_file_init(&file);
+  realname = datafilename(filename);
+  if (!realname) {
+    freelog(LOG_FATAL, "Could not find required file %s", name);
+    assert(0);
+    exit(EXIT_FAILURE);
+  }
+  if (!section_file_load(&file, realname)) {
+    freelog(LOG_FATAL, "Could not find required file %s", filename);
+    assert(0);
+    exit(EXIT_FAILURE);
+  }
+  theme_bytes_per_pixel = secfile_lookup_int(&file, "meta.bpp") / 8;
+  section_file_free(&file);
 }
 
 /*************************************************************************
@@ -122,17 +151,15 @@ struct Sprite *te_load_gfx(const char *filename)
 *************************************************************************/
 static bool str_color_to_be_color(be_color *col, const char *s)
 {
-  int values[4] = {0, 0, 0, 255}; /* RGBA; set to black */
+  int values[theme_bytes_per_pixel];
   int i;
-  int len = (strlen(s) - 1) / 2;
 
-  if ((len != 3 && len != 4) || s[0] != '#') {
-    /* Neither RGB or RGBA value in appropriate form! */
+  if (strlen(s) != (theme_bytes_per_pixel * 2 + 1) || s[0] != '#') {
     return FALSE;
   }
 
-  s++; /* ditch '#' */
-  for (i = 0; i < len; i++) {
+  s++;
+  for (i = 0; i < theme_bytes_per_pixel; i++) {
     char b[3];
     int scanned;
 
@@ -144,22 +171,9 @@ static bool str_color_to_be_color(be_color *col, const char *s)
     assert(scanned == 1);
     s += 2;
   }
-  *col = be_get_color(values[0], values[1], values[2], values[3]);
+  /* FIXME: this needs to be generalized for other bitdepths */
+  *col = be_get_color(values[0], values[1], values[2]);
   return TRUE;
-}
-
-/*************************************************************************
-  Find a position in a theme file.
-*************************************************************************/
-struct ct_point te_read_point(struct section_file *file, const char *section,
-                              const char *prefix)
-{
-  struct ct_point point;
-
-  point.x = secfile_lookup_int(file, "%s.%s.%s", section, prefix, "x");
-  point.y = secfile_lookup_int(file, "%s.%s.%s", section, prefix, "y");
-
-  return point;
 }
 
 /*************************************************************************
@@ -177,7 +191,7 @@ be_color te_read_color(struct section_file *file, const char *section,
             file->filename, section, prefix, suffix);
     assert(0);
     exit(EXIT_FAILURE);
-    return (be_color)0;
+    return 0;
   }
 }
 
@@ -207,8 +221,8 @@ struct ct_string *te_read_string(struct section_file *file,
   int size, outline_width;
   char *text, *font,*transform_str;
   bool anti_alias;
-  be_color color, background, outline_color;
-  be_color dummy_color = be_get_color(0, 0, 0, MAX_OPACITY);
+  be_color color, background, outline_color, dummy_color =
+      be_get_color(0, 0, 0);
   enum cts_transform transform;
 
   if (need_text) {
@@ -326,7 +340,7 @@ struct ct_tooltip *te_read_tooltip(struct section_file *file,
 	te_read_string(file, section, "tooltip", TRUE, need_text);
     int delay = secfile_lookup_int(file, "%s.tooltip-delay", section);
     int shadow = secfile_lookup_int(file, "%s.tooltip-shadow", section);
-    be_color color = be_get_color(0, 0, 0, MAX_OPACITY);
+    be_color color = be_get_color(0, 0, 0);
 
     if (shadow > 0) {
       color = te_read_color(file, section, "", "tooltip-shadow-color");
@@ -501,12 +515,11 @@ static void construct_infos_tooltip(struct section_file *file,
     }
     data->widget =
 	sw_window_create(screen->window, data->bounds.width,
-			 data->bounds.height, NULL,
+			 data->bounds.height, NULL, 100,
 			 FALSE, DEPTH_MAX);
     sw_widget_set_position(data->widget, data->bounds.x, data->bounds.y);
     sw_window_set_draggable(data->widget, FALSE);
-    sw_widget_set_background_color(data->widget, 
-                                   be_get_color(0, 0, 0, MIN_OPACITY));
+    sw_widget_set_background_color(data->widget,be_get_color(0,0,0));
 
     inserted = hash_insert(screen->widgets, id, data);
     assert(inserted);
@@ -629,7 +642,7 @@ static bool my_key_handler(struct sw_widget *widget,
 {
   struct te_screen *screen = data;
 
-  keybinding_list_iterate(screen->keybindings, pbinding) {
+  keybinding_list_iterate(*screen->keybindings, pbinding) {
     if (ct_key_matches(pbinding->key, key)) {
       screen->env.action_callback(pbinding->action);
       return TRUE;
@@ -651,7 +664,7 @@ static void read_keybindings(struct section_file *file,
 
   screen->keybindings = fc_malloc(sizeof(*(screen->keybindings)));
 
-  screen->keybindings = keybinding_list_new();
+  keybinding_list_init(screen->keybindings);
 
   for (i = 0; i < num; i++) {
     char *key = sec[i];
@@ -660,7 +673,7 @@ static void read_keybindings(struct section_file *file,
 
     binding->key = ct_key_parse(key);
     binding->action = mystrdup(action);
-    keybinding_list_prepend(screen->keybindings, binding);
+    keybinding_list_insert(screen->keybindings, binding);
   }
 
   sw_window_set_key_notify(screen->window, my_key_handler, screen);

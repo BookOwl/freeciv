@@ -45,8 +45,6 @@ libcivcommon_a_SOURCES = \
 		packets.def	\
 		player.c	\
 		player.h	\
-		requirements.c	\
-		requirements.h	\
 		spaceship.c	\
 		spaceship.h	\
 		tech.c		\

@@ -15,7 +15,6 @@
 
 #include "inteldlg_g.h"
 
-void intel_dialog_init(void);
-void intel_dialog_done(void);
+/* nothing to add */
 
 #endif				/* FC__INTELDLG_H */

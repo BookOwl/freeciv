@@ -80,7 +80,7 @@ static struct {
 
 #define my_city_map_iterate(pcity, cx, cy) {                           \
   city_map_checked_iterate(pcity->tile, cx, cy, _ptile) { \
-    if (!is_free_worked_tile(cx, cy)) {
+    if(!is_city_center(cx, cy)) {
 
 #define my_city_map_iterate_end \
     }                                \
@@ -100,16 +100,17 @@ static bool results_are_equal(struct city *pcity,
 			     const struct cm_result *const result1,
 			     const struct cm_result *const result2)
 {
+  enum cm_stat stat;
+
   T(disorder);
   T(happy);
+  T(specialists[SP_ELVIS]);
+  T(specialists[SP_SCIENTIST]);
+  T(specialists[SP_TAXMAN]);
 
-  specialist_type_iterate(sp) {
-    T(specialists[sp]);
-  } specialist_type_iterate_end;
-
-  output_type_iterate(stat) {
+  for (stat = 0; stat < NUM_STATS; stat++) {
     T(surplus[stat]);
-  } output_type_iterate_end;
+  }
 
   my_city_map_iterate(pcity, x, y) {
     if (result1->worker_positions_used[x][y] !=
@@ -177,6 +178,9 @@ static bool check_city(int city_id, struct cm_parameter *parameter)
 
   if (city_owner(pcity) != game.player_ptr) {
     cma_release_city(pcity);
+    create_event(pcity->tile, E_CITY_CMA_RELEASE,
+		 _("CMA: You lost control of %s. Detaching from city."),
+		 pcity->name);
     return FALSE;
   }
 
@@ -190,7 +194,7 @@ static bool check_city(int city_id, struct cm_parameter *parameter)
 static bool apply_result_on_server(struct city *pcity,
 				   const struct cm_result *const result)
 {
-  int first_request_id = 0, last_request_id = 0, i;
+  int first_request_id = 0, last_request_id = 0, i, sp;
   struct cm_result current_state;
   bool success;
 
@@ -230,27 +234,24 @@ static bool apply_result_on_server(struct city *pcity,
     }
   } my_city_map_iterate_end;
 
-  /* Change the excess non-default specialists to default. */
-  specialist_type_iterate(sp) {
-    if (sp == DEFAULT_SPECIALIST) {
-      continue;
-    }
+  /* Change the excess non-elvis specialists to elvises. */
+  assert(SP_ELVIS == 0);
+  for (sp = 1; sp < SP_COUNT; sp++) {
     for (i = 0; i < pcity->specialists[sp] - result->specialists[sp]; i++) {
       freelog(APPLY_RESULT_LOG_LEVEL, "Change specialist from %d to %d.",
-	      sp, DEFAULT_SPECIALIST);
-      last_request_id = city_change_specialist(pcity,
-					       sp, DEFAULT_SPECIALIST);
+	      sp, SP_ELVIS);
+      last_request_id = city_change_specialist(pcity, sp, SP_ELVIS);
       if (first_request_id == 0) {
 	first_request_id = last_request_id;
       }
     }
-  } specialist_type_iterate_end;
+  }
 
   /* now all surplus people are enterainers */
 
   /* Set workers */
-  /* FIXME: This code assumes that any toggled worker will turn into a
-   * DEFAULT_SPECIALIST! */
+  /* FIXME: This code assumes that any toggled worker will turn into an
+   * elvis! */
   my_city_map_iterate(pcity, x, y) {
     if (result->worker_positions_used[x][y] &&
 	pcity->city_map[x][y] != C_TILE_WORKER) {
@@ -263,22 +264,19 @@ static bool apply_result_on_server(struct city *pcity,
     }
   } my_city_map_iterate_end;
 
-  /* Set all specialists except DEFAULT_SPECIALIST (all the unchanged
-   * ones remain as DEFAULT_SPECIALIST). */
-  specialist_type_iterate(sp) {
-    if (sp == DEFAULT_SPECIALIST) {
-      continue;
-    }
+  /* Set all specialists except SP_ELVIS (all the unchanged ones remain
+   * as elvises). */
+  assert(SP_ELVIS == 0);
+  for (sp = 1; sp < SP_COUNT; sp++) {
     for (i = 0; i < result->specialists[sp] - pcity->specialists[sp]; i++) {
       freelog(APPLY_RESULT_LOG_LEVEL, "Changing specialist from %d to %d.",
-	      DEFAULT_SPECIALIST, sp);
-      last_request_id = city_change_specialist(pcity,
-					       DEFAULT_SPECIALIST, sp);
+	      SP_ELVIS, sp);
+      last_request_id = city_change_specialist(pcity, SP_ELVIS, sp);
       if (first_request_id == 0) {
 	first_request_id = last_request_id;
       }
     }
-  } specialist_type_iterate_end;
+  }
 
   if (last_request_id == 0 || ALWAYS_APPLY_AT_SERVER) {
       /*
@@ -399,7 +397,7 @@ static void handle_city(struct city *pcity)
       cma_release_city(pcity);
 
       create_event(pcity->tile, E_CITY_CMA_RELEASE,
-		   _("The citizen governor can't fulfill the requirements "
+		   _("CMA: The agent can't fulfill the requirements "
 		     "for %s. Passing back control."), pcity->name);
       handled = TRUE;
       break;
@@ -408,8 +406,8 @@ static void handle_city(struct city *pcity)
 	freelog(HANDLE_CITY_LOG_LEVEL2, "  doesn't cleanly apply");
 	if (check_city(city_id, NULL) && i == 0) {
 	  create_event(pcity->tile, E_NOEVENT,
-		       _("The citizen governor has gotten confused dealing "
-			 "with %s.  You may want to have a look."),
+		       _("CMA: %s has changed and the calculated "
+			 "result can't be applied. Will retry."),
 		       pcity->name);
 	}
       } else {
@@ -427,10 +425,10 @@ static void handle_city(struct city *pcity)
     assert(pcity != NULL);
     freelog(HANDLE_CITY_LOG_LEVEL2, "  not handled");
 
-    create_event(pcity->tile, E_NOEVENT,
-		 _("The citizen governor has gotten confused dealing "
-		   "with %s.  You may want to have a look."),
-		 pcity->name);
+    create_event(pcity->tile, E_CITY_CMA_RELEASE,
+		 _("CMA: %s has changed multiple times. This may be "
+		   "an error in Freeciv or bad luck. The CMA will detach "
+		   "itself from the city now."), pcity->name);
 
     cma_release_city(pcity);
 
@@ -570,7 +568,7 @@ bool cma_get_parameter(enum attr_city attr, int city_id,
   size_t len;
   char buffer[SAVED_PARAMETER_SIZE];
   struct data_in din;
-  int version, dummy;
+  int i, version, dummy;
 
   /* Changing this function is likely to break compatability with old
    * savegames that store these values. */
@@ -586,10 +584,10 @@ bool cma_get_parameter(enum attr_city attr, int city_id,
   dio_get_uint8(&din, &version);
   assert(version == 2);
 
-  output_type_iterate(i) {
+  for (i = 0; i < NUM_STATS; i++) {
     dio_get_sint16(&din, &parameter->minimal_surplus[i]);
     dio_get_sint16(&din, &parameter->factor[i]);
-  } output_type_iterate_end;
+  }
 
   dio_get_sint16(&din, &parameter->happy_factor);
   dio_get_uint8(&din, &dummy); /* Dummy value; used to be factor_target. */
@@ -609,6 +607,7 @@ void cma_set_parameter(enum attr_city attr, int city_id,
 {
   char buffer[SAVED_PARAMETER_SIZE];
   struct data_out dout;
+  int i;
 
   /* Changing this function is likely to break compatability with old
    * savegames that store these values. */
@@ -617,10 +616,10 @@ void cma_set_parameter(enum attr_city attr, int city_id,
 
   dio_put_uint8(&dout, 2);
 
-  output_type_iterate(i) {
+  for (i = 0; i < NUM_STATS; i++) {
     dio_put_sint16(&dout, parameter->minimal_surplus[i]);
     dio_put_sint16(&dout, parameter->factor[i]);
-  } output_type_iterate_end;
+  }
 
   dio_put_sint16(&dout, parameter->happy_factor);
   dio_put_uint8(&dout, 0); /* Dummy value; used to be factor_target. */

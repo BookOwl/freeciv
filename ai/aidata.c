@@ -59,16 +59,11 @@ static void ai_data_city_impr_calc(struct player *pplayer, struct ai_data *ai)
   memset(count, 0, sizeof(count));
 
   impr_type_iterate(id) {
-    struct req_source source = {
-      .type = REQ_BUILDING,
-      .value.building = id
-    };
-
     ai->impr_calc[id] = AI_IMPR_ESTIMATE;
 
     /* Find largest extension */
-    effect_list_iterate(get_req_source_effects(&source), peffect) {
-      switch (peffect->type) {
+    effect_type_vector_iterate(get_building_effect_types(id), ptype) {
+      switch (*ptype) {
 #if 0
       /* TODO */
       case EFT_FORCE_CONTENT:
@@ -97,21 +92,19 @@ static void ai_data_city_impr_calc(struct player *pplayer, struct ai_data *ai)
       case EFT_TRADE_INC_TILE:
       case EFT_TRADE_PER_TILE:
       case EFT_UPKEEP_FREE:
-	requirement_list_iterate(peffect->reqs, preq) {
-	  if (preq->source.type == REQ_BUILDING
-	      && preq->source.value.building == id) {
-	    ai->impr_calc[id] = AI_IMPR_CALCULATE;
-	    if (preq->range > ai->impr_range[id]) {
-	      ai->impr_range[id] = preq->range;
-	    }
-	  }
-	} requirement_list_iterate_end;
+      effect_list_iterate(*get_building_effects(id, *ptype), peff) {
+        ai->impr_calc[id] = AI_IMPR_CALCULATE;
+        if (peff->range > ai->impr_range[id]) {
+          ai->impr_range[id] = peff->range;
+        }
+      } effect_list_iterate_end;
       break;
       default:
       /* Nothing! */
       break;
       }
-    } effect_list_iterate_end;
+    } effect_type_vector_iterate_end;
+    
   } impr_type_iterate_end;
 }
 
@@ -138,7 +131,7 @@ void ai_data_analyze_rulesets(struct player *pplayer)
   defending units, and ignore enemy units that are incapable of harming 
   us, instead of just checking attack strength > 1.
 **************************************************************************/
-void ai_data_phase_init(struct player *pplayer, bool is_new_phase)
+void ai_data_turn_init(struct player *pplayer) 
 {
   struct ai_data *ai = &aidata[pplayer->player_no];
   int i, nuke_units = num_role_units(F_NUCLEAR);
@@ -276,9 +269,9 @@ void ai_data_phase_init(struct player *pplayer, bool is_new_phase)
   ai->stats.average_production = 0;
   city_list_iterate(pplayer->cities, pcity) {
     ai->stats.cities[(int)map_get_continent(pcity->tile)]++;
-    ai->stats.average_production += pcity->surplus[O_SHIELD];
+    ai->stats.average_production += pcity->shield_surplus;
   } city_list_iterate_end;
-  ai->stats.average_production /= MAX(1, city_list_size(pplayer->cities));
+  ai->stats.average_production /= MAX(1, city_list_size(&pplayer->cities));
   BV_CLR_ALL(ai->stats.diplomat_reservations);
   unit_list_iterate(pplayer->units, punit) {
     struct tile *ptile = punit->tile;
@@ -299,8 +292,8 @@ void ai_data_phase_init(struct player *pplayer, bool is_new_phase)
 
   /*** Diplomacy ***/
 
-  if (pplayer->ai.control && !is_barbarian(pplayer) && is_new_phase) {
-    ai_diplomacy_begin_new_phase(pplayer, ai);
+  if (pplayer->ai.control && !is_barbarian(pplayer)) {
+    ai_diplomacy_calculate(pplayer, ai);
   }
 
   /* Question: What can we accept as the reputation of a player before
@@ -325,8 +318,8 @@ void ai_data_phase_init(struct player *pplayer, bool is_new_phase)
     /* Determine who is the leader of our alliance. That is,
      * whoever has the more cities. */
     if (pplayers_allied(pplayer, aplayer)
-        && city_list_size(aplayer->cities) > ally_strength) {
-      ally_strength = city_list_size(aplayer->cities);
+        && city_list_size(&aplayer->cities) > ally_strength) {
+      ally_strength = city_list_size(&aplayer->cities);
       ally_strongest = aplayer;
     }
 
@@ -414,27 +407,17 @@ void ai_data_phase_init(struct player *pplayer, bool is_new_phase)
 /**************************************************************************
   Clean up our mess.
 **************************************************************************/
-void ai_data_phase_done(struct player *pplayer)
+void ai_data_turn_done(struct player *pplayer)
 {
   struct ai_data *ai = &aidata[pplayer->player_no];
 
-  free(ai->explore.ocean);
-  ai->explore.ocean = NULL;
-
-  free(ai->explore.continent);
-  ai->explore.continent = NULL;
-
-  free(ai->threats.continent);
-  ai->threats.continent = NULL;
-
+  free(ai->explore.ocean);     ai->explore.ocean = NULL;
+  free(ai->explore.continent); ai->explore.continent = NULL;
+  free(ai->threats.continent); ai->threats.continent = NULL;
   free(ai->threats.ocean);
   ai->threats.ocean = NULL;
-
-  free(ai->stats.workers);
-  ai->stats.workers = NULL;
-
-  free(ai->stats.cities);
-  ai->stats.cities = NULL;
+  free(ai->stats.workers);     ai->stats.workers = NULL;
+  free(ai->stats.cities);      ai->stats.cities = NULL;
 }
 
 /**************************************************************************
@@ -447,8 +430,8 @@ struct ai_data *ai_data_get(struct player *pplayer)
   if (ai->num_continents != map.num_continents
       || ai->num_oceans != map.num_oceans) {
     /* we discovered more continents, recalculate! */
-    ai_data_phase_done(pplayer);
-    ai_data_phase_init(pplayer, FALSE);
+    ai_data_turn_done(pplayer);
+    ai_data_turn_init(pplayer);
   }
   return ai;
 }

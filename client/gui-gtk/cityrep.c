@@ -57,7 +57,7 @@
 
 /******************************************************************/
 static GtkWidget *config_shell;
-static GtkWidget **config_toggle;
+static GtkWidget *config_toggle[NUM_CREPORT_COLS];
 
 static void create_city_report_config_dialog(void);
 static void popup_city_report_config_dialog(void);
@@ -142,8 +142,7 @@ static void get_city_text(struct city *pcity, char *buf[], int n)
     buf[i][0]='\0';
     if(!spec->show) continue;
 
-    my_snprintf(buf[i], n, "%*s", NEG_VAL(spec->width),
-		(spec->func)(pcity, spec->data));
+    my_snprintf(buf[i], n, "%*s", NEG_VAL(spec->width), (spec->func)(pcity));
   }
 }
 
@@ -425,7 +424,7 @@ static void select_cma_callback(GtkWidget * w, gpointer data)
 
     /* must copy the list as refresh_city_dialog() corrupts the selection */
     for (; selection; selection = g_list_next(selection)) {
-      copy = g_list_prepend(copy, city_from_glist(selection));
+      copy = g_list_append(copy, city_from_glist(selection));
     }
 
     reports_freeze();
@@ -560,7 +559,7 @@ static gint city_change_callback(GtkWidget *w, GdkEvent *event, gpointer data)
   append_impr_or_unit_to_menu(menu, _("Wonders"), TRUE, FALSE, FALSE, TRUE,
                               city_can_build_impr_or_unit, TRUE);
 
-  item = gtk_menu_item_new_with_label(_("Citizen Governor"));
+  item = gtk_menu_item_new_with_label(_("CMA"));
   gtk_menu_append(GTK_MENU(menu), item);
   submenu = gtk_menu_new();
   gtk_menu_item_set_submenu(GTK_MENU_ITEM(item), submenu);
@@ -589,8 +588,8 @@ static gint city_change_callback(GtkWidget *w, GdkEvent *event, gpointer data)
 *****************************************************************/
 static void create_city_report_dialog(bool make_modal)
 {
-  static char **titles;
-  static char (*buf)[64];
+  static char *titles	[NUM_CREPORT_COLS];
+  static char  buf	[NUM_CREPORT_COLS][64];
 
   GtkWidget *close_command, *scrolled;
   int        i;
@@ -603,11 +602,9 @@ static void create_city_report_dialog(bool make_modal)
 
   gtk_window_set_title(GTK_WINDOW(city_dialog_shell),_("Cities"));
 
-  buf = fc_realloc(buf, NUM_CREPORT_COLS * sizeof(buf[0]));
-  titles = fc_realloc(titles, NUM_CREPORT_COLS * sizeof(titles[0]));
-  for (i = 0; i < NUM_CREPORT_COLS; i++) {
-    titles[i] = buf[i];
-  }
+  for (i=0;i<NUM_CREPORT_COLS;i++)
+    titles[i]=buf[i];
+
   get_city_table_header(titles, sizeof(buf[0]));
 
   city_list = gtk_clist_new_with_titles(NUM_CREPORT_COLS,titles);
@@ -788,7 +785,7 @@ city_select_same_island_callback(GtkWidget *w, gpointer data)
   GList *copy = NULL;
 
   for(; selection; selection = g_list_next(selection))
-    copy = g_list_prepend (copy, city_from_glist(selection));
+    copy = g_list_append (copy, city_from_glist(selection));
 
   for(i = 0; i < GTK_CLIST(city_list)->rows; i++)
     {
@@ -826,9 +823,9 @@ static gboolean city_select_building_callback(GtkWidget *w, gpointer data)
 
     if ( (which == TYPE_UNIT && pcity->is_building_unit)
          || (which == TYPE_NORMAL_IMPROVEMENT && !pcity->is_building_unit
-             && !is_great_wonder(pcity->currently_building))
+             && !is_wonder(pcity->currently_building))
          || (which == TYPE_WONDER && !pcity->is_building_unit
-             && is_great_wonder(pcity->currently_building)) ) {
+             && is_wonder(pcity->currently_building)) ) {
       gtk_clist_select_row(GTK_CLIST(city_list), i, 0);
     }
   }
@@ -937,7 +934,7 @@ city_select_callback(GtkWidget *w, GdkEvent *event, gpointer data)
 			      FALSE, TRUE, city_can_build_impr_or_unit,
 			      FALSE);
 
-  item=gtk_menu_item_new_with_label( _("Citizen Governor") );
+  item=gtk_menu_item_new_with_label( _("CMA") );
   gtk_menu_append(GTK_MENU(menu),item);  
   submenu = gtk_menu_new();
   gtk_menu_item_set_submenu(GTK_MENU_ITEM(item), submenu);
@@ -966,7 +963,7 @@ static void city_change_all_dialog_callback(GtkWidget *w, gpointer data)
     /* What are we changing to? */
     selection_to = GTK_CLIST(city_change_all_to_list)->selection;
     if (!selection_to) {
-      append_output_window(_("Select a unit or improvement"
+      append_output_window(_("Game: Select a unit or improvement"
 			     " to change production to."));
       return;
     } else {
@@ -1065,7 +1062,7 @@ static void city_change_all_callback(GtkWidget * w, gpointer data)
 
       buf[0] = items[i].descr;
 
-      j = gtk_clist_prepend(GTK_CLIST(city_change_all_from_list), buf);
+      j = gtk_clist_append(GTK_CLIST(city_change_all_from_list), buf);
       gtk_clist_set_row_data(GTK_CLIST(city_change_all_from_list),
 			     j, GINT_TO_POINTER(items[i].cid));
       if (selected_cid == items[i].cid) {
@@ -1108,7 +1105,7 @@ static void city_change_all_callback(GtkWidget * w, gpointer data)
 
       buf[0] = items[i].descr;
 
-      j = gtk_clist_prepend(GTK_CLIST(city_change_all_to_list), buf);
+      j = gtk_clist_append(GTK_CLIST(city_change_all_to_list), buf);
       gtk_clist_set_row_data(GTK_CLIST(city_change_all_to_list), j,
 			     GINT_TO_POINTER(items[i].cid));
     }
@@ -1207,7 +1204,7 @@ static void city_popup_callback(GtkWidget *w, gpointer data)
 
   /* We have to copy the list as the popup_city_dialog destroys the data */
   for(; current; current = g_list_next(current))
-    copy = g_list_prepend (copy, city_from_glist(current));
+    copy = g_list_append (copy, city_from_glist(current));
   
   for(; copy; copy = g_list_next(copy))
     popup_city_dialog(copy->data, 0);
@@ -1258,14 +1255,14 @@ void city_report_dialog_update(void)
 
     for(selection = GTK_CLIST(city_list)->selection; 
 	selection; selection = g_list_next(selection))
-      copy = g_list_prepend (copy, city_from_glist(selection));
+      copy = g_list_append (copy, city_from_glist(selection));
 
     gtk_clist_freeze(GTK_CLIST(city_list));
     gtk_clist_clear(GTK_CLIST(city_list));
 
     city_list_iterate(game.player_ptr->cities, pcity) {
       get_city_text(pcity, row, sizeof(buf[0]));
-      i=gtk_clist_prepend(GTK_CLIST(city_list), row);
+      i=gtk_clist_append(GTK_CLIST(city_list), row);
       gtk_clist_set_row_data (GTK_CLIST(city_list), i, pcity);
       if(g_list_find(copy,pcity))
 	gtk_clist_select_row(GTK_CLIST(city_list), i, -1);
@@ -1330,7 +1327,7 @@ void city_report_dialog_update_city(struct city *pcity)
 
     gtk_clist_freeze(GTK_CLIST(city_list));
     gtk_clist_remove(GTK_CLIST(city_list),i);
-    i=gtk_clist_prepend(GTK_CLIST(city_list),row);
+    i=gtk_clist_append(GTK_CLIST(city_list),row);
     gtk_clist_set_row_data (GTK_CLIST(city_list), i, pcity);
     if (selected)
       gtk_clist_select_row(GTK_CLIST(city_list), i, -1);
@@ -1435,8 +1432,6 @@ static void create_city_report_config_dialog(void)
   gtk_widget_show(vbox);
   gtk_box_pack_start(GTK_BOX(box), vbox, FALSE, FALSE, 0);
 
-  config_toggle = fc_realloc(config_toggle,
-			     NUM_CREPORT_COLS * sizeof(*config_toggle));
   for(i=1, spec=city_report_specs+i; i<NUM_CREPORT_COLS; i++, spec++) {
     if (i == NUM_CREPORT_COLS / 2 + 1) {
       vbox = gtk_vbox_new(FALSE, 0);

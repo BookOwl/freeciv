@@ -173,12 +173,14 @@ void city_dialog_redraw_map(struct city *pcity,
 		       get_citydlg_canvas_width(),
 		       get_citydlg_canvas_height());
 
-  mapview_layer_iterate(layer) {
-    citydlg_known_iterate(pcity, city_x, city_y,
-			  ptile, canvas_x, canvas_y) {
-      put_one_tile(pcanvas, layer, ptile, canvas_x, canvas_y, pcity);
-    } citydlg_known_iterate_end;
-  } mapview_layer_iterate_end;
+  citydlg_known_iterate(pcity, city_x, city_y,
+			ptile, canvas_x, canvas_y) {
+    if (is_isometric) {
+      put_one_tile_iso(pcanvas, ptile, canvas_x, canvas_y, TRUE);
+    } else {
+      put_one_tile(pcanvas, ptile, canvas_x, canvas_y, TRUE);
+    }
+  } citydlg_known_iterate_end;
 
   /* We have to put the output afterwards or it will be covered
    * in iso-view. */
@@ -238,7 +240,7 @@ void get_city_dialog_production(struct city *pcity,
 
   if (get_current_construction_bonus(pcity, EFT_PROD_TO_GOLD) > 0) {
     my_snprintf(buffer, buffer_len, _("%3d gold per turn"),
-		MAX(0, pcity->surplus[O_SHIELD]));
+		MAX(0, pcity->shield_surplus));
   } else {
     char time[50];
 
@@ -279,8 +281,7 @@ void get_city_dialog_production_full(char *buffer, size_t buffer_len,
 {
   if (!is_unit && building_has_effect(id, EFT_PROD_TO_GOLD)) {
     my_snprintf(buffer, buffer_len, _("%s (XX) %d/turn"),
-		get_impr_name_ex(pcity, id),
-		MAX(0, pcity->surplus[O_SHIELD]));
+		get_impr_name_ex(pcity, id), MAX(0, pcity->shield_surplus));
   } else {
     int turns = city_turns_to_build(pcity, id, is_unit, TRUE);
     const char *name;
@@ -329,15 +330,13 @@ void get_city_dialog_production_row(char *buf[], size_t column_size, int id,
     }
     my_snprintf(buf[2], column_size, "%d", unit_build_shield_cost(id));
   } else {
-    struct player *pplayer = game.player_ptr;
-
     /* Total & turns left meaningless on capitalization */
     if (building_has_effect(id, EFT_PROD_TO_GOLD)) {
-      my_snprintf(buf[0], column_size, get_improvement_name(id));
+      my_snprintf(buf[0], column_size, get_improvement_type(id)->name);
       buf[1][0] = '\0';
       my_snprintf(buf[2], column_size, "---");
     } else {
-      my_snprintf(buf[0], column_size, get_improvement_name(id));
+      my_snprintf(buf[0], column_size, get_improvement_type(id)->name);
 
       /* from city.c get_impr_name_ex() */
       if (pcity && is_building_replaced(pcity, id)) {
@@ -345,21 +344,12 @@ void get_city_dialog_production_row(char *buf[], size_t column_size, int id,
       } else {
 	const char *state = "";
 
-	if (is_great_wonder(id)) {
-          if (improvement_obsolete(pplayer, id)) {
-            state = _("Obsolete");
-          } else if (great_wonder_was_built(id)) {
-            state = _("Built");
-          } else {
-            state = _("Great Wonder");
-          }
-	}
-	if (is_small_wonder(id)) {
-	  state = _("Small Wonder");
-	  if (find_city_from_small_wonder(pplayer, id)) {
+	if (is_wonder(id)) {
+	  state = _("Wonder");
+	  if (game.global_wonders[id] != 0) {
 	    state = _("Built");
 	  }
-	  if (improvement_obsolete(pplayer, id)) {
+	  if (wonder_obsolete(id)) {
 	    state = _("Obsolete");
 	  }
 	}
@@ -375,7 +365,7 @@ void get_city_dialog_production_row(char *buf[], size_t column_size, int id,
   if (pcity) {
     if (!is_unit && building_has_effect(id, EFT_PROD_TO_GOLD)) {
       my_snprintf(buf[3], column_size, _("%d/turn"),
-		  MAX(0, pcity->surplus[O_SHIELD]));
+		  MAX(0, pcity->shield_surplus));
     } else {
       int turns = city_turns_to_build(pcity, id, is_unit, FALSE);
       if (turns < 999) {
@@ -387,133 +377,6 @@ void get_city_dialog_production_row(char *buf[], size_t column_size, int id,
   } else {
     my_snprintf(buf[3], column_size, "---");
   }
-}
-
-/**************************************************************************
-  Return text describing the production output.
-**************************************************************************/
-void get_city_dialog_output_text(const struct city *pcity,
-				 Output_type_id otype,
-				 char *buf, size_t bufsz)
-{
-  int total = 0;
-  enum effect_type eft = get_output_bonus_effect(otype);
-  int tax[O_COUNT];
-
-  buf[0] = '\0';
-
-  cat_snprintf(buf, bufsz,
-	       _("%+4d : Citizens\n"), pcity->citizen_base[otype]);
-  total += pcity->citizen_base[otype];
-
-  /* Hack to get around the ugliness of add_tax_income. */
-  memset(tax, 0, O_COUNT * sizeof(*tax));
-  tax[O_TRADE] = pcity->prod[O_TRADE];
-  add_tax_income(city_owner(pcity), tax);
-  tax[O_TRADE] = 0;
-  if (tax[otype] != 0) {
-    cat_snprintf(buf, bufsz, _("%+4d : Taxed from trade\n"), tax[otype]);
-    total += tax[otype];
-  }
-
-  /* Special cases for "bonus" production.  See set_city_production in
-   * city.c. */
-  if (otype == O_TRADE) {
-    int i;
-
-    for (i = 0; i < NUM_TRADEROUTES; i++) {
-      if (pcity->trade[i] != 0 && pcity->trade_value[i] != 0) {
-	/* There have been bugs causing the trade city to not be sent
-	 * properly to the client.  If this happens we trust the
-	 * trade_value[] array and simply don't give the name of the
-	 * city. */
-	struct city *trade_city = find_city_by_id(pcity->trade[i]);
-	char *name = trade_city ? trade_city->name : _("(unknown)");
-
-	cat_snprintf(buf, bufsz, _("%+4d : Trade route with %s\n"),
-		     pcity->trade_value[i], name);
-	total += pcity->trade_value[i];
-      }
-    }
-  } else if (otype == O_GOLD) {
-    int tithes = get_city_tithes_bonus(pcity);
-
-    if (tithes != 0) {
-      cat_snprintf(buf, bufsz, _("%+4d : Building tithes\n"), tithes);
-      total += tithes;
-    }
-  }
-
-  if (eft != EFT_LAST) {
-    int base = total, bonus = 100;
-    struct effect_list *plist = effect_list_new();
-
-    (void) get_city_bonus_effects(plist, pcity, eft);
-
-    effect_list_iterate(plist, peffect) {
-      char buf2[512];
-      int new_total;
-
-      get_effect_req_text(peffect, buf2, sizeof(buf2));
-
-      bonus += peffect->value;
-      new_total = bonus * base / 100;
-      cat_snprintf(buf, bufsz,
-		   _("%+4d : Bonus from %s (%+d%%)\n"),
-		   (new_total - total), buf2,
-		   peffect->value);
-      total = new_total;
-    } effect_list_iterate_end;
-    effect_list_unlink_all(plist);
-    effect_list_free(plist);
-  }
-
-  if (pcity->waste[otype] != 0) {
-    cat_snprintf(buf, bufsz,
-		 _("%+4d : Waste\n"), -pcity->waste[otype]);
-    total -= pcity->waste[otype];
-  }
-
-  if (pcity->unhappy_penalty[otype] != 0) {
-    cat_snprintf(buf, bufsz,
-		 _("%+4d : Disorder\n"), -pcity->unhappy_penalty[otype]);
-    total -= pcity->unhappy_penalty[otype];
-  }
-
-  if (pcity->usage[otype] > 0) {
-    cat_snprintf(buf, bufsz,
-		 _("%+4d : Used\n"), -pcity->usage[otype]);
-    total -= pcity->usage[otype];
-  }
-
-  cat_snprintf(buf, bufsz,
-	       _("==== : Adds up to\n"));
-  cat_snprintf(buf, bufsz,
-	       _("%4d : Total surplus"), pcity->surplus[otype]);
-}
-
-/**************************************************************************
-  Return text describing the pollution output.
-**************************************************************************/
-void get_city_dialog_pollution_text(const struct city *pcity,
-				    char *buf, size_t bufsz)
-{
-  int pollu, prod, pop, mod;
-
-  pollu = city_pollution_types(pcity, pcity->prod[O_SHIELD],
-			       &prod, &pop, &mod);
-  buf[0] = '\0';
-
-  cat_snprintf(buf, bufsz,
-	       "%+4d : Pollution from shields\n", prod);
-  cat_snprintf(buf, bufsz,
-	       "%+4d : Pollution from citizens\n", pop);
-  cat_snprintf(buf, bufsz,
-	       "%+4d : Pollution modifier\n", mod);
-  cat_snprintf(buf, bufsz,
-	       "==== : Adds up to\n");
-  cat_snprintf(buf, bufsz,
-	       "%4d : Total surplus", pollu);
 }
 
 /**************************************************************************
@@ -588,10 +451,10 @@ void city_rotate_specialist(struct city *pcity, int citizen_index)
 **************************************************************************/
 void activate_all_units(struct tile *ptile)
 {
-  struct unit_list *punit_list = ptile->units;
+  struct unit_list *punit_list = &ptile->units;
   struct unit *pmyunit = NULL;
 
-  unit_list_iterate(punit_list, punit) {
+  unit_list_iterate((*punit_list), punit) {
     if (game.player_idx == punit->owner) {
       /* Activate this unit. */
       pmyunit = punit;

@@ -144,17 +144,6 @@ const int num_gui_options = ARRAY_SIZE(gui_options);
 
 /* =========================================================== */
 
-/****************************************************************************
-  Called by the tileset code to set the font size that should be used to
-  draw the city names and productions.
-****************************************************************************/
-void set_city_names_font_sizes(int my_city_names_font_size,
-			       int my_city_productions_font_size)
-{
-  freelog(LOG_ERROR, "Unimplemented set_city_names_font_sizes.");
-  /* PORTME */
-}
-
 /**************************************************************************
   Print extra usage information, including one line help on each option,
   to stderr. 
@@ -841,6 +830,7 @@ void ui_main(int argc, char *argv[])
   __pMap_Scroll_User_Event.user.data2 = NULL;
   pMap_Scroll_User_Event = &__pMap_Scroll_User_Event;
   
+  smooth_move_unit_steps = 8;
   update_city_text_in_refresh_tile = FALSE;
   draw_city_names = FALSE;
   draw_city_productions = FALSE;
@@ -885,9 +875,9 @@ void ui_main(int argc, char *argv[])
   
   draw_intro_gfx();
 
-  mapview.tile_width = (mapview.width - 1)
+  mapview_canvas.tile_width = (mapview_canvas.width - 1)
 	  / NORMAL_TILE_WIDTH + 1;
-  mapview.tile_height = (mapview.height - 1)
+  mapview_canvas.tile_height = (mapview_canvas.height - 1)
 	  / NORMAL_TILE_HEIGHT + 1;
 
   flush_all();
@@ -969,18 +959,4 @@ void remove_net_input(void)
     pAnimCursor = NULL;
     pStoreAnimCursor = NULL;
   }
-}
-
-/****************************************************************************
-  Enqueue a callback to be called during an idle moment.  The 'callback'
-  function should be called sometimes soon, and passed the 'data' pointer
-  as its data.
-****************************************************************************/
-void add_idle_callback(void (callback)(void *), void *data)
-{
-  /* PORTME */
-
-  /* This is a reasonable fallback if it's not ported. */
-  freelog(LOG_ERROR, "Unimplemented add_idle_callback.");
-  (callback)(data);
 }

@@ -17,9 +17,19 @@
 
 #include "connection.h"
 #include "fc_types.h"
-#include "requirements.h"
 #include "tech.h"
 #include "terrain.h"
+
+/* Range of effects (used in equiv_range and effect.range fields)
+ * These must correspond to effect_range_names[] in improvement.c. */
+enum effect_range {
+  EFR_LOCAL,
+  EFR_CITY,
+  EFR_CONTINENT,
+  EFR_PLAYER,
+  EFR_WORLD,
+  EFR_LAST   /* keep this last */
+};
 
 /* Type of effects. (Used in effect.type field)
  * These must correspond to effect_type_names[] in effects.c. */
@@ -109,30 +119,79 @@ enum effect_type {
 };
 
 /* lookups */
+enum effect_range effect_range_from_str(const char *str);
+const char *effect_range_name(enum effect_range effect_range);
 enum effect_type effect_type_from_str(const char *str);
 const char *effect_type_name(enum effect_type effect_type);
 
+/* A building_vector is an array of building types. */
+#define SPECVEC_TAG building
+#define SPECVEC_TYPE Impr_Type_id
+#include "specvec.h"
+#define building_vector_iterate(vector, pbldg) \
+  TYPED_VECTOR_ITERATE(Impr_Type_id, vector, pbldg)
+#define building_vector_iterate_end  VECTOR_ITERATE_END
+
+/* An effect_type_vector is an array of effect types. */
+#define SPECVEC_TAG effect_type
+#define SPECVEC_TYPE enum effect_type
+#include "specvec.h"
+#define effect_type_vector_iterate(vector, ptype) \
+  TYPED_VECTOR_ITERATE(enum effect_type, vector, ptype)
+#define effect_type_vector_iterate_end VECTOR_ITERATE_END
+
+/* Effect requirement type. */
+enum effect_req_type {
+  REQ_NONE,
+  REQ_TECH,
+  REQ_GOV,
+  REQ_BUILDING,
+  REQ_SPECIAL,
+  REQ_TERRAIN,
+  REQ_LAST
+};
+
+struct effect_group;
+
 /* An effect is provided by a source.  If the source is present, and the
  * other conditions (described below) are met, the effect will be active.
- * Note the difference between effect and effect_type. */
+ * Note the difference between effect and effect_type.  The effect doesn't
+ * give an effect_type because all effects in an effect_vector will be of
+ * the same type. */
 struct effect {
-  enum effect_type type;
+  /* The range the effect applies to, relative to the source.  For instance
+   * if the source is a building an effect with range "city" will apply to
+   * everything in that city. */
+  enum effect_range range;
 
   /* The "value" of the effect.  The meaning of this varies between
    * effects.  When get_xxx_bonus() is called the value of all applicable
    * effects will be summed up. */
   int value;
 
-  /* An effect can have multiple requirements.  The effect will only be
-   * active if all of these requirement are met. */
-  struct requirement_list *reqs;
+  /* The group this effect is in.  If more than one source in the group
+   * provides the effect, only one will be active. */
+  struct effect_group *group;
 
-  /* An effect can have multiple negated requirements.  The effect will
-   * only be active if none of these requirements are met. */
-  struct requirement_list *nreqs;
+  /* If true, this effect will survive even if its source is destroyed. */
+  bool survives;
+
+  /* An effect can have a single requirement.  The effect will only be
+   * active if this requirement is met.  The req is one of several types. */
+  struct {
+    enum effect_req_type type;			/* requirement type */
+
+    union {
+      Tech_Type_id tech;			/* requirement tech */
+      int gov;					/* requirement government */
+      Impr_Type_id building;			/* requirement building */
+      enum tile_special_type special;		/* requirement special */
+      Terrain_type_id terrain;			//* requirement terrain type */
+    } value;					/* requirement value */
+  } req;
 };
 
-/* An effect_list is a list of effects. */
+/* An effect_vector is an array of effects. */
 #define SPECLIST_TAG effect
 #define SPECLIST_TYPE struct effect
 #include "speclist.h"
@@ -140,21 +199,52 @@ struct effect {
   TYPED_LIST_ITERATE(struct effect, effect_list, peffect)
 #define effect_list_iterate_end LIST_ITERATE_END
 
-struct effect *effect_new(enum effect_type type, int value);
-void effect_req_append(struct effect *peffect, bool neg,
-		       struct requirement *preq);
-
-void get_effect_req_text(struct effect *peffect, char *buf, size_t buf_len);
+/* This struct contains a source building along with the effect value.  It is
+ * primarily useful for get_city_bonus_sources(). */
+struct effect_source {
+  Impr_Type_id building;
+  int effect_value;
+};
+#define SPECVEC_TAG effect_source
+#define SPECVEC_TYPE struct effect_source
+#include "specvec.h"
+#define effect_source_vector_iterate(vector, psource) \
+  TYPED_VECTOR_ITERATE(struct effect_source, vector, psource)
+#define effect_source_vector_iterate_end VECTOR_ITERATE_END
 
 /* ruleset cache creation and communication functions */
-struct packet_ruleset_effect;
-struct packet_ruleset_effect_req;
-
 void ruleset_cache_init(void);
 void ruleset_cache_free(void);
-void recv_ruleset_effect(struct packet_ruleset_effect *packet);
-void recv_ruleset_effect_req(struct packet_ruleset_effect_req *packet);
+void ruleset_cache_add(Impr_Type_id source, enum effect_type effect_type,
+		       enum effect_range range, bool survives, int eff_value,
+		       enum effect_req_type req_type, int req_value,
+		       int group_id);
 void send_ruleset_cache(struct conn_list *dest);
+
+/* equivalent effect group */
+struct effect_group *effect_group_new(const char *name);
+void effect_group_add_element(struct effect_group *group,
+			      Impr_Type_id source_building,
+			      enum effect_range range, bool survives);
+int find_effect_group_id(const char *name);
+
+/* name string to value functions */
+enum effect_req_type effect_req_type_from_str(const char *str);
+int parse_effect_requirement(Impr_Type_id source,
+			     enum effect_req_type req_type,
+			     const char *req_value);
+
+/* An effect is targeted at a certain target type.  For instance a
+ * production bonus applies to a city (or a tile within a city: same thing).
+ * In this case the target is TARGET_CITY.  Note the effect has a range as
+ * well: the effect applies to all targets within that range.  So for a
+ * TARGET_CITY, EFR_PLAYER effect it applies to all cities owned by the
+ * player. */
+enum target_type {
+  TARGET_PLAYER,
+  TARGET_CITY,
+  TARGET_BUILDING 
+};
 
 bool is_effect_useful(enum target_type target,
 		      const struct player *target_player,
@@ -174,17 +264,13 @@ int get_building_bonus(const struct city *pcity, Impr_Type_id building,
 		       enum effect_type effect_type);
 
 /* miscellaneous auxiliary effects functions */
-struct effect_list *get_req_source_effects(struct req_source *psource);
-bool is_effect_disabled(enum target_type target,
-		        const struct player *target_player,
-		        const struct city *target_city,
-		        Impr_Type_id target_building,
-		        const struct tile *target_tile,
-		        const struct effect *peffect);
+struct effect_list *get_building_effects(Impr_Type_id building,
+					 enum effect_type effect_type);
+struct effect_type_vector *get_building_effect_types(Impr_Type_id building);
 
-int get_player_bonus_effects(struct effect_list *plist,
+int get_player_bonus_sources(struct effect_source_vector *sources,
     const struct player *pplayer, enum effect_type effect_type);
-int get_city_bonus_effects(struct effect_list *plist,
+int get_city_bonus_sources(struct effect_source_vector *sources,
     const struct city *pcity, enum effect_type effect_type);
 
 bool building_has_effect(Impr_Type_id building,

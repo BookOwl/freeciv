@@ -64,7 +64,8 @@ struct spaceship_dialog {
     TYPED_LIST_ITERATE(struct spaceship_dialog, dialoglist, pdialog)
 #define dialog_list_iterate_end  LIST_ITERATE_END
 
-static struct dialog_list *dialog_list;
+static struct dialog_list dialog_list;
+static bool dialog_list_has_been_initialised = FALSE;
 
 static struct spaceship_dialog *get_spaceship_dialog(struct player *pplayer);
 static struct spaceship_dialog *create_spaceship_dialog(struct player
@@ -76,24 +77,13 @@ static void spaceship_dialog_update_info(struct spaceship_dialog *pdialog);
 /****************************************************************
 ...
 *****************************************************************/
-void spaceship_dialog_init()
-{
-  dialog_list = dialog_list_new();
-}
-
-/****************************************************************
-...
-*****************************************************************/
-void spaceship_dialog_done()
-{
-  dialog_list_free(dialog_list);
-}
-
-/****************************************************************
-...
-*****************************************************************/
 struct spaceship_dialog *get_spaceship_dialog(struct player *pplayer)
 {
+  if (!dialog_list_has_been_initialised) {
+    dialog_list_init(&dialog_list);
+    dialog_list_has_been_initialised = TRUE;
+  }
+
   dialog_list_iterate(dialog_list, pdialog) {
     if (pdialog->pplayer == pplayer) {
       return pdialog;
@@ -178,7 +168,7 @@ static void spaceship_destroy_callback(GtkWidget *w, gpointer data)
 {
   struct spaceship_dialog *pdialog = (struct spaceship_dialog *)data;
   
-  dialog_list_unlink(dialog_list, pdialog);
+  dialog_list_unlink(&dialog_list, pdialog);
 
   free(pdialog);
 }
@@ -251,7 +241,7 @@ struct spaceship_dialog *create_spaceship_dialog(struct player *pplayer)
   gtk_box_pack_start(GTK_BOX(hbox), pdialog->info_label, FALSE, FALSE, 0);
   gtk_widget_set_name(pdialog->info_label, "spaceship label");
 
-  dialog_list_prepend(dialog_list, pdialog);
+  dialog_list_insert(&dialog_list, pdialog);
 
   gtk_widget_grab_focus(pdialog->image_canvas);
 
@@ -300,10 +290,13 @@ void spaceship_dialog_update_image(struct spaceship_dialog *pdialog)
     sprite = (k==0 ? sprites.spaceship.habitation :
 	      k==1 ? sprites.spaceship.life_support :
 	             sprites.spaceship.solar_panels);
-    gdk_draw_pixbuf(pdialog->image_canvas->window, civ_gc,
-		    sprite_get_pixbuf(sprite), 
-		    0, 0, x, y, sprite->width, sprite->height,
-		    GDK_RGB_DITHER_NONE, 0, 0);
+    gdk_gc_set_clip_origin(civ_gc, x, y);
+    gdk_gc_set_clip_mask(civ_gc, sprite->mask);
+    gdk_draw_drawable(pdialog->image_canvas->window, civ_gc, sprite->pixmap, 
+	      0, 0,
+	      x, y,
+	      sprite->width, sprite->height);
+    gdk_gc_set_clip_mask(civ_gc,NULL);
   }
 
   for (i=0; i < NUM_SS_COMPONENTS; i++) {
@@ -318,10 +311,13 @@ void spaceship_dialog_update_image(struct spaceship_dialog *pdialog)
 
     sprite = (k==0) ? sprites.spaceship.fuel : sprites.spaceship.propulsion;
 
-    gdk_draw_pixbuf(pdialog->image_canvas->window, civ_gc,
-		    sprite_get_pixbuf(sprite),
-		    0, 0, x, y, sprite->width, sprite->height,
-		    GDK_RGB_DITHER_NONE, 0, 0);
+    gdk_gc_set_clip_origin(civ_gc, x, y);
+    gdk_gc_set_clip_mask(civ_gc, sprite->mask);
+    gdk_draw_drawable(pdialog->image_canvas->window, civ_gc, sprite->pixmap,
+	      0, 0,
+	      x, y,
+	      sprite->width, sprite->height);
+    gdk_gc_set_clip_mask(civ_gc,NULL);
   }
 
   sprite = sprites.spaceship.structural;
@@ -332,10 +328,13 @@ void spaceship_dialog_update_image(struct spaceship_dialog *pdialog)
     x = structurals_info[i].x * sprite->width  / 4 - sprite->width / 2;
     y = structurals_info[i].y * sprite->height / 4 - sprite->height / 2;
 
-    gdk_draw_pixbuf(pdialog->image_canvas->window, civ_gc,
-		    sprite_get_pixbuf(sprite),
-		    0, 0, x, y, sprite->width, sprite->height,
-		    GDK_RGB_DITHER_NONE, 0, 0);
+    gdk_gc_set_clip_origin(civ_gc, x, y);
+    gdk_gc_set_clip_mask(civ_gc, sprite->mask);
+    gdk_draw_drawable(pdialog->image_canvas->window, civ_gc, sprite->pixmap,
+	      0, 0,
+	      x, y,
+	      sprite->width, sprite->height);
+    gdk_gc_set_clip_mask(civ_gc,NULL);
   }
 }
 

@@ -33,10 +33,10 @@ enum player_dlg_column_type {
 struct player_dlg_column {
   bool show;
   enum player_dlg_column_type type;
-  const char *title;				/* already translated */
-  const char *(*func)(const struct player *);	/* if type = COL_*TEXT */
-  bool (*bool_func)(const struct player *);	/* if type = COL_BOOLEAN */
-  const char *tagname;				/* for save_options */
+  const char *title;			/* already translated */
+  const char *(*func)(struct player*);	/* if type = COL_*TEXT */
+  bool (*bool_func)(struct player*);	/* if type = COL_BOOLEAN */
+  const char *tagname;			/* for save_options */
 };
 
 extern struct player_dlg_column player_dlg_columns[];
@@ -45,6 +45,6 @@ extern const int num_player_dlg_columns;
 void init_player_dlg_common(void);
 int player_dlg_default_sort_column(void);
 
-const char *player_addr_hack(const struct player *pplayer);
+const char *player_addr_hack(struct player *pplayer);
 
 #endif  /* FC__PLRDLG_COMMON_H */

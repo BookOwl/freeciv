@@ -22,22 +22,20 @@ is_isometric = 1
 roadstyle = 0
 
 ; Use fogstyle  (old iso style)
-fogstyle = 2
+fogstyle = 0
 
 ; Use darkness style 1 (single-sprite)
-darkness_style = 4
+darkness_style = 1
  
 ; offset the flags by this amount when drawing units
 flag_offset_x = 17
 flag_offset_y = 11
 
-; offset the units by this amount when drawing units
-unit_offset_x = 21
-unit_offset_y = 13
+; Font to use to draw city names:
+city_names_font = "9x15bold"
 
-; Font size (points) to use to draw city names and productions:
-city_names_font_size = 10
-city_productions_font_size = 10
+; Font to use to draw city productions:
+city_productions_font = "6x13"
 
 ; These are special because they get freed and reloaded
 ; as required:
@@ -53,15 +51,12 @@ files =
   "isotrident/terrain2.spec",
   "isotrident/tiles.spec",
   "misc/small.spec",
-  "trident/units.spec",
-  "isotrident/unitextras.spec",
-  "isotrident/select.spec",
+  "isotrident/units.spec",
   "misc/flags.spec",
   "misc/buildings.spec",
   "misc/space.spec",
 ;  "misc/techs.spec",
   "misc/treaty.spec",
-  "isotrident/fog.spec",
   "isotrident/nuke.spec",
   "trident/explosions.spec",
   "isotrident/cities.spec",

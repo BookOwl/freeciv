@@ -558,7 +558,7 @@ static void help_callback(GtkWidget *w, gpointer data)
 
     if (is_unit) {
       popup_help_dialog_typed(get_unit_type(id)->name, HELP_UNIT);
-    } else if (is_great_wonder(id)) {
+    } else if (is_wonder(id)) {
       popup_help_dialog_typed(get_improvement_name(id), HELP_WONDER);
     } else {
       popup_help_dialog_typed(get_improvement_name(id), HELP_IMPROVEMENT);
@@ -972,7 +972,7 @@ static void cell_render_func(GtkTreeViewColumn *col, GtkCellRenderer *rend,
     if (!is_unit && *pcity) {
       plr = city_owner(*pcity);
       useless = improvement_obsolete(plr, id)
-	|| is_building_replaced(*pcity, id);
+	|| improvement_redundant(plr, *pcity, id, FALSE);
       g_object_set(rend, "strikethrough", useless, NULL);
     } else {
       g_object_set(rend, "strikethrough", FALSE, NULL);

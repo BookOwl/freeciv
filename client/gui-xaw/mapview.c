@@ -53,7 +53,7 @@
 
 #include "mapview.h"
 
-#define map_canvas_store (mapview.store->pixmap)
+#define map_canvas_store (mapview_canvas.store->pixmap)
 
 static void pixmap_put_overlay_tile(Pixmap pixmap, int x, int y,
  				    struct Sprite *ssprite);
@@ -172,7 +172,7 @@ void update_info_label(void)
   set_indicator_icons(client_research_sprite(),
 		      client_warming_sprite(),
 		      client_cooling_sprite(),
-		      client_government_sprite());
+		      game.player_ptr->government);
 
   d=0;
   for(;d<(game.player_ptr->economic.luxury)/10;d++)
@@ -208,7 +208,7 @@ void update_unit_info_label(struct unit *punit)
     xaw_set_label(unit_info_label, buffer);
 
     if (hover_unit != punit->id)
-      set_hover_state(NULL, HOVER_NONE, ACTIVITY_LAST, ORDER_LAST);
+      set_hover_state(NULL, HOVER_NONE, ACTIVITY_LAST);
 
     switch (hover_state) {
     case HOVER_NONE:
@@ -257,13 +257,28 @@ Pixmap get_citizen_pixmap(struct citizen_type type, int cnum,
 /**************************************************************************
 ...
 **************************************************************************/
-void set_indicator_icons(struct Sprite *bulb, struct Sprite *sol,
-			 struct Sprite *flake, struct Sprite *gov)
+void set_indicator_icons(int bulb, int sol, int flake, int gov)
 {
-  xaw_set_bitmap(bulb_label, bulb->pixmap);
-  xaw_set_bitmap(sun_label, sol->pixmap);
-  xaw_set_bitmap(flake_label, flake->pixmap);
-  xaw_set_bitmap(government_label, gov->pixmap);
+  struct Sprite *gov_sprite;
+
+  bulb = CLIP(0, bulb, NUM_TILES_PROGRESS-1);
+  sol = CLIP(0, sol, NUM_TILES_PROGRESS-1);
+  flake = CLIP(0, flake, NUM_TILES_PROGRESS-1);
+
+  xaw_set_bitmap(bulb_label, sprites.bulb[bulb]->pixmap);
+  xaw_set_bitmap(sun_label, sprites.warming[sol]->pixmap);
+  xaw_set_bitmap(flake_label, sprites.cooling[flake]->pixmap);
+
+  if (game.government_count==0) {
+    /* HACK: the UNHAPPY citizen is used for the government
+     * when we don't know any better. */
+    struct citizen_type c = {.type = CITIZEN_UNHAPPY};
+
+    gov_sprite = get_citizen_sprite(c, 0, NULL);
+  } else {
+    gov_sprite = get_government(gov)->sprite;
+  }
+  xaw_set_bitmap(government_label, gov_sprite->pixmap);
 }
 
 /**************************************************************************
@@ -881,4 +896,7 @@ void tileset_changed(void)
   /* Here you should do any necessary redraws (for instance, the city
    * dialogs usually need to be resized).
    */
+   reset_econ_label_pixmaps();
+   update_info_label();
+   reset_unit_below_pixmaps();
 }

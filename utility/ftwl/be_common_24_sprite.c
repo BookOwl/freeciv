@@ -26,6 +26,10 @@
 #include "back_end.h"
 #include "be_common_24.h"
 
+struct color {
+  int red, green, blue;
+};
+
 /*************************************************************************
   ...
 *************************************************************************/
@@ -39,6 +43,7 @@ static struct Sprite *ctor_sprite(struct image *image)
 /*************************************************************************
   ...
 *************************************************************************/
+
 void be_free_sprite(struct Sprite *sprite)
 {
   free(sprite);
@@ -54,6 +59,8 @@ struct Sprite *be_crop_sprite(struct Sprite *source,
   struct ct_rect region = { x, y, width, height };
 
   ct_clip_rect(&region, &source->image->full_rect);
+
+  image_set_mask(result->image, &result->image->full_rect, 0);
 
   image_copy_full(source->image, result->image, &region);
 
@@ -101,7 +108,7 @@ struct Sprite *be_load_gfxfile(const char *filename)
   width = png_get_image_width(pngp, infop);
   height = png_get_image_height(pngp, infop);
 
-  freelog(LOG_DEBUG, "reading '%s' (%ldx%ld) bit depth=%d color_type=%d",
+  freelog(LOG_NORMAL, "reading '%s' (%ldx%ld) bit depth=%d color_type=%d",
 	  filename, width, height, png_get_bit_depth(pngp, infop),
 	  png_get_color_type(pngp, infop));
 
@@ -157,7 +164,10 @@ struct Sprite *be_load_gfxfile(const char *filename)
 	png_bytep src = pb + 4 * x;
 	unsigned char *dest = IMAGE_GET_ADDRESS(xi, x, y);
 
-        memcpy(dest, src, 4);
+	dest[0] = src[0];
+	dest[1] = src[1];
+	dest[2] = src[2];
+	dest[3] = (src[3] != 0) ? 255 : 0;
       }
       pb += stride;
     }

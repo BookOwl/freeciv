@@ -41,7 +41,9 @@ gchar *ntoh_str(const gchar *netstr);
 extern PangoFontDescription *        main_font;
 extern PangoFontDescription *        city_productions_font;
 
+extern bool fullscreen_mode;
 extern bool enable_tabs;
+extern bool solid_unit_icon_bg;
 extern bool better_fog;
 
 extern GdkGC *          civ_gc;
@@ -56,7 +58,7 @@ extern GdkPixmap *      gray50;
 extern GdkPixmap *      gray25;
 extern GdkPixmap *      black50;
 extern GdkPixmap *      mask_bitmap;
-#define single_tile_pixmap (mapview.single_tile->pixmap)
+#define single_tile_pixmap (mapview_canvas.single_tile->pixmap)
 extern GtkTextView *	main_message_area;
 extern GtkWidget *      text_scrollbar;
 extern GtkWidget *      toplevel;

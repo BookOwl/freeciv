@@ -22,7 +22,7 @@
  * called. TIMER_INTERVAL has to stay 500 because real_timer_callback
  * also updates the timeout info.
  */
-#define TIMER_INTERVAL (int)(real_timer_callback() * 1000)
+#define TIMER_INTERVAL 500
 
 void handle_packet_input(void *packet, int type);
 
@@ -52,22 +52,18 @@ extern bool auto_connect;
 extern bool waiting_for_end_turn;
 extern bool turn_done_sent;
 
+extern int seconds_to_turndone;
+
 void wait_till_request_got_processed(int request_id);
 bool client_is_observer(void);
-void set_seconds_to_turndone(double seconds);
-int get_seconds_to_turndone(void);
-double real_timer_callback(void);
+void real_timer_callback(void);
 bool can_client_issue_orders(void);
 bool can_client_change_view(void);
-bool can_meet_with_player(const struct player *pplayer);
-bool can_intel_with_player(const struct player *pplayer);
+bool can_meet_with_player(struct player *pplayer);
+bool can_intel_with_player(struct player *pplayer);
 
 void client_game_init(void);
 void client_game_free(void);
 void ui_exit(void);
-
-/* Set in GUI code. */
-extern const char * const gui_character_encoding;
-extern const bool gui_use_transliteration;
 
 #endif  /* FC__CIVCLIENT_H */

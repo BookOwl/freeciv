@@ -24,9 +24,6 @@ extern char default_tileset_name[512];
 extern char default_sound_set_name[512];
 extern char default_sound_plugin_name[512];
 
-extern bool save_options_on_exit;
-extern bool fullscreen_mode;
-
 /** Local Options: **/
 
 extern bool solid_color_behind_units;
@@ -34,6 +31,7 @@ extern bool sound_bell_at_new_turn;
 extern int smooth_move_unit_msec;
 extern int smooth_center_slide_msec;
 extern bool do_combat_animation;
+extern bool ai_popup_windows;
 extern bool ai_manual_turn_done;
 extern bool auto_center_on_unit;
 extern bool auto_center_on_combat;
@@ -56,21 +54,9 @@ enum client_option_type {
   COT_STR
 };
 
-enum client_option_class {
-  COC_GRAPHICS,
-  COC_SOUND,
-  COC_INTERFACE,
-  COC_NETWORK,
-  COC_MAX
-};
-
-extern const char *client_option_class_names[];
-
 typedef struct client_option {
-  const char *name; /* Short name - used as an identifier */
-  const char *description; /* One-line description */
-  const char *helptext; /* Paragraph-length help text */
-  enum client_option_class category;
+  const char *name;
+  const char *description;
   enum client_option_type type;
   int *p_int_value;
   bool *p_bool_value;
@@ -89,15 +75,16 @@ typedef struct client_option {
 } client_option;
 extern client_option *options;
 
-#define GEN_INT_OPTION(oname, desc, help, category)			    \
-  { #oname, desc, help, category, COT_INT,				    \
-      &oname, NULL, NULL, 0, NULL, NULL, NULL }
-#define GEN_BOOL_OPTION(oname, desc, help, category)	                    \
-  { #oname, desc, help, category, COT_BOOL,				    \
-      NULL, &oname, NULL, 0, NULL, NULL, NULL }
-#define GEN_STR_OPTION(oname, desc, help, category, str_defaults, callback) \
-  { #oname, desc, help, category, COT_STR,			    \
-      NULL, NULL, oname, sizeof(oname), callback, str_defaults, NULL }
+#define GEN_INT_OPTION(oname, desc) { #oname, desc, COT_INT, \
+                                      &oname, NULL, NULL, 0, NULL, \
+                                       NULL, NULL }
+#define GEN_BOOL_OPTION(oname, desc) { #oname, desc, COT_BOOL, \
+                                       NULL, &oname, NULL, 0, NULL, \
+                                       NULL, NULL }
+#define GEN_STR_OPTION(oname, desc, str_defaults, callback) \
+                                    { #oname, desc, COT_STR, \
+                                      NULL, NULL, oname, sizeof(oname), \
+                                      callback, str_defaults, NULL }
 
 extern int num_options;
 
@@ -119,7 +106,6 @@ extern client_option gui_options[];
 
 /** View Options: **/
 
-extern bool draw_city_outlines;
 extern bool draw_map_grid;
 extern bool draw_city_names;
 extern bool draw_city_growth;

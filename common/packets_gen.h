@@ -120,10 +120,8 @@ struct packet_game_info {
   int player_idx;
   int globalwarming;
   int heating;
-  int warminglevel;
   int nuclearwinter;
   int cooling;
-  int coolinglevel;
   int cityfactor;
   int diplcost;
   int freecost;
@@ -132,10 +130,11 @@ struct packet_game_info {
   int angrycitizen;
   int techpenalty;
   int foodbox;
+  int civstyle;
   int diplomacy;
   bool spacerace;
   int global_advances[A_LAST];
-  int great_wonders[B_LAST];
+  int global_wonders[B_LAST];
 };
 
 struct packet_map_info {
@@ -176,19 +175,23 @@ struct packet_city_info {
   int ppl_content[5];
   int ppl_unhappy[5];
   int ppl_angry[5];
-  int specialists_size;
-  int specialists[SP_MAX];
-  int surplus[O_MAX];
-  int waste[O_MAX];
-  int unhappy_penalty[O_MAX];
-  int prod[O_MAX];
-  int citizen_base[O_MAX];
-  int usage[O_MAX];
+  int specialists[SP_COUNT];
+  int food_prod;
+  int shield_prod;
+  int trade_prod;
+  int food_surplus;
+  int shield_surplus;
+  int tile_trade;
   int food_stock;
   int shield_stock;
+  int corruption;
   int trade[NUM_TRADEROUTES];
   int trade_value[NUM_TRADEROUTES];
+  int luxury_total;
+  int tax_total;
+  int science_total;
   int pollution;
+  int shield_waste;
   int currently_building;
   bool is_building_unit;
   int turn_last_built;
@@ -309,7 +312,6 @@ struct packet_player_info {
   int playerno;
   char name[MAX_LEN_NAME];
   char username[MAX_LEN_NAME];
-  bool is_observer;
   bool is_male;
   int government;
   int target_government;
@@ -339,7 +341,6 @@ struct packet_player_info {
   unsigned int gives_shared_vision;
   char inventions[A_LAST+1];
   int love[MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS];
-  int small_wonders[B_LAST];
 };
 
 struct packet_player_turn_done {
@@ -388,6 +389,7 @@ struct packet_unit_info {
   int veteran;
   bool ai;
   bool paradropped;
+  bool connecting;
   bool transported;
   bool done_moving;
   Unit_Type_id type;
@@ -397,7 +399,9 @@ struct packet_unit_info {
   int fuel;
   int activity_count;
   int unhappiness;
-  int upkeep[O_MAX];
+  int upkeep;
+  int upkeep_food;
+  int upkeep_gold;
   int occupy;
   int goto_dest_x;
   int goto_dest_y;
@@ -632,6 +636,9 @@ struct packet_conn_info {
 };
 
 struct packet_conn_ping_info {
+  int old_connections;
+  int old_conn_id[MAX_NUM_PLAYERS];
+  float old_ping_time[MAX_NUM_PLAYERS];
   int connections;
   int conn_id[MAX_NUM_CONNECTIONS];
   float ping_time[MAX_NUM_CONNECTIONS];
@@ -705,7 +712,6 @@ struct packet_ruleset_unit {
   int move_rate;
   int tech_requirement;
   int impr_requirement;
-  int gov_requirement;
   int vision_range;
   int transport_capacity;
   int hp;
@@ -713,7 +719,9 @@ struct packet_ruleset_unit {
   int obsoleted_by;
   int fuel;
   int happy_cost;
-  int upkeep[O_MAX];
+  int shield_cost;
+  int food_cost;
+  int gold_cost;
   int paratroopers_range;
   int paratroopers_mr_req;
   int paratroopers_mr_sub;
@@ -727,23 +735,16 @@ struct packet_ruleset_unit {
 };
 
 struct packet_ruleset_game {
-  int default_specialist;
-  int num_specialist_types;
-  int bonus_array_size;
-  int req_array_size;
-  char specialist_name[SP_MAX][MAX_LEN_NAME];
-  char specialist_short_name[SP_MAX][MAX_LEN_NAME];
-  int specialist_min_size[SP_MAX];
-  int specialist_bonus[SP_MAX * O_MAX];
-  int specialist_req_type[SP_MAX * MAX_NUM_REQS];
-  int specialist_req_range[SP_MAX * MAX_NUM_REQS];
-  int specialist_req_value[SP_MAX * MAX_NUM_REQS];
-  bool specialist_req_survives[SP_MAX * MAX_NUM_REQS];
+  char specialist_name[SP_COUNT][MAX_LEN_NAME];
+  int specialist_min_size[SP_COUNT];
+  int specialist_bonus[SP_COUNT];
   bool changable_tax;
   int forced_science;
   int forced_luxury;
   int forced_gold;
-  int min_city_center_output[O_MAX];
+  int min_city_center_food;
+  int min_city_center_shield;
+  int min_city_center_trade;
   int min_dist_bw_cities;
   int init_vis_radius_sq;
   int hut_overflight;
@@ -756,7 +757,6 @@ struct packet_ruleset_game {
   int tech_cost_double_year;
   int tech_leakage;
   int global_init_techs[MAX_NUM_TECH_LIST];
-  int autoupgrade_veteran_loss;
   bool killstack;
   int trireme_loss_chance[MAX_VET_LEVELS];
   int work_veteran_chance[MAX_VET_LEVELS];
@@ -795,18 +795,35 @@ struct packet_ruleset_government {
   int empire_size_inc;
   int rapture_size;
   int unit_happy_cost_factor;
-  int unit_upkeep_factor[O_MAX];
+  int unit_shield_cost_factor;
+  int unit_food_cost_factor;
+  int unit_gold_cost_factor;
   int free_happy;
-  int free_upkeep[O_MAX];
-  int output_before_penalty[O_MAX];
-  int celeb_output_before_penalty[O_MAX];
-  int output_inc_tile[O_MAX];
-  int celeb_output_inc_tile[O_MAX];
-  int waste_level[O_MAX];
-  int fixed_waste_distance[O_MAX];
-  int waste_distance_factor[O_MAX];
-  int extra_waste_distance[O_MAX];
-  int waste_max_distance_cap[O_MAX];
+  int free_shield;
+  int free_food;
+  int free_gold;
+  int trade_before_penalty;
+  int shields_before_penalty;
+  int food_before_penalty;
+  int celeb_trade_before_penalty;
+  int celeb_shields_before_penalty;
+  int celeb_food_before_penalty;
+  int trade_bonus;
+  int shield_bonus;
+  int food_bonus;
+  int celeb_trade_bonus;
+  int celeb_shield_bonus;
+  int celeb_food_bonus;
+  int corruption_level;
+  int fixed_corruption_distance;
+  int corruption_distance_factor;
+  int extra_corruption_distance;
+  int corruption_max_distance_cap;
+  int waste_level;
+  int fixed_waste_distance;
+  int waste_distance_factor;
+  int extra_waste_distance;
+  int waste_max_distance_cap;
   int flags;
   int num_ruler_titles;
   char name[MAX_LEN_NAME];
@@ -828,10 +845,16 @@ struct packet_ruleset_terrain_control {
   char river_help_text[MAX_LEN_PACKET];
   int fortress_defense_bonus;
   int road_superhighway_trade_bonus;
-  int rail_tile_bonus[O_MAX];
+  int rail_food_bonus;
+  int rail_shield_bonus;
+  int rail_trade_bonus;
   int farmland_supermarket_food_bonus;
-  int pollution_tile_penalty[O_MAX];
-  int fallout_tile_penalty[O_MAX];
+  int pollution_food_penalty;
+  int pollution_shield_penalty;
+  int pollution_trade_penalty;
+  int fallout_food_penalty;
+  int fallout_shield_penalty;
+  int fallout_trade_penalty;
 };
 
 struct packet_ruleset_nation {
@@ -840,7 +863,7 @@ struct packet_ruleset_nation {
   char name_plural[MAX_LEN_NAME];
   char graphic_str[MAX_LEN_NAME];
   char graphic_alt[MAX_LEN_NAME];
-  char category[MAX_LEN_NAME];
+  char class[MAX_LEN_NAME];
   char legend[MAX_LEN_MSG];
   int city_style;
   int init_techs[MAX_NUM_TECH_LIST];
@@ -862,7 +885,6 @@ struct packet_ruleset_city {
 
 struct packet_ruleset_building {
   Impr_Type_id id;
-  enum impr_genus_id genus;
   char name[MAX_LEN_NAME];
   char graphic_str[MAX_LEN_NAME];
   char graphic_alt[MAX_LEN_NAME];
@@ -870,6 +892,8 @@ struct packet_ruleset_building {
   int obsolete_by;
   Impr_Type_id bldg_req;
   Impr_Type_id replaced_by;
+  bool is_wonder;
+  enum impr_range equiv_range;
   int build_cost;
   int upkeep;
   int sabotage;
@@ -880,6 +904,10 @@ struct packet_ruleset_building {
   Terrain_type_id terr_gate[255];
   int spec_gate_count;
   enum tile_special_type spec_gate[255];
+  int equiv_dupl_count;
+  Impr_Type_id equiv_dupl[255];
+  int equiv_repl_count;
+  Impr_Type_id equiv_repl[255];
 };
 
 struct packet_ruleset_terrain {
@@ -890,13 +918,19 @@ struct packet_ruleset_terrain {
   char graphic_alt[MAX_LEN_NAME];
   int movement_cost;
   int defense_bonus;
-  int output[O_MAX];
+  int food;
+  int shield;
+  int trade;
   char special_1_name[MAX_LEN_NAME];
-  int output_special_1[O_MAX];
+  int food_special_1;
+  int shield_special_1;
+  int trade_special_1;
   char graphic_str_special_1[MAX_LEN_NAME];
   char graphic_alt_special_1[MAX_LEN_NAME];
   char special_2_name[MAX_LEN_NAME];
-  int output_special_2[O_MAX];
+  int food_special_2;
+  int shield_special_2;
+  int trade_special_2;
   char graphic_str_special_2[MAX_LEN_NAME];
   char graphic_alt_special_2[MAX_LEN_NAME];
   int road_trade_incr;
@@ -925,6 +959,10 @@ struct packet_ruleset_control {
   int num_unit_types;
   int num_impr_types;
   int num_tech_types;
+  int rtech_cathedral_plus;
+  int rtech_cathedral_minus;
+  int rtech_colosseum_plus;
+  int rtech_temple_plus;
   int rtech_partisan_req[MAX_NUM_TECH_LIST];
   int government_when_anarchy;
   int default_government;
@@ -941,16 +979,12 @@ struct packet_ruleset_control {
 };
 
 struct packet_single_want_hack_req {
+  int old_token;
   char token[MAX_LEN_NAME];
 };
 
 struct packet_single_want_hack_reply {
   bool you_have_hack;
-};
-
-struct packet_ruleset_choices {
-  int ruleset_count;
-  char rulesets[MAX_NUM_RULESETS][MAX_RULESET_NAME_LENGTH];
 };
 
 struct packet_game_load {
@@ -986,18 +1020,23 @@ struct packet_options_settable {
   int category;
 };
 
-struct packet_ruleset_effect {
-  enum effect_type effect_type;
-  int effect_value;
+struct packet_ruleset_cache_group {
+  char name[MAX_LEN_NAME];
+  int num_elements;
+  Impr_Type_id source_buildings[255];
+  enum effect_range ranges[255];
+  bool survives[255];
 };
 
-struct packet_ruleset_effect_req {
-  int effect_id;
-  bool neg;
-  enum req_source_type source_type;
-  int source_value;
-  enum req_range range;
+struct packet_ruleset_cache_effect {
+  Impr_Type_id id;
+  enum effect_type effect_type;
+  enum effect_range range;
   bool survives;
+  int eff_value;
+  enum effect_req_type req_type;
+  int req_value;
+  int group_id;
 };
 
 enum packet_type {
@@ -1113,9 +1152,8 @@ enum packet_type {
   PACKET_OPTIONS_SETTABLE_CONTROL,
   PACKET_OPTIONS_SETTABLE,
   PACKET_SELECT_RACES,
-  PACKET_RULESET_CHOICES,
-  PACKET_RULESET_EFFECT = 122,
-  PACKET_RULESET_EFFECT_REQ,
+  PACKET_RULESET_CACHE_GROUP = 120,      /* 120 */
+  PACKET_RULESET_CACHE_EFFECT,
 
   PACKET_LAST  /* leave this last */
 };
@@ -1568,9 +1606,6 @@ struct packet_single_want_hack_reply *receive_packet_single_want_hack_reply(stru
 int send_packet_single_want_hack_reply(struct connection *pc, const struct packet_single_want_hack_reply *packet);
 int dsend_packet_single_want_hack_reply(struct connection *pc, bool you_have_hack);
 
-struct packet_ruleset_choices *receive_packet_ruleset_choices(struct connection *pc, enum packet_type type);
-int send_packet_ruleset_choices(struct connection *pc, const struct packet_ruleset_choices *packet);
-
 struct packet_game_load *receive_packet_game_load(struct connection *pc, enum packet_type type);
 int send_packet_game_load(struct connection *pc, const struct packet_game_load *packet);
 void lsend_packet_game_load(struct conn_list *dest, const struct packet_game_load *packet);
@@ -1581,13 +1616,13 @@ int send_packet_options_settable_control(struct connection *pc, const struct pac
 struct packet_options_settable *receive_packet_options_settable(struct connection *pc, enum packet_type type);
 int send_packet_options_settable(struct connection *pc, const struct packet_options_settable *packet);
 
-struct packet_ruleset_effect *receive_packet_ruleset_effect(struct connection *pc, enum packet_type type);
-int send_packet_ruleset_effect(struct connection *pc, const struct packet_ruleset_effect *packet);
-void lsend_packet_ruleset_effect(struct conn_list *dest, const struct packet_ruleset_effect *packet);
+struct packet_ruleset_cache_group *receive_packet_ruleset_cache_group(struct connection *pc, enum packet_type type);
+int send_packet_ruleset_cache_group(struct connection *pc, const struct packet_ruleset_cache_group *packet);
+void lsend_packet_ruleset_cache_group(struct conn_list *dest, const struct packet_ruleset_cache_group *packet);
 
-struct packet_ruleset_effect_req *receive_packet_ruleset_effect_req(struct connection *pc, enum packet_type type);
-int send_packet_ruleset_effect_req(struct connection *pc, const struct packet_ruleset_effect_req *packet);
-void lsend_packet_ruleset_effect_req(struct conn_list *dest, const struct packet_ruleset_effect_req *packet);
+struct packet_ruleset_cache_effect *receive_packet_ruleset_cache_effect(struct connection *pc, enum packet_type type);
+int send_packet_ruleset_cache_effect(struct connection *pc, const struct packet_ruleset_cache_effect *packet);
+void lsend_packet_ruleset_cache_effect(struct conn_list *dest, const struct packet_ruleset_cache_effect *packet);
 
 
 void delta_stats_report(void);

@@ -787,7 +787,7 @@ static void help_update_unit_type(const struct help_item *pitem,
 				       utype->tech_requirement));
     }
 /*    create_tech_tree(help_improvement_tree, 0, utype->tech_requirement, 3);*/
-    if (utype->obsoleted_by == U_NOT_OBSOLETED) {
+    if(utype->obsoleted_by==-1) {
       gtk_label_set_text(GTK_LABEL(help_ulabel[4][4]), _("None"));
     } else {
       gtk_label_set_text(GTK_LABEL(help_ulabel[4][4]), get_unit_type(utype->obsoleted_by)->name);
@@ -902,7 +902,7 @@ static void help_update_tech(const struct help_item *pitem, char *title, int i)
         w = gtk_label_new(_("Allows"));
         gtk_box_pack_start(GTK_BOX(hbox), w, FALSE, FALSE, 0);
         w = help_slink_new(improvement_types[j].name,
-			  is_great_wonder(j) ? HELP_WONDER : HELP_IMPROVEMENT);
+			  is_wonder(j)?HELP_WONDER:HELP_IMPROVEMENT);
         gtk_box_pack_start(GTK_BOX(hbox), w, FALSE, FALSE, 0);
         gtk_widget_show_all(hbox);
       }
@@ -912,7 +912,7 @@ static void help_update_tech(const struct help_item *pitem, char *title, int i)
         w = gtk_label_new(_("Obsoletes"));
         gtk_box_pack_start(GTK_BOX(hbox), w, FALSE, FALSE, 0);
         w = help_slink_new(improvement_types[j].name,
-			  is_great_wonder(j) ? HELP_WONDER : HELP_IMPROVEMENT);
+			  is_wonder(j)?HELP_WONDER:HELP_IMPROVEMENT);
         gtk_box_pack_start(GTK_BOX(hbox), w, FALSE, FALSE, 0);
         gtk_widget_show_all(hbox);
       }
@@ -996,33 +996,33 @@ static void help_update_terrain(const struct help_item *pitem,
     gtk_label_set_text(GTK_LABEL(help_tlabel[0][1]), buf);
 
     sprintf(buf, "%d/%d/%d",
-	    tile_types[i].output[O_FOOD],
-	    tile_types[i].output[O_SHIELD],
-	    tile_types[i].output[O_TRADE]);
+	    tile_types[i].food,
+	    tile_types[i].shield,
+	    tile_types[i].trade);
     gtk_label_set_text(GTK_LABEL(help_tlabel[0][4]), buf);
 
-    if (*(tile_types[i].special[0].name)) {
+    if (*(tile_types[i].special_1_name)) {
       sprintf(buf, _("%s F/R/T:"),
-	       tile_types[i].special[0].name);
+	       tile_types[i].special_1_name);
       gtk_label_set_text(GTK_LABEL(help_tlabel[1][0]), buf);
       sprintf(buf, "%d/%d/%d",
-	      tile_types[i].special[0].output[O_FOOD],
-	      tile_types[i].special[0].output[O_SHIELD],
-	      tile_types[i].special[0].output[O_TRADE]);
+	      tile_types[i].food_special_1,
+	      tile_types[i].shield_special_1,
+	      tile_types[i].trade_special_1);
       gtk_label_set_text(GTK_LABEL(help_tlabel[1][1]), buf);
     } else {
       gtk_label_set_text(GTK_LABEL(help_tlabel[1][0]), "");
       gtk_label_set_text(GTK_LABEL(help_tlabel[1][1]), "");
     }
 
-    if (*(tile_types[i].special[1].name)) {
+    if (*(tile_types[i].special_2_name)) {
       sprintf(buf, _("%s F/R/T:"),
-	      tile_types[i].special[1].name);
+	      tile_types[i].special_2_name);
       gtk_label_set_text(GTK_LABEL(help_tlabel[1][3]), buf);
       sprintf(buf, "%d/%d/%d",
-	      tile_types[i].special[1].output[O_FOOD],
-	      tile_types[i].special[1].output[O_SHIELD],
-	      tile_types[i].special[1].output[O_TRADE]);
+	      tile_types[i].food_special_2,
+	      tile_types[i].shield_special_2,
+	      tile_types[i].trade_special_2);
       gtk_label_set_text(GTK_LABEL(help_tlabel[1][4]), buf);
     } else {
       gtk_label_set_text(GTK_LABEL(help_tlabel[1][3]), "");
@@ -1125,16 +1125,12 @@ static void help_update_dialog(const struct help_item *pitem)
   switch(pitem->type) {
   case HELP_IMPROVEMENT:
     i = find_improvement_by_name(top);
-    if (i != B_LAST && is_great_wonder(i)) {
-      i = B_LAST;
-    }
+    if(i!=B_LAST && is_wonder(i)) i = B_LAST;
     help_update_improvement(pitem, top, i);
     break;
   case HELP_WONDER:
     i = find_improvement_by_name(top);
-    if (i != B_LAST && !is_great_wonder(i)) {
-      i = B_LAST;
-    }
+    if(i!=B_LAST && !is_wonder(i)) i = B_LAST;
     help_update_wonder(pitem, top, i);
     break;
   case HELP_UNIT:

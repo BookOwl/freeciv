@@ -25,14 +25,7 @@
 
 struct canvas_store;		/* opaque type, real type is gui-dep */
 
-struct mapview_decoration {
-  /* For client Area Selection */
-  enum tile_hilite {
-    HILITE_NONE, HILITE_CITY
-  } hilite;
-};
-
-struct view {
+struct mapview_canvas {
   int gui_x0, gui_y0;
   int width, height;		/* Size in pixels. */
   int tile_width, tile_height;	/* Size in tiles. Rounded up. */
@@ -49,8 +42,7 @@ struct overview {
   struct canvas *store;
 };
 
-extern struct mapview_decoration *map_deco;
-extern struct view mapview;
+extern struct mapview_canvas mapview_canvas;
 extern struct overview overview;
 
 /* HACK: Callers can set this to FALSE to disable sliding.  It should be
@@ -60,33 +52,34 @@ extern bool can_slide;
 #define BORDER_WIDTH 2
 #define GOTO_WIDTH 2
 
+enum update_type {
+  /* Masks */
+  UPDATE_NONE = 0,
+  UPDATE_CITY_DESCRIPTIONS = 1,
+  UPDATE_MAP_CANVAS_VISIBLE = 2
+};
+
 /*
  * Iterate over all map tiles that intersect with the given GUI rectangle.
  * The order of iteration is guaranteed to satisfy the painter's algorithm.
- * The iteration covers not only tiles but tile edges and corners.
  *
  * gui_x0, gui_y0: gives the GUI origin of the rectangle.
  * width, height: gives the GUI width and height of the rectangle.  These
  * values may be negative.
  *
- * ptile, pedge, pcorner: gives the tile, edge, or corner that is being
- * iterated over.  These are declared inside the macro.  Usually only
- * one of them will be non-NULL at a time.  These values may be passed in
- * directly to fill_sprite_array.
+ * map_x, map_y: variables that will give the current tile of iteration.
+ * These coordinates are unnormalized.
  *
- * canvas_x, canvas_y: the canvas position of the current element.  Each
- * element is assumed to be NORMAL_TILE_WIDTH * NORMAL_TILE_HEIGHT in
- * size.  If an element is larger the caller needs to use a larger rectangle
- * of iteration.
+ * draw: A variable that tells which parts of the tiles overlap with the
+ * GUI rectangle.  Only applies in iso-view.
  *
- * The grid of iteration is rather complicated.  For a picture of it see
- * http://bugs.freeciv.org/Ticket/Attachment/89565/56824/newgrid.png
- * or the other text in PR#12085.
+ * The classic-view iteration is pretty simple.  Documentation of the
+ * iso-view iteration is at
+ * http://rt.freeciv.org/Ticket/Attachment/51374/37363/isogrid.png.
  */
-#define gui_rect_iterate(GRI_gui_x0, GRI_gui_y0, width, height,		    \
-			 ptile, pedge, pcorner, canvas_x, canvas_y)	    \
+#define gui_rect_iterate(gui_x0, gui_y0, width, height, ptile)	            \
 {									    \
-  int _gui_x0 = (GRI_gui_x0), _gui_y0 = (GRI_gui_y0);			    \
+  int _gui_x0 = (gui_x0), _gui_y0 = (gui_y0);				    \
   int _width = (width), _height = (height);				    \
 									    \
   if (_width < 0) {							    \
@@ -98,119 +91,46 @@ extern bool can_slide;
     _height = -_height;							    \
   }									    \
   if (_width > 0 && _height > 0) {					    \
-    const int _ratio = (is_isometric ? 2 : 1);				    \
-    const int _W = NORMAL_TILE_WIDTH / (_ratio * 2);			    \
-    const int _H = NORMAL_TILE_HEIGHT / (_ratio * 2);			    \
-    const int GRI_x0 = DIVIDE(_gui_x0, _W) - 1;				    \
-    const int GRI_y0 = DIVIDE(_gui_y0, _H) - 1;				    \
-    const int GRI_x1 = DIVIDE(_gui_x0 + _width + _W - 1, _W) + _ratio;	    \
-    const int GRI_y1 = DIVIDE(_gui_y0 + _height + _H - 1, _H) + _ratio;	    \
-    const int _count = (GRI_x1 - GRI_x0) * (GRI_y1 - GRI_y0);		    \
-    int GRI_itr, GRI_x_itr, GRI_y_itr, GRI_sum, GRI_diff;		    \
+    int W = (is_isometric ? (NORMAL_TILE_WIDTH / 2) : NORMAL_TILE_WIDTH);   \
+    int H = (is_isometric ? (NORMAL_TILE_HEIGHT / 2) : NORMAL_TILE_HEIGHT); \
+    int GRI_x0 = DIVIDE(_gui_x0, W), GRI_y0 = DIVIDE(_gui_y0, H);	    \
+    int GRI_x1 = DIVIDE(_gui_x0 + _width + W - 1, W);			    \
+    int GRI_y1 = DIVIDE(_gui_y0 + _height + H - 1, H);			    \
+    int GRI_itr, GRI_x_itr, GRI_y_itr, _map_x, _map_y;			    \
+    int count;								    \
+    struct tile *ptile;							    \
 									    \
-    for (GRI_itr = 0; GRI_itr < _count; GRI_itr++) {			    \
-      struct tile *ptile = NULL;					    \
-      struct tile_edge *pedge = NULL;					    \
-      struct tile_corner *pcorner = NULL;				    \
-      struct tile_edge GRI_edge;					    \
-      struct tile_corner GRI_corner;					    \
-      int canvas_x, canvas_y;						    \
-									    \
+    if (is_isometric) {							    \
+      /* Tiles to the left/above overlap with us. */			    \
+      GRI_x0--;								    \
+      GRI_y0--;								    \
+    }									    \
+    count = (GRI_x1 - GRI_x0) * (GRI_y1 - GRI_y0);			    \
+    for (GRI_itr = 0; GRI_itr < count; GRI_itr++) {			    \
       GRI_x_itr = GRI_x0 + (GRI_itr % (GRI_x1 - GRI_x0));		    \
       GRI_y_itr = GRI_y0 + (GRI_itr / (GRI_x1 - GRI_x0));		    \
-      GRI_sum = GRI_x_itr + GRI_y_itr;					    \
-      GRI_diff = GRI_y_itr - GRI_x_itr;					    \
       if (is_isometric) {						    \
 	if ((GRI_x_itr + GRI_y_itr) % 2 != 0) {				    \
 	  continue;							    \
 	}								    \
-	if (GRI_x_itr % 2 == 0 && GRI_y_itr % 2 == 0) {			    \
-	  if ((GRI_x_itr + GRI_y_itr) % 4 == 0) {			    \
-	    /* Tile */							    \
-	    ptile = map_pos_to_tile(GRI_sum / 4 - 1, GRI_diff / 4);	    \
-	  } else {							    \
-	    /* Corner */						    \
-	    pcorner = &GRI_corner;					    \
-	    pcorner->tile[0] = map_pos_to_tile((GRI_sum - 6) / 4,	    \
-					       (GRI_diff - 2) / 4);	    \
-	    pcorner->tile[1] = map_pos_to_tile((GRI_sum - 2) / 4,	    \
-					       (GRI_diff - 2) / 4);	    \
-	    pcorner->tile[2] = map_pos_to_tile((GRI_sum - 2) / 4,	    \
-					       (GRI_diff + 2) / 4);	    \
-	    pcorner->tile[3] = map_pos_to_tile((GRI_sum - 6) / 4,	    \
-					       (GRI_diff + 2) / 4);	    \
-	  }								    \
-	} else {							    \
-	  /* Edge. */							    \
-	  pedge = &GRI_edge; 						    \
-	  if (GRI_sum % 4 == 0) {					    \
-	    pedge->type = EDGE_NS;					    \
-	    pedge->tile[0] = map_pos_to_tile((GRI_sum - 4) / 4, /* N */	    \
-					     (GRI_diff - 2) / 4);	    \
-	    pedge->tile[1] = map_pos_to_tile((GRI_sum - 4) / 4, /* S */	    \
-					     (GRI_diff + 2) / 4);	    \
-	  } else {							    \
-	    pedge->type = EDGE_EW;					    \
-	    pedge->tile[0] = map_pos_to_tile((GRI_sum - 6) / 4,		    \
-					     GRI_diff / 4); /* E */	    \
-	    pedge->tile[1] = map_pos_to_tile((GRI_sum - 2) / 4,		    \
-					     GRI_diff / 4); /* W */	    \
-	  }								    \
-	}								    \
+	_map_x = (GRI_x_itr + GRI_y_itr) / 2;				    \
+	_map_y = (GRI_y_itr - GRI_x_itr) / 2;				    \
       } else {								    \
-	if (GRI_sum % 2 == 0) {						    \
-	  if (GRI_x_itr % 2 == 0) {					    \
-	    /* Corner. */						    \
-	    pcorner = &GRI_corner;					    \
-	    pcorner->tile[0] = map_pos_to_tile(GRI_x_itr / 2 - 1,	    \
-					       GRI_y_itr / 2 - 1); /* NW */ \
-	    pcorner->tile[1] = map_pos_to_tile(GRI_x_itr / 2,		    \
-					       GRI_y_itr / 2 - 1); /* NE */ \
-	    pcorner->tile[2] = map_pos_to_tile(GRI_x_itr / 2,		    \
-					       GRI_y_itr / 2); /* SE */	    \
-	    pcorner->tile[3] = map_pos_to_tile(GRI_x_itr / 2 - 1,	    \
-					       GRI_y_itr / 2); /* SW */	    \
-	  } else {							    \
-	    /* Tile. */							    \
-	    ptile = map_pos_to_tile((GRI_x_itr - 1) / 2,		    \
-				    (GRI_y_itr - 1) / 2);		    \
-	  }								    \
-	} else {							    \
-	  /* Edge. */							    \
-	  pedge = &GRI_edge;						    \
-	  if (GRI_y_itr % 2 == 0) {					    \
-	    pedge->type = EDGE_EW;					    \
-	    pedge->tile[0] = map_pos_to_tile(GRI_x_itr / 2 - 1,		    \
-					     (GRI_y_itr - 1) / 2);	    \
-	    pedge->tile[1] = map_pos_to_tile(GRI_x_itr / 2,		    \
-					     (GRI_y_itr - 1) / 2);	    \
-	  } else {							    \
-	    pedge->type = EDGE_NS;					    \
-	    pedge->tile[0] = map_pos_to_tile((GRI_x_itr - 1) / 2,	    \
-					     GRI_y_itr / 2 - 1);	    \
-	    pedge->tile[1] = map_pos_to_tile((GRI_x_itr - 1) / 2,	    \
-					     GRI_y_itr / 2);		    \
-	  }								    \
-	}								    \
+	_map_x = GRI_x_itr;						    \
+	_map_y = GRI_y_itr;						    \
       }									    \
-      canvas_x								    \
-	= GRI_x_itr * _W - NORMAL_TILE_WIDTH / 2 - mapview.gui_x0;	    \
-      canvas_y								    \
-	= GRI_y_itr * _H - NORMAL_TILE_HEIGHT / 2 - mapview.gui_y0;
+      ptile = map_pos_to_tile(_map_x, _map_y);				    \
+      if (!ptile) {							    \
+	continue;							    \
+      }
 
 #define gui_rect_iterate_end						    \
     }									    \
   }									    \
 }
 
-void refresh_tile_mapcanvas(struct tile *ptile,
-			    bool full_refresh, bool write_to_screen);
-void refresh_unit_mapcanvas(struct unit *punit, struct tile *ptile,
-			    bool full_refresh, bool write_to_screen);
-void refresh_city_mapcanvas(struct city *pcity, struct tile *ptile,
-			    bool full_refresh, bool write_to_screen);
-
-enum color_std get_grid_color(const struct tile *ptile, enum direction8 dir);
+void refresh_tile_mapcanvas(struct tile *ptile, bool write_to_screen);
+enum color_std get_grid_color(struct tile *ptile, enum direction8 dir);
 
 void map_to_gui_vector(int *gui_dx, int *gui_dy, int map_dx, int map_dy);
 bool tile_to_canvas_pos(int *canvas_x, int *canvas_y, struct tile *ptile);
@@ -231,7 +151,7 @@ void center_tile_mapcanvas(struct tile *ptile);
 bool tile_visible_mapcanvas(struct tile *ptile);
 bool tile_visible_and_not_on_border_mapcanvas(struct tile *ptile);
 
-void put_unit(const struct unit *punit,
+void put_unit(struct unit *punit,
 	      struct canvas *pcanvas, int canvas_x, int canvas_y);
 void put_city(struct city *pcity,
 	      struct canvas *pcanvas, int canvas_x, int canvas_y);
@@ -251,9 +171,12 @@ void put_red_frame_tile(struct canvas *pcanvas,
 
 void put_nuke_mushroom_pixmaps(struct tile *ptile);
 
-void put_one_tile(struct canvas *pcanvas, enum mapview_layer layer,
-		  struct tile *ptile, int canvas_x, int canvas_y,
-		  const struct city *citymode);
+void put_one_tile(struct canvas *pcanvas, struct tile *ptile,
+		  int canvas_x, int canvas_y, bool citymode);
+void put_one_tile_iso(struct canvas *pcanvas, struct tile *ptile,
+		      int canvas_x, int canvas_y, bool citymode);
+void tile_draw_grid(struct canvas *pcanvas, struct tile *ptile,
+		    int canvas_x, int canvas_y, bool citymode);
 
 void update_map_canvas(int canvas_x, int canvas_y, int width, int height);
 void update_map_canvas_visible(void);
@@ -284,6 +207,9 @@ void get_city_mapview_name_and_growth(struct city *pcity,
 				      size_t growth_buffer_len,
 				      enum color_std *grwoth_color);
 
+void queue_mapview_update(enum update_type update);
+void unqueue_mapview_updates(void);
+
 void map_to_overview_pos(int *overview_x, int *overview_y,
 			 int map_x, int map_y);
 void overview_to_map_pos(int *map_x, int *map_y,
@@ -293,7 +219,6 @@ void refresh_overview_canvas(void);
 void overview_update_tile(struct tile *ptile);
 void set_overview_dimensions(int width, int height);
 
-void init_mapview_decorations(void);
 bool map_canvas_resized(int width, int height);
 void init_mapcanvas_and_overview(void);
 

@@ -50,7 +50,6 @@
 #include "aidata.h"
 #include "aiferry.h"
 #include "ailog.h"
-#include "aitech.h"
 #include "aiunit.h"
 
 #include "aitools.h"
@@ -67,7 +66,7 @@ int military_amortize(struct player *pplayer, struct city *pcity,
                       int value, int delay, int build_cost)
 {
   struct ai_data *ai = ai_data_get(pplayer);
-  int city_output = (pcity ? pcity->surplus[O_SHIELD] : 1);
+  int city_output = (pcity ? pcity->shield_surplus : 1);
   int output = MAX(city_output, ai->stats.average_production);
   int build_time = build_cost / MAX(output, 1);
 
@@ -87,17 +86,15 @@ int military_amortize(struct player *pplayer, struct city *pcity,
 bool is_player_dangerous(struct player *pplayer, struct player *aplayer)
 {
   struct ai_data *ai = ai_data_get(pplayer);
-  struct ai_dip_intel *adip = &ai->diplomacy.player_intel[aplayer->player_no];
-  int reason = pplayer->diplstates[aplayer->player_no].has_reason_to_cancel;
+  struct ai_dip_intel *adip 
+    = &ai->diplomacy.player_intel[aplayer->player_no];
 
-  /* Have to check if aplayer == pplayer explicitly because our reputation
-   * can be so low that we'd fear being stabbed in the back by ourselves */ 
-  return (pplayer != aplayer
-          && (pplayers_at_war(pplayer, aplayer)
-              || ai->diplomacy.target == aplayer
-              || reason != 0
-              || ai->diplomacy.acceptable_reputation > aplayer->reputation
-              || adip->is_allied_with_enemy));
+  return (pplayer != aplayer)
+         && ((pplayers_at_war(pplayer, aplayer)
+           || ai->diplomacy.target == aplayer
+           || pplayer->diplstates[aplayer->player_no].has_reason_to_cancel != 0
+           || ai->diplomacy.acceptable_reputation > aplayer->reputation
+           || adip->is_allied_with_enemy));
 }
 
 /*************************************************************************
@@ -186,7 +183,7 @@ static void ai_gothere_bodyguard(struct unit *punit, struct tile *dest_tile)
 
   ptile = punit->tile;
   /* We look for the bodyguard where we stand. */
-  if (!unit_list_find(ptile->units, punit->ai.bodyguard)) {
+  if (!unit_list_find(&ptile->units, punit->ai.bodyguard)) {
     int my_def = (punit->hp 
                   * unit_type(punit)->veteran[punit->veteran].power_fact
 		  * unit_type(punit)->defense_strength
@@ -403,8 +400,8 @@ bool ai_unit_make_homecity(struct unit *punit, struct city *pcity)
        the greater good -- Per */
     return FALSE;
   }
-  if (pcity->surplus[O_SHIELD] >= unit_type(punit)->upkeep[O_SHIELD]
-      && pcity->surplus[O_FOOD] >= unit_type(punit)->upkeep[O_FOOD]) {
+  if (pcity->shield_surplus - unit_type(punit)->shield_cost >= 0
+      && pcity->food_surplus - unit_type(punit)->food_cost >= 0) {
     handle_unit_change_homecity(unit_owner(punit), punit->id, pcity->id);
     return TRUE;
   }
@@ -686,20 +683,6 @@ void copy_if_better_choice(struct ai_choice *cur, struct ai_choice *best)
 }
 
 /**************************************************************************
-  Calls ai_wants_role_unit to choose the best unit with the given role and 
-  set tech wants.  Sets choice->choice if we can build something.
-**************************************************************************/
-void ai_choose_role_unit(struct player *pplayer, struct city *pcity,
-			 struct ai_choice *choice, int role, int want)
-{
-  Unit_Type_id iunit = ai_wants_role_unit(pplayer, pcity, role, want);
-
-  if (iunit != U_LAST) {
-    choice->choice = iunit;
-  }
-}
-
-/**************************************************************************
   Returns TRUE if pcity's owner is building any wonder in another city on
   the same continent (if so, we may want to build a caravan here).
 **************************************************************************/
@@ -742,7 +725,9 @@ void ai_advisor_choose_building(struct city *pcity, struct ai_choice *choice)
   city_list_iterate_end;
 
   impr_type_iterate(i) {
-    if (!plr->ai.control && is_wonder(i)) {
+    if (!plr->ai.control
+        && (get_building_for_effect(EFT_CAPITAL_CITY) == i
+            || is_wonder(i))) {
       continue; /* Humans should not be advised to build wonders or palace */
     }
     if (!is_wonder(i)

@@ -74,8 +74,8 @@ void update_meswin_dialog(void)
   }
 
   if (!is_meswin_open() && messages_total > 0 &&
-      (!game.player_ptr->ai.control)) {
-    popup_meswin_dialog(FALSE);
+      (!game.player_ptr->ai.control || ai_popup_windows)) {
+    popup_meswin_dialog();
     change = FALSE;
     return;
   }
@@ -109,12 +109,11 @@ void add_notify_window(char *message, struct tile *ptile,
 		       enum event_type event)
 {
   const size_t min_msg_len = 50;
-  const char *game_prefix1 = "";
-  const char *game_prefix2 = _("");
+  const char *game_prefix1 = "Game: ";
+  const char *game_prefix2 = _("Game: ");
   size_t gp_len1 = strlen(game_prefix1);
   size_t gp_len2 = strlen(game_prefix2);
-  size_t msg_len = strlen(message);
-  char *s = fc_malloc(MAX(msg_len, min_msg_len) + 1);
+  char *s = fc_malloc(MAX(strlen(message), min_msg_len) + 1);
   int i, nspc;
 
   change = TRUE;

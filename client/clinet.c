@@ -209,7 +209,6 @@ int try_to_connect(const char *username, char *errbuf, int errbufsize)
   }
 
   connection_common_init(&aconnection);
-  aconnection.is_server = FALSE;
   aconnection.client.last_request_id_used = 0;
   aconnection.client.last_processed_request_id_seen = 0;
   aconnection.client.request_id_of_currently_handled_packet = 0;
@@ -347,6 +346,8 @@ void input_from_server(int fd)
   } else {
     close_socket_callback(&aconnection);
   }
+
+  unqueue_mapview_updates();
 }
 
 /**************************************************************************
@@ -389,7 +390,7 @@ void input_from_server_till_request_got_processed(int fd,
 	  if (aconnection.client.last_processed_request_id_seen >=
 	      expected_request_id) {
 	    freelog(LOG_DEBUG, "ifstrgp: got it; returning");
-	    return;
+	    goto out;
 	  }
 	}
       }
@@ -398,6 +399,9 @@ void input_from_server_till_request_got_processed(int fd,
       break;
     }
   }
+
+out:
+  unqueue_mapview_updates();
 }
 
 #ifdef WIN32_NATIVE
@@ -503,7 +507,8 @@ static struct server_list *parse_metaserver_data(fz_FILE *f)
   struct section_file the_file, *file = &the_file;
   int nservers, i, j;
 
-  server_list = server_list_new();
+  server_list = fc_malloc(sizeof(struct server_list));
+  server_list_init(server_list);
 
   /* This call closes f. */
   if (!section_file_load_from_stream(file, f)) {
@@ -562,7 +567,7 @@ static struct server_list *parse_metaserver_data(fz_FILE *f)
       pserver->players[j].nation = mystrdup(nation);
     }
 
-    server_list_append(server_list, pserver);
+    server_list_insert_back(server_list, pserver);
   }
 
   section_file_free(file);
@@ -597,7 +602,7 @@ struct server_list *create_server_list(char *errbuf, int n_errbuf)
   }
 
   if (!net_lookup_service(metaname, metaport, &addr)) {
-    (void) mystrlcpy(errbuf, _("Failed looking up metaserver's host"), n_errbuf);
+    (void) mystrlcpy(errbuf, _("Failed looking up host"), n_errbuf);
     return NULL;
   }
   
@@ -672,7 +677,7 @@ struct server_list *create_server_list(char *errbuf, int n_errbuf)
 **************************************************************************/
 void delete_server_list(struct server_list *server_list)
 {
-  server_list_iterate(server_list, ptmp) {
+  server_list_iterate(*server_list, ptmp) {
     int i;
     int n = atoi(ptmp->nplayers);
 
@@ -697,7 +702,7 @@ void delete_server_list(struct server_list *server_list)
   } server_list_iterate_end;
 
   server_list_unlink_all(server_list);
-  server_list_free(server_list);
+  free(server_list);
 }
 
 /**************************************************************************
@@ -794,7 +799,8 @@ int begin_lanserver_scan(void)
     return 0;
   }
 
-  lan_servers = server_list_new();
+  lan_servers = fc_malloc(sizeof(struct server_list));
+  server_list_init(lan_servers);
 
   return 1;
 }
@@ -870,7 +876,7 @@ struct server_list *get_lan_server_list(void) {
     }
 
     /* UDP can send duplicate or delayed packets. */
-    server_list_iterate(lan_servers, aserver) {
+    server_list_iterate(*lan_servers, aserver) {
       if (!mystrcasecmp(aserver->host, servername) 
           && !mystrcasecmp(aserver->port, port)) {
         return lan_servers;
@@ -889,7 +895,7 @@ struct server_list *get_lan_server_list(void) {
     pserver->message = mystrdup(message);
     pserver->players = NULL;
 
-    server_list_prepend(lan_servers, pserver);
+    server_list_insert(lan_servers, pserver);
   } else {
     return lan_servers;
   }                                       

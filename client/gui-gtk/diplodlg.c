@@ -89,7 +89,7 @@ struct Diplomacy_dialog {
     TYPED_LIST_ITERATE(struct Diplomacy_dialog, dialoglist, pdialog)
 #define dialog_list_iterate_end  LIST_ITERATE_END
 
-static struct dialog_list *dialog_list = NULL;
+static struct dialog_list dialog_list;
 static bool dialog_list_list_has_been_initialised = FALSE;
 
 static struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0, 
@@ -247,7 +247,7 @@ static int fill_diplomacy_city_menu(GtkWidget * popupmenu,
 				    struct player *pgiver,
 				    struct player *pdest)
 {
-  int i = 0, j = 0, n = city_list_size(pgiver->cities);
+  int i = 0, j = 0, n = city_list_size(&pgiver->cities);
   struct city **city_list_ptrs;
 
   if (n > 0) {
@@ -296,7 +296,7 @@ static struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0,
   if (!titles) titles = intl_slist(1, titles_);
   
   pdialog=fc_malloc(sizeof(struct Diplomacy_dialog));
-  dialog_list_prepend(dialog_list, pdialog);
+  dialog_list_insert(&dialog_list, pdialog);
   
   init_treaty(&pdialog->treaty, plr0, plr1);
   
@@ -613,7 +613,7 @@ static void update_diplomacy_dialog(struct Diplomacy_dialog *pdialog)
 
   clause_list_iterate(pdialog->treaty.clauses, pclause) {
     client_diplomacy_clause_string(buf, sizeof(buf), pclause);
-    gtk_clist_prepend(GTK_CLIST(pdialog->dip_clauselist),row);
+    gtk_clist_append(GTK_CLIST(pdialog->dip_clauselist),row);
   } clause_list_iterate_end;
 
   gtk_clist_thaw(GTK_CLIST(pdialog->dip_clauselist));
@@ -846,7 +846,7 @@ void close_diplomacy_dialog(struct Diplomacy_dialog *pdialog)
 {
   gtk_widget_destroy(pdialog->dip_dialog_shell);
   
-  dialog_list_unlink(dialog_list, pdialog);
+  dialog_list_unlink(&dialog_list, pdialog);
   free(pdialog);
 }
 
@@ -858,7 +858,7 @@ static struct Diplomacy_dialog *find_diplomacy_dialog(int other_player_id)
   struct player *plr0 = game.player_ptr, *plr1 = get_player(other_player_id);
 
   if (!dialog_list_list_has_been_initialised) {
-    dialog_list = dialog_list_new();
+    dialog_list_init(&dialog_list);
     dialog_list_list_has_been_initialised = TRUE;
   }
   
@@ -907,7 +907,7 @@ static void diplo_dialog_returnkey(GtkWidget *w, gpointer data)
 					       CLAUSE_GOLD, amount);
       gtk_entry_set_text(GTK_ENTRY(w), "");
     } else {
-      append_output_window(_("Invalid amount of gold specified."));
+      append_output_window(_("Game: Invalid amount of gold specified."));
     }
   }
 }
@@ -920,7 +920,7 @@ void close_all_diplomacy_dialogs(void)
   if (!dialog_list_list_has_been_initialised) {
     return;
   }
-  while (dialog_list_size(dialog_list) > 0) {
-    close_diplomacy_dialog(dialog_list_get(dialog_list, 0));
+  while (dialog_list_size(&dialog_list) > 0) {
+    close_diplomacy_dialog(dialog_list_get(&dialog_list, 0));
   }
 }

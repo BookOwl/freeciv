@@ -39,9 +39,6 @@
 
 #include "gui_main.h"
 
-const char * const gui_character_encoding = "UTF-8";
-const bool gui_use_transliteration = FALSE;
-
 client_option gui_options[] = {
 };
 const int num_gui_options = ARRAY_SIZE(gui_options);
@@ -68,9 +65,9 @@ void ui_init(void)
 **************************************************************************/
 static void timer_callback(void *data)
 {
-  double msec = real_timer_callback() * 1000;
-
-  sw_add_timeout(msec, timer_callback, NULL);
+  real_timer_callback();
+  //sw_add_timeout(TIMER_INTERVAL, timer_callback, NULL);
+  sw_add_timeout(1000, timer_callback, NULL);
 }
 
 /**************************************************************************
@@ -131,7 +128,7 @@ static void get_colors(void)
   for (i = 0; i < COLOR_EXT_LAST; i++) {
     all_colors[i] =
 	be_get_color(all_colors_rgb[i].r, all_colors_rgb[i].g,
-		     all_colors_rgb[i].b, MAX_OPACITY);
+		     all_colors_rgb[i].b);
   }
 }
 
@@ -181,6 +178,13 @@ void ui_main(int argc, char *argv[])
   struct ct_size res;
   struct ct_size size;
 
+  init_character_encodings("ISO-8859-1", TRUE);
+
+  if (!auto_connect) {
+    die("Connection dialog not yet implemented. Start client using "
+        "the -a option.");
+  }
+
   while (i < argc) {
     if (is_option("--help", argv[i])) {
       fc_fprintf(stderr, _("  -d, --dump\t\tEnable screen dumper\n"));
@@ -204,14 +208,12 @@ void ui_main(int argc, char *argv[])
       sw_set_dump_screen(TRUE);
     } else if (is_option("--fullscreen", argv[i])) {
       fullscreen = TRUE;
-    } else if ((option = get_option_malloc("--res", argv, &i, argc))) {
+    } else if ((option = get_option("--res", argv, &i, argc))) {
       free(resolution);
       resolution = mystrdup(option);
-      free(option);
-    } else if ((option = get_option_malloc("--theme", argv, &i, argc))) {
+    } else if ((option = get_option("--theme", argv, &i, argc))) {
       free(theme);
       theme = mystrdup(option);
-      free(option);
     } else {
       freelog(LOG_ERROR, "unknown option '%s'", argv[i]);
     }
@@ -223,11 +225,6 @@ void ui_main(int argc, char *argv[])
   }
   free(resolution);
   
-  if (!auto_connect) {
-    die("Connection dialog not yet implemented. Start client using "
-        "the -a option.");
-  }
-
   sw_init();
   be_init(&res, fullscreen);
   be_screen_get_size(&size);
@@ -238,6 +235,7 @@ void ui_main(int argc, char *argv[])
   }
   te_init(theme, "mapview.screen");
   free(theme);
+  te_init_colormodel("palette.prop");
 
   get_colors();
   root_window = sw_create_root_window();

@@ -178,7 +178,7 @@ const char *get_nation_name_plural(Nation_Type_id nation)
 /***************************************************************
 Returns pointer to a nation 
 ***************************************************************/
-struct nation_type *get_nation_by_plr(const struct player *plr)
+struct nation_type *get_nation_by_plr(struct player *plr)
 {
   assert(plr != NULL);
   if (!bounds_check_nation_id(plr->nation, LOG_FATAL, "get_nation_by_plr")) {
@@ -223,9 +223,9 @@ static void nation_free(Nation_Type_id nation)
     p->leaders = NULL;
   }
   
-  if (p->category) {
-    free(p->category);
-    p->category = NULL;
+  if (p->class) {
+    free(p->class);
+    p->class = NULL;
   }
   
   if (p->legend) {

@@ -59,6 +59,7 @@ struct civ_game {
   bool is_new_game;		/* 1 for games never started */
   int version;
   char id[MAX_ID_LEN];		/* server only */
+  int civstyle;
   int gold;
   char start_units[MAX_LEN_STARTUNIT];
   int dispersion;
@@ -94,20 +95,20 @@ struct civ_game {
   int onsetbarbarian;
   int nbarbarians;
   int occupychance;
-  bool autoattack;
   int unhappysize;
   bool angrycitizen;
   char *startmessage;
   int player_idx;
   struct player *player_ptr;
   struct player players[MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS];
-  struct conn_list *all_connections;        /* including not yet established */
-  struct conn_list *est_connections;        /* all established client conns */
-  struct conn_list *game_connections;       /* involved in game; send map etc */
+  struct conn_list all_connections;        /* including not yet established */
+  struct conn_list est_connections;        /* all established client conns */
+  struct conn_list game_connections;       /* involved in game; send map etc */
   int global_advances[A_LAST];             /* a counter */
-  int great_wonders[B_LAST];              /* contains city id's */
-         /* great_wonders[] may also be (-1), or the id of a city
+  int global_wonders[B_LAST];              /* contains city id's */
+         /* global_wonders[] may also be (-1), or the id of a city
 	    which no longer exists, if the wonder has been destroyed */
+  Impr_Status improvements[B_LAST];        /* impr. with equiv_range==World */
 
   int heating; /* Number of polluted squares. */
   int globalwarming; /* Total damage done. (counts towards a warming event.) */
@@ -173,6 +174,12 @@ struct civ_game {
   Impr_Type_id land_defend_building;
 
   struct {
+    int cathedral_plus;		/* eg Theology */
+    int cathedral_minus;	/* eg Communism */
+    int colosseum_plus;		/* eg Electricity */
+    int temple_plus;		/* eg Mysticism */
+    int nav;			/* AI convenience: tech_req for first
+				   non-trireme ferryboat */
     int u_partisan;		/* convenience: tech_req for first
 				   Partisan unit */
     /* Following tech list is A_LAST terminated if shorter than
@@ -185,22 +192,17 @@ struct civ_game {
 
   /* values from game.ruleset */
   struct {
-    int num_specialist_types;
-    int default_specialist;
-    struct specialist {
+    struct {
       char name[MAX_LEN_NAME];
-      char short_name[MAX_LEN_NAME];
-      int bonus[O_MAX];
-      int min_size;
-      struct requirement req[MAX_NUM_REQS];
-    } specialists[SP_MAX];
-#define SP_COUNT game.rgame.num_specialist_types
-#define DEFAULT_SPECIALIST game.rgame.default_specialist
+      int min_size, bonus;
+    } specialists[SP_COUNT];
     bool changable_tax;
     int forced_science; /* only relevant if !changable_tax */
     int forced_luxury;
     int forced_gold;
-    int min_city_center_output[O_MAX];
+    int min_city_center_food;
+    int min_city_center_shield;
+    int min_city_center_trade;
     int min_dist_bw_cities;
     int init_vis_radius_sq;
     int hut_overflight;
@@ -216,8 +218,6 @@ struct civ_game {
     /* Items given to all players at game start.  Server only. */
     int global_init_techs[MAX_NUM_TECH_LIST];
     int global_init_buildings[MAX_NUM_BUILDING_LIST];
-
-    int autoupgrade_veteran_loss;
 
     bool killstack;
   } rgame;
@@ -244,11 +244,6 @@ struct civ_game {
   int work_veteran_chance[MAX_VET_LEVELS];
   int veteran_chance[MAX_VET_LEVELS];
   int revolution_length; /* 0=> random length, else the fixated length */
-
-  struct {
-    /* Function to be called in game_remove_unit when a unit is deleted. */
-    void (*unit_deallocate)(int unit_id);
-  } callbacks;
 };
 
 /* Unused? */
@@ -262,7 +257,6 @@ enum sset_type {
 };
 
 void game_init(void);
-void game_map_init(void);
 void game_free(void);
 void ruleset_data_free(void);
 
@@ -474,8 +468,6 @@ extern bool is_server;
 #define GAME_DEFAULT_OCCUPYCHANCE    0
 #define GAME_MIN_OCCUPYCHANCE        0
 #define GAME_MAX_OCCUPYCHANCE        100
-
-#define GAME_DEFAULT_AUTOATTACK      FALSE
 
 #define GAME_DEFAULT_RULESETDIR      "default"
 

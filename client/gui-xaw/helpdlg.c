@@ -845,7 +845,7 @@ static void help_update_unit_type(const struct help_item *pitem,
 		    advances[utype->tech_requirement].name);
     }
     create_tech_tree(help_tech_tree, 0, utype->tech_requirement, 3);
-    if (utype->obsoleted_by == U_NOT_OBSOLETED) {
+    if(utype->obsoleted_by==-1) {
       xaw_set_label(help_wonder_obsolete_data, _("None"));
     } else {
       xaw_set_label(help_wonder_obsolete_data,
@@ -952,35 +952,35 @@ static void help_update_terrain(const struct help_item *pitem,
       xaw_set_label (help_terrain_movement_defense_data, buf);
 
       sprintf (buf, "%d/%d/%d",
-	       tile_types[i].output[O_FOOD],
-	       tile_types[i].output[O_SHIELD],
-	       tile_types[i].output[O_TRADE]);
+	       tile_types[i].food,
+	       tile_types[i].shield,
+	       tile_types[i].trade);
       xaw_set_label (help_terrain_food_shield_trade_data, buf);
 
-      if (*(tile_types[i].special[0].name))
+      if (*(tile_types[i].special_1_name))
 	{
 	  sprintf (buf, _("%s F/R/T:"),
-		   tile_types[i].special[0].name);
+		   tile_types[i].special_1_name);
 	  xaw_set_label (help_terrain_special_1, buf);
 	  sprintf (buf, "%d/%d/%d",
-		   tile_types[i].special[0].output[O_FOOD],
-		   tile_types[i].special[0].output[O_SHIELD],
-		   tile_types[i].special[0].output[O_TRADE]);
+		   tile_types[i].food_special_1,
+		   tile_types[i].shield_special_1,
+		   tile_types[i].trade_special_1);
 	  xaw_set_label (help_terrain_special_1_data, buf);
 	} else {
 	  xaw_set_label (help_terrain_special_1, "");
 	  xaw_set_label (help_terrain_special_1_data, "");
 	}
 
-      if (*(tile_types[i].special[1].name))
+      if (*(tile_types[i].special_2_name))
 	{
 	  sprintf (buf, _("%s F/R/T:"),
-		   tile_types[i].special[1].name);
+		   tile_types[i].special_2_name);
 	  xaw_set_label (help_terrain_special_2, buf);
 	  sprintf (buf, "%d/%d/%d",
-		   tile_types[i].special[1].output[O_FOOD],
-		   tile_types[i].special[1].output[O_SHIELD],
-		   tile_types[i].special[1].output[O_TRADE]);
+		   tile_types[i].food_special_2,
+		   tile_types[i].shield_special_2,
+		   tile_types[i].trade_special_2);
 	  xaw_set_label (help_terrain_special_2_data, buf);
 	} else {
 	  xaw_set_label (help_terrain_special_2, "");
@@ -1087,12 +1087,12 @@ static void help_update_dialog(const struct help_item *pitem)
   switch(pitem->type) {
   case HELP_IMPROVEMENT:
     i = find_improvement_by_name(top);
-    if(i!=B_LAST && is_great_wonder(i)) i = B_LAST;
+    if(i!=B_LAST && is_wonder(i)) i = B_LAST;
     help_update_improvement(pitem, top, i);
     break;
   case HELP_WONDER:
     i = find_improvement_by_name(top);
-    if(i!=B_LAST && !is_great_wonder(i)) i = B_LAST;
+    if(i!=B_LAST && !is_wonder(i)) i = B_LAST;
     help_update_wonder(pitem, top, i);
     break;
   case HELP_UNIT:

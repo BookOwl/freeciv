@@ -137,7 +137,7 @@ void init_settlers(void)
   /* (Re)allocate map arrays.  Note that the server may run more than one
    * game so the realloc() is necessary. */
   territory = fc_realloc(territory,
-                         MAP_INDEX_SIZE * sizeof(*territory));
+                         map.xsize * map.ysize * sizeof(*territory));
 }
 
 /**************************************************************************
@@ -184,29 +184,29 @@ static bool is_already_assigned(struct unit *myunit, struct player *pplayer,
 int city_tile_value(struct city *pcity, int x, int y, 
 		    int foodneed, int prodneed)
 {
-  int food = city_get_output_tile(x, y, pcity, O_FOOD);
-  int shield = city_get_output_tile(x, y, pcity, O_SHIELD);
-  int trade = city_get_output_tile(x, y, pcity, O_TRADE);
-  int value = 0;
+ int food = city_get_food_tile(x, y, pcity);
+ int shield = city_get_shields_tile(x, y, pcity);
+ int trade = city_get_trade_tile(x, y, pcity);
+ int value = 0;
 
-  /* Each food, trade, and shield gets a certain weighting.  We also benefit
-   * tiles that have at least one of an item - this promotes balance and 
-   * also accounts for INC_TILE effects. */
-  value += food * FOOD_WEIGHTING;
-  if (food > 0) {
-    value += FOOD_WEIGHTING / 2;
-  }
-  value += shield * SHIELD_WEIGHTING;
-  if (shield > 0) {
-    value += SHIELD_WEIGHTING / 2;
-  }
-  value += trade * TRADE_WEIGHTING;
-  if (trade > 0) {
-    value += TRADE_WEIGHTING / 2;
-  }
+ /* Each food, trade, and shield gets a certain weighting.  We also benefit
+  * tiles that have at least one of an item - this promotes balance and 
+  * also accounts for INC_TILE effects. */
+ value += food * FOOD_WEIGHTING;
+ if (food > 0) {
+   value += FOOD_WEIGHTING / 2;
+ }
+ value += shield * SHIELD_WEIGHTING;
+ if (shield > 0) {
+   value += SHIELD_WEIGHTING / 2;
+ }
+ value += trade * TRADE_WEIGHTING;
+ if (trade > 0) {
+   value += TRADE_WEIGHTING / 2;
+ }
 
-  return value;
-}
+ return value;
+}  
 
 /**************************************************************************
   Calculates the value of removing pollution at the given tile.
@@ -704,7 +704,7 @@ static int ai_calc_railroad(struct city *pcity, struct player *pplayer,
 }
 
 /**************************************************************************
-  Tries to find a boat for our unit. Requires warmap to be initialized
+  Tries to find a boat for our settler. Requires warmap to be initialized
   with respect to x, y. cap is the requested capacity on the transport.
   Note that it may return a transport with less than cap capacity if this
   transport has zero move cost to x, y.
@@ -846,8 +846,8 @@ static int unit_foodbox_cost(struct unit *punit)
 static int unit_food_upkeep(struct unit *punit)
 {
   struct player *pplayer = unit_owner(punit);
-  int upkeep = utype_upkeep_cost(unit_type(punit),
-				 get_gov_pplayer(pplayer), O_FOOD);
+  int upkeep = utype_food_cost(unit_type(punit),
+			       get_gov_pplayer(pplayer));
   if (punit->id != 0 && punit->homecity == 0)
     upkeep = 0; /* thanks, Peter */
 
@@ -982,7 +982,7 @@ static int evaluate_improvements(struct unit *punit,
 	  time = mv_turns
 	    + get_turns_for_activity_at(punit, ACTIVITY_FALLOUT, ptile);
 	  consider_settler_action(pplayer, ACTIVITY_FALLOUT,
-				  pplayer->ai.frost,
+				  pplayer->ai.warmth,
 				  pcity->ai.derad[i][j], oldv, in_use, time,
 				  &best_newv, &best_oldv,
 				  best_act, best_tile,
@@ -1087,7 +1087,6 @@ static void auto_settler_findwork(struct player *pplayer, struct unit *punit)
   }
 
   if (unit_flag(punit, F_CITIES) && pplayer->ai.control) {
-    /* may use a boat: */
     find_best_city_placement(punit, &result, TRUE, FALSE);
     UNIT_LOG(LOG_SETTLER, punit, "city want %d (impr want %d)", result.result,
              best_impr);
@@ -1163,7 +1162,7 @@ static int best_worker_tile_value(struct city *pcity)
   int best = 0;
 
   city_map_iterate(x, y) {
-    if (is_free_worked_tile(x, y) 
+    if (is_city_center(x, y) 
 	|| get_worker_city(pcity, x, y) == C_TILE_WORKER 
 	|| get_worker_city(pcity, x, y) == C_TILE_EMPTY) {
       int tmp = city_tile_value(pcity, x, y, 0, 0);
@@ -1248,21 +1247,10 @@ void auto_settlers_player(struct player *pplayer)
   /* Initialize the infrastructure cache, which is used shortly. */
   initialize_infrastructure_cache(pplayer);
 
-  /* An extra consideration for the benefit of cleaning up pollution/fallout.
-   * This depends heavily on the calculations in update_environmental_upset.
-   * Aside from that it's more or less a WAG that simply grows incredibly
-   * large as an environmental disaster approaches. */
-  pplayer->ai.warmth
-    = (WARMING_FACTOR * game.heating / ((game.warminglevel + 1) / 2)
-       + game.globalwarming);
-  pplayer->ai.frost
-    = (COOLING_FACTOR * game.cooling / ((game.coolinglevel + 1) / 2)
-       + game.nuclearwinter);
+  pplayer->ai.warmth = WARMING_FACTOR * (game.heating > game.warminglevel ? 2 : 1);
 
   freelog(LOG_DEBUG, "Warmth = %d, game.globalwarming=%d",
 	  pplayer->ai.warmth, game.globalwarming);
-  freelog(LOG_DEBUG, "Frost = %d, game.nuclearwinter=%d",
-	  pplayer->ai.warmth, game.nuclearwinter);
 
   /* Auto-settle with a settler unit if it's under AI control (e.g. human
    * player auto-settler mode) or if the player is an AI.  But don't
@@ -1392,7 +1380,7 @@ noticeably slow the game, feel free to replace this else{}  -- Syela */
 **************************************************************************/
 static void assign_territory(void)
 {
-  memset(territory, 0, MAP_INDEX_SIZE * sizeof(*territory));
+  memset(territory, 0, map.xsize * map.ysize * sizeof(*territory));
 
   players_iterate(pplayer) {
     assign_territory_player(pplayer);
@@ -1453,7 +1441,6 @@ void contemplate_new_city(struct city *pcity)
     bool is_coastal = is_ocean_near_tile(pcity->tile);
 
     find_best_city_placement(virtualunit, &result, is_coastal, is_coastal);
-    assert(0 <= result.result);
 
     CITY_LOG(LOG_DEBUG, pcity, "want(%d) to establish city at"
 	     " (%d, %d) and will %s to get there", result.result, 

@@ -25,7 +25,6 @@
 #include "timing.h"
 
 #include "graphics_g.h"
-#include "gui_main_g.h"
 #include "mapctrl_g.h"
 #include "mapview_g.h"
 
@@ -36,8 +35,7 @@
 #include "mapview_common.h"
 #include "tilespec.h"
 
-struct mapview_decoration *map_deco;
-struct view mapview;
+struct mapview_canvas mapview_canvas;
 struct overview overview;
 bool can_slide = TRUE;
 
@@ -60,88 +58,29 @@ static void redraw_overview(void);
 static void dirty_overview(void);
 static void flush_dirty_overview(void);
 
-static void tile_draw_grid(struct canvas *pcanvas, const struct tile *ptile,
-			   int canvas_x, int canvas_y,
-			   const struct city *citymode);
-
-enum update_type {
-  /* Masks */
-  UPDATE_NONE = 0,
-  UPDATE_CITY_DESCRIPTIONS = 1,
-  UPDATE_MAP_CANVAS_VISIBLE = 2
-};
-
-/* A tile update has a tile associated with it as well as an area type.
- * See unqueue_mapview_updates for a thorough explanation. */
-enum tile_update_type {
-  TILE_UPDATE_TILE_SINGLE,
-  TILE_UPDATE_TILE_FULL,
-  TILE_UPDATE_UNIT,
-  TILE_UPDATE_CITY_DESC,
-  TILE_UPDATE_CITYMAP,
-  TILE_UPDATE_COUNT
-};
-static void queue_mapview_update(enum update_type update);
-static void queue_mapview_tile_update(struct tile *ptile,
-				      enum tile_update_type type);
-static void unqueue_mapview_updates(bool write_to_screen);
-
 /**************************************************************************
  Refreshes a single tile on the map canvas.
 **************************************************************************/
-void refresh_tile_mapcanvas(struct tile *ptile,
-			    bool full_refresh, bool write_to_screen)
+void refresh_tile_mapcanvas(struct tile *ptile, bool write_to_screen)
 {
-  if (full_refresh) {
-    queue_mapview_tile_update(ptile, TILE_UPDATE_TILE_FULL);
-  } else {
-    queue_mapview_tile_update(ptile, TILE_UPDATE_TILE_SINGLE);
-  }
-  if (write_to_screen) {
-    unqueue_mapview_updates(TRUE);
-  }
-}
+  int canvas_x, canvas_y;
 
-/**************************************************************************
- Refreshes a single unit on the map canvas.
-**************************************************************************/
-void refresh_unit_mapcanvas(struct unit *punit, struct tile *ptile,
-			    bool full_refresh, bool write_to_screen)
-{
-  if (full_refresh && unit_type_flag(punit->type, F_CITIES)) {
-    queue_mapview_tile_update(ptile, TILE_UPDATE_CITYMAP);
-  } else {
-    queue_mapview_tile_update(ptile, TILE_UPDATE_UNIT);
-  }
-  if (write_to_screen) {
-    unqueue_mapview_updates(TRUE);
-  }
-}
+  if (tile_to_canvas_pos(&canvas_x, &canvas_y, ptile)) {
+    canvas_y += NORMAL_TILE_HEIGHT - UNIT_TILE_HEIGHT;
+    update_map_canvas(canvas_x, canvas_y, UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT);
 
-/**************************************************************************
-  Refreshes a single city on the map canvas.
-
-  If full_refresh is given then the citymap area and the city text will
-  also be refreshed.  Otherwise only the base city sprite is refreshed.
-**************************************************************************/
-void refresh_city_mapcanvas(struct city *pcity, struct tile *ptile,
-			    bool full_refresh, bool write_to_screen)
-{
-  if (full_refresh && (draw_map_grid || draw_borders)) {
-    queue_mapview_tile_update(ptile, TILE_UPDATE_CITYMAP);
-  } else {
-    queue_mapview_tile_update(ptile, TILE_UPDATE_UNIT);
+    if (write_to_screen) {
+      flush_dirty();
+    }
   }
-  if (write_to_screen) {
-    unqueue_mapview_updates(TRUE);
-  }
+  overview_update_tile(ptile);
 }
 
 /**************************************************************************
 Returns the color the grid should have between tile (x1,y1) and
 (x2,y2).
 **************************************************************************/
-enum color_std get_grid_color(const struct tile *tile1, enum direction8 dir)
+enum color_std get_grid_color(struct tile *tile1, enum direction8 dir)
 {
   enum city_tile_type city_tile_type1, city_tile_type2;
   struct city *dummy_pcity;
@@ -300,14 +239,14 @@ bool tile_to_canvas_pos(int *canvas_x, int *canvas_y, struct tile *ptile)
    */
   /* TODO: Cache the value of this position */
   base_canvas_to_map_pos(&center_map_x, &center_map_y,
-			 mapview.width / 2,
-			 mapview.height / 2);
+			 mapview_canvas.width / 2,
+			 mapview_canvas.height / 2);
   base_map_distance_vector(&dx, &dy,
 			   center_map_x, center_map_y, ptile->x, ptile->y);
 
   map_to_gui_pos(canvas_x, canvas_y, center_map_x + dx, center_map_y + dy);
-  *canvas_x -= mapview.gui_x0;
-  *canvas_y -= mapview.gui_y0;
+  *canvas_x -= mapview_canvas.gui_x0;
+  *canvas_y -= mapview_canvas.gui_y0;
 
   /*
    * Finally we clip.
@@ -320,9 +259,9 @@ bool tile_to_canvas_pos(int *canvas_x, int *canvas_y, struct tile *ptile)
    * backing store we need to draw it in case the canvas is resized.
    */
   return (*canvas_x > -NORMAL_TILE_WIDTH
-	  && *canvas_x < mapview.store_width
+	  && *canvas_x < mapview_canvas.store_width
 	  && *canvas_y > -NORMAL_TILE_HEIGHT
-	  && *canvas_y < (mapview.store_height
+	  && *canvas_y < (mapview_canvas.store_height
 			  + UNIT_TILE_HEIGHT - NORMAL_TILE_HEIGHT));
 }
 
@@ -334,8 +273,8 @@ static void base_canvas_to_map_pos(int *map_x, int *map_y,
 				   int canvas_x, int canvas_y)
 {
   gui_to_map_pos(map_x, map_y,
-		 canvas_x + mapview.gui_x0,
-		 canvas_y + mapview.gui_y0);
+		 canvas_x + mapview_canvas.gui_x0,
+		 canvas_y + mapview_canvas.gui_y0);
 }
 
 /**************************************************************************
@@ -450,7 +389,7 @@ static void gui_distance_vector(int *gui_dx, int *gui_dy,
 static void base_set_mapview_origin(int gui_x0, int gui_y0)
 {
   int old_gui_x0, old_gui_y0, dx, dy;
-  const int width = mapview.width, height = mapview.height;
+  const int width = mapview_canvas.width, height = mapview_canvas.height;
   int common_x0, common_x1, common_y0, common_y1;
   int update_x0, update_x1, update_y0, update_y1;
   struct tile *map_center;
@@ -466,13 +405,13 @@ static void base_set_mapview_origin(int gui_x0, int gui_y0)
    * to wrap the distance vector is only one tile. */
   normalize_gui_pos(&gui_x0, &gui_y0);
   gui_distance_vector(&dx, &dy,
-		      mapview.gui_x0, mapview.gui_y0,
+		      mapview_canvas.gui_x0, mapview_canvas.gui_y0,
 		      gui_x0, gui_y0);
   old_gui_x0 = gui_x0 - dx;
   old_gui_y0 = gui_y0 - dy;
 
-  mapview.gui_x0 = gui_x0;
-  mapview.gui_y0 = gui_y0;
+  mapview_canvas.gui_x0 = gui_x0;
+  mapview_canvas.gui_y0 = gui_y0;
 
   /* Find the overlapping area of the new and old mapview.  This is
    * done in GUI coordinates.  Note that if the GUI coordinates wrap
@@ -482,12 +421,12 @@ static void base_set_mapview_origin(int gui_x0, int gui_y0)
   common_y0 = MAX(old_gui_y0, gui_y0);
   common_y1 = MIN(old_gui_y0, gui_y0) + height;
 
-  if (mapview.can_do_cached_drawing
+  if (mapview_canvas.can_do_cached_drawing
       && common_x1 > common_x0 && common_y1 > common_y0) {
     /* Do a partial redraw only.  This means the area of overlap (a
      * rectangle) is copied.  Then the remaining areas (two rectangles)
      * are updated through update_map_canvas. */
-    struct canvas *target = mapview.tmp_store;
+    struct canvas *target = mapview_canvas.tmp_store;
 
     if (old_gui_x0 < gui_x0) {
       update_x0 = MAX(old_gui_x0 + width, gui_x0);
@@ -505,13 +444,13 @@ static void base_set_mapview_origin(int gui_x0, int gui_y0)
     }
 
     dirty_all();
-    canvas_copy(target, mapview.store,
+    canvas_copy(target, mapview_canvas.store,
 		common_x0 - old_gui_x0,
 		common_y0 - old_gui_y0,
 		common_x0 - gui_x0, common_y0 - gui_y0,
 		common_x1 - common_x0, common_y1 - common_y0);
-    mapview.tmp_store = mapview.store;
-    mapview.store = target;
+    mapview_canvas.tmp_store = mapview_canvas.store;
+    mapview_canvas.store = target;
 
     if (update_y1 > update_y0) {
       update_map_canvas(0, update_y0 - gui_y0,
@@ -522,8 +461,7 @@ static void base_set_mapview_origin(int gui_x0, int gui_y0)
 			update_x1 - update_x0, common_y1 - common_y0);
     }
   } else {
-    dirty_all();
-    update_map_canvas(0, 0, mapview.store_width, mapview.store_height);
+    update_map_canvas_visible();
   }
 
   map_center = get_center_tile_mapcanvas();
@@ -558,12 +496,12 @@ void set_mapview_origin(int gui_x0, int gui_y0)
     gui_y0 = CLIP(ymin, gui_y0, ymax - ysize);
   }
 
-  if (mapview.gui_x0 == gui_x0 && mapview.gui_y0 == gui_y0) {
+  if (mapview_canvas.gui_x0 == gui_x0 && mapview_canvas.gui_y0 == gui_y0) {
     return;
   }
 
   if (can_slide && smooth_center_slide_msec > 0) {
-    int start_x = mapview.gui_x0, start_y = mapview.gui_y0;
+    int start_x = mapview_canvas.gui_x0, start_y = mapview_canvas.gui_y0;
     int diff_x, diff_y;
     double timing_sec = (double)smooth_center_slide_msec / 1000.0, mytime;
     static struct timer *anim_timer;
@@ -571,8 +509,6 @@ void set_mapview_origin(int gui_x0, int gui_y0)
 
     gui_distance_vector(&diff_x, &diff_y, start_x, start_y, gui_x0, gui_y0);
     anim_timer = renew_timer_start(anim_timer, TIMER_USER, TIMER_ACTIVE);
-
-    unqueue_mapview_updates(TRUE);
 
     do {
       mytime = MIN(read_timer_seconds(anim_timer), timing_sec);
@@ -624,8 +560,8 @@ void get_mapview_scroll_window(int *xmin, int *ymin, int *xmax, int *ymax,
 {
   int diff;
 
-  *xsize = mapview.width;
-  *ysize = mapview.height;
+  *xsize = mapview_canvas.width;
+  *ysize = mapview_canvas.height;
 
   if (MAP_IS_ISOMETRIC == is_isometric) {
     /* If the map and view line up, it's easy. */
@@ -673,11 +609,11 @@ void get_mapview_scroll_window(int *xmin, int *ymin, int *xmax, int *ymax,
     NATIVE_TO_MAP_POS(&map_x, &map_y, map.xsize - 1, map.ysize - 1);
     map_to_gui_pos(&gui_x4, &gui_y4, map_x, map_y);
 
-    *xmin = MIN(gui_x1, MIN(gui_x2, gui_x3)) - mapview.width / 2;
-    *ymin = MIN(gui_y1, MIN(gui_y2, gui_y3)) - mapview.height / 2;
+    *xmin = MIN(gui_x1, MIN(gui_x2, gui_x3)) - mapview_canvas.width / 2;
+    *ymin = MIN(gui_y1, MIN(gui_y2, gui_y3)) - mapview_canvas.height / 2;
 
-    *xmax = MAX(gui_x4, MAX(gui_x2, gui_x3)) + mapview.width / 2;
-    *ymax = MAX(gui_y4, MAX(gui_y2, gui_y3)) + mapview.height / 2;
+    *xmax = MAX(gui_x4, MAX(gui_x2, gui_x3)) + mapview_canvas.width / 2;
+    *ymax = MAX(gui_y4, MAX(gui_y2, gui_y3)) + mapview_canvas.height / 2;
   }
 
   /* Make sure the scroll window is big enough to hold the mapview.  If
@@ -718,8 +654,8 @@ void get_mapview_scroll_step(int *xstep, int *ystep)
 ****************************************************************************/
 void get_mapview_scroll_pos(int *scroll_x, int *scroll_y)
 {
-  *scroll_x = mapview.gui_x0;
-  *scroll_y = mapview.gui_y0;
+  *scroll_x = mapview_canvas.gui_x0;
+  *scroll_y = mapview_canvas.gui_y0;
 }
 
 /****************************************************************************
@@ -739,8 +675,8 @@ void set_mapview_scroll_pos(int scroll_x, int scroll_y)
 **************************************************************************/
 struct tile *get_center_tile_mapcanvas(void)
 {
-  return canvas_pos_to_nearest_tile(mapview.width / 2,
-				    mapview.height / 2);
+  return canvas_pos_to_nearest_tile(mapview_canvas.width / 2,
+				    mapview_canvas.height / 2);
 }
 
 /**************************************************************************
@@ -749,16 +685,12 @@ struct tile *get_center_tile_mapcanvas(void)
 void center_tile_mapcanvas(struct tile *ptile)
 {
   int gui_x, gui_y;
-  static bool first = TRUE;
-
-  assert(!first || !can_slide);
-  first = FALSE;
 
   map_to_gui_pos(&gui_x, &gui_y, ptile->x, ptile->y);
 
   /* Put the center pixel of the tile at the exact center of the mapview. */
-  gui_x -= (mapview.width - NORMAL_TILE_WIDTH) / 2;
-  gui_y -= (mapview.height - NORMAL_TILE_HEIGHT) / 2;
+  gui_x -= (mapview_canvas.width - NORMAL_TILE_WIDTH) / 2;
+  gui_y -= (mapview_canvas.height - NORMAL_TILE_HEIGHT) / 2;
 
   set_mapview_origin(gui_x, gui_y);
 }
@@ -815,11 +747,11 @@ bool tile_visible_and_not_on_border_mapcanvas(struct tile *ptile)
       && (!same || scroll_y > ymin || topo_has_flag(TF_WRAPY))) {
     return FALSE;
   }
-  if (canvas_x + NORMAL_TILE_WIDTH > mapview.width - border_x
+  if (canvas_x + NORMAL_TILE_WIDTH > mapview_canvas.width - border_x
       && (!same || scroll_x + xsize < xmax || topo_has_flag(TF_WRAPX))) {
     return FALSE;
   }
-  if (canvas_y + NORMAL_TILE_HEIGHT > mapview.height - border_y
+  if (canvas_y + NORMAL_TILE_HEIGHT > mapview_canvas.height - border_y
       && (!same || scroll_y + ysize < ymax || topo_has_flag(TF_WRAPY))) {
     return FALSE;
   }
@@ -856,11 +788,11 @@ static void put_path_length(void)
 
     if (tile_to_canvas_pos(&canvas_x, &canvas_y, ptile)) {
       if (sprites.path.turns[units]) {
-	canvas_put_sprite_full(mapview.store, canvas_x, canvas_y,
+	canvas_put_sprite_full(mapview_canvas.store, canvas_x, canvas_y,
 			       sprites.path.turns[units]);
       }
       if (tens > 0 && sprites.path.turns_tens[tens]) {
-	canvas_put_sprite_full(mapview.store, canvas_x, canvas_y,
+	canvas_put_sprite_full(mapview_canvas.store, canvas_x, canvas_y,
 			       sprites.path.turns_tens[tens]);
       }
     }
@@ -936,39 +868,18 @@ static void put_drawn_sprites(struct canvas *pcanvas,
 }
 
 /**************************************************************************
-  Draw one layer of a tile, edge, corner, unit, and/or city onto the
-  canvas at the given position.
-**************************************************************************/
-static void put_one_element(struct canvas *pcanvas, enum mapview_layer layer,
-			    struct tile *ptile,
-			    const struct tile_edge *pedge,
-			    const struct tile_corner *pcorner,
-			    const struct unit *punit, struct city *pcity,
-			    int canvas_x, int canvas_y,
-			    const struct city *citymode)
-{
-  struct drawn_sprite tile_sprs[80];
-  int count = fill_sprite_array(tile_sprs, layer, ptile, pedge, pcorner,
-				punit, pcity, citymode);
-  bool fog = (ptile && tile_get_known(ptile) == TILE_KNOWN_FOGGED 
-	      && draw_fog_of_war && fogstyle == FOG_AUTO);
-
-  /*** Draw terrain and specials ***/
-  put_drawn_sprites(pcanvas, canvas_x, canvas_y, count, tile_sprs, fog);
-}
-
-/**************************************************************************
   Draw the given unit onto the canvas store at the given location.  The
   area of drawing is UNIT_TILE_HEIGHT x UNIT_TILE_WIDTH.
 **************************************************************************/
-void put_unit(const struct unit *punit,
+void put_unit(struct unit *punit,
 	      struct canvas *pcanvas, int canvas_x, int canvas_y)
 {
+  struct drawn_sprite drawn_sprites[40];
+  int count = fill_sprite_array(drawn_sprites, NULL, punit, NULL, FALSE);
+
   canvas_y += (UNIT_TILE_HEIGHT - NORMAL_TILE_HEIGHT);
-  mapview_layer_iterate(layer) {
-    put_one_element(pcanvas, layer, NULL, NULL, NULL,
-		    punit, NULL, canvas_x, canvas_y, NULL);
-  } mapview_layer_iterate_end;
+  put_drawn_sprites(pcanvas, canvas_x, canvas_y,
+		    count, drawn_sprites, FALSE);
 }
 
 /**************************************************************************
@@ -978,12 +889,12 @@ void put_unit(const struct unit *punit,
 void put_city(struct city *pcity,
 	      struct canvas *pcanvas, int canvas_x, int canvas_y)
 {
+  struct drawn_sprite drawn_sprites[40];
+  int count = fill_sprite_array(drawn_sprites, NULL, NULL, pcity, FALSE);
+
   canvas_y += (UNIT_TILE_HEIGHT - NORMAL_TILE_HEIGHT);
-  mapview_layer_iterate(layer) {
-    put_one_element(pcanvas, layer,
-		    NULL, NULL, NULL, NULL, pcity,
-		    canvas_x, canvas_y, NULL);
-  } mapview_layer_iterate_end;
+  put_drawn_sprites(pcanvas, canvas_x, canvas_y,
+		    count, drawn_sprites, FALSE);
 }
 
 /**************************************************************************
@@ -994,12 +905,13 @@ void put_city(struct city *pcity,
 void put_terrain(struct tile *ptile,
 		 struct canvas *pcanvas, int canvas_x, int canvas_y)
 {
+  struct drawn_sprite drawn_sprites[40];
+  int count = fill_sprite_array(drawn_sprites, ptile, NULL, NULL, FALSE);
+
   /* Use full tile height, even for terrains. */
   canvas_y += (UNIT_TILE_HEIGHT - NORMAL_TILE_HEIGHT);
-  mapview_layer_iterate(layer) {
-    put_one_element(pcanvas, layer, ptile, NULL, NULL, NULL, NULL,
-		    canvas_x, canvas_y, NULL);
-  } mapview_layer_iterate_end;
+  put_drawn_sprites(pcanvas, canvas_x, canvas_y,
+		    count, drawn_sprites, FALSE);
 }
 
 /****************************************************************************
@@ -1013,9 +925,9 @@ void put_city_tile_output(struct city *pcity, int city_x, int city_y,
 			  struct canvas *pcanvas,
 			  int canvas_x, int canvas_y)
 {
-  int food = city_get_output_tile(city_x, city_y, pcity, O_FOOD);
-  int shields = city_get_output_tile(city_x, city_y, pcity, O_SHIELD);
-  int trade = city_get_output_tile(city_x, city_y, pcity, O_TRADE);
+  int food = city_get_food_tile(city_x, city_y, pcity);
+  int shields = city_get_shields_tile(city_x, city_y, pcity);
+  int trade = city_get_trade_tile(city_x, city_y, pcity);
 
   food = CLIP(0, food, NUM_TILES_DIGITS - 1);
   shields = CLIP(0, shields, NUM_TILES_DIGITS - 1);
@@ -1047,12 +959,12 @@ void put_unit_city_overlays(struct unit *punit,
 			    struct canvas *pcanvas,
 			    int canvas_x, int canvas_y)
 {
-  int upkeep_food = CLIP(0, punit->upkeep[O_FOOD], 2);
-  int upkeep_gold = CLIP(0, punit->upkeep[O_GOLD], 2);
+  int upkeep_food = CLIP(0, punit->upkeep_food, 2);
+  int upkeep_gold = CLIP(0, punit->upkeep_gold, 2);
   int unhappy = CLIP(0, punit->unhappiness, 2);
 
   /* draw overlay pixmaps */
-  if (punit->upkeep[O_SHIELD] > 0) {
+  if (punit->upkeep > 0) {
     canvas_put_sprite_full(pcanvas, canvas_x, canvas_y,
 			   sprites.upkeep.shield);
   }
@@ -1071,21 +983,21 @@ void put_unit_city_overlays(struct unit *punit,
 }
 
 /*
- * pcity->client.color_index is an index into the city_colors array.
- * When toggle_city_color is called the city's coloration is toggled.  When
- * a city is newly colored its color is taken from color_index and
- * color_index is moved forward one position. Each color in the array
- * tells what color the citymap will be drawn on the mapview.
+ * pcity->client.color is an index into the city_colors array.  The default
+ * color index is DEFAULT_CITY_COLOR in city.h.  When toggle_city_color is
+ * called the index moves forward one position.  Each color in the array
+ * tells what color the citymap will be drawn on the mapview; COLOR_STD_LAST
+ * is a marker meaning nothing will be drawn (which of course is the
+ * default).
  *
  * This array can be added to without breaking anything elsewhere.
  */
 static enum color_std city_colors[] = {
+  COLOR_STD_LAST,  /* Default color (see DEFAULT_CITY_COLOR in city.h). */
   COLOR_STD_RED,
+  COLOR_STD_WHITE,
   COLOR_STD_YELLOW,
-  COLOR_STD_CYAN,
-  COLOR_STD_WHITE
 };
-static int color_index = 0;
 #define NUM_CITY_COLORS ARRAY_SIZE(city_colors)
 
 
@@ -1096,15 +1008,16 @@ static int color_index = 0;
 ****************************************************************************/
 void toggle_city_color(struct city *pcity)
 {
-  if (pcity->client.colored) {
-    pcity->client.colored = FALSE;
-  } else {
-    pcity->client.colored = TRUE;
-    pcity->client.color_index = color_index;
-    color_index = (color_index + 1) % NUM_CITY_COLORS;
-  }
+  int canvas_x, canvas_y;
+  int width = get_citydlg_canvas_width();
+  int height = get_citydlg_canvas_height();
 
-  refresh_city_mapcanvas(pcity, pcity->tile, TRUE, FALSE);
+  pcity->client.color = (pcity->client.color + 1) % NUM_CITY_COLORS;
+
+  tile_to_canvas_pos(&canvas_x, &canvas_y, pcity->tile);
+  update_map_canvas(canvas_x - (width - NORMAL_TILE_WIDTH) / 2,
+		    canvas_y - (height - NORMAL_TILE_HEIGHT) / 2,
+		    width, height);
 }
 
 /****************************************************************************
@@ -1114,15 +1027,16 @@ void toggle_city_color(struct city *pcity)
 ****************************************************************************/
 void toggle_unit_color(struct unit *punit)
 {
-  if (punit->client.colored) {
-    punit->client.colored = FALSE;
-  } else {
-    punit->client.colored = TRUE;
-    punit->client.color_index = color_index;
-    color_index = (color_index + 1) % NUM_CITY_COLORS;
-  }
+  int canvas_x, canvas_y;
+  int width = get_citydlg_canvas_width();
+  int height = get_citydlg_canvas_height();
 
-  refresh_unit_mapcanvas(punit, punit->tile, TRUE, FALSE);
+  punit->client.color = (punit->client.color + 1) % NUM_CITY_COLORS;
+
+  tile_to_canvas_pos(&canvas_x, &canvas_y, punit->tile);
+  update_map_canvas(canvas_x - (width - NORMAL_TILE_WIDTH) / 2,
+		    canvas_y - (height - NORMAL_TILE_HEIGHT) / 2,
+		    width, height);
 }
 
 /****************************************************************************
@@ -1320,15 +1234,10 @@ void put_nuke_mushroom_pixmaps(struct tile *ptile)
   canvas_x += (NORMAL_TILE_WIDTH - width) / 2;
   canvas_y += (NORMAL_TILE_HEIGHT - height) / 2;
 
-  /* Make sure everything is flushed and synced before proceeding.  First
-   * we update everything to the store, but don't write this to screen.
-   * Then add the nuke graphic to the store.  Finally flush everything to
-   * the screen and wait 1 second. */
-  unqueue_mapview_updates(FALSE);
-
-  canvas_put_sprite_full(mapview.store, canvas_x, canvas_y, mysprite);
+  canvas_put_sprite_full(mapview_canvas.store, canvas_x, canvas_y, mysprite);
   dirty_rect(canvas_x, canvas_y, width, height);
 
+  /* Make sure everything is flushed and synced before proceeding. */
   flush_dirty();
   gui_flush();
 
@@ -1341,7 +1250,7 @@ void put_nuke_mushroom_pixmaps(struct tile *ptile)
    Draw the borders of the given map tile at the given canvas position.
 **************************************************************************/
 static void tile_draw_borders(struct canvas *pcanvas,
-			      const struct tile *ptile,
+			      struct tile *ptile,
 			      int canvas_x, int canvas_y)
 {
   struct player *this_owner = map_get_owner(ptile), *adjc_owner;
@@ -1396,81 +1305,64 @@ static void tile_draw_borders(struct canvas *pcanvas,
   }
 }
 
-/****************************************************************************
-  Return TRUE if the tile is within the city radius of one of the player's
-  cities, and can be worked by the player.
-****************************************************************************/
-static bool player_workable_and_in_city_radius(const struct player *pplayer,
-					       const struct tile *ptile)
+/**************************************************************************
+  Draw the given map tile at the given canvas position in non-isometric
+  view.
+**************************************************************************/
+void put_one_tile(struct canvas *pcanvas, struct tile *ptile,
+		  int canvas_x, int canvas_y, bool citymode)
 {
-  struct player *powner = map_get_owner(ptile);
-
-  /* Borders are considered but not units.  This function is intended to be
-   * used by the drawing code not the backend. */
-  if (powner && powner != pplayer) {
-    return FALSE;
+  if (tile_get_known(ptile) != TILE_UNKNOWN) {
+    /* FIXME: These two functions should be merged. */
+    put_one_tile_iso(pcanvas, ptile, canvas_x, canvas_y, citymode);
+  } else {
+    /* tile is unknown */
+    canvas_put_rectangle(pcanvas, COLOR_STD_BLACK,
+			 canvas_x, canvas_y,
+			 NORMAL_TILE_WIDTH, NORMAL_TILE_HEIGHT);
   }
-  return player_in_city_radius(pplayer, ptile);
+}
+
+/**************************************************************************
+  Draw the unique tile for the given map position, in non-isometric view.
+  The coordinates have not been normalized, and are not guaranteed to be
+  real (we have to draw unreal tiles too).
+**************************************************************************/
+static void put_tile(struct tile *ptile)
+{
+  int canvas_x, canvas_y;
+
+  if (tile_to_canvas_pos(&canvas_x, &canvas_y, ptile)) {
+    freelog(LOG_DEBUG, "putting (%d,%d) at (%d,%d)",
+	    TILE_XY(ptile), canvas_x, canvas_y);
+    put_one_tile(mapview_canvas.store, ptile,
+		 canvas_x, canvas_y, FALSE);
+  }
 }
 
 /****************************************************************************
    Draw the map grid around the given map tile at the given canvas position.
 ****************************************************************************/
 static void tile_draw_map_grid(struct canvas *pcanvas,
-			       const struct tile *ptile,
+			       struct tile *ptile,
 			       int canvas_x, int canvas_y)
 {
   enum direction8 dir;
 
-  if (draw_map_grid) {
-    for (dir = 0; dir < 8; dir++) {
-      int start_x, start_y, end_x, end_y;
+  if (!draw_map_grid) {
+    return;
+  }
 
-      /* Draw the grid.  Every edge gets one line; we just have to
-       * check what color. */
-      if (get_tile_boundaries(dir, 0, 1,
-			      &start_x, &start_y, &end_x, &end_y)) {
-	canvas_put_line(pcanvas,
-			get_grid_color(ptile, dir),
-			LINE_NORMAL,
-			canvas_x + start_x, canvas_y + start_y,
-			end_x - start_x, end_y - start_y);
-      }
-    }
-  } else if (draw_city_outlines) {
-    /* Draw only the outlines of cities and setter citymap areas.
-     * Here we have to check if each edge presents the boundary of
-     * a citymap and non-citymap area.  City areas are edged in white,
-     * settler citymap areas in red and underneath.  We also consider
-     * any tile in enemy territory not to be part of the citys'
-     * citymaps (though they are counted for settler citymaps). */
-    for (dir = 0; dir < 8; dir++) {
-      int start_x, start_y, end_x, end_y, dummy_x, dummy_y;
-      struct tile *tile2 = mapstep(ptile, dir);
-      struct unit *pfocus;
-      enum color_std color = COLOR_STD_LAST;
+  for (dir = 0; dir < 8; dir++) {
+    int start_x, start_y, end_x, end_y;
 
-      if (tile2
-	  && get_tile_boundaries(dir, 0, 1,
-				 &start_x, &start_y, &end_x, &end_y)) {
-	if (XOR(player_workable_and_in_city_radius(game.player_ptr, ptile),
-		player_workable_and_in_city_radius(game.player_ptr, tile2))) {
-	  color = COLOR_STD_WHITE;
-	} else if ((pfocus = get_unit_in_focus())
-		   && unit_flag(pfocus, F_CITIES)
-		   && city_can_be_built_here(pfocus->tile, pfocus)
-		   && XOR(base_map_to_city_map(&dummy_x, &dummy_y,
-					       pfocus->tile, ptile),
-			  base_map_to_city_map(&dummy_x, &dummy_y,
-					       pfocus->tile, tile2))) {
-	  color = COLOR_STD_RED;
-	}
-	if (color != COLOR_STD_LAST) {
-	  canvas_put_line(pcanvas, color, LINE_NORMAL,
-			  canvas_x + start_x, canvas_y + start_y,
-			  end_x - start_x, end_y - start_y);
-	}
-      }
+    if (get_tile_boundaries(dir, 0, 1,
+			    &start_x, &start_y, &end_x, &end_y)) {
+      canvas_put_line(pcanvas,
+		      get_grid_color(ptile, dir),
+		      LINE_NORMAL,
+		      canvas_x + start_x, canvas_y + start_y,
+		      end_x - start_x, end_y - start_y);
     }
   }
 }
@@ -1481,7 +1373,7 @@ static void tile_draw_map_grid(struct canvas *pcanvas,
   If the map grid is drawn this will cover it up.
 ****************************************************************************/
 static void tile_draw_coastline(struct canvas *pcanvas,
-				const struct tile *ptile,
+				struct tile *ptile,
 				int canvas_x, int canvas_y)
 {
   Terrain_type_id t1 = map_get_terrain(ptile), t2;
@@ -1510,7 +1402,7 @@ static void tile_draw_coastline(struct canvas *pcanvas,
    position.
 ****************************************************************************/
 static void tile_draw_selection(struct canvas *pcanvas,
-				const struct tile *ptile,
+				struct tile *ptile,
 				int canvas_x, int canvas_y, bool citymode)
 {
   const int inset = (is_isometric ? 0 : 1);
@@ -1532,10 +1424,10 @@ static void tile_draw_selection(struct canvas *pcanvas,
      * map grid if it is drawn. */
     if (get_tile_boundaries(dir, inset, 1,
 			    &start_x, &start_y, &end_x, &end_y)) {
-      if (map_deco[ptile->index].hilite == HILITE_CITY
+      if (ptile->client.hilite == HILITE_CITY
 	  || (is_isometric
 	      && (adjc_tile = mapstep(ptile, dir))
-	      && map_deco[adjc_tile->index].hilite == HILITE_CITY)) {
+	      && adjc_tile->client.hilite == HILITE_CITY)) {
 	canvas_put_line(pcanvas, COLOR_STD_YELLOW, LINE_NORMAL,
 			canvas_x + start_x, canvas_y + start_y,
 			end_x - start_x, end_y - start_y);
@@ -1549,9 +1441,8 @@ static void tile_draw_selection(struct canvas *pcanvas,
    Draw the grid lines of the given map tile at the given canvas position
    in isometric view.  (This include the map grid, borders, and coastline).
 ****************************************************************************/
-static void tile_draw_grid(struct canvas *pcanvas, const struct tile *ptile,
-			   int canvas_x, int canvas_y,
-			   const struct city *citymode)
+void tile_draw_grid(struct canvas *pcanvas, struct tile *ptile,
+		    int canvas_x, int canvas_y, bool citymode)
 {
   tile_draw_map_grid(pcanvas, ptile, canvas_x, canvas_y);
   tile_draw_borders(pcanvas, ptile, canvas_x, canvas_y);
@@ -1560,16 +1451,38 @@ static void tile_draw_grid(struct canvas *pcanvas, const struct tile *ptile,
 }
 
 /**************************************************************************
-  Draw some or all of a tile onto the canvas.
+  Draw some or all of a tile onto the canvas, in iso-view.
 **************************************************************************/
-void put_one_tile(struct canvas *pcanvas, enum mapview_layer layer,
-		  struct tile *ptile, int canvas_x, int canvas_y,
-		  const struct city *citymode)
+void put_one_tile_iso(struct canvas *pcanvas, struct tile *ptile,
+		      int canvas_x, int canvas_y, bool citymode)
 {
-  if (tile_get_known(ptile) != TILE_UNKNOWN) {
-    put_one_element(pcanvas, layer, ptile, NULL, NULL,
-		    get_drawable_unit(ptile, citymode),
-		    ptile->city, canvas_x, canvas_y, citymode);
+  struct drawn_sprite tile_sprs[80];
+  int count = fill_sprite_array(tile_sprs, ptile,
+				get_drawable_unit(ptile, citymode),
+				ptile->city, citymode);
+  bool fog = (tile_get_known(ptile) == TILE_KNOWN_FOGGED && draw_fog_of_war
+	      && fogstyle == 0);
+
+  /*** Draw terrain and specials ***/
+  put_drawn_sprites(pcanvas, canvas_x, canvas_y, count, tile_sprs, fog);
+}
+
+/**************************************************************************
+  Draw the unique tile for the given map position, in isometric view.
+  The coordinates have not been normalized, and are not guaranteed to be
+  real (we have to draw unreal tiles too).
+**************************************************************************/
+static void put_tile_iso(struct tile *ptile)
+{
+  int canvas_x, canvas_y;
+
+  if (tile_to_canvas_pos(&canvas_x, &canvas_y, ptile)) {
+    freelog(LOG_DEBUG, "putting (%d,%d) at (%d,%d)",
+	    TILE_XY(ptile), canvas_x, canvas_y);
+
+    put_one_tile_iso(mapview_canvas.store,
+		     ptile, canvas_x, canvas_y,
+		     FALSE);
   }
 }
 
@@ -1596,14 +1509,14 @@ void update_map_canvas(int canvas_x, int canvas_y, int width, int height)
 
   canvas_x = MAX(canvas_x, 0);
   canvas_y = MAX(canvas_y, 0);
-  width = MIN(mapview.store_width - canvas_x, width);
-  height = MIN(mapview.store_height - canvas_y, height);
+  width = MIN(mapview_canvas.store_width - canvas_x, width);
+  height = MIN(mapview_canvas.store_height - canvas_y, height);
 
-  gui_x0 = mapview.gui_x0 + canvas_x;
-  gui_y0 = mapview.gui_y0 + canvas_y;
+  gui_x0 = mapview_canvas.gui_x0 + canvas_x;
+  gui_y0 = mapview_canvas.gui_y0 + canvas_y;
   full = (canvas_x == 0 && canvas_y == 0
-	  && width == mapview.store_width
-	  && height == mapview.store_height);
+	  && width == mapview_canvas.store_width
+	  && height == mapview_canvas.store_height);
 
   freelog(LOG_DEBUG,
 	  "update_map_canvas(pos=(%d,%d), size=(%d,%d))",
@@ -1614,9 +1527,9 @@ void update_map_canvas(int canvas_x, int canvas_y, int width, int height)
    * tmp_canvas then copy *just* the area of update onto the canvas. */
   if (!full) {
     /* Swap store and tmp_store. */
-    tmp = mapview.store;
-    mapview.store = mapview.tmp_store;
-    mapview.tmp_store = tmp;
+    tmp = mapview_canvas.store;
+    mapview_canvas.store = mapview_canvas.tmp_store;
+    mapview_canvas.tmp_store = tmp;
   }
 
   /* Clear the area.  This is necessary since some parts of the rectangle
@@ -1626,26 +1539,26 @@ void update_map_canvas(int canvas_x, int canvas_y, int width, int height)
    *
    * Of course it's necessary to draw to the whole area to cover up any old
    * drawing that was done there. */
-  canvas_put_rectangle(mapview.store, COLOR_STD_BLACK,
+  canvas_put_rectangle(mapview_canvas.store, COLOR_STD_BLACK,
 		       canvas_x, canvas_y, width, height);
 
-  mapview_layer_iterate(layer) {
-    gui_rect_iterate(gui_x0, gui_y0, width,
-		     height + (is_isometric ? (NORMAL_TILE_HEIGHT / 2) : 0),
-		     ptile, pedge, pcorner, cx, cy) {
-      if (ptile) {
-	put_one_tile(mapview.store, layer, ptile, cx, cy, NULL);
-      } else if (pedge) {
-	put_one_element(mapview.store, layer, NULL, pedge, NULL,
-			NULL, NULL, cx, cy, NULL);
-      } else if (pcorner) {
-	put_one_element(mapview.store, layer, NULL, NULL, pcorner,
-			NULL, NULL, cx, cy, NULL);
-      } else {
-	/* This can happen, for instance for unreal tiles. */
-      }
+  /* FIXME: we don't have to draw black (unknown) tiles since they're already
+   * cleared. */
+  if (is_isometric) {
+    gui_rect_iterate(gui_x0, gui_y0, width, height + NORMAL_TILE_HEIGHT / 2,
+		     ptile) {
+      put_tile_iso(ptile);
     } gui_rect_iterate_end;
-  } mapview_layer_iterate_end;
+  } else {
+    /* not isometric */
+    gui_rect_iterate(gui_x0, gui_y0, width, height, ptile) {
+      /*
+       * We don't normalize until later because we want to draw
+       * black tiles for unreal positions.
+       */
+      put_tile(ptile);
+    } gui_rect_iterate_end;
+  }
 
   /* Draw the goto lines on top of the whole thing. This is done last as
    * we want it completely on top.
@@ -1655,10 +1568,7 @@ void update_map_canvas(int canvas_x, int canvas_y, int width, int height)
    * from adjacent tiles (if they're close enough). */
   gui_rect_iterate(gui_x0 - GOTO_WIDTH, gui_y0 - GOTO_WIDTH,
 		   width + 2 * GOTO_WIDTH, height + 2 * GOTO_WIDTH,
-		   ptile, pedge, pcorner, cx, cy) {
-    if (!ptile) {
-      continue;
-    }
+		   ptile) {
     adjc_dir_iterate(ptile, adjc_tile, dir) {
       if (is_drawn_line(ptile, dir)) {
 	draw_segment(ptile, dir);
@@ -1667,30 +1577,32 @@ void update_map_canvas(int canvas_x, int canvas_y, int width, int height)
   } gui_rect_iterate_end;
 
   /* Draw citymap overlays on top. */
-  gui_rect_iterate(gui_x0, gui_y0, width, height,
-		   ptile, pedge, pcorner, canvas_x2, canvas_y2) {
-    if (ptile && tile_get_known(ptile) != TILE_UNKNOWN) {
+  gui_rect_iterate(gui_x0, gui_y0, width, height, ptile) {
+    if (tile_get_known(ptile) != TILE_UNKNOWN) {
       struct unit *punit;
       struct city *pcity;
-      int city_x, city_y;
+      int city_x, city_y, canvas_x2, canvas_y2;
 
       pcity = find_city_or_settler_near_tile(ptile, &punit);
       if (pcity
-	  && pcity->client.colored
-	  && map_to_city_map(&city_x, &city_y, pcity, ptile)) {
+	  && city_colors[pcity->client.color] != COLOR_STD_LAST
+	  && map_to_city_map(&city_x, &city_y, pcity, ptile)
+	  && tile_to_canvas_pos(&canvas_x2, &canvas_y2, ptile)) {
 	enum city_tile_type worker = get_worker_city(pcity, city_x, city_y);
 
-	put_city_worker(mapview.store,
-			city_colors[pcity->client.color_index], worker,
+	put_city_worker(mapview_canvas.store,
+			city_colors[pcity->client.color], worker,
 			canvas_x2, canvas_y2);
 	if (worker == C_TILE_WORKER) {
 	  put_city_tile_output(pcity, city_x, city_y,
-			       mapview.store, canvas_x2, canvas_y2);
+			       mapview_canvas.store, canvas_x2, canvas_y2);
 	}
-      } else if (punit && punit->client.colored) {
+      } else if (punit
+		 && city_colors[punit->client.color] != COLOR_STD_LAST
+		 && tile_to_canvas_pos(&canvas_x2, &canvas_y2, ptile)) {
 	/* Draw citymap overlay for settlers. */
-	put_city_worker(mapview.store,
-			city_colors[punit->client.color_index], C_TILE_EMPTY,
+	put_city_worker(mapview_canvas.store,
+			city_colors[punit->client.color], C_TILE_EMPTY,
 			canvas_x2, canvas_y2);
       }
     }
@@ -1703,12 +1615,12 @@ void update_map_canvas(int canvas_x, int canvas_y, int width, int height)
 
   if (!full) {
     /* Swap store and tmp_store back. */
-    tmp = mapview.store;
-    mapview.store = mapview.tmp_store;
-    mapview.tmp_store = tmp;
+    tmp = mapview_canvas.store;
+    mapview_canvas.store = mapview_canvas.tmp_store;
+    mapview_canvas.tmp_store = tmp;
 
     /* And copy store to tmp_store. */
-    canvas_copy(mapview.store, mapview.tmp_store,
+    canvas_copy(mapview_canvas.store, mapview_canvas.tmp_store,
 		canvas_x, canvas_y, canvas_x, canvas_y, width, height);
   }
 
@@ -1720,7 +1632,9 @@ void update_map_canvas(int canvas_x, int canvas_y, int width, int height)
 **************************************************************************/
 void update_map_canvas_visible(void)
 {
-  queue_mapview_update(UPDATE_MAP_CANVAS_VISIBLE);
+  dirty_all();
+  update_map_canvas(0, 0, mapview_canvas.store_width,
+		    mapview_canvas.store_height);
 }
 
 /* The maximum city description width and height.  This gives the dimensions
@@ -1737,7 +1651,15 @@ static int max_desc_width = 0, max_desc_height = 0;
 **************************************************************************/
 void update_city_description(struct city *pcity)
 {
-  queue_mapview_tile_update(pcity->tile, TILE_UPDATE_CITY_DESC);
+  int canvas_x, canvas_y;
+
+  /* We update the entire map canvas area that this city description
+   * might be covering.  This may, for instance, redraw other city
+   * descriptions that overlap with this one. */
+  (void) tile_to_canvas_pos(&canvas_x, &canvas_y, pcity->tile);
+  update_map_canvas(canvas_x - (max_desc_width - NORMAL_TILE_WIDTH) / 2,
+		    canvas_y + NORMAL_TILE_HEIGHT,
+		    max_desc_width, max_desc_height);
 }
 
 /**************************************************************************
@@ -1772,15 +1694,18 @@ void show_city_descriptions(int canvas_x, int canvas_y,
    * We must draw H2 extra pixels above and (W2 - W1) / 2 extra pixels
    * to each side of the mapview.
    */
-  gui_rect_iterate(mapview.gui_x0 + canvas_x - dx / 2,
-		   mapview.gui_y0 + canvas_y - dy,
+  gui_rect_iterate(mapview_canvas.gui_x0 + canvas_x - dx / 2,
+		   mapview_canvas.gui_y0 + canvas_y - dy,
 		   width + dx, height + dy - NORMAL_TILE_HEIGHT,
-		   ptile, pedge, pcorner, canvas_x, canvas_y) {
-    if (ptile && ptile->city) {
-      int width = 0, height = 0;
-      struct city *pcity = ptile->city;
+		   ptile) {
+    int canvas_x, canvas_y;
+    struct city *pcity = ptile->city;
 
-      show_city_desc(mapview.store, canvas_x, canvas_y,
+    if (pcity) {
+      int width = 0, height = 0;
+
+      (void) tile_to_canvas_pos(&canvas_x, &canvas_y, ptile);
+      show_city_desc(mapview_canvas.store, canvas_x, canvas_y,
 		     pcity, &width, &height);
 
       max_desc_width = MAX(width, max_desc_width);
@@ -1853,7 +1778,7 @@ void draw_segment(struct tile *src_tile, enum direction8 dir)
   map_to_gui_vector(&canvas_dx, &canvas_dy, DIR_DX[dir], DIR_DY[dir]);
 
   /* Draw the segment. */
-  canvas_put_line(mapview.store, COLOR_STD_CYAN, LINE_GOTO,
+  canvas_put_line(mapview_canvas.store, COLOR_STD_CYAN, LINE_GOTO,
 		  canvas_x, canvas_y, canvas_dx, canvas_dy);
 
   /* The actual area drawn will extend beyond the base rectangle, since
@@ -1876,14 +1801,21 @@ void draw_segment(struct tile *src_tile, enum direction8 dir)
 **************************************************************************/
 void undraw_segment(struct tile *src_tile, enum direction8 dir)
 {
-  struct tile *dst_tile = mapstep(src_tile, dir);
+  int canvas_x, canvas_y, canvas_dx, canvas_dy;
 
-  if (is_drawn_line(src_tile, dir) || !dst_tile) {
-    assert(0);
-    return;
-  }
-  refresh_tile_mapcanvas(src_tile, FALSE, FALSE);
-  refresh_tile_mapcanvas(dst_tile, FALSE, FALSE);
+  assert(!is_drawn_line(src_tile, dir));
+
+  /* Note that if source and dest tiles are not adjacent (because the
+   * mapview wraps around) this will not give the correct behavior.  This is
+   * consistent with the current design which fails when the size of the
+   * mapview approaches the size of the map. */
+  (void) tile_to_canvas_pos(&canvas_x, &canvas_y, src_tile);
+  map_to_gui_vector(&canvas_dx, &canvas_dy, DIR_DX[dir], DIR_DY[dir]);
+
+  update_map_canvas(MIN(canvas_x, canvas_x + canvas_dx),
+		    MIN(canvas_y, canvas_y + canvas_dy),
+		    ABS(canvas_dx) + NORMAL_TILE_WIDTH,
+		    ABS(canvas_dy) + NORMAL_TILE_HEIGHT);
 }
 
 /****************************************************************************
@@ -1899,7 +1831,6 @@ void decrease_unit_hp_smooth(struct unit *punit0, int hp0,
 
   set_units_in_combat(punit0, punit1);
 
-  unqueue_mapview_updates(TRUE);
   while (punit0->hp > hp0 || punit1->hp > hp1) {
     const int diff0 = punit0->hp - hp0, diff1 = punit1->hp - hp1;
 
@@ -1907,13 +1838,13 @@ void decrease_unit_hp_smooth(struct unit *punit0, int hp0,
 
     if (myrand(diff0 + diff1) < diff0) {
       punit0->hp--;
-      refresh_unit_mapcanvas(punit0, punit0->tile, FALSE, FALSE);
+      refresh_tile_mapcanvas(punit0->tile, FALSE);
     } else {
       punit1->hp--;
-      refresh_unit_mapcanvas(punit1, punit1->tile, FALSE, FALSE);
+      refresh_tile_mapcanvas(punit1->tile, FALSE);
     }
 
-    unqueue_mapview_updates(TRUE);
+    flush_dirty();
     gui_flush();
 
     usleep_since_timer_start(anim_timer, 10000);
@@ -1922,9 +1853,8 @@ void decrease_unit_hp_smooth(struct unit *punit0, int hp0,
   if (num_tiles_explode_unit > 0
       && tile_to_canvas_pos(&canvas_x, &canvas_y,
 			   losing_unit->tile)) {
-    refresh_unit_mapcanvas(losing_unit, losing_unit->tile, FALSE, FALSE);
-    unqueue_mapview_updates(FALSE);
-    canvas_copy(mapview.tmp_store, mapview.store,
+    refresh_tile_mapcanvas(losing_unit->tile, FALSE);
+    canvas_copy(mapview_canvas.tmp_store, mapview_canvas.store,
 		canvas_x, canvas_y, canvas_x, canvas_y,
 		NORMAL_TILE_WIDTH, NORMAL_TILE_HEIGHT);
 
@@ -1937,10 +1867,10 @@ void decrease_unit_hp_smooth(struct unit *punit0, int hp0,
       /* We first draw the explosion onto the unit and draw draw the
        * complete thing onto the map canvas window. This avoids
        * flickering. */
-      canvas_copy(mapview.store, mapview.tmp_store,
+      canvas_copy(mapview_canvas.store, mapview_canvas.tmp_store,
 		  canvas_x, canvas_y, canvas_x, canvas_y,
 		  NORMAL_TILE_WIDTH, NORMAL_TILE_HEIGHT);
-      canvas_put_sprite_full(mapview.store,
+      canvas_put_sprite_full(mapview_canvas.store,
 			     canvas_x + NORMAL_TILE_WIDTH / 2 - w / 2,
 			     canvas_y + NORMAL_TILE_HEIGHT / 2 - h / 2,
 			     sprites.explode.unit[i]);
@@ -1954,8 +1884,8 @@ void decrease_unit_hp_smooth(struct unit *punit0, int hp0,
   }
 
   set_units_in_combat(NULL, NULL);
-  refresh_unit_mapcanvas(punit0, punit0->tile, TRUE, FALSE);
-  refresh_unit_mapcanvas(punit1, punit1->tile, TRUE, FALSE);
+  refresh_tile_mapcanvas(punit0->tile, FALSE);
+  refresh_tile_mapcanvas(punit1->tile, FALSE);
 }
 
 /**************************************************************************
@@ -1974,8 +1904,11 @@ void move_unit_map_canvas(struct unit *punit,
     return;
   }
 
+  /* Go ahead and start the timer. */
+  anim_timer = renew_timer_start(anim_timer, TIMER_USER, TIMER_ACTIVE);
+
   if (punit == get_unit_in_focus() && hover_state != HOVER_NONE) {
-    set_hover_state(NULL, HOVER_NONE, ACTIVITY_LAST, ORDER_LAST);
+    set_hover_state(NULL, HOVER_NONE, ACTIVITY_LAST);
     update_unit_info_label(punit);
   }
 
@@ -2001,11 +1934,9 @@ void move_unit_map_canvas(struct unit *punit,
       start_y -= NORMAL_TILE_HEIGHT / 2;
     }
 
-    /* Bring the backing store up to date, but don't flush. */
-    unqueue_mapview_updates(FALSE);
-
-    /* Start the timer (AFTER the unqueue above). */
-    anim_timer = renew_timer_start(anim_timer, TIMER_USER, TIMER_ACTIVE);
+    /* Flush before we start animating. */
+    flush_dirty();
+    gui_flush();
 
     do {
       int new_x, new_y;
@@ -2016,12 +1947,12 @@ void move_unit_map_canvas(struct unit *punit,
       new_y = start_y + canvas_dy * (mytime / timing_sec);
 
       /* Backup the canvas store to the temp store. */
-      canvas_copy(mapview.tmp_store, mapview.store,
+      canvas_copy(mapview_canvas.tmp_store, mapview_canvas.store,
 		  new_x, new_y, new_x, new_y,
 		  UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT);
 
       /* Draw */
-      put_unit(punit, mapview.store, new_x, new_y);
+      put_unit(punit, mapview_canvas.store, new_x, new_y);
       dirty_rect(new_x, new_y, UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT);
 
       /* Flush. */
@@ -2029,7 +1960,7 @@ void move_unit_map_canvas(struct unit *punit,
       gui_flush();
 
       /* Restore the backup.  It won't take effect until the next flush. */
-      canvas_copy(mapview.store, mapview.tmp_store,
+      canvas_copy(mapview_canvas.store, mapview_canvas.tmp_store,
 		  new_x, new_y, new_x, new_y,
 		  UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT);
       dirty_rect(new_x, new_y, UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT);
@@ -2084,7 +2015,7 @@ struct city *find_city_or_settler_near_tile(struct tile *ptile,
        * causing it to be marked as C_TILE_UNAVAILABLE.
        */
       
-      if (map_deco[pcity->tile->index].hilite == HILITE_CITY) {
+      if (pcity->tile->client.hilite == HILITE_CITY) {
 	/* rule c */
 	return pcity;
       }
@@ -2110,7 +2041,7 @@ struct city *find_city_or_settler_near_tile(struct tile *ptile,
 	  if (!closest_settler) {
 	    closest_settler = psettler;
 	  }
-	  if (!best_settler && psettler->client.colored) {
+	  if (!best_settler && psettler->client.color != 0) {
 	    best_settler = psettler;
 	  }
 	}
@@ -2174,37 +2105,6 @@ void get_city_mapview_production(struct city *pcity,
 }
 
 static enum update_type needed_updates = UPDATE_NONE;
-static bool callback_queued = FALSE;
-
-/* These values hold the tiles that need city, unit, or tile updates.
- * These different types of updates just tell what area need to be updated,
- * not necessarily what's sitting on the tile.  A city update covers the
- * whole citymap area.  A unit update covers just the "full" unit tile
- * area.  A tile update covers the base tile plus half a tile in each
- * direction. */
-struct tile_list *tile_updates[TILE_UPDATE_COUNT];
-
-/****************************************************************************
-  This callback is called during an idle moment to unqueue any pending
-  mapview updates.
-****************************************************************************/
-static void queue_callback(void *data)
-{
-  callback_queued = FALSE;
-  unqueue_mapview_updates(TRUE);
-}
-
-/****************************************************************************
-  When a mapview update is queued this function should be called to prepare
-  an idle-time callback to unqueue the updates.
-****************************************************************************/
-static void queue_add_callback(void)
-{
-  if (!callback_queued) {
-    callback_queued = TRUE;
-    add_idle_callback(queue_callback, NULL);
-  }
-}
 
 /**************************************************************************
   This function, along with unqueue_mapview_update(), helps in updating
@@ -2226,120 +2126,25 @@ static void queue_add_callback(void)
 void queue_mapview_update(enum update_type update)
 {
   needed_updates |= update;
-  queue_add_callback();
-}
-
-/**************************************************************************
-  Queue this tile to be refreshed.  The refresh will be done some time
-  soon thereafter, and grouped with other needed refreshes.
-
-  Note this should only be called for tiles.  For cities or units use
-  queue_mapview_xxx_update instead.
-**************************************************************************/
-void queue_mapview_tile_update(struct tile *ptile,
-			       enum tile_update_type type)
-{
-  if (!tile_updates[type]) {
-    tile_updates[type] = tile_list_new();
-  }
-  tile_list_append(tile_updates[type], ptile);
-  queue_add_callback();
 }
 
 /**************************************************************************
   See comment for queue_mapview_update().
 **************************************************************************/
-void unqueue_mapview_updates(bool write_to_screen)
+void unqueue_mapview_updates(void)
 {
-  /* Calculate the area covered by each update type.  The area array gives
-   * the offset from the tile origin as well as the width and height of the
-   * area to be updated.  This is initialized each time when entering the
-   * function from the existing tileset variables.
-   *
-   * A TILE update covers the base tile (W x H) plus a half-tile in each
-   * direction (for edge/corner graphics), making its area 2W x 2H.
-   *
-   * A UNIT update covers a UW x UH area.  This is centered horizontally
-   * over the tile but extends up above the tile (e.g., units in iso-view).
-   *
-   * A CITYMAP update covers the whole citymap of a tile.  This includes
-   * the citymap area itself plus an extra half-tile in each direction (for
-   * edge/corner graphics).
-   */
-  const int W = NORMAL_TILE_WIDTH, H = NORMAL_TILE_HEIGHT;
-  const int UW = UNIT_TILE_WIDTH, UH = UNIT_TILE_HEIGHT;
-  const int city_width = get_citydlg_canvas_width() + W;
-  const int city_height = get_citydlg_canvas_height() + H;
-  const struct {
-    int dx, dy, w, h;
-  } area[TILE_UPDATE_COUNT] = {
-    {0, 0, W, H},
-    {-W / 2, -H / 2, 2 * W, 2 * H},
-    {(W - UW) / 2, H - UH, UW, UH},
-    {-(max_desc_width - W) / 2, H, max_desc_width, max_desc_height},
-    {-(city_width - W) / 2, -(city_height - H) / 2, city_width, city_height}
-  };
-
-  int i;
-
   freelog(LOG_DEBUG, "unqueue_mapview_update: needed_updates=%d",
 	  needed_updates);
 
-  if (map_exists()) {
-    if ((needed_updates & UPDATE_MAP_CANVAS_VISIBLE)
-	|| (needed_updates & UPDATE_CITY_DESCRIPTIONS)) {
-      dirty_all();
-      update_map_canvas(0, 0, mapview.store_width,
-			mapview.store_height);
-    } else {
-      int min_x = mapview.width, min_y = mapview.height;
-      int max_x = 0, max_y = 0;
-      int i;
-
-      for (i = 0; i < TILE_UPDATE_COUNT; i++) {
-	if (tile_updates[i]) {
-	  tile_list_iterate(tile_updates[i], ptile) {
-	    int x0, y0, x1, y1;
-
-	    (void) tile_to_canvas_pos(&x0, &y0, ptile);
-
-	    x0 += area[i].dx;
-	    y0 += area[i].dy;
-	    x1 = x0 + area[i].w;
-	    y1 = y0 + area[i].h;
-
-	    if (x1 > 0 && x0 < mapview.width
-		&& y1 > 0 && y0 < mapview.height) {
-	      min_x = MIN(min_x, x0);
-	      min_y = MIN(min_y, y0);
-	      max_x = MAX(max_x, x1);
-	      max_y = MAX(max_y, y1);
-	    }
-
-	    /* FIXME: These overview updates should be batched as well.
-	     * Right now they account for as much as 90% of the runtime of
-	     * the unqueue. */
-	    overview_update_tile(ptile);
-	  } tile_list_iterate_end;
-	}
-      }
-
-      if (min_x < max_x && min_y < max_y) {
-	update_map_canvas(min_x, min_y, max_x - min_x, max_y - min_y);
-      }
-    }
-  }
-  for (i = 0; i < TILE_UPDATE_COUNT; i++) {
-    if (tile_updates[i]) {
-      tile_list_unlink_all(tile_updates[i]);
-    }
+  if (needed_updates & UPDATE_MAP_CANVAS_VISIBLE) {
+    update_map_canvas_visible();
+  } else if (needed_updates & UPDATE_CITY_DESCRIPTIONS) {
+    update_city_descriptions();
   }
   needed_updates = UPDATE_NONE;
 
-  if (write_to_screen) {
-    flush_dirty();
-    flush_dirty_overview();
-  }
+  flush_dirty();
+  flush_dirty_overview();
 }
 
 /**************************************************************************
@@ -2516,6 +2321,7 @@ void overview_to_map_pos(int *map_x, int *map_y,
 {
   int ntl_x = overview_x / OVERVIEW_TILE_SIZE + overview.map_x0;
   int ntl_y = overview_y / OVERVIEW_TILE_SIZE + overview.map_y0;
+  struct tile *ptile;
 
   if (MAP_IS_ISOMETRIC && !topo_has_flag(TF_WRAPX)) {
     /* Clip half tile left and right.  See comment in map_to_overview_pos. */
@@ -2523,10 +2329,12 @@ void overview_to_map_pos(int *map_x, int *map_y,
   }
 
   NATURAL_TO_MAP_POS(map_x, map_y, ntl_x, ntl_y);
-  if (!normalize_map_pos(map_x, map_y)) {
-    /* All positions on the overview should be valid. */
-    assert(FALSE);
-  }
+
+  /* HACK: there are reports of normalize_map_pos failing here, so we use
+   * nearest_real_tile instead. */
+  ptile = nearest_real_tile(*map_x, *map_y);
+  *map_x = ptile->x;
+  *map_y = ptile->y;
 }
 
 /**************************************************************************
@@ -2547,34 +2355,34 @@ static void get_mapview_corners(int x[4], int y[4])
     /* We start with the west corner. */
 
     /* North */
-    x[1] = x[0] + OVERVIEW_TILE_WIDTH * mapview.tile_width;
-    y[1] = y[0] - OVERVIEW_TILE_HEIGHT * mapview.tile_width;
+    x[1] = x[0] + OVERVIEW_TILE_WIDTH * mapview_canvas.tile_width;
+    y[1] = y[0] - OVERVIEW_TILE_HEIGHT * mapview_canvas.tile_width;
 
     /* East */
-    x[2] = x[1] + OVERVIEW_TILE_WIDTH * mapview.tile_height;
-    y[2] = y[1] + OVERVIEW_TILE_HEIGHT * mapview.tile_height;
+    x[2] = x[1] + OVERVIEW_TILE_WIDTH * mapview_canvas.tile_height;
+    y[2] = y[1] + OVERVIEW_TILE_HEIGHT * mapview_canvas.tile_height;
 
     /* South */
-    x[3] = x[0] + OVERVIEW_TILE_WIDTH * mapview.tile_height;
-    y[3] = y[0] + OVERVIEW_TILE_HEIGHT * mapview.tile_height;
+    x[3] = x[0] + OVERVIEW_TILE_WIDTH * mapview_canvas.tile_height;
+    y[3] = y[0] + OVERVIEW_TILE_HEIGHT * mapview_canvas.tile_height;
   } else if (!is_isometric && MAP_IS_ISOMETRIC) {
     /* We start with the west corner.  Note the X scale is smaller. */
 
     /* North */
-    x[1] = x[0] + OVERVIEW_TILE_WIDTH * mapview.tile_width / 2;
-    y[1] = y[0] + OVERVIEW_TILE_HEIGHT * mapview.tile_width;
+    x[1] = x[0] + OVERVIEW_TILE_WIDTH * mapview_canvas.tile_width / 2;
+    y[1] = y[0] + OVERVIEW_TILE_HEIGHT * mapview_canvas.tile_width;
 
     /* East */
-    x[2] = x[1] - OVERVIEW_TILE_WIDTH * mapview.tile_height / 2;
-    y[2] = y[1] + OVERVIEW_TILE_HEIGHT * mapview.tile_height;
+    x[2] = x[1] - OVERVIEW_TILE_WIDTH * mapview_canvas.tile_height / 2;
+    y[2] = y[1] + OVERVIEW_TILE_HEIGHT * mapview_canvas.tile_height;
 
     /* South */
-    x[3] = x[2] - OVERVIEW_TILE_WIDTH * mapview.tile_width / 2;
-    y[3] = y[2] - OVERVIEW_TILE_HEIGHT * mapview.tile_width;
+    x[3] = x[2] - OVERVIEW_TILE_WIDTH * mapview_canvas.tile_width / 2;
+    y[3] = y[2] - OVERVIEW_TILE_HEIGHT * mapview_canvas.tile_width;
   } else {
     /* We start with the northwest corner. */
-    int screen_width = mapview.tile_width;
-    int screen_height = mapview.tile_height * (is_isometric ? 2 : 1);
+    int screen_width = mapview_canvas.tile_width;
+    int screen_height = mapview_canvas.tile_height * (is_isometric ? 2 : 1);
 
     /* Northeast */
     x[1] = x[0] + OVERVIEW_TILE_WIDTH * screen_width - 1;
@@ -2648,7 +2456,7 @@ void overview_update_tile(struct tile *ptile)
 static bool can_do_cached_drawing(void)
 {
   const int W = NORMAL_TILE_WIDTH, H = NORMAL_TILE_HEIGHT;
-  int w = mapview.store_width, h = mapview.store_height;
+  int w = mapview_canvas.store_width, h = mapview_canvas.store_height;
 
   /* If the mapview window is too large, cached drawing is not possible.
    *
@@ -2743,22 +2551,10 @@ void set_overview_dimensions(int width, int height)
 		       0, 0, overview.width, overview.height);
   update_map_canvas_scrollbars_size();
 
-  mapview.can_do_cached_drawing = can_do_cached_drawing();
+  mapview_canvas.can_do_cached_drawing = can_do_cached_drawing();
 
   /* Call gui specific function. */
   map_size_changed();
-}
-
-/**************************************************************************
-  Called when we receive map dimensions.  It initialized the mapview
-  decorations.
-**************************************************************************/
-void init_mapview_decorations(void)
-{
-  map_deco = fc_realloc(map_deco, MAP_INDEX_SIZE * sizeof(*map_deco));
-  whole_map_iterate(ptile) {
-    map_deco[ptile->index].hilite = HILITE_NONE;
-  } whole_map_iterate_end;
 }
 
 /**************************************************************************
@@ -2768,9 +2564,9 @@ void init_mapview_decorations(void)
 **************************************************************************/
 bool map_canvas_resized(int width, int height)
 {
-  int old_tile_width = mapview.tile_width;
-  int old_tile_height = mapview.tile_height;
-  int old_width = mapview.width, old_height = mapview.height;
+  int old_tile_width = mapview_canvas.tile_width;
+  int old_tile_height = mapview_canvas.tile_height;
+  int old_width = mapview_canvas.width, old_height = mapview_canvas.height;
   int tile_width = (width + NORMAL_TILE_WIDTH - 1) / NORMAL_TILE_WIDTH;
   int tile_height = (height + NORMAL_TILE_HEIGHT - 1) / NORMAL_TILE_HEIGHT;
   int full_width = tile_width * NORMAL_TILE_WIDTH;
@@ -2782,12 +2578,12 @@ bool map_canvas_resized(int width, int height)
   /* Since a resize is only triggered when the tile_*** changes, the canvas
    * width and height must include the entire backing store - otherwise
    * small resizings may lead to undrawn tiles. */
-  mapview.tile_width = tile_width;
-  mapview.tile_height = tile_height;
-  mapview.width = width;
-  mapview.height = height;
-  mapview.store_width = full_width;
-  mapview.store_height = full_height;
+  mapview_canvas.tile_width = tile_width;
+  mapview_canvas.tile_height = tile_height;
+  mapview_canvas.width = width;
+  mapview_canvas.height = height;
+  mapview_canvas.store_width = full_width;
+  mapview_canvas.store_height = full_height;
 
   /* Check for what's changed. */
   tile_size_changed = (tile_width != old_tile_width
@@ -2796,22 +2592,21 @@ bool map_canvas_resized(int width, int height)
 
   /* If the tile size has changed, resize the canvas. */
   if (tile_size_changed) {
-    if (mapview.store) {
-      canvas_free(mapview.store);
-      canvas_free(mapview.tmp_store);
+    if (mapview_canvas.store) {
+      canvas_free(mapview_canvas.store);
+      canvas_free(mapview_canvas.tmp_store);
     }
-    mapview.store = canvas_create(full_width, full_height);
-    canvas_put_rectangle(mapview.store, COLOR_STD_BLACK, 0, 0,
+    mapview_canvas.store = canvas_create(full_width, full_height);
+    canvas_put_rectangle(mapview_canvas.store, COLOR_STD_BLACK, 0, 0,
 			 full_width, full_height);
 
-    mapview.tmp_store = canvas_create(full_width, full_height);
+    mapview_canvas.tmp_store = canvas_create(full_width, full_height);
   }
 
   if (map_exists() && can_client_change_view()) {
     if (tile_size_changed) {
       update_map_canvas_visible();
       center_tile_overviewcanvas(get_center_tile_mapcanvas());
-      unqueue_mapview_updates(TRUE);
       redrawn = TRUE;
     }
 
@@ -2823,7 +2618,7 @@ bool map_canvas_resized(int width, int height)
     }
   }
 
-  mapview.can_do_cached_drawing = can_do_cached_drawing();
+  mapview_canvas.can_do_cached_drawing = can_do_cached_drawing();
 
   return redrawn;
 }
@@ -2833,6 +2628,4 @@ bool map_canvas_resized(int width, int height)
 **************************************************************************/
 void init_mapcanvas_and_overview(void)
 {
-  /* Create a dummy map to make sure mapview.store is never NULL. */
-  map_canvas_resized(1, 1);
 }

@@ -87,7 +87,7 @@ static void notify(struct player *pplayer, const char *text, ...)
 {
   if (diplomacy_verbose) {
     va_list ap;
-    struct conn_list *dest = pplayer->connections;
+    struct conn_list *dest = (struct conn_list*)&pplayer->connections;
 
     va_start(ap, text);
     vnotify_conn_ex(dest, NULL, E_DIPLOMACY, text, ap);
@@ -112,44 +112,21 @@ static int greed(int missing_love)
   }
 }
 
-/****************************************************************************
-  Convert clause into diplomatic state
-****************************************************************************/
-static enum diplstate_type pact_clause_to_diplstate_type(enum clause_type type)
-{
-  switch(type) {
-    case CLAUSE_ALLIANCE:
-	return DS_ALLIANCE;
-    case CLAUSE_PEACE:
-        return DS_PEACE;
-    case CLAUSE_CEASEFIRE:
-	return DS_CEASEFIRE;
-    default:
-	assert(0);
-	return DS_WAR;
-  }
-}
-
 /********************************************************************** 
   How much is a tech worth to player measured in gold
 ***********************************************************************/
 static int ai_goldequiv_tech(struct player *pplayer, Tech_Type_id tech)
 {
-  int bulbs, tech_want, worth;
-  struct ai_data *ai = ai_data_get(pplayer);
+  int worth;
 
   if (get_invention(pplayer, tech) == TECH_KNOWN) {
     return 0;
   }
-  bulbs = total_bulbs_required_for_goal(pplayer, tech) * 3;
-  tech_want = MAX(pplayer->ai.tech_want[tech], 0) / MAX(game.turn, 1);
-  worth = bulbs + tech_want;
+  worth = total_bulbs_required_for_goal(pplayer, tech) * 3;
+  worth += MAX(pplayer->ai.tech_want[tech], 0) / MAX(game.turn, 1);
   if (get_invention(pplayer, tech) == TECH_REACHABLE) {
     worth /= 2;
   }
-  DIPLO_LOG(LOG_DEBUG, pplayer, ai, "eval tech %s to %d (bulbs=%d, "
-            "tech_want=%d)", get_tech_name(pplayer, tech), worth, bulbs, 
-            tech_want);
   return worth;
 }
 
@@ -185,8 +162,8 @@ static bool shared_vision_is_safe(struct player* pplayer,
 static bool ai_players_can_agree_on_ceasefire(struct player* player1,
                                               struct player* player2)
 {
-  struct ai_data *ai1 = ai_data_get(player1);
-
+  struct ai_data *ai1;
+  ai1 = ai_data_get(player1);
   return (ai1->diplomacy.target != player2 && 
           (player1 == ai1->diplomacy.alliance_leader ||
            !pplayers_at_war(player2, ai1->diplomacy.alliance_leader)) &&
@@ -196,98 +173,67 @@ static bool ai_players_can_agree_on_ceasefire(struct player* player1,
 }
 
 /********************************************************************** 
-  Calculate a price of a tech.
-  Note that both AI players always evaluate the tech worth symetrically
-  This eases tech exchange.
-  is_dangerous returns ig the giver is afraid of giving that tech
-  (the taker should evaluate it normally, but giver should never give that)
-**********************************************************************/
-static int compute_tech_sell_price(struct player* giver, struct player* taker,
-				int tech_id, bool* is_dangerous)
-{
-    int worth;
-    
-    worth = ai_goldequiv_tech(taker, tech_id);
-    
-    *is_dangerous = FALSE;
-    
-    /* Share and expect being shared brotherly between allies */
-    if (pplayers_allied(giver, taker)) {
-      worth /= 2;
-    }
-    if (players_on_same_team(giver, taker)) {
-      return 0;
-    }
-
-    /* Do not bother wanting a tech that we already have. */
-    if (get_invention(taker, tech_id) == TECH_KNOWN) {
-      return 0;
-    }
-
-    /* Calculate in tech leak to our opponents, guess 50% chance */
-    players_iterate(eplayer) {
-      if (eplayer == giver
-          || eplayer == taker
-          || !eplayer->is_alive
-          || get_invention(eplayer, tech_id) == TECH_KNOWN) {
-        continue;
-      }
-      
-      /* Don't risk it falling into enemy hands */
-      if (pplayers_allied(taker, eplayer) &&
-          is_player_dangerous(giver, eplayer)) {
-        *is_dangerous = TRUE;
-      }
-      
-      if (pplayers_allied(taker, eplayer) &&
-          !pplayers_allied(giver, eplayer)) {
-        /* Taker can enrichen his side with this tech */
-        worth += ai_goldequiv_tech(eplayer, tech_id) / 4;
-      }
-    } players_iterate_end;
-    return worth;
-}
-
-/********************************************************************** 
   Evaluate gold worth of a single clause in a treaty. Note that it
   sometimes matter a great deal who is giving what to whom, and
   sometimes (such as with treaties) it does not matter at all.
-  ds_after means a pact offered in the same treaty or current diplomatic
-  state
 ***********************************************************************/
 static int ai_goldequiv_clause(struct player *pplayer, 
                                struct player *aplayer,
                                struct Clause *pclause,
                                struct ai_data *ai,
-                               bool verbose,
-			       enum diplstate_type ds_after)
+                               bool verbose)
 {
   int worth = 0; /* worth for pplayer of what aplayer gives */
   bool give = (pplayer == pclause->from);
   int giver;
   struct ai_dip_intel *adip = &ai->diplomacy.player_intel[aplayer->player_no];
-  bool is_dangerous;
 
-  assert(pplayer != aplayer);
-  
   diplomacy_verbose = verbose;
 
   giver = pclause->from->player_no;
 
   switch (pclause->type) {
   case CLAUSE_ADVANCE:
-    
     if (give) {
-      worth -= compute_tech_sell_price(pplayer, aplayer, pclause->value,
-                                       &is_dangerous);
-      if (is_dangerous) {
-        return -BIG_NUMBER;
-      }
+      worth -= ai_goldequiv_tech(aplayer, pclause->value);
     } else if (get_invention(pplayer, pclause->value) != TECH_KNOWN) {
-      worth += compute_tech_sell_price(aplayer, pplayer, pclause->value,
-                                       &is_dangerous);
+      worth += ai_goldequiv_tech(pplayer, pclause->value);
     }
 
+    /* Share and expect being shared brotherly between allies */
+    if (pplayers_allied(pplayer, aplayer)) {
+      worth /= 2;
+    }
+    if (players_on_same_team(pplayer, aplayer)) {
+      worth = 0;
+      break;
+    }
+
+    /* Do not bother wanting a tech that we already have. */
+    if (!give && get_invention(pplayer, pclause->value) == TECH_KNOWN) {
+      break;
+    }
+
+    /* Calculate in tech leak to our opponents, guess 50% chance */
+    players_iterate(eplayer) {
+      if (eplayer == aplayer
+          || eplayer == pplayer
+          || !eplayer->is_alive
+          || get_invention(eplayer, pclause->value) == TECH_KNOWN) {
+        continue;
+      }
+      if (give && pplayers_allied(aplayer, eplayer)) {
+        if (is_player_dangerous(pplayer, eplayer)) {
+          /* Don't risk it falling into enemy hands */
+          worth = -BIG_NUMBER;
+          break;
+        }
+        worth -= ai_goldequiv_tech(eplayer, pclause->value) / 2;
+      } else if (!give && pplayers_allied(pplayer, eplayer)) {
+        /* We can enrichen our side with this tech */
+        worth += ai_goldequiv_tech(eplayer, pclause->value) / 4;
+      }
+    } players_iterate_end;
   break;
 
   case CLAUSE_ALLIANCE:
@@ -425,7 +371,7 @@ static int ai_goldequiv_clause(struct player *pplayer,
       /* Very silly algorithm 1: Sea map more worth if enemy has more
          cities. Reasoning is he has more use of seamap for settling
          new areas the more cities he has already. */
-      worth -= 15 * city_list_size(aplayer->cities);
+      worth -= 15 * city_list_size(&aplayer->cities);
 
       /* Make maps from novice player cheap */
       if (ai_handicap(pplayer, H_DIPLOMACY)) {
@@ -441,7 +387,7 @@ static int ai_goldequiv_clause(struct player *pplayer,
     } else {
       /* Very silly algorithm 2: Land map more worth the more cities
          we have, since we expose all of these to the enemy. */
-      worth -= 50 * MAX(city_list_size(pplayer->cities), 3);
+      worth -= 50 * MAX(city_list_size(&pplayer->cities), 3);
       /* Inflate numbers if not peace */
       if (!pplayers_in_peace(pplayer, aplayer)) {
         worth *= 4;
@@ -454,7 +400,7 @@ static int ai_goldequiv_clause(struct player *pplayer,
     break;
 
   case CLAUSE_CITY: {
-    struct city *offer = city_list_find_id(pclause->from->cities, 
+    struct city *offer = city_list_find_id(&(pclause->from)->cities, 
                                            pclause->value);
 
     if (!offer || offer->owner != giver) {
@@ -475,15 +421,14 @@ static int ai_goldequiv_clause(struct player *pplayer,
         worth /= 2;
       }
     } else {
-      worth = city_gold_worth(offer);
+      worth = city_gold_worth(offer);      
     }
-    DIPLO_LOG(LOG_DEBUG, pplayer, ai, "worth of %s is %d", offer->name, worth);
     break;
   }
 
   case CLAUSE_VISION:
     if (give) {
-      if (pplayers_allied(pplayer, aplayer) || ds_after == DS_ALLIANCE) {
+      if (pplayers_allied(pplayer, aplayer)) {
         if (!shared_vision_is_safe(pplayer, aplayer)) {
           notify(aplayer, _("*%s (AI)* Sorry, sharing vision with you "
 	                    "is not safe."),
@@ -502,7 +447,7 @@ static int ai_goldequiv_clause(struct player *pplayer,
     break;
   case CLAUSE_EMBASSY:
     if (give) {
-      if (ds_after == DS_PEACE || ds_after == DS_ALLIANCE) {
+      if (pplayers_in_peace(pplayer, aplayer)) {
         worth = 0;
       } else {
         worth = -BIG_NUMBER; /* No. */
@@ -511,6 +456,7 @@ static int ai_goldequiv_clause(struct player *pplayer,
       worth = 0; /* We don't need no stinkin' embassy, do we? */
     }
     break;
+  case CLAUSE_UNUSED:
   case CLAUSE_LAST:
     break;
   } /* end of switch */
@@ -527,24 +473,18 @@ void ai_treaty_evaluate(struct player *pplayer, struct player *aplayer,
                         struct Treaty *ptreaty)
 {
   int total_balance = 0;
+  bool has_treaty = FALSE;
   bool only_gifts = TRUE;
   struct ai_data *ai = ai_data_get(pplayer);
-  enum diplstate_type ds_after =
-    pplayer_get_diplstate(pplayer, aplayer)->type;
 
   assert(!is_barbarian(pplayer));
-  
-  clause_list_iterate(ptreaty->clauses, pclause) {
-    if (is_pact_clause(pclause->type)) {
-      ds_after = pact_clause_to_diplstate_type(pclause->type);
-    }
-  } clause_list_iterate_end;
-  
+
   /* Evaluate clauses */
   clause_list_iterate(ptreaty->clauses, pclause) {
-    total_balance +=
-      ai_goldequiv_clause(pplayer, aplayer, pclause, ai, TRUE, ds_after);
-    
+    total_balance += ai_goldequiv_clause(pplayer, aplayer, pclause, ai, TRUE);
+    if (is_pact_clause(pclause->type)) {
+      has_treaty = TRUE;
+    }
     if (pclause->type != CLAUSE_GOLD && pclause->type != CLAUSE_MAP
         && pclause->type != CLAUSE_SEAMAP && pclause->type != CLAUSE_VISION
         && (pclause->type != CLAUSE_ADVANCE 
@@ -561,7 +501,7 @@ void ai_treaty_evaluate(struct player *pplayer, struct player *aplayer,
 
   /* If we are at war, and no peace is offered, then no deal, unless
    * it is just gifts, in which case we gratefully accept. */
-  if (ds_after == DS_WAR && !only_gifts) {
+  if (pplayers_at_war(pplayer, aplayer) && !has_treaty && !only_gifts) {
     return;
   }
 
@@ -618,21 +558,10 @@ void ai_treaty_accepted(struct player *pplayer, struct player *aplayer,
   int total_balance = 0;
   bool gift = TRUE;
   struct ai_data *ai = ai_data_get(pplayer);
-  enum diplstate_type ds_after =
-    pplayer_get_diplstate(pplayer, aplayer)->type;
-
-  assert(pplayer != aplayer);
-  
-  clause_list_iterate(ptreaty->clauses, pclause) {
-    if (is_pact_clause(pclause->type)) {
-      ds_after = pact_clause_to_diplstate_type(pclause->type);
-    }
-  } clause_list_iterate_end;
 
   /* Evaluate clauses */
   clause_list_iterate(ptreaty->clauses, pclause) {
-    int balance =
-      ai_goldequiv_clause(pplayer, aplayer, pclause, ai, TRUE, ds_after);
+    int balance = ai_goldequiv_clause(pplayer, aplayer, pclause, ai, TRUE);
 
     total_balance += balance;
     gift = (gift && (balance >= 0));
@@ -646,11 +575,11 @@ void ai_treaty_accepted(struct player *pplayer, struct player *aplayer,
    * he or she offers us gifts. It is only a gift if _all_ the clauses
    * are beneficial to us. */
   if (total_balance > 0 && gift) {
-    int i = total_balance / ((city_list_size(pplayer->cities) * 50) + 1);
+    int i = total_balance / ((city_list_size(&pplayer->cities) * 50) + 1);
 
     i = MIN(i, ai->diplomacy.love_incr * 150) * 10;
     pplayer->ai.love[aplayer->player_no] += i;
-    DIPLO_LOG(LOG_DIPL2, pplayer, ai, "%s's gift to %s increased love by %d",
+    PLAYER_LOG(LOG_DIPL2, pplayer, ai, "%s's gift to %s increased love by %d",
             aplayer->name, pplayer->name, i);
   }
 }
@@ -666,7 +595,7 @@ static int ai_war_desire(struct player *pplayer, struct player *aplayer,
   struct ai_dip_intel *adip = &ai->diplomacy.player_intel[aplayer->player_no];
 
   /* Number of cities is a player's base potential. */
-  kill_desire = city_list_size(aplayer->cities);
+  kill_desire = city_list_size(&aplayer->cities);
 
   /* Count settlers in production for us, indicating our expansionism,
    * while counting all enemy settlers as (worst case) indicators of
@@ -695,7 +624,7 @@ static int ai_war_desire(struct player *pplayer, struct player *aplayer,
   /* Spacerace loss we will not allow! */
   if (ship->state >= SSHIP_STARTED) {
     /* add potential */
-    kill_desire += city_list_size(aplayer->cities);
+    kill_desire += city_list_size(&aplayer->cities);
   }
   if (ai->diplomacy.spacerace_leader == aplayer) {
     ai->diplomacy.strategy = WIN_CAPITAL;
@@ -765,18 +694,12 @@ static void ai_diplomacy_suggest(struct player *pplayer,
   Calculate our diplomatic predispositions here. Don't do anything.
 
   Only ever called for AI players and never for barbarians.
-
-  This is called at the start of a new AI phase.  It's not called when
-  a game is loaded.  So everything calculated here should be put into
-  the savegame.
 ***********************************************************************/
-void ai_diplomacy_begin_new_phase(struct player *pplayer,
-				  struct ai_data *ai)
+void ai_diplomacy_calculate(struct player *pplayer, struct ai_data *ai)
 {
   int war_desire[MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS];
   int best_desire = 0;
   struct player *target = NULL;
-  int mult;
 
   memset(war_desire, 0, sizeof(war_desire));
 
@@ -803,8 +726,8 @@ void ai_diplomacy_begin_new_phase(struct player *pplayer,
         && !adip->at_war_with_ally
         && adip->ally_patience >= 0) {
       pplayer->ai.love[aplayer->player_no] += ai->diplomacy.love_incr;
-      DIPLO_LOG(LOG_DEBUG, pplayer, ai, "Increased love for %s (now %d)",
-                aplayer->name, pplayer->ai.love[aplayer->player_no]);
+      PLAYER_LOG(LOG_DEBUG, pplayer, ai, "Increased love for %s (now %d)",
+                 aplayer->name, pplayer->ai.love[aplayer->player_no]);
     } else if (pplayer->diplstates[aplayer->player_no].type == DS_WAR) {
       pplayer->ai.love[aplayer->player_no] -= ai->diplomacy.love_incr;
       if (ai->diplomacy.target != aplayer && 
@@ -812,29 +735,24 @@ void ai_diplomacy_begin_new_phase(struct player *pplayer,
         /* Give him a better chance for a cease fire */
         pplayer->ai.love[aplayer->player_no] += (MAX_AI_LOVE) * 3 / 100;
       }
-      DIPLO_LOG(LOG_DEBUG, pplayer, ai, "Reduced love for %s (now %d) ",
-                aplayer->name, pplayer->ai.love[aplayer->player_no]);
+      PLAYER_LOG(LOG_DEBUG, pplayer, ai, "Reduced love for %s (now %d) ",
+                 aplayer->name, pplayer->ai.love[aplayer->player_no]);
     } else if (pplayer->diplstates[a].has_reason_to_cancel != 0) {
       /* Provoked in time of peace */
       if (pplayer->ai.love[aplayer->player_no] > 0) {
-        DIPLO_LOG(LOG_DEBUG, pplayer, ai, "Provoked by %s! Love halved "
-                  "(was %d)", aplayer->name,
-                  pplayer->ai.love[aplayer->player_no]);
+        PLAYER_LOG(LOG_DEBUG, pplayer, ai, "Provoked by %s! Love halved "
+                   "(was %d)", aplayer->name, 
+                   pplayer->ai.love[aplayer->player_no]);
         pplayer->ai.love[aplayer->player_no] /= 2;
       }
       pplayer->ai.love[aplayer->player_no] -= ai->diplomacy.love_incr;
     }
-    
     /* Reduce love by number of units in our territory.
      * AI is so naive, that we have to count it even if players are allied */
-    mult = 
-      pplayers_at_war(pplayer, aplayer) || adip->is_allied_with_enemy ?
-      2 : 1;
-    
     pplayer->ai.love[aplayer->player_no] -=
       MIN(player_in_territory(pplayer, aplayer) * (MAX_AI_LOVE / 100),
           pplayers_allied(aplayer, pplayer) ? 
-	    ai->diplomacy.love_incr - 1 : (MAX_AI_LOVE / 2)) * mult;
+	    ai->diplomacy.love_incr - 1 : (MAX_AI_LOVE / 2));
  
     /* Increase the love if aplayer has got a building that makes 
      * us love him more. Typically it's Eiffel Tower */
@@ -854,8 +772,8 @@ void ai_diplomacy_begin_new_phase(struct player *pplayer,
 
   /* Stop war against a dead player */
   if (ai->diplomacy.target && !ai->diplomacy.target->is_alive) {
-    DIPLO_LOG(LOG_DIPL2, pplayer, ai, "Target player %s is dead! Victory!",
-              ai->diplomacy.target->name);
+    PLAYER_LOG(LOG_DIPL2, pplayer, ai, "Target player %s is dead! Victory!",
+               ai->diplomacy.target->name);
     ai->diplomacy.timer = 0;
     ai->diplomacy.countdown = 0;
     ai->diplomacy.target = NULL;
@@ -921,8 +839,8 @@ void ai_diplomacy_begin_new_phase(struct player *pplayer,
       war_desire[aplayer->player_no] /= 2;
     }
     
-    DIPLO_LOG(LOG_DEBUG, pplayer, ai, "Against %s we have war desire "
-              "%d ", aplayer->name, war_desire[aplayer->player_no]);
+    PLAYER_LOG(LOG_DEBUG, pplayer, ai, "Against %s we have war desire "
+            "%d ", aplayer->name, war_desire[aplayer->player_no]);
 
     /* Find best target */
     if (war_desire[aplayer->player_no] > best_desire) {
@@ -932,14 +850,14 @@ void ai_diplomacy_begin_new_phase(struct player *pplayer,
   } players_iterate_end;
 
   if (!target) {
-    DIPLO_LOG(LOG_DEBUG, pplayer, ai, "Found no target.");
+    PLAYER_LOG(LOG_DEBUG, pplayer, ai, "Found no target.");
     ai->diplomacy.target = NULL;
     return;
   }
 
   /* Switch to target */
   if (target != ai->diplomacy.target) {
-    DIPLO_LOG(LOG_DIPL, pplayer, ai, "Setting target to %s", target->name);
+    PLAYER_LOG(LOG_DIPL, pplayer, ai, "Setting target to %s", target->name);
     ai->diplomacy.target = target;
     if (ai->diplomacy.strategy == WIN_CAPITAL) {
       ai->diplomacy.countdown = 1; /* Quickly!! */
@@ -958,71 +876,7 @@ void ai_diplomacy_begin_new_phase(struct player *pplayer,
     } players_iterate_end;
   }
 }
-/********************************************************************** 
-  Find two techs that can be exchanged and suggest that
-***********************************************************************/
-static void suggest_tech_exchange(struct player* player1,
-                                  struct player* player2)
-{
-  int worth[game.num_tech_types];
-  bool is_dangerous;
-    
-  tech_type_iterate(tech) {
-    if (tech == A_NONE) {
-      worth[tech] = 0;
-      continue;
-    }
-    if (get_invention(player1, tech) == TECH_KNOWN) {
-      if (get_invention(player2, tech) != TECH_KNOWN) {
-        worth[tech] = -compute_tech_sell_price(player1, player2, tech,
-	                                       &is_dangerous);
-	if (is_dangerous) {
-	  /* don't try to exchange */
-	  worth[tech] = 0;
-	}
-      } else {
-        worth[tech] = 0;
-      }
-    } else {
-      if (get_invention(player2, tech) == TECH_KNOWN) {
-        worth[tech] = compute_tech_sell_price(player2, player1, tech,
-	                                      &is_dangerous);
-	if (is_dangerous) {
-	  /* don't try to exchange */
-	  worth[tech] = 0;
-	}
-      } else {
-        worth[tech] = 0;
-      }
-    }
-  } tech_type_iterate_end;
-    
-    
-  tech_type_iterate(tech) {
-    if (worth[tech] <= 0) {
-      continue;
-    }
-    tech_type_iterate(tech2) {
-      if (worth[tech2] >= 0) {
-        continue;
-      }
-      /* tech2 is given by player1, tech is given by player2 */
-      int diff = worth[tech] + worth[tech2];
-      if ((diff > 0 && player1->economic.gold >= diff)
-          || (diff < 0 && player2->economic.gold >= -diff)
-	  || diff == 0) {
-        ai_diplomacy_suggest(player1, player2, CLAUSE_ADVANCE, tech2);
-	ai_diplomacy_suggest(player2, player1, CLAUSE_ADVANCE, tech);
-	if (diff > 0) {
-	  ai_diplomacy_suggest(player1, player2, CLAUSE_GOLD, diff);
-	} else if (diff < 0) {
-	  ai_diplomacy_suggest(player2, player1, CLAUSE_GOLD, -diff);
-	}
-	return;
-      }
-    } tech_type_iterate_end;
-  } tech_type_iterate_end;
-}
+
 /********************************************************************** 
   Offer techs and stuff to other player and ask for techs we need.
 ***********************************************************************/
@@ -1056,10 +910,6 @@ static void ai_share(struct player *pplayer, struct player *aplayer)
   if (!player_has_embassy(aplayer, pplayer)) {
     ai_diplomacy_suggest(pplayer, aplayer, CLAUSE_EMBASSY, 0);
   }
-  
-  if (!ai_handicap(pplayer, H_DIPLOMACY) || !aplayer->ai.control) {
-    suggest_tech_exchange(pplayer, aplayer);
-  }
 }
 
 /********************************************************************** 
@@ -1068,8 +918,6 @@ static void ai_share(struct player *pplayer, struct player *aplayer)
 static void ai_go_to_war(struct player *pplayer, struct ai_data *ai,
                          struct player *target)
 {
-  assert(pplayer != target);
-
   if (gives_shared_vision(pplayer, target)) {
     remove_shared_vision(pplayer, target);
   }
@@ -1111,7 +959,7 @@ void ai_diplomacy_actions(struct player *pplayer)
     if (ai->diplomacy.acceptable_reputation > aplayer->reputation
         && pplayer->ai.love[aplayer->player_no] < 0
         && pplayer->diplstates[aplayer->player_no].has_reason_to_cancel >= 2) {
-      DIPLO_LOG(LOG_DIPL2, pplayer, ai, "Declaring war on %s in revenge",
+      PLAYER_LOG(LOG_DIPL2, pplayer, ai, "Declaring war on %s in revenge",
                  target->name);
       notify(target, _("*%s (AI)* I will NOT accept such behaviour! This "
              "means WAR!"), pplayer->name);
@@ -1170,7 +1018,7 @@ void ai_diplomacy_actions(struct player *pplayer)
   if (target && !pplayers_at_war(pplayer, target)
       && ai->diplomacy.countdown <= 0) {
     if (pplayers_allied(pplayer, target)) {
-      DIPLO_LOG(LOG_DEBUG, pplayer, ai, "Went to war against %s, who is "
+      PLAYER_LOG(LOG_DEBUG, pplayer, ai, "Went to war against %s, who is "
                  "an ally!", target->name); /* Oh, my. */
     }
     if (pplayer->diplstates[target->player_no].has_reason_to_cancel > 0) {
@@ -1201,10 +1049,8 @@ void ai_diplomacy_actions(struct player *pplayer)
         && !pplayers_at_war(pplayer, aplayer)
 	&& (pplayer_get_diplstate(pplayer, aplayer)->type != DS_CEASEFIRE || 
 	    myrand(5) < 1)) {
-      notify(aplayer, _("*%s (AI)* Your aggression against %s was "
-			"your last mistake!"),
-			pplayer->name,
-			adip->at_war_with_ally->name);
+      notify(aplayer, _("*%s (AI)* Your aggression against my allies was "
+			"your last mistake!"), pplayer->name);
       ai_go_to_war(pplayer, ai, aplayer);
     }
   } players_iterate_end;
@@ -1284,11 +1130,11 @@ void ai_diplomacy_actions(struct player *pplayer)
         break;
       }
       if (target && pplayer->ai.control) {
-        DIPLO_LOG(LOG_DIPL2, pplayer, ai, "Ally %s not at war with enemy %s "
-                  "(patience %d, %s %s)", aplayer->name, 
-                  target->name, adip->ally_patience, adip->at_war_with_ally
-                  ? "war_with_ally" : "", adip->is_allied_with_ally ? 
-                  "allied_with_ally" : "");
+        PLAYER_LOG(LOG_DIPL2, pplayer, ai, "Ally %s not at war with enemy %s "
+                "(patience %d, %s %s)", aplayer->name, 
+                target->name, adip->ally_patience, adip->at_war_with_ally
+                ? "war_with_ally" : "", adip->is_allied_with_ally ? 
+                "allied_with_ally" : "");
 
       }
       switch (adip->ally_patience--) {
@@ -1307,8 +1153,8 @@ void ai_diplomacy_actions(struct player *pplayer)
                  "alliance, and yet you remain at peace with our mortal "
                  "enemy, %s! This is unacceptable, our alliance is no "
                  "more!"), pplayer->name, target->name);
-          DIPLO_LOG(LOG_DIPL2, pplayer, ai, "breaking useless alliance with "
-                    "%s", aplayer->name);
+          PLAYER_LOG(LOG_DIPL2, pplayer, ai, "breaking useless alliance with "
+                     "%s", aplayer->name);
 	  /* to peace */
 	  handle_diplomacy_cancel_pact(pplayer, aplayer->player_no,
 				       CLAUSE_ALLIANCE);
@@ -1324,8 +1170,7 @@ void ai_diplomacy_actions(struct player *pplayer)
 
     case DS_PEACE:
       clause.type = CLAUSE_ALLIANCE;
-      if (ai_goldequiv_clause(pplayer, aplayer,
-                              &clause, ai, FALSE, DS_ALLIANCE) < 0
+      if (ai_goldequiv_clause(pplayer, aplayer, &clause, ai, FALSE) < 0
           || (adip->asked_about_alliance > 0 && !aplayer->ai.control)
           || !target) {
         /* Note that we don't ever ask for alliance unless we have a target */
@@ -1340,8 +1185,7 @@ void ai_diplomacy_actions(struct player *pplayer)
     case DS_CEASEFIRE:
     case DS_NEUTRAL:
       clause.type = CLAUSE_PEACE;
-      if (ai_goldequiv_clause(pplayer, aplayer, &clause,
-                              ai, FALSE, CLAUSE_PEACE) < 0
+      if (ai_goldequiv_clause(pplayer, aplayer, &clause, ai, FALSE) < 0
           || (adip->asked_about_peace > 0 && !aplayer->ai.control)
           || !target) {
         /* Note that we don't ever ask for peace unless we have a target */
@@ -1356,8 +1200,7 @@ void ai_diplomacy_actions(struct player *pplayer)
     case DS_NO_CONTACT: /* but we do have embassy! weird. */
     case DS_WAR:
       clause.type = CLAUSE_CEASEFIRE;
-      if (ai_goldequiv_clause(pplayer, aplayer,
-                              &clause, ai, FALSE, CLAUSE_CEASEFIRE) < 0
+      if (ai_goldequiv_clause(pplayer, aplayer, &clause, ai, FALSE) < 0
           || (adip->asked_about_ceasefire > 0 && !aplayer->ai.control)
           || !target) {
         break; /* Fight until the end! */

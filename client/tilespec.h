@@ -26,21 +26,6 @@
 
 struct Sprite;			/* opaque; gui-dep */
 
-/* An edge is the border between two tiles.  This structure represents one
- * edge.  The tiles are in unspecified order for the moment. */
-struct tile_edge {
-  enum {
-    EDGE_NS, EDGE_EW
-  } type;
-  struct tile *tile[2];
-};
-
-/* A corner is the endpoint of several edges.  At each corner 4 tiles will
- * meet (3 in hex view).  Tiles are in clockwise order NESW. */
-struct tile_corner {
-  struct tile *tile[4];
-};
-
 struct drawn_sprite {
   enum {
     DRAWN_SPRITE,	/* Draw a sprite. */
@@ -62,8 +47,8 @@ struct drawn_sprite {
     } sprite;
 
     struct {
-      const struct tile *tile;
-      const struct city *citymode;
+      struct tile *tile;
+      bool citymode;
     } grid;
 
     struct {
@@ -72,42 +57,8 @@ struct drawn_sprite {
   } data;
 };
 
-/* Items on the mapview are drawn in layers.  Each entry below represents
- * one layer.  The names are basically arbitrary and just correspond to
- * groups of elements in fill_sprite_array().  Callers of fill_sprite_array
- * must call it once for each layer. */
-enum mapview_layer {
-  LAYER_BACKGROUND,
-  LAYER_TERRAIN1,
-  LAYER_TERRAIN2,
-  LAYER_WATER,
-  LAYER_ROADS,
-  LAYER_SPECIAL1,
-  LAYER_GRID1,
-  LAYER_CITY1,
-  LAYER_SPECIAL2,
-  LAYER_FOG,
-  LAYER_CITY2,
-  LAYER_UNIT,
-  LAYER_SPECIAL3,
-  LAYER_GRID2,
-  LAYER_COUNT
-};
-
-#define mapview_layer_iterate(layer)			                    \
-{									    \
-  enum mapview_layer layer;						    \
-									    \
-  for (layer = 0; layer < LAYER_COUNT; layer++) {			    \
-
-#define mapview_layer_iterate_end		                            \
-  }									    \
-}
-
 const char **get_tileset_list(void);
 
-void tilespec_init(void);
-void tilespec_done(void);
 bool tilespec_read_toplevel(const char *tileset_name);
 void tilespec_load_tiles(void);
 void tilespec_free_tiles(void);
@@ -128,21 +79,15 @@ void tilespec_free_city_tiles(int count);
 
 /* Gfx support */
 
-int fill_sprite_array(struct drawn_sprite *sprs, enum mapview_layer layer,
-		      const struct tile *ptile,
-		      const struct tile_edge *pedge,
-		      const struct tile_corner *pcorner,
-		      const struct unit *punit, const struct city *pcity,
-		      const struct city *citymode);
+int fill_sprite_array(struct drawn_sprite *sprs, struct tile *ptile,
+		      struct unit *punit, struct city *pcity,
+		      bool citymode);
 
-enum color_std player_color(const struct player *pplayer);
+enum color_std player_color(struct player *pplayer);
 enum color_std overview_tile_color(struct tile *ptile);
 
-double get_focus_unit_toggle_timeout(void);
-void reset_focus_unit_state(void);
-void toggle_focus_unit_state(void);
-struct unit *get_drawable_unit(struct tile *ptile,
-			       const struct city *citymode);
+void set_focus_unit_hidden_state(bool hide);
+struct unit *get_drawable_unit(struct tile *ptile, bool citymode);
 
 
 /* This the way directional indices are now encoded: */
@@ -154,7 +99,6 @@ struct unit *get_drawable_unit(struct tile *ptile,
 #define NUM_TILES_CITIZEN CITIZEN_LAST
 #define NUM_TILES_HP_BAR 11
 #define NUM_TILES_DIGITS 10
-#define NUM_TILES_SELECT 4
 #define MAX_NUM_CITIZEN_SPRITES 6
 
 /* This could be moved to common/map.h if there's more use for it. */
@@ -222,7 +166,7 @@ struct named_sprites {
      * sprites, as defined by the tileset. */
     int count;
     struct Sprite *sprite[MAX_NUM_CITIZEN_SPRITES];
-  } citizen[NUM_TILES_CITIZEN], specialist[SP_MAX];
+  } citizen[NUM_TILES_CITIZEN], specialist[SP_COUNT];
   struct {
     struct Sprite
       *solar_panels,
@@ -252,7 +196,6 @@ struct named_sprites {
     struct Sprite
       *hp_bar[NUM_TILES_HP_BAR],
       *vet_lev[MAX_VET_LEVELS],
-      *select[NUM_TILES_SELECT],
       *auto_attack,
       *auto_settler,
       *auto_explore,
@@ -314,7 +257,6 @@ struct named_sprites {
       *airbase,
       *fallout,
       *fog,
-      **fullfog,
       *spec_river[MAX_INDEX_CARDINAL],
       *darkness[MAX_INDEX_CARDINAL],         /* first unused */
       *river_outlet[4];		/* indexed by enum direction4 */
@@ -324,14 +266,7 @@ struct named_sprites {
 };
 
 extern struct named_sprites sprites;
-
-/* Don't reorder this enum since tilesets depend on it. */
-enum fog_style {
-  FOG_AUTO, /* Fog is automatically appended by the code. */
-  FOG_SPRITE, /* A single fog sprite is provided by the tileset (tx.fog). */
-  FOG_NONE /* No fog. */
-};
-extern enum fog_style fogstyle;
+extern int fogstyle;
 
 struct Sprite *get_citizen_sprite(struct citizen_type type,
 				  int citizen_index,
@@ -381,6 +316,14 @@ extern int OVERVIEW_TILE_SIZE;
 
 extern bool is_isometric;
 extern int hex_width, hex_height;
+
+/* name of font to use to draw city names on main map */
+
+extern char *city_names_font;
+
+/* name of font to use to draw city productions on main map */
+
+extern char *city_productions_font_name;
 
 extern int num_tiles_explode_unit;
 

@@ -77,6 +77,10 @@ extern SDL_Event *pFlush_User_Event;
 extern SDL_Cursor **pAnimCursor;
 extern bool do_cursor_animation;
 
+/* These values are stored in the mapview_canvas struct now. */
+#define map_view_x0 mapview_canvas.map_x0
+#define map_view_y0 mapview_canvas.map_y0
+
 static Uint32 Amask;
 static int HALF_NORMAL_TILE_HEIGHT, HALF_NORMAL_TILE_WIDTH;
 
@@ -106,6 +110,8 @@ static enum {
 
 static void init_dither_tiles(void);
 static void free_dither_tiles(void);
+static void init_borders_tiles(void);
+static void free_borders_tiles(void);
 static void fill_dither_buffers(SDL_Surface **pDitherBufs, int x, int y,
 					Terrain_type_id terrain);
 
@@ -119,11 +125,29 @@ static void draw_map_cell(SDL_Surface * pDest, Sint16 map_x, Sint16 map_y,
 /**************************************************************************
   Draw some or all of a tile onto the mapview canvas.
 **************************************************************************/
-void put_one_tile_iso(struct canvas *pcanvas, int map_x, int map_y,
-		      int canvas_x, int canvas_y, bool citymode)
+void gui_map_put_tile_iso(int map_x, int map_y,
+			  int canvas_x, int canvas_y,
+			  int offset_x, int offset_y, int offset_y_unit,
+			  int width, int height, int height_unit,
+			  enum draw_type draw)
 {
-  draw_map_cell(pcanvas->surf, canvas_x, canvas_y,
-		(Uint16)map_x, (Uint16)map_y, citymode);
+  if (draw == D_MB_LR || draw == D_FULL) {  
+    draw_map_cell(Main.map, canvas_x, canvas_y, (Uint16)map_x, (Uint16)map_y, 0);
+  } else {
+    static SDL_Rect dest;
+        
+    dest.x = canvas_x + offset_x;
+    dest.y = canvas_y - HALF_NORMAL_TILE_HEIGHT + offset_y_unit;
+    dest.w = width;
+    dest.h = height_unit;
+    SDL_SetClipRect(Main.map, &dest);
+  
+    draw_map_cell(Main.map, canvas_x, canvas_y, (Uint16)map_x, (Uint16)map_y, 0);
+    
+    /* clear ClipRect */
+    SDL_SetClipRect(Main.map, NULL);
+
+  }
 }
 
 /**************************************************************************
@@ -136,7 +160,7 @@ void canvas_put_sprite(struct canvas *pcanvas,
 {
   SDL_Rect src = {offset_x, offset_y, width, height};
   SDL_Rect dst = {canvas_x + offset_x, canvas_y + offset_y, 0, 0};
-  SDL_BlitSurface(GET_SURF(sprite), &src, pcanvas->surf, &dst);
+  SDL_BlitSurface(GET_SURF(sprite), &src, pcanvas->map, &dst);
 }
 
 /**************************************************************************
@@ -147,7 +171,7 @@ void canvas_put_sprite_full(struct canvas *pcanvas,
 			 struct Sprite *sprite)
 {
   SDL_Rect dst = {canvas_x, canvas_y, 0, 0};
-  SDL_BlitSurface(GET_SURF(sprite), NULL, pcanvas->surf, &dst);
+  SDL_BlitSurface(GET_SURF(sprite), NULL, pcanvas->map, &dst);
 }
 
 /**************************************************************************
@@ -158,8 +182,8 @@ void canvas_put_rectangle(struct canvas *pcanvas,
 		       int canvas_x, int canvas_y, int width, int height)
 {
   SDL_Rect dst = {canvas_x, canvas_y, width, height};
-  SDL_FillRect(pcanvas->surf, &dst,
-	    get_game_color(color, pcanvas->surf));
+  SDL_FillRect(pcanvas->map, &dst,
+	    get_game_color(color, pcanvas->map));
 }
 
 /**************************************************************************
@@ -169,35 +193,8 @@ void canvas_put_line(struct canvas *pcanvas, enum color_std color,
 		  enum line_type ltype, int start_x, int start_y,
 		  int dx, int dy)
 {
-  putline(pcanvas->surf, start_x, start_y, start_x + dx, start_y + dy,
-				get_game_color(color, pcanvas->surf));
-}
-
-void canvas_copy(struct canvas *dest, struct canvas *src,
-		 int src_x, int src_y, int dest_x, int dest_y,
-		 int width, int height)
-{
-
-}
-
-struct canvas *canvas_create(int width, int height)
-{
-  return NULL;
-}
-
-void canvas_free(struct canvas *store)
-{
-
-}
-
-void map_size_changed(void)
-{
-  /* Nothing */
-}
-
-void update_map_canvas_scrollbars_size()
-{
-  /* No scrollbars */
+  putline(pcanvas->map, start_x, start_y, start_x + dx, start_y + dy,
+				get_game_color(color, pcanvas->map));
 }
 
 static bool is_flush_queued = FALSE;
@@ -218,6 +215,10 @@ void flush_mapcanvas(int canvas_x , int canvas_y ,
       src = dst;
       SDL_BlitSurface(Main.map, &src, Main.screen, &dst);
       dst = src;
+      if(draw_city_names||draw_city_productions) {
+        SDL_BlitSurface(Main.text, &src, Main.screen, &dst);
+        dst = src;
+      }
       SDL_BlitSurface(Main.gui, &src, Main.screen, &dst);
       while(Main.guis && Main.guis[i] && i < Main.guis_count) {
         dst = src;
@@ -240,6 +241,10 @@ void flush_rect(SDL_Rect rect)
       dst = rect;
       SDL_BlitSurface(Main.map, &rect, Main.screen, &dst);
       dst = rect;
+      if(draw_city_names||draw_city_productions) {
+        SDL_BlitSurface(Main.text, &rect, Main.screen, &dst);
+        dst = rect;
+      }
       SDL_BlitSurface(Main.gui, &rect, Main.screen, &dst);
       while(Main.guis && Main.guis[i] && i < Main.guis_count) {
         dst = rect;
@@ -259,7 +264,7 @@ void flush_rect(SDL_Rect rect)
 void unqueue_flush(void)
 {
   if(UPDATE_OVERVIEW_MAP) {
-    refresh_overview();
+    refresh_overview_viewrect();
     UPDATE_OVERVIEW_MAP = FALSE;
   }
   flush_dirty();
@@ -342,6 +347,9 @@ void flush_dirty(void)
   }
   if(Main.rects_count >= RECT_LIMIT) {
     SDL_BlitSurface(Main.map, NULL, Main.screen, NULL);
+    if(draw_city_names||draw_city_productions) {
+      SDL_BlitSurface(Main.text, NULL, Main.screen, NULL);
+    }
     SDL_BlitSurface(Main.gui, NULL, Main.screen, NULL);
     while(Main.guis && Main.guis[j] && j < Main.guis_count) {
       SDL_BlitSurface(Main.guis[j++], NULL, Main.screen, NULL);
@@ -356,6 +364,10 @@ void flush_dirty(void)
       dst = Main.rects[i];
       SDL_BlitSurface(Main.map, &Main.rects[i], Main.screen, &dst);
       dst = Main.rects[i];
+      if(draw_city_names||draw_city_productions) {
+        SDL_BlitSurface(Main.text, &Main.rects[i], Main.screen, &dst);
+        dst = Main.rects[i];
+      }
       SDL_BlitSurface(Main.gui, &Main.rects[i], Main.screen, &dst);
       while(Main.guis && Main.guis[j] && j < Main.guis_count) {
         dst = Main.rects[i];
@@ -377,18 +389,21 @@ void flush_dirty(void)
   client window.  The parameters tell which sprite to use for the
   indicator.
 **************************************************************************/
-void set_indicator_icons(struct Sprite *bulb, struct Sprite *sol,
-			 struct Sprite *flake, struct Sprite *gov)
+void set_indicator_icons(int bulb, int sol, int flake, int gov)
 {
   struct GUI *pBuf = NULL;
   char cBuf[128];
   
+  bulb = CLIP(0, bulb, NUM_TILES_PROGRESS - 1);
+  sol = CLIP(0, sol, NUM_TILES_PROGRESS - 1);
+  flake = CLIP(0, flake, NUM_TILES_PROGRESS - 1);
+
   pBuf = get_widget_pointer_form_main_list(ID_WARMING_ICON);
-  pBuf->theme = GET_SURF(sol);
+  pBuf->theme = GET_SURF(sprites.warming[sol]);
   redraw_label(pBuf);
     
   pBuf = get_widget_pointer_form_main_list(ID_COOLING_ICON);
-  pBuf->theme = GET_SURF(flake);
+  pBuf->theme = GET_SURF(sprites.cooling[flake]);
   redraw_label(pBuf);
     
   putframe(pBuf->dst, pBuf->size.x - pBuf->size.w - 1,
@@ -401,8 +416,19 @@ void set_indicator_icons(struct Sprite *bulb, struct Sprite *sol,
 	      2 * pBuf->size.w + 2, 2 * pBuf->size.h + 2);
 
   if (SDL_Client_Flags & CF_REVOLUTION) {
+    struct Sprite *sprite = NULL;
+    if (game.government_count == 0) {
+      /* HACK: the UNHAPPY citizen is used for the government
+       * when we don't know any better. */
+      struct citizen_type c = {.type = CITIZEN_UNHAPPY};
+
+      sprite = get_citizen_sprite(c, 0, NULL);
+    } else {
+      sprite = get_government(gov)->sprite;
+    }
+
     pBuf = get_revolution_widget();
-    set_new_icon2_theme(pBuf, GET_SURF(gov), FALSE);
+    set_new_icon2_theme(pBuf, GET_SURF(sprite), FALSE);
     
     my_snprintf(cBuf, sizeof(cBuf), _("Revolution (Shift + R)\n%s"),
     				get_gov_pplayer(game.player_ptr)->name);
@@ -445,7 +471,7 @@ void set_indicator_icons(struct Sprite *bulb, struct Sprite *sol,
 
   copy_chars_to_string16(pBuf->string16, cBuf);
   
-  set_new_icon2_theme(pBuf, GET_SURF(bulb), FALSE);
+  set_new_icon2_theme(pBuf, GET_SURF(sprites.bulb[bulb]), FALSE);
   redraw_widget(pBuf);
   sdl_dirty_rect(pBuf->size);
   
@@ -524,7 +550,7 @@ void update_info_label(void)
   set_indicator_icons(client_research_sprite(),
 		      client_warming_sprite(),
 		      client_cooling_sprite(),
-		      client_government_sprite());
+		      game.player_ptr->government);
 
   update_timeout_label();
 
@@ -1022,7 +1048,7 @@ void update_unit_info_label(struct unit *pUnit)
       enable_focus_animation();
     }
     if (hover_unit != pUnit->id) {
-      set_hover_state(NULL, HOVER_NONE, ACTIVITY_LAST);
+      set_hover_state(NULL, HOVER_NONE);
     }
     switch (hover_state) {
     case HOVER_NONE:
@@ -1118,7 +1144,7 @@ void update_turn_done_button(bool do_restore)
 void update_city_descriptions(void)
 {
   /* redraw buffer */
-  show_city_descriptions(0, 0, mapview.store_width, mapview.store_height);
+  show_city_descriptions();
   dirty_all();  
 }
 
@@ -1127,7 +1153,7 @@ void update_city_descriptions(void)
 **************************************************************************/
 void prepare_show_city_descriptions(void)
 {
-  /* Nothing */
+  SDL_FillRect(Main.text, NULL, 0x0);
 }
 
 /**************************************************************************
@@ -1135,8 +1161,7 @@ void prepare_show_city_descriptions(void)
 **************************************************************************/
 static void put_city_desc_on_surface(SDL_Surface *pDest,
 				     struct city *pCity,
-				     int canvas_x, int canvas_y,
-				     int *width, int *height)
+				     int canvas_x, int canvas_y)
 {
   static char buffer[128];
   SDL_Surface *pCity_Size = NULL, *pCity_Name = NULL, *pCity_Prod = NULL;
@@ -1147,8 +1172,6 @@ static void put_city_desc_on_surface(SDL_Surface *pDest,
 			  player_color(get_player(pCity->owner))));
   SDL_Color color_bg = {0, 0, 0, 80};
   Uint32 frame_color;
-
-  *width = *height = 0; /* TODO */
   
   color_size.unused = 128;
   
@@ -1407,11 +1430,10 @@ static void put_city_desc_on_surface(SDL_Surface *pDest,
   width and height of the text block (centered directly underneath the
   city's tile).
 ****************************************************************************/
-void show_city_desc(struct canvas *pcanvas, int canvas_x, int canvas_y,
-		    struct city *pcity, int *width, int *height)
+void show_city_desc(struct city *pcity, int canvas_x, int canvas_y)
 {
-  put_city_desc_on_surface(Main.map, pcity,
-			   canvas_x, canvas_y, width, height);
+  put_city_desc_on_surface(Main.text, pcity,
+                     canvas_x, canvas_y - NORMAL_TILE_HEIGHT / 6 );
 }
 
 /* ===================================================================== */
@@ -1431,6 +1453,80 @@ void center_minimap_on_minimap_window(void)
 			  OVERVIEW_TILE_HEIGHT * map.ysize) / 2;
 }
 
+/**************************************************************************
+  Set the dimensions for the map overview, in map units (tiles).
+  Typically each tile will be a 2x2 rectangle, although this may vary.
+**************************************************************************/
+void set_overview_dimensions(int w, int h)
+{
+  struct GUI *pMMap = get_minimap_window_widget();
+  int width = pMMap->size.w - 30 - DOUBLE_FRAME_WH;
+  int height = pMMap->size.h - DOUBLE_FRAME_WH;
+  
+  freelog(LOG_DEBUG,
+    "MAPVIEW: 'set_overview_dimensions' call with x = %d  y = %d", w, h);
+
+  if(w > width || h > height) {
+    Remake_MiniMap(w, h);
+    width = pMMap->size.w - 30 - DOUBLE_FRAME_WH;
+    height = pMMap->size.h - DOUBLE_FRAME_WH;
+  }
+  
+  OVERVIEW_TILE_WIDTH = MAX(1, width / w);
+  OVERVIEW_TILE_HEIGHT = MAX(1, height / h);
+  center_minimap_on_minimap_window();
+  
+  enable(ID_TOGGLE_UNITS_WINDOW_BUTTON);
+  enable(ID_REVOLUTION);
+  enable(ID_ECONOMY);
+  enable(ID_RESEARCH);
+  
+  /* New Turn */
+  pMMap = pMMap->prev;
+    
+  /* enable PLAYERS BUTTON */
+  pMMap = pMMap->prev;
+  set_wstate(pMMap, FC_WS_NORMAL);
+    
+  /* enable ID_FIND_CITY */
+  pMMap = pMMap->prev;
+  set_wstate(pMMap, FC_WS_NORMAL);
+  
+  /* enable UNITS BUTTON */
+  pMMap = pMMap->prev;
+  set_wstate(pMMap, FC_WS_NORMAL);
+  
+  /* enable ID_CHATLINE_TOGGLE_LOG_WINDOW_BUTTON */
+  pMMap = pMMap->prev;
+  set_wstate(pMMap, FC_WS_NORMAL);
+  
+  /* enable toggle minimap mode */
+  pMMap = pMMap->prev;
+  set_wstate(pMMap, FC_WS_NORMAL);
+  
+  /* enable ID_TOGGLE_MAP_WINDOW_BUTTON */
+  pMMap = pMMap->prev;
+  set_wstate(pMMap, FC_WS_NORMAL);
+  
+  /* del init string */
+  pMMap = get_widget_pointer_form_main_list(ID_WAITING_LABEL);
+
+  if (pMMap) {
+    del_widget_from_gui_list(pMMap);
+  }
+
+  /* this is here becouse I need function that is call after game start */
+  if(is_isometric) {  
+    free_dither_tiles();
+    init_dither_tiles();
+    free_borders_tiles();
+    init_borders_tiles();
+  }
+  
+  draw_city_names = TRUE;
+  
+}
+
 void toggle_overview_mode(void)
 {
   if (overview_mode == BORDERS) {
@@ -1440,18 +1536,227 @@ void toggle_overview_mode(void)
   }
 }
 
-struct canvas *get_overview_window(void)
+/**************************************************************************
+...
+**************************************************************************/
+static SDL_Color sdl_overview_tile_color(int x, int y)
 {
-  /* TODO */
-  return NULL;
+  SDL_Color color;
+  struct tile *pTile=map_get_tile(x, y);
+      
+  if ((enum known_type)pTile->known == TILE_UNKNOWN) {
+    return *(get_game_colorRGB(COLOR_STD_BLACK));
+  } else {
+    struct city *pCity = pTile->city;
+    if (pCity) {
+      if(pCity->owner == game.player_idx) {
+        return *(get_game_colorRGB(COLOR_STD_WHITE));
+      } else {
+        return *(get_game_colorRGB(COLOR_STD_CYAN));
+      }
+    } else {
+      struct unit *pUnit = find_visible_unit(pTile);
+      if (pUnit) {
+        if(pUnit->owner == game.player_idx) {
+	  return *(get_game_colorRGB(COLOR_STD_YELLOW));
+	} else {
+	  return *(get_game_colorRGB(COLOR_STD_RED));
+	}
+      } else {
+        switch (overview_mode) {
+          case BORDERS:
+	    if (pTile->owner) {
+	      if (is_ocean(pTile->terrain)) {
+                if ((enum known_type)pTile->known == TILE_KNOWN_FOGGED
+	           && draw_fog_of_war) {
+	          return *(get_game_colorRGB(COLOR_STD_RACE4));
+                } else {
+		  SDL_Color color_fog = *(get_game_colorRGB(COLOR_STD_RACE0 +
+		  				pTile->owner->player_no));
+		  
+		  color = *(get_game_colorRGB(COLOR_STD_OCEAN));
+		  
+		  ALPHA_BLEND(color_fog.r, color_fog.g, color_fog.b, 64,
+			         color.r, color.g, color.b);
+	          return color;
+                }
+              } else {
+                if ((enum known_type)pTile->known == TILE_KNOWN_FOGGED
+	           && draw_fog_of_war) {
+		  color = *(get_game_colorRGB(COLOR_STD_RACE0 +
+		  				pTile->owner->player_no));
+		  
+		  ALPHA_BLEND(0, 0, 0, 64,
+			         color.r, color.g, color.b);
+	          return color;
+                } else {
+	          return *(get_game_colorRGB(COLOR_STD_RACE0 +
+		  				pTile->owner->player_no));
+                }
+              } 
+	    } else {
+	      goto STD;
+	    }
+          break;
+          case TEAMS:
+	    goto STD;
+          break;
+          default:
+	  {
+STD:        if (is_ocean(pTile->terrain)) {
+	      if ((enum known_type)pTile->known == TILE_KNOWN_FOGGED
+	         && draw_fog_of_war) {
+	        return *(get_game_colorRGB(COLOR_STD_RACE4));
+              } else {
+	        return *(get_game_colorRGB(COLOR_STD_OCEAN));
+              }
+            } else {
+	      if ((enum known_type)pTile->known == TILE_KNOWN_FOGGED
+	          && draw_fog_of_war) {
+	        return *(get_game_colorRGB(COLOR_STD_GROUND_FOGED));
+              } else {
+	        return *(get_game_colorRGB(COLOR_STD_GROUND));
+              }
+            }
+	  }
+        }	
+      }
+    }
+  }
+    
+  return color;
+}
+
+/**************************************************************************
+  Update the tile for the given map position on the overview.
+**************************************************************************/
+void overview_update_tile(int x, int y)
+{
+  struct GUI *pMMap = get_minimap_window_widget();
+  SDL_Rect cell_size = {OVERVIEW_TILE_WIDTH * x + OVERVIEW_START_X,
+			OVERVIEW_TILE_HEIGHT * y + OVERVIEW_START_Y,
+			OVERVIEW_TILE_WIDTH, OVERVIEW_TILE_HEIGHT};
+  SDL_Color color = sdl_overview_tile_color(x, y);
+
+  freelog(LOG_DEBUG, "MAPVIEW: overview_update_tile (x = %d y = %d )", x, y);
+			 
+  SDL_FillRect(pMMap->theme, &cell_size,
+	    SDL_MapRGBA(pMMap->theme->format, color.r,color.g,
+    					color.b,color.unused));
+  UPDATE_OVERVIEW_MAP = TRUE;
+}
+
+/**************************************************************************
+  Refresh (update) the entire map overview.
+**************************************************************************/
+void refresh_overview_canvas(void)
+{
+  struct GUI *pMMap = get_minimap_window_widget();
+  SDL_Rect map_area = {FRAME_WH, FRAME_WH,
+			pMMap->size.w - 30 - DOUBLE_FRAME_WH,
+    			pMMap->size.h - DOUBLE_FRAME_WH}; 
+  SDL_Rect cell_size = {OVERVIEW_START_X, OVERVIEW_START_Y,
+			OVERVIEW_TILE_WIDTH, OVERVIEW_TILE_HEIGHT};
+  SDL_Color std_color;
+  Uint16 col = 0, row = 0;
+  			
+  /* clear map area */
+  SDL_FillRect(pMMap->theme, &map_area, 
+  	SDL_MapRGB(pMMap->theme->format, 0x0, 0x0, 0x0));
+  
+  while (TRUE) { /* mini map draw loop */
+    std_color = sdl_overview_tile_color(col, row); 
+    SDL_FillRect(pMMap->theme, &cell_size,
+	    SDL_MapRGBA(pMMap->theme->format, std_color.r,std_color.g,
+    					std_color.b,std_color.unused));
+
+    cell_size.x += OVERVIEW_TILE_WIDTH;
+    col++;
+
+    if (col == map.xsize) {
+      cell_size.y += OVERVIEW_TILE_HEIGHT;
+      cell_size.x = OVERVIEW_START_X;
+      row++;
+      if (row == map.ysize) {
+	break;
+      }
+      col = 0;
+    }
+
+  } /* end mini map draw loop */
+}
+
+/**************************************************************************
+  draw line on mini map.
+  this algoritm is far from optim.
+**************************************************************************/
+static void putline_on_mini_map(SDL_Rect * pMapArea, Sint16 x0, Sint16 y0,
+		Sint16 x1, Sint16 y1, Uint32 color, SDL_Surface *pDest)
+{
+  register float m;
+  register int x, y;
+  int xloop, w = (x1 - x0);
+
+
+  m = (float) (y1 - y0) / w;
+
+  if (x0 < 0) {
+    x0 += pMapArea->w;
+  } else if (x0 >= pMapArea->w) {
+    x0 -= pMapArea->w;
+  }
+
+  if (x1 < 0) {
+    x1 += pMapArea->w;
+  } else if (x1 >= pMapArea->w) {
+    x1 -= pMapArea->w;
+  }
+
+  if (y0 < 0) {
+    y0 += pMapArea->h;
+  } else if (y0 >= pMapArea->h) {
+    y0 -= pMapArea->h;
+  }
+
+  lock_surf(pDest);
+
+  for (xloop = 0; xloop < w; xloop++) {
+
+    x = x0 + xloop;
+
+    y = m * (x - x0) + y0;
+
+    if (x >= pMapArea->w) {
+      x -= pMapArea->w;
+    }
+
+    if (y < 0) {
+      y += pMapArea->h;
+    } else if (y >= pMapArea->h) {
+      y -= pMapArea->h;
+    }
+
+    x += pMapArea->x;
+    y += pMapArea->y;
+
+    putpixel(pDest, x, y, color);
+
+    x -= pMapArea->x;
+
+  }
+
+  unlock_surf(pDest);
 }
 
 /**************************************************************************
   Refresh (update) the viewrect on the overview. This is the rectangle
   showing the area covered by the mapview.
 **************************************************************************/
-void refresh_overview(void)
+void refresh_overview_viewrect(void)
 {
+
+  int Nx, Ny, Ex, Ey, Wx, Wy, Sx, Sy, map_w, map_h;
+  Uint32 color;
   struct GUI *pMMap, *pBuf;
   SDL_Rect map_area;
 
@@ -1483,7 +1788,40 @@ void refresh_overview(void)
     			map_area.y + map_area.h + 1, 0xFFFFFFFF);
     }
     
-    refresh_overview_canvas();
+    /* The x's and y's are in overview coordinates. */
+    map_w = mapview_canvas.tile_width;
+    map_h = mapview_canvas.tile_height;
+    
+#if 0
+    /* take from Main Map */
+    if (!canvas_to_map_pos(&Wx, &Wy, 0, 0)) {
+      nearest_real_pos(&Wx, &Wy);
+    }
+#endif
+    
+    Wx = OVERVIEW_TILE_WIDTH * map_view_x0;
+    Wy = OVERVIEW_TILE_HEIGHT * map_view_y0;
+
+    Nx = Wx + OVERVIEW_TILE_WIDTH * map_w;
+    Ny = Wy - OVERVIEW_TILE_HEIGHT * map_w;
+    
+    Sx = Wx + OVERVIEW_TILE_WIDTH * map_h;
+    Sy = Wy + OVERVIEW_TILE_HEIGHT * map_h;
+    Ex = Nx + OVERVIEW_TILE_WIDTH * map_h;
+    Ey = Ny + OVERVIEW_TILE_HEIGHT * map_h;
+
+    color = 0xFFFFFFFF;
+    
+    putline_on_mini_map(&map_area, Nx, Ny, Ex, Ey, color, pMMap->dst);
+
+    putline_on_mini_map(&map_area, Sx, Sy, Ex, Ey, color, pMMap->dst);
+
+    putline_on_mini_map(&map_area, Wx, Wy, Sx, Sy, color, pMMap->dst);
+
+    putline_on_mini_map(&map_area, Wx, Wy, Nx, Ny, color, pMMap->dst);
+
+    freelog(LOG_DEBUG, "wx,wy: %d,%d nx,ny:%d,%x ex,ey:%d,%d, sx,sy:%d,%d",
+	    Wx, Wy, Nx, Ny, Ex, Ey, Sx, Sy);
     /* ===== */
 
 
@@ -1622,7 +1960,47 @@ void refresh_overview(void)
 static void put_city_pixmap_draw(struct city *pCity, SDL_Surface *pDest,
 				 Sint16 map_x, Sint16 map_y)
 {
-  /* FIXME */
+  static struct drawn_sprite pSprites[10];
+  static SDL_Rect src, des;
+  static int i, count;
+    
+  if(!pCity) {
+    return;
+  }
+    
+  count = fill_city_sprite_array_iso(pSprites, pCity);
+  
+  if (!(SDL_Client_Flags & CF_CIV3_CITY_TEXT_STYLE))
+  {
+    src = get_smaller_surface_rect(GET_SURF(pSprites[0].sprite));
+    des.x = map_x + (NORMAL_TILE_WIDTH - src.w) / 2;
+    des.y = map_y + NORMAL_TILE_HEIGHT / 4;
+      
+    /* blit flag/shield */
+    SDL_BlitSurface(GET_SURF(pSprites[0].sprite), &src, pDest, &des);
+  }
+  
+  if (pCity->owner == game.player_idx && cma_is_city_under_agent(pCity, NULL)) {
+    draw_icon_from_theme(pTheme->CMA_Icon, 0, pDest,
+    		map_x + (NORMAL_TILE_WIDTH - pTheme->CMA_Icon->w / 2) / 4,
+    		map_y + NORMAL_TILE_HEIGHT - pTheme->CMA_Icon->h);
+  }
+  
+  des.x = map_x;
+  des.y = map_y;
+  src = des;
+  for (i = 1; i < count; i++) {
+    if (pSprites[i].sprite) {
+#if 0      
+      if(GET_SURF(pSprites[i].sprite)->w - NORMAL_TILE_WIDTH > 0) {
+	des.x -= ((GET_SURF(pSprites[i].sprite)->w - NORMAL_TILE_WIDTH) >> 1);
+      }
+#endif      
+      SDL_BlitSurface(GET_SURF(pSprites[i].sprite), NULL, pDest, &des);
+      des = src;	    
+    }
+  }
+    
 }
 
 /**************************************************************************
@@ -1631,11 +2009,72 @@ static void put_city_pixmap_draw(struct city *pCity, SDL_Surface *pDest,
 void put_unit_pixmap_draw(struct unit *pUnit, SDL_Surface *pDest,
 			  Sint16 map_x, Sint16 map_y)
 {
-  if (pUnit) {
-    struct canvas canvas = {.surf = pDest};
+  static struct drawn_sprite pSprites[10];
+  static SDL_Rect copy, des;
+  static SDL_Rect src_hp = {0,0,0,0};
+  static SDL_Rect src_flag = {0,0,0,0};
+  static int count, i;
+  bool solid_bg;
 
-    put_unit_full(pUnit, &canvas, map_x, map_y);
+  if(!pUnit) {
+    return;
   }
+  
+  des.x = map_x;
+  des.y = map_y;
+  
+  count = fill_unit_sprite_array(pSprites, pUnit, &solid_bg);
+
+  des.x += NORMAL_TILE_WIDTH / 4;
+
+  /* blit hp bar */
+  if (!src_hp.x)
+  {
+    src_hp = get_smaller_surface_rect(GET_SURF(pSprites[count - 1].sprite));
+  }
+  copy = des;
+  SDL_BlitSurface(GET_SURF(pSprites[count - 1].sprite), &src_hp, pDest, &des);
+
+  des = copy;
+  des.y += src_hp.h;
+  des.x++;
+  
+  /* blit flag/shield */
+  if (!src_flag.x)
+  {
+    src_flag = get_smaller_surface_rect(GET_SURF(pSprites[0].sprite));
+  }
+  
+  SDL_BlitSurface(GET_SURF(pSprites[0].sprite), &src_flag, pDest, &des);
+
+  des.x = map_x;
+  des.y = map_y;
+  copy = des;    
+  for (i = 1; i < count - 1; i++) {
+    if (pSprites[i].sprite) {
+      SDL_BlitSurface(GET_SURF(pSprites[i].sprite), NULL, pDest, &des);
+      des = copy;	    
+    }
+  }
+  
+  /* draw current occupy status */
+  if (pUnit->owner == game.player_idx
+      && get_transporter_occupancy(pUnit) > 0) {
+    
+    des.y += NORMAL_TILE_HEIGHT / 2;
+    copy = des;
+    
+    if (pUnit->occupy >= 10) {
+      SDL_BlitSurface(GET_SURF(sprites.city.size_tens[pUnit->occupy / 10]),
+	      NULL, pDest, &des);
+      des = copy;
+    }
+
+    SDL_BlitSurface(GET_SURF(sprites.city.size[pUnit->occupy % 10]),
+		    NULL, pDest, &des);
+
+  }
+  
 }
 
 /**************************************************************************
@@ -1668,6 +2107,7 @@ static void draw_map_cell(SDL_Surface *pDest, Sint16 map_x, Sint16 map_y,
 			  Uint16 map_col, Uint16 map_row, int citymode)
 {
   static struct drawn_sprite pTile_sprs[80];
+  static struct Sprite *pCoasts[4] = {NULL, NULL, NULL, NULL};
   static SDL_Surface *pDitherBufs[4];
   static SDL_Surface *pBufSurface = NULL;
   static SDL_Rect dst, des;
@@ -1678,11 +2118,10 @@ static void draw_map_cell(SDL_Surface *pDest, Sint16 map_x, Sint16 map_y,
   static Terrain_type_id terrain;
   static int count, i;
   static bool fog, full_ocean, solid_bg;
-  enum color_std bg_color;
 
   count =
-    fill_tile_sprite_array(pTile_sprs, &solid_bg, &bg_color,
-			   map_col, map_row, citymode);
+  	fill_tile_sprite_array_iso(pTile_sprs, pCoasts, NULL, map_col,
+				 map_row, citymode, &solid_bg);
 
   if (count == -1) { /* tile is unknown */
     des.x = map_x;
@@ -1718,11 +2157,74 @@ static void draw_map_cell(SDL_Surface *pDest, Sint16 map_x, Sint16 map_y,
 
   dst = des;
   
-  des = dst;
+  if (is_ocean(terrain)) {
+    if (full_ocean) {
+      if (fog) {
+	SDL_BlitSurface(pOcean_Foged_Tile, NULL, pBufSurface, &des);
+      } else {
+	SDL_BlitSurface(pOcean_Tile, NULL, pBufSurface, &des);
+      }
+    } else {  /* coasts */
+      /* top */
+      des.x += NORMAL_TILE_WIDTH / 4;
+      SDL_BlitSurface(GET_SURF(pCoasts[0]), NULL, pBufSurface, &des);
+      des = dst;
+      
+      /* bottom */
+      des.x += NORMAL_TILE_WIDTH / 4;
+      des.y += HALF_NORMAL_TILE_HEIGHT;
+      SDL_BlitSurface(GET_SURF(pCoasts[1]), NULL, pBufSurface, &des);
+      des = dst;
+      
+      /* left */
+      des.y += NORMAL_TILE_HEIGHT / 4;
+      SDL_BlitSurface(GET_SURF(pCoasts[2]), NULL, pBufSurface, &des);
+      des = dst;
+      
+      /* right */
+      des.y += NORMAL_TILE_HEIGHT / 4;
+      des.x += HALF_NORMAL_TILE_WIDTH;
+      SDL_BlitSurface(GET_SURF(pCoasts[3]), NULL, pBufSurface, &des);
+    }
+  } else {
+    SDL_BlitSurface(GET_SURF(pTile_sprs[0].sprite), NULL, pBufSurface, &des);
+    i++;
+  }
 
-  /*** Rest of terrain and specials ***/
+  des = dst;
+  /*** Dither base terrain ***/
+
+  if (!full_ocean && !is_ocean(terrain) && (SDL_Client_Flags & CF_DRAW_MAP_DITHER))
+  {
+    /* north */
+    if (pDitherBufs[0]) {
+      des.x += HALF_NORMAL_TILE_WIDTH;
+      SDL_BlitSurface(pDitherBufs[0], NULL, pBufSurface, &des);
+      des = dst;
+    }
+    /* south */
+    if (pDitherBufs[1]) {
+      des.y += HALF_NORMAL_TILE_HEIGHT;
+      SDL_BlitSurface(pDitherBufs[1], NULL, pBufSurface, &des);
+      des = dst;
+    }
+    /* east */
+    if (pDitherBufs[2]) {
+      des.y += HALF_NORMAL_TILE_HEIGHT;
+      des.x += HALF_NORMAL_TILE_WIDTH;
+      SDL_BlitSurface(pDitherBufs[2], NULL, pBufSurface, &des);
+      des = dst;
+    }
+    /* west */
+    if (pDitherBufs[3]) {
+      SDL_BlitSurface(pDitherBufs[3], NULL, pBufSurface, &des);
+      des = dst;
+    }
+  }  
+
+    /*** Rest of terrain and specials ***/
   if (draw_terrain) {
-    for (i = 0; i < count; i++) {
+    for (; i < count; i++) {
       if (pTile_sprs[i].sprite) {
         if (GET_SURF(pTile_sprs[i].sprite)->w - NORMAL_TILE_WIDTH > 0
 	   || GET_SURF(pTile_sprs[i].sprite)->h - NORMAL_TILE_HEIGHT > 0) {
@@ -2072,6 +2574,93 @@ void real_blink_active_unit(void)
 }
 
 /**************************************************************************
+ This function is called to decrease a unit's HP smoothly in battle when
+ combat_animation is turned on.
+**************************************************************************/
+void decrease_unit_hp_smooth(struct unit *punit0, int hp0,
+			     struct unit *punit1, int hp1)
+{
+
+  static struct timer *anim_timer = NULL;
+  struct unit *losing_unit = (hp0 == 0 ? punit0 : punit1);
+  int i, canvas_x, canvas_y;
+  SDL_Rect src =
+      { 0, 0, NORMAL_TILE_WIDTH, 1.5 * NORMAL_TILE_HEIGHT }, dest;
+
+  set_units_in_combat(punit0, punit1);
+
+  do {
+    anim_timer = renew_timer_start(anim_timer, TIMER_USER, TIMER_ACTIVE);
+
+    if (punit0->hp > hp0
+	&& myrand((punit0->hp - hp0) + (punit1->hp - hp1)) <
+	punit0->hp - hp0) {
+      punit0->hp--;
+    } else {
+      if (punit1->hp > hp1) {
+	punit1->hp--;
+      } else {
+	punit0->hp--;
+      }
+    }
+
+    refresh_tile_mapcanvas(punit0->x, punit0->y, FALSE);
+    refresh_tile_mapcanvas(punit1->x, punit1->y, FALSE);
+    
+    flush_dirty();
+
+    usleep_since_timer_start(anim_timer, 10000);
+
+  } while (punit0->hp > hp0 || punit1->hp > hp1);
+
+
+  if (num_tiles_explode_unit &&
+      tile_to_canvas_pos(&canvas_x, &canvas_y, losing_unit->x, losing_unit->y)) {
+    /* copy screen area */
+    src.x = canvas_x;
+    src.y = canvas_y;
+    SDL_BlitSurface(Main.map, &src, pTmpSurface, NULL);
+
+    dest.y = canvas_y;
+    for (i = 0; i < num_tiles_explode_unit; i++) {
+
+      anim_timer = renew_timer_start(anim_timer, TIMER_USER, TIMER_ACTIVE);
+
+      /* blit explosion */
+      dest.x = canvas_x + NORMAL_TILE_WIDTH / 4;
+
+      SDL_BlitSurface(GET_SURF(sprites.explode.unit[i]), 
+      						NULL, Main.map, &dest);
+      
+      flush_rect(dest);
+
+      usleep_since_timer_start(anim_timer, 40000);
+
+      /* clear explosion */
+      dest.x = canvas_x;
+      SDL_BlitSurface(pTmpSurface, NULL, Main.map, &dest);
+    }
+  }
+
+  sdl_dirty_rect(dest);
+
+  /* clear pTmpSurface */
+  if ((pTmpSurface->format->BytesPerPixel == 4) &&
+      (!pTmpSurface->format->Amask)) {
+    SDL_FillRect(pTmpSurface, NULL, Amask);
+  } else {
+    SDL_FillRect(pTmpSurface, NULL, 0x0);
+  }
+
+  set_units_in_combat(NULL, NULL);
+  
+  refresh_tile_mapcanvas(punit0->x, punit0->y, FALSE);
+  refresh_tile_mapcanvas(punit1->x, punit1->y, FALSE);
+  rebuild_focus_anim_frames();
+  flush_dirty();
+}
+
+/**************************************************************************
   Update (refresh) the locations of the mapview scrollbars (if it uses
   them).
 **************************************************************************/
@@ -2092,11 +2681,119 @@ void put_cross_overlay_tile(int x, int y)
   Draw in information about city workers on the mapview in the given
   color.
 **************************************************************************/
-void put_city_worker(struct canvas *pcanvas,
-		     enum color_std color, enum city_tile_type worker,
-		     int canvas_x, int canvas_y)
+void put_city_workers(struct city *pcity, int color)
 {
   freelog(LOG_DEBUG, "MAPVIEW: put_city_workers : PORT ME");
+}
+
+/**************************************************************************
+  Draw a nuke mushroom cloud at the given tile.
+**************************************************************************/
+void put_nuke_mushroom_pixmaps(int x, int y)
+{
+  int canvas_x, canvas_y;
+      
+  if (pAnim->num_tiles_explode_nuke &&
+     tile_to_canvas_pos(&canvas_x, &canvas_y, x, y)) {
+    struct Sprite *pNuke;
+    SDL_Surface *pStore;
+    struct timer *anim_timer = NULL;
+    SDL_Rect src, dst;
+    char tag[32];
+    int i;
+    
+    my_snprintf(tag , sizeof(tag), "explode.iso_nuke_0");
+    pNuke = load_sprite(tag);
+    assert(pNuke != NULL);   
+    /* copy screen area */
+    src.w = GET_SURF(pNuke)->w;
+    src.h = GET_SURF(pNuke)->h;
+    src.x = canvas_x + (NORMAL_TILE_WIDTH - src.w) / 2;
+    src.y = canvas_y + (NORMAL_TILE_HEIGHT - src.h) / 2 - 24;/* hard coded y position !! */
+    dst = src;
+       
+    pStore = create_surf(src.w, src.h, SDL_SWSURFACE);
+    SDL_BlitSurface(Main.map, &src, pStore, NULL);
+    src = dst;
+       
+    /* draw nuke explosion animations */
+    for (i = 0; i < pAnim->num_tiles_explode_nuke; i++) {
+
+      if(!pNuke) {
+       my_snprintf(tag , sizeof(tag), "explode.iso_nuke_%d", i);
+        pNuke = load_sprite(tag);
+      }
+      assert(pNuke != NULL);
+      
+      SDL_SetColorKey(GET_SURF(pNuke), SDL_SRCCOLORKEY,
+			    		get_first_pixel(GET_SURF(pNuke)));
+      
+      anim_timer = renew_timer_start(anim_timer, TIMER_USER, TIMER_ACTIVE);
+
+      /* blit explosion */
+      SDL_BlitSurface(GET_SURF(pNuke), NULL, Main.map, &dst);
+      
+      flush_rect(dst);
+      dst = src;
+      
+      usleep_since_timer_start(anim_timer, 40000);
+
+      /* clear explosion */
+      SDL_BlitSurface(pStore, NULL, Main.map, &dst);
+      dst = src;
+      
+      unload_sprite(tag);
+      pNuke = NULL;
+    }
+    
+    FREESURFACE(pStore);
+    finish_loading_sprites();
+  }
+  
+}
+
+/**************************************************************************
+  Draw a segment (e.g., a goto line) from the given tile in the given
+  direction.
+**************************************************************************/
+void draw_segment(int src_x, int src_y, int dir)
+{
+  int dest_x, dest_y, is_real;
+  int canvas_start_x, canvas_start_y;
+  int canvas_end_x, canvas_end_y;
+  Uint32 color = get_game_color(COLOR_STD_CYAN, Main.map);
+  
+  is_real = MAPSTEP(dest_x, dest_y, src_x, src_y, dir);
+  assert(is_real);
+  
+  /* Find middle of tiles. y-1 to not undraw the the middle pixel of a
+     horizontal line when we refresh the tile below-between. */
+  tile_to_canvas_pos(&canvas_start_x, &canvas_start_y, src_x, src_y);
+  tile_to_canvas_pos(&canvas_end_x, &canvas_end_y, dest_x, dest_y);
+  canvas_start_x += HALF_NORMAL_TILE_WIDTH;
+  canvas_start_y += HALF_NORMAL_TILE_HEIGHT - 1;
+  canvas_end_x += HALF_NORMAL_TILE_WIDTH;
+  canvas_end_y += HALF_NORMAL_TILE_HEIGHT - 1;
+    
+  dest_x = abs(canvas_end_x - canvas_start_x);
+  dest_y = abs(canvas_end_y - canvas_start_y);
+  
+  /* somewhat hackish way of solving the problem where draw from a tile on
+     one side of the screen out of the screen, and the tile we draw to is
+     found to be on the other side of the screen. */
+  if (dest_x > NORMAL_TILE_WIDTH || dest_y > NORMAL_TILE_HEIGHT) {
+    return;
+  }
+
+  /* draw it! */
+  putline(Main.map,
+  	canvas_start_x,	canvas_start_y,	canvas_end_x, canvas_end_y, color);
+  
+  dirty_rect(MIN(canvas_start_x, canvas_end_x),
+		  MIN(canvas_start_y, canvas_end_y),
+  			dest_x ? dest_x : 1, dest_y ? dest_y : 1);
+  
+  
 }
 
 /**************************************************************************
@@ -2366,7 +3063,7 @@ static SDL_Surface * create_noiso_city_map(struct city *pCity)
   SDL_Surface *pDest = create_surf(get_citydlg_canvas_width(),
 				   get_citydlg_canvas_height(), SDL_SWSURFACE);
 
-  store.surf = pDest;
+  store.map = pDest;
   
   /* turn off drawing units */
   draw_units = 0;
@@ -2478,6 +3175,11 @@ static SDL_Surface * create_ocean_tile(void)
   SDL_Rect des = { 0 , 0 , 0, 0 };
   SDL_Surface *pBuf[4];
   
+  pBuf[0] = GET_SURF(sprites.tx.coast_cape_iso[0][0]);
+  pBuf[1] = GET_SURF(sprites.tx.coast_cape_iso[0][1]);
+  pBuf[2] = GET_SURF(sprites.tx.coast_cape_iso[0][2]);
+  pBuf[3] = GET_SURF(sprites.tx.coast_cape_iso[0][3]);
+  
   /* top */
   des.y = 0;
   des.x = NORMAL_TILE_WIDTH / 4;
@@ -2516,6 +3218,11 @@ static void fill_dither_buffers(SDL_Surface **pDitherBufs, int x, int y,
   
     if (MAPSTEP(x1, y1, x, y, dir)) {
       __ter[dir] = map_get_terrain(x1, y1);
+      
+      /* hacking away the river here... */
+      if (is_isometric && __ter[dir] == T_RIVER) {
+	__ter[dir] = T_GRASSLAND;
+      }
     } else {
       /* We draw the edges of the map as if the same terrain just
        * continued off the edge of the map. */
@@ -2553,7 +3260,7 @@ static void init_dither_tiles(void)
   
   for (terrain = T_FIRST; terrain < T_COUNT; terrain++) {
     
-    if (is_ocean(terrain) || terrain == T_UNKNOWN)
+    if (terrain == T_RIVER || is_ocean(terrain) || terrain == T_UNKNOWN)
     {
       for(i = 0; i < 4; i++)
       {
@@ -2562,7 +3269,7 @@ static void init_dither_tiles(void)
       continue;
     }
       
-    pTerrain_Surface = GET_SURF(sprites.terrain[terrain]->layer[0].base);
+    pTerrain_Surface = GET_SURF(get_tile_type(terrain)->sprite[0]);
     
     for( i = 0; i < 4; i++ )
     {
@@ -2646,6 +3353,66 @@ static void clear_dither_tiles(void)
   }
 }
 /* ================================================================ */
+
+/**************************************************************************
+  ...
+**************************************************************************/
+static void init_borders_tiles(void)
+{
+  int i;
+  SDL_Color *color;
+  
+  pMapBorders = CALLOC(game.nplayers + 1, sizeof(SDL_Surface **));
+  for(i=0; i<game.nplayers; i++) {
+    
+    color = get_game_colorRGB(COLOR_STD_RACE0 + i);
+    color->unused = 192;
+    
+    pMapBorders[i] = CALLOC(4, sizeof(SDL_Surface *));
+    
+    pMapBorders[i][0] = SDL_DisplayFormat(pTheme->NWEST_BORDER_Icon);
+    SDL_FillRectAlpha(pMapBorders[i][0], NULL, color);
+    SDL_SetColorKey(pMapBorders[i][0], SDL_SRCCOLORKEY|SDL_RLEACCEL,
+    					get_first_pixel(pMapBorders[i][0]));
+    
+    pMapBorders[i][1] = SDL_DisplayFormat(pTheme->NNORTH_BORDER_Icon);
+    SDL_FillRectAlpha(pMapBorders[i][1], NULL, color);
+    SDL_SetColorKey(pMapBorders[i][1], SDL_SRCCOLORKEY|SDL_RLEACCEL,
+    					get_first_pixel(pMapBorders[i][1]));
+    
+    pMapBorders[i][2] = SDL_DisplayFormat(pTheme->NEAST_BORDER_Icon);
+    SDL_FillRectAlpha(pMapBorders[i][2], NULL, color);
+    SDL_SetColorKey(pMapBorders[i][2], SDL_SRCCOLORKEY|SDL_RLEACCEL,
+					get_first_pixel(pMapBorders[i][2]));
+        
+    pMapBorders[i][3] = SDL_DisplayFormat(pTheme->NSOUTH_BORDER_Icon);
+    SDL_FillRectAlpha(pMapBorders[i][3], NULL, color);
+    SDL_SetColorKey(pMapBorders[i][3], SDL_SRCCOLORKEY|SDL_RLEACCEL,
+    					get_first_pixel(pMapBorders[i][3]));
+            
+    color->unused = 255;
+  }
+  
+}
+
+/**************************************************************************
+  ...
+**************************************************************************/
+static void free_borders_tiles(void)
+{
+  if(pMapBorders) {
+    int i = 0;
+    while(pMapBorders[i]) {
+      FREESURFACE(pMapBorders[i][0]);
+      FREESURFACE(pMapBorders[i][1]);
+      FREESURFACE(pMapBorders[i][2]);
+      FREESURFACE(pMapBorders[i][3]);
+      FREE(pMapBorders[i]);
+      i++;
+    }
+    FREE(pMapBorders);
+  }
+}
 
 /**************************************************************************
   ...

@@ -20,7 +20,6 @@
 #endif
 
 #include <assert.h>
-#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -39,7 +38,6 @@
 #include "packets.h"
 #include "rand.h"
 #include "support.h"
-#include "timing.h"
 #include "version.h"
 
 #include "agents.h"
@@ -88,6 +86,8 @@ int  server_port = -1;
 bool auto_connect = FALSE; /* TRUE = skip "Connect to Freeciv Server" dialog */
 
 static enum client_states client_state = CLIENT_BOOT_STATE;
+
+int seconds_to_turndone;
 
 /* TRUE if an end turn request is blocked by busy agents */
 bool waiting_for_end_turn = FALSE;
@@ -177,7 +177,6 @@ int main(int argc, char *argv[])
 
   init_nls();
   audio_init();
-  init_character_encodings(gui_character_encoding, gui_use_transliteration);
 
   /* default argument values are set in options.c */
   loglevel=LOG_NORMAL;
@@ -185,98 +184,89 @@ int main(int argc, char *argv[])
   i = 1;
 
   while (i < argc) {
-    if (ui_separator) {
-      argv[1 + ui_options] = argv[i];
-      ui_options++;
-    } else if (is_option("--help", argv[i])) {
-      fc_fprintf(stderr, _("Usage: %s [option ...]\n"
-			   "Valid options are:\n"), argv[0]);
-      fc_fprintf(stderr, _("  -a, --autoconnect\tSkip connect dialog\n"));
+   if (ui_separator) {
+     argv[1 + ui_options] = argv[i];
+     ui_options++;
+   } else if (is_option("--help", argv[i])) {
+    fc_fprintf(stderr, _("Usage: %s [option ...]\n"
+		      "Valid options are:\n"), argv[0]);
+    fc_fprintf(stderr, _("  -a, --autoconnect\tSkip connect dialog\n"));
 #ifdef DEBUG
-      fc_fprintf(stderr, _("  -d, --debug NUM\tSet debug log level (0 to 4,"
-			   " or 4:file1,min,max:...)\n"));
+    fc_fprintf(stderr, _("  -d, --debug NUM\tSet debug log level (0 to 4,"
+                                  " or 4:file1,min,max:...)\n"));
 #else
-      fc_fprintf(stderr,
-		 _("  -d, --debug NUM\tSet debug log level (0 to 3)\n"));
+    fc_fprintf(stderr,
+	       _("  -d, --debug NUM\tSet debug log level (0 to 3)\n"));
 #endif
-      fc_fprintf(stderr,
-		 _("  -h, --help\t\tPrint a summary of the options\n"));
-      fc_fprintf(stderr, _("  -l, --log FILE\tUse FILE as logfile "
-			   "(spawned server also uses this)\n"));
-      fc_fprintf(stderr, _("  -m, --meta HOST\t"
-			   "Connect to the metaserver at HOST\n"));
-      fc_fprintf(stderr, _("  -n, --name NAME\tUse NAME as name\n"));
-      fc_fprintf(stderr,
-		 _("  -p, --port PORT\tConnect to server port PORT\n"));
-      fc_fprintf(stderr,
-		 _("  -P, --Plugin PLUGIN\tUse PLUGIN for sound output %s\n"),
-		 audio_get_all_plugin_names());
-      fc_fprintf(stderr, _("  -r, --read FILE\tRead startup script FILE "
-			   "(for spawned server only)\n"));
-      fc_fprintf(stderr,
-		 _("  -s, --server HOST\tConnect to the server at HOST\n"));
-      fc_fprintf(stderr,
-		 _("  -S, --Sound FILE\tRead sound tags from FILE\n"));
-      fc_fprintf(stderr, _("  -t, --tiles FILE\t"
-			   "Use data file FILE.tilespec for tiles\n"));
-      fc_fprintf(stderr, _("  -v, --version\t\tPrint the version number\n"));
-      fc_fprintf(stderr, _("      --\t\t"
-			   "Pass any following options to the UI.\n"
-			   "\t\t\tTry \"%s -- --help\" for more.\n"), argv[0]);
-      exit(EXIT_SUCCESS);
-    } else if (is_option("--version",argv[i])) {
-      fc_fprintf(stderr, "%s %s\n", freeciv_name_version(), client_string);
-      exit(EXIT_SUCCESS);
-    } else if ((option = get_option_malloc("--log", argv, &i, argc))) {
-      logfile = option; /* never free()d */
-    } else  if ((option = get_option_malloc("--read", argv, &i, argc))) {
-      scriptfile = option; /* never free()d */
-    } else if ((option = get_option_malloc("--name", argv, &i, argc))) {
+    fc_fprintf(stderr,
+	       _("  -h, --help\t\tPrint a summary of the options\n"));
+    fc_fprintf(stderr, _("  -l, --log FILE\tUse FILE as logfile "
+                      "(spawned server also uses this)\n"));
+    fc_fprintf(stderr, _("  -m, --meta HOST\t"
+		      "Connect to the metaserver at HOST\n"));
+    fc_fprintf(stderr, _("  -n, --name NAME\tUse NAME as name\n"));
+    fc_fprintf(stderr,
+	       _("  -p, --port PORT\tConnect to server port PORT\n"));
+    fc_fprintf(stderr,
+	       _("  -P, --Plugin PLUGIN\tUse PLUGIN for sound output %s\n"),
+	    audio_get_all_plugin_names());
+    fc_fprintf(stderr, _("  -r, --read FILE\tRead startup script FILE "
+                      "(for spawned server only)\n"));
+    fc_fprintf(stderr,
+	       _("  -s, --server HOST\tConnect to the server at HOST\n"));
+    fc_fprintf(stderr, _("  -S, --Sound FILE\tRead sound tags from FILE\n"));
+    fc_fprintf(stderr, _("  -t, --tiles FILE\t"
+		      "Use data file FILE.tilespec for tiles\n"));
+    fc_fprintf(stderr, _("  -v, --version\t\tPrint the version number\n"));
+    fc_fprintf(stderr, _("      --\t\t"
+		      "Pass any following options to the UI.\n"
+		      "\t\t\tTry \"%s -- --help\" for more.\n"), argv[0]);
+    exit(EXIT_SUCCESS);
+   } else if (is_option("--version",argv[i])) {
+    fc_fprintf(stderr, "%s %s\n", freeciv_name_version(), client_string);
+    exit(EXIT_SUCCESS);
+   } else if ((option = get_option("--log",argv,&i,argc))) {
+      logfile = mystrdup(option); /* never free()d */
+   } else  if ((option = get_option("--read", argv, &i, argc)))
+      scriptfile = mystrdup(option); /* never free()d */
+   else if ((option = get_option("--name",argv,&i,argc)))
       sz_strlcpy(user_name, option);
-      free(option);
-    } else if ((option = get_option_malloc("--meta", argv, &i, argc))) {
+   else if ((option = get_option("--meta",argv,&i,argc)))
       sz_strlcpy(metaserver, option);
-      free(option);
-    } else if ((option = get_option_malloc("--Sound", argv, &i, argc))) {
+   else if ((option = get_option("--Sound", argv, &i, argc)))
       sz_strlcpy(sound_set_name, option);
-      free(option);
-    } else if ((option = get_option_malloc("--Plugin", argv, &i, argc))) {
+   else if ((option = get_option("--Plugin", argv, &i, argc)))
       sz_strlcpy(sound_plugin_name, option);
-      free(option);
-    } else if ((option = get_option_malloc("--port",argv,&i,argc))) {
-      if (sscanf(option, "%d", &server_port) != 1) {
-	fc_fprintf(stderr,
-		   _("Invalid port \"%s\" specified with --port option.\n"),
-		   option);
-	fc_fprintf(stderr, _("Try using --help.\n"));
+   else if ((option = get_option("--port",argv,&i,argc))) {
+     if(sscanf(option, "%d", &server_port) != 1) {
+       fc_fprintf(stderr,
+		  _("Invalid port \"%s\" specified with --port option.\n"),
+		  option);
+       fc_fprintf(stderr, _("Try using --help.\n"));
         exit(EXIT_FAILURE);
-      }
-      free(option);
-    } else if ((option = get_option_malloc("--server", argv, &i, argc))) {
+     }
+   } else if ((option = get_option("--server",argv,&i,argc)))
       sz_strlcpy(server_host, option);
-      free(option);
-    } else if (is_option("--autoconnect", argv[i])) {
+   else if (is_option("--autoconnect",argv[i]))
       auto_connect = TRUE;
-    } else if ((option = get_option_malloc("--debug", argv, &i, argc))) {
-      loglevel = log_parse_level_str(option);
-      if (loglevel == -1) {
+   else if ((option = get_option("--debug",argv,&i,argc))) {
+      loglevel=log_parse_level_str(option);
+      if (loglevel==-1) {
 	fc_fprintf(stderr,
 		   _("Invalid debug level \"%s\" specified with --debug "
 		     "option.\n"), option);
 	fc_fprintf(stderr, _("Try using --help.\n"));
         exit(EXIT_FAILURE);
       }
-      free(option);
-    } else if ((option = get_option_malloc("--tiles", argv, &i, argc))) {
+   } else if ((option = get_option("--tiles", argv, &i, argc)))
       sz_strlcpy(tileset_name, option);
-      free(option);
-    } else if (is_option("--", argv[i])) {
-      ui_separator = TRUE;
-    } else {
+   else if (is_option("--", argv[i])) {
+     ui_separator = TRUE;
+   } else { 
       fc_fprintf(stderr, _("Unrecognized option: \"%s\"\n"), argv[i]);
       exit(EXIT_FAILURE);
-    }
-    i++;
+   }
+   i++;
   } /* of while */
 
   /* Remove all options except those intended for the UI. */
@@ -305,15 +295,16 @@ int main(int argc, char *argv[])
 
   /* initialization */
 
-  game.all_connections = conn_list_new();
-  game.est_connections = conn_list_new();
-  game.game_connections = conn_list_new();
+  conn_list_init(&game.all_connections);
+  conn_list_init(&game.est_connections);
+  conn_list_init(&game.game_connections);
 
   ui_init();
   charsets_init();
   my_init_network();
   chatline_common_init();
   init_messages_where();
+  init_city_report_data();
   init_player_dlg_common();
   settable_options_init();
 
@@ -334,14 +325,12 @@ int main(int argc, char *argv[])
     sz_strlcpy(metaserver, default_metaserver); 
   if (server_port == -1) server_port = default_server_port;
 
+
   /* This seed is not saved anywhere; randoms in the client should
      have cosmetic effects only (eg city name suggestions).  --dwp */
   mysrand(time(NULL));
-  control_init();
-  helpdata_init();
-  tilespec_init();
-  boot_help_texts();
 
+  boot_help_texts();
   if (!tilespec_read_toplevel(tileset_name)) {
     /* get tile sizes etc */
     exit(EXIT_FAILURE);
@@ -369,18 +358,8 @@ void ui_exit(void)
   client_remove_all_cli_conn();
   my_shutdown_network();
 
-  if (save_options_on_exit) {
-    save_options();
-  }
-  tilespec_done();
-  control_done();
-  chatline_common_done();
   client_game_free();
 
-  helpdata_done(); /* ui_exit() unlinks help text list */
-  conn_list_free(game.all_connections);
-  conn_list_free(game.est_connections);
-  conn_list_free(game.game_connections);
   exit(EXIT_SUCCESS);
 }
 
@@ -515,7 +494,6 @@ void set_client_state(enum client_states newstate)
     client_state=newstate;
 
     if (client_state == CLIENT_GAME_RUNNING_STATE) {
-      init_city_report_game_data();
       load_ruleset_specific_options();
       create_event(NULL, E_GAME_START, _("Game started."));
       precalc_tech_data();
@@ -577,11 +555,11 @@ enum client_states get_client_state(void)
 void client_remove_cli_conn(struct connection *pconn)
 {
   if (pconn->player) {
-    conn_list_unlink(pconn->player->connections, pconn);
+    conn_list_unlink(&pconn->player->connections, pconn);
   }
-  conn_list_unlink(game.all_connections, pconn);
-  conn_list_unlink(game.est_connections, pconn);
-  conn_list_unlink(game.game_connections, pconn);
+  conn_list_unlink(&game.all_connections, pconn);
+  conn_list_unlink(&game.est_connections, pconn);
+  conn_list_unlink(&game.game_connections, pconn);
   assert(pconn != &aconnection);
   free(pconn);
 }
@@ -592,11 +570,14 @@ void client_remove_cli_conn(struct connection *pconn)
 **************************************************************************/
 void client_remove_all_cli_conn(void)
 {
-  while (conn_list_size(game.all_connections) > 0) {
-    struct connection *pconn = conn_list_get(game.all_connections, 0);
+  while (conn_list_size(&game.all_connections) > 0) {
+    struct connection *pconn = conn_list_get(&game.all_connections, 0);
     client_remove_cli_conn(pconn);
   }
 }
+
+void dealloc_id(int id); /* double kludge (suppress a possible warning) */
+void dealloc_id(int id) { }/* kludge */
 
 /**************************************************************************
 ..
@@ -623,60 +604,16 @@ bool client_is_observer(void)
   return aconnection.established && aconnection.observer;
 }
 
-/* Seconds_to_turndone is the number of seconds the server has told us
- * are left.  The timer tells exactly how much time has passed since the
- * server gave us that data. */
-static double seconds_to_turndone = 0.0;
-static struct timer *turndone_timer;
-
-/* This value shows what value the timeout label is currently showing for
- * the seconds-to-turndone. */
-static int seconds_shown_to_turndone;
-
 /**************************************************************************
-  Reset the number of seconds to turndone from an "authentic" source.
-
-  The seconds are taken as a double even though most callers will just
-  know an integer value.
+ This function should be called every 500ms. It lets the unit blink
+ and update the timeout.
 **************************************************************************/
-void set_seconds_to_turndone(double seconds)
+void real_timer_callback(void)
 {
-  if (game.timeout > 0) {
-    seconds_to_turndone = seconds;
-    turndone_timer = renew_timer_start(turndone_timer, TIMER_USER,
-				       TIMER_ACTIVE);
-
-    /* Maybe we should do an update_timeout_label here, but it doesn't
-     * seem to be necessary. */
-    seconds_shown_to_turndone = ceil(seconds) + 0.1;
-  }
-}
-
-/**************************************************************************
-  Return the number of seconds until turn-done.  Don't call this unless
-  game.timeout != 0.
-**************************************************************************/
-int get_seconds_to_turndone(void)
-{
-  if (game.timeout > 0) {
-    return seconds_shown_to_turndone;
-  } else {
-    /* This shouldn't happen. */
-    return FC_INFINITY;
-  }
-}
-
-/**************************************************************************
-  This function should be called at least once per second.  It does various
-  updates (idle animations and timeout updates).  It returns the number of
-  seconds until it should be called again.
-**************************************************************************/
-double real_timer_callback(void)
-{
-  double time_until_next_call = 1.0;
+  static bool flip = FALSE;
 
   if (get_client_state() != CLIENT_GAME_RUNNING_STATE) {
-    return time_until_next_call;
+    return;
   }
 
   if (game.player_ptr->is_connected && game.player_ptr->is_alive &&
@@ -698,28 +635,18 @@ double real_timer_callback(void)
     }
   }
 
-  if (get_unit_in_focus()) {
-    double blink_time = blink_active_unit();
+  blink_active_unit();
 
-    time_until_next_call = MIN(time_until_next_call, blink_time);
-  }
-
-  if (game.timeout > 0) {
-    double seconds = seconds_to_turndone - read_timer_seconds(turndone_timer);
-    int iseconds = ceil(seconds) + 0.1; /* Turn should end right on 0. */
-
-    if (iseconds < seconds_shown_to_turndone) {
-      seconds_shown_to_turndone = iseconds;
-      update_timeout_label();
+  if (flip) {
+    update_timeout_label();
+    if (seconds_to_turndone > 0) {
+      seconds_to_turndone--;
+    } else {
+      seconds_to_turndone = 0;
     }
-
-    time_until_next_call = MIN(time_until_next_call,
-			       seconds - floor(seconds) + 0.001);
   }
 
-  /* Make sure we wait at least 50 ms, otherwise we may not give any other
-   * code time to run. */
-  return MAX(time_until_next_call, 0.05);
+  flip = !flip;
 }
 
 /**************************************************************************
@@ -737,7 +664,7 @@ bool can_client_issue_orders(void)
   Returns TRUE iff the client can do diplomatic meetings with another 
   given player.
 **************************************************************************/
-bool can_meet_with_player(const struct player *pplayer)
+bool can_meet_with_player(struct player *pplayer)
 {
   return (could_meet_with_player(game.player_ptr, pplayer)
           && can_client_issue_orders());
@@ -747,7 +674,7 @@ bool can_meet_with_player(const struct player *pplayer)
   Returns TRUE iff the client can get intelligence from another 
   given player.
 **************************************************************************/
-bool can_intel_with_player(const struct player *pplayer)
+bool can_intel_with_player(struct player *pplayer)
 {
   return could_intel_with_player(game.player_ptr, pplayer);
 }

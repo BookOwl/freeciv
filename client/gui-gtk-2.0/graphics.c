@@ -49,8 +49,8 @@
 #include "patrol_cursor.xbm"
 #include "patrol_cursor_mask.xbm"
 
-SPRITE *               intro_gfx_sprite;
-SPRITE *               radar_gfx_sprite;
+SPRITE *		intro_gfx_sprite;
+SPRITE *		radar_gfx_sprite;
 
 GdkCursor *		goto_cursor;
 GdkCursor *		drop_cursor;
@@ -92,22 +92,80 @@ void gtk_draw_shadowed_string(GdkDrawable *drawable,
   gdk_draw_layout(drawable, white_gc, x, y, layout);
 }
 
+/**************************************************************************
+...
+**************************************************************************/
+void load_intro_gfx(void)
+{
+  int tot, y;
+  char s[64];
+  GdkColor face;
+  GdkGC *face_gc;
+  PangoContext *context;
+  PangoLayout *layout;
+  PangoRectangle rect;
+
+  context = gdk_pango_context_get();
+  layout = pango_layout_new(context);
+  pango_layout_set_font_description(layout, main_font);
+
+  /* get colors */
+  face.red  = COLOR_MOTTO_FACE_R<<8;
+  face.green= COLOR_MOTTO_FACE_G<<8;
+  face.blue = COLOR_MOTTO_FACE_B<<8;
+  face_gc = gdk_gc_new(root_window);
+
+  /* Main graphic */
+  intro_gfx_sprite = load_gfxfile(main_intro_filename);
+  tot=intro_gfx_sprite->width;
+
+  pango_layout_set_text(layout, freeciv_motto(), -1);
+  pango_layout_get_pixel_extents(layout, &rect, NULL);
+
+  y = intro_gfx_sprite->height-45;
+
+  gdk_gc_set_rgb_fg_color(face_gc, &face);
+  gdk_draw_layout(intro_gfx_sprite->pixmap, face_gc,
+		  (tot-rect.width) / 2, y, layout);
+  g_object_unref(face_gc);
+
+  /* Minimap graphic */
+  radar_gfx_sprite = load_gfxfile(minimap_intro_filename);
+  tot=radar_gfx_sprite->width;
+
+  my_snprintf(s, sizeof(s), "%d.%d.%d%s",
+	      MAJOR_VERSION, MINOR_VERSION,
+	      PATCH_VERSION, VERSION_LABEL);
+  pango_layout_set_text(layout, s, -1);
+  pango_layout_get_pixel_extents(layout, &rect, NULL);
+
+  y = radar_gfx_sprite->height - (rect.height + 6);
+
+  gtk_draw_shadowed_string(radar_gfx_sprite->pixmap,
+			toplevel->style->black_gc,
+			toplevel->style->white_gc,
+			(tot - rect.width) / 2, y,
+			layout);
+
+  pango_layout_set_text(layout, word_version(), -1);
+  pango_layout_get_pixel_extents(layout, &rect, NULL);
+  y-=rect.height+3;
+
+  gtk_draw_shadowed_string(radar_gfx_sprite->pixmap,
+			toplevel->style->black_gc,
+			toplevel->style->white_gc,
+			(tot - rect.width) / 2, y,
+			layout);
+
+  /* done */
+  g_object_unref(layout);
+  g_object_unref(context);
+  return;
+}
+
 /****************************************************************************
   Create a new sprite by cropping and taking only the given portion of
   the image.
-
-  source gives the sprite that is to be cropped.
-
-  x,y, width, height gives the rectangle to be cropped.  The pixel at
-  position of the source sprite will be at (0,0) in the new sprite, and
-  the new sprite will have dimensions (width, height).
-
-  mask gives an additional mask to be used for clipping the new sprite.
-
-  mask_offset_x, mask_offset_y is the offset of the mask relative to the
-  origin of the source image.  The pixel at (mask_offset_x,mask_offset_y)
-  in the mask image will be used to clip pixel (0,0) in the source image
-  which is pixel (-x,-y) in the new image.
 ****************************************************************************/
 struct Sprite *crop_sprite(struct Sprite *source,
 			   int x, int y,
@@ -115,69 +173,38 @@ struct Sprite *crop_sprite(struct Sprite *source,
 			   struct Sprite *mask,
 			   int mask_offset_x, int mask_offset_y)
 {
-  GdkPixbuf *mypixbuf, *sub, *mask_pixbuf;
+  GdkPixmap *mypixmap, *mymask = NULL;
 
-  /* First just crop the image. */
-  if (x < 0) {
-    width += x;
-    x = 0;
+  mypixmap = gdk_pixmap_new(root_window, width, height, -1);
+
+  gdk_draw_drawable(mypixmap, civ_gc, source->pixmap, x, y, 0, 0,
+		    width, height);
+
+  if (source->has_mask) {
+    mymask = gdk_pixmap_new(NULL, width, height, 1);
+    gdk_draw_rectangle(mymask, mask_bg_gc, TRUE, 0, 0, -1, -1);
+
+    gdk_draw_drawable(mymask, mask_fg_gc, source->mask,
+		      x, y, 0, 0, width, height);
   }
-  if (y < 0) {
-    height += y;
-    y = 0;
-  }
-  width = CLIP(0, width, source->width - x);
-  height = CLIP(0, height, source->height - y);
-  sub = gdk_pixbuf_new_subpixbuf(sprite_get_pixbuf(source), x, y,
-				 width, height);
-  mypixbuf = gdk_pixbuf_copy(sub);
-  g_object_unref(sub);
 
-  /* Now mask.  This reduces the alpha of the final image proportional to the
-   * alpha of the mask.  Thus if the mask has 50% alpha the final image will
-   * be reduced by 50% alpha.  Note that the mask offset is in coordinates
-   * relative to the clipped image not the final image. */
-  if (mask
-      && (mask_pixbuf = sprite_get_pixbuf(mask))
-      && gdk_pixbuf_get_has_alpha(mask_pixbuf)) {
-    int x1, y1;
+  if (mask) {
+    if (mymask) {
+      gdk_gc_set_function(mask_fg_gc, GDK_AND);
+      gdk_draw_drawable(mymask, mask_fg_gc, mask->mask,
+			x - mask_offset_x, y - mask_offset_y,
+			0, 0, width, height);
+      gdk_gc_set_function(mask_fg_gc, GDK_OR);
+    } else {
+      mymask = gdk_pixmap_new(NULL, width, height, 1);
+      gdk_draw_rectangle(mymask, mask_bg_gc, TRUE, 0, 0, -1, -1);
 
-    /* The mask offset is the offset of the mask relative to the origin
-     * of the original source image.  For instance when cropping with
-     * blending sprites the offset is always 0.  Here we convert the
-     * coordinates so that they are relative to the origin of the new
-     * (cropped) image. */
-    mask_offset_x -= x;
-    mask_offset_y -= y;
-
-    width = CLIP(0, width, mask->width + mask_offset_x);
-    height = CLIP(0, height, mask->height + mask_offset_y);
-
-    if (!gdk_pixbuf_get_has_alpha(mypixbuf)) {
-      GdkPixbuf *p2 = mypixbuf;
-
-      mypixbuf = gdk_pixbuf_add_alpha(mypixbuf, FALSE, 0, 0, 0);
-      g_object_unref(p2);
-    }
-
-    for (x1 = 0; x1 < width; x1++) {
-      for (y1 = 0; y1 < height; y1++) {
-	int mask_x = x1 - mask_offset_x, mask_y = y1 - mask_offset_y;
-	guchar *alpha = gdk_pixbuf_get_pixels(mypixbuf)
-	  + y1 * gdk_pixbuf_get_rowstride(mypixbuf)
-	  + x1 * gdk_pixbuf_get_n_channels(mypixbuf)
-	  + 3;
-	guchar *mask_alpha = gdk_pixbuf_get_pixels(mask_pixbuf)
-	  + mask_y * gdk_pixbuf_get_rowstride(mask_pixbuf)
-	  + mask_x * gdk_pixbuf_get_n_channels(mask_pixbuf)
-	  + 3;
-
-	*alpha = (*alpha) * (*mask_alpha) / 255;
-      }
+      gdk_draw_drawable(mymask, mask_fg_gc, source->mask,
+			x, y, 0, 0, width, height);
     }
   }
 
-  return ctor_sprite(mypixbuf);
+  return ctor_sprite_mask(mypixmap, mymask, width, height);
 }
 
 /****************************************************************************
@@ -257,51 +284,22 @@ void load_cursors(void)
  Create a new sprite with the given pixmap, dimensions, and
  (optional) mask.
 ***************************************************************************/
-SPRITE *ctor_sprite(GdkPixbuf *pixbuf)
+SPRITE *ctor_sprite_mask( GdkPixmap *mypixmap, GdkPixmap *mask, 
+			  int width, int height )
 {
-  struct Sprite *sprite = fc_malloc(sizeof(*sprite));
-  bool has_alpha = FALSE, has_mask = FALSE;
+    SPRITE *mysprite = fc_malloc(sizeof(SPRITE));
 
-  sprite->width = gdk_pixbuf_get_width(pixbuf);
-  sprite->height = gdk_pixbuf_get_height(pixbuf);
+    mysprite->pixmap	= mypixmap;
+    mysprite->fogged = NULL;
+    mysprite->has_mask = (mask != NULL);
+    mysprite->mask = mask;
 
-  /* Check to see if this pixbuf has an alpha layer. */
-  if (gdk_pixbuf_get_has_alpha(pixbuf)) {
-    guchar *pixels = gdk_pixbuf_get_pixels(pixbuf);
-    int x, y, rowstride = gdk_pixbuf_get_rowstride(pixbuf);
+    mysprite->width	= width;
+    mysprite->height	= height;
 
-    for (y = 0; y < sprite->height; y++) {
-      for (x = 0; x < sprite->width; x++) {
-	int i = y * rowstride + 4 * x + 3;
-	guchar pixel = pixels[i];
+    mysprite->pixbuf	= NULL;
 
-	if (pixel > 0 && pixel < 255) {
-	  has_alpha = TRUE;
-	}
-	if (pixel == 0) {
-	  has_mask = TRUE;
-	}
-      }
-    }
-  }
-
-  sprite->pixbuf_fogged = NULL;
-  sprite->pixmap_fogged = NULL;
-  if (has_alpha) {
-    sprite->pixbuf = pixbuf;
-    sprite->pixmap = NULL;
-    sprite->mask = NULL;
-  } else {
-    gdk_pixbuf_render_pixmap_and_mask(pixbuf, &sprite->pixmap,
-				      &sprite->mask, 1);
-    if (!has_mask && sprite->mask) {
-      g_object_unref(sprite->mask);
-      sprite->mask = NULL;
-    }
-    g_object_unref(pixbuf);
-    sprite->pixbuf = NULL;
-  }
-  return sprite;
+    return mysprite;
 }
 
 
@@ -338,13 +336,29 @@ const char **gfx_fileextensions(void)
 struct Sprite *load_gfxfile(const char *filename)
 {
   GdkPixbuf *im;
+  SPRITE    *mysprite;
+  int	     w, h;
 
   if (!(im = gdk_pixbuf_new_from_file(filename, NULL))) {
     freelog(LOG_FATAL, "Failed reading graphics file: %s", filename);
     exit(EXIT_FAILURE);
   }
 
-  return ctor_sprite(im);
+  mysprite=fc_malloc(sizeof(struct Sprite));
+
+  w = gdk_pixbuf_get_width(im); h = gdk_pixbuf_get_height(im);
+  gdk_pixbuf_render_pixmap_and_mask(im, &mysprite->pixmap, &mysprite->mask, 1);
+
+  mysprite->has_mask  = (mysprite->mask != NULL);
+  mysprite->width     = w;
+  mysprite->height    = h;
+
+  mysprite->pixbuf    = NULL;
+  mysprite->fogged = NULL;
+
+  g_object_unref(im);
+
+  return mysprite;
 }
 
 /***************************************************************************
@@ -362,13 +376,9 @@ void free_sprite(SPRITE * s)
   }
   if (s->pixbuf) {
     g_object_unref(s->pixbuf);
-    s->pixbuf = NULL;
   }
-  if (s->pixmap_fogged) {
-    g_object_unref(s->pixmap_fogged);
-  }
-  if (s->pixbuf_fogged) {
-    g_object_unref(s->pixbuf_fogged);
+  if (s->fogged) {
+    g_object_unref(s->fogged);
   }
   free(s);
 }
@@ -378,6 +388,7 @@ void free_sprite(SPRITE * s)
 ***************************************************************************/
 void create_overlay_unit(struct canvas *pcanvas, int i)
 {
+  enum color_std bg_color;
   int x1, x2, y1, y2;
   int width, height;
   struct unit_type *type = get_unit_type(i);
@@ -395,6 +406,18 @@ void create_overlay_unit(struct canvas *pcanvas, int i)
     /* Guess */
     width = UNIT_TILE_WIDTH;
     height = UNIT_TILE_HEIGHT;
+  }
+
+  if (solid_unit_icon_bg) {
+    /* Give tile a background color, based on the type of unit */
+    switch (type->move_type) {
+      case LAND_MOVING: bg_color = COLOR_STD_GROUND; break;
+      case SEA_MOVING:  bg_color = COLOR_STD_OCEAN;  break;
+      case HELI_MOVING: bg_color = COLOR_STD_YELLOW; break;
+      case AIR_MOVING:  bg_color = COLOR_STD_CYAN;   break;
+      default:	      bg_color = COLOR_STD_BLACK;  break;
+    }
+    canvas_put_rectangle(pcanvas, bg_color, 0, 0, width, height);
   }
 
   /* Finally, put a picture of the unit in the tile */
@@ -426,9 +449,25 @@ void free_intro_radar_sprites(void)
 ***************************************************************************/
 SPRITE* sprite_scale(SPRITE *src, int new_w, int new_h)
 {
-  return ctor_sprite(gdk_pixbuf_scale_simple(sprite_get_pixbuf(src),
-					     new_w, new_h,
-					     GDK_INTERP_BILINEAR));
+  GdkPixbuf *original, *im;
+  SPRITE    *mysprite;
+
+  original = sprite_get_pixbuf(src);
+  im = gdk_pixbuf_scale_simple(original, new_w, new_h, GDK_INTERP_BILINEAR);
+
+  mysprite=fc_malloc(sizeof(struct Sprite));
+
+  gdk_pixbuf_render_pixmap_and_mask(im, &mysprite->pixmap, &mysprite->mask, 1);
+
+  mysprite->has_mask  = (mysprite->mask != NULL);
+  mysprite->width     = new_w;
+  mysprite->height    = new_h;
+
+  mysprite->pixbuf    = NULL;
+  mysprite->fogged = NULL;
+  g_object_unref(im);
+
+  return mysprite;
 }
 
 /***************************************************************************
@@ -440,10 +479,9 @@ void sprite_get_bounding_box(SPRITE * sprite, int *start_x,
 			     int *start_y, int *end_x, int *end_y)
 {
   GdkImage *mask_image;
-  GdkBitmap *mask = sprite_get_mask(sprite);
   int i, j;
 
-  if (!mask) {
+  if (!sprite->has_mask || !sprite->mask) {
     *start_x = 0;
     *start_y = 0;
     *end_x = sprite->width - 1;
@@ -452,7 +490,7 @@ void sprite_get_bounding_box(SPRITE * sprite, int *start_x,
   }
 
   mask_image =
-    gdk_drawable_get_image(mask, 0, 0, sprite->width, sprite->height);
+    gdk_drawable_get_image(sprite->mask, 0, 0, sprite->width, sprite->height);
 
 
   /* parses mask image for the first column that contains a visible pixel */
@@ -515,12 +553,9 @@ SPRITE *crop_blankspace(SPRITE *s)
 }
 
 /*********************************************************************
-  Converts a pixmap/mask sprite to a GdkPixbuf.
-
-  This is just a helper function for sprite_get_pixbuf().  Most callers
-  should use that function instead.
+ Converts a sprite to a GdkPixbuf.
 *********************************************************************/
-static GdkPixbuf *gdk_pixbuf_new_from_pixmap_sprite(SPRITE *src)
+GdkPixbuf *gdk_pixbuf_new_from_sprite(SPRITE *src)
 {
   GdkPixbuf *dst;
   int w, h;
@@ -561,11 +596,9 @@ static GdkPixbuf *gdk_pixbuf_new_from_pixmap_sprite(SPRITE *src)
 }
 
 /********************************************************************
-  Render a pixbuf from the sprite.
-
  NOTE: the pixmap and mask of a sprite must not change after this
        function is called!
-********************************************************************/
+ ********************************************************************/
 GdkPixbuf *sprite_get_pixbuf(SPRITE *sprite)
 {
   if (!sprite) {
@@ -573,23 +606,8 @@ GdkPixbuf *sprite_get_pixbuf(SPRITE *sprite)
   }
   
   if (!sprite->pixbuf) {
-    sprite->pixbuf = gdk_pixbuf_new_from_pixmap_sprite(sprite);
+    sprite->pixbuf = gdk_pixbuf_new_from_sprite(sprite);
   }
   return sprite->pixbuf;
 }
 
-/****************************************************************************
-  Render a mask from the sprite.
-
-  NOTE: the pixbuf of a sprite must not change after this function is called!
-****************************************************************************/
-GdkBitmap *sprite_get_mask(struct Sprite *sprite)
-{
-  if (!sprite->pixmap && !sprite->mask) {
-    /* If we're not in pixmap mode and we don't yet have a mask, render
-     * the pixbuf to a mask. */
-    gdk_pixbuf_render_pixmap_and_mask(sprite->pixbuf, NULL,
-				      &sprite->mask, 1);
-  }
-  return sprite->mask;
-}

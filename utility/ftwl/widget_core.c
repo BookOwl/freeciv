@@ -205,6 +205,7 @@ void sw_widget_set_position(struct sw_widget *widget, int x, int y)
 	   ct_rect_to_string(&widget->outer_bounds));
     printf("is outside of parent %p (%s)\n", widget->parent,
 	   ct_rect_to_string(&widget->parent->data.window.children_bounds));
+    assert(0);
   }
   parent_needs_paint(widget);
 }
@@ -236,6 +237,8 @@ void sw_widget_vcenter(struct sw_widget *widget)
 void align(const struct ct_rect *bb, struct ct_rect *item,
 	   enum ws_alignment alignment)
 {
+  assert(item->width <= bb->width && item->height <= bb->height);
+
   switch (alignment) {
   case A_W:
   case A_NW:
@@ -380,10 +383,10 @@ void sw_widget_get_bounds(struct sw_widget *widget, struct ct_rect *bounds)
 void sw_widget_destroy(struct sw_widget *widget)
 {
   assert(widget);
-  widget_list_prepend(deferred_destroyed_widgets, widget);
+  widget_list_insert(&deferred_destroyed_widgets, widget);
   parent_needs_paint(widget);
   // FIXME this is unsafe if
-  // widget_list_size(deferred_destroyed_widgets) > 1
+  // widget_list_size(&deferred_destroyed_widgets) > 1
 }
 
 /*************************************************************************

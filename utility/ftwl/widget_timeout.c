@@ -61,7 +61,7 @@ struct callback {
     TYPED_LIST_ITERATE(struct callback, list, item)
 #define callback_list_iterate_end  LIST_ITERATE_END
 
-static struct callback_list *callback_list = NULL;
+static struct callback_list callback_list;
 static bool callback_list_list_has_been_initialised = FALSE;
 static int id_counter = 1;
 
@@ -71,7 +71,7 @@ static int id_counter = 1;
 static void ensure_init(void)
 {
   if (!callback_list_list_has_been_initialised) {
-    callback_list = callback_list_new();
+    callback_list_init(&callback_list);
     callback_list_list_has_been_initialised = TRUE;
   }
 }
@@ -101,7 +101,7 @@ int sw_add_timeout(int msec, void (*callback) (void *data), void *data)
   id_counter++;
 
   ensure_init();
-  callback_list_prepend(callback_list, p);
+  callback_list_insert(&callback_list, p);
   return p->id;
 }
 
@@ -113,7 +113,7 @@ void sw_remove_timeout(int id)
   assert(id > 0);
   callback_list_iterate(callback_list, callback) {
     if (callback->id == id) {
-      callback_list_unlink(callback_list, callback);
+      callback_list_unlink(&callback_list, callback);
       free(callback);
     }
   } callback_list_iterate_end;
@@ -140,7 +140,7 @@ void handle_callbacks(void)
          callback->time.tv_usec); */
       if (timercmp(&callback->time, &now, <)) {
 	/*printf("  call\n"); */
-	callback_list_unlink(callback_list, callback);
+	callback_list_unlink(&callback_list, callback);
 	callback->callback(callback->data);
 	free(callback);
 	one_called = TRUE;
@@ -185,17 +185,11 @@ void get_select_timeout(struct timeval *timeout)
       timeout->tv_sec = 0;
       timeout->tv_usec = 0;
     } else {
-      int usec;
-
-      /* Note that on some platforms the field of timeval are defined as
-       * unsigned so we must enforce a signed type for usec */
       timeout->tv_sec = earliest->time.tv_sec - now.tv_sec;
-      usec = earliest->time.tv_usec - now.tv_usec;
-      if (usec < 0) {
-	timeout->tv_sec++;
-	timeout->tv_usec = usec + 1000 * 1000;
-      } else {
-      	timeout->tv_usec = usec;
+      timeout->tv_usec = earliest->time.tv_usec - now.tv_usec;
+      if (timeout->tv_usec < 0) {
+	timeout->tv_usec += 1000 * 1000;
+	timeout->tv_sec--;
       }
     }
     assert(timeout->tv_sec >= 0 && timeout->tv_usec >= 0);

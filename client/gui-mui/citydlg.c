@@ -1147,12 +1147,13 @@ static void city_cma_changed(struct city_dialog **ppdialog)
 {
   struct city_dialog *pdialog = *ppdialog; 
   struct cm_parameter param;
+  int i;
 
   cmafec_get_fe_parameter(pdialog->pcity, &param);
-  output_type_iterate(i) {
+  for (i = 0; i < NUM_STATS; i++) {
     param.minimal_surplus[i] = (int)xget(pdialog->minimal_surplus_slider[i],MUIA_Numeric_Value);
     param.factor[i] = (int)xget(pdialog->factor_slider[i],MUIA_Numeric_Value);
-  } output_type_iterate_end;
+  }
   param.require_happy = xget(pdialog->celebrate_check, MUIA_Selected);
   param.happy_factor = xget(pdialog->factor_slider[6],MUIA_Numeric_Value);
 
@@ -1371,7 +1372,7 @@ static struct city_dialog *create_city_dialog(struct city *pcity)
   page_labels[1] = _("Units");
   page_labels[2] = _("Worklist");
   page_labels[3] = _("Happiness");
-  page_labels[4] = _("Citizen Governor");
+  page_labels[4] = _("CMA");
   page_labels[5] = _("Trade Routes");
   page_labels[6] = _("Misc. Settings");
 
@@ -1379,7 +1380,7 @@ static struct city_dialog *create_city_dialog(struct city *pcity)
   misc_whichtab_label[1] = _("Units page");
   misc_whichtab_label[2] = _("Worklist page");
   misc_whichtab_label[3] = _("Happiness page");
-  misc_whichtab_label[4] = _("Governor page");
+  misc_whichtab_label[4] = _("CMA page");
   misc_whichtab_label[5] = _("Trade Routes page");
   misc_whichtab_label[6] = _("This Misc. Settings page");
   misc_whichtab_label[7] = _("Last active page");
@@ -1735,7 +1736,7 @@ static struct city_dialog *create_city_dialog(struct city *pcity)
 
     DoMethod(app, OM_ADDMEMBER, pdialog->wnd);
 
-    genlist_prepend(&dialog_list, pdialog, 0);
+    genlist_insert(&dialog_list, pdialog, 0);
     refresh_city_dialog(pdialog->pcity);
     return pdialog;
   }
@@ -1806,15 +1807,12 @@ static void city_dialog_update_information(struct city_dialog *pdialog, struct c
   granarystyle = (pcity->food_surplus < 0 && granaryturns < 4) ? RED : NORMAL;
   pollutionstyle = (pcity->pollution >= 10) ? RED : NORMAL;
 
-  settextf(info->food_text, "%2d (%+2d)", pcity->prod[O_FOOD], pcity->food_surplus);
-  settextf(info->shield_text, "%2d (%+2d)", pcity->prod[O_SHIELD] + pcity->waste[O_SHIELD], pcity->shield_surplus);
-  settextf(info->trade_text, "%2d (%+2d)",
-	   pcity->trade_prod + pcity->waste[O_TRADE],
-	   pcity->trade_prod);
-  settextf(info->gold_text, "%2d (%+2d)", pcity->prod[O_GOLD],
-	   pcity->surplus[O_GOLD]);
-  settextf(info->luxury_text, "%2d", pcity->prod[O_LUXURY]);
-  settextf(info->science_text, "%2d", pcity->prod[O_SCIENCE]);
+  settextf(info->food_text, "%2d (%+2d)", pcity->food_prod, pcity->food_surplus);
+  settextf(info->shield_text, "%2d (%+2d)", pcity->shield_prod + pcity->shield_waste, pcity->shield_surplus);
+  settextf(info->trade_text, "%2d (%+2d)", pcity->trade_prod + pcity->corruption, pcity->trade_prod);
+  settextf(info->gold_text, "%2d (%+2d)", pcity->tax_total, city_gold_surplus(pcity, pcity->tax_total));
+  settextf(info->luxury_text, "%2d", pcity->luxury_total);
+  settextf(info->science_text, "%2d", pcity->science_total);
 
   set(info->granary_text, MUIA_Text_PreParse, granarystyle==RED?MUIX_B:"");
   set(info->growth_text, MUIA_Text_PreParse, growthstyle==RED?MUIX_B:"");
@@ -1832,8 +1830,8 @@ static void city_dialog_update_information(struct city_dialog *pdialog, struct c
     settext(info->growth_text,buf);
   }
 
-  settextf(info->corruption_text, "%ld", pcity->waste[O_TRADE]);
-  settextf(info->waste_text, "%ld", pcity->waste[O_SHIELD]);
+  settextf(info->corruption_text, "%ld", pcity->corruption);
+  settextf(info->waste_text, "%ld", pcity->shield_waste);
   settextf(info->pollution_text, "%ld", pcity->pollution);
 }
 
@@ -2156,10 +2154,11 @@ static void refresh_cma_dialog(struct city_dialog *pdialog)
 
   
   /* if called from a hscale, we _don't_ want to do this */
-  output_type_iterate(i) {
+  for (i = 0; i < NUM_STATS; i++)
+  {
     nnset(pdialog->minimal_surplus_slider[i],MUIA_Numeric_Value,param.minimal_surplus[i]);
     nnset(pdialog->factor_slider[i],MUIA_Numeric_Value,param.factor[i]);
-  } output_type_iterate_end;
+  }
   nnset(pdialog->celebrate_check, MUIA_Selected,param.require_happy);
   nnset(pdialog->factor_slider[6], MUIA_Numeric_Value, param.happy_factor);
 
@@ -2229,7 +2228,7 @@ static void refresh_happiness_dialog(struct city_dialog *pdialog)
 
   /* LUXURY */
   my_snprintf(bptr, nleft, _("Luxury: %d total (maximum %d usable). "),
-	      pcity->prod[O_LUXURY], 2 * pcity->size);
+	      pcity->luxury_total, 2 * pcity->size);
 
   settext(pdialog->happiness_citizen_text[1], buf);
 

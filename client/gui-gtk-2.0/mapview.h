@@ -26,7 +26,7 @@
 struct unit;
 struct city;
 
-GdkPixbuf *get_thumb_pixbuf(int onoff);
+GdkPixmap *get_thumb_pixmap(int onoff);
 
 gboolean overview_canvas_expose(GtkWidget *w, GdkEventExpose *ev, gpointer data);
 gboolean map_canvas_expose(GtkWidget *w, GdkEventExpose *ev, gpointer data);

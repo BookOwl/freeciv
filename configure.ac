@@ -59,7 +59,7 @@ WITH_READLINE="maybe"	dnl maybe  - use if found [default]
 
 dnl  no=do not compile client,  yes=guess it,  *=use this client or error
 AC_ARG_ENABLE(client,
-[  --enable-client[=no/yes/xaw3d/xaw/gtk/gtk2/win32/sdl/ftwl]
+[  --enable-client[=no/yes/xaw3d/xaw/gtk/gtk2/win32]
                           compile a client [default=yes] (if yes, guess type)],
 [case "${enableval}" in
   yes)	  client=yes ;;
@@ -161,7 +161,7 @@ fi
 LIBS="$LIBS $LIBICONV"
 
 dnl I18n support
-ALL_LINGUAS="cs ca da de en_GB es et fi fr he_IL hu it ja nl nb no pl pt pt_BR ro ru sv uk"
+ALL_LINGUAS="ca cs da de en_GB es et fi fr he_IL hu it ja nl nb no pl pt pt_BR ro ru sv uk"
 AM_GNU_GETTEXT(,need-ngettext)
 
 dnl AM_GNU_GETTEXT doesn't have all features we want
@@ -267,6 +267,11 @@ gettext package. We recommend you versions >= 0.10.38. Or use
   fi
 fi
 
+
+dnl note this has to match the path installed by po/Makefile
+FC_EXPAND_DIR(LOCALEDIR, "$datadir/locale")
+AC_DEFINE_UNQUOTED(LOCALEDIR, "$LOCALEDIR", [Locale directory])
+
 EXTRA_GCC_DEBUG_CFLAGS=""
 
 if test -n "$GCC"; then
@@ -275,9 +280,8 @@ if test -n "$GCC"; then
 fi
 
 FC_DEBUG
-AC_C99_VARIADIC_MACROS
-AC_C99_VARIABLE_ARRAYS
-AC_C99_INITIALIZERS
+FC_VARIADIC_MACROS
+FC_VARIABLE_ARRAYS
 
 if test "$CVS_DEPS" = "maybe"; then
    dnl Should also check for gmake?
@@ -317,25 +321,12 @@ if test x"$MINGW32" = "xyes"; then
   LIBS="$LIBS -lwsock32"
 fi
 
-dnl note this has to match the path installed by po/Makefile
-if test x"$MINGW32" != "xyes"; then
-  FC_EXPAND_DIR(LOCALEDIR, "$datadir/locale")
-  AC_DEFINE_UNQUOTED(LOCALEDIR, "$LOCALEDIR", [Locale directory])
-else
-  FC_EXPAND_DIR(LOCALEDIR, './share/locale')
-  AC_DEFINE_UNQUOTED(LOCALEDIR, "$LOCALEDIR", [Locale directory])
-fi  
-
 dnl Check for zlib (needed for libpng)
 AC_CHECK_LIB(z, gzgets, , 
   AC_MSG_ERROR([Could not find zlib library.]), )
 AC_CHECK_HEADER(zlib.h, , 
   AC_MSG_ERROR([zlib found but not zlib.h.  
 You may need to install a zlib \"development\" package.]))
-AC_PATH_PROG(GZIP, gzip, "no")
-if test "$GZIP" = "no"; then
-  AC_MSG_ERROR([You need the gzip program for compilation.])
-fi
 
 dnl Check and compile ftwl
 if test "$ftwl" = x11 ; then
@@ -467,9 +458,8 @@ AC_CHECK_LIB(nls,main)
 dnl Checks for header files.
 AC_HEADER_STDC
 AC_HEADER_SYS_WAIT
-AC_CHECK_HEADERS([fcntl.h sys/time.h sys/types.h unistd.h sys/utsname.h \
-                  sys/file.h libintl.h signal.h])
-AC_HEADER_STDBOOL
+AC_CHECK_HEADERS(fcntl.h sys/time.h sys/types.h unistd.h sys/utsname.h \
+                 stdbool.h sys/file.h libintl.h)
 dnl Avoid including the unix emulation layer if we build mingw executables
 dnl There would be type conflicts between winsock and bsd/unix includes
 if test "x$MINGW32" != "xyes"; then

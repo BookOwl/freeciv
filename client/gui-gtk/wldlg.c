@@ -731,7 +731,7 @@ static void global_list_update(struct worklist_report *preport)
   gtk_clist_clear(GTK_CLIST(preport->list));
 
   while (preport->worklist_names_ptrs[n]) {
-    gtk_clist_prepend(GTK_CLIST(preport->list),
+    gtk_clist_append(GTK_CLIST(preport->list),
 		     &preport->worklist_names_ptrs[n]);
     n++;
   }
@@ -1003,7 +1003,7 @@ static void worklist_insert_item(struct worklist_editor *peditor)
   } else {
     where = GPOINTER_TO_INT(listSelection->data);
     if(peditor->pcity->did_buy && where == 0) {
-      append_output_window(_("You have bought this turn, can't change."));
+      append_output_window(_("Game: You have bought this turn, can't change."));
       where = 1;
     }
   }
@@ -1177,7 +1177,7 @@ static void worklist_swap_up_callback(GtkWidget * w, gpointer data)
 
   if(idx == 1 && peditor->pcity->did_buy) {
     /* Refuse to swap the first item if we've bought. */
-    append_output_window(_("You have bought this turn, can't change."));
+    append_output_window(_("Game: You have bought this turn, can't change."));
     return;
   }
 
@@ -1204,7 +1204,7 @@ static void worklist_swap_down_callback(GtkWidget * w, gpointer data)
 
   if(idx == 0 && peditor->pcity->did_buy) {
     /* Refuse to swap the first item if we've bought. */
-    append_output_window(_("You have bought this turn, can't change."));
+    append_output_window(_("Game: You have bought this turn, can't change."));
     return;
   }
 
@@ -1318,7 +1318,7 @@ static void worklist_list_update(struct worklist_editor *peditor)
     get_city_dialog_production_row(row, BUFFER_SIZE,
                                    wid_id(wid), wid_is_unit(wid),
                                    peditor->pcity);
-    gtk_clist_prepend(GTK_CLIST(peditor->worklist), row);
+    gtk_clist_append(GTK_CLIST(peditor->worklist), row);
   }
 
   gtk_clist_thaw(GTK_CLIST(peditor->worklist));
@@ -1376,7 +1376,7 @@ static void targets_list_update(struct worklist_editor *peditor)
                                      wid_id(wid), wid_is_unit(wid),
                                      peditor->pcity);
     }
-    gtk_clist_prepend(GTK_CLIST(peditor->avail), row);
+    gtk_clist_append(GTK_CLIST(peditor->avail), row);
   }
   gtk_clist_thaw(GTK_CLIST(peditor->avail));
 }
@@ -1437,7 +1437,7 @@ static void worklist_help(int id, bool is_unit)
   if (id >= 0) {
     if (is_unit) {
       popup_help_dialog_typed(get_unit_type(id)->name, HELP_UNIT);
-    } else if (is_great_wonder(id)) {
+    } else if (is_wonder(id)) {
       popup_help_dialog_typed(get_improvement_name(id), HELP_WONDER);
     } else {
       popup_help_dialog_typed(get_improvement_name(id), HELP_IMPROVEMENT);

@@ -19,32 +19,17 @@
 
 #include "fciconv.h"
 
-#include "civclient.h"
 #include "options.h"
 
 #include "gui_main.h"
 
 const char *client_string = "gui-stub";
 
-const char * const gui_character_encoding = "UTF-8";
-const bool gui_use_transliteration = FALSE;
-
 client_option gui_options[] = {
   /* None. */
 };
 const int num_gui_options = ARRAY_SIZE(gui_options);
 
-
-/****************************************************************************
-  Called by the tileset code to set the font size that should be used to
-  draw the city names and productions.
-****************************************************************************/
-void set_city_names_font_sizes(int my_city_names_font_size,
-			       int my_city_productions_font_size)
-{
-  freelog(LOG_ERROR, "Unimplemented set_city_names_font_sizes.");
-  /* PORTME */
-}
 
 /**************************************************************************
   Do any necessary pre-initialization of the UI, if necessary.
@@ -117,18 +102,4 @@ void set_unit_icon(int idx, struct unit *punit)
 void set_unit_icons_more_arrow(bool onoff)
 {
   /* PORTME */
-}
-
-/****************************************************************************
-  Enqueue a callback to be called during an idle moment.  The 'callback'
-  function should be called sometimes soon, and passed the 'data' pointer
-  as its data.
-****************************************************************************/
-void add_idle_callback(void (callback)(void *), void *data)
-{
-  /* PORTME */
-
-  /* This is a reasonable fallback if it's not ported. */
-  freelog(LOG_ERROR, "Unimplemented add_idle_callback.");
-  (callback)(data);
 }

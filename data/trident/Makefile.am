@@ -9,12 +9,8 @@ pkgdata_DATA =          \
 	cities.spec	\
 	explosions.png	\
 	explosions.spec	\
-	fog.png		\
-	fog.spec	\
 	roads.png	\
 	roads.spec	\
-	select.png	\
-	select.spec	\
 	tiles.png	\
 	tiles.spec	\
 	units.png	\

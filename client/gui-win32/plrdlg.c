@@ -69,7 +69,7 @@ static void players_meet(int player_index)
     dsend_packet_diplomacy_init_meeting_req(&aconnection, player_index);
 
   } else {
-    append_output_window(_("You need an embassy to "
+    append_output_window(_("Game: You need an embassy to "
 			   "establish a diplomatic meeting."));
   }
 }
@@ -381,14 +381,11 @@ static void create_players_dialog(void)
 
 *******************************************************************/      
 void
-popup_players_dialog(bool raise)
+popup_players_dialog(void)
 {
   if (!players_dialog)
     create_players_dialog();
   ShowWindow(players_dialog,SW_SHOWNORMAL);
-  if (raise) {
-    SetFocus(players_dialog);
-  }
 }
 
 /**************************************************************************

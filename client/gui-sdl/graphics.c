@@ -73,7 +73,7 @@
 #include "patrol_cursor.xbm"
 #include "patrol_cursor_mask.xbm"
 
-struct main Main;
+struct canvas Main;
 
 static SDL_Surface *pIntro_gfx = NULL;
 
@@ -832,11 +832,11 @@ void init_sdl(int iFlags)
   Main.guis = NULL;
   Main.gui = NULL;
   Main.map = NULL;
+  Main.text = NULL;
   Main.rects_count = 0;
   Main.guis_count = 0;
-
-  Main.map_canvas.surf = Main.map;
-  mapview.store = &Main.map_canvas;
+  
+  mapview_canvas.store = &Main;
 
   if (SDL_WasInit(SDL_INIT_AUDIO)) {
     error = (SDL_InitSubSystem(iFlags) < 0);
@@ -868,6 +868,7 @@ void quit_sdl(void)
 {
   FREESURFACE(Main.gui);
   FREESURFACE(Main.map);
+  FREESURFACE(Main.text);
 }
 
 /**************************************************************************
@@ -911,15 +912,20 @@ int set_video_mode(int iWidth, int iHeight, int iFlags)
   freelog(LOG_DEBUG, _("Setting resolution to: %d x %d %d bpp"),
 	  					iWidth, iHeight, iDepth);
 
-  mapview.width = iWidth;
-  mapview.height = iHeight;
+  mapview_canvas.width = iWidth;
+  mapview_canvas.height = iHeight;
   if (NORMAL_TILE_WIDTH > 0) {
-    mapview.tile_width = (iWidth - 1) / NORMAL_TILE_WIDTH + 1;
-    mapview.tile_height = (iHeight - 1) / NORMAL_TILE_HEIGHT + 1;
+    mapview_canvas.tile_width = (iWidth - 1) / NORMAL_TILE_WIDTH + 1;
+    mapview_canvas.tile_height = (iHeight - 1) / NORMAL_TILE_HEIGHT + 1;
   }
 
   FREESURFACE(Main.map);
   Main.map = SDL_DisplayFormat(Main.screen);
+  
+  FREESURFACE(Main.text);
+  Main.text = SDL_DisplayFormatAlpha(Main.screen);
+  SDL_FillRect(Main.text, NULL, 0x0);
+  /*SDL_SetColorKey(Main.text , SDL_SRCCOLORKEY|SDL_RLEACCEL, 0x0);*/
   
   FREESURFACE(Main.gui);
   Main.gui = SDL_DisplayFormatAlpha(Main.screen);
@@ -3605,28 +3611,13 @@ static struct Sprite * ctor_sprite(SDL_Surface *pSurface)
   return result;
 }
 
-void get_sprite_dimensions(struct Sprite *sprite, int *width, int *height)
-{
-  *width = GET_SURF(sprite)->w;
-  *height = GET_SURF(sprite)->h;
-}
-
-void gui_flush(void)
-{
-  /* Nothing */
-}
-
 /**************************************************************************
   Create a new sprite by cropping and taking only the given portion of
   the image.
 **************************************************************************/
 struct Sprite *crop_sprite(struct Sprite *source,
-			   int x, int y, int width, int height,
-			   struct Sprite *mask,
-			   int mask_offset_x, int mask_offset_y)
+			   int x, int y, int width, int height)
 {
-  /* FIXME: this needs to be able to crop from a mask - equivalent to the
-   * code currently in gui_dither.c. */
   SDL_Rect src_rect =
       { (Sint16) x, (Sint16) y, (Uint16) width, (Uint16) height };
   SDL_Surface *pNew, *pTmp =

@@ -76,7 +76,7 @@ bool ct_point_valid(const struct ct_point *point)
 bool ct_rect_in_rect_list(const struct ct_rect *item,
 			  const struct region_list *region_list)
 {
-  region_list_iterate(region_list, container) {
+  region_list_iterate(*region_list, container) {
     if (ct_rect_in_rect(item, container)) {
       return TRUE;
     }
@@ -104,6 +104,8 @@ bool ct_rect_in_rect(const struct ct_rect *item,
 bool ct_point_in_rect(const struct ct_point *item,
 		      const struct ct_rect *container)
 {
+    assert(ct_rect_valid(container) && ct_point_valid(item));
+
     return (item->x >= container->x && item->y >= container->y &&
 	    item->x < container->x + container->width &&
 	    item->y < container->y + container->height);

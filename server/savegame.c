@@ -266,9 +266,6 @@ static enum unit_orders char2order(char order)
   case 'w':
   case 'W':
     return ORDER_FULL_MP;
-  case 'b':
-  case 'B':
-    return ORDER_BUILD_CITY;
   case 'a':
   case 'A':
     return ORDER_ACTIVITY;
@@ -290,8 +287,6 @@ static char order2char(enum unit_orders order)
     return 'w';
   case ORDER_ACTIVITY:
     return 'a';
-  case ORDER_BUILD_CITY:
-    return 'b';
   case ORDER_LAST:
     break;
   }
@@ -1309,7 +1304,7 @@ static void worklist_load(struct section_file *file,
       }
 
       if ((pwl->wlefs[i] <= WEF_END) || (pwl->wlefs[i] >= WEF_LAST) ||
-	  pwl->wlefs[i] == WEF_UNIT ||
+	  ((pwl->wlefs[i] == WEF_UNIT) && !unit_type_exists(pwl->wlids[i])) ||
 	  ((pwl->wlefs[i] == WEF_IMPR) && !improvement_exists(pwl->wlids[i]))) {
 	pwl->wlefs[i] = WEF_END;
 	pwl->wlids[i] = 0;
@@ -1348,7 +1343,7 @@ static void worklist_load_old(struct section_file *file,
 	name = old_unit_type_name(id-68);
 	pwl->wlefs[i] = WEF_UNIT;
 	pwl->wlids[i] = find_unit_type_by_name_orig(name);
-	end = (pwl->wlids[i] < 0 || pwl->wlids[i] >= game.num_unit_types);
+	end = !unit_type_exists(pwl->wlids[i]);
       } else {				/* must be an improvement id */
 	name = old_impr_type_name(id);
 	pwl->wlefs[i] = WEF_IMPR;
@@ -1370,7 +1365,7 @@ static void load_player_units(struct player *plr, int plrno,
   enum unit_activity activity;
   char *savefile_options = secfile_lookup_str(file, "savefile.options");
 
-  plr->units = unit_list_new();
+  unit_list_init(&plr->units);
   nunits = secfile_lookup_int(file, "player%d.nunits", plrno);
   if (!plr->is_alive && nunits > 0) {
     nunits = 0; /* Some old savegames may be buggy. */
@@ -1423,7 +1418,7 @@ static void load_player_units(struct player *plr, int plrno,
 					 plrno, i);
 
     if ((pcity = find_city_by_id(punit->homecity))) {
-      unit_list_prepend(pcity->units_supported, punit);
+      unit_list_insert(&pcity->units_supported, punit);
     }
     
     punit->moves_left
@@ -1574,9 +1569,9 @@ static void load_player_units(struct player *plr, int plrno,
 		 unit_type(punit)->vision_range);
     }
 
-    unit_list_append(plr->units, punit);
+    unit_list_insert_back(&plr->units, punit);
 
-    unit_list_prepend(punit->tile->units, punit);
+    unit_list_insert(&punit->tile->units, punit);
   }
 }
 
@@ -1930,7 +1925,7 @@ static void player_load(struct player *plr, int plrno,
     }
   }
 
-  plr->cities = city_list_new();
+  city_list_init(&plr->cities);
   ncities=secfile_lookup_int(file, "player%d.ncities", plrno);
   if (!plr->is_alive && ncities > 0) {
     ncities = 0; /* Some old savegames may be buggy. */
@@ -1970,20 +1965,15 @@ static void player_load(struct player *plr, int plrno,
       pcity->trade[j]=secfile_lookup_int(file, "player%d.c%d.traderoute%d",
 					 plrno, i, j);
     
-    pcity->food_stock = secfile_lookup_int(file, "player%d.c%d.food_stock", 
-					   plrno, i);
-    pcity->shield_stock = secfile_lookup_int(file,
-					     "player%d.c%d.shield_stock", 
-					     plrno, i);
-    pcity->anarchy = secfile_lookup_int(file, "player%d.c%d.anarchy",
-					plrno, i);
-    pcity->rapture = secfile_lookup_int_default(file, 0,
-						"player%d.c%d.rapture",
-						plrno, i);
-    pcity->was_happy = secfile_lookup_bool(file,
-					   "player%d.c%d.was_happy",
-					   plrno, i);
-    pcity->is_building_unit =
+    pcity->food_stock=secfile_lookup_int(file, "player%d.c%d.food_stock", 
+						 plrno, i);
+    pcity->shield_stock=secfile_lookup_int(file, "player%d.c%d.shield_stock", 
+						   plrno, i);
+    pcity->tile_trade=pcity->trade_prod=0;
+    pcity->anarchy=secfile_lookup_int(file, "player%d.c%d.anarchy", plrno,i);
+    pcity->rapture=secfile_lookup_int_default(file, 0, "player%d.c%d.rapture", plrno,i);
+    pcity->was_happy=secfile_lookup_bool(file, "player%d.c%d.was_happy", plrno,i);
+    pcity->is_building_unit=
       secfile_lookup_bool(file, 
 			 "player%d.c%d.is_building_unit", plrno, i);
     name = secfile_lookup_str_default(file, NULL,
@@ -2082,7 +2072,7 @@ static void player_load(struct player *plr, int plrno,
     /* adding the cities contribution to fog-of-war */
     map_unfog_pseudo_city_area(&game.players[plrno], pcity->tile);
 
-    pcity->units_supported = unit_list_new();
+    unit_list_init(&pcity->units_supported);
 
     /* Initialize pcity->city_map[][], using set_worker_city() so that
        ptile->worked gets initialized correctly.  The pre-initialisation
@@ -2109,8 +2099,8 @@ static void player_load(struct player *plr, int plrno,
 	  if (ptile->worked) {
 	    /* oops, inconsistent savegame; minimal fix: */
 	    freelog(LOG_VERBOSE, "Inconsistent worked for %s (%d,%d), "
-		    "converting to specialist", pcity->name, x, y);
-	    pcity->specialists[DEFAULT_SPECIALIST]++;
+		    "converting to elvis", pcity->name, x, y);
+	    pcity->specialists[SP_ELVIS]++;
 	    set_worker_city(pcity, x, y, C_TILE_UNAVAILABLE);
 	  } else {
 	    set_worker_city(pcity, x, y, C_TILE_WORKER);
@@ -2128,9 +2118,8 @@ static void player_load(struct player *plr, int plrno,
 
     /* Initialise list of improvements with City- and Building-wide
        equiv_ranges */
-    for (k = 0; k < ARRAY_SIZE(pcity->improvements); k++) {
-      pcity->improvements[k] = I_NONE;
-    }
+    improvement_status_init(pcity->improvements,
+			    ARRAY_SIZE(pcity->improvements));
 
     p = secfile_lookup_str_default(file, NULL,
 				   "player%d.c%d.improvements_new",
@@ -2172,7 +2161,7 @@ static void player_load(struct player *plr, int plrno,
 
     map_set_city(pcity->tile, pcity);
 
-    city_list_append(plr->cities, pcity);
+    city_list_insert_back(&plr->cities, pcity);
   }
 
   load_player_units(plr, plrno, file);
@@ -2582,9 +2571,9 @@ static void player_save(struct player *plr, int plrno,
     }
   }
 
-  secfile_insert_int(file, unit_list_size(plr->units), "player%d.nunits", 
+  secfile_insert_int(file, unit_list_size(&plr->units), "player%d.nunits", 
 		     plrno);
-  secfile_insert_int(file, city_list_size(plr->cities), "player%d.ncities", 
+  secfile_insert_int(file, city_list_size(&plr->cities), "player%d.ncities", 
 		     plrno);
 
   i = -1;
@@ -2666,7 +2655,6 @@ static void player_save(struct player *plr, int plrno,
 	  act_buf[j] = activity2char(punit->orders.list[j].activity);
 	  break;
 	case ORDER_FULL_MP:
-	case ORDER_BUILD_CITY:
 	case ORDER_LAST:
 	  break;
 	}
@@ -2702,8 +2690,7 @@ static void player_save(struct player *plr, int plrno,
   i = -1;
   city_list_iterate(plr->cities, pcity) {
     int j, x, y;
-    char citymap_buf[CITY_MAP_SIZE * CITY_MAP_SIZE + 1];
-    char impr_buf[MAX_NUM_ITEMS + 1];
+    char buf[512];
 
     i++;
     secfile_insert_int(file, pcity->id, "player%d.c%d.id", plrno, i);
@@ -2777,25 +2764,14 @@ static void player_save(struct player *plr, int plrno,
     for(y=0; y<CITY_MAP_SIZE; y++) {
       for(x=0; x<CITY_MAP_SIZE; x++) {
 	switch (get_worker_city(pcity, x, y)) {
-	case C_TILE_EMPTY:
-	  citymap_buf[j++] = '0';
-	  break;
-	case C_TILE_WORKER:
-	  citymap_buf[j++] = '1';
-	  break;
-	case C_TILE_UNAVAILABLE:
-	  citymap_buf[j++] = '2';
-	  break;
-	default:
-	  citymap_buf[j++] = '?';
-	  assert(0);
-	  break;
+	  case C_TILE_EMPTY:       buf[j++] = '0'; break;
+	  case C_TILE_WORKER:      buf[j++] = '1'; break;
+	  case C_TILE_UNAVAILABLE: buf[j++] = '2'; break;
 	}
       }
     }
-    citymap_buf[j]='\0';
-    assert(j < sizeof(citymap_buf));
-    secfile_insert_str(file, citymap_buf, "player%d.c%d.workers", plrno, i);
+    buf[j]='\0';
+    secfile_insert_str(file, buf, "player%d.c%d.workers", plrno, i);
 
     secfile_insert_bool(file, pcity->is_building_unit, 
 		       "player%d.c%d.is_building_unit", plrno, i);
@@ -2815,25 +2791,22 @@ static void player_save(struct player *plr, int plrno,
     /* 1.14 servers depend on improvement order in ruleset. Here we
      * are trying to simulate 1.14.1 default order
      */
-    init_old_improvement_bitvector(impr_buf);
+    init_old_improvement_bitvector(buf);
     impr_type_iterate(id) {
       if (pcity->improvements[id] != I_NONE) {
-        add_improvement_into_old_bitvector(impr_buf, id);
+        add_improvement_into_old_bitvector(buf, id);
       }
     } impr_type_iterate_end;
-    assert(strlen(impr_buf) < sizeof(impr_buf));
-    secfile_insert_str(file, impr_buf, "player%d.c%d.improvements", plrno, i);
+    secfile_insert_str(file, buf, "player%d.c%d.improvements", plrno, i);
 
     /* Save improvement list as bitvector. Note that improvement order
      * is saved in savefile.improvement_order.
      */
     impr_type_iterate(id) {
-      impr_buf[id] = (pcity->improvements[id] != I_NONE) ? '1' : '0';
+      buf[id] = (pcity->improvements[id] != I_NONE) ? '1' : '0';
     } impr_type_iterate_end;
-    impr_buf[game.num_impr_types] = '\0';
-    assert(strlen(impr_buf) < sizeof(impr_buf));
-    secfile_insert_str(file, impr_buf,
-		       "player%d.c%d.improvements_new", plrno, i);    
+    buf[game.num_impr_types] = '\0';
+    secfile_insert_str(file, buf, "player%d.c%d.improvements_new", plrno, i);    
 
     worklist_save(file, "player%d.c%d", plrno, i, &pcity->worklist);
 
@@ -2986,13 +2959,13 @@ static void apply_unit_ordering(void)
 {
   players_iterate(pplayer) {
     city_list_iterate(pplayer->cities, pcity) {
-      unit_list_sort_ord_city(pcity->units_supported);
+      unit_list_sort_ord_city(&pcity->units_supported);
     }
     city_list_iterate_end;
   } players_iterate_end;
 
   whole_map_iterate(ptile) {
-    unit_list_sort_ord_map(ptile->units);
+    unit_list_sort_ord_map(&ptile->units);
   } whole_map_iterate_end;
 }
 
@@ -3014,7 +2987,7 @@ static void check_city(struct city *pcity)
       if (!res) {
 	struct tile *ptile;
 
-	pcity->specialists[DEFAULT_SPECIALIST]++;
+	pcity->specialists[SP_ELVIS]++;
 	set_worker_city(pcity, x, y, C_TILE_UNAVAILABLE);
 	freelog(LOG_DEBUG, "Worked tile was unavailable!");
 
@@ -3053,7 +3026,6 @@ void game_load(struct section_file *file)
   char** technology_order = NULL;
   int technology_order_size = 0;
   const char* name;
-  int civstyle = 0;
 
   game.version = secfile_lookup_int_default(file, 0, "game.version");
   tmp_server_state = (enum server_states)
@@ -3129,10 +3101,8 @@ void game_load(struct section_file *file)
     game.min_players   = secfile_lookup_int(file, "game.min_players");
     game.max_players   = secfile_lookup_int(file, "game.max_players");
     game.nplayers      = secfile_lookup_int(file, "game.nplayers");
-    game.heating = secfile_lookup_int_default(file, 0, "game.heating");
     game.globalwarming = secfile_lookup_int(file, "game.globalwarming");
     game.warminglevel  = secfile_lookup_int(file, "game.warminglevel");
-    game.cooling = secfile_lookup_int_default(file, 0, "game.cooling");
     game.nuclearwinter = secfile_lookup_int_default(file, 0, "game.nuclearwinter");
     game.coolinglevel  = secfile_lookup_int_default(file, 8, "game.coolinglevel");
     game.notradesize   = secfile_lookup_int_default(file, 0, "game.notradesize");
@@ -3156,7 +3126,7 @@ void game_load(struct section_file *file)
       (void) section_file_lookup(file, "game.farmfood");
     }
     if (game.version >= 10300) {
-      civstyle = secfile_lookup_int_default(file, 2, "game.civstyle");
+      game.civstyle = secfile_lookup_int_default(file, 0, "game.civstyle");
       game.save_nturns = secfile_lookup_int(file, "game.save_nturns");
     }
 
@@ -3239,19 +3209,17 @@ void game_load(struct section_file *file)
 			     1.10.0 */
     game.occupychance = secfile_lookup_int_default(file, game.occupychance,
 						   "game.occupychance");
-    game.autoattack = secfile_lookup_bool_default(file,
-						  GAME_DEFAULT_AUTOATTACK,
-                                                  "game.autoattack");
     game.seed = secfile_lookup_int_default(file, game.seed,
 					   "game.randseed");
     game.allowed_city_names =
 	secfile_lookup_int_default(file, game.allowed_city_names,
 				   "game.allowed_city_names"); 
 
-    if(civstyle == 1) {
+    if(game.civstyle == 1) {
       string = "civ1";
     } else {
       string = "default";
+      game.civstyle = GAME_DEFAULT_CIVSTYLE;
     }
 
     if (!has_capability("rulesetdir", savefile_options)) {
@@ -3301,6 +3269,9 @@ void game_load(struct section_file *file)
 
     game.auto_ai_toggle = secfile_lookup_bool_default(file, game.auto_ai_toggle,
 						     "game.auto_ai_toggle");
+
+    game.heating=0;
+    game.cooling=0;
 
     load_rulesets();
   }
@@ -3425,6 +3396,12 @@ void game_load(struct section_file *file)
   game.is_new_game = !secfile_lookup_bool_default(file, TRUE,
 						  "game.save_players");
 
+  if (!game.is_new_game) { /* If new game, this is done in srv_main.c */
+    /* Initialise lists of improvements with World and Island equiv_ranges */
+    improvement_status_init(game.improvements,
+			    ARRAY_SIZE(game.improvements));
+  }
+
   map_load(file);
 
   if (!game.is_new_game) {
@@ -3440,7 +3417,7 @@ void game_load(struct section_file *file)
 	  name = old_impr_type_name(k);
 	  id = find_improvement_by_name_orig(name);
 	  if (id != -1) {
-	    game.great_wonders[id] = -1;
+	    game.global_wonders[id] = -1;
 	  }
 	}
       }
@@ -3449,11 +3426,15 @@ void game_load(struct section_file *file)
         if (string[k] == '1') {
 	  id = find_improvement_by_name_orig(improvement_order[k]);
 	  if (id != -1) {
-            game.great_wonders[id] = -1;
+            game.global_wonders[id] = -1;
 	  }
 	}
       }
     }
+
+    /* This is done after continents are assigned, but before effects 
+     * are added. */
+    allot_island_improvs();
 
     for (i = 0; i < game.nplayers; i++) {
       player_load(&game.players[i], i, file, improvement_order,
@@ -3463,18 +3444,14 @@ void game_load(struct section_file *file)
 
     /* Update all city information.  This must come after all cities are
      * loaded (in player_load) but before player (dumb) cities are loaded
-     * (in player_map_load).
-     *
-     * This is a bit ugly since generic_city_refresh assumes a city that
-     * has already been refreshed at some point (even if it's out of date).
-     * Here we follow the simplest method of just refreshing all cities,
-     * and updating trade routes at the same time.  This could lead to memory
-     * issues because the refresh might look at some data of another city
-     * that hasn't itself been refreshed yet.  However this shouldn't cause
-     * any problems because in the end all cities are refreshed once (or
-     * more) and recursive dependencies are all taken care of. */
+     * (in player_map_load).  Cities are refreshed twice to account for
+     * trade routes: the first refresh initializes all cities tile_trade
+     * values; the second correctly updates all trade routes. */
     cities_iterate(pcity) {
-      generic_city_refresh(pcity, TRUE, NULL);
+      generic_city_refresh(pcity, FALSE, NULL);
+    } cities_iterate_end;
+    cities_iterate(pcity) {
+      generic_city_refresh(pcity, FALSE, NULL);
     } cities_iterate_end;
 
     /* Since the cities must be placed on the map to put them on the
@@ -3542,6 +3519,11 @@ void game_load(struct section_file *file)
     /* No shuffled players included, so shuffle them (this may include
      * scenarios). */
     shuffle_players();
+  }
+
+  if (!game.is_new_game) {
+    /* Set active city improvements/wonders and their effects */
+    improvements_update_obsolete();
   }
 
   game.player_idx=0;
@@ -3661,11 +3643,9 @@ void game_save(struct section_file *file)
   secfile_insert_int(file, game.min_players, "game.min_players");
   secfile_insert_int(file, game.max_players, "game.max_players");
   secfile_insert_int(file, game.nplayers, "game.nplayers");
-  secfile_insert_int(file, game.heating, "game.heating");
   secfile_insert_int(file, game.globalwarming, "game.globalwarming");
   secfile_insert_int(file, game.warminglevel, "game.warminglevel");
   secfile_insert_int(file, game.nuclearwinter, "game.nuclearwinter");
-  secfile_insert_int(file, game.cooling, "game.cooling");
   secfile_insert_int(file, game.coolinglevel, "game.coolinglevel");
   secfile_insert_int(file, game.notradesize, "game.notradesize");
   secfile_insert_int(file, game.fulltradesize, "game.fulltradesize");
@@ -3682,9 +3662,7 @@ void game_save(struct section_file *file)
   secfile_insert_int(file, game.foodbox, "game.foodbox");
   secfile_insert_int(file, game.techpenalty, "game.techpenalty");
   secfile_insert_int(file, game.razechance, "game.razechance");
-
-  /* Write civstyle for compatibility with old servers */
-  secfile_insert_int(file, 2, "game.civstyle");
+  secfile_insert_int(file, game.civstyle, "game.civstyle");
   secfile_insert_int(file, game.save_nturns, "game.save_nturns");
   secfile_insert_str(file, game.save_name, "game.save_name");
   secfile_insert_int(file, game.aifill, "game.aifill");
@@ -3703,7 +3681,6 @@ void game_save(struct section_file *file)
   secfile_insert_int(file, game.onsetbarbarian, "game.onsetbarbs");
   secfile_insert_int(file, game.revolution_length, "game.revolen");
   secfile_insert_int(file, game.occupychance, "game.occupychance");
-  secfile_insert_bool(file, game.autoattack, "game.autoattack");
   secfile_insert_str(file, game.demography, "game.demography");
   secfile_insert_int(file, game.borders, "game.borders");
   secfile_insert_bool(file, game.happyborders, "game.happyborders");
@@ -3793,8 +3770,8 @@ void game_save(struct section_file *file)
      */
     init_old_improvement_bitvector(temp);
     impr_type_iterate(id) {
-      if (is_great_wonder(id) && great_wonder_was_built(id)
-	  && !find_city_from_great_wonder(id)) {
+      if (is_wonder(id) && game.global_wonders[id] != 0
+	  && !find_city_by_id(game.global_wonders[id])) {
         add_improvement_into_old_bitvector(temp, id);
       } 
     } impr_type_iterate_end;
@@ -3804,8 +3781,8 @@ void game_save(struct section_file *file)
      * is saved in savefile.improvement_order
      */
     impr_type_iterate(id) {
-      if (is_great_wonder(id) && great_wonder_was_built(id)
-	  && !find_city_from_great_wonder(id)) {
+      if (is_wonder(id) && game.global_wonders[id] != 0
+	  && !find_city_by_id(game.global_wonders[id])) {
 	temp[id] = '1';
       } else {
         temp[id] = '0';

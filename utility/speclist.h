@@ -30,11 +30,11 @@
    including this file would provide a struct definition for:
       struct foo_list;
    and prototypes for the following functions:
-      struct foolist *foo_list_new();
+      void foo_list_init(struct foo_list *This);
       int  foo_list_size(struct foo_list *This);
       foo_t *foo_list_get(struct foo_list *This, int index);
-      void foo_list_prepend(struct foo_list *This, foo_t *pfoo);
-      void foo_list_append(struct foo_list *This, foo_t *pfoo);
+      void foo_list_insert(struct foo_list *This, foo_t *pfoo);
+      void foo_list_insert_back(struct foo_list *This, foo_t *pfoo);
       void foo_list_unlink(struct foo_list *This, foo_t *pfoo);
       void foo_list_unlink_all(struct foo_list *This);
       void foo_list_sort(struct foo_list *This, 
@@ -57,7 +57,6 @@
 */
 
 #include "genlist.h"
-#include "mem.h"
 
 #ifndef SPECLIST_TAG
 #error Must define a SPECLIST_TAG to use this header
@@ -74,56 +73,47 @@
 #define SPECLIST_FOO(suffix) SPECLIST_PASTE(SPECLIST_TAG, suffix)
 
 SPECLIST_LIST {
-  struct genlist *list;
+  struct genlist list;
 };
 
-static inline SPECLIST_LIST *SPECLIST_FOO(_list_new) (void)
+static inline void SPECLIST_FOO(_list_init) (SPECLIST_LIST *tthis)
 {
-  SPECLIST_LIST *speclist = fc_malloc(sizeof(*speclist));
-
-  speclist->list = genlist_new();
-  return speclist;
+  genlist_init(&tthis->list);
 }
 
-static inline void SPECLIST_FOO(_list_prepend) (SPECLIST_LIST *tthis, SPECLIST_TYPE *pfoo)
+static inline void SPECLIST_FOO(_list_insert) (SPECLIST_LIST *tthis, SPECLIST_TYPE *pfoo)
 {
-  genlist_prepend(tthis->list, pfoo);
+  genlist_insert(&tthis->list, pfoo, 0);
 }
 
 static inline void SPECLIST_FOO(_list_unlink) (SPECLIST_LIST *tthis, SPECLIST_TYPE *pfoo)
 {
-  genlist_unlink(tthis->list, pfoo);
+  genlist_unlink(&tthis->list, pfoo);
 }
 
 static inline int SPECLIST_FOO(_list_size) (const SPECLIST_LIST *tthis)
 {
-  return genlist_size(tthis->list);
+  return genlist_size(&tthis->list);
 }
 
 static inline SPECLIST_TYPE *SPECLIST_FOO(_list_get) (const SPECLIST_LIST *tthis, int index)
 {
-  return genlist_get(tthis->list, index);
+  return genlist_get(&tthis->list, index);
 }
 
-static inline void SPECLIST_FOO(_list_append) (SPECLIST_LIST *tthis, SPECLIST_TYPE *pfoo)
+static inline void SPECLIST_FOO(_list_insert_back) (SPECLIST_LIST *tthis, SPECLIST_TYPE *pfoo)
 {
-  genlist_append(tthis->list, pfoo);
+  genlist_insert(&tthis->list, pfoo, -1);
 }
 
 static inline void SPECLIST_FOO(_list_unlink_all) (SPECLIST_LIST *tthis)
 {
-  genlist_unlink_all(tthis->list);
-}
-
-static inline void SPECLIST_FOO(_list_free) (SPECLIST_LIST *tthis)
-{
-  genlist_free(tthis->list);
-  free(tthis);
+  genlist_unlink_all(&tthis->list);
 }
 
 static inline void SPECLIST_FOO(_list_sort) (SPECLIST_LIST * tthis, int (*compar) (const void *, const void *))
 {
-  genlist_sort(tthis->list, compar);
+  genlist_sort(&tthis->list, compar);
 }
 
 #undef SPECLIST_TAG

@@ -289,7 +289,7 @@ void update_menus(void)
     punit=get_unit_in_focus();
 
     for(i=0; i<game.nplayers; i++) {
-      if (city_list_size(game.players[i].cities)) {
+      if (city_list_size(&game.players[i].cities)) {
 	any_cities = TRUE;
 	break;
       }
@@ -558,7 +558,7 @@ static void government_menu_callback(Widget w, XtPointer client_data,
     popup_worklists_dialog(game.player_ptr);
     break;
   case MENU_GOVERNMENT_REVOLUTION:
-    popup_revolution_dialog(game.government_when_anarchy);
+    popup_revolution_dialog(-1);
     break;
   }
 }
@@ -786,7 +786,7 @@ static void reports_menu_callback(Widget w, XtPointer client_data,
     popup_activeunits_report_dialog(0);
     break;
   case MENU_REPORT_PLAYERS:
-    popup_players_dialog(FALSE);
+    popup_players_dialog();
     break;
    case MENU_REPORT_ECONOMY:
     popup_economy_report_dialog(0);
@@ -801,7 +801,7 @@ static void reports_menu_callback(Widget w, XtPointer client_data,
     send_report_request(REPORT_TOP_5_CITIES);
     break;
   case MENU_REPORT_MESSAGES:
-    popup_meswin_dialog(FALSE);
+    popup_meswin_dialog();
     break;
    case MENU_REPORT_DEMOGRAPHIC:
     send_report_request(REPORT_DEMOGRAPHIC);

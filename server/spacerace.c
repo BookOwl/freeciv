@@ -116,9 +116,7 @@ void send_spaceship_info(struct player *src, struct conn_list *dest)
 {
   int j;
 
-  if (!dest) {
-    dest = game.game_connections;
-  }
+  if (!dest) dest = &game.game_connections;
 
   players_iterate(pplayer) {
     if (!src || pplayer == src) {
@@ -163,17 +161,17 @@ void handle_spaceship_launch(struct player *pplayer)
 
   if (!find_palace(pplayer)) {
     notify_player(pplayer,
-                  _("You need to have a capital in order to launch "
+                  _("Game: You need to have a capital in order to launch "
 		    "your spaceship."));
     return;
   }
   if (ship->state >= SSHIP_LAUNCHED) {
-    notify_player(pplayer, _("Your spaceship is already launched!"));
+    notify_player(pplayer, _("Game: Your spaceship is already launched!"));
     return;
   }
   if (ship->state != SSHIP_STARTED
       || ship->success_rate == 0.0) {
-    notify_player(pplayer, _("Your spaceship can't be launched yet!"));
+    notify_player(pplayer, _("Game: Your spaceship can't be launched yet!"));
     return;
   }
 
@@ -182,7 +180,7 @@ void handle_spaceship_launch(struct player *pplayer)
   arrival = ship->launch_year + (int) ship->travel_time;
 
   notify_player_ex(NULL, NULL, E_SPACESHIP,
-		   _("The %s have launched a spaceship!  "
+		   _("Game: The %s have launched a spaceship!  "
 		     "It is estimated to arrive on Alpha Centauri in %s."),
 		   get_nation_name_plural(pplayer->nation),
 		   textyear(arrival));
@@ -199,12 +197,12 @@ void handle_spaceship_place(struct player *pplayer,
   struct player_spaceship *ship = &pplayer->spaceship;
   
   if (ship->state == SSHIP_NONE) {
-    notify_player(pplayer, _("Spaceship action received,"
+    notify_player(pplayer, _("Game: Spaceship action received,"
 			     " but you don't have a spaceship!"));
     return;
   }
   if (ship->state >= SSHIP_LAUNCHED) {
-    notify_player(pplayer, _("You can't modify your"
+    notify_player(pplayer, _("Game: You can't modify your"
 			     " spaceship after launch!"));
     return;
   }
@@ -213,12 +211,12 @@ void handle_spaceship_place(struct player *pplayer,
       return;
     }
     if (num_spaceship_structurals_placed(ship) >= ship->structurals) {
-      notify_player(pplayer, _("You don't have any unplaced"
+      notify_player(pplayer, _("Game: You don't have any unplaced"
 			       " Space Structurals!"));
       return;
     }
     if (num!=0 && !ship->structure[structurals_info[num].required]) {
-      notify_player(pplayer, _("That Space Structural"
+      notify_player(pplayer, _("Game: That Space Structural"
 			       " would not be connected!"));
       return;
     }
@@ -232,12 +230,12 @@ void handle_spaceship_place(struct player *pplayer,
       return;
     }
     if (ship->fuel + ship->propulsion >= ship->components) {
-      notify_player(pplayer, _("You don't have any unplaced"
+      notify_player(pplayer, _("Game: You don't have any unplaced"
 			       " Space Components!"));
       return;
     }
     if (num > NUM_SS_COMPONENTS/2) {
-      notify_player(pplayer, _("Your spaceship already has"
+      notify_player(pplayer, _("Game: Your spaceship already has"
 			       " the maximum number of Fuel Components!"));
       return;
     }
@@ -251,12 +249,12 @@ void handle_spaceship_place(struct player *pplayer,
       return;
     }
     if (ship->fuel + ship->propulsion >= ship->components) {
-      notify_player(pplayer, _("You don't have any unplaced"
+      notify_player(pplayer, _("Game: You don't have any unplaced"
 			       " Space Components!"));
       return;
     }
     if (num > NUM_SS_COMPONENTS/2) {
-      notify_player(pplayer, _("Your spaceship already has the"
+      notify_player(pplayer, _("Game: Your spaceship already has the"
 			       " maximum number of Propulsion Components!"));
       return;
     }
@@ -271,12 +269,12 @@ void handle_spaceship_place(struct player *pplayer,
     }
     if (ship->habitation + ship->life_support + ship->solar_panels
 	>= ship->modules) {
-      notify_player(pplayer, _("You don't have any unplaced"
+      notify_player(pplayer, _("Game: You don't have any unplaced"
 			       " Space Modules!"));
       return;
     }
     if (num > NUM_SS_MODULES/3) {
-      notify_player(pplayer, _("Your spaceship already has the"
+      notify_player(pplayer, _("Game: Your spaceship already has the"
 			       " maximum number of Habitation Modules!"));
       return;
     }
@@ -291,12 +289,12 @@ void handle_spaceship_place(struct player *pplayer,
     }
     if (ship->habitation + ship->life_support + ship->solar_panels
 	>= ship->modules) {
-      notify_player(pplayer, _("You don't have any unplaced"
+      notify_player(pplayer, _("Game: You don't have any unplaced"
 			       " Space Modules!"));
       return;
     }
     if (num > NUM_SS_MODULES/3) {
-      notify_player(pplayer, _("Your spaceship already has the"
+      notify_player(pplayer, _("Game: Your spaceship already has the"
 			       " maximum number of Life Support Modules!"));
       return;
     }
@@ -311,12 +309,12 @@ void handle_spaceship_place(struct player *pplayer,
     }
     if (ship->habitation + ship->life_support + ship->solar_panels
 	>= ship->modules) {
-      notify_player(pplayer, _("You don't have any unplaced"
+      notify_player(pplayer, _("Game: You don't have any unplaced"
 			       " Space Modules!"));
       return;
     }
     if (num > NUM_SS_MODULES/3) {
-      notify_player(pplayer, _("Your spaceship already has the"
+      notify_player(pplayer, _("Game: Your spaceship already has the"
 			       " maximum number of Solar Panel Modules!"));
       return;
     }
@@ -335,7 +333,7 @@ void handle_spaceship_place(struct player *pplayer,
 void spaceship_lost(struct player *pplayer)
 {
   notify_player_ex(NULL, NULL, E_SPACESHIP,
-		   _("Without guidance from the capital, the %s "
+		   _("Game: Without guidance from the capital, the %s "
 		     "spaceship is lost!"),
 		   get_nation_name(pplayer->nation));
   spaceship_init(&pplayer->spaceship);
@@ -366,7 +364,7 @@ void check_spaceship_arrivals(void)
     best_pplayer->spaceship.state = SSHIP_ARRIVED;
     server_state = GAME_OVER_STATE;
     notify_player_ex(NULL, NULL, E_SPACESHIP,
-		     _("The %s spaceship has arrived "
+		     _("Game: The %s spaceship has arrived "
 		       "at Alpha Centauri."),
 		     get_nation_name(best_pplayer->nation));
     gamelog(GAMELOG_JUDGE, GL_LONEWIN, best_pplayer);

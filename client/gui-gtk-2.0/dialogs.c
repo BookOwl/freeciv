@@ -884,7 +884,7 @@ void popup_diplomat_dialog(struct unit *punit, struct tile *dest_tile)
     g_signal_connect(shl, "delete_event",
 		     G_CALLBACK(diplomat_cancel_callback), NULL);
   } else { 
-    if ((ptunit = unit_list_get(dest_tile->units, 0))){
+    if ((ptunit = unit_list_get(&dest_tile->units, 0))){
       /* Spy/Diplomat acting against a unit */ 
        
       diplomat_target_id = ptunit->id;
@@ -960,8 +960,8 @@ static void caravan_destroy_callback(GtkWidget *w, gpointer data)
 void popup_caravan_dialog(struct unit *punit,
 			  struct city *phomecity, struct city *pdestcity)
 {
-  char buf[128], wonder[128];
-  bool can_establish, can_trade, can_wonder;
+  char buf[128];
+  bool can_establish, can_trade;
   
   my_snprintf(buf, sizeof(buf),
 	      _("Your caravan from %s reaches the city of %s.\nWhat now?"),
@@ -973,23 +973,13 @@ void popup_caravan_dialog(struct unit *punit,
   can_trade = can_cities_trade(phomecity, pdestcity);
   can_establish = can_trade
   		  && can_establish_trade_route(phomecity, pdestcity);
-
-  if (unit_can_help_build_wonder(punit, pdestcity)) {
-    my_snprintf(wonder, sizeof(wonder), _("Help build _Wonder (%d remaining)"),
-	impr_build_shield_cost(pdestcity->currently_building)
-	- pdestcity->shield_stock);
-    can_wonder = TRUE;
-  } else {
-    my_snprintf(wonder, sizeof(wonder), _("Help build _Wonder"));
-    can_wonder = FALSE;
-  }
-
+  
   caravan_dialog = popup_message_dialog(GTK_WINDOW(toplevel),
     _("Your Caravan Has Arrived"), 
     buf,
     (can_establish ? _("Establish _Traderoute") :
     _("Enter Marketplace")),caravan_establish_trade_callback, NULL,
-    wonder,caravan_help_build_wonder_callback, NULL,
+    _("Help build _Wonder"),caravan_help_build_wonder_callback, NULL,
     _("_Keep moving"), NULL, NULL,
     NULL);
 
@@ -1000,7 +990,7 @@ void popup_caravan_dialog(struct unit *punit,
     message_dialog_button_set_sensitive(caravan_dialog, 0, FALSE);
   }
   
-  if (!can_wonder) {
+  if (!unit_can_help_build_wonder(punit, pdestcity)) {
     message_dialog_button_set_sensitive(caravan_dialog, 1, FALSE);
   }
 }
@@ -1564,7 +1554,7 @@ static void create_races_dialog(void)
   shell =
     gtk_dialog_new_with_buttons(_("What Nation Will You Be?"),
 				NULL,
-				0,
+				GTK_DIALOG_MODAL,
 				_("_Disconnect"),
 				GTK_RESPONSE_CANCEL,
 				GTK_STOCK_OK,
@@ -1652,9 +1642,10 @@ static void create_races_dialog(void)
     gtk_list_store_append(store, &it);
 
     s = crop_blankspace(nation->flag_sprite);
-    img = sprite_get_pixbuf(s);
-    gtk_list_store_set(store, &it, 0, i, 1, FALSE, 2, img, -1);
+    img = gdk_pixbuf_new_from_sprite(s);
     free_sprite(s);
+    gtk_list_store_set(store, &it, 0, i, 1, FALSE, 2, img, -1);
+    g_object_unref(img);
 
     g_value_init(&value, G_TYPE_STRING);
     g_value_set_static_string(&value, nation->name);
@@ -1662,7 +1653,7 @@ static void create_races_dialog(void)
     g_value_unset(&value);
 
     g_value_init(&value, G_TYPE_STRING);
-    g_value_set_static_string(&value, Q_(nation->category));
+    g_value_set_static_string(&value, Q_(nation->class));
     gtk_list_store_set_value(store, &it, 4, &value);
     g_value_unset(&value);
   }
@@ -1766,8 +1757,7 @@ static void create_races_dialog(void)
     last = city_styles[i].tiles_num-1;
 
     s = crop_blankspace(sprites.city.tile[i][last]);
-    img = sprite_get_pixbuf(s);
-    g_object_ref(img);
+    img = gdk_pixbuf_new_from_sprite(s);
     free_sprite(s);
     gtk_list_store_set(store, &it, 0, i, 1, img, 2,
                        get_city_style_name(i), -1);
@@ -1885,7 +1875,7 @@ static void select_random_leader(void)
 
   leaders = get_nation_leaders(selected_nation, &nleaders);
   for (i = 0; i < nleaders; i++) {
-    items = g_list_prepend(items, leaders[i].name);
+    items = g_list_append(items, leaders[i].name);
   }
 
   /* Populate combo box with minimum signal noise. */
@@ -2128,7 +2118,8 @@ static void races_response(GtkWidget *w, gint response, gpointer data)
     dsend_packet_nation_select_req(&aconnection, selected_nation,
 				   selected_sex, s, selected_city_style);
   } else if (response == GTK_RESPONSE_CLOSE) {
-    ui_exit();
+    exit(EXIT_SUCCESS);
+
   } else {
     popdown_races_dialog();
     disconnect_from_server();
@@ -2146,12 +2137,35 @@ gboolean taxrates_callback(GtkWidget * w, GdkEventButton * ev, gpointer data)
   return TRUE;
 }
 
+/**************************************************************************
+...
+**************************************************************************/
+static void nuke_children(gpointer data, gpointer user_data)
+{
+  if (data != user_data) {
+    if (GTK_IS_WINDOW(data) && GTK_WINDOW(data)->type == GTK_WINDOW_TOPLEVEL) {
+      gtk_widget_destroy(data);
+    }
+  }
+}
+
 /********************************************************************** 
   This function is called when the client disconnects or the game is
   over.  It should close all dialog windows for that game.
 ***********************************************************************/
 void popdown_all_game_dialogs(void)
 {
+  GList *res;
+
   gui_dialog_destroy_all();
+
+
+  res = gtk_window_list_toplevels();
+
+  g_list_foreach(res, (GFunc)g_object_ref, NULL);
+  g_list_foreach(res, nuke_children, toplevel);
+  g_list_foreach(res, (GFunc)g_object_unref, NULL);
+
+  g_list_free(res);
 }
 

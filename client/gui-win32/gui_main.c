@@ -30,7 +30,6 @@
 #include "shared.h"
 #include "support.h"
 #include "version.h"
-#include "timing.h"
 
 #include "chatline.h"
 #include "civclient.h"
@@ -96,46 +95,13 @@ const static RECT textwin_size={0,1,0,100};
 struct fcwin_box *main_win_box;
 struct fcwin_box *output_box;
 
-const char * const gui_character_encoding = NULL;
-const bool gui_use_transliteration = TRUE;
-
 client_option gui_options[] = {
   GEN_BOOL_OPTION(better_fog,
-		  N_("Better fog-of-war drawing"),
-		  N_("If this is enabled then a better method is used for "
-		     "drawing fog-of-war.  It is not any slower but will "
-		     "consume about twice as much memory."),
-		  COC_GRAPHICS)
+		  N_("Better fog-of-war drawing"))
 };
 const int num_gui_options = ARRAY_SIZE(gui_options);
 
-bool process_net_input(void);
-
-struct callback {
-  void (*callback)(void *data);
-  void *data;
-};
-
-#define SPECLIST_TAG callback
-#define SPECLIST_TYPE struct callback
-#include "speclist.h"
-
-struct callback_list *callbacks;
-
-/****************************************************************************
-  Called by the tileset code to set the font size that should be used to
-  draw the city names and productions.
-****************************************************************************/
-void set_city_names_font_sizes(int my_city_names_font_size,
-			       int my_city_productions_font_size)
-{
-  freelog(LOG_ERROR, "Unimplemented set_city_names_font_sizes.");
-  /* PORTME */
-}
-
-BOOL have_AlphaBlend = FALSE;
-
-BOOL (WINAPI * AlphaBlend)(HDC,int,int,int,int,HDC,int,int,int,int,BLENDFUNCTION);
+void socket_timer(void);
 
 /**************************************************************************
 
@@ -512,31 +478,44 @@ static void create_main_window(void)
 }
 
 /**************************************************************************
-   Check the network input for messages, and process them.  Returns true
-   if a message was received.
-**************************************************************************/
-bool process_net_input()
-{
-  struct timeval tv;
-  fd_set civfdset;
-  bool processed = FALSE;
 
-  while (net_input>=0) {
-    FD_ZERO(&civfdset);
-    FD_SET(net_input, &civfdset);
-    tv.tv_sec = 0;
-    tv.tv_usec = 0;
-    if (select(1, &civfdset, NULL, NULL, &tv)) {
-      if (FD_ISSET(net_input, &civfdset)) {
-	input_from_server(net_input);
-	processed = TRUE;
-      }
-    } else {
-      break;
-    }
+**************************************************************************/
+static VOID CALLBACK blink_timer(HWND hwnd, UINT uMsg, UINT idEvent,
+				 DWORD dwTime)
+{
+  if (can_client_change_view()) {
+    check_mapstore();
   }
 
-  return processed;
+  real_timer_callback();
+}
+
+/**************************************************************************
+
+**************************************************************************/
+void socket_timer ()
+{
+    struct timeval tv;
+  fd_set civfdset;
+  while (net_input>=0)
+    {
+ 
+      FD_ZERO(&civfdset);
+      FD_SET(net_input,&civfdset);
+      tv.tv_sec=0;
+      tv.tv_usec=0;
+      if (select(1,&civfdset,NULL,NULL,&tv))
+        {
+          if (FD_ISSET(net_input,&civfdset))
+            {
+              input_from_server(net_input);
+            }
+        }
+      else
+        {
+          break;
+        }
+    }           
 } 
 
 /**************************************************************************
@@ -557,7 +536,7 @@ void popdown_all_game_dialogs(void)
 **************************************************************************/
 void ui_init(void)
 {
-
+  init_character_encodings(NULL, TRUE);
 }
 
 /**************************************************************************
@@ -568,36 +547,10 @@ ui_main(int argc, char *argv[])
 {
   RECT rc;
   MSG msg;
-  HINSTANCE hmsimg32;
-  HDC hdc;
+  freecivhinst=GetModuleHandle(NULL); /* There is no WinMain! */
   bool quit = FALSE;
-  bool idle;
-  struct timer *callback_timer;
-  float callback_seconds = 0;
-
-  freecivhinst = GetModuleHandle(NULL); /* There is no WinMain! */
-
   init_layoutwindow();
   InitCommonControls();
-
-  /* Try to get AlphaBlend() from msimg32.dll */
-  if ((hmsimg32 = LoadLibrary("msimg32.dll"))) {
-    if ((AlphaBlend = GetProcAddress(hmsimg32, "AlphaBlend"))) {
-      have_AlphaBlend = TRUE;
-    } else {
-      freelog(LOG_NORMAL, "No AlphaBlend() in msimg32.dll, alpha blending disabled");
-    }
-  } else {
-    freelog(LOG_NORMAL, "No msimg32.dll, alpha blending disabled");
-  }
-
-  hdc = GetDC(map_window);
-  if (GetDeviceCaps(hdc, BITSPIXEL) < 32) {
-    freelog(LOG_NORMAL, "Not running in 32 bit color, alpha blending disabled");
-    have_AlphaBlend = FALSE;
-  }
-  ReleaseDC(map_window, hdc);
-
   unitselect_init(freecivhinst);
   init_mapwindow();
   font_8courier=GetStockObject(ANSI_FIXED_FONT);
@@ -617,30 +570,11 @@ ui_main(int argc, char *argv[])
  
   set_client_state(CLIENT_PRE_GAME_STATE);
 
-  callbacks = callback_list_new();
-
-  callback_timer = new_timer_start(TIMER_USER, TIMER_ACTIVE);
+  SetTimer(root_window, 2, TIMER_INTERVAL, blink_timer);
 
   while (!quit) {
-
-    /* Network input */
-    idle = !process_net_input();
-
-    /* real_timer_callback() */
-    if (callback_seconds < read_timer_seconds(callback_timer)) {
-      idle = FALSE;
-
-      if (can_client_change_view()) {
-	check_mapstore();
-      }
-
-      callback_seconds = real_timer_callback();
-      clear_timer_start(callback_timer);
-    }
-
-    /* Win32 message queue */
+    socket_timer();
     while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
-      idle = FALSE;
       if (msg.message == WM_QUIT) {
 	quit = TRUE;
       }
@@ -650,22 +584,7 @@ ui_main(int argc, char *argv[])
 	DispatchMessage(&msg);   
       }
     }
-
-    /* If nothing happened in the three blocks above, call an idle function */
-    if (idle && callbacks && callback_list_size(callbacks) > 0) {
-      struct callback *cb = callback_list_get(callbacks, 0);
-      callback_list_unlink(callbacks, cb);
-      (cb->callback)(cb->data);
-      free(cb);
-    }
-
   }
-
-  free_timer(callback_timer);
-  callback_list_unlink_all(callbacks);
-  free(callbacks);
-
-  FreeLibrary(hmsimg32);
 }
 
 
@@ -720,19 +639,4 @@ void
 set_unit_icons_more_arrow(bool onoff)
 {
 	/* PORTME */
-}
-
-/****************************************************************************
-  Enqueue a callback to be called during an idle moment.  The 'callback'
-  function should be called sometimes soon, and passed the 'data' pointer
-  as its data.
-****************************************************************************/
-void add_idle_callback(void (callback)(void *), void *data)
-{
-  struct callback *cb = fc_malloc(sizeof(*cb));
-
-  cb->callback = callback;
-  cb->data = data;
-
-  callback_list_prepend(callbacks, cb);
 }
