@@ -1,0 +1,14 @@
+# Server commands to make rules similar to Civ1.
+#
+# Use this as, eg, "./ser -r data/civ1.serv" 
+#
+# Civ1 start:
+set settlers 1
+set explorer 0
+rulesetdir civ1
+#
+# Minor civ1 rules:
+set civstyle 1
+#
+# Optional:
+#set nations civ1
