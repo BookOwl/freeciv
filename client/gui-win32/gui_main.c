@@ -30,7 +30,6 @@
 #include "shared.h"
 #include "support.h"
 #include "version.h"
-#include "timing.h"
 
 #include "chatline.h"
 #include "civclient.h"
@@ -41,8 +40,8 @@
 #include "control.h"
 #include "dialogs.h"
 #include "gotodlg.h"
-#include "gui_stuff.h"
 #include "graphics.h"
+#include "gui_stuff.h"
 #include "helpdata.h"           /* boot_help_texts() */
 #include "mapctrl.h"
 #include "mapview.h"
@@ -50,7 +49,6 @@
 #include "optiondlg.h"
 #include "options.h"
 #include "spaceshipdlg.h"
-#include "sprite.h"
 #include "tilespec.h"
 
 #include <stdio.h>
@@ -87,96 +85,23 @@ int overview_win_width;
 int overview_win_height;
 static int net_input=-1;
 
-int city_names_font_size = 0, city_productions_font_size = 0;
-HFONT main_font;
-HFONT city_descriptions_font;
 
 extern int seconds_to_turndone;   
 
 bool better_fog = TRUE;
-bool enable_alpha = TRUE;
 
 const static RECT textwin_size={0,1,0,100};
 
 struct fcwin_box *main_win_box;
 struct fcwin_box *output_box;
 
-const char * const gui_character_encoding = NULL;
-const bool gui_use_transliteration = TRUE;
-
 client_option gui_options[] = {
   GEN_BOOL_OPTION(better_fog,
-		  N_("Better fog-of-war drawing"),
-		  N_("If this is enabled then a better method is used for "
-		     "drawing fog-of-war.  It is not any slower but will "
-		     "consume about twice as much memory."),
-		  COC_GRAPHICS),
-  GEN_BOOL_OPTION(enable_alpha,
-		  N_("Enable alpha blending"),
-		  N_("If this is enabled, then alpha blending will be used "
-		     "in rendering, instead of an ordered dither.  If there "
-		     "is no hardware support for alpha blending, this is "
-		     "much slower."),
-		  COC_GRAPHICS)
+		  N_("Better fog-of-war drawing"))
 };
 const int num_gui_options = ARRAY_SIZE(gui_options);
 
-bool process_net_input(void);
-
-struct callback {
-  void (*callback)(void *data);
-  void *data;
-};
-
-#define SPECLIST_TAG callback
-#define SPECLIST_TYPE struct callback
-#include "speclist.h"
-
-struct callback_list *callbacks;
-
-/****************************************************************************
-  Called by the tileset code to set the font size that should be used to
-  draw the city names and productions.
-****************************************************************************/
-void set_city_names_font_sizes(int my_city_names_font_size,
-			       int my_city_productions_font_size)
-{
-  LOGFONT lf;
-  HDC hdc;
-
-  city_names_font_size = my_city_names_font_size;
-  city_productions_font_size = my_city_productions_font_size;
-
-  lf.lfWidth = 0;
-  lf.lfEscapement = 0;
-  lf.lfOrientation = 0;
-  lf.lfWeight = FW_SEMIBOLD;
-  lf.lfItalic = FALSE;
-  lf.lfUnderline = FALSE;
-  lf.lfStrikeOut = FALSE;
-  lf.lfCharSet = DEFAULT_CHARSET;
-  lf.lfOutPrecision = OUT_DEFAULT_PRECIS;
-  lf.lfClipPrecision = CLIP_DEFAULT_PRECIS;
-  lf.lfQuality = DEFAULT_QUALITY;
-  lf.lfPitchAndFamily = DEFAULT_PITCH;
-  strcpy(lf.lfFaceName, "");
-
-  hdc = GetDC(root_window);
-
-  lf.lfHeight = -MulDiv(city_names_font_size, GetDeviceCaps(hdc, LOGPIXELSY),
-			72);
-  main_font = CreateFontIndirect(&lf);
-
-  lf.lfHeight = -MulDiv(city_productions_font_size,
-			GetDeviceCaps(hdc, LOGPIXELSY), 72);
-  city_descriptions_font = CreateFontIndirect(&lf);
-
-  ReleaseDC(root_window, hdc);
-}
-
-BOOL have_AlphaBlend = FALSE;
-
-BOOL (WINAPI * AlphaBlend)(HDC,int,int,int,int,HDC,int,int,int,int,BLENDFUNCTION);
+void socket_timer(void);
 
 /**************************************************************************
 
@@ -195,9 +120,9 @@ static void HandleLMouse(int x, int y)
   if ((x>overview_win_x)&&(x<overview_win_x+overview_win_width)
 	   &&(y>overview_win_y)&&(y<overview_win_y+overview_win_height))
     overview_handle_rbut(x-overview_win_x,y-overview_win_y);
-  else if ((x<10*tileset_small_sprite_width(tileset))&&(y>taxinfoline_y)
-	   &&(y<taxinfoline_y+2*tileset_small_sprite_height(tileset)))
-    indicator_handle_but(x/tileset_small_sprite_width(tileset));
+  else if ((x<10*SMALL_TILE_WIDTH)&&(y>taxinfoline_y)
+	   &&(y<taxinfoline_y+2*SMALL_TILE_HEIGHT))
+    indicator_handle_but(x/SMALL_TILE_WIDTH);
 }
 
 /**************************************************************************
@@ -284,8 +209,8 @@ static void box_fixedsize(POINT * minsize,void *data)
 **************************************************************************/
 static void taxinfoline_minsize(POINT * minsize,void *data)
 {
-  minsize->x=10*tileset_small_sprite_width(tileset);
-  minsize->y=1*tileset_small_sprite_height(tileset);
+  minsize->x=10*SMALL_TILE_WIDTH;
+  minsize->y=1*SMALL_TILE_HEIGHT;
 }
 
 /**************************************************************************
@@ -293,8 +218,8 @@ static void taxinfoline_minsize(POINT * minsize,void *data)
 **************************************************************************/
 static void indicator_line_minsize(POINT *minsize, void *data)
 {
-  minsize->x=4*tileset_small_sprite_width(tileset);
-  minsize->y=1*tileset_small_sprite_height(tileset);
+  minsize->x=4*SMALL_TILE_WIDTH;
+  minsize->y=1*SMALL_TILE_HEIGHT;
 }
 /**************************************************************************
 
@@ -311,7 +236,7 @@ static void taxinfoline_setsize(LPRECT newsize,void *data)
 {
   RECT rc;
   rc=*newsize;
-  rc.bottom+=tileset_small_sprite_height(tileset);
+  rc.bottom+=SMALL_TILE_HEIGHT;
   InvalidateRect(root_window,newsize,TRUE);
   taxinfoline_y=newsize->top;
 		 
@@ -354,8 +279,8 @@ static void overview_setsize(LPRECT newsize, void *data)
 **************************************************************************/
 static void map_minsize(POINT * minsize, void *data)
 {
-  minsize->x=tileset_tile_width(tileset)+15;
-  minsize->y=tileset_tile_height(tileset)+15;
+  minsize->x=NORMAL_TILE_WIDTH+15;
+  minsize->y=NORMAL_TILE_HEIGHT+15;
 }
 
 /**************************************************************************
@@ -371,7 +296,7 @@ static void map_setsize(LPRECT newsize, void *data)
   if ((mx==map_win_x)&&(map_win_y==my)&&
       (map_win_width==mw)&&(map_win_height==mh))
     return;
-  if ((mw<(2*tileset_tile_width(tileset)))||(mh<(2*tileset_tile_height(tileset)))) {
+  if ((mw<(2*NORMAL_TILE_WIDTH))||(mh<(2*NORMAL_TILE_HEIGHT))) {
     return;
   }
   map_win_x=mx;
@@ -553,31 +478,44 @@ static void create_main_window(void)
 }
 
 /**************************************************************************
-   Check the network input for messages, and process them.  Returns true
-   if a message was received.
-**************************************************************************/
-bool process_net_input()
-{
-  struct timeval tv;
-  fd_set civfdset;
-  bool processed = FALSE;
 
-  while (net_input>=0) {
-    FD_ZERO(&civfdset);
-    FD_SET(net_input, &civfdset);
-    tv.tv_sec = 0;
-    tv.tv_usec = 0;
-    if (select(1, &civfdset, NULL, NULL, &tv)) {
-      if (FD_ISSET(net_input, &civfdset)) {
-	input_from_server(net_input);
-	processed = TRUE;
-      }
-    } else {
-      break;
-    }
+**************************************************************************/
+static VOID CALLBACK blink_timer(HWND hwnd, UINT uMsg, UINT idEvent,
+				 DWORD dwTime)
+{
+  if (can_client_change_view()) {
+    check_mapstore();
   }
 
-  return processed;
+  real_timer_callback();
+}
+
+/**************************************************************************
+
+**************************************************************************/
+void socket_timer ()
+{
+    struct timeval tv;
+  fd_set civfdset;
+  while (net_input>=0)
+    {
+ 
+      FD_ZERO(&civfdset);
+      FD_SET(net_input,&civfdset);
+      tv.tv_sec=0;
+      tv.tv_usec=0;
+      if (select(1,&civfdset,NULL,NULL,&tv))
+        {
+          if (FD_ISSET(net_input,&civfdset))
+            {
+              input_from_server(net_input);
+            }
+        }
+      else
+        {
+          break;
+        }
+    }           
 } 
 
 /**************************************************************************
@@ -598,119 +536,7 @@ void popdown_all_game_dialogs(void)
 **************************************************************************/
 void ui_init(void)
 {
-
-}
-
-static HINSTANCE hmsimg32;
-
-/**************************************************************************
-  Look for the alphablend function, then return TRUE if it works.
-**************************************************************************/
-static bool test_alphablend()
-{
-  HDC hdc;
-  BLENDFUNCTION bf;
-  COLORREF cr;
-  BITMAP bmp;
-  unsigned char *p;
-  HBITMAP src, dst;
-  HDC srcdc, dstdc;
-  HGDIOBJ tmpsrc, tmpdst;
-
-  /* Try to get AlphaBlend() from msimg32.dll */
-  if ((hmsimg32 = LoadLibrary("msimg32.dll"))) {
-    if ((AlphaBlend = GetProcAddress(hmsimg32, "AlphaBlend"))) {
-      /* fall through, do nothing */
-    } else {
-      freelog(LOG_NORMAL, "No AlphaBlend() in msimg32.dll, alpha blending disabled");
-      return FALSE;
-    }
-  } else {
-    freelog(LOG_NORMAL, "No msimg32.dll, alpha blending disabled");
-    return FALSE;
-  }
-
-  hdc = GetDC(map_window);
-
-  if (GetDeviceCaps(hdc, BITSPIXEL) < 32) {
-    freelog(LOG_NORMAL, "Not running in 32 bit color, alpha blending disabled");
-    ReleaseDC(map_window, hdc);
-    return FALSE;
-  }
-
-  /* As of version 3.2 of mingw's w32api, SHADEBLENDCAPS is not defined. */
-#define SHADEBLENDCAPS 120
-#define SB_NONE 0
-
-  if (GetDeviceCaps(hdc, SHADEBLENDCAPS) == SB_NONE) {
-    freelog(LOG_NORMAL, "Device does not support alpha blending, alpha blending disabled");
-    ReleaseDC(map_window, hdc);
-    return FALSE;
-  }
-
-#undef SB_NONE
-#undef SHADEBLENDCAPS
-
-  ReleaseDC(map_window, hdc);
-
-  /* It's not enough to simply have AlphaBlend, we must test it to see it
-     actually works. */
-  
-  p = fc_malloc(4);
-
-  bmp.bmType       = 0;
-  bmp.bmWidth      = 1;
-  bmp.bmHeight     = 1;
-  bmp.bmWidthBytes = 4;
-  bmp.bmPlanes     = 1;
-  bmp.bmBitsPixel  = 32;
-  bmp.bmBits       = p;
-
-  p[0] = 32;
-  p[1] = 64;
-  p[2] = 128;
-  p[3] = 128;
-
-  src = CreateBitmapIndirect(&bmp);
-
-  p[0] = 255;
-  p[1] = 170;
-  p[2] = 85;
-  p[3] = 0;
-
-  dst = CreateBitmapIndirect(&bmp);
-
-  free(p);
-
-  hdc = GetDC(root_window);
-  srcdc = CreateCompatibleDC(hdc);
-  dstdc = CreateCompatibleDC(hdc);
-  ReleaseDC(root_window, hdc);
-
-  tmpsrc = SelectObject(srcdc, src);
-  tmpdst = SelectObject(dstdc, dst);
-
-  bf.BlendOp = AC_SRC_OVER;
-  bf.BlendFlags = 0;
-  bf.SourceConstantAlpha = 255;
-  bf.AlphaFormat = AC_SRC_ALPHA;
-  AlphaBlend(dstdc, 0, 0, 1, 1, srcdc, 0, 0, 1, 1, bf);
-
-  cr = GetPixel(dstdc, 0, 0);
-
-  SelectObject(srcdc, tmpsrc);
-  SelectObject(dstdc, tmpdst);
-
-  DeleteObject(dstdc);
-  DeleteObject(srcdc);
-  DeleteObject(dst);
-  DeleteObject(src);
-
-  if (abs(GetRValue(cr) - 170) + abs(GetGValue(cr) - 149)
-      + abs(GetBValue(cr) - 159) > 25) {
-    return FALSE;
-  }
-  return TRUE;
+  init_character_encodings(NULL, TRUE);
 }
 
 /**************************************************************************
@@ -721,19 +547,10 @@ ui_main(int argc, char *argv[])
 {
   RECT rc;
   MSG msg;
+  freecivhinst=GetModuleHandle(NULL); /* There is no WinMain! */
   bool quit = FALSE;
-  bool idle;
-  struct timer *callback_timer;
-  float callback_seconds = 0;
-
-  freecivhinst = GetModuleHandle(NULL); /* There is no WinMain! */
-
   init_layoutwindow();
   InitCommonControls();
-
-  have_AlphaBlend = test_alphablend();
-  enable_alpha = have_AlphaBlend;
-
   unitselect_init(freecivhinst);
   init_mapwindow();
   font_8courier=GetStockObject(ANSI_FIXED_FONT);
@@ -745,7 +562,7 @@ ui_main(int argc, char *argv[])
   SetMenu(root_window,create_mainmenu());
   ShowWindow(root_window,SW_SHOWNORMAL);
   UpdateWindow(root_window);
-  tileset_load_tiles(tileset);
+  tilespec_load_tiles();
   init_fog_bmp();
   load_cursors();
 
@@ -753,30 +570,11 @@ ui_main(int argc, char *argv[])
  
   set_client_state(CLIENT_PRE_GAME_STATE);
 
-  callbacks = callback_list_new();
-
-  callback_timer = new_timer_start(TIMER_USER, TIMER_ACTIVE);
+  SetTimer(root_window, 2, TIMER_INTERVAL, blink_timer);
 
   while (!quit) {
-
-    /* Network input */
-    idle = !process_net_input();
-
-    /* real_timer_callback() */
-    if (callback_seconds < read_timer_seconds(callback_timer)) {
-      idle = FALSE;
-
-      if (can_client_change_view()) {
-	check_mapstore();
-      }
-
-      callback_seconds = real_timer_callback();
-      clear_timer_start(callback_timer);
-    }
-
-    /* Win32 message queue */
+    socket_timer();
     while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
-      idle = FALSE;
       if (msg.message == WM_QUIT) {
 	quit = TRUE;
       }
@@ -786,26 +584,8 @@ ui_main(int argc, char *argv[])
 	DispatchMessage(&msg);   
       }
     }
-
-    /* If nothing happened in the three blocks above, call an idle function */
-    if (idle && callbacks && callback_list_size(callbacks) > 0) {
-      struct callback *cb = callback_list_get(callbacks, 0);
-      callback_list_unlink(callbacks, cb);
-      (cb->callback)(cb->data);
-      free(cb);
-    }
-
-    /* If we're idle, give up the CPU. */
-    if (idle) {
-      Sleep(1);
-    }
+    Sleep(1);
   }
-
-  free_timer(callback_timer);
-  callback_list_unlink_all(callbacks);
-  free(callbacks);
-
-  FreeLibrary(hmsimg32);
 }
 
 
@@ -860,19 +640,4 @@ void
 set_unit_icons_more_arrow(bool onoff)
 {
 	/* PORTME */
-}
-
-/****************************************************************************
-  Enqueue a callback to be called during an idle moment.  The 'callback'
-  function should be called sometimes soon, and passed the 'data' pointer
-  as its data.
-****************************************************************************/
-void add_idle_callback(void (callback)(void *), void *data)
-{
-  struct callback *cb = fc_malloc(sizeof(*cb));
-
-  cb->callback = callback;
-  cb->data = data;
-
-  callback_list_prepend(callbacks, cb);
 }

@@ -55,8 +55,24 @@ typedef unsigned int fc_bool;
 #define fc__attribute(x)
 #endif
 
+
+/* Note: the capability string is now in capstr.c --dwp */
+/* Version stuff is now in version.h --dwp */
+
+#define BUG_EMAIL_ADDRESS "bugs@freeciv.org"
+#define WEBSITE_URL "http://www.freeciv.org/"
+
+/* MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS <= 32 !!!! */
+#define MAX_NUM_PLAYERS  30
+#define MAX_NUM_BARBARIANS   2
+#define MAX_NUM_CONNECTIONS (2 * (MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS))
+#define MAX_NUM_ITEMS   200	/* eg, unit_types */
+#define MAX_NUM_TECH_LIST 10
+#define MAX_NUM_BUILDING_LIST 10
 #define MAX_LEN_NAME     32
 #define MAX_LEN_ADDR     256	/* see also MAXHOSTNAMELEN and RFC 1123 2.1 */
+#define MAX_LEN_VET_SHORT_NAME 8
+#define MAX_VET_LEVELS 10
 #define MAX_LEN_PATH 4095
 
 /* Use FC_INFINITY to denote that a certain event will never occur or
@@ -174,8 +190,7 @@ bool bv_are_equal(const unsigned char *vec1, const unsigned char *vec2,
 
 char *create_centered_string(const char *s);
 
-char *get_option_malloc(const char *option_name,
-			char **argv, int *i, int argc);
+char * get_option(const char *option_name,char **argv,int *i,int argc);
 bool is_option(const char *option_name,char *option);
 int get_tokens(const char *str, char **tokens, size_t num_tokens,
 	       const char *delimiterset);
@@ -226,8 +241,8 @@ struct datafile {
 char *user_home_dir(void);
 const char *user_username(void);
 const char **datafilelist(const char *suffix);
-struct datafile_list *datafilelist_infix(const char *subpath,
-                                         const char *infix, bool nodups);
+struct datafile_list datafilelist_infix(const char *subpath,
+    const char *infix, bool nodups);
 char *datafilename(const char *filename);
 char **datafilenames(const char *filename);
 char *datafilename_required(const char *filename);
@@ -264,7 +279,6 @@ enum m_pre_result match_prefix(m_pre_accessor_fn_t accessor_fn,
 
 char *get_multicast_group(void);
 void interpret_tilde(char* buf, size_t buf_size, const char* filename);
-char *interpret_tilde_alloc(const char* filename);
 
 bool make_dir(const char *pathname);
 bool path_is_absolute(const char *filename);

@@ -11,13 +11,6 @@
    GNU General Public License for more details.
 ***********************************************************************/
 
-#ifndef FC__GUI_TEXT_H
-#define FC__GUI_TEXT_H
-
-struct tile;
-struct unit;
-struct city;
-
 const char *mapview_get_terrain_tooltip_text(struct tile *ptile);
 const char *mapview_get_unit_action_tooltip(struct unit *punit,
 					    const char *action,
@@ -31,4 +24,3 @@ const char *mapview_get_city_info_text(struct city *pcity);
 const char *mapview_get_unit_tooltip_text(struct unit *punit);
 const char *mapview_get_unit_info_text(struct unit *punit);
 
-#endif				/* FC__GUI_TEXT_H */

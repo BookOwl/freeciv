@@ -49,8 +49,6 @@ struct server_arguments {
   bool auth_enabled;            /* defaults to FALSE */
   bool auth_allow_guests;       /* defaults to TRUE */
   bool auth_allow_newusers;     /* defaults to TRUE */
-
-  bool timing_debug;
 };
 
 void init_game_seed(void);
@@ -60,7 +58,7 @@ void server_quit(void);
 
 bool handle_packet_input(struct connection *pconn, void *packet, int type);
 void start_game(void);
-void save_game(char *orig_filename, const char *save_reason);
+void save_game(char *orig_filename);
 void pick_ai_player_name(Nation_Type_id nation, char *newname);
 void send_all_info(struct conn_list *dest);
 void check_for_full_turn_done(void);

@@ -26,8 +26,7 @@
   Returns TRUE iff pplayer could do diplomancy in the game at all.
   These values are set by player in stdinhand.c.
 **************************************************************************/
-bool diplomacy_possible(const struct player *pplayer,
-			const struct player *aplayer)
+bool diplomacy_possible(struct player *pplayer, struct player *aplayer)
 {
   return  (game.diplomacy == 0      /* Unlimited diplomacy */
 	   || (game.diplomacy == 1  /* Human diplomacy only */
@@ -43,8 +42,7 @@ bool diplomacy_possible(const struct player *pplayer,
 /**************************************************************************
   Returns TRUE iff pplayer could do diplomatic meetings with aplayer.
 **************************************************************************/
-bool could_meet_with_player(const struct player *pplayer,
-			    const struct player *aplayer)
+bool could_meet_with_player(struct player *pplayer, struct player *aplayer)
 {
   return (pplayer->is_alive
           && aplayer->is_alive
@@ -61,8 +59,7 @@ bool could_meet_with_player(const struct player *pplayer,
 /**************************************************************************
   Returns TRUE iff pplayer could do diplomatic meetings with aplayer.
 **************************************************************************/
-bool could_intel_with_player(const struct player *pplayer,
-			     const struct player *aplayer)
+bool could_intel_with_player(struct player *pplayer, struct player *aplayer)
 {
   return (pplayer->is_alive
           && aplayer->is_alive
@@ -82,7 +79,7 @@ void init_treaty(struct Treaty *ptreaty,
   ptreaty->plr1=plr1;
   ptreaty->accept0 = FALSE;
   ptreaty->accept1 = FALSE;
-  ptreaty->clauses = clause_list_new();
+  clause_list_init(&ptreaty->clauses);
 }
 
 /****************************************************************
@@ -93,8 +90,7 @@ void clear_treaty(struct Treaty *ptreaty)
   clause_list_iterate(ptreaty->clauses, pclause) {
     free(pclause);
   } clause_list_iterate_end;
-  clause_list_unlink_all(ptreaty->clauses);
-  clause_list_free(ptreaty->clauses);
+  clause_list_unlink_all(&ptreaty->clauses);
 }
 
 /****************************************************************
@@ -106,7 +102,7 @@ bool remove_clause(struct Treaty *ptreaty, struct player *pfrom,
   clause_list_iterate(ptreaty->clauses, pclause) {
     if(pclause->type==type && pclause->from==pfrom &&
        pclause->value==val) {
-      clause_list_unlink(ptreaty->clauses, pclause);
+      clause_list_unlink(&ptreaty->clauses, pclause);
       free(pclause);
 
       ptreaty->accept0 = FALSE;
@@ -182,7 +178,7 @@ bool add_clause(struct Treaty *ptreaty, struct player *pfrom,
   pclause->from=pfrom;
   pclause->value=val;
   
-  clause_list_append(ptreaty->clauses, pclause);
+  clause_list_insert_back(&ptreaty->clauses, pclause);
 
   ptreaty->accept0 = FALSE;
   ptreaty->accept1 = FALSE;

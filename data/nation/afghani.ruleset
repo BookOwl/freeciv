@@ -2,7 +2,7 @@
 
 name=_("Afghani")
 plural=_("?plural:Afghanis")
-groups=_("Modern"), _("Asian")
+class=_("Modern")
 leader="Kanishka", "Mahmud Ghazni", "Timour-i-Lang", "Ahmad Shah",
   "Zahir Shah", "Daoud Khan"
 leader_sex="Male", "Male", "Male", "Male",

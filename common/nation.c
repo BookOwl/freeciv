@@ -35,9 +35,6 @@
 static struct nation_type *nations = NULL;
 static struct team teams[MAX_NUM_TEAMS];
 
-static int num_nation_groups;
-static struct nation_group nation_groups[MAX_NUM_NATION_GROUPS];
-
 /***************************************************************
   Returns 1 if nid is a valid nation id, else 0.
   If returning 0, prints log message with given loglevel
@@ -181,7 +178,7 @@ const char *get_nation_name_plural(Nation_Type_id nation)
 /***************************************************************
 Returns pointer to a nation 
 ***************************************************************/
-struct nation_type *get_nation_by_plr(const struct player *plr)
+struct nation_type *get_nation_by_plr(struct player *plr)
 {
   assert(plr != NULL);
   if (!bounds_check_nation_id(plr->nation, LOG_FATAL, "get_nation_by_plr")) {
@@ -226,6 +223,11 @@ static void nation_free(Nation_Type_id nation)
     p->leaders = NULL;
   }
   
+  if (p->class) {
+    free(p->class);
+    p->class = NULL;
+  }
+  
   if (p->legend) {
     free(p->legend);
     p->legend = NULL;
@@ -240,19 +242,13 @@ static void nation_free(Nation_Type_id nation)
     free(p->parent_nations);
     p->parent_nations = NULL;
   }
-  
-  if (p->groups) {
-    free(p->groups);
-    p->groups = NULL;
-  }
 
   nation_city_names_free(p->city_names);
   p->city_names = NULL;
 }
 
 /***************************************************************
- De-allocate the currently allocated nations and remove all
- nation groups
+ De-allocate the currently allocated nations.
 ***************************************************************/
 void nations_free()
 {
@@ -269,7 +265,6 @@ void nations_free()
   free(nations);
   nations = NULL;
   game.nation_count = 0;
-  num_nation_groups = 0;
 }
 
 /***************************************************************
@@ -428,51 +423,3 @@ void team_init()
     teams[i].name[0] = '\0';
   }
 }
-
-/***************************************************************
-  Add new group into the array of groups. If a group with
-  the same name already exists don't create new one, but return
-  old one
-***************************************************************/
-struct nation_group* add_new_nation_group(const char* name)
-{
-  int i;
-  for (i = 0; i < num_nation_groups; i++) {
-    if (mystrcasecmp(name, nation_groups[i].name) == 0) {
-      return &nation_groups[i];
-    }
-  }
-  if (i == MAX_NUM_NATION_GROUPS) {
-    die("Too many groups of nations");
-  }
-  sz_strlcpy(nation_groups[i].name, name);
-  nation_groups[i].match = 0;
-  return &nation_groups[num_nation_groups++];
-}
-
-/***************************************************************
-***************************************************************/
-int get_nation_groups_count(void)
-{
-  return num_nation_groups;
-}
-
-struct nation_group* get_nation_group_by_id(int id)
-{
-  return &nation_groups[id];
-}
-
-/***************************************************************
-  Check if the given nation is in a given group
-***************************************************************/
-bool nation_in_group(struct nation_type* nation, const char* group_name)
-{
-  int i;
-  for (i = 0; i < nation->num_groups; i++) {
-    if (mystrcasecmp(nation->groups[i]->name, group_name) == 0) {
-      return TRUE;
-    }
-  }
-  return FALSE;
-}
-

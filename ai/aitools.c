@@ -24,7 +24,6 @@
 #include "log.h"
 #include "map.h"
 #include "mem.h"
-#include "movement.h"
 #include "packets.h"
 #include "player.h"
 #include "shared.h"
@@ -51,39 +50,9 @@
 #include "aidata.h"
 #include "aiferry.h"
 #include "ailog.h"
-#include "aitech.h"
 #include "aiunit.h"
 
 #include "aitools.h"
-
-/**************************************************************************
-  Return a string describing a unit's AI role.
-**************************************************************************/
-const char *get_ai_role_str(enum ai_unit_task task)
-{
-  switch(task) {
-   case AIUNIT_NONE:
-     return "None";
-   case AIUNIT_AUTO_SETTLER:
-     return "Auto settler";
-   case AIUNIT_BUILD_CITY:
-     return "Build city";
-   case AIUNIT_DEFEND_HOME:
-     return "Defend home";
-   case AIUNIT_ATTACK:
-     return "Attack";
-   case AIUNIT_ESCORT:
-     return "Escort";
-   case AIUNIT_EXPLORE:
-     return "Explore";
-   case AIUNIT_RECOVER:
-     return "Recover";
-   case AIUNIT_HUNTER:
-     return "Hunter";
-  }
-  assert(FALSE);
-  return NULL;
-}
 
 /**************************************************************************
   Amortize a want modified by the shields (build_cost) we risk losing.
@@ -97,7 +66,7 @@ int military_amortize(struct player *pplayer, struct city *pcity,
                       int value, int delay, int build_cost)
 {
   struct ai_data *ai = ai_data_get(pplayer);
-  int city_output = (pcity ? pcity->surplus[O_SHIELD] : 1);
+  int city_output = (pcity ? pcity->shield_surplus : 1);
   int output = MAX(city_output, ai->stats.average_production);
   int build_time = build_cost / MAX(output, 1);
 
@@ -117,17 +86,15 @@ int military_amortize(struct player *pplayer, struct city *pcity,
 bool is_player_dangerous(struct player *pplayer, struct player *aplayer)
 {
   struct ai_data *ai = ai_data_get(pplayer);
-  struct ai_dip_intel *adip = &ai->diplomacy.player_intel[aplayer->player_no];
-  int reason = pplayer->diplstates[aplayer->player_no].has_reason_to_cancel;
+  struct ai_dip_intel *adip 
+    = &ai->diplomacy.player_intel[aplayer->player_no];
 
-  /* Have to check if aplayer == pplayer explicitly because our reputation
-   * can be so low that we'd fear being stabbed in the back by ourselves */ 
-  return (pplayer != aplayer
-          && (pplayers_at_war(pplayer, aplayer)
-              || ai->diplomacy.target == aplayer
-              || reason != 0
-              || ai->diplomacy.acceptable_reputation > aplayer->reputation
-              || adip->is_allied_with_enemy));
+  return (pplayer != aplayer)
+         && ((pplayers_at_war(pplayer, aplayer)
+           || ai->diplomacy.target == aplayer
+           || pplayer->diplstates[aplayer->player_no].has_reason_to_cancel != 0
+           || ai->diplomacy.acceptable_reputation > aplayer->reputation
+           || adip->is_allied_with_enemy));
 }
 
 /*************************************************************************
@@ -216,7 +183,7 @@ static void ai_gothere_bodyguard(struct unit *punit, struct tile *dest_tile)
 
   ptile = punit->tile;
   /* We look for the bodyguard where we stand. */
-  if (!unit_list_find(ptile->units, punit->ai.bodyguard)) {
+  if (!unit_list_find(&ptile->units, punit->ai.bodyguard)) {
     int my_def = (punit->hp 
                   * unit_type(punit)->veteran[punit->veteran].power_fact
 		  * unit_type(punit)->defense_strength
@@ -341,8 +308,8 @@ void ai_unit_new_role(struct unit *punit, enum ai_unit_task task,
   /* If the unit is under (human) orders we shouldn't control it. */
   assert(!unit_has_orders(punit));
 
-  UNIT_LOG(LOG_DEBUG, punit, "changing role from %s to %s",
-           get_ai_role_str(punit->ai.ai_role), get_ai_role_str(task));
+  UNIT_LOG(LOG_DEBUG, punit, "changing role from %d to %d",
+           punit->activity, task);
 
   /* Free our ferry.  Most likely it has been done already. */
   if (task == AIUNIT_NONE || task == AIUNIT_DEFEND_HOME) {
@@ -374,11 +341,6 @@ void ai_unit_new_role(struct unit *punit, enum ai_unit_task task,
     charge->ai.bodyguard = BODYGUARD_NONE;
   }
   punit->ai.charge = BODYGUARD_NONE;
-
-  /* Record the city to defend; our goto may be to transport. */
-  if (task == AIUNIT_DEFEND_HOME && ptile && ptile->city) {
-    punit->ai.charge = ptile->city->id;
-  }
 
   punit->ai.ai_role = task;
 
@@ -438,8 +400,8 @@ bool ai_unit_make_homecity(struct unit *punit, struct city *pcity)
        the greater good -- Per */
     return FALSE;
   }
-  if (pcity->surplus[O_SHIELD] >= unit_type(punit)->upkeep[O_SHIELD]
-      && pcity->surplus[O_FOOD] >= unit_type(punit)->upkeep[O_FOOD]) {
+  if (pcity->shield_surplus - unit_type(punit)->shield_cost >= 0
+      && pcity->food_surplus - unit_type(punit)->food_cost >= 0) {
     handle_unit_change_homecity(unit_owner(punit), punit->id, pcity->id);
     return TRUE;
   }
@@ -721,42 +683,84 @@ void copy_if_better_choice(struct ai_choice *cur, struct ai_choice *best)
 }
 
 /**************************************************************************
-  Calls ai_wants_role_unit to choose the best unit with the given role and 
-  set tech wants.  Sets choice->choice if we can build something.
+  Returns TRUE if pcity's owner is building any wonder in another city on
+  the same continent (if so, we may want to build a caravan here).
 **************************************************************************/
-void ai_choose_role_unit(struct player *pplayer, struct city *pcity,
-			 struct ai_choice *choice, int role, int want)
+static bool is_building_other_wonder(struct city *pcity)
 {
-  Unit_Type_id iunit = ai_wants_role_unit(pplayer, pcity, role, want);
+  struct player *pplayer = city_owner(pcity);
 
-  if (iunit != U_LAST) {
-    choice->choice = iunit;
-  }
+  city_list_iterate(pplayer->cities, acity) {
+    if (pcity != acity
+	&& !acity->is_building_unit
+	&& is_wonder(acity->currently_building)
+	&& (map_get_continent(acity->tile)
+	    == map_get_continent(pcity->tile))) {
+      return TRUE;
+    }
+  } city_list_iterate_end;
+
+  return FALSE;
 }
 
 /**************************************************************************
   Choose improvement we like most and put it into ai_choice.
-
- "I prefer the ai_choice as a return value; gcc prefers it as an arg" 
-  -- Syela 
+  TODO: Clean, update the log calls.
 **************************************************************************/
 void ai_advisor_choose_building(struct city *pcity, struct ai_choice *choice)
-{
+{ /* I prefer the ai_choice as a return value; gcc prefers it as an arg -- Syela */
   Impr_Type_id id = B_LAST;
-  int want = 0;
-  struct player *plr = city_owner(pcity);
+  unsigned int danger = 0;
+  int downtown = 0, cities = 0;
+  int want=0;
+  struct player *plr;
+        
+  plr = city_owner(pcity);
+     
+  /* too bad plr->score isn't kept up to date. */
+  city_list_iterate(plr->cities, acity)
+    danger += acity->ai.danger;
+    downtown += acity->ai.downtown;
+    cities++;
+  city_list_iterate_end;
 
   impr_type_iterate(i) {
-    if (!plr->ai.control && is_wonder(i)) {
+    if (!plr->ai.control
+        && (get_building_for_effect(EFT_CAPITAL_CITY) == i
+            || is_wonder(i))) {
       continue; /* Humans should not be advised to build wonders or palace */
     }
-    if (pcity->ai.building_want[i] > want
-        && can_build_improvement(pcity, i)) {
-      want = pcity->ai.building_want[i];
-      id = i;
+    if (!is_wonder(i)
+	|| (!pcity->is_building_unit && is_wonder(pcity->currently_building)
+	    && pcity->shield_stock >= impr_build_shield_cost(i) / 2)
+	|| (!is_building_other_wonder(pcity)
+	    /* otherwise caravans will be killed! */
+	    && pcity->ai.grave_danger == 0
+	    && pcity->ai.downtown * cities >= downtown
+	    && pcity->ai.danger * cities <= danger)) {
+      /* Is this too many restrictions? */
+      /* trying to keep wonders in safe places with easy caravan
+       * access -- Syela */
+      if(pcity->ai.building_want[i]>want) {
+	/* we have to do the can_build check to avoid Built Granary.
+	 * Now Building Granary. */
+        if (can_build_improvement(pcity, i)) {
+          want = pcity->ai.building_want[i];
+          id = i;
+        } else {
+	  freelog(LOG_DEBUG, "%s can't build %s", pcity->name,
+		  get_improvement_name(i));
+	}
+      } /* id is the building we like the best */
     }
   } impr_type_iterate_end;
 
+  if (want != 0) {
+    freelog(LOG_DEBUG, "AI_Chosen: %s with desire = %d for %s",
+	    get_improvement_name(id), want, pcity->name);
+  } else {
+    freelog(LOG_DEBUG, "AI_Chosen: None for %s", pcity->name);
+  }
   choice->want = want;
   choice->choice = id;
   choice->type = CT_BUILDING;
@@ -827,5 +831,5 @@ bool ai_assess_military_unhappiness(struct city *pcity,
 **************************************************************************/
 bool ai_wants_no_science(struct player *pplayer)
 {
-  return ai_data_get(pplayer)->wants_no_science;
+  return is_future_tech(pplayer->research.researching);
 }

@@ -7,6 +7,9 @@
 if CLIENT_GUI_SDL
 GUI_SUBDIR = gui-sdl
 endif
+if CLIENT_GUI_GTK
+GUI_SUBDIR = gui-gtk
+endif
 if CLIENT_GUI_GTK_2_0
 GUI_SUBDIR = gui-gtk-2.0
 endif
@@ -170,8 +173,6 @@ civclient_SOURCES = $(ESD_FILES) $(SDL_FILES) $(ALSA_FILES) $(WINMM_FILES) \
 	mapview_common.h \
 	messagewin_common.c \
 	messagewin_common.h \
-	overview_common.c	\
-	overview_common.h	\
 	packhand.c	\
 	packhand.h	\
 	packhand_gen.h	\

@@ -16,7 +16,6 @@
 #endif
 
 #include "log.h"
-#include "movement.h"
 #include "player.h"
 #include "unit.h"
 
@@ -272,10 +271,6 @@ bool ai_manage_explorer(struct unit *punit)
 
   double logDF = log(DIST_FACTOR);
   double logBPS = log(BEST_POSSIBLE_SCORE);
-
-  if (pplayer->ai.control && unit_flag(punit, F_GAMELOSS)) {
-    return FALSE; /* too dangerous */
-  }
 
   pft_fill_unit_parameter(&parameter, punit);
   parameter.get_TB = no_fights_or_unknown;

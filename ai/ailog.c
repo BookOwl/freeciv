@@ -22,11 +22,9 @@
 #include "shared.h"
 #include "support.h"
 #include "unit.h"
-#include "timing.h"
 
 #include "gotohand.h"
 #include "plrhand.h"
-#include "srv_main.h"
 
 #include "aidata.h"
 #include "ailog.h"
@@ -34,57 +32,20 @@
 /* General AI logging functions */
 
 /**************************************************************************
-  Log player tech messages.
-**************************************************************************/
-void TECH_LOG(int level, struct player *pplayer, Tech_Type_id id,
-              const char *msg, ...)
-{
-  char buffer[500];
-  char buffer2[500];
-  va_list ap;
-  int minlevel = MIN(LOGLEVEL_TECH, level);
-
-  if (!tech_exists(id) || id == A_NONE) {
-    return;
-  }
-
-  if (BV_ISSET(pplayer->debug, PLAYER_DEBUG_TECH)) {
-    minlevel = LOG_NORMAL;
-  } else if (minlevel > fc_log_level) {
-    return;
-  }
-
-  my_snprintf(buffer, sizeof(buffer), "%s::%s (want %d, dist %d) ", 
-              pplayer->name, get_tech_name(pplayer, id), 
-              pplayer->ai.tech_want[id], 
-              num_unknown_techs_for_goal(pplayer, id));
-
-  va_start(ap, msg);
-  my_vsnprintf(buffer2, sizeof(buffer2), msg, ap);
-  va_end(ap);
-
-  cat_snprintf(buffer, sizeof(buffer), buffer2);
-  if (BV_ISSET(pplayer->debug, PLAYER_DEBUG_TECH)) {
-    notify_conn(game.est_connections, buffer);
-  }
-  freelog(minlevel, buffer);
-}
-
-/**************************************************************************
   Log player messages, they will appear like this
     2: perrin [ti12 co6 lo5 e]  Increased love for a (now 9)
   where ti is timer, co countdown and lo love for target, who is e.
 **************************************************************************/
-void DIPLO_LOG(int level, struct player *pplayer, struct ai_data *ai, 
-               const char *msg, ...)
+void PLAYER_LOG(int level, struct player *pplayer, struct ai_data *ai, 
+                const char *msg, ...)
 {
   char targetbuffer[250];
   char buffer[500];
   char buffer2[500];
   va_list ap;
-  int minlevel = MIN(LOGLEVEL_PLAYER, level);
+  int minlevel = MIN(LOGLEVEL_CITY, level);
 
-  if (BV_ISSET(pplayer->debug, PLAYER_DEBUG_DIPLOMACY)) {
+  if (pplayer->debug) {
     minlevel = LOG_NORMAL;
   } else if (minlevel > fc_log_level) {
     return;
@@ -109,8 +70,8 @@ void DIPLO_LOG(int level, struct player *pplayer, struct ai_data *ai,
   va_end(ap);
 
   cat_snprintf(buffer, sizeof(buffer), buffer2);
-  if (BV_ISSET(pplayer->debug, PLAYER_DEBUG_DIPLOMACY)) {
-    notify_conn(game.est_connections, buffer);
+  if (pplayer->debug) {
+    notify_conn(&game.est_connections, buffer);
   }
   freelog(minlevel, buffer);
 }
@@ -144,7 +105,7 @@ void CITY_LOG(int level, struct city *pcity, const char *msg, ...)
 
   cat_snprintf(buffer, sizeof(buffer), buffer2);
   if (pcity->debug) {
-    notify_conn(game.est_connections, buffer);
+    notify_conn(&game.est_connections, buffer);
   }
   freelog(minlevel, buffer);
 }
@@ -200,7 +161,7 @@ void UNIT_LOG(int level, struct unit *punit, const char *msg, ...)
 
   cat_snprintf(buffer, sizeof(buffer), buffer2);
   if (punit->debug || messwin) {
-    notify_conn(game.est_connections, buffer);
+    notify_conn(&game.est_connections, buffer);
   }
   freelog(minlevel, buffer);
 }
@@ -244,45 +205,7 @@ void BODYGUARD_LOG(int level, struct unit *punit, const char *msg)
 	      s, id, ptile->x, ptile->y);
   cat_snprintf(buffer, sizeof(buffer), msg);
   if (punit->debug) {
-    notify_conn(game.est_connections, buffer);
-  }
-  freelog(minlevel, buffer);
-}
-
-/**************************************************************************
-  Measure the time between the calls.  Used to see where in the AI too
-  much CPU is being used.
-**************************************************************************/
-void TIMING_LOG(int level, struct player *pplayer, const char *msg)
-{
-  char buffer[500];
-  int minlevel = MIN(LOGLEVEL_BODYGUARD, level);
-  static struct timer *t = NULL;
-  static int turn = -1;
-
-  if (t == NULL) {
-    t = new_timer_start(TIMER_CPU, TIMER_ACTIVE);
-  }
-
-  if (srvarg.timing_debug) {
-    minlevel = LOG_NORMAL;
-  } else if (minlevel > fc_log_level) {
-    clear_timer_start(t);
-    return;
-  }
-
-  /* So that the first log won't be displayed ridiculously high */
-  if (turn != game.turn) {
-    turn = game.turn;
-    clear_timer_start(t);
-  }
-
-  my_snprintf(buffer, sizeof(buffer), "... %g seconds. %s: ",
-              read_timer_seconds(t), pplayer ? pplayer->name : "(all)");
-  clear_timer_start(t);
-  cat_snprintf(buffer, sizeof(buffer), msg);
-  if (srvarg.timing_debug) {
-    notify_conn(game.est_connections, buffer);
+    notify_conn(&game.est_connections, buffer);
   }
   freelog(minlevel, buffer);
 }

@@ -31,6 +31,11 @@
 #define MOVE_COST_FOR_VALID_SEA_STEP	(-3)
 #define MOVE_COST_FOR_VALID_AIR_STEP	(-3)
 
+/* For client Area Selection */
+enum tile_hilite {
+  HILITE_NONE = 0, HILITE_CITY
+};
+
 /* Convenience macro for accessing tile coordinates.  This should only be
  * used for debugging. */
 #define TILE_XY(ptile) ((ptile) ? (ptile)->x : -1), \
@@ -42,8 +47,8 @@ struct tile {
   const int index; /* Index coordinate of the tile. */
   Terrain_type_id terrain;
   enum tile_special_type special;
-  struct city *city;        /* city standing on the tile, NULL if none */
-  struct unit_list *units;
+  struct city *city;
+  struct unit_list units;
   unsigned int known;   /* A bitvector on the server side, an
 			   enum known_type on the client side.
 			   Player_no is index */
@@ -52,22 +57,86 @@ struct tile {
   Continent_id continent;
   signed char move_cost[8]; /* don't know if this helps! */
   struct player *owner;     /* Player owning this tile, or NULL. */
+  struct {
+    /* Area Selection in client. */
+    enum tile_hilite hilite;
+  } client;
   char *spec_sprite;
 };
 
-/* get 'struct tile_list' and related functions: */
-#define SPECLIST_TAG tile
-#define SPECLIST_TYPE struct tile
-#include "speclist.h"
-
-#define tile_list_iterate(tile_list, ptile) \
-    TYPED_LIST_ITERATE(struct tile, tile_list, ptile)
-#define tile_list_iterate_end  LIST_ITERATE_END
 
 /****************************************************************
 miscellaneous terrain information
 *****************************************************************/
 #define terrain_misc packet_ruleset_terrain_control
+
+/****************************************************************
+tile_type for each terrain type
+expand with government bonuses??
+*****************************************************************/
+struct tile_type {
+  const char *terrain_name; /* Translated string - doesn't need freeing. */
+  char terrain_name_orig[MAX_LEN_NAME];	/* untranslated copy */
+  char graphic_str[MAX_LEN_NAME];
+  char graphic_alt[MAX_LEN_NAME];
+
+  /* Server-only. */
+  char identifier; /* Single-character identifier used in savegames. */
+#define UNKNOWN_TERRAIN_IDENTIFIER 'u'
+
+  int movement_cost;
+  int defense_bonus;
+
+  int food;
+  int shield;
+  int trade;
+
+  const char *special_1_name; /* Translated string - doesn't need freeing. */
+  char special_1_name_orig[MAX_LEN_NAME]; /* untranslated copy */
+  int food_special_1;
+  int shield_special_1;
+  int trade_special_1;
+
+  const char *special_2_name; /* Translated string - doesn't need freeing. */
+  char special_2_name_orig[MAX_LEN_NAME]; /* untranslated copy */
+  int food_special_2;
+  int shield_special_2;
+  int trade_special_2;
+
+  /* I would put the above special data in this struct too,
+     but don't want to make unnecessary changes right now --dwp */
+  struct {
+    char graphic_str[MAX_LEN_NAME];
+    char graphic_alt[MAX_LEN_NAME];
+  } special[2];
+
+  int road_trade_incr;
+  int road_time;
+
+  Terrain_type_id irrigation_result;
+  int irrigation_food_incr;
+  int irrigation_time;
+
+  Terrain_type_id mining_result;
+  int mining_shield_incr;
+  int mining_time;
+
+  Terrain_type_id transform_result;
+  int transform_time;
+  int rail_time;
+  int airbase_time;
+  int fortress_time;
+  int clean_pollution_time;
+  int clean_fallout_time;
+
+  Terrain_type_id warmer_wetter_result, warmer_drier_result;
+  Terrain_type_id cooler_wetter_result, cooler_drier_result;
+
+  bv_terrain_flags flags;
+
+  char *helptext;
+};
+extern struct tile_type tile_types[MAX_NUM_TERRAINS];
 
 /* The direction8 gives the 8 possible directions.  These may be used in
  * a number of ways, for instance as an index into the DIR_DX/DIR_DY
@@ -171,14 +240,14 @@ Continent_id map_get_continent(const struct tile *ptile);
 void initialize_move_costs(void);
 void reset_move_costs(struct tile *ptile);
 
-/* Number of index coordinates (for sanity checks and allocations) */
-#define MAP_INDEX_SIZE (map.xsize * map.ysize)
+/* Maximum value of index (for sanity checks and allocations) */
+#define MAX_MAP_INDEX (map.xsize * map.ysize)
 
 #ifdef DEBUG
 #define CHECK_MAP_POS(x,y) assert(is_normal_map_pos((x),(y)))
 #define CHECK_NATIVE_POS(x, y) assert((x) >= 0 && (x) < map.xsize \
 				      && (y) >= 0 && (y) < map.ysize)
-#define CHECK_INDEX(index) assert((index) >= 0 && (index) < MAP_INDEX_SIZE)
+#define CHECK_INDEX(index) assert((index) >= 0 && (index) < MAX_MAP_INDEX)
 #else
 #define CHECK_MAP_POS(x,y) ((void)0)
 #define CHECK_NATIVE_POS(x, y) ((void)0)
@@ -303,7 +372,7 @@ bool is_normal_map_pos(int x, int y);
 
 /* implemented in server/maphand.c and client/climisc.c */
 enum known_type map_get_known(const struct tile *ptile,
-			      const struct player *pplayer);
+			      struct player *pplayer);
 
 /* special testing */
 bool map_has_special(const struct tile *ptile,
@@ -338,7 +407,10 @@ enum tile_special_type get_special_by_name(const char * name);
 const char *get_special_name(enum tile_special_type type);
 bool is_safe_ocean(const struct tile *ptile);
 bool is_cardinally_adj_to_ocean(const struct tile *ptile);
-int get_tile_output_base(const struct tile *ptile, Output_type_id output);
+bool is_sea_usable(const struct tile *ptile);
+int get_tile_food_base(const struct tile *ptile);
+int get_tile_shield_base(const struct tile *ptile);
+int get_tile_trade_base(const struct tile *ptile);
 enum tile_special_type get_tile_infrastructure_set(const struct tile *ptile);
 const char *map_get_infrastructure_text(enum tile_special_type spe);
 enum tile_special_type map_get_infrastructure_prerequisite(enum tile_special_type spe);
@@ -507,7 +579,7 @@ extern struct terrain_misc terrain_control;
 #define whole_map_iterate(ptile)					    \
 {                                                                           \
   int _index; /* We use index positions for cache efficiency. */	    \
-  for (_index = 0; _index < MAP_INDEX_SIZE; _index++) {			    \
+  for (_index = 0; _index < MAX_MAP_INDEX; _index++) {			    \
     struct tile *ptile = map.tiles + _index;				    \
 
 #define whole_map_iterate_end                                               \

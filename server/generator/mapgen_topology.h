@@ -13,19 +13,16 @@
 #ifndef FC__MAPGEN_TOPOLOGY_H
 #define FC__MAPGEN_TOPOLOGY_H
 
-#include "shared.h"		/* bool type */
-
-struct tile;
-
 /* this is the maximal colatitude at equators returned by 
    map_colatitude */
 
 #define MAX_COLATITUDE 1000
 
-int get_sqsize(void);
+/* An estimate of the linear (1-dimensional) size of the map. */
+#define SQSIZE MAX(1, sqrt(map.xsize * map.ysize / 1000))
 
 /* size safe Unit of colatitude */ 
-#define L_UNIT (MAX_COLATITUDE / (30 * get_sqsize()))
+#define L_UNIT (MAX_COLATITUDE / (30 * SQSIZE) )
 
 /* define the 5 region of a Earth like map 
    =========================================================

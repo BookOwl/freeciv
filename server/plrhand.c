@@ -24,7 +24,6 @@
 #include "government.h"
 #include "log.h"
 #include "mem.h"
-#include "movement.h"
 #include "packets.h"
 #include "player.h"
 #include "rand.h"
@@ -73,7 +72,7 @@ static enum plr_info_level player_info_level(struct player *plr,
 **************************************************************************/
 void do_dipl_cost(struct player *pplayer)
 {
-  pplayer->research->bulbs_researched -=
+  pplayer->research.bulbs_researched -=
       (total_bulbs_required(pplayer) * game.diplcost) / 100;
 }
 
@@ -82,7 +81,7 @@ void do_dipl_cost(struct player *pplayer)
 **************************************************************************/
 void do_free_cost(struct player *pplayer)
 {
-  pplayer->research->bulbs_researched -=
+  pplayer->research.bulbs_researched -=
       (total_bulbs_required(pplayer) * game.freecost) / 100;
 }
 
@@ -91,7 +90,7 @@ void do_free_cost(struct player *pplayer)
 **************************************************************************/
 void do_conquer_cost(struct player *pplayer)
 {
-  pplayer->research->bulbs_researched -=
+  pplayer->research.bulbs_researched -=
       (total_bulbs_required(pplayer) * game.conquercost) / 100;
 }
 
@@ -102,11 +101,11 @@ void do_conquer_cost(struct player *pplayer)
 void send_player_turn_notifications(struct conn_list *dest)
 {
   if (dest) {
-    conn_list_iterate(dest, pconn) {
+    conn_list_iterate(*dest, pconn) {
       struct player *pplayer = pconn->player;
       if (pplayer) {
 	city_list_iterate(pplayer->cities, pcity) {
-	  send_city_turn_notifications(pconn->self, pcity);
+	  send_city_turn_notifications(&pconn->self, pcity);
 	}
 	city_list_iterate_end;
       }
@@ -116,7 +115,7 @@ void send_player_turn_notifications(struct conn_list *dest)
   else {
     players_iterate(pplayer) {
       city_list_iterate(pplayer->cities, pcity) {
-	send_city_turn_notifications(pplayer->connections, pcity);
+	send_city_turn_notifications(&pplayer->connections, pcity);
       } city_list_iterate_end;
     } players_iterate_end;
   }
@@ -131,32 +130,32 @@ void send_player_turn_notifications(struct conn_list *dest)
 void do_tech_parasite_effect(struct player *pplayer)
 {
   int mod;
-  struct effect_list *plist = effect_list_new();
+  struct effect_source_vector sources;
 
   /* Note that two EFT_TECH_PARASITE effects will combine into a single,
    * much worse effect. */
-  if ((mod = get_player_bonus_effects(plist, pplayer,
+  if ((mod = get_player_bonus_sources(&sources, pplayer,
 				      EFT_TECH_PARASITE)) > 0) {
     char buf[512];
 
     buf[0] = '\0';
-    effect_list_iterate(plist, peffect) {
+    effect_source_vector_iterate(&sources, src) {
       if (buf[0] != '\0') {
 	sz_strlcat(buf, ", ");
       }
-      get_effect_req_text(peffect, buf, sizeof(buf));
-    } effect_list_iterate_end;
+      sz_strlcat(buf, get_improvement_name(src->building));
+    } effect_source_vector_iterate_end;
 
     tech_type_iterate(i) {
       if (get_invention(pplayer, i) != TECH_KNOWN
 	  && tech_is_available(pplayer, i)
 	  && game.global_advances[i] >= mod) {
 	notify_player_ex(pplayer, NULL, E_TECH_GAIN,
-			 _("%s acquired from %s!"),
+			 _("Game: %s acquired from %s!"),
 			 get_tech_name(pplayer, i), buf);
         gamelog(GAMELOG_TECH, pplayer, NULL, i, "steal");
 	notify_embassies(pplayer, NULL,
-			 _("The %s have acquired %s from %s."),
+			 _("Game: The %s have acquired %s from %s."),
 			 get_nation_name_plural(pplayer->nation),
 			 get_tech_name(pplayer, i), buf);
 
@@ -166,8 +165,7 @@ void do_tech_parasite_effect(struct player *pplayer)
       }
     } tech_type_iterate_end;
   }
-  effect_list_unlink_all(plist);
-  effect_list_free(plist);
+  effect_source_vector_free(&sources);
 }
 
 /****************************************************************************
@@ -181,8 +179,8 @@ void kill_dying_players(void)
 {
   players_iterate(pplayer) {
     if (pplayer->is_alive) {
-      if (unit_list_size(pplayer->units) == 0
-	  && city_list_size(pplayer->cities) == 0) {
+      if (unit_list_size(&pplayer->units) == 0
+	  && city_list_size(&pplayer->cities) == 0) {
 	pplayer->is_dying = TRUE;
       }
       if (pplayer->is_dying) {
@@ -220,7 +218,7 @@ void kill_player(struct player *pplayer) {
                           "The feared barbarian leader %s is no more");
     return;
   } else {
-    notify_player_ex(NULL, NULL, E_DESTROYED, _("The %s are no more!"),
+    notify_player_ex(NULL, NULL, E_DESTROYED, _("Game: The %s are no more!"),
                      get_nation_name_plural(pplayer->nation));
     gamelog(GAMELOG_GENO, pplayer, "%s civilization destroyed");
   }
@@ -255,7 +253,7 @@ void kill_player(struct player *pplayer) {
   spaceship_init(&pplayer->spaceship);
   send_spaceship_info(pplayer, NULL);
 
-  send_player_info_c(pplayer, game.est_connections);
+  send_player_info_c(pplayer, &game.est_connections);
 }
 
 /**************************************************************************
@@ -271,7 +269,6 @@ void found_new_tech(struct player *plr, int tech_found, bool was_discovery,
   bool was_first = FALSE;
   bool had_embassy[MAX_NUM_PLAYERS];
   struct city *pcity;
-  bool can_switch[game.government_count];
 
   players_iterate(aplr) {
     had_embassy[aplr->player_no]
@@ -286,8 +283,8 @@ void found_new_tech(struct player *plr, int tech_found, bool was_discovery,
 	 || tech_found == A_FUTURE);
   assert(tech_is_available(plr, tech_found) || tech_found == A_FUTURE);
 
-  plr->research->got_tech = TRUE;
-  plr->research->techs_researched++;
+  plr->got_tech = TRUE;
+  plr->research.techs_researched++;
   was_first = (game.global_advances[tech_found] == 0);
 
   if (was_first) {
@@ -295,11 +292,11 @@ void found_new_tech(struct player *plr, int tech_found, bool was_discovery,
 
     /* Alert the owners of any wonders that have been made obsolete */
     impr_type_iterate(id) {
-      if (is_great_wonder(id) && great_wonder_was_built(id) &&
+      if (game.global_wonders[id] != 0 && is_wonder(id) &&
 	  improvement_types[id].obsolete_by == tech_found &&
-	  (pcity = find_city_from_great_wonder(id))) {
+	  (pcity = find_city_by_id(game.global_wonders[id]))) {
 	notify_player_ex(city_owner(pcity), NULL, E_WONDER_OBSOLETE,
-	                 _("Discovery of %s OBSOLETES %s in %s!"), 
+	                 _("Game: Discovery of %s OBSOLETES %s in %s!"), 
 	                 get_tech_name(city_owner(pcity), tech_found),
 			 get_improvement_name(id),
 	                 pcity->name);
@@ -308,9 +305,12 @@ void found_new_tech(struct player *plr, int tech_found, bool was_discovery,
   }
 
   government_iterate(gov) {
-    /* We do it this way so all requirements are checked, including
-     * statue-of-liberty effects. */
-    can_switch[gov->index] = can_change_to_government(plr, gov->index);
+    if (tech_found == gov->required_tech) {
+      notify_player_ex(plr, NULL, E_NEW_GOVERNMENT,
+		       _("Game: Discovery of %s makes the government form %s"
+			 " available. You may want to start a revolution."),
+		       get_tech_name(plr, tech_found), gov->name);
+    }
   } government_iterate_end;
 
   if (tech_flag(tech_found, TF_BONUS_TECH) && was_first) {
@@ -323,16 +323,6 @@ void found_new_tech(struct player *plr, int tech_found, bool was_discovery,
   if (tech_flag(tech_found,TF_RAILROAD)) {
     upgrade_city_rails(plr, was_discovery);
   }
-
-  government_iterate(gov) {
-    if (!can_switch[gov->index]
-	&& can_change_to_government(plr, gov->index)) {
-      notify_player_ex(plr, NULL, E_NEW_GOVERNMENT,
-		       _("Discovery of %s makes the government form %s"
-			 " available. You may want to start a revolution."),
-		       get_tech_name(plr, tech_found), gov->name);
-    }
-  } government_iterate_end;
 
   /* enhance vision of units inside a fortress */
   if (tech_flag(tech_found, TF_WATCHTOWER)) {
@@ -351,70 +341,70 @@ void found_new_tech(struct player *plr, int tech_found, bool was_discovery,
     plr->ai.tech_goal = A_UNSET;
   }
 
-  if (tech_found == plr->research->researching && next_tech == A_NONE) {
+  if (tech_found == plr->research.researching && next_tech == A_NONE) {
     /* try to pick new tech to research */
 
     if (choose_goal_tech(plr)) {
       notify_player_ex(plr, NULL, E_TECH_LEARNED,
-		       _("Learned %s.  "
+		       _("Game: Learned %s.  "
 			 "Our scientists focus on %s, goal is %s."),
 		       get_tech_name(plr, tech_found),
-		       get_tech_name(plr, plr->research->researching),
+		       get_tech_name(plr, plr->research.researching),
 		       get_tech_name(plr, plr->ai.tech_goal));
     } else {
       if (plr->ai.control || !was_discovery) {
         choose_random_tech(plr);
       } else if (is_future_tech(tech_found)) {
         /* Continue researching future tech. */
-        plr->research->researching = A_FUTURE;
+        plr->research.researching = A_FUTURE;
       } else {
-        plr->research->researching = A_UNSET;
+        plr->research.researching = A_UNSET;
       }
-      if (plr->research->researching != A_UNSET 
-          && (!is_future_tech(plr->research->researching)
+      if (plr->research.researching != A_UNSET 
+          && (!is_future_tech(plr->research.researching)
 	      || !is_future_tech(tech_found))) {
 	notify_player_ex(plr, NULL, E_TECH_LEARNED,
-			 _("Learned %s.  Scientists "
+			 _("Game: Learned %s.  Scientists "
 			   "choose to research %s."),
 			 get_tech_name(plr, tech_found),
-			 get_tech_name(plr, plr->research->researching));
-      } else if (plr->research->researching != A_UNSET) {
+			 get_tech_name(plr, plr->research.researching));
+      } else if (plr->research.researching != A_UNSET) {
 	char buffer1[300];
 	char buffer2[300];
 
-	my_snprintf(buffer1, sizeof(buffer1), _("Learned %s. "),
-		    get_tech_name(plr, plr->research->researching));
+	my_snprintf(buffer1, sizeof(buffer1), _("Game: Learned %s. "),
+		    get_tech_name(plr, plr->research.researching));
 	plr->future_tech++;
 	my_snprintf(buffer2, sizeof(buffer2), _("Researching %s."),
-		    get_tech_name(plr, plr->research->researching));
+		    get_tech_name(plr, plr->research.researching));
 	notify_player_ex(plr, NULL, E_TECH_LEARNED, "%s%s", buffer1,
 			 buffer2);
       } else {
 	notify_player_ex(plr, NULL, E_TECH_LEARNED,
-			 _("Learned %s.  Scientists "
+			 _("Game: Learned %s.  Scientists "
 			   "do not know what to research next."),
 			 get_tech_name(plr, tech_found));
       }
     }
-  } else if (tech_found == plr->research->researching && next_tech > A_NONE) {
+  } else if (tech_found == plr->research.researching && next_tech > A_NONE) {
     /* Next target already determined. We always save bulbs. */
-    plr->research->researching = next_tech;
+    plr->research.researching = next_tech;
   }
 
-  if (!saving_bulbs && plr->research->bulbs_researched > 0) {
-    plr->research->bulbs_researched = 0;
+  if (!saving_bulbs && plr->research.bulbs_researched > 0) {
+    plr->research.bulbs_researched = 0;
   }
 
   if (bonus_tech_hack) {
     if (advances[tech_found].bonus_message) {
-      notify_player(plr, _("%s"),
+      notify_player(plr, _("Game: %s"),
 		    _(advances[tech_found].bonus_message));
     } else {
-      notify_player(plr, _("Great scientists from all the "
+      notify_player(plr, _("Game: Great scientists from all the "
 			   "world join your civilization: you get "
 			   "an immediate advance."));
     }
-    if (plr->research->researching == A_UNSET) {
+    if (plr->research.researching == A_UNSET) {
       choose_random_tech(plr);
     }
     tech_researched(plr);
@@ -430,16 +420,19 @@ void found_new_tech(struct player *plr, int tech_found, bool was_discovery,
    * Inform player about his new tech.
    */
   send_player_info(plr, plr);
-
+  
   /*
-   * Update all cities in case the tech changed some effects. This is
-   * inefficient; it could be optimized if it's found to be a problem.  But
-   * techs aren't researched that often.
+   * Update all cities if the new tech affects happiness.
    */
-  cities_iterate(pcity) {
-    city_refresh(pcity);
-    send_city_info(city_owner(pcity), pcity);
-  } cities_iterate_end;
+  if (tech_found == game.rtech.cathedral_plus
+      || tech_found == game.rtech.cathedral_minus
+      || tech_found == game.rtech.colosseum_plus
+      || tech_found == game.rtech.temple_plus) {
+    city_list_iterate(plr->cities, pcity) {
+      city_refresh(pcity);
+      send_city_info(plr, pcity);
+    } city_list_iterate_end;
+  }
 
   /*
    * Send all player an updated info of the owner of the Marco Polo
@@ -464,20 +457,21 @@ void found_new_tech(struct player *plr, int tech_found, bool was_discovery,
         && plr->diplstates[aplayer->player_no].type == DS_TEAM
         && aplayer->is_alive
         && get_invention(aplayer, tech_found) != TECH_KNOWN) {
-      if (tech_exists(plr->research->researching)) {
+      if (tech_exists(plr->research.researching)) {
         notify_player_ex(aplayer, NULL, E_TECH_LEARNED,
-                         _("Learned %s in cooperation with %s. "
+                         _("Game: Learned %s in cooperation with %s. "
                            "Scientists choose to research %s."),
                          get_tech_name(aplayer, tech_found), plr->name,
-                         get_tech_name(plr, plr->research->researching));
+                         get_tech_name(plr, plr->research.researching));
       } else {
         notify_player_ex(aplayer, NULL, E_TECH_LEARNED,
-                         _("Learned %s in cooperation with %s. "
+                         _("Game: Learned %s in cooperation with %s. "
                            "Scientists do not know what to research next."),
                          get_tech_name(aplayer, tech_found), plr->name);
       }
+      found_new_tech(aplayer, tech_found, was_discovery, saving_bulbs,
+                     plr->research.researching);
     }
-    send_player_info(aplayer, NULL);
   } players_iterate_end;
 }
 
@@ -488,7 +482,7 @@ notification is not done here as it depends on how the tech came.
 void found_new_future_tech(struct player *pplayer)
 {
   pplayer->future_tech++;
-  pplayer->research->techs_researched++;
+  pplayer->research.techs_researched++;
 }
 
 /**************************************************************************
@@ -498,47 +492,55 @@ static void tech_researched(struct player* plr)
 {
   /* plr will be notified when new tech is chosen */
 
-  if (!is_future_tech(plr->research->researching)) {
+  if (!is_future_tech(plr->research.researching)) {
     notify_embassies(plr, NULL,
-		     _("The %s have researched %s."), 
+		     _("Game: The %s have researched %s."), 
 		     get_nation_name_plural(plr->nation),
-		     get_tech_name(plr, plr->research->researching));
+		     get_tech_name(plr, plr->research.researching));
 
   } else {
     notify_embassies(plr, NULL,
-		     _("The %s have researched Future Tech. %d."), 
+		     _("Game: The %s have researched Future Tech. %d."), 
 		     get_nation_name_plural(plr->nation),
 		     plr->future_tech);
   
   }
-  gamelog(GAMELOG_TECH, plr, NULL, plr->research->researching);
+  gamelog(GAMELOG_TECH, plr, NULL, plr->research.researching);
 
   /* Deduct tech cost */
-  plr->research->bulbs_researched = 
-      MAX(plr->research->bulbs_researched - total_bulbs_required(plr), 0);
+  plr->research.bulbs_researched = 
+      MAX(plr->research.bulbs_researched - total_bulbs_required(plr), 0);
 
   /* do all the updates needed after finding new tech */
-  found_new_tech(plr, plr->research->researching, TRUE, TRUE, A_NONE);
+  found_new_tech(plr, plr->research.researching, TRUE, TRUE, A_NONE);
 }
 
 /**************************************************************************
-  Called from each city to update the research->
+  Called from each city to update the research.
 **************************************************************************/
 void update_tech(struct player *plr, int bulbs)
 {
   int excessive_bulbs;
 
   /* count our research contribution this turn */
-  plr->bulbs_last_turn += bulbs;
+  plr->research.bulbs_last_turn += bulbs;
 
-  plr->research->bulbs_researched += bulbs;
+  players_iterate(pplayer) {
+    if (pplayer == plr) {
+      pplayer->research.bulbs_researched += bulbs;
+    } else if (pplayer->diplstates[plr->player_no].type == DS_TEAM
+               && pplayer->is_alive) {
+      /* Share with union partner(s). We'll get in return later. */
+      pplayer->research.bulbs_researched += bulbs;
+    }
+  } players_iterate_end;
   
   excessive_bulbs =
-      (plr->research->bulbs_researched - total_bulbs_required(plr));
+      (plr->research.bulbs_researched - total_bulbs_required(plr));
 
-  if (excessive_bulbs >= 0 && plr->research->researching != A_UNSET) {
+  if (excessive_bulbs >= 0 && plr->research.researching != A_UNSET) {
     tech_researched(plr);
-    if (plr->research->researching != A_UNSET) {
+    if (plr->research.researching != A_UNSET) {
       update_tech(plr, 0);
     }
   }
@@ -551,10 +553,22 @@ static bool choose_goal_tech(struct player *plr)
 {
   int sub_goal;
 
+  if (plr->ai.control) {
+    ai_next_tech_goal(plr);	/* tech-AI has been changed */
+  }
   sub_goal = get_next_tech(plr, plr->ai.tech_goal);
 
+  if (sub_goal == A_UNSET) {
+    if (plr->ai.control || plr->research.techs_researched == 1) {
+      ai_next_tech_goal(plr);
+      sub_goal = get_next_tech(plr, plr->ai.tech_goal);
+    } else {
+      plr->ai.tech_goal = A_UNSET;	/* clear goal when it is achieved */
+    }
+  }
+
   if (sub_goal != A_UNSET) {
-    plr->research->researching = sub_goal;
+    plr->research.researching = sub_goal;
     return TRUE;
   }
   return FALSE;
@@ -567,8 +581,8 @@ void choose_random_tech(struct player *plr)
 {
   int chosen, researchable = 0;
 
-  if (plr->research->bulbs_researched >0) {
-    plr->research->bulbs_researched = 0;
+  if (plr->research.bulbs_researched >0) {
+    plr->research.bulbs_researched = 0;
   }
   tech_type_iterate(i) {
     if (get_invention(plr, i) == TECH_REACHABLE) {
@@ -576,7 +590,7 @@ void choose_random_tech(struct player *plr)
     }
   } tech_type_iterate_end;
   if (researchable == 0) {
-    plr->research->researching = A_FUTURE;
+    plr->research.researching = A_FUTURE;
     return;
   }
   chosen = myrand(researchable) + 1;
@@ -585,7 +599,7 @@ void choose_random_tech(struct player *plr)
     if (get_invention(plr, i) == TECH_REACHABLE) {
       chosen--;
       if (chosen == 0) {
-	plr->research->researching = i;
+	plr->research.researching = i;
 	break;
       }
     }
@@ -597,33 +611,33 @@ void choose_random_tech(struct player *plr)
 **************************************************************************/
 void choose_tech(struct player *plr, int tech)
 {
-  if (plr->research->researching==tech)
+  if (plr->research.researching==tech)
     return;
   if (get_invention(plr, tech)!=TECH_REACHABLE) { /* can't research this */
     return;
   }
-  if (!plr->research->got_tech && plr->research->changed_from == -1) {
-    plr->research->bulbs_researched_before = plr->research->bulbs_researched;
-    plr->research->changed_from = plr->research->researching;
+  if (!plr->got_tech && plr->research.changed_from == -1) {
+    plr->research.bulbs_researched_before = plr->research.bulbs_researched;
+    plr->research.changed_from = plr->research.researching;
     /* subtract a penalty because we changed subject */
-    if (plr->research->bulbs_researched > 0) {
-      plr->research->bulbs_researched -=
-	  ((plr->research->bulbs_researched * game.techpenalty) / 100);
-      assert(plr->research->bulbs_researched >= 0);
+    if (plr->research.bulbs_researched > 0) {
+      plr->research.bulbs_researched -=
+	  ((plr->research.bulbs_researched * game.techpenalty) / 100);
+      assert(plr->research.bulbs_researched >= 0);
     }
-  } else if (tech == plr->research->changed_from) {
-    plr->research->bulbs_researched = plr->research->bulbs_researched_before;
-    plr->research->changed_from = -1;
+  } else if (tech == plr->research.changed_from) {
+    plr->research.bulbs_researched = plr->research.bulbs_researched_before;
+    plr->research.changed_from = -1;
   }
-  plr->research->researching=tech;
-  if (plr->research->bulbs_researched > total_bulbs_required(plr)) {
+  plr->research.researching=tech;
+  if (plr->research.bulbs_researched > total_bulbs_required(plr)) {
     tech_researched(plr);
   }
 }
 
 void choose_tech_goal(struct player *plr, int tech)
 {
-  notify_player(plr, _("Technology goal is %s."),
+  notify_player(plr, _("Game: Technology goal is %s."),
 		get_tech_name(plr, tech));
   plr->ai.tech_goal = tech;
 }
@@ -641,7 +655,7 @@ void init_tech(struct player *plr, int tech)
   } tech_type_iterate_end;
   set_invention(plr, A_NONE, TECH_KNOWN);
 
-  plr->research->techs_researched = 1;
+  plr->research.techs_researched = 1;
 
   /*
    * Give game wide initial techs
@@ -666,7 +680,7 @@ void init_tech(struct player *plr, int tech)
   for (i = 0; i < tech; i++) {
     update_research(plr);
     choose_random_tech(plr); /* could be choose_goal_tech -- Syela */
-    set_invention(plr, plr->research->researching, TECH_KNOWN);
+    set_invention(plr, plr->research.researching, TECH_KNOWN);
   }
 
   /* Mark the reachable techs */
@@ -722,17 +736,17 @@ void get_a_tech(struct player *pplayer, struct player *target)
   gamelog(GAMELOG_TECH, pplayer, target, stolen_tech, "steal");
 
   notify_player_ex(pplayer, NULL, E_TECH_GAIN,
-		   _("You steal %s from the %s."),
+		   _("Game: You steal %s from the %s."),
 		   get_tech_name(pplayer, stolen_tech),
 		   get_nation_name_plural(target->nation));
 
   notify_player_ex(target, NULL, E_ENEMY_DIPLOMAT_THEFT,
-                   _("The %s stole %s from you!"),
+                   _("Game: The %s stole %s from you!"),
 		   get_nation_name_plural(pplayer->nation),
 		   get_tech_name(pplayer, stolen_tech));
 
   notify_embassies(pplayer, target,
-		   _("The %s have stolen %s from the %s."),
+		   _("Game: The %s have stolen %s from the %s."),
 		   get_nation_name_plural(pplayer->nation),
 		   get_tech_name(pplayer, stolen_tech),
 		   get_nation_name_plural(target->nation));
@@ -754,7 +768,7 @@ void handle_player_rates(struct player *pplayer,
     freelog(LOG_ERROR, "received player_rates packet from %s before start",
 	    pplayer->name);
     notify_player(pplayer,
-		  _("Cannot change rates before game start."));
+		  _("Game: Cannot change rates before game start."));
     return;
   }
 	
@@ -777,17 +791,17 @@ void handle_player_rates(struct player *pplayer,
       rtype = _("Science");
     }
 
-    notify_player(pplayer, _("%s rate exceeds the max rate for %s."),
+    notify_player(pplayer, _("Game: %s rate exceeds the max rate for %s."),
                   rtype, get_government_name(pplayer->government));
   } else {
     pplayer->economic.tax = tax;
     pplayer->economic.luxury = luxury;
     pplayer->economic.science = science;
     gamelog(GAMELOG_RATECHANGE, pplayer);
-    conn_list_do_buffer(pplayer->connections);
+    conn_list_do_buffer(&pplayer->connections);
     global_city_refresh(pplayer);
     send_player_info(pplayer, pplayer);
-    conn_list_do_unbuffer(pplayer->connections);
+    conn_list_do_unbuffer(&pplayer->connections);
   }
 }
 
@@ -802,14 +816,16 @@ void handle_player_research(struct player *pplayer, int tech)
   choose_tech(pplayer, tech);
   send_player_info(pplayer, pplayer);
 
-  /* Notify Team members. 
-   * They share same research struct.
-   */
+  /* Notify Team members.  Note that the the player may not necessarily
+   * be researching the tech that has been set: if there were enough
+   * research points then research will finish immediately and the
+   * player will start researching the "next" tech (probably A_NONE). */
   players_iterate(aplayer) {
     if (pplayer != aplayer
+	&& aplayer->research.researching != pplayer->research.researching
        && pplayer->diplstates[aplayer->player_no].type == DS_TEAM
        && aplayer->is_alive) {
-      send_player_info(aplayer, aplayer);
+      handle_player_research(aplayer, pplayer->research.researching);
     }
   } players_iterate_end;
 }
@@ -859,7 +875,7 @@ static void finish_revolution(struct player *pplayer)
 	  pplayer->name, get_government_name(government),
 	  pplayer->revolution_finishes, game.turn);
   notify_player_ex(pplayer, NULL, E_REVOLT_DONE,
-		   _("%s now governs the %s as a %s."), 
+		   _("Game: %s now governs the %s as a %s."), 
 		   pplayer->name, 
 		   get_nation_name_plural(pplayer->nation),
 		   get_government_name(government));
@@ -910,7 +926,7 @@ static void start_revolution(struct player *pplayer)
 	  pplayer->name, get_government_name(pplayer->target_government),
 	  pplayer->revolution_finishes, game.turn);
   notify_player_ex(pplayer, NULL, E_REVOLT_START,
-		   _("The %s have incited a revolt!"),
+		   _("Game: The %s have incited a revolt!"),
 		   get_nation_name_plural(pplayer->nation));
   gamelog(GAMELOG_REVOLT, pplayer);
 
@@ -1038,19 +1054,19 @@ void check_player_government_rates(struct player *pplayer)
   if (pplayer->economic.tax != old_econ.tax) {
     changed = TRUE;
     notify_player(pplayer,
-		  _("Tax rate exceeded the max rate for %s; adjusted."), 
+		  _("Game: Tax rate exceeded the max rate for %s; adjusted."), 
 		  get_government_name(pplayer->government));
   }
   if (pplayer->economic.science != old_econ.science) {
     changed = TRUE;
     notify_player(pplayer,
-		  _("Science rate exceeded the max rate for %s; adjusted."), 
+		  _("Game: Science rate exceeded the max rate for %s; adjusted."), 
 		  get_government_name(pplayer->government));
   }
   if (pplayer->economic.luxury != old_econ.luxury) {
     changed = TRUE;
     notify_player(pplayer,
-		  _("Luxury rate exceeded the max rate for %s; adjusted."), 
+		  _("Game: Luxury rate exceeded the max rate for %s; adjusted."), 
 		  get_government_name(pplayer->government));
   }
 
@@ -1181,12 +1197,12 @@ repeat_break_treaty:
   else {
     pplayer->reputation = MAX(pplayer->reputation - reppenalty, 0);
     notify_player_ex(pplayer, NULL, E_TREATY_BROKEN,
-                     _("Your reputation is now %s."),
+                     _("Game: Your reputation is now %s."),
                      reputation_text(pplayer->reputation));
     if (has_senate && pplayer->revolution_finishes < 0) {
       if (myrand(GAME_MAX_REPUTATION) > pplayer->reputation) {
         notify_player_ex(pplayer, NULL, E_ANARCHY,
-                         _("The senate decides to dissolve "
+                         _("Game: The senate decides to dissolve "
                          "rather than support your actions any longer."));
 	handle_player_change_government(pplayer, pplayer->government);
       }
@@ -1217,13 +1233,13 @@ repeat_break_treaty:
   check_city_workers(pplayer2);
 
   notify_player_ex(pplayer, NULL, E_TREATY_BROKEN,
-		   _("The diplomatic state between the %s "
+		   _("Game: The diplomatic state between the %s "
 		     "and the %s is now %s."),
 		   get_nation_name_plural(pplayer->nation),
 		   get_nation_name_plural(pplayer2->nation),
 		   diplstate_text(new_type));
   notify_player_ex(pplayer2, NULL, E_TREATY_BROKEN,
-		   _(" %s cancelled the diplomatic agreement! "
+		   _("Game:  %s cancelled the diplomatic agreement! "
 		     "The diplomatic state between the %s and the %s "
 		     "is now %s."), pplayer->name,
 		   get_nation_name_plural(pplayer2->nation),
@@ -1240,7 +1256,7 @@ repeat_break_treaty:
          * to the aggressor. This prevents in-alliance wars, which are not
          * permitted. */
         notify_player_ex(other, NULL, E_TREATY_BROKEN,
-                         _("%s has attacked your ally %s! "
+                         _("Game: %s has attacked your ally %s! "
                            "You cancel your alliance to the aggressor."),
                        pplayer->name, pplayer2->name);
         other->diplstates[pplayer->player_no].has_reason_to_cancel = 1;
@@ -1251,7 +1267,7 @@ repeat_break_treaty:
          * alliance with him. We trust our team mate and break alliance
          * with the attacked player */
         notify_player_ex(other, NULL, E_TREATY_BROKEN,
-                         _("Your team mate %s declared war on %s. "
+                         _("Game: Your team mate %s declared war on %s. "
                            "You are obligated to cancel alliance with %s."),
                          pplayer->name,
                          get_nation_name_plural(pplayer2->nation),
@@ -1282,7 +1298,7 @@ void vnotify_conn_ex(struct conn_list *dest, struct tile *ptile,
   genmsg.event = event;
   genmsg.conn_id = -1;
 
-  conn_list_iterate(dest, pconn) {
+  conn_list_iterate(*dest, pconn) {
     if (server_state >= RUN_GAME_STATE
 	&& ptile /* special case, see above */
 	&& ((!pconn->player && pconn->observer)
@@ -1336,9 +1352,9 @@ void notify_player_ex(const struct player *pplayer, struct tile *ptile,
   va_list args;
 
   if (pplayer) {
-    dest = pplayer->connections;
+    dest = (struct conn_list*)&pplayer->connections;
   } else {
-    dest = game.game_connections;
+    dest = &game.game_connections;
   }
   
   va_start(args, format);
@@ -1355,9 +1371,9 @@ void notify_player(const struct player *pplayer, const char *format, ...)
   va_list args;
 
   if (pplayer) {
-    dest = pplayer->connections;
+    dest = (struct conn_list*)&pplayer->connections;
   } else {
-    dest = game.game_connections;
+    dest = &game.game_connections;
   }
   
   va_start(args, format);
@@ -1388,7 +1404,7 @@ void notify_embassies(struct player *pplayer, struct player *exclude,
     if (player_has_embassy(other_player, pplayer)
 	&& exclude != other_player
         && pplayer != other_player) {
-      lsend_packet_chat_msg(other_player->connections, &genmsg);
+      lsend_packet_chat_msg(&other_player->connections, &genmsg);
     }
   } players_iterate_end;
 }
@@ -1408,7 +1424,7 @@ void send_player_info_c(struct player *src, struct conn_list *dest)
 
       package_player_common(pplayer, &info);
 
-      conn_list_iterate(dest, pconn) {
+      conn_list_iterate(*dest, pconn) {
 	if (pconn->player && pconn->player->is_observer) {
 	  /* Global observer. */
 	  package_player_info(pplayer, &info, pconn->player, INFO_FULL);
@@ -1432,7 +1448,7 @@ void send_player_info_c(struct player *src, struct conn_list *dest)
 **************************************************************************/
 void send_player_info(struct player *src, struct player *dest)
 {
-  send_player_info_c(src, (dest ? dest->connections : game.game_connections));
+  send_player_info_c(src, (dest ? &dest->connections : &game.game_connections));
 }
 
 /**************************************************************************
@@ -1448,7 +1464,6 @@ static void package_player_common(struct player *plr,
   sz_strlcpy(packet->username, plr->username);
   packet->nation=plr->nation;
   packet->is_male=plr->is_male;
-  packet->is_observer=plr->is_observer;
   packet->team = plr->team;
   packet->city_style=plr->city_style;
 
@@ -1461,13 +1476,8 @@ static void package_player_common(struct player *plr,
   packet->barbarian_type = plr->ai.barbarian_type;
   packet->reputation=plr->reputation;
 
-  packet->phase_done = plr->phase_done;
+  packet->turn_done=plr->turn_done;
   packet->nturns_idle=plr->nturns_idle;
-
-  for (i = 0; i < B_LAST /*game.num_impr_types */ ; i++) {
-    packet->small_wonders[i] = plr->small_wonders[i];
-  }
-  packet->science_cost = plr->ai.science_cost;
 }
 
 /**************************************************************************
@@ -1544,7 +1554,7 @@ static void package_player_info(struct player *plr,
   /* Make absolutely sure - in case you lose your embassy! */
   if (info_level >= INFO_EMBASSY 
       || pplayer_get_diplstate(plr, receiver)->type == DS_TEAM) {
-    packet->bulbs_last_turn = plr->bulbs_last_turn;
+    packet->bulbs_last_turn = plr->research.bulbs_last_turn;
   } else {
     packet->bulbs_last_turn = 0;
   }
@@ -1553,15 +1563,15 @@ static void package_player_info(struct player *plr,
    * embassy. */
   if (info_level >= INFO_EMBASSY) {
     for (i = A_FIRST; i < game.num_tech_types; i++) {
-      packet->inventions[i] = plr->research->inventions[i].state + '0';
+      packet->inventions[i] = plr->research.inventions[i].state + '0';
     }
     packet->inventions[i]   = '\0';
     packet->tax             = plr->economic.tax;
     packet->science         = plr->economic.science;
     packet->luxury          = plr->economic.luxury;
-    packet->bulbs_researched= plr->research->bulbs_researched;
-    packet->techs_researched= plr->research->techs_researched;
-    packet->researching     = plr->research->researching;
+    packet->bulbs_researched= plr->research.bulbs_researched;
+    packet->techs_researched= plr->research.techs_researched;
+    packet->researching     = plr->research.researching;
     packet->future_tech     = plr->future_tech;
     packet->revolution_finishes = plr->revolution_finishes;
   } else {
@@ -1581,7 +1591,7 @@ static void package_player_info(struct player *plr,
 
   /* We have to inform the client that the other players also know
    * A_NONE. */
-  packet->inventions[A_NONE] = plr->research->inventions[A_NONE].state + '0';
+  packet->inventions[A_NONE] = plr->research.inventions[A_NONE].state + '0';
 
   if (info_level >= INFO_FULL
       || plr->diplstates[receiver->player_no].type == DS_TEAM) {
@@ -1595,10 +1605,10 @@ static void package_player_info(struct player *plr,
    * to have a consistent state here.
    */
   assert(server_state != RUN_GAME_STATE
-	 || ((tech_exists(plr->research->researching)
-	      && plr->research->researching != A_NONE)
-	     || is_future_tech(plr->research->researching)
-             || plr->research->researching == A_UNSET));
+	 || ((tech_exists(plr->research.researching)
+	      && plr->research.researching != A_NONE)
+	     || is_future_tech(plr->research.researching)
+             || plr->research.researching == A_UNSET));
   assert((tech_exists(plr->ai.tech_goal) && plr->ai.tech_goal != A_NONE)
 	 || plr->ai.tech_goal == A_UNSET);
 }
@@ -1628,8 +1638,8 @@ static enum plr_info_level player_info_level(struct player *plr,
 struct conn_list *player_reply_dest(struct player *pplayer)
 {
   return (pplayer->current_conn ?
-	  pplayer->current_conn->self :
-	  pplayer->connections);
+	  &pplayer->current_conn->self :
+	  &pplayer->connections);
 }
 
 /********************************************************************** 
@@ -1658,12 +1668,12 @@ void server_remove_player(struct player *pplayer)
   }
 
   freelog(LOG_NORMAL, _("Removing player %s."), pplayer->name);
-  notify_player(pplayer, _("You've been removed from the game!"));
+  notify_player(pplayer, _("Game: You've been removed from the game!"));
 
-  notify_conn(game.est_connections,
-	      _("%s has been removed from the game."), pplayer->name);
+  notify_conn(&game.est_connections,
+	      _("Game: %s has been removed from the game."), pplayer->name);
   
-  dlsend_packet_player_remove(game.game_connections, pplayer->player_no);
+  dlsend_packet_player_remove(&game.game_connections, pplayer->player_no);
 
   /* Note it is ok to remove the _current_ item in a list_iterate. */
   conn_list_iterate(pplayer->connections, pconn) {
@@ -1704,11 +1714,11 @@ void make_contact(struct player *pplayer1, struct player *pplayer2,
       = dipstate;
     notify_player_ex(pplayer1, ptile,
 		     E_FIRST_CONTACT,
-		     _("You have made contact with the %s, ruled by %s."),
+		     _("Game: You have made contact with the %s, ruled by %s."),
 		     get_nation_name_plural(pplayer2->nation), pplayer2->name);
     notify_player_ex(pplayer2, ptile,
 		     E_FIRST_CONTACT,
-		     _("You have made contact with the %s, ruled by %s."),
+		     _("Game: You have made contact with the %s, ruled by %s."),
 		     get_nation_name_plural(pplayer1->nation), pplayer1->name);
     send_player_info(pplayer1, pplayer2);
     send_player_info(pplayer2, pplayer1);
@@ -1954,15 +1964,14 @@ static struct player *split_player(struct player *pplayer)
 
   /* Copy the research */
 
-  cplayer->research->bulbs_researched = 0;
-  cplayer->research->techs_researched = pplayer->research->techs_researched;
-  cplayer->research->researching = pplayer->research->researching;
+  cplayer->research.bulbs_researched = 0;
+  cplayer->research.techs_researched = pplayer->research.techs_researched;
+  cplayer->research.researching = pplayer->research.researching;
 
   tech_type_iterate(i) {
-    cplayer->research->inventions[i] = pplayer->research->inventions[i];
+    cplayer->research.inventions[i] = pplayer->research.inventions[i];
   } tech_type_iterate_end;
-  cplayer->phase_done = TRUE; /* Have other things to think
-				 about - paralysis */
+  cplayer->turn_done = TRUE; /* Have other things to think about - paralysis*/
   cplayer->embassy = 0;   /* all embassies destroyed */
 
   /* Do the ai */
@@ -1973,7 +1982,6 @@ static struct player *split_player(struct player *pplayer)
   cplayer->ai.maxbuycost = pplayer->ai.maxbuycost;
   cplayer->ai.handicap = pplayer->ai.handicap;
   cplayer->ai.warmth = pplayer->ai.warmth;
-  cplayer->ai.frost = pplayer->ai.frost;
   set_ai_level_direct(cplayer, game.skill_level);
 
   tech_type_iterate(i) {
@@ -1985,7 +1993,7 @@ static struct player *split_player(struct player *pplayer)
     pplayer->government = game.government_when_anarchy;
     pplayer->revolution_finishes = game.turn + 1;
   }
-  pplayer->research->bulbs_researched = 0;
+  pplayer->research.bulbs_researched = 0;
   pplayer->embassy = 0; /* all embassies destroyed */
 
   /* give splitted player the embassies to his team mates back, if any */
@@ -2005,8 +2013,9 @@ static struct player *split_player(struct player *pplayer)
   give_map_from_player_to_player(pplayer, cplayer);
 
   /* Not sure if this is necessary, but might be a good idea
-   * to avoid doing some ai calculations with bogus data. */
-  ai_data_phase_init(cplayer, TRUE);
+     to avoid doing some ai calculations with bogus data:
+  */
+  ai_data_turn_init(cplayer);
   assess_danger_player(cplayer);
   if (pplayer->ai.control) {
     assess_danger_player(pplayer);
@@ -2123,12 +2132,12 @@ void civil_war(struct player *pplayer)
 	  "%s's nation is thrust into civil war, created AI player %s",
 	  pplayer->name, cplayer->name);
   notify_player_ex(pplayer, NULL, E_CIVIL_WAR,
-		   _("Your nation is thrust into civil war, "
+		   _("Game: Your nation is thrust into civil war, "
 		     " %s is declared the leader of the rebel states."),
 		   cplayer->name);
 
-  i = city_list_size(pplayer->cities)/2;   /* number to flip */
-  j = city_list_size(pplayer->cities);	    /* number left to process */
+  i = city_list_size(&pplayer->cities)/2;   /* number to flip */
+  j = city_list_size(&pplayer->cities);	    /* number left to process */
   city_list_iterate(pplayer->cities, pcity) {
     if (!is_capital(pcity)) {
       if (i >= j || (i > 0 && myrand(2) == 1)) {
@@ -2143,7 +2152,7 @@ void civil_war(struct player *pplayer)
 	freelog(LOG_VERBOSE, "%s declares allegiance to %s",
 		pcity->name, cplayer->name);
 	notify_player_ex(pplayer, pcity->tile, E_CITY_LOST,
-			 _("%s declares allegiance to %s."),
+			 _("Game: %s declares allegiance to %s."),
 			 pcity->name, cplayer->name);
 	i--;
       }
@@ -2157,14 +2166,14 @@ void civil_war(struct player *pplayer)
   resolve_unit_stacks(pplayer, cplayer, FALSE);
 
   notify_player(NULL,
-		_("The capture of %s's capital and the destruction "
+		_("Game: The capture of %s's capital and the destruction "
 		  "of the empire's administrative\n"
 		  "      structures have sparked a civil war.  "
 		  "Opportunists have flocked to the rebel cause,\n"
 		  "      and the upstart %s now holds power in %d "
 		  "rebel provinces."),
 		pplayer->name, cplayer->name,
-		city_list_size(cplayer->cities));
+		city_list_size(&cplayer->cities));
 }  
 
 /**************************************************************************
@@ -2189,9 +2198,9 @@ void handle_player_attribute_block(struct player *pplayer)
 ...
 (Hmm, how should "turn done" work for multi-connected non-observer players?)
 **************************************************************************/
-void handle_player_phase_done(struct player *pplayer)
+void handle_player_turn_done(struct player *pplayer)
 {
-  pplayer->phase_done = TRUE;
+  pplayer->turn_done = TRUE;
 
   check_for_full_turn_done();
 

@@ -2,7 +2,7 @@
 
 name=_("Mexican")
 plural=_("?plural:Mexicans")
-groups=_("Modern"), _("American")
+class=_("Modern")
 leader="B. Juárez", "Cárdenas"
 leader_sex="Male", "Male"
 flag="f.mexico"

@@ -33,7 +33,6 @@
 #include "timing.h"
 #include "version.h"
 
-#include "canvas.h"
 #include "citydlg.h" 
 #include "civclient.h"
 #include "climap.h"
@@ -48,14 +47,20 @@
 #include "goto.h"
 #include "gui_main.h"
 #include "mapview.h"
-#include "sprite.h"
 #include "text.h"
 
-extern HCURSOR cursors[];
+extern HCURSOR goto_cursor;
+extern HCURSOR drop_cursor;
+extern HCURSOR nuke_cursor;
+extern HCURSOR patrol_cursor;
 
-static struct sprite *indicator_sprite[3];
+static struct Sprite *indicator_sprite[3];
 
 static HBITMAP intro_gfx;
+
+#define single_tile_pixmap (mapview_canvas.single_tile->bitmap)
+
+extern HBITMAP BITMAP2HBITMAP(BITMAP *bmp);
 
 extern void do_mainwin_layout();
 
@@ -64,23 +69,95 @@ void update_map_canvas_scrollbars_size(void);
 void refresh_overview_viewrect_real(HDC hdcp);
 static void draw_rates(HDC hdc);
 
+
+/***************************************************************************
+ ...
+***************************************************************************/
+struct canvas *canvas_create(int width, int height)
+{
+  struct canvas *result = fc_malloc(sizeof(*result));
+  HDC hdc;
+  hdc = GetDC(root_window);
+  result->bitmap = CreateCompatibleBitmap(hdc, width, height);
+  result->hdc = NULL;
+  ReleaseDC(root_window, hdc);
+  return result;
+}
+
+/***************************************************************************
+  ...
+***************************************************************************/
+void canvas_free(struct canvas *store)
+{
+  DeleteObject(store->bitmap);
+  free(store);
+}
+
+static struct canvas overview_canvas;
+
+/****************************************************************************
+  Return a canvas that is the overview window.
+****************************************************************************/
+struct canvas *get_overview_window(void)
+{
+  return &overview_canvas;
+}
+
+/***************************************************************************
+   ...
+***************************************************************************/
+void canvas_copy(struct canvas *dest, struct canvas *src,
+		 int src_x, int src_y, int dest_x, int dest_y,
+		 int width, int height)
+{
+  HDC hdcsrc = NULL;
+  HDC hdcdst = NULL;
+  HBITMAP oldsrc = NULL;
+  HBITMAP olddst = NULL;
+  if (src->hdc) {
+    hdcsrc = src->hdc;
+  } else {
+    hdcsrc = CreateCompatibleDC(NULL);
+    oldsrc = SelectObject(hdcsrc, src->bitmap);
+  }
+  if (dest->hdc) {
+    hdcdst = dest->hdc;
+  } else if (dest->bitmap) {
+    hdcdst = CreateCompatibleDC(NULL);
+    olddst = SelectObject(hdcdst, dest->bitmap);
+  } else {
+    hdcdst = GetDC(root_window);
+  }
+  BitBlt(hdcdst, dest_x, dest_y, width, height, hdcsrc, src_x, src_y, SRCCOPY);
+  if (!src->hdc) {
+    SelectObject(hdcsrc, oldsrc);
+    DeleteDC(hdcsrc);
+  }
+  if (!dest->hdc) {
+    if (dest->bitmap) {
+      SelectObject(hdcdst, olddst);
+      DeleteDC(hdcdst);
+    } else {
+      ReleaseDC(root_window, hdcdst);
+    }
+  }
+}
+
 /**************************************************************************
 
 **************************************************************************/
-void map_expose(int x, int y, int width, int height)
+void map_expose(HDC hdc)
 {
+
   HBITMAP bmsave;
   HDC introgfxdc;
-  HDC hdc;
-
   if (!can_client_change_view()) {
     if (!intro_gfx_sprite) {
       load_intro_gfx();
     }
     if (!intro_gfx) {
-      intro_gfx = BITMAP2HBITMAP(intro_gfx_sprite->img);
+      intro_gfx = BITMAP2HBITMAP(&intro_gfx_sprite->img);
     }
-    hdc = GetDC(map_window);
     introgfxdc = CreateCompatibleDC(hdc);
     bmsave = SelectObject(introgfxdc, intro_gfx);
     StretchBlt(hdc, 0, 0, map_win_width, map_win_height,
@@ -90,10 +167,15 @@ void map_expose(int x, int y, int width, int height)
 	       SRCCOPY);
     SelectObject(introgfxdc, bmsave);
     DeleteDC(introgfxdc);
-    ReleaseDC(map_window, hdc);
   } else {
-    canvas_copy(get_mapview_window(), mapview.store, x, y, x, y,
-		width, height);
+    HBITMAP old;
+    HDC mapstoredc;
+    mapstoredc = CreateCompatibleDC(NULL);
+    old = SelectObject(mapstoredc, mapstorebitmap);
+    BitBlt(hdc, 0, 0, map_win_width, map_win_height,
+	   mapstoredc, 0, 0, SRCCOPY);
+    SelectObject(mapstoredc, old);
+    DeleteDC(mapstoredc);
   }
 } 
 
@@ -124,14 +206,14 @@ static void draw_rates(HDC hdc)
   int d;
   d=0;
   for(;d<(game.player_ptr->economic.luxury)/10;d++)
-    draw_sprite(get_tax_sprite(tileset, O_LUXURY), hdc,
-		tileset_small_sprite_width(tileset)*d,taxinfoline_y);/* elvis tile */
+    draw_sprite(sprites.tax_luxury, hdc,
+		SMALL_TILE_WIDTH*d,taxinfoline_y);/* elvis tile */
   for(;d<(game.player_ptr->economic.science+game.player_ptr->economic.luxury)/10;d++)
-    draw_sprite(get_tax_sprite(tileset, O_SCIENCE), hdc,
-		tileset_small_sprite_width(tileset)*d,taxinfoline_y); /* scientist tile */    
+    draw_sprite(sprites.tax_science, hdc,
+		SMALL_TILE_WIDTH*d,taxinfoline_y); /* scientist tile */    
   for(;d<10;d++)
-    draw_sprite(get_tax_sprite(tileset, O_GOLD), hdc,
-		tileset_small_sprite_width(tileset)*d,taxinfoline_y); /* taxman tile */  
+    draw_sprite(sprites.tax_gold, hdc,
+		SMALL_TILE_WIDTH*d,taxinfoline_y); /* taxman tile */  
 }
 
 /**************************************************************************
@@ -158,7 +240,7 @@ update_info_label(void)
   set_indicator_icons(client_research_sprite(),
 		      client_warming_sprite(),
                       client_cooling_sprite(),
-		      client_government_sprite());
+                      game.player_ptr->government);
   
   hdc=GetDC(root_window);
   draw_rates(hdc);
@@ -178,23 +260,23 @@ update_unit_info_label(struct unit *punit)
 
   if(punit) {
     if (hover_unit != punit->id)
-      set_hover_state(NULL, HOVER_NONE, ACTIVITY_LAST, ORDER_LAST);
+      set_hover_state(NULL, HOVER_NONE, ACTIVITY_LAST);
     switch (hover_state) {
       case HOVER_NONE:
 	SetCursor (LoadCursor(NULL, IDC_ARROW));
 	break;
       case HOVER_PATROL:
-	SetCursor (cursors[CURSOR_PATROL]);
+	SetCursor (patrol_cursor);
 	break;
       case HOVER_GOTO:
       case HOVER_CONNECT:
-	SetCursor (cursors[CURSOR_GOTO]);
+	SetCursor (goto_cursor);
 	break;
       case HOVER_NUKE:
-	SetCursor (cursors[CURSOR_NUKE]);
+	SetCursor (nuke_cursor);
 	break;
       case HOVER_PARADROP:
-	SetCursor (cursors[CURSOR_PARADROP]);
+	SetCursor (drop_cursor);
 	break;
     }
   } else {
@@ -232,25 +314,33 @@ void update_turn_done_button(bool do_restore)
   }
 }
 
-/****************************************************************************
-  Set information for the indicator icons typically shown in the main
-  client window.  The parameters tell which sprite to use for the
-  indicator.
-****************************************************************************/
-void set_indicator_icons(struct sprite *bulb, struct sprite *sol,
-			 struct sprite *flake, struct sprite *gov)
+/**************************************************************************
+
+**************************************************************************/
+void
+set_indicator_icons(int bulb, int sol, int flake, int gov)
 {
   int i;
   HDC hdc;
   
-  indicator_sprite[0] = bulb;
-  indicator_sprite[1] = sol;
-  indicator_sprite[2] = flake;
-  indicator_sprite[3] = gov;
+  bulb = CLIP(0, bulb, NUM_TILES_PROGRESS-1);
+  sol = CLIP(0, sol, NUM_TILES_PROGRESS-1);
+  flake = CLIP(0, flake, NUM_TILES_PROGRESS-1);     
+  indicator_sprite[0]=sprites.bulb[bulb];
+  indicator_sprite[1]=sprites.warming[sol];
+  indicator_sprite[2]=sprites.cooling[flake];
+  if (game.government_count==0) {
+    /* HACK: the UNHAPPY citizen is used for the government
+     * when we don't know any better. */
+    struct citizen_type c = {.type = CITIZEN_UNHAPPY};
 
+    indicator_sprite[3] = get_citizen_sprite(c, 0, NULL);
+  } else {
+    indicator_sprite[3] = get_government(gov)->sprite;    
+  }
   hdc=GetDC(root_window);
   for(i=0;i<4;i++)
-    draw_sprite(indicator_sprite[i],hdc,i*tileset_small_sprite_width(tileset),indicator_y); 
+    draw_sprite(indicator_sprite[i],hdc,i*SMALL_TILE_WIDTH,indicator_y); 
   ReleaseDC(root_window,hdc);
 }
 
@@ -270,8 +360,17 @@ map_size_changed(void)
 void flush_mapcanvas(int canvas_x, int canvas_y,
 		     int pixel_width, int pixel_height)
 {
-  canvas_copy(get_mapview_window(), mapview.store, canvas_x, canvas_y,
-	      canvas_x, canvas_y, pixel_width, pixel_height);
+  HDC hdcwin = GetDC(map_window);
+  HDC mapstoredc = CreateCompatibleDC(NULL);
+  HBITMAP old = SelectObject(mapstoredc, mapstorebitmap);
+  BitBlt(hdcwin, canvas_x, canvas_y,
+	 pixel_width, pixel_height,
+	 mapstoredc,
+	 canvas_x, canvas_y,
+	 SRCCOPY);
+  ReleaseDC(map_window, hdcwin);
+  SelectObject(mapstoredc, old);
+  DeleteDC(mapstoredc);
 }
 
 #define MAX_DIRTY_RECTS 20
@@ -397,6 +496,100 @@ update_city_descriptions(void)
 }
 
 /**************************************************************************
+  If necessary, clear the city descriptions out of the buffer.
+**************************************************************************/
+void prepare_show_city_descriptions(void)
+{
+  /* Nothing to do */
+}
+
+/****************************************************************************
+  Draw a description for the given city.  This description may include the
+  name, turns-to-grow, production, and city turns-to-build (depending on
+  client options).
+
+  (canvas_x, canvas_y) gives the location on the given canvas at which to
+  draw the description.  This is the location of the city itself so the
+  text must be drawn underneath it.  pcity gives the city to be drawn,
+  while (*width, *height) should be set by show_ctiy_desc to contain the
+  width and height of the text block (centered directly underneath the
+  city's tile).
+****************************************************************************/
+void show_city_desc(struct canvas *pcanvas, int canvas_x, int canvas_y,
+		    struct city *pcity, int *width, int *height)
+{
+  char buffer[500];
+  int y_offset;
+  HDC hdc;
+  HBITMAP old;
+
+  /* TODO: hdc should be stored statically */
+  /* FIXME: we should draw to the given pcanvas. */
+  hdc = CreateCompatibleDC(NULL);
+  old = SelectObject(hdc, mapstorebitmap);
+  SetBkMode(hdc,TRANSPARENT);
+
+  *width = *height = 0;
+
+  y_offset = canvas_y + NORMAL_TILE_HEIGHT;
+  if (draw_city_names && pcity->name) {
+    RECT rc;
+
+    /* FIXME: draw city growth as well, using
+     * get_city_mapview_name_and_growth() */
+
+    DrawText(hdc, pcity->name, strlen(pcity->name), &rc, DT_CALCRECT);
+    rc.left = canvas_x + NORMAL_TILE_WIDTH / 2 - 10;
+    rc.right = rc.left + 20;
+    rc.bottom -= rc.top;
+    rc.top = y_offset;
+    rc.bottom += rc.top;
+    SetTextColor(hdc, RGB(0, 0, 0));
+    DrawText(hdc, pcity->name, strlen(pcity->name), &rc,
+	     DT_NOCLIP | DT_CENTER);
+    rc.left++;
+    rc.top--;
+    rc.right++;
+    rc.bottom--;
+    SetTextColor(hdc, RGB(255, 255, 255));
+    DrawText(hdc, pcity->name, strlen(pcity->name), &rc,
+	     DT_NOCLIP | DT_CENTER);
+
+    *width = rc.right - rc.left + 1;
+    *height = rc.bottom - rc.top + 2;
+
+    y_offset = rc.bottom + 2;
+  }
+
+  if (draw_city_productions && pcity->owner == game.player_idx) {
+    RECT rc;
+
+    get_city_mapview_production(pcity, buffer, sizeof(buffer));
+      
+    DrawText(hdc, buffer, strlen(buffer), &rc, DT_CALCRECT);
+    rc.left = canvas_x + NORMAL_TILE_WIDTH / 2 - 10;
+    rc.right = rc.left + 20;
+    rc.bottom -= rc.top;
+    rc.top = y_offset;
+    rc.bottom += rc.top; 
+    SetTextColor(hdc, RGB(0, 0, 0));
+    DrawText(hdc, buffer, strlen(buffer), &rc, DT_NOCLIP | DT_CENTER);
+    rc.left++;
+    rc.top--;
+    rc.right++;
+    rc.bottom--;
+    SetTextColor(hdc, RGB(255, 255, 255));
+    DrawText(hdc, buffer, strlen(buffer), &rc, DT_NOCLIP | DT_CENTER);
+
+    *width = MAX(*width, rc.right - rc.left + 1);
+    *height += rc.bottom - rc.top + 1;
+  }
+
+  SelectObject(hdc, old);
+  DeleteDC(hdc);
+}
+
+/**************************************************************************
 
 **************************************************************************/
 void
@@ -407,9 +600,21 @@ put_cross_overlay_tile(struct tile *ptile)
   tile_to_canvas_pos(&canvas_x, &canvas_y, ptile);
   if (tile_visible_mapcanvas(ptile)) {
     hdc=GetDC(map_window);
-    draw_sprite(get_attention_crosshair_sprite(tileset), hdc, canvas_x, canvas_y);
+    draw_sprite(sprites.user.attention,hdc,canvas_x,canvas_y);
     ReleaseDC(map_window,hdc);
   }
+}
+
+/****************************************************************************
+  Draw a single tile of the citymap onto the mapview.  The tile is drawn
+  as the given color with the given worker on it.  The exact method of
+  drawing is left up to the GUI.
+****************************************************************************/
+void put_city_worker(struct canvas *pcanvas,
+		     enum color_std color, enum city_tile_type worker,
+		     int canvas_x, int canvas_y)
+{
+  /* PORTME */
 }
 
 /**************************************************************************
@@ -463,13 +668,13 @@ void overview_expose(HDC hdc)
       bmp=NULL;
       for(i=0;i<4;i++)
 	if (indicator_sprite[i]) {
-	  bmp=BITMAP2HBITMAP(indicator_sprite[i]->img);
+	  bmp=BITMAP2HBITMAP(&indicator_sprite[i]->img);
 	  if (!old)
 	    old=SelectObject(hdctest,bmp);
 	  else
 	    DeleteObject(SelectObject(hdctest,bmp));
-	  BitBlt(hdc,i*tileset_small_sprite_width(tileset),indicator_y,
-		 tileset_small_sprite_width(tileset),tileset_small_sprite_height(tileset),
+	  BitBlt(hdc,i*SMALL_TILE_WIDTH,indicator_y,
+		 SMALL_TILE_WIDTH,SMALL_TILE_HEIGHT,
 		 hdctest,0,0,SRCCOPY);
 	}
       SelectObject(hdctest,old);
@@ -477,7 +682,9 @@ void overview_expose(HDC hdc)
 	DeleteObject(bmp);
       DeleteDC(hdctest);
       draw_rates(hdc);
-      refresh_overview_canvas();
+      overview_canvas.hdc = hdc;
+      refresh_overview_canvas(/* hdc */);
+      overview_canvas.hdc = NULL;
     }
 }
 
@@ -512,6 +719,223 @@ void map_handle_vscroll(int pos)
 }
 
 /**************************************************************************
+Only used for isometric view.
+**************************************************************************/
+static void pixmap_put_overlay_tile_draw(HDC hdc,
+                                         int canvas_x, int canvas_y,
+                                         struct Sprite *ssprite,
+                                         bool fog)
+{
+  if (!ssprite)
+    return;
+
+  if (fog && better_fog && !ssprite->has_fog) {
+    fog_sprite(ssprite);
+    if (!ssprite->has_fog) {
+      freelog(LOG_NORMAL,
+	      _("Better fog will only work in truecolor.  Disabling it"));
+      better_fog = FALSE;
+    }
+  }
+
+  if (fog && better_fog) {
+    draw_sprite_fog(ssprite, hdc, canvas_x, canvas_y);
+    return;
+  }
+
+  draw_sprite(ssprite, hdc, canvas_x, canvas_y);
+
+  if (fog) {
+    draw_fog(ssprite, hdc, canvas_x, canvas_y);
+  }
+  
+}
+
+/**************************************************************************
+  Draw some or all of a sprite onto the mapview or citydialog canvas.
+**************************************************************************/
+void canvas_put_sprite(struct canvas *pcanvas,
+		       int canvas_x, int canvas_y,
+		       struct Sprite *sprite,
+		       int offset_x, int offset_y, int width, int height)
+{
+  HDC hdc;
+  HBITMAP old = NULL; /*Remove warning*/
+
+  /* FIXME: we don't want to have to recreate the hdc each time! */
+  if (pcanvas->bitmap) {
+    hdc = CreateCompatibleDC(pcanvas->hdc);
+    old = SelectObject(hdc, pcanvas->bitmap);
+  } else {
+    hdc = pcanvas->hdc;
+  }
+  draw_sprite(sprite, hdc, canvas_x, canvas_y);
+  if (pcanvas->bitmap) {
+    SelectObject(hdc, old);
+    DeleteDC(hdc);
+  }
+}
+
+/**************************************************************************
+  Draw a full sprite onto the mapview or citydialog canvas.
+**************************************************************************/
+void canvas_put_sprite_full(struct canvas *pcanvas,
+			    int canvas_x, int canvas_y,
+			    struct Sprite *sprite)
+{
+  canvas_put_sprite(pcanvas, canvas_x, canvas_y, sprite,
+		    0, 0, sprite->width, sprite->height);
+}
+
+/****************************************************************************
+  Draw a full sprite onto the canvas.  If "fog" is specified draw it with
+  fog.
+****************************************************************************/
+void canvas_put_sprite_fogged(struct canvas *pcanvas,
+			      int canvas_x, int canvas_y,
+			      struct Sprite *psprite,
+			      bool fog, int fog_x, int fog_y)
+{
+  HDC hdc;
+  HBITMAP old = NULL;
+
+  if (pcanvas->hdc == NULL) {
+    hdc = CreateCompatibleDC(NULL);
+    old = SelectObject(hdc, pcanvas->bitmap);
+  } else {
+    hdc = pcanvas->hdc;
+  }
+
+  pixmap_put_overlay_tile_draw(hdc, canvas_x, canvas_y,
+			       psprite, fog);
+
+  if (pcanvas->hdc == NULL) {
+    SelectObject(hdc, old);
+    DeleteDC(hdc);
+  }
+}
+
+/**************************************************************************
+  Draw a filled-in colored rectangle onto the mapview or citydialog canvas.
+**************************************************************************/
+void canvas_put_rectangle(struct canvas *pcanvas,
+			  enum color_std color,
+			  int canvas_x, int canvas_y, int width, int height)
+{
+  HDC hdc;
+  HBITMAP old = NULL; /*Remove warning*/
+  RECT rect;
+
+  if (pcanvas->bitmap) {
+    hdc = CreateCompatibleDC(pcanvas->hdc);
+    old = SelectObject(hdc, pcanvas->bitmap);
+  } else {
+    hdc = pcanvas->hdc;
+  }
+
+  /* FillRect doesn't fill bottom and right edges, however canvas_x + width
+   * and canvas_y + height are each 1 larger than necessary. */
+  SetRect(&rect, canvas_x, canvas_y, canvas_x + width,
+		 canvas_y + height);
+
+  FillRect(hdc, &rect, brush_std[color]);
+
+  if (pcanvas->bitmap) {
+    SelectObject(hdc, old);
+    DeleteDC(hdc);
+  }
+}
+/****************************************************************************
+  Fill the area covered by the sprite with the given color.
+****************************************************************************/
+void canvas_fill_sprite_area(struct canvas *pcanvas,
+			     struct Sprite *psprite, enum color_std color,
+			     int canvas_x, int canvas_y)
+{
+  /* FIXME: this may be inefficient */
+  HDC hdc;
+  HBITMAP old = NULL; /*Remove warning*/
+  HPEN oldpen;
+  HBRUSH oldbrush;
+  POINT points[4];
+
+  if (pcanvas->bitmap) {
+    hdc = CreateCompatibleDC(pcanvas->hdc);
+    old = SelectObject(hdc, pcanvas->bitmap);
+  } else {
+    hdc = pcanvas->hdc;
+  }
+
+  /* FIXME: give a real implementation of this function. */
+  assert(psprite == sprites.black_tile);
+
+  points[0].x = canvas_x + NORMAL_TILE_WIDTH / 2;
+  points[0].y = canvas_y;
+  points[1].x = canvas_x;
+  points[1].y = canvas_y + NORMAL_TILE_HEIGHT / 2;
+  points[2].x = canvas_x + NORMAL_TILE_WIDTH / 2;
+  points[2].y = canvas_y + NORMAL_TILE_HEIGHT;
+  points[3].x = canvas_x + NORMAL_TILE_WIDTH;
+  points[3].y = canvas_y + NORMAL_TILE_HEIGHT / 2;
+  oldpen = SelectObject(hdc, pen_std[color]); 
+  oldbrush = SelectObject(hdc, brush_std[color]);
+  Polygon(hdc, points, 4);
+  SelectObject(hdc, oldpen);
+  SelectObject(hdc, oldbrush);
+
+  if (pcanvas->bitmap) {
+    SelectObject(hdc, old);
+    DeleteDC(hdc);
+  }
+}
+
+/****************************************************************************
+  Fill the area covered by the sprite with the given color.
+****************************************************************************/
+void canvas_fog_sprite_area(struct canvas *pcanvas, struct Sprite *psprite,
+			    int canvas_x, int canvas_y)
+{
+  /* PORTME */
+}
+
+/**************************************************************************
+  Draw a 1-pixel-width colored line onto the mapview or citydialog canvas.
+**************************************************************************/
+void canvas_put_line(struct canvas *pcanvas, enum color_std color,
+		     enum line_type ltype, int start_x, int start_y,
+		     int dx, int dy)
+{
+  HDC hdc;
+  HBITMAP old = NULL; /*Remove warning*/
+  HPEN old_pen;
+
+  if (pcanvas->hdc) {
+    hdc = pcanvas->hdc;
+  } else if (pcanvas->bitmap) {
+    hdc = CreateCompatibleDC(pcanvas->hdc);
+    old = SelectObject(hdc, pcanvas->bitmap);
+  } else {
+    hdc = GetDC(root_window);
+  }
+
+  /* FIXME: set line type (size). */
+  old_pen = SelectObject(hdc, pen_std[color]);
+  MoveToEx(hdc, start_x, start_y, NULL);
+  LineTo(hdc, start_x + dx, start_y + dy);
+  SelectObject(hdc, old_pen);
+
+  if (!pcanvas->hdc) {
+    if (pcanvas->bitmap) {
+      SelectObject(hdc, old);
+      DeleteDC(hdc);
+    } else {
+      ReleaseDC(root_window, hdc);
+    }
+  }
+
+}
+
+/**************************************************************************
  Area Selection
 **************************************************************************/
 void draw_selection_rectangle(int canvas_x, int canvas_y, int w, int h)
@@ -533,6 +957,6 @@ void tileset_changed(void)
   indicator_sprite[1] = NULL;
   indicator_sprite[2] = NULL;
   init_fog_bmp();
-  map_canvas_resized(mapview.width, mapview.height);
+  map_canvas_resized(mapview_canvas.width, mapview_canvas.height);
   citydlg_tileset_change();
 }

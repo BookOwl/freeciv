@@ -69,7 +69,7 @@ static void players_meet(int player_index)
     dsend_packet_diplomacy_init_meeting_req(&aconnection, player_index);
 
   } else {
-    append_output_window(_("You need an embassy to "
+    append_output_window(_("Game: You need an embassy to "
 			   "establish a diplomatic meeting."));
   }
 }
@@ -151,7 +151,7 @@ static void build_row(const char **row, int i, int update)
   /* text for state */
   if (game.players[i].is_alive) {
     if (game.players[i].is_connected) {
-      if (game.players[i].phase_done) {
+      if (game.players[i].turn_done) {
 	sz_strlcpy(statebuf, _("done"));
       } else {
 	sz_strlcpy(statebuf, _("moving"));
@@ -381,14 +381,11 @@ static void create_players_dialog(void)
 
 *******************************************************************/      
 void
-popup_players_dialog(bool raise)
+popup_players_dialog(void)
 {
   if (!players_dialog)
     create_players_dialog();
   ShowWindow(players_dialog,SW_SHOWNORMAL);
-  if (raise) {
-    SetFocus(players_dialog);
-  }
 }
 
 /**************************************************************************
