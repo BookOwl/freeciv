@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -18,12 +17,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 #include <gtk/gtk.h>
 
 #include "events.h"
 #include "fcintl.h"
 #include "game.h"
+#include "log.h"
 #include "map.h"
 #include "mem.h"
 #include "packets.h"
@@ -59,6 +60,25 @@ static void meswin_popcity_callback(GtkWidget * w, gpointer data);
 
 #define N_MSG_VIEW 24	       /* max before scrolling happens */
 
+static int delay_meswin_update=0;
+
+/******************************************************************
+ Turn off updating of message window
+*******************************************************************/
+void meswin_update_delay_on(void)
+{
+  delay_meswin_update=1;
+}
+
+/******************************************************************
+ Turn on updating of message window
+*******************************************************************/
+void meswin_update_delay_off(void)
+{
+  delay_meswin_update=0;
+}
+
+
 /****************************************************************
 popup the dialog 10% inside the main-window 
 *****************************************************************/
@@ -79,26 +99,6 @@ void popup_meswin_dialog(void)
   meswin_scroll_down();
 }
 
-/****************************************************************
-...
-*****************************************************************/
-bool is_meswin_open(void)
-{
-  return meswin_dialog_shell != NULL;
-}
-
-/**************************************************************************
- Closes the message window dialog.
-**************************************************************************/
-void popdown_meswin_dialog(void)
-{
-  if (meswin_dialog_shell) {
-    gtk_widget_destroy(meswin_dialog_shell);
-    meswin_dialog_shell = NULL;
-    gtk_style_unref(meswin_visited_style);
-    gtk_style_unref(meswin_not_visited_style);
-  }
-}
 
 /****************************************************************
 ...
@@ -107,7 +107,6 @@ static void meswin_visited_item (gint n)
 {
   gtk_clist_set_row_style (GTK_CLIST (meswin_list), n,
 						meswin_visited_style);
-  set_message_visited_state(n, TRUE);
 }
 
 /****************************************************************
@@ -117,7 +116,6 @@ static void meswin_not_visited_item (gint n)
 {
   gtk_clist_set_row_style (GTK_CLIST (meswin_list), n,
 						meswin_not_visited_style);
-  set_message_visited_state(n, FALSE);
 }
 
 /****************************************************************
@@ -125,7 +123,7 @@ static void meswin_not_visited_item (gint n)
 *****************************************************************/
 void create_meswin_dialog(void)
 {
-  static const char *titles_[1] = { N_("Messages") };
+  static gchar *titles_[1] = { N_("Messages") };
   static gchar **titles;
   GtkWidget *scrolled;
   GtkAccelGroup *accel = gtk_accel_group_new();
@@ -137,12 +135,11 @@ void create_meswin_dialog(void)
         GTK_SIGNAL_FUNC(meswin_close_callback),NULL );
   gtk_accel_group_attach(accel, GTK_OBJECT(meswin_dialog_shell));
 
-  gtk_window_set_title(GTK_WINDOW(meswin_dialog_shell), _("Messages"));
-  gtk_window_set_default_size(GTK_WINDOW(meswin_dialog_shell), 400, 250);
+  gtk_window_set_title( GTK_WINDOW(meswin_dialog_shell), _("Messages") );
 
   scrolled = gtk_scrolled_window_new(NULL,NULL);
-  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled),
-				 GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+  gtk_scrolled_window_set_policy( GTK_SCROLLED_WINDOW( scrolled ),
+                          GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC );
   gtk_box_pack_start(GTK_BOX(GTK_DIALOG(meswin_dialog_shell)->vbox),
 		     scrolled, TRUE, TRUE, 0);
 
@@ -200,10 +197,109 @@ void create_meswin_dialog(void)
   meswin_not_visited_style->bg[GTK_STATE_SELECTED]=
 					*colors_standard[COLOR_STD_RACE13];
 
-  real_update_meswin_dialog();
+  update_meswin_dialog();
 
   gtk_widget_show_all( GTK_DIALOG(meswin_dialog_shell)->vbox );
   gtk_widget_show_all( GTK_DIALOG(meswin_dialog_shell)->action_area );
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+
+static int messages_total = 0; /* current total number of message lines */
+static int messages_alloc = 0; /* number allocated for */
+static char **string_ptrs = NULL;
+static int *xpos = NULL;
+static int *ypos = NULL;
+static int *event = NULL;
+
+/**************************************************************************
+ This makes sure that the next two elements in string_ptrs etc are
+ allocated for.  Two = one to be able to grow, and one for the sentinel
+ in string_ptrs.
+ Note update_meswin_dialog should always be called soon after this since
+ it contains pointers to the memory we're reallocing here.
+**************************************************************************/
+static void meswin_allocate(void)
+{
+  int i;
+  
+  if (messages_total+2 > messages_alloc) {
+    messages_alloc = messages_total + 32;
+    string_ptrs = fc_realloc(string_ptrs, messages_alloc*sizeof(char*));
+    xpos = fc_realloc(xpos, messages_alloc*sizeof(int));
+    ypos = fc_realloc(ypos, messages_alloc*sizeof(int));
+    event = fc_realloc(event, messages_alloc*sizeof(int));
+    for( i=messages_total; i<messages_alloc; i++ ) {
+      string_ptrs[i] = NULL;
+      xpos[i] = 0;
+      ypos[i] = 0;
+      event[i] = E_NOEVENT;
+    }
+  }
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+
+void clear_notify_window(void)
+{
+  int i;
+  meswin_allocate();
+  for (i = 0; i <messages_total; i++) {
+    free(string_ptrs[i]);
+    string_ptrs[i] = NULL;
+    xpos[i] = 0;
+    ypos[i] = 0;
+    event[i] = E_NOEVENT;
+  }
+  string_ptrs[0] = NULL;
+  messages_total = 0;
+  update_meswin_dialog();
+  if(meswin_dialog_shell) {
+    gtk_widget_set_sensitive(meswin_goto_command, FALSE);
+    gtk_widget_set_sensitive(meswin_popcity_command, FALSE);
+  }
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+void add_notify_window(struct packet_generic_message *packet)
+{
+  char *s;
+  int nspc;
+  char *game_prefix1 = "Game: ";
+  char *game_prefix2 = _("Game: ");
+  int gp_len1 = strlen(game_prefix1);
+  int gp_len2 = strlen(game_prefix2);
+
+  meswin_allocate();
+  s = fc_malloc(strlen(packet->message) + 50);
+  if (strncmp(packet->message, game_prefix1, gp_len1) == 0) {
+    strcpy(s, packet->message + gp_len1);
+  } else if(strncmp(packet->message, game_prefix2, gp_len2) == 0) {
+    strcpy(s, packet->message + gp_len2);
+  } else {
+    strcpy(s, packet->message);
+  }
+
+  nspc=50-strlen(s);
+  if(nspc>0)
+    strncat(s, "                                                  ", nspc);
+  
+  xpos[messages_total] = packet->x;
+  ypos[messages_total] = packet->y;
+  event[messages_total]= packet->event;
+  string_ptrs[messages_total] = s;
+  messages_total++;
+  string_ptrs[messages_total] = NULL;
+  if (!delay_meswin_update) {
+    update_meswin_dialog();
+    meswin_scroll_down();
+  }
 }
 
 /**************************************************************************
@@ -215,66 +311,82 @@ void create_meswin_dialog(void)
  For: if we don't scroll down, new messages which appear at the bottom
  (including combat results etc) will be easily missed.
 **************************************************************************/
-static void meswin_scroll_down(void)
+void meswin_scroll_down(void)
 {
-  if (get_num_messages() <= N_MSG_VIEW) {
+  if (!meswin_dialog_shell)
     return;
-  }
-
-  gtk_clist_moveto(GTK_CLIST(meswin_list), get_num_messages() - 1, 0, 0.0,
-		   0.0);
+  if (messages_total <= N_MSG_VIEW)
+    return;
+  
+   gtk_clist_moveto(GTK_CLIST(meswin_list), messages_total-1, 0, 0.0, 0.0);
 }
 
 /**************************************************************************
 ...
 **************************************************************************/
-void real_update_meswin_dialog(void)
+void update_meswin_dialog(void)
 {
-  int i, num = get_num_messages();
-
-  gtk_clist_freeze(GTK_CLIST(meswin_list));
-  gtk_clist_clear(GTK_CLIST(meswin_list));
-
-  for (i = 0; i < num; i++) {
-    gtk_clist_append(GTK_CLIST(meswin_list), &get_message(i)->descr);
-    if(get_message(i)->visited) {
-      meswin_visited_item(i);
-    } else {
-      meswin_not_visited_item(i);
+  if (!meswin_dialog_shell) { 
+    if (messages_total > 0 &&
+        (!game.player_ptr->ai.control || ai_popup_windows)) {
+      popup_meswin_dialog();
+      /* Can return here because popup_meswin_dialog will call
+       * this very function again.
+       */
+      return;
     }
   }
+   if(meswin_dialog_shell) {
+     int i;
 
-  gtk_clist_thaw(GTK_CLIST(meswin_list));
-  gtk_widget_show_all(meswin_list);
+     gtk_clist_freeze(GTK_CLIST(meswin_list));
+     gtk_clist_clear(GTK_CLIST(meswin_list));
 
-  meswin_scroll_down();
+     for (i=0; i<messages_total; i++)
+     {
+       gtk_clist_append (GTK_CLIST (meswin_list), &string_ptrs[i]);
+       meswin_not_visited_item (i);
+     }
 
-  gtk_widget_set_sensitive(meswin_goto_command, FALSE);
-  gtk_widget_set_sensitive(meswin_popcity_command, FALSE);
+     gtk_clist_thaw(GTK_CLIST(meswin_list));
+     gtk_widget_show_all(meswin_list);
+   }
+
 }
 
 /**************************************************************************
 ...
 **************************************************************************/
-static void meswin_list_callback(GtkWidget * w, gint row, gint column,
-				 GdkEvent * ev)
+void meswin_list_callback (GtkWidget *w, gint row, gint column, GdkEvent *ev)
 {
-  struct message *message = get_message(row);
+  struct city *pcity;
+  int x, y;
+  bool location_ok, city_ok;
+
+  x = xpos[row];
+  y = ypos[row];
+  location_ok = (x != -1 && y != -1);
+  city_ok = (location_ok && (pcity = map_get_city(x, y))
+	     && (pcity->owner == game.player_idx));
 
   if (ev && ev->type == GDK_2BUTTON_PRESS) {
     /* since we added a gtk_clist_select_row() there may be no event */
-    meswin_double_click(row);
+    if (city_ok && is_city_event(event[row])) {
+      meswin_popcity_callback(meswin_popcity_command, NULL);
+    } else if (location_ok) {
+      meswin_goto_callback(meswin_goto_command, NULL);
+    }
   }
   meswin_visited_item(row);
 
-  gtk_widget_set_sensitive(meswin_goto_command, message->location_ok);
-  gtk_widget_set_sensitive(meswin_popcity_command, message->city_ok);
+  gtk_widget_set_sensitive(meswin_goto_command, location_ok);
+  gtk_widget_set_sensitive(meswin_popcity_command, city_ok);
 }
 
 /**************************************************************************
 ...
 **************************************************************************/
-static void meswin_list_ucallback(GtkWidget *w, gint row, gint column)
+void meswin_list_ucallback(GtkWidget *w, gint row, gint column)
 {
   gtk_widget_set_sensitive(meswin_goto_command, FALSE);
   gtk_widget_set_sensitive(meswin_popcity_command, FALSE);
@@ -283,41 +395,55 @@ static void meswin_list_ucallback(GtkWidget *w, gint row, gint column)
 /**************************************************************************
 ...
 **************************************************************************/
-static void meswin_close_callback(GtkWidget *w, gpointer data)
+void meswin_close_callback(GtkWidget *w, gpointer data)
 {
-  popdown_meswin_dialog();
+  gtk_widget_destroy(meswin_dialog_shell);
+  meswin_dialog_shell = NULL;
+  gtk_style_unref(meswin_visited_style);
+  gtk_style_unref(meswin_not_visited_style);
 }
 
 /**************************************************************************
 ...
 **************************************************************************/
-static void meswin_goto_callback(GtkWidget * w, gpointer data)
+void meswin_goto_callback(GtkWidget *w, gpointer data)
 {
-  GList *selection = selection = GTK_CLIST(meswin_list)->selection;
-  gint row;
+  GList *selection;
+  gint   row;
 
-  if (!selection) {
-    return;
-  }
+  if (!(selection=GTK_CLIST(meswin_list)->selection))
+      return;
 
   row = GPOINTER_TO_INT(selection->data);
-  meswin_goto(row);
-  meswin_visited_item(row);
+
+  if(xpos[row]!=-1 && ypos[row]!=-1)
+    center_tile_mapcanvas(xpos[row], ypos[row]);
+  meswin_visited_item (row);
 }
 
 /**************************************************************************
 ...
 **************************************************************************/
-static void meswin_popcity_callback(GtkWidget * w, gpointer data)
+void meswin_popcity_callback(GtkWidget *w, gpointer data)
 {
-  GList *selection = selection = GTK_CLIST(meswin_list)->selection;
+  struct city *pcity;
+  int x, y;
+  GList *selection;
   gint row;
 
-  if (!selection) {
-    return;
-  }
+  if (!(selection=GTK_CLIST(meswin_list)->selection))
+      return;
 
   row = GPOINTER_TO_INT(selection->data);
-  meswin_popup_city(row);
-  meswin_visited_item(row);
+
+  x = xpos[row];
+  y = ypos[row];
+  if((x!=-1 && y!=-1) && (pcity=map_get_city(x,y))
+     && (pcity->owner == game.player_idx)) {
+      if (center_when_popup_city) {
+       center_tile_mapcanvas(x,y);
+      }
+    popup_city_dialog(pcity, 0);
+  }
+  meswin_visited_item (row);
 }

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -33,6 +32,7 @@
 #include "packets.h"
 #include "worklist.h"
 #include "support.h"
+#include "log.h"
 #include "climisc.h"
 #include "clinet.h"
 
@@ -73,7 +73,7 @@ static gint global_dialog_delete_callback(GtkWidget * w, GdkEvent * ev,
 static void global_close_report_callback(GtkWidget * w, gpointer data);
 static void global_edit_callback(GtkWidget * w, gpointer data);
 static void global_rename_callback(GtkWidget * w, gpointer data);
-static void global_rename_sub_callback(const char *input, gpointer data);
+static void global_rename_sub_callback(GtkWidget * w, gpointer data);
 static void global_insert_callback(GtkWidget * w, gpointer data);
 static void global_delete_callback(GtkWidget * w, gpointer data);
 static void global_select_list_callback(GtkWidget * w, gint row,
@@ -139,7 +139,7 @@ void popup_worklists_report(struct player *pplr)
 {
   GtkWidget *button, *scrolled;
   GtkAccelGroup *accel;
-  const char *title[1] = { N_("Available worklists") };
+  char *title[1] = { N_("Available worklists") };
   static char **clist_title = NULL;
 
   /* Report window already open */
@@ -307,13 +307,13 @@ struct worklist_editor *create_worklist_editor(struct worklist *pwl,
   GtkAccelGroup *accel = gtk_accel_group_new();
 
   static char **wl_clist_titles = NULL;
-  const char *wl_titles[] = { N_("Type"),
+  char *wl_titles[] = { N_("Type"),
     N_("Info"),
     N_("Cost")
   };
 
   static char **avail_clist_titles = NULL;
-  const char *avail_titles[] = { N_("Type"),
+  char *avail_titles[] = { N_("Type"),
     N_("Info"),
     N_("Cost"),
     N_("Turns")
@@ -599,23 +599,28 @@ static void global_rename_callback(GtkWidget * w, gpointer data)
 		      _("Rename Worklist"),
 		      _("What should the new name be?"),
 		      preport->pplr->worklists[preport->wl_idx].name,
-		      global_rename_sub_callback,
+		      (void *) global_rename_sub_callback,
 		      (gpointer) preport,
-		      NULL, NULL);
+		      (void *) global_rename_sub_callback,
+		      (gpointer) NULL);
 }
 
 /****************************************************************
 
 *****************************************************************/
-static void global_rename_sub_callback(const char *input, gpointer data)
+static void global_rename_sub_callback(GtkWidget * w, gpointer data)
 {
   struct worklist_report *preport = (struct worklist_report *) data;
 
-  strncpy(preport->pplr->worklists[preport->wl_idx].name, input,
-	  MAX_LEN_NAME);
-  preport->pplr->worklists[preport->wl_idx].name[MAX_LEN_NAME - 1] = '\0';
+  if (preport) {
+    strncpy(preport->pplr->worklists[preport->wl_idx].name, 
+            input_dialog_get_input(w), MAX_LEN_NAME);
+    preport->pplr->worklists[preport->wl_idx].name[MAX_LEN_NAME - 1] = '\0';
 
-  global_list_update(preport);
+    global_list_update(preport);
+  }
+
+  input_dialog_destroy(w);
 }
 
 /****************************************************************
@@ -1438,14 +1443,6 @@ static void cleanup_worklist_editor(struct worklist_editor *peditor)
 
   memset(peditor, 0, sizeof(*peditor));
   free(peditor);
-}
-
-/****************************************************************
-...
-*****************************************************************/
-void close_worklist_editor(struct worklist_editor *peditor)
-{
-  cleanup_worklist_editor(peditor);
 }
 
 /****************************************************************

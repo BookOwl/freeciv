@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -252,9 +251,25 @@ void load_cursors(void)
   gdk_bitmap_unref(mask);
 }
 
+#ifdef UNUSED
 /***************************************************************************
- Create a new sprite with the given pixmap, dimensions, and
- (optional) mask.
+...
+***************************************************************************/
+static SPRITE *ctor_sprite( GdkPixmap *mypixmap, int width, int height )
+{
+    SPRITE *mysprite = fc_malloc(sizeof(SPRITE));
+
+    mysprite->pixmap	= mypixmap;
+    mysprite->width	= width;
+    mysprite->height	= height;
+    mysprite->has_mask	= 0;
+
+    return mysprite;
+}
+#endif
+
+/***************************************************************************
+...
 ***************************************************************************/
 SPRITE *ctor_sprite_mask( GdkPixmap *mypixmap, GdkPixmap *mask, 
 			  int width, int height )
@@ -288,12 +303,12 @@ void dtor_sprite( SPRITE *mysprite )
  Returns the filename extensions the client supports
  Order is important.
 ***************************************************************************/
-const char **gfx_fileextensions(void)
+char **gfx_fileextensions(void)
 {
-  static const char *ext[] =
+  static char *ext[] =
   {
-    "png",
     "xpm",
+    "png",
     NULL
   };
 

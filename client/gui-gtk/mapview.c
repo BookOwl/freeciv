@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -46,11 +45,39 @@
 #include "options.h"
 #include "tilespec.h"
 
-#include "citydlg.h" /* For reset_city_dialogs() */
 #include "mapview.h"
 
 /* contains the x0, y0 coordinates of the upper left corner block */
 int map_view_x0, map_view_y0;
+
+/* T: area above the actual tile.
+   M: the top of the actual tile.
+   B: the bottom of the actual tile.
+   L: left.
+   R: right.
+*/
+enum draw_part {
+  D_T_L = 1, D_T_R = 2, D_M_L = 4, D_M_R = 8, D_B_L = 16, D_B_R = 32
+};
+
+/* Format: D_[TMB]+_[LR]+.
+   The drawing algorithm don't take all possible combinations into account,
+   but only those that are rectangles.
+*/
+/* Some usefull definitions: */
+enum draw_type {
+  D_FULL = D_T_L | D_T_R | D_M_L | D_M_R | D_B_L | D_B_R,
+  D_B_LR = D_B_L | D_B_R,
+  D_MB_L = D_M_L | D_B_L,
+  D_MB_R = D_M_R | D_B_R,
+  D_TM_L = D_T_L | D_M_L,
+  D_TM_R = D_T_R | D_M_R,
+  D_T_LR = D_T_L | D_T_R,
+  D_TMB_L = D_T_L | D_M_L | D_B_L,
+  D_TMB_R = D_T_R | D_M_R | D_B_R,
+  D_M_LR = D_M_L | D_M_R,
+  D_MB_LR = D_M_L | D_M_R | D_B_L | D_B_R
+};
 
 static void pixmap_put_overlay_tile(GdkDrawable *pixmap,
 				    int canvas_x, int canvas_y,
@@ -61,6 +88,7 @@ static void put_overlay_tile_gpixmap(GtkPixcomm *p,
 static void put_unit_pixmap(struct unit *punit, GdkPixmap *pm,
 			    int canvas_x, int canvas_y);
 static void put_line(GdkDrawable *pm, int x, int y, int dir);
+static void show_city_descriptions(void);
 
 static void put_unit_pixmap_draw(struct unit *punit, GdkPixmap *pm,
 				 int canvas_x, int canvas_y,
@@ -91,22 +119,6 @@ static SPRITE *scaled_intro_sprite = NULL;
 
 static GtkObject *map_hadj, *map_vadj;
 
-
-/***********************************************************************
-  This function can be used by mapview_common code to determine the
-  location and dimensions of the mapview canvas.
-***********************************************************************/
-void get_mapview_dimensions(int *map_view_topleft_map_x,
-			    int *map_view_topleft_map_y,
-			    int *map_view_pixel_width,
-			    int *map_view_pixel_height)
-{
-  *map_view_topleft_map_x = map_view_x0;
-  *map_view_topleft_map_y = map_view_y0;
-  gdk_window_get_size(map_canvas->window,
-		      map_view_pixel_width,
-		      map_view_pixel_height);
-}
 
 /**************************************************************************
 ...
@@ -212,6 +224,34 @@ void pixmap_put_tile(GdkDrawable *pm, int x, int y,
       }
     }
   }
+}
+
+/**************************************************************************
+Finds the pixel coordinates of a tile.  Beside setting the results in
+canvas_x,canvas_y it returns whether the tile is inside the visible
+map.
+
+This function is almost identical between all GUI's.
+**************************************************************************/
+static int get_canvas_xy(int map_x, int map_y, int *canvas_x,
+			 int *canvas_y)
+{
+  int width, height;
+
+  gdk_window_get_size(map_canvas->window, &width, &height);
+  return map_pos_to_canvas_pos(map_x, map_y, canvas_x, canvas_y,
+			       map_view_x0, map_view_y0, width, height);
+}
+
+/**************************************************************************
+Finds the map coordinates corresponding to pixel coordinates.
+
+This function is almost identical between all GUI's.
+**************************************************************************/
+void get_map_xy(int canvas_x, int canvas_y, int *map_x, int *map_y)
+{
+  canvas_pos_to_map_pos(canvas_x, canvas_y, map_x, map_y, map_view_x0,
+			map_view_y0);
 }
 
 /**************************************************************************
@@ -451,6 +491,17 @@ GdkPixmap *get_citizen_pixmap(int frame)
   return sprites.citizen[frame]->pixmap;
 }
 
+
+/**************************************************************************
+...
+**************************************************************************/
+SPRITE *get_citizen_sprite(int frame)
+{
+  frame = CLIP(0, frame, NUM_TILES_CITIZEN-1);
+  return sprites.citizen[frame];
+}
+
+
 /**************************************************************************
 ...
 **************************************************************************/
@@ -474,6 +525,50 @@ void set_indicator_icons(int bulb, int sol, int flake, int gov)
   }
   gtk_pixmap_set(GTK_PIXMAP(government_label), gov_sprite->pixmap, NULL);
 }
+
+
+/**************************************************************************
+...
+**************************************************************************/
+bool tile_visible_mapcanvas(int x, int y)
+{
+  if (is_isometric) {
+    int dummy_x, dummy_y; /* well, it needs two pointers... */
+    return get_canvas_xy(x, y, &dummy_x, &dummy_y);
+  } else {
+    return (y>=map_view_y0 && y<map_view_y0+map_canvas_store_theight &&
+	    ((x>=map_view_x0 && x<map_view_x0+map_canvas_store_twidth) ||
+	     (x+map.xsize>=map_view_x0 && 
+	      x+map.xsize<map_view_x0+map_canvas_store_twidth)));
+  }
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+bool tile_visible_and_not_on_border_mapcanvas(int x, int y)
+{
+  if (is_isometric) {
+    int canvas_x, canvas_y;
+    int width, height;
+    gdk_window_get_size(map_canvas->window, &width, &height);
+    get_canvas_xy(x, y, &canvas_x, &canvas_y);
+
+    return canvas_x > NORMAL_TILE_WIDTH/2
+      && canvas_x < (width - 3*NORMAL_TILE_WIDTH/2)
+      && canvas_y >= NORMAL_TILE_HEIGHT
+      && canvas_y < height - 3 * NORMAL_TILE_HEIGHT/2;
+  } else {
+    return ((y>=map_view_y0+2 || (y >= map_view_y0 && map_view_y0 == 0))
+	    && (y<map_view_y0+map_canvas_store_theight-2 ||
+		(y<map_view_y0+map_canvas_store_theight &&
+		 map_view_y0 + map_canvas_store_theight-EXTRA_BOTTOM_ROW == map.ysize))
+	    && ((x>=map_view_x0+2 && x<map_view_x0+map_canvas_store_twidth-2) ||
+		(x+map.xsize>=map_view_x0+2
+		 && x+map.xsize<map_view_x0+map_canvas_store_twidth-2)));
+  }
+}
+
 
 /**************************************************************************
 Animates punit's "smooth" move from (x0,y0) to (x0+dx,y0+dy).
@@ -604,6 +699,18 @@ void move_unit_map_canvas(struct unit *punit, int x0, int y0, int dx, int dy)
       }
     }
   }
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+void get_center_tile_mapcanvas(int *x, int *y)
+{
+  int width, height;
+  gdk_window_get_size(map_canvas->window, &width, &height);
+
+  /* This sets the pointers x and y */
+  get_map_xy(width/2, height/2, x, y);
 }
 
 /**************************************************************************
@@ -1176,6 +1283,28 @@ void update_map_canvas(int x, int y, int width, int height,
 }
 
 /**************************************************************************
+ Update (only) the visible part of the map
+**************************************************************************/
+void update_map_canvas_visible(void)
+{
+  if (is_isometric) {
+    /* just find a big rectangle that includes the whole visible area. The
+       invisible tiles will not be drawn. */
+    int width, height;
+
+    width = height = map_canvas_store_twidth + map_canvas_store_theight;
+    update_map_canvas(map_view_x0,
+		      map_view_y0 - map_canvas_store_twidth,
+		      width, height, TRUE);
+  } else {
+    update_map_canvas(map_view_x0, map_view_y0,
+		      map_canvas_store_twidth,map_canvas_store_theight, TRUE);
+  }
+
+  show_city_descriptions();
+}
+
+/**************************************************************************
  Update display of descriptions associated with cities on the main map.
 **************************************************************************/
 void update_city_descriptions(void)
@@ -1186,51 +1315,82 @@ void update_city_descriptions(void)
 /**************************************************************************
 ...
 **************************************************************************/
-void show_city_desc(struct city *pcity, int canvas_x, int canvas_y)
+static void show_desc_at_tile(int x, int y)
 {
-  static char buffer[512], buffer2[32];
-  int w, w2, ascent;
-  enum color_std color;
+  static char buffer[512];
+  struct city *pcity;
+  if ((pcity = map_get_city(x, y))) {
+    int canvas_x, canvas_y;
+    int w, ascent;
 
-  canvas_x += NORMAL_TILE_WIDTH / 2;
-  canvas_y += NORMAL_TILE_HEIGHT;
-
-  get_city_mapview_name_and_growth(pcity, buffer, sizeof(buffer),
-				   buffer2, sizeof(buffer2), &color);
-
-  gdk_string_extents(main_fontset, buffer, NULL, NULL, &w, &ascent, NULL);
-  if (buffer2[0] != '\0') {
-    /* HACK: put a character's worth of space between the two strings. */
-    w += gdk_string_width(main_fontset, "M");
-  }
-  w2 = gdk_string_width(prod_fontset, buffer2);
-
-  gtk_draw_shadowed_string(map_canvas->window, main_fontset,
-			   toplevel->style->black_gc,
-			   toplevel->style->white_gc,
-			   canvas_x - (w + w2) / 2,
-			   canvas_y + ascent,
-			   buffer);
-  gdk_gc_set_foreground(civ_gc, colors_standard[color]);
-  gtk_draw_shadowed_string(map_canvas->window, prod_fontset,
-			   toplevel->style->black_gc,
-			   civ_gc,
-			   canvas_x - (w + w2) / 2 + w,
-			   canvas_y + ascent,
-			   buffer2);
-
-  if (draw_city_productions && (pcity->owner==game.player_idx)) {
+    get_canvas_xy(x, y, &canvas_x, &canvas_y);
     if (draw_city_names) {
-      canvas_y += gdk_string_height(main_fontset, buffer);
+      my_snprintf(buffer, sizeof(buffer), "%s", pcity->name);
+      gdk_string_extents(main_fontset, buffer, NULL, NULL, &w, &ascent, NULL);
+      gtk_draw_shadowed_string(map_canvas->window, main_fontset,
+			       toplevel->style->black_gc,
+			       toplevel->style->white_gc,
+			       canvas_x + NORMAL_TILE_WIDTH / 2 - w / 2,
+			       canvas_y + NORMAL_TILE_HEIGHT +
+			       ascent, buffer);
     }
 
-    get_city_mapview_production(pcity, buffer, sizeof(buffer));
+    if (draw_city_productions && (pcity->owner==game.player_idx)) {
+      int y_offset;
 
-    gdk_string_extents(prod_fontset, buffer, NULL, NULL, &w, &ascent, NULL);
-    gtk_draw_shadowed_string(map_canvas->window, prod_fontset,
-			     toplevel->style->black_gc,
-			     toplevel->style->white_gc, canvas_x - w / 2,
-			     canvas_y + ascent + 3, buffer);
+      if (draw_city_names)
+	y_offset = gdk_string_height(main_fontset, buffer);
+      else
+	y_offset = 0;
+
+      get_city_mapview_production(pcity, buffer, sizeof(buffer));
+
+      gdk_string_extents(prod_fontset, buffer, NULL, NULL, &w, &ascent, NULL);
+      gtk_draw_shadowed_string(map_canvas->window, prod_fontset,
+			       toplevel->style->black_gc,
+			       toplevel->style->white_gc,
+			       canvas_x + NORMAL_TILE_WIDTH / 2 - w / 2,
+			       canvas_y + NORMAL_TILE_HEIGHT +
+			       ascent + 3 + y_offset, buffer);
+    }
+  }
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+static void show_city_descriptions(void)
+{
+  if (!draw_city_names && !draw_city_productions)
+    return;
+
+  if (is_isometric ) {
+    int x, y;
+    int w, h;
+
+    for (h=-1; h<map_canvas_store_theight*2; h++) {
+      int x_base = map_view_x0 + h/2 + (h != -1 ? h%2 : 0);
+      int y_base = map_view_y0 + h/2 + (h == -1 ? -1 : 0);
+      for (w=0; w<=map_canvas_store_twidth; w++) {
+	x = (x_base + w);
+	y = y_base - w;
+	if (normalize_map_pos(&x, &y)) {
+	  show_desc_at_tile(x, y);
+	}
+      }
+    }
+  } else { /* is_isometric */
+    int x1, y1;
+    for (x1 = 0; x1 < map_canvas_store_twidth; x1++) {
+      int x = map_view_x0 + x1;
+      for (y1 = 0; y1 < map_canvas_store_theight; y1++) {
+	int y = map_view_y0 + y1;
+
+	if (normalize_map_pos(&x, &y)) {
+	  show_desc_at_tile(x, y);
+	}
+      }
+    }
   }
 }
 
@@ -1645,15 +1805,24 @@ static void really_draw_segment(int src_x, int src_y, int dir,
 **************************************************************************/
 void draw_segment(int src_x, int src_y, int dir)
 {
-  assert(get_drawn(src_x, src_y, dir) > 0);
-
   if (is_isometric) {
-    really_draw_segment(src_x, src_y, dir, TRUE, FALSE);
+    increment_drawn(src_x, src_y, dir);
+    if (get_drawn(src_x, src_y, dir) > 1) {
+      return;
+    } else {
+      really_draw_segment(src_x, src_y, dir, TRUE, FALSE);
+    }
   } else {
     int dest_x, dest_y, is_real;
 
     is_real = MAPSTEP(dest_x, dest_y, src_x, src_y, dir);
     assert(is_real);
+
+    /* A previous line already marks the place */
+    if (get_drawn(src_x, src_y, dir)) {
+      increment_drawn(src_x, src_y, dir);
+      return;
+    }
 
     if (tile_visible_mapcanvas(src_x, src_y)) {
       put_line(map_canvas_store, src_x, src_y, dir);
@@ -1662,6 +1831,65 @@ void draw_segment(int src_x, int src_y, int dir)
     if (tile_visible_mapcanvas(dest_x, dest_y)) {
       put_line(map_canvas_store, dest_x, dest_y, DIR_REVERSE(dir));
       put_line(map_canvas->window, dest_x, dest_y, DIR_REVERSE(dir));
+    }
+
+    increment_drawn(src_x, src_y, dir);
+  }
+}
+
+/**************************************************************************
+remove the line from src_x,src_y -> dest_x,dest_y on both map_canvas and
+map_canvas_store.
+**************************************************************************/
+void undraw_segment(int src_x, int src_y, int dir)
+{
+  int dest_x, dest_y, is_real;
+
+  is_real = MAPSTEP(dest_x, dest_y, src_x, src_y, dir);
+  assert(is_real);
+
+  if (is_isometric) {
+    assert(get_drawn(src_x, src_y, dir));
+    decrement_drawn(src_x, src_y, dir);
+
+    /* somewhat inefficient */
+    if (!get_drawn(src_x, src_y, dir)) {
+      update_map_canvas(MIN(src_x, dest_x), MIN(src_y, dest_y),
+			src_x == dest_x ? 1 : 2,
+			src_y == dest_y ? 1 : 2,
+			TRUE);
+    }
+  } else {
+    int drawn = get_drawn(src_x, src_y, dir);
+
+    assert(drawn > 0);
+    /* If we walk on a path twice it looks just like walking on it once. */
+    if (drawn > 1) {
+      decrement_drawn(src_x, src_y, dir);
+      return;
+    }
+
+    decrement_drawn(src_x, src_y, dir);
+    refresh_tile_mapcanvas(src_x, src_y, TRUE);
+    refresh_tile_mapcanvas(dest_x, dest_y, TRUE);
+    if (NORMAL_TILE_WIDTH%2 == 0 || NORMAL_TILE_HEIGHT%2 == 0) {
+      int is_real;
+
+      if (dir == DIR8_NORTHEAST) {
+	/* Since the tile doesn't have a middle we draw an extra pixel
+	   on the adjacent tile when drawing in this direction. */
+	dest_x = src_x + 1;
+	dest_y = src_y;
+	is_real = normalize_map_pos(&dest_x, &dest_y);
+	assert(is_real);
+	refresh_tile_mapcanvas(dest_x, dest_y, TRUE);
+      } else if (dir == DIR8_SOUTHWEST) {	/* the same */
+	dest_x = src_x;
+	dest_y = src_y + 1;
+	is_real = normalize_map_pos(&dest_x, &dest_y);
+	assert(is_real);
+	refresh_tile_mapcanvas(dest_x, dest_y, TRUE);
+      }
     }
   }
 }
@@ -2039,13 +2267,4 @@ static void pixmap_put_tile_iso(GdkDrawable *pm, int x, int y,
 				 sprites.tx.fortress,
 				 offset_x, offset_y_unit,
 				 width, height_unit, fog);
-}
-
-/**************************************************************************
-  This function is called when the tileset is changed.
-**************************************************************************/
-void tileset_changed(void)
-{
-  reset_city_dialogs();
-  reset_unit_table();
 }

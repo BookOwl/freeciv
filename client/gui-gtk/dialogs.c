@@ -10,12 +10,12 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
 #include <assert.h>
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -36,17 +36,13 @@
 #include "support.h"
 
 #include "chatline.h"
-#include "cityrep.h"	/* for popdown_city_report_dialog */
 #include "civclient.h"
 #include "clinet.h"
 #include "control.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "mapview.h"
-#include "messagewin.h"	/* for popdown_meswin_dialog */
 #include "options.h"
-#include "plrdlg.h"	/* for popdown_players_dialog */
-#include "repodlgs.h"	/* for popdown_xxx_dialog */
 #include "tilespec.h"
 
 #include "dialogs.h"
@@ -58,7 +54,6 @@ static gint popup_mes_del_callback(GtkWidget *widget, GdkEvent *event,
 /******************************************************************/
 static GtkWidget  *races_dialog_shell=NULL;
 static GtkWidget  *races_toggles_form;
-static GtkWidget  *races_by_name;
 static GtkWidget  *races_sex_toggles_form;
 static GtkWidget  *city_style_toggles_form;
 static GtkWidget  *races_ok_command;            /* ok button */
@@ -74,9 +69,6 @@ static GList      *sorted_races_list = NULL; /* contains a list of race
 					      name. Is valid as long
 					      as the races_dialog is
 					      poped up. */
-/******************************************************************/
-static GtkWidget  *notify_dialog_shell;
-
 /******************************************************************/
 static GtkWidget  *spy_tech_shell;
 static GtkWidget  *spy_advances_list;
@@ -108,24 +100,27 @@ static int races_buttons_get_current(void);
 static int sex_buttons_get_current(void);
 static int city_style_get_current(void);
 
-static void create_races_dialog(void);
-static void races_buttons_callback(GtkWidget *w, gpointer data);
-static void races_toggles_callback(GtkWidget *w, gpointer race_id_p);
-static void races_sex_toggles_callback(GtkWidget *w, gpointer data);
-static void races_by_name_callback(GtkWidget *w, gpointer data);
-static void races_name_callback(GtkWidget *w, gpointer data);
-static void city_style_toggles_callback(GtkWidget *w, gpointer data);
+static void create_races_dialog	(void);
+static void races_buttons_callback	( GtkWidget *w, gpointer data );
+static void races_toggles_callback(GtkWidget * w, gpointer race_id_p);
+static void races_sex_toggles_callback ( GtkWidget *w, gpointer data );
+static void races_name_callback	( GtkWidget *w, gpointer data );
+static void city_style_toggles_callback ( GtkWidget *w, gpointer data );
 
 static int selected_nation;
 static int selected_leader;
 static bool is_name_unique = FALSE;
 static int selected_sex;
 static int selected_city_style;
-static int city_style_idx[64];  /* translation table basic style->city_style */
-static int city_style_ridx[64]; /* translation table the other way. they     */
-                                /* in fact limit the num of styles to 64     */
-static int b_s_num; /* number of basic city styles, 
-                     * i.e. those that you can start with */
+static int city_style_idx[64];        /* translation table basic style->city_style  */
+static int city_style_ridx[64];       /* translation table the other way            */
+                               /* they in fact limit the num of styles to 64 */
+static int b_s_num; /* number of basic city styles, i.e. those that you can start with */
+
+static int is_showing_government_dialog;
+
+static int is_showing_pillage_dialog = FALSE;
+static int unit_to_use_to_pillage;
 
 static int caravan_city_id;
 static int caravan_unit_id;
@@ -136,25 +131,18 @@ static int diplomat_target_id;
 
 static GtkWidget *caravan_dialog;
 
-static bool government_dialog_is_open = FALSE;
+static int is_showing_unit_connect_dialog = FALSE;
+static int unit_to_use_to_connect;
+static int connect_unit_x;
+static int connect_unit_y;
 
-struct pillage_data {
-  int unit_id;
-  enum tile_special_type what;
-};
-
-struct connect_data {
-  int unit_id;
-  int dest_x, dest_y;
-  enum unit_activity what;
-};
-		     
 /****************************************************************
 ...
 *****************************************************************/
 static void notify_command_callback(GtkWidget *w, GtkWidget *t)
 {
-  popdown_notify_dialog();
+  gtk_widget_destroy( t );
+  gtk_widget_set_sensitive( top_vbox, TRUE );
 }
 
 /****************************************************************
@@ -172,7 +160,7 @@ gint deleted_callback(GtkWidget *w, GdkEvent *ev, gpointer data)
 *****************************************************************/
 void popup_notify_dialog(char *caption, char *headline, char *lines)
 {
-  GtkWidget *notify_command;
+  GtkWidget *notify_dialog_shell, *notify_command;
   GtkWidget *notify_label, *notify_headline, *notify_scrolled;
   GtkAccelGroup *accel=gtk_accel_group_new();
   
@@ -231,18 +219,6 @@ void popup_notify_dialog(char *caption, char *headline, char *lines)
   gtk_widget_show( notify_dialog_shell );
 
   gtk_widget_set_sensitive( top_vbox, FALSE );
-}
-
-/****************************************************************
- Closes the notify dialog.
-*****************************************************************/
-void popdown_notify_dialog(void)
-{
-  if (notify_dialog_shell) {
-    gtk_widget_destroy(notify_dialog_shell);
-    gtk_widget_set_sensitive(top_vbox, TRUE);
-    notify_dialog_shell = NULL;
-  }
 }
 
 /****************************************************************
@@ -375,7 +351,7 @@ void popup_notify_goto_dialog(char *headline, char *lines,int x, int y)
 /****************************************************************
 ...
 *****************************************************************/
-static void diplomat_bribe_yes_callback(gpointer data)
+static void diplomat_bribe_yes_callback(GtkWidget *w, gpointer data)
 {
   struct packet_diplomat_action req;
 
@@ -384,21 +360,35 @@ static void diplomat_bribe_yes_callback(gpointer data)
   req.target_id=diplomat_target_id;
 
   send_packet_diplomat_action(&aconnection, &req);
+  
+  destroy_message_dialog(w);
 }
+
+/****************************************************************
+...
+*****************************************************************/
+static void diplomat_bribe_no_callback(GtkWidget *w, gpointer data)
+{
+  destroy_message_dialog(w);
+}
+
 
 
 /****************************************************************
 ...  Ask the server how much the bribe is
 *****************************************************************/
-static void diplomat_bribe_callback(gpointer data)
+static void diplomat_bribe_callback(GtkWidget *w, gpointer data)
 {
   struct packet_generic_integer packet;
 
+  destroy_message_dialog(w);
+  
   if(find_unit_by_id(diplomat_id) && 
      find_unit_by_id(diplomat_target_id)) { 
     packet.value = diplomat_target_id;
     send_packet_generic_integer(&aconnection, PACKET_INCITE_INQ, &packet);
    }
+
 }
  
 /****************************************************************
@@ -412,25 +402,26 @@ void popup_bribe_dialog(struct unit *punit)
     my_snprintf(buf, sizeof(buf),
 		_("Bribe unit for %d gold?\nTreasury contains %d gold."), 
 		punit->bribe_cost, game.player_ptr->economic.gold);
-    popup_message_dialog(top_vbox, _("Bribe Enemy Unit"), buf,
-			 dummy_close_callback, NULL,
-			 _("_Yes"), diplomat_bribe_yes_callback, 0, 
-			 _("_No"), NULL, 0, 0);
+    popup_message_dialog(top_vbox, /*"diplomatbribedialog"*/_("Bribe Enemy Unit"), buf,
+			_("_Yes"), diplomat_bribe_yes_callback, 0,
+			_("_No"), diplomat_bribe_no_callback, 0, 0);
   } else {
     my_snprintf(buf, sizeof(buf),
 		_("Bribing the unit costs %d gold.\n"
 		  "Treasury contains %d gold."), 
 		punit->bribe_cost, game.player_ptr->economic.gold);
-    popup_message_dialog(top_vbox, _("Traitors Demand Too Much!"), buf,
-			 dummy_close_callback, NULL, _("Darn"), NULL, 0, 0);
+    popup_message_dialog(top_vbox, /*"diplomatnogolddialog"*/_("Traitors Demand Too Much!"), buf,
+			_("Darn"), diplomat_bribe_no_callback, 0, 
+			0);
   }
 }
 
 /****************************************************************
 ...
 *****************************************************************/
-static void diplomat_sabotage_callback(gpointer data)
+static void diplomat_sabotage_callback(GtkWidget *w, gpointer data)
 {
+  destroy_message_dialog(w);
   diplomat_dialog_open=0;
 
   if(find_unit_by_id(diplomat_id) && 
@@ -451,8 +442,9 @@ static void diplomat_sabotage_callback(gpointer data)
 /****************************************************************
 ...
 *****************************************************************/
-static void diplomat_investigate_callback(gpointer data)
+static void diplomat_investigate_callback(GtkWidget *w, gpointer data)
 {
+  destroy_message_dialog(w);
   diplomat_dialog_open=0;
 
   if(find_unit_by_id(diplomat_id) && 
@@ -472,7 +464,7 @@ static void diplomat_investigate_callback(gpointer data)
 /****************************************************************
 ...
 *****************************************************************/
-static void spy_sabotage_unit_callback(gpointer data)
+static void spy_sabotage_unit_callback(GtkWidget *w, gpointer data)
 {
 
   struct packet_diplomat_action req;
@@ -482,13 +474,16 @@ static void spy_sabotage_unit_callback(gpointer data)
   req.target_id=diplomat_target_id;
   
   send_packet_diplomat_action(&aconnection, &req);
+  
+  destroy_message_dialog(w);
 }
 
 /****************************************************************
 ...
 *****************************************************************/
-static void diplomat_embassy_callback(gpointer data)
+static void diplomat_embassy_callback(GtkWidget *w, gpointer data)
 {
+  destroy_message_dialog(w);
   diplomat_dialog_open=0;
 
   if(find_unit_by_id(diplomat_id) && 
@@ -508,8 +503,9 @@ static void diplomat_embassy_callback(gpointer data)
 /****************************************************************
 ...
 *****************************************************************/
-static void spy_poison_callback(gpointer data)
+static void spy_poison_callback(GtkWidget *w, gpointer data)
 {
+  destroy_message_dialog(w);
   diplomat_dialog_open=0;
 
   if(find_unit_by_id(diplomat_id) &&
@@ -529,8 +525,11 @@ static void spy_poison_callback(gpointer data)
 /****************************************************************
 ...
 *****************************************************************/
-static void diplomat_steal_callback(gpointer data)
+static void diplomat_steal_callback(GtkWidget *w, gpointer data)
 {
+  destroy_message_dialog(w);
+  diplomat_dialog_open=0;
+
   if(find_unit_by_id(diplomat_id) && 
      find_city_by_id(diplomat_target_id)) { 
     struct packet_diplomat_action req;
@@ -616,7 +615,7 @@ static void spy_uselect_improvement_callback(GtkWidget *w, gint row,
 /****************************************************************
 ...
 *****************************************************************/
-static void spy_steal_callback(gpointer data)
+static void spy_steal_callback(GtkWidget *w, gpointer data)
 {  
   gtk_widget_destroy(spy_tech_shell);
   spy_tech_shell = NULL;
@@ -640,14 +639,6 @@ static void spy_steal_callback(gpointer data)
   }
 
   process_diplomat_arrival(NULL, 0);
-}
-
-/****************************************************************
-...
-*****************************************************************/
-static void spy_steal_button_callback(GtkWidget * w, gpointer data)
-{
-  spy_steal_callback(data);
 }
 
 /****************************************************************
@@ -687,7 +678,7 @@ static int create_advances_list(struct player *pplayer,
 {  
   GtkWidget *close_command, *scrolled;
   int i, j;
-  static const char *title_[1] = { N_("Select Advance to Steal") };
+  static gchar *title_[1] = { N_("Select Advance to Steal") };
   static gchar **title;
   GtkAccelGroup *accel=gtk_accel_group_new();
 
@@ -730,7 +721,7 @@ static int create_advances_list(struct player *pplayer,
   gtk_signal_connect(GTK_OBJECT(close_command), "clicked",
 	GTK_SIGNAL_FUNC(spy_close_tech_callback), NULL);
   gtk_signal_connect(GTK_OBJECT(spy_steal_command), "clicked",
-	GTK_SIGNAL_FUNC(spy_steal_button_callback), NULL);
+	GTK_SIGNAL_FUNC(spy_steal_callback), NULL);
 
   /* Now populate the list */
   gtk_clist_freeze(GTK_CLIST(spy_advances_list));
@@ -760,7 +751,7 @@ static int create_advances_list(struct player *pplayer,
   }
 
   if(j == 0) {
-    static const char *row_[1] = { N_("NONE") };
+    static gchar *row_[1] = { N_("NONE") };
     static gchar **row;
     
     if (!row) row = intl_slist(1, row_);
@@ -786,7 +777,7 @@ static int create_improvements_list(struct player *pplayer,
   GtkWidget *close_command, *scrolled;
   int j;
   gchar *row[1];
-  static const char *title_[1] = { N_("Select Improvement to Sabotage") };
+  static gchar *title_[1] = { N_("Select Improvement to Sabotage") };
   static gchar **title;
   GtkAccelGroup *accel=gtk_accel_group_new();
 
@@ -840,7 +831,7 @@ static int create_improvements_list(struct player *pplayer,
 
   built_impr_iterate(pcity, i) {
     if(i != B_PALACE && !is_wonder(i)) {
-      row[0] = (char *) get_impr_name_ex(pcity, i);
+      row[0] = get_impr_name_ex(pcity, i);
       gtk_clist_append(GTK_CLIST(spy_improvements_list), row);
       improvement_type[j++] = i;
     }  
@@ -878,6 +869,7 @@ static void spy_steal_popup(GtkWidget *w, gpointer data)
 has happened to the city during latency.  Therefore we must initialize
 pvictim to NULL and account for !pvictim in create_advances_list. -- Syela */
   
+  destroy_message_dialog(w);
   diplomat_dialog_open=0;
 
   if(!spy_tech_shell){
@@ -894,8 +886,11 @@ pvictim to NULL and account for !pvictim in create_advances_list. -- Syela */
  Requests up-to-date list of improvements, the return of
  which will trigger the popup_sabotage_dialog() function.
 *****************************************************************/
-static void spy_request_sabotage_list(gpointer data)
+static void spy_request_sabotage_list(GtkWidget *w, gpointer data)
 {
+  destroy_message_dialog(w);
+  diplomat_dialog_open=0;
+
   if(find_unit_by_id(diplomat_id) &&
      (find_city_by_id(diplomat_target_id))) {
     struct packet_diplomat_action req;
@@ -927,7 +922,7 @@ void popup_sabotage_dialog(struct city *pcity)
 /****************************************************************
 ...
 *****************************************************************/
-static void diplomat_incite_yes_callback(gpointer data)
+static void diplomat_incite_yes_callback(GtkWidget *w, gpointer data)
 {
   struct packet_diplomat_action req;
 
@@ -936,24 +931,34 @@ static void diplomat_incite_yes_callback(gpointer data)
   req.target_id=diplomat_target_id;
 
   send_packet_diplomat_action(&aconnection, &req);
+  
+  destroy_message_dialog(w);
+
+  process_diplomat_arrival(NULL, 0);
 }
 
 /****************************************************************
 ...
 *****************************************************************/
-static void diplomat_incite_close_callback(gpointer data)
+static void diplomat_incite_no_callback(GtkWidget *w, gpointer data)
 {
+  destroy_message_dialog(w);
+
   process_diplomat_arrival(NULL, 0);
 }
+
 
 /****************************************************************
 ...  Ask the server how much the revolt is going to cost us
 *****************************************************************/
-static void diplomat_incite_callback(gpointer data)
+static void diplomat_incite_callback(GtkWidget *w, gpointer data)
 {
   struct city *pcity;
   struct packet_generic_integer packet;
 
+  destroy_message_dialog(w);
+  diplomat_dialog_open=0;
+  
   if(find_unit_by_id(diplomat_id) && 
      (pcity=find_city_by_id(diplomat_target_id))) { 
     packet.value = diplomat_target_id;
@@ -972,24 +977,22 @@ void popup_incite_dialog(struct city *pcity)
     my_snprintf(buf, sizeof(buf), _("You can't incite a revolt in %s."),
 		pcity->name);
     popup_message_dialog(top_vbox, _("City can't be incited!"), buf,
-			 diplomat_incite_close_callback, NULL,
-			 _("Darn"), NULL, 0, 0);
+			 _("Darn"), diplomat_incite_no_callback, 0, 0);
   } else if (game.player_ptr->economic.gold >= pcity->incite_revolt_cost) {
     my_snprintf(buf, sizeof(buf),
 		_("Incite a revolt for %d gold?\nTreasury contains %d gold."), 
 		pcity->incite_revolt_cost, game.player_ptr->economic.gold);
-   popup_message_dialog(top_vbox, _("Incite a Revolt!"), buf,
-			diplomat_incite_close_callback, NULL,
+   diplomat_target_id = pcity->id;
+   popup_message_dialog(top_vbox, /*"diplomatrevoltdialog"*/_("Incite a Revolt!"), buf,
 		       _("_Yes"), diplomat_incite_yes_callback, 0,
-		       _("_No"), NULL, 0, 0);
+		       _("_No"), diplomat_incite_no_callback, 0, 0);
   } else {
     my_snprintf(buf, sizeof(buf),
 		_("Inciting a revolt costs %d gold.\n"
 		  "Treasury contains %d gold."), 
 		pcity->incite_revolt_cost, game.player_ptr->economic.gold);
-   popup_message_dialog(top_vbox, _("Traitors Demand Too Much!"), buf,
-			diplomat_incite_close_callback, NULL,
-		       _("Darn"), NULL, 0, 
+   popup_message_dialog(top_vbox, /*"diplomatnogolddialog"*/_("Traitors Demand Too Much!"), buf,
+		       _("Darn"), diplomat_incite_no_callback, 0, 
 		       0);
   }
 }
@@ -999,11 +1002,14 @@ void popup_incite_dialog(struct city *pcity)
   Callback from diplomat/spy dialog for "keep moving".
   (This should only occur when entering allied city.)
 *****************************************************************/
-static void diplomat_keep_moving_callback(gpointer data)
+static void diplomat_keep_moving_callback(GtkWidget *w, gpointer data)
 {
   struct unit *punit;
   struct city *pcity;
   
+  destroy_message_dialog(w);
+  diplomat_dialog_open=0;
+
   if( (punit=find_unit_by_id(diplomat_id))
       && (pcity=find_city_by_id(diplomat_target_id))
       && !same_pos(punit->x, punit->y, pcity->x, pcity->y)) {
@@ -1019,9 +1025,10 @@ static void diplomat_keep_moving_callback(gpointer data)
 /****************************************************************
 ...
 *****************************************************************/
-static void diplomat_close_callback(gpointer data)
+static void diplomat_cancel_callback(GtkWidget *w, gpointer data)
 {
-  diplomat_dialog_open = 0;
+  destroy_message_dialog(w);
+  diplomat_dialog_open=0;
 
   process_diplomat_arrival(NULL, 0);
 }
@@ -1050,14 +1057,13 @@ void popup_diplomat_dialog(struct unit *punit, int dest_x, int dest_y)
     if(!unit_flag(punit, F_SPY)){
       shl=popup_message_dialog(top_vbox, /*"diplomatdialog"*/
 			       _(" Choose Your Diplomat's Strategy"), buf,
-			       diplomat_close_callback, NULL,
          		     _("Establish _Embassy"), diplomat_embassy_callback, 0,
          		     _("_Investigate City"), diplomat_investigate_callback, 0,
          		     _("_Sabotage City"), diplomat_sabotage_callback, 0,
          		     _("Steal _Technology"), diplomat_steal_callback, 0,
          		     _("Incite a _Revolt"), diplomat_incite_callback, 0,
          		     _("_Keep moving"), diplomat_keep_moving_callback, 0,
-         		     _("_Cancel"), NULL, 0,
+         		     _("_Cancel"), diplomat_cancel_callback, 0,
          		     0);
       
       if(!diplomat_can_do_action(punit, DIPLOMAT_EMBASSY, dest_x, dest_y))
@@ -1075,7 +1081,6 @@ void popup_diplomat_dialog(struct unit *punit, int dest_x, int dest_y)
     }else{
        shl=popup_message_dialog(top_vbox, /*"spydialog"*/
 				_("Choose Your Spy's Strategy"), buf,
-				diplomat_close_callback, NULL,
  			      _("Establish _Embassy"), diplomat_embassy_callback, 0,
  			      _("_Investigate City (free)"), diplomat_investigate_callback, 0,
  			      _("_Poison City"), spy_poison_callback,0,
@@ -1083,7 +1088,7 @@ void popup_diplomat_dialog(struct unit *punit, int dest_x, int dest_y)
  			      _("Steal _Technology"), spy_steal_popup, 0,
  			      _("Incite a _Revolt"), diplomat_incite_callback, 0,
  			      _("_Keep moving"), diplomat_keep_moving_callback, 0,
- 			      _("_Cancel"), NULL, 0,
+ 			      _("_Cancel"), diplomat_cancel_callback, 0,
  			      0);
  
       if(!diplomat_can_do_action(punit, DIPLOMAT_EMBASSY, dest_x, dest_y))
@@ -1113,10 +1118,9 @@ void popup_diplomat_dialog(struct unit *punit, int dest_x, int dest_y)
                               (!unit_flag(punit, F_SPY))?
  			      _("Sir, the diplomat is waiting for your command"):
  			      _("Sir, the spy is waiting for your command"),
-				diplomat_close_callback, NULL,
  			      _("_Bribe Enemy Unit"), diplomat_bribe_callback, 0,
  			      _("_Sabotage Enemy Unit"), spy_sabotage_unit_callback, 0,
- 			      _("_Cancel"), NULL, 0,
+ 			      _("_Cancel"), diplomat_cancel_callback, 0,
  			      0);
         
        if(!diplomat_can_do_action(punit, DIPLOMAT_BRIBE, dest_x, dest_y))
@@ -1138,36 +1142,63 @@ bool diplomat_dialog_is_open(void)
 /****************************************************************
 ...
 *****************************************************************/
-static void caravan_establish_trade_callback(gpointer data)
+static void caravan_establish_trade_callback(GtkWidget *w, gpointer data)
 {
   struct packet_unit_request req;
   req.unit_id=caravan_unit_id;
   req.city_id=caravan_city_id;
   req.name[0]='\0';
   send_packet_unit_request(&aconnection, &req, PACKET_UNIT_ESTABLISH_TRADE);
+    
+  destroy_message_dialog(w);
+  caravan_dialog = NULL;
+  process_caravan_arrival(NULL);
 }
 
 
 /****************************************************************
 ...
 *****************************************************************/
-static void caravan_help_build_wonder_callback(gpointer data)
+static void caravan_help_build_wonder_callback(GtkWidget *w, gpointer data)
 {
   struct packet_unit_request req;
   req.unit_id=caravan_unit_id;
   req.city_id=caravan_city_id;
   req.name[0]='\0';
   send_packet_unit_request(&aconnection, &req, PACKET_UNIT_HELP_BUILD_WONDER);
+
+  destroy_message_dialog(w);
+  caravan_dialog = NULL;
+  process_caravan_arrival(NULL);
 }
+
 
 /****************************************************************
 ...
 *****************************************************************/
-static void caravan_close_callback(gpointer data)
+static void caravan_keep_moving_callback(GtkWidget *w, gpointer data)
 {
+#if 0   /* Now don't want to move at all in this case --dwp */
+  struct unit *punit;
+  struct city *pcity;
+  
+  if((punit=find_unit_by_id(caravan_unit_id)) && 
+     (pcity=find_city_by_id(caravan_city_id))) {
+    struct unit req_unit;
+
+    req_unit=*punit;
+    req_unit.x=pcity->x;
+    req_unit.y=pcity->y;
+    send_unit_info(&req_unit);
+  }
+#endif
+  
+  destroy_message_dialog(w);
   caravan_dialog = NULL;
   process_caravan_arrival(NULL);
 }
+
+
 
 /****************************************************************
 ...
@@ -1175,6 +1206,7 @@ static void caravan_close_callback(gpointer data)
 void popup_caravan_dialog(struct unit *punit,
 			  struct city *phomecity, struct city *pdestcity)
 {
+  GtkWidget *b;
   char buf[128];
   
   my_snprintf(buf, sizeof(buf),
@@ -1184,20 +1216,24 @@ void popup_caravan_dialog(struct unit *punit,
   caravan_city_id=pdestcity->id; /* callbacks need these */
   caravan_unit_id=punit->id;
   
-  caravan_dialog = popup_message_dialog(top_vbox,
-					_("Your Caravan Has Arrived"), buf,
-					caravan_close_callback, NULL,
+  caravan_dialog=popup_message_dialog(top_vbox,
+			   /*"caravandialog"*/_("Your Caravan Has Arrived"), 
+			   buf,
 			   _("Establish _Traderoute"),caravan_establish_trade_callback, 0,
 			   _("Help build _Wonder"),caravan_help_build_wonder_callback, 0,
-			   _("_Keep moving"),NULL, 0,
+			   _("_Keep moving"),caravan_keep_moving_callback, 0,
 			   0);
   
-  if (!can_establish_trade_route(phomecity, pdestcity)) {
-    message_dialog_button_set_sensitive(caravan_dialog, "button0", FALSE);
+  if(!can_establish_trade_route(phomecity, pdestcity))
+  {
+    b = gtk_object_get_data( GTK_OBJECT( caravan_dialog ), "button0" );
+    gtk_widget_set_sensitive( b, FALSE );
   }
   
-  if (!unit_can_help_build_wonder(punit, pdestcity)) {
-    message_dialog_button_set_sensitive(caravan_dialog, "button1", FALSE);
+  if(!unit_can_help_build_wonder(punit, pdestcity))
+  {
+    b = gtk_object_get_data( GTK_OBJECT( caravan_dialog ), "button1" );
+    gtk_widget_set_sensitive( b, FALSE );
   }
 }
 
@@ -1209,68 +1245,105 @@ bool caravan_dialog_is_open(void)
   return caravan_dialog != NULL;
 }
 
+
 /****************************************************************
 ...
 *****************************************************************/
-static void government_callback(gpointer data)
+static void government_callback(GtkWidget *w, gpointer data)
 {
   struct packet_player_request packet;
 
-  packet.government = GPOINTER_TO_INT(data);
+  packet.government=(size_t)data;
   send_packet_player_request(&aconnection, &packet, PACKET_PLAYER_GOVERNMENT);
 
-  assert(government_dialog_is_open);
-  government_dialog_is_open = FALSE;
+  destroy_message_dialog(w);
+  is_showing_government_dialog=0;
 }
+
 
 /****************************************************************
 ...
 *****************************************************************/
 void popup_government_dialog(void)
 {
-  int num, i, j;
-  struct button_descr *buttons;
+  int i;
+  GtkWidget *dshell, *button, *dlabel, *vbox;
 
-  if (government_dialog_is_open) {
-    return;
-  }
+  if(!is_showing_government_dialog) {
+    is_showing_government_dialog=1;
+  
+    gtk_widget_set_sensitive(top_vbox, FALSE);
+  
+    dshell=gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_position (GTK_WINDOW(dshell), GTK_WIN_POS_MOUSE);
 
-  assert(game.government_when_anarchy >= 0
-	 && game.government_when_anarchy < game.government_count);
-  num = game.government_count - 1;
+    gtk_signal_connect(
+      GTK_OBJECT(dshell),
+      "delete_event",
+      GTK_SIGNAL_FUNC(gtk_true),
+      (gpointer) toplevel
+    );
 
-  buttons = fc_malloc(sizeof(struct button_descr) * num);
+    gtk_window_set_title(GTK_WINDOW(dshell), _("Choose Your New Government"));
+#if 0
+    gtk_widget_realize(dshell);
+    gdk_window_set_decorations(dshell->window, GDK_DECOR_BORDER);
+#endif
 
-  j = 0;
-  for (i = 0; i < game.government_count; i++) {
-    struct government *g = &governments[i];
+    vbox = gtk_vbox_new(0,TRUE);
+    gtk_container_add(GTK_CONTAINER(dshell),vbox);
 
-    if (i == game.government_when_anarchy) {
-      continue;
+    gtk_container_border_width(GTK_CONTAINER(vbox),5);
+
+    dlabel = gtk_label_new(_("Select government type:"));
+    gtk_box_pack_start(GTK_BOX(vbox), dlabel, TRUE, FALSE, 0);
+
+    gtk_object_set_data(GTK_OBJECT(vbox), "parent",(gpointer) top_vbox);
+
+    for (i=0; i<game.government_count; ++i) {
+      struct government *g = &governments[i];
+
+      if (i == game.government_when_anarchy) continue;
+      button=gtk_button_new_with_label(g->name);
+      gtk_box_pack_start(GTK_BOX(vbox), button, TRUE, FALSE, 0);
+      gtk_signal_connect(
+        GTK_OBJECT(button),
+        "clicked",
+        GTK_SIGNAL_FUNC(government_callback),
+        GINT_TO_POINTER(g->index)
+      );
+      if(!can_change_to_government(game.player_ptr, i))
+	gtk_widget_set_sensitive(button, FALSE);
     }
-
-    buttons[j].text = g->name;
-    buttons[j].callback = government_callback;
-    buttons[j].data = GINT_TO_POINTER(i);
-    buttons[j].sensitive = can_change_to_government(game.player_ptr, i);
-    j++;
+ 
+    gtk_widget_show_all( vbox );
+    gtk_widget_show(dshell);  
   }
+}
 
-  government_dialog_is_open = TRUE;
-  base_popup_message_dialog(top_vbox, _("Choose Your New Government"),
-			    _("Select government type:"), NULL, NULL,
-			    num, buttons);
+
+
+/****************************************************************
+...
+*****************************************************************/
+static void revolution_callback_yes(GtkWidget *w, gpointer data)
+{
+  struct packet_player_request packet;
+
+  send_packet_player_request(&aconnection, &packet, PACKET_PLAYER_REVOLUTION);
+  
+  destroy_message_dialog(w);
 }
 
 /****************************************************************
 ...
 *****************************************************************/
-static void revolution_callback_yes(gpointer data)
+static void revolution_callback_no(GtkWidget *w, gpointer data)
 {
-  struct packet_player_request packet;
-
-  send_packet_player_request(&aconnection, &packet, PACKET_PLAYER_REVOLUTION);
+  destroy_message_dialog(w);
 }
+
+
 
 /****************************************************************
 ...
@@ -1279,35 +1352,43 @@ void popup_revolution_dialog(void)
 {
   popup_message_dialog(top_vbox, /*"revolutiondialog"*/_("Revolution!"), 
 		       _("You say you wanna revolution?"),
-		       dummy_close_callback, NULL, 
 		       _("_Yes"),revolution_callback_yes, 0,
-		       _("_No"),NULL, 0, 
+		       _("_No"),revolution_callback_no, 0, 
 		       0);
 }
 
+
 /****************************************************************
 ...
 *****************************************************************/
-static void pillage_callback(gpointer data)
+static void pillage_callback(GtkWidget *w, gpointer data)
 {
-  struct pillage_data *pdata = data;
-  struct unit *punit = find_unit_by_id(pdata->unit_id);
-
-  if (!punit) {
+  if (!is_showing_pillage_dialog) {
+    destroy_message_dialog (w);
     return;
   }
 
-  request_new_unit_activity_targeted(punit, ACTIVITY_PILLAGE, pdata->what);
+  if (data) {
+    struct unit *punit = find_unit_by_id (unit_to_use_to_pillage);
+    if (punit) {
+      request_new_unit_activity_targeted (punit,
+					  ACTIVITY_PILLAGE,
+					  GPOINTER_TO_INT(data));
+    }
+  }
+
+  destroy_message_dialog (w);
+  is_showing_pillage_dialog = FALSE;
 }
 
 /****************************************************************
 ...
 *****************************************************************/
-static void pillage_close_callback(gpointer data)
+static gint pillage_del_callback(GtkWidget *widget, GdkEvent *event,
+				 gpointer data)
 {
-  struct pillage_data *pillage_datas = data;
-
-  free(pillage_datas);
+  pillage_callback((GtkWidget *)data, NULL);
+  return FALSE;
 }
 
 /****************************************************************
@@ -1316,73 +1397,103 @@ static void pillage_close_callback(gpointer data)
 void popup_pillage_dialog(struct unit *punit,
 			  enum tile_special_type may_pillage)
 {
-  /* +1 for cancel button */
-  int i, num = 1;
-  enum tile_special_type tmp = may_pillage;
-  struct button_descr *buttons;
-  struct pillage_data *datas;
+  GtkWidget *dshell, *button, *dlabel, *vbox;
 
-  while (tmp != S_NO_SPECIAL) {
-    enum tile_special_type what = get_preferred_pillage(tmp);
+  if (!is_showing_pillage_dialog) {
+    is_showing_pillage_dialog = TRUE;
+    unit_to_use_to_pillage = punit->id;
 
-    tmp &= (~(what | map_get_infrastructure_prerequisite(what)));
-    num++;
+    gtk_widget_set_sensitive (top_vbox, FALSE);
+
+    dshell = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_position (GTK_WINDOW(dshell), GTK_WIN_POS_MOUSE);
+    gtk_window_set_title (GTK_WINDOW(dshell), _("What To Pillage"));
+
+    vbox = gtk_vbox_new (0,TRUE);
+    gtk_container_add (GTK_CONTAINER (dshell), vbox);
+
+    gtk_container_border_width (GTK_CONTAINER (vbox), 5);
+
+    dlabel = gtk_label_new (_("Select what to pillage:"));
+    gtk_box_pack_start (GTK_BOX (vbox), dlabel, TRUE, FALSE, 0);
+
+    gtk_object_set_data (GTK_OBJECT (vbox), "parent", (gpointer)top_vbox);
+
+    while (may_pillage != S_NO_SPECIAL) {
+      enum tile_special_type what = get_preferred_pillage(may_pillage);
+
+      button = gtk_button_new_with_label (map_get_infrastructure_text (what));
+      gtk_box_pack_start (GTK_BOX (vbox), button, TRUE, FALSE, 0);
+      gtk_signal_connect (
+        GTK_OBJECT (button),
+        "clicked",
+        GTK_SIGNAL_FUNC (pillage_callback),
+        GINT_TO_POINTER(what)
+      );
+      may_pillage &= (~(what | map_get_infrastructure_prerequisite (what)));
+    }
+    button = gtk_button_new_with_label (_("Cancel"));
+    gtk_box_pack_start (GTK_BOX (vbox), button, TRUE, FALSE, 0);
+    gtk_signal_connect (
+      GTK_OBJECT (button),
+      "clicked",
+      GTK_SIGNAL_FUNC (pillage_callback),
+      NULL
+    );
+
+    gtk_signal_connect (
+      GTK_OBJECT (dshell),
+      "delete_event",
+      GTK_SIGNAL_FUNC (pillage_del_callback),
+      (gpointer)button
+    );
+
+    gtk_widget_show_all (vbox);
+    gtk_widget_show (dshell);
   }
-  buttons = fc_malloc(sizeof(struct button_descr) * num);
-  datas = fc_malloc(sizeof(struct pillage_data) * num);
-
-  for (i = 0; i < num - 1; i++) {
-    enum tile_special_type what = get_preferred_pillage(may_pillage);
-
-    datas[i].unit_id = punit->id;
-    datas[i].what = what;
-
-    buttons[i].text = get_special_name(what);
-    buttons[i].callback = pillage_callback;
-    buttons[i].data = &datas[i];
-    buttons[i].sensitive = TRUE;
-
-    may_pillage &= (~(what | map_get_infrastructure_prerequisite(what)));
-  }
-  buttons[num - 1].text = _("Cancel");
-  buttons[num - 1].callback = NULL;
-
-  base_popup_message_dialog(top_vbox, _("What To Pillage"),
-			    _("Select what to pillage:"),
-			    pillage_close_callback, datas, num, buttons);
 }
 
 /****************************************************************
 handle buttons in unit connect dialog
 *****************************************************************/
-static void unit_connect_callback(gpointer data)
+static void unit_connect_callback (GtkWidget *w, gpointer data)
 {
-  struct connect_data *pdata = data;
+  struct unit *punit;
+  int activity = GPOINTER_TO_INT(data);
 
-  if (find_unit_by_id(pdata->unit_id)) {
-    struct packet_unit_connect req;
-
-    req.activity_type = pdata->what;
-    req.unit_id = pdata->unit_id;
-    req.dest_x = pdata->dest_x;
-    req.dest_y = pdata->dest_y;
-    send_packet_unit_connect(&aconnection, &req);
+  if (!is_showing_unit_connect_dialog) {
+    destroy_message_dialog(w);
+    return;
   }
+
+  punit = find_unit_by_id(unit_to_use_to_connect);
+
+  if (punit) {
+    if (activity != ACTIVITY_IDLE) {
+      struct packet_unit_connect req;
+      req.activity_type = activity;
+      req.unit_id = punit->id;
+      req.dest_x = connect_unit_x;
+      req.dest_y = connect_unit_y;
+      send_packet_unit_connect(&aconnection, &req);
+    }
+    else {
+      update_unit_info_label(punit);
+    }
+  }
+
+  destroy_message_dialog(w);
+  is_showing_unit_connect_dialog = FALSE;
 }
 
 /****************************************************************
 ...
 *****************************************************************/
-static void unit_connect_close_callback(gpointer data)
+static gint unit_connect_del_callback(GtkWidget *widget, GdkEvent *event,
+				      gpointer data)
 {
-  struct connect_data *connect_datas = data;
-  struct unit *punit = find_unit_by_id(connect_datas[0].unit_id);
-
-  if (punit) {
-    update_unit_info_label(punit);
-  }
-
-  free(connect_datas);
+  unit_connect_callback((GtkWidget *) data, GINT_TO_POINTER(ACTIVITY_IDLE));
+  return FALSE;
 }
 
 /****************************************************************
@@ -1390,152 +1501,100 @@ popup dialog which prompts for activity type (unit connect)
 *****************************************************************/
 void popup_unit_connect_dialog(struct unit *punit, int dest_x, int dest_y)
 {
-  /* +1 for cancel button */
-  int j, num = 1;
-  struct button_descr *buttons;
-  enum unit_activity activity;
-  struct connect_data *datas;
+  GtkWidget *dshell, *button, *dlabel, *vbox;
+  int activity;
+
+  if (is_showing_unit_connect_dialog) 
+    return;
+
+  is_showing_unit_connect_dialog = TRUE;
+  unit_to_use_to_connect = punit->id;
+  connect_unit_x = dest_x;
+  connect_unit_y = dest_y;
+
+  gtk_widget_set_sensitive (top_vbox, FALSE);
+
+  dshell = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+  gtk_window_set_position (GTK_WINDOW(dshell), GTK_WIN_POS_MOUSE);
+
+  gtk_window_set_title (GTK_WINDOW(dshell), _("Connect"));
+
+  vbox = gtk_vbox_new (0,TRUE);
+  gtk_container_add (GTK_CONTAINER (dshell), vbox);
+
+  gtk_container_border_width (GTK_CONTAINER (vbox), 5);
+
+  dlabel = gtk_label_new (_("Choose unit activity:"));
+  gtk_box_pack_start (GTK_BOX (vbox), dlabel, TRUE, FALSE, 0);
+
+  gtk_object_set_data (GTK_OBJECT (vbox), "parent", (gpointer)top_vbox);
 
   for (activity = ACTIVITY_IDLE + 1; activity < ACTIVITY_LAST; activity++) {
-    if (!can_unit_do_connect(punit, activity)) {
-      continue;
-    }
-    num++;
+    if (! can_unit_do_connect (punit, activity)) continue;
+
+    button = gtk_button_new_with_label (get_activity_text (activity));
+    gtk_box_pack_start (GTK_BOX (vbox), button, TRUE, FALSE, 0);
+    gtk_signal_connect (
+      GTK_OBJECT (button),
+      "clicked",
+      GTK_SIGNAL_FUNC (unit_connect_callback),
+      GINT_TO_POINTER(activity)
+      );
   }
+  button = gtk_button_new_with_label (_("Cancel"));
+  gtk_box_pack_start (GTK_BOX (vbox), button, TRUE, FALSE, 0);
+  gtk_signal_connect (
+    GTK_OBJECT (button),
+    "clicked",
+    GTK_SIGNAL_FUNC (unit_connect_callback),
+    GINT_TO_POINTER(ACTIVITY_IDLE)
+    );
 
-  buttons = fc_malloc(sizeof(struct button_descr) * num);
-  datas = fc_malloc(sizeof(struct connect_data) * num);
+  gtk_signal_connect (
+    GTK_OBJECT (dshell),
+    "delete_event",
+    GTK_SIGNAL_FUNC (unit_connect_del_callback),
+    (gpointer)button
+  );
 
-  j = 0;
-  for (activity = ACTIVITY_IDLE + 1; activity < ACTIVITY_LAST; activity++) {
-    if (!can_unit_do_connect(punit, activity)) {
-      continue;
-    }
-
-    datas[j].unit_id = punit->id;
-    datas[j].dest_x = dest_x;
-    datas[j].dest_y = dest_y;
-    datas[j].what = activity;
-
-    buttons[j].text = get_activity_text(activity);
-    buttons[j].callback = unit_connect_callback;
-    buttons[j].data = &datas[j];
-    buttons[j].sensitive = TRUE;
-    j++;
-  }
-
-  buttons[num - 1].text = _("Cancel");
-  buttons[num - 1].callback = NULL;
-
-  base_popup_message_dialog(top_vbox, _("Connect"),
-			    _("Choose unit activity:"),
-			    unit_connect_close_callback, datas, num,
-			    buttons);
+  gtk_widget_show_all (vbox);
+  gtk_widget_show (dshell);
 }
 
 /****************************************************************
 ...
 *****************************************************************/
-static void popup_mes_close(GtkWidget *dialog_shell)
-{
-  GtkWidget *parent =
-      gtk_object_get_data(GTK_OBJECT(dialog_shell), "parent");
-  void (*close_callback) (gpointer) =
-      (void (*)(gpointer)) gtk_object_get_data(GTK_OBJECT(dialog_shell),
-					       "close_callback");
-  gpointer close_callback_data =
-      gtk_object_get_data(GTK_OBJECT(dialog_shell), "close_callback_data");
-  struct button_descr *buttons =
-      gtk_object_get_data(GTK_OBJECT(dialog_shell), "buttons");
-
-  if (GTK_IS_WIDGET(parent)) {
-    /* 
-     * It is possible that the user callback for a button may have
-     * destroyed the parent.
-     */
-    gtk_widget_set_sensitive(parent, TRUE);
-  }
-
-  if (close_callback) {
-    (*close_callback)(close_callback_data);
-  }
-
-  free(buttons);
-}
-
-/****************************************************************
-...
-*****************************************************************/
-static gint popup_mes_del_callback(GtkWidget * widget, GdkEvent * event,
+static gint popup_mes_del_callback(GtkWidget *widget, GdkEvent *event,
 				   gpointer data)
 {
-  GtkWidget *dialog_shell = GTK_WIDGET(data);
-  void (*close_callback) (gpointer) =
-      (void (*)(gpointer)) gtk_object_get_data(GTK_OBJECT(dialog_shell),
-					       "close_callback");
-
-  if (close_callback) {
-    popup_mes_close(dialog_shell);
-    return FALSE;
-  } else {
-    return TRUE;
-  }
+  gtk_widget_set_sensitive( (GtkWidget *)data, TRUE );
+  return FALSE;
 }
 
 /****************************************************************
 ...
 *****************************************************************/
-static void popup_mes_handle_callback(GtkWidget * widget, gpointer data)
+void message_dialog_button_set_sensitive(GtkWidget *shl, char *bname,int state)
 {
-  GtkWidget *dialog_shell = GTK_WIDGET(data);
-  int button =
-	GPOINTER_TO_INT(gtk_object_get_data(GTK_OBJECT(widget), "button"));
-  struct button_descr *buttons =
-      gtk_object_get_data(GTK_OBJECT(dialog_shell), "buttons");
+  GtkWidget *b;
 
-  if (buttons[button].callback) {
-    (*buttons[button].callback)(buttons[button].data);
-  }
-
-  popup_mes_close(dialog_shell);
-
-  gtk_widget_destroy(dialog_shell);
+  b = gtk_object_get_data( GTK_OBJECT( shl ), bname );
+  gtk_widget_set_sensitive( b, state );
 }
 
 /****************************************************************
 ...
 *****************************************************************/
-void message_dialog_button_set_sensitive(GtkWidget * shl, const char *bname,
-					 bool state)
+GtkWidget *popup_message_dialog(GtkWidget *parent, char *dialogname,
+				char *text, ...)
 {
-  GtkWidget *button = gtk_object_get_data(GTK_OBJECT(shl), bname);
-  gtk_widget_set_sensitive(button, state);
-}
-
-/****************************************************************
-  Displays a dialog which shows several textual choices. The parent
-  widget is deactivated during the time the dialog is shown.
-
-  If the user clicks on one of the buttons the corresponding callback
-  is called. If the close_callback is set it is called afterwards.
-
-  If close_callback is unset the dialog can't be closed with the X
-  button. If close_callback is set and the user closes the dialog with
-  the X button the close_callback is called.
-
-  The dialog is automatically destroyed after use (button click or X
-  button).
-*****************************************************************/
-GtkWidget *base_popup_message_dialog(GtkWidget * parent, 
-				     const char *dialogname,
-				     const char *text,
-				     void (*close_callback) (gpointer),
-				     gpointer close_callback_data,
-				     int num_buttons,
-				     const struct button_descr *buttons)
-{
-  GtkWidget *dshell, *dlabel, *vbox;
+  va_list args;
+  GtkWidget *dshell, *button, *dlabel, *vbox;
   GtkAccelGroup *accel = gtk_accel_group_new();
+  void (*fcb)(GtkWidget *, gpointer);
+  gpointer data;
+  char *name;
+  char button_name[512];
   int i;
 
   gtk_widget_set_sensitive(parent, FALSE);
@@ -1544,14 +1603,8 @@ GtkWidget *base_popup_message_dialog(GtkWidget * parent,
   gtk_window_set_position (GTK_WINDOW(dshell), GTK_WIN_POS_MOUSE);
   gtk_accel_group_attach(accel, GTK_OBJECT(dshell));
 
-  gtk_object_set_data(GTK_OBJECT(dshell), "close_callback",
-		      (gpointer) close_callback);
-  gtk_object_set_data(GTK_OBJECT(dshell), "close_callback_data",
-		      (gpointer) close_callback_data);
-
-  gtk_signal_connect(GTK_OBJECT(dshell), "delete_event",
-		     GTK_SIGNAL_FUNC(popup_mes_del_callback),
-		     (gpointer) dshell);
+  gtk_signal_connect( GTK_OBJECT(dshell),"delete_event",
+	GTK_SIGNAL_FUNC(popup_mes_del_callback),(gpointer)parent );
   gtk_window_set_title( GTK_WINDOW(dshell), dialogname );
 
   vbox = gtk_vbox_new(0,TRUE);
@@ -1562,32 +1615,29 @@ GtkWidget *base_popup_message_dialog(GtkWidget * parent,
   dlabel = gtk_label_new(text);
   gtk_box_pack_start( GTK_BOX( vbox ), dlabel, TRUE, FALSE, 0 );
 
-  gtk_object_set_data(GTK_OBJECT(dshell), "parent",(gpointer)parent);
-  gtk_object_set_data(GTK_OBJECT(dshell), "buttons", (gpointer) buttons);
+  gtk_object_set_data(GTK_OBJECT(vbox), "parent",(gpointer)parent);
 
-  for (i = 0; i < num_buttons; i++) {
-    GtkWidget *button;
-    char button_name[512];
-
-    button = gtk_accelbutton_new(buttons[i].text, accel);
-    gtk_box_pack_start(GTK_BOX(vbox), button, TRUE, FALSE, 0);
-
-    my_snprintf(button_name, sizeof(button_name), "button%d", i);
-    gtk_object_set_data(GTK_OBJECT(dshell), button_name, button);
-
-    gtk_object_set_data(GTK_OBJECT(button), "button", GINT_TO_POINTER(i));
+  i=0;
+  va_start(args, text);
+  
+  while((name=va_arg(args, char *))) {
+    fcb=va_arg(args, void *);
+    data=va_arg(args, gpointer);
+    my_snprintf(button_name, sizeof(button_name), "button%d", i++);
     
-    gtk_signal_connect(GTK_OBJECT(button), "clicked",
-		       GTK_SIGNAL_FUNC(popup_mes_handle_callback),
-		       (gpointer) dshell);
+    button=gtk_accelbutton_new(name, accel);
+    gtk_box_pack_start( GTK_BOX( vbox ), button, TRUE, FALSE, 0 );
+    
+    gtk_object_set_data( GTK_OBJECT( dshell ), button_name, button );
 
-    gtk_widget_set_sensitive(GTK_WIDGET(button), buttons[i].sensitive);
+    gtk_signal_connect(GTK_OBJECT(button),"clicked",GTK_SIGNAL_FUNC(fcb),data );
 
-    if (i == 0) {
+    if (i==1)
       gtk_widget_grab_focus(button);
-    }
   }
   
+  va_end(args);
+
   gtk_widget_show_all( vbox );
 
   gtk_widget_show(dshell);  
@@ -1596,41 +1646,18 @@ GtkWidget *base_popup_message_dialog(GtkWidget * parent,
 }
 
 /****************************************************************
- Wrapper for base_popup_message_dialog.
-
- See also message_dialog_button_set_sensitive.
+...
 *****************************************************************/
-GtkWidget *popup_message_dialog(GtkWidget * parent, const char *dialogname,
-				const char *text,
-				void (*close_callback) (gpointer),
-				gpointer close_callback_data, ...)
+void destroy_message_dialog(GtkWidget *button)
 {
-  va_list args;
-  int i, num = 0;
-  struct button_descr *buttons;
+  GtkWidget *parent;
 
-  va_start(args, close_callback_data);
-  while (va_arg(args, char *)) {
-    (void) va_arg(args, void *);
-    (void) va_arg(args, gpointer);
-    num++;
-  }
-  va_end(args);
+  parent = gtk_object_get_data(GTK_OBJECT(button->parent),"parent");
+  gtk_widget_set_sensitive(parent, TRUE);
 
-  buttons = fc_malloc(sizeof(struct button_descr) * num);
-
-  va_start(args, close_callback_data);
-  for (i = 0; i < num; i++) {
-    buttons[i].text = va_arg(args, char *);
-    buttons[i].callback = va_arg(args, void *);
-    buttons[i].data = va_arg(args, gpointer);
-    buttons[i].sensitive = TRUE;
-  }
-  va_end(args);
-
-  return base_popup_message_dialog(parent, dialogname, text, close_callback,
-				   close_callback_data, num, buttons);
+  gtk_widget_destroy(button->parent->parent);
 }
+
 
 /**************************************************************************
 ...
@@ -1797,11 +1824,11 @@ popup the dialog 10% inside the main-window
 *****************************************************************/
 void popup_races_dialog(void)
 {
-  gtk_widget_set_sensitive(top_vbox, FALSE);
+  gtk_widget_set_sensitive (top_vbox, FALSE);
 
-  create_races_dialog();
+  create_races_dialog ();
 
-  gtk_widget_show(races_dialog_shell);
+  gtk_widget_show (races_dialog_shell);
 }
 
 /****************************************************************
@@ -1810,24 +1837,12 @@ void popup_races_dialog(void)
 void popdown_races_dialog(void)
 {
   if (races_dialog_shell) {
-    gtk_widget_set_sensitive(top_vbox, TRUE);
-
-    /* while dialog is being destroyed, it will toggle the race_toggle 
-     * buttons in turn. eventually races_by_name_callback() will call
-     * select_random_race() will try to activate a now-destroyed 
-     * button with typical results. let's avoid that. 
-     * (this is one of the reasons I hate gtk) */
-    gtk_signal_disconnect_by_func(GTK_OBJECT(GTK_COMBO(races_by_name)->list),
-                                  GTK_SIGNAL_FUNC(races_by_name_callback), 
-                                  NULL);
-
-    gtk_widget_destroy(races_dialog_shell);
+    gtk_widget_set_sensitive (top_vbox, TRUE);
+    gtk_widget_destroy (races_dialog_shell);
     races_dialog_shell = NULL;
     g_list_free(sorted_races_list);
     sorted_races_list = NULL;
-    free(races_toggles);
-    races_toggles = NULL;
-  }
+  } /* else there is no dialog shell to destroy */
 }
 
 /****************************************************************
@@ -1899,15 +1914,15 @@ static void select_random_race(void)
   }
 
   /* initialize nation toggle array */
-  gtk_toggle_button_set_state(GTK_TOGGLE_BUTTON(
-                              races_toggles[g_list_index(sorted_races_list,
-                              GINT_TO_POINTER(selected_nation))]), TRUE);
+  gtk_toggle_button_set_state( GTK_TOGGLE_BUTTON(
+		 races_toggles[g_list_index(sorted_races_list,
+			    GINT_TO_POINTER(selected_nation))] ), TRUE );
 
   /* initialize city style */
   selected_city_style =
-                      city_style_ridx[get_nation_city_style(selected_nation)];
+    city_style_ridx[get_nation_city_style(selected_nation)];
   gtk_toggle_button_set_state(GTK_TOGGLE_BUTTON(
-			city_style_toggles[selected_city_style]), TRUE);
+			city_style_toggles[selected_city_style] ), TRUE );
 }
 
 /****************************************************************
@@ -1915,228 +1930,157 @@ static void select_random_race(void)
 *****************************************************************/
 void create_races_dialog(void)
 {
-  int       per_row;
+  int       per_row = 5;
   int       i;
   GSList    *group = NULL;
   GSList    *sgroup = NULL;
   GSList    *cgroup = NULL;
-  GtkWidget *frame, *label, *pop_downs_box;
-  GList     *race_names;
- 
-  /* Makes the flag box a nicely proportioned rectangle,
-   * whatever the total size may be */
-  if (game.playable_nation_count > 8) {
-    per_row = sqrt(game.playable_nation_count) * 18 / 15;
-  } else {
-    /* Multiple rows would look silly here */ 
-    per_row = game.playable_nation_count;
-  }
+  GtkWidget *f, *fs, *fa;
 
   races_dialog_shell = gtk_dialog_new();
-  gtk_signal_connect(GTK_OBJECT(races_dialog_shell), "delete_event", 
-                     GTK_SIGNAL_FUNC(deleted_callback), NULL);
+    gtk_signal_connect( GTK_OBJECT(races_dialog_shell),"delete_event",
+	GTK_SIGNAL_FUNC(deleted_callback),NULL );
 
-  gtk_window_set_title(GTK_WINDOW(races_dialog_shell), 
-                       _("What Nation Will You Be?"));
+  gtk_window_set_title( GTK_WINDOW( races_dialog_shell ),
+			_(" What Nation Will You Be?") );
 
-  frame = gtk_frame_new(_("Select nation and name"));
-  gtk_box_pack_start(GTK_BOX(GTK_DIALOG(races_dialog_shell)->vbox),
-                     frame, FALSE, FALSE, 0);
+  f = gtk_frame_new(_("Select nation and name"));
+  gtk_box_pack_start( GTK_BOX( GTK_DIALOG( races_dialog_shell )->vbox ),
+	f, FALSE, FALSE, 0 );
 
   /* ------- nation name toggles ------- */
 
-  races_toggles_form = gtk_table_new(per_row, 
-                              ((game.playable_nation_count-1) / per_row) + 1, 
-                              FALSE);
-  gtk_container_add(GTK_CONTAINER(frame), races_toggles_form);
+  races_toggles_form =
+    gtk_table_new( per_row, ((game.playable_nation_count-1)/per_row)+1, FALSE );
+  gtk_container_add( GTK_CONTAINER( f ), races_toggles_form );
 
   free(races_toggles);
-  races_toggles = fc_calloc(game.playable_nation_count, sizeof(GtkWidget*));
+  races_toggles = fc_calloc( game.playable_nation_count, sizeof(GtkWidget*) );
 
-  for(i = 0; i < game.playable_nation_count; i++) {
-    sorted_races_list = g_list_append(sorted_races_list, GINT_TO_POINTER(i));
+  for(i=0; i<game.playable_nation_count; i++) {
+    sorted_races_list=g_list_append(sorted_races_list,GINT_TO_POINTER(i));
   }
-
-  sorted_races_list = g_list_sort(sorted_races_list, cmp_func);
-
-  for(i = 0; i < g_list_length(sorted_races_list); i++) {
-    gint nat_id = GPOINTER_TO_INT(g_list_nth_data(sorted_races_list, i));
-    GtkWidget *flag;
-    SPRITE *s;
-
-    races_toggles[i] = gtk_radio_button_new(group);
-    s = crop_blankspace(get_nation_by_idx(nat_id)->flag_sprite);
-    flag = gtk_pixmap_new(s->pixmap, s->mask);
-    gtk_misc_set_alignment(GTK_MISC(flag), 0, 0.5);
-    gtk_misc_set_padding(GTK_MISC(flag), 6, 4);
-
-    gtk_container_add(GTK_CONTAINER(races_toggles[i]), flag);
-    gtk_toggle_button_set_state(GTK_TOGGLE_BUTTON(races_toggles[i]), FALSE); 
-
-    group = gtk_radio_button_group(GTK_RADIO_BUTTON(races_toggles[i]));
-    gtk_table_attach_defaults(GTK_TABLE(races_toggles_form), races_toggles[i], 
+  sorted_races_list=g_list_sort(sorted_races_list,cmp_func);
+  for(i=0; i<g_list_length(sorted_races_list); i++) {
+    gint nat_id=GPOINTER_TO_INT(g_list_nth_data(sorted_races_list,i));
+    races_toggles[i]=gtk_radio_button_new_with_label(group,
+						     get_nation_name(nat_id));
+    gtk_toggle_button_set_state(GTK_TOGGLE_BUTTON(races_toggles[i]), FALSE);
+    group = gtk_radio_button_group( GTK_RADIO_BUTTON( races_toggles[i] ) );
+    gtk_table_attach_defaults(GTK_TABLE(races_toggles_form),races_toggles[i],
 			      i%per_row, i%per_row+1, i/per_row, i/per_row+1);
-  } 
-
-  /* ------ choose nation by name -- and choose leader ------ */
- 
-  pop_downs_box = gtk_hbox_new(FALSE, 0);
-  gtk_box_pack_start(GTK_BOX(GTK_DIALOG(races_dialog_shell)->vbox),
-                     pop_downs_box, FALSE, FALSE, 5);
- 
-  label = gtk_label_new(_("Nation:"));
-  races_by_name = gtk_combo_new();
-  gtk_editable_set_editable(GTK_EDITABLE(GTK_COMBO(races_by_name)->entry), 
-                            FALSE);
-  race_names = NULL;
-
-  for(i = 0; i < game.playable_nation_count; i++) {
-    race_names = g_list_append(race_names, get_nation_by_idx(
-          GPOINTER_TO_INT(g_list_nth_data(sorted_races_list, i)))->name);
   }
 
-  gtk_combo_set_popdown_strings(GTK_COMBO(races_by_name), race_names);
-  gtk_combo_set_value_in_list(GTK_COMBO(races_by_name), TRUE, FALSE);
-  gtk_box_pack_start(GTK_BOX(pop_downs_box), label, FALSE, FALSE, 4);
-  gtk_box_pack_start(GTK_BOX(pop_downs_box), races_by_name, FALSE, FALSE, 0);
-  
+  /* ------- nation leader combo ------- */
 
   races_name = gtk_combo_new();
 
-  label = gtk_label_new(_("Leader:"));
-  gtk_box_pack_end(GTK_BOX(pop_downs_box), races_name, FALSE, FALSE, 4);
-  gtk_box_pack_end(GTK_BOX(pop_downs_box), label, FALSE, FALSE, 0);
- 
-  GTK_WIDGET_SET_FLAGS(races_name, GTK_CAN_DEFAULT);
-  gtk_widget_grab_default(races_name);
+  gtk_box_pack_start( GTK_BOX( GTK_DIALOG( races_dialog_shell )->vbox ),
+	races_name, FALSE, FALSE, 0 );
+  GTK_WIDGET_SET_FLAGS( races_name, GTK_CAN_DEFAULT );
+  gtk_widget_grab_default( races_name );
 
   /* ------- leader sex toggles ------- */
 
-  frame = gtk_frame_new(_("Select your sex"));
-  gtk_box_pack_start(GTK_BOX(GTK_DIALOG(races_dialog_shell)->vbox),
-                     frame, FALSE, FALSE, 0);
+  fs = gtk_frame_new(_("Select your sex"));
 
-  races_sex_toggles_form = gtk_table_new(1, 2, FALSE);
-  gtk_container_add(GTK_CONTAINER(frame), races_sex_toggles_form); 
+  gtk_box_pack_start( GTK_BOX( GTK_DIALOG( races_dialog_shell )->vbox ),
+	fs, FALSE, FALSE, 0 );
+  races_sex_toggles_form = gtk_table_new( 1, 2, FALSE );
+  gtk_container_add( GTK_CONTAINER( fs ), races_sex_toggles_form ); 
 
-  races_sex_toggles[0] = gtk_radio_button_new_with_label(sgroup, _("Male"));
-  gtk_toggle_button_set_state(GTK_TOGGLE_BUTTON( races_sex_toggles[0]),
-                              FALSE);
-  sgroup = gtk_radio_button_group(GTK_RADIO_BUTTON(races_sex_toggles[0]));
-  gtk_table_attach_defaults(GTK_TABLE(races_sex_toggles_form),
-                            races_sex_toggles[0], 0, 1, 0, 1); 
-  races_sex_toggles[1] = gtk_radio_button_new_with_label(sgroup, _("Female"));
-  gtk_toggle_button_set_state(GTK_TOGGLE_BUTTON(races_sex_toggles[1]),
-                              FALSE);
-  sgroup = gtk_radio_button_group(GTK_RADIO_BUTTON(races_sex_toggles[1]));
-  gtk_table_attach_defaults(GTK_TABLE(races_sex_toggles_form),
-                            races_sex_toggles[1], 1, 2, 0, 1); 
+  races_sex_toggles[0]= gtk_radio_button_new_with_label( sgroup, _("Male") );
+  gtk_toggle_button_set_state( GTK_TOGGLE_BUTTON( races_sex_toggles[0] ),
+			       FALSE );
+  sgroup = gtk_radio_button_group( GTK_RADIO_BUTTON( races_sex_toggles[0] ) );
+  gtk_table_attach_defaults( GTK_TABLE(races_sex_toggles_form),
+			     races_sex_toggles[0],0,1,0,1); 
+  races_sex_toggles[1]= gtk_radio_button_new_with_label( sgroup, _("Female") );
+  gtk_toggle_button_set_state( GTK_TOGGLE_BUTTON( races_sex_toggles[1] ),
+			       FALSE );
+  sgroup = gtk_radio_button_group( GTK_RADIO_BUTTON( races_sex_toggles[1] ) );
+  gtk_table_attach_defaults( GTK_TABLE(races_sex_toggles_form),
+			     races_sex_toggles[1],1,2,0,1); 
 
   /* ------- city style toggles ------- */
 
   /* find out styles that can be used at the game beginning */
    
-  for(i = 0, b_s_num = 0; i < game.styles_count && i < 64; i++) {
+  for(i=0,b_s_num=0; i<game.styles_count && i<64; i++) {
     if(city_styles[i].techreq == A_NONE) {
       city_style_idx[b_s_num] = i;
       city_style_ridx[i] = b_s_num;
       b_s_num++;
     }
   }
-
   free(city_style_toggles);
-  city_style_toggles = fc_calloc(b_s_num, sizeof(struct GtkWidget*));
-  
-  frame = gtk_frame_new(_("Select your city style"));
-  gtk_box_pack_start(GTK_BOX( GTK_DIALOG(races_dialog_shell)->vbox),
-                     frame, FALSE, FALSE, 0);
+  city_style_toggles = fc_calloc( b_s_num, sizeof(struct GtkWidget*) );
 
-  city_style_toggles_form = gtk_table_new(per_row, 
-                                          ((b_s_num-1) / per_row) + 1, FALSE);
-  gtk_container_add(GTK_CONTAINER(frame), city_style_toggles_form); 
+  fa = gtk_frame_new( _("Select your city style") );
 
-  per_row /= 2;
- 
-  for(i = 0; i < b_s_num; i++) {
-    GtkWidget *box;
-    SPRITE *s;
+  gtk_box_pack_start( GTK_BOX( GTK_DIALOG( races_dialog_shell )->vbox ),
+                      fa, FALSE, FALSE, 0 );
+  city_style_toggles_form =
+    gtk_table_new( per_row, ((b_s_num-1)/per_row)+1, FALSE );
+  gtk_container_add( GTK_CONTAINER( fa ), city_style_toggles_form ); 
 
-    city_style_toggles[i] = gtk_radio_button_new(cgroup);
-    box = gtk_hbox_new(FALSE, 0);
-    gtk_container_add(GTK_CONTAINER(city_style_toggles[i]), box);
-    s = crop_blankspace(sprites.city.tile[i][0]);
-    gtk_box_pack_start(GTK_BOX(box), gtk_pixmap_new(s ->pixmap, s->mask),
- 		       FALSE, FALSE, 4);
-    if ((s->width < 80) && (city_styles[i].tiles_num > 1)){
-      s = crop_blankspace(sprites.city.tile[i][1]);
-      gtk_box_pack_start(GTK_BOX(box), gtk_pixmap_new(s->pixmap, s->mask),
- 			 FALSE, FALSE, 4);
-    }
-    if ((s->width < 40) && (city_styles[i].tiles_num > 2)){
-      s = crop_blankspace(sprites.city.tile[i][2]);
-      gtk_box_pack_start(GTK_BOX(box), gtk_pixmap_new(s->pixmap, s->mask),
- 			 FALSE, FALSE, 4);
-    }
-
-    gtk_toggle_button_set_state(GTK_TOGGLE_BUTTON(city_style_toggles[i]), 
-                                FALSE);
-    cgroup = gtk_radio_button_group(GTK_RADIO_BUTTON(city_style_toggles[i]));
-    gtk_table_attach_defaults( GTK_TABLE(city_style_toggles_form), 
- 			       city_style_toggles[i],
- 			       i%per_row, i%per_row+1, i/per_row, i/per_row+1);
+  for(i=0; i<b_s_num; i++) {
+      city_style_toggles[i] =
+	gtk_radio_button_new_with_label(cgroup,
+					city_styles[city_style_idx[i]].name);
+      gtk_toggle_button_set_state( GTK_TOGGLE_BUTTON( city_style_toggles[i] ),
+				   FALSE );
+      cgroup = gtk_radio_button_group( GTK_RADIO_BUTTON( city_style_toggles[i] ) );
+      gtk_table_attach_defaults( GTK_TABLE(city_style_toggles_form),
+				 city_style_toggles[i],
+                                 i%per_row, i%per_row+1, i/per_row, i/per_row+1 );
   }
-  
+
   /* ------- OK/Disc/Quit buttons ------- */
 
-  races_ok_command = gtk_button_new_with_label(_("Ok"));
-  GTK_WIDGET_SET_FLAGS(races_ok_command, GTK_CAN_DEFAULT);
-  gtk_box_pack_start(GTK_BOX(GTK_DIALOG(races_dialog_shell)->action_area),
-                     races_ok_command, TRUE, TRUE, 0);
+  races_ok_command = gtk_button_new_with_label( _("Ok") );
+  GTK_WIDGET_SET_FLAGS( races_ok_command, GTK_CAN_DEFAULT );
+  gtk_box_pack_start( GTK_BOX( GTK_DIALOG( races_dialog_shell )->action_area ),
+	races_ok_command, TRUE, TRUE, 0 );
 
-  races_disc_command = gtk_button_new_with_label(_("Disconnect"));
-  GTK_WIDGET_SET_FLAGS(races_disc_command, GTK_CAN_DEFAULT);
-  gtk_box_pack_start(GTK_BOX( GTK_DIALOG(races_dialog_shell)->action_area),
-		     races_disc_command, TRUE, TRUE, 0);
+  races_disc_command = gtk_button_new_with_label( _("Disconnect") );
+  GTK_WIDGET_SET_FLAGS( races_disc_command, GTK_CAN_DEFAULT );
+  gtk_box_pack_start( GTK_BOX( GTK_DIALOG( races_dialog_shell )->action_area ),
+		      races_disc_command, TRUE, TRUE, 0 );
 
-  races_quit_command = gtk_button_new_with_label(_("Quit"));
-  GTK_WIDGET_SET_FLAGS(races_quit_command, GTK_CAN_DEFAULT);
-  gtk_box_pack_start(GTK_BOX( GTK_DIALOG(races_dialog_shell)->action_area),
-		      races_quit_command, TRUE, TRUE, 0);
+  races_quit_command = gtk_button_new_with_label( _("Quit") );
+  GTK_WIDGET_SET_FLAGS( races_quit_command, GTK_CAN_DEFAULT );
+  gtk_box_pack_start( GTK_BOX( GTK_DIALOG( races_dialog_shell )->action_area ),
+		      races_quit_command, TRUE, TRUE, 0 );
 
   /* ------- connect callback functions ------- */
 
-   for(i = 0; i < g_list_length(sorted_races_list); i++)
-     gtk_signal_connect(GTK_OBJECT( races_toggles[i]), "toggled",
-                        GTK_SIGNAL_FUNC( races_toggles_callback),
-                        g_list_nth_data(sorted_races_list, i));
+   for(i=0; i<g_list_length(sorted_races_list); i++)
+	gtk_signal_connect( GTK_OBJECT( races_toggles[i] ), "toggled",
+                           GTK_SIGNAL_FUNC( races_toggles_callback ),
+                           g_list_nth_data(sorted_races_list, i));
 
-  for(i = 0; i < 2; i++) {
-    gtk_signal_connect(GTK_OBJECT(races_sex_toggles[i]), "toggled",
-                       GTK_SIGNAL_FUNC(races_sex_toggles_callback), NULL);
-  }
+  for(i=0; i<2; i++)
+        gtk_signal_connect( GTK_OBJECT( races_sex_toggles[i] ), "toggled",
+	    GTK_SIGNAL_FUNC( races_sex_toggles_callback ), NULL );
 
-  for(i = 0; i < b_s_num; i++) {
-     gtk_signal_connect(GTK_OBJECT(city_style_toggles[i]), "toggled",
-	                GTK_SIGNAL_FUNC(city_style_toggles_callback), NULL);
-  }
+  for(i=0; i<b_s_num; i++)
+        gtk_signal_connect( GTK_OBJECT( city_style_toggles[i] ), "toggled",
+	    GTK_SIGNAL_FUNC( city_style_toggles_callback ), NULL );
 
-  gtk_signal_connect(GTK_OBJECT( GTK_COMBO(races_name)->list), 
+  gtk_signal_connect( GTK_OBJECT( GTK_COMBO(races_name)->list ), 
 		      "selection_changed",
-		      GTK_SIGNAL_FUNC(races_name_callback), NULL);
+		      GTK_SIGNAL_FUNC( races_name_callback ), NULL );
 
-  gtk_signal_connect(GTK_OBJECT(races_ok_command), "clicked",
-			GTK_SIGNAL_FUNC(races_buttons_callback), NULL);
+  gtk_signal_connect( GTK_OBJECT( races_ok_command ), "clicked",
+			GTK_SIGNAL_FUNC( races_buttons_callback ), NULL );
 
-  gtk_signal_connect(GTK_OBJECT(races_disc_command), "clicked",
-		      GTK_SIGNAL_FUNC(races_buttons_callback), NULL);
+  gtk_signal_connect( GTK_OBJECT( races_disc_command ), "clicked",
+		      GTK_SIGNAL_FUNC( races_buttons_callback ), NULL );
 
-  gtk_signal_connect(GTK_OBJECT(races_quit_command), "clicked",
-		      GTK_SIGNAL_FUNC(races_buttons_callback), NULL);
+  gtk_signal_connect( GTK_OBJECT( races_quit_command ), "clicked",
+		      GTK_SIGNAL_FUNC( races_buttons_callback ), NULL );
 
-  gtk_signal_connect(GTK_OBJECT(GTK_COMBO(races_by_name)->list), 
- 		      "selection_changed",
- 		      GTK_SIGNAL_FUNC(races_by_name_callback), NULL);
- 
   /* ------- set initial selections ------- */
 
   select_random_race();
@@ -2144,34 +2088,12 @@ void create_races_dialog(void)
 
   gtk_widget_grab_default(races_ok_command);
 
-  gtk_widget_show_all(GTK_DIALOG(races_dialog_shell)->vbox);
-  gtk_widget_show_all(GTK_DIALOG(races_dialog_shell)->action_area);
+  gtk_widget_show_all( GTK_DIALOG(races_dialog_shell)->vbox );
+  gtk_widget_show_all( GTK_DIALOG(races_dialog_shell)->action_area );
 }
 
 /**************************************************************************
 ...
-**************************************************************************/ 
-static void races_by_name_callback(GtkWidget *w, gpointer data)
-{
-  int i;
-
-  for(i = 0; i < g_list_length(sorted_races_list); i++) {
-    if (strcmp(gtk_entry_get_text(GTK_ENTRY(GTK_COMBO(races_by_name)->entry)),
-               get_nation_by_idx(GPOINTER_TO_INT(
-               g_list_nth_data(sorted_races_list, i)))->name) == 0) {
-      if (GTK_WIDGET_SENSITIVE(races_toggles[i])) {
- 	gtk_toggle_button_set_state(GTK_TOGGLE_BUTTON(races_toggles[i]), TRUE);
- 	break;
-      } else {
-	/* That one's taken */
- 	select_random_race();
-      }
-    }
-  }
-} 
- 
-/**************************************************************************
- ...
 **************************************************************************/
 void races_toggles_set_sensitive(struct packet_nations_used *packet)
 {
@@ -2204,7 +2126,7 @@ void races_toggles_set_sensitive(struct packet_nations_used *packet)
 /**************************************************************************
 ...
 **************************************************************************/
-static void races_name_callback(GtkWidget *w, gpointer data)
+static void races_name_callback(GtkWidget * w, gpointer data)
 {
   Nation_Type_id nation = races_buttons_get_current();
   const char *leader =
@@ -2213,8 +2135,9 @@ static void races_name_callback(GtkWidget *w, gpointer data)
   if (check_nation_leader_name(nation, leader)) {
     is_name_unique = FALSE;
     selected_sex = get_nation_leader_sex(nation, leader);
-    gtk_toggle_button_set_state(
-           GTK_TOGGLE_BUTTON(races_sex_toggles[selected_sex ? 0 : 1]), TRUE);
+    gtk_toggle_button_set_state(GTK_TOGGLE_BUTTON
+				(races_sex_toggles[selected_sex ? 0 : 1]),
+				TRUE);
   } else {
     is_name_unique = TRUE;
   }
@@ -2223,13 +2146,11 @@ static void races_name_callback(GtkWidget *w, gpointer data)
 /**************************************************************************
 ...
 **************************************************************************/
-static void races_toggles_callback(GtkWidget *w, gpointer race_id_p)
+static void races_toggles_callback( GtkWidget *w, gpointer race_id_p )
 {
   /* don't do anything if signal is untoggling the button */
   if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(w))) {
     selected_nation = GPOINTER_TO_INT(race_id_p);
-    gtk_entry_set_text(GTK_ENTRY(GTK_COMBO(races_by_name)->entry),
- 		       get_nation_by_idx(selected_nation)->name);
     select_random_leader();
 
     selected_city_style = 
@@ -2242,24 +2163,26 @@ static void races_toggles_callback(GtkWidget *w, gpointer race_id_p)
 /**************************************************************************
 ...
 **************************************************************************/
-static void races_sex_toggles_callback(GtkWidget *w, gpointer data)
+static void races_sex_toggles_callback( GtkWidget *w, gpointer data )
 {
-  selected_sex = (w == races_sex_toggles[0]) ? 1 : 0;
+  if(w==races_sex_toggles[0]) 
+      selected_sex = 1;
+  else 
+      selected_sex = 0;
 }
 
 /**************************************************************************
 ...
 **************************************************************************/
-static void city_style_toggles_callback(GtkWidget *w, gpointer data)
+static void city_style_toggles_callback( GtkWidget *w, gpointer data )
 {
   int i;
 
-  for(i = 0; i < b_s_num; i++) {
-    if(w == city_style_toggles[i]) {
+  for(i=0; i<b_s_num; i++)
+    if(w==city_style_toggles[i]) {
       selected_city_style = i;
       return;
     }
-  }
 }
 
 /**************************************************************************
@@ -2270,17 +2193,11 @@ static int races_buttons_get_current(void)
   return selected_nation;
 }
 
-/**************************************************************************
-...
-**************************************************************************/
 static int sex_buttons_get_current(void)
 {
   return selected_sex;
 }
 
-/**************************************************************************
-...
-**************************************************************************/
 static int city_style_get_current(void)
 {
   return selected_city_style;
@@ -2289,32 +2206,32 @@ static int city_style_get_current(void)
 /**************************************************************************
 ...
 **************************************************************************/
-static void races_buttons_callback(GtkWidget *w, gpointer data)
+static void races_buttons_callback( GtkWidget *w, gpointer data )
 {
   int selected, selected_sex, selected_style;
   char *s;
 
   struct packet_alloc_nation packet;
 
-  if(w == races_quit_command) {
+  if(w==races_quit_command) {
     exit(EXIT_SUCCESS);
-  } else if(w == races_disc_command) {
+  } else if(w==races_disc_command) {
     popdown_races_dialog();
     disconnect_from_server();
     return;
   }
 
-  if((selected = races_buttons_get_current()) == -1) {
+  if((selected=races_buttons_get_current())==-1) {
     append_output_window(_("You must select a nation."));
     return;
   }
 
-  if((selected_sex = sex_buttons_get_current()) == -1) {
+  if((selected_sex=sex_buttons_get_current())==-1) {
     append_output_window(_("You must select your sex."));
     return;
   }
 
-  if((selected_style = city_style_get_current()) == -1) {
+  if((selected_style=city_style_get_current())==-1) {
     append_output_window(_("You must select your city style."));
     return;
   }
@@ -2322,30 +2239,31 @@ static void races_buttons_callback(GtkWidget *w, gpointer data)
   s = gtk_entry_get_text(GTK_ENTRY(GTK_COMBO(races_name)->entry));
 
   /* perform a minimum of sanity test on the name */
-  packet.nation_no = selected;
+  packet.nation_no=selected;
   packet.is_male = selected_sex;
   packet.city_style = city_style_idx[selected_style];
   sz_strlcpy(packet.name, (char*)s);
   
-  if (!is_sane_name(packet.name)) {
+  if(!get_sane_name(packet.name)) {
     append_output_window(_("You must type a legal name."));
     return;
   }
 
-  send_packet_alloc_nation(&aconnection, &packet);
+  packet.name[0]=toupper(packet.name[0]);
 
-  /* reset this variable */
-  is_name_unique = FALSE;  
+  send_packet_alloc_nation(&aconnection, &packet);
 }
+
 
 /**************************************************************************
   Destroys its widget.  Usefull for a popdown callback on pop-ups that
   won't get resused.
 **************************************************************************/
-void destroy_me_callback(GtkWidget *w, gpointer data)
+void destroy_me_callback( GtkWidget *w, gpointer data)
 {
   gtk_widget_destroy(w);
 }
+
 
 /**************************************************************************
   Adjust tax rates from main window
@@ -2380,21 +2298,4 @@ void taxrates_callback(GtkWidget *w, GdkEventButton *ev, gpointer data)
   }
   send_packet_player_request(&aconnection, &packet, PACKET_PLAYER_RATES);
 
-}
-
-void dummy_close_callback(gpointer data){}
-
-/********************************************************************** 
-  This function is called when the client disconnects or the game is
-  over.  It should close all dialog windows for that game.
-***********************************************************************/
-void popdown_all_game_dialogs(void)
-{
-  popdown_city_report_dialog();
-  popdown_meswin_dialog();
-  popdown_science_dialog();
-  popdown_economy_report_dialog();
-  popdown_activeunits_report_dialog();
-  popdown_players_dialog();
-  popdown_notify_dialog();
 }

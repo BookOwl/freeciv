@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -18,6 +17,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <stdarg.h>
 #include <assert.h>
 
@@ -27,7 +27,6 @@
 #include "city.h"
 #include "fcintl.h"
 #include "game.h"
-#include "mem.h"
 #include "packets.h"
 #include "shared.h"
 #include "support.h"
@@ -40,7 +39,6 @@
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "mapview.h"
-#include "packhand.h"
 #include "optiondlg.h"
 #include "options.h"
 #include "repodlgs.h"
@@ -135,8 +133,8 @@ static void get_city_table_header(char *text[], int n)
 
   for(i=0, spec=city_report_specs; i<NUM_CREPORT_COLS; i++, spec++) {
     my_snprintf(text[i], n, "%*s\n%*s",
-	    NEG_VAL(spec->width), spec->title1 ? spec->title1 : "",
-	    NEG_VAL(spec->width), spec->title2 ? spec->title2 : "");
+	    NEG_VAL(spec->width), spec->title1 ? _(spec->title1) : "",
+	    NEG_VAL(spec->width), spec->title2 ? _(spec->title2) : "");
   }
 }
 
@@ -164,19 +162,6 @@ void popup_city_report_dialog(bool make_modal)
    }
 }
 
-/****************************************************************
- Closes the city report dialog.
-****************************************************************/
-void popdown_city_report_dialog(void)
-{
-  if (city_dialog_shell) {
-    if (city_dialog_shell_is_modal) {
-      gtk_widget_set_sensitive(top_vbox, TRUE);
-    }
-    gtk_widget_destroy(city_dialog_shell);
-    city_dialog_shell = NULL;
-  }
-}
 
 /****************************************************************
 ...
@@ -215,30 +200,22 @@ static void append_impr_or_unit_to_menu_sub(GtkWidget * menu,
   cid cids[U_LAST + B_LAST];
   struct item items[U_LAST + B_LAST];
   int item, cids_used, num_selected_cities = 0;
-  struct city **selected_cities = NULL;
+  struct city *selected_cities[200];
 
   if (change_prod) {
     GList *selection = GTK_CLIST(city_list)->selection;
-    int i;
 
     g_assert(selection);
-    
-    num_selected_cities = g_list_length(selection);
-    selected_cities =
-	fc_malloc(sizeof(*selected_cities) * num_selected_cities);
-
-    for (i = 0; i < num_selected_cities; i++) {
-      selected_cities[i] = city_from_glist(selection);
-      selection = g_list_next(selection);
+    for (; selection; selection = g_list_next(selection)) {
+      selected_cities[num_selected_cities] = city_from_glist(selection);
+      num_selected_cities++;
+      assert(num_selected_cities < ARRAY_SIZE(selected_cities));
     }
   }
 
   cids_used = collect_cids1(cids, selected_cities,
 			    num_selected_cities, append_units,
 			    append_wonders, change_prod, test_func);
-  if (selected_cities) {
-    free(selected_cities);
-  }
   name_and_sort_items(cids, cids_used, items, change_prod, NULL);
 
   for (item = 0; item < cids_used; item++) {
@@ -265,8 +242,7 @@ static void select_impr_or_unit_callback(GtkWidget *w, gpointer data)
   cid cid = GPOINTER_TO_INT(data);
   gint i;
   GtkObject *parent = GTK_OBJECT(w->parent);
-  TestCityFunc test_func =
-      (TestCityFunc) gtk_object_get_data(parent, "freeciv_test_func");
+  TestCityFunc test_func = gtk_object_get_data(parent, "freeciv_test_func");
   bool change_prod = 
     GPOINTER_TO_INT(gtk_object_get_data(parent, "freeciv_change_prod"));
 
@@ -285,24 +261,20 @@ static void select_impr_or_unit_callback(GtkWidget *w, gpointer data)
   else
     {
       bool is_unit = cid_is_unit(cid);
-      int last_request_id = 0, id = cid_id(cid);
+      int id = cid_id(cid);
       GList* selection = GTK_CLIST(city_list)->selection;
 
       g_assert(selection);
+  
+      for(; selection; selection = g_list_next(selection))
+	{
+	  struct packet_city_request packet;
 
-      connection_do_buffer(&aconnection);  
-      for (; selection; selection = g_list_next(selection)) {
-	struct packet_city_request packet;
-
-	packet.city_id = city_from_glist(selection)->id;
-	packet.build_id = id;
-	packet.is_build_id_unit_id = is_unit;
-	last_request_id = send_packet_city_request(&aconnection, &packet,
-						   PACKET_CITY_CHANGE);
-      }
-
-      connection_do_unbuffer(&aconnection);
-      reports_freeze_till(last_request_id);
+	  packet.city_id=city_from_glist(selection)->id;
+	  packet.build_id=id;
+	  packet.is_build_id_unit_id=is_unit;
+	  send_packet_city_request(&aconnection, &packet, PACKET_CITY_CHANGE);
+	}
     }
 }
 
@@ -411,8 +383,6 @@ static void select_cma_callback(GtkWidget * w, gpointer data)
       copy = g_list_append(copy, city_from_glist(selection));
     }
 
-    reports_freeze();
-
     for (; copy; copy = g_list_next(copy)) {
       struct city *pcity = copy->data;
 
@@ -423,7 +393,6 @@ static void select_cma_callback(GtkWidget * w, gpointer data)
       }
       refresh_city_dialog(pcity);
     }
-    reports_thaw();
 
     g_list_free(copy);
   }
@@ -934,7 +903,7 @@ Handle callbacks from the "change all" dialog.
 *****************************************************************/
 static void city_change_all_dialog_callback(GtkWidget *w, gpointer data)
 {
-  const char *cmd = (const char *)data;
+  char *cmd = (char *)data;
 
   if (cmd) {
     GList *selection_from, *selection_to;
@@ -978,8 +947,8 @@ static void city_change_all_callback(GtkWidget * w, gpointer data)
   GList *selection;
   gint row;
   struct city *pcity;
-  static const char *title_[2][1] = { {N_("From:")},
-				      {N_("To:")}
+  static gchar *title_[2][1] = { {N_("From:")},
+				 {N_("To:")}
   };
   static gchar **title[2];
   int i, j;
@@ -1113,7 +1082,7 @@ static void city_change_all_callback(GtkWidget * w, gpointer data)
 			action_area), button, TRUE, FALSE, 0);
     gtk_signal_connect(GTK_OBJECT(button), "clicked",
 		       GTK_SIGNAL_FUNC(city_change_all_dialog_callback),
-		       (gpointer)"change");
+		       "change");
     gtk_widget_show(button);
 
     button = gtk_button_new_with_label(_("Cancel"));
@@ -1142,7 +1111,7 @@ static void city_buy_callback(GtkWidget *w, gpointer data)
   {
       struct city *pcity = city_from_glist (current);
       int value;
-      const char *name;
+      char *name;
       char buf[512];
 
       value=city_buy_cost(pcity);    
@@ -1172,7 +1141,11 @@ static void city_buy_callback(GtkWidget *w, gpointer data)
 *****************************************************************/
 static void city_close_callback(GtkWidget *w, gpointer data)
 {
-  popdown_city_report_dialog();
+
+  if(city_dialog_shell_is_modal)
+     gtk_widget_set_sensitive(top_vbox, TRUE);
+   gtk_widget_destroy(city_dialog_shell);
+   city_dialog_shell=NULL;
 }
 
 /****************************************************************
@@ -1249,7 +1222,7 @@ void city_report_dialog_update(void)
     int   i;
     struct city_report_spec *spec;
 
-  if(is_report_dialogs_frozen()) return;
+  if(delay_report_update) return;
   if(!city_dialog_shell) return;
 
     for (i=0, spec=city_report_specs;i<NUM_CREPORT_COLS;i++, spec++)
@@ -1292,7 +1265,7 @@ void city_report_dialog_update_city(struct city *pcity)
   int   i;
   struct city_report_spec *spec;
 
-  if(is_report_dialogs_frozen()) return;
+  if(delay_report_update) return;
   if(!city_dialog_shell) return;
 
   for (i=0, spec=city_report_specs;i<NUM_CREPORT_COLS;i++, spec++)
@@ -1377,7 +1350,7 @@ static void popup_city_report_config_dialog(void)
 *****************************************************************/
 static void create_city_report_config_dialog(void)
 {
-  GtkWidget *config_label, *config_ok_command, *box, *vbox;
+  GtkWidget *config_label, *config_ok_command;
   struct city_report_spec *spec;
   int i;
   
@@ -1389,24 +1362,11 @@ static void create_city_report_config_dialog(void)
   gtk_box_pack_start(GTK_BOX(GTK_DIALOG(config_shell)->vbox), config_label,
 			FALSE, FALSE, 0);
 
-  box = gtk_hbox_new(TRUE,0);
-  gtk_widget_show(box);
-  gtk_box_pack_start(GTK_BOX(GTK_DIALOG(config_shell)->vbox), box,
-		     FALSE, FALSE, 0);
-
-  vbox = gtk_vbox_new(FALSE, 0);
-  gtk_widget_show(vbox);
-  gtk_box_pack_start(GTK_BOX(box), vbox, FALSE, FALSE, 0);
-
   for(i=1, spec=city_report_specs+i; i<NUM_CREPORT_COLS; i++, spec++) {
-    if (i == NUM_CREPORT_COLS / 2 + 1) {
-      vbox = gtk_vbox_new(FALSE, 0);
-      gtk_widget_show(vbox);
-      gtk_box_pack_start(GTK_BOX(box), vbox, FALSE, FALSE, 0);
-    }
-    config_toggle[i] = gtk_check_button_new_with_label(spec->explanation);
+    config_toggle[i]=gtk_check_button_new_with_label(_(spec->explanation));
 
-    gtk_box_pack_start(GTK_BOX(vbox), config_toggle[i], FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(GTK_DIALOG(config_shell)->vbox), config_toggle[i],
+			FALSE, FALSE, 0);
   }
 
   config_ok_command = gtk_button_new_with_label(_("Close"));

@@ -19,32 +19,11 @@
 
 struct tile;
 
-struct button_descr {
-  const char *text;
-  void (*callback) (gpointer);
-  gpointer data;
-  bool sensitive;
-};
+void message_dialog_button_set_sensitive(GtkWidget *shl, char *bname, int state);
+GtkWidget *popup_message_dialog(GtkWidget * parent, char *dialogname,
+				char *text, ...);
 
-void message_dialog_button_set_sensitive(GtkWidget * shl, const char *bname,
-					 bool state);
-
-void popdown_notify_dialog(void);
-
-GtkWidget *base_popup_message_dialog(GtkWidget * parent,
-				     const char *dialogname,
-				     const char *text,
-				     void (*close_callback) (gpointer),
-				     gpointer close_callback_data,
-				     int num_buttons,
-				     const struct button_descr *buttons);
-
-GtkWidget *popup_message_dialog(GtkWidget * parent, const char *dialogname,
-				const char *text,
-				void (*close_callback) (gpointer),
-				gpointer close_callback_data, ...);
-
-void dummy_close_callback(gpointer data);
+void destroy_message_dialog(GtkWidget *button);
 
 void destroy_me_callback(GtkWidget *w, gpointer data);
 void taxrates_callback(GtkWidget *w, GdkEventButton *ev, gpointer data);

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -61,17 +60,16 @@ static gint popit_button_release(GtkWidget *w, GdkEventButton *event)
 }
 
 /**************************************************************************
-  Popup a label with information about the tile, unit, city, when the user
-  used the middle mouse button on the map.
+...
 **************************************************************************/
 static void popit(GdkEventButton *event, int xtile, int ytile)
 {
   GtkWidget *p, *b;
   static struct map_position cross_list[2 + 1];
   struct map_position *cross_head = cross_list;
-  int i;
+  int i, count = 0;
+  int popx, popy;
   char s[512];
-  static struct t_popup_pos popup_pos;
   struct city *pcity;
   struct unit *punit;
   struct tile *ptile = map_get_tile(xtile, ytile);
@@ -85,22 +83,26 @@ static void popit(GdkEventButton *event, int xtile, int ytile)
     my_snprintf(s, sizeof(s), _("Location: (%d, %d)"), xtile, ytile);
     gtk_widget_new(GTK_TYPE_LABEL, "GtkWidget::parent", b,
 				    "GtkLabel::label", s, NULL);
+    count++;
 #endif /* DEBUG */
 
     my_snprintf(s, sizeof(s), _("Terrain: %s"),
 		map_get_tile_info_text(xtile, ytile));
     gtk_widget_new(GTK_TYPE_LABEL, "GtkWidget::parent", b,
 				   "GtkLabel::label", s, NULL);
+    count++;
 
     my_snprintf(s, sizeof(s), _("Food/Prod/Trade: %s"),
 		map_get_tile_fpt_text(xtile, ytile));
     gtk_widget_new(GTK_TYPE_LABEL, "GtkWidget::parent", b,
 				    "GtkLabel::label", s, NULL);
+    count++;
 
     if (tile_has_special(ptile, S_HUT)) {
       gtk_widget_new(GTK_TYPE_LABEL, "GtkWidget::parent", b,
 				     "GtkLabel::label", 
                                      _("Minor Tribe Village"), NULL);
+      count++;
     }
     
     if((pcity = map_get_city(xtile, ytile))) {
@@ -108,10 +110,12 @@ static void popit(GdkEventButton *event, int xtile, int ytile)
 		  get_nation_name(city_owner(pcity)->nation));
       gtk_widget_new(GTK_TYPE_LABEL, "GtkWidget::parent", b,
 				     "GtkLabel::label", s, NULL);
+      count++;
 
       if (city_got_citywalls(pcity)) {
         gtk_widget_new(GTK_TYPE_LABEL, "GtkWidget::parent", b,
 		       "GtkLabel::label", _("with City Walls"), NULL);
+	count++;
       }
     }
 
@@ -120,12 +124,14 @@ static void popit(GdkEventButton *event, int xtile, int ytile)
       sz_strlcat(s, map_get_infrastructure_text(ptile->special));
       gtk_widget_new(GTK_TYPE_LABEL, "GtkWidget::parent", b,
 				     "GtkLabel::label", s, NULL);
+      count++;
     }
     
     sz_strlcpy(s, _("Activity: "));
     if (concat_tile_activity_text(s, sizeof(s), xtile, ytile)) {
       gtk_widget_new(GTK_TYPE_LABEL, "GtkWidget::parent", b,
 		     "GtkLabel::label", s, NULL);
+      count++;
     }
     
     if((punit = find_visible_unit(ptile)) && !pcity) {
@@ -142,6 +148,7 @@ static void popit(GdkEventButton *event, int xtile, int ytile)
 		  get_nation_name(unit_owner(punit)->nation), cn);
       gtk_widget_new(GTK_TYPE_LABEL, "GtkWidget::parent", b,
 				     "GtkLabel::label", s, NULL);
+      count++;
 
       if(punit->owner == game.player_idx)  {
 	char uc[64] = "";
@@ -167,6 +174,7 @@ static void popit(GdkEventButton *event, int xtile, int ytile)
       }
       gtk_widget_new(GTK_TYPE_LABEL, "GtkWidget::parent", b,
 				     "GtkLabel::label", s, NULL);
+      count++;
     }
 
     cross_head->x = xtile;
@@ -183,14 +191,12 @@ static void popit(GdkEventButton *event, int xtile, int ytile)
 		       GTK_SIGNAL_FUNC(popupinfo_popdown_callback),
 		       cross_list);
 
-    popup_pos.xroot = event->x_root;
-    popup_pos.yroot = event->y_root;
-
-    gtk_signal_connect(GTK_OBJECT(p), "size-allocate",
-                       GTK_SIGNAL_FUNC(popupinfo_positioning_callback), 
-                       &popup_pos);
-
-    gtk_widget_show(p);
+    /* displace popup so as not to obscure it by the mouse cursor */
+    popx = event->x_root + 16;
+    popy = event->y_root - (8 * count);
+    if (popy < 0)
+      popy = 0;      
+    gtk_widget_popup(p, popx, popy);
     gdk_pointer_grab(p->window, TRUE, GDK_BUTTON_RELEASE_MASK,
 		     NULL, NULL, event->time);
     gtk_grab_add(p);
@@ -214,38 +220,19 @@ void popupinfo_popdown_callback(GtkWidget *w, gpointer data)
 }
 
 /**************************************************************************
-  Put the popup on the correct position, after the real size is allocated 
-  to the widget. The correct position is left beneath the cursor if within
-  the right half of the map, and vice versa. Also, displace the popup so 
-  as not to obscure it by the mouse cursor. 
-**************************************************************************/
-void popupinfo_positioning_callback(GtkWidget *w, GtkAllocation *alloc, 
-                                    gpointer data)
-{
-  struct t_popup_pos *popup_pos = (struct t_popup_pos *)data;
-  gint x, y;
-  
-  gdk_window_get_origin(map_canvas->window, &x, &y);
-  if ((map_canvas->allocation.width / 2 + x) > popup_pos->xroot) {
-    gtk_widget_set_uposition(w, popup_pos->xroot + 16,
-                             popup_pos->yroot - (alloc->height / 2));
-  } else {
-    gtk_widget_set_uposition(w, popup_pos->xroot - alloc->width - 16, 
-                             popup_pos->yroot - (alloc->height / 2));
-  }
-}
-
-/**************************************************************************
 ...
 **************************************************************************/
-static void name_new_city_callback(const char *input, gpointer data)
+static void name_new_city_callback(GtkWidget *w, gpointer data)
 {
-  int unit_id = GPOINTER_TO_INT(data);
-  struct packet_unit_request req;
-
-  req.unit_id = unit_id;
-  sz_strlcpy(req.name, input);
-  send_packet_unit_request(&aconnection, &req, PACKET_UNIT_BUILD_CITY);
+  size_t unit_id;
+  
+  if((unit_id = (size_t)data)) {
+    struct packet_unit_request req;
+    req.unit_id = unit_id;
+    sz_strlcpy(req.name, input_dialog_get_input(w));
+    send_packet_unit_request(&aconnection, &req, PACKET_UNIT_BUILD_CITY);
+  }
+  input_dialog_destroy(w);
 }
 
 /**************************************************************************
@@ -259,7 +246,7 @@ void popup_newcity_dialog(struct unit *punit, char *suggestname)
 		      _("Build New City"),
 		      _("What should we call our new city?"), suggestname,
 		      name_new_city_callback, GINT_TO_POINTER(punit->id),
-		      NULL, NULL);
+		      name_new_city_callback, GINT_TO_POINTER(0));
 }
 
 /**************************************************************************
@@ -312,7 +299,7 @@ gint butt_down_mapcanvas(GtkWidget *w, GdkEventButton *ev)
     gtk_widget_grab_focus(turn_done_button);
   } else if ((ev->button == 2) || (ev->state & GDK_CONTROL_MASK)) {
     popit(ev, xtile, ytile);
-  } else if (ev->button == 3) {
+  } else {
     center_tile_mapcanvas(xtile, ytile);
   }
   return TRUE;
@@ -342,7 +329,7 @@ void update_line(int window_x, int window_y)
     get_map_xy(window_x, window_y, &x, &y);
 
     get_line_dest(&old_x, &old_y);
-    if (!same_pos(old_x, old_y, x, y)) {
+    if (old_x != x || old_y != y) {
       draw_line(x, y);
     }
   }
