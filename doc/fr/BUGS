@@ -15,7 +15,14 @@ voyez :
 
 BUGS CONNUS :
 ===========
+ - Dans le client XAW/XAW3d, l'option -t pour le jeu de graphiques à utiliser ne
+   fonctionne pas de temps en temps. Dans ce cas, utilisez --tiles à la place.
 
+ - L'affichage des unités en dessous du du bouton Fin du tour ne marche pas très
+   bien. L'IA peut bouger les unités sans que le champ soit mis à jour. Ainsi
+	 vous pouvez voir 3-4 unités sur la gauche mais, en fait, il n'y en a qu'une.
+	 Voyez la question PR#2625 pour plus d'informations.
+	 
  - Vos réglages AGU ne sont envoyés au serveur que quand vous pressez "fin du
    tour" et par conséquent, les changements que vous apportez à l'AGU dans le
 	 même tour que celui où vous sauvegardez un jeu seront perdus.
@@ -29,14 +36,17 @@ BUGS CONNUS :
 	 "generator" du serveur sur 2 ou 3. C'est à dire, sur le serveur, 
 	 avant de démarrer un jeu, tapez : set generator 2 ou set generator 3.
 
+
  - L'IA difficile ne l'est pas suffisamment pour des joueurs expérimentés 
    et continue à faire des choses stupides. Par exemple, elle préfère 
 	 laisser des villes en désordre civil plutôt que de les laisser 
 	 s'affamer/diminuer de taille.
 
+
  - Parfois, il y a tellement d'avances dans le menu "objectif" du rapport 
    de science que celui-ci dépasse le haut de l'écran et vous ne pouvez pas
    sélectionner des items.
+
 
  - Vous pouvez parfois obtenir les messages 
 	{ss} player for sample <01> not found
@@ -83,6 +93,13 @@ BUGS CONNUS :
  - Le client xaw ne fonctionne pas très bien avec le gestionnaire de fenêtres 
    de KDE. Essayez d'utiliser le client gtk ou bien un autre gestionnaire de 
 	 fenêtres.
+	 
+ - Toutes les options données au client seront également passées à l'interface
+   utilisateur. Ceci veut dire que s'il y a des options identiques elles
+	 entreront en conflit. C'est un problème pour les options -d et parfois -t à
+	 l'utilisation du client XAW. Un contournement est d'utiliser les versions
+	 longues des options à la place (dans ce cas, --debug et --tiles). Voyez
+	 PR#1752.
 
 FAIRE UN RAPPORT DE BUG :
 =======================

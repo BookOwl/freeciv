@@ -10,14 +10,9 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
-#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 
 #include "game.h"
 #include "log.h"
@@ -133,12 +128,13 @@ bool government_has_hint(const struct government *gov,
 ***************************************************************/
 struct government *find_government_by_name(const char *name)
 {
-  government_iterate(gov) {
-    if (mystrcasecmp(gov->name, name) == 0) {
-      return gov;
-    }
-  } government_iterate_end;
+  int i;
 
+  for (i = 0; i < game.government_count; ++i) {
+    if (mystrcasecmp(governments[i].name, name) == 0) {
+      return &governments[i];
+    }
+  }
   return NULL;
 }
 
@@ -147,9 +143,7 @@ struct government *find_government_by_name(const char *name)
 ***************************************************************/
 struct government *get_government(int gov)
 {
-  assert(game.government_count > 0 && gov >= 0
-	 && gov < game.government_count);
-  assert(governments[gov].index == gov);
+  assert(game.government_count > 0 && gov >= 0 && gov < game.government_count);
   return &governments[gov];
 }
 
@@ -247,15 +241,12 @@ bool can_change_to_government(struct player *pplayer, int government)
 	 government >= 0 && government < game.government_count);
 
   req = governments[government].required_tech;
-  if (!tech_is_available(pplayer, req)) {
-    /* If the technology doesn't "exist" or if there is no way we can
-     * ever get it, then we can't change to the gov type even if we have
-     * a wonder that would otherwise allow it. */
+  if (!tech_exists(req))
     return FALSE;
-  } else {
-    return (get_invention(pplayer, req) == TECH_KNOWN
+  else 
+    return (req == A_NONE
+	    || (get_invention(pplayer, req) == TECH_KNOWN)
 	    || player_owns_active_govchange_wonder(pplayer));
-  }
 }
 
 /***************************************************************
@@ -282,20 +273,14 @@ void set_ruler_title(struct government *gov, int nation,
 ***************************************************************/
 void governments_alloc(int num)
 {
-  int index;
-
   governments = fc_calloc(num, sizeof(struct government));
   game.government_count = num;
-
-  for (index = 0; index < num; index++) {
-    governments[index].index = index;
-  }
 }
 
 /***************************************************************
  De-allocate resources associated with the given government.
 ***************************************************************/
-static void government_free(struct government *gov)
+void government_free(struct government *gov)
 {
   free(gov->ruler_titles);
   gov->ruler_titles = NULL;
@@ -309,9 +294,11 @@ static void government_free(struct government *gov)
 ***************************************************************/
 void governments_free(void)
 {
-  government_iterate(gov) {
-    government_free(gov);
-  } government_iterate_end;
+  int i;
+
+  for (i = 0; i < game.government_count; i++) {
+    government_free(get_government(i));
+  }
   free(governments);
   governments = NULL;
   game.government_count = 0;

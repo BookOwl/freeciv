@@ -65,35 +65,29 @@ EXTRA_DIST=	acconfig.old			\
 		debian/rules			\
 		debian/watch			\
 		m4/ac_path_lib.m4		\
-		m4/auth.m4			\
-		m4/c99.m4			\
+		m4/locale.m4			\
 		m4/debug.m4			\
 		m4/esd.m4			\
-		m4/freetype2.m4			\
 		m4/gettext.m4			\
-		m4/gettimeofday.m4		\
 		m4/glib-2.0.m4			\
 		m4/glib-gettext.m4		\
 		m4/glib.m4			\
 		m4/glibc21.m4			\
 		m4/gtk-2.0.m4			\
 		m4/gtk.m4			\
-		m4/gtk-client.m4		\
-		m4/gtk2-client.m4		\
 		m4/iconv.m4			\
 		m4/imlib.m4			\
 		m4/isc-posix.m4			\
 		m4/lcmessage.m4			\
-		m4/locale.m4			\
+		m4/lib-ld.m4			\
+		m4/lib-link.m4			\
+		m4/lib-prefix.m4		\
 		m4/ngettext.m4			\
-		m4/no-client.m4			\
 		m4/progtest.m4			\
 		m4/readline.m4			\
-		m4/sdl-client.m4		\
 		m4/sdl.m4			\
 		m4/sound.m4			\
 		m4/vsnprintf.m4			\
-		m4/win32-client.m4		\
 		m4/x.213			\
 		m4/x.252			\
 		vms/config.h_vms		\

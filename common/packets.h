@@ -15,34 +15,29 @@
 
 #include "connection.h"		/* struct connection, MAX_LEN_* */
 #include "map.h"
-#include "nation.h"
 #include "player.h"
 #include "shared.h"		/* MAX_LEN_NAME, MAX_LEN_ADDR */
 #include "spaceship.h"
-#include "unittype.h"
 #include "worklist.h"
+#include "unittype.h"
 
 #define MAX_LEN_USERNAME        10        /* see below */
 #define MAX_LEN_MSG             1536
 #define MAX_ATTRIBUTE_BLOCK     (256*1024)	/* largest attribute block */
 #define ATTRIBUTE_CHUNK_SIZE    (1024*2)  /* attribute chunk size to use */
-#define MAX_LEN_ROUTE		2000	  /* MAX_LEN_PACKET/2 - header */
 
 /* Note that MAX_LEN_USERNAME cannot be expanded, because it
    is used for the name in the first packet sent by the client,
    before we have the capability string.
 */
 
-/* The order of these cannot be changed without breaking network
- * compatability. */
 enum packet_type {
-  PACKET_LOGIN_REQUEST,
-  PACKET_LOGIN_REPLY,
+  PACKET_REQUEST_JOIN_GAME,
+  PACKET_JOIN_GAME_REPLY,
   PACKET_PROCESSING_STARTED,
   PACKET_PROCESSING_FINISHED,
   PACKET_SERVER_SHUTDOWN,
   PACKET_UNIT_INFO,
-  PACKET_SHORT_UNIT,
   PACKET_MOVE_UNIT,
   PACKET_TURN_DONE,
   PACKET_NEW_YEAR,
@@ -117,9 +112,11 @@ enum packet_type {
   PACKET_RULESET_CITY,
   PACKET_UNIT_CONNECT,
   PACKET_SABOTAGE_LIST,
+  PACKET_ADVANCE_FOCUS,
   PACKET_RULESET_GAME,
   PACKET_CONN_INFO,
   PACKET_SHORT_CITY,
+  PACKET_PLAYER_REMOVE_VISION,
   PACKET_GOTO_ROUTE,
   PACKET_PATROL_ROUTE,
   PACKET_CONN_PING,
@@ -131,10 +128,6 @@ enum packet_type {
   PACKET_SELECT_NATION_OK,
   PACKET_FREEZE_HINT,
   PACKET_THAW_HINT,
-  PACKET_PING_INFO,
-  PACKET_AUTHENTICATION_REQUEST,
-  PACKET_AUTHENTICATION_REPLY,
-  PACKET_ENDGAME_REPORT,
   PACKET_LAST  /* leave this last */
 };
 
@@ -161,13 +154,6 @@ enum unit_info_use {
   UNIT_INFO_IDENTITY,
   UNIT_INFO_CITY_SUPPORTED,
   UNIT_INFO_CITY_PRESENT
-};
-
-enum authentication_type {
-  AUTH_LOGIN_FIRST,   /* request a password for a returning user */
-  AUTH_NEWUSER_FIRST, /* request a password for a new user */
-  AUTH_LOGIN_RETRY,   /* inform the client to try a different password */
-  AUTH_NEWUSER_RETRY, /* inform the client to try a different [new] password */
 };
 
 /*********************************************************
@@ -278,8 +264,7 @@ struct packet_city_request
   tile info
 *********************************************************/
 struct packet_tile_info {
-  int x, y, type, special, known, owner;
-  unsigned short continent;
+  int x, y, type, special, known;
 };
 
 
@@ -328,32 +313,12 @@ struct packet_unit_info {
   enum tile_special_type activity_target;
   bool paradropped;
   bool connecting;
-  bool done_moving;
-  int occupy;
   /* in packet only, not in unit struct */
-  bool carried;		/* FIXME: should not send carried units at all? */
-};
-
-
-/**************************************************************************
-  Information for a short_unit packet.  This packet type is sent
-  server->client to give limited information about a unit.
-**************************************************************************/
-struct packet_short_unit {
-  int id;
-  int owner;
-  int x, y;
-  bool veteran;
-  int type;
-  int hp;
-  int activity;
-  bool occupied;
-
-  /* in packet only, not in unit struct */
-  int carried;		/* FIXME: should not send carried units at all? */
+  bool carried;
+  bool select_it;
   int packet_use;	/* see enum unit_info_use */
   int info_city_id;	/* for UNIT_INFO_CITY_SUPPORTED
-  			   and UNIT_INFO_CITY_PRESENT uses */
+			   and UNIT_INFO_CITY_PRESENT uses */
   int serial_num;	/* a 16-bit unsigned number, never zero
 			   (not used by UNIT_INFO_IDENTITY) */
 };
@@ -372,7 +337,7 @@ struct packet_city_info {
   int ppl_happy[5], ppl_content[5], ppl_unhappy[5], ppl_angry[5];
   int ppl_elvis, ppl_scientist, ppl_taxman;
   int food_prod, food_surplus;
-  int shield_prod, shield_surplus, shield_waste;
+  int shield_prod, shield_surplus;
   int trade_prod, tile_trade, corruption;
   int trade[NUM_TRADEROUTES], trade_value[NUM_TRADEROUTES];
   int luxury_total, tax_total, science_total;
@@ -386,6 +351,7 @@ struct packet_city_info {
   int currently_building;
 
   int turn_last_built;
+  int turn_changed_target;
   int changed_from_id;
   bool changed_from_is_unit;
   int before_change_shields;
@@ -413,10 +379,8 @@ struct packet_short_city {
   char name[MAX_LEN_NAME];
   int size;			/* uint8 */
   bool happy;			/* boolean */
-  bool unhappy;			/* boolean */
   bool capital;			/* boolean */
   bool walls;			/* boolean */
-  bool occupied;		/* boolean */
   int tile_trade;		/* same as in packet_city_info */
 };
 
@@ -428,13 +392,13 @@ struct packet_short_city {
  (can only add long name at end, to avoid problems with
  connection to/from older versions)
 *********************************************************/
-struct packet_login_request {
+struct packet_req_join_game {
   char short_name[MAX_LEN_USERNAME];
   int major_version;
   int minor_version;
   int patch_version;
   char capability[MAX_LEN_CAPSTR];
-  char username[MAX_LEN_NAME];
+  char name[MAX_LEN_NAME];
   char version_label[MAX_LEN_NAME];
 };
 
@@ -442,28 +406,13 @@ struct packet_login_request {
 /*********************************************************
  ... and the server replies.
 *********************************************************/
-struct packet_login_reply {
-  bool you_can_login;             /* true/false */
+struct packet_join_game_reply {
+  bool you_can_join;             /* true/false */
   char message[MAX_LEN_MSG];
   char capability[MAX_LEN_CAPSTR];
   int conn_id;			/* clients conn id as known in server */
 };
 
-/*********************************************************
- the server requests a password from the client
-*********************************************************/
-struct packet_authentication_request {
-  enum authentication_type type;
-  char message[MAX_LEN_MSG]; /* explain to the client if there's a problem */
-};
-
-/*********************************************************
- ... and the client replies. this could be a generic packet, but
- we might want to add things like encryption in the near future.
-*********************************************************/
-struct packet_authentication_reply {
-  char password[MAX_LEN_NAME];
-};
 
 /*********************************************************
 ...
@@ -550,18 +499,9 @@ struct packet_conn_info {
   
   enum cmdlevel_id access_level;   /* range uchar */
   
-  char username[MAX_LEN_NAME];
+  char name[MAX_LEN_NAME];
   char addr[MAX_LEN_ADDR];
   char capability[MAX_LEN_CAPSTR];
-};
-
-/*********************************************************
-Information about the ping times of the connections.
-*********************************************************/
-struct packet_ping_info {
-  int connections;
-  int conn_id[MAX_NUM_PLAYERS];
-  double ping_time[MAX_NUM_PLAYERS];
 };
 
 /*********************************************************
@@ -634,7 +574,6 @@ struct packet_ruleset_control {
   int nation_count;
   int playable_nation_count;
   int style_count;
-  int borders;
   char team_name[MAX_NUM_TEAMS][MAX_LEN_NAME];
 };
 
@@ -657,7 +596,6 @@ struct packet_ruleset_unit {
   int defense_strength;
   int move_rate;
   int tech_requirement;
-  int impr_requirement;
   int vision_range;
   int transport_capacity;
   int hp;
@@ -686,11 +624,9 @@ struct packet_ruleset_unit {
 };
 
 struct packet_ruleset_tech {
-  int id, req[2], root_req;	/* indices for advances[] */
+  int id, req[2];		/* indices for advances[] */
   int flags;
   char name[MAX_LEN_NAME];
-  char graphic_str[MAX_LEN_NAME];
-  char graphic_alt[MAX_LEN_NAME];
   char *helptext;		/* same as for packet_ruleset_unit, above */
   int preset_cost;
   int num_reqs;
@@ -699,13 +635,11 @@ struct packet_ruleset_tech {
 struct packet_ruleset_building {
   int id;			/* index for improvement_types[] */
   char name[MAX_LEN_NAME];
-  char graphic_str[MAX_LEN_NAME];
-  char graphic_alt[MAX_LEN_NAME];
   Tech_Type_id tech_req;
   Impr_Type_id bldg_req;
   enum tile_terrain_type *terr_gate;
   enum tile_special_type *spec_gate;
-  enum impr_range equiv_range;
+  Eff_Range_id equiv_range;
   Impr_Type_id *equiv_dupl;
   Impr_Type_id *equiv_repl;
   Tech_Type_id obsolete_by;
@@ -763,8 +697,6 @@ struct packet_ruleset_terrain {
 
   enum tile_terrain_type transform_result;
   int transform_time;
-
-  bv_terrain_flags flags;
   
   char *helptext;		/* same as for packet_ruleset_unit, above */
 };
@@ -812,15 +744,7 @@ struct packet_ruleset_government {
   int fixed_corruption_distance;
   int corruption_distance_factor;
   int extra_corruption_distance;
-  int corruption_max_distance_cap;
-  
-  int waste_level;
-  int waste_modifier;
-  int fixed_waste_distance;
-  int waste_distance_factor;
-  int extra_waste_distance;
-  int waste_max_distance_cap;
-  
+      
   int flags;
   int hints;
       
@@ -853,8 +777,6 @@ struct packet_ruleset_nation {
   bool leader_sex[MAX_NUM_LEADERS];
   int city_style;
   int init_techs[MAX_NUM_TECH_LIST];
-  char class[MAX_LEN_NAME];
-  char legend[MAX_LEN_MSG];
 };
 
 struct packet_ruleset_city {
@@ -862,8 +784,6 @@ struct packet_ruleset_city {
   char name[MAX_LEN_NAME];
   char graphic[MAX_LEN_NAME];
   char graphic_alt[MAX_LEN_NAME];
-  char citizens_graphic[MAX_LEN_NAME];
-  char citizens_graphic_alt[MAX_LEN_NAME];
   int techreq;
   int replaced_by;
 };
@@ -911,7 +831,6 @@ struct packet_game_info {
   int global_wonders[B_LAST];
   int foodbox;
   int techpenalty;
-  int diplomacy;
   bool spacerace;
   /* the following values are computed each time packet_game_info is sent */
   int seconds_to_turndone;
@@ -922,7 +841,6 @@ struct packet_game_info {
 *********************************************************/
 struct packet_map_info {
   int xsize, ysize;
-  int topology_id;
   bool is_earth;
 };
 
@@ -959,9 +877,11 @@ struct packet_sabotage_list
 
 struct packet_goto_route
 {
-  int unit_id;
   int length;
-  struct map_position pos[MAX_LEN_ROUTE];
+  int first_index;
+  int last_index;
+  struct map_position *pos;
+  int unit_id;
 };
 
 struct packet_attribute_chunk
@@ -977,27 +897,6 @@ struct packet_attribute_chunk
 struct packet_nations_used {
   int num_nations_used;
   Nation_Type_id nations_used[MAX_NUM_PLAYERS];
-};
-
-/*********************************************************
- This is the endgame report packet.
-*********************************************************/
-struct packet_endgame_report {
-  int nscores;
-  int id[MAX_NUM_PLAYERS];
-  int score[MAX_NUM_PLAYERS];
-  int pop[MAX_NUM_PLAYERS];
-  int bnp[MAX_NUM_PLAYERS];
-  int mfg[MAX_NUM_PLAYERS];
-  int cities[MAX_NUM_PLAYERS];
-  int techs[MAX_NUM_PLAYERS];
-  int mil_service[MAX_NUM_PLAYERS];
-  int wonders[MAX_NUM_PLAYERS];
-  int research[MAX_NUM_PLAYERS];
-  int landarea[MAX_NUM_PLAYERS];
-  int settledarea[MAX_NUM_PLAYERS];
-  int literacy[MAX_NUM_PLAYERS];
-  int spaceship[MAX_NUM_PLAYERS];
 };
 
 int send_packet_diplomacy_info(struct connection *pc, enum packet_type pt,
@@ -1040,9 +939,6 @@ int send_packet_game_info(struct connection *pc,
 			  const struct packet_game_info *pinfo);
 struct packet_game_info *receive_packet_game_info(struct connection *pc);
 
-int send_packet_ping_info(struct connection *pc,
-			  const struct packet_ping_info *packet);
-struct packet_ping_info *receive_packet_ping_info(struct connection *pc);
 
 struct packet_player_info *receive_packet_player_info(struct connection *pc);
 int send_packet_player_info(struct connection *pc, 
@@ -1065,28 +961,15 @@ int send_packet_unit_info(struct connection *pc,
 			  const struct packet_unit_info *req);
 struct packet_unit_info *receive_packet_unit_info(struct connection *pc);
 
-int send_packet_short_unit(struct connection *pc,
-			   const struct packet_short_unit *req);
-struct packet_short_unit *receive_packet_short_unit(struct connection *pc);
-
-int send_packet_login_request(struct connection *pc, 
-			      const struct packet_login_request *request);
-struct packet_login_request *receive_packet_login_request(struct 
+int send_packet_req_join_game(struct connection *pc, 
+			      const struct packet_req_join_game *request);
+struct packet_req_join_game *receive_packet_req_join_game(struct 
 							  connection *pc);
 
-int send_packet_login_reply(struct connection *pc, 
-                            const struct packet_login_reply *reply);
-struct packet_login_reply *receive_packet_login_reply(struct connection *pc);
-
-struct packet_authentication_request *
-                  receive_packet_authentication_request(struct connection *pc);
-int send_packet_authentication_request(struct connection *pc,
-                          const struct packet_authentication_request *request);
-
-int send_packet_authentication_reply(struct connection *pc,
-                              const struct packet_authentication_reply *reply);
-struct packet_authentication_reply * 
-                    receive_packet_authentication_reply(struct connection *pc);
+int send_packet_join_game_reply(struct connection *pc, 
+			        const struct packet_join_game_reply *reply);
+struct packet_join_game_reply *receive_packet_join_game_reply(struct 
+							      connection *pc);
 
 int send_packet_alloc_nation(struct connection *pc, 
 			     const struct packet_alloc_nation *packet);
@@ -1217,7 +1100,7 @@ void remove_packet_from_buffer(struct socket_packet_buffer *buffer);
 
 int send_packet_goto_route(struct connection *pc,
                            const struct packet_goto_route *packet,
-			   enum packet_type packet_type);
+			   enum goto_route_type type);
 struct packet_goto_route *receive_packet_goto_route(struct connection *pc);
 
 int send_packet_attribute_chunk(struct connection *pc,
@@ -1238,11 +1121,6 @@ int send_packet_nations_used(struct connection *pc,
 			     const struct packet_nations_used *packet);
 struct packet_nations_used *receive_packet_nations_used(struct connection
 							*pc);
-int send_packet_endgame_report(struct connection *pc, enum packet_type pt,
-                               const struct packet_endgame_report *packet);
-struct packet_endgame_report *
-receive_packet_endgame_report(struct connection *pc);
-
 
 #include "packets_lsend.h"		/* lsend_packet_* functions */
 

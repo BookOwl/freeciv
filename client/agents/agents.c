@@ -11,24 +11,20 @@
    GNU General Public License for more details.
 ***********************************************************************/
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <assert.h>
 #include <string.h>
 
 #include "capability.h"
 #include "hash.h"
-#include "log.h"
 #include "mem.h"
-#include "timing.h"
-
 #include "civclient.h"
+#include "log.h"
 #include "clinet.h"
+#include "timing.h"
+#include "mapctrl_g.h"
+
 #include "cma_core.h"
 #include "cma_fec.h"
-#include "mapctrl_g.h"
 
 #include "agents.h"
 
@@ -239,7 +235,7 @@ static void thaw(void)
 /***********************************************************************
  Helper.
 ***********************************************************************/
-static struct my_agent *find_agent_by_name(const char *agent_name)
+static struct my_agent *find_agent_by_name(char *agent_name)
 {
   int i;
 
@@ -314,7 +310,7 @@ void agents_free(void)
    * for a simple disconnect and a client quit. for right now, we just
    * let the OS free the memory on exit instead of doing it ourselves. */
   /* cmafec_free(); */
-  cm_free();
+  cma_free();
 
   for (;;) {
     struct call *pcall = remove_and_return_a_call();
@@ -459,8 +455,8 @@ void agents_new_turn(void)
  Called from client/packhand.c. A call is created and added to the
  list of outstanding calls if an agent wants to be informed about this
  event and the change wasn't caused by the agent. We then try (this
- may not be successful in every case since we can be frozen or another
- call_handle_methods may be running higher up on the stack) to execute
+ may no be successfull in every case since we can be frozen or another
+ call_handle_methods is running higher up on the stack) to execute
  all outstanding calls.
 ***********************************************************************/
 void agents_unit_changed(struct unit *punit)
@@ -621,7 +617,7 @@ void agents_city_remove(struct city *pcity)
  Called from an agent. This function will return until the last
  request has been processed by the server.
 ***********************************************************************/
-void wait_for_requests(const char *agent_name, int first_request_id,
+void wait_for_requests(char *agent_name, int first_request_id,
 		       int last_request_id)
 {
   struct my_agent *agent = find_agent_by_name(agent_name);
@@ -658,7 +654,7 @@ void wait_for_requests(const char *agent_name, int first_request_id,
 /***********************************************************************
  Adds a specific call for the given agent.
 ***********************************************************************/
-void cause_a_unit_changed_for_agent(const char *name_of_calling_agent,
+void cause_a_unit_changed_for_agent(char *name_of_calling_agent,
 				    struct unit *punit)
 {
   struct my_agent *agent = find_agent_by_name(name_of_calling_agent);
@@ -671,7 +667,7 @@ void cause_a_unit_changed_for_agent(const char *name_of_calling_agent,
 /***********************************************************************
  Adds a specific call for the given agent.
 ***********************************************************************/
-void cause_a_city_changed_for_agent(const char *name_of_calling_agent,
+void cause_a_city_changed_for_agent(char *name_of_calling_agent,
 				    struct city *pcity)
 {
   struct my_agent *agent = find_agent_by_name(name_of_calling_agent);

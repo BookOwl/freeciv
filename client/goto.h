@@ -15,7 +15,15 @@
 
 #include "map.h"
 
-#include "path_finding.h"
+struct client_goto_map {
+  short **move_cost;
+  char **vector;
+  unsigned char **drawn; /* Should not be modified directly. */
+  int unit_id; /* The unit of the goto map */
+  int src_x, src_y;
+};
+
+extern struct client_goto_map goto_map;
 
 void init_client_goto(void);
 void free_client_goto(void);
@@ -28,11 +36,10 @@ bool goto_pop_waypoint(void);
 
 void draw_line(int dest_x, int dest_y);
 int get_drawn(int x, int y, int dir);
+void increment_drawn(int x, int y, int dir);
+void decrement_drawn(int x, int y, int dir);
 
-void send_goto_path(struct unit *punit, struct pf_path *path);
 void send_patrol_route(struct unit *punit);
 void send_goto_route(struct unit *punit);
-
-struct pf_path *path_to_nearest_allied_city(struct unit *punit);
 
 #endif /* FC__GOTO_H */

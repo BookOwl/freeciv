@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/  
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -121,7 +120,6 @@ enum MenuID {
   IDM_ORDERS_CONNECT,
   IDM_ORDERS_GOTO,
   IDM_ORDERS_AIRLIFT,
-  IDM_ORDERS_RETURN,
 
   IDM_ORDERS_DISBAND,
   IDM_ORDERS_WONDER,
@@ -205,7 +203,7 @@ struct my_menu {
 /**************************************************************************
 
 **************************************************************************/
-HACCEL my_create_menu_acceltable(void)
+HACCEL my_create_menu_acceltable()
 {
   return CreateAcceleratorTable(menuaccel,accelcount);
 }
@@ -343,7 +341,6 @@ static struct my_menu main_menu[]={
   {N_("_Connect") "\tShift+C",IDM_ORDERS_CONNECT},
   {N_("_Go to") "\tG",IDM_ORDERS_GOTO},
   {N_("Go/Airlift to City") "\tL",IDM_ORDERS_AIRLIFT},
-  {N_("Return to nearest city") "\tShift+G", IDM_ORDERS_RETURN},
   { "",IDM_SEPARATOR},
   {N_("Disband Unit") "\tShift+D",IDM_ORDERS_DISBAND},
   {N_("Help Build Wonder") "\tShift+B",IDM_ORDERS_WONDER},
@@ -437,7 +434,7 @@ static int my_append_menu(HMENU menu, struct my_menu *item, HMENU submenu)
 /**************************************************************************
 
 **************************************************************************/
-static HMENU my_create_menu(struct my_menu **items)
+HMENU my_create_menu(struct my_menu **items)
 {
   HMENU menu;
   if ((*items)->id==IDM_BEGIN) {
@@ -469,36 +466,34 @@ static HMENU my_create_menu(struct my_menu **items)
 /**************************************************************************
 
 **************************************************************************/
-static void handle_numpad(int code)
+void handle_numpad(int code)
 {
-  switch (code) { 
-  case IDM_NUMPAD_BASE + 1:
-    key_unit_move(DIR8_SOUTHWEST);
-    break;
-  case IDM_NUMPAD_BASE + 2:
-    key_unit_move(DIR8_SOUTH);
-    break;
-  case IDM_NUMPAD_BASE + 3:
-    key_unit_move(DIR8_SOUTHEAST);
-    break;
-  case IDM_NUMPAD_BASE + 4:
-    key_unit_move(DIR8_WEST);
-    break;
-  case IDM_NUMPAD_BASE + 5:
-    advance_unit_focus();
-    break;
-  case IDM_NUMPAD_BASE + 6:
-    key_unit_move(DIR8_EAST);
-    break;
-  case IDM_NUMPAD_BASE + 7:
-    key_unit_move(DIR8_NORTHWEST);
-    break;
-  case IDM_NUMPAD_BASE + 8:
-    key_unit_move(DIR8_NORTH);
-    break;
-  case IDM_NUMPAD_BASE + 9:
-    key_unit_move(DIR8_NORTHEAST);
-    break;
+  if (is_isometric) {
+    switch (code)
+      {
+      case IDM_NUMPAD_BASE+1: key_move_south(); break;
+      case IDM_NUMPAD_BASE+2: key_move_south_east(); break;
+      case IDM_NUMPAD_BASE+3: key_move_east(); break;
+      case IDM_NUMPAD_BASE+4: key_move_south_west(); break;
+      case IDM_NUMPAD_BASE+5: focus_to_next_unit(); break;
+      case IDM_NUMPAD_BASE+6: key_move_north_east(); break;
+      case IDM_NUMPAD_BASE+7: key_move_west(); break;
+      case IDM_NUMPAD_BASE+8: key_move_north_west(); break;
+      case IDM_NUMPAD_BASE+9: key_move_north(); break;
+      }
+  } else {
+    switch (code) 
+      { 
+      case IDM_NUMPAD_BASE+1: key_move_south_west(); break;
+      case IDM_NUMPAD_BASE+2: key_move_south(); break;
+      case IDM_NUMPAD_BASE+3: key_move_south_east(); break;
+      case IDM_NUMPAD_BASE+4: key_move_west(); break;
+      case IDM_NUMPAD_BASE+5: focus_to_next_unit(); break;
+      case IDM_NUMPAD_BASE+6: key_move_east(); break;
+      case IDM_NUMPAD_BASE+7: key_move_north_west(); break;
+      case IDM_NUMPAD_BASE+8: key_move_north(); break;
+      case IDM_NUMPAD_BASE+9: key_move_north_east(); break;
+      }
   }
 }
 
@@ -719,11 +714,6 @@ void handle_menu(int code)
       if(get_unit_in_focus())
 	popup_goto_dialog();
       break;
-    case IDM_ORDERS_RETURN:
-      if (get_unit_in_focus()) {
-	request_unit_return(get_unit_in_focus());
-      }
-      break;
     case IDM_ORDERS_DISBAND:
       if(get_unit_in_focus())
 	request_unit_disband(get_unit_in_focus());
@@ -854,7 +844,7 @@ static void my_rename_menu(HMENU hmenu,int id,char *newstr)
 /**************************************************************************
 
 **************************************************************************/
-HMENU create_mainmenu(void)
+HMENU create_mainmenu()
 {
   struct my_menu *items=main_menu;
   return my_create_menu(&items);
@@ -869,7 +859,8 @@ update_menus(void)
   enum MenuID id;
   HMENU menu;
   menu=GetMenu(root_window);
-  if (!can_client_issue_orders()) {
+  if (get_client_state()!=CLIENT_GAME_RUNNING_STATE)
+    {
       for(id=IDM_KINGDOM_MENU+1;id<IDM_HELP_MENU;id++)
 	my_enable_menu(menu,id,FALSE);
       
@@ -889,11 +880,6 @@ update_menus(void)
       for(id=IDM_KINGDOM_MENU+1;id<IDM_HELP_MENU;id++)
 	my_enable_menu(menu,id,TRUE);
       
-      my_enable_menu(menu, IDM_KINGDOM_TAX, can_client_issue_orders());
-      my_enable_menu(menu, IDM_KINGDOM_WORK, can_client_issue_orders());
-      my_enable_menu(menu, IDM_KINGDOM_REVOLUTION,
-		     can_client_issue_orders());
-
       my_enable_menu(menu,IDM_GAME_LOCAL_OPT,TRUE);
       my_enable_menu(menu,IDM_GAME_MESSAGE_OPT,TRUE);
       my_enable_menu(menu,IDM_GAME_SAVE_SETTINGS,TRUE);

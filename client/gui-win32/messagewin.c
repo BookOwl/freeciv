@@ -10,11 +10,10 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
-
+ 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -53,10 +52,10 @@ static int max_list_width;
 /**************************************************************************
 
 **************************************************************************/
-static LONG APIENTRY MsgdlgProc(HWND hWnd,
-				UINT message,
-				UINT wParam,
-				LONG lParam)
+LONG APIENTRY MsgdlgProc(HWND hWnd,
+			 UINT message,
+			 UINT wParam,
+			 LONG lParam)
 {
   switch(message)
     {

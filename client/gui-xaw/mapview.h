@@ -17,16 +17,17 @@
 
 #include "mapview_g.h"
 
-#include "citydlg_common.h"
-
 #include "graphics.h"
 
 struct unit;
 struct city;
 
 Pixmap get_thumb_pixmap(int onoff);
-Pixmap get_citizen_pixmap(enum citizen_type type, int cnum,
-			  struct city *pcity);
+Pixmap get_citizen_pixmap(int frame);
+
+void get_map_xy(int canvas_x, int canvas_y, int *map_x, int *map_y);
+void put_unit_pixmap(struct unit *punit, Pixmap pm,
+		     int canvas_x, int canvas_y);
 
 void put_unit_pixmap_city_overlays(struct unit *punit, Pixmap pm);
 
@@ -39,6 +40,8 @@ void map_canvas_expose(Widget w, XEvent *event, Region exposed,
 		       void *client_data);
 void map_canvas_resize(void);
 
+void pixmap_put_tile(Pixmap pm, int x, int y, int canvas_x, int canvas_y, 
+		     int citymode);
 void pixmap_put_black_tile(Pixmap pm, int canvas_x, int canvas_y);
 void pixmap_frame_tile_red(Pixmap pm, int canvas_x, int canvas_y);
 
@@ -47,14 +50,7 @@ void scrollbar_jump_callback(Widget scrollbar, XtPointer client_data,
 void scrollbar_scroll_callback(Widget w, XtPointer client_data,
 			     XtPointer position_ptr);
 
-/* These values are stored in the mapview_canvas struct now. */
-#define map_view_x0 mapview_canvas.map_x0
-#define map_view_y0 mapview_canvas.map_y0
-#define map_canvas_store_twidth mapview_canvas.tile_width
-#define map_canvas_store_theight mapview_canvas.tile_height
-
-/* Use of these wrapper functions is deprecated. */
-#define get_canvas_xy(map_x, map_y, canvas_x, canvas_y) \
-  map_to_canvas_pos(canvas_x, canvas_y, map_x, map_y)
+extern int map_view_x0;
+extern int map_view_y0;
 
 #endif  /* FC__MAPVIEW_H */

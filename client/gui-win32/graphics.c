@@ -10,11 +10,9 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/ 
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
-#endif
-
+#endif 
 #include <string.h>  
 #include <stdlib.h>
 #include <windows.h>
@@ -92,10 +90,10 @@ free_intro_radar_sprites(void)
 /**************************************************************************
 
 **************************************************************************/
-const char **
+char **
 gfx_fileextensions(void)
 {
-  static const char *ext[] =
+  static char *ext[] =
   {
     "png",
     NULL
@@ -495,33 +493,31 @@ void draw_fog_part(HDC hdc,int x, int y,int w, int h,
     draw_sprite_part(&fog_sprite,hdc,x,y,w,h,xsrc,ysrc);
 }
 
-#if 0
 /**************************************************************************
 
 **************************************************************************/
-static void crop_sprite_real(struct Sprite *source)
+void  crop_sprite_real(struct Sprite *source)
 {
 } 
-#endif
         
 /**************************************************************************
 
 **************************************************************************/
-void free_sprite(struct Sprite *s)
+void
+free_sprite(struct Sprite *s)
 {
-  if (s->has_mask) {
-    free(s->mask.bmBits);
-    s->mask = NULL;
-  }
-
+  if (s->has_mask)
+    {
+      free(s->mask.bmBits);
+    }
+  
+  
   free(s->bmp.bmBits);
-  s->bmp = NULL;
-
+  
   free(s);
-  if (bitmapcache) {
+  if (bitmapcache)
     DeleteObject(bitmapcache);
-  }
-  sprcache = NULL;
+  sprcache=NULL;
 }
 
 /**************************************************************************

@@ -13,6 +13,7 @@
 #ifndef FC__UNIT_H
 #define FC__UNIT_H
 
+#include "genlist.h"
 #include "terrain.h"		/* enum tile_special_type */
 #include "unittype.h"
 
@@ -20,8 +21,6 @@ struct player;
 struct city;
 struct goto_route;
 struct tile;
-
-#define BARBARIAN_LIFE    5
 
 enum unit_activity {
   ACTIVITY_IDLE, ACTIVITY_POLLUTION, ACTIVITY_ROAD, ACTIVITY_MINE,
@@ -52,7 +51,7 @@ enum diplomat_client_actions {
 enum ai_unit_task { AIUNIT_NONE, AIUNIT_AUTO_SETTLER, AIUNIT_BUILD_CITY,
                     AIUNIT_DEFEND_HOME, AIUNIT_ATTACK, AIUNIT_FORTIFY,
                     AIUNIT_RUNAWAY, AIUNIT_ESCORT, AIUNIT_EXPLORE,
-                    AIUNIT_PILLAGE, AIUNIT_RECOVER };
+                    AIUNIT_PILLAGE };
 
 enum goto_move_restriction {
   GOTO_MOVE_ANY,
@@ -118,51 +117,25 @@ struct unit {
   int upkeep;
   int upkeep_food;
   int upkeep_gold;
+  bool foul;
   int fuel;
   int bribe_cost;
   struct unit_ai ai;
   enum unit_activity activity;
-  struct {
-    /* We can't use struct map_position because map.h cannot be included. */
-    int x, y;
-  } goto_dest;
+  int goto_dest_x, goto_dest_y;
   int activity_count;
   enum tile_special_type activity_target;
   enum unit_focus_status focus_status;
   int ord_map, ord_city;
   /* ord_map and ord_city are the order index of this unit in tile.units
      and city.units_supported; they are only used for save/reload */
-  bool foul;
-  bool debug;
   bool moved;
   bool paradropped;
   bool connecting;
-
-  /* This value is set if the unit is done moving for this turn. This
-   * information is used by the client.  The invariant is:
-   *   - If the unit has no more moves, it's done moving.
-   *   - If the unit is on a goto but is waiting, it's done moving.
-   *   - Otherwise the unit is not done moving. */
-  bool done_moving;
-
   int transported_by;
-  int occupy; /* number of units that occupy transporter */
   struct goto_route *pgr;
 };
 
-/* Wrappers for accessing the goto destination of a unit.  This goto_dest
- * is used by client goto as well as by the AI. */
-#define is_goto_dest_set(punit) ((punit)->goto_dest.x != -1      \
-                                 && (punit)->goto_dest.y != -1)
-#define goto_dest_x(punit) (assert((punit)->goto_dest.x != -1),  \
-                            (punit)->goto_dest.x)
-#define goto_dest_y(punit) (assert((punit)->goto_dest.y != -1),  \
-                            (punit)->goto_dest.y)
-#define set_goto_dest(punit, map_x, map_y) (CHECK_MAP_POS(map_x, map_y),  \
-                                            (punit)->goto_dest.x = map_x, \
-                                            (punit)->goto_dest.y = map_y)
-#define clear_goto_dest(punit) ((punit)->goto_dest.x = -1, \
-                                (punit)->goto_dest.y = -1)
 
 /* get 'struct unit_list' and related functions: */
 #define SPECLIST_TAG unit
@@ -235,6 +208,7 @@ bool is_unit_activity_on_tile(enum unit_activity activity, int x, int y);
 int get_unit_tile_pillage_set(int x, int y);
 bool is_military_unit(struct unit *punit);           /* !set !dip !cara */
 bool is_diplomat_unit(struct unit *punit);
+bool is_ground_threat(struct player *pplayer, struct unit *punit);
 bool is_square_threatened(struct player *pplayer, int x, int y);
 bool is_field_unit(struct unit *punit);              /* ships+aero */
 bool is_hiding_unit(struct unit *punit);
@@ -242,8 +216,6 @@ bool is_sailing_unit(struct unit *punit);
 bool is_air_unit(struct unit *punit);
 bool is_heli_unit(struct unit *punit);
 bool is_ground_unit(struct unit *punit);
-#define COULD_OCCUPY(punit) \
-  ((is_ground_unit(punit) || is_heli_unit(punit)) && is_military_unit(punit))
 bool can_unit_add_to_city (struct unit *punit);
 bool can_unit_build_city (struct unit *punit);
 bool can_unit_add_or_build_city (struct unit *punit);
@@ -251,6 +223,7 @@ enum add_build_city_result test_unit_add_or_build_city(struct unit *punit);
 bool kills_citizen_after_attack(struct unit *punit);
 
 const char *unit_activity_text(struct unit *punit);
+const char *unit_description(struct unit *punit);
 int ground_unit_transporter_capacity(int x, int y, struct player *pplayer);
 int get_transporter_capacity(struct unit *punit);
 bool is_ground_units_transport(struct unit *punit);
@@ -272,7 +245,6 @@ struct unit *is_non_attack_unit_tile(struct tile *ptile,
 				     struct player *pplayer);
 
 int trireme_loss_pct(struct player *pplayer, int x, int y);
-int base_trireme_loss_pct(struct player *pplayer);
 
 bool is_my_zoc(struct player *unit_owner, int x0, int y0);
 bool unit_being_aggressive(struct unit *punit);
@@ -288,13 +260,9 @@ enum unit_move_result test_unit_move_to_tile(Unit_Type_id type,
 					     int src_y, int dest_x,
 					     int dest_y, bool igzoc);
 bool unit_type_really_ignores_zoc(Unit_Type_id type);
+bool zoc_ok_move_gen(struct unit *punit, int x1, int y1, int x2, int y2);
 bool zoc_ok_move(struct unit *punit, int x, int y);
 
 bool is_build_or_clean_activity(enum unit_activity activity);
-
-struct unit *create_unit_virtual(struct player *pplayer, struct city *pcity,
-                                 Unit_Type_id type, bool make_veteran);
-void destroy_unit_virtual(struct unit *punit);
-void free_unit_goto_route(struct unit *punit);
 
 #endif  /* FC__UNIT_H */

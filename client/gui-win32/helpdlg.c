@@ -10,16 +10,14 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
-
-#include <assert.h>
+ 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include <assert.h>
 #include <windows.h>
 #include <windowsx.h>
  
@@ -514,12 +512,7 @@ static void help_update_wonder(const struct help_item *pitem,
     } else {
       SetWindowText(help_ilabel[3], advances[imp->tech_req].name);
     }
-    if (tech_exists(imp->obsolete_by)) {
-      SetWindowText(help_ilabel[5], advances[imp->obsolete_by].name);
-    } else {
-      SetWindowText(help_ilabel[5], _("(Never)"));
-    }
-
+    SetWindowText(help_ilabel[5], advances[imp->obsolete_by].name);
     /*    create_tech_tree(help_improvement_tree, 0, imp->tech_req, 3);*/
   }
   else {
@@ -803,7 +796,7 @@ static void help_update_tech(const struct help_item *pitem, char *title, int i)
 			   0,FALSE,FALSE,5);
     } unit_type_iterate_end;
 
-    for (j = 0; j < game.num_tech_types; j++) {
+    for(j=0; j<game.num_tech_types; ++j) {
       if(i==advances[j].req[0]) {
         if(advances[j].req[1]==A_NONE) {
 	  hbox=fcwin_hbox_new(helpdlg_win,FALSE);
@@ -866,9 +859,7 @@ static void help_update_dialog(const struct help_item *pitem)
   char *top;
   /* figure out what kind of item is required for pitem ingo */
 
-  for (top = pitem->topic; *top == ' '; top++) {
-    /* nothing */
-  }
+  for(top=pitem->topic; *top==' '; ++top);
   SetWindowText(helpdlg_text,"");
 
   switch(pitem->type) {

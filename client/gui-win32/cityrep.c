@@ -10,14 +10,15 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/  
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
-#endif
-
+#endif        
+#include <stdlib.h>
+ 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
                          
 #include <windows.h>
 #include <windowsx.h>
@@ -346,30 +347,52 @@ static void cityrep_popup(HWND hWnd)
 /**************************************************************************
 
 **************************************************************************/
-static void cityrep_do_buy(HWND hWnd)
+static void cityrep_buy(HWND hWnd)
 {
   int cityids[256];
+  int selcount;
   int i;
-  int selcount = ListBox_GetSelCount(GetDlgItem(hWnd, ID_CITYREP_LIST));
-
-  if (selcount == LB_ERR) {
-    return;
-  }
-  selcount = MIN(256, selcount);
-  selcount = ListBox_GetSelItems(GetDlgItem(hWnd, ID_CITYREP_LIST),
-				 selcount, &cityids[0]);
-  for (i = 0; i < selcount; i++) {
-    cityrep_buy((struct city *) ListBox_GetItemData(GetDlgItem(hWnd,
-							       ID_CITYREP_LIST),
-						    cityids[i]));
-  }
+  struct city *pcity;
+   selcount=ListBox_GetSelCount(GetDlgItem(hWnd,ID_CITYREP_LIST));
+  if (selcount==LB_ERR) return;
+  selcount=MIN(256,selcount);
+  selcount=ListBox_GetSelItems(GetDlgItem(hWnd,ID_CITYREP_LIST),
+			       selcount,&cityids[0]);
+  for(i=0;i<selcount;i++)
+    {
+      int value;
+      char *name;
+      char buf[512];            
+      pcity=(struct city *)ListBox_GetItemData(GetDlgItem(hWnd,
+							  ID_CITYREP_LIST),
+					       cityids[i]);
+      value=city_buy_cost(pcity);
+      if(pcity->is_building_unit)
+        name=get_unit_type(pcity->currently_building)->name;
+      else
+        name=get_impr_name_ex(pcity, pcity->currently_building);
+ 
+      if (game.player_ptr->economic.gold >= value)
+        {
+          struct packet_city_request packet;
+          packet.city_id=pcity->id;
+          send_packet_city_request(&aconnection, &packet, PACKET_CITY_BUY);
+        }
+      else
+        {
+          my_snprintf(buf, sizeof(buf),
+                      _("Game: %s costs %d gold and you only have %d gold."),
+                      name,value,game.player_ptr->economic.gold);
+          append_output_window(buf);
+        }             
+    }
 }
   
-#if 0
+
 /**************************************************************************
 
 **************************************************************************/
-static void cityrep_refresh(HWND hWnd)
+void cityrep_refresh(HWND hWnd)
 {
     int cityids[256];
   int selcount;
@@ -396,8 +419,6 @@ static void cityrep_refresh(HWND hWnd)
 				  &packet);      
     }
 }
-#endif
-
 /**************************************************************************
 
 **************************************************************************/
@@ -498,11 +519,15 @@ static void cityrep_change_menu(HWND hWnd, cid cid)
 
   connection_do_buffer(&aconnection);
   for (i = 0; i < selcount; i++) {
+    struct packet_city_request packet;
     pcity = (struct city *) ListBox_GetItemData(GetDlgItem(hWnd,
 							   ID_CITYREP_LIST),
 						cityids[i]);
+    packet.city_id = pcity->id;
+    packet.build_id = number;
+    packet.is_build_id_unit_id = is_unit;
     last_request_id =
-      city_change_production(pcity, is_unit, number);
+	send_packet_city_request(&aconnection, &packet, PACKET_CITY_CHANGE);
     ListBox_SetSel(GetDlgItem(hWnd, ID_CITYREP_LIST), FALSE, cityids[i]);
   }
 
@@ -550,9 +575,8 @@ static void list_coastal_select(HWND hLst)
   for (i=0;i<num;i++)
     {
       pcity=(struct city *)ListBox_GetItemData(hLst,i);
-      if (is_ocean_near_tile(pcity->x, pcity->y)) {
+      if (is_terrain_near_tile(pcity->x, pcity->y, T_OCEAN)) 
 	ListBox_SetSel(hLst,TRUE,i);
-      }
     }
 }
 
@@ -592,8 +616,7 @@ static void list_sameisland_select(HWND hLst)
 /**************************************************************************
 
 **************************************************************************/
-static void list_impr_or_unit_select(HWND hLst, int num,
-				     TestCityFunc *test_func)
+void list_impr_or_unit_select(HWND hLst,int num, TestCityFunc *test_func)
 {
   int i,rows;
   list_all_select(hLst,FALSE);
@@ -994,7 +1017,7 @@ static LONG APIENTRY city_report_proc(HWND hWnd,
 	  cityrep_popup(hWnd);
 	  break;
 	case ID_CITYREP_BUY:
-	  cityrep_do_buy(hWnd);
+	  cityrep_buy(hWnd);
 	  break;
 	case ID_CITYREP_CHANGE:
 	  cityrep_change(hWnd);

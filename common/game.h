@@ -14,20 +14,17 @@
 #define FC__GAME_H
 
 #include <time.h>	/* time_t */
-
 #ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
 #endif
 
 #include "connection.h"		/* struct conn_list */
 #include "improvement.h"	/* Impr_Status */
-#include "player.h"
 #include "shared.h"
-
+#include "player.h"
 
 #define MAX_LEN_DEMOGRAPHY  16
-#define MAX_LEN_ALLOW_TAKE 16
-#define MAX_ID_LEN 33
+#define MAX_LEN_ALLOW_CONNECT 16
 
 enum server_states { 
   PRE_GAME_STATE, 
@@ -57,7 +54,6 @@ struct city;
 struct civ_game {
   bool is_new_game;		/* 1 for games never started */
   int version;
-  char id[MAX_ID_LEN];		/* server only */
   int civstyle;
   int gold;
   int settlers, explorer;
@@ -74,7 +70,6 @@ struct civ_game {
   int netwait;
   time_t last_ping;
   int pingtimeout;
-  int pingtime;
   time_t turn_start;
   int end_year;
   int year;
@@ -85,7 +80,6 @@ struct civ_game {
   int cityfactor;
   int citymindist;
   int civilwarsize;
-  int contactturns;
   int rapturedelay;
   int min_players, max_players, nplayers;
   int aifill;
@@ -97,6 +91,7 @@ struct civ_game {
   int unhappysize;
   bool angrycitizen;
   char *startmessage;
+  int conn_id;			/* client-only: id client known to server as */
   int player_idx;
   struct player *player_ptr;
   struct player players[MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS];
@@ -108,6 +103,9 @@ struct civ_game {
          /* global_wonders[] may also be (-1), or the id of a city
 	    which no longer exists, if the wonder has been destroyed */
   Impr_Status improvements[B_LAST];        /* impr. with equiv_range==World */
+  struct geff_vector effects;		   /* effects with range==World */
+  struct ceff_vector destroyed_effects;	   /* list of effects that have survived
+					      building destruction */
 
   int heating; /* Number of polluted squares. */
   int globalwarming; /* Total damage done. (counts towards a warming event.) */
@@ -159,9 +157,6 @@ struct civ_game {
   int watchtower_vision;
   int allowed_city_names;
 
-  int borders;		/* distance of border from city; 0=disabled. */
-  int diplomacy;        /* who can do it */
-
   char rulesetdir[MAX_LEN_NAME];
   int firepower_factor;		/* See README.rulesets */
   struct {
@@ -203,7 +198,7 @@ struct civ_game {
   } rgame;
 
   char demography[MAX_LEN_DEMOGRAPHY];
-  char allow_take[MAX_LEN_ALLOW_TAKE];
+  char allow_connect[MAX_LEN_ALLOW_CONNECT];
 
   /* used by the map editor to control game_save; could be used by the server too */
   struct {
@@ -243,17 +238,22 @@ struct unit *find_unit_by_id(int id);
 struct city *find_city_by_id(int id);
 
 void game_remove_player(struct player *pplayer);
+void game_remove_all_players(void);
 void game_renumber_players(int plrno);
 
 void game_remove_unit(struct unit *punit);
 void game_remove_city(struct city *pcity);
 int total_player_citizens(struct player *pplayer);
+int civ_score(struct player *pplayer);
 void initialize_globals(void);
 
 void translate_data_names(void);
 
 struct player *get_player(int player_id);
 int get_num_human_and_ai_players(void);
+void update_island_impr_effect(int oldmax, int maxcont);
+
+void update_all_effects(void);
 
 extern struct civ_game game;
 extern bool is_server;
@@ -314,16 +314,6 @@ extern bool is_server;
 
 #define GAME_DEFAULT_FOGOFWAR        TRUE
 
-/* 0 means no national borders.  Performance dropps quickly as the border
- * distance increases (o(n^2) or worse). */
-#define GAME_DEFAULT_BORDERS         7
-#define GAME_MIN_BORDERS             0
-#define GAME_MAX_BORDERS             24
-
-#define GAME_DEFAULT_DIPLOMACY       0
-#define GAME_MIN_DIPLOMACY           0
-#define GAME_MAX_DIPLOMACY           3
-
 #define GAME_DEFAULT_DIPLCHANCE      80
 #define GAME_MIN_DIPLCHANCE          1
 #define GAME_MAX_DIPLCHANCE          99
@@ -347,10 +337,6 @@ extern bool is_server;
 #define GAME_DEFAULT_CIVILWARSIZE    10
 #define GAME_MIN_CIVILWARSIZE        6
 #define GAME_MAX_CIVILWARSIZE        1000
-
-#define GAME_DEFAULT_CONTACTTURNS    20
-#define GAME_MIN_CONTACTTURNS        0
-#define GAME_MAX_CONTACTTURNS        100
 
 #define GAME_DEFAULT_RAPTUREDELAY    1
 #define GAME_MIN_RAPTUREDELAY        1
@@ -411,10 +397,6 @@ extern bool is_server;
 #define GAME_MIN_NETWAIT             0
 #define GAME_MAX_NETWAIT             20
 
-#define GAME_DEFAULT_PINGTIME        20
-#define GAME_MIN_PINGTIME            1
-#define GAME_MAX_PINGTIME            1800
-
 #define GAME_DEFAULT_PINGTIMEOUT     60
 #define GAME_MIN_PINGTIMEOUT         60
 #define GAME_MAX_PINGTIMEOUT         1800
@@ -448,7 +430,7 @@ extern bool is_server;
 #define GAME_OLD_DEFAULT_SKILL_LEVEL 5  /* normal; for old save games */
 
 #define GAME_DEFAULT_DEMOGRAPHY      "NASRLPEMOqrb"
-#define GAME_DEFAULT_ALLOW_TAKE      "HAhad"
+#define GAME_DEFAULT_ALLOW_CONNECT   "NHAhad"
 
 #define GAME_DEFAULT_COMPRESS_LEVEL 6    /* if we have compression */
 #define GAME_MIN_COMPRESS_LEVEL     0

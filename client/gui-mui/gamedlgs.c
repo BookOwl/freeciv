@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -290,7 +289,7 @@ static void option_ok(void)
 {
   client_option *o;
 
-  for (o = options; o->name; o++)
+  for (o = options; o->name; ++o)
   {
     Object *obj = (Object *) o->p_gui_data;
     if (obj)
@@ -334,7 +333,8 @@ static void create_option_dialog(void)
 
     if (option_wnd)
     {
-      for (o = options; o->name; o++) {
+      for (o = options; o->name; ++o)
+      {
       	Object *obj, *label;
 
 	if (o->type == COT_BOOL) obj = MakeCheck(_(o->description), FALSE);
@@ -363,7 +363,8 @@ static void create_option_dialog(void)
 
   if (option_wnd)
   {
-    for (o = options; o->name; o++) {
+    for (o = options; o->name; ++o)
+    {
       Object *obj = (Object *) o->p_gui_data;
       if (obj)
       {

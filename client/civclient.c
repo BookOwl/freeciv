@@ -10,66 +10,66 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
-#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <assert.h>
 
-#ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
-#endif
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#ifdef HAVE_SYS_TYPES_H
+#include <sys/types.h>
+#endif
+
 #ifdef HAVE_WINSOCK
 #include <winsock.h>
 #endif
 
 #include "capstr.h"
-#include "diptreaty.h"
 #include "fcintl.h"
 #include "game.h"
 #include "idex.h"
 #include "log.h"
 #include "map.h"
 #include "mem.h"
-#include "netintf.h"
 #include "packets.h"
 #include "rand.h"
 #include "support.h"
 #include "version.h"
 
-#include "agents.h"
-#include "attribute.h"
-#include "audio.h"
 #include "chatline_g.h"
 #include "citydlg_g.h"
 #include "cityrepdata.h"
 #include "climisc.h"
 #include "clinet.h"
-#include "cma_core.h"		/* kludge */
 #include "connectdlg_g.h"
 #include "control.h" 
 #include "dialogs_g.h"
 #include "diplodlg_g.h"
-#include "goto.h"
 #include "gui_main_g.h"
+#include "goto.h"
 #include "helpdata.h"		/* boot_help_texts() */
 #include "mapctrl_g.h"
 #include "mapview_g.h"
 #include "menu_g.h"
 #include "messagewin_g.h"
+#include "netintf.h"
 #include "options.h"
 #include "packhand.h"
 #include "plrdlg_g.h"
 #include "repodlgs_g.h"
 #include "tilespec.h"
+#include "attribute.h"
+#include "agents.h"
+#include "audio.h"
+
+#include "cma_core.h" /* kludge */
 
 #include "civclient.h"
 
@@ -77,12 +77,11 @@
    needed (hence, it is not 'extern'd in civclient.h) */
 bool is_server = FALSE;
 
-static char tileset_name[512] = "\0";
+char tile_set_name[512] = "\0";
 char sound_plugin_name[512] = "\0";
 char sound_set_name[512] = "\0";
 char server_host[512] = "\0";
-char user_name[512] = "\0";
-char password[MAX_LEN_NAME] = "\0";
+char player_name[512] = "\0";
 char metaserver[512] = "\0";
 int  server_port = -1;
 bool auto_connect = FALSE; /* TRUE = skip "Connect to Freeciv Server" dialog */
@@ -90,6 +89,9 @@ bool auto_connect = FALSE; /* TRUE = skip "Connect to Freeciv Server" dialog */
 static enum client_states client_state = CLIENT_BOOT_STATE;
 
 int seconds_to_turndone;
+
+int last_turn_gold_amount;
+int turn_gold_difference;
 
 /* TRUE if an end turn request is blocked by busy agents */
 bool waiting_for_end_turn = FALSE;
@@ -100,19 +102,20 @@ bool waiting_for_end_turn = FALSE;
  */
 bool turn_done_sent = FALSE;
 
+static void client_remove_all_cli_conn(void);
 
 /**************************************************************************
 ...
 **************************************************************************/
 int main(int argc, char *argv[])
 {
-  int i, loglevel;
-  int ui_options = 0;
-  bool ui_separator = FALSE;
+  int i;
+  int loglevel;
   char *logfile=NULL;
   char *option=NULL;
 
   init_nls();
+  dont_run_as_root(argv[0], "freeciv_client");
   audio_init();
 
   /* default argument values are set in options.c */
@@ -121,10 +124,7 @@ int main(int argc, char *argv[])
   i = 1;
 
   while (i < argc) {
-   if (ui_separator) {
-     argv[1 + ui_options] = argv[i];
-     ui_options++;
-   } else if (is_option("--help", argv[i])) {
+   if (is_option("--help", argv[i])) {
     fprintf(stderr, _("Usage: %s [option ...]\n"
 		      "Valid options are:\n"), argv[0]);
     fprintf(stderr, _("  -a, --autoconnect\tSkip connect dialog\n"));
@@ -147,9 +147,6 @@ int main(int argc, char *argv[])
     fprintf(stderr, _("  -t, --tiles FILE\t"
 		      "Use data file FILE.tilespec for tiles\n"));
     fprintf(stderr, _("  -v, --version\t\tPrint the version number\n"));
-    fprintf(stderr, _("      --\t\t"
-		      "Pass any following options to the UI.\n"
-		      "\t\t\tTry \"%s -- --help\" for more.\n"), argv[0]);
     exit(EXIT_SUCCESS);
    } else if (is_option("--version",argv[i])) {
     fprintf(stderr, "%s %s\n", freeciv_name_version(), client_string);
@@ -157,7 +154,7 @@ int main(int argc, char *argv[])
    } else if ((option = get_option("--log",argv,&i,argc)))
       logfile = mystrdup(option); /* never free()d */
    else if ((option = get_option("--name",argv,&i,argc)))
-      sz_strlcpy(user_name, option);
+      sz_strlcpy(player_name, option);
    else if ((option = get_option("--meta",argv,&i,argc)))
       sz_strlcpy(metaserver, option);
    else if ((option = get_option("--Sound", argv, &i, argc)))
@@ -178,34 +175,21 @@ int main(int argc, char *argv[])
         exit(EXIT_FAILURE);
       }
    } else if ((option = get_option("--tiles", argv, &i, argc)))
-      sz_strlcpy(tileset_name, option);
-   else if (is_option("--", argv[i])) {
-     ui_separator = TRUE;
-   } else { 
+      sz_strlcpy(tile_set_name, option);
+   else { 
       fprintf(stderr, _("Unrecognized option: \"%s\"\n"), argv[i]);
       exit(EXIT_FAILURE);
    }
    i++;
   } /* of while */
 
-  /* Remove all options except those intended for the UI. */
-  argv[1 + ui_options] = NULL;
-  argc = 1 + ui_options;
-
-  /* disallow running as root -- too dangerous */
-  dont_run_as_root(argv[0], "freeciv_client");
-
   log_init(logfile, loglevel, NULL);
 
   /* after log_init: */
 
-  sz_strlcpy(default_user_name, user_username());
+  sz_strlcpy(default_player_name, user_username());
 
   /* initialization */
-
-  conn_list_init(&game.all_connections);
-  conn_list_init(&game.est_connections);
-  conn_list_init(&game.game_connections);
 
   ui_init();
   my_init_network();
@@ -214,17 +198,16 @@ int main(int argc, char *argv[])
 
   load_general_options();
 
-  if (tileset_name[0] == '\0') {
-    sz_strlcpy(tileset_name, default_tileset_name);
-  }
+  if (tile_set_name[0] == '\0') 
+    sz_strlcpy(tile_set_name, default_tile_set_name); 
   if (sound_set_name[0] == '\0') 
     sz_strlcpy(sound_set_name, default_sound_set_name); 
   if (sound_plugin_name[0] == '\0')
     sz_strlcpy(sound_plugin_name, default_sound_plugin_name); 
   if (server_host[0] == '\0')
     sz_strlcpy(server_host, default_server_host); 
-  if (user_name[0] == '\0')
-    sz_strlcpy(user_name, default_user_name); 
+  if (player_name[0] == '\0')
+    sz_strlcpy(player_name, default_player_name); 
   if (metaserver[0] == '\0')
     sz_strlcpy(metaserver, default_metaserver); 
   if (server_port == -1) server_port = default_server_port;
@@ -235,17 +218,17 @@ int main(int argc, char *argv[])
   mysrand(time(NULL));
 
   boot_help_texts();
-  tilespec_read_toplevel(tileset_name); /* get tile sizes etc */
+  tilespec_read_toplevel(tile_set_name); /* get tile sizes etc */
 
   audio_real_init(sound_set_name, sound_plugin_name);
   audio_play_music("music_start", NULL);
 
   /* run gui-specific client */
+
   ui_main(argc, argv);
 
   /* termination */
   attribute_flush();
-  client_remove_all_cli_conn();
   my_shutdown_network();
 
   client_game_free();
@@ -260,13 +243,8 @@ int main(int argc, char *argv[])
 void handle_packet_input(void *packet, int type)
 {
   switch(type) {
-  case PACKET_LOGIN_REPLY:
-    handle_login_reply((struct packet_login_reply *)packet);
-    break;
-
-  case PACKET_AUTHENTICATION_REQUEST:
-    handle_authentication_request((struct packet_authentication_request *)
-                                  packet);
+  case PACKET_JOIN_GAME_REPLY:
+    handle_join_game_reply((struct packet_join_game_reply *)packet);
     break;
 
   case PACKET_SERVER_SHUTDOWN:
@@ -285,10 +263,10 @@ void handle_packet_input(void *packet, int type)
     handle_unit_info((struct packet_unit_info *)packet);
     break;
 
-  case PACKET_SHORT_UNIT:
-    handle_short_unit(packet);
+   case PACKET_MOVE_UNIT:
+    handle_move_unit();
     break;
-
+    
   case PACKET_TILE_INFO:
     handle_tile_info((struct packet_tile_info *)packet);
     break;
@@ -437,6 +415,10 @@ void handle_packet_input(void *packet, int type)
     handle_diplomat_action((struct packet_diplomat_action *)packet);
     break;
 
+  case PACKET_ADVANCE_FOCUS:
+    handle_advance_focus((struct packet_generic_integer *)packet);
+    break;
+    
   case PACKET_CONN_INFO:
     handle_conn_info((struct packet_conn_info *)packet);
     break;
@@ -474,16 +456,11 @@ void handle_packet_input(void *packet, int type)
     handle_thaw_hint();
     break;
 
-  case PACKET_PING_INFO:
-    handle_ping_info((struct packet_ping_info *) packet);
-    break;
-
-  case PACKET_ENDGAME_REPORT:
-    handle_endgame_report((struct packet_endgame_report *) packet);
-    break;
-    
   default:
     freelog(LOG_ERROR, "Received unknown packet (type %d) from server!", type);
+    /* Old clients (<= some 1.11.5-devel, capstr +1.11) used to exit()
+     * here, so server should not rely on client surviving.
+     */
     break;
   }
 
@@ -527,8 +504,7 @@ void send_turn_done(void)
   attribute_flush();
 
   gen_packet.message[0] = '\0';
-  gen_packet.x = gen_packet.y = -1;
-  gen_packet.event = E_NOEVENT;
+
   send_packet_generic_message(&aconnection, PACKET_TURN_DONE, &gen_packet);
 
   update_turn_done_button_state();
@@ -541,40 +517,18 @@ void send_unit_info(struct unit *punit)
 {
   struct packet_unit_info info;
 
-  /* 
-   * Initialize unused fields.  The content is ignored by the server
-   * but they are part of the packet.  Initialized for completness
-   * here since we don't want to send uninitialized data over the
-   * network.  Note we could just use memset instead.  They're set
-   * above the applicable fields for safety.
-   */
-  info.done_moving = punit->done_moving;
-  info.carried = FALSE;
-  info.ai = FALSE;
-  info.paradropped = FALSE;
-  info.connecting = FALSE;
-  info.hp = 0;
-  info.upkeep = 0;
-  info.upkeep_food = 0;
-  info.upkeep_gold = 0;
-  info.unhappiness = 0;
-  info.activity_count = 0;
-  info.goto_dest_x = 0;
-  info.goto_dest_y = 0;
-  info.fuel = 0;
-
-  /* These fields are used. */
   info.id=punit->id;
   info.owner=punit->owner;
   info.x=punit->x;
   info.y=punit->y;
   info.homecity=punit->homecity;
-  info.occupy = punit->occupy;
   info.veteran=punit->veteran;
   info.type=punit->type;
   info.movesleft=punit->moves_left;
   info.activity=punit->activity;
   info.activity_target=punit->activity_target;
+  info.select_it = FALSE;
+  info.packet_use = UNIT_INFO_IDENTITY;
 
   send_packet_unit_info(&aconnection, &info);
 }
@@ -601,7 +555,6 @@ void send_goto_unit(struct unit *punit, int dest_x, int dest_y)
   struct packet_unit_request req;
 
   req.unit_id = punit->id;
-  req.city_id = -1;
   req.name[0] = '\0';
   req.x = dest_x;
   req.y = dest_y;
@@ -624,11 +577,13 @@ void send_report_request(enum report_type type)
 **************************************************************************/
 void client_game_init()
 {
+  conn_list_init(&game.all_connections);
+  conn_list_init(&game.est_connections);
+  conn_list_init(&game.game_connections);
+
   game_init();
   attribute_init();
   agents_init();
-  cm_init();
-  target_government_init();
 }
 
 /**************************************************************************
@@ -636,6 +591,7 @@ void client_game_init()
 **************************************************************************/
 void client_game_free()
 {
+  client_remove_all_cli_conn();
   free_client_goto();
   free_help_texts();
   attribute_free();
@@ -652,6 +608,19 @@ void set_client_state(enum client_states newstate)
       && (newstate == CLIENT_PRE_GAME_STATE);
   enum client_states oldstate = client_state;
 
+  /*
+   * We are currently ignoring the CLIENT_GAME_OVER_STATE state
+   * because the client hasen't been changed to take care of it. So it
+   * breaks the show-whole-map-at-the-end-of-the-game. Nevertheless
+   * the server is so kind and sends the client this information. And
+   * in the future the client can/should take advantage of this
+   * information.
+   *
+   * FIXME: audit all client code to that it copes with
+   * CLIENT_GAME_OVER_STATE and implement specific
+   * CLIENT_GAME_OVER_STATE actions like history browsing. Then remove
+   * the kludge below.
+   */
   if (newstate == CLIENT_GAME_OVER_STATE) {
     /*
      * Extra kludge for end-game handling of the CMA.
@@ -661,9 +630,10 @@ void set_client_state(enum client_states newstate)
         cma_release_city(pcity);
       }
     } city_list_iterate_end;
+    newstate = CLIENT_GAME_RUNNING_STATE;
   }
 
-  if (client_state != newstate) {
+  if(client_state!=newstate) {
 
     /* If changing from pre-game state to _either_ select race
        or running state, then we have finished getting ruleset data,
@@ -680,7 +650,7 @@ void set_client_state(enum client_states newstate)
       
     client_state=newstate;
 
-    if (client_state == CLIENT_GAME_RUNNING_STATE) {
+    if(client_state==CLIENT_GAME_RUNNING_STATE) {
       load_ruleset_specific_options();
       create_event(-1, -1, E_GAME_START, _("Game started."));
       update_research(game.player_ptr);
@@ -688,9 +658,8 @@ void set_client_state(enum client_states newstate)
       boot_help_texts();	/* reboot */
       update_unit_focus();
     }
-    else if (client_state == CLIENT_PRE_GAME_STATE) {
+    else if(client_state==CLIENT_PRE_GAME_STATE) {
       popdown_all_city_dialogs();
-      popdown_all_game_dialogs();
       close_all_diplomacy_dialogs();
       set_unit_focus_no_center(NULL);
       clear_notify_window();
@@ -701,8 +670,7 @@ void set_client_state(enum client_states newstate)
     }
     update_menus();
   }
-  if (!aconnection.established && client_state == CLIENT_PRE_GAME_STATE) {
-    gui_server_connect();
+  if (client_state == CLIENT_PRE_GAME_STATE) {
     if (auto_connect) {
       if (connect_error) {
 	freelog(LOG_NORMAL,
@@ -710,12 +678,13 @@ void set_client_state(enum client_states newstate)
 	exit(EXIT_FAILURE);
       } else {
 	server_autoconnect();
-	auto_connect = FALSE;	/* don't try this again */
+        auto_connect = 0;  /* don't try this again */
       }
-    } 
+    } else {
+      gui_server_connect();
+    }
   }
   update_turn_done_button_state();
-  update_conn_list_dialog();
 }
 
 
@@ -745,7 +714,7 @@ void client_remove_cli_conn(struct connection *pconn)
   Remove (and free) all connections from all connection lists in client.
   Assumes game.all_connections is properly maintained with all connections.
 **************************************************************************/
-void client_remove_all_cli_conn(void)
+static void client_remove_all_cli_conn(void)
 {
   while (conn_list_size(&game.all_connections) > 0) {
     struct connection *pconn = conn_list_get(&game.all_connections, 0);
@@ -781,7 +750,7 @@ void wait_till_request_got_processed(int request_id)
 **************************************************************************/
 bool client_is_observer(void)
 {
-  return aconnection.established && aconnection.observer;
+  return aconnection.established && find_conn_by_id(game.conn_id)->observer;
 }
 
 /**************************************************************************
@@ -827,45 +796,4 @@ void real_timer_callback(void)
   }
 
   flip = !flip;
-}
-
-/**************************************************************************
-  Returns TRUE if the client can issue orders (such as giving unit
-  commands).  This function should be called each time before allowing the
-  user to give an order.
-**************************************************************************/
-bool can_client_issue_orders(void)
-{
-  return (!client_is_observer()
-	  && get_client_state() == CLIENT_GAME_RUNNING_STATE);
-}
-
-/**************************************************************************
-  Returns TRUE iff the client can do diplomatic meetings with another 
-  given player.
-**************************************************************************/
-bool can_meet_with_player(struct player *pplayer)
-{
-  return (could_meet_with_player(game.player_ptr, pplayer)
-          && can_client_issue_orders());
-}
-
-/**************************************************************************
-  Returns TRUE iff the client can get intelligence from another 
-  given player.
-**************************************************************************/
-bool can_intel_with_player(struct player *pplayer)
-{
-  return could_intel_with_player(game.player_ptr, pplayer);
-}
-
-/**************************************************************************
-  Return TRUE if the client can change the view; i.e. if the mapview is
-  active.  This function should be called each time before allowing the
-  user to do mapview actions.
-**************************************************************************/
-bool can_client_change_view(void)
-{
-  return (get_client_state() == CLIENT_GAME_RUNNING_STATE
-	  || get_client_state() == CLIENT_GAME_OVER_STATE);
 }

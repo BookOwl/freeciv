@@ -14,10 +14,6 @@
 #define FC__CONNECTION_H
 
 #include <time.h>	/* time_t */
-
-#ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
-#endif
 #ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
 #endif
@@ -27,10 +23,10 @@
   Includes cmdlevel stuff, which is connection-based.
 ***************************************************************************/
 
-#include "shared.h"		/* MAX_LEN_ADDR, bool type */
+#include "shared.h"		/* MAX_LEN_ADDR */
+#include "shared.h"		/* bool type */
 
 struct player;
-struct timer_list;
 
 #define MAX_LEN_PACKET   4096
 #define MAX_LEN_CAPSTR    512
@@ -55,17 +51,8 @@ enum cmdlevel_id {    /* access levels for users to issue commands        */
 
 /***************************************************************************
   On the distinction between nations(formerly races), players, and users,
-  see doc/HACKING
+  see freeciv_hackers_guide.txt
 ***************************************************************************/
-
-/* where the connection is in the authentication process */
-enum auth_status {
-  AS_NOT_ESTABLISHED = 0,
-  AS_FAILED,
-  AS_REQUESTING_NEW_PASS,
-  AS_REQUESTING_OLD_PASS,
-  AS_ESTABLISHED
-};
 
 /* get 'struct conn_list' and related functions: */
 /* do this with forward definition of struct connection, so that
@@ -109,12 +96,10 @@ struct connection {
   struct socket_packet_buffer *buffer;
   struct socket_packet_buffer *send_buffer;
   time_t last_write;
+  bool ponged;		        /* have received a PACKET_CONN_PONG? */
 
-  double ping_time;
-  
   struct conn_list self;	/* list with this connection as single element */
-  char username[MAX_LEN_NAME];
-  char password[MAX_LEN_NAME];
+  char name[MAX_LEN_NAME];
   char addr[MAX_LEN_ADDR];
   char capability[MAX_LEN_CAPSTR];
   /* "capability" gives the capability string of the executable (be it
@@ -126,12 +111,12 @@ struct connection {
    */
   struct map_position *route;
   int route_length;
-  /* These are used when recieving goto routes; they are sent split, and in
-   * the time where the route is partially received it is stored here. */
+  /* These are used when recieving goto routes; they are send split, and in
+     the time where the route is partially recieved it is stored here. */
 
   bool delayed_disconnect;
-  /* Something has occurred that means the connection should be closed, but
-   * the closing has been postponed. */
+  /* Something has occured that means the connection should be closed, but
+     the closing has been postponed. */
 
   void (*notify_of_writable_data) (struct connection * pc,
 				   bool data_available_and_socket_full);
@@ -164,22 +149,6 @@ struct connection {
      * Will increase for every received packet.
      */
     int last_request_id_seen;
-
-    /* 
-     * The start times of the PACKET_CONN_PING which have been sent
-     * but weren't PACKET_CONN_PONGed yet? 
-     */
-    struct timer_list *ping_timers;
-   
-    /* Holds number of tries for authentication from client. */
-    int authentication_tries;
-
-    /* the time that the server will reply after receiving an auth reply.
-     * this is used to throttle the connection. */
-    time_t authentication_stop;
-
-    /* used to follow where the connection is in the authentication process */
-    enum auth_status status;
   } server;
 
   /*
@@ -210,6 +179,7 @@ void close_socket_set_callback(CLOSE_FUN fun);
 
 int read_socket_data(int sock, struct socket_packet_buffer *buffer);
 void flush_connection_send_buffer_all(struct connection *pc);
+void flush_connection_send_buffer_packets(struct connection *pc);
 void send_connection_data(struct connection *pc, const unsigned char *data,
 			  int len);
 
@@ -219,9 +189,9 @@ void connection_do_unbuffer(struct connection *pc);
 void conn_list_do_buffer(struct conn_list *dest);
 void conn_list_do_unbuffer(struct conn_list *dest);
 
-struct connection *find_conn_by_user(const char *user_name);
-struct connection *find_conn_by_user_prefix(const char *user_name,
-                                             enum m_pre_result *result);
+struct connection *find_conn_by_name(const char *name);
+struct connection *find_conn_by_name_prefix(const char *name,
+					    enum m_pre_result *result);
 struct connection *find_conn_by_id(int id);
 
 struct socket_packet_buffer *new_socket_packet_buffer(void);

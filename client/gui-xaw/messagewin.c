@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -94,17 +93,6 @@ void popup_meswin_dialog(void)
   XtVaSetValues(meswin_viewport, XtNforceBars, True, NULL);
   
   meswin_scroll_down();
-}
-
-/****************************************************************
-  Closes the message window dialog.
-*****************************************************************/
-void popdown_meswin_dialog(void)
-{
-  if (meswin_dialog_shell) {
-    XtDestroyWidget(meswin_dialog_shell);
-    meswin_dialog_shell = 0;
-  }
 }
 
 /****************************************************************
@@ -296,7 +284,8 @@ static void meswin_list_callback(Widget w, XtPointer client_data,
 static void meswin_close_callback(Widget w, XtPointer client_data,
 				  XtPointer call_data)
 {
-  popdown_meswin_dialog();
+  XtDestroyWidget(meswin_dialog_shell);
+  meswin_dialog_shell=0;
 }
 
 /****************************************************************

@@ -22,8 +22,8 @@ void handle_unit_airlift(struct player *pplayer,
 			 struct packet_unit_request *req);
 void handle_unit_connect(struct player *pplayer, 
 		          struct packet_unit_connect *req);
-void handle_upgrade_unittype_request(struct player * const pplayer,
-			const struct packet_unittype_info * const packet);
+void handle_upgrade_unittype_request(struct player *pplayer, 
+				     struct packet_unittype_info *packet);
 void handle_unit_upgrade_request(struct player *pplayer,
 				 struct packet_unit_request *packet);
 void handle_diplomat_action(struct player *pplayer, 
@@ -32,6 +32,11 @@ void handle_unit_change_homecity(struct player *pplayer,
 				 struct packet_unit_request *req);
 void handle_unit_disband(struct player *pplayer, 
 			 struct packet_unit_request *req);
+void handle_unit_disband_safe(struct player *pplayer, 
+			      struct packet_unit_request *req,
+			      struct genlist_iterator *iter);
+void do_unit_disband_safe(struct city *pcity, struct unit *punit,
+			  struct genlist_iterator *iter); /* AI uses this directly */
 void handle_unit_build_city(struct player *pplayer, 
 			    struct packet_unit_request *req);
 void handle_unit_info(struct player *pplayer, struct packet_unit_info *pinfo);
@@ -45,6 +50,10 @@ void handle_unit_auto_request(struct player *pplayer,
 			      struct packet_unit_request *req);
 void handle_unit_activity_request(struct unit *punit, 
 				  enum unit_activity new_activity);
+void handle_unit_activity_request_targeted(struct unit *punit,
+					   enum unit_activity new_activity,
+					   enum tile_special_type new_target,
+					   bool select_unit);
 void handle_unit_unload_request(struct player *pplayer, 
 				struct packet_unit_request *req);
 void handle_unit_nuke(struct player *pplayer, 

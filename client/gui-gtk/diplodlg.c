@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -20,9 +19,9 @@
 
 #include <gtk/gtk.h>
 
-#include "diptreaty.h"
 #include "fcintl.h"
 #include "game.h"
+#include "genlist.h"
 #include "government.h"
 #include "map.h"
 #include "mem.h"
@@ -31,10 +30,10 @@
 #include "shared.h"
 #include "support.h"
 
+#include "chatline.h"
 #include "climisc.h"
 #include "clinet.h"
-
-#include "chatline.h"
+#include "diptreaty.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "mapview.h"
@@ -79,22 +78,8 @@ struct Diplomacy_dialog {
   GtkWidget *dip_erase_clause_command;
 };
 
-#define SPECLIST_TAG dialog
-#define SPECLIST_TYPE struct Diplomacy_dialog
-#define SPECLIST_STATIC
-#include "speclist.h"
-
-#define SPECLIST_TAG dialog
-#define SPECLIST_TYPE struct Diplomacy_dialog
-#define SPECLIST_STATIC
-#include "speclist_c.h"
-
-#define dialog_list_iterate(dialoglist, pdialog) \
-    TYPED_LIST_ITERATE(struct Diplomacy_dialog, dialoglist, pdialog)
-#define dialog_list_iterate_end  LIST_ITERATE_END
-
-static struct dialog_list dialog_list;
-static bool dialog_list_list_has_been_initialised = FALSE;
+static struct genlist diplomacy_dialogs;
+static int diplomacy_dialogs_list_has_been_initialised;
 
 static struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0, 
 						 struct player *plr1);
@@ -211,26 +196,61 @@ static void popup_diplomacy_dialog(struct player *plr0, struct player *plr1)
 
 
 /****************************************************************
-...
+ Create tech menu - create sub menus if techs don't fit on screen
 *****************************************************************/
 static int fill_diplomacy_tech_menu(GtkWidget *popupmenu, 
 				    struct player *plr0, struct player *plr1)
 {
-  int i, flag;
+  int i, j, lines, flag;
+  GtkWidget *parentmenu;
+  
+  parentmenu = popupmenu;
+  j = 1;
+
+  /* We assume that the height of a menu item is 30 pixels, which is more  *
+   * than the standard font used on Linux. It doesn't do much harm if font *
+   * is smaller. If the user chooses a much bigger font, though, the menu  *
+   * will still run out of the screen.                            - ChrisK */
+  lines = (gdk_screen_height() / 30) - 1;
 
   for(i=1, flag=0; i<game.num_tech_types; i++) {
-    if (get_invention(plr0, i) == TECH_KNOWN
-        && (get_invention(plr1, i) == TECH_UNKNOWN
-	    || get_invention(plr1, i) == TECH_REACHABLE)
-        && tech_is_available(plr1, i)) {
-	  GtkWidget *item=gtk_menu_item_new_with_label(advances[i].name);
+    if(get_invention(plr0, i)==TECH_KNOWN && 
+       (get_invention(plr1, i)==TECH_UNKNOWN || 
+	get_invention(plr1, i)==TECH_REACHABLE)) {
+      if(j == lines) {
+        /* Last entry for current menu:                                 *
+         * create "more" item and submenu, create tech item and append  *
+         * to submenu, make submenu current parentmenu        - ChrisK  */
+           
+        GtkWidget *submenu = gtk_menu_new();
+        GtkWidget *more = gtk_menu_item_new_with_label(_("more"));
+        GtkWidget *item = gtk_menu_item_new_with_label(advances[i].name);
 
-	  gtk_menu_append(GTK_MENU(popupmenu),item);
-	  gtk_signal_connect(GTK_OBJECT(item), "activate",
-			     GTK_SIGNAL_FUNC(diplomacy_dialog_tech_callback),
-			     GINT_TO_POINTER(plr0->player_no * 10000 +
-					     plr1->player_no * 100 + i));
-      flag=1;
+        gtk_menu_item_configure(GTK_MENU_ITEM(more), FALSE, TRUE);
+        gtk_menu_item_set_submenu(GTK_MENU_ITEM(more), submenu);
+	gtk_menu_append(GTK_MENU(parentmenu), more);
+        gtk_menu_append(GTK_MENU(submenu), item);
+        gtk_signal_connect(GTK_OBJECT(item), "activate",
+	  GTK_SIGNAL_FUNC(diplomacy_dialog_tech_callback),
+	  GINT_TO_POINTER(plr0->player_no * 10000 +
+	  plr1->player_no * 100 + i));
+
+        parentmenu = submenu;
+        j = 1;
+
+      } else {
+        /* create tech item and append to parentmenu           - ChrisK  */
+        
+        GtkWidget *item = gtk_menu_item_new_with_label(advances[i].name);
+        gtk_menu_append(GTK_MENU(parentmenu), item);
+        gtk_signal_connect(GTK_OBJECT(item), "activate",
+	  GTK_SIGNAL_FUNC(diplomacy_dialog_tech_callback),
+	  GINT_TO_POINTER(plr0->player_no * 10000 +
+	  plr1->player_no * 100 + i));
+
+        j++;
+        flag = 1;
+      }
     }
   }
 
@@ -248,7 +268,10 @@ static int fill_diplomacy_city_menu(GtkWidget *popupmenu,
 				    struct player *plr0, struct player *plr1)
 {
   int i = 0, j = 0, n = city_list_size(&plr0->cities);
+  int k, lines;
   struct city **city_list_ptrs;
+  GtkWidget *parentmenu;
+
   if (n>0) {
     city_list_ptrs = fc_malloc(sizeof(struct city*)*n);
   } else {
@@ -263,17 +286,54 @@ static int fill_diplomacy_city_menu(GtkWidget *popupmenu,
   } city_list_iterate_end;
 
   qsort(city_list_ptrs, i, sizeof(struct city*), city_name_compare);
+
+  parentmenu = popupmenu;
+  k = 1;
+                     
+  /* We assume that the height of a menu item is 30 pixels, which is more  *
+   * than the standard font used on Linux. It doesn't do much harm if font *
+   * is smaller. If the user chooses a much bigger font, though, the menu  *
+   * will still run out of the screen.                            - ChrisK */
+  lines = (gdk_screen_height() / 30) - 1;
   
   for(j=0; j<i; j++) {
-      GtkWidget *item=gtk_menu_item_new_with_label(city_list_ptrs[j]->name);
+    if(k == lines) {
+      /* Last entry for current menu:                                 *
+       * create "more" item and submenu, create tech item and append  *
+       * to submenu, make submenu current parentmenu        - ChrisK  */
+           
+      GtkWidget *submenu = gtk_menu_new();
+      GtkWidget *more = gtk_menu_item_new_with_label(_("more"));
+      GtkWidget *item = gtk_menu_item_new_with_label(city_list_ptrs[j]->name);
 
-      gtk_menu_append(GTK_MENU(popupmenu),item);
+      gtk_menu_item_configure(GTK_MENU_ITEM(more), FALSE, TRUE);
+      gtk_menu_item_set_submenu(GTK_MENU_ITEM(more), submenu);
+      gtk_menu_append(GTK_MENU(parentmenu), more);
+      gtk_menu_append(GTK_MENU(submenu), item);
       gtk_signal_connect(GTK_OBJECT(item), "activate",
 			 GTK_SIGNAL_FUNC(diplomacy_dialog_city_callback),
 			 GINT_TO_POINTER(city_list_ptrs[j]->id * 1024 +
 					 plr0->player_no * 32 +
 					 plr1->player_no));
+
+      parentmenu = submenu;
+      k = 1;
+
+    } else {
+      /* create tech item and append to parentmenu       - ChrisK  */
+
+      GtkWidget *item = gtk_menu_item_new_with_label(city_list_ptrs[j]->name);
+      gtk_menu_append(GTK_MENU(parentmenu), item);
+      gtk_signal_connect(GTK_OBJECT(item), "activate",
+			 GTK_SIGNAL_FUNC(diplomacy_dialog_city_callback),
+			 GINT_TO_POINTER(city_list_ptrs[j]->id * 1024 +
+					 plr0->player_no * 32 +
+					 plr1->player_no));
+
+      k++;
+    }        
   }
+
   free(city_list_ptrs);
   return i;
 }
@@ -285,8 +345,8 @@ static struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0,
 							struct player *plr1)
 {
   char buf[512];
-  static const char *titles_[1]
-      = { N_("The following clauses have been agreed upon:") };
+  static gchar *titles_[1]
+    = { N_("The following clauses have been agreed upon:") };
   static gchar **titles;
   struct Diplomacy_dialog *pdialog;
   GtkWidget *button,*label,*item,*table,*scrolled;
@@ -294,7 +354,7 @@ static struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0,
   if (!titles) titles = intl_slist(1, titles_);
   
   pdialog=fc_malloc(sizeof(struct Diplomacy_dialog));
-  dialog_list_insert(&dialog_list, pdialog);
+  genlist_insert(&diplomacy_dialogs, pdialog, 0);
   
   init_treaty(&pdialog->treaty, plr0, plr1);
   
@@ -851,7 +911,7 @@ void close_diplomacy_dialog(struct Diplomacy_dialog *pdialog)
 {
   gtk_widget_destroy(pdialog->dip_dialog_shell);
   
-  dialog_list_unlink(&dialog_list, pdialog);
+  genlist_unlink(&diplomacy_dialogs, pdialog);
   free(pdialog);
 }
 
@@ -861,18 +921,22 @@ void close_diplomacy_dialog(struct Diplomacy_dialog *pdialog)
 static struct Diplomacy_dialog *find_diplomacy_dialog(struct player *plr0, 
 						      struct player *plr1)
 {
-  if (!dialog_list_list_has_been_initialised) {
-    dialog_list_init(&dialog_list);
-    dialog_list_list_has_been_initialised = TRUE;
+  struct genlist_iterator myiter;
+
+  if(!diplomacy_dialogs_list_has_been_initialised) {
+    genlist_init(&diplomacy_dialogs);
+    diplomacy_dialogs_list_has_been_initialised=1;
   }
   
-  dialog_list_iterate(dialog_list, pdialog) {
-    if ((pdialog->treaty.plr0 == plr0 && pdialog->treaty.plr1 == plr1) ||
-	(pdialog->treaty.plr0 == plr1 && pdialog->treaty.plr1 == plr0)) {
+  genlist_iterator_init(&myiter, &diplomacy_dialogs, 0);
+    
+  for(; ITERATOR_PTR(myiter); ITERATOR_NEXT(myiter)) {
+    struct Diplomacy_dialog *pdialog=
+      (struct Diplomacy_dialog *)ITERATOR_PTR(myiter);
+    if((pdialog->treaty.plr0==plr0 && pdialog->treaty.plr1==plr1) ||
+       (pdialog->treaty.plr0==plr1 && pdialog->treaty.plr1==plr0))
       return pdialog;
-    }
-  } dialog_list_iterate_end;
-
+  }
   return NULL;
 }
 
@@ -881,12 +945,17 @@ static struct Diplomacy_dialog *find_diplomacy_dialog(struct player *plr0,
 *****************************************************************/
 static struct Diplomacy_dialog *find_diplomacy_by_input(GtkWidget *w)
 {
-  dialog_list_iterate(dialog_list, pdialog) {
-    if ((pdialog->dip_gold_entry0 == w) || (pdialog->dip_gold_entry1 == w)) {
+  struct genlist_iterator myiter;
+  
+  genlist_iterator_init(&myiter, &diplomacy_dialogs, 0);
+    
+  for(; ITERATOR_PTR(myiter); ITERATOR_NEXT(myiter)) {
+    struct Diplomacy_dialog *pdialog=
+      (struct Diplomacy_dialog *)ITERATOR_PTR(myiter);
+    if((pdialog->dip_gold_entry0==w) || (pdialog->dip_gold_entry1==w)) {
       return pdialog;
     }
-  } dialog_list_iterate_end;
-
+  }
   return NULL;
 }
 
@@ -929,10 +998,13 @@ static void diplo_dialog_returnkey(GtkWidget *w, gpointer data)
 *****************************************************************/
 void close_all_diplomacy_dialogs(void)
 {
-  if (!dialog_list_list_has_been_initialised) {
+  struct Diplomacy_dialog *pdialog;
+  
+  if (!diplomacy_dialogs_list_has_been_initialised) {
     return;
   }
-  while (dialog_list_size(&dialog_list) > 0) {
-    close_diplomacy_dialog(dialog_list_get(&dialog_list, 0));
+  while (genlist_size(&diplomacy_dialogs)) {
+    pdialog = genlist_get(&diplomacy_dialogs, 0);
+    close_diplomacy_dialog(pdialog);
   }
 }

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -20,42 +19,16 @@
 #include "log.h"
 #include "support.h"
 
-#include "clinet.h"
-#include "control.h"
+#include "citydlg_common.h"
 #include "options.h"		/* for concise_city_production */
 #include "tilespec.h"		/* for is_isometric */
-
-#include "citydlg_common.h"
-
-/**************************************************************************
-  Return the width of the city dialog canvas.
-**************************************************************************/
-int get_citydlg_canvas_width(void)
-{
-  if (is_isometric) {
-    return 4 * NORMAL_TILE_WIDTH;
-  } else {
-    return 5 * NORMAL_TILE_WIDTH;
-  }
-}
-
-/**************************************************************************
-  Return the height of the city dialog canvas.
-**************************************************************************/
-int get_citydlg_canvas_height(void)
-{
-  if (is_isometric) {
-    return 4 * NORMAL_TILE_HEIGHT;
-  } else {
-    return 5 * NORMAL_TILE_HEIGHT;
-  }
-}
 
 /**************************************************************************
 This converts a city coordinate position to citymap canvas coordinates
 (either isometric or overhead).  It should be in cityview.c instead.
 **************************************************************************/
-bool city_to_canvas_pos(int *canvas_x, int *canvas_y, int city_x, int city_y)
+void city_pos_to_canvas_pos(int city_x, int city_y, int *canvas_x,
+			    int *canvas_y)
 {
   if (is_isometric) {
     /*
@@ -73,46 +46,43 @@ bool city_to_canvas_pos(int *canvas_x, int *canvas_y, int city_x, int city_y)
     *canvas_x = city_x * NORMAL_TILE_WIDTH;
     *canvas_y = city_y * NORMAL_TILE_HEIGHT;
   }
-
-  if (!is_valid_city_coords(city_x, city_y)) {
-    assert(FALSE);
-    return FALSE;
-  }
-  return TRUE;
 }
 
 /**************************************************************************
 This converts a citymap canvas position to a city coordinate position
 (either isometric or overhead).  It should be in cityview.c instead.
 **************************************************************************/
-bool canvas_to_city_pos(int *city_x, int *city_y, int canvas_x, int canvas_y)
+void canvas_pos_to_city_pos(int canvas_x, int canvas_y, int *map_x, int *map_y)
 {
-  int orig_canvas_x = canvas_x, orig_canvas_y = canvas_y;
-
   if (is_isometric) {
-    const int W = NORMAL_TILE_WIDTH, H = NORMAL_TILE_HEIGHT;
+    *map_x = -2;
+    *map_y = 2;
 
-    /* Shift the tile right so the top corner of tile (-2,2) is at
-       canvas position (0,0). */
-    canvas_y += H / 2;
+    /* first find an equivalent position on the left side of the screen. */
+    *map_x += canvas_x / NORMAL_TILE_WIDTH;
+    *map_y -= canvas_x / NORMAL_TILE_WIDTH;
+    canvas_x %= NORMAL_TILE_WIDTH;
 
-    /* Perform a pi/4 rotation, with scaling.  See canvas_pos_to_map_pos
-       for a full explanation. */
-    *city_x = DIVIDE(canvas_x * H + canvas_y * W, W * H);
-    *city_y = DIVIDE(canvas_y * W - canvas_x * H, W * H);
+    /* Then move op to the top corner. */
+    *map_x += canvas_y / NORMAL_TILE_HEIGHT;
+    *map_y += canvas_y / NORMAL_TILE_HEIGHT;
+    canvas_y %= NORMAL_TILE_HEIGHT;
 
-    /* Add on the offset of the top-left corner to get the final
-     * coordinates (like in canvas_to_map_pos). */
-    *city_x -= 2;
-    *city_y += 2;
+    assert(NORMAL_TILE_WIDTH == 2 * NORMAL_TILE_HEIGHT);
+    canvas_y *= 2;		/* now we have a square. */
+    if (canvas_x + canvas_y > NORMAL_TILE_WIDTH / 2)
+      (*map_x)++;
+    if (canvas_x + canvas_y > 3 * NORMAL_TILE_WIDTH / 2)
+      (*map_x)++;
+    if (canvas_x - canvas_y > NORMAL_TILE_WIDTH / 2)
+      (*map_y)--;
+    if (canvas_y - canvas_x > NORMAL_TILE_WIDTH / 2)
+      (*map_y)++;
   } else {
-    *city_x = canvas_x / NORMAL_TILE_WIDTH;
-    *city_y = canvas_y / NORMAL_TILE_HEIGHT;
+    *map_x = canvas_x / NORMAL_TILE_WIDTH;
+    *map_y = canvas_y / NORMAL_TILE_HEIGHT;
   }
-  freelog(LOG_DEBUG, "canvas_to_city_pos(pos=(%d,%d))=(%d,%d)",
-	  orig_canvas_x, orig_canvas_y, *city_x, *city_y);
-
-  return is_valid_city_coords(*city_x, *city_y);
+  freelog(LOG_DEBUG, "canvas_pos_to_city_pos(pos=(%d,%d))=(%d,%d)", canvas_x, canvas_y, *map_x, *map_y);
 }
 
 /**************************************************************************
@@ -253,7 +223,7 @@ void get_city_dialog_production_row(char *buf[], size_t column_size, int id,
       if (pcity && wonder_replacement(pcity, id)) {
 	my_snprintf(buf[1], column_size, "*");
       } else {
-	const char *state = "";
+	char *state = "";
 
 	if (is_wonder(id)) {
 	  state = _("Wonder");
@@ -288,249 +258,4 @@ void get_city_dialog_production_row(char *buf[], size_t column_size, int id,
   } else {
     my_snprintf(buf[3], column_size, "---");
   }
-}
-
-/**************************************************************************
-  Provide a list of all citizens in the city, in order.  "index"
-  should be the happiness index (currently [0..4]; 4 = final
-  happiness).  "citizens" should be an array large enough to hold all
-  citizens (use MAX_CITY_SIZE to be on the safe side).
-**************************************************************************/
-void get_city_citizen_types(struct city *pcity, int index,
-			    enum citizen_type *citizens)
-{
-  int i = 0, n;
-  assert(index >= 0 && index < 5);
-
-  for (n = 0; n < pcity->ppl_happy[index]; n++, i++) {
-    citizens[i] = CITIZEN_HAPPY;
-  }
-  for (n = 0; n < pcity->ppl_content[index]; n++, i++) {
-    citizens[i] = CITIZEN_CONTENT;
-  }
-  for (n = 0; n < pcity->ppl_unhappy[index]; n++, i++) {
-    citizens[i] = CITIZEN_UNHAPPY;
-  }
-  for (n = 0; n < pcity->ppl_angry[index]; n++, i++) {
-    citizens[i] = CITIZEN_ANGRY;
-  }
-
-  for (n = 0; n < pcity->ppl_elvis; n++, i++) {
-    citizens[i] = CITIZEN_ELVIS;
-  }
-  for (n = 0; n < pcity->ppl_scientist; n++, i++) {
-    citizens[i] = CITIZEN_SCIENTIST;
-  }
-  for (n = 0; n < pcity->ppl_taxman; n++, i++) {
-    citizens[i] = CITIZEN_TAXMAN;
-  }
-
-  assert(i == pcity->size);
-}
-
-/**************************************************************************
-  Rotate the given specialist citizen to the next type of citizen.
-**************************************************************************/
-void city_rotate_specialist(struct city *pcity, int citizen_index)
-{
-  enum citizen_type citizens[MAX_CITY_SIZE];
-  enum citizen_type from, to;
-
-  if (citizen_index < 0 || citizen_index >= pcity->size) {
-    return;
-  }
-
-  get_city_citizen_types(pcity, 4, citizens);
-
-  switch (citizens[citizen_index]) {
-  case CITIZEN_ELVIS:
-    from = SP_ELVIS;
-    to = SP_SCIENTIST;
-    break;
-  case CITIZEN_SCIENTIST:
-    from = SP_SCIENTIST;
-    to = SP_TAXMAN;
-    break;
-  case CITIZEN_TAXMAN:
-    from = SP_TAXMAN;
-    to = SP_ELVIS;
-    break;
-  default:
-    return;
-  }
-
-  city_change_specialist(pcity, from, to);
-}
-    
-/**************************************************************************
-  Activate all units on the given map tile.
-**************************************************************************/
-void activate_all_units(int map_x, int map_y)
-{
-  struct unit_list *punit_list = &map_get_tile(map_x, map_y)->units;
-  struct unit *pmyunit = NULL;
-
-  unit_list_iterate((*punit_list), punit) {
-    if (game.player_idx == punit->owner) {
-      /* Activate this unit. */
-      pmyunit = punit;
-      request_new_unit_activity(punit, ACTIVITY_IDLE);
-    }
-  } unit_list_iterate_end;
-  if (pmyunit) {
-    /* Put the focus on one of the activated units. */
-    set_unit_focus(pmyunit);
-  }
-}
-
-/**************************************************************************
-  Change the production of a given city.  Return the request ID.
-**************************************************************************/
-int city_change_production(struct city *pcity, bool is_unit, int build_id)
-{
-  struct packet_city_request packet;
-
-  packet.city_id = pcity->id;
-  packet.build_id = build_id;
-  packet.is_build_id_unit_id = is_unit;
-
-  /* Fill out unused fields. */
-  packet.worker_x = packet.worker_y = -1;
-  packet.specialist_from = packet.specialist_to = -1;
-
-  return send_packet_city_request(&aconnection, &packet, PACKET_CITY_CHANGE);
-}
-
-/**************************************************************************
-  Set the worklist for a given city.  Return the request ID.
-**************************************************************************/
-int city_set_worklist(struct city *pcity, struct worklist *pworklist)
-{
-  struct packet_city_request packet;
-
-  packet.city_id = pcity->id;
-  copy_worklist(&packet.worklist, pworklist);
-
-  /* Don't send the worklist name to the server. */
-  packet.worklist.name[0] = '\0';
-
-  /* Fill out unused fields. */
-  packet.build_id = -1;
-  packet.is_build_id_unit_id = FALSE;
-  packet.worker_x = packet.worker_y = -1;
-  packet.specialist_from = packet.specialist_to = -1;
-
-  return send_packet_city_request(&aconnection, &packet,
-				  PACKET_CITY_WORKLIST);
-}
-
-/**************************************************************************
-  Change the production of a given city.  Return the request ID.
-**************************************************************************/
-int city_sell_improvement(struct city *pcity, Impr_Type_id sell_id)
-{
-  struct packet_city_request packet;
-
-  packet.city_id = pcity->id;
-  packet.build_id = sell_id;
-
-  /* Fill out unused fields. */
-  packet.is_build_id_unit_id = FALSE;
-  packet.worker_x = packet.worker_y = -1;
-  packet.specialist_from = packet.specialist_to = -1;
-
-  return send_packet_city_request(&aconnection, &packet, PACKET_CITY_SELL);
-}
-
-/**************************************************************************
-  Buy the current production item in a given city.  Return the request ID.
-**************************************************************************/
-int city_buy_production(struct city *pcity)
-{
-  struct packet_city_request packet;
-
-  packet.city_id = pcity->id;
-
-  /* Fill out unused fields. */
-  packet.build_id = -1;
-  packet.is_build_id_unit_id = FALSE;
-  packet.worker_x = packet.worker_y = -1;
-  packet.specialist_from = packet.specialist_to = -1;
-
-  return send_packet_city_request(&aconnection, &packet, PACKET_CITY_BUY);
-}
-
-/**************************************************************************
-  Change a specialist in the given city.  Return the request ID.
-**************************************************************************/
-int city_change_specialist(struct city *pcity, enum specialist_type from,
-			   enum specialist_type to)
-{
-  struct packet_city_request packet;
-
-  packet.city_id = pcity->id;
-  packet.specialist_from = from;
-  packet.specialist_to = to;
-
-  /* Fill out unused fields. */
-  packet.build_id = -1;
-  packet.is_build_id_unit_id = FALSE;
-  packet.worker_x = packet.worker_y = -1;
-
-  return send_packet_city_request(&aconnection, &packet,
-				  PACKET_CITY_CHANGE_SPECIALIST);
-}
-
-/**************************************************************************
-  Toggle a worker<->specialist at the given city tile.  Return the
-  request ID.
-**************************************************************************/
-int city_toggle_worker(struct city *pcity, int city_x, int city_y)
-{
-  struct packet_city_request packet;
-  enum packet_type ptype;
-
-  assert(is_valid_city_coords(city_x, city_y));
-
-  packet.city_id = pcity->id;
-  packet.worker_x = city_x;
-  packet.worker_y = city_y;
-
-  /* Fill out unused fields. */
-  packet.build_id = -1;
-  packet.is_build_id_unit_id = FALSE;
-  packet.specialist_from = packet.specialist_to = -1;
-
-  if (pcity->city_map[city_x][city_y] == C_TILE_WORKER) {
-    ptype = PACKET_CITY_MAKE_SPECIALIST;
-  } else if (pcity->city_map[city_x][city_y] == C_TILE_EMPTY) {
-    ptype = PACKET_CITY_MAKE_WORKER;
-  } else {
-    return 0;
-  }
-
-  freelog(LOG_DEBUG, "city_toggle_worker(city='%s'(%d), x=%d, y=%d, %s)",
-	  pcity->name, pcity->id, city_x, city_y,
-	  (ptype == PACKET_CITY_MAKE_SPECIALIST) ? "clear" : "set");
-
-  return send_packet_city_request(&aconnection, &packet, ptype);
-}
-
-/**************************************************************************
-  Tell the server to rename the city.  Return the request ID.
-**************************************************************************/
-int city_rename(struct city *pcity, const char *name)
-{
-  struct packet_city_request packet;
-
-  packet.city_id = pcity->id;
-  sz_strlcpy(packet.name, name);
-
-  /* Fill out unused fields. */
-  packet.build_id = -1;
-  packet.is_build_id_unit_id = FALSE;
-  packet.worker_x = packet.worker_y = -1;
-  packet.specialist_from = packet.specialist_to = -1;
-
-  return send_packet_city_request(&aconnection, &packet, PACKET_CITY_RENAME);
 }

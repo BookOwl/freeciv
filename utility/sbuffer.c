@@ -30,10 +30,6 @@ sbuffer: ("string buffer")
   are handled there; makes liberal use of assert().
 ***************************************************************************/
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <assert.h>
 #include <string.h>
 
@@ -106,9 +102,17 @@ static void sbuf_align(struct sbuffer *sb)
 }
 
 /**************************************************************************
+  Get a new initialized sbuffer, using default buffer size: 
+**************************************************************************/
+struct sbuffer *sbuf_new(void)
+{
+  return sbuf_new_size(SBUF_DEFAULT_SIZE);
+}
+
+/**************************************************************************
   Get a new initialized sbuffer, specifying buffer size:
 **************************************************************************/
-static struct sbuffer *sbuf_new_size(size_t size)
+struct sbuffer *sbuf_new_size(size_t size)
 {
   struct sbuffer *sb;
 
@@ -122,14 +126,6 @@ static struct sbuffer *sbuf_new_size(size_t size)
   sbuf_expand(sb);
 
   return sb;
-}
-
-/**************************************************************************
-  Get a new initialized sbuffer, using default buffer size: 
-**************************************************************************/
-struct sbuffer *sbuf_new(void)
-{
-  return sbuf_new_size(SBUF_DEFAULT_SIZE);
 }
 
 /**************************************************************************

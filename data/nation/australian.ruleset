@@ -2,9 +2,6 @@
 
 name=_("Australian")
 plural=_("?plural:Australians")
-class=_("Modern")
-legend=_("Australia was founded as a British penal colony in 1788AD. It is \
-the only country on earth to occupy an entire continent.")
 leader="Robert Menzies"
 leader_sex="Male"
 flag="f.australia"
@@ -15,6 +12,10 @@ ruler_titles = { "government",      "male_title",      "female_title"
                  "Democracy",       _("Prime Minister"), _("Prime Minister")
                }
 
+attack=1
+expand=0
+civilized=2
+advisors=100,100,100,100,100,100,100
 init_techs=""
 
 tech_goals="Monarchy","Chivalry","Iron Working","Trade","Navigation",

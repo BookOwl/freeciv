@@ -63,20 +63,16 @@
 
 ***********************************************************************/
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
-#include <assert.h>
 #include <stdio.h>
 #include <string.h>
+#include <assert.h>
 
 #include "astring.h"
 #include "ioz.h"
 #include "log.h"
 #include "mem.h"
-#include "shared.h"		/* TRUE, FALSE */
 #include "support.h"
+#include "shared.h"		/* TRUE, FALSE */
 
 #include "inputfile.h"
 
@@ -124,11 +120,11 @@ static const char *get_token_table_end(struct inputfile *inf);
 static const char *get_token_comma(struct inputfile *inf);
 static const char *get_token_value(struct inputfile *inf);
 
-static struct {
-  const char *name;
+struct {
+  char *name;
   get_token_fn_t func;
 }
-tok_tab[INF_TOK_LAST] =
+static tok_tab[INF_TOK_LAST] =
 {
   { "section_name", get_token_section_name },
   { "entry_name",   get_token_entry_name },
@@ -140,7 +136,6 @@ tok_tab[INF_TOK_LAST] =
 };
 
 static bool read_a_line(struct inputfile *inf);
-static void inf_warn(struct inputfile *inf, const char *message);
 
 /********************************************************************** 
   Return true if c is a 'comment' character: '#' or ';'
@@ -178,6 +173,7 @@ static void assert_sanity(struct inputfile *inf)
 {
   assert(inf != NULL);
   assert(inf->magic==INF_MAGIC);
+  assert(inf->filename != NULL);
   assert(inf->fp != NULL);
   assert(inf->line_num >= 0);
   assert(inf->cur_line_pos >= 0);
@@ -199,58 +195,30 @@ static void assert_sanity(struct inputfile *inf)
 #endif
 }
 
-/**************************************************************************
-  Return the filename the inputfile was loaded as, or "(anonymous)"
-  if this inputfile was loaded from a stream rather than from a file.
-**************************************************************************/
-static const char *inf_filename(struct inputfile *inf)
-{
-  if (inf->filename) {
-    return inf->filename;
-  } else {
-    return "(anonymous)";
-  }
-}
-
 /********************************************************************** 
   Open the file, and return an allocated, initialized structure.
   Returns NULL if the file could not be opened.
 ***********************************************************************/
-struct inputfile *inf_from_file(const char *filename,
-				datafilename_fn_t datafn)
+struct inputfile *inf_open(const char *filename,
+			   datafilename_fn_t datafn)
 {
   struct inputfile *inf;
   fz_FILE *fp;
 
   assert(filename != NULL);
-  assert(strlen(filename) > 0);
-  fp = fz_from_file(filename, "r", FZ_NOT_USED, FZ_NOT_USED);
+  assert(strlen(filename)>0);
+  fp = fz_fopen(filename, "r", FZ_NOT_USED, FZ_NOT_USED);
   if (!fp) {
     return NULL;
   }
-  freelog(LOG_DEBUG, "inputfile: opened \"%s\" ok", filename);
-  inf = inf_from_stream(fp, datafn);
-  inf->filename = mystrdup(filename);
-  return inf;
-}
-
-/********************************************************************** 
-  Open the stream, and return an allocated, initialized structure.
-  Returns NULL if the file could not be opened.
-***********************************************************************/
-struct inputfile *inf_from_stream(fz_FILE * stream, datafilename_fn_t datafn)
-{
-  struct inputfile *inf;
-
-  assert(stream != NULL);
-  inf = fc_malloc(sizeof(*inf));
+  inf = (struct inputfile *)fc_malloc(sizeof(struct inputfile));
   init_zeros(inf);
   
-  inf->filename = NULL;
-  inf->fp = stream;
+  inf->filename = mystrdup(filename);
+  inf->fp = fp;
   inf->datafn = datafn;
 
-  freelog(LOG_DEBUG, "inputfile: opened \"%s\" ok", inf_filename(inf));
+  freelog(LOG_DEBUG, "inputfile: opened \"%s\" ok", filename);
   return inf;
 }
 
@@ -265,20 +233,18 @@ static void inf_close_partial(struct inputfile *inf)
 {
   assert_sanity(inf);
 
-  freelog(LOG_DEBUG, "inputfile: sub-closing \"%s\"", inf_filename(inf));
+  freelog(LOG_DEBUG, "inputfile: sub-closing \"%s\"", inf->filename);
 
   if (fz_ferror(inf->fp) != 0) {
-    freelog(LOG_ERROR, "Error before closing %s: %s", inf_filename(inf),
+    freelog(LOG_ERROR, "Error before closing %s: %s", inf->filename,
 	    fz_strerror(inf->fp));
     fz_fclose(inf->fp);
     inf->fp = NULL;
   }
   else if (fz_fclose(inf->fp) != 0) {
-    freelog(LOG_ERROR, "Error closing %s", inf_filename(inf));
+    freelog(LOG_ERROR, "Error closing %s", inf->filename);
   }
-  if (inf->filename) {
-    free(inf->filename);
-  }
+  free(inf->filename);
   inf->filename = NULL;
   astr_free(&inf->cur_line);
   astr_free(&inf->copy_line);
@@ -302,7 +268,7 @@ void inf_close(struct inputfile *inf)
 {
   assert_sanity(inf);
 
-  freelog(LOG_DEBUG, "inputfile: closing \"%s\"", inf_filename(inf));
+  freelog(LOG_DEBUG, "inputfile: closing \"%s\"", inf->filename);
   if (inf->included_from) {
     inf_close(inf->included_from);
   }
@@ -374,9 +340,7 @@ static bool check_include(struct inputfile *inf)
   while (*c != '\0' && my_isspace(*c)) c++;
 
   if (*c != '\"') {
-    inf_log(inf, LOG_ERROR, 
-            "Did not find opening doublequote for '*include' line");
-    return FALSE;
+    inf_die(inf, "Did not find opening doublequote for '*include' line");
   }
   c++;
   inf->cur_line_pos = c - inf->cur_line.str;
@@ -384,9 +348,7 @@ static bool check_include(struct inputfile *inf)
   bare_name = c;
   while (*c != '\0' && *c != '\"') c++;
   if (*c != '\"') {
-    inf_log(inf, LOG_ERROR, 
-            "Did not find closing doublequote for '*include' line");
-    return FALSE;
+    inf_die(inf, "Did not find closing doublequote for '*include' line");
   }
   *c++ = '\0';
   inf->cur_line_pos = c - inf->cur_line.str;
@@ -394,15 +356,14 @@ static bool check_include(struct inputfile *inf)
   /* check rest of line is well-formed: */
   while (*c != '\0' && my_isspace(*c) && !is_comment(*c)) c++;
   if (!(*c=='\0' || is_comment(*c))) {
-    inf_log(inf, LOG_ERROR, "Junk after filename for '*include' line");
-    return FALSE;
+    inf_die(inf, "Junk after filename for '*include' line");
   }
   inf->cur_line_pos = inf->cur_line.n-1;
 
   full_name = inf->datafn(bare_name);
   if (!full_name) {
-    freelog(LOG_ERROR, "Could not find included file \"%s\"", bare_name);
-    return FALSE;
+    freelog(LOG_FATAL, "Could not find included file \"%s\"", bare_name);
+    inf_die(inf, NULL);
   }
 
   /* avoid recursion: (first filename may not have the same path,
@@ -410,15 +371,14 @@ static bool check_include(struct inputfile *inf)
   {
     struct inputfile *inc = inf;
     do {
-      if (inc->filename && strcmp(full_name, inc->filename)==0) {
-        freelog(LOG_ERROR, 
-                "Recursion trap on '*include' for \"%s\"", full_name);
-        return FALSE;
+      if (strcmp(full_name, inc->filename)==0) {
+	freelog(LOG_FATAL, "Recursion trap on '*include' for \"%s\"", full_name);
+	inf_die(inf, NULL);
       }
     } while((inc=inc->included_from));
   }
   
-  new_inf = inf_from_file(full_name, inf->datafn);
+  new_inf = inf_open(full_name, inf->datafn);
 
   /* Swap things around so that memory pointed to by inf (user pointer,
      and pointer in calling functions) contains the new inputfile,
@@ -479,8 +439,7 @@ static bool read_a_line(struct inputfile *inf)
       if (inf->in_string) {
 	/* Note: Don't allow multi-line strings to cross "include"
 	   boundaries */
-	inf_log(inf, LOG_ERROR, "Multi-line string went to end-of-file");
-        return FALSE;
+	inf_die(inf, "Multi-line string went to end-of-file");
       }
       if (inf->included_from) {
 	/* Pop the include, and get next line from file above instead. */
@@ -539,7 +498,8 @@ static void assign_flag_token(struct astring *astr, char val)
   current line number etc.  Message can be NULL: then just logs
   information on where we are in the file.
 ***********************************************************************/
-void inf_log(struct inputfile *inf, int loglevel, const char *message)
+static void inf_log(struct inputfile *inf, int loglevel,
+		    const char *message)
 {
   assert_sanity(inf);
 
@@ -547,7 +507,7 @@ void inf_log(struct inputfile *inf, int loglevel, const char *message)
     freelog(loglevel, "%s", message);
   }
   freelog(loglevel, "  file \"%s\", line %d, pos %d%s",
-	  inf_filename(inf), inf->line_num, inf->cur_line_pos,
+	  inf->filename, inf->line_num, inf->cur_line_pos,
 	  (inf->at_eof ? ", EOF" : ""));
   if (inf->cur_line.str && inf->cur_line.n > 0) {
     freelog(loglevel, "  looking at: '%s'",
@@ -562,14 +522,17 @@ void inf_log(struct inputfile *inf, int loglevel, const char *message)
   }
   while ((inf=inf->included_from)) {    /* local pointer assignment */
     freelog(loglevel, "  included from file \"%s\", line %d",
-	    inf_filename(inf), inf->line_num);
+	    inf->filename, inf->line_num);
   }
 }
 
-/********************************************************************** 
-  ...
-***********************************************************************/
-static void inf_warn(struct inputfile *inf, const char *message)
+void inf_die(struct inputfile *inf, const char *message)
+{
+  inf_log(inf, LOG_FATAL, message);
+  exit(EXIT_FAILURE);
+}
+
+void inf_warn(struct inputfile *inf, const char *message)
 {
   inf_log(inf, LOG_NORMAL, message);
 }
@@ -613,9 +576,9 @@ static const char *get_token(struct inputfile *inf,
 	freelog(LOG_DEBUG, "inputfile: did not find %s", name);
       }
     } else {
-      /* should be varargs... */
-      freelog(LOG_ERROR, "Did not find required token: %s", name);
-      return NULL;
+      /* inf_die etc should be varargs... */
+      freelog(LOG_FATAL, "Did not find required token: %s", name);
+      inf_die(inf, NULL);
     }
   }
   return c;
@@ -880,9 +843,7 @@ static const char *get_token_value(struct inputfile *inf)
     
     if (!read_a_line(inf)) {
       /* shouldn't happen */
-      inf_log(inf, LOG_ERROR, 
-              "Bad return for multi-line string from read_a_line");
-      return NULL;
+      inf_die(inf, "Bad return for multi-line string from read_a_line");
     }
     c = start = inf->cur_line.str;
   }

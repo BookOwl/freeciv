@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -24,9 +23,9 @@
 #include "government.h"
 #include "mem.h"
 #include "player.h"
-#include "shared.h"
 #include "support.h"
 #include "tech.h"
+#include "shared.h"
 
 #include "unittype.h"
 
@@ -45,8 +44,7 @@ static const char *flag_names[] = {
   "AEGIS", "Fighter", "Marines", "Partial_Invis", "Settlers", "Diplomat",
   "Trireme", "Nuclear", "Spy", "Transform", "Paratroopers",
   "Airbase", "Cities", "IgTired", "Missile_Carrier", "No_Land_Attack",
-  "AddToCity", "Fanatic", "GameLoss", "Unique", "Unbribable", 
-  "Undisbandable", "SuperSpy", "NoHome"
+  "AddToCity", "Fanatic"
 };
 static const char *role_names[] = {
   "FirstBuild", "Explorer", "Hut", "HutTech", "Partisan",
@@ -313,17 +311,17 @@ int can_upgrade_unittype(struct player *pplayer, Unit_Type_id id)
 }
 
 /**************************************************************************
-  Return the cost (gold) of upgrading a single unit of the specified type
-  to the new type.  This price could (but currently does not) depend on
-  other attributes (like nation or government type) of the player the unit
-  belongs to.
+...
 **************************************************************************/
-int unit_upgrade_price(const struct player * const pplayer,
-		       const Unit_Type_id from, const Unit_Type_id to)
+int unit_upgrade_price(struct player *pplayer, Unit_Type_id from,
+		       Unit_Type_id to)
 {
-  const int diff = unit_value(to) - unit_value(from) / 2;
-
-  return (diff <= 0) ? 0 : (diff * 2 + diff * diff / 20);
+  int total, build;
+  build = unit_value(from)/2;
+  total = unit_value(to);
+  if (build>=total)
+    return 0;
+  return (total-build)*2+(total-build)*(total-build)/20; 
 }
 
 /**************************************************************************
@@ -420,9 +418,6 @@ player has a coastal city.
 **************************************************************************/
 bool can_player_build_unit_direct(struct player *p, Unit_Type_id id)
 {
-  Impr_Type_id impr_req;
-  Tech_Type_id tech_req;
-
   if (!unit_type_exists(id))
     return FALSE;
   if (unit_type_flag(id, F_NUCLEAR) && game.global_wonders[B_MANHATTEN] == 0)
@@ -432,26 +427,6 @@ bool can_player_build_unit_direct(struct player *p, Unit_Type_id id)
     return FALSE;
   if (get_invention(p,unit_types[id].tech_requirement)!=TECH_KNOWN)
     return FALSE;
-  if (unit_type_flag(id, F_UNIQUE)) {
-    /* FIXME: This could be slow if we have lots of units. We could
-     * consider keeping an array of unittypes updated with this info 
-     * instead. */
-    unit_list_iterate(p->units, punit) {
-      if (punit->type == id) { 
-        return FALSE;
-      }
-    } unit_list_iterate_end;
-  }
-
-  /* If the unit has a building requirement, we check to see if the player
-   * can build that building.  Note that individual cities may not have
-   * that building, so they still may not be able to build the unit. */
-  impr_req = unit_types[id].impr_requirement;
-  tech_req = get_improvement_type(impr_req)->tech_req;
-  if (impr_req != B_LAST && get_invention(p, tech_req) != TECH_KNOWN) {
-    return FALSE;
-  }
-
   return TRUE;
 }
 
@@ -591,33 +566,9 @@ Unit_Type_id best_role_unit(struct city *pcity, int role)
 }
 
 /**************************************************************************
-Return "best" unit the player can build, with given role/flag.
-Returns U_LAST if none match. "Best" means highest unit type id.
-
-TODO: Cache the result per player?
-**************************************************************************/
-Unit_Type_id best_role_unit_for_player(struct player *pplayer, int role)
-{
-  int j;
-
-  assert((role >= 0 && role < F_LAST) || (role >= L_FIRST && role < L_LAST));
-
-  for(j = n_with_role[role]-1; j >= 0; j--) {
-    Unit_Type_id utype = with_role[role][j];
-
-    if (can_player_build_unit(pplayer, utype)) {
-      return utype;
-    }
-  }
-
-  return U_LAST;
-}
-
-
-/**************************************************************************
   Frees the memory associated with this unit type.
 **************************************************************************/
-static void unit_type_free(Unit_Type_id id)
+void unit_type_free(Unit_Type_id id)
 {
   struct unit_type *p = get_unit_type(id);
 

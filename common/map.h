@@ -16,10 +16,10 @@
 #include <assert.h>
 #include <math.h>
 
-#include "game.h"
 #include "player.h"
 #include "terrain.h"
 #include "unit.h"
+#include "game.h"
 
 struct Sprite;			/* opaque; client-gui specific */
 
@@ -55,11 +55,13 @@ struct tile {
   unsigned int known;   /* A bitvector on the server side, an
 			   enum known_type on the client side.
 			   Player_no is index */
+  unsigned int sent;    /* Indicates if  the client know the tile
+			   as TILE_KNOWN_NODRAW. A bitvector like known.
+			   Not used on the client side. */
   int assigned; /* these can save a lot of CPU usage -- Syela */
   struct city *worked;      /* city working tile, or NULL if none */
-  unsigned short continent;
+  signed short continent;
   signed char move_cost[8]; /* don't know if this helps! */
-  struct player *owner;     /* Player owning this tile, or NULL. */
 };
 
 
@@ -100,7 +102,7 @@ struct terrain_misc
 tile_type for each terrain type
 expand with government bonuses??
 *****************************************************************/
-BV_DEFINE(bv_terrain_flags, TER_MAX);
+
 struct tile_type {
   char terrain_name[MAX_LEN_NAME];     /* "" if unused */
   char terrain_name_orig[MAX_LEN_NAME];	/* untranslated copy */
@@ -149,14 +151,11 @@ struct tile_type {
   enum tile_terrain_type transform_result;
   int transform_time;
 
-  bv_terrain_flags flags;
-
   char *helptext;
 };
 
 struct civ_map { 
-  int topology_id;
-  int xsize, ysize; /* native dimensions */
+  int xsize, ysize;
   int seed;
   int riches;
   bool is_earth;
@@ -178,21 +177,8 @@ struct civ_map {
   bool have_rivers_overlay;	/* only applies if !have_specials */
   int num_continents;
   struct tile *tiles;
-
-  /* Only used by server. */
-  struct map_position *start_positions;	/* allocated at runtime */
+  struct map_position start_positions[MAX_NUM_NATIONS];
 };
-
-enum topo_flag {
-  /* Bit-values. */
-  TF_WRAPX = 1,
-  TF_WRAPY = 2,
-  TF_ISO = 4
-};
-
-#define CURRENT_TOPOLOGY (map.topology_id)
-
-#define topo_has_flag(flag) ((CURRENT_TOPOLOGY & (flag)) != 0)
 
 bool map_is_empty(void);
 void map_init(void);
@@ -212,20 +198,15 @@ bool base_get_direction_for_step(int start_x, int start_y, int end_x,
 int get_direction_for_step(int start_x, int start_y, int end_x, int end_y);
 
 void map_set_continent(int x, int y, int val);
-unsigned short map_get_continent(int x, int y);
+signed short map_get_continent(int x, int y);
 
 void initialize_move_costs(void);
 void reset_move_costs(int x, int y);
 
-/* Maximum value of index (for sanity checks and allocations) */
-#define MAX_MAP_INDEX map.xsize * map.ysize
-
 #ifdef DEBUG
 #define CHECK_MAP_POS(x,y) assert(is_normal_map_pos((x),(y)))
-#define CHECK_INDEX(index) assert((index) >= 0 && (index) < MAX_MAP_INDEX)
 #else
 #define CHECK_MAP_POS(x,y) ((void)0)
-#define CHECK_INDEX(index) ((void)0)
 #endif
 
 #define map_adjust_x(X)            \
@@ -238,41 +219,8 @@ void reset_move_costs(int x, int y);
 #define map_adjust_y(Y) \
   (((Y)<0) ? 0 : (((Y)>=map.ysize) ? map.ysize-1 : (Y)))
 
-/* Obscure math.  See explanation in doc/HACKING. */
-#define native_to_map_pos(pmap_x, pmap_y, nat_x, nat_y)                     \
-  (topo_has_flag(TF_ISO)                                                    \
-   ? (*(pmap_x) = ((nat_y) + ((nat_y) & 1)) / 2 + (nat_x),                  \
-      *(pmap_y) = (nat_y) - *(pmap_x) + map.xsize)                          \
-   : (*(pmap_x) = (nat_x), *(pmap_y) = (nat_y)))
-
-#define map_to_native_pos(pnat_x, pnat_y, map_x, map_y)                     \
-  (topo_has_flag(TF_ISO)                                                    \
-   ? (*(pnat_y) = (map_x) + (map_y) - map.xsize,                            \
-      *(pnat_x) = (2 * (map_x) - *(pnat_y) - (*(pnat_y) & 1)) / 2)          \
-   : (*(pnat_x) = (map_x), *(pnat_y) = (map_y)))
-
-/* Use map_to_native_pos instead unless you know what you're doing. */
-#define map_pos_to_native_x(map_x, map_y)                                   \
-  (topo_has_flag(TF_ISO)                                                    \
-   ? (((map_x) - (map_y) + map.xsize                                        \
-       - (((map_x) + (map_y) - map.xsize) & 1)) / 2)                        \
-   : (map_x))
-#define map_pos_to_native_y(map_x, map_y)                                   \
-  (topo_has_flag(TF_ISO)                                                    \
-   ? ((map_x) + (map_y) - map.xsize)                                        \
-   : (map_y))
-
-#define map_pos_to_index(map_x, map_y)        \
-  (CHECK_MAP_POS((map_x), (map_y)),           \
-   (map_pos_to_native_x(map_x, map_y)         \
-    + map_pos_to_native_y(map_x, map_y) * map.xsize))
-
-/* index_to_map_pos(int *, int *, int) inverts map_pos_to_index */
-#define index_to_map_pos(pmap_x, pmap_y, index) \
-  (CHECK_INDEX(index),                          \
-   *(pmap_x) = (index) % map.xsize,             \
-   *(pmap_y) = (index) / map.xsize,             \
-   native_to_map_pos(pmap_x, pmap_y, *(pmap_x), *(pmap_y)))
+#define map_inx(x,y) \
+  (CHECK_MAP_POS((x),(y)), (x)+(y)*map.xsize)
 
 #define DIRSTEP(dest_x, dest_y, dir)	\
 (    (dest_x) = DIR_DX[(dir)],      	\
@@ -281,19 +229,13 @@ void reset_move_costs(int x, int y);
 /*
  * Returns true if the step yields a new valid map position. If yes
  * (dest_x, dest_y) is set to the new map position.
- *
- * Direct calls to DIR_DXY should be avoided and DIRSTEP should be
- * used. But to allow dest and src to be the same, as in
- *    MAPSTEP(x, y, x, y, dir)
- * we bend this rule here.
  */
 #define MAPSTEP(dest_x, dest_y, src_x, src_y, dir)	\
-(    (dest_x) = (src_x) + DIR_DX[(dir)],   		\
-     (dest_y) = (src_y) + DIR_DY[(dir)],		\
+(    DIRSTEP(dest_x, dest_y, dir),			\
+     (dest_x) += (src_x),		   		\
+     (dest_y) += (src_y),   				\
      normalize_map_pos(&(dest_x), &(dest_y)))
 
-struct player *map_get_owner(int x, int y);
-void map_set_owner(int x, int y, struct player *pplayer);
 struct city *map_get_city(int x, int y);
 void map_set_city(int x, int y, struct city *pcity);
 enum tile_terrain_type map_get_terrain(int x, int y);
@@ -301,12 +243,10 @@ enum tile_special_type map_get_special(int x, int y);
 void map_set_terrain(int x, int y, enum tile_terrain_type ter);
 void map_set_special(int x, int y, enum tile_special_type spe);
 void map_clear_special(int x, int y, enum tile_special_type spe);
-void map_clear_all_specials(int x, int y);
-bool is_real_map_pos(int x, int y);
+void tile_init(struct tile *ptile);
+void tile_free(struct tile *ptile);
+bool is_real_tile(int x, int y);
 bool is_normal_map_pos(int x, int y);
-
-/* implemented in server/maphand.c and client/climisc.c */
-enum known_type map_get_known(int x, int y, struct player *pplayer);
 
 /* special testing */
 bool map_has_special(int x, int y, enum tile_special_type to_test_for);
@@ -315,16 +255,20 @@ bool tile_has_special(struct tile *ptile,
 bool contains_special(enum tile_special_type all,
 		      enum tile_special_type to_test_for);
 
+/* 
+ * Determines whether the position is normal given that it's in the
+ * range 0<=x<map.xsize and 0<=y<map.ysize.  It's primarily a faster
+ * version of is_normal_map_pos since such checks are pretty common.
+ */
+#define regular_map_pos_is_normal(x, y) (TRUE)
+
 /*
  * A "border position" is any one that _may have_ positions within
  * map distance dist that are non-normal.  To see its correctness,
  * consider the case where dist is 1 or 0.
- *
- * TODO: implement this for iso-maps.
  */
 #define IS_BORDER_MAP_POS(x, y, dist)                         \
-  (topo_has_flag(TF_ISO)                                      \
-   || (x) < (dist) || (x) >= map.xsize - (dist)               \
+  ((x) < (dist) || (x) >= map.xsize - (dist)                  \
    || (y) < (dist) || (y) >= map.ysize - (dist))
 
 bool normalize_map_pos(int *x, int *y);
@@ -340,6 +284,7 @@ bool is_tiles_adjacent(int x0, int y0, int x1, int y1);
 bool is_move_cardinal(int start_x, int start_y, int end_x, int end_y);
 int map_move_cost(struct unit *punit, int x, int y);
 struct tile_type *get_tile_type(enum tile_terrain_type type);
+void tile_type_free(enum tile_terrain_type type);
 void tile_types_free(void);
 enum tile_terrain_type get_terrain_by_name(const char * name);
 const char *get_terrain_name(enum tile_terrain_type type);
@@ -347,7 +292,6 @@ enum tile_special_type get_special_by_name(const char * name);
 const char *get_special_name(enum tile_special_type type);
 bool is_terrain_near_tile(int x, int y, enum tile_terrain_type t);
 int count_terrain_near_tile(int x, int y, enum tile_terrain_type t);
-enum terrain_flag_id terrain_flag_from_str(const char *s);
 bool is_special_near_tile(int x, int y, enum tile_special_type spe);
 int count_special_near_tile(int x, int y, enum tile_special_type spe);
 bool is_coastline(int x,int y);
@@ -364,7 +308,7 @@ int get_tile_trade_base(struct tile * ptile);
 int get_tile_infrastructure_set(struct tile * ptile);
 const char *map_get_infrastructure_text(int spe);
 int map_get_infrastructure_prerequisite(int spe);
-enum tile_special_type get_preferred_pillage(int pset);
+int get_preferred_pillage(int pset);
 
 void map_irrigate_tile(int x, int y);
 void map_mine_tile(int x, int y);
@@ -454,21 +398,6 @@ extern struct tile_type tile_types[T_LAST];
     }                                                                         \
     MACRO_positive = !MACRO_positive;                                         \
   }                                                                           \
-}
-
-#define rectangle_iterate(map_x0, map_y0, map_width, map_height,            \
-                          x_itr, y_itr)                                     \
-{                                                                           \
-  int RI_dx_itr, RI_dy_itr;                                                 \
-  for (RI_dy_itr = 0; RI_dy_itr < (map_height); RI_dy_itr++) {              \
-    for (RI_dx_itr = 0; RI_dx_itr < (map_width); RI_dx_itr++) {             \
-      int x_itr = RI_dx_itr + (map_x0), y_itr = RI_dy_itr + (map_y0);       \
-      if (normalize_map_pos(&x_itr, &y_itr)) {
-
-#define rectangle_iterate_end                                               \
-      }                                                                     \
-    }                                                                       \
-  }                                                                         \
 }
 
 /* 
@@ -561,18 +490,16 @@ extern struct tile_type tile_types[T_LAST];
   }                                                                           \
 }
 
-/* Iterate over all positions on the globe. */
-#define whole_map_iterate(map_x, map_y)                                     \
-{                                                                           \
-  int WMI_index; /* We use index positions for cache efficiency. */         \
-  for (WMI_index = 0; WMI_index < MAX_MAP_INDEX; WMI_index++) {             \
-    int map_x, map_y;                                                       \
-    index_to_map_pos(&map_x, &map_y, WMI_index);                            \
-    {
+/* iterating y, x for cache efficiency */
+#define whole_map_iterate(WMI_x_itr, WMI_y_itr)                               \
+{                                                                             \
+  int WMI_x_itr, WMI_y_itr;                                                   \
+  for (WMI_y_itr = 0; WMI_y_itr < map.ysize; WMI_y_itr++)                     \
+    for (WMI_x_itr = 0; WMI_x_itr < map.xsize; WMI_x_itr++)                   \
+      if (regular_map_pos_is_normal(WMI_x_itr, WMI_y_itr)) {
 
-#define whole_map_iterate_end                                               \
-    }                                                                       \
-  }                                                                         \
+#define whole_map_iterate_end                                                 \
+      }                                                                       \
 }
 
 /*
@@ -604,8 +531,6 @@ enum direction8 {
   DIR8_SOUTHEAST = 7
 };
 
-BV_DEFINE(dir_vector, 8);
-
 /* return the reverse of the direction */
 #define DIR_REVERSE(dir) (7 - (dir))
 
@@ -618,7 +543,6 @@ BV_DEFINE(dir_vector, 8);
 enum direction8 dir_cw(enum direction8 dir);
 enum direction8 dir_ccw(enum direction8 dir);
 const char* dir_get_name(enum direction8 dir);
-bool is_valid_dir(enum direction8 dir);
 
 extern const int DIR_DX[8];
 extern const int DIR_DY[8];
@@ -645,9 +569,6 @@ extern const int CAR_DIR_DY[4];
   }                                                                           \
 }
 
-/* Used for network transmission; do not change. */
-#define MAP_TILE_OWNER_NULL	 MAX_UINT16
-
 #define MAP_DEFAULT_HUTS         50
 #define MAP_MIN_HUTS             0
 #define MAP_MAX_HUTS             500
@@ -659,11 +580,6 @@ extern const int CAR_DIR_DY[4];
 #define MAP_DEFAULT_HEIGHT       50
 #define MAP_MIN_HEIGHT           25
 #define MAP_MAX_HEIGHT           100
-
-#define MAP_ORIGINAL_TOPO        TF_WRAPX
-#define MAP_DEFAULT_TOPO         TF_WRAPX
-#define MAP_MIN_TOPO             0
-#define MAP_MAX_TOPO             3
 
 #define MAP_DEFAULT_SEED         0
 #define MAP_MIN_SEED             0
@@ -693,9 +609,9 @@ extern const int CAR_DIR_DY[4];
 #define MAP_MIN_DESERTS          0
 #define MAP_MAX_DESERTS          100
 
-#define MAP_DEFAULT_RIVERS       5
+#define MAP_DEFAULT_RIVERS       50
 #define MAP_MIN_RIVERS           0
-#define MAP_MAX_RIVERS           100
+#define MAP_MAX_RIVERS           1000
 
 #define MAP_DEFAULT_FORESTS      20
 #define MAP_MIN_FORESTS          0

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -19,7 +18,6 @@
 /* Under Mac OS X sys/types.h must be included before dirent.h */
 #include <sys/types.h>
 #endif
-
 #include <assert.h>
 #include <dirent.h>
 #include <errno.h>
@@ -27,15 +25,26 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 
-#ifdef HAVE_PWD_H
-#include <pwd.h>
+#ifdef HAVE_ICONV
+#include <iconv.h>
+#ifdef HAVE_LIBCHARSET
+#include <libcharset.h>
+#else
+#ifdef HAVE_LANGINFO_CODESET
+#include <langinfo.h>
+#endif
+#endif
 #endif
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#ifdef HAVE_PWD_H
+#include <pwd.h>
+#endif
+
 #ifdef WIN32_NATIVE
 #include <windows.h>
 #endif
@@ -64,9 +73,11 @@
                           "~/.freeciv"
 #endif
 
-static char *grouping = NULL;
-static char *grouping_sep = NULL;
-static size_t grouping_sep_len = 0;
+/* Cached locale numeric formatting information.
+   Defaults are as appropriate for the US. */
+static char *grouping = "\3";
+static char *grouping_sep = ",";
+static size_t grouping_sep_len = 1;
 
 /***************************************************************
   Take a string containing multiple lines and create a copy where
@@ -212,7 +223,7 @@ static size_t my_strcspn(const char *s, const char *reject)
 
 /***************************************************************
  Splits the string into tokens. The individual tokens are
- returned. The delimiterset can freely be chosen.
+ returned. The delimiterset can freely be choosen.
 
  i.e. "34 abc 54 87" with a delimiterset of " " will yield 
       tokens={"34", "abc", "54", "87"}
@@ -278,7 +289,7 @@ int get_tokens(const char *str, char **tokens, size_t num_tokens,
   works for numbers >= zero.) The actually number used for the
   formatting is: nr*10^decade_exponent
 ***************************************************************/
-static const char *general_int_to_text(int nr, int decade_exponent)
+const char *general_int_to_text(int nr, int decade_exponent)
 {
   static char buf[64]; /* Note that we'll be filling this in right to left. */
   char *grp = grouping;
@@ -371,21 +382,22 @@ static bool is_iso_latin1(char ch)
 /***************************************************************
   This is used in sundry places to make sure that names of cities,
   players etc. do not contain yucky characters of various sorts.
-  Returns TRUE iff the name is acceptable.
+  Returns the input argument if it points to an acceptable name,
+  otherwise returns NULL.
   FIXME:  Not internationalised.
 ***************************************************************/
-bool is_sane_name(const char *name)
+const char *get_sane_name(const char *name)
 {
   const char *cp;
 
   /* must not be NULL or empty */
   if (!name || *name == '\0') {
-    return FALSE;
+    return NULL; 
   }
 
   /* must begin and end with some non-space character */
   if ((*name == ' ') || (*(strchr(name, '\0') - 1) == ' ')) {
-    return FALSE;
+    return NULL; 
   }
 
   /* must be composed entirely of printable ISO 8859-1 characters,
@@ -395,11 +407,11 @@ bool is_sane_name(const char *name)
     /* nothing */
   }
   if (*cp != '\0') {
-    return FALSE;
+    return NULL; 
   }
 
   /* otherwise, it's okay... */
-  return TRUE;
+  return name;
 }
 
 /***************************************************************
@@ -460,7 +472,7 @@ char *skip_leading_spaces(char *s)
   Removes leading spaces in string pointed to by 's'.
   Note 's' must point to writeable memory!
 ***************************************************************************/
-static void remove_leading_spaces(char *s)
+void remove_leading_spaces(char *s)
 {
   char *t;
   
@@ -478,7 +490,7 @@ static void remove_leading_spaces(char *s)
   Terminates string pointed to by 's' to remove traling spaces;
   Note 's' must point to writeable memory!
 ***************************************************************************/
-static void remove_trailing_spaces(char *s)
+void remove_trailing_spaces(char *s)
 {
   char *t;
   size_t len;
@@ -510,7 +522,7 @@ void remove_leading_trailing_spaces(char *s)
 /***************************************************************************
   As remove_trailing_spaces(), for specified char.
 ***************************************************************************/
-static void remove_trailing_char(char *s, char trailing)
+void remove_trailing_char(char *s, char trailing)
 {
   char *t;
   
@@ -627,7 +639,7 @@ size_t loud_strlcpy(char *buffer, const char *str, size_t len,
  available in str, does not change the string. 
 
  Also like mystrlcat, returns the final length that str would have
- had without truncation.  I.e., if return is >= n, truncation occurred.
+ had without truncation.  Ie, if return is >= n, truncation occured.
 **********************************************************************/ 
 int cat_snprintf(char *str, size_t n, const char *format, ...)
 {
@@ -646,25 +658,6 @@ int cat_snprintf(char *str, size_t n, const char *format, ...)
   ret = my_vsnprintf(str+len, n-len, format, ap);
   va_end(ap);
   return (int) (ret + len);
-}
-
-/***************************************************************************
-  Exit because of a fatal error after printing a message about it.  This
-  should only be called for code errors - user errors (like not being able
-  to find a tileset) should just exit rather than dumping core.
-***************************************************************************/
-void real_die(const char *file, int line, const char *format, ...)
-{
-  va_list ap;
-
-  freelog(LOG_FATAL, "Detected fatal error in %s line %d:", file, line);
-  va_start(ap, format);
-  vreal_freelog(LOG_FATAL, format, ap);
-  va_end(ap);
-
-  assert(FALSE);
-
-  exit(EXIT_FAILURE);
 }
 
 /***************************************************************************
@@ -758,8 +751,7 @@ char *user_username(void)
 ***************************************************************************/
 static const char **get_data_dirs(int *num_dirs)
 {
-  const char *path;
-  char *path2, *tok;
+  char *path, *path2, *tok;
   static int num = 0;
   static const char **dirs = NULL;
 
@@ -882,7 +874,7 @@ const char **datafilelist(const char* suffix)
 		dirs[dir_num]);
       } else {
 	freelog(LOG_ERROR, _("Could not read data directory %s: %s."),
-		dirs[dir_num], mystrerror(errno));
+		dirs[dir_num], strerror(errno));
       }
       continue;
     }
@@ -1026,14 +1018,6 @@ char *datafilename_required(const char *filename)
 ***************************************************************************/
 void init_nls(void)
 {
-  /* 
-   * Setup the cached locale numeric formatting information. Defaults
-   * are as appropriate for the US.
-   */
-  grouping = mystrdup("\3");
-  grouping_sep = mystrdup(",");
-  grouping_sep_len = strlen(grouping_sep);
-
 #ifdef ENABLE_NLS
 #ifdef WIN32_NATIVE
   /* set LANG by hand if it is not set */
@@ -1114,11 +1098,10 @@ void init_nls(void)
 	/* nothing */
       }
       len++;
-      free(grouping);
       grouping = fc_malloc(len);
       memcpy(grouping, lc->grouping, len);
     }
-    free(grouping_sep);
+
     grouping_sep = mystrdup(lc->thousands_sep);
     grouping_sep_len = strlen(grouping_sep);
   }
@@ -1251,4 +1234,138 @@ bool bv_check_mask(unsigned char *vec1, unsigned char *vec2, size_t size1,
     vec2++;
   }
   return FALSE;
+}
+
+#ifdef HAVE_ICONV
+/***************************************************************************
+  Convert the text.  This assumes 'from' is an 8-bit charset.
+***************************************************************************/
+static char *convert_string_malloc(const char *text,
+				   const char *from, const char *to)
+{
+  iconv_t cd;
+  size_t from_len = strlen(text) + 1, to_len = from_len;
+  char *result;
+
+  cd = iconv_open(to, from);
+  if (cd == (iconv_t) (-1)) {
+    freelog(LOG_ERROR,
+	    _("String conversion from %s not possible.  You may\n"
+	      "want to set your local encoding manually by setting\n"
+	      "the environment variable $FREECIV_LOCAL_ENCODING."
+	      "Proceeding anyway..."),
+	    from);
+    return mystrdup(text); /* The best we can do? */
+  }
+
+  do {
+    size_t flen = from_len, tlen = to_len, res;
+    const char *mytext = text;
+    char *myresult;
+
+    if (to_len > 1000000) {
+      /* Avoid unterminated loop. */
+      /* NOTE: same as error message above. */
+      freelog(LOG_ERROR,
+	      _("String conversion from %s not possible.  You may\n"
+		"want to set your local encoding manually by setting\n"
+		"the environment variable $FREECIV_LOCAL_ENCODING."
+		"Proceeding anyway..."),
+	      from);
+      iconv_close(cd);
+      return mystrdup(text);
+    }
+
+    result = fc_malloc(to_len);
+
+    myresult = result;
+
+    /* Since we may do multiple translations, we may need to reset iconv
+     * in between. */
+    iconv(cd, NULL, NULL, NULL, NULL);
+
+    res = iconv(cd, (ICONV_CONST char **)&mytext, &flen, &myresult, &tlen);
+    if (res == (size_t) (-1)) {
+      if (errno != E2BIG) {
+	/* Invalid input. */
+	freelog(LOG_ERROR,
+		_("The string '%s' is not valid: %s. Ruleset files must\n"
+		  "be encoded as %s; you can change this by setting\n"
+		  "$FREECIV_DATA_ENCODING."),
+		text, strerror(errno), from);
+	free(result);
+	iconv_close(cd);
+	return mystrdup(text); /* The best we can do? */
+      }
+    } else {
+      /* Success. */
+      iconv_close(cd);
+
+      /* There may be wasted space here.  But we don't want to call
+       * mystrdup on result since it might not be in an 8-bit charset. */
+      return result;
+    }
+
+    /* Not enough space; try again. */
+    free(result);
+    to_len *= 2;
+  } while (TRUE);
+}
+#endif
+
+/***************************************************************************
+  We convert from the charset used by the rulesets into the local encoding.
+***************************************************************************/
+char *convert_data_string_malloc(const char *text)
+{
+#ifdef HAVE_ICONV
+  const char *local_encoding;
+  const char *data_encoding;
+  char target[128];
+
+  data_encoding = getenv("FREECIV_DATA_ENCODING");
+  if (!data_encoding) {
+    /* Currently the rulesets are in latin1 (ISO-8859-1). */
+    data_encoding = "ISO-8859-1";
+  }
+
+  local_encoding = getenv("FREECIV_LOCAL_ENCODING");
+  if (!local_encoding) {
+#ifdef HAVE_LIBCHARSET
+    local_encoding = locale_charset();
+#else
+#ifdef HAVE_LANGINFO_CODESET
+    local_encoding = nl_langinfo(CODESET);
+#else
+    local_encoding = "";
+#endif
+#endif
+    if (strcasecmp(local_encoding, "ANSI_X3.4-1968") == 0
+	|| strcasecmp(local_encoding, "ASCII") == 0) {
+      /* HACK: Use latin1 instead of ascii. */
+      local_encoding = "ISO-8859-1";
+    }
+    my_snprintf(target, sizeof(target), "%s//TRANSLIT", local_encoding);
+    local_encoding = target;
+  }
+
+  return convert_string_malloc(text, data_encoding, local_encoding);
+#else
+/* Don't expect that win32 users install iconv on their own, especially
+ * not from http://gnu.org/ in source form... */
+#ifndef WIN32_NATIVE
+  static bool only_give_this_damn_warning_once = FALSE;
+
+  if (!only_give_this_damn_warning_once) {
+    only_give_this_damn_warning_once = TRUE;
+
+   freelog(LOG_ERROR,
+           _("You are running Freeciv without using iconv.  Unless\n"
+           "you are using the latin1 character set, some characters\n"
+           "may not be displayed properly.  You can download iconv\n"
+           "at http://gnu.org/."));
+   }
+#endif
+  return mystrdup(text);
+#endif
 }

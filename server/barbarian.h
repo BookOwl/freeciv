@@ -25,10 +25,13 @@ struct player;
 #define UPRISE_CIV_MORE  30
 #define UPRISE_CIV_MOST  50
 
+#define BARBARIAN_LIFE    5
+
 #define MAP_FACTOR     2000  /* adjust this to get a good uprising frequency */
 
-bool unleash_barbarians(int x, int y);
+bool unleash_barbarians(struct player *victim, int x, int y);
 void summon_barbarians(void);
 bool is_land_barbarian(struct player *pplayer);
+bool is_sea_barbarian(struct player *pplayer);
 
 #endif  /* FC__BARBARIAN_H */

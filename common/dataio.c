@@ -23,20 +23,20 @@
 #include <config.h>
 #endif
 
-#include <assert.h>
-#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
+#include <limits.h>
 
-#ifdef HAVE_ARPA_INET_H
-#include <arpa/inet.h>
+#ifdef HAVE_SYS_TYPES_H
+#include <sys/types.h>
 #endif
 #ifdef HAVE_NETINET_IN_H
 #include <netinet/in.h>
 #endif
-#ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
+#ifdef HAVE_ARPA_INET_H
+#include <arpa/inet.h>
 #endif
 #ifdef HAVE_WINSOCK
 #include <winsock.h>
@@ -384,14 +384,19 @@ void dio_put_tech_list(struct data_out *dout, const int *value)
 /**************************************************************************
 ...
 **************************************************************************/
-void dio_put_worklist(struct data_out *dout, const struct worklist *pwl)
+void dio_put_worklist(struct data_out *dout, const struct worklist *pwl,
+		      bool real_wl)
 {
   dio_put_bool8(dout, pwl->is_valid);
 
   if (pwl->is_valid) {
     int i, length = worklist_length(pwl);
 
-    dio_put_string(dout, "");
+    if (real_wl) {
+      dio_put_string(dout, pwl->name);
+    } else {
+      dio_put_string(dout, "\0");
+    }
 
     dio_put_uint8(dout, length);
     for (i = 0; i < length; i++) {

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -34,7 +33,6 @@
 #include "support.h"
 
 #include "chatline.h"
-#include "civclient.h"
 #include "climisc.h"
 #include "clinet.h"
 #include "inteldlg.h"
@@ -209,10 +207,17 @@ static void players_active(void)
     set(player_vision_button, MUIA_Disabled,
 	!gives_shared_vision(game.player_ptr, pplayer));
 
-    set(player_meet_button, MUIA_Disabled, !can_meet_with_player(pplayer));
-    set(player_intelligence_button, MUIA_Disabled,
-	!can_intel_with_player(pplayer));
-    return;
+    if (pplayer->is_alive
+        && pplayer != game.player_ptr
+        && player_has_embassy(game.player_ptr, pplayer))
+    {
+      if (pplayer->is_connected)
+	set(player_meet_button, MUIA_Disabled, FALSE);
+      else
+	set(player_meet_button, MUIA_Disabled, TRUE);
+      set(player_intelligence_button, MUIA_Disabled, FALSE);
+      return;
+    }
   }
 
   set(player_meet_button, MUIA_Disabled, TRUE);
@@ -231,9 +236,8 @@ static void players_intelligence(void)
   {
     playerno -= 100;
 
-    if (can_intel_with_player(&game.players[playerno])) {
+    if (player_has_embassy(game.player_ptr, &game.players[playerno]))
       popup_intel_dialog(&game.players[playerno]);
-    }
   }
 }
 
@@ -249,12 +253,10 @@ static void players_meet(void)
   {
     playerno -= 100;
 
-    if (can_meet_with_player(&game.players[playerno])) {
+    if (player_has_embassy(game.player_ptr, &game.players[playerno]))
+    {
       request_diplomacy_init_meeting(game.player_idx, playerno);
-    } else {
-      append_output_window(_("Game: You need an embassy to establish a "
-                             "diplomatic meeting."));
-    }
+    } else append_output_window(_("Game: You need an embassy to establish a diplomatic meeting."));
   }
 }
 
@@ -268,12 +270,9 @@ static void players_war(void)
 
   if(playerno)
   {
-    struct packet_generic_values packet;
-
-    packet.id = playerno - 100;
-    packet.value1 = CLAUSE_CEASEFIRE;
-    send_packet_generic_values(&aconnection, PACKET_PLAYER_CANCEL_PACT,
-                               &packet);
+    struct packet_generic_integer pa;
+    pa.value = playerno - 100;
+    send_packet_generic_integer(&aconnection, PACKET_PLAYER_CANCEL_PACT, &pa);
   }
 }
 
@@ -287,12 +286,9 @@ void players_vision(void)
 
   if(playerno)
   {
-    struct packet_generic_values packet;
-
-    packet.id = playerno - 100;
-    packet.value1 = CLAUSE_VISION;
-    send_packet_generic_values(&aconnection,
-                               PACKET_PLAYER_CANCEL_PACT, &packet);
+    struct packet_generic_integer pa;
+    pa.value = playerno - 100;
+    send_packet_generic_integer(&aconnection, PACKET_PLAYER_REMOVE_VISION, &pa);
   }
 }
 
