@@ -15,7 +15,6 @@
 This module contains various general - mostly highlevel - functions
 used throughout the client.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -29,7 +28,7 @@ used throughout the client.
 #include <unistd.h>
 #endif
 
-/*#include "astring.h"*/
+#include "astring.h"
 #include "diptreaty.h"
 #include "fcintl.h"
 #include "game.h"
@@ -43,7 +42,6 @@ used throughout the client.
 #include "cityrep_g.h"
 #include "civclient.h"
 #include "chatline_g.h"
-#include "climap.h"
 #include "clinet.h"
 #include "control.h"
 #include "mapview_g.h"
@@ -55,6 +53,152 @@ used throughout the client.
 #include "tilespec.h"
 
 #include "climisc.h"
+
+static void renumber_island_impr_effect(int old, int newnumber);
+
+#define MAX_NUM_CONT 32767   /* max portable value in signed short */
+
+/* Static data used to keep track of continent numbers in client:
+ * maximum value used, and array of recycled values which can be used.
+ * (Could used signed short, but int is easier and storage here will
+ * be fairly small.)
+ */
+static int max_cont_used = 0;
+static struct athing recyc_conts;   /* .n is number available */
+static bool recyc_init = FALSE;	    /* for first init of recyc_conts */
+static int *recyc_ptr = NULL;	    /* set to recyc_conts.ptr (void* vs int*) */
+
+/**************************************************************************
+  Initialise above data, or re-initialize (eg, new map).
+**************************************************************************/
+void climap_init_continents(void)
+{
+  if (!recyc_init) {
+    /* initialize with size first time: */
+    ath_init(&recyc_conts, sizeof(int));
+    recyc_init = TRUE;
+  }
+  update_island_impr_effect(-1, 0);
+  ath_free(&recyc_conts);
+  recyc_ptr = NULL;
+  max_cont_used = 0;
+}
+
+/**************************************************************************
+  Recycle a continent number.
+  (Ie, number is no longer used, and may be re-used later.)
+**************************************************************************/
+static void recycle_continent_num(int cont)
+{
+  assert(cont>0 && cont<=max_cont_used);          /* sanity */
+  ath_minnum(&recyc_conts, recyc_conts.n+1);
+  recyc_ptr = recyc_conts.ptr;
+  recyc_ptr[recyc_conts.n-1] = cont;
+  freelog(LOG_DEBUG, "clicont: recycling %d (max %d recyc %d)",
+	  cont, max_cont_used, (unsigned int)recyc_conts.n);
+}
+
+/**************************************************************************
+  Obtain an unused continent number: a recycled number if available,
+  or increase the maximum.
+**************************************************************************/
+static int new_continent_num(void)
+{
+  int ret;
+  
+  if (recyc_conts.n>0) {
+    ret = recyc_ptr[--recyc_conts.n];
+  } else {
+    assert(max_cont_used<MAX_NUM_CONT);
+    ret = ++max_cont_used;
+    update_island_impr_effect(max_cont_used-1, max_cont_used);
+  }
+  freelog(LOG_DEBUG, "clicont: new %d (max %d, recyc %d)",
+	  ret, max_cont_used, (unsigned int)recyc_conts.n);
+  return ret;
+}
+
+/**************************************************************************
+  Recursively renumber the client continent at (x,y) with continent
+  number 'new'.  Ie, renumber (x,y) tile and recursive adjacent
+  known land tiles with the same previous continent ('old').
+**************************************************************************/
+static void climap_renumber_continent(int x, int y, int newnumber)
+{
+  int old;
+
+  if( !normalize_map_pos(&x, &y) )
+    return;
+
+  old = map_get_continent(x,y);
+
+  /* some sanity checks: */
+  assert(tile_get_known(x,y) >= TILE_KNOWN_FOGGED);
+  assert(map_get_terrain(x,y) != T_OCEAN);
+  assert(old>0 && old<=max_cont_used);
+  
+  renumber_island_impr_effect(old, newnumber);
+
+  map_set_continent(x,y,newnumber);
+  adjc_iterate(x, y, i, j) {
+    if (tile_get_known(i, j) >= TILE_KNOWN_FOGGED
+	&& map_get_terrain(i, j) != T_OCEAN
+	&& map_get_continent(i, j) == old) {
+      climap_renumber_continent(i, j, newnumber);
+    }
+  }
+  adjc_iterate_end;
+}
+
+/**************************************************************************
+  Update continent numbers when (x,y) becomes known (if (x,y) land).
+  Check neighbouring known land tiles: the first continent number
+  found becomes the continent value of this tile.  Any other continents
+  found are numbered to this continent (ie, continents are merged)
+  and previous continent values are recycled.  If no neighbours are
+  numbered, use a new number. 
+**************************************************************************/
+void climap_update_continents(int x, int y)
+{
+  struct tile *ptile = map_get_tile(x,y);
+  int con, this_con;
+
+  if(ptile->terrain == T_OCEAN) return;
+
+  this_con = -1;
+  adjc_iterate(x, y, i, j) {
+    if (tile_get_known(i, j) >= TILE_KNOWN_FOGGED
+	&& map_get_terrain(i, j) != T_OCEAN) {
+      con = map_get_continent(i, j);
+      if (con > 0) {
+	if (this_con == -1) {
+	  ptile->continent = this_con = con;
+	} else if (con != this_con) {
+	  freelog(LOG_DEBUG,
+		  "renumbering client continent %d to %d at (%d %d)", con,
+		  this_con, x, y);
+	  climap_renumber_continent(i, j, this_con);
+	  recycle_continent_num(con);
+	}
+      }
+    }
+  }
+  adjc_iterate_end;
+
+  if(this_con==-1) {
+    ptile->continent = new_continent_num();
+    freelog(LOG_DEBUG, "new client continent %d at (%d %d)",
+	    ptile->continent, x, y);
+  }
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+void client_init_player(struct player *plr)
+{
+  player_init_island_imprs(plr, max_cont_used);
+}
 
 /**************************************************************************
 ...
@@ -192,7 +336,7 @@ void client_change_all(cid x, cid y)
 /***************************************************************************
 Return a string indicating one nation's embassy status with another
 ***************************************************************************/
-const char *get_embassy_status(struct player *me, struct player *them)
+char *get_embassy_status(struct player *me, struct player *them)
 {
   if (me == them) return "-";
   if (player_has_embassy(me, them)) {
@@ -209,7 +353,7 @@ const char *get_embassy_status(struct player *me, struct player *them)
 /***************************************************************************
 Return a string indicating one nation's shaed vision status with another
 ***************************************************************************/
-const char *get_vision_status(struct player *me, struct player *them)
+char *get_vision_status(struct player *me, struct player *them)
 {
   if (gives_shared_vision(me, them)) {
     if (gives_shared_vision(them, me))
@@ -323,6 +467,20 @@ int client_cooling_sprite(void)
   return index;
 }
 
+/************************************************************************
+ A tile's "known" field is used by the server to store whether _each_
+ player knows the tile.  Client-side, it's used as an enum known_type
+ to track whether the tile is known/fogged/unknown.
+
+ Judicious use of this function also makes things very convenient for
+ civworld, since it uses both client and server-style storage; since it
+ uses the stock tilespec.c file, this function serves as a wrapper.
+*************************************************************************/
+enum known_type tile_get_known(int x, int y)
+{
+  return (enum known_type) map_get_tile(x, y)->known;
+}
+
 /**************************************************************************
 Find something sensible to display. This is used to overwrite the
 intro gfx.
@@ -332,7 +490,7 @@ void center_on_something(void)
   struct city *pcity;
   struct unit *punit;
 
-  if (!can_client_change_view()) {
+  if (get_client_state() != CLIENT_GAME_RUNNING_STATE) {
     return;
   }
 
@@ -880,6 +1038,58 @@ int num_present_units_in_city(struct city *pcity)
 }
 
 /**************************************************************************
+  Moves all improvements from the 'old' continent to the 'new' one.
+**************************************************************************/
+void renumber_island_impr_effect(int old, int newnumber)
+{
+  int i;
+  bool changed = FALSE;
+
+  players_iterate(plr) {
+    Impr_Status *oldimpr, *newimpr;
+    struct geff_vector *oldv, *newv;
+    struct eff_global *olde, *newe;
+
+    assert(plr->island_improv != NULL);
+    oldimpr=&plr->island_improv[game.num_impr_types*old];
+    newimpr=&plr->island_improv[game.num_impr_types*newnumber];
+
+    oldv=&plr->island_effects[old];
+    newv=&plr->island_effects[newnumber];
+
+    /* First move any island-range effects to the new vector. */
+    for (i=0; i<geff_vector_size(oldv); i++) {
+      olde=geff_vector_get(oldv, i);
+
+      if (olde->eff.impr!=B_LAST) {
+	changed=TRUE;
+	newe = append_geff(newv);
+	newe->eff	 = olde->eff;
+	newe->cityid	 = olde->cityid;
+	olde->eff.impr	 = B_LAST;   /* Mark the old entry as unused. */
+      }
+    }
+
+    /* Now move all city improvements across. */
+    impr_type_iterate(i) {
+      if (oldimpr[i]!=I_NONE) {
+	newimpr[i]=oldimpr[i];
+	oldimpr[i]=I_NONE;
+
+	/* Obsolete or redundant buildings don't change the effects. */
+	if (newimpr[i]==I_ACTIVE) {
+	  changed=TRUE;  
+	}
+      }
+    } impr_type_iterate_end;
+  } players_iterate_end;
+
+  /* If anything was changed, then we need to update the effects. */
+  if (changed)
+    update_all_effects();
+}
+
+/**************************************************************************
   Returns a description of the given spaceship. The string doesn't
   have to be freed. If pship is NULL returns a text with the same
   format as the final one but with dummy values.
@@ -1019,100 +1229,4 @@ void reports_force_thaw(void)
   plrdlg_force_thaw();
   report_dialogs_force_thaw();
   output_window_force_thaw();
-}
-
-/**************************************************************************
-  Find city nearest to given unit and optionally return squared city
-  distance Parameter sq_dist may be NULL. Returns NULL only if no city is
-  known. Favors punit owner's cities over other cities if equally distant.
-**************************************************************************/
-struct city *get_nearest_city(struct unit *punit, int *sq_dist)
-{
-  struct city *pcity_near;
-  int pcity_near_dist;
-
-  if ((pcity_near = map_get_city(punit->x, punit->y))) {
-    pcity_near_dist = 0;
-  } else {
-    pcity_near = NULL;
-    pcity_near_dist = -1;
-    players_iterate(pplayer) {
-      city_list_iterate(pplayer->cities, pcity_current) {
-        int dist = sq_map_distance(pcity_current->x, pcity_current->y,
-				   punit->x, punit->y);
-        if (pcity_near_dist == -1 || dist < pcity_near_dist
-	    || (dist == pcity_near_dist
-		&& punit->owner == pcity_current->owner)) {
-          pcity_near = pcity_current;
-          pcity_near_dist = dist;
-        }
-      } city_list_iterate_end;
-    } players_iterate_end;
-  }
-
-  if (sq_dist) {
-    *sq_dist = pcity_near_dist;
-  }
-
-  return pcity_near;
-}
-
-#define FAR_CITY_SQUARE_DIST (2*(6*6))
-
-/**************************************************************************
-  Fill buf (of size bufsz) with proper nearest city message.
-  Returns buf.
-**************************************************************************/
-char *get_nearest_city_text(struct city *pcity, int sq_dist,
-			    char *buf, size_t bufsz)
-{
-  /* just to be sure */
-  if (!pcity) {
-    sq_dist = -1;
-  }
-
-  my_snprintf(buf, bufsz, 
-	      (sq_dist >= FAR_CITY_SQUARE_DIST) ? _("far from %s")
-	      : (sq_dist > 0) ? _("near %s")
-	      : (sq_dist == 0) ? _("in %s")
-	      : "%s",
-	      pcity ? pcity->name : "");
-
-  return buf;
-}
-
-/**************************************************************************
-  Returns unit description (as static buffer).
-**************************************************************************/
-const char *unit_description(struct unit *punit)
-{
-  struct city *pcity, *pcity_near;
-  int pcity_near_dist;
-  static char buffer[512];
-  char buffer2[64];
-  char buffer3[64];
-  char buffer4[64];
-
-  pcity = player_find_city_by_id(game.player_ptr, punit->homecity);
-  pcity_near = get_nearest_city(punit, &pcity_near_dist);
-
-  if (pcity) {
-    my_snprintf(buffer3, sizeof(buffer3), _("from %s"), pcity->name);
-  } else {
-    buffer3[0] = 0;
-  }
-  if (punit->veteran) {
-    my_snprintf(buffer4, sizeof(buffer4),
-		_("%s (veteran)"), unit_type(punit)->name);
-  } else {
-    sz_strlcpy(buffer4, unit_type(punit)->name);
-  }
-  my_snprintf(buffer, sizeof(buffer), "%s\n%s\n%s\n%s", 
-	      buffer4,
-	      unit_activity_text(punit), 
-	      buffer3,
-	      get_nearest_city_text(pcity_near, pcity_near_dist,
-				    buffer2, sizeof(buffer2)));
-
-  return buffer;
 }

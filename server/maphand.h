@@ -14,10 +14,7 @@
 #define FC__MAPHAND_H
 
 #include "map.h"
-#include "terrain.h"
 #include "packets.h"
-
-enum ocean_land_change { OLC_NONE, OLC_OCEAN_TO_LAND, OLC_LAND_TO_OCEAN };
 
 struct player;
 struct section_file;
@@ -26,16 +23,14 @@ struct conn_list;
 struct dumb_city{
   int id;
   bool has_walls;
-  bool occupied;
   char name[MAX_LEN_NAME];
   unsigned short size;
   unsigned char owner;
 };
 
-struct player_tile {
+struct player_tile{
   enum tile_terrain_type terrain;
   enum tile_special_type special;
-  unsigned short continent;
   unsigned short seen;
   unsigned short own_seen;
   /* If you build a city with an unknown square within city radius
@@ -69,6 +64,8 @@ void map_fog_pseudo_city_area(struct player *pplayer, int x,int y);
 
 bool map_get_known_and_seen(int x, int y, struct player *pplayer);
 void map_change_seen(int x, int y, struct player *pplayer, int change);
+int map_get_own_seen(int x, int y, struct player *pplayer);
+void map_change_own_seen(int x, int y, struct player *pplayer, int change);
 bool map_get_known(int x, int y, struct player *pplayer);
 void map_set_known(int x, int y, struct player *pplayer);
 void map_clear_known(int x, int y, struct player *pplayer);
@@ -78,7 +75,8 @@ void show_map_to_all(void);
 
 void player_map_allocate(struct player *pplayer);
 void player_map_free(struct player *pplayer);
-struct player_tile *map_get_player_tile(int x, int y, struct player *pplayer);
+struct player_tile *map_get_player_tile(int x, int y,
+					struct player *pplayer);
 void update_tile_knowledge(struct player *pplayer,int x, int y);
 void update_player_tile_last_seen(struct player *pplayer, int x, int y);
 
@@ -90,7 +88,4 @@ void handle_player_remove_vision(struct player *pplayer,
 void enable_fog_of_war(void);
 void disable_fog_of_war(void);
 bool is_coast_seen(int x, int y, struct player *pplayer);
-
-enum ocean_land_change check_terrain_ocean_land_change(int x, int y,
-                                              enum tile_terrain_type oldter);
 #endif  /* FC__MAPHAND_H */

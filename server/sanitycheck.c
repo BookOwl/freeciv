@@ -11,10 +11,6 @@
    GNU General Public License for more details.
 ***********************************************************************/
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <assert.h>
 
 #include "city.h"
@@ -99,15 +95,14 @@ static void check_map(void)
   whole_map_iterate(x, y) {
     struct tile *ptile = map_get_tile(x, y);
     struct city *pcity = map_get_city(x, y);
-    int cont = map_get_continent(x, y, NULL);
-    if (is_ocean(map_get_terrain(x, y))) {
+    int cont = map_get_continent(x, y);
+    if (map_get_terrain(x, y) == T_OCEAN) {
       assert(cont == 0);
     } else {
       assert(cont != 0);
       adjc_iterate(x, y, x1, y1) {
-	if (!is_ocean(map_get_terrain(x1, y1))) {
-	  assert(map_get_continent(x1, y1, NULL) == cont);
-	}
+	if (map_get_terrain(x1, y1) != T_OCEAN)
+	  assert(map_get_continent(x1, y1) == cont);
       } adjc_iterate_end;
     }
 
@@ -137,7 +132,7 @@ static void check_cities(void)
       } unit_list_iterate_end;
 
       assert(is_normal_map_pos(pcity->x, pcity->y));
-      assert(!is_ocean(map_get_terrain(pcity->x, pcity->y)));
+      assert(map_get_terrain(pcity->x, pcity->y) != T_OCEAN);
 
       city_map_iterate(x, y) {
 	int map_x,map_y;
@@ -240,9 +235,8 @@ static void check_units(void) {
 	assert(pplayers_allied(city_owner(pcity), pplayer));
       }
 
-      if (is_ocean(map_get_terrain(x, y))) {
+      if (map_get_terrain(x, y) == T_OCEAN)
 	assert(ground_unit_transporter_capacity(x, y, pplayer) >= 0);
-      }
 
       assert(punit->moves_left >= 0);
       assert(punit->hp > 0);

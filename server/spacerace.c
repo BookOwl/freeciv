@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -379,7 +378,6 @@ void check_spaceship_arrivals(void)
 		     get_nation_name(best_pplayer->nation));
     gamelog(GAMELOG_NORMAL, _("The %s spaceship has arrived at "
 			      "Alpha Centauri."),
-            get_nation_name(best_pplayer->nation));
-    gamelog(GAMELOG_TEAM, "SINGLEWINNER %s", best_pplayer->name);
+	    get_nation_name(best_pplayer->nation));
   }
 }

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -33,7 +32,6 @@
 #include "support.h"
 
 #include "chatline.h"
-#include "civclient.h"
 #include "climisc.h"
 #include "clinet.h"
 #include "diplodlg.h"
@@ -89,16 +87,6 @@ void popup_players_dialog(void)
   XtPopup(players_dialog_shell, XtGrabNone);
 }
 
-/****************************************************************
-  Closes the player list dialog.
-*****************************************************************/
-void popdown_players_dialog(void)
-{
-  if (players_dialog_shell) {
-    XtDestroyWidget(players_dialog_shell);
-    players_dialog_shell = 0;
-  }
-}
 
 /****************************************************************
 ...
@@ -311,8 +299,16 @@ void players_list_callback(Widget w, XtPointer client_data,
     XtSetSensitive(players_vision_command,
 		   gives_shared_vision(game.player_ptr, pplayer));
 
-    XtSetSensitive(players_meet_command, can_meet_with_player(pplayer));
-    XtSetSensitive(players_int_command, can_intel_with_player(pplayer));
+    if (pplayer->is_alive
+        && pplayer != game.player_ptr
+        && player_has_embassy(game.player_ptr, pplayer)) {
+      if(pplayer->is_connected)
+	XtSetSensitive(players_meet_command, TRUE);
+      else
+	XtSetSensitive(players_meet_command, FALSE);
+      XtSetSensitive(players_int_command, TRUE);
+      return;
+    }
   }
   XtSetSensitive(players_meet_command, FALSE);
   XtSetSensitive(players_int_command, FALSE);
@@ -325,7 +321,8 @@ void players_list_callback(Widget w, XtPointer client_data,
 void players_close_callback(Widget w, XtPointer client_data, 
 			      XtPointer call_data)
 {
-  popdown_players_dialog();
+  XtDestroyWidget(players_dialog_shell);
+  players_dialog_shell=0;
 }
 
 /****************************************************************

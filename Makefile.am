@@ -75,8 +75,6 @@ EXTRA_DIST=	acconfig.old			\
 		m4/glibc21.m4			\
 		m4/gtk-2.0.m4			\
 		m4/gtk.m4			\
-		m4/gtk-client.m4		\
-		m4/gtk2-client.m4		\
 		m4/iconv.m4			\
 		m4/imlib.m4			\
 		m4/isc-posix.m4			\
@@ -85,10 +83,8 @@ EXTRA_DIST=	acconfig.old			\
 		m4/progtest.m4			\
 		m4/readline.m4			\
 		m4/sdl.m4			\
-		m4/sdl-client.m4		\
 		m4/sound.m4			\
 		m4/vsnprintf.m4			\
-		m4/win32-client.m4		\
 		m4/x.213			\
 		m4/x.252			\
 		vms/config.h_vms		\

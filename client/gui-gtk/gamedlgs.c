@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -377,36 +376,22 @@ static void option_ok_command_callback(GtkWidget *widget, gpointer data)
 {
   client_option *o;
   char *dp;
-  bool b;
-  int i;
 
   for (o=options; o->name; ++o) {
     switch (o->type) {
     case COT_BOOL:
-      b = *(o->p_bool_value);
       *(o->p_bool_value) = GTK_TOGGLE_BUTTON(o->p_gui_data)->active;
-      if (b != *(o->p_bool_value) && o->change_callback) {
-	(o->change_callback)(o);
-      }
       break;
     case COT_INT:
-      i = *(o->p_int_value);
       dp = gtk_entry_get_text(GTK_ENTRY(o->p_gui_data));
       sscanf(dp, "%d", o->p_int_value);
-      if (i != *(o->p_int_value) && o->change_callback) {
-	(o->change_callback)(o);
-      }
       break;
     case COT_STR:
       if (o->p_string_vals) {
-	char* new_value = gtk_entry_get_text(GTK_ENTRY
-					    (GTK_COMBO(o->p_gui_data)->entry));
-	if (strcmp(o->p_string_value, new_value)) {
-	  mystrlcpy(o->p_string_value, new_value, o->string_length);
-	  if (o->change_callback) {
-	    (o->change_callback)(o);
-	  }
-	}
+	mystrlcpy(o->p_string_value,
+		  gtk_entry_get_text(GTK_ENTRY
+				     (GTK_COMBO(o->p_gui_data)->entry)),
+		  o->string_length);
       } else {
 	mystrlcpy(o->p_string_value,
 		  gtk_entry_get_text(GTK_ENTRY(o->p_gui_data)),

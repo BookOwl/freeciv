@@ -128,7 +128,6 @@ enum packet_type {
   PACKET_SELECT_NATION_OK,
   PACKET_FREEZE_HINT,
   PACKET_THAW_HINT,
-  PACKET_PING_INFO,
   PACKET_LAST  /* leave this last */
 };
 
@@ -352,6 +351,7 @@ struct packet_city_info {
   int currently_building;
 
   int turn_last_built;
+  int turn_changed_target;
   int changed_from_id;
   bool changed_from_is_unit;
   int before_change_shields;
@@ -381,7 +381,6 @@ struct packet_short_city {
   bool happy;			/* boolean */
   bool capital;			/* boolean */
   bool walls;			/* boolean */
-  bool occupied;		/* boolean */
   int tile_trade;		/* same as in packet_city_info */
 };
 
@@ -461,7 +460,6 @@ struct packet_player_info {
   int playerno;
   char name[MAX_LEN_NAME];
   bool is_male;
-  int team;
   int government;
   int embassy;
   int city_style;
@@ -503,15 +501,6 @@ struct packet_conn_info {
   char name[MAX_LEN_NAME];
   char addr[MAX_LEN_ADDR];
   char capability[MAX_LEN_CAPSTR];
-};
-
-/*********************************************************
-Information about the ping times of the connections.
-*********************************************************/
-struct packet_ping_info {
-  int connections;
-  int conn_id[MAX_NUM_PLAYERS];
-  double ping_time[MAX_NUM_PLAYERS];
 };
 
 /*********************************************************
@@ -584,7 +573,6 @@ struct packet_ruleset_control {
   int nation_count;
   int playable_nation_count;
   int style_count;
-  char team_name[MAX_NUM_TEAMS][MAX_LEN_NAME];
 };
 
 /*********************************************************
@@ -637,8 +625,6 @@ struct packet_ruleset_tech {
   int id, req[2];		/* indices for advances[] */
   int flags;
   char name[MAX_LEN_NAME];
-  char graphic_str[MAX_LEN_NAME];
-  char graphic_alt[MAX_LEN_NAME];
   char *helptext;		/* same as for packet_ruleset_unit, above */
   int preset_cost;
   int num_reqs;
@@ -647,13 +633,11 @@ struct packet_ruleset_tech {
 struct packet_ruleset_building {
   int id;			/* index for improvement_types[] */
   char name[MAX_LEN_NAME];
-  char graphic_str[MAX_LEN_NAME];
-  char graphic_alt[MAX_LEN_NAME];
   Tech_Type_id tech_req;
   Impr_Type_id bldg_req;
   enum tile_terrain_type *terr_gate;
   enum tile_special_type *spec_gate;
-  enum effect_range equiv_range;
+  Eff_Range_id equiv_range;
   Impr_Type_id *equiv_dupl;
   Impr_Type_id *equiv_repl;
   Tech_Type_id obsolete_by;
@@ -953,9 +937,6 @@ int send_packet_game_info(struct connection *pc,
 			  const struct packet_game_info *pinfo);
 struct packet_game_info *receive_packet_game_info(struct connection *pc);
 
-int send_packet_ping_info(struct connection *pc,
-			  const struct packet_ping_info *packet);
-struct packet_ping_info *receive_packet_ping_info(struct connection *pc);
 
 struct packet_player_info *receive_packet_player_info(struct connection *pc);
 int send_packet_player_info(struct connection *pc, 

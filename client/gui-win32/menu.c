@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/  
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -860,7 +859,8 @@ update_menus(void)
   enum MenuID id;
   HMENU menu;
   menu=GetMenu(root_window);
-  if (!can_client_issue_orders()) {
+  if (get_client_state()!=CLIENT_GAME_RUNNING_STATE)
+    {
       for(id=IDM_KINGDOM_MENU+1;id<IDM_HELP_MENU;id++)
 	my_enable_menu(menu,id,FALSE);
       
@@ -880,11 +880,6 @@ update_menus(void)
       for(id=IDM_KINGDOM_MENU+1;id<IDM_HELP_MENU;id++)
 	my_enable_menu(menu,id,TRUE);
       
-      my_enable_menu(menu, IDM_KINGDOM_TAX, can_client_issue_orders());
-      my_enable_menu(menu, IDM_KINGDOM_WORK, can_client_issue_orders());
-      my_enable_menu(menu, IDM_KINGDOM_REVOLUTION,
-		     can_client_issue_orders());
-
       my_enable_menu(menu,IDM_GAME_LOCAL_OPT,TRUE);
       my_enable_menu(menu,IDM_GAME_MESSAGE_OPT,TRUE);
       my_enable_menu(menu,IDM_GAME_SAVE_SETTINGS,TRUE);

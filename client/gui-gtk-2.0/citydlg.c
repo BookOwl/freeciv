@@ -38,7 +38,6 @@
 #include "cma_fec.h" 
 #include "colors.h"
 #include "control.h"
-#include "climap.h"
 #include "clinet.h"
 #include "dialogs.h"
 #include "graphics.h"
@@ -57,17 +56,13 @@
 
 #include "citydlg.h"
 
-struct city_dialog;
-
 /* get 'struct dialog_list' and related functions: */
 #define SPECLIST_TAG dialog
 #define SPECLIST_TYPE struct city_dialog
-#define SPECLIST_STATIC
 #include "speclist.h"
 
 #define SPECLIST_TAG dialog
 #define SPECLIST_TYPE struct city_dialog
-#define SPECLIST_STATIC
 #include "speclist_c.h"
 
 #define dialog_list_iterate(dialoglist, pdialog) \
@@ -112,6 +107,11 @@ struct city_dialog {
     GtkWidget *buy_command;
     GtkWidget *change_command;
     GtkWidget *sell_command;
+
+    GtkWidget *production_label;
+    GtkWidget *output_label;
+    GtkWidget *granary_label;
+    GtkWidget *pollution_label;
 
     GtkWidget *present_units_frame;
     GtkWidget **present_unit_boxes;
@@ -180,6 +180,7 @@ struct city_dialog {
 
   Impr_Type_id sell_id;
 
+  int first_elvis, first_scientist, first_taxman;
   int cwidth;
 
   /* This is used only to avoid too many refreshes. */
@@ -264,6 +265,8 @@ static void unit_fortify_callback(GtkWidget * w, gpointer data);
 static void unit_disband_callback(GtkWidget * w, gpointer data);
 static void unit_homecity_callback(GtkWidget * w, gpointer data);
 static void unit_upgrade_callback(GtkWidget * w, gpointer data);
+static void unit_upgrade_callback_no(GtkWidget * w, gpointer data);
+static void unit_upgrade_callback_yes(GtkWidget * w, gpointer data);
 static void unit_cancel_callback(GtkWidget * w, gpointer data);
 
 static void citizens_callback(GtkWidget * w, GdkEventButton * ev,
@@ -278,6 +281,10 @@ static void change_list_callback(GtkTreeView *view, GtkTreePath *path,
 				 GtkTreeViewColumn *col, gpointer data);
 
 static void buy_callback(GtkWidget * w, gpointer data);
+static gint buy_callback_delete(GtkWidget * w, GdkEvent * ev,
+				gpointer data);
+static void buy_callback_no(GtkWidget * w, gpointer data);
+static void buy_callback_yes(GtkWidget * w, gpointer data);
 
 static void sell_callback(GtkWidget * w, gpointer data);
 static gint sell_callback_delete(GtkWidget * w, GdkEvent * ev,
@@ -309,23 +316,6 @@ static void close_callback(GtkWidget * w, gpointer data);
 static void switch_city_callback(GtkWidget * w, gpointer data);
 
 /****************************************************************
-  Called to set the dimensions of the city dialog, both on
-  startup and if the tileset is changed.
-*****************************************************************/
-static void init_citydlg_dimensions(void)
-{
-  if (is_isometric) {
-    canvas_width = 4 * NORMAL_TILE_WIDTH;
-    canvas_height = 4 * NORMAL_TILE_HEIGHT;
-    MAX_UNIT_ROWS = (int) (100 / (UNIT_TILE_HEIGHT));
-  } else {
-    canvas_width = 5 * NORMAL_TILE_WIDTH;
-    canvas_height = 5 * NORMAL_TILE_HEIGHT;
-    MAX_UNIT_ROWS = (int) (100 / (UNIT_TILE_HEIGHT + 6));
-  }
-}
-
-/****************************************************************
 ...
 *****************************************************************/
 static void initialize_city_dialogs(void)
@@ -337,7 +327,15 @@ static void initialize_city_dialogs(void)
   assert(!city_dialogs_have_been_initialised);
 
   dialog_list_init(&dialog_list);
-  init_citydlg_dimensions();
+  if (is_isometric) {
+    canvas_width = 4 * NORMAL_TILE_WIDTH;
+    canvas_height = 4 * NORMAL_TILE_HEIGHT;
+    MAX_UNIT_ROWS = (int) (100 / (UNIT_TILE_HEIGHT));
+  } else {
+    canvas_width = 5 * NORMAL_TILE_WIDTH;
+    canvas_height = 5 * NORMAL_TILE_HEIGHT;
+    MAX_UNIT_ROWS = (int) (100 / (UNIT_TILE_HEIGHT + 6));
+  }
 
   NUM_UNITS_SHOWN = (int) (MAX_UNIT_ROWS * 500) / (UNIT_TILE_WIDTH);
 
@@ -353,27 +351,6 @@ static void initialize_city_dialogs(void)
   info_label_style[RED]->fg[GTK_STATE_NORMAL] = red;
 
   city_dialogs_have_been_initialised = TRUE;
-}
-
-/****************************************************************
-  Called when the tileset changes.
-*****************************************************************/
-void reset_city_dialogs(void)
-{
-  if (!city_dialogs_have_been_initialised) {
-    return;
-  }
-
-  init_citydlg_dimensions();
-
-  dialog_list_iterate(dialog_list, pdialog) {
-    /* There's no reasonable way to resize a GtkPixcomm, so we don't try.
-       Instead we just redraw the overview within the existing area.  The
-       player has to close and reopen the dialog to fix this. */
-    city_dialog_update_map(pdialog);
-  } dialog_list_iterate_end;
-
-  popdown_all_city_dialogs();
 }
 
 /****************************************************************
@@ -473,8 +450,10 @@ void popup_city_dialog(struct city *pcity, bool make_modal)
   if (!(pdialog = get_city_dialog(pcity))) {
     pdialog = create_city_dialog(pcity, make_modal);
   }
+  gtk_set_relative_position(toplevel, pdialog->shell, 10, 10);
 
-  gtk_window_present(GTK_WINDOW(pdialog->shell));
+  gtk_widget_show(pdialog->shell);
+  gdk_window_raise(pdialog->shell->window);
 }
 
 /****************************************************************
@@ -564,7 +543,7 @@ static GtkWidget *create_city_info_table(GtkWidget **info_label)
   int i;
   GtkWidget *hbox, *table, *label;
 
-  static char *output_label[NUM_INFO_FIELDS] = { N_("Food:"),
+  char *output_label[NUM_INFO_FIELDS] = { N_("Food:"),
     N_("Prod:"),
     N_("Trade:"),
     N_("Gold"),
@@ -575,7 +554,8 @@ static GtkWidget *create_city_info_table(GtkWidget **info_label)
     N_("Corruption:"),
     N_("Pollution:")
   };
-  static bool output_label_done;
+
+  char **output_intl_label = NULL;
 
   hbox = gtk_hbox_new(TRUE, 0);	/* to give the table padding inside the frame */
 
@@ -586,10 +566,10 @@ static GtkWidget *create_city_info_table(GtkWidget **info_label)
   gtk_table_set_col_spacing(GTK_TABLE(table), 0, 5);
   gtk_box_pack_start(GTK_BOX(hbox), table, FALSE, FALSE, 4);
 
-  intl_slist(ARRAY_SIZE(output_label), output_label, &output_label_done);
+  output_intl_label = intl_slist(NUM_INFO_FIELDS, output_label);
 
   for (i = 0; i < NUM_INFO_FIELDS; i++) {
-    label = gtk_label_new(output_label[i]);
+    label = gtk_label_new(output_intl_label[i]);
     gtk_widget_set_name(label, "city label");	/* for font style? */
     gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
     gtk_table_attach(GTK_TABLE(table), label, 0, 1, i, i + 1, GTK_FILL, 0,
@@ -633,12 +613,13 @@ static void create_and_append_overview_page(struct city_dialog *pdialog)
   GtkWidget *halves, *hbox, *vbox, *page, *align;
   GtkWidget *frame, *table, *label, *sw;
 
-  static char *improvement_title[] = { N_("City improvements"),
+  char *improvement_title[] = { N_("City improvements"),
     N_("Upkeep")
   };
-  static bool improvement_title_done;
 
   char *tab_title = _("City _Overview");
+
+  char **improvement_clist_title = NULL;
 
   page = gtk_vbox_new(FALSE, 1);
 
@@ -860,11 +841,11 @@ static void create_and_append_overview_page(struct city_dialog *pdialog)
   gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sw),
 				 GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
 
-  intl_slist(ARRAY_SIZE(improvement_title), improvement_title,
-             &improvement_title_done);
-
+  if (!improvement_clist_title) {
+    improvement_clist_title = intl_slist(2, improvement_title);
+  }
   pdialog->overview.improvement_list =
-      gtk_clist_new_with_titles(2, improvement_title);
+      gtk_clist_new_with_titles(2, improvement_clist_title);
   gtk_clist_column_titles_passive(GTK_CLIST
 				  (pdialog->overview.improvement_list));
   gtk_clist_set_column_justification(GTK_CLIST
@@ -1263,13 +1244,13 @@ static void create_and_append_misc_page(struct city_dialog *pdialog)
 
   char *tab_title = _("_Misc. Settings");
 
-  static char *new_citizens_label[] = {
+  char *new_citizens_label[] = {
     N_("Entertainers"),
     N_("Scientists"),
     N_("Taxmen")
   };
 
-  static char *city_opts_label[NUM_CITY_OPTS] = {
+  char *city_opts_label[NUM_CITY_OPTS] = {
     N_("Land units"),
     N_("Sea units"),
     N_("Helicopters"),
@@ -1277,7 +1258,7 @@ static void create_and_append_misc_page(struct city_dialog *pdialog)
     N_("Disband if build settler at size 1")
   };
 
-  static char *misc_whichtab_label[NUM_PAGES] = {
+  char *misc_whichtab_label[NUM_PAGES] = {
     N_("City Overview page"),
     N_("Units page"),
     N_("Worklist page"),
@@ -1288,9 +1269,9 @@ static void create_and_append_misc_page(struct city_dialog *pdialog)
     N_("Last active page")
   };
 
-  static bool new_citizens_label_done;
-  static bool city_opts_label_done;
-  static bool misc_whichtab_label_done;
+  char **new_citizens_intl_label = NULL;
+  char **city_opts_intl_label = NULL;
+  char **misc_whichtab_intl_label = NULL;
 
   /* initialize signal_blocker */
   pdialog->misc.block_signal = 0;
@@ -1317,15 +1298,14 @@ static void create_and_append_misc_page(struct city_dialog *pdialog)
 
   /* auto-attack table */
 
-  intl_slist(ARRAY_SIZE(city_opts_label), city_opts_label,
-             &city_opts_label_done);
+  city_opts_intl_label = intl_slist(NUM_CITY_OPTS, city_opts_label);
 
   table = gtk_table_new(2, 2, FALSE);
   gtk_container_add(GTK_CONTAINER(frame), table);
 
   for(i = 0; i < NUM_CITY_OPTS - 1; i++){
     pdialog->misc.city_opts[i] = 
-                      gtk_check_button_new_with_label(city_opts_label[i]);
+                      gtk_check_button_new_with_label(city_opts_intl_label[i]);
     gtk_table_attach(GTK_TABLE(table), pdialog->misc.city_opts[i],
 		     i%per_row, i%per_row+1, i/per_row, i/per_row+1,
                      GTK_FILL, 0, 0, 0);
@@ -1338,7 +1318,7 @@ static void create_and_append_misc_page(struct city_dialog *pdialog)
   /* the disband-if-size-1 button */
 
   pdialog->misc.city_opts[NUM_CITY_OPTS - 1] =
-      gtk_check_button_new_with_label(city_opts_label[NUM_CITY_OPTS - 1]);
+      gtk_check_button_new_with_label(city_opts_intl_label[NUM_CITY_OPTS - 1]);
   gtk_box_pack_start(GTK_BOX(vbox), pdialog->misc.city_opts[NUM_CITY_OPTS - 1], 
                      FALSE, FALSE, 0);
 
@@ -1356,11 +1336,10 @@ static void create_and_append_misc_page(struct city_dialog *pdialog)
   vbox = gtk_vbox_new(FALSE, 0);	/* new_citizens radio box */
   gtk_container_add(GTK_CONTAINER(frame), vbox);
 
-  intl_slist(ARRAY_SIZE(new_citizens_label), new_citizens_label,
-             &new_citizens_label_done);
+  new_citizens_intl_label = intl_slist(3, new_citizens_label);
   for (i = 0; i < 3; i++) {
     pdialog->misc.new_citizens_radio[i] =
-	gtk_radio_button_new_with_label(group, new_citizens_label[i]);
+	gtk_radio_button_new_with_label(group, new_citizens_intl_label[i]);
     group =
 	gtk_radio_button_group(GTK_RADIO_BUTTON
 			       (pdialog->misc.new_citizens_radio[i]));
@@ -1395,11 +1374,11 @@ static void create_and_append_misc_page(struct city_dialog *pdialog)
 
   group = NULL;			/* reinitialize group for next radio set */
 
-  intl_slist(ARRAY_SIZE(misc_whichtab_label), misc_whichtab_label,
-             &misc_whichtab_label_done);
+  misc_whichtab_intl_label = intl_slist(NUM_PAGES, misc_whichtab_label);
   for (i = 0; i < NUM_PAGES; i++) {
     pdialog->misc.whichtab_radio[i] =
-	gtk_radio_button_new_with_label(group, misc_whichtab_label[i]);
+	gtk_radio_button_new_with_label(group,
+					misc_whichtab_intl_label[i]);
     group =
 	gtk_radio_button_group(GTK_RADIO_BUTTON
 			       (pdialog->misc.whichtab_radio[i]));
@@ -1460,12 +1439,6 @@ static struct city_dialog *create_city_dialog(struct city *pcity,
 	NULL,
   	0,
 	NULL);
-
-  if (make_modal) {
-    gtk_window_set_transient_for(GTK_WINDOW(pdialog->shell),
-				 GTK_WINDOW(toplevel));
-    gtk_window_set_modal(GTK_WINDOW(pdialog->shell), TRUE);
-  }
 
   gtk_signal_connect(GTK_OBJECT(pdialog->shell), "delete_event",
 		     GTK_SIGNAL_FUNC(city_dialog_delete_callback),
@@ -1583,6 +1556,9 @@ static struct city_dialog *create_city_dialog(struct city *pcity,
   /* need to do this every time a new dialog is opened. */
   city_dialog_update_prev_next();
 
+  if (make_modal)
+    gtk_widget_set_sensitive(top_vbox, FALSE);
+
   pdialog->is_modal = make_modal;
 
   gtk_widget_show_all(GTK_DIALOG(pdialog->shell)->vbox);
@@ -1623,9 +1599,9 @@ static void city_dialog_update_title(struct city_dialog *pdialog)
 *****************************************************************/
 static void city_dialog_update_citizens(struct city_dialog *pdialog)
 {
-  int i, width;
+  int i, n;
   struct city *pcity = pdialog->pcity;
-  enum citizen_type citizens[MAX_CITY_SIZE];
+  int width;
 
   /* If there is not enough space we stack the icons. We draw from left to */
   /* right. width is how far we go to the right for each drawn pixmap. The */
@@ -1644,14 +1620,44 @@ static void city_dialog_update_citizens(struct city_dialog *pdialog)
   gtk_pixcomm_freeze(GTK_PIXCOMM(pdialog->citizen_pixmap));
   gtk_pixcomm_clear(GTK_PIXCOMM(pdialog->citizen_pixmap));
 
-  get_city_citizen_types(pcity, 4, citizens);
-
-  for (i = 0; i < pcity->size; i++) {
+  i = 0;	/* tracks the # of the citizen we are currently placing. */
+  for (n = 0; n < pcity->ppl_happy[4]; n++, i++) {
     gtk_pixcomm_copyto(GTK_PIXCOMM(pdialog->citizen_pixmap),
-		       get_citizen_sprite(citizens[i], i, pcity),
-		       i * width, 0);
+		       get_citizen_sprite(5 + i % 2), i * width, 0);
   }
 
+  for (n = 0; n < pcity->ppl_content[4]; n++, i++) {
+    gtk_pixcomm_copyto(GTK_PIXCOMM(pdialog->citizen_pixmap),
+		       get_citizen_sprite(3 + i % 2), i * width, 0);
+  }
+
+  for (n = 0; n < pcity->ppl_unhappy[4]; n++, i++) {
+    gtk_pixcomm_copyto(GTK_PIXCOMM(pdialog->citizen_pixmap),
+		       get_citizen_sprite(7 + i % 2), i * width, 0);
+  }
+
+  for (n = 0; n < pcity->ppl_angry[4]; n++, i++) {
+    gtk_pixcomm_copyto(GTK_PIXCOMM(pdialog->citizen_pixmap),
+		       get_citizen_sprite(9 + i % 2), i * width, 0);
+  }
+
+  pdialog->first_elvis = i;
+  for (n = 0; n < pcity->ppl_elvis; n++, i++) {
+    gtk_pixcomm_copyto(GTK_PIXCOMM(pdialog->citizen_pixmap),
+		       get_citizen_sprite(0), i * width, 0);
+  }
+
+  pdialog->first_scientist = i;
+  for (n = 0; n < pcity->ppl_scientist; n++, i++) {
+    gtk_pixcomm_copyto(GTK_PIXCOMM(pdialog->citizen_pixmap),
+		       get_citizen_sprite(1), i * width, 0);
+  }
+
+  pdialog->first_taxman = i;
+  for (n = 0; n < pcity->ppl_taxman; n++, i++) {
+    gtk_pixcomm_copyto(GTK_PIXCOMM(pdialog->citizen_pixmap),
+		       get_citizen_sprite(2), i * width, 0);
+  }
   gtk_pixcomm_thaw(GTK_PIXCOMM(pdialog->citizen_pixmap));
 
 /*  gtk_widget_set_sensitive(pdialog->citizen_pixmap,*/
@@ -2346,9 +2352,22 @@ static void present_units_page_pos_callback(GtkWidget * w, gpointer data)
 *****************************************************************/
 static void activate_all_units_callback(GtkWidget * w, gpointer data)
 {
-  struct city_dialog *pdialog = data;
+  struct city_dialog *pdialog = (struct city_dialog *) data;
+  int x = pdialog->pcity->x, y = pdialog->pcity->y;
+  struct unit_list *punit_list = &map_get_tile(x, y)->units;
+  struct unit *pmyunit = NULL;
 
-  activate_all_units(pdialog->pcity->x, pdialog->pcity->y);
+  if (unit_list_size(punit_list)) {
+    unit_list_iterate((*punit_list), punit) {
+      if (game.player_idx == punit->owner) {
+	pmyunit = punit;
+	request_new_unit_activity(punit, ACTIVITY_IDLE);
+      }
+    }
+    unit_list_iterate_end;
+    if (pmyunit)
+      set_unit_focus(pmyunit);
+  }
 }
 
 /****************************************************************
@@ -2615,14 +2634,12 @@ static void unit_homecity_callback(GtkWidget * w, gpointer data)
 /****************************************************************
 ...
 *****************************************************************/
-static void unit_upgrade_callback(GtkWidget *w, gpointer data)
+static void unit_upgrade_callback(GtkWidget * w, gpointer data)
 {
   struct unit *punit;
+  char buf[512];
   int ut1, ut2;
   int value;
-  GtkWidget *shell;
-
-  destroy_message_dialog(w);
 
   if ((punit = player_find_unit_by_id(game.player_ptr, (size_t) data))) {
     ut1 = punit->type;
@@ -2630,49 +2647,61 @@ static void unit_upgrade_callback(GtkWidget *w, gpointer data)
 
     if (ut2 == -1) {
       /* this shouldn't generally happen, but it is conceivable */
-      shell = gtk_message_dialog_new(GTK_WINDOW(toplevel),
-        GTK_DIALOG_DESTROY_WITH_PARENT,
-        GTK_MESSAGE_INFO, GTK_BUTTONS_CLOSE,
-        _("Sorry: cannot upgrade %s."), unit_types[ut1].name);
-
-      gtk_window_set_title(GTK_WINDOW(shell), _("Upgrade Unit!"));
-      g_signal_connect(shell, "response", G_CALLBACK(gtk_widget_destroy),
-        NULL);
-      gtk_window_present(GTK_WINDOW(shell));
+      my_snprintf(buf, sizeof(buf),
+		  _("Sorry: cannot upgrade %s."), unit_types[ut1].name);
+      popup_message_dialog(top_vbox,
+			   /*"upgradenodialog" */
+			   _("Upgrade Unit!"), buf, _("Darn"),
+			   unit_upgrade_callback_no, 0, NULL);
     } else {
       value = unit_upgrade_price(game.player_ptr, ut1, ut2);
 
       if (game.player_ptr->economic.gold >= value) {
-        shell = gtk_message_dialog_new(GTK_WINDOW(toplevel),
-              GTK_DIALOG_MODAL|GTK_DIALOG_DESTROY_WITH_PARENT,
-              GTK_MESSAGE_QUESTION, GTK_BUTTONS_YES_NO,
-              _("Upgrade %s to %s for %d gold?\n"
-                "Treasury contains %d gold."),
-              unit_types[ut1].name, unit_types[ut2].name,
-              value, game.player_ptr->economic.gold);
-        gtk_window_set_title(GTK_WINDOW(shell), _("Upgrade Obsolete Units"));
-        gtk_dialog_set_default_response(GTK_DIALOG(shell), GTK_RESPONSE_YES);
-
-        if (gtk_dialog_run(GTK_DIALOG(shell)) == GTK_RESPONSE_YES) {
-          request_unit_upgrade(punit);
-        }
-        gtk_widget_destroy(shell);
+	my_snprintf(buf, sizeof(buf), _("Upgrade %s to %s for %d gold?\n"
+					"Treasury contains %d gold."),
+		    unit_types[ut1].name, unit_types[ut2].name,
+		    value, game.player_ptr->economic.gold);
+	popup_message_dialog(top_vbox,
+			     /*"upgradedialog" */
+			     _("Upgrade Obsolete Units"), buf, _("_Yes"),
+			     unit_upgrade_callback_yes,
+			     GINT_TO_POINTER(punit->id), _("_No"),
+			     unit_upgrade_callback_no, 0, NULL);
       } else {
-        shell = gtk_message_dialog_new(GTK_WINDOW(toplevel),
-          GTK_DIALOG_DESTROY_WITH_PARENT,
-          GTK_MESSAGE_INFO, GTK_BUTTONS_CLOSE,
-          _("Upgrading %s to %s costs %d gold.\n"
-            "Treasury contains %d gold."),
-          unit_types[ut1].name, unit_types[ut2].name,
-          value, game.player_ptr->economic.gold);
-
-        gtk_window_set_title(GTK_WINDOW(shell), _("Upgrade Unit!"));
-        g_signal_connect(shell, "response", G_CALLBACK(gtk_widget_destroy),
-          NULL);
-        gtk_window_present(GTK_WINDOW(shell));
+	my_snprintf(buf, sizeof(buf),
+		    _("Upgrading %s to %s costs %d gold.\n"
+		      "Treasury contains %d gold."), unit_types[ut1].name,
+		    unit_types[ut2].name, value,
+		    game.player_ptr->economic.gold);
+	popup_message_dialog(top_vbox,
+			     /*"upgradenodialog" */ _("Upgrade Unit!"),
+			     buf,
+			     _("Darn"), unit_upgrade_callback_no, 0, NULL);
       }
     }
+    destroy_message_dialog(w);
   }
+}
+
+/****************************************************************
+...
+*****************************************************************/
+static void unit_upgrade_callback_no(GtkWidget * w, gpointer data)
+{
+  destroy_message_dialog(w);
+}
+
+/****************************************************************
+...
+*****************************************************************/
+static void unit_upgrade_callback_yes(GtkWidget * w, gpointer data)
+{
+  struct unit *punit;
+
+  if ((punit = player_find_unit_by_id(game.player_ptr, (size_t) data))) {
+    request_unit_upgrade(punit);
+  }
+  destroy_message_dialog(w);
 }
 
 /****************************************************************
@@ -2696,26 +2725,19 @@ static void citizens_callback(GtkWidget * w, GdkEventButton * ev,
   struct packet_city_request packet;
   int citnum;
   enum specialist_type type;
-  enum citizen_type citizens[MAX_CITY_SIZE];
 
   if (ev->x > (pcity->size - 1) * pdialog->cwidth + SMALL_TILE_WIDTH)
     return;			/* no citizen that far to the right */
 
   citnum = MIN(pcity->size - 1, ev->x / pdialog->cwidth);
 
-  get_city_citizen_types(pcity, 4, citizens);
-
-  switch (citizens[citnum]) {
-  case CITIZEN_ELVIS:
-    type = SP_ELVIS;
-    break;
-  case CITIZEN_SCIENTIST:
-    type = SP_SCIENTIST;
-    break;
-  case CITIZEN_TAXMAN:
+  if (citnum >= pdialog->first_taxman) {
     type = SP_TAXMAN;
-    break;
-  default:
+  } else if (citnum >= pdialog->first_scientist) {
+    type = SP_SCIENTIST;
+  } else if (citnum >= pdialog->first_elvis) {
+    type = SP_ELVIS;
+  } else {
     return;
   }
 
@@ -2801,12 +2823,12 @@ static void draw_map_canvas(struct city_dialog *pdialog)
 /****************************************************************
 ...
 *****************************************************************/
-static void buy_callback(GtkWidget *w, gpointer data)
+static void buy_callback(GtkWidget * w, gpointer data)
 {
   struct city_dialog *pdialog;
   int value;
   const char *name;
-  GtkWidget *shell;
+  char buf[512];
 
   pdialog = (struct city_dialog *) data;
 
@@ -2820,33 +2842,64 @@ static void buy_callback(GtkWidget *w, gpointer data)
   value = city_buy_cost(pdialog->pcity);
 
   if (game.player_ptr->economic.gold >= value) {
-    shell = gtk_message_dialog_new(GTK_WINDOW(pdialog->shell),
-        GTK_DIALOG_MODAL|GTK_DIALOG_DESTROY_WITH_PARENT,
-        GTK_MESSAGE_QUESTION, GTK_BUTTONS_YES_NO,
-        _("Buy %s for %d gold?\nTreasury contains %d gold."),
-        name, value, game.player_ptr->economic.gold);
-    gtk_window_set_title(GTK_WINDOW(shell), _("Buy It!"));
-    gtk_dialog_set_default_response(GTK_DIALOG(shell), GTK_RESPONSE_YES);
+    my_snprintf(buf, sizeof(buf),
+		_("Buy %s for %d gold?\nTreasury contains %d gold."),
+		name, value, game.player_ptr->economic.gold);
 
-    if (gtk_dialog_run(GTK_DIALOG(shell)) == GTK_RESPONSE_YES) {
-      struct packet_city_request packet;
-
-      packet.city_id = pdialog->pcity->id;
-      send_packet_city_request(&aconnection, &packet, PACKET_CITY_BUY);
-    }
-    gtk_widget_destroy(shell);
+    pdialog->buy_shell =
+	popup_message_dialog(pdialog->shell, /*"buydialog" */ _("Buy It!"),
+			     buf, _("_Yes"), buy_callback_yes, pdialog,
+			     _("_No"), buy_callback_no, pdialog, 0);
   } else {
-    shell = gtk_message_dialog_new(GTK_WINDOW(pdialog->shell),
-        GTK_DIALOG_DESTROY_WITH_PARENT,
-        GTK_MESSAGE_INFO, GTK_BUTTONS_CLOSE,
-        _("%s costs %d gold.\nTreasury contains %d gold."),
-        name, value, game.player_ptr->economic.gold);
+    my_snprintf(buf, sizeof(buf),
+		_("%s costs %d gold.\nTreasury contains %d gold."),
+		name, value, game.player_ptr->economic.gold);
 
-    gtk_window_set_title(GTK_WINDOW(shell), _("Buy It!"));
-    g_signal_connect(shell, "response", G_CALLBACK(gtk_widget_destroy),
-      NULL);
-    gtk_window_present(GTK_WINDOW(shell));
+    pdialog->buy_shell = popup_message_dialog(pdialog->shell,
+					      _("Buy It!"), buf, _("Darn"),
+					      buy_callback_no, pdialog, 0);
   }
+
+  gtk_signal_connect(GTK_OBJECT(pdialog->buy_shell), "delete_event",
+		     GTK_SIGNAL_FUNC(buy_callback_delete), data);
+}
+
+/****************************************************************
+...
+*****************************************************************/
+static gint buy_callback_delete(GtkWidget * w, GdkEvent * ev,
+				gpointer data)
+{
+  struct city_dialog *pdialog = (struct city_dialog *) data;
+  pdialog->buy_shell = NULL;
+  return FALSE;
+}
+
+/****************************************************************
+...
+*****************************************************************/
+static void buy_callback_no(GtkWidget * w, gpointer data)
+{
+  struct city_dialog *pdialog = (struct city_dialog *) data;
+  destroy_message_dialog(w);
+  pdialog->buy_shell = NULL;
+}
+
+/****************************************************************
+...
+*****************************************************************/
+static void buy_callback_yes(GtkWidget * w, gpointer data)
+{
+  struct city_dialog *pdialog;
+  struct packet_city_request packet;
+
+  pdialog = (struct city_dialog *) data;
+
+  packet.city_id = pdialog->pcity->id;
+  send_packet_city_request(&aconnection, &packet, PACKET_CITY_BUY);
+
+  destroy_message_dialog(w);
+  pdialog->buy_shell = NULL;
 }
 
 /****************************************************************
@@ -2857,9 +2910,9 @@ static void change_callback(GtkWidget *w, gpointer data)
   GtkWidget *cshell, *sw, *view;
   struct city_dialog *pdialog;
   int i;
-  static char *titles[4] =
+  static gchar *titles_[4] =
       { N_("Type"), N_("Info"), N_("Cost"), N_("Turns") };
-  static bool titles_done;
+  static gchar **titles = NULL;
   char *row[4];
   char buf[4][64];
   cid cids[U_LAST + B_LAST];
@@ -2867,7 +2920,9 @@ static void change_callback(GtkWidget *w, gpointer data)
   struct item items[U_LAST + B_LAST];
   GtkListStore *store;
 
-  intl_slist(ARRAY_SIZE(titles), titles, &titles_done);
+  if (!titles) {
+    titles = intl_slist(4, titles_);
+  }
 
   pdialog = (struct city_dialog *) data;
 
@@ -3419,6 +3474,9 @@ static void close_city_dialog(struct city_dialog *pdialog)
   free(pdialog->overview.supported_unit_boxes);
   free(pdialog->overview.supported_unit_pixmaps);
   free(pdialog->overview.supported_unit_ids);
+
+  if (pdialog->is_modal)
+    gtk_widget_set_sensitive(top_vbox, TRUE);
 
   if (pdialog->change_shell)
     gtk_widget_destroy(pdialog->change_shell);

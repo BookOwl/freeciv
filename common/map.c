@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -65,6 +64,8 @@ static const char *tile_special_type_names[] =
   N_("Airbase"),
   N_("Fallout")
 };
+
+extern bool is_server;
 
 #define MAP_TILE(x,y)	(map.tiles + map_inx(x, y))
 
@@ -198,29 +199,6 @@ void map_init(void)
   map.have_specials         = FALSE;
   map.have_rivers_overlay   = FALSE;
   map.have_huts             = FALSE;
-}
-
-/***************************************************************
-...
-***************************************************************/
-static void tile_init(struct tile *ptile)
-{
-  ptile->terrain  = T_UNKNOWN;
-  ptile->special  = S_NO_SPECIAL;
-  ptile->known    = 0;
-  ptile->sent     = 0;
-  ptile->city     = NULL;
-  unit_list_init(&ptile->units);
-  ptile->worked   = NULL; /* pointer to city working tile */
-  ptile->assigned = 0; /* bitvector */
-}
-
-/***************************************************************
-...
-***************************************************************/
-static void tile_free(struct tile *ptile)
-{
-  unit_list_unlink_all(&ptile->units);
 }
 
 /**************************************************************************
@@ -425,9 +403,8 @@ int count_special_near_tile(int x, int y, enum tile_special_type spe)
 bool is_at_coast(int x, int y)
 {
   cartesian_adjacent_iterate(x, y, x1, y1) {
-    if (is_ocean(map_get_terrain(x1, y1))) {
+    if (map_get_terrain(x1, y1) == T_OCEAN)
       return TRUE;
-    }
   } cartesian_adjacent_iterate_end;
 
   return FALSE;
@@ -440,9 +417,9 @@ bool is_coastline(int x, int y)
 {
   adjc_iterate(x, y, x1, y1) {
     enum tile_terrain_type ter = map_get_terrain(x1, y1);
-    if (!is_ocean(ter) && ter != T_UNKNOWN) {
+    if (ter != T_OCEAN
+	&& ter != T_UNKNOWN)
       return TRUE;
-    }
   } adjc_iterate_end;
 
   return FALSE;
@@ -488,7 +465,7 @@ bool is_starter_close(int x, int y, int nr, int dist)
   
   /* don't want them starting on the poles unless the poles are
      connected to more land: */
-  if (map_get_continent(x, y, NULL) <= 2 && map.generator != 0
+  if (map_get_continent(x, y) <= 2 && map.generator != 0
       && map.separatepoles) {
     return TRUE;
   }
@@ -497,7 +474,7 @@ bool is_starter_close(int x, int y, int nr, int dist)
   for (i=0;i<nr;i++) {
     int x1 = map.start_positions[i].x;
     int y1 = map.start_positions[i].y;
-    if (map_get_continent(x, y, NULL) == map_get_continent(x1, y1, NULL)
+    if (map_get_continent(x, y) == map_get_continent(x1, y1)
 	&& real_map_distance(x, y, x1, y1) < dist) {
       return TRUE;
     }
@@ -572,9 +549,8 @@ the tile.
 bool is_sea_usable(int x, int y)
 {
   map_city_radius_iterate(x, y, x1, y1) {
-    if (!is_ocean(map_get_terrain(x1, y1))) {
+    if (map_get_terrain(x1, y1) != T_OCEAN)
       return TRUE;
-    }
   } map_city_radius_iterate_end;
 
   return FALSE;
@@ -677,7 +653,7 @@ int map_get_infrastructure_prerequisite(int spe)
 /***************************************************************
 ...
 ***************************************************************/
-enum tile_special_type get_preferred_pillage(int pset)
+int get_preferred_pillage(int pset)
 {
   if (contains_special(pset, S_FARMLAND))
     return S_FARMLAND;
@@ -704,7 +680,7 @@ bool is_water_adjacent_to_tile(int x, int y)
   struct tile *ptile;
 
   ptile = map_get_tile(x, y);
-  if (is_ocean(ptile->terrain)
+  if (ptile->terrain == T_OCEAN
       || ptile->terrain == T_RIVER
       || tile_has_special(ptile, S_RIVER)
       || tile_has_special(ptile, S_IRRIGATION))
@@ -712,7 +688,7 @@ bool is_water_adjacent_to_tile(int x, int y)
 
   cartesian_adjacent_iterate(x, y, x1, y1) {
     ptile = map_get_tile(x1, y1);
-    if (is_ocean(ptile->terrain)
+    if (ptile->terrain == T_OCEAN
 	|| ptile->terrain == T_RIVER
 	|| tile_has_special(ptile, S_RIVER)
 	|| tile_has_special(ptile, S_IRRIGATION))
@@ -858,7 +834,7 @@ void map_irrigate_tile(int x, int y)
   }
   else if (result != T_LAST) {
     map_set_terrain(x, y, result);
-    if (is_ocean(result)) {
+    if (result == T_OCEAN) {
       clear_infrastructure(x, y);
       clear_dirtiness(x, y);
       map_clear_special(x, y, S_RIVER);	/* FIXME: When rest of code can handle
@@ -883,7 +859,7 @@ void map_mine_tile(int x, int y)
     map_set_special(x, y, S_MINE);
   else if (result != T_LAST) {
     map_set_terrain(x, y, result);
-    if (is_ocean(result)) {
+    if (result == T_OCEAN) {
       clear_infrastructure(x, y);
       clear_dirtiness(x, y);
       map_clear_special(x, y, S_RIVER);	/* FIXME: When rest of code can handle
@@ -901,7 +877,7 @@ void map_mine_tile(int x, int y)
 void change_terrain(int x, int y, enum tile_terrain_type type)
 {
   map_set_terrain(x, y, type);
-  if (is_ocean(type)) {
+  if (type == T_OCEAN) {
     clear_infrastructure(x, y);
     clear_dirtiness(x, y);
     map_clear_special(x, y, S_RIVER);	/* FIXME: When rest of code can handle
@@ -951,7 +927,7 @@ bool can_reclaim_ocean(int x, int y)
     return TRUE;
 
   adjc_iterate(x, y, x1, y1) {
-    if (!is_ocean(map_get_tile(x1, y1)->terrain))
+    if (map_get_tile(x1, y1)->terrain != T_OCEAN)
       if (--landtiles == 0)
 	return TRUE;	
   } adjc_iterate_end;
@@ -974,7 +950,7 @@ bool can_channel_land(int x, int y)
     return TRUE;
 
   adjc_iterate(x, y, x1, y1) {
-    if (is_ocean(map_get_tile(x1, y1)->terrain))
+    if (map_get_tile(x1, y1)->terrain == T_OCEAN)
       if (--oceantiles == 0)
 	return TRUE;
   } adjc_iterate_end;
@@ -1053,21 +1029,21 @@ static int tile_move_cost_ai(struct tile *tile0, struct tile *tile1,
   assert(!is_server
 	 || (tile0->terrain != T_UNKNOWN && tile1->terrain != T_UNKNOWN));
 
-  if (is_ocean(tile0->terrain) && is_ocean(tile1->terrain)) {
+  if (tile0->terrain == T_OCEAN && tile1->terrain == T_OCEAN) {
     return MOVE_COST_FOR_VALID_SEA_STEP;
   }
 
-  if (is_ocean(tile0->terrain)
+  if (tile0->terrain == T_OCEAN
       && (tile1->city || tile1->terrain == T_UNKNOWN)) {
     return MOVE_COST_FOR_VALID_SEA_STEP;
   }
 
-  if (is_ocean(tile1->terrain)
+  if (tile1->terrain == T_OCEAN
       && (tile0->city || tile0->terrain == T_UNKNOWN)) {
     return MOVE_COST_FOR_VALID_SEA_STEP;
   }
 
-  if (is_ocean(tile0->terrain) || is_ocean(tile1->terrain)) {
+  if (tile0->terrain == T_OCEAN || tile1->terrain == T_OCEAN) {
     return maxcost;
   }
 
@@ -1077,7 +1053,7 @@ static int tile_move_cost_ai(struct tile *tile0, struct tile *tile1,
 /***************************************************************
  ...
 ***************************************************************/
-static void debug_log_move_costs(const char *str, int x, int y, struct tile *tile0)
+static void debug_log_move_costs(char *str, int x, int y, struct tile *tile0)
 {
   /* the %x don't work so well for oceans, where
      move_cost[]==-3 ,.. --dwp
@@ -1162,10 +1138,50 @@ bool is_tiles_adjacent(int x0, int y0, int x1, int y1)
 /***************************************************************
 ...
 ***************************************************************/
+void tile_init(struct tile *ptile)
+{
+  ptile->terrain  = T_UNKNOWN;
+  ptile->special  = S_NO_SPECIAL;
+  ptile->known    = 0;
+  ptile->sent     = 0;
+  ptile->city     = NULL;
+  unit_list_init(&ptile->units);
+  ptile->worked   = NULL; /* pointer to city working tile */
+  ptile->assigned = 0; /* bitvector */
+}
+
+/***************************************************************
+...
+***************************************************************/
+void tile_free(struct tile *ptile)
+{
+  unit_list_unlink_all(&ptile->units);
+}
+
+/***************************************************************
+...
+***************************************************************/
 struct tile *map_get_tile(int x, int y)
 {
   return MAP_TILE(x, y);
 }
+
+/***************************************************************
+...
+***************************************************************/
+signed short map_get_continent(int x, int y)
+{
+  return MAP_TILE(x, y)->continent;
+}
+
+/***************************************************************
+...
+***************************************************************/
+void map_set_continent(int x, int y, int val)
+{
+  MAP_TILE(x, y)->continent = val;
+}
+
 
 /***************************************************************
 ...
@@ -1248,118 +1264,6 @@ void map_clear_special(int x, int y, enum tile_special_type spe)
 
   if (contains_special(spe, S_ROAD) || contains_special(spe, S_RAILROAD)) {
     reset_move_costs(x, y);
-  }
-}
-
-/**************************************************************************
-  Recursively renumber the client continent at (x,y) with continent
-  number 'new'.  Ie, renumber (x,y) tile and recursive adjacent
-  known land tiles with the same previous continent ('old').
-
-  Note: because of renumbering, you cannot count on a tile's number being 
-  same from one move to the next. you should always use map_get_continent()
-**************************************************************************/
-static void renumber_continent(int x, int y, struct player *pplayer,
-                               int newnumber)
-{
-  int old;
-
-  if(!normalize_map_pos(&x, &y)) {
-    return;
-  }
-
-  old = map_get_continent(x, y, pplayer);
-
-  map_set_continent(x, y, pplayer, newnumber);
-  adjc_iterate(x, y, i, j) {
-    if (map_get_known(i, j, pplayer)
-        && !is_ocean(map_get_terrain(i, j))
-        && map_get_continent(i, j, pplayer) == old) {
-      freelog(LOG_DEBUG,
-              " renumbering continent %d to %d at (%d %d) for %s", old,
-              newnumber, i, j, pplayer->name);
-      renumber_continent(i, j, pplayer, newnumber);
-    }
-  } adjc_iterate_end;
-}
-
-#define MAX_NUM_CONT 65535   /* max portable value in unsigned short */
-
-/**************************************************************************
-  Recycle a continent number.
-  
-  Example: say you have 5 continents, and you discover that 3 is actually
-  same continent as 1. Then 3 will be renamed to 1 in renumber_contients()
-  and then this function renames continent 5 to 3.
-**************************************************************************/
-static void recycle_continent_num(struct player *pplayer, int cont)
-{
-
-  freelog(LOG_DEBUG, " recycling continent number: setting %d to %d...",
-          pplayer->num_continents, cont);
-
-  /* if we renumbered away the last continent, we don't need to do anything */
-  if (cont == pplayer->num_continents) {
-    return;
-  }
-
-  whole_map_iterate(x, y) {
-    if (map_get_continent(x, y, pplayer) == pplayer->num_continents) {
-      map_set_continent(x, y, pplayer, cont);
-    }
-  } whole_map_iterate_end;
-}
-
-
-/**************************************************************************
-  Update continent numbers when (x,y) becomes known (if (x,y) land).
-  Check neighbouring known land tiles: the first continent number
-  found becomes the continent value of this tile.  Any other continents
-  found are numbered to this continent (ie, continents are merged)
-  and previous continent values are recycled.  If no neighbours are
-  numbered, use a new number. 
-**************************************************************************/
-void update_continents(int x, int y, struct player *pplayer)
-{
-  int con = 0, first_adj_con = -1;
-
-  if (is_ocean(map_get_tile(x, y)->terrain)) {
-    return;
-  }
-
-  adjc_iterate(x, y, i, j) {
-    if (map_get_known(i, j, pplayer) && !is_ocean(map_get_terrain(i, j))) {
-      con = map_get_continent(i, j, pplayer);
-
-      /* does the adjacent tile have a number? */
-      if (con > 0) {
-        if (first_adj_con == -1) {
-          /* this is the first adjacent tile with a number */
-          map_set_continent(x, y, pplayer, con);
-          first_adj_con = con;
-        } else if (con != first_adj_con) {
-          /* we found two tiles (adjacent to this one) that aren't the same */
-          /* TODO: this could be optimized if con == num_continents */
-          freelog(LOG_DEBUG,
-                  " renumbering continent %d to %d at (%d %d) for %s", con,
-                  first_adj_con, i, j, pplayer->name);
-          renumber_continent(i, j, pplayer, first_adj_con);
-          recycle_continent_num(pplayer, con);
-          first_adj_con = -1;
-          pplayer->num_continents--;
-        }
-      }
-    }
-  } adjc_iterate_end;
-
-  /* don't get a new one if the tile's already been counted */
-  if (first_adj_con == -1 && map_get_continent(x, y, pplayer) == 0) {
-    assert(pplayer->num_continents < MAX_NUM_CONT);
-
-    map_set_continent(x, y, pplayer, ++pplayer->num_continents);
-
-    freelog(LOG_DEBUG, " new continent %d at (%d %d) for %s",
-            map_get_continent(x, y, pplayer), x, y, pplayer->name);
   }
 }
 
@@ -1661,7 +1565,7 @@ bool is_move_cardinal(int start_x, int start_y, int end_x, int end_y)
 /**************************************************************************
   Free memory which is associated with this terrain type.
 **************************************************************************/
-static void tile_type_free(enum tile_terrain_type type)
+void tile_type_free(enum tile_terrain_type type)
 {
   struct tile_type *p = get_tile_type(type);
 

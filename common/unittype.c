@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -312,17 +311,17 @@ int can_upgrade_unittype(struct player *pplayer, Unit_Type_id id)
 }
 
 /**************************************************************************
-  Return the cost (gold) of upgrading a single unit of the specified type
-  to the new type.  This price could (but currently does not) depend on
-  other attributes (like nation or government type) of the player the unit
-  belongs to.
+...
 **************************************************************************/
-int unit_upgrade_price(const struct player * const pplayer,
-		       const Unit_Type_id from, const Unit_Type_id to)
+int unit_upgrade_price(struct player *pplayer, Unit_Type_id from,
+		       Unit_Type_id to)
 {
-  const int diff = unit_value(to) - unit_value(from) / 2;
-
-  return (diff <= 0) ? 0 : (diff * 2 + diff * diff / 20);
+  int total, build;
+  build = unit_value(from)/2;
+  total = unit_value(to);
+  if (build>=total)
+    return 0;
+  return (total-build)*2+(total-build)*(total-build)/20; 
 }
 
 /**************************************************************************
@@ -567,33 +566,9 @@ Unit_Type_id best_role_unit(struct city *pcity, int role)
 }
 
 /**************************************************************************
-Return "best" unit the player can build, with given role/flag.
-Returns U_LAST if none match. "Best" means highest unit type id.
-
-TODO: Cache the result per player?
-**************************************************************************/
-Unit_Type_id best_role_unit_for_player(struct player *pplayer, int role)
-{
-  int j;
-
-  assert((role >= 0 && role < F_LAST) || (role >= L_FIRST && role < L_LAST));
-
-  for(j = n_with_role[role]-1; j >= 0; j--) {
-    Unit_Type_id utype = with_role[role][j];
-
-    if (can_player_build_unit(pplayer, utype)) {
-      return utype;
-    }
-  }
-
-  return U_LAST;
-}
-
-
-/**************************************************************************
   Frees the memory associated with this unit type.
 **************************************************************************/
-static void unit_type_free(Unit_Type_id id)
+void unit_type_free(Unit_Type_id id)
 {
   struct unit_type *p = get_unit_type(id);
 

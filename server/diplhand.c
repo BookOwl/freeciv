@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -39,20 +38,9 @@
 
 #include "diplhand.h"
 
-#define SPECLIST_TAG treaty
-#define SPECLIST_TYPE struct Treaty
-#include "speclist.h"
-
-#define SPECLIST_TAG treaty
-#define SPECLIST_TYPE struct Treaty
-#include "speclist_c.h"
-
-#define treaty_list_iterate(list, p) \
-    TYPED_LIST_ITERATE(struct Treaty, list, p)
-#define treaty_list_iterate_end  LIST_ITERATE_END
-
-static struct treaty_list treaties;
+static struct genlist treaties;
 static bool did_init_treaties;
+
 
 /**************************************************************************
 Checks if the player numbers in the packet are sane.
@@ -90,18 +78,21 @@ static bool check_packet(struct packet_diplomacy_info *packet, bool check_other)
 **************************************************************************/
 struct Treaty *find_treaty(struct player *plr0, struct player *plr1)
 {
-  if (!did_init_treaties) {
-    treaty_list_init(&treaties);
+  struct genlist_iterator myiter;
+  
+  if(!did_init_treaties) {
+    genlist_init(&treaties);
     did_init_treaties = TRUE;
   }
 
-  treaty_list_iterate(treaties, ptreaty) {
-    if ((ptreaty->plr0 == plr0 && ptreaty->plr1 == plr1) ||
-	(ptreaty->plr0 == plr1 && ptreaty->plr1 == plr0)) {
+  genlist_iterator_init(&myiter, &treaties, 0);
+  
+  for(; ITERATOR_PTR(myiter); ITERATOR_NEXT(myiter)) {
+    struct Treaty *ptreaty=(struct Treaty *)ITERATOR_PTR(myiter);
+    if((ptreaty->plr0==plr0 && ptreaty->plr1==plr1) ||
+       (ptreaty->plr0==plr1 && ptreaty->plr1==plr0))
       return ptreaty;
-    }
-  } treaty_list_iterate_end;
-
+  }
   return NULL;
 }
 
@@ -395,7 +386,7 @@ void handle_diplomacy_accept_treaty(struct player *pplayer,
 
     } clause_list_iterate_end;
   cleanup:      
-    treaty_list_unlink(&treaties, ptreaty);
+    genlist_unlink(&treaties, ptreaty);
     free(ptreaty);
     send_player_info(plr0, NULL);
     send_player_info(plr1, NULL);
@@ -497,7 +488,7 @@ static void really_diplomacy_cancel_meeting(struct player *pplayer,
 			       &packet);
     notify_player(pplayer, _("Game: Meeting with %s canceled."), 
 		  pplayer2->name);
-    treaty_list_unlink(&treaties, ptreaty);
+    genlist_unlink(&treaties, ptreaty);
     free(ptreaty);
   }
 }
@@ -549,7 +540,7 @@ void handle_diplomacy_init(struct player *pplayer,
 
       ptreaty=fc_malloc(sizeof(struct Treaty));
       init_treaty(ptreaty, plr0, plr1);
-      treaty_list_insert(&treaties, ptreaty);
+      genlist_insert(&treaties, ptreaty, 0);
 
       pa.plrno0=plr0->player_no;
       pa.plrno1=plr1->player_no;

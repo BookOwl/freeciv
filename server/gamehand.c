@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -37,17 +36,10 @@
 **************************************************************************/
 void init_new_game(void)
 {
-  static const char chars[] =
-      "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
   int i, j, x, y;
   int dx, dy;
   Unit_Type_id utype;
   int start_pos[MAX_NUM_PLAYERS]; /* indices into map.start_positions[] */
-
-  for (i = 0; i < sizeof(game.id) - 1; i++) {
-    game.id[i] = chars[myrand(sizeof(chars) - 1)];
-  }
-  game.id[i] = '\0';
 
   if (!map.fixed_start_positions) {
     /* except in a scenario which provides them,
@@ -124,9 +116,8 @@ void init_new_game(void)
 	  dy = y + myrand(2 * game.dispersion + 1) - game.dispersion;
 	  (void) normalize_map_pos(&dx, &dy);
 	} while (!(is_real_tile(dx, dy)
-                   && map_get_continent(x, y, NULL) 
-                        == map_get_continent(dx, dy, NULL)
-                   && !is_ocean(map_get_terrain(dx, dy))
+                   && map_get_continent(x, y) == map_get_continent(dx, dy)
+                   && map_get_terrain(dx, dy) != T_OCEAN
                    && !is_non_allied_unit_tile(map_get_tile(dx, dy),
                     			       get_player(i))));
       }
@@ -153,6 +144,12 @@ void init_new_game(void)
 
   /* Initialise list of improvements with world-wide equiv_range */
   improvement_status_init(game.improvements, ARRAY_SIZE(game.improvements));
+
+  /* Free vector of effects with world-wide range. */
+  geff_vector_free(&game.effects);
+
+  /* Free vector of destroyed effects */
+  ceff_vector_free(&game.destroyed_effects);
 }
 
 /**************************************************************************

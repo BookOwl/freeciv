@@ -39,6 +39,7 @@ enum client_states get_client_state(void);
 
 void client_remove_cli_conn(struct connection *pconn);
 
+extern char tile_set_name[512];
 extern char sound_plugin_name[512];
 extern char sound_set_name[512];
 extern char server_host[512];
@@ -49,15 +50,13 @@ extern bool auto_connect;
 extern bool waiting_for_end_turn;
 extern bool turn_done_sent;
 
+extern int turn_gold_difference;
 extern int seconds_to_turndone;
+extern int last_turn_gold_amount;
 
 void wait_till_request_got_processed(int request_id);
 bool client_is_observer(void);
 void real_timer_callback(void);
-bool can_client_issue_orders(void);
-bool can_client_change_view(void);
-bool can_meet_with_player(struct player *pplayer);
-bool can_intel_with_player(struct player *pplayer);
 
 void client_game_init(void);
 void client_game_free(void);

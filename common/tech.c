@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -37,8 +36,7 @@ struct advance advances[A_LAST];
 static const char *flag_names[] = {
   "Bonus_Tech", "Boat_Fast", "Bridge", "Railroad", "Fortress",
   "Watchtower", "Population_Pollution_Inc", "Trade_Revenue_Reduce",
-  "Airbase", "Farmland", "Reduce_Trireme_Loss1", "Reduce_Trireme_Loss2", 
-  "Build_Airborne"
+  "Airbase", "Farmland", "Reduce_Trireme_Loss1", "Reduce_Trireme_Loss2"
 };
 /* Note that these strings must correspond with the enums in tech_flag_id,
    in common/tech.h */
@@ -95,7 +93,8 @@ static void build_required_techs_helper(struct player *pplayer,
 {
   /* The is_tech_a_req_for_goal condition is true if the tech is
    * already marked */
-  if (!tech_exists(tech) || get_invention(pplayer, tech) == TECH_KNOWN
+  if (tech == A_NONE || !tech_exists(tech)
+      || get_invention(pplayer, tech) == TECH_KNOWN
       || is_tech_a_req_for_goal(pplayer, tech, goal)) {
     return;
   }
@@ -201,13 +200,13 @@ static Tech_Type_id get_next_tech_rec(struct player *pplayer,
   Tech_Type_id sub_goal;
 
   if (!tech_exists(goal) || get_invention(pplayer, goal) == TECH_KNOWN) {
-    return A_UNSET;
+    return A_NONE;
   }
   if (get_invention(pplayer, goal) == TECH_REACHABLE) {
     return goal;
   }
   sub_goal = get_next_tech_rec(pplayer, advances[goal].req[0]);
-  if (sub_goal != A_UNSET) {
+  if (sub_goal != A_NONE) {
     return sub_goal;
   } else {
     return get_next_tech_rec(pplayer, advances[goal].req[1]);
@@ -222,8 +221,9 @@ static Tech_Type_id get_next_tech_rec(struct player *pplayer,
 **************************************************************************/
 Tech_Type_id get_next_tech(struct player *pplayer, Tech_Type_id goal)
 {
-  if (!tech_exists(goal) || get_invention(pplayer, goal) == TECH_KNOWN) {
-    return A_UNSET;
+  if (goal == A_NONE || !tech_exists(goal) ||
+      get_invention(pplayer, goal) == TECH_KNOWN) {
+    return A_NONE;
   }
   return (get_next_tech_rec(pplayer, goal));
 }
@@ -386,8 +386,10 @@ int base_total_bulbs_required(struct player *pplayer, Tech_Type_id tech)
 	GAME_DEFAULT_RESEARCHCOST;
     break;
   default:
-    die("Invalid tech_cost_style %d %d", game.rgame.tech_cost_style,
-	tech_cost_style);
+    freelog(LOG_ERROR, "Invalid tech_cost_style %d %d",
+	    game.rgame.tech_cost_style, tech_cost_style);
+    assert(0);
+    exit(EXIT_FAILURE);
   }
 
   /* Research becomes more expensive. */
@@ -450,7 +452,9 @@ int base_total_bulbs_required(struct player *pplayer, Tech_Type_id tech)
     break;
 
   default:
-    die("Invalid tech_leakage %d", game.rgame.tech_leakage);
+    freelog(LOG_ERROR, "Invalid tech_leakage %d", game.rgame.tech_leakage);
+    assert(0);
+    exit(EXIT_FAILURE);
   }
 
   /* If we have many players, tech cost may drop to 0.  */
@@ -518,7 +522,12 @@ void precalc_tech_data()
 **************************************************************************/
 bool is_future_tech(Tech_Type_id tech)
 {
-  return tech == A_FUTURE;
+  /*
+   * Future techs can be identify in two ways: the "tech >=
+   * game.num_tech_types" condition and the "tech == A_NONE"
+   * condition. FIXME: clean this up.
+   */
+  return (tech >= game.num_tech_types) || (tech == A_NONE);
 }
 
 /**************************************************************************
@@ -530,7 +539,6 @@ const char *get_tech_name(struct player *pplayer, Tech_Type_id tech)
   static char buffer[200];
 
   if (!is_future_tech(tech)) {
-    assert(tech_exists(tech));
     my_snprintf(buffer, sizeof(buffer), "%s", advances[tech].name);
   } else {
     my_snprintf(buffer, sizeof(buffer), _("Future Tech. %d"),
@@ -553,7 +561,7 @@ bool techs_have_fixed_costs()
 /***************************************************************
  De-allocate resources associated with the given tech.
 ***************************************************************/
-static void tech_free(Tech_Type_id tech)
+void tech_free(Tech_Type_id tech)
 {
   struct advance *p = &advances[tech];
 

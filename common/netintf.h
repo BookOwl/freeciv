@@ -18,6 +18,10 @@
   Common network interface.
 ***********************************************************************/
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -34,7 +38,6 @@
 #include <netinet/in.h>
 #endif
 
-#include "ioz.h"
 #include "shared.h"		/* bool type */
 
 #ifdef FD_ZERO
@@ -45,15 +48,13 @@
 
 struct sockaddr;
 
-int my_readsocket(int sock, void *buf, size_t size);
+int my_readsocket(int sock, void *buf , size_t size);
 int my_writesocket(int sock, const void *buf, size_t size); 
 void my_closesocket(int sock);
 void my_init_network(void);         
 void my_shutdown_network(void);
 
 void my_nonblock(int sockfd);
-bool net_lookup_service(const char *name, int port, 
-                        struct sockaddr *sa, int len);
-fz_FILE *my_querysocket(int sock, void *buf, size_t size);
+bool fc_lookup_host(const char *hostname, struct sockaddr_in *sock);
 
 #endif  /* FC__NETINTF_H */

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -397,10 +396,9 @@ void send_city_turn_notifications(struct conn_list *dest, struct city *pcity)
 **************************************************************************/
 void begin_cities_turn(struct player *pplayer)
 {
-  city_list_iterate(pplayer->cities, pcity) {
-    pcity->ai.already_considered_for_diplomat = FALSE; /* ai hack */
-    define_orig_production_values(pcity);
-  } city_list_iterate_end;
+  city_list_iterate(pplayer->cities, pcity)
+     define_orig_production_values(pcity);
+  city_list_iterate_end;
 }
 
 /**************************************************************************
@@ -469,7 +467,7 @@ void city_reduce_size(struct city *pcity, int pop_loss)
 /**************************************************************************
 Note: We do not send info about the city to the clients as part of this function
 **************************************************************************/
-static void city_increase_size(struct city *pcity)
+void city_increase_size(struct city *pcity)
 {
   struct player *powner = city_owner(pcity);
   bool have_square;
@@ -618,7 +616,6 @@ static void advisor_choose_build(struct player *pplayer, struct city *pcity)
   int id=-1;
   int want=0;
 
-  init_choice(&choice);
   if (!city_owner(pcity)->ai.control)
     ai_eval_buildings(pcity); /* so that ai_advisor is smart even for humans */
   ai_advisor_choose_building(pcity, &choice); /* much smarter version -- Syela */
@@ -1143,7 +1140,7 @@ static void check_pollution(struct city *pcity)
 	continue;
       }
 
-      if ((!is_ocean(map_get_terrain(mx, my))
+      if ((map_get_terrain(mx, my) != T_OCEAN
 	   && map_get_terrain(mx, my) <= T_TUNDRA)
 	  && !map_has_special(mx, my, S_POLLUTION)) {
 	map_set_special(mx, my, S_POLLUTION);
@@ -1184,17 +1181,16 @@ static void sanity_check_city(struct city *pcity)
 /**************************************************************************
   Sets the incite_revolt_cost field in the given city.
 **************************************************************************/
-int city_incite_cost(struct player *pplayer, struct city *pcity)
+void city_incite_cost(struct city *pcity)
 {
   struct government *g = get_gov_pcity(pcity);
   struct city *capital;
   int dist;
-  int incite_revolt_cost;
-
+  
   if (city_got_building(pcity, B_PALACE)) {
-    incite_revolt_cost = INCITE_IMPOSSIBLE_COST;
+    pcity->incite_revolt_cost = INCITE_IMPOSSIBLE_COST;
   } else {
-    incite_revolt_cost = city_owner(pcity)->economic.gold + 1000;
+    pcity->incite_revolt_cost = city_owner(pcity)->economic.gold + 1000;
     capital = find_palace(city_owner(pcity));
     if (capital) {
       int tmp = map_distance(capital->x, capital->y, pcity->x, pcity->y);
@@ -1209,16 +1205,15 @@ int city_incite_cost(struct player *pplayer, struct city *pcity)
     if (g->fixed_corruption_distance != 0) {
       dist = MIN(g->fixed_corruption_distance, dist);
     }
-    incite_revolt_cost /= (dist + 3);
-    incite_revolt_cost *= pcity->size;
+    pcity->incite_revolt_cost /= (dist + 3);
+    pcity->incite_revolt_cost *= pcity->size;
     if (city_unhappy(pcity)) {
-      incite_revolt_cost /= 2;
+      pcity->incite_revolt_cost /= 2;
     }
     if (unit_list_size(&map_get_tile(pcity->x,pcity->y)->units)==0) {
-      incite_revolt_cost /= 2;
+      pcity->incite_revolt_cost /= 2;
     }
   }
-  return incite_revolt_cost;
 }
 
 /**************************************************************************
@@ -1334,6 +1329,7 @@ static void update_city_activity(struct player *pplayer, struct city *pcity)
       pcity->anarchy=0;
     }
     check_pollution(pcity);
+    city_incite_cost(pcity);
 
     send_city_info(NULL, pcity);
     if (pcity->anarchy>2 && government_has_flag(g, G_REVOLUTION_WHEN_UNHAPPY)) {

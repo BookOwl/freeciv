@@ -17,7 +17,6 @@
 
 #include "gtkpixcomm.h"
 
-#include "citydlg_common.h"
 #include "mapview_g.h"
 #include "mapview_common.h"
 
@@ -27,8 +26,8 @@ struct unit;
 struct city;
 
 GdkPixmap *get_thumb_pixmap(int onoff);
-GdkPixmap *get_citizen_pixmap(enum citizen_type type, int cnum,
-			      struct city *pcity);
+GdkPixmap *get_citizen_pixmap(int frame);
+SPRITE *get_citizen_sprite(int frame);
 
 gboolean overview_canvas_expose(GtkWidget *w, GdkEventExpose *ev, gpointer data);
 gboolean map_canvas_expose(GtkWidget *w, GdkEventExpose *ev, gpointer data);
@@ -51,6 +50,8 @@ void pixmap_put_black_tile(GdkDrawable *pm,
 
 void scrollbar_jump_callback(GtkAdjustment *adj, gpointer hscrollbar);
 void update_map_canvas_scrollbars_size(void);
+
+void get_map_xy(int canvas_x, int canvas_y, int *map_x, int *map_y);
 
 /* contains the x0, y0 coordinates of the upper left corner block */
 extern int map_view_x0, map_view_y0;

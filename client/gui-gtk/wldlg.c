@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -22,7 +21,6 @@
 #include <gtk/gtk.h>
 #include <gdk/gdkkeysyms.h>
 
-#include "civclient.h"
 #include "city.h"
 #include "fcintl.h"
 #include "game.h"
@@ -140,7 +138,7 @@ void popup_worklists_report(struct player *pplr)
 {
   GtkWidget *button, *scrolled;
   GtkAccelGroup *accel;
-  const char *title[1] = { N_("Available worklists") };
+  char *title[1] = { N_("Available worklists") };
   static char **clist_title = NULL;
 
   /* Report window already open */
@@ -308,13 +306,13 @@ struct worklist_editor *create_worklist_editor(struct worklist *pwl,
   GtkAccelGroup *accel = gtk_accel_group_new();
 
   static char **wl_clist_titles = NULL;
-  const char *wl_titles[] = { N_("Type"),
+  char *wl_titles[] = { N_("Type"),
     N_("Info"),
     N_("Cost")
   };
 
   static char **avail_clist_titles = NULL;
-  const char *avail_titles[] = { N_("Type"),
+  char *avail_titles[] = { N_("Type"),
     N_("Info"),
     N_("Cost"),
     N_("Turns")
@@ -911,7 +909,7 @@ static void worklist_select_callback(GtkWidget * w, gint row, gint column,
   int row_selected;
   struct worklist_editor *peditor = (struct worklist_editor *) data;
 
-  if (can_client_issue_orders() && ev && ev->type == GDK_2BUTTON_PRESS) {
+  if (ev && ev->type == GDK_2BUTTON_PRESS) {
     /* Double-click to remove item from worklist */
     worklist_remove_item(peditor);
     return;
@@ -919,10 +917,8 @@ static void worklist_select_callback(GtkWidget * w, gint row, gint column,
 
   row_selected = (GTK_CLIST(peditor->worklist)->selection != NULL);
 
-  gtk_widget_set_sensitive(peditor->btn_up, can_client_issue_orders() &&
-			   row_selected && row > 0 );
-  gtk_widget_set_sensitive(peditor->btn_down, can_client_issue_orders() &&
-			   row_selected &&
+  gtk_widget_set_sensitive(peditor->btn_up, row_selected && row > 0);
+  gtk_widget_set_sensitive(peditor->btn_down, row_selected &&
 			   row < GTK_CLIST(peditor->worklist)->rows - 1);
 }
 
@@ -932,7 +928,7 @@ static void worklist_select_callback(GtkWidget * w, gint row, gint column,
 static void targets_select_callback(GtkWidget * w, gint row, gint column,
 				    GdkEvent * ev, gpointer data)
 {
-  if (can_client_issue_orders() && ev && ev->type == GDK_2BUTTON_PRESS) {
+  if (ev && ev->type == GDK_2BUTTON_PRESS) {
     struct worklist_editor *peditor = (struct worklist_editor *) data;
     /* Double-click to insert item in worklist */
     worklist_insert_item(peditor);

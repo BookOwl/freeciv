@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -406,12 +405,12 @@ static void create_help_dialog(void)
   help_dialog_shell = gtk_dialog_new_with_buttons(_("Freeciv Help Browser"),
   	NULL,
 	0,
+	GTK_STOCK_CLOSE,
+	GTK_RESPONSE_CLOSE,
 	GTK_STOCK_GO_BACK,
 	1,
 	GTK_STOCK_GO_FORWARD,
 	2,
-	GTK_STOCK_CLOSE,
-	GTK_RESPONSE_CLOSE,
 	NULL);
   gtk_dialog_set_default_response(GTK_DIALOG(help_dialog_shell),
 	GTK_RESPONSE_CLOSE);

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -54,7 +53,7 @@ static int improvement_upkeep_asmiths(struct city *pcity, Impr_Type_id i,
 
 /* Iterate a city map, from the center (the city) outwards */
 
-int city_map_iterate_outwards_indices[CITY_TILES][2] =
+int city_map_iterate_outwards_indices[(CITY_MAP_SIZE*CITY_MAP_SIZE)-4][2] =
 {
   { 2, 2 },
 
@@ -72,6 +71,9 @@ struct citystyle *city_styles = NULL;
 
 /* from server/unittools.h */
 void send_unit_info(struct player *dest, struct unit *punit);
+
+/* from client/civclient.c or server/srv_main.c */
+extern bool is_server;
 
 /**************************************************************************
 ...
@@ -102,9 +104,9 @@ bool is_city_center(int city_x, int city_y)
 Finds the city map coordinate for a given map position and a city
 center. Returns whether the map position is inside of the city map.
 **************************************************************************/
-static bool base_map_to_city_map(int *city_map_x, int *city_map_y,
-				 int city_center_x, int city_center_y,
-				 int map_x, int map_y)
+bool base_map_to_city_map(int *city_map_x, int *city_map_y,
+			 int city_center_x, int city_center_y,
+			 int map_x, int map_y)
 {
   assert(is_real_tile(map_x, map_y));
   city_map_checked_iterate(city_center_x, city_center_y, cx, cy, mx, my) {
@@ -318,7 +320,7 @@ struct player *city_owner(struct city *pcity)
  terr_gate (terrain) or spec_gate (specials), or if the building has no
  terrain/special requirements.
 **************************************************************************/
-bool city_has_terr_spec_gate(struct city *pcity, Impr_Type_id id)
+static bool city_has_terr_spec_gate(struct city *pcity, Impr_Type_id id)
 {
   struct impr_type *impr;
   enum tile_terrain_type *terr_gate;
@@ -367,7 +369,7 @@ bool can_eventually_build_improvement(struct city *pcity, Impr_Type_id id)
  owner has the required tech, but if all other pre reqs are fulfiled? 
  modularized so the AI can choose the tech it wants -- Syela 
 **************************************************************************/
-static bool could_build_improvement(struct city *pcity, Impr_Type_id id)
+bool could_build_improvement(struct city *pcity, Impr_Type_id id)
 {
   struct impr_type *impr;
 
@@ -407,9 +409,8 @@ bool can_build_unit_direct(struct city *pcity, Unit_Type_id id)
 {
   if (!can_player_build_unit_direct(city_owner(pcity), id))
     return FALSE;
-  if (!is_ocean_near_tile(pcity->x, pcity->y) && is_water_unit(id)) {
+  if (!is_terrain_near_tile(pcity->x, pcity->y, T_OCEAN) && is_water_unit(id))
     return FALSE;
-  }
   return TRUE;
 }
 
@@ -439,9 +440,8 @@ bool can_eventually_build_unit(struct city *pcity, Unit_Type_id id)
 
   /* Some units can be built only in certain cities -- for instance,
      ships may be built only in cities adjacent to ocean. */
-  if (!is_ocean_near_tile(pcity->x, pcity->y) && is_water_unit(id)) {
+  if (!is_terrain_near_tile(pcity->x, pcity->y, T_OCEAN) && is_water_unit(id))
     return FALSE;
-  }
 
   return TRUE;
 }
@@ -575,9 +575,8 @@ int base_city_get_shields_tile(int x, int y, struct city *pcity,
     s+=(s*terrain_control.rail_shield_bonus)/100;
   if (city_affected_by_wonder(pcity, B_RICHARDS))
     s++;
-  if (is_ocean(tile_t) && city_got_building(pcity, B_OFFSHORE)) {
+  if (tile_t==T_OCEAN && city_got_building(pcity, B_OFFSHORE))
     s++;
-  }
   /* government shield bonus & penalty */
   if (s > 0)
     s += (is_celebrating ? g->celeb_shield_bonus : g->shield_bonus);
@@ -610,7 +609,7 @@ int get_trade_tile(int x, int y)
   else
     t = get_tile_type(tile_t)->trade;
 
-  if (contains_special(spec_t, S_RIVER) && !is_ocean(tile_t)) {
+  if (contains_special(spec_t, S_RIVER) && tile_t != T_OCEAN) {
     t += terrain_control.river_trade_incr;
   }
   if (contains_special(spec_t, S_ROAD)) {
@@ -661,7 +660,7 @@ int base_city_get_trade_tile(int x, int y, struct city *pcity,
   else
     t=get_tile_type(tile_t)->trade;
 
-  if (contains_special(spec_t, S_RIVER) && !is_ocean(tile_t)) {
+  if (contains_special(spec_t, S_RIVER) && tile_t != T_OCEAN) {
     t += terrain_control.river_trade_incr;
   }
   if (contains_special(spec_t, S_ROAD)) {
@@ -786,9 +785,8 @@ int base_city_get_food_tile(int x, int y, struct city *pcity,
     }
   }
 
-  if (is_ocean(tile_t) && city_got_building(pcity, B_HARBOUR)) {
+  if (tile_t==T_OCEAN && city_got_building(pcity, B_HARBOUR))
     f++;
-  }
 
   if (contains_special(spec_t, S_RAILROAD))
     f+=(f*terrain_control.rail_food_bonus)/100;
@@ -814,9 +812,8 @@ int base_city_get_food_tile(int x, int y, struct city *pcity,
 **************************************************************************/
 bool city_can_be_built_here(int x, int y)
 {
-  if (is_ocean(map_get_terrain(x, y))) {
+  if (map_get_terrain(x, y) == T_OCEAN)
     return FALSE;
-  }
 
   /* game.rgame.min_dist_bw_cities minimum is 1, which means adjacent is okay */
   square_iterate(x, y, game.rgame.min_dist_bw_cities-1, x1, y1) {
@@ -864,26 +861,17 @@ bool can_establish_trade_route(struct city *pc1, struct city *pc2)
 **************************************************************************/
 int trade_between_cities(struct city *pc1, struct city *pc2)
 {
-  int bonus = 0;
+  int bonus=0;
 
   if (pc1 && pc2) {
-    struct player *p1 = city_owner(pc1);
-    struct player *p2 = city_owner(pc2);
+    bonus=(pc1->tile_trade+pc2->tile_trade+4)/8;
 
-    bonus = (pc1->tile_trade + pc2->tile_trade + 4) / 8;
+    /* Double if on different continents. */
+    if (map_get_continent(pc1->x, pc1->y) !=
+	map_get_continent(pc2->x, pc2->y)) bonus *= 2;
 
-    /* if neither player knows the cities are on the
-     * same contient, then double the bonus */
-    if ( !((map_get_continent(pc1->x, pc1->y, p1) ==
-            map_get_continent(pc2->x, pc2->y, p1)) ||
-           (map_get_continent(pc1->x, pc1->y, p2) ==
-            map_get_continent(pc2->x, pc2->y, p2))) ) {
-      bonus *= 2;
-    }
-
-    if (p1 == p2) {
-      bonus /= 2;
-    }
+    if (pc1->owner==pc2->owner)
+      bonus/=2;
   }
   return bonus;
 }
@@ -996,8 +984,8 @@ bool city_affected_by_wonder(struct city *pcity, Impr_Type_id id)
   case B_HOOVER:
   case B_BACH:
     if (improvement_variant(id)==1) {
-      return (map_get_continent(tmp->x, tmp->y, city_owner(tmp)) ==
-	      map_get_continent(pcity->x, pcity->y, city_owner(pcity)));
+      return (map_get_continent(tmp->x, tmp->y) ==
+	      map_get_continent(pcity->x, pcity->y));
     } else {
       return TRUE;
     }
@@ -1059,14 +1047,15 @@ bool city_rapture_grow(struct city *pcity)
 **************************************************************************/
 struct city *city_list_find_id(struct city_list *This, int id)
 {
-  if (id != 0) {
-    city_list_iterate(*This, pcity) {
-      if (pcity->id == id) {
-	return pcity;
-      }
-    } city_list_iterate_end;
-  }
+  if(id != 0) {
+    struct genlist_iterator myiter;
 
+    genlist_iterator_init(&myiter, &This->list, 0);
+    
+    for(; ITERATOR_PTR(myiter); ITERATOR_NEXT(myiter))
+    if(((struct city *)ITERATOR_PTR(myiter))->id==id)
+	return ITERATOR_PTR(myiter);
+  }
   return NULL;
 }
 
@@ -1075,11 +1064,13 @@ struct city *city_list_find_id(struct city_list *This, int id)
 **************************************************************************/
 struct city *city_list_find_name(struct city_list *This, const char *name)
 {
-  city_list_iterate(*This, pcity) {
-    if (mystrcasecmp(name, pcity->name) == 0) {
-      return pcity;
-    }
-  } city_list_iterate_end;
+  struct genlist_iterator myiter;
+
+  genlist_iterator_init(&myiter, &This->list, 0);
+
+  for(; ITERATOR_PTR(myiter); ITERATOR_NEXT(myiter))
+    if(mystrcasecmp(name, ((struct city *)ITERATOR_PTR(myiter))->name) == 0)
+      return ITERATOR_PTR(myiter);
 
   return NULL;
 }
@@ -1134,7 +1125,7 @@ int citygov_free_food(struct city *pcity, struct government *gov)
 /**************************************************************************
 ...
 **************************************************************************/
-static int citygov_free_gold(struct city *pcity, struct government *gov)
+int citygov_free_gold(struct city *pcity, struct government *gov)
 {
   if (gov->free_gold == G_CITY_SIZE_FREE) {
     return pcity->size;
@@ -1238,6 +1229,14 @@ int city_change_production_penalty(struct city *pcity,
 
   if (apply_it) {
     pcity->shield_stock = shield_stock_after_adjustment;
+
+    if (new_class != orig_class) {
+      /* This is buggy; the interval between turns is not constant. */
+      pcity->turn_changed_target = game.year; 
+    } else {
+      /* Pretend we have changed nothing */
+      pcity->turn_changed_target = GAME_START_YEAR;
+    }
   }
 
   return shield_stock_after_adjustment;
@@ -2228,7 +2227,30 @@ int get_colosseum_power(struct city *pcity)
 **************************************************************************/
 void city_add_improvement(struct city *pcity, Impr_Type_id impr)
 {
+  struct ceff_vector *ceffs[2];
+  struct geff_vector *geffs[4];
+  int i;
+
+  get_effect_vectors(ceffs, geffs, impr, pcity);
   mark_improvement(pcity,impr,I_ACTIVE);
+
+  /* Add affects at all ranges. */
+  for (i=0; ceffs[i]; i++) {
+    struct eff_city *eff;
+    
+    eff		= append_ceff(ceffs[i]);
+    eff->impr	= impr;
+    eff->active	= 0;
+  }
+
+  for (i=0; geffs[i]; i++) {
+    struct eff_global *eff;
+    
+    eff		    = append_geff(geffs[i]);
+    eff->eff.impr   = impr;
+    eff->eff.active = 0;
+    eff->cityid	    = pcity->id;
+  }
 }
 
 /**************************************************************************
@@ -2239,6 +2261,9 @@ void city_add_improvement(struct city *pcity, Impr_Type_id impr)
 **************************************************************************/
 void city_remove_improvement(struct city *pcity,Impr_Type_id impr)
 {
+  struct ceff_vector *ceffs[2];
+  struct geff_vector *geffs[4];
+  int i, j;
 
   freelog(LOG_DEBUG,"Improvement %s removed from city %s",
           improvement_types[impr].name,pcity->name);
@@ -2254,6 +2279,31 @@ void city_remove_improvement(struct city *pcity,Impr_Type_id impr)
         }
       } city_list_iterate_end;
     } players_iterate_end;
+  }
+
+  get_effect_vectors(ceffs, geffs, impr, pcity);
+
+  /* Now remove the effects. */
+  for (j=0; ceffs[j]; j++) {
+    for (i=0; i<ceff_vector_size(ceffs[j]); i++) {
+      struct eff_city *eff=ceff_vector_get(ceffs[j], i);
+
+      if (eff->impr==impr) {
+	eff->impr=B_LAST;
+	break;
+      }
+    }
+  }
+
+  for (j=0; geffs[j]; j++) {
+    for (i=0; i<geff_vector_size(geffs[j]); i++) {
+      struct eff_global *eff=geff_vector_get(geffs[j], i);
+
+      if (eff->eff.impr==impr) {
+	eff->eff.impr=B_LAST;
+	break;
+      }
+    }
   }
 }
 

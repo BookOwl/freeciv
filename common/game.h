@@ -25,7 +25,6 @@
 
 #define MAX_LEN_DEMOGRAPHY  16
 #define MAX_LEN_ALLOW_CONNECT 16
-#define MAX_ID_LEN 33
 
 enum server_states { 
   PRE_GAME_STATE, 
@@ -55,7 +54,6 @@ struct city;
 struct civ_game {
   bool is_new_game;		/* 1 for games never started */
   int version;
-  char id[MAX_ID_LEN];		/* server only */
   int civstyle;
   int gold;
   int settlers, explorer;
@@ -72,7 +70,6 @@ struct civ_game {
   int netwait;
   time_t last_ping;
   int pingtimeout;
-  int pingtime;
   time_t turn_start;
   int end_year;
   int year;
@@ -106,6 +103,9 @@ struct civ_game {
          /* global_wonders[] may also be (-1), or the id of a city
 	    which no longer exists, if the wonder has been destroyed */
   Impr_Status improvements[B_LAST];        /* impr. with equiv_range==World */
+  struct geff_vector effects;		   /* effects with range==World */
+  struct ceff_vector destroyed_effects;	   /* list of effects that have survived
+					      building destruction */
 
   int heating; /* Number of polluted squares. */
   int globalwarming; /* Total damage done. (counts towards a warming event.) */
@@ -238,6 +238,7 @@ struct unit *find_unit_by_id(int id);
 struct city *find_city_by_id(int id);
 
 void game_remove_player(struct player *pplayer);
+void game_remove_all_players(void);
 void game_renumber_players(int plrno);
 
 void game_remove_unit(struct unit *punit);
@@ -250,6 +251,7 @@ void translate_data_names(void);
 
 struct player *get_player(int player_id);
 int get_num_human_and_ai_players(void);
+void update_island_impr_effect(int oldmax, int maxcont);
 
 void update_all_effects(void);
 
@@ -394,10 +396,6 @@ extern bool is_server;
 #define GAME_DEFAULT_NETWAIT         4
 #define GAME_MIN_NETWAIT             0
 #define GAME_MAX_NETWAIT             20
-
-#define GAME_DEFAULT_PINGTIME        20
-#define GAME_MIN_PINGTIME            1
-#define GAME_MAX_PINGTIME            1800
 
 #define GAME_DEFAULT_PINGTIMEOUT     60
 #define GAME_MIN_PINGTIMEOUT         60

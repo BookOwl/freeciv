@@ -14,48 +14,28 @@
 #define FC__AITOOLS_H
 
 #include "shared.h"		/* bool type */
-#include "unit.h"		/* enum ai_unit_task */
-#include "unittype.h"		/* Unit_Type_id */
 
 struct ai_choice;
 struct city;
 struct government;
 struct player;
-
-#ifdef DEBUG
-#define CHECK_UNIT(punit)                                        \
- (assert(punit),                                                 \
-  assert(punit->type < U_LAST),                                  \
-  assert(punit->owner < MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS),   \
-  assert(find_unit_by_id(punit->id)))
-#else
-#define CHECK_UNIT(punit) assert(TRUE)
-#endif
+struct unit;
 
 enum bodyguard_enum {
   BODYGUARD_WANTED=-1,
   BODYGUARD_NONE
 };
 
-int military_amortize(struct player *pplayer, struct city *pcity, 
-                      int value, int delay, int build_cost);
-struct unit *create_unit_virtual(struct player *pplayer, struct city *pcity,
-                                 Unit_Type_id type, bool make_veteran);
-void destroy_unit_virtual(struct unit *punit);
-bool is_stack_vulnerable(int x, int y);
-
-bool ai_unit_gothere(struct unit *punit);
-bool ai_unit_goto(struct unit *punit, int x, int y);
-void ai_unit_new_role(struct unit *punit, enum ai_unit_task task, int x, int y);
-
+void ai_unit_new_role(struct unit *punit, enum ai_unit_task utask);
 bool ai_unit_make_homecity(struct unit *punit, struct city *pcity);
-bool ai_unit_attack(struct unit *punit, int x, int y);
+void ai_unit_attack(struct unit *punit, int x, int y);
 bool ai_unit_move(struct unit *punit, int x, int y);
 
 struct city *dist_nearest_city(struct player *pplayer, int x, int y,
                                bool everywhere, bool enemy);
 
 void ai_government_change(struct player *pplayer, int gov);
+
 int ai_gold_reserve(struct player *pplayer);
 
 void init_choice(struct ai_choice *choice);
@@ -65,6 +45,5 @@ void ai_advisor_choose_building(struct city *pcity, struct ai_choice *choice);
 bool ai_assess_military_unhappiness(struct city *pcity, struct government *g);
 
 int ai_evaluate_government(struct player *pplayer, struct government *g);
-bool ai_wants_no_science(struct player *pplayer);
 
 #endif  /* FC__AITOOLS_H */

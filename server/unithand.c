@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -58,12 +57,6 @@ static void city_add_or_build_error(struct player *pplayer,
 static void city_add_unit(struct player *pplayer, struct unit *punit);
 static void city_build(struct player *pplayer, struct unit *punit,
 		       char *name);
-static void handle_unit_activity_request_targeted(struct unit *punit,
-						  enum unit_activity
-						  new_activity,
-						  enum tile_special_type
-						  new_target,
-						  bool select_unit);
 
 /**************************************************************************
 ...
@@ -156,55 +149,40 @@ void handle_unit_connect(struct player *pplayer,
 /**************************************************************************
  Upgrade all units of a given type.
 **************************************************************************/
-void handle_upgrade_unittype_request(struct player * const pplayer,
-			const struct packet_unittype_info * const packet)
+void handle_upgrade_unittype_request(struct player *pplayer, 
+				     struct packet_unittype_info *packet)
 {
-  const Unit_Type_id from_unittype = packet->type;
-  const Unit_Type_id to_unittype = can_upgrade_unittype(pplayer,
-							from_unittype);
-
-  if (to_unittype == -1) {
-    notify_player(pplayer,
-		  _("Game: Illegal packet, can't upgrade %s (yet)."),
-                  unit_types[from_unittype].name);
+  int cost;
+  int to_unit;
+  int upgraded = 0;
+  if ((to_unit =can_upgrade_unittype(pplayer, packet->type)) == -1) {
+    notify_player(pplayer, _("Game: Illegal packet, can't upgrade %s (yet)."), 
+		  unit_types[packet->type].name);
+    return;
+  }
+  cost = unit_upgrade_price(pplayer, packet->type, to_unit);
+  conn_list_do_buffer(&pplayer->connections);
+  unit_list_iterate(pplayer->units, punit) {
+    struct city *pcity;
+    if (cost > pplayer->economic.gold)
+      break;
+    pcity = map_get_city(punit->x, punit->y);
+    if (punit->type == packet->type && pcity && pcity->owner == pplayer->player_no) {
+      pplayer->economic.gold -= cost;
+      
+      upgrade_unit(punit, to_unit);
+      upgraded++;
+    }
+  }
+  unit_list_iterate_end;
+  conn_list_do_unbuffer(&pplayer->connections);
+  if (upgraded > 0) {
+    notify_player(pplayer, _("Game: %d %s upgraded to %s for %d gold."), 
+		  upgraded, unit_types[packet->type].name, 
+		  unit_types[to_unit].name, cost * upgraded);
+    send_player_info(pplayer, pplayer);
   } else {
-    const int cost = unit_upgrade_price(pplayer, from_unittype, to_unittype);
-    int number_of_upgraded_units = 0;
-
-    if (pplayer->economic.gold >= cost) {
-      const int player_no = pplayer->player_no;
-
-      /* Try to upgrade units. The order we upgrade in is arbitrary (if
-       * the player really cared they should have done it manually). */
-      conn_list_do_buffer(&pplayer->connections);
-      unit_list_iterate(pplayer->units, punit) {
-        if (punit->type == from_unittype) {
-          const struct city * const pcity = map_get_city(punit->x, punit->y);
-
-	  /* Only units in cities can be upgraded. */
-          if (pcity && pcity->owner == player_no) {
-            upgrade_unit(punit, to_unittype);
-            ++number_of_upgraded_units;
-            if ((pplayer->economic.gold -= cost) < cost) {
-	      /* We can't upgrade any more units. */
-              break;
-            }
-          }
-        }
-      } unit_list_iterate_end;
-      conn_list_do_unbuffer(&pplayer->connections);
-    }
-
-    /* Alert the player about what happened. */
-    if (number_of_upgraded_units > 0) {
-      notify_player(pplayer, _("Game: %d %s upgraded to %s for %d gold."),
-                    number_of_upgraded_units, unit_types[from_unittype].name,
-                    unit_types[to_unittype].name,
-                    cost * number_of_upgraded_units);
-      send_player_info(pplayer, pplayer);
-    } else {
-      notify_player(pplayer, _("Game: No units could be upgraded."));
-    }
+    notify_player(pplayer, _("Game: No units could be upgraded."));
   }
 }
 
@@ -257,8 +235,8 @@ void handle_incite_inq(struct connection *pconn,
 		       struct packet_generic_integer *packet)
 {
   struct player *pplayer = pconn->player;
-  struct city *pcity = find_city_by_id(packet->value);
-  struct unit *punit = find_unit_by_id(packet->value);
+  struct city *pcity=find_city_by_id(packet->value);
+  struct unit *punit=find_unit_by_id(packet->value);
   struct packet_generic_values req;
 
   if (!pplayer) {
@@ -266,16 +244,18 @@ void handle_incite_inq(struct connection *pconn,
 	    conn_description(pconn));
     return;
   }
-  if (pcity) {
-    req.value1 = city_incite_cost(pplayer, pcity);
-    req.id = packet->value;
+  if(pcity)  {
+    city_incite_cost(pcity);
+    req.id=packet->value;
+    req.value1=pcity->incite_revolt_cost;
+    if(pplayer->player_no == pcity->original) req.value1/=2;
     send_packet_generic_values(pconn, PACKET_INCITE_COST, &req);
     return;
   }
-  if (punit) {
+  if(punit)  {
     punit->bribe_cost = unit_bribe_cost(punit);
-    req.id = packet->value;
-    req.value1 = punit->bribe_cost;
+    req.id=packet->value;
+    req.value1=punit->bribe_cost;
     send_packet_generic_values(pconn, PACKET_INCITE_COST, &req);
   }
 }
@@ -402,8 +382,8 @@ void handle_unit_change_homecity(struct player *pplayer,
   NOTE: AI calls do_unit_disband_safe directly, but player calls
   of course handle_unit_disband_safe
 **************************************************************************/
-static void do_unit_disband_safe(struct city *pcity, struct unit *punit,
-				 struct genlist_iterator *iter)
+void do_unit_disband_safe(struct city *pcity, struct unit *punit,
+			  struct genlist_iterator *iter)
 {
   if (pcity) {
     pcity->shield_stock += (unit_type(punit)->build_cost/2);
@@ -558,18 +538,20 @@ static void city_add_unit(struct player *pplayer, struct unit *punit)
 static void city_build(struct player *pplayer, struct unit *punit,
 		       char *name)
 {
-  if (!is_sane_name(name)) {
+  const char *city_name = get_sane_name(name);
+
+  if (!city_name) {
     notify_player_ex(pplayer, punit->x, punit->y, E_NOEVENT,
 		     _("Game: Let's not build a city with "
 		       "such a stupid name."));
     return;
   }
 
-  if (!is_allowed_city_name(pplayer, name, punit->x, punit->y, TRUE)) {
+  if (!is_allowed_city_name(pplayer, city_name, punit->x, punit->y, TRUE)) {
     return;
   }
 
-  create_city(pplayer, punit->x, punit->y, name);
+  create_city(pplayer, punit->x, punit->y, city_name);
   wipe_unit(punit);
 }
 
@@ -650,14 +632,14 @@ already made all neccesary checks.
 **************************************************************************/
 static void handle_unit_attack_request(struct unit *punit, struct unit *pdefender)
 {
+  int o;
   struct player *pplayer = unit_owner(punit);
   struct packet_unit_combat combat;
   struct unit *plooser, *pwinner;
+  struct unit old_punit = *punit;	/* Used for new ship algorithm. -GJW */
   struct city *pcity;
-  int moves_used, def_moves_used; 
   int def_x = pdefender->x, def_y = pdefender->y;
-  struct packet_unit_info unit_att_packet, unit_def_packet;
-
+  
   freelog(LOG_DEBUG, "Start attack: %s's %s against %s's %s.",
 	  pplayer->name, unit_type(punit)->name, 
 	  unit_owner(pdefender)->name,
@@ -665,16 +647,20 @@ static void handle_unit_attack_request(struct unit *punit, struct unit *pdefende
 
   /* Sanity checks */
   if (pplayers_non_attack(unit_owner(punit), unit_owner(pdefender))) {
-    die("Trying to attack a unit with which you have peace "
-	"or cease-fire at %i, %i", def_x, def_y);
+    freelog(LOG_FATAL,
+	    "Trying to attack a unit with which you have peace or cease-fire at %i, %i",
+	    def_x, def_y);
+    abort();
   }
   if (pplayers_allied(unit_owner(punit), unit_owner(pdefender))
       && !(unit_flag(punit, F_NUCLEAR) && punit == pdefender)) {
-    die("Trying to attack a unit with which you have alliance at %i, %i",
-	def_x, def_y);
+    freelog(LOG_FATAL,
+	    "Trying to attack a unit with which you have alliance at %i, %i",
+	    def_x, def_y);
+    abort();
   }
 
-  if (unit_flag(punit, F_NUCLEAR)) {
+  if(unit_flag(punit, F_NUCLEAR)) {
     struct packet_nuke_tile packet;
     
     packet.x=def_x;
@@ -696,9 +682,7 @@ static void handle_unit_attack_request(struct unit *punit, struct unit *pdefende
     do_nuclear_explosion(pplayer, def_x, def_y);
     return;
   }
-  moves_used = unit_move_rate(punit) - punit->moves_left;
-  def_moves_used = unit_move_rate(pdefender) - pdefender->moves_left;
-
+  
   unit_versus_unit(punit, pdefender);
 
   /* Adjust attackers moves_left _after_ unit_versus_unit() so that
@@ -710,21 +694,14 @@ static void handle_unit_attack_request(struct unit *punit, struct unit *pdefende
    * that had been used so far this turn (plus the points used in the attack
    * itself). -GJW
    */
-  if (is_sailing_unit(punit)) {
-    punit->moves_left = unit_move_rate(punit) - moves_used - SINGLE_MOVE;
+  if (is_sailing_unit (punit)) {
+    int moves_used = unit_move_rate (&old_punit) - old_punit.moves_left;
+    punit->moves_left = unit_move_rate (punit) - moves_used - SINGLE_MOVE;
   } else {
     punit->moves_left -= SINGLE_MOVE;
   }
-  if (is_sailing_unit(pdefender)) {
-    pdefender->moves_left = unit_move_rate(pdefender) - def_moves_used;
-  }
-  
-  if (punit->moves_left < 0) {
-    punit->moves_left = 0;
-  }
-  if (pdefender->moves_left < 0) {
-    pdefender->moves_left = 0;
-  }
+  if(punit->moves_left<0)
+    punit->moves_left=0;
 
   if (punit->hp &&
       (pcity=map_get_city(def_x, def_y)) &&
@@ -742,42 +719,22 @@ static void handle_unit_attack_request(struct unit *punit, struct unit *pdefende
     
   combat.attacker_unit_id=punit->id;
   combat.defender_unit_id=pdefender->id;
-  combat.attacker_hp=punit->hp;
-  combat.defender_hp=pdefender->hp;
+  combat.attacker_hp=punit->hp / game.firepower_factor;
+  combat.defender_hp=pdefender->hp / game.firepower_factor;
   combat.make_winner_veteran=pwinner->veteran?1:0;
-
-  package_unit(punit, &unit_att_packet, FALSE, FALSE, UNIT_INFO_IDENTITY, 0,
-	       FALSE);
-  package_unit(pdefender, &unit_def_packet, FALSE, FALSE, UNIT_INFO_IDENTITY,
-	       0, FALSE);
   
-  players_iterate(other_player) {
-    if (map_get_known_and_seen(punit->x, punit->y, other_player) ||
-	map_get_known_and_seen(def_x, def_y, other_player)) {
-
-      /* 
-       * Special case for attacking/defending:
-       * 
-       * Normally the player doesn't get the information about the
-       * units inside a city. However for attacking/defending the
-       * player has to know the unit of the other side.
-       */
-
-      lsend_packet_unit_info(&other_player->connections, &unit_att_packet);
-      lsend_packet_unit_info(&other_player->connections, &unit_def_packet);
-      lsend_packet_unit_combat(&other_player->connections, &combat);
+  for(o=0; o<game.nplayers; o++)
+    if (map_get_known_and_seen(punit->x, punit->y, get_player(o)) ||
+	map_get_known_and_seen(def_x, def_y, get_player(o))) {
+      lsend_packet_unit_combat(&game.players[o].connections, &combat);
     }
-  } players_iterate_end;
-
   conn_list_iterate(game.game_connections, pconn) {
     if (!pconn->player && pconn->observer) {
-      send_packet_unit_info(pconn, &unit_att_packet);
-      send_packet_unit_info(pconn, &unit_def_packet);
       send_packet_unit_combat(pconn, &combat);
     }
   } conn_list_iterate_end;
   
-  if (punit == plooser) {
+  if(punit==plooser) {
     /* The attacker lost */
     freelog(LOG_DEBUG, "Attacker lost: %s's %s against %s's %s.",
 	    pplayer->name, unit_type(punit)->name,
@@ -801,7 +758,8 @@ static void handle_unit_attack_request(struct unit *punit, struct unit *pdefende
 		     get_location_str_at(unit_owner(plooser),
 					 pwinner->x, pwinner->y));
     wipe_unit(plooser);
-  } else {
+  }
+  else {
     /* The defender lost, the attacker punit lives! */
     freelog(LOG_DEBUG, "Defender lost: %s's %s against %s's %s.",
 	    pplayer->name, unit_type(punit)->name,
@@ -837,7 +795,7 @@ static void handle_unit_attack_request(struct unit *punit, struct unit *pdefende
        and adjust moves_left to afterward (if successful). */
 
     int old_moves = punit->moves_left;
-    int full_moves = unit_move_rate(punit);
+    int full_moves = unit_move_rate (punit);
     punit->moves_left = full_moves;
     if (handle_unit_move_request(punit, def_x, def_y, FALSE, FALSE)) {
       punit->moves_left = old_moves - (full_moves - punit->moves_left);
@@ -973,7 +931,8 @@ bool handle_unit_move_request(struct unit *punit, int dest_x, int dest_y,
       } else if (pdefender) {
 	packet.target_id = pdefender->id;
       } else {
-	die("Bug in unithand.c: no diplomat target.");
+	freelog(LOG_FATAL, "Bug in unithand.c: no diplomat target.");
+	abort();
       }
       packet.diplomat_id = punit->id;
       packet.action_type = DIPLOMAT_CLIENT_POPUP_DIALOG;
@@ -981,7 +940,7 @@ bool handle_unit_move_request(struct unit *punit, int dest_x, int dest_y,
       return FALSE;
     } else if (!can_unit_move_to_tile(punit, dest_x, dest_y, igzoc)) {
       notify_player_ex(pplayer, punit->x, punit->y, E_NOEVENT,
-		       is_ocean(map_get_terrain(punit->x, punit->y))
+		       map_get_terrain(punit->x, punit->y) == T_OCEAN
 		       ? _("Game: Unit must be on land to "
 			   "perform diplomatic action.")
 		       : _("Game: No diplomat action possible."));
@@ -992,17 +951,6 @@ bool handle_unit_move_request(struct unit *punit, int dest_x, int dest_y,
   /*** Try to attack if there is an enemy unit on the target tile ***/
   if (pdefender
       && pplayers_at_war(unit_owner(punit), unit_owner(pdefender))) {
-    if (pcity && !pplayers_at_war(city_owner(pcity), unit_owner(punit))) {
-      notify_player_ex(pplayer, punit->x, punit->y, E_NOEVENT,
-		       _("Game: Can't attack %s's unit in the city of %s "
-			 "because you are not at war with %s."),
-		       unit_owner(pdefender)->name,
-		       pcity->name,
-		       city_owner(pcity)->name);
-      how_to_declare_war(pplayer);
-      return FALSE;
-    }
-
     if (!can_unit_attack_tile(punit, dest_x , dest_y)) {
       notify_player_ex(pplayer, punit->x, punit->y, E_NOEVENT,
   		       _("Game: You can't attack there."));
@@ -1015,9 +963,17 @@ bool handle_unit_move_request(struct unit *punit, int dest_x, int dest_y,
       return FALSE;
     }
 
-    /* FIXME: This code will never activate for AI players, and for
-     * human players the server-side goto implementation should be
-     * obsoleted for client usage. So in time, remove the code below. */
+    if (pcity && !pplayers_at_war(city_owner(pcity), unit_owner(punit))) {
+      notify_player_ex(pplayer, punit->x, punit->y, E_NOEVENT,
+		       _("Game: Can't attack %s's unit in the city of %s "
+			 "because you are not at war with %s."),
+		       unit_owner(pdefender)->name,
+		       pcity->name,
+		       city_owner(pcity)->name);
+      how_to_declare_war(pplayer);
+      return FALSE;
+    }
+
     if (punit->activity == ACTIVITY_GOTO && 
         !same_pos(punit->goto_dest_x, punit->goto_dest_y, dest_x, dest_y)) {
       notify_player_ex(pplayer, punit->x, punit->y, E_NOEVENT,
@@ -1247,7 +1203,8 @@ static void handle_unit_activity_dependencies(struct unit *punit,
       punit->ai.control = FALSE;
       break;
     default: 
-      ; /* do nothing */
+      /* do nothing */
+      break;
     }
     break;
   case ACTIVITY_EXPLORE:
@@ -1255,16 +1212,12 @@ static void handle_unit_activity_dependencies(struct unit *punit,
     if (punit->moves_left > 0) {
       int id = punit->id;
       bool more_to_explore = ai_manage_explorer(punit);
-
-      if ((punit = find_unit_by_id(id))) {
-	if (more_to_explore) {
-	  /* ai_manage_explorer sets the activity to idle, so we reset
-	   * it. */
-	  set_unit_activity(punit, ACTIVITY_EXPLORE);
-	  send_unit_info(NULL, punit);
-	} else {
-	  punit->ai.control = FALSE;
-	}
+      /* ai_manage_explorer sets the activity to idle, so we reset it */
+      if ((punit = find_unit_by_id(id)) && more_to_explore) {
+	set_unit_activity(punit, ACTIVITY_EXPLORE);
+	send_unit_info(NULL, punit);
+      } else if (punit) {
+        punit->ai.control = FALSE;
       }
     }
     break;
@@ -1297,12 +1250,10 @@ void handle_unit_activity_request(struct unit *punit,
 /**************************************************************************
 ...
 **************************************************************************/
-static void handle_unit_activity_request_targeted(struct unit *punit,
-						  enum unit_activity
-						  new_activity,
-						  enum tile_special_type
-						  new_target,
-						  bool select_unit)
+void handle_unit_activity_request_targeted(struct unit *punit,
+					   enum unit_activity new_activity,
+					   enum tile_special_type new_target,
+					   bool select_unit)
 {
   if (can_unit_do_activity_targeted(punit, new_activity, new_target)) {
     enum unit_activity old_activity = punit->activity;

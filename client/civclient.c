@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -78,7 +77,7 @@
    needed (hence, it is not 'extern'd in civclient.h) */
 bool is_server = FALSE;
 
-static char tile_set_name[512] = "\0";
+char tile_set_name[512] = "\0";
 char sound_plugin_name[512] = "\0";
 char sound_set_name[512] = "\0";
 char server_host[512] = "\0";
@@ -90,6 +89,9 @@ bool auto_connect = FALSE; /* TRUE = skip "Connect to Freeciv Server" dialog */
 static enum client_states client_state = CLIENT_BOOT_STATE;
 
 int seconds_to_turndone;
+
+int last_turn_gold_amount;
+int turn_gold_difference;
 
 /* TRUE if an end turn request is blocked by busy agents */
 bool waiting_for_end_turn = FALSE;
@@ -107,13 +109,13 @@ static void client_remove_all_cli_conn(void);
 **************************************************************************/
 int main(int argc, char *argv[])
 {
-  int i, loglevel;
-  int ui_options = 0;
-  bool ui_separator = FALSE;
+  int i;
+  int loglevel;
   char *logfile=NULL;
   char *option=NULL;
 
   init_nls();
+  dont_run_as_root(argv[0], "freeciv_client");
   audio_init();
 
   /* default argument values are set in options.c */
@@ -122,10 +124,7 @@ int main(int argc, char *argv[])
   i = 1;
 
   while (i < argc) {
-   if (ui_separator) {
-     argv[1 + ui_options] = argv[i];
-     ui_options++;
-   } else if (is_option("--help", argv[i])) {
+   if (is_option("--help", argv[i])) {
     fprintf(stderr, _("Usage: %s [option ...]\n"
 		      "Valid options are:\n"), argv[0]);
     fprintf(stderr, _("  -a, --autoconnect\tSkip connect dialog\n"));
@@ -148,9 +147,6 @@ int main(int argc, char *argv[])
     fprintf(stderr, _("  -t, --tiles FILE\t"
 		      "Use data file FILE.tilespec for tiles\n"));
     fprintf(stderr, _("  -v, --version\t\tPrint the version number\n"));
-    fprintf(stderr, _("      --\t\t"
-		      "Pass any following options to the UI.\n"
-		      "\t\t\tTry \"%s -- --help\" for more.\n"), argv[0]);
     exit(EXIT_SUCCESS);
    } else if (is_option("--version",argv[i])) {
     fprintf(stderr, "%s %s\n", freeciv_name_version(), client_string);
@@ -180,21 +176,12 @@ int main(int argc, char *argv[])
       }
    } else if ((option = get_option("--tiles", argv, &i, argc)))
       sz_strlcpy(tile_set_name, option);
-   else if (is_option("--", argv[i])) {
-     ui_separator = TRUE;
-   } else { 
+   else { 
       fprintf(stderr, _("Unrecognized option: \"%s\"\n"), argv[i]);
       exit(EXIT_FAILURE);
    }
    i++;
   } /* of while */
-
-  /* Remove all options except those intended for the UI. */
-  argv[1 + ui_options] = NULL;
-  argc = 1 + ui_options;
-
-  /* disallow running as root -- too dangerous */
-  dont_run_as_root(argv[0], "freeciv_client");
 
   log_init(logfile, loglevel, NULL);
 
@@ -237,6 +224,7 @@ int main(int argc, char *argv[])
   audio_play_music("music_start", NULL);
 
   /* run gui-specific client */
+
   ui_main(argc, argv);
 
   /* termination */
@@ -468,10 +456,6 @@ void handle_packet_input(void *packet, int type)
     handle_thaw_hint();
     break;
 
-  case PACKET_PING_INFO:
-    handle_ping_info((struct packet_ping_info *) packet);
-    break;
-
   default:
     freelog(LOG_ERROR, "Received unknown packet (type %d) from server!", type);
     /* Old clients (<= some 1.11.5-devel, capstr +1.11) used to exit()
@@ -600,7 +584,6 @@ void client_game_init()
   game_init();
   attribute_init();
   agents_init();
-  cm_init();
 }
 
 /**************************************************************************
@@ -608,7 +591,6 @@ void client_game_init()
 **************************************************************************/
 void client_game_free()
 {
-  cm_free();
   client_remove_all_cli_conn();
   free_client_goto();
   free_help_texts();
@@ -626,6 +608,19 @@ void set_client_state(enum client_states newstate)
       && (newstate == CLIENT_PRE_GAME_STATE);
   enum client_states oldstate = client_state;
 
+  /*
+   * We are currently ignoring the CLIENT_GAME_OVER_STATE state
+   * because the client hasen't been changed to take care of it. So it
+   * breaks the show-whole-map-at-the-end-of-the-game. Nevertheless
+   * the server is so kind and sends the client this information. And
+   * in the future the client can/should take advantage of this
+   * information.
+   *
+   * FIXME: audit all client code to that it copes with
+   * CLIENT_GAME_OVER_STATE and implement specific
+   * CLIENT_GAME_OVER_STATE actions like history browsing. Then remove
+   * the kludge below.
+   */
   if (newstate == CLIENT_GAME_OVER_STATE) {
     /*
      * Extra kludge for end-game handling of the CMA.
@@ -635,9 +630,10 @@ void set_client_state(enum client_states newstate)
         cma_release_city(pcity);
       }
     } city_list_iterate_end;
+    newstate = CLIENT_GAME_RUNNING_STATE;
   }
 
-  if (client_state != newstate) {
+  if(client_state!=newstate) {
 
     /* If changing from pre-game state to _either_ select race
        or running state, then we have finished getting ruleset data,
@@ -654,7 +650,7 @@ void set_client_state(enum client_states newstate)
       
     client_state=newstate;
 
-    if (client_state == CLIENT_GAME_RUNNING_STATE) {
+    if(client_state==CLIENT_GAME_RUNNING_STATE) {
       load_ruleset_specific_options();
       create_event(-1, -1, E_GAME_START, _("Game started."));
       update_research(game.player_ptr);
@@ -662,9 +658,8 @@ void set_client_state(enum client_states newstate)
       boot_help_texts();	/* reboot */
       update_unit_focus();
     }
-    else if (client_state == CLIENT_PRE_GAME_STATE) {
+    else if(client_state==CLIENT_PRE_GAME_STATE) {
       popdown_all_city_dialogs();
-      popdown_all_game_dialogs();
       close_all_diplomacy_dialogs();
       set_unit_focus_no_center(NULL);
       clear_notify_window();
@@ -683,7 +678,7 @@ void set_client_state(enum client_states newstate)
 	exit(EXIT_FAILURE);
       } else {
 	server_autoconnect();
-	auto_connect = FALSE;	/* don't try this again */
+        auto_connect = 0;  /* don't try this again */
       }
     } else {
       gui_server_connect();
@@ -801,50 +796,4 @@ void real_timer_callback(void)
   }
 
   flip = !flip;
-}
-
-/**************************************************************************
-  Returns TRUE if the client can issue orders (such as giving unit
-  commands).  This function should be called each time before allowing the
-  user to give an order.
-**************************************************************************/
-bool can_client_issue_orders(void)
-{
-  return (!client_is_observer()
-	  && get_client_state() == CLIENT_GAME_RUNNING_STATE);
-}
-
-/**************************************************************************
-  Returns TRUE iff the client can do diplomatic meetings with another 
-  given player.
-**************************************************************************/
-bool can_meet_with_player(struct player *pplayer)
-{
-  return (pplayer->is_alive
-          && pplayer != game.player_ptr
-          && player_has_embassy(game.player_ptr, pplayer)
-          && pplayer->is_connected
-          && can_client_issue_orders());
-}
-
-/**************************************************************************
-  Returns TRUE iff the client can get intelligence from another 
-  given player.
-**************************************************************************/
-bool can_intel_with_player(struct player *pplayer)
-{
-  return (pplayer->is_alive
-          && pplayer != game.player_ptr
-          && player_has_embassy(game.player_ptr, pplayer));
-}
-
-/**************************************************************************
-  Return TRUE if the client can change the view; i.e. if the mapview is
-  active.  This function should be called each time before allowing the
-  user to do mapview actions.
-**************************************************************************/
-bool can_client_change_view(void)
-{
-  return (get_client_state() == CLIENT_GAME_RUNNING_STATE
-	  || get_client_state() == CLIENT_GAME_OVER_STATE);
 }

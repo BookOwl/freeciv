@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -25,7 +24,7 @@
 
 #include "chatline_g.h"
 #include "citydlg_g.h"
-#include "climap.h"
+#include "climisc.h"
 #include "dialogs_g.h"
 #include "gui_main_g.h"
 #include "mapctrl_g.h"
@@ -58,10 +57,7 @@ bool draw_goto_line = TRUE;
 static struct unit *punit_attacking = NULL;
 static struct unit *punit_defending = NULL;
 
-/*
- * This variable is TRUE iff a NON-AI controlled unit was focused this
- * turn.
- */
+/* this variable is TRUE iff a NON-AI controlled unit moved this turn */
 bool non_ai_unit_focus;
 
 /*************************************************************************/
@@ -221,19 +217,14 @@ void advance_unit_focus(void)
 
   set_unit_focus(punit_focus);
 
-  /* 
-   * Is the unit which just lost focus a non-AI unit? If yes this
-   * enables the auto end turn. 
-   */
+  /* A unit moved, was it a good enough condition for auto end turn 
+   * once no more units can be moved? */
   if (punit_old_focus && !punit_old_focus->ai.control) {
     non_ai_unit_focus = TRUE;
   }
 
-  /* 
-   * Handle auto-turn-done mode: If a unit was in focus (did move),
-   * but now none are (no more to move) and there was at least one
-   * non-AI unit this turn which was focused, then fake a Turn Done
-   * keypress.
+  /* Handle auto-turn-done mode:  If a unit was in focus (did move),
+   * but now none are (no more to move), then fake a Turn Done keypress.
    */
   if (auto_turn_done && punit_old_focus && !punit_focus && non_ai_unit_focus) {
     key_end_turn();
@@ -345,15 +336,9 @@ struct unit *find_visible_unit(struct tile *ptile)
 void blink_active_unit(void)
 {
   static bool is_shown;
-  static struct unit *pblinking_unit;
   struct unit *punit;
 
   if((punit=get_unit_in_focus())) {
-    if (punit != pblinking_unit) {
-      /* When the focus unit changes, we reset the is_shown flag. */
-      pblinking_unit = punit;
-      is_shown = TRUE;
-    }
     if(is_shown) {
       set_focus_unit_hidden_state(TRUE);
       refresh_tile_mapcanvas(punit->x, punit->y, TRUE);
@@ -388,8 +373,8 @@ void update_unit_pix_label(struct unit *punit)
   
   int i;
   
-  if (punit && get_client_state() != CLIENT_GAME_OVER_STATE) {
-    if (punit->type != prev_unit_type
+  if(punit) {
+    if(punit->type != prev_unit_type
        || punit->activity != prev_activity
        || punit->hp != prev_hp) {
       set_unit_icon(-1, punit);
@@ -935,9 +920,7 @@ void request_unit_pillage(struct unit *punit)
 **************************************************************************/
 void request_toggle_map_grid(void) 
 {
-  if (!can_client_change_view()) {
-    return;
-  }
+  if(get_client_state()!=CLIENT_GAME_RUNNING_STATE) return;
 
   draw_map_grid^=1;
   update_map_canvas_visible();
@@ -948,24 +931,10 @@ void request_toggle_map_grid(void)
 **************************************************************************/
 void request_toggle_city_names(void)
 {
-  if (!can_client_change_view()) {
+  if (get_client_state() != CLIENT_GAME_RUNNING_STATE)
     return;
-  }
 
   draw_city_names ^= 1;
-  update_map_canvas_visible();
-}
- 
- /**************************************************************************
- Toggle display of city growth (turns-to-grow)
-**************************************************************************/
-void request_toggle_city_growth(void)
-{
-  if (get_client_state() != CLIENT_GAME_RUNNING_STATE) {
-    return;
-  }
-
-  draw_city_growth = !draw_city_growth;
   update_map_canvas_visible();
 }
 
@@ -974,9 +943,8 @@ void request_toggle_city_growth(void)
 **************************************************************************/
 void request_toggle_city_productions(void)
 {
-  if (!can_client_change_view()) {
+  if (get_client_state() != CLIENT_GAME_RUNNING_STATE)
     return;
-  }
 
   draw_city_productions ^= 1;
   update_map_canvas_visible();
@@ -987,9 +955,8 @@ void request_toggle_city_productions(void)
 **************************************************************************/
 void request_toggle_terrain(void)
 {
-  if (!can_client_change_view()) {
+  if (get_client_state() != CLIENT_GAME_RUNNING_STATE)
     return;
-  }
 
   draw_terrain ^= 1;
   update_map_canvas_visible();
@@ -1000,9 +967,8 @@ void request_toggle_terrain(void)
 **************************************************************************/
 void request_toggle_coastline(void)
 {
-  if (!can_client_change_view()) {
+  if (get_client_state() != CLIENT_GAME_RUNNING_STATE)
     return;
-  }
 
   draw_coastline ^= 1;
   update_map_canvas_visible();
@@ -1013,9 +979,8 @@ void request_toggle_coastline(void)
 **************************************************************************/
 void request_toggle_roads_rails(void)
 {
-  if (!can_client_change_view()) {
+  if (get_client_state() != CLIENT_GAME_RUNNING_STATE)
     return;
-  }
 
   draw_roads_rails ^= 1;
   update_map_canvas_visible();
@@ -1026,9 +991,8 @@ void request_toggle_roads_rails(void)
 **************************************************************************/
 void request_toggle_irrigation(void)
 {
-  if (!can_client_change_view()) {
+  if (get_client_state() != CLIENT_GAME_RUNNING_STATE)
     return;
-  }
 
   draw_irrigation ^= 1;
   update_map_canvas_visible();
@@ -1039,9 +1003,8 @@ void request_toggle_irrigation(void)
 **************************************************************************/
 void request_toggle_mines(void)
 {
-  if (!can_client_change_view()) {
+  if (get_client_state() != CLIENT_GAME_RUNNING_STATE)
     return;
-  }
 
   draw_mines ^= 1;
   update_map_canvas_visible();
@@ -1052,9 +1015,8 @@ void request_toggle_mines(void)
 **************************************************************************/
 void request_toggle_fortress_airbase(void)
 {
-  if (!can_client_change_view()) {
+  if (get_client_state() != CLIENT_GAME_RUNNING_STATE)
     return;
-  }
 
   draw_fortress_airbase ^= 1;
   update_map_canvas_visible();
@@ -1065,9 +1027,8 @@ void request_toggle_fortress_airbase(void)
 **************************************************************************/
 void request_toggle_specials(void)
 {
-  if (!can_client_change_view()) {
+  if (get_client_state() != CLIENT_GAME_RUNNING_STATE)
     return;
-  }
 
   draw_specials ^= 1;
   update_map_canvas_visible();
@@ -1078,9 +1039,8 @@ void request_toggle_specials(void)
 **************************************************************************/
 void request_toggle_pollution(void)
 {
-  if (!can_client_change_view()) {
+  if (get_client_state() != CLIENT_GAME_RUNNING_STATE)
     return;
-  }
 
   draw_pollution ^= 1;
   update_map_canvas_visible();
@@ -1091,9 +1051,8 @@ void request_toggle_pollution(void)
 **************************************************************************/
 void request_toggle_cities(void)
 {
-  if (!can_client_change_view()) {
+  if (get_client_state() != CLIENT_GAME_RUNNING_STATE)
     return;
-  }
 
   draw_cities ^= 1;
   update_map_canvas_visible();
@@ -1104,9 +1063,8 @@ void request_toggle_cities(void)
 **************************************************************************/
 void request_toggle_units(void)
 {
-  if (!can_client_change_view()) {
+  if (get_client_state() != CLIENT_GAME_RUNNING_STATE)
     return;
-  }
 
   draw_units ^= 1;
   update_map_canvas_visible();
@@ -1117,9 +1075,8 @@ void request_toggle_units(void)
 **************************************************************************/
 void request_toggle_focus_unit(void)
 {
-  if (!can_client_change_view()) {
+  if (get_client_state() != CLIENT_GAME_RUNNING_STATE)
     return;
-  }
 
   draw_focus_unit ^= 1;
   update_map_canvas_visible();
@@ -1130,9 +1087,8 @@ void request_toggle_focus_unit(void)
 **************************************************************************/
 void request_toggle_fog_of_war(void)
 {
-  if (!can_client_change_view()) {
+  if (get_client_state() != CLIENT_GAME_RUNNING_STATE)
     return;
-  }
 
   draw_fog_of_war ^= 1;
   update_map_canvas_visible();
@@ -1250,7 +1206,7 @@ void do_map_click(int xtile, int ytile)
   if (punit && hover_state != HOVER_NONE) {
     switch (hover_state) {
     case HOVER_NONE:
-      die("well; shouldn't get here :)");
+      abort(); /* well; shouldn't get here :) */
     case HOVER_GOTO:
       do_unit_goto(xtile, ytile);
       break;
@@ -1779,15 +1735,6 @@ void key_map_grid_toggle(void)
 void key_city_names_toggle(void)
 {
   request_toggle_city_names();
-}
-
-/**************************************************************************
-  Toggles the "show city growth turns" option by passing off the
-  request to another function...
-**************************************************************************/
-void key_city_growth_toggle(void)
-{
-  request_toggle_city_growth();
 }
 
 /**************************************************************************

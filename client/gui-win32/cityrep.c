@@ -10,11 +10,11 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/  
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
-#endif
-
+#endif        
+#include <stdlib.h>
+ 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -575,9 +575,8 @@ static void list_coastal_select(HWND hLst)
   for (i=0;i<num;i++)
     {
       pcity=(struct city *)ListBox_GetItemData(hLst,i);
-      if (is_ocean_near_tile(pcity->x, pcity->y)) {
+      if (is_terrain_near_tile(pcity->x, pcity->y, T_OCEAN)) 
 	ListBox_SetSel(hLst,TRUE,i);
-      }
     }
 }
 
@@ -604,8 +603,8 @@ static void list_sameisland_select(HWND hLst)
 	{
 	  struct city *selectedcity;
 	  selectedcity=(struct city *)ListBox_GetItemData(hLst,cityids[j]);
-          if (map_get_continent(pcity->x, pcity->y, NULL)
-              == map_get_continent(selectedcity->x, selectedcity->y, NULL))
+          if (map_get_continent(pcity->x, pcity->y)
+              == map_get_continent(selectedcity->x, selectedcity->y))
 	    {    
 	      ListBox_SetSel(hLst,TRUE,i);
 	      break;

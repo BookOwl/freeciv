@@ -10,11 +10,10 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
+ 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
-#endif
-
+#endif   
 #include <windows.h>
 #include <windowsx.h>
 #include <commctrl.h>
@@ -31,7 +30,6 @@
 #include "shared.h"
 #include "support.h"
  
-#include "climap.h"
 #include "climisc.h"
 #include "cityrep.h"
 #include "colors.h"
@@ -95,7 +93,7 @@ struct city_dialog {
   int present_y;
   Impr_Type_id sell_id;
   
-  enum citizen_type citizen_type[NUM_CITIZENS_SHOWN];
+  int citizen_type[NUM_CITIZENS_SHOWN];
   int support_unit_ids[NUM_UNITS_SHOWN];
   int present_unit_ids[NUM_UNITS_SHOWN];
   int change_list_ids[B_LAST+1+U_LAST+1];
@@ -607,23 +605,57 @@ void city_dialog_update_map(HDC hdc,struct city_dialog *pdialog)
 
 void city_dialog_update_citizens(HDC hdc,struct city_dialog *pdialog)
 {
-  int i;
+  int i, n;
   struct city *pcity=pdialog->pcity;
   RECT rc;
   HBITMAP oldbit;
-  enum citizen_type citizens[MAX_CITY_SIZE];
   oldbit=SelectObject(citydlgdc,pdialog->citizen_bmp);
 
-  get_city_citizen_types(pcity, 4, citizens);
 
-  for (i = 0; i < pcity->size && i < NUM_CITIZENS_SHOWN; i++) {
-    if (pdialog->citizen_type[i] != citizens[i]) {
-      pdialog->citizen_type[i] = citizens[i];
-      draw_sprite(get_citizen_sprite(citizens[i], i, pcity), citydlgdc,
+  for(i=0, n=0; n<pcity->ppl_happy[4] && i<NUM_CITIZENS_SHOWN; n++, i++)
+    if(pdialog->citizen_type[i]!=5 && pdialog->citizen_type[i]!=6) {
+      pdialog->citizen_type[i]=5+i%2;
+      draw_sprite(get_citizen_sprite(pdialog->citizen_type[i]),citydlgdc,
+		  SMALL_TILE_WIDTH*i,0);
+    }
+  for(n=0; n<pcity->ppl_content[4] && i<NUM_CITIZENS_SHOWN; n++, i++)
+    if(pdialog->citizen_type[i]!=3 && pdialog->citizen_type[i]!=4) {
+      pdialog->citizen_type[i]=3+i%2;
+      draw_sprite(get_citizen_sprite(pdialog->citizen_type[i]),citydlgdc,
+		  SMALL_TILE_WIDTH*i,0);  
+    }
+  for(n=0; n<pcity->ppl_unhappy[4] && i<NUM_CITIZENS_SHOWN; n++, i++)
+    if(pdialog->citizen_type[i]!=7 && pdialog->citizen_type[i]!=8) {
+      pdialog->citizen_type[i]=7+i%2;
+      draw_sprite(get_citizen_sprite(pdialog->citizen_type[i]),citydlgdc,
+		  SMALL_TILE_WIDTH*i,0);
+    }
+  for (n = 0; n < pcity->ppl_angry[4] && i < NUM_CITIZENS_SHOWN; n++, i++)
+    if (pdialog->citizen_type[i] != 9 && pdialog->citizen_type[i] != 10) {
+      pdialog->citizen_type[i] = 9 + i % 2;
+      draw_sprite(get_citizen_sprite(pdialog->citizen_type[i]), citydlgdc,
 		  SMALL_TILE_WIDTH * i, 0);
     }
-  }
-
+  for(n=0; n<pcity->ppl_elvis && i<NUM_CITIZENS_SHOWN; n++, i++)
+    if(pdialog->citizen_type[i]!=0) {
+      pdialog->citizen_type[i]=0;
+      draw_sprite(get_citizen_sprite(pdialog->citizen_type[i]),citydlgdc,
+		  SMALL_TILE_WIDTH*i,0);
+      
+     }
+  for(n=0; n<pcity->ppl_scientist && i<NUM_CITIZENS_SHOWN; n++, i++)
+    if(pdialog->citizen_type[i]!=1) {
+      pdialog->citizen_type[i]=1;
+      draw_sprite(get_citizen_sprite(pdialog->citizen_type[i]),citydlgdc,
+		  SMALL_TILE_WIDTH*i,0);
+    }
+  for(n=0; n<pcity->ppl_taxman && i<NUM_CITIZENS_SHOWN; n++, i++)
+    if(pdialog->citizen_type[i]!=2) {
+      pdialog->citizen_type[i]=2;
+      draw_sprite(get_citizen_sprite(pdialog->citizen_type[i]),citydlgdc,
+		  SMALL_TILE_WIDTH*i,0);
+    }
+  
   if (i<NUM_CITIZENS_SHOWN) {
     rc.left=i*SMALL_TILE_WIDTH;
     rc.right=NUM_CITIZENS_SHOWN*SMALL_TILE_WIDTH;
@@ -636,7 +668,7 @@ void city_dialog_update_citizens(HDC hdc,struct city_dialog *pdialog)
   }
   
   for(; i<NUM_CITIZENS_SHOWN; i++) {
-    pdialog->citizen_type[i] = CITIZEN_LAST;    
+    pdialog->citizen_type[i]=-1;    
   }   
   
   BitBlt(hdc,pdialog->pop_x,pdialog->pop_y,
@@ -800,8 +832,8 @@ static void CityDlgCreate(HWND hWnd,struct city_dialog *pdialog)
   }
     
   hdc=GetDC(pdialog->mainwindow);
-  pdialog->map_bmp = CreateCompatibleBitmap(hdc, city_map_width,
-					    city_map_height);
+  pdialog->map_bmp=CreateCompatibleBitmap(hdc,5*NORMAL_TILE_WIDTH,
+					  5*NORMAL_TILE_HEIGHT);
   pdialog->citizen_bmp=CreateCompatibleBitmap(hdc,
 					      NUM_CITIZENS_SHOWN*
 					      SMALL_TILE_WIDTH,
@@ -1421,7 +1453,20 @@ static void supported_units_activate_close_callback(HWND w, void * data){
 
 void activate_callback(struct city_dialog *pdialog)
 {
-  activate_all_units(pdialog->pcity->x, pdialog->pcity->y);
+  int x=pdialog->pcity->x,y=pdialog->pcity->y;
+  struct unit_list *punit_list = &map_get_tile(x,y)->units;
+  struct unit *pmyunit = NULL;
+ 
+  if(unit_list_size(punit_list))  {
+    unit_list_iterate((*punit_list), punit) {
+      if(game.player_idx==punit->owner) {
+        pmyunit = punit;
+        request_new_unit_activity(punit, ACTIVITY_IDLE);
+      }
+    } unit_list_iterate_end;
+    if (pmyunit)
+      set_unit_focus(pmyunit);
+  }
 }      
 
 /****************************************************************
@@ -1630,7 +1675,7 @@ void city_dlg_click_supported(struct city_dialog *pdialog, int n)
            _("_Disband unit"),
              present_units_disband_callback, punit->id,
            _("_Cancel"),
-	     present_units_cancel_callback, 0, 0,NULL);
+             present_units_cancel_callback, 0, 0,NULL);
   }
 }
 
@@ -1739,8 +1784,6 @@ void city_dlg_click_citizens(struct city_dialog *pdialog,int n)
       packet.specialist_to=SP_ELVIS;   
       send_packet_city_request(&aconnection, &packet,
 			       PACKET_CITY_CHANGE_SPECIALIST);   
-      break;
-    default:
       break;
     }
 }
@@ -2093,35 +2136,6 @@ popdown_all_city_dialogs(void)
     CityDlgClose(genlist_get(&dialog_list,0));
   }
   popdown_cityopt_dialog();     
-}
-
-/**************************************************************************
-...
-**************************************************************************/
-void citydlg_tileset_change(void)
-{
-  
-  struct genlist_iterator myiter;
-  if (!city_dialogs_have_been_initialised)
-    initialize_city_dialogs();
-  if (is_isometric) {
-    city_map_width = 4 * NORMAL_TILE_WIDTH;
-    city_map_height = 4 * NORMAL_TILE_HEIGHT;
-  } else {
-    city_map_width = 5 * NORMAL_TILE_WIDTH;
-    city_map_height = 5 * NORMAL_TILE_HEIGHT;
-  }
-  genlist_iterator_init(&myiter, &dialog_list, 0);
-  for(; ITERATOR_PTR(myiter); ITERATOR_NEXT(myiter)) {
-    HDC hdc;
-    struct city_dialog *pdialog = (struct city_dialog *)ITERATOR_PTR(myiter);
-    DeleteObject(pdialog->map_bmp);
-    hdc = GetDC(pdialog->mainwindow);
-    pdialog->map_bmp = CreateCompatibleBitmap(hdc, city_map_width,
-					      city_map_height);
-    ReleaseDC(pdialog->mainwindow, hdc);
-    refresh_city_dialog(pdialog->pcity);
-  }
 }
 
 /**************************************************************************

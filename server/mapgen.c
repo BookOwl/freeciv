@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -59,6 +58,7 @@ static int maxval=0;
 static int forests=0;
 
 struct isledata {
+  int x,y;                        /* upper left corner of the islands */
   int goodies;
   int starters;
 };
@@ -91,7 +91,7 @@ static void make_mountains(int thill)
   }
   
   whole_map_iterate(x, y) {
-    if (hmap(x, y) > thill && !is_ocean(map_get_terrain(x,y))) { 
+    if (hmap(x, y)>thill &&map_get_terrain(x,y)!=T_OCEAN) { 
       if (myrand(100)>75) 
 	map_set_terrain(x, y, T_MOUNTAINS);
       else if (myrand(100)>25) 
@@ -138,10 +138,10 @@ static void make_polar(void)
      since the first lines has already been set to all arctic above. */
   for (x=0;x<map.xsize;x++) {
     if (map_get_terrain(x, 1)!=T_ARCTIC &&
-	!is_ocean(map_get_terrain(x, 1)))
+	map_get_terrain(x, 1)!=T_OCEAN)
       map_set_terrain(x, 1, T_TUNDRA);
     if (map_get_terrain(x, map.ysize-2)!=T_ARCTIC && 
-	!is_ocean(map_get_terrain(x, map.ysize-2)))
+	map_get_terrain(x, map.ysize-2)!=T_OCEAN)
       map_set_terrain(x, map.ysize-2, T_TUNDRA);
   }
 }
@@ -233,9 +233,8 @@ static void make_swamps(void)
     if (map_get_terrain(x, y)==T_GRASSLAND && hmap(x, y)<(maxval*60)/100) {
       map_set_terrain(x, y, T_SWAMP);
       cartesian_adjacent_iterate(x, y, x1, y1) {
- 	if (myrand(10) > 5 && !is_ocean(map_get_terrain(x1, y1))) { 
+ 	if (myrand(10)>5 && map_get_terrain(x1, y1) != T_OCEAN) 
  	  map_set_terrain(x1, y1, T_SWAMP);
-	}
  	/* maybe this should increment i too? */
       } cartesian_adjacent_iterate_end;
       swamps++;
@@ -347,7 +346,7 @@ static int river_test_highlands(int x, int y)
 *********************************************************************/
 static int river_test_adjacent_ocean(int x, int y)
 {
-  return 4 - adjacent_ocean_tiles4(x, y);
+  return 4 - adjacent_terrain_tiles4(x, y, T_OCEAN);
 }
 
 /*********************************************************************
@@ -537,7 +536,7 @@ static bool make_river(int x, int y)
 
     /* Test if the river is done. */
     if (adjacent_river_tiles4(x, y) != 0||
-	adjacent_ocean_tiles4(x, y) != 0) {
+	adjacent_terrain_tiles4(x, y, T_OCEAN) != 0) {
       freelog(LOG_DEBUG,
 	      "The river ended at (%d, %d).\n", x, y);
       return TRUE;
@@ -682,7 +681,7 @@ static void make_rivers(void)
      */
     if (
 	/* Don't start a river on ocean. */
-	!is_ocean(map_get_terrain(x, y)) &&
+	map_get_terrain(x, y) != T_OCEAN &&
 
 	/* Don't start a river on river. */
 	map_get_terrain(x, y) != T_RIVER &&
@@ -691,7 +690,7 @@ static void make_rivers(void)
 	/* Don't start a river on a tile is surrounded by > 1 river +
 	   ocean tile. */
 	adjacent_river_tiles4(x, y) +
-	adjacent_ocean_tiles4(x, y) <= 1 &&
+	adjacent_terrain_tiles4(x, y, T_OCEAN) <= 1 &&
 
 	/* Don't start a river on a tile that is surrounded by hills or
 	   mountains unless it is hard to find somewhere else to start
@@ -808,7 +807,7 @@ static void make_fair(void)
 	}
 	cartesian_adjacent_iterate(x, y, x1, y1) {
 	  if (myrand(100) > 66 &&
-	      !is_ocean(map_get_terrain(x1, y1))
+	      map_get_terrain(x1, y1) != T_OCEAN
 	      && map_get_terrain(x1, y1) != T_RIVER
 	      && !map_has_special(x1, y1, S_RIVER)) {
 	    map_set_terrain(x1, y1, T_HILLS);
@@ -866,14 +865,10 @@ static void make_land(void)
 **************************************************************************/
 static bool is_tiny_island(int x, int y) 
 {
-  if (is_ocean(map_get_terrain(x,y))) {
-    return FALSE;
-  }
+  if (map_get_terrain(x,y) == T_OCEAN) return FALSE;
 
   cartesian_adjacent_iterate(x, y, x1, y1) {
-    if (!is_ocean(map_get_terrain(x1, y1))) {
-      return FALSE;
-    }
+    if (map_get_terrain(x1, y1) != T_OCEAN) return FALSE;
   } cartesian_adjacent_iterate_end;
 
   return TRUE;
@@ -888,7 +883,7 @@ static void remove_tiny_islands(void)
     if (is_tiny_island(x, y)) {
       map_set_terrain(x, y, T_OCEAN);
       map_clear_special(x, y, S_RIVER);
-      map_set_continent(x, y, NULL, 0);
+      map_set_continent(x, y, 0);
     }
   } whole_map_iterate_end;
 }
@@ -900,12 +895,10 @@ static void remove_tiny_islands(void)
 static void assign_continent_flood(int x, int y, int nr)
 {
   if (y<0 || y>=map.ysize)              return;
-  if (map_get_continent(x, y, NULL) != 0)     return;
-  if (is_ocean(map_get_terrain(x, y))) {
-    return;
-  }
+  if (map_get_continent(x, y) != 0)     return;
+  if (map_get_terrain(x, y) == T_OCEAN) return;
 
-  map_set_continent(x, y, NULL, nr);
+  map_set_continent(x, y, nr);
 
   adjc_iterate(x, y, x1, y1) {
     assign_continent_flood(x1, y1, nr);
@@ -926,7 +919,7 @@ void assign_continent_numbers(void)
   int isle = 1;
 
   whole_map_iterate(x, y) {
-    map_set_continent(x, y, NULL, 0);
+    map_set_continent(x, y, 0);
   } whole_map_iterate_end;
 
   if (map.generator != 0) {
@@ -936,8 +929,7 @@ void assign_continent_numbers(void)
   }
       
   whole_map_iterate(x, y) {
-    if (map_get_continent(x, y, NULL) == 0 
-        && !is_ocean(map_get_terrain(x, y))) {
+    if (map_get_continent(x, y) == 0 && map_get_terrain(x, y) != T_OCEAN) {
       assign_continent_flood(x, y, isle++);
     }
   } whole_map_iterate_end;
@@ -947,115 +939,171 @@ void assign_continent_numbers(void)
 
 /**************************************************************************
  Allocate islands array and fill in values.
- Note this is only used for map.generator <= 1 or >= 5, since others
+ Note this is only use for map.generator<=1, since others
  setups islands and starters explicitly.
 **************************************************************************/
 static void setup_isledata(void)
 {
-  int starters = 0;
-  int min, firstcont, i;
-  
-  assert(map.num_continents > 0);
+  int x;
+  int good, mingood, maxgood;
+  int riches;
+  int starters;
+  int isles, oldisles, goodisles;
+  int guard1=0;
+  int firstcont;
+  int i;
+
+  assert(map.num_continents>0);
   
   /* allocate + 1 so can use continent number as index */
-  islands = fc_calloc((map.num_continents + 1), sizeof(struct isledata));
+  islands = fc_malloc((map.num_continents+1)*sizeof(struct isledata));
+
+  /* initialize: */
+  for(i=0; i<=map.num_continents; i++) {
+    islands[i].x = islands[i].y = -1;             /* flag */
+    islands[i].goodies = islands[i].starters = 0;
+  }
+
+  /* get x and y positions: (top left) */
+  whole_map_iterate(x, y) {
+    int cont = map_get_continent(x, y);
+    if (islands[cont].x == -1) {
+      islands[cont].x = x;
+      islands[cont].y = y;
+    }
+  } whole_map_iterate_end;
+
+  /* Add up the goodies: for useable ocean, add value to continent
+     for _every_ adjacent land tile.  This is IMO not very good,
+     because it adds potentially many times, and usable sea of
+     distance 2 from land is ignored, but this re-produces the
+     results of the previous method which used flood_fill().  --dwp
+     This is also the correct place to add S_HUT bonus.
+  */
+  whole_map_iterate(x, y) {
+    int cont = map_get_continent(x, y);
+    if (cont != 0) {
+      islands[cont].goodies += is_good_tile(x, y);
+      if (map_has_special(x, y, S_HUT)) {
+	islands[cont].goodies += 0;	/* 3; *//* regression testing */
+      }
+    } else {
+      assert(map_get_terrain(x, y) == T_OCEAN);
+      /* no need to check is_sea_usable(x,y), because will
+         only use for adjacent land (cont1>0) below */
+      {
+	int goodval = is_good_tile(x, y);
+	square_iterate(x, y, 1, x1, y1) {
+	  int cont1 = map_get_continent(x1, y1);
+	  if (cont1 > 0) {
+	    islands[cont1].goodies += goodval;
+	  }
+	}
+	square_iterate_end;
+      }
+    }
+  } whole_map_iterate_end;
   
-  /* the arctic and the antarctic are continents 1 and 2 for generator > 0 */
+  /* the arctic and the antarctic are continents 1 and 2 for generator>0*/
   if ((map.generator > 0) && map.separatepoles) {
     firstcont = 3;
   } else {
     firstcont = 1;
   }
-  
-  /* add up all the resources of the map */
-  whole_map_iterate(x, y) {
-    /* number of different continents seen from (x,y) */
-    int seen_conts = 0;
-    /* list of seen continents */
-    int conts[CITY_TILES]; 
-    int j;
-    
-    /* add tile's value to each continent that is within city 
-     * radius distance */
-    map_city_radius_iterate(x, y, x1, y1) {
-      /* (x1,y1) is possible location of a future city which will
-       * be able to get benefit of the tile (x,y) */
-      if (map_get_continent(x1, y1, NULL) < firstcont) { 
-        /* (x1, y1) belongs to a non-startable continent */
-        continue;
-      }
-      for (j = 0; j < seen_conts; j++) {
-	if (map_get_continent(x1, y1, NULL) == conts[j]) {
-          /* Continent of (x1,y1) is already in the list */
-	  break;
-        }
-      }
-      if (j >= seen_conts) { 
-	/* we have not seen this continent yet */
-	assert(seen_conts < CITY_TILES);
-	conts[seen_conts] = map_get_continent(x1, y1, NULL);
-	seen_conts++;
-      }
-    } map_city_radius_iterate_end;
-    
-    /* Now actually add the tile's value to all these continents */
-    for (j = 0; j < seen_conts; j++) {
-      islands[conts[j]].goodies += is_good_tile(x, y);
-    }
-  } whole_map_iterate_end;
-  
-  /* now divide the number of desired starting positions among
-   * the continents so that the minimum number of resources per starting 
-   * position is as large as possible */
-  
-  /* set minimum number of resources per starting position to be value of
-   * the best continent */
-  min = 0;
-  for (i = firstcont; i < map.num_continents + 1; i++) {
-    if (min < islands[i].goodies) {
-      min = islands[i].goodies;
-    }
+  isles = map.num_continents+1;
+ 
+  riches=0;
+  for (x=firstcont; x<isles; x++) {
+      riches+=islands[x].goodies;
   }
-  
-  /* place as many starting positions as possible with the current minumum
-   * number of resources, if not enough are placed, decrease the minimum */
-  while ((starters < game.nplayers) && (min > 0)) {
-    int nextmin = 0;
-    
-    starters = 0;
-    for (i = firstcont; i <= map.num_continents; i++) {
-      int value = islands[i].goodies;
-      
-      starters += value / min;
-      if (nextmin < (value / (value / min + 1))) {
-        nextmin = value / (value / min + 1);
-      }
-    }
-    
-    freelog(LOG_VERBOSE,
-	    "%d starting positions allocated with\n"
-            "at least %d resouces per starting position; \n",
-            starters, min);
 
-    assert(nextmin < min);
-    /* This choice of next min guarantees that there will be at least 
-     * one more starter on one of the continents */
-    min = nextmin;
-  }
+  starters= 100; oldisles= isles+1; goodisles= isles;
+  while( starters>game.nplayers && oldisles>goodisles ){
+    freelog(LOG_VERBOSE, "goodisles=%i", goodisles);
+    oldisles= goodisles;
+    maxgood= 1;
+    mingood= riches;
+    good=0; 
+    goodisles=0;
+    starters= 0;
+
+
+    /* goody goody */
+    for (x=firstcont;x<isles;x++) {	  
+      islands[x].starters=0;
+      if ( islands[x].goodies > (riches+oldisles-1)/oldisles ) 
+	{ 
+	  good+=islands[x].goodies; 
+	  goodisles++; 
+	  if(mingood>islands[x].goodies)
+	    mingood= islands[x].goodies;
+	  if(maxgood<islands[x].goodies)
+	    maxgood= islands[x].goodies;
+	}
+    }
   
-  if (min == 0) {
-    freelog(LOG_VERBOSE,
-            "If we continue some starting positions will have to have "
-            "access to zero resources (as defined in is_good_tile). \n");
-    freelog(LOG_FATAL,
-            "Cannot create enough starting position and will abort.\n"
-            "Please report this bug at " WEBSITE_URL);
-    abort();
-  } else {
-    for (i = firstcont; i <= map.num_continents; i++) {
-      islands[i].starters = islands[i].goodies / min;
+    if(mingood+1<maxgood/game.nplayers)
+      mingood= maxgood/game.nplayers; 
+
+    if(goodisles>game.nplayers){
+      /* bloody goodies */   
+      for (x=firstcont;x<isles;x++) {
+	if (( islands[x].goodies*4 > 3*(riches+oldisles-1)/oldisles )
+	    &&!(islands[x].goodies > (riches+oldisles-1)/oldisles)
+	    )
+	  { 
+	    good+=islands[x].goodies; 
+	    goodisles++; 
+	    if(mingood>islands[x].goodies)
+	      mingood= islands[x].goodies;
+	  }
+      }
+  
+ 
+      /* starters are loosers */
+      for (x=firstcont;x<isles;x++) {
+	if (( islands[x].goodies*4 > 3*(riches+oldisles-1)/oldisles )
+	    &&!(islands[x].goodies > (riches+oldisles-1)/oldisles)) {
+	  freelog(LOG_VERBOSE, "islands[x].goodies=%i",islands[x].goodies);
+	  islands[x].starters= (islands[x].goodies+guard1)/mingood; 
+	  if(islands[x].starters == 0) {
+	    islands[x].starters+= 1;/* ?PS: may not be enough, guard1(tm) */
+	  }
+	  starters+= islands[x].starters;
+	}
+      }
+    }
+
+    /* starters are winners */
+    for (x=firstcont;x<isles;x++) {
+      if (islands[x].goodies > (riches+oldisles-1)/oldisles) {
+	assert(islands[x].starters == 0);
+	freelog(LOG_VERBOSE, "islands[x].goodies=%i", islands[x].goodies);
+	islands[x].starters = (islands[x].goodies+guard1)/mingood; 
+	if(islands[x].starters == 0) {
+	  islands[x].starters+= 1;/* ?PS: may not be enough, guard1(tm) */
+	}
+	starters+= islands[x].starters;
+      }
+    }
+
+    riches= good;
+    if(starters<game.nplayers){
+      starters= game.nplayers+1;
+      goodisles=oldisles; 
+      oldisles= goodisles+1;
+      riches= (4*riches+3)/3;
+      if(mingood/game.nplayers>5) {
+	guard1+= mingood/game.nplayers;
+      } else {
+	guard1+=5;
+      }
+      freelog(LOG_DEBUG,
+	      _("Map generator: not enough start positions, fixing."));
     }
   }
+  freelog(LOG_DEBUG, "The map has %i starting positions on %i isles.",
+	  starters, goodisles);
 }
 
 /**************************************************************************
@@ -1093,10 +1141,10 @@ void create_start_positions(void)
 
   while (nr<game.nplayers) {
     rand_map_pos(&x, &y);
-    if (islands[(int)map_get_continent(x, y, NULL)].starters != 0) {
+    if (islands[(int)map_get_continent(x, y)].starters != 0) {
       j++;
       if (!is_starter_close(x, y, nr, dist)) {
-	islands[(int)map_get_continent(x, y, NULL)].starters--;
+	islands[(int)map_get_continent(x, y)].starters--;
 	map.start_positions[nr].x=x;
 	map.start_positions[nr].y=y;
 	nr++;
@@ -1110,9 +1158,11 @@ void create_start_positions(void)
     }
     counter++;
     if (counter > MAXTRIES) {
-      die("The server appears to have gotten into an infinite loop "
-	  "in the allocation of starting positions, and will abort.\n"
-	  "Please report this bug at " WEBSITE_URL);
+      freelog(LOG_FATAL,
+	      "The server appears to have gotten into an infinite loop "
+	      "in the allocation of starting positions, and will abort.\n"
+	      "Please report this bug at " WEBSITE_URL);
+      abort();
     }
   }
   map.num_start_positions = game.nplayers;
@@ -1170,6 +1220,9 @@ void map_fractal_generate(void)
 
   /* restore previous random state: */
   set_myrand_state(rstate);
+
+  if (map.num_continents>0)
+    update_island_impr_effect(-1, map.num_continents);
 }
 
 /**************************************************************************
@@ -1340,7 +1393,7 @@ static void make_huts(int number)
   while (number * map_num_tiles() >= 2000 && count++ < map_num_tiles() * 2) {
     rand_map_pos(&x, &y);
     l=myrand(6);
-    if (!is_ocean(map_get_terrain(x, y)) && 
+    if (map_get_terrain(x, y)!=T_OCEAN && 
 	( map_get_terrain(x, y)!=T_ARCTIC || l<3 )
 	) {
       if (!is_hut_close(x,y)) {
@@ -1361,7 +1414,7 @@ static void add_specials(int prob)
   for (y=1;y<map.ysize-1;y++) {
     for (x=0;x<map.xsize; x++) {
       ttype = map_get_terrain(x, y);
-      if ((is_ocean(ttype) && is_coastline(x,y)) || !is_ocean(ttype)) {
+      if ((ttype==T_OCEAN && is_coastline(x,y)) || (ttype!=T_OCEAN)) {
 	if (myrand(1000)<prob) {
 	  if (!is_special_close(x,y)) {
 	    if (tile_types[ttype].special_1_name[0] != '\0' &&
@@ -1449,7 +1502,7 @@ static void fill_island(int coast, long int *bucket,
   while (i > 0 && (failsafe--) > 0) {
     get_random_map_position_from_state(&x, &y, pstate);
 
-    if (map_get_continent(x, y, NULL) == pstate->isleindex &&
+    if (map_get_continent(x, y) == pstate->isleindex &&
 	map_get_terrain(x, y) == T_GRASSLAND) {
 
       /* the first condition helps make terrain more contiguous,
@@ -1471,7 +1524,7 @@ static void fill_island(int coast, long int *bucket,
 			    ? warm0 : warm1);
         } else {
           if (is_water_adjacent_to_tile(x, y) &&
-	      count_ocean_near_tile(x, y) < 4 &&
+	      count_terrain_near_tile(x, y, T_OCEAN) < 4 &&
 	      count_terrain_near_tile(x, y, T_RIVER) < 3)
 	    map_set_terrain(x, y, T_RIVER);
 	}
@@ -1502,7 +1555,7 @@ static void fill_island_rivers(int coast, long int *bucket,
 
   while (i > 0 && (failsafe--) > 0) {
     get_random_map_position_from_state(&x, &y, pstate);
-    if (map_get_continent(x, y, NULL) == pstate->isleindex &&
+    if (map_get_continent(x, y) == pstate->isleindex &&
 	map_get_terrain(x, y) == T_GRASSLAND) {
 
       /* the first condition helps make terrain more contiguous,
@@ -1513,7 +1566,7 @@ static void fill_island_rivers(int coast, long int *bucket,
 	     )
 	   &&( !is_at_coast(x, y) || myrand(100) < coast )) {
 	if (is_water_adjacent_to_tile(x, y) &&
-	    count_ocean_near_tile(x, y) < 4 &&
+	    count_terrain_near_tile(x, y, T_OCEAN) < 4 &&
             count_special_near_tile(x, y, S_RIVER) < 3) {
 	  map_set_special(x, y, S_RIVER);
 	  i--;
@@ -1576,7 +1629,7 @@ static bool place_island(struct gen234_state *pstate)
 	}
 
         map_set_terrain(map_x, map_y, T_GRASSLAND);
-	map_set_continent(map_x, map_y, NULL,  pstate->isleindex);
+	map_set_continent(map_x, map_y, pstate->isleindex);
         i++;
       }
     }
@@ -1768,20 +1821,20 @@ static void initworld(struct gen234_state *pstate)
   for (y = 0 ; y < map.ysize ; y++) 
     for (x = 0 ; x < map.xsize ; x++) {
       map_set_terrain(x, y, T_OCEAN);
-      map_set_continent(x, y, NULL, 0);
+      map_set_continent(x, y, 0);
     }
   for (x = 0 ; x < map.xsize; x++) {
     map_set_terrain(x, 0, myrand(9) > 0 ? T_ARCTIC : T_TUNDRA);
-    map_set_continent(x, 0, NULL, 1);
+    map_set_continent(x, 0, 1);
     if (myrand(9) == 0) {
       map_set_terrain(x, 1, myrand(9) > 0 ? T_TUNDRA : T_ARCTIC);
-      map_set_continent(x, 1, NULL, 1);
+      map_set_continent(x, 1, 1);
     }
     map_set_terrain(x, map.ysize-1, myrand(9) > 0 ? T_ARCTIC : T_TUNDRA);
-    map_set_continent(x, map.ysize-1, NULL, 2);
+    map_set_continent(x, map.ysize-1, 2);
     if (myrand(9) == 0) {
       map_set_terrain(x, map.ysize-2, myrand(9) > 0 ? T_TUNDRA : T_ARCTIC);
-      map_set_continent(x, map.ysize-2, NULL, 2);
+      map_set_continent(x, map.ysize-2, 2);
     }
   }
   map.num_continents = 2;

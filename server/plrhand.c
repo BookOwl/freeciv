@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -55,10 +54,6 @@ static void package_player_info(struct player *plr,
                                 struct packet_player_info *packet,
                                 struct player *receiver,
                                 enum plr_info_level min_info_level);
-static void tech_researched(struct player* plr);
-static bool choose_goal_tech(struct player *plr);
-static enum plr_info_level player_info_level(struct player *plr,
-					     struct player *receiver);
 
 /**************************************************************************
 ...
@@ -211,10 +206,6 @@ void found_new_tech(struct player *plr, int tech_found, bool was_discovery,
   bool macro_polo_was_obsolete = wonder_obsolete(B_MARCO);
   struct city *pcity;
 
-  assert((tech_exists(tech_found)
-	  && get_invention(plr, tech_found) != TECH_KNOWN)
-	 || tech_found == A_FUTURE);
-
   plr->got_tech = TRUE;
   plr->research.techs_researched++;
   was_first = (game.global_advances[tech_found] == 0);
@@ -237,7 +228,8 @@ void found_new_tech(struct player *plr, int tech_found, bool was_discovery,
   }
 
   for (i=0; i<game.government_count; i++) {
-    if (tech_found == governments[i].required_tech) {
+    if (tech_found == governments[i].required_tech
+	&& tech_found != A_NONE) {
       notify_player_ex(plr,-1,-1, E_NEW_GOVERNMENT,
 		       _("Game: Discovery of %s makes the government form %s"
 			 " available. You may want to start a revolution."),
@@ -270,16 +262,15 @@ void found_new_tech(struct player *plr, int tech_found, bool was_discovery,
     unit_list_iterate_end;
   }
 
-  if (tech_found == plr->ai.tech_goal) {
-    plr->ai.tech_goal = A_UNSET;
-  }
+  if (tech_found==plr->ai.tech_goal)
+    plr->ai.tech_goal=A_NONE;
 
   if (tech_found==plr->research.researching) {
     /* need to pick new tech to research */
 
     int saved_bulbs = plr->research.bulbs_researched;
 
-    if (choose_goal_tech(plr)) {
+    if (choose_goal_tech(plr) != 0) {
       notify_player_ex(plr, -1, -1, E_TECH_LEARNED,
 		       _("Game: Learned %s.  "
 			 "Our scientists focus on %s, goal is %s."),
@@ -379,7 +370,7 @@ void found_new_future_tech(struct player *pplayer)
 /**************************************************************************
 Player has researched a new technology
 **************************************************************************/
-static void tech_researched(struct player* plr)
+void tech_researched(struct player* plr)
 {
   /* plr will be notified when new tech is chosen */
 
@@ -428,7 +419,7 @@ void update_tech(struct player *plr, int bulbs)
 /**************************************************************************
 ...
 **************************************************************************/
-static bool choose_goal_tech(struct player *plr)
+int choose_goal_tech(struct player *plr)
 {
   int sub_goal;
 
@@ -436,24 +427,22 @@ static bool choose_goal_tech(struct player *plr)
     plr->research.bulbs_researched = 0;
   }
   if (plr->ai.control) {
-    ai_next_tech_goal(plr);	/* tech-AI has been changed */
-  }
-  sub_goal = get_next_tech(plr, plr->ai.tech_goal);
-
-  if (sub_goal == A_UNSET) {
+    ai_next_tech_goal(plr); /* tech-AI has been changed */
+    sub_goal = get_next_tech(plr, plr->ai.tech_goal); /* should be changed */
+  } else sub_goal = get_next_tech(plr, plr->ai.tech_goal);
+  if (sub_goal == 0) {
     if (plr->ai.control || plr->research.techs_researched == 1) {
       ai_next_tech_goal(plr);
       sub_goal = get_next_tech(plr, plr->ai.tech_goal);
     } else {
-      plr->ai.tech_goal = A_UNSET;	/* clear goal when it is achieved */
+      plr->ai.tech_goal = A_NONE; /* clear goal when it is achieved */
     }
   }
 
-  if (sub_goal != A_UNSET) {
-    plr->research.researching = sub_goal;
-    return TRUE;
-  }
-  return FALSE;
+  if (sub_goal != 0) {
+    plr->research.researching=sub_goal;
+  }   
+  return sub_goal;
 }
 
 
@@ -474,7 +463,7 @@ void choose_random_tech(struct player *plr)
     }
   }
   if (researchable == 0) {
-    plr->research.researching = A_FUTURE;
+    plr->research.researching = A_NONE;
     return;
   }
   choosen = myrand(researchable) + 1;
@@ -565,7 +554,7 @@ void init_tech(struct player *plr, int tech)
 
   /* Mark the reachable techs */
   update_research(plr);
-  if (!choose_goal_tech(plr)) {
+  if (choose_goal_tech(plr) == 0) {
     choose_random_tech(plr);
   }
 }
@@ -617,10 +606,9 @@ void get_a_tech(struct player *pplayer, struct player *target)
 		   get_tech_name(pplayer, i),
 		   get_nation_name_plural(target->nation));
 
-  notify_player_ex(target, -1, -1, E_ENEMY_DIPLOMAT_THEFT,
-                   _("Game: The %s stole %s from you!"),
-		   get_nation_name_plural(pplayer->nation),
-		   get_tech_name(pplayer, i));
+  notify_player(target, _("Game: The %s stole %s from you!"),
+		get_nation_name_plural(pplayer->nation),
+		get_tech_name(pplayer, i));
 
   notify_embassies(pplayer, target,
 		   _("Game: The %s have stolen %s from the %s."),
@@ -823,11 +811,6 @@ void handle_player_cancel_pact(struct player *pplayer, int other_player)
   if (pplayer == pplayer2)
     return;
 
-  /* can't break a pact with a team member */
-  if (pplayer->team != TEAM_NONE && pplayer->team == pplayer2->team) {
-    return;
-  }
-
   /* check what the new status will be, and what will happen to our
      reputation */
   switch(old_type) {
@@ -888,13 +871,39 @@ void handle_player_cancel_pact(struct player *pplayer, int other_player)
   send_player_info(pplayer, NULL);
   send_player_info(pplayer2, NULL);
 
-  /* If the old state was alliance, the players' units can share tiles
+  /* If the old state was alliance the players' units can share tiles
      illegally, and we need to call resolve_unit_stack() on all the players'
-     potentially shared unit positions. */
+     units. We can't just iterate through the unitlist as it could get
+     corrupted when resolve_unit_stack() deletes units. */
   if (old_type == DS_ALLIANCE) {
-    unit_list_iterate_safe(pplayer->units, punit) {
-      resolve_unit_stack(punit->x, punit->y, TRUE);
-    } unit_list_iterate_safe_end;
+    int *resolve_list = NULL;
+    int tot_units = unit_list_size(&(pplayer->units))
+      + unit_list_size(&(pplayer2->units));
+    int no_units = unit_list_size(&(pplayer->units));
+    int i;
+
+    if (tot_units > 0)
+      resolve_list = fc_malloc(tot_units * 2 * sizeof(int));
+    i = 0;
+    unit_list_iterate(pplayer->units, punit) {
+      resolve_list[i]   = punit->x;
+      resolve_list[i+1] = punit->y;
+      i += 2;
+    } unit_list_iterate_end;
+
+    no_units = unit_list_size(&(pplayer2->units));
+    unit_list_iterate(pplayer2->units, punit) {
+      resolve_list[i]   = punit->x;
+      resolve_list[i+1] = punit->y;
+      i += 2;
+    } unit_list_iterate_end;
+
+    if (resolve_list) {
+      for (i = 0; i < tot_units * 2; i += 2)
+	resolve_unit_stack(resolve_list[i], resolve_list[i+1], TRUE);
+      free(resolve_list);
+      resolve_list = NULL;
+    }
   }
 
   /* 
@@ -1103,7 +1112,6 @@ static void package_player_common(struct player *plr,
   sz_strlcpy(packet->name, plr->name);
   packet->nation=plr->nation;
   packet->is_male=plr->is_male;
-  packet->team = plr->team;
   packet->city_style=plr->city_style;
 
   packet->is_alive=plr->is_alive;
@@ -1136,23 +1144,15 @@ static void package_player_info(struct player *plr,
 
   if (info_level >= INFO_MEETING) {
     packet->gold            = plr->economic.gold;
-    for (i = A_NONE; i < game.num_tech_types; i++) {
+    for (i = 0; i < game.num_tech_types; i++) {
       packet->inventions[i] = plr->research.inventions[i].state + '0';
     }
     packet->inventions[i]   = '\0';
     packet->government      = plr->government;
   } else {
     packet->gold            = 0;
-    for (i = A_NONE; i < game.num_tech_types; i++) {
+    for(i=0; i<game.num_tech_types; i++)
       packet->inventions[i] = '0';
-    }
-
-    /* 
-     * We have to inform the client that the other players also know
-     * A_NONE.
-     */
-    packet->inventions[A_NONE] =
-	plr->research.inventions[A_NONE].state + '0';
     packet->inventions[i]   = '\0';
 
     /* Ideally, we should check whether receiver really sees any cities owned
@@ -1190,7 +1190,7 @@ static void package_player_info(struct player *plr,
     packet->luxury          = 0;
     packet->bulbs_researched= 0;
     packet->techs_researched= 0;
-    packet->researching     = A_UNSET;
+    packet->researching     = A_NONE;
     packet->future_tech     = 0;
     packet->revolution      = 0;
 
@@ -1221,25 +1221,15 @@ static void package_player_info(struct player *plr,
   if (info_level >= INFO_FULL) {
     packet->tech_goal       = plr->ai.tech_goal;
   } else {
-    packet->tech_goal       = A_UNSET;
+    packet->tech_goal       = A_NONE;
   }
-
-  /* 
-   * This may be an odd time to check these values but we can be sure
-   * to have a consistent state here.
-   */
-  assert((tech_exists(plr->research.researching)
-	  && plr->research.researching != A_NONE)
-	 || is_future_tech(plr->research.researching));
-  assert((tech_exists(plr->ai.tech_goal) && plr->ai.tech_goal != A_NONE)
-	 || plr->ai.tech_goal == A_UNSET);
 }
 
 /**************************************************************************
   ...
 **************************************************************************/
-static enum plr_info_level player_info_level(struct player *plr,
-					     struct player *receiver)
+enum plr_info_level player_info_level(struct player *plr,
+                                      struct player *receiver)
 {
   if (plr == receiver)
     return INFO_FULL;
@@ -1323,10 +1313,11 @@ before the x and y sizes have been determined
 ***********************************************************************/
 void server_player_init(struct player *pplayer, bool initmap)
 {
-  if (initmap) {
+  if (initmap)
     player_map_allocate(pplayer);
-  }
   player_init(pplayer);
+
+  player_init_island_imprs(pplayer, map.num_continents);
 }
 
 /********************************************************************** 
@@ -1339,7 +1330,8 @@ void server_remove_player(struct player *pplayer)
   /* Not allowed after a game has started */
   if (!(game.is_new_game && (server_state==PRE_GAME_STATE ||
 			     server_state==SELECT_RACES_STATE))) {
-    die("You can't remove players after the game has started!");
+    freelog(LOG_FATAL, "You can't remove players after the game has started!");
+    abort();
   }
 
   freelog(LOG_NORMAL, _("Removing player %s."), pplayer->name);
@@ -1520,7 +1512,7 @@ research etc.  Players are both thrown into anarchy and gold is
 split between both players.
                                - Kris Bubendorfer 
 ***********************************************************************/
-static struct player *split_player(struct player *pplayer)
+struct player *split_player(struct player *pplayer)
 {
   int *nations_used, i, num_nations_avail=game.playable_nation_count, pick;
   int newplayer = game.nplayers;

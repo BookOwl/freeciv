@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -98,9 +97,8 @@ void popup_goto_dialog(void)
   Dimension width, height;
   Boolean no_player_cities = !(city_list_size(&game.player_ptr->cities));
 
-  if (!can_client_issue_orders()) {
+  if(get_client_state()!=CLIENT_GAME_RUNNING_STATE)
     return;
-  }
   if(get_unit_in_focus()==0)
     return;
 

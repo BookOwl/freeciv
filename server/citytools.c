@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -39,6 +38,7 @@
 #include "cityturn.h"
 #include "gamelog.h"
 #include "maphand.h"
+#include "player.h"
 #include "plrhand.h"
 #include "sernet.h"
 #include "settlers.h"
@@ -59,9 +59,6 @@ static char *search_for_city_name(int x, int y, struct city_name *city_names,
 				  struct player *pplayer);
 static void server_set_tile_city(struct city *pcity, int city_x, int city_y,
 				 enum city_tile_type type);
-static void remove_trade_route(struct city *pc1, struct city *pc2);
-static bool update_city_tile_status(struct city *pcity, int city_x,
-				    int city_y);
 
 struct city_name *misc_city_names;
 
@@ -479,10 +476,7 @@ bool is_building_other_wonder(struct city *pc)
 {
   struct player *pplayer = city_owner(pc);
   city_list_iterate(pplayer->cities, pcity) 
-    if ((pc != pcity) && !(pcity->is_building_unit) 
-        && is_wonder(pcity->currently_building) 
-        && map_get_continent(pcity->x, pcity->y, pplayer) 
-             == map_get_continent(pc->x, pc->y, pplayer))
+    if ((pc != pcity) && !(pcity->is_building_unit) && is_wonder(pcity->currently_building) && map_get_continent(pcity->x, pcity->y) == map_get_continent(pc->x, pc->y))
       return TRUE;
   city_list_iterate_end;
   return FALSE;
@@ -690,7 +684,7 @@ struct city *find_closest_owned_city(struct player *pplayer, int x, int y,
   struct city *rcity = NULL;
   city_list_iterate(pplayer->cities, pcity)
     if ((real_map_distance(x, y, pcity->x, pcity->y) < dist || dist == -1) && 
-	(!sea_required || is_ocean_near_tile(pcity->x, pcity->y)) &&
+	(!sea_required || is_terrain_near_tile(pcity->x, pcity->y, T_OCEAN)) &&
 	(!pexclcity || (pexclcity != pcity))) {
       dist = real_map_distance(x, y, pcity->x, pcity->y);
       rcity = pcity;
@@ -906,14 +900,6 @@ void transfer_city(struct player *ptaker, struct city *pcity,
   }
 
   city_refresh(pcity);
-
-  /* 
-   * maybe_make_first_contact have to be called before
-   * update_city_tile_status_map below since the diplomacy status can
-   * influence if a tile is available.
-   */
-  maybe_make_first_contact(pcity->x, pcity->y, ptaker);
-
   map_city_radius_iterate(pcity->x, pcity->y, x, y) {
     update_city_tile_status_map(pcity, x, y);
   } map_city_radius_iterate_end;
@@ -951,6 +937,7 @@ void transfer_city(struct player *ptaker, struct city *pcity,
   }
 
   map_fog_pseudo_city_area(pgiver, pcity->x, pcity->y);
+  maybe_make_first_contact(pcity->x, pcity->y, ptaker);
 
   gamelog(GAMELOG_LOSEC, _("%s lose %s (%i,%i)"),
 	  get_nation_name_plural(pgiver->nation), pcity->name, pcity->x,
@@ -1023,12 +1010,16 @@ void create_city(struct player *pplayer, const int x, const int y,
   improvement_status_init(pcity->improvements,
 			  ARRAY_SIZE(pcity->improvements));
 
+  /* Initialise city's vector of improvement effects. */
+  ceff_vector_init(&pcity->effects);
+
   if (!pplayer->capital) {
     pplayer->capital = TRUE;
     city_add_improvement(pcity,B_PALACE);
     update_all_effects();
   }
   pcity->turn_last_built = game.year;
+  pcity->turn_changed_target = game.year;
   pcity->changed_from_id = 0;
   pcity->changed_from_is_unit = FALSE;
   pcity->before_change_shields = 0;
@@ -1039,13 +1030,13 @@ void create_city(struct player *pplayer, const int x, const int y,
 
   pcity->city_options = CITYOPT_DEFAULT;
   
+  pcity->ai.ai_role = AICITY_NONE;
   pcity->ai.trade_want = TRADE_WEIGHTING; 
   memset(pcity->ai.building_want, 0, sizeof(pcity->ai.building_want));
   pcity->ai.workremain = 1; /* there's always work to be done! */
   pcity->ai.danger = 0;
   pcity->ai.urgency = 0;
   pcity->ai.grave_danger = 0;
-  pcity->ai.already_considered_for_diplomat = FALSE;
   pcity->corruption = 0;
   pcity->shield_bonus = 100;
   pcity->tax_bonus = 100;
@@ -1076,6 +1067,8 @@ void create_city(struct player *pplayer, const int x, const int y,
   auto_arrange_workers(pcity);
 
   city_refresh(pcity);
+
+  city_incite_cost(pcity);
 
   /* Put vision back to normal, if fortress acted as a watchtower */
   if (player_knows_techs_with_flag(pplayer, TF_WATCHTOWER)
@@ -1176,8 +1169,8 @@ void remove_city(struct city *pcity)
     handle_unit_activity_request(punit, ACTIVITY_IDLE);
     moved = FALSE;
     adjc_iterate(x, y, x1, y1) {
-      if (is_ocean(map_get_terrain(x1, y1))) {
-	if (could_unit_move_to_tile(punit, x1, y1) == 1) {
+      if (map_get_terrain(x1, y1) == T_OCEAN) {
+	if (could_unit_move_to_tile(punit, x, y, x1, y1) == 1) {
 	  moved = handle_unit_move_request(punit, x1, y1, FALSE, TRUE);
 	  if (moved) {
 	    notify_player_ex(unit_owner(punit), -1, -1, E_NOEVENT,
@@ -1401,7 +1394,6 @@ static void package_dumb_city(struct player* pplayer, int x, int y,
     packet->capital = FALSE;
 
   packet->walls = pdcity->has_walls;
-  packet->occupied = pdcity->occupied;
 
   if (pcity && player_has_traderoute_with_city(pplayer, pcity)) {
     packet->tile_trade = pcity->tile_trade;
@@ -1635,6 +1627,7 @@ void package_city(struct city *pcity, struct packet_city_info *packet,
   packet->currently_building=pcity->currently_building;
 
   packet->turn_last_built=pcity->turn_last_built;
+  packet->turn_changed_target=pcity->turn_changed_target;
   packet->turn_founded = pcity->turn_founded;
   packet->changed_from_id=pcity->changed_from_id;
   packet->changed_from_is_unit=pcity->changed_from_is_unit;
@@ -1687,8 +1680,6 @@ void update_dumb_city(struct player *pplayer, struct city *pcity)
   sz_strlcpy(pdcity->name, pcity->name);
   pdcity->size = pcity->size;
   pdcity->has_walls = city_got_citywalls(pcity);
-  pdcity->occupied =
-      (unit_list_size(&(map_get_tile(pcity->x, pcity->y)->units)) > 0);
   pdcity->owner = pcity->owner;
 }
 
@@ -1716,7 +1707,7 @@ void reality_check_city(struct player *pplayer,int x, int y)
 /**************************************************************************
 ...
 **************************************************************************/
-static void remove_trade_route(struct city *pc1, struct city *pc2)
+void remove_trade_route(struct city *pc1, struct city *pc2)
 {
   int i;
 
@@ -1806,7 +1797,7 @@ void change_build_target(struct player *pplayer, struct city *pcity,
 			 int target, bool is_unit, int event)
 {
   char *name;
-  const char *source;
+  char *source;
 
   /* If the city is already building this thing, don't do anything */
   if (pcity->is_building_unit == is_unit &&
@@ -1981,20 +1972,18 @@ void server_set_worker_city(struct city *pcity, int city_x, int city_y)
 }
 
 /**************************************************************************
-Wrapper (using map positions) for update_city_tile_status (which uses
-city map positions).
-
-You need to call sync_cities for the affected cities to be synced with
-the client.
+Wrapper.
+You need to call sync_cities for the affected cities to be synced with the
+client.
 **************************************************************************/
-bool update_city_tile_status_map(struct city *pcity, int map_x, int map_y)
+void update_city_tile_status_map(struct city *pcity, int map_x, int map_y)
 {
   int city_x, city_y;
   bool is_valid;
 
   is_valid = map_to_city_map(&city_x, &city_y, pcity, map_x, map_y);
   assert(is_valid);
-  return update_city_tile_status(pcity, city_x, city_y);
+  update_city_tile_status(pcity, city_x, city_y);
 }
 
 /**************************************************************************
@@ -2002,15 +1991,11 @@ Updates the worked status of a tile.
 city_x, city_y is in city map coords.
 You need to call sync_cities for the affected cities to be synced with the
 client.
-
-Returns TRUE iff a tile got available.
 **************************************************************************/
-static bool update_city_tile_status(struct city *pcity, int city_x,
-				    int city_y)
+void update_city_tile_status(struct city *pcity, int city_x, int city_y)
 {
   enum city_tile_type current;
   bool is_available;
-  bool result = FALSE;
 
   assert(is_valid_city_coords(city_x, city_y));
 
@@ -2023,14 +2008,12 @@ static bool update_city_tile_status(struct city *pcity, int city_x,
       server_set_tile_city(pcity, city_x, city_y, C_TILE_UNAVAILABLE);
       add_adjust_workers(pcity); /* will place the displaced */
       city_refresh(pcity);
-      send_city_info(NULL, pcity);
     }
     break;
 
   case C_TILE_UNAVAILABLE:
     if (is_available) {
       server_set_tile_city(pcity, city_x, city_y, C_TILE_EMPTY);
-      result = TRUE;
     }
     break;
 
@@ -2040,8 +2023,6 @@ static bool update_city_tile_status(struct city *pcity, int city_x,
     }
     break;
   }
-
-  return result;
 }
 
 /**************************************************************************
@@ -2072,49 +2053,4 @@ void check_city_workers(struct player *pplayer)
     } city_map_iterate_end;
   } city_list_iterate_end;
   sync_cities();
-}
-
-/**************************************************************************
-  For each city adjacent to (x,y), check if landlocked.  If so, sell all
-  improvements in the city that depend upon being next to an ocean tile.
-  (Should be called after any ocean to land terrain changes.
-  Assumes no city at (x,y).)
-
-  N.B. Now uses info from buildings.ruleset to decide which buildings
-  to sell. In theory this could (should?) be generalised to sell
-  relevant buildings after any change of terrain/special type 
-**************************************************************************/
-void city_landlocked_sell_coastal_improvements(int x, int y)
-{
-  adjc_iterate(x, y, x1, y1) {
-    struct city *pcity = map_get_city(x1, y1);
-
-    if (pcity && !is_ocean_near_tile(x1, y1)) {
-      struct player *pplayer = city_owner(pcity);
-
-      /* Sell all buildings (but not Wonders) that must be next to the ocean */
-      built_impr_iterate(pcity, impr) {
-        int i = 0;
-
-        if (is_wonder(impr)) {
-          continue;
-        }
-
-        while (!is_ocean(improvement_types[impr].terr_gate[i])
-               && improvement_types[impr].terr_gate[i] != T_LAST) {
-          i++;
-        }
-
-        if (is_ocean(improvement_types[impr].terr_gate[i])
-            && !city_has_terr_spec_gate(pcity, impr)) {
-          do_sell_building(pplayer, pcity, impr);
-          notify_player_ex(pplayer, x1, y1, E_IMP_SOLD,
-                           _("Game: You sell %s in %s (now landlocked)"
-                             " for %d gold."),
-                           get_improvement_name(impr), pcity->name,
-                           improvement_value(impr)); 
-        }
-      } built_impr_iterate_end;
-    }
-  } adjc_iterate_end;
 }

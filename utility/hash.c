@@ -90,10 +90,6 @@
    
 ***************************************************************************/
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <string.h>
 #include <assert.h>
 
@@ -452,7 +448,9 @@ static struct hash_bucket *internal_lookup(const struct hash_table *h,
       }
       break;
     default:
-      die("Bad value %d in switch(bucket->used)", (int) bucket->used);
+      freelog(LOG_FATAL, "Bad value %d in switch(bucket->used)",
+	      (int)bucket->used);
+      exit(EXIT_FAILURE);
     }
     i++;
     if (i==h->num_buckets) {
@@ -463,7 +461,8 @@ static struct hash_bucket *internal_lookup(const struct hash_table *h,
   if (deleted) {
     return deleted;
   }
-  die("Full hash table -- and somehow did not resize!!");
+  freelog(LOG_FATAL, "Full hash table -- and somehow did not resize!!");
+  exit(EXIT_FAILURE);
 }
 
 /**************************************************************************
@@ -612,7 +611,9 @@ const void *hash_key_by_number(const struct hash_table *h,
       return bucket->key;
     counter++;
   }
-  die("never reached");
+  /* never reached */
+  assert(0);
+  exit(EXIT_FAILURE);
 }
 
 /**************************************************************************

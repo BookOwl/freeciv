@@ -20,12 +20,9 @@
 #include "log.h"
 #include "map.h"
 #include "support.h"
-#include "timing.h"
 
 #include "mapview_g.h"
 
-#include "control.h"
-#include "goto.h"
 #include "mapview_common.h"
 #include "tilespec.h"
 
@@ -92,12 +89,12 @@ enum color_std get_grid_color(int x1, int y1, int x2, int y2)
   in canvas_x,canvas_y it returns whether the tile is inside the
   visible map.
 **************************************************************************/
-static bool map_pos_to_canvas_pos(int map_x, int map_y,
-				  int *canvas_x, int *canvas_y,
-				  int map_view_topleft_map_x,
-				  int map_view_topleft_map_y,
-				  int map_view_pixel_width,
-				  int map_view_pixel_height)
+bool map_pos_to_canvas_pos(int map_x, int map_y,
+			  int *canvas_x, int *canvas_y,
+			  int map_view_topleft_map_x,
+			  int map_view_topleft_map_y,
+			  int map_view_pixel_width,
+			  int map_view_pixel_height)
 {
   if (is_isometric) {
     /* For a simpler example of this math, see
@@ -184,97 +181,46 @@ static bool map_pos_to_canvas_pos(int map_x, int map_y,
 /**************************************************************************
   Finds the map coordinates corresponding to pixel coordinates.
 **************************************************************************/
-static void canvas_pos_to_map_pos(int canvas_x, int canvas_y,
-				  int *map_x, int *map_y,
-				  int map_view_topleft_map_x,
-				  int map_view_topleft_map_y)
+void canvas_pos_to_map_pos(int canvas_x, int canvas_y,
+			   int *map_x, int *map_y,
+			   int map_view_topleft_map_x,
+			   int map_view_topleft_map_y)
 {
   if (is_isometric) {
-    /* The basic operation here is a simple pi/4 rotation; however, we
-     * have to first scale because the tiles have different width and
-     * height.  Mathematically, this looks like
-     *   | 1/W  1/H | |x|    |x`|
-     *   |          | | | -> |  |
-     *   |-1/W  1/H | |y|    |y`|
-     *
-     * Where W is the tile width and H the height.
-     *
-     * In simple terms, this is
-     *   map_x = [   x / W + y / H ]
-     *   map_y = [ - x / W + y / H ]
-     * where [q] stands for integer part of q.
-     *
-     * Here the division is proper mathematical floating point division.
-     *
-     * A picture demonstrating this can be seen at
-     * http://rt.freeciv.org/Ticket/Attachment/16782/9982/grid1.png.
-     *
-     * The calculation is complicated somewhat because of two things: we
-     * only use integer math, and C integer division rounds toward zero
-     * instead of rounding down.
-     *
-     * For another example of this math, see canvas_pos_to_city_pos().
-     */
-    const int W = NORMAL_TILE_WIDTH, H = NORMAL_TILE_HEIGHT;
+    *map_x = map_view_topleft_map_x;
+    *map_y = map_view_topleft_map_y;
 
-    *map_x = DIVIDE(canvas_x * H + canvas_y * W, W * H);
-    *map_y = DIVIDE(canvas_y * W - canvas_x * H, W * H);
+    /* first find an equivalent position on the left side of the screen. */
+    *map_x += canvas_x / NORMAL_TILE_WIDTH;
+    *map_y -= canvas_x / NORMAL_TILE_WIDTH;
+    canvas_x %= NORMAL_TILE_WIDTH;
+
+    /* Then move op to the top corner. */
+    *map_x += canvas_y / NORMAL_TILE_HEIGHT;
+    *map_y += canvas_y / NORMAL_TILE_HEIGHT;
+    canvas_y %= NORMAL_TILE_HEIGHT;
+
+    /* We are inside a rectangle, with 2 half tiles starting in the
+       corner, and two tiles further out. Draw a grid to see how this
+       works :). */
+    assert(NORMAL_TILE_WIDTH == 2 * NORMAL_TILE_HEIGHT);
+    canvas_y *= 2;		/* now we have a square. */
+    if (canvas_x > canvas_y) {
+      *map_y -= 1;
+    }
+    if (canvas_x + canvas_y > NORMAL_TILE_WIDTH) {
+      *map_x += 1;
+    }
   } else {			/* is_isometric */
-    *map_x = canvas_x / NORMAL_TILE_WIDTH;
-    *map_y = canvas_y / NORMAL_TILE_HEIGHT;
+    *map_x = map_view_topleft_map_x + canvas_x / NORMAL_TILE_WIDTH;
+    *map_y = map_view_topleft_map_y + canvas_y / NORMAL_TILE_HEIGHT;
   }
-
-  *map_x += map_view_topleft_map_x;
-  *map_y += map_view_topleft_map_y;
 
   /*
    * If we are outside the map find the nearest tile, with distance as
    * seen on the map.
    */
   nearest_real_pos(map_x, map_y);
-}
-
-/**************************************************************************
-  Finds the pixel coordinates of a tile.  Beside setting the results
-  in canvas_x, canvas_y it returns whether the tile is inside the
-  visible map.
-**************************************************************************/
-bool get_canvas_xy(int map_x, int map_y, int *canvas_x, int *canvas_y)
-{
-  int map_view_x0, map_view_y0, map_win_width, map_win_height;
-
-  get_mapview_dimensions(&map_view_x0, &map_view_y0,
-			 &map_win_width, &map_win_height);
-  return map_pos_to_canvas_pos(map_x, map_y, canvas_x, canvas_y,
-			       map_view_x0, map_view_y0,
-			       map_win_width, map_win_height);
-}
-
-/**************************************************************************
-  Finds the map coordinates corresponding to pixel coordinates.
-**************************************************************************/
-void get_map_xy(int canvas_x, int canvas_y, int *map_x, int *map_y)
-{
-  int map_view_x0, map_view_y0, map_win_width, map_win_height;
-
-  get_mapview_dimensions(&map_view_x0, &map_view_y0,
-			 &map_win_width, &map_win_height);
-  canvas_pos_to_map_pos(canvas_x, canvas_y, map_x, map_y,
-			map_view_x0, map_view_y0);
-}
-
-/**************************************************************************
-  Finds the current center tile of the mapcanvas.
-**************************************************************************/
-void get_center_tile_mapcanvas(int *map_x, int *map_y)
-{
-  int map_view_x0, map_view_y0, map_win_width, map_win_height;
-
-  get_mapview_dimensions(&map_view_x0, &map_view_y0,
-			 &map_win_width, &map_win_height);
-
-  /* This sets the pointers map_x and map_y */
-  get_map_xy(map_win_width / 2, map_win_height / 2, map_x, map_y);
 }
 
 /**************************************************************************
@@ -315,296 +261,6 @@ void base_center_tile_mapcanvas(int map_x, int map_y,
 
     *map_view_topleft_map_x = new_map_view_x0;
     *map_view_topleft_map_y = new_map_view_y0;
-  }
-}
-
-/**************************************************************************
-  Return TRUE iff the given map position has a tile visible on the
-  map canvas.
-**************************************************************************/
-bool tile_visible_mapcanvas(int map_x, int map_y)
-{
-  int dummy_x, dummy_y;		/* well, it needs two pointers... */
-
-  return get_canvas_xy(map_x, map_y, &dummy_x, &dummy_y);
-}
-
-/**************************************************************************
-  Return TRUE iff the given map position has a tile visible within the
-  interior of the map canvas. This information is used to determine
-  when we need to recenter the map canvas.
-
-  The logic of this function is simple: if a tile is within 1.5 tiles
-  of a border of the canvas and that border is not aligned with the
-  edge of the map, then the tile is on the "border" of the map canvas.
-
-  This function is only correct for the current topology.
-**************************************************************************/
-bool tile_visible_and_not_on_border_mapcanvas(int map_x, int map_y)
-{
-  int map_view_x0, map_view_y0, map_win_width, map_win_height;
-  int map_tile_width, map_tile_height;
-
-  get_mapview_dimensions(&map_view_x0, &map_view_y0,
-			 &map_win_width, &map_win_height);
-  map_tile_width = (map_win_width - 1) / NORMAL_TILE_WIDTH + 1;
-  map_tile_height = (map_win_height - 1) / NORMAL_TILE_HEIGHT + 1;
-
-  if (is_isometric) {
-    int canvas_x, canvas_y;
-
-    /* The border consists of the half-tile on the left and top of the
-     * screen, and the 1.5-tiles on the right and bottom. */
-    return (get_canvas_xy(map_x, map_y, &canvas_x, &canvas_y)
-	    && canvas_x > NORMAL_TILE_WIDTH / 2
-	    && canvas_x < map_win_width - 3 * NORMAL_TILE_WIDTH / 2
-	    && canvas_y >= NORMAL_TILE_HEIGHT
-	    && canvas_y < map_win_height - 3 * NORMAL_TILE_HEIGHT / 2);
-  } else {
-    /* The border consists of the two tiles on the edge of the
-     * mapview.  But we take into account the border of the map. */
-    return ((map_y >= map_view_y0 + 2 || (map_y >= map_view_y0
-					  && map_view_y0 == 0))
-	    && (map_y < map_view_y0 + map_tile_height - 2
-		|| (map_y < map_view_y0 + map_tile_height
-		    && (map_view_y0 + map_tile_height
-			- EXTRA_BOTTOM_ROW == map.ysize)))
-	    && ((map_x >= map_view_x0 + 2
-		 && map_x < map_view_x0 + map_tile_width - 2)
-		|| (map_x + map.xsize >= map_view_x0 + 2
-		    && (map_x + map.xsize
-			< map_view_x0 + map_tile_width - 2))));
-  }
-}
-
-/**************************************************************************
- Update (only) the visible part of the map
-**************************************************************************/
-void update_map_canvas_visible(void)
-{
-  int map_view_x0, map_view_y0, map_win_width, map_win_height;
-  int map_tile_width, map_tile_height;
-
-  get_mapview_dimensions(&map_view_x0, &map_view_y0,
-			 &map_win_width, &map_win_height);
-  map_tile_width = (map_win_width - 1) / NORMAL_TILE_WIDTH + 1;
-  map_tile_height = (map_win_height - 1) / NORMAL_TILE_HEIGHT + 1;
-
-  if (is_isometric) {
-    /* just find a big rectangle that includes the whole visible area. The
-       invisible tiles will not be drawn. */
-    int width, height;
-
-    width = height = map_tile_width + map_tile_height;
-    update_map_canvas(map_view_x0, map_view_y0 - map_tile_width, width,
-		      height, TRUE);
-  } else {
-    update_map_canvas(map_view_x0, map_view_y0, map_tile_width,
-		      map_tile_height, TRUE);
-  }
-
-  show_city_descriptions();
-}
-
-/**************************************************************************
-  Show descriptions for all cities visible on the map canvas.
-**************************************************************************/
-void show_city_descriptions(void)
-{
-  int map_view_x0, map_view_y0, map_win_width, map_win_height;
-  int map_tile_width, map_tile_height;
-  int canvas_x, canvas_y;
-
-  if (!draw_city_names && !draw_city_productions) {
-    return;
-  }
-
-  get_mapview_dimensions(&map_view_x0, &map_view_y0, &map_win_width,
-			 &map_win_height);
-  map_tile_width = (map_win_width - 1) / NORMAL_TILE_WIDTH + 1;
-  map_tile_height = (map_win_height - 1) / NORMAL_TILE_HEIGHT + 1;
-
-  if (is_isometric) {
-    int w, h;
-
-    for (h = -1; h < map_tile_height * 2; h++) {
-      int x_base = map_view_x0 + h / 2 + (h != -1 ? h % 2 : 0);
-      int y_base = map_view_y0 + h / 2 + (h == -1 ? -1 : 0);
-
-      for (w = 0; w <= map_tile_width; w++) {
-	int x = x_base + w;
-	int y = y_base - w;
-	struct city *pcity;
-
-	if (normalize_map_pos(&x, &y)
-	    && (pcity = map_get_city(x, y))) {
-	  get_canvas_xy(x, y, &canvas_x, &canvas_y);
-	  show_city_desc(pcity, canvas_x, canvas_y);
-	}
-      }
-    }
-  } else {			/* is_isometric */
-    int x1, y1;
-
-    for (x1 = 0; x1 < map_tile_width; x1++) {
-      for (y1 = 0; y1 < map_tile_height; y1++) {
-	int x = map_view_x0 + x1;
-	int y = map_view_y0 + y1;
-	struct city *pcity;
-
-	if (normalize_map_pos(&x, &y)
-	    && (pcity = map_get_city(x, y))) {
-	  get_canvas_xy(x, y, &canvas_x, &canvas_y);
-	  show_city_desc(pcity, canvas_x, canvas_y);
-	}
-      }
-    }
-  }
-}
-
-/**************************************************************************
-  Remove the line from src_x, src_y in the given direction, and redraw
-  the change if necessary.
-**************************************************************************/
-void undraw_segment(int src_x, int src_y, int dir)
-{
-  int dest_x, dest_y;
-
-  assert(get_drawn(src_x, src_y, dir) == 0);
-
-  if (!MAPSTEP(dest_x, dest_y, src_x, src_y, dir)) {
-    assert(0);
-  }
-
-  if (is_isometric) {
-    /* somewhat inefficient */
-    update_map_canvas(MIN(src_x, dest_x), MIN(src_y, dest_y),
-		      src_x == dest_x ? 1 : 2,
-		      src_y == dest_y ? 1 : 2,
-		      TRUE);
-  } else {
-    refresh_tile_mapcanvas(src_x, src_y, TRUE);
-    refresh_tile_mapcanvas(dest_x, dest_y, TRUE);
-
-    if (NORMAL_TILE_WIDTH % 2 == 0 || NORMAL_TILE_HEIGHT % 2 == 0) {
-      if (dir == DIR8_NORTHEAST) {
-	/* Since the tile doesn't have a middle we draw an extra pixel
-	 * on the adjacent tile when drawing in this direction. */
-	if (!MAPSTEP(dest_x, dest_y, src_x, src_y, DIR8_EAST)) {
-	  assert(0);
-	}
-	refresh_tile_mapcanvas(dest_x, dest_y, TRUE);
-      } else if (dir == DIR8_SOUTHWEST) {	/* the same */
-	if (!MAPSTEP(dest_x, dest_y, src_x, src_y, DIR8_SOUTH)) {
-	  assert(0);
-	}
-	refresh_tile_mapcanvas(dest_x, dest_y, TRUE);
-      }
-    }
-  }
-}
-
-/**************************************************************************
-  Animates punit's "smooth" move from (x0, y0) to (x0+dx, y0+dy).
-  Note: Works only for adjacent-tile moves.
-**************************************************************************/
-void move_unit_map_canvas(struct unit *punit,
-			  int map_x, int map_y, int dx, int dy)
-{
-  static struct timer *anim_timer = NULL; 
-  int dest_x, dest_y;
-
-  /* only works for adjacent-square moves */
-  if (dx < -1 || dx > 1 || dy < -1 || dy > 1 || (dx == 0 && dy == 0)) {
-    return;
-  }
-
-  if (punit == get_unit_in_focus() && hover_state != HOVER_NONE) {
-    set_hover_state(NULL, HOVER_NONE);
-    update_unit_info_label(punit);
-  }
-
-  dest_x = map_x + dx;
-  dest_y = map_y + dy;
-  if (!normalize_map_pos(&dest_x, &dest_y)) {
-    assert(0);
-  }
-
-  if (player_can_see_unit(game.player_ptr, punit) &&
-      (tile_visible_mapcanvas(map_x, map_y) ||
-       tile_visible_mapcanvas(dest_x, dest_y))) {
-    int i, steps;
-    int start_x, start_y;
-    int this_x, this_y;
-    int canvas_dx, canvas_dy;
-
-    if (is_isometric) {
-      if (dx == 0) {
-	canvas_dx = -NORMAL_TILE_WIDTH / 2 * dy;
-	canvas_dy = NORMAL_TILE_HEIGHT / 2 * dy;
-      } else if (dy == 0) {
-	canvas_dx = NORMAL_TILE_WIDTH / 2 * dx;
-	canvas_dy = NORMAL_TILE_HEIGHT / 2 * dx;
-      } else {
-	if (dx > 0) {
-	  if (dy > 0) {
-	    canvas_dx = 0;
-	    canvas_dy = NORMAL_TILE_HEIGHT;
-	  } else { /* dy < 0 */
-	    canvas_dx = NORMAL_TILE_WIDTH;
-	    canvas_dy = 0;
-	  }
-	} else { /* dx < 0 */
-	  if (dy > 0) {
-	    canvas_dx = -NORMAL_TILE_WIDTH;
-	    canvas_dy = 0;
-	  } else { /* dy < 0 */
-	    canvas_dx = 0;
-	    canvas_dy = -NORMAL_TILE_HEIGHT;
-	  }
-	}
-      }
-    } else {
-      canvas_dx = NORMAL_TILE_WIDTH * dx;
-      canvas_dy = NORMAL_TILE_HEIGHT * dy;
-    }
-
-    /* Sanity check on the number of steps. */
-    if (smooth_move_unit_steps < 2) {
-      steps = 2;
-    } else if (smooth_move_unit_steps > MAX(abs(canvas_dx),
-					    abs(canvas_dy))) {
-      steps = MAX(abs(canvas_dx), abs(canvas_dy));
-    } else {
-      steps = smooth_move_unit_steps;
-    }
-
-    get_canvas_xy(map_x, map_y, &start_x, &start_y);
-    if (is_isometric) {
-      start_y -= NORMAL_TILE_HEIGHT / 2;
-    }
-
-    this_x = start_x;
-    this_y = start_y;
-
-    for (i = 1; i <= steps; i++) {
-      int new_x, new_y;
-
-      anim_timer = renew_timer_start(anim_timer, TIMER_USER, TIMER_ACTIVE);
-
-      new_x = start_x + (i * canvas_dx) / steps;
-      new_y = start_y + (i * canvas_dy) / steps;
-
-      draw_unit_animation_frame(punit, i == 1, i == steps,
-				this_x, this_y, new_x, new_y);
-
-      this_x = new_x;
-      this_y = new_y;
-
-      if (i < steps) {
-	usleep_since_timer_start(anim_timer, 10000);
-      }
-    }
   }
 }
 
@@ -731,50 +387,5 @@ void unqueue_mapview_update(void)
   if (need_mapview_update) {
     update_map_canvas_visible();
     need_mapview_update = FALSE;
-  }
-}
-
-/**************************************************************************
-  Fill the two buffers which information about the city which is shown
-  below it. It takes draw_city_names and draw_city_growth into account.
-**************************************************************************/
-void get_city_mapview_name_and_growth(struct city *pcity,
-				      char *name_buffer,
-				      size_t name_buffer_len,
-				      char *growth_buffer,
-				      size_t growth_buffer_len,
-				      enum color_std *growth_color)
-{
-  if (!draw_city_names) {
-    name_buffer[0] = '\0';
-    growth_buffer[0] = '\0';
-    *growth_color = COLOR_STD_WHITE;
-    return;
-  }
-
-  my_snprintf(name_buffer, name_buffer_len, pcity->name);
-
-  if (draw_city_growth && pcity->owner == game.player_idx) {
-    int turns = city_turns_to_grow(pcity);
-
-    if (turns == 0) {
-      my_snprintf(growth_buffer, growth_buffer_len, "X");
-    } else if (turns == FC_INFINITY) {
-      my_snprintf(growth_buffer, growth_buffer_len, "-");
-    } else {
-      /* Negative turns means we're shrinking, but that's handled
-         down below. */
-      my_snprintf(growth_buffer, growth_buffer_len, "%d", abs(turns));
-    }
-
-    if (turns <= 0) {
-      /* A blocked or shrinking city has its growth status shown in red. */
-      *growth_color = COLOR_STD_RED;
-    } else {
-      *growth_color = COLOR_STD_WHITE;
-    }
-  } else {
-    growth_buffer[0] = '\0';
-    *growth_color = COLOR_STD_WHITE;
   }
 }

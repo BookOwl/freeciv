@@ -22,10 +22,12 @@ struct tile;
 void message_dialog_button_set_sensitive(GtkWidget *shl, char *bname, int state);
 GtkWidget *popup_message_dialog(GtkWidget * parent, const char *dialogname,
 				const char *text, ...);
+
 void destroy_message_dialog(GtkWidget *button);
 
-void popdown_notify_dialog(void);
-
+void destroy_me_callback(GtkWidget *w, gpointer data);
 gboolean taxrates_callback(GtkWidget *w, GdkEventButton *ev, gpointer data);
+
+gint deleted_callback(GtkWidget *w, GdkEvent *ev, gpointer data);
 
 #endif  /* FC__DIALOGS_H */

@@ -16,9 +16,9 @@ dnl client/server should always have the same major and minor versions
 dnl different patch versions are compatible
 MAJOR_VERSION=1
 MINOR_VERSION=14
-PATCH_VERSION=1
-VERSION_LABEL="-devel"
-IS_DEVEL_VERSION=1
+PATCH_VERSION=0
+VERSION_LABEL=""
+IS_DEVEL_VERSION=0
 IS_BETA_VERSION=0
 
 VERSION=${MAJOR_VERSION}.${MINOR_VERSION}.${PATCH_VERSION}${VERSION_LABEL}
@@ -143,7 +143,7 @@ dnl Programs already checked by AM_INIT_AUTOMAKE:
 dnl  AC_PROG_MAKE_SET
 
 dnl I18n support
-ALL_LINGUAS="da de en_GB es et fi fr he_IL hu it ja nl no pl pt pt_BR ro ru sv"
+ALL_LINGUAS="da de en_GB es et fi fr hu it ja nl no pl pt pt_BR ro ru sv"
 AM_GNU_GETTEXT(,need-ngettext)
 
 dnl AM_GNU_GETTEXT doesn't have all features we want
@@ -293,6 +293,7 @@ if test x"$MINGW32" = "xyes"; then
   AC_DEFINE(WIN32_NATIVE, 1, [Mingw32-specific setting - native])
   AC_DEFINE(HAVE_WINSOCK, 1, [Mingw32-specific setting - winsock])
   SERVER_LIBS="-lwsock32"
+  CFLAGS="$CFLAGS -fnative-struct"
 fi
 
 dnl Check and choose clients
@@ -311,13 +312,39 @@ if test x$client != xno; then
   fi
 
   dnl Gtk-specific overrides
-  FC_GTK_CLIENT
+  if test "$client" = gtk || test "$client" = yes ; then
+    AM_PATH_GTK(1.2.5, gtk_found="yes", gtk_found="", imlib_found="")
+    if test "x$gtk_found" = "xyes"; then
+      AM_PATH_GDK_IMLIB(1.9.2, imlib_found="yes", imlib_found="")
+      if test "x$imlib_found" = "xyes"; then
+        CLIENT_CFLAGS="$GDK_IMLIB_CFLAGS"
+        CLIENT_LIBS="$GDK_IMLIB_LIBS"
+	found_client=yes
+      fi
+    fi
+
+    if test "x$found_client" = "xyes"; then
+      client=gtk
+    elif test "$client" = "gtk"; then
+      AC_MSG_ERROR(specified client 'gtk' not configurable)
+    fi
+  fi
 
   dnl Gtk-2.0-specific overrides
-  FC_GTK2_CLIENT
+  if test "$client" = "gtk-2.0" || test "$client" = yes ; then
+    AM_PATH_GTK_2_0(2.0.0, gtk_2_0_found="yes", gtk2_0_found="")
+    if test "x$gtk_2_0_found" = "xyes"; then
+      CLIENT_CFLAGS="$GTK_CFLAGS"
+      CLIENT_LIBS="$GTK_LIBS"
+      found_client=yes
+    fi
 
-  dnl SDL-specific overrides
-  FC_SDL_CLIENT
+    if test "x$found_client" = "xyes"; then
+      client="gtk-2.0"
+    elif test "$client" = "gtk-2.0"; then
+      AC_MSG_ERROR(specified client 'gtk-2.0' not configurable)
+    fi
+  fi
 
   dnl Xaw-specific overrides
   if test "$client" = xaw || test "$client" = yes ; then
@@ -333,21 +360,6 @@ if test x$client != xno; then
     if test -n "$fc_x_proto_value"; then
       AC_DEFINE_UNQUOTED(NARROWPROTO, $fc_x_proto_value, [Narrowproto])
     fi
-
-    dnl Check for zlib (needed for libpng)
-    AC_CHECK_LIB(z, gzgets, , 
-        AC_MSG_ERROR([Could not find zlib library.]), 
-        $CLIENT_LIBS)
-    AC_CHECK_HEADER(zlib.h, , 
-        AC_MSG_ERROR([zlib found but not zlib.h.  
-You may need to install a zlib \"development\" package.]))
-
-    dnl Check for libpng
-    AC_CHECK_LIB(png, png_read_image, [X_LIBS="$X_LIBS -lpng"],
-	AC_MSG_ERROR([Could not find PNG library (libpng).]), [-lz])
-    AC_CHECK_HEADER(png.h, ,
-	AC_MSG_ERROR([libpng found but not png.h.
-You may need to install a libpng \"development\" package.]))
 
     dnl Try to get additional Xpm paths:
     FC_XPM_PATHS
@@ -431,7 +443,21 @@ You may need to install a libpng \"development\" package.]))
   fi
 
   dnl Win32-specific overrides
-  FC_WIN32_CLIENT
+  if test "$client" = win32 || test "$client" = yes ; then
+    if test x"$MINGW32" = "xyes"; then
+      AC_CHECK_HEADER(png.h, ,
+         AC_MSG_ERROR("You have to install libpng"))
+      AC_CHECK_LIB(png, png_read_image,,
+         AC_MSG_ERROR("You have to install libpng"),-lz)
+      found_client=yes
+      CLIENT_LIBS="-lwsock32 -lcomctl32  -lpng -lz -mwindows"
+    fi
+    if test "x$found_client" = "xyes"; then
+      client=win32
+    elif test "$client" = "win32"; then
+      AC_MSG_ERROR(specified client 'win32' not configurable)
+    fi
+  fi
 
   dnl Stub-specific overrides
   if test "$client" = stub ; then
@@ -462,7 +488,6 @@ AC_SUBST(SOUND_LIBS)
 AM_CONDITIONAL(ESD, test "x$ESD" = "xyes")
 AM_CONDITIONAL(SDL, test "x$SDL_mixer" = "xyes")
 AM_CONDITIONAL(WINMM, test "x$WINMM" = "xyes")
-AM_CONDITIONAL(CLIENT_GUI_SDL, test "$gui_sources" = "gui-sdl")
 AM_CONDITIONAL(CLIENT_GUI_GTK, test "$gui_sources" = "gui-gtk")
 AM_CONDITIONAL(CLIENT_GUI_GTK_2_0, test "$gui_sources" = "gui-gtk-2.0")
 AM_CONDITIONAL(CLIENT_GUI_XAW, test "$gui_sources" = "gui-xaw")
@@ -482,9 +507,6 @@ if test x$server = xtrue; then
         AC_CHECK_LIB(socket, connect, SERVER_LIBS="-lsocket $SERVER_LIBS")
     fi
 
-    dnl Some systems (e.g., BeOS) need this lib
-    AC_CHECK_LIB(bind, gethostbyaddr, SERVER_LIBS="-lbind $SERVER_LIBS")
-
     dnl Readline library and header files.
     FC_HAS_READLINE()
 
@@ -502,10 +524,10 @@ dnl Include CLIENT_LIBS in zlib tests below because some X11R4 installations
 dnl contain their own libz which may be too old a version to have gzgets().
 if test "$WITH_ZLIB" = "yes"; then
     AC_CHECK_LIB(z, gzgets, , 
-        AC_MSG_ERROR([Could not find zlib library.]), 
+        AC_MSG_ERROR([Specified --with-zlib but did not find zlib library.]), 
         $CLIENT_LIBS)
     AC_CHECK_HEADER(zlib.h, , 
-        AC_MSG_ERROR([zlib found but not zlib.h.  
+        AC_MSG_ERROR([Specified --with-zlib; zlib found but not zlib.h.  
 You may need to install a zlib \"development\" package.]))
 
 elif test "$WITH_ZLIB" = "maybe"; then
@@ -517,8 +539,7 @@ fi
 
 dnl Checks for header files.
 AC_HEADER_STDC
-AC_CHECK_HEADERS(fcntl.h sys/time.h sys/types.h unistd.h sys/utsname.h \
-                 stdbool.h)
+AC_CHECK_HEADERS(fcntl.h sys/time.h sys/types.h unistd.h sys/utsname.h)
 dnl Avoid including the unix emulation layer if we build mingw executables
 dnl There would be type conflicts between winsock and bsd/unix includes
 if test "x$MINGW32" != "xyes"; then
@@ -546,13 +567,9 @@ AC_FUNC_STRCOLL
 AC_FUNC_VPRINTF
 AC_FUNC_VSNPRINTF
 
-AC_CHECK_FUNCS(fileno gethostname getpwuid inet_aton \
+AC_CHECK_FUNCS(fileno gethostname getpwuid gettimeofday inet_aton \
                select snooze strerror strcasecmp strncasecmp \
                strlcat strlcpy strstr usleep vsnprintf uname)
-
-AC_MSG_CHECKING(for working gettimeofday)
-  FC_CHECK_GETTIMEOFDAY_RUNTIME(,AC_DEFINE(HAVE_GETTIMEOFDAY, 1,
-	[Define if the gettimeofday function works and is sane.]),)
 
 dnl The use of both AC_FUNC_VSNPRINTF and AC_CHECK_FUNCS(vsnprintf) is
 dnl deliberate.
@@ -682,12 +699,10 @@ AC_CONFIG_FILES([Makefile
 	  data/nation/Makefile 
 	  data/history/Makefile 
 	  common/Makefile 
-	  common/aicore/Makefile 
 	  ai/Makefile 
 	  client/Makefile 
 	  client/agents/Makefile
 	  client/include/Makefile 
-	  client/gui-sdl/Makefile 
 	  client/gui-gtk/Makefile 
 	  client/gui-gtk-2.0/Makefile
 	  client/gui-xaw/Makefile 

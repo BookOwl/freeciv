@@ -65,7 +65,7 @@ bool is_land_barbarian(struct player *pplayer)
   return (pplayer->ai.barbarian_type == LAND_BARBARIAN);
 }
 
-static bool is_sea_barbarian(struct player *pplayer)
+bool is_sea_barbarian(struct player *pplayer)
 {
   return (pplayer->ai.barbarian_type == SEA_BARBARIAN);
 }
@@ -100,7 +100,8 @@ static struct player *create_barbarian_player(bool land)
   } players_iterate_end;
 
   if( newplayer >= MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS ) {
-    die("Too many players?");
+    freelog( LOG_FATAL, "Too many players?");
+    abort();
   }
 
   barbarians = &game.players[newplayer];
@@ -154,7 +155,7 @@ Check if a tile is land and free of enemy units
 **************************************************************************/
 static bool is_free_land(int x, int y, struct player *who)
 {
-  return (is_real_tile(x, y) && !is_ocean(map_get_terrain(x, y))
+  return (is_real_tile(x, y) && map_get_terrain(x, y) != T_OCEAN
 	  && !is_non_allied_unit_tile(map_get_tile(x, y), who));
 }
 
@@ -163,7 +164,7 @@ Check if a tile is sea and free of enemy units
 **************************************************************************/
 static bool is_free_sea(int x, int y, struct player *who)
 {
-  return (is_real_tile(x, y) && is_ocean(map_get_terrain(x, y))
+  return (is_real_tile(x, y) && map_get_terrain(x, y) == T_OCEAN
 	  && !is_non_allied_unit_tile(map_get_tile(x, y), who));
 }
 
@@ -175,7 +176,8 @@ on land, if not enough land but some sea free, load some of them on boats,
 otherwise (not much land and no sea) kill enemy unit and stay in a village.
 The return value indicates if the explorer survived entering the vilage.
 **************************************************************************/
-bool unleash_barbarians(int x, int y)
+
+bool unleash_barbarians(struct player* victim, int x, int y)
 {
   struct player *barbarians;
   int unit, unit_cnt, land_cnt=0, sea_cnt=0;
@@ -270,9 +272,8 @@ Is sea not further than a couple of tiles away from land
 static bool is_near_land(int x0, int y0)
 {
   square_iterate(x0, y0, 4, x, y) {
-    if (!is_ocean(map_get_terrain(x,y))) {
+    if (map_get_terrain(x,y) != T_OCEAN)
       return TRUE;
-    }
   } square_iterate_end;
 
   return FALSE;
@@ -337,12 +338,10 @@ static void try_summon_barbarians(void)
     return;
 
   /* I think Sea Raiders can come out of unknown sea territory */
-  if (!find_empty_tile_nearby(x,y,&xu,&yu)
-      || (!map_get_known(xu, yu, victim)
-	  && !is_ocean(map_get_terrain(xu, yu)))
-      || !is_near_land(xu, yu) ) {
+  if( !find_empty_tile_nearby(x,y,&xu,&yu) ||
+      (!map_get_known(xu, yu, victim) && map_get_terrain(xu, yu) != T_OCEAN) ||
+      !is_near_land(xu, yu) )
     return;
-  }
 
   /* do not harass small civs - in practice: do not uprise at the beginning */
   if( (int)myrand(UPRISE_CIV_MORE) >
@@ -357,8 +356,7 @@ static void try_summon_barbarians(void)
     send_tile_info(NULL, x, y);
   }
 
-  if (!is_ocean(map_get_terrain(xu,yu))) {
-    /* land (disembark) barbarians */
+  if( map_get_terrain(xu,yu) != T_OCEAN ) {        /* land barbarians */
     barbarians = create_barbarian_player(TRUE);
     if( city_list_size(&victim->cities) > UPRISE_CIV_MOST )
       uprise = 3;

@@ -5,14 +5,13 @@ EXTRA_DIST =			\
 	BUGS			\
 	CodingStyle		\
 	HACKING			\
-	INSTALL.Cygwin		\
 	HOWTOPLAY		\
 	PEOPLE			\
+	INSTALL.Cygwin		\
 	README.AI		\
 	README.agents		\
 	README.attributes 	\
 	README.cma		\
-	README.effects		\
 	README.graphics		\
 	README.rulesets		\
 	README.sound		\

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -55,31 +54,6 @@
 #include "aicity.h"
 
 static void ai_manage_city(struct player *pplayer, struct city *pcity);
-
-/**************************************************************************
-  This calculates the usefulness of pcity to us. Note that you can pass
-  another player's ai_data structure here for evaluation by different
-  priorities.
-**************************************************************************/
-int ai_eval_calc_city(struct city *pcity, struct ai_data *ai)
-{
-  int i = (pcity->food_surplus * ai->food_priority
-           + pcity->shield_surplus * ai->shield_priority
-           + pcity->luxury_total * ai->luxury_priority
-           + pcity->tax_total * ai->gold_priority
-           + pcity->science_total * ai->science_priority
-           + pcity->ppl_happy[4] * ai->happy_priority
-           - pcity->ppl_unhappy[4] * ai->unhappy_priority
-           - pcity->ppl_angry[4] * ai->angry_priority
-           - pcity->pollution * ai->pollution_priority);
-  
-  if (pcity->food_surplus < 0 || pcity->shield_surplus < 0) {
-    /* The city is unmaintainable, it can't be good */
-    i = MIN(i, 0);
-  }
-
-  return i;
-}
      
 /************************************************************************** 
 ...
@@ -174,7 +148,6 @@ static void ai_city_choose_build(struct player *pplayer, struct city *pcity)
   struct ai_choice bestchoice, curchoice;
 
   init_choice(&bestchoice);
-  init_choice(&curchoice);
 
   if( is_barbarian(pplayer) ) {    /* always build best attack unit */
     Unit_Type_id i, iunit, bestunit = -1;
@@ -204,6 +177,12 @@ static void ai_city_choose_build(struct player *pplayer, struct city *pcity)
     }
   }
   else {
+
+/* obsolete code destroyed */
+/*  military_advisor_choose_build(pplayer, pcity, &curchoice); */
+/* this is now handled in manage_city thanks to our friend ->ai.choice */
+/*  copy_if_better_choice(&curchoice, &bestchoice); */
+
     copy_if_better_choice(&pcity->ai.choice, &bestchoice);
 
     if (bestchoice.want <= 100 || pcity->ai.urgency == 0) { /* soldier at 101 cannot be denied */
@@ -225,7 +204,7 @@ static void ai_city_choose_build(struct player *pplayer, struct city *pcity)
                    unit_name(bestchoice.choice) :
 		   get_improvement_name(bestchoice.choice)),
 		  bestchoice.want);
-    if (!pcity->is_building_unit && is_wonder(pcity->currently_building) &&
+    if(!pcity->is_building_unit && is_wonder(pcity->currently_building) &&
        (is_unit_choice_type(bestchoice.type) ||
         bestchoice.choice != pcity->currently_building))
       notify_player_ex(NULL, pcity->x, pcity->y, E_WONDER_STOPPED,
@@ -271,6 +250,20 @@ static void ai_city_choose_build(struct player *pplayer, struct city *pcity)
 /* I think fallbacks only happen with techlevel 0, and even then are rare.
 I haven't seen them, but I want to somewhat prepare for them anyway. -- Syela */  
 }
+
+/************************************************************************** 
+...
+**************************************************************************/
+#ifdef GRAVEDANGERWORKS
+static int ai_city_defender_value(struct city *pcity, Unit_Type_id a_type,
+                                  Unit_Type_id d_type)
+{
+  return unit_vulnerability_virtual2(a_type, d_type, pcity->x,
+				     pcity->y, FALSE,
+				     do_make_unit_veteran(pcity, d_type),
+				     FALSE, 0);
+}
+#endif
 
 /************************************************************************** 
 ...
@@ -410,11 +403,14 @@ static void ai_spend_gold(struct player *pplayer)
              > pcity->food_stock + pcity->food_surplus) {
         /* Don't build settlers in size 1 cities unless we grow next turn */
         continue;
-      } else if (city_list_size(&pplayer->cities) > 6) {
-          /* Don't waste precious money buying settlers late game
-           * since this raises taxes, and we want science. Adjust this
-           * again when our tax algorithm is smarter. */
+      } else {
+        if (city_list_size(&pplayer->cities) <= 8) {
+          /* Make AI get gold for settlers early game */
+          pplayer->ai.maxbuycost = MAX(pplayer->ai.maxbuycost, buycost);
+        } else if (city_list_size(&pplayer->cities) > 25) {
+          /* Don't waste precious money buying settlers late game */
           continue;
+        }
       }
     } else {
       /* We are not a settler. Therefore we increase the cash need we
@@ -553,6 +549,46 @@ void ai_choose_ferryboat(struct player *pplayer, struct city *pcity, struct ai_c
 }
 
 /************************************************************************** 
+  don't ask me why this is in aicity, I can't even remember -- Syela 
+**************************************************************************/
+static Unit_Type_id ai_choose_attacker(struct city *pcity,
+                                       enum unit_move_type which)
+{
+  Unit_Type_id bestid = 0; /* ??? Zero is legal value! (Settlers by default) */
+  int best = 0;
+  int cur;
+
+  simple_ai_unit_type_iterate(i) {
+    cur = ai_unit_attack_desirability(i);
+    if (which == unit_types[i].move_type) {
+      if (can_build_unit(pcity, i) && (cur > best || (cur == best &&
+ get_unit_type(i)->build_cost <= get_unit_type(bestid)->build_cost))) {
+        best = cur;
+        bestid = i;
+      }
+    }
+  } simple_ai_unit_type_iterate_end;
+
+  return bestid;
+}
+
+/************************************************************************** 
+  ...
+**************************************************************************/
+Unit_Type_id ai_choose_attacker_ground(struct city *pcity)
+{
+  return(ai_choose_attacker(pcity, LAND_MOVING));
+}
+
+/************************************************************************** 
+  ...
+**************************************************************************/
+Unit_Type_id ai_choose_attacker_sailing(struct city *pcity)
+{
+  return(ai_choose_attacker(pcity, SEA_MOVING));
+}
+
+/************************************************************************** 
   ...
 **************************************************************************/
 Unit_Type_id ai_choose_defender_versus(struct city *pcity, Unit_Type_id v)
@@ -586,7 +622,7 @@ Unit_Type_id ai_choose_defender_versus(struct city *pcity, Unit_Type_id v)
    the same results as (hp>10) for the default set, and does
    _something_ for other sets.  This should be revisited.  --dwp
 **************************************************************************/
-static bool has_a_normal_defender(struct city *pcity)
+bool has_a_normal_defender(struct city *pcity)
 {
   unit_list_iterate(map_get_tile(pcity->x, pcity->y)->units, punit)
     if (is_military_unit(punit)
@@ -603,8 +639,8 @@ static bool has_a_normal_defender(struct city *pcity)
 /************************************************************************** 
   ...
 **************************************************************************/
-static Unit_Type_id ai_choose_defender_limited(struct city *pcity, int n,
-					       enum unit_move_type which)
+Unit_Type_id ai_choose_defender_limited(struct city *pcity, int n,
+                                        enum unit_move_type which)
 {
   Unit_Type_id bestid = 0; /* ??? Zero is legal value! (Settlers by default) */
   int j, m;
@@ -654,8 +690,9 @@ Unit_Type_id ai_choose_defender(struct city *pcity)
 **************************************************************************/
 static bool building_unwanted(struct player *plr, Impr_Type_id i)
 {
-  return (ai_wants_no_science(plr)
-	  && (i == B_LIBRARY || i == B_UNIVERSITY || i == B_RESEARCH));
+  if (plr->research.researching != A_NONE)
+    return FALSE;
+  return (i == B_LIBRARY || i == B_UNIVERSITY || i == B_RESEARCH);
 }
 
 /**************************************************************************
@@ -843,11 +880,10 @@ void ai_scientists_taxmen(struct city *pcity)
   tax_bonus = city_tax_bonus(pcity);
   science_bonus = city_science_bonus(pcity);
   
-  if (tax_bonus > science_bonus || ai_wants_no_science(city_owner(pcity))) {
+  if (tax_bonus > science_bonus || (city_owner(pcity)->research.researching == A_NONE)) 
     make_taxmen(pcity);
-  } else {
+  else
     make_scientists(pcity);
-  }
 
   sync_cities();
 }

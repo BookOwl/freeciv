@@ -10,17 +10,16 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/  
-
+#include <windows.h>
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
-
-#include <windows.h>
  
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
                       
+#include <stdlib.h>
 #include "capability.h"
 #include "fcintl.h"
 #include "game.h"
@@ -33,7 +32,6 @@
 #include "chatline.h"
 #include "citydlg.h"
 #include "civclient.h"
-#include "climap.h"
 #include "climisc.h"
 #include "clinet.h"
 #include "colors.h"
@@ -274,9 +272,8 @@ static LONG CALLBACK map_wnd_proc(HWND hwnd,UINT message,WPARAM wParam, LPARAM l
   case WM_CREATE:
     break;
   case WM_LBUTTONDOWN:
-    if (!can_client_change_view()) {
+    if (get_client_state()!=CLIENT_GAME_RUNNING_STATE)
       break;
-    }
     SetFocus(root_window);
     get_map_xy(LOWORD(lParam),HIWORD(lParam),&xtile,&ytile);
     if (wParam&MK_SHIFT) {
@@ -289,13 +286,13 @@ static LONG CALLBACK map_wnd_proc(HWND hwnd,UINT message,WPARAM wParam, LPARAM l
     }
     break;
   case WM_MBUTTONDOWN:
-    if (can_client_change_view()) {
+    if (get_client_state() == CLIENT_GAME_RUNNING_STATE) {
       get_map_xy(LOWORD(lParam), HIWORD(lParam), &xtile, &ytile);
       popit(LOWORD(lParam), HIWORD(lParam), xtile, ytile);
     }
     break;
   case WM_RBUTTONDOWN:
-    if (can_client_change_view()) {
+    if (get_client_state()==CLIENT_GAME_RUNNING_STATE) {
       get_map_xy(LOWORD(lParam),HIWORD(lParam),&xtile,&ytile);
       if (wParam&MK_CONTROL) {
 	popit(LOWORD(lParam),HIWORD(lParam),xtile,ytile);	
@@ -317,7 +314,7 @@ static LONG CALLBACK map_wnd_proc(HWND hwnd,UINT message,WPARAM wParam, LPARAM l
     }
     break;
   case WM_MOUSEMOVE:
-    if (can_client_change_view()) {
+    if (get_client_state()==CLIENT_GAME_RUNNING_STATE) {
       map_handle_move(LOWORD(lParam),HIWORD(lParam));
     }
     break;
@@ -367,9 +364,8 @@ void overview_handle_rbut(int x, int y)
 
  ytile=y/2; 
 
- if (!can_client_change_view()) {
-   return;
- }
+ if(get_client_state()!=CLIENT_GAME_RUNNING_STATE)
+     return ;
  center_tile_mapcanvas(xtile,ytile); 
 
 }

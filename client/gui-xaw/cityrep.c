@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -191,19 +190,6 @@ void popup_city_report_dialog(bool make_modal)
    }
 }
 
-/****************************************************************
-  Closes the cityrep dialog.
-****************************************************************/
-void popdown_city_report_dialog(void)
-{
-  if (city_dialog_shell) {
-    if (city_dialog_shell_is_modal) {
-      XtSetSensitive(main_form, TRUE);
-    }
-    XtDestroyWidget(city_dialog_shell);
-    city_dialog_shell = 0;
-  }
-}
 
 /****************************************************************
 ...
@@ -473,7 +459,10 @@ void city_refresh_callback(Widget w, XtPointer client_data, XtPointer call_data)
 void city_close_callback(Widget w, XtPointer client_data, 
 			 XtPointer call_data)
 {
-  popdown_city_report_dialog();
+  if(city_dialog_shell_is_modal)
+     XtSetSensitive(main_form, TRUE);
+  XtDestroyWidget(city_dialog_shell);
+  city_dialog_shell=0;
 }
 
 /****************************************************************

@@ -220,8 +220,8 @@ int utype_happy_cost(struct unit_type *ut, struct government *g);
 int utype_gold_cost(struct unit_type *ut, struct government *g);
 
 int can_upgrade_unittype(struct player *pplayer, Unit_Type_id id);
-int unit_upgrade_price(const struct player * const pplayer,
-		       const Unit_Type_id from, const Unit_Type_id to);
+int unit_upgrade_price(struct player *pplayer, Unit_Type_id from,
+		       Unit_Type_id to);
 
 Unit_Type_id find_unit_type_by_name(const char *s);
 
@@ -238,8 +238,8 @@ void role_unit_precalcs(void);
 int num_role_units(int role);
 Unit_Type_id get_role_unit(int role, int index);
 Unit_Type_id best_role_unit(struct city *pcity, int role);
-Unit_Type_id best_role_unit_for_player(struct player *pplayer, int role);
 
+void unit_type_free(Unit_Type_id id);
 void unit_types_free(void);
 
 #define unit_type_iterate(m_i)                                                \

@@ -13,11 +13,6 @@
 #ifndef FC__AIDATA_H
 #define FC__AIDATA_H
 
-#include "shared.h"		/* bool type */
-
-struct player;
-struct unit;
-
 /* 
  * This file and aidata.c contains global data structures for the AI
  * and some of the functions that fill them with useful values at the 
@@ -47,21 +42,9 @@ struct ai_data {
   struct {
     int *workers; /* cities to workers on continent*/
     int *cities;  /* number of cities on continent */
-    int average_production;
   } stats;
 
   int num_continents; /* last time we updated our continent data */
-
-  /* Dynamic weights used in addition to Syela's hardcoded weights */
-  int shield_priority;
-  int food_priority;
-  int luxury_priority;
-  int gold_priority;
-  int science_priority;
-  int happy_priority;
-  int unhappy_priority;
-  int angry_priority;
-  int pollution_priority;
 };
 
 void ai_data_turn_init(struct player *pplayer);

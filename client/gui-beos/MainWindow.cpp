@@ -3,10 +3,6 @@
 	Copyright (c) 1997 Be Do Have Software. All rights reserved.
  */
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <stdio.h>
 #include <support/Debug.h>
 
@@ -180,6 +176,7 @@ MainWindow::MessageReceived( BMessage *msg )
 	case UI_HANDLE_DIPLO_REMOVE_CLAUSE:
 	case UI_POPUP_FIND_DIALOG:
 	case UI_POPUP_GOTO_DIALOG:
+	case UI_POPUP_HELP_DIALOG:
 	case UI_POPUP_HELP_DIALOG_STRING:
 	case UI_POPUP_HELP_DIALOG_TYPED:
 	case UI_POPDOWN_HELP_DIALOG: 

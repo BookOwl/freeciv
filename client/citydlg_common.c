@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -21,7 +20,6 @@
 #include "support.h"
 
 #include "citydlg_common.h"
-#include "control.h"
 #include "options.h"		/* for concise_city_production */
 #include "tilespec.h"		/* for is_isometric */
 
@@ -56,30 +54,35 @@ This converts a citymap canvas position to a city coordinate position
 **************************************************************************/
 void canvas_pos_to_city_pos(int canvas_x, int canvas_y, int *map_x, int *map_y)
 {
-  int orig_canvas_x = canvas_x, orig_canvas_y = canvas_y;
-
   if (is_isometric) {
-    const int W = NORMAL_TILE_WIDTH, H = NORMAL_TILE_HEIGHT;
+    *map_x = -2;
+    *map_y = 2;
 
-    /* Shift the tile right so the top corner of tile (-2,2) is at
-       canvas position (0,0). */
-    canvas_y += H / 2;
+    /* first find an equivalent position on the left side of the screen. */
+    *map_x += canvas_x / NORMAL_TILE_WIDTH;
+    *map_y -= canvas_x / NORMAL_TILE_WIDTH;
+    canvas_x %= NORMAL_TILE_WIDTH;
 
-    /* Perform a pi/4 rotation, with scaling.  See canvas_pos_to_map_pos
-       for a full explanation. */
-    *map_x = DIVIDE(canvas_x * H + canvas_y * W, W * H);
-    *map_y = DIVIDE(canvas_y * W - canvas_x * H, W * H);
+    /* Then move op to the top corner. */
+    *map_x += canvas_y / NORMAL_TILE_HEIGHT;
+    *map_y += canvas_y / NORMAL_TILE_HEIGHT;
+    canvas_y %= NORMAL_TILE_HEIGHT;
 
-    /* Add on the offset of the top-left corner to get the final
-       coordinates (like in canvas_pos_to_map_pos). */
-    *map_x -= 2;
-    *map_y += 2;
+    assert(NORMAL_TILE_WIDTH == 2 * NORMAL_TILE_HEIGHT);
+    canvas_y *= 2;		/* now we have a square. */
+    if (canvas_x + canvas_y > NORMAL_TILE_WIDTH / 2)
+      (*map_x)++;
+    if (canvas_x + canvas_y > 3 * NORMAL_TILE_WIDTH / 2)
+      (*map_x)++;
+    if (canvas_x - canvas_y > NORMAL_TILE_WIDTH / 2)
+      (*map_y)--;
+    if (canvas_y - canvas_x > NORMAL_TILE_WIDTH / 2)
+      (*map_y)++;
   } else {
     *map_x = canvas_x / NORMAL_TILE_WIDTH;
     *map_y = canvas_y / NORMAL_TILE_HEIGHT;
   }
-  freelog(LOG_DEBUG, "canvas_pos_to_city_pos(pos=(%d,%d))=(%d,%d)",
-	  orig_canvas_x, orig_canvas_y, *map_x, *map_y);
+  freelog(LOG_DEBUG, "canvas_pos_to_city_pos(pos=(%d,%d))=(%d,%d)", canvas_x, canvas_y, *map_x, *map_y);
 }
 
 /**************************************************************************
@@ -220,7 +223,7 @@ void get_city_dialog_production_row(char *buf[], size_t column_size, int id,
       if (pcity && wonder_replacement(pcity, id)) {
 	my_snprintf(buf[1], column_size, "*");
       } else {
-	const char *state = "";
+	char *state = "";
 
 	if (is_wonder(id)) {
 	  state = _("Wonder");
@@ -254,64 +257,5 @@ void get_city_dialog_production_row(char *buf[], size_t column_size, int id,
     }
   } else {
     my_snprintf(buf[3], column_size, "---");
-  }
-}
-
-/**************************************************************************
-  Provide a list of all citizens in the city, in order.  "index"
-  should be the happiness index (currently [0..4]; 4 = final
-  happiness).  "citizens" should be an array large enough to hold all
-  citizens (use MAX_CITY_SIZE to be on the safe side).
-**************************************************************************/
-void get_city_citizen_types(struct city *pcity, int index,
-			    enum citizen_type *citizens)
-{
-  int i = 0, n;
-  assert(index >= 0 && index < 5);
-
-  for (n = 0; n < pcity->ppl_happy[index]; n++, i++) {
-    citizens[i] = CITIZEN_HAPPY;
-  }
-  for (n = 0; n < pcity->ppl_content[index]; n++, i++) {
-    citizens[i] = CITIZEN_CONTENT;
-  }
-  for (n = 0; n < pcity->ppl_unhappy[index]; n++, i++) {
-    citizens[i] = CITIZEN_UNHAPPY;
-  }
-  for (n = 0; n < pcity->ppl_angry[index]; n++, i++) {
-    citizens[i] = CITIZEN_ANGRY;
-  }
-
-  for (n = 0; n < pcity->ppl_elvis; n++, i++) {
-    citizens[i] = CITIZEN_ELVIS;
-  }
-  for (n = 0; n < pcity->ppl_scientist; n++, i++) {
-    citizens[i] = CITIZEN_SCIENTIST;
-  }
-  for (n = 0; n < pcity->ppl_taxman; n++, i++) {
-    citizens[i] = CITIZEN_TAXMAN;
-  }
-
-  assert(i == pcity->size);
-}
-
-/**************************************************************************
-  Activate all units on the given map tile.
-**************************************************************************/
-void activate_all_units(int map_x, int map_y)
-{
-  struct unit_list *punit_list = &map_get_tile(map_x, map_y)->units;
-  struct unit *pmyunit = NULL;
-
-  unit_list_iterate((*punit_list), punit) {
-    if (game.player_idx == punit->owner) {
-      /* Activate this unit. */
-      pmyunit = punit;
-      request_new_unit_activity(punit, ACTIVITY_IDLE);
-    }
-  } unit_list_iterate_end;
-  if (pmyunit) {
-    /* Put the focus on one of the activated units. */
-    set_unit_focus(pmyunit);
   }
 }

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -124,7 +123,7 @@ static void science_goal(ULONG * newgoal)
   int i;
   int to = -1;
 
-  if (game.player_ptr->ai.tech_goal == A_UNSET)
+  if (game.player_ptr->ai.tech_goal == A_NONE)
     if (help_goal_entries[*newgoal] == (STRPTR) advances[A_NONE].name)
       to = 0;
   for (i = A_FIRST; i < game.num_tech_types; i++)
@@ -210,7 +209,8 @@ void popup_science_dialog(bool make_modal)
     help_goal_entries = NULL;
   }
 
-  if (!is_future_tech(game.player_ptr->research.researching)) {
+  if (game.player_ptr->research.researching != A_NONE)
+  {
     for (i = A_FIRST, j = 0; i < game.num_tech_types; i++)
     {
       if (get_invention(game.player_ptr, i) != TECH_REACHABLE)
@@ -245,18 +245,17 @@ void popup_science_dialog(bool make_modal)
 	num_unknown_techs_for_goal(game.player_ptr, i) < 11)
       j++;
   }
-  if (game.player_ptr->ai.tech_goal == A_UNSET) {
+  if (game.player_ptr->ai.tech_goal == A_NONE)
     j++;
-  }
 
   if (j)
   {
     if ((help_goal_entries = (STRPTR *) malloc((j + 2) * sizeof(STRPTR))))
     {
       j = 0;
-      if (game.player_ptr->ai.tech_goal == A_UNSET) {
+      if (game.player_ptr->ai.tech_goal == A_NONE)
 	help_goal_entries[j++] = advances[A_NONE].name;
-      }
+
 
       for (i = A_FIRST; i < game.num_tech_types; i++)
       {

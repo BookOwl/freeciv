@@ -31,7 +31,6 @@
 #include "support.h"
 
 #include "chatline.h"
-#include "civclient.h"
 #include "climisc.h"
 #include "clinet.h"
 #include "gui_main.h"
@@ -64,7 +63,7 @@ static void players_vision_callback(GtkMenuItem *item, gpointer data);
 static void players_intel_callback(GtkMenuItem *item, gpointer data);
 static void players_sship_callback(GtkMenuItem *item, gpointer data);
 
-#define NUM_COLUMNS 12                /* number of columns in total */
+#define NUM_COLUMNS 11                /* number of columns in total */
 #define DEF_SORT_COLUMN 2             /* default sort column (2 = nation) */
 #define COLOR_COLUMN (NUM_COLUMNS)    /* color column */
 #define PLRNO_COLUMN (NUM_COLUMNS+1)  /* plrno column */
@@ -162,9 +161,13 @@ static void selection_callback(GtkTreeSelection *selection, gpointer data)
     gtk_widget_set_sensitive(players_vision_command,
       gives_shared_vision(game.player_ptr, plr));
 
-    gtk_widget_set_sensitive(players_meet_command, can_meet_with_player(plr));
-    gtk_widget_set_sensitive(players_int_command, can_intel_with_player(plr));
-    return;
+    if (plr->is_alive
+        && plr != game.player_ptr
+        && player_has_embassy(game.player_ptr, plr)) {
+      gtk_widget_set_sensitive(players_meet_command, plr->is_connected);
+      gtk_widget_set_sensitive(players_int_command, TRUE);
+      return;
+    }
   }
 
   gtk_widget_set_sensitive(players_meet_command, FALSE);
@@ -176,11 +179,10 @@ static void selection_callback(GtkTreeSelection *selection, gpointer data)
 **************************************************************************/
 void create_players_dialog(void)
 {
-  static char *titles[NUM_COLUMNS] = {
+  static gchar *titles_[NUM_COLUMNS] = {
     N_("Name"),
     N_("Flag"),
     N_("Nation"),
-    N_("Team"),
     N_("AI"),
     N_("Embassy"),
     N_("Dipl.State"),
@@ -190,12 +192,11 @@ void create_players_dialog(void)
     N_("Host"),
     N_("Idle Turns")
   };
-  static bool titles_done;
+  static gchar **titles;
 
   static GType model_types[NUM_COLUMNS+2] = {
     G_TYPE_STRING,
     G_TYPE_NONE,
-    G_TYPE_STRING,
     G_TYPE_STRING,
     G_TYPE_BOOLEAN,
     G_TYPE_STRING,
@@ -231,7 +232,7 @@ void create_players_dialog(void)
   model_types[1] = GDK_TYPE_PIXBUF;
   model_types[COLOR_COLUMN] = GDK_TYPE_COLOR;
 
-  intl_slist(ARRAY_SIZE(titles), titles, &titles_done);
+  if (!titles) titles = intl_slist(NUM_COLUMNS, titles_);
 
   players_dialog_shell = gtk_dialog_new_with_buttons(_("Players"),
     NULL,
@@ -417,24 +418,16 @@ static void build_flag(Nation_Type_id nation)
 static void build_row(GtkTreeIter *it, int i)
 {
   static char dsbuf[32];
-  gchar *team, *state;
+  gchar *state;
   const struct player_diplstate *pds;
   gint idle;
   struct player *plr = get_player(i);
   GdkColor *state_col;
   GValue value = { 0, };
 
-  /* the team */
-  if (plr->team != TEAM_NONE) {
-    team = team_get_by_id(plr->team)->name;
-  } else {
-    team = "";
-  }
-
   gtk_list_store_set(store, it,
     0, (gchar *)plr->name,   	      	      /* the playername */
     2, (gchar *)get_nation_name(plr->nation), /* the nation */
-    3, (gchar *)team,
     PLRNO_COLUMN, (gint)i,    	      	      /* the playerid */
     -1);
 
@@ -476,17 +469,17 @@ static void build_row(GtkTreeIter *it, int i)
   /* assemble the whole lot */
   g_value_init(&value, G_TYPE_STRING);
   g_value_set_static_string(&value, state);
-  gtk_list_store_set_value(store, it, 9, &value);
+  gtk_list_store_set_value(store, it, 8, &value);
   g_value_unset(&value);
 
   gtk_list_store_set(store, it,
-     4, (gboolean)plr->ai.control,
-     5, (gchar *)get_embassy_status(game.player_ptr, plr),
-     6, (gchar *)dsbuf,
-     7, (gchar *)get_vision_status(game.player_ptr, plr),
-     8, (gchar *)reputation_text(plr->reputation),
-    10, (gchar *)player_addr_hack(plr),   	      	    /* Fixme */
-    11, (gint)idle,
+     3, (gboolean)plr->ai.control,
+     4, (gchar *)get_embassy_status(game.player_ptr, plr),
+     5, (gchar *)dsbuf,
+     6, (gchar *)get_vision_status(game.player_ptr, plr),
+     7, (gchar *)reputation_text(plr->reputation),
+     9, (gchar *)player_addr_hack(plr),   	      	    /* Fixme */
+    10, (gint)idle,
     -1);
 
    /* set flag. */

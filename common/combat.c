@@ -10,11 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
@@ -137,7 +132,7 @@ void get_modified_firepower(struct unit *attacker, struct unit *defender,
 
   /* In land bombardment both units have their firepower reduced to 1 */
   if (is_sailing_unit(attacker)
-      && !is_ocean(map_get_terrain(defender->x, defender->y))
+      && map_get_terrain(defender->x, defender->y) != T_OCEAN
       && is_ground_unit(defender)) {
     *att_fp = 1;
     *def_fp = 1;
@@ -167,7 +162,7 @@ double unit_win_chance(struct unit *attacker, struct unit *defender)
 /**************************************************************************
   a wrapper that returns whether or not a unit ignores citywalls
 **************************************************************************/
-static bool unit_ignores_citywalls(struct unit *punit)
+bool unit_ignores_citywalls(struct unit *punit)
 {
   return (unit_flag(punit, F_IGWALL));
 }
@@ -396,7 +391,7 @@ int get_virtual_defense_power(Unit_Type_id att_type, Unit_Type_id def_type,
   enum tile_terrain_type t = map_get_terrain(x, y);
   int db;
 
-  if (unit_types[def_type].move_type == LAND_MOVING && is_ocean(t)) {
+  if (unit_types[def_type].move_type == LAND_MOVING && t == T_OCEAN) {
     /* Ground units on ship doesn't defend. */
     return 0;
   }
@@ -503,15 +498,10 @@ struct unit *get_defender(struct unit *attacker, int x, int y)
   } unit_list_iterate_end;
 
   if (count > 0 && !bestdef) {
-    struct tile *ptile = map_get_tile(x, y);
-    struct unit *punit = unit_list_get(&ptile->units, 0);
-
-    freelog(LOG_ERROR, "get_defender bug: %s's %s vs %s's %s (total %d"
-            " units) on %s at (%d,%d). ", unit_owner(attacker)->name,
-            unit_type(attacker)->name, unit_owner(punit)->name,
-            unit_type(punit)->name, unit_list_size(&ptile->units), 
-            get_terrain_name(ptile->terrain), x, y);
-    assert(FALSE);
+    struct unit *debug_unit = unit_list_get(&map_get_tile(x, y)->units, 0);
+    freelog(LOG_ERROR, "Get_def bugged at (%d,%d). The most likely course"
+	    " is a unit on an ocean square without a transport. The owner"
+	    " of the unit is %s", x, y, unit_owner(debug_unit)->name);
   }
 
   return bestdef;

@@ -40,9 +40,9 @@ enum barbarian_type {
 
 enum handicap_type {
   H_NONE=0, /* no handicaps */
-  H_DIPLOMAT=1, /* can't build offensive diplomats */
+  H_RIGIDPROD=1, /* can't switch to/from building_unit without penalty */
   H_MAP=2, /* only knows map_get_known tiles */
-  H_LIMITEDHUTS=4, /* Can get only 25 gold and barbs from huts */
+  H_TECH=4, /* doesn't know what enemies have researched */
   H_CITYBUILDINGS=8, /* doesn't know what buildings are in enemy cities */
   H_CITYUNITS=16, /* doesn't know what units are in enemy cities */
   H_DEFENSIVE=32, /* builds lots of defensive buildings without calculating need */
@@ -52,8 +52,7 @@ enum handicap_type {
   H_RATES=256, /* can't set its rates beyond government limits */
   H_TARGETS=512, /* can't target anything it doesn't know exists */
   H_HUTS=1024, /* doesn't know which unseen tiles have huts on them */
-  H_FOG=2048, /* can't see through fog of war */
-  H_NOPLANES=4096, /* doesn't build planes */
+  H_FOG=2048 /* can't see through fog of war */
 };
 
 struct player_economic {
@@ -66,13 +65,7 @@ struct player_economic {
 struct player_research {
   int bulbs_researched;   /* # bulbs reseached for the current tech */    
   int techs_researched;   /* # techs the player has researched/acquired */
-  /* 
-   * Invention being researched in. Valid values for researching are:
-   *  - any existing tech but not A_NONE or
-   *  - A_FUTURE.
-   * In addition A_UNSET is allowed at the client for enemies.
-   */
-  int researching;        
+  int researching;        /* invention being researched in */
   int changed_from;       /* if the player changed techs, which one
 			     changed from */
   int bulbs_researched_before;  /* if the player changed techs, how
@@ -122,12 +115,6 @@ struct player_score {
 
 struct player_ai {
   bool control;
-
-  /* 
-   * Valid values for tech_goal are:
-   *  - any existing tech but not A_NONE or
-   *  - A_UNSET.
-   */
   int tech_goal;
   int prev_gold;
   int maxbuycost;
@@ -163,7 +150,7 @@ struct player_diplstate {
 
 /***************************************************************************
   On the distinction between nations(formerly races), players, and users,
-  see doc/HACKING
+  see freeciv_hackers_guide.txt
 ***************************************************************************/
 
 struct player {
@@ -173,7 +160,6 @@ struct player {
   bool is_male;
   int government;
   Nation_Type_id nation;
-  Team_Type_id team;
   bool turn_done;
   int nturns_idle;
   bool is_alive;
@@ -202,8 +188,13 @@ struct player {
   Impr_Status improvements[B_LAST]; /* improvements with equiv_range==Player */
   Impr_Status *island_improv; /* improvements with equiv_range==Island, dimensioned to
 			 	 [map.num_continents][game.num_impr_types] */
+  struct geff_vector effects;		/* effects with range==Player */
+  struct geff_vector *island_effects;	/* effects with range==Island */
 
-  int num_continents;
+  /* 
+   * Size of the island_improv and island_effects arrays.
+   */
+  int max_continent;
 
   struct {
     int length;
@@ -212,6 +203,8 @@ struct player {
 };
 
 void player_init(struct player *plr);
+void player_init_island_imprs(struct player *plr, int numcont);
+void player_free_island_imprs(struct player *plr);
 struct player *find_player_by_name(const char *name);
 struct player *find_player_by_name_prefix(const char *name,
 					  enum m_pre_result *result);
@@ -238,7 +231,6 @@ bool player_knows_improvement_tech(struct player *pplayer,
 bool player_knows_techs_with_flag(struct player *pplayer,
 				 enum tech_flag_id flag);
 int num_known_tech_with_flag(struct player *pplayer, enum tech_flag_id flag);
-int player_get_expected_income(struct player *pplayer);
 
 void player_limit_to_government_rates(struct player *pplayer);
 

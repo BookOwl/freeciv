@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -46,30 +45,29 @@ static const char name_too_long[] = "Name \"%s\" too long; truncating.";
 #define name_strlcpy(dst, src) ((void) sz_loud_strlcpy(dst, src, name_too_long))
 
 static void openload_ruleset_file(struct section_file *file,
-				  const char *whichset);
+				   char *whichset);
 static char *check_ruleset_capabilities(struct section_file *file,
-					const char *us_capstr,
+					char *us_capstr,
 					const char *filename);
 
-static int lookup_tech(struct section_file *file, const char *prefix,
-		       const char *entry, bool required, const char *filename,
-		       const char *description);
-static void lookup_tech_list(struct section_file *file, const char *prefix,
-			     const char *entry, int *output, const char *filename);
-static int lookup_unit_type(struct section_file *file, const char *prefix,
-			    const char *entry, bool required, const char *filename,
-			    const char *description);
-static Impr_Type_id lookup_impr_type(struct section_file *file, const char *prefix,
-				     const char *entry, bool required,
-				     const char *filename, const char *description);
-static int lookup_government(struct section_file *file, const char *entry,
+static int lookup_tech(struct section_file *file, char *prefix,
+		       char *entry, bool required, const char *filename,
+		       char *description);
+static void lookup_tech_list(struct section_file *file, char *prefix,
+			     char *entry, int *output, const char *filename);
+static int lookup_unit_type(struct section_file *file, char *prefix,
+			    char *entry, bool required, const char *filename,
+			    char *description);
+static Impr_Type_id lookup_impr_type(struct section_file *file, char *prefix,
+				     char *entry, bool required,
+				     const char *filename, char *description);
+static int lookup_government(struct section_file *file, char *entry,
 			     const char *filename);
-static int lookup_city_cost(struct section_file *file, const char *prefix,
-			    const char *entry, const char *filename);
+static int lookup_city_cost(struct section_file *file, char *prefix,
+			    char *entry, const char *filename);
 static char *lookup_helptext(struct section_file *file, char *prefix);
 
-static enum tile_terrain_type lookup_terrain(char *name, 
-                                             enum tile_terrain_type tthis);
+static enum tile_terrain_type lookup_terrain(char *name, int tthis);
 
 static void load_tech_names(struct section_file *file);
 static void load_unit_names(struct section_file *file);
@@ -79,8 +77,8 @@ static void load_terrain_names(struct section_file *file);
 static void load_citystyle_names(struct section_file *file);
 static void load_nation_names(struct section_file *file);
 static struct city_name* load_city_name_list(struct section_file *file,
-					     const char *secfile_str1,
-					     const char *secfile_str2);
+					     char *secfile_str1,
+					     char *secfile_str2);
 
 static void load_ruleset_techs(struct section_file *file);
 static void load_ruleset_units(struct section_file *file);
@@ -105,7 +103,7 @@ static void send_ruleset_game(struct conn_list *dest);
   datafilename() wrapper: tries to match in two ways.
   Returns NULL on failure, the (statically allocated) filename on success.
 **************************************************************************/
-static char *valid_ruleset_filename(const char *subdir, const char *whichset)
+char *valid_ruleset_filename(char *subdir, char *whichset)
 {
   char filename[512], *dfilename;
 
@@ -137,7 +135,7 @@ static char *valid_ruleset_filename(const char *subdir, const char *whichset)
   "whichset" = "techs", "units", "buildings", "terrain", ...
   Calls exit(EXIT_FAILURE) on failure.
 **************************************************************************/
-static void openload_ruleset_file(struct section_file *file, const char *whichset)
+static void openload_ruleset_file(struct section_file *file, char *whichset)
 {
   char sfilename[512];
   char *dfilename = valid_ruleset_filename(game.rulesetdir, whichset);
@@ -165,7 +163,7 @@ static void openload_ruleset_file(struct section_file *file, const char *whichse
   capabilites specified are satisified.
 **************************************************************************/
 static char *check_ruleset_capabilities(struct section_file *file,
-					const char *us_capstr, const char *filename)
+					char *us_capstr, const char *filename)
 {
   char *datafile_options;
   
@@ -197,9 +195,9 @@ static char *check_ruleset_capabilities(struct section_file *file,
  If description is not NULL, it is used in the warning message
  instead of prefix (eg pass unit->name instead of prefix="units2.u27")
 **************************************************************************/
-static int lookup_tech(struct section_file *file, const char *prefix,
-		       const char *entry, bool required, const char *filename,
-		       const char *description)
+static int lookup_tech(struct section_file *file, char *prefix,
+		       char *entry, bool required, const char *filename,
+		       char *description)
 {
   char *sval;
   int i;
@@ -231,8 +229,8 @@ static int lookup_tech(struct section_file *file, const char *prefix,
  tech_exist(). There should be at least one value, but it may be "",
  meaning empty list.
 **************************************************************************/
-static void lookup_tech_list(struct section_file *file, const char *prefix,
-			     const char *entry, int *output, const char *filename)
+static void lookup_tech_list(struct section_file *file, char *prefix,
+			     char *entry, int *output, const char *filename)
 {
   char **slist;
   int i, nval;
@@ -283,9 +281,9 @@ static void lookup_tech_list(struct section_file *file, const char *prefix,
  If description is not NULL, it is used in the warning message
  instead of prefix (eg pass unit->name instead of prefix="units2.u27")
 **************************************************************************/
-static int lookup_unit_type(struct section_file *file, const char *prefix,
-			    const char *entry, bool required, const char *filename,
-			    const char *description)
+static int lookup_unit_type(struct section_file *file, char *prefix,
+			    char *entry, bool required, const char *filename,
+			    char *description)
 {
   char *sval;
   int i;
@@ -316,9 +314,9 @@ static int lookup_unit_type(struct section_file *file, const char *prefix,
  If description is not NULL, it is used in the warning message
  instead of prefix (eg pass impr->name instead of prefix="imprs2.b27")
 **************************************************************************/
-static Impr_Type_id lookup_impr_type(struct section_file *file, const char *prefix,
-				     const char *entry, bool required,
-				     const char *filename, const char *description)
+static Impr_Type_id lookup_impr_type(struct section_file *file, char *prefix,
+				     char *entry, bool required,
+				     const char *filename, char *description)
 {
   char *sval;
   int id;
@@ -345,7 +343,7 @@ static Impr_Type_id lookup_impr_type(struct section_file *file, const char *pref
   Lookup entry in the file and return the corresponding government index;
   dies if can't find/match.  filename is for error message.
 **************************************************************************/
-static int lookup_government(struct section_file *file, const char *entry,
+static int lookup_government(struct section_file *file, char *entry,
 			     const char *filename)
 {
   char *sval;
@@ -366,8 +364,8 @@ static int lookup_government(struct section_file *file, const char *entry,
   value if int, or G_CITY_SIZE_FREE is entry is "City_Size".
   Dies if gets some other string.  filename is for error message.
 **************************************************************************/
-static int lookup_city_cost(struct section_file *file, const char *prefix,
-			    const char *entry, const char *filename)
+static int lookup_city_cost(struct section_file *file, char *prefix,
+			    char *entry, const char *filename)
 {
   char *sval;
   int ival = 0;
@@ -388,8 +386,8 @@ static int lookup_city_cost(struct section_file *file, const char *prefix,
 /**************************************************************************
   Lookup optional string, returning allocated memory or NULL.
 **************************************************************************/
-static char *lookup_string(struct section_file *file, const char *prefix,
-			   const char *suffix)
+static char *lookup_string(struct section_file *file, char *prefix,
+			   char *suffix)
 {
   char *sval;
   
@@ -414,25 +412,28 @@ static char *lookup_helptext(struct section_file *file, char *prefix)
 /**************************************************************************
   Look up a terrain name in the tile_types array and return its index.
 **************************************************************************/
-static enum tile_terrain_type lookup_terrain(char *name, 
-                                             enum tile_terrain_type tthis)
+static enum tile_terrain_type lookup_terrain(char *name, int tthis)
 {
-  enum tile_terrain_type i;
+  int i;
 
-  if (*name == '\0' || (0 == strcmp(name, "none")) 
-      || (0 == strcmp(name, "no"))) {
-    return (T_LAST);
-  } else if (0 == strcmp(name, "yes")) {
-    return (tthis);
-  }
-
-  for (i = T_FIRST; i < T_COUNT; i++) {
-    if (0 == strcmp(name, tile_types[i].terrain_name)) {
-      return i;
+  if (*name == '\0' || (0 == strcmp(name, "none")) || (0 == strcmp(name, "no")))
+    {
+      return (T_LAST);
     }
-  }
+  else if (0 == strcmp(name, "yes"))
+    {
+      return (tthis);
+    }
 
-  return T_UNKNOWN;
+  for (i = T_FIRST; i < T_COUNT; i++)
+    {
+      if (0 == strcmp(name, tile_types[i].terrain_name))
+	{
+	  return (i);
+	}
+    }
+
+  return (T_UNKNOWN);
 }
 
 /**************************************************************************
@@ -535,12 +536,6 @@ static void load_ruleset_techs(struct section_file *file)
     }
     free(slist);
 
-    sz_strlcpy(a->graphic_str,
-	       secfile_lookup_str_default(file, "-", "%s.graphic", sec[i]));
-    sz_strlcpy(a->graphic_alt,
-	       secfile_lookup_str_default(file, "-",
-					  "%s.graphic_alt", sec[i]));
-    
     a->helptext = lookup_helptext(file, sec[i]);    
     a->bonus_message = lookup_string(file, sec[i], "bonus_message");
     a->preset_cost =
@@ -624,6 +619,15 @@ static void load_ruleset_units(struct section_file *file)
 
   datafile_options =
     check_ruleset_capabilities(file, "+1.9", filename);
+
+  game.firepower_factor =
+    secfile_lookup_int_default(file, 1, "units_adjust.firepower_factor");
+  if (game.firepower_factor <= 0) {
+      freelog(LOG_FATAL, "In the [units_adjust] section of the %s file,\n"
+		      "firepower_factor has been set to %d but has to be "
+		      "higher than zero.", filename, game.firepower_factor);
+      exit(EXIT_FAILURE);
+  }
 
   sec = secfile_get_secnames_prefix(file, "unit_", &nval);
 
@@ -725,7 +729,15 @@ static void load_ruleset_units(struct section_file *file)
       if(strcmp(sval,"")==0) {
 	continue;
       }
+      if (strcmp(sval, "Submarine")==0) {
+	/* Backwards compatibility */
+	freelog(LOG_NORMAL, "Old-style \"Submarine\" flag in %s (ok)", filename);
+	BV_SET(u->flags, F_NO_LAND_ATTACK);
+	BV_SET(u->flags, F_MISSILE_CARRIER);
+	ival = F_PARTIAL_INVIS;
+      } else {
 	ival = unit_flag_from_str(sval);
+      }
       if (ival==F_LAST) {
 	freelog(LOG_ERROR, "for unit_type \"%s\": bad flag name \"%s\" (%s)",
 	     u->name, sval, filename);
@@ -1195,12 +1207,6 @@ static void load_ruleset_buildings(struct section_file *file)
 
     /* FIXME: remove when gen-impr obsoletes */
     b->variant = secfile_lookup_int_default(file, 0, "%s.variant", sec[i]);
-    
-    sz_strlcpy(b->graphic_str,
-	       secfile_lookup_str_default(file, "-", "%s.graphic", sec[i]));
-    sz_strlcpy(b->graphic_alt,
-	    secfile_lookup_str_default(file, "-", "%s.graphic_alt", sec[i]));
-
     sz_strlcpy(b->soundtag,
 	       secfile_lookup_str_default(file, "-", "%s.sound", sec[i]));
     sz_strlcpy(b->soundtag_alt,
@@ -1740,10 +1746,6 @@ static void send_ruleset_control(struct conn_list *dest)
   packet.playable_nation_count = game.playable_nation_count;
   packet.style_count = game.styles_count;
 
-  for(i = 0; i < MAX_NUM_TEAMS; i++) {
-    sz_strlcpy(packet.team_name[i], team_get_by_id(i)->name);
-  }
-
   lsend_packet_ruleset_control(dest, &packet);
 }
 
@@ -1752,29 +1754,24 @@ This checks if nations[pos] leader names are not already defined in any
 previous nation, or twice in its own leader name table.
 If not return NULL, if yes return pointer to name which is repeated.
 **************************************************************************/
-static char *check_leader_names(Nation_Type_id nation)
+static char *check_leader_names(int pos)
 {
-  int k;
-  struct nation_type *pnation = get_nation_by_idx(nation);
+  int i, j, k;
+  struct nation_type *n, *nation;
+  char *leader;
 
-  for (k = 0; k < pnation->leader_count; k++) {
-    char *leader = pnation->leaders[k].name;
-    int i;
-    Nation_Type_id nation2;
-
-    for (i = 0; i < k; i++) {
-      if (0 == strcmp(leader, pnation->leaders[i].name)) {
-	return leader;
-      }
+  nation = get_nation_by_idx(pos);
+  for( k = 0; k < nation->leader_count; k++) {
+    leader = nation->leader_name[k];
+    for( i=0; i<k; i++ ) {
+      if( 0 == strcmp(leader, nation->leader_name[i]) )
+          return leader;
     }
-
-    for (nation2 = 0; nation2 < nation; nation2++) {
-      struct nation_type *pnation2 = get_nation_by_idx(nation2);
-
-      for (i = 0; i < pnation2->leader_count; i++) {
-	if (0 == strcmp(leader, pnation2->leaders[i].name)) {
-	  return leader;
-	}
+    for( j = 0; j < pos; j++) {
+      n = get_nation_by_idx(j);
+      for( i=0; i < n->leader_count; i++) {
+        if( 0 == strcmp(leader, n->leader_name[i]) )
+          return leader;
       }
     }
   }
@@ -1837,8 +1834,8 @@ static void load_nation_names(struct section_file *file)
   malloc'ed city name list (which is all filled out) will be returned.
 **************************************************************************/
 static struct city_name* load_city_name_list(struct section_file *file,
-					     const char *secfile_str1,
-					     const char *secfile_str2)
+					     char *secfile_str1,
+					     char *secfile_str2)
 {
   int dim, j;
   struct city_name *city_names;
@@ -1999,11 +1996,10 @@ static void load_ruleset_nations(struct section_file *file)
       exit(EXIT_FAILURE);
     }
     pl->leader_count = dim;
-    pl->leaders = fc_malloc(sizeof(*pl->leaders) * pl->leader_count);
     for(j = 0; j < dim; j++) {
-      pl->leaders[j].name = mystrdup(leaders[j]);
+      pl->leader_name[j] = mystrdup(leaders[j]);
       if (check_name(leaders[j])) {
-	pl->leaders[j].name[MAX_LEN_NAME - 1] = '\0';
+	pl->leader_name[j][MAX_LEN_NAME - 1] = 0;
       }
     }
     free(leaders);
@@ -2025,15 +2021,15 @@ static void load_ruleset_nations(struct section_file *file)
     }
     for (j = 0; j < dim; j++) {
       if (0 == mystrcasecmp(leaders[j], "Male")) {
-        pl->leaders[j].is_male = TRUE;
+        pl->leader_is_male[j] = TRUE;
       } else if (0 == mystrcasecmp(leaders[j], "Female")) {
-        pl->leaders[j].is_male = FALSE;
+        pl->leader_is_male[j] = FALSE;
       } else {
         freelog(LOG_ERROR,
 		"Nation %s, leader %s: sex must be either Male or Female; "
 		"assuming Male",
-		pl->name, pl->leaders[j].name);
-	pl->leaders[j].is_male = TRUE;
+		pl->name, pl->leader_name[j]);
+	pl->leader_is_male[j] = TRUE;
       }
     }
     free(leaders);
@@ -2150,7 +2146,7 @@ static void load_ruleset_nations(struct section_file *file)
       freelog(LOG_VERBOSE, "No valid goal techs for %s", pl->name);
     }
     while( j < MAX_NUM_TECH_GOALS )
-      pl->goals.tech[j++] = A_UNSET;
+      pl->goals.tech[j++] = A_NONE;
     if (techs) free(techs);
 
     /* AI wonder & government */
@@ -2413,7 +2409,7 @@ static void send_ruleset_units(struct conn_list *dest)
     packet.tech_requirement = u->tech_requirement;
     packet.vision_range = u->vision_range;
     packet.transport_capacity = u->transport_capacity;
-    packet.hp = u->hp;
+    packet.hp = u->hp / game.firepower_factor;
     packet.firepower = u->firepower;
     packet.obsoleted_by = u->obsoleted_by;
     packet.fuel = u->fuel;
@@ -2444,8 +2440,6 @@ static void send_ruleset_techs(struct conn_list *dest)
   for(a=advances; a<advances+game.num_tech_types; a++) {
     packet.id = a-advances;
     sz_strlcpy(packet.name, a->name_orig);
-    sz_strlcpy(packet.graphic_str, a->graphic_str);
-    sz_strlcpy(packet.graphic_alt, a->graphic_alt);	  
     packet.req[0] = a->req[0];
     packet.req[1] = a->req[1];
     packet.flags = a->flags;
@@ -2469,8 +2463,6 @@ static void send_ruleset_buildings(struct conn_list *dest)
 
     packet.id = i;
     sz_strlcpy(packet.name, b->name_orig);
-    sz_strlcpy(packet.graphic_str, b->graphic_str);
-    sz_strlcpy(packet.graphic_alt, b->graphic_alt);
     packet.tech_req = b->tech_req;
     packet.bldg_req = b->bldg_req;
     packet.terr_gate = b->terr_gate;		/* pointer assignment */
@@ -2665,8 +2657,8 @@ static void send_ruleset_nations(struct conn_list *dest)
     sz_strlcpy(packet.graphic_alt, n->flag_graphic_alt);
     packet.leader_count = n->leader_count;
     for(i=0; i < n->leader_count; i++) {
-      sz_strlcpy(packet.leader_name[i], n->leaders[i].name);
-      packet.leader_sex[i] = n->leaders[i].is_male;
+      sz_strlcpy(packet.leader_name[i], n->leader_name[i]);
+      packet.leader_sex[i] = n->leader_is_male[i];
     }
     packet.city_style = n->city_style;
     memcpy(packet.init_techs, n->init_techs, sizeof(packet.init_techs));

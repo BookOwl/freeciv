@@ -11,7 +11,6 @@
    GNU General Public License for more details.
 
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -336,7 +335,7 @@ void ui_main(int argc, char *argv[])
   
   icon_pixmap = XCreateBitmapFromData(display,
 				      RootWindowOfScreen(XtScreen(toplevel)),
-				      freeciv_bits,
+				      (char *) freeciv_bits,
 				      freeciv_width, freeciv_height);
   XtVaSetValues(toplevel, XtNiconPixmap, icon_pixmap, NULL);
 
@@ -411,9 +410,8 @@ void ui_main(int argc, char *argv[])
 
   /* Do this outside setup_widgets() so after tiles are loaded */
   for(i=0;i<10;i++)  {
-    enum citizen_type c = i < 5 ? CITIZEN_SCIENTIST : CITIZEN_TAXMAN;
     XtVaSetValues(econ_label[i], XtNbitmap,
-		  get_citizen_pixmap(c, i, NULL), NULL);
+		  get_citizen_pixmap(i<5?1:2), NULL);
     XtAddCallback(econ_label[i], XtNcallback, taxrates_callback,
 		  INT_TO_XTPOINTER(i));
   }
@@ -702,7 +700,7 @@ void main_show_info_popup(XEvent *event)
 		population_to_text(civ_population(game.player_ptr)),
 		textyear(game.year), game.turn,
 		game.player_ptr->economic.gold,
-		player_get_expected_income(game.player_ptr),
+		turn_gold_difference,
 		game.player_ptr->economic.tax,
 		game.player_ptr->economic.luxury,
 		game.player_ptr->economic.science,

@@ -27,20 +27,11 @@ typedef int Tech_Type_id;
 #define A_NONE 0
 #define A_FIRST 1
 #define A_LAST MAX_NUM_ITEMS
-#define A_UNSET (A_LAST-1)
-#define A_FUTURE (A_LAST-2)
-
 /*
-   A_NONE is the root tech. All players always know this tech. It is
-   used as a flag in various cases where there is no tech-requirement.
+   A_NONE is a special tech value, used as a flag in various
+   cases where no tech is required.
 
    A_FIRST is the first real tech id value
-
-   A_UNSET is a value which indicates that no tech is selected (for
-   research).
-
-   A_FUTURE is a value which indicates that the player is researching
-   a future tech.
 
    A_LAST is a value which is guaranteed to be larger than all
    actual tech id values.  It is used as a flag value; it can
@@ -62,7 +53,6 @@ enum tech_flag_id {
   TF_FARMLAND,  /* "Settler" unit types can build farmland */
   TF_REDUCE_TRIREME_LOSS1, /* Reduces chance of Trireme being lost at sea */
   TF_REDUCE_TRIREME_LOSS2, /* Reduces chance of Trireme being lost at sea */
-  TF_BUILD_AIRBORNE, /* Player can build air units */
   TF_LAST
 };
 
@@ -75,14 +65,10 @@ enum tech_state {
 struct advance {
   char name[MAX_LEN_NAME];
   char name_orig[MAX_LEN_NAME];	      /* untranslated */
-  char graphic_str[MAX_LEN_NAME];	/* which named sprite to use */
-  char graphic_alt[MAX_LEN_NAME];	/* alternate icon name */
   int req[2];
   unsigned int flags;
   char *helptext;
 
-  struct Sprite *sprite;		/* icon of tech. */
-	  
   /* 
    * Message displayed to the first player to get a bonus tech 
    */
@@ -129,6 +115,7 @@ const char *get_tech_name(struct player *pplayer, Tech_Type_id tech);
 
 void precalc_tech_data(void);
 
+void tech_free(Tech_Type_id tech);
 void techs_free(void);
 
 extern struct advance advances[];

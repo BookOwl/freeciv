@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -29,7 +28,6 @@
 #include "citydlg.h"
 #include "civclient.h"
 #include "clinet.h"
-#include "climap.h"
 #include "climisc.h"
 #include "colors.h"
 #include "control.h"
@@ -280,7 +278,8 @@ gint butt_down_wakeup(GtkWidget *w, GdkEventButton *ev)
   int xtile, ytile;
 
   /* when you get a <SHIFT>+<LMB> pow! */
-  if (!can_client_issue_orders() || !(ev->state & GDK_SHIFT_MASK)) {
+  if (get_client_state() != CLIENT_GAME_RUNNING_STATE
+      || !(ev->state & GDK_SHIFT_MASK)) {
     return TRUE;
   }
 
@@ -296,13 +295,11 @@ gint butt_down_wakeup(GtkWidget *w, GdkEventButton *ev)
 gint butt_down_mapcanvas(GtkWidget *w, GdkEventButton *ev)
 {
   int xtile, ytile;
-
-  if (!can_client_change_view()) {
+  
+  if(get_client_state() != CLIENT_GAME_RUNNING_STATE)
     return TRUE;
-  }
-
-  if (can_client_issue_orders()
-      && (ev->button == 1) && (ev->state & GDK_SHIFT_MASK)) {
+  
+  if ((ev->button == 1) && (ev->state & GDK_SHIFT_MASK)) {
     adjust_workers(w, ev);
     return TRUE;
   }
@@ -335,6 +332,24 @@ void create_line_at_mouse_pos(void)
 /**************************************************************************
 ...
 **************************************************************************/
+void update_line(int window_x, int window_y)
+{
+  int x, y, old_x, old_y;
+
+  if ((hover_state == HOVER_GOTO || hover_state == HOVER_PATROL)
+      && draw_goto_line) {
+    get_map_xy(window_x, window_y, &x, &y);
+
+    get_line_dest(&old_x, &old_y);
+    if (!same_pos(old_x, old_y, x, y)) {
+      draw_line(x, y);
+    }
+  }
+}
+
+/**************************************************************************
+...
+**************************************************************************/
 gint move_mapcanvas(GtkWidget *widget, GdkEventButton *event)
 {
   update_line(event->x, event->y);
@@ -351,7 +366,7 @@ void adjust_workers(GtkWidget *widget, GdkEventButton *ev)
   struct packet_city_request packet;
   enum city_tile_type wrk;
 
-  if (!can_client_issue_orders()) {
+  if (get_client_state() != CLIENT_GAME_RUNNING_STATE) {
     return;
   }
 
@@ -405,12 +420,14 @@ gint butt_down_overviewcanvas(GtkWidget *w, GdkEventButton *ev)
   }
   ytile = ev->y / 2;
   
-  if (can_client_change_view() && ev->button == 3) {
-    center_tile_mapcanvas(xtile, ytile);
-  } else if (can_client_issue_orders() && ev->button == 1) {
-    do_unit_goto(xtile, ytile);
-  }
+  if(get_client_state() != CLIENT_GAME_RUNNING_STATE)
+     return TRUE;
 
+  if (ev->button == 1) {
+    do_unit_goto(xtile, ytile);
+  } else if (ev->button == 3) {
+    center_tile_mapcanvas(xtile, ytile);
+  }
   return TRUE;
 }
 
@@ -430,7 +447,7 @@ void key_city_workers(GtkWidget *w, GdkEventKey *ev)
   int x,y;
   struct city *pcity;
 
-  if (!can_client_change_view()) {
+  if (get_client_state() != CLIENT_GAME_RUNNING_STATE) {
     return;
   }
   

@@ -42,11 +42,9 @@
 #include "support.h"
 #include "unit.h"
 
-#include "civclient.h" /* for get_client_state() */
-#include "climap.h" /* for tile_get_known() */
+#include "climisc.h" /* for tile_get_known() */
 #include "control.h" /* for fill_xxx */
 #include "graphics_g.h"
-#include "mapview_g.h" /* for update_map_canvas_visible */
 #include "options.h" /* for fill_xxx */
 
 #include "tilespec.h"
@@ -57,10 +55,8 @@ char *main_intro_filename;
 char *minimap_intro_filename;
 
 struct named_sprites sprites;
-char current_tile_set_name[512];
 
-static const int DIR4_TO_DIR8[4] =
-    { DIR8_NORTH, DIR8_SOUTH, DIR8_EAST, DIR8_WEST };
+const int DIR4_TO_DIR8[4] = {DIR8_NORTH, DIR8_SOUTH, DIR8_EAST, DIR8_WEST};
 
 int NORMAL_TILE_WIDTH;
 int NORMAL_TILE_HEIGHT;
@@ -78,7 +74,6 @@ bool flags_are_transparent = TRUE;
 
 int num_tiles_explode_unit=0;
 
-static bool is_mountainous = FALSE;
 
 static int num_spec_files = 0;
 static char **spec_filenames;	/* full pathnames */
@@ -144,7 +139,7 @@ const char **get_tileset_list(void)
 ***********************************************************************/
 static char *tilespec_fullname(const char *tileset_name)
 {
-  const char *tileset_default;
+  char *tileset_default;
   char *fname, *dname;
 
   if (isometric_view_supported()) {
@@ -153,13 +148,9 @@ static char *tilespec_fullname(const char *tileset_name)
     tileset_default = "trident";    /* Do not i18n! --dwp */
   }
 
-  if (!tileset_name || tileset_name[0] == '\0') {
+  if (tileset_name[0] == '\0') {
     tileset_name = tileset_default;
   }
-
-  /* Hack: this is the name of the tileset we're about to load.  We copy
-   * it here, since this is the only place where we know it. */
-  sz_strlcpy(current_tile_set_name, tileset_name);
 
   fname = fc_malloc(strlen(tileset_name) + strlen(TILESPEC_SUFFIX) + 1);
   sprintf(fname, "%s%s", tileset_name, TILESPEC_SUFFIX);
@@ -214,160 +205,24 @@ static void check_tilespec_capabilities(struct section_file *file,
 ***********************************************************************/
 static char *tilespec_gfx_filename(const char *gfx_filename)
 {
-  const char  *gfx_current_fileext;
-  const char **gfx_fileexts = gfx_fileextensions();
+  char **gfx_fileexts;
+  char *full_name,*real_full_name,*gfx_current_fileext;
+
+  gfx_fileexts = gfx_fileextensions();
 
   while((gfx_current_fileext = *gfx_fileexts++))
   {
-    char *full_name =
-	fc_malloc(strlen(gfx_filename) + strlen(gfx_current_fileext) + 2);
-    char *real_full_name;
-
+    full_name = fc_malloc(strlen(gfx_filename)+strlen(gfx_current_fileext)+2);
     sprintf(full_name,"%s.%s",gfx_filename,gfx_current_fileext);
 
     real_full_name = datafilename(full_name);
     free(full_name);
-    if (real_full_name) {
-      return mystrdup(real_full_name);
-    }
+    if(real_full_name) return mystrdup(real_full_name);
   }
 
   freelog(LOG_FATAL, _("Couldn't find a supported gfx file extension for %s"),
 	  gfx_filename);
   exit(EXIT_FAILURE);
-}
-
-/**********************************************************************
-  Frees the tilespec toplevel data, in preparation for re-reading it.
-
-  See tilespec_read_toplevel().
-***********************************************************************/
-static void tilespec_free_toplevel(void)
-{
-  if (city_names_font) {
-    free(city_names_font);
-    city_names_font = NULL;
-  }
-  if (city_productions_font_name) {
-    free(city_productions_font_name);
-    city_productions_font_name = NULL;
-  }
-  if (main_intro_filename) {
-    free(main_intro_filename);
-    main_intro_filename = NULL;
-  }
-  if (minimap_intro_filename) {
-    free(minimap_intro_filename);
-    minimap_intro_filename = NULL;
-  }
-  /* FIXME: free spec_filenames */
-}
-
-/**********************************************************************
-  Read a new tilespec in from scratch.
-
-  Unlike the initial reading code, which reads pieces one at a time,
-  this gets rid of the old data and reads in the new all at once.
-
-  It will also call the necessary functions to redraw the graphics.
-***********************************************************************/
-void tilespec_reread(const char *tileset_name)
-{
-  int id;
-  int center_x, center_y;
-  enum client_states state = get_client_state();
-
-  freelog(LOG_NORMAL, "Loading tileset %s.", tileset_name);
-
-  /* Step 0:  Record old data.
-   *
-   * We record the current mapcanvas center, etc.
-   */
-  get_center_tile_mapcanvas(&center_x, &center_y);
-
-  /* Step 1:  Cleanup.
-   *
-   * We free all old data in preparation for re-reading it.
-   */
-  tilespec_free_tiles();
-  tilespec_free_city_tiles(game.styles_count);
-  tilespec_free_toplevel();
-
-  /* Step 2:  Read.
-   *
-   * We read in the new tileset.  This should be pretty straightforward.
-   */
-  tilespec_read_toplevel(tileset_name);
-  tilespec_load_tiles();
-
-  /* Step 3: Setup
-   *
-   * This is a seriously sticky problem.  On startup, we build a hash
-   * from all the sprite data. Then, when we connect to a server, the
-   * server sends us ruleset data a piece at a time and we use this data
-   * to assemble the sprite structures.  But if we change while connected
-   *  we have to reassemble all of these.  This should just involve
-   * calling tilespec_setup_*** on everything.  But how do we tell what
-   * "everything" is?
-   *
-   * The below code just does things straightforwardly, by setting up
-   * each possible sprite again.  Hopefully it catches everything, and
-   * doesn't mess up too badly if we change tilesets while not connected
-   * to a server.
-   */
-  if (state < CLIENT_SELECT_RACE_STATE) {
-    /* The ruleset data is not sent until this point. */
-    return;
-  }
-  for (id = T_FIRST; id < T_COUNT; id++) {
-    tilespec_setup_tile_type(id);
-  }
-  unit_type_iterate(id) {
-    tilespec_setup_unit_type(id);
-  } unit_type_iterate_end;
-  for (id = 0; id < game.government_count; id++) {
-    tilespec_setup_government(id);
-  }
-  for (id = 0; id < game.nation_count; id++) {
-    tilespec_setup_nation_flag(id);
-  }
-  impr_type_iterate(imp_id) {
-    tilespec_setup_impr_type(imp_id);
-  } impr_type_iterate_end;
-  for (id = 0; id < game.num_tech_types; id++) {
-    if (tech_exists(id)) {
-      tilespec_setup_tech_type(id);
-    }
-  }
-
-  /* tilespec_load_tiles reverts the city tile pointers to 0.  This
-     is a workaround. */
-  tilespec_alloc_city_tiles(game.styles_count);
-  for (id = 0; id < game.styles_count; id++) {
-    tilespec_setup_city_tiles(id);
-  }
-
-  /* Step 4:  Draw.
-   *
-   * Do any necessary redraws.
-   */
-  if (state < CLIENT_GAME_RUNNING_STATE) {
-    /* Unless the client state is playing a game or in gameover,
-       we don't want/need to redraw. */
-    return;
-  }
-  tileset_changed();
-  center_tile_mapcanvas(center_x, center_y);
-}
-
-/**************************************************************************
-  This is merely a wrapper for tilespec_reread (above) for use in
-  options.c and the client local options dialog.
-**************************************************************************/
-void tilespec_reread_callback(struct client_option *option)
-{
-  assert(option->p_string_value && *option->p_string_value != '\0');
-  tilespec_reread(option->p_string_value);
 }
 
 /**********************************************************************
@@ -399,7 +254,7 @@ void tilespec_read_toplevel(const char *tileset_name)
     assert(tileset_name != NULL);
     section_file_free(file);
     free(fname);
-    tilespec_read_toplevel(NULL);
+    tilespec_read_toplevel("");
     return;
   }
   if (!is_isometric && !overhead_view_supported()) {
@@ -427,9 +282,6 @@ void tilespec_read_toplevel(const char *tileset_name)
 	  NORMAL_TILE_WIDTH, NORMAL_TILE_HEIGHT,
 	  UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT,
 	  SMALL_TILE_WIDTH, SMALL_TILE_HEIGHT);
-
-  is_mountainous = secfile_lookup_bool_default(file, FALSE,
-					       "tilespec.is_mountainous");
 
   c = secfile_lookup_str_default(file, "10x20", "tilespec.city_names_font");
   city_names_font = mystrdup(c);
@@ -477,8 +329,8 @@ static void tilespec_load_one(const char *spec_filename)
 {
   struct section_file the_file, *file = &the_file;
   struct Sprite *big_sprite = NULL, *small_sprite;
-  const char *gfx_filename, *gfx_current_fileext, **gfx_fileexts;
-  char **gridnames, **tags;
+  char *gfx_filename,*gfx_current_fileext;
+  char **gridnames, **tags, **gfx_fileexts;
   int num_grids, num_tags;
   int i, j, k;
   int x_top_left, y_top_left, dx, dy;
@@ -569,34 +421,6 @@ static void tilespec_load_one(const char *spec_filename)
 }
 
 /**********************************************************************
-  Returns a text name for the citizen, as used in the tileset.
-***********************************************************************/
-static const char *get_citizen_name(enum citizen_type citizen)
-{
-  /* These strings are used in reading the tileset.  Do not
-   * translate. */
-  switch (citizen) {
-  case CITIZEN_ELVIS:
-    return "entertainer";
-  case CITIZEN_SCIENTIST:
-    return "scientist";
-  case CITIZEN_TAXMAN:
-    return "tax_collector";
-  case CITIZEN_HAPPY:
-    return "happy";
-  case CITIZEN_CONTENT:
-    return "content";
-  case CITIZEN_UNHAPPY:
-    return "unhappy";
-  case CITIZEN_ANGRY:
-    return "angry";
-  default:
-    die("unknown citizen type %d", (int) citizen);
-  }
-  return NULL;
-}
-
-/**********************************************************************
   Return string n0s0e0w0 such that INDEX_NSEW(n,s,e,w) = idx
   The returned string is pointer to static memory.
 ***********************************************************************/
@@ -623,10 +447,6 @@ static char *nsew_str(int idx)
        }                                                       \
        assert(sprites.field != NULL);                          \
     } while(FALSE)
-
-/* Sets sprites.field to tag, or NULL if not available */
-#define SET_SPRITE_OPT(field, tag) \
-  sprites.field = hash_lookup_data(sprite_hash, tag)
 
 /**********************************************************************
   Initialize 'sprites' structure based on hardwired tags which
@@ -659,31 +479,18 @@ static void tilespec_lookup_sprite_tags(void)
     SET_SPRITE(coast_color, "t.coast_color");
   }
 
-  /* Load the citizen sprite graphics. */
-  for (i = 0; i < NUM_TILES_CITIZEN; i++) {
-    my_snprintf(buffer, sizeof(buffer), "citizen.%s", get_citizen_name(i));
-    sprites.citizen[i].sprite[0] = hash_lookup_data(sprite_hash, buffer);
-    if (sprites.citizen[i].sprite[0]) {
-      /*
-       * If this form exists, use it as the only sprite.  This allows
-       * backwards compatability with tilesets that use e.g.,
-       * citizen.entertainer.
-       */
-      sprites.citizen[i].count = 1;
-      continue;
-    }
-
-    for (j = 0; j < NUM_TILES_CITIZEN; j++) {
-      my_snprintf(buffer, sizeof(buffer), "citizen.%s_%d",
-		  get_citizen_name(i), j);
-      sprites.citizen[i].sprite[j] = hash_lookup_data(sprite_hash, buffer);
-      if (!sprites.citizen[i].sprite[j]) {
-	break;
-      }
-    }
-    sprites.citizen[i].count = j;
-    assert(j > 0);
-  }
+  /* This uses internal code for citizens array/index: */
+  SET_SPRITE(citizen[0], "citizen.entertainer");
+  SET_SPRITE(citizen[1], "citizen.scientist");
+  SET_SPRITE(citizen[2], "citizen.tax_collector");
+  SET_SPRITE(citizen[3], "citizen.content_0");
+  SET_SPRITE(citizen[4], "citizen.content_1");
+  SET_SPRITE(citizen[5], "citizen.happy_0");
+  SET_SPRITE(citizen[6], "citizen.happy_1");
+  SET_SPRITE(citizen[7], "citizen.unhappy_0");
+  SET_SPRITE(citizen[8], "citizen.unhappy_1");
+  SET_SPRITE(citizen[9], "citizen.angry_0");
+  SET_SPRITE(citizen[10], "citizen.angry_1");
 
   SET_SPRITE(spaceship.solar_panels, "spaceship.solar_panels");
   SET_SPRITE(spaceship.life_support, "spaceship.life_support");
@@ -725,16 +532,6 @@ static void tilespec_lookup_sprite_tags(void)
       SET_SPRITE(rail.diagonal[i], buffer);
     }
   }
-
-  SET_SPRITE_OPT(rail.corner[DIR8_NORTHWEST], "r.c_rail_nw");
-  SET_SPRITE_OPT(rail.corner[DIR8_NORTHEAST], "r.c_rail_ne");
-  SET_SPRITE_OPT(rail.corner[DIR8_SOUTHWEST], "r.c_rail_sw");
-  SET_SPRITE_OPT(rail.corner[DIR8_SOUTHEAST], "r.c_rail_se");
-
-  SET_SPRITE_OPT(road.corner[DIR8_NORTHWEST], "r.c_road_nw");
-  SET_SPRITE_OPT(road.corner[DIR8_NORTHEAST], "r.c_road_ne");
-  SET_SPRITE_OPT(road.corner[DIR8_SOUTHWEST], "r.c_road_sw");
-  SET_SPRITE_OPT(road.corner[DIR8_SOUTHEAST], "r.c_road_se");
 
   if (is_isometric) {
     SET_SPRITE(explode.iso_nuke, "explode.iso_nuke");
@@ -917,7 +714,9 @@ static struct Sprite* lookup_sprite_tag_alt(const char *tag, const char *alt,
   
   /* (should get sprite_hash before connection) */
   if (!sprite_hash) {
-    die("attempt to lookup for %s %s before sprite_hash setup", what, name);
+    freelog(LOG_FATAL, "attempt to lookup for %s %s before sprite_hash setup",
+	    what, name);
+    exit(EXIT_FAILURE);
   }
 
   sp = hash_lookup_data(sprite_hash, tag);
@@ -946,36 +745,6 @@ void tilespec_setup_unit_type(int id)
   ut->sprite = lookup_sprite_tag_alt(ut->graphic_str, ut->graphic_alt,
 				     unit_type_exists(id), "unit_type",
 				     ut->name);
-
-  /* should maybe do something if NULL, eg generic default? */
-}
-
-/**********************************************************************
-  Set improvement_type sprite value; should only happen after
-  tilespec_load_tiles().
-***********************************************************************/
-void tilespec_setup_impr_type(int id)
-{
-  struct impr_type *pimpr = get_improvement_type(id);
-
-  pimpr->sprite = lookup_sprite_tag_alt(pimpr->graphic_str,
-					pimpr->graphic_alt,
-					improvement_exists(id), "impr_type",
-					pimpr->name);
-
-  /* should maybe do something if NULL, eg generic default? */
-}
-
-/**********************************************************************
-  Set tech_type sprite value; should only happen after
-  tilespec_load_tiles().
-***********************************************************************/
-void tilespec_setup_tech_type(int id)
-{
-  advances[id].sprite = lookup_sprite_tag_alt(advances[id].graphic_str,
-					      advances[id].graphic_alt,
-					      tech_exists(id), "tech_type",
-					      advances[id].name);
 
   /* should maybe do something if NULL, eg generic default? */
 }
@@ -1135,6 +904,7 @@ static int fill_city_sprite_array(struct Sprite **sprs, struct city *pcity,
 				  int *solid_bg)
 {
   struct Sprite **save_sprs=sprs;
+  struct tile *ptile = map_get_tile(pcity->x, pcity->y);
 
   *solid_bg = 0;
   if (!no_backdrop) {
@@ -1146,9 +916,8 @@ static int fill_city_sprite_array(struct Sprite **sprs, struct city *pcity,
     }
   }
 
-  if (pcity->occupied) {
+  if (genlist_size(&(ptile->units.list)) > 0)
     *sprs++ = get_city_occupied_sprite(pcity);
-  }
 
   *sprs++ = get_city_sprite(pcity);
 
@@ -1184,14 +953,14 @@ static int fill_city_sprite_array(struct Sprite **sprs, struct city *pcity,
 int fill_city_sprite_array_iso(struct Sprite **sprs, struct city *pcity)
 {
   struct Sprite **save_sprs=sprs;
+  struct tile *ptile = map_get_tile(pcity->x, pcity->y);
 
   if (!no_backdrop) {
     *sprs++ = get_city_nation_flag_sprite(pcity);
   }
 
-  if (pcity->occupied) {
+  if (genlist_size(&(ptile->units.list)) > 0)
     *sprs++ = get_city_occupied_sprite(pcity);
-  }
 
   *sprs++ = get_city_sprite(pcity);
 
@@ -1199,55 +968,6 @@ int fill_city_sprite_array_iso(struct Sprite **sprs, struct city *pcity)
     *sprs++ = sprites.city.disorder;
 
   return sprs - save_sprs;
-}
-
-/**************************************************************************
-  Assemble some data that is used in building the tile sprite arrays.
-    (map_x, map_y) : the (normalized) map position
-  The values we fill in:
-    ttype          : the terrain type of the tile
-    tspecial       : all specials the tile has
-    ttype_near     : terrain types of all adjacent terrain
-    tspecial_near  : specials of all adjacent terrain
-**************************************************************************/
-static void build_tile_data(int map_x, int map_y,
-			    enum tile_terrain_type *ttype,
-			    enum tile_special_type *tspecial,
-			    enum tile_terrain_type *ttype_near,
-			    enum tile_special_type *tspecial_near)
-{
-  enum direction8 dir;
-
-  *tspecial = map_get_special(map_x, map_y);
-  *ttype = map_get_terrain(map_x, map_y);
-
-  /* In iso view a river is drawn as an overlay on top of an underlying
-   * grassland terrain. */
-  if (is_isometric && *ttype == T_RIVER) {
-    *ttype = T_GRASSLAND;
-    *tspecial |= S_RIVER;
-  }
-
-  /* Loop over all adjacent tiles.  We should have an iterator for this. */
-  for (dir = 0; dir < 8; dir++) {
-    int x1, y1;
-
-    if (MAPSTEP(x1, y1, map_x, map_y, dir)) {
-      tspecial_near[dir] = map_get_special(x1, y1);
-      ttype_near[dir] = map_get_terrain(x1, y1);
-
-      /* hacking away the river here... */
-      if (is_isometric && ttype_near[dir] == T_RIVER) {
-	tspecial_near[dir] |= S_RIVER;
-	ttype_near[dir] = T_GRASSLAND;
-      }
-    } else {
-      /* We draw the edges of the map as if the same terrain just
-       * continued off the edge of the map. */
-      tspecial_near[dir] = S_NO_SPECIAL;
-      ttype_near[dir] = *ttype;
-    }
-  }
 }
 
 /**********************************************************************
@@ -1361,148 +1081,16 @@ static struct Sprite *get_dither(int ttype, int ttype_other)
   if (ttype_other == T_UNKNOWN)
     return sprites.black_tile;
 
-  if (is_ocean(ttype) || ttype == T_JUNGLE) {
+  if (ttype == T_OCEAN || ttype == T_JUNGLE)
     return NULL;
-  }
 
-  if (is_ocean(ttype_other)) {
+  if (ttype_other == T_OCEAN)
     return sprites.coast_color;
-  }
 
   if (ttype_other != T_UNKNOWN && ttype_other != T_LAST)
     return get_tile_type(ttype_other)->sprite[0];
   else
     return NULL;
-}
-
-/**********************************************************************
-  Return TRUE iff the two mountainous terrain types should be blended.
-
-  If is_mountainous set, the tileset will be "mountainous" and consider
-  adjacent hills and mountains interchangable.  If it's unset then
-  hills will only blend with hills and mountains only with mountains.
-***********************************************************************/
-static bool can_blend_hills_and_mountains(enum tile_terrain_type ttype,
-				  enum tile_terrain_type ttype_adjc)
-{
-  assert(ttype == T_HILLS || ttype == T_MOUNTAINS);
-  if (is_mountainous) {
-    return ttype_adjc == T_HILLS || ttype_adjc == T_MOUNTAINS;
-  } else {
-    return ttype_adjc == ttype;
-  }
-}
-
-/**************************************************************************
-  Add any corner road tiles to the sprite array.
-**************************************************************************/
-static struct Sprite **fill_road_corner_sprites(struct Sprite **sprs,
-	enum tile_special_type tspecial,
-	enum tile_special_type *tspecial_near)
-{
-  bool road, road_near[8], rail, rail_near[8];
-  enum direction8 dir;
-
-  if (!draw_roads_rails || !(draw_diagonal_roads || is_isometric)) {
-    /* We're not supposed to draw roads/rails here. */
-    /* HACK: draw_diagonal_roads is not checked in iso view. */
-    return sprs;
-  }
-
-  /* Roads going diagonally adjacent to this tile need to be
-   * partly drawn on this tile. */
-  road = contains_special(tspecial, S_ROAD);
-  rail = contains_special(tspecial, S_RAILROAD);
-  for (dir = 0; dir < 8; dir++) {
-    road_near[dir] = contains_special(tspecial_near[dir], S_ROAD);
-    rail_near[dir] = contains_special(tspecial_near[dir], S_RAILROAD);
-  }
-
-  /* Draw the corner sprite if:
-   *   - There is a diagonal road (not rail!) between two adjacent tiles.
-   *   - There is no diagonal road (not rail!) that intersects this road.
-   * The logic is simple: roads are drawn underneath railrods, but are
-   * not always covered by them (even in the corners!).  But if a railroad
-   * connects two tiles, only the railroad (no road) is drawn between
-   * those tiles.
-   */
-  if (sprites.road.corner[DIR8_NORTHEAST]
-      && (road_near[DIR8_NORTH] && road_near[DIR8_EAST]
-	  && !(rail_near[DIR8_NORTH] && rail_near[DIR8_EAST]))
-      && !(road && road_near[DIR8_NORTHEAST]
-	   && !(rail && rail_near[DIR8_NORTHEAST]))) {
-    *sprs++ = sprites.road.corner[DIR8_NORTHEAST];
-  }
-  if (sprites.road.corner[DIR8_NORTHWEST]
-      && (road_near[DIR8_NORTH] && road_near[DIR8_WEST]
-	  && !(rail_near[DIR8_NORTH] && rail_near[DIR8_WEST]))
-      && !(road && road_near[DIR8_NORTHWEST]
-	   && !(rail && rail_near[DIR8_NORTHWEST]))) {
-    *sprs++ = sprites.road.corner[DIR8_NORTHWEST];
-  }
-  if (sprites.road.corner[DIR8_SOUTHEAST]
-      && (road_near[DIR8_SOUTH] && road_near[DIR8_EAST]
-	  && !(rail_near[DIR8_SOUTH] && rail_near[DIR8_EAST]))
-      && !(road && road_near[DIR8_SOUTHEAST]
-	   && !(rail && rail_near[DIR8_SOUTHEAST]))) {
-    *sprs++ = sprites.road.corner[DIR8_SOUTHEAST];
-  }
-  if (sprites.road.corner[DIR8_SOUTHWEST]
-      && (road_near[DIR8_SOUTH] && road_near[DIR8_WEST]
-	  && !(rail_near[DIR8_SOUTH] && rail_near[DIR8_WEST]))
-      && !(road && road_near[DIR8_SOUTHWEST]
-	   && !(rail && rail_near[DIR8_SOUTHWEST]))) {
-    *sprs++ = sprites.road.corner[DIR8_SOUTHWEST];
-  }
-
-  return sprs;
-}
-
-/**************************************************************************
-  Add any corner rail tiles to the sprite array.
-**************************************************************************/
-static struct Sprite **fill_rail_corner_sprites(struct Sprite **sprs,
-	enum tile_special_type tspecial,
-	enum tile_special_type *tspecial_near)
-{
-  bool rail, rail_near[8];
-  enum direction8 dir;
-
-  if (!draw_roads_rails || !(draw_diagonal_roads || is_isometric)) {
-    /* We're not supposed to draw roads/rails here. */
-    /* HACK: draw_diagonal_roads is not checked in iso view. */
-    return sprs;
-  }
-
-  /* Rails going diagonally adjacent to this tile need to be
-   * partly drawn on this tile. */
-  rail = contains_special(tspecial, S_RAILROAD);
-  for (dir = 0; dir < 8; dir++) {
-    rail_near[dir] = contains_special(tspecial_near[dir], S_RAILROAD);
-  }
-
-  if (sprites.rail.corner[DIR8_NORTHEAST]
-      && rail_near[DIR8_NORTH] && rail_near[DIR8_EAST]
-      && !(rail && rail_near[DIR8_NORTHEAST])) {
-    *sprs++ = sprites.rail.corner[DIR8_NORTHEAST];
-  }
-  if (sprites.rail.corner[DIR8_NORTHWEST]
-      && rail_near[DIR8_NORTH] && rail_near[DIR8_WEST]
-      && !(rail && rail_near[DIR8_NORTHWEST])) {
-    *sprs++ = sprites.rail.corner[DIR8_NORTHWEST];
-  }
-  if (sprites.rail.corner[DIR8_SOUTHEAST]
-      && rail_near[DIR8_SOUTH] && rail_near[DIR8_EAST]
-      && !(rail && rail_near[DIR8_SOUTHEAST])) {
-    *sprs++ = sprites.rail.corner[DIR8_SOUTHEAST];
-  }
-  if (sprites.rail.corner[DIR8_SOUTHWEST]
-      && rail_near[DIR8_SOUTH] && rail_near[DIR8_WEST]
-      && !(rail && rail_near[DIR8_SOUTHWEST])) {
-    *sprs++ = sprites.rail.corner[DIR8_SOUTHWEST];
-  }
-
-  return sprs;
 }
 
 /**********************************************************************
@@ -1524,8 +1112,8 @@ int fill_tile_sprite_array_iso(struct Sprite **sprs, struct Sprite **coasts,
 			       int x, int y, bool citymode,
 			       int *solid_bg)
 {
-  enum tile_terrain_type ttype, ttype_near[8];
-  enum tile_special_type tspecial, tspecial_near[8];
+  int ttype, ttype_near[8];
+  int tspecial, tspecial_near[8];
   int tileno, dir, i;
   struct city *pcity;
   struct Sprite **save_sprs = sprs;
@@ -1536,11 +1124,36 @@ int fill_tile_sprite_array_iso(struct Sprite **sprs, struct Sprite **coasts,
     return -1;
 
   pcity = map_get_city(x, y);
+  tspecial = map_get_special(x, y);
+  ttype = map_get_terrain(x, y);
 
-  build_tile_data(x, y, &ttype, &tspecial, ttype_near, tspecial_near);
+  /* A little hack to avoid drawing seperate T_RIVER isometric tiles. */
+  if (ttype == T_RIVER) {
+    ttype = T_GRASSLAND;
+    tspecial |= S_RIVER;
+  }
 
+  /* Any unreal tile have no specials and the terrain type of (x, y). */
+  for (dir = 0; dir < 8; dir++) {
+    int x1, y1;
+  
+    if (MAPSTEP(x1, y1, x, y, dir)) {
+      tspecial_near[dir] = map_get_special(x1, y1);
+      ttype_near[dir] = map_get_terrain(x1, y1);
+
+      /* hacking away the river here... */
+      if (ttype_near[dir] == T_RIVER) {
+      	tspecial_near[dir] |= S_RIVER;
+        ttype_near[dir] = T_GRASSLAND;
+      }
+    } else {
+      tspecial_near[dir] = S_NO_SPECIAL;
+      ttype_near[dir] = ttype;
+    }
+  }
+  
   if (draw_terrain) {
-    if (is_ocean(ttype)) {
+    if (ttype == T_OCEAN) {
       /* painted via coasts. */
 
       for (dir = 0; dir < 4; dir++) {
@@ -1552,14 +1165,10 @@ int fill_tile_sprite_array_iso(struct Sprite **sprs, struct Sprite **coasts,
 
       switch (ttype) {
         case T_HILLS:
-        tileno = INDEX_NSEW(can_blend_hills_and_mountains(T_HILLS,
-						  ttype_near[DIR8_NORTH]),
-			    can_blend_hills_and_mountains(T_HILLS,
-						  ttype_near[DIR8_SOUTH]),
-			    can_blend_hills_and_mountains(T_HILLS,
-						  ttype_near[DIR8_EAST]),
-			    can_blend_hills_and_mountains(T_HILLS,
-						  ttype_near[DIR8_WEST]));
+        tileno = INDEX_NSEW(ttype_near[DIR8_NORTH] == T_HILLS,
+        		  ttype_near[DIR8_SOUTH] == T_HILLS,
+        		  ttype_near[DIR8_EAST] == T_HILLS,
+        		  ttype_near[DIR8_WEST] == T_HILLS);
         *sprs++ = sprites.tx.spec_hill[tileno];
         break;
  
@@ -1572,14 +1181,10 @@ int fill_tile_sprite_array_iso(struct Sprite **sprs, struct Sprite **coasts,
         break;
  
         case T_MOUNTAINS:
-        tileno = INDEX_NSEW(can_blend_hills_and_mountains(T_MOUNTAINS,
-						  ttype_near[DIR8_NORTH]),
-			    can_blend_hills_and_mountains(T_MOUNTAINS,
-						  ttype_near[DIR8_SOUTH]),
-			    can_blend_hills_and_mountains(T_MOUNTAINS,
-						  ttype_near[DIR8_EAST]),
-			    can_blend_hills_and_mountains(T_MOUNTAINS,
-						  ttype_near[DIR8_WEST]));
+        tileno = INDEX_NSEW(ttype_near[DIR8_NORTH] == T_MOUNTAINS,
+        		  ttype_near[DIR8_SOUTH] == T_MOUNTAINS,
+        		  ttype_near[DIR8_EAST] == T_MOUNTAINS,
+        		  ttype_near[DIR8_WEST] == T_MOUNTAINS);
         *sprs++ = sprites.tx.spec_mountain[tileno];
         break;
 
@@ -1596,13 +1201,13 @@ int fill_tile_sprite_array_iso(struct Sprite **sprs, struct Sprite **coasts,
  
       if (contains_special(tspecial, S_RIVER)) {
 	tileno = INDEX_NSEW(contains_special(tspecial_near[DIR8_NORTH], S_RIVER)
-      	      	      	    || is_ocean(ttype_near[DIR8_NORTH]),
+      	      	      	    || ttype_near[DIR8_NORTH] == T_OCEAN,
 			    contains_special(tspecial_near[DIR8_SOUTH], S_RIVER)
-			    || is_ocean(ttype_near[DIR8_SOUTH]),
+			    || ttype_near[DIR8_SOUTH] == T_OCEAN,
 			    contains_special(tspecial_near[DIR8_EAST], S_RIVER)
-			    || is_ocean(ttype_near[DIR8_EAST]),
+			    || ttype_near[DIR8_EAST] == T_OCEAN,
 			    contains_special(tspecial_near[DIR8_WEST], S_RIVER)
-			    || is_ocean(ttype_near[DIR8_WEST]));
+			    || ttype_near[DIR8_WEST] == T_OCEAN);
       	*sprs++ = sprites.tx.spec_river[tileno];
       }
     }
@@ -1641,7 +1246,7 @@ int fill_tile_sprite_array_iso(struct Sprite **sprs, struct Sprite **coasts,
     *sprs++ = sprites.tx.oil_mine;
   }
 
-  if (is_ocean(ttype)) {
+  if (ttype == T_OCEAN) {
     const int dirs[4] = {
       /* up */
       DIR8_NORTHWEST,
@@ -1655,55 +1260,43 @@ int fill_tile_sprite_array_iso(struct Sprite **sprs, struct Sprite **coasts,
 
     /* put coasts */
     for (i = 0; i < 4; i++) {
-      int array_index = ((!is_ocean(ttype_near[dir_ccw(dirs[i])]) ? 1 : 0)
-			 + (!is_ocean(ttype_near[dirs[i]]) ? 2 : 0)
-			 + (!is_ocean(ttype_near[dir_cw(dirs[i])]) ? 4 : 0));
+      int array_index = ((ttype_near[dir_ccw(dirs[i])] != T_OCEAN ? 1 : 0)
+			 + (ttype_near[dirs[i]] != T_OCEAN ? 2 : 0)
+			 + (ttype_near[dir_cw(dirs[i])] != T_OCEAN ? 4 : 0));
 
       coasts[i] = sprites.tx.coast_cape_iso[array_index][i];
     }
   } else {
     if (draw_roads_rails) {
-      /* Draw road corners underneath rails. */
-      sprs = fill_road_corner_sprites(sprs, tspecial, tspecial_near);
-
-      /* Draw roads underneath rails. */
-      if (contains_special(tspecial, S_ROAD)) {
-	bool found = FALSE;
-
-	for (dir = 0; dir < 8; dir++) {
-	  if (contains_special(tspecial_near[dir], S_ROAD)) {
-	    found = TRUE;
-	    /* Only draw a road if there's no rail there. */
-	    if (!(contains_special(tspecial, S_RAILROAD)
-		  && contains_special(tspecial_near[dir], S_RAILROAD))) {
-	      *sprs++ = sprites.road.dir[dir];
-	    }
-	  }
-	}
-
-	if (!found && !pcity && !contains_special(tspecial, S_RAILROAD)) {
-	  *sprs++ = sprites.road.isolated;
-	}
-      }
-
-      /* Draw rails over roads. */
       if (contains_special(tspecial, S_RAILROAD)) {
-	bool found = FALSE;
+      	bool found = FALSE;
 
 	for (dir = 0; dir < 8; dir++) {
 	  if (contains_special(tspecial_near[dir], S_RAILROAD)) {
 	    *sprs++ = sprites.rail.dir[dir];
 	    found = TRUE;
+	  } else if (contains_special(tspecial_near[dir], S_ROAD)) {
+	    *sprs++ = sprites.road.dir[dir];
+	    found = TRUE;
 	  }
 	}
 
-	if (!found && !pcity) {
+	if (!found && !pcity)
 	  *sprs++ = sprites.rail.isolated;
-	}
-      }
 
-      /* Draw rail corners over roads. */
-      sprs = fill_rail_corner_sprites(sprs, tspecial, tspecial_near);
+      } else if (contains_special(tspecial, S_ROAD)) {
+	bool found = FALSE;
+
+	for (dir = 0; dir < 8; dir++) {
+	  if (contains_special(tspecial_near[dir], S_ROAD)) {
+	    *sprs++ = sprites.road.dir[dir];
+	    found = TRUE;
+	  }
+	}
+
+	if (!found && !pcity)
+	  *sprs++ = sprites.road.isolated;
+      }
     }
 
     if (contains_special(tspecial, S_HUT) && draw_specials)
@@ -1753,8 +1346,8 @@ The sprites are drawn in the following order:
 int fill_tile_sprite_array(struct Sprite **sprs, int abs_x0, int abs_y0,
 			   bool citymode, int *solid_bg, struct player **pplayer)
 {
-  enum tile_terrain_type ttype, ttype_near[8];
-  enum tile_special_type tspecial, tspecial_near[8];
+  int ttype, ttype_near[8];
+  int tspecial, tspecial_near[8];
   int rail_card_tileno=0, rail_semi_tileno=0, road_card_tileno=0, road_semi_tileno=0;
   int rail_card_count=0, rail_semi_count=0, road_card_count=0, road_semi_count=0;
 
@@ -1799,8 +1392,21 @@ int fill_tile_sprite_array(struct Sprite **sprs, int abs_x0, int abs_y0,
     }
   }
 
-  build_tile_data(abs_x0, abs_y0, 
-		  &ttype, &tspecial, ttype_near, tspecial_near);
+  tspecial = map_get_special(abs_x0, abs_y0);
+  ttype = map_get_terrain(abs_x0, abs_y0);
+
+  /* Any unreal tile have no specials and the terrain type of (x, y). */
+  for (dir = 0; dir < 8; dir++) {
+    int x, y;
+  
+    if (MAPSTEP(x, y, abs_x0, abs_y0, dir)) {
+      tspecial_near[dir] = map_get_special(x, y);
+      ttype_near[dir] = map_get_terrain(x, y);
+    } else {
+      tspecial_near[dir] = S_NO_SPECIAL;
+      ttype_near[dir] = ttype;
+    }
+  }
 
   if(map.is_earth &&
      abs_x0>=34 && abs_x0<=36 && abs_y0>=den_y && abs_y0<=den_y+1) {
@@ -1811,10 +1417,10 @@ int fill_tile_sprite_array(struct Sprite **sprs, int abs_x0, int abs_y0,
 			ttype_near[DIR8_EAST] == ttype,
 			ttype_near[DIR8_WEST] == ttype);
     if(ttype==T_RIVER) {
-      tileno |= INDEX_NSEW(is_ocean(ttype_near[DIR8_NORTH]),
-			   is_ocean(ttype_near[DIR8_SOUTH]),
-			   is_ocean(ttype_near[DIR8_EAST]),
-			   is_ocean(ttype_near[DIR8_WEST]));
+      tileno |= INDEX_NSEW(ttype_near[DIR8_NORTH] == T_OCEAN,
+			   ttype_near[DIR8_SOUTH] == T_OCEAN,
+			   ttype_near[DIR8_EAST] == T_OCEAN,
+			   ttype_near[DIR8_WEST] == T_OCEAN);
     }
     mysprite = get_tile_type(ttype)->sprite[tileno];
   }
@@ -1824,21 +1430,21 @@ int fill_tile_sprite_array(struct Sprite **sprs, int abs_x0, int abs_y0,
   else
     *solid_bg = 1;
 
-  if(is_ocean(ttype) && draw_terrain) {
+  if(ttype==T_OCEAN && draw_terrain) {
     int dir;
 
-    tileno = INDEX_NSEW(is_ocean(ttype_near[DIR8_NORTH])
-			&& is_ocean(ttype_near[DIR8_EAST])
-			&& !is_ocean(ttype_near[DIR8_NORTHEAST]),
-			is_ocean(ttype_near[DIR8_SOUTH])
-			&& is_ocean(ttype_near[DIR8_WEST])
-			&& !is_ocean(ttype_near[DIR8_SOUTHWEST]),
-			is_ocean(ttype_near[DIR8_EAST])
-			&& is_ocean(ttype_near[DIR8_SOUTH])
-			&& !is_ocean(ttype_near[DIR8_SOUTHEAST]),
-			is_ocean(ttype_near[DIR8_NORTH])
-			&& is_ocean(ttype_near[DIR8_WEST])
-			&& !is_ocean(ttype_near[DIR8_NORTHWEST]));
+    tileno = INDEX_NSEW(ttype_near[DIR8_NORTH] == T_OCEAN
+			&& ttype_near[DIR8_EAST] == T_OCEAN
+			&& ttype_near[DIR8_NORTHEAST] != T_OCEAN,
+			ttype_near[DIR8_SOUTH] == T_OCEAN
+			&& ttype_near[DIR8_WEST] == T_OCEAN
+			&& ttype_near[DIR8_SOUTHWEST] != T_OCEAN,
+			ttype_near[DIR8_EAST] == T_OCEAN
+			&& ttype_near[DIR8_SOUTH] == T_OCEAN
+			&& ttype_near[DIR8_SOUTHEAST] != T_OCEAN,
+			ttype_near[DIR8_NORTH] == T_OCEAN
+			&& ttype_near[DIR8_WEST] == T_OCEAN
+			&& ttype_near[DIR8_NORTHWEST] != T_OCEAN);
     if(tileno!=0)
       *sprs++ = sprites.tx.coast_cape[tileno];
 
@@ -1852,13 +1458,13 @@ int fill_tile_sprite_array(struct Sprite **sprs, int abs_x0, int abs_y0,
 
   if (contains_special(tspecial, S_RIVER) && draw_terrain) {
     tileno = INDEX_NSEW(contains_special(tspecial_near[DIR8_NORTH], S_RIVER)
-			|| is_ocean(ttype_near[DIR8_NORTH]),
+			|| ttype_near[DIR8_NORTH] == T_OCEAN,
 			contains_special(tspecial_near[DIR8_SOUTH], S_RIVER)
-			|| is_ocean(ttype_near[DIR8_SOUTH]),
+			|| ttype_near[DIR8_SOUTH] == T_OCEAN,
 			contains_special(tspecial_near[DIR8_EAST], S_RIVER)
-			|| is_ocean(ttype_near[DIR8_EAST]),
+			|| ttype_near[DIR8_EAST] == T_OCEAN,
 			contains_special(tspecial_near[DIR8_WEST], S_RIVER)
-			|| is_ocean(ttype_near[DIR8_WEST]));
+			|| ttype_near[DIR8_WEST] == T_OCEAN);
     *sprs++=sprites.tx.spec_river[tileno];
   }
 
@@ -1866,9 +1472,6 @@ int fill_tile_sprite_array(struct Sprite **sprs, int abs_x0, int abs_y0,
     if(contains_special(tspecial, S_FARMLAND)) *sprs++=sprites.tx.farmland;
     else *sprs++=sprites.tx.irrigation;
   }
-
-  /* Draw road corners under rails. */
-  sprs = fill_road_corner_sprites(sprs, tspecial, tspecial_near);
 
   if((contains_special(tspecial, S_ROAD) || contains_special(tspecial, S_RAILROAD)) && draw_roads_rails) {
     bool n, s, e, w;
@@ -1941,9 +1544,6 @@ int fill_tile_sprite_array(struct Sprite **sprs, int abs_x0, int abs_y0,
       }
     }
   }
-
-  /* Draw rail corners over roads. */
-  sprs = fill_rail_corner_sprites(sprs, tspecial, tspecial_near);
 
   if(draw_specials) {
     if (contains_special(tspecial, S_SPECIAL_1))
@@ -2208,7 +1808,7 @@ enum color_std overview_tile_color(int x, int y)
       color=COLOR_STD_YELLOW;
     else
       color=COLOR_STD_RED;
-  } else if (is_ocean(ptile->terrain)) {
+  } else if(ptile->terrain==T_OCEAN) {
     if (tile_get_known(x, y) == TILE_KNOWN_FOGGED && draw_fog_of_war) {
       color = COLOR_STD_RACE4;
     } else {
@@ -2308,19 +1908,4 @@ void tilespec_free_tiles(void)
 
   hash_free(sprite_hash);
   sprite_hash = NULL;
-}
-
-/**************************************************************************
-  Return a sprite for the given citizen.  The citizen's type is given,
-  as well as their index (in the range [0..pcity->size)).  The
-  citizen's city can be used to determine which sprite to use (a NULL
-  value indicates there is no city; i.e., the sprite is just being
-  used as a picture).
-**************************************************************************/
-struct Sprite *get_citizen_sprite(enum citizen_type type, int citizen_index,
-				  struct city *pcity)
-{
-  assert(type >= 0 && type < NUM_TILES_CITIZEN);
-  citizen_index %= sprites.citizen[type].count;
-  return sprites.citizen[type].sprite[citizen_index];
 }

@@ -13,6 +13,7 @@
 #ifndef FC__DIPTREATY_H
 #define FC__DIPTREATY_H
 
+#include "genlist.h"
 #include "shared.h"		/* bool type */
 
 enum clause_type { CLAUSE_ADVANCE, CLAUSE_GOLD, CLAUSE_MAP,

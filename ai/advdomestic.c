@@ -10,11 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <stdio.h>
 #include <string.h>
 
@@ -64,13 +59,13 @@ static int ai_eval_threat_land(struct player *pplayer, struct city *pcity)
     return 40;
   }
 
-  continent = map_get_continent(pcity->x, pcity->y, NULL);
+  continent = map_get_continent(pcity->x, pcity->y);
   vulnerable = ai->threats.continent[continent]
                || city_got_building(pcity, B_PALACE)
                || (ai->threats.invasions
                    && is_water_adjacent_to_tile(pcity->x, pcity->y));
 
-  return vulnerable ? TRADE_WEIGHTING + 2 : 1; /* trump coinage, and sam */
+  return vulnerable ? 20 : 1; /* WAG */
 }
 
 /**************************************************************************
@@ -85,8 +80,7 @@ static int ai_eval_threat_sea(struct player *pplayer, struct city *pcity)
     return 40;
   }
 
-  /* trump coinage, and wall, and sam */
-  return ai->threats.sea ? TRADE_WEIGHTING + 3 : 1;
+  return ai->threats.sea ? 30 : 1; /* WAG */
 }
 
 /**************************************************************************
@@ -103,13 +97,14 @@ static int ai_eval_threat_air(struct player *pplayer, struct city *pcity)
     return 50;
   }
 
-  continent = map_get_continent(pcity->x, pcity->y, NULL);
+  continent = map_get_continent(pcity->x, pcity->y);
   vulnerable = ai->threats.air
                && (ai->threats.continent[continent]
                    || is_water_adjacent_to_tile(pcity->x, pcity->y) 
                    || city_got_building(pcity, B_PALACE));
 
-  return vulnerable ? TRADE_WEIGHTING + 1 : 1; /* trump coinage */
+  /* 50 is a magic number inherited from Syela */
+  return vulnerable ? 40 : 1;
 }
 
 /**************************************************************************
@@ -134,7 +129,7 @@ static int ai_eval_threat_nuclear(struct player *pplayer, struct city *pcity)
   /* No non-allied player has nuclear capability yet. */
   if (ai->threats.nuclear == 0) { return 0; }
 
-  continent = map_get_continent(pcity->x, pcity->y, NULL);
+  continent = map_get_continent(pcity->x, pcity->y);
   if (ai->threats.continent[continent]
       || is_water_adjacent_to_tile(pcity->x, pcity->y)
       || city_got_building(pcity, B_PALACE)) {
@@ -154,14 +149,14 @@ static int ai_eval_threat_nuclear(struct player *pplayer, struct city *pcity)
 static int ai_eval_threat_missile(struct player *pplayer, struct city *pcity)
 {
   struct ai_data *ai = ai_data_get(pplayer);
-  int continent = map_get_continent(pcity->x, pcity->y, NULL);
+  int continent = map_get_continent(pcity->x, pcity->y);
   bool vulnerable = is_water_adjacent_to_tile(pcity->x, pcity->y)
                     || ai->threats.continent[continent]
                     || city_got_building(pcity, B_PALACE);
 
   /* Only build missile defence if opponent builds them, and we are in
-     a vulnerable spot. Trump coinage but not wall or coastal. */
-  return (ai->threats.missile && vulnerable) ? TRADE_WEIGHTING + 1 : 1;
+     a vulnerable spot. FIXME: 10 is a totally arbitrary Syelaism. - Per */
+  return (ai->threats.missile && vulnerable) ? 10 : 1;
 }
 
 /**************************************************************************
@@ -262,7 +257,7 @@ static int ocean_workers(struct city *pcity)
   int i = 0;
 
   city_map_checked_iterate(pcity->x, pcity->y, cx, cy, mx, my) {
-    if (is_ocean(map_get_terrain(mx, my))) {
+    if (map_get_terrain(mx, my) == T_OCEAN) {
       /* This is a kluge; wasn't getting enough harbors because often
        * everyone was stuck farming grassland. */
       i++;
@@ -408,8 +403,6 @@ void ai_eval_buildings(struct city *pcity)
   int tprod, prod, sci, tax, t, val, wwtv;
   int j, k;
   int values[B_LAST];
-  int nplayers = game.nplayers 
-                 - team_count_members_alive(pplayer->team);
 
   /* --- initialize control parameters --- */
   t = pcity->ai.trade_want;  /* trade_weighting */
@@ -421,9 +414,7 @@ void ai_eval_buildings(struct city *pcity)
   sci = ((sci + pcity->trade_prod) * t)/2;
   tax = ((tax + pcity->trade_prod) * t)/2;
   /* don't need libraries!! */
-  if (ai_wants_no_science(pplayer)) {
-    sci = 0;
-  }
+  if (pplayer->research.researching == A_NONE) sci = 0;
 
   est_food = 2 * pcity->ppl_scientist + 2 * pcity->ppl_taxman
            + pcity->food_surplus; 
@@ -534,7 +525,11 @@ void ai_eval_buildings(struct city *pcity)
       values[id] = road_trade(pcity) * t;
       break;
     case B_CAPITAL:
-      values[id] = TRADE_WEIGHTING; /* a kind of default */
+      /* rationale: If cost is N and benefit is N gold per MORT turns, want is
+       * TRADE_WEIGHTING * 100 / MORT. This is comparable, thus the same weight 
+      values[id] = TRADE_WEIGHTING * 999 / MORT; / * trust me * /
+      -- Syela */
+      values[id] = -60 * TRADE_WEIGHTING / MORT; /* want ~50 */
       break;
   
     /* unhappiness relief */
@@ -682,7 +677,7 @@ void ai_eval_buildings(struct city *pcity)
     case B_GREAT:
       /* basically (100 - freecost)% of a free tech per 2 turns */
       values[id] = (total_bulbs_required(pplayer) * (100 - game.freecost) * t
-                 * (nplayers - 2)) / (nplayers * 2 * 100);
+                 * (game.nplayers - 2)) / (game.nplayers * 2 * 100);
       break;
     case B_WALL:
       if (!city_got_citywalls(pcity)) {
@@ -791,21 +786,11 @@ void ai_eval_buildings(struct city *pcity)
       } unit_list_iterate_end;
       break;
     case B_APOLLO:
-      if (game.spacerace) {
-        values[id] = values[B_CAPITAL] + 1; /* trump coinage and defenses */
-      }
+      if (game.spacerace) 
+        values[id] = values[B_CAPITAL]+1;
       break;
-    case B_UNITED:
-      values[id] = values[B_CAPITAL] + 4; /* trump coinage and defenses */
-      break;
-    case B_LIGHTHOUSE:
-      values[id] = values[B_CAPITAL] + 4; /* trump coinage and defenses */
-      break;
-    case B_MAGELLAN:
-      values[id] = values[B_CAPITAL] + 4; /* trump coinage and defenses */
-      break;
-    /* also, MAGELLAN is special cased in ai_manage_buildings() */
-    /* ignoring MANHATTAN and STATUE */
+
+    /* ignoring APOLLO, LIGHTHOUSE, MAGELLAN, MANHATTEN, STATUE, UNITED */
     } /* end switch */
   } impr_type_iterate_end;
 
@@ -817,7 +802,8 @@ void ai_eval_buildings(struct city *pcity)
         values[id]-= improvement_upkeep(pcity, id) * t;
         values[id] = (values[id] <= 0 
           ? 0 : (values[id] * SHIELD_WEIGHTING * 100) / MORT);
-      } else {
+      }
+      else {
         /* bias against wonders when total production is small */
         values[id] *= (tprod < 50 ? 100/(50-tprod): 100);
       }
@@ -825,9 +811,9 @@ void ai_eval_buildings(struct city *pcity)
       /* handle H_PROD here? -- Syela */
       j = improvement_value(id);
       pcity->ai.building_want[id] = values[id] / j;
-    } else {
-      pcity->ai.building_want[id] = -values[id];
     }
+    else 
+      pcity->ai.building_want[id] = -values[id];
 
     if (values[id] != 0) 
       freelog(LOG_DEBUG, "ai_eval_buildings: %s wants %s with desire %d.",
@@ -848,7 +834,7 @@ static void ai_choose_help_wonder(struct player *pplayer, struct city *pcity,
 {
   /* Continent where the city is --- we won't be aiding any wonder 
    * construction on another continent */
-  int continent = map_get_continent(pcity->x, pcity->y, NULL);
+  int continent = map_get_continent(pcity->x, pcity->y);
   /* Total count of caravans available or already being built 
    * on this continent */
   int caravans = 0;
@@ -863,7 +849,7 @@ static void ai_choose_help_wonder(struct player *pplayer, struct city *pcity,
   /* Count existing caravans */
   unit_list_iterate(pplayer->units, punit) {
     if (unit_flag(punit, F_HELP_WONDER)
-        && map_get_continent(punit->x, punit->y, NULL) == continent)
+        && map_get_continent(punit->x, punit->y) == continent)
       caravans++;
   } unit_list_iterate_end;
 
@@ -873,7 +859,7 @@ static void ai_choose_help_wonder(struct player *pplayer, struct city *pcity,
         && unit_type_flag(acity->currently_building, F_HELP_WONDER)
         && acity->shield_stock >=
              get_unit_type(acity->currently_building)->build_cost
-        && map_get_continent(acity->x, acity->y, NULL) == continent)
+        && map_get_continent(acity->x, acity->y) == continent)
       caravans++;
   } city_list_iterate_end;
 
@@ -894,7 +880,7 @@ static void ai_choose_help_wonder(struct player *pplayer, struct city *pcity,
      * to finish the wonder. */
     if (!acity->is_building_unit
         && is_wonder(acity->currently_building)
-        && map_get_continent(acity->x, acity->y, NULL) == continent
+        && map_get_continent(acity->x, acity->y) == continent
         && acity != pcity
         && build_points_left(acity) >
              get_unit_type(unit_type)->build_cost * caravans) {
@@ -1010,8 +996,7 @@ void domestic_advisor_choose_build(struct player *pplayer, struct city *pcity,
 
   {
     struct ai_choice cur;
-
-    init_choice(&cur);
+    
     ai_advisor_choose_building(pcity, &cur);
     /* Allowing buy of peaceful units after much testing. -- Syela */
     /* want > 100 means BUY RIGHT NOW */
@@ -1023,6 +1008,11 @@ void domestic_advisor_choose_build(struct player *pplayer, struct city *pcity,
   if (choice->want == 0) {
     /* Oh dear, better think of something! */
     unit_type = best_role_unit(pcity, F_TRADE_ROUTE);
+    
+    if (unit_type == U_LAST) {
+      unit_type = best_role_unit(pcity, F_DIPLOMAT);
+      /* Someday, real diplomat code will be here! */
+    }
     
     if (unit_type != U_LAST) {
       choice->want = 1;

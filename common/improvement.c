@@ -10,11 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <assert.h>
 #include <string.h>
 
@@ -25,6 +20,16 @@
 #include "shared.h" /* ARRAY_SIZE */
 
 #include "improvement.h"
+
+/* get 'struct ceff_vector' functions: */
+#define SPECVEC_TAG ceff
+#define SPECVEC_TYPE struct eff_city
+#include "specvec_c.h"
+
+/* get 'struct geff_vector' functions: */
+#define SPECVEC_TAG geff
+#define SPECVEC_TYPE struct eff_global
+#include "specvec_c.h"
 
 /**************************************************************************
 All the city improvements:
@@ -40,7 +45,7 @@ struct impr_type improvement_types[B_LAST];
  */
 static const char *effect_range_names[] = {
   "None",
-  "Local",
+  "Building",
   "City",
   "Island",
   "Player",
@@ -128,9 +133,9 @@ static const char *effect_type_names[] = {
   Convert effect range names to enum; case insensitive;
   returns EFR_LAST if can't match.
 **************************************************************************/
-enum effect_range effect_range_from_str(const char *str)
+Eff_Range_id effect_range_from_str(const char *str)
 {
-  enum effect_range ret_id;
+  Eff_Range_id ret_id;
 
   assert(ARRAY_SIZE(effect_range_names) == EFR_LAST);
 
@@ -146,7 +151,7 @@ enum effect_range effect_range_from_str(const char *str)
 /**************************************************************************
   Return effect range name; NULL if bad id.
 **************************************************************************/
-const char *effect_range_name(enum effect_range id)
+const char *effect_range_name(Eff_Range_id id)
 {
   assert(ARRAY_SIZE(effect_range_names) == EFR_LAST);
 
@@ -161,9 +166,9 @@ const char *effect_range_name(enum effect_range id)
   Convert effect type names to enum; case insensitive;
   returns EFT_LAST if can't match.
 **************************************************************************/
-enum effect_type effect_type_from_str(const char *str)
+Eff_Type_id effect_type_from_str(const char *str)
 {
-  enum effect_type ret_id;
+  Eff_Type_id ret_id;
 
   assert(ARRAY_SIZE(effect_type_names) == EFT_LAST);
 
@@ -179,7 +184,7 @@ enum effect_type effect_type_from_str(const char *str)
 /**************************************************************************
   Return effect type name; NULL if bad id.
 **************************************************************************/
-const char *effect_type_name(enum effect_type id)
+const char *effect_type_name(Eff_Type_id id)
 {
   assert(ARRAY_SIZE(effect_type_names) == EFT_LAST);
 
@@ -193,7 +198,7 @@ const char *effect_type_name(enum effect_type id)
 /**************************************************************************
   Frees the memory associated with this improvement.
 **************************************************************************/
-static void improvement_free(Impr_Type_id id)
+void improvement_free(Impr_Type_id id)
 {
   struct impr_type *p = get_improvement_type(id);
 
@@ -327,15 +332,20 @@ static void fill_ranges_improv_lists(Impr_Status *implist[EFR_LAST],
 				     struct city *pcity,
 				     struct player *pplayer)
 {
-  int i;
+  int i,cont=-1;
   for (i=0;i<EFR_LAST;i++) implist[i]=NULL;
 
   if (pcity) {
     implist[EFR_CITY]=pcity->improvements;
+    cont = map_get_continent(pcity->x,pcity->y);
   }
 
   if (pplayer) {
     implist[EFR_PLAYER]=pplayer->improvements;
+    if (cont >= 0) {
+      assert(pplayer->island_improv != NULL);
+      implist[EFR_ISLAND] = &pplayer->island_improv[cont*game.num_impr_types];
+    }
   }
 
   implist[EFR_WORLD]=game.improvements;
@@ -434,7 +444,7 @@ bool could_player_eventually_build_improvement(struct player *p,
 
   if (impr->effect) {
     struct impr_effect *peffect = impr->effect;
-    enum effect_type type;
+    Eff_Type_id type;
 
     /* This if for a spaceship component is asked */
     while ((type = peffect->type) != EFT_LAST) {
@@ -467,7 +477,7 @@ bool could_player_eventually_build_improvement(struct player *p,
 /**************************************************************************
 ...
 **************************************************************************/
-static bool could_player_build_improvement(struct player *p, Impr_Type_id id)
+bool could_player_build_improvement(struct player *p, Impr_Type_id id)
 {
   if (!could_player_eventually_build_improvement(p, id))
     return FALSE;
@@ -496,7 +506,7 @@ bool can_player_build_improvement(struct player *p, Impr_Type_id id)
 **************************************************************************/
 void mark_improvement(struct city *pcity,Impr_Type_id id,Impr_Status status)
 {
-  enum effect_range equiv_range;
+  Eff_Range_id equiv_range;
   Impr_Status *improvements,*equiv_list[EFR_LAST];
   struct player *pplayer;
 
@@ -512,4 +522,166 @@ void mark_improvement(struct city *pcity,Impr_Type_id id,Impr_Status status)
     /* And set the same status */
     improvements[id] = status;
   }
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+struct geff_vector *get_eff_world(void)
+{
+  return (&game.effects);
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+struct geff_vector *get_eff_player(struct player *plr)
+{
+  return (&plr->effects);
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+struct geff_vector *get_eff_island(int cont, struct player *plr)
+{
+  return (&plr->island_effects[cont]);
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+struct ceff_vector *get_eff_city(struct city *pcity)
+{
+  return (&pcity->effects);
+}
+
+/**************************************************************************
+  Converts the given geff_vector into a ceff_vector (struct eff_global is
+  a derived class of struct eff_city, and by the same token geff_vector
+  is derived from ceff_vector). The returned vector functions exactly as
+  the orginal geff_vector, but returns eff_city structures.
+**************************************************************************/
+#ifdef UNUSED
+static struct ceff_vector *get_geff_parent(struct geff_vector *geff)
+{
+  return (struct ceff_vector *)geff;
+}
+#endif
+
+/**************************************************************************
+  Fills in the efflist pointer array with the eff_global lists that could
+  be changed by the given improvement (in the given city) being built
+  or destroyed.
+**************************************************************************/
+void get_effect_vectors(struct ceff_vector *ceffs[],
+			struct geff_vector *geffs[],
+			Impr_Type_id impr, struct city *pcity)
+{
+  struct impr_effect *ie;
+  int j, i, cont;
+  bool effects[EFR_LAST];
+  struct player *plr;
+
+  assert(pcity && impr>=0 && impr<game.num_impr_types);
+
+  for (i=0; i<EFR_LAST; i++)
+    effects[i]=FALSE;
+
+  if ((ie=improvement_types[impr].effect)) {
+    for (; ie->type<EFT_LAST; ie++) {
+      effects[ie->range]=TRUE;
+    }
+  }
+
+  cont = map_get_continent(pcity->x, pcity->y);
+  plr = city_owner(pcity);
+
+  i=0;
+  for (j=0; j<EFR_LAST; j++) {
+    if (effects[j]) {
+      switch (j) {
+      case EFR_ISLAND: geffs[i++]=get_eff_island(cont, plr);	break;
+      case EFR_PLAYER: geffs[i++]=get_eff_player(plr);		break;
+      case EFR_WORLD:  geffs[i++]=get_eff_world();		break;
+      default:  						break;
+      }
+    }
+  }
+  geffs[i++]=NULL;
+
+  ceffs[0]=get_eff_city(pcity);
+  ceffs[1]=NULL;
+}
+
+/**************************************************************************
+  Updates the relevant global effect structures, to bring them into
+  line with the current activity status of their parent city structure,
+  which should be owned by the passed pcity.
+**************************************************************************/
+void update_global_effect(struct city *pcity, struct eff_city *effect)
+{
+  struct geff_vector *effs[3];
+  int i, j, cont;
+  struct player *plr;
+
+  cont = map_get_continent(pcity->x, pcity->y);
+  plr = city_owner(pcity);
+
+  effs[0] = get_eff_island(cont, plr);
+  effs[1] = get_eff_player(plr);
+  effs[2] = get_eff_world();
+
+  for (j=0; j<3; j++) {
+    for (i=0; i<geff_vector_size(effs[j]); i++) {
+      struct eff_global *eff=geff_vector_get(effs[j], i);
+
+      if (eff->cityid==pcity->id && eff->eff.impr==effect->impr) {
+	eff->eff.active=effect->active;
+	break;
+      }
+    }
+  }
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+struct eff_city *append_ceff(struct ceff_vector *x)
+{
+  int i, n;
+  struct eff_city *eff;
+
+  /* Try for an unused vector instance if possible. */
+  n=ceff_vector_size(x);
+  for (i=0; i<n; i++) {
+    eff=ceff_vector_get(x, i);
+    if (eff->impr==B_LAST)
+      return eff;
+  }
+
+  /* That didn't work, so add a new instance to the vector. */
+  ceff_vector_reserve(x, n+1);
+  return ceff_vector_get(x, n);
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+struct eff_global *append_geff(struct geff_vector *x)
+{
+  int i, n;
+  struct eff_global *eff;
+
+  /* Try for an unused vector instance if possible. */
+  n=geff_vector_size(x);
+  for (i=0; i<n; i++) {
+    eff=geff_vector_get(x, i);
+    if (eff->eff.impr==B_LAST)
+      return eff;
+  }
+
+  /* That didn't work, so add a new instance to the vector. */
+  geff_vector_reserve(x, n+1);
+  return geff_vector_get(x, n);
 }

@@ -139,16 +139,6 @@ void popup_city_report_dialog(bool make_modal)
   gtk_window_present(GTK_WINDOW(city_dialog_shell));
 }
 
-/****************************************************************
- Closes the city report dialog.
-****************************************************************/
-void popdown_city_report_dialog(void)
-{
-  if (city_dialog_shell) {
-    gtk_widget_destroy(city_dialog_shell);
-  }
-}
-
 
 /****************************************************************
 ...
@@ -327,7 +317,7 @@ static void select_cma_callback(GtkWidget * w, gpointer data)
   GObject *parent = G_OBJECT(w->parent);
   bool change_cma =
       GPOINTER_TO_INT(g_object_get_data(parent, "freeciv_change_cma"));
-  struct cm_parameter parameter;
+  struct cma_parameter parameter;
 
   /* If this is not the change button but the select cities button. */
   if (!change_cma) {
@@ -352,8 +342,8 @@ static void select_cma_callback(GtkWidget * w, gpointer data)
       } else if (idx == CMA_NONE && !controlled) {
         select = TRUE;
       } else if (idx >= 0 && controlled &&
-        	 cm_are_parameter_equal(&parameter,
-        				cmafec_preset_get_parameter(idx))) {
+        	 cma_are_parameter_equal(&parameter,
+        				 cmafec_preset_get_parameter(idx))) {
         select = TRUE;
       }
 
@@ -379,7 +369,7 @@ static void append_cma_to_menu_item(GtkMenuItem *parent_item, bool change_cma)
 {
   GtkWidget *menu;
   int i;
-  struct cm_parameter parameter;
+  struct cma_parameter parameter;
   GtkWidget *w;
 
   gtk_menu_item_remove_submenu(parent_item);
@@ -444,8 +434,8 @@ static void append_cma_to_menu_item(GtkMenuItem *parent_item, bool change_cma)
       found = 0;
       city_list_iterate(game.player_ptr->cities, pcity) {
 	if (cma_is_city_under_agent(pcity, &parameter) &&
-	    cm_are_parameter_equal(&parameter,
-				   cmafec_preset_get_parameter(i))) {
+	    cma_are_parameter_equal(&parameter,
+				    cmafec_preset_get_parameter(i))) {
 	  found = 1;
 	  break;
 	}
@@ -755,7 +745,7 @@ static void city_select_coastal_callback(GtkMenuItem *item, gpointer data)
     itree_get(&it, 0, &res, -1);
     pcity = res;
 
-    if (is_ocean_near_tile(pcity->x, pcity->y)) {
+    if (is_terrain_near_tile(pcity->x, pcity->y, T_OCEAN)) {
       itree_select(city_selection, &it);
     }
   }
@@ -780,8 +770,8 @@ static void same_island_iterate(GtkTreeModel *model, GtkTreePath *path,
     itree_get(&it, 0, &res, -1);
     pcity = res;
 
-    if (map_get_continent(pcity->x, pcity->y, NULL)
-    	    == map_get_continent(selectedcity->x, selectedcity->y, NULL)) {
+    if (map_get_continent(pcity->x, pcity->y)
+    	    == map_get_continent(selectedcity->x, selectedcity->y)) {
       itree_select(city_selection, &it);
     }
   }

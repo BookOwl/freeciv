@@ -14,26 +14,28 @@
 #define FC__CLIMISC_H
 
 #include "shared.h"		/* MAX_LEN_NAME */
+#include "terrain.h"		/* enum known_type */
 
 struct city;
 struct Clause;
 struct player;
 struct player_spaceship;
-struct unit;
-
 typedef int cid;
 typedef int wid;
 
+void client_init_player(struct player *plr);
 void client_remove_player(int plrno);
 void client_remove_city(struct city *pcity);
 void client_remove_unit(struct unit *punit);
 
+void climap_init_continents(void);
+void climap_update_continents(int x, int y);
 void client_change_all(cid x, cid y);
 
 void format_duration(char *buffer, int buffer_size, int duration);
 
-const char *get_embassy_status(struct player *me, struct player *them);
-const char *get_vision_status(struct player *me, struct player *them);
+char *get_embassy_status(struct player *me, struct player *them);
+char *get_vision_status(struct player *me, struct player *them);
 void client_diplomacy_clause_string(char *buf, int bufsiz,
 				    struct Clause *pclause);
 
@@ -41,6 +43,7 @@ int client_research_sprite(void);
 int client_warming_sprite(void);
 int client_cooling_sprite(void);
 
+enum known_type tile_get_known(int x, int y);
 void center_on_something(void);
 
 int concat_tile_activity_text(char *buf, int buf_size, int x, int y);
@@ -115,11 +118,5 @@ void reports_freeze(void);
 void reports_freeze_till(int request_id);
 void reports_thaw(void);
 void reports_force_thaw(void);
-
-struct city *get_nearest_city(struct unit *punit, int *sq_dist);
-char *get_nearest_city_text(struct city *pcity, int sq_dist,
-			    char *buf, size_t bufsz);
-
-const char *unit_description(struct unit *punit);
 
 #endif  /* FC__CLIMISC_H */

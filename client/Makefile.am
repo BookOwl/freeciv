@@ -4,9 +4,6 @@
 ##    SUBDIRS = @gui_sources@
 ## but that doesn't work properly for "make dist"
 
-if CLIENT_GUI_SDL
-GUI_SUBDIR = gui-sdl
-endif
 if CLIENT_GUI_GTK
 GUI_SUBDIR = gui-gtk
 endif
@@ -125,7 +122,7 @@ SUBDIRS = $(GUI_SUBDIR) $(CLI_INCLUDE) agents
 
 bin_PROGRAMS = civclient
 
-INCLUDES = -I$(srcdir)/include -I$(top_srcdir)/common -I$(top_srcdir)/common/aicore -I../intl -I$(srcdir)/agents @SOUND_CFLAGS@
+INCLUDES = -I$(srcdir)/include -I$(top_srcdir)/common -I../intl -I$(srcdir)/agents @SOUND_CFLAGS@
 
 ## Above, note -I../intl instead of -I$(top_srdir/intl) is deliberate.
 
@@ -142,8 +139,6 @@ civclient_SOURCES = $(ESD_FILES) $(SDL_FILES) $(WINMM_FILES) \
 	chatline_common.h \
 	climisc.c	\
 	climisc.h	\
-	climap.c	\
-	climap.h	\
 	clinet.c	\
 	clinet.h	\
 	control.c	\
@@ -174,8 +169,8 @@ civclient_SOURCES = $(ESD_FILES) $(SDL_FILES) $(WINMM_FILES) \
 	audio_none.h
 
 civclient_DEPENDENCIES = @gui_sources@/libguiclient.a \
-	../common/libcivcommon.a agents/libagents.a ../common/aicore/libaicore.a
+	../common/libcivcommon.a agents/libagents.a
 civclient_LDADD        = @gui_sources@/libguiclient.a \
 	../common/libcivcommon.a @INTLLIBS@ @gui_sources@/libguiclient.a \
-	../common/libcivcommon.a @CLIENT_LIBS@ ../common/aicore/libaicore.a agents/libagents.a \
+	../common/libcivcommon.a @CLIENT_LIBS@ agents/libagents.a \
 	@CLIENT_LIBS@ @SOUND_LIBS@

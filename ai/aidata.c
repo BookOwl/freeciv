@@ -10,11 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <stdio.h>
 #include <string.h>
 
@@ -44,16 +39,11 @@ static struct ai_data aidata[MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS];
   ai_eval_defense_land, ai_eval_defense_nuclear, ai_eval_defense_sea and 
   ai_eval_defense_air.
 
-  Note: We use map.num_continents here rather than pplayer->num_continents
-  because we are omniscient and don't care about such trivialities as who
-  can see what.
-
   FIXME: We should try to find the lowest common defence strength of our
   defending units, and ignore enemy units that are incapable of harming 
   us, instead of just checking attack strength > 1.
 **************************************************************************/
-void ai_data_turn_init(struct player *pplayer)
-{
+void ai_data_turn_init(struct player *pplayer) {
   struct ai_data *ai = &aidata[pplayer->player_no];
   int i, nuke_units = num_role_units(F_NUCLEAR);
   bool danger_of_nukes = FALSE;
@@ -62,10 +52,13 @@ void ai_data_turn_init(struct player *pplayer)
   bool can_build_antinuke = can_player_build_improvement(pplayer, B_SDI);
   bool can_build_antimissile = can_player_build_improvement(pplayer, B_SDI);
 
+  /* Sanity */
+
+  ai->num_continents    = map.num_continents;
+
   /* Threats */
 
-  ai->num_continents = map.num_continents;
-  ai->threats.continent = fc_calloc(ai->num_continents + 1, sizeof(bool));
+  ai->threats.continent = fc_calloc(map.num_continents + 1, sizeof(bool));
   ai->threats.invasions = FALSE;
   ai->threats.air       = FALSE;
   ai->threats.nuclear   = 0; /* none */
@@ -80,7 +73,7 @@ void ai_data_turn_init(struct player *pplayer)
      * enough to warrant city walls. Concentrate instead on 
      * coastal fortresses and hunting down enemy transports. */
     city_list_iterate(aplayer->cities, acity) {
-      int continent = map_get_continent(acity->x, acity->y, NULL);
+      int continent = map_get_continent(acity->x, acity->y);
       ai->threats.continent[continent] = TRUE;
     } city_list_iterate_end;
 
@@ -144,12 +137,10 @@ void ai_data_turn_init(struct player *pplayer)
 
   ai->explore.land_done = TRUE;
   ai->explore.sea_done = TRUE;
-  ai->explore.continent = fc_calloc(ai->num_continents + 1, sizeof(bool));
+  ai->explore.continent = fc_calloc(map.num_continents + 1, sizeof(bool));
   whole_map_iterate(x, y) {
     struct tile *ptile = map_get_tile(x, y);
-    int continent = (int)map_get_continent(x, y, NULL);
-
-    if (is_ocean(ptile->terrain)) {
+    if (ptile->terrain == T_OCEAN) {
       if (ai->explore.sea_done && ai_handicap(pplayer, H_TARGETS) 
           && !map_get_known(x, y, pplayer)) {
         ai->explore.sea_done = FALSE; /* we're not done there */
@@ -157,7 +148,7 @@ void ai_data_turn_init(struct player *pplayer)
       /* skip rest, which is land only */
       continue;
     }
-    if (ai->explore.continent[continent]) {
+    if (ai->explore.continent[ptile->continent]) {
       /* we don't need more explaining, we got the point */
       continue;
     }
@@ -168,48 +159,30 @@ void ai_data_turn_init(struct player *pplayer)
             && pplayers_at_war(pplayer, city_owner(ptile->city)))) {
       /* hut, empty city... what is the difference? :) */
       ai->explore.land_done = FALSE;
-      ai->explore.continent[continent] = TRUE;
+      ai->explore.continent[ptile->continent] = TRUE;
       continue;
     }
     if (ai_handicap(pplayer, H_TARGETS) && !map_get_known(x, y, pplayer)) {
       /* this AI must explore */
       ai->explore.land_done = FALSE;
-      ai->explore.continent[continent] = TRUE;
+      ai->explore.continent[ptile->continent] = TRUE;
     }
   } whole_map_iterate_end;
 
   /* Statistics */
 
-  ai->stats.workers = fc_calloc(ai->num_continents + 1, sizeof(int));
-  ai->stats.cities = fc_calloc(ai->num_continents + 1, sizeof(int));
-  ai->stats.average_production = 0;
+  ai->stats.workers = fc_calloc(map.num_continents + 1, sizeof(int));
+  ai->stats.cities = fc_calloc(map.num_continents + 1, sizeof(int));
   city_list_iterate(pplayer->cities, pcity) {
-    ai->stats.cities[(int)map_get_continent(pcity->x, pcity->y, NULL)]++;
-    ai->stats.average_production += pcity->shield_surplus;
+    struct tile *ptile = map_get_tile(pcity->x, pcity->y);
+    ai->stats.cities[ptile->continent]++;
   } city_list_iterate_end;
-  ai->stats.average_production /= MAX(1, city_list_size(&pplayer->cities));
   unit_list_iterate(pplayer->units, punit) {
     struct tile *ptile = map_get_tile(punit->x, punit->y);
-    if (!is_ocean(ptile->terrain) && unit_flag(punit, F_SETTLERS)) {
-      ai->stats.workers[(int)map_get_continent(punit->x, punit->y, NULL)]++;
+    if (ptile->terrain != T_OCEAN && unit_flag(punit, F_SETTLERS)) {
+      ai->stats.workers[ptile->continent]++;
     }
   } unit_list_iterate_end;
-
-  /* 
-   * Priorities. NEVER set these to zero! Weight values are usually
-   * multiplied by these values, so be careful with them. They are
-   * used in city calculations, and food and shields should be slightly
-   * bigger because we only look at surpluses there. WAGs.
-   */
-  ai->food_priority = FOOD_WEIGHTING;
-  ai->shield_priority = SHIELD_WEIGHTING;
-  ai->luxury_priority = 1;
-  ai->science_priority = TRADE_WEIGHTING;
-  ai->gold_priority = TRADE_WEIGHTING;
-  ai->happy_priority = 1;
-  ai->unhappy_priority = TRADE_WEIGHTING; /* danger */
-  ai->angry_priority = TRADE_WEIGHTING * 3; /* grave danger */
-  ai->pollution_priority = POLLUTION_WEIGHTING;
 }
 
 /**************************************************************************
@@ -217,22 +190,19 @@ void ai_data_turn_init(struct player *pplayer)
 **************************************************************************/
 void ai_data_turn_done(struct player *pplayer) {
   struct ai_data *ai = &aidata[pplayer->player_no];
-
-  free(ai->explore.continent); ai->explore.continent = NULL;
-  free(ai->threats.continent); ai->threats.continent = NULL;
-  free(ai->stats.workers);     ai->stats.workers = NULL;
-  free(ai->stats.cities);      ai->stats.cities = NULL;
+  free(ai->explore.continent);
+  free(ai->threats.continent);
+  free(ai->stats.workers);
+  free(ai->stats.cities);
 }
 
 /**************************************************************************
-  Return a pointer to our data
+  Do some sanity checks then return a pointer to our data
 **************************************************************************/
-struct ai_data *ai_data_get(struct player *pplayer)
-{
+struct ai_data *ai_data_get(struct player *pplayer) {
   struct ai_data *ai = &aidata[pplayer->player_no];
-
   if (ai->num_continents != map.num_continents) {
-    /* we discovered more continents, recalculate! */
+    /* Damn, someone raised Atlantis, recalculate! */
     ai_data_turn_done(pplayer);
     ai_data_turn_init(pplayer);
   }

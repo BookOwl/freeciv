@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -29,9 +28,6 @@
 #endif
 #ifdef HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
-#endif
-#ifdef HAVE_NETINET_IN_H
-#include <netinet/in.h>
 #endif
 #ifdef HAVE_SYS_UIO_H
 #include <sys/uio.h>
@@ -144,7 +140,7 @@ int connect_to_server(char *name, char *hostname, int port,
    - return 0 on success
      or put an error message in ERRBUF and return -1 on failure
 **************************************************************************/
-int get_server_address(const char *hostname, int port, char *errbuf,
+int get_server_address(char *hostname, int port, char *errbuf,
 		       int errbufsize)
 {
   if (port == 0)
@@ -154,12 +150,12 @@ int get_server_address(const char *hostname, int port, char *errbuf,
   if (!hostname)
     hostname = "localhost";
 
-  if (!net_lookup_service(hostname, port, (struct sockaddr *)&server_addr,
-      sizeof(server_addr))) {
+  if (!fc_lookup_host(hostname, &server_addr)) {
     (void) mystrlcpy(errbuf, _("Failed looking up host"), errbufsize);
     return -1;
   }
 
+  server_addr.sin_port = htons(port);
   return 0;
 }
 
@@ -499,7 +495,7 @@ struct server_list *create_server_list(char *errbuf, int n_errbuf)
   struct server_list *server_list;
   struct sockaddr_in addr;
   int s;
-  fz_FILE *f;
+  FILE *f;
   char *proxy_url;
   char urlbuf[512];
   char *urlpath;
@@ -556,10 +552,12 @@ struct server_list *create_server_list(char *errbuf, int n_errbuf)
     urlpath = s;
   }
 
-  if (!net_lookup_service(server,port,(struct sockaddr *) &addr,sizeof(addr))) {
+  if (!fc_lookup_host(server, &addr)) {
     (void) mystrlcpy(errbuf, _("Failed looking up host"), n_errbuf);
     return NULL;
   }
+  
+  addr.sin_port = htons(port);
   
   if((s = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
     (void) mystrlcpy(errbuf, mystrerror(errno), n_errbuf);
@@ -599,7 +597,26 @@ struct server_list *create_server_list(char *errbuf, int n_errbuf)
               client_string,
               machine_string);
 
-  f = my_querysocket(s, str, strlen(str));
+#ifdef HAVE_FDOPEN
+  f=fdopen(s,"r+");
+  fwrite(str,1,strlen(str),f);
+  fflush(f);
+#else
+  {
+    int i;
+
+    f=tmpfile();
+    my_writesocket(s,str,strlen(str));
+    
+    while ((i = my_readsocket(s, str, sizeof(str))) > 0)
+      fwrite(str,1,i,f);
+    fflush(f);
+
+    my_closesocket(s);
+
+    fseek(f,0,SEEK_SET);
+  }
+#endif
 
 #define NEXT_FIELD p=strstr(p,"<TD>"); if(!p) continue; p+=4;
 #define END_FIELD  p=strstr(p,"</TD>"); if(!p) continue; *p++='\0';
@@ -608,7 +625,7 @@ struct server_list *create_server_list(char *errbuf, int n_errbuf)
   server_list = fc_malloc(sizeof(struct server_list));
   server_list_init(server_list);
 
-  while(fz_fgets(str, 512, f)) {
+  while(fgets(str, 512, f)) {
     if((0 == strncmp(str, "<TR BGCOLOR",11)) && strchr(str, '\n')) {
       char *name,*port,*version,*status,*players,*metastring;
       char *p;
@@ -636,7 +653,7 @@ struct server_list *create_server_list(char *errbuf, int n_errbuf)
       server_list_insert(server_list, pserver);
     }
   }
-  fz_fclose(f);
+  fclose(f);
 
   return server_list;
 }

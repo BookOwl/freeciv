@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -72,7 +71,6 @@ void player_init(struct player *plr)
   plr->is_male = TRUE;
   plr->government=game.default_government;
   plr->nation=MAX_NUM_NATIONS;
-  plr->team = TEAM_NONE;
   plr->capital = FALSE;
   unit_list_init(&plr->units);
   city_list_init(&plr->cities);
@@ -88,7 +86,7 @@ void player_init(struct player *plr)
   }
   plr->city_style=0;            /* should be first basic style */
   plr->ai.control=FALSE;
-  plr->ai.tech_goal = A_UNSET;
+  plr->ai.tech_goal = A_NONE;
   plr->ai.handicap = 0;
   plr->ai.skill_level = 0;
   plr->ai.fuzzy = 0;
@@ -107,14 +105,69 @@ void player_init(struct player *plr)
 
   /* Initialise list of improvements with Player-wide equiv_range */
   improvement_status_init(plr->improvements, ARRAY_SIZE(plr->improvements));
+  /* Initialise vector of effects with player range. */
+  geff_vector_init(&plr->effects);
 
   /* Blank lists of Island-range improvements and effects (these are
      initialised by player_init_island_impr) */
   plr->island_improv = NULL;
-  plr->num_continents = 0;
+  plr->island_effects = NULL;
 
   plr->attribute_block.data = NULL;
   plr->attribute_block.length = 0;
+}
+
+/***************************************************************
+  Set up the player's lists of Island-range improvements and
+  effects. These lists must also be redimensioned (e.g. by
+  update_island_impr_effect) if the number of islands later
+  changes.
+***************************************************************/
+void player_init_island_imprs(struct player *plr, int numcont)
+{
+  int i;
+
+  player_free_island_imprs(plr);
+  if (game.num_impr_types>0) {
+    /* Initialise lists of improvements with island-wide equiv_range. */
+    if (plr->island_improv)
+      free(plr->island_improv);
+    plr->island_improv=fc_calloc((numcont+1)*game.num_impr_types,
+				 sizeof(Impr_Status));
+    for (i=0; i<=numcont; i++) {
+      improvement_status_init(&plr->island_improv[i * game.num_impr_types],
+			      game.num_impr_types);
+    }
+
+    /* Initialise lists of island-range effects. */
+    plr->island_effects=fc_calloc(numcont+1, sizeof(struct geff_vector));
+    for (i=0; i<=numcont; i++) {
+      geff_vector_init(&plr->island_effects[i]);
+    }
+  }
+}
+
+/***************************************************************
+  Frees the player's list of island-range improvements and
+  effects.
+***************************************************************/
+void player_free_island_imprs(struct player *plr)
+{
+  int i;
+
+  if (plr->island_improv) {
+    free(plr->island_improv);
+    plr->island_improv = NULL;
+  }
+
+  if (plr->island_effects) {
+    for (i = 0; i <= plr->max_continent; i++) {
+      geff_vector_free(&plr->island_effects[i]);
+    }
+    free(plr->island_effects);
+    plr->island_effects = NULL;
+    plr->max_continent = 0;
+  }
 }
 
 /***************************************************************
@@ -302,26 +355,6 @@ int num_known_tech_with_flag(struct player *pplayer, enum tech_flag_id flag)
 }
 
 /**************************************************************************
-  Return the expected net income of the player this turn.  This includes
-  tax revenue and upkeep, but not one-time purchases or found gold.
-**************************************************************************/
-int player_get_expected_income(struct player *pplayer)
-{
-  int income = 0;
-
-  city_list_iterate(pplayer->cities, pcity) {
-    impr_type_iterate(impr_id) {
-      if (city_got_building(pcity, impr_id)) {
-	income -= improvement_upkeep(pcity, impr_id);
-      }
-    } impr_type_iterate_end;
-    income += pcity->tax_total;
-  } city_list_iterate_end;
-
-  return income;
-}
-
-/**************************************************************************
  Returns TRUE iff the player knows at least one tech which has the
  given flag.
 **************************************************************************/
@@ -371,7 +404,7 @@ void player_limit_to_government_rates(struct player *pplayer)
     } else if (pplayer->economic.luxury < maxrate) {
       pplayer->economic.luxury += 10;
     } else {
-      die("byebye");
+      abort();
     }
     surplus -= 10;
   }
@@ -499,7 +532,8 @@ const char *diplstate_text(const enum diplstate_type type)
 
   if (type < DS_LAST)
     return Q_(ds_names[type]);
-  die("Bad diplstate_type in diplstate_text: %d", type);
+  freelog(LOG_FATAL, "Bad diplstate_type in diplstate_text: %d", type);
+  abort();
 }
 
 /***************************************************************

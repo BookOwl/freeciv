@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -75,6 +74,7 @@
 #include "ratesdlg.h"
 #include "repodlgs_g.h"
 #include "spaceshipdlg_g.h"
+#include "support.h"
 #include "tilespec.h"
 #include "wldlg.h"
 
@@ -412,7 +412,8 @@ static void control_callback(ULONG * value)
       }
       break;
     case END_TURN:
-      key_end_turn();
+      if (get_client_state() == CLIENT_GAME_RUNNING_STATE)
+        key_end_turn();
       break;
     case NEXT_UNIT:
       advance_unit_focus();	/*focus_to_next_unit(); */
@@ -726,9 +727,8 @@ static void taxrates_callback(LONG * number)
   int delta = 10;
   struct packet_player_request packet;
 
-  if (!can_client_issue_orders()) {
+  if (get_client_state() != CLIENT_GAME_RUNNING_STATE)
     return;
-  }
 
   i = (size_t) * number;
 
@@ -1183,7 +1183,8 @@ void remove_net_input(void)
 **************************************************************************/
 void update_menus(void) /* from menu.c */
 {
-  if (!can_client_change_view()) {
+  if (get_client_state() != CLIENT_GAME_RUNNING_STATE)
+  {
     menu_title_sensitive(MENU_REPORT, FALSE);
     menu_title_sensitive(MENU_ORDER, FALSE);
     menu_title_sensitive(MENU_VIEW, FALSE);
@@ -1206,18 +1207,14 @@ void update_menus(void) /* from menu.c */
     }
 
     menu_title_sensitive(MENU_REPORT, TRUE);
-    menu_title_sensitive(MENU_ORDER, punit
-			 ? can_client_issue_orders() : FALSE);
+    menu_title_sensitive(MENU_ORDER, punit ? TRUE : FALSE);
     menu_title_sensitive(MENU_VIEW, TRUE);
     menu_title_sensitive(MENU_KINGDOM, TRUE);
 
-    menu_title_sensitive(MENU_KINGDOM_TAX_RATE, can_client_issue_orders());
-    menu_title_sensitive(MENU_KINGDOM_WORKLISTS, can_client_issue_orders());
-    menu_title_sensitive(MENU_KINGDOM_REVOLUTION, can_client_issue_orders());
-
     menu_entry_sensitive(MENU_REPORT_SPACESHIP, (game.player_ptr->spaceship.state != SSHIP_NONE));
 
-    if (punit && can_client_issue_orders()) {
+    if (punit)
+    {
       const char *chgfmt = _("Change to %s");
       static char irrtext[64];
       static char mintext[64];
@@ -1383,8 +1380,7 @@ void ui_main(int argc, char *argv[])
       main_bulb_sprite = MakeBorderSprite(sprites.bulb[0]);
       main_sun_sprite = MakeBorderSprite(sprites.warming[0]);
       main_flake_sprite = MakeBorderSprite(sprites.cooling[0]);
-      main_government_sprite
-	= MakeBorderSprite(get_citizen_sprite(CITIZEN_UNHAPPY, 0, NULL));
+      main_government_sprite = MakeBorderSprite(sprites.citizen[7]);
       main_timeout_text = TextObject, End;
 
       econ_group = HGroup, GroupSpacing(0), End;

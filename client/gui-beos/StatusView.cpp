@@ -3,10 +3,6 @@
 	Copyright 1999 Be Do Have. All Rights Reserved.
 */
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <support/Debug.h>
 #include "StatusView.hpp"
 

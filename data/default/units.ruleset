@@ -21,6 +21,10 @@
 description="Default unit_type data for Freeciv"
 options="1.9"
 
+[units_adjust]
+firepower_factor=1     ; Divide hitpoints by this value. It has to be 
+                       ; set higher than zero.
+
 ; Below: The individual units, one per section.
 ;
 ; The number can be variable, up to 200.  
@@ -1295,7 +1299,7 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 flags         = ""
-roles         = "DefendGood"
+roles         = ""
 
 [unit_aegis_cruiser]
 name          = _("AEGIS Cruiser")
@@ -1323,7 +1327,7 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 flags         = "AEGIS"
-roles         = "DefendGood"
+roles         = ""
 
 [unit_battleship]
 name          = _("Battleship")
@@ -1364,13 +1368,13 @@ sound_move    = "m_submarine"
 sound_move_alt = "m_generic"
 sound_fight   = "f_submarine"
 sound_fight_alt = "f_generic"
-build_cost    = 50
+build_cost    = 60
 pop_cost      = 0
-attack        = 15
+attack        = 10
 defense       = 2
 hitpoints     = 30
 firepower     = 2
-move_rate     = 5
+move_rate     = 3
 vision_range  = 2
 transport_cap = 8
 fuel          = 0

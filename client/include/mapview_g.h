@@ -19,10 +19,8 @@
 struct unit;
 struct city;
 
-void get_mapview_dimensions(int *map_view_topleft_map_x,
-			    int *map_view_topleft_map_y,
-			    int *map_view_pixel_width,
-			    int *map_view_pixel_height);
+bool tile_visible_mapcanvas(int x, int y);
+bool tile_visible_and_not_on_border_mapcanvas(int x, int y);
 
 void update_info_label(void);
 void update_unit_info_label(struct unit *punit);
@@ -35,20 +33,17 @@ void set_overview_dimensions(int x, int y);
 void overview_update_tile(int x, int y);
 
 void center_tile_mapcanvas(int x, int y);
-
-void show_city_desc(struct city *pcity, int canvas_x, int canvas_y);
+void get_center_tile_mapcanvas(int *x, int *y);
 
 void update_map_canvas(int x, int y, int width, int height,
 		       bool write_to_screen);
+void update_map_canvas_visible(void);
 void update_map_canvas_scrollbars(void);
 
 void put_cross_overlay_tile(int x,int y);
 void put_city_workers(struct city *pcity, int color);
 
-void draw_unit_animation_frame(struct unit *punit,
-			       bool first_frame, bool last_frame,
-			       int old_canvas_x, int old_canvas_y,
-			       int new_canvas_x, int new_canvas_y);
+void move_unit_map_canvas(struct unit *punit, int x0, int y0, int dx, int dy);
 void decrease_unit_hp_smooth(struct unit *punit0, int hp0, 
 			     struct unit *punit1, int hp1);
 void put_nuke_mushroom_pixmaps(int x, int y);
@@ -57,7 +52,6 @@ void refresh_overview_canvas(void);
 void refresh_overview_viewrect(void);
 
 void draw_segment(int src_x, int src_y, int dir);
-
-void tileset_changed(void);
+void undraw_segment(int src_x, int src_y, int dir);
 
 #endif  /* FC__MAPVIEW_G_H */
