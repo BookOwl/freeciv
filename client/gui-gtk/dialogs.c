@@ -1756,7 +1756,8 @@ static void select_random_race(void)
   int class_id = selected_class;
   int nations_in_class = g_list_length(sorted_races_list[class_id]);
   int index;
-
+  int tries = 0;
+  
   /* try to find a free nation */
   while (TRUE) {
     index = myrand(nations_in_class);
@@ -1765,6 +1766,7 @@ static void select_random_race(void)
     if (GTK_WIDGET_SENSITIVE(races_toggles[class_id][index])) {
       break;
     }
+    if (tries++ > 1000) return;
   }
 
   /* initialize nation toggle array */
@@ -1823,7 +1825,7 @@ void create_races_dialog(void)
 
     /* Find the nation's class. */
     for (class_id = 1; class_id < num_classes; class_id++) {
-      if (strcmp(nation->category, class_names[class_id]) == 0) {
+      if (strcmp(nation->class, class_names[class_id]) == 0) {
 	found = TRUE;
 	break;
       }
@@ -1832,7 +1834,7 @@ void create_races_dialog(void)
     /* Append a new class. */
     if (!found && num_classes < MAX_NUM_ITEMS) {
       class_id = num_classes++;
-      class_names[class_id] = nation->category;
+      class_names[class_id] = nation->class;
     }
 
     /* Add the nation to the class list. */
@@ -2213,7 +2215,7 @@ static void races_toggles_callback(GtkWidget * w, gpointer race_id_p)
   gtk_entry_set_text(GTK_ENTRY(GTK_COMBO(races_by_name[class_id])->entry),
 		     get_nation_by_idx(selected_nation)->name);
   gtk_label_set_text(GTK_LABEL(class[class_id]),
-		     get_nation_by_idx(selected_nation)->category);
+		     get_nation_by_idx(selected_nation)->class);
   gtk_label_set_text(GTK_LABEL(legend[class_id]),
 		     get_nation_by_idx(selected_nation)->legend);
 
@@ -2282,7 +2284,7 @@ static void races_buttons_callback(GtkWidget *w, gpointer data)
   char *s;
 
   if(w == races_quit_command) {
-    ui_exit();
+    exit(EXIT_SUCCESS);
   } else if(w == races_disc_command) {
     popdown_races_dialog();
     disconnect_from_server();

@@ -109,7 +109,7 @@ const char *map_get_tile_info_text(const struct tile *ptile)
     } else {
       sz_strlcat(s, "/");
     }
-    sz_strlcat(s, tile_types[ptile->terrain].special[0].name);
+    sz_strlcat(s, tile_types[ptile->terrain].special_1_name);
   }
   if (tile_has_special(ptile, S_SPECIAL_2)) {
     if (first) {
@@ -118,7 +118,7 @@ const char *map_get_tile_info_text(const struct tile *ptile)
     } else {
       sz_strlcat(s, "/");
     }
-    sz_strlcat(s, tile_types[ptile->terrain].special[1].name);
+    sz_strlcat(s, tile_types[ptile->terrain].special_2_name);
   }
   if (!first) {
     sz_strlcat(s, ")");
@@ -158,9 +158,9 @@ const char *map_get_tile_fpt_text(const struct tile *ptile)
   static char s[64];
   
   my_snprintf(s, sizeof(s), "%d/%d/%d",
-	      get_output_tile(ptile, O_FOOD),
-	      get_output_tile(ptile, O_SHIELD),
-	      get_output_tile(ptile, O_TRADE));
+	      get_food_tile(ptile),
+	      get_shields_tile(ptile),
+	      get_trade_tile(ptile));
   return s;
 }
 
@@ -319,7 +319,7 @@ void map_init_topology(bool set_sizes)
 
   if (!set_sizes) {
     /* Set map.size based on map.xsize and map.ysize. */
-    map.size = (float)(map_num_tiles()) / 1000.0 + 0.5;
+    map.size = (float)(map.xsize * map.ysize) / 1000.0 + 0.5;
   }
   
   /* sanity check for iso topologies*/
@@ -362,6 +362,7 @@ static void tile_init(struct tile *ptile)
   ptile->worked   = NULL; /* pointer to city working tile */
   ptile->assigned = 0; /* bitvector */
   ptile->owner    = NULL; /* Tile not claimed by any nation. */
+  ptile->client.hilite = HILITE_NONE; /* Area Selection in client. */
   ptile->spec_sprite = NULL;
 }
 
@@ -447,7 +448,7 @@ struct tile *index_to_tile(int index)
     return NULL;
   }
 
-  if (index >= 0 && index < MAP_INDEX_SIZE) {
+  if (index >= 0 && index < MAX_MAP_INDEX) {
     return map.tiles + index;
   } else {
     /* Unwrapped index coordinates are impossible, so the best we can do is
@@ -494,7 +495,7 @@ void map_allocate(void)
 	  map.tiles, map.xsize, map.ysize);
 
   assert(map.tiles == NULL);
-  map.tiles = fc_malloc(MAP_INDEX_SIZE * sizeof(*map.tiles));
+  map.tiles = fc_malloc(map.xsize * map.ysize * sizeof(struct tile));
   whole_map_iterate(ptile) {
     int index, nat_x, nat_y, map_x, map_y;
 
@@ -593,8 +594,6 @@ static int map_vector_to_distance(int dx, int dy)
 ****************************************************************************/
 int map_vector_to_real_distance(int dx, int dy)
 {
-  const int absdx = abs(dx), absdy = abs(dy);
-
   if (topo_has_flag(TF_HEX)) {
     if (topo_has_flag(TF_ISO)) {
       /* Iso-hex: you can't move NE or SW. */
@@ -602,10 +601,10 @@ int map_vector_to_real_distance(int dx, int dy)
 	  || (dx > 0 && dy < 0)) {
 	/* Diagonal moves in this direction aren't allowed, so it will take
 	 * the full number of moves. */
-        return absdx + absdy;
+	return abs(dx) + abs(dy);
       } else {
 	/* Diagonal moves in this direction *are* allowed. */
-        return MAX(absdx, absdy);
+	return MAX(abs(dx), abs(dy));
       }
     } else {
       /* Hex: you can't move SE or NW. */
@@ -613,14 +612,14 @@ int map_vector_to_real_distance(int dx, int dy)
 	  || (dx < 0 && dy < 0)) {
 	/* Diagonal moves in this direction aren't allowed, so it will take
 	 * the full number of moves. */
-	return absdx + absdy;
+	return abs(dx) + abs(dy);
       } else {
 	/* Diagonal moves in this direction *are* allowed. */
-        return MAX(absdx, absdy);
+	return MAX(abs(dx), abs(dy));
       }
     }
   } else {
-    return MAX(absdx, absdy);
+    return MAX(abs(dx), abs(dy));
   }
 }
 
@@ -708,19 +707,58 @@ bool is_safe_ocean(const struct tile *ptile)
   return FALSE;
 }
 
-/****************************************************************************
-  Return the output of this type provided by the tile.  This includes base
-  terrain plus S_SPECIAL_1 and S_SPECIAL_2, but not any other specials
-  (river/road/irrigation/etc).
-****************************************************************************/
-int get_tile_output_base(const struct tile *ptile, Output_type_id output)
+/***************************************************************
+Returns whether you can put a city on land near enough to use
+the tile.
+***************************************************************/
+bool is_sea_usable(const struct tile *ptile)
+{
+  map_city_radius_iterate(ptile, tile1) {
+    if (!is_ocean(map_get_terrain(tile1))) {
+      return TRUE;
+    }
+  } map_city_radius_iterate_end;
+
+  return FALSE;
+}
+
+/***************************************************************
+...
+***************************************************************/
+int get_tile_food_base(const struct tile *ptile)
 {
   if (tile_has_special(ptile, S_SPECIAL_1)) 
-    return tile_types[ptile->terrain].special[0].output[output];
+    return tile_types[ptile->terrain].food_special_1;
   else if (tile_has_special(ptile, S_SPECIAL_2))
-    return tile_types[ptile->terrain].special[1].output[output];
+    return tile_types[ptile->terrain].food_special_2;
   else
-    return tile_types[ptile->terrain].output[output];
+    return tile_types[ptile->terrain].food;
+}
+
+/***************************************************************
+...
+***************************************************************/
+int get_tile_shield_base(const struct tile *ptile)
+{
+  if (tile_has_special(ptile, S_SPECIAL_1))
+    return tile_types[ptile->terrain].shield_special_1;
+  else if(tile_has_special(ptile, S_SPECIAL_2))
+    return tile_types[ptile->terrain].shield_special_2;
+  else
+    return tile_types[ptile->terrain].shield;
+}
+
+/***************************************************************
+...
+***************************************************************/
+int get_tile_trade_base(const struct tile *ptile)
+{
+  if (tile_has_special(ptile, S_SPECIAL_1))
+    return tile_types[ptile->terrain].trade_special_1;
+  else if (tile_has_special(ptile, S_SPECIAL_2))
+    return tile_types[ptile->terrain].trade_special_2;
+  else
+    return tile_types[ptile->terrain].trade;
 }
 
 /***************************************************************
@@ -1563,18 +1601,18 @@ struct tile *rand_map_pos_filtered(void *data,
 {
   struct tile *ptile;
   int tries = 0;
-  const int max_tries = MAP_INDEX_SIZE / ACTIVITY_FACTOR;
+  const int max_tries = map.xsize * map.ysize / ACTIVITY_FACTOR;
 
   /* First do a few quick checks to find a spot.  The limit on number of
    * tries could use some tweaking. */
   do {
-    ptile = map.tiles + myrand(MAP_INDEX_SIZE);
+    ptile = map.tiles + myrand(map.xsize * map.ysize);
   } while (filter && !filter(ptile, data) && ++tries < max_tries);
 
   /* If that fails, count all available spots and pick one.
    * Slow but reliable. */
   if (tries == max_tries) {
-    int count = 0, positions[MAP_INDEX_SIZE];
+    int count = 0, positions[map.xsize * map.ysize];
 
     whole_map_iterate(ptile) {
       if (filter(ptile, data)) {

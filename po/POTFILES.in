@@ -6,7 +6,6 @@ common/effects.c
 common/map.c
 common/packets.c
 common/player.c
-common/requirements.c
 common/tech.c
 common/unit.c
 common/unittype.c
@@ -21,6 +20,7 @@ utility/shared.c
 utility/support.c
 ai/aicity.c
 ai/advdiplomacy.c
+server/autoattack.c
 server/barbarian.c
 server/cityhand.c
 server/citytools.c
@@ -92,8 +92,8 @@ client/gui-gtk-2.0/mapview.c
 client/gui-gtk-2.0/menu.c
 client/gui-gtk-2.0/messagedlg.c
 client/gui-gtk-2.0/messagewin.c
-client/gui-gtk-2.0/plrdlg.c
 client/gui-gtk-2.0/pages.c
+client/gui-gtk-2.0/plrdlg.c
 client/gui-gtk-2.0/repodlgs.c
 client/gui-gtk-2.0/spaceshipdlg.c
 client/gui-gtk-2.0/wldlg.c

@@ -59,48 +59,21 @@
 {                                                                   \
   Continent_id continent = map_get_continent(city_here->tile);	    \
   city_list_iterate(list, city) {                                   \
-    if ((range == REQ_RANGE_CITY && city == city_here)              \
-        || (range == REQ_RANGE_LOCAL && city == city_here)          \
-        || (range == REQ_RANGE_CONTINENT                            \
+    if ((range == EFR_CITY && city == city_here)                    \
+        || (range == EFR_LOCAL && city == city_here)                \
+        || (range == EFR_CONTINENT                                  \
             && map_get_continent(city->tile) == continent)	    \
-        || (range == REQ_RANGE_PLAYER)) {
+        || (range == EFR_PLAYER)) {
 #define city_range_iterate_end \
   } } city_list_iterate_end; }
 
 #define CITY_EMERGENCY(pcity)                        \
- (pcity->surplus[O_SHIELD] < 0 || city_unhappy(pcity)   \
-  || pcity->food_stock + pcity->surplus[O_FOOD] < 0)
+ (pcity->shield_surplus < 0 || city_unhappy(pcity)   \
+  || pcity->food_stock + pcity->food_surplus < 0)
 #define LOG_BUY LOG_DEBUG
 
 static void resolve_city_emergency(struct player *pplayer, struct city *pcity);
 static void ai_sell_obsolete_buildings(struct city *pcity);
-
-/**************************************************************************
-  Return the number of "luxury specialists".  This is the number of
-  specialists who provide at least HAPPY_COST luxury, being the number of
-  luxuries needed to make one citizen content or happy.
-
-  The AI assumes that for any specialist that provides HAPPY_COST luxury, 
-  if we can get that luxury from some other source it allows the specialist 
-  to become a worker.  The benefits from an extra worker are weighed against
-  the losses from acquiring the two extra luxury.
-
-  This is a very bad model if the abilities of specialists are changed.
-  But as long as the civ2 model of specialists is used it will continue
-  to work okay.
-**************************************************************************/
-static int get_entertainers(const struct city *pcity)
-{
-  int providers = 0;
-
-  specialist_type_iterate(i) {
-    if (game.rgame.specialists[i].bonus[O_LUXURY] >= HAPPY_COST) {
-      providers += pcity->specialists[i];
-    }
-  } specialist_type_iterate_end;
-
-  return providers;
-}
 
 /**************************************************************************
   This calculates the usefulness of pcity to us. Note that you can pass
@@ -109,17 +82,17 @@ static int get_entertainers(const struct city *pcity)
 **************************************************************************/
 int ai_eval_calc_city(struct city *pcity, struct ai_data *ai)
 {
-  int i = (pcity->surplus[O_FOOD] * ai->food_priority
-           + pcity->surplus[O_SHIELD] * ai->shield_priority
-           + pcity->prod[O_LUXURY] * ai->luxury_priority
-           + pcity->prod[O_GOLD] * ai->gold_priority
-           + pcity->prod[O_SCIENCE] * ai->science_priority
+  int i = (pcity->food_surplus * ai->food_priority
+           + pcity->shield_surplus * ai->shield_priority
+           + pcity->luxury_total * ai->luxury_priority
+           + pcity->tax_total * ai->gold_priority
+           + pcity->science_total * ai->science_priority
            + pcity->ppl_happy[4] * ai->happy_priority
            - pcity->ppl_unhappy[4] * ai->unhappy_priority
            - pcity->ppl_angry[4] * ai->angry_priority
            - pcity->pollution * ai->pollution_priority);
 
-  if (pcity->surplus[O_FOOD] < 0 || pcity->surplus[O_SHIELD] < 0) {
+  if (pcity->food_surplus < 0 || pcity->shield_surplus < 0) {
     /* The city is unmaintainable, it can't be good */
     i = MIN(i, 0);
   }
@@ -133,38 +106,41 @@ int ai_eval_calc_city(struct city *pcity, struct ai_data *ai)
 static inline int city_want(struct player *pplayer, struct city *acity, 
                             struct ai_data *ai)
 {
-  int want = 0, prod[O_COUNT];
+  int want = 0, food, trade, shields, lux, sci, tax;
 
-  get_citizen_output(acity, prod); /* this also clears prod[] */
-  output_type_iterate(o) {
-    prod[o] -= city_waste(acity, o, prod[o]);
-  } output_type_iterate_end;
-  add_tax_income(pplayer, prod);
+  get_food_trade_shields(acity, &food, &trade, &shields);
+  trade -= city_corruption(acity, trade);
+  shields -= city_waste(acity, shields);
+  get_tax_income(pplayer, trade, &sci, &lux, &tax);
+  sci += (acity->specialists[SP_SCIENTIST]
+	  * game.rgame.specialists[SP_SCIENTIST].bonus);
+  lux += (acity->specialists[SP_ELVIS]
+	  * game.rgame.specialists[SP_ELVIS].bonus);
+  tax += (acity->specialists[SP_TAXMAN]
+	  * game.rgame.specialists[SP_TAXMAN].bonus);
 
   built_impr_iterate(acity, i) {
-    prod[O_GOLD] -= improvement_upkeep(acity, i);
+    tax -= improvement_upkeep(acity, i);
   } built_impr_iterate_end;
-  /* Unit upkeep isn't handled here.  Unless we do a full city_refresh it
-   * won't be changed anyway. */
 
-  want += prod[O_FOOD] * ai->food_priority;
-  if (prod[O_SHIELD] != 0) {
-    want += ((prod[O_SHIELD] * get_city_output_bonus(acity, O_SHIELD)) / 100)
+  want += food * ai->food_priority;
+  if (shields != 0) {
+    want += ((shields * get_city_shield_bonus(acity)) / 100)
             * ai->shield_priority;
-    want -= city_pollution(acity, prod[O_SHIELD]) * ai->pollution_priority;
+    want -= city_pollution(acity, shields) * ai->pollution_priority;
   }
-  if (prod[O_LUXURY] > 0) {
-    want += ((prod[O_LUXURY] * get_city_output_bonus(acity, O_LUXURY)) / 100)
+  if (lux > 0) {
+    want += ((lux * get_city_luxury_bonus(acity)) / 100)
             * ai->luxury_priority;
   }
-  if (prod[O_SCIENCE] > 0) {
-    want += ((prod[O_SCIENCE] * get_city_output_bonus(acity, O_SCIENCE)) / 100)
+  if (sci > 0) {
+    want += ((sci * get_city_science_bonus(acity)) / 100)
             * ai->science_priority;
   }
-  if (prod[O_GOLD] > 0) {
-    prod[O_GOLD] *= get_city_output_bonus(acity, O_GOLD) / 100;
+  if (tax > 0) {
+    tax *= get_city_tax_bonus(acity) / 100;
   }
-  want += prod[O_GOLD] * ai->gold_priority;
+  want += tax * ai->gold_priority;
 
   return want;
 }
@@ -179,24 +155,15 @@ static int base_want(struct player *pplayer, struct city *pcity,
   struct ai_data *ai = ai_data_get(pplayer);
   int final_want = 0;
   struct city *capital = find_palace(pplayer);
-  int great_wonders_tmp = 0, small_wonders_tmp = 0;
 
   if (ai->impr_calc[id] == AI_IMPR_ESTIMATE) {
     return 0; /* Nothing to calculate here. */
   }
 
-  if (!can_build_improvement(pcity, id)) {
-    return 0;
-  }
-
   /* Add the improvement */
   city_add_improvement(pcity, id);
-  if (is_great_wonder(id)) {
-    great_wonders_tmp = game.great_wonders[id];
-    game.great_wonders[id] = pcity->id;
-  } else if (is_small_wonder(id)) {
-    small_wonders_tmp = pplayer->small_wonders[id];
-    pplayer->small_wonders[id] = pcity->id;
+  if (is_wonder(id)) {
+    game.global_wonders[id] = pcity->id;
   }
 
   /* Stir, then compare notes */
@@ -206,14 +173,14 @@ static int base_want(struct player *pplayer, struct city *pcity,
 
   /* Restore */
   city_remove_improvement(pcity, id);
-  if (is_great_wonder(id)) {
-    game.great_wonders[id] = great_wonders_tmp;
-  } else if (is_small_wonder(id)) {
-    pplayer->small_wonders[id] = small_wonders_tmp;
+  if (is_wonder(id)) {
+    game.global_wonders[id] = 0;
   }
 
   /* Ensure that we didn't inadvertantly move our palace */
-  assert(find_palace(pplayer) == capital);
+  if (find_palace(pplayer) != capital) {
+    city_add_improvement(capital, get_building_for_effect(EFT_CAPITAL_CITY));
+  }
 
   return final_want;
 }
@@ -237,7 +204,7 @@ static void adjust_building_want_by_effects(struct city *pcity,
   struct player *pplayer = city_owner(pcity);
   struct impr_type *pimpr = get_improvement_type(id);
   int v = 0;
-  int cities[REQ_RANGE_LAST];
+  int cities[EFR_LAST];
   int nplayers = game.nplayers
                  - game.nbarbarians
                  - team_count_members_alive(pplayer->team);
@@ -254,13 +221,13 @@ static void adjust_building_want_by_effects(struct city *pcity,
   }
 
   /* Find number of cities per range.  */
-  cities[REQ_RANGE_PLAYER] = city_list_size(&pplayer->cities);
-  cities[REQ_RANGE_WORLD] = cities[REQ_RANGE_PLAYER]; /* kludge. */
+  cities[EFR_PLAYER] = city_list_size(&pplayer->cities);
+  cities[EFR_WORLD] = cities[EFR_PLAYER]; /* kludge. */
 
-  cities[REQ_RANGE_CONTINENT] = ai->stats.cities[ptile->continent];
+  cities[EFR_CONTINENT] = ai->stats.cities[ptile->continent];
 
-  cities[REQ_RANGE_CITY] = 1;
-  cities[REQ_RANGE_LOCAL] = 0;
+  cities[EFR_CITY] = 1;
+  cities[EFR_LOCAL] = 0;
 
   /* Calculate desire value. */
   effect_type_vector_iterate(get_building_effect_types(id), ptype) {
@@ -311,21 +278,18 @@ static void adjust_building_want_by_effects(struct city *pcity,
             /* TODO */
             break;
 	  case EFT_NO_UNHAPPY:
-            v += (get_entertainers(pcity)
-		  + pcity->ppl_unhappy[4]) * 20;
+            v += (pcity->specialists[SP_ELVIS] + pcity->ppl_unhappy[4]) * 20;
             break;
 	  case EFT_FORCE_CONTENT:
 	    if (!government_has_flag(gov, G_NO_UNHAPPY_CITIZENS)) {
-	      v += (pcity->ppl_unhappy[4]
-		    + get_entertainers(pcity)) * 20;
+	      v += (pcity->ppl_unhappy[4] + pcity->specialists[SP_ELVIS]) * 20;
 	      v += 5 * c;
 	    }
 	    break;
 	  case EFT_MAKE_CONTENT_MIL_PER:
 	  case EFT_MAKE_CONTENT:
 	    if (!government_has_flag(gov, G_NO_UNHAPPY_CITIZENS)) {
-              v += MIN(pcity->ppl_unhappy[4]
-		       + get_entertainers(pcity),
+              v += MIN(pcity->ppl_unhappy[4] + pcity->specialists[SP_ELVIS],
                        amount) * 20;
               v += MIN(amount, 5) * c;
 	    }
@@ -343,7 +307,7 @@ static void adjust_building_want_by_effects(struct city *pcity,
 		* (nplayers - amount)) / (nplayers * amount * 100);
 	    break;
 	  case EFT_GROWTH_FOOD:
-	    v += c * 4 + (amount / 7) * pcity->surplus[O_FOOD];
+	    v += c * 4 + (amount / 7) * pcity->food_surplus;
 	    break;
 	  case EFT_AIRLIFT:
             /* FIXME: We need some smart algorithm here. The below is 
@@ -398,9 +362,9 @@ static void adjust_building_want_by_effects(struct city *pcity,
 	    /* there not being a break here is deliberate, mind you */
 	  case EFT_SIZE_ADJ: 
             if (!city_can_grow_to(pcity, pcity->size + 1)) {
-	      v += pcity->surplus[O_FOOD] * ai->food_priority * amount;
+	      v += pcity->food_surplus * ai->food_priority * amount;
               if (pcity->size == game.aqueduct_size) {
-                v += 30 * pcity->surplus[O_FOOD];
+                v += 30 * pcity->food_surplus;
               }
 	    }
 	    v += c * amount * 4 / game.aqueduct_size;
@@ -540,7 +504,7 @@ static void adjust_building_want_by_effects(struct city *pcity,
    }
 
   /* Adjust by building cost */
-  v -= pimpr->build_cost / (pcity->surplus[O_SHIELD] * 10 + 1);
+  v -= pimpr->build_cost / (pcity->shield_surplus * 10 + 1);
 
   /* Set */
   pcity->ai.building_want[id] = v;
@@ -572,9 +536,9 @@ void ai_manage_buildings(struct player *pplayer)
         pcity->ai.building_want[id] = 0; /* do recalc */
       }
       if (city_got_building(pcity, id)
-          || pcity->surplus[O_SHIELD] == 0
+          || pcity->shield_surplus == 0
           || !can_build_improvement(pcity, id)
-          || is_building_replaced(pcity, id)) {
+          || improvement_redundant(pplayer, pcity, id, FALSE)) {
         continue; /* Don't build redundant buildings */
       }
       adjust_building_want_by_effects(pcity, id);
@@ -742,7 +706,7 @@ static void ai_city_choose_build(struct player *pplayer, struct city *pcity)
 	      get_improvement_name(pcity->ai.choice.choice)),
 	     pcity->ai.choice.want);
     
-    if (!pcity->is_building_unit && is_great_wonder(pcity->currently_building) 
+    if (!pcity->is_building_unit && is_wonder(pcity->currently_building) 
 	&& (is_unit_choice_type(pcity->ai.choice.type) 
 	    || pcity->ai.choice.choice != pcity->currently_building))
       notify_player_ex(NULL, pcity->tile, E_WONDER_STOPPED,
@@ -755,13 +719,11 @@ static void ai_city_choose_build(struct player *pplayer, struct city *pcity)
 	&& is_wonder(pcity->ai.choice.choice)
 	&& (pcity->is_building_unit 
 	    || pcity->currently_building != pcity->ai.choice.choice)) {
-      if (is_great_wonder(pcity->ai.choice.choice)) {
-	notify_player_ex(NULL, pcity->tile, E_WONDER_STARTED,
-			 _("Game: The %s have started building The %s in %s."),
-			 get_nation_name_plural(city_owner(pcity)->nation),
-			 get_impr_name_ex(pcity, pcity->ai.choice.choice),
-			 pcity->name);
-      }
+      notify_player_ex(NULL, pcity->tile, E_WONDER_STARTED,
+		       _("Game: The %s have started building The %s in %s."),
+		       get_nation_name_plural(city_owner(pcity)->nation),
+		       get_impr_name_ex(pcity, pcity->ai.choice.choice),
+		       pcity->name);
       pcity->currently_building = pcity->ai.choice.choice;
       pcity->is_building_unit = is_unit_choice_type(pcity->ai.choice.type);
 
@@ -781,7 +743,7 @@ static void ai_city_choose_build(struct player *pplayer, struct city *pcity)
 static void try_to_sell_stuff(struct player *pplayer, struct city *pcity)
 {
   impr_type_iterate(id) {
-    if (can_city_sell_building(pcity, id)
+    if (can_sell_building(pcity, id)
 	&& !building_has_effect(id, EFT_LAND_DEFEND)) {
 /* selling walls to buy defenders is counterproductive -- Syela */
       really_handle_city_sell(pplayer, pcity, id);
@@ -918,7 +880,7 @@ static void ai_spend_gold(struct player *pplayer)
       if (get_city_bonus(pcity, EFT_GROWTH_FOOD) == 0
           && pcity->size == 1
           && city_granary_size(pcity->size)
-             > pcity->food_stock + pcity->surplus[O_FOOD]) {
+             > pcity->food_stock + pcity->food_surplus) {
         /* Don't buy settlers in size 1 cities unless we grow next turn */
         continue;
       } else if (city_list_size(&pplayer->cities) > 6) {
@@ -1050,7 +1012,7 @@ static void ai_sell_obsolete_buildings(struct city *pcity)
   struct player *pplayer = city_owner(pcity);
 
   built_impr_iterate(pcity, i) {
-    if(can_city_sell_building(pcity, i) 
+    if(!is_wonder(i) 
        && !building_has_effect(i, EFT_LAND_DEFEND)
 	      /* selling city walls is really, really dumb -- Syela */
        && (is_building_replaced(pcity, i)
@@ -1093,7 +1055,7 @@ static void resolve_city_emergency(struct player *pplayer, struct city *pcity)
           "Emergency in %s (%s, angry%d, unhap%d food%d, prod%d)",
           pcity->name, city_unhappy(pcity) ? "unhappy" : "content",
           pcity->ppl_angry[4], pcity->ppl_unhappy[4],
-          pcity->surplus[O_FOOD], pcity->surplus[O_SHIELD]);
+          pcity->food_surplus, pcity->shield_surplus);
 
   city_list_init(&minilist);
   map_city_radius_iterate(pcity->tile, ptile) {
@@ -1102,16 +1064,16 @@ static void resolve_city_emergency(struct player *pplayer, struct city *pcity)
     bool is_valid;
 
     if (acity && acity != pcity && acity->owner == pcity->owner)  {
+      if (same_pos(acity->tile, ptile)) {
+        /* can't stop working city center */
+        continue;
+      }
       freelog(LOG_DEBUG, "%s taking over %s's square in (%d, %d)",
               pcity->name, acity->name, ptile->x, ptile->y);
       is_valid = map_to_city_map(&city_map_x, &city_map_y, acity, ptile);
       assert(is_valid);
-      if (!is_valid || is_free_worked_tile(city_map_x, city_map_y)) {
-	/* Can't remove a worker here. */
-        continue;
-      }
       server_remove_worker_city(acity, city_map_x, city_map_y);
-      acity->specialists[DEFAULT_SPECIALIST]++;
+      acity->specialists[SP_ELVIS]++;
       if (!city_list_find_id(&minilist, acity->id)) {
 	city_list_insert(&minilist, acity);
       }

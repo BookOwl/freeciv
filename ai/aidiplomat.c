@@ -54,10 +54,6 @@
 #define LOG_DIPLOMAT LOG_DEBUG
 #define LOG_DIPLOMAT_BUILD LOG_DEBUG
 
-/* 3000 is a just a large number, but not hillariously large as the
- * previously used one. This is important for diplomacy. - Per */
-#define DIPLO_DEFENSE_WANT 3000
-
 static void find_city_to_diplomat(struct player *pplayer, struct unit *punit,
                                   struct city **ctarget, int *move_dist,
                                   struct pf_map *map);
@@ -123,12 +119,10 @@ void ai_choose_diplomat_defensive(struct player *pplayer,
       freelog(LOG_DIPLOMAT_BUILD,
               "A defensive diplomat is wanted badly in city %s.", pcity->name);
       u = get_role_unit(F_DIPLOMAT, 0);
+      /* 3000 is a just a large number, but not hillariously large as the
+         previously used one. This is important for diplomacy later - Per */
       if (u != U_LAST) {
-        Tech_Type_id tech_req = get_unit_type(u)->tech_requirement;
-
-        pplayer->ai.tech_want[tech_req] += DIPLO_DEFENSE_WANT;
-        TECH_LOG(LOG_DEBUG, pplayer, tech_req, "+ %d for %s in diplo defense",
-                 DIPLO_DEFENSE_WANT, unit_name(u));
+        pplayer->ai.tech_want[get_unit_type(u)->tech_requirement] += 3000;
       }
     }
   }
@@ -185,11 +179,11 @@ void ai_choose_diplomat_offensive(struct player *pplayer,
         && (incite_cost < pplayer->economic.gold - pplayer->ai.est_upkeep)) {
       /* incite gain (FIXME: we should count wonders too but need to
          cache that somehow to avoid CPU hog -- Per) */
-      gain_incite = acity->prod[O_FOOD] * FOOD_WEIGHTING
-                    + acity->prod[O_SHIELD] * SHIELD_WEIGHTING
-                    + (acity->prod[O_LUXURY]
-                       + acity->prod[O_GOLD]
-                       + acity->prod[O_SCIENCE]) * TRADE_WEIGHTING;
+      gain_incite = acity->food_prod * FOOD_WEIGHTING
+                    + acity->shield_prod * SHIELD_WEIGHTING
+                    + (acity->luxury_total
+                       + acity->tax_total
+                       + acity->science_total) * TRADE_WEIGHTING;
       gain_incite *= SHIELD_WEIGHTING; /* WAG cost to take city otherwise */
       gain_incite -= incite_cost * TRADE_WEIGHTING;
     }

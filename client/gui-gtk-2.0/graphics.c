@@ -92,6 +92,77 @@ void gtk_draw_shadowed_string(GdkDrawable *drawable,
   gdk_draw_layout(drawable, white_gc, x, y, layout);
 }
 
+/**************************************************************************
+...
+**************************************************************************/
+void load_intro_gfx(void)
+{
+  int tot, y;
+  char s[64];
+  GdkColor face;
+  GdkGC *face_gc;
+  PangoContext *context;
+  PangoLayout *layout;
+  PangoRectangle rect;
+
+  context = gdk_pango_context_get();
+  layout = pango_layout_new(context);
+  pango_layout_set_font_description(layout, main_font);
+
+  /* get colors */
+  face.red  = COLOR_MOTTO_FACE_R<<8;
+  face.green= COLOR_MOTTO_FACE_G<<8;
+  face.blue = COLOR_MOTTO_FACE_B<<8;
+  face_gc = gdk_gc_new(root_window);
+
+  /* Main graphic */
+  intro_gfx_sprite = load_gfxfile(main_intro_filename);
+  tot=intro_gfx_sprite->width;
+
+  pango_layout_set_text(layout, freeciv_motto(), -1);
+  pango_layout_get_pixel_extents(layout, &rect, NULL);
+
+  y = intro_gfx_sprite->height-45;
+
+  gdk_gc_set_rgb_fg_color(face_gc, &face);
+  gdk_draw_layout(intro_gfx_sprite->pixmap, face_gc,
+		  (tot-rect.width) / 2, y, layout);
+  g_object_unref(face_gc);
+
+  /* Minimap graphic */
+  radar_gfx_sprite = load_gfxfile(minimap_intro_filename);
+  tot=radar_gfx_sprite->width;
+
+  my_snprintf(s, sizeof(s), "%d.%d.%d%s",
+	      MAJOR_VERSION, MINOR_VERSION,
+	      PATCH_VERSION, VERSION_LABEL);
+  pango_layout_set_text(layout, s, -1);
+  pango_layout_get_pixel_extents(layout, &rect, NULL);
+
+  y = radar_gfx_sprite->height - (rect.height + 6);
+
+  gtk_draw_shadowed_string(radar_gfx_sprite->pixmap,
+			toplevel->style->black_gc,
+			toplevel->style->white_gc,
+			(tot - rect.width) / 2, y,
+			layout);
+
+  pango_layout_set_text(layout, word_version(), -1);
+  pango_layout_get_pixel_extents(layout, &rect, NULL);
+  y-=rect.height+3;
+
+  gtk_draw_shadowed_string(radar_gfx_sprite->pixmap,
+			toplevel->style->black_gc,
+			toplevel->style->white_gc,
+			(tot - rect.width) / 2, y,
+			layout);
+
+  /* done */
+  g_object_unref(layout);
+  g_object_unref(context);
+  return;
+}
+
 /****************************************************************************
   Create a new sprite by cropping and taking only the given portion of
   the image.
@@ -109,7 +180,7 @@ struct Sprite *crop_sprite(struct Sprite *source,
   gdk_draw_drawable(mypixmap, civ_gc, source->pixmap, x, y, 0, 0,
 		    width, height);
 
-  if (source->mask) {
+  if (source->has_mask) {
     mymask = gdk_pixmap_new(NULL, width, height, 1);
     gdk_draw_rectangle(mymask, mask_bg_gc, TRUE, 0, 0, -1, -1);
 
@@ -220,6 +291,7 @@ SPRITE *ctor_sprite_mask( GdkPixmap *mypixmap, GdkPixmap *mask,
 
     mysprite->pixmap	= mypixmap;
     mysprite->fogged = NULL;
+    mysprite->has_mask = (mask != NULL);
     mysprite->mask = mask;
 
     mysprite->width	= width;
@@ -277,6 +349,7 @@ struct Sprite *load_gfxfile(const char *filename)
   w = gdk_pixbuf_get_width(im); h = gdk_pixbuf_get_height(im);
   gdk_pixbuf_render_pixmap_and_mask(im, &mysprite->pixmap, &mysprite->mask, 1);
 
+  mysprite->has_mask  = (mysprite->mask != NULL);
   mysprite->width     = w;
   mysprite->height    = h;
 
@@ -386,6 +459,7 @@ SPRITE* sprite_scale(SPRITE *src, int new_w, int new_h)
 
   gdk_pixbuf_render_pixmap_and_mask(im, &mysprite->pixmap, &mysprite->mask, 1);
 
+  mysprite->has_mask  = (mysprite->mask != NULL);
   mysprite->width     = new_w;
   mysprite->height    = new_h;
 
@@ -407,7 +481,7 @@ void sprite_get_bounding_box(SPRITE * sprite, int *start_x,
   GdkImage *mask_image;
   int i, j;
 
-  if (!sprite->mask) {
+  if (!sprite->has_mask || !sprite->mask) {
     *start_x = 0;
     *start_y = 0;
     *end_x = sprite->width - 1;

@@ -32,22 +32,6 @@
 
 #ifdef SANITY_CHECKING
 
-#ifdef DEBUG
-#  define DEBUG_ASSERT(x) assert(x)
-#else
-#  define DEBUG_ASSERT(x) (void)0
-#endif /* DEBUG */
-
-#define SANITY_CHECK(x)							\
-  do {									\
-    if (!(x)) {								\
-      freelog(LOG_ERROR, "Failed sanity check: %s (%s:%d)",		\
-	      #x, __FILE__,__LINE__);					\
-    }									\
-    DEBUG_ASSERT(x);							\
-  } while(0)
-
-
 /**************************************************************************
 ...
 **************************************************************************/
@@ -58,18 +42,18 @@ static void check_specials(void)
     enum tile_special_type special = map_get_special(ptile);
 
     if (contains_special(special, S_RAILROAD))
-      SANITY_CHECK(contains_special(special, S_ROAD));
+      assert(contains_special(special, S_ROAD));
     if (contains_special(special, S_FARMLAND))
-      SANITY_CHECK(contains_special(special, S_IRRIGATION));
+      assert(contains_special(special, S_IRRIGATION));
     if (contains_special(special, S_SPECIAL_1))
-      SANITY_CHECK(!contains_special(special,  S_SPECIAL_2));
+      assert(!contains_special(special,  S_SPECIAL_2));
 
     if (contains_special(special, S_MINE))
-      SANITY_CHECK(get_tile_type(terrain)->mining_result == terrain);
+      assert(get_tile_type(terrain)->mining_result == terrain);
     if (contains_special(special, S_IRRIGATION))
-      SANITY_CHECK(get_tile_type(terrain)->irrigation_result == terrain);
+      assert(get_tile_type(terrain)->irrigation_result == terrain);
 
-    SANITY_CHECK(terrain >= T_FIRST && terrain < T_COUNT);
+    assert(terrain >= T_FIRST && terrain < T_COUNT);
   } whole_map_iterate_end;
 }
 
@@ -82,13 +66,13 @@ static void check_fow(void)
     players_iterate(pplayer) {
       struct player_tile *plr_tile = map_get_player_tile(ptile, pplayer);
       /* underflow of unsigned int */
-      SANITY_CHECK(plr_tile->seen < 60000);
-      SANITY_CHECK(plr_tile->own_seen < 60000);
-      SANITY_CHECK(plr_tile->pending_seen < 60000);
+      assert(plr_tile->seen < 60000);
+      assert(plr_tile->own_seen < 60000);
+      assert(plr_tile->pending_seen < 60000);
 
-      SANITY_CHECK(plr_tile->own_seen <= plr_tile->seen);
+      assert(plr_tile->own_seen <= plr_tile->seen);
       if (map_is_known(ptile, pplayer)) {
-	SANITY_CHECK(plr_tile->pending_seen == 0);
+	assert(plr_tile->pending_seen == 0);
       }
     } players_iterate_end;
   } whole_map_iterate_end;
@@ -105,9 +89,9 @@ static void check_misc(void)
       nbarbs++;
     }
   } players_iterate_end;
-  SANITY_CHECK(nbarbs == game.nbarbarians);
+  assert(nbarbs == game.nbarbarians);
 
-  SANITY_CHECK(game.nplayers <= MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS);
+  assert(game.nplayers <= MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS);
 }
 
 /**************************************************************************
@@ -124,40 +108,40 @@ static void check_map(void)
     CHECK_NATIVE_POS(ptile->nat_x, ptile->nat_y);
 
     index_to_map_pos(&x, &y, ptile->index);
-    SANITY_CHECK(x == ptile->x && y == ptile->y);
+    assert(x == ptile->x && y == ptile->y);
 
     index_to_native_pos(&x, &y, ptile->index);
-    SANITY_CHECK(x == ptile->nat_x && y == ptile->nat_y);
+    assert(x == ptile->nat_x && y == ptile->nat_y);
 
     if (is_ocean(map_get_terrain(ptile))) {
-      SANITY_CHECK(cont < 0);
+      assert(cont < 0);
       adjc_iterate(ptile, tile1) {
 	if (is_ocean(map_get_terrain(tile1))) {
-	  SANITY_CHECK(map_get_continent(tile1) == cont);
+	  assert(map_get_continent(tile1) == cont);
 	}
       } adjc_iterate_end;
     } else {
-      SANITY_CHECK(cont > 0);
+      assert(cont > 0);
       adjc_iterate(ptile, tile1) {
 	if (!is_ocean(map_get_terrain(tile1))) {
-	  SANITY_CHECK(map_get_continent(tile1) == cont);
+	  assert(map_get_continent(tile1) == cont);
 	}
       } adjc_iterate_end;
     }
 
     if (pcity) {
-      SANITY_CHECK(same_pos(pcity->tile, ptile));
+      assert(same_pos(pcity->tile, ptile));
     }
 
     unit_list_iterate(ptile->units, punit) {
-      SANITY_CHECK(same_pos(punit->tile, ptile));
+      assert(same_pos(punit->tile, ptile));
 
       /* Check diplomatic status of stacked units. */
       unit_list_iterate(ptile->units, punit2) {
-	SANITY_CHECK(pplayers_allied(unit_owner(punit), unit_owner(punit2)));
+	assert(pplayers_allied(unit_owner(punit), unit_owner(punit2)));
       } unit_list_iterate_end;
       if (pcity) {
-	SANITY_CHECK(pplayers_allied(unit_owner(punit), city_owner(pcity)));
+	assert(pplayers_allied(unit_owner(punit), city_owner(pcity)));
       }
     } unit_list_iterate_end;
   } whole_map_iterate_end;
@@ -171,13 +155,13 @@ void real_sanity_check_city(struct city *pcity, const char *file, int line)
   int workers = 0;
   struct player *pplayer = city_owner(pcity);
 
-  SANITY_CHECK(pcity->size >= 1);
-  SANITY_CHECK(!terrain_has_flag(map_get_terrain(pcity->tile),
+  assert(pcity->size >= 1);
+  assert(!terrain_has_flag(map_get_terrain(pcity->tile),
 			   TER_NO_CITIES));
 
   unit_list_iterate(pcity->units_supported, punit) {
-    SANITY_CHECK(punit->homecity == pcity->id);
-    SANITY_CHECK(unit_owner(punit) == pplayer);
+    assert(punit->homecity == pcity->id);
+    assert(unit_owner(punit) == pplayer);
   } unit_list_iterate_end;
 
   /* Note that cities may be found on land or water. */
@@ -247,7 +231,7 @@ void real_sanity_check_city(struct city *pcity, const char *file, int line)
 	break;
       }
     } else {
-      SANITY_CHECK(get_worker_city(pcity, x, y) == C_TILE_UNAVAILABLE);
+      assert(get_worker_city(pcity, x, y) == C_TILE_UNAVAILABLE);
     }
   } city_map_iterate_end;
 
@@ -258,30 +242,9 @@ void real_sanity_check_city(struct city *pcity, const char *file, int line)
     }
   } city_map_iterate_end;
   if (workers + city_specialists(pcity) != pcity->size + 1) {
-    int diff = pcity->size + 1 - workers - city_specialists(pcity);
-
-    SANITY_CHECK(workers + city_specialists(pcity) == pcity->size + 1);
-    if (diff > 0) {
-      pcity->specialists[DEFAULT_SPECIALIST] += diff;
-    } else if (diff < 0) {
-      specialist_type_iterate(sp) {
-	int num = MIN(-diff, pcity->specialists[sp]);
-
-	diff += num;
-	pcity->specialists[sp] -= num;
-      } specialist_type_iterate_end;
-
-      if (diff < 0) {
-	city_map_checked_iterate(pcity->tile, city_x, city_y, ptile) {
-	  if (ptile->worked == pcity && diff < 0) {
-	    server_remove_worker_city(pcity, city_x, city_y);
-	    diff++;
-	  }
-	} city_map_checked_iterate_end;
-      }
-    }
-
-    generic_city_refresh(pcity, TRUE, NULL);
+    die("%s is illegal (size%d w%d e%d t%d s%d) in %s line %d",
+        pcity->name, pcity->size, workers, pcity->specialists[SP_ELVIS],
+        pcity->specialists[SP_TAXMAN], pcity->specialists[SP_SCIENTIST], file, line);
   }
 }
 
@@ -292,7 +255,7 @@ static void check_cities(void)
 {
   players_iterate(pplayer) {
     city_list_iterate(pplayer->cities, pcity) {
-      SANITY_CHECK(city_owner(pcity) == pplayer);
+      assert(city_owner(pcity) == pplayer);
 
       sanity_check_city(pcity);
     } city_list_iterate_end;
@@ -305,7 +268,7 @@ static void check_cities(void)
       bool is_valid;
 
       is_valid = map_to_city_map(&city_x, &city_y, pcity, ptile);
-      SANITY_CHECK(is_valid);
+      assert(is_valid);
 
       if (pcity->city_map[city_x][city_y] != C_TILE_WORKER) {
 	freelog(LOG_ERROR, "%d,%d is listed as being worked by %s "
@@ -328,12 +291,12 @@ static void check_units(void) {
       struct city *pcity;
       struct unit *transporter = NULL, *transporter2 = NULL;
 
-      SANITY_CHECK(unit_owner(punit) == pplayer);
+      assert(unit_owner(punit) == pplayer);
 
       if (punit->homecity != 0) {
 	pcity = player_find_city_by_id(pplayer, punit->homecity);
-	SANITY_CHECK(pcity != NULL);
-	SANITY_CHECK(city_owner(pcity) == pplayer);
+	assert(pcity != NULL);
+	assert(city_owner(pcity) == pplayer);
       }
 
       if (!can_unit_continue_current_activity(punit)) {
@@ -346,15 +309,15 @@ static void check_units(void) {
 
       pcity = map_get_city(ptile);
       if (pcity) {
-	SANITY_CHECK(pplayers_allied(city_owner(pcity), pplayer));
+	assert(pplayers_allied(city_owner(pcity), pplayer));
       }
 
-      SANITY_CHECK(punit->moves_left >= 0);
-      SANITY_CHECK(punit->hp > 0);
+      assert(punit->moves_left >= 0);
+      assert(punit->hp > 0);
 
       if (punit->transported_by != -1) {
         transporter = find_unit_by_id(punit->transported_by);
-        SANITY_CHECK(transporter != NULL);
+        assert(transporter != NULL);
 
 	/* Make sure the transporter is on the tile. */
 	unit_list_iterate(punit->tile->units, tile_unit) {
@@ -362,12 +325,12 @@ static void check_units(void) {
 	    transporter2 = tile_unit;
 	  }
 	} unit_list_iterate_end;
-	SANITY_CHECK(transporter2 != NULL);
+	assert(transporter2 != NULL);
 
         /* Also in the list of owner? */
-        SANITY_CHECK(player_find_unit_by_id(get_player(transporter->owner),
+        assert(player_find_unit_by_id(get_player(transporter->owner),
 				      punit->transported_by) != NULL);
-        SANITY_CHECK(same_pos(ptile, transporter->tile));
+        assert(same_pos(ptile, transporter->tile));
 
         /* Transporter capacity will be checked when transporter itself
 	 * is checked */
@@ -377,19 +340,19 @@ static void check_units(void) {
       if (!pcity
 	  && is_ocean(map_get_terrain(ptile))
 	  && is_ground_unit(punit)) {
-        SANITY_CHECK(punit->transported_by != -1);
-        SANITY_CHECK(!is_ground_unit(transporter));
-        SANITY_CHECK(is_ground_units_transport(transporter));
+        assert(punit->transported_by != -1);
+        assert(!is_ground_unit(transporter));
+        assert(is_ground_units_transport(transporter));
       } else if (!pcity
                  && !is_ocean(map_get_terrain(ptile))
 	         && is_sailing_unit(punit)) {
-        SANITY_CHECK(punit->transported_by != -1);
-        SANITY_CHECK(!is_sailing_unit(transporter));
-        SANITY_CHECK(FALSE); /* SANITY_CHECK(is_sailing_units_transport(transporter)); */
+        assert(punit->transported_by != -1);
+        assert(!is_sailing_unit(transporter));
+        assert(FALSE); /* assert(is_sailing_units_transport(transporter)); */
       }
 
       /* Check for over-full transports. */
-      SANITY_CHECK(get_transporter_occupancy(punit)
+      assert(get_transporter_occupancy(punit)
 	     <= get_transporter_capacity(punit));
     } unit_list_iterate_end;
   } players_iterate_end;
@@ -409,20 +372,15 @@ static void check_players(void)
       if (is_capital(pcity)) {
 	found_palace++;
       }
-      SANITY_CHECK(found_palace <= 1);
+      assert(found_palace <= 1);
     } city_list_iterate_end;
 
     players_iterate(pplayer2) {
-      SANITY_CHECK(pplayer->diplstates[pplayer2->player_no].type
+      assert(pplayer->diplstates[pplayer2->player_no].type
 	     == pplayer2->diplstates[pplayer->player_no].type);
       if (pplayer->diplstates[pplayer2->player_no].type == DS_CEASEFIRE) {
-	SANITY_CHECK(pplayer->diplstates[pplayer2->player_no].turns_left
+	assert(pplayer->diplstates[pplayer2->player_no].turns_left
 	       == pplayer2->diplstates[pplayer->player_no].turns_left);
-      }
-      if (pplayers_allied(pplayer, pplayer2)
-          && pplayer->is_alive
-          && pplayer2->is_alive) {
-        SANITY_CHECK(pplayer_can_ally(pplayer, pplayer2));
       }
     } players_iterate_end;
 
@@ -431,9 +389,9 @@ static void check_players(void)
         freelog(LOG_FATAL, "%s's government is anarchy but does not finish",
                 pplayer->name);
       }
-      SANITY_CHECK(pplayer->government != game.government_when_anarchy);
+      assert(pplayer->government != game.government_when_anarchy);
     } else if (pplayer->revolution_finishes > game.turn) {
-      SANITY_CHECK(pplayer->government == game.government_when_anarchy);
+      assert(pplayer->government == game.government_when_anarchy);
     } else {
       /* Things may vary in this case depending on when the sanity_check
        * call is made.  No better check is possible. */
@@ -446,12 +404,12 @@ static void check_players(void)
 
     if (!pplayer->is_alive) {
       /* Dead players' units and cities are disbanded in kill_player(). */
-      SANITY_CHECK(unit_list_size(&pplayer->units) == 0);
-      SANITY_CHECK(city_list_size(&pplayer->cities) == 0);
+      assert(unit_list_size(&pplayer->units) == 0);
+      assert(city_list_size(&pplayer->cities) == 0);
     }
 
     /* Dying players shouldn't be left around.  But they are. */
-    SANITY_CHECK(!pplayer->is_dying);
+    assert(!pplayer->is_dying);
   }
 }
 

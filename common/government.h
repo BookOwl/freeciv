@@ -96,33 +96,53 @@ struct government
 				   rapture is (practically) impossible */
 
   /* unit cost modifiers */
-  int unit_happy_cost_factor;
-  int unit_upkeep_factor[O_MAX];
+  int   unit_happy_cost_factor;
+  int   unit_shield_cost_factor;
+  int   unit_food_cost_factor;
+  int   unit_gold_cost_factor;
   
   /* base cost that a city does not have to "pay" for */
-  int free_happy;
-  int free_upkeep[O_MAX];
+  int   free_happy;
+  int   free_shield;
+  int   free_food;
+  int   free_gold;
   
-  /* government production penalties (when celebrating and when not) */
-  int output_before_penalty[O_MAX];
-  int celeb_output_before_penalty[O_MAX];
+  /* government production penalties -- SKi */
+  int   trade_before_penalty;
+  int   shields_before_penalty;
+  int   food_before_penalty;
 
-  /* government production bonuses.  These act as an EFT_XXX_INC_TILE
-   * effect.  There are separate values for celebrating versus normal
-   * cities. */
-  int output_inc_tile[O_MAX];
-  int celeb_output_inc_tile[O_MAX];
+  /* government production penalties when celebrating */
+  int   celeb_trade_before_penalty;
+  int   celeb_shields_before_penalty;
+  int   celeb_food_before_penalty;
 
-  /* waste/corruption modifiers - see governments.ruleset for more detail */
-  struct gov_waste {
-    int level;
-    int modifier;
-    int fixed_distance;
-    int distance_factor;
-    int extra_distance;
-    int max_distance_cap;
-  } waste[O_MAX];
+  /* government production bonuses -- SKi */
+  int   trade_bonus;
+  int   shield_bonus;
+  int   food_bonus;
 
+  /* government production bonuses when celebrating */
+  int   celeb_trade_bonus;
+  int   celeb_shield_bonus;
+  int   celeb_food_bonus;
+
+  /* corruption modifiers -- SKi */
+  int   corruption_level;
+  int   corruption_modifier;
+  int   fixed_corruption_distance;
+  int   corruption_distance_factor;
+  int   extra_corruption_distance;
+  int   corruption_max_distance_cap;
+  
+  /* waste modifiers, see governments.ruleset for more detail */
+  int   waste_level;
+  int   waste_modifier;
+  int   fixed_waste_distance;
+  int   waste_distance_factor;
+  int   extra_waste_distance;
+  int   waste_max_distance_cap;
+    
   /* other flags: bits in enum government_flag_id order,
      use government_has_flag() to access */
   int   flags;
@@ -149,7 +169,7 @@ extern struct ai_gov_tech_hint ai_gov_tech_hints[MAX_NUM_TECH_LIST];
    and techs before that are guaranteed to exist */
 
 struct government *get_government(int gov);
-struct government *get_gov_pplayer(const struct player *pplayer);
+struct government *get_gov_pplayer(struct player *pplayer);
 struct government *get_gov_pcity(const struct city *pcity);
 
 struct government *find_government_by_name(const char *name);

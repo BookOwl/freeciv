@@ -61,7 +61,8 @@ void sw_widget_set_enabled(struct sw_widget *widget, bool enabled);
 /* ===== window ==== */
 struct sw_widget *sw_window_create(struct sw_widget *parent, int width,
 				   int height, struct ct_string *title,
-				   bool has_border, int depth);
+				   int transparency, bool has_border,
+				   int depth);
 struct sw_widget *sw_window_create_by_clone(struct sw_widget *widget,
 					    int depth);
 

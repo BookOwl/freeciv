@@ -16,29 +16,17 @@
 
 /* This file serves to reduce the cross-inclusion of header files which
  * occurs when a type which is defined in one file is needed for a fuction
- * definition in another file.
- *
- * Nothing in this file should require anything else from the common/
- * directory! */
-
-enum output_type {
-  O_FOOD, O_SHIELD, O_TRADE, O_GOLD, O_LUXURY, O_SCIENCE, O_LAST
-};
-#define O_COUNT num_output_types
-#define O_MAX O_LAST /* Changing this breaks network compatibility. */
+ * definition in another file */
 
 typedef signed short Continent_id;
 typedef int Terrain_type_id;
-typedef int Specialist_type_id;
+typedef enum specialist_type Specialist_type_id;
 typedef int Impr_Type_id;
-typedef enum output_type Output_type_id;
 
 struct city;
 struct government;
 struct player;
 struct tile;
 struct unit;
-
-#define SP_MAX 20
 
 #endif /* FC__FC_TYPES_H */

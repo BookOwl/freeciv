@@ -245,14 +245,14 @@ static void xaw_key_open_messages(Widget w, XEvent *event, String *argv, Cardina
 {
   if (can_client_change_view() &&
      is_menu_item_active(MENU_REPORT, MENU_REPORT_MESSAGES))
-    popup_meswin_dialog(FALSE);
+    popup_meswin_dialog();
 }
 
 static void xaw_key_open_players(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
   if (can_client_change_view() &&
      is_menu_item_active(MENU_REPORT, MENU_REPORT_PLAYERS))
-    popup_players_dialog(FALSE);
+    popup_players_dialog();
 }
 
 /****************************************************************************
@@ -275,7 +275,7 @@ static void xaw_key_open_revolution(Widget w, XEvent *event,
 {
   if (can_client_change_view()
       && is_menu_item_active(MENU_GOVERNMENT, MENU_GOVERNMENT_REVOLUTION)) {
-    popup_revolution_dialog(game.government_when_anarchy);
+    popup_revolution_dialog(-1);
   }
 }
 

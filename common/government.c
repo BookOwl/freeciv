@@ -136,10 +136,10 @@ struct government *get_government(int gov)
   return &governments[gov];
 }
 
-/****************************************************************************
-  Return this player's government.
-****************************************************************************/
-struct government *get_gov_pplayer(const struct player *pplayer)
+/***************************************************************
+...
+***************************************************************/
+struct government *get_gov_pplayer(struct player *pplayer)
 {
   assert(pplayer != NULL);
   return get_government(pplayer->government);

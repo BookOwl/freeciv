@@ -103,7 +103,6 @@ int player_distance_to_player(struct player *pplayer, struct player *target)
 ***********************************************************************/
 int city_gold_worth(struct city *pcity)
 {
-  struct player *pplayer = city_owner(pcity);
   int worth;
 
   worth = pcity->size * 150; /* reasonable base cost */
@@ -119,7 +118,7 @@ int city_gold_worth(struct city *pcity)
     }
   } unit_list_iterate_end;
   built_impr_iterate(pcity, impr) {
-    if (is_wonder(impr) && !improvement_obsolete(pplayer, impr)) {
+    if (improvement_types[impr].is_wonder && !wonder_obsolete(impr)) {
       worth += impr_sell_gold(impr);
    } else {
       worth += impr_sell_gold(impr) / 4;
@@ -130,4 +129,3 @@ int city_gold_worth(struct city *pcity)
   }
   return worth;
 }
-

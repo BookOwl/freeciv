@@ -133,59 +133,18 @@ GtkWidget *sun_ebox;
 GtkWidget *flake_ebox;
 GtkWidget *government_ebox;
 
-const char * const gui_character_encoding = "UTF-8";
-const bool gui_use_transliteration = FALSE;
-
 client_option gui_options[] = {
-  /* This option is the same as the one in gui-gtk */
-  GEN_BOOL_OPTION(meta_accelerators, N_("Use Alt/Meta for accelerators"),
-		  N_("Uses the Alt or Meta keys for keyboard accelerators."),
-		  COC_INTERFACE),
-  /* This option is the same as the one in gui-gtk */
-  GEN_BOOL_OPTION(map_scrollbars, N_("Show Map Scrollbars"),
-		  N_("Disable this option to hide the scrollbars on the "
-		     "map view."),
-		  COC_INTERFACE),
-  /* This option is the same as the one in gui-gtk */
-  GEN_BOOL_OPTION(keyboardless_goto, N_("Keyboardless goto"),
-		  N_("If this option is set then a goto may be initiated "
-		     "by left-clicking and then holding down the mouse "
-		     "button while dragging the mouse onto a different "
-		     "tile."),
-		  COC_INTERFACE),
-  GEN_BOOL_OPTION(dialogs_on_top, N_("Keep dialogs on top"),
-		  N_("If this option is set then dialog windows will always "
-		     "remain in front of the main Freeciv window. "
-		     "Disabling this has no effect in fullscreen mode."),
-		  COC_INTERFACE),
-  GEN_BOOL_OPTION(show_task_icons, N_("Show worklist task icons"),
-		  N_("Disabling this will turn off the unit and building "
-		     "icons in the worklist dialog and the production "
-		     "tab of the city dialog."),
-		  COC_INTERFACE),
-  GEN_BOOL_OPTION(fullscreen_mode, N_("Fullscreen Mode"),
-		  N_("If this option is set then the game will be played in "
-		     "fullscreen mode. There are some known bugs with "
-		     "fullscreen mode so if you run into problems simply "
-		     "disable it."),
-		  COC_INTERFACE),
-  GEN_BOOL_OPTION(enable_tabs, N_("Enable status report tabs"),
-		  N_("If this option is enabled then report dialogs will "
-		     "be shown as separate tabs rather than in popup "
-		     "dialogs."),
-		  COC_INTERFACE),
+  GEN_BOOL_OPTION(meta_accelerators,	N_("Use Alt/Meta for accelerators")),
+  GEN_BOOL_OPTION(map_scrollbars,	N_("Show Map Scrollbars")),
+  GEN_BOOL_OPTION(keyboardless_goto,	N_("Keyboardless goto")),
+  GEN_BOOL_OPTION(dialogs_on_top,	N_("Keep dialogs on top")),
+  GEN_BOOL_OPTION(show_task_icons,	N_("Show worklist task icons")),
+  GEN_BOOL_OPTION(fullscreen_mode,	N_("Fullscreen Mode")),
+  GEN_BOOL_OPTION(enable_tabs,		N_("Enable status report tabs")),
   GEN_BOOL_OPTION(solid_unit_icon_bg,
-		  N_("Solid unit icon background color in city dialog"),
-		  N_("If this is enabled then units will be shown in the "
-		     "city dialog production tab with a color-coded "
-		     "solid background."),
-		  COC_INTERFACE),
+		  N_("Solid unit icon background color in city dialog")),
   GEN_BOOL_OPTION(better_fog,
-		  N_("Better fog-of-war drawing"),
-		  N_("If this is enabled then a better method is used for "
-		     "drawing fog-of-war.  It is not any slower but will "
-		     "consume about twice as much memory."),
-		  COC_GRAPHICS)
+		  N_("Better fog-of-war drawing"))
 };
 const int num_gui_options = ARRAY_SIZE(gui_options);
 
@@ -1034,7 +993,7 @@ static void setup_widgets(void)
   gtk_widget_hide(more_arrow_pixmap);
 
   if (enable_tabs) {
-    popup_meswin_dialog(FALSE);
+    popup_meswin_dialog();
   }
 
   gtk_notebook_set_current_page(GTK_NOTEBOOK(top_notebook), 0);
@@ -1051,7 +1010,25 @@ static void setup_widgets(void)
 **************************************************************************/
 void ui_init(void)
 {
+  gchar *s;
+
+  init_character_encodings("UTF-8", FALSE);
+
   log_set_callback(log_callback_utf8);
+
+  /* convert inputs */
+  s = g_locale_to_utf8(user_name, -1, NULL, NULL, NULL);
+  sz_strlcpy(user_name, s);
+  g_free(s);
+
+  /* this is silly, but i don't want the UI to barf on erroneous input */
+  s = g_locale_to_utf8(metaserver, -1, NULL, NULL, NULL);
+  sz_strlcpy(metaserver, s);
+  g_free(s);
+
+  s = g_locale_to_utf8(server_host, -1, NULL, NULL, NULL);
+  sz_strlcpy(server_host, s);
+  g_free(s);
 }
 
 /**************************************************************************
@@ -1184,6 +1161,7 @@ void ui_main(int argc, char **argv)
   tilespec_load_tiles();
 
   setup_widgets();
+  load_intro_gfx();
   load_cursors();
 
   genlist_init(&history_list);
@@ -1496,7 +1474,7 @@ static void quit_dialog_response(GtkWidget *dialog, gint response)
 {
   gtk_widget_destroy(dialog);
   if (response == GTK_RESPONSE_YES) {
-    ui_exit();
+    exit(EXIT_SUCCESS);
   }
 }
 

@@ -66,7 +66,7 @@ int military_amortize(struct player *pplayer, struct city *pcity,
                       int value, int delay, int build_cost)
 {
   struct ai_data *ai = ai_data_get(pplayer);
-  int city_output = (pcity ? pcity->surplus[O_SHIELD] : 1);
+  int city_output = (pcity ? pcity->shield_surplus : 1);
   int output = MAX(city_output, ai->stats.average_production);
   int build_time = build_cost / MAX(output, 1);
 
@@ -86,17 +86,15 @@ int military_amortize(struct player *pplayer, struct city *pcity,
 bool is_player_dangerous(struct player *pplayer, struct player *aplayer)
 {
   struct ai_data *ai = ai_data_get(pplayer);
-  struct ai_dip_intel *adip = &ai->diplomacy.player_intel[aplayer->player_no];
-  int reason = pplayer->diplstates[aplayer->player_no].has_reason_to_cancel;
+  struct ai_dip_intel *adip 
+    = &ai->diplomacy.player_intel[aplayer->player_no];
 
-  /* Have to check if aplayer == pplayer explicitly because our reputation
-   * can be so low that we'd fear being stabbed in the back by ourselves */ 
-  return (pplayer != aplayer
-          && (pplayers_at_war(pplayer, aplayer)
-              || ai->diplomacy.target == aplayer
-              || reason != 0
-              || ai->diplomacy.acceptable_reputation > aplayer->reputation
-              || adip->is_allied_with_enemy));
+  return (pplayer != aplayer)
+         && ((pplayers_at_war(pplayer, aplayer)
+           || ai->diplomacy.target == aplayer
+           || pplayer->diplstates[aplayer->player_no].has_reason_to_cancel != 0
+           || ai->diplomacy.acceptable_reputation > aplayer->reputation
+           || adip->is_allied_with_enemy));
 }
 
 /*************************************************************************
@@ -402,8 +400,8 @@ bool ai_unit_make_homecity(struct unit *punit, struct city *pcity)
        the greater good -- Per */
     return FALSE;
   }
-  if (pcity->surplus[O_SHIELD] >= unit_type(punit)->upkeep[O_SHIELD]
-      && pcity->surplus[O_FOOD] >= unit_type(punit)->upkeep[O_FOOD]) {
+  if (pcity->shield_surplus - unit_type(punit)->shield_cost >= 0
+      && pcity->food_surplus - unit_type(punit)->food_cost >= 0) {
     handle_unit_change_homecity(unit_owner(punit), punit->id, pcity->id);
     return TRUE;
   }
@@ -727,7 +725,9 @@ void ai_advisor_choose_building(struct city *pcity, struct ai_choice *choice)
   city_list_iterate_end;
 
   impr_type_iterate(i) {
-    if (!plr->ai.control && is_wonder(i)) {
+    if (!plr->ai.control
+        && (get_building_for_effect(EFT_CAPITAL_CITY) == i
+            || is_wonder(i))) {
       continue; /* Humans should not be advised to build wonders or palace */
     }
     if (!is_wonder(i)

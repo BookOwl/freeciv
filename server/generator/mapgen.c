@@ -802,6 +802,8 @@ static void make_rivers(void)
   /* The number of river tiles that have been set. */
   int current_riverlength = 0;
 
+  int i; /* Loop variable. */
+
   /* Counts the number of iterations (should increase with 1 during
      every iteration of the main loop in this function).
      Is needed to stop a potentially infinite loop. */
@@ -810,7 +812,7 @@ static void make_rivers(void)
   create_placed_map(); /* needed bu rand_map_characteristic */
   set_all_ocean_tiles_placed();
 
-  river_map = fc_malloc(sizeof(*river_map) * MAP_INDEX_SIZE);
+  river_map = fc_malloc(sizeof(int) * MAX_MAP_INDEX);
 
   /* The main loop in this function. */
   while (current_riverlength < desirable_riverlength
@@ -863,7 +865,9 @@ static void make_rivers(void)
 	    || iteration_counter == RIVERS_MAXTRIES / 10 * 9)) {
 
       /* Reset river_map before making a new river. */
-      memset(river_map, 0, MAP_INDEX_SIZE * sizeof(*river_map));
+      for (i = 0; i < map.xsize * map.ysize; i++) {
+	river_map[i] = 0;
+      }
 
       freelog(LOG_DEBUG,
 	      "Found a suitable starting tile for a river at (%d, %d)."
@@ -1027,12 +1031,8 @@ void map_fractal_generate(bool autosize)
   /* save the current random state: */
   RANDOM_STATE rstate = get_myrand_state();
  
-  if (map.seed == 0) {
-    /* Create a "random" map seed.  Note the call to myrand() which will
-     * depend on the game seed. */
+  if (map.seed==0)
     map.seed = (myrand(MAX_UINT32) ^ time(NULL)) & (MAX_UINT32 >> 1);
-    freelog(LOG_DEBUG, "Setting map.seed:%d", map.seed);
-  }
 
   mysrand(map.seed);
 
@@ -1067,7 +1067,7 @@ void map_fractal_generate(bool autosize)
     }
 
     if (map.generator == 1) {
-      make_random_hmap(MAX(1, 1 + get_sqsize() 
+      make_random_hmap(MAX(1, 1 + SQSIZE 
 			   - (map.startpos ? game.nplayers / 4 : 0)));
     }
 
@@ -1228,20 +1228,20 @@ static void add_specials(int prob)
     if (!is_ocean(ttype)
 	&& !is_special_close(ptile) 
 	&& myrand(1000) < prob) {
-      if (tile_types[ttype].special[0].name[0] != '\0'
-	  && (tile_types[ttype].special[1].name[0] == '\0'
+      if (tile_types[ttype].special_1_name[0] != '\0'
+	  && (tile_types[ttype].special_2_name[0] == '\0'
 	      || (myrand(100) < 50))) {
 	map_set_special(ptile, S_SPECIAL_1);
-      } else if (tile_types[ttype].special[1].name[0] != '\0') {
+      } else if (tile_types[ttype].special_2_name[0] != '\0') {
 	map_set_special(ptile, S_SPECIAL_2);
       }
     } else if (is_ocean(ttype) && near_safe_tiles(ptile) 
 	       && myrand(1000) < prob && !is_special_close(ptile)) {
-      if (tile_types[ttype].special[0].name[0] != '\0'
-	  && (tile_types[ttype].special[1].name[0] == '\0'
+      if (tile_types[ttype].special_1_name[0] != '\0'
+	  && (tile_types[ttype].special_2_name[0] == '\0'
 	      || (myrand(100) < 50))) {
         map_set_special(ptile, S_SPECIAL_1);
-      } else if (tile_types[ttype].special[1].name[0] != '\0') {
+      } else if (tile_types[ttype].special_2_name[0] != '\0') {
 	map_set_special(ptile, S_SPECIAL_2);
       }
     }
@@ -1499,7 +1499,7 @@ static bool create_island(int islemass, struct gen234_state *pstate)
   bool j;
   struct tile *ptile = native_pos_to_tile(map.xsize / 2, map.ysize / 2);
 
-  memset(height_map, '\0', MAP_INDEX_SIZE * sizeof(*height_map));
+  memset(height_map, '\0', sizeof(int) * map.xsize * map.ysize);
   hmap(native_pos_to_tile(map.xsize / 2, map.ysize / 2)) = 1;
   pstate->n = ptile->nat_y - 1;
   pstate->w = ptile->nat_x - 1;
@@ -1680,7 +1680,7 @@ static bool make_island(int islemass, int starters,
 **************************************************************************/
 static void initworld(struct gen234_state *pstate)
 {
-  height_map = fc_malloc(MAP_INDEX_SIZE * sizeof(*height_map));
+  height_map = fc_malloc(sizeof(int) * map.ysize * map.xsize);
   create_placed_map(); /* land tiles which aren't placed yet */
   create_tmap(FALSE);
   

@@ -17,9 +17,19 @@
 
 #include "connection.h"
 #include "fc_types.h"
-#include "requirements.h"
 #include "tech.h"
 #include "terrain.h"
+
+/* Range of effects (used in equiv_range and effect.range fields)
+ * These must correspond to effect_range_names[] in improvement.c. */
+enum effect_range {
+  EFR_LOCAL,
+  EFR_CITY,
+  EFR_CONTINENT,
+  EFR_PLAYER,
+  EFR_WORLD,
+  EFR_LAST   /* keep this last */
+};
 
 /* Type of effects. (Used in effect.type field)
  * These must correspond to effect_type_names[] in effects.c. */
@@ -109,6 +119,8 @@ enum effect_type {
 };
 
 /* lookups */
+enum effect_range effect_range_from_str(const char *str);
+const char *effect_range_name(enum effect_range effect_range);
 enum effect_type effect_type_from_str(const char *str);
 const char *effect_type_name(enum effect_type effect_type);
 
@@ -128,6 +140,17 @@ const char *effect_type_name(enum effect_type effect_type);
   TYPED_VECTOR_ITERATE(enum effect_type, vector, ptype)
 #define effect_type_vector_iterate_end VECTOR_ITERATE_END
 
+/* Effect requirement type. */
+enum effect_req_type {
+  REQ_NONE,
+  REQ_TECH,
+  REQ_GOV,
+  REQ_BUILDING,
+  REQ_SPECIAL,
+  REQ_TERRAIN,
+  REQ_LAST
+};
+
 struct effect_group;
 
 /* An effect is provided by a source.  If the source is present, and the
@@ -139,7 +162,7 @@ struct effect {
   /* The range the effect applies to, relative to the source.  For instance
    * if the source is a building an effect with range "city" will apply to
    * everything in that city. */
-  enum req_range range;
+  enum effect_range range;
 
   /* The "value" of the effect.  The meaning of this varies between
    * effects.  When get_xxx_bonus() is called the value of all applicable
@@ -155,7 +178,17 @@ struct effect {
 
   /* An effect can have a single requirement.  The effect will only be
    * active if this requirement is met.  The req is one of several types. */
-  struct requirement req;
+  struct {
+    enum effect_req_type type;			/* requirement type */
+
+    union {
+      Tech_Type_id tech;			/* requirement tech */
+      int gov;					/* requirement government */
+      Impr_Type_id building;			/* requirement building */
+      enum tile_special_type special;		/* requirement special */
+      Terrain_type_id terrain;			//* requirement terrain type */
+    } value;					/* requirement value */
+  } req;
 };
 
 /* An effect_vector is an array of effects. */
@@ -183,8 +216,8 @@ struct effect_source {
 void ruleset_cache_init(void);
 void ruleset_cache_free(void);
 void ruleset_cache_add(Impr_Type_id source, enum effect_type effect_type,
-		       enum req_range range, bool survives, int eff_value,
-		       struct requirement *req,
+		       enum effect_range range, bool survives, int eff_value,
+		       enum effect_req_type req_type, int req_value,
 		       int group_id);
 void send_ruleset_cache(struct conn_list *dest);
 
@@ -192,8 +225,26 @@ void send_ruleset_cache(struct conn_list *dest);
 struct effect_group *effect_group_new(const char *name);
 void effect_group_add_element(struct effect_group *group,
 			      Impr_Type_id source_building,
-			      enum req_range range, bool survives);
+			      enum effect_range range, bool survives);
 int find_effect_group_id(const char *name);
+
+/* name string to value functions */
+enum effect_req_type effect_req_type_from_str(const char *str);
+int parse_effect_requirement(Impr_Type_id source,
+			     enum effect_req_type req_type,
+			     const char *req_value);
+
+/* An effect is targeted at a certain target type.  For instance a
+ * production bonus applies to a city (or a tile within a city: same thing).
+ * In this case the target is TARGET_CITY.  Note the effect has a range as
+ * well: the effect applies to all targets within that range.  So for a
+ * TARGET_CITY, EFR_PLAYER effect it applies to all cities owned by the
+ * player. */
+enum target_type {
+  TARGET_PLAYER,
+  TARGET_CITY,
+  TARGET_BUILDING 
+};
 
 bool is_effect_useful(enum target_type target,
 		      const struct player *target_player,

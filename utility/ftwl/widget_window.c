@@ -50,12 +50,13 @@ static void draw_extra_background(struct sw_widget *widget,
 {
   if (widget->data.window.canvas_background) {
     struct ct_size size = { region->width,
-			    region->height };
-    struct ct_point pos = { region->x, region->y };
+			    region->height
+    };
+    struct ct_point pos={region->x,region->y};
 
     be_copy_osda_to_osda(get_osda(widget),
 			 widget->data.window.canvas_background,
-			 &size, &pos, &pos);
+			 &size, &pos, &pos, 0);
   }
 }
 
@@ -70,13 +71,13 @@ static void draw(struct sw_widget *widget)
 
     rect.height = widget->data.window.title->size.height + 2 * TITLE_PADDING;
 
-    be_draw_region(widget->data.window.target, &rect,
+    be_draw_region(widget->data.window.target, BE_OPAQUE, &rect,
 		   widget->data.window.title->background);
-    be_draw_rectangle(get_osda(widget), &rect, 1,
+    be_draw_rectangle(get_osda(widget), BE_OPAQUE, &rect, 1,
 		      widget->data.window.title->foreground);
-    pos.x = widget->inner_bounds.x + TITLE_PADDING;
-    pos.y = widget->inner_bounds.y + TITLE_PADDING;
-    be_draw_string(get_osda(widget), &pos,
+    pos.x = widget->inner_bounds.x+TITLE_PADDING;
+    pos.y = widget->inner_bounds.y+TITLE_PADDING;
+    be_draw_string(get_osda(widget), BE_OPAQUE, &pos,
 		   widget->data.window.title);
   }
 }
@@ -92,8 +93,7 @@ static void drag_start(struct sw_widget *widget,
     widget->data.window.pos_at_drag_start.x = widget->outer_bounds.x;
     widget->data.window.pos_at_drag_start.y = widget->outer_bounds.y;
 
-    sw_widget_set_border_color(widget, 
-                               be_get_color(255, 255, 0, MAX_OPACITY));
+    sw_widget_set_border_color(widget, be_get_color(255, 255, 0));
   } else if (widget->data.window.user_drag_start) {
     widget->data.window.user_drag_start(widget, mouse, button);
   }
@@ -131,8 +131,7 @@ static void drag_move(struct sw_widget *widget,
 static void drag_end(struct sw_widget *widget, enum be_mouse_button button)
 {
   if (button == BE_MB_LEFT) {
-    sw_widget_set_border_color(widget, 
-                               be_get_color(255, 255, 255, MAX_OPACITY));
+    sw_widget_set_border_color(widget, be_get_color(255, 255, 255));
   } else if (widget->data.window.user_drag_end) {
     widget->data.window.user_drag_end(widget, button);
   }
@@ -203,7 +202,8 @@ static void sw_window_set_depth(struct sw_widget *widget, int depth)
 *************************************************************************/
 struct sw_widget *sw_window_create(struct sw_widget *parent, int width,
 				   int height, struct ct_string *title,
-				   bool has_border, int depth)
+				   int transparency, bool has_border,
+				   int depth)
 {
   struct sw_widget *result = create_widget(parent, WT_WINDOW);
   int border_width = has_border ? BORDER_WIDTH : 0;
@@ -248,6 +248,7 @@ struct sw_widget *sw_window_create(struct sw_widget *parent, int width,
   result->data.window.target =
       be_create_osda(2 * border_width + width, 2 * border_width + height);
   result->data.window.title = title;
+  result->data.window.transparency = (transparency * MAX_TRANSPARENCY) / 100;
   result->data.window.shown = TRUE;
   result->data.window.list = NULL;
 
@@ -260,8 +261,7 @@ struct sw_widget *sw_window_create(struct sw_widget *parent, int width,
   }
 
   if (has_border) {
-    sw_widget_set_border_color(result, 
-                               be_get_color(255, 255, 255, MAX_OPACITY));
+    sw_widget_set_border_color(result, be_get_color(255, 255, 255));
   }
 
   sw_window_set_depth(result, depth);
@@ -289,11 +289,10 @@ struct sw_widget *sw_create_root_window(void)
   whole_osda = be_create_osda(size.width, size.height);
 
   result =
-      sw_window_create(NULL, size.width, size.height, NULL, FALSE,
+      sw_window_create(NULL, size.width, size.height, NULL, 0, FALSE,
 		       DEPTH_MIN + 1);
   sw_widget_set_position(result, 0, 0);
-  sw_widget_set_background_color(result, 
-                                 be_get_color(22, 44, 88, MAX_OPACITY));
+  sw_widget_set_background_color(result, be_get_color(22, 44, 88));
   sw_window_set_draggable(result, FALSE);
 
   root_window = result;
@@ -368,7 +367,8 @@ static void flush_one_window(struct sw_widget *widget,
   src_pos.y = screen_rect->y - widget->outer_bounds.y;
 
   be_copy_osda_to_osda(whole_osda, widget->data.window.target, &size,
-		       &dest_pos, &src_pos);
+		       &dest_pos, &src_pos,
+		       widget->data.window.transparency);
 }
 
 /*************************************************************************
@@ -423,10 +423,10 @@ static void draw_background_region(struct sw_widget *widget,
     size.width = rect->width;
     size.height = rect->height;
 
-    be_draw_sprite(get_osda(widget), widget->background_sprite,
+    be_draw_sprite(get_osda(widget), BE_OPAQUE, widget->background_sprite,
 		   &size, &pos, &pos);
   } else if (widget->has_background_color) {
-    be_draw_region(get_osda(widget), rect,
+    be_draw_region(get_osda(widget), BE_ALPHA, rect,
 		   widget->background_color);
   } else {
     if (widget->parent && widget->type != WT_WINDOW) {
@@ -440,6 +440,8 @@ static void draw_background_region(struct sw_widget *widget,
 *************************************************************************/
 static void draw_background(struct sw_widget *widget)
 {
+  be_set_transparent(get_osda(widget), &widget->inner_bounds);
+
   draw_background_region(widget, &widget->inner_bounds);
 
   if (widget->has_border_color) {
@@ -450,7 +452,7 @@ static void draw_background(struct sw_widget *widget)
       rect.y = 0;
     }
 
-    be_draw_rectangle(get_osda(widget), &rect, BORDER_WIDTH,
+    be_draw_rectangle(get_osda(widget), BE_OPAQUE, &rect, BORDER_WIDTH,
 		      widget->border_color);
   }
 }
@@ -486,6 +488,7 @@ static void draw_tooltip(struct sw_widget *widget)
   struct ct_point pos;
   struct ct_rect rect;
   const int PADDING = 5;
+  enum be_draw_type draw_type = BE_OPAQUE;
   struct osda *osda;
   int i, extra = 2 * PADDING + widget->tooltip->shadow;
 
@@ -512,12 +515,13 @@ static void draw_tooltip(struct sw_widget *widget)
 
     rect2.x += i;
     rect2.y += i;
-    be_draw_region(osda, &rect2, widget->tooltip->shadow_color);
+    be_draw_region(osda, draw_type, &rect2, widget->tooltip->shadow_color);
   }
 
-  be_draw_region(osda, &rect, widget->tooltip->text->background);
-  be_draw_string(osda, &pos, widget->tooltip->text);
-  be_draw_rectangle(osda, &rect, 1, widget->tooltip->text->foreground);
+  be_draw_region(osda, draw_type, &rect, widget->tooltip->text->background);
+  be_draw_string(osda, draw_type, &pos, widget->tooltip->text);
+  be_draw_rectangle(osda, draw_type, &rect, 1,
+		    widget->tooltip->text->foreground);
 }
 
 /*************************************************************************
@@ -577,6 +581,22 @@ void update_window(struct sw_widget *widget)
 /*************************************************************************
   ...
 *************************************************************************/
+static bool is_opaque(struct sw_widget *widget)
+{
+  if (widget->type == WT_WINDOW) {
+    if (widget->data.window.transparency > 0) {
+      return FALSE;
+    }
+    if (widget->data.window.canvas_background) {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+/*************************************************************************
+  ...
+*************************************************************************/
 static void merge_regions(struct region_list *list)
 {
   struct region_list tmp, *orig, *copy;
@@ -587,6 +607,7 @@ static void merge_regions(struct region_list *list)
 
   region_list_iterate(*orig, region) {
     if (ct_rect_in_rect_list(region, copy)) {
+	//printf("####### 1\n");
       free(region);
     } else {
       region_list_insert(copy, region);
@@ -599,6 +620,7 @@ static void merge_regions(struct region_list *list)
 
   region_list_iterate(*orig, region) {
     if (ct_rect_in_rect_list(region, copy)) {
+	//printf("####### 2\n");
       free(region);
     } else {
       region_list_insert(copy, region);
@@ -623,9 +645,11 @@ void sw_paint_all(void)
   int region_nr;
 #endif
 
-  call++;
-
   handle_destroyed_widgets();
+
+  call++;
+  if(DEBUG_PAINT_ALL)
+  printf("%%%%%%%% starting sw_paint_all %d\n",call);
 
   region_list_init(&normalized_regions);
 
@@ -640,9 +664,7 @@ void sw_paint_all(void)
     return;
   }
 
-  if (DEBUG_PAINT_ALL) {
-    printf("updated windows; %d regions have to be flushed\n", regions);
-  }
+  if(DEBUG_PAINT_ALL)  printf("%%%%%%%% updated windows; %d regions have to be flushed\n",regions);
 
   if (DUMP_WINDOWS) {
     widget_list_iterate(windows_back_to_front, widget) {
@@ -655,17 +677,16 @@ void sw_paint_all(void)
     } widget_list_iterate_end;
   }
 
-  if (DEBUG_PAINT_ALL) {
-    start_timer(timer2);
-  }
+  start_timer(timer2);
   widget_list_iterate(windows_back_to_front, widget) {
-#if 0
     if (DEBUG_PAINT_ALL) {
+      printf("window=%s d=%d is_opaque=%d\n",
+	     ct_rect_to_string(&widget->outer_bounds),
+	     widget->data.window.depth, is_opaque(widget));
       region_list_iterate(widget->data.window.to_flush, region) {
 	printf("  region=%s\n", ct_rect_to_string(region));
       } region_list_iterate_end;
     }
-#endif
 
     region_list_iterate(widget->data.window.to_flush, region) {
       region->x += widget->outer_bounds.x;
@@ -674,25 +695,20 @@ void sw_paint_all(void)
       region_list_insert(&normalized_regions, region);
     } region_list_iterate_end;
   } widget_list_iterate_end;
-  if (DEBUG_PAINT_ALL) {
-    stop_timer(timer2);
-  }
+  stop_timer(timer2);
 
-#if 0
   if (DEBUG_PAINT_ALL) {
     printf("  normalized_regions\n");
     region_list_iterate(normalized_regions, region) {
       printf("    region=%s\n", ct_rect_to_string(region));
     } region_list_iterate_end;
   }
-#endif
 
   merge_regions(&normalized_regions);
 
-  if(DEBUG_PAINT_ALL) {
-    printf("starting flushing of %d regions\n",
-           region_list_size(&normalized_regions));
-  }
+  if(DEBUG_PAINT_ALL)
+  printf("%%%%%%%% starting flushing of %d regions\n",
+	 region_list_size(&normalized_regions));
 
 #if DUMP_UPDATES
   sprintf(filename,"whole-c%03d-r000-before.ppm",call);
@@ -700,9 +716,7 @@ void sw_paint_all(void)
   region_nr = 1;
 #endif
 
-  if (DEBUG_PAINT_ALL) {
-    start_timer(timer3);
-  }
+  start_timer(timer3);
   region_list_iterate(normalized_regions, region) {
     int window_nr = 0;
 
@@ -732,10 +746,9 @@ void sw_paint_all(void)
 		region_nr, window_nr);
 	be_write_osda_to_file(whole_osda,filename);
 #endif
-      } else {
-	if (DEBUG_UPDATES) {
+      }else {
+	if(DEBUG_UPDATES)
 	  printf("    disjunkt\n");
-        }
       }
       window_nr++;
     } widget_list_iterate_end;
@@ -745,27 +758,20 @@ void sw_paint_all(void)
     region_nr++;
 #endif
   } region_list_iterate_end;
-  if (DEBUG_PAINT_ALL) {
-    stop_timer(timer3);
-  }
+  stop_timer(timer3);
 #if DUMP_UPDATES
   sprintf(filename,"whole-c%03d-r999-after.ppm",call);
   be_write_osda_to_file(whole_osda,filename);
 #endif
 
-  if (DEBUG_PAINT_ALL) {
-    start_timer(timer4);
-  }
+  start_timer(timer4);
   flush_all_to_screen();
-  if (DEBUG_PAINT_ALL) {
-    stop_timer(timer4);
-  }
+  stop_timer(timer4);
 
-  if (DEBUG_PAINT_ALL) {
-    printf("PAINT-ALL: update=%fs normalize=%fs flushs=%fs flush-all=%fs\n",
-           read_timer_seconds(timer1), read_timer_seconds(timer2),
-	   read_timer_seconds(timer3), read_timer_seconds(timer4));
-  }
+  if(0)
+  printf("PAINT-ALL: update=%fs normalize=%fs flushs=%fs flush-all=%fs\n",
+	 read_timer_seconds(timer1), read_timer_seconds(timer2),
+	 read_timer_seconds(timer3), read_timer_seconds(timer4));
 }
 
 /*************************************************************************
@@ -796,13 +802,15 @@ struct sw_widget *search_widget(const struct ct_point *pos,
   widget_list_iterate(windows_front_to_back, pwidget) {
     if (pwidget->data.window.shown && pwidget->accepts_events[event_type]
 	&& ct_point_in_rect(pos, &pwidget->outer_bounds)) {
-      bool is_transparent;
+	bool is_transparent;
       tmp = *pos;
       tmp.x -= pwidget->outer_bounds.x;
       tmp.y -= pwidget->outer_bounds.y;
 
-      is_transparent = 
+      is_transparent =
 	  be_is_transparent_pixel(pwidget->data.window.target, &tmp);
+      /*printf("%d %d | %d -> %d\n", tmp.x, tmp.y,
+	pwidget->data.window.depth, is_transparent);*/
       if (!is_transparent) {
 	window = pwidget;
 	break;
@@ -835,7 +843,7 @@ struct sw_widget *sw_window_create_by_clone(struct sw_widget *widget,
 {
   struct sw_widget *result =
       sw_window_create(widget, widget->outer_bounds.width,
-		       widget->outer_bounds.height, NULL, FALSE, depth);
+		       widget->outer_bounds.height, NULL, 0, FALSE, depth);
 
   result->can_be_dragged[BE_MB_LEFT] = widget->can_be_dragged;
   return result;
@@ -949,11 +957,13 @@ bool deliver_key(const struct be_key *key)
       continue;
     }
     if (pwidget->key && pwidget->key(pwidget, key,pwidget->key_data)) {
+      // printf("deliver key %s to window %p\n", ct_key_format(key), pwidget);
       return TRUE;
     }
 
     widget_list_iterate(pwidget->data.window.children, pwidget2) {
       if (pwidget2->key && pwidget2->key(pwidget2, key, pwidget2->key_data)) {
+        // printf("deliver key %s to widget %p\n", ct_key_format(key), pwidget2);
 	return TRUE;
       }
     } widget_list_iterate_end;

@@ -25,13 +25,6 @@
 
 struct canvas_store;		/* opaque type, real type is gui-dep */
 
-struct mapview_decoration {
-  /* For client Area Selection */
-  enum tile_hilite {
-    HILITE_NONE, HILITE_CITY
-  } hilite;
-};
-
 struct mapview_canvas {
   int gui_x0, gui_y0;
   int width, height;		/* Size in pixels. */
@@ -49,7 +42,6 @@ struct overview {
   struct canvas *store;
 };
 
-extern struct mapview_decoration *map_deco;
 extern struct mapview_canvas mapview_canvas;
 extern struct overview overview;
 
@@ -159,7 +151,7 @@ void center_tile_mapcanvas(struct tile *ptile);
 bool tile_visible_mapcanvas(struct tile *ptile);
 bool tile_visible_and_not_on_border_mapcanvas(struct tile *ptile);
 
-void put_unit(const struct unit *punit,
+void put_unit(struct unit *punit,
 	      struct canvas *pcanvas, int canvas_x, int canvas_y);
 void put_city(struct city *pcity,
 	      struct canvas *pcanvas, int canvas_x, int canvas_y);
@@ -179,9 +171,10 @@ void put_red_frame_tile(struct canvas *pcanvas,
 
 void put_nuke_mushroom_pixmaps(struct tile *ptile);
 
-void put_one_tile(struct canvas *pcanvas, enum mapview_layer layer,
-		  struct tile *ptile,
+void put_one_tile(struct canvas *pcanvas, struct tile *ptile,
 		  int canvas_x, int canvas_y, bool citymode);
+void put_one_tile_iso(struct canvas *pcanvas, struct tile *ptile,
+		      int canvas_x, int canvas_y, bool citymode);
 void tile_draw_grid(struct canvas *pcanvas, struct tile *ptile,
 		    int canvas_x, int canvas_y, bool citymode);
 
@@ -226,7 +219,6 @@ void refresh_overview_canvas(void);
 void overview_update_tile(struct tile *ptile);
 void set_overview_dimensions(int width, int height);
 
-void init_mapview_decorations(void);
 bool map_canvas_resized(int width, int height);
 void init_mapcanvas_and_overview(void);
 

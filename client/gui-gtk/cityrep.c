@@ -57,7 +57,7 @@
 
 /******************************************************************/
 static GtkWidget *config_shell;
-static GtkWidget **config_toggle;
+static GtkWidget *config_toggle[NUM_CREPORT_COLS];
 
 static void create_city_report_config_dialog(void);
 static void popup_city_report_config_dialog(void);
@@ -142,8 +142,7 @@ static void get_city_text(struct city *pcity, char *buf[], int n)
     buf[i][0]='\0';
     if(!spec->show) continue;
 
-    my_snprintf(buf[i], n, "%*s", NEG_VAL(spec->width),
-		(spec->func)(pcity, spec->data));
+    my_snprintf(buf[i], n, "%*s", NEG_VAL(spec->width), (spec->func)(pcity));
   }
 }
 
@@ -589,8 +588,8 @@ static gint city_change_callback(GtkWidget *w, GdkEvent *event, gpointer data)
 *****************************************************************/
 static void create_city_report_dialog(bool make_modal)
 {
-  static char **titles;
-  static char (*buf)[64];
+  static char *titles	[NUM_CREPORT_COLS];
+  static char  buf	[NUM_CREPORT_COLS][64];
 
   GtkWidget *close_command, *scrolled;
   int        i;
@@ -603,11 +602,9 @@ static void create_city_report_dialog(bool make_modal)
 
   gtk_window_set_title(GTK_WINDOW(city_dialog_shell),_("Cities"));
 
-  buf = fc_realloc(buf, NUM_CREPORT_COLS * sizeof(buf[0]));
-  titles = fc_realloc(titles, NUM_CREPORT_COLS * sizeof(titles[0]));
-  for (i = 0; i < NUM_CREPORT_COLS; i++) {
-    titles[i] = buf[i];
-  }
+  for (i=0;i<NUM_CREPORT_COLS;i++)
+    titles[i]=buf[i];
+
   get_city_table_header(titles, sizeof(buf[0]));
 
   city_list = gtk_clist_new_with_titles(NUM_CREPORT_COLS,titles);
@@ -826,9 +823,9 @@ static gboolean city_select_building_callback(GtkWidget *w, gpointer data)
 
     if ( (which == TYPE_UNIT && pcity->is_building_unit)
          || (which == TYPE_NORMAL_IMPROVEMENT && !pcity->is_building_unit
-             && !is_great_wonder(pcity->currently_building))
+             && !is_wonder(pcity->currently_building))
          || (which == TYPE_WONDER && !pcity->is_building_unit
-             && is_great_wonder(pcity->currently_building)) ) {
+             && is_wonder(pcity->currently_building)) ) {
       gtk_clist_select_row(GTK_CLIST(city_list), i, 0);
     }
   }
@@ -1435,8 +1432,6 @@ static void create_city_report_config_dialog(void)
   gtk_widget_show(vbox);
   gtk_box_pack_start(GTK_BOX(box), vbox, FALSE, FALSE, 0);
 
-  config_toggle = fc_realloc(config_toggle,
-			     NUM_CREPORT_COLS * sizeof(*config_toggle));
   for(i=1, spec=city_report_specs+i; i<NUM_CREPORT_COLS; i++, spec++) {
     if (i == NUM_CREPORT_COLS / 2 + 1) {
       vbox = gtk_vbox_new(FALSE, 0);

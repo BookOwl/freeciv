@@ -17,7 +17,7 @@
 
 #include "fc_types.h"
 
-void popup_city_report_dialog(bool raise);
+void popup_city_report_dialog(bool make_modal);
 void city_report_dialog_update(void);
 void city_report_dialog_update_city(struct city *pcity);
 

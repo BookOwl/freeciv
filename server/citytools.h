@@ -30,8 +30,14 @@
 #define POLLUTION_WEIGHTING 14 /* tentative */
 #define WARMING_FACTOR 50
 
+bool can_sell_building(struct city *pcity, Impr_Type_id id);
+struct city *find_city_wonder(Impr_Type_id id);
 int build_points_left(struct city *pcity);
 int do_make_unit_veteran(struct city *pcity, Unit_Type_id id);
+int city_shield_bonus(struct city *pcity);
+int city_luxury_bonus(struct city *pcity);
+int city_science_bonus(struct city *pcity);
+int city_tax_bonus(struct city *pcity);
 
 void transfer_city_units(struct player *pplayer, struct player *pvictim, 
 			 struct unit_list *units, struct city *pcity,
@@ -75,8 +81,6 @@ bool is_allowed_city_name(struct player *pplayer, const char *city_name,
 			  char *error_buf, size_t bufsz);
 char *city_name_suggestion(struct player *pplayer, struct tile *ptile);
 
-void city_freeze_workers(struct city *pcity);
-void city_thaw_workers(struct city *pcity);
 
 bool city_can_work_tile(struct city *pcity, int city_x, int city_y);
 void server_remove_worker_city(struct city *pcity, int city_x, int city_y);

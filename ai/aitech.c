@@ -26,7 +26,6 @@
 #include "plrhand.h"
 
 #include "advmilitary.h"
-#include "ailog.h"
 #include "aitools.h"
 
 #include "aitech.h"
@@ -48,9 +47,8 @@ static Tech_Type_id get_wonder_tech(struct player *plr)
   Impr_Type_id building = get_nation_by_plr(plr)->goals.wonder;
   
   if (improvement_exists(building)
-      && is_great_wonder(building)
-      && !great_wonder_was_built(building)
-      && !improvement_obsolete(plr, building)) {
+      && game.global_wonders[building] == 0
+      && !wonder_obsolete(building)) {
     Tech_Type_id tech = improvement_types[building].tech_req;
 
     if (tech_is_available(plr, tech) 
@@ -128,71 +126,60 @@ static void ai_select_tech(struct player *pplayer,
   /* Fill in values for the techs: want of the tech 
    * + average want of those we will discover en route */
   tech_type_iterate(i) {
-    if (tech_exists(i)) {
-      int steps = num_unknown_techs_for_goal(pplayer, i);
+    int steps = num_unknown_techs_for_goal(pplayer, i);
 
-      /* We only want it if we haven't got it (so AI is human after all) */
-      if (steps > 0) { 
-	values[i] += pplayer->ai.tech_want[i];
-	tech_type_iterate(k) {
-	  if (is_tech_a_req_for_goal(pplayer, k, i)) {
-	    values[k] += pplayer->ai.tech_want[i] / steps;
-	  }
-	} tech_type_iterate_end;
-      }
+    /* We only want it if we haven't got it (so AI is human after all) */
+    if (steps > 0) { 
+      values[i] += pplayer->ai.tech_want[i];
+      tech_type_iterate(k) {
+	if (is_tech_a_req_for_goal(pplayer, k, i)) {
+	  values[k] += pplayer->ai.tech_want[i] / steps;
+	}
+      } tech_type_iterate_end;
     }
   } tech_type_iterate_end;
 
   /* Fill in the values for the tech goals */
   tech_type_iterate(i) {
-    if (tech_exists(i)) {
-      int steps = num_unknown_techs_for_goal(pplayer, i);
+    int steps = num_unknown_techs_for_goal(pplayer, i);
 
-      if (steps == 0) {
-	continue;
+    if (steps == 0) {
+      continue;
+    }
+
+    goal_values[i] = values[i];      
+    tech_type_iterate(k) {
+      if (is_tech_a_req_for_goal(pplayer, k, i)) {
+	goal_values[i] += values[k];
       }
-
-      goal_values[i] = values[i];      
-      tech_type_iterate(k) {
-	if (is_tech_a_req_for_goal(pplayer, k, i)) {
-	  goal_values[i] += values[k];
-	}
-      } tech_type_iterate_end;
-
-      /* This is the best I could do.  It still sometimes does freaky stuff
-       * like setting goal to Republic and learning Monarchy, but that's what
-       * it's supposed to be doing; it just looks strange. -- Syela */
-      goal_values[i] /= steps;
-      if (steps < 6) {
-	freelog(LOG_DEBUG, "%s: want = %d, value = %d, goal_value = %d",
-		get_tech_name(pplayer, i), pplayer->ai.tech_want[i],
-		values[i], goal_values[i]);
-      }
+    } tech_type_iterate_end;
+    /* This is the best I could do.  It still sometimes does freaky stuff
+     * like setting goal to Republic and learning Monarchy, but that's what
+     * it's supposed to be doing; it just looks strange. -- Syela */
+    goal_values[i] /= steps;
+    if (steps < 6) {
+      freelog(LOG_DEBUG, "%s: want = %d, value = %d, goal_value = %d",
+	      get_tech_name(pplayer, i), pplayer->ai.tech_want[i],
+	      values[i], goal_values[i]);
     }
   } tech_type_iterate_end;
 
   newtech = A_UNSET;
   newgoal = A_UNSET;
   tech_type_iterate(i) {
-    if (tech_exists(i)) {
-      if (values[i] > values[newtech]
-	  && tech_is_available(pplayer, i)
-	  && get_invention(pplayer, i) == TECH_REACHABLE) {
-	newtech = i;
-      }
-      if (goal_values[i] > goal_values[newgoal]
-	  && tech_is_available(pplayer, i)) {
-	newgoal = i;
-      }
+    if (values[i] > values[newtech]
+        && tech_is_available(pplayer, i)
+        && get_invention(pplayer, i) == TECH_REACHABLE) {
+      newtech = i;
+    }
+    if (goal_values[i] > goal_values[newgoal]
+        && tech_is_available(pplayer, i)) {
+      newgoal = i;
     }
   } tech_type_iterate_end;
-#ifdef REALLY_DEBUG_THIS
-  tech_type_iterate(id) {
-    if (values[id] > 0 && get_invention(pplayer, id) == TECH_REACHABLE) {
-      TECH_LOG(LOG_DEBUG, pplayer, id, "turn end want: %d", values[id]);
-    }
-  } tech_type_iterate_end;
-#endif
+  freelog(LOG_DEBUG, "%s wants %s with desire %d (%d).", 
+	  pplayer->name, get_tech_name(pplayer, newtech), values[newtech], 
+	  pplayer->ai.tech_want[newtech]);
   if (choice) {
     choice->choice = newtech;
     choice->want = values[newtech] / num_cities_nonzero;

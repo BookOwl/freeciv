@@ -1689,20 +1689,19 @@ static void city_dialog_update_information(GtkWidget **info_label,
   /* fill the buffers with the necessary info */
 
   my_snprintf(buf[FOOD], sizeof(buf[FOOD]), "%2d (%+2d)",
-	      pcity->prod[O_FOOD], pcity->surplus[O_FOOD]);
+	      pcity->food_prod, pcity->food_surplus);
   my_snprintf(buf[SHIELD], sizeof(buf[SHIELD]), "%2d (%+2d)",
-	      pcity->prod[O_SHIELD] + pcity->waste[O_SHIELD],
-	      pcity->surplus[O_SHIELD]);
+	      pcity->shield_prod + pcity->shield_waste,
+	      pcity->shield_surplus);
   my_snprintf(buf[TRADE], sizeof(buf[TRADE]), "%2d (%+2d)",
-	      pcity->surplus[O_TRADE] + pcity->waste[O_TRADE],
-	      pcity->surplus[O_TRADE]);
+	      pcity->trade_prod + pcity->corruption, pcity->trade_prod);
   my_snprintf(buf[GOLD], sizeof(buf[GOLD]), "%2d (%+2d)",
-	      pcity->prod[O_GOLD], pcity->surplus[O_GOLD]);
+	      pcity->tax_total, city_gold_surplus(pcity, pcity->tax_total));
   my_snprintf(buf[LUXURY], sizeof(buf[LUXURY]), "%2d      ",
-	      pcity->prod[O_LUXURY]);
+	      pcity->luxury_total);
 
   my_snprintf(buf[SCIENCE], sizeof(buf[SCIENCE]), "%2d",
-	      pcity->prod[O_SCIENCE]);
+	      pcity->science_total);
 
   my_snprintf(buf[GRANARY], sizeof(buf[GRANARY]), "%d/%-d",
 	      pcity->food_stock, city_granary_size(pcity->size));
@@ -1721,9 +1720,9 @@ static void city_dialog_update_information(GtkWidget **info_label,
   }
 
   my_snprintf(buf[CORRUPTION], sizeof(buf[CORRUPTION]), "%2d",
-	      pcity->waste[O_TRADE]);
+	      pcity->corruption);
   my_snprintf(buf[WASTE], sizeof(buf[WASTE]), "%2d",
-	      pcity->waste[O_SHIELD]);
+	      pcity->shield_waste);
   my_snprintf(buf[POLLUTION], sizeof(buf[POLLUTION]), "%2d",
 	      pcity->pollution);
 
@@ -1740,7 +1739,7 @@ static void city_dialog_update_information(GtkWidget **info_label,
   style = (granaryturns > -4 && granaryturns < 0) ? RED : NORMAL;
   gtk_widget_modify_style(info_label[GRANARY], info_label_style[style]);
 
-  style = (granaryturns == 0 || pcity->surplus[O_FOOD] < 0) ? RED : NORMAL;
+  style = (granaryturns == 0 || pcity->food_surplus < 0) ? RED : NORMAL;
   gtk_widget_modify_style(info_label[GROWTH], info_label_style[style]);
 
   /* someone could add the info_label_style[ORANGE]
@@ -2972,7 +2971,7 @@ static void change_help_callback(GtkWidget * w, gpointer data)
 
     if (cid_is_unit(cid)) {
       popup_help_dialog_typed(get_unit_type(id)->name, HELP_UNIT);
-    } else if (is_great_wonder(id)) {
+    } else if (is_wonder(id)) {
       popup_help_dialog_typed(get_improvement_name(id), HELP_WONDER);
     } else {
       popup_help_dialog_typed(get_improvement_name(id), HELP_IMPROVEMENT);
@@ -3000,7 +2999,7 @@ static void sell_callback(GtkWidget * w, gpointer data)
 		       (GTK_CLIST(pdialog->overview.improvement_list),
 			GPOINTER_TO_INT(selection->data)));
   assert(city_got_building(pdialog->pcity, id));
-  if (!can_city_sell_building(pdialog->pcity, id))
+  if (is_wonder(id))
     return;
 
   pdialog->sell_id = id;
@@ -3057,7 +3056,7 @@ static void select_impr_list_callback(GtkWidget * w, gint row, gint column,
 			      GPOINTER_TO_INT(selection->data)));
     assert(city_got_building(pdialog->pcity, id));
 
-    if (can_city_sell_building(pdialog->pcity, id)) {
+    if (!is_wonder(id)) {
       char buf[64];
       my_snprintf(buf, sizeof(buf), _("Sell (worth %d gold)"),
 		  impr_sell_gold(id));
@@ -3116,7 +3115,7 @@ static void commit_city_worklist(struct worklist *pwl, void *data)
     /* Very special case: If we are currently building a wonder we
        allow the construction to continue, even if we the wonder is
        finished elsewhere, ie unbuildable. */
-    if (k == 0 && !is_unit && is_great_wonder(id) && same_as_current_build) {
+    if (k == 0 && !is_unit && is_wonder(id) && same_as_current_build) {
       worklist_remove(pwl, k);
       break;
     }

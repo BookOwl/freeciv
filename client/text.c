@@ -415,7 +415,7 @@ const char *science_dialog_text(void)
 
     if (plr == pplayer) {
       city_list_iterate(pplayer->cities, pcity) {
-        ours += pcity->prod[O_SCIENCE];
+        ours += pcity->science_total;
       } city_list_iterate_end;
     } else if (ds == DS_TEAM) {
       theirs += pplayer->research.bulbs_last_turn;
@@ -678,7 +678,7 @@ const char *format_duration(int duration)
   Return text giving the ping time for the player.  This is generally used
   used in the playerdlg.  This should only be used in playerdlg_common.c.
 ****************************************************************************/
-const char *get_ping_time_text(const struct player *pplayer)
+const char *get_ping_time_text(struct player *pplayer)
 {
   INIT;
 

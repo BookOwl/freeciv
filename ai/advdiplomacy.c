@@ -117,21 +117,16 @@ static int greed(int missing_love)
 ***********************************************************************/
 static int ai_goldequiv_tech(struct player *pplayer, Tech_Type_id tech)
 {
-  int bulbs, tech_want, worth;
-  struct ai_data *ai = ai_data_get(pplayer);
+  int worth;
 
   if (get_invention(pplayer, tech) == TECH_KNOWN) {
     return 0;
   }
-  bulbs = total_bulbs_required_for_goal(pplayer, tech) * 3;
-  tech_want = MAX(pplayer->ai.tech_want[tech], 0) / MAX(game.turn, 1);
-  worth = bulbs + tech_want;
+  worth = total_bulbs_required_for_goal(pplayer, tech) * 3;
+  worth += MAX(pplayer->ai.tech_want[tech], 0) / MAX(game.turn, 1);
   if (get_invention(pplayer, tech) == TECH_REACHABLE) {
     worth /= 2;
   }
-  DIPLO_LOG(LOG_DEBUG, pplayer, ai, "eval tech %s to %d (bulbs=%d, "
-            "tech_want=%d)", get_tech_name(pplayer, tech), worth, bulbs, 
-            tech_want);
   return worth;
 }
 
@@ -167,8 +162,8 @@ static bool shared_vision_is_safe(struct player* pplayer,
 static bool ai_players_can_agree_on_ceasefire(struct player* player1,
                                               struct player* player2)
 {
-  struct ai_data *ai1 = ai_data_get(player1);
-
+  struct ai_data *ai1;
+  ai1 = ai_data_get(player1);
   return (ai1->diplomacy.target != player2 && 
           (player1 == ai1->diplomacy.alliance_leader ||
            !pplayers_at_war(player2, ai1->diplomacy.alliance_leader)) &&
@@ -193,8 +188,6 @@ static int ai_goldequiv_clause(struct player *pplayer,
   int giver;
   struct ai_dip_intel *adip = &ai->diplomacy.player_intel[aplayer->player_no];
 
-  assert(pplayer != aplayer);
-  
   diplomacy_verbose = verbose;
 
   giver = pclause->from->player_no;
@@ -429,9 +422,8 @@ static int ai_goldequiv_clause(struct player *pplayer,
         worth /= 2;
       }
     } else {
-      worth = city_gold_worth(offer);
+      worth = city_gold_worth(offer);      
     }
-    DIPLO_LOG(LOG_DEBUG, pplayer, ai, "worth of %s is %d", offer->name, worth);
     break;
   }
 
@@ -568,8 +560,6 @@ void ai_treaty_accepted(struct player *pplayer, struct player *aplayer,
   bool gift = TRUE;
   struct ai_data *ai = ai_data_get(pplayer);
 
-  assert(pplayer != aplayer);
-
   /* Evaluate clauses */
   clause_list_iterate(ptreaty->clauses, pclause) {
     int balance = ai_goldequiv_clause(pplayer, aplayer, pclause, ai, TRUE);
@@ -590,7 +580,7 @@ void ai_treaty_accepted(struct player *pplayer, struct player *aplayer,
 
     i = MIN(i, ai->diplomacy.love_incr * 150) * 10;
     pplayer->ai.love[aplayer->player_no] += i;
-    DIPLO_LOG(LOG_DIPL2, pplayer, ai, "%s's gift to %s increased love by %d",
+    PLAYER_LOG(LOG_DIPL2, pplayer, ai, "%s's gift to %s increased love by %d",
             aplayer->name, pplayer->name, i);
   }
 }
@@ -705,13 +695,8 @@ static void ai_diplomacy_suggest(struct player *pplayer,
   Calculate our diplomatic predispositions here. Don't do anything.
 
   Only ever called for AI players and never for barbarians.
-
-  This is called at the start of a new AI phase.  It's not called when
-  a game is loaded.  So everything calculated here should be put into
-  the savegame.
 ***********************************************************************/
-void ai_diplomacy_begin_new_phase(struct player *pplayer,
-				  struct ai_data *ai)
+void ai_diplomacy_calculate(struct player *pplayer, struct ai_data *ai)
 {
   int war_desire[MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS];
   int best_desire = 0;
@@ -742,8 +727,8 @@ void ai_diplomacy_begin_new_phase(struct player *pplayer,
         && !adip->at_war_with_ally
         && adip->ally_patience >= 0) {
       pplayer->ai.love[aplayer->player_no] += ai->diplomacy.love_incr;
-      DIPLO_LOG(LOG_DEBUG, pplayer, ai, "Increased love for %s (now %d)",
-                aplayer->name, pplayer->ai.love[aplayer->player_no]);
+      PLAYER_LOG(LOG_DEBUG, pplayer, ai, "Increased love for %s (now %d)",
+                 aplayer->name, pplayer->ai.love[aplayer->player_no]);
     } else if (pplayer->diplstates[aplayer->player_no].type == DS_WAR) {
       pplayer->ai.love[aplayer->player_no] -= ai->diplomacy.love_incr;
       if (ai->diplomacy.target != aplayer && 
@@ -751,14 +736,14 @@ void ai_diplomacy_begin_new_phase(struct player *pplayer,
         /* Give him a better chance for a cease fire */
         pplayer->ai.love[aplayer->player_no] += (MAX_AI_LOVE) * 3 / 100;
       }
-      DIPLO_LOG(LOG_DEBUG, pplayer, ai, "Reduced love for %s (now %d) ",
-                aplayer->name, pplayer->ai.love[aplayer->player_no]);
+      PLAYER_LOG(LOG_DEBUG, pplayer, ai, "Reduced love for %s (now %d) ",
+                 aplayer->name, pplayer->ai.love[aplayer->player_no]);
     } else if (pplayer->diplstates[a].has_reason_to_cancel != 0) {
       /* Provoked in time of peace */
       if (pplayer->ai.love[aplayer->player_no] > 0) {
-        DIPLO_LOG(LOG_DEBUG, pplayer, ai, "Provoked by %s! Love halved "
-                  "(was %d)", aplayer->name,
-                  pplayer->ai.love[aplayer->player_no]);
+        PLAYER_LOG(LOG_DEBUG, pplayer, ai, "Provoked by %s! Love halved "
+                   "(was %d)", aplayer->name, 
+                   pplayer->ai.love[aplayer->player_no]);
         pplayer->ai.love[aplayer->player_no] /= 2;
       }
       pplayer->ai.love[aplayer->player_no] -= ai->diplomacy.love_incr;
@@ -788,8 +773,8 @@ void ai_diplomacy_begin_new_phase(struct player *pplayer,
 
   /* Stop war against a dead player */
   if (ai->diplomacy.target && !ai->diplomacy.target->is_alive) {
-    DIPLO_LOG(LOG_DIPL2, pplayer, ai, "Target player %s is dead! Victory!",
-              ai->diplomacy.target->name);
+    PLAYER_LOG(LOG_DIPL2, pplayer, ai, "Target player %s is dead! Victory!",
+               ai->diplomacy.target->name);
     ai->diplomacy.timer = 0;
     ai->diplomacy.countdown = 0;
     ai->diplomacy.target = NULL;
@@ -855,8 +840,8 @@ void ai_diplomacy_begin_new_phase(struct player *pplayer,
       war_desire[aplayer->player_no] /= 2;
     }
     
-    DIPLO_LOG(LOG_DEBUG, pplayer, ai, "Against %s we have war desire "
-              "%d ", aplayer->name, war_desire[aplayer->player_no]);
+    PLAYER_LOG(LOG_DEBUG, pplayer, ai, "Against %s we have war desire "
+            "%d ", aplayer->name, war_desire[aplayer->player_no]);
 
     /* Find best target */
     if (war_desire[aplayer->player_no] > best_desire) {
@@ -866,14 +851,14 @@ void ai_diplomacy_begin_new_phase(struct player *pplayer,
   } players_iterate_end;
 
   if (!target) {
-    DIPLO_LOG(LOG_DEBUG, pplayer, ai, "Found no target.");
+    PLAYER_LOG(LOG_DEBUG, pplayer, ai, "Found no target.");
     ai->diplomacy.target = NULL;
     return;
   }
 
   /* Switch to target */
   if (target != ai->diplomacy.target) {
-    DIPLO_LOG(LOG_DIPL, pplayer, ai, "Setting target to %s", target->name);
+    PLAYER_LOG(LOG_DIPL, pplayer, ai, "Setting target to %s", target->name);
     ai->diplomacy.target = target;
     if (ai->diplomacy.strategy == WIN_CAPITAL) {
       ai->diplomacy.countdown = 1; /* Quickly!! */
@@ -934,8 +919,6 @@ static void ai_share(struct player *pplayer, struct player *aplayer)
 static void ai_go_to_war(struct player *pplayer, struct ai_data *ai,
                          struct player *target)
 {
-  assert(pplayer != target);
-
   if (gives_shared_vision(pplayer, target)) {
     remove_shared_vision(pplayer, target);
   }
@@ -977,7 +960,7 @@ void ai_diplomacy_actions(struct player *pplayer)
     if (ai->diplomacy.acceptable_reputation > aplayer->reputation
         && pplayer->ai.love[aplayer->player_no] < 0
         && pplayer->diplstates[aplayer->player_no].has_reason_to_cancel >= 2) {
-      DIPLO_LOG(LOG_DIPL2, pplayer, ai, "Declaring war on %s in revenge",
+      PLAYER_LOG(LOG_DIPL2, pplayer, ai, "Declaring war on %s in revenge",
                  target->name);
       notify(target, _("*%s (AI)* I will NOT accept such behaviour! This "
              "means WAR!"), pplayer->name);
@@ -1036,7 +1019,7 @@ void ai_diplomacy_actions(struct player *pplayer)
   if (target && !pplayers_at_war(pplayer, target)
       && ai->diplomacy.countdown <= 0) {
     if (pplayers_allied(pplayer, target)) {
-      DIPLO_LOG(LOG_DEBUG, pplayer, ai, "Went to war against %s, who is "
+      PLAYER_LOG(LOG_DEBUG, pplayer, ai, "Went to war against %s, who is "
                  "an ally!", target->name); /* Oh, my. */
     }
     if (pplayer->diplstates[target->player_no].has_reason_to_cancel > 0) {
@@ -1148,11 +1131,11 @@ void ai_diplomacy_actions(struct player *pplayer)
         break;
       }
       if (target && pplayer->ai.control) {
-        DIPLO_LOG(LOG_DIPL2, pplayer, ai, "Ally %s not at war with enemy %s "
-                  "(patience %d, %s %s)", aplayer->name, 
-                  target->name, adip->ally_patience, adip->at_war_with_ally
-                  ? "war_with_ally" : "", adip->is_allied_with_ally ? 
-                  "allied_with_ally" : "");
+        PLAYER_LOG(LOG_DIPL2, pplayer, ai, "Ally %s not at war with enemy %s "
+                "(patience %d, %s %s)", aplayer->name, 
+                target->name, adip->ally_patience, adip->at_war_with_ally
+                ? "war_with_ally" : "", adip->is_allied_with_ally ? 
+                "allied_with_ally" : "");
 
       }
       switch (adip->ally_patience--) {
@@ -1171,8 +1154,8 @@ void ai_diplomacy_actions(struct player *pplayer)
                  "alliance, and yet you remain at peace with our mortal "
                  "enemy, %s! This is unacceptable, our alliance is no "
                  "more!"), pplayer->name, target->name);
-          DIPLO_LOG(LOG_DIPL2, pplayer, ai, "breaking useless alliance with "
-                    "%s", aplayer->name);
+          PLAYER_LOG(LOG_DIPL2, pplayer, ai, "breaking useless alliance with "
+                     "%s", aplayer->name);
 	  /* to peace */
 	  handle_diplomacy_cancel_pact(pplayer, aplayer->player_no,
 				       CLAUSE_ALLIANCE);

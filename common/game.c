@@ -38,6 +38,7 @@
 
 #include "game.h"
 
+void dealloc_id(int id);
 struct civ_game game;
 
 /*
@@ -143,8 +144,8 @@ void game_remove_unit(struct unit *punit)
 
   idex_unregister_unit(punit);
 
-  if (game.callbacks.unit_deallocate) {
-    (game.callbacks.unit_deallocate)(punit->id);
+  if (is_server) {
+    dealloc_id(punit->id);
   }
   destroy_unit_virtual(punit);
 }
@@ -221,6 +222,7 @@ void game_init(void)
   game.killcitizen = GAME_DEFAULT_KILLCITIZEN;
   game.scorelog    = GAME_DEFAULT_SCORELOG;
   game.techpenalty = GAME_DEFAULT_TECHPENALTY;
+  game.civstyle    = GAME_DEFAULT_CIVSTYLE;
   game.razechance  = GAME_DEFAULT_RAZECHANCE;
   game.spacerace   = GAME_DEFAULT_SPACERACE;
   game.turnblock   = GAME_DEFAULT_TURNBLOCK;
@@ -236,7 +238,6 @@ void game_init(void)
   game.onsetbarbarian = GAME_DEFAULT_ONSETBARBARIAN;
   game.nbarbarians = 0;
   game.occupychance= GAME_DEFAULT_OCCUPYCHANCE;
-  game.autoattack = GAME_DEFAULT_AUTOATTACK;
   game.revolution_length = GAME_DEFAULT_REVOLUTION_LENGTH;
 
   game.heating     = 0;
@@ -288,7 +289,7 @@ void game_init(void)
   for (i=0; i<A_LAST; i++)      /* game.num_tech_types = 0 here */
     game.global_advances[i]=0;
   for (i=0; i<B_LAST; i++)      /* game.num_impr_types = 0 here */
-    game.great_wonders[i]=0;
+    game.global_wonders[i]=0;
   game.player_idx=0;
   game.player_ptr=&game.players[0];
   terrain_control.river_help_text[0] = '\0';
@@ -344,11 +345,8 @@ void initialize_globals(void)
   players_iterate(plr) {
     city_list_iterate(plr->cities, pcity) {
       built_impr_iterate(pcity, i) {
-	if (is_great_wonder(i)) {
-	  game.great_wonders[i] = pcity->id;
-	} else if (is_small_wonder(i)) {
-	  plr->small_wonders[i] = pcity->id;
-	}
+	if (is_wonder(i))
+	  game.global_wonders[i] = pcity->id;
       } built_impr_iterate_end;
     } city_list_iterate_end;
   } players_iterate_end;
@@ -440,6 +438,11 @@ void game_remove_player(struct player *pplayer)
   if (pplayer->attribute_block.data) {
     free(pplayer->attribute_block.data);
     pplayer->attribute_block.data = NULL;
+  }
+
+  if (pplayer->island_improv) {
+    free(pplayer->island_improv);
+    pplayer->island_improv = NULL;
   }
 
   conn_list_unlink_all(&pplayer->connections);
@@ -548,10 +551,10 @@ void translate_data_names(void)
     tthis->terrain_name = ((strcmp(tthis->terrain_name_orig, "") != 0)
 			   ? Q_(tthis->terrain_name_orig) : "");
 
-    tthis->special[0].name = ((strcmp(tthis->special[0].name_orig, "") != 0)
-			      ? Q_(tthis->special[0].name_orig) : "");
-    tthis->special[1].name = ((strcmp(tthis->special[1].name_orig, "") != 0)
-			      ? Q_(tthis->special[1].name_orig) : "");
+    tthis->special_1_name = ((strcmp(tthis->special_1_name_orig, "") != 0)
+			     ? Q_(tthis->special_1_name_orig) : "");
+    tthis->special_2_name = ((strcmp(tthis->special_2_name_orig, "") != 0)
+			     ? Q_(tthis->special_2_name_orig) : "");
   } terrain_type_iterate_end;
 
   government_iterate(tthis) {

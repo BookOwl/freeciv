@@ -29,10 +29,8 @@ void client_remove_unit(struct unit *punit);
 
 void client_change_all(cid x, cid y);
 
-const char *get_embassy_status(const struct player *me,
-				const struct player *them);
-const char *get_vision_status(const struct player *me,
-				const struct player *them);
+const char *get_embassy_status(struct player *me, struct player *them);
+const char *get_vision_status(struct player *me, struct player *them);
 void client_diplomacy_clause_string(char *buf, int bufsiz,
 				    struct Clause *pclause);
 
@@ -116,7 +114,7 @@ void reports_freeze_till(int request_id);
 void reports_thaw(void);
 void reports_force_thaw(void);
 
-struct city *get_nearest_city(const struct unit *punit, int *sq_dist);
+struct city *get_nearest_city(struct unit *punit, int *sq_dist);
 
 void cityrep_buy(struct city *pcity);
 void common_taxrates_callback(int i);

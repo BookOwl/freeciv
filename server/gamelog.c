@@ -467,9 +467,9 @@ void gamelog(int level, ...)
         }
       } unit_list_iterate_end;
       city_list_iterate(pplayer->cities, pcity) {
-        shields += pcity->prod[O_SHIELD];
-        food += pcity->prod[O_FOOD];
-        trade += pcity->surplus[O_TRADE];
+        shields += pcity->shield_prod;
+        food += pcity->food_prod;
+        trade += pcity->trade_prod;
       } city_list_iterate_end;
 
       my_snprintf(buf, sizeof(buf), "<n>%d</n><cities>%d</cities>"
