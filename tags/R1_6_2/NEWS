@@ -1,0 +1,24 @@
+Welcome to Freeciv 1.6!
+
+Thanks again to all our developers, who continue to work so hard.
+
+For 1.6, a _lot_ of bugs have been fixed, new features added, and thanks
+to John Stonebraker, the AI is ever-increasingly capable.
+
+Those who are interested in seeing the detailed changes should check
+the ChangeLog file.
+
+KNOWN BUGS:
+
+While we're not saying Freeciv 1.6.2 is bug-free, we believe it's stable
+enough to be considered safe for everyday use.
+
+However if you do find one, please report it (or other problems) to
+the Freeciv mailing list.  See:
+
+  http://freeciv.ultraviolet.org
+
+THINGS TO DO:
+
+ - goto should be looked at, as units with moves left after a goto should
+   be active but aren't.
