@@ -1704,8 +1704,7 @@ void handle_conn_info(struct packet_conn_info *pinfo)
 }
 
 /*************************************************************************
-  Handles a conn_ping_info packet from the server.  This packet contains
-  ping times for each connection.
+...
 **************************************************************************/
 void handle_conn_ping_info(struct packet_conn_ping_info *packet)
 {

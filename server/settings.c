@@ -16,7 +16,6 @@
 #endif
 
 #include "fcintl.h"
-#include "log.h"
 
 #include "map.h"
 
@@ -151,7 +150,6 @@ static bool startunits_callback(const char *value, const char **error_string)
       have_founder = TRUE;
       continue;
     }
-    /* TODO: add 'f' back in here when we can support ferry units */
     if (strchr("cwxksdDaA", value[i])) {
       continue;
     }
@@ -434,8 +432,6 @@ struct settings_s settings[] = {
   /* Game initialization parameters (only affect the first start of the game,
    * and not reloads).  Can not be changed after first start of game.
    */
-  /* TODO: Add this line back when we can support Ferry units */
-  /* "    f   = Ferryboat (eg., Trireme)\n" */
   GEN_STRING("startunits", game.start_units,
 	     SSET_GAME_INIT, SSET_SOCIOLOGY, SSET_VITAL, SSET_TO_CLIENT,
              N_("List of players' initial units"),
@@ -644,13 +640,6 @@ struct settings_s settings[] = {
 	     "the percent chance of \"occupying\" territory."), NULL, 
 	  GAME_MIN_OCCUPYCHANCE, GAME_MAX_OCCUPYCHANCE, 
 	  GAME_DEFAULT_OCCUPYCHANCE)
-
-  GEN_BOOL("autoattack", game.autoattack, SSET_RULES_FLEXIBLE, SSET_MILITARY,
-         SSET_SITUATIONAL, SSET_TO_CLIENT,
-         N_("Turn on/off server-side autoattack"),
-         N_("If set to on, units with move left will automatically "
-            "consider attacking enemy units that move adjacent to them."), 
-         NULL, GAME_DEFAULT_AUTOATTACK)
 
   GEN_INT("killcitizen", game.killcitizen,
 	  SSET_RULES, SSET_MILITARY, SSET_RARE, SSET_TO_CLIENT,
@@ -1052,37 +1041,3 @@ struct settings_s settings[] = {
 
 /* The number of settings, not including the END. */
 const int SETTINGS_NUM = ARRAY_SIZE(settings) - 1;
-
-/****************************************************************************
-  Returns whether the specified server setting (option) can currently
-  be changed.  Does not indicate whether it can be changed by clients.
-****************************************************************************/
-bool sset_is_changeable(int idx)
-{
-  struct settings_s *op = &settings[idx];
-
-  switch(op->sclass) {
-  case SSET_MAP_SIZE:
-  case SSET_MAP_GEN:
-    /* Only change map options if we don't yet have a map: */
-    return map_is_empty();
-  case SSET_MAP_ADD:
-  case SSET_PLAYERS:
-  case SSET_GAME_INIT:
-
-  case SSET_RULES:
-    /* Only change start params and most rules if we don't yet have a map,
-     * or if we do have a map but its a scenario one (ie, the game has
-     * never actually been started).
-     */
-    return (map_is_empty() || game.is_new_game);
-  case SSET_RULES_FLEXIBLE:
-  case SSET_META:
-    /* These can always be changed: */
-    return TRUE;
-  default:
-    freelog(LOG_ERROR, "Unexpected case %d in %s line %d",
-            op->sclass, __FILE__, __LINE__);
-    return FALSE;
-  }
-}
