@@ -93,3 +93,6 @@ pkgdata_DATA = \
 
 EXTRA_DIST = $(pkgdata_DATA) Makefile.am.sh
 
+Makefile.am: Makefile.am.sh $(shell echo *.ruleset)
+	sh Makefile.am.sh >Makefile.am
+
