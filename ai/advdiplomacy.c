@@ -117,21 +117,16 @@ static int greed(int missing_love)
 ***********************************************************************/
 static int ai_goldequiv_tech(struct player *pplayer, Tech_Type_id tech)
 {
-  int bulbs, tech_want, worth;
-  struct ai_data *ai = ai_data_get(pplayer);
+  int worth;
 
   if (get_invention(pplayer, tech) == TECH_KNOWN) {
     return 0;
   }
-  bulbs = total_bulbs_required_for_goal(pplayer, tech) * 3;
-  tech_want = pplayer->ai.tech_want[tech] / 3;
-  worth = bulbs + tech_want;
+  worth = total_bulbs_required_for_goal(pplayer, tech) * 3;
+  worth += pplayer->ai.tech_want[tech] / 3;
   if (get_invention(pplayer, tech) == TECH_REACHABLE) {
     worth /= 2;
   }
-  PLAYER_LOG(LOG_DEBUG, pplayer, ai, "eval tech %s to %d (bulbs=%d, "
-             "tech_want=%d)", get_tech_name(pplayer, tech), worth, bulbs, 
-             tech_want);
   return worth;
 }
 
@@ -167,8 +162,8 @@ static bool shared_vision_is_safe(struct player* pplayer,
 static bool ai_players_can_agree_on_ceasefire(struct player* player1,
                                               struct player* player2)
 {
-  struct ai_data *ai1 = ai_data_get(player1);
-
+  struct ai_data *ai1;
+  ai1 = ai_data_get(player1);
   return (ai1->diplomacy.target != player2 && 
           (player1 == ai1->diplomacy.alliance_leader ||
            !pplayers_at_war(player2, ai1->diplomacy.alliance_leader)) &&
@@ -193,8 +188,6 @@ static int ai_goldequiv_clause(struct player *pplayer,
   int giver;
   struct ai_dip_intel *adip = &ai->diplomacy.player_intel[aplayer->player_no];
 
-  assert(pplayer != aplayer);
-  
   diplomacy_verbose = verbose;
 
   giver = pclause->from->player_no;
@@ -429,9 +422,8 @@ static int ai_goldequiv_clause(struct player *pplayer,
         worth /= 2;
       }
     } else {
-      worth = city_gold_worth(offer);
+      worth = city_gold_worth(offer);      
     }
-    PLAYER_LOG(LOG_DEBUG, pplayer, ai, "worth of %s is %d", offer->name, worth);
     break;
   }
 
@@ -567,8 +559,6 @@ void ai_treaty_accepted(struct player *pplayer, struct player *aplayer,
   int total_balance = 0;
   bool gift = TRUE;
   struct ai_data *ai = ai_data_get(pplayer);
-
-  assert(pplayer != aplayer);
 
   /* Evaluate clauses */
   clause_list_iterate(ptreaty->clauses, pclause) {
@@ -929,8 +919,6 @@ static void ai_share(struct player *pplayer, struct player *aplayer)
 static void ai_go_to_war(struct player *pplayer, struct ai_data *ai,
                          struct player *target)
 {
-  assert(pplayer != target);
-
   if (gives_shared_vision(pplayer, target)) {
     remove_shared_vision(pplayer, target);
   }

@@ -93,9 +93,9 @@ static struct unit * unpackage_unit(struct packet_unit_info *packet)
   punit->activity = packet->activity;
   punit->activity_count = packet->activity_count;
   punit->unhappiness = packet->unhappiness;
-  output_type_iterate(o) {
-    punit->upkeep[o] = packet->upkeep[o];
-  } output_type_iterate_end;
+  punit->upkeep = packet->upkeep;
+  punit->upkeep_food = packet->upkeep_food;
+  punit->upkeep_gold = packet->upkeep_gold;
   punit->ai.control = packet->ai;
   punit->fuel = packet->fuel;
   if (is_normal_map_pos(packet->goto_dest_x, packet->goto_dest_y)) {
@@ -418,15 +418,15 @@ void handle_city_info(struct packet_city_info *packet)
     /* Check if city desciptions should be updated */
     if (draw_city_names && name_changed) {
       update_descriptions = TRUE;
-    } else if (draw_city_productions
-	       && (pcity->is_building_unit != packet->is_building_unit
-		   || pcity->currently_building != packet->currently_building
-		   || pcity->surplus[O_SHIELD] != packet->surplus[O_SHIELD]
-		   || pcity->shield_stock != packet->shield_stock)) {
+    } else if (draw_city_productions &&
+	       (pcity->is_building_unit != packet->is_building_unit ||
+		pcity->currently_building != packet->currently_building ||
+		pcity->shield_surplus != packet->shield_surplus ||
+		pcity->shield_stock != packet->shield_stock)) {
       update_descriptions = TRUE;
     } else if (draw_city_names && draw_city_growth &&
 	       (pcity->food_stock != packet->food_stock ||
-		pcity->surplus[O_FOOD] != packet->surplus[O_FOOD])) {
+		pcity->food_surplus != packet->food_surplus)) {
       /* If either the food stock or surplus have changed, the time-to-grow
 	 is likely to have changed as well. */
       update_descriptions = TRUE;
@@ -457,13 +457,14 @@ void handle_city_info(struct packet_city_info *packet)
   }
   
   pcity->food_prod=packet->food_prod;
-  output_type_iterate(o) {
-    pcity->surplus[o] = packet->surplus[o];
-    pcity->waste[o] = packet->waste[o];
-  } output_type_iterate_end;
+  pcity->food_surplus=packet->food_surplus;
   pcity->shield_prod=packet->shield_prod;
+  pcity->shield_surplus=packet->shield_surplus;
+  pcity->trade_prod=packet->trade_prod;
   pcity->tile_trade=packet->tile_trade;
-
+  pcity->corruption=packet->corruption;
+  pcity->shield_waste=packet->shield_waste;
+    
   pcity->luxury_total=packet->luxury_total;
   pcity->tax_total=packet->tax_total;
   pcity->science_total=packet->science_total;
@@ -746,9 +747,11 @@ void handle_city_short_info(struct packet_city_short_info *packet)
       pcity->trade_value[i] = 0;
     }
     pcity->food_prod          = 0;
-    memset(pcity->surplus, 0, O_COUNT * sizeof(*pcity->surplus));
+    pcity->food_surplus       = 0;
     pcity->shield_prod        = 0;
-    memset(pcity->waste, 0, O_COUNT * sizeof(*pcity->waste));
+    pcity->shield_surplus     = 0;
+    pcity->trade_prod         = 0;
+    pcity->corruption         = 0;
     pcity->luxury_total       = 0;
     pcity->tax_total          = 0;
     pcity->science_total      = 0;
@@ -1174,12 +1177,18 @@ static bool handle_unit_packet_common(struct unit *packet_unit)
       punit->unhappiness = packet_unit->unhappiness;
       repaint_city = TRUE;
     }
-    output_type_iterate(o) {
-      if (punit->upkeep[o] != packet_unit->upkeep[o]) {
-	punit->upkeep[o] = packet_unit->upkeep[o];
-	repaint_city = TRUE;
-      }
-    } output_type_iterate_end;
+    if (punit->upkeep != packet_unit->upkeep) {
+      punit->upkeep = packet_unit->upkeep;
+      repaint_city = TRUE;
+    }
+    if (punit->upkeep_food != packet_unit->upkeep_food) {
+      punit->upkeep_food = packet_unit->upkeep_food;
+      repaint_city = TRUE;
+    }
+    if (punit->upkeep_gold != packet_unit->upkeep_gold) {
+      punit->upkeep_gold = packet_unit->upkeep_gold;
+      repaint_city = TRUE;
+    }
     if (repaint_city) {
       if((pcity=find_city_by_id(punit->homecity))) {
 	refresh_city_dialog(pcity);
@@ -1340,7 +1349,6 @@ void handle_map_info(int xsize, int ysize, int topology_id)
 
   map_allocate();
   init_client_goto();
-  init_mapview_decorations();
 
   generate_citydlg_dimensions();
 
@@ -1420,6 +1428,7 @@ void handle_game_info(struct packet_game_info *pinfo)
   }
   game.techpenalty=pinfo->techpenalty;
   game.foodbox=pinfo->foodbox;
+  game.civstyle=pinfo->civstyle;
   game.unhappysize = pinfo->unhappysize;
   game.cityfactor = pinfo->cityfactor;
 
@@ -1708,21 +1717,20 @@ void handle_conn_info(struct packet_conn_info *pinfo)
 }
 
 /*************************************************************************
-  Handles a conn_ping_info packet from the server.  This packet contains
-  ping times for each connection.
+...
 **************************************************************************/
-void handle_conn_ping_info(int connections, int *conn_id, float *ping_time)
+void handle_conn_ping_info(struct packet_conn_ping_info *packet)
 {
   int i;
 
-  for (i = 0; i < connections; i++) {
-    struct connection *pconn = find_conn_by_id(conn_id[i]);
+  for (i = 0; i < packet->connections; i++) {
+    struct connection *pconn = find_conn_by_id(packet->conn_id[i]);
 
     if (!pconn) {
       continue;
     }
 
-    pconn->ping_time = ping_time[i];
+    pconn->ping_time = packet->ping_time[i];
     freelog(LOG_DEBUG, "conn-id=%d, ping=%fs", pconn->id,
 	    pconn->ping_time);
   }
@@ -2211,7 +2219,6 @@ void handle_ruleset_unit(struct packet_ruleset_unit *p)
   u->move_rate          = p->move_rate;
   u->tech_requirement   = p->tech_requirement;
   u->impr_requirement   = p->impr_requirement;
-  u->gov_requirement    = p->gov_requirement;
   u->vision_range       = p->vision_range;
   u->transport_capacity = p->transport_capacity;
   u->hp                 = p->hp;
@@ -2221,9 +2228,9 @@ void handle_ruleset_unit(struct packet_ruleset_unit *p)
   u->flags              = p->flags;
   u->roles              = p->roles;
   u->happy_cost         = p->happy_cost;
-  output_type_iterate(o) {
-    u->upkeep[o] = p->upkeep[o];
-  } output_type_iterate_end;
+  u->shield_cost        = p->shield_cost;
+  u->food_cost          = p->food_cost;
+  u->gold_cost          = p->gold_cost;
   u->paratroopers_range = p->paratroopers_range;
   u->paratroopers_mr_req = p->paratroopers_mr_req;
   u->paratroopers_mr_sub = p->paratroopers_mr_sub;
@@ -2398,23 +2405,42 @@ void handle_ruleset_government(struct packet_ruleset_government *p)
   gov->rapture_size      = p->rapture_size;
   
   gov->unit_happy_cost_factor  = p->unit_happy_cost_factor;
+  gov->unit_shield_cost_factor = p->unit_shield_cost_factor;
+  gov->unit_food_cost_factor   = p->unit_food_cost_factor;
+  gov->unit_gold_cost_factor   = p->unit_gold_cost_factor;
+  
   gov->free_happy          = p->free_happy;
+  gov->free_shield         = p->free_shield;
+  gov->free_food           = p->free_food;
+  gov->free_gold           = p->free_gold;
 
-  output_type_iterate(o) {
-    gov->free_upkeep[o] = p->free_upkeep[o];
-    gov->unit_upkeep_factor[o] = p->unit_upkeep_factor[o];
+  gov->trade_before_penalty   = p->trade_before_penalty;
+  gov->shields_before_penalty = p->shields_before_penalty;
+  gov->food_before_penalty    = p->food_before_penalty;
 
-    gov->output_before_penalty[o] = p->output_before_penalty[o];
-    gov->celeb_output_before_penalty[o] = p->celeb_output_before_penalty[o];
-    gov->output_inc_tile[o] = p->output_inc_tile[o];
-    gov->celeb_output_inc_tile[o] = p->celeb_output_inc_tile[o];
+  gov->celeb_trade_before_penalty   = p->celeb_trade_before_penalty;
+  gov->celeb_shields_before_penalty = p->celeb_shields_before_penalty;
+  gov->celeb_food_before_penalty    = p->celeb_food_before_penalty;
 
-    gov->waste[o].level = p->waste_level[o];
-    gov->waste[o].fixed_distance = p->fixed_waste_distance[o];
-    gov->waste[o].distance_factor = p->waste_distance_factor[o];
-    gov->waste[o].extra_distance = p->extra_waste_distance[o];
-    gov->waste[o].max_distance_cap = p->waste_max_distance_cap[o];
-  } output_type_iterate_end;
+  gov->trade_bonus         = p->trade_bonus;
+  gov->shield_bonus        = p->shield_bonus;
+  gov->food_bonus          = p->food_bonus;
+
+  gov->celeb_trade_bonus   = p->celeb_trade_bonus;
+  gov->celeb_shield_bonus  = p->celeb_shield_bonus;
+  gov->celeb_food_bonus    = p->celeb_food_bonus;
+
+  gov->corruption_level    = p->corruption_level;
+  gov->fixed_corruption_distance = p->fixed_corruption_distance;
+  gov->corruption_distance_factor = p->corruption_distance_factor;
+  gov->extra_corruption_distance = p->extra_corruption_distance;
+  gov->corruption_max_distance_cap = p->corruption_max_distance_cap;
+  
+  gov->waste_level           = p->waste_level;
+  gov->fixed_waste_distance  = p->fixed_waste_distance;
+  gov->waste_distance_factor = p->waste_distance_factor;
+  gov->extra_waste_distance  = p->extra_waste_distance;
+  gov->waste_max_distance_cap = p->waste_max_distance_cap;
   
   gov->flags               = p->flags;
   gov->num_ruler_titles    = p->num_ruler_titles;
@@ -2477,18 +2503,19 @@ void handle_ruleset_terrain(struct packet_ruleset_terrain *p)
   sz_strlcpy(t->graphic_alt, p->graphic_alt);
   t->movement_cost = p->movement_cost;
   t->defense_bonus = p->defense_bonus;
-
-  output_type_iterate(o) {
-    t->output[o] = p->output[o];
-    t->special[0].output[o] = p->output_special_1[o];
-    t->special[1].output[o] = p->output_special_2[o];
-  } output_type_iterate_end;
-
-  sz_strlcpy(t->special[0].name_orig, p->special_1_name);
-  t->special[0].name = t->special[0].name_orig;
-
-  sz_strlcpy(t->special[1].name_orig, p->special_2_name);
-  t->special[1].name = t->special[1].name_orig;
+  t->food = p->food;
+  t->shield = p->shield;
+  t->trade = p->trade;
+  sz_strlcpy(t->special_1_name_orig, p->special_1_name);
+  t->special_1_name = t->special_1_name_orig;
+  t->food_special_1 = p->food_special_1;
+  t->shield_special_1 = p->shield_special_1;
+  t->trade_special_1 = p->trade_special_1;
+  sz_strlcpy(t->special_2_name_orig, p->special_2_name);
+  t->special_2_name = t->special_2_name_orig;
+  t->food_special_2 = p->food_special_2;
+  t->shield_special_2 = p->shield_special_2;
+  t->trade_special_2 = p->trade_special_2;
 
   sz_strlcpy(t->special[0].graphic_str, p->graphic_str_special_1);
   sz_strlcpy(t->special[0].graphic_alt, p->graphic_alt_special_1);
@@ -2558,10 +2585,10 @@ void handle_ruleset_nation(struct packet_ruleset_nation *p)
   }
   pl->city_style = p->city_style;
 
-  if (p->category[0] != '\0') {
-    pl->category = mystrdup(p->category);
+  if (p->class[0] != '\0') {
+    pl->class = mystrdup(p->class);
   } else {
-    pl->category = mystrdup(N_("Other"));
+    pl->class = mystrdup(N_("Other"));
   }
 
   if (p->legend[0] != '\0') {
@@ -2610,15 +2637,9 @@ void handle_ruleset_game(struct packet_ruleset_game *packet)
   int i;
 
   specialist_type_iterate(sp) {
-    int *bonus = game.rgame.specialists[sp].bonus;
-
     sz_strlcpy(game.rgame.specialists[sp].name, packet->specialist_name[sp]);
-    sz_strlcpy(game.rgame.specialists[sp].short_name,
-	       packet->specialist_short_name[sp]);
     game.rgame.specialists[sp].min_size = packet->specialist_min_size[sp];
-    output_type_iterate(o) {
-      bonus[o] = packet->specialist_bonus[sp * O_COUNT + o];
-    } output_type_iterate_end;
+    game.rgame.specialists[sp].bonus = packet->specialist_bonus[sp];
   } specialist_type_iterate_end;
   tilespec_setup_specialist_types();
 
@@ -2626,9 +2647,9 @@ void handle_ruleset_game(struct packet_ruleset_game *packet)
   game.rgame.forced_science = packet->forced_science;
   game.rgame.forced_luxury = packet->forced_luxury;
   game.rgame.forced_gold = packet->forced_gold;
-  output_type_iterate(o) {
-    game.rgame.min_city_center_output[o] = packet->min_city_center_output[o];
-  } output_type_iterate_end;
+  game.rgame.min_city_center_food = packet->min_city_center_food;
+  game.rgame.min_city_center_shield = packet->min_city_center_shield;
+  game.rgame.min_city_center_trade = packet->min_city_center_trade;
   game.rgame.min_dist_bw_cities = packet->min_dist_bw_cities;
   game.rgame.init_vis_radius_sq = packet->init_vis_radius_sq;
   game.rgame.hut_overflight = packet->hut_overflight;

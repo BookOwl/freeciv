@@ -99,7 +99,7 @@ static int con_dump(enum rfc_status rfc_status, const char *message, ...)
   my_vsnprintf(buf, sizeof(buf), message, args);
   va_end(args);
 
-  if (console_prompt_is_showing) {
+  if(console_prompt_is_showing) {
     fc_printf("\n");
   }
   if ((console_rfcstyle) && (rfc_status >= 0)) {
@@ -136,7 +136,7 @@ this allows con_puts(C_COMMENT,"");
 ************************************************************************/
 void con_puts(enum rfc_status rfc_status, const char *str)
 {
-  if (console_prompt_is_showing) {
+  if(console_prompt_is_showing) {
     fc_printf("\n");
   }
   if ((console_rfcstyle) && (rfc_status >= 0)) {

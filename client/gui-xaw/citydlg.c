@@ -240,11 +240,11 @@ static void get_contents_of_production(struct city_dialog *pdialog,
   if (pdialog) {
     pcity=pdialog->pcity;
     foodprod=pcity->food_prod;
-    foodsurplus = pcity->surplus[O_FOOD];
-    shieldprod=pcity->shield_prod + pcity->waste[O_SHIELD];
-    shieldsurplus = pcity->surplus[O_SHIELD];
-    tradeprod = pcity->surplus[O_TRADE] + pcity->waste[O_TRADE];
-    tradesurplus = pcity->surplus[O_TRADE];
+    foodsurplus=pcity->food_surplus;
+    shieldprod=pcity->shield_prod + pcity->shield_waste;
+    shieldsurplus=pcity->shield_surplus;
+    tradeprod=pcity->trade_prod+pcity->corruption;
+    tradesurplus=pcity->trade_prod;
   }
 
   my_snprintf(retbuf, n,

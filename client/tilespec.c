@@ -1553,7 +1553,8 @@ void tilespec_setup_unit_type(int id)
   struct unit_type *ut = get_unit_type(id);
   
   ut->sprite = lookup_sprite_tag_alt(ut->graphic_str, ut->graphic_alt,
-				     TRUE, "unit_type", ut->name);
+				     unit_type_exists(id), "unit_type",
+				     ut->name);
 
   /* should maybe do something if NULL, eg generic default? */
 }
@@ -1580,17 +1581,13 @@ void tilespec_setup_impr_type(int id)
 ***********************************************************************/
 void tilespec_setup_tech_type(int id)
 {
-  if (tech_exists(id)) {
-    advances[id].sprite
-      = lookup_sprite_tag_alt(advances[id].graphic_str,
-			      advances[id].graphic_alt,
-			      FALSE, "tech_type",
-			      get_tech_name(game.player_ptr, id));
+  advances[id].sprite
+    = lookup_sprite_tag_alt(advances[id].graphic_str,
+			    advances[id].graphic_alt,
+			    FALSE, "tech_type",
+			    get_tech_name(game.player_ptr, id));
 
-    /* should maybe do something if NULL, eg generic default? */
-  } else {
-    advances[id].sprite = NULL;
-  }
+  /* should maybe do something if NULL, eg generic default? */
 }
 
 /**********************************************************************
@@ -1778,9 +1775,8 @@ void tilespec_setup_tile_type(Terrain_type_id terrain)
     }
   }
 
-  for (i = 0; i < MAX_NUM_SPECIALS; i++) {
-    const char *name = tt->special[i].name;
-
+  for (i=0; i<2; i++) {
+    const char *name = (i != 0) ? tt->special_2_name : tt->special_1_name;
     if (name[0] != '\0') {
       draw->special[i]
 	= lookup_sprite_tag_alt(tt->special[i].graphic_str,
@@ -2472,7 +2468,7 @@ static int fill_terrain_sprite_array(struct drawn_sprite *sprs,
 #define LARGE_PRIME 10007
 #define SMALL_PRIME 1009
       assert(count < SMALL_PRIME);
-      assert((int)(LARGE_PRIME * MAP_INDEX_SIZE) > 0);
+      assert((int)(LARGE_PRIME * MAX_MAP_INDEX) > 0);
       count = ((ptile->index
 		* LARGE_PRIME) % SMALL_PRIME) % count;
       ADD_SPRITE(draw->layer[l].base.p[count],

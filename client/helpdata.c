@@ -241,11 +241,13 @@ void boot_help_texts(void)
 	help_list_init(&category_nodes);
 	if (current_type == HELP_UNIT) {
 	  unit_type_iterate(i) {
-	    pitem = new_help_item(current_type);
-	    my_snprintf(name, sizeof(name), " %s", unit_name(i));
-	    pitem->topic = mystrdup(name);
-	    pitem->text = mystrdup("");
-	    help_list_insert_back(&category_nodes, pitem);
+	    if (unit_type_exists(i)) {
+	      pitem = new_help_item(current_type);
+	      my_snprintf(name, sizeof(name), " %s", unit_name(i));
+	      pitem->topic = mystrdup(name);
+	      pitem->text = mystrdup("");
+	      help_list_insert_back(&category_nodes, pitem);
+	    }
 	  } unit_type_iterate_end;
 	} else if (current_type == HELP_TECH) {
 	  tech_type_iterate(i) {
@@ -503,18 +505,11 @@ const struct help_item *help_iter_next(void)
 char *helptext_building(char *buf, size_t bufsz, Impr_Type_id which,
 			const char *user_text)
 {
-  struct impr_type *imp;
-
+  struct impr_type *imp = &improvement_types[which];
+  
   assert(buf);
   buf[0] = '\0';
 
-  if (!improvement_exists(which)) {
-    freelog(LOG_ERROR, "Unknown building %d.", which);
-    return buf;
-  }
-
-  imp = &improvement_types[which];
-  
   if (imp->helptext && imp->helptext[0] != '\0') {
     my_snprintf(buf + strlen(buf), bufsz - strlen(buf),
 		"%s\n\n", _(imp->helptext));
@@ -584,7 +579,7 @@ char *helptext_building(char *buf, size_t bufsz, Impr_Type_id which,
   unit_type_iterate(utype) {
     const struct unit_type *u = get_unit_type(utype);
 
-    if (u->impr_requirement == which) {
+    if (unit_type_exists(utype) && u->impr_requirement == which) {
       if (u->tech_requirement != A_LAST) {
 	my_snprintf(buf + strlen(buf), bufsz - strlen(buf),
 		    _("* Allows %s (with %s).\n"), u->name,
@@ -649,19 +644,13 @@ void helptext_unit(char *buf, int i, const char *user_text)
   struct unit_type *utype;
 
   assert(buf&&user_text);
-  utype = get_unit_type(i);
-  if (!utype) {
-    freelog(LOG_ERROR, "Unknown unit %d.", i);
+  if (!unit_type_exists(i)) {
     strcpy(buf, user_text);
     return;
   }
+  utype = get_unit_type(i);
   
   buf[0] = '\0';
-  if (utype->gov_requirement != G_MAGIC) {
-    sprintf(buf + strlen(buf),
-	    _("* Can only be built with %s as government.\n"), 
-            get_government_name(utype->gov_requirement));
-  }
   if (unit_type_flag(i, F_NOBUILD)) {
     sprintf(buf + strlen(buf),
 	    _("* May not be built in cities.\n"));
@@ -983,12 +972,6 @@ void helptext_tech(char *buf, int i, const char *user_text)
   assert(buf&&user_text);
   strcpy(buf, user_text);
 
-  if (!tech_exists(i)) {
-    freelog(LOG_ERROR, "Unknown tech %d.", i);
-    strcpy(buf, user_text);
-    return;
-  }
-
   if (get_invention(game.player_ptr, i) != TECH_KNOWN) {
     if (get_invention(game.player_ptr, i) == TECH_REACHABLE) {
       sprintf(buf + strlen(buf),
@@ -1101,10 +1084,8 @@ void helptext_terrain(char *buf, int i, const char *user_text)
   
   buf[0] = '\0';
   
-  if (i < 0 || i >= T_COUNT) {
-    freelog(LOG_ERROR, "Unknown terrain %d.", i);
+  if (i<0 || i>=T_COUNT)
     return;
-  }
   pt = &tile_types[i];
 
   if (terrain_has_flag(i, TER_NO_POLLUTION)) {
@@ -1152,27 +1133,13 @@ void helptext_terrain(char *buf, int i, const char *user_text)
 *****************************************************************/
 void helptext_government(char *buf, int i, const char *user_text)
 {
-  struct government *gov;
+  struct government *gov = get_government(i);
   
   buf[0] = '\0';
-
-  if (i < 0 || i >= game.government_count) {
-    freelog(LOG_ERROR, "Unknown government %d.", i);
-    return;
-  }
-
-  gov = get_government(i);
+  
   if (gov->helptext[0] != '\0') {
     sprintf(buf, "%s\n\n", _(gov->helptext));
   }
-  unit_type_iterate(ut) {
-    struct unit_type *utype = get_unit_type(ut);
-
-    if (utype->gov_requirement == i) {
-      sprintf(buf + strlen(buf),
-	      _("* Allows you to build %s.\n"), unit_name(ut));
-    }
-  } unit_type_iterate_end;
   strcat(buf, user_text);
   wordwrap_string(buf, 68);
 }
@@ -1183,36 +1150,35 @@ void helptext_government(char *buf, int i, const char *user_text)
 char *helptext_unit_upkeep_str(int i)
 {
   static char buf[128];
-  struct unit_type *utype;
-  int any = 0;
+  struct unit_type *utype = get_unit_type(i);
 
-  utype = get_unit_type(i);
-  if (!utype) {
-    freelog(LOG_ERROR, "Unknown unit %d.", i);
-    return "";
-  }
-
-
-  buf[0] = '\0';
-  output_type_iterate(o) {
-    if (utype->upkeep[o] > 0) {
-      /* TRANS: "2 Food" or ", 1 shield" */
-      cat_snprintf(buf, sizeof(buf), _("%s%d %s"),
-	      (any > 0 ? ", " : ""), utype->upkeep[o],
-	      get_output_name(o));
+  if (utype->shield_cost > 0 || utype->food_cost > 0
+      || utype->gold_cost > 0 || utype->happy_cost > 0) {
+    int any = 0;
+    buf[0] = '\0';
+    if (utype->shield_cost > 0) {
+      sprintf(buf+strlen(buf), _("%s%d shield"),
+	      (any > 0 ? ", " : ""), utype->shield_cost);
       any++;
     }
-  } output_type_iterate_end;
-  if (utype->happy_cost > 0) {
-    /* TRANS: "2 unhappy" or ", 1 unhappy" */
-    cat_snprintf(buf, sizeof(buf), _("%s%d unhappy"),
-	    (any > 0 ? ", " : ""), utype->happy_cost);
-    any++;
-  }
-
-  if (any == 0) {
+    if (utype->food_cost > 0) {
+      sprintf(buf+strlen(buf), _("%s%d food"),
+	      (any > 0 ? ", " : ""), utype->food_cost);
+      any++;
+    }
+    if (utype->happy_cost > 0) {
+      sprintf(buf+strlen(buf), _("%s%d unhappy"),
+	      (any > 0 ? ", " : ""), utype->happy_cost);
+      any++;
+    }
+    if (utype->gold_cost > 0) {
+      sprintf(buf+strlen(buf), _("%s%d gold"),
+	      (any > 0 ? ", " : ""), utype->gold_cost);
+      any++;
+    }
+  } else {
     /* strcpy(buf, _("None")); */
-    snprintf(buf, sizeof(buf), "%d", 0);
+    sprintf(buf, "%d", 0);
   }
   return buf;
 }

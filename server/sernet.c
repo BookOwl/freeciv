@@ -756,7 +756,6 @@ static int server_accept_connection(int sockfd)
       pconn->access_level = access_level_for_next_connection();
       pconn->delayed_disconnect = FALSE;
       pconn->notify_of_writable_data = NULL;
-      pconn->is_server = TRUE;
       pconn->server.currently_processed_request_id = 0;
       pconn->server.last_request_id_seen = 0;
       pconn->server.authentication_tries = 0;
@@ -967,6 +966,7 @@ static void send_ping_times_to_all(void)
   } conn_list_iterate_end;
 
   packet.connections = i;
+  packet.old_connections = MIN(i, MAX_NUM_PLAYERS);
 
   i = 0;
   conn_list_iterate(game.game_connections, pconn) {
@@ -976,6 +976,10 @@ static void send_ping_times_to_all(void)
     assert(i < ARRAY_SIZE(packet.conn_id));
     packet.conn_id[i] = pconn->id;
     packet.ping_time[i] = pconn->ping_time;
+    if (i < packet.old_connections) {
+      packet.old_conn_id[i] = pconn->id;
+      packet.old_ping_time[i] = pconn->ping_time;
+    }
     i++;
   } conn_list_iterate_end;
   lsend_packet_conn_ping_info(&game.est_connections, &packet);

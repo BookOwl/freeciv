@@ -139,19 +139,25 @@ void update_report_dialogs(void)
 /****************************************************************
 ...
 *****************************************************************/
-void popup_science_dialog(bool raise)
+void popup_science_dialog(bool make_modal)
 {
   if(!science_dialog_shell) {
-    science_dialog_shell_is_modal = FALSE;
+    science_dialog_shell_is_modal = make_modal;
     
-    create_science_dialog(FALSE);
+    create_science_dialog(make_modal);
   }
 
   gui_dialog_present(science_dialog_shell);
+}
 
-  if (raise) {
-    gui_dialog_raise(science_dialog_shell);
-  }
+
+/****************************************************************
+ Raises the science dialog.
+****************************************************************/
+void raise_science_dialog(void)
+{
+  popup_science_dialog(FALSE);
+  gui_dialog_raise(science_dialog_shell);
 }
 
 
@@ -591,19 +597,27 @@ void science_dialog_update(void)
 /****************************************************************
 ...
 ****************************************************************/
-void popup_economy_report_dialog(bool raise)
+void popup_economy_report_dialog(bool make_modal)
 {
   if(!economy_dialog_shell) {
-    economy_dialog_shell_is_modal = FALSE;
+    economy_dialog_shell_is_modal = make_modal;
 
-    create_economy_report_dialog(FALSE);
+    create_economy_report_dialog(make_modal);
   }
 
   gui_dialog_present(economy_dialog_shell);
-  if (raise) {
-    gui_dialog_raise(economy_dialog_shell);
-  }
 }
+
+
+/****************************************************************
+ Raises the economy report dialog.
+****************************************************************/
+void raise_economy_report_dialog(void)
+{
+  popup_economy_report_dialog(FALSE);
+  gui_dialog_raise(economy_dialog_shell);
+}
+
 
 /****************************************************************
  Close the economy report dialog.
@@ -878,19 +892,27 @@ void economy_report_dialog_update(void)
 /****************************************************************
 ...
 ****************************************************************/
-void popup_activeunits_report_dialog(bool raise)
+void popup_activeunits_report_dialog(bool make_modal)
 {
   if(!activeunits_dialog_shell) {
-    activeunits_dialog_shell_is_modal = FALSE;
+    activeunits_dialog_shell_is_modal = make_modal;
     
-    create_activeunits_report_dialog(FALSE);
+    create_activeunits_report_dialog(make_modal);
   }
 
   gui_dialog_present(activeunits_dialog_shell);
-  if (raise) {
-    gui_dialog_raise(activeunits_dialog_shell);
-  }
 }
+
+
+/****************************************************************
+ Raises the units report dialog.
+****************************************************************/
+void raise_activeunits_report_dialog(void)
+{
+  popup_activeunits_report_dialog(FALSE);
+  gui_dialog_raise(activeunits_dialog_shell);
+}
+
 
 /****************************************************************
  Closes the units report dialog.
@@ -1025,7 +1047,11 @@ static void activeunits_selection_callback(GtkTreeSelection *selection,
     
     n = gtk_tree_model_iter_n_children(GTK_TREE_MODEL(activeunits_store), NULL);
 
-    is_unit_type = (row < n - 1);
+    if (row < n - 1 && unit_type_exists(activeunits_type[row])) {
+      is_unit_type = TRUE;
+    } else {
+      is_unit_type = FALSE;
+    }
   }
 
   if (!is_unit_type) {
@@ -1099,7 +1125,10 @@ static void activeunits_command_callback(struct gui_dialog *dlg, int response)
   /* nearest & upgrade commands. */
   row = gtk_tree_selection_get_row(activeunits_selection);
   ut1 = activeunits_type[row];
-  CHECK_UNIT_TYPE(ut1);
+
+  if (!unit_type_exists(ut1)) {
+    return;
+  }
 
   if (response == ACTIVEUNITS_NEAREST) {
     struct tile *ptile;
@@ -1147,7 +1176,9 @@ void activeunits_report_dialog_update(void)
 {
   struct repoinfo {
     int active_count;
-    int upkeep[O_COUNT];
+    int upkeep_shield;
+    int upkeep_food;
+    int upkeep_gold;
     int building_count;
   };
 
@@ -1167,15 +1198,16 @@ void activeunits_report_dialog_update(void)
     unit_list_iterate(game.player_ptr->units, punit) {
       (unitarray[punit->type].active_count)++;
       if (punit->homecity) {
-	output_type_iterate(o) {
-	  unitarray[punit->type].upkeep[o] += punit->upkeep[o];
-	} output_type_iterate_end;
+	unitarray[punit->type].upkeep_shield += punit->upkeep;
+	unitarray[punit->type].upkeep_food += punit->upkeep_food;
+	unitarray[punit->type].upkeep_gold += punit->upkeep_gold;
       }
-    } unit_list_iterate_end;
+    }
+    unit_list_iterate_end;
     city_list_iterate(game.player_ptr->cities,pcity) {
-      if (pcity->is_building_unit) {
+      if (pcity->is_building_unit &&
+	  (unit_type_exists (pcity->currently_building)))
 	(unitarray[pcity->currently_building].building_count)++;
-      }
     }
     city_list_iterate_end;
 
@@ -1183,8 +1215,7 @@ void activeunits_report_dialog_update(void)
     memset(&unittotals, '\0', sizeof(unittotals));
     unit_type_iterate(i) {
     
-      if (unitarray[i].active_count > 0
-	  || unitarray[i].building_count > 0) {
+      if ((unitarray[i].active_count > 0) || (unitarray[i].building_count > 0)) {
 	can = (can_upgrade_unittype(game.player_ptr, i) != -1);
 	
         gtk_list_store_append(activeunits_store, &it);
@@ -1192,9 +1223,9 @@ void activeunits_report_dialog_update(void)
 		1, can,
 		2, unitarray[i].building_count,
 		3, unitarray[i].active_count,
-		4, unitarray[i].upkeep[O_SHIELD],
-		5, unitarray[i].upkeep[O_FOOD],
-		6, unitarray[i].upkeep[O_GOLD],
+		4, unitarray[i].upkeep_shield,
+		5, unitarray[i].upkeep_food,
+		6, unitarray[i].upkeep_gold,
 		7, TRUE, -1);
 	g_value_init(&value, G_TYPE_STRING);
 	g_value_set_static_string(&value, unit_name(i));
@@ -1204,9 +1235,9 @@ void activeunits_report_dialog_update(void)
 	activeunits_type[k]=(unitarray[i].active_count > 0) ? i : U_LAST;
 	k++;
 	unittotals.active_count += unitarray[i].active_count;
-	output_type_iterate(o) {
-	  unittotals.upkeep[o] += unitarray[i].upkeep[o];	  
-	} output_type_iterate_end;
+	unittotals.upkeep_shield += unitarray[i].upkeep_shield;
+	unittotals.upkeep_food += unitarray[i].upkeep_food;
+	unittotals.upkeep_gold += unitarray[i].upkeep_gold;
 	unittotals.building_count += unitarray[i].building_count;
       }
     } unit_type_iterate_end;
@@ -1216,9 +1247,9 @@ void activeunits_report_dialog_update(void)
 	    1, FALSE,
     	    2, unittotals.building_count,
     	    3, unittotals.active_count,
-    	    4, unittotals.upkeep[O_SHIELD],
-    	    5, unittotals.upkeep[O_FOOD],
-	    6, unittotals.upkeep[O_GOLD],
+    	    4, unittotals.upkeep_shield,
+    	    5, unittotals.upkeep_food,
+	    6, unittotals.upkeep_gold,
 	    7, FALSE, -1);
     g_value_init(&value, G_TYPE_STRING);
     g_value_set_static_string(&value, _("Totals:"));

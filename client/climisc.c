@@ -379,7 +379,8 @@ void center_on_something(void)
      * is guaranteed to be larger than the map will be.  Although this is
      * a misuse of map.xsize and map.ysize (which are native dimensions),
      * it should give a sufficiently large radius. */
-    iterate_outward(ctile, map.xsize + map.ysize, ptile) {
+    iterate_outward(native_pos_to_tile(map.xsize / 2, map.ysize / 2),
+		    map.xsize + map.ysize, ptile) {
       if (tile_get_known(ptile) != TILE_UNKNOWN) {
 	ctile = ptile;
 	break;
@@ -955,14 +956,11 @@ void reports_force_thaw(void)
   output_window_force_thaw();
 }
 
-/***************************************************************************
-  Return a known_type for the given tile for the player.
-
-  FIXME: This function is used by the common code, but separate
-  implementations are provided by server and client.
-***************************************************************************/
+/*************************************************************************
+...
+*************************************************************************/
 enum known_type map_get_known(const struct tile *ptile,
-			      const struct player *pplayer)
+			      struct player *pplayer)
 {
   assert(pplayer == game.player_ptr);
   return tile_get_known(ptile);

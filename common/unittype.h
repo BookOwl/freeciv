@@ -191,12 +191,10 @@ struct unit_type {
   int move_rate;
   int tech_requirement;
   int impr_requirement;		/* should be Impr_Type_id */
-  int gov_requirement;
   int vision_range;
   int transport_capacity;
   int hp;
   int firepower;
-#define U_NOT_OBSOLETED ((Unit_Type_id)(-1))
   int obsoleted_by;
   int fuel;
 
@@ -204,7 +202,9 @@ struct unit_type {
   bv_roles roles;
 
   int happy_cost;  /* unhappy people in home city */
-  int upkeep[O_MAX];
+  int shield_cost; /* normal upkeep cost */
+  int food_cost;   /* settler food cost */
+  int gold_cost;   /* gold upkeep */
 
   int paratroopers_range; /* only valid for F_PARATROOPERS */
   int paratroopers_mr_req;
@@ -221,13 +221,13 @@ struct unit_type {
 
 
 extern struct unit_type unit_types[U_LAST];
-#define CHECK_UNIT_TYPE(ut) (assert((ut) >= 0 && (ut) < game.num_unit_types))
 
+bool unit_type_exists(Unit_Type_id id);
 struct unit_type *get_unit_type(Unit_Type_id id);
 struct unit_type *unit_type(struct unit *punit);
 
 bool unit_type_flag(Unit_Type_id id, int flag);
-bool unit_flag(const struct unit *punit, enum unit_flag_id flag);
+bool unit_flag(struct unit *punit, enum unit_flag_id flag);
 bool unit_has_role(Unit_Type_id id, int role);
 
 bool is_water_unit(Unit_Type_id id);
@@ -247,9 +247,10 @@ const char *unit_class_name(Unit_Class_id id);
 const char *get_unit_name(Unit_Type_id id);
 const char *get_units_with_flag_string(int flag);
 
-int utype_upkeep_cost(const struct unit_type *ut,
-		      const struct government *gov, Output_type_id otype);
+int utype_shield_cost(struct unit_type *ut, struct government *g);
+int utype_food_cost(struct unit_type *ut, struct government *g);
 int utype_happy_cost(struct unit_type *ut, struct government *g);
+int utype_gold_cost(struct unit_type *ut, struct government *g);
 
 int can_upgrade_unittype(struct player *pplayer, Unit_Type_id id);
 int unit_upgrade_price(const struct player * const pplayer,

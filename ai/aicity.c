@@ -68,8 +68,8 @@
   } } city_list_iterate_end; }
 
 #define CITY_EMERGENCY(pcity)                        \
- (pcity->surplus[O_SHIELD] < 0 || city_unhappy(pcity)   \
-  || pcity->food_stock + pcity->surplus[O_FOOD] < 0)
+ (pcity->shield_surplus < 0 || city_unhappy(pcity)   \
+  || pcity->food_stock + pcity->food_surplus < 0)
 #define LOG_BUY LOG_DEBUG
 
 static void resolve_city_emergency(struct player *pplayer, struct city *pcity);
@@ -82,8 +82,8 @@ static void ai_sell_obsolete_buildings(struct city *pcity);
 **************************************************************************/
 int ai_eval_calc_city(struct city *pcity, struct ai_data *ai)
 {
-  int i = (pcity->surplus[O_FOOD] * ai->food_priority
-           + pcity->surplus[O_SHIELD] * ai->shield_priority
+  int i = (pcity->food_surplus * ai->food_priority
+           + pcity->shield_surplus * ai->shield_priority
            + pcity->luxury_total * ai->luxury_priority
            + pcity->tax_total * ai->gold_priority
            + pcity->science_total * ai->science_priority
@@ -92,7 +92,7 @@ int ai_eval_calc_city(struct city *pcity, struct ai_data *ai)
            - pcity->ppl_angry[4] * ai->angry_priority
            - pcity->pollution * ai->pollution_priority);
 
-  if (pcity->surplus[O_FOOD] < 0 || pcity->surplus[O_SHIELD] < 0) {
+  if (pcity->food_surplus < 0 || pcity->shield_surplus < 0) {
     /* The city is unmaintainable, it can't be good */
     i = MIN(i, 0);
   }
@@ -106,38 +106,41 @@ int ai_eval_calc_city(struct city *pcity, struct ai_data *ai)
 static inline int city_want(struct player *pplayer, struct city *acity, 
                             struct ai_data *ai)
 {
-  int want = 0, prod[O_COUNT];
+  int want = 0, food, trade, shields, lux, sci, tax;
 
-  get_citizen_output(acity, prod); /* this also clears prod[] */
-  output_type_iterate(o) {
-    prod[o] -= city_waste(acity, o, prod[o]);
-  } output_type_iterate_end;
-  add_tax_income(pplayer, prod);
+  get_food_trade_shields(acity, &food, &trade, &shields);
+  trade -= city_corruption(acity, trade);
+  shields -= city_waste(acity, shields);
+  get_tax_income(pplayer, trade, &sci, &lux, &tax);
+  sci += (acity->specialists[SP_SCIENTIST]
+	  * game.rgame.specialists[SP_SCIENTIST].bonus);
+  lux += (acity->specialists[SP_ELVIS]
+	  * game.rgame.specialists[SP_ELVIS].bonus);
+  tax += (acity->specialists[SP_TAXMAN]
+	  * game.rgame.specialists[SP_TAXMAN].bonus);
 
   built_impr_iterate(acity, i) {
-    prod[O_GOLD] -= improvement_upkeep(acity, i);
+    tax -= improvement_upkeep(acity, i);
   } built_impr_iterate_end;
-  /* Unit upkeep isn't handled here.  Unless we do a full city_refresh it
-   * won't be changed anyway. */
 
-  want += prod[O_FOOD] * ai->food_priority;
-  if (prod[O_SHIELD] != 0) {
-    want += ((prod[O_SHIELD] * get_city_output_bonus(acity, O_SHIELD)) / 100)
+  want += food * ai->food_priority;
+  if (shields != 0) {
+    want += ((shields * get_city_shield_bonus(acity)) / 100)
             * ai->shield_priority;
-    want -= city_pollution(acity, prod[O_SHIELD]) * ai->pollution_priority;
+    want -= city_pollution(acity, shields) * ai->pollution_priority;
   }
-  if (prod[O_LUXURY] > 0) {
-    want += ((prod[O_LUXURY] * get_city_output_bonus(acity, O_LUXURY)) / 100)
+  if (lux > 0) {
+    want += ((lux * get_city_luxury_bonus(acity)) / 100)
             * ai->luxury_priority;
   }
-  if (prod[O_SCIENCE] > 0) {
-    want += ((prod[O_SCIENCE] * get_city_output_bonus(acity, O_SCIENCE)) / 100)
+  if (sci > 0) {
+    want += ((sci * get_city_science_bonus(acity)) / 100)
             * ai->science_priority;
   }
-  if (prod[O_GOLD] > 0) {
-    prod[O_GOLD] *= get_city_output_bonus(acity, O_GOLD) / 100;
+  if (tax > 0) {
+    tax *= get_city_tax_bonus(acity) / 100;
   }
-  want += prod[O_GOLD] * ai->gold_priority;
+  want += tax * ai->gold_priority;
 
   return want;
 }
@@ -304,7 +307,7 @@ static void adjust_building_want_by_effects(struct city *pcity,
 		* (nplayers - amount)) / (nplayers * amount * 100);
 	    break;
 	  case EFT_GROWTH_FOOD:
-	    v += c * 4 + (amount / 7) * pcity->surplus[O_FOOD];
+	    v += c * 4 + (amount / 7) * pcity->food_surplus;
 	    break;
 	  case EFT_AIRLIFT:
             /* FIXME: We need some smart algorithm here. The below is 
@@ -359,9 +362,9 @@ static void adjust_building_want_by_effects(struct city *pcity,
 	    /* there not being a break here is deliberate, mind you */
 	  case EFT_SIZE_ADJ: 
             if (!city_can_grow_to(pcity, pcity->size + 1)) {
-	      v += pcity->surplus[O_FOOD] * ai->food_priority * amount;
+	      v += pcity->food_surplus * ai->food_priority * amount;
               if (pcity->size == game.aqueduct_size) {
-                v += 30 * pcity->surplus[O_FOOD];
+                v += 30 * pcity->food_surplus;
               }
 	    }
 	    v += c * amount * 4 / game.aqueduct_size;
@@ -501,7 +504,7 @@ static void adjust_building_want_by_effects(struct city *pcity,
    }
 
   /* Adjust by building cost */
-  v -= pimpr->build_cost / (pcity->surplus[O_SHIELD] * 10 + 1);
+  v -= pimpr->build_cost / (pcity->shield_surplus * 10 + 1);
 
   /* Set */
   pcity->ai.building_want[id] = v;
@@ -533,7 +536,7 @@ void ai_manage_buildings(struct player *pplayer)
         pcity->ai.building_want[id] = 0; /* do recalc */
       }
       if (city_got_building(pcity, id)
-          || pcity->surplus[O_SHIELD] == 0
+          || pcity->shield_surplus == 0
           || !can_build_improvement(pcity, id)
           || improvement_redundant(pplayer, pcity, id, FALSE)) {
         continue; /* Don't build redundant buildings */
@@ -877,7 +880,7 @@ static void ai_spend_gold(struct player *pplayer)
       if (get_city_bonus(pcity, EFT_GROWTH_FOOD) == 0
           && pcity->size == 1
           && city_granary_size(pcity->size)
-             > pcity->food_stock + pcity->surplus[O_FOOD]) {
+             > pcity->food_stock + pcity->food_surplus) {
         /* Don't buy settlers in size 1 cities unless we grow next turn */
         continue;
       } else if (city_list_size(&pplayer->cities) > 6) {
@@ -1047,7 +1050,7 @@ static void resolve_city_emergency(struct player *pplayer, struct city *pcity)
           "Emergency in %s (%s, angry%d, unhap%d food%d, prod%d)",
           pcity->name, city_unhappy(pcity) ? "unhappy" : "content",
           pcity->ppl_angry[4], pcity->ppl_unhappy[4],
-          pcity->surplus[O_FOOD], pcity->surplus[O_SHIELD]);
+          pcity->food_surplus, pcity->shield_surplus);
 
   city_list_init(&minilist);
   map_city_radius_iterate(pcity->tile, ptile) {

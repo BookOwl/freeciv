@@ -30,30 +30,21 @@
 #include "log.h"
 #include "mem.h"
 
+// fixme
+#include "timing.h"
+#include "widget.h"
+
 static SDL_Surface *screen;
 static int other_fd = -1;
 
-/* SDL interprets each pixel as a 32-bit number, so our masks must depend
- * on the endianness (byte order) of the machine */
-#if SDL_BYTEORDER == SDL_BIG_ENDIAN
-static Uint32 rmask = 0xff000000;
-static Uint32 gmask = 0x00ff0000;
-static Uint32 bmask = 0x0000ff00;
-static Uint32 amask = 0x000000ff;
-#else
-static Uint32 rmask = 0x000000ff;
-static Uint32 gmask = 0x0000ff00;
-static Uint32 bmask = 0x00ff0000;
-static Uint32 amask = 0xff000000;
-#endif
+#define P IMAGE_GET_ADDRESS
 
 /*************************************************************************
-  Initialize video mode and SDL.
+  ...
 *************************************************************************/
 void be_init(const struct ct_size *screen_size, bool fullscreen)
 {
-  Uint32 flags = SDL_SWSURFACE | (fullscreen ? SDL_FULLSCREEN : 0)
-                 | SDL_ANYFORMAT;
+  Uint32 flags = SDL_HWSURFACE | (fullscreen ? SDL_FULLSCREEN : 0);
 
   char device[20];
 
@@ -63,7 +54,7 @@ void be_init(const struct ct_size *screen_size, bool fullscreen)
   if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_NOPARACHUTE) < 0) {
     freelog(LOG_FATAL, _("Unable to initialize SDL library: %s"),
 	    SDL_GetError());
-    exit(EXIT_FAILURE);
+    exit(1);
   }
   atexit(SDL_Quit);
 
@@ -98,7 +89,7 @@ void be_init(const struct ct_size *screen_size, bool fullscreen)
 #endif
 
   screen =
-      SDL_SetVideoMode(screen_size->width, screen_size->height, 32, flags);
+      SDL_SetVideoMode(screen_size->width, screen_size->height, 0, flags);
   if (screen == NULL) {
     freelog(LOG_FATAL, _("Can't set video mode: %s"), SDL_GetError());
     exit(1);
@@ -112,17 +103,12 @@ void be_init(const struct ct_size *screen_size, bool fullscreen)
   freelog(LOG_NORMAL, "  format: bits-per-pixel=%d bytes-per-pixel=%d",
 	  screen->format->BitsPerPixel, screen->format->BytesPerPixel);
   SDL_EnableUNICODE(1);
-  SDL_EnableKeyRepeat(SDL_DEFAULT_REPEAT_DELAY, SDL_DEFAULT_REPEAT_INTERVAL);
-#if 0
-  SDL_EventState(SDL_KEYUP, SDL_IGNORE);
-  SDL_EventState(SDL_ACTIVEEVENT, SDL_IGNORE);
-#endif
 }
 
 /*************************************************************************
   ...
 *************************************************************************/
-static inline bool copy_event(struct be_event *event, SDL_Event *sdl_event)
+static bool copy_event(struct be_event *event, SDL_Event * sdl_event)
 {
   switch (sdl_event->type) {
   case SDL_VIDEOEXPOSE:
@@ -176,17 +162,12 @@ static inline bool copy_event(struct be_event *event, SDL_Event *sdl_event)
 	event->key.type = BE_KEY_LEFT;
       } else if (key == SDLK_RIGHT) {
 	event->key.type = BE_KEY_RIGHT;
-      } else if (key == SDLK_DOWN) {
-	event->key.type = BE_KEY_DOWN;
-      } else if (key == SDLK_UP) {
-	event->key.type = BE_KEY_UP;
       } else if (key == SDLK_ESCAPE) {
 	event->key.type = BE_KEY_ESCAPE;
       } else {
 	Uint16 unicode = sdl_event->key.keysym.unicode;
 
 	if (unicode == 0) {
-          freelog(LOG_NORMAL, "unicode == 0");
 	  return FALSE;
 	}
 	if ((unicode & 0xFF80) != 0) {
@@ -204,11 +185,11 @@ static inline bool copy_event(struct be_event *event, SDL_Event *sdl_event)
     }
     break;
   case SDL_QUIT:
-    exit(EXIT_SUCCESS);
+    exit(0);
 
   default:
-    // freelog(LOG_NORMAL, "ignored event %d\n", sdl_event->type);
-    return FALSE;
+    //printf("got event %d\n", sdl_event->type);
+    return false;
   }
   return TRUE;
 }
@@ -228,12 +209,6 @@ void be_next_event(struct be_event *event, struct timeval *timeout)
       SDL_GetTicks() + timeout->tv_sec * 1000 + timeout->tv_usec / 1000;
 
   for (;;) {
-    SDL_Event sdl_event;
-
-    event->type = BE_NO_EVENT;
-    event->key.key = 0;
-    event->key.type = NUM_BE_KEYS;
-
     /* Test the network socket. */
     if (other_fd != -1) {
       fd_set readfds, exceptfds;
@@ -266,21 +241,17 @@ void be_next_event(struct be_event *event, struct timeval *timeout)
     }
 
     /* Normal SDL events */
-    while (SDL_PollEvent(&sdl_event)) {
-      if (copy_event(event, &sdl_event)) {
-#if 0
-        /* For debugging sdl slowness - remove me when done */
-        if (event->type == BE_KEY_PRESSED) {
-          printf("sending event %d:%d\n", event->key.key, event->key.type);
-        }
-#endif
-        return;
+    {
+      SDL_Event sdl_event;
+      while (SDL_PollEvent(&sdl_event)) {
+	if (copy_event(event, &sdl_event)) {
+	  return;
+	}
       }
     }
 
     /* Wait 10ms and do polling */
     SDL_Delay(10);
-    assert(event->type == BE_NO_EVENT);
   }
 }
 
@@ -300,19 +271,122 @@ void be_remove_net_input(void)
   other_fd = -1;
 }
 
+#define COMP_565_RED(x)		((((x)>>3)&0x1f)<<11)
+#define COMP_565_GREEN(x)	((((x)>>2)&0x3f)<< 5)
+#define COMP_565_BLUE(x)	((((x)>>3)&0x1f)<< 0)
+
 /*************************************************************************
-  Copy our osda to the screen.  No alpha-blending here.
+  ...
+*************************************************************************/
+static void fill_surface_from_image_565(SDL_Surface * surface,
+					const struct image *image)
+{
+  int x, y;
+  unsigned short *pdest = (unsigned short *) surface->pixels;
+  int extra_per_line = surface->pitch / 2 - image->width;
+
+  for (y = 0; y < image->height; y++) {
+    for (x = 0; x < image->width; x++) {
+      unsigned char *psrc = P(image, x, y);
+      unsigned short new_value =
+	  (COMP_565_RED(psrc[0]) | COMP_565_GREEN(psrc[1]) |
+	   COMP_565_BLUE(psrc[2]));
+      *pdest = new_value;
+      pdest++;
+    }
+    pdest += extra_per_line;
+  }
+}
+
+#define COMP_555_RED(x)		((((x)>>3)&0x1f)<<10)
+#define COMP_555_GREEN(x)	((((x)>>3)&0x1f)<< 5)
+#define COMP_555_BLUE(x)	((((x)>>3)&0x1f)<< 0)
+
+/*************************************************************************
+  ...
+*************************************************************************/
+static void fill_surface_from_image_555(SDL_Surface * surface,
+					const struct image *image)
+{
+  int x, y;
+  unsigned short *pdest = (unsigned short *) surface->pixels;
+  int extra_per_line = surface->pitch / 2 - image->width;
+
+  for (y = 0; y < image->height; y++) {
+    for (x = 0; x < image->width; x++) {
+      unsigned char *psrc = P(image, x, y);
+      unsigned short new_value =
+	  (COMP_555_RED(psrc[0]) | COMP_555_GREEN(psrc[1]) |
+	   COMP_555_BLUE(psrc[2]));
+      *pdest = new_value;
+      pdest++;
+    }
+    pdest += extra_per_line;
+  }
+}
+
+/*************************************************************************
+  ...
+*************************************************************************/
+static void fill_surface_from_image_8888(SDL_Surface * surface,
+					const struct image *image)
+{
+  int x, y;
+  unsigned char *pdest = (unsigned char *) surface->pixels;
+  int extra_per_line = surface->pitch - image->width*4;
+
+  for (y = 0; y < image->height; y++) {
+    for (x = 0; x < image->width; x++) {
+      unsigned char *psrc = P(image, x, y);
+
+      pdest[0] = psrc[2];
+      pdest[1] = psrc[1];
+      pdest[2] = psrc[0];
+
+      pdest += 4;
+    }
+    pdest += extra_per_line;
+  }
+}
+
+/*************************************************************************
+  ...
 *************************************************************************/
 void be_copy_osda_to_screen(struct osda *src)
 {
-  SDL_Surface *buf;
+  assert(screen->w == src->image->width && screen->h == src->image->height);
 
-  buf = SDL_CreateRGBSurfaceFrom(src->image->data, src->image->width,
-                                 src->image->height, 32, src->image->pitch,
-                                 rmask, gmask, bmask, amask);
-  SDL_BlitSurface(buf, NULL, screen, NULL);
-  SDL_Flip(screen);
-  SDL_FreeSurface(buf);
+  SDL_LockSurface(screen);
+
+  if (screen->format->Rmask == 0xf800 && screen->format->Gmask == 0x7e0 &&
+      screen->format->Bmask == 0x1f && screen->format->Amask == 0 &&
+      screen->format->BitsPerPixel == 16
+      && screen->format->BytesPerPixel == 2) {
+    fill_surface_from_image_565(screen, src->image);
+  }else if (screen->format->Rmask == 0x7c00 && screen->format->Gmask == 0x3e0 &&
+      screen->format->Bmask == 0x1f && screen->format->Amask == 0 &&
+      screen->format->BitsPerPixel == 16
+      && screen->format->BytesPerPixel == 2) {
+    fill_surface_from_image_555(screen, src->image);
+  } else if (screen->format->Rmask == 0xff0000
+	     && screen->format->Gmask == 0xff00
+	     && screen->format->Bmask == 0xff
+	     && screen->format->Amask == 0
+	     && screen->format->BitsPerPixel == 32
+	     && screen->format->BytesPerPixel == 4) {
+    fill_surface_from_image_8888(screen, src->image);
+  } else {
+    fprintf(stderr, "ERROR: unknown screen format: red=0x%x, "
+	    "green=0x%x, blue=0x%x, alpha=0x%x bits-per-pixel=%d "
+	    "bytes-per-pixel=%d\n",
+	    screen->format->Rmask, screen->format->Gmask,
+	    screen->format->Bmask, screen->format->Amask,
+	    screen->format->BitsPerPixel, screen->format->BytesPerPixel);
+    assert(0);
+  }
+
+  SDL_UnlockSurface(screen);
+  SDL_UpdateRect(screen, 0, 0, 0, 0);
 }
 
 /*************************************************************************
@@ -329,5 +403,5 @@ void be_screen_get_size(struct ct_size *size)
 *************************************************************************/
 bool be_supports_fullscreen(void)
 {
-  return TRUE;
+    return TRUE;
 }

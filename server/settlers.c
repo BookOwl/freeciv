@@ -137,7 +137,7 @@ void init_settlers(void)
   /* (Re)allocate map arrays.  Note that the server may run more than one
    * game so the realloc() is necessary. */
   territory = fc_realloc(territory,
-                         MAP_INDEX_SIZE * sizeof(*territory));
+                         map.xsize * map.ysize * sizeof(*territory));
 }
 
 /**************************************************************************
@@ -243,13 +243,13 @@ int city_tile_value(struct city *pcity, int x, int y,
   if (prodneed > 0) {
     shield_value += 9 * (MIN(shield_value, prodneed));
   }
-  shield_value *= SHIELD_WEIGHTING * pcity->bonus[O_SHIELD];
+  shield_value *= SHIELD_WEIGHTING * city_shield_bonus(pcity);
   shield_value /= 100;
 
   trade_value = (city_get_trade_tile(x, y, pcity) * pcity->ai.trade_want
-       * (pcity->bonus[O_GOLD] * plr->economic.tax
-	  + pcity->bonus[O_LUXURY] * plr->economic.luxury
-	  + pcity->bonus[O_SCIENCE] * plr->economic.science)) / 10000;
+       * (city_tax_bonus(pcity) * plr->economic.tax
+	  + city_luxury_bonus(pcity) * plr->economic.luxury
+	  + city_science_bonus(pcity) * plr->economic.science)) / 10000;
 
   return food_value + shield_value + trade_value;
 }  
@@ -750,7 +750,7 @@ static int ai_calc_railroad(struct city *pcity, struct player *pplayer,
 }
 
 /**************************************************************************
-  Tries to find a boat for our unit. Requires warmap to be initialized
+  Tries to find a boat for our settler. Requires warmap to be initialized
   with respect to x, y. cap is the requested capacity on the transport.
   Note that it may return a transport with less than cap capacity if this
   transport has zero move cost to x, y.
@@ -892,8 +892,8 @@ static int unit_foodbox_cost(struct unit *punit)
 static int unit_food_upkeep(struct unit *punit)
 {
   struct player *pplayer = unit_owner(punit);
-  int upkeep = utype_upkeep_cost(unit_type(punit),
-				 get_gov_pplayer(pplayer), O_FOOD);
+  int upkeep = utype_food_cost(unit_type(punit),
+			       get_gov_pplayer(pplayer));
   if (punit->id != 0 && punit->homecity == 0)
     upkeep = 0; /* thanks, Peter */
 
@@ -1130,7 +1130,6 @@ static void auto_settler_findwork(struct player *pplayer, struct unit *punit)
   }
 
   if (unit_flag(punit, F_CITIES) && pplayer->ai.control) {
-    /* may use a boat: */
     find_best_city_placement(punit, &result, TRUE, FALSE);
     UNIT_LOG(LOG_SETTLER, punit, "city want %d (impr want %d)", result.result,
              best_impr);
@@ -1424,7 +1423,7 @@ noticeably slow the game, feel free to replace this else{}  -- Syela */
 **************************************************************************/
 static void assign_territory(void)
 {
-  memset(territory, 0, MAP_INDEX_SIZE * sizeof(*territory));
+  memset(territory, 0, map.xsize * map.ysize * sizeof(*territory));
 
   players_iterate(pplayer) {
     assign_territory_player(pplayer);
@@ -1485,7 +1484,6 @@ void contemplate_new_city(struct city *pcity)
     bool is_coastal = is_ocean_near_tile(pcity->tile);
 
     find_best_city_placement(virtualunit, &result, is_coastal, is_coastal);
-    assert(0 <= result.result);
 
     CITY_LOG(LOG_DEBUG, pcity, "want(%d) to establish city at"
 	     " (%d, %d) and will %s to get there", result.result, 

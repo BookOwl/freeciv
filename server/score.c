@@ -145,7 +145,9 @@ static void build_landarea_map_new(struct claim_map *pcmap)
 {
   int nbytes;
 
-  pcmap->claims = fc_calloc(MAP_INDEX_SIZE, sizeof(*pcmap->claims));
+  nbytes = map.xsize * map.ysize * sizeof(struct claim_cell);
+  pcmap->claims = fc_malloc(nbytes);
+  memset(pcmap->claims, 0, nbytes);
 
   nbytes = game.nplayers * sizeof(int);
   pcmap->player_landarea = fc_malloc(nbytes);
@@ -155,7 +157,7 @@ static void build_landarea_map_new(struct claim_map *pcmap)
   pcmap->player_owndarea = fc_malloc(nbytes);
   memset(pcmap->player_owndarea, 0, nbytes);
 
-  nbytes = 2 * MAP_INDEX_SIZE * sizeof(*pcmap->edges);
+  nbytes = 2 * map.xsize * map.ysize * sizeof(*pcmap->edges);
   pcmap->edges = fc_malloc(nbytes);
 
   players_iterate(pplayer) {
@@ -242,7 +244,7 @@ static void build_landarea_map_expand(struct claim_map *pcmap)
   struct tile **thisedge;
   struct tile **nextedge;
 
-  midedge = &pcmap->edges[MAP_INDEX_SIZE];
+  midedge = &pcmap->edges[map.xsize * map.ysize];
 
   for (accum = 1, turn = 1; accum > 0; turn++) {
     thisedge = ((turn & 0x1) == 1) ? pcmap->edges : midedge;
@@ -373,9 +375,9 @@ void calc_civ_score(struct player *pplayer)
   pplayer->score.content = 0;
   pplayer->score.unhappy = 0;
   pplayer->score.angry = 0;
-  specialist_type_iterate(sp) {
-    pplayer->score.specialists[sp] = 0;
-  } specialist_type_iterate_end;
+  pplayer->score.taxmen = 0;
+  pplayer->score.scientists = 0;
+  pplayer->score.elvis = 0;
   pplayer->score.wonders = 0;
   pplayer->score.techs = 0;
   pplayer->score.techout = 0;
@@ -404,15 +406,15 @@ void calc_civ_score(struct player *pplayer)
     pplayer->score.content += pcity->ppl_content[4];
     pplayer->score.unhappy += pcity->ppl_unhappy[4];
     pplayer->score.angry += pcity->ppl_angry[4];
-    specialist_type_iterate(sp) {
-      pplayer->score.specialists[sp] += pcity->specialists[sp];
-    } specialist_type_iterate_end;
+    pplayer->score.taxmen += pcity->specialists[SP_TAXMAN];
+    pplayer->score.scientists += pcity->specialists[SP_SCIENTIST];
+    pplayer->score.elvis += pcity->specialists[SP_ELVIS];
     pplayer->score.population += city_population(pcity);
     pplayer->score.cities++;
     pplayer->score.pollution += pcity->pollution;
     pplayer->score.techout += pcity->science_total;
-    pplayer->score.bnp += pcity->surplus[O_TRADE];
-    pplayer->score.mfg += pcity->surplus[O_SHIELD];
+    pplayer->score.bnp += pcity->trade_prod;
+    pplayer->score.mfg += pcity->shield_surplus;
 
     bonus = CLIP(0, get_city_bonus(pcity, EFT_SCIENCE_BONUS), 100);
     pplayer->score.literacy += (city_population(pcity) * bonus) / 100;
@@ -476,14 +478,11 @@ int get_civ_score(const struct player *pplayer)
 **************************************************************************/
 int total_player_citizens(const struct player *pplayer)
 {
-  int count = (pplayer->score.happy
-	       + pplayer->score.content
-	       + pplayer->score.unhappy
-	       + pplayer->score.angry);
-
-  specialist_type_iterate(sp) {
-    count += pplayer->score.specialists[sp];
-  } specialist_type_iterate_end;
-
-  return count;
+  return (pplayer->score.happy
+	  + pplayer->score.content
+	  + pplayer->score.unhappy
+	  + pplayer->score.angry
+	  + pplayer->score.scientists
+	  + pplayer->score.elvis
+	  + pplayer->score.taxmen);
 }

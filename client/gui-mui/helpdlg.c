@@ -688,7 +688,7 @@ static void help_update_unit_type(const struct help_item *pitem,
 
     UpdateTechButton(help_unit_needs_button, utype->tech_requirement);
 
-    if (utype->obsoleted_by == U_NOT_OBSOLETED)
+    if (utype->obsoleted_by == -1)
       text = _("None");
     else
       text = get_unit_type(utype->obsoleted_by)->name;
@@ -868,9 +868,7 @@ static void help_update_terrain(const struct help_item *pitem,
 
     help_terrain_dynamic_group = VGroup,End;
 
-    my_snprintf(buf,sizeof(buf),_("Food:   %d\nShield: %d\nTrade:  %d"),
-		tile->output[O_FOOD], tile->output[O_SHIELD],
-		tile->output[O_TRADE]);
+    my_snprintf(buf,sizeof(buf),_("Food:   %d\nShield: %d\nTrade:  %d"),tile->food, tile->shield, tile->trade);
     if((o = HGroup,
               Child, HSpace(0),
 	      Child, TextObject, MUIA_Text_Contents, "", End,
@@ -887,10 +885,8 @@ static void help_update_terrain(const struct help_item *pitem,
 
     g = HGroup, Child, HSpace(0), End;
 
-    my_snprintf(buf,sizeof(buf),_("Food:   %d\nShield: %d\nTrade:  %d"),
-		tile->special[0].output[O_FOOD],
-		tile->special[0].output[O_SHIELD],
-		tile->special[0].output[O_TRADE]);
+    my_snprintf(buf,sizeof(buf),_("Food:   %d\nShield: %d\nTrade:  %d"),tile->food_special_1, tile->shield_special_1,
+    tile->trade_special_1);
     if((o = HGroup,
               Child, HSpace(0),
 	      Child, TextObject, MUIA_Text_Contents, tile->special_1_name, End,
@@ -907,10 +903,7 @@ static void help_update_terrain(const struct help_item *pitem,
       DoMethod(g, OM_ADDMEMBER, o);
     }
 
-    my_snprintf(buf,sizeof(buf),_("Food:   %d\nShield: %d\nTrade:  %d"),
-		tile->special[1].output[O_FOOD],
-		tile->special[1].output[O_SHIELD],
-		tile->special[1].output[O_TRADE]);
+    my_snprintf(buf,sizeof(buf),_("Food:   %d\nShield: %d\nTrade:  %d"),tile->food_special_2, tile->shield_special_2,
     tile->trade_special_2);
     if((o = HGroup,
               Child, HSpace(0),

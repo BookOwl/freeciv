@@ -59,7 +59,7 @@ WITH_READLINE="maybe"	dnl maybe  - use if found [default]
 
 dnl  no=do not compile client,  yes=guess it,  *=use this client or error
 AC_ARG_ENABLE(client,
-[  --enable-client[=no/yes/xaw3d/xaw/gtk/gtk2/win32/sdl/ftwl]
+[  --enable-client[=no/yes/xaw3d/xaw/gtk/gtk2/win32]
                           compile a client [default=yes] (if yes, guess type)],
 [case "${enableval}" in
   yes)	  client=yes ;;
@@ -149,7 +149,7 @@ dnl Programs already checked by AM_INIT_AUTOMAKE:
 dnl  AC_PROG_MAKE_SET
 
 dnl I18n support
-ALL_LINGUAS="cs ca da de en_GB es et fi fr he_IL hu it ja nl no pl pt pt_BR ro ru sv uk"
+ALL_LINGUAS="ca cs da de en_GB es et fi fr he_IL hu it ja nl no pl pt pt_BR ro ru sv uk"
 AM_GNU_GETTEXT(,need-ngettext)
 
 dnl AM_GNU_GETTEXT doesn't have all features we want
@@ -255,6 +255,11 @@ gettext package. We recommend you versions >= 0.10.38. Or use
   fi
 fi
 
+
+dnl note this has to match the path installed by po/Makefile
+FC_EXPAND_DIR(LOCALEDIR, "$datadir/locale")
+AC_DEFINE_UNQUOTED(LOCALEDIR, "$LOCALEDIR", [Locale directory])
+
 EXTRA_GCC_DEBUG_CFLAGS=""
 
 if test -n "$GCC"; then
@@ -303,15 +308,6 @@ if test x"$MINGW32" = "xyes"; then
   AC_DEFINE(HAVE_WINSOCK, 1, [Mingw32-specific setting - winsock])
   LIBS="$LIBS -lwsock32"
 fi
-
-dnl note this has to match the path installed by po/Makefile
-if test x"$MINGW32" != "xyes"; then
-  FC_EXPAND_DIR(LOCALEDIR, "$datadir/locale")
-  AC_DEFINE_UNQUOTED(LOCALEDIR, "$LOCALEDIR", [Locale directory])
-else
-  FC_EXPAND_DIR(LOCALEDIR, './share/locale')
-  AC_DEFINE_UNQUOTED(LOCALEDIR, "$LOCALEDIR", [Locale directory])
-fi  
 
 dnl Check for zlib (needed for libpng)
 AC_CHECK_LIB(z, gzgets, , 
@@ -464,8 +460,7 @@ dnl Checks for header files.
 AC_HEADER_STDC
 AC_HEADER_SYS_WAIT
 AC_CHECK_HEADERS(fcntl.h sys/time.h sys/types.h unistd.h sys/utsname.h \
-                 sys/file.h libintl.h)
-AC_HEADER_STDBOOL
+                 stdbool.h sys/file.h)
 dnl Avoid including the unix emulation layer if we build mingw executables
 dnl There would be type conflicts between winsock and bsd/unix includes
 if test "x$MINGW32" != "xyes"; then

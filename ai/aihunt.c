@@ -103,8 +103,7 @@ static Unit_Type_id ai_hunter_guess_best(struct city *pcity,
       desire /= 2;
     }
 
-    desire = amortize(desire,
-		      ut->build_cost / MAX(pcity->surplus[O_SHIELD], 1));
+    desire = amortize(desire, ut->build_cost / MAX(pcity->shield_surplus, 1));
 
     if (desire > best) {
         best = desire;
@@ -161,8 +160,7 @@ static void ai_hunter_missile_want(struct player *pplayer,
       desire /= 2;
     }
 
-    desire = amortize(desire,
-		      ut->build_cost / MAX(pcity->surplus[O_SHIELD], 1));
+    desire = amortize(desire, ut->build_cost / MAX(pcity->shield_surplus, 1));
 
     if (desire > best) {
         best = desire;
@@ -460,8 +458,8 @@ bool ai_hunter_manage(struct player *pplayer, struct unit *punit)
 
   /* Check if we can nuke it */
   ai_hunter_try_launch(pplayer, punit, target);
-  /* Check if we have nuked it */
-  if (target != find_unit_by_id(sanity_target)) {
+  target = find_unit_by_id(sanity_target);
+  if (!target){
     UNIT_LOG(LOGLEVEL_HUNT, punit, "mission accomplished");
     ai_unit_new_role(punit, AIUNIT_NONE, NULL);
     return TRUE;
@@ -474,7 +472,8 @@ bool ai_hunter_manage(struct player *pplayer, struct unit *punit)
 
   /* Check if we can nuke it now */
   ai_hunter_try_launch(pplayer, punit, target);
-  if (target != find_unit_by_id(sanity_target)) {
+  target = find_unit_by_id(sanity_target);
+  if (!target){
     UNIT_LOG(LOGLEVEL_HUNT, punit, "mission accomplished");
     ai_unit_new_role(punit, AIUNIT_NONE, NULL);
     return TRUE;
@@ -483,12 +482,13 @@ bool ai_hunter_manage(struct player *pplayer, struct unit *punit)
   /* If we are adjacent - RAMMING SPEED! */
   if (is_tiles_adjacent(punit->tile, target->tile)) {
     ai_unit_attack(punit, target->tile);
+    target = find_unit_by_id(sanity_target);
   }
 
   if (!find_unit_by_id(sanity_own)) {
     return TRUE;
   }
-  if (target != find_unit_by_id(sanity_target)) {
+  if (!target) {
     UNIT_LOG(LOGLEVEL_HUNT, punit, "mission accomplished");
     ai_unit_new_role(punit, AIUNIT_NONE, NULL);
   }

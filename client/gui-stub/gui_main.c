@@ -19,15 +19,11 @@
 
 #include "fciconv.h"
 
-#include "civclient.h"
 #include "options.h"
 
 #include "gui_main.h"
 
 const char *client_string = "gui-stub";
-
-const char * const gui_character_encoding = "UTF-8";
-const bool gui_use_transliteration = FALSE;
 
 client_option gui_options[] = {
   /* None. */

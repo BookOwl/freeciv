@@ -57,7 +57,7 @@ static const char *transliteration_string;
 
   Pass an internal encoding of NULL to use the local encoding internally.
 ***************************************************************************/
-void init_character_encodings(const char *my_internal_encoding,
+void init_character_encodings(char *my_internal_encoding,
 			      bool my_use_transliteration)
 {
 #ifdef HAVE_ICONV
@@ -127,12 +127,7 @@ void init_character_encodings(const char *my_internal_encoding,
 #endif
 
 #else
-   /* freelog may not work at this point. */
-  fprintf(stderr,
-	     _("You are running Freeciv without using iconv.  Unless\n"
-	       "you are using the latin1 character set, some characters\n"
-	       "may not be displayed properly.  You can download iconv\n"
-	       "at http://gnu.org/.\n"));
+#  error No iconv present!
 #endif
 
   is_init = TRUE;
@@ -182,14 +177,11 @@ const char *get_internal_encoding(void)
   Convert the text.  Both 'from' and 'to' must be 8-bit charsets.  The
   result will be put into the buf buffer unless it is NULL, in which case it
   will be allocated on demand.
-
-  Don't use this function if you can avoid it.  Use one of the
-  xxx_to_yyy_string functions.
 ***************************************************************************/
-char *convert_string(const char *text,
-		     const char *from,
-		     const char *to,
-		     char *buf, size_t bufsz)
+static char *convert_string(const char *text,
+			    const char *from,
+			    const char *to,
+			    char *buf, size_t bufsz)
 {
 #ifdef HAVE_ICONV
   iconv_t cd = iconv_open(to, from);

@@ -418,7 +418,7 @@ bool is_field_unit(struct unit *punit)
   it has the F_PARTIAL_INVIS flag or if it transported by a unit with
   this flag.
 **************************************************************************/
-bool is_hiding_unit(const struct unit *punit)
+bool is_hiding_unit(struct unit *punit)
 {
   struct unit *transporter = find_unit_by_id(punit->transported_by);
 
@@ -1187,12 +1187,10 @@ void unit_list_sort_ord_city(struct unit_list *This)
 }
 
 /**************************************************************************
-  Return the unit's owner.
+...
 **************************************************************************/
-struct player *unit_owner(const struct unit *punit)
+struct player *unit_owner(struct unit *punit)
 {
-  /* FIXME: if punit->owner were a player pointer then this function couldn't
-   * have a const parameter. */
   return (&game.players[punit->owner]);
 }
 
@@ -1712,7 +1710,9 @@ struct unit *create_unit_virtual(struct player *pplayer, struct city *pcity,
   }
   punit->goto_tile = NULL;
   punit->veteran = veteran_level;
-  memset(punit->upkeep, 0, O_COUNT * sizeof(*punit->upkeep));
+  punit->upkeep = 0;
+  punit->upkeep_food = 0;
+  punit->upkeep_gold = 0;
   punit->unhappiness = 0;
   /* A unit new and fresh ... */
   punit->foul = FALSE;

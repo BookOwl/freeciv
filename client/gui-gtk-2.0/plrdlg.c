@@ -74,17 +74,23 @@ static void players_ai_skill_callback(GtkMenuItem *item, gpointer data);
 static void update_views(void);
 
 /**************************************************************************
-popup the dialog 10% inside the main-window, and optionally raise it.
+popup the dialog 10% inside the main-window 
 **************************************************************************/
-void popup_players_dialog(bool raise)
+void popup_players_dialog(void)
 {
   if (!players_dialog_shell){
     create_players_dialog();
   }
   gui_dialog_present(players_dialog_shell);
-  if (raise) {
-    gui_dialog_raise(players_dialog_shell);
-  }
+}
+
+/****************************************************************
+ Raises the players dialog.
+****************************************************************/
+void raise_players_dialog(void)
+{
+  popup_players_dialog();
+  gui_dialog_raise(players_dialog_shell);
 }
 
 /****************************************************************

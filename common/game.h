@@ -59,6 +59,7 @@ struct civ_game {
   bool is_new_game;		/* 1 for games never started */
   int version;
   char id[MAX_ID_LEN];		/* server only */
+  int civstyle;
   int gold;
   char start_units[MAX_LEN_STARTUNIT];
   int dispersion;
@@ -94,7 +95,6 @@ struct civ_game {
   int onsetbarbarian;
   int nbarbarians;
   int occupychance;
-  bool autoattack;
   int unhappysize;
   bool angrycitizen;
   char *startmessage;
@@ -192,18 +192,17 @@ struct civ_game {
 
   /* values from game.ruleset */
   struct {
-    struct specialist {
+    struct {
       char name[MAX_LEN_NAME];
-      char short_name[MAX_LEN_NAME];
-      int min_size;
-      int bonus[O_MAX];
-    } specialists[SP_MAX];
-#define DEFAULT_SPECIALIST SP_ELVIS
+      int min_size, bonus;
+    } specialists[SP_COUNT];
     bool changable_tax;
     int forced_science; /* only relevant if !changable_tax */
     int forced_luxury;
     int forced_gold;
-    int min_city_center_output[O_MAX];
+    int min_city_center_food;
+    int min_city_center_shield;
+    int min_city_center_trade;
     int min_dist_bw_cities;
     int init_vis_radius_sq;
     int hut_overflight;
@@ -245,11 +244,6 @@ struct civ_game {
   int work_veteran_chance[MAX_VET_LEVELS];
   int veteran_chance[MAX_VET_LEVELS];
   int revolution_length; /* 0=> random length, else the fixated length */
-
-  struct {
-    /* Function to be called in game_remove_unit when a unit is deleted. */
-    void (*unit_deallocate)(int unit_id);
-  } callbacks;
 };
 
 /* Unused? */
@@ -474,8 +468,6 @@ extern bool is_server;
 #define GAME_DEFAULT_OCCUPYCHANCE    0
 #define GAME_MIN_OCCUPYCHANCE        0
 #define GAME_MAX_OCCUPYCHANCE        100
-
-#define GAME_DEFAULT_AUTOATTACK      FALSE
 
 #define GAME_DEFAULT_RULESETDIR      "default"
 

@@ -66,8 +66,4 @@ void client_game_init(void);
 void client_game_free(void);
 void ui_exit(void);
 
-/* Set in GUI code. */
-extern const char * const gui_character_encoding;
-extern const bool gui_use_transliteration;
-
 #endif  /* FC__CIVCLIENT_H */

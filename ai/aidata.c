@@ -269,7 +269,7 @@ void ai_data_turn_init(struct player *pplayer)
   ai->stats.average_production = 0;
   city_list_iterate(pplayer->cities, pcity) {
     ai->stats.cities[(int)map_get_continent(pcity->tile)]++;
-    ai->stats.average_production += pcity->surplus[O_SHIELD];
+    ai->stats.average_production += pcity->shield_surplus;
   } city_list_iterate_end;
   ai->stats.average_production /= MAX(1, city_list_size(&pplayer->cities));
   BV_CLR_ALL(ai->stats.diplomat_reservations);
@@ -409,23 +409,13 @@ void ai_data_turn_done(struct player *pplayer)
 {
   struct ai_data *ai = &aidata[pplayer->player_no];
 
-  free(ai->explore.ocean);
-  ai->explore.ocean = NULL;
-
-  free(ai->explore.continent);
-  ai->explore.continent = NULL;
-
-  free(ai->threats.continent);
-  ai->threats.continent = NULL;
-
+  free(ai->explore.ocean);     ai->explore.ocean = NULL;
+  free(ai->explore.continent); ai->explore.continent = NULL;
+  free(ai->threats.continent); ai->threats.continent = NULL;
   free(ai->threats.ocean);
   ai->threats.ocean = NULL;
-
-  free(ai->stats.workers);
-  ai->stats.workers = NULL;
-
-  free(ai->stats.cities);
-  ai->stats.cities = NULL;
+  free(ai->stats.workers);     ai->stats.workers = NULL;
+  free(ai->stats.cities);      ai->stats.cities = NULL;
 }
 
 /**************************************************************************

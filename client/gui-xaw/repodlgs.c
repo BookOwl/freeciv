@@ -949,6 +949,7 @@ void activeunits_list_callback(Widget w, XtPointer client_data,
 
   may_upgrade =
     ((inx != XAW_LIST_NONE) &&
+     (unit_type_exists (activeunits_type[inx])) &&
      (can_upgrade_unittype (game.player_ptr, activeunits_type[inx]) != -1));
 
   XtSetSensitive (upgrade_command, may_upgrade);
@@ -987,8 +988,9 @@ void activeunits_upgrade_callback(Widget w, XtPointer client_data,
 
   if(ret->list_index!=XAW_LIST_NONE) {
     ut1 = activeunits_type[ret->list_index];
-    CHECK_UNIT_TYPE(ut1);
-
+    if (!(unit_type_exists (ut1))) {
+      return;
+    }
     /* puts(unit_types[ut1].name); */
 
     ut2 = can_upgrade_unittype(game.player_ptr,
@@ -1065,16 +1067,15 @@ void activeunits_report_dialog_update(void)
     unit_list_iterate(game.player_ptr->units, punit) {
       (unitarray[punit->type].active_count)++;
       if (punit->homecity) {
-	unitarray[punit->type].upkeep_shield += punit->upkeep[O_SHIELD];
-	unitarray[punit->type].upkeep_food += punit->upkeep[O_FOOD];
-	/* TODO: gold upkeep */
+	unitarray[punit->type].upkeep_shield += punit->upkeep;
+	unitarray[punit->type].upkeep_food += punit->upkeep_food;
       }
     }
     unit_list_iterate_end;
     city_list_iterate(game.player_ptr->cities,pcity) {
-      if (pcity->is_building_unit) {
+      if (pcity->is_building_unit &&
+	  (unit_type_exists (pcity->currently_building)))
 	(unitarray[pcity->currently_building].building_count)++;
-      }
     }
     city_list_iterate_end;
 

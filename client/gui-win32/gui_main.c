@@ -93,9 +93,6 @@ const static RECT textwin_size={0,1,0,100};
 struct fcwin_box *main_win_box;
 struct fcwin_box *output_box;
 
-const char * const gui_character_encoding = NULL;
-const bool gui_use_transliteration = TRUE;
-
 client_option gui_options[] = {
   /* None. */
 };
@@ -529,7 +526,7 @@ void popdown_all_game_dialogs(void)
 **************************************************************************/
 void ui_init(void)
 {
-
+  init_character_encodings(NULL, TRUE);
 }
 
 /**************************************************************************

@@ -804,10 +804,7 @@ static void ai_military_bodyguard(struct player *pplayer, struct unit *punit)
 
   if (!same_pos(punit->tile, ptile)) {
     if (goto_is_sane(punit, ptile, TRUE)) {
-      if (!ai_unit_goto(punit, ptile)) {
-        /* We died */
-        return;
-      }
+      (void) ai_unit_goto(punit, ptile);
     } else {
       /* can't possibly get there to help */
       ai_unit_new_role(punit, AIUNIT_NONE, NULL);
@@ -1893,7 +1890,7 @@ static void ai_manage_caravan(struct player *pplayer, struct unit *punit)
     if ((pcity = wonder_on_continent(pplayer, 
                                      map_get_continent(punit->tile))) 
         && unit_flag(punit, F_HELP_WONDER)
-        && build_points_left(pcity) > (pcity->surplus[O_SHIELD] * 2)) {
+        && build_points_left(pcity) > (pcity->shield_surplus * 2)) {
       if (!same_pos(pcity->tile, punit->tile)) {
         if (punit->moves_left == 0) {
           return;
@@ -2404,7 +2401,7 @@ void update_simple_ai_types(void)
   int i = 0;
 
   unit_type_iterate(id) {
-    if (!unit_type_flag(id, F_NONMIL)
+    if (unit_type_exists(id) && !unit_type_flag(id, F_NONMIL)
 	&& !unit_type_flag(id, F_MISSILE)
 	&& !unit_type_flag(id, F_NO_LAND_ATTACK)
         && get_unit_type(id)->move_type != AIR_MOVING

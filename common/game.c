@@ -38,6 +38,7 @@
 
 #include "game.h"
 
+void dealloc_id(int id);
 struct civ_game game;
 
 /*
@@ -143,8 +144,8 @@ void game_remove_unit(struct unit *punit)
 
   idex_unregister_unit(punit);
 
-  if (game.callbacks.unit_deallocate) {
-    (game.callbacks.unit_deallocate)(punit->id);
+  if (is_server) {
+    dealloc_id(punit->id);
   }
   destroy_unit_virtual(punit);
 }
@@ -221,6 +222,7 @@ void game_init(void)
   game.killcitizen = GAME_DEFAULT_KILLCITIZEN;
   game.scorelog    = GAME_DEFAULT_SCORELOG;
   game.techpenalty = GAME_DEFAULT_TECHPENALTY;
+  game.civstyle    = GAME_DEFAULT_CIVSTYLE;
   game.razechance  = GAME_DEFAULT_RAZECHANCE;
   game.spacerace   = GAME_DEFAULT_SPACERACE;
   game.turnblock   = GAME_DEFAULT_TURNBLOCK;
@@ -236,7 +238,6 @@ void game_init(void)
   game.onsetbarbarian = GAME_DEFAULT_ONSETBARBARIAN;
   game.nbarbarians = 0;
   game.occupychance= GAME_DEFAULT_OCCUPYCHANCE;
-  game.autoattack = GAME_DEFAULT_AUTOATTACK;
   game.revolution_length = GAME_DEFAULT_REVOLUTION_LENGTH;
 
   game.heating     = 0;
@@ -550,10 +551,10 @@ void translate_data_names(void)
     tthis->terrain_name = ((strcmp(tthis->terrain_name_orig, "") != 0)
 			   ? Q_(tthis->terrain_name_orig) : "");
 
-    tthis->special[0].name = ((strcmp(tthis->special[0].name_orig, "") != 0)
-			      ? Q_(tthis->special[0].name_orig) : "");
-    tthis->special[1].name = ((strcmp(tthis->special[1].name_orig, "") != 0)
-			      ? Q_(tthis->special[1].name_orig) : "");
+    tthis->special_1_name = ((strcmp(tthis->special_1_name_orig, "") != 0)
+			     ? Q_(tthis->special_1_name_orig) : "");
+    tthis->special_2_name = ((strcmp(tthis->special_2_name_orig, "") != 0)
+			     ? Q_(tthis->special_2_name_orig) : "");
   } terrain_type_iterate_end;
 
   government_iterate(tthis) {

@@ -470,7 +470,7 @@ void gamelog(int level, ...)
         workers += pcity->size;
         shields += pcity->shield_prod;
         food += pcity->food_prod;
-        trade += pcity->surplus[O_TRADE];
+        trade += pcity->trade_prod;
       } city_list_iterate_end;
 
       my_snprintf(buf, sizeof(buf), "<n>%d</n><cities>%d</cities>"

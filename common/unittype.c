@@ -67,6 +67,21 @@ static const char *unit_class_names[] = {
 };
 
 /**************************************************************************
+Returns 1 if the unit_type "exists" in this game, 0 otherwise.
+A unit_type doesn't exist if one of:
+- id is out of range
+- the unit_type has been flagged as removed by setting its
+  tech_requirement to A_LAST.
+**************************************************************************/
+bool unit_type_exists(Unit_Type_id id)
+{
+  if (id<0 || id>=U_LAST || id>=game.num_unit_types)
+    return FALSE;
+  else 
+    return unit_types[id].tech_requirement!=A_LAST;
+}
+
+/**************************************************************************
 ...
 **************************************************************************/
 struct unit_type *get_unit_type(Unit_Type_id id)
@@ -116,17 +131,23 @@ bool is_water_unit(Unit_Type_id id)
 }
 
 /**************************************************************************
-  Returns the upkeep of a unit of this type under the given government.
+...
 **************************************************************************/
-int utype_upkeep_cost(const struct unit_type *ut,
-		      const struct government *g, Output_type_id otype)
+int utype_shield_cost(struct unit_type *ut, struct government *g)
 {
   if (government_has_flag(g, G_FANATIC_TROOPS) &&
       BV_ISSET(ut->flags, F_FANATIC)) {
-    /* Special case: fanatics have no upkeep under fanaticism. */
     return 0;
   }
-  return ut->upkeep[otype] * g->unit_upkeep_factor[otype];
+  return ut->shield_cost * g->unit_shield_cost_factor;
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+int utype_food_cost(struct unit_type *ut, struct government *g)
+{
+  return ut->food_cost * g->unit_food_cost_factor;
 }
 
 /**************************************************************************
@@ -140,6 +161,14 @@ int utype_happy_cost(struct unit_type *ut, struct government *g)
 /**************************************************************************
 ...
 **************************************************************************/
+int utype_gold_cost(struct unit_type *ut, struct government *g)
+{
+  return ut->gold_cost * g->unit_gold_cost_factor;
+}
+
+/**************************************************************************
+...
+**************************************************************************/
 bool unit_type_flag(Unit_Type_id id, int flag)
 {
   assert(flag>=0 && flag<F_LAST);
@@ -147,9 +176,9 @@ bool unit_type_flag(Unit_Type_id id, int flag)
 }
 
 /**************************************************************************
-  Return whether the unit has the given flag.
+...
 **************************************************************************/
-bool unit_flag(const struct unit *punit, enum unit_flag_id flag)
+bool unit_flag(struct unit *punit, enum unit_flag_id flag)
 {
   return unit_type_flag(punit->type, flag);
 }
@@ -311,11 +340,9 @@ int can_upgrade_unittype(struct player *pplayer, Unit_Type_id id)
 
   if (!can_player_build_unit_direct(pplayer, id))
     return -1;
-  while ((id = unit_types[id].obsoleted_by) != U_NOT_OBSOLETED) {
-    if (can_player_build_unit_direct(pplayer, id)) {
+  while (unit_type_exists(id = unit_types[id].obsoleted_by))
+    if (can_player_build_unit_direct(pplayer, id))
       best_upgrade = id;
-    }
-  }
 
   return best_upgrade;
 }
@@ -447,21 +474,17 @@ bool can_player_build_unit_direct(struct player *p, Unit_Type_id id)
   Impr_Type_id impr_req;
   Tech_Type_id tech_req;
 
-  CHECK_UNIT_TYPE(id);
+  if (!unit_type_exists(id))
+    return FALSE;
   if (unit_type_flag(id, F_NUCLEAR)
       && !get_player_bonus(p, EFT_ENABLE_NUKE) > 0)
     return FALSE;
   if (unit_type_flag(id, F_NOBUILD)) {
     return FALSE;
   }
-  if (unit_types[id].gov_requirement != G_MAGIC
-      && unit_types[id].gov_requirement != p->government) {
-    return FALSE;
-  }
   if (unit_type_flag(id, F_FANATIC)
-      && !government_has_flag(get_gov_pplayer(p), G_FANATIC_TROOPS)) {
+      && !government_has_flag(get_gov_pplayer(p), G_FANATIC_TROOPS))
     return FALSE;
-  }
   if (get_invention(p,unit_types[id].tech_requirement)!=TECH_KNOWN)
     return FALSE;
   if (unit_type_flag(id, F_UNIQUE)) {
@@ -495,11 +518,9 @@ bool can_player_build_unit(struct player *p, Unit_Type_id id)
 {  
   if (!can_player_build_unit_direct(p, id))
     return FALSE;
-  while ((id = unit_types[id].obsoleted_by) != U_NOT_OBSOLETED) {
-    if (can_player_build_unit_direct(p, id)) {
+  while(unit_type_exists((id = unit_types[id].obsoleted_by)))
+    if (can_player_build_unit_direct(p, id))
 	return FALSE;
-    }
-  }
   return TRUE;
 }
 
@@ -510,11 +531,13 @@ with future tech.  returns 0 if unit is obsolete.
 **************************************************************************/
 bool can_player_eventually_build_unit(struct player *p, Unit_Type_id id)
 {
-  CHECK_UNIT_TYPE(id);
+  if (!unit_type_exists(id)) {
+    return FALSE;
+  }
   if (unit_type_flag(id, F_NOBUILD)) {
     return FALSE;
   }
-  while ((id = unit_types[id].obsoleted_by) != U_NOT_OBSOLETED) {
+  while (unit_type_exists((id = unit_types[id].obsoleted_by))) {
     if (can_player_build_unit_direct(p, id)) {
 	return FALSE;
     }
@@ -527,6 +550,7 @@ The following functions use static variables so we can quickly look up
 which unit types have given flag or role.
 For these functions flags and roles are considered to be in the same "space",
 and any "role" argument can also be a "flag".
+Only units which pass unit_type_exists are counted.
 Unit order is in terms of the order in the units ruleset.
 **************************************************************************/
 static bool first_init = TRUE;
@@ -542,7 +566,7 @@ static void precalc_one(int i, bool (*func_has)(Unit_Type_id, int))
 
   /* Count: */
   unit_type_iterate(u) {
-    if (func_has(u, i)) {
+    if(unit_type_exists(u) && func_has(u, i)) {
       n_with_role[i]++;
     }
   } unit_type_iterate_end;
@@ -551,7 +575,7 @@ static void precalc_one(int i, bool (*func_has)(Unit_Type_id, int))
     with_role[i] = fc_malloc(n_with_role[i]*sizeof(Unit_Type_id));
     j = 0;
     unit_type_iterate(u) {
-      if (func_has(u, i)) {
+      if(unit_type_exists(u) && func_has(u, i)) {
 	with_role[i][j++] = u;
       }
     } unit_type_iterate_end;

@@ -55,8 +55,6 @@
 
 #include "unittools.h"
 
-/* We need this global variable for our sort algorithm */
-static struct tile *autoattack_target;
 
 static void unit_restore_hitpoints(struct player *pplayer, struct unit *punit);
 static void unit_restore_movepoints(struct player *pplayer, struct unit *punit);
@@ -260,7 +258,7 @@ void pay_for_units(struct player *pplayer, struct city *pcity)
 
   unit_list_iterate_safe(pcity->units_supported, punit) {
 
-    if (pplayer->economic.gold + potential_gold < punit->upkeep[O_GOLD]) {
+    if (pplayer->economic.gold + potential_gold < punit->upkeep_gold) {
       /* We cannot upkeep this unit any longer and selling off city
        * improvements will not help so we will have to disband */
       assert(pplayer->economic.gold + potential_gold >= 0);
@@ -273,7 +271,7 @@ void pay_for_units(struct player *pplayer, struct city *pcity)
       /* Gold can get negative here as city improvements will be sold
        * afterwards to balance our budget. FIXME: Should units with gold 
        * upkeep give gold when they are disbanded? */
-      pplayer->economic.gold -= punit->upkeep[O_GOLD];
+      pplayer->economic.gold -= punit->upkeep_gold;
     }
   } unit_list_iterate_safe_end;
 }
@@ -622,6 +620,9 @@ static void update_unit_activity(struct unit *punit)
 	  unit_list_iterate(punit->tile->units,
 			    punit2) {
 	    if (is_ground_unit(punit2)) {
+              /* Unfog (increase seen counter) first, fog (decrease counter)
+               * later, so tiles that are within vision range both before and
+               * after are not even temporarily marked fogged. */
 	      unfog_area(pplayer, punit2->tile,
 			 unit_type(punit2)->vision_range);
 	      fog_area(pplayer, punit2->tile,
@@ -652,6 +653,9 @@ static void update_unit_activity(struct unit *punit)
 	freelog(LOG_VERBOSE, "Watchtower(2) pillaged!");
 	unit_list_iterate(punit->tile->units, punit2) {
 	  if (is_ground_unit(punit2)) {
+            /* Unfog (increase seen counter) first, fog (decrease counter)
+             * later, so tiles that are within vision range both before and
+             * after are not even temporarily marked fogged. */
 	    unfog_area(pplayer, punit2->tile,
 		       unit_type(punit2)->vision_range);
 	    fog_area(pplayer, punit2->tile,
@@ -688,10 +692,13 @@ static void update_unit_activity(struct unit *punit)
       if (player_knows_techs_with_flag(pplayer, TF_WATCHTOWER)) {
 	unit_list_iterate(ptile->units, punit) {
 	  if (is_ground_unit(punit)) {
-	    fog_area(pplayer, punit->tile,
-		     unit_type(punit)->vision_range);
+            /* Unfog (increase seen counter) first, fog (decrease counter)
+             * later, so tiles that are within vision range both before and
+             * after are not even temporarily marked fogged. */
 	    unfog_area(pplayer, punit->tile,
 		       get_watchtower_vision(punit));
+	    fog_area(pplayer, punit->tile,
+		     unit_type(punit)->vision_range);
 	  }
 	}
 	unit_list_iterate_end;
@@ -1376,7 +1383,12 @@ void upgrade_unit(struct unit *punit, Unit_Type_id to_unit, bool is_free)
 
   conn_list_do_buffer(&pplayer->connections);
 
-  /* apply new vision range */
+  /* Apply new vision range
+   *
+   * Unfog (increase seen counter) first, fog (decrease counter)
+   * later, so tiles that are within vision range both before and
+   * after are not even temporarily marked fogged. */
+
   if (map_has_special(punit->tile, S_FORTRESS)
       && unit_profits_of_watchtower(punit))
     unfog_area(pplayer, punit->tile, get_watchtower_vision(punit));
@@ -1769,9 +1781,9 @@ void package_unit(struct unit *punit, struct packet_unit_info *packet)
   packet->activity = punit->activity;
   packet->activity_count = punit->activity_count;
   packet->unhappiness = punit->unhappiness;
-  output_type_iterate(o) {
-    packet->upkeep[o] = punit->upkeep[o];
-  } output_type_iterate_end;
+  packet->upkeep = punit->upkeep;
+  packet->upkeep_food = punit->upkeep_food;
+  packet->upkeep_gold = punit->upkeep_gold;
   packet->ai = punit->ai.control;
   packet->fuel = punit->fuel;
   if (punit->goto_tile) {
@@ -1784,6 +1796,7 @@ void package_unit(struct unit *punit, struct packet_unit_info *packet)
   }
   packet->activity_target = punit->activity_target;
   packet->paradropped = punit->paradropped;
+  packet->connecting = FALSE;
   packet->done_moving = punit->done_moving;
   if (punit->transported_by == -1) {
     packet->transported = FALSE;
@@ -2417,129 +2430,7 @@ void unload_unit_from_transporter(struct unit *punit)
 }
 
 /*****************************************************************
-  This function is passed to unit_list_sort() to sort a list of
-  units according to their win chance against autoattack_x|y.
-  If the unit is being transported, then push it to the front of
-  the list, since we wish to leave its transport out of combat
-  if at all possible.
-*****************************************************************/
-static int compare_units(const void *p, const void *q)
-{
-  struct unit * const *p1 = p;
-  struct unit * const *q1 = q;
-  struct unit *p1def = get_defender(*p1, autoattack_target);
-  struct unit *q1def = get_defender(*q1, autoattack_target);
-  int p1uwc = unit_win_chance(*p1, p1def);
-  int q1uwc = unit_win_chance(*q1, q1def);
-
-  if (p1uwc < q1uwc || (*q1)->transported_by > 0) {
-    return -1; /* q is better */
-  } else if (p1uwc == q1uwc) {
-    return 0;
-  } else {
-    return 1; /* p is better */
-  }
-}
-
-/*****************************************************************
-  Check if unit survives enemy autoattacks. We assume that any
-  unit that is adjacent to us can see us.
-*****************************************************************/
-static bool unit_survive_autoattack(struct unit *punit)
-{
-  struct unit_list autoattack;
-  int moves = punit->moves_left;
-  int sanity1 = punit->id;
-
-  /* Kludge to prevent attack power from dropping to zero during calc */
-  punit->moves_left = MAX(punit->moves_left, 1);
-
-  unit_list_init(&autoattack);
-  adjc_iterate(punit->tile, ptile) {
-    /* First add all eligible units to a unit list */
-    unit_list_iterate(ptile->units, penemy) {
-      struct player *enemyplayer = unit_owner(penemy);
-      enum diplstate_type ds = 
-            pplayer_get_diplstate(unit_owner(punit), enemyplayer)->type;
-
-      if (((enemyplayer->ai.control && ai_handicap(enemyplayer, H_EXPERIMENTAL))
-           || game.autoattack)
-          && penemy->moves_left > 0
-          && ds == DS_WAR
-          && can_unit_attack_unit_at_tile(penemy, punit, punit->tile)) {
-        unit_list_insert(&autoattack, penemy);
-      }
-    } unit_list_iterate_end;
-  } adjc_iterate_end;
-
-  /* The unit list is now sorted according to win chance against punit */
-  autoattack_target = punit->tile; /* global variable */
-  if (unit_list_size(&autoattack) >= 2) {
-    unit_list_sort(&autoattack, &compare_units);
-  }
-
-  unit_list_iterate_safe(autoattack, penemy) {
-    int sanity2 = penemy->id;
-    struct unit *enemy_defender = get_defender(punit, penemy->tile);
-    struct unit *punit_defender = get_defender(penemy, punit->tile);
-    double punitwin = unit_win_chance(punit, enemy_defender);
-    double penemywin = unit_win_chance(penemy, punit_defender);
-    double threshold = 0.25;
-    struct tile *ptile = penemy->tile;
-
-    if (ptile->city && unit_list_size(&ptile->units) == 1) {
-      /* Don't leave city defenseless */
-      threshold = 0.90;
-    }
-
-    if ((penemywin > 1.0 - punitwin
-         || unit_flag(punit, F_DIPLOMAT)
-         || get_transporter_capacity(punit) > 0)
-        && penemywin > threshold) {
-#ifdef REALLY_DEBUG_THIS
-      freelog(LOG_NORMAL, "AA %s -> %s (%d,%d) %.2f > %.2f && > %.2f",
-              unit_type(penemy)->name, unit_type(punit)->name, 
-              punit->tile->x, punit->tile->y, penemywin, 1.0 - punitwin, 
-              threshold);
-#endif
-
-      handle_unit_activity_request(penemy, ACTIVITY_IDLE);
-      (void) handle_unit_move_request(penemy, punit->tile, FALSE, FALSE);
-    }
-#ifdef REALLY_DEBUG_THIS
-      else {
-      freelog(LOG_NORMAL, "!AA %s -> %s (%d,%d) %.2f > %.2f && > %.2f",
-              unit_type(penemy)->name, unit_type(punit)->name, 
-              punit->tile->x, punit->tile->y, penemywin, 1.0 - punitwin, 
-              threshold);
-      continue;
-    }
-#endif
-
-    if (find_unit_by_id(sanity2)) {
-      send_unit_info(NULL, penemy);
-    }
-    if (find_unit_by_id(sanity1)) {
-      send_unit_info(NULL, punit);
-    } else {
-      return FALSE; /* done, gone */
-    }
-  } unit_list_iterate_safe_end;
-
-  unit_list_unlink_all(&autoattack);
-  if (find_unit_by_id(sanity1)) {
-    /* We could have lost movement in combat */
-    punit->moves_left = MIN(punit->moves_left, moves);
-    send_unit_info(NULL, punit);
-    return TRUE;
-  } else {
-    return FALSE;
-  }
-}
-
-/*****************************************************************
-  Will wake up any neighboring enemy sentry units or patrolling 
-  units.
+Will wake up any neighboring enemy sentry units or patrolling units
 *****************************************************************/
 static void wakeup_neighbor_sentries(struct unit *punit)
 {
@@ -2873,9 +2764,6 @@ bool move_unit(struct unit *punit, struct tile *pdesttile, int move_cost)
 
   handle_unit_move_consequences(punit, psrctile, pdesttile);
   wakeup_neighbor_sentries(punit);
-  if (!unit_survive_autoattack(punit)) {
-    return FALSE;
-  }
   maybe_make_contact(pdesttile, unit_owner(punit));
 
   conn_list_do_unbuffer(&pplayer->connections);

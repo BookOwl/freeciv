@@ -18,10 +18,9 @@
 #include "messagewin.h"
 
 /**************************************************************************
-  Display the message dialog.  Optionally raise it.
-  Typically triggered by F10.
+  Popup (or raise) the message dialog; typically triggered by F10.
 **************************************************************************/
-void popup_meswin_dialog(bool raise)
+void popup_meswin_dialog(void)
 {
   /* PORTME */
 }

@@ -107,7 +107,7 @@ enum unit_upgrade_result {
 struct unit_ai {
   bool control; /* 0: not automated    1: automated */
   enum ai_unit_task ai_role;
-  /* The following are unit ids or special indicator values (<=0) */
+  /* The following are all unit ids */
   int ferryboat; /* the ferryboat assigned to us */
   int passenger; /* the unit assigned to this ferryboat */
   int bodyguard; /* the unit bodyguarding us */
@@ -130,7 +130,9 @@ struct unit {
   int hp;
   int veteran;
   int unhappiness;
-  int upkeep[O_MAX];
+  int upkeep;
+  int upkeep_food;
+  int upkeep_gold;
   int fuel;
   int bribe_cost;
   struct unit_ai ai;
@@ -261,7 +263,7 @@ bool is_military_unit(struct unit *punit);           /* !set !dip !cara */
 bool is_diplomat_unit(struct unit *punit);
 bool is_square_threatened(struct player *pplayer, const struct tile *ptile);
 bool is_field_unit(struct unit *punit);              /* ships+aero */
-bool is_hiding_unit(const struct unit *punit);
+bool is_hiding_unit(struct unit *punit);
 bool is_sailing_unit(struct unit *punit);
 bool is_air_unit(struct unit *punit);
 bool is_heli_unit(struct unit *punit);
@@ -287,7 +289,7 @@ int airunit_carrier_capacity(const struct tile *ptile,
 			     struct player *pplayer,
 			     bool count_units_with_extra_fuel);
 
-struct player *unit_owner(const struct unit *punit);
+struct player *unit_owner(struct unit *punit);
 
 struct unit *is_allied_unit_tile(const struct tile *ptile,
 				 struct player *pplayer);

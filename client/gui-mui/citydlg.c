@@ -1147,12 +1147,13 @@ static void city_cma_changed(struct city_dialog **ppdialog)
 {
   struct city_dialog *pdialog = *ppdialog; 
   struct cm_parameter param;
+  int i;
 
   cmafec_get_fe_parameter(pdialog->pcity, &param);
-  output_type_iterate(i) {
+  for (i = 0; i < NUM_STATS; i++) {
     param.minimal_surplus[i] = (int)xget(pdialog->minimal_surplus_slider[i],MUIA_Numeric_Value);
     param.factor[i] = (int)xget(pdialog->factor_slider[i],MUIA_Numeric_Value);
-  } output_type_iterate_end;
+  }
   param.require_happy = xget(pdialog->celebrate_check, MUIA_Selected);
   param.happy_factor = xget(pdialog->factor_slider[6],MUIA_Numeric_Value);
 
@@ -1807,10 +1808,8 @@ static void city_dialog_update_information(struct city_dialog *pdialog, struct c
   pollutionstyle = (pcity->pollution >= 10) ? RED : NORMAL;
 
   settextf(info->food_text, "%2d (%+2d)", pcity->food_prod, pcity->food_surplus);
-  settextf(info->shield_text, "%2d (%+2d)", pcity->shield_prod + pcity->waste[O_SHIELD], pcity->shield_surplus);
-  settextf(info->trade_text, "%2d (%+2d)",
-	   pcity->trade_prod + pcity->waste[O_TRADE],
-	   pcity->trade_prod);
+  settextf(info->shield_text, "%2d (%+2d)", pcity->shield_prod + pcity->shield_waste, pcity->shield_surplus);
+  settextf(info->trade_text, "%2d (%+2d)", pcity->trade_prod + pcity->corruption, pcity->trade_prod);
   settextf(info->gold_text, "%2d (%+2d)", pcity->tax_total, city_gold_surplus(pcity, pcity->tax_total));
   settextf(info->luxury_text, "%2d", pcity->luxury_total);
   settextf(info->science_text, "%2d", pcity->science_total);
@@ -1831,8 +1830,8 @@ static void city_dialog_update_information(struct city_dialog *pdialog, struct c
     settext(info->growth_text,buf);
   }
 
-  settextf(info->corruption_text, "%ld", pcity->waste[O_TRADE]);
-  settextf(info->waste_text, "%ld", pcity->waste[O_SHIELD]);
+  settextf(info->corruption_text, "%ld", pcity->corruption);
+  settextf(info->waste_text, "%ld", pcity->shield_waste);
   settextf(info->pollution_text, "%ld", pcity->pollution);
 }
 
@@ -2155,10 +2154,11 @@ static void refresh_cma_dialog(struct city_dialog *pdialog)
 
   
   /* if called from a hscale, we _don't_ want to do this */
-  output_type_iterate(i) {
+  for (i = 0; i < NUM_STATS; i++)
+  {
     nnset(pdialog->minimal_surplus_slider[i],MUIA_Numeric_Value,param.minimal_surplus[i]);
     nnset(pdialog->factor_slider[i],MUIA_Numeric_Value,param.factor[i]);
-  } output_type_iterate_end;
+  }
   nnset(pdialog->celebrate_check, MUIA_Selected,param.require_happy);
   nnset(pdialog->factor_slider[6], MUIA_Numeric_Value, param.happy_factor);
 

@@ -554,33 +554,33 @@ static void help_update_terrain(const struct help_item *pitem,
     SetWindowText (help_tlabel[0][1], buf);
 
     sprintf(buf, "%d/%d/%d",
-	    tile_types[i].output[O_FOOD],
-	    tile_types[i].output[O_SHIELD],
-	    tile_types[i].output[O_TRADE]);
+	    tile_types[i].food,
+	    tile_types[i].shield,
+	    tile_types[i].trade);
     SetWindowText(help_tlabel[0][4], buf);
 
-    if (*(tile_types[i].special[0].name)) {
+    if (*(tile_types[i].special_1_name)) {
       sprintf(buf, _("%s F/R/T:"),
-	      tile_types[i].special[0].name);
+	      tile_types[i].special_1_name);
       SetWindowText(help_tlabel[1][0], buf);
       sprintf(buf, "%d/%d/%d",
-	      tile_types[i].special[0].output[O_FOOD],
-	      tile_types[i].special[0].output[O_SHIELD],
-	      tile_types[i].special[0].output[O_TRADE]);
+	      tile_types[i].food_special_1,
+	      tile_types[i].shield_special_1,
+	      tile_types[i].trade_special_1);
       SetWindowText(help_tlabel[1][1], buf);
     } else {
       SetWindowText(help_tlabel[1][0], " ");
       SetWindowText(help_tlabel[1][1], " ");
     }
 
-    if (*(tile_types[i].special[1].name)) {
+    if (*(tile_types[i].special_2_name)) {
       sprintf(buf, _("%s F/R/T:"),
-	      tile_types[i].special[1].name);
+	      tile_types[i].special_2_name);
       SetWindowText(help_tlabel[1][3], buf);
       sprintf(buf, "%d/%d/%d",
-	      tile_types[i].special[1].output[O_FOOD],
-	      tile_types[i].special[1].output[O_SHIELD],
-	      tile_types[i].special[1].output[O_TRADE]);
+	      tile_types[i].food_special_2,
+	      tile_types[i].shield_special_2,
+	      tile_types[i].trade_special_2);
       SetWindowText(help_tlabel[1][4], buf);
     } else {
       SetWindowText(help_tlabel[1][3], " ");
@@ -708,7 +708,7 @@ static void help_update_unit_type(const struct help_item *pitem,
       SetWindowText(help_ulabel[4][1], advances[utype->tech_requirement].name);
     }
     /*    create_tech_tree(help_improvement_tree, 0, utype->tech_requirement, 3);*/
-    if (utype->obsoleted_by == U_NOT_OBSOLETED) {
+    if(utype->obsoleted_by==-1) {
       SetWindowText(help_ulabel[4][4], _("None"));
     } else {
       SetWindowText(help_ulabel[4][4], get_unit_type(utype->obsoleted_by)->name);

@@ -279,7 +279,7 @@ static void update_radio_buttons(int id)
 static void update_nation_info()
 {
   SetWindowText(races_class, 
-		get_nation_by_idx(selected_nation)->category);
+		get_nation_by_idx(selected_nation)->class);
   SetWindowText(races_legend,
 		get_nation_by_idx(selected_nation)->legend);
 }
@@ -388,7 +388,7 @@ static LONG CALLBACK racesdlg_proc(HWND hWnd,
 	  }
 	  break;
 	case ID_RACESDLG_QUIT:
-	  ui_exit();
+	  exit(EXIT_SUCCESS);
 	  break;
 	case ID_RACESDLG_DISCONNECT:
 	  popdown_races_dialog();

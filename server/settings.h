@@ -120,5 +120,3 @@ struct settings_s {
 
 extern struct settings_s settings[];
 extern const int SETTINGS_NUM;
-
-bool sset_is_changeable(int idx);

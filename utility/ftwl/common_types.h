@@ -16,7 +16,6 @@
 
 #include "shared.h"
 
-/* int is sometimes less than 32 bits */
 typedef unsigned long be_color;
 
 struct be_key;

@@ -504,6 +504,42 @@ int do_make_unit_veteran(struct city *pcity, Unit_Type_id id)
   return 0;
 }
 
+/**************************************************************************
+  Return the cached shield bonus rate.  Don't confuse this with
+  get_city_shield_bonus which recomputes the value from scratch.
+**************************************************************************/
+int city_shield_bonus(struct city *pcity)
+{
+  return pcity->shield_bonus;
+}
+
+/**************************************************************************
+  Return the cached luxury bonus rate.  Don't confuse this with
+  get_city_luxury_bonus which recomputes the value from scratch.
+**************************************************************************/
+int city_luxury_bonus(struct city *pcity)
+{
+  return pcity->luxury_bonus;
+}
+
+/**************************************************************************
+  Return the cached tax bonus rate.  Don't confuse this with
+  get_city_tax_bonus which recomputes the value from scratch.
+**************************************************************************/
+int city_tax_bonus(struct city *pcity)
+{
+  return pcity->tax_bonus;
+}
+
+/**************************************************************************
+  Return the cached science bonus rate.  Don't confuse this with
+  get_city_science_bonus which recomputes the value from scratch.
+**************************************************************************/
+int city_science_bonus(struct city *pcity)
+{
+  return pcity->science_bonus;
+}
+
 /*********************************************************************
 Note: the old unit is not wiped here.
 ***********************************************************************/
@@ -1536,22 +1572,24 @@ void package_city(struct city *pcity, struct packet_city_info *packet,
     packet->ppl_unhappy[i]=pcity->ppl_unhappy[i];
     packet->ppl_angry[i]=pcity->ppl_angry[i];
   }
-  specialist_type_iterate(sp) {
-    packet->specialists[sp] = pcity->specialists[sp];
-  } specialist_type_iterate_end;
+  packet->specialists[SP_ELVIS] = pcity->specialists[SP_ELVIS];
+  packet->specialists[SP_SCIENTIST] = pcity->specialists[SP_SCIENTIST];
+  packet->specialists[SP_TAXMAN] = pcity->specialists[SP_TAXMAN];
   for (i = 0; i < NUM_TRADEROUTES; i++) {
     packet->trade[i]=pcity->trade[i];
     packet->trade_value[i]=pcity->trade_value[i];
   }
 
-  output_type_iterate(o) {
-    packet->surplus[o] = pcity->surplus[o];
-    packet->waste[o] = pcity->waste[o];
-  } output_type_iterate_end;
-  packet->food_prod = pcity->food_prod;
-  packet->shield_prod = pcity->shield_prod;
-  packet->tile_trade = pcity->tile_trade;
-
+  packet->food_prod=pcity->food_prod;
+  packet->food_surplus=pcity->food_surplus;
+  packet->shield_prod=pcity->shield_prod;
+  packet->shield_surplus=pcity->shield_surplus;
+  packet->trade_prod=pcity->trade_prod;
+  packet->tile_trade=pcity->tile_trade;
+  packet->corruption=pcity->corruption;
+  
+  packet->shield_waste=pcity->shield_waste;
+    
   packet->luxury_total=pcity->luxury_total;
   packet->tax_total=pcity->tax_total;
   packet->science_total=pcity->science_total;
@@ -1991,7 +2029,7 @@ static bool update_city_tile_status(struct city *pcity, int city_x,
   case C_TILE_WORKER:
     if (!is_available) {
       server_set_tile_city(pcity, city_x, city_y, C_TILE_UNAVAILABLE);
-      pcity->specialists[DEFAULT_SPECIALIST]++; /* keep city sanity */
+      pcity->specialists[SP_ELVIS]++; /* keep city sanity */
       auto_arrange_workers(pcity); /* will place the displaced */
       city_refresh(pcity);
       send_city_info(NULL, pcity);

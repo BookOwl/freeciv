@@ -35,7 +35,6 @@
 #include "mapview_common.h"
 #include "tilespec.h"
 
-struct mapview_decoration *map_deco;
 struct mapview_canvas mapview_canvas;
 struct overview overview;
 bool can_slide = TRUE;
@@ -686,10 +685,6 @@ struct tile *get_center_tile_mapcanvas(void)
 void center_tile_mapcanvas(struct tile *ptile)
 {
   int gui_x, gui_y;
-  static bool first = TRUE;
-
-  assert(!first || !can_slide);
-  first = FALSE;
 
   map_to_gui_pos(&gui_x, &gui_y, ptile->x, ptile->y);
 
@@ -957,12 +952,12 @@ void put_unit_city_overlays(struct unit *punit,
 			    struct canvas *pcanvas,
 			    int canvas_x, int canvas_y)
 {
-  int upkeep_food = CLIP(0, punit->upkeep[O_FOOD], 2);
-  int upkeep_gold = CLIP(0, punit->upkeep[O_GOLD], 2);
+  int upkeep_food = CLIP(0, punit->upkeep_food, 2);
+  int upkeep_gold = CLIP(0, punit->upkeep_gold, 2);
   int unhappy = CLIP(0, punit->unhappiness, 2);
 
   /* draw overlay pixmaps */
-  if (punit->upkeep[O_SHIELD] > 0) {
+  if (punit->upkeep > 0) {
     canvas_put_sprite_full(pcanvas, canvas_x, canvas_y,
 			   sprites.upkeep.shield);
   }
@@ -1428,10 +1423,10 @@ static void tile_draw_selection(struct canvas *pcanvas,
      * map grid if it is drawn. */
     if (get_tile_boundaries(dir, inset, 1,
 			    &start_x, &start_y, &end_x, &end_y)) {
-      if (map_deco[ptile->index].hilite == HILITE_CITY
+      if (ptile->client.hilite == HILITE_CITY
 	  || (is_isometric
 	      && (adjc_tile = mapstep(ptile, dir))
-	      && map_deco[adjc_tile->index].hilite == HILITE_CITY)) {
+	      && adjc_tile->client.hilite == HILITE_CITY)) {
 	canvas_put_line(pcanvas, COLOR_STD_YELLOW, LINE_NORMAL,
 			canvas_x + start_x, canvas_y + start_y,
 			end_x - start_x, end_y - start_y);
@@ -2018,7 +2013,7 @@ struct city *find_city_or_settler_near_tile(struct tile *ptile,
        * causing it to be marked as C_TILE_UNAVAILABLE.
        */
       
-      if (map_deco[pcity->tile->index].hilite == HILITE_CITY) {
+      if (pcity->tile->client.hilite == HILITE_CITY) {
 	/* rule c */
 	return pcity;
       }
@@ -2324,6 +2319,7 @@ void overview_to_map_pos(int *map_x, int *map_y,
 {
   int ntl_x = overview_x / OVERVIEW_TILE_SIZE + overview.map_x0;
   int ntl_y = overview_y / OVERVIEW_TILE_SIZE + overview.map_y0;
+  struct tile *ptile;
 
   if (MAP_IS_ISOMETRIC && !topo_has_flag(TF_WRAPX)) {
     /* Clip half tile left and right.  See comment in map_to_overview_pos. */
@@ -2331,10 +2327,12 @@ void overview_to_map_pos(int *map_x, int *map_y,
   }
 
   NATURAL_TO_MAP_POS(map_x, map_y, ntl_x, ntl_y);
-  if (!normalize_map_pos(map_x, map_y)) {
-    /* All positions on the overview should be valid. */
-    assert(FALSE);
-  }
+
+  /* HACK: there are reports of normalize_map_pos failing here, so we use
+   * nearest_real_tile instead. */
+  ptile = nearest_real_tile(*map_x, *map_y);
+  *map_x = ptile->x;
+  *map_y = ptile->y;
 }
 
 /**************************************************************************
@@ -2558,18 +2556,6 @@ void set_overview_dimensions(int width, int height)
 }
 
 /**************************************************************************
-  Called when we receive map dimensions.  It initialized the mapview
-  decorations.
-**************************************************************************/
-void init_mapview_decorations(void)
-{
-  map_deco = fc_realloc(map_deco, MAP_INDEX_SIZE * sizeof(*map_deco));
-  whole_map_iterate(ptile) {
-    map_deco[ptile->index].hilite = HILITE_NONE;
-  } whole_map_iterate_end;
-}
-
-/**************************************************************************
   Called if the map in the GUI is resized.
 
   Returns TRUE iff the canvas was redrawn.
@@ -2640,6 +2626,4 @@ bool map_canvas_resized(int width, int height)
 **************************************************************************/
 void init_mapcanvas_and_overview(void)
 {
-  /* Create a dummy map to make sure mapview_canvas.store is never NULL. */
-  map_canvas_resized(1, 1);
 }
