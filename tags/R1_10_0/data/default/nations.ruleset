@@ -1,0 +1,1951 @@
+
+; Modifying this file:
+; You should not modify this file except to make bugfixes or
+; for other "maintenance".  If you want to make custom changes
+; you should create a new datadir subdirectory and copy this file
+; into that directory, and then modify that copy.  Then use the
+; command "set nations <mysubdir>" in the server to have freeciv
+; use your new customized file.
+
+[datafile]
+description="Default nations data for Freeciv"
+options="1.9"
+
+; Below: nations data in sections [nation0] - [nationxx]
+; for all nations available. If you want to have more
+; nations just add one at the end. There is a maximum
+; of 63 nations however. I hope it is enough :-)
+;
+; Notes:
+;
+; name          = name of the nation
+; plural        = plural form of the nation name (use '?plural:' qualifier)
+; leader        = default leader names for the nation
+; leader_sex    = sex of each default leader: "Male" or "Female"
+; flag          = string to look for in client tilespec files for
+;                 preferred flag icon
+; flag_alt      = alternate flag icon string, or "-"
+;
+; Next are some hints for AI, as defined in struct player_race
+; Ask the guy who designed this struct for more explanation :-)
+; AFAIK some of them are not implemented yet.
+;
+; attack        = c 0 = optimize for food, 2 =  optimize for prod
+;                 c0 = large amount of buildings, 2 = units
+; expand        = c0 = transform first ,  2 = build cities first
+; civilized     = c 0 = do not use nukes,  2 = use nukes, lots of pollution
+; advisors      = some kind of advisors, not implemented anyway
+; tech_goals    = technology goals, up to 10
+; wonder        = primary wonder
+; government    = wanted government
+;
+; cities        = city names, of course :-)
+;
+;
+;
+; section [misc] currently contains cities suggested when
+; you run out of default cities for your nation
+;
+
+[nation0]
+
+name=_("Roman")
+plural=_("?plural:Romans")
+leader="Caesar", "August", "Livia", "Trajan", "Constantin"
+leader_sex="Male", "Male", "Female", "Male", "Male"
+flag = "f.italy"
+flag_alt = "-"
+city_style = "Classical"
+
+ruler_titles = { "government",      "male_title",      "female_title"
+                 "Despotism",       _("Dictator"),     _("Dictator")
+                 "Monarchy",        _("Imperator"),    _("Imperatrix")
+}
+
+attack=1
+expand=2
+civilized=2
+advisors=100,100,100,100,100,100,100
+tech_goals = "The Republic", "The Wheel", "Iron Working", "Construction",
+             "Railroad"
+wonder="Leonardo's Workshop"
+government="Republic"
+
+cities =
+  "Roma", "Capua", "Veii", "Beneventum", "Corfinium", "Ancona",
+  "Tarentum", "Brundisium", "Ravenna", "Pisa", "Genova", "Mediolanum",
+  "Aquileia", "Florentia", "Bononia", "Verona", "Ostia", "Agrigentum",
+  "Syracusae", "Neapolis", "Pompeii", "Salernum", "Tarraco",
+  "Carthago", "Numantia", "Carthago Nova", "Baiae",
+  "Noviomagus", "Vindobona", "Atuatuca", "Caesarea", "Ierusalem",
+  "Trapezus", "Durocortorum", "Lutetia", "Burdigala", "Portus Namnetum",
+  "Utica", "Lugdunum", "Londinium", "Aquae Sulis", "Camulodunum", "Dubris",
+  "Eburacum", "Coriovallum", "Perusia", "Leptis Magna", "Corduba", "Edessa",
+  "Ariminum", "Narbo Martius", "Pergamum", "Vienna", "Hispalis",
+  "Salonae", "Cyrenae", "Dyrrachium", "Luni", "Noreia", "Ephesus",
+  "Panoramus", "Ancyra", "Caralis", "Patavium", "Petra", "Tolosa",
+  "Pisae", "Palmyra", "Tyrus", "Cortona", "Arenate", "Brigantium",
+  "Lix", "Sala", "Berytus", "Naissus", "Nicomedia", "Berenice",
+  "Sabrata", "Attalea", "Sinope", "Hippo Regius", "Gesoriacum",
+  "Velia", "Segesta", "Gaza", "Aleria", "Colonia Agrippina",
+  "Agentoracum", "Moguntiacum", "Arretium", "Thapsus", "Altinum", "Tarsus"
+
+
+[nation1]
+
+name=_("Babylonian")
+plural=_("?plural:Babylonians")
+leader="Hammurabi", "Sargon", "Nabuchadnezzar"
+leader_sex="Male", "Male", "Male"
+flag = "f.iraq_old"
+flag_alt = "-"
+city_style = "Classical"
+
+attack=0
+expand=0
+civilized=2
+advisors=100,100,100,100,100,100,100
+
+tech_goals = "Monarchy","Philosophy","Mathematics","Chivalry",
+             "Theology","Monotheism"
+wonder="Hanging Gardens"
+government="Monarchy"
+
+cities =
+  "Babylon", "Lagash", "Nippur", "Ur", "Kish",
+  "Shuruppak", "Kisurra", "Cutha", "Adab", "Umma",
+  "Akkad", "Eridu", "Larsa", "Borsippa", "Sippar",
+  "Nineveh", "Ashur", "Calach", "Carcar", "Hamat",
+  "Opis", "Cunaxa", "Arbela", "Nisibis", "Carrhae",
+  "Seleucia", "Ctesiphon", "Sittace", "Orchoe", "Apamea"
+
+
+[nation2]
+
+name=_("German")
+plural=_("?plural:Germans")
+leader="Frederick", "Otto", "Wilhelm", "Bismarck", "Hitler"
+leader_sex="Male", "Male", "Male", "Male", "Male"
+flag="f.germany"
+flag_alt = "-"
+city_style = "European"
+ruler_titles = { "government",      "male_title",      "female_title"
+                 "Democracy",       _("Chancellor"),   _("Chancellor")
+                 "Fundamentalism",  _("Archbishop"),   _("Archbishop")
+               }
+
+attack=2
+expand=0
+civilized=2
+advisors=100,100,100,100,100,100,100
+
+tech_goals = "The Republic", "Iron Working", "Gunpowder", "Explosives",
+             "Flight"
+wonder="J.S. Bach's Cathedral"
+government="Republic"
+
+cities =
+  "Frankfurt", "Mainz", "Trier", "Aachen", "Münster",
+  "Bremen", "Lübeck", "Hamburg", "Berlin", "Dresden",
+  "Wien", "Fulda", "Würzburg", "Bamberg", "Nürnberg",
+  "München", "Brixien", "Salzburg", "Passau", "Köln",
+  "Koblenz", "Leipzig", "Regensburg", "Heidelberg", "Verden",
+  "Kassel", "Wittenberg", "Wismar", "Ulm", "Nördlingen",
+  "Stralsund", "Marburg", "Schlettstadt", "Augsburg", "Rostock", "Schwerin",
+  "Mansfeld", "Donauwörth", "Dessau", "Osnabrück", "Hannover", "Stuttgart",
+  "Mühlberg", "Wittstock", "Speyer", "Kleve", "Worms", "Halle", "Erfurt",
+  "Landau", "Heilbronn", "Rosheim", "Schmalkalden", "Lutter",
+  "Wiesloch", "Rosslau", "Magdeburg", "Minden", "Sinsheim", "Gotha",
+  "Philippsburg", "Halberstadt", "Hersfeld", "Altenburg", "Klostergrab",
+  "Oldenburg", "Weimar", "Freiburg", "Baden-Baden", "Mannheim", "Kiel",
+  "Solingen", "Elberfeld", "Barmen", "Essen", "Dortmund", "Duisburg",
+  "Düsseldorf", "Gelsenkirchen", "Bochum", "Saarbrücken", "Ludwigshafen"
+
+
+[nation3]
+
+name=_("Egyptian")
+plural=_("?plural:Egyptians")
+leader="Ramesses", "Cleopatra", "Tutanhamon", "Hatshepsut", "Nefertiti", "Cheops"
+leader_sex="Male", "Female", "Male", "Female", "Female", "Male"
+flag="f.egypt"
+flag_alt = "-"
+city_style = "Classical"
+
+ruler_titles = { "government",      "male_title",      "female_title"
+                 "Despotism",       _("Pharaoh"),       _("Pharaoh")
+                 "Monarchy",        _("Great Pharaoh"), _("Great Pharaoh")
+               }
+
+attack=1
+expand=1
+civilized=2
+advisors=100,100,100,100,100,100,100
+
+tech_goals = "Monarchy", "Philosophy", "Navigation", "Iron Working",
+             "Railroad"
+wonder="Pyramids"
+government="Monarchy"
+
+cities =
+  "Thebae", "Memphis", "Heliopolis", "Syene", "Arsinoe", "Bubastis",
+  "Ammonium", "Alexandria", "Pelusium", "Canopus", "Naucratis",
+  "Diospolis",  "Sais", "Acoris", "Cynopolis", "Thinis",
+  "Timonepsis", "Nilopolis", "Chemmis", "Antaeopolis", "Hermonthis",
+  "Letopolis", "Aphroditopolis", "Heracleopolis", "Oxyrynchus",
+  "Ibiu", "Busiris", "Andropolis", "Sele", "Antiphrae", "Apis"
+
+
+[nation4]
+
+name=_("American")
+plural=_("?plural:Americans")
+leader="Lincoln", "Washington", "Franklin D. Roosevelt",
+       "J.F. Kennedy", "Eleonore Roosevelt"
+leader_sex="Male", "Male", "Male", "Male", "Female"
+flag="f.usa"
+flag_alt = "-"
+city_style = "European"
+ruler_titles = { "government",      "male_title",      "female_title"
+                 "Republic",        _("Speaker"),      _("Speaker")
+                 "Fundamentalism",  _("Reverend"),     _("Reverend")
+               }
+
+attack=0
+expand=1
+civilized=2
+advisors=100,100,100,100,100,100,100
+tech_goals = "The Republic", "Trade", "Engineering", "Democracy",
+             "Railroad", "Explosives", "Automobile"
+wonder="Statue of Liberty"
+government="Democracy"
+
+cities =
+  "Washington", "New York", "Boston", "Philadelphia", "Los Angeles",
+  "Atlanta", "Chicago", "Buffalo", "St. Louis", "Detroit",
+  "New Orleans", "Baltimore", "Denver", "Cincinnati", "Dallas",
+  "Minneapolis", "Houston", "San Antonio", "San Francisco", "Seattle",
+  "Portland", "Miami", "Cleveland", "Pittsburgh",
+  "Salt Lake City", "San Diego", "Phoenix", "Kansas City", "Indianapolis",
+  "Orlando", "Milwaukee", "Honolulu", "Boise", "Las Vegas", "Springfield",
+  "Nashville", "Hartford", "Charlotte", "El Paso", "Anchorage",
+  "Spokane", "Tacoma", "Fort Worth", "Austin", "Sacramento", "Oklahoma City",
+  "St. Paul", "Jacksonville", "Sioux Falls", "Madison", "Lubbock",
+  "Amarillo", "Omaha", "Baton Rouge", "Little Rock", "Tucson",
+  "Erie", "Flint", "Trenton", "Newark", "Arlington", "Richmond", "Reno",
+  "Santa Fe", "Tulsa", "Anapolis", "Dover", "Akron", "Urbana-Champaign"
+
+
+[nation5]
+
+name=_("Greek")
+plural=_("?plural:Greeks")
+leader="Alexander", "Perikles", "Leonidas"
+leader_sex="Male", "Male", "Male"
+flag="f.greece"
+flag_alt = "-"
+city_style = "Classical"
+ruler_titles = { "government",      "male_title",      "female_title"
+                 "Democracy",       _("Prime Minister"), _("Prime Minister")
+               }
+
+attack=1
+expand=2
+civilized=0
+advisors=100,100,100,100,100,100,100
+tech_goals = "The Republic", "Philosophy", "Trade", "Engineering",
+             "Iron Working", "Railroad"
+wonder="Lighthouse"
+government="Republic"
+
+cities =
+  "Athenae", "Sparta", "Thebae", "Corinthus", "Byzantium",
+  "Miletus", "Ephesus", "Piraeus", "Argos", "Megalopolis",
+  "Megara", "Eleusis", "Chalcis", "Eretria", "Thessalonica",
+  "Pella", "Edessa", "Dodona", "Nikopolis", "Naupactus",
+  "Patrae", "Olympia", "Pylos", "Mantinea", "Tegea",
+  "Nauplion", "Mycenae", "Nemea", "Epidauros", "Aulis",
+  "Orchomenos", "Marathon", "Delphi", "Thermopylae", "Phaleron",
+  "Nicaea", "Heraclea", "Potidaea", "Stagira", "Olynthus",
+  "Colophon", "Phocaea", "Amphissa", "Elateia", "Hyampolis",
+  "Atalante", "Oropos", "Lebadeia", "Larissa", "Iolkus",
+  "Amphiclaea", "Mesembria", "Cyzicus", "Halicarnassus", "Pergamos",
+  "Pydna", "Philadelphea", "Therme", "Amphipolis", "Corcyra",
+  "Ithaca", "Thera", "Delos", "Panormos", "Ortygia",
+  "Melos", "Lykosoura", "Amyclae", "Clazomenae", "Kynos Kephalae"
+
+
+[nation6]
+
+name=_("Indian")
+plural=_("?plural:Indians")
+leader="Gandhi", "Ashoka", "Chandragupta", "Indhira Gandhi"
+leader_sex="Male", "Male", "Male", "Female"
+flag="f.india"
+flag_alt = "-"
+city_style = "European"
+
+ruler_titles = { "government",      "male_title",      "female_title"
+                 "Monarchy",        _("Maharaja"),     _("Maharaja")
+               }
+
+attack=0
+expand=0
+civilized=1
+advisors=100,100,100,100,100,100,100
+tech_goals = "Monarchy", "Philosophy", "The Republic", "Iron Working",
+             "Engineering", "Railroad"
+wonder="Oracle"
+government="Republic"
+
+cities =
+  "Delhi", "Bombay", "Madras", "Bangalore", "Calcutta",
+  "Lahore", "Karachi", "Ahmadabad", "Kanpur", "Hyderabad",
+  "Dacca", "Lucknow", "Benares", "Chandrigarh", "Rawalpindi",
+  "Colombo", "Madurai", "Coimbatore", "Calicut", "Trivandrum",
+  "Nagpur", "Chittagong", "Multan", "Amritsar", "Srinagar",
+  "Agra", "Bhopal", "Patna", "Surat", "Jaipur", "Varanasi",
+  "Allahabad", "Indore", "Mysore", "Raipur", "Gaya"
+
+
+[nation7]
+
+name=_("Russian")
+plural=_("?plural:Russians")
+leader="Catherine II", "Ivan the Terrible", "Stalin", "Peter", "Anne"
+leader_sex="Female", "Male", "Male", "Male", "Female"
+flag="f.russia"
+flag_alt = "-"
+city_style = "European"
+
+ruler_titles = { "government",      "male_title",      "female_title",
+                 "Monarchy",        _("Czar"),         _("Czarina")
+                 "Fundamentalism",  _("Patriarch"),    _("Matriarch")
+               }
+
+attack=2
+expand=1
+civilized=0
+advisors=100,100,100,100,100,100,100
+
+tech_goals = "Monarchy", "Philosophy", "Chivalry", "Trade",
+             "Bridge Building", "Railroad", "Communism"
+wonder="Women's Suffrage"
+government="Communism"
+
+cities =
+  "Moskva", "St. Petersburg", "Tver", "Novgorod",
+  "Yekaterinburg", "Samara", "Pskov", "Ryazan", "Vladimir",
+  "Yaroslavl",  "Novosibirsk", "Smolensk", "Briansk", "Oriel",
+  "Voronezh", "Saransk", "Uralsk", "Petrozavodsk", "Perm", "Ufa",
+  "Saratov", "Volgograd", "Rostov", "Tomsk", "Omsk", "Chelyabinsk",
+  "Irkutsk",  "Vladivostok",  "Khabarovsk",  "Krasnoyarsk",
+  "Vologda",  "Murmansk",  "Arkhangelsk",  "Krasnodar",  "Stavropol"
+
+
+[nation8]
+
+name=_("Zulu")
+plural=_("?plural:Zulus")
+leader="Shaka"
+leader_sex="Male"
+flag="f.south_africa"
+flag_alt = "f.rwanda"  ; used previously
+city_style = "European"
+
+attack=2
+expand=1
+civilized=1
+advisors=100,100,100,100,100,100,100
+
+tech_goals = "Monarchy", "Philosophy", "Chivalry", "Trade", "Bridge Building",
+             "Railroad", "Communism"
+wonder="Apollo Program"
+government="Communism"
+
+cities =
+ "Zimbabwe", "Ulundi", "Bapedi", "Hlobane", "Isandhlwana",
+ "Intombe", "Mpondo", "Ngome", "Swazi", "Tugela", "Umtata",
+ "Umfolozi", "Ibabanago", "Isipezi", "Amatikulu", "Zunguin",
+ "Nongoma", "Ixopo", "Isipingo", "Amanzimtoti", "Mtubatuba",
+ "Ubombo", "Ngobeni", "Ngutu", "Nkande", "Empangeni"
+
+
+[nation9]
+
+name=_("French")
+plural=_("?plural:French")
+leader="Napoleon", "Louis XIV", "Charles de Gaulle", "Vercingetorix", "Chlodwig"
+leader_sex="Male", "Male", "Male", "Male", "Male"
+flag="f.france"
+flag_alt = "-"
+city_style = "European"
+ruler_titles = { "government",      "male_title",      "female_title"
+                 "Democracy",       _("Premier"),      _("Premier")
+                 "Fundamentalism",  _("Archbishop"),   _("Archbishop")
+               }
+
+attack=2
+expand=2
+civilized=2
+advisors=100,100,100,100,100,100,100
+
+tech_goals = "Monarchy", "Chivalry", "Philosophy", "The Republic",
+             "Monotheism", "Engineering", "Navigation", "Railroad"
+wonder="Magellan's Expedition"
+government="Republic"
+
+cities =
+  "Paris", "Lyon", "Marseille", "Lille", "Bordeaux",
+  "Nantes", "Rouen", "Reims", "Tours", "Angers",
+  "Toulouse", "Montpellier", "Nîmes", "Toulon", "Orléans",
+  "Chartres", "Avignon", "Grenoble", "Dijon", "Amiens",
+  "Cherbourg", "Caen", "Calais", "Limoges", "Clermont-Ferrand",
+  "Nancy", "Besançon", "St. Etienne", "Brest", "Perpignan",
+  "Vichy", "Rennes", "Le Havre", "La Rochelle", "Poitiers",
+  "St. Nazaire", "Bourges", "Le Mans", "Valenciennes", "Montlucon"
+
+
+[nation10]
+
+name=_("Aztec")
+plural=_("?plural:Aztecs")
+leader="Montezuma", "Cuahtemoc", "Itzcoatl", "Axayacatl"
+leader_sex="Male", "Male", "Male", "Male"
+flag="f.mexico"
+flag_alt = "-"
+city_style = "Classical"
+
+attack=1
+expand=0
+civilized=2
+advisors=100,100,100,100,100,100,100
+
+tech_goals = "Monarchy", "Chivalry", "Iron Working", "Trade",
+             "Navigation", "Railroad", "Communism"
+wonder="Hoover Dam"
+government="Communism"
+
+cities =
+  "Michoacan", "Axaca", "Tuxpan", "Metztitlan", "Otumba",
+  "Tlacopán", "Theotihucanán", "Tezcuco", "Jalapa", "Tlaxcala",
+  "Cholula", "Tenochtitlán", "Yopitzingo", "Teotitlán", "Theuantepec",
+  "Chiauhtia", "Chapultepec", "Coatepec", "Ayotzinco", "Itzapalapa",
+  "Iztapam", "Mitxcoac", "Tacubaya", "Tecamac", "Tepezinco",
+  "Ticomán", "Xaltocán", "Xicalango", "Zumpanco"
+
+
+[nation11]
+
+name=_("Chinese")
+plural=_("?plural:Chinese")
+leader="Mao", "Cixi", "Wu Zetian", "Li Shimin", "Liu Bang", "Qin Shihuang"
+leader_sex="Male", "Female", "Female", "Male", "Male", "Male"
+flag="f.china"
+flag_alt = "-"
+city_style = "Classical"
+ruler_titles = { "government",      "male_title",      "female_title"
+                 "Communism",       _("Chairman"),     _("Chairperson")
+               }
+
+attack=1
+expand=1
+civilized=2
+advisors=100,100,100,100,100,100,100
+
+tech_goals = "Monarchy", "Trade", "Philosophy", "Bridge Building",
+             "Railroad", "Communism"
+wonder="Great Wall"
+government="Communism"
+
+cities =
+  "Beijing", "Shanghai", "Guangzhou", "Nanjing", "Tianjin",
+  "Xi'an", "Taiyuan", "Shenyang", "Changchun", "Harbin",
+  "Wuhan", "Chengdu", "Kunming", "Guiyang", "Lanzhou",
+  "Zhengzhou", "Changsha", "Nanchang", "Fuzhou", "Hangzhou",
+  "Jinan", "Shijiazhuang", "Yinchuan", "Xining", "Nanning",
+  "Hefei", "Haikou", "Fushun", "Chongqing", "Wuxi",
+  "Suzhou", "Xuzhou", "Jilin", "Qiqihar", "Hong Kong",
+  "Datong", "Kaifeng", "Luoyang", "Baoding", "Zhangjiakou",
+  "Qingdao", "Dalian", "Xiamen", "Handan", "Qinhuangdao",
+  "Hankou", "Changzhou", "Yangzhou", "Baotou", "Jiayuguan",
+  "Tangshan", "Yantai", "Jining", "Ningbo", "Guilin",
+  "Linxia", "Shantou", "Shangqiu", "Shaoxing", "Lianyungang",
+  "Yueyang", "Liaoyang", "Xianyang", "Mianyang", "Huizhou",
+  "Liuzhou", "Wenzhou", "Zhangzhou", "Chaozhou", "Ganzhou",
+  "Dezhou", "Zhanjiang", "Jiaxing", "Fuoshan", "Chengde",
+  "Tianshui", "Jiuquan", "Xiangtan", "Baoji", "Dengfeng",
+  "Baiyin", "Changshu", "Gaoyou", "Heihe", "Dunhuang"
+
+
+[nation12]
+
+name=_("English")
+plural=_("?plural:English")
+leader="Elizabeth", "William the Conqueror", "Richard Lionheart", "Henry VIII",
+       "Victoria"
+leader_sex="Female", "Male", "Male", "Male",
+           "Female"
+flag="f.england"
+flag_alt = "f.united_kingdom"
+city_style = "European"
+ruler_titles = { "government",      "male_title",      "female_title"
+                 "Democracy",       _("Prime Minister"), _("Prime Minister")
+                 "Fundamentalism",  _("Lord Protector"), _("Lady Protector")
+               }
+
+attack=1
+expand=2
+civilized=1
+advisors=100,100,100,100,100,100,100
+
+tech_goals = "Monarchy",  "Chivalry", "Trade", "Theology", "Monotheism",
+             "Navigation", "Democracy", "Railroad"
+wonder="King Richard's Crusade"
+government="Democracy"
+
+cities =
+  "London", "Birmingham", "Liverpool", "Manchester", "Leeds", "York",
+  "Newcastle", "Canterbury", "Bradford", "Derby", "Southampton",
+  "Middlesborough", "Sheffield", "Nottingham", "Coventry", "Bath", "Bristol",
+  "Brighton", "Portsmouth", "Hull", "Leicester", "Plymouth", "Bournemouth",
+  "Sunderland", "Stoke-on-Trent", "Bolton", "Norwich", "Oxford", "Colchester",
+  "Reading", "Cambridge", "Gloucester", "Blackpool", "Stratford-upon-Avon",
+  "Durham", "Eastleigh", "Winchester", "Folkestone", "Dover",
+  "Huntingdon", "Hereford", "Ipswich", "Kettering", "King's Lynn",
+  "Kidderminster", "Leek", "Lincoln", "Lutterworth", "Macclesfield",
+  "Market Bosworth", "Market Harborough", "Melton Mowbray", "Nuneaton",
+  "Oakham", "Peterborough", "Pickering", "Preston", "Poole", "Rochester",
+  "Ramsgate", "Southend", "Stevenage", "Ashford", "Swindon", "Torquay",
+  "Wolverhampton", "Weymouth", "Yeovil", "Halifax", "Oldham",
+  "Rochdale", "Blackburn", "Burnley", "Lancaster", "Northampton"
+
+
+[nation13]
+
+name=_("Mongol")
+plural=_("?plural:Mongols")
+leader="Genghis", "Ogodei", "Timur", "Batu", "Tokhtamysh"
+leader_sex="Male", "Male", "Male", "Male", "Male"
+flag="f.mongolia"
+flag_alt = "-"
+city_style = "European"
+ruler_titles = { "government",      "male_title",      "female_title"
+                 "Despotism",       _("Khan"),         _("Khan")
+                 "Monarchy",        _("Great Khan"),   _("Great Khan")
+               }
+
+attack=2
+expand=2
+civilized=0
+advisors=100,100,100,100,100,100,100
+
+tech_goals = "Monarchy",  "Chivalry", "Trade", "Bridge Building",
+             "Railroad"
+wonder="Sun Tzu's War Academy"
+government="Monarchy"
+
+cities =
+  "Almaligh", "Khotan", "Turfan", "Samarkand", "Bokhara", "Tashkent",
+  "Kashgar", "Balkh", "Kabul", "Sarai", "Astrachan", "Tana", "Kazan",
+  "Caffa", "Karakorum", "Hami", "Dunhuang", "Tali", "Tabriz", "Basra",
+  "Rayy", "Daybul", "Ulan Bator", "Ulan Ude", "Saynshand", "Ulaangom",
+  "Hovd", "Hatgal", "Ulyasutay", "Tsetserleg", "Altanbulug", "Dzuumod",
+  "Buyanhongor", "Huld", "Dalandzadgad", "Choybalsan"
+
+
+[nation14]
+
+name=_("Turk")
+plural=_("?plural:Turks")
+leader="Kemal Atatürk", "Sulayman", "Osman", "Murad",
+       "Selim", "Mehmed"
+leader_sex="Male", "Male", "Male", "Male",
+           "Male", "Male"
+flag="f.turkey"
+flag_alt = "-"
+city_style = "European"
+
+ruler_titles = { "government",      "male_title",      "female_title"
+                 "Monarchy",        _("Sultan"),       _("Sultan")
+               }
+
+attack=1
+expand=2
+civilized=2
+advisors=100,100,100,100,100,100,100
+
+tech_goals = "Monarchy", "Philosophy", "Mathematics", "Chivalry",
+             "Theology", "Railroad"
+wonder="Sun Tzu's War Academy"
+government="Republic"
+
+cities =
+ "Ankara", "Istanbul", "Izmir", "Adana", "Antalya",
+ "Galatarasay", "Smyrna", "Bursa", "Edirne", "Erzerum",
+ "Eskisehir", "Trabzon", "Konya", "Ordu", "Iskenderun",
+ "Aydin", "Denizli", "Kutahya", "Nevsehir", "Sivas",
+ "Adiyaman", "Kirsehir", "Elazig", "Malatya", "Tunceli",
+ "Balikesli", "Bandirma", "Yozgat", "Diyarbakir", "Giresun"
+
+
+[nation15]
+
+name=_("Spanish")
+plural=_("?plural:Spanish")
+leader="Charles V", "Isabella", "Ferdinand", "Joanna", "Philip"
+leader_sex="Male", "Female", "Male", "Female", "Male"
+flag="f.spain"
+flag_alt = "-"
+city_style = "European"
+ruler_titles = { "government",      "male_title",      "female_title"
+                 "Democracy",       _("Prime Minister"), _("Prime Minister")
+               }
+
+attack=1
+expand=1
+civilized=2
+advisors=100,100,100,100,100,100,100
+tech_goals = "Monarchy", "Philosophy", "Navigation", "Iron Working",
+             "Railroad"
+wonder="Magellan's Expedition"
+government="Democracy"
+
+cities =
+ "Madrid", "Toledo", "Leon", "Salamanca",
+ "Vigo", "La Coruna", "Oviedo", "Bilbao", "Valladolid",
+ "San Sebastian", "Vitoria", "Zaragoza",
+ "Barcelona", "Valencia", "Mallorca",
+ "Tenerife", "Santander", "Sevilla", "Granada", "Malaga",
+ "Jerez", "Alicante", "Cordoba", "Cadiz"
+
+
+[nation16]
+
+name=_("Persian")
+plural=_("?plural:Persians")
+leader="Cyrus", "Darius", "Xerxes", "Ardashir"
+leader_sex="Male", "Male", "Male", "Male"
+flag="f.iran"
+flag_alt = "-"
+city_style = "Classical"
+
+ruler_titles = { "government",      "male_title",      "female_title"
+                 "Monarchy",        _("Shah"),         _("Shah")
+               }
+
+attack=1
+expand=2
+civilized=0
+advisors=100,100,100,100,100,100,100
+tech_goals = "Polytheism", "Philosophy", "Trade", "Engineering",
+             "Iron Working", "Railroad"
+wonder="Hanging Gardens"
+government="Monarchy"
+
+;first are ancient cities in latin version
+
+cities =
+  "Persepolis", "Susa", "Ekbatana", "Pasargadae",
+  "Rhagae", "Margiane", "Baktra", "Taxila", "Gabae",
+  "Zadrakarta", "Herat", "Drapsaka", "Karmana", "Pura", ;modern cities
+  "Teheran", "Isfahan", "Tabriz", "Hamadan", "Rasht",
+  "Ahraz", "Shiraz", "Kerman", "Yazd", "Mashhad", "Zahedan",
+  "Bushehr", "Qazrin", "Lhasa", "Bulgar", "Hormuz", "Baghdad",
+  "Esfahan", "Mosul"
+
+
+[nation17]
+
+name=_("Arab")
+plural=_("?plural:Arabs")
+leader="Mohammad", "Umar", "Harun al-Rashid", "Saladin"
+leader_sex="Male", "Male", "Male", "Male"
+flag ="f.arab"
+flag_alt = "-"
+city_style = "Classical"
+
+ruler_titles = { "government",      "male_title",      "female_title"
+                 "Monarchy",        _("Caliph"),       _("Caliph")
+               }
+
+attack=2
+expand=1
+civilized=0
+advisors=100,100,100,100,100,100,100
+tech_goals="Monarchy", "Philosophy", "Chivalry", "Trade", "Bridge Building",
+           "Railroad"
+wonder="Oracle"
+government="Monarchy"
+
+;Arab Peninsula and Near East
+
+cities =
+  "Mekka", "Medina", "Rijadh",  "Jidda", "Al Hufuf",
+  "Buraydah", "At Taif", "Sana", "Al Hudaydah", "Aden",
+  "Al Mukalla", "Taizz", "Masquat", "Abu Dhabi", "Dubai",
+  "Doha", "Al Manamah", "Ad Damman", "Kuwait", "Al-Jahrah",
+  "Amman", "Damascus", "Beyruth", "Hamah", "Aleppo", "Hums",
+  "Al Ayn"
+
+
+[nation18]
+
+name=_("Carthaginian")
+plural=_("?plural:Carthaginians")
+leader="Hannibal", "Hasdrubal", "Hamilcar", "Dido"
+leader_sex="Male", "Male", "Male", "Female"
+flag="f.tunisia"
+flag_alt = "-"
+city_style = "Classical"
+
+attack=2
+expand=1
+civilized=1
+advisors=100,100,100,100,100,100,100
+
+tech_goals="Monarchy", "Philosophy","Chivalry","Trade","Bridge Building",
+           "Navigation"
+wonder="Lighthouse"
+government="Monarchy"
+
+;Ancient cities from Africa and south Spain,
+;some are later roman colonies and not carthaginian towns
+
+cities =
+  "Carthago", "Leptis Magna", "Cirta", "Hadrumetum", "Aspis",
+  "Charax", "Oea", "Sabrata", "Utica", "Saldae", "Cartenna",
+  "Siga", "Rusaddir", "Tingis", "Gades", "Malaca", "Mastia",
+  "Thapsus", "Capsa", "Thugga", "Thevesta", "Madaura", "Sitifis",
+  "Githis", "Uthina", "Thamugaddi", "Lambaesis"
+
+
+[nation19]
+
+name=_("Inca")
+plural=_("?plural:Incas")
+leader="Tupac", "Manco Capac", "Atahualpa", "Pachacuti"
+leader_sex="Male", "Male", "Male", "Male"
+flag="f.peru"
+flag_alt = "-"
+city_style = "Classical"
+
+ruler_titles = { "government",      "male_title",      "female_title"
+                 "Despotism",       _("Warlord"),      _("Warlord")
+               }
+
+attack=2
+expand=2
+civilized=2
+advisors=100,100,100,100,100,100,100
+
+tech_goals="Monarchy","Chivalry","Philosophy","Monotheism", "Invention"
+wonder="Great Wall"
+government="Monarchy"
+
+cities =
+  "Cuzco", "Machu Picchu","Tiahuanaco", "Nazca", "Paracas",
+  "Recuay", "Chavin", "Pacatnamu", "Quito", "Tumbez",
+  "Sullana", "Huanapampa", "Cajanarca", "Chanchan", "Moche",
+  "Huanuco", "Parmunca", "Pachacamac", "Janja", "Ancon",
+  "Huamanga", "Vileas",  "Ollantaytambo", "Pucara", ;modern cities
+  "Lima", "Guayaquil", "Arica", "Callao", "La Paz", "Potosi",
+  "Trujillo", "Cajamarca"
+
+
+[nation20]
+
+name=_("Viking")
+plural=_("?plural:Vikings")
+leader="Erik the Bloodaxe", "Harald"
+leader_sex="Male", "Male"
+flag="f.norway"
+flag_alt = "f.denmark"  ; Now used by Danish
+city_style = "European"
+
+attack=2
+expand=2
+civilized=2
+advisors=100,100,100,100,100,100,100
+
+tech_goals = "The Republic", "The Wheel", "Iron Working", "Construction",
+             "Railroad"
+wonder="Magellan's Expedition"
+government="Republic"
+
+;Norwegian (and Icelandic) names.
+;Norwegian places listed up in the order it struck my mind.
+
+cities =
+ "Oslo", "Bergen", "Kaupang", "Stavanger", "Nidaros", "Narvik", "Tromsø",
+ "Reykjavik", "Harstad", "Fagernes", "Tønsberg", "Kirkenes", "Hamar",
+ "Fredrikstad", "Kristansand", "Kristiansund", "Christiania", "Drammen",
+ "Sandnes", "Arendal", "Vardø", "Vadsø", "Haugesund", "Sarpsborg",
+ "Kongsberg", "Kongsvinger", "Gjøvik", "Bardufoss", "Skjold", "Setermoen",
+ "Lillehammer", "Lillestrøm", "Strømmen", "Fredrikborg", "Halden", "Karmøy",
+ "Kragerø", "Fauske", "Bodø", "Andenes", "Stokkmarknes", "Svolvær",
+ "Sortland", "Moss", "Honningsvåg", "Hammerfest", "Ås", "Os", "Tynset",
+ "Longyearbyen"
+
+
+[nation21]
+
+name=_("Polish")
+plural=_("?plural:Polish")
+leader="Mieszko", "Jadwiga", "Jan Sobieski", "Kosciuszko", "Pilsudski", "Walesa"
+leader_sex="Male", "Female", "Male", "Male", "Male", "Male"
+flag="f.poland"
+flag_alt = "-"
+city_style = "European"
+ruler_titles = { "government",      "male_title",      "female_title"
+                 "Fundamentalism",  _("Prymas"),       _("Prymas")
+               }
+
+attack=2
+expand=1
+civilized=2
+advisors=100,100,100,100,100,100,100
+tech_goals = "The Republic", "Trade", "Engineering", "Monotheism",
+             "Gunpowder", "Railroad"
+wonder="Copernicus' Observatory"
+government="Democracy"
+
+cities =
+ "Gniezno", "Kraków", "Warszawa", "Wroclaw", "Poznan", "Gdansk",
+ "Szczecin", "Lódz", "Torun", "Bydgoszcz", "Lublin", "Czestochowa",
+ "Olsztyn", "Wloclawek", "Radom", "Kielce", "Bialystok", "Opole",
+ "Plock", "Rzeszów", "Tarnów", "Katowice", "Bielsko-Biala",
+ "Sandomierz", "Legnica", "Walbrzych", "Gdynia", "Koszalin",
+ "Slupsk", "Piotrków", "Konin", "Kalisz", "Krosno", "Przemysl",
+ "Tarnobrzeg", "Zamosc", "Chelm", "Suwalki", "Elblag", "Zakopane",
+ "Oswiecim", "Glogów", "Jawor", "Zielona Góra", "Jelenia Góra",
+ "Boleslawiec", "Gorzów"
+
+
+[nation22]
+
+name=_("Hungarian")
+plural=_("?plural:Hungarians")
+leader="Arpad", "Stephen", "Bela", "Mary", "Louis"
+leader_sex="Male", "Male", "Male", "Female", "Male"
+flag="f.hungary"
+flag_alt = "-"
+city_style = "European"
+
+attack=2
+expand=0
+civilized=2
+advisors=100,100,100,100,100,100,100
+tech_goals = "The Republic", "Iron Working", "Theology", "Gunpowder",
+             "Railroad"
+wonder="J.S. Bach's Cathedral"
+government="Republic"
+
+cities =
+ "Budapest", "Szeged", "Debrecen", "Pécs", "Székesfehervár",
+ "Györ", "Kolosvár", "Temesvar", "Mohacs", "Szombathely",
+ "Veszprém", "Miskolc", "Nyiregyhaza", "Sopron", "Kaposvár",
+ "Kecskemét", "Eger", "Szolnok", "Békécsaba", "Szekszárd",
+ "Esztergom", "Nagykanizsa", "Varazdin", "Zalaegerszeg",
+ "Dunaujváros", "Paks", "Szentes", "Bonyhád", "Siklós", "Tokaj"
+
+
+[nation23]
+
+name=_("Danish")
+plural=_("?plural:Danes")
+leader="Valdemar", "Knut", "Margaret"
+leader_sex="Male", "Male", "Female"
+flag="f.denmark"
+flag_alt = "-"
+city_style = "European"
+ruler_titles = { "government",      "male_title",      "female_title"
+                 "Democracy",       _("Prime Minister"), _("Prime Minister")
+               }
+
+attack=1
+expand=2
+civilized=1
+advisors=100,100,100,100,100,100,100
+
+tech_goals = "Monarchy", "Chivalry", "Trade", "Theology", "University",
+             "Navigation", "Railroad"
+wonder="Magellan's Expedition"
+government="Democracy"
+
+cities =
+   "København", "Århus", "Odense", "Ålborg", "Esbjerg", "Randers",
+  "Frederikshavn", "Helsingør", "Roskilde", "Slagelse", "Sønderborg",
+  "Åbenrå", "Haderslev", "Vejle", "Holstebro", "Hirtshals", "Tylstrup",
+  "Skagen", "Hjørring", "Blokhus", "Nørresundby", "Hanstholm", "Thisted",
+  "Løgstør", "Thyborøn", "Skive", "Hadsund", "Ålestrup", "Grenå",
+  "Struer", "Herning", "Silkeborg", "Yding", "Skovhøj", "Give", "Tarm",
+  "Varde", "Assens", "Nyborg", "Fåborg", "Korsør", "Næstved", "Vordingborg",
+  "Nakskov", "Rødby", "Birkerød", "Nykøbing", "Rønne", "Allinge", "Neksø"
+
+
+[nation24]
+
+name=_("Dutch")
+plural=_("?plural:Dutch")
+leader="Willem", "Beatrix"
+leader_sex="Male", "Female"
+flag="f.holland"
+flag_alt = "-"
+city_style = "European"
+ruler_titles = { "government",      "male_title",      "female_title"
+                 "Democracy",       _("Prime Minister"), _("Prime Minister")
+               }
+
+attack=2
+expand=2
+civilized=0
+advisors=100,100,100,100,100,100,100
+
+tech_goals = "Map Making", "The Republic", "Trade", "Navigation",
+  "Economics", "Democracy"
+wonder="Magellan's Expedition"
+government="Democracy"
+
+;names from the Golden Age, from Holland circling outward
+;later important towns added at the end
+
+cities =
+ "Amsterdam", "Utrecht", "Leiden", "Haarlem", "Delft", "Alkmaar",
+ "Hoorn", "Enkhuizen", "'s-Gravenhage", "Dordt", "Gouda", "Naarden",
+ "Rotterdam", "Schiedam", "Vlaardingen",
+ "Middelburg", "Goes", "Veere", "Vlissingen",
+ "Deventer", "Kampen", "Zutphen", "Zwolle", "Arnhem", "Amersfoort",
+ "Groningen", "Leeuwarden", "Dokkum", "Sneek", "Stavoren", "Franeker",
+ "Breda", "'s-Hertogenbosch", "Nijmegen", "Venlo", "Roermond", "Maastricht",
+ "Helmond", "Eindhoven", "Bergen op Zoom", "Hulst", "Batavia", "Willemstad",
+ "Tilburg", "Enschede", "Hengelo", "Almelo", "Oss",
+ "Heerlen", "Sittard", "Geleen", "Weert",
+ "Apeldoorn", "Ede", "Wageningen", "Veenendaal",
+ "Assen", "Emmen", "Hoogeveen", "Drachten", "Delfzijl", "Veendam",
+ "Zaandam", "Beverwijk", "Velsen", "Purmerend", "Hilversum", "Bussum",
+ "Alphen a/d Rijn", "Zoetermeer", "Woerden", "Capelle a/d IJssel",
+ "Spijkenisse", "Terneuzen", "Emmeloord", "Lelystad", "Almere"
+
+
+[nation25]
+
+name=_("Swedish")
+plural=_("?plural:Swedes")
+leader="Gustav Vasa", "Erik", "Karl", "Christine"
+leader_sex="Male", "Male", "Male", "Female"
+flag="f.sweden"
+flag_alt = "-"
+city_style = "European"
+ruler_titles = { "government",      "male_title",      "female_title"
+                 "Democracy",       _("Prime Minister"), _("Prime Minister")
+               }
+
+attack=2
+expand=2
+civilized=0
+advisors=100,100,100,100,100,100,100
+
+tech_goals = "Map Making", "The Republic", "Trade", "Gunpowder"
+wonder="Magellan's Expedition"
+government="Democracy"
+
+cities =
+ "Stockholm", "Uppsala", "Solentuna", "Sigtuna", "Birka",
+ "Norrköping", "Linköping", "Örebro", "Gävle", "Västerås",
+ "Göteborg", "Karlstad", "Växjö", "Kalmar", "Visby",
+ "Malmö", "Helsingborg", "Ystad",  "Lund", "Luleå", "Kiruna",
+ "Halmstad", "Östersund", "Nyköping", "Söderhamn", "Sundsvall",
+ "Piteå", "Skellefteå", "Umeå", "Jönköping", "Kristianstad",
+ "Karlskrona", "Mora", "Oskarshamn", "Hässleholm", "Falun",
+ "Vyborg", "Holmgard"
+
+
+[nation26]
+
+name=_("Japanese")
+plural=_("?plural:Japanese")
+leader="Mutsuhito", "Jimmu Tenno", "Hirohito", "Tokugawa Ieyasu"
+leader_sex="Male", "Male", "Male", "Male"
+flag="f.japan"
+flag_alt = "-"
+city_style = "European"
+
+ruler_titles = { "government",      "male_title",      "female_title"
+                 "Monarchy",        _("Shogun"),         _("Shogun")
+                 "Democracy",       _("Prime Minister"), _("Prime Minister")
+}
+
+attack=2
+expand=0
+civilized=1
+advisors=100,100,100,100,100,100,100
+tech_goals = "Monarchy", "Philosophy", "The Republic", "Iron Working",
+             "Engineering", "Railroad"
+wonder="Oracle"
+government="Republic"
+
+cities =
+  "Tokyo", "Osaka", "Yokohama", "Kyoto", "Kobe",
+  "Sapporo", "Hiroshima", "Nagoya", "Kawasaki", "Nagasaki",
+  "Fukuoka", "Sasebo", "Kumamoto", "Kita-Kyushu",
+  "Kagoshima", "Shimonoseki", "Okayama", "Gifu", "Kamazawa",
+  "Shizuoka", "Sendai", "Yokosuka", "Chiba", "Kochi",
+  "Iwaki", "Fukuyama", "Wakayama", "Niigata", "Matsuyama"
+
+
+[nation27]
+
+name=_("Portuguese")
+plural=_("?plural:Portuguese")
+leader="Afonso Henriques", "Afonso IV", "João II"
+leader_sex="Male", "Male", "Male"
+flag="f.portugal"
+flag_alt = "-"
+city_style = "European"
+
+ruler_titles = { "government",      "male_title",      "female_title"
+                 "Democracy",       _("Prime Minister"), _("Prime Minister")
+}
+
+attack=2
+expand=2
+civilized=1
+advisors=100,100,100,100,100,100,100
+tech_goals = "Monarchy", "Chivalry", "Trade", "Theology", "Navigation",
+             "The Republic", "Railroad"
+wonder="Magellan's Expedition"
+government="Republic"
+
+cities =
+ "Lisboa", "Guimarães", "Guarda", "Vila Real", "Viseu", "Braga", "Porto",
+ "Coimbra", "Aveiro", "Leiria", "Bragança", "Barcelos", "Sintra",
+ "Setúbal", "Alcácer do Sal", "Santarém", "Silves", "Évora",
+ "Portalegre", "Faro", "Elvas", "Óbidos", "Alcobaça", "Alcochete",
+ "Alcoutim", "Tomar", "Alenquer", "Aljubarrota", "Fátima", "Batalha",
+ "Nazaré", "Aljustrel", "Almada", "Almeirim", "Aljezur", "Odemira",
+ "Viana do Castelo", "Chaves", "Castelo Branco", "Caldas da Rainha",
+ "Estremoz", "Vila Viçosa", "Sines", "Portimão", "Albufeira", "Lagos",
+ "Tavira", "Marvão", "Mafra", "Palmela", "Cascais", "Estoril",
+ "Funchal", "Ponta Delgada", "Torres Vedras", "Torres Novas",
+ "Amadora", "Queluz", "Maia", "Figueira da Foz", "Matosinhos",
+ "Vila Nova de Gaia"
+
+
+[nation28]
+
+name=_("Finnish")
+plural=_("?plural:Finns")
+leader="Mannerheim", "Kekkonen", "Ahtisaari", "Linus Torvalds"
+leader_sex="Male", "Male", "Male", "Male"
+flag="f.finland"
+flag_alt = "-"
+city_style = "European"
+
+ruler_titles = { "government",      "male_title",        "female_title"
+                 "Republic",        _("President"),      _("President")
+                 "Democracy",       _("Prime Minister"), _("Prime Minister")
+               }
+
+attack=2
+expand=0
+civilized=0
+advisors=100,100,100,100,100,100,100
+
+tech_goals = "Iron Working", "Literacy", "Engineering", "Map Making",
+             "The Republic", "Metallurgy", "Industrialization", "Electronics",
+             "Tactics"
+wonder="Women's Suffrage"
+government="Republic"
+
+; all the Finnish cities, the situation in 1998,
+; ordered by combined population and age (in 2000)
+
+cities =
+ "Helsinki", "Turku", "Oulu", "Tampere", "Pori", "Porvoo", "Vaasa",
+ "Rauma", "Lappeenranta", "Kuopio", "Hämeenlinna", "Kokkola", "Kajaani",
+ "Jyväskylä", "Savonlinna", "Lahti", "Tornio", "Joensuu", "Naantali",
+ "Pietarsaari", "Kotka", "Uusikaupunki", "Tammisaari", "Raahe", "Espoo",
+ "Mikkeli", "Vantaa", "Heinola", "Hamina", "Kemi", "Kristiinankaupunki",
+ "Uusikaarlepyy", "Iisalmi", "Loviisa", "Hyvinkää", "Maarianhamina",
+ "Rovaniemi", "Hanko", "Kouvola", "Seinäjoki", "Järvenpää", "Lohja",
+ "Riihimäki", "Salo", "Imatra", "Varkaus", "Kerava", "Valkeakoski",
+ "Forssa", "Nokia", "Raisio", "Kuusankoski", "Vammala", "Pieksämäki",
+ "Lieksa", "Anjalankoski", "Ylivieska", "Äänekoski", "Kankaanpää",
+ "Kaskinen", "Lapua", "Jämsä", "Kemijärvi", "Parainen", "Nurmes",
+ "Kurikka", "Kauniainen", "Alavus", "Loimaa", "Huittinen", "Kokemäki",
+ "Karjaa", "Karkkila", "Virrat", "Outokumpu", "Haapajärvi", "Mänttä",
+ "Suonenjoki", "Oulainen", "Toijala", "Harjavalta", "Parkano",
+ "Ikaalinen", "Keuruu", "Kuhmo", "Saarijärvi", "Kaarina", "Suolahti",
+ "Alajärvi", "Orivesi", "Laitila", "Kauhava", "Orimattila", "Jämsänkoski",
+ "Ähtäri", "Nivala", "Kannus", "Kitee", "Kiuruvesi", "Närpiö", "Somero",
+ "Pyhäjärvi", "Haapavesi", "Viitasaari", "Paimio", "Nilsiä", "Juankoski"
+
+
+[nation29]
+
+name=_("Sioux")
+plural=_("?plural:Sioux")
+leader="Sitting Bull", "Crazy Horse", "Little Crow", "Red Cloud"
+leader_sex="Male", "Male", "Male", "Male"
+flag="f.sioux"
+flag_alt = "-"
+city_style = "European"
+
+ruler_titles = { "government",      "male_title",      "female_title"
+                 "Despotism",       _("Chief"),        _("Chief")
+                 "Monarchy",        _("Great Chief"),  _("Great Chief")
+               }
+
+attack=2
+expand=0
+civilized=1
+advisors=100,100,100,100,100,100,100
+tech_goals = "Monarchy", "Philosophy", "The Republic", "Iron Working"
+wonder="Sun Tzu's War Academy"
+government="Republic"
+
+;big problem I use names of more known battles between Indians and USA
+
+cities =
+  "Big Mound", "Killdeer Knee", "Bear Paw", "Lame Deer",
+  "Wolf Mountain", "Dull Knife", "Little Bighorn", "Blue Water",
+  "Birch Coulee", "Wood Lake", "Whitestone Hill", "Dead Buffalo Lake",
+  "Whitebird Creek", "Clearwater", "Big Hole", "Pine Ridge"
+
+
+[nation30]
+
+name = _("Czech")
+plural = _("?plural:Czechs")
+
+leader = "Jan Lucembursky", "Otakar II", "Karel IV", "Vaclav", "Jiri z Podebrad",
+         "Jan Zizka", "Jan Hus", "Zavis z Falknstejna", "Libuse",
+         "Kunhuta", "Alzbeta Pomoranska", "Eliska Premyslovna", "Anezka",
+         "T. G. Masaryk", "Edvard Benes", "Vaclav Havel"
+leader_sex = "Male", "Male", "Male", "Male", "Male",
+        "Male", "Male", "Male", "Female",
+        "Female", "Female", "Female", "Female",
+        "Male", "Male", "Male"
+
+flag = "f.czech"
+flag_alt = "-"
+city_style = "European"
+
+; Thane = Vladyka, Prophetess = Vestkyne (Libuse)
+ruler_titles = { "government",      "male_title",      "female_title"
+                 "Despotism",       _("Thane"),        _("Prophetess")
+               }
+
+attack = 2
+expand = 0
+civilized = 0
+advisors = 100,100,100,100,100,100,100
+
+tech_goals = "Iron Working", "Literacy", "Astronomy", "Bridge Building",
+             "The Republic", "Metallurgy", "Medicine", "University",
+             "Explosives"
+wonder = "Shakespeare's Theatre"
+government = "Republic"
+
+cities =
+        "Praha", "Brno", "Ostrava", "Plzen", "Hradec Kralove",
+        "Olomouc", "Ceske Budejovice", "Usti nad Labem", "Opava",
+        "Most", "Pardubice", "Jihlava", "Chomutov", "Prerov",
+        "Teplice", "Frydek Mistek", "Znojmo", "Cheb", "Zlin",
+        "Karlovy Vary", "Uherske Hradiste", "Kolin", "Hodonin",
+        "Mlada Boleslav", "Pribram", "Sumperk", "Pisek",
+        "Litomerice", "Trebic", "Vyskov", "Kromeriz", "Klatovy",
+        "Havlickuv Brod", "Prostejov", "Chrudim", "Louny", "Decin",
+        "Rokycany", "Nachod", "Beroun", "Rakovnik", "Melnik",
+        "Novy Jicin", "Tachov", "Strakonice", "Kutna Hora",
+        "Bruntal", "Trutnov", "Sokolov", "Pelhrimov", "Nymburk",
+        "Svitavy", "Usti nad Orlici", "Jicin", "Tabor",
+        "Domazlice", "Jindrichuv Hradec", "Ceska Lipa", "Benesov",
+        "Liberec", "Rychnov nad Kneznou", "Cesky Krumlov",
+        "Prachatice", "Semily", "Zdar nad Sazavou", "Vsetin",
+        "Osek", "Litomysl", "Velehrad", "Tesin", "Rozmberk",
+        "Tovacov", "Sezimovo Usti", "Horice", "Kourim",
+        "Podebrady", "Vilemov", "Kunvald", "Dvur Kralove",
+        "Bezdez", "Trebon", "Sternberk", "Sazava", "Slany",
+        "Stara Boleslav", "Kunstat", "Zelena Hora", "Duchcov",
+        "Zatec", "Kladsko", "Horazdovice", "Caslav", "Pirkstejn",
+        "Krnov", "Rozmital", "Loket", "Kladno",
+        "Jablonec nad Nisou", "Breclav", "Blansko", "Karvina"
+
+
+[nation31]
+
+name=_("Australian")
+plural=_("?plural:Australians")
+leader="Robert Menzies"
+leader_sex="Male"
+flag="f.australia"
+flag_alt = "-"
+city_style = "European"
+
+ruler_titles = { "government",      "male_title",      "female_title"
+                 "Democracy",       _("Prime Minister"), _("Prime Minister")
+               }
+
+attack=1
+expand=0
+civilized=2
+advisors=100,100,100,100,100,100,100
+
+tech_goals="Monarchy","Chivalry","Iron Working","Trade","Navigation",
+           "Railroad","Steel"
+wonder="Hoover Dam"
+government="Democracy"
+
+cities =
+  "Canberra", "Sydney", "Melbourne", "Brisbane", "Adelaide", "Perth",
+  "Darwin", "Hobart", "Wollongong", "Rockhampton", "Launceston",
+  "Townsville", "Albany", "Bunbury", "Kalgoorlie", "Meekatharra",
+  "Winton", "Alice Springs", "Quilpie", "Cairns", "Southport", "Ballarat",
+  "Waneroo", "Fremantle", "Whyalla", "Albury", "Bathurst", "Dubbo",
+  "Mackay", "Newcastle", "Byron Bay", "Monkey Mia", "Grafton",
+  "Wagga Wagga", "Lismore", "Bourke", "Tamworth", "Woomera", "Carnarvon",
+  "Esperance", "Katherine", "Oodnadatta", "Broken Hill", "Hughenden",
+  "Geelong", "Mt. Isa", "Pine Creek", "Daly Waters", "Wyndham", "Broome",
+  "Onslow", "Geraldton", "Meekathrra", "Tennant Creek", "Ceduna",
+  "Longreach", "Renmark", "Mildura", "Hay", "Bega", "Toowoomba",
+  "Queenstown", "Coober Pedy", "Bendigo", "Derby", "Cunnamulla", "Walgett",
+  "Dampier", "Exmouth", "Yorketown", "Kiama", "Moe", "Warwick", "Gosford",
+  "Bowen", "Ingham", "Gympie", "Caloundra", "Taree", "Katoomba", "Prosperpine"
+
+
+[nation32]
+
+name=_("Welsh")
+plural=_("?plural:Welsh")
+leader="Llywelyn ap Gruffudd", "Hywel Dda", "Owain Glyndwr"
+leader_sex="Male", "Male", "Male"
+flag="f.wales"
+flag_alt = "f.united_kingdom"
+city_style = "European"
+
+;names = "Yr Ymerodreath Gymreig"          "empire"            (depotism)
+;      = "Y Twysysogaeth Cymru"            "principality"      (monarchy)
+;      = "Y Gwerinaeth Pobl Cymru"         "people's republic" (communism)
+;      = "Yr Ymerodrath Scantaidd Cymreig" "holy welsh empire" (fundamentalism)
+;      = "Y Gweriniaeth Cymru"             "republic"          (republic, democracy)
+
+ruler_titles = { "government",      "male_title",      "female_title",
+                 "Monarchy",        _("Prince"),         _("Princess")
+                 "Democracy",       _("Prime Minister"), _("Prime Minister")
+               }
+
+attack=1
+expand=1
+civilized=2
+advisors=100,100,100,100,100,100,100
+
+tech_goals="Monarchy","Iron Working","Trade","Navigation","Railroad","Steel",
+           "Industrialization"
+wonder="Hoover Dam"
+government="Democracy"
+
+cities =
+  "Cardiff", "Swansea", "Newport", "Barry", "Port Talbot", "Carmarthen",
+  "Caerphily", "Methyr Tydfil", "Pembroke", "Fishguard", "Aberystwith",
+  "Lampeter", "Llandovery", "Brecon", "Flint", "Caemarfon", "Llanfyllin",
+  "Holyhead", "Tywyn", "Llandeilo", "Cwmbran"
+
+
+[nation33]
+
+name=_("Korean")
+plural=_("?plural:Koreans")
+leader="T'aejong", "Kim Ir Sen", "Pak Dzonghyi", "Wang Gon"
+leader_sex="Male", "Male", "Male", "Male"
+flag="f.korea"
+flag_alt = "-"
+city_style = "European"
+
+attack=0
+expand=1
+civilized=2
+advisors=100,100,100,100,100,100,100
+
+tech_goals="Monarchy","Iron Working","Philosophy","Invention","Gunpowder",
+           "Railroad","Steel"
+wonder="Sun Tzu's War Academy"
+government="Democracy"
+
+cities =
+  "Seoul", "Pyongyang", "Pusan", "Taegu", "Inchon", "Taejon",
+  "Wonsan", "Kosong", "Haeju", "Sunchon", "Kimchaek", "Najin",
+  "Ulsan", "Yosu", "Mokpo", "Pohang", "Masan", "Chinhae",
+  "Sonbong", "Songnim", "Sariwon", "Hamhung"
+
+
+[nation34]
+
+name=_("Scottish")
+plural=_("?plural:Scottish")
+leader="Robert the Bruce", "William Wallace", "James", "Charles"
+leader_sex="Male", "Male", "Male", "Male"
+flag="f.scotland"
+flag_alt = "f.united_kingdom"
+city_style = "European"
+
+ruler_titles = { "government",      "male_title",        "female_title"
+                 "Republic",    _("Speaker"),        _("Speaker")
+                 "Democracy",       _("Prime Minister"), _("Prime Minister")
+               }
+
+attack=1
+expand=1
+civilized=2
+advisors=100,100,100,100,100,100,100
+
+tech_goals="Monarchy","Iron Working","Trade","Navigation","Railroad","Steel",
+           "Industrialization"
+wonder="Hoover Dam"
+government="Democracy"
+
+cities =
+  "Edinburgh", "Glasgow", "Aberdeen", "Dundee", "Inverness", "Perth",
+  "Ayr", "Cowdenbeath", "Dumbarton", "Dunfermline", "Falkirk",
+  "Fort William", "Gretna", "Irvine", "Johnstone", "Kilmarnok",
+  "Kilwinning", "Livingstone", "Lockerbie", "Motherwell", "Monifieth",
+  "Paisly", "Peterhead", "Prestwick", "Stirling", "Stranraer",
+  "Troon", "Ullapool", "Whitebridge"
+
+
+[nation35]
+
+name=_("Israeli")
+plural=_("?plural:Israelis")
+leader="Solomon", "David", "David Ben-Gurion", "Ze'ev Zabotinsky"
+leader_sex="Male", "Male", "Male", "Male"
+flag="f.israel"
+flag_alt = "-"
+city_style = "European"
+
+ruler_titles = { "government",      "male_title",      "female_title"
+                 "Democracy",       _("Prime Minister"), _("Prime Minister")
+               }
+
+attack=1
+expand=1
+civilized=2
+advisors=100,100,100,100,100,100,100
+
+tech_goals="Monarchy","Iron Working","Trade","Monotheism","Navigation",
+           "Railroad","Steel","Industrialization"
+wonder="J.S. Bach's Cathedral"
+government="Democracy"
+
+cities =
+  "Jerusalam", "Zephath", "Jeriho", "Beersheba", "Gat", "Tiberias",
+  "Shchem", "Beit-El", "Beit-Horon", "Beit-Shemesh", "Beit-Shaan",
+  "Beit-Lechem", "Hevron", "Acre", "Ceisaria", "Jaffo", "Haifa",
+  "Rishon Le-Zion", "Beit-Shemen", "Rehovot", "Hadera", "Tel Aviv",
+  "Petach-Tikva", "Ashdod", "Lod", "Eilat", "Ashqelon", "Herzliah",
+  "Netania", "Afulla", "Metula", "Dimona", "Carmiel", "Nazareth",
+  "Ra'anana", "Ramat-Gav", "Holon"
+
+
+[nation36]
+
+name=_("Argentine")
+plural=_("?plural:Argentines")
+leader="San Martin", "de Rosas", "Rivadavia", "Penon"
+leader_sex="Male", "Male", "Male", "Male"
+flag="f.argentina"
+flag_alt = "-"
+city_style = "European"
+
+attack=1
+expand=1
+civilized=2
+advisors=100,100,100,100,100,100,100
+
+tech_goals="Monarchy","The Republic","Iron Working","Trade","Navigation",
+           "Railroad","Steel","Industrialization","Democracy"
+wonder="J.S. Bach's Cathedral"
+government="Democracy"
+
+cities =
+  "Buenos Airies", "Cordoba", "Rosario", "Mendoza", "Tucuman",
+  "Mar del Plata", "Santa Fe"
+
+
+[nation37]
+
+name=_("Canadian")
+plural=_("?plural:Canadians")
+leader="Pierre Trudeau", "John A. MacDonald", "John Diefenbaker"
+leader_sex="Male", "Male", "Male"
+flag="f.canada"
+flag_alt = "f.united_kingdom"
+city_style = "European"
+ruler_titles = { "government",      "male_title",         "female_title"
+                 "Democracy",       _("Prime Minister"),  _("Prime Minister")
+               }
+
+attack=0
+expand=1
+civilized=0
+advisors=100,100,100,100,100,100,100
+tech_goals = "The Republic", "Trade", "Engineering", "Democracy",
+             "Railroad", "Explosives", "Automobile"
+wonder="Cure For Cancer"
+government="Democracy"
+
+cities =
+  "Ottawa", "Toronto", "Vancouver", "Montreal", "Quebec", "Winnipeg",
+  "Calgary", "Edmonton", "Victoria", "Yellowknife", "Fredericton",
+  "Charlottetown", "Regina", "Saskatoon", "Whitehorse", "Iqaluit",
+  "Hamilton", "Kelowna", "Moose Jaw", "Brandon", "Sudbury", "St. John",
+  "St. John's", "Sault Ste. Marie", "Thunder Bay", "Red Deer", "Jasper",
+  "Prince Rupert", "Windsor", "Prince George", "Kamloops", "Lethbridge",
+  "Medicine Hat", "Prince Albert", "Thompson", "Timmins", "Sarnia",
+  "Guelph", "St. Catharines", "Barrie", "North Bay", "Belleville",
+  "Kingston", "Cornwall", "Trois-Rivieres", "Chicoutimi", "Rimouski",
+  "Moncton", "Dartmouth", "Glace Bay", "Corner Brook", "Gander"
+
+
+[nation38]
+
+name=_("Ukrainian")
+plural=_("?plural:Ukrainians")
+leader="Khmelnistkyi","Petlura"
+leader_sex="Male","Male"
+flag="f.ukraine"
+flag_alt = "-"
+city_style = "European"
+ruler_titles = { "government",      "male_title",         "female_title"
+                 "Despotism",     _("Hetman"),          _("Hetman")
+               }
+
+attack=0
+expand=2
+civilized=2
+advisors=100,100,100,100,100,100,100
+tech_goals = "Chivalry","The Republic","Gunpowder","Leadership","Explosives"
+wonder="Sun Tzu's War Academy"
+government="Communism"
+
+cities =
+  "Kyiv", "Lviv", "Zhytomyr", "Lutsk", "Pereyeslav", "Zaporizhzhia",
+  "Chernihiv", "Braclav", "Kherson", "Kharkiv", "Sumy",
+  "Odesa", "Cherkasy", "Donetsk", "Dnipropetrovsk",
+  "Poltava", "Rivne", "Chernobyl", "Sevastopol", "Yalta",
+  "Kamieniec", "White Church", "Chernivtsi", "Khmelnistkyi",
+  "Ternopil", "Ivano-frankivsk", "Uzhhorod", "Kirovohrad",
+  "Luhansk", "Mykolaiv", "Vinnytsya"
+
+
+[nation39]
+
+name=_("Lithuanian")
+plural=_("?plural:Lithuanians")
+leader="Gediminas","Jogaila"
+leader_sex="Male", "Male"
+flag="f.lithuania"
+flag_alt = "-"
+city_style = "European"
+ruler_titles = { "government",      "male_title",         "female_title"
+                 "Monarchy",      _("Great Duke"),      _("Great Duchess")
+}
+
+attack=2
+expand=1
+civilized=1
+advisors=100,100,100,100,100,100,100
+tech_goals = "Monarchy","Chivalry","The Republic","Railroad","Explosives"
+wonder="Copernicus' Observatory"
+government = "Republic"
+
+; Some of these names are not spelled correctly
+; Some of these names are not Lithuanian, but Latvian, Estian or Belarusian
+; they were in Lithuania in some part of history and are not in freeciv yet,
+; so I put them here
+cities =
+  "Vilnius", "Kaunas", "Klaipeda", "Grodno", "Riga", "Siauliai",
+  "Tallin", "Sluck", "Bobruysk", "Minsk", "Slonim",
+  "Brest Litovsk", "Tartu", "Kobrin", "Polock", "Daugavpilsk",
+  "Parnava", "Lipava", "Yelgava", "Yurmala", "Rosienie", "Vindava",
+  "Narva", "Kohtla-Järve"
+
+
+[nation40]
+
+name = _("Kenyan")
+plural = _("?plural:Kenyans")
+leader = "Kenyatta"
+leader_sex = "Male"
+flag = "f.kenya"
+flag_alt = "-"
+city_style = "European"
+attack = 2
+expand = 2
+civilized = 1
+advisors=100,100,100,100,100,100,100
+tech_goals="Monarchy","Warrior Code","Iron Working","Navigation"
+wonder="Sun Tzu's War Academy"
+government="Republic"
+
+cities =
+  "Nairobi", "Mombasa", "Malindi", "Kisumu", "Labu", "Kitale", "Nakuru",
+  "Nyeri", "Lokichoki", "Lodwar", "Moyale", "Ramu", "Marsabi", "Wajir",
+  "Eldoret", "Mado Gashi", "Butere", "Kakamega", "Nanyuki", "Isiolo",
+  "Kericho", "Embu", "Garissa", "Narok", "Thika", "Garsen", "Voi",
+  "Konza", "Machakos", "Magadi", "Kilgoris", "Tsavo", "Maungu",
+  "Mwaga", "Kilifi", "Kwale", "Gazi", "Witu", "Lamu", "Wangi", "Hadera",
+  "Liboi", "Maralal", "Kisii", "Busonga", "Nginyang", "Dukana",
+  "Kakuma", "Lokitaung"
+
+
+[nation41]
+
+name=_("Dúnedain")
+plural=_("?plural:Dúnedan")
+leader="Elros", "Tar-Ancalimë", "Míriel", "Elendil", "Isildur", "Aragorn"
+leader_sex="Male", "Female", "Female", "Male", "Male", "Male"
+flag = "f.dunedain"
+flag_alt = "-"
+city_style = "European"
+
+ruler_titles = { "government",      "male_title",      "female_title"
+                 "Monarchy",        _("King"),         _("Queen")
+}
+
+attack=0
+expand=2
+civilized=2
+advisors=100,100,100,100,100,100,100
+tech_goals = "Monarchy", "Iron Working", "Feudalism", "Construction"
+wonder="Magellan's Expedition"
+government="Monarchy"
+
+cities =
+  "Armenelos", "Romenna", "Meneltarma", "Andúnië", "Eldalondë",
+  "Nindamos", "Osgiliath", "Minas Anor", "Minas Ithil", "Pelargir",
+  "Erech", "Umbar", "Aglarond", "Angrenost", "Elastirion", "Annúminas",
+  "Amon Sûl", "Fornost", "Ethring", "Dol Amroth", "Edhellond", "Linhir",
+  "Calembel", "Tharbad", "Isengard", "Belfalas", "Anorien", "Bree", "Staddle",
+  "Combe", "Archet", "Minas Tirith", "Halifirien", "Calenhad", "Minrimmon",
+  "Erelas", "Nardol", "Eilenach", "Amon Dîn", "Henneth Anûn", "Tarnost"
+
+
+[nation42]
+
+name=_("Vietnamese")
+plural=_("?plural:Vietnamese")
+leader="Ly Bon", "Gia Long", "Bao Dai", "Ho Chi Minh", "Ngo Ding Diem"
+leader_sex="Male", "Male", "Male", "Male", "Male"
+flag="f.vietnam"
+flag_alt = "-"
+city_style = "European"
+
+attack=0
+expand=0
+civilized=2
+advisors=100,100,100,100,100,100,100
+tech_goals = "Feudalism", "The Republic", "Gunpowder", "Explosives",
+             "Guerilla Warfare"
+wonder= "Great Wall"
+government = "Communism"
+
+cities =
+  "Hanoi", "Ho Chi Minh City", "Saigon", "Haifong", "Nam Dinh",
+  "Can Tho", "Nha Trang", "Hue", "Danang", "Long Xuyen", "Qui Nhon"
+
+
+[nation43]
+
+name=_("Thai")
+plural=_("?plural:Thai")
+leader = "Rama Thibodi", "Chao Phya Chakri", "Maha Mongkut", "Chulalongkorn",
+         "Pibul Songgram", "Seni Pramoya"
+leader_sex = "Male", "Male", "Male", "Male",
+             "Male", "Male"
+flag="f.thailand"
+flag_alt = "-"
+city_style = "European"
+
+attack=1
+expand=2
+civilized=1
+advisors=100,100,100,100,100,100,100
+tech_goals = "The Republic", "Engeneering", "Invention", "Railroad",
+             "Explosives"
+wonder= "Marco Polo's Embassy"
+government = "Democracy"
+
+cities =
+  "Bangkok", "Thon Buri", "Nakhon Rachasima", "Chiang Mai", "Khon Kaen",
+  "Hat Yai", "Chiang Rai", "Chumphon", "Hua Hin", "Lop Buri", "Lampang",
+  "Phitsanulok", "Sawankhatok", "Songkhla", "Adon Thani", "Pattaya",
+  "Laem Chabang", "Kanchanaburi", "Surat Thani", "Thammarat", "Phuket"
+
+
+;[nation??]
+;
+;name=_("Olympic")
+;plural=_("?plural:Olympians")
+;leader=""
+;leader_sex="Male"
+;flag="f.olympic"
+;flag_alt = "-"
+;city_style = "European"
+;
+;attack=0
+;expand=2
+;civilized=2
+;advisors=100,100,100,100,100,100,100
+;
+;tech_goals="Monarchy","Philosophy","Invention","Electricity"
+;wonder="United Nations"
+;government="Democracy"
+;
+;cities =
+;  "Athens", "Paris", "St Louis", "London", "Stockholm", "Antwerp",
+;  "Amsterdam", "Los Angeles", "Berlin", "Helsinki", "Melbourne",
+;  "Rome", "Tokyo", "Grenoble", "Mexico City", "Munich", "Montreal",
+;  "Moscow", "Seoul", "Barcelona", "Atlanta", "Sydney", "Salt Lake"
+
+
+;[nation??]
+;
+;name=_("Krevi")
+;plural=_("?plural:Krevis")
+;leader="Leif", "Michael"
+;leader_sex="Male", "Male"
+;flag="f.krev"
+;flag_alt = "-"
+;city_style = "European"
+;
+;attack=1
+;expand=1
+;civilized=2
+;advisors=100,100,100,100,100,100,100
+;
+;tech_goals="Monarchy","Iron Working","Trade","Monotheism","Navigation",
+;           "Railroad","Steel","Industrialization"
+;wonder="J.S. Bach's Cathedral"
+;government="Democracy"
+;
+;cities =
+;  "Elgaland", "Vargaland"
+
+
+;
+; barbarians MUST go last
+;
+
+[nation_barbarian]
+
+name="Barbarian"
+plural="Barbarians"
+leader="Genseric", "Alaric", "Teodoric", "Herman"
+leader_sex="Male", "Male", "Male", "Male"
+flag="f.barbarian"
+flag_alt = "-"
+city_style = "European"
+
+attack=0
+expand=0
+civilized=0
+advisors=100,100,100,100,100,100,100
+
+tech_goals = "Warrior Code"
+wonder = "Apollo Program"
+government = "Despotism"
+
+cities = "Mordor"
+
+; nothing more needed for barbarians
+
+
+[misc]
+
+;/* collection of towns aroud the world */
+;/* from xconq-7, distributed under the GNU GPL */
+;/* Copyright (C) 1991-1997 Stanley T. Shebs <shebs@cygnus.com> */
+
+cities =
+;  /* Soviet Union */
+  "Uglegorsk", "Taganrog", "Kuzemino", "Igodovo", 
+  "Izhevsk", "Leninskoye", "Zvenigorod", "Faustovo", 
+  "Tokma", "Bolotnoje", "Pudino", "Predivinsk", 
+  "Gotoputovo", "Stupino", 
+;  /* Japan */
+  "Toyooka", "Kobayashi", "Kamiyahagi", "Fukude", 
+;  /* China */
+  "Dandong", "Xingtai", "Xiaojiagang", "Wushu", 
+  "Wutangjie", "Qingfeng", "Dushikou", "Huilong", 
+  "Linyi", "Miaoyang", "Xinbo", "Bugt", 
+;  /* Indochina */
+  "Tan-an", "Ban Khlong Kua", "Bo Phloi", "Thot-not",
+  "Herbertabad", "Mong Pawn", "Roi Et",
+;  /* Indonesia */
+  "Butong", "Lubukbertubung", "Moutong", "Gimpu", 
+  "Waingapu", "Sindangbarang", "Kualakapuas", "Bongka", 
+  "Salimbatu", "Bonggaw", "Baing", "Grokgak", 
+;  /* India */
+  "Bap", "Meerut", "Harda", "Garwa", 
+  "Digboi", "Kurnool", "Nirmal", "Coondapoor", 
+  "Tetulbaria", "Maheshwar", "Paramagudi", "Bhakkar", 
+  "Mungaoli", "Shorapur", "Channapatna", "Chilaw", 
+;  /* Middle East and Central Asia */
+  "Bajandalaj", "Cogt-Ovoo", "Un't", "Ich-Uul", 
+  "Yazd", "Samarkand", "Mashhad", "Chah Bahar", 
+  "Jubbah", "Al-'Awsajiyah", "Kifri", "Kashgar", 
+  "Chundzha", "Ushtobe", "Dzaamar", "Wadi Musa", 
+  "Bogustan", "Gakuch", 
+;  /* Africa */
+  "Pibor Post", "Umm Digulgulaya", "Umm Shalil", "Buzaymah", 
+  "Gedo", "North Horr", "Todenyang", "Madadi", 
+  "Ngetera", "Ouadda", "Mazoula", "Tiglit", 
+  "Gummi", "Gbarnga", "Burutu", "Bafwabalinga", 
+  "Goonda", "Ankoroka", "Vryburg", "Matuba", 
+  "Bakouma", "El Idrissia", "Agadir", "Nungwe", 
+  "Bunianga", "Ngali", "Nguiroungou", "Otukpa", 
+  "Hell-Ville", "Morafenobe", "Tongobory", "Farafangana", 
+  "Mungbere", "Haco", "Barbar", "Oulessebougou",
+;  /* Australia */
+  "Nookawarra", "Bunbury", "Buckleboo", "Breeza Plains", 
+  "Mistake Creek", "Boolaloo", "Yarloop", "Dubbo", 
+  "Bushy Park", "Old Cork", "Cessnock", "Wagga Wagga", 
+  "Mungar Junction", "Koolywirtie", "Wonthaggi",
+  "Oatlands", "Bindebango", "Alice Springs",
+;  /* New Guinea */
+  "Kwatisore", "Finschhafen", "Yobi", "Rumahtinggih", 
+;  /* USA */
+;  /* AL */
+  "New Hope", "Hackleburg", 
+;  /* AK */
+  "Kaktovik", "Fort Yukon", 
+;  /* AZ */
+  "Benson", "Gila Bend", "Turkey Flat", "Tuba City",  
+  "Wide Ruins", 
+;  /* AR */
+  "Metalton", "Oil Trough", "Hackett",
+;  /* CA */
+  "Burnt Ranch", "Calexico", "Eel Rock", "Gilroy", 
+  "Joshua Tree", "Milpitas", "Mormon Bar", "Pumpkin Center", 
+  "Death Valley Junction", "Toms Place",
+  "Pinole", "Petaluma", 
+  "Scotts Valley", "Whiskeytown", "Leucadia", "Lompoc",
+  "Granada Hills",
+;  /* CO */
+  "Las Animas", "Silver Plume", 
+; /* CT */
+  "Upper Stepney", "Moosup", "Danbury",
+;  /* FL */
+  "Yeehaw Junction", "Big Pine Key", 
+  "Panacea", "Wewahitchka", "Estiffanulga", 
+;  /* GA */
+  "Dixieion", "Fowlstown", "Dacula", "Americus", 
+;  /* HW */
+  "Laupahoehoe", 
+;  /* ID */
+  "Malad City", "Kootenai", 
+;  /* IL */
+  "Farmer City", "Aroma Park", "Goreville", "Illiopolis",  
+  "Mascoutah", "Metamora", "Metropolis", "New Boston",  
+  "Pontoon Beach", "Romeoville", "Teutopolis",  
+;  /* IN */
+  "Etan Green", "French Lick", "Loogootee", "Needmore",  
+  "Ogden Dunes", "Oolitic", "Star City",  
+;  /* IA */
+  "Coon Rapids", "Correctionville", "Grundy Center",
+  "Lost Nation", "Ossian", "Sac City",  
+; /* KA */
+  "Countryside", "Mankato", "Pretty Prairie",  "Greeley",
+  "Grouse Creek",
+;  /* KY */
+  "Big Clifty", "Cloverport", "Druid Hills", "Fancy Farm", 
+  "Hardburly", "Hardshell", "Horse Cave", "Pleasureville", 
+  "Science Hill", "Sublimity City", "Watergap", 
+;  /* LA */
+  "Bayou Goula", "Cut Off", "Hackberry", "Lutcher", 
+  "Waggaman", 
+;  /* ME */
+  "Veazie", "Madawaska", 
+;  /* MD */
+  "Bestgate", "College Park", "Frostburg", "Pocomoke City", 
+  "Port Deposit", "Pumphrey", "Tammany Manor",
+  "Weems Creek", "Whiskey Bottom", "Hack Point",
+;  /* MA */
+  "Assinippi", "Buzzards Bay", "Dorothy Pond", "Hopkinton", 
+  "Housatonic", "Pigeon Cove", "Swampscott", "Gloucester",
+  "Hyannis Port", "Ipswich", "Boxford",
+;  /* MI */
+  "Bad Axe", "Brown City", "Cassopolis", "New Buffalo", 
+  "Petoskey", "Ishpeming", "Ypsilanti", "Saugatuck", 
+;  /* Michigan UP (from Sandra Loosemore) */
+  "Skanee", "Bruce Crossing", "Baraga", "Germfask", 
+  "Assinins", "Tapiola", "Gaastra", "Bete Grise", 
+;  /* MN */
+  "Ada", "Blue Earth", "Brainerd", "Eden Valley",  
+  "Lino Lakes", "New Prague", "Sleepy Eye", "Waconia",  
+;  /* MS */
+  "Bogue Chitto", "Buckatunna", "Guntown", "Picayune", 
+  "Red Lick", "Senatobia", "Tie Plant", "Yazoo City",  
+;  /* MO */
+  "Bourbon", "Doe Run", "Hayti", "Humansville", 
+  "Lutesville", "Moberly", "New Madrid", "Peculiar", 
+  "Sappington", "Vandalia",  
+;  /* MT */
+  "Big Sandy", "Hungry Horse", 
+  "Kalispell",  "East Missoula",
+;  /* NE */
+  "Hershey", "Loup City", 
+  "Minatare", "Wahoo",  "Grainfield",
+;  /* NV */
+  "Winnemucca", "Tonopah", "Jackpot",  
+;  /* NH */
+  "Littleton", "Winnisquam",  
+;  /* NJ */
+  "Cheesequake", "Freewood Acres",
+  "Forked River", "Hoboken", "Succasunna",  
+  "Maple Shade", "New Egypt", "Parsippany", "Ship Bottom",  
+;  /* NM */
+  "Adobe Acres", "Cloudcroft", "Ruidoso", "Toadlena",  
+  "Los Padillos", "Ojo Caliente", 
+;  /* NY */
+  "Angola on the Lake", "Podunk", "Chili Center",
+  "Aquebogue", "Muttontown", "Hicksville", 
+  "Hoosick Falls", "Nyack",
+  "Painted Post", "Peekskill", "Portville",  
+  "Ronkonkoma", "Wappingers Falls", 
+  "Sparrow Bush", "Swan Lake",
+;  /* NC */
+  "Altamahaw",
+  "Biltmore Forest", "Boger City", "Granite Quarry",  
+  "High Shoals", "Lake Toxaway",
+  "Scotland Neck", "Hiddenite", 
+  "Mocksville", "Yadkinville", "Nags Head", 
+  "Kill Devil Hills", "Rural Hall",  
+;  /* ND */
+  "Cannon Ball", "Hoople", "Zap",  
+;  /* OH */
+  "Academia", "Arcanum", "Blacklick Estates", "Blue Ball",  
+  "Crooksville", "Dry Run", "Flushing", "Gratis",  
+  "Lithopolis", "Mingo Junction", "Newton Falls",
+  "New Straitsville", "Painesville", "Pepper Pike", 
+  "Possum Woods", "Sahara Sands",  
+;  /* OK */
+  "Bowlegs", "Broken Arrow", "Fort Supply", "Drumright", 
+  "Dill City", "Okay", "Hooker",  
+;  /* OR */
+  "Condon", "Happy Valley", "Drain", "Junction City", 
+  "Molalla", "Philomath", "Tillamook", "Wankers Corner",
+;  /* PA */
+  "Atlasburg", "Beaver Meadows", "Birdsboro", "Daisytown", 
+  "Fairless Hills", "Fairchance", "Kutztown", "Erdenheim", 
+  "Hyndman", "Pringle", "Scalp Level", "Slickville", 
+  "Zelienople", "Sugar Notch", "Toughkenamon", "Throop", 
+  "Tire Hill", "Wormleysburg", "Oleopolis",
+;  /* RI */
+  "Woonsocket", "Pawtucket",
+;  /* SC */
+  "Due West", "Ninety Six", 
+  "Travelers Rest", "Ware Shoals",  
+;  /* SD */
+  "Deadwood", "Lower Brule", 
+  "New Underwood", "Pickstown", 
+  "Plankinton", "Tea", "Yankton",  
+;  /* TN */
+  "Berry's Chapel", "Bulls Gap", "Cornersville", "Counce", 
+  "Gilt Edge", "Grimsley", "Malesus", "Soddy-Daisy",  
+;  /* TX */
+  "Bastrop", "New Braunfels", "Harlingen", "Dimock", 
+  "Devils Elbow", "North Zulch", "Llano", "Fort Recovery", 
+  "Arp", "Bovina", "Cut and Shoot", "College Station", 
+  "Grurer", "Iraan", "Leming", "Harlingen", 
+  "Muleshoe", "Munday", "Kermit", "La Grange", 
+  "Ropesville", "Wink", "Yoakum", "Sourlake",  
+;  /* UT */
+  "Delta", "Moab", "Nephi", "Loa", 
+  "Moroni", "Orem", "Tooele", "Sigurd", 
+;  /* VT */
+  "Bellows Falls", "Chester Depot", "Winooski",  
+;  /* VA */
+  "Accotink", "Ben Hur", "Ferry Farms", "Disputanta", 
+  "Dooms", "Sleepy Hollow", "Max Meadows", "Goochland", 
+  "Rural Retreat", "Sandston", "Stanleytown",
+  "Willis Wharf", "Stuarts Draft", 
+;  /* WA */
+  "Black Diamond", "Carnation", "Cle Elum", "Cosmopolis", 
+  "Darrington", "Enumclaw", "Forks", "Goose Prairie", 
+  "Navy Yard City", "La Push", "Soap Lake", "Walla Walla", 
+  "Sedro Woolley", "Pe Ell", "Ruston",  
+;  /* WV */
+  "Barrackville", "Pocatalico", "Fort Gay", "Big Chimney", 
+  "Nutter Fort", "Hometown", "Nitro", "Triadelphia", 
+  "Star City",  
+;  /* WI */
+  "Combined Lock", "Coon Valley", "Black Earth",
+  "New Holstein", "Little Chute", "Wisconsin Dells",
+  "Random Lake", "Sheboygan", "Nauwatosa",  
+;  /* WY */
+  "East Thermopolis", "Fort Washakie", "Paradise Valley", 
+;  /* Canada */
+  "Sexsmith", "Squamish", "Fort Qu'Appelle", "Flin Flon", 
+  "Moose Jaw", "Grand-Mere", "Great Village", "Pugwash", 
+  "Chiliwack", "Cranbery Portage",  
+  "Moosonee", "Joe Batt's Arm", "St.-Polycarpe",
+  "Crabtree Mills", "Copper Cliff", "Uxbridge", 
+  "Penetanguishene", "Boger City", "Drumheller", 
+  "Port Blandford", "Hamtramck",
+; USA? 
+  "Hackensack", "North Middleboro", "Fannettsburg", 
+  "Corkscrew", "Boynton Beach", 
+  "Belchertown",
+; South America 
+  "Huatabampo", "Zapotiltic", "Ipiranga", "Perseverancia", 
+  "Bilwaskarma", "Aguadulce",
+  "Albert Town", "Fuente de Oro", 
+  "Pedras de Fogo", "Maxaranguape", "Comodoro Rivadavia",
+  "Coribe", "Rossell y Rius", "General Alvear",
+  "Ushaia", "Los Antiguos", "Puerto Alegre", "Quevedo", 
+; Eastern Europe 
+  "Kannonkoski", "Ulfborg", "Wloszczowa", 
+  "Drohiczyn", "Vrchlabi", "Oroshaza", "Klagenfurt", 
+  "Pisz", "Krokowa", "Partizanske", "Ozd", 
+  "Jimbolia", "Peshkopi", "Galaxidhion", "Naxos", 
+; Iceland 
+  "Thingvellir", "Honningsvag", "Vikna", "Jokkmokk",
+; Scandinavia 
+  "Rimbo", "Kukkola",
+  "Guderup", "Grindsted", "Store Andst", "Odder", 
+  "Vrigstad", "Trollhaetten", "Kinsarvik", "Grimstad", 
+; Ireland 
+  "Ballybunion", "Banagher", "Carncastle",
+; Belgium 
+  "Lisp", "Knokke", "Bialy", "Bor",
+  "Hel", "Puck",
+; Germany 
+  "Diepholz", "Sangerhausen", "Biedenkopf", 
+  "Mosbach", "Butzbach", "Goslar", "Studenka",
+  "Slavonice", "Gouda", "Dokkum", "Oss",
+  "Bad Bramstedt", "Dinkelsbuehl", "Hoogezand", 
+  "Schoensee", "Fuerstenfeldbruck", 
+  "Pfaffenhausen", "Namlos", "Bad Hall",
+  "Consdorf", "Cloppenburg", "Bad Muskau", "Exing",
+; France 
+  "Bois-d'Arcy",
+  "Presles-en-Brie", "Silly-le-Long", "Saint-Witz", 
+  "Limoux", "Crozon", "Guilvinec", "Pignans",
+  "La Tour-du-Pin", "Roquefort", "Saint-Quentin", 
+; Italy 
+  "Bobbio", "Viareggio", "Siderno", "Cortona", "Poggibonsi", 
+; Spain 
+  "Pedrogao Grande", "Villarcayo", "Alosno", "La Bisbal", 
+; UK 
+  "Cold Norton", "Potten End", "Battlesbridge", 
+  "Fawkham Green", "Ysbyty Ystwyth", "Bletchley",
+  "Llanbrynmair", "St Keverne", "Foxholes", 
+  "Whitby", "Sutton-on-Sea", "Tweedmouth", "Wrexham",
+  "Kirkwall", "Blair Atholl", "Inchbare", "Blackwaterfoot", 
+  "Ramsgate", "Llantwit Major", "Minehead", "Buckfastleigh", 
+  "Pocklington", "Robin Hood's Bay", "West Kilbride",
+  "Inchnadamph", "North Tolsta", "Oykel Bridge",
+  "Pangbourne", "Moreton-in-Marsh", "Wye", "Congresbury"
