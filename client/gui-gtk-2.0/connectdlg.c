@@ -18,13 +18,11 @@
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 #include <gtk/gtk.h>
 
 #include "fcintl.h"
 #include "log.h"
-#include "packets.h"
 #include "support.h"
 #include "version.h"
 
@@ -39,23 +37,10 @@
 
 #include "connectdlg.h"
 
-enum { 
-  LOGIN_PAGE, 
-  METASERVER_PAGE
-};
-  
-static enum {
-  LOGIN_TYPE, 
-  NEW_PASSWORD_TYPE, 
-  VERIFY_PASSWORD_TYPE,
-  ENTER_PASSWORD_TYPE
-} dialog_config;
-
-static GtkWidget *imsg, *ilabel, *iinput, *ihost, *iport;
-static GtkWidget *connw;
+static GtkWidget *iname, *ihost, *iport;
 static GtkListStore *store;
 
-static GtkWidget *dialog, *book;
+static GtkWidget *dialog;
 
 /* meta Server */
 static bool update_meta_dialog(void);
@@ -65,124 +50,26 @@ static void meta_update_callback(GtkWidget *w, gpointer data);
 static int get_meta_list(char *errbuf, int n_errbuf);
 
 /**************************************************************************
- close and destroy the dialog.
-**************************************************************************/
-void close_connection_dialog() 
-{   
-  if (dialog) {
-    gtk_widget_destroy(dialog);
-    dialog = NULL;
-    gtk_widget_set_sensitive(top_vbox, TRUE);
-  }
-}
-
-/**************************************************************************
- configure the dialog depending on what type of authentication request the
- server is making.
-**************************************************************************/
-void handle_authentication_request(struct packet_authentication_request *
-                                   packet)
-{
-  gtk_widget_grab_focus(iinput);
-  gtk_entry_set_text(GTK_ENTRY(iinput), "");
-  gtk_button_set_label(GTK_BUTTON(connw), _("Next"));
-  gtk_widget_set_sensitive(connw, TRUE);
-  gtk_set_label(imsg, packet->message);
-
-  switch (packet->type) {
-  case AUTH_NEWUSER_FIRST:
-    dialog_config = NEW_PASSWORD_TYPE;
-    break;
-  case AUTH_NEWUSER_RETRY:
-    dialog_config = NEW_PASSWORD_TYPE;
-    break;
-  case AUTH_LOGIN_FIRST:
-    /* if we magically have a password already present in 'password'
-     * then, use that and skip the password entry dialog */
-    if (password[0] != '\0') {
-      struct packet_authentication_reply reply;
-
-      sz_strlcpy(reply.password, password);
-      send_packet_authentication_reply(&aconnection, &reply);
-      return;
-    } else {
-      dialog_config = ENTER_PASSWORD_TYPE;
-    }
-    break;
-  case AUTH_LOGIN_RETRY:
-    dialog_config = ENTER_PASSWORD_TYPE;
-    break;
-  default:
-    assert(0);
-  }
-
-  gtk_widget_show(dialog);
-  gtk_entry_set_visibility(GTK_ENTRY(iinput), FALSE);
-  gtk_set_label(ilabel, _("Password:"));
-}
-
-/**************************************************************************
- if on the metaserver page, switch page to the login page (with new server
- and port). if on the login page, send connect and/or authentication 
- requests to the server.
+...
 **************************************************************************/
 static void connect_callback(GtkWidget *w, gpointer data)
 {
   char errbuf [512];
-  struct packet_authentication_reply reply;
+  gchar *local_server_host;
 
-  /* FIXME: where was this actually used? -mck */
-/* local_server_host = g_locale_from_utf8(server_host, -1, NULL, NULL, NULL);*/
+  sz_strlcpy(player_name, gtk_entry_get_text(GTK_ENTRY(iname)));
+  sz_strlcpy(server_host, gtk_entry_get_text(GTK_ENTRY(ihost)));
 
-  if (gtk_notebook_get_current_page(GTK_NOTEBOOK(book)) == METASERVER_PAGE) {
-    gtk_notebook_set_current_page(GTK_NOTEBOOK(book), LOGIN_PAGE);
-    return;
+  local_server_host = g_locale_from_utf8(server_host, -1, NULL, NULL, NULL);
+  server_port = atoi(gtk_entry_get_text(GTK_ENTRY(iport)));
+
+  if(connect_to_server(player_name, server_host, server_port,
+		       errbuf, sizeof(errbuf))!=-1) {
+    gtk_widget_destroy(dialog);
+  } else {
+    append_output_window(errbuf);
   }
-
-  switch (dialog_config) {
-  case LOGIN_TYPE:
-    sz_strlcpy(user_name, gtk_entry_get_text(GTK_ENTRY(iinput)));
-    sz_strlcpy(server_host, gtk_entry_get_text(GTK_ENTRY(ihost)));
-    server_port = atoi(gtk_entry_get_text(GTK_ENTRY(iport)));
-  
-    if (connect_to_server(user_name, server_host, server_port,
-                          errbuf, sizeof(errbuf)) != -1) {
-    } else {
-      append_output_window(errbuf);
-    }
-
-    break; 
-  case NEW_PASSWORD_TYPE:
-    sz_strlcpy(password, gtk_entry_get_text(GTK_ENTRY(iinput)));
-    gtk_set_label(imsg, _("Verify Password"));
-    gtk_entry_set_text(GTK_ENTRY(iinput), "");
-    gtk_widget_grab_focus(iinput);
-    dialog_config = VERIFY_PASSWORD_TYPE;
-    break;
-  case VERIFY_PASSWORD_TYPE:
-    sz_strlcpy(reply.password, gtk_entry_get_text(GTK_ENTRY(iinput)));
-    if (strncmp(reply.password, password, MAX_LEN_NAME) == 0) {
-      gtk_widget_set_sensitive(connw, FALSE);
-      memset(password, 0, MAX_LEN_NAME);
-      password[0] = '\0';
-      send_packet_authentication_reply(&aconnection, &reply);
-    } else { 
-      gtk_widget_grab_focus(iinput);
-      gtk_entry_set_text(GTK_ENTRY(iinput), "");
-      gtk_set_label(imsg, _("Passwords don't match, enter password."));
-      dialog_config = NEW_PASSWORD_TYPE;
-    }
-    break;
-  case ENTER_PASSWORD_TYPE:
-    gtk_widget_set_sensitive(connw, FALSE);
-    sz_strlcpy(reply.password, gtk_entry_get_text(GTK_ENTRY(iinput)));
-    send_packet_authentication_reply(&aconnection, &reply);
-    break;
-  default:
-    assert(0);
-  }
-
-  /* g_free(local_server_host);*/
+  g_free(local_server_host);
 }
 
 /**************************************************************************
@@ -242,21 +129,6 @@ static void connect_destroy_callback(GtkWidget *w, gpointer data)
   dialog = NULL;
 }
 
-/****************************************************************
- change the connect button label on switching.
-*****************************************************************/
-static void switch_page_callback(GtkNotebook * notebook,
-                                 GtkNotebookPage * page, gint page_num,
-                                 gpointer data)
-{
-  if (page_num == LOGIN_PAGE) {
-    gtk_button_set_label(GTK_BUTTON(connw),
-                  dialog_config == LOGIN_TYPE ? _("Connect") : _("Next"));
-  } else {
-    gtk_button_set_label(GTK_BUTTON(connw), _("Select"));
-  }
-}
-
 /**************************************************************************
 ...
 **************************************************************************/
@@ -274,16 +146,10 @@ static void connect_command_callback(GtkWidget *w, gint response_id)
 **************************************************************************/
 void gui_server_connect(void)
 {
-  GtkWidget *label, *table, *scrolled, *list, *vbox, *update;
+  GtkWidget *label, *table, *book, *scrolled, *list, *vbox, *update, *w;
   char buf [256];
   GtkCellRenderer *renderer;
   GtkTreeSelection *selection;
-
-  if (dialog) {
-    return;
-  }
-
-  dialog_config = LOGIN_TYPE;
 
   dialog = gtk_dialog_new_with_buttons(_(" Connect to Freeciv Server"),
     NULL,
@@ -298,8 +164,8 @@ void gui_server_connect(void)
   g_signal_connect(dialog, "response",
 		   G_CALLBACK(connect_command_callback), NULL);
 
-  connw = gtk_stockbutton_new(GTK_STOCK_JUMP_TO, _("_Connect"));
-  gtk_dialog_add_action_widget(GTK_DIALOG(dialog), connw, GTK_RESPONSE_ACCEPT);
+  w = gtk_stockbutton_new(GTK_STOCK_JUMP_TO, _("_Connect"));
+  gtk_dialog_add_action_widget(GTK_DIALOG(dialog), w, GTK_RESPONSE_ACCEPT);
 
   gtk_dialog_add_button(GTK_DIALOG(dialog),
     GTK_STOCK_QUIT, GTK_RESPONSE_REJECT);
@@ -319,32 +185,24 @@ void gui_server_connect(void)
   gtk_container_set_border_width(GTK_CONTAINER(table), 6);
   gtk_box_pack_start(GTK_BOX(vbox), table, FALSE, TRUE, 0);
 
-  imsg = g_object_new(GTK_TYPE_LABEL,
-                       "use-underline", TRUE,
-                       "xalign", 0.0,
-                       "yalign", 0.5,
-                       NULL);
-  gtk_table_attach(GTK_TABLE(table), imsg, 1, 2, 0, 1,
-                   GTK_FILL, GTK_FILL, 0, 0);
-
-  iinput = gtk_entry_new();
-  gtk_entry_set_text(GTK_ENTRY(iinput), user_name);
-  gtk_table_attach(GTK_TABLE(table), iinput, 1, 2, 1, 2,
+  iname=gtk_entry_new();
+  gtk_entry_set_text(GTK_ENTRY(iname), player_name);
+  gtk_table_attach(GTK_TABLE(table), iname, 1, 2, 0, 1,
 		   GTK_EXPAND | GTK_FILL, GTK_EXPAND | GTK_FILL, 0, 0);
 
-  ilabel = g_object_new(GTK_TYPE_LABEL,
+  label = g_object_new(GTK_TYPE_LABEL,
 		       "use-underline", TRUE,
-		       "mnemonic-widget", iinput,
-		       "label", _("_Login:"),
+		       "mnemonic-widget", iname,
+		       "label", _("_Name:"),
 		       "xalign", 0.0,
 		       "yalign", 0.5,
 		       NULL);
-  gtk_table_attach(GTK_TABLE(table), ilabel, 0, 1, 1, 2,
+  gtk_table_attach(GTK_TABLE(table), label, 0, 1, 0, 1,
 		   GTK_FILL, GTK_FILL, 0, 0);
 
   ihost=gtk_entry_new();
   gtk_entry_set_text(GTK_ENTRY(ihost), server_host);
-  gtk_table_attach(GTK_TABLE(table), ihost, 1, 2, 2, 3,
+  gtk_table_attach(GTK_TABLE(table), ihost, 1, 2, 1, 2,
 		   GTK_EXPAND | GTK_FILL, GTK_EXPAND | GTK_FILL, 0, 0);
 
   label = g_object_new(GTK_TYPE_LABEL,
@@ -354,14 +212,14 @@ void gui_server_connect(void)
 		       "xalign", 0.0,
 		       "yalign", 0.5,
 		       NULL);
-  gtk_table_attach(GTK_TABLE(table), label, 0, 1, 2, 3,
+  gtk_table_attach(GTK_TABLE(table), label, 0, 1, 1, 2,
 		   GTK_FILL, GTK_FILL, 0, 0);
 
   my_snprintf(buf, sizeof(buf), "%d", server_port);
 
   iport=gtk_entry_new();
   gtk_entry_set_text(GTK_ENTRY(iport), buf);
-  gtk_table_attach(GTK_TABLE(table), iport, 1, 2, 3, 4,
+  gtk_table_attach(GTK_TABLE(table), iport, 1, 2, 2, 3,
 		   GTK_EXPAND | GTK_FILL, GTK_EXPAND | GTK_FILL, 0, 0);
 
   label = g_object_new(GTK_TYPE_LABEL,
@@ -371,7 +229,7 @@ void gui_server_connect(void)
 		       "xalign", 0.0,
 		       "yalign", 0.5,
 		       NULL);
-  gtk_table_attach(GTK_TABLE(table), label, 0, 1, 3, 4,
+  gtk_table_attach(GTK_TABLE(table), label, 0, 1, 2, 3,
 		   GTK_FILL, GTK_FILL, 0, 0);
 
 #if IS_BETA_VERSION
@@ -420,20 +278,8 @@ void gui_server_connect(void)
 				 GTK_POLICY_AUTOMATIC, GTK_POLICY_ALWAYS);
   gtk_box_pack_start(GTK_BOX(vbox), scrolled, TRUE, TRUE, 0);
 
-  update=gtk_button_new_from_stock(GTK_STOCK_REFRESH);
+  update=gtk_button_new_with_label(_("Update"));
   gtk_box_pack_start(GTK_BOX(vbox), update, FALSE, FALSE, 2);
-
-  gtk_widget_show_all(GTK_DIALOG(dialog)->vbox);
-
-  if (auto_connect) {
-     gtk_widget_hide(dialog);
-  } else {
-     gtk_widget_show(dialog);
-  }
-
-  /* connect all the signals here, so that we can't send 
-   * packets to the server until the dialog is up (which 
-   * it may not be on very slow machines) */
 
   g_signal_connect(list, "button_press_event",
 		   G_CALLBACK(meta_click_callback), NULL);
@@ -442,16 +288,17 @@ void gui_server_connect(void)
   g_signal_connect(update, "clicked",
 		   G_CALLBACK(meta_update_callback), NULL);
 
-  g_signal_connect(book, "switch-page", G_CALLBACK(switch_page_callback), NULL);
-  g_signal_connect(iinput, "activate", G_CALLBACK(connect_callback), NULL);
+  g_signal_connect(iname, "activate", G_CALLBACK(connect_callback), NULL);
   g_signal_connect(ihost, "activate", G_CALLBACK(connect_callback), NULL);
   g_signal_connect(iport, "activate", G_CALLBACK(connect_callback), NULL);
 
-  gtk_widget_set_size_request(dialog, 500, 250);
+  gtk_widget_show_all(GTK_DIALOG(dialog)->vbox);
+
+  gtk_widget_set_size_request(dialog, 450, 250);
   gtk_window_set_position(GTK_WINDOW(dialog), GTK_WIN_POS_CENTER_ON_PARENT);
   gtk_window_present(GTK_WINDOW(dialog));
 
-  gtk_widget_grab_focus(iinput);
+  gtk_widget_grab_focus(iname);
 }
 
 /**************************************************************************
@@ -514,16 +361,16 @@ static int try_to_autoconnect(gpointer data)
     freelog(LOG_FATAL,
 	    _("Failed to contact server \"%s\" at port "
 	      "%d as \"%s\" after %d attempts"),
-	    server_host, server_port, user_name, count);
+	    server_host, server_port, player_name, count);
     exit(EXIT_FAILURE);
   }
 
-  switch (try_to_connect(user_name, errbuf, sizeof(errbuf))) {
+  switch (try_to_connect(player_name, errbuf, sizeof(errbuf))) {
   case 0:			/* Success! */
     return FALSE;		/*  Tells GTK not to call this
 				   function again */
 #ifndef WIN32_NATIVE
-  /* See PR#4042 for more info on issues with try_to_connect() and errno. */
+/* See PR#4042 for more info on issues with try_to_connect() and errno. */
   case ECONNREFUSED:		/* Server not available (yet) */
     if (!warning_shown) {
       freelog(LOG_NORMAL, _("Connection to server refused. "
@@ -538,7 +385,7 @@ static int try_to_autoconnect(gpointer data)
     freelog(LOG_FATAL,
 	    _("Error contacting server \"%s\" at port %d "
 	      "as \"%s\":\n %s\n"),
-	    server_host, server_port, user_name, errbuf);
+	    server_host, server_port, player_name, errbuf);
     exit(EXIT_FAILURE);
   }
 }
@@ -558,7 +405,7 @@ void server_autoconnect()
   my_snprintf(buf, sizeof(buf),
 	      _("Auto-connecting to server \"%s\" at port %d "
 		"as \"%s\" every %d.%d second(s) for %d times"),
-	      server_host, server_port, user_name,
+	      server_host, server_port, player_name,
 	      AUTOCONNECT_INTERVAL / 1000,AUTOCONNECT_INTERVAL % 1000, 
 	      MAX_AUTOCONNECT_ATTEMPTS);
   append_output_window(buf);
@@ -567,7 +414,7 @@ void server_autoconnect()
     freelog(LOG_FATAL,
 	    _("Error contacting server \"%s\" at port %d "
 	      "as \"%s\":\n %s\n"),
-	    server_host, server_port, user_name, buf);
+	    server_host, server_port, player_name, buf);
     exit(EXIT_FAILURE);
   }
   if (try_to_autoconnect(NULL)) {

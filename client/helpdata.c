@@ -20,11 +20,10 @@
 #include <config.h>
 #endif
 
-#include <assert.h>
-#include <stdio.h>
 #include <string.h>
+#include <stdio.h>
+#include <assert.h>
 
-#include "astring.h"
 #include "city.h"
 #include "fcintl.h"
 #include "game.h"
@@ -217,7 +216,7 @@ void boot_help_texts(void)
   sec = secfile_get_secnames_prefix(sf, "help_", &nsec);
 
   for(isec=0; isec<nsec; isec++) {
-    const char *gen_str =
+    char *gen_str =
       secfile_lookup_str_default(sf, NULL, "%s.generate", sec[isec]);
     
     if (gen_str) {
@@ -255,15 +254,15 @@ void boot_help_texts(void)
 	    }
 	  } unit_type_iterate_end;
 	} else if(current_type==HELP_TECH) {
-	  tech_type_iterate(i) {
-	    if (i != A_NONE && tech_exists(i)) {
+	  for(i=A_FIRST; i<game.num_tech_types; i++) {  /* skip A_NONE */
+	    if(tech_exists(i)) {
 	      pitem = new_help_item(current_type);
 	      my_snprintf(name, sizeof(name), " %s", advances[i].name);
 	      pitem->topic = mystrdup(name);
 	      pitem->text = mystrdup("");
 	      genlist_insert(&category_nodes, pitem, -1);
 	    }
-	  } tech_type_iterate_end;
+	  }
 	} else if(current_type==HELP_TERRAIN) {
 	  for(i=T_FIRST; i<T_COUNT; i++) {
 	    if(*(tile_types[i].terrain_name) != '\0') {
@@ -277,21 +276,20 @@ void boot_help_texts(void)
 	  /* Add special Civ2-style river help text if it's supplied. */
 	  if (terrain_control.river_help_text) {
 	    pitem = new_help_item(HELP_TEXT);
-	    /* TRANS: preserve single space at beginning */
-	    pitem->topic = mystrdup(_(" Rivers"));
+	    pitem->topic = mystrdup(_("  Rivers"));
 	    strcpy(long_buffer, _(terrain_control.river_help_text));
 	    wordwrap_string(long_buffer, 68);
 	    pitem->text = mystrdup(long_buffer);
 	    genlist_insert(&category_nodes, pitem, -1);
 	  }
 	} else if(current_type==HELP_GOVERNMENT) {
-	  government_iterate(gov) {
-	    pitem = new_help_item(current_type);
-	    my_snprintf(name, sizeof(name), " %s", gov->name);
-	    pitem->topic = mystrdup(name);
-	    pitem->text = mystrdup("");
-	    genlist_insert(&category_nodes, pitem, -1);
-	  } government_iterate_end;
+	  for(i=0; i<game.government_count; i++) {
+	      pitem = new_help_item(current_type);
+	      my_snprintf(name, sizeof(name), " %s", get_government(i)->name);
+	      pitem->topic = mystrdup(name);
+	      pitem->text = mystrdup("");
+	      genlist_insert(&category_nodes, pitem, -1);
+	  }
 	} else if(current_type==HELP_IMPROVEMENT) {
 	  impr_type_iterate(i) {
 	    if(improvement_exists(i) && !is_wonder(i)) {
@@ -313,7 +311,8 @@ void boot_help_texts(void)
 	    }
 	  } impr_type_iterate_end;
 	} else {
-	  die("Bad current_type %d", current_type);
+	  freelog(LOG_FATAL, "Bad current_type %d", current_type);
+	  exit(EXIT_FAILURE);
 	}
 	genlist_sort(&category_nodes, help_item_compar);
 	help_list_iterate(category_nodes, ptmp) {
@@ -415,14 +414,13 @@ get_help_item_spec(const char *name, enum help_page_type htype, int *pos)
   idx = 0;
   help_list_iterate(help_nodes, ptmp) {
     char *p=ptmp->topic;
-    while (*p == ' ') {
-      p++;
-    }
+    while(*p==' ')
+      ++p;
     if(strcmp(name, p)==0 && (htype==HELP_ANY || htype==ptmp->type)) {
       pitem = ptmp;
       break;
     }
-    idx++;
+    ++idx;
   }
   help_list_iterate_end;
   
@@ -775,6 +773,8 @@ void helptext_unit(char *buf, int i, const char *user_text)
 *****************************************************************/
 void helptext_tech(char *buf, int i, const char *user_text)
 {
+  int gov;
+  
   assert(buf&&user_text);
   strcpy(buf, user_text);
 
@@ -784,7 +784,7 @@ void helptext_tech(char *buf, int i, const char *user_text)
 	      _("If we would now start with %s we would need %d bulbs."),
 	      advances[i].name,
 	      base_total_bulbs_required(game.player_ptr, i));
-    } else if (tech_is_available(game.player_ptr, i)) {
+    } else {
       sprintf(buf + strlen(buf),
 	      _("To reach %s we need to obtain %d other "
 		"technologies first. The whole project "
@@ -792,11 +792,8 @@ void helptext_tech(char *buf, int i, const char *user_text)
 	      advances[i].name,
 	      num_unknown_techs_for_goal(game.player_ptr, i) - 1,
 	      total_bulbs_required_for_goal(game.player_ptr, i));
-    } else {
-      sprintf(buf + strlen(buf),
-	      _("You cannot research this technology."));
     }
-    if (!techs_have_fixed_costs() && tech_is_available(game.player_ptr, i)) {
+    if (!techs_have_fixed_costs()) {
       sprintf(buf + strlen(buf),
 	      _(" This number may vary depending on what "
 		"other players will research.\n"));
@@ -805,12 +802,13 @@ void helptext_tech(char *buf, int i, const char *user_text)
     }
   }
 
-  government_iterate(g) {
+  for(gov=0; gov<game.government_count; gov++) {
+    struct government *g = get_government(gov);
     if (g->required_tech == i) {
       sprintf(buf+strlen(buf), _("Allows changing government to %s.\n"),
 	      g->name);
     }
-  } government_iterate_end;
+  }
   if(tech_flag(i,TF_BONUS_TECH)) {
     sprintf(buf+strlen(buf),
 	    _("The first player to research %s gets an immediate advance.\n"),

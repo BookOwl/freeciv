@@ -17,7 +17,6 @@
 
 #include "plrdlg_g.h"
 
-void popdown_players_dialog(void);
 
 void plrdlg_msg_close(Widget w);
 

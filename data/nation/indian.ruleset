@@ -1,13 +1,12 @@
 [nation_indian]
 
 name=_("Indian")
-class=_("Modern")
 plural=_("?plural:Indians")
-leader="Gandhi", "Ashoka", "Chandragupta", "Indira Gandhi"
+leader="Gandhi", "Ashoka", "Chandragupta", "Indhira Gandhi"
 leader_sex="Male", "Male", "Male", "Female"
 flag="f.india"
 flag_alt = "-"
-city_style = "Asian"
+city_style = "European"
 
 ruler_titles = { "government",      "male_title",      "female_title"
                  "Monarchy",        _("Maharaja"),     _("Maharaja")
@@ -30,5 +29,4 @@ cities =
   "Colombo", "Madurai", "Coimbatore", "Calicut", "Trivandrum",
   "Nagpur", "Chittagong", "Multan", "Amritsar", "Srinagar",
   "Agra", "Bhopal", "Patna", "Surat", "Jaipur", "Varanasi",
-  "Allahabad", "Indore", "Mysore", "Raipur", "Gaya", "Cawnpore",
-  "Poona (hills)"
+  "Allahabad", "Indore", "Mysore", "Raipur", "Gaya"

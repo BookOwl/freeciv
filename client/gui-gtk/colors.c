@@ -10,15 +10,11 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <stdio.h>
 
-#include <gdk_imlib.h>
 #include <gtk/gtk.h>
+
+#include <gdk_imlib.h>
 
 #include "log.h"
 #include "mem.h"

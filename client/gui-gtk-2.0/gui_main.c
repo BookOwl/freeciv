@@ -19,7 +19,6 @@
 #ifdef HAVE_LOCALE_H
 #include <locale.h>
 #endif
-#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -75,6 +74,8 @@ GtkWidget *map_horizontal_scrollbar;
 GtkWidget *map_vertical_scrollbar;
 GdkPixmap *map_canvas_store;            /* this pixmap acts as a backing store 
                                          * for the map_canvas widget */
+int map_canvas_store_twidth = 1;
+int map_canvas_store_theight = 1;
 
 GtkWidget *overview_canvas;             /* GtkDrawingArea */
 GdkPixmap *overview_canvas_store;       /* this pixmap acts as a backing store 
@@ -84,6 +85,10 @@ int overview_canvas_store_height = 2 * 50;
 
 GdkPixmap *single_tile_pixmap;          /* this pixmap is used when 
                                          * moving units etc */
+GdkPixmap *gray50_tile_pixmap;
+
+int single_tile_pixmap_width;
+int single_tile_pixmap_height;
 
 GtkWidget *toplevel;
 GtkWidget *top_vbox;
@@ -99,16 +104,11 @@ GdkGC *fill_bg_gc;
 GdkGC *fill_tile_gc;
 GdkGC *thin_line_gc;
 GdkGC *thick_line_gc;
-GdkGC *border_line_gc;
 GdkPixmap *gray50, *gray25, *black50;
 GdkPixmap *mask_bitmap;
 
 GtkWidget *main_frame_civ_name;
 GtkWidget *main_label_info;
-
-GtkWidget *avbox, *ahbox, *vbox, *conn_box;
-GtkListStore *conn_model;       
-GtkWidget* scroll_panel;
 
 GtkWidget *econ_label[10];
 GtkWidget *bulb_label;
@@ -121,14 +121,6 @@ GtkWidget *turn_done_button;
 GtkWidget *unit_info_label;
 GtkWidget *unit_info_frame;
 
-GtkTooltips *main_tips;
-GtkWidget *econ_ebox;
-GtkWidget *bulb_ebox;
-GtkWidget *sun_ebox;
-GtkWidget *flake_ebox;
-GtkWidget *government_ebox;
-
-static GtkWidget *unit_pixmap_table;
 static GtkWidget *unit_pixmap;
 static GtkWidget *unit_pixmap_button;
 static GtkWidget *unit_below_pixmap[MAX_NUM_UNITS_BELOW];
@@ -164,8 +156,7 @@ static GtkWidget *detached_widget_fill(GtkWidget *ahbox);
 static gboolean select_unit_pixmap_callback(GtkWidget *w, GdkEvent *ev, 
 					    gpointer data);
 static gint timer_callback(gpointer data);
-static gboolean show_conn_popup(GtkWidget *view, GdkEventButton *ev,
-				gpointer data);
+
 static char *network_charset = NULL;
 
 
@@ -382,84 +373,57 @@ static gboolean keyboard_handler(GtkWidget *w, GdkEventKey *ev, gpointer data)
     return TRUE;
   }
 
-  if (!client_is_observer()) {
+  if (is_isometric && !client_is_observer()) {
     switch (ev->keyval) {
+      case GDK_Up:
       case GDK_KP_Up:
       case GDK_8:
-      case GDK_KP_8:
-	key_unit_move(DIR8_NORTH);
-	break;
+      case GDK_KP_8: 		key_move_north_west();	break;
 
       case GDK_Page_Up:
       case GDK_KP_Page_Up:
       case GDK_9:
-      case GDK_KP_9:
-	key_unit_move(DIR8_NORTHEAST);
-	break;
+      case GDK_KP_9: 		key_move_north();	break;
 
+      case GDK_Right:
       case GDK_KP_Right:
       case GDK_6:
-      case GDK_KP_6:
-	key_unit_move(DIR8_EAST);
-	break;
+      case GDK_KP_6: 		key_move_north_east();	break;
 
       case GDK_Page_Down:
       case GDK_KP_Page_Down:
       case GDK_3:
-      case GDK_KP_3:
-	key_unit_move(DIR8_SOUTHEAST);
-	break;
+      case GDK_KP_3: 		key_move_east();	break;
 
+      case GDK_Down:
       case GDK_KP_Down:
       case GDK_2:
-      case GDK_KP_2:
-	key_unit_move(DIR8_SOUTH);
-	break;
+      case GDK_KP_2: 		key_move_south_east();	break;
 
       case GDK_End:
       case GDK_KP_End:
       case GDK_1:
-      case GDK_KP_1:
-	key_unit_move(DIR8_SOUTHWEST);
-	break;
-
-      case GDK_KP_Left:
-      case GDK_4:
-      case GDK_KP_4:
-	key_unit_move(DIR8_WEST);
-	break;
-
-      case GDK_KP_Home:		
-      case GDK_7:
-      case GDK_KP_7:
-	key_unit_move(DIR8_NORTHWEST);
-	break;
+      case GDK_KP_1: 		key_move_south();	break;
 
       case GDK_Left:
-        scroll_mapview(DIR8_WEST);
-        break;
+      case GDK_KP_Left:
+      case GDK_4:
+      case GDK_KP_4: 		key_move_south_west();	break;
 
-      case GDK_Right:
-        scroll_mapview(DIR8_EAST);
+      case GDK_Home:
+      case GDK_KP_Home:
+      case GDK_7:
+      case GDK_KP_7: 		key_move_west();	break;
+ 
+      case GDK_KP_Begin:
+      case GDK_5:
+      case GDK_KP_5:
+        focus_to_next_unit();
         break;
-
-      case GDK_Up:
-        scroll_mapview(DIR8_NORTH);
-        break;
-
-      case GDK_Down:
-        scroll_mapview(DIR8_SOUTH);
-        break;
-
+  
       case GDK_Return:
       case GDK_KP_Enter:
         key_end_turn();
-        break;
-  
-      case GDK_5:
-      case GDK_KP_5: 
-      case GDK_KP_Begin:
-        key_recall_previous_focus_unit(); 
         break;
   
       case GDK_Escape:
@@ -470,14 +434,75 @@ static gboolean keyboard_handler(GtkWidget *w, GdkEventKey *ev, gpointer data)
         key_city_workers(w, ev);
         break;
 
+      default:
+        return FALSE;
+    }
+  } else if (!client_is_observer()) {
+    switch (ev->keyval) {
+      case GDK_Up:
+      case GDK_KP_Up:
+      case GDK_8:
+      case GDK_KP_8: 		key_move_north();	break;
+
+      case GDK_Page_Up:
+      case GDK_KP_Page_Up:
+      case GDK_9:
+      case GDK_KP_9: 		key_move_north_east();	break;
+
+      case GDK_Right:
+      case GDK_KP_Right:
+      case GDK_6:
+      case GDK_KP_6: 		key_move_east();	break;
+
+      case GDK_Page_Down:
+      case GDK_KP_Page_Down:
+      case GDK_3:
+      case GDK_KP_3: 		key_move_south_east();	break;
+
+      case GDK_Down:
+      case GDK_KP_Down:
+      case GDK_2:
+      case GDK_KP_2: 		key_move_south();	break;
+
+      case GDK_End:
+      case GDK_KP_End:
+      case GDK_1:
+      case GDK_KP_1: 		key_move_south_west();	break;
+
+      case GDK_Left:
+      case GDK_KP_Left:
+      case GDK_4:
+      case GDK_KP_4: 		key_move_west();	break;
+
       case GDK_Home:
-        key_center_capital();
+      case GDK_KP_Home:		
+      case GDK_7:
+      case GDK_KP_7: 		key_move_north_west();	break;
+
+      case GDK_KP_Begin:
+      case GDK_Return:
+      case GDK_KP_Enter:
+        key_end_turn();
+        break;
+  
+      case GDK_5:
+      case GDK_KP_5: 
+        focus_to_next_unit(); 
+        break;
+  
+      case GDK_Escape:
+        key_cancel_action();
+        break;
+  
+      case GDK_t:
+        key_city_workers(w, ev);
         break;
 
       default:
         return FALSE;
     }
   }
+
   return TRUE;
 }
 
@@ -548,116 +573,15 @@ static GtkWidget *detached_widget_fill(GtkWidget *ahbox)
 }
 
 /**************************************************************************
-  Called to build the unit_below pixmap table.  This is the table on the
-  left of the screen that shows all of the inactive units in the current
-  tile.
-
-  It may be called again if the tileset changes.
-**************************************************************************/
-static void populate_unit_pixmap_table(void)
-{
-  int i;
-  GtkWidget *table = unit_pixmap_table;
- 
-  /* 135 below is rough value (could be more intelligent) --dwp */
-  num_units_below = 135 / (int) NORMAL_TILE_WIDTH;
-  num_units_below = CLIP(1, num_units_below, MAX_NUM_UNITS_BELOW);
-
-  gtk_table_resize(GTK_TABLE(table), 2, num_units_below);
-
-  /* Note, we ref this and other widgets here so that we can unref them
-   * in reset_unit_table. */
-  unit_pixmap = gtk_pixcomm_new(UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT);
-  gtk_widget_ref(unit_pixmap);
-  gtk_pixcomm_clear(GTK_PIXCOMM(unit_pixmap));
-  unit_pixmap_button = gtk_event_box_new();
-  gtk_widget_ref(unit_pixmap_button);
-  gtk_container_add(GTK_CONTAINER(unit_pixmap_button), unit_pixmap);
-  gtk_table_attach_defaults(GTK_TABLE(table), unit_pixmap_button, 0, 1, 0, 1);
-  g_signal_connect(unit_pixmap_button, "button_press_event",
-		   G_CALLBACK(select_unit_pixmap_callback), 
-		   GINT_TO_POINTER(-1));
-
-  for (i = 0; i < num_units_below; i++) {
-    unit_below_pixmap[i] = gtk_pixcomm_new(UNIT_TILE_WIDTH,
-                                           UNIT_TILE_HEIGHT);
-    gtk_widget_ref(unit_below_pixmap[i]);
-    unit_below_pixmap_button[i] = gtk_event_box_new();
-    gtk_widget_ref(unit_below_pixmap_button[i]);
-    gtk_container_add(GTK_CONTAINER(unit_below_pixmap_button[i]),
-                      unit_below_pixmap[i]);
-    g_signal_connect(unit_below_pixmap_button[i],
-		     "button_press_event",
-		     G_CALLBACK(select_unit_pixmap_callback),
-		     GINT_TO_POINTER(i));
-      
-    gtk_table_attach_defaults(GTK_TABLE(table), unit_below_pixmap_button[i],
-                              i, i + 1, 1, 2);
-    gtk_widget_set_size_request(unit_below_pixmap[i],
-				UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT);
-    gtk_pixcomm_clear(GTK_PIXCOMM(unit_below_pixmap[i]));
-  }
-
-  more_arrow_pixmap = gtk_image_new_from_pixmap(sprites.right_arrow->pixmap,
-						NULL);
-  gtk_widget_ref(more_arrow_pixmap);
-  gtk_table_attach_defaults(GTK_TABLE(table), more_arrow_pixmap, 4, 5, 1, 2);
-
-  gtk_widget_show_all(table);
-}
-
-/**************************************************************************
-  Called when the tileset is changed to reset the unit pixmap table.
-**************************************************************************/
-void reset_unit_table(void)
-{
-  int i;
-
-  /* Unreference all of the widgets that we're about to reallocate, thus
-   * avoiding a memory leak. Remove them from the container first, just
-   * to be safe. Note, the widgets are ref'd in
-   * populatate_unit_pixmap_table. */
-  gtk_container_remove(GTK_CONTAINER(unit_pixmap_table),
-		       unit_pixmap_button);
-  gtk_widget_unref(unit_pixmap);
-  gtk_widget_unref(unit_pixmap_button);
-  for (i = 0; i < num_units_below; i++) {
-    gtk_container_remove(GTK_CONTAINER(unit_pixmap_table),
-			 unit_below_pixmap_button[i]);
-    gtk_widget_unref(unit_below_pixmap[i]);
-    gtk_widget_unref(unit_below_pixmap_button[i]);
-  }
-  gtk_container_remove(GTK_CONTAINER(unit_pixmap_table),
-		       more_arrow_pixmap);
-  gtk_widget_unref(more_arrow_pixmap);
-
-  populate_unit_pixmap_table();
-
-  /* We have to force a redraw of the units.  And we explicitly have
-   * to force a redraw of the focus unit, which is normally only
-   * redrawn when the focus changes. We also have to force the 'more'
-   * arrow to go away, both by expicitly hiding it and telling it to
-   * do so (this will be reset immediately afterwards if necessary,
-   * but we have to make the *internal* state consistent). */
-  gtk_widget_hide(more_arrow_pixmap);
-  set_unit_icons_more_arrow(FALSE);
-  set_unit_icon(-1, get_unit_in_focus());
-  update_unit_pix_label(get_unit_in_focus());
-}
-
-/**************************************************************************
  do the heavy lifting for the widget setup.
 **************************************************************************/
 static void setup_widgets(void)
 {
-  GtkWidget *box, *ebox, *hbox, *sbox, *align, *label;
-  GtkWidget *frame, *table, *table2, *paned, *menubar, *sw, *text, *view;
+  GtkWidget *box, *ebox, *hbox, *vbox, *align;
+  GtkWidget *avbox, *ahbox;
+  GtkWidget *frame, *table, *paned, *menubar, *sw, *text;
   GtkStyle *style;
   int i;
-  struct Sprite *sprite;
-  GtkCellRenderer *rend;
-
-  main_tips = gtk_tooltips_new();
 
   /* the window is divided into two panes. "top" and "message window" */ 
   paned = gtk_vpaned_new();
@@ -701,48 +625,13 @@ static void setup_widgets(void)
   g_signal_connect(overview_canvas, "button_press_event",
         	   G_CALLBACK(butt_down_overviewcanvas), NULL);
 
-  /* prepare list of connected users in the pregame state. */
-  conn_model = gtk_list_store_new(1, G_TYPE_STRING); 
-  view = gtk_tree_view_new_with_model(GTK_TREE_MODEL(conn_model));
-  gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(view), FALSE);
-  
-  /* add column with username to connected users list. */
-  rend = gtk_cell_renderer_text_new();
-  g_object_set(rend, "weight", "bold", NULL);
-  gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(view),
-					      -1, NULL, rend, "text", 0, NULL);
-  
-  /* display the list of connected users. */
-  conn_box = gtk_vbox_new(FALSE, 2);
-  gtk_box_pack_start(GTK_BOX(avbox), conn_box, TRUE, TRUE, 6);
-
-  label = g_object_new(GTK_TYPE_LABEL,
-		       "use-underline", TRUE,
-		       "mnemonic-widget", view,
-		       "label", _("_Connected Users:"),
-		       "xalign", 0.0,
-		       "yalign", 0.5,
-		       NULL);
-  gtk_box_pack_start(GTK_BOX(conn_box), label, FALSE, FALSE, 0);
-
-  sw = gtk_scrolled_window_new(NULL, NULL);
-  gtk_scrolled_window_set_shadow_type(GTK_SCROLLED_WINDOW(sw),
-				      GTK_SHADOW_ETCHED_IN);
-  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sw),
-				 GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
-  gtk_container_add(GTK_CONTAINER(sw), view);
-  gtk_box_pack_start(GTK_BOX(conn_box), sw, TRUE, TRUE, 0);
-
-  g_signal_connect(view, "button-press-event",
-		   G_CALLBACK(show_conn_popup), NULL);
-
-  /* The rest */
+  /* The Rest */
 
   ahbox = detached_widget_new();
   gtk_container_add(GTK_CONTAINER(vbox), ahbox);
   avbox = detached_widget_fill(ahbox);
 
-  /* Info on player's civilization, when game is running. */
+  /* Info on player's civilization */
   frame = gtk_frame_new(NULL);
   gtk_box_pack_start(GTK_BOX(avbox), frame, FALSE, FALSE, 0);
 
@@ -774,27 +663,17 @@ static void setup_widgets(void)
   gtk_box_pack_start(GTK_BOX(box), table, TRUE, FALSE, 0);
 
   /* citizens for taxrates */
-  ebox = gtk_event_box_new();
-  gtk_table_attach_defaults(GTK_TABLE(table), ebox, 0, 10, 0, 1);
-  econ_ebox = ebox;
-  
-  table2 = gtk_table_new(1, 10, TRUE);
-  gtk_table_set_row_spacing(GTK_TABLE(table2), 0, 0);
-  gtk_table_set_col_spacing(GTK_TABLE(table2), 0, 0);
-  gtk_container_add(GTK_CONTAINER(ebox), table2);
-  
   for (i = 0; i < 10; i++) {
-    enum citizen_type c = i < 5 ? CITIZEN_SCIENTIST : CITIZEN_TAXMAN;
     ebox = gtk_event_box_new();
     gtk_widget_add_events(ebox, GDK_BUTTON_PRESS_MASK);
 
-    gtk_table_attach_defaults(GTK_TABLE(table2), ebox, i, i + 1, 0, 1);
+    gtk_table_attach_defaults(GTK_TABLE(table), ebox, i, i + 1, 0, 1);
 
     g_signal_connect(ebox, "button_press_event",
                      G_CALLBACK(taxrates_callback), GINT_TO_POINTER(i));
 
-    sprite = get_citizen_sprite(c, i, NULL);
-    econ_label[i] = gtk_image_new_from_pixmap(sprite->pixmap, sprite->mask);
+    econ_label[i] = gtk_image_new_from_pixmap(get_citizen_pixmap(i < 5 ? 1 : 2),
+					      NULL);
     gtk_container_add(GTK_CONTAINER(ebox), econ_label[i]);
   }
 
@@ -802,38 +681,24 @@ static void setup_widgets(void)
   bulb_label = gtk_image_new_from_pixmap(sprites.bulb[0]->pixmap, NULL);
   sun_label = gtk_image_new_from_pixmap(sprites.warming[0]->pixmap, NULL);
   flake_label = gtk_image_new_from_pixmap(sprites.cooling[0]->pixmap, NULL);
-  sprite = get_citizen_sprite(CITIZEN_UNHAPPY, 0, NULL);
-  government_label = gtk_image_new_from_pixmap(sprite->pixmap, sprite->mask);
+  government_label = gtk_image_new_from_pixmap(sprites.citizen[7]->pixmap,
+					       NULL);
 
   for (i = 0; i < 4; i++) {
     GtkWidget *w;
     
-    ebox = gtk_event_box_new();
-
     switch (i) {
-    case 0:
-      w = bulb_label;
-      bulb_ebox = ebox;
-      break;
-    case 1:
-      w = sun_label;
-      sun_ebox = ebox;
-      break;
-    case 2:
-      w = flake_label;
-      flake_ebox = ebox; 
-      break;
-    default:
-    case 3:
-      w = government_label;
-      government_ebox = ebox;
-      break;
+      case 0: w = bulb_label;	      break;
+      case 1: w = sun_label;	      break;
+      case 2: w = flake_label;        break;
+      default:
+      case 3: w = government_label;   break;
     }
 
     gtk_misc_set_alignment(GTK_MISC(w), 0.0, 0.0);
     gtk_misc_set_padding(GTK_MISC(w), 0, 0);
-    gtk_container_add(GTK_CONTAINER(ebox), w);
-    gtk_table_attach_defaults(GTK_TABLE(table), ebox, i, i + 1, 1, 2);
+    gtk_widget_set_size_request(w, SMALL_TILE_WIDTH, SMALL_TILE_HEIGHT);
+    gtk_table_attach_defaults(GTK_TABLE(table), w, i, i + 1, 1, 2);
   }
 
   timeout_label = gtk_label_new("");
@@ -870,14 +735,37 @@ static void setup_widgets(void)
   box = gtk_hbox_new(FALSE,0);
   gtk_box_pack_start(GTK_BOX(avbox), box, FALSE, FALSE, 0);
 
-  table = gtk_table_new(0, 0, FALSE);
+  table = gtk_table_new(2, num_units_below, FALSE);
   gtk_box_pack_start(GTK_BOX(box), table, FALSE, FALSE, 5);
 
   gtk_table_set_row_spacings(GTK_TABLE(table), 2);
   gtk_table_set_col_spacings(GTK_TABLE(table), 2);
 
-  unit_pixmap_table = table;
-  populate_unit_pixmap_table();
+  unit_pixmap = gtk_pixcomm_new(UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT);
+  unit_pixmap_button = gtk_event_box_new();
+  gtk_container_add(GTK_CONTAINER(unit_pixmap_button), unit_pixmap);
+  gtk_table_attach_defaults(GTK_TABLE(table), unit_pixmap_button, 0, 1, 0, 1);
+  g_signal_connect(unit_pixmap_button, "button_press_event",
+                   G_CALLBACK(select_unit_pixmap_callback), 
+                   GINT_TO_POINTER(-1));
+
+  for(i = 0; i < num_units_below; i++) {
+    unit_below_pixmap[i] = gtk_pixcomm_new(UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT);
+    unit_below_pixmap_button[i] = gtk_event_box_new();
+    gtk_container_add(GTK_CONTAINER(unit_below_pixmap_button[i]),
+                      unit_below_pixmap[i]);
+    g_signal_connect(unit_below_pixmap_button[i],
+                     "button_press_event",
+                      G_CALLBACK(select_unit_pixmap_callback),
+                      GINT_TO_POINTER(i));
+      
+    gtk_table_attach_defaults(GTK_TABLE(table), unit_below_pixmap_button[i],
+                              i, i + 1, 1, 2);
+  }
+
+  more_arrow_pixmap = gtk_image_new_from_pixmap(sprites.right_arrow->pixmap,
+						NULL);
+  gtk_table_attach_defaults(GTK_TABLE(table), more_arrow_pixmap, 4, 5, 1, 2);
 
   /* Map canvas and scrollbars */
 
@@ -891,7 +779,8 @@ static void setup_widgets(void)
 
   map_canvas = gtk_drawing_area_new();
   GTK_WIDGET_SET_FLAGS(map_canvas, GTK_CAN_FOCUS);
-
+  gtk_widget_set_double_buffered(map_canvas, FALSE);
+  
   for (i = 0; i < 5; i++) {
     gtk_widget_modify_bg(GTK_WIDGET(overview_canvas), i,
 			 colors_standard[COLOR_STD_BLACK]);
@@ -932,9 +821,9 @@ static void setup_widgets(void)
 
   /* *** The message window -- this is a detachable widget *** */
 
-  sbox = detached_widget_new();
-  gtk_paned_pack2(GTK_PANED(paned), sbox, TRUE, TRUE);
-  avbox = detached_widget_fill(sbox);
+  ahbox = detached_widget_new();
+  gtk_paned_pack2(GTK_PANED(paned), ahbox, TRUE, TRUE);
+  avbox = detached_widget_fill(ahbox);
 
   sw = gtk_scrolled_window_new(NULL, NULL);
   gtk_scrolled_window_set_shadow_type(GTK_SCROLLED_WINDOW(sw),
@@ -983,7 +872,6 @@ static void setup_widgets(void)
     gtk_widget_hide(map_horizontal_scrollbar);
     gtk_widget_hide(map_vertical_scrollbar);
   }
-  gtk_widget_hide(ahbox);  /* Hide info on player's civ in pregame */
 }
 
 /**************************************************************************
@@ -1020,8 +908,8 @@ void ui_init(void)
   dio_set_get_conv_callback(get_conv);
 
   /* convert inputs */
-  s = g_locale_to_utf8(user_name, -1, NULL, NULL, NULL);
-  sz_strlcpy(user_name, s);
+  s = g_locale_to_utf8(player_name, -1, NULL, NULL, NULL);
+  sz_strlcpy(player_name, s);
   g_free(s);
 
   /* this is silly, but i don't want the UI to barf on erroneous input */
@@ -1115,17 +1003,12 @@ void ui_main(int argc, char **argv)
   /* for isometric view. always create. the tileset can change at run time. */
   thin_line_gc = gdk_gc_new(root_window);
   thick_line_gc = gdk_gc_new(root_window);
-  border_line_gc = gdk_gc_new(root_window);
   gdk_gc_set_line_attributes(thin_line_gc, 1,
 			     GDK_LINE_SOLID,
 			     GDK_CAP_NOT_LAST,
 			     GDK_JOIN_MITER);
   gdk_gc_set_line_attributes(thick_line_gc, 2,
 			     GDK_LINE_SOLID,
-			     GDK_CAP_NOT_LAST,
-			     GDK_JOIN_MITER);
-  gdk_gc_set_line_attributes(border_line_gc, 2,
-			     GDK_LINE_ON_OFF_DASH,
 			     GDK_CAP_NOT_LAST,
 			     GDK_JOIN_MITER);
 
@@ -1159,6 +1042,11 @@ void ui_main(int argc, char **argv)
 
   tilespec_load_tiles();
 
+  /* 135 below is rough value (could be more intelligent) --dwp */
+  num_units_below = 135 / (int) NORMAL_TILE_WIDTH;
+  num_units_below = MIN(num_units_below, MAX_NUM_UNITS_BELOW);
+  num_units_below = MAX(num_units_below, 1);
+  
   setup_widgets();
   load_intro_gfx();
   load_cursors();
@@ -1178,8 +1066,24 @@ void ui_main(int argc, char **argv)
   gdk_draw_rectangle(overview_canvas_store, fill_bg_gc, TRUE, 0, 0,
                      overview_canvas_store_width, overview_canvas_store_height);
 
+  single_tile_pixmap_width = UNIT_TILE_WIDTH;
+  single_tile_pixmap_height = UNIT_TILE_HEIGHT;
+
   single_tile_pixmap = gdk_pixmap_new(root_window, 
-				      UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT, -1);
+                                      single_tile_pixmap_width,
+                                      single_tile_pixmap_height, -1);
+
+  gray50_tile_pixmap = gdk_pixmap_new(root_window, 
+				      single_tile_pixmap_width,
+				      single_tile_pixmap_height, -1);
+
+  gdk_gc_set_fill(fill_tile_gc, GDK_OPAQUE_STIPPLED);
+  gdk_gc_set_stipple(fill_tile_gc, black50);
+  gdk_gc_set_foreground(fill_tile_gc, colors_standard[COLOR_STD_BLACK]);
+  gdk_gc_set_background(fill_tile_gc, colors_standard[COLOR_STD_WHITE]);
+  gdk_draw_rectangle(gray50_tile_pixmap, fill_tile_gc, TRUE, 0, 0,
+		     single_tile_pixmap_width, single_tile_pixmap_height);
+  gdk_gc_set_fill(fill_tile_gc, GDK_STIPPLED);
 
   set_client_state(CLIENT_PRE_GAME_STATE);
 
@@ -1187,87 +1091,6 @@ void ui_main(int argc, char **argv)
 
   free_color_system();
   tilespec_free_tiles();
-}
-
-/**************************************************************************
- Update the connected users list at pregame state.
-**************************************************************************/
-void update_conn_list_dialog(void)
-{
-  GtkTreeIter it;
-  
-  if (get_client_state() != CLIENT_GAME_RUNNING_STATE) {
-    gtk_list_store_clear(conn_model);
-    conn_list_iterate(game.est_connections, pconn) {
-      gtk_list_store_append(conn_model, &it);
-      gtk_list_store_set(conn_model, &it, 0, pconn->username, -1);
-    } conn_list_iterate_end;
-
-    gtk_widget_hide(ahbox);
-    gtk_widget_show(conn_box);
-  } else {
-    gtk_widget_hide(conn_box);
-    gtk_widget_show(ahbox);
-  }
-}
-
-/**************************************************************************
- Show details about a user in the Connected Users dialog in a popup.
-**************************************************************************/
-static gboolean show_conn_popup(GtkWidget *view, GdkEventButton *ev,
-				gpointer data)
-{
-  GtkTreePath *path;
-  GtkTreeIter it;
-  GtkWidget *popup, *table, *label;
-  gchar *name;
-  struct connection *pconn;
-
-  /* Get the current selection in the Connected Users list */
-  if (!gtk_tree_view_get_path_at_pos(GTK_TREE_VIEW(view),
-				     ev->x, ev->y, &path, NULL, NULL, NULL)) {
-    return FALSE;
-  }
-
-  gtk_tree_model_get_iter(GTK_TREE_MODEL(conn_model), &it, path);
-  gtk_tree_path_free(path);
-
-  gtk_tree_model_get(GTK_TREE_MODEL(conn_model), &it, 0, &name, -1);
-  pconn = find_conn_by_user(name);
-
-  /* Show popup. */
-  popup = gtk_window_new(GTK_WINDOW_POPUP);
-  gtk_widget_set_app_paintable(popup, TRUE);
-  gtk_container_set_border_width(GTK_CONTAINER(popup), 4);
-  gtk_window_set_position(GTK_WINDOW(popup), GTK_WIN_POS_MOUSE);
-
-  table = gtk_table_new(2, 2, FALSE);
-  gtk_table_set_col_spacings(GTK_TABLE(table), 6);
-  gtk_container_add(GTK_CONTAINER(popup), table);
-
-  label = gtk_label_new(_("Name:"));
-  gtk_misc_set_alignment(GTK_MISC(label), 0.0, 0.5);
-  gtk_table_attach_defaults(GTK_TABLE(table), label, 0, 1, 0, 1);
-  label = gtk_label_new(pconn->username);
-  gtk_misc_set_alignment(GTK_MISC(label), 0.0, 0.5);
-  gtk_table_attach_defaults(GTK_TABLE(table), label, 1, 2, 0, 1);
-
-  label = gtk_label_new(_("Host:"));
-  gtk_misc_set_alignment(GTK_MISC(label), 0.0, 0.5);
-  gtk_table_attach_defaults(GTK_TABLE(table), label, 0, 1, 1, 2);
-  label = gtk_label_new(pconn->addr);
-  gtk_misc_set_alignment(GTK_MISC(label), 0.0, 0.5);
-  gtk_table_attach_defaults(GTK_TABLE(table), label, 1, 2, 1, 2);
-
-  gtk_widget_show_all(table);
-  gtk_widget_show(popup);
-
-  gdk_pointer_grab(popup->window, TRUE, GDK_BUTTON_RELEASE_MASK,
-		   NULL, NULL, ev->time);
-  gtk_grab_add(popup);
-  g_signal_connect_after(popup, "button_release_event",
-			 G_CALLBACK(show_info_button_release), NULL);
-  return FALSE;
 }
 
 /**************************************************************************
@@ -1346,6 +1169,7 @@ static gboolean select_unit_pixmap_callback(GtkWidget *w, GdkEvent *ev,
   punit = find_unit_by_id(unit_ids[i]);
   if(punit) { /* should always be true at this point */
     if (punit->owner == game.player_idx) {  /* may be non-true if alliance */
+      request_new_unit_activity(punit, ACTIVITY_IDLE);
       set_unit_focus(punit);
     }
   }
@@ -1389,7 +1213,7 @@ static gboolean show_info_popup(GtkWidget *w, GdkEventButton *ev, gpointer data)
 	    population_to_text(civ_population(game.player_ptr)),
 	    textyear(game.year), game.turn,
 	    game.player_ptr->economic.gold,
-	    player_get_expected_income(game.player_ptr),
+	    turn_gold_difference,
 	    game.player_ptr->economic.tax,
 	    game.player_ptr->economic.luxury,
 	    game.player_ptr->economic.science,

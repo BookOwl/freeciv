@@ -208,7 +208,10 @@ popup the dialog
 *****************************************************************/
 void popup_goto_dialog(void)
 {
-  if (!can_client_issue_orders() || !get_unit_in_focus()) {
+  if (get_client_state()!= CLIENT_GAME_RUNNING_STATE) {
+    return;
+  }
+  if (!get_unit_in_focus()) {
     return;
   }
 

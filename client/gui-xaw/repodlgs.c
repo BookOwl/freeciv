@@ -10,15 +10,15 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
-#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
+#include <assert.h>
 
 #include <X11/Intrinsic.h>
 #include <X11/Shell.h>
@@ -29,6 +29,7 @@
 #include <X11/Xaw/Command.h>
 #include <X11/Xaw/List.h>
 #include <X11/Xaw/MenuButton.h>
+#include <X11/Xaw/SimpleMenu.h>
 #include <X11/Xaw/SmeBSB.h>
 #include <X11/Xaw/Toggle.h>
 
@@ -189,19 +190,6 @@ void popup_science_dialog(bool make_modal)
 
 }
 
-/****************************************************************
-  Closes the science dialog.
-*****************************************************************/
-void popdown_science_dialog(void)
-{
-  if (science_dialog_shell) {
-    if (science_dialog_shell_is_modal) {
-      XtSetSensitive(main_form, TRUE);
-    }
-    XtDestroyWidget(science_dialog_shell);
-    science_dialog_shell = 0;
-  }
-}
 
 /****************************************************************
 ...
@@ -332,10 +320,9 @@ void create_science_dialog(bool make_modal)
     XtSetSensitive(science_change_menu_button, FALSE);
   
  for(i=A_FIRST, flag=0; i<game.num_tech_types; i++)
-    if (tech_is_available(game.player_ptr, i)
-        && get_invention(game.player_ptr, i) != TECH_KNOWN
-        && advances[i].req[0] != A_LAST && advances[i].req[1] != A_LAST
-        && num_unknown_techs_for_goal(game.player_ptr, i) < 11) {
+    if(get_invention(game.player_ptr, i) != TECH_KNOWN &&
+       advances[i].req[0] != A_LAST && advances[i].req[1] != A_LAST &&
+       num_unknown_techs_for_goal(game.player_ptr, i) < 11) {
       Widget entry=
       XtVaCreateManagedWidget(advances[i].name, smeBSBObjectClass, 
 			      goalmenu, NULL);
@@ -439,7 +426,11 @@ void science_goal_callback(Widget w, XtPointer client_data,
 void science_close_callback(Widget w, XtPointer client_data, 
 			    XtPointer call_data)
 {
-  popdown_science_dialog();
+
+  if(science_dialog_shell_is_modal)
+    XtSetSensitive(main_form, TRUE);
+  XtDestroyWidget(science_dialog_shell);
+  science_dialog_shell=0;
 }
 
 
@@ -602,19 +593,6 @@ void popup_economy_report_dialog(bool make_modal)
    }
 }
 
-/****************************************************************
-  Closes the economy report.
-****************************************************************/
-void popdown_economy_report_dialog(void)
-{
-  if (economy_dialog_shell) {
-    if (economy_dialog_shell_is_modal) {
-      XtSetSensitive(main_form, TRUE);
-    }
-    XtDestroyWidget(economy_dialog_shell);
-    economy_dialog_shell = 0;
-  }
-}
 
 /****************************************************************
 ...
@@ -693,26 +671,25 @@ void create_economy_report_dialog(bool make_modal)
 
 
 /****************************************************************
-  Called when a building type is selected in the economy list.
+...
 *****************************************************************/
 void economy_list_callback(Widget w, XtPointer client_data, 
 			 XtPointer call_data)
 {
-  XawListReturnStruct *ret = XawListShowCurrent(economy_list);
+  XawListReturnStruct *ret;
+  int i;
+  ret = XawListShowCurrent(economy_list);
 
-  if (ret->list_index != XAW_LIST_NONE) {
-    /* The user has selected an improvement type. */
-    int i = economy_improvement_type[ret->list_index];
-    bool is_sellable = (i >= 0 && i < game.num_impr_types && !is_wonder(i));
-
-    XtSetSensitive(sellobsolete_command, is_sellable
-		   && improvement_obsolete(game.player_ptr, i));
-    XtSetSensitive(sellall_command, is_sellable);
-  } else {
-    /* No selection has been made. */
-    XtSetSensitive(sellobsolete_command, FALSE);
-    XtSetSensitive(sellall_command, FALSE);
+  if(ret->list_index!=XAW_LIST_NONE) {
+    i = economy_improvement_type[ret->list_index];
+    if (i >= 0 && i < game.num_impr_types && !is_wonder(i)) {
+      XtSetSensitive(sellobsolete_command, TRUE);
+      XtSetSensitive(sellall_command, TRUE);
+    }
+    return;
   }
+  XtSetSensitive(sellobsolete_command, FALSE);
+  XtSetSensitive(sellall_command, FALSE);
 }
 
 /****************************************************************
@@ -721,7 +698,11 @@ void economy_list_callback(Widget w, XtPointer client_data,
 void economy_close_callback(Widget w, XtPointer client_data, 
 			 XtPointer call_data)
 {
-  popdown_economy_report_dialog();
+
+  if(economy_dialog_shell_is_modal)
+     XtSetSensitive(main_form, TRUE);
+  XtDestroyWidget(economy_dialog_shell);
+  economy_dialog_shell=0;
 }
 
 /****************************************************************
@@ -739,6 +720,9 @@ void economy_selloff_callback(Widget w, XtPointer client_data,
 			    XtPointer call_data)
 {
   int i,count=0,gold=0;
+  struct genlist_iterator myiter;
+  struct city *pcity;
+  struct packet_city_request packet;
   char str[64];
   XawListReturnStruct *ret=XawListShowCurrent(economy_list);
 
@@ -746,16 +730,19 @@ void economy_selloff_callback(Widget w, XtPointer client_data,
 
   i=economy_improvement_type[ret->list_index];
 
-  city_list_iterate(game.player_ptr->cities, pcity) {
+  genlist_iterator_init(&myiter, &game.player_ptr->cities.list, 0);
+  for(; ITERATOR_PTR(myiter);ITERATOR_NEXT(myiter)) {
+    pcity=(struct city *)ITERATOR_PTR(myiter);
     if(!pcity->did_sell && city_got_building(pcity, i) && 
        (client_data ||
 	improvement_obsolete(game.player_ptr,i) ||
         wonder_replacement(pcity, i) ))  {
 	count++; gold+=improvement_value(i);
-	city_sell_improvement(pcity, i);
+        packet.city_id=pcity->id;
+        packet.build_id=i;
+        send_packet_city_request(&aconnection, &packet, PACKET_CITY_SELL);
     }
-  } city_list_iterate_end;
-
+  }
   if(count)  {
     my_snprintf(str, sizeof(str), _("Sold %d %s for %d gold"),
 		count, get_improvement_name(i), gold);
@@ -855,19 +842,6 @@ void popup_activeunits_report_dialog(bool make_modal)
    }
 }
 
-/****************************************************************
-  Closes the active units report.
-*****************************************************************/
-void popdown_activeunits_report_dialog(void)
-{
-  if (activeunits_dialog_shell) {
-    if (activeunits_dialog_shell_is_modal) {
-      XtSetSensitive(main_form, TRUE);
-    }
-    XtDestroyWidget(activeunits_dialog_shell);
-    activeunits_dialog_shell = 0;
-  }
-}
 
 /****************************************************************
 ...
@@ -1034,7 +1008,11 @@ void activeunits_upgrade_callback(Widget w, XtPointer client_data,
 void activeunits_close_callback(Widget w, XtPointer client_data, 
 			 XtPointer call_data)
 {
-  popdown_activeunits_report_dialog();
+
+  if(activeunits_dialog_shell_is_modal)
+     XtSetSensitive(main_form, TRUE);
+   XtDestroyWidget(activeunits_dialog_shell);
+   activeunits_dialog_shell=0;
 }
 
 /****************************************************************

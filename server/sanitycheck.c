@@ -11,10 +11,6 @@
    GNU General Public License for more details.
 ***********************************************************************/
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <assert.h>
 
 #include "city.h"
@@ -69,9 +65,8 @@ static void check_fow(void)
       assert(plr_tile->pending_seen < 60000);
 
       assert(plr_tile->own_seen <= plr_tile->seen);
-      if (map_is_known(x, y, pplayer)) {
+      if (map_get_known(x, y, pplayer))
 	assert(plr_tile->pending_seen == 0);
-      }
     } players_iterate_end;
   } whole_map_iterate_end;
 }
@@ -101,14 +96,13 @@ static void check_map(void)
     struct tile *ptile = map_get_tile(x, y);
     struct city *pcity = map_get_city(x, y);
     int cont = map_get_continent(x, y);
-    if (is_ocean(map_get_terrain(x, y))) {
+    if (map_get_terrain(x, y) == T_OCEAN) {
       assert(cont == 0);
     } else {
       assert(cont != 0);
       adjc_iterate(x, y, x1, y1) {
-	if (!is_ocean(map_get_terrain(x1, y1))) {
+	if (map_get_terrain(x1, y1) != T_OCEAN)
 	  assert(map_get_continent(x1, y1) == cont);
-	}
       } adjc_iterate_end;
     }
 
@@ -138,16 +132,13 @@ static void check_cities(void)
       } unit_list_iterate_end;
 
       assert(is_normal_map_pos(pcity->x, pcity->y));
-
-      /* Note that cities may be found on land or water. */
+      assert(map_get_terrain(pcity->x, pcity->y) != T_OCEAN);
 
       city_map_iterate(x, y) {
 	int map_x,map_y;
 
 	if (city_map_to_map(&map_x, &map_y, pcity, x, y)) {
 	  struct tile *ptile = map_get_tile(map_x, map_y);
-	  struct player *owner = map_get_owner(map_x, map_y);
-
 	  switch (get_worker_city(pcity, x, y)) {
 	  case C_TILE_EMPTY:
 	    if (map_get_tile(map_x, map_y)->worked) {
@@ -159,12 +150,6 @@ static void check_cities(void)
 	    if (is_enemy_unit_tile(ptile, pplayer)) {
 	      freelog(LOG_ERROR, "Tile at %s->%d,%d marked as "
 		      "empty but occupied by an enemy unit!",
-		      pcity->name, x, y);
-	    }
-	    if (game.borders > 0
-		&& owner && owner->player_no != pcity->owner) {
-	      freelog(LOG_ERROR, "Tile at %s->%d,%d marked as "
-		      "empty but in enemy territory!",
 		      pcity->name, x, y);
 	    }
 	    break;
@@ -179,18 +164,11 @@ static void check_cities(void)
 		      "worked but occupied by an enemy unit!",
 		      pcity->name, x, y);
 	    }
-	    if (game.borders > 0
-                && owner && owner->player_no != pcity->owner) {
-	      freelog(LOG_ERROR, "Tile at %s->%d,%d marked as "
-		      "worked but in enemy territory!",
-		      pcity->name, x, y);
-	    }
 	    break;
 	  case C_TILE_UNAVAILABLE:
 	    if (!map_get_tile(map_x, map_y)->worked
 		&& !is_enemy_unit_tile(ptile, pplayer)
-		&& map_is_known(map_x, map_y, pplayer)
-		&& (!owner || owner->player_no == pcity->owner)) {
+		&& map_get_known(map_x, map_y, pplayer)) {
 	      freelog(LOG_ERROR, "Tile at %s->%d,%d marked as "
 		      "unavailable but seems to be available!",
 		      pcity->name, x, y);
@@ -236,7 +214,7 @@ static void check_units(void) {
       struct city *pcity;
 
       assert(unit_owner(punit) == pplayer);
-      CHECK_MAP_POS(x, y);
+      assert(is_real_tile(x, y));
 
       if (punit->homecity != 0) {
 	pcity = player_find_city_by_id(pplayer, punit->homecity);
@@ -255,9 +233,10 @@ static void check_units(void) {
       pcity = map_get_city(x, y);
       if (pcity) {
 	assert(pplayers_allied(city_owner(pcity), pplayer));
-      } else if (is_ocean(map_get_terrain(x, y))) {
-	assert(ground_unit_transporter_capacity(x, y, pplayer) >= 0);
       }
+
+      if (map_get_terrain(x, y) == T_OCEAN)
+	assert(ground_unit_transporter_capacity(x, y, pplayer) >= 0);
 
       assert(punit->moves_left >= 0);
       assert(punit->hp > 0);

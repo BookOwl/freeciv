@@ -2,16 +2,12 @@
 
 name=_("Brazilian")
 plural=_("?plural:Brazilians")
-class=_("Modern")
-legend=_("Brazil was founded as a colony of Portugal but became \
-independent in 1822AD. It is the only country in the New World that \
-has been the seat of a monarchy.")
 leader="Dom Pedro I", "Princesa Isabel", "Marechal Deodoro",
        "Tancredo Neves", "Juscelino Kubitscheck", "Getúlio Vargas"
 leader_sex="Male", "Female", "Male", "Male", "Male", "Male"
 flag = "f.brasil"
 flag_alt = "-"
-city_style = "Tropical"
+city_style = "European"
 
 ruler_titles = { "government",      "male_title",      "female_title"
                  "Despotism",       _("Dictator"),     _("Dictatrix")

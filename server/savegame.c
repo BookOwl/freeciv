@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -37,7 +36,6 @@
 
 #include "citytools.h"
 #include "cityturn.h"
-#include "diplhand.h"
 #include "mapgen.h"
 #include "maphand.h"
 #include "meta.h"
@@ -45,7 +43,6 @@
 #include "ruleset.h"
 #include "spacerace.h"
 #include "srv_main.h"
-#include "stdinhand.h"
 #include "unittools.h"
 
 #include "aicity.h"
@@ -74,8 +71,10 @@
       if (regular_map_pos_is_normal(x, y)) {            \
 	line[x] = get_xy_char;                          \
         if(!my_isprint(line[x] & 0x7f)) {               \
-          die("Trying to write invalid map "            \
-              "data: '%c' %d", line[x], line[x]);       \
+          freelog(LOG_FATAL, _("Trying to write invalid"\
+		  " map data: '%c' %d"),                \
+		  line[x], line[x]);                    \
+          exit(EXIT_FAILURE);                           \
         }                                               \
       } else {                                          \
         /* skipped over in loading */                   \
@@ -193,7 +192,8 @@ static int ascii_hex2bin(char ch, int halfbyte)
   pch = strchr(hex_chars, ch);
 
   if (!pch || ch == '\0') {
-    die("Unknown hex value: '%c' %d", ch, ch);
+    freelog(LOG_FATAL, "Unknown hex value: '%c' %d", ch, ch);
+    exit(EXIT_FAILURE);
   }
   return (pch - hex_chars) << (halfbyte * 4);
 }
@@ -207,7 +207,8 @@ static int char2terrain(char ch)
   char *pch = strchr(terrain_chars, ch);
 
   if (!pch || ch == '\0') {
-    die("Unknown terrain type: '%c' %d", ch, ch);
+    freelog(LOG_FATAL, "Unknown terrain type: '%c' %d", ch, ch);
+    exit(EXIT_FAILURE);
   }
   return pch - terrain_chars;
 }
@@ -277,12 +278,7 @@ static void map_startpos_load(struct section_file *file)
 
   map.fixed_start_positions = secfile_lookup_bool_default(file, FALSE, "map.fixed_start_positions");
 
-  map.start_positions = fc_realloc(map.start_positions,
-				   game.max_players
-				   * sizeof(*map.start_positions));
-  while (i < game.max_players
-	 && (pos = secfile_lookup_int_default(file, -1,
-					      "map.r%dsx", i)) != -1) {
+  while( (pos = secfile_lookup_int_default(file, -1, "map.r%dsx", i)) != -1) {
     map.start_positions[i].x = pos;
     map.start_positions[i].y = secfile_lookup_int(file, "map.r%dsy", i);
     i++;
@@ -399,6 +395,12 @@ static void map_load(struct section_file *file)
 
 
   map.have_specials = TRUE;
+
+  /* Should be handled as part of send_all_know_tiles,
+     but do it here too for safety */
+  whole_map_iterate(x, y) {
+    map_get_tile(x, y)->sent = 0;
+  } whole_map_iterate_end;
 }
 
 /***************************************************************
@@ -482,7 +484,7 @@ Load the worklist elements specified by path, given the arguments
 plrno and wlinx, into the worklist pointed to by pwl.
 ***************************************************************/
 static void worklist_load(struct section_file *file,
-			  const char *path, int plrno, int wlinx,
+			  char *path, int plrno, int wlinx,
 			  struct worklist *pwl)
 {
   char efpath[64];
@@ -524,7 +526,7 @@ plrno and wlinx, into the worklist pointed to by pwl.
 Assumes original save-file format.  Use for backward compatibility.
 ***************************************************************/
 static void worklist_load_old(struct section_file *file,
-			      const char *path, int plrno, int wlinx,
+			      char *path, int plrno, int wlinx,
 			      struct worklist *pwl)
 {
   int i, id;
@@ -574,33 +576,7 @@ static void player_load(struct player *plr, int plrno,
   sz_strlcpy(plr->name, secfile_lookup_str(file, "player%d.name", plrno));
   sz_strlcpy(plr->username,
 	     secfile_lookup_str_default(file, "", "player%d.username", plrno));
-
-  /* 1.15 and later versions store nations by name.  Try that first. */
-  p = secfile_lookup_str_default(file, NULL, "player%d.nation", plrno);
-  if (!p) {
-    /*
-     * Otherwise read as a pre-1.15 savefile with numeric nation indexes.
-     * This random-looking order is from the old nations/ruleset file.
-     * Use it to convert old-style nation indices to name strings.
-     * The idea is not to be dependent on the order in which nations 
-     * get read into the registry.
-     */
-    const char *name_order[] = {
-      "roman", "babylonian", "german", "egyptian", "american", "greek",
-      "indian", "russian", "zulu", "french", "aztec", "chinese", "english",
-      "mongol", "turk", "spanish", "persian", "arab", "carthaginian", "inca",
-      "viking", "polish", "hungarian", "danish", "dutch", "swedish",
-      "japanese", "portuguese", "finnish", "sioux", "czech", "australian",
-      "welsh", "korean", "scottish", "israeli", "argentine", "canadian",
-      "ukrainian", "lithuanian", "kenyan", "dunedain", "vietnamese", "thai",
-      "mordor", "bavarian", "brazilian", "irish", "cornish", "italian",
-      "filipino", "estonian", "latvian", "boer", "silesian", "singaporean",
-      "chilean", "catalan", "croatian", "slovenian", "serbian", "barbarian",
-    };
-    p = (char *)name_order[secfile_lookup_int(file, "player%d.race", plrno)];
-  }
-  plr->nation = find_nation_by_name_orig(p);
-  init_tech(plr, game.tech); /* add techs from game and nation here */
+  plr->nation=secfile_lookup_int(file, "player%d.race", plrno);
 
   /* not all players have teams */
   if (section_file_lookup(file, "player%d.team", plrno)) {
@@ -625,28 +601,14 @@ static void player_load(struct player *plr, int plrno,
   plr->is_alive=secfile_lookup_bool(file, "player%d.is_alive", plrno);
   plr->ai.control = secfile_lookup_bool(file, "player%d.ai.control", plrno);
   plr->ai.tech_goal = secfile_lookup_int(file, "player%d.ai.tech_goal", plrno);
-  if (plr->ai.tech_goal == A_NONE
-      || !tech_exists(plr->ai.tech_goal)) {
-    /* The value of A_UNSET could change in the future, since it
-     * is not ruleset-dependent.  And it used to be A_NONE, so we check for
-     * that as well.  This is a hack since there's no way to distinguish
-     * from A_FUTURE (which shouldn't ever be here anyway). */
-    plr->ai.tech_goal = A_UNSET;
-  }
-  /* Some sane defaults */
   plr->ai.handicap = 0;		/* set later */
   plr->ai.fuzzy = 0;		/* set later */
   plr->ai.expand = 100;		/* set later */
-  plr->ai.science_cost = 100;	/* set later */
   plr->ai.skill_level =
     secfile_lookup_int_default(file, game.skill_level,
 			       "player%d.ai.skill_level", plrno);
   if (plr->ai.control && plr->ai.skill_level==0) {
     plr->ai.skill_level = GAME_OLD_DEFAULT_SKILL_LEVEL;
-  }
-  if (plr->ai.control) {
-    /* Set AI parameters */
-    set_ai_level_directer(plr, plr->ai.skill_level);
   }
 
   plr->economic.gold=secfile_lookup_int(file, "player%d.gold", plrno);
@@ -675,14 +637,6 @@ static void player_load(struct player *plr, int plrno,
 					     "player%d.researchpoints", plrno);
   plr->research.researching=secfile_lookup_int(file, 
 					     "player%d.researching", plrno);
-  if (plr->research.researching == A_NONE
-      || !tech_exists(plr->research.researching)) {
-    /* The value of A_FUTURE could change in the future, since it
-     * is not ruleset-dependent.  And it used to be A_NONE, so we check for
-     * that as well.  This is a hack since there's no way to distinguish
-     * from A_UNSET (which shouldn't ever be here anyway). */
-    plr->research.researching = A_FUTURE;
-  }
 
   p=secfile_lookup_str(file, "player%d.invs", plrno);
     
@@ -690,17 +644,14 @@ static void player_load(struct player *plr, int plrno,
   plr->revolution=secfile_lookup_int_default(file, 0, "player%d.revolution",
                                              plrno);
 
-  tech_type_iterate(i) {
-    if (p[i] == '1') {
-      set_invention(plr, i, TECH_KNOWN);
-    }
-  } tech_type_iterate_end;
+  for(i=0; i<game.num_tech_types; i++)
+    set_invention(plr, i, (p[i]=='1') ? TECH_KNOWN : TECH_UNKNOWN);
 
   update_research(plr);
 
   plr->reputation=secfile_lookup_int_default(file, GAME_DEFAULT_REPUTATION,
 					     "player%d.reputation", plrno);
-  for (i=0; i < game.nplayers; i++) {
+  for(i=0; i<game.nplayers; i++) {
     plr->diplstates[i].type = 
       secfile_lookup_int_default(file, DS_WAR,
 				 "player%d.diplstate%d.type", plrno, i);
@@ -711,9 +662,6 @@ static void player_load(struct player *plr, int plrno,
       secfile_lookup_int_default(file, 0,
 				 "player%d.diplstate%d.has_reason_to_cancel",
 				 plrno, i);
-    plr->diplstates[i].contact_turns_left = 
-      secfile_lookup_int_default(file, 0,
-			   "player%d.diplstate%d.contact_turns_left", plrno, i);
   }
   /* We don't need this info, but savegames carry it anyway.
      To avoid getting "unused" warnings we touch the values like this. */
@@ -725,22 +673,8 @@ static void player_load(struct player *plr, int plrno,
     secfile_lookup_int_default(file, 0,
 			       "player%d.diplstate%d.has_reason_to_cancel",
 			       plrno, i);
-    secfile_lookup_int_default(file, 0,
-			   "player%d.diplstate%d.contact_turns_left", plrno, i);
   }
-  /* Sanity check alliances, prevent allied-with-ally-of-enemy */
-  players_iterate(aplayer) {
-    if (pplayers_allied(plr, aplayer)
-        && !pplayer_can_ally(plr, aplayer)) {
-      freelog(LOG_ERROR, _("Illegal alliance structure detected: "
-              "%s's alliance to %s reduced to peace treaty."),
-              plr->name, aplayer->name);
-      plr->diplstates[aplayer->player_no].type = DS_PEACE;
-      aplayer->diplstates[plr->player_no].type = DS_PEACE;
-      resolve_unit_stacks(plr, aplayer, FALSE);
-    }
-  } players_iterate_end;
-
+  
   { /* spacerace */
     struct player_spaceship *ship = &plr->spaceship;
     char prefix[32];
@@ -782,18 +716,29 @@ static void player_load(struct player *plr, int plrno,
   city_list_init(&plr->cities);
   ncities=secfile_lookup_int(file, "player%d.ncities", plrno);
   
-  for (i = 0; i < ncities; i++) { /* read the cities */
+  for(i=0; i<ncities; i++) { /* read the cities */
     struct city *pcity;
-
-    pcity = create_city_virtual(plr,
-                      secfile_lookup_int(file, "player%d.c%d.x", plrno, i),
-                      secfile_lookup_int(file, "player%d.c%d.y", plrno, i),
-                      secfile_lookup_str(file, "player%d.c%d.name", plrno, i));
-
+    
+    pcity=fc_malloc(sizeof(struct city));
+    pcity->ai.ai_role = AICITY_NONE;
+    pcity->ai.trade_want = TRADE_WEIGHTING;
+    memset(pcity->ai.building_want, 0, sizeof(pcity->ai.building_want));
+    pcity->ai.workremain = 1; /* there's always work to be done! */
+    pcity->ai.danger = -1; /* flag, may come in handy later */
+    pcity->corruption = 0;
+    pcity->shield_bonus = 100;
+    pcity->tax_bonus = 100;
+    pcity->science_bonus = 100;
+ 
     pcity->id=secfile_lookup_int(file, "player%d.c%d.id", plrno, i);
     alloc_id(pcity->id);
     idex_register_city(pcity);
+    pcity->owner=plrno;
+    pcity->x=secfile_lookup_int(file, "player%d.c%d.x", plrno, i);
+    pcity->y=secfile_lookup_int(file, "player%d.c%d.y", plrno, i);
     
+    sz_strlcpy(pcity->name,
+	       secfile_lookup_str(file, "player%d.c%d.name", plrno, i));
     if (section_file_lookup(file, "player%d.c%d.original", plrno, i))
       pcity->original = secfile_lookup_int(file, "player%d.c%d.original", 
 					   plrno,i);
@@ -830,6 +775,9 @@ static void player_load(struct player *plr, int plrno,
     pcity->turn_last_built=
       secfile_lookup_int_default(file, GAME_START_YEAR,
 				 "player%d.c%d.turn_last_built", plrno, i);
+    pcity->turn_changed_target=
+      secfile_lookup_int_default(file, GAME_START_YEAR,
+				 "player%d.c%d.turn_changed_target", plrno, i);
     pcity->changed_from_id=
       secfile_lookup_int_default(file, pcity->currently_building,
 				 "player%d.c%d.changed_from_id", plrno, i);
@@ -846,8 +794,6 @@ static void player_load(struct player *plr, int plrno,
       secfile_lookup_int_default(file, 0,
 				 "player%d.c%d.caravan_shields", plrno, i);
 
-    pcity->synced = FALSE; /* must re-sync with clients */
-
     pcity->turn_founded =
 	secfile_lookup_int_default(file, -2, "player%d.c%d.turn_founded",
 				   plrno, i);
@@ -861,8 +807,11 @@ static void player_load(struct player *plr, int plrno,
     pcity->did_sell =
       secfile_lookup_bool_default(file, FALSE, "player%d.c%d.did_sell", plrno,i);
     
-    pcity->airlift = secfile_lookup_bool_default(file, FALSE,
+    if (game.version >=10300) 
+      pcity->airlift=secfile_lookup_bool(file,
 					"player%d.c%d.airlift", plrno,i);
+    else
+      pcity->airlift = FALSE;
 
     pcity->city_options =
       secfile_lookup_int_default(file, CITYOPT_DEFAULT,
@@ -934,6 +883,9 @@ static void player_load(struct player *plr, int plrno,
     improvement_status_init(pcity->improvements,
 			    ARRAY_SIZE(pcity->improvements));
 
+    /* Initialise city's vector of improvement effects. */
+    ceff_vector_init(&pcity->effects);
+
     impr_type_iterate(x) {
       if (*p != '\0' && *p++=='1') {
         city_add_improvement(pcity,x);
@@ -948,11 +900,9 @@ static void player_load(struct player *plr, int plrno,
 			plrno, i, &pcity->worklist);
     }
 
-    /* FIXME: remove this when the urgency is properly recalculated. */
-    pcity->ai.urgency = secfile_lookup_int_default(file, 0, 
-				"player%d.c%d.ai.urgency", plrno, i);
-
     map_set_city(pcity->x, pcity->y, pcity);
+
+    pcity->incite_revolt_cost = -1; /* flag value */
 
     city_list_insert_back(&plr->cities, pcity);
   }
@@ -963,25 +913,28 @@ static void player_load(struct player *plr, int plrno,
   for(i=0; i<nunits; i++) { /* read the units */
     struct unit *punit;
     struct city *pcity;
-
-    punit = create_unit_virtual(plr, NULL, 
-                  secfile_lookup_int(file, "player%d.u%d.type", plrno, i),
-                  secfile_lookup_bool(file, "player%d.u%d.veteran", plrno, i));
+    
+    punit=fc_malloc(sizeof(struct unit));
     punit->id=secfile_lookup_int(file, "player%d.u%d.id", plrno, i);
     alloc_id(punit->id);
     idex_register_unit(punit);
+    punit->owner=plrno;
     punit->x=secfile_lookup_int(file, "player%d.u%d.x", plrno, i);
     punit->y=secfile_lookup_int(file, "player%d.u%d.y", plrno, i);
 
+    punit->veteran=secfile_lookup_bool(file, "player%d.u%d.veteran", plrno, i);
     punit->foul=secfile_lookup_bool_default(file, FALSE, "player%d.u%d.foul",
 					   plrno, i);
     punit->homecity=secfile_lookup_int(file, "player%d.u%d.homecity",
 				       plrno, i);
 
-    if ((pcity = find_city_by_id(punit->homecity))) {
+    if((pcity=find_city_by_id(punit->homecity)))
       unit_list_insert(&pcity->units_supported, punit);
-    }
+    else
+      punit->homecity=0;
     
+    punit->type=secfile_lookup_int(file, "player%d.u%d.type", plrno, i);
+
     punit->moves_left=secfile_lookup_int(file, "player%d.u%d.moves", plrno, i);
     punit->fuel= secfile_lookup_int(file, "player%d.u%d.fuel", plrno, i);
     set_unit_activity(punit, secfile_lookup_int(file, "player%d.u%d.activity",plrno, i));
@@ -997,19 +950,19 @@ static void player_load(struct player *plr, int plrno,
     punit->connecting=secfile_lookup_bool_default(file, FALSE,
 						"player%d.u%d.connecting",
 						plrno, i);
-    /* Load the goto information.  Older savegames will not have the
-     * "go" field, so we just load the goto destination by default. */
-    if (secfile_lookup_bool_default(file, TRUE,
-				    "player%d.u%d.go", plrno, i)) {
-      int x = secfile_lookup_int(file, "player%d.u%d.goto_x", plrno, i);
-      int y = secfile_lookup_int(file, "player%d.u%d.goto_y", plrno, i);
-      set_goto_dest(punit, x, y);
-    } else {
-      clear_goto_dest(punit);
-    }
 
+    punit->goto_dest_x=secfile_lookup_int(file, 
+					  "player%d.u%d.goto_x", plrno,i);
+    punit->goto_dest_y=secfile_lookup_int(file, 
+					  "player%d.u%d.goto_y", plrno,i);
     punit->ai.control=secfile_lookup_bool(file, "player%d.u%d.ai", plrno,i);
+    punit->ai.ai_role = AIUNIT_NONE;
+    punit->ai.ferryboat = 0;
+    punit->ai.passenger = 0;
+    punit->ai.bodyguard = 0;
+    punit->ai.charge = 0;
     punit->hp=secfile_lookup_int(file, "player%d.u%d.hp", plrno, i);
+    punit->bribe_cost=-1;	/* flag value */
     
     punit->ord_map=secfile_lookup_int_default(file, 0, "player%d.u%d.ord_map",
 					      plrno, i);
@@ -1028,6 +981,10 @@ static void player_load(struct player *plr, int plrno,
        otherwise these don't get initialized (and AI calculations
        etc may use junk values).
     */
+    punit->unhappiness = 0;
+    punit->upkeep      = 0;
+    punit->upkeep_food = 0;
+    punit->upkeep_gold = 0;
 
     /* load the goto route */
     {
@@ -1045,14 +1002,12 @@ static void player_load(struct player *plr, int plrno,
 	goto_buf = secfile_lookup_str(file, "player%d.u%d.goto_route_x", plrno, i);
 	goto_buf_ptr = goto_buf;
 	for (j = 0; j < len; j++) {
-	  if (sscanf(goto_buf_ptr, "%d", &pgr->pos[j].x) == 0) {
-	    die("not an int");
-	  }
+	  if (sscanf(goto_buf_ptr, "%d", &pgr->pos[j].x) == 0)
+	    abort();
 	  while (*goto_buf_ptr != ',') {
 	    goto_buf_ptr++;
-	    if (*goto_buf_ptr == '\0') {
-	      die("byebye");
-	    }
+	    if (*goto_buf_ptr == '\0')
+	      abort();
 	  }
 	  goto_buf_ptr++;
 	}
@@ -1060,14 +1015,12 @@ static void player_load(struct player *plr, int plrno,
 	goto_buf = secfile_lookup_str(file, "player%d.u%d.goto_route_y", plrno, i);
 	goto_buf_ptr = goto_buf;
 	for (j = 0; j < len; j++) {
-	  if (sscanf(goto_buf_ptr, "%d", &pgr->pos[j].y) == 0) {
-	    die("not an int");
-	  }
+	  if (sscanf(goto_buf_ptr, "%d", &pgr->pos[j].y) == 0)
+	    abort();
 	  while (*goto_buf_ptr != ',') {
 	    goto_buf_ptr++;
-	    if (*goto_buf_ptr == '\0') {
-	      die("byebye");
-	    }
+	    if (*goto_buf_ptr == '\0')
+	      abort();
 	  }
 	  goto_buf_ptr++;
 	}
@@ -1224,12 +1177,6 @@ static void player_map_load(struct player *plr, int plrno,
 	sz_strlcpy(pdcity->name, secfile_lookup_str(file, "player%d.dc%d.name", plrno, j));
 	pdcity->size = secfile_lookup_int(file, "player%d.dc%d.size", plrno, j);
 	pdcity->has_walls = secfile_lookup_bool(file, "player%d.dc%d.has_walls", plrno, j);    
-	pdcity->occupied = secfile_lookup_bool_default(file, FALSE,
-					"player%d.dc%d.occupied", plrno, j);
-	pdcity->happy = secfile_lookup_bool_default(file, FALSE,
-					"player%d.dc%d.happy", plrno, j);
-	pdcity->unhappy = secfile_lookup_bool_default(file, FALSE,
-					"player%d.dc%d.unhappy", plrno, j);
 	pdcity->owner = secfile_lookup_int(file, "player%d.dc%d.owner", plrno, j);
 	map_get_player_tile(x, y, plr)->city = pdcity;
 	alloc_id(pdcity->id);
@@ -1239,7 +1186,7 @@ static void player_map_load(struct player *plr, int plrno,
     /* This shouldn't be neccesary if the savegame was consistent, but there
        is a bug in some pre-1.11 savegames. Anyway, it can't hurt */
     whole_map_iterate(x, y) {
-      if (map_is_known_and_seen(x, y, plr)) {
+      if (map_get_known_and_seen(x, y, get_player(plrno))) {
 	update_tile_knowledge(plr, x, y);
 	reality_check_city(plr, x, y);
 	if (map_get_city(x, y)) {
@@ -1253,7 +1200,7 @@ static void player_map_load(struct player *plr, int plrno,
        players private knowledge is set to be what he could see
        without fog of war */
     whole_map_iterate(x, y) {
-      if (map_is_known(x, y, plr)) {
+      if (map_get_known(x, y, plr)) {
 	struct city *pcity = map_get_city(x, y);
 	update_player_tile_last_seen(plr, x, y);
 	update_tile_knowledge(plr, x, y);
@@ -1269,7 +1216,7 @@ Save the worklist elements specified by path, given the arguments
 plrno and wlinx, from the worklist pointed to by pwl.
 ***************************************************************/
 static void worklist_save(struct section_file *file,
-			  const char *path, int plrno, int wlinx,
+			  char *path, int plrno, int wlinx,
 			  struct worklist *pwl)
 {
   char efpath[64];
@@ -1284,16 +1231,6 @@ static void worklist_save(struct section_file *file,
   for (i = 0; i < MAX_LEN_WORKLIST; i++) {
     secfile_insert_int(file, pwl->wlefs[i], efpath, plrno, wlinx, i);
     secfile_insert_int(file, pwl->wlids[i], idpath, plrno, wlinx, i);
-    if (pwl->wlefs[i] == WEF_END) {
-      break;
-    }
-  }
-
-  /* Fill out remaining worklist entries. */
-  for (i++; i < MAX_LEN_WORKLIST; i++) {
-    /* These values match what worklist_load fills in for unused entries. */
-    secfile_insert_int(file, WEF_END, efpath, plrno, wlinx, i);
-    secfile_insert_int(file, 0, idpath, plrno, wlinx, i);
   }
 }
 
@@ -1309,9 +1246,6 @@ static void player_save(struct player *plr, int plrno,
 
   secfile_insert_str(file, plr->name, "player%d.name", plrno);
   secfile_insert_str(file, plr->username, "player%d.username", plrno);
-  secfile_insert_str(file, get_nation_name_orig(plr->nation),
-		     "player%d.nation", plrno);
-  /* 1.15 and later won't use the race field, they key on the nation string */
   secfile_insert_int(file, plr->nation, "player%d.race", plrno);
   if (plr->team != TEAM_NONE) {
     secfile_insert_str(file, (char *) team_get_by_id(plr->team)->name, 
@@ -1351,10 +1285,9 @@ static void player_save(struct player *plr, int plrno,
   secfile_insert_bool(file, plr->capital, "player%d.capital", plrno);
   secfile_insert_int(file, plr->revolution, "player%d.revolution", plrno);
 
-  tech_type_iterate(tech_id) {
-    invs[tech_id] = (get_invention(plr, tech_id) == TECH_KNOWN) ? '1' : '0';
-  } tech_type_iterate_end;
-  invs[game.num_tech_types] = '\0';
+  for(i=0; i<game.num_tech_types; i++)
+    invs[i]=(get_invention(plr, i)==TECH_KNOWN) ? '1' : '0';
+  invs[i]='\0';
   secfile_insert_str(file, invs, "player%d.invs", plrno);
 
   secfile_insert_int(file, plr->reputation, "player%d.reputation", plrno);
@@ -1365,8 +1298,6 @@ static void player_save(struct player *plr, int plrno,
 		       "player%d.diplstate%d.turns_left", plrno, i);
     secfile_insert_int(file, plr->diplstates[i].has_reason_to_cancel,
 		       "player%d.diplstate%d.has_reason_to_cancel", plrno, i);
-    secfile_insert_int(file, plr->diplstates[i].contact_turns_left,
-		       "player%d.diplstate%d.contact_turns_left", plrno, i);
   }
 
   {
@@ -1442,19 +1373,8 @@ static void player_save(struct player *plr, int plrno,
     secfile_insert_int(file, punit->fuel, "player%d.u%d.fuel",
 		                plrno, i);
 
-    if (is_goto_dest_set(punit)) {
-      secfile_insert_bool(file, TRUE, "player%d.u%d.go", plrno, i);
-      secfile_insert_int(file, goto_dest_x(punit),
-			 "player%d.u%d.goto_x", plrno, i);
-      secfile_insert_int(file, goto_dest_y(punit), "player%d.u%d.goto_y",
-			 plrno, i);
-    } else {
-      secfile_insert_bool(file, FALSE, "player%d.u%d.go", plrno, i);
-      /* for compatility with older servers */
-      secfile_insert_int(file, 0, "player%d.u%d.goto_x", plrno, i);
-      secfile_insert_int(file, 0, "player%d.u%d.goto_y", plrno, i);
-    }
-
+    secfile_insert_int(file, punit->goto_dest_x, "player%d.u%d.goto_x", plrno, i);
+    secfile_insert_int(file, punit->goto_dest_y, "player%d.u%d.goto_y", plrno, i);
     secfile_insert_bool(file, punit->ai.control, "player%d.u%d.ai", plrno, i);
     secfile_insert_int(file, punit->ord_map, "player%d.u%d.ord_map", plrno, i);
     secfile_insert_int(file, punit->ord_city, "player%d.u%d.ord_city", plrno, i);
@@ -1531,6 +1451,8 @@ static void player_save(struct player *plr, int plrno,
 		       plrno, i);
     secfile_insert_int(file, pcity->turn_last_built,
 		       "player%d.c%d.turn_last_built", plrno, i);
+    secfile_insert_int(file, pcity->turn_changed_target,
+		       "player%d.c%d.turn_changed_target", plrno, i);
     secfile_insert_int(file, pcity->changed_from_id,
 		       "player%d.c%d.changed_from_id", plrno, i);
     secfile_insert_bool(file, pcity->changed_from_is_unit,
@@ -1586,10 +1508,6 @@ static void player_save(struct player *plr, int plrno,
     secfile_insert_str(file, buf, "player%d.c%d.improvements", plrno, i);
 
     worklist_save(file, "player%d.c%d", plrno, i, &pcity->worklist);
-
-    /* FIXME: remove this when the urgency is properly recalculated. */
-    secfile_insert_int(file, pcity->ai.urgency,
-		       "player%d.c%d.ai.urgency", plrno, i);
   }
   city_list_iterate_end;
 
@@ -1652,12 +1570,6 @@ static void player_save(struct player *plr, int plrno,
 			     plrno, i);
 	  secfile_insert_bool(file, pdcity->has_walls,
 			     "player%d.dc%d.has_walls", plrno, i);
-	  secfile_insert_bool(file, pdcity->occupied,
-			      "player%d.dc%d.occupied", plrno, i);
-	  secfile_insert_bool(file, pdcity->happy,
-			      "player%d.dc%d.happy", plrno, i);
-	  secfile_insert_bool(file, pdcity->unhappy,
-			      "player%d.dc%d.unhappy", plrno, i);
 	  secfile_insert_int(file, pdcity->owner, "player%d.dc%d.owner",
 			     plrno, i);
 	  i++;
@@ -1805,7 +1717,7 @@ void game_load(struct section_file *file)
   int i;
   enum server_states tmp_server_state;
   char *savefile_options;
-  const char *string;
+  char *string;
 
   game.version = secfile_lookup_int_default(file, 0, "game.version");
   tmp_server_state = (enum server_states)
@@ -1902,13 +1814,6 @@ void game_load(struct section_file *file)
     game.rapturedelay  = secfile_lookup_int_default(file,
       GAME_DEFAULT_RAPTUREDELAY, "game.rapturedelay");
 
-    /* National borders setting. */
-    game.borders = secfile_lookup_int_default(file, 0, "game.borders");
-
-    /* Diplomacy. */
-    game.diplomacy = secfile_lookup_int_default(file, GAME_DEFAULT_DIPLOMACY, 
-                                                "game.diplomacy");
-
     if (has_capability("watchtower", savefile_options)) {
       game.watchtower_extra_vision =
 	  secfile_lookup_int(file, "game.watchtower_extra_vision");
@@ -1926,7 +1831,6 @@ void game_load(struct section_file *file)
     game.aifill = secfile_lookup_int_default(file, 0, "game.aifill");
 
     game.scorelog = secfile_lookup_bool_default(file, FALSE, "game.scorelog");
-    sz_strlcpy(game.id, secfile_lookup_str_default(file, "", "game.id"));
 
     game.fogofwar = secfile_lookup_bool_default(file, FALSE, "game.fogofwar");
     game.fogofwar_old = game.fogofwar;
@@ -1934,9 +1838,6 @@ void game_load(struct section_file *file)
     game.civilwarsize =
       secfile_lookup_int_default(file, GAME_DEFAULT_CIVILWARSIZE,
 				 "game.civilwarsize");
-    game.contactturns =
-      secfile_lookup_int_default(file, GAME_DEFAULT_CONTACTTURNS,
-				 "game.contactturns");
   
     if(has_capability("diplchance_percent", savefile_options)) {
       game.diplchance = secfile_lookup_int_default(file, game.diplchance,
@@ -2145,20 +2046,11 @@ void game_load(struct section_file *file)
     } impr_type_iterate_end;
   out:
 
-    /* This is done after continents are assigned, but before effects 
-     * are added. */
-    allot_island_improvs();
-
     for(i=0; i<game.nplayers; i++) {
       player_load(&game.players[i], i, file); 
     }
 
-    cities_iterate(pcity) {
-      /* Update all city information.  This must come after all cities are
-       * loaded (in player_load) but before player (dumb) cities are loaded
-       * (in player_map_load). */
-      generic_city_refresh(pcity, FALSE, NULL);
-    } cities_iterate_end;
+    update_island_impr_effect(-1, map.num_continents);
 
     /* Since the cities must be placed on the map to put them on the
        player map we do this afterwards */
@@ -2187,9 +2079,6 @@ void game_load(struct section_file *file)
     initialize_globals();
     apply_unit_ordering();
 
-    /* Rebuild national borders. */
-    map_calculate_borders();
-
     /* Make sure everything is consistent. */
     players_iterate(pplayer) {
       unit_list_iterate(pplayer->units, punit) {
@@ -2209,7 +2098,7 @@ void game_load(struct section_file *file)
 
   if (!game.is_new_game) {
     /* Set active city improvements/wonders and their effects */
-    improvements_update_obsolete();
+    update_all_effects();
   }
 
   game.player_idx=0;
@@ -2282,7 +2171,6 @@ void game_save(struct section_file *file)
   secfile_insert_int(file, game.cityfactor, "game.cityfactor");
   secfile_insert_int(file, game.citymindist, "game.citymindist");
   secfile_insert_int(file, game.civilwarsize, "game.civilwarsize");
-  secfile_insert_int(file, game.contactturns, "game.contactturns");
   secfile_insert_int(file, game.rapturedelay, "game.rapturedelay");
   secfile_insert_int(file, game.diplcost, "game.diplcost");
   secfile_insert_int(file, game.freecost, "game.freecost");
@@ -2295,7 +2183,6 @@ void game_save(struct section_file *file)
   secfile_insert_str(file, game.save_name, "game.save_name");
   secfile_insert_int(file, game.aifill, "game.aifill");
   secfile_insert_bool(file, game.scorelog, "game.scorelog");
-  secfile_insert_str(file, game.id, "game.id");
   secfile_insert_bool(file, game.fogofwar, "game.fogofwar");
   secfile_insert_bool(file, game.spacerace, "game.spacerace");
   secfile_insert_bool(file, game.auto_ai_toggle, "game.auto_ai_toggle");
@@ -2309,8 +2196,6 @@ void game_save(struct section_file *file)
   secfile_insert_int(file, game.onsetbarbarian, "game.onsetbarbs");
   secfile_insert_int(file, game.occupychance, "game.occupychance");
   secfile_insert_str(file, game.demography, "game.demography");
-  secfile_insert_int(file, game.borders, "game.borders");
-  secfile_insert_int(file, game.diplomacy, "game.diplomacy");
   secfile_insert_int(file, game.watchtower_vision, "game.watchtower_vision");
   secfile_insert_int(file, game.watchtower_extra_vision, "game.watchtower_extra_vision");
   secfile_insert_int(file, game.allowed_city_names, "game.allowed_city_names");

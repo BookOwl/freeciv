@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -19,8 +18,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <gdk/gdkkeysyms.h>
 #include <gtk/gtk.h>
+#include <gdk/gdkkeysyms.h>
 
 #include "events.h"
 #include "fcintl.h"
@@ -31,17 +30,16 @@
 #include "shared.h"
 #include "support.h"
 
-#include "clinet.h"
-#include "options.h"
-
 #include "chatline.h"
 #include "cityrep.h"
 #include "dialogs.h"
+#include "clinet.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
+#include "options.h"
 
-#include "optiondlg.h"
 #include "ratesdlg.h"
+#include "optiondlg.h"
 
 /******************************************************************/
 static GtkWidget *rates_dialog_shell;
@@ -378,36 +376,22 @@ static void option_ok_command_callback(GtkWidget *widget, gpointer data)
 {
   client_option *o;
   char *dp;
-  bool b;
-  int i;
 
-  for (o = options; o->name; o++) {
+  for (o=options; o->name; ++o) {
     switch (o->type) {
     case COT_BOOL:
-      b = *(o->p_bool_value);
       *(o->p_bool_value) = GTK_TOGGLE_BUTTON(o->p_gui_data)->active;
-      if (b != *(o->p_bool_value) && o->change_callback) {
-	(o->change_callback)(o);
-      }
       break;
     case COT_INT:
-      i = *(o->p_int_value);
       dp = gtk_entry_get_text(GTK_ENTRY(o->p_gui_data));
       sscanf(dp, "%d", o->p_int_value);
-      if (i != *(o->p_int_value) && o->change_callback) {
-	(o->change_callback)(o);
-      }
       break;
     case COT_STR:
       if (o->p_string_vals) {
-	char* new_value = gtk_entry_get_text(GTK_ENTRY
-					    (GTK_COMBO(o->p_gui_data)->entry));
-	if (strcmp(o->p_string_value, new_value)) {
-	  mystrlcpy(o->p_string_value, new_value, o->string_length);
-	  if (o->change_callback) {
-	    (o->change_callback)(o);
-	  }
-	}
+	mystrlcpy(o->p_string_value,
+		  gtk_entry_get_text(GTK_ENTRY
+				     (GTK_COMBO(o->p_gui_data)->entry)),
+		  o->string_length);
       } else {
 	mystrlcpy(o->p_string_value,
 		  gtk_entry_get_text(GTK_ENTRY(o->p_gui_data)),
@@ -450,15 +434,14 @@ static void create_option_dialog(void)
 
   gtk_window_set_title(GTK_WINDOW(option_dialog_shell), _("Set local options"));
 
-  for (o = options, i = 0; o->name; o++, i++) {
-    /* nothing */
-  }
+  for (o=options, i=0; o->name; ++o, i++)
+    ;
 
   table=gtk_table_new(i, 2, FALSE);
   gtk_container_add(GTK_CONTAINER(GTK_DIALOG(option_dialog_shell)->vbox),
   	table);
 
-  for (o = options, i = 0; o->name; o++, i++) {
+  for (o=options, i=0; o->name; ++o, i++) {
     switch (o->type) {
     case COT_BOOL:
       label = gtk_label_new(_(o->description));
@@ -514,7 +497,7 @@ void popup_option_dialog(void)
 
   create_option_dialog();
 
-  for (o = options; o->name; o++) {
+  for (o=options; o->name; ++o) {
     switch (o->type) {
     case COT_BOOL:
       gtk_toggle_button_set_state(GTK_TOGGLE_BUTTON(o->p_gui_data),

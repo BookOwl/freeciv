@@ -17,16 +17,8 @@
 #include "terrain.h"		/* T_COUNT */
 
 #define MAX_NUM_TECH_GOALS 10
-
-/* Changing this value will break network compatibility. */
-#define NO_NATION_SELECTED (Nation_Type_id)(-1)
-
-/* 
- * Purpose of this constant is to catch invalid ruleset and network
- * data and to allow static allocation of the nation_info packet.
- */
-#define MAX_NUM_LEADERS MAX_NUM_ITEMS
-
+#define MAX_NUM_NATIONS  63
+#define MAX_NUM_LEADERS  16
 #define MAX_NUM_TEAMS MAX_NUM_PLAYERS
 #define TEAM_NONE 255
 
@@ -60,23 +52,17 @@ struct city_name {
   ternary terrain[T_COUNT];	
 };
 
-struct leader {
-  char *name;
-  bool is_male;
-};
-
 struct nation_type {
   char name[MAX_LEN_NAME];
   char name_plural[MAX_LEN_NAME];
   char flag_graphic_str[MAX_LEN_NAME];
   char flag_graphic_alt[MAX_LEN_NAME];
   int  leader_count;
-  struct leader *leaders;
+  char *leader_name[MAX_NUM_LEADERS];
+  bool  leader_is_male[MAX_NUM_LEADERS];
   int city_style;
   struct city_name *city_names;		/* The default city names. */
   struct Sprite *flag_sprite;
-  char *class;				/* may be empty */
-  char *legend;				/* may be empty */
 
   /* untranslated copies: */
   char name_orig[MAX_LEN_NAME];
@@ -112,17 +98,16 @@ struct team {
 };
 
 Nation_Type_id find_nation_by_name(const char *name);
-Nation_Type_id find_nation_by_name_orig(const char *name);
 const char *get_nation_name(Nation_Type_id nation);
 const char *get_nation_name_plural(Nation_Type_id nation);
-const char *get_nation_name_orig(Nation_Type_id nation);
-struct leader *get_nation_leaders(Nation_Type_id nation, int *dim);
+char **get_nation_leader_names(Nation_Type_id nation, int *dim);
 bool get_nation_leader_sex(Nation_Type_id nation, const char *name);
 struct nation_type *get_nation_by_plr(struct player *plr);
 struct nation_type *get_nation_by_idx(Nation_Type_id nation);
 bool check_nation_leader_name(Nation_Type_id nation, const char *name);
 void nations_alloc(int num);
 void nations_free(void);
+void nation_free(Nation_Type_id nation);
 void nation_city_names_free(struct city_name *city_names);
 int get_nation_city_style(Nation_Type_id nation);
 

@@ -11,10 +11,6 @@
    GNU General Public License for more details.
 ***********************************************************************/
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <stdio.h>
 #include <string.h>
 
@@ -37,9 +33,43 @@
 #include "aitech.h"
 
 /**************************************************************************
+.. AI got some tech goals, and should try to fulfill them. 
+**************************************************************************/
+
+/**************************************************************************
+.. calculate next government wish.
+**************************************************************************/
+static Tech_Type_id get_government_tech(struct player *plr)
+{
+  int goal = get_nation_by_plr(plr)->goals.government;
+  int subgoal = get_government(goal)->subgoal;
+  
+  if (can_change_to_government(plr, goal)) {
+    freelog(LOG_DEBUG, "get_gov_tech (%s): have %d", plr->name, goal);
+    return A_NONE;
+  }
+
+  if (subgoal >= 0) {
+    struct government *subgov = get_government(subgoal);
+    if (get_invention(plr, subgov->required_tech) == TECH_KNOWN) {
+      freelog(LOG_DEBUG, "get_gov_tech (%s): have sub %d %s",
+	      plr->name, goal, subgov->name);
+      return get_government(goal)->required_tech;
+    } else {
+      freelog(LOG_DEBUG, "get_gov_tech (%s): do sub %d %s",
+	      plr->name, goal, subgov->name);
+      return subgov->required_tech;
+    }
+  } else {
+    freelog(LOG_DEBUG, "get_gov_tech (%s): no sub %d", plr->name, goal);
+    return get_government(goal)->required_tech;
+  }
+}
+
+/**************************************************************************
   Returns tech corresponding to players wonder goal from nations[],
   if it makes sense, and wonder is not already built and not obsolete.
-  Otherwise returns A_UNSET.
+  Otherwise returns A_NONE.
 **************************************************************************/
 static Tech_Type_id get_wonder_tech(struct player *plr)
 {
@@ -50,12 +80,10 @@ static Tech_Type_id get_wonder_tech(struct player *plr)
       && !wonder_obsolete(building)) {
     Tech_Type_id tech = improvement_types[building].tech_req;
 
-    if (tech_is_available(plr, tech) 
-        && get_invention(plr, tech) != TECH_KNOWN) {
+    if (tech_exists(tech) && get_invention(plr, tech) != TECH_KNOWN)
       return tech;
-    }
   }
-  return A_UNSET;
+  return A_NONE;
 }
 
 /**************************************************************************
@@ -67,15 +95,13 @@ static void ai_next_tech_goal_default(struct player *pplayer,
   struct nation_type *prace = get_nation_by_plr(pplayer);
   int bestdist = A_LAST + 1;
   int dist, i;
-  Tech_Type_id goal = A_UNSET;
+  Tech_Type_id goal = A_NONE;
   Tech_Type_id tech;
 
   for (i = 0 ; i < MAX_NUM_TECH_GOALS; i++) {
     Tech_Type_id j = prace->goals.tech[i];
-    if (!tech_is_available(pplayer, j) 
-        || get_invention(pplayer, j) == TECH_KNOWN) {
+    if (!tech_exists(j) || get_invention(pplayer, j) == TECH_KNOWN) 
       continue;
-    }
     dist = num_unknown_techs_for_goal(pplayer, j);
     if (dist < bestdist) { 
       bestdist = dist;
@@ -83,15 +109,23 @@ static void ai_next_tech_goal_default(struct player *pplayer,
       break; /* remove this to restore old functionality -- Syela */
     }
   } 
+  tech = get_government_tech(pplayer);
+  if (tech != A_NONE && tech_exists(tech)) {
+    dist = num_unknown_techs_for_goal(pplayer, tech);
+    if (dist < bestdist) { 
+      bestdist = dist;
+      goal = tech;
+    }
+  }
   tech = get_wonder_tech(pplayer);
-  if (tech != A_UNSET) {
+  if (tech != A_NONE) {
     dist = num_unknown_techs_for_goal(pplayer, tech);
     if (dist < bestdist) { 
 /*    bestdist = dist; */ /* useless, reinclude when adding a new if statement */
       goal = tech;
     }
   }
-  if (goal != A_UNSET) {
+  if (goal != A_NONE) {
     choice->choice = goal;
     choice->want = 1;
   }
@@ -114,7 +148,7 @@ static void adjust_tech_choice(struct player *pplayer, struct ai_choice *cur,
 static void ai_select_tech(struct player *pplayer, struct ai_choice *choice,
 			   struct ai_choice *gol)
 {
-  Tech_Type_id k, l;
+  Tech_Type_id i, k, l;
   int j;
   int num_cities_nonzero;
   int values[A_LAST];
@@ -124,25 +158,25 @@ static void ai_select_tech(struct player *pplayer, struct ai_choice *choice,
     num_cities_nonzero = 1;
   memset(values, 0, sizeof(values));
   memset(goal_values, 0, sizeof(goal_values));
-  tech_type_iterate(i) {
+  for (i = A_FIRST; i < game.num_tech_types; i++) {
     j = num_unknown_techs_for_goal(pplayer, i);
     if (j > 0) { /* if we already got it we don't want it */
       values[i] += pplayer->ai.tech_want[i];
-      tech_type_iterate(k) {
+      for (k = A_FIRST; k < game.num_tech_types; k++) {
 	if (is_tech_a_req_for_goal(pplayer, k, i)) {
 	  values[k] += pplayer->ai.tech_want[i] / j;
 	}
-      } tech_type_iterate_end;
+      }
     }
-  } tech_type_iterate_end;
+  }
 
-  tech_type_iterate(i) {
+  for (i = A_FIRST; i < game.num_tech_types; i++) {
     if (num_unknown_techs_for_goal(pplayer, i) > 0) {
-      tech_type_iterate(k) {
+      for (k = A_FIRST; k < game.num_tech_types; k++) {
 	if (is_tech_a_req_for_goal(pplayer, k, i)) {
           goal_values[i] += values[k];
         }
-      } tech_type_iterate_end;
+      }
       goal_values[i] += values[i];
       
 /* this is the best I could do.  It still sometimes does freaky stuff like
@@ -156,21 +190,13 @@ to be doing; it just looks strange. -- Syela */
 		values[i], goal_values[i]);
       }
     } else goal_values[i] = 0;
-  } tech_type_iterate_end;
+  }
 
-  l = A_UNSET; /* currently researched tech */
-  k = A_UNSET; /* current tech goal */
-  tech_type_iterate(i) {
-    if (values[i] > values[l]
-        && tech_is_available(pplayer, i)
-        && get_invention(pplayer, i) == TECH_REACHABLE) {
-      l = i;
-    }
-    if (goal_values[i] > goal_values[k]
-        && tech_is_available(pplayer, i)) {
-      k = i;
-    }
-  } tech_type_iterate_end;
+  l = A_NONE; k = A_NONE;
+  for (i = A_FIRST; i < game.num_tech_types; i++) {
+    if (values[i] > values[l] && get_invention(pplayer, i) == TECH_REACHABLE) l = i;
+    if (goal_values[i] > goal_values[k]) k = i;
+  }
   freelog(LOG_DEBUG, "%s wants %s with desire %d (%d).", pplayer->name,
 		advances[l].name, values[l], pplayer->ai.tech_want[l]);
   if (choice) {
@@ -207,8 +233,9 @@ static void ai_select_tech_goal(struct player *pplayer, struct ai_choice *choice
 void ai_next_tech_goal(struct player *pplayer)
 {
   struct ai_choice bestchoice, curchoice;
-
-  init_choice(&bestchoice);
+  
+  bestchoice.choice = A_NONE;      
+  bestchoice.want   = 0;
 
   ai_select_tech_goal(pplayer, &curchoice);
   copy_if_better_choice(&curchoice, &bestchoice); /* not dealing with the rest */

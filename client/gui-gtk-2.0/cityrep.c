@@ -34,7 +34,6 @@
 #include "chatline.h"
 #include "citydlg.h"
 #include "cityrepdata.h"
-#include "civclient.h"
 #include "clinet.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
@@ -141,16 +140,6 @@ void popup_city_report_dialog(bool make_modal)
   }
 
   gtk_window_present(GTK_WINDOW(city_dialog_shell));
-}
-
-/****************************************************************
- Closes the city report dialog.
-****************************************************************/
-void popdown_city_report_dialog(void)
-{
-  if (city_dialog_shell) {
-    gtk_widget_destroy(city_dialog_shell);
-  }
 }
 
 
@@ -287,12 +276,11 @@ static void impr_or_unit_iterate(GtkTreeModel *model, GtkTreePath *path,
   struct packet_city_request packet;
   gint id;
 
-  /* FIXME: don't use network packet structures here. */
   packet = *(struct packet_city_request *)data;
   gtk_tree_model_get(model, it, 1, &id, -1);
 
-  city_change_production(find_city_by_id(id),
-			 packet.is_build_id_unit_id, packet.build_id);
+  packet.city_id = id;
+  send_packet_city_request(&aconnection, &packet, PACKET_CITY_CHANGE);
 }
 
 /****************************************************************
@@ -369,7 +357,7 @@ static void select_cma_callback(GtkWidget * w, gpointer data)
   GObject *parent = G_OBJECT(w->parent);
   bool change_cma =
       GPOINTER_TO_INT(g_object_get_data(parent, "freeciv_change_cma"));
-  struct cm_parameter parameter;
+  struct cma_parameter parameter;
 
   /* If this is not the change button but the select cities button. */
   if (!change_cma) {
@@ -394,8 +382,8 @@ static void select_cma_callback(GtkWidget * w, gpointer data)
       } else if (idx == CMA_NONE && !controlled) {
         select = TRUE;
       } else if (idx >= 0 && controlled &&
-        	 cm_are_parameter_equal(&parameter,
-        				cmafec_preset_get_parameter(idx))) {
+        	 cma_are_parameter_equal(&parameter,
+        				 cmafec_preset_get_parameter(idx))) {
         select = TRUE;
       }
 
@@ -421,12 +409,13 @@ static void append_cma_to_menu_item(GtkMenuItem *parent_item, bool change_cma)
 {
   GtkWidget *menu;
   int i;
-  struct cm_parameter parameter;
+  struct cma_parameter parameter;
   GtkWidget *w;
 
   gtk_menu_item_remove_submenu(parent_item);
   menu = gtk_menu_new();
   gtk_menu_item_set_submenu(parent_item, menu);
+  gtk_widget_set_name(menu, "Freeciv");
 
   if (change_cma) {
     for (i = -1; i < cmafec_preset_num(); i++) {
@@ -482,8 +471,8 @@ static void append_cma_to_menu_item(GtkMenuItem *parent_item, bool change_cma)
       found = 0;
       city_list_iterate(game.player_ptr->cities, pcity) {
 	if (cma_is_city_under_agent(pcity, &parameter) &&
-	    cm_are_parameter_equal(&parameter,
-				   cmafec_preset_get_parameter(i))) {
+	    cma_are_parameter_equal(&parameter,
+				    cmafec_preset_get_parameter(i))) {
 	  found = 1;
 	  break;
 	}
@@ -803,7 +792,7 @@ static void city_select_coastal_callback(GtkMenuItem *item, gpointer data)
     itree_get(&it, 0, &res, -1);
     pcity = res;
 
-    if (is_ocean_near_tile(pcity->x, pcity->y)) {
+    if (is_terrain_near_tile(pcity->x, pcity->y, T_OCEAN)) {
       itree_select(city_selection, &it);
     }
   }
@@ -911,11 +900,32 @@ static void city_refresh_callback(GtkWidget *w, gpointer data)
 static void buy_iterate(GtkTreeModel *model, GtkTreePath *path,
 			GtkTreeIter *it, gpointer data)
 {
+  struct city *pcity;
+  int value;
+  const char *name;
+  char buf[512];
   gpointer res;
 
   gtk_tree_model_get(model, it, 0, &res, -1);
+  pcity = res;
 
-  cityrep_buy(res);
+  value = city_buy_cost(pcity);	 
+  if (pcity->is_building_unit)
+    name = get_unit_type(pcity->currently_building)->name;
+  else
+    name = get_impr_name_ex(pcity, pcity->currently_building);
+
+  if (game.player_ptr->economic.gold >= value) {
+      struct packet_city_request packet;
+
+      packet.city_id = pcity->id;
+      send_packet_city_request(&aconnection, &packet, PACKET_CITY_BUY);
+  } else {
+    my_snprintf(buf, sizeof(buf),
+        	_("Game: %s costs %d gold and you only have %d gold."),
+        	name,value, game.player_ptr->economic.gold);
+    append_output_window(buf);
+  }
 }
 
 /****************************************************************
@@ -1397,9 +1407,9 @@ static void city_selection_changed_callback(GtkTreeSelection *selection)
     gtk_widget_set_sensitive(city_popup_command, FALSE);
     gtk_widget_set_sensitive(city_buy_command, FALSE);
   } else {
-    gtk_widget_set_sensitive(city_change_command, can_client_issue_orders());
+    gtk_widget_set_sensitive(city_change_command, TRUE);
     gtk_widget_set_sensitive(city_center_command, TRUE);
     gtk_widget_set_sensitive(city_popup_command, TRUE);
-    gtk_widget_set_sensitive(city_buy_command, can_client_issue_orders());
+    gtk_widget_set_sensitive(city_buy_command, TRUE);
   }
 }

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -42,13 +41,15 @@
 **************************************************************************/
 void chatline_key_send(Widget w)
 {
+  struct packet_generic_message apacket;
   String theinput;
   String empty="";
 
   XtVaGetValues(w, XtNstring, &theinput, NULL);
   
   if(*theinput) {
-    send_chat(theinput);
+    mystrlcpy(apacket.message, theinput, MAX_LEN_MSG-MAX_LEN_USERNAME+1);
+    send_packet_generic_message(&aconnection, PACKET_CHAT_MSG, &apacket);
   }
 
   XtVaSetValues(w, XtNstring, empty, NULL);

@@ -11,178 +11,44 @@
    GNU General Public License for more details.
 ***********************************************************************/
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <stdio.h>
 #include <stdlib.h>
 
 #include "city.h"
-#include "combat.h"
 #include "game.h"
 #include "government.h"
 #include "log.h"
 #include "map.h"
-#include "mem.h"
 #include "packets.h"
 #include "player.h"
 #include "shared.h"
 #include "unit.h"
 
-#include "airgoto.h"
-#include "barbarian.h"
+#include "unithand.h"
 #include "citytools.h"
 #include "cityturn.h"
-#include "gotohand.h"
 #include "maphand.h"
 #include "plrhand.h"
-#include "settlers.h"
-#include "unithand.h"
 #include "unittools.h"
 
 #include "aicity.h"
-#include "aidata.h"
 #include "ailog.h"
 #include "aiunit.h"
 
 #include "aitools.h"
 
 /**************************************************************************
-  Amortize a want modified by the shields (build_cost) we risk losing.
-  We add the build time of the unit(s) we risk to amortize delay.  The
-  build time is claculated as the build cost divided by the production
-  output of the unit's homecity or the city where we want to produce
-  the unit. If the city has less than average shield output, we
-  instead use the average, to encourage long-term thinking.
+  Ensure unit sanity
 **************************************************************************/
-int military_amortize(struct player *pplayer, struct city *pcity,
-                      int value, int delay, int build_cost)
-{
-  struct ai_data *ai = ai_data_get(pplayer);
-  int city_output = (pcity ? pcity->shield_surplus : 1);
-  int output = MAX(city_output, ai->stats.average_production);
-  int build_time = build_cost / MAX(output, 1);
-
-  if (value <= 0) {
-    return 0;
-  }
-
-  return amortize(value, delay + build_time);
-}
-
-/**********************************************************************
-  There are some signs that a player might be dangerous: We are at 
-  war with him, he has lousy reputation, he has done lots of ignoble 
-  things to us, he is an ally of one of our enemies (a ticking bomb
-  to be sure), or he is our war target.
-***********************************************************************/
-bool is_player_dangerous(struct player *pplayer, struct player *aplayer)
-{
-  struct ai_data *ai = ai_data_get(pplayer);
-  struct ai_dip_intel *adip 
-    = &ai->diplomacy.player_intel[aplayer->player_no];
-
-  return (pplayers_at_war(pplayer, aplayer)
-          || ai->diplomacy.target == aplayer
-          || pplayer->diplstates[aplayer->player_no].has_reason_to_cancel
-          || ai->diplomacy.acceptable_reputation > aplayer->reputation
-          || adip->is_allied_with_enemy);
-}
-
-/**************************************************************************
-  This will eventually become the ferry-enabled goto. For now, it just
-  wraps ai_unit_goto()
-**************************************************************************/
-bool ai_unit_gothere(struct unit *punit)
-{
-  CHECK_UNIT(punit);
-  if (ai_unit_goto(punit, goto_dest_x(punit), goto_dest_y(punit))) {
-    return TRUE; /* ... and survived */
-  } else {
-    return FALSE; /* we died */
-  }
-}
-
-/**************************************************************************
-  Go to specified destination but do not disturb existing role or activity
-  and do not clear the role's destination. Return FALSE iff we died.
-
-  FIXME: add some logging functionality to replace GOTO_LOG()
-**************************************************************************/
-bool ai_unit_goto(struct unit *punit, int x, int y)
-{
-  enum goto_result result;
-  int oldx = -1, oldy = -1;
-  enum unit_activity activity = punit->activity;
-  bool is_set = is_goto_dest_set(punit);
-
-  if (is_set) {
-    oldx = goto_dest_x(punit);
-    oldy = goto_dest_y(punit);
-  }
-
-  CHECK_UNIT(punit);
-  /* TODO: log error on same_pos with punit->x|y */
-  set_goto_dest(punit, x, y);
-  handle_unit_activity_request(punit, ACTIVITY_GOTO);
-  result = do_unit_goto(punit, GOTO_MOVE_ANY, FALSE);
-  if (result != GR_DIED) {
-    handle_unit_activity_request(punit, activity);
-    if (is_set) {
-      set_goto_dest(punit, oldx, oldy);
-    } else {
-      clear_goto_dest(punit);
-    }
-    return TRUE;
-  }
-  return FALSE;
-}
-
-/**************************************************************************
-  Ensure unit sanity by telling charge that we won't bodyguard it anymore,
-  tell bodyguard it can roam free if our job is done, add and remove city 
-  spot reservation, and set destination.
-**************************************************************************/
-void ai_unit_new_role(struct unit *punit, enum ai_unit_task task, int x, int y)
+void ai_unit_new_role(struct unit *punit, enum ai_unit_task task)
 {
   struct unit *charge = find_unit_by_id(punit->ai.charge);
-  struct unit *bodyguard = find_unit_by_id(punit->ai.bodyguard);
-
-  if (punit->activity == ACTIVITY_GOTO) {
-    /* It would indicate we're going somewhere otherwise */
-    handle_unit_activity_request(punit, ACTIVITY_IDLE);
-  }
-
-  if (punit->ai.ai_role == AIUNIT_BUILD_CITY) {
-    remove_city_from_minimap(goto_dest_x(punit), goto_dest_y(punit));
-  }
-
   if (charge && (charge->ai.bodyguard == punit->id)) {
     /* ensure we don't let the unit believe we bodyguard it */
-    charge->ai.bodyguard = BODYGUARD_NONE;
+    charge->ai.bodyguard = BODYGUARD_NONE; 
   }
   punit->ai.charge = BODYGUARD_NONE;
-
   punit->ai.ai_role = task;
-
-  /* Verify and set the goto destination.  Eventually this can be a lot more
-   * stringent, but for now we don't want to break things too badly. */
-  if (x == -1 && y == -1) {
-    /* No goto_dest. */
-    clear_goto_dest(punit);
-  } else {
-    set_goto_dest(punit, x, y);
-  }
-
-  if (punit->ai.ai_role == AIUNIT_NONE && bodyguard) {
-    ai_unit_new_role(bodyguard, AIUNIT_NONE, -1, -1);
-  }
-
-  if (punit->ai.ai_role == AIUNIT_BUILD_CITY) {
-    assert(is_normal_map_pos(x, y));
-    add_city_to_minimap(x, y);
-  }
 }
 
 /**************************************************************************
@@ -191,7 +57,6 @@ void ai_unit_new_role(struct unit *punit, enum ai_unit_task task, int x, int y)
 **************************************************************************/
 bool ai_unit_make_homecity(struct unit *punit, struct city *pcity)
 {
-  CHECK_UNIT(punit);
   if (punit->homecity == 0 && !unit_has_role(punit->type, L_EXPLORER)) {
     /* This unit doesn't pay any upkeep while it doesn't have a homecity,
      * so it would be stupid to give it one. There can also be good reasons
@@ -217,6 +82,8 @@ bool ai_unit_make_homecity(struct unit *punit, struct city *pcity)
   been moved to (x, y) which is a valid, safe coordinate, and that our
   bodyguard has not. This is an ai_unit_* auxiliary function, do not use 
   elsewhere.
+
+  FIXME: packetify requests too
 **************************************************************************/
 static void ai_unit_bodyguard_move(int unitid, int x, int y)
 {
@@ -230,10 +97,8 @@ static void ai_unit_bodyguard_move(int unitid, int x, int y)
   punit = find_unit_by_id(bodyguard->ai.charge);
   assert(punit != NULL);
 
-  assert(punit->ai.bodyguard == bodyguard->id);
-  assert(bodyguard->ai.charge == punit->id);
-
   if (!is_tiles_adjacent(x, y, bodyguard->x, bodyguard->y)) {
+    BODYGUARD_LOG(LOG_DEBUG, bodyguard, "is too far from its charge");
     return;
   }
 
@@ -243,8 +108,11 @@ static void ai_unit_bodyguard_move(int unitid, int x, int y)
     return;
   }
 
+  BODYGUARD_LOG(LOG_DEBUG, bodyguard, "was dragged along by charge");
+
   handle_unit_activity_request(bodyguard, ACTIVITY_IDLE);
   (void) ai_unit_move(bodyguard, x, y);
+  handle_unit_activity_request(bodyguard, ACTIVITY_FORTIFYING);
 }
 
 /**************************************************************************
@@ -273,13 +141,12 @@ static bool has_bodyguard(struct unit *punit)
 /**************************************************************************
   Move and attack with an ai unit. We do not wait for server reply.
 **************************************************************************/
-bool ai_unit_attack(struct unit *punit, int x, int y)
+void ai_unit_attack(struct unit *punit, int x, int y)
 {
   struct packet_move_unit pmove;
   int sanity = punit->id;
-  bool alive;
 
-  CHECK_UNIT(punit);
+  assert(punit != NULL);
   assert(unit_owner(punit)->ai.control);
   assert(is_normal_map_pos(x, y));
   assert(is_tiles_adjacent(punit->x, punit->y, x, y));
@@ -287,18 +154,13 @@ bool ai_unit_attack(struct unit *punit, int x, int y)
   pmove.x = x;
   pmove.y = y;
   pmove.unid = punit->id;
-  handle_unit_activity_request(punit, ACTIVITY_IDLE);
   handle_move_unit(unit_owner(punit), &pmove);
-  alive = (find_unit_by_id(sanity) != NULL);
 
-  if (alive && same_pos(x, y, punit->x, punit->y)
-      && has_bodyguard(punit)) {
-    ai_unit_bodyguard_move(punit->ai.bodyguard, x, y);
-    /* Clumsy bodyguard might trigger an auto-attack */
-    alive = (find_unit_by_id(sanity) != NULL);
+  if (find_unit_by_id(sanity) && same_pos(x, y, punit->x, punit->y)) {
+    if (has_bodyguard(punit)) {
+      ai_unit_bodyguard_move(punit->ai.bodyguard, x, y);
+    }
   }
-
-  return alive;
 }
 
 /**************************************************************************
@@ -316,7 +178,7 @@ bool ai_unit_move(struct unit *punit, int x, int y)
   struct player *pplayer = unit_owner(punit);
   struct tile *ptile = map_get_tile(x,y);
 
-  CHECK_UNIT(punit);
+  assert(punit != NULL);
   assert(unit_owner(punit)->ai.control);
   assert(is_normal_map_pos(x, y));
   assert(is_tiles_adjacent(punit->x, punit->y, x, y));
@@ -333,7 +195,7 @@ bool ai_unit_move(struct unit *punit, int x, int y)
   }
 
   /* don't leave bodyguard behind */
-  if (has_bodyguard(punit)
+  if (has_bodyguard(punit) 
       && (bodyguard = find_unit_by_id(punit->ai.bodyguard))
       && same_pos(punit->x, punit->y, bodyguard->x, bodyguard->y)
       && bodyguard->moves_left == 0) {
@@ -355,7 +217,6 @@ bool ai_unit_move(struct unit *punit, int x, int y)
   pmove.x = x;
   pmove.y = y;
   pmove.unid = punit->id;
-  handle_unit_activity_request(punit, ACTIVITY_IDLE);
   handle_move_unit(unit_owner(punit), &pmove);
 
   /* handle the results */
@@ -379,83 +240,48 @@ struct city *dist_nearest_city(struct player *pplayer, int x, int y,
                                bool everywhere, bool enemy)
 { 
   struct city *pc=NULL;
-  int best_dist = -1;
+  int dist = MAX(map.xsize / 2, map.ysize);
   int con = map_get_continent(x, y);
 
   players_iterate(pplay) {
-    /* If "enemy" is set, only consider cities whose owner we're at
-     * war with. */
-    if (enemy && pplayer && !pplayers_at_war(pplayer, pplay)) {
-      continue;
-    }
+    if ((enemy) && (pplayer) && (!pplayers_at_war(pplayer,pplay))) continue;
 
-    city_list_iterate(pplay->cities, pcity) {
-      int city_dist = real_map_distance(x, y, pcity->x, pcity->y);
-
-      /* Find the closest city known to the player with a matching
-       * continent. */
-      if ((best_dist == -1 || city_dist < best_dist)
-	  && (everywhere || con == 0
-	      || con == map_get_continent(pcity->x, pcity->y))
-	  && (!pplayer || map_is_known(pcity->x, pcity->y, pplayer))) {
-	best_dist = city_dist;
+    city_list_iterate(pplay->cities, pcity)
+      if (real_map_distance(x, y, pcity->x, pcity->y) < dist &&
+         (everywhere || con == 0 || con == map_get_continent(pcity->x, pcity->y)) &&
+         (!pplayer || map_get_known(pcity->x, pcity->y, pplayer))) {
+        dist = real_map_distance(x, y, pcity->x, pcity->y);
         pc = pcity;
       }
-    } city_list_iterate_end;
+    city_list_iterate_end;
   } players_iterate_end;
 
   return(pc);
 }
 
-
 /**************************************************************************
-  Calculate the value of the target unit including the other units which
-  will die in a successful attack
-**************************************************************************/
-int stack_cost(struct unit *pdef)
-{
-  int victim_cost = 0;
-
-  if (is_stack_vulnerable(pdef->x, pdef->y)) {
-    /* lotsa people die */
-    unit_list_iterate(map_get_tile(pdef->x, pdef->y)->units, aunit) {
-      victim_cost += unit_type(aunit)->build_cost;
-    } unit_list_iterate_end;
-  } else {
-    /* Only one unit dies if attack is successful */
-    victim_cost = unit_type(pdef)->build_cost;
-  }
-  
-  return victim_cost;
-}
-
-/**************************************************************************
-  Change government, pretty fast...
+.. change government,pretty fast....
 **************************************************************************/
 void ai_government_change(struct player *pplayer, int gov)
 {
   struct packet_player_request preq;
-
-  if (gov == pplayer->government) {
+  if (gov == pplayer->government)
     return;
-  }
-  preq.government = gov;
-  pplayer->revolution = 0;
-  pplayer->government = game.government_when_anarchy;
+  preq.government=gov;
+  pplayer->revolution=0;
+  pplayer->government=game.government_when_anarchy;
   handle_player_government(pplayer, &preq);
   pplayer->revolution = -1; /* yes, I really mean this. -- Syela */
 }
 
 /**************************************************************************
-  Credits the AI wants to have in reserves. We need some gold to bribe
-  and incite cities.
-
-  "I still don't trust this function" -- Syela
+... Credits the AI wants to have in reserves.
 **************************************************************************/
 int ai_gold_reserve(struct player *pplayer)
 {
   int i = total_player_citizens(pplayer)*2;
   return MAX(pplayer->ai.maxbuycost, i);
+/* I still don't trust this function -- Syela */
 }
 
 /**************************************************************************
@@ -463,7 +289,7 @@ int ai_gold_reserve(struct player *pplayer)
 **************************************************************************/
 void init_choice(struct ai_choice *choice)
 {
-  choice->choice = A_UNSET;
+  choice->choice = A_NONE;
   choice->want = 0;
   choice->type = CT_NONE;
 }
@@ -482,13 +308,6 @@ void adjust_choice(int value, struct ai_choice *choice)
 void copy_if_better_choice(struct ai_choice *cur, struct ai_choice *best)
 {
   if (cur->want > best->want) {
-    freelog(LOG_DEBUG, "Overriding choice (%s, %d) with (%s, %d)",
-	    (best->type == CT_BUILDING ? 
-	     get_improvement_name(best->choice) : unit_types[best->choice].name), 
-	    best->want, 
-	    (cur->type == CT_BUILDING ? 
-	     get_improvement_name(cur->choice) : unit_types[cur->choice].name), 
-	    cur->want);
     best->choice =cur->choice;
     best->want = cur->want;
     best->type = cur->type;
@@ -608,10 +427,78 @@ bool ai_assess_military_unhappiness(struct city *pcity,
   return unhap > 0;
 }
 
-/**************************************************************************
-  AI doesn't want the score for future techs.
-**************************************************************************/
-bool ai_wants_no_science(struct player *pplayer)
+/**********************************************************************
+  Evaluate a government form, still pretty sketchy.
+
+  This evaluation should be more dynamic (based on players current
+  needs, like expansion, at war, etc, etc). -SKi
+
+  0 is my first attempt at government evaluation
+  1 is new evaluation based on patch from rizos -SKi
+**********************************************************************/
+int ai_evaluate_government (struct player *pplayer, struct government *g)
 {
-  return is_future_tech(pplayer->research.researching);
+  int current_gov      = pplayer->government;
+  int shield_surplus   = 0;
+  int food_surplus     = 0;
+  int trade_prod       = 0;
+  int shield_need      = 0;
+  int food_need        = 0;
+  bool gov_overthrown   = FALSE;
+  int score;
+
+  pplayer->government = g->index;
+
+  city_list_iterate(pplayer->cities, pcity) {
+    city_refresh(pcity);
+
+    /* the lines that follow are copied from ai_manage_city -
+       we don't need the sell_obsolete_buildings */
+    auto_arrange_workers(pcity);
+    if (ai_fix_unhappy (pcity))
+      ai_scientists_taxmen(pcity);
+
+    trade_prod     += pcity->trade_prod;
+    if (pcity->shield_prod > 0)
+      shield_surplus += pcity->shield_surplus;
+    else
+      shield_need    += pcity->shield_surplus;
+    if (pcity->food_surplus > 0)
+      food_surplus   += pcity->food_surplus;
+    else
+      food_need      += pcity->food_surplus;
+
+    if (city_unhappy(pcity)) {
+      /* the following is essential to prevent falling into anarchy */
+      if (pcity->anarchy > 0
+	  && government_has_flag(g, G_REVOLUTION_WHEN_UNHAPPY)) 
+        gov_overthrown = TRUE;
+    }
+  } city_list_iterate_end;
+
+  pplayer->government = current_gov;
+
+  /* Restore all cities. */
+  city_list_iterate(pplayer->cities, pcity) {
+    city_refresh(pcity);
+
+    /* the lines that follow are copied from ai_manage_city -
+       we don't need the sell_obsolete_buildings */
+    auto_arrange_workers(pcity);
+    if (ai_fix_unhappy (pcity))
+      ai_scientists_taxmen(pcity);
+  } city_list_iterate_end;
+  sync_cities();
+
+  score =
+    3 * trade_prod
+  + 2 * shield_surplus + 2 * food_surplus
+  - 4 * shield_need - 4 * food_need;
+
+  score = gov_overthrown ? 0 : MAX(score, 0);
+
+  freelog(LOG_DEBUG, "a_e_g (%12s) = score=%3d; trade=%3d; shield=%3d/%3d; "
+                     "food=%3d/%3d;", g->name, score, trade_prod, 
+                     shield_surplus, shield_need, food_surplus, food_need);
+  return score;
 }

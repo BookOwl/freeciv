@@ -10,11 +10,9 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
-
 #include <windows.h>
 #include <winsock.h>
 #include <windowsx.h>
@@ -75,6 +73,8 @@ int main_win_width;
 int main_win_height;
 int map_win_x;
 int map_win_y;
+int map_win_width;
+int map_win_height;
 int taxinfoline_y;
 int indicator_y;
 int overview_win_x;
@@ -95,7 +95,7 @@ struct fcwin_box *output_box;
 /**************************************************************************
 
 **************************************************************************/
-static void HandleRMouse(int x, int y)
+void HandleRMouse(int x, int y)
 {
   SetFocus(root_window);
 }
@@ -103,7 +103,7 @@ static void HandleRMouse(int x, int y)
 /**************************************************************************
 
 **************************************************************************/
-static void HandleLMouse(int x, int y)
+void HandleLMouse(int x, int y)
 {
   SetFocus(root_window);
   if ((x>overview_win_x)&&(x<overview_win_x+overview_win_width)
@@ -117,7 +117,7 @@ static void HandleLMouse(int x, int y)
 /**************************************************************************
 
  **************************************************************************/
-static void HandlePaint(HDC hdc)
+void HandlePaint(HDC hdc)
 {
   overview_expose(hdc);
 }
@@ -125,16 +125,17 @@ static void HandlePaint(HDC hdc)
 /**************************************************************************
 
 **************************************************************************/
-void do_mainwin_layout(void)
+void do_mainwin_layout()
 {
   fcwin_redo_layout(root_window);
  
 }
 
+
 /**************************************************************************
 
 **************************************************************************/
-void set_overview_win_dim(int w, int h)
+void set_overview_win_dim(int w,int h)
 {
   overview_win_width=w;
   overview_win_height=h;
@@ -142,8 +143,7 @@ void set_overview_win_dim(int w, int h)
   do_mainwin_layout();
   
 }
-
-static void Handle_Hscroll(HWND hWnd, HWND hWndCtl, UINT code, int pos)
+void Handle_Hscroll(HWND hWnd,HWND hWndCtl,UINT code,int pos)
 {
   int PosCur,PosMax,PosMin,id;
   PosCur=ScrollBar_GetPos(hWndCtl);
@@ -295,8 +295,11 @@ static void map_setsize(LPRECT newsize, void *data)
 /**************************************************************************
 
 **************************************************************************/
-static LONG APIENTRY FreecivWndProc(HWND hWnd, UINT message,
-				    UINT wParam, LONG lParam)
+LONG APIENTRY FreecivWndProc (
+                           HWND hWnd,
+                           UINT message,
+                           UINT wParam,
+                           LONG lParam)
 {
   HDC hdc;
   PAINTSTRUCT ps;
@@ -355,7 +358,7 @@ static LONG APIENTRY FreecivWndProc(HWND hWnd, UINT message,
 /**************************************************************************
 
 **************************************************************************/
-static void create_main_window(void)
+void create_main_window()
 {
   HINSTANCE riched;
   struct fcwin_box *upper;
@@ -455,7 +458,7 @@ static void create_main_window(void)
 static VOID CALLBACK blink_timer(HWND hwnd, UINT uMsg, UINT idEvent,
 				 DWORD dwTime)
 {
-  if (can_client_change_view()) {
+  if (get_client_state() == CLIENT_GAME_RUNNING_STATE) {
     check_mapstore();
   }
 
@@ -494,7 +497,7 @@ static VOID CALLBACK socket_timer(HWND  hwnd,UINT uMsg,UINT idEvent,DWORD  dwTim
 /**************************************************************************
   This pops down every dialog
 **************************************************************************/
-void popdown_all_game_dialogs(void)
+void popdown_everything(void)
 {
   RECT rc;
   fcwin_close_all_childs(root_window);
@@ -555,14 +558,6 @@ ui_main(int argc, char *argv[])
     }      
 }
 
-
-/**************************************************************************
- Update the connected users list at pregame state.
-**************************************************************************/
-void update_conn_list_dialog(void)
-{
-  /* PORTME */
-}
 
 /**************************************************************************
 

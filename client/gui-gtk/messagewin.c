@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -29,15 +28,14 @@
 #include "packets.h"
 #include "player.h"
 
-#include "clinet.h"
-#include "options.h"
-
 #include "chatline.h"
 #include "citydlg.h"
+#include "clinet.h"
 #include "colors.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "mapview.h"
+#include "options.h"
 
 #include "messagewin.h"
 
@@ -88,19 +86,6 @@ bool is_meswin_open(void)
   return meswin_dialog_shell != NULL;
 }
 
-/**************************************************************************
- Closes the message window dialog.
-**************************************************************************/
-void popdown_meswin_dialog(void)
-{
-  if (meswin_dialog_shell) {
-    gtk_widget_destroy(meswin_dialog_shell);
-    meswin_dialog_shell = NULL;
-    gtk_style_unref(meswin_visited_style);
-    gtk_style_unref(meswin_not_visited_style);
-  }
-}
-
 /****************************************************************
 ...
 *****************************************************************/
@@ -126,7 +111,7 @@ static void meswin_not_visited_item (gint n)
 *****************************************************************/
 void create_meswin_dialog(void)
 {
-  static const char *titles_[1] = { N_("Messages") };
+  static gchar *titles_[1] = { N_("Messages") };
   static gchar **titles;
   GtkWidget *scrolled;
   GtkAccelGroup *accel = gtk_accel_group_new();
@@ -286,7 +271,10 @@ static void meswin_list_ucallback(GtkWidget *w, gint row, gint column)
 **************************************************************************/
 static void meswin_close_callback(GtkWidget *w, gpointer data)
 {
-  popdown_meswin_dialog();
+  gtk_widget_destroy(meswin_dialog_shell);
+  meswin_dialog_shell = NULL;
+  gtk_style_unref(meswin_visited_style);
+  gtk_style_unref(meswin_not_visited_style);
 }
 
 /**************************************************************************

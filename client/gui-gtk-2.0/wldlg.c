@@ -547,9 +547,15 @@ static void change_callback(GtkWidget *w, gpointer data)
   if (gtk_tree_selection_get_selected(selection, &model, &it)) {
     gint cid;
 
+    struct packet_city_request packet;
+
     gtk_tree_model_get(model, &it, 0, &cid, -1);
 
-    city_change_production(ptr->pcity, cid_is_unit(cid), cid_id(cid));
+    packet.city_id = ptr->pcity->id;
+    packet.build_id = cid_id(cid);
+    packet.is_build_id_unit_id = cid_is_unit(cid);
+
+    send_packet_city_request(&aconnection, &packet, PACKET_CITY_CHANGE);
   }
 }
 
@@ -979,7 +985,7 @@ GtkWidget *create_worklist()
   g_signal_connect(button, "clicked",
 		   G_CALLBACK(help_callback), ptr);
 
-  button = gtk_button_new_with_mnemonic(_("Chan_ge Production"));
+  button = gtk_button_new_with_mnemonic("Chan_ge Production");
   gtk_container_add(GTK_CONTAINER(bbox), button);
   g_signal_connect(button, "clicked",
 		   G_CALLBACK(change_callback), ptr);
@@ -1140,8 +1146,7 @@ void refresh_worklist(GtkWidget *editor)
 
   /* update widget sensitivity. */
   if (ptr->pcity) {
-    if ((can_client_issue_orders() &&
-	 city_owner(ptr->pcity) == game.player_ptr)) {
+    if (city_owner(ptr->pcity) == game.player_ptr) {
       gtk_widget_set_sensitive(ptr->add_cmd, TRUE);
       gtk_widget_set_sensitive(ptr->dst_view, TRUE);
       gtk_widget_set_sensitive(ptr->change_cmd, TRUE);
@@ -1201,6 +1206,13 @@ static void commit_worklist(struct worklist_data *ptr)
   strcpy(pwl->name, name);
 
   if (ptr->pcity) {
-    city_set_worklist(ptr->pcity, pwl);
+    struct packet_city_request packet;
+
+    packet.city_id = ptr->pcity->id;
+    copy_worklist(&packet.worklist, pwl);
+    packet.worklist.name[0] = '\0';
+    
+    send_packet_city_request(&aconnection, &packet, PACKET_CITY_WORKLIST);
   }
 }
+

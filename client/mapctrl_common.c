@@ -11,27 +11,14 @@
    GNU General Public License for more details.
 ***********************************************************************/
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
-#include "combat.h"
-#include "log.h"
-
 #include "agents.h"
 #include "civclient.h"
-#include "clinet.h"
-#include "cma_core.h"
-#include "control.h"
-#include "goto.h"
+#include "log.h"
 #include "mapctrl_g.h"
 #include "mapview_g.h"
 #include "options.h"
 
 #include "mapctrl_common.h"
-
-/* Update the workers for a city on the map, when the update is received */
-struct city *city_workers_display = NULL;
 
 static bool turn_done_state;
 static bool is_turn_done_state_valid = FALSE;
@@ -50,122 +37,6 @@ bool get_turn_done_button_state()
 }
 
 /**************************************************************************
-  Scroll the mapview half a screen in the given direction.  This is a GUI
-  direction; i.e., DIR8_NORTH is "up" on the mapview.
-**************************************************************************/
-void scroll_mapview(enum direction8 gui_dir)
-{
-  int map_x, map_y, canvas_x, canvas_y;
-
-  if (!can_client_change_view()) {
-    return;
-  }
-
-  canvas_x = mapview_canvas.width / 2;
-  canvas_y = mapview_canvas.height / 2;
-  canvas_x += DIR_DX[gui_dir] * mapview_canvas.width / 2;
-  canvas_y += DIR_DY[gui_dir] * mapview_canvas.height / 2;
-  if (!canvas_to_map_pos(&map_x, &map_y, canvas_x, canvas_y)) {
-    nearest_real_pos(&map_x, &map_y);
-  }
-  center_tile_mapcanvas(map_x, map_y);
-}
-
-/**************************************************************************
-  Do some appropriate action when the "main" mouse button (usually
-  left-click) is pressed.  For more sophisticated user control use (or
-  write) a different xxx_button_pressed function.
-**************************************************************************/
-void action_button_pressed(int canvas_x, int canvas_y)
-{
-  int map_x, map_y;
-
-  if (can_client_change_view()) {
-    /* FIXME: Some actions here will need to check can_client_issue_orders.
-     * But all we can check is the lowest common requirement. */
-    if (canvas_to_map_pos(&map_x, &map_y, canvas_x, canvas_y)) {
-      do_map_click(map_x, map_y);
-    }
-  }
-}
-
-/**************************************************************************
-  Wakeup sentried units on the tile of the specified location.  Usually
-  this is done with SHIFT+left-click.
-**************************************************************************/
-void wakeup_button_pressed(int canvas_x, int canvas_y)
-{
-  int map_x, map_y;
-
-  if (can_client_issue_orders()) {
-    if (canvas_to_map_pos(&map_x, &map_y, canvas_x, canvas_y)) {
-      wakeup_sentried_units(map_x, map_y);
-    }
-  }
-}
-
-/**************************************************************************
-  Adjust the position of city workers from the mapview.  Usually this is
-  done with SHIFT+left-click.
-**************************************************************************/
-void adjust_workers_button_pressed(int canvas_x, int canvas_y)
-{
-  int map_x, map_y, city_x, city_y;
-  struct city *pcity;
-  struct packet_city_request packet;
-  enum city_tile_type worker;
-
-  if (can_client_issue_orders()) {
-    if (canvas_to_map_pos(&map_x, &map_y, canvas_x, canvas_y)) {
-      pcity = find_city_near_tile(map_x, map_y);
-      if (pcity && !cma_is_city_under_agent(pcity, NULL)) {
-	if (!map_to_city_map(&city_x, &city_y, pcity, map_x, map_y)) {
-	  assert(0);
-	}
-
-	packet.city_id = pcity->id;
-	packet.worker_x = city_x;
-	packet.worker_y = city_y;
-
-	worker = get_worker_city(pcity, city_x, city_y);
-	if (worker == C_TILE_WORKER) {
-	  send_packet_city_request(&aconnection, &packet,
-				   PACKET_CITY_MAKE_SPECIALIST);
-	} else if (worker == C_TILE_EMPTY) {
-	  send_packet_city_request(&aconnection, &packet,
-				   PACKET_CITY_MAKE_WORKER);
-	} else {
-	  /* If worker == C_TILE_UNAVAILABLE then we can't use this tile.  No
-	   * packet is sent and city_workers_display is not updated. */
-	  return;
-	}
-	
-	/* When the city info packet is received, update the workers on the
-	 * map.  This is a bad hack used to selectively update the mapview
-	 * when we receive the corresponding city packet. */
-	city_workers_display = pcity;
-      }
-    }
-  }
-}
-
-/**************************************************************************
-  Recenter the map on the canvas location, on user request.  Usually this
-  is done with a right-click.
-**************************************************************************/
-void recenter_button_pressed(int canvas_x, int canvas_y)
-{
-  int map_x, map_y;
-
-  if (can_client_change_view()) {
-    if (!canvas_to_map_pos(&map_x, &map_y, canvas_x, canvas_y)) {
-      nearest_real_pos(&map_x, &map_y);
-    }
-    center_tile_mapcanvas(map_x, map_y);
-  }
-}
-
-/**************************************************************************
  Update the turn done button state.
 **************************************************************************/
 void update_turn_done_button_state()
@@ -180,8 +51,9 @@ void update_turn_done_button_state()
 	    turn_done_state);
   }
 
-  new_state = (can_client_issue_orders()
+  new_state = (get_client_state() == CLIENT_GAME_RUNNING_STATE
 	       && !game.player_ptr->turn_done && !agents_busy()
+	       && !client_is_observer()
 	       && !turn_done_sent);
   if (new_state == turn_done_state) {
     return;
@@ -201,49 +73,4 @@ void update_turn_done_button_state()
       update_turn_done_button(TRUE);
     }
   }
-}
-
-/**************************************************************************
-  Update the goto/patrol line to the given map canvas location.
-**************************************************************************/
-void update_line(int canvas_x, int canvas_y)
-{
-  if ((hover_state == HOVER_GOTO || hover_state == HOVER_PATROL)
-      && draw_goto_line) {
-    int x, y, old_x, old_y;
-
-    if (!canvas_to_map_pos(&x, &y, canvas_x, canvas_y)) {
-      nearest_real_pos(&x, &y);
-    }
-
-    get_line_dest(&old_x, &old_y);
-    if (!same_pos(old_x, old_y, x, y)) {
-      draw_line(x, y);
-    }
-  }
-}
-
-/**************************************************************************
-  Find the focus unit's chance of success at attacking/defending the
-  given tile.  Return FALSE if the values cannot be determined (e.g., no
-  units on the tile).
-**************************************************************************/
-bool get_chance_to_win(int *att_chance, int *def_chance,
-		       int map_x, int map_y)
-{
-  struct unit *my_unit, *defender, *attacker;
-
-  if (!(my_unit = get_unit_in_focus())
-      || !(defender = get_defender(my_unit, map_x, map_y))
-      || !(attacker = get_attacker(my_unit, map_x, map_y))) {
-    return FALSE;
-  }
-
-  /* chance to win when active unit is attacking the selected unit */
-  *att_chance = unit_win_chance(my_unit, defender) * 100;
-
-  /* chance to win when selected unit is attacking the active unit */
-  *def_chance = (1.0 - unit_win_chance(attacker, my_unit)) * 100;
-
-  return TRUE;
 }

@@ -98,17 +98,11 @@
 #undef NARROWPROTO
 #undef HAVE_LIBREADLINE
 #define ALWAYS_ROOT 1 /*may not be needed.  Metroworks provides dummy functions*/
-
-/* copland Compatibility (os x?), _MAC ONLY_ (pointless on other systems) */
-#undef STRICT_WINDOWS
-
+#undef STRICT_WINDOWS/* copland Compatability (os x?), _MAC ONLY_ (pointless on other systems)*/
 #define STRICT_WINDOWS 1 /* seq used to enable strict windows */
-
-/* copland Compatibility (os x?), _MAC ONLY_ (pointless on other systems) */
-#undef STRICT_CONTROLS
-
+#undef STRICT_CONTROLS/* copland Compatability (os x?), _MAC ONLY_ (pointless on other systems)*/
 #define STRICT_CONTROLS 1 /* seq used to enable strict controls */
-#undef STRICT_MENUS/* copland Compatibility? (os x?), _MAC ONLY_ (pointless on other systems)*/
+#undef STRICT_MENUS/* copland Compatability? (os x?), _MAC ONLY_ (pointless on other systems)*/
 #define STRICT_MENUS 1 /* seq used to enable strict menus */
 #define GENERATING_MAC /*use for mac native code*/
 #define HAVE_OPENTRANSPORT /*used for OpenTransport Networking*/

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -68,23 +67,15 @@ void UNIT_LOG(int level, struct unit *punit, const char *msg, ...)
   char buffer2[500];
   va_list ap;
   int minlevel = MIN(LOGLEVEL_UNIT, level);
-  int gx, gy;
 
   if (minlevel > fc_log_level) {
     return;
   }
 
-  if (is_goto_dest_set(punit)) {
-    gx = goto_dest_x(punit);
-    gy = goto_dest_y(punit);
-  } else {
-    gx = gy = -1;
-  }
-  
   my_snprintf(buffer, sizeof(buffer), "%s's %s[%d] (%d,%d)->(%d,%d){%d} ",
               unit_owner(punit)->name, unit_type(punit)->name,
               punit->id, punit->x, punit->y,
-	      gx, gy,
+              punit->goto_dest_x, punit->goto_dest_y, 
               punit->ai.bodyguard);
 
   va_start(ap, msg);
@@ -108,20 +99,12 @@ void GOTO_LOG(int level, struct unit *punit, enum goto_result result,
     char buffer[500];
     char buffer2[500];
     va_list ap;
-    int gx, gy;
-
-    if (is_goto_dest_set(punit)) {
-      gx = goto_dest_x(punit);
-      gy = goto_dest_y(punit);
-    } else {
-      gx = gy = -1;
-    }
 
     my_snprintf(buffer, sizeof(buffer),
                 "%s's %s[%d] on GOTO (%d,%d)->(%d,%d) %s : ",
                 unit_owner(punit)->name, unit_type(punit)->name,
                 punit->id, punit->x, punit->y,
-		gx, gy,
+                punit->goto_dest_x, punit->goto_dest_y,
                (result == GR_FAILED) ? "failed" : "fought");
 
     va_start(ap, msg);
@@ -145,7 +128,7 @@ void BODYGUARD_LOG(int level, struct unit *punit, const char *msg)
   struct unit *pcharge;
   struct city *pcity;
   int x = -1, y = -1, id = -1;
-  const char *s = "none";
+  char *s = "none";
 
   if (minlevel > fc_log_level) {
     return;

@@ -14,21 +14,9 @@
 #ifndef FC__MAPCTRL_COMMON_H
 #define FC__MAPCTRL_COMMON_H
 
-#include "map.h"		/* enum direction8 */
 #include "shared.h"		/* bool type */
 
 bool get_turn_done_button_state(void);
-void scroll_mapview(enum direction8 gui_dir);
-void action_button_pressed(int canvas_x, int canvas_y);
-void wakeup_button_pressed(int canvas_x, int canvas_y);
-void adjust_workers_button_pressed(int canvas_x, int canvas_y);
-void recenter_button_pressed(int canvas_x, int canvas_y);
 void update_turn_done_button_state(void);
-void update_line(int canvas_x, int canvas_y);
-
-bool get_chance_to_win(int *att_chance, int *def_chance,
-		       int map_x, int map_y);
-
-extern struct city *city_workers_display;
 
 #endif /* FC__MAPVIEW_COMMON_H */

@@ -4,9 +4,6 @@
 ##    SUBDIRS = @gui_sources@
 ## but that doesn't work properly for "make dist"
 
-if CLIENT_GUI_SDL
-GUI_SUBDIR = gui-sdl
-endif
 if CLIENT_GUI_GTK
 GUI_SUBDIR = gui-gtk
 endif
@@ -60,7 +57,6 @@ EXTRA_DIST= 	gui-mui/autogroupclass.c         \
 		gui-mui/diplodlg.c               \
 		gui-mui/diplodlg.h               \
 		gui-mui/finddlg.c                \
-		gui-mui/finddlg.h                \
 		gui-mui/gamedlgs.c               \
 		gui-mui/gotodlg.c                \
 		gui-mui/gotodlg.h                \
@@ -75,7 +71,6 @@ EXTRA_DIST= 	gui-mui/autogroupclass.c         \
 		gui-mui/inputdlg.c               \
 		gui-mui/inputdlg.h               \
 		gui-mui/inteldlg.c               \
-		gui-mui/inteldlg.h               \
 		gui-mui/mapclass.c               \
 		gui-mui/mapclass.h               \
 		gui-mui/mapctrl.c                \
@@ -83,7 +78,6 @@ EXTRA_DIST= 	gui-mui/autogroupclass.c         \
 		gui-mui/mapview.c                \
 		gui-mui/mapview.h                \
 		gui-mui/messagedlg.c             \
-		gui-mui/messagedlg.h             \
 		gui-mui/messagewin.c             \
 		gui-mui/messagewin.h             \
 		gui-mui/muistuff.c               \
@@ -95,7 +89,6 @@ EXTRA_DIST= 	gui-mui/autogroupclass.c         \
 		gui-mui/overviewclass.h          \
 		gui-mui/plrdlg.c                 \
 		gui-mui/plrdlg.h                 \
-		gui-mui/ratesdlg.h               \
 		gui-mui/repodlgs.c               \
 		gui-mui/repodlgs.h               \
 		gui-mui/scrollbuttonclass.c      \
@@ -129,7 +122,7 @@ SUBDIRS = $(GUI_SUBDIR) $(CLI_INCLUDE) agents
 
 bin_PROGRAMS = civclient
 
-INCLUDES = -I$(srcdir)/include -I$(top_srcdir)/common -I$(top_srcdir)/common/aicore -I../intl -I$(srcdir)/agents @SOUND_CFLAGS@
+INCLUDES = -I$(srcdir)/include -I$(top_srcdir)/common -I../intl -I$(srcdir)/agents @SOUND_CFLAGS@
 
 ## Above, note -I../intl instead of -I$(top_srdir/intl) is deliberate.
 
@@ -146,8 +139,6 @@ civclient_SOURCES = $(ESD_FILES) $(SDL_FILES) $(WINMM_FILES) \
 	chatline_common.h \
 	climisc.c	\
 	climisc.h	\
-	climap.c	\
-	climap.h	\
 	clinet.c	\
 	clinet.h	\
 	control.c	\
@@ -179,10 +170,8 @@ civclient_SOURCES = $(ESD_FILES) $(SDL_FILES) $(WINMM_FILES) \
 
 civclient_LDFLAGS = @CLIENT_LDFLAGS@
 civclient_DEPENDENCIES = @gui_sources@/libguiclient.a \
-	../common/libcivcommon.a agents/libagents.a \
-        ../common/aicore/libaicore.a
-
+	../common/libcivcommon.a agents/libagents.a
 civclient_LDADD        = @gui_sources@/libguiclient.a \
-	@INTLLIBS@ ../common/aicore/libaicore.a \
-        ../common/libcivcommon.a agents/libagents.a \
+	../common/libcivcommon.a @INTLLIBS@ @gui_sources@/libguiclient.a \
+	../common/libcivcommon.a @CLIENT_LIBS@ agents/libagents.a \
 	@CLIENT_LIBS@ @SOUND_LIBS@

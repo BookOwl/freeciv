@@ -10,16 +10,13 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
 #include <assert.h>
-
 #include <gtk/gtk.h>
 
-#include "combat.h"
 #include "fcintl.h"
 #include "game.h"
 #include "map.h"
@@ -27,27 +24,27 @@
 #include "support.h"
 #include "unit.h"
 
-#include "civclient.h"
-#include "climap.h"
-#include "climisc.h"
-#include "clinet.h"
-#include "cma_core.h"
-#include "control.h"
-#include "goto.h"
-#include "tilespec.h"
-
 #include "chatline.h"
 #include "citydlg.h"
+#include "civclient.h"
+#include "clinet.h"
+#include "climisc.h"
 #include "colors.h"
+#include "control.h"
 #include "dialogs.h"
+#include "goto.h"
 #include "graphics.h"
 #include "gui_main.h"
 #include "inputdlg.h"
 #include "mapview.h"
 #include "menu.h"
+#include "tilespec.h"
+#include "cma_core.h"
 
 #include "mapctrl.h"
 
+/* Update the workers for a city on the map, when the update is received */
+struct city *city_workers_display = NULL;
 /* Color to use to display the workers */
 int city_workers_color = COLOR_STD_WHITE;
 
@@ -84,8 +81,7 @@ static void popit(GdkEventButton *event, int xtile, int ytile)
     gtk_container_add(GTK_CONTAINER(p), b);
 
 #ifdef DEBUG    
-    my_snprintf(s, sizeof(s), _("Location: (%d, %d) [%d]"), xtile, ytile, 
-                ptile->continent);
+    my_snprintf(s, sizeof(s), _("Location: (%d, %d)"), xtile, ytile);
     gtk_widget_new(GTK_TYPE_LABEL, "GtkWidget::parent", b,
 				    "GtkLabel::label", s, NULL);
 #endif /* DEBUG */
@@ -105,23 +101,8 @@ static void popit(GdkEventButton *event, int xtile, int ytile)
 				     "GtkLabel::label", 
                                      _("Minor Tribe Village"), NULL);
     }
-
-    pcity = map_get_city(xtile, ytile);
-    if (game.borders > 0 && !pcity) {
-      struct player *owner = map_get_owner(xtile, ytile);
-      if (owner) {
-	my_snprintf(s, sizeof(s), _("Claimed by %s"),
-		    get_nation_name(owner->nation));
-	gtk_widget_new(GTK_TYPE_LABEL, "GtkWidget::parent", b,
-				       "GtkLabel::label", s, NULL);
-      } else {
-	gtk_widget_new(GTK_TYPE_LABEL, "GtkWidget::parent", b,
-				       "GtkLabel::label",
-				       _("Unclaimed territory"), NULL);
-      }
-    }
     
-    if (pcity) {
+    if((pcity = map_get_city(xtile, ytile))) {
       my_snprintf(s, sizeof(s), _("City: %s(%s)"), pcity->name,
 		  get_nation_name(city_owner(pcity)->nation));
       gtk_widget_new(GTK_TYPE_LABEL, "GtkWidget::parent", b,
@@ -173,21 +154,11 @@ static void popit(GdkEventButton *event, int xtile, int ytile)
 		    ptype->hp, punit->veteran ? _(" V") : "", uc);
 
         if(punit->activity == ACTIVITY_GOTO || punit->connecting)  {
-	  cross_head->x = goto_dest_x(punit);
-	  cross_head->y = goto_dest_y(punit);
+	  cross_head->x = punit->goto_dest_x;
+	  cross_head->y = punit->goto_dest_y;
 	  cross_head++;
         }
       } else {
-	int att_chance, def_chance;
-
-        /* calculate chance to win */
-        if (get_chance_to_win(&att_chance, &def_chance, xtile, ytile)) {
-          my_snprintf(s, sizeof(s), _("Chance to win: A:%d%% D:%d%%"),
-               att_chance, def_chance);
-          gtk_widget_new(GTK_TYPE_LABEL, "GtkWidget::parent", b,
-                                         "GtkLabel::label", s, NULL);
-        }
-
         my_snprintf(s, sizeof(s), _("A:%d D:%d FP:%d HP:%d0%%"),
 		    ptype->attack_strength, 
 		    ptype->defense_strength, ptype->firepower, 
@@ -304,11 +275,17 @@ void set_turn_done_button_state(bool state)
 **************************************************************************/
 gint butt_down_wakeup(GtkWidget *w, GdkEventButton *ev)
 {
+  int xtile, ytile;
+
   /* when you get a <SHIFT>+<LMB> pow! */
-  if (ev->state & GDK_SHIFT_MASK) {
-    wakeup_button_pressed(ev->x, ev->y);
+  if (get_client_state() != CLIENT_GAME_RUNNING_STATE
+      || !(ev->state & GDK_SHIFT_MASK)) {
+    return TRUE;
   }
 
+  get_map_xy(ev->x, ev->y, &xtile, &ytile);
+
+  wakeup_sentried_units(xtile, ytile);
   return TRUE;
 }
 
@@ -318,24 +295,25 @@ gint butt_down_wakeup(GtkWidget *w, GdkEventButton *ev)
 gint butt_down_mapcanvas(GtkWidget *w, GdkEventButton *ev)
 {
   int xtile, ytile;
-
-  if (!can_client_change_view()) {
+  
+  if(get_client_state() != CLIENT_GAME_RUNNING_STATE)
+    return TRUE;
+  
+  if ((ev->button == 1) && (ev->state & GDK_SHIFT_MASK)) {
+    adjust_workers(w, ev);
     return TRUE;
   }
 
-  gtk_widget_grab_focus(turn_done_button);
+  get_map_xy(ev->x, ev->y, &xtile, &ytile);
 
-  if (ev->button == 1 && (ev->state & GDK_SHIFT_MASK)) {
-    adjust_workers_button_pressed(ev->x, ev->y);
-  } else if (ev->button == 1) {
-    action_button_pressed(ev->x, ev->y);
-  } else if (canvas_to_map_pos(&xtile, &ytile, ev->x, ev->y)
-	     && (ev->button == 2 || (ev->state & GDK_CONTROL_MASK))) {
+  if (ev->button == 1) {
+    do_map_click(xtile, ytile);
+    gtk_widget_grab_focus(turn_done_button);
+  } else if ((ev->button == 2) || (ev->state & GDK_CONTROL_MASK)) {
     popit(ev, xtile, ytile);
   } else if (ev->button == 3) {
-    recenter_button_pressed(ev->x, ev->y);
+    center_tile_mapcanvas(xtile, ytile);
   }
-
   return TRUE;
 }
 
@@ -354,10 +332,71 @@ void create_line_at_mouse_pos(void)
 /**************************************************************************
 ...
 **************************************************************************/
+void update_line(int window_x, int window_y)
+{
+  int x, y, old_x, old_y;
+
+  if ((hover_state == HOVER_GOTO || hover_state == HOVER_PATROL)
+      && draw_goto_line) {
+    get_map_xy(window_x, window_y, &x, &y);
+
+    get_line_dest(&old_x, &old_y);
+    if (!same_pos(old_x, old_y, x, y)) {
+      draw_line(x, y);
+    }
+  }
+}
+
+/**************************************************************************
+...
+**************************************************************************/
 gint move_mapcanvas(GtkWidget *widget, GdkEventButton *event)
 {
   update_line(event->x, event->y);
   return TRUE;
+}
+
+/**************************************************************************
+  Adjust the position of city workers from the mapcanvas
+**************************************************************************/
+void adjust_workers(GtkWidget *widget, GdkEventButton *ev)
+{
+  int x, y, map_x, map_y, is_valid;
+  struct city *pcity;
+  struct packet_city_request packet;
+  enum city_tile_type wrk;
+
+  if (get_client_state() != CLIENT_GAME_RUNNING_STATE) {
+    return;
+  }
+
+  get_map_xy(ev->x, ev->y, &map_x, &map_y);
+
+  pcity = find_city_near_tile(map_x, map_y);
+  if (!pcity) {
+    return;
+  }
+
+  if (cma_is_city_under_agent(pcity, NULL)) {
+    return;
+  }
+
+  is_valid = map_to_city_map(&x, &y, pcity, map_x, map_y);
+  assert(is_valid);
+
+  packet.city_id = pcity->id;
+  packet.worker_x = x;
+  packet.worker_y = y;
+  
+  wrk = get_worker_city(pcity, x, y);
+  if (wrk == C_TILE_WORKER)
+    send_packet_city_request(&aconnection, &packet, 
+			    PACKET_CITY_MAKE_SPECIALIST);
+  else if (wrk == C_TILE_EMPTY)
+    send_packet_city_request(&aconnection, &packet, PACKET_CITY_MAKE_WORKER);
+
+  /* When the city info packet is received, update the workers on the map*/
+  city_workers_display = pcity;
 }
 
 /**************************************************************************
@@ -370,14 +409,25 @@ gint butt_down_overviewcanvas(GtkWidget *w, GdkEventButton *ev)
   if (ev->type != GDK_BUTTON_PRESS)
     return TRUE; /* Double-clicks? Triple-clicks? No thanks! */
 
-  overview_to_map_pos(&xtile, &ytile, ev->x, ev->y);
-  
-  if (can_client_change_view() && ev->button == 3) {
-    center_tile_mapcanvas(xtile, ytile);
-  } else if (can_client_issue_orders() && ev->button == 1) {
-    do_unit_goto(xtile, ytile);
+  if (is_isometric) {
+    xtile = ev->x / 2 - (map.xsize / 2 -
+			 (map_view_x0 +
+			  (map_canvas_store_twidth +
+			   map_canvas_store_theight) / 2));
+  } else {
+    xtile = ev->x / 2 - (map.xsize / 2 -
+			 (map_view_x0 + map_canvas_store_twidth / 2));
   }
+  ytile = ev->y / 2;
+  
+  if(get_client_state() != CLIENT_GAME_RUNNING_STATE)
+     return TRUE;
 
+  if (ev->button == 1) {
+    do_unit_goto(xtile, ytile);
+  } else if (ev->button == 3) {
+    center_tile_mapcanvas(xtile, ytile);
+  }
   return TRUE;
 }
 
@@ -397,14 +447,12 @@ void key_city_workers(GtkWidget *w, GdkEventKey *ev)
   int x,y;
   struct city *pcity;
 
-  if (!can_client_change_view()) {
+  if (get_client_state() != CLIENT_GAME_RUNNING_STATE) {
     return;
   }
   
   gdk_window_get_pointer(map_canvas->window, &x, &y, NULL);
-  if (!canvas_to_map_pos(&x, &y, x, y)) {
-    nearest_real_pos(&x, &y);
-  }
+  get_map_xy(x, y, &x, &y);
 
   pcity = find_city_near_tile(x, y);
   if (!pcity) {
@@ -417,3 +465,10 @@ void key_city_workers(GtkWidget *w, GdkEventKey *ev)
 }
 
 
+/**************************************************************************
+...
+**************************************************************************/
+void focus_to_next_unit(void)
+{
+  advance_unit_focus();
+}

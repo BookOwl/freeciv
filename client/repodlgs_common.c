@@ -11,14 +11,9 @@
    GNU General Public License for more details.
 ***********************************************************************/
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <assert.h>
 
 #include "game.h"
-
 #include "repodlgs_g.h"
 
 #include "repodlgs_common.h"

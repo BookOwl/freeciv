@@ -10,13 +10,12 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
-#include <stdarg.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <string.h>
 
 #include "fcintl.h"
@@ -234,7 +233,6 @@ static void log_write(FILE *fs, int level, char *message)
   }
   if (log_filename || (!log_callback)) {
     fprintf(fs, "%d: %s\n", level, message);
-    fflush(fs);
   }
 }
 

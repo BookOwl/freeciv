@@ -1,7 +1,5 @@
 ## Process this file with automake to produce Makefile.in
 
-SUBDIRS=	aicore
-
 noinst_LIBRARIES = libcivcommon.a
 
 INCLUDES = -I../intl
@@ -26,8 +24,6 @@ libcivcommon_a_SOURCES = \
 		dataio.h	\
 		diptreaty.c	\
 		diptreaty.h	\
-		effects.c	\
-		effects.h	\
 		events.h	\
 		fcintl.c	\
 		fcintl.h	\
@@ -61,8 +57,6 @@ libcivcommon_a_SOURCES = \
 		packets_lsend.h	\
 		player.c	\
 		player.h	\
-		pqueue.c	\
-		pqueue.h	\
 		mem.c           \
 		mem.h		\
 		rand.c		\

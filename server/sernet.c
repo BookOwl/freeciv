@@ -10,71 +10,69 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
-#include <assert.h>
-#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <errno.h>
+#include <assert.h>
 
-#ifdef HAVE_ARPA_INET_H
-#include <arpa/inet.h>
-#endif
-#ifdef HAVE_NETDB_H
-#include <netdb.h>
-#endif
-#ifdef HAVE_NETINET_IN_H
-#include <netinet/in.h>
-#endif
-#ifdef HAVE_PWD_H
-#include <pwd.h>
-#endif
-#ifdef HAVE_LIBREADLINE
-#include <readline/history.h>
-#include <readline/readline.h>
-#endif
-#ifdef HAVE_SYS_SELECT_H
-#include <sys/select.h>
-#endif
-#ifdef HAVE_SYS_SOCKET_H
-#include <sys/socket.h>
-#endif
-#ifdef HAVE_SYS_TIME_H
-#include <sys/time.h>
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
 #endif
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
 #endif
+#ifdef HAVE_SYS_TIME_H
+#include <sys/time.h>
+#endif
+#ifdef HAVE_PWD_H
+#include <pwd.h>
+#endif
+
+#ifdef HAVE_SYS_SELECT_H
+#include <sys/select.h>
+#endif
+
+#ifdef HAVE_SYS_SOCKET_H
+#include <sys/socket.h>
+#endif
+#ifdef HAVE_NETDB_H
+#include <netdb.h>
+#endif
 #ifdef HAVE_SYS_UIO_H
 #include <sys/uio.h>
 #endif
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#ifdef HAVE_NETINET_IN_H
+#include <netinet/in.h>
+#endif
+#ifdef HAVE_ARPA_INET_H
+#include <arpa/inet.h>
 #endif
 #ifdef HAVE_WINSOCK
 #include <winsock.h>
 #endif
 
-#include "capability.h"
-#include "events.h"
+#ifdef HAVE_LIBREADLINE
+#include <readline/readline.h>
+#include <readline/history.h>
+#endif
+
 #include "fcintl.h"
 #include "log.h"
 #include "mem.h"
 #include "netintf.h"
 #include "packets.h"
+#include "plrhand.h"
 #include "shared.h"
 #include "support.h"
-#include "timing.h"
-
-#include "connecthand.h"
+#include "capability.h"
 #include "console.h"
 #include "meta.h"
-#include "plrhand.h"
 #include "srv_main.h"
 #include "stdinhand.h"
 
@@ -107,22 +105,12 @@ static int sock;
    void user_interrupt_callback();
 #endif
 
-#define SPECLIST_TAG timer
-#define SPECLIST_TYPE struct timer
-#include "speclist.h"
-
-#define SPECLIST_TAG timer
-#define SPECLIST_TYPE struct timer
-#include "speclist_c.h"
-
 #define PROCESSING_TIME_STATISTICS 0
 
 static int server_accept_connection(int sockfd);
 static void start_processing_request(struct connection *pconn,
 				     int request_id);
 static void finish_processing_request(struct connection *pconn);
-static void ping_connection(struct connection *pconn);
-static void send_ping_times_to_all(void);
 
 static bool no_input = FALSE;
 
@@ -176,13 +164,6 @@ static void handle_readline_input_callback(char *line)
 *****************************************************************************/
 void close_connection(struct connection *pconn)
 {
-  while (timer_list_size(pconn->server.ping_timers) > 0) {
-    struct timer *timer = timer_list_get(pconn->server.ping_timers, 0);
-
-    timer_list_unlink(pconn->server.ping_timers, timer);
-    free_timer(timer);
-  }
-
   /* safe to do these even if not in lists: */
   conn_list_unlink(&game.all_connections, pconn);
   conn_list_unlink(&game.est_connections, pconn);
@@ -205,11 +186,9 @@ void close_connection(struct connection *pconn)
 void close_connections_and_socket(void)
 {
   int i;
-  struct packet_generic_message gen_packet;
 
+  struct packet_generic_message gen_packet;
   gen_packet.message[0]='\0';
-  gen_packet.x = gen_packet.y = -1;
-  gen_packet.event = E_NOEVENT;
 
   lsend_packet_generic_message(&game.all_connections, PACKET_SERVER_SHUTDOWN,
 			       &gen_packet);
@@ -225,6 +204,9 @@ void close_connections_and_socket(void)
   if (history_file) {
     write_history(history_file);
     history_truncate_file(history_file, HISTORY_LENGTH);
+  }
+  if (readline_initialized) {
+    rl_callback_handler_remove();
   }
 #endif
 
@@ -355,11 +337,10 @@ int sniff_packets(void)
       }
 
       rl_initialize();
-      rl_callback_handler_install((char *) "> ", handle_readline_input_callback);
+      rl_callback_handler_install("> ", handle_readline_input_callback);
       rl_attempted_completion_function = freeciv_completion;
 
       readline_initialized = TRUE;
-      atexit(rl_callback_handler_remove);
     }
   }
 #endif /* HAVE_LIBREADLINE */
@@ -367,10 +348,8 @@ int sniff_packets(void)
   if(year!=game.year) {
     if (server_state == RUN_GAME_STATE) year=game.year;
   }
-  if (game.timeout == 0) {
-    /* Just in case someone sets timeout we keep game.turn_start updated */
+  if (game.timeout == 0)
     game.turn_start = time(NULL);
-  }
   
   while(TRUE) {
     con_prompt_on();		/* accepting new input */
@@ -381,7 +360,8 @@ int sniff_packets(void)
       return 2;
     }
 
-    /* end server if no players for 'srvarg.quitidle' seconds */
+
+    /* quit server if no players for 'srvarg.quitidle' seconds */
     if (srvarg.quitidle != 0 && server_state != PRE_GAME_STATE) {
       static time_t last_noplayers;
       if(conn_list_size(&game.est_connections) == 0) {
@@ -392,12 +372,8 @@ int sniff_packets(void)
 	    freelog(LOG_NORMAL, srvarg.metaserver_info_line);
 	    (void) send_server_info_to_metaserver(TRUE, FALSE);
 
-            server_state = GAME_OVER_STATE;
-            force_end_of_sniff = TRUE;
-            conn_list_iterate(game.est_connections, pconn) {
-              lost_connection_to_client(pconn);
-              close_connection(pconn);
-            } conn_list_iterate_end;
+	    close_connections_and_socket();
+	    exit(EXIT_SUCCESS);
 	  }
 	} else {
 	  last_noplayers = time(NULL);
@@ -414,44 +390,33 @@ int sniff_packets(void)
       }
     }
 
-    /* Pinging around for statistics */
-    if (time(NULL) > (game.last_ping + game.pingtime)) {
-      /* send data about the previous run */
-      send_ping_times_to_all();
+    /* send PACKET_CONN_PING & cut mute players */
+    if ((time(NULL)>game.last_ping + game.pingtimeout)) {
+      for(i=0; i<MAX_NUM_CONNECTIONS; i++) {
+	struct connection *pconn = &connections[i];
+	if (pconn->used) {
+	  send_packet_generic_empty(pconn, PACKET_CONN_PING);
 
-      conn_list_iterate(game.game_connections, pconn) {
-	if (!pconn->used) {
-	  continue;
+	  if (pconn->ponged) {
+	    pconn->ponged = FALSE;
+	  } else {
+	    freelog(LOG_NORMAL, "cut connection %s due to ping timeout",
+		    conn_description(pconn));
+	    close_socket_callback(pconn);
+	  }
 	}
-
-	if ((timer_list_size(pconn->server.ping_timers) > 0
-	     &&
-	     read_timer_seconds(timer_list_get(pconn->server.ping_timers, 0))
-	     > game.pingtimeout) || pconn->ping_time > game.pingtimeout) {
-	  /* cut mute players */
-	  freelog(LOG_NORMAL, "cut connection %s due to ping timeout",
-		  conn_description(pconn));
-	  close_socket_callback(pconn);
-	}
-	ping_connection(pconn);
-      } conn_list_iterate_end;
-      game.last_ping = time(NULL);
-    }
-
-    /* if we've waited long enough after a failure, respond to the client */
-    for (i = 0; i < MAX_NUM_CONNECTIONS; i++) {
-      struct connection *pconn = &connections[i];
-
-      if (pconn->server.status == AS_FAILED
-          && pconn->server.authentication_stop > 0
-          && time(NULL) >= pconn->server.authentication_stop) {
-        unfail_authentication(pconn);
       }
+      game.last_ping = time(NULL);
     }
 
     /* Don't wait if timeout == -1 (i.e. on auto games) */
     if (server_state != PRE_GAME_STATE && game.timeout == -1) {
       (void) send_server_info_to_metaserver(FALSE, FALSE);
+
+      /* kick out of the srv_main loop */
+      if (server_state == GAME_OVER_STATE) {
+	server_state = PRE_GAME_STATE;
+      }
       return 0;
     }
 
@@ -517,10 +482,8 @@ int sniff_packets(void)
 #endif /* !__VMS */
       }
     }
-    if (game.timeout == 0) {
-      /* Just in case someone sets timeout we keep game.turn_start updated */
+    if (game.timeout == 0)
       game.turn_start = time(NULL);
-    }
 
     if(FD_ISSET(sock, &exceptfs)) {	     /* handle Ctrl-Z suspend/resume */
       continue;
@@ -559,7 +522,8 @@ int sniff_packets(void)
       char buf[BUF_SIZE+1];
       
       if((didget=read(0, buf, BUF_SIZE))==-1) {
-	die("read from stdin failed");
+	freelog(LOG_FATAL, "read from stdin failed");
+	exit(EXIT_FAILURE);
       }
 
       if(didget==0) {
@@ -681,7 +645,7 @@ static const char *makeup_connection_name(int *id)
     if (!find_player_by_name(name)
 	&& !find_player_by_user(name)
 	&& !find_conn_by_id(i)
-	&& !find_conn_by_user(name)) {
+	&& !find_conn_by_name(name)) {
       *id = i;
       return name;
     }
@@ -731,6 +695,7 @@ static int server_accept_connection(int sockfd)
       pconn->buffer = new_socket_packet_buffer();
       pconn->send_buffer = new_socket_packet_buffer();
       pconn->last_write = 0;
+      pconn->ponged = TRUE;
       pconn->first_packet = TRUE;
       pconn->byte_swap = FALSE;
       pconn->capability[0] = '\0';
@@ -739,24 +704,16 @@ static int server_accept_connection(int sockfd)
       pconn->notify_of_writable_data = NULL;
       pconn->server.currently_processed_request_id = 0;
       pconn->server.last_request_id_seen = 0;
-      pconn->server.authentication_tries = 0;
-      pconn->server.authentication_stop = 0;
-      pconn->server.status = AS_NOT_ESTABLISHED;
-      pconn->server.ping_timers = malloc(sizeof(*pconn->server.ping_timers));
-      timer_list_init(pconn->server.ping_timers);
-      pconn->ping_time = -1.0;
       pconn->incoming_packet_notify = NULL;
       pconn->outgoing_packet_notify = NULL;
 
-      sz_strlcpy(pconn->username, makeup_connection_name(&pconn->id));
+      sz_strlcpy(pconn->name, makeup_connection_name(&pconn->id));
       sz_strlcpy(pconn->addr,
 		 (from ? from->h_name : inet_ntoa(fromend.sin_addr)));
 
       conn_list_insert_back(&game.all_connections, pconn);
   
-      freelog(LOG_VERBOSE, "connection (%s) from %s", 
-              pconn->username, pconn->addr);
-      ping_connection(pconn);
+      freelog(LOG_VERBOSE, "connection (%s) from %s", pconn->name, pconn->addr);
       return 0;
     }
   }
@@ -775,7 +732,8 @@ int server_open_socket(void)
   int opt;
 
   if((sock = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
-    die("socket failed: %s", mystrerror(errno));
+    freelog(LOG_FATAL, "socket failed: %s", mystrerror(errno));
+    exit(EXIT_FAILURE);
   }
 
   opt=1; 
@@ -856,68 +814,4 @@ static void finish_processing_request(struct connection *pconn)
 	  pconn->server.currently_processed_request_id, pconn->id);
   send_packet_generic_empty(pconn, PACKET_PROCESSING_FINISHED);
   pconn->server.currently_processed_request_id = 0;
-}
-
-/**************************************************************************
-...
-**************************************************************************/
-static void ping_connection(struct connection *pconn)
-{
-  freelog(LOG_DEBUG, "sending ping to %s (open=%d)",
-	  conn_description(pconn),
-	  timer_list_size(pconn->server.ping_timers));
-  timer_list_insert_back(pconn->server.ping_timers,
-			 new_timer_start(TIMER_USER, TIMER_ACTIVE));
-  send_packet_generic_empty(pconn, PACKET_CONN_PING);
-}
-
-/**************************************************************************
-...
-**************************************************************************/
-void handle_conn_pong(struct connection *pconn)
-{
-  struct timer *timer;
-
-  if (timer_list_size(pconn->server.ping_timers) == 0) {
-    freelog(LOG_NORMAL, "got unexpected pong from %s",
-	    conn_description(pconn));
-    return;
-  }
-
-  timer = timer_list_get(pconn->server.ping_timers, 0);
-  timer_list_unlink(pconn->server.ping_timers, timer);
-  pconn->ping_time = read_timer_seconds_free(timer);
-  freelog(LOG_DEBUG, "got pong from %s (open=%d); ping time = %fs",
-	  conn_description(pconn),
-	  timer_list_size(pconn->server.ping_timers), pconn->ping_time);
-}
-
-/**************************************************************************
-...
-**************************************************************************/
-static void send_ping_times_to_all(void)
-{
-  struct packet_ping_info packet;
-  int i;
-
-  i = 0;
-  conn_list_iterate(game.game_connections, pconn) {
-    if (!pconn->used) {
-      continue;
-    }
-    i++;
-  } conn_list_iterate_end;
-
-  packet.connections = i;
-
-  i = 0;
-  conn_list_iterate(game.game_connections, pconn) {
-    if (!pconn->used) {
-      continue;
-    }
-    packet.conn_id[i] = pconn->id;
-    packet.ping_time[i] = pconn->ping_time;
-    i++;
-  } conn_list_iterate_end;
-  lsend_packet_ping_info(&game.est_connections, &packet);
 }

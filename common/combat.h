@@ -26,17 +26,13 @@
 struct unit;
 struct player;
 
-bool can_player_attack_tile(struct player *pplayer, int x, int y);
-bool can_unit_attack_unit_at_tile(struct unit *punit, struct unit *pdefender,
-                                  int dest_x, int dest_y);
-bool can_unit_attack_tile(struct unit *punit, int dest_x, int dest_y);
-
 double win_chance(int as, int ahp, int afp, int ds, int dhp, int dfp);
 
 void get_modified_firepower(struct unit *attacker, struct unit *defender,
 			    int *att_fp, int *def_fp);
 double unit_win_chance(struct unit *attacker, struct unit *defender);
 
+bool unit_ignores_citywalls(struct unit *punit);
 bool unit_really_ignores_citywalls(struct unit *punit);
 bool unit_behind_walls(struct unit *punit);
 bool unit_on_fortress(struct unit *punit);
@@ -57,5 +53,4 @@ int get_total_attack_power(struct unit *attacker, struct unit *defender);
 struct unit *get_defender(struct unit *attacker, int x, int y);
 struct unit *get_attacker(struct unit *defender, int x, int y);
 
-bool is_stack_vulnerable(int x, int y);
 #endif /* FC__COMBAT_H */

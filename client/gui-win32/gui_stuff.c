@@ -10,9 +10,8 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/ 
-
 #ifdef HAVE_CONFIG_H
-#include <config.h>
+#include "config.h"
 #endif
 
 #include "genlist.h"
@@ -251,7 +250,7 @@ static LONG APIENTRY layout_wnd_proc(HWND hWnd,
 /**************************************************************************
 
 **************************************************************************/
-void init_layoutwindow(void)
+void init_layoutwindow()
 {
   WNDCLASS *wndclass;
   wndclass=fc_malloc(sizeof(WNDCLASS));
@@ -262,7 +261,7 @@ void init_layoutwindow(void)
   wndclass->hIcon=NULL;
   wndclass->hCursor=LoadCursor(NULL,IDC_ARROW);
   wndclass->hInstance=freecivhinst;
-  wndclass->hbrBackground=CreateSolidBrush(GetSysColor(15));
+  wndclass->hbrBackground=CreateSolidBrush(GetSysColor(4));
   wndclass->lpszClassName=CLASSNAME;
   wndclass->lpszMenuName=(LPSTR)NULL;
   if (!RegisterClass(wndclass))
@@ -333,7 +332,7 @@ HWND fcwin_create_layouted_window(WNDPROC user_wndproc,
 /**************************************************************************
 
 **************************************************************************/
-static struct fcwin_box * fcwin_box_new(int horiz, HWND owner, int same_size)
+struct fcwin_box * fcwin_box_new(int horiz, HWND owner, int same_size)
 {
   struct fcwin_box *fcb;
   fcb=fc_malloc(sizeof(struct fcwin_box));
@@ -546,7 +545,7 @@ void fcwin_box_add_win(struct fcwin_box *box,
 /**************************************************************************
 
 **************************************************************************/
-static void button_minsize(LPPOINT minsize, void *data)
+void button_minsize(LPPOINT minsize, void *data)
 {
   win_minsize(minsize,data);
   minsize->x=minsize->x+4;
@@ -987,7 +986,7 @@ static void combo_minsize(POINT *minsize,void *data)
 /**************************************************************************
 
 **************************************************************************/
-static void combo_setsize(LPRECT size, void *data)
+void combo_setsize(LPRECT size,void *data)
 {
   struct list_data *ld=data;
   MoveWindow(ld->win,size->left,size->top,

@@ -21,6 +21,7 @@
 
 #ifdef ENABLE_NLS
 #include <libintl.h>
+
 #ifdef HAVE_LOCALE_H
 #include <locale.h>
 #endif

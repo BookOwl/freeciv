@@ -382,17 +382,11 @@ static void option_ok_command_callback(GtkWidget *widget, gpointer data)
     case COT_BOOL:
       b = *(o->p_bool_value);
       *(o->p_bool_value) = GTK_TOGGLE_BUTTON(o->p_gui_data)->active;
-      if (b != *(o->p_bool_value) && o->change_callback) {
-	(o->change_callback)(o);
-      }
       break;
     case COT_INT:
       i = *(o->p_int_value);
       dp = gtk_entry_get_text(GTK_ENTRY(o->p_gui_data));
       sscanf(dp, "%d", o->p_int_value);
-      if (i != *(o->p_int_value) && o->change_callback) {
-	(o->change_callback)(o);
-      }
       break;
     case COT_STR:
       if (o->p_string_vals) {
@@ -400,9 +394,6 @@ static void option_ok_command_callback(GtkWidget *widget, gpointer data)
 					(GTK_COMBO(o->p_gui_data)->entry));
 	if (strcmp(o->p_string_value, new_value)) {
 	  mystrlcpy(o->p_string_value, new_value, o->string_length);
-	  if (o->change_callback) {
-	    (o->change_callback)(o);
-	  }
 	}
       } else {
 	mystrlcpy(o->p_string_value,

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -140,9 +139,8 @@ popup_goto_dialog(void)
   struct fcwin_box *vbox;
   if (goto_dialog)
     return;
-  if (!can_client_change_view()) {
+  if (get_client_state()!=CLIENT_GAME_RUNNING_STATE)
     return;
-  }
   if (get_unit_in_focus()==0)
     return;
 

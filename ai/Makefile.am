@@ -2,7 +2,7 @@
 
 noinst_LIBRARIES = libcivai.a
 
-INCLUDES = -I$(srcdir)/../common -I$(srcdir)/../server -I../intl -I$(top_srcdir)/common/aicore
+INCLUDES = -I$(srcdir)/../common -I$(srcdir)/../server -I../intl
 
 ## Above, note -I../intl instead of -I$(top_srdir/intl) is deliberate.
 
@@ -21,14 +21,10 @@ libcivai_a_SOURCES = \
 		advmilitary.h	\
 		advscience.c	\
 		advscience.h	\
-		advdiplomacy.c	\
-		advdiplomacy.h	\
 		advspace.c	\
 		advspace.h	\
 		advtrade.c	\
 		advtrade.h	\
-		aiair.c		\
-		aiair.h		\
 		aicity.c	\
 		aicity.h	\
 		aidata.c	\
@@ -42,6 +38,4 @@ libcivai_a_SOURCES = \
 		aitools.c	\
 		aitools.h	\
 		aiunit.c	\
-		aiunit.h	\
-		aidiplomat.c	\
-		aidiplomat.h
+		aiunit.h

@@ -15,17 +15,19 @@
 
 #include <gtk/gtk.h>
 
-#include "citydlg_common.h"
-#include "mapview_common.h"
+#include "gtkpixcomm.h"
+
 #include "mapview_g.h"
+#include "mapview_common.h"
 
 #include "graphics.h"
-#include "gtkpixcomm.h"
 
 struct unit;
 struct city;
 
 GdkPixmap *get_thumb_pixmap(int onoff);
+GdkPixmap *get_citizen_pixmap(int frame);
+SPRITE *get_citizen_sprite(int frame);
 
 gint overview_canvas_expose(GtkWidget *w, GdkEventExpose *ev);
 gint map_canvas_expose(GtkWidget *w, GdkEventExpose *ev);
@@ -39,24 +41,17 @@ void put_one_tile_full(GdkDrawable *pm, int x, int y,
 		       int canvas_x, int canvas_y, int citymode);
 void pixmap_frame_tile_red(GdkDrawable *pm,
 			   int canvas_x, int canvas_y);
+void pixmap_put_tile(GdkDrawable *pm, int x, int y,
+		     int canvas_x, int canvas_y, int citymode);
 void pixmap_put_black_tile(GdkDrawable *pm,
 			   int canvas_x, int canvas_y);
-
-void pixmap_put_sprite_full(GdkDrawable *pixmap,
-			    int pixmap_x, int pixmap_y,
-			    struct Sprite *ssprite);
 
 void scrollbar_jump_callback(GtkAdjustment *adj, gpointer hscrollbar);
 void update_map_canvas_scrollbars_size(void);
 
-/* These values are stored in the mapview_canvas struct now. */
-#define map_view_x0 mapview_canvas.map_x0
-#define map_view_y0 mapview_canvas.map_y0
-#define map_canvas_store_twidth mapview_canvas.tile_width
-#define map_canvas_store_theight mapview_canvas.tile_height
+void get_map_xy(int canvas_x, int canvas_y, int *map_x, int *map_y);
 
-/* Use of these wrapper functions is deprecated. */
-#define get_canvas_xy(map_x, map_y, canvas_x, canvas_y) \
-  map_to_canvas_pos(canvas_x, canvas_y, map_x, map_y)
+/* contains the x0, y0 coordinates of the upper left corner block */
+extern int map_view_x0, map_view_y0;
 
 #endif  /* FC__MAPVIEW_H */

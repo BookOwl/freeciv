@@ -13,7 +13,8 @@ options="1.9"
 
 ; Below: nations data in sections [nation_*] for
 ; all nations available. If you want to have more
-; nations just add one at the end.
+; nations just add one at the end. There is a maximum
+; of 63 nations however. I hope it is enough :-)
 ;
 ; Notes:
 ;
@@ -44,6 +45,9 @@ options="1.9"
 ; default cities for your nation. See doc/README.rulesets for information
 ; on marking up cities with terrain information.
 ;
+
+; Note: do not change the following order for default nations.ruleset,
+; or nations in savegames will become wrong.
 
 *include "nation/roman.ruleset"
 *include "nation/babylonian.ruleset"

@@ -15,6 +15,4 @@
 
 #include "citydlg_g.h"
 
-void reset_city_dialogs(void);
-
 #endif				/* FC__CITYDLG_H */

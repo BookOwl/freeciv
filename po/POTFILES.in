@@ -14,14 +14,12 @@ common/unit.c
 common/unittype.c
 common/version.c
 ai/aicity.c
-ai/advdiplomacy.c
 server/autoattack.c
 server/barbarian.c
 server/cityhand.c
 server/citytools.c
 server/cityturn.c
 server/civserver.c
-server/connecthand.c
 server/console.c
 server/diplhand.c
 server/diplomats.c
@@ -52,7 +50,6 @@ client/control.c
 client/helpdata.c
 client/options.c
 client/packhand.c
-client/plrdlg_common.c
 client/tilespec.c
 client/agents/cma_core.c
 client/agents/cma_fec.c

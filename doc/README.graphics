@@ -54,48 +54,14 @@ specially: these graphics are freed after the game starts, and
 reloaded later as necessary.
 
 ----------------------------------------------------------------------
-Tileset options:
-----------------
-
-In the top-level tilespec file you can set options for the tileset.
-Each of these should go within the [tilespec] section. Currently
-options include:
-
-  Strings (enclosed in "")
-  ------------------------
-  options               : A capability string, currently "+tilespec2"
-  name                  : the name of the tileset
-  city_names_font       : an X font string
-  city_productions_font : an X font string
-  main_intro_file       : GFX file for the intro graphics
-  minimap_intro_file    : GFX file for the radar screen intro graphics
-
-  Integers
-  --------
-  normal_tile_width     : the width of terrain tiles
-  normal_tile_height    : the height of terrain tiles
-  small_tile_width      : the width of icon sprites
-  small_tile_height     : the height of icon sprites
-
-  Booleans (0 or 1)
-  -----------------
-  is_isometric          : set to 1 for an iso-view tileset
-  is_mountainous        : do hills and mountains blend together?
-
-  String lists (a comma-separated list of strings)
-  ------------------------------------------------
-  files                 : A list of .spec files to scan for sprites.
-                          See "individual spec files", below.
-
-----------------------------------------------------------------------
 Individual spec files:
 ----------------------
 
-Each spec file describes one graphics file (PNG format is standard,
-although some clients may accept other formats as well) as specified in
-the spec file.  The graphics file must be in the Freeciv data path, but
-not necessarily in the same location as the spec file.  Note you can have
-multiple spec files using a single graphics file in different ways.
+Each spec file describes one graphics file (currently xpm format only)
+as specified in the spec file.  The graphics file must be in the
+Freeciv data path, but not necessarily "near" the spec file.  (Thus
+you could have multiple spec files using a single graphics file in
+different ways.)
 
 The main data described in the spec file is in sections named
 [grid_*], where * is some arbitrary tag (but unique within each file).
@@ -156,34 +122,4 @@ graphics.  (The basic size may vary, as specified in the top-level
 tilespec file, but the individual tiles should be consistent with
 those sizes and/or the usage of those graphics.)
   
-----------------------------------------------------------------------
-
-Information on certain tags:
-
-  citizen.*
-
-    This provides citizen graphics.  The types of citizen are happy,
-    content, unhappy, angry, entertainer, scientist, and
-    tax_collector. The name of the citizen forms the postfix for the
-    tag name; for instance "citizen.entertainer" should be the Elvis
-    sprite.  More than one sprite can be provide for the citizen type
-    by appending a number; for instance "citizen.happy_0" and
-    "citizen.happy_1" will provide two citizen sprites.  There is a
-    hard-coded limit (currently 6) on the number of different sprites
-    a citizen may have.
-
-    Currently the citizen sprites may not have any transparency, as
-    this is ignored in much of the drawing.  This is considered a bug.
-
-  farmland/irrigation:
-
-    tx.farmland and tx.irrigation provide the basic sprites for farmland
-    and irrigation.  Additionally, there is support for drawing continuous
-    farmland and irrigation (as is used in Civ3).  Here there are 16
-    irrigation sprites (and the same for farmland), starting with
-    tx.s_irrigation_n0s0e0w0 and running through tx.s_irrigation_n1s1e1w1.
-    An appropriate sprite will be chosen depending on which adjacent tiles
-    also have farmland/irrigation.  If any of these sprites are not present,
-    the default sprite will be used as a fallback.
-
 ----------------------------------------------------------------------

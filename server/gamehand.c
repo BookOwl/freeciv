@@ -10,20 +10,19 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
 #include <assert.h>
 
-#include "events.h"
 #include "fcintl.h"
 #include "improvement.h"
 #include "log.h"
 #include "mem.h"
 #include "packets.h"
 #include "rand.h"
+#include "events.h"
 
 #include "maphand.h"
 #include "plrhand.h"
@@ -37,17 +36,10 @@
 **************************************************************************/
 void init_new_game(void)
 {
-  static const char chars[] =
-      "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
   int i, j, x, y;
   int dx, dy;
   Unit_Type_id utype;
   int start_pos[MAX_NUM_PLAYERS]; /* indices into map.start_positions[] */
-
-  for (i = 0; i < sizeof(game.id) - 1; i++) {
-    game.id[i] = chars[myrand(sizeof(chars) - 1)];
-  }
-  game.id[i] = '\0';
 
   if (!map.fixed_start_positions) {
     /* except in a scenario which provides them,
@@ -119,17 +111,15 @@ void init_new_game(void)
 	dx = x;
 	dy = y;
       } else {
-	bool is_real;
-
 	do {
 	  dx = x + myrand(2 * game.dispersion + 1) - game.dispersion;
 	  dy = y + myrand(2 * game.dispersion + 1) - game.dispersion;
-	  is_real = normalize_map_pos(&dx, &dy);
-	} while (!(is_real
-		   && map_get_continent(x, y) == map_get_continent(dx, dy)
-		   && !is_ocean(map_get_terrain(dx, dy))
-		   && !is_non_allied_unit_tile(map_get_tile(dx, dy),
-					       get_player(i))));
+	  (void) normalize_map_pos(&dx, &dy);
+	} while (!(is_real_tile(dx, dy)
+                   && map_get_continent(x, y) == map_get_continent(dx, dy)
+                   && map_get_terrain(dx, dy) != T_OCEAN
+                   && !is_non_allied_unit_tile(map_get_tile(dx, dy),
+                    			       get_player(i))));
       }
       /* For scenarios or dispersion, huts may coincide with player
 	 starts (in other cases, huts are avoided as start positions).
@@ -154,6 +144,12 @@ void init_new_game(void)
 
   /* Initialise list of improvements with world-wide equiv_range */
   improvement_status_init(game.improvements, ARRAY_SIZE(game.improvements));
+
+  /* Free vector of effects with world-wide range. */
+  geff_vector_free(&game.effects);
+
+  /* Free vector of destroyed effects */
+  ceff_vector_free(&game.destroyed_effects);
 }
 
 /**************************************************************************
@@ -161,7 +157,7 @@ void init_new_game(void)
 **************************************************************************/
 void send_start_turn_to_clients(void)
 {
-  lsend_packet_generic_empty(&game.game_connections, PACKET_START_TURN);
+  lsend_packet_generic_empty(&game.est_connections, PACKET_START_TURN);
 }
 
 /**************************************************************************
@@ -181,16 +177,16 @@ void send_year_to_clients(int year)
 
   apacket.year = year;
   apacket.turn = game.turn;
-  lsend_packet_new_year(&game.game_connections, &apacket);
+  lsend_packet_new_year(&game.est_connections, &apacket);
 
   /* Hmm, clients could add this themselves based on above packet? */
-  notify_conn_ex(&game.game_connections, -1, -1, E_NEXT_YEAR, _("Year: %s"),
+  notify_conn_ex(&game.est_connections, -1, -1, E_NEXT_YEAR, _("Year: %s"),
 		 textyear(year));
 }
 
 
 /**************************************************************************
-  Send specified state; should be a CLIENT_GAME_*_STATE ?
+  Send specifed state; should be a CLIENT_GAME_*_STATE ?
   (But note client also changes state from other events.)
 **************************************************************************/
 void send_game_state(struct conn_list *dest, int state)
@@ -203,7 +199,7 @@ void send_game_state(struct conn_list *dest, int state)
 
 /**************************************************************************
   Send game_info packet; some server options and various stuff...
-  dest==NULL means game.game_connections
+  dest==NULL means game.est_connections
 **************************************************************************/
 void send_game_info(struct conn_list *dest)
 {
@@ -211,7 +207,7 @@ void send_game_info(struct conn_list *dest)
   int i;
 
   if (!dest)
-    dest = &game.game_connections;
+    dest = &game.est_connections;
 
   ginfo.gold = game.gold;
   ginfo.tech = game.tech;
@@ -228,7 +224,6 @@ void send_game_info(struct conn_list *dest)
   ginfo.heating = game.heating;
   ginfo.nuclearwinter = game.nuclearwinter;
   ginfo.cooling = game.cooling;
-  ginfo.diplomacy = game.diplomacy;
   ginfo.techpenalty = game.techpenalty;
   ginfo.foodbox = game.foodbox;
   ginfo.civstyle = game.civstyle;
@@ -286,7 +281,7 @@ int update_timeout(void)
     game.timeoutint += game.timeoutintinc;
 
     if (game.timeout > GAME_MAX_TIMEOUT) {
-      notify_conn_ex(&game.game_connections, -1, -1, E_NOEVENT,
+      notify_conn_ex(&game.est_connections, -1, -1, E_NOEVENT,
 		     _("The turn timeout has exceeded its maximum value, "
 		       "fixing at its maximum"));
       freelog(LOG_DEBUG, "game.timeout exceeded maximum value");
@@ -294,7 +289,7 @@ int update_timeout(void)
       game.timeoutint = 0;
       game.timeoutinc = 0;
     } else if (game.timeout < 0) {
-      notify_conn_ex(&game.game_connections, -1, -1, E_NOEVENT,
+      notify_conn_ex(&game.est_connections, -1, -1, E_NOEVENT,
 		     _("The turn timeout is smaller than zero, "
 		       "fixing at zero."));
       freelog(LOG_DEBUG, "game.timeout less than zero");

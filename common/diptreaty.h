@@ -13,12 +13,13 @@
 #ifndef FC__DIPTREATY_H
 #define FC__DIPTREATY_H
 
+#include "genlist.h"
 #include "shared.h"		/* bool type */
 
 enum clause_type { CLAUSE_ADVANCE, CLAUSE_GOLD, CLAUSE_MAP,
 		   CLAUSE_SEAMAP, CLAUSE_CITY, 
 		   CLAUSE_CEASEFIRE, CLAUSE_PEACE, CLAUSE_ALLIANCE,
-		   CLAUSE_VISION, CLAUSE_LAST };
+		   CLAUSE_VISION};
 
 #define is_pact_clause(x) \
   ((x == CLAUSE_CEASEFIRE) || (x == CLAUSE_PEACE) || (x == CLAUSE_ALLIANCE))
@@ -44,10 +45,6 @@ struct Treaty {
   bool accept0, accept1;
   struct clause_list clauses;
 };
-
-bool diplomacy_possible(struct player *pplayer, struct player *aplayer);
-bool could_meet_with_player(struct player *pplayer, struct player *aplayer);
-bool could_intel_with_player(struct player *pplayer, struct player *aplayer);
 
 void init_treaty(struct Treaty *ptreaty, 
 		 struct player *plr0, struct player *plr1);

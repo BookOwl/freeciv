@@ -10,24 +10,28 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
 #include <assert.h>
-#include <errno.h>
 #include <string.h>
+#include <errno.h>
 
-#ifdef HAVE_SYS_SELECT_H
-#include <sys/select.h>
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
 #endif
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
 #endif
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#ifdef HAVE_SYS_TIME_H
+#include <sys/time.h>
 #endif
+
+#ifdef HAVE_SYS_SELECT_H
+#include <sys/select.h>
+#endif
+
 #ifdef HAVE_WINSOCK
 #include <winsock.h>
 #endif
@@ -89,7 +93,7 @@ enum cmdlevel_id cmdlevel_named(const char *token)
   enum cmdlevel_id i;
   size_t len = strlen(token);
 
-  for (i = 0; i < ALLOW_NUM; i++) {
+  for (i = 0; i < ALLOW_NUM; ++i) {
     if (strncmp(levelnames[i], token, len) == 0) {
       return i;
     }
@@ -120,7 +124,7 @@ void close_socket_set_callback(CLOSE_FUN fun)
 /**************************************************************************
   Read data from socket, and check if a packet is ready.
   Returns:
-    -1  :  an error occurred - you should close the socket
+    -1  :  an error occured - you should close the socket
     >0  :  number of bytes read
     =0  :  non-blocking sockets only; no data read, would block
 **************************************************************************/
@@ -244,7 +248,7 @@ void flush_connection_send_buffer_all(struct connection *pc)
 /**************************************************************************
   flush'em
 **************************************************************************/
-static void flush_connection_send_buffer_packets(struct connection *pc)
+void flush_connection_send_buffer_packets(struct connection *pc)
 {
   if(pc && pc->used && pc->send_buffer->ndata >= MAX_LEN_PACKET) {
     write_socket_data(pc, pc->send_buffer, MAX_LEN_PACKET-1);
@@ -349,7 +353,7 @@ void connection_do_unbuffer(struct connection *pc)
   if (pc && pc->used) {
     pc->send_buffer->do_buffer_sends--;
     if (pc->send_buffer->do_buffer_sends < 0) {
-      freelog(LOG_ERROR, "Too many calls to unbuffer %s!", pc->username);
+      freelog(LOG_ERROR, "Too many calls to unbuffer %s!", pc->name);
       pc->send_buffer->do_buffer_sends = 0;
     }
     if(pc->send_buffer->do_buffer_sends == 0)
@@ -374,38 +378,38 @@ void conn_list_do_unbuffer(struct conn_list *dest)
 }
 
 /***************************************************************
-  Find connection by exact user name, from game.all_connections,
+  Find connection by exact name, from game.all_connections,
   case-insensitve.  Returns NULL if not found.
 ***************************************************************/
-struct connection *find_conn_by_user(const char *user_name)
+struct connection *find_conn_by_name(const char *name)
 {
   conn_list_iterate(game.all_connections, pconn) {
-    if (mystrcasecmp(user_name, pconn->username)==0) {
+    if (mystrcasecmp(name, pconn->name)==0) {
       return pconn;
     }
-  } conn_list_iterate_end;
+  }
+  conn_list_iterate_end;
   return NULL;
 }
 
 /***************************************************************
-  Like find_conn_by_username(), but allow unambigous prefix
+  Like find_conn_by_name(), but allow unambigous prefix
   (ie abbreviation).
   Returns NULL if could not match, or if ambiguous or other
   problem, and fills *result with characterisation of
   match/non-match (see shared.[ch])
 ***************************************************************/
 static const char *connection_accessor(int i) {
-  return conn_list_get(&game.all_connections, i)->username;
+  return conn_list_get(&game.all_connections, i)->name;
 }
-
-struct connection *find_conn_by_user_prefix(const char *user_name,
-                                            enum m_pre_result *result)
+struct connection *find_conn_by_name_prefix(const char *name,
+					    enum m_pre_result *result)
 {
   int ind;
 
   *result = match_prefix(connection_accessor,
 			 conn_list_size(&game.all_connections),
-			 MAX_LEN_NAME-1, mystrncasecmp, user_name, &ind);
+			 MAX_LEN_NAME-1, mystrncasecmp, name, &ind);
   
   if (*result < M_PRE_AMBIGUOUS) {
     return conn_list_get(&game.all_connections, ind);
@@ -474,9 +478,9 @@ const char *conn_description(const struct connection *pconn)
 
   buffer[0] = '\0';
 
-  if (*pconn->username != '\0') {
+  if (*pconn->name != '\0') {
     my_snprintf(buffer, sizeof(buffer), _("%s from %s"),
-		pconn->username, pconn->addr); 
+		pconn->name, pconn->addr); 
   } else {
     sz_strlcpy(buffer, "server");
   }

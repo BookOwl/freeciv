@@ -16,5 +16,6 @@
 void assign_continent_numbers(void);
 void map_fractal_generate(void);
 void create_start_positions(void);
+void adjust_terrain_param(void);
 
 #endif  /* FC__MAPGEN_H */

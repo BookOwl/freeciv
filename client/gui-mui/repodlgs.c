@@ -10,15 +10,14 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
-#include <assert.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
+#include <stdlib.h>
+#include <assert.h>
 
 #include <libraries/mui.h>
 #include <mui/NListview_MCC.h>
@@ -124,7 +123,7 @@ static void science_goal(ULONG * newgoal)
   int i;
   int to = -1;
 
-  if (game.player_ptr->ai.tech_goal == A_UNSET)
+  if (game.player_ptr->ai.tech_goal == A_NONE)
     if (help_goal_entries[*newgoal] == (STRPTR) advances[A_NONE].name)
       to = 0;
   for (i = A_FIRST; i < game.num_tech_types; i++)
@@ -210,7 +209,8 @@ void popup_science_dialog(bool make_modal)
     help_goal_entries = NULL;
   }
 
-  if (!is_future_tech(game.player_ptr->research.researching)) {
+  if (game.player_ptr->research.researching != A_NONE)
+  {
     for (i = A_FIRST, j = 0; i < game.num_tech_types; i++)
     {
       if (get_invention(game.player_ptr, i) != TECH_REACHABLE)
@@ -240,24 +240,22 @@ void popup_science_dialog(bool make_modal)
 
   for (i = A_FIRST, j = 0; i < game.num_tech_types; i++)
   {
-    if (tech_is_available(game.player_ptr, i)
-	&& get_invention(game.player_ptr, i) != TECH_KNOWN &&
-	&& advances[i].req[0] != A_LAST && advances[i].req[1] != A_LAST
-	&& num_unknown_techs_for_goal(game.player_ptr, i) < 11)
+    if (get_invention(game.player_ptr, i) != TECH_KNOWN &&
+	advances[i].req[0] != A_LAST && advances[i].req[1] != A_LAST &&
+	num_unknown_techs_for_goal(game.player_ptr, i) < 11)
       j++;
   }
-  if (game.player_ptr->ai.tech_goal == A_UNSET) {
+  if (game.player_ptr->ai.tech_goal == A_NONE)
     j++;
-  }
 
   if (j)
   {
     if ((help_goal_entries = (STRPTR *) malloc((j + 2) * sizeof(STRPTR))))
     {
       j = 0;
-      if (game.player_ptr->ai.tech_goal == A_UNSET) {
+      if (game.player_ptr->ai.tech_goal == A_NONE)
 	help_goal_entries[j++] = advances[A_NONE].name;
-      }
+
 
       for (i = A_FIRST; i < game.num_tech_types; i++)
       {
@@ -513,10 +511,14 @@ static void trade_sell(int *data)
       if (!pcity->did_sell && city_got_building(pcity, i) &&
 	  (*data || improvement_obsolete(game.player_ptr, i) || wonder_replacement(pcity, i)))
     {
+      struct packet_city_request packet;
+
       count++;
       gold += improvement_value(i);
 
-      city_sell_improvement(pcity, i);
+      packet.city_id = pcity->id;
+      packet.build_id = i;
+      send_packet_city_request(&aconnection, &packet, PACKET_CITY_SELL);
     }
     city_list_iterate_end
 

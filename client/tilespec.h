@@ -15,23 +15,16 @@
   Reading and using the tilespec files, which describe
   the files and contents of tilesets.
 ***********************************************************************/
+
 #ifndef FC__TILESPEC_H
 #define FC__TILESPEC_H
-
 #include "map.h"		/* NUM_DIRECTION_NSEW */
 
-#include "citydlg_common.h"	/* enum citizen_type */
 #include "colors_g.h"
-#include "options.h"
 
 struct Sprite;			/* opaque; gui-dep */
 struct unit;
 struct player;
-
-struct drawn_sprite {
-  struct Sprite *sprite;
-  int offset_x, offset_y;	/* offset from tile origin */
-};
 
 const char **get_tileset_list(void);
 
@@ -39,12 +32,7 @@ void tilespec_read_toplevel(const char *tileset_name);
 void tilespec_load_tiles(void);
 void tilespec_free_tiles(void);
 
-void tilespec_reread(const char *tileset_name);
-void tilespec_reread_callback(struct client_option *option);
-
 void tilespec_setup_unit_type(int id);
-void tilespec_setup_impr_type(int id);
-void tilespec_setup_tech_type(int id);
 void tilespec_setup_tile_type(int id);
 void tilespec_setup_government(int id);
 void tilespec_setup_nation_flag(int id);
@@ -54,18 +42,14 @@ void tilespec_free_city_tiles(int count);
 
 /* Gfx support */
 
-int fill_tile_sprite_array_iso(struct drawn_sprite *sprs,
-			       struct Sprite **coasts,
+int fill_tile_sprite_array_iso(struct Sprite **sprs, struct Sprite **coasts,
 			       struct Sprite **dither,
 			       int x, int y, bool citymode,
-			       bool *solid_bg);
-int fill_tile_sprite_array(struct drawn_sprite *sprs, int abs_x0, int abs_y0,
-			   bool citymode, bool *solid_bg,
-			   struct player **pplayer);
-int fill_unit_sprite_array(struct drawn_sprite *sprs,
-			   struct unit *punit, bool *solid_bg);
-int fill_city_sprite_array_iso(struct drawn_sprite *sprs,
-			       struct city *pcity);
+			       int *solid_bg);
+int fill_tile_sprite_array(struct Sprite **sprs, int abs_x0, int abs_y0,
+			   bool citymode, int *solid_bg, struct player **pplayer);
+int fill_unit_sprite_array(struct Sprite **sprs, struct unit *punit, int *solid_bg);
+int fill_city_sprite_array_iso(struct Sprite **sprs, struct city *pcity);
 
 enum color_std player_color(struct player *pplayer);
 enum color_std overview_tile_color(int x, int y);
@@ -87,10 +71,9 @@ struct unit *get_drawable_unit(int x, int y, bool citymode);
                              ((w) ? BIT_WEST  : 0))
 
 #define NUM_TILES_PROGRESS 8
-#define NUM_TILES_CITIZEN CITIZEN_LAST
+#define NUM_TILES_CITIZEN 11
 #define NUM_TILES_HP_BAR 11
 #define NUM_TILES_DIGITS 10
-#define MAX_NUM_CITIZEN_SPRITES 6
 
 /* This could be moved to common/map.h if there's more use for it. */
 enum direction4 {
@@ -102,19 +85,13 @@ struct named_sprites {
     *bulb[NUM_TILES_PROGRESS],
     *warming[NUM_TILES_PROGRESS],
     *cooling[NUM_TILES_PROGRESS],
+    *citizen[NUM_TILES_CITIZEN],   /* internal code... */
     *treaty_thumb[2],     /* 0=disagree, 1=agree */
     *right_arrow,
 
     *black_tile,      /* only used for isometric view */
     *dither_tile,     /* only used for isometric view */
     *coast_color;     /* only used for isometric view */
-
-  struct {
-    /* Each citizen type has up to MAX_NUM_CITIZEN_SPRITES different
-     * sprites, as defined by the tileset. */
-    int count;
-    struct Sprite *sprite[MAX_NUM_CITIZEN_SPRITES];
-  } citizen[NUM_TILES_CITIZEN];
   struct {
     struct Sprite
       *solar_panels,
@@ -126,14 +103,12 @@ struct named_sprites {
   } spaceship;
   struct {
     struct Sprite
-      /* for roadstyle 0 */
-      *dir[8],     /* all entries used */
-      /* for roadstyle 1 */
-      *cardinal[NUM_DIRECTION_NSEW],     /* first unused */
-      *diagonal[NUM_DIRECTION_NSEW],     /* first unused */
-      /* for roadstyle 0 and 1 */
       *isolated,
-      *corner[NUM_DIRECTION_NSEW]; /* only diagonal directions used */
+      /* for isometric*/
+      *dir[8],     /* first used! */
+      /* for non-isometric */
+      *cardinal[NUM_DIRECTION_NSEW],     /* first unused */
+      *diagonal[NUM_DIRECTION_NSEW];     /* first unused */
   } road, rail;
   struct {
     struct Sprite *nuke[3][3];	         /* row, column, from top-left */
@@ -186,8 +161,8 @@ struct named_sprites {
   } user;
   struct {
     struct Sprite
-      *farmland[NUM_DIRECTION_NSEW],
-      *irrigation[NUM_DIRECTION_NSEW],
+      *farmland,
+      *irrigation,
       *mine,
       *oil_mine,
       *pollution,
@@ -213,34 +188,36 @@ struct named_sprites {
 
 extern struct named_sprites sprites;
 
-struct Sprite *get_citizen_sprite(enum citizen_type type, int citizen_index,
-				  struct city *pcity);
-
 /* full pathnames: */
 extern char *main_intro_filename;
 extern char *minimap_intro_filename;
 
-/* These variables contain the size of the tiles used within the game.
+/* NOTE: The following comments are out of date and need to
+ *       be revised!  -- dwp
  *
- * "normal" tiles include most mapview graphics, particularly the basic
- * terrain graphics.
+ * These variables contain thee size of the tiles used within the game.
+ * Tiles for the units and city squares, etc, are usually 30x30.
+ * Tiles for things like food production, etc, are usually 15x20.  We
+ * say "usually" for two reasons:  
  *
- * "unit" tiles are those used for drawing units.  In iso view these are
- * larger than normal tiles to mimic a 3D effect.
+ * First, it is feasible to replace the tiles in the .xpm files with
+ * ones of some other size.  Mitch Davis (mjd@alphalink.com.au) has
+ * done this, and replaced all the tiles with the ones from the
+ * original Civ.  The tiles from the original civ are 32x32.  All that
+ * is required is that these constants be changed.
  *
- * "small" tiles are used for extra "theme" graphics, particularly sprites
- * for citizens, governments, and other panel indicator icons.
+ * Second, although there is currently no "zoom" feature as in the
+ * original Civ, we might add it some time in the future.  If and when
+ * this happens, we'll have to stop using the constants, and go back
+ * to using ints which change at runtime.  Note, this would require
+ * quite a bit of memory and pixmap management work, so it seems like
+ * a nasty task.
  *
- * Various parts of the code may make additional assumptions, including:
- *   - in non-iso view:
- *     - NORMAL_TILE_WIDTH == NORMAL_TILE_HEIGHT
- *     - UNIT_TILE_WIDTH == NORMAL_TILE_WIDTH
- *     - UNIT_TILE_HEIGHT == NORMAL_TILE_HEIGHT
- *   - in iso-view:
- *     - NORMAL_TILE_WIDTH == 2 * NORMAL_TILE_HEIGHT
- *     - UNIT_TILE_WIDTH == NORMAL_TILE_WIDTH
- *     - UNIT_TILE_HEIGHT == NORMAL_TILE_HEIGHT * 3 / 2
- *     - NORMAL_TILE_WIDTH and NORMAL_TILE_HEIGHT are even
+ * BUG: pjunold informs me that there are hard-coded geometries in
+ * the Freeciv.h file which will prevent ideal displaying of pixmaps
+ * which are not of the original 30x30 size.  Also, the pixcomm widget
+ * apparently also does not handle this well.  Truthfully, I hadn't
+ * noticed at all! :-) (mjd)
  */
 
 extern int NORMAL_TILE_WIDTH;
@@ -249,9 +226,6 @@ extern int UNIT_TILE_WIDTH;
 extern int UNIT_TILE_HEIGHT;
 extern int SMALL_TILE_WIDTH;
 extern int SMALL_TILE_HEIGHT;
-
-extern int OVERVIEW_TILE_WIDTH;
-extern int OVERVIEW_TILE_HEIGHT;
 
 extern bool is_isometric;
 
@@ -263,11 +237,8 @@ extern char *city_names_font;
 
 extern char *city_productions_font_name;
 
-extern int num_tiles_explode_unit;
+extern bool flags_are_transparent;
 
-struct Sprite *load_sprite(const char *tag_name);
-void unload_sprite(const char *tag_name);
-bool sprite_exists(const char *tag_name);
-void finish_loading_sprites(void);
+extern int num_tiles_explode_unit;
 
 #endif  /* FC__TILESPEC_H */

@@ -10,15 +10,10 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "game.h"
+#include "genlist.h"
 #include "log.h"
 #include "mem.h"
 #include "player.h"
@@ -28,52 +23,6 @@
 #define SPECLIST_TAG clause
 #define SPECLIST_TYPE struct Clause
 #include "speclist_c.h"
-
-/**************************************************************************
-  Returns TRUE iff pplayer could do diplomancy in the game at all.
-**************************************************************************/
-bool diplomacy_possible(struct player *pplayer, struct player *aplayer)
-{
-  return  (game.diplomacy == 0
-	   || (game.diplomacy == 1 
-	       && !pplayer->ai.control 
-	       && !aplayer->ai.control)
-	   || (game.diplomacy == 2
-	       && pplayer->ai.control
-	       && aplayer->ai.control)
-	   || (pplayer->team != TEAM_NONE
-	       && pplayer->team == aplayer->team));
-}
-
-/**************************************************************************
-  Returns TRUE iff pplayer could do diplomatic meetings with aplayer.
-**************************************************************************/
-bool could_meet_with_player(struct player *pplayer, struct player *aplayer)
-{
-  return (pplayer->is_alive
-          && aplayer->is_alive
-          && pplayer != aplayer
-          && diplomacy_possible(pplayer,aplayer)
-          && (player_has_embassy(aplayer, pplayer) 
-              || player_has_embassy(pplayer, aplayer)
-              || pplayer->diplstates[aplayer->player_no].contact_turns_left > 0
-              || aplayer->diplstates[pplayer->player_no].contact_turns_left > 0)
-          && (aplayer->is_connected || aplayer->ai.control)
-          && (pplayer->is_connected || pplayer->ai.control));
-}
-
-/**************************************************************************
-  Returns TRUE iff pplayer could do diplomatic meetings with aplayer.
-**************************************************************************/
-bool could_intel_with_player(struct player *pplayer, struct player *aplayer)
-{
-  return (pplayer->is_alive
-          && aplayer->is_alive
-          && pplayer != aplayer
-          && (pplayer->diplstates[aplayer->player_no].contact_turns_left > 0
-              || aplayer->diplstates[pplayer->player_no].contact_turns_left > 0
-              || player_has_embassy(pplayer, aplayer)));
-}
 
 /****************************************************************
 ...

@@ -43,15 +43,23 @@
 
 #include <assert.h>
 #include <ctype.h>
-#include <errno.h>
-#include <stdarg.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
-#ifdef GENERATING_MAC
-#include <events.h>		/* for WaitNextEvent() */
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>		/* usleep, fcntl, gethostname */
+#endif
+
+#ifdef HAVE_SYS_TIME_H
+#include <sys/time.h>
+#endif
+#ifdef HAVE_SYS_TYPES_H
+#include <sys/types.h>
 #endif
 #ifdef HAVE_FCNTL_H
 #include <fcntl.h>
@@ -59,24 +67,21 @@
 #ifdef HAVE_SYS_IOCTL_H
 #include <sys/ioctl.h>
 #endif
+
 #ifdef HAVE_SYS_SELECT_H
 #include <sys/select.h>
 #endif
-#ifdef HAVE_SYS_TIME_H
-#include <sys/time.h>
-#endif
-#ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
-#endif
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>		/* usleep, fcntl, gethostname */
+
+#ifdef HAVE_WINSOCK
+#include <winsock.h>
 #endif
 #ifdef WIN32_NATIVE
 #include <process.h>
 #include <windows.h>
 #endif
-#ifdef HAVE_WINSOCK
-#include <winsock.h>
+
+#ifdef GENERATING_MAC
+#include <events.h>		/* for WaitNextEvent() */
 #endif
 
 #include "fcintl.h"
@@ -148,7 +153,7 @@ const char *mystrerror(int errnum)
 
 
 /***************************************************************
-  Suspend execution for the specified number of microseconds.
+  Suspend execution for the specified number of milliseconds.
 ***************************************************************/
 void myusleep(unsigned long usec)
 {
@@ -194,8 +199,8 @@ void myusleep(unsigned long usec)
 
  Result is always nul-terminated, whether or not truncation occurs,
  and the return value is the strlen the destination would have had
- without truncation.  I.e., a return value >= input n indicates
- truncation occurred.
+ without truncation.  Ie, a return value >= input n indicates
+ truncation occured.
 
  Will assume that if configure found strlcpy/strlcat they are ok.
  For replacement implementations, will keep it simple rather
@@ -225,9 +230,6 @@ size_t mystrlcpy(char *dest, const char *src, size_t n)
 #endif
 }
 
-/**********************************************************************
- ...
-***********************************************************************/
 size_t mystrlcat(char *dest, const char *src, size_t n)
 {
   assert(dest != NULL);
@@ -536,14 +538,6 @@ bool my_isprint(char c)
 bool my_isspace(char c)
 {
   return isspace((int) c) != 0;
-}
-
-/**********************************************************************
-  Wrapper function to work around broken libc implementations.
-***********************************************************************/
-bool my_isupper(char c)
-{
-  return isupper((int) c) != 0;
 }
 
 /**********************************************************************

@@ -118,17 +118,6 @@ void popup_science_dialog(bool make_modal)
 
 
 /****************************************************************
- Closes the science dialog.
-*****************************************************************/
-void popdown_science_dialog(void)
-{
-  if (science_dialog_shell) {
-    gtk_widget_destroy(science_dialog_shell);
-  }
-}
- 
-
-/****************************************************************
 ...
 *****************************************************************/
 void create_science_dialog(bool make_modal)
@@ -262,8 +251,6 @@ void science_change_callback(GtkWidget *widget, gpointer data)
   } else {
     gdouble pct;
 
-    gtk_widget_set_sensitive(science_change_menu_button,
-			     can_client_issue_orders());
     my_snprintf(text, sizeof(text), "%d/%d",
 		game.player_ptr->research.bulbs_researched,
 		total_bulbs_required(game.player_ptr));
@@ -299,7 +286,7 @@ void science_goal_callback(GtkWidget *widget, gpointer data)
     int steps = num_unknown_techs_for_goal(game.player_ptr, to);
     my_snprintf(text, sizeof(text),
 		PL_("(%d step)", "(%d steps)", steps), steps);
-    gtk_set_label(science_goal_label,text);
+    gtk_label_set_text(GTK_LABEL(science_goal_label),text);
 
     packet.tech=to;
     send_packet_player_request(&aconnection, &packet, PACKET_PLAYER_TECH_GOAL);
@@ -418,8 +405,6 @@ void science_dialog_update(void)
   popupmenu = gtk_menu_new();
   gtk_option_menu_set_menu(GTK_OPTION_MENU(science_change_menu_button),
 	popupmenu);
-  gtk_widget_set_sensitive(science_change_menu_button,
-			   can_client_issue_orders());
 
   my_snprintf(text, sizeof(text), "%d/%d",
 	      game.player_ptr->research.bulbs_researched,
@@ -435,7 +420,7 @@ void science_dialog_update(void)
    * hist will hold afterwards the techid of the current choice
    */
   hist=0;
-  if (!is_future_tech(game.player_ptr->research.researching)) {
+  if (game.player_ptr->research.researching!=A_NONE) {
     for(i=A_FIRST; i<game.num_tech_types; i++) {
       if(get_invention(game.player_ptr, i)!=TECH_REACHABLE)
 	continue;
@@ -484,16 +469,14 @@ void science_dialog_update(void)
   goalmenu = gtk_menu_new();
   gtk_option_menu_set_menu(GTK_OPTION_MENU(science_goal_menu_button),
 	goalmenu);
-  gtk_widget_set_sensitive(science_goal_menu_button,
-			   can_client_issue_orders());
   
   steps = num_unknown_techs_for_goal(game.player_ptr,
 				     game.player_ptr->ai.tech_goal);
   my_snprintf(text, sizeof(text), PL_("(%d step)", "(%d steps)", steps),
 	      steps);
-  gtk_label_set_text(GTK_LABEL(science_goal_label), text);
+  gtk_set_label(science_goal_label,text);
 
-  if (game.player_ptr->ai.tech_goal == A_UNSET) {
+  if (game.player_ptr->ai.tech_goal == A_NONE) {
     item = gtk_menu_item_new_with_label(advances[A_NONE].name);
     gtk_menu_shell_append(GTK_MENU_SHELL(goalmenu), item);
   }
@@ -503,10 +486,9 @@ void science_dialog_update(void)
    */
   hist=0;
   for(i=A_FIRST; i<game.num_tech_types; i++) {
-    if (tech_is_available(game.player_ptr, i)
-        && get_invention(game.player_ptr, i) != TECH_KNOWN
-        && advances[i].req[0] != A_LAST && advances[i].req[1] != A_LAST
-        && num_unknown_techs_for_goal(game.player_ptr, i) < 11) {
+    if(get_invention(game.player_ptr, i) != TECH_KNOWN &&
+       advances[i].req[0] != A_LAST && advances[i].req[1] != A_LAST &&
+       num_unknown_techs_for_goal(game.player_ptr, i) < 11) {
       if (i==game.player_ptr->ai.tech_goal)
 	hist=i;
       sorting_list = g_list_append(sorting_list, GINT_TO_POINTER(i));
@@ -556,17 +538,6 @@ void popup_economy_report_dialog(bool make_modal)
   gtk_window_present(GTK_WINDOW(economy_dialog_shell));
 }
 
-
-/****************************************************************
- Close the economy report dialog.
-****************************************************************/
-void popdown_economy_report_dialog(void)
-{
-  if (economy_dialog_shell) {
-    gtk_widget_destroy(economy_dialog_shell);
-  }
-}
- 
 
 /****************************************************************
 ...
@@ -698,10 +669,8 @@ static void economy_selection_callback(GtkTreeSelection *selection,
     bool is_sellable = (i >= 0 && i < game.num_impr_types && !is_wonder(i));
 
     gtk_widget_set_sensitive(sellobsolete_command, is_sellable
-			     && can_client_issue_orders()
 			     && improvement_obsolete(game.player_ptr, i));
-    gtk_widget_set_sensitive(sellall_command, is_sellable
-			     && can_client_issue_orders());
+    gtk_widget_set_sensitive(sellall_command, is_sellable);
   } else {
     /* No selection has been made. */
     gtk_widget_set_sensitive(sellobsolete_command, FALSE);
@@ -715,6 +684,9 @@ static void economy_selection_callback(GtkTreeSelection *selection,
 static void economy_command_callback(GtkWidget *w, gint response_id)
 {
   int i, count = 0, gold = 0;
+  struct genlist_iterator myiter;
+  struct city *pcity;
+  struct packet_city_request packet;
   gint row;
   GtkWidget *shell;
 
@@ -728,15 +700,20 @@ static void economy_command_callback(GtkWidget *w, gint response_id)
   row = gtk_tree_selection_get_row(economy_selection);
   i = economy_improvement_type[row];
 
-  city_list_iterate(game.player_ptr->cities, pcity) {
+  genlist_iterator_init(&myiter, &game.player_ptr->cities.list, 0);
+    for(; ITERATOR_PTR(myiter);ITERATOR_NEXT(myiter)) {
+      pcity=(struct city *)ITERATOR_PTR(myiter);
+
     if(!pcity->did_sell && city_got_building(pcity, i) && 
        (response_id == 2 ||
 	improvement_obsolete(game.player_ptr,i) ||
         wonder_replacement(pcity, i) ))  {
 	count++; gold+=improvement_value(i);
-	city_sell_improvement(pcity, i);
+        packet.city_id=pcity->id;
+        packet.build_id=i;
+        send_packet_city_request(&aconnection, &packet, PACKET_CITY_SELL);
     }
-  } city_list_iterate_end;
+  }
 
   if (count > 0) {
     shell = gtk_message_dialog_new(GTK_WINDOW(economy_dialog_shell),
@@ -816,17 +793,6 @@ void popup_activeunits_report_dialog(bool make_modal)
 }
 
 
-/****************************************************************
- Closes the units report dialog.
-****************************************************************/
-void popdown_activeunits_report_dialog(void)
-{
-  if (activeunits_dialog_shell) {
-    gtk_widget_destroy(activeunits_dialog_shell);
-  }
-}
-
- 
 /****************************************************************
 ...
 *****************************************************************/
@@ -999,7 +965,7 @@ static void activeunits_selection_callback(GtkTreeSelection *selection,
   if (row < n-2 &&
       unit_type_exists(activeunits_type[row]) &&
       can_upgrade_unittype(game.player_ptr, activeunits_type[row]) != -1) {
-    gtk_widget_set_sensitive(upgrade_command, can_client_issue_orders());
+    gtk_widget_set_sensitive(upgrade_command, TRUE);
   } else {
     gtk_widget_set_sensitive(upgrade_command, FALSE);
   }

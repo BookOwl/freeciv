@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -25,6 +24,7 @@
 #include "government.h"
 #include "idex.h"
 #include "improvement.h"
+#include "log.h"
 #include "map.h"
 #include "mem.h"
 #include "rand.h"
@@ -34,30 +34,6 @@
 #include "unit.h"
 
 #include "player.h"
-
-/***************************************************************
-  Returns true iff p1 can ally p2. There is only one condition:
-  We are not at war with any of p2's allies. Note that for an
-  alliance to be made, we need to check this both ways.
-
-  The reason for this is to avoid the dread 'love-love-hate' 
-  triad, in which p1 is allied to p2 is allied to p3 is at
-  war with p1. These lead to strange situations.
-***************************************************************/
-bool pplayer_can_ally(struct player *p1, struct player *p2)
-{
-  players_iterate(pplayer) {
-    enum diplstate_type ds = pplayer_get_diplstate(p1, pplayer)->type;
-    if (pplayer != p1
-        && pplayer != p2
-        && pplayers_allied(p2, pplayer)
-        && ds == DS_WAR /* do not count 'never met' as war here */
-        && pplayer->is_alive) {
-      return FALSE;
-    }
-  } players_iterate_end;
-  return TRUE;
-}
 
 /***************************************************************
   Check if pplayer has an embassy with pplayer2. We always have
@@ -90,11 +66,11 @@ void player_init(struct player *plr)
 
   plr->player_no=plr-game.players;
 
-  sz_strlcpy(plr->name, ANON_PLAYER_NAME);
-  sz_strlcpy(plr->username, ANON_USER_NAME);
+  sz_strlcpy(plr->name, "YourName");
+  sz_strlcpy(plr->username, "UserName");
   plr->is_male = TRUE;
   plr->government=game.default_government;
-  plr->nation = NO_NATION_SELECTED;
+  plr->nation=MAX_NUM_NATIONS;
   plr->team = TEAM_NONE;
   plr->capital = FALSE;
   unit_list_init(&plr->units);
@@ -102,19 +78,16 @@ void player_init(struct player *plr)
   conn_list_init(&plr->connections);
   plr->current_conn = NULL;
   plr->is_connected = FALSE;
-  plr->was_created = FALSE;
   plr->is_alive=TRUE;
-  plr->is_dying = FALSE;
   plr->embassy=0;
   plr->reputation=GAME_DEFAULT_REPUTATION;
   for(i = 0; i < MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS; i++) {
     plr->diplstates[i].type = DS_NO_CONTACT;
     plr->diplstates[i].has_reason_to_cancel = 0;
-    plr->diplstates[i].contact_turns_left = 0;
   }
   plr->city_style=0;            /* should be first basic style */
   plr->ai.control=FALSE;
-  plr->ai.tech_goal = A_UNSET;
+  plr->ai.tech_goal = A_NONE;
   plr->ai.handicap = 0;
   plr->ai.skill_level = 0;
   plr->ai.fuzzy = 0;
@@ -133,21 +106,69 @@ void player_init(struct player *plr)
 
   /* Initialise list of improvements with Player-wide equiv_range */
   improvement_status_init(plr->improvements, ARRAY_SIZE(plr->improvements));
+  /* Initialise vector of effects with player range. */
+  geff_vector_init(&plr->effects);
 
-  /* Initialise list of improvements with Island-wide equiv_range */
+  /* Blank lists of Island-range improvements and effects (these are
+     initialised by player_init_island_impr) */
   plr->island_improv = NULL;
-
-  if (map.num_continents > 0) {
-    plr->island_improv = fc_malloc((map.num_continents + 1) * 
-                                   game.num_impr_types * sizeof(Impr_Status));
-    for (i = 1; i <= map.num_continents; i++) {
-      improvement_status_init(&plr->island_improv[i * game.num_impr_types],
-                              game.num_impr_types);
-    }
-  }
+  plr->island_effects = NULL;
 
   plr->attribute_block.data = NULL;
   plr->attribute_block.length = 0;
+}
+
+/***************************************************************
+  Set up the player's lists of Island-range improvements and
+  effects. These lists must also be redimensioned (e.g. by
+  update_island_impr_effect) if the number of islands later
+  changes.
+***************************************************************/
+void player_init_island_imprs(struct player *plr, int numcont)
+{
+  int i;
+
+  player_free_island_imprs(plr);
+  if (game.num_impr_types>0) {
+    /* Initialise lists of improvements with island-wide equiv_range. */
+    if (plr->island_improv)
+      free(plr->island_improv);
+    plr->island_improv=fc_calloc((numcont+1)*game.num_impr_types,
+				 sizeof(Impr_Status));
+    for (i=0; i<=numcont; i++) {
+      improvement_status_init(&plr->island_improv[i * game.num_impr_types],
+			      game.num_impr_types);
+    }
+
+    /* Initialise lists of island-range effects. */
+    plr->island_effects=fc_calloc(numcont+1, sizeof(struct geff_vector));
+    for (i=0; i<=numcont; i++) {
+      geff_vector_init(&plr->island_effects[i]);
+    }
+  }
+}
+
+/***************************************************************
+  Frees the player's list of island-range improvements and
+  effects.
+***************************************************************/
+void player_free_island_imprs(struct player *plr)
+{
+  int i;
+
+  if (plr->island_improv) {
+    free(plr->island_improv);
+    plr->island_improv = NULL;
+  }
+
+  if (plr->island_effects) {
+    for (i = 0; i <= plr->max_continent; i++) {
+      geff_vector_free(&plr->island_effects[i]);
+    }
+    free(plr->island_effects);
+    plr->island_effects = NULL;
+    plr->max_continent = 0;
+  }
 }
 
 /***************************************************************
@@ -183,10 +204,6 @@ struct player *find_player_by_name(const char *name)
 static const char *pname_accessor(int i) {
   return game.players[i].name;
 }
-
-/***************************************************************
-Find player by its name prefix
-***************************************************************/
 struct player *find_player_by_name_prefix(const char *name,
 					  enum m_pre_result *result)
 {
@@ -255,29 +272,6 @@ bool player_can_see_unit_at_location(struct player *pplayer,
 bool player_can_see_unit(struct player *pplayer, struct unit *punit)
 {
   return player_can_see_unit_at_location(pplayer, punit, punit->x, punit->y);
-}
-
-/**************************************************************************
-  A helper function for send_info_to_onlookers below.  
-  Checks if a unit can be seen by pplayer at (x,y).
-  A player can see a unit if he:
-  (a) can see the tile AND
-  (b) can see the unit at the tile (i.e. unit not invisible at this tile) AND
-  (c) the unit is not in an unallied city
-
-  TODO: the name is confusingly similar to player_can_see_unit_at_location
-  But we need to rename p_c_s_u_a_t because it is really 
-  is_unit_visible_to_player_at or player_ignores_unit_invisibility_at.
-**************************************************************************/
-bool can_player_see_unit_at(struct player *pplayer, struct unit *punit,
-                            int x, int y)
-{
-  bool see_tile = (map_get_known2(x, y, pplayer) == TILE_KNOWN);
-  bool see_unit = player_can_see_unit_at_location(pplayer, punit, x, y);
-  struct city *pcity = map_get_city(x, y);
-  bool in_city = (pcity && !pplayers_allied(unit_owner(punit), pplayer));
-  
-  return (see_tile && see_unit && !in_city);
 }
 
 /***************************************************************
@@ -362,40 +356,6 @@ int num_known_tech_with_flag(struct player *pplayer, enum tech_flag_id flag)
 }
 
 /**************************************************************************
-  Return the expected net income of the player this turn.  This includes
-  tax revenue and upkeep, but not one-time purchases or found gold.
-**************************************************************************/
-int player_get_expected_income(struct player *pplayer)
-{
-  int income = 0;
-
-  /* City income/expenses. */
-  city_list_iterate(pplayer->cities, pcity) {
-    /* Tax income. */
-    income += pcity->tax_total;
-
-    /* Improvement upkeep. */
-    impr_type_iterate(impr_id) {
-      if (city_got_building(pcity, impr_id)) {
-	income -= improvement_upkeep(pcity, impr_id);
-      }
-    } impr_type_iterate_end;
-
-    /* Capitalization income. */
-    if (!pcity->is_building_unit && pcity->currently_building == B_CAPITAL) {
-      income += pcity->shield_stock + pcity->shield_surplus;
-    }
-  } city_list_iterate_end;
-
-  /* Unit upkeep. */
-  unit_list_iterate(pplayer->units, punit) {
-    income -= punit->upkeep_gold;
-  } unit_list_iterate_end;
-
-  return income;
-}
-
-/**************************************************************************
  Returns TRUE iff the player knows at least one tech which has the
  given flag.
 **************************************************************************/
@@ -445,7 +405,7 @@ void player_limit_to_government_rates(struct player *pplayer)
     } else if (pplayer->economic.luxury < maxrate) {
       pplayer->economic.luxury += 10;
     } else {
-      die("byebye");
+      abort();
     }
     surplus -= 10;
   }
@@ -557,7 +517,7 @@ const char *reputation_text(const int rep)
 }
 
 /**************************************************************************
-  Return a diplomatic state as a human-readable string
+Return a diplomatic state as a human-readable string
 **************************************************************************/
 const char *diplstate_text(const enum diplstate_type type)
 {
@@ -568,14 +528,13 @@ const char *diplstate_text(const enum diplstate_type type)
     N_("?diplomatic_state:Cease-fire"),
     N_("?diplomatic_state:Peace"),
     N_("?diplomatic_state:Alliance"),
-    N_("?diplomatic_state:Never met")
+    N_("?diplomatic_state:No Contact")
   };
 
-  if (type < DS_LAST) {
+  if (type < DS_LAST)
     return Q_(ds_names[type]);
-  }
-  die("Bad diplstate_type in diplstate_text: %d", type);
-  return NULL;
+  freelog(LOG_FATAL, "Bad diplstate_type in diplstate_text: %d", type);
+  abort();
 }
 
 /***************************************************************
@@ -588,58 +547,9 @@ const struct player_diplstate *pplayer_get_diplstate(const struct player *pplaye
 }
 
 /***************************************************************
-  Returns true iff players can attack each other.
+  Returns true iff players have no contact status.
 ***************************************************************/
-bool pplayers_at_war(const struct player *pplayer,
-                     const struct player *pplayer2)
-{
-  enum diplstate_type ds = pplayer_get_diplstate(pplayer, pplayer2)->type;
-  if (pplayer == pplayer2) {
-    return FALSE;
-  }
-  if (is_barbarian(pplayer) || is_barbarian(pplayer2)) {
-    return TRUE;
-  }
-  return ds == DS_WAR || ds == DS_NO_CONTACT;
-}
-
-/***************************************************************
-  Returns true iff players are allied.
-***************************************************************/
-bool pplayers_allied(const struct player *pplayer,
-                     const struct player *pplayer2)
-{
-  enum diplstate_type ds = pplayer_get_diplstate(pplayer, pplayer2)->type;
-  if (pplayer == pplayer2) {
-    return TRUE;
-  }
-  if (is_barbarian(pplayer) || is_barbarian(pplayer2)) {
-    return FALSE;
-  }
-  return (ds == DS_ALLIANCE);
-}
-
-/***************************************************************
-  Returns true iff players are allied or at peace.
-***************************************************************/
-bool pplayers_in_peace(const struct player *pplayer,
-                       const struct player *pplayer2)
-{
-  enum diplstate_type ds = pplayer_get_diplstate(pplayer, pplayer2)->type;
-
-  if (pplayer == pplayer2) {
-    return TRUE;
-  }
-  if (is_barbarian(pplayer) || is_barbarian(pplayer2)) {
-    return FALSE;
-  }
-  return (ds == DS_PEACE || ds == DS_ALLIANCE);
-}
-
-/***************************************************************
-  Returns true iff players have peace or cease-fire.
-***************************************************************/
-bool pplayers_non_attack(const struct player *pplayer,
+bool pplayers_no_contact(const struct player *pplayer,
                          const struct player *pplayer2)
 {
   enum diplstate_type ds = pplayer_get_diplstate(pplayer, pplayer2)->type;
@@ -649,6 +559,47 @@ bool pplayers_non_attack(const struct player *pplayer,
   if (is_barbarian(pplayer) || is_barbarian(pplayer2)) {
     return FALSE;
   }
+  return ds == DS_NO_CONTACT;
+}
+
+/***************************************************************
+returns true iff players can attack each other.
+***************************************************************/
+bool pplayers_at_war(const struct player *pplayer,
+		    const struct player *pplayer2)
+{
+  enum diplstate_type ds = pplayer_get_diplstate(pplayer, pplayer2)->type;
+  if (pplayer == pplayer2) return FALSE;
+  if (is_barbarian(pplayer) || is_barbarian(pplayer2))
+    return TRUE;
+  return ds == DS_WAR || ds == DS_NO_CONTACT;
+}
+
+/***************************************************************
+returns true iff players are allied
+***************************************************************/
+bool pplayers_allied(const struct player *pplayer,
+		    const struct player *pplayer2)
+{
+  enum diplstate_type ds = pplayer_get_diplstate(pplayer, pplayer2)->type;
+  if (pplayer == pplayer2)
+    return TRUE;
+  if (is_barbarian(pplayer) || is_barbarian(pplayer2))
+    return FALSE;
+  return (ds == DS_ALLIANCE);
+}
+
+/***************************************************************
+returns true iff players have peace or cease-fire
+***************************************************************/
+bool pplayers_non_attack(const struct player *pplayer,
+			const struct player *pplayer2)
+{
+  enum diplstate_type ds = pplayer_get_diplstate(pplayer, pplayer2)->type;
+  if (pplayer == pplayer2)
+    return FALSE;
+  if (is_barbarian(pplayer) || is_barbarian(pplayer2))
+    return FALSE;
   return (ds == DS_PEACE || ds == DS_CEASEFIRE || ds == DS_NEUTRAL);
 }
 

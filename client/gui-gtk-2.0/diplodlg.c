@@ -57,22 +57,8 @@ struct Diplomacy_dialog {
   GtkListStore *store;
 };
 
-#define SPECLIST_TAG dialog
-#define SPECLIST_TYPE struct Diplomacy_dialog
-#define SPECLIST_STATIC
-#include "speclist.h"
-
-#define SPECLIST_TAG dialog
-#define SPECLIST_TYPE struct Diplomacy_dialog
-#define SPECLIST_STATIC
-#include "speclist_c.h"
-
-#define dialog_list_iterate(dialoglist, pdialog) \
-    TYPED_LIST_ITERATE(struct Diplomacy_dialog, dialoglist, pdialog)
-#define dialog_list_iterate_end  LIST_ITERATE_END
-
-static struct dialog_list dialog_list;
-static bool dialog_list_list_has_been_initialised = FALSE;
+static struct genlist diplomacy_dialogs;
+static int diplomacy_dialogs_list_has_been_initialised;
 
 static struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0, 
 						 struct player *plr1);
@@ -173,10 +159,6 @@ popup the dialog 10% inside the main-window
 static void popup_diplomacy_dialog(struct player *plr0, struct player *plr1)
 {
   struct Diplomacy_dialog *pdialog;
-
-  if (game.player_ptr->ai.control) {
-    return; /* Don't show if we are AI controlled. */
-  }
   
   if (!(pdialog = find_diplomacy_dialog(plr0, plr1))) {
     pdialog = create_diplomacy_dialog(plr0, plr1);
@@ -243,10 +225,9 @@ static void popup_add_menu(GtkMenuShell *parent, gpointer data)
     menu = gtk_menu_new();
 
     for (i = 1, flag = FALSE; i < game.num_tech_types; i++) {
-      if (get_invention(plr0, i) == TECH_KNOWN
-	  && (get_invention(plr1, i) == TECH_UNKNOWN
-	      || get_invention(plr1, i) == TECH_REACHABLE)
-          && tech_is_available(plr1, i)) {
+      if (get_invention(plr0, i) == TECH_KNOWN && 
+	  (get_invention(plr1, i) == TECH_UNKNOWN || 
+	   get_invention(plr1, i) == TECH_REACHABLE)) {
 	item = gtk_menu_item_new_with_label(advances[i].name);
 
 	gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
@@ -392,7 +373,7 @@ static void diplomacy_destroy(GtkWidget *w, gpointer data)
 {
   struct Diplomacy_dialog *pdialog = (struct Diplomacy_dialog *)data;
 
-  dialog_list_unlink(&dialog_list, pdialog);
+  genlist_unlink(&diplomacy_dialogs, pdialog);
   free(pdialog);
 }
 
@@ -442,7 +423,7 @@ static struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0,
 
   pdialog = fc_malloc(sizeof(*pdialog));
 
-  dialog_list_insert(&dialog_list, pdialog);
+  genlist_insert(&diplomacy_dialogs, pdialog, 0);
   init_treaty(&pdialog->treaty, plr0, plr1);
 
   shell = gtk_dialog_new_with_buttons(_("Diplomacy meeting"),
@@ -813,18 +794,22 @@ void close_diplomacy_dialog(struct Diplomacy_dialog *pdialog)
 static struct Diplomacy_dialog *find_diplomacy_dialog(struct player *plr0, 
 						      struct player *plr1)
 {
-  if(!dialog_list_list_has_been_initialised) {
-    dialog_list_init(&dialog_list);
-    dialog_list_list_has_been_initialised = TRUE;
+  struct genlist_iterator myiter;
+
+  if(!diplomacy_dialogs_list_has_been_initialised) {
+    genlist_init(&diplomacy_dialogs);
+    diplomacy_dialogs_list_has_been_initialised=1;
   }
-
-  dialog_list_iterate(dialog_list, pdialog) {
-    if ((pdialog->treaty.plr0 == plr0 && pdialog->treaty.plr1 == plr1) ||
-	(pdialog->treaty.plr0 == plr1 && pdialog->treaty.plr1 == plr0)) {
+  
+  genlist_iterator_init(&myiter, &diplomacy_dialogs, 0);
+    
+  for(; ITERATOR_PTR(myiter); ITERATOR_NEXT(myiter)) {
+    struct Diplomacy_dialog *pdialog=
+      (struct Diplomacy_dialog *)ITERATOR_PTR(myiter);
+    if((pdialog->treaty.plr0==plr0 && pdialog->treaty.plr1==plr1) ||
+       (pdialog->treaty.plr0==plr1 && pdialog->treaty.plr1==plr0))
       return pdialog;
-    }
-  } dialog_list_iterate_end;
-
+  }
   return NULL;
 }
 
@@ -862,11 +847,14 @@ static void diplo_dialog_returnkey(GtkWidget *w, gpointer data)
 *****************************************************************/
 void close_all_diplomacy_dialogs(void)
 {
-  if (!dialog_list_list_has_been_initialised) {
+  struct Diplomacy_dialog *pdialog;
+  
+  if (!diplomacy_dialogs_list_has_been_initialised) {
     return;
   }
 
-  while (dialog_list_size(&dialog_list) > 0) {
-    close_diplomacy_dialog(dialog_list_get(&dialog_list, 0));
+  while (genlist_size(&diplomacy_dialogs) > 0) {
+    pdialog = genlist_get(&diplomacy_dialogs, 0);
+    close_diplomacy_dialog(pdialog);
   }
 }

@@ -11,7 +11,6 @@
    GNU General Public License for more details.
 
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -159,9 +158,6 @@ XtAppContext app_context;
 /* this GC will be the default one all thru freeciv */
 GC civ_gc; 
 
-/* This is for drawing border lines */
-GC border_line_gc; 
-
 /* and this one is used for filling with the bg color */
 GC fill_bg_gc;
 GC fill_tile_gc;
@@ -195,6 +191,7 @@ Window root_window;
 
 /* this pixmap acts as a backing store for the map_canvas widget */
 Pixmap map_canvas_store = 0;
+int map_canvas_store_twidth, map_canvas_store_theight;
 
 /* this pixmap acts as a backing store for the overview_canvas widget */
 Pixmap overview_canvas_store;
@@ -202,6 +199,7 @@ int overview_canvas_store_width, overview_canvas_store_height;
 
 /* this pixmap is used when moving units etc */
 Pixmap single_tile_pixmap;
+int single_tile_pixmap_width, single_tile_pixmap_height;
 
 XtInputId x_input_id;
 XtIntervalId x_interval_id;
@@ -337,7 +335,7 @@ void ui_main(int argc, char *argv[])
   
   icon_pixmap = XCreateBitmapFromData(display,
 				      RootWindowOfScreen(XtScreen(toplevel)),
-				      freeciv_bits,
+				      (char *) freeciv_bits,
 				      freeciv_width, freeciv_height);
   XtVaSetValues(toplevel, XtNiconPixmap, icon_pixmap, NULL);
 
@@ -373,15 +371,6 @@ void ui_main(int argc, char *argv[])
 			    GCForeground|GCBackground|GCFont|GCGraphicsExposures,
 			    &values);
 
-    values.line_width = 2;
-    values.line_style = LineOnOffDash;
-    values.cap_style = CapNotLast;
-    values.join_style = JoinMiter;
-    values.fill_style = FillSolid;
-    border_line_gc = XCreateGC(display, root_window,
-			       GCGraphicsExposures|GCLineWidth|GCLineStyle
-			       |GCCapStyle|GCJoinStyle|GCFillStyle, &values);
-
     values.foreground = 0;
     values.background = 0;
     fill_bg_gc= XCreateGC(display, root_window, 
@@ -402,7 +391,7 @@ void ui_main(int argc, char *argv[])
   }
   
   /* 135 below is rough value (could be more intelligent) --dwp */
-  num_units_below = 135 / UNIT_TILE_WIDTH;
+  num_units_below = 135/(int)NORMAL_TILE_WIDTH;
   num_units_below = MIN(num_units_below,MAX_NUM_UNITS_BELOW);
   num_units_below = MAX(num_units_below,1);
   
@@ -421,9 +410,8 @@ void ui_main(int argc, char *argv[])
 
   /* Do this outside setup_widgets() so after tiles are loaded */
   for(i=0;i<10;i++)  {
-    enum citizen_type c = i < 5 ? CITIZEN_SCIENTIST : CITIZEN_TAXMAN;
     XtVaSetValues(econ_label[i], XtNbitmap,
-		  get_citizen_pixmap(c, i, NULL), NULL);
+		  get_citizen_pixmap(i<5?1:2), NULL);
     XtAddCallback(econ_label[i], XtNcallback, taxrates_callback,
 		  INT_TO_XTPOINTER(i));
   }
@@ -455,13 +443,13 @@ void ui_main(int argc, char *argv[])
 		 overview_canvas_store_width, overview_canvas_store_height);
 
   single_tile_pixmap=XCreatePixmap(display, XtWindow(overview_canvas), 
-				   UNIT_TILE_WIDTH,
-				   UNIT_TILE_HEIGHT,
+				   NORMAL_TILE_WIDTH,
+				   NORMAL_TILE_HEIGHT,
 				   display_depth);
 
   for(i=0; i<num_units_below; i++)
     unit_below_pixmap[i]=XCreatePixmap(display, XtWindow(overview_canvas), 
-				       UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT, 
+				       NORMAL_TILE_WIDTH, NORMAL_TILE_HEIGHT, 
 				       display_depth);  
 
   set_indicator_icons(0, 0, 0, 0);
@@ -494,6 +482,7 @@ static void unit_icon_callback(Widget w, XtPointer client_data,
   punit=find_unit_by_id(unit_ids[i]);
   if(punit) { /* should always be true at this point */
     if (punit->owner == game.player_idx) {  /* may be non-true if alliance */
+      request_new_unit_activity(punit, ACTIVITY_IDLE);
       set_unit_focus(punit);
     }
   }
@@ -620,8 +609,8 @@ void setup_widgets(void)
   unit_pix_canvas = XtVaCreateManagedWidget("unitpixcanvas", 
 					   pixcommWidgetClass,
 					   left_column_form, 
-					   XtNwidth, UNIT_TILE_WIDTH,
-					   XtNheight, UNIT_TILE_HEIGHT,
+					   XtNwidth, NORMAL_TILE_WIDTH,
+					   XtNheight, NORMAL_TILE_HEIGHT,
 					   NULL);
 
   for(i=0; i<num_units_below; i++) {
@@ -631,10 +620,8 @@ void setup_widgets(void)
     unit_below_canvas[i] = XtVaCreateManagedWidget(unit_below_name,
 						   pixcommWidgetClass,
 						   left_column_form, 
-						   XtNwidth,
-						   UNIT_TILE_WIDTH,
-						   XtNheight,
-						   UNIT_TILE_HEIGHT,
+						   XtNwidth, NORMAL_TILE_WIDTH,
+						   XtNheight, NORMAL_TILE_HEIGHT,
 						   NULL);
     XtAddCallback(unit_below_canvas[i], XtNcallback, unit_icon_callback,
 		  (XtPointer)i);  
@@ -713,7 +700,7 @@ void main_show_info_popup(XEvent *event)
 		population_to_text(civ_population(game.player_ptr)),
 		textyear(game.year), game.turn,
 		game.player_ptr->economic.gold,
-		player_get_expected_income(game.player_ptr),
+		turn_gold_difference,
 		game.player_ptr->economic.tax,
 		game.player_ptr->economic.luxury,
 		game.player_ptr->economic.science,
@@ -741,14 +728,6 @@ void main_show_info_popup(XEvent *event)
     XtVaSetValues(p, XtNx, x-w/2, XtNy, y-h/2, NULL);
     XtPopupSpringLoaded(p);
   }
-}
-
-/**************************************************************************
- Update the connected users list at pregame state.
-**************************************************************************/
-void update_conn_list_dialog(void)
-{
-  /* PORTME */
 }
 
 /**************************************************************************
@@ -849,11 +828,11 @@ void set_unit_icon(int idx, struct unit *punit)
     unit_ids[idx] = punit ? punit->id : 0;
   }
   
-  XawPixcommClear(w);
+  if (flags_are_transparent || punit==NULL) {
+    XawPixcommClear(w);
+  }
   if (punit) {
-    struct canvas_store store = {XawPixcommPixmap(w)};
-
-    put_unit_full(punit, &store, 0, 0);
+    put_unit_pixmap(punit, XawPixcommPixmap(w), 0, 0);
     xaw_expose_now(w);
   }
 }

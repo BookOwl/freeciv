@@ -13,8 +13,8 @@
 #ifndef FC__AIUNIT_H
 #define FC__AIUNIT_H
 
-#include "combat.h"
 #include "unittype.h"
+#include "combat.h"
 
 /*
  * To prevent integer overflows the product "power * hp * firepower"
@@ -24,20 +24,6 @@
  */
 #define POWER_DIVIDER 	(POWER_FACTOR * 3)
 
-/* Simple military power macros */
-#define DEFENCE_POWER(punit) \
- (unit_type(punit)->defense_strength * unit_type(punit)->hp \
-  * unit_type(punit)->firepower)
-#define ATTACK_POWER(punit) \
- (unit_type(punit)->attack_strength * unit_type(punit)->hp \
-  * unit_type(punit)->firepower)
-#define IS_ATTACKER(punit) \
-  (unit_type(punit)->attack_strength \
-        > unit_type(punit)->transport_capacity)
-#define HOSTILE_PLAYER(pplayer, ai, aplayer) \
-  (pplayers_at_war(pplayer, aplayer)         \
-   || ai->diplomacy.target == aplayer)
-
 struct player;
 struct city;
 struct unit;
@@ -46,38 +32,37 @@ struct ai_choice;
 extern Unit_Type_id simple_ai_types[U_LAST];
 
 void ai_manage_units(struct player *pplayer); 
-int could_unit_move_to_tile(struct unit *punit, int dest_x, int dest_y);
+int could_unit_move_to_tile(struct unit *punit, int src_x, int src_y,
+			    int dest_x, int dest_y);
 int look_for_charge(struct player *pplayer, struct unit *punit,
                     struct unit **aunit, struct city **acity);
 
 bool ai_manage_explorer(struct unit *punit);
 
-int turns_to_enemy_city(Unit_Type_id our_type, struct city *acity,
-                        int speed, bool go_by_boat, 
-                        struct unit *boat, Unit_Type_id boattype);
-int turns_to_enemy_unit(Unit_Type_id our_type, int speed, int x, int y, 
-                        Unit_Type_id enemy_type);
 int find_something_to_kill(struct player *pplayer, struct unit *punit, 
                             int *x, int *y);
-bool find_beachhead(struct unit *punit, int dest_x, int dest_y, 
-                    int *x, int *y);
+int find_beachhead(struct unit *punit, int dest_x, int dest_y, int *x, int *y);
 
 int build_cost_balanced(Unit_Type_id type);
-int unittype_att_rating(Unit_Type_id type, bool veteran,
-                        int moves_left, int hp);
-int unit_att_rating(struct unit *punit);
-int unit_def_rating_basic(struct unit *punit);
-int unit_def_rating_basic_sq(struct unit *punit);
-int unittype_def_rating_sq(Unit_Type_id att_type, Unit_Type_id def_type,
-                           int x, int y, bool fortified, bool veteran);
+int base_unit_belligerence_primitive(Unit_Type_id type, bool veteran,
+				     int moves_left, int hp);
+int unit_belligerence_basic(struct unit *punit);
+int unit_belligerence(struct unit *punit);
+int unit_vulnerability_basic(struct unit *punit, struct unit *pdef);
+int unit_vulnerability_virtual(struct unit *punit);
+int unit_vulnerability_virtual2(Unit_Type_id att_type, Unit_Type_id def_type,
+				int x, int y, bool fortified, bool veteran,
+				bool use_alternative_hp, int alternative_hp);
+int unit_vulnerability(struct unit *punit, struct unit *pdef);
 int kill_desire(int benefit, int attack, int loss, int vuln, int attack_count);
+int military_amortize(int value, int delay, int build_cost);
 
 bool is_on_unit_upgrade_path(Unit_Type_id test, Unit_Type_id base);
 
 Unit_Type_id ai_wants_role_unit(struct player *pplayer, struct city *pcity,
                                 int role, int want);
 void ai_choose_role_unit(struct player *pplayer, struct city *pcity,
-                         struct ai_choice *choice, int role, int want);
+			 struct ai_choice *choice, int role, int want);
 void update_simple_ai_types(void);
 
 #define simple_ai_unit_type_iterate(m_i)                                      \

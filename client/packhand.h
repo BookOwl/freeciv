@@ -15,17 +15,15 @@
 
 #include "packets.h"
 
-void handle_login_reply(struct packet_login_reply *packet);
+void handle_join_game_reply(struct packet_join_game_reply *packet);
 
 void handle_tile_info(struct packet_tile_info *packet);
 void handle_player_info(struct packet_player_info *pinfo);
 void handle_conn_info(struct packet_conn_info *pinfo);
-void handle_ping_info(struct packet_ping_info *packet);
 void handle_game_info(struct packet_game_info *pinfo);
 void handle_map_info(struct packet_map_info *pinfo);
 void handle_select_nation(struct packet_nations_used *packet);
 void handle_unit_info(struct packet_unit_info *packet);
-void handle_short_unit(struct packet_short_unit *packet);
 void handle_chat_msg(struct packet_generic_message *packet);
 
 void handle_remove_city(struct packet_generic_integer *packet);
@@ -36,6 +34,7 @@ void handle_city_options(struct packet_generic_values *preq);
 
 void handle_spaceship_info(struct packet_spaceship_info *p);
 
+void handle_move_unit(void);
 void handle_new_year(struct packet_new_year *ppacket);
 void handle_city_info(struct packet_city_info *packet);
 void handle_short_city(struct packet_short_city *packet);
@@ -72,9 +71,4 @@ void notify_about_outgoing_packet(struct connection *pc,
 				  int packet_type, int size,
 				  int request_id);
 void set_reports_thaw_request(int request_id);
-
-void target_government_init(void);
-void set_government_choice(int government);
-void start_revolution(void);
-
 #endif /* FC__PACKHAND_H */

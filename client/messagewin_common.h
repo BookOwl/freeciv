@@ -15,8 +15,6 @@
 #define FC__MESSAGEWIN_COMMON_H
 
 #include "events.h"
-#include "packets.h"
-#include "shared.h"		/* bool type */
 
 struct message {
   char *descr;

@@ -10,72 +10,71 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
-#include <assert.h>
-#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
+#include <assert.h>
 
-#ifdef HAVE_NETINET_IN_H
-#include <netinet/in.h>
-#endif
-#ifdef HAVE_PWD_H
-#include <pwd.h>
-#endif
-#ifdef HAVE_SYS_SELECT_H
-#include <sys/select.h>
-#endif
-#ifdef HAVE_SYS_SOCKET_H
-#include <sys/socket.h>
-#endif
-#ifdef HAVE_SYS_TIME_H
-#include <sys/time.h>
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
 #endif
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
 #endif
+#ifdef HAVE_SYS_SOCKET_H
+#include <sys/socket.h>
+#endif
 #ifdef HAVE_SYS_UIO_H
 #include <sys/uio.h>
 #endif
-#ifdef HAVE_SYS_UTSNAME_H
-#include <sys/utsname.h>
+#ifdef HAVE_SYS_TIME_H
+#include <sys/time.h>
 #endif
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
+
+#ifdef HAVE_PWD_H
+#include <pwd.h>
 #endif
+
+#ifdef HAVE_SYS_SELECT_H
+#include <sys/select.h>
+#endif
+
 #ifdef HAVE_WINSOCK
 #include <winsock.h>
+#endif
+
+#ifdef HAVE_SYS_UTSNAME_H
+#include <sys/utsname.h>
 #endif
 
 #include "capstr.h"
 #include "fcintl.h"
 #include "game.h"
-#include "hash.h"
 #include "log.h"
 #include "mem.h"
 #include "netintf.h"
 #include "packets.h"
 #include "support.h"
 #include "version.h"
+#include "hash.h"
 
-#include "agents.h"
 #include "chatline_g.h"
 #include "civclient.h"
 #include "climisc.h"
-#include "connectdlg_g.h"
 #include "dialogs_g.h"		/* popdown_races_dialog() */
 #include "gui_main_g.h"		/* add_net_input(), remove_net_input() */
-#include "mapview_common.h"	/* unqueue_mapview_update */
 #include "messagewin_g.h"
 #include "options.h"
 #include "packhand.h"
 #include "plrdlg_g.h"
 #include "repodlgs_g.h"
+#include "agents.h"
+#include "mapview_common.h"	/* unqueue_mapview_update */
 
 #include "clinet.h"
 
@@ -100,13 +99,11 @@ static void close_socket_nomessage(struct connection *pc)
 
   remove_net_input();
   popdown_races_dialog(); 
-  close_connection_dialog();
 
   reports_force_thaw();
   
   set_client_state(CLIENT_PRE_GAME_STATE);
   agents_disconnect();
-  client_remove_all_cli_conn();
 }
 
 /**************************************************************************
@@ -123,14 +120,14 @@ static void close_socket_callback(struct connection *pc)
   Connect to a civserver instance -- or at least try to.  On success,
   return 0; on failure, put an error message in ERRBUF and return -1.
 **************************************************************************/
-int connect_to_server(char *username, char *hostname, int port,
+int connect_to_server(char *name, char *hostname, int port,
 		      char *errbuf, int errbufsize)
 {
   if (get_server_address(hostname, port, errbuf, errbufsize) != 0) {
     return -1;
   }
 
-  if (try_to_connect(username, errbuf, errbufsize) != 0) {
+  if (try_to_connect(name, errbuf, errbufsize) != 0) {
     return -1;
   }
   return 0;
@@ -144,7 +141,7 @@ int connect_to_server(char *username, char *hostname, int port,
    - return 0 on success
      or put an error message in ERRBUF and return -1 on failure
 **************************************************************************/
-int get_server_address(const char *hostname, int port, char *errbuf,
+int get_server_address(char *hostname, int port, char *errbuf,
 		       int errbufsize)
 {
   if (port == 0)
@@ -154,12 +151,12 @@ int get_server_address(const char *hostname, int port, char *errbuf,
   if (!hostname)
     hostname = "localhost";
 
-  if (!net_lookup_service(hostname, port, (struct sockaddr *)&server_addr,
-      sizeof(server_addr))) {
+  if (!fc_lookup_host(hostname, &server_addr)) {
     (void) mystrlcpy(errbuf, _("Failed looking up host"), errbufsize);
     return -1;
   }
 
+  server_addr.sin_port = htons(port);
   return 0;
 }
 
@@ -168,15 +165,15 @@ int get_server_address(const char *hostname, int port, char *errbuf,
    - try to create a TCP socket and connect it to `server_addr'
    - if successful:
 	  - start monitoring the socket for packets from the server
-	  - send a "login request" packet to the server
+	  - send a "join game request" packet to the server
       and - return 0
    - if unable to create the connection, close the socket, put an error
      message in ERRBUF and return the Unix error code (ie., errno, which
      will be non-zero).
 **************************************************************************/
-int try_to_connect(char *username, char *errbuf, int errbufsize)
+int try_to_connect(char *user_name, char *errbuf, int errbufsize)
 {
-  struct packet_login_request req;
+  struct packet_req_join_game req;
 
   if ((aconnection.sock = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
     (void) mystrlcpy(errbuf, mystrerror(errno), errbufsize);
@@ -188,11 +185,7 @@ int try_to_connect(char *username, char *errbuf, int errbufsize)
     (void) mystrlcpy(errbuf, mystrerror(errno), errbufsize);
     my_closesocket(aconnection.sock);
     aconnection.sock = -1;
-#ifdef WIN32_NATIVE
-    return -1;
-#else
     return errno;
-#endif
   }
 
   if (aconnection.buffer) {
@@ -220,15 +213,15 @@ int try_to_connect(char *username, char *errbuf, int errbufsize)
 
   /* now send join_request package */
 
-  sz_strlcpy(req.short_name, username);
+  sz_strlcpy(req.short_name, user_name);
   req.major_version = MAJOR_VERSION;
   req.minor_version = MINOR_VERSION;
   req.patch_version = PATCH_VERSION;
   sz_strlcpy(req.version_label, VERSION_LABEL);
   sz_strlcpy(req.capability, our_capability);
-  sz_strlcpy(req.username, username);
+  sz_strlcpy(req.name, user_name);
   
-  send_packet_login_request(&aconnection, &req);
+  send_packet_req_join_game(&aconnection, &req);
 
   return 0;
 }
@@ -248,7 +241,7 @@ socket becomes writeable and there is still data which should be sent
 to the server.
 
 Returns:
-    -1  :  an error occurred - you should close the socket
+    -1  :  an error occured - you should close the socket
     >0  :  number of bytes read
     =0  :  no data read, would block
 **************************************************************************/
@@ -296,7 +289,7 @@ static int read_from_connection(struct connection *pc, bool block)
       }
 
       freelog(LOG_NORMAL, "error in select() return=%d errno=%d (%s)",
-	      n, errno, mystrerror(errno));
+	      n, errno, strerror(errno));
       return -1;
     }
 
@@ -340,7 +333,7 @@ void input_from_server(int fd)
     close_socket_callback(&aconnection);
   }
 
-  unqueue_mapview_updates();
+  unqueue_mapview_update();
 }
 
 /**************************************************************************
@@ -392,7 +385,7 @@ void input_from_server_till_request_got_processed(int fd,
   }
 
 out:
-  unqueue_mapview_updates();
+  unqueue_mapview_update();
 }
 
 #ifdef WIN32_NATIVE
@@ -503,7 +496,7 @@ struct server_list *create_server_list(char *errbuf, int n_errbuf)
   struct server_list *server_list;
   struct sockaddr_in addr;
   int s;
-  fz_FILE *f;
+  FILE *f;
   char *proxy_url;
   char urlbuf[512];
   char *urlpath;
@@ -539,10 +532,8 @@ struct server_list *create_server_list(char *errbuf, int n_errbuf)
 	port = 80;
       }
       s[0] = '\0';
-      s++;
-      while (my_isdigit(s[0])) {
-	s++;
-      }
+      ++s;
+      while (my_isdigit(s[0])) {++s;}
     } else {
       port = 80;
       if (!(s = strchr(server,'/'))) {
@@ -552,7 +543,7 @@ struct server_list *create_server_list(char *errbuf, int n_errbuf)
 
     if (s[0] == '/') {
       s[0] = '\0';
-      s++;
+      ++s;
     } else if (s[0] != '\0') {
       (void) mystrlcpy(errbuf, _("Invalid $http_proxy value, cannot "
 				 "find separating '/'"), n_errbuf);
@@ -562,10 +553,12 @@ struct server_list *create_server_list(char *errbuf, int n_errbuf)
     urlpath = s;
   }
 
-  if (!net_lookup_service(server,port,(struct sockaddr *) &addr,sizeof(addr))) {
+  if (!fc_lookup_host(server, &addr)) {
     (void) mystrlcpy(errbuf, _("Failed looking up host"), n_errbuf);
     return NULL;
   }
+  
+  addr.sin_port = htons(port);
   
   if((s = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
     (void) mystrlcpy(errbuf, mystrerror(errno), n_errbuf);
@@ -604,9 +597,28 @@ struct server_list *create_server_list(char *errbuf, int n_errbuf)
               VERSION_STRING,
               client_string,
               machine_string,
-              default_tileset_name);
+              default_tile_set_name);
 
-  f = my_querysocket(s, str, strlen(str));
+#ifdef HAVE_FDOPEN
+  f=fdopen(s,"r+");
+  fwrite(str,1,strlen(str),f);
+  fflush(f);
+#else
+  {
+    int i;
+
+    f=tmpfile();
+    my_writesocket(s,str,strlen(str));
+    
+    while ((i = my_readsocket(s, str, sizeof(str))) > 0)
+      fwrite(str,1,i,f);
+    fflush(f);
+
+    my_closesocket(s);
+
+    fseek(f,0,SEEK_SET);
+  }
+#endif
 
 #define NEXT_FIELD p=strstr(p,"<TD>"); if(!p) continue; p+=4;
 #define END_FIELD  p=strstr(p,"</TD>"); if(!p) continue; *p++='\0';
@@ -615,7 +627,7 @@ struct server_list *create_server_list(char *errbuf, int n_errbuf)
   server_list = fc_malloc(sizeof(struct server_list));
   server_list_init(server_list);
 
-  while(fz_fgets(str, 512, f)) {
+  while(fgets(str, 512, f)) {
     if((0 == strncmp(str, "<TR BGCOLOR",11)) && strchr(str, '\n')) {
       char *name,*port,*version,*status,*players,*metastring;
       char *p;
@@ -643,7 +655,7 @@ struct server_list *create_server_list(char *errbuf, int n_errbuf)
       server_list_insert(server_list, pserver);
     }
   }
-  fz_fclose(f);
+  fclose(f);
 
   return server_list;
 }

@@ -12,10 +12,6 @@
 
 ***********************************************************************/
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include "game.h"
 
 #include "chatline.h"
@@ -53,7 +49,7 @@ static void xaw_mouse_moved(Widget w, XEvent *event, String *argv, Cardinal *arg
 
 static void xaw_btn_adjust_workers(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  adjust_workers_button_pressed(event->xbutton.x, event->xbutton.y);
+  mapctrl_btn_adjust_workers(event);
 }
 
 static void xaw_btn_select_citymap(Widget w, XEvent *event, String *argv, Cardinal *argc)
@@ -143,7 +139,7 @@ static void xaw_key_end_turn(Widget w, XEvent *event, String *argv, Cardinal *ar
 
 static void xaw_key_focus_to_next_unit(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  advance_unit_focus();
+  focus_to_next_unit();
 }
 
 static void xaw_key_map_grid_toggle(Widget w, XEvent *event, String *argv, Cardinal *argc)
@@ -151,156 +147,147 @@ static void xaw_key_map_grid_toggle(Widget w, XEvent *event, String *argv, Cardi
   key_map_grid_toggle();
 }
 
-/*************************************************************************
-  Called when the key to toggle borders is pressed.
-**************************************************************************/
-static void xaw_key_map_borders_toggle(Widget w, XEvent *event,
-				       String *argv, Cardinal *argc)
-{
-  key_map_borders_toggle();
-}
-
 static void xaw_key_move_north(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  key_unit_move(DIR8_NORTH);
+  key_move_north();
 }
 
 static void xaw_key_move_north_east(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  key_unit_move(DIR8_NORTHEAST);
+  key_move_north_east();
 }
 
 static void xaw_key_move_east(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  key_unit_move(DIR8_EAST);
+  key_move_east();
 }
 
 static void xaw_key_move_south_east(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  key_unit_move(DIR8_SOUTHEAST);
+  key_move_south_east();
 }
 
 static void xaw_key_move_south(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  key_unit_move(DIR8_SOUTH);
+  key_move_south();
 }
 
 static void xaw_key_move_south_west(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  key_unit_move(DIR8_SOUTHWEST);
+  key_move_south_west();
 }
 
 static void xaw_key_move_west(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  key_unit_move(DIR8_WEST);
+  key_move_west();
 }
 
 static void xaw_key_move_north_west(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  key_unit_move(DIR8_NORTHWEST);
+  key_move_north_west();
 }
 
 static void xaw_key_open_city_report(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_change_view() &&
+  if(get_client_state()==CLIENT_GAME_RUNNING_STATE &&
      is_menu_item_active(MENU_REPORT, MENU_REPORT_CITIES))
     popup_city_report_dialog(0);
 }
 
 static void xaw_key_open_demographics(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_change_view() &&
+  if(get_client_state()==CLIENT_GAME_RUNNING_STATE &&
      is_menu_item_active(MENU_REPORT, MENU_REPORT_DEMOGRAPHIC))
     send_report_request(REPORT_DEMOGRAPHIC);
 }
 
 static void xaw_key_open_economy_report(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_change_view() &&
+  if(get_client_state()==CLIENT_GAME_RUNNING_STATE &&
      is_menu_item_active(MENU_REPORT, MENU_REPORT_ECONOMY))
     popup_economy_report_dialog(0);
 }
 
 static void xaw_key_open_find_city(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_change_view() &&
+  if(get_client_state()==CLIENT_GAME_RUNNING_STATE &&
      is_menu_item_active(MENU_KINGDOM, MENU_KINGDOM_FIND_CITY))
     popup_find_dialog();
 }
 
 static void xaw_key_open_goto_airlift(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_change_view() &&
+  if(get_client_state()==CLIENT_GAME_RUNNING_STATE &&
      is_menu_item_active(MENU_ORDER, MENU_ORDER_GOTO_CITY))
     popup_goto_dialog();
 }
 
 static void xaw_key_open_messages(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_change_view() &&
+  if(get_client_state()==CLIENT_GAME_RUNNING_STATE &&
      is_menu_item_active(MENU_REPORT, MENU_REPORT_MESSAGES))
     popup_meswin_dialog();
 }
 
 static void xaw_key_open_players(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_change_view() &&
+  if(get_client_state()==CLIENT_GAME_RUNNING_STATE &&
      is_menu_item_active(MENU_REPORT, MENU_REPORT_PLAYERS))
     popup_players_dialog();
 }
 
 static void xaw_key_open_rates(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_change_view() &&
+  if(get_client_state()==CLIENT_GAME_RUNNING_STATE &&
      is_menu_item_active(MENU_KINGDOM, MENU_KINGDOM_RATES))
     popup_rates_dialog();
 }
 
 static void xaw_key_open_revolution(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_change_view() &&
+  if(get_client_state()==CLIENT_GAME_RUNNING_STATE &&
      is_menu_item_active(MENU_KINGDOM, MENU_KINGDOM_REVOLUTION))
     popup_revolution_dialog();
 }
 
 static void xaw_key_open_science_report(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_change_view() &&
+  if(get_client_state()==CLIENT_GAME_RUNNING_STATE &&
      is_menu_item_active(MENU_REPORT, MENU_REPORT_SCIENCE))
     popup_science_dialog(0);
 }
 
 static void xaw_key_open_spaceship(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_change_view() &&
+  if(get_client_state()==CLIENT_GAME_RUNNING_STATE &&
      is_menu_item_active(MENU_REPORT, MENU_REPORT_SPACESHIP))
     popup_spaceship_dialog(game.player_ptr);
 }
 
 static void xaw_key_open_top_five(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_change_view() &&
+  if(get_client_state()==CLIENT_GAME_RUNNING_STATE &&
      is_menu_item_active(MENU_REPORT, MENU_REPORT_TOP_CITIES))
     send_report_request(REPORT_TOP_5_CITIES);
 }
 
 static void xaw_key_open_units_report(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_change_view() &&
+  if(get_client_state()==CLIENT_GAME_RUNNING_STATE &&
      is_menu_item_active(MENU_REPORT, MENU_REPORT_UNITS))
     popup_activeunits_report_dialog(0);
 }
 
 static void xaw_key_open_wonders(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_change_view() &&
+  if(get_client_state()==CLIENT_GAME_RUNNING_STATE &&
      is_menu_item_active(MENU_REPORT, MENU_REPORT_WOW))
     send_report_request(REPORT_WONDERS_OF_THE_WORLD);
 }
 
 static void xaw_key_open_worklists(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_change_view() &&
+  if(get_client_state()==CLIENT_GAME_RUNNING_STATE &&
      is_menu_item_active(MENU_KINGDOM, MENU_KINGDOM_WORKLISTS))
     popup_worklists_dialog(game.player_ptr);
 }
@@ -624,7 +611,6 @@ static XtActionsRec Actions[] = {
   { "key-end-turn", xaw_key_end_turn },
   { "key-focus-to-next-unit", xaw_key_focus_to_next_unit },
   { "key-map-grid-toggle", xaw_key_map_grid_toggle },
-  { "key-map-borders-toggle", xaw_key_map_borders_toggle },
   { "key-move-north", xaw_key_move_north },
   { "key-move-north-east", xaw_key_move_north_east },
   { "key-move-east", xaw_key_move_east },
