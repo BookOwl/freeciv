@@ -73,7 +73,7 @@
 #include "patrol_cursor.xbm"
 #include "patrol_cursor_mask.xbm"
 
-struct main Main;
+struct canvas Main;
 
 static SDL_Surface *pIntro_gfx = NULL;
 
@@ -832,11 +832,11 @@ void init_sdl(int iFlags)
   Main.guis = NULL;
   Main.gui = NULL;
   Main.map = NULL;
+  Main.text = NULL;
   Main.rects_count = 0;
   Main.guis_count = 0;
-
-  Main.map_canvas.surf = Main.map;
-  mapview.store = &Main.map_canvas;
+  
+  mapview_canvas.store = &Main;
 
   if (SDL_WasInit(SDL_INIT_AUDIO)) {
     error = (SDL_InitSubSystem(iFlags) < 0);
@@ -868,6 +868,7 @@ void quit_sdl(void)
 {
   FREESURFACE(Main.gui);
   FREESURFACE(Main.map);
+  FREESURFACE(Main.text);
 }
 
 /**************************************************************************
@@ -911,15 +912,20 @@ int set_video_mode(int iWidth, int iHeight, int iFlags)
   freelog(LOG_DEBUG, _("Setting resolution to: %d x %d %d bpp"),
 	  					iWidth, iHeight, iDepth);
 
-  mapview.width = iWidth;
-  mapview.height = iHeight;
-  if (tileset_tile_width(tileset) > 0) {
-    mapview.tile_width = (iWidth - 1) / tileset_tile_width(tileset) + 1;
-    mapview.tile_height = (iHeight - 1) / tileset_tile_height(tileset) + 1;
+  mapview_canvas.width = iWidth;
+  mapview_canvas.height = iHeight;
+  if (NORMAL_TILE_WIDTH > 0) {
+    mapview_canvas.tile_width = (iWidth - 1) / NORMAL_TILE_WIDTH + 1;
+    mapview_canvas.tile_height = (iHeight - 1) / NORMAL_TILE_HEIGHT + 1;
   }
 
   FREESURFACE(Main.map);
   Main.map = SDL_DisplayFormat(Main.screen);
+  
+  FREESURFACE(Main.text);
+  Main.text = SDL_DisplayFormatAlpha(Main.screen);
+  SDL_FillRect(Main.text, NULL, 0x0);
+  /*SDL_SetColorKey(Main.text , SDL_SRCCOLORKEY|SDL_RLEACCEL, 0x0);*/
   
   FREESURFACE(Main.gui);
   Main.gui = SDL_DisplayFormatAlpha(Main.screen);
@@ -3450,7 +3456,7 @@ SDL_Surface *make_flag_surface_smaler(SDL_Surface * pSrc)
 SDL_Surface * get_intro_gfx(void)
 {
   if(!pIntro_gfx) {
-   pIntro_gfx = load_surf(tileset_main_intro_filename(tileset));
+   pIntro_gfx = load_surf(main_intro_filename);
   }
   return pIntro_gfx;
 }
@@ -3461,7 +3467,7 @@ SDL_Surface * get_intro_gfx(void)
 SDL_Surface * get_logo_gfx(void)
 {
   SDL_Surface *pLogo;
-  SDL_Surface *pLogo_Surf = IMG_Load(tileset_mini_intro_filename(tileset));
+  SDL_Surface *pLogo_Surf = IMG_Load(minimap_intro_filename);
   assert(pLogo_Surf != NULL);
   pLogo = SDL_CreateRGBSurface(SDL_SWSURFACE,
 			pLogo_Surf->w, pLogo_Surf->h,
@@ -3477,13 +3483,13 @@ SDL_Surface * get_logo_gfx(void)
 SDL_Surface * get_city_gfx(void)
 {
   SDL_Surface *pCity_Surf;
-  struct sprite *pSpr = load_sprite(tileset, "theme.city");
+  struct Sprite *pSpr = load_sprite("theme.city");
   
   pCity_Surf = (pSpr ? GET_SURF(pSpr) : NULL);
   assert(pCity_Surf != NULL);
   
   pSpr->psurface = NULL;
-  unload_sprite(tileset, "theme.city");
+  unload_sprite("theme.city");
   
   return pCity_Surf;
 }
@@ -3596,37 +3602,22 @@ const char **gfx_fileextensions(void)
 /**************************************************************************
   Create a sprite struct and fill it with SDL_Surface pointer
 **************************************************************************/
-static struct sprite * ctor_sprite(SDL_Surface *pSurface)
+static struct Sprite * ctor_sprite(SDL_Surface *pSurface)
 {
-  struct sprite *result = fc_malloc(sizeof(struct sprite));
+  struct Sprite *result = fc_malloc(sizeof(struct Sprite));
 
   result->psurface = pSurface;
 
   return result;
 }
 
-void get_sprite_dimensions(struct sprite *sprite, int *width, int *height)
-{
-  *width = GET_SURF(sprite)->w;
-  *height = GET_SURF(sprite)->h;
-}
-
-void gui_flush(void)
-{
-  /* Nothing */
-}
-
 /**************************************************************************
   Create a new sprite by cropping and taking only the given portion of
   the image.
 **************************************************************************/
-struct sprite *crop_sprite(struct sprite *source,
-			   int x, int y, int width, int height,
-			   struct sprite *mask,
-			   int mask_offset_x, int mask_offset_y)
+struct Sprite *crop_sprite(struct Sprite *source,
+			   int x, int y, int width, int height)
 {
-  /* FIXME: this needs to be able to crop from a mask - equivalent to the
-   * code currently in gui_dither.c. */
   SDL_Rect src_rect =
       { (Sint16) x, (Sint16) y, (Uint16) width, (Uint16) height };
   SDL_Surface *pNew, *pTmp =
@@ -3710,7 +3701,7 @@ static bool correct_black(SDL_Surface * pSrc)
   entire image file, which may later be broken up into individual sprites
   with crop_sprite.
 **************************************************************************/
-struct sprite * load_gfxfile(const char *filename)
+struct Sprite * load_gfxfile(const char *filename)
 {
   SDL_Surface *pNew = NULL;
   SDL_Surface *pBuf = NULL;
@@ -3757,7 +3748,7 @@ struct sprite * load_gfxfile(const char *filename)
 /**************************************************************************
   Free a sprite and all associated image data.
 **************************************************************************/
-void free_sprite(struct sprite *s)
+void free_sprite(struct Sprite *s)
 {
   FREESURFACE(GET_SURF(s));
   /*s->psurface=NULL;*/

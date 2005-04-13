@@ -31,12 +31,13 @@
 
 static struct {
   struct ct_string *template;
+  int transparency;
   struct ct_rect bounds;
   enum ws_alignment alignment;
 
-  struct sprite *up, *down, *left, *right;
-  struct sprite *vert_top, *vert_bottom, *vert_repeat, *vert_center;
-  struct sprite *hori_top, *hori_bottom, *hori_repeat, *hori_center;
+  struct Sprite *up, *down, *left, *right;
+  struct Sprite *vert_top, *vert_bottom, *vert_repeat, *vert_center;
+  struct Sprite *hori_top, *hori_bottom, *hori_repeat, *hori_center;
 } config;
 
 static struct {
@@ -146,6 +147,8 @@ static void read_config(void)
 
   te_read_bounds_alignment(file, "xyz", &config.bounds, &config.alignment);
   config.template = te_read_string(file, "xyz", "text", TRUE, FALSE);
+  config.transparency = secfile_lookup_int(file, "xyz.transparency");
+  assert(config.transparency >= 0 && config.transparency <= 100);
 
   config.up = te_load_gfx(secfile_lookup_str(file, "xyz.up"));
   config.down = te_load_gfx(secfile_lookup_str(file, "xyz.down"));
@@ -190,7 +193,7 @@ static void construct_widgets(void)
   widgets.window =
       sw_window_create(root_window,
 		       config.bounds.width, config.bounds.height, NULL,
-		       FALSE, DEPTH_MAX);
+		       config.transparency, FALSE, DEPTH_MAX);
   sw_widget_set_background_color(widgets.window, enum_color_to_be_color
 				 (COLOR_STD_RED));
   sw_widget_set_position(widgets.window, config.bounds.x, config.bounds.y);

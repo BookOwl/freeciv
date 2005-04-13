@@ -15,29 +15,46 @@
 
 #include "graphics_g.h"
 
-extern struct sprite *intro_gfx_sprite;
-extern struct sprite *radar_gfx_sprite;
+/**********************************************************************
+Some notes about sprite management in this client:
+Some windows versions (e.g: Win95, Win98, WinME) have some strange 
+limitiations on gdi objects (like bitmaps). The number of bitmaps 
+(I really mean number and not size) is limited. And the limit is too low
+for the sprites freeciv uses.
+That means HBITMAPs cannot be stored in a sprite struct.
+The bitmaps are stored using GetObject/GetBitmapBits. 
+**********************************************************************/
 
-BITMAP *bmp_new(int width, int height);
-void bmp_free(BITMAP *bmp);
+typedef struct Sprite SPRITE;
+struct Sprite
+{
+  int has_mask;
+  int has_fog;
+  BITMAP img;
+  BITMAP fog;
+  BITMAP mask;
+  int img_cache_id;
+  int fog_cache_id;
+  int mask_cache_id;
+  int width;
+  int height;
+};
 
-HBITMAP BITMAP2HBITMAP(BITMAP *bmp);
-BITMAP *HBITMAP2BITMAP(HBITMAP hbmp);
-HBITMAP getcachehbitmap(BITMAP *bmp, int *cache_id);
+struct canvas
+{
+  HDC hdc;
+  HBITMAP bitmap;
+};
 
-bool bmp_test_mask(BITMAP *bmp);
-bool bmp_test_alpha(BITMAP *bmp);
+void fog_sprite(struct Sprite *sprite);
+void draw_sprite(struct Sprite *sprite, HDC hdc, int x, int y);
+void draw_sprite_fog(struct Sprite *sprite, HDC hdc, int x, int y);
+void init_fog_bmp(void);
+void draw_fog(struct Sprite *sprite, HDC hdc, int x, int y);
 
-BITMAP *bmp_premult_alpha(BITMAP *bmp);
-BITMAP *bmp_generate_mask(BITMAP *bmp);
-BITMAP *bmp_crop(BITMAP *bmp, int src_x, int src_y, int width, int height);
-BITMAP *bmp_blend_alpha(BITMAP *bmp, BITMAP *mask,
-			int offset_x, int offset_y);
-BITMAP *bmp_fog(BITMAP *bmp, int brightness);
+extern HBITMAP BITMAP2HBITMAP(BITMAP *bmp);
+extern SPRITE *intro_gfx_sprite;
+extern SPRITE *radar_gfx_sprite;
 
-BITMAP *bmp_load_png(const char *filename);
-
-void blend_bmp_to_hdc(HDC hdc, int dst_x, int dst_y, int w, int h,
-		      BITMAP *bmp, int src_x, int src_y);
 
 #endif  /* FC__GRAPHICS_H */

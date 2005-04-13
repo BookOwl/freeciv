@@ -94,22 +94,23 @@ static void get_units_report_data(struct units_entry *entries,
     (entries[pUnit->type].active_count)++;
     (total->active_count)++;
     if (pUnit->homecity) {
-      entries[pUnit->type].upkeep_shield += pUnit->upkeep[O_SHIELD];
-      total->upkeep_shield += pUnit->upkeep[O_SHIELD];
-      entries[pUnit->type].upkeep_food += pUnit->upkeep[O_FOOD];
-      total->upkeep_food += pUnit->upkeep[O_FOOD];
-      entries[pUnit->type].upkeep_gold += pUnit->upkeep[O_GOLD];
-      total->upkeep_gold += pUnit->upkeep[O_GOLD];
+      entries[pUnit->type].upkeep_shield += pUnit->upkeep;
+      total->upkeep_shield += pUnit->upkeep;
+      entries[pUnit->type].upkeep_food += pUnit->upkeep_food;
+      total->upkeep_food += pUnit->upkeep_food;
+      entries[pUnit->type].upkeep_gold += pUnit->upkeep_gold;
+      total->upkeep_gold += pUnit->upkeep_gold;
     }
   } unit_list_iterate_end;
     
   city_list_iterate(game.player_ptr->cities, pCity) {
-    if (pCity->is_building_unit) {
-      (entries[pCity->currently_building].building_count)++;
-      (total->building_count)++;
-      entries[pCity->currently_building].soonest_completions =
-	MIN(entries[pCity->currently_building].soonest_completions,
-	    city_turns_to_build(pCity,
+    if (pCity->is_building_unit &&
+      (unit_type_exists(pCity->currently_building))) {
+        (entries[pCity->currently_building].building_count)++;
+	(total->building_count)++;
+        entries[pCity->currently_building].soonest_completions =
+		MIN(entries[pCity->currently_building].soonest_completions,
+			city_turns_to_build(pCity,
 				pCity->currently_building, TRUE, TRUE));
     }
   } city_list_iterate_end;
@@ -172,10 +173,9 @@ static int popup_upgrade_unit_callback(struct GUI *pWidget)
   
   ut1 = MAX_ID - pWidget->ID;
   
-  if (pUnits_Upg_Dlg) {
+  if (pUnits_Upg_Dlg || !unit_type_exists(ut1)) {
     return 1;
   }
-  CHECK_UNIT_TYPE(ut1);
   
   set_wstate(pWidget, FC_WS_NORMAL);
   pSellected_Widget = NULL;
@@ -573,7 +573,7 @@ static void real_activeunits_report_dialog_update(struct units_entry *units,
   } unit_type_iterate_end;
     
   pUnitsDlg->pBeginWidgetList = pBuf;
-  w = (tileset_full_tile_width(tileset) * 2 + name_w + 15) +
+  w = (UNIT_TILE_WIDTH * 2 + name_w + 15) +
 		(4 * pText1->w + 46) + (pText2->w + 16) + (pText5->w + 6) + 2;
   if(count) {
     pUnitsDlg->pBeginActiveWidgetList = pBuf;
@@ -618,7 +618,7 @@ static void real_activeunits_report_dialog_update(struct units_entry *units,
   /* totals background and label */
   dst.x = FRAME_WH + 2;
   dst.y = h - ( pText3->h + 2 ) - 2 - FRAME_WH;
-  dst.w = name_w + tileset_full_tile_width(tileset) * 2 + 5;
+  dst.w = name_w + UNIT_TILE_WIDTH * 2 + 5;
   dst.h = pText3->h + 2;
   SDL_FillRectAlpha(pWindow->theme, &dst, &color);
   
@@ -626,14 +626,14 @@ static void real_activeunits_report_dialog_update(struct units_entry *units,
 			  dst.x + dst.w, dst.y + dst.h - 1, 0xFF000000);
   
   dst.y += 1;
-  dst.x += ((name_w + tileset_full_tile_width(tileset) * 2 + 5) - pText3->w) / 2;
+  dst.x += ((name_w + UNIT_TILE_WIDTH * 2 + 5) - pText3->w) / 2;
   SDL_BlitSurface(pText3, NULL, pWindow->theme, &dst);
   FREESURFACE(pText3);
   
   /* total active widget */
   pBuf = pBuf->prev;
   pBuf->size.x = pWindow->size.x + FRAME_WH + name_w +
-			  tileset_full_tile_width(tileset) * 2 + 17;
+			  UNIT_TILE_WIDTH * 2 + 17;
   pBuf->size.y = pWindow->size.y + dst.y;
   
   /* total shields cost widget */
@@ -659,7 +659,7 @@ static void real_activeunits_report_dialog_update(struct units_entry *units,
   /* units background and labels */
   dst.x = FRAME_WH + 2;
   dst.y = WINDOW_TILE_HIGH + 2;
-  dst.w = name_w + tileset_full_tile_width(tileset) * 2 + 5;
+  dst.w = name_w + UNIT_TILE_WIDTH * 2 + 5;
   dst.h = pText4->h + 2;
   SDL_FillRectAlpha(pWindow->theme, &dst, &color);
   
@@ -667,12 +667,12 @@ static void real_activeunits_report_dialog_update(struct units_entry *units,
 			  dst.x + dst.w, dst.y + dst.h - 1, 0xFF000000);
   
   dst.y += 1;
-  dst.x += ((name_w + tileset_full_tile_width(tileset) * 2 + 5)- pText4->w) / 2;
+  dst.x += ((name_w + UNIT_TILE_WIDTH * 2 + 5)- pText4->w) / 2;
   SDL_BlitSurface(pText4, NULL, pWindow->theme, &dst);
   FREESURFACE(pText4);
   
   /* active count background and label */  
-  dst.x = FRAME_WH + 2 + name_w + tileset_full_tile_width(tileset) * 2 + 15;
+  dst.x = FRAME_WH + 2 + name_w + UNIT_TILE_WIDTH * 2 + 15;
   dst.y = WINDOW_TILE_HIGH + 2;
   dst.w = pText1->w + 6;
   dst.h = h - WINDOW_TILE_HIGH - 2 - FRAME_WH - 2;
@@ -769,14 +769,14 @@ static void real_activeunits_report_dialog_update(struct units_entry *units,
     pBuf = pBuf->prev;
     while(TRUE)
     {
-      pBuf->size.x = start_x + (mod ? tileset_full_tile_width(tileset) : 0);
+      pBuf->size.x = start_x + (mod ? UNIT_TILE_WIDTH : 0);
       pBuf->size.y = start_y;
       hh = pBuf->size.h;
       mod ^= 1;
       
       pBuf = pBuf->prev;
       pBuf->size.w = name_w;
-      pBuf->size.x = start_x + tileset_full_tile_width(tileset) * 2 + 5;
+      pBuf->size.x = start_x + UNIT_TILE_WIDTH * 2 + 5;
       pBuf->size.y = start_y + (hh - pBuf->size.h) / 2;
       
       pBuf = pBuf->prev;
@@ -2515,7 +2515,7 @@ void science_dialog_update(void)
     /* ------------------------------------- */
 
     city_list_iterate(game.player_ptr->cities, pCity) {
-      curent_output += pCity->prod[O_SCIENCE];
+      curent_output += pCity->science_total;
     } city_list_iterate_end;
 
     if (curent_output <= 0) {

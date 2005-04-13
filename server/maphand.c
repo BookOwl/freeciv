@@ -183,8 +183,7 @@ static void give_tile_info_from_player_to_player(struct player *pfrom,
 static void send_tile_info_always(struct player *pplayer,
 				  struct conn_list *dest, struct tile *ptile);
 static void shared_vision_change_seen(struct tile *ptile, struct player *pplayer, int change);
-static int map_get_seen(const struct tile *ptile,
-			const struct player *pplayer);
+static int map_get_seen(const struct tile *ptile, struct player *pplayer);
 static void map_change_own_seen(struct tile *ptile, struct player *pplayer,
 				int change);
 
@@ -235,8 +234,8 @@ void global_warming(int effect)
   }
 
   notify_player_ex(NULL, NULL, E_GLOBAL_ECO,
-		   _("Global warming has occurred!"));
-  notify_player(NULL, _("Coastlines have been flooded and vast "
+		   _("Game: Global warming has occurred!"));
+  notify_player(NULL, _("Game: Coastlines have been flooded and vast "
 			"ranges of grassland have become deserts."));
 }
 
@@ -277,8 +276,8 @@ void nuclear_winter(int effect)
   }
 
   notify_player_ex(NULL, NULL, E_GLOBAL_ECO,
-		   _("Nuclear winter has occurred!"));
-  notify_player(NULL, _("Wetlands have dried up and vast "
+		   _("Game: Nuclear winter has occurred!"));
+  notify_player(NULL, _("Game: Wetlands have dried up and vast "
 			"ranges of grassland have become tundra."));
 }
 
@@ -295,17 +294,17 @@ void upgrade_city_rails(struct player *pplayer, bool discovery)
     return;
   }
 
-  conn_list_do_buffer(pplayer->connections);
+  conn_list_do_buffer(&pplayer->connections);
 
   if (discovery) {
     notify_player(pplayer,
-		  _("New hope sweeps like fire through the country as "
+		  _("Game: New hope sweeps like fire through the country as "
 		    "the discovery of railroad is announced.\n"
 		    "      Workers spontaneously gather and upgrade all "
 		    "cities with railroads."));
   } else {
     notify_player(pplayer,
-		  _("The people are pleased to hear that your "
+		  _("Game: The people are pleased to hear that your "
 		    "scientists finally know about railroads.\n"
 		    "      Workers spontaneously gather and upgrade all "
 		    "cities with railroads."));
@@ -317,7 +316,7 @@ void upgrade_city_rails(struct player *pplayer, bool discovery)
   }
   city_list_iterate_end;
 
-  conn_list_do_unbuffer(pplayer->connections);
+  conn_list_do_unbuffer(&pplayer->connections);
 }
 
 /**************************************************************************
@@ -335,9 +334,9 @@ static void buffer_shared_vision(struct player *pplayer)
 {
   players_iterate(pplayer2) {
     if (really_gives_vision(pplayer, pplayer2))
-      conn_list_do_buffer(pplayer2->connections);
+      conn_list_do_buffer(&pplayer2->connections);
   } players_iterate_end;
-  conn_list_do_buffer(pplayer->connections);
+  conn_list_do_buffer(&pplayer->connections);
 }
 
 /**************************************************************************
@@ -347,9 +346,9 @@ static void unbuffer_shared_vision(struct player *pplayer)
 {
   players_iterate(pplayer2) {
     if (really_gives_vision(pplayer, pplayer2))
-      conn_list_do_unbuffer(pplayer2->connections);
+      conn_list_do_unbuffer(&pplayer2->connections);
   } players_iterate_end;
-  conn_list_do_unbuffer(pplayer->connections);
+  conn_list_do_unbuffer(&pplayer->connections);
 }
 
 /**************************************************************************
@@ -404,9 +403,7 @@ void send_all_known_tiles(struct conn_list *dest)
 {
   int tiles_sent;
 
-  if (!dest) {
-    dest = game.game_connections;
-  }
+  if (!dest) dest = &game.game_connections;
 
   /* send whole map piece by piece to each player to balance the load
      of the send buffers better */
@@ -421,7 +418,7 @@ void send_all_known_tiles(struct conn_list *dest)
       conn_list_do_buffer(dest);
     }
 
-    conn_list_iterate(dest, pconn) {
+    conn_list_iterate(*dest, pconn) {
       struct player *pplayer = pconn->player;
 
       if (!pplayer && !pconn->observer) {	/* no map needed */
@@ -429,7 +426,7 @@ void send_all_known_tiles(struct conn_list *dest)
       }
 
       if (!pplayer || map_is_known(ptile, pplayer)) {
-	send_tile_info_always(pplayer, pconn->self, ptile);
+	send_tile_info_always(pplayer, &pconn->self, ptile);
       }
     } conn_list_iterate_end;
   } whole_map_iterate_end;
@@ -450,9 +447,7 @@ void send_tile_info(struct conn_list *dest, struct tile *ptile)
 {
   struct packet_tile_info info;
 
-  if (!dest) {
-    dest = game.game_connections;
-  }
+  if (!dest) dest = &game.game_connections;
 
   info.x = ptile->x;
   info.y = ptile->y;
@@ -463,7 +458,7 @@ void send_tile_info(struct conn_list *dest, struct tile *ptile)
     info.spec_sprite[0] = '\0';
   }
 
-  conn_list_iterate(dest, pconn) {
+  conn_list_iterate(*dest, pconn) {
     struct player *pplayer = pconn->player;
     if (!pplayer && !pconn->observer) {
       continue;
@@ -647,7 +642,7 @@ static void really_unfog_area(struct player *pplayer, struct tile *ptile)
    * continent number before it can handle following packets
    */
   update_player_tile_knowledge(pplayer, ptile);
-  send_tile_info_always(pplayer, pplayer->connections, ptile);
+  send_tile_info_always(pplayer, &pplayer->connections, ptile);
 
   /* discover units */
   unit_list_iterate(ptile->units, punit)
@@ -723,7 +718,7 @@ static void really_fog_area(struct player *pplayer, struct tile *ptile)
   unit_list_iterate_end;  
 
   update_player_tile_last_seen(pplayer, ptile);
-  send_tile_info_always(pplayer, pplayer->connections, ptile);
+  send_tile_info_always(pplayer, &pplayer->connections, ptile);
 }
 
 /**************************************************************************
@@ -883,7 +878,7 @@ static void really_show_area(struct player *pplayer, struct tile *ptile)
     update_player_tile_knowledge(pplayer, ptile);
     update_player_tile_last_seen(pplayer, ptile);
 
-    send_tile_info_always(pplayer, pplayer->connections, ptile);
+    send_tile_info_always(pplayer, &pplayer->connections, ptile);
 
     /* remove old cities that exist no more */
     reality_check_city(pplayer, ptile);
@@ -936,11 +931,10 @@ void show_area(struct player *pplayer, struct tile *ptile, int len)
   unbuffer_shared_vision(pplayer);
 }
 
-/****************************************************************************
-  Return whether the player knows the tile.  Knowing a tile means you've
-  seen it once (as opposed to seeing a tile which means you can see it now).
-****************************************************************************/
-bool map_is_known(const struct tile *ptile, const struct player *pplayer)
+/***************************************************************
+...
+***************************************************************/
+bool map_is_known(const struct tile *ptile, struct player *pplayer)
 {
   return TEST_BIT(ptile->known, pplayer->player_no);
 }
@@ -954,15 +948,10 @@ bool map_is_known_and_seen(const struct tile *ptile, struct player *pplayer)
       && ((pplayer->private_map + ptile->index)->seen != 0);
 }
 
-/****************************************************************************
-  Return whether the player can see the tile.  Seeing a tile means you have
-  vision of it now (as opposed to knowing a tile which means you've seen it
-  before).  Note that a tile can be seen but not known (currently this only
-  happens when a city is founded with some unknown tiles in its radius); in
-  this case the tile is unknown (but map_get_seen will still return TRUE).
-****************************************************************************/
-static int map_get_seen(const struct tile *ptile,
-			const struct player *pplayer)
+/***************************************************************
+Watch out - this can be true even if the tile is not known.
+***************************************************************/
+static int map_get_seen(const struct tile *ptile, struct player *pplayer)
 {
   return map_get_player_tile(ptile, pplayer)->seen;
 }
@@ -1051,8 +1040,8 @@ void show_map_to_all(void)
 ****************************************************************/
 void player_map_allocate(struct player *pplayer)
 {
-  pplayer->private_map
-    = fc_malloc(MAP_INDEX_SIZE * sizeof(*pplayer->private_map));
+  pplayer->private_map =
+    fc_malloc(map.xsize*map.ysize*sizeof(struct player_tile));
   whole_map_iterate(ptile) {
     player_tile_init(ptile, pplayer);
   } whole_map_iterate_end;
@@ -1106,13 +1095,11 @@ static void player_tile_init(struct tile *ptile, struct player *pplayer)
   plrtile->own_seen = plrtile->seen;
 }
  
-/****************************************************************************
-  Players' information of tiles is tracked so that fogged area can be kept
-  consistent even when the client disconnects.  This function returns the
-  player tile information for the given tile and player.
-****************************************************************************/
+/***************************************************************
+...
+***************************************************************/
 struct player_tile *map_get_player_tile(const struct tile *ptile,
-					const struct player *pplayer)
+					struct player *pplayer)
 {
   return pplayer->private_map + ptile->index;
 }
@@ -1151,7 +1138,7 @@ void update_tile_knowledge(struct tile *ptile)
   players_iterate(pplayer) {
     if (map_is_known_and_seen(ptile, pplayer)) {
       if (update_player_tile_knowledge(pplayer, ptile)) {
-        send_tile_info(pplayer->connections, ptile);
+        send_tile_info(&pplayer->connections, ptile);
       }
     }
   } players_iterate_end;
@@ -1160,7 +1147,7 @@ void update_tile_knowledge(struct tile *ptile)
   conn_list_iterate(game.game_connections, pconn) {
     struct player *pplayer = pconn->player;
     if (!pplayer && pconn->observer) {
-      send_tile_info(pconn->self, ptile);
+      send_tile_info(&pconn->self, ptile);
     }
   } conn_list_iterate_end;
 }
@@ -1201,7 +1188,7 @@ static void really_give_tile_info_from_player_to_player(struct player *pfrom,
       dest_tile->terrain = from_tile->terrain;
       dest_tile->special = from_tile->special;
       dest_tile->last_updated = from_tile->last_updated;
-      send_tile_info_always(pdest, pdest->connections, ptile);
+      send_tile_info_always(pdest, &pdest->connections, ptile);
 	
       /* update and send city knowledge */
       /* remove outdated cities */
@@ -1222,7 +1209,7 @@ static void really_give_tile_info_from_player_to_player(struct player *pfrom,
 	  dest_tile->city = fc_malloc(sizeof(struct dumb_city));
 	}
 	*dest_tile->city = *from_tile->city;
-	send_city_info_at_tile(pdest, pdest->connections, NULL, ptile);
+	send_city_info_at_tile(pdest, &pdest->connections, NULL, ptile);
       }
 
       reveal_pending_seen(pdest, ptile, 0);
@@ -1392,14 +1379,11 @@ void remove_shared_vision(struct player *pfrom, struct player *pto)
   }
 }
 
-/***************************************************************************
-  Return a known_type for the given tile for the player.
-
-  FIXME: This function is used by the common code, but separate
-  implementations are provided by server and client.
-***************************************************************************/
+/*************************************************************************
+...
+*************************************************************************/
 enum known_type map_get_known(const struct tile *ptile,
-			      const struct player *pplayer)
+			      struct player *pplayer)
 {
   if (map_is_known(ptile, pplayer)) {
     if (map_get_seen(ptile, pplayer) > 0) {
@@ -1515,6 +1499,7 @@ enum ocean_land_change check_terrain_ocean_land_change(struct tile *ptile,
 
   if (change_type != OLC_NONE) {
     assign_continent_numbers(FALSE);
+    allot_island_improvs();
 
     /* New continent numbers for all tiles to all players */
     send_all_known_tiles(NULL);

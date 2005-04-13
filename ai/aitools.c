@@ -24,7 +24,6 @@
 #include "log.h"
 #include "map.h"
 #include "mem.h"
-#include "movement.h"
 #include "packets.h"
 #include "player.h"
 #include "shared.h"
@@ -51,39 +50,9 @@
 #include "aidata.h"
 #include "aiferry.h"
 #include "ailog.h"
-#include "aitech.h"
 #include "aiunit.h"
 
 #include "aitools.h"
-
-/**************************************************************************
-  Return a string describing a unit's AI role.
-**************************************************************************/
-const char *get_ai_role_str(enum ai_unit_task task)
-{
-  switch(task) {
-   case AIUNIT_NONE:
-     return "None";
-   case AIUNIT_AUTO_SETTLER:
-     return "Auto settler";
-   case AIUNIT_BUILD_CITY:
-     return "Build city";
-   case AIUNIT_DEFEND_HOME:
-     return "Defend home";
-   case AIUNIT_ATTACK:
-     return "Attack";
-   case AIUNIT_ESCORT:
-     return "Escort";
-   case AIUNIT_EXPLORE:
-     return "Explore";
-   case AIUNIT_RECOVER:
-     return "Recover";
-   case AIUNIT_HUNTER:
-     return "Hunter";
-  }
-  assert(FALSE);
-  return NULL;
-}
 
 /**************************************************************************
   Amortize a want modified by the shields (build_cost) we risk losing.
@@ -97,7 +66,7 @@ int military_amortize(struct player *pplayer, struct city *pcity,
                       int value, int delay, int build_cost)
 {
   struct ai_data *ai = ai_data_get(pplayer);
-  int city_output = (pcity ? pcity->surplus[O_SHIELD] : 1);
+  int city_output = (pcity ? pcity->shield_surplus : 1);
   int output = MAX(city_output, ai->stats.average_production);
   int build_time = build_cost / MAX(output, 1);
 
@@ -117,30 +86,25 @@ int military_amortize(struct player *pplayer, struct city *pcity,
 bool is_player_dangerous(struct player *pplayer, struct player *aplayer)
 {
   struct ai_data *ai = ai_data_get(pplayer);
-  struct ai_dip_intel *adip = &ai->diplomacy.player_intel[aplayer->player_no];
-  int reason = pplayer->diplstates[aplayer->player_no].has_reason_to_cancel;
+  struct ai_dip_intel *adip 
+    = &ai->diplomacy.player_intel[aplayer->player_no];
 
-  /* Have to check if aplayer == pplayer explicitly because our reputation
-   * can be so low that we'd fear being stabbed in the back by ourselves */ 
-  return (pplayer != aplayer
-          && (pplayers_at_war(pplayer, aplayer)
-              || ai->diplomacy.target == aplayer
-              || reason != 0
-              || ai->diplomacy.acceptable_reputation > aplayer->reputation
-              || adip->is_allied_with_enemy));
+  return (pplayer != aplayer)
+         && ((pplayers_at_war(pplayer, aplayer)
+           || ai->diplomacy.target == aplayer
+           || pplayer->diplstates[aplayer->player_no].has_reason_to_cancel != 0
+           || ai->diplomacy.acceptable_reputation > aplayer->reputation
+           || adip->is_allied_with_enemy));
 }
 
 /*************************************************************************
-  This is a function to execute paths returned by the path-finding engine,
-  for AI units and units (such as auto explorers) temporarily controlled
-  by the AI.
+  This is a function to execute paths returned by the path-finding engine.
 
   Brings our bodyguard along.
   Returns FALSE only if died.
 *************************************************************************/
 bool ai_unit_execute_path(struct unit *punit, struct pf_path *path)
 {
-  const bool is_ai = unit_owner(punit)->ai.control;
   int i;
 
   /* We start with i = 1 for i = 0 is our present position */
@@ -156,11 +120,8 @@ bool ai_unit_execute_path(struct unit *punit, struct pf_path *path)
     /* We use ai_unit_move() for everything but the last step
      * of the way so that we abort if unexpected opposition
      * shows up. Any enemy on the target tile is expected to
-     * be our target and any attack there intentional.
-     * However, do not annoy human players by automatically attacking
-     * using units temporarily under AI control (such as auto-explorers)
-     */
-    if (is_ai && i == path->length - 1) {
+     * be our target and any attack there intentional. */
+    if (i == path->length - 1) {
       (void) ai_unit_attack(punit, ptile);
     } else {
       (void) ai_unit_move(punit, ptile);
@@ -222,7 +183,7 @@ static void ai_gothere_bodyguard(struct unit *punit, struct tile *dest_tile)
 
   ptile = punit->tile;
   /* We look for the bodyguard where we stand. */
-  if (!unit_list_find(ptile->units, punit->ai.bodyguard)) {
+  if (!unit_list_find(&ptile->units, punit->ai.bodyguard)) {
     int my_def = (punit->hp 
                   * unit_type(punit)->veteran[punit->veteran].power_fact
 		  * unit_type(punit)->defense_strength
@@ -250,6 +211,9 @@ static void ai_gothere_bodyguard(struct unit *punit, struct tile *dest_tile)
 
   TODO: A big one is rendezvous points.  When this is implemented, we won't
   have to be at the coast to ask for a boat to come to us.
+
+  You MUST have warmap created before calling this function in order for 
+  find_beachhead to work here. This requirement should be removed.
 ****************************************************************************/
 bool ai_gothere(struct player *pplayer, struct unit *punit,
                 struct tile *dest_tile)
@@ -296,448 +260,36 @@ bool ai_gothere(struct player *pplayer, struct unit *punit,
   
   /* Dead unit shouldn't reach this point */
   CHECK_UNIT(punit);
-
+  
   return (same_pos(punit->tile, dest_tile) 
           || is_tiles_adjacent(punit->tile, dest_tile));
 }
 
 /**************************************************************************
-  Returns the destination for a unit moving towards a given final destination.
-  That is, it gives a suitable way-point, if necessary.
-  For example, aircraft need these way-points to refuel.
-**************************************************************************/
-struct tile *immediate_destination(struct unit *punit,
-				   struct tile *dest_tile)
-{
-  if (!same_pos(punit->tile, dest_tile) && is_air_unit(punit)) {
-    struct tile *waypoint_tile = punit->goto_tile;
-
-    if (find_air_first_destination(punit, &waypoint_tile)) {
-      return waypoint_tile;
-    } else {
-      struct player *pplayer = unit_owner(punit);
-
-      freelog(LOG_VERBOSE, "Did not find an air-route for "
-	      "%s's %s at (%d, %d) -> (%d, %d)",
-	      pplayer->name, unit_type(punit)->name,
-	      TILE_XY(punit->tile), TILE_XY(dest_tile));
-      /* Prevent take off */
-      return punit->tile;
-    }
-  }
-  /* else does not need way-points */
-  return dest_tile;
-}
-
-/**************************************************************************
-  Move a unit along a path without disturbing its activity, role
-  or assigned destination
-  Return FALSE iff we died.
-**************************************************************************/
-bool ai_follow_path(struct unit *punit, struct pf_path *path,
-		    struct tile *ptile)
-{
-  struct tile *old_tile = punit->goto_tile;
-  enum unit_activity activity = punit->activity;
-  bool alive;
-
-  punit->goto_tile = ptile;
-  handle_unit_activity_request(punit, ACTIVITY_GOTO);
-  alive = ai_unit_execute_path(punit, path);
-  if (alive) {
-    handle_unit_activity_request(punit, ACTIVITY_IDLE);
-    send_unit_info(NULL, punit);
-    handle_unit_activity_request(punit, activity);
-    punit->goto_tile = old_tile; /* May be NULL. */
-    send_unit_info(NULL, punit);
-  }
-  return alive;
-}
-
-/**************************************************************************
-  Log the cost of travelling a path.
-**************************************************************************/
-void ai_log_path(struct unit *punit,
-		 struct pf_path *path, struct pf_parameter *parameter)
-{
-  struct pf_position *last = pf_last_position(path);
-  const int cc = PF_TURN_FACTOR * last->total_MC
-                 + parameter->move_rate * last->total_EC;
-  const int tc = cc / (PF_TURN_FACTOR *parameter->move_rate); 
-
-  UNIT_LOG(LOG_DEBUG, punit, "path L=%d T=%d(%d) MC=%d EC=%d CC=%d",
-	   path->length - 1, last->turn, tc,
-	   last->total_MC, last->total_EC, cc);
-}
-
-/**************************************************************************
-  Go to specified destination, subject to given PF constraints,
-  but do not disturb existing role or activity
-  and do not clear the role's destination. Return FALSE iff we died.
-
-  parameter: the PF constraints on the computed path. The unit will move
-  as far along the computed path is it can; the movement code will impose
-  all the real constraints (ZoC, etc).
-**************************************************************************/
-bool ai_unit_goto_constrained(struct unit *punit, struct tile *ptile,
-			      struct pf_parameter *parameter)
-{
-  bool alive = TRUE;
-  struct pf_map *map = NULL;
-  struct pf_path *path = NULL;
-
-  ptile = immediate_destination(punit, ptile);
-
-  if (same_pos(punit->tile, ptile)) {
-    /* Not an error; sometimes immediate_destination instructs the unit
-     * to stay here. For example, to refuel.*/
-    send_unit_info(NULL, punit);
-    return TRUE;
-  } else if (!goto_is_sane(punit, ptile, FALSE)) {
-    punit->activity = ACTIVITY_IDLE;
-    send_unit_info(NULL, punit);
-    return TRUE;
-  } else if(punit->moves_left == 0) {
-    send_unit_info(NULL, punit);
-    return TRUE;
-  }
-
-  map = pf_create_map(parameter);
-  path = pf_get_path(map, ptile);
-
-  if (path) {
-    ai_log_path(punit, path, parameter);
-    alive = ai_follow_path(punit, path, ptile);
-  } else {
-    UNIT_LOG(LOG_DEBUG, punit, "no path to destination");
-  }
-
-  pf_destroy_path(path);
-  pf_destroy_map(map);
-
-  return alive;
-}
-
-
-/*********************************************************************
-  The value of the units belonging to a given player on a given tile.
-*********************************************************************/
-static int stack_value(const struct tile *ptile,
-		       const struct player *pplayer)
-{
-  int cost = 0;
-
-  if (is_stack_vulnerable(ptile)) {
-    unit_list_iterate(ptile->units, punit) {
-      if (unit_owner(punit) == pplayer) {
-	cost += unit_build_shield_cost(punit->type);
-      }
-    } unit_list_iterate_end;
-  }
-
-  return cost;
-}
-
-/*********************************************************************
-  How dangerous would it be stop on a particular tile,
-  because of enemy attacks,
-  expressed as the probability of being killed.
-
-  TODO: This implementation is a kludge until we compute a more accurate
-  probability using the movemap.
-  Also, we should take into account the reduced probability of death
-  if we have a bodyguard travelling with us.
-*********************************************************************/
-static double chance_killed_at(const struct tile *ptile,
-			       struct ai_risk_cost *risk_cost,
-			       struct pf_parameter *param)
-{
-  double db;
-  /* Compute the basic probability */
-  /* WAG */
-  /* In the early stages of a typical game, ferries
-   * are effectively invulnerable (not until Frigates set sail),
-   * so we make seas appear safer.
-   * If we don't do this, the amphibious movement code has too strong a
-   * desire to minimise the length of the path,
-   * leading to poor choice for landing beaches */
-  double p = is_ocean(ptile->terrain)? 0.05: 0.15;
-
-  /* If we are on defensive terrain, we are more likely to survive */
-  db = get_tile_type(ptile->terrain)->defense_bonus;
-  if (map_has_special(ptile, S_RIVER)) {
-    db += (db * terrain_control.river_defense_bonus) / 100;
-  }
-  p *= 10.0 / db;
-
-  return p;
-}
-
-/*********************************************************************
-  PF stack risk cost. How undesirable is passing through a tile
-  because of risks?
-  Weight by the cost of destruction, for risks that can kill the unit.
-
-  Why use the build cost when assessing the cost of destruction?
-  The reasoning is thus.
-  - Assume that all our units are doing necessary jobs;
-    none are surplus to requirements.
-    If that is not the case, we have problems elsewhere :-)
-  - Then any units that are destroyed will have to be replaced.
-  - The cost of replacing them will be their build cost.
-  - Therefore the total (re)build cost is a good representation of the
-    the cost of destruction.
-*********************************************************************/
-static int stack_risk(const struct tile *ptile,
-		      struct ai_risk_cost *risk_cost,
-		      struct pf_parameter *param)
-{
-  double risk = 0;
-  /* Compute the risk of destruction, assuming we will stop at this tile */
-  const double value = risk_cost->base_value
-                       + stack_value(ptile, param->owner);
-  const double p_killed = chance_killed_at(ptile, risk_cost, param);
-  double danger = value * p_killed;
-
-  if (terrain_has_flag(ptile->terrain, TER_UNSAFE)) {
-    danger += risk_cost->unsafe_terrain_cost;
-  }
-  if (is_ocean(ptile->terrain) && !is_safe_ocean(ptile)) {
-    danger += risk_cost->ocean_cost;
-  }
-
-  /* Adjust for the fact that we might not stop at this tile,
-   * and for our fearfulness */
-  risk += danger * risk_cost->fearfulness;
-
-  /* Adjust for the risk that we might become stuck (for an indefinite period)
-   * if we enter or try to enter the tile. */
-  if (risk_cost->enemy_zoc_cost != 0
-      && (is_non_allied_city_tile(ptile, param->owner)
-	  || !is_my_zoc(param->owner, ptile)
-	  || is_non_allied_unit_tile(ptile, param->owner))) {
-    /* We could become stuck. */
-    risk += risk_cost->enemy_zoc_cost;
-  }
-
-  return risk;
-}
-
-/*********************************************************************
-  PF extra cost call back to avoid creating tall stacks or
-  crossing dangerous tiles.
-  By setting this as an extra-cost call-back, paths will avoid tall stacks.
-  Avoiding tall stacks *all* along a path is useful because a unit following a
-  path might have to stop early because of ZoCs.
-*********************************************************************/
-static int prefer_short_stacks(const struct tile *ptile,
-			       enum known_type known,
-			       struct pf_parameter *param)
-{
-  return stack_risk(ptile, (struct ai_risk_cost *)param->data, param);
-}
-
-/**********************************************************************
-  Set PF call-backs to favour paths that do not create tall stacks
-  or cross dangerous tiles.
-***********************************************************************/
-void ai_avoid_risks(struct pf_parameter *parameter,
-		    struct ai_risk_cost *risk_cost,
-		    struct unit *punit,
-		    const double fearfulness)
-{
-  const struct player *pplayer = unit_owner(punit);
-  /* If we stay a short time on each tile, the danger of each individual tile
-   * is reduced. If we do not do this,
-   * we will not favour longer but faster routs. */
-  const double linger_fraction = (double)SINGLE_MOVE / parameter->move_rate;
-
-  parameter->data = risk_cost;
-  parameter->get_EC = prefer_short_stacks;
-  parameter->turn_mode = TM_WORST_TIME;
-  risk_cost->base_value = unit_build_shield_cost(punit->type);
-  risk_cost->fearfulness = fearfulness * linger_fraction;
-
-  if (unit_flag(punit, F_TRIREME)) {
-    risk_cost->ocean_cost = risk_cost->base_value
-      * (double)base_trireme_loss_pct(pplayer, punit)
-      / 100.0;
-  } else {
-    risk_cost->ocean_cost = 0;
-  }
-  risk_cost->unsafe_terrain_cost = risk_cost->base_value
-    * (double)base_unsafe_terrain_loss_pct(pplayer, punit) / 100.0;
-  risk_cost->enemy_zoc_cost = PF_TURN_FACTOR * 20;
-}
-
-/*
- * The length of time, in turns, which is long enough to be optimistic
- * that enemy units will have moved from their current position.
- * WAG
- */
-#define LONG_TIME 4
-/**************************************************************************
-  Set up the constraints on a path for an AI unit,
-  of for a unit (such as an auto-explorer) temporarily under AI control.
-
-  For non-AI units, take care to prevent cheats, because the AI is 
-  omniscient but the players are not. (Ideally, this code should not
-  be used by non-AI units at all, though.)
-
-  parameter:
-     constraints (output)
-  risk_cost:
-     auxiliary data used by the constraints (output)
-  ptile:
-     the destination of the unit.
-     For ferries, the destination may be a coastal land tile,
-     in which case the ferry should stop on an adjacent tile.
-**************************************************************************/
-void ai_fill_unit_param(struct pf_parameter *parameter,
-			struct ai_risk_cost *risk_cost,
-			struct unit *punit, struct tile *ptile)
-{
-  const bool is_ferry = get_transporter_capacity(punit) > 0
-                        && !unit_flag(punit, F_MISSILE_CARRIER)
-                        && punit->ai.ai_role != AIUNIT_HUNTER;
-  const bool is_air = is_air_unit(punit)
-                      && punit->ai.ai_role != AIUNIT_ESCORT;
-  const bool long_path = LONG_TIME < (map_distance(punit->tile, punit->tile)
-				      * SINGLE_MOVE
-				      / unit_type(punit)->move_rate);
-  const bool barbarian = is_barbarian(unit_owner(punit));
-  const bool is_ai = unit_owner(punit)->ai.control;
-
-  if (is_ferry) {
-    /* The destination may be a coastal land tile,
-     * in which case the ferry should stop on an adjacent tile. */
-    pft_fill_unit_overlap_param(parameter, punit);
-  } else if (is_ai && !is_air && is_military_unit(punit)
-	     && (punit->ai.ai_role == AIUNIT_DEFEND_HOME
-		 || punit->ai.ai_role == AIUNIT_ATTACK
-		 || punit->ai.ai_role ==  AIUNIT_ESCORT
-		 || punit->ai.ai_role == AIUNIT_HUNTER)) {
-    /* Use attack movement for defenders and escorts so they can
-     * make defensive attacks */
-    pft_fill_unit_attack_param(parameter, punit);
-  } else {
-    pft_fill_unit_parameter(parameter, punit);
-  }
-
-  /* Should we use the risk avoidance code?
-   * The risk avoidance code uses omniscience, so do not use for
-   * human-player units under temporary AI control.
-   * Air units are immune to most risks, especially dangerous terrain.
-   * Barbarians bravely/stupidly ignore risks
-   */
-  if (is_ai && !is_air && !barbarian) {
-    ai_avoid_risks(parameter, risk_cost, punit, NORMAL_STACKING_FEARFULNESS);
-  }
-
-  /* Should we absolutely forbid ending a turn on a dangerous tile?
-   * Do not annoy human players by killing their units for them.
-   * For AI units be optimistic; allows attacks across dangerous terrain,
-   * and polar settlements.
-   * TODO: This is compatible with old code,
-   * but probably ought to be more cautious for non military units
-   */
-  if (is_ai && !is_ferry && !is_air) {
-    parameter->is_pos_dangerous = NULL;
-  }
-
-  if (is_ai && long_path) {
-    /* Move as far along the path to the destination as we can;
-     * that is, ignore the presence of enemy units when computing the
-     * path.
-     * Hopefully, ai_avoid_risks will have produced a path that avoids enemy
-     * ZoCs. Ignoring ZoCs allows us to move closer to a destination
-     * for which there is not yet a clear path.
-     * That is good if the destination is several turns away,
-     * so we can reasonably expect blocking enemy units to move or
-     * be destroyed. But it can be bad if the destination is one turn away
-     * or our destination is far but there are enemy units near us and on the
-     * shortest path to the destination.
-     */
-    parameter->get_zoc = NULL;
-  }
-
-  if (!is_ai) {
-    /* Do not annoy human players by killing their units for them.
-     * Do not cheat by using information about tiles unknown to the player.
-     */
-    parameter->get_TB = no_fights_or_unknown;
-  } else if ((unit_flag(punit, F_DIPLOMAT))
-      || (unit_flag(punit, F_SPY))) {
-    /* Default tile behaviour */
-  } else if (unit_flag(punit, F_SETTLERS)) {
-    parameter->get_TB = no_fights;
-  } else if (long_path && unit_flag(punit, F_CITIES)) {
-    /* Default tile behaviour;
-     * move as far along the path to the destination as we can;
-     * that is, ignore the presence of enemy units when computing the
-     * path.
-     */
-  } else if (unit_flag(punit, F_CITIES)) {
-    /* Short path */
-    parameter->get_TB = no_fights;
-  } else if (unit_flag(punit, F_TRADE_ROUTE)
-             || unit_flag(punit, F_HELP_WONDER)) {
-    parameter->get_TB = no_fights;
-  } else if (unit_has_role(punit->type, L_BARBARIAN_LEADER)) {
-    /* Avoid capture */
-    parameter->get_TB = no_fights;
-  } else if (is_ferry) {
-    /* Ferries are not warships */
-    parameter->get_TB = no_fights;
-  } else if (is_air) {
-    /* Default tile behaviour */
-  } else if (is_heli_unit(punit)) {
-    /* Default tile behaviour */
-  } else if (is_military_unit(punit)) {
-    switch (punit->ai.ai_role) {
-    case AIUNIT_AUTO_SETTLER:
-    case AIUNIT_BUILD_CITY:
-      /* Strange, but not impossible */
-      parameter->get_TB = no_fights;
-      break;
-    case AIUNIT_DEFEND_HOME:
-    case AIUNIT_ATTACK:
-    case AIUNIT_ESCORT:
-    case AIUNIT_HUNTER:
-      parameter->get_TB = no_intermediate_fights;
-      break;
-    case AIUNIT_EXPLORE:
-    case AIUNIT_RECOVER:
-      parameter->get_TB = no_fights;
-      break;
-    default:
-      /* Default tile behaviour */
-      break;
-    }
-  } else {
-    /* Probably an explorer */
-    parameter->get_TB = no_fights;
-  }
-
-  if (is_ferry) {
-    /* Must use TM_WORST_TIME, so triremes move safely */
-    parameter->turn_mode = TM_WORST_TIME;
-    /* Show the destination in the client when watching an AI: */
-    punit->goto_tile = ptile;
-  }
-}
-
-/**************************************************************************
   Go to specified destination but do not disturb existing role or activity
   and do not clear the role's destination. Return FALSE iff we died.
+
+  FIXME: add some logging functionality to replace GOTO_LOG()
 **************************************************************************/
 bool ai_unit_goto(struct unit *punit, struct tile *ptile)
 {
-  struct pf_parameter parameter;
-  struct ai_risk_cost risk_cost;
+  enum goto_result result;
+  struct tile *old_tile;
+  enum unit_activity activity = punit->activity;
 
-  ai_fill_unit_param(&parameter, &risk_cost, punit, ptile);
-  return ai_unit_goto_constrained(punit, ptile, &parameter);
+  old_tile = punit->goto_tile; /* May be NULL. */
+
+  CHECK_UNIT(punit);
+  /* TODO: log error on same_pos with punit->x|y */
+  punit->goto_tile = ptile;
+  handle_unit_activity_request(punit, ACTIVITY_GOTO);
+  result = do_unit_goto(punit, GOTO_MOVE_ANY, FALSE);
+  if (result != GR_DIED) {
+    handle_unit_activity_request(punit, activity);
+    punit->goto_tile = old_tile; /* May be NULL. */
+    return TRUE;
+  }
+  return FALSE;
 }
 
 /**************************************************************************
@@ -756,8 +308,8 @@ void ai_unit_new_role(struct unit *punit, enum ai_unit_task task,
   /* If the unit is under (human) orders we shouldn't control it. */
   assert(!unit_has_orders(punit));
 
-  UNIT_LOG(LOG_DEBUG, punit, "changing role from %s to %s",
-           get_ai_role_str(punit->ai.ai_role), get_ai_role_str(task));
+  UNIT_LOG(LOG_DEBUG, punit, "changing role from %d to %d",
+           punit->activity, task);
 
   /* Free our ferry.  Most likely it has been done already. */
   if (task == AIUNIT_NONE || task == AIUNIT_DEFEND_HOME) {
@@ -789,11 +341,6 @@ void ai_unit_new_role(struct unit *punit, enum ai_unit_task task,
     charge->ai.bodyguard = BODYGUARD_NONE;
   }
   punit->ai.charge = BODYGUARD_NONE;
-
-  /* Record the city to defend; our goto may be to transport. */
-  if (task == AIUNIT_DEFEND_HOME && ptile && ptile->city) {
-    punit->ai.charge = ptile->city->id;
-  }
 
   punit->ai.ai_role = task;
 
@@ -853,8 +400,8 @@ bool ai_unit_make_homecity(struct unit *punit, struct city *pcity)
        the greater good -- Per */
     return FALSE;
   }
-  if (pcity->surplus[O_SHIELD] >= unit_type(punit)->upkeep[O_SHIELD]
-      && pcity->surplus[O_FOOD] >= unit_type(punit)->upkeep[O_FOOD]) {
+  if (pcity->shield_surplus - unit_type(punit)->shield_cost >= 0
+      && pcity->food_surplus - unit_type(punit)->food_cost >= 0) {
     handle_unit_change_homecity(unit_owner(punit), punit->id, pcity->id);
     return TRUE;
   }
@@ -946,9 +493,7 @@ bool ai_unit_attack(struct unit *punit, struct tile *ptile)
 }
 
 /**************************************************************************
-  Move a unit. Do not attack. Do not leave bodyguard.
-  For AI units and units (such as auto explorers) temporarily controlled
-  by the AI.
+  Move an ai unit. Do not attack. Do not leave bodyguard.
 
   This function returns only when we have a reply from the server and
   we can tell the calling function what happened to the move request.
@@ -959,13 +504,12 @@ bool ai_unit_move(struct unit *punit, struct tile *ptile)
   struct unit *bodyguard;
   int sanity = punit->id;
   struct player *pplayer = unit_owner(punit);
-  const bool is_ai = pplayer->ai.control;
 
   CHECK_UNIT(punit);
+  assert(unit_owner(punit)->ai.control);
   assert(is_tiles_adjacent(punit->tile, ptile));
 
-  /* if enemy, stop and give a chance for the ai attack function
-   * or the human player to handle this case */
+  /* if enemy, stop and let ai attack function take this case */
   if (is_enemy_unit_tile(ptile, pplayer)
       || is_enemy_city_tile(ptile, pplayer)) {
     UNIT_LOG(LOG_DEBUG, punit, "movement halted due to enemy presence");
@@ -978,7 +522,7 @@ bool ai_unit_move(struct unit *punit, struct tile *ptile)
   }
 
   /* don't leave bodyguard behind */
-  if (is_ai && has_bodyguard(punit)
+  if (has_bodyguard(punit)
       && (bodyguard = find_unit_by_id(punit->ai.bodyguard))
       && same_pos(punit->tile, bodyguard->tile)
       && bodyguard->moves_left == 0) {
@@ -1002,7 +546,7 @@ bool ai_unit_move(struct unit *punit, struct tile *ptile)
 
   /* handle the results */
   if (find_unit_by_id(sanity) && same_pos(ptile, punit->tile)) {
-    if (is_ai && has_bodyguard(punit)) {
+    if (has_bodyguard(punit)) {
       ai_unit_bodyguard_move(punit->ai.bodyguard, ptile);
     }
     return TRUE;
@@ -1139,42 +683,84 @@ void copy_if_better_choice(struct ai_choice *cur, struct ai_choice *best)
 }
 
 /**************************************************************************
-  Calls ai_wants_role_unit to choose the best unit with the given role and 
-  set tech wants.  Sets choice->choice if we can build something.
+  Returns TRUE if pcity's owner is building any wonder in another city on
+  the same continent (if so, we may want to build a caravan here).
 **************************************************************************/
-void ai_choose_role_unit(struct player *pplayer, struct city *pcity,
-			 struct ai_choice *choice, int role, int want)
+static bool is_building_other_wonder(struct city *pcity)
 {
-  Unit_Type_id iunit = ai_wants_role_unit(pplayer, pcity, role, want);
+  struct player *pplayer = city_owner(pcity);
 
-  if (iunit != U_LAST) {
-    choice->choice = iunit;
-  }
+  city_list_iterate(pplayer->cities, acity) {
+    if (pcity != acity
+	&& !acity->is_building_unit
+	&& is_wonder(acity->currently_building)
+	&& (map_get_continent(acity->tile)
+	    == map_get_continent(pcity->tile))) {
+      return TRUE;
+    }
+  } city_list_iterate_end;
+
+  return FALSE;
 }
 
 /**************************************************************************
   Choose improvement we like most and put it into ai_choice.
-
- "I prefer the ai_choice as a return value; gcc prefers it as an arg" 
-  -- Syela 
+  TODO: Clean, update the log calls.
 **************************************************************************/
 void ai_advisor_choose_building(struct city *pcity, struct ai_choice *choice)
-{
+{ /* I prefer the ai_choice as a return value; gcc prefers it as an arg -- Syela */
   Impr_Type_id id = B_LAST;
-  int want = 0;
-  struct player *plr = city_owner(pcity);
+  unsigned int danger = 0;
+  int downtown = 0, cities = 0;
+  int want=0;
+  struct player *plr;
+        
+  plr = city_owner(pcity);
+     
+  /* too bad plr->score isn't kept up to date. */
+  city_list_iterate(plr->cities, acity)
+    danger += acity->ai.danger;
+    downtown += acity->ai.downtown;
+    cities++;
+  city_list_iterate_end;
 
   impr_type_iterate(i) {
-    if (!plr->ai.control && is_wonder(i)) {
+    if (!plr->ai.control
+        && (get_building_for_effect(EFT_CAPITAL_CITY) == i
+            || is_wonder(i))) {
       continue; /* Humans should not be advised to build wonders or palace */
     }
-    if (pcity->ai.building_want[i] > want
-        && can_build_improvement(pcity, i)) {
-      want = pcity->ai.building_want[i];
-      id = i;
+    if (!is_wonder(i)
+	|| (!pcity->is_building_unit && is_wonder(pcity->currently_building)
+	    && pcity->shield_stock >= impr_build_shield_cost(i) / 2)
+	|| (!is_building_other_wonder(pcity)
+	    /* otherwise caravans will be killed! */
+	    && pcity->ai.grave_danger == 0
+	    && pcity->ai.downtown * cities >= downtown
+	    && pcity->ai.danger * cities <= danger)) {
+      /* Is this too many restrictions? */
+      /* trying to keep wonders in safe places with easy caravan
+       * access -- Syela */
+      if(pcity->ai.building_want[i]>want) {
+	/* we have to do the can_build check to avoid Built Granary.
+	 * Now Building Granary. */
+        if (can_build_improvement(pcity, i)) {
+          want = pcity->ai.building_want[i];
+          id = i;
+        } else {
+	  freelog(LOG_DEBUG, "%s can't build %s", pcity->name,
+		  get_improvement_name(i));
+	}
+      } /* id is the building we like the best */
     }
   } impr_type_iterate_end;
 
+  if (want != 0) {
+    freelog(LOG_DEBUG, "AI_Chosen: %s with desire = %d for %s",
+	    get_improvement_name(id), want, pcity->name);
+  } else {
+    freelog(LOG_DEBUG, "AI_Chosen: None for %s", pcity->name);
+  }
   choice->want = want;
   choice->choice = id;
   choice->type = CT_BUILDING;
@@ -1245,5 +831,5 @@ bool ai_assess_military_unhappiness(struct city *pcity,
 **************************************************************************/
 bool ai_wants_no_science(struct player *pplayer)
 {
-  return ai_data_get(pplayer)->wants_no_science;
+  return is_future_tech(pplayer->research.researching);
 }

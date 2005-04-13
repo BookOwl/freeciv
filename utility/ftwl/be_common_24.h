@@ -14,11 +14,9 @@
 #ifndef FC__BE_24_H
 #define FC__BE_24_H
 
-#include "common_types.h"
-
 #define ENABLE_IMAGE_ACCESS_CHECK	0
 
-/* Internal 32bpp format. */
+/* Internal 24 bit format, 8 bit are for masking. */
 struct image {
   int width, height;
   int pitch;
@@ -26,7 +24,10 @@ struct image {
   struct ct_rect full_rect;
 };
 
-struct sprite {
+#define MASK_ALPHA  0x01
+#define MASK_OPAQUE 0x02
+
+struct Sprite {
   struct image *image;
 };
 
@@ -42,8 +43,8 @@ struct image *image_clone_sub(struct image *src, const struct ct_point *pos,
 			      const struct ct_size *size);
 void image_copy_full(struct image *src, struct image *dest,
 		     struct ct_rect *region);
-void image_set_alpha(const struct image *image, const struct ct_rect *rect,
-		     unsigned char alpha);
+void image_set_mask(const struct image *image, const struct ct_rect *rect,
+		    unsigned char mask);
 
 #define IMAGE_GET_ADDRESS(image, x, y) ((image)->data + (image)->pitch * (y) + 4 * (x))
 

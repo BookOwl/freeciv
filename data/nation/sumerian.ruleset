@@ -2,7 +2,7 @@
 
 name=_("Sumerian")
 plural=_("?plural:Sumerians")
-groups=_("Ancient"), _("Asian")
+class=_("Historical")
 leader="Gilgamesh", "Lagislazuli", "Urukagina", "Urnammu", "Ibissin"
 leader_sex="Male", "Male", "Male", "Male", "Male"
 flag = "f.sumeria"

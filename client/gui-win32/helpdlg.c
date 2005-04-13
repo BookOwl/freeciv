@@ -28,21 +28,20 @@
 #include "game.h"
 #include "genlist.h"
 #include "government.h"
-#include "map.h"
 #include "mem.h"
-#include "movement.h"
 #include "shared.h"
 #include "tech.h"
 #include "unit.h"
+#include "map.h"
 #include "support.h"
 #include "version.h"
  
 #include "climisc.h"
 #include "colors.h"
+#include "graphics.h"
 #include "gui_stuff.h"
 #include "helpdata.h"
 #include "options.h"
-#include "sprite.h"
 #include "tilespec.h"
                                   
 #include "helpdlg.h"
@@ -313,8 +312,8 @@ static void create_wonder_page(struct fcwin_box *vbox)
 **************************************************************************/
 static void unit_minsize(POINT *min,void *data)
 {
-  min->x=tileset_full_tile_width(tileset);
-  min->y=tileset_full_tile_height(tileset);
+  min->x=UNIT_TILE_WIDTH;
+  min->y=UNIT_TILE_HEIGHT;
 }
 
 /*************************************************************************
@@ -555,33 +554,33 @@ static void help_update_terrain(const struct help_item *pitem,
     SetWindowText (help_tlabel[0][1], buf);
 
     sprintf(buf, "%d/%d/%d",
-	    tile_types[i].output[O_FOOD],
-	    tile_types[i].output[O_SHIELD],
-	    tile_types[i].output[O_TRADE]);
+	    tile_types[i].food,
+	    tile_types[i].shield,
+	    tile_types[i].trade);
     SetWindowText(help_tlabel[0][4], buf);
 
-    if (*(tile_types[i].special[0].name)) {
+    if (*(tile_types[i].special_1_name)) {
       sprintf(buf, _("%s F/R/T:"),
-	      tile_types[i].special[0].name);
+	      tile_types[i].special_1_name);
       SetWindowText(help_tlabel[1][0], buf);
       sprintf(buf, "%d/%d/%d",
-	      tile_types[i].special[0].output[O_FOOD],
-	      tile_types[i].special[0].output[O_SHIELD],
-	      tile_types[i].special[0].output[O_TRADE]);
+	      tile_types[i].food_special_1,
+	      tile_types[i].shield_special_1,
+	      tile_types[i].trade_special_1);
       SetWindowText(help_tlabel[1][1], buf);
     } else {
       SetWindowText(help_tlabel[1][0], " ");
       SetWindowText(help_tlabel[1][1], " ");
     }
 
-    if (*(tile_types[i].special[1].name)) {
+    if (*(tile_types[i].special_2_name)) {
       sprintf(buf, _("%s F/R/T:"),
-	      tile_types[i].special[1].name);
+	      tile_types[i].special_2_name);
       SetWindowText(help_tlabel[1][3], buf);
       sprintf(buf, "%d/%d/%d",
-	      tile_types[i].special[1].output[O_FOOD],
-	      tile_types[i].special[1].output[O_SHIELD],
-	      tile_types[i].special[1].output[O_TRADE]);
+	      tile_types[i].food_special_2,
+	      tile_types[i].shield_special_2,
+	      tile_types[i].trade_special_2);
       SetWindowText(help_tlabel[1][4], buf);
     } else {
       SetWindowText(help_tlabel[1][3], " ");
@@ -651,8 +650,8 @@ static void help_draw_unit(HDC hdc,int i)
   RECT rc;
   rc.top=unitpos.y;
   rc.left=unitpos.x;
-  rc.bottom=unitpos.y+tileset_full_tile_height(tileset);
-  rc.right=unitpos.x+tileset_full_tile_width(tileset);
+  rc.bottom=unitpos.y+UNIT_TILE_HEIGHT;
+  rc.right=unitpos.x+UNIT_TILE_WIDTH;
   
   /* Give tile a background color, based on the type of unit */
   switch (get_unit_type(i)->move_type) {
@@ -666,12 +665,12 @@ static void help_draw_unit(HDC hdc,int i)
   
   /* If we're using flags, put one on the tile */
   if(!solid_color_behind_units)  {
-    struct sprite *flag=get_nation_by_plr(game.player_ptr)->flag_sprite;
+    struct Sprite *flag=get_nation_by_plr(game.player_ptr)->flag_sprite;
     draw_sprite(flag,hdc,unitpos.x,unitpos.y);
   }
   /* Finally, put a picture of the unit in the tile */
   if(i<game.num_unit_types) {
-    struct sprite *s=get_unit_type(i)->sprite;
+    struct Sprite *s=get_unit_type(i)->sprite;
     draw_sprite(s,hdc,unitpos.x,unitpos.y);
   }
   
@@ -709,7 +708,7 @@ static void help_update_unit_type(const struct help_item *pitem,
       SetWindowText(help_ulabel[4][1], advances[utype->tech_requirement].name);
     }
     /*    create_tech_tree(help_improvement_tree, 0, utype->tech_requirement, 3);*/
-    if (utype->obsoleted_by == U_NOT_OBSOLETED) {
+    if(utype->obsoleted_by==-1) {
       SetWindowText(help_ulabel[4][4], _("None"));
     } else {
       SetWindowText(help_ulabel[4][4], get_unit_type(utype->obsoleted_by)->name);
@@ -760,7 +759,7 @@ static void help_update_tech(const struct help_item *pitem, char *title, int i)
 	fcwin_box_add_box(helpdlg_page_vbox,hbox,FALSE,FALSE,5);
 	fcwin_box_add_static(hbox,_("Allows "),0,SS_LEFT,FALSE,FALSE,5);
 	fcwin_box_add_button(hbox,improvement_types[j].name,
-			     is_great_wonder(j)?
+			     is_wonder(j)?
 			     ID_HELP_WONDER_LINK:ID_HELP_IMPROVEMENT_LINK,
 			     0,FALSE,FALSE,5);
       }
@@ -769,7 +768,7 @@ static void help_update_tech(const struct help_item *pitem, char *title, int i)
 	fcwin_box_add_box(helpdlg_page_vbox,hbox,FALSE,FALSE,5);
 	fcwin_box_add_static(hbox,_("Obsoletes "),0,SS_LEFT,FALSE,FALSE,5);
 	fcwin_box_add_button(hbox,improvement_types[j].name,
-			     is_great_wonder(j)?
+			     is_wonder(j)?
 			     ID_HELP_WONDER_LINK:ID_HELP_IMPROVEMENT_LINK,
 			     0,FALSE,FALSE,5);
       }
@@ -856,12 +855,12 @@ static void help_update_dialog(const struct help_item *pitem)
   switch(pitem->type) {
   case HELP_IMPROVEMENT:
     i = find_improvement_by_name(top);
-    if(i!=B_LAST && is_great_wonder(i)) i = B_LAST;
+    if(i!=B_LAST && is_wonder(i)) i = B_LAST;
     help_update_improvement(pitem, top, i);
     break;
   case HELP_WONDER:
     i = find_improvement_by_name(top);
-    if(i!=B_LAST && !is_great_wonder(i)) i = B_LAST;
+    if(i!=B_LAST && !is_wonder(i)) i = B_LAST;
     help_update_wonder(pitem, top, i);
     break;
   case HELP_UNIT:

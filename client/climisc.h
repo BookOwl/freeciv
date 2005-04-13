@@ -29,17 +29,14 @@ void client_remove_unit(struct unit *punit);
 
 void client_change_all(cid x, cid y);
 
-const char *get_embassy_status(const struct player *me,
-				const struct player *them);
-const char *get_vision_status(const struct player *me,
-				const struct player *them);
+const char *get_embassy_status(struct player *me, struct player *them);
+const char *get_vision_status(struct player *me, struct player *them);
 void client_diplomacy_clause_string(char *buf, int bufsiz,
 				    struct Clause *pclause);
 
-struct sprite *client_research_sprite(void);
-struct sprite *client_warming_sprite(void);
-struct sprite *client_cooling_sprite(void);
-struct sprite *client_government_sprite(void);
+int client_research_sprite(void);
+int client_warming_sprite(void);
+int client_cooling_sprite(void);
 
 void center_on_something(void);
 
@@ -83,6 +80,9 @@ bool city_building_present(struct city *pcity, cid cid);
 struct item {
   cid cid;
   char descr[MAX_LEN_NAME + 40];
+
+  /* Privately used for sorting */
+  int section;
 };
 
 void name_and_sort_items(int *pcids, int num_cids, struct item *items,
@@ -114,7 +114,7 @@ void reports_freeze_till(int request_id);
 void reports_thaw(void);
 void reports_force_thaw(void);
 
-struct city *get_nearest_city(const struct unit *punit, int *sq_dist);
+struct city *get_nearest_city(struct unit *punit, int *sq_dist);
 
 void cityrep_buy(struct city *pcity);
 void common_taxrates_callback(int i);

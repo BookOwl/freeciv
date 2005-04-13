@@ -48,7 +48,7 @@ void get_economy_report_data(struct improvement_entry *entries,
   *total_cost = 0;
 
   impr_type_iterate(impr_id) {
-    if (is_improvement(impr_id)) {
+    if (!is_wonder(impr_id)) {
       int count = 0, cost = 0;
       city_list_iterate(game.player_ptr->cities, pcity) {
 	if (city_got_building(pcity, impr_id)) {
@@ -80,9 +80,9 @@ void get_economy_report_data(struct improvement_entry *entries,
   *total_income = 0;
 
   city_list_iterate(game.player_ptr->cities, pcity) {
-    *total_income += pcity->prod[O_GOLD];
+    *total_income += pcity->tax_total;
     if (get_current_construction_bonus(pcity, EFT_PROD_TO_GOLD) > 0) {
-      *total_income += MAX(0, pcity->surplus[O_SHIELD]);
+      *total_income += MAX(0, pcity->shield_surplus);
     }
   } city_list_iterate_end;
 }
@@ -99,11 +99,9 @@ void get_economy_report_units_data(struct unit_entry *entries,
 
   unit_type_iterate(utype) {
     unittype = get_unit_type(utype);
-    cost = utype_upkeep_cost(unittype, get_gov_pplayer(game.player_ptr),
-			     O_GOLD);
+    cost = utype_gold_cost(unittype, get_gov_pplayer(game.player_ptr));
 
     if (cost == 0) {
-      /* Short-circuit all of the following checks. */
       continue;
     }
 
@@ -115,7 +113,7 @@ void get_economy_report_units_data(struct unit_entry *entries,
 
 	if (punit->type == utype) {
 	  count++;
-	  partial_cost += punit->upkeep[O_GOLD];
+	  partial_cost += punit->upkeep_gold;
 	}
 
       } unit_list_iterate_end;

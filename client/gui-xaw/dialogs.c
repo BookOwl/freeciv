@@ -1107,7 +1107,7 @@ void popup_diplomat_dialog(struct unit *punit, struct tile *dest_tile)
 
     diplomat_dialog_open = TRUE;
   }else{ 
-    if ((ptunit = unit_list_get(dest_tile->units, 0))) {
+    if((ptunit=unit_list_get(&dest_tile->units, 0))){
       /* Spy/Diplomat acting against a unit */
       
       const char *message = !unit_flag(punit, F_SPY)
@@ -1431,7 +1431,7 @@ void popup_unit_select_dialog(struct tile *ptile)
   Widget unit_select_all_command, unit_select_close_command;
   Widget firstcolumn=0,column=0;
   Pixel bg;
-  struct unit *unit_list[unit_list_size(ptile->units)];
+  struct unit *unit_list[unit_list_size(&ptile->units)];
 
   XtSetSensitive(main_form, FALSE);
 
@@ -1447,7 +1447,7 @@ void popup_unit_select_dialog(struct tile *ptile)
   XtVaGetValues(unit_select_form, XtNbackground, &bg, NULL);
   XSetForeground(display, fill_bg_gc, bg);
 
-  n = MIN(MAX_SELECT_UNITS, unit_list_size(ptile->units));
+  n = MIN(MAX_SELECT_UNITS, unit_list_size(&ptile->units));
   r = number_of_rows(n);
 
   fill_tile_unit_list(ptile, unit_list);
@@ -1477,11 +1477,11 @@ void popup_unit_select_dialog(struct tile *ptile)
 	    unit_activity_text(punit));
 
     unit_select_pixmaps[i]=XCreatePixmap(display, XtWindow(map_canvas), 
-					 tileset_full_tile_width(tileset), tileset_full_tile_height(tileset),
+					 UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT,
 					 display_depth);
 
     XFillRectangle(display, unit_select_pixmaps[i], fill_bg_gc,
-		   0, 0, tileset_full_tile_width(tileset), tileset_full_tile_height(tileset));
+		   0, 0, UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT);
     store.pixmap = unit_select_pixmaps[i];
     put_unit(punit, &store, 0, 0);
 
@@ -1767,9 +1767,8 @@ void create_races_dialog(void)
 				NULL));
 
   /* find out styles that can be used at the game beginning */
-  /* Limit of 64 city_styles should be deleted. -ev */
-  for (i = 0, b_s_num = 0; i < game.styles_count && i < 64; i++) {
-    if (!city_style_has_requirements(&city_styles[i])) {
+  for(i=0,b_s_num=0; i<game.styles_count && i<64; i++) {
+    if(city_styles[i].techreq == A_NONE) {
       city_style_idx[b_s_num] = i;
       city_style_ridx[i] = b_s_num;
       b_s_num++;
@@ -2187,7 +2186,7 @@ void races_disconnect_command_callback(Widget w, XtPointer client_data,
 void races_quit_command_callback(Widget w, XtPointer client_data, 
 				 XtPointer call_data)
 {
-  ui_exit();
+  exit(EXIT_SUCCESS);
 }
 
 /**************************************************************************

@@ -27,7 +27,38 @@
 
 #include "government.h"
 
+/* TODO:
+ * o Update and turn on government evaluation code.
+ * o Check exact government rules vs Civ1,Civ2.
+ * o The clients display wrong upkeep icons in the city display,
+ *   not sure what to do here.  (Does the new terrain-ruleset code
+ *   have icons that could be used here?)
+ * o When change government, server should update cities and unit
+ *   upkeep etc and send updated info to client.
+ * o Implement actual cost for unit gold upkeep.
+ * o Possibly remove ai_gov_tech_hint stuff?
+ *   (See usage in ai_manage_cities() in aicity.c)
+ * o Update help system, including dynamic help on governments.
+ * o Test the new government evaluation code (AI).
+ *   [ It seems fine to me, although it favours Democracy very early
+ *   on. This is because of the huge trade bonus. -SKi ]
+ * o Implement the features needed for fundamentalism:
+ *   - A diplomatic penalty modifier when international incidents occur.
+ *     (Spy places nuke in city, goes to war, etc).
+ *     [ Is this one of those Civ II "features" best be ignored?  I am
+ *     inclined to think so -SKi ]
+ */
+
+/*
+ * WISHLIST:
+ * o Features needed for CTP-style rules, just more trade, science and
+ *   production modifiers.  (Just counting CTP governments, only
+ *   basics).
+ */
+
 struct government *governments = NULL;
+
+struct ai_gov_tech_hint ai_gov_tech_hints[MAX_NUM_TECH_LIST];
 
 static const char *flag_names[] = {
   "Build_Veteran_Diplomats", "Revolution_When_Unhappy", "Has_Senate",
@@ -105,10 +136,10 @@ struct government *get_government(int gov)
   return &governments[gov];
 }
 
-/****************************************************************************
-  Return this player's government.
-****************************************************************************/
-struct government *get_gov_pplayer(const struct player *pplayer)
+/***************************************************************
+...
+***************************************************************/
+struct government *get_gov_pplayer(struct player *pplayer)
 {
   assert(pplayer != NULL);
   return get_government(pplayer->government);
@@ -193,20 +224,21 @@ const char *get_government_name(int type)
 ***************************************************************/
 bool can_change_to_government(struct player *pplayer, int government)
 {
-  struct government *gov = &governments[government];
+  int req;
 
-  if (government < 0 || government >= game.government_count) {
-    assert(0);
+  assert(game.government_count > 0 &&
+	 government >= 0 && government < game.government_count);
+
+  req = governments[government].required_tech;
+  if (!tech_is_available(pplayer, req)) {
+    /* If the technology doesn't "exist" or if there is no way we can
+     * ever get it, then we can't change to the gov type even if we have
+     * a wonder that would otherwise allow it. */
     return FALSE;
+  } else {
+    return (get_invention(pplayer, req) == TECH_KNOWN
+	    || get_player_bonus(pplayer, EFT_ANY_GOVERNMENT) > 0);
   }
-
-  if (get_player_bonus(pplayer, EFT_ANY_GOVERNMENT) > 0) {
-    /* Note, this may allow govs that are on someone else's "tech tree". */
-    return TRUE;
-  }
-
-  return are_reqs_active(pplayer, NULL, B_LAST, NULL,
-			 gov->req, MAX_NUM_REQS);
 }
 
 /***************************************************************

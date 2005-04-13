@@ -38,9 +38,9 @@
 #define HOSTILE_PLAYER(pplayer, ai, aplayer) \
   (pplayers_at_war(pplayer, aplayer)         \
    || ai->diplomacy.target == aplayer)
-#define UNITTYPE_COSTS(ut)						\
-  (ut->pop_cost * 3 + ut->happy_cost					\
-   + ut->upkeep[O_SHIELD] + ut->upkeep[O_FOOD] + ut->upkeep[O_GOLD])
+#define UNITTYPE_COSTS(ut)                             \
+  (ut->pop_cost * 3 + ut->happy_cost + ut->shield_cost \
+   + ut->food_cost + ut->gold_cost)
 
 struct ai_choice;
 struct pf_path;
@@ -62,6 +62,8 @@ int turns_to_enemy_unit(Unit_Type_id our_type, int speed, struct tile *ptile,
                         Unit_Type_id enemy_type);
 int find_something_to_kill(struct player *pplayer, struct unit *punit, 
 			   struct tile **ptile);
+bool find_beachhead(struct unit *punit, struct tile *dst_tile,
+		    struct tile **ptile);
 
 int build_cost_balanced(Unit_Type_id type);
 int unittype_att_rating(Unit_Type_id type, int veteran,
@@ -75,6 +77,10 @@ int kill_desire(int benefit, int attack, int loss, int vuln, int attack_count);
 
 bool is_on_unit_upgrade_path(Unit_Type_id test, Unit_Type_id base);
 
+Unit_Type_id ai_wants_role_unit(struct player *pplayer, struct city *pcity,
+                                int role, int want);
+void ai_choose_role_unit(struct player *pplayer, struct city *pcity,
+                         struct ai_choice *choice, int role, int want);
 void update_simple_ai_types(void);
 
 #define simple_ai_unit_type_iterate(m_i)                                      \

@@ -78,9 +78,6 @@
 #ifdef HAVE_WINSOCK
 #include <winsock.h>
 #endif
-#ifdef HAVE_STRINGS_H
-#  include <strings.h>
-#endif
 
 #include "fcintl.h"
 #include "mem.h"

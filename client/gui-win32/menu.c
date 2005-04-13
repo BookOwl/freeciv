@@ -28,7 +28,6 @@
 #include "government.h"
 #include "map.h"
 #include "mem.h"
-#include "movement.h"
 #include "support.h"
 #include "unit.h"
  
@@ -595,7 +594,7 @@ void handle_menu(int code)
       disconnect_from_server();
       break;
     case IDM_GAME_QUIT:
-      ui_exit();
+      exit(EXIT_SUCCESS);
       break;
 
 
@@ -818,19 +817,19 @@ void handle_menu(int code)
 
 
     case IDM_REPORTS_CITIES:
-      popup_city_report_dialog(TRUE);
+      popup_city_report_dialog(0);
       break;
     case IDM_REPORTS_UNITS:
-      popup_activeunits_report_dialog(TRUE);
+      popup_activeunits_report_dialog(0);
       break;
     case IDM_REPORTS_PLAYERS:
-      popup_players_dialog(TRUE);
+      popup_players_dialog();
       break;
     case IDM_REPORTS_ECONOMY:
-      popup_economy_report_dialog(TRUE);
+      popup_economy_report_dialog(0);
       break;  
     case IDM_REPORTS_SCIENCE:
-      popup_science_dialog(TRUE);
+      popup_science_dialog(0);
       break;
     case IDM_REPORTS_WONDERS:
       send_report_request(REPORT_WONDERS_OF_THE_WORLD);
@@ -839,7 +838,7 @@ void handle_menu(int code)
       send_report_request(REPORT_TOP_5_CITIES);
       break;       
     case IDM_REPORTS_MESSAGES:
-      popup_meswin_dialog(TRUE);
+      popup_meswin_dialog();
       break;
     case IDM_REPORTS_DEMOGRAPHICS:
       send_report_request(REPORT_DEMOGRAPHIC);

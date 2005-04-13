@@ -8,18 +8,10 @@ pkgdata_DATA =          \
 	buildings.spec	\
 	chiefs.png	\
 	chiefs.spec	\
-	cityicon.png	\
-	civicon.png	\
-	colors.png	\
-	colors.spec	\
-	cursors.png	\
-	cursors.spec	\
 	flags.spec	\
-	icons.spec	\
 	intro.png	\
-	overlays.png	\
-	overlays.spec	\
 	radar.png	\
+	shields.png	\
 	shields.spec	\
 	small.png	\
 	small.spec	\

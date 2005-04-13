@@ -203,13 +203,13 @@ void update_info_label(void)
 
   d = 0;
   for (; d < (game.player_ptr->economic.luxury) / 10; d++)
-    set(main_econ_sprite[d], MUIA_Sprite_Sprite, get_tax_sprite(tileset, O_LUXURY));
+    set(main_econ_sprite[d], MUIA_Sprite_Sprite, sprites.tax_luxury);
 
   for (; d < (game.player_ptr->economic.science + game.player_ptr->economic.luxury) / 10; d++)
-    set(main_econ_sprite[d], MUIA_Sprite_Sprite, get_tax_sprite(tileset, O_SCIENCE));
+    set(main_econ_sprite[d], MUIA_Sprite_Sprite, sprites.tax_science);
 
   for (; d < 10; d++)
-    set(main_econ_sprite[d], MUIA_Sprite_Sprite, get_tax_sprite(tileset, O_GOLD));
+    set(main_econ_sprite[d], MUIA_Sprite_Sprite, sprites.tax_gold);
 
   update_timeout_label();
 }
@@ -320,7 +320,7 @@ void update_unit_info_label(struct unit *punit)
 **************************************************************************/
 void set_indicator_icons(int bulb, int sol, int flake, int gov)
 {
-  struct sprite *gov_sprite;
+  struct Sprite *gov_sprite;
 
   bulb = CLIP(0, bulb, NUM_TILES_PROGRESS - 1);
   sol = CLIP(0, sol, NUM_TILES_PROGRESS - 1);
@@ -337,7 +337,7 @@ void set_indicator_icons(int bulb, int sol, int flake, int gov)
      * when we don't know any better. */
     struct citizen_type c = {.type = CITIZEN_UNHAPPY};
 
-    gov_sprite = get_citizen_sprite(tileset, c, 0, NULL);
+    gov_sprite = get_citizen_sprite(c, 0, NULL);
   }
   else
   {
