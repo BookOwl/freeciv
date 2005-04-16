@@ -101,6 +101,7 @@ static int get_lanservers(HWND list);
 
 static int num_lanservers_timer = 0;
 
+extern void socket_timer(void);
 
 /*************************************************************************
  configure the dialog depending on what type of authentication request the
@@ -182,16 +183,8 @@ void handle_game_load(struct packet_game_load *packet)
   ListView_DeleteAllItems(players_listview);
 
   for (i = 0; i < packet->nplayers; i++) {
-    const char *nation_name;
-
-    if (packet->nations[i] == NO_NATION_SELECTED) {
-      nation_name = "";
-    } else {
-      nation_name = get_nation_name(packet->nations[i]);
-    }
-
     row[0] = packet->name[i];
-    row[1] = (char *)nation_name;
+    row[1] = packet->nation_name[i];
     row[2] = packet->is_alive[i] ? _("Alive") : _("Dead");
     row[3] = packet->is_ai[i] ? _("AI") : _("Human");
     fcwin_listview_add_row(players_listview, 0, 4, row);
@@ -512,7 +505,7 @@ static int get_lanservers(HWND list)
   if (server_list != NULL) {
     ListView_DeleteAllItems(list);
 
-    server_list_iterate(server_list, pserver) {
+    server_list_iterate(*server_list, pserver) {
 
       row[0] = pserver->host;
       row[1] = pserver->port;
@@ -562,7 +555,7 @@ static int get_meta_list(HWND list, char *errbuf, int n_errbuf)
   for (i = 0; i < 6; i++)
     row[i] = buf[i];
 
-  server_list_iterate(server_list, pserver) {
+  server_list_iterate(*server_list, pserver) {
     sz_strlcpy(buf[0], pserver->host);
     sz_strlcpy(buf[1], pserver->port);
     sz_strlcpy(buf[2], pserver->version);
@@ -813,6 +806,9 @@ void handle_save_load(const char *title, bool is_save)
 static void load_game_callback()
 {
   if (is_server_running() || client_start_server()) {
+    while(!can_client_access_hack()) {
+      socket_timer();
+    }
     handle_save_load(_("Load Game"), FALSE);
   }
 }

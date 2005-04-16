@@ -734,10 +734,7 @@ static char *stats_%(name)s_names[] = {%(names)s};
             delta_header=""
 
         if self.want_post_send:
-            if self.no_packet:
-                post="  post_send_%(packet_name)s(pc, NULL);\n"
-            else:
-                post="  post_send_%(packet_name)s(pc, real_packet);\n"
+            post="  post_send_%(packet_name)s(pc, real_packet);\n"
         else:
             post=""
 
@@ -1104,12 +1101,12 @@ class Packet:
         only_client=len(self.dirs)==1 and self.dirs[0]=="sc"
         only_server=len(self.dirs)==1 and self.dirs[0]=="cs"
         if only_client:
-            restrict='''  if (pc->is_server) {
+            restrict='''  if(is_server) {
     freelog(LOG_ERROR, "Receiving %(name)s at the server.");
   }
 '''%self.get_dict(vars())
         elif only_server:
-            restrict='''  if (!pc->is_server) {
+            restrict='''  if(!is_server) {
     freelog(LOG_ERROR, "Receiving %(name)s at the client.");
   }
 '''%self.get_dict(vars())
@@ -1140,12 +1137,12 @@ class Packet:
         only_client=len(self.dirs)==1 and self.dirs[0]=="cs"
         only_server=len(self.dirs)==1 and self.dirs[0]=="sc"
         if only_client:
-            restrict='''  if (pc->is_server) {
+            restrict='''  if(is_server) {
     freelog(LOG_ERROR, "Sending %(name)s from the server.");
   }
 '''%self.get_dict(vars())
         elif only_server:
-            restrict='''  if (!pc->is_server) {
+            restrict='''  if(!is_server) {
     freelog(LOG_ERROR, "Sending %(name)s from the client.");
   }
 '''%self.get_dict(vars())
@@ -1194,7 +1191,7 @@ class Packet:
         if not self.want_lsend: return ""
         return '''%(lsend_prototype)s
 {
-  conn_list_iterate(dest, pconn) {
+  conn_list_iterate(*dest, pconn) {
     send_%(name)s(pconn%(extra_send_args2)s);
   } conn_list_iterate_end;
 }

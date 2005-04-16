@@ -16,6 +16,8 @@ civserver_SOURCES = \
 libcivserver_a_SOURCES = \
 		airgoto.c	\
 		airgoto.h	\
+		autoattack.c	\
+		autoattack.h	\
 		barbarian.c	\
 		barbarian.h	\
 		cityhand.c	\
@@ -72,6 +74,7 @@ libcivserver_a_SOURCES = \
 		srv_main.h	\
 		stdinhand.c	\
 		stdinhand.h	\
+		stdinhand_info.h\
 		unithand.c	\
 		unithand.h	\
 		unittools.c	\

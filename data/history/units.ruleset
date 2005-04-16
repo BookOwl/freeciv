@@ -71,7 +71,7 @@ firepower_factor=1     ; Multiply firepower by this value. Set it
 ;		  this should be a standard tag.  Otherwise can use eg "-" 
 ;		  for no alternate graphic.
 ; tech_req      = required advance, names from techs.ruleset, or special:
-;                 "None" => available from start
+;                 "None" => available from start; "Never" => never available
 ; obsolete_by   = can be upgraded to and made obsolete by another unit by name
 ; move_type     = "Land" or "Sea" or "Air" or "Heli"
 ; transport_cap = Number of units (ground, or air/missiles, depending on flags)
@@ -416,6 +416,34 @@ flags         = ""
 roles         = "DefendGood", "FirstBuild", "HutTech",
                 "BarbarianTech", "BarbarianBuildTech", "BarbarianSeaTech"
 
+[unit_fanatics]
+name          = _("Fanatics")
+move_type     = "Land"
+tech_req      = "Never"
+obsolete_by   = "None"
+graphic       = "u.fanatics"
+graphic_alt   = "-"
+sound_move    = "m_fanatics"
+sound_move_alt = "m_generic"
+sound_fight   = "f_fanatics"
+sound_fight_alt = "f_generic"
+build_cost    = 20
+pop_cost      = 0
+attack        = 4
+defense       = 4
+hitpoints     = 20
+firepower     = 1
+move_rate     = 1
+vision_range  = 1
+transport_cap = 0
+fuel          = 0
+uk_happy      = 1
+uk_shield     = 1
+uk_food       = 0
+uk_gold       = 0
+flags         = ""
+roles         = "DefendGood"
+
 [unit_partisan]
 name          = _("Partisan")
 move_type     = "Land"
@@ -631,7 +659,7 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 flags         = "Horse"
-roles         = "AttackFast", "Hut", "Barbarian", "Hunter"
+roles         = "AttackFast", "Hut", "Barbarian"
 
 [unit_chariot]
 name          = _("Chariot")
@@ -659,7 +687,63 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 flags         = "Horse"
-roles         = "AttackFast", "Hut", "Hunter"
+roles         = "AttackFast", "Hut"
+
+[unit_elephants]
+name          = _("Elephants")
+move_type     = "Land"
+tech_req      = "Never"
+obsolete_by   = "Crusaders"
+graphic       = "u.elephants"
+graphic_alt   = "-"
+sound_move    = "m_elephants"
+sound_move_alt = "m_generic"
+sound_fight   = "f_elephants"
+sound_fight_alt = "f_generic"
+build_cost    = 40
+pop_cost      = 0
+attack        = 4
+defense       = 1
+hitpoints     = 10
+firepower     = 1
+move_rate     = 2
+vision_range  = 1
+transport_cap = 0
+fuel          = 0
+uk_happy      = 1
+uk_shield     = 1
+uk_food       = 0
+uk_gold       = 0
+flags         = "Horse"
+roles         = "AttackFast"
+
+[unit_crusaders]
+name          = _("Crusaders")
+move_type     = "Land"
+tech_req      = "Never"
+obsolete_by   = "Dragoons"
+graphic       = "u.crusaders"
+graphic_alt   = "-"
+sound_move    = "m_crusaders"
+sound_move_alt = "m_generic"
+sound_fight   = "f_crusaders"
+sound_fight_alt = "f_generic"
+build_cost    = 40
+pop_cost      = 0
+attack        = 5
+defense       = 1
+hitpoints     = 10
+firepower     = 1
+move_rate     = 2
+vision_range  = 1
+transport_cap = 0
+fuel          = 0
+uk_happy      = 1
+uk_shield     = 1
+uk_food       = 0
+uk_gold       = 0
+flags         = "Horse"
+roles         = "AttackFast"
 
 [unit_knights]
 name          = _("Knights")
@@ -688,7 +772,7 @@ uk_food       = 0
 uk_gold       = 0
 flags         = "Horse"
 roles         = "AttackFast", "HutTech", "BarbarianTech",
-                "BarbarianBuildTech", "BarbarianSeaTech", "Hunter"
+                "BarbarianBuildTech", "BarbarianSeaTech"
 
 [unit_dragoons]
 name          = _("Dragoons")
@@ -716,8 +800,7 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 flags         = "Horse"
-roles         = "AttackFast", "BarbarianBuildTech", "BarbarianSeaTech",
-                "Hunter"
+roles         = "AttackFast", "BarbarianBuildTech", "BarbarianSeaTech"
 
 [unit_cavalry]
 name          = _("Cavalry")
@@ -745,7 +828,7 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 flags         = ""
-roles         = "AttackFast", "Hunter"
+roles         = "AttackFast"
 
 [unit_armor]
 name          = _("Armor")
@@ -773,7 +856,7 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 flags         = ""
-roles         = "AttackFast", "Hunter"
+roles         = "AttackFast"
 
 [unit_catapult]
 name          = _("Catapult")
@@ -1151,7 +1234,7 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 flags         = ""
-roles         = "Hunter"
+roles         = ""
 
 [unit_ironclad]
 name          = _("Ironclad")
@@ -1179,7 +1262,7 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 flags         = ""
-roles         = "Hunter"
+roles         = ""
 
 [unit_destroyer]
 name          = _("Destroyer")
@@ -1207,7 +1290,7 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 flags         = ""
-roles         = "Hunter"
+roles         = ""
 helptext      = _("\
 TIP:  A very fast unit, which is very useful for hunting down enemy\
  Transports.\
@@ -1324,7 +1407,7 @@ uk_food       = 0
 uk_gold       = 0
 flags         = "Partial_Invis", 
 	        "Missile_Carrier", "No_Land_Attack"
-roles         = "Hunter"
+roles         = ""
 helptext      = _("\
 Submarines have a very high strategic value, but have a weak\
  defence.\
@@ -1659,39 +1742,6 @@ flags         = "IgTer", "IgZOC", "NonMil"
 roles         = "Explorer"
 helptext      = _("\
 Explorers are very useful for mapping unknown territory.\
-")
-
-[unit_leader]
-name          = _("Leader")
-move_type     = "Land"
-tech_req      = "None"
-obsolete_by   = "None"
-graphic       = "u.leader"
-graphic_alt   = "u.explorer"
-sound_move    = "m_leader"
-sound_move_alt = "m_generic"
-sound_fight   = "f_leader"
-sound_fight_alt = "f_generic"
-build_cost    = 10
-pop_cost      = 0
-attack        = 0
-defense       = 2
-hitpoints     = 20
-firepower     = 1
-move_rate     = 2
-vision_range  = 2
-transport_cap = 0
-fuel          = 0
-uk_happy      = 0
-uk_shield     = 0
-uk_food       = 0
-uk_gold       = 0
-flags         = "IgZOC", "NonMil", "NoBuild", "NoHome", "SuperSpy", 
-                "Undisbandable", "Unbribable", "GameLoss", "Unique",
-                "NoVeteran"
-roles         = "GameLoss"
-helptext      = _("\
-This is you. If you lose this unit, you lose the game. So don't.\
 ")
 
 [unit_barbarian_leader]

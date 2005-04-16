@@ -13,8 +13,6 @@
 #ifndef FC__MAPGEN_H
 #define FC__MAPGEN_H
 
-#include "shared.h"		/* bool type */
-
 void map_fractal_generate(bool autosize);
 
 #endif  /* FC__MAPGEN_H */

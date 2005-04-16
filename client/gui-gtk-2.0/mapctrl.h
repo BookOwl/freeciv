@@ -15,9 +15,9 @@
 
 #include <gtk/gtk.h>
 
-#include "fc_types.h"
-
 #include "mapctrl_g.h"
+
+struct unit;
 
 void key_city_workers(GtkWidget *w, GdkEventKey *ev);
 

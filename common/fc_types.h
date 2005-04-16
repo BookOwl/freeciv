@@ -16,60 +16,17 @@
 
 /* This file serves to reduce the cross-inclusion of header files which
  * occurs when a type which is defined in one file is needed for a fuction
- * definition in another file.
- *
- * Nothing in this file should require anything else from the common/
- * directory! */
-
-#define BUG_EMAIL_ADDRESS "bugs@freeciv.org"
-#define WEBSITE_URL "http://www.freeciv.org/"
-
-/* MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS <= 32 !!!! */
-#define MAX_NUM_PLAYERS  30
-#define MAX_NUM_BARBARIANS   2
-#define MAX_NUM_CONNECTIONS (2 * (MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS))
-#define MAX_NUM_ITEMS   200     /* eg, unit_types */
-#define MAX_NUM_TECH_LIST 10
-#define MAX_NUM_UNIT_LIST 10
-#define MAX_NUM_BUILDING_LIST 10
-#define MAX_LEN_VET_SHORT_NAME 8
-#define MAX_VET_LEVELS 10
-
-enum output_type {
-  O_FOOD, O_SHIELD, O_TRADE, O_GOLD, O_LUXURY, O_SCIENCE, O_LAST
-};
-#define O_COUNT num_output_types
-#define O_MAX O_LAST /* Changing this breaks network compatibility. */
+ * definition in another file */
 
 typedef signed short Continent_id;
 typedef int Terrain_type_id;
-typedef int Specialist_type_id;
+typedef enum specialist_type Specialist_type_id;
 typedef int Impr_Type_id;
-typedef enum output_type Output_type_id;
-typedef int Nation_Type_id;
-typedef int Team_Type_id;
 
 struct city;
 struct government;
-struct nation_type;
 struct player;
 struct tile;
 struct unit;
-
-#define SP_MAX 20
-#define MAX_NUM_REQS 2
-
-#define MAX_NUM_RULESETS 16
-#define MAX_RULESET_NAME_LENGTH 64
-#define RULESET_SUFFIX ".serv"
-
-/* This has to be put here for now, otherwise movement.h and unittype.h
- * would have a recursive dependency. */
-enum unit_move_type {
-  LAND_MOVING = 1,
-  SEA_MOVING,
-  HELI_MOVING,
-  AIR_MOVING
-};
 
 #endif /* FC__FC_TYPES_H */

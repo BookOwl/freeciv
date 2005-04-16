@@ -2,7 +2,7 @@
 
 name=_("Bosnia & Herzegovina")
 plural=_("?plural:Bosnians")
-groups=_("Modern"), _("European")
+class=_("Modern")
 leader="Kulin Ban", "Ban Stjepan", "Kotromanic", "Tvrtko",
        "Stjepan Tvrtko I", "Prijezda I", "Stjepan Tomas",
        "Filipovic Nikola", "Avdo Humo", "Seid Maglajlija",

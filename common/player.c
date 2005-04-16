@@ -42,7 +42,7 @@
   triad, in which p1 is allied to p2 is allied to p3 is at
   war with p1. These lead to strange situations.
 ***************************************************************/
-bool pplayer_can_ally(const struct player *p1, const struct player *p2)
+bool pplayer_can_ally(struct player *p1, struct player *p2)
 {
   players_iterate(pplayer) {
     enum diplstate_type ds = pplayer_get_diplstate(p1, pplayer)->type;
@@ -61,8 +61,7 @@ bool pplayer_can_ally(const struct player *p1, const struct player *p2)
   Check if pplayer has an embassy with pplayer2. We always have
   an embassy with ourselves.
 ***************************************************************/
-bool player_has_embassy(const struct player *pplayer,
-			const struct player *pplayer2)
+bool player_has_embassy(struct player *pplayer, struct player *pplayer2)
 {
   return (TEST_BIT(pplayer->embassy, pplayer2->player_no)
           || (pplayer == pplayer2)
@@ -70,32 +69,18 @@ bool player_has_embassy(const struct player *pplayer,
               && !is_barbarian(pplayer2)));
 }
 
-/****************************************************************************
-  Return TRUE iff the given player owns the city.
-****************************************************************************/
-bool player_owns_city(const struct player *pplayer, const struct city *pcity)
+/****************************************************************
+...
+*****************************************************************/
+bool player_owns_city(struct player *pplayer, struct city *pcity)
 {
-  if (!pcity || !pplayer) {
-    /* better safe than sorry */
-    return FALSE;
-  }
+  if (!pcity || !pplayer)
+    return FALSE;			/* better safe than sorry */
   return (pcity->owner==pplayer->player_no);
 }
 
 /***************************************************************
- Fill the structure with some sane values
-***************************************************************/
-static void player_research_init(struct player_research* research)
-{
-  memset(research, 0, sizeof(struct player_research));
-  research->tech_goal = A_UNSET;
-  research->changed_from = -1;
-}
-
-/***************************************************************
-  In the server you must use server_player_init.  Note that
-  this function is matched by game_remove_player() in game.c,
-  there is no corresponding player_free() in this file.
+In the server you must use server_player_init
 ***************************************************************/
 void player_init(struct player *plr)
 {
@@ -111,9 +96,9 @@ void player_init(struct player *plr)
   plr->team = TEAM_NONE;
   plr->revolution_finishes = -1;
   plr->capital = FALSE;
-  plr->units = unit_list_new();
-  plr->cities = city_list_new();
-  plr->connections = conn_list_new();
+  unit_list_init(&plr->units);
+  city_list_init(&plr->cities);
+  conn_list_init(&plr->connections);
   plr->current_conn = NULL;
   plr->is_connected = FALSE;
   plr->is_observer = FALSE;
@@ -129,6 +114,7 @@ void player_init(struct player *plr)
   }
   plr->city_style=0;            /* should be first basic style */
   plr->ai.control=FALSE;
+  plr->ai.tech_goal = A_UNSET;
   plr->ai.handicap = 0;
   plr->ai.skill_level = 0;
   plr->ai.fuzzy = 0;
@@ -138,21 +124,31 @@ void player_init(struct player *plr)
   plr->economic.tax=PLAYER_DEFAULT_TAX_RATE;
   plr->economic.science=PLAYER_DEFAULT_SCIENCE_RATE;
   plr->economic.luxury=PLAYER_DEFAULT_LUXURY_RATE;
-  plr->research = fc_malloc(sizeof(struct player_research));
-  player_research_init(plr->research);
+  plr->research.changed_from = -1;
   player_limit_to_government_rates(plr);
   spaceship_init(&plr->spaceship);
 
   plr->gives_shared_vision = 0;
   plr->really_gives_vision = 0;
 
-  for (i = 0; i < B_LAST; i++) {
-    plr->small_wonders[i] = 0;
+  /* Initialise list of improvements with Player-wide equiv_range */
+  improvement_status_init(plr->improvements, ARRAY_SIZE(plr->improvements));
+
+  /* Initialise list of improvements with Island-wide equiv_range */
+  plr->island_improv = NULL;
+
+  if (map.num_continents > 0) {
+    plr->island_improv = fc_malloc((map.num_continents + 1) * 
+                                   game.num_impr_types * sizeof(Impr_Status));
+    for (i = 1; i <= map.num_continents; i++) {
+      improvement_status_init(&plr->island_improv[i * game.num_impr_types],
+                              game.num_impr_types);
+    }
   }
 
   plr->attribute_block.data = NULL;
   plr->attribute_block.length = 0;
-  BV_CLR_ALL(plr->debug);
+  plr->debug = FALSE;
 }
 
 /***************************************************************
@@ -230,9 +226,8 @@ struct player *find_player_by_user(const char *name)
   (d) the unit isn't in a transporter, or we are allied AND
   (e) the unit isn't in a transporter, or we can see the transporter
 ****************************************************************************/
-bool can_player_see_unit_at(const struct player *pplayer,
-			    const struct unit *punit,
-			    const struct tile *ptile)
+bool can_player_see_unit_at(struct player *pplayer, struct unit *punit,
+			    struct tile *ptile)
 {
   struct city *pcity;
 
@@ -284,8 +279,7 @@ bool can_player_see_unit_at(const struct player *pplayer,
 
   See can_player_see_unit_at.
 ****************************************************************************/
-bool can_player_see_unit(const struct player *pplayer,
-			 const struct unit *punit)
+bool can_player_see_unit(struct player *pplayer, struct unit *punit)
 {
   return can_player_see_unit_at(pplayer, punit, punit->tile);
 }
@@ -309,8 +303,8 @@ bool can_player_see_unit(const struct player *pplayer,
   Otherwise the player would not know anything about the city's units at
   all, since the full city packet has no "occupied" flag.
 ****************************************************************************/
-bool can_player_see_units_in_city(const struct player *pplayer,
-				  const struct city *pcity)
+bool can_player_see_units_in_city(struct player *pplayer,
+				  struct city *pcity)
 {
   return (can_player_see_city_internals(pplayer, pcity)
 	  || pplayers_allied(pplayer, city_owner(pcity)));
@@ -321,8 +315,8 @@ bool can_player_see_units_in_city(const struct player *pplayer,
   full city packet is sent to the client, who should then be able to popup
   a dialog for it.
 ****************************************************************************/
-bool can_player_see_city_internals(const struct player *pplayer,
-				   const struct city *pcity)
+bool can_player_see_city_internals(struct player *pplayer,
+				   struct city *pcity)
 {
   return (pplayer == city_owner(pcity));
 }
@@ -364,8 +358,7 @@ struct unit *player_find_unit_by_id(const struct player *pplayer,
 /*************************************************************************
 Return 1 if x,y is inside any of the player's city radii.
 **************************************************************************/
-bool player_in_city_radius(const struct player *pplayer,
-			   const struct tile *ptile)
+bool player_in_city_radius(struct player *pplayer, struct tile *ptile)
 {
   struct city *pcity;
   map_city_radius_iterate(ptile, ptile1) {
@@ -381,31 +374,30 @@ bool player_in_city_radius(const struct player *pplayer,
  flag. Needs to be optimized later (e.g. int tech_flags[TF_LAST] in
  struct player)
 **************************************************************************/
-int num_known_tech_with_flag(const struct player *pplayer,
-			     enum tech_flag_id flag)
+int num_known_tech_with_flag(struct player *pplayer, enum tech_flag_id flag)
 {
-  return pplayer->research->num_known_tech_with_flag[flag];
+  return pplayer->research.num_known_tech_with_flag[flag];
 }
 
 /**************************************************************************
   Return the expected net income of the player this turn.  This includes
   tax revenue and upkeep, but not one-time purchases or found gold.
 
-  This function depends on pcity->prod[O_GOLD] being set for all cities, so
+  This function depends on pcity->tax_total being set for all cities, so
   make sure the player's cities have been refreshed.
 **************************************************************************/
-int player_get_expected_income(const struct player *pplayer)
+int player_get_expected_income(struct player *pplayer)
 {
   int income = 0;
 
   /* City income/expenses. */
   city_list_iterate(pplayer->cities, pcity) {
     /* Gold suplus accounts for imcome plus building and unit upkeep. */
-    income += pcity->surplus[O_GOLD];
+    income += city_gold_surplus(pcity, pcity->tax_total);
 
     /* Capitalization income. */
     if (get_current_construction_bonus(pcity, EFT_PROD_TO_GOLD) > 0) {
-      income += pcity->shield_stock + pcity->surplus[O_SHIELD];
+      income += pcity->shield_stock + pcity->shield_surplus;
     }
   } city_list_iterate_end;
 
@@ -416,8 +408,8 @@ int player_get_expected_income(const struct player *pplayer)
  Returns TRUE iff the player knows at least one tech which has the
  given flag.
 **************************************************************************/
-bool player_knows_techs_with_flag(const struct player *pplayer,
-				  enum tech_flag_id flag)
+bool player_knows_techs_with_flag(struct player *pplayer,
+				 enum tech_flag_id flag)
 {
   return num_known_tech_with_flag(pplayer, flag) > 0;
 }
@@ -473,7 +465,7 @@ void player_limit_to_government_rates(struct player *pplayer)
 /**************************************************************************
 Locate the city where the players palace is located, (NULL Otherwise) 
 **************************************************************************/
-struct city *find_palace(const struct player *pplayer)
+struct city *find_palace(struct player *pplayer)
 {
   city_list_iterate(pplayer->cities, pcity) {
     if (is_capital(pcity)) {
@@ -484,12 +476,21 @@ struct city *find_palace(const struct player *pplayer)
 }
 
 /**************************************************************************
-  AI players may have handicaps - allowing them to cheat or preventing
-  them from using certain algorithms.  This function returns whether the
-  player has the given handicap.  Human players are assumed to have no
-  handicaps.
+...
 **************************************************************************/
-bool ai_handicap(const struct player *pplayer, enum handicap_type htype)
+bool player_knows_improvement_tech(struct player *pplayer,
+				   Impr_Type_id id)
+{
+  int t;
+  if (!improvement_exists(id)) return FALSE;
+  t = get_improvement_type(id)->tech_req;
+  return (get_invention(pplayer, t) == TECH_KNOWN);
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+bool ai_handicap(struct player *pplayer, enum handicap_type htype)
 {
   if (!pplayer->ai.control) {
     return TRUE;
@@ -513,14 +514,10 @@ the "ai_fuzzy(pplayer," part, and read the previous example as:
     if (condition && 1) { action }
 --dwp
 **************************************************************************/
-bool ai_fuzzy(const struct player *pplayer, bool normal_decision)
+bool ai_fuzzy(struct player *pplayer, bool normal_decision)
 {
-  if (!pplayer->ai.control || pplayer->ai.fuzzy == 0) {
-    return normal_decision;
-  }
-  if (myrand(1000) >= pplayer->ai.fuzzy) {
-    return normal_decision;
-  }
+  if (!pplayer->ai.control || pplayer->ai.fuzzy == 0) return normal_decision;
+  if (myrand(1000) >= pplayer->ai.fuzzy) return normal_decision;
   return !normal_decision;
 }
 
@@ -702,7 +699,7 @@ bool is_barbarian(const struct player *pplayer)
 /**************************************************************************
   Return TRUE iff the player me gives shared vision to player them.
 **************************************************************************/
-bool gives_shared_vision(const struct player *me, const struct player *them)
+bool gives_shared_vision(struct player *me, struct player *them)
 {
   return TEST_BIT(me->gives_shared_vision, them->player_no);
 }
@@ -723,8 +720,7 @@ bool are_diplstates_equal(const struct player_diplstate *pds1,
   from the point of view of pplayer.  Units that cannot be seen by pplayer
   will not be found (this function doesn't cheat).
 ***************************************************************************/
-int player_in_territory(const struct player *pplayer,
-			const struct player *pplayer2)
+int player_in_territory(struct player *pplayer, struct player *pplayer2)
 {
   int in_territory = 0;
 
@@ -759,45 +755,4 @@ bool is_valid_username(const char *name)
 	  && !my_isdigit(name[0])
 	  && is_ascii_name(name)
 	  && mystrcasecmp(name, ANON_USER_NAME) != 0);
-}
-
-/****************************************************************************
-  Merges research of two players. This is used by teams
-****************************************************************************/
-void merge_players_research(struct player* p1, struct player* p2)
-{
-  struct player_research* old_research;
-  if (p1->research == p2->research) {
-    return;
-  }
-  old_research = p1->research;
-  players_iterate(aplayer) {
-    if (aplayer->research == old_research) {
-      aplayer->research = p2->research;
-    }
-  } players_iterate_end;
-  free(old_research);
-}
-
-/****************************************************************************
-****************************************************************************/
-void clean_players_research()
-{
-  players_iterate(aplayer) {
-    if (aplayer->research) {
-      players_iterate(bplayer) {
-        if (aplayer == bplayer || aplayer->research != bplayer->research) {
-	  continue;
-	}
-	bplayer->research = NULL;
-      } players_iterate_end;
-      free(aplayer->research);
-      aplayer->research = NULL;
-    }
-  } players_iterate_end;
-  
-  players_iterate(aplayer) {
-    aplayer->research = fc_malloc(sizeof (struct player_research));
-    player_research_init(aplayer->research);
-  } players_iterate_end;
 }

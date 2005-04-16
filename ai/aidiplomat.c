@@ -24,7 +24,6 @@
 #include "log.h"
 #include "map.h"
 #include "mem.h"
-#include "movement.h"
 #include "packets.h"
 #include "path_finding.h"
 #include "pf_tools.h"
@@ -54,10 +53,6 @@
 
 #define LOG_DIPLOMAT LOG_DEBUG
 #define LOG_DIPLOMAT_BUILD LOG_DEBUG
-
-/* 3000 is a just a large number, but not hillariously large as the
- * previously used one. This is important for diplomacy. - Per */
-#define DIPLO_DEFENSE_WANT 3000
 
 static void find_city_to_diplomat(struct player *pplayer, struct unit *punit,
                                   struct city **ctarget, int *move_dist,
@@ -124,12 +119,10 @@ void ai_choose_diplomat_defensive(struct player *pplayer,
       freelog(LOG_DIPLOMAT_BUILD,
               "A defensive diplomat is wanted badly in city %s.", pcity->name);
       u = get_role_unit(F_DIPLOMAT, 0);
+      /* 3000 is a just a large number, but not hillariously large as the
+         previously used one. This is important for diplomacy later - Per */
       if (u != U_LAST) {
-        Tech_Type_id tech_req = get_unit_type(u)->tech_requirement;
-
-        pplayer->ai.tech_want[tech_req] += DIPLO_DEFENSE_WANT;
-        TECH_LOG(LOG_DEBUG, pplayer, tech_req, "+ %d for %s in diplo defense",
-                 DIPLO_DEFENSE_WANT, unit_name(u));
+        pplayer->ai.tech_want[get_unit_type(u)->tech_requirement] += 3000;
       }
     }
   }
@@ -186,16 +179,16 @@ void ai_choose_diplomat_offensive(struct player *pplayer,
         && (incite_cost < pplayer->economic.gold - pplayer->ai.est_upkeep)) {
       /* incite gain (FIXME: we should count wonders too but need to
          cache that somehow to avoid CPU hog -- Per) */
-      gain_incite = acity->prod[O_FOOD] * FOOD_WEIGHTING
-                    + acity->prod[O_SHIELD] * SHIELD_WEIGHTING
-                    + (acity->prod[O_LUXURY]
-                       + acity->prod[O_GOLD]
-                       + acity->prod[O_SCIENCE]) * TRADE_WEIGHTING;
+      gain_incite = acity->food_prod * FOOD_WEIGHTING
+                    + acity->shield_prod * SHIELD_WEIGHTING
+                    + (acity->luxury_total
+                       + acity->tax_total
+                       + acity->science_total) * TRADE_WEIGHTING;
       gain_incite *= SHIELD_WEIGHTING; /* WAG cost to take city otherwise */
       gain_incite -= incite_cost * TRADE_WEIGHTING;
     }
-    if (city_owner(acity)->research->techs_researched <
-             pplayer->research->techs_researched
+    if (city_owner(acity)->research.techs_researched <
+             pplayer->research.techs_researched
              && !pplayers_allied(pplayer, city_owner(acity))) {
       /* tech theft gain */
       gain_theft = total_bulbs_required(pplayer) * TRADE_WEIGHTING;
@@ -359,8 +352,8 @@ static void find_city_to_diplomat(struct player *pplayer, struct unit *punit,
      * 2. stealing techs OR
      * 3. inciting revolt */
     if (!has_embassy
-        || (acity->steal == 0 && pplayer->research->techs_researched < 
-            aplayer->research->techs_researched && !dipldef)
+        || (acity->steal == 0 && pplayer->research.techs_researched < 
+            aplayer->research.techs_researched && !dipldef)
         || (incite_cost < (pplayer->economic.gold - pplayer->ai.est_upkeep)
             && can_incite && !dipldef)) {
       /* We have the closest enemy city on the continent */
@@ -448,7 +441,7 @@ static bool ai_diplomat_bribe_nearby(struct player *pplayer,
     struct tile *ptile = pos.tile;
     bool threat = FALSE;
     int newval, bestval = 0, cost;
-    struct unit *pvictim = unit_list_get(ptile->units, 0);
+    struct unit *pvictim = unit_list_get(&ptile->units, 0);
     int sanity = punit->id;
 
     if (pos.total_MC > punit->moves_left) {
@@ -458,7 +451,7 @@ static bool ai_diplomat_bribe_nearby(struct player *pplayer,
 
     if (!pvictim
         || !HOSTILE_PLAYER(pplayer, ai, unit_owner(pvictim))
-        || unit_list_size(ptile->units) > 1
+        || unit_list_size(&ptile->units) > 1
         || map_get_city(pos.tile)
         || government_has_flag(get_gov_pplayer(unit_owner(pvictim)),
                                G_UNBRIBABLE)) {
@@ -516,7 +509,7 @@ static bool ai_diplomat_bribe_nearby(struct player *pplayer,
 
     if (diplomat_can_do_action(punit, DIPLOMAT_BRIBE, pos.tile)) {
       handle_unit_diplomat_action(pplayer, punit->id, DIPLOMAT_BRIBE,
-				  unit_list_get(ptile->units, 0)->id, -1);
+				  unit_list_get(&ptile->units, 0)->id, -1);
       /* autoattack might kill us as we move in */
       if (find_unit_by_id(sanity) && punit->moves_left > 0) {
         return TRUE;
@@ -574,7 +567,6 @@ void ai_manage_diplomat(struct player *pplayer, struct unit *punit)
     UNIT_LOG(LOG_DIPLOMAT, punit, "stays to protect %s (urg %d)", 
              pcity->name, pcity->ai.urgency);
     ai_unit_new_role(punit, AIUNIT_NONE, NULL); /* abort mission */
-    punit->ai.done = TRUE;
     pf_destroy_map(map);
     return;
   }
@@ -644,7 +636,6 @@ void ai_manage_diplomat(struct player *pplayer, struct unit *punit)
       UNIT_LOG(LOG_DIPLOMAT, punit, "going idle");
     } else {
       UNIT_LOG(LOG_DIPLOMAT, punit, "could not find a job");
-      punit->ai.done = TRUE;
       pf_destroy_map(map);
       return;
     }
@@ -681,8 +672,6 @@ void ai_manage_diplomat(struct player *pplayer, struct unit *punit)
       }
     }
     pf_destroy_path(path);
-  } else {
-    punit->ai.done = TRUE;
   }
   pf_destroy_map(map);
 }

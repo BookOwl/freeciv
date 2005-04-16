@@ -59,10 +59,9 @@ enum {
 #define N_MSG_VIEW 24	       /* max before scrolling happens */
 
 /****************************************************************
-popup the dialog 10% inside the main-window, and optionally
-raise it.
+popup the dialog 10% inside the main-window 
 *****************************************************************/
-void popup_meswin_dialog(bool raise)
+void popup_meswin_dialog(void)
 {
   if (!meswin_shell) {
     create_meswin_dialog();
@@ -71,9 +70,15 @@ void popup_meswin_dialog(bool raise)
   update_meswin_dialog();
 
   gui_dialog_present(meswin_shell);
-  if (raise) {
-    gui_dialog_raise(meswin_shell);
-  }
+}
+
+/****************************************************************
+ Raises the message window dialog.
+****************************************************************/
+void raise_meswin_dialog(void)
+{
+  popup_meswin_dialog();
+  gui_dialog_raise(meswin_shell);
 }
 
 /**************************************************************************

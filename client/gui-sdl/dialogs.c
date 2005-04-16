@@ -116,7 +116,7 @@ void put_window_near_map_tile(struct GUI *pWindow,
   int canvas_x, canvas_y;
   
   if (tile_to_canvas_pos(&canvas_x, &canvas_y, x, y)) {
-    if (canvas_x + tileset_tile_width(tileset) + window_width >= pWindow->dst->w)
+    if (canvas_x + NORMAL_TILE_WIDTH + window_width >= pWindow->dst->w)
     {
       if (canvas_x - window_width < 0) {
 	pWindow->size.x = (pWindow->dst->w - window_width) / 2;
@@ -124,10 +124,10 @@ void put_window_near_map_tile(struct GUI *pWindow,
 	pWindow->size.x = canvas_x - window_width;
       }
     } else {
-      pWindow->size.x = canvas_x + tileset_tile_width(tileset);
+      pWindow->size.x = canvas_x + NORMAL_TILE_WIDTH;
     }
     
-    canvas_y += (tileset_tile_height(tileset) - window_height) / 2;
+    canvas_y += (NORMAL_TILE_HEIGHT - window_height) / 2;
     if (canvas_y + window_height >= pWindow->dst->h)
     {
       pWindow->size.y = pWindow->dst->h - window_height - 1;
@@ -182,6 +182,7 @@ void popdown_all_game_dialogs(void)
   if (get_client_state() == CLIENT_PRE_GAME_STATE) {
     draw_city_names = FALSE;
     draw_city_productions = FALSE;
+    SDL_FillRect(Main.text, NULL, 0x0);
     SDL_FillRect(Main.gui, NULL, 0x0);
   }
 }
@@ -405,12 +406,11 @@ void popup_unit_upgrade_dlg(struct unit *pUnit, bool city)
   
   ut1 = pUnit->type;
   
-  if (pUnit_Upgrade_Dlg) {
+  if (pUnit_Upgrade_Dlg || !unit_type_exists(ut1)) {
     /* just in case */
     flush_dirty();
     return;
   }
-  CHECK_UNIT_TYPE(ut1);
     
   pUnit_Upgrade_Dlg = MALLOC(sizeof(struct SMALL_DLG));
 
@@ -991,7 +991,7 @@ static void popup_terrain_info_dialog(SDL_Surface *pDest,
   pStr->style |= SF_CENTER;
   pBuf = create_iconlabel(pSurf, pWindow->dst, pStr, WF_FREE_THEME);
   
-  pBuf->size.h += tileset_tile_height(tileset) / 2;
+  pBuf->size.h += NORMAL_TILE_HEIGHT / 2;
   
   add_to_gui_list(ID_LABEL, pBuf);
   
@@ -4143,8 +4143,8 @@ void popup_races_dialog(void)
     pText_Name = create_text_surf_smaller_that_w(pStr, pTmp_Surf->w - 4);
     SDL_SetAlpha(pText_Name, 0x0, 0x0);
     
-    if (pNation->category && *(pNation->category) != '\0') {
-      copy_chars_to_string16(pStr, pNation->category);
+    if (pNation->class && *(pNation->class) != '\0') {
+      copy_chars_to_string16(pStr, pNation->class);
       change_ptsize16(pStr, 10);
       pText_Class = create_text_surf_smaller_that_w(pStr, pTmp_Surf->w - 4);
       SDL_SetAlpha(pText_Class, 0x0, 0x0);

@@ -30,7 +30,6 @@ used throughout the client.
 #include "diptreaty.h"
 #include "fcintl.h"
 #include "game.h"
-#include "government.h"
 #include "log.h"
 #include "map.h"
 #include "packets.h"
@@ -72,7 +71,6 @@ void client_remove_unit(struct unit *punit)
   struct tile *ptile = punit->tile;
   int hc = punit->homecity;
   struct unit *ufocus = get_unit_in_focus();
-  struct unit old_unit = *punit;
 
   freelog(LOG_DEBUG, "removing unit %d, %s %s (%d %d) hcity %d",
 	  punit->id, get_nation_name(unit_owner(punit)->nation),
@@ -99,7 +97,7 @@ void client_remove_unit(struct unit *punit)
   if (pcity) {
     if (can_player_see_units_in_city(game.player_ptr, pcity)) {
       pcity->client.occupied =
-	(unit_list_size(pcity->tile->units) > 0);
+	(unit_list_size(&pcity->tile->units) > 0);
     }
 
     refresh_city_dialog(pcity);
@@ -116,7 +114,7 @@ void client_remove_unit(struct unit *punit)
 	    TILE_XY(pcity->tile));
   }
 
-  refresh_unit_mapcanvas(&old_unit, ptile, TRUE, FALSE);
+  refresh_tile_mapcanvas(ptile, FALSE);
 }
 
 /**************************************************************************
@@ -126,7 +124,6 @@ void client_remove_city(struct city *pcity)
 {
   bool effect_update;
   struct tile *ptile = pcity->tile;
-  struct city old_city = *pcity;
 
   freelog(LOG_DEBUG, "removing city %s, %s, (%d %d)", pcity->name,
 	  get_nation_name(city_owner(pcity)->nation), TILE_XY(ptile));
@@ -147,7 +144,7 @@ void client_remove_city(struct city *pcity)
   popdown_city_dialog(pcity);
   game_remove_city(pcity);
   city_report_dialog_update();
-  refresh_city_mapcanvas(&old_city, ptile, TRUE, FALSE);
+  refresh_tile_mapcanvas(ptile, FALSE);
 }
 
 /**************************************************************************
@@ -162,7 +159,7 @@ void client_change_all(cid x, cid y)
   int last_request_id = 0;
 
   my_snprintf(buf, sizeof(buf),
-	      _("Changing production of every %s into %s."),
+	      _("Game: Changing production of every %s into %s."),
 	      fr_is_unit ? get_unit_type(fr_id)->name :
 	      get_improvement_name(fr_id),
 	      to_is_unit ? get_unit_type(to_id)->
@@ -193,8 +190,7 @@ void client_change_all(cid x, cid y)
 /***************************************************************************
   Return a string indicating one nation's embassy status with another
 ***************************************************************************/
-const char *get_embassy_status(const struct player *me,
-			       const struct player *them)
+const char *get_embassy_status(struct player *me, struct player *them)
 {
   if (me == them
       || !them->is_alive
@@ -220,8 +216,7 @@ const char *get_embassy_status(const struct player *me,
 /***************************************************************************
   Return a string indicating one nation's shaed vision status with another
 ***************************************************************************/
-const char *get_vision_status(const struct player *me,
-			      const struct player *them)
+const char *get_vision_status(struct player *me, struct player *them)
 {
   if (gives_shared_vision(me, them)) {
     if (gives_shared_vision(them, me)) {
@@ -301,90 +296,47 @@ void client_diplomacy_clause_string(char *buf, int bufsiz,
 }
 
 /**************************************************************************
-  Return the sprite for the research indicator.
+Return the sprite index for the research indicator.
 **************************************************************************/
-struct sprite *client_research_sprite(void)
+int client_research_sprite(void)
 {
-  if (can_client_change_view() && game.player_ptr) {
-    int index = (NUM_TILES_PROGRESS
-		 * game.player_ptr->research->bulbs_researched)
-      / (total_bulbs_required(game.player_ptr) + 1);
-
-    /* This clipping can be necessary since we can end up with excess
-     * research */
-    index = CLIP(0, index, NUM_TILES_PROGRESS - 1);
-    return get_indicator_sprite(tileset, INDICATOR_BULB, index);
-  } else {
-    return get_indicator_sprite(tileset, INDICATOR_BULB, 0);
-  }
+  return (NUM_TILES_PROGRESS *
+	  game.player_ptr->research.bulbs_researched) /
+      (total_bulbs_required(game.player_ptr) + 1);
 }
 
 /**************************************************************************
-  Return the sprite for the global-warming indicator.
+Return the sprite index for the global-warming indicator.
 **************************************************************************/
-struct sprite *client_warming_sprite(void)
+int client_warming_sprite(void)
 {
-  if (can_client_change_view() && game.player_ptr) {
-    int index;
-
-    if ((game.globalwarming <= 0) &&
-	(game.heating < (NUM_TILES_PROGRESS / 2))) {
-      index = MAX(0, game.heating);
-    } else {
-      index = MIN(NUM_TILES_PROGRESS,
-		  (MAX(0, 4 + game.globalwarming) / 5) +
-		  ((NUM_TILES_PROGRESS / 2) - 1));
-    }
-
-    /* The clipping is needed because the above math is a little fuzzy. */
-    index = CLIP(0, index, NUM_TILES_PROGRESS - 1);
-    return get_indicator_sprite(tileset, INDICATOR_WARMING, index);
+  int index;
+  if ((game.globalwarming <= 0) &&
+      (game.heating < (NUM_TILES_PROGRESS / 2))) {
+    index = MAX(0, game.heating);
   } else {
-    return get_indicator_sprite(tileset, INDICATOR_WARMING, 0);
+    index = MIN(NUM_TILES_PROGRESS,
+		(MAX(0, 4 + game.globalwarming) / 5) +
+		((NUM_TILES_PROGRESS / 2) - 1));
   }
+  return index;
 }
 
 /**************************************************************************
-  Return the sprite for the global-cooling indicator.
+Return the sprite index for the global-cooling indicator.
 **************************************************************************/
-struct sprite *client_cooling_sprite(void)
+int client_cooling_sprite(void)
 {
-  if (can_client_change_view()) {
-    int index;
-
-    if ((game.nuclearwinter <= 0) &&
-	(game.cooling < (NUM_TILES_PROGRESS / 2))) {
-      index = MAX(0, game.cooling);
-    } else {
-      index = MIN(NUM_TILES_PROGRESS,
-		  (MAX(0, 4 + game.nuclearwinter) / 5) +
-		  ((NUM_TILES_PROGRESS / 2) - 1));
-    }
-
-    /* The clipping is needed because the above math is a little fuzzy. */
-    index = CLIP(0, index, NUM_TILES_PROGRESS - 1);
-    return get_indicator_sprite(tileset, INDICATOR_COOLING, index);
+  int index;
+  if ((game.nuclearwinter <= 0) &&
+      (game.cooling < (NUM_TILES_PROGRESS / 2))) {
+    index = MAX(0, game.cooling);
   } else {
-    return get_indicator_sprite(tileset, INDICATOR_COOLING, 0);
+    index = MIN(NUM_TILES_PROGRESS,
+		(MAX(0, 4 + game.nuclearwinter) / 5) +
+		((NUM_TILES_PROGRESS / 2) - 1));
   }
-}
-
-/**************************************************************************
-  Return the sprite for the government indicator.
-**************************************************************************/
-struct sprite *client_government_sprite(void)
-{
-  if (can_client_change_view() && game.government_count > 0) {
-    struct government *gov = get_government(game.player_ptr->government);
-
-    return get_government_sprite(tileset, gov);
-  } else {
-    /* HACK: the UNHAPPY citizen is used for the government
-     * when we don't know any better. */
-    struct citizen_type c = {.type = CITIZEN_UNHAPPY};
-
-    return get_citizen_sprite(tileset, c, 0, NULL);
-  }
+  return index;
 }
 
 /**************************************************************************
@@ -406,14 +358,14 @@ void center_on_something(void)
   } else if ((pcity = find_palace(game.player_ptr))) {
     /* Else focus on the capital. */
     center_tile_mapcanvas(pcity->tile);
-  } else if (city_list_size(game.player_ptr->cities) > 0) {
+  } else if (city_list_size(&game.player_ptr->cities) > 0) {
     /* Just focus on any city. */
-    pcity = city_list_get(game.player_ptr->cities, 0);
+    pcity = city_list_get(&game.player_ptr->cities, 0);
     assert(pcity != NULL);
     center_tile_mapcanvas(pcity->tile);
-  } else if (unit_list_size(game.player_ptr->units) > 0) {
+  } else if (unit_list_size(&game.player_ptr->units) > 0) {
     /* Just focus on any unit. */
-    punit = unit_list_get(game.player_ptr->units, 0);
+    punit = unit_list_get(&game.player_ptr->units, 0);
     assert(punit != NULL);
     center_tile_mapcanvas(punit->tile);
   } else {
@@ -424,7 +376,8 @@ void center_on_something(void)
      * is guaranteed to be larger than the map will be.  Although this is
      * a misuse of map.xsize and map.ysize (which are native dimensions),
      * it should give a sufficiently large radius. */
-    iterate_outward(ctile, map.xsize + map.ysize, ptile) {
+    iterate_outward(native_pos_to_tile(map.xsize / 2, map.ysize / 2),
+		    map.xsize + map.ysize, ptile) {
       if (tile_get_known(ptile) != TILE_UNKNOWN) {
 	ctile = ptile;
 	break;
@@ -584,42 +537,16 @@ bool city_building_present(struct city *pcity, cid cid)
 }
 
 /**************************************************************************
-  Return the numerical "section" of an item.  This is used for sorting.
-**************************************************************************/
-static int cid_get_section(cid cid)
-{
-  bool is_unit = cid_is_unit(cid);
-  int id = cid_id(cid);
-
-  if (is_unit) {
-    if (unit_type_flag(id, F_NONMIL)) {
-      return 2;
-    } else {
-      return 3;
-    }
-  } else {
-    if (building_has_effect(id, EFT_PROD_TO_GOLD)) {
-      return 1;
-    } else if (is_great_wonder(id)) {
-      return 4;
-    } else {
-      return 0;
-    }
-  }
-}
-
-/**************************************************************************
  Helper for name_and_sort_items.
 **************************************************************************/
 static int my_cmp(const void *p1, const void *p2)
 {
-  const struct item *i1 = p1, *i2 = p2;
-  int s1 = cid_get_section(i1->cid), s2 = cid_get_section(i2->cid);
+  const struct item *i1 = (const struct item *) p1;
+  const struct item *i2 = (const struct item *) p2;
 
-  if (s1 == s2) {
+  if (i1->section == i2->section)
     return mystrcasecmp(i1->descr, i2->descr);
-  }
-  return s1 - s2;
+  return (i1->section - i2->section);
 }
 
 /**************************************************************************
@@ -648,12 +575,19 @@ void name_and_sort_items(int *pcids, int num_cids, struct item *items,
     if (is_unit) {
       name = get_unit_name(id);
       cost = unit_build_shield_cost(id);
+      pitem->section = unit_type_flag(id, F_NONMIL) ? 2 : 3;
     } else {
       name = get_impr_name_ex(pcity, id);
       if (building_has_effect(id, EFT_PROD_TO_GOLD)) {
 	cost = -1;
+	pitem->section = 1;
       } else {
 	cost = impr_build_shield_cost(id);
+	if (is_wonder(id)) {
+      	  pitem->section = 4;
+        } else {
+	  pitem->section = 0;
+	}
       }
     }
 
@@ -883,9 +817,9 @@ int num_supported_units_in_city(struct city *pcity)
   struct unit_list *plist;
 
   if (pcity->owner != game.player_idx) {
-    plist = pcity->info_units_supported;
+    plist = &pcity->info_units_supported;
   } else {
-    plist = pcity->units_supported;
+    plist = &pcity->units_supported;
   }
 
   return unit_list_size(plist);
@@ -899,9 +833,9 @@ int num_present_units_in_city(struct city *pcity)
   struct unit_list *plist;
 
   if (pcity->owner != game.player_idx) {
-    plist = pcity->info_units_present;
+    plist = &pcity->info_units_present;
   } else {
-    plist = pcity->tile->units;
+    plist = &pcity->tile->units;
   }
 
   return unit_list_size(plist);
@@ -929,7 +863,7 @@ void handle_event(char *message, struct tile *ptile,
     add_notify_window(message, ptile, event);
   }
   if (BOOL_VAL(where & MW_POPUP) &&
-      (!game.player_ptr->ai.control)) {
+      (!game.player_ptr->ai.control || ai_popup_windows)) {
     popup_notify_goto_dialog(_("Popup Request"), message, ptile);
   }
 
@@ -1019,14 +953,11 @@ void reports_force_thaw(void)
   output_window_force_thaw();
 }
 
-/***************************************************************************
-  Return a known_type for the given tile for the player.
-
-  FIXME: This function is used by the common code, but separate
-  implementations are provided by server and client.
-***************************************************************************/
+/*************************************************************************
+...
+*************************************************************************/
 enum known_type map_get_known(const struct tile *ptile,
-			      const struct player *pplayer)
+			      struct player *pplayer)
 {
   assert(pplayer == game.player_ptr);
   return tile_get_known(ptile);
@@ -1037,7 +968,7 @@ enum known_type map_get_known(const struct tile *ptile,
   distance Parameter sq_dist may be NULL. Returns NULL only if no city is
   known. Favors punit owner's cities over other cities if equally distant.
 **************************************************************************/
-struct city *get_nearest_city(const struct unit *punit, int *sq_dist)
+struct city *get_nearest_city(struct unit *punit, int *sq_dist)
 {
   struct city *pcity_near;
   int pcity_near_dist;
@@ -1081,7 +1012,7 @@ void cityrep_buy(struct city *pcity)
 
     assert(!pcity->is_building_unit);
     my_snprintf(buf, sizeof(buf),
-		_("You don't buy %s in %s!"),
+		_("Game: You don't buy %s in %s!"),
 		improvement_types[pcity->currently_building].name,
 		pcity->name);
     append_output_window(buf);
@@ -1101,7 +1032,7 @@ void cityrep_buy(struct city *pcity)
     }
 
     my_snprintf(buf, sizeof(buf),
-		_("%s costs %d gold and you only have %d gold."),
+		_("Game: %s costs %d gold and you only have %d gold."),
 		name, value, game.player_ptr->economic.gold);
     append_output_window(buf);
   }

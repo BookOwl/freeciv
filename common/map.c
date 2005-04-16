@@ -22,7 +22,6 @@
 #include "fcintl.h"
 #include "log.h"
 #include "mem.h"
-#include "movement.h"
 #include "packets.h"
 #include "rand.h"
 #include "shared.h"
@@ -110,7 +109,7 @@ const char *map_get_tile_info_text(const struct tile *ptile)
     } else {
       sz_strlcat(s, "/");
     }
-    sz_strlcat(s, tile_types[ptile->terrain].special[0].name);
+    sz_strlcat(s, tile_types[ptile->terrain].special_1_name);
   }
   if (tile_has_special(ptile, S_SPECIAL_2)) {
     if (first) {
@@ -119,7 +118,7 @@ const char *map_get_tile_info_text(const struct tile *ptile)
     } else {
       sz_strlcat(s, "/");
     }
-    sz_strlcat(s, tile_types[ptile->terrain].special[1].name);
+    sz_strlcat(s, tile_types[ptile->terrain].special_2_name);
   }
   if (!first) {
     sz_strlcat(s, ")");
@@ -159,9 +158,9 @@ const char *map_get_tile_fpt_text(const struct tile *ptile)
   static char s[64];
   
   my_snprintf(s, sizeof(s), "%d/%d/%d",
-	      get_output_tile(ptile, O_FOOD),
-	      get_output_tile(ptile, O_SHIELD),
-	      get_output_tile(ptile, O_TRADE));
+	      get_food_tile(ptile),
+	      get_shields_tile(ptile),
+	      get_trade_tile(ptile));
   return s;
 }
 
@@ -320,7 +319,7 @@ void map_init_topology(bool set_sizes)
 
   if (!set_sizes) {
     /* Set map.size based on map.xsize and map.ysize. */
-    map.size = (float)(map_num_tiles()) / 1000.0 + 0.5;
+    map.size = (float)(map.xsize * map.ysize) / 1000.0 + 0.5;
   }
   
   /* sanity check for iso topologies*/
@@ -359,10 +358,11 @@ static void tile_init(struct tile *ptile)
   ptile->known    = 0;
   ptile->continent = 0;
   ptile->city     = NULL;
-  ptile->units    = unit_list_new();
+  unit_list_init(&ptile->units);
   ptile->worked   = NULL; /* pointer to city working tile */
   ptile->assigned = 0; /* bitvector */
   ptile->owner    = NULL; /* Tile not claimed by any nation. */
+  ptile->client.hilite = HILITE_NONE; /* Area Selection in client. */
   ptile->spec_sprite = NULL;
 }
 
@@ -448,7 +448,7 @@ struct tile *index_to_tile(int index)
     return NULL;
   }
 
-  if (index >= 0 && index < MAP_INDEX_SIZE) {
+  if (index >= 0 && index < MAX_MAP_INDEX) {
     return map.tiles + index;
   } else {
     /* Unwrapped index coordinates are impossible, so the best we can do is
@@ -478,8 +478,7 @@ void map_set_owner(struct tile *ptile, struct player *owner)
 ***************************************************************/
 static void tile_free(struct tile *ptile)
 {
-  unit_list_unlink_all(ptile->units);
-  unit_list_free(ptile->units);
+  unit_list_unlink_all(&ptile->units);
   if (ptile->spec_sprite) {
     free(ptile->spec_sprite);
     ptile->spec_sprite = NULL;
@@ -493,10 +492,10 @@ static void tile_free(struct tile *ptile)
 void map_allocate(void)
 {
   freelog(LOG_DEBUG, "map_allocate (was %p) (%d,%d)",
-	  (void *)map.tiles, map.xsize, map.ysize);
+	  map.tiles, map.xsize, map.ysize);
 
   assert(map.tiles == NULL);
-  map.tiles = fc_malloc(MAP_INDEX_SIZE * sizeof(*map.tiles));
+  map.tiles = fc_malloc(map.xsize * map.ysize * sizeof(struct tile));
   whole_map_iterate(ptile) {
     int index, nat_x, nat_y, map_x, map_y;
 
@@ -595,8 +594,6 @@ static int map_vector_to_distance(int dx, int dy)
 ****************************************************************************/
 int map_vector_to_real_distance(int dx, int dy)
 {
-  const int absdx = abs(dx), absdy = abs(dy);
-
   if (topo_has_flag(TF_HEX)) {
     if (topo_has_flag(TF_ISO)) {
       /* Iso-hex: you can't move NE or SW. */
@@ -604,10 +601,10 @@ int map_vector_to_real_distance(int dx, int dy)
 	  || (dx > 0 && dy < 0)) {
 	/* Diagonal moves in this direction aren't allowed, so it will take
 	 * the full number of moves. */
-        return absdx + absdy;
+	return abs(dx) + abs(dy);
       } else {
 	/* Diagonal moves in this direction *are* allowed. */
-        return MAX(absdx, absdy);
+	return MAX(abs(dx), abs(dy));
       }
     } else {
       /* Hex: you can't move SE or NW. */
@@ -615,14 +612,14 @@ int map_vector_to_real_distance(int dx, int dy)
 	  || (dx < 0 && dy < 0)) {
 	/* Diagonal moves in this direction aren't allowed, so it will take
 	 * the full number of moves. */
-	return absdx + absdy;
+	return abs(dx) + abs(dy);
       } else {
 	/* Diagonal moves in this direction *are* allowed. */
-        return MAX(absdx, absdy);
+	return MAX(abs(dx), abs(dy));
       }
     }
   } else {
-    return MAX(absdx, absdy);
+    return MAX(abs(dx), abs(dy));
   }
 }
 
@@ -710,19 +707,58 @@ bool is_safe_ocean(const struct tile *ptile)
   return FALSE;
 }
 
-/****************************************************************************
-  Return the output of this type provided by the tile.  This includes base
-  terrain plus S_SPECIAL_1 and S_SPECIAL_2, but not any other specials
-  (river/road/irrigation/etc).
-****************************************************************************/
-int get_tile_output_base(const struct tile *ptile, Output_type_id output)
+/***************************************************************
+Returns whether you can put a city on land near enough to use
+the tile.
+***************************************************************/
+bool is_sea_usable(const struct tile *ptile)
+{
+  map_city_radius_iterate(ptile, tile1) {
+    if (!is_ocean(map_get_terrain(tile1))) {
+      return TRUE;
+    }
+  } map_city_radius_iterate_end;
+
+  return FALSE;
+}
+
+/***************************************************************
+...
+***************************************************************/
+int get_tile_food_base(const struct tile *ptile)
 {
   if (tile_has_special(ptile, S_SPECIAL_1)) 
-    return tile_types[ptile->terrain].special[0].output[output];
+    return tile_types[ptile->terrain].food_special_1;
   else if (tile_has_special(ptile, S_SPECIAL_2))
-    return tile_types[ptile->terrain].special[1].output[output];
+    return tile_types[ptile->terrain].food_special_2;
   else
-    return tile_types[ptile->terrain].output[output];
+    return tile_types[ptile->terrain].food;
+}
+
+/***************************************************************
+...
+***************************************************************/
+int get_tile_shield_base(const struct tile *ptile)
+{
+  if (tile_has_special(ptile, S_SPECIAL_1))
+    return tile_types[ptile->terrain].shield_special_1;
+  else if(tile_has_special(ptile, S_SPECIAL_2))
+    return tile_types[ptile->terrain].shield_special_2;
+  else
+    return tile_types[ptile->terrain].shield;
+}
+
+/***************************************************************
+...
+***************************************************************/
+int get_tile_trade_base(const struct tile *ptile)
+{
+  if (tile_has_special(ptile, S_SPECIAL_1))
+    return tile_types[ptile->terrain].trade_special_1;
+  else if (tile_has_special(ptile, S_SPECIAL_2))
+    return tile_types[ptile->terrain].trade_special_2;
+  else
+    return tile_types[ptile->terrain].trade;
 }
 
 /***************************************************************
@@ -952,7 +988,7 @@ void map_irrigate_tile(struct tile *ptile)
   result = tile_types[now].irrigation_result;
 
   if (now == result) {
-    if (tile_has_special(ptile, S_IRRIGATION)) {
+    if (map_has_special(ptile, S_IRRIGATION)) {
       map_set_special(ptile, S_FARMLAND);
     } else {
       map_set_special(ptile, S_IRRIGATION);
@@ -967,6 +1003,7 @@ void map_irrigate_tile(struct tile *ptile)
        * rivers in oceans, don't clear this! */
       map_clear_special(ptile, S_RIVER);
     }
+    reset_move_costs(ptile);
   }
   map_clear_special(ptile, S_MINE);
 }
@@ -993,6 +1030,7 @@ void map_mine_tile(struct tile *ptile)
        * rivers in oceans, don't clear this! */
       map_clear_special(ptile, S_RIVER);
     }
+    reset_move_costs(ptile);
   }
   map_clear_special(ptile, S_FARMLAND);
   map_clear_special(ptile, S_IRRIGATION);
@@ -1010,6 +1048,8 @@ void change_terrain(struct tile *ptile, Terrain_type_id type)
     map_clear_special(ptile, S_RIVER);	/* FIXME: When rest of code can handle
 					   rivers in oceans, don't clear this! */
   }
+
+  reset_move_costs(ptile);
 
   /* Clear mining/irrigation if resulting terrain type cannot support
      that feature.  (With current rules, this should only clear mines,
@@ -1119,31 +1159,27 @@ static int tile_move_cost_ptrs(struct unit *punit,
   return(get_tile_type(t2->terrain)->movement_cost*SINGLE_MOVE);
 }
 
-/****************************************************************************
-  map_move_cost_ai returns the move cost as
+/***************************************************************
+  tile_move_cost_ai is used to fill the move_cost array of struct
+  tile. The cached values of this array are used in server/gotohand.c
+  and client/goto.c. tile_move_cost_ai returns the move cost as
   calculated by tile_move_cost_ptrs (with no unit pointer to get
   unit-independent results) EXCEPT if either of the source or
   destination tile is an ocean tile. Then the result of the method
   shows if a ship can take the step from the source position to the
   destination position (return value is MOVE_COST_FOR_VALID_SEA_STEP)
-  or not.  An arbitrarily high value will be returned if the move is
-  impossible.
+  or not (return value is maxcost).
 
-  FIXME: this function can't be used for air units because it returns
-  sea<->land moves as impossible.
-****************************************************************************/
-int map_move_cost_ai(const struct tile *tile0, const struct tile *tile1)
+  A ship can take the step if:
+    - both tiles are ocean or
+    - one of the tiles is ocean and the other is a city or is unknown
+***************************************************************/
+static int tile_move_cost_ai(struct tile *tile0, struct tile *tile1,
+			     int maxcost)
 {
-  const int maxcost = 72; /* Arbitrary. */
-
   assert(!is_server
 	 || (tile0->terrain != T_UNKNOWN && tile1->terrain != T_UNKNOWN));
 
-  /* A ship can take the step if:
-   * - both tiles are ocean or
-   * - one of the tiles is ocean and the other is a city or is unknown
-   *
-   * Note tileX->terrain will only be T_UNKNOWN at the client. */
   if (is_ocean(tile0->terrain) && is_ocean(tile1->terrain)) {
     return MOVE_COST_FOR_VALID_SEA_STEP;
   }
@@ -1159,13 +1195,69 @@ int map_move_cost_ai(const struct tile *tile0, const struct tile *tile1)
   }
 
   if (is_ocean(tile0->terrain) || is_ocean(tile1->terrain)) {
-    /* FIXME: Shouldn't this return MOVE_COST_FOR_VALID_AIR_STEP?
-     * Note that MOVE_COST_FOR_VALID_AIR_STEP is currently equal to
-     * MOVE_COST_FOR_VALID_SEA_STEP. */
     return maxcost;
   }
 
   return tile_move_cost_ptrs(NULL, tile0, tile1);
+}
+
+/***************************************************************
+ ...
+***************************************************************/
+static void debug_log_move_costs(const char *str, struct tile *tile0)
+{
+  /* the %x don't work so well for oceans, where
+     move_cost[]==-3 ,.. --dwp
+  */
+  freelog(LOG_DEBUG, "%s (%d, %d) [%x%x%x%x%x%x%x%x]", str,
+	  tile0->x, tile0->y,
+	  tile0->move_cost[0], tile0->move_cost[1],
+	  tile0->move_cost[2], tile0->move_cost[3],
+	  tile0->move_cost[4], tile0->move_cost[5],
+	  tile0->move_cost[6], tile0->move_cost[7]);
+}
+
+/***************************************************************
+  Recalculate tile->move_cost[] for (x,y), and for adjacent
+  tiles in direction back to (x,y).  That is, call this when
+  something has changed on (x,y), eg roads, city, transform, etc.
+***************************************************************/
+void reset_move_costs(struct tile *ptile)
+{
+  int maxcost = 72; /* should be big enough without being TOO big */
+
+  debug_log_move_costs("Resetting move costs for", ptile);
+
+  /* trying to move off the screen is the default */
+  memset(ptile->move_cost, maxcost, sizeof(ptile->move_cost));
+
+  adjc_dir_iterate(ptile, tile1, dir) {
+    ptile->move_cost[dir] = tile_move_cost_ai(ptile, tile1, maxcost);
+    /* reverse: not at all obfuscated now --dwp */
+    tile1->move_cost[DIR_REVERSE(dir)] =
+	tile_move_cost_ai(tile1, ptile, maxcost);
+  } adjc_dir_iterate_end;
+  debug_log_move_costs("Reset move costs for", ptile);
+}
+
+/***************************************************************
+  Initialize tile->move_cost[] for all tiles, where move_cost[i]
+  is the unit-independent cost to move _from_ that tile, to
+  adjacent tile in direction specified by i.
+***************************************************************/
+void initialize_move_costs(void)
+{
+  int maxcost = 72; /* should be big enough without being TOO big */
+
+  whole_map_iterate(ptile) {
+    /* trying to move off the screen is the default */
+    memset(ptile->move_cost, maxcost, sizeof(ptile->move_cost));
+
+    adjc_dir_iterate(ptile, tile1, dir) {
+      ptile->move_cost[dir] = tile_move_cost_ai(ptile, tile1, maxcost);
+    }
+    adjc_dir_iterate_end;
+  } whole_map_iterate_end;
 }
 
 /***************************************************************
@@ -1226,6 +1318,15 @@ enum tile_special_type map_get_special(const struct tile *ptile)
 }
 
 /***************************************************************
+ Returns TRUE iff the given special is found at the given map
+ position.
+***************************************************************/
+bool map_has_special(const struct tile *ptile, enum tile_special_type special)
+{
+  return contains_special(ptile->special, special);
+}
+
+/***************************************************************
  Returns TRUE iff the given tile has the given special.
 ***************************************************************/
 bool tile_has_special(const struct tile *ptile,
@@ -1259,6 +1360,10 @@ bool contains_special(enum tile_special_type set,
 void map_set_special(struct tile *ptile, enum tile_special_type spe)
 {
   ptile->special |= spe;
+
+  if (contains_special(spe, S_ROAD) || contains_special(spe, S_RAILROAD)) {
+    reset_move_costs(ptile);
+  }
 }
 
 /***************************************************************
@@ -1267,6 +1372,10 @@ void map_set_special(struct tile *ptile, enum tile_special_type spe)
 void map_clear_special(struct tile *ptile, enum tile_special_type spe)
 {
   ptile->special &= ~spe;
+
+  if (contains_special(spe, S_ROAD) || contains_special(spe, S_RAILROAD)) {
+    reset_move_costs(ptile);
+  }
 }
 
 /***************************************************************
@@ -1492,18 +1601,18 @@ struct tile *rand_map_pos_filtered(void *data,
 {
   struct tile *ptile;
   int tries = 0;
-  const int max_tries = MAP_INDEX_SIZE / ACTIVITY_FACTOR;
+  const int max_tries = map.xsize * map.ysize / ACTIVITY_FACTOR;
 
   /* First do a few quick checks to find a spot.  The limit on number of
    * tries could use some tweaking. */
   do {
-    ptile = map.tiles + myrand(MAP_INDEX_SIZE);
+    ptile = map.tiles + myrand(map.xsize * map.ysize);
   } while (filter && !filter(ptile, data) && ++tries < max_tries);
 
   /* If that fails, count all available spots and pick one.
    * Slow but reliable. */
   if (tries == max_tries) {
-    int count = 0, positions[MAP_INDEX_SIZE];
+    int count = 0, positions[map.xsize * map.ysize];
 
     whole_map_iterate(ptile) {
       if (filter(ptile, data)) {

@@ -17,7 +17,7 @@
 
 #include "graphics_g.h"
 
-struct sprite {
+struct Sprite {
   Pixmap pixmap, mask;
   int width, height, ncols;
   unsigned long *pcolorarray;
@@ -30,8 +30,11 @@ struct canvas {
 
 Pixmap create_overlay_unit(int i);
 
-extern struct sprite *intro_gfx_sprite;
-extern struct sprite *radar_gfx_sprite;
-extern Cursor cursors[];
+extern struct Sprite *intro_gfx_sprite;
+extern struct Sprite *radar_gfx_sprite;
+extern Cursor         goto_cursor;
+extern Cursor         drop_cursor;
+extern Cursor         nuke_cursor;
+extern Cursor         patrol_cursor;
 
 #endif  /* FC__GRAPHICS_H */

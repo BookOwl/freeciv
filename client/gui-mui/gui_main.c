@@ -98,17 +98,6 @@ client_option gui_options[] = {
 };
 const int num_gui_options = ARRAY_SIZE(gui_options);
 
-/****************************************************************************
-  Called by the tileset code to set the font size that should be used to
-  draw the city names and productions.
-****************************************************************************/
-void set_city_names_font_sizes(int my_city_names_font_size,
-			       int my_city_productions_font_size)
-{
-  freelog(LOG_ERROR, "Unimplemented set_city_names_font_sizes.");
-  /* PORTME */
-}
-
 /**************************************************************************
   Print extra usage information, including one line help on each option,
   to stderr.
@@ -144,7 +133,6 @@ static void parse_options(int argc, char **argv)
 static void handle_timer(void)
 {
   real_timer_callback();
-  freelog(LOG_ERROR, "FIXME: Need to update timer.");
 }
 
 static BOOL connected;		/* TRUE, if connected to the server */
@@ -1300,7 +1288,7 @@ void update_menus(void) /* from menu.c */
 	  && (tinfo->irrigation_result != ttype)) {
 	my_snprintf(irrtext, sizeof(irrtext), chgfmt,
 		    (get_tile_type(tinfo->irrigation_result))->terrain_name);
-      } else if (tile_has_special(punit->tile, S_IRRIGATION)
+      } else if (map_has_special(punit->tile, S_IRRIGATION)
 		 && player_knows_techs_with_flag(game.player_ptr,
 						 TF_FARMLAND)) {
 	sz_strlcpy(irrtext, _("Build Farmland"));
@@ -1324,7 +1312,7 @@ void update_menus(void) /* from menu.c */
         sz_strlcpy(transtext, _("Transform Terrain"));
       }
 
-      if (tile_has_special(punit->tile, S_ROAD)) {
+      if (map_has_special(punit->tile, S_ROAD)) {
 	menu_entry_rename(MENU_ORDER_ROAD, _("Build Railroad"), FALSE);
       } else {
 	menu_entry_rename(MENU_ORDER_ROAD, _("Build Road"), FALSE);
@@ -1364,7 +1352,7 @@ void ui_main(int argc, char *argv[])
 
   atexit(ui_exit);
 
-  if (init_timer() && load_all_sprites())	/* includes tileset_load_tiles */
+  if (init_timer() && load_all_sprites())	/* includes tilespec_load_tiles */
   {
     if (init_gui())
     {
@@ -1398,7 +1386,7 @@ void ui_main(int argc, char *argv[])
 	/* HACK: the UNHAPPY citizen is used for the government
 	 * when we don't know any better. */
 	struct citizen_type c = {.type = CITIZEN_UNHAPPY};
-	struct sprite *sprite = get_citizen_sprite(tileset, c, 0, NULL);
+	struct Sprite *sprite = get_citizen_sprite(c, 0, NULL);
 
 	main_government_sprite = MakeBorderSprite(sprite);
       }
@@ -1466,18 +1454,4 @@ void set_unit_icon(int idx, struct unit *punit)
 **************************************************************************/
 void set_unit_icons_more_arrow(bool onoff)
 {
-}
-
-/****************************************************************************
-  Enqueue a callback to be called during an idle moment.  The 'callback'
-  function should be called sometimes soon, and passed the 'data' pointer
-  as its data.
-****************************************************************************/
-void add_idle_callback(void (callback)(void *), void *data)
-{
-  /* PORTME */
-
-  /* This is a reasonable fallback if it's not ported. */
-  freelog(LOG_ERROR, "Unimplemented add_idle_callback.");
-  (callback)(data);
 }

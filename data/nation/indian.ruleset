@@ -1,7 +1,7 @@
 [nation_indian]
 
 name=_("Indian")
-groups=_("Ancient"), _("Medieval"), _("Modern"), _("Asian")
+class=_("Modern")
 plural=_("?plural:Indians")
 leader="Gandhi", "Ashoka", "Chandragupta", "Indira Gandhi"
 leader_sex="Male", "Male", "Male", "Female"

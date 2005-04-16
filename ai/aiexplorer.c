@@ -16,7 +16,6 @@
 #endif
 
 #include "log.h"
-#include "movement.h"
 #include "player.h"
 #include "unit.h"
 
@@ -178,7 +177,7 @@ static int explorer_desirable(struct tile *ptile, struct player *pplayer,
   if ((unit_flag(punit, F_TRIREME) && 
        is_likely_trireme_loss(pplayer, ptile))
       || map_get_city(ptile)
-      || (is_barbarian(pplayer) && tile_has_special(ptile, S_HUT))) {
+      || (is_barbarian(pplayer) && map_has_special(ptile, S_HUT))) {
     return 0;
   }
 
@@ -228,7 +227,7 @@ static int explorer_desirable(struct tile *ptile, struct player *pplayer,
 
   if ((!pplayer->ai.control || !ai_handicap(pplayer, H_HUTS))
       && map_is_known(ptile, pplayer)
-      && tile_has_special(ptile, S_HUT)) {
+      && map_has_special(ptile, S_HUT)) {
     /* we want to explore huts whenever we can,
      * even if doing so will not uncover any tiles. */
     desirable += HUT_SCORE;
@@ -272,12 +271,6 @@ bool ai_manage_explorer(struct unit *punit)
 
   double logDF = log(DIST_FACTOR);
   double logBPS = log(BEST_POSSIBLE_SCORE);
-
-  if (pplayer->ai.control && unit_flag(punit, F_GAMELOSS)) {
-    return FALSE; /* too dangerous */
-  }
-
-  TIMING_LOG(AIT_EXPLORER, TIMER_START);
 
   pft_fill_unit_parameter(&parameter, punit);
   parameter.get_TB = no_fights_or_unknown;
@@ -344,8 +337,6 @@ bool ai_manage_explorer(struct unit *punit)
     }
   }
   pf_destroy_map(map);
-
-  TIMING_LOG(AIT_EXPLORER, TIMER_STOP);
 
   /* Go to the best tile found. */
   if (best_tile != NULL) {

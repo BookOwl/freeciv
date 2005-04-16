@@ -41,10 +41,10 @@
 #include "packhand.h"
 #include "text.h"
 
-#include "canvas.h"
 #include "chatline.h"
 #include "dialogs.h"
 #include "gui_stuff.h"
+#include "graphics.h"
 #include "mapctrl.h"
 #include "mapview.h"
 #include "gui_main.h" 
@@ -278,21 +278,10 @@ static void update_radio_buttons(int id)
 **************************************************************************/
 static void update_nation_info()
 {
-  int i;
-  char buf[255];
-  struct nation_type *nation= get_nation_by_idx(selected_nation);
- 
-  buf[0] = '\0';
-
-  for (i = 0; i < nation->num_groups; i++) {
-    sz_strlcat(buf, nation->groups[i]->name);
-    if (i != nation->num_groups - 1) {
-      sz_strlcat(buf, ", ");
-    }
-  }
-
-  SetWindowText(races_class, buf);
-  SetWindowText(races_legend, nation->legend);
+  SetWindowText(races_class, 
+		get_nation_by_idx(selected_nation)->class);
+  SetWindowText(races_legend,
+		get_nation_by_idx(selected_nation)->legend);
 }
 
 
@@ -399,7 +388,7 @@ static LONG CALLBACK racesdlg_proc(HWND hWnd,
 	  }
 	  break;
 	case ID_RACESDLG_QUIT:
-	  ui_exit();
+	  exit(EXIT_SUCCESS);
 	  break;
 	case ID_RACESDLG_DISCONNECT:
 	  popdown_races_dialog();
@@ -453,18 +442,18 @@ static void add_nations(struct fcwin_box *vbox)
   int i;
   struct fcwin_box *hbox;
   struct fcwin_box *vboxes[NATIONS_PER_ROW];
-  struct genlist *nation_list;
+  struct genlist nation_list;
   struct genlist_link *myiter;
-  nation_list = genlist_new();
+  genlist_init(&nation_list);
   for(i=0; i<game.playable_nation_count; i++) { 
     /* Don't use a NULL pointer */
-    genlist_prepend(nation_list, (void *)(i + ID_RACESDLG_NATION_BASE));
+    genlist_insert(&nation_list,(void *)(i+ID_RACESDLG_NATION_BASE),0);
   }
-  genlist_sort(nation_list, cmp_func);
+  genlist_sort(&nation_list,cmp_func);
   for(i=0;i<NATIONS_PER_ROW;i++) {  
     vboxes[i]=fcwin_vbox_new(races_dlg,TRUE);
   }
-  myiter = nation_list->head_link;
+  myiter = nation_list.head_link;
   i=0;
   for(;ITERATOR_PTR(myiter);ITERATOR_NEXT(myiter),i++) {
     int id;
@@ -475,7 +464,7 @@ static void add_nations(struct fcwin_box *vbox)
 			      get_nation_name(id-ID_RACESDLG_NATION_BASE),
 			      id,0,FALSE,FALSE,0);			      
   }
-  genlist_unlink_all(nation_list);
+  genlist_unlink_all(&nation_list);
   hbox=fcwin_hbox_new(races_dlg,TRUE);
   for(i=0;i<NATIONS_PER_ROW;i++)
     fcwin_box_add_box(hbox,vboxes[i],TRUE,TRUE,10);
@@ -537,7 +526,7 @@ void popup_races_dialog(void)
 			 FALSE,FALSE,5);
   hbox=fcwin_hbox_new(races_dlg,TRUE);
   for(i=0,b_s_num=0; i<game.styles_count && i<64; i++) {
-    if (!city_style_has_requirements(&city_styles[i])) {
+    if(city_styles[i].techreq == A_NONE) {
       city_style_idx[b_s_num] = i;
       city_style_ridx[i] = b_s_num;
       b_s_num++;
@@ -720,7 +709,7 @@ popup_unit_select_dialog(struct tile *ptile)
   RECT rc,rc2;
   HBITMAP old;
   HDC unitsel_dc;
-  struct unit *unit_list[unit_list_size(ptile->units)];
+  struct unit *unit_list[unit_list_size(&ptile->units)];
   
   fill_tile_unit_list(ptile, unit_list);
   
@@ -742,7 +731,7 @@ popup_unit_select_dialog(struct tile *ptile)
     return;
   hdc=GetDC(unit_select_main);
   unitsel_dc=CreateCompatibleDC(NULL);
-  n = unit_list_size(ptile->units);
+  n=unit_list_size(&ptile->units);
   r=number_of_rows(n);
   c=number_of_columns(n);
   max_width=0;
@@ -763,31 +752,24 @@ popup_unit_select_dialog(struct tile *ptile)
 	max_width=rc.right-rc.left;
       if ((rc.bottom-rc.top)>max_height)
 	max_height=rc.bottom-rc.top;
-      unit_select_bitmaps[i]=CreateCompatibleBitmap(hdc,tileset_full_tile_width(tileset),
-						    tileset_full_tile_height(tileset));
+      unit_select_bitmaps[i]=CreateCompatibleBitmap(hdc,UNIT_TILE_WIDTH,
+						    UNIT_TILE_HEIGHT);
     }
   ReleaseDC(unit_select_main,hdc);
   old=SelectObject(unitsel_dc,unit_select_bitmaps[0]);
-  max_width+=tileset_full_tile_width(tileset);
+  max_width+=UNIT_TILE_WIDTH;
   max_width+=4;
-  if (max_height<tileset_full_tile_width(tileset))
+  if (max_height<UNIT_TILE_WIDTH)
     {
-      max_height=tileset_full_tile_height(tileset);
+      max_height=UNIT_TILE_HEIGHT;
     }
   max_height+=4;
   for (i=0;i<n;i++)
     {
-      struct canvas canvas_store;
+      struct canvas canvas_store = {unitsel_dc, NULL};
       struct unit *punit=unit_list[i];
       struct unit_type *punittemp=unit_type(punit);
       struct city *pcity;
-
-      canvas_store.type = CANVAS_DC;
-      canvas_store.hdc = unitsel_dc;
-      canvas_store.bmp = NULL;
-      canvas_store.wnd = NULL;
-      canvas_store.tmp = NULL;
-
       pcity=player_find_city_by_id(game.player_ptr, punit->homecity);
       my_snprintf(buffer, sizeof(buffer), "%s(%s)\n%s",
 		  punittemp->name,
@@ -795,24 +777,24 @@ popup_unit_select_dialog(struct tile *ptile)
 		  unit_activity_text(punit));
       unit_select_labels[i]=CreateWindow("STATIC",buffer,
 					 WS_CHILD | WS_VISIBLE | SS_LEFT,
-					 (i/r)*max_width+tileset_full_tile_width(tileset),
+					 (i/r)*max_width+UNIT_TILE_WIDTH,
 					 (i%r)*max_height,
-					 max_width-tileset_full_tile_width(tileset),
+					 max_width-UNIT_TILE_WIDTH,
 					 max_height,
 					 unit_select_main,
 					 NULL,
 					 freecivhinst,
 					 NULL);
       SelectObject(unitsel_dc,unit_select_bitmaps[i]);
-      BitBlt(unitsel_dc,0,0,tileset_full_tile_width(tileset),tileset_full_tile_height(tileset),NULL,
+      BitBlt(unitsel_dc,0,0,UNIT_TILE_WIDTH,UNIT_TILE_HEIGHT,NULL,
 	     0,0,WHITENESS);
       put_unit(punit,&canvas_store,0,0);
       unit_select_but[i]=CreateWindow("BUTTON",NULL,
 				      WS_CHILD | WS_VISIBLE | BS_BITMAP,
 				      (i/r)*max_width,
 				      (i%r)*max_height,
-				      tileset_full_tile_width(tileset),
-				      tileset_full_tile_height(tileset),
+				      UNIT_TILE_WIDTH,
+				      UNIT_TILE_HEIGHT,
 				      unit_select_main,
 				      (HMENU)(UNITSELECT_UNITS_BASE+i),
 				      freecivhinst,
@@ -1587,7 +1569,7 @@ void popup_diplomat_dialog(struct unit *punit, struct tile *ptile)
 
     diplomat_dialog_open=1;
    }else{ 
-     if ((ptunit = unit_list_get(ptile->units, 0))){
+     if ((ptunit = unit_list_get(&ptile->units, 0))){
        /* Spy/Diplomat acting against a unit */ 
        
        diplomat_target_id=ptunit->id;

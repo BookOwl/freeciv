@@ -153,29 +153,19 @@ cumulative.  For many effects this is undesirable.
 "Regen_Reputation" - Increase your reputation by AMOUNT units (out of 1000)
                   per turn
 
-"Slow_Down_Timeline" - Slow down the timeline based on the AMOUNT.  If
-                       AMOUNT >= 3 the timeline will be 1 year/turn; with
-                       AMOUNT == 2 it is 2 years/turn; with
-                       AMOUNT == 1 it is 5 years/turn; with
-                       AMOUNT <= 0 the timeline is unaffected.
-                       The effect will be ignored if game.spacerace isn't
-                       set.
-
 
 .range may be one of: 
-             "None", "Local", "Adjacent", "City", "Continent",
-             "Player", "World"
+             "None", "Local", "City", "Continent", "Player", "World"
 .value	   = integral AMOUNT parameter for many effects
 	    (must be in the range -32767 to 32767)
 .survives  = 1 if effect survives destruction (wonders only)
 	    (if unspecified, 0 (doesn't survive) is assumed)
 .req_type  = The type of the requirement; one of:
-             "None" (default), "Tech", "Gov", "Building", "Special",
-             "Terrain", "Nation"
+             "None" (default), "Tech", "Gov", "Building", "Special", "Terrain"
 .req       = The requirement.  The effect will not be active unless this
              requirement is met.  This is a string containing the name of
-             the technology, government, building, tile special, tile
-             terrain, or nation that is required.  The requirement applies
-             to the target of the effect (not the source).
+             the technology, government, building, tile special, or tile
+             terrain that is required.  The requirement applies to the
+             target of the effect (not the source).
 
 See data/default/buildings.ruleset for examples.

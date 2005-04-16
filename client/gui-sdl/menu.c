@@ -153,10 +153,7 @@ static int unit_order_callback(struct GUI *pOrder_Widget)
     key_unit_auto_explore();
     break;
   case ID_UNIT_ORDER_CONNECT:
-#if 0
-    /* TODO: multiple connect types */
     key_unit_connect();
-#endif
     break;
   case ID_UNIT_ORDER_PATROL:
     key_unit_patrol();
@@ -1224,6 +1221,12 @@ void update_menus(void)
 	local_hide(ID_UNIT_ORDER_AIRLIFT);
       }
 
+      if (!pTile->city && !is_air_unittype(pUnit->type)) {
+        local_show(ID_UNIT_ORDER_RETURN);
+      } else {
+	local_hide(ID_UNIT_ORDER_RETURN);
+      }
+      
       if (pTile->city && can_upgrade_unittype(game.player_ptr, pUnit->type) != -1) {
 	local_show(ID_UNIT_ORDER_UPGRADE);
       } else {
