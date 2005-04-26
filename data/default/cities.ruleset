@@ -21,25 +21,14 @@ options="1.9"
 ; the city is of a certain size.
 [specialist]
 
-types = _("elvis"), _("scientist"), _("taxman")
-elvis_short_name = _("?Elvis:E")
-elvis_req	=
-    { "type", "name", "range"
-; Nothing
-    }
-elvis_bonus_luxury = 2
-scientist_short_name = _("?Scientist:S")
-scientist_req	=
-    { "type", "name", "range"
-      "MinSize", "5", "City"
-    }
-scientist_bonus_science = 3
-taxman_short_name = _("?Taxman:T")
-taxman_req	=
-    { "type", "name", "range"
-      "MinSize", "5", "City"
-    }
-taxman_bonus_gold = 3
+; Changing the order or names of specialists will break things
+types = "elvis", "scientist", "taxman"
+elvis_min_size = 0
+elvis_base_bonus = 2
+scientist_min_size = 5
+scientist_base_bonus = 3
+taxman_min_size = 5
+taxman_base_bonus = 3
 
 changable_tax = 1
 ;forced_science = 0
@@ -48,7 +37,6 @@ changable_tax = 1
 
 [parameters]
 add_to_size_limit  = 8		; cities >= this cannot be added to.
-angry_citizens = 1              ; set to zero to disable angry citizens
 
 ;
 ; City styles define the way cities are drawn
@@ -57,7 +45,7 @@ angry_citizens = 1              ; set to zero to disable angry citizens
 ;               more info on city tiles
 ; citizens_graphic     = group of citizens tiles to use, see citizens/small
 ;                        spec for more info on citizens tiles
-; reqs        = requirements for this city style (see README.effects)
+; tech        = technology required for style to be used
 ; replaced_by = which style replaced this one
 
 [citystyle_european]
@@ -66,7 +54,7 @@ graphic     = "city.european"
 graphic_alt = "-"
 citizens_graphic     = "ancient"
 citizens_graphic_alt = "generic"
-; No reqs
+tech        = "None"
 replaced_by = "Renaissance"
 
 [citystyle_classical]
@@ -75,7 +63,7 @@ graphic     = "city.classical"
 graphic_alt = "-"
 citizens_graphic     = "ancient"
 citizens_graphic_alt = "generic"
-; No reqs
+tech        = "None"
 replaced_by = "Renaissance"
 
 [citystyle_tropical]
@@ -84,7 +72,7 @@ graphic     = "city.tropical"
 graphic_alt = "city.european"
 citizens_graphic     = "ancient"
 citizens_graphic_alt = "generic"
-; No reqs
+tech        = "None"
 replaced_by = "Renaissance"
 
 [citystyle_asian]
@@ -93,7 +81,7 @@ graphic     = "city.asian"
 graphic_alt = "city.classical"
 citizens_graphic     = "ancient"
 citizens_graphic_alt = "generic"
-; No reqs
+tech        = "None"
 replaced_by = "Renaissance"
 
 [citystyle_renaissance]
@@ -102,9 +90,7 @@ graphic     = "city.industrial"
 graphic_alt = "-"
 citizens_graphic     = "renaissance"
 citizens_graphic_alt = "generic"
-reqs = { "type", "name", "range"
-         "tech", "University", "Player"
-       }
+tech        = "University"
 replaced_by = "Industrial"
 
 [citystyle_industrial]
@@ -113,9 +99,7 @@ graphic     = "city.industrial"
 graphic_alt = "-"
 citizens_graphic     = "industrial"
 citizens_graphic_alt = "generic"
-reqs = { "type", "name", "range"
-         "tech", "Railroad", "Player"
-       }
+tech        = "Railroad"
 replaced_by = "Modern"
 
 [citystyle_modern]
@@ -124,9 +108,7 @@ graphic     = "city.modern"
 graphic_alt = "-"
 citizens_graphic     = "modern"
 citizens_graphic_alt = "generic"
-reqs = { "type", "name", "range"
-         "tech", "Automobile", "Player"
-       }
+tech        = "Automobile"
 replaced_by = "PostModern"
 
 [citystyle_postmodern]
@@ -135,7 +117,5 @@ graphic     = "city.postmodern"
 graphic_alt = "-"
 citizens_graphic     = "postmodern"
 citizens_graphic_alt = "generic"
-reqs = { "type", "name", "range"
-         "tech", "Superconductors", "Player"
-       }
+tech        = "Superconductors"
 replaced_by = "-"

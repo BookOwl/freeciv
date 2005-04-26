@@ -21,7 +21,6 @@
 #include "game.h"
 #include "player.h"
 #include "terrain.h"
-#include "tile.h"
 #include "unit.h"
 
 /*
@@ -32,10 +31,112 @@
 #define MOVE_COST_FOR_VALID_SEA_STEP	(-3)
 #define MOVE_COST_FOR_VALID_AIR_STEP	(-3)
 
+/* For client Area Selection */
+enum tile_hilite {
+  HILITE_NONE = 0, HILITE_CITY
+};
+
+/* Convenience macro for accessing tile coordinates.  This should only be
+ * used for debugging. */
+#define TILE_XY(ptile) ((ptile) ? (ptile)->x : -1), \
+                       ((ptile) ? (ptile)->y : -1)
+
+struct tile {
+  const int x, y; /* Cartesian (map) coordinates of the tile. */
+  const int nat_x, nat_y; /* Native coordinates of the tile. */
+  const int index; /* Index coordinate of the tile. */
+  Terrain_type_id terrain;
+  enum tile_special_type special;
+  struct city *city;
+  struct unit_list units;
+  unsigned int known;   /* A bitvector on the server side, an
+			   enum known_type on the client side.
+			   Player_no is index */
+  int assigned; /* these can save a lot of CPU usage -- Syela */
+  struct city *worked;      /* city working tile, or NULL if none */
+  Continent_id continent;
+  signed char move_cost[8]; /* don't know if this helps! */
+  struct player *owner;     /* Player owning this tile, or NULL. */
+  struct {
+    /* Area Selection in client. */
+    enum tile_hilite hilite;
+  } client;
+  char *spec_sprite;
+};
+
+
 /****************************************************************
 miscellaneous terrain information
 *****************************************************************/
 #define terrain_misc packet_ruleset_terrain_control
+
+/****************************************************************
+tile_type for each terrain type
+expand with government bonuses??
+*****************************************************************/
+struct tile_type {
+  const char *terrain_name; /* Translated string - doesn't need freeing. */
+  char terrain_name_orig[MAX_LEN_NAME];	/* untranslated copy */
+  char graphic_str[MAX_LEN_NAME];
+  char graphic_alt[MAX_LEN_NAME];
+
+  /* Server-only. */
+  char identifier; /* Single-character identifier used in savegames. */
+#define UNKNOWN_TERRAIN_IDENTIFIER 'u'
+
+  int movement_cost;
+  int defense_bonus;
+
+  int food;
+  int shield;
+  int trade;
+
+  const char *special_1_name; /* Translated string - doesn't need freeing. */
+  char special_1_name_orig[MAX_LEN_NAME]; /* untranslated copy */
+  int food_special_1;
+  int shield_special_1;
+  int trade_special_1;
+
+  const char *special_2_name; /* Translated string - doesn't need freeing. */
+  char special_2_name_orig[MAX_LEN_NAME]; /* untranslated copy */
+  int food_special_2;
+  int shield_special_2;
+  int trade_special_2;
+
+  /* I would put the above special data in this struct too,
+     but don't want to make unnecessary changes right now --dwp */
+  struct {
+    char graphic_str[MAX_LEN_NAME];
+    char graphic_alt[MAX_LEN_NAME];
+  } special[2];
+
+  int road_trade_incr;
+  int road_time;
+
+  Terrain_type_id irrigation_result;
+  int irrigation_food_incr;
+  int irrigation_time;
+
+  Terrain_type_id mining_result;
+  int mining_shield_incr;
+  int mining_time;
+
+  Terrain_type_id transform_result;
+  int transform_time;
+  int rail_time;
+  int airbase_time;
+  int fortress_time;
+  int clean_pollution_time;
+  int clean_fallout_time;
+
+  Terrain_type_id warmer_wetter_result, warmer_drier_result;
+  Terrain_type_id cooler_wetter_result, cooler_drier_result;
+
+  bv_terrain_flags flags;
+
+  char *helptext;
+};
+extern struct tile_type tile_types[MAX_NUM_TERRAINS];
 
 /* The direction8 gives the 8 possible directions.  These may be used in
  * a number of ways, for instance as an index into the DIR_DX/DIR_DY
@@ -133,14 +234,20 @@ bool base_get_direction_for_step(const struct tile *src_tile,
 int get_direction_for_step(const struct tile *src_tile,
 			   const struct tile *dst_tile);
 
-/* Number of index coordinates (for sanity checks and allocations) */
-#define MAP_INDEX_SIZE (map.xsize * map.ysize)
+void map_set_continent(struct tile *ptile, Continent_id val);
+Continent_id map_get_continent(const struct tile *ptile);
+
+void initialize_move_costs(void);
+void reset_move_costs(struct tile *ptile);
+
+/* Maximum value of index (for sanity checks and allocations) */
+#define MAX_MAP_INDEX (map.xsize * map.ysize)
 
 #ifdef DEBUG
 #define CHECK_MAP_POS(x,y) assert(is_normal_map_pos((x),(y)))
 #define CHECK_NATIVE_POS(x, y) assert((x) >= 0 && (x) < map.xsize \
 				      && (y) >= 0 && (y) < map.ysize)
-#define CHECK_INDEX(index) assert((index) >= 0 && (index) < MAP_INDEX_SIZE)
+#define CHECK_INDEX(index) assert((index) >= 0 && (index) < MAX_MAP_INDEX)
 #else
 #define CHECK_MAP_POS(x,y) ((void)0)
 #define CHECK_NATIVE_POS(x, y) ((void)0)
@@ -249,12 +356,32 @@ struct tile *map_pos_to_tile(int x, int y);
 struct tile *native_pos_to_tile(int nat_x, int nat_y);
 struct tile *index_to_tile(int index);
 
+struct player *map_get_owner(const struct tile *ptile);
+void map_set_owner(struct tile *ptile, struct player *pplayer);
+struct city *map_get_city(const struct tile *ptile);
+void map_set_city(struct tile *ptile, struct city *pcity);
+Terrain_type_id map_get_terrain(const struct tile *ptile);
+enum tile_special_type map_get_special(const struct tile *ptile);
+void map_set_terrain(struct tile *ptile, Terrain_type_id ter);
+void map_set_special(struct tile *ptile, enum tile_special_type spe);
+void map_clear_special(struct tile *ptile, enum tile_special_type spe);
+void map_clear_all_specials(struct tile *ptile);
+
 bool is_real_map_pos(int x, int y);
 bool is_normal_map_pos(int x, int y);
 
 /* implemented in server/maphand.c and client/climisc.c */
 enum known_type map_get_known(const struct tile *ptile,
-			      const struct player *pplayer);
+			      struct player *pplayer);
+
+/* special testing */
+bool map_has_special(const struct tile *ptile,
+		     enum tile_special_type to_test_for);
+bool tile_has_special(const struct tile *ptile,
+		      enum tile_special_type to_test_for);
+bool contains_special(enum tile_special_type all,
+		      enum tile_special_type to_test_for);
+
 
 bool is_singular_tile(const struct tile *ptile, int dist);
 bool normalize_map_pos(int *x, int *y);
@@ -276,10 +403,14 @@ bool is_tiles_adjacent(const struct tile *ptile0, const struct tile *ptile1);
 bool is_move_cardinal(const struct tile *src_tile,
 		      const struct tile *dst_tile);
 int map_move_cost(struct unit *punit, const struct tile *ptile);
-int map_move_cost_ai(const struct tile *tile0, const struct tile *tile1);
+enum tile_special_type get_special_by_name(const char * name);
+const char *get_special_name(enum tile_special_type type);
 bool is_safe_ocean(const struct tile *ptile);
 bool is_cardinally_adj_to_ocean(const struct tile *ptile);
-int get_tile_output_base(const struct tile *ptile, Output_type_id output);
+bool is_sea_usable(const struct tile *ptile);
+int get_tile_food_base(const struct tile *ptile);
+int get_tile_shield_base(const struct tile *ptile);
+int get_tile_trade_base(const struct tile *ptile);
 enum tile_special_type get_tile_infrastructure_set(const struct tile *ptile);
 const char *map_get_infrastructure_text(enum tile_special_type spe);
 enum tile_special_type map_get_infrastructure_prerequisite(enum tile_special_type spe);
@@ -448,7 +579,7 @@ extern struct terrain_misc terrain_control;
 #define whole_map_iterate(ptile)					    \
 {                                                                           \
   int _index; /* We use index positions for cache efficiency. */	    \
-  for (_index = 0; _index < MAP_INDEX_SIZE; _index++) {			    \
+  for (_index = 0; _index < MAX_MAP_INDEX; _index++) {			    \
     struct tile *ptile = map.tiles + _index;				    \
 
 #define whole_map_iterate_end                                               \

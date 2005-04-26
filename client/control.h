@@ -29,13 +29,9 @@ enum quickselect_type {
   SELECT_POPUP = 0, SELECT_SEA, SELECT_LAND
 };
 
-void control_init(void);
-void control_done(void);
-
 extern int hover_unit; /* unit hover_state applies to */
 extern enum cursor_hover_state hover_state;
 extern enum unit_activity connect_activity;
-extern enum unit_orders goto_last_order;
 extern bool draw_goto_line;
 extern bool non_ai_unit_focus;
 
@@ -51,8 +47,7 @@ void do_unit_connect(struct unit *punit, struct tile *ptile,
 void do_map_click(struct tile *ptile, enum quickselect_type qtype);
 
 void set_hover_state(struct unit *punit, enum cursor_hover_state state,
-		     enum unit_activity connect_activity,
-		     enum unit_orders goto_last_order);
+		     enum unit_activity activity);
 void request_center_focus_unit(void);
 void request_move_unit_direction(struct unit *punit, int dir);
 void request_new_unit_activity(struct unit *punit, enum unit_activity act);
@@ -68,7 +63,7 @@ void request_unit_change_homecity(struct unit *punit);
 void request_unit_connect(enum unit_activity activity);
 void request_unit_disband(struct unit *punit);
 void request_unit_fortify(struct unit *punit);
-void request_unit_goto(enum unit_orders last_order);
+void request_unit_goto(void);
 void request_unit_move_done(void);
 void request_unit_nuke(struct unit *punit);
 void request_unit_paradrop(struct unit *punit);
@@ -83,7 +78,6 @@ void request_unit_wait(struct unit *punit);
 void request_unit_wakeup(struct unit *punit);
 void request_diplomat_action(enum diplomat_actions action, int dipl_id,
 			     int target_id, int value);
-void request_toggle_city_outlines(void);
 void request_toggle_map_grid(void);
 void request_toggle_map_borders(void);
 void request_toggle_city_names(void);
@@ -112,7 +106,7 @@ void set_unit_focus_and_select(struct unit *punit);
 void update_unit_focus(void);
 struct unit *find_visible_unit(struct tile *ptile);
 void set_units_in_combat(struct unit *pattacker, struct unit *pdefender);
-double blink_active_unit(void);
+void blink_active_unit(void);
 void update_unit_pix_label(struct unit *punit);
 
 void process_caravan_arrival(struct unit *punit);
@@ -136,7 +130,6 @@ void key_units_toggle(void);
 void key_focus_unit_toggle(void);
 void key_fog_of_war_toggle(void);
 void key_end_turn(void);
-void key_city_outlines_toggle(void);
 void key_map_grid_toggle(void);
 void key_map_borders_toggle(void);
 void key_quickselect(enum quickselect_type qtype);

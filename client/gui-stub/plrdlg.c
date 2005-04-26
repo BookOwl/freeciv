@@ -18,9 +18,9 @@
 #include "plrdlg.h"
 
 /**************************************************************************
-  Display the player list dialog.  Optionally raise it.
+  Popup (or raise) the player list dialog.
 **************************************************************************/
-void popup_players_dialog(bool raise)
+void popup_players_dialog(void)
 {
   /* PORTME */
 }

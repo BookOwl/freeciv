@@ -17,8 +17,6 @@
 
 #include <assert.h>
 
-#include "fcintl.h"
-
 #include "map.h"
 #include "mem.h"		/* free */
 #include "rand.h"
@@ -180,7 +178,7 @@ int count_terrain_near_tile(const struct tile *ptile,
   int count = 0, total = 0;
 
   variable_adjc_iterate(ptile, adjc_tile, cardinal_only) {
-    if (tile_get_terrain(adjc_tile) == t) {
+    if (map_get_terrain(adjc_tile) == t) {
       count++;
     }
     total++;
@@ -190,105 +188,6 @@ int count_terrain_near_tile(const struct tile *ptile,
     count = count * 100 / total;
   }
   return count;
-}
-
-/****************************************************************************
-  Return the number of adjacent tiles that have the given terrain property.
-****************************************************************************/
-int count_terrain_property_near_tile(const struct tile *ptile,
-				     bool cardinal_only, bool percentage,
-				     enum mapgen_terrain_property prop)
-{
-  int count = 0, total = 0;
-
-  variable_adjc_iterate(ptile, adjc_tile, cardinal_only) {
-    if (get_tile_type(adjc_tile->terrain)->property[prop] > 0) {
-      count++;
-    }
-    total++;
-  } variable_adjc_iterate_end;
-
-  if (percentage) {
-    count = count * 100 / total;
-  }
-  return count;
-}
-
-/* Names of specials.
- * (These must correspond to enum tile_special_type.)
- */
-static const char *tile_special_type_names[] =
-{
-  N_("Special1"),
-  N_("Road"),
-  N_("Irrigation"),
-  N_("Railroad"),
-  N_("Mine"),
-  N_("Pollution"),
-  N_("Hut"),
-  N_("Fortress"),
-  N_("Special2"),
-  N_("River"),
-  N_("Farmland"),
-  N_("Airbase"),
-  N_("Fallout")
-};
-
-/****************************************************************************
-  Return the special with the given name, or S_NO_SPECIAL.
-
-  FIXME: should be find_special_by_name().
-****************************************************************************/
-enum tile_special_type get_special_by_name(const char *name)
-{
-  int i;
-  enum tile_special_type st = 1;
-
-  for (i = 0; i < ARRAY_SIZE(tile_special_type_names); i++) {
-    if (0 == strcmp(name, tile_special_type_names[i])) {
-      return st;
-    }
-      
-    st <<= 1;
-  }
-
-  return S_NO_SPECIAL;
-}
-
-/****************************************************************************
-  Return the name of the given special.
-****************************************************************************/
-const char *get_special_name(enum tile_special_type type)
-{
-  int i;
-
-  for (i = 0; i < ARRAY_SIZE(tile_special_type_names); i++) {
-    if ((type & 0x1) == 1) {
-      return _(tile_special_type_names[i]);
-    }
-    type >>= 1;
-  }
-
-  return NULL;
-}
-
-/***************************************************************
- Returns TRUE iff the given special is found in the given set.
-***************************************************************/
-bool contains_special(enum tile_special_type set,
-		      enum tile_special_type to_test_for)
-{
-  enum tile_special_type masked = set & to_test_for;
-
-  assert(0 == (int) S_NO_SPECIAL);
-
-  /*
-   * contains_special should only be called with one S_* in
-   * to_test_for.
-   */
-  assert(masked == S_NO_SPECIAL || masked == to_test_for);
-
-  return masked == to_test_for;
 }
 
 /****************************************************************************
@@ -297,7 +196,7 @@ bool contains_special(enum tile_special_type set,
 bool is_special_near_tile(const struct tile *ptile, enum tile_special_type spe)
 {
   adjc_iterate(ptile, adjc_tile) {
-    if (tile_has_special(adjc_tile, spe)) {
+    if (map_has_special(adjc_tile, spe)) {
       return TRUE;
     }
   } adjc_iterate_end;
@@ -315,7 +214,7 @@ int count_special_near_tile(const struct tile *ptile,
   int count = 0, total = 0;
 
   variable_adjc_iterate(ptile, adjc_tile, cardinal_only) {
-    if (tile_has_special(adjc_tile, spe)) {
+    if (map_has_special(adjc_tile, spe)) {
       count++;
     }
     total++;
@@ -334,7 +233,7 @@ bool is_terrain_flag_near_tile(const struct tile *ptile,
 			       enum terrain_flag_id flag)
 {
   adjc_iterate(ptile, adjc_tile) {
-    if (terrain_has_flag(tile_get_terrain(adjc_tile), flag)) {
+    if (terrain_has_flag(map_get_terrain(adjc_tile), flag)) {
       return TRUE;
     }
   } adjc_iterate_end;
@@ -352,7 +251,7 @@ int count_terrain_flag_near_tile(const struct tile *ptile,
   int count = 0, total = 0;
 
   variable_adjc_iterate(ptile, adjc_tile, cardinal_only) {
-    if (terrain_has_flag(tile_get_terrain(adjc_tile), flag)) {
+    if (terrain_has_flag(map_get_terrain(adjc_tile), flag)) {
       count++;
     }
     total++;

@@ -109,7 +109,7 @@ static ULONG TilePopWindow_New(struct IClass *cl, Object * o, struct opSet *msg)
 	DoMethod(group, OM_ADDMEMBER, text_obj);
       }
 
-      if ((pcity = tile_get_city(xtile, ytile)))
+      if ((pcity = map_get_city(xtile, ytile)))
       {
 	my_snprintf(s, sizeof(s), _("City: %s(%s)"), pcity->name,
 		    get_nation_name(city_owner(pcity)->nation));
@@ -224,8 +224,8 @@ Object *MakeMap(void)
 struct Map_Data
 {
   /* Über Tags (2 Sprites) */
-  struct sprite *intro_gfx_sprite;
-  struct sprite *radar_gfx_sprite;
+  struct Sprite *intro_gfx_sprite;
+  struct Sprite *radar_gfx_sprite;
 
   LONG black_pen;
   LONG white_pen;
@@ -466,8 +466,8 @@ static void Map_Priv_ShowCityDesc(Object *o, struct Map_Data *data)
 
   rp = _rp(o);
 
-  canvas_x += tileset_tile_width(tileset) / 2;
-  canvas_y += tileset_tile_height(tileset);
+  canvas_x += NORMAL_TILE_WIDTH / 2;
+  canvas_y += NORMAL_TILE_HEIGHT;
 
   GetRPAttrs(rp, RPTAG_Font, &org_font, TAG_DONE);
   SetFont(rp, new_font);
@@ -530,8 +530,8 @@ static void Map_Priv_DrawUnitAnimationFrame(Object *o, struct Map_Data *data)
 
   diff_x = old_canvas_x - new_canvas_x;
   diff_y = old_canvas_y - new_canvas_y;
-  w = tileset_full_tile_width(tileset) + abs(diff_x);
-  h = tileset_full_tile_height(tileset) + abs(diff_y);
+  w = UNIT_TILE_WIDTH + abs(diff_x);
+  h = UNIT_TILE_HEIGHT + abs(diff_y);
   this_x = MIN(old_canvas_x,new_canvas_x);
   this_y = MIN(old_canvas_y,new_canvas_y);
 
@@ -576,20 +576,20 @@ static void Map_Priv_ExplodeUnit(Object *o, struct Map_Data *data)
 
     get_canvas_xy(data->explode_unit->x, data->explode_unit->y, &canvas_x, &canvas_y);
 
-    w = MAX(0,MIN(tileset_tile_width(tileset), _mwidth(o)-canvas_x));
-    h = MAX(0,MIN(tileset_tile_height(tileset), _mheight(o)-canvas_y));
+    w = MAX(0,MIN(NORMAL_TILE_WIDTH, _mwidth(o)-canvas_x));
+    h = MAX(0,MIN(NORMAL_TILE_HEIGHT, _mheight(o)-canvas_y));
 
     anim_timer = renew_timer_start(anim_timer, TIMER_USER, TIMER_ACTIVE);
 
     if (w > 0 && h > 0) {
-      if (tileset_is_isometric(tileset)) {
+      if (is_isometric) {
       /* We first draw the explosion onto the unit and draw draw the
 	 complete thing onto the map canvas window. This avoids flickering. */
 	MyBltBitMapRastPort(data->map_bitmap, canvas_x, canvas_y,
 			    data->unit_layer->rp, 0, 0, w, h, 0xc0);
-	put_sprite_overlay(data->unit_layer->rp, sprites.explode.unit[i], tileset_tile_width(tileset)/4,0);
+	put_sprite_overlay(data->unit_layer->rp, sprites.explode.unit[i], NORMAL_TILE_WIDTH/4,0);
 	MyBltBitMapRastPort(data->unit_bitmap,0,0,_rp(o),_mleft(o) + canvas_x, _mtop(o) + canvas_y, w, h, 0xc0);
-      } else { /* tileset_is_isometric(tileset) */
+      } else { /* is_isometric */
 	MyBltBitMapRastPort(data->map_bitmap, canvas_x, canvas_y,
 			    data->unit_layer->rp, 0, 0, w, h, 0xc0);
 	put_sprite_overlay(data->unit_layer->rp, sprites.explode.unit[i], 0, 0);
@@ -811,8 +811,8 @@ static ULONG Map_Setup(struct IClass * cl, Object * o, Msg msg)
     colors_pen[i] = ObtainBestPenA(cm, r, g, b, 0); /* global in colors.c */
   }
 
-  data->intro_gfx_sprite = load_sprite(tileset, tileset_main_intro_filename(tileset), FALSE);
-  data->radar_gfx_sprite = load_sprite(tileset, tileset_mini_intro_filename(tileset), FALSE);
+  data->intro_gfx_sprite = load_sprite(main_intro_filename, FALSE);
+  data->radar_gfx_sprite = load_sprite(minimap_intro_filename, FALSE);
 
   if ((dh = data->drawhandle = ObtainDrawHandle(pen_shared_map, &_screen(o)->RastPort, _screen(o)->ViewPort.ColorMap,
 					   GGFX_DitherMode, DITHERMODE_NONE,
@@ -821,12 +821,12 @@ static ULONG Map_Setup(struct IClass * cl, Object * o, Msg msg)
     if (data->overview_object)
       set(data->overview_object, MUIA_Overview_RadarPicture, data->radar_gfx_sprite->picture);
 
-    if ((data->unit_bitmap = AllocBitMap(tileset_full_tile_width(tileset) * 3, tileset_full_tile_height(tileset) * 3, GetBitMapAttr(_screen(o)->RastPort.BitMap, BMA_DEPTH), BMF_MINPLANES, _screen(o)->RastPort.BitMap)))
+    if ((data->unit_bitmap = AllocBitMap(UNIT_TILE_WIDTH * 3, UNIT_TILE_HEIGHT * 3, GetBitMapAttr(_screen(o)->RastPort.BitMap, BMA_DEPTH), BMF_MINPLANES, _screen(o)->RastPort.BitMap)))
     {
       if ((data->unit_layerinfo = NewLayerInfo()))
       {
 	InstallLayerInfoHook(data->unit_layerinfo, LAYERS_NOBACKFILL);
-	if ((data->unit_layer = CreateBehindHookLayer(data->unit_layerinfo, data->unit_bitmap, 0, 0, tileset_full_tile_width(tileset) * 3 - 1, tileset_full_tile_height(tileset) * 3 - 1, LAYERSIMPLE, LAYERS_NOBACKFILL, NULL)))
+	if ((data->unit_layer = CreateBehindHookLayer(data->unit_layerinfo, data->unit_bitmap, 0, 0, UNIT_TILE_WIDTH * 3 - 1, UNIT_TILE_HEIGHT * 3 - 1, LAYERSIMPLE, LAYERS_NOBACKFILL, NULL)))
 	{
 	  if (render_sprites(dh))
 	  {
@@ -1039,7 +1039,7 @@ static ULONG Map_Draw(struct IClass * cl, Object * o, struct MUIP_Draw * msg)
 
 	APTR cliphandle = MUI_AddClipping(muiRenderInfo(o), _mleft(o), _mtop(o), _mwidth(o), _mheight(o));
 
-	if (tileset_is_isometric(tileset))
+	if (is_isometric)
 	{
 	  /* Do I get points for style? */
 /*	  char boom[] = "Really Loud BOOM!!!";
@@ -1050,8 +1050,8 @@ static ULONG Map_Draw(struct IClass * cl, Object * o, struct MUIP_Draw * msg)
 	  draw_shadowed_string(map_canvas->window, main_font,
 			 toplevel->style->black_gc,
 			 toplevel->style->white_gc,
-			 canvas_x + tileset_tile_width(tileset) / 2 - w / 2,
-			 canvas_y + tileset_tile_height(tileset),
+			 canvas_x + NORMAL_TILE_WIDTH / 2 - w / 2,
+			 canvas_y + NORMAL_TILE_HEIGHT,
 			 boom); */
 
 	} else
@@ -1061,7 +1061,7 @@ static ULONG Map_Draw(struct IClass * cl, Object * o, struct MUIP_Draw * msg)
 
 	  for (y_itr=0; y_itr<3; y_itr++) {
 	    for (x_itr=0; x_itr<3; x_itr++) {
-	      struct sprite *mysprite = sprites.explode.nuke[y_itr][x_itr];
+	      struct Sprite *mysprite = sprites.explode.nuke[y_itr][x_itr];
 	      get_canvas_xy(x + x_itr - 1, y + y_itr - 1, &canvas_x, &canvas_y);
 	      put_sprite_overlay( _rp(o), mysprite, _mleft(o) + canvas_x, _mtop(o) + canvas_y);
   	    }
@@ -1159,7 +1159,7 @@ static ULONG Map_Draw(struct IClass * cl, Object * o, struct MUIP_Draw * msg)
 
 	assert(is_drawn_line(src_x, src_y, dir));
 
-	if (tileset_is_isometric(tileset)) {
+	if (is_isometric) {
 	  really_draw_segment(data->map_layer->rp, 0, 0, src_x, src_y, dir,
 			      FALSE);
 	  really_draw_segment(_rp(o), _mleft(o), _mtop(o), src_x, src_y,
@@ -1223,13 +1223,13 @@ static ULONG Map_Draw(struct IClass * cl, Object * o, struct MUIP_Draw * msg)
 	write_to_screen = 1;
 
 	/* see update_map_canvas_visible() in mapview.c */
-	if (tileset_is_isometric(tileset))
+	if (is_isometric)
 	{
 	  y -= width;
 	  width = height = width + height;
 	}
 
-	if ((msg->flags & MADF_DRAWUPDATE) && (data->update == 3) && !tileset_is_isometric(tileset))
+	if ((msg->flags & MADF_DRAWUPDATE) && (data->update == 3) && !is_isometric)
 	{
 	  /* Map has been scrolled (non isometric only atm), drawing can be optimized */
 	  int dx = data->horiz_first - data->old_horiz_first;
@@ -1238,7 +1238,7 @@ static ULONG Map_Draw(struct IClass * cl, Object * o, struct MUIP_Draw * msg)
 	  if (abs(dx) < width && abs(dy) < height && data->map_shown)
 	  {
 	    ScrollRaster(data->map_layer->rp,
-	    		 dx * tileset_tile_width(tileset), dy * tileset_tile_height(tileset),
+	    		 dx * NORMAL_TILE_WIDTH, dy * NORMAL_TILE_HEIGHT,
 			 0, 0, _mwidth(o) - 1, _mheight(o) - 1);
 
 	    if (abs(dx) < width && dx)
@@ -1302,7 +1302,7 @@ static ULONG Map_Draw(struct IClass * cl, Object * o, struct MUIP_Draw * msg)
 	}
       }
 
-      if (tileset_is_isometric(tileset))
+      if (is_isometric)
       {
 	int i;
 	int x_itr, y_itr;
@@ -1384,16 +1384,16 @@ static ULONG Map_Draw(struct IClass * cl, Object * o, struct MUIP_Draw * msg)
 
           get_canvas_xy(x, y, &canvas_start_x, &canvas_start_y); /* top left corner */
           /* top left corner in isometric view */
-          canvas_start_x -= height * tileset_tile_width(tileset)/2;
+          canvas_start_x -= height * NORMAL_TILE_WIDTH/2;
 
           /* because of where get_canvas_xy() sets canvas_x */
-          canvas_start_x += tileset_tile_width(tileset)/2;
+          canvas_start_x += NORMAL_TILE_WIDTH/2;
 
           /* And because units fill a little extra */
-          canvas_start_y -= tileset_tile_height(tileset)/2;
+          canvas_start_y -= NORMAL_TILE_HEIGHT/2;
 
-	  w = (height + width) * tileset_tile_width(tileset)/2;
-	  h = (height + width) * tileset_tile_height(tileset)/2 + tileset_tile_height(tileset)/2;
+	  w = (height + width) * NORMAL_TILE_WIDTH/2;
+	  h = (height + width) * NORMAL_TILE_HEIGHT/2 + NORMAL_TILE_HEIGHT/2;
 
 	  if (canvas_start_x <0)
 	  {
@@ -1625,7 +1625,7 @@ static ULONG Map_ContextMenuBuild(struct IClass * cl, Object * o, struct MUIP_Co
 	Object *menu_title;
 	static char title[256];
 
-	pcity = tile_get_city(x, y);
+	pcity = map_get_city(x, y);
 	punit = find_visible_unit(ptile);
 	focus = get_unit_in_focus();
 
@@ -1700,7 +1700,7 @@ static ULONG Map_ContextMenuBuild(struct IClass * cl, Object * o, struct MUIP_Co
 		if (can_unit_do_activity(punit, ACTIVITY_IRRIGATE))
 		{
 		  static char irrtext[64];
-		  if (tile_has_special(punit->tile, S_IRRIGATION) &&
+		  if (map_has_special(punit->tile, S_IRRIGATION) &&
 		      player_knows_techs_with_flag(game.player_ptr, TF_FARMLAND))
 		  {
 		    sz_strlcpy(irrtext, _("Build Farmland"));
@@ -1854,18 +1854,18 @@ static ULONG Map_Refresh(struct IClass * cl, Object * o, struct MUIP_Map_Refresh
 
   /* Clear old sprite. */
   gdk_draw_pixmap(map_canvas->window, civ_gc, map_canvas_store, old_canvas_x,
-		  old_canvas_y, old_canvas_x, old_canvas_y, tileset_full_tile_width(tileset),
-		  tileset_full_tile_height(tileset));
+		  old_canvas_y, old_canvas_x, old_canvas_y, UNIT_TILE_WIDTH,
+		  UNIT_TILE_HEIGHT);
 
   /* Draw the new sprite. */
   gdk_draw_pixmap(single_tile_pixmap, civ_gc, map_canvas_store, new_canvas_x,
-		  new_canvas_y, 0, 0, tileset_full_tile_width(tileset), tileset_full_tile_height(tileset));
+		  new_canvas_y, 0, 0, UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT);
   put_unit_pixmap(punit, single_tile_pixmap, 0, 0);
 
   /* Write to screen. */
   gdk_draw_pixmap(map_canvas->window, civ_gc, single_tile_pixmap, 0, 0,
-		  new_canvas_x, new_canvas_y, tileset_full_tile_width(tileset),
-		  tileset_full_tile_height(tileset));
+		  new_canvas_x, new_canvas_y, UNIT_TILE_WIDTH,
+		  UNIT_TILE_HEIGHT);
 
   /* Flush. */
   gdk_flush();
@@ -2097,7 +2097,7 @@ static ULONG CityMap_AskMinMax(struct IClass * cl, Object * o, struct MUIP_AskMi
 {
   DoSuperMethodA(cl, o, (Msg) msg);
 
-  if (tileset_is_isometric(tileset))
+  if (is_isometric)
   {
     msg->MinMaxInfo->MinWidth += get_normal_tile_width() * 4;
     msg->MinMaxInfo->DefWidth += get_normal_tile_width() * 4;
@@ -2127,7 +2127,7 @@ static ULONG CityMap_Draw(struct IClass * cl, Object * o, struct MUIP_Draw * msg
   {
     struct city *pcity = data->pcity;
 
-    if (tileset_is_isometric(tileset))
+    if (is_isometric)
     {
       /* First make it all black. */
       SetAPen(rp,data->black_color);
@@ -2179,24 +2179,24 @@ static ULONG CityMap_Draw(struct IClass * cl, Object * o, struct MUIP_Draw * msg
 
 	  /* top --> right */
 	  SetAPen(rp, data->red_color);
-	  Move(rp, canvas_x + tileset_tile_width(tileset) / 2 - 1, canvas_y);
-	  Draw(rp, canvas_x + tileset_tile_width(tileset) - 1,
-	       canvas_y + tileset_tile_height(tileset) / 2 - 1);
+	  Move(rp, canvas_x + NORMAL_TILE_WIDTH / 2 - 1, canvas_y);
+	  Draw(rp, canvas_x + NORMAL_TILE_WIDTH - 1,
+	       canvas_y + NORMAL_TILE_HEIGHT / 2 - 1);
 
 	  /* top --> left */
-	  Move(rp, canvas_x + tileset_tile_width(tileset) / 2, canvas_y);
-	  Draw(rp, canvas_x, canvas_y + tileset_tile_height(tileset) / 2 - 1);
+	  Move(rp, canvas_x + NORMAL_TILE_WIDTH / 2, canvas_y);
+	  Draw(rp, canvas_x, canvas_y + NORMAL_TILE_HEIGHT / 2 - 1);
 
 	  /* bottom --> right */
-	  Move(rp, canvas_x + tileset_tile_width(tileset) / 2 - 1,
-	       canvas_y + tileset_tile_height(tileset) - 1);
-	  Draw(rp, canvas_x + tileset_tile_width(tileset) - 1,
-	       canvas_y + tileset_tile_height(tileset) / 2);
+	  Move(rp, canvas_x + NORMAL_TILE_WIDTH / 2 - 1,
+	       canvas_y + NORMAL_TILE_HEIGHT - 1);
+	  Draw(rp, canvas_x + NORMAL_TILE_WIDTH - 1,
+	       canvas_y + NORMAL_TILE_HEIGHT / 2);
 
 	  /* bottom --> left */
-	  Move(rp, canvas_x + tileset_tile_width(tileset) / 2,
-	       canvas_y + tileset_tile_height(tileset) - 1);
-	  Draw(rp, canvas_x, canvas_y + tileset_tile_height(tileset) / 2);
+	  Move(rp, canvas_x + NORMAL_TILE_WIDTH / 2,
+	       canvas_y + NORMAL_TILE_HEIGHT - 1);
+	  Draw(rp, canvas_x, canvas_y + NORMAL_TILE_HEIGHT / 2);
 	}
       } city_map_checked_iterate_end;
     } else
@@ -2372,7 +2372,7 @@ static ULONG SpaceShip_Draw(struct IClass * cl, Object * o, struct MUIP_Draw * m
 
   {
     int i, j, k, x, y;
-    struct sprite *sprite = sprites.spaceship.habitation;	/* for size */
+    struct Sprite *sprite = sprites.spaceship.habitation;	/* for size */
     struct player_spaceship *ship = data->ship;
 
     SetAPen(rp, 1);		/* black */
@@ -2446,7 +2446,7 @@ DISPATCHERPROTO(SpaceShip_Dispatcher)
 
 struct MUI_CustomClass *CL_Sprite;
 
-Object *MakeSprite(struct sprite *sprite)
+Object *MakeSprite(struct Sprite *sprite)
 {
   return SpriteObject,
     MUIA_Sprite_Sprite, sprite,
@@ -2455,7 +2455,7 @@ Object *MakeSprite(struct sprite *sprite)
     End;
 }
 
-Object *MakeBorderSprite(struct sprite *sprite)
+Object *MakeBorderSprite(struct Sprite *sprite)
 {
   return SpriteObject,
     TextFrame,
@@ -2464,10 +2464,10 @@ Object *MakeBorderSprite(struct sprite *sprite)
     End;
 }
 
-struct sprite_Data
+struct Sprite_Data
 {
-  struct sprite *sprite;
-  struct sprite *overlay_sprite;
+  struct Sprite *sprite;
+  struct Sprite *overlay_sprite;
   ULONG transparent;
 
   ULONG bgcol;
@@ -2482,7 +2482,7 @@ static ULONG Sprite_New(struct IClass *cl, Object * o, struct opSet *msg)
 {
   if ((o = (Object *) DoSuperMethodA(cl, o, (Msg) msg)))
   {
-    struct sprite_Data *data = (struct sprite_Data *) INST_DATA(cl, o);
+    struct Sprite_Data *data = (struct Sprite_Data *) INST_DATA(cl, o);
     struct TagItem *tl = msg->ops_AttrList;
     struct TagItem *ti;
 
@@ -2491,11 +2491,11 @@ static ULONG Sprite_New(struct IClass *cl, Object * o, struct opSet *msg)
       switch (ti->ti_Tag)
       {
 	case  MUIA_Sprite_Sprite:
-	      data->sprite = (struct sprite *) ti->ti_Data;
+	      data->sprite = (struct Sprite *) ti->ti_Data;
 	      break;
 
 	case  MUIA_Sprite_OverlaySprite:
-	      data->overlay_sprite = (struct sprite *) ti->ti_Data;
+	      data->overlay_sprite = (struct Sprite *) ti->ti_Data;
 	      break;
 
 	case  MUIA_Sprite_Transparent:
@@ -2514,7 +2514,7 @@ static ULONG Sprite_New(struct IClass *cl, Object * o, struct opSet *msg)
 
 static ULONG Sprite_Set(struct IClass * cl, Object * o, struct opSet * msg)
 {
-  struct sprite_Data *data = (struct sprite_Data *) INST_DATA(cl, o);
+  struct Sprite_Data *data = (struct Sprite_Data *) INST_DATA(cl, o);
   struct TagItem *tl = msg->ops_AttrList;
   struct TagItem *ti;
   BOOL redraw = FALSE;
@@ -2525,7 +2525,7 @@ static ULONG Sprite_Set(struct IClass * cl, Object * o, struct opSet * msg)
     switch (ti->ti_Tag)
     {
       case  MUIA_Sprite_Sprite:
-	    data->sprite = (struct sprite *) ti->ti_Data;
+	    data->sprite = (struct Sprite *) ti->ti_Data;
 	    redraw = TRUE;
             break;
 
@@ -2565,7 +2565,7 @@ static ULONG Sprite_Set(struct IClass * cl, Object * o, struct opSet * msg)
 
 static ULONG Sprite_Setup(struct IClass * cl, Object * o, Msg msg)
 {
-  struct sprite_Data *data = (struct sprite_Data *) INST_DATA(cl, o);
+  struct Sprite_Data *data = (struct Sprite_Data *) INST_DATA(cl, o);
   struct ColorMap *cm;
 
   if (!DoSuperMethodA(cl, o, msg))
@@ -2585,7 +2585,7 @@ static ULONG Sprite_Setup(struct IClass * cl, Object * o, Msg msg)
 
 static ULONG Sprite_Cleanup(struct IClass * cl, Object * o, Msg msg)
 {
-  struct sprite_Data *data = (struct sprite_Data *) INST_DATA(cl, o);
+  struct Sprite_Data *data = (struct Sprite_Data *) INST_DATA(cl, o);
 
   data->setup = FALSE;
 
@@ -2601,7 +2601,7 @@ static ULONG Sprite_Cleanup(struct IClass * cl, Object * o, Msg msg)
 
 static ULONG Sprite_AskMinMax(struct IClass * cl, Object * o, struct MUIP_AskMinMax * msg)
 {
-  struct sprite_Data *data = (struct sprite_Data *) INST_DATA(cl, o);
+  struct Sprite_Data *data = (struct Sprite_Data *) INST_DATA(cl, o);
   DoSuperMethodA(cl, o, (Msg) msg);
 
   if (data->sprite)
@@ -2624,7 +2624,7 @@ static ULONG Sprite_AskMinMax(struct IClass * cl, Object * o, struct MUIP_AskMin
 
 static ULONG Sprite_Draw(struct IClass * cl, Object * o, struct MUIP_Draw * msg)
 {
-  struct sprite_Data *data = (struct sprite_Data *) INST_DATA(cl, o);
+  struct Sprite_Data *data = (struct Sprite_Data *) INST_DATA(cl, o);
   DoSuperMethodA(cl, o, (Msg) msg);
 
   if (data->bgpen != -1)
@@ -2783,8 +2783,8 @@ static ULONG Unit_Cleanup(struct IClass * cl, Object * o, Msg msg)
 static ULONG Unit_AskMinMax(struct IClass * cl, Object * o, struct MUIP_AskMinMax * msg)
 {
   struct Unit_Data *data = (struct Unit_Data *) INST_DATA(cl, o);
-  LONG w = tileset_full_tile_width(tileset);
-  LONG h = tileset_full_tile_height(tileset);
+  LONG w = UNIT_TILE_WIDTH;
+  LONG h = UNIT_TILE_HEIGHT;
   DoSuperMethodA(cl, o, (Msg) msg);
 
   if (data->upkeep)
@@ -2926,7 +2926,7 @@ static ULONG PresentUnit_ContextMenuBuild(struct IClass * cl, Object * o, struct
       if (context_menu)
       {
       	Object *entry;
-      	struct city *pcity = tile_get_city(punit->tile);
+      	struct city *pcity = map_get_city(punit->tile);
 
 	if ((entry = MUI_MakeObject(MUIO_Menuitem, _("Activate"), NULL, MUIO_Menuitem_CopyStrings, 0)))
 	{
@@ -3180,7 +3180,7 @@ BOOL create_map_class(void)
     if ((CL_Map = MUI_CreateCustomClass(NULL, MUIC_Area, NULL, sizeof(struct Map_Data), (APTR) Map_Dispatcher)))
       if ((CL_CityMap = MUI_CreateCustomClass(NULL, MUIC_Area, NULL, sizeof(struct CityMap_Data), (APTR) CityMap_Dispatcher)))
 	if ((CL_SpaceShip = MUI_CreateCustomClass(NULL, MUIC_Area, NULL, sizeof(struct SpaceShip_Data), (APTR) SpaceShip_Dispatcher)))
-	  if ((CL_Sprite = MUI_CreateCustomClass(NULL, MUIC_Area, NULL, sizeof(struct sprite_Data), (APTR) Sprite_Dispatcher)))
+	  if ((CL_Sprite = MUI_CreateCustomClass(NULL, MUIC_Area, NULL, sizeof(struct Sprite_Data), (APTR) Sprite_Dispatcher)))
 	    if ((CL_Unit = MUI_CreateCustomClass(NULL, MUIC_Area, NULL, sizeof(struct Unit_Data), (APTR) Unit_Dispatcher)))
 	      if ((CL_PresentUnit = MUI_CreateCustomClass(NULL, NULL, CL_Unit, sizeof(struct PresentUnit_Data), (APTR) PresentUnit_Dispatcher)))
 		if ((CL_SupportedUnit = MUI_CreateCustomClass(NULL, NULL, CL_Unit, sizeof(struct SupportedUnit_Data), (APTR) SupportedUnit_Dispatcher)))

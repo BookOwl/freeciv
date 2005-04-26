@@ -36,8 +36,6 @@ libcivcommon_a_SOURCES = \
 		improvement.h	\
 		map.c		\
 		map.h		\
-		movement.c	\
-		movement.h	\
 		nation.c        \
 		nation.h        \
 		packets.c	\
@@ -47,16 +45,12 @@ libcivcommon_a_SOURCES = \
 		packets.def	\
 		player.c	\
 		player.h	\
-		requirements.c	\
-		requirements.h	\
 		spaceship.c	\
 		spaceship.h	\
 		tech.c		\
 		tech.h		\
 		terrain.c	\
 		terrain.h	\
-		tile.c		\
-		tile.h		\
 		unit.c		\
 		unit.h		\
 		unittype.c	\

@@ -16,7 +16,6 @@
 #endif
 
 #include "log.h"
-#include "movement.h"
 #include "player.h"
 #include "unit.h"
 
@@ -42,7 +41,7 @@ static int likely_ocean(struct tile *ptile, struct player *pplayer)
 
   if (map_is_known(ptile, pplayer)) {
     /* we've seen the tile already. */
-    return (is_ocean(tile_get_terrain(ptile)) ? 100 : 0);
+    return (is_ocean(map_get_terrain(ptile)) ? 100 : 0);
   }
   
   /* Now we're going to do two things at once. We're going to see if
@@ -59,14 +58,14 @@ static int likely_ocean(struct tile *ptile, struct player *pplayer)
 	 * central tile is ocean or not by the appearance of
 	 * the adjacent tile. So, given that we can tell, 
 	 * it's fair to look at the actual tile. */
-        return (is_ocean(tile_get_terrain(ptile)) ? 100 : 0);
+        return (is_ocean(map_get_terrain(ptile)) ? 100 : 0);
       } else {
 	/* We're diagonal to the tile in question. So we can't
 	 * be sure what the central tile is, but the central
 	 * tile is likely to be the same as the nearby tiles. 
 	 * If all 4 are water, return 90; if all 4 are land, 
 	 * return 10. */
-        sum += (is_ocean(tile_get_terrain(ptile1)) ? 10 : -10);
+        sum += (is_ocean(map_get_terrain(ptile1)) ? 10 : -10);
       }
     }
   } adjc_dir_iterate_end;
@@ -177,8 +176,8 @@ static int explorer_desirable(struct tile *ptile, struct player *pplayer,
    * the tile has a hut, don't go there. */
   if ((unit_flag(punit, F_TRIREME) && 
        is_likely_trireme_loss(pplayer, ptile))
-      || tile_get_city(ptile)
-      || (is_barbarian(pplayer) && tile_has_special(ptile, S_HUT))) {
+      || map_get_city(ptile)
+      || (is_barbarian(pplayer) && map_has_special(ptile, S_HUT))) {
     return 0;
   }
 
@@ -228,7 +227,7 @@ static int explorer_desirable(struct tile *ptile, struct player *pplayer,
 
   if ((!pplayer->ai.control || !ai_handicap(pplayer, H_HUTS))
       && map_is_known(ptile, pplayer)
-      && tile_has_special(ptile, S_HUT)) {
+      && map_has_special(ptile, S_HUT)) {
     /* we want to explore huts whenever we can,
      * even if doing so will not uncover any tiles. */
     desirable += HUT_SCORE;
@@ -272,12 +271,6 @@ bool ai_manage_explorer(struct unit *punit)
 
   double logDF = log(DIST_FACTOR);
   double logBPS = log(BEST_POSSIBLE_SCORE);
-
-  if (pplayer->ai.control && unit_flag(punit, F_GAMELOSS)) {
-    return FALSE; /* too dangerous */
-  }
-
-  TIMING_LOG(AIT_EXPLORER, TIMER_START);
 
   pft_fill_unit_parameter(&parameter, punit);
   parameter.get_TB = no_fights_or_unknown;
@@ -344,8 +337,6 @@ bool ai_manage_explorer(struct unit *punit)
     }
   }
   pf_destroy_map(map);
-
-  TIMING_LOG(AIT_EXPLORER, TIMER_STOP);
 
   /* Go to the best tile found. */
   if (best_tile != NULL) {

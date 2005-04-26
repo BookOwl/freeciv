@@ -2,7 +2,7 @@
 
 name=_("Columbian")
 plural=_("?plural:Columbians")
-groups=_("Modern"), _("American")
+class=_("Modern")
 leader="S. Bolívar", "G.J. Quesada"
 leader_sex="Male", "Male"
 flag="f.columbia"

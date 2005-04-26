@@ -48,16 +48,15 @@
 #include "gui_stuff.h"
 #include "mapctrl.h"
 #include "options.h"
-#include "overview_common.h"
 #include "text.h"
 #include "tilespec.h"
 
 #include "mapview.h"
 
-#define map_canvas_store (mapview.store->pixmap)
+#define map_canvas_store (mapview_canvas.store->pixmap)
 
 static void pixmap_put_overlay_tile(Pixmap pixmap, int x, int y,
- 				    struct sprite *ssprite);
+ 				    struct Sprite *ssprite);
 
 /* the intro picture is held in this pixmap, which is scaled to
    the screen size */
@@ -65,20 +64,10 @@ Pixmap scaled_intro_pixmap;
 int scaled_intro_pixmap_width, scaled_intro_pixmap_height;
 
 
-/****************************************************************************
-  Return the dimensions of the area (container widget; maximum size) for
-  the overview.
-****************************************************************************/
-void get_overview_area_dimensions(int *width, int *height)
-{
-  XtVaGetValues(left_column_form, XtNheight, &height, NULL);
-  XtVaGetValues(below_menu_form, XtNwidth, &width, NULL);
-}
-
 /**************************************************************************
 ...
 **************************************************************************/
-void overview_size_changed(void)
+void map_size_changed(void)
 {
   Dimension h, w;
 
@@ -183,17 +172,17 @@ void update_info_label(void)
   set_indicator_icons(client_research_sprite(),
 		      client_warming_sprite(),
 		      client_cooling_sprite(),
-		      client_government_sprite());
+		      game.player_ptr->government);
 
   d=0;
   for(;d<(game.player_ptr->economic.luxury)/10;d++)
-    xaw_set_bitmap(econ_label[d], get_tax_sprite(tileset, O_LUXURY)->pixmap);
+    xaw_set_bitmap(econ_label[d], sprites.tax_luxury->pixmap);
  
   for(;d<(game.player_ptr->economic.science+game.player_ptr->economic.luxury)/10;d++)
-    xaw_set_bitmap(econ_label[d], get_tax_sprite(tileset, O_SCIENCE)->pixmap);
+    xaw_set_bitmap(econ_label[d], sprites.tax_science->pixmap);
  
    for(;d<10;d++)
-     xaw_set_bitmap(econ_label[d], get_tax_sprite(tileset, O_GOLD)->pixmap);
+     xaw_set_bitmap(econ_label[d], sprites.tax_gold->pixmap);
  
   update_timeout_label();
 }
@@ -219,24 +208,24 @@ void update_unit_info_label(struct unit *punit)
     xaw_set_label(unit_info_label, buffer);
 
     if (hover_unit != punit->id)
-      set_hover_state(NULL, HOVER_NONE, ACTIVITY_LAST, ORDER_LAST);
+      set_hover_state(NULL, HOVER_NONE, ACTIVITY_LAST);
 
     switch (hover_state) {
     case HOVER_NONE:
       XUndefineCursor(display, XtWindow(map_canvas));
       break;
     case HOVER_PATROL:
-      XDefineCursor(display, XtWindow(map_canvas), cursors[CURSOR_PATROL]);
+      XDefineCursor(display, XtWindow(map_canvas), patrol_cursor);
       break;
     case HOVER_GOTO:
     case HOVER_CONNECT:
-      XDefineCursor(display, XtWindow(map_canvas), cursors[CURSOR_GOTO]);
+      XDefineCursor(display, XtWindow(map_canvas), goto_cursor);
       break;
     case HOVER_NUKE:
-      XDefineCursor(display, XtWindow(map_canvas), cursors[CURSOR_NUKE]);
+      XDefineCursor(display, XtWindow(map_canvas), nuke_cursor);
       break;
     case HOVER_PARADROP:
-      XDefineCursor(display, XtWindow(map_canvas), cursors[CURSOR_PARADROP]);
+      XDefineCursor(display, XtWindow(map_canvas), drop_cursor);
       break;
     }
   } else {
@@ -252,8 +241,7 @@ void update_unit_info_label(struct unit *punit)
 **************************************************************************/
 Pixmap get_thumb_pixmap(int onoff)
 {
-  /* FIXME: what about the mask? */
-  return get_treaty_thumb_sprite(tileset, BOOL_VAL(onoff))->pixmap;
+  return sprites.treaty_thumb[BOOL_VAL(onoff)]->pixmap;
 }
 
 /**************************************************************************
@@ -262,20 +250,35 @@ Pixmap get_thumb_pixmap(int onoff)
 Pixmap get_citizen_pixmap(struct citizen_type type, int cnum,
 			  struct city *pcity)
 {
-  return get_citizen_sprite(tileset, type, cnum, pcity)->pixmap;
+  return get_citizen_sprite(type, cnum, pcity)->pixmap;
 }
 
 
 /**************************************************************************
 ...
 **************************************************************************/
-void set_indicator_icons(struct sprite *bulb, struct sprite *sol,
-			 struct sprite *flake, struct sprite *gov)
+void set_indicator_icons(int bulb, int sol, int flake, int gov)
 {
-  xaw_set_bitmap(bulb_label, bulb->pixmap);
-  xaw_set_bitmap(sun_label, sol->pixmap);
-  xaw_set_bitmap(flake_label, flake->pixmap);
-  xaw_set_bitmap(government_label, gov->pixmap);
+  struct Sprite *gov_sprite;
+
+  bulb = CLIP(0, bulb, NUM_TILES_PROGRESS-1);
+  sol = CLIP(0, sol, NUM_TILES_PROGRESS-1);
+  flake = CLIP(0, flake, NUM_TILES_PROGRESS-1);
+
+  xaw_set_bitmap(bulb_label, sprites.bulb[bulb]->pixmap);
+  xaw_set_bitmap(sun_label, sprites.warming[sol]->pixmap);
+  xaw_set_bitmap(flake_label, sprites.cooling[flake]->pixmap);
+
+  if (game.government_count==0) {
+    /* HACK: the UNHAPPY citizen is used for the government
+     * when we don't know any better. */
+    struct citizen_type c = {.type = CITIZEN_UNHAPPY};
+
+    gov_sprite = get_citizen_sprite(c, 0, NULL);
+  } else {
+    gov_sprite = get_government(gov)->sprite;
+  }
+  xaw_set_bitmap(government_label, gov_sprite->pixmap);
 }
 
 /**************************************************************************
@@ -372,7 +375,7 @@ void map_canvas_expose(Widget w, XEvent *event, Region exposed,
 **************************************************************************/
 static void pixmap_put_sprite(Pixmap pixmap,
 			      int canvas_x, int canvas_y,
-			      struct sprite *sprite,
+			      struct Sprite *sprite,
 			      int offset_x, int offset_y,
 			      int width, int height)
 {
@@ -397,7 +400,7 @@ static void pixmap_put_sprite(Pixmap pixmap,
 **************************************************************************/
 void canvas_put_sprite(struct canvas *pcanvas,
 		       int canvas_x, int canvas_y,
-		       struct sprite *sprite,
+		       struct Sprite *sprite,
 		       int offset_x, int offset_y, int width, int height)
 {
   pixmap_put_sprite(pcanvas->pixmap, canvas_x, canvas_y,
@@ -409,7 +412,7 @@ void canvas_put_sprite(struct canvas *pcanvas,
 **************************************************************************/
 void canvas_put_sprite_full(struct canvas *pcanvas,
 			    int canvas_x, int canvas_y,
-			    struct sprite *sprite)
+			    struct Sprite *sprite)
 {
   canvas_put_sprite(pcanvas, canvas_x, canvas_y,
 		    sprite, 0, 0, sprite->width, sprite->height);
@@ -421,7 +424,7 @@ void canvas_put_sprite_full(struct canvas *pcanvas,
 ****************************************************************************/
 void canvas_put_sprite_fogged(struct canvas *pcanvas,
 			      int canvas_x, int canvas_y,
-			      struct sprite *psprite,
+			      struct Sprite *psprite,
 			      bool fog, int fog_x, int fog_y)
 {
   canvas_put_sprite_full(pcanvas, canvas_x, canvas_y, psprite);
@@ -447,7 +450,7 @@ void canvas_put_rectangle(struct canvas *pcanvas,
   Fill the area covered by the sprite with the given color.
 ****************************************************************************/
 void canvas_fill_sprite_area(struct canvas *pcanvas,
-			     struct sprite *psprite, enum color_std color,
+			     struct Sprite *psprite, enum color_std color,
 			     int canvas_x, int canvas_y)
 {
   if (psprite->has_mask) {
@@ -467,7 +470,7 @@ void canvas_fill_sprite_area(struct canvas *pcanvas,
 /****************************************************************************
   Fill the area covered by the sprite with the given color.
 ****************************************************************************/
-void canvas_fog_sprite_area(struct canvas *pcanvas, struct sprite *psprite,
+void canvas_fog_sprite_area(struct canvas *pcanvas, struct Sprite *psprite,
 			    int canvas_x, int canvas_y)
 {
   if (psprite->has_mask) {
@@ -653,6 +656,14 @@ void update_city_descriptions(void)
 }
 
 /**************************************************************************
+  If necessary, clear the city descriptions out of the buffer.
+**************************************************************************/
+void prepare_show_city_descriptions(void)
+{
+  /* Nothing to do */
+}
+
+/**************************************************************************
 Draw at x = left of string, y = top of string.
 **************************************************************************/
 static void draw_shadowed_string(struct canvas *pcanvas,
@@ -674,38 +685,69 @@ static void draw_shadowed_string(struct canvas *pcanvas,
       x, y, string, len);
 }
 
-static XFontSet *fonts[FONT_COUNT] = {&main_font_set, &prod_font_set};
-static GC *font_gcs[FONT_COUNT] = {&font_gc, &prod_font_gc};
-
 /****************************************************************************
-  Return the size of the given text in the given font.  This size should
-  include the ascent and descent of the text.  Either of width or height
-  may be NULL in which case those values simply shouldn't be filled out.
-****************************************************************************/
-void get_text_size(int *width, int *height,
-		   enum client_font font, const char *text)
-{
-  if (width) {
-    *width = XmbTextEscapement(*fonts[font], text, strlen(text));
-  }
-  if (height) {
-    /* ??? */
-    *height = XExtentsOfFontSet(*fonts[font])->max_logical_extent.height;
-  }
-}
+  Draw a description for the given city.  This description may include the
+  name, turns-to-grow, production, and city turns-to-build (depending on
+  client options).
 
-/****************************************************************************
-  Draw the text onto the canvas in the given color and font.  The canvas
-  position does not account for the ascent of the text; this function must
-  take care of this manually.  The text will not be NULL but may be empty.
+  (canvas_x, canvas_y) gives the location on the given canvas at which to
+  draw the description.  This is the location of the city itself so the
+  text must be drawn underneath it.  pcity gives the city to be drawn,
+  while (*width, *height) should be set by show_ctiy_desc to contain the
+  width and height of the text block (centered directly underneath the
+  city's tile).
 ****************************************************************************/
-void canvas_put_text(struct canvas *pcanvas, int canvas_x, int canvas_y,
-		     enum client_font font, enum color_std color,
-		     const char *text)
+void show_city_desc(struct canvas *pcanvas, int canvas_x, int canvas_y,
+		    struct city *pcity, int *width, int *height)
 {
-  draw_shadowed_string(pcanvas, *fonts[font], *font_gcs[font],
-		       color, COLOR_STD_BLACK,
-		       canvas_x, canvas_y, text);
+  char buffer[512], buffer2[512];
+  enum color_std color;
+  int w, w2;
+  XFontSetExtents *main_exts = XExtentsOfFontSet(main_font_set);
+  XFontSetExtents *prod_exts = XExtentsOfFontSet(prod_font_set);
+
+  canvas_x += NORMAL_TILE_WIDTH / 2;
+  canvas_y += NORMAL_TILE_HEIGHT;
+
+  get_city_mapview_name_and_growth(pcity, buffer, sizeof(buffer),
+				   buffer2, sizeof(buffer2), &color);
+
+  w = XmbTextEscapement(main_font_set, buffer, strlen(buffer));
+  if (buffer2[0] != '\0') {
+    /* HACK: put a character's worth of space between the two strings. */
+    w += XmbTextEscapement(main_font_set, "M", 1);
+  }
+  w2 = XmbTextEscapement(main_font_set, buffer2, strlen(buffer2));
+
+  draw_shadowed_string(pcanvas, main_font_set, font_gc,
+		       COLOR_STD_WHITE, COLOR_STD_BLACK,
+		       canvas_x - (w + w2) / 2,
+		       canvas_y, buffer);
+
+  draw_shadowed_string(pcanvas, prod_font_set, prod_font_gc, color,
+		       COLOR_STD_BLACK,
+		       canvas_x - (w + w2) / 2 + w,
+		       canvas_y, buffer2);
+
+  *width = w + w2;
+  *height = main_exts->max_logical_extent.height;
+
+  if (draw_city_productions && (pcity->owner == game.player_idx)) {
+    if (draw_city_names) {
+      canvas_y += main_exts->max_logical_extent.height;
+    }
+
+    get_city_mapview_production(pcity, buffer, sizeof(buffer));
+    w = XmbTextEscapement(prod_font_set, buffer, strlen(buffer));
+
+    draw_shadowed_string(pcanvas, prod_font_set, prod_font_gc,
+			 COLOR_STD_WHITE, COLOR_STD_BLACK,
+			 canvas_x - w / 2,
+			 canvas_y, buffer);
+
+    *width = MAX(*width, w);
+    *height += prod_exts->max_logical_extent.height;
+  }
 }
 
 /**************************************************************************
@@ -720,17 +762,17 @@ void put_unit_pixmap_city_overlays(struct unit *punit, Pixmap pm)
  
   /* wipe the slate clean */
   XSetForeground(display, fill_bg_gc, colors_standard[COLOR_STD_WHITE]);
-  XFillRectangle(display, pm, fill_bg_gc, 0, tileset_tile_width(tileset), 
-		 tileset_tile_height(tileset), tileset_tile_height(tileset)+tileset_small_sprite_height(tileset));
+  XFillRectangle(display, pm, fill_bg_gc, 0, NORMAL_TILE_WIDTH, 
+		 NORMAL_TILE_HEIGHT, NORMAL_TILE_HEIGHT+SMALL_TILE_HEIGHT);
 
-  put_unit_city_overlays(punit, &store, 0, tileset_tile_height(tileset));
+  put_unit_city_overlays(punit, &store, 0, NORMAL_TILE_HEIGHT);
 }
 
 /**************************************************************************
 ...
 **************************************************************************/
 static void pixmap_put_overlay_tile(Pixmap pixmap, int canvas_x, int canvas_y,
- 				    struct sprite *ssprite)
+ 				    struct Sprite *ssprite)
 {
   if (!ssprite) return;
 
@@ -747,8 +789,32 @@ void put_cross_overlay_tile(struct tile *ptile)
 
   if (tile_to_canvas_pos(&canvas_x, &canvas_y, ptile)) {
     pixmap_put_overlay_tile(XtWindow(map_canvas), canvas_x, canvas_y,
-			    get_attention_crosshair_sprite(tileset));
+			    sprites.user.attention);
   }
+}
+
+/****************************************************************************
+  Draw a single tile of the citymap onto the mapview.  The tile is drawn
+  as the given color with the given worker on it.  The exact method of
+  drawing is left up to the GUI.
+****************************************************************************/
+void put_city_worker(struct canvas *pcanvas,
+		     enum color_std color, enum city_tile_type worker,
+		     int canvas_x, int canvas_y)
+{
+  if (worker == C_TILE_EMPTY) {
+    XSetStipple(display, fill_tile_gc, gray25);
+  } else if (worker == C_TILE_WORKER) {
+    XSetStipple(display, fill_tile_gc, gray50);
+  } else {
+    return;
+  }
+
+  XSetTSOrigin(display, fill_tile_gc, canvas_x, canvas_y);
+  XSetForeground(display, fill_tile_gc, colors_standard[color]);
+  XFillRectangle(display, pcanvas->pixmap, fill_tile_gc,
+		 canvas_x, canvas_y,
+		 NORMAL_TILE_WIDTH, NORMAL_TILE_HEIGHT);
 }
 
 /**************************************************************************
@@ -830,4 +896,7 @@ void tileset_changed(void)
   /* Here you should do any necessary redraws (for instance, the city
    * dialogs usually need to be resized).
    */
+   reset_econ_label_pixmaps();
+   update_info_label();
+   reset_unit_below_pixmaps();
 }

@@ -20,8 +20,7 @@
 #include "gotohand.h"
 
 /* battle related */
-Unit_Type_id find_a_unit_type(enum unit_role_id role,
-			      enum unit_role_id role_tech);
+int find_a_unit_type(int role, int role_tech);
 bool maybe_make_veteran(struct unit *punit);
 void unit_versus_unit(struct unit *attacker, struct unit *defender,
 		      bool bombard);
@@ -76,6 +75,7 @@ void unit_goes_out_of_sight(struct player *pplayer, struct unit *punit);
 
 /* doing a unit activity */
 void do_nuclear_explosion(struct player *pplayer, struct tile *ptile);
+bool try_move_unit(struct unit *punit, struct tile *ptile); 
 bool do_airline(struct unit *punit, struct city *city2);
 bool do_paradrop(struct unit *punit, struct tile *ptile);
 void load_unit_onto_transporter(struct unit *punit, struct unit *ptrans);

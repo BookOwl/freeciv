@@ -48,6 +48,8 @@ cumulative.  For many effects this is undesirable.
 
 "Have_Embassies"- like having embassies with all other players
 
+"Luxury_Bonus"	- luxury production increased by AMOUNT percent
+
 "Make_Content"	- makes AMOUNT unhappy citizens content
 		  (applied *before* martial law and aggressive units;
 		  all Make_Content's are summed before being applied)
@@ -80,6 +82,8 @@ cumulative.  For many effects this is undesirable.
 "Prod_Per_Tile"	- increases shield production generated on each worked
 		  tile by AMOUNT percent
 
+"Prod_Bonus"	- shield production is increased by AMOUNT percent
+
 "Prod_To_Gold"	- convert production to gold at 1:1 ratio
 
 "Reveal_Cities"	- make all city tiles known
@@ -88,6 +92,8 @@ cumulative.  For many effects this is undesirable.
 
 "Incite_Dist_Pct" - multiplies effective distance to the capital by
 		  AMOUNT percent for purpose of computing revolt cost
+
+"Science_Bonus"	- science research is increased by AMOUNT percent
 
 "Size_Adj"      - Increases maximum city size by AMOUNT
 
@@ -107,6 +113,8 @@ cumulative.  For many effects this is undesirable.
                   get an AMOUNT percent bonus.
 		  (all Spy_Resistant's are summed before being applied)
 
+"Tax_Bonus"	- tax revenues are increased by AMOUNT percent
+
 "Trade_Add_Tile"- each worked tile produces AMOUNT additional trade
 
 "Trade_Inc_Tile" - each worked tile that is already producing some
@@ -115,19 +123,7 @@ cumulative.  For many effects this is undesirable.
 "Trade_Per_Tile" - increases trade generated on each worked tile
 		  by AMOUNT percent
 
-"Food_Bonus"	- city's production is increased by AMOUNT percent
-"Prod_Bonus"
-"Trade_Bonus"
-"Tax_Bonus"
-"Luxury_Bonus"
-"Science_Bonus"
-
-"Food_Bonus_2"	- production is increased by AMOUNT percent.  This is
-"Prod_Bonus_2"    applied after the first bonus so it's multiplicative
-"Trade_Bonus_2"   with it.
-"Tax_Bonus_2"
-"Luxury_Bonus_2"
-"Science_Bonus_2"
+"Trade_Bonus"	- trade generated is increased by AMOUNT percent
 
 "Sea_Move"	- adds AMOUNT of movement points to sea units
 
@@ -157,31 +153,19 @@ cumulative.  For many effects this is undesirable.
 "Regen_Reputation" - Increase your reputation by AMOUNT units (out of 1000)
                   per turn
 
-"Slow_Down_Timeline" - Slow down the timeline based on the AMOUNT.  If
-                       AMOUNT >= 3 the timeline will be 1 year/turn; with
-                       AMOUNT == 2 it is 2 years/turn; with
-                       AMOUNT == 1 it is 5 years/turn; with
-                       AMOUNT <= 0 the timeline is unaffected.
-                       The effect will be ignored if game.spacerace isn't
-                       set.
-
 
 .range may be one of: 
-             "None", "Local", "Adjacent", "City", "Continent",
-             "Player", "World"
+             "None", "Local", "City", "Continent", "Player", "World"
 .value	   = integral AMOUNT parameter for many effects
 	    (must be in the range -32767 to 32767)
 .survives  = 1 if effect survives destruction (wonders only)
 	    (if unspecified, 0 (doesn't survive) is assumed)
 .req_type  = The type of the requirement; one of:
-             "None" (default), "Tech", "Gov", "Building", "Special",
-             "Terrain", "Nation", "MinSize"
+             "None" (default), "Tech", "Gov", "Building", "Special", "Terrain"
 .req       = The requirement.  The effect will not be active unless this
              requirement is met.  This is a string containing the name of
-             the technology, government, building, tile special, tile
-             terrain, or nation that is required.  For MinSize it is the
-             minimum (city) size at which the requirement is met.  The
-             requirement applies to the target of the effect (not
-             the source).
+             the technology, government, building, tile special, or tile
+             terrain that is required.  The requirement applies to the
+             target of the effect (not the source).
 
 See data/default/buildings.ruleset for examples.

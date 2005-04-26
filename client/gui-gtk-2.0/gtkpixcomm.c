@@ -37,8 +37,6 @@
 #include <config.h>
 #endif
 
-#include <math.h>
-
 #include "gui_main.h"
 #include "gtkpixcomm.h"
 
@@ -67,7 +65,7 @@ struct op {
   GdkColor *color;
 
   /* OP_COPY */
-  struct sprite *src;
+  SPRITE *src;
   gint x, y;
 };
 
@@ -187,7 +185,8 @@ gtk_pixcomm_fill(GtkPixcomm *p, GdkColor *color)
   refresh(p);
 }
 
-void gtk_pixcomm_copyto(GtkPixcomm *p, struct sprite *src, gint x, gint y)
+void
+gtk_pixcomm_copyto(GtkPixcomm *p, SPRITE *src, gint x, gint y)
 {
   struct op v;
 
@@ -247,33 +246,24 @@ gtk_pixcomm_expose(GtkWidget *widget, GdkEventExpose *ev)
         break;
 
       case OP_COPY:
-	if (rop->src->pixmap) {
-	  if (rop->src->mask) {
-	    gdk_gc_set_clip_mask(civ_gc, rop->src->mask);
-	    gdk_gc_set_clip_origin(civ_gc, x + rop->x, y + rop->y);
+        if (rop->src->has_mask) {
+          gdk_gc_set_clip_mask(civ_gc, rop->src->mask);
+          gdk_gc_set_clip_origin(civ_gc, x + rop->x, y + rop->y);
 
-	    gdk_draw_drawable(widget->window, civ_gc,
-			      rop->src->pixmap,
-			      0, 0,
-			      x + rop->x, y + rop->y,
-			      rop->src->width, rop->src->height);
+          gdk_draw_drawable(widget->window, civ_gc,
+	      rop->src->pixmap,
+	      0, 0,
+	      x + rop->x, y + rop->y,
+	      rop->src->width, rop->src->height);
 
-	    gdk_gc_set_clip_origin(civ_gc, 0, 0);
-	    gdk_gc_set_clip_mask(civ_gc, NULL);
-	  } else {
-	    gdk_draw_drawable(widget->window, civ_gc,
-			      rop->src->pixmap,
-			      0, 0,
-			      x + rop->x, y + rop->y,
-			      rop->src->width, rop->src->height);
-	  }
-	} else {
-	  gdk_draw_pixbuf(widget->window, civ_gc,
-			  rop->src->pixbuf,
-			  0, 0,
-			  x + rop->x, y + rop->y,
-			  rop->src->width, rop->src->height,
-			  GDK_RGB_DITHER_NONE, 0, 0);
+          gdk_gc_set_clip_origin(civ_gc, 0, 0);
+          gdk_gc_set_clip_mask(civ_gc, NULL);
+        } else {
+          gdk_draw_drawable(widget->window, civ_gc,
+	      rop->src->pixmap,
+	      0, 0,
+	      x + rop->x, y + rop->y,
+	      rop->src->width, rop->src->height);
 	}
         break;
 

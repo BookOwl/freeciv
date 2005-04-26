@@ -74,17 +74,23 @@ static void players_ai_skill_callback(GtkMenuItem *item, gpointer data);
 static void update_views(void);
 
 /**************************************************************************
-popup the dialog 10% inside the main-window, and optionally raise it.
+popup the dialog 10% inside the main-window 
 **************************************************************************/
-void popup_players_dialog(bool raise)
+void popup_players_dialog(void)
 {
   if (!players_dialog_shell){
     create_players_dialog();
   }
   gui_dialog_present(players_dialog_shell);
-  if (raise) {
-    gui_dialog_raise(players_dialog_shell);
-  }
+}
+
+/****************************************************************
+ Raises the players dialog.
+****************************************************************/
+void raise_players_dialog(void)
+{
+  popup_players_dialog();
+  gui_dialog_raise(players_dialog_shell);
 }
 
 /****************************************************************
@@ -283,7 +289,7 @@ void create_players_dialog(void)
 {
   int i;
   GtkWidget *sep, *sw;
-  GtkWidget *menubar, *menu, *item, *vbox;
+  GtkWidget *menubar, *menu, *item;
 
   gui_dialog_new(&players_dialog_shell, GTK_NOTEBOOK(top_notebook));
   gui_dialog_set_title(players_dialog_shell, _("Players"));
@@ -376,48 +382,13 @@ void create_players_dialog(void)
 		                 GTK_POLICY_AUTOMATIC, GTK_POLICY_ALWAYS);
   gtk_container_add(GTK_CONTAINER(sw), players_list);
 
-  gtk_box_pack_start(GTK_BOX(players_dialog_shell->vbox), sw,
-		     TRUE, TRUE, 0);
-
-  vbox = gtk_vbox_new(FALSE, 0);
-  sep = gtk_hseparator_new();
-  gtk_box_pack_start(GTK_BOX(vbox), sep, FALSE, FALSE, 0);
-
   menubar = gtk_menu_bar_new();
-  gtk_box_pack_start(GTK_BOX(vbox), menubar, TRUE, TRUE, 0);
+  gtk_box_pack_start(GTK_BOX(players_dialog_shell->vbox), menubar,
+		     FALSE, FALSE, 0);
+  gtk_box_pack_start(GTK_BOX(players_dialog_shell->vbox), sw,
+		     TRUE, TRUE, 5);
 
-  gui_dialog_add_widget(players_dialog_shell, vbox);
-  gtk_box_set_child_packing(GTK_BOX(players_dialog_shell->action_area), 
-      vbox, FALSE, FALSE, 0, GTK_PACK_END);
-
-  item = gtk_menu_item_new_with_mnemonic(_("S_how"));
-  menu = create_show_menu();
-  gtk_menu_item_set_submenu(GTK_MENU_ITEM(item), menu);
-  gtk_menu_shell_append(GTK_MENU_SHELL(menubar), item);
-
-  item = gtk_menu_item_new_with_mnemonic(_("_AI"));
-  gtk_menu_shell_append(GTK_MENU_SHELL(menubar), item);
-
-  menu = gtk_menu_new();
-  gtk_menu_item_set_submenu(GTK_MENU_ITEM(item), menu);
-
-  item = gtk_menu_item_new_with_mnemonic(_("_Toggle AI Mode"));
-  g_signal_connect(item, "activate",
-      G_CALLBACK(players_ai_toggle_callback), NULL);
-  gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
-
-  sep = gtk_separator_menu_item_new();
-  gtk_menu_shell_append(GTK_MENU_SHELL(menu), sep);
-
-  for (i = 0; i < NUM_SKILL_LEVELS; i++) {
-    item = gtk_menu_item_new_with_label(_(skill_level_names[i]));
-    g_signal_connect(item, "activate",
-	G_CALLBACK(players_ai_skill_callback), GUINT_TO_POINTER(i));
-    gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
-  }
-  gtk_widget_show_all(menu);
-
-  item = gtk_menu_item_new_with_mnemonic(_("_Diplomacy"));
+  item = gtk_menu_item_new_with_mnemonic(_("_Player"));
   gtk_menu_shell_append(GTK_MENU_SHELL(menubar), item);
 
   menu = gtk_menu_new();
@@ -450,6 +421,33 @@ void create_players_dialog(void)
   gtk_menu_shell_append(GTK_MENU_SHELL(menu), players_sship_command);
 
 
+  item = gtk_menu_item_new_with_mnemonic(_("_AI"));
+  gtk_menu_shell_append(GTK_MENU_SHELL(menubar), item);
+
+  menu = gtk_menu_new();
+  gtk_menu_item_set_submenu(GTK_MENU_ITEM(item), menu);
+
+  item = gtk_menu_item_new_with_mnemonic(_("_Toggle AI Mode"));
+  g_signal_connect(item, "activate",
+      G_CALLBACK(players_ai_toggle_callback), NULL);
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
+
+  sep = gtk_separator_menu_item_new();
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), sep);
+
+  for (i = 0; i < NUM_SKILL_LEVELS; i++) {
+    item = gtk_menu_item_new_with_label(_(skill_level_names[i]));
+    g_signal_connect(item, "activate",
+	G_CALLBACK(players_ai_skill_callback), GUINT_TO_POINTER(i));
+    gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
+  }
+  gtk_widget_show_all(menu);
+
+
+  item = gtk_menu_item_new_with_mnemonic(_("S_how"));
+  menu = create_show_menu();
+  gtk_menu_item_set_submenu(GTK_MENU_ITEM(item), menu);
+  gtk_menu_shell_append(GTK_MENU_SHELL(menubar), item);
 
   gui_dialog_show_all(players_dialog_shell);
 
@@ -482,13 +480,13 @@ void create_players_dialog(void)
 /**************************************************************************
  Builds the flag pixmap.
 **************************************************************************/
-GdkPixbuf *get_flag(Nation_Type_id nation)
+static GdkPixbuf *get_flag(struct nation_type *nation)
 {
   int x0, y0, x1, y1, w, h;
-  GdkPixbuf *im, *im2;
-  struct sprite *flag;
+  GdkPixbuf *im;
+  SPRITE *flag;
 
-  flag = get_nation_flag_sprite(tileset, nation);
+  flag = nation->flag_sprite;
 
   /* calculate the bounding box ... */
   sprite_get_bounding_box(flag, &x0, &y0, &x1, &y1);
@@ -505,12 +503,15 @@ GdkPixbuf *get_flag(Nation_Type_id nation)
   assert(w >= MIN_DIMENSION && h >= MIN_DIMENSION);
 
   /* croping */
-  im = gdk_pixbuf_new_subpixbuf(sprite_get_pixbuf(flag), x0, y0, w, h);
-  im2 = gdk_pixbuf_copy(im);
-  g_object_unref(im);
+  im = gdk_pixbuf_get_from_drawable(NULL,
+				    flag->pixmap,
+				    gdk_colormap_get_system(),
+				    x0, y0,
+				    0, 0,
+				    w, h);
 
   /* and finaly store the scaled flag pixbuf in the static flags array */
-  return im2;
+  return im;
 }
 
 
@@ -535,7 +536,7 @@ static void build_row(GtkTreeIter *it, int i)
 	gtk_list_store_set(store, it, k, p, -1);
 	break;
       case COL_FLAG:
-        pixbuf = get_flag(plr->nation);
+        pixbuf = get_flag(get_nation_by_plr(plr));
         gtk_list_store_set(store, it, k, pixbuf, -1);
         g_object_unref(pixbuf);
 	break;

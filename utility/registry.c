@@ -199,7 +199,7 @@ struct entry {
 
 struct section {
   char *name;
-  struct entry_list *entries;
+  struct entry_list entries;
 };
 
 /* create a 'struct section_list' and related functions: */
@@ -257,7 +257,8 @@ const char *secfile_filename(const struct section_file *file)
 void section_file_init(struct section_file *file)
 {
   file->filename = NULL;
-  file->sections = section_list_new();
+  file->sections = fc_malloc(sizeof(struct section_list));
+  section_list_init(file->sections);
   file->num_entries = 0;
   file->hashd = NULL;
   file->sb = sbuf_new();
@@ -271,12 +272,14 @@ void section_file_free(struct section_file *file)
   /* all the real data is stored in the sbuffer;
      just free the list meta-data:
   */
-  section_list_iterate(file->sections, psection) {
-    entry_list_unlink_all(psection->entries);
-    entry_list_free(psection->entries);
-  } section_list_iterate_end;
+  section_list_iterate(*file->sections, psection) {
+    entry_list_unlink_all(&psection->entries);
+  }
+  section_list_iterate_end;
+  
   section_list_unlink_all(file->sections);
-  section_list_free(file->sections);
+  
+  free(file->sections);
   file->sections = NULL;
 
   /* free the hash data: */
@@ -305,7 +308,7 @@ void section_file_check_unused(struct section_file *file, const char *filename)
 {
   int any = 0;
 
-  section_list_iterate(file->sections, psection) {
+  section_list_iterate(*file->sections, psection) {
     entry_list_iterate(psection->entries, pentry) {
       if (pentry->used == 0) {
 	if (any == 0 && filename) {
@@ -366,7 +369,7 @@ static struct section *find_section_by_name(struct section_file *sf,
    * Nonetheless this is slow if there are lots of sections.  We could have
    * a hash on section names to speed it up.
    */
-  section_list_iterate_rev(sf->sections, psection) {
+  section_list_iterate_rev(*sf->sections, psection) {
     if (strcmp(psection->name, name) == 0) {
       return psection;
     }
@@ -434,8 +437,8 @@ static bool section_file_read_dup(struct section_file *sf,
       if (!psection) {
 	psection = sbuf_malloc(sb, sizeof(struct section));
 	psection->name = sbuf_strdup(sb, tok);
-	psection->entries = entry_list_new();
-	section_list_append(sf->sections, psection);
+	entry_list_init(&psection->entries);
+	section_list_insert_back(sf->sections, psection);
       }
       (void) inf_token_required(inf, INF_TOK_EOL);
       continue;
@@ -477,7 +480,7 @@ static bool section_file_read_dup(struct section_file *sf,
 		      (int) (i - num_columns + 1));
 	}
 	pentry = new_entry(sb, entry_name.str, tok);
-	entry_list_append(psection->entries, pentry);
+	entry_list_insert_back(&psection->entries, pentry);
 	sf->num_entries++;
       } while(inf_token(inf, INF_TOK_COMMA));
       
@@ -545,7 +548,7 @@ static bool section_file_read_dup(struct section_file *sf,
 		    "%s,%d", base_name.str, i);
 	pentry = new_entry(sb, entry_name.str, tok);
       }
-      entry_list_append(psection->entries, pentry);
+      entry_list_insert_back(&psection->entries, pentry);
       sf->num_entries++;
     } while(inf_token(inf, INF_TOK_COMMA));
     (void) inf_token_required(inf, INF_TOK_EOL);
@@ -651,14 +654,14 @@ bool section_file_save(struct section_file *my_section_file,
   if (!fs)
     return FALSE;
 
-  section_list_iterate(my_section_file->sections, psection) {
+  section_list_iterate(*my_section_file->sections, psection) {
     fz_fprintf(fs, "\n[%s]\n", psection->name);
 
     /* Following doesn't use entry_list_iterate() because we want to do
      * tricky things with the iterators...
      */
-    for(ent_iter = psection->entries->list->head_link;
-        ent_iter && (pentry = ITERATOR_PTR(ent_iter));
+    for(ent_iter = psection->entries.list.head_link;
+	(pentry = ITERATOR_PTR(ent_iter));
 	ITERATOR_NEXT(ent_iter)) {
 
       /* Tables: break out of this loop if this is a non-table
@@ -1297,18 +1300,18 @@ section_file_insert_internal(struct section_file *my_section_file,
      */
     pentry = sbuf_malloc(sb, sizeof(struct entry));
     pentry->name = sbuf_strdup(sb, ent_name);
-    entry_list_append(psection->entries, pentry);
+    entry_list_insert_back(&psection->entries, pentry);
     return pentry;
   }
 
   psection = sbuf_malloc(sb, sizeof(struct section));
   psection->name = sbuf_strdup(sb, sec_name);
-  psection->entries = entry_list_new();
-  section_list_append(my_section_file->sections, psection);
+  entry_list_init(&psection->entries);
+  section_list_insert_back(my_section_file->sections, psection);
   
   pentry = sbuf_malloc(sb, sizeof(struct entry));
   pentry->name = sbuf_strdup(sb, ent_name);
-  entry_list_append(psection->entries, pentry);
+  entry_list_insert_back(&psection->entries, pentry);
 
   return pentry;
 }
@@ -1388,7 +1391,7 @@ void secfilehash_build(struct section_file *file, bool allow_duplicates)
   hashd->allow_duplicates = allow_duplicates;
   hashd->num_duplicates = 0;
   
-  section_list_iterate(file->sections, psection) {
+  section_list_iterate(*file->sections, psection) {
     entry_list_iterate(psection->entries, pentry) {
       my_snprintf(buf, sizeof(buf), "%s.%s", psection->name, pentry->name);
       secfilehash_insert(file, buf, pentry);
@@ -1608,7 +1611,7 @@ char **secfile_get_secnames_prefix(struct section_file *my_section_file,
 
   /* count 'em: */
   i = 0;
-  section_list_iterate(my_section_file->sections, psection) {
+  section_list_iterate(*my_section_file->sections, psection) {
     if (strncmp(psection->name, prefix, len) == 0) {
       i++;
     }
@@ -1623,7 +1626,7 @@ char **secfile_get_secnames_prefix(struct section_file *my_section_file,
   ret = fc_malloc((*num)*sizeof(char*));
 
   i = 0;
-  section_list_iterate(my_section_file->sections, psection) {
+  section_list_iterate(*my_section_file->sections, psection) {
     if (strncmp(psection->name, prefix, len) == 0) {
       ret[i++] = psection->name;
     }
@@ -1655,7 +1658,7 @@ char **secfile_get_section_entries(struct section_file *my_section_file,
     return NULL;
   }
 
-  *num = entry_list_size(psection->entries);
+  *num = entry_list_size(&psection->entries);
 
   if (*num == 0) {
     return NULL;

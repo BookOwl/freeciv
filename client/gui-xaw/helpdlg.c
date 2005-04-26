@@ -490,8 +490,8 @@ static void create_help_page(enum help_page_type type)
       XtVaCreateManagedWidget("helpunittile",
 			      labelWidgetClass,
 			      help_right_form,
-			      XtNwidth, tileset_full_tile_width(tileset),
-			      XtNheight, tileset_full_tile_height(tileset),
+			      XtNwidth, UNIT_TILE_WIDTH,
+			      XtNheight, UNIT_TILE_HEIGHT,
 			      NULL);  
     XtAddCallback(help_unit_tile,
                   XtNdestroyCallback,free_bitmap_destroy_callback,
@@ -749,31 +749,17 @@ static void help_update_improvement(const struct help_item *pitem,
   
   if (which<game.num_impr_types) {
     struct impr_type *imp = &improvement_types[which];
-    int i;
-    char req_buf[512];
-
     sprintf(buf, "%d ", impr_build_shield_cost(which));
     xaw_set_label(help_improvement_cost_data, buf);
     sprintf(buf, "%d ", imp->upkeep);
     xaw_set_label(help_improvement_upkeep_data, buf);
-    /*if (imp->tech_req == A_LAST) {
+    if (imp->tech_req == A_LAST) {
       xaw_set_label(help_improvement_req_data, _("(Never)"));
     } else {
       xaw_set_label(help_improvement_req_data,
 		    advances[imp->tech_req].name);
-    }*/
-    
-    /* FIXME: this should show ranges and all the MAX_NUM_REQS reqs. 
-     * Currently it's limited to 1 req but this code is partially prepared
-     * to be extended.  Remember MAX_NUM_REQS is a compile-time
-     * definition. */
-    for (i = 0; i < MIN(MAX_NUM_REQS, 1); i++) {
-      xaw_set_label(help_improvement_req_data,
-                   get_req_source_text(&imp->req[i].source,
-                                       req_buf, sizeof(req_buf)));
     }
-    create_tech_tree(help_tech_tree, 0, 
-                     imp->req[0].source.value.tech, 3);
+    create_tech_tree(help_tech_tree, 0, imp->tech_req, 3);
   }
   else {
     xaw_set_label(help_improvement_cost_data, "0 ");
@@ -798,36 +784,21 @@ static void help_update_wonder(const struct help_item *pitem,
 
   if (which<game.num_impr_types) {
     struct impr_type *imp = &improvement_types[which];
-    int i;
-    char req_buf[512];
-
     sprintf(buf, "%d ", impr_build_shield_cost(which));
     xaw_set_label(help_improvement_cost_data, buf);
-    /*if (imp->tech_req == A_LAST) {
+    if (imp->tech_req == A_LAST) {
       xaw_set_label(help_improvement_req_data, _("(Never)"));
     } else {
       xaw_set_label(help_improvement_req_data,
 		    advances[imp->tech_req].name);
-    }*/
-
-     /* FIXME: this should show ranges and all the MAX_NUM_REQS reqs. 
-      * Currently it's limited to 1 req but this code is partially prepared
-      * to be extended.  Remember MAX_NUM_REQS is a compile-time
-      * definition. */
-    for (i = 0; i < MIN(MAX_NUM_REQS, 1); i++) {
-      xaw_set_label(help_improvement_req_data,
-                   get_req_source_text(&imp->req[i].source,
-                                       req_buf, sizeof(req_buf)));
     }
-
     if (tech_exists(imp->obsolete_by)) {
       xaw_set_label(help_wonder_obsolete_data,
 		    advances[imp->obsolete_by].name);
     } else {
       xaw_set_label(help_wonder_obsolete_data, _("(Never)"));
     }
-    create_tech_tree(help_tech_tree, 0, 
-                     imp->req[0].source.value.tech, 3);
+    create_tech_tree(help_tech_tree, 0, imp->tech_req, 3);
   }
   else {
     /* can't find wonder */
@@ -874,7 +845,7 @@ static void help_update_unit_type(const struct help_item *pitem,
 		    advances[utype->tech_requirement].name);
     }
     create_tech_tree(help_tech_tree, 0, utype->tech_requirement, 3);
-    if (utype->obsoleted_by == U_NOT_OBSOLETED) {
+    if(utype->obsoleted_by==-1) {
       xaw_set_label(help_wonder_obsolete_data, _("None"));
     } else {
       xaw_set_label(help_wonder_obsolete_data,
@@ -917,25 +888,9 @@ static void help_update_tech(const struct help_item *pitem, char *title, int i)
     helptext_tech(buf, i, pitem->text);
 
     impr_type_iterate(j) {
-      /*if(i==improvement_types[j].tech_req) 
+      if(i==improvement_types[j].tech_req) 
 	sprintf(buf+strlen(buf), _("Allows %s.\n"),
 		improvement_types[j].name);
-      */
-       int k;
- 
-       /* FIXME: need a more general mechanism for this, since this
-        * helptext needs to be shown in all possible req source types. */
-       for (k = 0; k < MAX_NUM_REQS; k++) {
- 	struct requirement *req = &improvement_types[j].req[k];
- 
- 	if (req->source.type == REQ_NONE) {
- 	  break;
- 	} else if (req->source.type == REQ_BUILDING
- 		   && req->source.value.building == i) {
-	  sprintf(buf+strlen(buf), _("Allows %s.\n"),
-                  improvement_types[j].name);
-        }
-       }
       if(i==improvement_types[j].obsolete_by)
 	sprintf(buf+strlen(buf), _("Obsoletes %s.\n"),
 		improvement_types[j].name);
@@ -997,35 +952,35 @@ static void help_update_terrain(const struct help_item *pitem,
       xaw_set_label (help_terrain_movement_defense_data, buf);
 
       sprintf (buf, "%d/%d/%d",
-	       tile_types[i].output[O_FOOD],
-	       tile_types[i].output[O_SHIELD],
-	       tile_types[i].output[O_TRADE]);
+	       tile_types[i].food,
+	       tile_types[i].shield,
+	       tile_types[i].trade);
       xaw_set_label (help_terrain_food_shield_trade_data, buf);
 
-      if (*(tile_types[i].special[0].name))
+      if (*(tile_types[i].special_1_name))
 	{
 	  sprintf (buf, _("%s F/R/T:"),
-		   tile_types[i].special[0].name);
+		   tile_types[i].special_1_name);
 	  xaw_set_label (help_terrain_special_1, buf);
 	  sprintf (buf, "%d/%d/%d",
-		   tile_types[i].special[0].output[O_FOOD],
-		   tile_types[i].special[0].output[O_SHIELD],
-		   tile_types[i].special[0].output[O_TRADE]);
+		   tile_types[i].food_special_1,
+		   tile_types[i].shield_special_1,
+		   tile_types[i].trade_special_1);
 	  xaw_set_label (help_terrain_special_1_data, buf);
 	} else {
 	  xaw_set_label (help_terrain_special_1, "");
 	  xaw_set_label (help_terrain_special_1_data, "");
 	}
 
-      if (*(tile_types[i].special[1].name))
+      if (*(tile_types[i].special_2_name))
 	{
 	  sprintf (buf, _("%s F/R/T:"),
-		   tile_types[i].special[1].name);
+		   tile_types[i].special_2_name);
 	  xaw_set_label (help_terrain_special_2, buf);
 	  sprintf (buf, "%d/%d/%d",
-		   tile_types[i].special[1].output[O_FOOD],
-		   tile_types[i].special[1].output[O_SHIELD],
-		   tile_types[i].special[1].output[O_TRADE]);
+		   tile_types[i].food_special_2,
+		   tile_types[i].shield_special_2,
+		   tile_types[i].trade_special_2);
 	  xaw_set_label (help_terrain_special_2_data, buf);
 	} else {
 	  xaw_set_label (help_terrain_special_2, "");
@@ -1132,12 +1087,12 @@ static void help_update_dialog(const struct help_item *pitem)
   switch(pitem->type) {
   case HELP_IMPROVEMENT:
     i = find_improvement_by_name(top);
-    if(i!=B_LAST && is_great_wonder(i)) i = B_LAST;
+    if(i!=B_LAST && is_wonder(i)) i = B_LAST;
     help_update_improvement(pitem, top, i);
     break;
   case HELP_WONDER:
     i = find_improvement_by_name(top);
-    if(i!=B_LAST && !is_great_wonder(i)) i = B_LAST;
+    if(i!=B_LAST && !is_wonder(i)) i = B_LAST;
     help_update_wonder(pitem, top, i);
     break;
   case HELP_UNIT:

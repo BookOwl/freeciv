@@ -2,13 +2,21 @@
 Welcome to Freeciv 2.0
 ======================
 
-This is release 2.0.
+This is release 2.0.1.
 
 Thanks again to all our developers, who continue to work so hard.
 
 This release includes lots of changes, outlined below.  Those who
 are interested in seeing the detailed changes should check the
 ChangeLog file.
+
+
+WHAT'S CHANGED SINCE 2.0.0
+ - Fix a bug causing easy and novice AIs to be much harder than they were
+   supposed to be.
+ - New behavior of the /start command in multi-player mode.
+ - Minor translation updates.
+ - Other minor bugfixes.
 
 WHAT'S CHANGED SINCE 1.14.2
  - Research cost has doubled, effects of science buildings doubled. SETI
@@ -24,8 +32,7 @@ WHAT'S CHANGED SINCE 1.14.2
    buildings have much higher incite cost.
  - Killing a defending diplomat now costs you 1 movement point.
  - Units now have multiple, configurable veteran levels.
- - Team mates now pool their research. You may opt out and research
-   individually by cancelling the 'Team' treaty.
+ - Team mates now pool their research.
  - Server has voting on commands and options. You need over 50% of votes.
  - When moving a unit from a transport on an ocean tile to a land tile,
    you lose all movement points.

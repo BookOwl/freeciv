@@ -59,7 +59,7 @@ veteran_move_bonus = 0, 0
 ;		  this should be a standard tag.  Otherwise can use eg "-" 
 ;		  for no alternate graphic.
 ; tech_req      = required advance, names from techs.ruleset, or special:
-;                 "None" => available from start
+;                 "None" => available from start; "Never" => never available
 ; obsolete_by   = can be upgraded to and made obsolete by another unit by name
 ; move_type     = "Land" or "Sea" or "Air" or "Heli"
 ; transport_cap = Number of units (ground, or air/missiles, depending on flags)
@@ -347,7 +347,6 @@ roles         = "DefendGood", "FirstBuild", "HutTech",
 name          = _("Fanatics")
 move_type     = "Land"
 tech_req      = "Fundamentalism"
-gov_req       = "Fundamentalism"
 obsolete_by   = "None"
 graphic       = "u.fanatics"
 graphic_alt   = "-"
@@ -372,6 +371,8 @@ uk_gold       = 0
 flags         = "Fanatic"
 roles         = "DefendGood"
 helptext      = _("\
+Only Fundamentalist nations can build Fanatic units.\
+\n\n\
 Fundamentalist nations can maintain Fanatic units without\
  having to pay any shields for upkeep.\
 ")
@@ -591,7 +592,7 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 flags         = "Horse"
-roles         = "AttackFast", "Hut", "Barbarian", "Hunter"
+roles         = "AttackFast", "Hut", "Barbarian"
 
 [unit_chariot]
 name          = _("Chariot")
@@ -619,7 +620,7 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 flags         = "Horse"
-roles         = "AttackFast", "Hut", "Hunter"
+roles         = "AttackFast", "Hut"
 
 [unit_elephants]
 name          = _("Elephants")
@@ -704,7 +705,7 @@ uk_food       = 0
 uk_gold       = 0
 flags         = "Horse"
 roles         = "AttackFast", "HutTech", "BarbarianTech",
-                "BarbarianBuildTech", "BarbarianSeaTech", "Hunter"
+                "BarbarianBuildTech", "BarbarianSeaTech"
 
 [unit_dragoons]
 name          = _("Dragoons")
@@ -732,8 +733,7 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 flags         = "Horse"
-roles         = "AttackFast", "BarbarianBuildTech", "BarbarianSeaTech",
-                "Hunter"
+roles         = "AttackFast", "BarbarianBuildTech", "BarbarianSeaTech"
 
 [unit_cavalry]
 name          = _("Cavalry")
@@ -761,7 +761,7 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 flags         = ""
-roles         = "AttackFast", "Hunter"
+roles         = "AttackFast"
 
 [unit_armor]
 name          = _("Armor")
@@ -789,7 +789,7 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 flags         = ""
-roles         = "AttackFast", "Hunter"
+roles         = "AttackFast"
 
 [unit_catapult]
 name          = _("Catapult")
@@ -1167,7 +1167,7 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 flags         = ""
-roles         = "Hunter"
+roles         = ""
 
 [unit_ironclad]
 name          = _("Ironclad")
@@ -1195,7 +1195,7 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 flags         = ""
-roles         = "Hunter"
+roles         = ""
 
 [unit_destroyer]
 name          = _("Destroyer")
@@ -1223,7 +1223,7 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 flags         = ""
-roles         = "Hunter"
+roles         = ""
 helptext      = _("\
 TIP:  A very fast unit, which is very useful for hunting down enemy\
  Transports.\
@@ -1340,7 +1340,7 @@ uk_food       = 0
 uk_gold       = 0
 flags         = "Partial_Invis", 
 	        "Missile_Carrier", "No_Land_Attack"
-roles         = "Hunter"
+roles         = ""
 helptext      = _("\
 Submarines have a very high strategic value, but have a weak\
  defence.\

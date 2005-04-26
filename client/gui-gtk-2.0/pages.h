@@ -15,8 +15,6 @@
 
 #include <gtk/gtk.h>
 
-#include "shared.h"		/* bool type */
-
 #include "pages_g.h"
 
 extern GtkWidget *start_message_area;

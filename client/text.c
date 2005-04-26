@@ -156,7 +156,7 @@ const char *popup_info_text(struct tile *ptile)
     add_line(_("Minor Tribe Village"));
   }
   if (game.borders > 0 && !pcity) {
-    struct player *owner = tile_get_owner(ptile);
+    struct player *owner = map_get_owner(ptile);
     struct player_diplstate *ds = game.player_ptr->diplstates;
 
     if (owner == game.player_ptr){
@@ -205,14 +205,14 @@ const char *popup_info_text(struct tile *ptile)
 		 turns);
       } else {
         /* TRANS: "City: Warsaw (Polish,friendly)" */
-        add_line(_("City: %s (%s, %s)"), pcity->name,
+        add_line(_("City: %s (%s,%s)"), pcity->name,
 		 get_nation_name(owner->nation),
 		 diplo_city_adjectives[ds[owner->player_no].type]);
       }
     }
     if (city_got_citywalls(pcity)) {
       /* TRANS: previous lines gave other information about the city. */
-      add(" %s", _("with City Walls"));
+      add("%s",_(" with City Walls"));
     }
 
     if ((apunit = get_unit_in_focus())) {
@@ -265,7 +265,7 @@ const char *popup_info_text(struct tile *ptile)
 		 turns);
       } else {
 	/* TRANS: "Unit: Musketeers (Polish,friendly)" */
-	add_line(_("Unit: %s (%s, %s)"), ptype->name,
+	add_line(_("Unit: %s (%s,%s)"), ptype->name,
 		 get_nation_name(owner->nation),
 		 diplo_city_adjectives[ds[owner->player_no].type]);
       }
@@ -294,9 +294,9 @@ const char *popup_info_text(struct tile *ptile)
 	     ptype->defense_strength, ptype->firepower, punit->hp, 
 	     ptype->hp, punit->veteran ? _(" V") : "");
     if (owner == game.player_ptr
-	&& unit_list_size(ptile->units) >= 2) {
+	&& unit_list_size(&ptile->units) >= 2) {
       /* TRANS: "5 more" units on this tile */
-      add(_("  (%d more)"), unit_list_size(ptile->units) - 1);
+      add(_("  (%d more)"), unit_list_size(&ptile->units) - 1);
     }
   } 
   RETURN;
@@ -395,41 +395,8 @@ const char *unit_description(struct unit *punit)
   }
 
   add_line("%s", get_nearest_city_text(pcity_near, pcity_near_dist));
-#ifdef DEBUG
-  add_line("Unit ID: %d", punit->id);
-#endif
 
   RETURN;
-}
-
-/****************************************************************************
-  Return total expected bulbs.
-****************************************************************************/
-static int get_bulbs_per_turn(int *pours, int *ptheirs)
-{
-  struct player *plr = game.player_ptr;
-  int ours = 0, theirs = 0;
-
-  /* Sum up science */
-  players_iterate(pplayer) {
-    enum diplstate_type ds = pplayer_get_diplstate(plr, pplayer)->type;
-
-    if (plr == pplayer) {
-      city_list_iterate(pplayer->cities, pcity) {
-        ours += pcity->prod[O_SCIENCE];
-      } city_list_iterate_end;
-    } else if (ds == DS_TEAM) {
-      theirs += pplayer->bulbs_last_turn;
-    }
-  } players_iterate_end;
-
-  if (pours) {
-    *pours = ours;
-  }
-  if (ptheirs) {
-    *ptheirs = theirs;
-  }
-  return ours + theirs;
 }
 
 /****************************************************************************
@@ -439,10 +406,21 @@ const char *science_dialog_text(void)
 {
   int turns_to_advance;
   struct player *plr = game.player_ptr;
-  int ours, theirs;
+  int ours = 0, theirs = 0;
   INIT;
 
-  get_bulbs_per_turn(&ours, &theirs);
+  /* Sum up science */
+  players_iterate(pplayer) {
+    enum diplstate_type ds = pplayer_get_diplstate(plr, pplayer)->type;
+
+    if (plr == pplayer) {
+      city_list_iterate(pplayer->cities, pcity) {
+        ours += pcity->science_total;
+      } city_list_iterate_end;
+    } else if (ds == DS_TEAM) {
+      theirs += pplayer->research.bulbs_last_turn;
+    }
+  } players_iterate_end;
 
   if (ours == 0 && theirs == 0) {
     add(_("Progress: no research"));
@@ -468,39 +446,6 @@ const char *science_dialog_text(void)
 }
 
 /****************************************************************************
-  Set the science-goal-label text as if we're researching the given goal.
-****************************************************************************/
-const char *get_science_goal_text(Tech_Type_id goal)
-{
-  int steps = num_unknown_techs_for_goal(game.player_ptr, goal);
-  int bulbs = total_bulbs_required_for_goal(game.player_ptr, goal);
-  int bulbs_needed = bulbs, turns;
-  int perturn = get_bulbs_per_turn(NULL, NULL);
-  char buf1[256], buf2[256], buf3[256];
-  INIT;
-
-  if (is_tech_a_req_for_goal(game.player_ptr,
-			     game.player_ptr->research->researching, goal)) {
-    bulbs_needed -= game.player_ptr->research->bulbs_researched;
-  }
-
-  my_snprintf(buf1, sizeof(buf1),
-	      PL_("%d step", "%d steps", steps), steps);
-  my_snprintf(buf2, sizeof(buf2),
-	      PL_("%d bulb", "%d bulbs", bulbs), bulbs);
-  if (perturn > 0) {
-    turns = (bulbs_needed + perturn - 1) / perturn;
-    my_snprintf(buf3, sizeof(buf3),
-		PL_("%d turn", "%d turns", turns), turns);
-  } else {
-    my_snprintf(buf3, sizeof(buf3), _("never"));
-  }
-  add_line("(%s - %s - %s)", buf1, buf2, buf3);
-
-  RETURN;
-}
-
-/****************************************************************************
   Return the text for the label on the info panel.  (This is traditionally
   shown to the left of the mapview.)
 ****************************************************************************/
@@ -510,15 +455,11 @@ const char *get_info_label_text(void)
 
   add_line(_("Population: %s"),
 	     population_to_text(civ_population(game.player_ptr)));
-  add_line(_("Year: %s (T%d)"), textyear(game.year), game.turn);
-  add_line(_("Gold: %d (%+d)"), game.player_ptr->economic.gold,
-	   player_get_expected_income(game.player_ptr));
+  add_line(_("Year: %s"), textyear(game.year));
+  add_line(_("Gold: %d"), game.player_ptr->economic.gold);
   add_line(_("Tax: %d Lux: %d Sci: %d"), game.player_ptr->economic.tax,
 	   game.player_ptr->economic.luxury,
 	   game.player_ptr->economic.science);
-  if (!game.simultaneous_phases_now) {
-    add_line(_("Moving: %s"), get_player(game.phase)->name);
-  }
   RETURN;
 }
 
@@ -573,9 +514,6 @@ const char *get_unit_info_label_text2(struct unit *punit)
     } else {
       add_line(" ");
     }
-#ifdef DEBUG
-    add_line("(Unit ID %d)", punit->id);
-#endif
   } else {
     add("\n\n\n");
   }
@@ -593,8 +531,8 @@ const char *get_bulb_tooltip(void)
   add(_("Shows your progress in researching "
 	"the current technology.\n%s: %d/%d."),
       get_tech_name(game.player_ptr,
-		    game.player_ptr->research->researching),
-      game.player_ptr->research->bulbs_researched,
+		    game.player_ptr->research.researching),
+      game.player_ptr->research.bulbs_researched,
       total_bulbs_required(game.player_ptr));
   RETURN;
 }
@@ -607,12 +545,8 @@ const char *get_global_warming_tooltip(void)
 {
   INIT;
 
-  /* This mirrors the logic in update_environmental_upset. */
-  add_line(_("Shows the progress of global warming:"));
-  add_line(_("Pollution rate: %d%%"),
-	   DIVIDE(game.heating - game.warminglevel + 1, 2));
-  add_line(_("Chance of catastrophic warming each turn: %d%%"),
-	   CLIP(0, (game.globalwarming + 1) / 2, 100));
+  add(_("Shows the progress of global warming:\n%d."),
+      client_warming_sprite());
   RETURN;
 }
 
@@ -624,12 +558,8 @@ const char *get_nuclear_winter_tooltip(void)
 {
   INIT;
 
-  /* This mirrors the logic in update_environmental_upset. */
-  add_line(_("Shows the progress of nuclear winter:"));
-  add_line(_("Fallout rate: %d%%"),
-	   DIVIDE(game.heating - game.warminglevel + 1, 2));
-  add_line(_("Chance of catastrophic winter each turn: %d%%"),
-	   CLIP(0, (game.globalwarming + 1) / 2, 100));
+  add(_("Shows the progress of nuclear winter:\n%d."),
+      client_cooling_sprite());
   RETURN;
 }
 
@@ -709,7 +639,7 @@ const char *get_timeout_label_text(void)
   if (game.timeout <= 0) {
     add("%s", Q_("?timeout:off"));
   } else {
-    add("%s", format_duration(get_seconds_to_turndone()));
+    add("%s", format_duration(seconds_to_turndone));
   }
 
   RETURN;
@@ -748,14 +678,14 @@ const char *format_duration(int duration)
   Return text giving the ping time for the player.  This is generally used
   used in the playerdlg.  This should only be used in playerdlg_common.c.
 ****************************************************************************/
-const char *get_ping_time_text(const struct player *pplayer)
+const char *get_ping_time_text(struct player *pplayer)
 {
   INIT;
 
-  if (conn_list_size(pplayer->connections) > 0
-      && conn_list_get(pplayer->connections, 0)->ping_time != -1.0) {
+  if (conn_list_size(&pplayer->connections) > 0
+      && conn_list_get(&pplayer->connections, 0)->ping_time != -1.0) {
     double ping_time_in_ms =
-	1000 * conn_list_get(pplayer->connections, 0)->ping_time;
+	1000 * conn_list_get(&pplayer->connections, 0)->ping_time;
 
     add(_("%6d.%02d ms"), (int) ping_time_in_ms,
 	((int) (ping_time_in_ms * 100.0)) % 100);
@@ -794,29 +724,20 @@ const char *get_report_title(const char *report_name)
 const char *get_happiness_buildings(const struct city *pcity)
 {
   int faces = 0;
-  struct effect_list *plist = effect_list_new();
-  char buf[512];
+  struct effect_source_vector sources;
   INIT;
 
   add_line(_("Buildings: "));
 
-  get_city_bonus_effects(plist, pcity, EFT_MAKE_CONTENT);
-
-  effect_list_iterate(plist, peffect) {
-    if (faces != 0) {
-      add(_(", "));
-    }
-    get_effect_req_text(peffect, buf, sizeof(buf));
-    add(_("%s"), buf);
+  get_city_bonus_sources(&sources, pcity, EFT_MAKE_CONTENT);
+  effect_source_vector_iterate(&sources, src) {
     faces++;
-  } effect_list_iterate_end;
-  effect_list_unlink_all(plist);
-  effect_list_free(plist);
+    add(_("%s. "), get_improvement_name(src->building));
+  } effect_source_vector_iterate_end;
+  effect_source_vector_free(&sources);
 
   if (faces == 0) {
     add(_("None. "));
-  } else {
-    add(_("."));
   }
 
   RETURN;
@@ -828,31 +749,34 @@ const char *get_happiness_buildings(const struct city *pcity)
 const char *get_happiness_wonders(const struct city *pcity)
 {
   int faces = 0;
-  struct effect_list *plist = effect_list_new();
-  char buf[512];
+  struct effect_source_vector sources;
   INIT;
 
   add_line(_("Wonders: "));
-  get_city_bonus_effects(plist, pcity, EFT_MAKE_HAPPY);
-  get_city_bonus_effects(plist, pcity, EFT_FORCE_CONTENT);
-  get_city_bonus_effects(plist, pcity, EFT_NO_UNHAPPY);
 
-  effect_list_iterate(plist, peffect) {
-    if (faces != 0) {
-      add(_(", "));
-    }
-    get_effect_req_text(peffect, buf, sizeof(buf));
-    add(_("%s"), buf);
+  get_city_bonus_sources(&sources, pcity, EFT_MAKE_HAPPY);
+  effect_source_vector_iterate(&sources, src) {
     faces++;
-  } effect_list_iterate_end;
+    add(_("%s. "), get_improvement_name(src->building));
+  } effect_source_vector_iterate_end;
+  effect_source_vector_free(&sources);
 
-  effect_list_unlink_all(plist);
-  effect_list_free(plist);
+  get_city_bonus_sources(&sources, pcity, EFT_FORCE_CONTENT);
+  effect_source_vector_iterate(&sources, src) {
+    faces++;
+    add(_("%s. "), get_improvement_name(src->building));
+  } effect_source_vector_iterate_end;
+  effect_source_vector_free(&sources);
+
+  get_city_bonus_sources(&sources, pcity, EFT_NO_UNHAPPY);
+  effect_source_vector_iterate(&sources, src) {
+    faces++;
+    add(_("%s. "), get_improvement_name(src->building));
+  } effect_source_vector_iterate_end;
+  effect_source_vector_free(&sources);
 
   if (faces == 0) {
     add(_("None. "));
-  } else {
-    add(_("."));
   }
 
   RETURN;

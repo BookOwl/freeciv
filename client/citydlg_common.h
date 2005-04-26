@@ -23,17 +23,15 @@
 
 struct canvas;
 
-enum citizen_category {
-  CITIZEN_SPECIALIST,
-  CITIZEN_CONTENT,
-  CITIZEN_HAPPY,
-  CITIZEN_UNHAPPY,
-  CITIZEN_ANGRY,
-  CITIZEN_LAST
-};
-
 struct citizen_type {
-  enum citizen_category type;
+  enum {
+    CITIZEN_SPECIALIST,
+    CITIZEN_CONTENT,
+    CITIZEN_HAPPY,
+    CITIZEN_UNHAPPY,
+    CITIZEN_ANGRY,
+    CITIZEN_LAST
+  } type;
   Specialist_type_id spec_type;
 };
 
@@ -56,12 +54,6 @@ void get_city_dialog_production_full(char *buffer, size_t buffer_len,
 void get_city_dialog_production_row(char *buf[], size_t column_size, int id,
 				    bool is_unit, struct city *pcity);
 
-void get_city_dialog_output_text(const struct city *pcity,
-				 Output_type_id otype,
-				 char *buffer, size_t bufsz);
-void get_city_dialog_pollution_text(const struct city *pcity,
-				    char *buffer, size_t bufsz);
-
 void get_city_citizen_types(struct city *pcity, int index,
 			    struct citizen_type *citizens);
 void city_rotate_specialist(struct city *pcity, int citizen_index);
@@ -72,9 +64,6 @@ int city_change_production(struct city *pcity, bool is_unit, int build_id);
 int city_set_worklist(struct city *pcity, struct worklist *pworklist);
 bool city_queue_insert(struct city *pcity, int position,
 		       bool item_is_unit, int item_id);
-bool city_queue_clear(struct city *pcity);
-bool city_queue_insert_worklist(struct city *pcity, int position,
-				struct worklist *worklist);
 void city_get_queue(struct city *pcity, struct worklist *pqueue);
 void city_set_queue(struct city *pcity, struct worklist *pqueue);
 bool city_can_buy(const struct city *pcity);

@@ -17,6 +17,13 @@ options="1.9"
 [governments]
 default="Despotism"
 when_anarchy="Anarchy"
+ai_goal="Republic"
+
+ai_tech_hints = { "tech", "turns_factor", "const_factor", "get_first", "done"
+    "Code of Laws", 150,   0, 1, 0
+    "The Republic",  90,  90, 0, 1
+    "Monarchy",       0, 150, 0, 0
+}
 
 ; Below: The individual government types, one per section.
 ;
@@ -31,7 +38,8 @@ when_anarchy="Anarchy"
 ; Notes on fields:
 
 ; name        = name of this government form as seen by user 
-; reqs        = requirements for this government (see README.effects)
+; tech_req    = required advance, names from techs.ruleset, or special:
+;               "None" => available from start
 ; graphic     = tag specifing preferred graphic
 ; graphic_alt = alternate graphics tag if preferred is not found;
 ;               should be a standard tag if preferred is not;
@@ -97,7 +105,7 @@ when_anarchy="Anarchy"
 [government_anarchy]
 
 name        = _("Anarchy")
-; No reqs
+tech_req    = "None"
 graphic     = "gov.anarchy"
 graphic_alt = "-"
 flags       = "-"
@@ -172,11 +180,10 @@ You may impose martial law under Anarchy: each military unit inside\
 [government_despotism]
 
 name        = _("Despotism")
-; No reqs
+tech_req    = "None"
 graphic     = "gov.despotism"
 graphic_alt = "-"
 flags       = "-"
-ai_better   = "Monarchy"
 
 martial_law_max  = 100  ; unlimited
 martial_law_per  = 1
@@ -248,13 +255,10 @@ You may impose martial law under Despotism: each military unit\
 [government_monarchy]
 
 name        = _("Monarchy")
-reqs = { "type", "name", "range"
-         "tech", "Monarchy", "Player"
-       }
+tech_req    = "Monarchy"
 graphic     = "gov.monarchy"
 graphic_alt = "-"
 flags       = "-"
-ai_better   = "Communism"
 
 martial_law_max  = 3
 martial_law_per  = 1
@@ -325,9 +329,7 @@ You may impose limited martial law under Monarchy: each military\
 [government_communism]
 
 name        = _("Communism")
-reqs = { "type", "name", "range"
-         "tech", "Communism", "Player"
-       }
+tech_req    = "Communism"
 graphic     = "gov.communism"
 graphic_alt = "-"
 flags       = "Build_Veteran_Diplomats", "Inspires_Partisans"
@@ -412,7 +414,7 @@ tech_req    = "Fundamentalism"
 graphic     = "gov.fundamentalism"
 graphic_alt = "-"
 flags       = "No_Unhappy_Citizens", "Convert_Tithes_To_Money", 
-              "Fanatic_Troops"
+              "Reduced_Research", "Fanatic_Troops"
 
 martial_law_max  = 0
 martial_law_per  = 0
@@ -493,9 +495,7 @@ Improvement that normally convert unhappy citizens to content\
 [government_republic]
 
 name        = _("Republic")
-reqs = { "type", "name", "range"
-         "tech", "The Republic", "Player"
-       }
+tech_req    = "The Republic"
 graphic     = "gov.republic"
 graphic_alt = "-"
 flags       = "Has_Senate", "Rapture_City_Growth"
@@ -580,9 +580,7 @@ The citizens of a city will tolerate 1 aggressive unit; subsequent\
 [government_democracy]
 
 name        = _("Democracy")
-reqs = { "type", "name", "range"
-         "tech", "Democracy", "Player"
-       }
+tech_req    = "Democracy"
 graphic     = "gov.democracy"
 graphic_alt = "-"
 flags       = "Has_Senate", "Revolution_When_Unhappy", 

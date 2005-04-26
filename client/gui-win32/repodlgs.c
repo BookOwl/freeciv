@@ -101,12 +101,12 @@ science_dialog_update(void)
 	}
     }
   my_snprintf(text, sizeof(text), "%d/%d",
-              game.player_ptr->research->bulbs_researched,
+              game.player_ptr->research.bulbs_researched,
 	      total_bulbs_required(game.player_ptr));
   SetWindowText(GetDlgItem(science_dlg,ID_SCIENCE_PROG),text);
   ComboBox_ResetContent(GetDlgItem(science_dlg,ID_SCIENCE_RESEARCH));
 
-  if (game.player_ptr->research->researching == A_UNSET) {
+  if (game.player_ptr->research.researching == A_UNSET) {
     id = ComboBox_AddString(GetDlgItem(science_dlg, ID_SCIENCE_RESEARCH),
 			    advances[A_NONE].name);
     ComboBox_SetItemData(GetDlgItem(science_dlg, ID_SCIENCE_RESEARCH),
@@ -115,7 +115,7 @@ science_dialog_update(void)
 		       id);
   }
 
-  if (!is_future_tech(game.player_ptr->research->researching)) {
+  if (!is_future_tech(game.player_ptr->research.researching)) {
     for (i = A_FIRST; i < game.num_tech_types; i++) {
       if (get_invention(game.player_ptr, i) != TECH_REACHABLE) {
 	continue;
@@ -125,7 +125,7 @@ science_dialog_update(void)
 			      advances[i].name);
       ComboBox_SetItemData(GetDlgItem(science_dlg, ID_SCIENCE_RESEARCH),
 			   id, i);
-      if (i == game.player_ptr->research->researching) {
+      if (i == game.player_ptr->research.researching) {
 	ComboBox_SetCurSel(GetDlgItem(science_dlg, ID_SCIENCE_RESEARCH),
 			   id);
       }
@@ -140,19 +140,19 @@ science_dialog_update(void)
         && get_invention(game.player_ptr, i) != TECH_KNOWN
         && advances[i].req[0] != A_LAST && advances[i].req[1] != A_LAST
         && (num_unknown_techs_for_goal(game.player_ptr, i) < 11
-	    || i == game.player_ptr->research->tech_goal)) {
+	    || i == game.player_ptr->ai.tech_goal)) {
       id=ComboBox_AddString(GetDlgItem(science_dlg,ID_SCIENCE_GOAL),
 			    advances[i].name);
       ComboBox_SetItemData(GetDlgItem(science_dlg,ID_SCIENCE_GOAL),
 			 id,i);
-      if (i==game.player_ptr->research->tech_goal)
+      if (i==game.player_ptr->ai.tech_goal)
 	ComboBox_SetCurSel(GetDlgItem(science_dlg,ID_SCIENCE_GOAL),
 			   id);
       
     }
   }
   steps = num_unknown_techs_for_goal(game.player_ptr,
-                                     game.player_ptr->research->tech_goal);
+                                     game.player_ptr->ai.tech_goal);
   my_snprintf(text, sizeof(text),
 	      PL_("(%d step)", "(%d steps)", steps), steps);
   SetWindowText(GetDlgItem(science_dlg,ID_SCIENCE_STEPS),text);
@@ -194,7 +194,7 @@ static LONG CALLBACK science_proc(HWND hWnd,
 		science_dialog_update();
 	      } else {
 		my_snprintf(text, sizeof(text), "%d/%d",
-			    game.player_ptr->research->bulbs_researched,
+			    game.player_ptr->research.bulbs_researched,
 			    total_bulbs_required(game.player_ptr));
 		SetWindowText(GetDlgItem(hWnd,ID_SCIENCE_PROG),text);
 		dsend_packet_player_research(&aconnection, to);
@@ -241,7 +241,7 @@ static LONG CALLBACK science_proc(HWND hWnd,
 
 **************************************************************************/
 void
-popup_science_dialog(bool raise)
+popup_science_dialog(bool make_modal)
 {
   if (!science_dlg)
     {
@@ -283,9 +283,6 @@ popup_science_dialog(bool raise)
     }
   science_dialog_update();
   ShowWindow(science_dlg,SW_SHOWNORMAL);
-  if (raise) {
-    SetFocus(science_dlg);
-  }
 }
 /**************************************************************************
 
@@ -405,7 +402,7 @@ static LONG CALLBACK economy_proc(HWND hWnd,
 
 **************************************************************************/
 void
-popup_economy_report_dialog(bool raise)
+popup_economy_report_dialog(bool make_modal)
 {
   int i;
   struct fcwin_box *hbox;
@@ -454,9 +451,6 @@ popup_economy_report_dialog(bool raise)
   economy_report_dialog_update();
   
   ShowWindow(economy_dlg,SW_SHOWNORMAL);
-  if (raise) {
-    SetFocus(economy_dlg);
-  }
 }
 /****************************************************************
 ...
@@ -512,15 +506,14 @@ static LONG CALLBACK activeunits_proc(HWND hWnd,
       
     case WM_NOTIFY:
       if (sel>=0) {
-	CHECK_UNIT_TYPE(activeunits_type[sel]);
-	if (can_upgrade_unittype(game.player_ptr,
-				 activeunits_type[sel]) != -1) {
+	if ((unit_type_exists(activeunits_type[sel])) &&
+	    (can_upgrade_unittype(game.player_ptr,
+				  activeunits_type[sel]) != -1))    
 	  EnableWindow(GetDlgItem(activeunits_dlg,ID_MILITARY_UPGRADE),
 		       TRUE);
-	} else {
+	else
 	  EnableWindow(GetDlgItem(activeunits_dlg,ID_MILITARY_UPGRADE),
 		       FALSE);
-	}
       }
       break;
     case WM_COMMAND:    
@@ -538,9 +531,9 @@ static LONG CALLBACK activeunits_proc(HWND hWnd,
 	    {
 	      char buf[512];
 	      int ut1,ut2;     
-
 	      ut1 = activeunits_type[sel];
-	      CHECK_UNIT_TYPE(ut1);
+	      if (!(unit_type_exists (ut1)))
+		break;
 	      ut2=can_upgrade_unittype(game.player_ptr,activeunits_type[sel]);
 	      my_snprintf(buf, sizeof(buf),
 			  _("Upgrade as many %s to %s as possible for %d gold each?\n"
@@ -601,17 +594,16 @@ activeunits_report_dialog_update(void)
     unit_list_iterate(game.player_ptr->units, punit) {
       (unitarray[punit->type].active_count)++;
       if (punit->homecity) {
-        unitarray[punit->type].upkeep_shield += punit->upkeep[O_SHIELD];
-        unitarray[punit->type].upkeep_food += punit->upkeep[O_FOOD];
-	/* TODO: gold upkeep */
+        unitarray[punit->type].upkeep_shield += punit->upkeep;
+        unitarray[punit->type].upkeep_food += punit->upkeep_food;
       }
     }
 
     unit_list_iterate_end;
     city_list_iterate(game.player_ptr->cities,pcity) {
-      if (pcity->is_building_unit) {
+      if (pcity->is_building_unit &&
+          (unit_type_exists (pcity->currently_building)))
         (unitarray[pcity->currently_building].building_count)++;
-      }
     }
     city_list_iterate_end;
 
@@ -658,7 +650,7 @@ activeunits_report_dialog_update(void)
 
 **************************************************************************/
 void
-popup_activeunits_report_dialog(bool raise)
+popup_activeunits_report_dialog(bool make_modal)
 {
   if (!activeunits_dlg)
     {
@@ -711,9 +703,6 @@ popup_activeunits_report_dialog(bool raise)
     }
   activeunits_report_dialog_update();
   ShowWindow(activeunits_dlg,SW_SHOWNORMAL);
-  if (raise) {
-    SetFocus(activeunits_dlg);
-  }
 }
 
 /****************************************************************

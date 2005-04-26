@@ -228,7 +228,7 @@ void popup_races_dialog(void)
 
     string = ct_string_create(STYLE_ITALIC, 14,
 			      ct_extend_std_color(COLOR_STD_BLACK),
-			      COLOR_EXT_GRAY, Q_(nation->category));
+			      COLOR_EXT_GRAY, Q_(nation->class));
     label = sw_label_create_text(root_window, string);
     sw_list_set_item(nations_list, 2, i, label);    
   }
@@ -263,6 +263,17 @@ void popup_unit_select_dialog(struct tile *ptile)
 void races_toggles_set_sensitive(bool *nations_used)
 {
   /* PORTME */
+}
+
+/**************************************************************************
+  Popup a dialog asking if the player wants to start a revolution.
+**************************************************************************/
+void popup_revolution_dialog(void)
+{
+  /* PORTME */
+#if 0				/* Demo code */
+  popup_message_dialog(_("Revolution!"), _("You say you wanna revolution?"));
+#endif
 }
 
 /**************************************************************************

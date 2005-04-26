@@ -45,29 +45,26 @@ static int get_tile_value(struct tile *ptile)
   int value, irrig_bonus, mine_bonus;
 
   /* Give one point for each food / shield / trade produced. */
-  value = 0;
-  output_type_iterate(o) {
-    value += get_output_tile(ptile, o);
-  } output_type_iterate_end;
+  value = (get_food_tile(ptile)
+	   + get_shields_tile(ptile)
+	   + get_trade_tile(ptile));
 
   old_terrain = ptile->terrain;
   old_special = ptile->special;
 
-  tile_set_special(ptile, S_ROAD);
+  map_set_special(ptile, S_ROAD);
   map_irrigate_tile(ptile);
-  irrig_bonus = -value;
-  output_type_iterate(o) {
-    irrig_bonus += get_output_tile(ptile, o);
-  } output_type_iterate_end;
+  irrig_bonus = (get_food_tile(ptile)
+		 + get_shields_tile(ptile)
+		 + get_trade_tile(ptile)) - value;
 
   ptile->terrain = old_terrain;
   ptile->special = old_special;
-  tile_set_special(ptile, S_ROAD);
+  map_set_special(ptile, S_ROAD);
   map_mine_tile(ptile);
-  mine_bonus = -value;
-  output_type_iterate(o) {
-    mine_bonus += get_output_tile(ptile, o);
-  } output_type_iterate_end;
+  mine_bonus = (get_food_tile(ptile)
+		+ get_shields_tile(ptile)
+		+ get_trade_tile(ptile)) - value;
 
   ptile->terrain = old_terrain;
   ptile->special = old_special;
@@ -100,7 +97,7 @@ static bool is_valid_start_pos(const struct tile *ptile, const void *dataptr)
   const struct start_filter_data *pdata = dataptr;
   int i;
   struct islands_data_type *island;
-  int cont_size, cont = tile_get_continent(ptile);
+  int cont_size, cont = map_get_continent(ptile);
 
   /* Only start on certain terrain types. */  
   if (pdata->value[ptile->index] < pdata->min_value) {
@@ -113,7 +110,7 @@ static bool is_valid_start_pos(const struct tile *ptile, const void *dataptr)
   }
 
   /* Don't start on a hut. */
-  if (tile_has_special(ptile, S_HUT)) {
+  if (map_has_special(ptile, S_HUT)) {
     return FALSE;
   }
 
@@ -123,7 +120,7 @@ static bool is_valid_start_pos(const struct tile *ptile, const void *dataptr)
   for (i = 0; i < pdata->count; i++) {
     struct tile *tile1 = map.start_positions[i].tile;
 
-    if ((tile_get_continent(ptile) == tile_get_continent(tile1)
+    if ((map_get_continent(ptile) == map_get_continent(tile1)
 	 && (real_map_distance(ptile, tile1) * 1000 / pdata->min_value
 	     <= (sqrt(cont_size / island->total))))
 	|| (real_map_distance(ptile, tile1) * 1000 / pdata->min_value < 5)) {
@@ -169,7 +166,7 @@ static void initialize_isle_data(void)
 ****************************************************************************/
 static bool filter_starters(const struct tile *ptile, const void *data)
 {
-  return terrain_has_flag(tile_get_terrain(ptile), TER_STARTER);
+  return terrain_has_flag(map_get_terrain(ptile), TER_STARTER);
 }
 
 /**************************************************************************
@@ -186,7 +183,7 @@ void create_start_positions(enum start_mode mode)
   struct tile *ptile;
   int k, sum;
   struct start_filter_data data;
-  int tile_value_aux[MAP_INDEX_SIZE], tile_value[MAP_INDEX_SIZE];
+  int tile_value_aux[MAX_MAP_INDEX], tile_value[MAX_MAP_INDEX];
   int min_goodies_per_player = 2000;
   int total_goodies = 0;
   /* this is factor is used to maximize land used in extreme little maps */
@@ -234,7 +231,7 @@ void create_start_positions(enum start_mode mode)
     if (!filter_starters(ptile, NULL)) {
       tile_value[ptile->index] = 0;
     } else {
-      islands[tile_get_continent(ptile)].goodies += tile_value[ptile->index];
+      islands[map_get_continent(ptile)].goodies += tile_value[ptile->index];
       total_goodies += tile_value[ptile->index];
     }
   } whole_map_iterate_end;
@@ -342,13 +339,13 @@ void create_start_positions(enum start_mode mode)
 				   * sizeof(*map.start_positions));
   while (data.count < game.nplayers) {
     if ((ptile = rand_map_pos_filtered(&data, is_valid_start_pos))) {
-      islands[islands_index[(int) tile_get_continent(ptile)]].starters--;
+      islands[islands_index[(int) map_get_continent(ptile)]].starters--;
       map.start_positions[data.count].tile = ptile;
       map.start_positions[data.count].nation = NO_NATION_SELECTED;
       freelog(LOG_DEBUG,
 	      "Adding %d,%d as starting position %d, %d goodies on islands.",
 	      TILE_XY(ptile), data.count,
-	      islands[islands_index[(int) tile_get_continent(ptile)]].goodies);
+	      islands[islands_index[(int) map_get_continent(ptile)]].goodies);
       data.count++;
 
     } else {

@@ -158,18 +158,18 @@ static void calc_effect(enum unit_activity activity, struct tile *ptile,
   struct tile backup = *ptile;
   int stats_before[3], stats_after[3];
 
-  stats_before[0] = get_output_tile(ptile, O_FOOD);
-  stats_before[1] = get_output_tile(ptile, O_SHIELD);
-  stats_before[2] = get_output_tile(ptile, O_TRADE);
+  stats_before[0] = get_food_tile(ptile);
+  stats_before[1] = get_shields_tile(ptile);
+  stats_before[2] = get_trade_tile(ptile);
 
   /* BEWARE UGLY HACK AHEAD */
 
   switch (activity) {
   case ACTIVITY_ROAD:
-    tile_set_special(ptile, S_ROAD);
+    map_set_special(ptile, S_ROAD);
     break;
   case ACTIVITY_RAILROAD:
-    tile_set_special(ptile, S_RAILROAD);
+    map_set_special(ptile, S_RAILROAD);
     break;
   case ACTIVITY_MINE:
     map_mine_tile(ptile);
@@ -186,9 +186,9 @@ static void calc_effect(enum unit_activity activity, struct tile *ptile,
     assert(0);
   }
 
-  stats_after[0] = get_output_tile(ptile, O_FOOD);
-  stats_after[1] = get_output_tile(ptile, O_SHIELD);
-  stats_after[2] = get_output_tile(ptile, O_TRADE);
+  stats_after[0] = get_food_tile(ptile);
+  stats_after[1] = get_shields_tile(ptile);
+  stats_after[2] = get_trade_tile(ptile);
 
   ptile->terrain = backup.terrain;
   ptile->special = backup.special;
@@ -309,7 +309,7 @@ const char *mapview_get_unit_action_tooltip(struct unit *punit,
       && (tinfo->irrigation_result != ttype)) {
     my_snprintf(irrtext, sizeof(irrtext), irrfmt,
 		(get_tile_type(tinfo->irrigation_result))->terrain_name);
-  } else if (tile_has_special(punit->tile, S_IRRIGATION)
+  } else if (map_has_special(punit->tile, S_IRRIGATION)
 	     && player_knows_techs_with_flag(game.player_ptr, TF_FARMLAND)) {
     sz_strlcpy(irrtext, _("Bu_ild Farmland"));
   }
@@ -388,7 +388,7 @@ const char *mapview_get_terrain_info_text(struct tile *ptile)
     add_line(_("Minor Tribe Village"));
   }
   if (game.borders > 0) {
-    struct player *owner = tile_get_owner(ptile);
+    struct player *owner = map_get_owner(ptile);
     struct player_diplstate *ds = game.player_ptr->diplstates;
 
     if (owner == game.player_ptr){

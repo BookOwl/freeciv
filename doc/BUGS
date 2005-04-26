@@ -2,7 +2,7 @@
 BUGS
 ====
 
-Freeciv 2.0.0 is a "stable" release and is considered bug-free enough
+Freeciv 2.0.1 is a "stable" release and is considered bug-free enough
 for everyday use.  However if you do find a bug, we would really like to
 know, so that we can fix it.  This file lists known bugs in this release,
 and gives information about reporting new bugs.
@@ -71,6 +71,8 @@ KNOWN BUGS:
 
  - The Xaw client does not work well with the KDE window manager.
    Try using the GTK+ client or another window manager.
+
+ - There are some bugs with research in team mode.
 
 REPORTING A BUG:
 ================

@@ -2,7 +2,7 @@
 
 name=_("Sioux")
 plural=_("?plural:Sioux")
-groups=_("Medieval"), _("American")
+class=_("Historical")
 leader="Sitting Bull", "Crazy Horse", "Little Crow", "Red Cloud"
 leader_sex="Male", "Male", "Male", "Male"
 flag="f.cheyenne"

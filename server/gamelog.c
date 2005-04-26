@@ -467,17 +467,17 @@ void gamelog(int level, ...)
         }
       } unit_list_iterate_end;
       city_list_iterate(pplayer->cities, pcity) {
-        shields += pcity->prod[O_SHIELD];
-        food += pcity->prod[O_FOOD];
-        trade += pcity->surplus[O_TRADE];
+        shields += pcity->shield_prod;
+        food += pcity->food_prod;
+        trade += pcity->trade_prod;
       } city_list_iterate_end;
 
       my_snprintf(buf, sizeof(buf), "<n>%d</n><cities>%d</cities>"
                   "<pop>%d</pop><food>%d</food><prod>%d</prod>"
                   "<trade>%d</trade><settlers>%d</settlers><units>%d</units>",
-                  pplayer->player_no, city_list_size(pplayer->cities),
+                  pplayer->player_no, city_list_size(&pplayer->cities),
                   total_player_citizens(pplayer), food, shields, trade, 
-                  settlers, unit_list_size(pplayer->units));
+                  settlers, unit_list_size(&pplayer->units));
     }
     gamelog_put_prefix(buf, sizeof(buf), "info");
     break;
@@ -568,7 +568,7 @@ void gamelog(int level, ...)
         for (nat_x = 0; nat_x < map.xsize; nat_x++) {
           struct tile *ptile = native_pos_to_tile(nat_x, nat_y);
 
-          mapline[i++] = is_ocean(tile_get_terrain(ptile)) ? ' ' : '.';
+          mapline[i++] = is_ocean(map_get_terrain(ptile)) ? ' ' : '.';
         }
         mapline[i++] = '\n';
       }

@@ -2,7 +2,7 @@
 
 name=_("Canadian")
 plural=_("?plural:Canadians")
-groups=_("Modern"), _("American")
+class=_("Modern")
 leader="Pierre Trudeau", "John A. MacDonald", "John Diefenbaker", "Mackenzie King"
 leader_sex="Male", "Male", "Male", "Male"
 flag="f.canada"

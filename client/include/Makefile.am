@@ -1,7 +1,16 @@
 ## Process this file with automake to produce Makefile.in
 
 noinst_HEADERS = \
-	canvas_g.h		\
+	cityicon.ico	\
+	freeciv.ico	\
+	drop_cursor.xbm	\
+	drop_cursor_mask.xbm	\
+	goto_cursor.xbm	\
+	goto_cursor_mask.xbm	\
+	nuke_cursor.xbm	\
+	nuke_cursor_mask.xbm	\
+	patrol_cursor.xbm	\
+	patrol_cursor_mask.xbm	\
 	chatline_g.h	\
 	citydlg_g.h	\
 	cityrep_g.h	\
@@ -25,5 +34,4 @@ noinst_HEADERS = \
 	ratesdlg_g.h	\
 	repodlgs_g.h	\
 	spaceshipdlg_g.h	\
-	sprite_g.h		\
 	wldlg_g.h

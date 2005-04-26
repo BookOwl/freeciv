@@ -31,7 +31,6 @@
 #include "government.h"
 #include "log.h"
 #include "map.h"
-#include "movement.h"
 #include "nation.h"
 #include "rand.h"
 #include "support.h"
@@ -131,7 +130,7 @@ static struct player *create_barbarian_player(bool land)
   barbarians->capital = FALSE;
   barbarians->economic.gold = 100;
 
-  barbarians->phase_done = TRUE;
+  barbarians->turn_done = TRUE;
 
   /* Do the ai */
   barbarians->ai.control = TRUE;
@@ -169,7 +168,7 @@ static struct player *create_barbarian_player(bool land)
 **************************************************************************/
 static bool is_free_land(struct tile *ptile, struct player *who)
 {
-  return (!is_ocean(tile_get_terrain(ptile))
+  return (!is_ocean(map_get_terrain(ptile))
 	  && !is_non_allied_unit_tile((ptile), who));
 }
 
@@ -178,7 +177,7 @@ static bool is_free_land(struct tile *ptile, struct player *who)
 **************************************************************************/
 static bool is_free_sea(struct tile *ptile, struct player *who)
 {
-  return (is_ocean(tile_get_terrain(ptile))
+  return (is_ocean(map_get_terrain(ptile))
 	  && !is_non_allied_unit_tile((ptile), who));
 }
 
@@ -201,9 +200,7 @@ bool unleash_barbarians(struct tile *ptile)
   struct tile *utile = NULL;
   bool alive = TRUE;     /* explorer survived */
 
-  if (game.barbarianrate == 0
-      || game.year < game.onsetbarbarian
-      || num_role_units(L_BARBARIAN) != 0) {
+  if (game.barbarianrate == 0 || (game.year < game.onsetbarbarian)) {
     unit_list_iterate_safe((ptile)->units, punit) {
       wipe_unit(punit);
     } unit_list_iterate_safe_end;
@@ -293,7 +290,7 @@ bool unleash_barbarians(struct tile *ptile)
 static bool is_near_land(struct tile *tile0)
 {
   square_iterate(tile0, 4, ptile) {
-    if (!is_ocean(tile_get_terrain(ptile))) {
+    if (!is_ocean(map_get_terrain(ptile))) {
       return TRUE;
     }
   } square_iterate_end;
@@ -307,7 +304,7 @@ static bool is_near_land(struct tile *tile0)
 static struct tile *find_empty_tile_nearby(struct tile *ptile)
 {
   square_iterate(ptile, 1, tile1) {
-    if (unit_list_size(tile1->units) == 0) {
+    if (unit_list_size(&(tile1)->units) == 0) {
       return tile1;
     }
   } square_iterate_end;
@@ -348,7 +345,7 @@ static void try_summon_barbarians(void)
    * gameplay. */
   ptile = rand_map_pos();
 
-  if (terrain_has_flag(tile_get_terrain(ptile), TER_NO_BARBS)) {
+  if (terrain_has_flag(map_get_terrain(ptile), TER_NO_BARBS)) {
     return;
   }
 
@@ -370,30 +367,30 @@ static void try_summon_barbarians(void)
   /* I think Sea Raiders can come out of unknown sea territory */
   if (!(utile = find_empty_tile_nearby(ptile))
       || (!map_is_known(utile, victim)
-	  && !is_ocean(tile_get_terrain(utile)))
+	  && !is_ocean(map_get_terrain(utile)))
       || !is_near_land(utile)) {
     return;
   }
 
   /* do not harass small civs - in practice: do not uprise at the beginning */
   if ((int)myrand(UPRISE_CIV_MORE) >
-           (int)city_list_size(victim->cities) -
+           (int)city_list_size(&victim->cities) -
                 UPRISE_CIV_SIZE/(game.barbarianrate-1)
       || myrand(100) > get_gov_pcity(pc)->civil_war) {
     return;
   }
   freelog(LOG_DEBUG, "Barbarians are willing to fight");
 
-  if (tile_has_special(utile, S_HUT)) {
+  if (map_has_special(utile, S_HUT)) {
     /* remove the hut in place of uprising */
-    tile_clear_special(utile, S_HUT);
+    map_clear_special(utile, S_HUT);
     update_tile_knowledge(utile);
   }
 
-  if (!is_ocean(tile_get_terrain(utile))) {
+  if (!is_ocean(map_get_terrain(utile))) {
     /* land (disembark) barbarians */
     barbarians = create_barbarian_player(TRUE);
-    if (city_list_size(victim->cities) > UPRISE_CIV_MOST) {
+    if (city_list_size(&victim->cities) > UPRISE_CIV_MOST) {
       uprise = 3;
     }
     for (i = 0; i < myrand(3) + uprise * game.barbarianrate; i++) {
@@ -409,7 +406,7 @@ static void try_summon_barbarians(void)
     barbarians = create_barbarian_player(FALSE);
     boat = find_a_unit_type(L_BARBARIAN_BOAT,-1);
     ptrans = create_unit(barbarians, utile, boat, 0, 0, -1);
-    cap = get_transporter_capacity(unit_list_get(utile->units, 0));
+    cap = get_transporter_capacity(unit_list_get(&utile->units, 0));
     for (i = 0; i < cap-1; i++) {
       unit = find_a_unit_type(L_BARBARIAN_SEA,L_BARBARIAN_SEA_TECH);
       (void) create_unit_full(barbarians, utile, unit, 0, 0, -1, -1,
