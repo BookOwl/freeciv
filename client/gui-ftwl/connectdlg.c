@@ -251,11 +251,3 @@ void really_close_connection_dialog(void)
 {
   close_connection_dialog();
 }
-
-/**************************************************************************
-  ...
-**************************************************************************/
-void gui_set_rulesets(int num_rulesets, char **rulesets)
-{
-    /* PORTME */
-}

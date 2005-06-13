@@ -29,8 +29,7 @@
 
 
 #include <gtk/gtkmisc.h>
-
-#include "sprite.h"
+#include "graphics.h"
 
 
 G_BEGIN_DECLS
@@ -65,8 +64,8 @@ struct _GtkPixcommClass
 
 GType	   gtk_pixcomm_get_type	 (void) G_GNUC_CONST;
 GtkWidget *gtk_pixcomm_new	 (gint width, gint height);
-void gtk_pixcomm_copyto(GtkPixcomm *pixcomm, struct sprite *src,
-			gint x, gint y);
+void       gtk_pixcomm_copyto	 (GtkPixcomm *pixcomm, SPRITE *src,
+				  gint x, gint y);
 void       gtk_pixcomm_clear	 (GtkPixcomm *pixcomm);
 void	   gtk_pixcomm_fill	 (GtkPixcomm *pixcomm, GdkColor *color);
 

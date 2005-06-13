@@ -18,7 +18,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "game.h"
 #include "improvement.h"
 #include "map.h"
 #include "mem.h"
@@ -26,7 +25,6 @@
 #include "score.h"
 #include "unit.h"
 
-static int get_civ_score(const struct player *pplayer);
 
 /**************************************************************************
   Allocates, fills and returns a land area claim map.
@@ -38,7 +36,7 @@ static int get_civ_score(const struct player *pplayer);
 struct claim_cell {
   int when;
   int whom;
-  bv_player know;
+  int know;
   int cities;
 };
 
@@ -111,7 +109,7 @@ static void print_landarea_map(struct claim_map *pcmap, int turn)
   if (turn == 0) {
     printf("Player Info...\n");
 
-    for (p = 0; p < game.info.nplayers; p++) {
+    for (p = 0; p < game.nplayers; p++) {
       printf(".know (%d)\n  ", p);
       WRITE_MAP_DATA("%c",
 		     TEST_BIT(pcmap->claims[map_pos_to_index(x, y)].know,
@@ -147,17 +145,19 @@ static void build_landarea_map_new(struct claim_map *pcmap)
 {
   int nbytes;
 
-  pcmap->claims = fc_calloc(MAP_INDEX_SIZE, sizeof(*pcmap->claims));
+  nbytes = map.xsize * map.ysize * sizeof(struct claim_cell);
+  pcmap->claims = fc_malloc(nbytes);
+  memset(pcmap->claims, 0, nbytes);
 
-  nbytes = game.info.nplayers * sizeof(int);
+  nbytes = game.nplayers * sizeof(int);
   pcmap->player_landarea = fc_malloc(nbytes);
   memset(pcmap->player_landarea, 0, nbytes);
 
-  nbytes = game.info.nplayers * sizeof(int);
+  nbytes = game.nplayers * sizeof(int);
   pcmap->player_owndarea = fc_malloc(nbytes);
   memset(pcmap->player_owndarea, 0, nbytes);
 
-  nbytes = 2 * MAP_INDEX_SIZE * sizeof(*pcmap->edges);
+  nbytes = 2 * map.xsize * map.ysize * sizeof(*pcmap->edges);
   pcmap->edges = fc_malloc(nbytes);
 
   players_iterate(pplayer) {
@@ -199,7 +199,7 @@ static void build_landarea_map_turn_0(struct claim_map *pcmap)
       nextedge++;
       pcmap->player_landarea[owner]++;
       pcmap->player_owndarea[owner]++;
-      pclaim->know = ptile->tile_known;
+      pclaim->know = ptile->known;
     } else if (ptile->worked) {
       owner = ptile->worked->owner;
       pclaim->when = turn + 1;
@@ -208,9 +208,9 @@ static void build_landarea_map_turn_0(struct claim_map *pcmap)
       nextedge++;
       pcmap->player_landarea[owner]++;
       pcmap->player_owndarea[owner]++;
-      pclaim->know = ptile->tile_known;
-    } else if (unit_list_size(ptile->units) > 0) {
-      owner = (unit_list_get(ptile->units, 0))->owner;
+      pclaim->know = ptile->known;
+    } else if (unit_list_size(&ptile->units) > 0) {
+      owner = (unit_list_get(&ptile->units, 0))->owner;
       pclaim->when = turn + 1;
       pclaim->whom = owner;
       *nextedge = ptile;
@@ -219,11 +219,11 @@ static void build_landarea_map_turn_0(struct claim_map *pcmap)
       if (TEST_BIT(pclaim->cities, owner)) {
 	pcmap->player_owndarea[owner]++;
       }
-      pclaim->know = ptile->tile_known;
+      pclaim->know = ptile->known;
     } else {
       /* pclaim->when = 0; */
       pclaim->whom = no_owner;
-      pclaim->know = ptile->tile_known;
+      pclaim->know = ptile->known;
     }
   } whole_map_iterate_end;
 
@@ -244,7 +244,7 @@ static void build_landarea_map_expand(struct claim_map *pcmap)
   struct tile **thisedge;
   struct tile **nextedge;
 
-  midedge = &pcmap->edges[MAP_INDEX_SIZE];
+  midedge = &pcmap->edges[map.xsize * map.ysize];
 
   for (accum = 1, turn = 1; accum > 0; turn++) {
     thisedge = ((turn & 0x1) == 1) ? pcmap->edges : midedge;
@@ -260,7 +260,7 @@ static void build_landarea_map_expand(struct claim_map *pcmap)
 	  int j = tile1->index;
 	  struct claim_cell *pclaim = &pcmap->claims[j];
 
-	  if (BV_ISSET(pclaim->know, owner)) {
+	  if (TEST_BIT(pclaim->know, owner)) {
 	    if (pclaim->when == 0) {
 	      pclaim->when = turn + 1;
 	      pclaim->whom = owner;
@@ -368,17 +368,16 @@ static void get_player_landarea(struct claim_map *pcmap,
 void calc_civ_score(struct player *pplayer)
 {
   struct city *pcity;
-  int landarea = 0, settledarea = 0;
+  int landarea, settledarea;
   static struct claim_map cmap = { NULL, NULL, NULL,NULL };
-  static int turn = 0;
 
   pplayer->score.happy = 0;
   pplayer->score.content = 0;
   pplayer->score.unhappy = 0;
   pplayer->score.angry = 0;
-  specialist_type_iterate(sp) {
-    pplayer->score.specialists[sp] = 0;
-  } specialist_type_iterate_end;
+  pplayer->score.taxmen = 0;
+  pplayer->score.scientists = 0;
+  pplayer->score.elvis = 0;
   pplayer->score.wonders = 0;
   pplayer->score.techs = 0;
   pplayer->score.techout = 0;
@@ -393,7 +392,10 @@ void calc_civ_score(struct player *pplayer)
   pplayer->score.literacy = 0;
   pplayer->score.spaceship = 0;
 
-  if (is_barbarian(pplayer) || pplayer->is_observer) {
+  if (is_barbarian(pplayer)) {
+    if (pplayer->player_no == game.nplayers - 1) {
+      free_landarea_map(&cmap);
+    }
     return;
   }
 
@@ -404,36 +406,37 @@ void calc_civ_score(struct player *pplayer)
     pplayer->score.content += pcity->ppl_content[4];
     pplayer->score.unhappy += pcity->ppl_unhappy[4];
     pplayer->score.angry += pcity->ppl_angry[4];
-    specialist_type_iterate(sp) {
-      pplayer->score.specialists[sp] += pcity->specialists[sp];
-    } specialist_type_iterate_end;
+    pplayer->score.taxmen += pcity->specialists[SP_TAXMAN];
+    pplayer->score.scientists += pcity->specialists[SP_SCIENTIST];
+    pplayer->score.elvis += pcity->specialists[SP_ELVIS];
     pplayer->score.population += city_population(pcity);
     pplayer->score.cities++;
     pplayer->score.pollution += pcity->pollution;
-    pplayer->score.techout += pcity->prod[O_SCIENCE];
-    pplayer->score.bnp += pcity->surplus[O_TRADE];
-    pplayer->score.mfg += pcity->surplus[O_SHIELD];
+    pplayer->score.techout += pcity->science_total;
+    pplayer->score.bnp += pcity->trade_prod;
+    pplayer->score.mfg += pcity->shield_surplus;
 
-    bonus = get_city_output_bonus(pcity, O_SCIENCE) - 100;
-    bonus = CLIP(0, bonus, 100);
+    bonus = CLIP(0, get_city_bonus(pcity, EFT_SCIENCE_BONUS), 100);
     pplayer->score.literacy += (city_population(pcity) * bonus) / 100;
   } city_list_iterate_end;
 
-  /* rebuild map only once per turn */
-  if (game.info.turn != turn) {
+  if (pplayer->player_no == 0) {
     free_landarea_map(&cmap);
     build_landarea_map(&cmap);
   }
   get_player_landarea(&cmap, pplayer, &landarea, &settledarea);
   pplayer->score.landarea = landarea;
   pplayer->score.settledarea = settledarea;
+  if (pplayer->player_no == game.nplayers - 1) {
+    free_landarea_map(&cmap);
+  }
 
   tech_type_iterate(i) {
-    if (i > A_NONE && get_invention(pplayer, i) == TECH_KNOWN) {
+    if (get_invention(pplayer, i)==TECH_KNOWN) {
       pplayer->score.techs++;
     }
   } tech_type_iterate_end;
-  pplayer->score.techs += pplayer->research->future_tech * 5 / 2;
+  pplayer->score.techs += pplayer->future_tech * 5 / 2;
   
   unit_list_iterate(pplayer->units, punit) {
     if (is_military_unit(punit)) {
@@ -442,8 +445,8 @@ void calc_civ_score(struct player *pplayer)
   } unit_list_iterate_end
 
   impr_type_iterate(i) {
-    if (is_great_wonder(i)
-	&& (pcity = find_city_from_great_wonder(i))
+    if (is_wonder(i)
+	&& (pcity = find_city_by_id(game.global_wonders[i]))
 	&& player_owns_city(pplayer, pcity)) {
       pplayer->score.wonders++;
     }
@@ -455,14 +458,12 @@ void calc_civ_score(struct player *pplayer)
     pplayer->score.spaceship += (int)(100 * pplayer->spaceship.habitation
 				      * pplayer->spaceship.success_rate);
   }
-
-  pplayer->score.game = get_civ_score(pplayer);
 }
 
 /**************************************************************************
   Return the civilization score (a numerical value) for the player.
 **************************************************************************/
-static int get_civ_score(const struct player *pplayer)
+int get_civ_score(const struct player *pplayer)
 {
   /* We used to count pplayer->score.happy here too, but this is too easily
    * manipulated by players at the endyear. */
@@ -477,14 +478,11 @@ static int get_civ_score(const struct player *pplayer)
 **************************************************************************/
 int total_player_citizens(const struct player *pplayer)
 {
-  int count = (pplayer->score.happy
-	       + pplayer->score.content
-	       + pplayer->score.unhappy
-	       + pplayer->score.angry);
-
-  specialist_type_iterate(sp) {
-    count += pplayer->score.specialists[sp];
-  } specialist_type_iterate_end;
-
-  return count;
+  return (pplayer->score.happy
+	  + pplayer->score.content
+	  + pplayer->score.unhappy
+	  + pplayer->score.angry
+	  + pplayer->score.scientists
+	  + pplayer->score.elvis
+	  + pplayer->score.taxmen);
 }

@@ -57,6 +57,8 @@
 #include "commands.h"
 #include "settings.h"
 
+#include "stdinhand_info.h"
+
 enum manuals {
   MANUAL_SETTINGS,
   MANUAL_COMMANDS,
@@ -112,7 +114,7 @@ static bool manual_command(void)
   for (manuals = 0; manuals < MANUAL_COUNT; manuals++) {
     int i;
 
-    my_snprintf(filename, sizeof(filename), "manual%d.html", manuals + 1);
+    snprintf(filename, sizeof(filename), "manual%d.html", manuals + 1);
 
     if (!is_reg_file_for_access(filename, TRUE)
         || !(doc = fopen(filename, "w"))) {
@@ -199,7 +201,11 @@ static bool manual_command(void)
 	  fprintf(doc, "<pre>%s</pre></td></tr></table>", _(cmd->synopsis));
 	}
 	fprintf(doc, _("<p class=\"level\">Level: %s</p>\n\n"),
-		cmdlevel_name(cmd->level));
+		cmdlevel_name(cmd->game_level));
+	if (cmd->game_level != cmd->pregame_level) {
+	  fprintf(doc, _("<p class=\"level\">Pregame level: %s</p>\n\n"),
+		  cmdlevel_name(cmd->pregame_level));
+	}
 	if (cmd->extra_help) {
 	  static struct astring abuf = ASTRING_INIT;
 	  const char *help = _(cmd->extra_help);
@@ -227,7 +233,6 @@ static bool manual_command(void)
       fprintf(doc, "</tr>\n");
       terrain_type_iterate(id) {
 	struct tile_type *ptype = get_tile_type(id);
-	int s;
 
 	if (ptype->defense_bonus == 0) {
 	  /* Must be a disabled piece of terrain */
@@ -238,18 +243,21 @@ static bool manual_command(void)
 		ptype->graphic_str,
 		IMAGE_END, get_terrain_name(id));
 	fprintf(doc, "<td>%d / %d / %d</td>",
-		ptype->output[O_FOOD], ptype->output[O_SHIELD],
-		ptype->output[O_TRADE]);
+		ptype->food, ptype->shield, ptype->trade);
 
-	for (s = 0; s < MAX_NUM_SPECIALS; s++) {
-	  fprintf(doc, "<td>%s%s%s %s</td>", IMAGE_BEGIN,
-		  ptype->special[s].graphic_str, IMAGE_END,
-		  ptype->special[s].name);
-	  fprintf(doc, "<td>%d / %d / %d</td>",
-		  ptype->special[s].output[O_FOOD],
-		  ptype->special[s].output[O_SHIELD],
-		  ptype->special[s].output[O_TRADE]);
-	}
+	fprintf(doc, "<td>%s%s%s %s</td>", IMAGE_BEGIN,
+		ptype->special[0].graphic_str, IMAGE_END,
+		ptype->special_1_name);
+	fprintf(doc, "<td>%d / %d / %d</td>",
+		ptype->food_special_1, ptype->shield_special_1,
+		ptype->trade_special_1);
+
+	fprintf(doc, "<td>%s%s%s", IMAGE_BEGIN,
+		ptype->special[1].graphic_str, IMAGE_END);
+	fprintf(doc, " %s</td>", ptype->special_2_name);
+	fprintf(doc, "<td>%d / %d / %d</td>",
+		ptype->food_special_2, ptype->shield_special_2,
+		ptype->trade_special_2);
 
 	fprintf(doc, "<td>%d</td>\n", ptype->movement_cost);
 	fprintf(doc, "<td>%d0%%</td><td>%d</td><td>%d</td><td>%d</td>\n",
@@ -296,7 +304,7 @@ static bool manual_command(void)
 	struct impr_type *pimpr = get_improvement_type(id);
 	char buf[64000];
 
-	if (is_great_wonder(id)) {
+	if (pimpr->is_wonder) {
 	  continue;
 	}
 
@@ -306,14 +314,10 @@ static bool manual_command(void)
 	fprintf(doc, "<table>\n");
 	fprintf(doc, _("<tr><td>Cost: <td>%d</tr>\n"), pimpr->build_cost);
 	fprintf(doc, _("<tr><td>Upkeep: <td>%d</tr>\n"), pimpr->upkeep);
-	requirement_vector_iterate(&pimpr->reqs, req) {
-	  char text[512];
-
-	  if (req->source.type != REQ_NONE) {
-	    fprintf(doc, _("<tr><td>Requires: <td>%s</tr>\n"),
-		    get_req_source_text(&req->source, text, sizeof(text)));
-	  }
-	} requirement_vector_iterate_end;
+	if (tech_exists(pimpr->tech_req)) {
+	  fprintf(doc, _("<tr><td>Tech required: <td>%s</tr>\n"),
+		  advances[pimpr->tech_req].name);
+	}
 	if (tech_exists(pimpr->obsolete_by)) {
 	  fprintf(doc, _("<tr><td>Obsoleted by: <td>%s</tr>\n"),
 		  advances[pimpr->obsolete_by].name);
@@ -329,7 +333,7 @@ static bool manual_command(void)
 	struct impr_type *pimpr = get_improvement_type(id);
 	char buf[64000];
 
-	if (!is_great_wonder(id)) {
+	if (!pimpr->is_wonder) {
 	  continue;
 	}
 
@@ -339,9 +343,9 @@ static bool manual_command(void)
 	fprintf(doc, "<table>\n");
 	fprintf(doc, _("<tr><td>Cost: <td>%d</tr>\n"), pimpr->build_cost);
 	fprintf(doc, _("<tr><td>Upkeep: <td>%d</tr>\n"), pimpr->upkeep);
-	if (tech_exists(pimpr->obsolete_by)) {
-	  fprintf(doc, _("<tr><td>Obsoleted by: <td>%s</tr>\n"),
-		  advances[pimpr->obsolete_by].name);
+	if (tech_exists(pimpr->tech_req)) {
+	  fprintf(doc, _("<tr><td>Tech required: <td>%s</tr>\n"),
+		  advances[pimpr->tech_req].name);
 	}
 	if (tech_exists(pimpr->obsolete_by)) {
 	  fprintf(doc, _("<tr><td>Obsoleted by: <td>%s</tr>\n"),

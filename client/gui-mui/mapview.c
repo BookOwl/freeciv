@@ -189,7 +189,7 @@ void update_info_label(void)
 
   settextf(main_people_text, _("Population: %s"),
 	   population_to_text(civ_population(game.player_ptr)));
-  settextf(main_year_text, _("Year: %s"), textyear(game.info.year));
+  settextf(main_year_text, _("Year: %s"), textyear(game.year));
   settextf(main_gold_text, _("Gold: %d"), game.player_ptr->economic.gold);
   settextf(main_tax_text, _("Tax:%d Lux:%d Sci:%d"),
 	   game.player_ptr->economic.tax,
@@ -203,13 +203,13 @@ void update_info_label(void)
 
   d = 0;
   for (; d < (game.player_ptr->economic.luxury) / 10; d++)
-    set(main_econ_sprite[d], MUIA_Sprite_Sprite, get_tax_sprite(tileset, O_LUXURY));
+    set(main_econ_sprite[d], MUIA_Sprite_Sprite, sprites.tax_luxury);
 
   for (; d < (game.player_ptr->economic.science + game.player_ptr->economic.luxury) / 10; d++)
-    set(main_econ_sprite[d], MUIA_Sprite_Sprite, get_tax_sprite(tileset, O_SCIENCE));
+    set(main_econ_sprite[d], MUIA_Sprite_Sprite, sprites.tax_science);
 
   for (; d < 10; d++)
-    set(main_econ_sprite[d], MUIA_Sprite_Sprite, get_tax_sprite(tileset, O_GOLD));
+    set(main_econ_sprite[d], MUIA_Sprite_Sprite, sprites.tax_gold);
 
   update_timeout_label();
 }
@@ -245,7 +245,7 @@ void update_unit_info_label(struct unit *punit)
     settextf(main_unitname_text, "%s%s", unit_type(punit)->name,
 	     (punit->veteran) ? _(" (veteran)") : "");
     settext(main_moves_text, (hover_unit == punit->id) ? _("Select destination") : unit_activity_text(punit));
-    settext(main_terrain_text, tile_get_info_text(punit->tile));
+    settext(main_terrain_text, map_get_tile_info_text(punit->tile));
     settext(main_hometown_text, pcity ? pcity->name : "");
 
 
@@ -320,7 +320,7 @@ void update_unit_info_label(struct unit *punit)
 **************************************************************************/
 void set_indicator_icons(int bulb, int sol, int flake, int gov)
 {
-  struct sprite *gov_sprite;
+  struct Sprite *gov_sprite;
 
   bulb = CLIP(0, bulb, NUM_TILES_PROGRESS - 1);
   sol = CLIP(0, sol, NUM_TILES_PROGRESS - 1);
@@ -337,7 +337,7 @@ void set_indicator_icons(int bulb, int sol, int flake, int gov)
      * when we don't know any better. */
     struct citizen_type c = {.type = CITIZEN_UNHAPPY};
 
-    gov_sprite = get_citizen_sprite(tileset, c, 0, NULL);
+    gov_sprite = get_citizen_sprite(c, 0, NULL);
   }
   else
   {

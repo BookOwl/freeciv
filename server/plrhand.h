@@ -29,8 +29,7 @@ struct conn_list;
 
 enum plr_info_level { INFO_MINIMUM, INFO_MEETING, INFO_EMBASSY, INFO_FULL };
 
-void server_player_init(struct player *pplayer,
-			bool initmap, bool needs_team);
+void server_player_init(struct player *pplayer, bool initmap);
 void server_remove_player(struct player *pplayer);
 void kill_player(struct player *pplayer);
 void kill_dying_players(void);
@@ -82,14 +81,12 @@ void do_conquer_cost(struct player *pplayer);
 void shuffle_players(void);
 void set_shuffled_players(int *shuffled_players);
 struct player *shuffled_player(int i);
-struct player *create_global_observer(void);
-void reset_all_start_commands(void);
 
 #define shuffled_players_iterate(pplayer)                                   \
 {                                                                           \
   struct player *pplayer;                                                   \
   int i;                                                                    \
-  for (i = 0; i < game.info.nplayers; i++) {                               \
+  for (i = 0; i < game.nplayers; i++) {                                     \
     pplayer = shuffled_player(i);                                           \
     {
 
@@ -97,14 +94,6 @@ void reset_all_start_commands(void);
     }                                                                       \
   }                                                                         \
 }
-
-#define phase_players_iterate(pplayer) \
-  shuffled_players_iterate(pplayer) { \
-    if (is_player_phase(pplayer, game.info.phase)) {
-
-#define phase_players_iterate_end		\
-    }						\
-  } shuffled_players_iterate_end
 
 bool civil_war_triggered(struct player *pplayer);
 void civil_war(struct player *pplayer);

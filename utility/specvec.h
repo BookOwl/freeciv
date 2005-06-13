@@ -88,13 +88,12 @@ static inline void SPECVEC_FOO(_vector_init) (SPECVEC_VECTOR *tthis)
 }
 
 static inline void SPECVEC_FOO(_vector_reserve) (SPECVEC_VECTOR *tthis,
-						 size_t size)
+						 int size)
 {
   if (size > tthis->size_alloc) {
-    size_t new_size = MAX(size, tthis->size_alloc * 2);
+    int new_size = MAX(size, tthis->size_alloc * 2);
 
-    tthis->p = (SPECVEC_TYPE *)fc_realloc(tthis->p,
-					  new_size * sizeof(*tthis->p));
+    tthis->p = fc_realloc(tthis->p, new_size * sizeof(*tthis->p));
     tthis->size_alloc = new_size;
   }
   tthis->size = size;
@@ -105,13 +104,12 @@ static inline size_t SPECVEC_FOO(_vector_size) (const SPECVEC_VECTOR *tthis)
   return tthis->size;
 }
 
-static inline SPECVEC_TYPE *SPECVEC_FOO(_vector_get) (const SPECVEC_VECTOR
-						      *tthis,
+static inline SPECVEC_TYPE *SPECVEC_FOO(_vector_get) (SPECVEC_VECTOR *tthis,
 						      int index)
 {
   if (index == -1 && tthis->size > 0) {
     return tthis->p + tthis->size - 1;
-  } else if (index >= 0 && (size_t)index < tthis->size) {
+  } else if (index >= 0 && index < tthis->size) {
     return tthis->p + index;
   } else {
     return NULL;

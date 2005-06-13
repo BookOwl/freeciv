@@ -2,17 +2,17 @@
 
 name=_("Mexican")
 plural=_("?plural:Mexicans")
-groups=_("Modern"), _("American")
+class=_("Modern")
 leader="B. Juárez", "Cárdenas"
 leader_sex="Male", "Male"
-flag="mexico"
+flag="f.mexico"
 flag_alt = "-"
 city_style = "European"
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
+tech_goals = "Warrior Code", "The Republic", "Gunpowder", "Explosives",
+             "Guerilla Warfare"
 wonder= "Statue of Liberty"
 government = "The Republic"
 

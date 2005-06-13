@@ -5,10 +5,13 @@ COMMON_CLIENT_FILES =			\
 	isophex.tilespec		\
 	isotrident.tilespec		\
 	trident.tilespec		\
-	stdsounds.soundspec		\
+	trident_shields.tilespec	\
 	helpdata.txt
 if CLIENT_GUI_XAW
 CLIENT_EXTRA_FILES = Freeciv
+endif
+if CLIENT_GUI_GTK
+CLIENT_EXTRA_FILES = freeciv.rc
 endif
 if CLIENT_GUI_GTK_2_0
 CLIENT_EXTRA_FILES = freeciv.rc-2.0
@@ -22,7 +25,6 @@ if SERVER
 SERVER_FILES = \
 	civ1.serv \
 	civ2.serv \
-	default.serv \
 	history.serv
 else
 SERVER_FILES =
@@ -30,7 +32,6 @@ endif
 
 pkgdata_DATA = $(SERVER_FILES) $(CLIENT_FILES)
 
-# Freeciv.rc was originally for gui-gtk but is also used by gui-sdl
 EXTRA_DIST = \
 	Freeciv	\
 	freeciv.rc	\
@@ -38,15 +39,14 @@ EXTRA_DIST = \
 	isophex.tilespec	\
 	isotrident.tilespec \
 	trident.tilespec	\
-	stdsounds.soundspec	\
+	trident_shields.tilespec	\
 	helpdata.txt	\
 	civ1.serv	\
 	civ2.serv	\
-	default.serv	\
 	history.serv
 
 if CLIENT
-CLIENTDATADIRS = misc flags isotrident trident isophex stdsounds
+CLIENTDATADIRS = misc flags isotrident trident isophex
 else
 CLIENTDATADIRS = 
 endif

@@ -36,8 +36,8 @@
 /* semi-arbitrary number that controls the width of the happiness widget */
 #define HAPPINESS_PIX_WIDTH 23
 
-#define	PIXCOMM_WIDTH	(HAPPINESS_PIX_WIDTH * tileset_small_sprite_width(tileset))
-#define	PIXCOMM_HEIGHT	(tileset_small_sprite_height(tileset))
+#define	PIXCOMM_WIDTH	(HAPPINESS_PIX_WIDTH * SMALL_TILE_WIDTH)
+#define	PIXCOMM_HEIGHT	(SMALL_TILE_HEIGHT)
 
 #define NUM_HAPPINESS_MODIFIERS 5
 
@@ -60,7 +60,8 @@ struct happiness_dialog {
     TYPED_LIST_ITERATE(struct happiness_dialog, dialoglist, pdialog)
 #define dialog_list_iterate_end  LIST_ITERATE_END
 
-static struct dialog_list *dialog_list;
+static struct dialog_list dialog_list;
+static bool dialog_list_has_been_initialised = FALSE;
 static struct happiness_dialog *get_happiness_dialog(struct city *pcity);
 static struct happiness_dialog *create_happiness_dialog(struct city
 							*pcity);
@@ -78,24 +79,13 @@ static void happiness_dialog_update_wonders(struct happiness_dialog
 /****************************************************************
 ...
 *****************************************************************/
-void happiness_dialog_init()
-{
-  dialog_list = dialog_list_new();
-}
-
-/****************************************************************
-...
-*****************************************************************/
-void happiness_dialog_done()
-{
-  dialog_list_free(dialog_list);
-}
-
-/****************************************************************
-...
-*****************************************************************/
 static struct happiness_dialog *get_happiness_dialog(struct city *pcity)
 {
+  if (!dialog_list_has_been_initialised) {
+    dialog_list_init(&dialog_list);
+    dialog_list_has_been_initialised = TRUE;
+  }
+
   dialog_list_iterate(dialog_list, pdialog) {
     if (pdialog->pcity == pcity) {
       return pdialog;
@@ -141,12 +131,18 @@ static struct happiness_dialog *create_happiness_dialog(struct city *pcity)
     gtk_misc_set_alignment(GTK_MISC(pdialog->hpixmaps[i]), 0, 0);
     gtk_misc_set_alignment(GTK_MISC(pdialog->hlabels[i]), 0, 0);
     gtk_label_set_justify(GTK_LABEL(pdialog->hlabels[i]), GTK_JUSTIFY_LEFT);
-    gtk_label_set_line_wrap(GTK_LABEL(pdialog->hlabels[i]), TRUE);
+
+    /* gtk_label_set_line_wrap(GTK_LABEL(pdialog->hlabels[i]), TRUE); */
   }
 
   gtk_widget_show_all(pdialog->shell);
 
-  dialog_list_prepend(dialog_list, pdialog);
+  if (!dialog_list_has_been_initialised) {
+    dialog_list_init(&dialog_list);
+    dialog_list_has_been_initialised = TRUE;
+  }
+
+  dialog_list_insert(&dialog_list, pdialog);
 
   refresh_happiness_dialog(pcity);
 
@@ -161,7 +157,7 @@ static void refresh_pixcomm(GtkPixcomm *dst, struct city *pcity, int index)
   int i;
   struct citizen_type citizens[MAX_CITY_SIZE];
   int num_citizens = pcity->size;
-  int offset = MIN(tileset_small_sprite_width(tileset), PIXCOMM_WIDTH / num_citizens);
+  int offset = MIN(SMALL_TILE_WIDTH, PIXCOMM_WIDTH / num_citizens);
 
   get_city_citizen_types(pcity, index, citizens);
 
@@ -169,7 +165,7 @@ static void refresh_pixcomm(GtkPixcomm *dst, struct city *pcity, int index)
   gtk_pixcomm_clear(dst);
 
   for (i = 0; i < num_citizens; i++) {
-    gtk_pixcomm_copyto(dst, get_citizen_sprite(tileset, citizens[i], i, pcity),
+    gtk_pixcomm_copyto(dst, get_citizen_sprite(citizens[i], i, pcity),
 		       i * offset, 0);
   }
 
@@ -204,7 +200,7 @@ void close_happiness_dialog(struct city *pcity)
   struct happiness_dialog *pdialog = get_happiness_dialog(pcity);
 
   gtk_widget_hide(pdialog->shell);
-  dialog_list_unlink(dialog_list, pdialog);
+  dialog_list_unlink(&dialog_list, pdialog);
 
   gtk_widget_destroy(pdialog->shell);
   free(pdialog);
@@ -221,11 +217,11 @@ static void happiness_dialog_update_cities(struct happiness_dialog
 
   struct city *pcity = pdialog->pcity;
   struct player *pplayer = &game.players[pcity->owner];
-  int cities = city_list_size(pplayer->cities);
-  int content = game.info.unhappysize;
-  int basis = game.info.cityfactor 
-              + get_player_bonus(game.player_ptr, EFT_EMPIRE_SIZE_MOD);
-  int step = get_player_bonus(game.player_ptr, EFT_EMPIRE_SIZE_STEP);
+  struct government *g = get_gov_pcity(pcity);
+  int cities = city_list_size(&pplayer->cities);
+  int content = game.unhappysize;
+  int basis = game.cityfactor + g->empire_size_mod;
+  int step = g->empire_size_inc;
   int excess = cities - basis;
   int penalty = 0;
 
@@ -263,7 +259,7 @@ static void happiness_dialog_update_luxury(struct happiness_dialog
   struct city *pcity = pdialog->pcity;
 
   my_snprintf(bptr, nleft, _("Luxury: %d total."),
-	      pcity->prod[O_LUXURY]);
+	      pcity->luxury_total);
 
   gtk_label_set_text(GTK_LABEL(pdialog->hlabels[LUXURIES]), buf);
 }
@@ -287,7 +283,7 @@ static void happiness_dialog_update_units(struct happiness_dialog *pdialog)
   int nleft = sizeof(buf);
   struct city *pcity = pdialog->pcity;
   struct government *g = get_gov_pcity(pcity);
-  int mlmax = get_city_bonus(pcity, EFT_MARTIAL_LAW_MAX);
+  int mlmax = g->martial_law_max;
   int uhcfac = g->unit_happy_cost_factor;
 
   my_snprintf(bptr, nleft, _("Units: "));
@@ -304,8 +300,7 @@ static void happiness_dialog_update_units(struct happiness_dialog *pdialog)
 				   "%d units maximum, ", mlmax), mlmax);
     bptr = end_of_strn(bptr, &nleft);
 
-    my_snprintf(bptr, nleft, _("%d per unit). "), 
-                get_city_bonus(pcity, EFT_MARTIAL_LAW_EACH));
+    my_snprintf(bptr, nleft, _("%d per unit). "), g->martial_law_per);
   } 
   else if (uhcfac > 0) {
     my_snprintf(bptr, nleft,

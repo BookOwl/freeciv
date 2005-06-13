@@ -2,7 +2,7 @@
 
 name=_("Zulu")
 plural=_("?plural:Zulus")
-groups= _("African")
+class=_("Historical")
 ; /*
 ; According to <http://www.anglo.50megs.com/zulu_kings.htm>, this is the
 ; complete Zulu king list.  It's in regnal order, except that Utshaka
@@ -20,15 +20,15 @@ leader_sex="Male", "Male", "Male", "Male", "Male",
            "Male", "Male", "Male", "Male", "Male", 
            "Male", "Male", "Male", "Male", "Male", 
            "Male"
-flag="south_africa"
-flag_alt = "rwanda"  ; used previously
+flag="f.south_africa"
+flag_alt = "f.rwanda"  ; used previously
 city_style = "Tropical"
 
 init_techs=""
 init_buildings=""
 
-init_government="Despotism"
-init_units=""
+tech_goals = "Monarchy", "Philosophy", "Chivalry", "Trade", "Bridge Building",
+             "Railroad", "Communism"
 wonder="Apollo Program"
 government="Communism"
 

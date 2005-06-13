@@ -2,17 +2,17 @@
 
 name=_("Columbian")
 plural=_("?plural:Columbians")
-groups=_("Modern"), _("American")
+class=_("Modern")
 leader="S. Bolívar", "G.J. Quesada"
 leader_sex="Male", "Male"
-flag="columbia"
+flag="f.columbia"
 flag_alt = "-"
 city_style = "European"
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
+tech_goals = "Feudalism", "The Republic", "Gunpowder", "Explosives",
+             "Guerilla Warfare"
 wonder= "Statue of Liberty"
 government = "Democracy"
 

@@ -18,22 +18,48 @@
 #include "graphics_g.h"
 #include "mapview_common.h"
 
-#include "canvas.h"
-#include "sprite.h"
+struct Sprite
+{
+  GdkPixmap *pixmap;
+  GdkPixmap *fogged;
+  GdkBitmap *mask;
+  int	     has_mask;
+  int	     width;
+  int	     height;
+
+  GdkPixbuf *pixbuf;
+};
+
+typedef struct Sprite SPRITE;
 
 void create_overlay_unit(struct canvas *pcanvas, int i);
 
-extern struct sprite *intro_gfx_sprite;
-extern struct sprite *radar_gfx_sprite;
-
-/* This name is to avoid a naming conflict with a global 'cursors'
- * variable in GTK+-2.6.  See PR#12459. */
-extern GdkCursor *fc_cursors[CURSOR_LAST];
+extern SPRITE *    intro_gfx_sprite;
+extern SPRITE *    radar_gfx_sprite;
+extern GdkCursor * goto_cursor;
+extern GdkCursor * drop_cursor;
+extern GdkCursor * nuke_cursor;
+extern GdkCursor * patrol_cursor;
 
 void gtk_draw_shadowed_string(GdkDrawable *drawable,
 			      GdkGC *black_gc,
 			      GdkGC *white_gc,
 			      gint x, gint y, PangoLayout *layout);
+
+SPRITE *ctor_sprite_mask(GdkPixmap *mypixmap, GdkPixmap *mask,
+			 int width, int height);
+SPRITE* sprite_scale(SPRITE *src, int new_w, int new_h);
+void sprite_get_bounding_box(SPRITE * sprite, int *start_x,
+			     int *start_y, int *end_x, int *end_y);
+SPRITE *crop_blankspace(SPRITE *s);
+
+GdkPixbuf *gdk_pixbuf_new_from_sprite(SPRITE *src);
+  
+/********************************************************************
+ NOTE: the pixmap and mask of a sprite must not change after this
+       function is called!
+ ********************************************************************/
+GdkPixbuf *sprite_get_pixbuf(SPRITE *sprite);
 
 #endif  /* FC__GRAPHICS_H */
 

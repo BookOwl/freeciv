@@ -2,12 +2,12 @@
 
 name=_("Galician")
 plural=_("?plural:Galicians")
-groups= _("European")
+class=_("Historical")
 leader="Don Afonso", "Diego Xelmírez", "Hermerico", "Pedro Pardo de Cela",
        "Rosalía de Castro", "Don Manuel"
 leader_sex="Male", "Male", "Male", "Male",
            "Female", "Male"
-flag="galicia"
+flag="f.galicia"
 flag_alt = "-"
 city_style = "European"
 ruler_titles = { "government",      "male_title",          "female_title"
@@ -20,8 +20,8 @@ ruler_titles = { "government",      "male_title",          "female_title"
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
+tech_goals = "Monarchy", "Iron Working", "Navigation", "Chivalry", "Trade",
+  "Monotheism", "The Republic"
 wonder="Magellan's Expedition"
 government="Republic"
 

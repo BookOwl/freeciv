@@ -18,17 +18,14 @@
 #include <assert.h>
 
 #include "city.h"
-#include "distribute.h"
 #include "game.h"
 #include "government.h"
 #include "log.h"
 #include "map.h"
-#include "nation.h"
 #include "packets.h"
 #include "player.h"
 #include "shared.h"
 #include "unit.h"
-#include "timing.h"
 
 #include "cm.h"
 
@@ -71,7 +68,7 @@
 **************************************************************************/
 static void ai_manage_spaceship(struct player *pplayer)
 {
-  if (game.info.spacerace) {
+  if (game.spacerace) {
     if (pplayer->spaceship.state == SSHIP_STARTED) {
       ai_spaceship_autoplace(pplayer, &pplayer->spaceship);
       /* if we have built the best possible spaceship  -- AJS 19990610 */
@@ -97,25 +94,10 @@ static void ai_manage_spaceship(struct player *pplayer)
 static void ai_manage_taxes(struct player *pplayer) 
 {
   int maxrate = (ai_handicap(pplayer, H_RATES) 
-                 ? get_player_bonus(pplayer, EFT_MAX_RATES) : 100);
+                 ? get_government_max_rate(pplayer->government) : 100);
   bool celebrate = TRUE;
   int can_celebrate = 0, total_cities = 0;
-  int trade = 0; /* total amount of trade generated */
-  int expenses = 0; /* total amount of gold upkeep */
-
-  if (!game.info.changable_tax) {
-    return; /* This ruleset does not support changing tax rates. */
-  }
-
-  if (get_gov_pplayer(pplayer)->index == game.info.government_when_anarchy) {
-    return; /* This government does not support changing tax rates. */
-  }
-
-  /* Find total trade surplus and gold expenses */
-  city_list_iterate(pplayer->cities, pcity) {
-    trade += pcity->surplus[O_TRADE];
-    expenses += pcity->usage[O_GOLD];
-  } city_list_iterate_end;
+  struct government *g = get_gov_pplayer(pplayer);
 
   /* Find minimum tax rate which gives us a positive balance. We assume
    * that we want science most and luxuries least here, and reverse or 
@@ -131,18 +113,8 @@ static void ai_manage_taxes(struct player *pplayer)
   while(pplayer->economic.tax < maxrate
         && (pplayer->economic.science > 0
             || pplayer->economic.luxury > 0)) {
-    int rates[3], result[3];
-    const int SCIENCE = 0, TAX = 1, LUXURY = 2;
 
-    /* Assume our entire civilization is one big city, and 
-     * distribute total income accordingly. This is a 
-     * simplification that speeds up the code significantly. */
-    rates[SCIENCE] = pplayer->economic.science;
-    rates[LUXURY] = pplayer->economic.luxury;
-    rates[TAX] = 100 - rates[SCIENCE] - rates[LUXURY];
-    distribute(trade, 3, rates, result);
-
-    if (expenses - result[TAX] > 0) {
+    if (player_get_expected_income(pplayer) < 0) {
       pplayer->economic.tax += 10;
       if (pplayer->economic.luxury > 0) {
         pplayer->economic.luxury -= 10;
@@ -169,9 +141,7 @@ static void ai_manage_taxes(struct player *pplayer)
   /* TODO: In the future, we should check if we should 
    * celebrate for other reasons than growth. Currently 
    * this is ignored. Maybe we need ruleset AI hints. */
-  /* TODO: Allow celebrate individual cities? No modpacks use this yet. */
-  if (get_player_bonus(pplayer, EFT_RAPTURE_GROW) > 0
-      && !ai_handicap(pplayer, H_AWAY)) {
+  if (government_has_flag(g, G_RAPTURE_CITY_GROWTH)) {
     int luxrate = pplayer->economic.luxury;
     int scirate = pplayer->economic.science;
     struct cm_parameter cmp;
@@ -187,8 +157,8 @@ static void ai_manage_taxes(struct player *pplayer)
     cmp.require_happy = TRUE;    /* note this one */
     cmp.allow_disorder = FALSE;
     cmp.allow_specialists = TRUE;
-    cmp.factor[O_FOOD] = 20;
-    cmp.minimal_surplus[O_GOLD] = -FC_INFINITY;
+    cmp.factor[FOOD] = 20;
+    cmp.minimal_surplus[GOLD] = -FC_INFINITY;
 
     city_list_iterate(pplayer->cities, pcity) {
       cm_clear_cache(pcity);
@@ -197,8 +167,8 @@ static void ai_manage_taxes(struct player *pplayer)
       total_cities++;
 
       if (cmr.found_a_valid
-          && pcity->surplus[O_FOOD] > 0
-          && pcity->size >= game.info.celebratesize
+          && pcity->food_surplus > 0
+          && pcity->size >= g->rapture_size
 	  && city_can_grow_to(pcity, pcity->size + 1)) {
         pcity->ai.celebrate = TRUE;
         can_celebrate++;
@@ -252,10 +222,10 @@ static void ai_manage_taxes(struct player *pplayer)
 
   assert(pplayer->economic.tax + pplayer->economic.luxury 
          + pplayer->economic.science == 100);
-  freelog(LOGLEVEL_TAX, "%s rates: Sci=%d Lux=%d Tax=%d trade=%d expenses=%d"
-          " celeb=(%d/%d)", pplayer->name, pplayer->economic.science,
-          pplayer->economic.luxury, pplayer->economic.tax, trade, expenses,
-          can_celebrate, total_cities);
+  freelog(LOGLEVEL_TAX, "%s rates: Sci %d Lux%d Tax %d NetIncome %d "
+          "celeb=(%d/%d)", pplayer->name, pplayer->economic.science,
+          pplayer->economic.luxury, pplayer->economic.tax,
+          player_get_expected_income(pplayer), can_celebrate, total_cities);
   send_player_info(pplayer, pplayer);
 }
 
@@ -292,18 +262,17 @@ void ai_best_government(struct player *pplayer)
       int val = 0;
       int dist;
 
-      if (gov->index == game.info.government_when_anarchy) {
+      if (gov->index == game.government_when_anarchy) {
         continue; /* pointless */
-      }
-      if (gov->ai_better != G_MAGIC
-          && can_change_to_government(pplayer, gov->ai_better)) {
-        continue; /* we have better governments available */
       }
       pplayer->government = gov->index;
       /* Ideally we should change tax rates here, but since
        * this is a rather big CPU operation, we'd rather not. */
       check_player_government_rates(pplayer);
       city_list_iterate(pplayer->cities, acity) {
+        acity->ai.celebrate = FALSE;
+	/* This isn't strictly necessary since it's done in aaw. */
+        generic_city_refresh(acity, TRUE, NULL);
         auto_arrange_workers(acity);
       } city_list_iterate_end;
       city_list_iterate(pplayer->cities, pcity) {
@@ -313,27 +282,30 @@ void ai_best_government(struct player *pplayer)
       /* Bonuses for non-economic abilities. We increase val by
        * a very small amount here to choose govt in cases where
        * we have no cities yet. */
-      bonus += get_player_bonus(pplayer, EFT_VETERAN_DIPLOMATS) ? 3 : 0;
-      bonus -= get_player_bonus(pplayer, EFT_REVOLUTION_WHEN_UNHAPPY) ? 3 : 0;
-      bonus += get_player_bonus(pplayer, EFT_NO_INCITE) ? 4 : 0;
-      bonus += get_player_bonus(pplayer, EFT_UNBRIBABLE_UNITS) ? 2 : 0;
-      bonus += get_player_bonus(pplayer, EFT_INSPIRE_PARTISANS) ? 3 : 0;
-      bonus += get_player_bonus(pplayer, EFT_RAPTURE_GROW) ? 2 : 0;
-      bonus += get_player_bonus(pplayer, EFT_FANATICS) ? 3 : 0;
-      output_type_iterate(o) {
-	val += gov->output_inc_tile[o];
-      } output_type_iterate_end;
+      if (government_has_flag(gov, G_BUILD_VETERAN_DIPLOMAT)) {
+        bonus += 3; /* WAG */
+      }
+      if (government_has_flag(gov, G_REVOLUTION_WHEN_UNHAPPY)) {
+        bonus -= 3; /* Not really a problem for us */ /* WAG */
+      }
+      if (government_has_flag(gov, G_UNBRIBABLE)) {
+        bonus += 5; /* WAG */
+      }
+      if (government_has_flag(gov, G_INSPIRES_PARTISANS)) {
+        bonus += 3; /* WAG */
+      }
+      if (government_has_flag(gov, G_RAPTURE_CITY_GROWTH)) {
+        bonus += 5; /* WAG */
+        val += 1;
+      }
+      if (government_has_flag(gov, G_FANATIC_TROOPS)) {
+        bonus += 3; /* WAG */
+      }
+      val += gov->trade_bonus + gov->shield_bonus + gov->food_bonus;
 
       val += (val * bonus) / 100;
 
-      /* FIXME: handle reqs other than technologies. */
-      dist = 0;
-      requirement_vector_iterate(&gov->reqs, preq) {
-	if (preq->source.type == REQ_TECH) {
-	  dist += MAX(1, num_unknown_techs_for_goal(pplayer,
-						    preq->source.value.tech));
-	}
-      } requirement_vector_iterate_end;
+      dist = MAX(1, num_unknown_techs_for_goal(pplayer, gov->required_tech));
       val = amortize(val, dist);
       ai->government_want[gov->index] = val; /* Save want */
     } government_iterate_end;
@@ -344,7 +316,7 @@ void ai_best_government(struct player *pplayer)
       generic_city_refresh(acity, TRUE, NULL);
       auto_arrange_workers(acity);
     } city_list_iterate_end;
-    ai->govt_reeval = CLIP(5, city_list_size(pplayer->cities), 20);
+    ai->govt_reeval = CLIP(5, city_list_size(&pplayer->cities), 20);
   }
   ai->govt_reeval--;
 
@@ -358,15 +330,7 @@ void ai_best_government(struct player *pplayer)
     if (ai->government_want[gov->index] > ai->goal.govt.val) {
       ai->goal.govt.idx = gov->index;
       ai->goal.govt.val = ai->government_want[gov->index];
-
-      /* FIXME: handle reqs other than technologies. */
-      ai->goal.govt.req = A_NONE;
-      requirement_vector_iterate(&gov->reqs, preq) {
-	if (preq->source.type == REQ_TECH) {
-	  ai->goal.govt.req = preq->source.value.tech;
-	  break;
-	}
-      } requirement_vector_iterate_end;
+      ai->goal.govt.req = gov->required_tech;
     }
   } government_iterate_end;
   /* Goodness of the ideal gov is calculated relative to the goodness of the
@@ -392,22 +356,11 @@ static void ai_manage_government(struct player *pplayer)
   /* Crank up tech want */
   if (get_invention(pplayer, ai->goal.govt.req) == TECH_KNOWN) {
     return; /* already got it! */
-  } else if (ai->goal.govt.val > 0) {
-    /* We have few cities in the beginning, compensate for this to ensure
-     * that we are sufficiently forward-looking. */
-    int want = MAX(ai->goal.govt.val, 100);
-    struct nation_type *pnation = get_nation_by_plr(pplayer);
-
-    if (pplayer->government == pnation->init_government) {
-      /* Default government is the crappy one we start in (like Despotism).
-       * We want something better pretty soon! */
-      want += 25 * game.info.turn;
-    }
-    pplayer->ai.tech_want[ai->goal.govt.req] += want;
-    TECH_LOG(LOG_DEBUG, pplayer, ai->goal.govt.req, "+ %d for %s in "
-             "ai_manage_government", want,
-             get_government_name(ai->goal.govt.idx));
   }
+  pplayer->ai.tech_want[ai->goal.govt.req] += ai->goal.govt.val;
+  freelog(LOG_DEBUG, "%s wants %s with want %d", pplayer->name,
+          get_tech_name(pplayer, ai->goal.govt.req), 
+          pplayer->ai.tech_want[ai->goal.govt.req]);
 }
 
 /**************************************************************************
@@ -416,18 +369,13 @@ static void ai_manage_government(struct player *pplayer)
 **************************************************************************/
 void ai_do_first_activities(struct player *pplayer)
 {
-  TIMING_LOG(AIT_ALL, TIMER_START);
   assess_danger_player(pplayer);
   /* TODO: Make assess_danger save information on what is threatening
    * us and make ai_mange_units and Co act upon this information, trying
    * to eliminate the source of danger */
 
-  TIMING_LOG(AIT_UNITS, TIMER_START);
   ai_manage_units(pplayer); 
-  TIMING_LOG(AIT_UNITS, TIMER_STOP);
   /* STOP.  Everything else is at end of turn. */
-
-  TIMING_LOG(AIT_ALL, TIMER_STOP);
 }
 
 /**************************************************************************
@@ -440,22 +388,11 @@ void ai_do_first_activities(struct player *pplayer)
 **************************************************************************/
 void ai_do_last_activities(struct player *pplayer)
 {
-  TIMING_LOG(AIT_ALL, TIMER_START);
-
   ai_manage_government(pplayer);
-  TIMING_LOG(AIT_TAXES, TIMER_START);
   ai_manage_taxes(pplayer); 
-  TIMING_LOG(AIT_TAXES, TIMER_STOP);
-  TIMING_LOG(AIT_CITIES, TIMER_START);
   ai_manage_cities(pplayer);
-  TIMING_LOG(AIT_CITIES, TIMER_STOP);
-  TIMING_LOG(AIT_TECH, TIMER_START);
   ai_manage_tech(pplayer); 
-  TIMING_LOG(AIT_TECH, TIMER_STOP);
   ai_manage_spaceship(pplayer);
-  ai_data_phase_done(pplayer);
-
-  TIMING_LOG(AIT_ALL, TIMER_STOP);
 }
 
 /**************************************************************************

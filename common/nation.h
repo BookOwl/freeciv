@@ -17,14 +17,13 @@
 
 #include "fc_types.h"
 #include "terrain.h"		/* T_COUNT */
-#include "unittype.h"           /* Unit_type_id */
 
 #define MAX_NUM_TECH_GOALS 10
 
 /* Changing this value will break network compatibility. */
-#define NO_NATION_SELECTED (Nation_type_id)(-1)
+#define NO_NATION_SELECTED (Nation_Type_id)(-1)
 
-#define OBSERVER_NATION (game.control.nation_count - 2)
+#define OBSERVER_NATION (game.nation_count - 2)
 
 /* 
  * Purpose of this constant is to catch invalid ruleset and network
@@ -32,7 +31,13 @@
  */
 #define MAX_NUM_LEADERS MAX_NUM_ITEMS
 
-#define MAX_NUM_NATION_GROUPS 128
+#define MAX_NUM_TEAMS MAX_NUM_PLAYERS
+#define TEAM_NONE 255
+
+typedef int Nation_Type_id;
+typedef int Team_Type_id;
+
+struct Sprite;			/* opaque; client-gui specific */
 
 /*
  * The city_name structure holds information about a default choice for
@@ -60,15 +65,7 @@ struct leader {
   bool is_male;
 };
 
-struct nation_group {
-  char name[MAX_LEN_NAME];
-  
-  /* How much the AI will try to select a nation in the same group */
-  int match;
-};
-
 struct nation_type {
-  const int index;
   /* Pointer values are allocated on load then freed in free_nations(). */
   const char *name; /* Translated string - doesn't need freeing. */
   const char *name_plural; /* Translated string - doesn't need freeing. */
@@ -78,13 +75,15 @@ struct nation_type {
   struct leader *leaders;
   int city_style;
   struct city_name *city_names;		/* The default city names. */
+  struct Sprite *flag_sprite;
+  char *class;				/* may be empty */
   char *legend;				/* may be empty */
 
   /* civilwar_nations is a NO_NATION_SELECTED-terminated list of index of
    * the nations that can fork from this one.  parent_nations is the inverse
    * of this array.  Server only. */
-  Nation_type_id *civilwar_nations;
-  Nation_type_id *parent_nations;
+  Nation_Type_id *civilwar_nations;
+  Nation_Type_id *parent_nations;
 
   /* untranslated copies: */
   char name_orig[MAX_LEN_NAME];
@@ -93,54 +92,56 @@ struct nation_type {
   /* Items given to this nation at game start.  Server only. */
   int init_techs[MAX_NUM_TECH_LIST];
   int init_buildings[MAX_NUM_BUILDING_LIST];
-  int init_government;
-  Unit_type_id init_units[MAX_NUM_UNIT_LIST];
 
-  /* Groups which this nation is assigned to */
-  int num_groups;
-  struct nation_group **groups;
-
-  /* Unavailable nations aren't allowed in the scenario.  Used nations are
-   * those in use by another player. */
-  bool is_unavailable, is_used;
+  /* Following basically disabled -- Syela */
+  /* Note the client doesn't use/have these. */
+  struct {
+    int tech[MAX_NUM_TECH_GOALS];               /* tech goals     */
+    int wonder;                                 /* primary Wonder */
+    int government;
+  } goals;
 };
 
-Nation_type_id find_nation_by_name(const char *name);
-Nation_type_id find_nation_by_name_orig(const char *name);
-const char *get_nation_name(Nation_type_id nation);
-const char *get_nation_name_plural(Nation_type_id nation);
-const char *get_nation_name_orig(Nation_type_id nation);
-struct leader *get_nation_leaders(Nation_type_id nation, int *dim);
-Nation_type_id *get_nation_civilwar(Nation_type_id nation);
-bool get_nation_leader_sex(Nation_type_id nation, const char *name);
-struct nation_type *get_nation_by_plr(const struct player *plr);
-struct nation_type *get_nation_by_idx(Nation_type_id nation);
-bool check_nation_leader_name(Nation_type_id nation, const char *name);
+struct team {
+  char name[MAX_LEN_NAME];
+  Team_Type_id id; /* equal to array index if active, else TEAM_NONE */
+};
+
+Nation_Type_id find_nation_by_name(const char *name);
+Nation_Type_id find_nation_by_name_orig(const char *name);
+const char *get_nation_name(Nation_Type_id nation);
+const char *get_nation_name_plural(Nation_Type_id nation);
+const char *get_nation_name_orig(Nation_Type_id nation);
+struct leader *get_nation_leaders(Nation_Type_id nation, int *dim);
+Nation_Type_id *get_nation_civilwar(Nation_Type_id nation);
+bool get_nation_leader_sex(Nation_Type_id nation, const char *name);
+struct nation_type *get_nation_by_plr(struct player *plr);
+struct nation_type *get_nation_by_idx(Nation_Type_id nation);
+bool check_nation_leader_name(Nation_Type_id nation, const char *name);
 void nations_alloc(int num);
 void nations_free(void);
 void nation_city_names_free(struct city_name *city_names);
-int get_nation_city_style(Nation_type_id nation);
+int get_nation_city_style(Nation_Type_id nation);
 
-struct nation_group* add_new_nation_group(const char* name);
-int get_nation_groups_count(void);
-struct nation_group* get_nation_group_by_id(int id);
+void team_init(void);
+Team_Type_id team_find_by_name(const char *team_name);
+struct team *team_get_by_id(Team_Type_id id);
+void team_add_player(struct player *pplayer, const char *team_name);
+void team_remove_player(struct player *pplayer);
+int team_count_members_alive(Team_Type_id id);
 
-bool nation_in_group(struct nation_type* nation, const char* group_name);
+#define team_iterate(PI_team)                                                 \
+{                                                                             \
+  struct team *PI_team;                                                       \
+  Team_Type_id PI_p_itr;                                                      \
+  for (PI_p_itr = 0; PI_p_itr < MAX_NUM_TEAMS; PI_p_itr++) {                  \
+    PI_team = team_get_by_id(PI_p_itr);                                       \
+    if (PI_team->id == TEAM_NONE) {                                           \
+      continue;                                                               \
+    }
 
-bool can_conn_edit_players_nation(const struct connection *pconn,
-				  const struct player *pplayer);
-
-#define nations_iterate(nation)						    \
-{									    \
-  int NI_index;								    \
-									    \
-  for (NI_index = 0;							    \
-       NI_index < game.control.playable_nation_count;			    \
-       NI_index++) {							    \
-    struct nation_type *nation = get_nation_by_idx(NI_index);
-
-#define nations_iterate_end						    \
-  }									    \
+#define team_iterate_end                                                      \
+  }                                                                           \
 }
 
 #endif  /* FC__NATION_H */

@@ -16,7 +16,6 @@
 #endif
 
 #include "log.h"
-#include "movement.h"
 #include "player.h"
 #include "unit.h"
 
@@ -42,7 +41,7 @@ static int likely_ocean(struct tile *ptile, struct player *pplayer)
 
   if (map_is_known(ptile, pplayer)) {
     /* we've seen the tile already. */
-    return (is_ocean(tile_get_terrain(ptile)) ? 100 : 0);
+    return (is_ocean(map_get_terrain(ptile)) ? 100 : 0);
   }
   
   /* Now we're going to do two things at once. We're going to see if
@@ -59,14 +58,14 @@ static int likely_ocean(struct tile *ptile, struct player *pplayer)
 	 * central tile is ocean or not by the appearance of
 	 * the adjacent tile. So, given that we can tell, 
 	 * it's fair to look at the actual tile. */
-        return (is_ocean(tile_get_terrain(ptile)) ? 100 : 0);
+        return (is_ocean(map_get_terrain(ptile)) ? 100 : 0);
       } else {
 	/* We're diagonal to the tile in question. So we can't
 	 * be sure what the central tile is, but the central
 	 * tile is likely to be the same as the nearby tiles. 
 	 * If all 4 are water, return 90; if all 4 are land, 
 	 * return 10. */
-        sum += (is_ocean(tile_get_terrain(ptile1)) ? 10 : -10);
+        sum += (is_ocean(map_get_terrain(ptile1)) ? 10 : -10);
       }
     }
   } adjc_dir_iterate_end;
@@ -102,8 +101,8 @@ static bool is_likely_coastline(struct tile *ptile, struct player *pplayer)
 Is there a chance that a trireme would be lost, given information that 
 the player actually has.
 ***************************************************************/
-static bool is_likely_trireme_loss(struct tile *ptile, struct player *pplayer, 
-                             	   struct unit *punit)
+static bool is_likely_trireme_loss(struct player *pplayer,
+				   struct tile *ptile)
 {
   /*
    * If we are in a city or next to land, we have no chance of losing
@@ -112,7 +111,7 @@ static bool is_likely_trireme_loss(struct tile *ptile, struct player *pplayer,
    */
   if ((likely_ocean(ptile, pplayer) < 50) || 
       is_likely_coastline(ptile, pplayer) ||
-      get_unit_bonus(punit, EFT_NO_SINK_DEEP) > 0) {
+      get_player_bonus(pplayer, EFT_NO_SINK_DEEP) > 0) {
     return FALSE;
   } else {
     return TRUE;
@@ -176,9 +175,9 @@ static int explorer_desirable(struct tile *ptile, struct player *pplayer,
    * tile is on a different continent, or if we're a barbarian and
    * the tile has a hut, don't go there. */
   if ((unit_flag(punit, F_TRIREME) && 
-       is_likely_trireme_loss(ptile, pplayer, punit))
-      || tile_get_city(ptile)
-      || (is_barbarian(pplayer) && tile_has_special(ptile, S_HUT))) {
+       is_likely_trireme_loss(pplayer, ptile))
+      || map_get_city(ptile)
+      || (is_barbarian(pplayer) && map_has_special(ptile, S_HUT))) {
     return 0;
   }
 
@@ -228,7 +227,7 @@ static int explorer_desirable(struct tile *ptile, struct player *pplayer,
 
   if ((!pplayer->ai.control || !ai_handicap(pplayer, H_HUTS))
       && map_is_known(ptile, pplayer)
-      && tile_has_special(ptile, S_HUT)) {
+      && map_has_special(ptile, S_HUT)) {
     /* we want to explore huts whenever we can,
      * even if doing so will not uncover any tiles. */
     desirable += HUT_SCORE;
@@ -272,15 +271,6 @@ bool ai_manage_explorer(struct unit *punit)
 
   double logDF = log(DIST_FACTOR);
   double logBPS = log(BEST_POSSIBLE_SCORE);
-
-  UNIT_LOG(LOG_DEBUG, punit, "auto-exploring.");
-
-  if (pplayer->ai.control && unit_flag(punit, F_GAMELOSS)) {
-    UNIT_LOG(LOG_DEBUG, punit, "exploration too dangerous!");
-    return FALSE; /* too dangerous */
-  }
-
-  TIMING_LOG(AIT_EXPLORER, TIMER_START);
 
   pft_fill_unit_parameter(&parameter, punit);
   parameter.get_TB = no_fights_or_unknown;
@@ -348,8 +338,6 @@ bool ai_manage_explorer(struct unit *punit)
   }
   pf_destroy_map(map);
 
-  TIMING_LOG(AIT_EXPLORER, TIMER_STOP);
-
   /* Go to the best tile found. */
   if (best_tile != NULL) {
     /* TODO: read the path off the map we made.  Then we can make a path 
@@ -358,7 +346,6 @@ bool ai_manage_explorer(struct unit *punit)
       /* Died?  Strange... */
       return FALSE;
     }
-    UNIT_LOG(LOG_DEBUG, punit, "exploration GOTO succeeded");
     if (punit->moves_left > 0) {
       /* We can still move on... */
       if (punit->moves_left < init_moves) {
@@ -366,7 +353,6 @@ bool ai_manage_explorer(struct unit *punit)
          * Let's do more exploring. 
          * (Checking only whether our position changed is unsafe: can allow
          * yoyoing on a RR) */
-	UNIT_LOG(LOG_DEBUG, punit, "recursively exploring...");
 	return ai_manage_explorer(punit);          
       } else {
 	/* Something went wrong. What to do but return?
@@ -379,14 +365,11 @@ bool ai_manage_explorer(struct unit *punit)
             && (punit->moves_left != unit_move_rate(punit))) {
           /* we're a trireme with non-full complement of movement points,
            * so wait until next turn. */
-	  UNIT_LOG(LOG_DEBUG, punit, "done exploring (had to hold)...");
           return TRUE;
         }
-	UNIT_LOG(LOG_DEBUG, punit, "done exploring (all finished)...");
 	return FALSE;
       }
     }
-    UNIT_LOG(LOG_DEBUG, punit, "done exploring (but more go go)...");
     return TRUE;
   } else {
     /* Didn't find anything. */

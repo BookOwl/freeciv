@@ -26,22 +26,19 @@ struct section_file;
 struct conn_list;
 
 struct dumb_city{
-  /* Values in this struct are copied using a memcpy, so don't put any
-   * pointers in here. */
   int id;
+  bool has_walls;
   bool occupied;
   bool happy, unhappy;
   char name[MAX_LEN_NAME];
   unsigned short size;
   unsigned char owner;
-
-  bv_imprs improvements;
 };
 
 struct player_tile {
   Terrain_type_id terrain;
-  bv_special special;
-  unsigned short seen_count;
+  enum tile_special_type special;
+  unsigned short seen;
   unsigned short own_seen;
   /* If you build a city with an unknown square within city radius
      the square stays unknown. However, we still have to keep count
@@ -80,7 +77,7 @@ void map_fog_pseudo_city_area(struct player *pplayer, struct tile *ptile);
 
 bool map_is_known_and_seen(const struct tile *ptile, struct player *pplayer);
 void map_change_seen(struct tile *ptile, struct player *pplayer, int change);
-bool map_is_known(const struct tile *ptile, const struct player *pplayer);
+bool map_is_known(const struct tile *ptile, struct player *pplayer);
 void map_set_known(struct tile *ptile, struct player *pplayer);
 void map_clear_known(struct tile *ptile, struct player *pplayer);
 void map_know_all(struct player *pplayer);
@@ -90,7 +87,7 @@ void show_map_to_all(void);
 void player_map_allocate(struct player *pplayer);
 void player_map_free(struct player *pplayer);
 struct player_tile *map_get_player_tile(const struct tile *ptile,
-					const struct player *pplayer);
+					struct player *pplayer);
 bool update_player_tile_knowledge(struct player *pplayer,struct tile *ptile);
 void update_tile_knowledge(struct tile *ptile);
 void update_player_tile_last_seen(struct player *pplayer, struct tile *ptile);

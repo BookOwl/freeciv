@@ -99,7 +99,7 @@ static LONG CALLBACK goto_dialog_proc(HWND dlg,UINT message,
 	    if (pdestcity) {
 	      struct unit *punit=get_unit_in_focus();
 	      if (punit) {
-		send_goto_tile(punit, pdestcity->tile);
+		send_goto_unit(punit, pdestcity->tile);
 		DestroyWindow(dlg);
 	      }
 	    }
@@ -185,10 +185,8 @@ static void update_goto_dialog(HWND list)
   ListBox_ResetContent(list);
   Button_SetState(GetDlgItem(goto_dialog,ID_ALL),show_all_cities);
 
-  for(i=0; i<game.info.nplayers; i++) {
-    if (!show_all_cities && i != game.info.player_idx) {
-      continue;
-    }
+  for(i=0; i<game.nplayers; i++) {
+    if(!show_all_cities && i!=game.player_idx) continue;
     city_list_iterate(game.players[i].cities, pcity) {
       sz_strlcpy(name, pcity->name);
       /* FIXME: should use unit_can_airlift_to(). */

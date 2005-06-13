@@ -2,7 +2,7 @@
 
 name=_("English")
 plural=_("?plural:English")
-groups=_("Modern"), _("Medieval"), _("European")
+class=_("Modern")
 legend=_("England was unified by Alfred the Great of Wessex in the late \
 9th century AD, only to be conquered by William of Normandy a century later, \
 in the last successful invasion of the country.")
@@ -11,8 +11,8 @@ leader="Elizabeth", "Alfred of Wessex", "William the Conqueror",
        "Victoria", "Winston Churchill", "John Lackland"
 leader_sex="Female", "Male", "Male", "Male", "Male",
            "Male", "Female", "Male", "Male"
-flag="england"
-flag_alt = "united_kingdom"
+flag="f.england"
+flag_alt = "f.united_kingdom"
 city_style = "European"
 ruler_titles = { "government",      "male_title",      "female_title"
                  "Democracy",       _("Prime Minister"), _("Prime Minister")
@@ -22,8 +22,8 @@ ruler_titles = { "government",      "male_title",      "female_title"
 init_techs=""
 init_buildings=""
 
-init_government="Despotism"
-init_units=""
+tech_goals = "Monarchy",  "Chivalry", "Trade", "Theology", "Monotheism",
+             "Navigation", "Democracy", "Railroad"
 wonder="King Richard's Crusade"
 government="Democracy"
 civilwar_nations = "american", "australian", "canadian"

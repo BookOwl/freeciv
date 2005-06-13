@@ -74,14 +74,13 @@ static Widget races_form, races_toggles_form, races_label;
 static Widget *races_toggles=NULL;
 static int *races_toggles_to_nations=NULL;
 static int *nation_to_race_toggle = NULL;
-struct player *races_player;
 static Widget races_leader_form, races_leader;
 static Widget races_leader_pick_popupmenu, races_leader_pick_menubutton;
 static Widget races_sex_toggles[2], races_sex_form, races_sex_label;
 static Widget races_style_form, races_style_label;
 static Widget *races_style_toggles=NULL;
 static Widget races_action_form;
-static Widget races_ok_command, races_random_command, races_quit_command;
+static Widget races_ok_command, races_disconnect_command, races_quit_command;
 
 /******************************************************************/
 static Widget spy_tech_shell;
@@ -123,7 +122,7 @@ void create_help_dialog(Widget *shell);
 
 
 /******************************************************************/
-static void create_races_dialog(struct player *pplayer);
+static void create_races_dialog(void);
 static void races_leader_set_values(int race, int lead);
 static int races_buttons_get_current(void);
 static int races_sex_buttons_get_current(void);
@@ -138,7 +137,7 @@ static void races_leader_pick_callback(Widget w, XtPointer client_data,
 				       XtPointer call_data);
 static void races_ok_command_callback(Widget w, XtPointer client_data, 
 				      XtPointer call_data);
-static void races_random_command_callback(Widget w, XtPointer client_data, 
+static void races_disconnect_command_callback(Widget w, XtPointer client_data, 
 					      XtPointer call_data);
 static void races_quit_command_callback(Widget w, XtPointer client_data, 
 					XtPointer call_data);
@@ -190,7 +189,7 @@ static void select_random_race(void)
 {
   /* try to find a free nation */
   while (1) {
-    int race_toggle_index = myrand(game.control.playable_nation_count);
+    int race_toggle_index = myrand(game.playable_nation_count);
 
     if (XtIsSensitive(races_toggles[race_toggle_index])) {
       x_simulate_button_click(races_toggles[race_toggle_index]);
@@ -734,7 +733,7 @@ static int create_advances_list(struct player *pplayer,
   advance_type[j] = -1;
 
   if (pvictim) { /* you don't want to know what lag can do -- Syela */
-    for(i=A_FIRST; i<game.control.num_tech_types; i++) {
+    for(i=A_FIRST; i<game.num_tech_types; i++) {
       if(get_invention(pvictim, i)==TECH_KNOWN && 
          (get_invention(pplayer, i)==TECH_UNKNOWN || 
           get_invention(pplayer, i)==TECH_REACHABLE)) {
@@ -745,7 +744,7 @@ static int create_advances_list(struct player *pplayer,
     }
     if(j > 0) {
       advances_can_steal[j] = _("At Spy's Discretion");
-      advance_type[j++] = game.control.num_tech_types;
+      advance_type[j++] = game.num_tech_types;
     }
   }
 
@@ -1047,7 +1046,7 @@ void popup_diplomat_dialog(struct unit *punit, struct tile *dest_tile)
 
   diplomat_id=punit->id;
 
-  if((pcity=tile_get_city(dest_tile))){
+  if((pcity=map_get_city(dest_tile))){
     /* Spy/Diplomat acting against a city */
 
     diplomat_target_id=pcity->id;
@@ -1108,7 +1107,7 @@ void popup_diplomat_dialog(struct unit *punit, struct tile *dest_tile)
 
     diplomat_dialog_open = TRUE;
   }else{ 
-    if ((ptunit = unit_list_get(dest_tile->units, 0))) {
+    if((ptunit=unit_list_get(&dest_tile->units, 0))){
       /* Spy/Diplomat acting against a unit */
       
       const char *message = !unit_flag(punit, F_SPY)
@@ -1287,10 +1286,9 @@ static void pillage_callback(Widget w, XtPointer client_data,
 ...
 *****************************************************************/
 void popup_pillage_dialog(struct unit *punit,
-			  bv_special may_pillage)
+			  enum tile_special_type may_pillage)
 {
   Widget shell, form, dlabel, button, prev;
-  enum tile_special_type what, prereq;
 
   if (is_showing_pillage_dialog) {
     return;
@@ -1306,25 +1304,19 @@ void popup_pillage_dialog(struct unit *punit,
   dlabel = I_L(XtVaCreateManagedWidget("dlabel", labelWidgetClass, form, NULL));
 
   prev = dlabel;
-  while ((what = get_preferred_pillage(may_pillage)) != S_LAST) {
-    bv_special what_bv;
+  while (may_pillage) {
+    enum tile_special_type what = get_preferred_pillage(may_pillage);
 
-    BV_CLR_ALL(what_bv);
-    BV_SET(what_bv, what);
     button =
       XtVaCreateManagedWidget ("button", commandWidgetClass, form,
 			       XtNfromVert, prev,
 			       XtNlabel,
-			       (XtArgVal)(get_infrastructure_text(what_bv)),
+			         (XtArgVal)(map_get_infrastructure_text (what)),
 			       NULL);
     XtAddCallback(button, XtNcallback, pillage_callback,
 		  INT_TO_XTPOINTER(what));
     prev = button;
-    clear_special(&may_pillage, what);
-    prereq = get_infrastructure_prereq(what);
-    if (prereq != S_LAST) {
-      clear_special(&may_pillage, prereq);
-    }
+    may_pillage &= (~(what | map_get_infrastructure_prerequisite (what)));
   }
   button =
     I_L(XtVaCreateManagedWidget("closebutton", commandWidgetClass, form,
@@ -1439,7 +1431,7 @@ void popup_unit_select_dialog(struct tile *ptile)
   Widget unit_select_all_command, unit_select_close_command;
   Widget firstcolumn=0,column=0;
   Pixel bg;
-  struct unit *unit_list[unit_list_size(ptile->units)];
+  struct unit *unit_list[unit_list_size(&ptile->units)];
 
   XtSetSensitive(main_form, FALSE);
 
@@ -1455,7 +1447,7 @@ void popup_unit_select_dialog(struct tile *ptile)
   XtVaGetValues(unit_select_form, XtNbackground, &bg, NULL);
   XSetForeground(display, fill_bg_gc, bg);
 
-  n = MIN(MAX_SELECT_UNITS, unit_list_size(ptile->units));
+  n = MIN(MAX_SELECT_UNITS, unit_list_size(&ptile->units));
   r = number_of_rows(n);
 
   fill_tile_unit_list(ptile, unit_list);
@@ -1485,11 +1477,11 @@ void popup_unit_select_dialog(struct tile *ptile)
 	    unit_activity_text(punit));
 
     unit_select_pixmaps[i]=XCreatePixmap(display, XtWindow(map_canvas), 
-					 tileset_full_tile_width(tileset), tileset_full_tile_height(tileset),
+					 UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT,
 					 display_depth);
 
     XFillRectangle(display, unit_select_pixmaps[i], fill_bg_gc,
-		   0, 0, tileset_full_tile_width(tileset), tileset_full_tile_height(tileset));
+		   0, 0, UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT);
     store.pixmap = unit_select_pixmaps[i];
     put_unit(punit, &store, 0, 0);
 
@@ -1591,16 +1583,14 @@ void unit_select_callback(Widget w, XtPointer client_data,
 /****************************************************************
 popup the dialog 5% inside the main-window 
 *****************************************************************/
-void popup_races_dialog(struct player *pplayer)
+void popup_races_dialog(void)
 {
   Position x, y;
   Dimension width, height;
 
   XtSetSensitive(main_form, FALSE);
 
-  if (!races_dialog_shell) {
-    create_races_dialog(pplayer);
-  }
+  create_races_dialog();
 
   XtVaGetValues(toplevel, XtNwidth, &width, XtNheight, &height, NULL);
 
@@ -1627,7 +1617,7 @@ void popdown_races_dialog(void)
 /****************************************************************
 ...
 *****************************************************************/
-void create_races_dialog(struct player *pplayer)
+void create_races_dialog(void)
 {
   int per_row = 5;
   int i, j, len, maxracelen, index;
@@ -1636,9 +1626,8 @@ void create_races_dialog(struct player *pplayer)
   int space;
   XtWidgetGeometry geom;
 
-  races_player = pplayer;
   maxracelen = 0;
-  for(i=0; i<game.control.playable_nation_count; i++) {
+  for(i=0; i<game.playable_nation_count; i++) {
     len = strlen(get_nation_name(i));
     maxracelen = MAX(maxracelen, len);
   }
@@ -1664,11 +1653,11 @@ void create_races_dialog(struct player *pplayer)
 					       NULL);   
 
   free(races_toggles);
-  races_toggles = fc_calloc(game.control.playable_nation_count,sizeof(Widget));
+  races_toggles = fc_calloc(game.playable_nation_count,sizeof(Widget));
   free(races_toggles_to_nations);
-  races_toggles_to_nations = fc_calloc(game.control.playable_nation_count,sizeof(int));
+  races_toggles_to_nations = fc_calloc(game.playable_nation_count,sizeof(int));
 
-  for( i = 0; i < ((game.control.playable_nation_count-1)/per_row)+1; i++) {
+  for( i = 0; i < ((game.playable_nation_count-1)/per_row)+1; i++) {
     index = i * per_row;
     my_snprintf(namebuf, sizeof(namebuf), "racestoggle%d", index);
     if( i == 0 ) {
@@ -1693,7 +1682,7 @@ void create_races_dialog(struct player *pplayer)
 
     for( j = 1; j < per_row; j++) {
       index = i * per_row + j;
-      if( index >= game.control.playable_nation_count ) break;
+      if( index >= game.playable_nation_count ) break;
       my_snprintf(namebuf, sizeof(namebuf), "racestoggle%d", index);
       if( i == 0 ) {
 	races_toggles[index] =
@@ -1778,9 +1767,8 @@ void create_races_dialog(struct player *pplayer)
 				NULL));
 
   /* find out styles that can be used at the game beginning */
-  /* Limit of 64 city_styles should be deleted. -ev */
-  for (i = 0, b_s_num = 0; i < game.control.styles_count && i < 64; i++) {
-    if (!city_style_has_requirements(&city_styles[i])) {
+  for(i=0,b_s_num=0; i<game.styles_count && i<64; i++) {
+    if(city_styles[i].techreq == A_NONE) {
       city_style_idx[b_s_num] = i;
       city_style_ridx[i] = b_s_num;
       b_s_num++;
@@ -1869,7 +1857,7 @@ void create_races_dialog(struct player *pplayer)
 				races_action_form,
 				NULL));
 
-  races_random_command =
+  races_disconnect_command =
     I_L(XtVaCreateManagedWidget("racesdisconnectcommand",
 				commandWidgetClass,
 				races_action_form,
@@ -1880,16 +1868,16 @@ void create_races_dialog(struct player *pplayer)
     I_L(XtVaCreateManagedWidget("racesquitcommand",
 				commandWidgetClass,
 				races_action_form,
-				XtNfromHoriz, races_random_command,
+				XtNfromHoriz, races_disconnect_command,
 				NULL));
 
-  XtAddCallback(races_random_command, XtNcallback,
-		races_random_command_callback, NULL);
+  XtAddCallback(races_disconnect_command, XtNcallback,
+		races_disconnect_command_callback, NULL);
   XtAddCallback(races_quit_command, XtNcallback,
 		races_quit_command_callback, NULL);
 
 
-  for(i=0; i<game.control.playable_nation_count; i++) {
+  for(i=0; i<game.playable_nation_count; i++) {
     XtAddCallback(races_toggles[i], XtNcallback,
 		  races_toggles_callback, INT_TO_XTPOINTER(i));
   }
@@ -1903,7 +1891,7 @@ void create_races_dialog(struct player *pplayer)
 
   XtRealizeWidget(races_dialog_shell);
 
-  for(i=0; i<game.control.playable_nation_count; i++) {
+  for(i=0; i<game.playable_nation_count; i++) {
     races_toggles_to_nations[i] = i;
   }
   qsort(races_toggles_to_nations, i, sizeof(int), races_indirect_compare);
@@ -1911,12 +1899,12 @@ void create_races_dialog(struct player *pplayer)
   /* Build nation_to_race_toggle */
   free(nation_to_race_toggle);
   nation_to_race_toggle =
-      fc_calloc(game.control.playable_nation_count, sizeof(int));
-  for (i = 0; i < game.control.playable_nation_count; i++) {
+      fc_calloc(game.playable_nation_count, sizeof(int));
+  for (i = 0; i < game.playable_nation_count; i++) {
     nation_to_race_toggle[races_toggles_to_nations[i]] = i;
   }
 
-  for(i=0; i<game.control.playable_nation_count; i++) {
+  for(i=0; i<game.playable_nation_count; i++) {
     XtVaSetValues (races_toggles[i],
 		   XtNlabel, (XtArgVal)get_nation_name(races_toggles_to_nations[i]),
 		   NULL);
@@ -1943,24 +1931,18 @@ void racesdlg_key_ok(Widget w)
 /**************************************************************************
 ...
 **************************************************************************/
-void races_toggles_set_sensitive(void)
+void races_toggles_set_sensitive(bool *nations_used)
 {
   int i;
 
-  if (!races_dialog_shell) {
-    return;
-  }
-  for (i = 0; i < game.control.playable_nation_count; i++) {
+  for (i = 0; i < game.playable_nation_count; i++) {
     XtSetSensitive(races_toggles[nation_to_race_toggle[i]], TRUE);
   }
 
-  for (i = 0; i < game.control.playable_nation_count; i++) {
-    int nation_no = i, selected_nation = -1;
-    struct nation_type *nation;
+  for (i = 0; i < game.playable_nation_count; i++) {
+    int nation = i, selected_nation = -1;
 
-    nation = get_nation_by_idx(i);
-
-    if (!(nation->is_unavailable || nation->is_used)) {
+    if (!nations_used[i]) {
       continue;
     }
 
@@ -1969,15 +1951,15 @@ void races_toggles_set_sensitive(void)
 	  races_toggles_to_nations[races_buttons_get_current()];
     }
 
-    freelog(LOG_DEBUG, "  [%d]: %d = %s", i, nation_no,
-	    get_nation_name(nation_no));
+    freelog(LOG_DEBUG, "  [%d]: %d = %s", i, nation,
+	    get_nation_name(nation));
 
-    if (nation_no == selected_nation) {
+    if (nation == selected_nation) {
       XawToggleUnsetCurrent(races_toggles[0]);
-      XtSetSensitive(races_toggles[nation_to_race_toggle[nation_no]], FALSE);
+      XtSetSensitive(races_toggles[nation_to_race_toggle[nation]], FALSE);
       select_random_race();
     } else {
-      XtSetSensitive(races_toggles[nation_to_race_toggle[nation_no]], FALSE);
+      XtSetSensitive(races_toggles[nation_to_race_toggle[nation]], FALSE);
     }
   }
 }
@@ -2007,7 +1989,7 @@ void races_toggles_callback(Widget w, XtPointer client_data,
 			 races_leader_pick_menubutton,
 			 NULL);
 
-  nation_count = game.control.nation_count;
+  nation_count = game.nation_count;
 
   for(j=0; j<leader_count; j++) {
     entry =
@@ -2061,13 +2043,13 @@ int races_buttons_get_current(void)
   int i;
   XtPointer dp, yadp;
 
-  if((game.control.playable_nation_count)==1)
+  if((game.playable_nation_count)==1)
     return 0;
 
   if(!(dp=XawToggleGetCurrent(races_toggles[0])))
     return -1;
 
-  for(i=0; i<game.control.playable_nation_count; i++) {
+  for(i=0; i<game.playable_nation_count; i++) {
     XtVaGetValues(races_toggles[i], XtNradioData, &yadp, NULL);
     if(dp==yadp)
       return i;
@@ -2183,21 +2165,19 @@ void races_ok_command_callback(Widget w, XtPointer client_data,
   }
 
   dsend_packet_nation_select_req(&aconnection,
-				 races_player->player_no,
 				 races_toggles_to_nations[selected_index],
 				 selected_sex ? FALSE : TRUE,
 				 dp, city_style_idx[selected_style]);
-  popdown_races_dialog();
 }
 
 /**************************************************************************
 ...
 **************************************************************************/
-void races_random_command_callback(Widget w, XtPointer client_data, 
+void races_disconnect_command_callback(Widget w, XtPointer client_data, 
 				       XtPointer call_data)
 {
   popdown_races_dialog();
-/*  disconnect_from_server();*/
+  disconnect_from_server();
 }
 
 /**************************************************************************
@@ -2206,7 +2186,7 @@ void races_random_command_callback(Widget w, XtPointer client_data,
 void races_quit_command_callback(Widget w, XtPointer client_data, 
 				 XtPointer call_data)
 {
-  ui_exit();
+  exit(EXIT_SUCCESS);
 }
 
 /**************************************************************************

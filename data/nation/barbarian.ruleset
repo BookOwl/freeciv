@@ -4,15 +4,14 @@ name=_("Barbarian")
 plural=_("?plural:Barbarians")
 leader="Genseric", "Alaric", "Theodoric", "Stilicho", "Attila", "Boadicea"
 leader_sex="Male", "Male", "Male", "Male", "Male", "Female"
-flag="barbarian"
+flag="f.barbarian"
 flag_alt = "-"
 city_style = "European"
 
 init_techs=""
 init_buildings=""
 
-init_government="Despotism"
-init_units=""
+tech_goals = "Warrior Code"
 wonder = "Apollo Program"
 government = "Despotism"
 

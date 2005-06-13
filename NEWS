@@ -2,13 +2,46 @@
 Welcome to Freeciv 2.0
 ======================
 
-This is release 2.0.
+This is release 2.0.2.
 
 Thanks again to all our developers, who continue to work so hard.
 
 This release includes lots of changes, outlined below.  Those who
 are interested in seeing the detailed changes should check the
 ChangeLog file.
+
+
+WHAT'S CHANGED SINCE 2.0.1
+ - Fix an AI bug causing the AI to miscalculate the value of some wonders
+   and buildings.
+ - Fix a client crash where unloading a transporter could focus another
+   player's unit.
+ - Fix several bugs with updating of menus and dialogs when (un)loading units.
+ - Fix a CMA update bug when loading saved games.
+ - Fix some bugs in the science dialog in the Win32 client.
+ - Add a new server setting for multiplayer: timeoutaddenemymove.
+ - Update to europe (200x100) scenario.
+ - Don't let player change research without penalty just because they
+   found a new tech.
+ - Fix a major bug when changing research target in team games.
+ - Remove the near-empty Ecology server setting category.
+ - Don't crash if a detached player does /away.
+ - Change /start from a vote into a special-case poll. Once all players
+   have run /start the game will start. Running /list will show which
+   players are ready.
+ - Clear unit orders (client-side goto) when a unit moves outside of the
+   orders (units on transporters/airlifts).
+ - Don't let patrols do more than one loop per turn (previously a patrol on
+   railroad could run forever).
+ - Fix a bug in river generation that caused too few rivers to form.
+ - Better logging of ruleset errors.
+
+WHAT'S CHANGED SINCE 2.0.0
+ - Fix a bug causing easy and novice AIs to be much harder than they were
+   supposed to be.
+ - New behavior of the /start command in multi-player mode.
+ - Minor translation updates.
+ - Other minor bugfixes.
 
 WHAT'S CHANGED SINCE 1.14.2
  - Research cost has doubled, effects of science buildings doubled. SETI
@@ -24,8 +57,7 @@ WHAT'S CHANGED SINCE 1.14.2
    buildings have much higher incite cost.
  - Killing a defending diplomat now costs you 1 movement point.
  - Units now have multiple, configurable veteran levels.
- - Team mates now pool their research. You may opt out and research
-   individually by cancelling the 'Team' treaty.
+ - Team mates now pool their research.
  - Server has voting on commands and options. You need over 50% of votes.
  - When moving a unit from a transport on an ocean tile to a land tile,
    you lose all movement points.

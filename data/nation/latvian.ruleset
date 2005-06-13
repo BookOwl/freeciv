@@ -2,19 +2,18 @@
 
 name=_("Latvian")
 plural=_("?plural:Latvians")
-groups=_("Modern"), _("European")
+class=_("Modern")
 leader="Karlis Ulmanis", "Guntis Ulmanis", 
   "Vaira Vike Freiberga", "Namejs"
 leader_sex="Male", "Male", 
   "Female", "Male"
-flag="latvia"
+flag="f.latvia"
 flag_alt = "-"
 city_style = "European"
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
+tech_goals = "Monarchy","Chivalry","Gunpowder","Industrialization"
 wonder="Cure For Cancer"
 government = "Democracy"
 civilwar_nations = "polish", "swedish"

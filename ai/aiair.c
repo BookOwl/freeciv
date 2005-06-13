@@ -18,10 +18,8 @@
 #include <assert.h>
 
 #include "combat.h"
-#include "game.h"
 #include "log.h"
 #include "map.h"
-#include "movement.h"
 #include "player.h"
 #include "unit.h"
 
@@ -32,7 +30,6 @@
 #include "unithand.h"
 #include "unittools.h"
 
-#include "ailog.h"
 #include "aitools.h"
 #include "aiunit.h"
 
@@ -69,7 +66,7 @@ static bool find_nearest_airbase(struct tile *ptile, struct unit *punit,
 static bool ai_should_we_air_attack_tile(struct unit *punit,
 					 struct tile *ptile)
 {
-  struct city *acity = tile_get_city(ptile);
+  struct city *acity = map_get_city(ptile);
 
   /* For a virtual unit (punit->id == 0), all targets are good */
   /* TODO: There is a danger of producing too many units that will not 
@@ -246,7 +243,7 @@ static bool ai_find_strategic_airbase(struct unit *punit,
     if ((target_worth
 	 = find_something_to_bomb(punit, get_refuel_tile(airbase))) > 0) {
       struct city *base_city 
-        = tile_get_city(get_refuel_tile(airbase));
+        = map_get_city(get_refuel_tile(airbase));
      
       if (base_city && base_city->ai.grave_danger != 0) {
         /* Fly there immediately!! */
@@ -314,9 +311,9 @@ void ai_manage_airunit(struct player *pplayer, struct unit *punit)
       ai_unit_goto(punit, punit->goto_tile);
     } else {
       if (punit->fuel == 1) {
-	UNIT_LOG(LOG_DEBUG, punit, "Oops, fallin outta the sky");
+	freelog(LOG_DEBUG, "Oops, %s is fallin outta sky", 
+		unit_type(punit)->name);
       }
-      punit->ai.done = TRUE; /* Won't help trying again */
       return;
     }
 
@@ -343,15 +340,13 @@ void ai_manage_airunit(struct player *pplayer, struct unit *punit)
     } else if (ai_find_strategic_airbase(punit, &dst_tile)) {
       freelog(LOG_DEBUG, "%s will fly to (%i, %i) (%s) to fight there",
               unit_type(punit)->name, dst_tile->x, dst_tile->y,
-              (tile_get_city(dst_tile) ? 
-               tile_get_city(dst_tile)->name : ""));
+              (map_get_city(dst_tile) ? 
+               map_get_city(dst_tile)->name : ""));
       punit->goto_tile = dst_tile;
-      punit->ai.done = TRUE; /* Wait for next turn */
-      (void) ai_unit_goto(punit, punit->goto_tile);
+      ai_unit_goto(punit, punit->goto_tile);
     } else {
       freelog(LOG_DEBUG, "%s cannot find anything to kill and is staying put", 
               unit_type(punit)->name);
-      punit->ai.done = TRUE;
       handle_unit_activity_request(punit, ACTIVITY_IDLE);
     }
   }

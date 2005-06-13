@@ -21,8 +21,8 @@
 
 #include "graphics.h"
 
-struct sprite *intro_gfx_sprite;
-struct sprite *radar_gfx_sprite;
+struct Sprite *intro_gfx_sprite;
+struct Sprite *radar_gfx_sprite;
 
 /****************************************************************************
   Return whether the client supports isometric view (isometric tilesets).
@@ -48,8 +48,8 @@ bool overhead_view_supported(void)
 void load_intro_gfx(void)
 {
   /* PORTME */
-  intro_gfx_sprite = load_gfxfile(tileset_main_intro_filename(tileset));
-  radar_gfx_sprite = load_gfxfile(tileset_mini_intro_filename(tileset));
+  intro_gfx_sprite = load_gfxfile(main_intro_filename);
+  radar_gfx_sprite = load_gfxfile(minimap_intro_filename);
 }
 
 /****************************************************************************
@@ -74,4 +74,67 @@ void free_intro_radar_sprites(void)
     free_sprite(radar_gfx_sprite);
     radar_gfx_sprite = NULL;
   }
+}
+
+/****************************************************************************
+  Return a NULL-terminated, permanently allocated array of possible
+  graphics types extensions.  Extensions listed first will be checked
+  first.
+****************************************************************************/
+const char **gfx_fileextensions(void)
+{
+  /* PORTME */
+
+  /* hack to allow stub to run */
+  static const char *ext[] = {
+    "png",	/* png should be the default. */
+    /* ...etc... */
+    NULL
+  };
+
+  return ext;
+}
+
+/****************************************************************************
+  Load the given graphics file into a sprite.  This function loads an
+  entire image file, which may later be broken up into individual sprites
+  with crop_sprite.
+****************************************************************************/
+struct Sprite *load_gfxfile(const char *filename)
+{
+  /* PORTME */
+  return NULL;
+}
+
+/****************************************************************************
+  Create a new sprite by cropping and taking only the given portion of
+  the image.
+****************************************************************************/
+struct Sprite *crop_sprite(struct Sprite *source,
+			   int x, int y, int width, int height,
+			   struct Sprite *mask,
+			   int mask_offset_x, int mask_offset_y)
+{
+  /* PORTME */
+  return NULL;
+}
+
+/****************************************************************************
+  Find the dimensions of the sprite.
+****************************************************************************/
+void get_sprite_dimensions(struct Sprite *sprite, int *width, int *height)
+{
+  /* PORTME */
+#if 0
+  *width = sprite->width;
+  *height = sprite->height;
+#endif
+}
+
+/****************************************************************************
+  Free a sprite and all associated image data.
+****************************************************************************/
+void free_sprite(struct Sprite *s)
+{
+  /* PORTME */
 }

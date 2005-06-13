@@ -97,7 +97,7 @@ static void gamelog_put_prefix(char *buf, int len, const char *element)
   char buf2[5000];
 
   my_snprintf(buf2, sizeof(buf2), "<%s y=\"%d\" t=\"%d\">%s</%s>", element,
-              game.info.year, game.info.turn, buf, element);
+              game.year, game.turn, buf, element);
   
   mystrlcpy(buf, buf2, len);
 }
@@ -353,18 +353,18 @@ void gamelog(int level, ...)
                   "<n1>%d</n1><n2>%d</n2><name>%s</name>"
                   "<m>%s %s %s from the %s</m>",
                   pplayer->player_no, pplayer2->player_no,
-                  get_tech_name(pplayer, (Tech_type_id) num),
+                  get_tech_name(pplayer, (Tech_Type_id) num),
                   get_nation_name_plural(pplayer->nation), word,
-                  get_tech_name(pplayer, (Tech_type_id) num),
+                  get_tech_name(pplayer, (Tech_Type_id) num),
                   get_nation_name_plural(pplayer2->nation));
     } else {
       my_snprintf(buf, sizeof(buf),
                   "<n1>%d</n1><name>%s</name>"
                   "<m>%s discover %s</m>",
                   pplayer->player_no,
-                  get_tech_name(pplayer, (Tech_type_id) num),
+                  get_tech_name(pplayer, (Tech_Type_id) num),
                   get_nation_name_plural(pplayer->nation),
-                  get_tech_name(pplayer, (Tech_type_id) num));
+                  get_tech_name(pplayer, (Tech_Type_id) num));
     }
     gamelog_put_prefix(buf, sizeof(buf), "tech");
     break;
@@ -467,17 +467,17 @@ void gamelog(int level, ...)
         }
       } unit_list_iterate_end;
       city_list_iterate(pplayer->cities, pcity) {
-        shields += pcity->prod[O_SHIELD];
-        food += pcity->prod[O_FOOD];
-        trade += pcity->surplus[O_TRADE];
+        shields += pcity->shield_prod;
+        food += pcity->food_prod;
+        trade += pcity->trade_prod;
       } city_list_iterate_end;
 
       my_snprintf(buf, sizeof(buf), "<n>%d</n><cities>%d</cities>"
                   "<pop>%d</pop><food>%d</food><prod>%d</prod>"
                   "<trade>%d</trade><settlers>%d</settlers><units>%d</units>",
-                  pplayer->player_no, city_list_size(pplayer->cities),
+                  pplayer->player_no, city_list_size(&pplayer->cities),
                   total_player_citizens(pplayer), food, shields, trade, 
-                  settlers, unit_list_size(pplayer->units));
+                  settlers, unit_list_size(&pplayer->units));
     }
     gamelog_put_prefix(buf, sizeof(buf), "info");
     break;
@@ -489,7 +489,7 @@ void gamelog(int level, ...)
                 pplayer->player_no, pplayer->username,
                 pplayer->is_connected ? 1 : 0,
                 pplayer->ai.control ? 
-                name_of_skill_level(pplayer->ai.skill_level) : "",
+                  name_of_skill_level(pplayer->ai.skill_level) : "",
                 get_nation_name_plural(pplayer->nation), pplayer->name);
     gamelog_put_prefix(buf, sizeof(buf), "player");
     break;
@@ -497,9 +497,9 @@ void gamelog(int level, ...)
     pteam = va_arg(args, struct team *);
 
     my_snprintf(buf, sizeof(buf), "<id>%d</id><name>%s</name>",
-                                  pteam->index, pteam->name);
+                                  pteam->id, pteam->name);
     players_iterate(aplayer) {
-      if (aplayer->team == pteam) {
+      if (aplayer->team == pteam->id) {
         cat_snprintf(buf, sizeof(buf), "<n>%d</n>", aplayer->player_no);
       }
     } players_iterate_end;
@@ -546,7 +546,7 @@ void gamelog(int level, ...)
       pteam = va_arg(args, struct team *);
       my_snprintf(buf, sizeof(buf), "<type>%s</type>", endgame_strings[num]);
       players_iterate(aplayer) {
-        if (aplayer->team == pteam) {
+        if (aplayer->team == pteam->id) {
           cat_snprintf(buf, sizeof(buf), "<n>%d</n>", aplayer->player_no);
         }
       } players_iterate_end;
@@ -568,7 +568,7 @@ void gamelog(int level, ...)
         for (nat_x = 0; nat_x < map.xsize; nat_x++) {
           struct tile *ptile = native_pos_to_tile(nat_x, nat_y);
 
-          mapline[i++] = is_ocean(tile_get_terrain(ptile)) ? ' ' : '.';
+          mapline[i++] = is_ocean(map_get_terrain(ptile)) ? ' ' : '.';
         }
         mapline[i++] = '\n';
       }
@@ -616,18 +616,31 @@ static void gamelog_status(char *buffer, int len) {
 
   int i, count = 0, highest = -1;
   struct player *highest_plr = NULL;
-  struct player_score_entry size[game.info.nplayers];
-  struct player_score_entry rank[game.info.nplayers];
+  struct player_score_entry size[game.nplayers], rank[game.nplayers];
 
   players_iterate(pplayer) {
     if (!is_barbarian(pplayer)) {
-      rank[count].value = pplayer->score.game;
+      rank[count].value = get_civ_score(pplayer);
       rank[count].idx = pplayer->player_no;
       size[count].value = total_player_citizens(pplayer);
       size[count].idx = pplayer->player_no;
       if (rank[count].value > highest) {
         highest = rank[count].value;
         highest_plr = pplayer;
+      }
+      count++;
+    }
+  } players_iterate_end;
+
+  /* Draws and team victories */
+  count = 0;
+  players_iterate(pplayer) {
+    if (!is_barbarian(pplayer)) {
+      if ((BV_ISSET_ANY(srvarg.draw)
+           && BV_ISSET(srvarg.draw, pplayer->player_no))
+          || players_on_same_team(pplayer, highest_plr)) {
+        /* We win a shared victory, so equal the score. */
+        rank[count].value = highest;
       }
       count++;
     }

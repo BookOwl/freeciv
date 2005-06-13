@@ -204,22 +204,22 @@ void create_science_dialog(bool make_modal)
   char goal_text[512];
   const char *report_title;
   
-  if (game.player_ptr->research->researching == A_UNSET) {
+  if (game.player_ptr->research.researching == A_UNSET) {
     my_snprintf(current_text, sizeof(current_text),
 		_("Researching %s: %d/%d"),
 		advances[A_NONE].name,
-		game.player_ptr->research->bulbs_researched,
+		game.player_ptr->research.bulbs_researched,
 		total_bulbs_required(game.player_ptr));
   } else {
     my_snprintf(current_text, sizeof(current_text),
 		_("Researching %s: %d/%d"),
 		get_tech_name(game.player_ptr,
-			      game.player_ptr->research->researching),
-		game.player_ptr->research->bulbs_researched,
+			      game.player_ptr->research.researching),
+		game.player_ptr->research.bulbs_researched,
 		total_bulbs_required(game.player_ptr));
   }
 
-  if (game.player_ptr->research->tech_goal == A_UNSET) {
+  if (game.player_ptr->ai.tech_goal == A_UNSET) {
     my_snprintf(goal_text, sizeof(goal_text),
 		_("Goal: %s (%d steps)"),
 		advances[A_NONE].name,
@@ -227,12 +227,12 @@ void create_science_dialog(bool make_modal)
   } else {
     my_snprintf(goal_text, sizeof(goal_text),
 		_("Goal: %s (%d steps)"),
-		advances[game.player_ptr->research->tech_goal].name,
+		advances[game.player_ptr->ai.tech_goal].name,
 		num_unknown_techs_for_goal(game.player_ptr,
-					   game.player_ptr->research->tech_goal));
+					   game.player_ptr->ai.tech_goal));
   }
   
-  for(i=A_FIRST, j=0; i<game.control.num_tech_types; i++)
+  for(i=A_FIRST, j=0; i<game.num_tech_types; i++)
     if(get_invention(game.player_ptr, i)==TECH_KNOWN) {
       tech_list_names_ptrs[j]=advances[i].name;
       j++;
@@ -317,7 +317,7 @@ void create_science_dialog(bool make_modal)
 				NULL);
 
   
-  for(i=A_FIRST, flag=0; i<game.control.num_tech_types; i++)
+  for(i=A_FIRST, flag=0; i<game.num_tech_types; i++)
     if(get_invention(game.player_ptr, i)==TECH_REACHABLE) {
       Widget entry=
       XtVaCreateManagedWidget(advances[i].name, smeBSBObjectClass, 
@@ -330,12 +330,12 @@ void create_science_dialog(bool make_modal)
   if(!flag)
     XtSetSensitive(science_change_menu_button, FALSE);
   
- for(i=A_FIRST, flag=0; i<game.control.num_tech_types; i++)
+ for(i=A_FIRST, flag=0; i<game.num_tech_types; i++)
     if (tech_is_available(game.player_ptr, i)
         && get_invention(game.player_ptr, i) != TECH_KNOWN
         && advances[i].req[0] != A_LAST && advances[i].req[1] != A_LAST
         && (num_unknown_techs_for_goal(game.player_ptr, i) < 11
-	    || i == game.player_ptr->research->tech_goal)) {
+	    || i == game.player_ptr->ai.tech_goal)) {
       Widget entry=
       XtVaCreateManagedWidget(advances[i].name, smeBSBObjectClass, 
 			      goalmenu, NULL);
@@ -390,7 +390,7 @@ void science_change_callback(Widget w, XtPointer client_data,
   } else {
     my_snprintf(current_text, sizeof(current_text),
 		_("Researching %s: %d/%d"),
-		advances[to].name, game.player_ptr->research->bulbs_researched,
+		advances[to].name, game.player_ptr->research.bulbs_researched,
 		total_bulbs_required(game.player_ptr));
 
     XtVaSetValues(science_current_label, XtNlabel, current_text, NULL);
@@ -480,24 +480,24 @@ void science_dialog_update(void)
     xaw_set_label(science_label, report_title);
     free((void *) report_title);
 
-    if (game.player_ptr->research->researching == A_UNSET) {
+    if (game.player_ptr->research.researching == A_UNSET) {
       my_snprintf(text, sizeof(text),
 		  _("Researching %s: %d/%d"),
 		  advances[A_NONE].name,
-		  game.player_ptr->research->bulbs_researched,
+		  game.player_ptr->research.bulbs_researched,
 		  total_bulbs_required(game.player_ptr));
     } else {
       my_snprintf(text, sizeof(text),
 		  _("Researching %s: %d/%d"),
 		  get_tech_name(game.player_ptr,
-				game.player_ptr->research->researching),
-		  game.player_ptr->research->bulbs_researched,
+				game.player_ptr->research.researching),
+		  game.player_ptr->research.bulbs_researched,
 		  total_bulbs_required(game.player_ptr));
     }
 
     xaw_set_label(science_current_label, text);
 
-    if (game.player_ptr->research->tech_goal == A_UNSET) {
+    if (game.player_ptr->ai.tech_goal == A_UNSET) {
       my_snprintf(text, sizeof(text),
 		  _("Goal: %s (%d steps)"),
 		  advances[A_NONE].name,
@@ -505,14 +505,14 @@ void science_dialog_update(void)
     } else {
       my_snprintf(text, sizeof(text),
 		  _("Goal: %s (%d steps)"),
-		  advances[game.player_ptr->research->tech_goal].name,
+		  advances[game.player_ptr->ai.tech_goal].name,
 		  num_unknown_techs_for_goal(game.player_ptr,
-					    game.player_ptr->research->tech_goal));
+					    game.player_ptr->ai.tech_goal));
     }
 
     xaw_set_label(science_goal_label, text);
 
-    for(i=A_FIRST, j=0; i<game.control.num_tech_types; i++)
+    for(i=A_FIRST, j=0; i<game.num_tech_types; i++)
       if(get_invention(game.player_ptr, i)==TECH_KNOWN) {
 	tech_list_names_ptrs[j]=advances[i].name;
 	j++;
@@ -529,7 +529,7 @@ void science_dialog_update(void)
 				   science_change_menu_button, 
 				   NULL);
     
-      for(i=A_FIRST, flag=0; i<game.control.num_tech_types; i++)
+      for(i=A_FIRST, flag=0; i<game.num_tech_types; i++)
       if(get_invention(game.player_ptr, i)==TECH_REACHABLE) {
 	Widget entry=
 	  XtVaCreateManagedWidget(advances[i].name, smeBSBObjectClass, 
@@ -549,12 +549,12 @@ void science_dialog_update(void)
 				  science_goal_menu_button, 
 				  NULL);
     
-    for(i=A_FIRST, flag=0; i<game.control.num_tech_types; i++)
+    for(i=A_FIRST, flag=0; i<game.num_tech_types; i++)
       if (tech_is_available(game.player_ptr, i)
 	  && get_invention(game.player_ptr, i) != TECH_KNOWN
 	  && advances[i].req[0] != A_LAST && advances[i].req[1] != A_LAST
 	  && (num_unknown_techs_for_goal(game.player_ptr, i) < 11
-	      || i == game.player_ptr->research->tech_goal)) {
+	      || i == game.player_ptr->ai.tech_goal)) {
 	Widget entry=
 	  XtVaCreateManagedWidget(advances[i].name, smeBSBObjectClass, 
 				  goalmenu, NULL);
@@ -703,7 +703,7 @@ void economy_list_callback(Widget w, XtPointer client_data,
   if (ret->list_index != XAW_LIST_NONE) {
     /* The user has selected an improvement type. */
     int i = economy_improvement_type[ret->list_index];
-    bool is_sellable = (improvement_exists(i) && can_sell_building(i));
+    bool is_sellable = (i >= 0 && i < game.num_impr_types && !is_wonder(i));
 
     XtSetSensitive(sellobsolete_command, is_sellable
 		   && improvement_obsolete(game.player_ptr, i));
@@ -949,6 +949,7 @@ void activeunits_list_callback(Widget w, XtPointer client_data,
 
   may_upgrade =
     ((inx != XAW_LIST_NONE) &&
+     (unit_type_exists (activeunits_type[inx])) &&
      (can_upgrade_unittype (game.player_ptr, activeunits_type[inx]) != -1));
 
   XtSetSensitive (upgrade_command, may_upgrade);
@@ -987,8 +988,9 @@ void activeunits_upgrade_callback(Widget w, XtPointer client_data,
 
   if(ret->list_index!=XAW_LIST_NONE) {
     ut1 = activeunits_type[ret->list_index];
-    CHECK_UNIT_TYPE(ut1);
-
+    if (!(unit_type_exists (ut1))) {
+      return;
+    }
     /* puts(unit_types[ut1].name); */
 
     ut2 = can_upgrade_unittype(game.player_ptr,
@@ -1065,16 +1067,15 @@ void activeunits_report_dialog_update(void)
     unit_list_iterate(game.player_ptr->units, punit) {
       (unitarray[punit->type].active_count)++;
       if (punit->homecity) {
-	unitarray[punit->type].upkeep_shield += punit->upkeep[O_SHIELD];
-	unitarray[punit->type].upkeep_food += punit->upkeep[O_FOOD];
-	/* TODO: gold upkeep */
+	unitarray[punit->type].upkeep_shield += punit->upkeep;
+	unitarray[punit->type].upkeep_food += punit->upkeep_food;
       }
     }
     unit_list_iterate_end;
     city_list_iterate(game.player_ptr->cities,pcity) {
-      if (pcity->is_building_unit) {
+      if (pcity->is_building_unit &&
+	  (unit_type_exists (pcity->currently_building)))
 	(unitarray[pcity->currently_building].building_count)++;
-      }
     }
     city_list_iterate_end;
 

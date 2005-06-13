@@ -20,18 +20,22 @@
 #endif
 
 #include "shared.h"
-#include "timing.h"
 
 #include "connection.h"		/* struct conn_list */
 #include "fc_types.h"
 #include "improvement.h"	/* Impr_Status */
 #include "player.h"
-#include "packets.h"
-#include "specialist.h"
+
+/* Changing these will probably break network compatability. */
+#define MAX_LEN_DEMOGRAPHY 16
+#define MAX_LEN_ALLOW_TAKE 16
+#define MAX_ID_LEN 33
+#define MAX_GRANARY_INIS 24
+#define MAX_LEN_STARTUNIT (20+1)
 
 enum server_states { 
   PRE_GAME_STATE, 
-  UNUSED_STATE, /* Have to keep this around for savegame compatibility. */
+  SELECT_RACES_STATE, 
   RUN_GAME_STATE,
   GAME_OVER_STATE
 };
@@ -39,6 +43,7 @@ enum server_states {
 enum client_states { 
   CLIENT_BOOT_STATE,
   CLIENT_PRE_GAME_STATE,
+  CLIENT_SELECT_RACE_STATE,
   CLIENT_WAITING_FOR_GAME_START_STATE,
   CLIENT_GAME_RUNNING_STATE,
   CLIENT_GAME_OVER_STATE
@@ -51,46 +56,179 @@ enum client_states {
 #define CONTAMINATION_FALLOUT   2
 
 struct civ_game {
-  struct packet_game_info info;
-  struct packet_ruleset_control control;
   bool is_new_game;		/* 1 for games never started */
   int version;
   char id[MAX_ID_LEN];		/* server only */
+  int civstyle;
+  int gold;
+  char start_units[MAX_LEN_STARTUNIT];
+  int dispersion;
+  int tech;
+  int skill_level;
+  int timeout;
   int timeoutint;     /* increase timeout every N turns... */
   int timeoutinc;     /* ... by this amount ... */
   int timeoutincmult; /* ... and multiply timeoutinc by this amount ... */
   int timeoutintinc;  /* ... and increase timeoutint by this amount */
   int timeoutcounter; /* timeoutcounter - timeoutint = turns to next inc. */
-  int timeoutaddenemymove; /* minimum timeout after an enemy move is seen */
+  int timeoutaddenemymove; /* increase to, when enemy move seen */
+  int tcptimeout;
+  int netwait;
   time_t last_ping;
-  struct timer *phase_timer; /* Time since seconds_to_phase_done was set. */
-  /* The .info.simultaneous_phases value indicates the phase mode currently in
-   * use.  The "stored" value is a value the player can change; it won't
-   * take effect until the next turn. */
-  bool simultaneous_phases_stored;
+  int pingtimeout;
+  int pingtime;
+  time_t turn_start;
+  int end_year;
+  int year;
+  int turn;
+  int researchcost; /* Multiplier on cost of new research */
+  int diplcost, freecost, conquercost;
+  int diplchance;
+  int cityfactor;
+  int citymindist;
+  int civilwarsize;
+  int contactturns;
+  int rapturedelay;
+  int min_players, max_players, nplayers;
   int aifill;
+  int notradesize, fulltradesize;
+  int barbarianrate;
+  int onsetbarbarian;
+  int nbarbarians;
+  int occupychance;
+  int unhappysize;
+  bool angrycitizen;
   char *startmessage;
+  int player_idx;
   struct player *player_ptr;
   struct player players[MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS];
-  struct conn_list *all_connections;        /* including not yet established */
-  struct conn_list *est_connections;        /* all established client conns */
-  struct conn_list *game_connections;       /* involved in game; send map etc */
+  struct conn_list all_connections;        /* including not yet established */
+  struct conn_list est_connections;        /* all established client conns */
+  struct conn_list game_connections;       /* involved in game; send map etc */
+  int global_advances[A_LAST];             /* a counter */
+  int global_wonders[B_LAST];              /* contains city id's */
+         /* global_wonders[] may also be (-1), or the id of a city
+	    which no longer exists, if the wonder has been destroyed */
+  Impr_Status improvements[B_LAST];        /* impr. with equiv_range==World */
+
+  int heating; /* Number of polluted squares. */
+  int globalwarming; /* Total damage done. (counts towards a warming event.) */
+  int warminglevel; /* If globalwarming is higher than this number there is
+		       a chance of a warming event. */
+
+  int cooling; /* Number of irradiated squares. */
+  int nuclearwinter; /* Total damage done. (counts towards a cooling event.) */
+  int coolinglevel; /* If nuclearwinter is higher than this number there is
+		       a chance of a cooling event. */
+
   char save_name[MAX_LEN_NAME];
+  int save_nturns;
+  int save_compress_level;
+  int foodbox;
+  int aqueductloss;
+  int killcitizen;
+  int techpenalty;
+  int razechance;
   bool scorelog;
   int seed;
+  int aqueduct_size;
+  int add_to_size_limit;
+  bool savepalace;
+  bool natural_city_names;
+  bool spacerace;
+  bool turnblock;
+  bool fixedlength;
+  bool auto_ai_toggle;
+  bool fogofwar;
   bool fogofwar_old;	/* as the fog_of_war bit get changed by setting
 			   the server we need to remember the old setting */
+
+  int num_unit_types;
+  int num_impr_types;
+  int num_tech_types;  /* including A_NONE */
+
+  int government_count;
+  int default_government;
+  int government_when_anarchy;
   int ai_goal_government;	/* kludge */
 
-  char rulesetdir[MAX_LEN_NAME];
+  int nation_count;
+  int playable_nation_count;
+  int styles_count;
 
-  /* values from game.info.t */
+  int terrain_count;
+
+  int watchtower_extra_vision;
+  int watchtower_vision;
+  int allowed_city_names;
+
+  int borders;		/* distance of border from city; 0=disabled. */
+  bool happyborders;
+  int diplomacy;        /* who can do it */
+  bool slow_invasions;  /* land units lose all movement landing on shores */
+
+  char rulesetdir[MAX_LEN_NAME];
+  int firepower_factor;		/* See README.rulesets */
+
+  Impr_Type_id default_building;
+  Impr_Type_id palace_building;
+  Impr_Type_id land_defend_building;
+
   struct {
+    int cathedral_plus;		/* eg Theology */
+    int cathedral_minus;	/* eg Communism */
+    int colosseum_plus;		/* eg Electricity */
+    int temple_plus;		/* eg Mysticism */
+    int nav;			/* AI convenience: tech_req for first
+				   non-trireme ferryboat */
+    int u_partisan;		/* convenience: tech_req for first
+				   Partisan unit */
+    /* Following tech list is A_LAST terminated if shorter than
+       max len, and the techs listed are guaranteed to exist;
+       this could be better implemented as a new field in the
+       units.ruleset
+    */
+    int partisan_req[MAX_NUM_TECH_LIST];       /* all required for uprisings */
+  } rtech;
+
+  /* values from game.ruleset */
+  struct {
+    struct {
+      char name[MAX_LEN_NAME];
+      int min_size, bonus;
+    } specialists[SP_COUNT];
+    bool changable_tax;
+    int forced_science; /* only relevant if !changable_tax */
+    int forced_luxury;
+    int forced_gold;
+    int min_city_center_food;
+    int min_city_center_shield;
+    int min_city_center_trade;
+    int min_dist_bw_cities;
+    int init_vis_radius_sq;
+    int hut_overflight;
+    bool pillage_select;
+    int nuke_contamination;
+    int granary_food_ini[MAX_GRANARY_INIS];
+    int granary_num_inis;
+    int granary_food_inc;
+    int tech_cost_style;
+    int tech_leakage;
+    int tech_cost_double_year;
+
     /* Items given to all players at game start.  Server only. */
     int global_init_techs[MAX_NUM_TECH_LIST];
     int global_init_buildings[MAX_NUM_BUILDING_LIST];
+
+    bool killstack;
   } rgame;
   
+  struct {
+    int improvement_factor;
+    int unit_factor;
+    int total_factor;
+  } incite_cost;
+
   char demography[MAX_LEN_DEMOGRAPHY];
   char allow_take[MAX_LEN_ALLOW_TAKE];
 
@@ -106,22 +244,27 @@ struct civ_game {
   int trireme_loss_chance[MAX_VET_LEVELS];
   int work_veteran_chance[MAX_VET_LEVELS];
   int veteran_chance[MAX_VET_LEVELS];
+  int revolution_length; /* 0=> random length, else the fixated length */
+};
 
-  struct {
-    /* Function to be called in game_remove_unit when a unit is deleted. */
-    void (*unit_deallocate)(int unit_id);
-  } callbacks;
+/* Unused? */
+struct lvldat {
+  int advspeed;
+};
+
+/* Server setting types.  Changing these will break network compatability. */
+enum sset_type {
+  SSET_BOOL, SSET_INT, SSET_STRING
 };
 
 void game_init(void);
-void game_map_init(void);
 void game_free(void);
 void ruleset_data_free(void);
 
 int game_next_year(int);
 void game_advance_year(void);
 
-int civ_population(const struct player *pplayer);
+int civ_population(struct player *pplayer);
 struct city *game_find_city_by_name(const char *name);
 
 struct unit *find_unit_by_id(int id);
@@ -139,7 +282,6 @@ void translate_data_names(void);
 struct player *get_player(int player_id);
 bool is_valid_player_id(int player_id);
 int get_num_human_and_ai_players(void);
-bool is_player_phase(const struct player *pplayer, int phase);
 
 const char *population_to_text(int thousand_citizen);
 
@@ -154,7 +296,7 @@ extern bool is_server;
 #define GAME_MIN_GOLD            0
 #define GAME_MAX_GOLD            5000
 
-#define GAME_DEFAULT_START_UNITS  "ccwwx"
+#define GAME_DEFAULT_START_UNITS  "ccx"
 
 #define GAME_DEFAULT_DISPERSION  0
 #define GAME_MIN_DISPERSION      0
@@ -186,13 +328,9 @@ extern bool is_server;
 #define GAME_MIN_AIFILL              0
 #define GAME_MAX_AIFILL              GAME_MAX_MAX_PLAYERS
 
-#define GAME_DEFAULT_FOODBOX         100
-#define GAME_MIN_FOODBOX             1
-#define GAME_MAX_FOODBOX             10000
-
-#define GAME_DEFAULT_SCIENCEBOX 100
-#define GAME_MIN_SCIENCEBOX 1
-#define GAME_MAX_SCIENCEBOX 10000
+#define GAME_DEFAULT_RESEARCHCOST	   20
+#define GAME_MIN_RESEARCHCOST	       4
+#define GAME_MAX_RESEARCHCOST        100
 
 #define GAME_DEFAULT_DIPLCOST        0
 #define GAME_MIN_DIPLCOST            0
@@ -215,8 +353,8 @@ extern bool is_server;
 #define GAME_MAX_DIPLOMACY           4
 
 #define GAME_DEFAULT_DIPLCHANCE      80
-#define GAME_MIN_DIPLCHANCE          40
-#define GAME_MAX_DIPLCHANCE          100
+#define GAME_MIN_DIPLCHANCE          1
+#define GAME_MAX_DIPLCHANCE          99
 
 #define GAME_DEFAULT_FREECOST        0
 #define GAME_MIN_FREECOST            0
@@ -242,8 +380,6 @@ extern bool is_server;
 #define GAME_MIN_CONTACTTURNS        0
 #define GAME_MAX_CONTACTTURNS        100
 
-#define GAME_DEFAULT_CELEBRATESIZE    3
-
 #define GAME_DEFAULT_RAPTUREDELAY    1
 #define GAME_MIN_RAPTUREDELAY        1
 #define GAME_MAX_RAPTUREDELAY        99 /* 99 practicaly disables rapturing */
@@ -251,6 +387,10 @@ extern bool is_server;
 #define GAME_DEFAULT_SAVEPALACE      TRUE
 
 #define GAME_DEFAULT_NATURALCITYNAMES TRUE
+
+#define GAME_DEFAULT_FOODBOX         10
+#define GAME_MIN_FOODBOX             5
+#define GAME_MAX_FOODBOX             30
 
 #define GAME_DEFAULT_AQUEDUCTLOSS    0
 #define GAME_MIN_AQUEDUCTLOSS        0
@@ -287,10 +427,12 @@ extern bool is_server;
 #define GAME_DEFAULT_TIMEOUTINCMULT  1
 #define GAME_DEFAULT_TIMEOUTADDEMOVE 0
 
+#ifndef NDEBUG
 #define GAME_MIN_TIMEOUT             -1
+#else
+#define GAME_MIN_TIMEOUT             0
+#endif
 #define GAME_MAX_TIMEOUT             8639999
-
-#define GAME_DEFAULT_SIMULTANEOUS_PHASES TRUE
 
 #define GAME_DEFAULT_TCPTIMEOUT      10
 #define GAME_MIN_TCPTIMEOUT          0
@@ -329,8 +471,6 @@ extern bool is_server;
 #define GAME_MIN_OCCUPYCHANCE        0
 #define GAME_MAX_OCCUPYCHANCE        100
 
-#define GAME_DEFAULT_AUTOATTACK      FALSE
-
 #define GAME_DEFAULT_RULESETDIR      "default"
 
 #define GAME_DEFAULT_SAVE_NAME       "civgame"
@@ -346,9 +486,17 @@ extern bool is_server;
 #define GAME_MAX_COMPRESS_LEVEL     9
 #define GAME_NO_COMPRESS_LEVEL      0
 
-#define GAME_DEFAULT_WATCHTOWER_EXTRA_VISION 2
+#define GAME_DEFAULT_REPUTATION 1000
+#define GAME_MAX_REPUTATION 1000
+#define GAME_REPUTATION_INCR 2
+
+#define GAME_DEFAULT_WATCHTOWER_VISION 2
+#define GAME_MIN_WATCHTOWER_VISION 1
+#define GAME_MAX_WATCHTOWER_VISION 3
+
+#define GAME_DEFAULT_WATCHTOWER_EXTRA_VISION 0
 #define GAME_MIN_WATCHTOWER_EXTRA_VISION 0
-#define GAME_MAX_WATCHTOWER_EXTRA_VISION 4
+#define GAME_MAX_WATCHTOWER_EXTRA_VISION 2
 
 #define GAME_DEFAULT_ALLOWED_CITY_NAMES 1
 #define GAME_MIN_ALLOWED_CITY_NAMES 0
@@ -359,5 +507,15 @@ extern bool is_server;
 #define GAME_MAX_REVOLUTION_LENGTH 10
 
 #define GAME_START_YEAR -4000
+
+#define specialist_type_iterate(sp)					    \
+{									    \
+  int sp;                                                                   \
+                                                                            \
+  for (sp = 0; sp < SP_COUNT; sp++) {
+
+#define specialist_type_iterate_end                                         \
+  }                                                                         \
+}
 
 #endif  /* FC__GAME_H */

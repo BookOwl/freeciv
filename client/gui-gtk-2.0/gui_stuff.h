@@ -18,7 +18,6 @@
 #include "shared.h"
 
 GtkWidget *gtk_stockbutton_new(const gchar *stock, const gchar *label_text);
-void gtk_stockbutton_set_label(GtkWidget *button, const gchar *label_text);
 void gtk_expose_now(GtkWidget *w);
 void gtk_set_relative_position(GtkWidget *ref, GtkWidget *w, int px, int py);
 
@@ -83,8 +82,6 @@ struct gui_dialog
   struct gui_dialog **source;
 
   GUI_DIALOG_RESPONSE_FUN response_callback;
-
-  GtkSizeGroup *gui_button;
 };
 
 void gui_dialog_new(struct gui_dialog **pdlg, GtkNotebook *notebook);
@@ -93,8 +90,6 @@ GtkWidget *gui_dialog_add_button(struct gui_dialog *dlg,
     const char *text, int response);
 GtkWidget *gui_dialog_add_stockbutton(struct gui_dialog *dlg,
     const char *stock, const char *text, int response);
-GtkWidget *gui_dialog_add_widget(struct gui_dialog *dlg,
-				 GtkWidget *widget);
 void gui_dialog_set_default_size(struct gui_dialog *dlg,
     int width, int height);
 void gui_dialog_set_title(struct gui_dialog *dlg, const char *title);

@@ -5,7 +5,6 @@ pkgdatadir = $(datadir)/@PACKAGE@/history
 
 pkgdata_DATA =          \
 	buildings.ruleset \
-	effects.ruleset	\
 	game.ruleset	\
 	governments.ruleset \
 	techs.ruleset	\
