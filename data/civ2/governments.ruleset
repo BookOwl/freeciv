@@ -17,6 +17,13 @@ options="1.9"
 [governments]
 default="Despotism"
 when_anarchy="Anarchy"
+ai_goal="Republic"
+
+ai_tech_hints = { "tech", "turns_factor", "const_factor", "get_first", "done"
+    "Code of Laws", 150,   0, 1, 0
+    "The Republic",  90,  90, 0, 1
+    "Monarchy",       0, 150, 0, 0
+}
 
 ; Below: The individual government types, one per section.
 ;
@@ -31,11 +38,29 @@ when_anarchy="Anarchy"
 ; Notes on fields:
 
 ; name        = name of this government form as seen by user 
-; reqs        = requirements for this government (see README.effects)
+; tech_req    = required advance, names from techs.ruleset, or special:
+;               "None" => available from start
 ; graphic     = tag specifing preferred graphic
 ; graphic_alt = alternate graphics tag if preferred is not found;
 ;               should be a standard tag if preferred is not;
 ;		otherwise may be "-"
+; flags       = special effects; see government.c for strings
+
+; martial_law_max  = maximum number of units which can enforce martial law
+;		     in the city
+; martial_law_per  = number of unhappy citizens made content by each
+;		     enforcer unit
+; max_single_rate  = maximum which can be allocated to single one of
+;		     taxation/luxuries/science
+; empire_size_mod  = signed modifier added to cityfactor to determine
+;		     empire size when base unhappiness is increased
+; empire_size_inc  = if non-zero, reduce one content citizen for
+;		     every empire_size_inc cities once #cities
+;		     exceeds (cityfactor + empire_size_mod)
+; civil_war_chance = percentage change of civil war when capital is captured
+;		     (and player has enough cities etc)
+; rapture_size     = a happy city will celebrate when its size is
+;                    this value or larger
 
 ; unit_*_factor = factor applied to individual unit upkeep for different 
 ;		  upkeep forms
@@ -80,9 +105,19 @@ when_anarchy="Anarchy"
 [government_anarchy]
 
 name        = _("Anarchy")
-; No reqs
+tech_req    = "None"
 graphic     = "gov.anarchy"
 graphic_alt = "-"
+flags       = "-"
+
+martial_law_max  = 100  ; unlimited
+martial_law_per  = 1
+max_single_rate  = 100  ; rates are irrelevant under Anarchy; use 100
+		        ; to avoid unnecessary changes during revolution
+civil_war_chance = 90
+empire_size_mod  = -6
+empire_size_inc  = 6
+rapture_size     = 3
 
 unit_unhappy_factor = 0
 unit_shield_factor  = 1
@@ -145,10 +180,18 @@ You may impose martial law under Anarchy: each military unit inside\
 [government_despotism]
 
 name        = _("Despotism")
-; No reqs
+tech_req    = "None"
 graphic     = "gov.despotism"
 graphic_alt = "-"
-ai_better   = "Monarchy"
+flags       = "-"
+
+martial_law_max  = 100  ; unlimited
+martial_law_per  = 1
+max_single_rate  = 60
+civil_war_chance = 80
+empire_size_mod  = -6
+empire_size_inc  = 6
+rapture_size     = 3
 
 unit_unhappy_factor = 0 
 unit_shield_factor  = 1
@@ -212,12 +255,18 @@ You may impose martial law under Despotism: each military unit\
 [government_monarchy]
 
 name        = _("Monarchy")
-reqs = { "type", "name", "range"
-         "tech", "Monarchy", "Player"
-       }
+tech_req    = "Monarchy"
 graphic     = "gov.monarchy"
 graphic_alt = "-"
-ai_better   = "Communism"
+flags       = "-"
+
+martial_law_max  = 3
+martial_law_per  = 1
+max_single_rate  = 70
+civil_war_chance = 70
+empire_size_mod  = -3
+empire_size_inc  = 9
+rapture_size     = 3
 
 unit_unhappy_factor = 0
 unit_shield_factor  = 1
@@ -280,11 +329,18 @@ You may impose limited martial law under Monarchy: each military\
 [government_communism]
 
 name        = _("Communism")
-reqs = { "type", "name", "range"
-         "tech", "Communism", "Player"
-       }
+tech_req    = "Communism"
 graphic     = "gov.communism"
 graphic_alt = "-"
+flags       = "Build_Veteran_Diplomats", "Inspires_Partisans"
+
+martial_law_max  = 3
+martial_law_per  = 2
+max_single_rate  = 80
+civil_war_chance = 50
+empire_size_mod  = 127 ; unlimited
+empire_size_inc  = 0
+rapture_size     = 3
 
 unit_unhappy_factor = 0
 unit_shield_factor  = 1
@@ -354,11 +410,19 @@ You impose limited but efficient martial law under Communism.  Each\
 [government_fundamentalism]
 
 name        = _("Fundamentalism")
-reqs = { "type", "name", "range"
-         "tech", "Fundamentalism", "Player"
-       }
+tech_req    = "Fundamentalism"
 graphic     = "gov.fundamentalism"
 graphic_alt = "-"
+flags       = "No_Unhappy_Citizens", "Convert_Tithes_To_Money", 
+              "Reduced_Research", "Fanatic_Troops"
+
+martial_law_max  = 0
+martial_law_per  = 0
+max_single_rate  = 80
+civil_war_chance = 60
+empire_size_mod  = 0
+empire_size_inc  = 12
+rapture_size     = 3
 
 unit_unhappy_factor = 0
 unit_shield_factor  = 1
@@ -431,11 +495,18 @@ Improvement that normally convert unhappy citizens to content\
 [government_republic]
 
 name        = _("Republic")
-reqs = { "type", "name", "range"
-         "tech", "The Republic", "Player"
-       }
+tech_req    = "The Republic"
 graphic     = "gov.republic"
 graphic_alt = "-"
+flags       = "Has_Senate", "Rapture_City_Growth"
+
+martial_law_max  = 0
+martial_law_per  = 0
+max_single_rate  = 80
+civil_war_chance = 40
+empire_size_mod  = 0
+empire_size_inc  = 12
+rapture_size     = 3
 
 unit_unhappy_factor = 1
 unit_shield_factor  = 1
@@ -509,11 +580,19 @@ The citizens of a city will tolerate 1 aggressive unit; subsequent\
 [government_democracy]
 
 name        = _("Democracy")
-reqs = { "type", "name", "range"
-         "tech", "Democracy", "Player"
-       }
+tech_req    = "Democracy"
 graphic     = "gov.democracy"
 graphic_alt = "-"
+flags       = "Has_Senate", "Revolution_When_Unhappy", 
+              "Inspires_Partisans", "Unbribable", "Rapture_City_Growth"
+
+martial_law_max  = 0
+martial_law_per  = 0
+max_single_rate  = 100
+civil_war_chance = 30
+empire_size_mod  = 3
+empire_size_inc  = 15
+rapture_size     = 3
 
 unit_unhappy_factor = 2
 unit_shield_factor  = 1

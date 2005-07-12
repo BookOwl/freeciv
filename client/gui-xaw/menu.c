@@ -27,7 +27,6 @@
 
 #include "fcintl.h"
 #include "mem.h"
-#include "movement.h"
 #include "support.h"
 
 #include "government.h"
@@ -289,8 +288,8 @@ void update_menus(void)
 
     punit=get_unit_in_focus();
 
-    for(i=0; i<game.info.nplayers; i++) {
-      if (city_list_size(game.players[i].cities)) {
+    for(i=0; i<game.nplayers; i++) {
+      if (city_list_size(&game.players[i].cities)) {
 	any_cities = TRUE;
 	break;
       }
@@ -319,7 +318,7 @@ void update_menus(void)
     government_iterate(gov) {
       Widget w;
 
-      if (gov->index == game.info.government_when_anarchy) {
+      if (gov->index == game.government_when_anarchy) {
 	continue;
       }
 
@@ -364,10 +363,10 @@ void update_menus(void)
 
     if (punit && can_client_issue_orders()) {
       Terrain_type_id  ttype;
-      struct terrain *      tinfo;
+      struct tile_type *      tinfo;
 
       ttype = punit->tile->terrain;
-      tinfo = get_terrain(ttype);
+      tinfo = get_tile_type(ttype);
 
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_BUILD_CITY,
 			   can_unit_add_or_build_city(punit));
@@ -430,6 +429,8 @@ void update_menus(void)
 			   unit_can_help_build_wonder_here(punit));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_TRADEROUTE,
 			   unit_can_est_traderoute_here(punit));
+      menu_entry_sensitive(MENU_ORDER, MENU_ORDER_RETURN,
+			   !(is_air_unit(punit) || is_heli_unit(punit)));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_DIPLOMAT_DLG,
 			   (is_diplomat_unit(punit)
 			    && diplomat_can_do_action(punit, DIPLOMAT_ANY_ACTION,
@@ -437,7 +438,7 @@ void update_menus(void)
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_NUKE,
                            unit_flag(punit, F_NUCLEAR));
 
-      if (unit_flag(punit, F_CITIES) && tile_get_city(punit->tile)) {
+      if (unit_flag(punit, F_CITIES) && map_get_city(punit->tile)) {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_BUILD_CITY,
 			  TEXT_ORDER_CITY_ADD_TO, NULL);
       } else {
@@ -449,9 +450,9 @@ void update_menus(void)
 	  && (tinfo->irrigation_result != ttype)) {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_IRRIGATE,
 			  TEXT_ORDER_IRRIGATE_CHANGE_TO,
-			  (get_terrain(tinfo->irrigation_result))->terrain_name);
+			  (get_tile_type(tinfo->irrigation_result))->terrain_name);
       }
-      else if (tile_has_special(punit->tile, S_IRRIGATION) &&
+      else if (map_has_special(punit->tile, S_IRRIGATION) &&
 	       player_knows_techs_with_flag(game.player_ptr, TF_FARMLAND)) {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_IRRIGATE,
 			  TEXT_ORDER_IRRIGATE_FARMLAND, NULL);
@@ -464,7 +465,7 @@ void update_menus(void)
 	  && (tinfo->mining_result != ttype)) {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_MINE,
 			  TEXT_ORDER_MINE_CHANGE_TO,
-			  (get_terrain(tinfo->mining_result))->terrain_name);
+			  (get_tile_type(tinfo->mining_result))->terrain_name);
       } else {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_MINE,
 			  TEXT_ORDER_MINE_MINE, NULL);
@@ -474,7 +475,7 @@ void update_menus(void)
 	  && (tinfo->transform_result != ttype)) {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_TRANSFORM,
 			  TEXT_ORDER_TRANSFORM_TRANSFORM_TO,
-			  (get_terrain(tinfo->transform_result))->terrain_name);
+			  (get_tile_type(tinfo->transform_result))->terrain_name);
       } else {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_TRANSFORM,
 			  TEXT_ORDER_TRANSFORM_TERRAIN, NULL);
@@ -488,7 +489,7 @@ void update_menus(void)
 			  TEXT_ORDER_POLLUTION_POLLUTION, NULL);
       }
 
-      if (tile_has_special(punit->tile, S_ROAD)) {
+      if (map_has_special(punit->tile, S_ROAD)) {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_ROAD,
 			  TEXT_ORDER_ROAD_RAILROAD, NULL);
       } else {
@@ -557,7 +558,7 @@ static void government_menu_callback(Widget w, XtPointer client_data,
     popup_worklists_dialog(game.player_ptr);
     break;
   case MENU_GOVERNMENT_REVOLUTION:
-    popup_revolution_dialog(game.info.government_when_anarchy);
+    popup_revolution_dialog(-1);
     break;
   }
 }
@@ -785,7 +786,7 @@ static void reports_menu_callback(Widget w, XtPointer client_data,
     popup_activeunits_report_dialog(0);
     break;
   case MENU_REPORT_PLAYERS:
-    popup_players_dialog(FALSE);
+    popup_players_dialog();
     break;
    case MENU_REPORT_ECONOMY:
     popup_economy_report_dialog(0);
@@ -800,7 +801,7 @@ static void reports_menu_callback(Widget w, XtPointer client_data,
     send_report_request(REPORT_TOP_5_CITIES);
     break;
   case MENU_REPORT_MESSAGES:
-    popup_meswin_dialog(FALSE);
+    popup_meswin_dialog();
     break;
    case MENU_REPORT_DEMOGRAPHIC:
     send_report_request(REPORT_DEMOGRAPHIC);

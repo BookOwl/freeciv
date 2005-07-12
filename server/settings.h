@@ -11,9 +11,6 @@
    GNU General Public License for more details.
 ***********************************************************************/
 
-#ifndef FC__SETTINGS_H
-#define FC__SETTINGS_H
-
 #include "shared.h"
 
 #include "game.h"
@@ -51,6 +48,7 @@ enum sset_to_client {
  */
 enum sset_category {
   SSET_GEOLOGY,
+  SSET_ECOLOGY,
   SSET_SOCIOLOGY,
   SSET_ECONOMICS,
   SSET_MILITARY,
@@ -68,8 +66,7 @@ enum sset_level {
   SSET_ALL,
   SSET_VITAL,
   SSET_SITUATIONAL,
-  SSET_RARE,
-  SSET_CHANGED
+  SSET_RARE
 };
 
 extern const char *sset_level_names[];
@@ -123,7 +120,3 @@ struct settings_s {
 
 extern struct settings_s settings[];
 extern const int SETTINGS_NUM;
-
-bool sset_is_changeable(int idx);
-
-#endif				/* FC__SETTINGS_H */

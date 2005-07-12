@@ -20,8 +20,6 @@ pkgdata_DATA = \
 		boer.ruleset \
 		bosnia.ruleset \
 		brazilian.ruleset \
-		bulgarian.ruleset \
-		byzantium.ruleset	\
 		canadian.ruleset \
 		carthaginian.ruleset \
 		catalan.ruleset \
@@ -65,7 +63,6 @@ pkgdata_DATA = \
 		mexican.ruleset \
 		mongol.ruleset \
 		mordor.ruleset \
-		newzealand.ruleset	\
 		nigerian.ruleset \
 		observer.ruleset \
 		persian.ruleset \
@@ -73,7 +70,6 @@ pkgdata_DATA = \
 		polish.ruleset \
 		portuguese.ruleset \
 		quebecois.ruleset \
-		romanian.ruleset	\
 		roman.ruleset \
 		russian.ruleset \
 		scottish.ruleset \
@@ -81,7 +77,6 @@ pkgdata_DATA = \
 		silesian.ruleset \
 		singaporean.ruleset \
 		sioux.ruleset \
-		slovakian.ruleset	\
 		slovenian.ruleset \
 		spanish.ruleset \
 		sumerian.ruleset \
@@ -91,11 +86,13 @@ pkgdata_DATA = \
 		thai.ruleset \
 		turk.ruleset \
 		ukrainian.ruleset \
-		venezuelan.ruleset	\
 		vietnamese.ruleset \
 		viking.ruleset \
 		welsh.ruleset \
 		zulu.ruleset 
 
 EXTRA_DIST = $(pkgdata_DATA) Makefile.am.sh
+
+Makefile.am: Makefile.am.sh $(shell echo *.ruleset)
+	sh Makefile.am.sh >Makefile.am
 

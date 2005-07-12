@@ -36,14 +36,12 @@ sprites =
 		"f.bosnia", "flags/bosnia"
 		"f.brasil", "flags/brasil"
 		"f.bulgaria", "flags/bulgaria"
-		"f.byzantium", "flags/byzantium"
 		"f.canada", "flags/canada"
 		"f.catalan", "flags/catalan"
 		"f.cheyenne", "flags/cheyenne"
 		"f.chile", "flags/chile"
 		"f.china", "flags/china"
 		"f.columbia", "flags/columbia"
-;		"f.constantine", "flags/constantine"
 		"f.cornwall", "flags/cornwall"
 		"f.croatia", "flags/croatia"
 		"f.cuba", "flags/cuba"
@@ -89,7 +87,6 @@ sprites =
 		"f.mordor", "flags/mordor"
 		"f.nato", "flags/nato"
 		"f.netherlands", "flags/netherlands"
-		"f.newzealand", "flags/newzealand"
 		"f.nigeria", "flags/nigeria"
 		"f.norway", "flags/norway"
 		"f.observer", "flags/observer"
@@ -100,7 +97,6 @@ sprites =
 		"f.poland", "flags/poland"
 		"f.portugal", "flags/portugal"
 		"f.quebec", "flags/quebec"
-		"f.romania", "flags/romania"
 		"f.rome", "flags/rome"			; Roman republic flag
 		"f.russia", "flags/russia"
 		"f.rwanda", "flags/rwanda"		; Alternate Zulu
@@ -108,7 +104,6 @@ sprites =
 		"f.serbia", "flags/serbia"
 		"f.silesia", "flags/silesia"
 		"f.singapore", "flags/singapore"
-		"f.slovakia", "flags/slovakia"
 		"f.slovenia", "flags/slovenia"
 		"f.south_africa", "flags/south_africa"	; for Zulus
 		"f.soviet", "flags/soviet"
@@ -126,7 +121,6 @@ sprites =
 		"f.united_nations", "flags/united_nations"
 		"f.unknown", "flags/unknown"		; useful for alternates
 		"f.usa", "flags/usa"
-		"f.venezuela", "flags/venezuela"
 		"f.vietnam", "flags/vietnam"
 		"f.wales", "flags/wales"
 		"f.alien", "flags/alien"

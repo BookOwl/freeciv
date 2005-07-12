@@ -14,6 +14,4 @@ libaicore_a_SOURCES = 		\
 	cm.c	 		\
 	cm.h			\
 	citymap.c		\
-	citymap.h               \
-        caravan.c               \
-        caravan.h
+	citymap.h

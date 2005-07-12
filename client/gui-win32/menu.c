@@ -28,7 +28,6 @@
 #include "government.h"
 #include "map.h"
 #include "mem.h"
-#include "movement.h"
 #include "support.h"
 #include "unit.h"
  
@@ -595,7 +594,7 @@ void handle_menu(int code)
       disconnect_from_server();
       break;
     case IDM_GAME_QUIT:
-      ui_exit();
+      exit(EXIT_SUCCESS);
       break;
 
 
@@ -818,19 +817,19 @@ void handle_menu(int code)
 
 
     case IDM_REPORTS_CITIES:
-      popup_city_report_dialog(TRUE);
+      popup_city_report_dialog(0);
       break;
     case IDM_REPORTS_UNITS:
-      popup_activeunits_report_dialog(TRUE);
+      popup_activeunits_report_dialog(0);
       break;
     case IDM_REPORTS_PLAYERS:
-      popup_players_dialog(TRUE);
+      popup_players_dialog();
       break;
     case IDM_REPORTS_ECONOMY:
-      popup_economy_report_dialog(TRUE);
+      popup_economy_report_dialog(0);
       break;  
     case IDM_REPORTS_SCIENCE:
-      popup_science_dialog(TRUE);
+      popup_science_dialog(0);
       break;
     case IDM_REPORTS_WONDERS:
       send_report_request(REPORT_WONDERS_OF_THE_WORLD);
@@ -839,7 +838,7 @@ void handle_menu(int code)
       send_report_request(REPORT_TOP_5_CITIES);
       break;       
     case IDM_REPORTS_MESSAGES:
-      popup_meswin_dialog(TRUE);
+      popup_meswin_dialog();
       break;
     case IDM_REPORTS_DEMOGRAPHICS:
       send_report_request(REPORT_DEMOGRAPHIC);
@@ -980,21 +979,6 @@ HMENU create_mainmenu(void)
   return my_create_menu(&items);
 }
 
-/****************************************************************************
-  Return the text for the tile, changed by the activity.
-
-  Should only be called for irrigation, mining, or transformation, and
-  only when the activity changes the base terrain type.
-****************************************************************************/
-static const char *get_tile_change_menu_text(struct tile *ptile,
-					     enum unit_activity activity)
-{
-  struct tile newtile = *ptile;
-
-  tile_apply_activity(&newtile, activity);
-  return tile_get_info_text(ptile);
-}
-
 /**************************************************************************
   Update the status and names of all menu items.
 **************************************************************************/
@@ -1041,8 +1025,8 @@ update_menus(void)
     govts = GetSubMenu(GetSubMenu(menu, 1), 5); 
 
     /* add new government entries. */
-    for (i = 0; i < game.control.government_count; i++) {
-      if (i != game.info.government_when_anarchy) {
+    for (i = 0; i < game.government_count; i++) {
+      if (i != game.government_when_anarchy) {
 	AppendMenu(govts, MF_STRING, IDM_GOVERNMENT_CHANGE_FIRST + i,
 		   governments[i].name);
 	my_enable_menu(menu, IDM_GOVERNMENT_CHANGE_FIRST + i, 
@@ -1063,7 +1047,7 @@ update_menus(void)
     }
 
     if (can_client_issue_orders()) {
-      my_enable_menu(menu, IDM_GOVERNMENT_TAX_RATE, game.info.changable_tax);
+      my_enable_menu(menu, IDM_GOVERNMENT_TAX_RATE, game.rgame.changable_tax);
       my_enable_menu(menu, IDM_GOVERNMENT_WORKLISTS, TRUE);
       my_enable_menu(menu, IDM_GOVERNMENT_REVOLUTION, TRUE);
     }
@@ -1073,7 +1057,7 @@ update_menus(void)
 		   (game.player_ptr->spaceship.state!=SSHIP_NONE));
 
     my_check_menu(menu, IDM_VIEW_MAP_GRID, draw_map_grid);
-    my_enable_menu(menu, IDM_VIEW_NATIONAL_BORDERS, game.info.borders > 0);
+    my_enable_menu(menu, IDM_VIEW_NATIONAL_BORDERS, game.borders > 0);
     my_check_menu(menu, IDM_VIEW_NATIONAL_BORDERS, draw_borders);
     my_check_menu(menu, IDM_VIEW_CITY_NAMES, draw_city_names);
     my_enable_menu(menu, IDM_VIEW_CITY_GROWTH, draw_city_names);
@@ -1107,7 +1091,7 @@ update_menus(void)
       char irrtext[128], mintext[128], transtext[128];
       char *roadtext;
       Terrain_type_id  ttype;
-      struct terrain *tinfo;
+      struct tile_type *tinfo;
 
       sz_strlcpy(irrtext, N_("Build Irrigation") "\tI");
       sz_strlcpy(mintext, N_("Build Mine") "\tM");
@@ -1186,7 +1170,7 @@ update_menus(void)
 	my_rename_menu(menu, IDM_ORDERS_BUILD_CITY, N_("Help Build Wonder")
 		       "\tB");
       } else if (unit_flag(punit, F_CITIES)) {
-	if (tile_get_city(punit->tile)) {
+	if (map_get_city(punit->tile)) {
 	  my_rename_menu(menu, IDM_ORDERS_BUILD_CITY, N_("Add to City")
 			 "\tB");
 	} else {
@@ -1200,7 +1184,7 @@ update_menus(void)
       if (unit_flag(punit, F_TRADE_ROUTE)) {
 	my_rename_menu(menu, IDM_ORDERS_ROAD, N_("Make Trade Route") "\tR");
       } else if (unit_flag(punit, F_SETTLERS)) {
-	if (tile_has_special(punit->tile, S_ROAD)) {
+	if (map_has_special(punit->tile, S_ROAD)) {
 	  roadtext = N_("Build Railroad") "\tR";
 	  road_activity = ACTIVITY_RAILROAD;  
 	} else {
@@ -1213,13 +1197,12 @@ update_menus(void)
       }
 
       ttype = punit->tile->terrain;
-      tinfo = get_terrain(ttype);
+      tinfo = get_tile_type(ttype);
       if (tinfo->irrigation_result != T_NONE
 	  && tinfo->irrigation_result != ttype) {
 	my_snprintf(irrtext, sizeof(irrtext), irrfmt,
-		    get_tile_change_menu_text(punit->tile,
-					      ACTIVITY_IRRIGATE));
-      } else if (tile_has_special(punit->tile, S_IRRIGATION)
+		    (get_tile_type(tinfo->irrigation_result))->terrain_name);
+      } else if (map_has_special(punit->tile, S_IRRIGATION)
 		 && player_knows_techs_with_flag(game.player_ptr,
 						 TF_FARMLAND)) {
 	sz_strlcpy(irrtext, N_("Build Farmland") "\tI");
@@ -1227,13 +1210,12 @@ update_menus(void)
       if (tinfo->mining_result != T_NONE
 	  && tinfo->mining_result != ttype) {
 	my_snprintf(mintext, sizeof(mintext), minfmt,
-		    get_tile_change_menu_text(punit->tile, ACTIVITY_MINE));
+		    (get_tile_type(tinfo->mining_result))->terrain_name);
       }
       if (tinfo->transform_result != T_NONE
 	  && tinfo->transform_result != ttype) {
 	my_snprintf(transtext, sizeof(transtext), transfmt,
-		    get_tile_change_menu_text(punit->tile,
-					      ACTIVITY_TRANSFORM));
+		    (get_tile_type(tinfo->transform_result))->terrain_name);
       }
 
       my_rename_menu(menu, IDM_ORDERS_IRRIGATE, irrtext);

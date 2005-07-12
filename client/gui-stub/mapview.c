@@ -42,7 +42,7 @@ void update_info_label(void)
 		"Gold %d\n"
 		"Tax: %d Lux: %d Sci: %d"),
 	      population_to_text(civ_population(game.player_ptr)),
-	      textyear(game.info.year), game.player_ptr->economic.gold,
+	      textyear(game.year), game.player_ptr->economic.gold,
 	      game.player_ptr->economic.tax,
 	      game.player_ptr->economic.luxury,
 	      game.player_ptr->economic.science);
@@ -51,16 +51,16 @@ void update_info_label(void)
 }
 
 /****************************************************************************
-  Update the information label which gives info on the current unit
-  and the tile under the current unit, for specified unit.  Note that
-  in practice punit is always the focus unit.
+  Update the information label which gives info on the current unit and
+  the square under the current unit, for specified unit.  Note that in
+  practice punit is always the focus unit.
 
   Clears label if punit is NULL.
 
-  Typically also updates the cursor for the map_canvas (this is
-  related because the info label may includes "select destination"
-  prompt etc).  And it may call update_unit_pix_label() to update the
-  icons for units on this tile.
+  Typically also updates the cursor for the map_canvas (this is related
+  because the info label may includes  "select destination" prompt etc).
+  And it may call update_unit_pix_label() to update the icons for units
+  on this square.
 ****************************************************************************/
 void update_unit_info_label(struct unit *punit)
 {
@@ -68,8 +68,8 @@ void update_unit_info_label(struct unit *punit)
 }
 
 /****************************************************************************
-  Update the timeout display.  The timeout is the time until the turn
-  ends, in seconds.
+  Update the timeout in the client window.  The timeout is the time until
+  the turn ends, in seconds.
 ****************************************************************************/
 void update_timeout_label(void)
 {
@@ -79,10 +79,9 @@ void update_timeout_label(void)
 }
 
 /****************************************************************************
-  If do_restore is FALSE it should change the turn button style (to
-  draw the user's attention to it).  If called regularly from a timer
-  this will give a blinking turn done button.  If do_restore is TRUE
-  this should reset the turn done button to the default style.
+  If do_restore is FALSE it should change the turn button style (to draw
+  the user's attention to it).  If do_restore is TRUE this should reset
+  the turn done button to the default style.
 ****************************************************************************/
 void update_turn_done_button(bool do_restore)
 {
@@ -105,8 +104,7 @@ void update_turn_done_button(bool do_restore)
   client window.  The parameters tell which sprite to use for the
   indicator.
 ****************************************************************************/
-void set_indicator_icons(struct sprite *bulb, struct sprite *sol,
-			 struct sprite *flake, struct sprite *gov)
+void set_indicator_icons(int bulb, int sol, int flake, int gov)
 {
   /* PORTME */
 }
@@ -118,6 +116,124 @@ void set_indicator_icons(struct sprite *bulb, struct sprite *sol,
   called.
 ****************************************************************************/
 void map_size_changed(void)
+{
+  /* PORTME */
+}
+
+/****************************************************************************
+  Draw a description for the given city.  This description may include the
+  name, turns-to-grow, production, and city turns-to-build (depending on
+  client options).
+
+  (canvas_x, canvas_y) gives the location on the given canvas at which to
+  draw the description.  This is the location of the city itself so the
+  text must be drawn underneath it.  pcity gives the city to be drawn,
+  while (*width, *height) should be set by show_ctiy_desc to contain the
+  width and height of the text block (centered directly underneath the
+  city's tile).
+****************************************************************************/
+void show_city_desc(struct canvas *pcanvas, int canvas_x, int canvas_y,
+		    struct city *pcity, int *width, int *height)
+{
+  /* PORTME */
+}
+
+/****************************************************************************
+  Create a canvas of the given size.
+****************************************************************************/
+struct canvas *canvas_create(int width, int height)
+{
+  /* PORTME */
+  return NULL;
+}
+
+/****************************************************************************
+  Free any resources associated with this canvas and the canvas struct
+  itself.
+****************************************************************************/
+void canvas_free(struct canvas *store)
+{
+  /* PORTME */
+}
+
+/****************************************************************************
+  Draw some or all of a sprite onto the mapview or citydialog canvas.
+****************************************************************************/
+void canvas_put_sprite(struct canvas *pcanvas,
+		    int canvas_x, int canvas_y,
+		    struct Sprite *sprite,
+		    int offset_x, int offset_y, int width, int height)
+{
+  /* PORTME */
+}
+
+/****************************************************************************
+  Draw a full sprite onto the mapview or citydialog canvas.
+****************************************************************************/
+void canvas_put_sprite_full(struct canvas *pcanvas,
+			 int canvas_x, int canvas_y,
+			 struct Sprite *sprite)
+{
+  /* PORTME */
+}
+
+/****************************************************************************
+  Draw a full sprite onto the canvas.  If "fog" is specified draw it with
+  fog.
+****************************************************************************/
+void canvas_put_sprite_fogged(struct canvas *pcanvas,
+			      int canvas_x, int canvas_y,
+			      struct Sprite *psprite,
+			      bool fog, int fog_x, int fog_y)
+{
+  /* PORTME */
+}
+
+/****************************************************************************
+  Draw a filled-in colored rectangle onto the mapview or citydialog canvas.
+****************************************************************************/
+void canvas_put_rectangle(struct canvas *pcanvas,
+		       enum color_std color,
+		       int canvas_x, int canvas_y, int width, int height)
+{
+  /* PORTME */
+}
+
+/****************************************************************************
+  Fill the area covered by the sprite with the given color.
+****************************************************************************/
+void canvas_fill_sprite_area(struct canvas *pcanvas,
+			     struct Sprite *psprite, enum color_std color,
+			     int canvas_x, int canvas_y)
+{
+  /* PORTME */
+}
+
+/****************************************************************************
+  Fill the area covered by the sprite with the given color.
+****************************************************************************/
+void canvas_fog_sprite_area(struct canvas *pcanvas, struct Sprite *psprite,
+			    int canvas_x, int canvas_y)
+{
+  /* PORTME */
+}
+
+/****************************************************************************
+  Draw a 1-pixel-width colored line onto the mapview or citydialog canvas.
+****************************************************************************/
+void canvas_put_line(struct canvas *pcanvas, enum color_std color,
+		  enum line_type ltype, int start_x, int start_y,
+		  int dx, int dy)
+{
+  /* PORTME */
+}
+
+/****************************************************************************
+  Copies an area from the source canvas to the destination canvas.
+****************************************************************************/
+void canvas_copy(struct canvas *dest, struct canvas *src,
+		     int src_x, int src_y, int dest_x, int dest_y, int width,
+		     int height)
 {
   /* PORTME */
 }
@@ -142,7 +258,7 @@ void flush_mapcanvas(int canvas_x, int canvas_y,
 }
 
 /****************************************************************************
-  Mark the rectangular region as "dirty" so that we know to flush it
+  Mark the rectangular region as 'dirty' so that we know to flush it
   later.
 ****************************************************************************/
 void dirty_rect(int canvas_x, int canvas_y,
@@ -197,7 +313,7 @@ void update_map_canvas_scrollbars_size(void)
 }
 
 /****************************************************************************
-  Update (refresh) all city descriptions on the mapview.
+  Update (refresh) all of the city descriptions on the mapview.
 ****************************************************************************/
 void update_city_descriptions(void)
 {
@@ -205,9 +321,29 @@ void update_city_descriptions(void)
 }
 
 /****************************************************************************
+  If necessary, clear the city descriptions out of the buffer.
+****************************************************************************/
+void prepare_show_city_descriptions(void)
+{
+  /* PORTME */
+}
+
+/****************************************************************************
   Draw a cross-hair overlay on a tile.
 ****************************************************************************/
 void put_cross_overlay_tile(struct tile *ptile)
+{
+  /* PORTME */
+}
+
+/****************************************************************************
+  Draw a single tile of the citymap onto the mapview.  The tile is drawn
+  as the given color with the given worker on it.  The exact method of
+  drawing is left up to the GUI.
+****************************************************************************/
+void put_city_worker(struct canvas *pcanvas,
+		     enum color_std color, enum city_tile_type worker,
+		     int canvas_x, int canvas_y)
 {
   /* PORTME */
 }

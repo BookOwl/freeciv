@@ -3,9 +3,13 @@
 # Use this as, eg, "./ser -r data/civ1.serv" 
 #
 # Civ1 start:
-set sciencebox 50
+set researchcost 10
 set startunits c
 rulesetdir civ1
 #
 # Minor civ1 rules:
+set civstyle 1
 set borders 0
+#
+# Optional:
+#set nations civ1

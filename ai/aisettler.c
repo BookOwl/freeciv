@@ -24,7 +24,6 @@
 #include "government.h"
 #include "map.h"
 #include "mem.h"
-#include "movement.h"
 #include "log.h"
 #include "packets.h"
 #include "path_finding.h"
@@ -113,7 +112,7 @@ void cityresult_fill(struct player *pplayer,
                      struct ai_data *ai,
                      struct cityresult *result)
 {
-  struct city *pcity = tile_get_city(result->tile);
+  struct city *pcity = map_get_city(result->tile);
   int sum = 0;
   bool virtual_city = FALSE;
   int curr_govt = pplayer->government;
@@ -151,16 +150,13 @@ void cityresult_fill(struct player *pplayer,
       /* We cannot read city center from cache */
 
       /* Food */
-      result->citymap[i][j].food
-	= base_city_get_output_tile(i, j, pcity, FALSE, O_FOOD);
+      result->citymap[i][j].food = base_city_get_food_tile(i, j, pcity, FALSE);
 
       /* Shields */
-      result->citymap[i][j].shield
-	= base_city_get_output_tile(i, j, pcity, FALSE, O_SHIELD);
+      result->citymap[i][j].shield =base_city_get_shields_tile(i, j, pcity, FALSE);
 
       /* Trade */
-      result->citymap[i][j].trade
-	= base_city_get_output_tile(i, j, pcity, FALSE, O_TRADE);
+      result->citymap[i][j].trade = base_city_get_trade_tile(i, j, pcity, FALSE);
 
       sum = result->citymap[i][j].food * ai->food_priority
             + result->citymap[i][j].trade * ai->science_priority
@@ -229,16 +225,16 @@ void cityresult_fill(struct player *pplayer,
     /* Corruption and waste of a size one city deducted. Notice that we
      * don't do this if 'fulltradesize' is changed, since then we'd
      * never make cities. */
-    if (game.info.fulltradesize == 1) {
+    if (game.fulltradesize == 1) {
       result->corruption = ai->science_priority
-	* city_waste(pcity, O_TRADE,
-		     result->citymap[result->o_x][result->o_y].trade
-		     + result->citymap[2][2].trade);
+	* city_corruption(pcity, 
+			  result->citymap[result->o_x][result->o_y].trade
+			  + result->citymap[2][2].trade);
     } else {
       result->corruption = 0;
     }
     result->waste = ai->shield_priority
-      * city_waste(pcity, O_SHIELD,
+      * city_waste(pcity,
 		   result->citymap[result->o_x][result->o_y].shield
 		   + result->citymap[2][2].shield);
   } else {
@@ -246,13 +242,13 @@ void cityresult_fill(struct player *pplayer,
      * is possible (with notradesize) that we _gain_ value here. */
     pcity->size++;
     result->corruption = ai->science_priority
-      * (city_waste(pcity, O_TRADE,
-		    result->citymap[result->o_x][result->o_y].trade)
-	 - pcity->waste[O_TRADE]);
+      * (city_corruption(pcity,
+			 result->citymap[result->o_x][result->o_y].trade)
+	 - pcity->corruption);
     result->waste = ai->shield_priority
-      * (city_waste(pcity, O_SHIELD,
+      * (city_waste(pcity,
 		    result->citymap[result->o_x][result->o_y].shield)
-	 - pcity->waste[O_SHIELD]);
+	 - pcity->shield_waste);
     pcity->size--;
   }
   result->total -= result->corruption;
@@ -296,8 +292,8 @@ static int defense_bonus(struct cityresult *result, struct ai_data *ai)
 {
   /* Defense modification (as tie breaker mostly) */
   int defense_bonus = 
-    10 + get_terrain(tile_get_terrain(result->tile))->defense_bonus / 10;
-  if (tile_has_special(result->tile, S_RIVER)) {
+            get_tile_type(map_get_terrain(result->tile))->defense_bonus;
+  if (map_has_special(result->tile, S_RIVER)) {
     defense_bonus +=
         (defense_bonus * terrain_control.river_defense_bonus) / 100;
   }
@@ -378,7 +374,7 @@ static void city_desirability(struct player *pplayer, struct ai_data *ai,
                               struct unit *punit, struct tile *ptile,
                               struct cityresult *result)
 {  
-  struct city *pcity = tile_get_city(ptile);
+  struct city *pcity = map_get_city(ptile);
 
   assert(punit && ai && pplayer && result);
 
@@ -392,7 +388,7 @@ static void city_desirability(struct player *pplayer, struct ai_data *ai,
   }
 
   /* Check if another settler has taken a spot within mindist */
-  square_iterate(ptile, game.info.min_dist_bw_cities-1, tile1) {
+  square_iterate(ptile, game.rgame.min_dist_bw_cities-1, tile1) {
     if (citymap_is_reserved(tile1)) {
       return;
     }
@@ -403,7 +399,7 @@ static void city_desirability(struct player *pplayer, struct ai_data *ai,
   }
 
   if (pcity && (pcity->size + unit_pop_value(punit->type)
-		> game.info.add_to_size_limit)) {
+		> game.add_to_size_limit)) {
     /* Can't exceed population limit. */
     return;
   }
@@ -419,7 +415,7 @@ static void city_desirability(struct player *pplayer, struct ai_data *ai,
   }
 
   /* If (x, y) is an existing city, consider immigration */
-  if (pcity && pcity->owner == pplayer) {
+  if (pcity && pcity->owner == pplayer->player_no) {
     return;
   }
 
@@ -445,8 +441,8 @@ static void city_desirability(struct player *pplayer, struct ai_data *ai,
 **************************************************************************/
 void ai_settler_init(struct player *pplayer)
 {
-  cachemap = fc_realloc(cachemap, MAP_INDEX_SIZE * sizeof(*cachemap));
-  memset(cachemap, -1, MAP_INDEX_SIZE * sizeof(*cachemap));
+  cachemap = fc_realloc(cachemap, MAX_MAP_INDEX * sizeof(*cachemap));
+  memset(cachemap, -1, MAX_MAP_INDEX * sizeof(*cachemap));
 }
 
 /**************************************************************************
@@ -486,7 +482,7 @@ static bool settler_map_iterate(struct pf_parameter *parameter,
        * likelihood go away next turn, or even in a few nanoseconds. */
       continue;
     }
-    if (game.info.borders > 0
+    if (game.borders > 0
         && ptile->owner != NULL
         && ptile->owner != pplayer
         && pplayers_in_peace(ptile->owner, pplayer)) {
@@ -524,27 +520,24 @@ static bool settler_map_iterate(struct pf_parameter *parameter,
      * further step away. */
     if (best->result > RESULT_IS_ENOUGH
         && turns > parameter->move_rate /* sic -- yeah what an explanation! */
-        && best_turn < turns /*+ game.info.min_dist_bw_cities*/) {
+        && best_turn < turns /*+ game.rgame.min_dist_bw_cities*/) {
       break;
     }
   } pf_iterator_end;
 
   pf_destroy_map(map);
 
-  assert(!found || 0 <= best->result);
   return found;
 }
 
 /**************************************************************************
   Find nearest and best city placement or (TODO) a city to immigrate to.
 
-  Option look_for_boat forces us to find a (real) boat before cosidering
-  going overseas.  Option use_virt_boat allows to use virtual boat but only
+  Option look_for_boat forces to find a boat before cosidering going 
+  overseas.  Option use_virt_boat allows to use virtual boat but only
   if punit is in a coastal city right now (should only be used by 
   virtual units).  I guess it won't hurt to remove this condition, PF 
   will just give no positions.
-  If (!look_for_boat && !use_virt_boat), will not consider placements
-  overseas.
 **************************************************************************/
 void find_best_city_placement(struct unit *punit, struct cityresult *best,
 			      bool look_for_boat, bool use_virt_boat)
@@ -554,8 +547,6 @@ void find_best_city_placement(struct unit *punit, struct cityresult *best,
   struct unit *ferry = NULL;
 
   assert(pplayer->ai.control);
-  /* Only virtual units may use virtual boats: */
-  assert(0 == punit->id || !use_virt_boat);
 
   best->tile = NULL;
   best->result = 0;
@@ -582,30 +573,26 @@ void find_best_city_placement(struct unit *punit, struct cityresult *best,
 
   if (ferry 
       || (use_virt_boat && is_ocean_near_tile(punit->tile) 
-          && tile_get_city(punit->tile))) {
+          && map_get_city(punit->tile))) {
     if (!ferry) {
       /* No boat?  Get a virtual one! */
-      Unit_type_id boattype
+      Unit_Type_id boattype
         = best_role_unit_for_player(pplayer, L_FERRYBOAT);
 
       if (boattype == U_LAST) {
         /* Sea travel not possible yet. Bump tech want for ferries. */
-        Unit_type_id boattype = get_role_unit(L_FERRYBOAT, 0);
-
+        Unit_Type_id boattype = get_role_unit(L_FERRYBOAT, 0);
         if (boattype != U_LAST) {
-          Tech_type_id tech_req = unit_types[boattype].tech_requirement;
+          Tech_Type_id tech_req = unit_types[boattype].tech_requirement;
 
           pplayer->ai.tech_want[tech_req] += FERRY_TECH_WANT;
-          TECH_LOG(LOG_DEBUG, pplayer, tech_req, "+ %d for %s to ferry settler",
-                   FERRY_TECH_WANT, unit_name(boattype));
+          return;
         }
-        return;
       }
       ferry = create_unit_virtual(pplayer, NULL, boattype, 0);
       ferry->tile = punit->tile;
     }
 
-    assert(SEA_MOVING == unit_type(ferry)->move_type);
     pft_fill_unit_overlap_param(&parameter, ferry);
     parameter.get_TB = no_fights_or_unknown;
 
@@ -623,7 +610,4 @@ void find_best_city_placement(struct unit *punit, struct cityresult *best,
       destroy_unit_virtual(ferry);
     }
   }
-  /* If we use a virtual boat, we must have permission and be emigrating: */
-  assert(!best->virt_boat || use_virt_boat);
-  assert(!best->virt_boat || best->overseas);
 }

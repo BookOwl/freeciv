@@ -47,7 +47,6 @@
 #include "log.h"
 #include "mem.h"
 #include "player.h"
-#include "requirements.h"
 #include "support.h"
 #include "tech.h"
 #include "worklist.h"
@@ -71,7 +70,7 @@ void dio_set_put_conv_callback(DIO_PUT_CONV_FUN fun)
  Returns FALSE if the destination isn't large enough or the source was
  bad.
 **************************************************************************/
-static bool get_conv(char *dst, size_t ndst, const char *src,
+static bool get_conv(char *dst, size_t ndst, const unsigned char *src,
 		     size_t nsrc)
 {
   size_t len = nsrc;		/* length to copy, not including null */
@@ -321,7 +320,7 @@ void dio_put_string(struct data_out *dout, const char *value)
 {
   if (put_conv_callback) {
     size_t length;
-    char *buffer;
+    unsigned char *buffer;
 
     if ((buffer = (*put_conv_callback) (value, &length))) {
       dio_put_memory(dout, buffer, length + 1);
@@ -473,7 +472,7 @@ void dio_get_bool8(struct data_in *din, bool * dest)
 **************************************************************************/
 void dio_get_bool32(struct data_in *din, bool * dest)
 {
-  int ival = 0;
+  int ival;
 
   dio_get_uint32(din, &ival);
 
@@ -506,7 +505,7 @@ void dio_get_sint8(struct data_in *din, int *dest)
 **************************************************************************/
 void dio_get_sint16(struct data_in *din, int *dest)
 {
-  int tmp = 0;
+  int tmp;
 
   dio_get_uint16(din, &tmp);
   if (dest) {
@@ -535,7 +534,7 @@ void dio_get_memory(struct data_in *din, void *dest, size_t dest_size)
 **************************************************************************/
 void dio_get_string(struct data_in *din, char *dest, size_t max_dest_size)
 {
-  char *c;
+  unsigned char *c;
   size_t ps_len;		/* length in packet, not including null */
   size_t offset, remaining;
 
@@ -577,7 +576,7 @@ void dio_get_string(struct data_in *din, char *dest, size_t max_dest_size)
 void dio_get_bit_string(struct data_in *din, char *dest,
 			size_t max_dest_size)
 {
-  int npack = 0;		/* number claimed in packet */
+  int npack;			/* number claimed in packet */
   int i;			/* iterate the bytes */
 
   assert(dest != NULL && max_dest_size > 0);
@@ -719,38 +718,3 @@ void dio_put_diplstate(struct data_out *dout,
   dio_put_uint16(dout, pds->contact_turns_left);
   dio_put_uint8(dout, pds->has_reason_to_cancel);
 }
-
-/**************************************************************************
-  De-serialize a requirement.
-**************************************************************************/
-void dio_get_requirement(struct data_in *din, struct requirement *preq)
-{
-  int type, range, value;
-  bool survives, negated;
-
-  dio_get_uint8(din, &type);
-  dio_get_sint32(din, &value);
-  dio_get_uint8(din, &range);
-  dio_get_bool8(din, &survives);
-  dio_get_bool8(din, &negated);
-
-  *preq = req_from_values(type, range, survives, negated, value);
-}
-
-/**************************************************************************
-  Serialize a requirement.
-**************************************************************************/
-void dio_put_requirement(struct data_out *dout, const struct requirement *preq)
-{
-  int type, range, value;
-  bool survives, negated;
-
-  req_get_values(preq, &type, &range, &survives, &negated, &value);
-
-  dio_put_uint8(dout, type);
-  dio_put_sint32(dout, value);
-  dio_put_uint8(dout, range);
-  dio_put_bool8(dout, survives);
-  dio_put_bool8(dout, negated);
-}
-

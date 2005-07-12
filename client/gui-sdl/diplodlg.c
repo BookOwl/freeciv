@@ -418,7 +418,7 @@ static int gold_callback(struct GUI *pWidget)
 					     CLAUSE_GOLD, amount);
     
   } else {
-    append_output_window(_("Invalid amount of gold specified."));
+    append_output_window(_("Game: Invalid amount of gold specified."));
   }
   
   if(amount || !pWidget->string16->text) {
@@ -627,7 +627,7 @@ static struct ADVANCED_DLG * popup_diplomatic_objects(struct player *pPlayer0,
     bool flag = FALSE;
     int i;
     
-    for (i = 1; i < game.control.num_tech_types; i++) {
+    for (i = 1; i < game.num_tech_types; i++) {
       if (get_invention(pPlayer0, i) == TECH_KNOWN &&
          tech_is_available(pPlayer1, i) &&
 	(get_invention(pPlayer1, i) == TECH_UNKNOWN || 
@@ -660,7 +660,7 @@ static struct ADVANCED_DLG * popup_diplomatic_objects(struct player *pPlayer0,
     }
     
     if(flag) {
-      for (; i < game.control.num_tech_types; i++) {
+      for (; i < game.num_tech_types; i++) {
 	if (get_invention(pPlayer0, i) == TECH_KNOWN &&
 	   tech_is_available(pPlayer1, i) &&
 	  (get_invention(pPlayer1, i) == TECH_UNKNOWN || 

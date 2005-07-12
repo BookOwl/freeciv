@@ -40,8 +40,6 @@
 #include "civclient.h"
 #include "clinet.h"
 #include "control.h" /* get_unit_in_focus */
-#include "goto.h"
-
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "mapctrl.h"
@@ -98,7 +96,7 @@ void popup_goto_dialog(void)
 {
   Position x, y;
   Dimension width, height;
-  Boolean no_player_cities = !(city_list_size(game.player_ptr->cities));
+  Boolean no_player_cities = !(city_list_size(&game.player_ptr->cities));
 
   if (!can_client_issue_orders()) {
     return;
@@ -211,17 +209,17 @@ void update_goto_dialog(Widget goto_list)
   cleanup_goto_list();
 
   if(all_cities) {
-    for(i=0, ncities_total=0; i<game.info.nplayers; i++) {
-      ncities_total += city_list_size(game.players[i].cities);
+    for(i=0, ncities_total=0; i<game.nplayers; i++) {
+      ncities_total+=city_list_size(&game.players[i].cities);
     }
   } else {
-    ncities_total = city_list_size(game.player_ptr->cities);
+    ncities_total=city_list_size(&game.player_ptr->cities);
   }
 
   city_name_ptrs=fc_malloc(ncities_total*sizeof(char*));
   
-  for(i=0, j=0; i<game.info.nplayers; i++) {
-    if (!all_cities && i != game.info.player_idx) continue;
+  for(i=0, j=0; i<game.nplayers; i++) {
+    if(!all_cities && i!=game.player_idx) continue;
     city_list_iterate(game.players[i].cities, pcity) {
       char name[MAX_LEN_NAME+3];
       sz_strlcpy(name, pcity->name);
@@ -308,7 +306,7 @@ void goto_goto_command_callback(Widget w, XtPointer client_data,
   if (pdestcity) {
     struct unit *punit = get_unit_in_focus();
     if (punit) {
-      send_goto_tile(punit, pdestcity->tile);
+      send_goto_unit(punit, pdestcity->tile);
     }
   }
   popdown_goto_dialog();

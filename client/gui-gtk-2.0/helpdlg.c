@@ -187,7 +187,7 @@ static void create_tech_tree(int tech, int levels, GtkTreeIter *parent)
   GValue        value = { 0, };
 
   if (advances[tech].req[0] == A_LAST && advances[tech].req[1] == A_LAST) {
-    bg = COLOR_REQTREE_UNREACHABLE;
+    bg = COLOR_STD_RED;
 
     gtk_tree_store_append(tstore, &l, parent);
     help_advances[tech] = TRUE;
@@ -200,22 +200,16 @@ static void create_tech_tree(int tech, int levels, GtkTreeIter *parent)
     gtk_tree_store_set(tstore, &l,
 		       1, -1,
 		       2, tech,
-		       3, &get_color(tileset, bg)->color
+		       3, colors_standard[bg],
 		       -1);
     return;
   }
 
-  bg = COLOR_REQTREE_BACKGROUND;
   switch (get_invention(game.player_ptr, tech)) {
-  case TECH_UNKNOWN:
-    bg = COLOR_REQTREE_UNREACHABLE;
-    break;
-  case TECH_KNOWN:
-    bg = COLOR_REQTREE_KNOWN;
-    break;
-  case TECH_REACHABLE:
-    bg = COLOR_REQTREE_REACHABLE;
-    break;
+  case TECH_UNKNOWN:	      bg = COLOR_STD_RED;	      break;
+  case TECH_KNOWN:	      bg = COLOR_STD_GROUND;	      break;
+  case TECH_REACHABLE:        bg = COLOR_STD_YELLOW;	      break;
+  default:		      bg = COLOR_STD_WHITE;	      break;
   }
   turns_to_tech = num_unknown_techs_for_goal(game.player_ptr, tech);
 
@@ -233,7 +227,7 @@ static void create_tech_tree(int tech, int levels, GtkTreeIter *parent)
   gtk_tree_store_set(tstore, &l,
 		     1, turns_to_tech,
 		     2, tech,
-		     3, &get_color(tileset, bg)->color,
+		     3, colors_standard[bg],
 		     -1);
 
   if (--levels <= 0)
@@ -509,7 +503,7 @@ static void create_help_dialog(void)
   help_box = gtk_vbox_new(FALSE, 5);
   gtk_container_add(GTK_CONTAINER(help_frame), help_box);
 
-  unit_tile = gtk_pixcomm_new(tileset_full_tile_width(tileset), tileset_full_tile_height(tileset));
+  unit_tile = gtk_pixcomm_new(UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT);
   gtk_box_pack_start(GTK_BOX(help_box), unit_tile, FALSE, FALSE, 0);
 
   help_itable = gtk_table_new(1, 6, FALSE);
@@ -689,35 +683,25 @@ static void help_update_improvement(const struct help_item *pitem,
   
   create_help_page(HELP_IMPROVEMENT);
   
-  if (which<game.control.num_impr_types) {
+  if (which<game.num_impr_types) {
     struct impr_type *imp = &improvement_types[which];
-    int i;
-    char req_buf[512];
-
     sprintf(buf, "%d", impr_build_shield_cost(which));
     gtk_label_set_text(GTK_LABEL(help_ilabel[1]), buf);
     sprintf(buf, "%d", imp->upkeep);
     gtk_label_set_text(GTK_LABEL(help_ilabel[3]), buf);
-
-    /* FIXME: this should show ranges and all the MAX_NUM_REQS reqs. 
-     * Currently it's limited to 1 req but this code is partially prepared
-     * to be extended.  Remember MAX_NUM_REQS is a compile-time
-     * definition. */
-    i = 0;
-    requirement_vector_iterate(&imp->reqs, preq) {
-      gtk_label_set_text(GTK_LABEL(help_ilabel[5 + i]),
-			 get_req_source_text(&preq->source,
-					     req_buf, sizeof(req_buf)));
-      i++;
-      break;
-    } requirement_vector_iterate_end;
+    if (imp->tech_req == A_LAST) {
+      gtk_label_set_text(GTK_LABEL(help_ilabel[5]), _("(Never)"));
+    } else {
+      gtk_label_set_text(GTK_LABEL(help_ilabel[5]),
+			 get_tech_name(game.player_ptr, imp->tech_req));
+    }
 /*    create_tech_tree(help_improvement_tree, 0, imp->tech_req, 3);*/
   }
   else {
     gtk_label_set_text(GTK_LABEL(help_ilabel[1]), "0");
     gtk_label_set_text(GTK_LABEL(help_ilabel[3]), "0");
     gtk_label_set_text(GTK_LABEL(help_ilabel[5]), _("(Never)"));
-/*    create_tech_tree(help_improvement_tree, 0, game.control.num_tech_types, 3);*/
+/*    create_tech_tree(help_improvement_tree, 0, game.num_tech_types, 3);*/
   }
   gtk_widget_show(help_itable);
 
@@ -736,26 +720,16 @@ static void help_update_wonder(const struct help_item *pitem,
 
   create_help_page(HELP_WONDER);
 
-  if (which<game.control.num_impr_types) {
+  if (which<game.num_impr_types) {
     struct impr_type *imp = &improvement_types[which];
-    int i;
-    char req_buf[512];
-
     sprintf(buf, "%d", impr_build_shield_cost(which));
     gtk_label_set_text(GTK_LABEL(help_wlabel[1]), buf);
-
-    /* FIXME: this should show ranges and all the MAX_NUM_REQS reqs. 
-     * Currently it's limited to 1 req but this code is partially prepared
-     * to be extended.  Remember MAX_NUM_REQS is a compile-time
-     * definition. */
-    i = 0;
-    requirement_vector_iterate(&imp->reqs, preq) {
-      gtk_label_set_text(GTK_LABEL(help_ilabel[3 + i]),
-			 get_req_source_text(&preq->source,
-					     req_buf, sizeof(req_buf)));
-      i++;
-      break;
-    } requirement_vector_iterate_end;
+    if (imp->tech_req == A_LAST) {
+      gtk_label_set_text(GTK_LABEL(help_wlabel[3]), _("(Never)"));
+    } else {
+      gtk_label_set_text(GTK_LABEL(help_wlabel[3]),
+			 get_tech_name(game.player_ptr, imp->tech_req));
+    }
     if (tech_exists(imp->obsolete_by)) {
       gtk_label_set_text(GTK_LABEL(help_wlabel[5]),
 			 get_tech_name(game.player_ptr, imp->obsolete_by));
@@ -769,7 +743,7 @@ static void help_update_wonder(const struct help_item *pitem,
     gtk_label_set_text(GTK_LABEL(help_wlabel[1]), "0");
     gtk_label_set_text(GTK_LABEL(help_wlabel[3]), _("(Never)"));
     gtk_label_set_text(GTK_LABEL(help_wlabel[5]), _("None"));
-/*    create_tech_tree(help_improvement_tree, 0, game.control.num_tech_types, 3); */
+/*    create_tech_tree(help_improvement_tree, 0, game.num_tech_types, 3); */
   }
   gtk_widget_show(help_wtable);
 
@@ -788,7 +762,7 @@ static void help_update_unit_type(const struct help_item *pitem,
 
   create_help_page(HELP_UNIT);
 
-  if (i<game.control.num_unit_types) {
+  if (i<game.num_unit_types) {
     struct unit_type *utype = get_unit_type(i);
     sprintf(buf, "%d", unit_build_shield_cost(i));
     gtk_label_set_text(GTK_LABEL(help_ulabel[0][1]), buf);
@@ -813,7 +787,7 @@ static void help_update_unit_type(const struct help_item *pitem,
 				       utype->tech_requirement));
     }
 /*    create_tech_tree(help_improvement_tree, 0, utype->tech_requirement, 3);*/
-    if (utype->obsoleted_by == U_NOT_OBSOLETED) {
+    if(utype->obsoleted_by==-1) {
       gtk_label_set_text(GTK_LABEL(help_ulabel[4][4]), _("None"));
     } else {
       gtk_label_set_text(GTK_LABEL(help_ulabel[4][4]), get_unit_type(utype->obsoleted_by)->name);
@@ -903,15 +877,6 @@ static void help_update_tech(const struct help_item *pitem, char *title, int i)
     len = strlen(buf);
     my_chomp(buf, len);
 
-    if (get_tech_sprite(tileset, i)) {
-      GdkPixbuf *pixbuf = sprite_get_pixbuf(get_tech_sprite(tileset, i));
-
-      w = gtk_image_new_from_pixbuf(pixbuf);
-      gtk_widget_set_name(w, "help tech image");
-      gtk_box_pack_start(GTK_BOX(help_vbox), w, FALSE, FALSE, 0);
-      gtk_widget_show(w);
-    }
-
     w = gtk_text_view_new();
     gtk_text_view_set_cursor_visible(GTK_TEXT_VIEW(w), FALSE);
     gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(w), GTK_WRAP_WORD);
@@ -931,29 +896,23 @@ static void help_update_tech(const struct help_item *pitem, char *title, int i)
     gtk_widget_show(w);
 
     impr_type_iterate(j) {
-      /* FIXME: need a more general mechanism for this, since this
-       * helptext needs to be shown in all possible req source types. */
-      requirement_vector_iterate(&improvement_types[j].reqs, preq) {
-	if (preq->source.type == REQ_BUILDING
-	    && preq->source.value.building == i) {
-	  hbox = gtk_hbox_new(FALSE, 0);
-	  gtk_container_add(GTK_CONTAINER(help_vbox), hbox);
-	  w = gtk_label_new(_("Allows"));
-	  gtk_box_pack_start(GTK_BOX(hbox), w, FALSE, FALSE, 0);
-	  w = help_slink_new(improvement_types[j].name,
-	      is_great_wonder(j) ? HELP_WONDER
-	      : HELP_IMPROVEMENT);
-	  gtk_box_pack_start(GTK_BOX(hbox), w, FALSE, FALSE, 0);
-	  gtk_widget_show_all(hbox);
-	}
-      } requirement_vector_iterate_end;
+      if(i==improvement_types[j].tech_req) {
+        hbox = gtk_hbox_new(FALSE, 0);
+        gtk_container_add(GTK_CONTAINER(help_vbox), hbox);
+        w = gtk_label_new(_("Allows"));
+        gtk_box_pack_start(GTK_BOX(hbox), w, FALSE, FALSE, 0);
+        w = help_slink_new(improvement_types[j].name,
+			  is_wonder(j)?HELP_WONDER:HELP_IMPROVEMENT);
+        gtk_box_pack_start(GTK_BOX(hbox), w, FALSE, FALSE, 0);
+        gtk_widget_show_all(hbox);
+      }
       if(i==improvement_types[j].obsolete_by) {
         hbox = gtk_hbox_new(FALSE, 0);
         gtk_container_add(GTK_CONTAINER(help_vbox), hbox);
         w = gtk_label_new(_("Obsoletes"));
         gtk_box_pack_start(GTK_BOX(hbox), w, FALSE, FALSE, 0);
         w = help_slink_new(improvement_types[j].name,
-			  is_great_wonder(j) ? HELP_WONDER : HELP_IMPROVEMENT);
+			  is_wonder(j)?HELP_WONDER:HELP_IMPROVEMENT);
         gtk_box_pack_start(GTK_BOX(hbox), w, FALSE, FALSE, 0);
         gtk_widget_show_all(hbox);
       }
@@ -970,7 +929,7 @@ static void help_update_tech(const struct help_item *pitem, char *title, int i)
       gtk_widget_show_all(hbox);
     } unit_type_iterate_end;
 
-    for (j = 0; j < game.control.num_tech_types; j++) {
+    for (j = 0; j < game.num_tech_types; j++) {
       if(i==advances[j].req[0]) {
 	if(advances[j].req[1]==A_NONE) {
           hbox = gtk_hbox_new(FALSE, 0);
@@ -1031,89 +990,89 @@ static void help_update_terrain(const struct help_item *pitem,
 
   if (i < T_COUNT) {
     sprintf(buf, "%d/%d.%d",
-	    terrains[i].movement_cost,
-	    (int)((terrains[i].defense_bonus + 100) / 100),
-	    (terrains[i].defense_bonus + 100) % 100 / 10);
+	    tile_types[i].movement_cost,
+	    (int)(tile_types[i].defense_bonus/10),
+	    tile_types[i].defense_bonus%10);
     gtk_label_set_text(GTK_LABEL(help_tlabel[0][1]), buf);
 
     sprintf(buf, "%d/%d/%d",
-	    terrains[i].output[O_FOOD],
-	    terrains[i].output[O_SHIELD],
-	    terrains[i].output[O_TRADE]);
+	    tile_types[i].food,
+	    tile_types[i].shield,
+	    tile_types[i].trade);
     gtk_label_set_text(GTK_LABEL(help_tlabel[0][4]), buf);
 
-    if (*(terrains[i].special[0].name)) {
+    if (*(tile_types[i].special_1_name)) {
       sprintf(buf, _("%s F/R/T:"),
-	       terrains[i].special[0].name);
+	       tile_types[i].special_1_name);
       gtk_label_set_text(GTK_LABEL(help_tlabel[1][0]), buf);
       sprintf(buf, "%d/%d/%d",
-	      terrains[i].special[0].output[O_FOOD],
-	      terrains[i].special[0].output[O_SHIELD],
-	      terrains[i].special[0].output[O_TRADE]);
+	      tile_types[i].food_special_1,
+	      tile_types[i].shield_special_1,
+	      tile_types[i].trade_special_1);
       gtk_label_set_text(GTK_LABEL(help_tlabel[1][1]), buf);
     } else {
       gtk_label_set_text(GTK_LABEL(help_tlabel[1][0]), "");
       gtk_label_set_text(GTK_LABEL(help_tlabel[1][1]), "");
     }
 
-    if (*(terrains[i].special[1].name)) {
+    if (*(tile_types[i].special_2_name)) {
       sprintf(buf, _("%s F/R/T:"),
-	      terrains[i].special[1].name);
+	      tile_types[i].special_2_name);
       gtk_label_set_text(GTK_LABEL(help_tlabel[1][3]), buf);
       sprintf(buf, "%d/%d/%d",
-	      terrains[i].special[1].output[O_FOOD],
-	      terrains[i].special[1].output[O_SHIELD],
-	      terrains[i].special[1].output[O_TRADE]);
+	      tile_types[i].food_special_2,
+	      tile_types[i].shield_special_2,
+	      tile_types[i].trade_special_2);
       gtk_label_set_text(GTK_LABEL(help_tlabel[1][4]), buf);
     } else {
       gtk_label_set_text(GTK_LABEL(help_tlabel[1][3]), "");
       gtk_label_set_text(GTK_LABEL(help_tlabel[1][4]), "");
     }
 
-    if (terrains[i].road_trade_incr > 0) {
+    if (tile_types[i].road_trade_incr > 0) {
       sprintf(buf, _("+%d Trade / %d"),
-	      terrains[i].road_trade_incr,
-	      terrains[i].road_time);
-    } else if (terrains[i].road_time > 0) {
+	      tile_types[i].road_trade_incr,
+	      tile_types[i].road_time);
+    } else if (tile_types[i].road_time > 0) {
       sprintf(buf, _("no extra / %d"),
-	      terrains[i].road_time);
+	      tile_types[i].road_time);
     } else {
       strcpy(buf, _("n/a"));
     }
     gtk_label_set_text(GTK_LABEL(help_tlabel[2][1]), buf);
 
     strcpy(buf, _("n/a"));
-    if (terrains[i].irrigation_result == i) {
-      if (terrains[i].irrigation_food_incr > 0) {
+    if (tile_types[i].irrigation_result == i) {
+      if (tile_types[i].irrigation_food_incr > 0) {
 	sprintf(buf, _("+%d Food / %d"),
-		terrains[i].irrigation_food_incr,
-		terrains[i].irrigation_time);
+		tile_types[i].irrigation_food_incr,
+		tile_types[i].irrigation_time);
       }
-    } else if (terrains[i].irrigation_result != T_NONE) {
+    } else if (tile_types[i].irrigation_result != T_NONE) {
       sprintf(buf, "%s / %d",
-	      terrains[terrains[i].irrigation_result].terrain_name,
-	      terrains[i].irrigation_time);
+	      tile_types[tile_types[i].irrigation_result].terrain_name,
+	      tile_types[i].irrigation_time);
     }
     gtk_label_set_text(GTK_LABEL(help_tlabel[2][4]), buf);
 
     strcpy(buf, _("n/a"));
-    if (terrains[i].mining_result == i) {
-      if (terrains[i].mining_shield_incr > 0) {
+    if (tile_types[i].mining_result == i) {
+      if (tile_types[i].mining_shield_incr > 0) {
 	sprintf(buf, _("+%d Res. / %d"),
-		terrains[i].mining_shield_incr,
-		terrains[i].mining_time);
+		tile_types[i].mining_shield_incr,
+		tile_types[i].mining_time);
       }
-    } else if (terrains[i].mining_result != T_NONE) {
+    } else if (tile_types[i].mining_result != T_NONE) {
       sprintf(buf, "%s / %d",
-	      terrains[terrains[i].mining_result].terrain_name,
-	      terrains[i].mining_time);
+	      tile_types[tile_types[i].mining_result].terrain_name,
+	      tile_types[i].mining_time);
     }
     gtk_label_set_text(GTK_LABEL(help_tlabel[3][1]), buf);
 
-    if (terrains[i].transform_result != T_NONE) {
+    if (tile_types[i].transform_result != T_NONE) {
       sprintf(buf, "%s / %d",
-	       terrains[terrains[i].transform_result].terrain_name,
-	       terrains[i].transform_time);
+	       tile_types[tile_types[i].transform_result].terrain_name,
+	       tile_types[i].transform_time);
     } else {
       strcpy(buf, "n/a");
     }
@@ -1166,16 +1125,12 @@ static void help_update_dialog(const struct help_item *pitem)
   switch(pitem->type) {
   case HELP_IMPROVEMENT:
     i = find_improvement_by_name(top);
-    if (i != B_LAST && is_great_wonder(i)) {
-      i = B_LAST;
-    }
+    if(i!=B_LAST && is_wonder(i)) i = B_LAST;
     help_update_improvement(pitem, top, i);
     break;
   case HELP_WONDER:
     i = find_improvement_by_name(top);
-    if (i != B_LAST && !is_great_wonder(i)) {
-      i = B_LAST;
-    }
+    if(i!=B_LAST && !is_wonder(i)) i = B_LAST;
     help_update_wonder(pitem, top, i);
     break;
   case HELP_UNIT:

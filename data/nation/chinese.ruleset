@@ -2,7 +2,7 @@
 
 name=_("Chinese")
 plural=_("?plural:Chinese")
-groups=_("Ancient"), _("Medieval"), _("Modern"), _("Asian")
+class=_("Modern")
 legend=_("China is the oldest major civilization that is still in existence \
 today, with written records dating back over 3,500 years.  After first being \
 unified by the Qin dynasty in 221BC, China alternated between periods of \
@@ -14,7 +14,7 @@ leader="Qin Shihuang", "Liu Bang", "Liu Bei", "Li Shimin", "Wu Zetian",
        "Qianlong", "Cixi", "Sun Yat-Sen", "Mao Zedong", "Deng Xiaoping" 
 leader_sex="Male", "Male", "Male", "Male", "Female",
            "Male", "Female", "Male", "Male", "Male"
-flag="china"
+flag="f.china"
 flag_alt = "-"
 city_style = "Asian"
 ruler_titles = { "government",      "male_title",      "female_title"
@@ -25,8 +25,8 @@ ruler_titles = { "government",      "male_title",      "female_title"
 init_techs=""
 init_buildings=""
 
-init_government="Despotism"
-init_units=""
+tech_goals = "Monarchy", "Trade", "Philosophy", "Bridge Building",
+             "Railroad", "Communism"
 wonder="Great Wall"
 government="Communism"
 civilwar_nations = "vietnamese", "japanese", "korean"

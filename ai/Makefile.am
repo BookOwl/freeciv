@@ -25,8 +25,6 @@ libcivai_a_SOURCES = \
 		aiexplorer.h	\
 		aiferry.c	\
 		aiferry.h	\
-		aiguard.c	\
-		aiguard.h	\
 		aihand.c	\
 		aihand.h	\
 		aihunt.c	\

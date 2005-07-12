@@ -13,19 +13,12 @@
 #ifndef FC__HELPDATA_H
 #define FC__HELPDATA_H
 
-#include <stddef.h>		/* size_t */
-
-#include "improvement.h" 	/* Impr_type_id */
-
 #include "helpdlg_g.h"		/* enum help_page_type */
 
 struct help_item {
   char *topic, *text;
   enum help_page_type type;
 };
-
-void helpdata_init(void);
-void helpdata_done(void);
 
 void boot_help_texts(void);
 void free_help_texts(void);
@@ -38,7 +31,7 @@ const struct help_item *get_help_item_spec(const char *name,
 void help_iter_start(void);
 const struct help_item *help_iter_next(void);
 
-char *helptext_building(char *buf, size_t bufsz, Impr_type_id which,
+char *helptext_building(char *buf, size_t bufsz, Impr_Type_id which,
 			const char *user_text);
 void helptext_unit(char *buf, int i, const char *user_text);
 void helptext_tech(char *buf, int i, const char *user_text);

@@ -2,13 +2,13 @@
 
 name=_("Ukrainian")
 plural=_("?plural:Ukrainians")
-groups=_("Modern"), _("European")
+class=_("Modern")
 legend=_("The Ukraine is a vast region on the westernmost marches of the \
 former Soviet Union. It includes some of the most fertile black-soil \
 cropland on Earth.")
 leader = "Bohdan Khmelnitskyi", "Simon Petlura", "Basil Kapnist"
 leader_sex = "Male", "Male", "Male"
-flag="ukraine"
+flag="f.ukraine"
 flag_alt = "-"
 city_style = "European"
 ruler_titles = { "government",      "male_title",         "female_title"
@@ -17,8 +17,7 @@ ruler_titles = { "government",      "male_title",         "female_title"
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
+tech_goals = "Chivalry","The Republic","Gunpowder","Leadership","Explosives"
 wonder="Sun Tzu's War Academy"
 government="Communism"
 civilwar_nations = "polish"

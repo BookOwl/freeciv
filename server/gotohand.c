@@ -25,7 +25,6 @@
 #include "log.h"
 #include "map.h"
 #include "mem.h"
-#include "movement.h"
 #include "rand.h"
 
 #include "airgoto.h"
@@ -195,14 +194,14 @@ Reset the movecosts of the warmap.
 **************************************************************************/
 static void init_warmap(struct tile *orig_tile, enum unit_move_type move_type)
 {
-  if (warmap.size != MAP_INDEX_SIZE) {
+  if (warmap.size != MAX_MAP_INDEX) {
     warmap.cost = fc_realloc(warmap.cost,
-			     MAP_INDEX_SIZE * sizeof(*warmap.cost));
+			     MAX_MAP_INDEX * sizeof(*warmap.cost));
     warmap.seacost = fc_realloc(warmap.seacost,
-				MAP_INDEX_SIZE * sizeof(*warmap.seacost));
+				MAX_MAP_INDEX * sizeof(*warmap.seacost));
     warmap.vector = fc_realloc(warmap.vector,
-			       MAP_INDEX_SIZE * sizeof(*warmap.vector));
-    warmap.size = MAP_INDEX_SIZE;
+			       MAX_MAP_INDEX * sizeof(*warmap.vector));
+    warmap.size = MAX_MAP_INDEX;
   }
 
   init_queue();
@@ -212,12 +211,12 @@ static void init_warmap(struct tile *orig_tile, enum unit_move_type move_type)
   case HELI_MOVING:
   case AIR_MOVING:
     assert(sizeof(*warmap.cost) == sizeof(char));
-    memset(warmap.cost, MAXCOST, MAP_INDEX_SIZE * sizeof(char));
+    memset(warmap.cost, MAXCOST, map.xsize * map.ysize);
     WARMAP_COST(orig_tile) = 0;
     break;
   case SEA_MOVING:
     assert(sizeof(*warmap.seacost) == sizeof(char));
-    memset(warmap.seacost, MAXCOST, MAP_INDEX_SIZE * sizeof(char));
+    memset(warmap.seacost, MAXCOST, map.xsize * map.ysize);
     WARMAP_SEACOST(orig_tile) = 0;
     break;
   default:
@@ -305,35 +304,25 @@ void really_generate_warmap(struct city *pcity, struct unit *punit,
 	if (WARMAP_COST(tile1) <= cost)
 	  continue; /* No need for all the calculations */
 
-        if (is_ocean(tile_get_terrain(tile1))) {
+        if (is_ocean(map_get_terrain(tile1))) {
           if (punit && ground_unit_transporter_capacity(tile1, pplayer) > 0)
 	    move_cost = SINGLE_MOVE;
           else
 	    continue;
 	} else if (is_ocean(ptile->terrain)) {
-	  int base_cost = get_terrain(tile_get_terrain(tile1))->movement_cost * SINGLE_MOVE;
+	  int base_cost = get_tile_type(map_get_terrain(tile1))->movement_cost * SINGLE_MOVE;
 	  move_cost = igter ? MOVE_COST_ROAD : MIN(base_cost, unit_move_rate(punit));
         } else if (igter)
 	  /* NOT c = 1 (Syela) [why not? - Thue] */
-	  move_cost = (map_move_cost_ai(ptile, tile1) != 0
-		       ? SINGLE_MOVE : 0);
-        else if (punit) {
-	  const int tmp1 = map_move_cost_ai(ptile, tile1);
-	  const int tmp2 = unit_move_rate(punit);
-
-	  move_cost = MIN(tmp1, tmp2);
-#if 0
-	} else {
-	  c = ptile->move_cost[k]; 
-	  /* This led to a bad bug where a unit in a swamp was considered
-	   * too far away. */
-#endif
-        } else {
-	  /* we have a city */
-	  const int tmp1 = map_move_cost_ai(tile1, ptile);
-	  const int tmp2 = map_move_cost_ai(ptile, tile1);
-
-          move_cost = (tmp2 + tmp1 + (tmp2 > tmp1 ? 1 : 0)) / 2;
+	  move_cost = (ptile->move_cost[dir] != 0 ? SINGLE_MOVE : 0);
+        else if (punit)
+	  move_cost = MIN(ptile->move_cost[dir], unit_move_rate(punit));
+	/* else c = ptile->move_cost[k]; 
+	   This led to a bad bug where a unit in a swamp was considered too far away */
+        else { /* we have a city */
+	  int tmp = tile1->move_cost[DIR_REVERSE(dir)];
+          move_cost = (ptile->move_cost[dir] + tmp +
+		       (ptile->move_cost[dir] > tmp ? 1 : 0))/2;
         }
 
         move_cost += cost;
@@ -352,8 +341,7 @@ void really_generate_warmap(struct city *pcity, struct unit *punit,
 	     can move between we allow for shore bombardment/transport
 	     to inland positions/etc. */
           WARMAP_SEACOST(tile1) = move_cost;
-	  if (map_move_cost_ai(ptile, tile1)
-	      == MOVE_COST_FOR_VALID_SEA_STEP) {
+	  if (ptile->move_cost[dir] == MOVE_COST_FOR_VALID_SEA_STEP) {
 	    add_to_mapqueue(move_cost, tile1);
 	  }
 	}
@@ -495,7 +483,7 @@ static bool goto_zoc_ok(struct unit *punit, struct tile *src_tile,
     adjc_dir_iterate(src_tile, ptile, dir) {
       /* if we didn't come from there */
       if (!BV_ISSET(came_from, dir)
-	  && !is_ocean(tile_get_terrain(ptile))
+	  && !is_ocean(map_get_terrain(ptile))
 	  /* and there is an enemy there */
 	  && is_enemy_unit_tile(ptile, owner)) {
 	/* then it counts in the zoc claculation */
@@ -584,7 +572,7 @@ static bool find_the_shortest_path(struct unit *punit,
   int maxcost = MAXCOST;
   int move_cost, total_cost;
   int straight_dir = 0;	/* init to silence compiler warning */
-  dir_vector local_vector[MAP_INDEX_SIZE];
+  dir_vector local_vector[MAX_MAP_INDEX];
 #define LOCAL_VECTOR(ptile) local_vector[(ptile)->index]
   struct unit *pcargo;
   /* 
@@ -617,7 +605,7 @@ static bool find_the_shortest_path(struct unit *punit,
   if (move_type == SEA_MOVING) {
     pcargo = other_passengers(punit);
     if (pcargo)
-      if (is_ocean(tile_get_terrain(dest_tile)) ||
+      if (is_ocean(map_get_terrain(dest_tile)) ||
 	  !is_non_allied_unit_tile(dest_tile, unit_owner(pcargo))
 	  || is_allied_city_tile(dest_tile, unit_owner(pcargo))
 	  || unit_flag(pcargo, F_MARINES)
@@ -655,14 +643,12 @@ static bool find_the_shortest_path(struct unit *punit,
 	  else
 	    move_cost = 3;
 	} else if (is_ocean(psrctile->terrain)) {
-	  int base_cost = get_terrain(pdesttile->terrain)->movement_cost * SINGLE_MOVE;
+	  int base_cost = get_tile_type(pdesttile->terrain)->movement_cost * SINGLE_MOVE;
 	  move_cost = igter ? 1 : MIN(base_cost, unit_move_rate(punit));
 	} else if (igter)
-	  move_cost = (map_move_cost_ai(psrctile, pdesttile) != 0
-		       ? SINGLE_MOVE : 0);
+	  move_cost = (psrctile->move_cost[dir] != 0 ? SINGLE_MOVE : 0);
 	else
-	  move_cost = MIN(map_move_cost_ai(psrctile, pdesttile),
-			  unit_move_rate(punit));
+	  move_cost = MIN(psrctile->move_cost[dir], unit_move_rate(punit));
 
 	if (!pplayer->ai.control && !map_is_known(tile1, pplayer)) {
 	  /* Don't go into the unknown. 5*SINGLE_MOVE is an arbitrary deterrent. */
@@ -722,8 +708,7 @@ static bool find_the_shortest_path(struct unit *punit,
 	  continue; /* No need for all the calculations */
 
 	/* allow ships to target a shore */
-	if (map_move_cost_ai(psrctile, pdesttile)
-	    != MOVE_COST_FOR_VALID_SEA_STEP
+	if (psrctile->move_cost[dir] != MOVE_COST_FOR_VALID_SEA_STEP
 	    && !same_pos(tile1, dest_tile)) {
 	  continue;
 	} else if (unit_loss_pct(unit_owner(punit), tile1, punit) > 0) {
@@ -833,7 +818,7 @@ static bool find_the_shortest_path(struct unit *punit,
   /*** Succeeded. The vector at the destination indicates which way we get there.
      Now backtrack to remove all the blind paths ***/
   assert(sizeof(*warmap.vector) == sizeof(char));
-  memset(warmap.vector, 0, MAP_INDEX_SIZE * sizeof(char));
+  memset(warmap.vector, 0, map.xsize * map.ysize);
 
   init_queue();
   add_to_mapqueue(0, dest_tile);
@@ -874,7 +859,7 @@ static bool is_coast_seen(struct tile *ptile, struct player *pplayer)
 
   adjc_iterate(ptile, adjc_tile) {
     /* Is there land here, and if so can we see it? */
-    if (!is_ocean(tile_get_terrain(adjc_tile))
+    if (!is_ocean(map_get_terrain(adjc_tile))
 	&& (ai_always_see_map || map_is_known(adjc_tile, pplayer))) {
       return TRUE;
     }
@@ -931,7 +916,8 @@ static int find_a_direction(struct unit *punit,
   struct unit *passenger;
   struct player *pplayer = unit_owner(punit);
   bool afraid_of_sinking = (unit_flag(punit, F_TRIREME)
-			    && get_unit_bonus(punit, EFT_NO_SINK_DEEP) == 0);
+			    && get_player_bonus(pplayer,
+						EFT_NO_SINK_DEEP) == 0);
 
   /* 
    * If the destination is one step away, look around first or just go
@@ -939,7 +925,7 @@ static int find_a_direction(struct unit *punit,
    */ 
   bool do_full_check = afraid_of_sinking; 
 
-  if (is_ocean(tile_get_terrain(punit->tile))) {
+  if (is_ocean(map_get_terrain(punit->tile))) {
     passenger = other_passengers(punit);
   } else {
     passenger = NULL;
@@ -975,7 +961,7 @@ static int find_a_direction(struct unit *punit,
   adjc_dir_iterate(punit->tile, ptile, dir) {
     int defence_multiplier, num_of_allied_units, best_friendly_defence,
 	base_move_cost;
-    struct city *pcity = tile_get_city(ptile);
+    struct city *pcity = map_get_city(ptile);
     struct unit *best_ally;
 
     /* 
@@ -995,7 +981,7 @@ static int find_a_direction(struct unit *punit,
     if (is_ground_unit(punit)) {
       /* assuming move is valid, but what if unit is trying to board? 
 	 -- GB */
-      base_move_cost = map_move_cost_ai(punit->tile, ptile);
+      base_move_cost = punit->tile->move_cost[dir];
     } else {
       base_move_cost = SINGLE_MOVE;
     }
@@ -1244,25 +1230,25 @@ bool goto_is_sane(struct unit *punit, struct tile *ptile, bool omni)
   switch (unit_type(punit)->move_type) {
 
   case LAND_MOVING:
-    if (is_ocean(tile_get_terrain(ptile))) {
+    if (is_ocean(map_get_terrain(ptile))) {
       /* Going to a sea tile, the target should be next to our continent 
        * and with a boat */
       if (ground_unit_transporter_capacity(ptile, pplayer) > 0) {
         adjc_iterate(ptile, tmp_tile) {
-          if (tile_get_continent(tmp_tile) == tile_get_continent(punit->tile))
+          if (map_get_continent(tmp_tile) == map_get_continent(punit->tile))
             /* The target is adjacent to our continent! */
             return TRUE;
         } adjc_iterate_end;
       }
     } else {
       /* Going to a land tile: better be our continent */
-      if (tile_get_continent(punit->tile) == tile_get_continent(ptile)) {
+      if (map_get_continent(punit->tile) == map_get_continent(ptile)) {
         return TRUE;
       } else {
         /* Well, it's not our continent, but maybe we are on a boat
          * adjacent to the target continent? */
 	adjc_iterate(punit->tile, tmp_tile) {
-	  if (tile_get_continent(tmp_tile) == tile_get_continent(ptile)) {
+	  if (map_get_continent(tmp_tile) == map_get_continent(ptile)) {
 	    return TRUE;
           }
 	} adjc_iterate_end;
@@ -1272,7 +1258,7 @@ bool goto_is_sane(struct unit *punit, struct tile *ptile, bool omni)
     return FALSE;
 
   case SEA_MOVING:
-    if (is_ocean(tile_get_terrain(ptile))
+    if (is_ocean(map_get_terrain(ptile))
         || is_ocean_near_tile(ptile)) {
       /* The target is sea or is accessible from sea 
        * (allow for bombardment and visiting ports) */
@@ -1430,6 +1416,33 @@ enum goto_result do_unit_goto(struct unit *punit,
 }
 
 /**************************************************************************
+Calculate and return cost (in terms of move points) for unit to move
+to specified destination.
+Currently only used in autoattack.c
+**************************************************************************/
+int calculate_move_cost(struct unit *punit, struct tile *dest_tile)
+{
+  /* perhaps we should do some caching -- fisch */
+
+  if (is_air_unit(punit) || is_heli_unit(punit)) {
+    /* The warmap only really knows about land and sea
+       units, so for these we just assume cost = distance.
+       (times 3 for road factor).
+       (Could be wrong if there are things in the way.)
+    */
+    return SINGLE_MOVE * real_map_distance(punit->tile, dest_tile);
+  }
+
+  generate_warmap(NULL, punit);
+
+  if (is_sailing_unit(punit))
+    return WARMAP_SEACOST(dest_tile);
+  else /* ground unit */
+    return WARMAP_COST(dest_tile);
+}
+
+
+/**************************************************************************
  Returns true if the airspace at given map position _looks_ safe to
  the given player. The airspace is unsafe if the player believes
  there is an enemy unit on it. This is tricky, since we have to
@@ -1471,10 +1484,6 @@ static bool airspace_looks_safe(struct tile *ptile, struct player *pplayer)
  possible without running out of moves. It returns -1 if it is
  impossible.
 
-  Note that the 'moves' passed to this function should be the number of
-  steps the air unit has left.  The caller should *already* have
-  divided by SINGLE_MOVE.
-
 The function has 3 stages:
 Try to rule out the possibility in O(1) time              else
 Try to quickly verify in O(moves) time                    else
@@ -1496,7 +1505,6 @@ int air_can_move_between(int moves, struct tile *src_tile,
     return -1;
   }
   if (total_distance == 0) {
-    assert(moves >= 0);
     return moves;
   }
 
@@ -1528,8 +1536,7 @@ int air_can_move_between(int moves, struct tile *src_tile,
   if (dist == 1) {
     /* Looks like the O(n) quicksearch worked. */
     assert(real_map_distance(ptile, dest_tile) == 1);
-    assert(moves - total_distance >= 0);
-    return moves - total_distance;
+    return moves - total_distance * MOVE_COST_AIR;
   }
 
   /* 
@@ -1564,16 +1571,15 @@ int air_can_move_between(int moves, struct tile *src_tile,
       if (same_pos(tile1, dest_tile)) {
 	/* We're there! */
 	freelog(LOG_DEBUG, "air_can_move_between: movecost: %i",
-		WARMAP_COST(ptile) + 1);
-	/* The -1 is because we haven't taken the final
+		WARMAP_COST(ptile) + MOVE_COST_AIR);
+	/* The -MOVE_COST_AIR is because we haven't taken the final
 	   step yet. */
-	assert(moves - WARMAP_COST(ptile) - 1 >= 0);
-	return moves - WARMAP_COST(ptile) - 1;
+	return moves - WARMAP_COST(ptile) - MOVE_COST_AIR;
       }
 
       /* We refuse to goto through unsafe airspace. */
       if (airspace_looks_safe(tile1, pplayer)) {
-	int cost = WARMAP_COST(ptile) + 1;
+	int cost = WARMAP_COST(ptile) + MOVE_COST_AIR;
 
 	WARMAP_COST(tile1) = cost;
 

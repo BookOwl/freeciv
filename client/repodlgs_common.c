@@ -48,7 +48,7 @@ void get_economy_report_data(struct improvement_entry *entries,
   *total_cost = 0;
 
   impr_type_iterate(impr_id) {
-    if (is_improvement(impr_id)) {
+    if (!is_wonder(impr_id)) {
       int count = 0, cost = 0;
       city_list_iterate(game.player_ptr->cities, pcity) {
 	if (city_got_building(pcity, impr_id)) {
@@ -71,7 +71,7 @@ void get_economy_report_data(struct improvement_entry *entries,
       /* Currently there is no building expense under anarchy.  It's
        * not a good idea to hard-code this in the client, but what
        * else can we do? */
-      if (game.player_ptr->government != game.info.government_when_anarchy) {
+      if (game.player_ptr->government != game.government_when_anarchy) {
         *total_cost += cost;
       }
     }
@@ -80,9 +80,9 @@ void get_economy_report_data(struct improvement_entry *entries,
   *total_income = 0;
 
   city_list_iterate(game.player_ptr->cities, pcity) {
-    *total_income += pcity->prod[O_GOLD];
+    *total_income += pcity->tax_total;
     if (get_current_construction_bonus(pcity, EFT_PROD_TO_GOLD) > 0) {
-      *total_income += MAX(0, pcity->surplus[O_SHIELD]);
+      *total_income += MAX(0, pcity->shield_surplus);
     }
   } city_list_iterate_end;
 }
@@ -99,11 +99,9 @@ void get_economy_report_units_data(struct unit_entry *entries,
 
   unit_type_iterate(utype) {
     unittype = get_unit_type(utype);
-    cost = utype_upkeep_cost(unittype, game.player_ptr,
-                             get_gov_pplayer(game.player_ptr), O_GOLD);
+    cost = utype_gold_cost(unittype, get_gov_pplayer(game.player_ptr));
 
     if (cost == 0) {
-      /* Short-circuit all of the following checks. */
       continue;
     }
 
@@ -115,7 +113,7 @@ void get_economy_report_units_data(struct unit_entry *entries,
 
 	if (punit->type == utype) {
 	  count++;
-	  partial_cost += punit->upkeep[O_GOLD];
+	  partial_cost += punit->upkeep_gold;
 	}
 
       } unit_list_iterate_end;
@@ -309,7 +307,7 @@ void handle_options_settable(struct packet_options_settable *packet)
   The "message" string will be filled with a GUI-friendly message about
   what was sold.
 ****************************************************************************/
-void sell_all_improvements(Impr_type_id impr, bool obsolete_only,
+void sell_all_improvements(Impr_Type_id impr, bool obsolete_only,
 			   char *message, size_t message_sz)
 {
   int count = 0, gold = 0;
@@ -346,7 +344,7 @@ void sell_all_improvements(Impr_type_id impr, bool obsolete_only,
   The "message" string will be filled with a GUI-friendly message about
   what was sold.
 ****************************************************************************/
-void disband_all_units(Unit_type_id type, bool in_cities_only,
+void disband_all_units(Unit_Type_id type, bool in_cities_only,
 		       char *message, size_t message_sz)
 {
   int count = 0;
@@ -367,7 +365,7 @@ void disband_all_units(Unit_type_id type, bool in_cities_only,
     /* Only supported units are disbanded.  Units with no homecity have no
      * cost and are not disbanded. */
     unit_list_iterate(pcity->units_supported, punit) {
-      struct city *incity = tile_get_city(punit->tile);
+      struct city *incity = map_get_city(punit->tile);
 
       if (punit->type == type
 	  && (!in_cities_only

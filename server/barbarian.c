@@ -25,14 +25,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "effects.h"
 #include "events.h"
 #include "fcintl.h"
 #include "game.h"
 #include "government.h"
 #include "log.h"
 #include "map.h"
-#include "movement.h"
 #include "nation.h"
 #include "rand.h"
 #include "support.h"
@@ -45,7 +43,6 @@
 #include "plrhand.h"
 #include "srv_main.h"
 #include "stdinhand.h"
-#include "techtools.h"
 #include "unithand.h"
 #include "unittools.h"
 
@@ -87,7 +84,7 @@ static bool is_sea_barbarian(struct player *pplayer)
 **************************************************************************/
 static struct player *create_barbarian_player(bool land)
 {
-  int newplayer = game.info.nplayers;
+  int newplayer = game.nplayers;
   struct player *barbarians;
 
   players_iterate(barbarians) {
@@ -97,8 +94,7 @@ static struct player *create_barbarian_player(bool land)
         barbarians->economic.gold = 0;
         barbarians->is_alive = TRUE;
         barbarians->is_dying = FALSE;
-        pick_random_player_name(game.control.nation_count - 1,
-				barbarians->name);
+        pick_ai_player_name(game.nation_count - 1, barbarians->name);
 	sz_strlcpy(barbarians->username, ANON_USER_NAME);
         /* I need to make them to forget the map, I think */
 	whole_map_iterate(ptile) {
@@ -118,23 +114,23 @@ static struct player *create_barbarian_player(bool land)
 
   /* make a new player */
 
-  server_player_init(barbarians, TRUE, TRUE);
+  server_player_init(barbarians, TRUE);
 
-  barbarians->nation = game.control.nation_count - 1;
-  pick_random_player_name(game.control.nation_count - 1, barbarians->name);
+  barbarians->nation = game.nation_count - 1;
+  pick_ai_player_name(game.nation_count - 1, barbarians->name);
 
-  game.info.nplayers++;
-  game.info.nbarbarians++;
-  game.info.max_players = game.info.nplayers;
+  game.nplayers++;
+  game.nbarbarians++;
+  game.max_players = game.nplayers;
 
   sz_strlcpy(barbarians->username, ANON_USER_NAME);
   barbarians->is_connected = FALSE;
-  barbarians->government = game.info.government_when_anarchy; 
+  barbarians->government = game.government_when_anarchy; 
   barbarians->revolution_finishes = 1;
   barbarians->capital = FALSE;
   barbarians->economic.gold = 100;
 
-  barbarians->phase_done = TRUE;
+  barbarians->turn_done = TRUE;
 
   /* Do the ai */
   barbarians->ai.control = TRUE;
@@ -143,8 +139,8 @@ static struct player *create_barbarian_player(bool land)
   } else {
     barbarians->ai.barbarian_type = SEA_BARBARIAN;
   }
-  set_ai_level_directer(barbarians, game.info.skill_level);
-  init_tech(barbarians, game.info.tech);
+  set_ai_level_directer(barbarians, game.skill_level);
+  init_tech(barbarians, game.tech);
 
   /* Ensure that we are at war with everyone else */
   players_iterate(pplayer) {
@@ -172,7 +168,7 @@ static struct player *create_barbarian_player(bool land)
 **************************************************************************/
 static bool is_free_land(struct tile *ptile, struct player *who)
 {
-  return (!is_ocean(tile_get_terrain(ptile))
+  return (!is_ocean(map_get_terrain(ptile))
 	  && !is_non_allied_unit_tile((ptile), who));
 }
 
@@ -181,7 +177,7 @@ static bool is_free_land(struct tile *ptile, struct player *who)
 **************************************************************************/
 static bool is_free_sea(struct tile *ptile, struct player *who)
 {
-  return (is_ocean(tile_get_terrain(ptile))
+  return (is_ocean(map_get_terrain(ptile))
 	  && !is_non_allied_unit_tile((ptile), who));
 }
 
@@ -200,13 +196,11 @@ bool unleash_barbarians(struct tile *ptile)
   struct player *barbarians;
   int unit, unit_cnt, land_cnt = 0, sea_cnt = 0;
   int boat;
-  int i;
+  int i, me;
   struct tile *utile = NULL;
   bool alive = TRUE;     /* explorer survived */
 
-  if (game.info.barbarianrate == 0
-      || game.info.year < game.info.onsetbarbarian
-      || num_role_units(L_BARBARIAN) != 0) {
+  if (game.barbarianrate == 0 || (game.year < game.onsetbarbarian)) {
     unit_list_iterate_safe((ptile)->units, punit) {
       wipe_unit(punit);
     } unit_list_iterate_safe_end;
@@ -216,6 +210,7 @@ bool unleash_barbarians(struct tile *ptile)
   unit_cnt = 3 + myrand(4);
 
   barbarians = create_barbarian_player(TRUE);
+  me = barbarians->player_no;
 
   for (i = 0; i < unit_cnt; i++) {
     unit = find_a_unit_type(L_BARBARIAN, L_BARBARIAN_TECH);
@@ -230,7 +225,7 @@ bool unleash_barbarians(struct tile *ptile)
 
   if (land_cnt >= 3) {           /* enough land, scatter guys around */
     unit_list_iterate((ptile)->units, punit2) {
-      if (punit2->owner == barbarians) {
+      if (punit2->owner == me) {
         send_unit_info(NULL, punit2);
 	do {
 	  do {
@@ -248,7 +243,7 @@ bool unleash_barbarians(struct tile *ptile)
       /* FIXME: If anyone knows what this code is supposed to do, rewrite
        * this comment to explain it. */
       unit_list_iterate((ptile)->units, punit2) {
-        if (punit2->owner == barbarians) {
+        if (punit2->owner == me) {
           send_unit_info(NULL, punit2);
           while(TRUE) {
 	    utile = rand_neighbour(ptile);
@@ -271,7 +266,7 @@ bool unleash_barbarians(struct tile *ptile)
       } unit_list_iterate_end;
     } else {             /* The village is surrounded! Kill the explorer. */
       unit_list_iterate_safe((ptile)->units, punit2) {
-        if (punit2->owner != barbarians) {
+        if (punit2->owner != me) {
           wipe_unit(punit2);
           alive = FALSE;
         } else {
@@ -295,7 +290,7 @@ bool unleash_barbarians(struct tile *ptile)
 static bool is_near_land(struct tile *tile0)
 {
   square_iterate(tile0, 4, ptile) {
-    if (!is_ocean(tile_get_terrain(ptile))) {
+    if (!is_ocean(map_get_terrain(ptile))) {
       return TRUE;
     }
   } square_iterate_end;
@@ -309,7 +304,7 @@ static bool is_near_land(struct tile *tile0)
 static struct tile *find_empty_tile_nearby(struct tile *ptile)
 {
   square_iterate(ptile, 1, tile1) {
-    if (unit_list_size(tile1->units) == 0) {
+    if (unit_list_size(&(tile1)->units) == 0) {
       return tile1;
     }
   } square_iterate_end;
@@ -350,7 +345,7 @@ static void try_summon_barbarians(void)
    * gameplay. */
   ptile = rand_map_pos();
 
-  if (terrain_has_flag(tile_get_terrain(ptile), TER_NO_BARBS)) {
+  if (terrain_has_flag(map_get_terrain(ptile), TER_NO_BARBS)) {
     return;
   }
 
@@ -372,35 +367,33 @@ static void try_summon_barbarians(void)
   /* I think Sea Raiders can come out of unknown sea territory */
   if (!(utile = find_empty_tile_nearby(ptile))
       || (!map_is_known(utile, victim)
-	  && !is_ocean(tile_get_terrain(utile)))
+	  && !is_ocean(map_get_terrain(utile)))
       || !is_near_land(utile)) {
     return;
   }
 
   /* do not harass small civs - in practice: do not uprise at the beginning */
   if ((int)myrand(UPRISE_CIV_MORE) >
-           (int)city_list_size(victim->cities) -
-                UPRISE_CIV_SIZE/(game.info.barbarianrate-1)
-      || myrand(100) > get_player_bonus(victim, EFT_CIVIL_WAR_CHANCE)) {
+           (int)city_list_size(&victim->cities) -
+                UPRISE_CIV_SIZE/(game.barbarianrate-1)
+      || myrand(100) > get_gov_pcity(pc)->civil_war) {
     return;
   }
   freelog(LOG_DEBUG, "Barbarians are willing to fight");
 
-  if (tile_has_special(utile, S_HUT)) {
+  if (map_has_special(utile, S_HUT)) {
     /* remove the hut in place of uprising */
-    tile_clear_special(utile, S_HUT);
+    map_clear_special(utile, S_HUT);
     update_tile_knowledge(utile);
   }
 
-  if (!is_ocean(tile_get_terrain(utile))) {
-    int rand_factor = myrand(3);
-
+  if (!is_ocean(map_get_terrain(utile))) {
     /* land (disembark) barbarians */
     barbarians = create_barbarian_player(TRUE);
-    if (city_list_size(victim->cities) > UPRISE_CIV_MOST) {
+    if (city_list_size(&victim->cities) > UPRISE_CIV_MOST) {
       uprise = 3;
     }
-    for (i = 0; i < rand_factor + uprise * game.info.barbarianrate; i++) {
+    for (i = 0; i < myrand(3) + uprise * game.barbarianrate; i++) {
       unit = find_a_unit_type(L_BARBARIAN, L_BARBARIAN_TECH);
       (void) create_unit(barbarians, utile, unit, 0, 0, -1);
       freelog(LOG_DEBUG, "Created barbarian unit %s", unit_types[unit].name);
@@ -413,7 +406,7 @@ static void try_summon_barbarians(void)
     barbarians = create_barbarian_player(FALSE);
     boat = find_a_unit_type(L_BARBARIAN_BOAT,-1);
     ptrans = create_unit(barbarians, utile, boat, 0, 0, -1);
-    cap = get_transporter_capacity(unit_list_get(utile->units, 0));
+    cap = get_transporter_capacity(unit_list_get(&utile->units, 0));
     for (i = 0; i < cap-1; i++) {
       unit = find_a_unit_type(L_BARBARIAN_SEA,L_BARBARIAN_SEA_TECH);
       (void) create_unit_full(barbarians, utile, unit, 0, 0, -1, -1,
@@ -453,11 +446,11 @@ void summon_barbarians(void)
 {
   int i, n;
 
-  if (game.info.barbarianrate == 0) {
+  if (game.barbarianrate == 0) {
     return;
   }
 
-  if (game.info.year < game.info.onsetbarbarian) {
+  if (game.year < game.onsetbarbarian) {
     return;
   }
 
@@ -467,7 +460,7 @@ void summon_barbarians(void)
     n = 1;
   }
 
-  for (i = 0; i < n * (game.info.barbarianrate - 1); i++) {
+  for (i = 0; i < n * (game.barbarianrate - 1); i++) {
     try_summon_barbarians();
   }
 }

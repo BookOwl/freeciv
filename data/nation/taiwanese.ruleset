@@ -2,17 +2,17 @@
 
 name=_("Taiwanese")
 plural=_("?plural:Taiwanese")
-groups=_("Modern"), _("Asian")
+class=_("Modern")
 leader="Sun Yat Sen", "Chiang Kai Shek", "Lee Teng Hui", "Kung Fu Tse"
 leader_sex="Male", "Male", "Male", "Male"
-flag="taiwan"
+flag="f.taiwan"
 flag_alt = "-"
 city_style = "Classical"
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
+tech_goals = "Feudalism", "The Republic", "Democracy", "Explosives",
+             "Guerilla Warfare"
 wonder= "Marco Polo's Embassy"
 government = "Democracy"
 

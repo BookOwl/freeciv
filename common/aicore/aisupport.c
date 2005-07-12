@@ -35,7 +35,7 @@ struct player *player_leading_spacerace(void)
   int best_arrival = FC_INFINITY;
   enum spaceship_state best_state = SSHIP_NONE;
 
-  if (game.info.spacerace == FALSE) {
+  if (game.spacerace == FALSE) {
     return NULL;
   }
 
@@ -75,8 +75,8 @@ int player_distance_to_player(struct player *pplayer, struct player *target)
   if (pplayer == target
       || !target->is_alive
       || !pplayer->is_alive
-      || city_list_size(pplayer->cities) == 0
-      || city_list_size(target->cities) == 0) {
+      || city_list_size(&pplayer->cities) == 0
+      || city_list_size(&target->cities) == 0) {
     return 1;
   }
 
@@ -103,13 +103,12 @@ int player_distance_to_player(struct player *pplayer, struct player *target)
 ***********************************************************************/
 int city_gold_worth(struct city *pcity)
 {
-  struct player *pplayer = city_owner(pcity);
   int worth;
 
   worth = pcity->size * 150; /* reasonable base cost */
   unit_list_iterate(pcity->units_supported, punit) {
     if (same_pos(punit->tile, pcity->tile)) {
-      Unit_type_id id = unit_type(punit)->obsoleted_by;
+      Unit_Type_id id = unit_type(punit)->obsoleted_by;
 
       if (id >= 0 && can_build_unit_direct(pcity, id)) {
         worth += unit_disband_shields(punit->type) / 2; /* obsolete */
@@ -119,7 +118,7 @@ int city_gold_worth(struct city *pcity)
     }
   } unit_list_iterate_end;
   built_impr_iterate(pcity, impr) {
-    if (is_wonder(impr) && !improvement_obsolete(pplayer, impr)) {
+    if (improvement_types[impr].is_wonder && !wonder_obsolete(impr)) {
       worth += impr_sell_gold(impr);
    } else {
       worth += impr_sell_gold(impr) / 4;
@@ -130,4 +129,3 @@ int city_gold_worth(struct city *pcity)
   }
   return worth;
 }
-

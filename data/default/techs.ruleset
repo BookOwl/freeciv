@@ -41,6 +41,7 @@ options="1.9"
 ; Following flag strings are possible
 ;
 ; "Bonus_Tech" = player gets extra tech if rearched first
+; "Boat_Fast" = all sea units get one extra move point
 ; "Bridge"   = "Settler" unit types can build bridges over rivers
 ; "Railroad" = "Settler" unit types can build rail roads
 ; "Farmland" = "Settler" unit types can build farmland
@@ -181,7 +182,6 @@ req2     = "Industrialization"
 flags    = ""
 graphic     = "a.communism"
 graphic_alt = "-"
-helptext = _("Reduces the effect of Cathedrals.")
 
 [advance_computers]
 name     = _("Computers")
@@ -238,7 +238,6 @@ req2     = "Magnetism"
 flags    = ""
 graphic     = "a.electricity"
 graphic_alt = "-"
-helptext = _("Improves the effect of Colosseums.")
 
 [advance_electronics]
 name     = _("Electronics")
@@ -503,7 +502,6 @@ req2     = "None"
 flags    = ""
 graphic     = "a.mysticism"
 graphic_alt = "-"
-helptext = _("Improves the effect of Temples.")
 
 [advance_navigation]
 name     = _("Navigation")
@@ -525,10 +523,9 @@ graphic_alt = "-"
 name     = _("Nuclear Power")
 req1     = "Nuclear Fission"
 req2     = "Electronics"
-flags    = ""
+flags    = "Boat_Fast"
 graphic     = "a.nuclear_power"
 graphic_alt = "-"
-helptext = _("Gives sea units one extra move.")
 
 [advance_philosophy]
 name     = _("Philosophy")
@@ -723,7 +720,6 @@ req2     = "Monotheism"
 flags    = ""
 graphic     = "a.theology"
 graphic_alt = "-"
-helptext = _("Improves the effect of Cathedrals.")
 
 [advance_theory_of_gravity]
 name     = _("Theory of Gravity")

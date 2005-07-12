@@ -2,17 +2,16 @@
 
 name=_("Indonesian")
 plural=_("?plural:Indonesians")
-groups=_("Modern")
+class=_("Modern")
 leader="Sukarno", "Suharto", "Habibie", "Wahid"
 leader_sex="Male", "Male", "Male", "Male"
-flag="indonesia"
+flag="f.indonesia"
 flag_alt = "-"
 city_style = "Classical"
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
+tech_goals = "Monarchy", "Feudalism", "Navigation", "Flight", "Rocketry"
 wonder= "Magellan's Expedition"
 government = "Despotism"
 
