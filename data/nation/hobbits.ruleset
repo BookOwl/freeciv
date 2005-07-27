@@ -2,7 +2,7 @@
 
 name=_("Hobbit")
 plural=_("?plural:Hobbits")
-groups=_("Fictional")
+class=_("Fictional")
 ; These are pretty arbitrary.  Peregrin was Thain of Tookland;
 ; Meriadoc was Master of Brandybuck; others were mayor of hobbiton.
 ;
@@ -10,7 +10,7 @@ groups=_("Fictional")
 leader="Will Whitfoot", "Samwise Gamgee", "Tolman Cotton",
        "Peregrin Took", "Meriadoc Brandybuck"
 leader_sex="Male", "Male", "Male", "Male", "Male"
-flag="hobbits"
+flag="f.hobbits"
 flag_alt = "-"
 city_style = "European"
 ruler_titles = { "government",      "male_title",            "female_title"
@@ -20,8 +20,8 @@ ruler_titles = { "government",      "male_title",            "female_title"
 init_techs=""
 init_buildings=""
 
-init_government="Despotism"
-init_units=""
+tech_goals = "Map Making", "The Republic", "Trade", "Navigation",
+  "Economics", "Democracy"
 ; Hanging Gardens: as Samwise used his gift from Galadriel, all plants grew fast, and the first year was called 'the year of Plenty'
 wonder="Hanging Gardens"
 government="Monarchy"

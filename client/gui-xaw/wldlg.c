@@ -1200,7 +1200,7 @@ void worklist_help(int id, bool is_unit)
   if(id >= 0) {
     if (is_unit) {
       popup_help_dialog_typed(get_unit_type(id)->name, HELP_UNIT);
-    } else if(is_great_wonder(id)) {
+    } else if(is_wonder(id)) {
       popup_help_dialog_typed(get_improvement_name(id), HELP_WONDER);
     } else {
       popup_help_dialog_typed(get_improvement_name(id), HELP_IMPROVEMENT);
@@ -1246,12 +1246,12 @@ void worklist_populate_worklist(struct worklist_dialog *pdialog)
   n = 0;
   if (pdialog->pcity) {
     /* First element is the current build target of the city. */
-    id = pdialog->pcity->production.value;
+    id = pdialog->pcity->currently_building;
 
     worklist_id_to_name(pdialog->worklist_names[n],
-			id, pdialog->pcity->production.is_unit, pdialog->pcity);
+			id, pdialog->pcity->is_building_unit, pdialog->pcity);
 
-    if (pdialog->pcity->production.is_unit)
+    if (pdialog->pcity->is_building_unit)
       id += B_LAST;
     pdialog->worklist_names_ptrs[n] = pdialog->worklist_names[n];
     pdialog->worklist_ids[n] = id;

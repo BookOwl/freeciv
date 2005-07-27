@@ -2,10 +2,10 @@
 
 name=_("Sioux")
 plural=_("?plural:Sioux")
-groups=_("Medieval"), _("American")
+class=_("Historical")
 leader="Sitting Bull", "Crazy Horse", "Little Crow", "Red Cloud"
 leader_sex="Male", "Male", "Male", "Male"
-flag="cheyenne"
+flag="f.cheyenne"
 flag_alt = "-"
 city_style = "European"
 
@@ -16,8 +16,7 @@ ruler_titles = { "government",      "male_title",      "female_title"
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
+tech_goals = "Monarchy", "Philosophy", "The Republic", "Iron Working"
 wonder="Sun Tzu's War Academy"
 government="Republic"
 civilwar_nations = "american"

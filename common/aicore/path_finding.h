@@ -42,12 +42,9 @@
  *   path: a list of steps which leads from the start to the end
  *
  *   move cost (MC): move cost of a _single_ step.  MC is always >= 0. 
- *     [The parameter can specify what the MC of a step into the unknown is
- *      to be (this is a constant for each map).  This defaults to a
- *      slightly large value meaning unknown tiles are avoided slightly.
- *      It's also possible to use 0 here and use TB or EC to control
- *      movement through unknown tiles, or to use PF_IMPOSSIBLE_MC to
- *      easily avoid unknown tiles.]
+ *   Note that the MC of a step is taken to be 0 if the target is
+ *   unknown.  The idea is that the user can set the unknown move cost
+ *   via EC callback.
  *
  *   extra cost (EC): extra cost of a _single_ tile.  EC is always >= 0.
  *   The intended meaning for EC is "how much we want to avoid this tile",
@@ -126,21 +123,6 @@
  * through an additional tile_behaviour callback,  which would return
  * TB_IGNORE for tiles we don't want to visit and TB_DONT_LEAVE for tiles
  * we won't be able to leave (at least alive).
- *
- * Dangerous tiles are those on which we don't want to end a turn.  If
- * the danger callback is specified it is used to determine which tiles are
- * dangerous; no path that ends a turn on such a tile will ever be
- * considered.
- *
- * There is also support for fuel, and thus indirectly for air units.  If
- * the fuel parameters are provided then the unit is considered to have
- * that much fuel.  The net effect is that if a unit has N fuel then only
- * every Nth turn will be considered a stopping point.  To support air
- * units, then, all tiles that don't have airfields (or cities/carriers)
- * should be returned as dangerous (see danger, above).  Note: fuel support
- * will only work if all moves have equal MC.  Support for fuel is
- * experimental at this time (Jun 2005) and should not be used in the
- * server.  Setting fuel==1 in the pf_parameter disables fuel support.
  * 
  * There are few other options in the path-finding, including "omniscience" 
  * (if true, all tiles are assumed to be KNOWN) and "get_zoc" callback (if 
@@ -233,8 +215,8 @@
  * path_finding_tools or a mix of these.
  *
  * Hints:
- * 1. It is useful to limit the expansion of unknown tiles with a get_TB
- * callback.  In this case you might set the unknown_MC to be 0.
+ * 1. Since MC into unknown is 0, it is useful to limit the expansion of 
+ * unknown tiles with a get_TB callback.
  * 2. If there are two paths of the same cost to a tile (x,y), you are
  * not guaranteed to get the one with the least steps in it.  If you care,
  * specifying EC to be 1 will do the job.
@@ -288,7 +270,7 @@ enum turn_mode {
 /* Full specification of a position and time to reach it. */
 struct pf_position {
   struct tile *tile;
-  int turn, moves_left, fuel_left;	/* See definitions above */
+  int turn, moves_left;		/* See definitions above */
 
   int total_MC;			/* Total MC to reach this point */
   int total_EC;			/* Total EC to reach this point */
@@ -312,12 +294,8 @@ struct pf_path {
  * Examples of callbacks can be found in pf_tools.c*/
 struct pf_parameter {
   struct tile *start_tile;	/* Initial position */
-
   int moves_left_initially;
-  int fuel_left_initially;      /* Ignored for non-air units. */
-
   int move_rate;		/* Move rate of the virtual unit */
-  int fuel;                     /* Should be 1 for units without fuel. */
 
   struct player *owner;
 
@@ -333,7 +311,6 @@ struct pf_parameter {
    * implementation of the callback. */
   int (*get_MC) (const struct tile *from_tile, enum direction8 dir,
 		 const struct tile *to_tile, struct pf_parameter * param);
-  int unknown_MC; /* Move cost into unknown - very large by default */
 
   /* Callback which determines the behavior of a tile. If NULL
    * TB_NORMAL is assumed. It can be assumed that the implementation
@@ -355,7 +332,7 @@ struct pf_parameter {
    * ZoC for strategic planning purposes (take into account enemy cities 
    * but not units for example).
    * If this callback is NULL, ZoC are ignored.*/
-  bool (*get_zoc) (const struct player *pplayer, const struct tile *ptile);
+  bool (*get_zoc) (struct player *pplayer, const struct tile *ptile);
 
   /* If this callback is non-NULL and returns TRUE this position is
    * dangerous. The unit will never end a turn at a dangerous

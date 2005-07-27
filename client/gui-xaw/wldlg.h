@@ -15,7 +15,9 @@
 
 #include <X11/Intrinsic.h>
 
-#include "fc_types.h"
+struct worklist;
+struct player;
+struct city;
 
 typedef void (*WorklistOkCallback) (struct worklist *pwl, void *data);
 typedef void (*WorklistCancelCallback) (void *data);

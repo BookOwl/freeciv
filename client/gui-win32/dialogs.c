@@ -41,10 +41,10 @@
 #include "packhand.h"
 #include "text.h"
 
-#include "canvas.h"
 #include "chatline.h"
 #include "dialogs.h"
 #include "gui_stuff.h"
+#include "graphics.h"
 #include "mapctrl.h"
 #include "mapview.h"
 #include "gui_main.h" 
@@ -98,7 +98,6 @@ struct message_dialog {
 };
 
 static HWND races_dlg;
-struct player *races_player;
 static HWND races_class;
 static HWND races_legend;
 int selected_leader_sex;
@@ -266,13 +265,10 @@ static void update_radio_buttons(int id)
   /*  if (id!=selected_style) */
   CheckRadioButton(races_dlg,ID_RACESDLG_STYLE_BASE,
 		   ID_RACESDLG_STYLE_BASE+b_s_num-1,selected_style);
-#if 0
-/* FIXME!!! */
   if (id!=(selected_nation+ID_RACESDLG_NATION_BASE)) 
     CheckRadioButton(races_dlg,ID_RACESDLG_NATION_BASE,
-		     ID_RACESDLG_NATION_BASE+game.control.playable_nation_count-1,
+		     ID_RACESDLG_NATION_BASE+game.playable_nation_count-1,
 		     selected_nation+ID_RACESDLG_NATION_BASE);   
-#endif
 }
 
 
@@ -282,21 +278,10 @@ static void update_radio_buttons(int id)
 **************************************************************************/
 static void update_nation_info()
 {
-  int i;
-  char buf[255];
-  struct nation_type *nation = get_nation_by_idx(selected_nation);
- 
-  buf[0] = '\0';
-
-  for (i = 0; i < nation->num_groups; i++) {
-    sz_strlcat(buf, nation->groups[i]->name);
-    if (i != nation->num_groups - 1) {
-      sz_strlcat(buf, ", ");
-    }
-  }
-
-  SetWindowText(races_class, buf);
-  SetWindowText(races_legend, nation->legend);
+  SetWindowText(races_class, 
+		get_nation_by_idx(selected_nation)->class);
+  SetWindowText(races_legend,
+		get_nation_by_idx(selected_nation)->legend);
 }
 
 
@@ -305,12 +290,9 @@ static void update_nation_info()
 **************************************************************************/
 static void select_random_race(HWND hWnd)
 {
-#if 0
-/* FIXME!!! */
-  selected_nation=myrand(game.control.playable_nation_count);
+  selected_nation=myrand(game.playable_nation_count);
   update_nation_info();
   update_radio_buttons(0);
-#endif
 }
 
 /**************************************************************************
@@ -319,8 +301,7 @@ static void select_random_race(HWND hWnd)
 static void select_random_leader(HWND hWnd)
 {
   int j,leader_num;
-  struct leader *leaders 
-    = get_nation_leaders(get_nation_by_idx(selected_nation), &leader_num);
+  struct leader *leaders = get_nation_leaders(selected_nation, &leader_num);
 
   ComboBox_ResetContent(GetDlgItem(hWnd,ID_RACESDLG_LEADER));
   for (j = 0; j < leader_num; j++) {
@@ -357,10 +338,8 @@ static void do_select(HWND hWnd)
     append_output_window(_("You must type a legal name."));
     return;
   }
-  dsend_packet_nation_select_req(&aconnection, races_player->player_no,
-				 selected_nation, is_male, name, city_style);
-
-  popdown_races_dialog();
+  dsend_packet_nation_select_req(&aconnection, selected_nation, is_male,
+				 name, city_style);
 }
 
 
@@ -409,7 +388,7 @@ static LONG CALLBACK racesdlg_proc(HWND hWnd,
 	  }
 	  break;
 	case ID_RACESDLG_QUIT:
-	  ui_exit();
+	  exit(EXIT_SUCCESS);
 	  break;
 	case ID_RACESDLG_DISCONNECT:
 	  popdown_races_dialog();
@@ -424,11 +403,8 @@ static LONG CALLBACK racesdlg_proc(HWND hWnd,
 	      (id<ID_RACESDLG_STYLE_BASE+b_s_num)) {
 	    selected_style=id;
 	    update_radio_buttons(id);
-	  }
-#if 0
-/* FIXME!!! */
- else if ((id>=ID_RACESDLG_NATION_BASE)&&
-		     (id<ID_RACESDLG_NATION_BASE+game.control.playable_nation_count)) {
+	  } else if ((id>=ID_RACESDLG_NATION_BASE)&&
+		     (id<ID_RACESDLG_NATION_BASE+game.playable_nation_count)) {
 	    selected_nation=id-ID_RACESDLG_NATION_BASE;
 	    update_nation_info();
 	    if (!name_edited) {
@@ -437,7 +413,7 @@ static LONG CALLBACK racesdlg_proc(HWND hWnd,
 	    update_radio_buttons(id);
     
 	  }
-#endif
+
 	  break;
 	}
       break;
@@ -453,8 +429,8 @@ static LONG CALLBACK racesdlg_proc(HWND hWnd,
 *****************************************************************/
 static int cmp_func(const void * a_p, const void * b_p)
 {
-  return strcmp(get_nation_name(get_nation_by_idx((*(int *)a_p)-ID_RACESDLG_NATION_BASE)),
-                get_nation_name(get_nation_by_idx((*(int *)b_p)-ID_RACESDLG_NATION_BASE)));
+  return strcmp(get_nation_name((*(int *)a_p)-ID_RACESDLG_NATION_BASE),
+                get_nation_name((*(int *)b_p)-ID_RACESDLG_NATION_BASE));
 }
 
 #define NATIONS_PER_ROW 5
@@ -463,23 +439,21 @@ static int cmp_func(const void * a_p, const void * b_p)
 **************************************************************************/
 static void add_nations(struct fcwin_box *vbox)
 {
-#if 0
-/* FIXME!!! */
   int i;
   struct fcwin_box *hbox;
   struct fcwin_box *vboxes[NATIONS_PER_ROW];
-  struct genlist *nation_list;
+  struct genlist nation_list;
   struct genlist_link *myiter;
-  nation_list = genlist_new();
-  for(i=0; i<game.control.playable_nation_count; i++) { 
+  genlist_init(&nation_list);
+  for(i=0; i<game.playable_nation_count; i++) { 
     /* Don't use a NULL pointer */
-    genlist_prepend(nation_list, (void *)(i + ID_RACESDLG_NATION_BASE));
+    genlist_insert(&nation_list,(void *)(i+ID_RACESDLG_NATION_BASE),0);
   }
-  genlist_sort(nation_list, cmp_func);
+  genlist_sort(&nation_list,cmp_func);
   for(i=0;i<NATIONS_PER_ROW;i++) {  
     vboxes[i]=fcwin_vbox_new(races_dlg,TRUE);
   }
-  myiter = nation_list->head_link;
+  myiter = nation_list.head_link;
   i=0;
   for(;ITERATOR_PTR(myiter);ITERATOR_NEXT(myiter),i++) {
     int id;
@@ -490,54 +464,22 @@ static void add_nations(struct fcwin_box *vbox)
 			      get_nation_name(id-ID_RACESDLG_NATION_BASE),
 			      id,0,FALSE,FALSE,0);			      
   }
-  genlist_unlink_all(nation_list);
+  genlist_unlink_all(&nation_list);
   hbox=fcwin_hbox_new(races_dlg,TRUE);
   for(i=0;i<NATIONS_PER_ROW;i++)
     fcwin_box_add_box(hbox,vboxes[i],TRUE,TRUE,10);
   fcwin_box_add_box(vbox,hbox,TRUE,TRUE,10);
-#endif
-}
-
-/****************************************************************
-...
-*****************************************************************/
-static void create_races_dialog(struct player *pplayer)
-{
-  HWND shell, frame;
-  struct fcwin_box *vbox, *hbox;
-
-  shell =
-    fcwin_create_layouted_window(racesdlg_proc, _("What nation will you be?"),
-				 WS_OVERLAPPEDWINDOW, CW_USEDEFAULT,
-				 CW_USEDEFAULT, root_window, NULL,
-				 REAL_CHILD, NULL);
-
-  races_dlg = shell;
-  races_player = pplayer;
-
-  hbox = fcwin_hbox_new(shell, FALSE);
-  vbox = fcwin_hbox_new(shell, FALSE);
-  
-  frame = fcwin_box_add_groupbox(hbox, _("Select a nation"), vbox, 0, FALSE,
-				 FALSE, 0);
 }
 
 /**************************************************************************
 
 **************************************************************************/
-void popup_races_dialog(struct player *pplayer)
+void popup_races_dialog(void)
 {
-  if (!races_dlg) {
-    create_races_dialog(pplayer);
-    SetFocus(races_dlg);
-  }
-#if 0
   struct fcwin_box *vbox;
   struct fcwin_box *hbox;
   struct fcwin_box *grp_box;
   int i;
-
-  races_player = pplayer;
   races_dlg=fcwin_create_layouted_window(racesdlg_proc,
 					 _("What nation will you be?"),
 					 WS_OVERLAPPEDWINDOW,
@@ -583,8 +525,8 @@ void popup_races_dialog(struct player *pplayer)
   fcwin_box_add_groupbox(vbox,_("Select your city style"),grp_box,WS_GROUP,
 			 FALSE,FALSE,5);
   hbox=fcwin_hbox_new(races_dlg,TRUE);
-  for(i=0,b_s_num=0; i<game.control.styles_count && i<64; i++) {
-    if (!city_style_has_requirements(&city_styles[i])) {
+  for(i=0,b_s_num=0; i<game.styles_count && i<64; i++) {
+    if(city_styles[i].techreq == A_NONE) {
       city_style_idx[b_s_num] = i;
       city_style_ridx[i] = b_s_num;
       b_s_num++;
@@ -615,7 +557,6 @@ void popup_races_dialog(struct player *pplayer)
   select_random_race(races_dlg);
   select_random_leader(races_dlg);
   ShowWindow(races_dlg,SW_SHOWNORMAL);
-#endif
 }
 
 /**************************************************************************
@@ -624,11 +565,8 @@ void popup_races_dialog(struct player *pplayer)
 void
 popdown_races_dialog(void)
 {
-  if (races_dlg) {
-    DestroyWindow(races_dlg);
-    races_dlg = NULL;
-    SetFocus(root_window);
-  }
+  DestroyWindow(races_dlg);
+  SetFocus(root_window);
 }
 
 /**************************************************************************
@@ -710,7 +648,7 @@ static LONG APIENTRY unitselect_proc(HWND hWnd, UINT message,
 	    {
 	      struct unit *punit=player_find_unit_by_id(game.player_ptr,
 							unit_select_ids[id]);
-	      if (punit && punit->owner == game.player_ptr) {
+	      if(punit && punit->owner == game.player_idx) {
 		set_unit_focus(punit);
 	      }   
 	    }
@@ -771,7 +709,7 @@ popup_unit_select_dialog(struct tile *ptile)
   RECT rc,rc2;
   HBITMAP old;
   HDC unitsel_dc;
-  struct unit *unit_list[unit_list_size(ptile->units)];
+  struct unit *unit_list[unit_list_size(&ptile->units)];
   
   fill_tile_unit_list(ptile, unit_list);
   
@@ -793,7 +731,7 @@ popup_unit_select_dialog(struct tile *ptile)
     return;
   hdc=GetDC(unit_select_main);
   unitsel_dc=CreateCompatibleDC(NULL);
-  n = unit_list_size(ptile->units);
+  n=unit_list_size(&ptile->units);
   r=number_of_rows(n);
   c=number_of_columns(n);
   max_width=0;
@@ -814,31 +752,24 @@ popup_unit_select_dialog(struct tile *ptile)
 	max_width=rc.right-rc.left;
       if ((rc.bottom-rc.top)>max_height)
 	max_height=rc.bottom-rc.top;
-      unit_select_bitmaps[i]=CreateCompatibleBitmap(hdc,tileset_full_tile_width(tileset),
-						    tileset_full_tile_height(tileset));
+      unit_select_bitmaps[i]=CreateCompatibleBitmap(hdc,UNIT_TILE_WIDTH,
+						    UNIT_TILE_HEIGHT);
     }
   ReleaseDC(unit_select_main,hdc);
   old=SelectObject(unitsel_dc,unit_select_bitmaps[0]);
-  max_width+=tileset_full_tile_width(tileset);
+  max_width+=UNIT_TILE_WIDTH;
   max_width+=4;
-  if (max_height<tileset_full_tile_width(tileset))
+  if (max_height<UNIT_TILE_WIDTH)
     {
-      max_height=tileset_full_tile_height(tileset);
+      max_height=UNIT_TILE_HEIGHT;
     }
   max_height+=4;
   for (i=0;i<n;i++)
     {
-      struct canvas canvas_store;
+      struct canvas canvas_store = {unitsel_dc, NULL};
       struct unit *punit=unit_list[i];
       struct unit_type *punittemp=unit_type(punit);
       struct city *pcity;
-
-      canvas_store.type = CANVAS_DC;
-      canvas_store.hdc = unitsel_dc;
-      canvas_store.bmp = NULL;
-      canvas_store.wnd = NULL;
-      canvas_store.tmp = NULL;
-
       pcity=player_find_city_by_id(game.player_ptr, punit->homecity);
       my_snprintf(buffer, sizeof(buffer), "%s(%s)\n%s",
 		  punittemp->name,
@@ -846,24 +777,24 @@ popup_unit_select_dialog(struct tile *ptile)
 		  unit_activity_text(punit));
       unit_select_labels[i]=CreateWindow("STATIC",buffer,
 					 WS_CHILD | WS_VISIBLE | SS_LEFT,
-					 (i/r)*max_width+tileset_full_tile_width(tileset),
+					 (i/r)*max_width+UNIT_TILE_WIDTH,
 					 (i%r)*max_height,
-					 max_width-tileset_full_tile_width(tileset),
+					 max_width-UNIT_TILE_WIDTH,
 					 max_height,
 					 unit_select_main,
 					 NULL,
 					 freecivhinst,
 					 NULL);
       SelectObject(unitsel_dc,unit_select_bitmaps[i]);
-      BitBlt(unitsel_dc,0,0,tileset_full_tile_width(tileset),tileset_full_tile_height(tileset),NULL,
+      BitBlt(unitsel_dc,0,0,UNIT_TILE_WIDTH,UNIT_TILE_HEIGHT,NULL,
 	     0,0,WHITENESS);
       put_unit(punit,&canvas_store,0,0);
       unit_select_but[i]=CreateWindow("BUTTON",NULL,
 				      WS_CHILD | WS_VISIBLE | BS_BITMAP,
 				      (i/r)*max_width,
 				      (i%r)*max_height,
-				      tileset_full_tile_width(tileset),
-				      tileset_full_tile_height(tileset),
+				      UNIT_TILE_WIDTH,
+				      UNIT_TILE_HEIGHT,
 				      unit_select_main,
 				      (HMENU)(UNITSELECT_UNITS_BASE+i),
 				      freecivhinst,
@@ -915,37 +846,30 @@ popup_unit_select_dialog(struct tile *ptile)
 /**************************************************************************
 
 **************************************************************************/
-void races_toggles_set_sensitive(void)
+void races_toggles_set_sensitive(bool *nations_used)
 {
-#if 0
-/* FIXME!! */
   int i;
-  BOOL changed;
 
-  for (i = 0; i < game.control.playable_nation_count; i++) {
+  for (i = 0; i < game.playable_nation_count; i++) {
     EnableWindow(GetDlgItem(races_dlg, ID_RACESDLG_NATION_BASE + i), TRUE);
   }
 
-  changed = FALSE;
+  for (i = 0; i < game.playable_nation_count; i++) {
+    Nation_Type_id nation = i;
 
-  for (i = 0; i < game.control.playable_nation_count; i++) {
-    struct nation_type *nation;
-    nation = get_nation_by_idx(i);
-
-    if (!(nation->is_unavailable || nation->is_used)) {
+    if (!nations_used[i]) {
       continue;
     }
 
-    EnableWindow(GetDlgItem(races_dlg, ID_RACESDLG_NATION_BASE + i),
+    freelog(LOG_DEBUG, "  [%d]: %d", i, nation);
+
+    EnableWindow(GetDlgItem(races_dlg, ID_RACESDLG_NATION_BASE + nation),
 		 FALSE);
 
-    changed = TRUE;
+    if (nation == selected_nation) {
+      select_random_race(races_dlg);
+    }
   }
-
-  if (changed) {
-    select_random_race(races_dlg);
-  }
-#endif
 }
 
 /****************************************************************
@@ -976,7 +900,7 @@ static void revolution_callback_no(HWND w, void * data)
 *****************************************************************/
 void popup_revolution_dialog(int government)
 {
-  if (game.player_ptr->revolution_finishes < game.info.turn) {
+  if (game.player_ptr->revolution_finishes < game.turn) {
     popup_message_dialog(NULL, _("Revolution!"),
 			 _("You say you wanna revolution?"),
 			 _("_Yes"),revolution_callback_yes, government,
@@ -1102,7 +1026,7 @@ static void diplomat_steal_callback(HWND w, void * data)
   if(find_unit_by_id(diplomat_id) &&
      find_city_by_id(diplomat_target_id)) {
     request_diplomat_action(DIPLOMAT_STEAL, diplomat_id,
-			    diplomat_target_id, A_UNSET);
+			    diplomat_target_id, 0);
   }
  
   process_diplomat_arrival(NULL, 0);
@@ -1176,7 +1100,7 @@ static void create_advances_list(struct player *pplayer,
   
   if (pvictim) { /* you don't want to know what lag can do -- Syela */
     
-    for(i=A_FIRST; i<game.control.num_tech_types; i++) {
+    for(i=A_FIRST; i<game.num_tech_types; i++) {
       if(get_invention(pvictim, i)==TECH_KNOWN && 
          (get_invention(pplayer, i)==TECH_UNKNOWN || 
           get_invention(pplayer, i)==TECH_REACHABLE)) {
@@ -1187,7 +1111,7 @@ static void create_advances_list(struct player *pplayer,
     
     if(j > 0) {
       ListBox_AddString(lb,_("At Spy's Discretion"));
-      advance_type[j++] = A_UNSET;
+      advance_type[j++] = game.num_tech_types;
     }
   }
   if(j == 0) {
@@ -1588,7 +1512,7 @@ void popup_diplomat_dialog(struct unit *punit, struct tile *ptile)
 
   diplomat_id=punit->id;
 
-  if ((pcity = tile_get_city(ptile))){
+  if ((pcity = map_get_city(ptile))){
     /* Spy/Diplomat acting against a city */
 
     diplomat_target_id=pcity->id;
@@ -1645,7 +1569,7 @@ void popup_diplomat_dialog(struct unit *punit, struct tile *ptile)
 
     diplomat_dialog_open=1;
    }else{ 
-     if ((ptunit = unit_list_get(ptile->units, 0))){
+     if ((ptunit = unit_list_get(&ptile->units, 0))){
        /* Spy/Diplomat acting against a unit */ 
        
        diplomat_target_id=ptunit->id;
@@ -1717,12 +1641,10 @@ static LONG CALLBACK pillage_proc(HWND dlg,UINT message,
 
 **************************************************************************/
 void popup_pillage_dialog(struct unit *punit,
-			  bv_special may_pillage)
+			  enum tile_special_type may_pillage)
 {
   HWND dlg;
   struct fcwin_box *vbox;
-  enum tile_special_type what, prereq;
-
   if (!is_showing_pillage_dialog) {
     is_showing_pillage_dialog = TRUE;   
     unit_to_use_to_pillage = punit->id;
@@ -1735,20 +1657,12 @@ void popup_pillage_dialog(struct unit *punit,
     vbox=fcwin_vbox_new(dlg,FALSE);
     fcwin_box_add_static(vbox,_("Select what to pillage:"),0,SS_LEFT,
 			 FALSE,FALSE,10);
-    while ((what = get_preferred_pillage(may_pillage)) != S_LAST) {
-      bv_special what_bv;
+    while(may_pillage != S_NO_SPECIAL) {
+      enum tile_special_type what = get_preferred_pillage(may_pillage);
 
-      BV_CLR_ALL(what_bv);
-      BV_SET(what_bv, what);
-
-      fcwin_box_add_button(vbox, get_infrastructure_text(what_bv),
+      fcwin_box_add_button(vbox,map_get_infrastructure_text(what),
 			   ID_PILLAGE_BASE+what,0,TRUE,FALSE,5);
-
-      clear_special(&may_pillage, what);
-      prereq = get_infrastructure_prereq(what);
-      if (prereq != S_LAST) {
-	clear_special(&may_pillage, prereq);
-      }
+      may_pillage &= (~(what | map_get_infrastructure_prerequisite (what)));
     }
     fcwin_box_add_button(vbox,_("Cancel"),IDCANCEL,0,TRUE,FALSE,5);
     fcwin_set_box(dlg,vbox);

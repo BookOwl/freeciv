@@ -43,7 +43,6 @@
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "packhand.h"
-#include "pages.h"
 
 #include "connectdlg.h"
 
@@ -287,7 +286,6 @@ void connect_callback(Widget w, XtPointer client_data,
       }
 
       XtSetSensitive(toplevel, True);
-      popup_start_page();
       return;
     } else {
       append_output_window(errbuf);
@@ -513,7 +511,7 @@ static int get_server_list(char **list, char *errbuf, int n_errbuf)
     }
   }
 
-  server_list_iterate(server_list,pserver) {
+  server_list_iterate(*server_list,pserver) {
     if (pserver == NULL) continue;
     my_snprintf(line, sizeof(line), "%-35s %-5s %-11s %-11s %2s   %s",
 		pserver->host, pserver->port, pserver->version,

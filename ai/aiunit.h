@@ -38,14 +38,14 @@
 #define HOSTILE_PLAYER(pplayer, ai, aplayer) \
   (pplayers_at_war(pplayer, aplayer)         \
    || ai->diplomacy.target == aplayer)
-#define UNITTYPE_COSTS(ut)						\
-  (ut->pop_cost * 3 + ut->happy_cost					\
-   + ut->upkeep[O_SHIELD] + ut->upkeep[O_FOOD] + ut->upkeep[O_GOLD])
+#define UNITTYPE_COSTS(ut)                             \
+  (ut->pop_cost * 3 + ut->happy_cost + ut->shield_cost \
+   + ut->food_cost + ut->gold_cost)
 
 struct ai_choice;
 struct pf_path;
 
-extern struct unit_type *simple_ai_types[U_LAST];
+extern Unit_Type_id simple_ai_types[U_LAST];
 
 void ai_manage_units(struct player *pplayer); 
 void ai_manage_unit(struct player *pplayer, struct unit *punit);
@@ -55,43 +55,45 @@ int could_unit_move_to_tile(struct unit *punit, struct tile *dst_tile);
 int look_for_charge(struct player *pplayer, struct unit *punit,
                     struct unit **aunit, struct city **acity);
 
-int turns_to_enemy_city(const struct unit_type *our_type, struct city *acity,
+int turns_to_enemy_city(Unit_Type_id our_type, struct city *acity,
                         int speed, bool go_by_boat, 
-                        struct unit *boat, const struct unit_type *boattype);
-int turns_to_enemy_unit(const struct unit_type *our_type,
-			int speed, struct tile *ptile, 
-                        const struct unit_type *enemy_type);
+                        struct unit *boat, Unit_Type_id boattype);
+int turns_to_enemy_unit(Unit_Type_id our_type, int speed, struct tile *ptile, 
+                        Unit_Type_id enemy_type);
 int find_something_to_kill(struct player *pplayer, struct unit *punit, 
 			   struct tile **ptile);
+bool find_beachhead(struct unit *punit, struct tile *dst_tile,
+		    struct tile **ptile);
 
-int build_cost_balanced(const struct unit_type *punittype);
-int unittype_att_rating(const struct unit_type *punittype, int veteran,
+int build_cost_balanced(Unit_Type_id type);
+int unittype_att_rating(Unit_Type_id type, int veteran,
                         int moves_left, int hp);
 int unit_att_rating(struct unit *punit);
 int unit_def_rating_basic(struct unit *punit);
 int unit_def_rating_basic_sq(struct unit *punit);
-int unittype_def_rating_sq(const struct unit_type *att_type,
-			   const struct unit_type *def_type,
+int unittype_def_rating_sq(Unit_Type_id att_type, Unit_Type_id def_type,
                            struct tile *ptile, bool fortified, int veteran);
 int kill_desire(int benefit, int attack, int loss, int vuln, int attack_count);
 
-bool is_on_unit_upgrade_path(const struct unit_type *test,
-			     const struct unit_type *base);
+bool is_on_unit_upgrade_path(Unit_Type_id test, Unit_Type_id base);
 
+Unit_Type_id ai_wants_role_unit(struct player *pplayer, struct city *pcity,
+                                int role, int want);
+void ai_choose_role_unit(struct player *pplayer, struct city *pcity,
+                         struct ai_choice *choice, int role, int want);
 void update_simple_ai_types(void);
 
-#define simple_ai_unit_type_iterate(m_i)                                    \
-{                                                                           \
-  int m_c;                                                                  \
-  for (m_c = 0;; m_c++) {                                                   \
-    struct unit_type * m_i = simple_ai_types[m_c];			    \
-									    \
-    if (!m_i) {								    \
-      break;                                                                \
+#define simple_ai_unit_type_iterate(m_i)                                      \
+{                                                                             \
+  int m_c;                                                                    \
+  for (m_c = 0;; m_c++) {                                                     \
+    Unit_Type_id m_i = simple_ai_types[m_c];                                  \
+    if (m_i == U_LAST) {                                                      \
+      break;                                                                  \
     }
 
-#define simple_ai_unit_type_iterate_end                                     \
- }                                                                          \
+#define simple_ai_unit_type_iterate_end                                       \
+ }                                                                            \
 }
 
 #endif  /* FC__AIUNIT_H */

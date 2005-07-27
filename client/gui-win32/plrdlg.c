@@ -58,7 +58,7 @@ static int sort_column=2;
 #define ID_PLAYERS_VISION 105
 #define ID_PLAYERS_SSHIP 106
 
-#define NUM_COLUMNS 9
+#define NUM_COLUMNS 10
 
 /******************************************************************
 
@@ -69,7 +69,7 @@ static void players_meet(int player_index)
     dsend_packet_diplomacy_init_meeting_req(&aconnection, player_index);
 
   } else {
-    append_output_window(_("You need an embassy to "
+    append_output_window(_("Game: You need an embassy to "
 			   "establish a diplomatic meeting."));
   }
 }
@@ -117,7 +117,7 @@ static void players_sship(int player_index)
 static void build_row(const char **row, int i, int update)
 {
   static char namebuf[MAX_LEN_NAME],  aibuf[2], dsbuf[32],
-      statebuf[32], idlebuf[32];
+      repbuf[32], statebuf[32], idlebuf[32];
   const struct player_diplstate *pds;
 
   /* we cassume that neither name nor the nation of a player changes */
@@ -136,7 +136,7 @@ static void build_row(const char **row, int i, int update)
   aibuf[1] = '\0';
 
   /* text for diplstate type and turns -- not applicable if this is me */
-  if (i == game.info.player_idx) {
+  if (i == game.player_idx) {
     strcpy(dsbuf, "-");
   } else {
     pds = pplayer_get_diplstate(game.player_ptr, get_player(i));
@@ -151,7 +151,7 @@ static void build_row(const char **row, int i, int update)
   /* text for state */
   if (game.players[i].is_alive) {
     if (game.players[i].is_connected) {
-      if (game.players[i].phase_done) {
+      if (game.players[i].turn_done) {
 	sz_strlcpy(statebuf, _("done"));
       } else {
 	sz_strlcpy(statebuf, _("moving"));
@@ -173,14 +173,19 @@ static void build_row(const char **row, int i, int update)
     idlebuf[0] = '\0';
   }
 
+  /* text for reputation */
+  my_snprintf(repbuf, sizeof(repbuf),
+	      reputation_text(game.players[i].reputation));
+
   /* assemble the whole lot */
   row[2] = aibuf;
   row[3] = get_embassy_status(game.player_ptr, &game.players[i]);
   row[4] = dsbuf;
   row[5] = get_vision_status(game.player_ptr, &game.players[i]);
-  row[6] = statebuf;
-  row[7] = (char *) player_addr_hack(&game.players[i]);	/* Fixme */
-  row[8] = idlebuf;
+  row[6] = repbuf;
+  row[7] = statebuf;
+  row[8] = (char *) player_addr_hack(&game.players[i]);	/* Fixme */
+  row[9] = idlebuf;
 }
 
 
@@ -333,7 +338,7 @@ static void create_players_dialog(void)
   int i;
   static char *titles_[NUM_COLUMNS] =
     { N_("Name"), N_("Nation"), N_("AI"),
-      N_("Embassy"), N_("Dipl.State"), N_("Vision"),
+      N_("Embassy"), N_("Dipl.State"), N_("Vision"), N_("Reputation"),
       N_("State"), N_("Host"), N_("Idle")
     };
   struct fcwin_box *vbox;
@@ -376,14 +381,11 @@ static void create_players_dialog(void)
 
 *******************************************************************/      
 void
-popup_players_dialog(bool raise)
+popup_players_dialog(void)
 {
   if (!players_dialog)
     create_players_dialog();
   ShowWindow(players_dialog,SW_SHOWNORMAL);
-  if (raise) {
-    SetFocus(players_dialog);
-  }
 }
 
 /**************************************************************************
@@ -399,7 +401,7 @@ update_players_dialog(void)
     int i,row;
     lv=GetDlgItem(players_dialog,ID_PLAYERS_LIST);
     ListView_DeleteAllItems(lv);
-    for (i = 0; i < game.info.nplayers; i++) {
+    for (i = 0; i < game.nplayers; i++) {
       build_row(row_texts, i, 0);
       row=fcwin_listview_add_row(lv,i,NUM_COLUMNS, (char **)row_texts);
       lvi.iItem=row;

@@ -7,8 +7,6 @@ AM_CPPFLAGS = -I. -I$(srcdir)/.. -I$(srcdir)/../agents -I$(top_srcdir)/utility -
 ## Above, note -I../../intl instead of -I$(top_srdir)/intl is deliberate.
 
 libguiclient_a_SOURCES = \
-	canvas.c	\
-	canvas.h	\
 	chatline.c	\
 	chatline.h	\
 	citydlg.c	\
@@ -65,7 +63,5 @@ libguiclient_a_SOURCES = \
 	repodlgs.h	\
 	spaceshipdlg.c	\
 	spaceshipdlg.h	\
-	sprite.c	\
-	sprite.h	\
 	wldlg.c		\
 	wldlg.h

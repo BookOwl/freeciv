@@ -2,11 +2,11 @@
 
 name=_("Greek")
 plural=_("?plural:Greeks")
-groups=_("Ancient"), _("Medieval"), _("Modern"), _("European")
+class=_("Historical")
 legend=_("The ancient Greeks, between Mycenae and the Roman conquest.")
 leader="Alexander", "Perikles", "Leonidas", "Solon"
 leader_sex="Male", "Male", "Male", "Male"
-flag="greece"
+flag="f.greece"
 flag_alt = "-"
 city_style = "Classical"
 ruler_titles = { "government",      "male_title",      "female_title"
@@ -15,8 +15,8 @@ ruler_titles = { "government",      "male_title",      "female_title"
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
+tech_goals = "The Republic", "Philosophy", "Trade", "Engineering",
+             "Iron Working", "Railroad"
 wonder="Lighthouse"
 government="Republic"
 civilwar_nations = "egyptian", "persian"

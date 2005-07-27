@@ -2,17 +2,17 @@
 
 name=_("Malaysian")
 plural=_("?plural:Malaysians")
-groups=_("Modern")
+class=_("Modern")
 leader="Mahathir", "Anwar Ibrahim"
 leader_sex="Male", "Male"
-flag="malaysia"
+flag="f.malaysia"
 flag_alt = "-"
 city_style = "European"
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
+tech_goals = "Warrior Code", "The Republic", "Navigation", "Railroad",
+             "Guerilla Warfare"
 wonder= "Magellan's Expedition"
 government = "The Republic"
 

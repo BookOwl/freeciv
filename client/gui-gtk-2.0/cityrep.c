@@ -66,8 +66,7 @@ static void city_model_init(void);
 static void city_activated_callback(GtkTreeView *view, GtkTreePath *path,
 				    GtkTreeViewColumn *col, gpointer data);
 
-static void city_command_callback(struct gui_dialog *dlg, int response,
-                                  gpointer data);
+static void city_command_callback(struct gui_dialog *dlg, int response);
 
 static void city_selection_changed_callback(GtkTreeSelection *selection);
 
@@ -94,7 +93,8 @@ static void popup_first_menu(GtkMenuShell *menu, gpointer data);
 static void popup_next_menu(GtkMenuShell *menu, gpointer data);
 
 static GtkWidget *city_center_command, *city_popup_command, *city_buy_command;
-static GtkWidget *city_production_command;
+static GtkWidget *city_change_command;
+static GtkWidget *city_last_command, *city_first_command, *city_next_command;
 
 
 static GtkWidget *change_improvements_item;
@@ -138,7 +138,7 @@ bool select_menu_cached;
 /****************************************************************
  Return text line for the column headers for the city report
 *****************************************************************/
-static void get_city_table_header(char **text, int n)
+static void get_city_table_header(char *text[], int n)
 {
   struct city_report_spec *spec;
   int i;
@@ -157,23 +157,29 @@ static void get_city_table_header(char **text, int n)
 ****************************************************************/
 
 /****************************************************************
- Popup the city report dialog, and optionally raise it.
+...
 ****************************************************************/
-void popup_city_report_dialog(bool raise)
+void popup_city_report_dialog(bool make_modal)
 {
   if(!city_dialog_shell) {
-    city_dialog_shell_is_modal = FALSE;
+    city_dialog_shell_is_modal = make_modal;
     
-    create_city_report_dialog(FALSE);
+    create_city_report_dialog(make_modal);
 
     select_menu_cached = FALSE;
   }
 
   gui_dialog_present(city_dialog_shell);
   hilite_cities_from_canvas();
-  if (raise) {
-    gui_dialog_raise(city_dialog_shell);
-  }
+}
+
+/****************************************************************
+ Raises the city report dialog.
+****************************************************************/
+void raise_city_report_dialog(void)
+{
+  popup_city_report_dialog(FALSE);
+  gui_dialog_raise(city_dialog_shell);
 }
 
 /****************************************************************
@@ -667,36 +673,28 @@ static void update_view_menu(GtkWidget *show_item)
 *****************************************************************/
 static GtkWidget *create_city_report_menubar(void)
 {
-  GtkWidget *vbox, *sep, *menubar, *menu, *item;
-
-  vbox = gtk_vbox_new(FALSE, 0);
-  sep = gtk_hseparator_new();
-  gtk_box_pack_start(GTK_BOX(vbox), sep, FALSE, FALSE, 0);
+  GtkWidget *menubar, *item;
 
   menubar = gtk_menu_bar_new();
-  gtk_box_pack_start(GTK_BOX(vbox), menubar, TRUE, TRUE, 0);
   
-  item = gtk_menu_item_new_with_mnemonic(_("Pro_duction"));
-  city_production_command = item;
-  gtk_menu_shell_append(GTK_MENU_SHELL(menubar), item);
-
-  menu = gtk_menu_new();
-  gtk_menu_item_set_submenu(GTK_MENU_ITEM(item), menu);
-
   item = gtk_menu_item_new_with_mnemonic(_("Chan_ge"));
-  gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
+  gtk_menu_shell_append(GTK_MENU_SHELL(menubar), item);
+  city_change_command = item;
   create_change_menu(item);
 
   item = gtk_menu_item_new_with_mnemonic(_("Add _First"));
-  gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
+  gtk_menu_shell_append(GTK_MENU_SHELL(menubar), item);
+  city_first_command = item;
   create_first_menu(item);
 
   item = gtk_menu_item_new_with_mnemonic(_("Add _Next"));
-  gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
+  gtk_menu_shell_append(GTK_MENU_SHELL(menubar), item);
+  city_next_command = item;
   create_next_menu(item);
 
   item = gtk_menu_item_new_with_mnemonic(_("Add _Last"));
-  gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
+  gtk_menu_shell_append(GTK_MENU_SHELL(menubar), item);
+  city_last_command = item;
   create_last_menu(item);
 
   item = gtk_menu_item_new_with_mnemonic(_("_Select"));
@@ -706,7 +704,7 @@ static GtkWidget *create_city_report_menubar(void)
   item = gtk_menu_item_new_with_mnemonic(_("S_how"));
   gtk_menu_shell_append(GTK_MENU_SHELL(menubar), item);
   update_view_menu(item);
-  return vbox;
+  return menubar;
 }
 
 /****************************************************************
@@ -730,8 +728,7 @@ static void cityrep_cell_data_func(GtkTreeViewColumn *col,
   g_value_unset(&value);
 
   sp = &city_report_specs[n];
-  my_snprintf(buf, sizeof(buf), "%*s", NEG_VAL(sp->width),
-	      (sp->func)(pcity, sp->data));
+  my_snprintf(buf, sizeof(buf), "%*s", NEG_VAL(sp->width), (sp->func)(pcity));
 
   g_value_init(&value, G_TYPE_STRING);
   g_value_set_string(&value, buf);
@@ -763,10 +760,8 @@ static gint cityrep_sort_func(GtkTreeModel *model,
   g_value_unset(&value);
 
   sp = &city_report_specs[n];
-  my_snprintf(buf1, sizeof(buf1), "%*s", NEG_VAL(sp->width),
-	      (sp->func)(pcity1, sp->data));
-  my_snprintf(buf2, sizeof(buf2), "%*s", NEG_VAL(sp->width),
-	      (sp->func)(pcity2, sp->data));
+  my_snprintf(buf1, sizeof(buf1), "%*s",NEG_VAL(sp->width),(sp->func)(pcity1));
+  my_snprintf(buf2, sizeof(buf2), "%*s",NEG_VAL(sp->width),(sp->func)(pcity2));
 
   return cityrepfield_compare(buf1, buf2);
 }
@@ -776,14 +771,14 @@ static gint cityrep_sort_func(GtkTreeModel *model,
 *****************************************************************/
 static void create_city_report_dialog(bool make_modal)
 {
-  static char **titles;
-  static char (*buf)[64];
+  static char *titles [NUM_CREPORT_COLS];
+  static char  buf    [NUM_CREPORT_COLS][64];
   struct city_report_spec *spec;
 
   GtkWidget *w, *sw, *menubar;
   int i;
-
-  gui_dialog_new(&city_dialog_shell, GTK_NOTEBOOK(top_notebook), NULL);
+  
+  gui_dialog_new(&city_dialog_shell, GTK_NOTEBOOK(top_notebook));
   gui_dialog_set_title(city_dialog_shell, _("Cities"));
 
   gui_dialog_set_default_size(city_dialog_shell, -1, 420);
@@ -793,7 +788,8 @@ static void create_city_report_dialog(bool make_modal)
 
   /* menubar */
   menubar = create_city_report_menubar();
-  gui_dialog_add_widget(city_dialog_shell, menubar);
+  gtk_box_pack_start(GTK_BOX(city_dialog_shell->vbox),
+	menubar, FALSE, FALSE, 0);
 
   /* buttons */
   w = gui_dialog_add_stockbutton(city_dialog_shell, GTK_STOCK_ZOOM_FIT,
@@ -815,11 +811,9 @@ static void create_city_report_dialog(bool make_modal)
 				  GTK_RESPONSE_CLOSE);
 
   /* tree view */
-  buf = fc_realloc(buf, NUM_CREPORT_COLS * sizeof(buf[0]));
-  titles = fc_realloc(titles, NUM_CREPORT_COLS * sizeof(titles[0]));
-  for (i = 0; i < NUM_CREPORT_COLS; i++) {
+  for (i=0; i<NUM_CREPORT_COLS; i++)
     titles[i] = buf[i];
-  }
+
   get_city_table_header(titles, sizeof(buf[0]));
 
   city_model = gtk_list_store_new(2, G_TYPE_POINTER, G_TYPE_INT);
@@ -943,8 +937,8 @@ static void same_island_iterate(GtkTreeModel *model, GtkTreePath *path,
     itree_get(&it, 0, &res, -1);
     pcity = res;
 
-    if (tile_get_continent(pcity->tile)
-	== tile_get_continent(selectedcity->tile)) {
+    if (map_get_continent(pcity->tile)
+	== map_get_continent(selectedcity->tile)) {
       itree_select(city_selection, &it);
     }
   }
@@ -976,11 +970,11 @@ static void city_select_building_callback(GtkMenuItem *item, gpointer data)
     itree_get(&it, 0, &res, -1);
     pcity = res;
 
-    if ( (which == TYPE_UNIT && pcity->production.is_unit)
-         || (which == TYPE_NORMAL_IMPROVEMENT && !pcity->production.is_unit
-             && !is_wonder(pcity->production.value))
-         || (which == TYPE_WONDER && !pcity->production.is_unit
-             && is_wonder(pcity->production.value)) ) {
+    if ( (which == TYPE_UNIT && pcity->is_building_unit)
+         || (which == TYPE_NORMAL_IMPROVEMENT && !pcity->is_building_unit
+             && !is_wonder(pcity->currently_building))
+         || (which == TYPE_WONDER && !pcity->is_building_unit
+             && is_wonder(pcity->currently_building)) ) {
       itree_select(city_selection, &it);
     }
   }
@@ -1029,14 +1023,13 @@ static void popup_iterate(GtkTreeModel *model, GtkTreePath *path,
     center_tile_mapcanvas(pcity->tile);
   }
 
-  popup_city_dialog(pcity);
+  popup_city_dialog(pcity, 0);
 }
 
 /****************************************************************
 ...
 *****************************************************************/
-static void city_command_callback(struct gui_dialog *dlg, int response,
-                                  gpointer data)
+static void city_command_callback(struct gui_dialog *dlg, int response)
 {
   switch (response) {
   case CITY_CENTER:
@@ -1210,7 +1203,7 @@ static void create_change_menu(GtkWidget *item)
   gtk_menu_shell_append(GTK_MENU_SHELL(menu), change_improvements_item);
   change_wonders_item = gtk_menu_item_new_with_label(_("Wonders"));
   gtk_menu_shell_append(GTK_MENU_SHELL(menu), change_wonders_item);
-  change_cma_item = gtk_menu_item_new_with_label(_("Citizen Governor"));
+  change_cma_item = gtk_menu_item_new_with_label(_("CMA"));
   gtk_menu_shell_append(GTK_MENU_SHELL(menu), change_cma_item);
 }
 
@@ -1483,7 +1476,7 @@ static void create_select_menu(GtkWidget *item)
 	gtk_menu_item_new_with_label(_("Available Wonders"));
   gtk_menu_shell_append(GTK_MENU_SHELL(menu), select_wonders_item);
   select_cma_item =
-	gtk_menu_item_new_with_label(_("Citizen Governor"));
+	gtk_menu_item_new_with_label(_("CMA"));
   gtk_menu_shell_append(GTK_MENU_SHELL(menu), select_cma_item);
 }
 
@@ -1565,13 +1558,18 @@ static void city_selection_changed_callback(GtkTreeSelection *selection)
   n = gtk_tree_selection_count_selected_rows(selection);
 
   if (n == 0) {
-    gtk_widget_set_sensitive(city_production_command, FALSE);
+    gtk_widget_set_sensitive(city_change_command, FALSE);
+    gtk_widget_set_sensitive(city_last_command, FALSE);
+    gtk_widget_set_sensitive(city_first_command, FALSE);
+    gtk_widget_set_sensitive(city_next_command, FALSE);
     gtk_widget_set_sensitive(city_center_command, FALSE);
     gtk_widget_set_sensitive(city_popup_command, FALSE);
     gtk_widget_set_sensitive(city_buy_command, FALSE);
   } else {
-    gtk_widget_set_sensitive(city_production_command,
-			     can_client_issue_orders());
+    gtk_widget_set_sensitive(city_change_command, can_client_issue_orders());
+    gtk_widget_set_sensitive(city_last_command, can_client_issue_orders());
+    gtk_widget_set_sensitive(city_first_command, can_client_issue_orders());
+    gtk_widget_set_sensitive(city_next_command, can_client_issue_orders());
     gtk_widget_set_sensitive(city_center_command, TRUE);
     gtk_widget_set_sensitive(city_popup_command, TRUE);
     gtk_widget_set_sensitive(city_buy_command, can_client_issue_orders());

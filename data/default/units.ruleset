@@ -7,6 +7,14 @@
 ; command "rulesetdir <mysubdir>" in the server to have freeciv
 ; use your new customized file.
 ;
+; The AI does not know the value of Partial_Invis, nor does this
+; work against the AI, since it knows all. It does not know anything 
+; about air units at all. It does not build No_Land_Attack, Missile 
+; or Nuclear units. It values GameLoss units at 1/10th its usual value
+; and therefore would not easily build it, but if it does, it does not 
+; protect it from harm. NoHome units are likely to be given a homecity
+; by the AI, because it is rather stupid in this regard.
+;
 ; You should sort role units from worst to better, as often the best
 ; available role unit of a given sort will be picked by choosing
 ; the first available (not obsolete) such unit, or by picking the last
@@ -65,11 +73,10 @@ veteran_move_bonus = 0, 0, 0, 0
 ;		  this should be a standard tag.  Otherwise can use eg "-" 
 ;		  for no alternate graphic.
 ; tech_req      = required advance, names from techs.ruleset, or special:
-;                 "None" => available from start
+;                 "None" => available from start; "Never" => never available
 ; impr_req	= required city improvement, names from buildings.ruleset
-; gov_req       = required government, names from governments.ruleset
 ; obsolete_by   = can be upgraded to and made obsolete by another unit by name
-; class         = "Land", "Sea", "Air", "Helicopter", "Missile" or "Nuclear"
+; move_type     = "Land" or "Sea" or "Air" or "Heli"
 ; transport_cap = Number of units (ground, or air/missiles, depending on flags)
 ; fuel          = number of turns air units can fly before they crash. For
 ;                 barbarians this is used as lifetime instead. If this is zero,
@@ -183,11 +190,10 @@ veteran_move_bonus = 0, 0, 0, 0
 ; "GameLoss"	= losing one of these units means you lose the game, but it
 ;		  is produced without homecity and upkeep
 ; "Diplomat"	= can do diplomat actions (see diplchance server option)
-; "Hunter"      = AI hint: good for hunting other units
 
 [unit_settlers]
 name          = _("Settlers")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "None"
 obsolete_by   = "None"
 graphic       = "u.settlers"
@@ -231,7 +237,7 @@ Settlers and Engineers may work together to decrease the amount of\
 
 [unit_worker]
 name          = _("Workers")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Pottery"
 obsolete_by   = "Engineers"
 graphic       = "u.worker"
@@ -272,7 +278,7 @@ Settlers, Workers and Engineers may work together to decrease the\
 
 [unit_engineers]
 name          = _("Engineers")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Explosives"
 obsolete_by   = "None"
 graphic       = "u.engineers"
@@ -313,7 +319,7 @@ TIP 2:  If you manage to build Leonardo's Workshop, research\
 
 [unit_warriors]
 name          = _("Warriors")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "None"
 obsolete_by   = "Pikemen"
 graphic       = "u.warriors"
@@ -345,7 +351,7 @@ This unit may be built from the start of the game.  It is the\
 
 [unit_phalanx]
 name          = _("Phalanx")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Bronze Working"
 obsolete_by   = "Pikemen"
 graphic       = "u.phalanx"
@@ -373,7 +379,7 @@ roles         = "DefendGood", "FirstBuild"
 
 [unit_archers]
 name          = _("Archers")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Warrior Code"
 obsolete_by   = "Musketeers"
 graphic       = "u.archers"
@@ -401,7 +407,7 @@ roles         = "DefendOk"
 
 [unit_legion]
 name          = _("Legion")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Iron Working"
 obsolete_by   = "Musketeers"
 graphic       = "u.legion"
@@ -429,7 +435,7 @@ roles         = "DefendOk", "Hut", "BarbarianBuild", "BarbarianSea"
 
 [unit_pikemen]
 name          = _("Pikemen")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Feudalism"
 obsolete_by   = "Musketeers"
 graphic       = "u.pikemen"
@@ -457,7 +463,7 @@ roles         = "DefendGood", "FirstBuild"
 
 [unit_musketeers]
 name          = _("Musketeers")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Gunpowder"
 obsolete_by   = "Riflemen"
 graphic       = "u.musketeers"
@@ -484,9 +490,37 @@ flags         = ""
 roles         = "DefendGood", "FirstBuild", "HutTech",
                 "BarbarianTech", "BarbarianBuildTech", "BarbarianSeaTech"
 
+[unit_fanatics]
+name          = _("Fanatics")
+move_type     = "Land"
+tech_req      = "Never"
+obsolete_by   = "None"
+graphic       = "u.fanatics"
+graphic_alt   = "-"
+sound_move    = "m_fanatics"
+sound_move_alt = "m_generic"
+sound_fight   = "f_fanatics"
+sound_fight_alt = "f_generic"
+build_cost    = 20
+pop_cost      = 0
+attack        = 4
+defense       = 4
+hitpoints     = 20
+firepower     = 1
+move_rate     = 1
+vision_range  = 1
+transport_cap = 0
+fuel          = 0
+uk_happy      = 1
+uk_shield     = 1
+uk_food       = 0
+uk_gold       = 0
+flags         = ""
+roles         = "DefendGood"
+
 [unit_partisan]
 name          = _("Partisan")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Guerilla Warfare"
 obsolete_by   = "None"
 graphic       = "u.partisan"
@@ -526,7 +560,7 @@ A number of Partisans are granted free when an enemy conquers your\
 
 [unit_alpine_troops]
 name          = _("Alpine Troops")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Tactics"
 obsolete_by   = "None"
 graphic       = "u.alpine_troops"
@@ -554,7 +588,7 @@ roles         = "DefendGood"
 
 [unit_riflemen]
 name          = _("Riflemen")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Conscription"
 obsolete_by   = "None"
 graphic       = "u.riflemen"
@@ -582,7 +616,7 @@ roles         = "DefendGood", "FirstBuild"
 
 [unit_marines]
 name          = _("Marines")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Amphibious Warfare"
 obsolete_by   = "None"
 graphic       = "u.marines"
@@ -610,7 +644,7 @@ roles         = "DefendOk", "BarbarianSeaTech"
 
 [unit_paratroopers]
 name          = _("Paratroopers")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Combined Arms"
 obsolete_by   = "None"
 graphic       = "u.paratroopers"
@@ -642,7 +676,7 @@ paratroopers_mr_sub = 0
 
 [unit_mech_inf]
 name          = _("Mech. Inf.")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Labor Union"
 obsolete_by   = "None"
 graphic       = "u.mech_inf"
@@ -675,7 +709,7 @@ Mechanized Infantry; this unit has the strongest defence strength\
 
 [unit_horsemen]
 name          = _("Horsemen")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Horseback Riding"
 obsolete_by   = "Knights"
 graphic       = "u.horsemen"
@@ -699,11 +733,11 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 flags         = "Horse"
-roles         = "AttackFast", "Hut", "Barbarian", "Hunter"
+roles         = "AttackFast", "Hut", "Barbarian"
 
 [unit_chariot]
 name          = _("Chariot")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "The Wheel"
 obsolete_by   = "Knights"
 graphic       = "u.chariot"
@@ -727,11 +761,67 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 flags         = "Horse"
-roles         = "AttackFast", "Hut", "Hunter"
+roles         = "AttackFast", "Hut"
+
+[unit_elephants]
+name          = _("Elephants")
+move_type     = "Land"
+tech_req      = "Never"
+obsolete_by   = "Crusaders"
+graphic       = "u.elephants"
+graphic_alt   = "-"
+sound_move    = "m_elephants"
+sound_move_alt = "m_generic"
+sound_fight   = "f_elephants"
+sound_fight_alt = "f_generic"
+build_cost    = 40
+pop_cost      = 0
+attack        = 4
+defense       = 1
+hitpoints     = 10
+firepower     = 1
+move_rate     = 2
+vision_range  = 1
+transport_cap = 0
+fuel          = 0
+uk_happy      = 1
+uk_shield     = 1
+uk_food       = 0
+uk_gold       = 0
+flags         = "Horse"
+roles         = "AttackFast"
+
+[unit_crusaders]
+name          = _("Crusaders")
+move_type     = "Land"
+tech_req      = "Never"
+obsolete_by   = "Dragoons"
+graphic       = "u.crusaders"
+graphic_alt   = "-"
+sound_move    = "m_crusaders"
+sound_move_alt = "m_generic"
+sound_fight   = "f_crusaders"
+sound_fight_alt = "f_generic"
+build_cost    = 40
+pop_cost      = 0
+attack        = 5
+defense       = 1
+hitpoints     = 10
+firepower     = 1
+move_rate     = 2
+vision_range  = 1
+transport_cap = 0
+fuel          = 0
+uk_happy      = 1
+uk_shield     = 1
+uk_food       = 0
+uk_gold       = 0
+flags         = "Horse"
+roles         = "AttackFast"
 
 [unit_knights]
 name          = _("Knights")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Chivalry"
 obsolete_by   = "Dragoons"
 graphic       = "u.knights"
@@ -756,11 +846,11 @@ uk_food       = 0
 uk_gold       = 0
 flags         = "Horse"
 roles         = "AttackFast", "HutTech", "BarbarianTech",
-                "BarbarianBuildTech", "BarbarianSeaTech", "Hunter"
+                "BarbarianBuildTech", "BarbarianSeaTech"
 
 [unit_dragoons]
 name          = _("Dragoons")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Leadership"
 obsolete_by   = "Cavalry"
 graphic       = "u.dragoons"
@@ -784,12 +874,11 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 flags         = "Horse"
-roles         = "AttackFast", "BarbarianBuildTech", "BarbarianSeaTech",
-                "Hunter"
+roles         = "AttackFast", "BarbarianBuildTech", "BarbarianSeaTech"
 
 [unit_cavalry]
 name          = _("Cavalry")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Tactics"
 obsolete_by   = "Armor"
 graphic       = "u.cavalry"
@@ -813,11 +902,11 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 flags         = ""
-roles         = "AttackFast", "Hunter"
+roles         = "AttackFast"
 
 [unit_armor]
 name          = _("Armor")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Mobile Warfare"
 obsolete_by   = "None"
 graphic       = "u.armor"
@@ -841,11 +930,11 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 flags         = ""
-roles         = "AttackFast", "Hunter"
+roles         = "AttackFast"
 
 [unit_catapult]
 name          = _("Catapult")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Mathematics"
 obsolete_by   = "Cannon"
 graphic       = "u.catapult"
@@ -873,7 +962,7 @@ roles         = "AttackStrong"
 
 [unit_cannon]
 name          = _("Cannon")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Metallurgy"
 obsolete_by   = "Artillery"
 graphic       = "u.cannon"
@@ -901,7 +990,7 @@ roles         = "AttackStrong", "BarbarianTech", "BarbarianBuildTech"
 
 [unit_artillery]
 name          = _("Artillery")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Machine Tools"
 obsolete_by   = "Howitzer"
 graphic       = "u.artillery"
@@ -929,7 +1018,7 @@ roles         = "AttackStrong"
 
 [unit_howitzer]
 name          = _("Howitzer")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Robotics"
 obsolete_by   = "None"
 graphic       = "u.howitzer"
@@ -957,7 +1046,7 @@ roles         = "AttackStrong"
 
 [unit_fighter]
 name          = _("Fighter")
-class         = "Air"
+move_type     = "Air"
 tech_req      = "Flight"
 obsolete_by   = "Stealth Fighter"
 graphic       = "u.fighter"
@@ -985,7 +1074,7 @@ roles         = ""
 
 [unit_bomber]
 name          = _("Bomber")
-class         = "Air"
+move_type     = "Air"
 tech_req      = "Advanced Flight"
 obsolete_by   = "Stealth Bomber"
 graphic       = "u.bomber"
@@ -1013,7 +1102,7 @@ roles         = ""
 
 [unit_helicopter]
 name          = _("Helicopter")
-class         = "Helicopter"
+move_type     = "Heli"
 tech_req      = "Combined Arms"
 obsolete_by   = "None"
 graphic       = "u.helicopter"
@@ -1047,7 +1136,7 @@ The Helicopter is a very powerful unit, as it can both fly and\
 
 [unit_stealth_fighter]
 name          = _("Stealth Fighter")
-class         = "Air"
+move_type     = "Air"
 tech_req      = "Stealth"
 obsolete_by   = "None"
 graphic       = "u.stealth_fighter"
@@ -1079,7 +1168,7 @@ An improved Fighter, with improved attack and a higher movement\
 
 [unit_stealth_bomber]
 name          = _("Stealth Bomber")
-class         = "Air"
+move_type     = "Air"
 tech_req      = "Stealth"
 obsolete_by   = "None"
 graphic       = "u.stealth_bomber"
@@ -1111,7 +1200,7 @@ An improved Bomber, with improved attack and a higher movement\
 
 [unit_trireme]
 name          = _("Trireme")
-class         = "Sea"
+move_type     = "Sea"
 tech_req      = "Map Making"
 obsolete_by   = "Caravel"
 graphic       = "u.trireme"
@@ -1139,7 +1228,7 @@ roles         = "Ferryboat"
 
 [unit_caravel]
 name          = _("Caravel")
-class         = "Sea"
+move_type     = "Sea"
 tech_req      = "Navigation"
 obsolete_by   = "Galleon"
 graphic       = "u.caravel"
@@ -1167,7 +1256,7 @@ roles         = "Ferryboat", "BarbarianBoat"
 
 [unit_galleon]
 name          = _("Galleon")
-class         = "Sea"
+move_type     = "Sea"
 tech_req      = "Magnetism"
 obsolete_by   = "Transport"
 graphic       = "u.galleon"
@@ -1195,7 +1284,7 @@ roles         = "Ferryboat", "BarbarianBoat"
 
 [unit_frigate]
 name          = _("Frigate")
-class         = "Sea"
+move_type     = "Sea"
 tech_req      = "Magnetism"
 obsolete_by   = "Ironclad"
 graphic       = "u.frigate"
@@ -1219,11 +1308,11 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 flags         = ""
-roles         = "Hunter"
+roles         = ""
 
 [unit_ironclad]
 name          = _("Ironclad")
-class         = "Sea"
+move_type     = "Sea"
 tech_req      = "Steam Engine"
 obsolete_by   = "Destroyer"
 graphic       = "u.ironclad"
@@ -1247,11 +1336,11 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 flags         = ""
-roles         = "Hunter"
+roles         = ""
 
 [unit_destroyer]
 name          = _("Destroyer")
-class         = "Sea"
+move_type     = "Sea"
 tech_req      = "Electricity"
 obsolete_by   = "None"
 graphic       = "u.destroyer"
@@ -1275,7 +1364,7 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 flags         = ""
-roles         = "Hunter"
+roles         = ""
 helptext      = _("\
 TIP:  A very fast unit, which is very useful for hunting down enemy\
  Transports.\
@@ -1283,7 +1372,7 @@ TIP:  A very fast unit, which is very useful for hunting down enemy\
 
 [unit_cruiser]
 name          = _("Cruiser")
-class         = "Sea"
+move_type     = "Sea"
 tech_req      = "Steel"
 obsolete_by   = "AEGIS Cruiser"
 graphic       = "u.cruiser"
@@ -1311,7 +1400,7 @@ roles         = "DefendGood"
 
 [unit_aegis_cruiser]
 name          = _("AEGIS Cruiser")
-class         = "Sea"
+move_type     = "Sea"
 tech_req      = "Rocketry"
 obsolete_by   = "None"
 graphic       = "u.aegis_cruiser"
@@ -1339,7 +1428,7 @@ roles         = "DefendGood"
 
 [unit_battleship]
 name          = _("Battleship")
-class         = "Sea"
+move_type     = "Sea"
 tech_req      = "Automobile"
 obsolete_by   = "None"
 graphic       = "u.battleship"
@@ -1367,7 +1456,7 @@ roles         = ""
 
 [unit_submarine]
 name          = _("Submarine")
-class         = "Sea"
+move_type     = "Sea"
 tech_req      = "Combustion"
 obsolete_by   = "None"
 graphic       = "u.submarine"
@@ -1392,7 +1481,7 @@ uk_food       = 0
 uk_gold       = 0
 flags         = "Partial_Invis", 
 	        "Missile_Carrier", "No_Land_Attack"
-roles         = "Hunter"
+roles         = ""
 helptext      = _("\
 Submarines have a very high strategic value, but have a weak\
  defence.\
@@ -1400,7 +1489,7 @@ Submarines have a very high strategic value, but have a weak\
 
 [unit_carrier]
 name          = _("Carrier")
-class         = "Sea"
+move_type     = "Sea"
 tech_req      = "Advanced Flight"
 obsolete_by   = "None"
 graphic       = "u.carrier"
@@ -1433,7 +1522,7 @@ TIP:  Guard Carriers with a handful of fast-moving ships and a\
 
 [unit_transport]
 name          = _("Transport")
-class         = "Sea"
+move_type     = "Sea"
 tech_req      = "Industrialization"
 obsolete_by   = "None"
 graphic       = "u.transport"
@@ -1461,7 +1550,7 @@ roles         = "Ferryboat"
 
 [unit_cruise_missile]
 name          = _("Cruise Missile")
-class         = "Missile"
+move_type     = "Air"
 tech_req      = "Rocketry"
 obsolete_by   = "None"
 graphic       = "u.cruise_missile"
@@ -1493,7 +1582,7 @@ TIP:  A handful of these can successfully keep the waters around\
 
 [unit_nuclear]
 name          = _("Nuclear")
-class         = "Nuclear"
+move_type     = "Air"
 tech_req      = "Rocketry"
 obsolete_by   = "None"
 graphic       = "u.nuclear"
@@ -1540,7 +1629,7 @@ TIP 2:  You may be involved in a situation where you've invaded an\
 
 [unit_diplomat]
 name          = _("Diplomat")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Writing"
 obsolete_by   = "Spy"
 graphic       = "u.diplomat"
@@ -1586,7 +1675,7 @@ helptext      = _("\
 
 [unit_spy]
 name          = _("Spy")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Espionage"
 obsolete_by   = "None"
 graphic       = "u.spy"
@@ -1633,7 +1722,7 @@ A Spy can also be of aid on the battlefield - sabotaging enemy units\
 
 [unit_caravan]
 name          = _("Caravan")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Trade"
 obsolete_by   = "Freight"
 graphic       = "u.caravan"
@@ -1669,7 +1758,7 @@ TIP:  You can stockpile a stack of Caravans in advance and bring\
 
 [unit_freight]
 name          = _("Freight")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "The Corporation"
 obsolete_by   = "None"
 graphic       = "u.freight"
@@ -1700,7 +1789,7 @@ The Freight unit replaces the Caravan, and moves at twice the speed.\
 
 [unit_explorer]
 name          = _("Explorer")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Seafaring"
 obsolete_by   = "Partisan"
 graphic       = "u.explorer"
@@ -1729,42 +1818,9 @@ helptext      = _("\
 Explorers are very useful for mapping unknown territory.\
 ")
 
-[unit_leader]
-name          = _("Leader")
-class         = "Land"
-tech_req      = "None"
-obsolete_by   = "None"
-graphic       = "u.leader"
-graphic_alt   = "u.explorer"
-sound_move    = "m_leader"
-sound_move_alt = "m_generic"
-sound_fight   = "f_leader"
-sound_fight_alt = "f_generic"
-build_cost    = 10
-pop_cost      = 0
-attack        = 0
-defense       = 2
-hitpoints     = 20
-firepower     = 1
-move_rate     = 2
-vision_range  = 2
-transport_cap = 0
-fuel          = 0
-uk_happy      = 0
-uk_shield     = 0
-uk_food       = 0
-uk_gold       = 0
-flags         = "IgZOC", "NonMil", "NoBuild", "NoHome", "SuperSpy", 
-                "Undisbandable", "Unbribable", "GameLoss", "Unique",
-                "NoVeteran"
-roles         = "GameLoss"
-helptext      = _("\
-This is you. If you lose this unit, you lose the game. So don't.\
-")
-
 [unit_barbarian_leader]
 name          = _("Barbarian Leader")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "None"
 obsolete_by   = "None"
 graphic       = "u.barbarian_leader"
@@ -1797,7 +1853,7 @@ the 100 gold ransom is paid, but only to land units and helicopters.\
 
 [unit_awacs]
 name          = _("AWACS")
-class         = "Air"
+move_type     = "Air"
 tech_req      = "Advanced Flight"
 obsolete_by   = "None"
 graphic       = "u.awacs"
@@ -1827,3 +1883,6 @@ The AWACS (Airborne Warning and Control System) is an airplane with an \
 advanced radar that can determine the location of enemy units over a \
 wide area.\
 ")
+
+[u_specials]
+partisan_req = "Gunpowder","Communism"

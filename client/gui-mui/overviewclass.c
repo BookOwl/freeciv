@@ -116,7 +116,7 @@ static VOID Overview_HandleMouse(Object * o, struct Overview_Data *data, LONG x,
 	if (x < 0) x = 0;
 	else if (x >= data->ov_MapWidth * data->ov_ScaleX) x = data->ov_MapWidth * data->ov_ScaleX - 1;
 
-  if (tileset_is_isometric(tileset)) {
+  if (is_isometric) {
     x -= data->rect_width/2;
     y += data->rect_width/2;
     x -= data->rect_height/2;
@@ -167,7 +167,7 @@ static LONG Overview_GetMapPen(struct Overview_Data *data, LONG x, LONG y)
     }
     else
     {
-      if ((pcity = tile_get_city(x, y)))
+      if ((pcity = map_get_city(x, y)))
       {
 	if (pcity->owner == game.player_idx)
 	{
@@ -226,7 +226,7 @@ static VOID Overview_DrawRect(Object *o, struct Overview_Data *data)
 
   SetAPen(rp, data->pen_white);
 
-  if (tileset_is_isometric(tileset)) {
+  if (is_isometric) {
     int p1x = data->rect_left*2;
     int p1y = data->rect_top*2;
     int p2x = data->rect_left*2 + data->rect_height*2;

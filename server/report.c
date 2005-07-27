@@ -93,11 +93,8 @@ static const char *area_to_text(int value);
 static const char *percent_to_text(int value);
 static const char *production_to_text(int value);
 static const char *economics_to_text(int value);
-static const char *science_to_text(int value);
 static const char *mil_service_to_text(int value);
 static const char *pollution_to_text(int value);
-
-#define GOOD_PLAYER(p) ((p)->is_alive && !is_barbarian(p) && !(p)->is_observer)
 
 /*
  * Describes a row.
@@ -112,7 +109,7 @@ static struct dem_row {
   {'N', N_("Population"),       get_population,  population_to_text,  TRUE },
   {'A', N_("Land Area"),        get_landarea,    area_to_text,        TRUE },
   {'S', N_("Settled Area"),     get_settledarea, area_to_text,        TRUE },
-  {'R', N_("Research Speed"),   get_research,    science_to_text,     TRUE },
+  {'R', N_("Research Speed"),   get_research,    percent_to_text,     TRUE },
   {'L', N_("Literacy"),         get_literacy,    percent_to_text,     TRUE },
   {'P', N_("Production"),       get_production,  production_to_text,  TRUE },
   {'E', N_("Economics"),        get_economics,   economics_to_text,   TRUE },
@@ -120,17 +117,24 @@ static struct dem_row {
   {'O', N_("Pollution"),        get_pollution,   pollution_to_text,   FALSE }
 };
 
-/* Demographics columns. */
 enum dem_flag {
   DEM_COL_QUANTITY,
   DEM_COL_RANK,
-  DEM_COL_BEST,
-  DEM_COL_LAST
+  DEM_COL_BEST
 };
-BV_DEFINE(bv_cols, DEM_COL_LAST);
-static struct dem_col {
+
+/*
+ * Describes a column.
+ */
+static struct dem_col
+{
   char key;
-} coltable[] = {{'q'}, {'r'}, {'b'}}; /* Corresponds to dem_flag enum */
+  enum dem_flag flag;
+} coltable[] = {
+    { 'q', DEM_COL_QUANTITY },
+    { 'r', DEM_COL_RANK },
+    { 'b', DEM_COL_BEST }
+};
 
 /**************************************************************************
 ...
@@ -158,17 +162,16 @@ static void historian_generic(enum historian_type which_news)
   int i, j = 0, rank = 0;
   char buffer[4096];
   char title[1024];
-  struct player_score_entry size[game.info.nplayers];
+  struct player_score_entry size[game.nplayers];
 
   players_iterate(pplayer) {
-    if (GOOD_PLAYER(pplayer)) {
+    if (pplayer->is_alive && !is_barbarian(pplayer)) {
       switch(which_news) {
       case HISTORIAN_RICHEST:
 	size[j].value = pplayer->economic.gold;
 	break;
       case HISTORIAN_ADVANCED:
-	size[j].value
-	  = pplayer->score.techs + get_player_research(pplayer)->future_tech;
+	size[j].value = (pplayer->score.techs + pplayer->future_tech);
 	break;
       case HISTORIAN_MILITARY:
 	size[j].value = pplayer->score.units;
@@ -184,7 +187,7 @@ static void historian_generic(enum historian_type which_news)
       }
       size[j].player = pplayer;
       j++;
-    } /* else the player is dead or barbarian or observer */
+    } /* else the player is dead or barbarian */
   } players_iterate_end;
 
   qsort(size, j, sizeof(struct player_score_entry), secompare);
@@ -199,7 +202,7 @@ static void historian_generic(enum historian_type which_news)
   }
   my_snprintf(title, sizeof(title), _(historian_message[which_news]),
     _(historian_name[myrand(ARRAY_SIZE(historian_name))]));
-  page_conn_etype(game.game_connections, _("Historian Publishes!"),
+  page_conn_etype(&game.game_connections, _("Historian Publishes!"),
 		  title, buffer, E_BROADCAST_REPORT);
 }
 
@@ -211,7 +214,7 @@ static int nr_wonders(struct city *pcity)
   int result = 0;
 
   built_impr_iterate(pcity, i) {
-    if (is_great_wonder(i)) {
+    if (is_wonder(i)) {
       result++;
     }
   } built_impr_iterate_end;
@@ -289,14 +292,14 @@ void report_wonders_of_the_world(struct conn_list *dest)
   buffer[0] = '\0';
 
   impr_type_iterate(i) {
-    if (is_great_wonder(i)) {
-      struct city *pcity = find_city_from_great_wonder(i);
+    if (is_wonder(i)) {
+      struct city *pcity = find_city_wonder(i);
 
       if (pcity) {
 	cat_snprintf(buffer, sizeof(buffer), _("%s in %s (%s)\n"),
 		     get_impr_name_ex(pcity, i), pcity->name,
 		     get_nation_name(city_owner(pcity)->nation));
-      } else if(great_wonder_was_built(i)) {
+      } else if(game.global_wonders[i] != 0) {
 	cat_snprintf(buffer, sizeof(buffer), _("%s has been DESTROYED\n"),
 		     get_improvement_type(i)->name);
       }
@@ -304,10 +307,10 @@ void report_wonders_of_the_world(struct conn_list *dest)
   } impr_type_iterate_end;
 
   impr_type_iterate(i) {
-    if (is_great_wonder(i)) {
+    if (is_wonder(i)) {
       players_iterate(pplayer) {
 	city_list_iterate(pplayer->cities, pcity) {
-	  if (pcity->production.value == i && !pcity->production.is_unit) {
+	  if (pcity->currently_building == i && !pcity->is_building_unit) {
 	    cat_snprintf(buffer, sizeof(buffer),
 			 _("(building %s in %s (%s))\n"),
 			 get_improvement_type(i)->name, pcity->name,
@@ -347,7 +350,7 @@ static int get_settledarea(struct player *pplayer)
 
 static int get_research(struct player *pplayer)
 {
-  return pplayer->score.techout;
+  return (pplayer->score.techout * 100) / total_bulbs_required(pplayer);
 }
 
 static int get_literacy(struct player *pplayer)
@@ -489,15 +492,19 @@ static int get_unhappypop(struct player *pplayer)
   return pplayer->score.unhappy;
 }
 
-static int get_specialists(struct player *pplayer)
+static int get_taxmen(struct player *pplayer)
 {
-  int count = 0;
+  return pplayer->score.taxmen;
+}
 
-  specialist_type_iterate(sp) {
-    count += pplayer->score.specialists[sp];
-  } specialist_type_iterate_end;
+static int get_scientists(struct player *pplayer)
+{
+  return pplayer->score.scientists;
+}
 
-  return count;
+static int get_elvis(struct player *pplayer)
+{
+  return pplayer->score.elvis;
 }
 
 static int get_gov(struct player *pplayer)
@@ -510,7 +517,7 @@ static int get_corruption(struct player *pplayer)
   int result = 0;
 
   city_list_iterate(pplayer->cities, pcity) {
-    result += pcity->waste[O_TRADE];
+    result += pcity->corruption;
   } city_list_iterate_end;
 
   return result;
@@ -554,11 +561,6 @@ static const char *economics_to_text(int value)
   return value_units(value, _(" M goods"));
 }
 
-static const char *science_to_text(int value)
-{
-  return value_units(value, _(" bulbs"));
-}
-
 static const char *mil_service_to_text(int value)
 {
   return value_units(value, PL_(" month", " months", value));
@@ -597,23 +599,23 @@ static const char *number_to_ordinal_string(int num)
 **************************************************************************/
 static void dem_line_item(char *outptr, size_t out_size,
 			  struct player *pplayer, struct dem_row *prow,
-			  bv_cols selcols)
+			  int selcols)
 {
-  if (BV_ISSET(selcols, DEM_COL_QUANTITY)) {
+  if (TEST_BIT(selcols, DEM_COL_QUANTITY)) {
       cat_snprintf(outptr, out_size, " %-18s",
 		   prow->to_text(prow->get_value(pplayer)));
   }
 
-  if (BV_ISSET(selcols, DEM_COL_RANK)) {
+  if (TEST_BIT(selcols, DEM_COL_RANK)) {
     int basis = prow->get_value(pplayer);
     int place = 1;
 
     players_iterate(other) {
-      if (GOOD_PLAYER(other)
-	  && ((prow->greater_values_are_better
-	       && prow->get_value(other) > basis)
-	      || (!prow->greater_values_are_better
-	          && prow->get_value(other) < basis))) {
+      if (other->is_alive && !is_barbarian(other) &&
+	  ((prow->greater_values_are_better
+	    && prow->get_value(other) > basis)
+	   || (!prow->greater_values_are_better
+	       && prow->get_value(other) < basis))) {
 	place++;
       }
     } players_iterate_end;
@@ -621,12 +623,12 @@ static void dem_line_item(char *outptr, size_t out_size,
     cat_snprintf(outptr, out_size, " %6s", number_to_ordinal_string(place));
   }
 
-  if (BV_ISSET(selcols, DEM_COL_BEST)) {
+  if (TEST_BIT(selcols, DEM_COL_BEST)) {
     struct player *best_player = pplayer;
     int best_value = prow->get_value(pplayer);
 
     players_iterate(other) {
-      if (GOOD_PLAYER(other)) {
+      if (other->is_alive && !is_barbarian(other)) {
 	int value = prow->get_value(other);
 
 	if ((prow->greater_values_are_better && value > best_value)
@@ -663,7 +665,7 @@ bool is_valid_demography(const char *demography, const char **error_string)
     int j;
 
     /* See if the character is a valid column label. */
-    for (j = 0; j < DEM_COL_LAST; j++) {
+    for (j = 0; j < ARRAY_SIZE(coltable); j++) {
       if (demography[i] == coltable[j].key) {
 	found = TRUE;
 	break;
@@ -706,15 +708,12 @@ void report_demographics(struct connection *pconn)
   char buffer[4096];
   unsigned int i;
   bool anyrows;
-  bv_cols selcols;
-  int numcols = 0;
+  int selcols;
 
-  BV_CLR_ALL(selcols);
-  assert(ARRAY_SIZE(coltable) == DEM_COL_LAST);
-  for (i = 0; i < DEM_COL_LAST; i++) {
+  selcols = 0;
+  for (i = 0; i < ARRAY_SIZE(coltable); i++) {
     if (strchr(game.demography, coltable[i].key)) {
-      BV_SET(selcols, i);
-      numcols++;
+      selcols |= (1u << coltable[i].flag);
     }
   }
 
@@ -726,16 +725,15 @@ void report_demographics(struct connection *pconn)
     }
   }
 
-  if (!pplayer || !pplayer->is_alive || !anyrows || numcols == 0) {
-    page_conn(pconn->self, _("Demographics Report:"),
+  if (!pplayer || !pplayer->is_alive || !anyrows || selcols == 0) {
+    page_conn(&pconn->self, _("Demographics Report:"),
 	      _("Sorry, the Demographics report is unavailable."), "");
     return;
   }
 
-  my_snprintf(civbuf, sizeof(civbuf), _("The %s of the %s (%s)"),
+  my_snprintf(civbuf, sizeof(civbuf), _("The %s of the %s"),
 	      get_government_name(pplayer->government),
-	      get_nation_name_plural(pplayer->nation),
-	      textyear(game.info.year));
+	      get_nation_name_plural(pplayer->nation));
 
   buffer[0] = '\0';
   for (i = 0; i < ARRAY_SIZE(rowtable); i++) {
@@ -746,7 +744,7 @@ void report_demographics(struct connection *pconn)
     }
   }
 
-  page_conn(pconn->self, _("Demographics Report:"), civbuf, buffer);
+  page_conn(&pconn->self, _("Demographics Report:"), civbuf, buffer);
 }
 
 /**************************************************************************
@@ -850,7 +848,7 @@ static bool scan_score_log(FILE * fp, int *last_turn, char *id,
     return FALSE;
   }
 
-  if (*last_turn + 1 != game.info.turn) {
+  if (*last_turn + 1 != game.turn) {
     freelog(LOG_ERROR, "Scorelog doesn't match savegame!");
     return FALSE;
   }
@@ -903,7 +901,9 @@ static void log_civ_score(void)
     {"happypop",        get_happypop},
     {"contentpop",      get_contentpop},
     {"unhappypop",      get_unhappypop},
-    {"specialists",     get_specialists},
+    {"taxmen",          get_taxmen},
+    {"scientists",      get_scientists},
+    {"elvis",           get_elvis},
     {"gov",             get_gov},
     {"corruption",      get_corruption} /* new 1.11.5 tags end here */
   };
@@ -926,7 +926,7 @@ static void log_civ_score(void)
   }
 
   if (!fp) {
-    if (game.info.year == GAME_START_YEAR) {
+    if (game.year == GAME_START_YEAR) {
       oper = SL_CREATE;
     } else {
       fp = fopen(logname, "r");
@@ -975,15 +975,16 @@ static void log_civ_score(void)
     }
   }
 
-  if (game.info.turn > last_turn) {
-    fprintf(fp, "turn %d %d %s\n", game.info.turn, game.info.year, 
-            textyear(game.info.year));
-    last_turn = game.info.turn;
+#define GOOD_PLAYER(p) ((p)->is_alive)
+
+  if (game.turn > last_turn) {
+    fprintf(fp, "turn %d %d %s\n", game.turn, game.year, textyear(game.year));
+    last_turn = game.turn;
   }
 
   for (i = 0; i < ARRAY_SIZE(player_names); i++) {
     if (strlen(player_names[i]) > 0 && !GOOD_PLAYER(get_player(i))) {
-      fprintf(fp, "delplayer %d %d\n", game.info.turn - 1, i);
+      fprintf(fp, "delplayer %d %d\n", game.turn - 1, i);
       player_names[i][0] = '\0';
     }
   }
@@ -991,7 +992,7 @@ static void log_civ_score(void)
   players_iterate(pplayer) {
     if (GOOD_PLAYER(pplayer)
 	&& strlen(player_names[pplayer->player_no]) == 0) {
-      fprintf(fp, "addplayer %d %d %s\n", game.info.turn, pplayer->player_no,
+      fprintf(fp, "addplayer %d %d %s\n", game.turn, pplayer->player_no,
 	      pplayer->name);
       mystrlcpy(player_name_ptrs[pplayer->player_no], pplayer->name,
 		MAX_LEN_NAME);
@@ -1001,8 +1002,8 @@ static void log_civ_score(void)
   players_iterate(pplayer) {
     if (GOOD_PLAYER(pplayer)
 	&& strcmp(player_names[pplayer->player_no], pplayer->name) != 0) {
-      fprintf(fp, "delplayer %d %d\n", game.info.turn - 1, pplayer->player_no);
-      fprintf(fp, "addplayer %d %d %s\n", game.info.turn, pplayer->player_no,
+      fprintf(fp, "delplayer %d %d\n", game.turn - 1, pplayer->player_no);
+      fprintf(fp, "addplayer %d %d %s\n", game.turn, pplayer->player_no,
 	      pplayer->name);
       mystrlcpy(player_names[pplayer->player_no], pplayer->name,
 		MAX_LEN_NAME);
@@ -1015,7 +1016,7 @@ static void log_civ_score(void)
 	continue;
       }
 
-      fprintf(fp, "data %d %d %d %d\n", game.info.turn, i, pplayer->player_no,
+      fprintf(fp, "data %d %d %d %d\n", game.turn, i, pplayer->player_no,
 	      score_tags[i].get_value(pplayer));
     } players_iterate_end;
   }
@@ -1034,6 +1035,8 @@ log_civ_score_disable:
   disabled = TRUE;
 }
 
+#undef GOOD_PLAYER
+
 /**************************************************************************
   ...
 **************************************************************************/
@@ -1046,7 +1049,7 @@ void make_history_report(void)
     log_civ_score();
   }
 
-  if (game.info.nplayers == 1) {
+  if (game.nplayers == 1) {
     return;
   }
 
@@ -1067,17 +1070,51 @@ void make_history_report(void)
 }
 
 /**************************************************************************
+ Inform clients about player scores during a game.
+**************************************************************************/
+void report_progress_scores(void)
+{
+  int i, j = 0;
+  char buffer[4096];
+  struct player_score_entry size[game.nplayers];
+
+  players_iterate(pplayer) {
+    if (!is_barbarian(pplayer)) {
+      size[j].value = get_civ_score(pplayer);
+      size[j].player = pplayer;
+      j++;
+    }
+  } players_iterate_end;
+
+  qsort(size, j, sizeof(struct player_score_entry), secompare);
+  buffer[0] = '\0';
+
+  for (i = 0; i < j; i++) {
+    cat_snprintf(buffer, sizeof(buffer),
+		 PL_("%2d: The %s %s scored %d point\n",
+		     "%2d: The %s %s scored %d points\n",
+		     size[i].value),
+		 i + 1, _(greatness[i]),
+		 get_nation_name_plural(size[i].player->nation),
+		 size[i].value);
+  }
+  page_conn(&game.game_connections,
+	    _("Progress Scores:"),
+	    _("The Greatest Civilizations in the world."), buffer);
+}
+
+/**************************************************************************
   Inform clients about player scores and statistics when the game ends.
 **************************************************************************/
 void report_final_scores(void)
 {
   int i, j = 0;
-  struct player_score_entry size[game.info.nplayers];
+  struct player_score_entry size[game.nplayers];
   struct packet_endgame_report packet;
 
   players_iterate(pplayer) {
-    if (GOOD_PLAYER(pplayer)) {
-      size[j].value = pplayer->score.game;
+    if (!is_barbarian(pplayer)) {
+      size[j].value = get_civ_score(pplayer);
       size[j].player = pplayer;
       j++;
     }
@@ -1103,7 +1140,7 @@ void report_final_scores(void)
     packet.spaceship[i] = get_spaceship(size[i].player); 
   }  
 
-  lsend_packet_endgame_report(game.game_connections, &packet);
+  lsend_packet_endgame_report(&game.game_connections, &packet);
 }	
 
 /**************************************************************************

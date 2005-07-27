@@ -144,12 +144,15 @@ units.ruleset:
     - These flags and roles work only for move_type "Land" units:
       - "Diplomat"
       - "Partisan"
+      - "Paratroopers"
       - "Settler"
       - "IgTer"
       - "Marines"
       - "Airbase"
       - "Barbarian"
       - "BarbarianTech"
+
+    - Flag "Cities" does not work for move_type "Air" or "Heli" units
 
 nations.ruleset:
 

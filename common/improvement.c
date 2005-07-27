@@ -27,15 +27,16 @@
 
 #include "improvement.h"
 
-static const char *genus_names[IG_LAST] = {
-  "GreatWonder", "SmallWonder", "Improvement", "Special"
+/* Names of impr ranges.
+ * (These must correspond to enum impr_range_id in improvement.h.)
+ * do not change these unless you know what you're doing! */
+static const char *impr_range_names[] = {
+  "None",
+  "City",
+  "Island",
+  "Player",
+  "World"
 };
-
-static const char *flag_names[] = {
-  "VisibleByOthers", "SaveSmallWonder"
-};
-/* Note that these strings must correspond with the enums in impr_flag_id,
-   in common/improvement.h */
 
 /**************************************************************************
 All the city improvements:
@@ -44,52 +45,62 @@ The improvement_types array is now setup in:
    server/ruleset.c (for the server)
    client/packhand.c (for the client)
 **************************************************************************/
-static struct impr_type improvement_types[B_LAST];
+struct impr_type improvement_types[B_LAST];
 
 /**************************************************************************
-  Convert impr genus names to enum; case insensitive;
-  returns IG_LAST if can't match.
+  Convert impr range names to enum; case insensitive;
+  returns IR_LAST if can't match.
 **************************************************************************/
-enum impr_genus_id impr_genus_from_str(const char *s)
+enum impr_range impr_range_from_str(const char *str)
 {
-  enum impr_genus_id i;
+  enum impr_range ret_id;
 
-  for(i = 0; i < ARRAY_SIZE(genus_names); i++) {
-    if (mystrcasecmp(genus_names[i], s) == 0) {
-      break;
+  assert(ARRAY_SIZE(impr_range_names) == IR_LAST);
+
+  for (ret_id = 0; ret_id < IR_LAST; ret_id++) {
+    if (0 == mystrcasecmp(impr_range_names[ret_id], str)) {
+      return ret_id;
     }
   }
-  return i;
+
+  return IR_LAST;
 }
 
-/****************************************************************************
-  Inialize building structures.
-****************************************************************************/
-void improvements_init(void)
+/**************************************************************************
+  Return impr range name; NULL if bad id.
+**************************************************************************/
+const char *impr_range_name(enum impr_range id)
 {
-  int i;
+  assert(ARRAY_SIZE(impr_range_names) == IR_LAST);
 
-  /* Can't use impr_type_iterate or get_improvement_type here because
-   * num_impr_types isn't known yet. */
-  for (i = 0; i < ARRAY_SIZE(improvement_types); i++) {
-    struct impr_type *p = &improvement_types[i];
-
-    p->index = i;
-    requirement_vector_init(&p->reqs);
+  if (id < IR_LAST) {
+    return impr_range_names[id];
+  } else {
+    return NULL;
   }
 }
 
 /**************************************************************************
   Frees the memory associated with this improvement.
 **************************************************************************/
-static void improvement_free(Impr_type_id id)
+static void improvement_free(Impr_Type_id id)
 {
   struct impr_type *p = get_improvement_type(id);
 
+  free(p->terr_gate);
+  p->terr_gate = NULL;
+
+  free(p->spec_gate);
+  p->spec_gate = NULL;
+
+  free(p->equiv_dupl);
+  p->equiv_dupl = NULL;
+
+  free(p->equiv_repl);
+  p->equiv_repl = NULL;
+
   free(p->helptext);
   p->helptext = NULL;
-
-  requirement_vector_free(&p->reqs);
 }
 
 /***************************************************************
@@ -111,12 +122,12 @@ An improvement_type doesn't exist if one of:
 - it is a space part, and the spacerace is not enabled.
 Arguably this should be called improvement_type_exists, but that's too long.
 **************************************************************************/
-bool improvement_exists(Impr_type_id id)
+bool improvement_exists(Impr_Type_id id)
 {
-  if (id < 0 || id >= B_LAST || id>= game.control.num_impr_types)
+  if (id<0 || id>=B_LAST || id>=game.num_impr_types)
     return FALSE;
 
-  if (!game.info.spacerace
+  if (!game.spacerace
       && (building_has_effect(id, EFT_SS_STRUCTURAL)
 	  || building_has_effect(id, EFT_SS_COMPONENT)
 	  || building_has_effect(id, EFT_SS_MODULE))) {
@@ -124,25 +135,21 @@ bool improvement_exists(Impr_type_id id)
     return FALSE;
   }
 
-  return TRUE;
+  return (improvement_types[id].tech_req!=A_LAST);
 }
 
 /**************************************************************************
-  Returns the improvement type for the given index/ID.  Returns NULL for
-  an out-of-range index.
+...
 **************************************************************************/
-struct impr_type *get_improvement_type(Impr_type_id id)
+struct impr_type *get_improvement_type(Impr_Type_id id)
 {
-  if (id < 0 || id >= game.control.num_impr_types) {
-    return NULL;
-  }
   return &improvement_types[id];
 }
 
 /**************************************************************************
 ...
 **************************************************************************/
-const char *get_improvement_name(Impr_type_id id)
+const char *get_improvement_name(Impr_Type_id id)
 {
   return get_improvement_type(id)->name; 
 }
@@ -150,7 +157,7 @@ const char *get_improvement_name(Impr_type_id id)
 /****************************************************************************
   Get the original (untranslated) improvement name.
 ****************************************************************************/
-const char *get_improvement_name_orig(Impr_type_id id)
+const char *get_improvement_name_orig(Impr_Type_id id)
 {
   return get_improvement_type(id)->name_orig; 
 }
@@ -158,19 +165,18 @@ const char *get_improvement_name_orig(Impr_type_id id)
 /****************************************************************************
   Returns the number of shields it takes to build this improvement.
 ****************************************************************************/
-int impr_build_shield_cost(Impr_type_id id)
+int impr_build_shield_cost(Impr_Type_id id)
 {
-  return get_improvement_type(id)->build_cost;
+  return improvement_types[id].build_cost;
 }
 
 /****************************************************************************
   Returns the amount of gold it takes to rush this improvement.
 ****************************************************************************/
-int impr_buy_gold_cost(Impr_type_id id, int shields_in_stock)
+int impr_buy_gold_cost(Impr_Type_id id, int shields_in_stock)
 {
-  int cost = 0;
-  const int missing
-    = get_improvement_type(id)->build_cost - shields_in_stock;
+  int cost = 0, missing =
+      improvement_types[id].build_cost - shields_in_stock;
 
   if (building_has_effect(id, EFT_PROD_TO_GOLD)) {
     /* Can't buy capitalization. */
@@ -193,27 +199,27 @@ int impr_buy_gold_cost(Impr_type_id id, int shields_in_stock)
 /****************************************************************************
   Returns the amount of gold received when this improvement is sold.
 ****************************************************************************/
-int impr_sell_gold(Impr_type_id id)
+int impr_sell_gold(Impr_Type_id id)
 {
-  return get_improvement_type(id)->build_cost;
+  return improvement_types[id].build_cost;
 }
 
 /**************************************************************************
 ...
 **************************************************************************/
-bool is_wonder(Impr_type_id id)
+bool is_wonder(Impr_Type_id id)
 {
-  return (is_great_wonder(id) || is_small_wonder(id));
+  return (improvement_types[id].is_wonder);
 }
 
 /**************************************************************************
 Does a linear search of improvement_types[].name
 Returns B_LAST if none match.
 **************************************************************************/
-Impr_type_id find_improvement_by_name(const char *s)
+Impr_Type_id find_improvement_by_name(const char *s)
 {
   impr_type_iterate(i) {
-    if (strcmp(get_improvement_name(i), s)==0)
+    if (strcmp(improvement_types[i].name, s)==0)
       return i;
   } impr_type_iterate_end;
 
@@ -225,10 +231,10 @@ Impr_type_id find_improvement_by_name(const char *s)
   improvement that matches the given original (untranslated) name.  Returns
   B_LAST if none match.
 ****************************************************************************/
-Impr_type_id find_improvement_by_name_orig(const char *s)
+Impr_Type_id find_improvement_by_name_orig(const char *s)
 {
   impr_type_iterate(i) {
-    if (mystrcasecmp(get_improvement_type(i)->name_orig, s) == 0) {
+    if (mystrcasecmp(improvement_types[i].name_orig, s) == 0) {
       return i;
     }
   } impr_type_iterate_end;
@@ -237,66 +243,127 @@ Impr_type_id find_improvement_by_name_orig(const char *s)
 }
 
 /**************************************************************************
- Return TRUE if the impr has this flag otherwise FALSE
-**************************************************************************/
-bool impr_flag(Impr_type_id id, enum impr_flag_id flag)
-{
-  assert(flag >= 0 && flag < IF_LAST);
-  return TEST_BIT(get_improvement_type(id)->flags, flag);
-}
-
-/**************************************************************************
- Convert flag names to enum; case insensitive;
- returns IF_LAST if can't match.
-**************************************************************************/
-enum impr_flag_id impr_flag_from_str(const char *s)
-{
-  enum impr_flag_id i;
-
-  assert(ARRAY_SIZE(flag_names) == IF_LAST);
-  
-  for(i = 0; i < IF_LAST; i++) {
-    if (mystrcasecmp(flag_names[i], s) == 0) {
-      return i;
-    }
-  }
-  return IF_LAST;
-}
-
-/**************************************************************************
- Return TRUE if the improvement should be visible to others without spying
-**************************************************************************/
-bool is_improvement_visible(Impr_type_id id)
-{
-  return (is_wonder(id) || impr_flag(id, IF_VISIBLE_BY_OTHERS));
-}
-
-/**************************************************************************
  Returns 1 if the improvement is obsolete, now also works for wonders
 **************************************************************************/
-bool improvement_obsolete(const struct player *pplayer, Impr_type_id id) 
+bool improvement_obsolete(const struct player *pplayer, Impr_Type_id id) 
 {
-  struct impr_type *impr = get_improvement_type(id);
-
-  if (!tech_exists(impr->obsolete_by)) {
+  if (!tech_exists(improvement_types[id].obsolete_by)) {
     return FALSE;
   }
 
-  if (is_great_wonder(id)) {
-    /* a great wonder is obsolete, as soon as *any* player researched the
+  if (improvement_types[id].is_wonder) {
+    /* a wonder is obsolete, as soon as *any* player researched the
        obsolete tech */
-   return game.info.global_advances[impr->obsolete_by];
+   return game.global_advances[improvement_types[id].obsolete_by] != 0;
   }
 
-  return (get_invention(pplayer, impr->obsolete_by) == TECH_KNOWN);
+  return (get_invention(pplayer, improvement_types[id].obsolete_by)
+	  ==TECH_KNOWN);
+}
+
+/**************************************************************************
+ Fills in lists of improvements at all impr_ranges that might affect the
+ given city (owned by the given player)
+**************************************************************************/
+static void fill_ranges_improv_lists(Impr_Status *equiv_list[IR_LAST],
+                                     struct city *pcity,
+                                     struct player *pplayer)
+{ 
+  Continent_id cont = 0;
+  enum impr_range i;
+
+  for (i = IR_NONE; i < IR_LAST; i++) {
+    equiv_list[i] = NULL;
+  }
+
+  if (pcity) {
+    equiv_list[IR_CITY] = pcity->improvements;
+    cont = map_get_continent(pcity->tile);
+    /* Negative continents mean ocean cities. */
+  }
+
+  if (pplayer) {
+    equiv_list[IR_PLAYER] = pplayer->improvements;
+
+    if (cont > 0 && pplayer->island_improv) {
+      equiv_list[IR_ISLAND] =
+                          &pplayer->island_improv[cont * game.num_impr_types];
+    }
+  }
+
+  equiv_list[IR_WORLD] = game.improvements;
+}
+
+/**************************************************************************
+ Checks whether the building is within the equiv_range of a building that
+ replaces it
+**************************************************************************/
+bool improvement_redundant(struct player *pplayer, const struct city *pcity,
+                          Impr_Type_id id, bool want_to_build)
+{
+  enum impr_range i;
+  Impr_Status *equiv_list[IR_LAST];
+  Impr_Type_id *ept;
+
+  /* Make lists of improvements that affect this city */
+  fill_ranges_improv_lists(equiv_list, (struct city *)pcity, pplayer);
+
+  /* For every improvement named in equiv_dupl or equiv_repl, check for
+     its presence in any of the lists (we check only for its presence, and
+     assume that it has the "equiv" effect even if it itself is redundant) */
+  for (ept = improvement_types[id].equiv_repl; ept && *ept != B_LAST; ept++) {
+    for (i = IR_CITY; i < IR_LAST; i++) {
+      if (equiv_list[i]) {
+         Impr_Status stat = equiv_list[i][*ept];
+         if (stat != I_NONE && stat != I_OBSOLETE) return TRUE;
+      }
+    }
+  }
+
+  /* equiv_dupl makes buildings redundant, but that shouldn't stop you
+     from building them if you really want to */
+  if (!want_to_build) {
+    for (ept = improvement_types[id].equiv_dupl; ept && *ept != B_LAST; ept++) {
+      for (i = IR_CITY; i < IR_LAST; i++) {
+        if (equiv_list[i]) {
+          Impr_Status stat = equiv_list[i][*ept];
+          if (stat != I_NONE && stat != I_OBSOLETE) return TRUE;
+        }
+      }
+    }
+  }
+  return FALSE;
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+bool wonder_obsolete(Impr_Type_id id)
+{
+  return improvement_obsolete(NULL, id);
+}
+
+/**************************************************************************
+ Clears a list of improvements - sets them all to I_NONE
+**************************************************************************/
+void improvement_status_init(Impr_Status * improvements, size_t elements)
+{
+  /* 
+   * Since this function is called with elements!=game.num_impr_types
+   * impr_type_iterate can't used here.
+   */
+  Impr_Type_id i;
+
+  for (i = 0; i < elements; i++) {
+    improvements[i] = I_NONE;
+  }
 }
 
 /**************************************************************************
    Whether player can build given building somewhere, ignoring whether it
    is obsolete.
 **************************************************************************/
-bool can_player_build_improvement_direct(const struct player *p,
-					 Impr_type_id id)
+bool can_player_build_improvement_direct(struct player *p, Impr_Type_id id)
 {
   struct impr_type *impr;
   bool space_part = FALSE;
@@ -306,14 +373,11 @@ bool can_player_build_improvement_direct(const struct player *p,
     return FALSE;
   }
 
-  impr = get_improvement_type(id);
+  if (!player_knows_improvement_tech(p, id)) {
+    return FALSE;
+  }
 
-  requirement_vector_iterate(&impr->reqs, preq) {
-    if (preq->range >= REQ_RANGE_PLAYER
-        && !is_req_active(p, NULL, NULL, NULL, NULL, NULL, NULL, preq)) {
-      return FALSE;
-    }
-  } requirement_vector_iterate_end;
+  impr = get_improvement_type(id);
 
   /* Check for space part construction.  This assumes that space parts have
    * no other effects. */
@@ -341,11 +405,9 @@ bool can_player_build_improvement_direct(const struct player *p,
     return FALSE;
   }
 
-  if (is_great_wonder(id)) {
+  if (is_wonder(id)) {
     /* Can't build wonder if already built */
-    if (great_wonder_was_built(id)) {
-      return FALSE;
-    }
+    if (game.global_wonders[id] != 0) return FALSE;
   }
 
   return TRUE;
@@ -356,7 +418,7 @@ bool can_player_build_improvement_direct(const struct player *p,
   returns TRUE if building is available with current tech OR will be
   available with future tech.  Returns FALSE if building is obsolete.
 **************************************************************************/
-bool can_player_build_improvement(const struct player *p, Impr_type_id id)
+bool can_player_build_improvement(struct player *p, Impr_Type_id id)
 {
   if (!can_player_build_improvement_direct(p, id)) {
     return FALSE;
@@ -372,96 +434,182 @@ bool can_player_build_improvement(const struct player *p, Impr_type_id id)
   returns TRUE if building is available with current tech OR will be
   available with future tech.  Returns FALSE if building is obsolete.
 **************************************************************************/
-bool can_player_eventually_build_improvement(const struct player *p,
-					     Impr_type_id id)
+bool can_player_eventually_build_improvement(struct player *p, Impr_Type_id id)
 {
-  struct impr_type *building;
-
   if (!improvement_exists(id)) {
     return FALSE;
   }
   if (improvement_obsolete(p, id)) {
     return FALSE;
   }
-
-  /* Check for requirements that aren't met and that are unchanging (so
-   * they can never be met). */
-  building = get_improvement_type(id);
-  requirement_vector_iterate(&building->reqs, preq) {
-    if (preq->range >= REQ_RANGE_PLAYER
-	&& is_req_unchanging(preq)
-        && !is_req_active(p, NULL, NULL, NULL, NULL, NULL, NULL, preq)) {
-      return FALSE;
-    }
-  } requirement_vector_iterate_end;
-  /* FIXME: should check some "unchanging" reqs here - like if there's
-   * a nation requirement, we can go ahead and check it now. */
-
   return TRUE;
 }
 
 /**************************************************************************
-  Is this building a great wonder?
+  Marks an improvment to the status
 **************************************************************************/
-bool is_great_wonder(Impr_type_id id)
+void mark_improvement(struct city *pcity, Impr_Type_id id, Impr_Status status)
 {
-  return (get_improvement_type(id)->genus == IG_GREAT_WONDER);
+  enum impr_range range;
+  Impr_Status *improvements = NULL, *equiv_list[IR_LAST];
+
+  pcity->improvements[id] = status;
+  range = improvement_types[id].equiv_range;
+
+  /* Get the relevant improvement list */
+  fill_ranges_improv_lists(equiv_list, pcity, city_owner(pcity));
+  improvements = equiv_list[range];
+
+  if (improvements) {
+    /* And set the same status */
+    improvements[id] = status;
+  }
 }
 
 /**************************************************************************
-  Is this building a small wonder?
+  Redimensions the lists of island-range improvements when number of
+  continents changes. 
 **************************************************************************/
-bool is_small_wonder(Impr_type_id id)
+void allot_island_improvs(void)
 {
-  return (get_improvement_type(id)->genus == IG_SMALL_WONDER);
+  int i;
+
+  players_iterate(pplayer) {
+    pplayer->island_improv = fc_realloc(pplayer->island_improv,
+                                        (map.num_continents + 1)
+                                        * game.num_impr_types
+                                        * sizeof(Impr_Status));
+  
+    /* We index into this array with the continent number, so don't use zero */
+    for (i = 1; i <= map.num_continents; i++) {
+      improvement_status_init(&pplayer->island_improv[i * game.num_impr_types],
+                              game.num_impr_types);
+    } 
+
+    /* Fill the lists with existent improvements with Island equiv_range */
+    city_list_iterate(pplayer->cities, pcity) {
+      Continent_id cont = map_get_continent(pcity->tile);
+      Impr_Status *improvs = 
+                           &pplayer->island_improv[cont * game.num_impr_types];
+
+      built_impr_iterate(pcity, id) {
+        if (improvement_types[id].equiv_range != IR_ISLAND) {
+          continue;
+        }
+    
+        improvs[id] = pcity->improvements[id];
+      } built_impr_iterate_end;
+    } city_list_iterate_end;
+  } players_iterate_end;
+
+  improvements_update_redundant(NULL, NULL, 0, IR_WORLD);  
+}   
+
+/**************************************************************************
+  Update the obsolete status of all improvements. This needs to be done 
+  when a tech is discovered.
+
+  For all players since wonders are obsoleted when anybody discovers the
+  obsolescence tech.
+
+  If we marked something as obsolete, we need to call 
+  improvements_update_redundant(), since it might have made something 
+  unredundant.
+**************************************************************************/
+void improvements_update_obsolete(void)
+{   
+  bool did_mark = FALSE;
+
+  players_iterate(pplayer) {
+    city_list_iterate(pplayer->cities, pcity) {
+      built_impr_iterate(pcity, i) {
+        if (improvement_obsolete(pplayer, i)) {
+          freelog(LOG_DEBUG,"%s in %s is obsolete",
+                  improvement_types[i].name, pcity->name);
+          mark_improvement(pcity, i, I_OBSOLETE);
+          did_mark = TRUE;
+        }
+      } built_impr_iterate_end;
+    } city_list_iterate_end;
+  } players_iterate_end;
+
+  /* Ideally, we could track at what max range and for which players, but
+   * that's overoptimizing by a bit */
+  if (did_mark) {
+    improvements_update_redundant(NULL, NULL, 0, IR_WORLD);
+  }
 }
 
 /**************************************************************************
-  Is this building a regular improvement?
+  Update the redundancy status of all improvements.
+
+  This needs to be done: 
+   o When an improvement is made obsolete (by tech discovery).
+   o When an improvement is built.
+   o When an improvement is destroyed.
+   o When islands are reallotted: cities might be 'rearranged' into 
+     equiv_range.
+
+  We only check improvements within the equiv_range range. 
+
+  N.B. We do not need to do multiple iterations: an 
+  improvement making another improvement redundant does not depend on 
+  whether it itself it redundant or not. having been built is all that 
+  counts.
 **************************************************************************/
-bool is_improvement(Impr_type_id id)
+void improvements_update_redundant(struct player *pplayer, struct city *pcity,
+                                   Continent_id cont, enum impr_range range)
 {
-  return (get_improvement_type(id)->genus == IG_IMPROVEMENT);
+#define CHECK_CITY_IMPR(_pcity)                                              \
+{                                                                            \
+  built_impr_iterate((_pcity), i) {                                          \
+    if ((_pcity)->improvements[i] == I_OBSOLETE) {                           \
+      continue;                                                              \
+    }                                                                        \
+                                                                             \
+    if (improvement_redundant(city_owner(_pcity), (_pcity), i, FALSE)) {     \
+      freelog(LOG_DEBUG,"%s in %s is redundant",                             \
+              improvement_types[i].name, (_pcity)->name);                    \
+      mark_improvement((_pcity), i, I_REDUNDANT);                            \
+    } else {                                                                 \
+      freelog(LOG_DEBUG,"%s in %s is active!",                               \
+             improvement_types[i].name, (_pcity)->name);                     \
+      mark_improvement((_pcity), i, I_ACTIVE);                               \
+    }                                                                        \
+  } built_impr_iterate_end;                                                  \
 }
 
-/**************************************************************************
-  Get the world city with this great wonder.
-**************************************************************************/
-struct city *find_city_from_great_wonder(Impr_type_id id)
-{
-  return (find_city_by_id(game.info.great_wonders[id]));
-}
+  switch (range) {
+  case IR_NONE:
+    break;
+  case IR_CITY:
+    assert(pcity != NULL);
+    CHECK_CITY_IMPR(pcity);
+    break;
+  case IR_WORLD:
+    players_iterate(plr) {
+      city_list_iterate(plr->cities, pcity2) {
+        CHECK_CITY_IMPR(pcity2);
+      } city_list_iterate_end;
+    } players_iterate_end;
+    break;
+  case IR_PLAYER:
+    assert(pplayer != NULL);
+    city_list_iterate(pplayer->cities, pcity2) {
+      CHECK_CITY_IMPR(pcity2);
+    } city_list_iterate_end;
+    break;
+  case IR_ISLAND:
+    assert(cont > 0);
+    city_list_iterate(pplayer->cities, pcity2) {
+      if (map_get_continent(pcity2->tile) == cont) {
+        CHECK_CITY_IMPR(pcity2);
+      }
+    } city_list_iterate_end;
+    break;
+  default:
+    break;
+  }
 
-/**************************************************************************
-  Get the player city with this small wonder.
-**************************************************************************/
-struct city *find_city_from_small_wonder(const struct player *pplayer,
-					 Impr_type_id id)
-{
-  return (player_find_city_by_id(pplayer, pplayer->small_wonders[id]));
+#undef CHECK_CITY_IMPR 
 }
-
-/**************************************************************************
-  Was this great wonder built?
-**************************************************************************/
-bool great_wonder_was_built(Impr_type_id id)
-{
-  return (game.info.great_wonders[id] != 0);
-}
-
-/**************************************************************************
-  Return TRUE iff the improvement can be sold.
-**************************************************************************/
-bool can_sell_building(Impr_type_id id)
-{
-  return is_improvement(id);
-}
-
-/****************************************************************************
-  Return TRUE iff the city can sell the given improvement.
-****************************************************************************/
-bool can_city_sell_building(struct city *pcity, Impr_type_id id)
-{
-  return (city_got_building(pcity, id) ? can_sell_building(id) : FALSE);
-}
-

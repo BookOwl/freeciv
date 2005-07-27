@@ -338,7 +338,7 @@ static void worklist_help(int id, bool is_unit)
   if (id >= 0) {
     if (is_unit) {
       popup_help_dialog_typed(get_unit_type(id)->name, HELP_UNIT);
-    } else if (is_great_wonder(id)) {
+    } else if (is_wonder(id)) {
       popup_help_dialog_typed(get_improvement_name(id), HELP_WONDER);
     } else {
       popup_help_dialog_typed(get_improvement_name(id), HELP_IMPROVEMENT);
@@ -859,14 +859,14 @@ static void copy_worklist_to_editor(struct worklist *pwl,
 
 
 /****************************************************************
- sets aside the first space for "production.value" if in city
+ sets aside the first space for "currently_building" if in city
 *****************************************************************/
 static void worklist_prep(struct worklist_editor *peditor)
 {
   if (peditor->pcity) {
     peditor->worklist_wids[0] =
-        wid_encode(peditor->pcity->production.is_unit, FALSE,
-                   peditor->pcity->production.value);
+        wid_encode(peditor->pcity->is_building_unit, FALSE,
+                   peditor->pcity->currently_building);
     peditor->worklist_wids[1] = WORKLIST_END;
     copy_worklist_to_editor(&peditor->pcity->worklist, peditor,
                             MAX_LEN_WORKLIST);

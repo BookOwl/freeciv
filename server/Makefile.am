@@ -1,13 +1,11 @@
 ## Process this file with automake to produce Makefile.in
 
-SUBDIRS=	userdb generator scripting
+SUBDIRS=	userdb generator
 
 bin_PROGRAMS = civserver
 noinst_LIBRARIES = libcivserver.a
-AM_CPPFLAGS = \
-	-I$(top_srcdir)/utility -I$(srcdir)/../common -I$(srcdir)/../ai \
-	-I../intl -I$(top_srcdir)/common/aicore -I$(srcdir)/userdb \
-	-I$(srcdir)/generator -I$(srcdir)/scripting
+AM_CPPFLAGS = -I$(top_srcdir)/utility -I$(srcdir)/../common -I$(srcdir)/../ai -I../intl -I$(top_srcdir)/common/aicore -I$(srcdir)/userdb -I$(srcdir)/generator
+
 
 ## Above, note -I../intl instead of -I$(top_srdir/intl) is deliberate.
 
@@ -18,6 +16,8 @@ civserver_SOURCES = \
 libcivserver_a_SOURCES = \
 		airgoto.c	\
 		airgoto.h	\
+		autoattack.c	\
+		autoattack.h	\
 		barbarian.c	\
 		barbarian.h	\
 		cityhand.c	\
@@ -74,8 +74,7 @@ libcivserver_a_SOURCES = \
 		srv_main.h	\
 		stdinhand.c	\
 		stdinhand.h	\
-		techtools.h	\
-		techtools.c	\
+		stdinhand_info.h\
 		unithand.c	\
 		unithand.h	\
 		unittools.c	\
@@ -84,21 +83,11 @@ libcivserver_a_SOURCES = \
 civserver_DEPENDENCIES = ../utility/libcivutility.a ../common/libcivcommon.a \
       ../ai/libcivai.a ../utility/libcivutility.a ./libcivserver.a \
       ../utility/libcivutility.a ../common/aicore/libaicore.a \
-      ./scripting/libscripting.a \
-      ../dependencies/lua/src/liblua.a \
-      ../dependencies/lua/src/lib/liblualib.a \
-      ../dependencies/tolua/libtolua.a \
       ./generator/libgenerator.a $(USER_DB_DEP)
 civserver_LDADD        = ../utility/libcivutility.a ../common/libcivcommon.a \
       ../ai/libcivai.a ../utility/libcivutility.a ./libcivserver.a @INTLLIBS@ \
       ../utility/libcivutility.a ../common/libcivcommon.a ../ai/libcivai.a \
       ../utility/libcivutility.a ./libcivserver.a ../utility/libcivutility.a \
       ../common/aicore/libaicore.a ./generator/libgenerator.a \
-      ./scripting/libscripting.a \
-      ../dependencies/lua/src/liblua.a \
-      ../dependencies/lua/src/lib/liblualib.a \
-      ../dependencies/tolua/libtolua.a \
       $(USER_DB_LIB) $(SERVER_LIBS)
-
-
 

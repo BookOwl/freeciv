@@ -43,6 +43,8 @@ struct server_arguments {
   int quitidle;
   /* exit the server on game ending */
   bool exit_on_end;
+  /* what kind of end game we should use */
+  bv_draw draw;
   /* authentication options */
   bool auth_enabled;            /* defaults to FALSE */
   bool auth_allow_guests;       /* defaults to TRUE */
@@ -54,23 +56,18 @@ void srv_init(void);
 void srv_main(void);
 void server_quit(void);
 
-bool is_game_over(void);
-
 bool handle_packet_input(struct connection *pconn, void *packet, int type);
 void start_game(void);
-void save_game(char *orig_filename, const char *save_reason);
-void pick_random_player_name(const struct nation_type *pnation,
-			     char *newname);
+void save_game(char *orig_filename);
+void pick_ai_player_name(Nation_Type_id nation, char *newname);
 void send_all_info(struct conn_list *dest);
 void check_for_full_turn_done(void);
 
 void dealloc_id(int id);
 void alloc_id(int id);
 int get_next_id_number(void);
-void server_game_init(void);
 void server_game_free(void);
 void check_for_full_turn_done(void);
-void aifill(int amount);
 
 extern struct server_arguments srvarg;
 
@@ -79,5 +76,4 @@ extern bool nocity_send;
 
 extern bool force_end_of_sniff;
 
-void init_available_nations(void);
 #endif /* FC__SRV_MAIN_H */

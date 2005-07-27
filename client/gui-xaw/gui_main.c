@@ -46,15 +46,12 @@
 #include "support.h"
 #include "version.h"
 
+#include "actions.h"
 #include "civclient.h"
 #include "climisc.h"
 #include "clinet.h"
-#include "control.h"
-#include "options.h"
-#include "tilespec.h"
-
-#include "actions.h"
 #include "colors.h"
+#include "control.h"
 #include "dialogs.h"
 #include "graphics.h"
 #include "gui_stuff.h"		/* I_SW() */
@@ -62,15 +59,15 @@
 #include "mapview.h"
 #include "menu.h"
 #include "optiondlg.h"
-#include "pages.h"
+#include "options.h"
 #include "resources.h"
+#include "tilespec.h"
 
 #include "gui_main.h"
 
-const char *client_string = "gui-xaw";
+#include "freeciv.ico"
 
-const char * const gui_character_encoding = NULL;
-const bool gui_use_transliteration = TRUE;
+const char *client_string = "gui-xaw";
 
 client_option gui_options[] = {
   /* None. */
@@ -83,6 +80,8 @@ static AppResources appResources;
 static int unit_ids[MAX_NUM_UNITS_BELOW];  
 
 static void setup_widgets(void);
+void fill_econ_label_pixmaps(void);
+void fill_unit_below_pixmaps(void);
 
 /**************************************************************************
 ...
@@ -206,16 +205,6 @@ XtInputId x_input_id;
 XtIntervalId x_interval_id;
 Atom wm_delete_window;
 
-/****************************************************************************
-  Called by the tileset code to set the font size that should be used to
-  draw the city names and productions.
-****************************************************************************/
-void set_city_names_font_sizes(int my_city_names_font_size,
-			       int my_city_productions_font_size)
-{
-  freelog(LOG_ERROR, "Unimplemented set_city_names_font_sizes.");
-  /* PORTME */
-}
 
 #ifdef UNUSED
 /**************************************************************************
@@ -275,7 +264,7 @@ static Boolean toplevel_work_proc(XtPointer client_data)
 **************************************************************************/
 void ui_init(void)
 {
-
+  init_character_encodings(NULL, TRUE);
 }
 
 /**************************************************************************
@@ -284,7 +273,7 @@ void ui_init(void)
 void ui_main(int argc, char *argv[])
 {
   int i;
-  struct sprite *icon; 
+  Pixmap icon_pixmap; 
 
   parse_options(argc, argv);
 
@@ -344,19 +333,28 @@ void ui_main(int argc, char *argv[])
     freelog(LOG_FATAL, _("Only color displays are supported for now..."));
     /*    exit(EXIT_FAILURE); */
   }
+  
+  icon_pixmap = XCreateBitmapFromData(display,
+				      RootWindowOfScreen(XtScreen(toplevel)),
+				      freeciv_bits,
+				      freeciv_width, freeciv_height);
+  XtVaSetValues(toplevel, XtNiconPixmap, icon_pixmap, NULL);
+
+  init_color_system();
 
   {
     XGCValues values;
     char **missing_charset_list_return;
     int missing_charset_count_return;
     char *def_string_return;
-    char *city_names_font, *city_productions_font_name;
 
     values.graphics_exposures = False;
     civ_gc = XCreateGC(display, root_window, GCGraphicsExposures, &values);
 
+    free(city_names_font);
     city_names_font = mystrdup("-*-*-*-*-*--14-*");
 
+    free(city_productions_font_name);
     city_productions_font_name = mystrdup("-*-*-*-*-*--14-*");
 
     main_font_set = XCreateFontSet(display, city_names_font,
@@ -372,8 +370,8 @@ void ui_main(int argc, char *argv[])
       freelog(LOG_ERROR, _("Font for charset %s is lacking"),
 	  missing_charset_list_return[i]);
     }
-    values.foreground = get_color(tileset, COLOR_MAPVIEW_CITYTEXT)->color.pixel;
-    values.background = get_color(tileset, COLOR_MAPVIEW_UNKNOWN)->color.pixel;
+    values.foreground = colors_standard[COLOR_STD_WHITE];
+    values.background = colors_standard[COLOR_STD_BLACK];
     font_gc= XCreateGC(display, root_window, 
 		       GCForeground|GCBackground|GCGraphicsExposures, 
 		       &values);
@@ -391,8 +389,8 @@ void ui_main(int argc, char *argv[])
       freelog(LOG_ERROR, _("Font for charset %s is lacking"),
 	  missing_charset_list_return[i]);
     }
-    values.foreground = get_color(tileset, COLOR_MAPVIEW_CITYTEXT)->color.pixel;
-    values.background = get_color(tileset, COLOR_MAPVIEW_UNKNOWN)->color.pixel;
+    values.foreground = colors_standard[COLOR_STD_WHITE];
+    values.background = colors_standard[COLOR_STD_BLACK];
     prod_font_gc= XCreateGC(display, root_window,
 			    GCForeground|GCBackground|GCGraphicsExposures,
 			    &values);
@@ -426,7 +424,7 @@ void ui_main(int argc, char *argv[])
   }
   
   /* 135 below is rough value (could be more intelligent) --dwp */
-  num_units_below = 135 / tileset_full_tile_width(tileset);
+  num_units_below = 135 / UNIT_TILE_WIDTH;
   num_units_below = MIN(num_units_below,MAX_NUM_UNITS_BELOW);
   num_units_below = MAX(num_units_below,1);
   
@@ -434,13 +432,9 @@ void ui_main(int argc, char *argv[])
      setup_widgets() has enough colors available:  (on 256-colour systems)
   */
   setup_widgets();
-  tileset_load_tiles(tileset);
+  tilespec_load_tiles();
   load_intro_gfx();
   load_cursors();
-
-  /* FIXME: what about the mask? */
-  icon = get_icon_sprite(tileset, ICON_FREECIV);
-  XtVaSetValues(toplevel, XtNiconPixmap, icon->pixmap, NULL);
 
   XtSetKeyboardFocus(bottom_form, inputline_text);
   XtSetKeyboardFocus(below_menu_form, map_canvas);
@@ -448,14 +442,8 @@ void ui_main(int argc, char *argv[])
   InitializeActions(app_context);
 
   /* Do this outside setup_widgets() so after tiles are loaded */
-  for(i=0;i<10;i++)  {
-    struct sprite *s = i < 5 ? get_tax_sprite(tileset, O_SCIENCE) : get_tax_sprite(tileset, O_GOLD);
 
-    XtVaSetValues(econ_label[i], XtNbitmap,
-		  s->pixmap, NULL);
-    XtAddCallback(econ_label[i], XtNcallback, taxrates_callback,
-		  INT_TO_XTPOINTER(i));
-  }
+  fill_econ_label_pixmaps();
 		
   XtAddCallback(map_horizontal_scrollbar, XtNjumpProc, 
 		scrollbar_jump_callback, NULL);
@@ -476,15 +464,9 @@ void ui_main(int argc, char *argv[])
 
   init_mapcanvas_and_overview();
 
-  for(i=0; i<num_units_below; i++)
-    unit_below_pixmap[i]=XCreatePixmap(display, XtWindow(overview_canvas), 
-				       tileset_full_tile_width(tileset), tileset_full_tile_height(tileset), 
-				       display_depth);  
+  fill_unit_below_pixmaps();
 
-  set_indicator_icons(client_research_sprite(),
-		      client_warming_sprite(),
-		      client_cooling_sprite(),
-		      client_government_sprite());
+  set_indicator_icons(0, 0, 0, 0);
 
   wm_delete_window = XInternAtom(XtDisplay(toplevel), "WM_DELETE_WINDOW", 0);
   XSetWMProtocols(display, XtWindow(toplevel), &wm_delete_window, 1);
@@ -513,8 +495,7 @@ static void unit_icon_callback(Widget w, XtPointer client_data,
     return;
   punit=find_unit_by_id(unit_ids[i]);
   if(punit) { /* should always be true at this point */
-    if (punit->owner == game.player_ptr) {
-      /* may be non-true if alliance */
+    if (punit->owner == game.player_idx) {  /* may be non-true if alliance */
       set_unit_focus(punit);
     }
   }
@@ -590,8 +571,8 @@ void setup_widgets(void)
     econ_label[i] = XtVaCreateManagedWidget("econlabels",
 					    commandWidgetClass,
 					    left_column_form,
-					    XtNwidth, tileset_small_sprite_width(tileset),
-					    XtNheight, tileset_small_sprite_height(tileset),
+					    XtNwidth, SMALL_TILE_WIDTH,
+					    XtNheight, SMALL_TILE_HEIGHT,
 					    i?XtNfromHoriz:NULL, 
 					    i?econ_label[i-1]:NULL,
 					    XtNhorizDistance, econ_label_space,
@@ -629,7 +610,7 @@ void setup_widgets(void)
 				 commandWidgetClass,
 				 left_column_form,
 				 XtNwidth, econ_label_count*
-						(tileset_small_sprite_width(tileset)+econ_label_space),
+						(SMALL_TILE_WIDTH+econ_label_space),
 				 NULL));
 
   
@@ -641,8 +622,8 @@ void setup_widgets(void)
   unit_pix_canvas = XtVaCreateManagedWidget("unitpixcanvas", 
 					   pixcommWidgetClass,
 					   left_column_form, 
-					   XtNwidth, tileset_full_tile_width(tileset),
-					   XtNheight, tileset_full_tile_height(tileset),
+					   XtNwidth, UNIT_TILE_WIDTH,
+					   XtNheight, UNIT_TILE_HEIGHT,
 					   NULL);
 
   for(i=0; i<num_units_below; i++) {
@@ -653,9 +634,9 @@ void setup_widgets(void)
 						   pixcommWidgetClass,
 						   left_column_form, 
 						   XtNwidth,
-						   tileset_full_tile_width(tileset),
+						   UNIT_TILE_WIDTH,
 						   XtNheight,
-						   tileset_full_tile_height(tileset),
+						   UNIT_TILE_HEIGHT,
 						   NULL);
     XtAddCallback(unit_below_canvas[i], XtNcallback, unit_icon_callback,
 		  (XtPointer)i);  
@@ -708,7 +689,7 @@ void setup_widgets(void)
 **************************************************************************/
 void xaw_ui_exit(void)
 {
-  tileset_free_tiles(tileset);
+  tilespec_free_tiles();
   ui_exit();
 }
 
@@ -718,7 +699,6 @@ void xaw_ui_exit(void)
 void main_show_info_popup(XEvent *event)
 {
   XButtonEvent *ev=(XButtonEvent *)event;
-  struct player_research* research = get_player_research(game.player_ptr);
   if(ev->button==Button1) {
     Widget  p;
     Position x, y;
@@ -734,16 +714,16 @@ void main_show_info_popup(XEvent *event)
 		  "Researching %s: %d/%d\n"
 		  "Government: %s"),
 		population_to_text(civ_population(game.player_ptr)),
-		textyear(game.info.year), game.info.turn,
+		textyear(game.year), game.turn,
 		game.player_ptr->economic.gold,
 		player_get_expected_income(game.player_ptr),
 		game.player_ptr->economic.tax,
 		game.player_ptr->economic.luxury,
 		game.player_ptr->economic.science,
-		(research->researching == A_UNSET) ?
+		(game.player_ptr->research.researching == A_UNSET) ?
 		  advances[A_NONE].name :
-		  advances[research->researching].name,
-		research->bulbs_researched,
+		  advances[game.player_ptr->research.researching].name,
+		game.player_ptr->research.bulbs_researched,
 		total_bulbs_required(game.player_ptr),
 		get_government_name(game.player_ptr->government));
 
@@ -774,7 +754,6 @@ void main_show_info_popup(XEvent *event)
 void update_conn_list_dialog(void)
 {
   /* PORTME */
-  update_start_page();
 }
 
 /**************************************************************************
@@ -852,10 +831,9 @@ void end_turn_callback(Widget w, XtPointer client_data, XtPointer call_data)
 **************************************************************************/
 void timer_callback(XtPointer client_data, XtIntervalId * id)
 {
-  int msec = real_timer_callback() * 1000;
-
-  x_interval_id = XtAppAddTimeOut(app_context, msec,
+  x_interval_id = XtAppAddTimeOut(app_context, TIMER_INTERVAL,
 				  timer_callback, NULL);
+  real_timer_callback();
 }
 
 /**************************************************************************
@@ -895,8 +873,7 @@ void set_unit_icons_more_arrow(bool onoff)
   static bool showing = FALSE;
 
   if (onoff && !showing) {
-    /* FIXME: what about the mask? */
-    xaw_set_bitmap(more_arrow_label, get_arrow_sprite(tileset)->pixmap);
+    xaw_set_bitmap(more_arrow_label, sprites.right_arrow->pixmap);
     showing = TRUE;
   }
   else if(!onoff && showing) {
@@ -905,16 +882,60 @@ void set_unit_icons_more_arrow(bool onoff)
   }
 }
 
-/****************************************************************************
-  Enqueue a callback to be called during an idle moment.  The 'callback'
-  function should be called sometimes soon, and passed the 'data' pointer
-  as its data.
-****************************************************************************/
-void add_idle_callback(void (callback)(void *), void *data)
-{
-  /* PORTME */
+/**************************************************************************
+  Called to fill econ_label pixmaps (showing tax/lux/sci rates).
 
-  /* This is a reasonable fallback if it's not ported. */
-  freelog(LOG_ERROR, "Unimplemented add_idle_callback.");
-  (callback)(data);
+  It may be called again if the tileset changes.
+**************************************************************************/
+void fill_econ_label_pixmaps(void)
+{
+  int i;
+  int econ_label_count = 10;
+
+  for(i = 0; i < econ_label_count; i++) {
+    struct Sprite *s = i < 5 ? sprites.tax_science : sprites.tax_gold;
+
+    XtVaSetValues(econ_label[i], XtNbitmap,
+		  s->pixmap, NULL);
+    XtAddCallback(econ_label[i], XtNcallback, taxrates_callback,
+		  INT_TO_XTPOINTER(i));
+  }
+}
+
+/**************************************************************************
+  Called to fill unit_below pixmaps. They are on the left of the
+  screen that shows all of the inactive units in the current tile.
+
+  It may be called again if the tileset changes.
+**************************************************************************/
+void fill_unit_below_pixmaps(void)
+{
+  long i;
+
+  for (i = 0; i < num_units_below; i++) {
+    unit_below_pixmap[i] = XCreatePixmap(display, XtWindow(overview_canvas),
+					 UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT,
+					 display_depth);
+  }
+}
+
+/**************************************************************************
+  Called when the tileset is changed to reset indicators pixmaps.
+**************************************************************************/
+void reset_econ_label_pixmaps(void)
+{
+  fill_econ_label_pixmaps();
+}
+
+/**************************************************************************
+  Called when the tileset is changed to reset unit pixmaps.
+**************************************************************************/
+void reset_unit_below_pixmaps(void)
+{
+  long i;
+
+  for (i = 0; i < num_units_below; i++) {
+    XFreePixmap(display, unit_below_pixmap[i]);
+  }
+  fill_unit_below_pixmaps();
 }

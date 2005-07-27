@@ -10,8 +10,8 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-#ifndef FC__BACK_END_H
-#define FC__BACK_END_H
+#ifndef __BE_H
+#define __BE_H
 
 #ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
@@ -22,8 +22,8 @@
 
 #include "common_types.h"
 
-#define MAX_OPACITY    255
-#define MIN_OPACITY    0
+/* don't change */
+#define MAX_TRANSPARENCY	128
 
 #define DEPTH_MIN		100
 #define DEPTH_MAX		300
@@ -79,6 +79,12 @@ enum be_event_type {
   BE_KEY_PRESSED
 };
 
+enum be_draw_type {
+  BE_TRANSPARENT,		/* 100% background */
+  BE_ALPHA,			/* variable */
+  BE_OPAQUE			/* 100% foreground */
+};
+
 struct be_event {
   enum be_event_type type;
   int socket;			/* BE_DATA_OTHER_FD */
@@ -89,7 +95,7 @@ struct be_event {
 };
 
 struct osda;  /* Off-Screen Drawing Area */
-struct sprite;
+struct Sprite;
 struct FT_Bitmap_;
 
 #include "text_renderer.h"
@@ -97,59 +103,60 @@ struct FT_Bitmap_;
 /* ===== general osda ===== */
 struct osda *be_create_osda(int width, int height);
 void be_free_osda(struct osda *osda);
+void be_set_transparent(struct osda *osda,
+			const struct ct_rect *rect);
 
 /* ===== drawing to osda ===== */
 #define be_draw_string tr_draw_string
 
-void be_draw_bitmap(struct osda *target, be_color color,
+void be_draw_bitmap(struct osda *target, enum be_draw_type draw_type,
+		    be_color color,
 		    const struct ct_point *position,
 		    struct  FT_Bitmap_ *bitmap);
 
-void be_draw_region(struct osda *target, const struct ct_rect *region, 
-		    be_color color);
-void be_draw_line(struct osda *target, const struct ct_point *start,
-		  const struct ct_point *end, int line_width, bool dashed,
-		  be_color color);
-void be_draw_rectangle(struct osda *target, const struct ct_rect *spec,
+void be_draw_region(struct osda *target, enum be_draw_type draw_type,
+		    const struct ct_rect *region, be_color color);
+void be_draw_line(struct osda *target, enum be_draw_type draw_type,
+		  const struct ct_point *start,
+		  const struct ct_point *end,
+		  int line_width, bool dashed, be_color color);
+void be_draw_rectangle(struct osda *target, enum be_draw_type draw_type,
+		       const struct ct_rect *spec,
 		       int line_width, be_color color);
-void be_draw_sprite(struct osda *target, 
-		    const struct sprite *sprite,
+void be_draw_sprite(struct osda *target, enum be_draw_type draw_type,
+		    const struct Sprite *sprite,
 		    const struct ct_size *size,
 		    const struct ct_point *dest_pos,
 		    const struct ct_point *src_pos);
-void be_multiply_alphas(struct sprite *dest_sprite,
-			const struct sprite *src_sprite,
-			const struct ct_point *src_pos);
 void be_copy_osda_to_osda(struct osda *dest,
 			  struct osda *src,
 			  const struct ct_size *size,
 			  const struct ct_point *dest_pos,
-			  const struct ct_point *src_pos);
+			  const struct ct_point *src_pos, int transparency);
 
 /* ===== query info ===== */
 void be_screen_get_size(struct ct_size *size);
 #define be_string_get_size tr_string_get_size
 void be_sprite_get_size(struct ct_size *size,
-			const struct sprite *sprite);
+			const struct Sprite *sprite);
 void be_osda_get_size(struct ct_size *size,
 		      const struct osda *osda);
 bool be_is_transparent_pixel(struct osda *osda, const struct ct_point *pos);
 
 /* ===== graphics.c implementation ===== */
-struct sprite *be_load_gfxfile(const char *filename);
-struct sprite *be_crop_sprite(struct sprite *source,
+struct Sprite *be_load_gfxfile(const char *filename);
+struct Sprite *be_crop_sprite(struct Sprite *source,
 			      int x, int y, int width, int height);
-void be_free_sprite(struct sprite *sprite);
+void be_free_sprite(struct Sprite *sprite);
 
 /* ===== other ===== */
 void be_init(const struct ct_size *screen_size, bool fullscreen);
 bool be_supports_fullscreen(void);
-void be_next_non_blocking_event(struct be_event *event);
-void be_next_blocking_event(struct be_event *event, struct timeval *timeout);
+void be_next_event(struct be_event *event, struct timeval *timeout);
 void be_add_net_input(int sock);
 void be_remove_net_input(void);
 void be_copy_osda_to_screen(struct osda *src);
 void be_write_osda_to_file(struct osda *osda, const char *filename);
-be_color be_get_color(int red, int green, int blue, int alpha);
+be_color be_get_color(int red, int green, int blue);
 
-#endif				/* FC__BACK_END_H */
+#endif
