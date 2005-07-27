@@ -1,0 +1,11 @@
+Makefile
+Makefile.in
+POTFILES
+freeciv.pot
+stamp-cat-id
+cat-id-tbl.c
+*.mo
+*.gmo
+*.pox
+nb.po
+messages
