@@ -37,16 +37,13 @@
 #include "version.h"
 
 #include "civclient.h"
-#include "clinet.h"
-#include "packhand.h"
-#include "servers.h"
-
 #include "chatline.h"
+#include "clinet.h"
+#include "connectdlg_g.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
-#include "pages.h"
+#include "packhand.h"
 
-#include "connectdlg_g.h"
 #include "connectdlg.h"
 
 static enum {
@@ -289,7 +286,6 @@ void connect_callback(Widget w, XtPointer client_data,
       }
 
       XtSetSensitive(toplevel, True);
-      popup_start_page();
       return;
     } else {
       append_output_window(errbuf);
@@ -515,7 +511,7 @@ static int get_server_list(char **list, char *errbuf, int n_errbuf)
     }
   }
 
-  server_list_iterate(server_list,pserver) {
+  server_list_iterate(*server_list,pserver) {
     if (pserver == NULL) continue;
     my_snprintf(line, sizeof(line), "%-35s %-5s %-11s %-11s %2s   %s",
 		pserver->host, pserver->port, pserver->version,
@@ -530,4 +526,75 @@ static int get_server_list(char **list, char *errbuf, int n_errbuf)
   } 
   *list=NULL;
   return 0;
+}
+
+/**************************************************************************
+  Make an attempt to autoconnect to the server.  If the server isn't
+  there yet, get the Xt kit to call this routine again about
+  AUTOCONNECT_INTERVAL milliseconds.  If anything else goes wrong, log
+  a fatal error.
+**************************************************************************/
+static void try_to_autoconnect(XtPointer data, XtIntervalId * id)
+{
+  char errbuf[512];
+  static int count = 0;
+
+  count++;
+
+  if (count >= MAX_AUTOCONNECT_ATTEMPTS) {
+    freelog(LOG_FATAL,
+	    _("Failed to contact server \"%s\" at port "
+	      "%d as \"%s\" after %d attempts"),
+	    server_host, server_port, user_name, count);
+    exit(EXIT_FAILURE);
+  }
+
+  switch (try_to_connect(user_name, errbuf, sizeof(errbuf))) {
+    /* Success! */
+  case 0:
+    return;
+
+    /* Server not available (yet) - wait & retry */
+  case ECONNREFUSED:
+    XtAppAddTimeOut(app_context,
+		    AUTOCONNECT_INTERVAL, try_to_autoconnect, NULL);
+    break;
+
+    /* All other errors are fatal */
+  default:
+    freelog(LOG_FATAL,
+	    _("Error contacting server \"%s\" at port %d "
+	      "as \"%s\":\n %s\n"),
+	    server_host, server_port, user_name, errbuf);
+    exit(EXIT_FAILURE);
+  }
+}
+
+/**************************************************************************
+  Start trying to autoconnect to civserver.
+  Calls get_server_address() then try_to_autoconnect().
+**************************************************************************/
+void server_autoconnect()
+{
+  char buf[512];
+  int outcome;
+
+  my_snprintf(buf, sizeof(buf),
+	      _("Auto-connecting to server \"%s\" at port %d "
+		"as \"%s\" every %d.%d second(s) for %d times"),
+	      server_host, server_port, user_name,
+	      AUTOCONNECT_INTERVAL / 1000,AUTOCONNECT_INTERVAL % 1000, 
+	      MAX_AUTOCONNECT_ATTEMPTS);
+  append_output_window(buf);
+  outcome = get_server_address(server_host, server_port, buf, sizeof(buf));
+  if (outcome < 0) {
+    freelog(LOG_FATAL,
+	    _("Error contacting server \"%s\" at port %d "
+	      "as \"%s\":\n %s\n"),
+	    server_host, server_port, user_name, buf);
+    exit(EXIT_FAILURE);
+  }
+
+  try_to_autoconnect(NULL, NULL);
+  XtSetSensitive(toplevel, True);
 }

@@ -1260,18 +1260,13 @@ Freeciv*optionpopup*Toggle.internalHeight: 0
 Freeciv*optionlabel.label:             _("Set local options")
 Freeciv*optionlabel.borderWidth:       0
 
-Freeciv*optionviewport.fromVert:       optionlabel
-Freeciv*optionviewport.height:         510
-Freeciv*optionviewport.useRight:       True
-Freeciv*optionviewport.allowVert:      True
-
 ! dummy labels:
 Freeciv*optionpopup*label.label:           XXXXXXXXXXXXXXXXXXXXXXXXXXX
 Freeciv*optionpopup*label.borderWidth:     0
 
 Freeciv*optionpopup*input.*.foreground:    black
 Freeciv*optionpopup*input.*.background:    white
-Freeciv*optionpopup*input.width:           120
+Freeciv*optionpopup*input.width:           50
 Freeciv*optionpopup*input.*.editType:      edit
 
 Freeciv*optionokcommand.label:          _("Ok")
@@ -1488,13 +1483,13 @@ Freeciv*scienceclosecommand.right:       chainLeft
 !
 ! Citizen Management Agent dialog 
 !
-Freeciv*cmapopup.title:                   _("Citizen Governor")
+Freeciv*cmapopup.title:                   _("Citizen Management Agent")
 Freeciv*cmapresetviewport.allowVert:      True
 Freeciv*cmapresetlist.defaultColumns:     1
 Freeciv*cmapresetlist.forceColumns:       true
 Freeciv*cmapresetlist.background:         white
 
-Freeciv*cmacommand.label:                 _("Citizen governor...")
+Freeciv*cmacommand.label:                 _("CMA...")
 Freeciv*cmahelpbutton.label:              _("Help")
 Freeciv*cmaclosebutton.label:             _("Close")
 Freeciv*cmaaddbutton.label:               _("Add Preset")
@@ -2565,7 +2560,7 @@ Freeciv*overviewcanvas.left:                       chainLeft
 Freeciv*overviewcanvas.right:                      chainRight
 Freeciv*overviewcanvas.resizable:                  True
 
-Freeciv*infocommand.label:	\n\n\n\n\n\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ 
+Freeciv*infocommand.label:	\n\n\n\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ 
 Freeciv*infocommand.background:                    gray84
 Freeciv*infocommand.foreground:                    black
 Freeciv*infocommand.justify:                       left
@@ -3338,61 +3333,3 @@ Freeciv*meswinpopcitycommand.top:             chainBottom
 Freeciv*meswinpopcitycommand.bottom:          chainBottom
 Freeciv*meswinpopcitycommand.left:            chainLeft
 Freeciv*meswinpopcitycommand.right:           chainLeft
-
-!
-! start page shell
-!
-Freeciv*startpage.title:  _("Pregame")
-Freeciv*startpage.iconName:   _("Pregame")
-Freeciv*startpage.allowShellResize: True
-
-Freeciv*startpageform.resizable:           true
-Freeciv*startpageform.top:                 chainTop
-Freeciv*startpageform.bottom:              chainBottom
-Freeciv*startpageform.left:                chainLeft
-Freeciv*startpageform.right:               chainRight
-
-Freeciv*startpagelabel.resizable:          true
-Freeciv*startpagelabel.justify:            left
-Freeciv*startpagelabel.borderWidth:        1
-Freeciv*startpagelabel.top:                chainTop
-Freeciv*startpagelabel.bottom:             chainTop
-Freeciv*startpagelabel.left:               chainLeft
-Freeciv*startpagelabel.right:              chainRight
-Freeciv*startpagelabel.label: _("\
-Name              Ready Leader          Nation          ")
-
-Freeciv*startpageplayerslist.fromVert:        startpagelabel
-Freeciv*startpageplayerslist.forceColumns:    true
-Freeciv*startpageplayerslist.defaultColumns:  1
-Freeciv*startpageplayerslist.verticalList:    true
-Freeciv*startpageplayerslist.resizable:       true
-Freeciv*startpageplayerslist.top:             chainTop
-Freeciv*startpageplayerslist.bottom:          chainBottom
-Freeciv*startpageplayerslist.left:            chainLeft
-Freeciv*startpageplayerslist.right:           chainRight
-Freeciv*startpageplayerslist.background:      white
-
-Freeciv*startpagecancelcommand.label:         _("Cancel")
-Freeciv*startpagecancelcommand.fromVert:      startpageplayerslist
-Freeciv*startpagecancelcommand.top:           chainBottom
-Freeciv*startpagecancelcommand.bottom:        chainBottom
-Freeciv*startpagecancelcommand.left:          chainLeft
-Freeciv*startpagecancelcommand.right:         chainLeft
-
-Freeciv*startpagenationcommand.label:         _("Pick Nation")
-Freeciv*startpagenationcommand.fromHoriz:     startpagecancelcommand
-Freeciv*startpagenationcommand.fromVert:      startpageplayerslist
-Freeciv*startpagenationcommand.top:           chainBottom
-Freeciv*startpagenationcommand.bottom:        chainBottom
-Freeciv*startpagenationcommand.left:          chainLeft
-Freeciv*startpagenationcommand.right:         chainLeft
-
-Freeciv*startpagestartcommand.label:          _("Start")
-Freeciv*startpagestartcommand.fromHoriz:      startpagenationcommand
-Freeciv*startpagestartcommand.fromVert:       startpageplayerslist
-Freeciv*startpagestartcommand.top:            chainBottom
-Freeciv*startpagestartcommand.bottom:         chainBottom
-Freeciv*startpagestartcommand.left:           chainLeft
-Freeciv*startpagestartcommand.right:          chainLeft
-

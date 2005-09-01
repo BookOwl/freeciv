@@ -64,6 +64,9 @@ rail_shield_bonus=50
 ; percent added to trade production if square has railroad
 rail_trade_bonus=50
 
+; percent added to food production if farmland and city has supermarket
+farmland_supermarket_food_bonus=0
+
 ; percent subtracted from food production if square is polluted
 pollution_food_penalty=50
 
@@ -92,14 +95,14 @@ fallout_trade_penalty=50
 ;
 ; Notes:
 ;
-; name                 = name as seen by user; if "unused", it is not used
+; terrain_name         = name as seen by user; if "unused", it is not used
 ; graphic              = preferred base graphics tag in tilespec; must have
 ;                        tags with extensions _n0s0e0e0 etc.
 ; graphic_alt          = alternate graphics tag if preferred is not found;
 ;                        should be a standard tag if preferred is not;
 ;			 otherwise may be "-"
 ; movement_cost        = typically 1 to 3
-; defense_bonus        = percent added to defense; typically 0% to 200%
+; defense_bonus        = 10 times actual; typically 10 to 30 (1.0 to 3.0)
 ; food                 = normal food production
 ; shield               = normal shield production
 ; trade                = normal trade production
@@ -162,12 +165,12 @@ fallout_trade_penalty=50
 ;		         newlines so that xgettext parsing works
 
 [terrain_arctic]
-name                 = _("Arctic")
+terrain_name         = _("Arctic")
 graphic              = "arctic"
 graphic_alt	     = "-"
 identifier	     = "a"
 movement_cost        = 2
-defense_bonus        = 0
+defense_bonus        = 10
 food                 = 0
 shield               = 0
 trade                = 0
@@ -198,7 +201,6 @@ warmer_drier_result  = "no"
 cooler_wetter_result = "no"
 cooler_drier_result  = "no"
 flags                = "NoBarbs"
-property_frozen      = 100
 helptext	     = _("\
 Arctic squares are found only in the most northerly or southerly\
  reaches of the world.  They are very cold, and hence difficult to\
@@ -206,12 +208,12 @@ Arctic squares are found only in the most northerly or southerly\
 ")
 
 [terrain_desert]
-name                 = _("Desert")
+terrain_name         = _("Desert")
 graphic              = "desert"
 graphic_alt	     = "-"
 identifier	     = "d"
 movement_cost        = 1
-defense_bonus        = 0
+defense_bonus        = 10
 food                 = 0
 shield               = 1
 trade                = 0
@@ -241,20 +243,18 @@ warmer_wetter_result = "Swamp"
 warmer_drier_result  = "no"
 cooler_wetter_result = "no"
 cooler_drier_result  = "no"
-property_dry         = 100
-property_tropical    = 50
 helptext	     = _("\
 Deserts are regions of extreme dryness, making agriculture and\
  trade very difficult.\
 ")
 
 [terrain_forest]
-name                 = _("Forest")
+terrain_name         = _("Forest")
 graphic              = "forest"
 graphic_alt	     = "-"
 identifier	     = "f"
 movement_cost        = 2
-defense_bonus        = 50
+defense_bonus        = 15
 food                 = 1
 shield               = 2
 trade                = 0
@@ -285,20 +285,18 @@ warmer_drier_result  = "Desert"
 cooler_wetter_result = "no"
 cooler_drier_result  = "no"
 flags                = "Starter"
-property_temperate   = 50
-property_foliage     = 50
 helptext	     = _("\
 Forests are densely wooded, making agriculture somewhat\
  problematic.\
 ")
 
 [terrain_grassland]
-name                 = _("Grassland")
+terrain_name         = _("Grassland")
 graphic              = "grassland"
 graphic_alt	     = "-"
 identifier	     = "g"
 movement_cost        = 1
-defense_bonus        = 0
+defense_bonus        = 10
 food                 = 2
 shield               = 0
 trade                = 0
@@ -329,19 +327,17 @@ warmer_drier_result  = "Desert"
 cooler_wetter_result = "Desert"
 cooler_drier_result  = "Tundra"
 flags                = "Starter", "CanHaveRiver"
-property_temperate   = 50
-property_green       = 50
 helptext	     = _("\
 Grasslands afford exceptional agricultural opportunities.\
 ")
 
 [terrain_hills]
-name                 = _("Hills")
+terrain_name         = _("Hills")
 graphic              = "hills"
 graphic_alt	     = "-"
 identifier	     = "h"
 movement_cost        = 2
-defense_bonus        = 100
+defense_bonus        = 20
 food                 = 1
 shield               = 0
 trade                = 0
@@ -372,20 +368,18 @@ warmer_drier_result  = "no"
 cooler_wetter_result = "no"
 cooler_drier_result  = "no"
 flags                = "Starter"
-property_mountainous = 30
-property_green       = 10
 helptext	     = _("\
 In addition to being amenable to agriculture, Hills are frequently\
  rich in resources.\
 ")
 
 [terrain_jungle]
-name                 = _("Jungle")
+terrain_name         = _("Jungle")
 graphic              = "jungle"
 graphic_alt	     = "-"
 identifier	     = "j"
 movement_cost        = 2
-defense_bonus        = 50
+defense_bonus        = 15
 food                 = 1
 shield               = 0
 trade                = 0
@@ -415,20 +409,18 @@ warmer_wetter_result = "no"
 warmer_drier_result  = "no"
 cooler_wetter_result = "Desert"
 cooler_drier_result  = "Tundra"
-property_tropical    = 50
-property_foliage     = 50
 helptext	     = _("\
 Jungles are densely overgrown, making agriculture somewhat\
  problematic.\
 ")
 
 [terrain_mountains]
-name                 = _("Mountains")
+terrain_name         = _("Mountains")
 graphic              = "mountains"
 graphic_alt	     = "-"
 identifier	     = "m"
 movement_cost        = 3
-defense_bonus        = 200
+defense_bonus        = 30
 food                 = 0
 shield               = 1
 trade                = 0
@@ -458,19 +450,18 @@ warmer_wetter_result = "no"
 warmer_drier_result  = "no"
 cooler_wetter_result = "no"
 cooler_drier_result  = "no"
-property_mountainous = 70
 helptext	     = _("\
 Mountains are regions of extreme altitude, making agriculture and\
  trade very difficult.\
 ")
 
 [terrain_ocean]
-name                 = _("Ocean")
+terrain_name         = _("Ocean")
 graphic              = "ocean"
 graphic_alt	     = "-"
 identifier	     = " "
 movement_cost        = 1
-defense_bonus        = 0
+defense_bonus        = 10
 food                 = 1
 shield               = 0
 trade                = 2
@@ -509,12 +500,12 @@ Ocean squares can never be polluted or subjected to fallout.\
 ")
 
 [terrain_plains]
-name                 = _("Plains")
+terrain_name         = _("Plains")
 graphic              = "plains"
 graphic_alt	     = "-"
 identifier	     = "p"
 movement_cost        = 1
-defense_bonus        = 0
+defense_bonus        = 10
 food                 = 1
 shield               = 1
 trade                = 0
@@ -545,20 +536,18 @@ warmer_drier_result  = "Desert"
 cooler_wetter_result = "Desert"
 cooler_drier_result  = "Tundra"
 flags                = "Starter"
-property_temperate   = 50
-property_green       = 50
 helptext	     = _("\
 Plains are very broad, sparse regions, which makes trade slightly\
  inconvenient.\
 ")
 
 [terrain_swamp]
-name                 = _("Swamp")
+terrain_name         = _("Swamp")
 graphic              = "swamp"
 graphic_alt	     = "-"
 identifier	     = "s"
 movement_cost        = 2
-defense_bonus        = 50
+defense_bonus        = 15
 food                 = 1
 shield               = 0
 trade                = 0
@@ -588,20 +577,18 @@ warmer_wetter_result = "no"
 warmer_drier_result  = "no"
 cooler_wetter_result = "Desert"
 cooler_drier_result  = "Tundra"
-property_wet         = 100
-property_foliage     = 10
 helptext	     = _("\
 Swamps suffer from an over-abundance of water, making agriculture\
  somewhat problematic.\
 ")
 
 [terrain_tundra]
-name                 = _("Tundra")
+terrain_name         = _("Tundra")
 graphic              = "tundra"
 graphic_alt	     = "-"
 identifier	     = "t"
 movement_cost        = 1
-defense_bonus        = 0
+defense_bonus        = 10
 food                 = 1
 shield               = 0
 trade                = 0
@@ -632,7 +619,6 @@ warmer_drier_result  = "no"
 cooler_wetter_result = "Arctic"
 cooler_drier_result  = "Arctic"
 flags                = "Starter", "NoBarbs"
-property_cold        = 50
 helptext	     = _("\
 Tundra are broad, cold regions, fit for some agriculture and little\
  else.\

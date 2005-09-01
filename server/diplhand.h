@@ -13,6 +13,8 @@
 #ifndef FC__DIPLHAND_H
 #define FC__DIPLHAND_H
 
+#define REPUTATION_LOSS_NUKE (GAME_MAX_REPUTATION * 0.03)
+
 #include "fc_types.h"
 
 #include "hand_gen.h"

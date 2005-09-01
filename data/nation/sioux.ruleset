@@ -2,19 +2,10 @@
 
 name=_("Sioux")
 plural=_("?plural:Sioux")
-groups=_("Medieval"), _("American")
-legend=_("The Sioux was a North American nation that fought several\
- decisive battles against the United States. It consisted of three distinct\
- groups of tribes: the Lakota, the Dakota and the Nakota.")
-
-; These are English translations of the names
-;   Tatanka Iyotake = Sitting Bull
-;   Tasunka Witko = Crazy Horse
-;   Taoyateduta  = Little Crow
-;   Makhpiya-Luta = Red Cloud
+class=_("Historical")
 leader="Sitting Bull", "Crazy Horse", "Little Crow", "Red Cloud"
 leader_sex="Male", "Male", "Male", "Male"
-flag="cheyenne"
+flag="f.cheyenne"
 flag_alt = "-"
 city_style = "European"
 
@@ -25,33 +16,17 @@ ruler_titles = { "government",      "male_title",      "female_title"
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
+tech_goals = "Monarchy", "Philosophy", "The Republic", "Iron Working"
 wonder="Sun Tzu's War Academy"
 government="Republic"
-civilwar_nations = "american", "canadian"
+civilwar_nations = "american"
 
-
-
-; big problem: we use names of more known battles between Indians and USA
-
-; Alternate idea: the city names could be names of the individual tribes
-; that made up the Sioux nation.
+;big problem I use names of more known battles between Indians and USA
 
 cities =
- "Big Mound",
- "Killdeer Knee",
- "Bear Paw",
- "Lame Deer",
- "Wolf Mountain",
- "Dull Knife",
- "Little Bighorn",
- "Blue Water",
- "Birch Coulee",
- "Wood Lake",
- "Whitestone Hill",
- "Dead Buffalo Lake",
- "Whitebird Creek",
- "Clearwater",
- "Big Hole",
- "Pine Ridge"
+  "Big Mound", "Killdeer Knee", "Bear Paw", "Lame Deer",
+  "Wolf Mountain", "Dull Knife", "Little Bighorn", "Blue Water",
+  "Birch Coulee", "Wood Lake", "Whitestone Hill", "Dead Buffalo Lake",
+  "Whitebird Creek", "Clearwater", "Big Hole", "Pine Ridge"
+
+

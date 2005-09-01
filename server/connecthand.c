@@ -21,7 +21,6 @@
 #include "capstr.h"
 #include "events.h"
 #include "fcintl.h"
-#include "game.h"
 #include "log.h"
 #include "mem.h"
 #include "packets.h"
@@ -71,7 +70,7 @@ static bool is_good_password(const char *password, char *msg);
 **************************************************************************/
 static void establish_new_connection(struct connection *pconn)
 {
-  struct conn_list *dest = pconn->self;
+  struct conn_list *dest = &pconn->self;
   struct player *pplayer;
   struct packet_server_join_reply packet;
   char hostname[512];
@@ -108,13 +107,10 @@ static void establish_new_connection(struct connection *pconn)
           pconn->username, pconn->addr);
   conn_list_iterate(game.est_connections, aconn) {
     if (aconn != pconn) {
-      notify_conn(aconn->self, _("Server: %s has connected from %s."),
+      notify_conn(&aconn->self, _("Server: %s has connected from %s."),
                   pconn->username, pconn->addr);
     }
   } conn_list_iterate_end;
-
-  send_rulesets(dest);
-  send_server_settings(dest);
 
   /* a player has already been created for this user, reconnect him */
   if ((pplayer = find_player_by_user(pconn->username))) {
@@ -124,24 +120,25 @@ static void establish_new_connection(struct connection *pconn)
       /* Player and other info is only updated when the game is running.
        * See the comment in lost_connection_to_client(). */
       send_packet_freeze_hint(pconn);
+      send_rulesets(dest);
       send_all_info(dest);
       send_game_state(dest, CLIENT_GAME_RUNNING_STATE);
       send_player_info(NULL,NULL);
       send_diplomatic_meetings(pconn);
       send_packet_thaw_hint(pconn);
-      dsend_packet_start_phase(pconn, game.info.phase);
+      send_packet_start_turn(pconn);
     }
 
     /* This must be done after the above info is sent, because it will
      * generate a player-packet which can't be sent until (at least)
      * rulesets are sent. */
-    if (game.info.auto_ai_toggle && pplayer->ai.control) {
+    if (game.auto_ai_toggle && pplayer->ai.control) {
       toggle_ai_player_direct(NULL, pplayer);
     }
 
     gamelog(GAMELOG_PLAYER, pplayer);
 
-  } else if (server_state == PRE_GAME_STATE && game.info.is_new_game) {
+  } else if (server_state == PRE_GAME_STATE && game.is_new_game) {
     if (!attach_connection_to_player(pconn, NULL)) {
       notify_conn(dest, _("Couldn't attach your connection to new player."));
       freelog(LOG_VERBOSE, "%s is not attached to a player", pconn->username);
@@ -163,12 +160,12 @@ static void establish_new_connection(struct connection *pconn)
                 pconn->username, pconn->player->name);
   }
 
-  /* if need be, tell who we're waiting on to end the game.info.turn */
-  if (server_state == RUN_GAME_STATE && game.info.turnblock) {
+  /* if need be, tell who we're waiting on to end the game turn */
+  if (server_state == RUN_GAME_STATE && game.turnblock) {
     players_iterate(cplayer) {
       if (cplayer->is_alive
           && !cplayer->ai.control
-          && !cplayer->phase_done
+          && !cplayer->turn_done
           && cplayer != pconn->player) {  /* skip current player */
         notify_conn(dest, _("Turn-blocking game play: "
                             "waiting on %s to finish turn..."),
@@ -182,11 +179,9 @@ static void establish_new_connection(struct connection *pconn)
     show_players(pconn);
   }
 
-  send_conn_info(dest, game.est_connections);
-  conn_list_append(game.est_connections, pconn);
-  send_conn_info(game.est_connections, dest);
-  send_player_info_c(NULL, dest);
-  reset_all_start_commands();
+  send_conn_info(dest, &game.est_connections);
+  conn_list_insert_back(&game.est_connections, pconn);
+  send_conn_info(&game.est_connections, dest);
   (void) send_server_info_to_metaserver(META_INFO);
 }
 
@@ -294,7 +289,7 @@ bool handle_login_request(struct connection *pconn,
         get_unique_guest_name(req->username);
 
         if (strncmp(old_guest_name, req->username, MAX_LEN_NAME) != 0) {
-          notify_conn(pconn->self, _("Warning: the guest name '%s' has been "
+          notify_conn(&pconn->self, _("Warning: the guest name '%s' has been "
                                       "taken, renaming to user '%s'."),
                       old_guest_name, req->username);
         }
@@ -319,7 +314,7 @@ bool handle_login_request(struct connection *pconn,
           sz_strlcpy(pconn->username, tmpname);
 
           freelog(LOG_ERROR, "Error reading database; connection -> guest");
-          notify_conn(pconn->self, _("There was an error reading the user "
+          notify_conn(&pconn->self, _("There was an error reading the user "
                                       "database, logging in as guest "
                                       "connection '%s'."), pconn->username);
           establish_new_connection(pconn);
@@ -413,7 +408,7 @@ bool handle_authentication_reply(struct connection *pconn, char *password)
     case USER_DB_SUCCESS:
       break;
     case USER_DB_ERROR:
-      notify_conn(pconn->self, _("Warning: There was an error in saving "
+      notify_conn(&pconn->self, _("Warning: There was an error in saving "
                                   "to the database. Continuing, but your "
                                   "stats will not be saved."));
       freelog(LOG_ERROR, "Error writing to database for %s", pconn->username);
@@ -550,9 +545,9 @@ void lost_connection_to_client(struct connection *pconn)
    * really lost (as opposed to server shutting it down) which would
    * trigger an error on send and recurse back to here.
    * Safe to unlink even if not in list: */
-  conn_list_unlink(game.est_connections, pconn);
+  conn_list_unlink(&game.est_connections, pconn);
   delayed_disconnect++;
-  notify_conn(game.est_connections, _("Lost connection: %s."), desc);
+  notify_conn(&game.est_connections, _("Game: Lost connection: %s."), desc);
 
   if (!pplayer) {
     delayed_disconnect--;
@@ -561,7 +556,7 @@ void lost_connection_to_client(struct connection *pconn)
 
   unattach_connection_from_player(pconn);
 
-  send_conn_info_remove(pconn->self, game.est_connections);
+  send_conn_info_remove(&pconn->self, &game.est_connections);
   if (server_state == RUN_GAME_STATE) {
     /* Player info is only updated when the game is running; this must be
      * done consistently or the client will end up with inconsistent errors.
@@ -580,13 +575,14 @@ void lost_connection_to_client(struct connection *pconn)
     } players_iterate_end;
   }
 
-  if (game.info.is_new_game
+  if (game.is_new_game
       && !pplayer->is_connected /* eg multiple controllers */
       && !pplayer->ai.control    /* eg created AI player */
-      && server_state == PRE_GAME_STATE) {
+      && (server_state == PRE_GAME_STATE 
+          || server_state == SELECT_RACES_STATE)) {
     server_remove_player(pplayer);
   } else {
-    if (game.info.auto_ai_toggle
+    if (game.auto_ai_toggle
         && !pplayer->ai.control
         && !pplayer->is_connected /* eg multiple controllers */) {
       toggle_ai_player_direct(NULL, pplayer);
@@ -596,7 +592,6 @@ void lost_connection_to_client(struct connection *pconn)
 
     check_for_full_turn_done();
   }
-  reset_all_start_commands();
 
   delayed_disconnect--;
 }
@@ -629,7 +624,7 @@ static void send_conn_info_arg(struct conn_list *src,
 {
   struct packet_conn_info packet;
   
-  conn_list_iterate(src, psrc) {
+  conn_list_iterate(*src, psrc) {
     package_conn_info(psrc, &packet);
     if (remove) {
       packet.used = FALSE;
@@ -671,13 +666,12 @@ bool attach_connection_to_player(struct connection *pconn,
 {
   /* if pplayer is NULL, attach to first non-connected player slot */
   if (!pplayer) {
-    if (game.info.nplayers > game.info.max_players 
-        || game.info.nplayers > MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS) {
+    if (game.nplayers > game.max_players 
+        || game.nplayers > MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS) {
       return FALSE; 
     } else {
-      pplayer = &game.players[game.info.nplayers];
-      server_player_init(pplayer, FALSE, TRUE);
-      game.info.nplayers++;
+      pplayer = &game.players[game.nplayers];
+      game.nplayers++;
     }
   }
 
@@ -687,13 +681,8 @@ bool attach_connection_to_player(struct connection *pconn,
   }
 
   pconn->player = pplayer;
-  conn_list_append(pplayer->connections, pconn);
-  conn_list_append(game.game_connections, pconn);
-
-  send_game_info(NULL);
-  send_player_info(pplayer, NULL);
-
-  aifill(game.aifill);
+  conn_list_insert_back(&pplayer->connections, pconn);
+  conn_list_insert_back(&game.game_connections, pconn);
 
   return TRUE;
 }
@@ -710,8 +699,8 @@ bool unattach_connection_from_player(struct connection *pconn)
     return FALSE; /* no player is attached to this conn */
   }
 
-  conn_list_unlink(pconn->player->connections, pconn);
-  conn_list_unlink(game.game_connections, pconn);
+  conn_list_unlink(&pconn->player->connections, pconn);
+  conn_list_unlink(&game.game_connections, pconn);
 
   pconn->player->is_connected = FALSE;
   pconn->observer = FALSE;

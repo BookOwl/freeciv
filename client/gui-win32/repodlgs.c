@@ -58,7 +58,7 @@ extern HINSTANCE freecivhinst;
 extern HWND root_window;
 extern struct connection aconnection;               
 int economy_improvement_type[B_LAST];   
-struct unit_type *activeunits_type[U_LAST];
+int activeunits_type[U_LAST]; 
 
 #define ID_OPTIONS_BASE 1000
 
@@ -84,12 +84,14 @@ science_dialog_update(void)
  
   char text[512];
 
-  Tech_type_id tech_id;
+  Tech_Type_id tech_id;
   int hist, id, steps;
 
   if (!science_dlg) return;            
   sz_strlcpy(text, get_report_title(_("Science")));
   sz_strlcat(text, science_dialog_text());
+  SetWindowText(GetDlgItem(science_dlg,ID_SCIENCE_TOP),text);
+  ListBox_ResetContent(GetDlgItem(science_dlg,ID_SCIENCE_LIST));
 
   SetWindowText(GetDlgItem(science_dlg, ID_SCIENCE_TOP), text);
   ListBox_ResetContent(GetDlgItem(science_dlg, ID_SCIENCE_LIST));
@@ -101,28 +103,26 @@ science_dialog_update(void)
 			     get_tech_name(game.player_ptr, tech_id));
       ListBox_SetItemData(GetDlgItem(science_dlg,ID_SCIENCE_LIST), id,
 			  tech_id);
-    }
+     }
   } tech_type_iterate_end;
 
+  my_snprintf(text, sizeof(text), "%d/%d",
+              game.player_ptr->research.bulbs_researched,
+	      total_bulbs_required(game.player_ptr));
+
+  SetWindowText(GetDlgItem(science_dlg, ID_SCIENCE_PROG), text);
   ComboBox_ResetContent(GetDlgItem(science_dlg, ID_SCIENCE_RESEARCH));
 
-  if (get_player_research(game.player_ptr)->researching == A_UNSET) {
+  if (game.player_ptr->research.researching == A_UNSET) {
     id = ComboBox_AddString(GetDlgItem(science_dlg, ID_SCIENCE_RESEARCH),
 			    get_tech_name(game.player_ptr, A_NONE));
     ComboBox_SetItemData(GetDlgItem(science_dlg, ID_SCIENCE_RESEARCH),
 			 id, A_NONE);
     ComboBox_SetCurSel(GetDlgItem(science_dlg, ID_SCIENCE_RESEARCH),
 		       id);
-    text[0] = '\0';
-  } else {
-    my_snprintf(text, sizeof(text), "%d/%d",
-		get_player_research(game.player_ptr)->bulbs_researched,
-		total_bulbs_required(game.player_ptr));
   }
 
-  SetWindowText(GetDlgItem(science_dlg, ID_SCIENCE_PROG), text);
-
-  if (!is_future_tech(get_player_research(game.player_ptr)->researching)) {
+  if (!is_future_tech(game.player_ptr->research.researching)) {
     tech_type_iterate(tech_id) {
       if (get_invention(game.player_ptr, tech_id) != TECH_REACHABLE) {
 	continue;
@@ -132,14 +132,14 @@ science_dialog_update(void)
 			      get_tech_name(game.player_ptr, tech_id));
       ComboBox_SetItemData(GetDlgItem(science_dlg, ID_SCIENCE_RESEARCH),
 			   id, tech_id);
-      if (tech_id == get_player_research(game.player_ptr)->researching) {
+      if (tech_id == game.player_ptr->research.researching) {
 	ComboBox_SetCurSel(GetDlgItem(science_dlg, ID_SCIENCE_RESEARCH),
 			   id);
       }
     } tech_type_iterate_end;
   } else {
-      tech_id = game.control.num_tech_types + 1
-		+ get_player_research(game.player_ptr)->future_tech;
+    /* FIXME future tech */
+      tech_id = game.num_tech_types + 1 + game.player_ptr->future_tech;
       id = ComboBox_AddString(GetDlgItem(science_dlg, ID_SCIENCE_RESEARCH),
 			      get_tech_name(game.player_ptr, tech_id));
       ComboBox_SetItemData(GetDlgItem(science_dlg, ID_SCIENCE_RESEARCH),
@@ -155,29 +155,29 @@ science_dialog_update(void)
         && advances[tech_id].req[0] != A_LAST
 	&& advances[tech_id].req[1] != A_LAST
         && (num_unknown_techs_for_goal(game.player_ptr, tech_id) < 11
-	    || tech_id == get_player_research(game.player_ptr)->tech_goal)) {
+	    || tech_id == game.player_ptr->ai.tech_goal)) {
       id = ComboBox_AddString(GetDlgItem(science_dlg,ID_SCIENCE_GOAL),
 			      get_tech_name(game.player_ptr, tech_id));
-       ComboBox_SetItemData(GetDlgItem(science_dlg,ID_SCIENCE_GOAL),
+      ComboBox_SetItemData(GetDlgItem(science_dlg,ID_SCIENCE_GOAL),
 			 id, tech_id);
-      if (tech_id == get_player_research(game.player_ptr)->tech_goal)
- 	ComboBox_SetCurSel(GetDlgItem(science_dlg,ID_SCIENCE_GOAL),
- 			   id);
-       
-     }
+      if (tech_id == game.player_ptr->ai.tech_goal)
+	ComboBox_SetCurSel(GetDlgItem(science_dlg,ID_SCIENCE_GOAL),
+			   id);
+      
+    }
   } tech_type_iterate_end;
 
-  if (get_player_research(game.player_ptr)->tech_goal == A_UNSET) {
+  if (game.player_ptr->ai.tech_goal == A_UNSET) {
     id = ComboBox_AddString(GetDlgItem(science_dlg, ID_SCIENCE_GOAL),
 			    get_tech_name(game.player_ptr, A_NONE));
     ComboBox_SetItemData(GetDlgItem(science_dlg, ID_SCIENCE_GOAL),
 			 id, A_NONE);
     ComboBox_SetCurSel(GetDlgItem(science_dlg, ID_SCIENCE_GOAL),
 		       id);
-   }
+  }
 
   steps = num_unknown_techs_for_goal(game.player_ptr,
-                            get_player_research(game.player_ptr)->tech_goal);
+                                     game.player_ptr->ai.tech_goal);
   my_snprintf(text, sizeof(text),
 	      PL_("(%d step)", "(%d steps)", steps), steps);
   SetWindowText(GetDlgItem(science_dlg,ID_SCIENCE_STEPS),text);
@@ -208,6 +208,8 @@ static LONG CALLBACK science_proc(HWND hWnd,
 	  if (HIWORD(wParam)==CBN_SELCHANGE) {
 	    to=ComboBox_GetCurSel(GetDlgItem(hWnd,ID_SCIENCE_RESEARCH));
 	    if (to!=LB_ERR) {
+	      char text[512];
+
 	      to = ComboBox_GetItemData(GetDlgItem(hWnd,
 						   ID_SCIENCE_RESEARCH),
 					to);
@@ -216,6 +218,10 @@ static LONG CALLBACK science_proc(HWND hWnd,
 		popup_help_dialog_typed(advances[to].name, HELP_TECH);
 		science_dialog_update();
 	      } else {
+		my_snprintf(text, sizeof(text), "%d/%d",
+			    game.player_ptr->research.bulbs_researched,
+			    total_bulbs_required(game.player_ptr));
+		SetWindowText(GetDlgItem(hWnd,ID_SCIENCE_PROG),text);
 		dsend_packet_player_research(&aconnection, to);
 	      }
 	    }
@@ -260,7 +266,7 @@ static LONG CALLBACK science_proc(HWND hWnd,
 
 **************************************************************************/
 void
-popup_science_dialog(bool raise)
+popup_science_dialog(bool make_modal)
 {
   if (!science_dlg)
     {
@@ -302,9 +308,6 @@ popup_science_dialog(bool raise)
     }
   science_dialog_update();
   ShowWindow(science_dlg,SW_SHOWNORMAL);
-  if (raise) {
-    SetFocus(science_dlg);
-  }
 }
 /**************************************************************************
 
@@ -424,7 +427,7 @@ static LONG CALLBACK economy_proc(HWND hWnd,
 
 **************************************************************************/
 void
-popup_economy_report_dialog(bool raise)
+popup_economy_report_dialog(bool make_modal)
 {
   int i;
   struct fcwin_box *hbox;
@@ -473,9 +476,6 @@ popup_economy_report_dialog(bool raise)
   economy_report_dialog_update();
   
   ShowWindow(economy_dlg,SW_SHOWNORMAL);
-  if (raise) {
-    SetFocus(economy_dlg);
-  }
 }
 /****************************************************************
 ...
@@ -531,15 +531,14 @@ static LONG CALLBACK activeunits_proc(HWND hWnd,
       
     case WM_NOTIFY:
       if (sel>=0) {
-	CHECK_UNIT_TYPE(activeunits_type[sel]);
-	if (can_upgrade_unittype(game.player_ptr,
-				 activeunits_type[sel]) != NULL) {
+	if ((unit_type_exists(activeunits_type[sel])) &&
+	    (can_upgrade_unittype(game.player_ptr,
+				  activeunits_type[sel]) != -1))    
 	  EnableWindow(GetDlgItem(activeunits_dlg,ID_MILITARY_UPGRADE),
 		       TRUE);
-	} else {
+	else
 	  EnableWindow(GetDlgItem(activeunits_dlg,ID_MILITARY_UPGRADE),
 		       FALSE);
-	}
       }
       break;
     case WM_COMMAND:    
@@ -556,15 +555,15 @@ static LONG CALLBACK activeunits_proc(HWND hWnd,
 	  if (sel>=0)
 	    {
 	      char buf[512];
-	      struct unit_type *ut1, *ut2;     
-
+	      int ut1,ut2;     
 	      ut1 = activeunits_type[sel];
-	      CHECK_UNIT_TYPE(ut1);
+	      if (!(unit_type_exists (ut1)))
+		break;
 	      ut2=can_upgrade_unittype(game.player_ptr,activeunits_type[sel]);
 	      my_snprintf(buf, sizeof(buf),
 			  _("Upgrade as many %s to %s as possible for %d gold each?\n"
 			    "Treasury contains %d gold."),
-			  ut1->name, ut2->name,
+			  unit_types[ut1].name, unit_types[ut2].name,
 			  unit_upgrade_price(game.player_ptr, ut1, ut2),
 			  game.player_ptr->economic.gold);    
 	      
@@ -618,45 +617,40 @@ activeunits_report_dialog_update(void)
 
     memset(unitarray, '\0', sizeof(unitarray));
     unit_list_iterate(game.player_ptr->units, punit) {
-      (unitarray[punit->type->index].active_count)++;
+      (unitarray[punit->type].active_count)++;
       if (punit->homecity) {
-        unitarray[punit->type->index].upkeep_shield += punit->upkeep[O_SHIELD];
-        unitarray[punit->type->index].upkeep_food += punit->upkeep[O_FOOD];
-	/* TODO: gold upkeep */
+        unitarray[punit->type].upkeep_shield += punit->upkeep;
+        unitarray[punit->type].upkeep_food += punit->upkeep_food;
       }
     }
 
     unit_list_iterate_end;
     city_list_iterate(game.player_ptr->cities,pcity) {
-      if (pcity->production.is_unit) {
-        (unitarray[pcity->production.value].building_count)++;
-      }
+      if (pcity->is_building_unit &&
+          (unit_type_exists (pcity->currently_building)))
+        (unitarray[pcity->currently_building].building_count)++;
     }
     city_list_iterate_end;
 
     k = 0;
     memset(&unittotals, '\0', sizeof(unittotals));
     unit_type_iterate(i) {
-      if ((unitarray[i->index].active_count > 0)
-	  || (unitarray[i->index].building_count > 0)) {
-        can = (can_upgrade_unittype(game.player_ptr, i) != NULL);
+      if ((unitarray[i].active_count > 0) || (unitarray[i].building_count > 0)) 
+{
+        can = (can_upgrade_unittype(game.player_ptr, i) != -1);
         my_snprintf(buf[0], sizeof(buf[0]), "%s", unit_name(i));
         my_snprintf(buf[1], sizeof(buf[1]), "%c", can ? '*': '-');
-        my_snprintf(buf[2], sizeof(buf[2]), "%3d",
-				   unitarray[i->index].building_count);
-        my_snprintf(buf[3], sizeof(buf[3]), "%3d",
-				   unitarray[i->index].active_count);
-        my_snprintf(buf[4], sizeof(buf[4]), "%3d",
-				   unitarray[i->index].upkeep_shield);
-        my_snprintf(buf[5], sizeof(buf[5]), "%3d",
-				   unitarray[i->index].upkeep_food);
+        my_snprintf(buf[2], sizeof(buf[2]), "%3d", unitarray[i].building_count);
+        my_snprintf(buf[3], sizeof(buf[3]), "%3d", unitarray[i].active_count);
+        my_snprintf(buf[4], sizeof(buf[4]), "%3d", unitarray[i].upkeep_shield);
+        my_snprintf(buf[5], sizeof(buf[5]), "%3d", unitarray[i].upkeep_food);
 	fcwin_listview_add_row(lv,k,AU_COL,row);
-        activeunits_type[k]=(unitarray[i->index].active_count > 0) ? i : NULL;
+        activeunits_type[k]=(unitarray[i].active_count > 0) ? i : U_LAST;
         k++;
-        unittotals.active_count += unitarray[i->index].active_count;
-        unittotals.upkeep_shield += unitarray[i->index].upkeep_shield;
-        unittotals.upkeep_food += unitarray[i->index].upkeep_food;
-        unittotals.building_count += unitarray[i->index].building_count;
+        unittotals.active_count += unitarray[i].active_count;
+        unittotals.upkeep_shield += unitarray[i].upkeep_shield;
+        unittotals.upkeep_food += unitarray[i].upkeep_food;
+        unittotals.building_count += unitarray[i].building_count;
       }
     } unit_type_iterate_end;
 
@@ -681,7 +675,7 @@ activeunits_report_dialog_update(void)
 
 **************************************************************************/
 void
-popup_activeunits_report_dialog(bool raise)
+popup_activeunits_report_dialog(bool make_modal)
 {
   if (!activeunits_dlg)
     {
@@ -734,9 +728,6 @@ popup_activeunits_report_dialog(bool raise)
     }
   activeunits_report_dialog_update();
   ShowWindow(activeunits_dlg,SW_SHOWNORMAL);
-  if (raise) {
-    SetFocus(activeunits_dlg);
-  }
 }
 
 /****************************************************************

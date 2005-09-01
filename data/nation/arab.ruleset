@@ -2,12 +2,12 @@
 
 name=_("Arab")
 plural=_("?plural:Arabs")
-groups=_("Ancient"), _("Medieval")
+class=_("Historical")
 legend=_("The Arab/Islamic civilization of 622AD-1495AD.")
 leader="Mohammad", "Umar", "Harun al-Rashid", "Saladin", 
 	"Al-Mansur", "Al-Hakim"
 leader_sex="Male", "Male", "Male", "Male", "Male", "Male"
-flag ="arab"
+flag ="f.arab"
 flag_alt = "-"
 city_style = "Classical"
 
@@ -17,8 +17,8 @@ ruler_titles = { "government",      "male_title",      "female_title"
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
+tech_goals="Monarchy", "Philosophy", "Chivalry", "Trade", "Bridge Building",
+           "Railroad"
 wonder="Oracle"
 government="Monarchy"
 civilwar_nations = "turk", "persian"

@@ -145,12 +145,8 @@ char *create_centered_string(const char *s)
   *i can be increased to get next string in the array argv[].
   It is an error for the option to exist but be an empty string.
   This doesn't use freelog() because it is used before logging is set up.
-
-  The argv strings are assumed to be in the local encoding; the returned
-  string is in the internal encoding.
 **************************************************************************/
-char *get_option_malloc(const char *option_name,
-			char **argv, int *i, int argc)
+char *get_option(const char *option_name, char **argv, int *i, int argc)
 {
   int len = strlen(option_name);
 
@@ -175,7 +171,7 @@ char *get_option_malloc(const char *option_name,
       }
     }
 
-    return local_to_internal_string_malloc(opt);
+    return opt;
   }
 
   return NULL;
@@ -375,38 +371,6 @@ static bool is_ascii(char ch)
 {
   /* this works with both signed and unsigned char's. */
   return ch >= ' ' && ch <= '~';
-}
-
-/****************************************************************************
-  Check if the name is safe security-wise.  This is intended to be used to
-  make sure an untrusted filename is safe to be used.  We disallow filename
-  extensions since we assume these will be appended automatically after
-  this function is called.
-****************************************************************************/
-bool is_safe_filename(const char *name)
-{
-  int i;
-
-  /* must not be NULL or empty */
-  if (!name || *name == '\0') {
-    return FALSE; 
-  }
-
-  /* Accept only alphanumerics and '-', '_'.  '.' is not allowed so
-   * the untrusted source cannot provide a filename extension (this must
-   * be done by the caller). */
-  for (i = 0; name[i]; i++) {
-    if (!((name[i] <= 'z' && name[i] >= 'a')
-          || (name[i] <= 'Z' && name[i] >= 'A')
-          || (name[i] <= '9' && name[i] >= '0')
-          || name[i] == '-'
-          || name[i] == '_')) {
-      return FALSE;
-    }
-  }
-
-  /* Otherwise, it is okay... */
-  return TRUE;
 }
 
 /***************************************************************
@@ -758,23 +722,30 @@ char *user_home_dir(void)
   Gets value once, and then caches result.
   Note the caller should not mess with returned string.
 ***************************************************************************/
-char *user_username(char *buf, size_t bufsz)
+const char *user_username(void)
 {
+  static char username[MAX_LEN_NAME];
+
   /* This function uses a number of different methods to try to find a
-   * username.  This username then has to be truncated to bufsz
+   * username.  This username then has to be truncated to MAX_LEN_NAME
    * characters (including terminator) and checked for sanity.  Note that
    * truncating a sane name can leave you with an insane name under some
    * charsets. */
+
+  if (username[0] != '\0') {
+    /* Username is already known; just return it. */
+    return username;
+  }
 
   /* If the environment variable $USER is present and sane, use it. */
   {
     char *env = getenv("USER");
 
     if (env) {
-      mystrlcpy(buf, env, bufsz);
-      if (is_ascii_name(buf)) {
-	freelog(LOG_VERBOSE, "USER username is %s", buf);
-	return buf;
+      sz_strlcpy(username, env);
+      if (is_ascii_name(username)) {
+	freelog(LOG_VERBOSE, "USER username is %s", username);
+	return username;
       }
     }
   }
@@ -786,10 +757,10 @@ char *user_username(char *buf, size_t bufsz)
     struct passwd *pwent = getpwuid(getuid());
 
     if (pwent) {
-      mystrlcpy(buf, pwent->pw_name, bufsz);
-      if (is_ascii_name(buf)) {
-	freelog(LOG_VERBOSE, "getpwuid username is %s", buf);
-	return buf;
+      sz_strlcpy(username, pwent->pw_name);
+      if (is_ascii_name(username)) {
+	freelog(LOG_VERBOSE, "getpwuid username is %s", username);
+	return username;
       }
     }
   }
@@ -802,23 +773,23 @@ char *user_username(char *buf, size_t bufsz)
     DWORD length = sizeof(name);
 
     if (GetUserName(name, &length)) {
-      mystrlcpy(buf, name, bufsz);
-      if (is_ascii_name(buf)) {
-	freelog(LOG_VERBOSE, "GetUserName username is %s", buf);
-	return buf;
+      sz_strlcpy(username, name);
+      if (is_ascii_name(username)) {
+	freelog(LOG_VERBOSE, "GetUserName username is %s", username);
+	return username;
       }
     }
   }
 #endif
 
 #ifdef ALWAYS_ROOT
-  mystrlcpy(buf, "name", bufsz);
+  sz_strlcpy(username, "name");
 #else
-  my_snprintf(buf, bufsz, "name%d", (int)getuid());
+  my_snprintf(username, MAX_LEN_NAME, "name%d", (int)getuid());
 #endif
-  freelog(LOG_VERBOSE, "fake username is %s", buf);
-  assert(is_ascii_name(buf));
-  return buf;
+  freelog(LOG_VERBOSE, "fake username is %s", username);
+  assert(is_ascii_name(username));
+  return username;
 }
 
 /***************************************************************************
@@ -935,7 +906,7 @@ static const char **get_data_dirs(int *num_dirs)
   The suffixes are removed from the filenames before the list is
   returned.
 ***************************************************************************/
-char **datafilelist(const char* suffix)
+const char **datafilelist(const char* suffix)
 {
   const char **dirs = get_data_dirs(NULL);
   char **file_list = NULL;
@@ -1015,7 +986,7 @@ char **datafilelist(const char* suffix)
   file_list = fc_realloc(file_list, (num_matches + 1) * sizeof(*file_list));
   file_list[num_matches] = NULL;
 
-  return file_list;
+  return (const char **)file_list;
 }
 
 /***************************************************************************
@@ -1104,20 +1075,19 @@ static int compare_file_name_ptrs(const void *a, const void *b)
   second. Returned "name"s will be truncated starting at the "infix"
   substring. The returned list must be freed.
 **************************************************************************/
-struct datafile_list *datafilelist_infix(const char *subpath,
-                                         const char *infix, bool nodups)
+struct datafile_list datafilelist_infix(const char *subpath,
+    const char *infix, bool nodups)
 {
   const char **dirs = get_data_dirs(NULL);
   int num_matches = 0;
   int dir_num;
-  struct datafile_list *res;
+  struct datafile_list res;
 
-  res = datafile_list_new();
+  datafile_list_init(&res);
 
   /* First assemble a full list of names. */
   for (dir_num = 0; dirs[dir_num]; dir_num++) {
-    size_t len = (subpath ? strlen(subpath) : 0) + strlen(dirs[dir_num]) + 2;
-    char path[len];
+    char path[PATH_MAX];
     DIR *dir;
     struct dirent *entry;
 
@@ -1159,7 +1129,7 @@ struct datafile_list *datafilelist_infix(const char *subpath,
 	  file->fullname = mystrdup(fullname);
 	  file->mtime = buf.st_mtime;
 
-	  datafile_list_append(res, file);
+	  datafile_list_insert_back(&res, file);
 	  num_matches++;
 	}
 
@@ -1173,7 +1143,7 @@ struct datafile_list *datafilelist_infix(const char *subpath,
   }
 
   /* Sort the list by name. */
-  datafile_list_sort(res, compare_file_name_ptrs);
+  datafile_list_sort(&res, compare_file_name_ptrs);
 
   if (nodups) {
     char *name = "";
@@ -1184,16 +1154,18 @@ struct datafile_list *datafilelist_infix(const char *subpath,
       } else {
 	free(pfile->name);
 	free(pfile->fullname);
-	datafile_list_unlink(res, pfile);
+	datafile_list_unlink(&res, pfile);
       }
     } datafile_list_iterate_end;
   }
 
   /* Sort the list by last modification time. */
-  datafile_list_sort(res, compare_file_mtime_ptrs);
+  datafile_list_sort(&res, compare_file_mtime_ptrs);
 
   return res;
 }
+
+
 
 /***************************************************************************
   As datafilename(), above, except die with an appropriate log
@@ -1463,7 +1435,7 @@ char *get_multicast_group(void)
 {
   static bool init = FALSE;
   static char *group = NULL;
-  static char *default_multicast_group = "225.1.1.1";
+  static char *default_multicast_group = "225.0.0.1";
   
   if (!init) {
     char *env = getenv("FREECIV_MULTICAST_GROUP");
@@ -1480,9 +1452,6 @@ char *get_multicast_group(void)
 /***************************************************************************
   Interpret ~/ in filename as home dir
   New path is returned in buf of size buf_size
-
-  This may fail if the path is too long.  It is better to use
-  interpret_tilde_alloc.
 ***************************************************************************/
 void interpret_tilde(char* buf, size_t buf_size, const char* filename)
 {
@@ -1495,31 +1464,6 @@ void interpret_tilde(char* buf, size_t buf_size, const char* filename)
   }
 }
 
-/***************************************************************************
-  Interpret ~/ in filename as home dir
-
-  The new path is returned in buf, as a newly allocated buffer.  The new
-  path will always be allocated and written, even if there is no ~ present.
-***************************************************************************/
-char *interpret_tilde_alloc(const char* filename)
-{
-  if (filename[0] == '~' && filename[1] == '/') {
-    const char *home = user_home_dir();
-    size_t sz;
-    char *buf;
-
-    filename += 2; /* Skip past "~/" */
-    sz = strlen(home) + strlen(filename) + 2;
-    buf = fc_malloc(sz);
-    my_snprintf(buf, sz, "%s/%s", home, filename);
-    return buf;
-  } else if (filename[0] == '~' && filename[1] == '\0') {
-    return mystrdup(user_home_dir());
-  } else  {
-    return mystrdup(filename);
-  }
-}
-
 /**************************************************************************
   If the directory "pathname" does not exist, recursively create all
   directories until it does.
@@ -1527,30 +1471,31 @@ char *interpret_tilde_alloc(const char* filename)
 bool make_dir(const char *pathname)
 {
   char *dir;
-  char *path = NULL;
+  char file[PATH_MAX];
+  char path[PATH_MAX];
 
-  path = interpret_tilde_alloc(pathname);
-  dir = path;
-  do {
-    dir = strchr(dir, '/');
-    /* We set the current / with 0, and restore it afterwards */
-    if (dir) {
-      *dir = 0;
-    }
+  interpret_tilde(file, sizeof(file), pathname);
+  path[0] = '\0';
+
+#ifndef WIN32_NATIVE
+  /* Ensure we are starting from the root in absolute pathnames. */
+  if (file[0] == '/') {
+    sz_strlcat(path, "/");
+  }
+#endif
+
+  for (dir = strtok(file, "/"); dir; dir = strtok(NULL, "/")) {
+    sz_strlcat(path, dir);
 
 #ifdef WIN32_NATIVE
     mkdir(path);
 #else
     mkdir(path, 0755);
 #endif
-      
-    if (dir) {
-      *dir = '/';
-      dir++;
-    }
-  } while (dir);
 
-  free(path);
+    sz_strlcat(path, "/");
+  }
+
   return TRUE;
 }
 

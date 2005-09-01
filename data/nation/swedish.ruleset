@@ -2,23 +2,14 @@
 
 name=_("Swedish")
 plural=_("?plural:Swedes")
-groups=_("Medieval"), _("Modern"), _("European")
-legend=_("The Kingdom of Sweden was christianized and consolidated as a political entity in the 12th century AD. The country rose to prominence as one of the great powers of Europe in the 17th century, following substantial military conquests by the so called Warrior Kings. However, due to a worsening economy and several disastrous defeats to Russia, Sweden soon lost most of its gained territory. The country has not been involved in an armed conflict since 1814.")
-leader=
-  "Erik Segergäll",
-  "Olof Skötkonung",
-  "Magnus Ladulås",
-  "Gustav Vasa",
-  "Erik IX",
-  "Karl XII",
-  "Gustav II Adolf",
-  "Kristina",
-  "Per Albin Hansson",
-  "Olof Palme",
-  "Anna Lindh"
+class=_("Modern")
 
-leader_sex="Male", "Male", "Male", "Male", "Male", "Male", "Male", "Female", "Male", "Male", "Female"
-flag="sweden"
+leader=
+  "Erik Segergäll", "Olof Skötkonung", "Gustav Vasa", "Erik", "Karl",
+  "Christine"
+
+leader_sex="Male", "Male", "Male", "Male", "Male", "Female"
+flag="f.sweden"
 flag_alt = "-"
 city_style = "European"
 ruler_titles = { "government",      "male_title",      "female_title"
@@ -28,11 +19,10 @@ ruler_titles = { "government",      "male_title",      "female_title"
 init_techs=""
 init_buildings=""
 
-init_government="Despotism"
-init_units=""
+tech_goals = "Map Making", "The Republic", "Trade", "Gunpowder"
 wonder="Magellan's Expedition"
 government="Democracy"
-civilwar_nations = "viking", "danish"
+civilwar_nations = "viking"
 
 ; /* <-- avoid gettext warnings
 ;
@@ -40,9 +30,6 @@ civilwar_nations = "viking", "danish"
 ;  =====================================================
 ;
 ;  BIRKA betyder Björkö
-;    Borde Birka egentligen inte flyttas till viking.ruleset?
-;    Det är väl långsökt att påstå att staden någonsin tillhört den
-;    svenska nationen.
 ;
 ;  BORG (källa: Våra ord)
 ;    fornsvenska islänska <borg>; gemensamt germanskt ord (tyska
@@ -65,7 +52,7 @@ civilwar_nations = "viking", "danish"
 ;    sammansättning av [köpa] och <-angr> (fornsvenska <-anger>) äng,
 ;    gräsplats
 ;
-;  JOKKMOKK samiska bäck-krök
+;  JOKK samiska bäck
 ;
 ;  OR flodmynning (i till exempel <Orsa>)
 ;
@@ -73,9 +60,6 @@ civilwar_nations = "viking", "danish"
 ;    fornsvenska <sal>, isländska <salr>; gemensamt germanskt ord
 ;    (tyska <Saal>), troligen med grundbetydelsen 'stort hus för
 ;    gästabud; boning' (i ortnamn till exempel <Sala>, <Uppsala>)
-;
-;  SEL (källa: sv.wikipedia)
-;    Den del av en älv där den blir bredare, och vattnet flyter stilla.
 ;
 ;  TORP (källa: Våra ord)
 ;    fornsvenska isländska <þorp> liten utgård, nyodling; gård, by,
@@ -102,48 +86,15 @@ civilwar_nations = "viking", "danish"
 ; */ <-- avoid gettext warnings
 
 cities =
- "Stockholm (ocean)",
- "Uppsala",
- "Sollentuna",
- "Sigtuna",
- "Birka (ocean)",
- "Norrköping (grassland)",
- "Linköping (grassland)",
- "Örebro (river)",
- "Gävle",
- "Västerås (hills)",
- "Göteborg",
- "Karlstad",
- "Växjö (ocean)",
- "Kalmar", "Visby",
- "Malmö (ocean)",
- "Helsingborg",
- "Ystad",
- "Lund",
- "Luleå (river, ocean)",
- "Kiruna (mountains)",
- "Halmstad",
- "Östersund (ocean)",
- "Nyköping (grassland)",
- "Söderhamn (ocean)",
- "Sundsvall (ocean)",
- "Piteå (river, ocean)",
- "Skellefteå (river, ocean)",
- "Umeå (river, ocean)",
- "Jönköping (grassland)",
- "Kristianstad",
- "Karlskrona",
- "Mora",
- "Oskarshamn (ocean)",
- "Hässleholm (ocean)",
- "Falun",
- "Viborg",
- "Holmgård (ocean)",
- "Orsa (ocean, river)",
- "Trollhättan",
- "Kiruna (mountains)",
- "Jokkmokk (river)",
- "Lycksele",
- "Sorsele",
- "Pajala",
- "Torneå"
+ "Stockholm (ocean)", "Uppsala", "Sollentuna", "Sigtuna",
+ "Birka (ocean)", "Norrköping (grassland)", "Linköping (grassland)",
+ "Örebro (river)", "Gävle", "Västerås (hills)", "Göteborg",
+ "Karlstad", "Växjö (ocean)", "Kalmar", "Visby", "Malmö (ocean)",
+ "Helsingborg", "Ystad",  "Lund", "Luleå (river)",
+ "Kiruna (mountains)", "Halmstad", "Östersund (ocean)",
+ "Nyköping (grassland)", "Söderhamn (ocean)", "Sundsvall (ocean)",
+ "Piteå (river)", "Skellefteå (river)", "Umeå (river)",
+ "Jönköping (grassland)", "Kristianstad",
+ "Karlskrona", "Mora", "Oskarshamn (ocean)", "Hässleholm (ocean)",
+ "Falun", "Viborg", "Holmgård (ocean)", "Orsa (ocean, river)",
+ "Trollhättan", "Jokkmokk (river)"

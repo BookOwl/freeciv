@@ -2,7 +2,7 @@
 
 name=_("Bosnia & Herzegovina")
 plural=_("?plural:Bosnians")
-groups=_("Modern"), _("European")
+class=_("Modern")
 leader="Kulin Ban", "Ban Stjepan", "Kotromanic", "Tvrtko",
        "Stjepan Tvrtko I", "Prijezda I", "Stjepan Tomas",
        "Filipovic Nikola", "Avdo Humo", "Seid Maglajlija",
@@ -11,8 +11,8 @@ leader_sex="Male", "Male", "Male", "Male",
            "Male", "Male", "Male",
            "Male","Male", "Male",
            "Male", "Male", "Male"
-flag="bosnia"
-flag_alt = "unknown"
+flag="f.bosnia"
+flag_alt = "f.unknown"
 city_style = "European"
 
 ruler_titles = { "government",      "male_title",      "female_title"
@@ -24,8 +24,8 @@ ruler_titles = { "government",      "male_title",      "female_title"
 init_techs=""
 init_buildings=""
 
-init_government="Despotism"
-init_units=""
+tech_goals="The Republic", "Navigation", "Iron Working", "Gunpowder",
+           "Explosives"
 wonder="Sun Tzu's War Academy"
 government="Republic"
 ciwilwar_nations="croatian", "serbian"

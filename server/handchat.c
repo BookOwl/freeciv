@@ -63,20 +63,20 @@ static void complain_ambiguous(struct connection *pconn, const char *name,
   switch(player_conn) {
   case 0:
     my_snprintf(message, sizeof(message),
-		_("%s is an ambiguous player name-prefix."), name);
+		_("Game: %s is an ambiguous player name-prefix."), name);
     break;
   case 1:
     my_snprintf(message, sizeof(message),
-		_("%s is an ambiguous connection name-prefix."), name);
+		_("Game: %s is an ambiguous connection name-prefix."), name);
     break;
   case 2:
     my_snprintf(message, sizeof(message),
-                _("%s is an anonymous name. Use connection name"), name);
+                _("Game: %s is an anonymous name. Use connection name"), name);
     break;
   default:
     assert(0);
   }
-  dsend_packet_chat_msg(pconn, message, -1, -1, E_CHAT_ERROR, -1);
+  dsend_packet_chat_msg(pconn, message, -1, -1, E_NOEVENT, -1);
 }
 
 /**************************************************************************
@@ -94,11 +94,11 @@ static void chat_msg_to_conn(struct connection *sender,
   form_chat_name(dest, dest_name, sizeof(dest_name));
 
   my_snprintf(message, sizeof(message), "->*%s* %s", dest_name, msg);
-  dsend_packet_chat_msg(sender, message, -1, -1, E_CHAT_MSG, sender->id);
+  dsend_packet_chat_msg(sender, message, -1, -1, E_NOEVENT, sender->id);
 
   if (sender != dest) {
     my_snprintf(message, sizeof(message), "*%s* %s", sender_name, msg);
-    dsend_packet_chat_msg(dest, message, -1, -1, E_CHAT_MSG, sender->id);
+    dsend_packet_chat_msg(dest, message, -1, -1, E_NOEVENT, sender->id);
   }
 }
 
@@ -115,13 +115,13 @@ static void chat_msg_to_player_multi(struct connection *sender,
   form_chat_name(sender, sender_name, sizeof(sender_name));
 
   my_snprintf(message, sizeof(message), "->[%s] %s", pdest->name, msg);
-  dsend_packet_chat_msg(sender, message, -1, -1, E_CHAT_MSG, sender->id);
+  dsend_packet_chat_msg(sender, message, -1, -1, E_NOEVENT, sender->id);
 
   my_snprintf(message, sizeof(message), "[%s] %s", sender_name, msg);
   conn_list_iterate(pdest->connections, dest_conn) {
     if (dest_conn != sender) {
       dsend_packet_chat_msg(dest_conn, message,
-			    -1, -1, E_CHAT_MSG, sender->id);
+			    -1, -1, E_NOEVENT, sender->id);
     }
   } conn_list_iterate_end;
 }
@@ -183,8 +183,8 @@ void handle_chat_msg_req(struct connection *pconn, char *message)
     /* this won't work if we aren't attached to a player */
     if (!pconn->player) {
       my_snprintf(chat, sizeof(chat),
-                  _("You are not attached to a player."));
-      dsend_packet_chat_msg(pconn, chat, -1, -1, E_CHAT_ERROR, -1);
+                  _("Game: You are not attached to a player."));
+      dsend_packet_chat_msg(pconn, chat, -1, -1, E_NOEVENT, -1);
       return;
     }
 
@@ -199,8 +199,8 @@ void handle_chat_msg_req(struct connection *pconn, char *message)
       if (!pplayers_allied(pconn->player, aplayer)) {
         continue;
       }
-      dlsend_packet_chat_msg(aplayer->connections, chat, -1, -1,
-			     E_CHAT_MSG, pconn->id);
+      dlsend_packet_chat_msg(&aplayer->connections, chat, -1, -1,
+			     E_NOEVENT, pconn->id);
     } players_iterate_end;
     return;
   }
@@ -263,9 +263,9 @@ void handle_chat_msg_req(struct connection *pconn, char *message)
         return;
       }
       if (pdest && match_result_player < M_PRE_AMBIGUOUS) {
-	int nconn = conn_list_size(pdest->connections);
+	int nconn = conn_list_size(&pdest->connections);
 	if (nconn==1) {
-	  chat_msg_to_conn(pconn, conn_list_get(pdest->connections, 0), cp+1);
+	  chat_msg_to_conn(pconn, conn_list_get(&pdest->connections, 0), cp+1);
 	  return;
 	} else if (nconn>1) {
 	  chat_msg_to_player_multi(pconn, pdest, cp+1);
@@ -285,8 +285,8 @@ void handle_chat_msg_req(struct connection *pconn, char *message)
       if (pdest && match_result_player < M_PRE_AMBIGUOUS) {
 	/* Would have done something above if connected */
 	my_snprintf(chat, sizeof(chat),
-		    _("%s is not connected."), pdest->name);
-	dsend_packet_chat_msg(pconn, chat, -1, -1, E_CHAT_ERROR, -1);
+		    _("Game: %s is not connected."), pdest->name);
+	dsend_packet_chat_msg(pconn, chat, -1, -1, E_NOEVENT, -1);
 	return;
       }
     }
@@ -297,13 +297,13 @@ void handle_chat_msg_req(struct connection *pconn, char *message)
     if (!cpblank || (cp < cpblank)) {
       if (double_colon) {
 	my_snprintf(chat, sizeof(chat),
-		    _("There is no connection by the name %s."), name);
+		    _("Game: There is no connection by the name %s."), name);
       } else {
 	my_snprintf(chat, sizeof(chat),
-		    _("There is no player nor connection by the name %s."),
+		    _("Game: There is no player nor connection by the name %s."),
 		    name);
       }
-      dsend_packet_chat_msg(pconn, chat, -1, -1, E_CHAT_ERROR, -1);
+      dsend_packet_chat_msg(pconn, chat, -1, -1, E_NOEVENT, -1);
       return;
     }
   }
@@ -311,6 +311,6 @@ void handle_chat_msg_req(struct connection *pconn, char *message)
   form_chat_name(pconn, sender_name, sizeof(sender_name));
   my_snprintf(chat, sizeof(chat),
 	      "<%s> %s", sender_name, message);
-  dlsend_packet_chat_msg(game.est_connections, chat,
-			 -1, -1, E_CHAT_MSG, pconn->id);
+  dlsend_packet_chat_msg(&game.est_connections, chat,
+			 -1, -1, E_NOEVENT, pconn->id);
 }

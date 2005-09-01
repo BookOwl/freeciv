@@ -17,7 +17,6 @@
 
 struct worklist;
 struct player_diplstate;
-struct requirement;
 
 struct data_in {
   const void *src;
@@ -34,11 +33,11 @@ struct data_out {
 };
 
 /* network string conversion */
-typedef char *(*DIO_PUT_CONV_FUN) (const char *src, size_t *length);
+typedef unsigned char *(*DIO_PUT_CONV_FUN) (const char *src, size_t *length);
 void dio_set_put_conv_callback(DIO_PUT_CONV_FUN fun);
 
 typedef bool(*DIO_GET_CONV_FUN) (char *dst, size_t ndst,
-				 const char *src, size_t nsrc);
+				 const unsigned char *src, size_t nsrc);
 void dio_set_get_conv_callback(DIO_GET_CONV_FUN fun);
 
 /* General functions */
@@ -71,7 +70,6 @@ void dio_get_bit_string(struct data_in *din, char *dest,
 void dio_get_tech_list(struct data_in *din, int *dest);
 void dio_get_worklist(struct data_in *din, struct worklist *pwl);
 void dio_get_diplstate(struct data_in *din, struct player_diplstate *pds);
-void dio_get_requirement(struct data_in *din, struct requirement *preq);
 
 void dio_get_uint8_vec8(struct data_in *din, int **values, int stop_value);
 void dio_get_uint16_vec8(struct data_in *din, int **values, int stop_value);
@@ -100,7 +98,6 @@ void dio_put_tech_list(struct data_out *dout, const int *value);
 void dio_put_worklist(struct data_out *dout, const struct worklist *pwl);
 void dio_put_diplstate(struct data_out *dout,
 		       const struct player_diplstate *pds);
-void dio_put_requirement(struct data_out *dout, const struct requirement *preq);
 
 void dio_put_uint8_vec8(struct data_out *dout, int *values, int stop_value);
 void dio_put_uint16_vec8(struct data_out *dout, int *values, int stop_value);

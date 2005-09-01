@@ -153,10 +153,7 @@ static int unit_order_callback(struct GUI *pOrder_Widget)
     key_unit_auto_explore();
     break;
   case ID_UNIT_ORDER_CONNECT:
-#if 0
-    /* TODO: multiple connect types */
     key_unit_connect();
-#endif
     break;
   case ID_UNIT_ORDER_PATROL:
     key_unit_patrol();
@@ -1028,16 +1025,16 @@ void update_menus(void)
 	case T_JUNGLE:  
 	  my_snprintf(cBuf, sizeof(cBuf),"%s %s%s %d %s",
 			_("Cut Down to"),
-			terrains[terrains[terrain].irrigation_result
-				].name
+			tile_types[tile_types[terrain].irrigation_result
+				].terrain_name
 			," (I)", time , PL_("turn", "turns", time));
 	  pOrder_Irrigation_Button->theme = pTheme->OCutDownForest_Icon;
 	  break;
 	case T_SWAMP:
 	  my_snprintf(cBuf, sizeof(cBuf),"%s %s%s %d %s",
 			_("Irrigate to"),
-			terrains[terrains[terrain].irrigation_result
-				].name
+			tile_types[tile_types[terrain].irrigation_result
+				].terrain_name
 			," (I)", time , PL_("turn", "turns", time));
 	  pOrder_Irrigation_Button->theme = pTheme->OIrrigation_Icon;
 	  break;
@@ -1062,8 +1059,8 @@ void update_menus(void)
 	case T_FOREST:
 	  my_snprintf(cBuf, sizeof(cBuf),"%s %s%s %d %s",
 			_("Irrigate to"),
-			terrains[terrains[terrain].mining_result
-				].name
+			tile_types[tile_types[terrain].mining_result
+				].terrain_name
 			," (M)", time , PL_("turn", "turns", time));
 	  pOrder_Mine_Button->theme = pTheme->OIrrigation_Icon;
 	  break;
@@ -1095,7 +1092,7 @@ void update_menus(void)
 	time = map_transform_time(pUnit->x, pUnit->y);
 	my_snprintf(cBuf, sizeof(cBuf),"%s %s%s %d %s",
 	  _("Transform to"),
-	  terrains[terrains[terrain].transform_result].name,
+	  tile_types[tile_types[terrain].transform_result].terrain_name,
 			" (M)", time , 
 			PL_("turn", "turns", time));
 	copy_chars_to_string16(pOrder_Transform_Button->string16, cBuf);
@@ -1224,6 +1221,12 @@ void update_menus(void)
 	local_hide(ID_UNIT_ORDER_AIRLIFT);
       }
 
+      if (!pTile->city && !is_air_unittype(pUnit->type)) {
+        local_show(ID_UNIT_ORDER_RETURN);
+      } else {
+	local_hide(ID_UNIT_ORDER_RETURN);
+      }
+      
       if (pTile->city && can_upgrade_unittype(game.player_ptr, pUnit->type) != -1) {
 	local_show(ID_UNIT_ORDER_UPGRADE);
       } else {

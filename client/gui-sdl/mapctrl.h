@@ -22,9 +22,9 @@
 #ifndef FC__MAPCTRL_H
 #define FC__MAPCTRL_H
 
-#include "fc_types.h"
-
 #include "mapctrl_g.h"
+
+struct unit;
 
 #define BLOCK_W			30
 #define HIDDEN_UNITS_W		36  /* BLOCK_W + DOUBLE_FRAME_WH */

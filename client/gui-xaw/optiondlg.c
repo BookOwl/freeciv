@@ -28,9 +28,8 @@
 #include <X11/Xaw/SimpleMenu.h>
 #include <X11/Xaw/Scrollbar.h>
 #include <X11/Xaw/SmeBSB.h>
-#include <X11/Xaw/AsciiText.h>
-#include <X11/Xaw/Toggle.h>
-#include <X11/Xaw/Viewport.h>
+#include <X11/Xaw/AsciiText.h>  
+#include <X11/Xaw/Toggle.h>     
 
 #include "events.h"
 #include "fcintl.h"
@@ -113,11 +112,9 @@ static void stropt_change_callback(Widget w,
 void create_option_dialog(void)
 {
   Widget option_form, option_label;
-  Widget option_viewport, option_scrollform;
   Widget option_ok_command, option_cancel_command;
   Widget prev_widget, longest_label = 0;
   size_t longest_len = 0;
-  Dimension width;
   
   option_dialog_shell =
     I_T(XtCreatePopupShell("optionpopup", transientShellWidgetClass,
@@ -131,15 +128,7 @@ void create_option_dialog(void)
     I_L(XtVaCreateManagedWidget("optionlabel", labelWidgetClass, 
 				option_form, NULL));
 
-  option_viewport =
-    XtVaCreateManagedWidget("optionviewport", viewportWidgetClass,
-			    option_form, NULL);
-
-  option_scrollform =
-    XtVaCreateManagedWidget("optionscrollform", formWidgetClass,
-			    option_viewport, NULL);   
-
-  prev_widget = NULL; /* init the prev-Widget */
+  prev_widget = option_label; /* init the prev-Widget */
   client_options_iterate(o) {
     const char *descr = _(o->description);
     size_t len = strlen(descr);
@@ -150,34 +139,16 @@ void create_option_dialog(void)
      */
     o->p_gui_data = (void *) prev_widget;
 
-    if (prev_widget) {
-      prev_widget = 
-	XtVaCreateManagedWidget("label", labelWidgetClass, option_scrollform,
-				XtNlabel, descr,
-				XtNfromVert, prev_widget,
-				NULL);
-    } else {
-      prev_widget = 
-	XtVaCreateManagedWidget("label", labelWidgetClass, option_scrollform,
-				XtNlabel, descr,
-				NULL);
-    }
-
-    /* 
-     * The addition of a scrollbar screws things up. There must be a
-     * better way to do this.
-     */
-    XtVaGetValues(prev_widget, XtNwidth, &width, NULL);
-    XtVaSetValues(prev_widget, XtNwidth, width + 15, NULL);
-
+    prev_widget = 
+      XtVaCreateManagedWidget("label", labelWidgetClass, option_form,
+			      XtNlabel, descr,
+			      XtNfromVert, prev_widget,
+			      NULL);
     if (len > longest_len) {
       longest_len = len;
       longest_label = prev_widget;
     }
   } client_options_iterate_end;
-
-  XtVaGetValues(longest_label, XtNwidth, &width, NULL);
-  XtVaSetValues(option_label, XtNwidth, width + 15, NULL);
 
   client_options_iterate(o) {
     /* 
@@ -187,20 +158,11 @@ void create_option_dialog(void)
      */
     switch (o->type) {
     case COT_BOOL:
-      if (o->p_gui_data) {
-	prev_widget =
-	  XtVaCreateManagedWidget("toggle", toggleWidgetClass,
-				  option_scrollform,
-				  XtNfromHoriz, option_label,
-				  XtNfromVert, o->p_gui_data,
-				  NULL);
-      } else {
-	prev_widget =
-	  XtVaCreateManagedWidget("toggle", toggleWidgetClass,
-				  option_scrollform,
-				  XtNfromHoriz, option_label,
-				  NULL);
-      }
+      prev_widget =
+	XtVaCreateManagedWidget("toggle", toggleWidgetClass, option_form,
+				XtNfromHoriz, longest_label,
+				XtNfromVert, o->p_gui_data,
+				NULL);
       XtAddCallback(prev_widget, XtNcallback, toggle_callback, NULL);
       break;
     case COT_STR:
@@ -209,20 +171,12 @@ void create_option_dialog(void)
 	const char **vals = (*o->p_string_vals)();
 	Widget popupmenu;
 
-	if (o->p_gui_data) {
-	  prev_widget =
-	    XtVaCreateManagedWidget(o->name, menuButtonWidgetClass,
-				    option_scrollform,
-				    XtNfromHoriz, option_label,
-				    XtNfromVert, o->p_gui_data,
-				    NULL);
-	} else {
-	  prev_widget =
-	    XtVaCreateManagedWidget(o->name, menuButtonWidgetClass,
-				    option_scrollform,
-				    XtNfromHoriz, option_label,
-				    NULL);
-	}
+	prev_widget = XtVaCreateManagedWidget(o->name,
+					      menuButtonWidgetClass,
+					      option_form,
+					      XtNfromHoriz, longest_label,
+					      XtNfromVert, o->p_gui_data,
+					      NULL);
 
 	popupmenu = XtVaCreatePopupShell("menu",
 					 simpleMenuWidgetClass,
@@ -243,27 +197,15 @@ void create_option_dialog(void)
 	  XtSetSensitive(prev_widget, FALSE);
 	}
 
-	/* There should be another way to set width of menu button */
-	XtVaSetValues(prev_widget, XtNwidth, 120 ,NULL);
-
 	break;
       }
       /* else fall through */
     case COT_INT:
-      if (o->p_gui_data) {
-	prev_widget =
-	  XtVaCreateManagedWidget("input", asciiTextWidgetClass,
-				  option_scrollform,
-				  XtNfromHoriz, option_label,
-				  XtNfromVert, o->p_gui_data,
-				  NULL);
-      } else {
-	prev_widget =
-	  XtVaCreateManagedWidget("input", asciiTextWidgetClass,
-				  option_scrollform,
-				  XtNfromHoriz, option_label,
-				  NULL);
-      }
+      prev_widget =
+	XtVaCreateManagedWidget("input", asciiTextWidgetClass, option_form,
+				XtNfromHoriz, longest_label,
+				XtNfromVert, o->p_gui_data,
+				NULL);
       break;
     }
 
@@ -273,12 +215,12 @@ void create_option_dialog(void)
 
   option_ok_command =
     I_L(XtVaCreateManagedWidget("optionokcommand", commandWidgetClass,
-				option_form, XtNfromVert, option_viewport,
+				option_form, XtNfromVert, prev_widget,
 				NULL));
   
   option_cancel_command =
     I_L(XtVaCreateManagedWidget("optioncancelcommand", commandWidgetClass,
-				option_form, XtNfromVert, option_viewport,
+				option_form, XtNfromVert, prev_widget,
 				NULL));
 	
   XtAddCallback(option_ok_command, XtNcallback, 

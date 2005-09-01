@@ -45,16 +45,12 @@ static int con_dump(enum rfc_status rfc_status, const char *message, ...);
 Function to handle log messages.
 This must match the log_callback_fn typedef signature.
 ************************************************************************/
-static void con_handle_log(int level, const char *message, bool file_too)
+static void con_handle_log(int level, const char *message)
 {
-  /* Write to console only when not written to file.
-     LOG_FATAL messages always to console too. */
-  if (! file_too || level <= LOG_FATAL) {
-    if (console_rfcstyle) {
-      con_write(C_LOG_BASE + level, "%s", message);
-    } else {
-      con_write(C_LOG_BASE + level, "%d: %s", level, message);
-    }
+  if(console_rfcstyle) {
+    con_write(C_LOG_BASE+level, "%s", message);
+  } else {
+    con_write(C_LOG_BASE+level, "%d: %s", level, message);
   }
 }
 
@@ -85,7 +81,9 @@ static void con_update_prompt(void)
 ************************************************************************/
 void con_log_init(const char *log_filename, int log_level)
 {
-  log_init(log_filename, log_level, con_handle_log);
+  bool has_file = (log_filename && strlen(log_filename) > 0);
+
+  log_init(log_filename, log_level, has_file ? NULL : con_handle_log);
 }
 
 #ifndef HAVE_LIBREADLINE
@@ -101,7 +99,7 @@ static int con_dump(enum rfc_status rfc_status, const char *message, ...)
   my_vsnprintf(buf, sizeof(buf), message, args);
   va_end(args);
 
-  if (console_prompt_is_showing) {
+  if(console_prompt_is_showing) {
     fc_printf("\n");
   }
   if ((console_rfcstyle) && (rfc_status >= 0)) {
@@ -138,7 +136,7 @@ this allows con_puts(C_COMMENT,"");
 ************************************************************************/
 void con_puts(enum rfc_status rfc_status, const char *str)
 {
-  if (console_prompt_is_showing) {
+  if(console_prompt_is_showing) {
     fc_printf("\n");
   }
   if ((console_rfcstyle) && (rfc_status >= 0)) {

@@ -2,19 +2,19 @@
 
 name=_("Hungarian")
 plural=_("?plural:Hungarians")
-groups=_("Medieval"), _("Modern"), _("European")
+class=_("Modern")
 leader="Árpád", "Szent István", "Károly Róbert",
        "Hunyadi Mátyás", "Mária Terézia", "Batthyány"
 leader_sex="Male", "Male", "Male", "Male", "Female", "Male"
-flag="hungary"
+flag="f.hungary"
 flag_alt = "-"
 city_style = "European"
 
 init_techs=""
 init_buildings=""
 
-init_government="Despotism"
-init_units=""
+tech_goals = "The Republic", "Iron Working", "Chivalry", "Theology",
+             "Gunpowder", "Railroad", "Industrialization"
 wonder="J.S. Bach's Cathedral"
 government="Republic"
 civilwar_nations = "lithuanian", "croatian", "slovenian"

@@ -20,16 +20,14 @@
 #include "gotohand.h"
 
 /* battle related */
-struct unit_type *find_a_unit_type(enum unit_role_id role,
-				   enum unit_role_id role_tech);
+int find_a_unit_type(int role, int role_tech);
 bool maybe_make_veteran(struct unit *punit);
 void unit_versus_unit(struct unit *attacker, struct unit *defender,
 		      bool bombard);
 
 /* move check related */
 bool is_airunit_refuel_point(struct tile *ptile, struct player *pplayer,
-			     const struct unit_type *punittype,
-			     bool unit_is_on_tile);
+			     Unit_Type_id type, bool unit_is_on_tile);
 
 /* turn update related */
 void player_restore_units(struct player *pplayer);
@@ -52,13 +50,11 @@ void pay_for_units(struct player *pplayer, struct city *pcity);
 void bounce_unit(struct unit *punit, bool verbose);
 
 /* creation/deletion/upgrading */
-void upgrade_unit(struct unit *punit, struct unit_type *to_unit,
-		  bool has_to_pay);
-struct unit *create_unit(struct player *pplayer, struct tile *ptile,
-			 struct unit_type *punittype,
+void upgrade_unit(struct unit *punit, Unit_Type_id to_unit, bool has_to_pay);
+struct unit *create_unit(struct player *pplayer, struct tile *ptile, Unit_Type_id type,
 			 int veteran_level, int homecity_id, int moves_left);
 struct unit *create_unit_full(struct player *pplayer, struct tile *ptile,
-			      struct unit_type *punittype, int veteran_level,
+			      Unit_Type_id type, int veteran_level,
 			      int homecity_id, int moves_left, int hp_left,
 			      struct unit *ptrans);
 void wipe_unit(struct unit *punit);
@@ -79,6 +75,7 @@ void unit_goes_out_of_sight(struct player *pplayer, struct unit *punit);
 
 /* doing a unit activity */
 void do_nuclear_explosion(struct player *pplayer, struct tile *ptile);
+bool try_move_unit(struct unit *punit, struct tile *ptile); 
 bool do_airline(struct unit *punit, struct city *city2);
 bool do_paradrop(struct unit *punit, struct tile *ptile);
 void load_unit_onto_transporter(struct unit *punit, struct unit *ptrans);

@@ -2,7 +2,7 @@
 
 name=_("Argentine")
 plural=_("?plural:Argentines")
-groups=_("Modern"), _("American")
+class=_("Modern")
 legend=_("Argentina is located on the south-eastern coast of South America.")
 leader="José de San Martín", "Juan Manuel de Rosas", "Justo Urquiza",
        "Bernardino Rivadavia", "Domingo Sarmiento", "Juan Domingo Perón",
@@ -10,15 +10,15 @@ leader="José de San Martín", "Juan Manuel de Rosas", "Justo Urquiza",
 leader_sex="Male", "Male", "Male",
            "Male", "Male", "Male",
            "Female", "Male"
-flag="argentina"
+flag="f.argentina"
 flag_alt = "-"
 city_style = "European"
 
 init_techs=""
 init_buildings=""
 
-init_government="Despotism"
-init_units=""
+tech_goals="Monarchy", "The Republic", "Iron Working", "Trade", "Navigation",
+           "Railroad", "Steel", "Industrialization", "Democracy"
 wonder="J.S. Bach's Cathedral"
 government="Democracy"
 civilwar_nations = "chilean"

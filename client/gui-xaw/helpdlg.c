@@ -490,8 +490,8 @@ static void create_help_page(enum help_page_type type)
       XtVaCreateManagedWidget("helpunittile",
 			      labelWidgetClass,
 			      help_right_form,
-			      XtNwidth, tileset_full_tile_width(tileset),
-			      XtNheight, tileset_full_tile_height(tileset),
+			      XtNwidth, UNIT_TILE_WIDTH,
+			      XtNheight, UNIT_TILE_HEIGHT,
 			      NULL);  
     XtAddCallback(help_unit_tile,
                   XtNdestroyCallback,free_bitmap_destroy_callback,
@@ -747,38 +747,21 @@ static void help_update_improvement(const struct help_item *pitem,
   
   create_help_page(HELP_IMPROVEMENT);
   
-  if (which<game.control.num_impr_types) {
-    struct impr_type *imp = get_improvement_type(which);
-    int i;
-    char req_buf[512];
-
+  if (which<game.num_impr_types) {
+    struct impr_type *imp = &improvement_types[which];
     sprintf(buf, "%d ", impr_build_shield_cost(which));
     xaw_set_label(help_improvement_cost_data, buf);
     sprintf(buf, "%d ", imp->upkeep);
     xaw_set_label(help_improvement_upkeep_data, buf);
-    /*if (imp->tech_req == A_LAST) {
+    if (imp->tech_req == A_LAST) {
       xaw_set_label(help_improvement_req_data, _("(Never)"));
     } else {
       xaw_set_label(help_improvement_req_data,
 		    advances[imp->tech_req].name);
-    }*/
-    
-    /* FIXME: this should show ranges and all the MAX_NUM_REQS reqs. 
-     * Currently it's limited to 1 req but this code is partially prepared
-     * to be extended.  Remember MAX_NUM_REQS is a compile-time
-     * definition. */
-    i = 0;
-    requirement_vector_iterate(&imp->reqs, preq) {
-      xaw_set_label(help_improvement_req_data,
-		    get_req_source_text(&preq->source,
-					req_buf, sizeof(req_buf)));
-      i++;
-      break;
-    } requirement_vector_iterate_end;
-/*    create_tech_tree(help_tech_tree, 0,
-                     imp->req[0].source.value.tech, 3);
-*/
-  } else {
+    }
+    create_tech_tree(help_tech_tree, 0, imp->tech_req, 3);
+  }
+  else {
     xaw_set_label(help_improvement_cost_data, "0 ");
     xaw_set_label(help_improvement_upkeep_data, "0 ");
     xaw_set_label(help_improvement_req_data, _("(Never)"));
@@ -799,48 +782,30 @@ static void help_update_wonder(const struct help_item *pitem,
   
   create_help_page(HELP_WONDER);
 
-  if (which<game.control.num_impr_types) {
-    struct impr_type *imp = get_improvement_type(which);
-    int i;
-    char req_buf[512];
-
+  if (which<game.num_impr_types) {
+    struct impr_type *imp = &improvement_types[which];
     sprintf(buf, "%d ", impr_build_shield_cost(which));
     xaw_set_label(help_improvement_cost_data, buf);
-    /*if (imp->tech_req == A_LAST) {
+    if (imp->tech_req == A_LAST) {
       xaw_set_label(help_improvement_req_data, _("(Never)"));
     } else {
       xaw_set_label(help_improvement_req_data,
 		    advances[imp->tech_req].name);
-    }*/
-
-     /* FIXME: this should show ranges and all the MAX_NUM_REQS reqs. 
-      * Currently it's limited to 1 req but this code is partially prepared
-      * to be extended.  Remember MAX_NUM_REQS is a compile-time
-      * definition. */
-    i = 0;
-    requirement_vector_iterate(&imp->reqs, preq) {
-      xaw_set_label(help_improvement_req_data,
-                   get_req_source_text(&preq->source,
-                                       req_buf, sizeof(req_buf)));
-      i++;
-      break;
-    } requirement_vector_iterate_end;
-
+    }
     if (tech_exists(imp->obsolete_by)) {
       xaw_set_label(help_wonder_obsolete_data,
 		    advances[imp->obsolete_by].name);
     } else {
       xaw_set_label(help_wonder_obsolete_data, _("(Never)"));
     }
-/*    create_tech_tree(help_tech_tree, 0, 
-                     imp->req[0].source.value.tech, 3);
-*/
-  } else {
+    create_tech_tree(help_tech_tree, 0, imp->tech_req, 3);
+  }
+  else {
     /* can't find wonder */
     xaw_set_label(help_improvement_cost_data, "0 ");
     xaw_set_label(help_improvement_req_data, _("(Never)"));
     xaw_set_label(help_wonder_obsolete_data, _("None"));
-    create_tech_tree(help_tech_tree, 0, game.control.num_tech_types, 3); 
+    create_tech_tree(help_tech_tree, 0, game.num_tech_types, 3); 
   }
   set_title_topic(pitem);
   helptext_building(buf, sizeof(buf), which, pitem->text);
@@ -851,45 +816,43 @@ static void help_update_wonder(const struct help_item *pitem,
 ...
 **************************************************************************/
 static void help_update_unit_type(const struct help_item *pitem,
-				  char *title, struct unit_type *punittype)
+				  char *title, int i)
 {
   char *buf = &long_buffer[0];
   
   create_help_page(HELP_UNIT);
-  if (punittype) {
-/*    struct unit_type *punittype = get_unit_type(i);*/
-    sprintf(buf, "%d ", unit_build_shield_cost(punittype));
+  if (i<game.num_unit_types) {
+    struct unit_type *utype = get_unit_type(i);
+    sprintf(buf, "%d ", unit_build_shield_cost(i));
     xaw_set_label(help_unit_cost_data, buf);
-    sprintf(buf, "%d ", punittype->attack_strength);
+    sprintf(buf, "%d ", utype->attack_strength);
     xaw_set_label(help_unit_attack_data, buf);
-    sprintf(buf, "%d ", punittype->defense_strength);
+    sprintf(buf, "%d ", utype->defense_strength);
     xaw_set_label(help_unit_def_data, buf);
-    sprintf(buf, "%d ", punittype->move_rate/3);
+    sprintf(buf, "%d ", utype->move_rate/3);
     xaw_set_label(help_unit_move_data, buf);
-    sprintf(buf, "%d ", punittype->firepower);
+    sprintf(buf, "%d ", utype->firepower);
     xaw_set_label(help_unit_fp_data, buf);
-    sprintf(buf, "%d ", punittype->hp);
+    sprintf(buf, "%d ", utype->hp);
     xaw_set_label(help_unit_hp_data, buf);
-    sprintf(buf, "%d ", punittype->vision_range);
+    sprintf(buf, "%d ", utype->vision_range);
     xaw_set_label(help_unit_visrange_data, buf);
-    xaw_set_label(help_unit_upkeep_data,
-		  helptext_unit_upkeep_str(punittype));
-    if (punittype->tech_requirement == A_LAST) {
+    xaw_set_label(help_unit_upkeep_data, helptext_unit_upkeep_str(i));
+    if(utype->tech_requirement==A_LAST) {
       xaw_set_label(help_improvement_req_data, _("(Never)"));
     } else {
       xaw_set_label(help_improvement_req_data,
-		    get_tech_name(game.player_ptr,
-				  punittype->tech_requirement));
+		    advances[utype->tech_requirement].name);
     }
-    create_tech_tree(help_tech_tree, 0, punittype->tech_requirement, 3);
-    if (punittype->obsoleted_by == U_NOT_OBSOLETED) {
+    create_tech_tree(help_tech_tree, 0, utype->tech_requirement, 3);
+    if(utype->obsoleted_by==-1) {
       xaw_set_label(help_wonder_obsolete_data, _("None"));
     } else {
       xaw_set_label(help_wonder_obsolete_data,
-		    punittype->obsoleted_by->name);
+		    get_unit_type(utype->obsoleted_by)->name);
     }
     /* add text for transport_capacity, fuel, and flags: */
-    helptext_unit(buf, punittype, pitem->text);
+    helptext_unit(buf, i, pitem->text);
     XtVaSetValues(help_text, XtNstring, buf, NULL);
   }
   else {
@@ -901,11 +864,11 @@ static void help_update_unit_type(const struct help_item *pitem,
     xaw_set_label(help_unit_hp_data, "0 ");
     xaw_set_label(help_unit_visrange_data, "0 ");
     xaw_set_label(help_improvement_req_data, _("(Never)"));
-    create_tech_tree(help_tech_tree, 0, game.control.num_tech_types, 3);
+    create_tech_tree(help_tech_tree, 0, game.num_tech_types, 3);
     xaw_set_label(help_wonder_obsolete_data, _("None"));
     XtVaSetValues(help_text, XtNstring, pitem->text, NULL);
   }
-  xaw_set_bitmap(help_unit_tile, create_overlay_unit(punittype));
+  xaw_set_bitmap(help_unit_tile, create_overlay_unit(i));
   set_title_topic(pitem);
 }
 
@@ -924,32 +887,22 @@ static void help_update_tech(const struct help_item *pitem, char *title, int i)
     create_tech_tree(help_tech_tree, 0, i, 3);
     helptext_tech(buf, i, pitem->text);
 
-    impr_type_iterate(impr_t) {
-      /*if(i==improvement_types[j].tech_req) 
+    impr_type_iterate(j) {
+      if(i==improvement_types[j].tech_req) 
 	sprintf(buf+strlen(buf), _("Allows %s.\n"),
 		improvement_types[j].name);
-      */
-
-       /* FIXME: need a more general mechanism for this, since this
-        * helptext needs to be shown in all possible req source types. */
-      requirement_vector_iterate(&get_improvement_type(impr_t)->reqs, preq) {
-	if (preq->source.type == REQ_BUILDING
-	    && preq->source.value.building == i) {
-	  sprintf(buf+strlen(buf), _("Allows %s.\n"),
-		  get_improvement_name(impr_t));
-        }
-      } requirement_vector_iterate_end;
-      if (i == get_improvement_type(impr_t)->obsolete_by)
+      if(i==improvement_types[j].obsolete_by)
 	sprintf(buf+strlen(buf), _("Obsoletes %s.\n"),
-		get_improvement_name(impr_t));
+		improvement_types[j].name);
     } impr_type_iterate_end;
 
-    unit_type_iterate(punittype) {
-      if (i == punittype->tech_requirement) 
-	sprintf(buf + strlen(buf), _("Allows %s.\n"), punittype->name);
+    unit_type_iterate(j) {
+      if(i==get_unit_type(j)->tech_requirement) 
+	sprintf(buf+strlen(buf), _("Allows %s.\n"), 
+		get_unit_type(j)->name);
     } unit_type_iterate_end;
 
-    for (j = 0; j < game.control.num_tech_types; j++) {
+    for (j = 0; j < game.num_tech_types; j++) {
       if(i==advances[j].req[0]) {
 	if(advances[j].req[1]==A_NONE)
 	  sprintf(buf+strlen(buf), _("Allows %s.\n"), 
@@ -970,7 +923,7 @@ static void help_update_tech(const struct help_item *pitem, char *title, int i)
   }
   else {
     create_help_page(HELP_TECH);
-    create_tech_tree(help_tech_tree, 0, game.control.num_tech_types, 3);
+    create_tech_tree(help_tech_tree, 0, game.num_tech_types, 3);
     strcpy(buf, pitem->text);
   }
   wordwrap_string(buf, 68);
@@ -981,118 +934,137 @@ static void help_update_tech(const struct help_item *pitem, char *title, int i)
 ...
 **************************************************************************/
 static void help_update_terrain(const struct help_item *pitem,
-				char *title, struct terrain *pterrain)
+				char *title, int i)
 {
   char *buf = &long_buffer[0];
+  struct tile_type *ptype = get_tile_type(i);
 
   create_help_page(HELP_TERRAIN);
   set_title_topic(pitem);
 
-  helptext_terrain(buf, pterrain, pitem->text);
+  helptext_terrain(buf, i, pitem->text);
   XtVaSetValues(help_text, XtNstring, buf, NULL);
 
-  if (pterrain) {
-    sprintf(buf, "%d/%d.%d",
-	    pterrain->movement_cost,
-	    (int)((pterrain->defense_bonus + 100) / 100),
-	    (pterrain->defense_bonus + 100) % 100 / 10);
-    xaw_set_label(help_terrain_movement_defense_data, buf);
+  if (i < T_COUNT)
+    {
+      sprintf (buf, "%d/%d.%d",
+	       ptype->movement_cost,
+	       (int)(ptype->defense_bonus/10), ptype->defense_bonus%10);
+      xaw_set_label (help_terrain_movement_defense_data, buf);
 
-    sprintf(buf, "%d/%d/%d",
-	    pterrain->output[O_FOOD],
-	    pterrain->output[O_SHIELD],
-	    pterrain->output[O_TRADE]);
-    xaw_set_label(help_terrain_food_shield_trade_data, buf);
+      sprintf (buf, "%d/%d/%d",
+	       ptype->food,
+	       ptype->shield,
+	       ptype->trade);
+      xaw_set_label (help_terrain_food_shield_trade_data, buf);
 
-    if (*(pterrain->special[0].name))	{
-      sprintf(buf, _("%s F/R/T:"), pterrain->special[0].name);
-      xaw_set_label(help_terrain_special_1, buf);
-      sprintf(buf, "%d/%d/%d",
-	      pterrain->special[0].output[O_FOOD],
-	      pterrain->special[0].output[O_SHIELD],
-	      pterrain->special[0].output[O_TRADE]);
-      xaw_set_label(help_terrain_special_1_data, buf);
-    } else {
-      xaw_set_label(help_terrain_special_1, "");
-      xaw_set_label(help_terrain_special_1_data, "");
+      if (*(ptype->special_1_name))
+	{
+	  sprintf (buf, _("%s F/R/T:"),
+		   ptype->special_1_name);
+	  xaw_set_label (help_terrain_special_1, buf);
+	  sprintf (buf, "%d/%d/%d",
+		   ptype->food_special_1,
+		   ptype->shield_special_1,
+		   ptype->trade_special_1);
+	  xaw_set_label (help_terrain_special_1_data, buf);
+	} else {
+	  xaw_set_label (help_terrain_special_1, "");
+	  xaw_set_label (help_terrain_special_1_data, "");
+	}
+
+      if (*(ptype->special_2_name))
+	{
+	  sprintf (buf, _("%s F/R/T:"),
+		   ptype->special_2_name);
+	  xaw_set_label (help_terrain_special_2, buf);
+	  sprintf (buf, "%d/%d/%d",
+		   ptype->food_special_2,
+		   ptype->shield_special_2,
+		   ptype->trade_special_2);
+	  xaw_set_label (help_terrain_special_2_data, buf);
+	} else {
+	  xaw_set_label (help_terrain_special_2, "");
+	  xaw_set_label (help_terrain_special_2_data, "");
+	}
+
+      if (ptype->road_trade_incr > 0)
+	{
+	  sprintf (buf, _("+%d Trade / %d"),
+		   ptype->road_trade_incr,
+		   ptype->road_time);
+	}
+      else if (ptype->road_time > 0)
+	{
+	  sprintf (buf, _("no extra / %d"),
+		   ptype->road_time);
+	}
+      else
+	{
+	  strcpy (buf, _("n/a"));
+	}
+      xaw_set_label (help_terrain_road_result_time_data, buf);
+
+      strcpy (buf, _("n/a"));
+      if (ptype->irrigation_result == i)
+	{
+	  if (ptype->irrigation_food_incr > 0)
+	    {
+	      sprintf (buf, _("+%d Food / %d"),
+		       ptype->irrigation_food_incr,
+		       ptype->irrigation_time);
+	    }
+	}
+      else if (ptype->irrigation_result != T_NONE)
+	{
+	  sprintf (buf, "%s / %d",
+		   get_tile_type(ptype->irrigation_result)->terrain_name,
+		   ptype->irrigation_time);
+	}
+      xaw_set_label (help_terrain_irrigation_result_time_data, buf);
+
+      strcpy (buf, _("n/a"));
+      if (ptype->mining_result == i)
+	{
+	  if (ptype->mining_shield_incr > 0)
+	    {
+	      sprintf (buf, _("+%d Res. / %d"),
+		       ptype->mining_shield_incr,
+		       ptype->mining_time);
+	    }
+	}
+      else if (ptype->mining_result != T_NONE)
+	{
+	  sprintf (buf, "%s / %d",
+		   get_tile_type(ptype->mining_result)->terrain_name,
+		   ptype->mining_time);
+	}
+      xaw_set_label (help_terrain_mining_result_time_data, buf);
+
+      if (ptype->transform_result != T_NONE)
+	{
+	  sprintf (buf, "%s / %d",
+		   get_tile_type(ptype->transform_result)->terrain_name,
+		   ptype->transform_time);
+	} else {
+	  strcpy (buf, _("n/a"));
+	}
+      xaw_set_label (help_terrain_transform_result_time_data, buf);
     }
-
-    if (*(pterrain->special[1].name)) {
-      sprintf(buf, _("%s F/R/T:"), pterrain->special[1].name);
-      xaw_set_label(help_terrain_special_2, buf);
-      sprintf(buf, "%d/%d/%d",
-	      pterrain->special[1].output[O_FOOD],
-	      pterrain->special[1].output[O_SHIELD],
-	      pterrain->special[1].output[O_TRADE]);
-      xaw_set_label(help_terrain_special_2_data, buf);
-    } else {
-      xaw_set_label(help_terrain_special_2, "");
-      xaw_set_label(help_terrain_special_2_data, "");
-    }
-
-    if (pterrain->road_trade_incr > 0) {
-      sprintf(buf, _("+%d Trade / %d"),
-	      pterrain->road_trade_incr,
-	      pterrain->road_time);
-    } else if (pterrain->road_time > 0) {
-      sprintf(buf, _("no extra / %d"), pterrain->road_time);
-    } else {
-      strcpy(buf, _("n/a"));
-    }
-    xaw_set_label(help_terrain_road_result_time_data, buf);
-
-    strcpy(buf, _("n/a"));
-    if (pterrain->irrigation_result == pterrain) {
-      if (pterrain->irrigation_food_incr > 0) {
-	sprintf(buf, _("+%d Food / %d"),
-		pterrain->irrigation_food_incr,
-		pterrain->irrigation_time);
-      }
-    } else if (pterrain->irrigation_result != T_NONE) {
-      sprintf(buf, "%s / %d",
-	      pterrain->irrigation_result->name,
-	      pterrain->irrigation_time);
-    }
-    xaw_set_label(help_terrain_irrigation_result_time_data, buf);
-
-    strcpy(buf, _("n/a"));
-    if (pterrain->mining_result == pterrain) {
-      if (pterrain->mining_shield_incr > 0) {
-	sprintf(buf, _("+%d Res. / %d"),
-		pterrain->mining_shield_incr,
-		pterrain->mining_time);
-      }
-    } else if (pterrain->mining_result != T_NONE) {
-      sprintf(buf, "%s / %d",
-	      pterrain->mining_result->name,
-	      pterrain->mining_time);
-    }
-    xaw_set_label (help_terrain_mining_result_time_data, buf);
-
-    if (pterrain->transform_result != T_NONE) {
-      sprintf(buf, "%s / %d",
-	      pterrain->transform_result->name,
-	      pterrain->transform_time);
-    } else {
-      strcpy(buf, _("n/a"));
-    }
-    xaw_set_label (help_terrain_transform_result_time_data, buf);
-  }
 }
 
 /**************************************************************************
   This is currently just a text page, with special text:
 **************************************************************************/
 static void help_update_government(const struct help_item *pitem,
-				   char *title,
-				   struct government *pgovernment)
+				   char *title, struct government *gov)
 {
   char *buf = &long_buffer[0];
 
-  if (!pgovernment) {
+  if (gov==NULL) {
     strcat(buf, pitem->text);
   } else {
-    helptext_government(buf, pgovernment, pitem->text);
+    helptext_government(buf, gov-governments, pitem->text);
   }
   create_help_page(HELP_TEXT);
   set_title_topic(pitem);
@@ -1116,12 +1088,12 @@ static void help_update_dialog(const struct help_item *pitem)
   switch(pitem->type) {
   case HELP_IMPROVEMENT:
     i = find_improvement_by_name(top);
-    if(i!=B_LAST && is_great_wonder(i)) i = B_LAST;
+    if(i!=B_LAST && is_wonder(i)) i = B_LAST;
     help_update_improvement(pitem, top, i);
     break;
   case HELP_WONDER:
     i = find_improvement_by_name(top);
-    if(i!=B_LAST && !is_great_wonder(i)) i = B_LAST;
+    if(i!=B_LAST && !is_wonder(i)) i = B_LAST;
     help_update_wonder(pitem, top, i);
     break;
   case HELP_UNIT:

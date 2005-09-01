@@ -17,9 +17,6 @@
 
 #include "fc_types.h"
 
-void set_city_names_font_sizes(int city_names_font_size,
-			       int city_productions_font_size);
-
 void ui_init(void);
 void ui_main(int argc, char *argv[]);
 void update_conn_list_dialog(void);
@@ -29,8 +26,6 @@ void remove_net_input(void);
 
 void set_unit_icon(int idx, struct unit *punit);
 void set_unit_icons_more_arrow(bool onoff);
-
-void add_idle_callback(void (callback)(void *), void *data);
 
 extern const char *client_string;
 
