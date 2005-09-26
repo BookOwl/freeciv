@@ -15,11 +15,11 @@
 
 #include <X11/Intrinsic.h>
 
-#include "fcintl.h"
-
 #include "dialogs_g.h"
 
-void popup_revolution_dialog(struct government *pgovernment);
+struct tile;
+
+void popup_revolution_dialog(int government);
 Widget popup_message_dialog(Widget parent, const char *shellname,
 			    const char *text, ...);
 void destroy_message_dialog(Widget button);

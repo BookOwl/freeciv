@@ -27,7 +27,7 @@
 
 #include "log.h"
 
-static char *log_filename = NULL;
+static const char *log_filename;
 static log_callback_fn log_callback;
 
 int logd_init_counter = 1;
@@ -178,11 +178,8 @@ void log_init(const char *filename, int initial_level,
 	      log_callback_fn callback)
 {
   fc_log_level = initial_level;
-  if (log_filename) {
-    free(log_filename);
-  }
   if (filename && strlen(filename) > 0) {
-    log_filename = strdup(filename);
+    log_filename = filename;
   } else {
     log_filename = NULL;
   }
@@ -237,14 +234,14 @@ struct logdebug_afile_info logdebug_update(const char *file)
 Unconditionally print a simple string.
 Let the callback do its own level formating and add a '\n' if it wants.
 **************************************************************************/
-static void log_write(FILE *fs, int level, const char *message)
+static void log_write(FILE *fs, int level, char *message)
 {
+  if ((!log_filename) && log_callback) {
+    log_callback(level, message);
+  }
   if (log_filename || (!log_callback)) {
     fc_fprintf(fs, "%d: %s\n", level, message);
     fflush(fs);
-  }
-  if (log_callback) {
-    log_callback(level, message, log_filename != NULL);
   }
 }
 
@@ -271,9 +268,8 @@ void vreal_freelog(int level, const char *message, va_list ap)
 
     if (log_filename) {
       if(!(fs=fopen(log_filename, "a"))) {
-	fc_fprintf(stderr,
-		   _("Couldn't open logfile: %s for appending \"%s\".\n"), 
-		   log_filename, message);
+	fc_fprintf(stderr, _("Couldn't open logfile: %s for appending.\n"), 
+		log_filename);
 	exit(EXIT_FAILURE);
       }
     } else {

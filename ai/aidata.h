@@ -19,9 +19,6 @@
 #include "shared.h"		/* bool type */
 
 #include "fc_types.h"
-#include "improvement.h"
-
-#include "advdiplomacy.h"
 
 /* 
  * This file and aidata.c contains global data structures for the AI
@@ -31,7 +28,6 @@
 
 enum ai_improvement_status {
   AI_IMPR_CALCULATE, /* Calculate exactly its effect */
-  AI_IMPR_CALCULATE_FULL, /* Calculate including tile changes */
   AI_IMPR_ESTIMATE,  /* Estimate its effect using wild guesses */
   AI_IMPR_LAST
 };
@@ -51,8 +47,6 @@ struct ai_dip_intel {
 
   char spam;      /* timer to avoid spamming a player with chat */
   int distance;   /* average distance to that player's cities */
-  int countdown;  /* we're on a countdown to war declaration */
-  enum war_reason war_reason; /* why we declare war */
   char ally_patience; /* we EXPECT our allies to help us! */
   char asked_about_peace;     /* don't ask again */
   char asked_about_alliance;  /* don't nag! */
@@ -62,23 +56,25 @@ struct ai_dip_intel {
 
 BV_DEFINE(bv_id, MAX_NUM_ID);
 struct ai_data {
-  /* The Wonder City */
-  int wonder_city;
-
   /* Precalculated info about city improvements */
   enum ai_improvement_status impr_calc[MAX_NUM_ITEMS];
-  enum req_range impr_range[MAX_NUM_ITEMS];
+  enum effect_range impr_range[MAX_NUM_ITEMS];
 
   /* AI diplomacy and opinions on other players */
   struct {
+    int acceptable_reputation;
+    int acceptable_reputation_for_ceasefire;
     struct ai_dip_intel player_intel[MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS];
     enum winning_strategy strategy;
     int timer; /* pursue our goals with some stubbornness, in turns */
+    int countdown;          /* countdown to we actually declare war */
+    struct player *target;    /* Concentrate on this player */
     char love_coeff;          /* Reduce love with this % each turn */
     char love_incr;           /* Modify love with this fixed amount */
     int req_love_for_peace;
     int req_love_for_alliance;
     int req_love_for_ceasefire;
+    struct player *alliance_leader; /* Who is leading our alliance */
     struct player *spacerace_leader; /* who is leading the space pack */
     struct player *production_leader;
   } diplomacy;
@@ -117,7 +113,7 @@ struct ai_data {
       int upgradeable;
     } units;
     int *workers;     /* cities to workers on continent*/
-    int *cities;      /* number of cities we have on continent */
+    int *cities;      /* number of cities on continent */
     int passengers;   /* number of passengers waiting for boats */
     int boats;
     int available_boats;
@@ -146,23 +142,17 @@ struct ai_data {
   /* Goals */
   struct {
     struct {
-      struct government *gov;        /* The ideal government */
+      int idx;        /* Id of the ideal government */
       int val;        /* Its value (relative to the current gov) */
       int req;        /* The tech requirement for the ideal gov */
     } govt;
-    struct government *revolution;   /* The best gov of the now available */
+    int revolution;   /* The best gov of the now available */
   } goal;
-  
-  /* If the ai doesn't want/need any research */
-  bool wants_no_science;
-  
-  /* AI doesn't like having more than this number of cities */
-  int max_num_cities;
 };
 
 void ai_data_init(struct player *pplayer);
-void ai_data_phase_init(struct player *pplayer, bool is_new_phase);
-void ai_data_phase_done(struct player *pplayer);
+void ai_data_turn_init(struct player *pplayer);
+void ai_data_turn_done(struct player *pplayer);
 
 void ai_data_init(struct player *pplayer);
 void ai_data_analyze_rulesets(struct player *pplayer);

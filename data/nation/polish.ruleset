@@ -1,8 +1,8 @@
 [nation_polish]
 
 name=_("Polish")
-plural=_("?plural:Poles")
-groups=_("Medieval"), _("Modern"), _("European")
+plural=_("?plural:Polish")
+class=_("Modern")
 leader="Mieszko I",
        "Bolesław Chrobry",
        "Władysław Łokietek", 
@@ -16,7 +16,7 @@ leader="Mieszko I",
        "Józef Piłsudski"
 leader_sex="Male", "Male", "Male", "Male", "Female",
            "Male", "Male", "Male", "Male", "Male", "Male"
-flag="poland"
+flag="f.poland"
 flag_alt = "-"
 city_style = "European"
 
@@ -31,8 +31,14 @@ ruler_titles = { "government",      "male_title",      "female_title"
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
+tech_goals = "The Republic",
+             "Trade",
+             "Engineering",
+             "Monotheism",
+             "Gunpowder",
+             "Railroad"
+wonder="Copernicus' Observatory"
+government="Democracy"
 civilwar_nations = "lithuanian", "silesian", "ukrainian"
 
 cities =
@@ -51,7 +57,7 @@ cities =
 	"Gorzów",
 	"Zielona Góra (hills, forest)",
 	"Poznań",
-	"Łódz",
+	"Łódź",
 	"Lublin",
 	"Kielce",
 	"Opole",
@@ -107,7 +113,7 @@ cities =
 	"Kołobrzeg",
 	"Sopot (ocean)",
 	"Wolin",
-	"Świnoujście (ocean)",
+	"Świnoujscie (ocean)",
 	"Zakopane (mountains)",
 	"Stargard",
 	"Malbork",

@@ -2,7 +2,7 @@
 
 name=_("Roman")
 plural=_("?plural:Romans")
-groups=_("Ancient")
+class=_("Historical")
 legend=_("Rome was, in legend, founded by Romulus in 753 BC.  At its\
  height, Rome controlled nearly all of Europe, northern Africa and\
  Mesopotamia.")
@@ -11,8 +11,8 @@ leader="Caesar", "Augustus", "Vespasian", "Nero", "Trajan", "Marcus Aurelius",
        "Livia", "Messalina"
 leader_sex="Male", "Male", "Male", "Male", "Male", "Male", "Male", "Male",
            "Female", "Female"
-flag = "rome"
-flag_alt = "italy"
+flag = "f.rome"
+flag_alt = "f.italy"
 city_style = "Classical"
 
 ruler_titles = { "government",      "male_title",      "female_title"
@@ -22,8 +22,10 @@ ruler_titles = { "government",      "male_title",      "female_title"
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
+tech_goals = "The Republic", "The Wheel", "Iron Working", "Construction",
+             "Railroad"
+wonder="Leonardo's Workshop"
+government="Republic"
 civilwar_nations = "italian", "spanish", "french"
 
 cities =

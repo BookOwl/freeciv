@@ -28,7 +28,6 @@
 #include "log.h"
 #include "map.h"
 #include "mem.h"
-#include "movement.h"
 #include "packets.h"
 #include "player.h"
 #include "rand.h"
@@ -46,7 +45,6 @@
 #include "settlers.h"
 #include "spacerace.h"
 #include "srv_main.h"
-#include "techtools.h"
 #include "unittools.h"
 
 #include "aiexplorer.h"
@@ -66,7 +64,30 @@ static void handle_unit_activity_request_targeted(struct unit *punit,
 						  enum tile_special_type
 						  new_target);
 static bool base_handle_unit_establish_trade(struct player *pplayer, int unit_id, struct city *pcity_dest);
+static void how_to_declare_war(struct player *pplayer);
 static bool unit_bombard(struct unit *punit, struct tile *ptile);
+
+/**************************************************************************
+...
+**************************************************************************/
+void handle_unit_goto(struct player *pplayer, int unit_id, int x, int y)
+{
+  struct unit *punit = player_find_unit_by_id(pplayer, unit_id);
+  struct tile *ptile = map_pos_to_tile(x, y);
+
+  if (!ptile || !punit) {
+    return;
+  }
+
+  free_unit_orders(punit); /* This may reset punit->goto_tile also. */
+
+  punit->goto_tile = ptile;
+  set_unit_activity(punit, ACTIVITY_GOTO);
+
+  send_unit_info(NULL, punit);
+
+  (void) do_unit_goto(punit, GOTO_MOVE_ANY, TRUE);
+}
 
 /**************************************************************************
 ...
@@ -84,20 +105,17 @@ void handle_unit_airlift(struct player *pplayer, int unit_id, int city_id)
 /**************************************************************************
  Upgrade all units of a given type.
 **************************************************************************/
-void handle_unit_type_upgrade(struct player *pplayer, Unit_type_id type)
+void handle_unit_type_upgrade(struct player *pplayer, Unit_Type_id type)
 {
-  struct unit_type *from_unittype = get_unit_type(type), *to_unittype;
+  const Unit_Type_id from_unittype = type;
+  const Unit_Type_id to_unittype = can_upgrade_unittype(pplayer,
+							from_unittype);
   int number_of_upgraded_units = 0;
 
-  if (!from_unittype) {
-    return;
-  }
-
-  to_unittype = can_upgrade_unittype(pplayer, from_unittype);
-  if (!to_unittype) {
-    notify_player(pplayer, NULL, E_BAD_COMMAND,
-		  _("Illegal packet, can't upgrade %s (yet)."),
-		  from_unittype->name);
+  if (to_unittype == -1) {
+    notify_player(pplayer,
+		  _("Game: Illegal packet, can't upgrade %s (yet)."),
+		  unit_types[from_unittype].name);
     return;
   }
 
@@ -105,7 +123,7 @@ void handle_unit_type_upgrade(struct player *pplayer, Unit_type_id type)
    * Try to upgrade units. The order we upgrade in is arbitrary (if
    * the player really cared they should have done it manually). 
    */
-  conn_list_do_buffer(pplayer->connections);
+  conn_list_do_buffer(&pplayer->connections);
   unit_list_iterate(pplayer->units, punit) {
     if (punit->type == from_unittype) {
       enum unit_upgrade_result result = test_unit_upgrade(punit, FALSE);
@@ -118,20 +136,18 @@ void handle_unit_type_upgrade(struct player *pplayer, Unit_type_id type)
       }
     }
   } unit_list_iterate_end;
-  conn_list_do_unbuffer(pplayer->connections);
+  conn_list_do_unbuffer(&pplayer->connections);
 
   /* Alert the player about what happened. */
   if (number_of_upgraded_units > 0) {
     const int cost = unit_upgrade_price(pplayer, from_unittype, to_unittype);
-    notify_player(pplayer, NULL, E_UNIT_UPGRADED,
-		  _("%d %s upgraded to %s for %d gold."),
-		  number_of_upgraded_units, from_unittype->name,
-		  to_unittype->name,
+    notify_player(pplayer, _("Game: %d %s upgraded to %s for %d gold."),
+		  number_of_upgraded_units, unit_types[from_unittype].name,
+		  unit_types[to_unittype].name,
 		  cost * number_of_upgraded_units);
     send_player_info(pplayer, pplayer);
   } else {
-    notify_player(pplayer, NULL, E_UNIT_UPGRADED,
-		  _("No units could be upgraded."));
+    notify_player(pplayer, _("Game: No units could be upgraded."));
   }
 }
 
@@ -148,18 +164,16 @@ void handle_unit_upgrade(struct player *pplayer, int unit_id)
   }
 
   if (get_unit_upgrade_info(buf, sizeof(buf), punit) == UR_OK) {
-    struct unit_type *from_unit = punit->type;
-    struct unit_type *to_unit = can_upgrade_unittype(pplayer, punit->type);
+    Unit_Type_id from_unit = punit->type;
+    Unit_Type_id to_unit = can_upgrade_unittype(pplayer, punit->type);
     int cost = unit_upgrade_price(pplayer, punit->type, to_unit);
 
     upgrade_unit(punit, to_unit, FALSE);
     send_player_info(pplayer, pplayer);
-    notify_player(pplayer, punit->tile, E_UNIT_UPGRADED,
-		  _("%s upgraded to %s for %d gold."), 
+    notify_player(pplayer, _("Game: %s upgraded to %s for %d gold."), 
 		  unit_name(from_unit), unit_name(to_unit), cost);
   } else {
-    notify_player(pplayer, punit->tile, E_UNIT_UPGRADED,
-		  "%s", buf);
+    notify_player(pplayer, _("Game: %s"), buf);
   }
 }
 
@@ -267,67 +281,14 @@ void handle_unit_diplomat_action(struct player *pplayer, int diplomat_id,
 }
 
 /**************************************************************************
-  Transfer a unit from one homecity to another. If unit is not presently
-  in its new homecity, it will be moved there. This new homecity must
-  be valid for this unit.
-**************************************************************************/
-void real_unit_change_homecity(struct unit *punit, struct city *new_pcity)
-{
-  struct city *old_pcity = find_city_by_id(punit->homecity);
-  struct player *old_owner = unit_owner(punit);
-  struct player *new_owner = city_owner(new_pcity);
-
-  if (!same_pos(punit->tile, new_pcity->tile)) {
-    assert(can_unit_exist_at_tile(punit, new_pcity->tile));
-    move_unit(punit, new_pcity->tile, 0); /* teleport to location */
-  }
-
-  unit_list_prepend(new_pcity->units_supported, punit);
-  if (old_pcity) {
-    unit_list_unlink(old_pcity->units_supported, punit);
-  }
-  if (old_owner != new_owner) {
-    remove_unit_sight_points(punit);
-    ai_reinit(punit);
-
-    unit_list_unlink(old_owner->units, punit);
-    unit_list_prepend(new_owner->units, punit);
-    punit->owner = new_owner;
-
-    if (tile_has_special(punit->tile, S_FORTRESS)
-        && unit_profits_of_watchtower(punit)) {
-      unfog_area(new_owner, punit->tile, get_watchtower_vision(punit));
-    } else {
-      unfog_area(new_owner, punit->tile, unit_type(punit)->vision_range);
-    }
-
-    conceal_hidden_units(old_owner, punit->tile);
-    reveal_hidden_units(new_owner, punit->tile);
-  }
-
-  punit->homecity = new_pcity->id;
-  send_unit_info(unit_owner(punit), punit);
-
-  city_refresh(new_pcity);
-  send_city_info(new_owner, new_pcity);
-
-  if (old_pcity) {
-    assert(city_owner(old_pcity) == old_owner);
-    city_refresh(old_pcity);
-    send_city_info(old_owner, old_pcity);
-  }
-  assert(unit_owner(punit) == city_owner(new_pcity));
-}
-
-/**************************************************************************
-  Change a unit's home city. The unit must be present in the city to 
-  be set as its new home city.
+...
 **************************************************************************/
 void handle_unit_change_homecity(struct player *pplayer, int unit_id,
 				 int city_id)
 {
   struct unit *punit = player_find_unit_by_id(pplayer, unit_id);
-  struct city *new_pcity = player_find_city_by_id(pplayer, city_id);
+  struct city *old_pcity, *new_pcity =
+      player_find_city_by_id(pplayer, city_id);
 
   if (!punit || !new_pcity || city_id == punit->homecity) {
     return;
@@ -342,7 +303,24 @@ void handle_unit_change_homecity(struct player *pplayer, int unit_id,
             new_pcity->tile->y);
     return;
   }
-  real_unit_change_homecity(punit, new_pcity);
+
+  old_pcity = player_find_city_by_id(pplayer, punit->homecity);
+
+  unit_list_insert(&new_pcity->units_supported, punit);
+  if (old_pcity) {
+    unit_list_unlink(&old_pcity->units_supported, punit);
+  }
+
+  punit->homecity = new_pcity->id;
+  send_unit_info(pplayer, punit);
+
+  city_refresh(new_pcity);
+  send_city_info(pplayer, new_pcity);
+
+  if (old_pcity) {
+    city_refresh(old_pcity);
+    send_city_info(pplayer, old_pcity);
+  }
 }
 
 /**************************************************************************
@@ -357,43 +335,25 @@ void handle_unit_disband(struct player *pplayer, int unit_id)
   if (!punit) {
     return;
   }
+  pcity = map_get_city(punit->tile);
 
-  if (unit_flag(punit, F_UNDISBANDABLE)) {
-    /* refuse to kill ourselves */
-    notify_player(unit_owner(punit), punit->tile, E_BAD_COMMAND,
-              _("%s refuses to disband!"), unit_name(punit->type));
-    return;
-  }
-
-  pcity = tile_get_city(punit->tile);
-  if (pcity) {
-    /* If you disband inside a city, it gives some shields to that city.
-     *
-     * Note: Nowadays it's possible to disband unit in allied city and
-     * your ally receives those shields. Should it be like this? Why not?
-     * That's why we must use city_owner instead of pplayer -- Zamar */
-
-    if (unit_flag(punit, F_HELP_WONDER)) {
-      /* Count this just like a caravan that was added to a wonder.
-       * However don't actually give the city the extra shields unless
-       * they are building a wonder (but switching to a wonder later in
-       * the turn will give the extra shields back). */
-      pcity->caravan_shields += unit_build_shield_cost(punit->type);
-      if (unit_can_help_build_wonder(punit, pcity)) {
-	pcity->shield_stock += unit_build_shield_cost(punit->type);
-      } else {
-	pcity->shield_stock += unit_disband_shields(punit->type);
-      }
-    } else {
+  if (!unit_flag(punit, F_UNDISBANDABLE)) { /* refuse to kill ourselves */
+    if (pcity) {
       pcity->shield_stock += unit_disband_shields(punit->type);
       /* If we change production later at this turn. No penalty is added. */
       pcity->disbanded_shields += unit_disband_shields(punit->type);
+
+      /* Note: Nowadays it's possible to disband unit in allied city and
+       * your ally receives those shields. Should it be like this? Why not?
+       * That's why we must use city_owner instead of pplayer -- Zamar */
+      send_city_info(city_owner(pcity), pcity);
     }
-
-    send_city_info(city_owner(pcity), pcity);
+    wipe_unit(punit);
+  } else {
+    notify_player_ex(unit_owner(punit), punit->tile, E_NOEVENT,
+              _("Game: %s refuses to disband!"), unit_name(punit->type));
+    return;
   }
-
-  wipe_unit(punit);
 }
 
 /**************************************************************************
@@ -408,25 +368,25 @@ static void city_add_or_build_error(struct player *pplayer,
 {
   /* Given that res came from test_unit_add_or_build_city, pcity will
      be non-null for all required status values. */
-  struct city *pcity = tile_get_city(punit->tile);
+  struct city *pcity = map_get_city(punit->tile);
   const char *unit_name = unit_type(punit)->name;
 
   switch (res) {
   case AB_NOT_BUILD_LOC:
-    notify_player(pplayer, punit->tile, E_BAD_COMMAND,
-		     _("Can't place city here."));
+    notify_player_ex(pplayer, punit->tile, E_NOEVENT,
+		     _("Game: Can't place city here."));
     break;
   case AB_NOT_BUILD_UNIT:
     {
       const char *us = get_units_with_flag_string(F_CITIES);
       if (us) {
-	notify_player(pplayer, punit->tile, E_BAD_COMMAND,
-			 _("Only %s can build a city."),
+	notify_player_ex(pplayer, punit->tile, E_NOEVENT,
+			 _("Game: Only %s can build a city."),
 			 us);
 	free((void *) us);
       } else {
-	notify_player(pplayer, punit->tile, E_BAD_COMMAND,
-			 _("Can't build a city."));
+	notify_player_ex(pplayer, punit->tile, E_NOEVENT,
+			 _("Game: Can't build a city."));
       }
     }
     break;
@@ -434,34 +394,34 @@ static void city_add_or_build_error(struct player *pplayer,
     {
       const char *us = get_units_with_flag_string(F_ADD_TO_CITY);
       if (us) {
-	notify_player(pplayer, punit->tile, E_BAD_COMMAND,
-			 _("Only %s can add to a city."),
+	notify_player_ex(pplayer, punit->tile, E_NOEVENT,
+			 _("Game: Only %s can add to a city."),
 			 us);
 	free((void *) us);
       } else {
-	notify_player(pplayer, punit->tile, E_BAD_COMMAND,
-			 _("Can't add to a city."));
+	notify_player_ex(pplayer, punit->tile, E_NOEVENT,
+			 _("Game: Can't add to a city."));
       }
     }
     break;
   case AB_NO_MOVES_ADD:
-    notify_player(pplayer, punit->tile, E_BAD_COMMAND,
-		     _("%s unit has no moves left to add to %s."),
+    notify_player_ex(pplayer, punit->tile, E_NOEVENT,
+		     _("Game: %s unit has no moves left to add to %s."),
 		     unit_name, pcity->name);
     break;
   case AB_NO_MOVES_BUILD:
-    notify_player(pplayer, punit->tile, E_BAD_COMMAND,
-		     _("%s unit has no moves left to build city."),
+    notify_player_ex(pplayer, punit->tile, E_NOEVENT,
+		     _("Game: %s unit has no moves left to build city."),
 		     unit_name);
     break;
   case AB_TOO_BIG:
-    notify_player(pplayer, punit->tile, E_BAD_COMMAND,
-		     _("%s is too big to add %s."),
+    notify_player_ex(pplayer, punit->tile, E_NOEVENT,
+		     _("Game: %s is too big to add %s."),
 		     pcity->name, unit_name);
     break;
   case AB_NO_SPACE:
-    notify_player(pplayer, punit->tile, E_BAD_COMMAND,
-		     _("%s needs an improvement to grow, so "
+    notify_player_ex(pplayer, punit->tile, E_NOEVENT,
+		     _("Game: %s needs an improvement to grow, so "
 		       "you cannot add %s."),
 		     pcity->name, unit_name);
     break;
@@ -469,8 +429,8 @@ static void city_add_or_build_error(struct player *pplayer,
     /* Shouldn't happen */
     freelog(LOG_ERROR, "Cannot add %s to %s for unknown reason",
 	    unit_name, pcity->name);
-    notify_player(pplayer, punit->tile, E_BAD_COMMAND,
-		     _("Can't add %s to %s."),
+    notify_player_ex(pplayer, punit->tile, E_NOEVENT,
+		     _("Game: Can't add %s to %s."),
 		     unit_name, pcity->name);
     break;
   }
@@ -483,18 +443,18 @@ static void city_add_or_build_error(struct player *pplayer,
 **************************************************************************/
 static void city_add_unit(struct player *pplayer, struct unit *punit)
 {
-  struct city *pcity = tile_get_city(punit->tile);
+  struct city *pcity = map_get_city(punit->tile);
   const char *unit_name = unit_type(punit)->name;
 
   assert(unit_pop_value(punit->type) > 0);
   pcity->size += unit_pop_value(punit->type);
   /* Make the new people something, otherwise city fails the checks */
-  pcity->specialists[DEFAULT_SPECIALIST] += unit_pop_value(punit->type);
+  pcity->specialists[SP_TAXMAN] += unit_pop_value(punit->type);
   auto_arrange_workers(pcity);
   wipe_unit(punit);
   send_city_info(NULL, pcity);
-  notify_player(pplayer, pcity->tile, E_CITY_BUILD,
-		   _("%s added to aid %s in growing."),
+  notify_player_ex(pplayer, pcity->tile, E_NOEVENT,
+		   _("Game: %s added to aid %s in growing."),
 		   unit_name, pcity->name);
 }
 
@@ -510,8 +470,8 @@ static void city_build(struct player *pplayer, struct unit *punit,
   char message[1024];
 
   if (!is_allowed_city_name(pplayer, name, message, sizeof(message))) {
-    notify_player(pplayer, punit->tile, E_BAD_COMMAND,
-		     "%s", message);
+    notify_player_ex(pplayer, punit->tile, E_NOEVENT,
+		     _("Game: %s"), message);
     return;
   }
 
@@ -561,7 +521,6 @@ void handle_unit_change_activity(struct player *pplayer, int unit_id,
        * idle autosettlers behave correctly when selected --dwp
      */
     punit->ai.control = FALSE;
-    punit->goto_tile = NULL;
     handle_unit_activity_request_targeted(punit, activity, activity_target);
 
     /* Exploring is handled here explicitly, since the player expects to
@@ -596,8 +555,7 @@ void handle_unit_move(struct player *pplayer, int unit_id, int x, int y)
     return;
   }
 
-  if (!is_tiles_adjacent(punit->tile, ptile)
-      || !is_player_phase(unit_owner(punit), game.info.phase)) {
+  if (!is_tiles_adjacent(punit->tile, ptile)) {
     return;
   }
   (void) handle_unit_move_request(punit, ptile, FALSE, FALSE);
@@ -629,14 +587,14 @@ static void see_combat(struct unit *pattacker, struct unit *pdefender)
     if (map_is_known_and_seen(pattacker->tile, other_player)
 	|| map_is_known_and_seen(pdefender->tile, other_player)) {
       if (!can_player_see_unit(other_player, pattacker)) {
-	assert(other_player != pattacker->owner);
-	lsend_packet_unit_short_info(other_player->connections,
+	assert(other_player->player_no != pattacker->owner);
+	lsend_packet_unit_short_info(&other_player->connections,
 				     &unit_att_short_packet);
       }
 
       if (!can_player_see_unit(other_player, pdefender)) {
-	assert(other_player != pdefender->owner);
-	lsend_packet_unit_short_info(other_player->connections,
+	assert(other_player->player_no != pdefender->owner);
+	lsend_packet_unit_short_info(&other_player->connections,
 				     &unit_def_short_packet);
       }
     }
@@ -660,7 +618,7 @@ static void send_combat(struct unit *pattacker, struct unit *pdefender,
   players_iterate(other_player) {
     if (map_is_known_and_seen(pattacker->tile, other_player)
 	|| map_is_known_and_seen(pdefender->tile, other_player)) {
-      lsend_packet_unit_combat_info(other_player->connections, &combat);
+      lsend_packet_unit_combat_info(&other_player->connections, &combat);
 
       /* 
        * Remove the client knowledge of the units.  This corresponds to the
@@ -677,7 +635,7 @@ static void send_combat(struct unit *pattacker, struct unit *pdefender,
 
   /* Send combat info to non-player observers as well.  They already know
    * about the unit so no unit_info is needed. */
-  conn_list_iterate(game.est_connections, pconn) {
+  conn_list_iterate(game.game_connections, pconn) {
     if (!pconn->player && pconn->observer) {
       send_packet_unit_combat_info(pconn, &combat);
     }
@@ -691,7 +649,7 @@ static void send_combat(struct unit *pattacker, struct unit *pdefender,
 static bool unit_bombard(struct unit *punit, struct tile *ptile)
 {
   struct player *pplayer = unit_owner(punit);
-  struct city *pcity = tile_get_city(ptile);
+  struct city *pcity = map_get_city(ptile);
   int old_unit_vet;
 
   freelog(LOG_DEBUG, "Start bombard: %s's %s to %d, %d.",
@@ -711,7 +669,7 @@ static bool unit_bombard(struct unit *punit, struct tile *ptile)
     }
 
     if (!is_air_unit(pdefender)
-	|| (pcity || tile_has_special(ptile, S_AIRBASE))) {
+	|| (pcity || map_has_special(ptile, S_AIRBASE))) {
       see_combat(punit, pdefender);
 
       unit_versus_unit(punit, pdefender, TRUE);
@@ -737,9 +695,9 @@ static bool unit_bombard(struct unit *punit, struct tile *ptile)
   old_unit_vet = punit->veteran;
   maybe_make_veteran(punit);
   if (punit->veteran != old_unit_vet) {
-    notify_player(unit_owner(punit), punit->tile,
+    notify_player_ex(unit_owner(punit), punit->tile,
 		     E_UNIT_WIN_ATT,
-		     _("Your bombarding %s%s became more experienced!"),
+		     _("Game: Your bombarding %s%s became more experienced!"),
 		     unit_name(punit->type),
 		     get_location_str_at(unit_owner(punit),
 		     punit->tile));
@@ -780,18 +738,18 @@ static void handle_unit_attack_request(struct unit *punit, struct unit *pdefende
 
   if (unit_flag(punit, F_NUCLEAR)) {
     if ((pcity = sdi_defense_close(unit_owner(punit), def_tile))) {
-      notify_player(pplayer, punit->tile, E_UNIT_LOST_ATT,
-		       _("Your Nuclear missile was shot down by"
+      notify_player_ex(pplayer, punit->tile, E_UNIT_LOST_ATT,
+		       _("Game: Your Nuclear missile was shot down by"
 			 " SDI defences, what a waste."));
-      notify_player(city_owner(pcity), def_tile, E_UNIT_WIN,
-		       _("The nuclear attack on %s was avoided by"
+      notify_player_ex(city_owner(pcity), def_tile, E_UNIT_WIN,
+		       _("Game: The nuclear attack on %s was avoided by"
 			 " your SDI defense."), pcity->name);
       wipe_unit(punit);
       return;
     } 
 
-    dlsend_packet_nuke_tile_info(game.est_connections,
-				 def_tile->x, def_tile->y);
+    dlsend_packet_nuke_tile_info(&game.game_connections, def_tile->x,
+				 def_tile->y);
 
     wipe_unit(punit);
     do_nuclear_explosion(pplayer, def_tile);
@@ -825,7 +783,7 @@ static void handle_unit_attack_request(struct unit *punit, struct unit *pdefende
   }
 
   if (punit->hp > 0
-      && (pcity = tile_get_city(def_tile))
+      && (pcity = map_get_city(def_tile))
       && pcity->size > 1
       && get_city_bonus(pcity, EFT_UNIT_NO_LOSE_POP) == 0
       && kills_citizen_after_attack(punit)) {
@@ -850,18 +808,18 @@ static void handle_unit_attack_request(struct unit *punit, struct unit *pdefende
 	    unit_owner(pdefender)->name, unit_type(pdefender)->name);
 
     if (vet) {
-      notify_player(unit_owner(pwinner),
+      notify_player_ex(unit_owner(pwinner),
 		       pwinner->tile, E_UNIT_WIN,
-		       _("Your %s%s survived the pathetic attack"
+		       _("Game: Your %s%s survived the pathetic attack"
 		         " from %s's %s and became more experienced!"),
 		       unit_name(pwinner->type),
 		       get_location_str_in(unit_owner(pwinner),
 					   pwinner->tile),
 		       unit_owner(plooser)->name, unit_name(plooser->type));
     } else {
-      notify_player(unit_owner(pwinner),
+      notify_player_ex(unit_owner(pwinner),
 		       pwinner->tile, E_UNIT_WIN,
-		       _("Your %s%s survived the pathetic attack"
+		       _("Game: Your %s%s survived the pathetic attack"
 		         " from %s's %s."),
 		       unit_name(pwinner->type),
 		       get_location_str_in(unit_owner(pwinner),
@@ -869,9 +827,9 @@ static void handle_unit_attack_request(struct unit *punit, struct unit *pdefende
 		       unit_owner(plooser)->name, unit_name(plooser->type));
     }
     
-    notify_player(unit_owner(plooser),
+    notify_player_ex(unit_owner(plooser),
 		     def_tile, E_UNIT_LOST_ATT,
-		     _("Your attacking %s failed "
+		     _("Game: Your attacking %s failed "
 		       "against %s's %s%s!"),
 		     unit_name(plooser->type), unit_owner(pwinner)->name,
 		     unit_name(pwinner->type),
@@ -885,11 +843,31 @@ static void handle_unit_attack_request(struct unit *punit, struct unit *pdefende
 	    unit_owner(pdefender)->name, unit_type(pdefender)->name);
 
     punit->moved = TRUE;	/* We moved */
-    kill_unit(pwinner, plooser, vet && !unit_flag(punit, F_MISSILE));
-    if (unit_flag(pwinner, F_MISSILE)) {
-      wipe_unit(pwinner);
-      return;
+    if (vet && !unit_flag(punit, F_MISSILE)) {
+      notify_player_ex(unit_owner(pwinner), punit->tile,
+		       E_UNIT_WIN_ATT,
+		       _("Game: Your attacking %s succeeded"
+		         " against %s's %s%s and became more experienced!"),
+		       unit_name(pwinner->type),
+		       unit_owner(plooser)->name, unit_name(plooser->type),
+		       get_location_str_at(unit_owner(pwinner),
+		       plooser->tile));
+    } else {
+      notify_player_ex(unit_owner(pwinner), punit->tile,
+		       E_UNIT_WIN_ATT,
+		       _("Game: Your attacking %s succeeded"
+		         " against %s's %s%s!"),
+		       unit_name(pwinner->type),
+		       unit_owner(plooser)->name, unit_name(plooser->type),
+		       get_location_str_at(unit_owner(pwinner),
+		       plooser->tile));
     }
+    kill_unit(pwinner, plooser);
+               /* no longer pplayer - want better msgs -- Syela */
+  }
+  if (pwinner == punit && unit_flag(punit, F_MISSILE)) {
+    wipe_unit(pwinner);
+    return;
   }
 
   /* If attacker wins, and occupychance > 0, it might move in.  Don't move in
@@ -897,7 +875,7 @@ static void handle_unit_attack_request(struct unit *punit, struct unit *pdefende
    * multiple defenders and unstacked combat). Note that this could mean 
    * capturing (or destroying) a city. */
 
-  if (pwinner == punit && myrand(100) < game.info.occupychance &&
+  if (pwinner == punit && myrand(100) < game.occupychance &&
       !is_non_allied_unit_tile(def_tile,
 			       unit_owner(punit))) {
 
@@ -923,6 +901,15 @@ static void handle_unit_attack_request(struct unit *punit, struct unit *pdefende
 /**************************************************************************
 ...
 **************************************************************************/
+static void how_to_declare_war(struct player *pplayer)
+{
+  notify_player_ex(pplayer, NULL, E_NOEVENT,
+		   _("Game: Cancel treaty in the players dialog first (F3)."));
+}
+
+/**************************************************************************
+...
+**************************************************************************/
 static bool can_unit_move_to_tile_with_notify(struct unit *punit,
 					      struct tile *dest_tile,
 					      bool igzoc)
@@ -940,21 +927,21 @@ static bool can_unit_move_to_tile_with_notify(struct unit *punit,
   if (reason == MR_BAD_TYPE_FOR_CITY_TAKE_OVER) {
     const char *units_str = get_units_with_flag_string(F_MARINES);
     if (units_str) {
-      notify_player(unit_owner(punit), src_tile,
-		       E_BAD_COMMAND, _("Only %s can attack from sea."),
+      notify_player_ex(unit_owner(punit), src_tile,
+		       E_NOEVENT, _("Game: Only %s can attack from sea."),
 		       units_str);
       free((void *) units_str);
     } else {
-      notify_player(unit_owner(punit), src_tile,
-		       E_BAD_COMMAND, _("Cannot attack from sea."));
+      notify_player_ex(unit_owner(punit), src_tile,
+		       E_NOEVENT, _("Game: Cannot attack from sea."));
     }
   } else if (reason == MR_NO_WAR) {
-    notify_player(unit_owner(punit), src_tile,
-		     E_BAD_COMMAND,
-		     _("Cannot attack unless you declare war first."));
+    notify_player_ex(unit_owner(punit), src_tile,
+		     E_NOEVENT,
+		     _("Game: Cannot attack unless you declare war first."));
   } else if (reason == MR_ZOC) {
-    notify_player(unit_owner(punit), src_tile, E_BAD_COMMAND,
-		     _("%s can only move into your own zone of control."),
+    notify_player_ex(unit_owner(punit), src_tile, E_NOEVENT,
+		     _("Game: %s can only move into your own zone of control."),
 		     unit_type(punit)->name);
   }
   return FALSE;
@@ -990,8 +977,8 @@ bool handle_unit_move_request(struct unit *punit, struct tile *pdesttile,
 
 
   if (punit->moves_left<=0)  {
-    notify_player(pplayer, punit->tile, E_BAD_COMMAND,
-                     _("This unit has no moves left."));
+    notify_player_ex(pplayer, punit->tile, E_NOEVENT,
+                     _("Game: This unit has no moves left."));
     return FALSE;
   }
 
@@ -1043,11 +1030,11 @@ bool handle_unit_move_request(struct unit *punit, struct tile *pdesttile,
 						 punit->id, target_id);
         return FALSE;
       } else if (!can_unit_move_to_tile(punit, pdesttile, igzoc)) {
-        notify_player(pplayer, punit->tile, E_BAD_COMMAND,
-                         is_ocean(tile_get_terrain(punit->tile))
-                         ? _("Unit must be on land to "
+        notify_player_ex(pplayer, punit->tile, E_NOEVENT,
+                         is_ocean(map_get_terrain(punit->tile))
+                         ? _("Game: Unit must be on land to "
                              "perform diplomatic action.")
-                         : _("No diplomat action possible."));
+                         : _("Game: No diplomat action possible."));
         return FALSE;
       }
     }
@@ -1057,15 +1044,27 @@ bool handle_unit_move_request(struct unit *punit, struct tile *pdesttile,
 
   if (is_non_allied_unit_tile(pdesttile, pplayer) 
       || is_non_allied_city_tile(pdesttile, pplayer)) {
-    struct unit *victim = NULL;
+    struct unit *victim;
 
     /* We can attack ONLY in enemy cities */
-    if ((pcity && !pplayers_at_war(city_owner(pcity), pplayer))
-        || (victim = is_non_attack_unit_tile(pdesttile, pplayer))) {
-      notify_player(pplayer, punit->tile, E_BAD_COMMAND,
-                       _("You must declare war on %s first.  Try using "
-                         "players dialog (F3)."), victim == NULL ?
-                       city_owner(pcity)->name : unit_owner(victim)->name);
+    if (pcity && !pplayers_at_war(city_owner(pcity), pplayer)) {
+      notify_player_ex(pplayer, punit->tile, E_NOEVENT,
+		       _("Game: Can't attack %s "
+			 "because you are not at war with %s."),
+		       pcity->name,
+		       city_owner(pcity)->name);
+      how_to_declare_war(pplayer);
+      return FALSE;
+    }
+
+    /* Tile must contain ONLY enemy units. */
+    if ((victim = is_non_attack_unit_tile(pdesttile, pplayer))) {
+      notify_player_ex(pplayer, punit->tile, E_NOEVENT,
+                       _("Game: Can't attack %s's unit "
+			 "because you are not at war with %s."),
+                       unit_owner(victim)->name,
+                       unit_owner(victim)->name);
+      how_to_declare_war(pplayer);
       return FALSE;
     }
 
@@ -1073,13 +1072,13 @@ bool handle_unit_move_request(struct unit *punit, struct tile *pdesttile,
     if (unit_flag(punit, F_BOMBARDER)) {
       /* Only land can be bombarded, if the target is on ocean, fall
        * through to attack. */
-      if (!is_ocean(tile_get_terrain(pdesttile))) {
+      if (!is_ocean(map_get_terrain(pdesttile))) {
 	if (can_unit_bombard(punit)) {
 	  unit_bombard(punit, pdesttile);
 	  return TRUE;
 	} else {
-	  notify_player(pplayer, punit->tile, E_BAD_COMMAND,
-			   _("This unit is being transported, and"
+	  notify_player_ex(pplayer, punit->tile, E_NOEVENT,
+			   _("Game: This unit is being transported, and"
 			     " so cannot bombard."));
 	  return FALSE;
 	}
@@ -1093,8 +1092,8 @@ bool handle_unit_move_request(struct unit *punit, struct tile *pdesttile,
     if (victim) {
       /* Must be physically able to attack EVERY unit there */
       if (!can_unit_attack_all_at_tile(punit, pdesttile)) {
-        notify_player(pplayer, punit->tile, E_BAD_COMMAND,
-                         _("You can't attack there."));
+        notify_player_ex(pplayer, punit->tile, E_NOEVENT,
+                         _("Game: You can't attack there."));
         return FALSE;
       }
       
@@ -1113,8 +1112,8 @@ bool handle_unit_move_request(struct unit *punit, struct tile *pdesttile,
        * If not it would have been caught in the attack case. 
        * FIXME: Move this check into test_unit_move_tile */
       if (!COULD_OCCUPY(punit)) {
-        notify_player(pplayer, punit->tile, E_BAD_COMMAND,
-                         _("This type of troops cannot "
+        notify_player_ex(pplayer, punit->tile, E_NOEVENT,
+                         _("Game: This type of troops cannot "
                            "take over a city."));
         return FALSE;
       }
@@ -1131,15 +1130,17 @@ bool handle_unit_move_request(struct unit *punit, struct tile *pdesttile,
       if (pcargo->transported_by == punit->id
           && (is_non_allied_unit_tile(pdesttile, unit_owner(pcargo))
               || is_non_allied_city_tile(pdesttile, unit_owner(pcargo)))) {
-         notify_player(pplayer, punit->tile, E_BAD_COMMAND,
-                          _("A transported unit is not allied to all "
+         notify_player_ex(pplayer, punit->tile, E_NOEVENT,
+                          _("Game: A transported unit is not allied to all "
                             "units or city on target tile."));
          return FALSE;
       }
     } unit_list_iterate_end;
   }
 
-  if (can_unit_move_to_tile_with_notify(punit, pdesttile, igzoc)) {
+
+  if (can_unit_move_to_tile_with_notify(punit, pdesttile, igzoc)
+      && try_move_unit(punit, pdesttile)) {
     int move_cost = map_move_cost(punit, pdesttile);
 
     (void) move_unit(punit, pdesttile, move_cost);
@@ -1162,7 +1163,7 @@ void handle_unit_help_build_wonder(struct player *pplayer, int unit_id)
   if (!punit || !unit_flag(punit, F_HELP_WONDER)) {
     return;
   }
-  pcity_dest = tile_get_city(punit->tile);
+  pcity_dest = map_get_city(punit->tile);
   
   if (!pcity_dest || !unit_can_help_build_wonder(punit, pcity_dest)) {
     return;
@@ -1171,24 +1172,24 @@ void handle_unit_help_build_wonder(struct player *pplayer, int unit_id)
   pcity_dest->shield_stock += unit_build_shield_cost(punit->type);
   pcity_dest->caravan_shields += unit_build_shield_cost(punit->type);
 
-  conn_list_do_buffer(pplayer->connections);
+  conn_list_do_buffer(&pplayer->connections);
 
   if (build_points_left(pcity_dest) >= 0) {
-    text = _("Your %s helps build the %s in %s (%d remaining).");
+    text = _("Game: Your %s helps build the %s in %s (%d remaining).");
   } else {
-    text = _("Your %s helps build the %s in %s (%d surplus).");
+    text = _("Game: Your %s helps build the %s in %s (%d surplus).");
   }
-  notify_player(pplayer, pcity_dest->tile, E_CARAVAN_ACTION,
+  notify_player_ex(pplayer, pcity_dest->tile, E_NOEVENT,
 		   text, /* Must match arguments below. */
 		   unit_name(punit->type),
-		   get_improvement_type(pcity_dest->production.value)->name,
+		   get_improvement_type(pcity_dest->currently_building)->name,
 		   pcity_dest->name, 
 		   abs(build_points_left(pcity_dest)));
 
   wipe_unit(punit);
   send_player_info(pplayer, pplayer);
   send_city_info(pplayer, pcity_dest);
-  conn_list_do_unbuffer(pplayer->connections);
+  conn_list_do_unbuffer(&pplayer->connections);
 }
 
 /**************************************************************************
@@ -1209,7 +1210,7 @@ static bool base_handle_unit_establish_trade(struct player *pplayer, int unit_id
   /* if no destination city is passed in,
    *  check whether the unit is already in the city */
   if (!pcity_dest) { 
-    pcity_dest = tile_get_city(punit->tile);
+    pcity_dest = map_get_city(punit->tile);
   }
 
   if (!pcity_dest) {
@@ -1219,8 +1220,8 @@ static bool base_handle_unit_establish_trade(struct player *pplayer, int unit_id
   pcity_homecity = player_find_city_by_id(pplayer, punit->homecity);
 
   if (!pcity_homecity) {
-    notify_player(pplayer, punit->tile, E_BAD_COMMAND,
-		     _("Sorry, your %s cannot establish"
+    notify_player_ex(pplayer, punit->tile, E_NOEVENT,
+		     _("Game: Sorry, your %s cannot establish"
 		       " a trade route because it has no home city"),
 		     unit_name(punit->type));
     return FALSE;
@@ -1229,8 +1230,8 @@ static bool base_handle_unit_establish_trade(struct player *pplayer, int unit_id
 
     
   if (!can_cities_trade(pcity_homecity, pcity_dest)) {
-    notify_player(pplayer, pcity_dest->tile, E_BAD_COMMAND,
-		     _("Sorry, your %s cannot establish"
+    notify_player_ex(pplayer, pcity_dest->tile, E_NOEVENT,
+		     _("Game: Sorry, your %s cannot establish"
 		       " a trade route between %s and %s"),
 		     unit_name(punit->type),pcity_homecity->name,
 		     pcity_dest->name);
@@ -1257,10 +1258,10 @@ static bool base_handle_unit_establish_trade(struct player *pplayer, int unit_id
 	pcity_out_of_home = find_city_by_id(pcity_homecity->trade[slot]);
 	assert(pcity_out_of_home != NULL);
       } else {
-	notify_player(pplayer, pcity_dest->tile, E_BAD_COMMAND,
-		     _("Sorry, your %s cannot establish"
+	notify_player_ex(pplayer, pcity_dest->tile, E_NOEVENT,
+		     _("Game: Sorry, your %s cannot establish"
 		       " a trade route here!"), unit_name(punit->type));
-        notify_player(pplayer, pcity_dest->tile, E_BAD_COMMAND,
+        notify_player_ex(pplayer, pcity_dest->tile, E_NOEVENT,
 		       _("      The city of %s already has %d "
 			 "better trade routes!"), pcity_homecity->name,
 		       NUM_TRADEROUTES);
@@ -1274,10 +1275,10 @@ static bool base_handle_unit_establish_trade(struct player *pplayer, int unit_id
 	pcity_out_of_dest = find_city_by_id(pcity_dest->trade[slot]);
 	assert(pcity_out_of_dest != NULL);
       } else {
-	notify_player(pplayer, pcity_dest->tile, E_BAD_COMMAND,
-		     _("Sorry, your %s cannot establish"
+	notify_player_ex(pplayer, pcity_dest->tile, E_NOEVENT,
+		     _("Game: Sorry, your %s cannot establish"
 		       " a trade route here!"), unit_name(punit->type));
-        notify_player(pplayer, pcity_dest->tile, E_BAD_COMMAND,
+        notify_player_ex(pplayer, pcity_dest->tile, E_NOEVENT,
 		       _("      The city of %s already has %d "
 			 "better trade routes!"), pcity_dest->name,
 		       NUM_TRADEROUTES);
@@ -1288,9 +1289,9 @@ static bool base_handle_unit_establish_trade(struct player *pplayer, int unit_id
     /* Now cancel the trade route from the home city. */
     if (can_establish && pcity_out_of_home) {
       remove_trade_route(pcity_homecity, pcity_out_of_home);
-      notify_player(city_owner(pcity_out_of_home),
-		       pcity_out_of_home->tile, E_CARAVAN_ACTION,
-		       _("Sorry, %s has canceled the trade route "
+      notify_player_ex(city_owner(pcity_out_of_home),
+		       pcity_out_of_home->tile, E_NOEVENT,
+		       _("Game: Sorry, %s has canceled the trade route "
 			 "from %s to your city %s."),
 		       city_owner(pcity_homecity)->name,
 		       pcity_homecity->name, pcity_out_of_home->name);
@@ -1299,9 +1300,9 @@ static bool base_handle_unit_establish_trade(struct player *pplayer, int unit_id
     /* And the same for the dest city. */
     if (can_establish && pcity_out_of_dest) {
       remove_trade_route(pcity_dest, pcity_out_of_dest);
-      notify_player(city_owner(pcity_out_of_dest),
-		       pcity_out_of_dest->tile, E_CARAVAN_ACTION,
-		       _("Sorry, %s has canceled the trade route "
+      notify_player_ex(city_owner(pcity_out_of_dest),
+		       pcity_out_of_dest->tile, E_NOEVENT,
+		       _("Game: Sorry, %s has canceled the trade route "
 			 "from %s to your city %s."),
 		       city_owner(pcity_dest)->name,
 		       pcity_dest->name, pcity_out_of_dest->name);
@@ -1331,9 +1332,9 @@ static bool base_handle_unit_establish_trade(struct player *pplayer, int unit_id
     revenue = (revenue + 2) / 3;
   }
   
-  conn_list_do_buffer(pplayer->connections);
-  notify_player(pplayer, pcity_dest->tile, E_CARAVAN_ACTION,
-		   _("Your %s from %s has arrived in %s,"
+  conn_list_do_buffer(&pplayer->connections);
+  notify_player_ex(pplayer, pcity_dest->tile, E_NOEVENT,
+		   _("Game: Your %s from %s has arrived in %s,"
 		     " and revenues amount to %d in gold and research."), 
 		   unit_name(punit->type), pcity_homecity->name,
 		   pcity_dest->name, revenue);
@@ -1400,15 +1401,8 @@ static bool base_handle_unit_establish_trade(struct player *pplayer, int unit_id
     }
   }
   
-  /* The research has changed, we have to update all
-   * players sharing it */
-  players_iterate(aplayer) {
-    if (!players_on_same_team(pplayer, aplayer)) {
-      continue;
-    }
-    send_player_info(aplayer, aplayer);
-  } players_iterate_end;
-  conn_list_do_unbuffer(pplayer->connections);
+  send_player_info(pplayer, pplayer);
+  conn_list_do_unbuffer(&pplayer->connections);
   return TRUE;
 }
 
@@ -1423,11 +1417,11 @@ void handle_unit_establish_trade(struct player *pplayer, int unit_id)
 /**************************************************************************
 ...
 **************************************************************************/
-void handle_unit_autosettlers(struct player *pplayer, int unit_id)
+void handle_unit_auto(struct player *pplayer, int unit_id)
 {
   struct unit *punit = player_find_unit_by_id(pplayer, unit_id);
 
-  if (!punit || !can_unit_do_autosettlers(punit))
+  if (!punit || !can_unit_do_auto(punit))
     return;
 
   punit->ai.control = TRUE;
@@ -1447,8 +1441,8 @@ static void handle_unit_activity_dependencies(struct unit *punit,
     case ACTIVITY_PILLAGE: 
       {
         enum tile_special_type prereq =
-	  get_infrastructure_prereq(old_target);
-        if (prereq != S_LAST) {
+	  map_get_infrastructure_prerequisite(old_target);
+        if (prereq != S_NO_SPECIAL) {
           unit_list_iterate (punit->tile->units, punit2)
             if ((punit2->activity == ACTIVITY_PILLAGE) &&
                 (punit2->activity_target == prereq)) {
@@ -1553,7 +1547,8 @@ void handle_unit_unload(struct player *pplayer, int cargo_id, int trans_id)
 
   /* You are allowed to unload a unit if it is yours or if the transporter
    * is yours. */
-  if (pcargo->owner != pplayer && ptrans->owner != pplayer) {
+  if (pcargo->owner != pplayer->player_no
+      && ptrans->owner != pplayer->player_no) {
     return;
   }
 
@@ -1605,26 +1600,14 @@ void handle_unit_orders(struct player *pplayer,
 			struct packet_unit_orders *packet)
 {
   struct unit *punit = player_find_unit_by_id(pplayer, packet->unit_id);
-  struct tile *src_tile = map_pos_to_tile(packet->src_x, packet->src_y);
   int i;
 
   if (!punit || packet->length < 0 || punit->activity != ACTIVITY_IDLE) {
     return;
   }
 
-  if (src_tile != punit->tile) {
-    /* Failed sanity check.  Usually this happens if the orders were sent
-     * in the previous turn, and the client thought the unit was in a
-     * different position than it's actually in.  The easy solution is to
-     * discard the packet.  We don't send an error message to the client
-     * here (though maybe we should?). */
-    return;
-  }
 
   for (i = 0; i < packet->length; i++) {
-    if (packet->orders[i] < 0 || packet->orders[i] > ORDER_LAST) {
-      packet->orders[i] = ORDER_LAST;
-    }
     switch (packet->orders[i]) {
     case ORDER_MOVE:
       if (!is_valid_dir(packet->dir[i])) {
@@ -1654,14 +1637,10 @@ void handle_unit_orders(struct player *pplayer,
       }
       break;
     case ORDER_FULL_MP:
-    case ORDER_BUILD_CITY:
-    case ORDER_DISBAND:
-    case ORDER_BUILD_WONDER:
-    case ORDER_TRADEROUTE:
-    case ORDER_HOMECITY:
       break;
-    case ORDER_LAST:
+    default:
       /* An invalid order.  This is handled in execute_orders. */
+      packet->orders[i] = ORDER_LAST;
       break;
     }
   }
@@ -1706,8 +1685,7 @@ void handle_unit_orders(struct player *pplayer,
   }
 #endif
 
-  if (!is_player_phase(unit_owner(punit), game.info.phase)
-      || execute_orders(punit)) {
+  if (execute_orders(punit)) {
     /* Looks like the unit survived. */
     send_unit_info(NULL, punit);
   }

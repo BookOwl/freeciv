@@ -2,7 +2,7 @@
 
 name = _("Irish")
 plural = _("?plural:Irish")
-groups=_("Medieval"), _("Modern"), _("European")
+class=_("Modern")
 legend=_("Ireland held out against the Romans and Vikings but was \
 conquered by the Normans in 1171.  It was ruled by the English until 1922 \
 when most of the country was granted limited autonomy, becoming a republic \
@@ -29,7 +29,7 @@ leader_sex = "Male", "Male", "Female",
  "Male", "Male", "Male", "Male", "Male",
  "Female", "Female", "Female", "Female",
  "Male", "Male"
-flag="ireland"
+flag="f.ireland"
 flag_alt = "-"
 city_style = "European"
 
@@ -42,8 +42,10 @@ ruler_titles = { "government",      "male_title",      "female_title"
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
+tech_goals = "Ceremonial Burial", "Literacy", "The Republic", "Engineering",
+ "Monotheism", "Gunpowder", "Railroad", "Explosives", "Computers"
+wonder = "Marco Polo's Embassy"
+government = "Democracy"
 civilwar_nations = "cornish", "english", "scottish", "welsh"
 
 cities =

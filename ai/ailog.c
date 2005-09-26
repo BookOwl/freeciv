@@ -17,99 +17,61 @@
 
 #include <stdarg.h>
 
-#include "astring.h"
 #include "city.h"
 #include "log.h"
 #include "shared.h"
 #include "support.h"
 #include "unit.h"
-#include "timing.h"
 
 #include "gotohand.h"
 #include "plrhand.h"
-#include "srv_main.h"
 
 #include "aidata.h"
 #include "ailog.h"
 
-static struct timer *aitimer[AIT_LAST][2];
-static int recursion[AIT_LAST];
-
 /* General AI logging functions */
 
 /**************************************************************************
-  Log player tech messages.
-**************************************************************************/
-void TECH_LOG(int level, struct player *pplayer, Tech_type_id id,
-              const char *msg, ...)
-{
-  char buffer[500];
-  char buffer2[500];
-  va_list ap;
-  int minlevel = MIN(LOGLEVEL_TECH, level);
-
-  if (!tech_exists(id) || id == A_NONE) {
-    return;
-  }
-
-  if (BV_ISSET(pplayer->debug, PLAYER_DEBUG_TECH)) {
-    minlevel = LOG_NORMAL;
-  } else if (minlevel > fc_log_level) {
-    return;
-  }
-
-  my_snprintf(buffer, sizeof(buffer), "%s::%s (want %d, dist %d) ", 
-              pplayer->name, get_tech_name(pplayer, id), 
-              pplayer->ai.tech_want[id], 
-              num_unknown_techs_for_goal(pplayer, id));
-
-  va_start(ap, msg);
-  my_vsnprintf(buffer2, sizeof(buffer2), msg, ap);
-  va_end(ap);
-
-  cat_snprintf(buffer, sizeof(buffer), buffer2);
-  if (BV_ISSET(pplayer->debug, PLAYER_DEBUG_TECH)) {
-    notify_conn(NULL, NULL, E_AI_DEBUG, "%s", buffer);
-  }
-  freelog(minlevel, buffer);
-}
-
-/**************************************************************************
   Log player messages, they will appear like this
-    
+    2: perrin [ti12 co6 lo5 e]  Increased love for a (now 9)
   where ti is timer, co countdown and lo love for target, who is e.
 **************************************************************************/
-void DIPLO_LOG(int level, struct player *pplayer, struct player *aplayer,
-               const char *msg, ...)
+void PLAYER_LOG(int level, struct player *pplayer, struct ai_data *ai, 
+                const char *msg, ...)
 {
+  char targetbuffer[250];
   char buffer[500];
   char buffer2[500];
   va_list ap;
-  int minlevel = MIN(LOGLEVEL_PLAYER, level);
-  struct ai_data *ai;
-  struct ai_dip_intel *adip;
+  int minlevel = MIN(LOGLEVEL_CITY, level);
 
-  if (BV_ISSET(pplayer->debug, PLAYER_DEBUG_DIPLOMACY)) {
+  if (pplayer->debug) {
     minlevel = LOG_NORMAL;
   } else if (minlevel > fc_log_level) {
     return;
   }
-  ai = ai_data_get(pplayer);
-  adip = &ai->diplomacy.player_intel[aplayer->player_no];
 
-  my_snprintf(buffer, sizeof(buffer), "%s->%s(l%d,c%d,d%d%s): ", 
-              pplayer->name, aplayer->name, 
-              pplayer->ai.love[aplayer->player_no], adip->countdown, 
-              adip->distance, adip->is_allied_with_enemy ? "?" :
-              (adip->at_war_with_ally ? "!" : ""));
+  if (ai->diplomacy.target) {
+    my_snprintf(targetbuffer, sizeof(targetbuffer), "[ti%d co%d lo%d %s] ",
+                ai->diplomacy.timer, ai->diplomacy.countdown,
+                pplayer->ai.love[ai->diplomacy.target->player_no],
+                ai->diplomacy.target->name);
+  }
+  my_snprintf(buffer, sizeof(buffer), "%s %s%s%s ", pplayer->name,
+              ai->diplomacy.target ? targetbuffer : "",
+              ai->diplomacy.spacerace_leader &&
+              ai->diplomacy.spacerace_leader->player_no == pplayer->player_no ? 
+                "(spacelead) " : "",
+              ai->diplomacy.alliance_leader->player_no == pplayer->player_no ?
+                "(*)" : "");
 
   va_start(ap, msg);
   my_vsnprintf(buffer2, sizeof(buffer2), msg, ap);
   va_end(ap);
 
   cat_snprintf(buffer, sizeof(buffer), buffer2);
-  if (BV_ISSET(pplayer->debug, PLAYER_DEBUG_DIPLOMACY)) {
-    notify_conn(NULL, NULL, E_AI_DEBUG, "%s", buffer);
+  if (pplayer->debug) {
+    notify_conn(&game.est_connections, buffer);
   }
   freelog(minlevel, buffer);
 }
@@ -143,7 +105,7 @@ void CITY_LOG(int level, struct city *pcity, const char *msg, ...)
 
   cat_snprintf(buffer, sizeof(buffer), buffer2);
   if (pcity->debug) {
-    notify_conn(NULL, NULL, E_AI_DEBUG, "%s", buffer);
+    notify_conn(&game.est_connections, buffer);
   }
   freelog(minlevel, buffer);
 }
@@ -168,7 +130,7 @@ void UNIT_LOG(int level, struct unit *punit, const char *msg, ...)
   } else {
     /* Are we a virtual unit evaluated in a debug city?. */
     if (punit->id == 0) {
-      struct city *pcity = tile_get_city(punit->tile);
+      struct city *pcity = map_get_city(punit->tile);
 
       if (pcity && pcity->debug) {
         minlevel = LOG_NORMAL;
@@ -187,12 +149,9 @@ void UNIT_LOG(int level, struct unit *punit, const char *msg, ...)
     gx = gy = -1;
   }
   
-  my_snprintf(buffer, sizeof(buffer),
-	      "%s's %s[%d] (%s) (%d,%d)->(%d,%d){%d,%d} ",
+  my_snprintf(buffer, sizeof(buffer), "%s's %s[%d] (%d,%d)->(%d,%d){%d,%d} ",
               unit_owner(punit)->name, unit_type(punit)->name,
-              punit->id,
-	      get_activity_text(punit->activity),
-	      punit->tile->x, punit->tile->y,
+              punit->id, punit->tile->x, punit->tile->y,
 	      gx, gy,
               punit->ai.bodyguard, punit->ai.ferryboat);
 
@@ -202,7 +161,7 @@ void UNIT_LOG(int level, struct unit *punit, const char *msg, ...)
 
   cat_snprintf(buffer, sizeof(buffer), buffer2);
   if (punit->debug || messwin) {
-    notify_conn(NULL, NULL, E_AI_DEBUG, "%s", buffer);
+    notify_conn(&game.est_connections, buffer);
   }
   freelog(minlevel, buffer);
 }
@@ -212,16 +171,14 @@ void UNIT_LOG(int level, struct unit *punit, const char *msg, ...)
     2: ai4's bodyguard Mech. Inf.[485] (38,22){Riflemen:574@37,23} was ...
   note that these messages are likely to wrap if long.
 **************************************************************************/
-void BODYGUARD_LOG(int level, const struct unit *punit, const char *msg)
+void BODYGUARD_LOG(int level, struct unit *punit, const char *msg)
 {
   char buffer[500];
   int minlevel = MIN(LOGLEVEL_BODYGUARD, level);
-  const struct unit *pcharge;
-  const struct city *pcity;
+  struct unit *pcharge;
+  struct city *pcity;
   int id = -1;
-  int charge_x = -1;
-  int charge_y = -1;
-  const char *type = "guard";
+  struct tile *ptile = NULL;
   const char *s = "none";
 
   if (punit->debug) {
@@ -233,111 +190,22 @@ void BODYGUARD_LOG(int level, const struct unit *punit, const char *msg)
   pcity = find_city_by_id(punit->ai.charge);
   pcharge = find_unit_by_id(punit->ai.charge);
   if (pcharge) {
-    charge_x = pcharge->tile->x;
-    charge_y = pcharge->tile->y;
+    ptile = pcharge->tile;
     id = pcharge->id;
-    type = "bodyguard";
     s = unit_type(pcharge)->name;
   } else if (pcity) {
-    charge_x = pcity->tile->x;
-    charge_y = pcity->tile->y;
+    ptile = pcity->tile;
     id = pcity->id;
-    type = "cityguard";
     s = pcity->name;
   }
-  /* else perhaps the charge died */
-
   my_snprintf(buffer, sizeof(buffer),
-              "%s's %s %s[%d] (%d,%d){%s:%d@%d,%d} ",
-              unit_owner(punit)->name, type, unit_type(punit)->name,
+              "%s's bodyguard %s[%d] (%d,%d){%s:%d@%d,%d} ",
+              unit_owner(punit)->name, unit_type(punit)->name,
               punit->id, punit->tile->x, punit->tile->y,
-	      s, id, charge_x, charge_y);
+	      s, id, ptile->x, ptile->y);
   cat_snprintf(buffer, sizeof(buffer), msg);
   if (punit->debug) {
-    notify_conn(NULL, NULL, E_AI_DEBUG, "%s", buffer);
+    notify_conn(&game.est_connections, buffer);
   }
   freelog(minlevel, buffer);
-}
-
-/**************************************************************************
-  Measure the time between the calls.  Used to see where in the AI too
-  much CPU is being used.
-**************************************************************************/
-void TIMING_LOG(enum ai_timer timer, enum ai_timer_activity activity)
-{
-  static int turn = -1;
-  int i;
-
-  if (turn == -1) {
-    for (i = 0; i < AIT_LAST; i++) {
-      aitimer[i][0] = new_timer(TIMER_CPU, TIMER_ACTIVE);
-      aitimer[i][1] = new_timer(TIMER_CPU, TIMER_ACTIVE);
-      recursion[i] = 0;
-    }
-  }
-
-  if (game.info.turn != turn) {
-    turn = game.info.turn;
-    for (i = 0; i < AIT_LAST; i++) {
-      clear_timer(aitimer[i][0]);
-    }
-    assert(activity == TIMER_START);
-  }
-
-  if (activity == TIMER_START && recursion[timer] == 0) {
-    start_timer(aitimer[timer][0]);
-    start_timer(aitimer[timer][1]);
-    recursion[timer]++;
-  } else if (activity == TIMER_STOP && recursion[timer] == 1) {
-    stop_timer(aitimer[timer][0]);
-    stop_timer(aitimer[timer][1]);
-    recursion[timer]--;
-  }
-}
-
-/**************************************************************************
-  Print results
-**************************************************************************/
-void TIMING_RESULTS(void)
-{
-  char buf[200];
-
-#define OUT(text, which)                                                 \
-  my_snprintf(buf, sizeof(buf), "  %s: %g sec turn, %g sec game", text,  \
-           read_timer_seconds(aitimer[which][0]),                        \
-           read_timer_seconds(aitimer[which][1]));                       \
-  freelog(LOG_NORMAL, buf);                                              \
-  notify_conn(NULL, NULL, E_AI_DEBUG, "%s", buf);
-
-  freelog(LOG_NORMAL, "  --- AI timing results ---");
-  notify_conn(NULL, NULL, E_AI_DEBUG, "  --- AI timing results ---");
-  OUT("Total AI time", AIT_ALL);
-  OUT("Movemap", AIT_MOVEMAP);
-  OUT("Units", AIT_UNITS);
-  OUT(" - Military", AIT_MILITARY);
-  OUT(" - Attack", AIT_ATTACK);
-  OUT(" - Defense", AIT_DEFENDERS);
-  OUT(" - Ferry", AIT_FERRY);
-  OUT(" - Rampage", AIT_RAMPAGE);
-  OUT(" - Bodyguard", AIT_BODYGUARD);
-  OUT(" - Recover", AIT_RECOVER);
-  OUT(" - Caravan", AIT_CARAVAN);
-  OUT(" - Hunter", AIT_HUNTER);
-  OUT(" - Airlift", AIT_AIRLIFT);
-  OUT(" - Diplomat", AIT_DIPLOMAT);
-  OUT(" - Air", AIT_AIRUNIT);
-  OUT(" - Explore", AIT_EXPLORER);
-  OUT("fstk", AIT_FSTK);
-  OUT("Settlers", AIT_SETTLERS);
-  OUT("Workers", AIT_WORKERS);
-  OUT("Government", AIT_GOVERNMENT);
-  OUT("Taxes", AIT_TAXES);
-  OUT("Cities", AIT_CITIES);
-  OUT(" - Buildings", AIT_BUILDINGS);
-  OUT(" - Danger", AIT_DANGER);
-  OUT(" - Worker want", AIT_CITY_TERRAIN);
-  OUT(" - Military want", AIT_CITY_MILITARY);
-  OUT(" - Settler want", AIT_CITY_SETTLERS);
-  OUT("Citizen arrange", AIT_CITIZEN_ARRANGE);
-  OUT("Tech", AIT_TECH);
 }

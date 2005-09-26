@@ -3,7 +3,7 @@
 
 name=_("Elves")
 plural=_("?plural:Elves")
-groups=_("Fictional")
+class=_("Fictional")
 ; /* <-- avoid gettext warnings
 ; Starting with the six High Kings of the Noldor, folowed by other kings (some are not real Kings, but in the Third Age it's close enough :-)
 ; Elrond COULD have been High King, but never made claim to the Kingship, so I include him as well (and most people know him)
@@ -13,7 +13,7 @@ leader="Ingwë", "Fëanor", "Fingolfin", "Fingon", "Turgon",
    "Celeborn", "Elrond"
 leader_sex="Male", "Male", "Male", "Male", "Male", "Male", "Male", "Female",
    "Male", "Male", "Male", "Male"
-flag="elves"
+flag="f.elves"
 flag_alt = "-"
 city_style = "European"
 ; Melian was the Queen of Doriath
@@ -23,10 +23,11 @@ ruler_titles = { "government",      "male_title",      "female_title"
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
+tech_goals = ""
 
 ; Think of the Girdle of Melian, the Encircling Mountains around Rivendell, the rivers (Silverlode and Anduin) around Lothlorien, etc.
+wonder="Great Wall"
+government="Monarchy"
 
 ; /* <-- avoid gettext warnings
 ; Cities in order of seeing them on the map :-)

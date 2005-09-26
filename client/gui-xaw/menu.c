@@ -27,7 +27,6 @@
 
 #include "fcintl.h"
 #include "mem.h"
-#include "movement.h"
 #include "support.h"
 
 #include "government.h"
@@ -110,7 +109,8 @@ static struct MenuEntry game_menu_entries[]={
     { { N_("Message Options"), 0      },      "", MENU_GAME_MSG_OPTIONS, 0 },
     { { N_("Save Settings"), 0        },      "", MENU_GAME_SAVE_SETTINGS, 0 },
     { { 0                             },      "", MENU_SEPARATOR_LINE, 0 },
-    { { N_("Server Options"), 0       },      "", MENU_GAME_SERVER_OPTIONS, 0 },
+    { { N_("Server Opt initial"), 0   },      "", MENU_GAME_SERVER_OPTIONS1, 0 },
+    { { N_("Server Opt ongoing"), 0   },      "", MENU_GAME_SERVER_OPTIONS2, 0 },
     { { 0                             },      "", MENU_SEPARATOR_LINE, 0 },
     { { N_("Export Log"), 0           },      "", MENU_GAME_OUTPUT_LOG, 0 },
     { { N_("Clear Log"), 0            },      "", MENU_GAME_CLEAR_OUTPUT, 0 },
@@ -276,7 +276,8 @@ void update_menus(void)
     menu_entry_sensitive(MENU_GAME, MENU_GAME_OPTIONS, 0);
     menu_entry_sensitive(MENU_GAME, MENU_GAME_MSG_OPTIONS, 0);
     menu_entry_sensitive(MENU_GAME, MENU_GAME_SAVE_SETTINGS, 0);
-    menu_entry_sensitive(MENU_GAME, MENU_GAME_SERVER_OPTIONS, 1);
+    menu_entry_sensitive(MENU_GAME, MENU_GAME_SERVER_OPTIONS1, 1);
+    menu_entry_sensitive(MENU_GAME, MENU_GAME_SERVER_OPTIONS2, 1);
     menu_entry_sensitive(MENU_GAME, MENU_GAME_OUTPUT_LOG, 1);
     menu_entry_sensitive(MENU_GAME, MENU_GAME_CLEAR_OUTPUT, 1);
   }
@@ -287,8 +288,8 @@ void update_menus(void)
 
     punit=get_unit_in_focus();
 
-    for(i=0; i<game.info.nplayers; i++) {
-      if (city_list_size(game.players[i].cities)) {
+    for(i=0; i<game.nplayers; i++) {
+      if (city_list_size(&game.players[i].cities)) {
 	any_cities = TRUE;
 	break;
       }
@@ -314,18 +315,19 @@ void update_menus(void)
       XtDestroyWidget(government_widgets[i]);
     }
     i = 0;
-    government_iterate(pgovernment) {
+    government_iterate(gov) {
       Widget w;
 
-      if (pgovernment == game.government_when_anarchy) {
+      if (gov->index == game.government_when_anarchy) {
 	continue;
       }
 
-      w = XtCreateManagedWidget(pgovernment->name, smeBSBObjectClass,
+      w = XtCreateManagedWidget(gov->name, smeBSBObjectClass,
 				menus[MENU_GOVERNMENT]->shell, NULL, 0);
-      XtAddCallback(w, XtNcallback, revolution_menu_callback, pgovernment);
+      XtAddCallback(w, XtNcallback, revolution_menu_callback,
+		    (XtPointer)gov->index);
       XtSetSensitive(w, can_change_to_government(game.player_ptr,
-						 pgovernment));
+						 gov->index));
 
       government_widgets[i] = w;
       i++;
@@ -350,7 +352,8 @@ void update_menus(void)
     menu_entry_sensitive(MENU_GAME, MENU_GAME_OPTIONS, 1);
     menu_entry_sensitive(MENU_GAME, MENU_GAME_MSG_OPTIONS, 1);
     menu_entry_sensitive(MENU_GAME, MENU_GAME_SAVE_SETTINGS, 1);
-    menu_entry_sensitive(MENU_GAME, MENU_GAME_SERVER_OPTIONS, 1);
+    menu_entry_sensitive(MENU_GAME, MENU_GAME_SERVER_OPTIONS1, 1);
+    menu_entry_sensitive(MENU_GAME, MENU_GAME_SERVER_OPTIONS2, 1);
     menu_entry_sensitive(MENU_GAME, MENU_GAME_OUTPUT_LOG, 1);
     menu_entry_sensitive(MENU_GAME, MENU_GAME_CLEAR_OUTPUT, 1);
     menu_entry_sensitive(MENU_GAME, MENU_GAME_DISCONNECT, 1);
@@ -360,10 +363,10 @@ void update_menus(void)
 
     if (punit && can_client_issue_orders()) {
       Terrain_type_id  ttype;
-      struct terrain *tinfo;
+      struct tile_type *      tinfo;
 
-      ttype = punit->tile->terrain->index;
-      tinfo = get_terrain(ttype);
+      ttype = punit->tile->terrain;
+      tinfo = get_tile_type(ttype);
 
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_BUILD_CITY,
 			   can_unit_add_or_build_city(punit));
@@ -405,9 +408,11 @@ void update_menus(void)
 			   is_unit_activity_on_tile(ACTIVITY_SENTRY,
 				punit->tile));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_AUTO_SETTLER,
-			   (punit && can_unit_do_autosettlers(punit)
+			   (can_unit_do_auto(punit)
 			    && unit_flag(punit, F_SETTLERS)));
-      menu_entry_sensitive(MENU_ORDER, MENU_ORDER_AUTO_ATTACK, false);
+      menu_entry_sensitive(MENU_ORDER, MENU_ORDER_AUTO_ATTACK, 
+			   (can_unit_do_auto(punit)
+			    && !unit_flag(punit, F_SETTLERS)));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_DISBAND,
 			   !unit_flag(punit, F_UNDISBANDABLE));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_AUTO_EXPLORE, 
@@ -424,6 +429,8 @@ void update_menus(void)
 			   unit_can_help_build_wonder_here(punit));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_TRADEROUTE,
 			   unit_can_est_traderoute_here(punit));
+      menu_entry_sensitive(MENU_ORDER, MENU_ORDER_RETURN,
+			   !(is_air_unit(punit) || is_heli_unit(punit)));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_DIPLOMAT_DLG,
 			   (is_diplomat_unit(punit)
 			    && diplomat_can_do_action(punit, DIPLOMAT_ANY_ACTION,
@@ -431,7 +438,7 @@ void update_menus(void)
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_NUKE,
                            unit_flag(punit, F_NUCLEAR));
 
-      if (unit_flag(punit, F_CITIES) && tile_get_city(punit->tile)) {
+      if (unit_flag(punit, F_CITIES) && map_get_city(punit->tile)) {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_BUILD_CITY,
 			  TEXT_ORDER_CITY_ADD_TO, NULL);
       } else {
@@ -440,12 +447,12 @@ void update_menus(void)
       }
 
       if ((tinfo->irrigation_result != T_NONE)
-	  && (tinfo->irrigation_result->index != ttype)) {
+	  && (tinfo->irrigation_result != ttype)) {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_IRRIGATE,
 			  TEXT_ORDER_IRRIGATE_CHANGE_TO,
-			  tinfo->irrigation_result->name);
+			  (get_tile_type(tinfo->irrigation_result))->terrain_name);
       }
-      else if (tile_has_special(punit->tile, S_IRRIGATION) &&
+      else if (map_has_special(punit->tile, S_IRRIGATION) &&
 	       player_knows_techs_with_flag(game.player_ptr, TF_FARMLAND)) {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_IRRIGATE,
 			  TEXT_ORDER_IRRIGATE_FARMLAND, NULL);
@@ -455,20 +462,20 @@ void update_menus(void)
       }
 
       if ((tinfo->mining_result != T_NONE)
-	  && (tinfo->mining_result->index != ttype)) {
+	  && (tinfo->mining_result != ttype)) {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_MINE,
 			  TEXT_ORDER_MINE_CHANGE_TO,
-			  tinfo->mining_result->name);
+			  (get_tile_type(tinfo->mining_result))->terrain_name);
       } else {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_MINE,
 			  TEXT_ORDER_MINE_MINE, NULL);
       }
 
       if ((tinfo->transform_result != T_NONE)
-	  && (tinfo->transform_result->index != ttype)) {
+	  && (tinfo->transform_result != ttype)) {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_TRANSFORM,
 			  TEXT_ORDER_TRANSFORM_TRANSFORM_TO,
-			  tinfo->transform_result->name);
+			  (get_tile_type(tinfo->transform_result))->terrain_name);
       } else {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_TRANSFORM,
 			  TEXT_ORDER_TRANSFORM_TERRAIN, NULL);
@@ -482,7 +489,7 @@ void update_menus(void)
 			  TEXT_ORDER_POLLUTION_POLLUTION, NULL);
       }
 
-      if (tile_has_special(punit->tile, S_ROAD)) {
+      if (map_has_special(punit->tile, S_ROAD)) {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_ROAD,
 			  TEXT_ORDER_ROAD_RAILROAD, NULL);
       } else {
@@ -511,8 +518,11 @@ static void game_menu_callback(Widget w, XtPointer client_data,
   case MENU_GAME_SAVE_SETTINGS:
     save_options();
     break;
-  case MENU_GAME_SERVER_OPTIONS:
-    popup_settable_options_dialog();
+  case MENU_GAME_SERVER_OPTIONS1:
+    send_report_request(REPORT_SERVER_OPTIONS1);
+    break;
+  case MENU_GAME_SERVER_OPTIONS2:
+    send_report_request(REPORT_SERVER_OPTIONS2);
     break;
   case MENU_GAME_OUTPUT_LOG:
     log_output_window();
@@ -548,7 +558,7 @@ static void government_menu_callback(Widget w, XtPointer client_data,
     popup_worklists_dialog(game.player_ptr);
     break;
   case MENU_GOVERNMENT_REVOLUTION:
-    popup_revolution_dialog(NULL);
+    popup_revolution_dialog(-1);
     break;
   }
 }
@@ -559,13 +569,11 @@ static void government_menu_callback(Widget w, XtPointer client_data,
 static void revolution_menu_callback(Widget w, XtPointer client_data,
 				     XtPointer garbage)
 {
-  struct government *pgovernment = client_data;
-
   if (game.player_ptr->revolution_finishes == -1) {
-    popup_revolution_dialog(pgovernment);
+    popup_revolution_dialog(XTPOINTER_TO_INT(client_data));
   } else {
     /* Player already has a revolution and should just choose a government */
-    set_government_choice(pgovernment);
+    set_government_choice(XTPOINTER_TO_INT(client_data));
   }
 }
 
@@ -708,6 +716,9 @@ static void orders_menu_callback(Widget w, XtPointer client_data,
   case MENU_ORDER_AUTO_SETTLER:
     key_unit_auto_settle();
     break;
+  case MENU_ORDER_AUTO_ATTACK:
+    key_unit_auto_attack();
+    break;
   case MENU_ORDER_AUTO_EXPLORE:
     key_unit_auto_explore();
     break;
@@ -775,7 +786,7 @@ static void reports_menu_callback(Widget w, XtPointer client_data,
     popup_activeunits_report_dialog(0);
     break;
   case MENU_REPORT_PLAYERS:
-    popup_players_dialog(FALSE);
+    popup_players_dialog();
     break;
    case MENU_REPORT_ECONOMY:
     popup_economy_report_dialog(0);
@@ -790,7 +801,7 @@ static void reports_menu_callback(Widget w, XtPointer client_data,
     send_report_request(REPORT_TOP_5_CITIES);
     break;
   case MENU_REPORT_MESSAGES:
-    popup_meswin_dialog(FALSE);
+    popup_meswin_dialog();
     break;
    case MENU_REPORT_DEMOGRAPHIC:
     send_report_request(REPORT_DEMOGRAPHIC);

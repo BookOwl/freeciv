@@ -2,7 +2,7 @@
 
 name=_("Boer")
 plural=_("?plural:Boers")
-groups= _("African")
+class=_("Historical")
 legend=_("The Boers were Dutch settlers in British-controlled South \
 Africa from 1650AD.  They briefly controlled two republics, the \
 Transvaal and the Orange Free State, before being defeated by the British \
@@ -11,14 +11,16 @@ leader= "Jacobus Pretorius", "Louis Botha", "Wessel Pretorius",
 	"Paulus Krüger", "Piet Retief", "Jan Smuts"
 leader_sex= "Male", "Male", "Male",
 	    "Male", "Male", "Male"
-flag="boer"
+flag="f.boer"
 flag_alt = "-"
 city_style = "European"
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
+tech_goals = "The Republic", "Trade", "Engineering", "Gunpowder",
+	     "Railroad", "Explosives"
+wonder= "Magellan's Expedition"
+government= "Communism"
 civilwar_nations = "dutch"
 
 cities =

@@ -2,7 +2,7 @@
 
 name   = _("German")
 plural = _("?plural:Germans")
-groups  = _("Modern"), _("Medieval"), _("European")
+class  = _("Modern")
 
 legend = _("Germany was united in 1871 by the Prussian military \
 force.  After World War I it became a republic, but fell into \
@@ -16,7 +16,7 @@ leader = "Arminius", "Alarich", "Karl der Große", "Otto I.",
 leader_sex = "Male", "Male", "Male", "Male", "Male", "Male", "Male", 
              "Male", "Male", "Male", "Male", "Male", "Male"
 
-flag         = "germany"
+flag         = "f.germany"
 flag_alt     = "-"
 city_style   = "European"
 ruler_titles = { "government",      "male_title",       "female_title"
@@ -29,8 +29,10 @@ ruler_titles = { "government",      "male_title",       "female_title"
 init_techs = ""
 init_buildings=""
 
-init_government="Despotism"
-init_units=""
+tech_goals = "The Republic", "Iron Working", "Gunpowder", "Explosives",
+             "Flight"
+wonder     = "J.S. Bach's Cathedral"
+government = "Republic"
 civilwar_nations = "french", "italian"
 
 cities =

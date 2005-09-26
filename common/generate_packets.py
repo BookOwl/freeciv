@@ -734,10 +734,7 @@ static char *stats_%(name)s_names[] = {%(names)s};
             delta_header=""
 
         if self.want_post_send:
-            if self.no_packet:
-                post="  post_send_%(packet_name)s(pc, NULL);\n"
-            else:
-                post="  post_send_%(packet_name)s(pc, real_packet);\n"
+            post="  post_send_%(packet_name)s(pc, real_packet);\n"
         else:
             post=""
 
@@ -1104,12 +1101,12 @@ class Packet:
         only_client=len(self.dirs)==1 and self.dirs[0]=="sc"
         only_server=len(self.dirs)==1 and self.dirs[0]=="cs"
         if only_client:
-            restrict='''  if (pc->is_server) {
+            restrict='''  if(is_server) {
     freelog(LOG_ERROR, "Receiving %(name)s at the server.");
   }
 '''%self.get_dict(vars())
         elif only_server:
-            restrict='''  if (!pc->is_server) {
+            restrict='''  if(!is_server) {
     freelog(LOG_ERROR, "Receiving %(name)s at the client.");
   }
 '''%self.get_dict(vars())
@@ -1140,12 +1137,12 @@ class Packet:
         only_client=len(self.dirs)==1 and self.dirs[0]=="cs"
         only_server=len(self.dirs)==1 and self.dirs[0]=="sc"
         if only_client:
-            restrict='''  if (pc->is_server) {
+            restrict='''  if(is_server) {
     freelog(LOG_ERROR, "Sending %(name)s from the server.");
   }
 '''%self.get_dict(vars())
         elif only_server:
-            restrict='''  if (!pc->is_server) {
+            restrict='''  if(!is_server) {
     freelog(LOG_ERROR, "Sending %(name)s from the client.");
   }
 '''%self.get_dict(vars())
@@ -1194,7 +1191,7 @@ class Packet:
         if not self.want_lsend: return ""
         return '''%(lsend_prototype)s
 {
-  conn_list_iterate(dest, pconn) {
+  conn_list_iterate(*dest, pconn) {
     send_%(name)s(pconn%(extra_send_args2)s);
   } conn_list_iterate_end;
 }
@@ -1511,10 +1508,7 @@ bool server_handle_packet(enum packet_type type, void *packet,
                 b=", "+b
             if p.handle_via_packet:
                 f.write('struct %s;\n'%p.name)
-                if p.handle_per_conn:
-                    f.write('void handle_%s(struct connection *pc, struct %s *packet);\n'%(a,p.name))
-                else:
-                    f.write('void handle_%s(struct player *pplayer, struct %s *packet);\n'%(a,p.name))
+                f.write('void handle_%s(struct player *pplayer, struct %s *packet);\n'%(a,p.name))
             else:
                 if p.handle_per_conn:
                     f.write('void handle_%s(struct connection *pc%s);\n'%(a,b))
@@ -1588,11 +1582,7 @@ bool server_handle_packet(enum packet_type type, void *packet,
             b=",\n      "+b
 
         if p.handle_via_packet:
-             if p.handle_per_conn:
-                 args="pconn, packet"
-             else:
-                 args="pplayer, packet"
-
+            args="pplayer, packet"
         else:
             if p.handle_per_conn:
                 args="pconn"+b

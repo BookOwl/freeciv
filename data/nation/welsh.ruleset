@@ -2,13 +2,13 @@
 
 name=_("Welsh")
 plural=_("?plural:Welsh")
-groups= _("Medieval"), _("European")
+class=_("Historical")
 legend=_("The Welsh at one time controlled all of what is now England \
 until being driven into the mountainous western reaches by invading Saxons.")
 leader="Llywelyn ap Gruffudd", "Hywel Dda", "Owain Glyndwr"
 leader_sex="Male", "Male", "Male"
-flag="wales"
-flag_alt = "united_kingdom"
+flag="f.wales"
+flag_alt = "f.united_kingdom"
 city_style = "European"
 
 ;names = "Yr Ymerodreath Gymreig"          "empire"            (depotism)
@@ -25,8 +25,10 @@ ruler_titles = { "government",      "male_title",      "female_title",
 init_techs=""
 init_buildings=""
 
-init_government="Despotism"
-init_units=""
+tech_goals="Monarchy","Iron Working","Trade","Navigation","Railroad","Steel",
+           "Industrialization"
+wonder="Hoover Dam"
+government="Democracy"
 civilwar_nations = "scottish"
 
 cities =

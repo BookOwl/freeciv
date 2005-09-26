@@ -65,8 +65,6 @@ void handle_diplomacy_remove_clause(int counterpart, int giver,
 
 /**************************************************************************
   Close all open diplomacy dialogs.
-
-  Called when the client disconnects from game.
 **************************************************************************/
 void close_all_diplomacy_dialogs(void)
 {

@@ -34,7 +34,6 @@
 #include "mapctrl.h"
 #include "menu.h"
 #include "messagewin.h"
-#include "pages.h"
 #include "plrdlg.h"
 #include "inteldlg.h"
 #include "ratesdlg.h"
@@ -246,14 +245,14 @@ static void xaw_key_open_messages(Widget w, XEvent *event, String *argv, Cardina
 {
   if (can_client_change_view() &&
      is_menu_item_active(MENU_REPORT, MENU_REPORT_MESSAGES))
-    popup_meswin_dialog(FALSE);
+    popup_meswin_dialog();
 }
 
 static void xaw_key_open_players(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
   if (can_client_change_view() &&
      is_menu_item_active(MENU_REPORT, MENU_REPORT_PLAYERS))
-    popup_players_dialog(FALSE);
+    popup_players_dialog();
 }
 
 /****************************************************************************
@@ -276,7 +275,7 @@ static void xaw_key_open_revolution(Widget w, XEvent *event,
 {
   if (can_client_change_view()
       && is_menu_item_active(MENU_GOVERNMENT, MENU_GOVERNMENT_REVOLUTION)) {
-    popup_revolution_dialog(NULL);
+    popup_revolution_dialog(-1);
   }
 }
 
@@ -353,41 +352,41 @@ static void xaw_key_unit_airbase(Widget w, XEvent *event,
 }
 
 /****************************************************************************
-  Invoked when the key binding for orders->auto_explore is pressed.
+  Invoked when the key binding for orders->auto_attack is pressed.
 ****************************************************************************/
-static void xaw_key_unit_auto_explore(Widget w, XEvent *event, String *argv,
-				      Cardinal *argc)
+static void xaw_key_unit_auto_attack(Widget w, XEvent *event,
+				     String *argv, Cardinal *argc)
+{
+  if (can_client_issue_orders()
+      && is_menu_item_active(MENU_ORDER, MENU_ORDER_AUTO_ATTACK)) {
+    key_unit_auto_attack();
+  }
+}
+
+static void xaw_key_unit_auto_attack_or_settle(Widget w, XEvent *event, String *argv, Cardinal *argc)
+{
+  struct unit *punit = get_unit_in_focus();
+  if(punit) {
+    if (unit_flag(punit, F_SETTLERS)) {
+      if(is_menu_item_active(MENU_ORDER, MENU_ORDER_AUTO_SETTLER))
+	key_unit_auto_settle();
+    } else {
+      if(is_menu_item_active(MENU_ORDER, MENU_ORDER_AUTO_ATTACK))
+	key_unit_auto_attack();
+    }
+  }
+}
+
+static void xaw_key_unit_auto_explore(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
   if(is_menu_item_active(MENU_ORDER, MENU_ORDER_AUTO_EXPLORE))
     key_unit_auto_explore();
 }
 
-/****************************************************************************
-  Invoked when the key binding for orders->auto_settle is pressed.
-****************************************************************************/
-static void xaw_key_unit_auto_settle(Widget w, XEvent *event, String *argv,
-				     Cardinal *argc)
+static void xaw_key_unit_auto_settle(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
   if(is_menu_item_active(MENU_ORDER, MENU_ORDER_AUTO_SETTLER))
     key_unit_auto_settle();
-}
-
-/****************************************************************************
-  Invoked when the key binding for auto-settle or auto-attack is pressed.
-  Since there is no more auto-attack this function is just like another
-  way of calling key_unit_auto_settle.
-****************************************************************************/
-static void xaw_key_unit_auto_attack_or_settle(Widget w, XEvent *event,
-					       String *argv, Cardinal *argc)
-{
-  struct unit *punit = get_unit_in_focus();
-  if (punit) {
-    /* Since there is no more auto-attack, do nothing if unit nas no settler flag */
-    if (unit_flag(punit, F_SETTLERS)) {
-      if (is_menu_item_active(MENU_ORDER, MENU_ORDER_AUTO_SETTLER))
-	key_unit_auto_settle();
-    }
-  }
 }
 
 static void xaw_key_unit_build_city(Widget w, XEvent *event, String *argv, Cardinal *argc)
@@ -708,15 +707,6 @@ static void xaw_msg_close_science_report(Widget w, XEvent *event, String *argv, 
   sciencereport_msg_close(w);
 }
 
-/****************************************************************************
-  Action for msg-close-settable-options
-****************************************************************************/
-static void xaw_msg_close_settable_options(Widget w, XEvent *event,
-					   String *argv, Cardinal *argc)
-{
-  settable_options_msg_close(w);
-}
-
 static void xaw_msg_close_spaceship(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
   spaceshipdlg_msg_close(w);
@@ -725,11 +715,6 @@ static void xaw_msg_close_spaceship(Widget w, XEvent *event, String *argv, Cardi
 static void xaw_msg_close_units_report(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
   activeunits_msg_close(w);
-}
-
-static void xaw_msg_close_start_page(Widget w, XEvent *event, String *argv, Cardinal *argc)
-{
-  start_page_msg_close(w);
 }
 
 static void xaw_msg_quit_freeciv(Widget w, XEvent *event, String *argv, Cardinal *argc)
@@ -787,6 +772,7 @@ static XtActionsRec Actions[] = {
   { "key-open-wonders", xaw_key_open_wonders },
   { "key-open-worklists", xaw_key_open_worklists },
   { "key-unit-airbase", xaw_key_unit_airbase },
+  { "key-unit-auto-attack", xaw_key_unit_auto_attack },
   { "key-unit-auto-attack-or-settle", xaw_key_unit_auto_attack_or_settle },
   { "key-unit-auto-explore", xaw_key_unit_auto_explore },
   { "key-unit-auto-settle", xaw_key_unit_auto_settle },
@@ -832,10 +818,8 @@ static XtActionsRec Actions[] = {
   { "msg-close-intel", xaw_msg_close_intel },
   { "msg-close-intel-diplo", xaw_msg_close_intel_diplo },
   { "msg-close-science-report", xaw_msg_close_science_report },
-  { "msg-close-settable-options", xaw_msg_close_settable_options },
   { "msg-close-spaceship", xaw_msg_close_spaceship },
   { "msg-close-units-report", xaw_msg_close_units_report },
-  { "msg-close-start-page", xaw_msg_close_start_page },
   { "msg-quit-freeciv", xaw_msg_quit_freeciv }
 };
 

@@ -2,7 +2,7 @@
 
 name=_("Turk")
 plural=_("?plural:Turks")
-groups=_("Medieval"), _("Modern"), _("Asian")
+class=_("Modern")
 legend=_("Modern Turkey is the successor state of the Ottoman Empire, which \
 collapsed and was dismembered by the victors in World War I after backing \
 the Central Powers.  The country was subsequently reformed and secularized \
@@ -11,7 +11,7 @@ leader="Kemal Atatürk", "Süleyman", "Osman", "Murat",
        "Selim", "Mehmet"
 leader_sex="Male", "Male", "Male", "Male",
            "Male", "Male"
-flag="turkey"
+flag="f.turkey"
 flag_alt = "-"
 city_style = "European"
 
@@ -22,8 +22,10 @@ ruler_titles = { "government",      "male_title",      "female_title"
 init_techs=""
 init_buildings=""
 
-init_government="Despotism"
-init_units=""
+tech_goals = "Monarchy", "Philosophy", "Mathematics", "Chivalry",
+             "Theology", "Railroad"
+wonder="Sun Tzu's War Academy"
+government="Republic"
 civilwar_nations = "slovenian", "czech"
 
 cities =

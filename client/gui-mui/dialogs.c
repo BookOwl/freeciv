@@ -295,7 +295,7 @@ HOOKPROTONH(advance_display, void, char **array, APTR msg)
   if(which)
   {
     int tech = which-100;
-    if (tech == game.control.num_tech_types) *array = _("At Spy's Discretion");
+    if (tech == game.num_tech_types) *array = _("At Spy's Discretion");
     else *array = advances[which-100].name;
   }
   else
@@ -341,7 +341,7 @@ static void create_advances_list(struct player *pplayer,
     {
       /* you don't want to know what lag can do -- Syela */
       int any_tech = FALSE;
-      for(i=A_FIRST; i<game.control.num_tech_types; i++)
+      for(i=A_FIRST; i<game.num_tech_types; i++)
       {
         if(get_invention(pvictim, i)==TECH_KNOWN && (get_invention(pplayer, i)==TECH_UNKNOWN || get_invention(pplayer, i)==TECH_REACHABLE))
         {
@@ -351,7 +351,7 @@ static void create_advances_list(struct player *pplayer,
       }
 
       if (any_tech)
-	DoMethod(listview, MUIM_NList_InsertSingle, 100+game.control.num_tech_types,MUIV_NList_Insert_Bottom);
+	DoMethod(listview, MUIM_NList_InsertSingle, 100+game.num_tech_types,MUIV_NList_Insert_Bottom);
     }
 
     DoMethod(wnd,MUIM_Notify, MUIA_Window_CloseRequest, TRUE, app, 5, MUIM_CallHook, &civstandard_hook, spy_close, wnd, listview);
@@ -718,7 +718,7 @@ void popup_diplomat_dialog(struct unit *punit, int dest_x, int dest_y)
 
   diplomat_id = punit->id;
   
-  if((pcity=tile_get_city(dest_x, dest_y)))
+  if((pcity=map_get_city(dest_x, dest_y)))
   {
     /* Spy/Diplomat acting against a city */ 
  
@@ -1080,7 +1080,7 @@ void popup_pillage_dialog(struct unit *punit,
     {
       enum tile_special_type what = get_preferred_pillage(may_pillage);
 
-      may_pillage &= (~(what | get_infrastructure_prereq(what)));
+      may_pillage &= (~(what | map_get_infrastructure_prerequisite (what)));
       count++;
     }
 
@@ -1100,11 +1100,11 @@ void popup_pillage_dialog(struct unit *punit,
 	{
 	  enum tile_special_type what = get_preferred_pillage (may_pillage);
 	
-          msg_dlg[i].label = mystrdup(get_infrastructure_text(what));
+          msg_dlg[i].label = mystrdup(map_get_infrastructure_text(what));
           msg_dlg[i].function = (APTR)pillage_button;
           msg_dlg[i].data = (APTR)what;
 	
-          may_pillage &= (~(what | get_infrastructure_prereq(what)));
+          may_pillage &= (~(what | map_get_infrastructure_prerequisite (what)));
         }
 	
         msg_dlg[i].label = _("_Cancel");
@@ -1457,7 +1457,7 @@ Object *nations_styles_cycle;
  Get the nation id of the nation selected in the nations
  listview
 *****************************************************************/
-Nation_type_id get_active_nation(void)
+Nation_Type_id get_active_nation(void)
 {
   char *nationname;
 
@@ -1475,7 +1475,7 @@ static void nations_nation_active(void)
   int i, leader_count;
   struct leader *leaders;
   Object *list = (Object*)xget(nations_leader_poplist,MUIA_Popobject_Object);
-  Nation_type_id nation = get_active_nation();
+  Nation_Type_id nation = get_active_nation();
 
   set(nations_flag_sprite, MUIA_Sprite_Sprite, get_nation_by_idx(nation)->flag_sprite);
 
@@ -1538,7 +1538,7 @@ static void nations_disconnect(void)
 HOOKPROTONH(nations_obj2str, void, Object *list, Object *str)
 {
   char *x;
-  Nation_type_id nation = get_active_nation();
+  Nation_Type_id nation = get_active_nation();
   DoMethod(list,MUIM_List_GetEntry,MUIV_List_GetEntry_Active,&x);
   set(str,MUIA_String_Contents,x);
   if(x) set(nations_sex_radio, MUIA_Radio_Active, get_nation_leader_sex(nation,x)?0:1);
@@ -1596,7 +1596,7 @@ void popup_races_dialog(void)
 
     styles_basic_nums = 0;
 
-    for(i=0;i<game.control.styles_count && i<64;i++)
+    for(i=0;i<game.styles_count && i<64;i++)
     {
       if(city_styles[i].techreq == A_NONE)
       {
@@ -1664,7 +1664,7 @@ void popup_races_dialog(void)
     if(nations_wnd)
     {
       DoMethod(nations_nation_listview, MUIM_List_Clear);
-      for(i=0;i<game.control.playable_nation_count && i<64;i++)
+      for(i=0;i<game.playable_nation_count && i<64;i++)
 	DoMethod(nations_nation_listview, MUIM_List_InsertSingle, get_nation_name(i), MUIV_List_Insert_Sorted);
 
       DoMethod(nations_nation_listview, MUIM_Notify, MUIA_List_Active, MUIV_EveryTime, app, 3, MUIM_CallHook, &civstandard_hook, nations_nation_active);

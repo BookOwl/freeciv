@@ -22,8 +22,6 @@ libguiclient_a_DEPENDENCIES = rc2c
 libguiclient_a_SOURCES = \
 	rc2c		\
 	Freeciv.h	\
-	canvas.c	\
-	canvas.h	\
 	chatline.h	\
 	chatline.c	\
 	citydlg.c	\
@@ -83,9 +81,6 @@ libguiclient_a_SOURCES = \
 	resources.h	\
 	spaceshipdlg.c	\
 	spaceshipdlg.h  \
-	sprite.c	\
-	sprite.h	\
-	themes.c	\
 	wldlg.c		\
 	wldlg.h	
 

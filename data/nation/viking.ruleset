@@ -2,7 +2,7 @@
 
 name=_("Viking")
 plural=_("?plural:Vikings")
-groups=_("Medieval"), _("European")
+class=_("Historical")
 legend=_("The Vikings raided and traded along the coasts of Europe \
 between 800AD and 1100AD. Viking raiders eventually became the rulers of \
 Normandy, Russia, and a short-lived kingdom in Sicily.")
@@ -25,8 +25,8 @@ leader_sex="Male", "Male", "Male", "Male",
            "Male", "Male", "Female", "Male",
            "Male"
            
-flag="norway"
-flag_alt = "denmark"  ; Now used by Danish
+flag="f.norway"
+flag_alt = "f.denmark"  ; Now used by Danish
 city_style = "European"
 ruler_titles = { "government",      "male_title",      "female_title"
                  "Democracy",       _("Prime Minister"), _("Prime Minister")
@@ -35,8 +35,10 @@ ruler_titles = { "government",      "male_title",      "female_title"
 init_techs=""
 init_buildings=""
 
-init_government="Despotism"
-init_units=""
+tech_goals = "The Republic", "The Wheel", "Iron Working", "Construction",
+             "Railroad"
+wonder="Magellan's Expedition"
+government="Republic"
 civilwar_nations = "swedish", "finnish", "icelandic"
 
 ;Norwegian (and Icelandic) names.

@@ -20,27 +20,25 @@
 
 #include "hand_gen.h"
 
+enum ocean_land_change { OLC_NONE, OLC_OCEAN_TO_LAND, OLC_LAND_TO_OCEAN };
+
 struct section_file;
 struct conn_list;
 
 struct dumb_city{
-  /* Values in this struct are copied using a memcpy, so don't put any
-   * pointers in here. */
   int id;
+  bool has_walls;
   bool occupied;
   bool happy, unhappy;
   char name[MAX_LEN_NAME];
   unsigned short size;
-  struct player *owner; /* City owner - cannot be NULL. */
-
-  bv_imprs improvements;
+  unsigned char owner;
 };
 
 struct player_tile {
-  struct terrain *terrain; /* May be NULL for unknown tiles. */
-  bv_special special;
-  signed char owner;
-  unsigned short seen_count;
+  Terrain_type_id terrain;
+  enum tile_special_type special;
+  unsigned short seen;
   unsigned short own_seen;
   /* If you build a city with an unknown square within city radius
      the square stays unknown. However, we still have to keep count
@@ -50,6 +48,9 @@ struct player_tile {
   struct dumb_city* city;
   short last_updated;
 };
+
+/* The maximum number of continents and oceans. */
+#define MAP_NCONT 1024
 
 void assign_continent_numbers(bool skip_unsafe);
 
@@ -76,7 +77,7 @@ void map_fog_pseudo_city_area(struct player *pplayer, struct tile *ptile);
 
 bool map_is_known_and_seen(const struct tile *ptile, struct player *pplayer);
 void map_change_seen(struct tile *ptile, struct player *pplayer, int change);
-bool map_is_known(const struct tile *ptile, const struct player *pplayer);
+bool map_is_known(const struct tile *ptile, struct player *pplayer);
 void map_set_known(struct tile *ptile, struct player *pplayer);
 void map_clear_known(struct tile *ptile, struct player *pplayer);
 void map_know_all(struct player *pplayer);
@@ -86,7 +87,7 @@ void show_map_to_all(void);
 void player_map_allocate(struct player *pplayer);
 void player_map_free(struct player *pplayer);
 struct player_tile *map_get_player_tile(const struct tile *ptile,
-					const struct player *pplayer);
+					struct player *pplayer);
 bool update_player_tile_knowledge(struct player *pplayer,struct tile *ptile);
 void update_tile_knowledge(struct tile *ptile);
 void update_player_tile_last_seen(struct player *pplayer, struct tile *ptile);
@@ -102,7 +103,8 @@ void map_update_borders_city_change(struct city *pcity);
 void map_update_borders_landmass_change(struct tile *ptile);
 void map_calculate_borders(void);
 
-void check_terrain_change(struct tile *ptile, struct terrain *oldter);
+enum ocean_land_change check_terrain_ocean_land_change(struct tile *ptile,
+                                              Terrain_type_id oldter);
 int get_continent_size(Continent_id id);
 int get_ocean_size(Continent_id id);
 

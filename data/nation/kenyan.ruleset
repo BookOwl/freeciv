@@ -2,16 +2,17 @@
 
 name = _("Kenyan")
 plural = _("?plural:Kenyans")
-groups=_("Modern"), _("African")
+class=_("Modern")
 leader = "Kenyatta", "Nabongo", "Wangari Maathai", "Ezekiel Apindi"
 leader_sex = "Male", "Male", "Female", "Male"
-flag = "kenya"
+flag = "f.kenya"
 flag_alt = "-"
 city_style = "Tropical"
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
+tech_goals="Monarchy","Warrior Code","Iron Working","Navigation"
+wonder="Sun Tzu's War Academy"
+government="Republic"
 
 cities =
   "Nairobi", "Mombasa", "Malindi", "Kisumu", "Labu", "Kitale", "Nakuru",

@@ -16,7 +16,7 @@
 #include "shared.h"		/* bool type */
 
 #include "fc_types.h"
-#include "nation.h"		/* Nation_type_id */
+#include "nation.h"		/* Nation_Type_id */
 #include "terrain.h"		/* enum tile_special_type */
 
 struct packet_nations_selected_info;
@@ -26,12 +26,12 @@ void popup_notify_goto_dialog(const char *headline, const char *lines,
 void popup_notify_dialog(const char *caption, const char *headline,
 			 const char *lines);
 
-void popup_races_dialog(struct player *pplayer);
+void popup_races_dialog(void);
 void popdown_races_dialog(void);
 
 void popup_unit_select_dialog(struct tile *ptile);
 
-void races_toggles_set_sensitive(void);
+void races_toggles_set_sensitive(bool *nations_used);
 
 void popup_caravan_dialog(struct unit *punit,
 			  struct city *phomecity, struct city *pdestcity);
@@ -41,7 +41,8 @@ bool diplomat_dialog_is_open(void);
 void popup_incite_dialog(struct city *pcity);
 void popup_bribe_dialog(struct unit *punit);
 void popup_sabotage_dialog(struct city *pcity);
-void popup_pillage_dialog(struct unit *punit, bv_special may_pillage);
+void popup_pillage_dialog(struct unit *punit,
+			  enum tile_special_type may_pillage);
 
 void popdown_all_game_dialogs(void);
 

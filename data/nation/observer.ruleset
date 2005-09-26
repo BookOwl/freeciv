@@ -4,20 +4,17 @@ name=_("Observer")
 plural=_("?plural:Observers")
 leader="None"
 leader_sex="Male"
-flag="observer"
+flag="f.observer"
 flag_alt = "-"
 city_style = "Classical"
 
 init_techs=""
 init_buildings=""
 
-init_government="Despotism"
-init_units=""
+tech_goals = ""
+wonder = ""
+government = "Anarchy"
 
 cities = "Nowhere"
-
-is_playable = 0
-is_observer = 1
-is_barbarian = 0
 
 ; nothing more needed for observer

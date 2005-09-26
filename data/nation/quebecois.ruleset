@@ -2,11 +2,11 @@
 
 name=_("Quebecois")
 plural=_("?plural:Quebecois")
-groups= _("American")
+class=_("Historical")
 leader="Champlain", "Frontenac", "Montcalm", "Papineau",
        "Rene Levesque"
 leader_sex="Male", "Male", "Male", "Male", "Male"
-flag = "quebec"
+flag = "f.quebec"
 flag_alt = "-"
 city_style = "European"
 
@@ -17,8 +17,10 @@ ruler_titles = { "government",	"male_title",	"female_title"
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
+tech_goals = "Monarchy","Trade","Mathematics","Chivalry","Iron Working",
+             "Theology","Invention","Code of Laws","Engineering","Astronomy"
+wonder="Great Library"
+government="Democracy"
 
 cities =
   "Québec", "Montréal", "Trois-Rivières", "Sherbrooke", "Lévis", "Sorel", 

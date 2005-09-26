@@ -14,7 +14,6 @@
 #ifndef FC__REPODLGS_COMMON_H
 #define FC__REPODLGS_COMMON_H
 
-#include "fc_types.h"
 #include "improvement.h"
 #include "unittype.h"
 
@@ -22,13 +21,13 @@
 
 struct improvement_entry
 {
-  Impr_type_id type;
+  Impr_Type_id type;
   int count, cost, total_cost;
 };
 
 struct unit_entry
 {
-  struct unit_type *type;
+  Unit_Type_id type;
   int count, cost, total_cost;
 };
 
@@ -53,10 +52,8 @@ struct options_settable {
   char *name;
   char *short_help;
   char *extra_help;
-  enum sset_type type;
-  enum sset_class class;
+  int type;
   unsigned char category;
-  bool is_visible;
 
   int val;
   int default_val;
@@ -76,9 +73,9 @@ extern int num_options_categories;
 void settable_options_init(void);
 void settable_options_free(void);
 
-void sell_all_improvements(Impr_type_id impr, bool obsolete_only,
+void sell_all_improvements(Impr_Type_id impr, bool obsolete_only,
 			   char *message, size_t message_sz);
-void disband_all_units(struct unit_type *punittype, bool in_cities_only,
+void disband_all_units(Unit_Type_id type, bool in_cities_only,
 		       char *message, size_t message_sz);
 
 #endif /* FC__REPODLGS_COMMON_H */

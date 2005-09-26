@@ -19,17 +19,15 @@
 #include <string.h>
 
 #include "fcintl.h"
-#include "game.h"
 #include "map.h"
 #include "mem.h"
 
 #include "citydlg_g.h"
 #include "mapview_g.h"
 #include "messagewin_g.h"
-
-#include "civclient.h"
-#include "messagewin_common.h"
 #include "options.h"
+
+#include "messagewin_common.h"
 
 static int frozen_level = 0;
 static bool change = FALSE;
@@ -71,13 +69,13 @@ void meswin_force_thaw(void)
 **************************************************************************/
 void update_meswin_dialog(void)
 {
-  if (frozen_level > 0 || !change || !can_client_change_view()) {
+  if (frozen_level > 0 || !change) {
     return;
   }
 
   if (!is_meswin_open() && messages_total > 0 &&
-      (!game.player_ptr->ai.control)) {
-    popup_meswin_dialog(FALSE);
+      (!game.player_ptr->ai.control || ai_popup_windows)) {
+    popup_meswin_dialog();
     change = FALSE;
     return;
   }
@@ -111,8 +109,11 @@ void add_notify_window(char *message, struct tile *ptile,
 		       enum event_type event)
 {
   const size_t min_msg_len = 50;
-  size_t msg_len = strlen(message);
-  char *s = fc_malloc(MAX(msg_len, min_msg_len) + 1);
+  const char *game_prefix1 = "Game: ";
+  const char *game_prefix2 = _("Game: ");
+  size_t gp_len1 = strlen(game_prefix1);
+  size_t gp_len2 = strlen(game_prefix2);
+  char *s = fc_malloc(MAX(strlen(message), min_msg_len) + 1);
   int i, nspc;
 
   change = TRUE;
@@ -122,7 +123,13 @@ void add_notify_window(char *message, struct tile *ptile,
     messages = fc_realloc(messages, messages_alloc * sizeof(*messages));
   }
 
-  strcpy(s, message);
+  if (strncmp(message, game_prefix1, gp_len1) == 0) {
+    strcpy(s, message + gp_len1);
+  } else if (strncmp(message, game_prefix2, gp_len2) == 0) {
+    strcpy(s, message + gp_len2);
+  } else {
+    strcpy(s, message);
+  }
 
   nspc = min_msg_len - strlen(s);
   if (nspc > 0) {
@@ -142,7 +149,7 @@ void add_notify_window(char *message, struct tile *ptile,
    */
   for (i = 0; i < messages_total; i++) {
     if (messages[i].location_ok) {
-      struct city *pcity = tile_get_city(messages[i].tile);
+      struct city *pcity = map_get_city(messages[i].tile);
 
       messages[i].city_ok = (pcity && city_owner(pcity) == game.player_ptr);
     } else {
@@ -187,7 +194,7 @@ void meswin_popup_city(int message_index)
 
   if (messages[message_index].city_ok) {
     struct tile *ptile = messages[message_index].tile;
-    struct city *pcity = tile_get_city(ptile);
+    struct city *pcity = map_get_city(ptile);
 
     if (center_when_popup_city) {
       center_tile_mapcanvas(ptile);
@@ -201,7 +208,7 @@ void meswin_popup_city(int message_index)
        *
        * In both cases, it would be better if the popup button weren't
        * highlighted at all - this is left up to the GUI. */
-      popup_city_dialog(pcity);
+      popup_city_dialog(pcity, FALSE);
     }
   }
 }

@@ -2,17 +2,19 @@
 
 name=_("Austrian")
 plural=_("?plural:Austrians")
-groups=_("Modern"), _("European")
+class=_("Modern")
 leader="Maria Theresia", "Franz Joseph", "Luitpold" 
 leader_sex="Female", "Male", "Male"
-flag="austria"
+flag="f.austria"
 flag_alt = "-"
 city_style = "European"
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
+tech_goals = "Monarchy", "The Republic", "Gunpowder", "Metallurgy",
+             "Plastics"
+wonder= "J.S. Bach's Cathedral"
+government = "Monarchy"
 
 cities =
   "Wien", "Graz", "Linz", "Salzburg", "Innsbruck", "Klagenfurt",

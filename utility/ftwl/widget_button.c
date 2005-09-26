@@ -43,14 +43,15 @@ static void draw(struct sw_widget *widget)
     pos.y = widget->inner_bounds.y;
     be_copy_osda_to_osda(get_osda(widget),
 			 widget->data.button.background_faces[face],
-			 &size, &pos, NULL);
+			 &size, &pos, NULL, 0);
   }
 
   if (widget->data.button.text[face]) {
     pos.x = widget->inner_bounds.x + widget->data.button.text_offset[face].x;
     pos.y = widget->inner_bounds.y + widget->data.button.text_offset[face].y;
 
-    be_draw_string(get_osda(widget), &pos, widget->data.button.text[face]);
+    be_draw_string(get_osda(widget), BE_OPAQUE, &pos,
+		   widget->data.button.text[face]);
   }
 
   if (widget->data.button.foreground_faces[face]) {
@@ -63,7 +64,7 @@ static void draw(struct sw_widget *widget)
 
     be_copy_osda_to_osda(get_osda(widget),
 			 widget->data.button.foreground_faces[face],
-			 &size, &pos, NULL);
+			 &size, &pos, NULL, 0);
   }
 }
 
@@ -246,7 +247,7 @@ struct sw_widget *sw_button_create(struct sw_widget *parent,
 *************************************************************************/
 struct sw_widget *sw_button_create_text_and_background(struct sw_widget
 						       *parent, struct ct_string
-						       *string, struct sprite
+						       *string, struct Sprite
 						       *background_faces)
 {
   struct ct_size whole_size, size;
@@ -263,18 +264,18 @@ struct sw_widget *sw_button_create_text_and_background(struct sw_widget
 
   for (i = 0; i < 4; i++) {
     struct osda *t = be_create_osda(size.width, size.height);
-    struct sprite *s = be_crop_sprite(background_faces, 0, i * size.height,
+    struct Sprite *s = be_crop_sprite(background_faces, 0, i * size.height,
 				      size.width, size.height);
     struct ct_point point = { 0, 0 };
 
-    be_draw_sprite(t, s, &size, &point, &point);
+    be_draw_sprite(t, BE_OPAQUE, s, &size, &point, &point);
     faces[i] = t;
   }
 
   for (i = 0; i < 4; i++) {
     strings[i] = string;
   }
-  return sw_button_create(parent, string ? strings : NULL, NULL, faces);
+  return sw_button_create(parent,string?strings:NULL,NULL,faces);
 }
 
 /*************************************************************************
@@ -282,7 +283,7 @@ struct sw_widget *sw_button_create_text_and_background(struct sw_widget
 *************************************************************************/
 struct sw_widget *sw_button_create_bounded(struct sw_widget *parent,
 					   struct ct_string *string,
-					   struct sprite *background_faces,
+					   struct Sprite *background_faces,
 					   const struct ct_rect *bounds,
 					   enum ws_alignment alignment)
 {

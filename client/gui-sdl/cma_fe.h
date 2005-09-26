@@ -14,9 +14,9 @@
 #ifndef FC__SDL_CMA_H
 #define FC__SDL_CMA_H
 
-#include "fc_types.h"
-
 #include "cma_core.h"
+
+struct city;
 
 void update_city_cma_dialog(void);
 void popup_city_cma_dialog(struct city *pCity);

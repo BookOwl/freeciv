@@ -72,7 +72,7 @@ static struct {
       int wait_at_network, wait_at_network_requests;
     } stats;
   } entries[MAX_AGENTS];
-  struct call_list *calls;
+  struct call_list calls;
 } agents;
 
 static bool initialized = FALSE;
@@ -152,7 +152,7 @@ static void enqueue_call(struct my_agent *agent,
     }
   } call_list_iterate_end;
 
-  call_list_prepend(agents.calls, pcall2);
+  call_list_insert(&agents.calls, pcall2);
 
   if (DEBUG_TODO_LISTS) {
     freelog(LOG_NORMAL, "A: adding call");
@@ -180,15 +180,15 @@ static struct call *remove_and_return_a_call(void)
 {
   struct call *result;
 
-  if (call_list_size(agents.calls) == 0) {
+  if (call_list_size(&agents.calls) == 0) {
     return NULL;
   }
 
   /* get calls to agents with low levels first */
-  call_list_sort(agents.calls, my_call_sort);
+  call_list_sort(&agents.calls, my_call_sort);
 
-  result = call_list_get(agents.calls, 0);
-  call_list_unlink(agents.calls, result);
+  result = call_list_get(&agents.calls, 0);
+  call_list_unlink(&agents.calls, result);
 
   if (DEBUG_TODO_LISTS) {
     freelog(LOG_NORMAL, "A: removed call");
@@ -341,7 +341,7 @@ static void print_stats(struct my_agent *agent)
 void agents_init(void)
 {
   agents.entries_used = 0;
-  agents.calls = call_list_new();
+  call_list_init(&agents.calls);
 
   /* Add init calls of agents here */
   cma_init();
@@ -362,8 +362,6 @@ void agents_free(void)
    * let the OS free the memory on exit instead of doing it ourselves. */
   /* cmafec_free(); */
 
-  /*simple_historian_done();*/
-
   for (;;) {
     struct call *pcall = remove_and_return_a_call();
     if (!pcall) {
@@ -378,7 +376,6 @@ void agents_free(void)
 
     free_timer(agent->stats.network_wall_timer);
   }
-  call_list_free(agents.calls);
 }
 
 /***********************************************************************
@@ -519,7 +516,7 @@ void agents_unit_changed(struct unit *punit)
 
   freelog(LOG_DEBUG,
 	  "A: agents_unit_changed(unit=%d) type=%s pos=(%d,%d) owner=%s",
-	  punit->id, punit->type->name, TILE_XY(punit->tile),
+	  punit->id, unit_types[punit->type].name, TILE_XY(punit->tile),
 	  unit_owner(punit)->name);
 
   for (i = 0; i < agents.entries_used; i++) {
@@ -545,7 +542,7 @@ void agents_unit_new(struct unit *punit)
 
   freelog(LOG_DEBUG,
 	  "A: agents_new_unit(unit=%d) type=%s pos=(%d,%d) owner=%s",
-	  punit->id, punit->type->name, TILE_XY(punit->tile),
+	  punit->id, unit_types[punit->type].name, TILE_XY(punit->tile),
 	  unit_owner(punit)->name);
 
   for (i = 0; i < agents.entries_used; i++) {
@@ -572,7 +569,7 @@ void agents_unit_remove(struct unit *punit)
 
   freelog(LOG_DEBUG,
 	  "A: agents_remove_unit(unit=%d) type=%s pos=(%d,%d) owner=%s",
-	  punit->id, punit->type->name, TILE_XY(punit->tile),
+	  punit->id, unit_types[punit->type].name, TILE_XY(punit->tile),
 	  unit_owner(punit)->name);
 
   for (i = 0; i < agents.entries_used; i++) {
@@ -812,7 +809,7 @@ bool agents_busy(void)
 {
   int i;
 
-  if (!initialized || call_list_size(agents.calls) > 0 || frozen_level > 0
+  if (!initialized || call_list_size(&agents.calls) > 0 || frozen_level > 0
       || currently_running) {
     return TRUE;
   }

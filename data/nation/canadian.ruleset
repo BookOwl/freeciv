@@ -2,11 +2,11 @@
 
 name=_("Canadian")
 plural=_("?plural:Canadians")
-groups=_("Modern"), _("American")
+class=_("Modern")
 leader="Pierre Trudeau", "John A. MacDonald", "John Diefenbaker", "Mackenzie King"
 leader_sex="Male", "Male", "Male", "Male"
-flag="canada"
-flag_alt = "united_kingdom"
+flag="f.canada"
+flag_alt = "f.united_kingdom"
 city_style = "European"
 ruler_titles = { "government",      "male_title",         "female_title"
                  "Democracy",       _("Prime Minister"),  _("Prime Minister")
@@ -14,8 +14,10 @@ ruler_titles = { "government",      "male_title",         "female_title"
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
+tech_goals = "The Republic", "Trade", "Engineering", "Democracy",
+             "Railroad", "Explosives", "Automobile"
+wonder="Cure For Cancer"
+government="Democracy"
 civilwar_nations = "american"
 
 ; Capitals of provinces and territories are listed first in this list

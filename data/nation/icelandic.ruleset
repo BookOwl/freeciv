@@ -2,7 +2,7 @@
 
 name=_("Icelandic")
 plural=_("?plural:Icelanders")
-groups=_("Modern")
+class=_("Modern")
 leader= "Jón Sigurdsson",
    "Ingólfur Arnarson",
    "Davíð Oddsson",
@@ -10,8 +10,8 @@ leader= "Jón Sigurdsson",
 
 leader_sex="Male", "Male", "Male", "Male"
 
-flag="iceland"
-flag_alt = "norway"
+flag="f.iceland"
+flag_alt = "f.norway"
 city_style = "Classical"
 ruler_titles = { "government",      "male_title",       "female_title"
        "Democracy",   _("President"),      _("President")
@@ -19,8 +19,9 @@ ruler_titles = { "government",      "male_title",       "female_title"
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
+tech_goals = "The Republic", "Navigation", "Trade"
+wonder="Magellan's Expedition"
+government="Republic"
 civilwar_nations = "danish", "english", "canadian"
 
 cities =

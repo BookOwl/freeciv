@@ -33,13 +33,11 @@
 #include "clinet.h"
 #include "civclient.h"
 #include "control.h"
-#include "goto.h"
-#include "options.h"
-
 #include "dialogs.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "mapview.h"
+#include "options.h"
 
 #include "gotodlg.h"
 
@@ -99,7 +97,7 @@ static void goto_cmd_callback(GtkWidget *dlg, gint arg)
         struct unit *punit = get_unit_in_focus();
 
         if (punit) {
-          send_goto_tile(punit, pdestcity->tile);
+          send_goto_unit(punit, pdestcity->tile);
         }
       }
     }
@@ -248,8 +246,8 @@ static void update_goto_dialog(GtkToggleButton *button)
 
   gtk_list_store_clear(store);
 
-  for(i = 0, j = 0; i < game.info.nplayers; i++) {
-    if (!all_cities && i != game.info.player_idx)
+  for(i = 0, j = 0; i < game.nplayers; i++) {
+    if (!all_cities && i != game.player_idx)
       continue;
 
     city_list_iterate(game.players[i].cities, pcity) {
