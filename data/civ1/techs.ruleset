@@ -216,7 +216,7 @@ flags    = ""
 name     = _("Flight")
 req1     = "Combustion"
 req2     = "Physics"
-flags    = ""
+flags    = "Trade_Revenue_Reduce"
 
 [advance_fundamentalism]
 name     = _("Fundamentalism")
@@ -373,7 +373,6 @@ name     = _("Mysticism")
 req1     = "Ceremonial Burial"
 req2     = "None"
 flags    = ""
-helptext = _("Improves the effect of Temples.")
 
 [advance_navigation]
 name     = _("Navigation")
@@ -433,7 +432,7 @@ flags    = ""
 name     = _("Railroad")
 req1     = "Steam Engine"
 req2     = "Bridge Building"
-flags    = "Railroad"
+flags    = "Railroad","Trade_Revenue_Reduce"
 
 [advance_recycling]
 name     = _("Recycling")

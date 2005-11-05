@@ -2,23 +2,18 @@
 
 name=_("Turk")
 plural=_("?plural:Turks")
-groups=_("Medieval"), _("Modern"), _("Asian")
-legend=_("Modern Turkey is the successor state of the Ottoman Empire, which\
- collapsed and was dismembered by the victors in World War I after backing\
- the Central Powers. The country was subsequently reformed and secularized\
- by Kemal Mustapha, the hero of the defense of Gallipoli.")
-leader=
- "Kemal Atatürk",
- "Süleyman I",
- "Osman I",
- "Murad I",
- "Selim III",
- "Mehmed II"
+class=_("Modern")
+legend=_("Modern Turkey is the successor state of the Ottoman Empire, which \
+collapsed and was dismembered by the victors in World War I after backing \
+the Central Powers.  The country was subsequently reformed and secularized \
+by Kemal Mustapha, the hero of the defense of Gallipoli.")
+leader="Kemal Atatürk", "Süleyman", "Osman", "Murat",
+       "Selim", "Mehmet"
 leader_sex="Male", "Male", "Male", "Male",
            "Male", "Male"
-flag="turkey"
+flag="f.turkey"
 flag_alt = "-"
-city_style = "Classical"
+city_style = "European"
 
 ruler_titles = { "government",      "male_title",      "female_title"
                  "Monarchy",        _("Sultan"),       _("Sultan")
@@ -26,10 +21,12 @@ ruler_titles = { "government",      "male_title",      "female_title"
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
-civilwar_nations="bulgarian", "uyghur"
-; Removed "slovenian", "czech": No relation?
+
+tech_goals = "Monarchy", "Philosophy", "Mathematics", "Chivalry",
+             "Theology", "Railroad"
+wonder="Sun Tzu's War Academy"
+government="Republic"
+civilwar_nations = "slovenian", "czech"
 
 cities =
  "Ankara", "Istanbul", "Izmir", "Adana", "Antalya",

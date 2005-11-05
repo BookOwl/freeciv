@@ -2,27 +2,25 @@
 
 name=_("Aztec")
 plural=_("?plural:Aztecs")
-groups=_("Medieval"), _("American")
-legend=_("The Azteca, a group of barbarians from the Sonoran desert,\
- seized control of the Toltec-derived civilizations of Central Mexico\
- during the 15th century AD, reviving the practice of human sacrifice.\
- They were conquered by the Spanish under Cortez in 1524.")
-leader=
- "Moctezuma II",
- "Cuauhtémoc",
- "Itzcóatl",
- "Axayacatl"
+class=_("Historical")
+legend=_("The Azteca, a group of barbarians from the Sonoran desert, \
+seized control of the Toltec-derived civilizations of Central Mexico \
+during the 15th century AD, reviving the practice of human sacrifice.  \
+They were conquered by the Spanish under Cortez in 1524.")
+leader="Montezuma", "Cuahtemoc", "Itzcoatl", "Axayacatl"
 leader_sex="Male", "Male", "Male", "Male"
-flag="aztec"
-flag_alt = "mexico"	; Used previously
-city_style = "Babylonian"
+flag="f.mexico"
+flag_alt = "-"
+city_style = "Tropical"
 
 init_techs=""
 init_buildings=""
 
-init_government="Despotism"
-init_units=""
-civilwar_nations = "inca", "mayan"
+tech_goals = "Monarchy", "Chivalry", "Iron Working", "Trade",
+             "Navigation", "Railroad", "Communism"
+wonder="Hoover Dam"
+government="Communism"
+civilwar_nations = "inca"
 
 cities =
   "Michoacan", "Axaca", "Tuxpan", "Metztitlan", "Otumba",

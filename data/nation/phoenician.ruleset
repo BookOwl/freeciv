@@ -2,26 +2,20 @@
 
 name=_("Phoenician")
 plural=_("?plural:Phoenicians")
-groups=_("Ancient"), _("Asian")
-legend=_("Phoenicia was an ancient civilization, based in what is now the\
- coastal regions of Lebanon and Syria.")
-leader=
- "Hiram",
- "Agenor",
- "Eshmunazar",
- "Kadmos",
- "Ithobaal",
- "Abd'ashtart"
+class=_("Historical")
+leader="Hiram", "Agenor", "Eshmunazar", "Kadmos", "Ithobaal",
+       "Abd'ashtart"
 leader_sex="Male", "Male", "Male", "Male", "Male",
            "Male"
-flag="phoenicia"
+flag="f.phoenicia"
 flag_alt = "-"
 city_style = "Classical"
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
+tech_goals = "Alphabet", "Trade", "Seafaring", "Navigation"
+wonder="Magellan's Expedition"
+government="Monarchy"
 civilwar_nations="turk", "carthaginian", "israeli"
 
 cities =

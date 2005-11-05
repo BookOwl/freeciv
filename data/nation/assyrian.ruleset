@@ -2,20 +2,13 @@
 
 name=_("Assyrian")
 plural=_("?plural:Assyrians")
-groups=_("Ancient"), _("Asian")
-legend=_("Assyria was an empire in northern Mesopotamia, named after its\
- capital Ashur.")
-leader=
- "Ashurbanipal",
- "Tiglat Pileser III",
- "Ashurnasirpal II",
- "Shamiram",
- "Agha Petros",
- "Naoum Faik"
+class=_("Historical")
+leader="Ashurbanipal", "Tiglat Pileser III", "Ashurnasirpal II", "Shamiram",
+       "Agha Petros", "Naoum Faik"
 leader_sex="Male", "Male", "Male", "Female", "Male", "Male"
-flag = "assyria"
+flag = "f.assyria"
 flag_alt = "-"
-city_style = "Babylonian"
+city_style = "Classical"
 
 ruler_titles = { "government",	"male_title",	"female_title"
 		 "Monarchy",	_("Malka"),	_("Malikta")
@@ -24,9 +17,11 @@ ruler_titles = { "government",	"male_title",	"female_title"
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
-civilwar_nations="babylonian", "israeli"
+tech_goals = "Monarchy","Trade","Mathematics","Chivalry","Iron Working",
+             "Theology","Monotheism","Code of Laws","Engineering","Astronomy"
+wonder="Great Library"
+government="Democracy"
+
 
 cities =
   "Ashur", "Nineveh", "Kalhu", "Arbela", "Edessa", "Osrhoene",

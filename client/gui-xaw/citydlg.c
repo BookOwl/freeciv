@@ -50,7 +50,6 @@
 
 #include "cityrep.h"
 #include "citydlg.h"
-#include "civclient.h"
 #include "cma_fe.h"
 #include "colors.h"
 #include "control.h" /* request_xxx and set_unit_focus */
@@ -73,6 +72,8 @@
 #include "options.h"
 #include "text.h"
 #include "tilespec.h"
+
+#include "cityicon.ico"
 
 #define MIN_NUM_CITIZENS	22
 #define MAX_NUM_CITIZENS	50
@@ -116,7 +117,7 @@ struct city_dialog {
   Widget rename_input;
   Widget worklist_shell;
   
-  Impr_type_id sell_id;
+  Impr_Type_id sell_id;
   
   int support_unit_base;
   int present_unit_base;
@@ -128,7 +129,7 @@ struct city_dialog {
   int change_list_ids[B_LAST+1+U_LAST+1];
   int change_list_num_improvements;
 
-  /*int is_modal;*/
+  int is_modal;
 };
 
 #define SPECLIST_TAG dialog
@@ -139,11 +140,11 @@ struct city_dialog {
     TYPED_LIST_ITERATE(struct city_dialog, dialoglist, pdialog)
 #define dialog_list_iterate_end  LIST_ITERATE_END
 
-static struct dialog_list *dialog_list = NULL;
+static struct dialog_list dialog_list;
 static bool dialog_list_has_been_initialised = FALSE;
 
 static struct city_dialog *get_city_dialog(struct city *pcity);
-static struct city_dialog *create_city_dialog(struct city *pcity);
+static struct city_dialog *create_city_dialog(struct city *pcity, bool make_modal);
 static void close_city_dialog(struct city_dialog *pdialog);
 
 static void city_dialog_update_improvement_list(struct city_dialog *pdialog);
@@ -238,12 +239,12 @@ static void get_contents_of_production(struct city_dialog *pdialog,
 
   if (pdialog) {
     pcity=pdialog->pcity;
-    foodprod=pcity->prod[O_FOOD];
-    foodsurplus = pcity->surplus[O_FOOD];
-    shieldprod=pcity->prod[O_SHIELD] + pcity->waste[O_SHIELD];
-    shieldsurplus = pcity->surplus[O_SHIELD];
-    tradeprod = pcity->surplus[O_TRADE] + pcity->waste[O_TRADE];
-    tradesurplus = pcity->surplus[O_TRADE];
+    foodprod=pcity->food_prod;
+    foodsurplus=pcity->food_surplus;
+    shieldprod=pcity->shield_prod + pcity->shield_waste;
+    shieldsurplus=pcity->shield_surplus;
+    tradeprod=pcity->trade_prod+pcity->corruption;
+    tradesurplus=pcity->trade_prod;
   }
 
   my_snprintf(retbuf, n,
@@ -269,10 +270,10 @@ static void get_contents_of_output(struct city_dialog *pdialog,
 
   if (pdialog) {
     pcity=pdialog->pcity;
-    goldtotal=pcity->prod[O_GOLD];
-    goldsurplus = pcity->surplus[O_GOLD];
-    luxtotal=pcity->prod[O_LUXURY];
-    scitotal=pcity->prod[O_SCIENCE];
+    goldtotal=pcity->tax_total;
+    goldsurplus=city_gold_surplus(pcity, pcity->tax_total);
+    luxtotal=pcity->luxury_total;
+    scitotal=pcity->science_total;
   }
 
   my_snprintf(retbuf, n, 
@@ -314,7 +315,7 @@ static void get_contents_of_worklist(struct city_dialog *pdialog,
 struct city_dialog *get_city_dialog(struct city *pcity)
 {
   if (!dialog_list_has_been_initialised) {
-    dialog_list = dialog_list_new();
+    dialog_list_init(&dialog_list);
     dialog_list_has_been_initialised = TRUE;
   }
 
@@ -360,19 +361,19 @@ void refresh_city_dialog(struct city *pcity)
     XtSetSensitive(pdialog->trade_command,
     		   city_num_trade_routes(pcity)?True:False);
     XtSetSensitive(pdialog->activate_command,
-		   unit_list_size(pcity->tile->units)
+		   unit_list_size(&pcity->tile->units)
 		   ?True:False);
     XtSetSensitive(pdialog->show_units_command,
-                   unit_list_size(pcity->tile->units)
+                   unit_list_size(&pcity->tile->units)
 		   ?True:False);
     XtSetSensitive(pdialog->cma_command, True);
     XtSetSensitive(pdialog->cityopt_command, True);
   }
-  if (!game.player_ptr || city_owner(pcity) == game.player_ptr) {
+  if(pcity->owner == game.player_idx)  {
     city_report_dialog_update_city(pcity);
     economy_report_dialog_update();
   } else {
-    if (pdialog) {
+    if(pdialog)  {
       /* Set the buttons we do not want live while a Diplomat investigates */
       XtSetSensitive(pdialog->buy_command, FALSE);
       XtSetSensitive(pdialog->change_command, FALSE);
@@ -387,16 +388,16 @@ void refresh_city_dialog(struct city *pcity)
   }
 }
 
-/**************************************************************************
-  Updates supported and present units views in city dialogs for given unit
-**************************************************************************/
+/****************************************************************
+...
+*****************************************************************/
 void refresh_unit_city_dialogs(struct unit *punit)
 {
   struct city *pcity_sup, *pcity_pre;
   struct city_dialog *pdialog;
 
   pcity_sup=player_find_city_by_id(game.player_ptr, punit->homecity);
-  pcity_pre=tile_get_city(punit->tile);
+  pcity_pre=map_get_city(punit->tile);
   
   if(pcity_sup && (pdialog=get_city_dialog(pcity_sup)))
     city_dialog_update_supported_units(pdialog, 0);
@@ -408,12 +409,12 @@ void refresh_unit_city_dialogs(struct unit *punit)
 /****************************************************************
 popup the dialog 10% inside the main-window 
 *****************************************************************/
-void popup_city_dialog(struct city *pcity)
+void popup_city_dialog(struct city *pcity, bool make_modal)
 {
   struct city_dialog *pdialog;
   
   if(!(pdialog=get_city_dialog(pcity)))
-    pdialog=create_city_dialog(pcity);
+    pdialog=create_city_dialog(pcity, make_modal);
 
   xaw_set_relative_position(toplevel, pdialog->shell, 10, 10);
   XtPopup(pdialog->shell, XtGrabNone);
@@ -438,8 +439,8 @@ void popdown_all_city_dialogs(void)
   if(!dialog_list_has_been_initialised) {
     return;
   }
-  while (dialog_list_size(dialog_list) > 0) {
-    close_city_dialog(dialog_list_get(dialog_list, 0));
+  while (dialog_list_size(&dialog_list) > 0) {
+    close_city_dialog(dialog_list_get(&dialog_list, 0));
   }
   popdown_cityopt_dialog();
   popdown_cma_dialog();
@@ -465,7 +466,7 @@ static void city_map_canvas_expose(Widget w, XEvent *event, Region exposed,
 
 #define LAYOUT_DEBUG 0
 
-struct city_dialog *create_city_dialog(struct city *pcity)
+struct city_dialog *create_city_dialog(struct city *pcity, bool make_modal)
 {
   char *dummy_improvement_list[]={ 
     "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
@@ -479,6 +480,7 @@ struct city_dialog *create_city_dialog(struct city *pcity)
     "9",
     0
   };
+  static Pixmap icon_pixmap = 0;
 
   int i, itemWidth;
   struct city_dialog *pdialog;
@@ -492,9 +494,9 @@ struct city_dialog *create_city_dialog(struct city *pcity)
   Dimension widthPrev, borderPrev, internalPrev, spacePrev;
   Widget relative;
   struct citizen_type c = {.type = CITIZEN_SPECIALIST,
-			   .spec_type = DEFAULT_SPECIALIST};
+			   .spec_type = SP_TAXMAN};
 
-  if (tileset_tile_height(tileset)<45) dummy_improvement_list[5]=0;
+  if (NORMAL_TILE_HEIGHT<45) dummy_improvement_list[5]=0;
 
   if (concise_city_production) {
     dummy_improvement_list[0] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXX";
@@ -506,9 +508,18 @@ struct city_dialog *create_city_dialog(struct city *pcity)
   pdialog->present_unit_base=0;
   pdialog->worklist_shell = NULL;
 
+  if (!icon_pixmap) {
+    icon_pixmap =
+	XCreateBitmapFromData(display,
+			      RootWindowOfScreen(XtScreen(toplevel)),
+			      cityicon_bits,
+			      cityicon_width, cityicon_height);
+  }
+
+
   pdialog->shell=
     XtVaCreatePopupShell(pcity->name,
-/*			 make_modal ? transientShellWidgetClass :*/
+			 make_modal ? transientShellWidgetClass :
 			 topLevelShellWidgetClass,
 			 toplevel, 
 			 XtNallowShellResize, True, 
@@ -715,8 +726,8 @@ struct city_dialog *create_city_dialog(struct city *pcity)
 			    pixcommWidgetClass,
 			    pdialog->main_form,
 			    XtNfromVert, pdialog->support_unit_label,
-			    XtNwidth, tileset_full_tile_width(tileset),
-			    XtNheight, 3 * tileset_tile_height(tileset) / 2,
+			    XtNwidth, UNIT_TILE_WIDTH,
+			    XtNheight, 3 * NORMAL_TILE_HEIGHT / 2,
 			    NULL);
 
   pdialog->present_unit_label=
@@ -732,8 +743,8 @@ struct city_dialog *create_city_dialog(struct city *pcity)
     			    pixcommWidgetClass,
 			    pdialog->main_form,
 			    XtNfromVert, pdialog->present_unit_label,
-			    XtNwidth, tileset_full_tile_width(tileset),
-			    XtNheight, tileset_full_tile_height(tileset),
+			    XtNwidth, UNIT_TILE_WIDTH,
+			    XtNheight, UNIT_TILE_HEIGHT,
 			    NULL);
 
 
@@ -912,7 +923,7 @@ struct city_dialog *create_city_dialog(struct city *pcity)
   } else {
     pdialog->num_citizens_shown=DEFAULT_NUM_CITIZENS;
     pdialog->num_units_shown=DEFAULT_NUM_UNITS;
-    if (tileset_tile_height(tileset)<45) {
+    if (NORMAL_TILE_HEIGHT<45) {
       pdialog->num_citizens_shown-=5;
       pdialog->num_units_shown+=3;
     }
@@ -958,8 +969,8 @@ struct city_dialog *create_city_dialog(struct city *pcity)
 			      XtNfromVert, pdialog->support_unit_label,
 			      XtNfromHoriz,
 			        (XtArgVal)pdialog->support_unit_pixcomms[i-1],
-			      XtNwidth, tileset_full_tile_width(tileset),
-			      XtNheight, 3 * tileset_tile_height(tileset) / 2,
+			      XtNwidth, UNIT_TILE_WIDTH,
+			      XtNheight, 3 * NORMAL_TILE_HEIGHT / 2,
 			      NULL);
   }
 
@@ -982,8 +993,8 @@ struct city_dialog *create_city_dialog(struct city *pcity)
 			      XtNfromVert, pdialog->present_unit_label,
 			      XtNfromHoriz, 
 			        (XtArgVal)pdialog->support_unit_pixcomms[i-1],
-			      XtNwidth, tileset_full_tile_width(tileset),
-			      XtNheight, tileset_full_tile_height(tileset),
+			      XtNwidth, UNIT_TILE_WIDTH,
+			      XtNheight, UNIT_TILE_HEIGHT,
 			      NULL);
   }
 
@@ -997,9 +1008,8 @@ struct city_dialog *create_city_dialog(struct city *pcity)
 		XtNfromHoriz, (XtArgVal)relative,
 		NULL);
 
-  /* FIXME: this ignores the mask. */
-  XtVaSetValues(pdialog->shell, XtNiconPixmap,
-		get_icon_sprite(tileset, ICON_CITYDLG), NULL);
+  
+  XtVaSetValues(pdialog->shell, XtNiconPixmap, icon_pixmap, NULL);
 
 
   XtAddCallback(pdialog->sell_command, XtNcallback, sell_callback,
@@ -1044,7 +1054,7 @@ struct city_dialog *create_city_dialog(struct city *pcity)
   XtAddCallback(pdialog->cma_command, XtNcallback, cma_callback,
                 (XtPointer)pdialog);
 
-  dialog_list_prepend(dialog_list, pdialog);
+  dialog_list_insert(&dialog_list, pdialog);
 
   for(i=0; i<B_LAST+1; i++)
     pdialog->improvlist_names_ptrs[i]=0;
@@ -1052,12 +1062,11 @@ struct city_dialog *create_city_dialog(struct city *pcity)
   XtRealizeWidget(pdialog->shell);
 
   refresh_city_dialog(pdialog->pcity);
-/*
+
   if(make_modal)
     XtSetSensitive(toplevel, FALSE);
   
   pdialog->is_modal=make_modal;
-*/
 
   XSetWMProtocols(display, XtWindow(pdialog->shell), &wm_delete_window, 1);
   XtOverrideTranslations(pdialog->shell, 
@@ -1090,7 +1099,7 @@ void show_units_callback(Widget w, XtPointer client_data,
   struct city_dialog *pdialog = (struct city_dialog *)client_data;
   struct tile *ptile = pdialog->pcity->tile;
 
-  if( unit_list_size(ptile->units) )
+  if( unit_list_size(&ptile->units) )
     popup_unit_select_dialog(ptile);
 }
 
@@ -1143,7 +1152,7 @@ static void present_units_activate_callback(Widget w, XtPointer client_data,
 
   if((punit=player_find_unit_by_id(game.player_ptr, (size_t)client_data)))  {
     set_unit_focus(punit);
-    if((pcity=tile_get_city(punit->tile)))
+    if((pcity=map_get_city(punit->tile)))
       if((pdialog=get_city_dialog(pcity)))
 	city_dialog_update_present_units(pdialog, 0);
   }
@@ -1164,7 +1173,7 @@ static void supported_units_activate_callback(Widget w, XtPointer client_data,
 
   if((punit=player_find_unit_by_id(game.player_ptr, (size_t)client_data)))  {
     set_unit_focus(punit);
-    if((pcity=tile_get_city(punit->tile)))
+    if((pcity=map_get_city(punit->tile)))
       if((pdialog=get_city_dialog(pcity)))
 	city_dialog_update_supported_units(pdialog, 0);
   }
@@ -1188,7 +1197,7 @@ static void present_units_activate_close_callback(Widget w,
 
   if((punit=player_find_unit_by_id(game.player_ptr, (size_t)client_data)))  {
     set_unit_focus(punit);
-    if((pcity=tile_get_city(punit->tile)))
+    if((pcity=map_get_city(punit->tile)))
       if((pdialog=get_city_dialog(pcity)))
 	close_city_dialog(pdialog);
   }
@@ -1299,7 +1308,7 @@ void present_units_callback(Widget w, XtPointer client_data,
   XEvent *e = (XEvent*)call_data;
   
   if((punit=player_find_unit_by_id(game.player_ptr, (size_t)client_data)) &&
-     (pcity=tile_get_city(punit->tile)) &&
+     (pcity=map_get_city(punit->tile)) &&
      (pdialog=get_city_dialog(pcity))) {
     
     if(e->type==ButtonRelease && e->xbutton.button==Button2)  {
@@ -1339,8 +1348,7 @@ void present_units_callback(Widget w, XtPointer client_data,
     if (punit->homecity == pcity->id) {
       XtSetSensitive(XtNameToWidget(wd, "*button5"), FALSE);
     }
-    if (!game.player_ptr
-	|| (can_upgrade_unittype(game.player_ptr, punit->type) == NULL)) {
+    if (can_upgrade_unittype(game.player_ptr,punit->type) == -1) {
       XtSetSensitive(XtNameToWidget(wd, "*button6"), FALSE);
     }
   }
@@ -1471,9 +1479,9 @@ void city_dialog_update_building(struct city_dialog *pdialog)
   XtSetSensitive(pdialog->sell_command, !pcity->did_sell);
 
   xaw_set_label(pdialog->building_label,
-		pcity->production.is_unit ?
-		  get_unit_type(pcity->production.value)->name :
-		  get_impr_name_ex(pcity, pcity->production.value));
+		pcity->is_building_unit ?
+		  get_unit_type(pcity->currently_building)->name :
+		  get_impr_name_ex(pcity, pcity->currently_building));
 
   get_contents_of_progress(pdialog, buf, sizeof(buf));
   xaw_set_label(pdialog->progress_label, buf);
@@ -1548,8 +1556,7 @@ void city_dialog_update_citizens(struct city_dialog *pdialog)
 
   if (i >= pdialog->num_citizens_shown && i < pcity->size) {
     i = pdialog->num_citizens_shown - 1;
-    /* FIXME: what about the mask? */
-    xaw_set_bitmap(pdialog->citizen_labels[i], get_arrow_sprite(tileset)->pixmap);
+    xaw_set_bitmap(pdialog->citizen_labels[i], sprites.right_arrow->pixmap);
     XtSetSensitive(pdialog->citizen_labels[i], FALSE);
     XtRemoveAllCallbacks(pdialog->citizen_labels[i], XtNcallback);
     return;
@@ -1646,21 +1653,25 @@ void city_dialog_update_supported_units(struct city_dialog *pdialog,
   int i, j, adj_base;
   Widget pixcomm;
 
-  if (game.player_ptr && (city_owner(pdialog->pcity) != game.player_ptr)) {
-    plist = pdialog->pcity->info_units_supported;
+  if(pdialog->pcity->owner != game.player_idx) {
+    plist = &(pdialog->pcity->info_units_supported);
   } else {
-    plist = pdialog->pcity->units_supported;
+    plist = &(pdialog->pcity->units_supported);
   }
 
-  adj_base = units_scroll_maintenance(unit_list_size(plist),
-                                      pdialog->num_units_shown,
-                                      &(pdialog->support_unit_base),
-                                      pdialog->support_unit_next_command,
-                                      pdialog->support_unit_prev_command);
+  adj_base=
+    units_scroll_maintenance
+    (
+     plist->list.nelements,
+     pdialog->num_units_shown,
+     &(pdialog->support_unit_base),
+     pdialog->support_unit_next_command,
+     pdialog->support_unit_prev_command
+    );
 
   i = 0; /* number of displayed units */
   j = 0; /* index into list */
-  unit_list_iterate(plist, punit) {
+  unit_list_iterate(*plist, punit) {
     struct canvas store;
 
     if (j++ < pdialog->support_unit_base) {
@@ -1706,21 +1717,25 @@ void city_dialog_update_present_units(struct city_dialog *pdialog, int unitid)
   int i, j, adj_base;
   Widget pixcomm;
 
-  if (game.player_ptr && (city_owner(pdialog->pcity) != game.player_ptr)) {
-    plist = pdialog->pcity->info_units_present;
+  if(pdialog->pcity->owner != game.player_idx) {
+    plist = &(pdialog->pcity->info_units_present);
   } else {
-    plist = pdialog->pcity->tile->units;
+    plist = &pdialog->pcity->tile->units;
   }
 
-  adj_base = units_scroll_maintenance(unit_list_size(plist),
-                                      pdialog->num_units_shown,
-                                      &(pdialog->present_unit_base),
-                                      pdialog->present_unit_next_command,
-                                      pdialog->present_unit_prev_command);
+  adj_base=
+    units_scroll_maintenance
+    (
+     plist->list.nelements,
+     pdialog->num_units_shown,
+     &(pdialog->present_unit_base),
+     pdialog->present_unit_next_command,
+     pdialog->present_unit_prev_command
+    );
 
   i = 0; /* number of displayed units */
   j = 0; /* index into list */
-  unit_list_iterate(plist, punit) {
+  unit_list_iterate(*plist, punit) {
     struct canvas store;
 
     if (j++ < pdialog->present_unit_base) {
@@ -1763,7 +1778,7 @@ void city_dialog_update_title(struct city_dialog *pdialog)
   char buf[512];
   String now;
   
-  my_snprintf(buf, sizeof(buf), _("%s - %s citizens  Governor: %s"),
+  my_snprintf(buf, sizeof(buf), _("%s - %s citizens  CMA: %s"),
 	      pdialog->pcity->name,
 	      population_to_text(city_population(pdialog->pcity)),
                    cmafec_get_short_descr_of_city(pdialog->pcity));
@@ -1872,19 +1887,15 @@ void buy_callback(Widget w, XtPointer client_data, XtPointer call_data)
   
   pdialog=(struct city_dialog *)client_data;
 
-  if (!can_client_issue_orders()) {
-    return;
-  }
-
-  if(pdialog->pcity->production.is_unit) {
-    name=get_unit_type(pdialog->pcity->production.value)->name;
+  if(pdialog->pcity->is_building_unit) {
+    name=get_unit_type(pdialog->pcity->currently_building)->name;
   }
   else {
-    name=get_impr_name_ex(pdialog->pcity, pdialog->pcity->production.value);
+    name=get_impr_name_ex(pdialog->pcity, pdialog->pcity->currently_building);
   }
   value=city_buy_cost(pdialog->pcity);
  
-  if (game.player_ptr->economic.gold>=value) {
+  if(game.player_ptr->economic.gold>=value) {
     my_snprintf(buf, sizeof(buf),
 		_("Buy %s for %d gold?\nTreasury contains %d gold."), 
 		name, value, game.player_ptr->economic.gold);
@@ -1911,11 +1922,6 @@ void buy_callback(Widget w, XtPointer client_data, XtPointer call_data)
 void unitupgrade_callback_yes(Widget w, XtPointer client_data, XtPointer call_data)
 {
   struct unit *punit;
-
-  /* Is it right place for breaking? -ev */
-  if (!can_client_issue_orders()) {
-    return;
-  }
 
   if((punit=player_find_unit_by_id(game.player_ptr, (size_t)client_data))) {
     request_unit_upgrade(punit);
@@ -1974,12 +1980,11 @@ static void change_to_callback(Widget w, XtPointer client_data,
 
   ret=XawListShowCurrent(pdialog->change_list);
 
-  if (ret->list_index != XAW_LIST_NONE) {
-    struct city_production target;
-    target.is_unit = ret->list_index >= pdialog->change_list_num_improvements;
-    target.value = pdialog->change_list_ids[ret->list_index];
+  if(ret->list_index!=XAW_LIST_NONE) {
+    bool is_unit = ret->list_index >= pdialog->change_list_num_improvements;
+    int build_id = pdialog->change_list_ids[ret->list_index];
 
-    city_change_production(pdialog->pcity, target);
+    city_change_production(pdialog->pcity, is_unit, build_id);
   }
   
   XtDestroyWidget(XtParent(XtParent(w)));
@@ -2018,7 +2023,7 @@ static void change_help_callback(Widget w, XtPointer client_data,
 
     if (is_unit) {
       popup_help_dialog_typed(get_unit_type(idx)->name, HELP_UNIT);
-    } else if(is_great_wonder(idx)) {
+    } else if(is_wonder(idx)) {
       popup_help_dialog_typed(get_improvement_name(idx), HELP_WONDER);
     } else {
       popup_help_dialog_typed(get_improvement_name(idx), HELP_IMPROVEMENT);
@@ -2057,7 +2062,6 @@ void change_callback(Widget w, XtPointer client_data, XtPointer call_data)
   Position x, y;
   Dimension width, height;
   struct city_dialog *pdialog;
-  struct city_production production;
   int n;
   
   pdialog=(struct city_dialog *)client_data;
@@ -2132,11 +2136,9 @@ void change_callback(Widget w, XtPointer client_data, XtPointer call_data)
   n = 0;
   impr_type_iterate(i) {
     if(can_build_improvement(pdialog->pcity, i)) {
-      production.is_unit = false;
-      production.value = i;
       get_city_dialog_production_full(pdialog->change_list_names[n],
                                       sizeof(pdialog->change_list_names[n]),
-                                      production, pdialog->pcity);
+                                      i, FALSE, pdialog->pcity);
       pdialog->change_list_names_ptrs[n]=pdialog->change_list_names[n];
       pdialog->change_list_ids[n++]=i;
     }
@@ -2147,13 +2149,11 @@ void change_callback(Widget w, XtPointer client_data, XtPointer call_data)
 
   unit_type_iterate(i) {
     if(can_build_unit(pdialog->pcity, i)) {
-      production.is_unit = true;
-      production.value = i->index;
       get_city_dialog_production_full(pdialog->change_list_names[n],
                                       sizeof(pdialog->change_list_names[n]),
-                                      production, pdialog->pcity);
+                                      i, TRUE, pdialog->pcity);
       pdialog->change_list_names_ptrs[n]=pdialog->change_list_names[n];
-      pdialog->change_list_ids[n++] = i->index;
+      pdialog->change_list_ids[n++]=i;
     }
   } unit_type_iterate_end;
   
@@ -2192,8 +2192,8 @@ void worklist_callback(Widget w, XtPointer client_data, XtPointer call_data)
 void commit_city_worklist(struct worklist *pwl, void *data)
 {
   struct city_dialog *pdialog = data;
-  struct city_production production;
-  int k;
+  int k, id;
+  bool is_unit;
 
   /* Update the worklist.  Remember, though -- the current build 
      target really isn't in the worklist; don't send it to the 
@@ -2205,31 +2205,26 @@ void commit_city_worklist(struct worklist *pwl, void *data)
 
   for (k = 0; k < MAX_LEN_WORKLIST; k++) {
     int same_as_current_build;
-    if (!worklist_peek_ith(pwl, &production, k)) {
+    if (! worklist_peek_ith(pwl, &id, &is_unit, k))
       break;
-    }
-    same_as_current_build = 
-      (production.value == pdialog->pcity->production.value)
-      && (production.is_unit == pdialog->pcity->production.is_unit);
+    same_as_current_build = id == pdialog->pcity->currently_building
+      && is_unit == pdialog->pcity->is_building_unit;
 
     /* Very special case: If we are currently building a wonder we
        allow the construction to continue, even if we the wonder is
        finished elsewhere, ie unbuildable. */
-    if (k == 0 && !production.is_unit && is_great_wonder(production.value)
-	&& same_as_current_build) {
+    if (k == 0 && !is_unit && is_wonder(id) && same_as_current_build) {
       worklist_remove(pwl, k);
       break;
     }
 
     /* If it can be built... */
-    if ((production.is_unit
-	 && can_build_unit(pdialog->pcity, get_unit_type(production.value)))
-	|| (!production.is_unit
-	    && can_build_improvement(pdialog->pcity, production.value))) {
+    if (( is_unit && can_build_unit(pdialog->pcity, id)) ||
+	(!is_unit && can_build_improvement(pdialog->pcity, id))) {
       /* ...but we're not yet building it, then switch. */
       if (!same_as_current_build) {
 	/* Change the current target */
-	city_change_production(pdialog->pcity, production);
+	city_change_production(pdialog->pcity, is_unit, id);
       }
 
       /* This item is now (and may have always been) the current
@@ -2293,7 +2288,7 @@ void sell_callback(Widget w, XtPointer client_data, XtPointer call_data)
       if (n == ret->list_index) {
 	char buf[512];
 
-	if (!can_city_sell_building(pdialog->pcity, i)) {
+	if (is_wonder(i)) {
 	  return;
 	}
 
@@ -2322,7 +2317,7 @@ void close_city_dialog(struct city_dialog *pdialog)
     XtDestroyWidget(pdialog->worklist_shell);
 
   XtDestroyWidget(pdialog->shell);
-  dialog_list_unlink(dialog_list, pdialog);
+  dialog_list_unlink(&dialog_list, pdialog);
 
   free(pdialog->citizen_labels);
 
@@ -2332,16 +2327,14 @@ void close_city_dialog(struct city_dialog *pdialog)
   unit_list_iterate(pdialog->pcity->info_units_supported, psunit) {
     free(psunit);
   } unit_list_iterate_end;
-  unit_list_unlink_all(pdialog->pcity->info_units_supported);
+  unit_list_unlink_all(&(pdialog->pcity->info_units_supported));
   unit_list_iterate(pdialog->pcity->info_units_present, psunit) {
     free(psunit);
   } unit_list_iterate_end;
-  unit_list_unlink_all(pdialog->pcity->info_units_present);
+  unit_list_unlink_all(&(pdialog->pcity->info_units_present));
 
-/*
   if(pdialog->is_modal)
     XtSetSensitive(toplevel, TRUE);
-*/
   free(pdialog);
   popdown_cma_dialog();
 }
@@ -2554,26 +2547,18 @@ void cityopt_ok_command_callback(Widget w, XtPointer client_data,
   struct city *pcity = find_city_by_id(cityopt_city_id);
 
   if (pcity) {
-/*    int i; */
-    bv_city_options new_options;
+    int i, new_options;
     Boolean b;
-
-    assert(CITYO_LAST == 3);
-
-    BV_CLR_ALL(new_options);
-/*    for(i=0; i<NUM_CITYOPT_TOGGLES; i++)  {
+    
+    new_options = 0;
+    for(i=0; i<NUM_CITYOPT_TOGGLES; i++)  {
       XtVaGetValues(cityopt_toggles[i], XtNstate, &b, NULL);
       if (b) new_options |= (1<<i);
     }
-*/
-    XtVaGetValues(cityopt_toggles[4], XtNstate, &b, NULL);
-    if (b) {
-      BV_SET(new_options, CITYO_DISBAND);
-    }
     if (newcitizen_index == 1) {
-      BV_SET(new_options, CITYO_NEW_EINSTEIN);
+      new_options |= (1<<CITYO_NEW_EINSTEIN);
     } else if (newcitizen_index == 2) {
-      BV_SET(new_options, CITYO_NEW_TAXMAN);
+      new_options |= (1<<CITYO_NEW_TAXMAN);
     }
     dsend_packet_city_options_req(&aconnection, cityopt_city_id,new_options);
   }

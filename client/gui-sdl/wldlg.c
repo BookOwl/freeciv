@@ -81,8 +81,8 @@ struct EDITOR {
   struct GUI *pProduction_Progres;
     
   int stock;
-  int production.value;
-  bool production.is_unit;
+  int currently_building;
+  bool is_building_unit;
   
 } *pEditor = NULL;
 
@@ -159,23 +159,23 @@ static int ok_worklist_editor_callback(struct GUI *pWidget)
   
   if(pCity) {
     /* remove duplicate entry of currently building impv./wonder from worklist */
-    if(!pEditor->production.is_unit) {
+    if(!pEditor->is_building_unit) {
       for(i = 0; i < MAX_LEN_WORKLIST; i++) {
 	if(pEditor->pCopy_WorkList->wlefs[i] == WEF_END) {
 	  break;
         }
         if(pEditor->pCopy_WorkList->wlefs[i] == WEF_IMPR &&
-          pEditor->pCopy_WorkList->wlids[i] == pEditor->production.value) {
+          pEditor->pCopy_WorkList->wlids[i] == pEditor->currently_building) {
 	    worklist_remove(pEditor->pCopy_WorkList, i);
         }
       }
     }
     
     /* change production */
-    if(pEditor->production.is_unit != pCity->production.is_unit ||
-       pEditor->production.value != pCity->production.value) {
-      city_change_production(pCity, pEditor->production.is_unit,
-			     pEditor->production.value);
+    if(pEditor->is_building_unit != pCity->is_building_unit ||
+       pEditor->currently_building != pCity->currently_building) {
+      city_change_production(pCity, pEditor->is_building_unit,
+			     pEditor->currently_building);
       same_prod = FALSE;
     }
     
@@ -249,8 +249,8 @@ static void add_target_to_worklist(struct GUI *pTarget)
   }
  
   /* Denny adding currently building Impr/Wonder Target */ 
-  if(pEditor->pCity && !is_unit && !pEditor->production.is_unit &&
-	    (target == pEditor->production.value)) {
+  if(pEditor->pCity && !is_unit && !pEditor->is_building_unit &&
+	    (target == pEditor->currently_building)) {
     return;
   }
   
@@ -333,21 +333,22 @@ static bool are_the_same_class(int id_1, bool is_id_1_unit, int id_2, bool is_id
 static void change_production(int target, bool is_unit)
 {
     
-  if(!are_the_same_class(pEditor->production.value,
-  		pEditor->production.is_unit, target, is_unit)) {
+  if(!are_the_same_class(pEditor->currently_building,
+  		pEditor->is_building_unit, target, is_unit)) {
     if(pEditor->stock != pEditor->pCity->shield_stock) {
-      if(are_the_same_class(pEditor->pCity->production.value,
-  		pEditor->pCity->production.is_unit, target, is_unit)) {
+      if(are_the_same_class(pEditor->pCity->currently_building,
+  		pEditor->pCity->is_building_unit, target, is_unit)) {
 	pEditor->stock = pEditor->pCity->shield_stock;
       }
     } else {
       pEditor->stock =
-	  city_change_production_penalty(pEditor->pCity, target, is_unit);
+	  city_change_production_penalty(pEditor->pCity,
+					      target, is_unit, FALSE);
     }	  	  
   }
       
-  pEditor->production.value = target;
-  pEditor->production.is_unit = is_unit;
+  pEditor->currently_building = target;
+  pEditor->is_building_unit = is_unit;
   refresh_production_label(pEditor->stock);
 
   return;
@@ -381,8 +382,8 @@ static void add_target_to_production(struct GUI *pTarget)
   }
   
   /* check if we change to the same target */
-  if(((pEditor->production.value == target) && 
-  	(pEditor->production.is_unit == is_unit)) || pEditor->pCity->did_buy) {
+  if(((pEditor->currently_building == target) && 
+  	(pEditor->is_building_unit == is_unit)) || pEditor->pCity->did_buy) {
     /* comit changes and exit - double click detection */
     ok_worklist_editor_callback(NULL);
     return;
@@ -495,8 +496,8 @@ static void remove_item_from_worklist(struct GUI *pItem)
     if(!pEditor->pCity->did_buy) {
       if(worklist_is_empty(pEditor->pCopy_WorkList)) {
         /* there is no worklist */
-        if(!(!pEditor->production.is_unit &&
-	   (pEditor->production.value == B_CAPITAL))) {
+        if(!(!pEditor->is_building_unit &&
+	   (pEditor->currently_building == B_CAPITAL))) {
 	  /* change to capitalization */
 	  int dummy;   
 	  change_production(B_CAPITAL, FALSE);
@@ -641,9 +642,9 @@ static void swap_item_up_from_worklist(struct GUI *pItem)
   } else {
     if(!pEditor->pCity->did_buy) {
       /* change production ... */
-      id = pEditor->production.value;
+      id = pEditor->currently_building;
     
-      if(pEditor->production.is_unit) {
+      if(pEditor->is_building_unit) {
         flag = WEF_UNIT;
       } else {
         flag = WEF_IMPR;
@@ -929,7 +930,7 @@ static const char * get_production_name(struct city *pCity,
         
   if(is_unit) {
     struct unit_type *pType = get_unit_type(id);
-    *cost = unit_build_shield_cost(id);
+    *cost = unig_build_value(id);
     return pType->name;
   } else {
     *cost = impr_build_shield_cost(id);
@@ -983,18 +984,18 @@ static void refresh_production_label(int stock)
   char cBuf[64];
   SDL_Rect area;
   const char *name = get_production_name(pEditor->pCity,
-    				pEditor->production.value,
-    				pEditor->production.is_unit, &cost);
+    				pEditor->currently_building,
+    				pEditor->is_building_unit, &cost);
 
-  if (!pEditor->production.is_unit
-     && pEditor->production.value == B_CAPITAL)
+  if (!pEditor->is_building_unit
+     && pEditor->currently_building == B_CAPITAL)
   {
      my_snprintf(cBuf, sizeof(cBuf),
       	_("%s\n%d gold per turn"), name, MAX(0, pEditor->pCity->shield_surplus));
   } else {
     if(stock < cost) {
       turns = city_turns_to_build(pEditor->pCity,
-    	pEditor->production.value, pEditor->production.is_unit, TRUE);
+    	pEditor->currently_building, pEditor->is_building_unit, TRUE);
       if(turns == 999)
       {
         my_snprintf(cBuf, sizeof(cBuf), _("%s\nblocked!"), name);
@@ -1112,8 +1113,8 @@ void popup_worklist_editor(struct city *pCity, struct worklist *pWorkList)
   copy_worklist(pEditor->pCopy_WorkList, pWorkList);
   
   if(pCity) {
-    pEditor->production.is_unit = pCity->production.is_unit;
-    pEditor->production.value = pCity->production.value;
+    pEditor->is_building_unit = pCity->is_building_unit;
+    pEditor->currently_building = pCity->currently_building;
     pEditor->stock = pCity->shield_stock;
   }
   
@@ -1167,17 +1168,17 @@ void popup_worklist_editor(struct city *pCity, struct worklist *pWorkList)
     /* count == cost */
     /* turns == progress */
     const char *name = get_production_name(pCity,
-    				pCity->production.value,
-    				pCity->production.is_unit, &count);
+    				pCity->currently_building,
+    				pCity->is_building_unit, &count);
     
-    if (!pCity->production.is_unit && pCity->production.value == B_CAPITAL)
+    if (!pCity->is_building_unit && pCity->currently_building == B_CAPITAL)
     {
       my_snprintf(cBuf, sizeof(cBuf),
       	_("%s\n%d gold per turn"), name, MAX(0, pCity->shield_surplus));
     } else {
       if(pCity->shield_stock < count) {
         turns = city_turns_to_build(pCity,
-    	  pCity->production.value, pCity->production.is_unit, TRUE);
+    	  pCity->currently_building, pCity->is_building_unit, TRUE);
         if(turns == 999)
         {
           my_snprintf(cBuf, sizeof(cBuf), _("%s\nblocked!"), name);
@@ -1260,18 +1261,18 @@ void popup_worklist_editor(struct city *pCity, struct worklist *pWorkList)
   if(pCity) {
    /* Production Widget Label */ 
     pStr = create_str16_from_char(get_production_name(pCity,
-    				pCity->production.value,
-    				pCity->production.is_unit, &turns), 10);
+    				pCity->currently_building,
+    				pCity->is_building_unit, &turns), 10);
     pStr->style |= SF_CENTER;
     pBuf = create_iconlabel(NULL, pDest, pStr, WF_DRAW_THEME_TRANSPARENT);
     
     set_wstate(pBuf, FC_WS_NORMAL);
     pBuf->action = worklist_editor_item_callback;
         
-    if(pCity->production.is_unit) {
-      add_to_gui_list(MAX_ID - pCity->production.value, pBuf);
+    if(pCity->is_building_unit) {
+      add_to_gui_list(MAX_ID - pCity->currently_building, pBuf);
     } else {
-      add_to_gui_list(MAX_ID - 1000 - pCity->production.value, pBuf);
+      add_to_gui_list(MAX_ID - 1000 - pCity->currently_building, pBuf);
     }
     
     pEditor->pWork->pEndWidgetList = pBuf;

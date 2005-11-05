@@ -59,9 +59,9 @@ veteran_move_bonus = 0, 0
 ;		  this should be a standard tag.  Otherwise can use eg "-" 
 ;		  for no alternate graphic.
 ; tech_req      = required advance, names from techs.ruleset, or special:
-;                 "None" => available from start
+;                 "None" => available from start; "Never" => never available
 ; obsolete_by   = can be upgraded to and made obsolete by another unit by name
-; class         = "Land", "Sea", "Air", "Helicopter", "Missile" or "Nuclear"
+; move_type     = "Land" or "Sea" or "Air" or "Heli"
 ; transport_cap = Number of units (ground, or air/missiles, depending on flags)
 ; fuel          = number of turns air units can fly before they crash. For
 ;                 barbarians this is used as lifetime instead
@@ -87,7 +87,7 @@ veteran_move_bonus = 0, 0
 
 [unit_settlers]
 name          = _("Settlers")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "None"
 obsolete_by   = "Engineers"
 graphic       = "u.settlers"
@@ -103,7 +103,7 @@ defense       = 1
 hitpoints     = 20
 firepower     = 1
 move_rate     = 1
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 0
 fuel          = 0
 uk_happy      = 0
@@ -131,7 +131,7 @@ Settlers and Engineers may work together to decrease the amount of\
 
 [unit_engineers]
 name          = _("Engineers")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Explosives"
 obsolete_by   = "None"
 graphic       = "u.engineers"
@@ -147,7 +147,7 @@ defense       = 2
 hitpoints     = 20
 firepower     = 1
 move_rate     = 2
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 0
 fuel          = 0
 uk_happy      = 0
@@ -172,7 +172,7 @@ TIP 2:  If you manage to build Leonardo's Workshop, research\
 
 [unit_warriors]
 name          = _("Warriors")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "None"
 obsolete_by   = "Pikemen"
 graphic       = "u.warriors"
@@ -188,7 +188,7 @@ defense       = 1
 hitpoints     = 10
 firepower     = 1
 move_rate     = 1
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 0
 fuel          = 0
 uk_happy      = 1
@@ -204,7 +204,7 @@ This unit may be built from the start of the game.  It is the\
 
 [unit_phalanx]
 name          = _("Phalanx")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Bronze Working"
 obsolete_by   = "Pikemen"
 graphic       = "u.phalanx"
@@ -220,7 +220,7 @@ defense       = 2
 hitpoints     = 10
 firepower     = 1
 move_rate     = 1
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 0
 fuel          = 0
 uk_happy      = 1
@@ -232,7 +232,7 @@ roles         = "DefendGood", "FirstBuild"
 
 [unit_archers]
 name          = _("Archers")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Warrior Code"
 obsolete_by   = "Musketeers"
 graphic       = "u.archers"
@@ -248,7 +248,7 @@ defense       = 2
 hitpoints     = 10
 firepower     = 1
 move_rate     = 1
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 0
 fuel          = 0
 uk_happy      = 1
@@ -260,7 +260,7 @@ roles         = "DefendOk"
 
 [unit_legion]
 name          = _("Legion")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Iron Working"
 obsolete_by   = "Musketeers"
 graphic       = "u.legion"
@@ -276,7 +276,7 @@ defense       = 2
 hitpoints     = 10
 firepower     = 1
 move_rate     = 1
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 0
 fuel          = 0
 uk_happy      = 1
@@ -288,7 +288,7 @@ roles         = "DefendOk", "Hut", "BarbarianBuild", "BarbarianSea"
 
 [unit_pikemen]
 name          = _("Pikemen")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Feudalism"
 obsolete_by   = "Musketeers"
 graphic       = "u.pikemen"
@@ -304,7 +304,7 @@ defense       = 2
 hitpoints     = 10
 firepower     = 1
 move_rate     = 1
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 0
 fuel          = 0
 uk_happy      = 1
@@ -316,7 +316,7 @@ roles         = "DefendGood", "FirstBuild"
 
 [unit_musketeers]
 name          = _("Musketeers")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Gunpowder"
 obsolete_by   = "Riflemen"
 graphic       = "u.musketeers"
@@ -332,7 +332,7 @@ defense       = 3
 hitpoints     = 20
 firepower     = 1
 move_rate     = 1
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 0
 fuel          = 0
 uk_happy      = 1
@@ -345,9 +345,8 @@ roles         = "DefendGood", "FirstBuild", "HutTech",
 
 [unit_fanatics]
 name          = _("Fanatics")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Fundamentalism"
-gov_req       = "Fundamentalism"
 obsolete_by   = "None"
 graphic       = "u.fanatics"
 graphic_alt   = "-"
@@ -362,7 +361,7 @@ defense       = 4
 hitpoints     = 20
 firepower     = 1
 move_rate     = 1
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 0
 fuel          = 0
 uk_happy      = 1
@@ -372,13 +371,15 @@ uk_gold       = 0
 flags         = "Fanatic"
 roles         = "DefendGood"
 helptext      = _("\
+Only Fundamentalist nations can build Fanatic units.\
+\n\n\
 Fundamentalist nations can maintain Fanatic units without\
  having to pay any shields for upkeep.\
 ")
 
 [unit_partisan]
 name          = _("Partisan")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Guerilla Warfare"
 obsolete_by   = "None"
 graphic       = "u.partisan"
@@ -394,7 +395,7 @@ defense       = 4
 hitpoints     = 20
 firepower     = 1
 move_rate     = 1
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 0
 fuel          = 0
 uk_happy      = 1
@@ -418,7 +419,7 @@ A number of Partisans are granted free when an enemy conquers your\
 
 [unit_alpine_troops]
 name          = _("Alpine Troops")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Tactics"
 obsolete_by   = "None"
 graphic       = "u.alpine_troops"
@@ -434,7 +435,7 @@ defense       = 5
 hitpoints     = 20
 firepower     = 1
 move_rate     = 1
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 0
 fuel          = 0
 uk_happy      = 1
@@ -446,7 +447,7 @@ roles         = "DefendGood"
 
 [unit_riflemen]
 name          = _("Riflemen")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Conscription"
 obsolete_by   = "None"
 graphic       = "u.riflemen"
@@ -462,7 +463,7 @@ defense       = 4
 hitpoints     = 20
 firepower     = 1
 move_rate     = 1
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 0
 fuel          = 0
 uk_happy      = 1
@@ -474,7 +475,7 @@ roles         = "DefendGood", "FirstBuild"
 
 [unit_marines]
 name          = _("Marines")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Amphibious Warfare"
 obsolete_by   = "None"
 graphic       = "u.marines"
@@ -490,7 +491,7 @@ defense       = 5
 hitpoints     = 20
 firepower     = 1
 move_rate     = 1
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 0
 fuel          = 0
 uk_happy      = 1
@@ -502,7 +503,7 @@ roles         = "DefendOk", "BarbarianSeaTech"
 
 [unit_paratroopers]
 name          = _("Paratroopers")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Combined Arms"
 obsolete_by   = "None"
 graphic       = "u.paratroopers"
@@ -518,7 +519,7 @@ defense       = 4
 hitpoints     = 20
 firepower     = 1
 move_rate     = 1
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 0
 fuel          = 0
 uk_happy      = 1
@@ -534,7 +535,7 @@ paratroopers_mr_sub = 0
 
 [unit_mech_inf]
 name          = _("Mech. Inf.")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Labor Union"
 obsolete_by   = "None"
 graphic       = "u.mech_inf"
@@ -550,7 +551,7 @@ defense       = 6
 hitpoints     = 30
 firepower     = 1
 move_rate     = 3
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 0
 fuel          = 0
 uk_happy      = 1
@@ -567,7 +568,7 @@ Mechanized Infantry; this unit has the strongest defence strength\
 
 [unit_horsemen]
 name          = _("Horsemen")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Horseback Riding"
 obsolete_by   = "Knights"
 graphic       = "u.horsemen"
@@ -583,7 +584,7 @@ defense       = 1
 hitpoints     = 10
 firepower     = 1
 move_rate     = 2
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 0
 fuel          = 0
 uk_happy      = 1
@@ -591,11 +592,11 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 flags         = "Horse"
-roles         = "AttackFast", "Hut", "Barbarian", "Hunter"
+roles         = "AttackFast", "Hut", "Barbarian"
 
 [unit_chariot]
 name          = _("Chariot")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "The Wheel"
 obsolete_by   = "Knights"
 graphic       = "u.chariot"
@@ -611,7 +612,7 @@ defense       = 1
 hitpoints     = 10
 firepower     = 1
 move_rate     = 2
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 0
 fuel          = 0
 uk_happy      = 1
@@ -619,11 +620,11 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 flags         = "Horse"
-roles         = "AttackFast", "Hut", "Hunter"
+roles         = "AttackFast", "Hut"
 
 [unit_elephants]
 name          = _("Elephants")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Polytheism"
 obsolete_by   = "Crusaders"
 graphic       = "u.elephants"
@@ -639,7 +640,7 @@ defense       = 1
 hitpoints     = 10
 firepower     = 1
 move_rate     = 2
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 0
 fuel          = 0
 uk_happy      = 1
@@ -651,7 +652,7 @@ roles         = "AttackFast"
 
 [unit_crusaders]
 name          = _("Crusaders")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Monotheism"
 obsolete_by   = "Dragoons"
 graphic       = "u.crusaders"
@@ -667,7 +668,7 @@ defense       = 1
 hitpoints     = 10
 firepower     = 1
 move_rate     = 2
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 0
 fuel          = 0
 uk_happy      = 1
@@ -679,7 +680,7 @@ roles         = "AttackFast"
 
 [unit_knights]
 name          = _("Knights")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Chivalry"
 obsolete_by   = "Dragoons"
 graphic       = "u.knights"
@@ -695,7 +696,7 @@ defense       = 2
 hitpoints     = 10
 firepower     = 1
 move_rate     = 2
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 0
 fuel          = 0
 uk_happy      = 1
@@ -704,11 +705,11 @@ uk_food       = 0
 uk_gold       = 0
 flags         = "Horse"
 roles         = "AttackFast", "HutTech", "BarbarianTech",
-                "BarbarianBuildTech", "BarbarianSeaTech", "Hunter"
+                "BarbarianBuildTech", "BarbarianSeaTech"
 
 [unit_dragoons]
 name          = _("Dragoons")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Leadership"
 obsolete_by   = "Cavalry"
 graphic       = "u.dragoons"
@@ -724,7 +725,7 @@ defense       = 2
 hitpoints     = 20
 firepower     = 1
 move_rate     = 2
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 0
 fuel          = 0
 uk_happy      = 1
@@ -732,12 +733,11 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 flags         = "Horse"
-roles         = "AttackFast", "BarbarianBuildTech", "BarbarianSeaTech",
-                "Hunter"
+roles         = "AttackFast", "BarbarianBuildTech", "BarbarianSeaTech"
 
 [unit_cavalry]
 name          = _("Cavalry")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Tactics"
 obsolete_by   = "Armor"
 graphic       = "u.cavalry"
@@ -753,7 +753,7 @@ defense       = 3
 hitpoints     = 20
 firepower     = 1
 move_rate     = 2
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 0
 fuel          = 0
 uk_happy      = 1
@@ -761,11 +761,11 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 flags         = ""
-roles         = "AttackFast", "Hunter"
+roles         = "AttackFast"
 
 [unit_armor]
 name          = _("Armor")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Mobile Warfare"
 obsolete_by   = "None"
 graphic       = "u.armor"
@@ -781,7 +781,7 @@ defense       = 5
 hitpoints     = 30
 firepower     = 1
 move_rate     = 3
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 0
 fuel          = 0
 uk_happy      = 1
@@ -789,11 +789,11 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 flags         = ""
-roles         = "AttackFast", "Hunter"
+roles         = "AttackFast"
 
 [unit_catapult]
 name          = _("Catapult")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Mathematics"
 obsolete_by   = "Cannon"
 graphic       = "u.catapult"
@@ -809,7 +809,7 @@ defense       = 1
 hitpoints     = 10
 firepower     = 1
 move_rate     = 1
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 0
 fuel          = 0
 uk_happy      = 1
@@ -821,7 +821,7 @@ roles         = "AttackStrong"
 
 [unit_cannon]
 name          = _("Cannon")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Metallurgy"
 obsolete_by   = "Artillery"
 graphic       = "u.cannon"
@@ -837,7 +837,7 @@ defense       = 1
 hitpoints     = 20
 firepower     = 1
 move_rate     = 1
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 0
 fuel          = 0
 uk_happy      = 1
@@ -849,7 +849,7 @@ roles         = "AttackStrong", "BarbarianTech", "BarbarianBuildTech"
 
 [unit_artillery]
 name          = _("Artillery")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Machine Tools"
 obsolete_by   = "Howitzer"
 graphic       = "u.artillery"
@@ -865,7 +865,7 @@ defense       = 1
 hitpoints     = 20
 firepower     = 2
 move_rate     = 1
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 0
 fuel          = 0
 uk_happy      = 1
@@ -877,7 +877,7 @@ roles         = "AttackStrong"
 
 [unit_howitzer]
 name          = _("Howitzer")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Robotics"
 obsolete_by   = "None"
 graphic       = "u.howitzer"
@@ -893,7 +893,7 @@ defense       = 2
 hitpoints     = 30
 firepower     = 2
 move_rate     = 2
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 0
 fuel          = 0
 uk_happy      = 1
@@ -905,7 +905,7 @@ roles         = "AttackStrong"
 
 [unit_fighter]
 name          = _("Fighter")
-class         = "Air"
+move_type     = "Air"
 tech_req      = "Flight"
 obsolete_by   = "Stealth Fighter"
 graphic       = "u.fighter"
@@ -921,7 +921,7 @@ defense       = 3
 hitpoints     = 20
 firepower     = 2
 move_rate     = 10
-vision_radius_sq = 8
+vision_range  = 2
 transport_cap = 0
 fuel          = 1
 uk_happy      = 0
@@ -933,7 +933,7 @@ roles         = ""
 
 [unit_bomber]
 name          = _("Bomber")
-class         = "Air"
+move_type     = "Air"
 tech_req      = "Advanced Flight"
 obsolete_by   = "Stealth Bomber"
 graphic       = "u.bomber"
@@ -949,7 +949,7 @@ defense       = 1
 hitpoints     = 20
 firepower     = 2
 move_rate     = 8
-vision_radius_sq = 8
+vision_range  = 2
 transport_cap = 0
 fuel          = 2
 uk_happy      = 1
@@ -961,7 +961,7 @@ roles         = ""
 
 [unit_helicopter]
 name          = _("Helicopter")
-class         = "Helicopter"
+move_type     = "Heli"
 tech_req      = "Combined Arms"
 obsolete_by   = "None"
 graphic       = "u.helicopter"
@@ -977,7 +977,7 @@ defense       = 3
 hitpoints     = 20
 firepower     = 2
 move_rate     = 6
-vision_radius_sq = 8
+vision_range  = 2
 transport_cap = 0
 fuel          = 0
 uk_happy      = 1
@@ -995,7 +995,7 @@ The Helicopter is a very powerful unit, as it can both fly and\
 
 [unit_stealth_fighter]
 name          = _("Stealth Fighter")
-class         = "Air"
+move_type     = "Air"
 tech_req      = "Stealth"
 obsolete_by   = "None"
 graphic       = "u.stealth_fighter"
@@ -1011,7 +1011,7 @@ defense       = 4
 hitpoints     = 20
 firepower     = 2
 move_rate     = 14
-vision_radius_sq = 8
+vision_range  = 2
 transport_cap = 0
 fuel          = 1
 uk_happy      = 0
@@ -1027,7 +1027,7 @@ An improved Fighter, with improved attack and a higher movement\
 
 [unit_stealth_bomber]
 name          = _("Stealth Bomber")
-class         = "Air"
+move_type     = "Air"
 tech_req      = "Stealth"
 obsolete_by   = "None"
 graphic       = "u.stealth_bomber"
@@ -1043,7 +1043,7 @@ defense       = 5
 hitpoints     = 20
 firepower     = 2
 move_rate     = 12
-vision_radius_sq = 8
+vision_range  = 2
 transport_cap = 0
 fuel          = 2
 uk_happy      = 1
@@ -1059,7 +1059,7 @@ An improved Bomber, with improved attack and a higher movement\
 
 [unit_trireme]
 name          = _("Trireme")
-class         = "Sea"
+move_type     = "Sea"
 tech_req      = "Map Making"
 obsolete_by   = "Caravel"
 graphic       = "u.trireme"
@@ -1075,19 +1075,19 @@ defense       = 1
 hitpoints     = 10
 firepower     = 1
 move_rate     = 3
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 2
 fuel          = 0
 uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = "Trireme", "BadCityDefender"
+flags         = "Trireme"
 roles         = "Ferryboat"
 
 [unit_caravel]
 name          = _("Caravel")
-class         = "Sea"
+move_type     = "Sea"
 tech_req      = "Navigation"
 obsolete_by   = "Galleon"
 graphic       = "u.caravel"
@@ -1103,19 +1103,19 @@ defense       = 1
 hitpoints     = 10
 firepower     = 1
 move_rate     = 3
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 3
 fuel          = 0
 uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = "BadCityDefender"
+flags         = ""
 roles         = "Ferryboat", "BarbarianBoat"
 
 [unit_galleon]
 name          = _("Galleon")
-class         = "Sea"
+move_type     = "Sea"
 tech_req      = "Magnetism"
 obsolete_by   = "Transport"
 graphic       = "u.galleon"
@@ -1131,19 +1131,19 @@ defense       = 2
 hitpoints     = 20
 firepower     = 1
 move_rate     = 4
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 4
 fuel          = 0
 uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = "BadCityDefender"
+flags         = ""
 roles         = "Ferryboat", "BarbarianBoat"
 
 [unit_frigate]
 name          = _("Frigate")
-class         = "Sea"
+move_type     = "Sea"
 tech_req      = "Magnetism"
 obsolete_by   = "Ironclad"
 graphic       = "u.frigate"
@@ -1159,19 +1159,19 @@ defense       = 2
 hitpoints     = 20
 firepower     = 1
 move_rate     = 4
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 2
 fuel          = 0
 uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = "BadCityDefender"
-roles         = "Hunter"
+flags         = ""
+roles         = ""
 
 [unit_ironclad]
 name          = _("Ironclad")
-class         = "Sea"
+move_type     = "Sea"
 tech_req      = "Steam Engine"
 obsolete_by   = "Destroyer"
 graphic       = "u.ironclad"
@@ -1187,19 +1187,19 @@ defense       = 4
 hitpoints     = 30
 firepower     = 1
 move_rate     = 4
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 0
 fuel          = 0
 uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = "BadCityDefender"
-roles         = "Hunter"
+flags         = ""
+roles         = ""
 
 [unit_destroyer]
 name          = _("Destroyer")
-class         = "Sea"
+move_type     = "Sea"
 tech_req      = "Electricity"
 obsolete_by   = "None"
 graphic       = "u.destroyer"
@@ -1215,15 +1215,15 @@ defense       = 4
 hitpoints     = 30
 firepower     = 1
 move_rate     = 6
-vision_radius_sq = 8
+vision_range  = 2
 transport_cap = 0
 fuel          = 0
 uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = "BadCityDefender"
-roles         = "Hunter"
+flags         = ""
+roles         = ""
 helptext      = _("\
 TIP:  A very fast unit, which is very useful for hunting down enemy\
  Transports.\
@@ -1231,7 +1231,7 @@ TIP:  A very fast unit, which is very useful for hunting down enemy\
 
 [unit_cruiser]
 name          = _("Cruiser")
-class         = "Sea"
+move_type     = "Sea"
 tech_req      = "Steel"
 obsolete_by   = "AEGIS Cruiser"
 graphic       = "u.cruiser"
@@ -1247,19 +1247,19 @@ defense       = 6
 hitpoints     = 30
 firepower     = 2
 move_rate     = 5
-vision_radius_sq = 8
+vision_range  = 2
 transport_cap = 0
 fuel          = 0
 uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = "BadCityDefender"
+flags         = ""
 roles         = ""
 
 [unit_aegis_cruiser]
 name          = _("AEGIS Cruiser")
-class         = "Sea"
+move_type     = "Sea"
 tech_req      = "Rocketry"
 obsolete_by   = "None"
 graphic       = "u.aegis_cruiser"
@@ -1275,19 +1275,19 @@ defense       = 8
 hitpoints     = 30
 firepower     = 2
 move_rate     = 5
-vision_radius_sq = 8
+vision_range  = 2
 transport_cap = 0
 fuel          = 0
 uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = "AEGIS", "BadCityDefender"
+flags         = "AEGIS"
 roles         = ""
 
 [unit_battleship]
 name          = _("Battleship")
-class         = "Sea"
+move_type     = "Sea"
 tech_req      = "Automobile"
 obsolete_by   = "None"
 graphic       = "u.battleship"
@@ -1303,19 +1303,19 @@ defense       = 12
 hitpoints     = 40
 firepower     = 2
 move_rate     = 4
-vision_radius_sq = 8
+vision_range  = 2
 transport_cap = 0
 fuel          = 0
 uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = "BadCityDefender"
+flags         = ""
 roles         = ""
 
 [unit_submarine]
 name          = _("Submarine")
-class         = "Sea"
+move_type     = "Sea"
 tech_req      = "Combustion"
 obsolete_by   = "None"
 graphic       = "u.submarine"
@@ -1331,16 +1331,16 @@ defense       = 2
 hitpoints     = 30
 firepower     = 2
 move_rate     = 3
-vision_radius_sq = 8
+vision_range  = 2
 transport_cap = 8
 fuel          = 0
 uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = "Partial_Invis", "BadCityDefender",
+flags         = "Partial_Invis", 
 	        "Missile_Carrier", "No_Land_Attack"
-roles         = "Hunter"
+roles         = ""
 helptext      = _("\
 Submarines have a very high strategic value, but have a weak\
  defence.\
@@ -1348,7 +1348,7 @@ Submarines have a very high strategic value, but have a weak\
 
 [unit_carrier]
 name          = _("Carrier")
-class         = "Sea"
+move_type     = "Sea"
 tech_req      = "Advanced Flight"
 obsolete_by   = "None"
 graphic       = "u.carrier"
@@ -1364,7 +1364,7 @@ defense       = 9
 hitpoints     = 40
 firepower     = 2
 move_rate     = 5
-vision_radius_sq = 8
+vision_range  = 2
 transport_cap = 8
 fuel          = 0
 uk_happy      = 1
@@ -1381,7 +1381,7 @@ TIP:  Guard Carriers with a handful of fast-moving ships and a\
 
 [unit_transport]
 name          = _("Transport")
-class         = "Sea"
+move_type     = "Sea"
 tech_req      = "Industrialization"
 obsolete_by   = "None"
 graphic       = "u.transport"
@@ -1397,19 +1397,19 @@ defense       = 3
 hitpoints     = 30
 firepower     = 1
 move_rate     = 5
-vision_radius_sq = 8
+vision_range  = 2
 transport_cap = 8
 fuel          = 0
 uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = "BadCityDefender"
+flags         = ""
 roles         = "Ferryboat"
 
 [unit_cruise_missile]
 name          = _("Cruise Missile")
-class         = "Missile"
+move_type     = "Air"
 tech_req      = "Rocketry"
 obsolete_by   = "None"
 graphic       = "u.cruise_missile"
@@ -1425,7 +1425,7 @@ defense       = 0
 hitpoints     = 10
 firepower     = 3
 move_rate     = 12
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 0
 fuel          = 1
 uk_happy      = 1
@@ -1441,7 +1441,7 @@ TIP:  A handful of these can successfully keep the waters around\
 
 [unit_nuclear]
 name          = _("Nuclear")
-class         = "Nuclear"
+move_type     = "Air"
 tech_req      = "Rocketry"
 obsolete_by   = "None"
 graphic       = "u.nuclear"
@@ -1457,7 +1457,7 @@ defense       = 0
 hitpoints     = 10
 firepower     = 1
 move_rate     = 16
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 0
 fuel          = 1
 uk_happy      = 1
@@ -1488,7 +1488,7 @@ TIP 2:  You may be involved in a situation where you've invaded an\
 
 [unit_diplomat]
 name          = _("Diplomat")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Writing"
 obsolete_by   = "Spy"
 graphic       = "u.diplomat"
@@ -1504,7 +1504,7 @@ defense       = 0
 hitpoints     = 10
 firepower     = 1
 move_rate     = 2
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 0
 fuel          = 0
 uk_happy      = 0
@@ -1534,7 +1534,7 @@ helptext      = _("\
 
 [unit_spy]
 name          = _("Spy")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Espionage"
 obsolete_by   = "None"
 graphic       = "u.spy"
@@ -1550,7 +1550,7 @@ defense       = 0
 hitpoints     = 10
 firepower     = 1
 move_rate     = 3
-vision_radius_sq = 8
+vision_range  = 2
 transport_cap = 0
 fuel          = 0
 uk_happy      = 0
@@ -1581,7 +1581,7 @@ A Spy can also be of aid on the battlefield - sabotaging enemy units\
 
 [unit_caravan]
 name          = _("Caravan")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Trade"
 obsolete_by   = "Freight"
 graphic       = "u.caravan"
@@ -1597,7 +1597,7 @@ defense       = 1
 hitpoints     = 10
 firepower     = 1
 move_rate     = 1
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 0
 fuel          = 0
 uk_happy      = 0
@@ -1617,7 +1617,7 @@ TIP:  You can stockpile a stack of Caravans in advance and bring\
 
 [unit_freight]
 name          = _("Freight")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "The Corporation"
 obsolete_by   = "None"
 graphic       = "u.freight"
@@ -1633,7 +1633,7 @@ defense       = 1
 hitpoints     = 10
 firepower     = 1
 move_rate     = 2
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 0
 fuel          = 0
 uk_happy      = 0
@@ -1648,7 +1648,7 @@ The Freight unit replaces the Caravan, and moves at twice the speed.\
 
 [unit_explorer]
 name          = _("Explorer")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "Seafaring"
 obsolete_by   = "Partisan"
 graphic       = "u.explorer"
@@ -1664,7 +1664,7 @@ defense       = 1
 hitpoints     = 10
 firepower     = 1
 move_rate     = 1
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 0
 fuel          = 0
 uk_happy      = 0
@@ -1679,7 +1679,7 @@ Explorers are very useful for mapping unknown territory.\
 
 [unit_barbarian_leader]
 name          = _("Barbarian Leader")
-class         = "Land"
+move_type     = "Land"
 tech_req      = "None"
 obsolete_by   = "None"
 graphic       = "u.barbarian_leader"
@@ -1695,7 +1695,7 @@ defense       = 0
 hitpoints     = 10
 firepower     = 1
 move_rate     = 2
-vision_radius_sq = 2
+vision_range  = 1
 transport_cap = 0
 fuel          = 0
 uk_happy      = 0

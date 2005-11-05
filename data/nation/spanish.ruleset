@@ -2,29 +2,18 @@
 
 name=_("Spanish")
 plural=_("?plural:Spanish")
-groups=_("Medieval"),_("Modern"),_("European")
-conflicts_with="catalan", "galician"
-legend=_("The modern Spanish nation was formed when the rulers of the\
- kingdoms of Castille and Aragon led the recapture of the Iberian peninsula\
- from the Moslems.  The Reconquista was completed in 1492AD, the same year\
- Columbus sailed.")
-leader=
- "Viriato",
- "Recaredo I",
- "Alfonso X",
- "Fernando V",
- "Isabel I",
- "Carlos I",
- "Felipe II",
- "Carlos III",
- "Francisco Franco",
- "Mortadelo"
+class=_("Modern")
+legend=_("The modern Spanish nation was formed when the rulers of the \
+kingdoms of Castille and Aragon led the recapture of the Iberian peninsula \
+from the Moslems.  The Reconquista was completed in 1492AD, the same year \
+Columbus sailed.")
+leader="Viriato", "Recaredo I", "Alfonso X", "Fernando V", "Isabel I",
+       "Carlos I", "Felipe II", "Carlos III", "Franco", "Mortadelo"
 leader_sex="Male", "Male", "Male", "Male", "Female",
            "Male", "Male", "Male", "Male", "Male"
-flag="spain"
+flag="f.spain"
 flag_alt = "-"
-city_style = "Classical"
-
+city_style = "European"
 ruler_titles = { "government",     "male_title",        "female_title"
                  "Despotism",      _("Caudillo"),       _("Caudilla")
                  "Fundamentalism", _("Cardinal"),       _("Cardinal")
@@ -34,13 +23,11 @@ ruler_titles = { "government",     "male_title",        "female_title"
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
-civilwar_nations=
-; Sub-national nations
- "catalan", "galician",
-; Spanish speaking ex-colonies
- "argentine", "chilean", "colombian", "cuban", "filipino", "venezuelan"
+tech_goals = "Monarchy", "Philosophy", "Navigation", "Iron Working",
+             "Railroad"
+wonder="Magellan's Expedition"
+government="Democracy"
+civilwar_nations = "chilean", "argentine"
 
 cities =
   "Madrid", "Barcelona", "Bilbao", "Valencia", "Sevilla", "Zaragoza",

@@ -11,24 +11,44 @@
    GNU General Public License for more details.
 ***********************************************************************/
 
-#ifndef FC__SETTINGS_H
-#define FC__SETTINGS_H
-
 #include "shared.h"
 
 #include "game.h"
+
+/* The following classes determine what can be changed when.
+ * Actually, some of them have the same "changeability", but
+ * different types are separated here in case they have
+ * other uses.
+ * Also, SSET_GAME_INIT/SSET_RULES separate the two sections
+ * of server settings sent to the client.
+ * See the settings[] array for what these correspond to and
+ * explanations.
+ */
+enum sset_class {
+  SSET_MAP_SIZE,
+  SSET_MAP_GEN,
+  SSET_MAP_ADD,
+  SSET_PLAYERS,
+  SSET_GAME_INIT,
+  SSET_RULES,
+  SSET_RULES_FLEXIBLE,
+  SSET_META,
+  SSET_LAST
+};
 
 /* Whether settings are sent to the client when the client lists
  * server options; also determines whether clients can set them in principle.
  * Eg, not sent: seeds, saveturns, etc.
  */
-#define SSET_TO_CLIENT TRUE
-#define SSET_SERVER_ONLY FALSE
+enum sset_to_client {
+  SSET_TO_CLIENT, SSET_SERVER_ONLY
+};
 
 /* Categories allow options to be usefully organized when presented to the user
  */
 enum sset_category {
   SSET_GEOLOGY,
+  SSET_ECOLOGY,
   SSET_SOCIOLOGY,
   SSET_ECONOMICS,
   SSET_MILITARY,
@@ -46,8 +66,7 @@ enum sset_level {
   SSET_ALL,
   SSET_VITAL,
   SSET_SITUATIONAL,
-  SSET_RARE,
-  SSET_CHANGED
+  SSET_RARE
 };
 
 extern const char *sset_level_names[];
@@ -56,7 +75,7 @@ extern const int OLEVELS_NUM;
 struct settings_s {
   const char *name;
   enum sset_class sclass;
-  bool to_client;
+  enum sset_to_client to_client;
 
   /*
    * Sould be less than 42 chars (?), or shorter if the values may
@@ -101,7 +120,3 @@ struct settings_s {
 
 extern struct settings_s settings[];
 extern const int SETTINGS_NUM;
-
-bool setting_is_changeable(int setting_id);
-
-#endif				/* FC__SETTINGS_H */

@@ -2,21 +2,11 @@
 
 name=_("Dutch")
 plural=_("?plural:Dutch")
-groups=_("Modern"), _("Medieval"), _("European")
-legend=_("When the Holy Roman Emperor sentenced the entire population to\
- death, the people of the Netherlands revolted and declared themselves\
- independent, forming the Union of Utrecht in 1579. The Netherlands grew\
- to be a dominant maritime and economic power in the 17th century.")
-leader=
- "Willem I",
- "Maurits",
- "Emma",
- "Wilhelmina",
- "Juliana",
- "Beatrix"
+class=_("Modern")
+leader="Willem", "Maurits", "Emma", "Wilhelmina", "Juliana", "Beatrix"
 leader_sex="Male", "Male", "Female", "Female", "Female", "Female"
-flag="netherlands"
-flag_alt = "holland"
+flag="f.netherlands"
+flag_alt = "f.holland"
 city_style = "European"
 ruler_titles = { "government",      "male_title",      "female_title"
                  "Democracy",       _("Prime Minister"), _("Prime Minister")
@@ -25,9 +15,11 @@ ruler_titles = { "government",      "male_title",      "female_title"
 init_techs=""
 init_buildings=""
 
-init_government="Despotism"
-init_units=""
-civilwar_nations="boer", "belgian"
+tech_goals = "Map Making", "The Republic", "Trade", "Navigation",
+  "Economics", "Democracy"
+wonder="Magellan's Expedition"
+government="Democracy"
+civilwar_nations = "boer"
 
 ;names from the Golden Age, from Holland circling outward
 ;later important towns added at the end

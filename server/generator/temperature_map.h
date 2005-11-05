@@ -13,8 +13,6 @@
 #ifndef FC__TEMPERATURE_MAP_H
 #define FC__TEMPERATURE_MAP_H
 
-#include "fcintl.h"
-#include "shared.h"		/* bool type */
 
 /*
  *  temperature_map[] stores the temperature of each tile

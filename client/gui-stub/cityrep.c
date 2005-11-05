@@ -20,9 +20,10 @@
 #include "cityrep.h"
 
 /**************************************************************************
-  Display the city report dialog.  Optionally raise it.
+  Pop up or brings forward the city report dialog.  It may or may not
+  be modal.
 **************************************************************************/
-void popup_city_report_dialog(bool raise)
+void popup_city_report_dialog(bool make_modal)
 {
   /* PORTME */
 }
@@ -36,7 +37,7 @@ void city_report_dialog_update(void)
 }
 
 /**************************************************************************
-  Update the information for a single city in the city report.
+  Update the city report dialog for a single city.
 **************************************************************************/
 void city_report_dialog_update_city(struct city *pcity)
 {

@@ -1,56 +1,33 @@
 [nation_japanese]
 
-; For cities and leaders, we use ASCII transliterations of the Japanese
-; characters.  Using true Japanese (Kanji or Hiragana) is overkill for
-; those used to latin characters (but would be desirable for Japanese
-; players).  Other transliterations that use accented latin characters
-; are also unnecessary.  Here we stick to ascii using the Hepburn
-; romanization.
-;
-; This is a serious problem for Japanese players since they would obviously
-; want to see these names using their native alphabet.  The only ways to
-; solve this would be to allow translation of city names (forcing translators
-; to translate or at least wade through all of the thousands of available
-; names) or to distribute a separate Japanese ruleset for Japanese
-; players to use (which would not be that hard; just substitute in the
-; correct native characters, in UTF-8, into this file).
-;
-; This is also a problem for many other nations that use non-latin alphabets.
-
 name=_("Japanese")
 plural=_("?plural:Japanese")
-groups=_("Medieval"), _("Modern"), _("Asian")
-legend=_("According to traditional Japanese mythology, Japan was founded\
- in the 7th century BC by the ancestral Emperor Jimmu.")
-leader=
-  "Jimmu",
-  "Mutsuhito",
-  "Hirohito",
-  "Oda Nobunaga",
-  "Tokugawa Ieyasu"
+class=_("Modern")
+leader="Jimmu Tenno", "Mutsuhito", "Hirohito",
+       "Oda Nobunaga", "Tokugawa Ieyasu"
 leader_sex="Male", "Male", "Male", "Male", "Male"
-flag="japan"
+flag="f.japan"
 flag_alt = "-"
 city_style = "Asian"
 
 ruler_titles = { "government",      "male_title",      "female_title"
-                 "Monarchy",        _("Emperor"),        _("Empress")
-                 "Republic",        _("Shogun"),         _("Shogun")
+                 "Monarchy",        _("Shogun"),         _("Shogun")
                  "Democracy",       _("Prime Minister"), _("Prime Minister")
 }
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
-civilwar_nations="ryukyuan"
-; Reducing to ryukyuan only: This is a "true" Japanese civil war nation
+tech_goals = "Monarchy", "Philosophy", "The Republic", "Iron Working",
+             "Engineering", "Railroad"
+wonder="Oracle"
+government="Republic"
+civilwar_nations = "korean", "filipino"
 
 cities =
   "Tokyo (ocean)",
   "Osaka (ocean)",
+  "Yokohama (ocean)",
   "Kyoto (!ocean)",
-  "Nara (!ocean)",
   "Sapporo (ocean)",
   "Nagoya (ocean)",
   "Fukuoka (ocean)",
@@ -58,9 +35,8 @@ cities =
   "Hiroshima (ocean)",
   "Sendai (ocean)",
   "Kawasaki (ocean)",
-  "Kokura (ocean)",
+  "Kita-Kyushu (ocean)",
   "Saitama (!ocean)",
-  "Yokohama (ocean)",
   "Chiba (ocean)",
   "Shizuoka (ocean)",
   "Niigata (ocean)",
@@ -77,6 +53,7 @@ cities =
   "Akita (ocean)",
   "Himeji (ocean)",
   "Nagasaki (ocean)",
+  "Nara (!ocean)",
   "Yokosuka (ocean)",
   "Oita (ocean)",
   "Gifu (!ocean)",
@@ -86,6 +63,7 @@ cities =
   "Takamatsu (ocean)",
   "Kochi (ocean)",
   "Toyama (ocean)",
+  "Naha (ocean)",
   "Aomori (ocean)",
   "Hakodate (ocean)",
   "Maebashi (!ocean)",
@@ -105,6 +83,7 @@ cities =
   "Fukushima (!ocean)",
   "Yokkaichi (ocean)",
   "Shimonoseki (ocean)",
+  "Okinawa (ocean)",
   "Hachinohe (ocean)",
   "Mito (!ocean)",
   "Sasebo (ocean)",
@@ -112,7 +91,7 @@ cities =
   "Kawaguchi (!ocean)",
   "Kushiro (ocean)",
   "Chofu (!ocean)",
-  "Fuse (!ocean)",
+  "Higashi-Osaka (!ocean)",
   "Kumagaya (!ocean)",
   "Amagasaki (ocean)",
   "Ichikawa",

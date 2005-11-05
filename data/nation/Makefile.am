@@ -5,9 +5,7 @@
 pkgdatadir = $(datadir)/@PACKAGE@/nation
 
 pkgdata_DATA = \
-		aborigines.ruleset \
 		afghani.ruleset \
-		algerian.ruleset \
 		american.ruleset \
 		arab.ruleset \
 		argentine.ruleset \
@@ -22,18 +20,14 @@ pkgdata_DATA = \
 		boer.ruleset \
 		bosnia.ruleset \
 		brazilian.ruleset \
-		british.ruleset \
-		bulgarian.ruleset \
-		byzantium.ruleset \
 		canadian.ruleset \
 		carthaginian.ruleset \
 		catalan.ruleset \
 		chilean.ruleset \
 		chinese.ruleset \
-		colombian.ruleset \
+		columbian.ruleset \
 		cornish.ruleset \
 		croatian.ruleset \
-		cuban.ruleset \
 		czech.ruleset \
 		danish.ruleset \
 		dunedain.ruleset \
@@ -47,76 +41,58 @@ pkgdata_DATA = \
 		finnish.ruleset \
 		french.ruleset \
 		galician.ruleset \
-		gallic.ruleset \
 		german.ruleset \
 		greek.ruleset \
-		hittite.ruleset \
 		hobbits.ruleset \
 		hungarian.ruleset \
 		icelandic.ruleset \
 		inca.ruleset \
 		indian.ruleset \
 		indonesian.ruleset \
-		inuit.ruleset \
-		iraqi.ruleset \
 		irish.ruleset \
-		iroquois.ruleset \
 		israeli.ruleset \
 		italian.ruleset \
 		japanese.ruleset \
 		kampuchean.ruleset \
 		kenyan.ruleset \
 		korean.ruleset \
-		lankese.ruleset \
 		latvian.ruleset \
-		libyan.ruleset \
 		lithuanian.ruleset \
 		malaysian.ruleset \
-		manchu.ruleset \
-		maori.ruleset \
 		martian.ruleset \
-		mayan.ruleset \
 		mexican.ruleset \
 		mongol.ruleset \
 		mordor.ruleset \
-		newzealand.ruleset \
 		nigerian.ruleset \
-		norwegian.ruleset \
-		papuan.ruleset \
+		observer.ruleset \
 		persian.ruleset \
 		phoenician.ruleset \
 		polish.ruleset \
 		portuguese.ruleset \
 		quebecois.ruleset \
-		romanian.ruleset \
 		roman.ruleset \
 		russian.ruleset \
-		ryukyuan.ruleset \
-		sami.ruleset \
 		scottish.ruleset \
 		serbian.ruleset \
 		silesian.ruleset \
 		singaporean.ruleset \
 		sioux.ruleset \
-		slovakian.ruleset \
 		slovenian.ruleset \
 		spanish.ruleset \
-		sudanese.ruleset \
 		sumerian.ruleset \
 		swedish.ruleset \
 		swiss.ruleset \
 		taiwanese.ruleset \
 		thai.ruleset \
-		tibetan.ruleset \
-		tunisian.ruleset \
 		turk.ruleset \
 		ukrainian.ruleset \
-		uyghur.ruleset \
-		venezuelan.ruleset \
 		vietnamese.ruleset \
 		viking.ruleset \
 		welsh.ruleset \
 		zulu.ruleset 
 
 EXTRA_DIST = $(pkgdata_DATA) Makefile.am.sh
+
+Makefile.am: Makefile.am.sh $(shell echo *.ruleset)
+	sh Makefile.am.sh >Makefile.am
 

@@ -100,7 +100,7 @@ static void goto_ok(void)
     struct unit *punit = get_unit_in_focus();
     if (punit)
     {
-      send_goto_tile(punit, pcity->tile);
+      send_goto_unit(punit, pcity->tile);
     }
   }
   set(goto_wnd, MUIA_Window_Open, FALSE);
@@ -134,7 +134,7 @@ void update_goto_dialog(void)
   set(goto_cities_listview, MUIA_NList_Quiet, TRUE);
   DoMethod(goto_cities_listview, MUIM_NList_Clear);
 
-  for (i = 0; i < game.info.nplayers; i++)
+  for (i = 0; i < game.nplayers; i++)
   {
     city_list_iterate(game.players[i].cities, pcity)
       DoMethod(goto_cities_listview, MUIM_NList_InsertSingle, pcity, MUIV_NList_Insert_Bottom);

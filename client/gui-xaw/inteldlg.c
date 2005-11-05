@@ -69,7 +69,7 @@ struct intel_dialog {
     TYPED_LIST_ITERATE(struct intel_dialog, dialoglist, pdialog)
 #define dialog_list_iterate_end  LIST_ITERATE_END
 
-static struct dialog_list *dialog_list = NULL;
+static struct dialog_list dialog_list;
 static bool dialog_list_has_been_initialised = FALSE;
 
 /******************************************************************/
@@ -96,7 +96,7 @@ void intel_diplo_close_callback(Widget w, XtPointer client_data,
 struct intel_dialog *get_intel_dialog(struct player *pplayer)
 {
   if (!dialog_list_has_been_initialised) {
-    dialog_list = dialog_list_new();
+    dialog_list_init(&dialog_list);
     dialog_list_has_been_initialised = TRUE;
   }
 
@@ -122,7 +122,7 @@ void popup_intel_dialog(struct player *pplayer)
     pdialog->pplayer = pplayer;
     pdialog->intel_dialog_shell = 0;
     pdialog->intel_diplo_dialog_shell = 0;
-    dialog_list_prepend(dialog_list, pdialog);
+    dialog_list_insert(&dialog_list, pdialog);
   }
 
   if (!(pdialog->intel_dialog_shell)) {
@@ -148,7 +148,7 @@ void popdown_intel_dialog(struct intel_dialog *pdialog)
   pdialog->intel_dialog_shell = 0;
 
   if (!(pdialog->intel_diplo_dialog_shell)) {
-    dialog_list_unlink(dialog_list, pdialog);
+    dialog_list_unlink(&dialog_list, pdialog);
     free(pdialog);
   }
 }
@@ -239,15 +239,16 @@ void create_intel_dialog(struct intel_dialog *pdialog, bool raise)
 			  XtNlabel, buf,
 			  NULL);
 
-  if (get_player_research(pdialog->pplayer)->researching == A_UNSET
-      || get_player_research(pdialog->pplayer)->researching == A_NOINFO) {
-    my_snprintf(buf, sizeof(buf), _("Researching: Unknown(%d/-)"),
-		get_player_research(pdialog->pplayer)->bulbs_researched);
+  if (pdialog->pplayer->research.researching == A_UNSET) {
+    my_snprintf(buf, sizeof(buf), _("Researching: %s(%d/%d)"),
+		advances[A_NONE].name,
+		pdialog->pplayer->research.bulbs_researched,
+		total_bulbs_required(pdialog->pplayer));
   } else {
     my_snprintf(buf, sizeof(buf), _("Researching: %s(%d/%d)"),
 		get_tech_name(pdialog->pplayer,
-			get_player_research(pdialog->pplayer)->researching),
-		get_player_research(pdialog->pplayer)->bulbs_researched,
+			      pdialog->pplayer->research.researching),
+		pdialog->pplayer->research.bulbs_researched,
 		total_bulbs_required(pdialog->pplayer));
   }
 
@@ -266,7 +267,7 @@ void create_intel_dialog(struct intel_dialog *pdialog, bool raise)
 			  XtNlabel, buf,
 			  NULL);
 
-  for(i=A_FIRST, j=0; i<game.control.num_tech_types; i++)
+  for(i=A_FIRST, j=0; i<game.num_tech_types; i++)
     if (get_invention(pdialog->pplayer, i) == TECH_KNOWN) {
       if(get_invention(game.player_ptr, i)==TECH_KNOWN) {
 	sz_strlcpy(tech_list_names[j], advances[i].name);
@@ -363,7 +364,7 @@ void popup_intel_diplo_dialog(struct player *pplayer, bool raise)
     pdialog->pplayer = pplayer;
     pdialog->intel_dialog_shell = 0;
     pdialog->intel_diplo_dialog_shell = 0;
-    dialog_list_prepend(dialog_list, pdialog);
+    dialog_list_insert(&dialog_list, pdialog);
   }
 
   if (!(pdialog->intel_diplo_dialog_shell)) {
@@ -390,7 +391,7 @@ void popdown_intel_diplo_dialog(struct intel_dialog *pdialog)
   pdialog->intel_diplo_dialog_shell = 0;
 
   if (!(pdialog->intel_dialog_shell)) {
-    dialog_list_unlink(dialog_list, pdialog);
+    dialog_list_unlink(&dialog_list, pdialog);
     free(pdialog);
   }
 }

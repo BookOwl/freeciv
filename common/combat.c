@@ -18,12 +18,8 @@
 #include <assert.h>
 #include <math.h>
 
-#include "rand.h"
-
-#include "game.h"
 #include "log.h"
 #include "map.h"
-#include "movement.h"
 #include "packets.h"
 #include "unit.h"
 
@@ -36,13 +32,12 @@
   2) the tile contains a non-enemy city or
   3) the tile contains a non-enemy unit
 ***********************************************************************/
-bool can_player_attack_tile(const struct player *pplayer,
-			    const struct tile *ptile)
+bool can_player_attack_tile(struct player *pplayer, const struct tile *ptile)
 {
   struct city *pcity = ptile->city;
   
   /* 1. Is there anyone there at all? */
-  if (!pcity && unit_list_size((ptile->units)) == 0) {
+  if (!pcity && unit_list_size(&(ptile->units)) == 0) {
     return FALSE;
   }
 
@@ -79,12 +74,11 @@ bool can_player_attack_tile(const struct player *pplayer,
   2) Adjacency
   3) Diplomatic status
 ***********************************************************************/
-bool can_unit_attack_unit_at_tile(const struct unit *punit,
-				  const struct unit *pdefender,
+bool can_unit_attack_unit_at_tile(struct unit *punit, struct unit *pdefender,
                                   const struct tile *dest_tile)
 {
-  struct terrain *fromtile = punit->tile->terrain;
-  struct terrain *totile = dest_tile->terrain;
+  Terrain_type_id fromtile = punit->tile->terrain;
+  Terrain_type_id totile = dest_tile->terrain;
   struct city *pcity = dest_tile->city;
 
   /* 1. Can we attack _anything_ ? */
@@ -94,7 +88,7 @@ bool can_unit_attack_unit_at_tile(const struct unit *punit,
 
   /* 2. Only fighters can attack planes, except in city or airbase attacks */
   if (!unit_flag(punit, F_FIGHTER) && is_air_unit(pdefender)
-      && !(pcity || tile_has_special(dest_tile, S_AIRBASE))) {
+      && !(pcity || map_has_special(dest_tile, S_AIRBASE))) {
     return FALSE;
   }
 
@@ -122,7 +116,7 @@ bool can_unit_attack_unit_at_tile(const struct unit *punit,
   To attack a stack, unit must be able to attack every unit there (not
   including transported units).
 ************************************************************************/
-bool can_unit_attack_all_at_tile(const struct unit *punit,
+bool can_unit_attack_all_at_tile(struct unit *punit,
 				 const struct tile *ptile)
 {
   unit_list_iterate(ptile->units, aunit) {
@@ -144,8 +138,7 @@ bool can_unit_attack_all_at_tile(const struct unit *punit,
   Is unit (1) diplomatically allowed to attack and (2) physically able
   to do so?
 ***********************************************************************/
-bool can_unit_attack_tile(const struct unit *punit,
-			  const struct tile *dest_tile)
+bool can_unit_attack_tile(struct unit *punit, const struct tile *dest_tile)
 {
   if (!can_player_attack_tile(unit_owner(punit), dest_tile)) {
     return FALSE;
@@ -243,30 +236,21 @@ double win_chance(int as, int ahp, int afp, int ds, int dhp, int dfp)
 /**************************************************************************
 A unit's effective firepower depend on the situation.
 **************************************************************************/
-void get_modified_firepower(const struct unit *attacker,
-			    const struct unit *defender,
+void get_modified_firepower(struct unit *attacker, struct unit *defender,
 			    int *att_fp, int *def_fp)
 {
-  struct city *pcity = tile_get_city(defender->tile);
-
   *att_fp = unit_type(attacker)->firepower;
   *def_fp = unit_type(defender)->firepower;
 
   /* Check CityBuster flag */
-  if (unit_flag(attacker, F_CITYBUSTER) && pcity) {
+  if (unit_flag(attacker, F_CITYBUSTER)
+      && map_get_city(defender->tile)) {
     *att_fp *= 2;
-  }
-
-  if (unit_flag(attacker, F_BADWALLATTACKER)
-      && get_unittype_bonus(defender->owner, defender->tile, attacker->type,
-			    EFT_DEFEND_BONUS) > 0) {
-    *att_fp = 1;
   }
 
   /* pearl harbour - defender's firepower is reduced to one, 
    *                 attacker's is multiplied by two         */
-  if (unit_flag(defender, F_BADCITYDEFENDER)
-      && tile_get_city(defender->tile)) {
+  if (is_sailing_unit(defender) && map_get_city(defender->tile)) {
     *att_fp *= 2;
     *def_fp = 1;
   }
@@ -281,7 +265,7 @@ void get_modified_firepower(const struct unit *attacker,
 
   /* In land bombardment both units have their firepower reduced to 1 */
   if (is_sailing_unit(attacker)
-      && !is_ocean(tile_get_terrain(defender->tile))
+      && !is_ocean(map_get_terrain(defender->tile))
       && is_ground_unit(defender)) {
     *att_fp = 1;
     *def_fp = 1;
@@ -292,8 +276,7 @@ void get_modified_firepower(const struct unit *attacker,
 Returns a double in the range [0;1] indicating the attackers chance of
 winning. The calculation takes all factors into account.
 **************************************************************************/
-double unit_win_chance(const struct unit *attacker,
-		       const struct unit *defender)
+double unit_win_chance(struct unit *attacker, struct unit *defender)
 {
   int def_power = get_total_defense_power(attacker, defender);
   int att_power = get_total_attack_power(attacker, defender);
@@ -312,7 +295,7 @@ double unit_win_chance(const struct unit *attacker,
 /**************************************************************************
   a wrapper that returns whether or not a unit ignores citywalls
 **************************************************************************/
-static bool unit_ignores_citywalls(const struct unit *punit)
+static bool unit_ignores_citywalls(struct unit *punit)
 {
   return (unit_flag(punit, F_IGWALL));
 }
@@ -320,7 +303,7 @@ static bool unit_ignores_citywalls(const struct unit *punit)
 /**************************************************************************
   Takes into account unit move_type as well, and Walls variant.
 **************************************************************************/
-bool unit_really_ignores_citywalls(const struct unit *punit)
+bool unit_really_ignores_citywalls(struct unit *punit)
 {
   return (unit_ignores_citywalls(punit)
 	  || is_air_unit(punit)
@@ -330,23 +313,21 @@ bool unit_really_ignores_citywalls(const struct unit *punit)
 /**************************************************************************
  a wrapper function returns 1 if the unit is on a square with fortress
 **************************************************************************/
-bool unit_on_fortress(const struct unit *punit)
+bool unit_on_fortress(struct unit *punit)
 {
-  return tile_has_special(punit->tile, S_FORTRESS);
+  return map_has_special(punit->tile, S_FORTRESS);
 }
 
 /**************************************************************************
-  Try defending against nuclear attack, if succed return a city which 
-  had enough luck and EFT_NUKE_PROOF.
-  If the attack was succesful return NULL.
+  a wrapper function returns 1 if there is a sdi-defense close to the square
 **************************************************************************/
-struct city *sdi_try_defend(const struct player *owner,
+struct city *sdi_defense_close(struct player *owner,
 			       const struct tile *ptile)
 {
   square_iterate(ptile, 2, ptile1) {
-    struct city *pcity = tile_get_city(ptile1);
+    struct city *pcity = map_get_city(ptile1);
     if (pcity && (!pplayers_allied(city_owner(pcity), owner))
-	&& myrand(100) < get_city_bonus(pcity, EFT_NUKE_PROOF)) {
+	&& get_city_bonus(pcity, EFT_NUKE_PROOF) > 0) {
       return pcity;
     }
   } square_iterate_end;
@@ -357,7 +338,7 @@ struct city *sdi_try_defend(const struct player *owner,
 /**************************************************************************
  Convenience wrapper for base_get_attack_power.
 **************************************************************************/
-int get_attack_power(const struct unit *punit)
+int get_attack_power(struct unit *punit)
 {
   return base_get_attack_power(punit->type, punit->veteran,
 			       punit->moves_left);
@@ -368,15 +349,14 @@ int get_attack_power(const struct unit *punit)
  status. Set moves_left to SINGLE_MOVE to disable the reduction of
  power caused by tired units.
 **************************************************************************/
-int base_get_attack_power(const struct unit_type *punittype,
-			  int veteran, int moves_left)
+int base_get_attack_power(Unit_Type_id type, int veteran, int moves_left)
 {
   int power;
 
-  power = punittype->attack_strength * POWER_FACTOR;
-  power *= punittype->veteran[veteran].power_fact;
+  power = get_unit_type(type)->attack_strength * POWER_FACTOR;
+  power *= get_unit_type(type)->veteran[veteran].power_fact;
 
-  if (!unit_type_flag(punittype, F_IGTIRED) && moves_left < SINGLE_MOVE) {
+  if (!unit_type_flag(type, F_IGTIRED) && moves_left < SINGLE_MOVE) {
     power = (power * moves_left) / SINGLE_MOVE;
   }
   return power;
@@ -385,7 +365,7 @@ int base_get_attack_power(const struct unit_type *punittype,
 /**************************************************************************
   Returns the defense power, modified by veteran status.
 **************************************************************************/
-int base_get_defense_power(const struct unit *punit)
+int base_get_defense_power(struct unit *punit)
 {
   return unit_type(punit)->defense_strength * POWER_FACTOR
   	* unit_type(punit)->veteran[punit->veteran].power_fact;
@@ -394,12 +374,12 @@ int base_get_defense_power(const struct unit *punit)
 /**************************************************************************
   Returns the defense power, modified by terrain and veteran status.
 **************************************************************************/
-int get_defense_power(const struct unit *punit)
+int get_defense_power(struct unit *punit)
 {
   int db, power = base_get_defense_power(punit);
 
-  db = 10 + punit->tile->terrain->defense_bonus / 10;
-  if (tile_has_special(punit->tile, S_RIVER)) {
+  db = get_tile_type(punit->tile->terrain)->defense_bonus;
+  if (map_has_special(punit->tile, S_RIVER)) {
     db += (db * terrain_control.river_defense_bonus) / 100;
   }
   power = (power * db) / 10;
@@ -411,8 +391,7 @@ int get_defense_power(const struct unit *punit)
  return the modified attack power of a unit.  Currently they aren't any
  modifications...
 ***************************************************************************/
-int get_total_attack_power(const struct unit *attacker,
-			   const struct unit *defender)
+int get_total_attack_power(struct unit *attacker, struct unit *defender)
 {
   int attackpower = get_attack_power(attacker);
 
@@ -429,20 +408,15 @@ int get_total_attack_power(const struct unit *attacker,
 May be called with a non-existing att_type to avoid any unit type
 effects.
 **************************************************************************/
-static int defense_multiplication(const struct unit_type *att_type,
-				  const struct unit_type *def_type,
-				  const struct player *def_player,
+static int defense_multiplication(Unit_Type_id att_type,
+				  Unit_Type_id def_type,
 				  const struct tile *ptile,
 				  int defensepower, bool fortified)
 {
-  struct city *pcity = tile_get_city(ptile);
+  struct city *pcity = map_get_city(ptile);
   int mod;
 
-  CHECK_UNIT_TYPE(def_type);
-
-  if (att_type) {
-    CHECK_UNIT_TYPE(att_type);
-
+  if (unit_type_exists(att_type)) {
     if (unit_type_flag(def_type, F_PIKEMEN)
 	&& unit_type_flag(att_type, F_HORSE)) {
       defensepower *= 2;
@@ -452,12 +426,25 @@ static int defense_multiplication(const struct unit_type *att_type,
 	(is_air_unittype(att_type) || is_heli_unittype(att_type))) {
       defensepower *= 5;
     }
-
-    if (!unit_type_flag(att_type, F_IGWALL)) {
-      /* This applies even if pcity is NULL. */
-      mod = 100 + get_unittype_bonus(def_player, ptile,
-				     att_type, EFT_DEFEND_BONUS);
-      defensepower = MAX(0, defensepower * mod / 100);
+         
+    if (is_air_unittype(att_type) && pcity) {
+      if ((mod = get_city_bonus(pcity, EFT_AIR_DEFEND)) > 0) {
+	defensepower = defensepower * (100 + mod) / 100;
+      }
+      if ((mod = get_city_bonus(pcity, EFT_MISSILE_DEFEND)) > 0
+	  && unit_type_flag(att_type, F_MISSILE)) {
+	defensepower = defensepower * (100 + mod) / 100;
+      }
+    } else if (is_water_unit(att_type) && pcity) {
+      if ((mod = get_city_bonus(pcity, EFT_SEA_DEFEND)) > 0) {
+	defensepower = defensepower * (100 + mod) / 100;
+      }
+    }
+    if (!unit_type_flag(att_type, F_IGWALL)
+	&& (is_ground_unittype(att_type) || is_heli_unittype(att_type))
+        && pcity
+        && (mod = get_city_bonus(pcity, EFT_LAND_DEFEND)) > 0) {
+      defensepower = defensepower * (100 + mod) / 100;
     }
 
     if (unit_type_flag(att_type, F_FIGHTER) && is_heli_unittype(def_type)) {
@@ -465,7 +452,7 @@ static int defense_multiplication(const struct unit_type *att_type,
     }
   }
 
-  if (tile_has_special(ptile, S_FORTRESS) && !pcity) {
+  if (map_has_special(ptile, S_FORTRESS) && !pcity) {
     defensepower +=
 	(defensepower * terrain_control.fortress_defense_bonus) / 100;
   }
@@ -481,30 +468,27 @@ static int defense_multiplication(const struct unit_type *att_type,
  May be called with a non-existing att_type to avoid any effects which
  depend on the attacker.
 **************************************************************************/
-int get_virtual_defense_power(const struct unit_type *att_type,
-			      const struct unit_type *def_type,
-			      const struct player *def_player,
+int get_virtual_defense_power(Unit_Type_id att_type, Unit_Type_id def_type,
 			      const struct tile *ptile,
 			      bool fortified, int veteran)
 {
-  int defensepower = def_type->defense_strength;
+  int defensepower = unit_types[def_type].defense_strength;
+  Terrain_type_id t = map_get_terrain(ptile);
   int db;
 
-  if (def_type->move_type == LAND_MOVING
-      && is_ocean(ptile->terrain)) {
+  if (unit_types[def_type].move_type == LAND_MOVING && is_ocean(t)) {
     /* Ground units on ship doesn't defend. */
     return 0;
   }
 
-  db = 10 + ptile->terrain->defense_bonus / 10;
-  if (tile_has_special(ptile, S_RIVER)) {
+  db = get_tile_type(t)->defense_bonus;
+  if (map_has_special(ptile, S_RIVER)) {
     db += (db * terrain_control.river_defense_bonus) / 100;
   }
   defensepower *= db;
-  defensepower *= def_type->veteran[veteran].power_fact;
+  defensepower *= get_unit_type(def_type)->veteran[veteran].power_fact;
 
-  return defense_multiplication(att_type, def_type, def_player,
-				ptile, defensepower,
+  return defense_multiplication(att_type, def_type, ptile, defensepower,
 				fortified);
 }
 
@@ -513,11 +497,9 @@ int get_virtual_defense_power(const struct unit_type *att_type,
  An veteran aegis cruiser in a mountain city with SAM and SDI defense 
  being attacked by a missile gets defense 288.
 ***************************************************************************/
-int get_total_defense_power(const struct unit *attacker,
-			    const struct unit *defender)
+int get_total_defense_power(struct unit *attacker, struct unit *defender)
 {
   return defense_multiplication(attacker->type, defender->type,
-				defender->owner,
 				defender->tile,
 				get_defense_power(defender),
 				defender->activity == ACTIVITY_FORTIFIED);
@@ -528,8 +510,7 @@ A number indicating the defense strength.
 Unlike the one got from win chance this doesn't potentially get insanely
 small if the units are unevenly matched, unlike win_chance.
 **************************************************************************/
-static int get_defense_rating(const struct unit *attacker,
-			      const struct unit *defender)
+static int get_defense_rating(struct unit *attacker, struct unit *defender)
 {
   int afp, dfp;
 
@@ -549,8 +530,7 @@ static int get_defense_rating(const struct unit *attacker,
   relationship of attacker and defender is ignored; the caller should check
   this.
 **************************************************************************/
-struct unit *get_defender(const struct unit *attacker,
-			  const struct tile *ptile)
+struct unit *get_defender(struct unit *attacker, const struct tile *ptile)
 {
   struct unit *bestdef = NULL;
   int bestvalue = -1, best_cost = 0, rating_of_best = 0;
@@ -598,14 +578,14 @@ struct unit *get_defender(const struct unit *attacker,
     }
   } unit_list_iterate_end;
 
-  if (unit_list_size(ptile->units) > 0 && !bestdef) {
-    struct unit *punit = unit_list_get(ptile->units, 0);
+  if (unit_list_size(&ptile->units) > 0 && !bestdef) {
+    struct unit *punit = unit_list_get(&ptile->units, 0);
 
     freelog(LOG_ERROR, "get_defender bug: %s's %s vs %s's %s (total %d"
             " units) on %s at (%d,%d). ", unit_owner(attacker)->name,
             unit_type(attacker)->name, unit_owner(punit)->name,
-            unit_type(punit)->name, unit_list_size(ptile->units), 
-            get_name(ptile->terrain), ptile->x, ptile->y);
+            unit_type(punit)->name, unit_list_size(&ptile->units), 
+            get_terrain_name(ptile->terrain), ptile->x, ptile->y);
   }
 
   return bestdef;
@@ -617,8 +597,7 @@ get unit at (x, y) that wants to kill defender.
 Works like get_defender; see comment there.
 This function is mostly used by the AI.
 **************************************************************************/
-struct unit *get_attacker(const struct unit *defender,
-			  const struct tile *ptile)
+struct unit *get_attacker(struct unit *defender, const struct tile *ptile)
 {
   struct unit *bestatt = 0;
   int bestvalue = -1, unit_a, best_cost = 0;
@@ -647,7 +626,7 @@ struct unit *get_attacker(const struct unit *defender,
 bool is_stack_vulnerable(const struct tile *ptile)
 {
   return !(ptile->city != NULL
-           || tile_has_special(ptile, S_FORTRESS)
-           || tile_has_special(ptile, S_AIRBASE)
-           || !game.info.killstack);
+           || map_has_special(ptile, S_FORTRESS)
+           || map_has_special(ptile, S_AIRBASE)
+           || !game.rgame.killstack);
 }

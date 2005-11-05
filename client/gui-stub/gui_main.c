@@ -18,34 +18,18 @@
 #include <stdio.h>
 
 #include "fciconv.h"
-#include "log.h"
 
-#include "civclient.h"
 #include "options.h"
 
 #include "gui_main.h"
 
 const char *client_string = "gui-stub";
 
-const char * const gui_character_encoding = "UTF-8";
-const bool gui_use_transliteration = FALSE;
-
 client_option gui_options[] = {
   /* None. */
 };
 const int num_gui_options = ARRAY_SIZE(gui_options);
 
-
-/****************************************************************************
-  Called by the tileset code to set the font size that should be used to
-  draw the city names and productions.
-****************************************************************************/
-void set_city_names_font_sizes(int my_city_names_font_size,
-			       int my_city_productions_font_size)
-{
-  freelog(LOG_ERROR, "Unimplemented set_city_names_font_sizes.");
-  /* PORTME */
-}
 
 /**************************************************************************
   Do any necessary pre-initialization of the UI, if necessary.
@@ -85,9 +69,6 @@ void sound_bell(void)
 /**************************************************************************
   Wait for data on the given socket.  Call input_from_server() when data
   is ready to be read.
-
-  This function is called after the client succesfully has connected
-  to the server.
 **************************************************************************/
 void add_net_input(int sock)
 {
@@ -96,8 +77,6 @@ void add_net_input(int sock)
 
 /**************************************************************************
   Stop waiting for any server network data.  See add_net_input().
-
-  This function is called if the client disconnects from the server.
 **************************************************************************/
 void remove_net_input(void)
 {
@@ -105,14 +84,9 @@ void remove_net_input(void)
 }
 
 /**************************************************************************
-  Set one of the unit icons (specified by idx) in the information area
-  based on punit.
-
-  punit is the unit the information should be taken from. Use NULL to
-  clear the icon.
-
-  idx specified which icon should be modified. Use idx==-1 to indicate
-  the icon for the active unit. Or idx in [0..num_units_below-1] for
+  Set one of the unit icons in the information area based on punit.
+  NULL will be pased to clear the icon. idx==-1 will be passed to
+  indicate this is the active unit, or idx in [0..num_units_below-1] for
   secondary (inactive) units on the same tile.
 **************************************************************************/
 void set_unit_icon(int idx, struct unit *punit)
@@ -122,26 +96,10 @@ void set_unit_icon(int idx, struct unit *punit)
 
 /**************************************************************************
   Most clients use an arrow (e.g., sprites.right_arrow) to indicate when
-  the units_below will not fit. This function is called to activate or
+  the units_below will not fit. This function is called to activate and
   deactivate the arrow.
-
-  Is disabled by default.
 **************************************************************************/
 void set_unit_icons_more_arrow(bool onoff)
 {
   /* PORTME */
-}
-
-/****************************************************************************
-  Enqueue a callback to be called during an idle moment.  The 'callback'
-  function should be called sometimes soon, and passed the 'data' pointer
-  as its data.
-****************************************************************************/
-void add_idle_callback(void (callback)(void *), void *data)
-{
-  /* PORTME */
-
-  /* This is a reasonable fallback if it's not ported. */
-  freelog(LOG_ERROR, "Unimplemented add_idle_callback.");
-  (callback)(data);
 }

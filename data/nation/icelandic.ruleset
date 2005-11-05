@@ -2,30 +2,26 @@
 
 name=_("Icelandic")
 plural=_("?plural:Icelanders")
-groups=_("Modern"), _("European")
-legend=_("Iceland was discovered and settled by Norwegian Vikings in the\
- late 9th century. The island was kept initially under the Norwegian and\
- later the Danish crown until independence from Denmark in 1944.")
-leader=
- "Jón Sigurdsson",
- "Ingólfur Arnarson",
- "Davíð Oddsson",
- "Ólafur Ragnar Grímsson"
+class=_("Modern")
+leader= "Jón Sigurdsson",
+   "Ingólfur Arnarson",
+   "Davíð Oddsson",
+   "Ólafur Ragnar Grímsson"
 
 leader_sex="Male", "Male", "Male", "Male"
 
-flag="iceland"
-flag_alt = "norway"
-city_style = "European"
-
+flag="f.iceland"
+flag_alt = "f.norway"
+city_style = "Classical"
 ruler_titles = { "government",      "male_title",       "female_title"
        "Democracy",   _("President"),      _("President")
                }
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
+tech_goals = "The Republic", "Navigation", "Trade"
+wonder="Magellan's Expedition"
+government="Republic"
 civilwar_nations = "danish", "english", "canadian"
 
 cities =

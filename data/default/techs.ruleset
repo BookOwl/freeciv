@@ -41,12 +41,17 @@ options="1.9"
 ; Following flag strings are possible
 ;
 ; "Bonus_Tech" = player gets extra tech if rearched first
+; "Boat_Fast" = all sea units get one extra move point
 ; "Bridge"   = "Settler" unit types can build bridges over rivers
 ; "Railroad" = "Settler" unit types can build rail roads
 ; "Farmland" = "Settler" unit types can build farmland
 ; "Fortress" = "Settler" unit types can build fortress
+; "Watchtower" = Units get enhanced visionrange in a fortress
 ; "Population_Pollution_Inc" = Increase the pollution factor created by
 ;                              popultaion by one
+; "Trade_Revenue_Reduce" = When known by the player establishing a trade
+;                          route reduces the initial revenue by cumulative
+;                          factors of 2/3
 ; "Airbase" = "Airbase" unit types can build Airbases
 ; "Build_Airborne" = from now on can build air units (for use by AI)
 
@@ -177,7 +182,6 @@ req2     = "Industrialization"
 flags    = ""
 graphic     = "a.communism"
 graphic_alt = "-"
-helptext = _("Reduces the effect of Cathedrals.")
 
 [advance_computers]
 name     = _("Computers")
@@ -234,7 +238,6 @@ req2     = "Magnetism"
 flags    = ""
 graphic     = "a.electricity"
 graphic_alt = "-"
-helptext = _("Improves the effect of Colosseums.")
 
 [advance_electronics]
 name     = _("Electronics")
@@ -288,7 +291,7 @@ graphic_alt = "-"
 name     = _("Flight")
 req1     = "Combustion"
 req2     = "Theory of Gravity"
-flags    = "Build_Airborne"
+flags    = "Trade_Revenue_Reduce","Build_Airborne"
 graphic     = "a.flight"
 graphic_alt = "-"
 
@@ -352,7 +355,7 @@ graphic_alt = "-"
 name     = _("Invention")
 req1     = "Engineering"
 req2     = "Literacy"
-flags    = ""
+flags    = "Watchtower"
 graphic     = "a.invention"
 graphic_alt = "-"
 
@@ -499,7 +502,6 @@ req2     = "None"
 flags    = ""
 graphic     = "a.mysticism"
 graphic_alt = "-"
-helptext = _("Improves the effect of Temples.")
 
 [advance_navigation]
 name     = _("Navigation")
@@ -521,10 +523,9 @@ graphic_alt = "-"
 name     = _("Nuclear Power")
 req1     = "Nuclear Fission"
 req2     = "Electronics"
-flags    = ""
+flags    = "Boat_Fast"
 graphic     = "a.nuclear_power"
 graphic_alt = "-"
-helptext = _("Gives sea units one extra move.")
 
 [advance_philosophy]
 name     = _("Philosophy")
@@ -580,7 +581,7 @@ graphic_alt = "-"
 name     = _("Railroad")
 req1     = "Steam Engine"
 req2     = "Bridge Building"
-flags    = "Railroad"
+flags    = "Railroad","Trade_Revenue_Reduce"
 graphic     = "a.railroad"
 graphic_alt = "-"
 
@@ -719,7 +720,6 @@ req2     = "Monotheism"
 flags    = ""
 graphic     = "a.theology"
 graphic_alt = "-"
-helptext = _("Improves the effect of Cathedrals.")
 
 [advance_theory_of_gravity]
 name     = _("Theory of Gravity")

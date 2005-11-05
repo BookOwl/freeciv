@@ -2,61 +2,25 @@
 
 name=_("Belgian")
 plural=_("?plural:Belgians")
-groups=_("Modern"), _("European")
-legend = _("Belgium gained independance from the Dutch Kingdom in 1830.\
- Belgium is mainly characterized by its movement from a unified state\
- to a federal one. This is the result of the Flemish and the\
- Walloon's nationalist (almost) peaceful fights.")
-leader=
- "Leopold I",
- "Leopold II",
- "Albert I",
- "Leopold III",
- "Baudouin",	; Flemish name: "Boudewijn"
- "Albert II",
- "Philippe",
- "Elisabeth"
-leader_sex="Male", "Male", "Male", "Male", "Male", "Male", "Male", "Female"
-flag="belgium"
+class=_("Modern")
+legend = _("Belgium gained independance from the Dutch Kingdom in 1830. \
+Belgium is mainly characterized by its movement from a unified state \
+to a federal one. This is the result of the Flemish and the \
+Walloon's nationalist (almost) peaceful fights.")
+leader="Leopold", "Albert", "Boudewijn", "Baudouin"
+leader_sex="Male", "Male", "Male", "Male"
+flag="f.belgium"
 flag_alt = "-"
-city_style = "Celtic"
+city_style = "European"
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
-civilwar_nations="dutch", "french"
+tech_goals = "Warrior Code", "Monarchy", "Democracy", "Gunpowder",
+             "Guerilla Warfare"
+wonder= "Cure for Cancer"
+government = "Monarchy"
 
-; Alternating Flemish and Walloon names
 cities =
- "Brussel / Bruxelles",
- "Antwerpen",
- "Charleroi",
- "Gent",
- "Liège",
- "Brugge",
- "Namur",
- "Leuven",
- "Mons",
- "Aalst",
- "La Louvière",
- "Mechelen",
- "Tournai",
- "Kortrijk",
- "Seraing",
- "Hasselt",
- "Verviers",
- "Sint-Niklaas",
- "Mouscron",
- "Oostende",
- "Herstal",
- "Genk",
- "Châtelet",
- "Roeselare",
- "Binche",
- "Beveren",
- "Wavre",
- "Dendermonde",
- "Néau",
- "Lokeren",
- "Dinant"
+  "Brussel", "Antwerpen", "Gent", "Charleroi", "Liège", "Brugge", "Namur",
+  "Mons", "Leuven", "Aalst", "Kortrijk", "Mechelen", "Oostende", "Eupen",
+  "Tournai", "Hasselt", "St. Niklaas", "Dendermonde", "Dinant", "Lokeren"

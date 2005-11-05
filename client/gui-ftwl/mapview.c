@@ -21,7 +21,6 @@
 #include "game.h"
 #include "log.h"
 #include "map.h"
-#include "movement.h"
 #include "registry.h"
 #include "support.h"
 
@@ -31,7 +30,6 @@
 #include "combat.h"
 #include "control.h"
 #include "mapctrl_common.h"
-#include "overview_common.h"
 #include "text.h"
 
 #include "widget.h"
@@ -41,7 +39,6 @@
 #include "back_end.h"
 #include "timing.h"
 
-#include "canvas.h"
 #include "gui_text.h"
 #include "mapctrl.h"
 #include "mapview.h"
@@ -52,12 +49,10 @@
 #define SCREEN_DEPTH DEPTH_MIN+16
 #define FOCUS_LIST_DEPTH DEPTH_MIN+18
 
-static struct ct_point overview_pos;
-static struct ct_point detaildisplay_pos;
 static struct te_screen *screen;
-static struct sw_widget *mapview_window = NULL;
+static struct sw_widget *mapview_canvas_window = NULL;
 static struct sw_widget *overview_window = NULL;
-static struct widget_list *city_descr_windows;
+static struct widget_list city_descr_windows;
 static int drag_factor = 2;
 /*
  * 0 - pixel
@@ -75,18 +70,18 @@ static int drag_granularity = 0;
 
 static double min_drag_time = 1.0 / (float) MAX_DRAG_FPS;
 
-#define MAX_TILE_LIST2_ITEMS	20
+#define MAX_TILE_LIST_ITEMS	20
 #define MAX_ACTION_DEFS		60
 #define MAX_CITY_DESCR_STYLES	MAX_CITY_SIZE
 
-enum tile_list2_item_type {
+enum tile_list_item_type {
   TLI_TERRAIN,
   TLI_CITY,
   TLI_UNIT
 };
 
-struct tile_list2_item {
-  enum tile_list2_item_type type;
+struct tile_list_item {
+  enum tile_list_item_type type;
   struct osda *unselected;
   struct osda *selected;
   struct sw_widget *button;
@@ -96,11 +91,11 @@ struct tile_list2_item {
   char *info_text;
 };
 
-static struct tile_list2 {
+static struct tile_list {
   int items;
   int selected;
-  struct tile_list2_item item[MAX_TILE_LIST2_ITEMS];
-} tile_list2;
+  struct tile_list_item item[MAX_TILE_LIST_ITEMS];
+} tile_list;
 
 static struct ct_tooltip *tooltip_template = NULL;
 
@@ -138,20 +133,25 @@ static struct {
     int border_width;
     be_color border_color;
     be_color background_color;
+    int transparency;
   } style[MAX_CITY_DESCR_STYLES];
 } city_descr_styles;
 
-struct ct_string *text_templates[FONT_COUNT];
-
-/****************************************************************************
-  Return the dimensions of the area (container widget; maximum size) for
-  the overview.
-****************************************************************************/
-void get_overview_area_dimensions(int *width, int *height)
+/**************************************************************************
+  ...
+**************************************************************************/
+static struct city_descr_style *find_city_descr_style(struct city *pcity)
 {
- /* Hack */
-  *width = 120;
-  *height = 80;
+  int i;
+
+  for (i = 0; i < city_descr_styles.styles; i++) {
+    if (pcity->size >= city_descr_styles.style[i].min_size &&
+	pcity->size <= city_descr_styles.style[i].max_size) {
+      return &city_descr_styles.style[i];
+    }
+  }
+  assert(0);
+  return NULL;
 }
 
 /**************************************************************************
@@ -222,8 +222,7 @@ void update_turn_done_button(bool do_restore)
   client window.  The parameters tell which sprite to use for the
   indicator.
 **************************************************************************/
-void set_indicator_icons(struct sprite *bulb, struct sprite *sol,
-			 struct sprite *flake, struct sprite *gov)
+void set_indicator_icons(int bulb, int sol, int flake, int gov)
 {
   /* PORTME */
 }
@@ -242,9 +241,9 @@ static void overview_mouse_press_callback(struct sw_widget *widget,
 {
   int xtile, ytile;
 
-  freelog(LOG_DEBUG, "press (%d,%d)", pos->x, pos->y);
+  freelog(LOG_NORMAL, "press (%d,%d)", pos->x, pos->y);
   overview_to_map_pos(&xtile,&ytile,pos->x,pos->y);
-  freelog(LOG_DEBUG, " --> (%d,%d)", xtile, ytile);
+  freelog(LOG_NORMAL, " --> (%d,%d)", xtile, ytile);
   if (can_client_change_view() && button == 3) {
     center_tile_mapcanvas(map_pos_to_tile(xtile, ytile));
   }
@@ -257,17 +256,17 @@ static void overview_mouse_press_callback(struct sw_widget *widget,
 /**************************************************************************
   ...
 **************************************************************************/
-void overview_size_changed(void)
+void map_size_changed(void)
 {
   if (overview_window) {
     sw_widget_destroy(overview_window);
   }
   overview_window =
       sw_window_create(screen->window, overview.width, overview.height, NULL,
-		       FALSE, OVERVIEW_DEPTH);
+		       0, FALSE,OVERVIEW_DEPTH);
   sw_window_set_mouse_press_notify(overview_window,
 				   overview_mouse_press_callback, NULL);
-  sw_widget_set_position(overview_window, overview_pos.x, overview_pos.y);
+  sw_widget_set_position(overview_window, 9, 371);
   sw_window_set_draggable(overview_window, FALSE);
 
   sw_window_set_canvas_background(overview_window, TRUE);
@@ -284,6 +283,25 @@ struct canvas *get_overview_window(void)
   store.widget = overview_window;
 
   return &store;
+}
+
+/**************************************************************************
+  ...
+**************************************************************************/
+void canvas_copy(struct canvas *dest, struct canvas *src,
+		 int src_x, int src_y, int dest_x, int dest_y, int width,
+		 int height)
+{
+  struct ct_size size = { width, height };
+  struct ct_point src_pos = { src_x, src_y };
+  struct ct_point dest_pos = { dest_x, dest_y };
+
+  freelog(LOG_DEBUG, "canvas_copy(src=%p,dest=%p)",src,dest);
+
+  be_copy_osda_to_osda(dest->osda, src->osda, &size, &dest_pos, &src_pos, 0);
+  if (dest->widget) {
+    sw_window_canvas_background_region_needs_repaint(dest->widget, NULL);
+  }
 }
 
 /**************************************************************************
@@ -311,39 +329,6 @@ void refresh_overview_canvas(void)
 }
 #endif
 
-/* Disabled for now */
-#if 0
-/**************************************************************************
-  Find the appropriate city description theme style.  This depends on 
-  the size of the city, and enables us to have different visual styles
-  for city descriptions depending on their sizes.
-**************************************************************************/
-static struct city_descr_style *find_city_descr_style(struct city *pcity)
-{
-  int i;
-
-  for (i = 0; i < city_descr_styles.styles; i++) {
-    if (pcity->size >= city_descr_styles.style[i].min_size &&
-	pcity->size <= city_descr_styles.style[i].max_size) {
-      return &city_descr_styles.style[i];
-    }
-  }
-  freelog(LOG_ERROR, "No matching city description style found for %s "
-          "which is of size %d", pcity->name, pcity->size);
-  return &city_descr_styles.style[0];
-}
-
-/**************************************************************************
-  If necessary, clear the city descriptions out of the buffer.
-**************************************************************************/
-void prepare_show_city_descriptions(void)
-{
-  widget_list_iterate(city_descr_windows, widget) {
-    widget_list_unlink(city_descr_windows, widget);
-    sw_widget_destroy(widget);
-  } widget_list_iterate_end;
-}
-
 /**************************************************************************
   Draw a description for the given city.  (canvas_x, canvas_y) is the
   canvas position of the city itself.
@@ -364,13 +349,13 @@ void show_city_desc(struct canvas *pcanvas, int canvas_x, int canvas_y,
 #if 0
   /* try to trace that hard-to-find assert that we sometimes get */
   freelog(LOG_NORMAL, "show_city_desc(%s) pcx=%d->%d (%d) pcy=%d->%d (%d)", pcity->name,
-          canvas_x, canvas_x+tileset_tile_width(tileset) / 2, all_rect.width,
-          canvas_y, canvas_y+tileset_tile_height(tileset), all_rect.height);
+          canvas_x, canvas_x+NORMAL_TILE_WIDTH / 2, all_rect.width,
+          canvas_y, canvas_y+NORMAL_TILE_HEIGHT, all_rect.height);
 #endif
 
   /* Put text centered below tile */
-  canvas_x += tileset_tile_width(tileset) / 2;
-  canvas_y += tileset_tile_height(tileset);
+  canvas_x += NORMAL_TILE_WIDTH / 2;
+  canvas_y += NORMAL_TILE_HEIGHT;
 
   get_city_mapview_name_and_growth(pcity, buffer, sizeof(buffer),
 				   buffer2, sizeof(buffer2), &color);
@@ -395,7 +380,7 @@ void show_city_desc(struct canvas *pcanvas, int canvas_x, int canvas_y,
 
   window =
       sw_window_create(screen->window, width, height, NULL,
-		       style->border_width > 0,
+		       style->transparency, style->border_width > 0,
 		       CITY_DESCR_DEPTH);
   sw_widget_set_background_color(window, style->background_color);
   sw_widget_disable_mouse_events(window);
@@ -429,10 +414,94 @@ void show_city_desc(struct canvas *pcanvas, int canvas_x, int canvas_y,
     sw_widget_align_parent(label2, A_SW);
   }      
 
-  widget_list_prepend(city_descr_windows, window);
+  widget_list_insert(&city_descr_windows, window);
   /* PORTME */
 }
-#endif
+
+/**************************************************************************
+  Draw some or all of a sprite onto the mapview or citydialog canvas.
+**************************************************************************/
+void canvas_put_sprite(struct canvas *pcanvas,
+		       int canvas_x, int canvas_y,
+		       struct Sprite *sprite,
+		       int offset_x, int offset_y, int width, int height)
+{
+  struct osda *osda = pcanvas->osda;
+  struct ct_point dest_pos = { canvas_x, canvas_y };
+  struct ct_point src_pos = { offset_x, offset_y };
+  struct ct_size size = { width, height };
+
+  freelog(LOG_DEBUG, "gui_put_sprite canvas=%p",pcanvas);
+  be_draw_sprite(osda, BE_OPAQUE, sprite, &size, &dest_pos, &src_pos);
+  if (pcanvas->widget) {
+    sw_window_canvas_background_region_needs_repaint(pcanvas->widget,
+						     NULL);
+  }
+}
+
+/**************************************************************************
+  Draw a full sprite onto the mapview or citydialog canvas.
+**************************************************************************/
+void canvas_put_sprite_full(struct canvas *pcanvas,
+			    int canvas_x, int canvas_y,
+			    struct Sprite *sprite)
+{
+  struct ct_size size;
+
+  freelog(LOG_DEBUG, "gui_put_sprite_full");
+  be_sprite_get_size(&size, sprite);
+  canvas_put_sprite(pcanvas, canvas_x, canvas_y,
+		    sprite, 0, 0, size.width, size.height);
+}
+
+/**************************************************************************
+  Draw a filled-in colored rectangle onto the mapview or citydialog canvas.
+**************************************************************************/
+void canvas_put_rectangle(struct canvas *pcanvas,
+			  enum color_std color,
+			  int canvas_x, int canvas_y, int width, int height)
+{
+  struct ct_rect rect = { canvas_x, canvas_y, width, height };
+
+  freelog(LOG_DEBUG, "gui_put_rectangle(...)");
+  be_draw_region(pcanvas->osda,
+		 BE_OPAQUE, &rect, enum_color_to_be_color(color));
+  if (pcanvas->widget) {
+    sw_window_canvas_background_region_needs_repaint(pcanvas->widget,
+						     &rect);
+  }
+}
+
+/**************************************************************************
+  Draw a 1-pixel-width colored line onto the mapview or citydialog canvas.
+**************************************************************************/
+void canvas_put_line(struct canvas *pcanvas, enum color_std color,
+		     enum line_type ltype, int start_x, int start_y,
+		     int dx, int dy)
+{
+  struct ct_point start = { start_x, start_y };
+  struct ct_point end = { start_x + dx, start_y + dy};
+  struct ct_rect rect;
+
+  ct_rect_fill_on_2_points(&rect,&start,&end);
+
+  freelog(LOG_DEBUG, "gui_put_line(...)");
+
+  if (ltype == LINE_NORMAL) {
+    be_draw_line(pcanvas->osda, BE_OPAQUE, &start, &end, 1, FALSE,
+		 enum_color_to_be_color(color));
+  } else if (ltype == LINE_BORDER) {
+    be_draw_line(pcanvas->osda, BE_OPAQUE, &start, &end, 2, TRUE,
+		 enum_color_to_be_color(color));
+  } else {
+    assert(0);
+  }
+      
+  if (pcanvas->widget) {
+    sw_window_canvas_background_region_needs_repaint(pcanvas->widget,
+						     &rect);
+  }
+}
 
 /**************************************************************************
   Flush the given part of the canvas buffer (if there is one) to the
@@ -445,10 +514,10 @@ void flush_mapcanvas(int canvas_x, int canvas_y,
   struct ct_size size = { pixel_width, pixel_height };
   struct ct_point pos = { canvas_x, canvas_y };
 
-  freelog(LOG_DEBUG, "flush_mapcanvas=%s", ct_rect_to_string(&rect));
-  be_copy_osda_to_osda(sw_window_get_canvas_background(mapview_window),
-		       mapview.store->osda, &size, &pos, &pos);
-  sw_window_canvas_background_region_needs_repaint(mapview_window,
+  freelog(LOG_DEBUG,"flush_mapcanvas=%s",ct_rect_to_string(&rect));
+  be_copy_osda_to_osda(sw_window_get_canvas_background(mapview_canvas_window),
+		       mapview_canvas.store->osda, &size, &pos, &pos, 0);
+  sw_window_canvas_background_region_needs_repaint(mapview_canvas_window,
 						   &rect);
 }
 
@@ -462,20 +531,21 @@ void dirty_rect(int canvas_x, int canvas_y,
   struct ct_rect rect = { canvas_x, canvas_y, pixel_width, pixel_height };
 
   //freelog(LOG_NORMAL, "dirty_rect(...)");
-  sw_window_canvas_background_region_needs_repaint(mapview_window, &rect);
+  sw_window_canvas_background_region_needs_repaint(mapview_canvas_window, &rect);
 }
 
 /**************************************************************************
   Mark the entire screen area as "dirty" so that we can flush it later.
-  It is called by client common code.
 **************************************************************************/
 void dirty_all(void)
 {
   struct ct_rect rect;
 
-  sw_widget_get_bounds(mapview_window, &rect);
-  sw_window_canvas_background_region_needs_repaint(mapview_window, 
-                                                   &rect);
+  sw_widget_get_bounds(mapview_canvas_window, &rect);
+
+  //freelog(LOG_NORMAL, "dirty_all(...)");
+  sw_window_canvas_background_region_needs_repaint(mapview_canvas_window, &rect);
+  /* PORTME */
 }
 
 /**************************************************************************
@@ -485,7 +555,7 @@ void dirty_all(void)
 **************************************************************************/
 void flush_dirty(void)
 {
-  flush_mapcanvas(0, 0, mapview.width, mapview.height);
+  flush_mapcanvas(0, 0, mapview_canvas.width, mapview_canvas.height);
 }
 
 /**************************************************************************
@@ -506,9 +576,33 @@ void update_city_descriptions(void)
 }
 
 /**************************************************************************
+  If necessary, clear the city descriptions out of the buffer.
+**************************************************************************/
+void prepare_show_city_descriptions(void)
+{
+  freelog(LOG_DEBUG, "prepare_show_city_descriptions");
+  
+  widget_list_iterate(city_descr_windows, widget) {
+    widget_list_unlink(&city_descr_windows, widget);
+    sw_widget_destroy(widget);
+  } widget_list_iterate_end;
+}
+
+/**************************************************************************
   Draw a cross-hair overlay on a tile.
 **************************************************************************/
 void put_cross_overlay_tile(struct tile *ptile)
+{
+  /* PORTME */
+}
+
+/**************************************************************************
+  Draw in information about city workers on the mapview in the given
+  color.
+**************************************************************************/
+void put_city_worker(struct canvas *pcanvas,
+                     enum color_std color, enum city_tile_type worker,
+                     int canvas_x, int canvas_y)
 {
   /* PORTME */
 }
@@ -528,7 +622,7 @@ void tileset_changed(void)
 **************************************************************************/
 static struct osda *unit_to_osda(struct unit *punit)
 {
-  struct osda *result = be_create_osda(tileset_full_tile_width(tileset), tileset_full_tile_height(tileset));
+  struct osda *result = be_create_osda(UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT);
   struct canvas *store = fc_malloc(sizeof(*store));
 
   store->osda = result;
@@ -545,7 +639,7 @@ static struct osda *unit_to_osda(struct unit *punit)
 **************************************************************************/
 static struct osda *terrain_to_osda(struct tile *ptile)
 {
-  struct osda *result = be_create_osda(tileset_full_tile_width(tileset), tileset_full_tile_height(tileset));
+  struct osda *result = be_create_osda(UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT);
   struct canvas *store = fc_malloc(sizeof(*store));
 
   store->osda = result;
@@ -562,7 +656,7 @@ static struct osda *terrain_to_osda(struct tile *ptile)
 **************************************************************************/
 static struct osda *city_to_osda(struct city *pcity)
 {
-  struct osda *result = be_create_osda(tileset_full_tile_width(tileset), tileset_full_tile_height(tileset));
+  struct osda *result = be_create_osda(UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT);
   struct canvas *store = fc_malloc(sizeof(*store));
 
   store->osda = result;
@@ -579,39 +673,37 @@ static struct osda *city_to_osda(struct city *pcity)
 **************************************************************************/
 static struct osda *create_selected_osda(struct osda *osda)
 {
-  struct osda *result = be_create_osda(tileset_full_tile_width(tileset), tileset_full_tile_height(tileset));
-  struct ct_rect spec={0,0,tileset_full_tile_width(tileset), tileset_full_tile_height(tileset)};
-  struct ct_size size={tileset_full_tile_width(tileset), tileset_full_tile_height(tileset)};
+  struct osda *result = be_create_osda(UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT);
+  struct ct_rect spec={0,0,UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT};
+  struct ct_size size={UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT};
 
-  be_copy_osda_to_osda(result, osda, &size, NULL, NULL);
+  be_copy_osda_to_osda(result, osda, &size, NULL, NULL, 0);
 
-  be_draw_rectangle(result, &spec, 1, be_get_color(255, 0, 0, 255));
+  be_draw_rectangle(result,
+		    BE_OPAQUE,&spec,1,be_get_color(255,0,0));
   return result;
 }
 
-static void tile_list2_select(int new_index);
+static void tile_list_select(int new_index);
 
 /**************************************************************************
   ...
 **************************************************************************/
-static void tile_list2_select_callback(struct sw_widget *widget, void *data)
+static void tile_list_select_callback(struct sw_widget *widget, void *data)
 {
-    tile_list2_select((int)data);
+    tile_list_select((int)data);
 }
 
 /**************************************************************************
-  Show the detaildisplay information - the information displayed when
-  you click on a tile, city or unit.
-
-  FIXME: The number '35' below should be calculated from tile width.
+  ...
 **************************************************************************/
-static void tile_list2_select(int new_index)
+static void tile_list_select(int new_index)
 {
   int i;
-  tile_list2.selected = new_index;
+  tile_list.selected = new_index;
 
-  for (i = 0; i < tile_list2.items; i++) {
-    struct tile_list2_item *item = &tile_list2.item[i];
+  for (i = 0; i < tile_list.items; i++) {
+    struct tile_list_item *item = &tile_list.item[i];
     struct osda *osda = i == new_index ? item->selected : item->unselected;
     struct osda *background_faces[4];
     int j;
@@ -627,10 +719,9 @@ static void tile_list2_select(int new_index)
 
     item->button =
 	sw_button_create(screen->window, NULL, NULL, background_faces);
-    sw_widget_set_position(item->button, detaildisplay_pos.x + i * 35,
-                           detaildisplay_pos.y);
+    sw_widget_set_position(item->button, 200 + i * 35, 430);
     sw_button_set_callback(item->button,
-			   tile_list2_select_callback, (void *)i);
+			   tile_list_select_callback, (void *)i);
     sw_widget_set_tooltip(item->button,
 			  ct_tooltip_clone1(tooltip_template,
 					    item->tooltip));
@@ -642,7 +733,7 @@ static void tile_list2_select(int new_index)
 /**************************************************************************
   ...
 **************************************************************************/
-static void update_focus_tile_list2(void)
+static void update_focus_tile_list(void)
 {
   int i;
   struct tile *ptile;
@@ -651,25 +742,26 @@ static void update_focus_tile_list2(void)
 
   ptile = get_focus_tile();
   unit_list_iterate(ptile->units, aunit) {
-    if (game.info.player_idx == aunit->owner) {
+    if (game.player_idx == aunit->owner) {
       set_unit_focus(aunit);
       break;
     }
   } unit_list_iterate_end;
 
-  for (i = 0; i < tile_list2.items; i++) {
-    sw_widget_destroy(tile_list2.item[i].button);
-    be_free_osda(tile_list2.item[i].selected);
-    be_free_osda(tile_list2.item[i].unselected);
+  for (i = 0; i < tile_list.items; i++) {
+    printf("destroy button %d\n", i);
+    sw_widget_destroy(tile_list.item[i].button);
+    be_free_osda(tile_list.item[i].selected);
+    be_free_osda(tile_list.item[i].unselected);
   }
 
-  tile_list2.items = 0;
-  tile_list2.selected = -1;
+  tile_list.items = 0;
+  tile_list.selected = -1;
 
   {
-    struct tile_list2_item *item = &tile_list2.item[tile_list2.items];
+    struct tile_list_item *item = &tile_list.item[tile_list.items];
 
-    tile_list2.items++;
+    tile_list.items++;
 
     item->type = TLI_TERRAIN;
     item->unselected = terrain_to_osda(ptile);
@@ -679,41 +771,41 @@ static void update_focus_tile_list2(void)
     item->info_text=mystrdup(mapview_get_terrain_info_text(ptile));
   }
 
-  if (tile_get_city(ptile)) {
-    struct city *pcity=tile_get_city(ptile);
-    struct tile_list2_item *item = &tile_list2.item[tile_list2.items];
+  if(map_get_city(ptile)) {
+      struct city *pcity=map_get_city(ptile);
+    struct tile_list_item *item = &tile_list.item[tile_list.items];
 
-    tile_list2.items++;
+    tile_list.items++;
 
     item->type = TLI_CITY;
     item->unselected = city_to_osda(pcity);
     item->selected = create_selected_osda(item->unselected);
     item->button = NULL;
-    item->pcity = pcity;
+    item->pcity=pcity;
     item->tooltip = mystrdup(mapview_get_city_tooltip_text(pcity));
-    item->info_text = mystrdup(mapview_get_city_info_text(pcity));
+    item->info_text=mystrdup(mapview_get_city_info_text(pcity));
   }
 
   unit_list_iterate(ptile->units, punit) {
-    struct tile_list2_item *item = &tile_list2.item[tile_list2.items];
+    struct tile_list_item *item = &tile_list.item[tile_list.items];
 
-    tile_list2.items++;
+    tile_list.items++;
 
     item->type = TLI_UNIT;
     item->unselected = unit_to_osda(punit);
     item->selected = create_selected_osda(item->unselected);
     item->button = NULL;
-    item->punit = punit;
+    item->punit=punit;
 
     item->tooltip = mystrdup(mapview_get_unit_tooltip_text(punit));
-    item->info_text = mystrdup(mapview_get_unit_info_text(punit));
+    item->info_text=mystrdup(mapview_get_unit_info_text(punit));
   } unit_list_iterate_end;
 
-  if (tile_list2.items > 1) {
-    /* Take the city or unit */
-    tile_list2_select(1);
-  } else {
-    tile_list2_select(0);
+  if(tile_list.items>1) {
+      /* Take the city or unit */
+      tile_list_select(1);
+  }else{
+      tile_list_select(0);
   }
 }
 
@@ -746,14 +838,14 @@ static void canvas_mouse_press_callback(struct sw_widget *widget,
 
   if (button == BE_MB_LEFT) {
     set_focus_tile(ptile);
-    update_focus_tile_list2();
+    update_focus_tile_list();
   } else if (button == BE_MB_MIDDLE) {
     //popit(ev, xtile, ytile);
   } else if (button == BE_MB_RIGHT) {
       /*
     struct ct_rect rect;
 
-    sw_widget_get_bounds(mapview_window, &rect);
+    sw_widget_get_bounds(mapview_canvas_window, &rect);
 
     center_tile_mapcanvas(xtile, ytile);
       */
@@ -825,9 +917,9 @@ static void my_drag_move(struct sw_widget *widget,
   int dy = drag_factor * (current_position->y - start_position->y);
 
   int factorx =
-      drag_granularity == 0 ? 1 : drag_granularity * tileset_tile_width(tileset);
+      drag_granularity == 0 ? 1 : drag_granularity * NORMAL_TILE_WIDTH;
   int factory =
-      drag_granularity == 0 ? 1 : drag_granularity * tileset_tile_height(tileset);
+      drag_granularity == 0 ? 1 : drag_granularity * NORMAL_TILE_HEIGHT;
 
   dx /= factorx;
   dy /= factory;
@@ -856,9 +948,7 @@ static void action_button_callback(struct sw_widget *widget, void *data)
 }
 
 /**************************************************************************
-  glibc's scanf is localised. As such it will parse "1.345" as 1345 
-  with the german locale and not as 1.345.  The theme files should be
-  locale independent, and therefore since function is needed.
+  ...
 **************************************************************************/
 static bool is_float(char *str, double *dest)
 {
@@ -888,8 +978,7 @@ static bool is_float(char *str, double *dest)
 }
 
 /**************************************************************************
-  Handle keypresses.  This is where we carry out mapview scrolling with
-  arrow keys etc..
+  ...
 **************************************************************************/
 static void action_callback(const char *action)
 {
@@ -909,7 +998,7 @@ static void action_callback(const char *action)
     }
 
     for (i = 0; i < 8; i++) {
-      if (mystrcasecmp(dir_str, dir_get_name(i)) == 0) {
+      if (strcasecmp(dir_str, dir_get_name(i)) == 0) {
 	dir = i;
 	found = TRUE;
 	break;
@@ -977,6 +1066,7 @@ static void action_callback(const char *action)
     }
 
     total = (int) (factor * (float) base);
+    //printf("base=%d factor=%f total=%d\n",base,factor,total);
     {
       int x, y;
       get_mapview_scroll_pos(&x, &y);
@@ -996,17 +1086,11 @@ static void action_callback(const char *action)
 }
 
 /**************************************************************************
-  Read theme files and store their results for quick lookup.
+  ...
 **************************************************************************/
 static void read_properties(void)
 {
   struct section_file *file = te_open_themed_file("mapview.prop");
-
-  /* Overview position */
-  overview_pos = te_read_point(file, "overview", "position");
-
-  /* Unit, city and tile view position */
-  detaildisplay_pos = te_read_point(file, "detaildisplay", "position");
 
   tooltip_template = te_read_tooltip(file, "focus", FALSE);
 
@@ -1070,6 +1154,7 @@ static void read_properties(void)
       int min_size = secfile_lookup_int(file, "%s.size-min", sec[i]);
       int max_size = secfile_lookup_int(file, "%s.size-max", sec[i]);
       int border_width = secfile_lookup_int(file, "%s.border-width", sec[i]);
+      int transparency = secfile_lookup_int(file, "%s.transparency", sec[i]);
       struct ct_string *name =
 	  te_read_string(file, sec[i], "name", FALSE, FALSE);
       struct ct_string *growth =
@@ -1081,12 +1166,7 @@ static void read_properties(void)
       assert(min_size > 0 && max_size >= min_size
 	     && max_size <= MAX_CITY_SIZE);
       assert(border_width >= 0 && border_width <= 1);
-
-      /* HACK */
-      if (i == 0) {
-	text_templates[FONT_CITY_NAME] = name;
-	text_templates[FONT_CITY_PROD] = prod;
-      }
+      assert(transparency >= 0 && transparency <= 100);
 
       city_descr_styles.style[city_descr_styles.styles].min_size = min_size;
       city_descr_styles.style[city_descr_styles.styles].max_size = max_size;
@@ -1094,6 +1174,8 @@ static void read_properties(void)
 	  border_width;
       city_descr_styles.style[city_descr_styles.styles].border_color =
 	  border_color;
+      city_descr_styles.style[city_descr_styles.styles].transparency =
+	  transparency;
       city_descr_styles.style[city_descr_styles.styles].name_template = name;
       city_descr_styles.style[city_descr_styles.styles].growth_template =
 	  growth;
@@ -1116,7 +1198,7 @@ static const char *info_get_value(const char *id)
   }
 
   if (strcmp(id, "year") == 0) {
-    return textyear(game.info.year);
+    return textyear(game.year);
   } else if (strcmp(id, "gold") == 0) {
     my_snprintf(buffer, sizeof(buffer),
 		"%d", game.player_ptr->economic.gold);
@@ -1132,13 +1214,13 @@ static const char *info_get_value(const char *id)
 		"Gold %d\n"
 		"Tax: %d Lux: %d Sci: %d"),
 	      population_to_text(civ_population(game.player_ptr)),
-	      textyear(game.info.year), game.player_ptr->economic.gold,
+	      textyear(game.year), game.player_ptr->economic.gold,
 	      game.player_ptr->economic.tax,
 	      game.player_ptr->economic.luxury,
 	      game.player_ptr->economic.science);
       return buffer;
   } else if (strcmp(id, "focus_item") == 0) {
-      return tile_list2.item[tile_list2.selected].info_text;
+      return tile_list.item[tile_list.selected].info_text;
 #if 0      
       my_snprintf(buffer, sizeof(buffer),
 		  _("Population: %s "
@@ -1146,7 +1228,7 @@ static const char *info_get_value(const char *id)
 		"Gold %d "
 		"Tax: %d Lux: %d Sci: %d"),
 	      population_to_text(civ_population(game.player_ptr)),
-	      textyear(game.info.year), game.player_ptr->economic.gold,
+	      textyear(game.year), game.player_ptr->economic.gold,
 	      game.player_ptr->economic.tax,
 	      game.player_ptr->economic.luxury,
 	      game.player_ptr->economic.science);
@@ -1159,7 +1241,7 @@ static const char *info_get_value(const char *id)
 }
 
 /**************************************************************************
-  Initialize map canvas.
+  ...
 **************************************************************************/
 void popup_mapcanvas(void)
 {
@@ -1174,24 +1256,25 @@ void popup_mapcanvas(void)
   env.edit_get_width = edit_get_width;
   env.button_callback = button_callback;
   env.action_callback = action_callback;
-  city_descr_windows = widget_list_new();
+  widget_list_init(&city_descr_windows);
 
   screen = te_get_screen(root_window, "mapview", &env, SCREEN_DEPTH);
 
-  mapview_window =
+  mapview_canvas_window =
       sw_window_create(screen->window, screen_size.width, screen_size.height,
-		       NULL, FALSE, CANVAS_DEPTH);
-  sw_widget_set_position(mapview_window, 0,0);
+		       NULL, 0, FALSE, CANVAS_DEPTH);
+  sw_widget_set_position(mapview_canvas_window, 0,0);
 
-  sw_window_set_canvas_background(mapview_window, TRUE);
-  sw_window_set_mouse_press_notify(mapview_window,
+  sw_window_set_canvas_background(mapview_canvas_window, TRUE);
+  sw_window_set_mouse_press_notify(mapview_canvas_window,
 				   canvas_mouse_press_callback, NULL);
-  sw_window_set_draggable(mapview_window,FALSE);
-  sw_window_set_user_drag(mapview_window, my_drag_start, my_drag_move,
+  sw_window_set_draggable(mapview_canvas_window,FALSE);
+  sw_window_set_user_drag(mapview_canvas_window, my_drag_start, my_drag_move,
 			  NULL);
 
-  sw_widget_get_bounds(mapview_window, &rect);
-  be_draw_region(sw_window_get_canvas_background(mapview_window), &rect,
+  sw_widget_get_bounds(mapview_canvas_window, &rect);
+  be_draw_region(sw_window_get_canvas_background(mapview_canvas_window),
+		 BE_OPAQUE, &rect,
 		 enum_color_to_be_color(COLOR_STD_BACKGROUND));
 
   init_mapcanvas_and_overview();
@@ -1200,7 +1283,7 @@ void popup_mapcanvas(void)
 
   read_properties();
 
-  tile_list2.items = 0;
+  tile_list.items = 0;
   drag_timer = new_timer(TIMER_USER, TIMER_ACTIVE);
 }
 
@@ -1217,7 +1300,29 @@ void popdown_mapcanvas(void)
 **************************************************************************/
 void draw_selection_rectangle(int canvas_x, int canvas_y, int w, int h)
 {
-  /* ?? */
+
+}
+
+/**************************************************************************
+  ...
+**************************************************************************/
+struct canvas *canvas_create(int width, int height)
+{
+  struct canvas *result = fc_malloc(sizeof(*result));
+
+  result->osda = be_create_osda(width, height);
+  result->widget=NULL;
+  return result;
+}
+
+/**************************************************************************
+  ...
+**************************************************************************/
+void canvas_free(struct canvas *store)
+{
+  be_free_osda(store->osda);
+  assert(store->widget == NULL);
+  free(store);
 }
 
 /**************************************************************************
@@ -1229,11 +1334,11 @@ static void unshow_actions(void)
 
   for (i = 0; i < actions_shown.actions; i++) {
     sw_window_remove(actions_shown.action[i].widget);
-    actions_shown.action[i].widget = NULL;
+    actions_shown.action[i].widget=NULL;
     free(actions_shown.action[i].name);
-    actions_shown.action[i].name = NULL;
+    actions_shown.action[i].name=NULL;
     free(actions_shown.action[i].tooltip);
-    actions_shown.action[i].tooltip = NULL;
+    actions_shown.action[i].tooltip=NULL;
   }
 }
 
@@ -1257,13 +1362,13 @@ static const char *format_shortcut(const char *action)
 }
 
 #define ADD(x) \
-  actions_shown.action[actions_shown.actions].name = mystrdup(x);\
-  actions_shown.action[actions_shown.actions].enabled = TRUE;\
+  actions_shown.action[actions_shown.actions].name=mystrdup(x);\
+  actions_shown.action[actions_shown.actions].enabled=TRUE;\
   actions_shown.actions++;
 
 #define ADD_DIS(x) \
-  actions_shown.action[actions_shown.actions].name = mystrdup(x);\
-  actions_shown.action[actions_shown.actions].enabled = FALSE;\
+  actions_shown.action[actions_shown.actions].name=mystrdup(x);\
+  actions_shown.action[actions_shown.actions].enabled=FALSE;\
   actions_shown.actions++;
 
 #define X(x,y) 				\
@@ -1276,7 +1381,7 @@ static const char *format_shortcut(const char *action)
 **************************************************************************/
 static void fill_actions(void)
 {
-  struct tile_list2_item *item = &tile_list2.item[tile_list2.selected];  
+  struct tile_list_item *item = &tile_list.item[tile_list.selected];  
 
   actions_shown.actions = 0;
 
@@ -1322,7 +1427,7 @@ static void fill_actions(void)
     }
 
     if (can_unit_add_or_build_city(punit)) {
-      if (tile_get_city(punit->tile)) {
+      if (map_get_city(punit->tile)) {
 	ADD("unit_add_to_city");
       } else {
 	ADD("unit_build_city");
@@ -1465,8 +1570,8 @@ void mapview_update_actions(void)
 ****************************************************************************/
 void gui_flush(void)
 {
-  /* TESTME */
-  sw_paint_all();
+    /* TESTME */
+    sw_paint_all();
 }
 
 /**************************************************************************
@@ -1475,6 +1580,37 @@ void gui_flush(void)
 void update_map_canvas_scrollbars_size(void)
 {
   /* Nothing */
+}
+
+/****************************************************************************
+  Draw a full sprite onto the canvas.  If "fog" is specified draw it with
+  fog.
+****************************************************************************/
+void canvas_put_sprite_fogged(struct canvas *pcanvas,
+                              int canvas_x, int canvas_y,
+                              struct Sprite *psprite,
+                              bool fog, int fog_x, int fog_y)
+{
+  /* PORTME */
+}
+
+/****************************************************************************
+  Fill the area covered by the sprite with the given color.
+****************************************************************************/
+void canvas_fill_sprite_area(struct canvas *pcanvas,
+                             struct Sprite *psprite, enum color_std color,
+                             int canvas_x, int canvas_y)
+{
+  /* PORTME */
+}
+
+/****************************************************************************
+  Fill the area covered by the sprite with the given color.
+****************************************************************************/
+void canvas_fog_sprite_area(struct canvas *pcanvas, struct Sprite *psprite,
+                            int canvas_x, int canvas_y)
+{
+  /* PORTME */
 }
 
 struct tile *focus_tile;
@@ -1490,9 +1626,9 @@ void set_focus_tile(struct tile *ptile)
   focus_tile = ptile;
 
   if (old) {
-      refresh_tile_mapcanvas(old, FALSE, TRUE);
+    refresh_tile_mapcanvas(old, TRUE);
   }
-  refresh_tile_mapcanvas(focus_tile, FALSE, TRUE);
+  refresh_tile_mapcanvas(focus_tile, TRUE);
 }
 
 /****************************************************************************
@@ -1505,7 +1641,7 @@ void clear_focus_tile(void)
   focus_tile = NULL;
 
   if (map_exists() && old) {
-      refresh_tile_mapcanvas(old, FALSE, TRUE);
+    refresh_tile_mapcanvas(old, TRUE);
   }
 }
 
@@ -1515,15 +1651,4 @@ void clear_focus_tile(void)
 struct tile *get_focus_tile(void)
 {
   return focus_tile;
-}
-
-/****************************************************************************
-  Called by the tileset code to set the font size that should be used to
-  draw the city names and productions.
-****************************************************************************/
-void set_city_names_font_sizes(int my_city_names_font_size,
-			       int my_city_productions_font_size)
-{
-  freelog(LOG_ERROR, "Ignore set_city_names_font_sizes call.");
-  /* PORTME */
 }

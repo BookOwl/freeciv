@@ -28,21 +28,20 @@
 #include "game.h"
 #include "genlist.h"
 #include "government.h"
-#include "map.h"
 #include "mem.h"
-#include "movement.h"
 #include "shared.h"
 #include "tech.h"
 #include "unit.h"
+#include "map.h"
 #include "support.h"
 #include "version.h"
  
 #include "climisc.h"
 #include "colors.h"
+#include "graphics.h"
 #include "gui_stuff.h"
 #include "helpdata.h"
 #include "options.h"
-#include "sprite.h"
 #include "tilespec.h"
                                   
 #include "helpdlg.h"
@@ -67,7 +66,7 @@ static HWND help_ulabel[5][5];
 static HWND help_tlabel[4][5];
 
 static POINT unitpos;
-static struct unit_type *drawn_unit_type = NULL;
+static int unit_num=-1;
 
 struct fcwin_box *helpdlg_hbox;
 static struct fcwin_box *helpdlg_page_vbox;
@@ -101,7 +100,7 @@ char *help_tlabel_name[4][5] =
     { N_("Mine Rslt/Time:"), NULL, NULL, N_("Trans. Rslt/Time:"), NULL }
 };                                 
 
-static void help_draw_unit(HDC hdc, struct unit_type *utype);
+static void help_draw_unit(HDC hdc,int i);
 
 /**************************************************************************
 
@@ -148,8 +147,8 @@ static LONG APIENTRY HelpdlgWndProc(HWND hWnd,UINT uMsg,
       break;
     case WM_PAINT:
       hdc=BeginPaint(hWnd,(LPPAINTSTRUCT)&ps);
-      if (drawn_unit_type)
-	help_draw_unit(hdc, drawn_unit_type);
+      if (unit_num>=0)
+	help_draw_unit(hdc,unit_num);
       EndPaint(hWnd,(LPPAINTSTRUCT)&ps);
       break;
     case WM_COMMAND:
@@ -313,8 +312,8 @@ static void create_wonder_page(struct fcwin_box *vbox)
 **************************************************************************/
 static void unit_minsize(POINT *min,void *data)
 {
-  min->x=tileset_full_tile_width(tileset);
-  min->y=tileset_full_tile_height(tileset);
+  min->x=UNIT_TILE_WIDTH;
+  min->y=UNIT_TILE_HEIGHT;
 }
 
 /*************************************************************************
@@ -389,7 +388,7 @@ static void create_help_page(enum help_page_type type)
   GetClientRect(helpdlg_win,&rc);
   InvalidateRect(helpdlg_win,&rc,TRUE);
   fcwin_box_freeitem(helpdlg_hbox,1);
-  drawn_unit_type = NULL;
+  unit_num=-1;
   helpdlg_page_vbox=fcwin_vbox_new(helpdlg_win,FALSE);
   helpdlg_topic=fcwin_box_add_static(helpdlg_page_vbox,
 				     "",0,SS_LEFT,FALSE,FALSE,5);
@@ -422,7 +421,7 @@ static void create_help_page(enum help_page_type type)
 void create_help_dialog()
 {
   struct fcwin_box *vbox;
-  drawn_unit_type = NULL;
+  unit_num=-1;
   helpdlg_win=fcwin_create_layouted_window(HelpdlgWndProc,
 					   _("Freeciv Help Browser"),
 					   WS_OVERLAPPEDWINDOW,
@@ -475,34 +474,24 @@ static void help_update_improvement(const struct help_item *pitem,
  
   create_help_page(HELP_IMPROVEMENT);
  
-  if (which < game.control.num_impr_types) {
-    struct impr_type *imp = get_improvement_type(which);
-    int i;
-    char req_buf[512];
-
+  if (which<B_LAST) {
+    struct impr_type *imp = &improvement_types[which];
     sprintf(buf, "%d", impr_build_shield_cost(which));
     SetWindowText(help_ilabel[1], buf);
     sprintf(buf, "%d", imp->upkeep);
     SetWindowText(help_ilabel[3], buf);
-
-    /* FIXME: this should show ranges and all the MAX_NUM_REQS reqs. 
-     * Currently it's limited to 1 req but this code is partially prepared
-     * to be extended.  Remember MAX_NUM_REQS is a compile-time
-     * definition. */
-    i = 0;
-    requirement_vector_iterate(&imp->reqs, preq) {
-      SetWindowText(help_ilabel[5 + i],
-		    get_req_source_text(&preq->source, req_buf,
-		    sizeof(req_buf)));
-      i++;
-    } requirement_vector_iterate_end;
+    if (imp->tech_req == A_LAST) {
+      SetWindowText(help_ilabel[5], _("(Never)"));
+    } else {
+      SetWindowText(help_ilabel[5], advances[imp->tech_req].name);
+    }
 /*    create_tech_tree(help_improvement_tree, 0, imp->tech_req, 3);*/
   }
   else {
     SetWindowText(help_ilabel[1], "0");
     SetWindowText(help_ilabel[3], "0");
     SetWindowText(help_ilabel[5], _("(Never)"));
-/*    create_tech_tree(help_improvement_tree, 0, game.control.num_tech_types, 3);*/
+/*    create_tech_tree(help_improvement_tree, 0, game.num_tech_types, 3);*/
   }
   helptext_building(buf, sizeof(buf), which, pitem->text);
   set_help_text(buf);
@@ -518,35 +507,29 @@ static void help_update_wonder(const struct help_item *pitem,
  
   create_help_page(HELP_WONDER);
  
-  if (which < game.control.num_impr_types) {
-    struct impr_type *imp = get_improvement_type(which);
-    int i;
-    char req_buf[512];
-
+  if (which<B_LAST) {
+    struct impr_type *imp = &improvement_types[which];
     sprintf(buf, "%d", impr_build_shield_cost(which));
     SetWindowText(help_ilabel[1], buf);
-    sprintf(buf, "%d", imp->upkeep);
-    SetWindowText(help_ilabel[3], buf);
+    if (imp->tech_req == A_LAST) {
+      SetWindowText(help_ilabel[3], _("(Never)"));
+    } else {
+      SetWindowText(help_ilabel[3], advances[imp->tech_req].name);
+    }
+    if (tech_exists(imp->obsolete_by)) {
+      SetWindowText(help_ilabel[5], advances[imp->obsolete_by].name);
+    } else {
+      SetWindowText(help_ilabel[5], _("(Never)"));
+    }
 
-    /* FIXME: this should show ranges and all the MAX_NUM_REQS reqs. 
-     * Currently it's limited to 1 req but this code is partially prepared
-     * to be extended.  Remember MAX_NUM_REQS is a compile-time
-     * definition. */
-    i = 0;
-    requirement_vector_iterate(&imp->reqs, preq) {
-      SetWindowText(help_ilabel[5 + i],
-		    get_req_source_text(&preq->source, req_buf,
-		    sizeof(req_buf)));
-      i++;
-    } requirement_vector_iterate_end;
-/*    create_tech_tree(help_improvement_tree, 0, imp->tech_req, 3);*/
+    /*    create_tech_tree(help_improvement_tree, 0, imp->tech_req, 3);*/
   }
   else {
     /* can't find wonder */
     SetWindowText(help_ilabel[1], "0");
     SetWindowText(help_ilabel[3], _("(Never)"));
     SetWindowText(help_ilabel[5], _("None"));
-/*    create_tech_tree(help_improvement_tree, 0, game.control.num_tech_types, 3); */
+/*    create_tech_tree(help_improvement_tree, 0, game.num_tech_types, 3); */
   }
  
   helptext_building(buf, sizeof(buf), which, pitem->text);
@@ -557,140 +540,139 @@ static void help_update_wonder(const struct help_item *pitem,
 ...
 **************************************************************************/
 static void help_update_terrain(const struct help_item *pitem,
-				char *title, struct terrain *pterrain)
+				char *title, int i)
 {
   char *buf = &long_buffer[0];
-  
+  struct tile_type *ptype = get_tile_type(i);
+
   create_help_page(HELP_TERRAIN);
 
-  if (pterrain) {
+  if (i < T_COUNT) {
     sprintf(buf, "%d/%d.%d",
-	    pterrain->movement_cost,
-	    (int)((pterrain->defense_bonus + 100) / 100),
-	    (pterrain->defense_bonus + 100) % 100 / 10);
+	    ptype->movement_cost,
+	    (int)(ptype->defense_bonus/10),
+	    ptype->defense_bonus%10);
     SetWindowText (help_tlabel[0][1], buf);
 
     sprintf(buf, "%d/%d/%d",
-	    pterrain->output[O_FOOD],
-	    pterrain->output[O_SHIELD],
-	    pterrain->output[O_TRADE]);
+	    ptype->food,
+	    ptype->shield,
+	    ptype->trade);
     SetWindowText(help_tlabel[0][4], buf);
 
-    if (*(pterrain->special[0].name)) {
+    if (*(ptype->special_1_name)) {
       sprintf(buf, _("%s F/R/T:"),
-	      pterrain->special[0].name);
+	      ptype->special_1_name);
       SetWindowText(help_tlabel[1][0], buf);
       sprintf(buf, "%d/%d/%d",
-	      pterrain->special[0].output[O_FOOD],
-	      pterrain->special[0].output[O_SHIELD],
-	      pterrain->special[0].output[O_TRADE]);
+	      ptype->food_special_1,
+	      ptype->shield_special_1,
+	      ptype->trade_special_1);
       SetWindowText(help_tlabel[1][1], buf);
     } else {
       SetWindowText(help_tlabel[1][0], " ");
       SetWindowText(help_tlabel[1][1], " ");
     }
 
-    if (*(pterrain->special[1].name)) {
+    if (*(ptype->special_2_name)) {
       sprintf(buf, _("%s F/R/T:"),
-	      pterrain->special[1].name);
+	      ptype->special_2_name);
       SetWindowText(help_tlabel[1][3], buf);
       sprintf(buf, "%d/%d/%d",
-	      pterrain->special[1].output[O_FOOD],
-	      pterrain->special[1].output[O_SHIELD],
-	      pterrain->special[1].output[O_TRADE]);
+	      ptype->food_special_2,
+	      ptype->shield_special_2,
+	      ptype->trade_special_2);
       SetWindowText(help_tlabel[1][4], buf);
     } else {
       SetWindowText(help_tlabel[1][3], " ");
       SetWindowText(help_tlabel[1][4], " ");
     }
 
-    if (pterrain->road_trade_incr > 0) {
+    if (ptype->road_trade_incr > 0) {
       sprintf(buf, _("+%d Trade / %d"),
-	      pterrain->road_trade_incr,
-	      pterrain->road_time);
-    } else if (pterrain->road_time > 0) {
+	      ptype->road_trade_incr,
+	      ptype->road_time);
+    } else if (ptype->road_time > 0) {
       sprintf(buf, _("no extra / %d"),
-	      pterrain->road_time);
+	      ptype->road_time);
     } else {
       strcpy(buf, _("n/a"));
     }
     SetWindowText(help_tlabel[2][1], buf);
 
     strcpy(buf, _("n/a"));
-    if (pterrain->irrigation_result == pterrain) {
-      if (pterrain->irrigation_food_incr > 0) {
+    if (ptype->irrigation_result == i) {
+      if (ptype->irrigation_food_incr > 0) {
 	sprintf(buf, _("+%d Food / %d"),
-		pterrain->irrigation_food_incr,
-		pterrain->irrigation_time);
+		ptype->irrigation_food_incr,
+		ptype->irrigation_time);
       }
-    } else if (pterrain->irrigation_result != T_NONE) {
+    } else if (ptype->irrigation_result != T_NONE) {
       sprintf(buf, "%s / %d",
-	      pterrain->irrigation_result->name,
-	      pterrain->irrigation_time);
+	      get_tile_type(ptype->irrigation_result)->terrain_name,
+	      ptype->irrigation_time);
     }
     SetWindowText(help_tlabel[2][4], buf);
 
     strcpy(buf, _("n/a"));
-    if (pterrain->mining_result == pterrain) {
-      if (pterrain->mining_shield_incr > 0) {
+    if (ptype->mining_result == i) {
+      if (ptype->mining_shield_incr > 0) {
 	sprintf(buf, _("+%d Res. / %d"),
-		pterrain->mining_shield_incr,
-		pterrain->mining_time);
+		ptype->mining_shield_incr,
+		ptype->mining_time);
       }
-    } else if (pterrain->mining_result != T_NONE) {
+    } else if (ptype->mining_result != T_NONE) {
       sprintf(buf, "%s / %d",
-	      pterrain->mining_result->name,
-	      pterrain->mining_time);
+	      get_tile_type(ptype->mining_result)->terrain_name,
+	      ptype->mining_time);
     }
     SetWindowText(help_tlabel[3][1], buf);
 
-    if (pterrain->transform_result != T_NONE) {
+    if (ptype->transform_result != T_NONE) {
       sprintf(buf, "%s / %d",
-	      pterrain->transform_result->name,
-	      pterrain->transform_time);
+	      get_tile_type(ptype->transform_result)->terrain_name,
+	      ptype->transform_time);
     } else {
       strcpy(buf, _("n/a"));
     }
     SetWindowText(help_tlabel[3][4], buf);
   }
 
-  helptext_terrain(buf, pterrain, pitem->text);
+  helptext_terrain(buf, i, pitem->text);
   set_help_text(buf);
 }
 
 /*************************************************************************
 
 *************************************************************************/
-static void help_draw_unit(HDC hdc, struct unit_type *utype)
+static void help_draw_unit(HDC hdc,int i)
 {
   enum color_std bg_color;
   RECT rc;
-  HBRUSH brush;
   rc.top=unitpos.y;
   rc.left=unitpos.x;
-  rc.bottom=unitpos.y+tileset_full_tile_height(tileset);
-  rc.right=unitpos.x+tileset_full_tile_width(tileset);
+  rc.bottom=unitpos.y+UNIT_TILE_HEIGHT;
+  rc.right=unitpos.x+UNIT_TILE_WIDTH;
   
-  /* Give tile a background color, based on the type of unit
-   * FIXME: make a new set of colors for this.               */
-  switch (utype->move_type) {
-  case LAND_MOVING: bg_color = COLOR_OVERVIEW_LAND;       break;
-  case SEA_MOVING:  bg_color = COLOR_OVERVIEW_OCEAN;      break;
-  case HELI_MOVING: bg_color = COLOR_OVERVIEW_MY_UNIT;    break;
-  case AIR_MOVING:  bg_color = COLOR_OVERVIEW_ENEMY_CITY; break;
-  default:          bg_color = COLOR_OVERVIEW_UNKNOWN;    break;
+  /* Give tile a background color, based on the type of unit */
+  switch (get_unit_type(i)->move_type) {
+  case LAND_MOVING: bg_color = COLOR_STD_GROUND; break;
+  case SEA_MOVING:  bg_color = COLOR_STD_OCEAN;  break;
+  case HELI_MOVING: bg_color = COLOR_STD_YELLOW; break;
+  case AIR_MOVING:  bg_color = COLOR_STD_CYAN;   break;
+  default:          bg_color = COLOR_STD_BLACK;  break;
   }
-
-  brush = brush_alloc(get_color(tileset, bg_color));
-
-  FillRect(hdc, &rc, brush);
-
-  brush_free(brush);
+  FillRect(hdc,&rc,brush_std[bg_color]);
   
-  /* Put a picture of the unit in the tile */
-  if (utype) {
-    struct sprite *sprite = get_unittype_sprite(tileset, utype);
-    draw_sprite(sprite, hdc, unitpos.x, unitpos.y);
+  /* If we're using flags, put one on the tile */
+  if(!solid_color_behind_units)  {
+    struct Sprite *flag=get_nation_by_plr(game.player_ptr)->flag_sprite;
+    draw_sprite(flag,hdc,unitpos.x,unitpos.y);
+  }
+  /* Finally, put a picture of the unit in the tile */
+  if(i<game.num_unit_types) {
+    struct Sprite *s=get_unit_type(i)->sprite;
+    draw_sprite(s,hdc,unitpos.x,unitpos.y);
   }
   
 }
@@ -699,15 +681,14 @@ static void help_draw_unit(HDC hdc, struct unit_type *utype)
 
 **************************************************************************/
 static void help_update_unit_type(const struct help_item *pitem,
-				  char *title, struct unit_type *utype)
+				  char *title, int i)
 {
   char *buf = &long_buffer[0];
   create_help_page(HELP_UNIT);
-
-  drawn_unit_type = utype;
-
-  if (utype) {
-    sprintf(buf, "%d", unit_build_shield_cost(utype));
+  unit_num=i;
+  if (i<game.num_unit_types) {
+    struct unit_type *utype = get_unit_type(i);
+    sprintf(buf, "%d", unit_build_shield_cost(i));
     SetWindowText(help_ulabel[0][1], buf);
     sprintf(buf, "%d", utype->attack_strength);
     SetWindowText(help_ulabel[0][4], buf);
@@ -719,7 +700,7 @@ static void help_update_unit_type(const struct help_item *pitem,
     SetWindowText(help_ulabel[2][1], buf);
     sprintf(buf, "%d", utype->hp);
     SetWindowText(help_ulabel[2][4], buf);
-    SetWindowText(help_ulabel[3][1], helptext_unit_upkeep_str(utype));
+    SetWindowText(help_ulabel[3][1], helptext_unit_upkeep_str(i));
     sprintf(buf, "%d", utype->vision_range);
     SetWindowText(help_ulabel[3][4], buf);
     if(utype->tech_requirement==A_LAST) {
@@ -728,13 +709,13 @@ static void help_update_unit_type(const struct help_item *pitem,
       SetWindowText(help_ulabel[4][1], advances[utype->tech_requirement].name);
     }
     /*    create_tech_tree(help_improvement_tree, 0, utype->tech_requirement, 3);*/
-    if (utype->obsoleted_by == U_NOT_OBSOLETED) {
+    if(utype->obsoleted_by==-1) {
       SetWindowText(help_ulabel[4][4], _("None"));
     } else {
-      SetWindowText(help_ulabel[4][4], utype->obsoleted_by->name);
+      SetWindowText(help_ulabel[4][4], get_unit_type(utype->obsoleted_by)->name);
     }
 
-    helptext_unit(buf, utype, pitem->text);
+    helptext_unit(buf, i, pitem->text);
     set_help_text(buf);
   }
   else {
@@ -774,45 +755,37 @@ static void help_update_tech(const struct help_item *pitem, char *title, int i)
     fcwin_box_add_static(helpdlg_page_vbox,buf,0,SS_LEFT,FALSE,FALSE,5);
 
     impr_type_iterate(j) {
-      /* FIXME: need a more general mechanism for this, since this
-       * helptext needs to be shown in all possible req source types. */
-     requirement_vector_iterate(&get_improvement_type(j)->reqs, req) {
-	if (req->source.type == REQ_NONE) {
-	  break;
-	} else if (req->source.type == REQ_BUILDING
-		   && req->source.value.building == i) {
-	  hbox = fcwin_hbox_new(helpdlg_win, FALSE);
-	  fcwin_box_add_box(helpdlg_page_vbox, hbox, FALSE, FALSE, 5);
-	  fcwin_box_add_static(hbox, _("Allows "), 0, SS_LEFT, FALSE, FALSE,
-			       5);
-	  fcwin_box_add_button(hbox, get_improvement_type(j)->name,
-			       is_great_wonder(j) ?
-			       ID_HELP_WONDER_LINK : ID_HELP_IMPROVEMENT_LINK,
-			       0 , FALSE, FALSE, 5);
-	}
+      if(i==improvement_types[j].tech_req) {
+	hbox=fcwin_hbox_new(helpdlg_win,FALSE);
+	fcwin_box_add_box(helpdlg_page_vbox,hbox,FALSE,FALSE,5);
+	fcwin_box_add_static(hbox,_("Allows "),0,SS_LEFT,FALSE,FALSE,5);
+	fcwin_box_add_button(hbox,improvement_types[j].name,
+			     is_wonder(j)?
+			     ID_HELP_WONDER_LINK:ID_HELP_IMPROVEMENT_LINK,
+			     0,FALSE,FALSE,5);
       }
-      if(i==get_improvement_type(j)->obsolete_by) {
+      if(i==improvement_types[j].obsolete_by) {
 	hbox=fcwin_hbox_new(helpdlg_win,FALSE);
 	fcwin_box_add_box(helpdlg_page_vbox,hbox,FALSE,FALSE,5);
 	fcwin_box_add_static(hbox,_("Obsoletes "),0,SS_LEFT,FALSE,FALSE,5);
-	fcwin_box_add_button(hbox, get_improvement_type(j)->name,
-			     is_great_wonder(j)?
+	fcwin_box_add_button(hbox,improvement_types[j].name,
+			     is_wonder(j)?
 			     ID_HELP_WONDER_LINK:ID_HELP_IMPROVEMENT_LINK,
 			     0,FALSE,FALSE,5);
-      } requirement_vector_iterate_end;
+      }
     } impr_type_iterate_end;
 
     unit_type_iterate(j) {
-      if (i != j->tech_requirement) continue;
+      if(i!=get_unit_type(j)->tech_requirement) continue;
       hbox=fcwin_hbox_new(helpdlg_win,FALSE);
       fcwin_box_add_box(helpdlg_page_vbox,hbox,FALSE,FALSE,5);
       fcwin_box_add_static(hbox,_("Allows "),0,SS_LEFT,FALSE,FALSE,5);
-      fcwin_box_add_button(hbox,j->name,
+      fcwin_box_add_button(hbox,get_unit_type(j)->name,
 			   ID_HELP_UNIT_LINK,
 			   0,FALSE,FALSE,5);
     } unit_type_iterate_end;
 
-    for (j = 0; j < game.control.num_tech_types; j++) {
+    for (j = 0; j < game.num_tech_types; j++) {
       if(i==advances[j].req[0]) {
         if(advances[j].req[1]==A_NONE) {
 	  hbox=fcwin_hbox_new(helpdlg_win,FALSE);
@@ -860,7 +833,7 @@ static void help_update_government(const struct help_item *pitem,
   if (!gov) {
     strcat(buf, pitem->text);
   } else {
-    helptext_government(buf, gov, pitem->text);
+    helptext_government(buf, gov-governments, pitem->text);
   }
   create_help_page(HELP_TEXT);
   set_help_text(buf);
@@ -883,12 +856,12 @@ static void help_update_dialog(const struct help_item *pitem)
   switch(pitem->type) {
   case HELP_IMPROVEMENT:
     i = find_improvement_by_name(top);
-    if(i!=B_LAST && is_great_wonder(i)) i = B_LAST;
+    if(i!=B_LAST && is_wonder(i)) i = B_LAST;
     help_update_improvement(pitem, top, i);
     break;
   case HELP_WONDER:
     i = find_improvement_by_name(top);
-    if(i!=B_LAST && !is_great_wonder(i)) i = B_LAST;
+    if(i!=B_LAST && !is_wonder(i)) i = B_LAST;
     help_update_wonder(pitem, top, i);
     break;
   case HELP_UNIT:

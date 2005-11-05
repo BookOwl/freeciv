@@ -382,10 +382,9 @@ bool client_start_server(void)
    * get an iso-map and for a classic tileset you get a classic map.  In
    * both cases the map wraps in the X direction by default.
    *
-   * This works with hex maps too now.  A hex map always has
-   * tileset_is_isometric(tileset) return TRUE.  An iso-hex map has
-   * tileset_hex_height(tileset) != 0, while a non-iso hex map
-   * has tileset_hex_width(tileset) != 0.
+   * This works with hex maps too now.  A hex map always has is_isometric
+   * set.  An iso-hex map has hex_height != 0, while a non-iso hex map
+   * has hex_width != 0.
    *
    * Setting the option here is a bit of a hack, but so long as the client
    * has sufficient permissions to do so (it doesn't have HACK access yet) it
@@ -393,10 +392,8 @@ bool client_start_server(void)
    * set but then overwritten during the load. */
   my_snprintf(buf, sizeof(buf), "/set topology %d",
 	      (TF_WRAPX
-	       | ((tileset_is_isometric(tileset)
-		   && tileset_hex_height(tileset) == 0) ? TF_ISO : 0)
-	       | ((tileset_hex_width(tileset) != 0
-		   || tileset_hex_height(tileset) != 0) ? TF_HEX : 0)));
+	       | ((is_isometric && hex_height == 0) ? TF_ISO : 0)
+	       | ((hex_width != 0 || hex_height != 0) ? TF_HEX : 0)));
   send_chat(buf);
 
   return TRUE;
@@ -444,34 +441,36 @@ and read the string, then the client is given hack access.
 *****************************************************************/ 
 void send_client_wants_hack(const char *filename)
 {
-  if (filename[0] != '\0') {
-    struct packet_single_want_hack_req req;
-    struct section_file file;
+  if (has_capability("new_hack", aconnection.capability)) {
+    if (filename[0] != '\0') {
+      struct packet_single_want_hack_req req;
+      struct section_file file;
 
-    if (!is_filename_safe(filename)) {
-      return;
+      if (!is_filename_safe(filename)) {
+	return;
+      }
+
+      /* get the full filename path */
+      interpret_tilde(challenge_fullname, sizeof(challenge_fullname),
+	  "~/.freeciv/");
+      make_dir(challenge_fullname);
+
+      sz_strlcat(challenge_fullname, filename);
+
+      /* generate an authentication token */ 
+      randomize_string(req.token, sizeof(req.token));
+
+      section_file_init(&file);
+      secfile_insert_str(&file, req.token, "challenge.token");
+      if (!section_file_save(&file, challenge_fullname, 0)) {
+	freelog(LOG_ERROR, "Couldn't write token to temporary file: %s",
+	    challenge_fullname);
+      }
+      section_file_free(&file);
+
+      /* tell the server what we put into the file */ 
+      send_packet_single_want_hack_req(&aconnection, &req);
     }
-
-    /* get the full filename path */
-    interpret_tilde(challenge_fullname, sizeof(challenge_fullname),
-		    "~/.freeciv/");
-    make_dir(challenge_fullname);
-
-    sz_strlcat(challenge_fullname, filename);
-
-    /* generate an authentication token */ 
-    randomize_string(req.token, sizeof(req.token));
-
-    section_file_init(&file);
-    secfile_insert_str(&file, req.token, "challenge.token");
-    if (!section_file_save(&file, challenge_fullname, 0)) {
-      freelog(LOG_ERROR, "Couldn't write token to temporary file: %s",
-	      challenge_fullname);
-    }
-    section_file_free(&file);
-
-    /* tell the server what we put into the file */ 
-    send_packet_single_want_hack_req(&aconnection, &req);
   }
 }
 
@@ -480,13 +479,15 @@ handle response (by the server) if the client has got hack or not.
 *****************************************************************/ 
 void handle_single_want_hack_reply(bool you_have_hack)
 {
-  /* remove challenge file */
-  if (challenge_fullname[0] != '\0') {
-    if (remove(challenge_fullname) == -1) {
-      freelog(LOG_ERROR, "Couldn't remove temporary file: %s",
-	      challenge_fullname);
+  if (has_capability("new_hack", aconnection.capability)) {
+    /* remove challenge file */
+    if (challenge_fullname[0] != '\0') {
+      if (remove(challenge_fullname) == -1) {
+	freelog(LOG_ERROR, "Couldn't remove temporary file: %s",
+	    challenge_fullname);
+      }
+      challenge_fullname[0] = '\0';
     }
-    challenge_fullname[0] = '\0';
   }
 
   if (you_have_hack) {
@@ -530,44 +531,4 @@ void send_save_game(char *filename)
   }
 
   send_chat(message);
-}
-
-/**************************************************************************
-  Handle the list of rulesets sent by the server.
-**************************************************************************/
-void handle_ruleset_choices(struct packet_ruleset_choices *packet)
-{
-  char *rulesets[packet->ruleset_count];
-  int i;
-  size_t suf_len = strlen(RULESET_SUFFIX);
-
-  for (i = 0; i < packet->ruleset_count; i++) {
-    size_t len = strlen(packet->rulesets[i]);
-
-    rulesets[i] = mystrdup(packet->rulesets[i]);
-
-    if (len > suf_len
-	&& strcmp(rulesets[i] + len - suf_len, RULESET_SUFFIX) == 0) {
-      rulesets[i][len - suf_len] = '\0';
-    }
-  }
-  gui_set_rulesets(packet->ruleset_count, rulesets);
-
-  for (i = 0; i < packet->ruleset_count; i++) {
-    free(rulesets[i]);
-  }
-}
-
-/**************************************************************************
-  Called by the GUI code when the user sets the ruleset.  The ruleset
-  passed in here should match one of the strings given to gui_set_rulesets.
-**************************************************************************/
-void set_ruleset(const char *ruleset)
-{
-  char buf[4096];
-
-  my_snprintf(buf, sizeof(buf), "/read %s%s",
-	      ruleset, RULESET_SUFFIX);
-  freelog(LOG_DEBUG, "Executing '%s'", buf);
-  send_chat(buf);
 }

@@ -239,7 +239,7 @@ static bool unserialize_hash(struct hash_table *hash, void *data,
        * value_length (above) is set to a random value, which can also
        * cause a bug. */
       freelog(LOG_ERROR, _("There has been a CMA error.  "
-			   "Your citizen governor settings may be broken."));
+			   "Your CMA settings may be broken."));
       free(pvalue);
       free(pkey);
       hash_delete_all_entries(hash);
@@ -256,10 +256,6 @@ static bool unserialize_hash(struct hash_table *hash, void *data,
 void attribute_flush(void)
 {
   struct player *pplayer = game.player_ptr;
-
-  if (!pplayer) {
-    return;
-  }
 
   assert(attribute_hash != NULL);
 
@@ -283,10 +279,6 @@ void attribute_flush(void)
 void attribute_restore(void)
 {
   struct player *pplayer = game.player_ptr;
-
-  if (!pplayer) {
-    return;
-  }
 
   assert(attribute_hash != NULL);
 

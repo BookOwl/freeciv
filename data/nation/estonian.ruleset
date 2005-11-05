@@ -2,30 +2,24 @@
 
 name=_("Estonian")
 plural=_("?plural:Estonians")
-groups=_("Modern"), _("European")
-legend=_("Estonia is a small country on the south shore of the eastern\
- Baltic Sea. Its people and language are closely related to those of\
- Finland.")
-leader=
- "Kalevipoeg",
- "Lembitu",
- "Carl Robert Jakobson",
- "Konstantin Päts",
- "Tunne Kelam",
- "Lennart Meri",
- "Mart Laar"
+class=_("Modern")
+legend=_("Estonia is a small country on the south shore of the eastern \
+Baltic Sea.  Its people and language are closely related to those of \
+Finland.")
+leader="Kalevipoeg", "Lembitu", "Carl Robert Jakobson", "Konstantin Päts",
+  "Tunne Kelam", "Lennart Meri", "Mart Laar"
 leader_sex="Male", "Male", "Male", "Male",
   "Male", "Male", "Male"
-flag="estonia"
+flag="f.estonia"
 flag_alt = "-"
 city_style = "European"
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
-civilwar_nations="finnish", "latvian"
-; Removed "danish", "dutch": No relation?
+tech_goals = "Monarchy","Chivalry","The Republic","Democracy","Conscription"
+wonder="United Nations"
+government = "Democracy"
+civilwar_nations = "danish", "dutch"
 
 cities =
   "Tallinn", "Tartu", "Narva", "Kohtla-Järve", "Pärnu",

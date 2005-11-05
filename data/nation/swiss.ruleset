@@ -2,29 +2,23 @@
 
 name=_("Swiss")
 plural=_("?plural:Swiss")
-groups=_("Modern"), _("Medieval"), _("European")
-legend=_("Switzerland is a federation of cantons, some of which have more\
- than 700 years of history as a confederacy.")
-leader=
- "Wilhelm Tell",
- "Arnold von Winkelried",
- "Albrecht Gessler",
- "Henri Guisan",
- "Adolf Ogi",
- "Ruth Dreifuss",
- "Moritz Leuenberger",
- "Christoph Blocher"
+class=_("Modern")
+leader=	"Wilhelm Tell", "Arnold von Winkelried", "Gessler", "General Guisan",
+	"Adolf Ogi", "Ruth Dreifuss", "Moritz Leuenberger",
+	"Christoph Blocher"
 leader_sex="Male", "Male", "Male", "Male", "Male",
   "Female", "Male", "Male"
-flag="switzerland"
+flag="f.switzerland"
 flag_alt = "-"
 city_style = "European"
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
-civilwar_nations="austrian", "french", "italian"
+
+tech_goals = "Democracy", "Iron Working", "Trade", "Engineering",
+             "Railroad", "Bridge Building", "Banking"
+wonder="United Nations"
+government="Democracy"
 
 cities =
   "Bern (river)", "Zürich", "Basel (river)", "Genève", "Lausanne",

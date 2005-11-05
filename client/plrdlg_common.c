@@ -69,64 +69,66 @@ bool is_plrdlg_frozen(void)
 }
 
 /******************************************************************
-  The player-name (aka nation leader) column of the plrdlg.
+ ...
 *******************************************************************/
-static const char *col_name(const struct player *player)
+static const char *col_name(struct player *player)
 {
   return player->name;
 }
 
 /******************************************************************
-  The username (connection name) column of the plrdlg.
+ ...
 *******************************************************************/
-static const char *col_username(const struct player *player)
+static const char *col_username(struct player *player)
 {
   return player->username;
 }
 
 /******************************************************************
-  The name of the player's nation for the plrdlg.
+ ...
 *******************************************************************/
-static const char *col_nation(const struct player *player)
+static const char *col_nation(struct player *player)
 {
   return get_nation_name(player->nation);
 }
 
 /******************************************************************
-  The name of the player's team (or empty) for the plrdlg.
+ ...
 *******************************************************************/
-static const char *col_team(const struct player *player)
+static const char *col_team(struct player *player)
 {
-  return team_get_name(player->team);
+  if (player->team != TEAM_NONE) {
+    return team_get_by_id(player->team)->name;
+  } else {
+    return "";
+  }
 }
 
 /******************************************************************
-  TRUE if the player is AI-controlled.
+ ...
 *******************************************************************/
-static bool col_ai(const struct player *plr)
+static bool col_ai(struct player *plr)
 {
   return plr->ai.control;
 }
 
 /******************************************************************
-  Returns a translated string giving the embassy status
-  (none/with us/with them/both).
+ ...
 *******************************************************************/
-static const char *col_embassy(const struct player *player)
+static const char *col_embassy(struct player *player)
 {
   return get_embassy_status(game.player_ptr, player);
 }
 
 /******************************************************************
-  Returns a translated string giving the diplomatic status
-  ("war" or "ceasefire (5)").
+ ...
 *******************************************************************/
-static const char *col_diplstate(const struct player *player)
+static const char *col_diplstate(struct player *player)
 {
   static char buf[100];
   const struct player_diplstate *pds;
 
-  if (!game.player_ptr || player == game.player_ptr) {
+  if (player == game.player_ptr) {
     return "-";
   } else {
     pds = pplayer_get_diplstate(game.player_ptr, player);
@@ -143,9 +145,9 @@ static const char *col_diplstate(const struct player *player)
 /******************************************************************
   Return a string displaying the AI's love (or not) for you...
 *******************************************************************/
-static const char *col_love(const struct player *player)
+static const char *col_love(struct player *player)
 {
-  if (!game.player_ptr || player == game.player_ptr || !player->ai.control) {
+  if (player == game.player_ptr || !player->ai.control) {
     return "-";
   } else {
     return love_text(player->ai.love[game.player_ptr->player_no]);
@@ -153,73 +155,53 @@ static const char *col_love(const struct player *player)
 }
 
 /******************************************************************
-  Compares ai's attitude toward the player
-******************************************************************/
-static int cmp_love(const struct player *player1,
-                          const struct player *player2)
-{
-  int love1, love2;
-
-  if (!game.player_ptr) {
-    return player1->player_no - player2->player_no;
-  }
-
-  if (player1 == game.player_ptr || !player1->ai.control) {
-    love1 = MAX_AI_LOVE + 999;
-  } else {
-    love1 = player1->ai.love[game.player_ptr->player_no];
-  }
-
-  if (player2 == game.player_ptr || !player2->ai.control) {
-    love2 = MAX_AI_LOVE + 999;
-  } else {
-    love2 = player2->ai.love[game.player_ptr->player_no];
-  }
-  
-  return love1 - love2;
-}
-
-/******************************************************************
-  Returns a translated string giving our shared-vision status.
+ ...
 *******************************************************************/
-static const char *col_vision(const struct player *player)
+static const char *col_vision(struct player *player)
 {
   return get_vision_status(game.player_ptr, player);
 }
 
 /******************************************************************
-  Returns a translated string giving the player's "state".
-
-  FIXME: These terms aren't very intuitive for new players.
+ ...
 *******************************************************************/
-static const char *col_state(const struct player *plr)
+static const char *col_reputation(struct player *player)
 {
-  if (!plr->is_alive) {
-    return _("R.I.P");
-  } else if (!plr->is_connected) {
-    return "";
-  } else if (!is_player_phase(plr, game.info.phase)) {
-    return _("waiting");
-  } else if (plr->phase_done) {
-    return _("done");
+  return reputation_text(player->reputation);
+}
+
+/******************************************************************
+ ...
+*******************************************************************/
+static const char *col_state(struct player *plr)
+{
+  if (plr->is_alive) {
+    if (plr->is_connected) {
+      if (plr->turn_done) {
+	return _("done");
+      } else {
+	return _("moving");
+      }
+    } else {
+      return "";
+    }
   } else {
-    return _("moving");
+    return _("R.I.P");
   }
 }
 
 /******************************************************************
-  Returns a string telling the player's client's hostname (the
-  machine from which he is connecting).
+ ...
 *******************************************************************/
-static const char *col_host(const struct player *player)
+static const char *col_host(struct player *player)
 {
   return player_addr_hack(player);
 }
 
 /******************************************************************
-  Returns a string telling how many turns the player has been idle.
+ ...
 *******************************************************************/
-static const char *col_idle(const struct player *plr)
+static const char *col_idle(struct player *plr)
 {
   int idle;
   static char buf[100];
@@ -234,34 +216,25 @@ static const char *col_idle(const struct player *plr)
 }
 
 /******************************************************************
- Compares score of two players in players dialog
-*******************************************************************/
-static int cmp_score(const struct player* player1,
-                     const struct player* player2)
-{
-  return player1->score.game - player2->score.game;
-}
-
-/******************************************************************
  ...
 *******************************************************************/
 struct player_dlg_column player_dlg_columns[] = {
-  {TRUE, COL_TEXT, N_("?Player:Name"), col_name, NULL, NULL, "name"},
-  {FALSE, COL_TEXT, N_("Username"), col_username, NULL, NULL, "username"},
-  {TRUE, COL_FLAG, N_("Flag"), NULL, NULL, NULL,  "flag"},
-  {TRUE, COL_TEXT, N_("Nation"), col_nation, NULL, NULL,  "nation"},
-  {TRUE, COL_COLOR, N_("Border"), NULL, NULL, NULL,  "border"},
-  {TRUE, COL_RIGHT_TEXT, N_("Score"), get_score_text, NULL, cmp_score, "score"},
-  {TRUE, COL_TEXT, N_("Team"), col_team, NULL, NULL,  "team"},
-  {TRUE, COL_BOOLEAN, N_("AI"), NULL, col_ai, NULL,  "ai"},
-  {TRUE, COL_TEXT, N_("Attitude"), col_love, NULL, cmp_love,  "attitude"},
-  {TRUE, COL_TEXT, N_("Embassy"), col_embassy, NULL, NULL,  "embassy"},
-  {TRUE, COL_TEXT, N_("Dipl.State"), col_diplstate, NULL, NULL,  "diplstate"},
-  {TRUE, COL_TEXT, N_("Vision"), col_vision, NULL, NULL,  "vision"},
-  {TRUE, COL_TEXT, N_("State"), col_state, NULL, NULL,  "state"},
-  {FALSE, COL_TEXT, N_("?Player_dlg:Host"), col_host, NULL, NULL,  "host"},
-  {FALSE, COL_RIGHT_TEXT, N_("?Player_dlg:Idle"), col_idle, NULL, NULL,  "idle"},
-  {FALSE, COL_RIGHT_TEXT, N_("Ping"), get_ping_time_text, NULL, NULL,  "ping"}
+  {TRUE, COL_TEXT, N_("?Player:Name"), col_name, NULL, "name"},
+  {FALSE, COL_TEXT, N_("Username"), col_username, NULL, "username"},
+  {TRUE, COL_FLAG, N_("Flag"), NULL, NULL, "flag"},
+  {TRUE, COL_TEXT, N_("Nation"), col_nation, NULL, "nation"},
+  {TRUE, COL_COLOR, N_("Border"), NULL, NULL, "border"},
+  {TRUE, COL_TEXT, N_("Team"), col_team, NULL, "team"},
+  {TRUE, COL_BOOLEAN, N_("AI"), NULL, col_ai, "ai"},
+  {TRUE, COL_TEXT, N_("Attitude"), col_love, NULL, "attitude"},
+  {TRUE, COL_TEXT, N_("Embassy"), col_embassy, NULL, "embassy"},
+  {TRUE, COL_TEXT, N_("Dipl.State"), col_diplstate, NULL, "diplstate"},
+  {TRUE, COL_TEXT, N_("Vision"), col_vision, NULL, "vision"},
+  {TRUE, COL_TEXT, N_("Reputation"), col_reputation, NULL, "reputation"},
+  {TRUE, COL_TEXT, N_("State"), col_state, NULL, "state"},
+  {FALSE, COL_TEXT, N_("?Player_dlg:Host"), col_host, NULL, "host"},
+  {FALSE, COL_RIGHT_TEXT, N_("?Player_dlg:Idle"), col_idle, NULL, "idle"},
+  {FALSE, COL_RIGHT_TEXT, N_("Ping"), get_ping_time_text, NULL, "ping"}
 };
 
 const int num_player_dlg_columns = ARRAY_SIZE(player_dlg_columns);
@@ -296,7 +269,7 @@ void init_player_dlg_common()
   kept as a blank address if no one is controlling a player, but there are
   observers.
 **************************************************************************/
-const char *player_addr_hack(const struct player *pplayer)
+const char *player_addr_hack(struct player *pplayer)
 { 
   conn_list_iterate(pplayer->connections, pconn) {
     if (!pconn->observer) {

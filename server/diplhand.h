@@ -13,6 +13,8 @@
 #ifndef FC__DIPLHAND_H
 #define FC__DIPLHAND_H
 
+#define REPUTATION_LOSS_NUKE (GAME_MAX_REPUTATION * 0.03)
+
 #include "fc_types.h"
 
 #include "hand_gen.h"
@@ -30,5 +32,5 @@ struct Treaty *find_treaty(struct player *plr0, struct player *plr1);
 
 void send_diplomatic_meetings(struct connection *dest);
 void cancel_all_meetings(struct player *pplayer);
-void reject_all_treaties(struct player *pplayer);
+
 #endif  /* FC__DIPLHAND_H */

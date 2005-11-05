@@ -22,13 +22,8 @@ libguiclient_a_DEPENDENCIES = rc2c
 libguiclient_a_SOURCES = \
 	rc2c		\
 	Freeciv.h	\
-	canvas.c	\
-	canvas.h	\
-	caravan_dialog.c \
 	chatline.h	\
 	chatline.c	\
-	choice_dialog.c	\
-	choice_dialog.h \
 	citydlg.c	\
 	citydlg.h	\
 	cityrep.c	\
@@ -43,7 +38,6 @@ libguiclient_a_SOURCES = \
 	dialogs.h	\
 	diplodlg.c	\
 	diplodlg.h	\
-	diplomat_dialog.c \
 	finddlg.c	\
 	finddlg.h	\
 	gamedlgs.c	\
@@ -87,9 +81,6 @@ libguiclient_a_SOURCES = \
 	resources.h	\
 	spaceshipdlg.c	\
 	spaceshipdlg.h  \
-	sprite.c	\
-	sprite.h	\
-	themes.c	\
 	wldlg.c		\
 	wldlg.h	
 

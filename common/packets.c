@@ -21,6 +21,19 @@
 #include <assert.h>
 #include <limits.h>
 
+#ifdef HAVE_SYS_TYPES_H
+#include <sys/types.h>
+#endif
+#ifdef HAVE_NETINET_IN_H
+#include <netinet/in.h>
+#endif
+#ifdef HAVE_ARPA_INET_H
+#include <arpa/inet.h>
+#endif
+#ifdef HAVE_WINSOCK
+#include <winsock.h>
+#endif
+
 #include "capability.h"
 #include "dataio.h"
 #include "events.h"
@@ -80,7 +93,8 @@
 ***********************************************************************/
 
 /**************************************************************************
-  It returns the request id of the outgoing packet (or 0 if pc->is_server).
+It returns the request id of the outgoing packet or 0 if the packet
+was no request (i.e. server sends packet).
 **************************************************************************/
 int send_packet_data(struct connection *pc, unsigned char *data, int len)
 {
@@ -90,7 +104,7 @@ int send_packet_data(struct connection *pc, unsigned char *data, int len)
   freelog(BASIC_PACKET_LOG_LEVEL, "sending packet type=%s(%d) len=%d",
 	  get_packet_name(data[2]), data[2], len);
 
-  if (!pc->is_server) {
+  if (!is_server) {
     pc->client.last_request_id_used =
 	get_next_request_id(pc->client.last_request_id_used);
     result = pc->client.last_request_id_used;
@@ -145,9 +159,9 @@ int send_packet_data(struct connection *pc, unsigned char *data, int len)
 	PACKET_PROCESSING_FINISHED || packet_type == PACKET_THAW_HINT) {
       pc->compression.frozen_level--;
       if (pc->compression.frozen_level == 0) {
-	uLongf compressed_size = 12 + pc->compression.queue.size * 1.001;
+	long int compressed_size = 12 + pc->compression.queue.size * 1.001;
 	int error;
-	Bytef compressed[compressed_size];
+	char compressed[compressed_size];
 
 	error =
 	    compress2(compressed, &compressed_size,
@@ -359,7 +373,7 @@ void *get_packet_from_connection(struct connection *pc,
      * We don't know the decompressed size. We assume a bad case
      * here: an expansion by an factor of 100. 
      */
-    unsigned long int decompressed_size = 100 * compressed_size;
+    long int decompressed_size = 100 * compressed_size;
     void *decompressed = fc_malloc(decompressed_size);
     int error;
     struct socket_packet_buffer *buffer = pc->buffer;
@@ -464,7 +478,8 @@ void *get_packet_from_connection(struct connection *pc,
     packets_stats[packet_type].size += size;
 
     packet_counter++;
-    if (packet_counter % 100 == 0) {
+    if ((is_server && (packet_counter % 10 == 0))
+	|| (!is_server && (packet_counter % 1000 == 0))) {
       int i, sum = 0;
 
       freelog(LOG_NORMAL, "Received packets:");

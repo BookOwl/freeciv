@@ -80,7 +80,7 @@ static int goto_city_callback(struct GUI *pWidget)
     struct unit *pUnit = get_unit_in_focus();
     if (pUnit) {
       if(GOTO) {
-        send_goto_tile(pUnit, pDestcity->x, pDestcity->y);
+        send_goto_unit(pUnit, pDestcity->x, pDestcity->y);
       } else {
 	request_unit_airlift(pUnit, pDestcity);
       }
@@ -114,7 +114,7 @@ static void update_goto_dialog(void)
   
   pLast = pAdd_Dock;
   
-  for(i = 0; i < game.info.nplayers; i++) {
+  for(i = 0; i < game.nplayers; i++) {
     
     if (!TEST_BIT(all_players, game.players[i].player_no)) {
       continue;
@@ -249,7 +249,7 @@ static void popup_goto_airlift_dialog(void)
   
   col = 0;
   /* --------------------------------------------- */
-  for(i = 0; i < game.info.nplayers; i++) {
+  for(i = 0; i < game.nplayers; i++) {
     if(i != game.player_idx
       && pplayer_get_diplstate(
     		game.player_ptr, &game.players[i])->type == DS_NO_CONTACT) {
