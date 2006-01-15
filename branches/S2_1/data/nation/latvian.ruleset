@@ -1,0 +1,33 @@
+[nation_latvian]
+
+name=_("Latvian")
+plural=_("?plural:Latvians")
+groups=_("Modern"), _("European")
+legend=_("Latvia gained independence from the Russian Empire in 1920, was\
+ incorporated into the Soviet Union in 1940 and finally gained independence\
+ again in 1991.")
+leader=
+ "Karlis Ulmanis",
+ "Guntis Ulmanis",
+ "Namejs"
+leader_sex="Male", "Male", "Male"
+flag="latvia"
+flag_alt = "-"
+city_style = "European"
+
+init_techs=""
+init_buildings=""
+init_government="Despotism"
+init_units=""
+
+; Similar flags
+conflicts_with="austrian"
+civilwar_nations = "polish", "swedish"
+
+cities =
+  "Riga", "Liepaja", "Jurmala", "Jelgava", "Daugavpils", "Ogre", "Limbazi",
+  "Kuldiga","Valmiera", "Ventspils", "Talsi", "Tukums", "Bauska", "Dobele", 
+  "Livani", "Saldus", "Valdemarpils", "Rezenke", "Aizpute", "Valka", "Balvi",
+  "Sigulda", "Vecaki", "Olaine", "Saulkrasti", "Cesis", "Rujiena", "Smiltene",
+  "Gulbene", "Madona", "Ludza", "Aluksne", "Alsunga", "Jekabpils", "Sabile",
+  "Preili", "Salaspils", "Krustpils", "Auce", "Kandava", "Iecava", "Aglona"
