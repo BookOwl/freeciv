@@ -30,21 +30,18 @@
 #include <X11/Xaw/MenuButton.h>
 #include <X11/Xaw/SimpleMenu.h>
 #include <X11/Xaw/SmeBSB.h>
-#include <X11/Xaw/Toggle.h>
-#include <X11/Xaw/Viewport.h>	/* for racesdlg */
+#include <X11/Xaw/Toggle.h>     
 
 #include "fcintl.h"
-#include "log.h"
-#include "mem.h"
-#include "rand.h"
-#include "support.h"
-
 #include "game.h"
 #include "government.h"
+#include "log.h"
 #include "map.h"
+#include "mem.h"
 #include "packets.h"
 #include "player.h"
-#include "unitlist.h"
+#include "rand.h"
+#include "support.h"
 
 #include "chatline.h"
 #include "cityrep.h"	/* for popdown_city_report_dialog */
@@ -74,19 +71,34 @@ static Widget notify_dialog_shell;
 /******************************************************************/
 static Widget races_dialog_shell=NULL;
 static Widget races_form, races_toggles_form, races_label;
-static Widget races_toggles_viewport;
 static Widget *races_toggles=NULL;
-static struct nation_type **races_toggles_to_nations = NULL;
-static int *nation_idx_to_race_toggle = NULL;
-struct player *races_player;
+static int *races_toggles_to_nations=NULL;
+static int *nation_to_race_toggle = NULL;
 static Widget races_leader_form, races_leader;
 static Widget races_leader_pick_popupmenu, races_leader_pick_menubutton;
 static Widget races_sex_toggles[2], races_sex_form, races_sex_label;
 static Widget races_style_form, races_style_label;
 static Widget *races_style_toggles=NULL;
 static Widget races_action_form;
-static Widget races_ok_command, races_random_command, races_quit_command;
+static Widget races_ok_command, races_disconnect_command, races_quit_command;
 
+/******************************************************************/
+static Widget spy_tech_shell;
+static Widget spy_advances_list, spy_advances_list_label;
+static Widget spy_steal_command;
+
+static int spy_tech_shell_is_modal;
+static int advance_type[A_LAST+1];
+static int steal_advance = 0;
+
+/******************************************************************/
+static Widget spy_sabotage_shell;
+static Widget spy_improvements_list, spy_improvements_list_label;
+static Widget spy_sabotage_command;
+
+static int spy_sabotage_shell_is_modal;
+static int improvement_type[B_LAST+1];
+static int sabotage_improvement = 0;
 
 /******************************************************************/
 #define MAX_SELECT_UNITS 100
@@ -110,8 +122,8 @@ void create_help_dialog(Widget *shell);
 
 
 /******************************************************************/
-static void create_races_dialog(struct player *pplayer);
-static void races_leader_set_values(struct nation_type *race, int lead);
+static void create_races_dialog(void);
+static void races_leader_set_values(int race, int lead);
 static int races_buttons_get_current(void);
 static int races_sex_buttons_get_current(void);
 static int races_style_buttons_get_current(void);
@@ -125,7 +137,7 @@ static void races_leader_pick_callback(Widget w, XtPointer client_data,
 				       XtPointer call_data);
 static void races_ok_command_callback(Widget w, XtPointer client_data, 
 				      XtPointer call_data);
-static void races_random_command_callback(Widget w, XtPointer client_data, 
+static void races_disconnect_command_callback(Widget w, XtPointer client_data, 
 					      XtPointer call_data);
 static void races_quit_command_callback(Widget w, XtPointer client_data, 
 					XtPointer call_data);
@@ -152,6 +164,10 @@ int unit_to_use_to_pillage;
 int caravan_city_id;
 int caravan_unit_id;
 
+bool diplomat_dialog_open = FALSE;
+int diplomat_id;
+int diplomat_target_id;
+
 struct city *pcity_caravan_dest;
 struct unit *punit_caravan;
 
@@ -172,15 +188,9 @@ static void notify_command_callback(Widget w, XtPointer client_data,
 static void select_random_race(void)
 {
   /* try to find a free nation */
-  /* FIXME: this code should be done another way. -ev */
   while (1) {
-    int race_toggle_index = myrand(game.control.nation_count);
+    int race_toggle_index = myrand(game.playable_nation_count);
 
-    if (!is_nation_playable(get_nation_by_idx(race_toggle_index))
-	|| !get_nation_by_idx(race_toggle_index)->is_available
-	|| get_nation_by_idx(race_toggle_index)->player) {
-      continue;
-    }
     if (XtIsSensitive(races_toggles[race_toggle_index])) {
       x_simulate_button_click(races_toggles[race_toggle_index]);
       break;
@@ -394,6 +404,745 @@ void popup_notify_goto_dialog(const char *headline, const char *lines,
 /****************************************************************
 ...
 *****************************************************************/
+static void diplomat_bribe_yes_callback(Widget w, XtPointer client_data, 
+					XtPointer call_data)
+{
+  request_diplomat_action(DIPLOMAT_BRIBE, diplomat_id,
+			  diplomat_target_id, 0);
+
+  destroy_message_dialog(w);
+}
+
+/****************************************************************
+...
+*****************************************************************/
+static void diplomat_bribe_no_callback(Widget w, XtPointer client_data, 
+				       XtPointer call_data)
+{
+  destroy_message_dialog(w);
+}
+
+/****************************************************************
+...  Ask the server how much the bribe is
+*****************************************************************/
+static void diplomat_bribe_callback(Widget w, XtPointer client_data, 
+				    XtPointer call_data)
+{
+  destroy_message_dialog(w);
+
+  if (find_unit_by_id(diplomat_id) && find_unit_by_id(diplomat_target_id)) {
+    dsend_packet_unit_bribe_inq(&aconnection, diplomat_target_id);
+  }
+}
+
+/****************************************************************
+...
+*****************************************************************/
+void popup_bribe_dialog(struct unit *punit)
+{
+  char buf[128];
+
+  if (unit_flag(punit, F_UNBRIBABLE)) {
+    popup_message_dialog(toplevel, "diplomatbribedialog",
+                         _("This unit cannot be bribed!"),
+                         diplomat_bribe_no_callback, 0, 0, NULL);
+  } else if(game.player_ptr->economic.gold>=punit->bribe_cost) {
+    my_snprintf(buf, sizeof(buf),
+		_("Bribe unit for %d gold?\n"
+		  "Treasury contains %d gold."), 
+		punit->bribe_cost, game.player_ptr->economic.gold);
+    popup_message_dialog(toplevel, "diplomatbribedialog", buf,
+			 diplomat_bribe_yes_callback, 0, 0,
+			 diplomat_bribe_no_callback, 0, 0,
+			 NULL);
+  } else {
+    my_snprintf(buf, sizeof(buf),
+		_("Bribing the unit costs %d gold.\n"
+		  "Treasury contains %d gold."), 
+		punit->bribe_cost, game.player_ptr->economic.gold);
+    popup_message_dialog(toplevel, "diplomatnogolddialog", buf,
+			 diplomat_bribe_no_callback, 0, 0,
+			 NULL);
+  }
+}
+
+/****************************************************************
+...
+*****************************************************************/
+static void diplomat_sabotage_callback(Widget w, XtPointer client_data, 
+				       XtPointer call_data)
+{
+  destroy_message_dialog(w);
+  diplomat_dialog_open = FALSE;
+
+  if(find_unit_by_id(diplomat_id) && 
+     find_city_by_id(diplomat_target_id)) { 
+    request_diplomat_action(DIPLOMAT_SABOTAGE, diplomat_id,
+			    diplomat_target_id, -1);
+  }
+
+  process_diplomat_arrival(NULL, 0);
+}
+
+/****************************************************************
+...
+*****************************************************************/
+static void diplomat_embassy_callback(Widget w, XtPointer client_data, 
+				      XtPointer call_data)
+{
+  destroy_message_dialog(w);
+  diplomat_dialog_open = FALSE;
+
+  if(find_unit_by_id(diplomat_id) && 
+     (find_city_by_id(diplomat_target_id))) { 
+    request_diplomat_action(DIPLOMAT_EMBASSY, diplomat_id,
+			    diplomat_target_id, 0);
+  }
+
+  process_diplomat_arrival(NULL, 0);
+}
+
+/****************************************************************
+...
+*****************************************************************/
+static void diplomat_investigate_callback(Widget w, XtPointer client_data, 
+					  XtPointer call_data)
+{
+  destroy_message_dialog(w);
+  diplomat_dialog_open = FALSE;
+
+  if(find_unit_by_id(diplomat_id) && 
+     (find_city_by_id(diplomat_target_id))) { 
+    request_diplomat_action(DIPLOMAT_INVESTIGATE, diplomat_id,
+			    diplomat_target_id, 0);
+  }
+
+  process_diplomat_arrival(NULL, 0);
+}
+
+/****************************************************************
+...
+*****************************************************************/
+static void spy_sabotage_unit_callback(Widget w, XtPointer client_data, 
+				       XtPointer call_data)
+{
+  request_diplomat_action(SPY_SABOTAGE_UNIT, diplomat_id,
+			  diplomat_target_id, 0);
+
+  destroy_message_dialog(w);
+}
+
+/****************************************************************
+...
+*****************************************************************/
+static void spy_poison_callback(Widget w, XtPointer client_data, 
+				XtPointer call_data)
+{
+  destroy_message_dialog(w);
+  diplomat_dialog_open = FALSE;
+
+  if(find_unit_by_id(diplomat_id) && 
+     (find_city_by_id(diplomat_target_id))) { 
+    request_diplomat_action(SPY_POISON, diplomat_id, diplomat_target_id, 0);
+  }
+
+  process_diplomat_arrival(NULL, 0);
+}
+
+/****************************************************************
+...
+*****************************************************************/
+static void diplomat_steal_callback(Widget w, XtPointer client_data, 
+				    XtPointer call_data)
+{
+  destroy_message_dialog(w);
+  diplomat_dialog_open = FALSE;
+
+  if(find_unit_by_id(diplomat_id) && 
+     find_city_by_id(diplomat_target_id)) { 
+    request_diplomat_action(DIPLOMAT_STEAL, diplomat_id,
+			    diplomat_target_id, 0);
+  }
+
+  process_diplomat_arrival(NULL, 0);
+}
+
+/****************************************************************
+...
+*****************************************************************/
+static void spy_close_tech_callback(Widget w, XtPointer client_data, 
+				    XtPointer call_data)
+{
+  if(spy_tech_shell_is_modal)
+    XtSetSensitive(main_form, TRUE);
+  XtDestroyWidget(spy_tech_shell);
+  spy_tech_shell=0;
+
+  process_diplomat_arrival(NULL, 0);
+}
+
+/****************************************************************
+...
+*****************************************************************/
+static void spy_close_sabotage_callback(Widget w, XtPointer client_data, 
+					XtPointer call_data)
+{
+  if(spy_sabotage_shell_is_modal)
+    XtSetSensitive(main_form, TRUE);
+  XtDestroyWidget(spy_sabotage_shell);
+  spy_sabotage_shell=0;
+
+  process_diplomat_arrival(NULL, 0);
+}
+
+/****************************************************************
+...
+*****************************************************************/
+static void spy_select_tech_callback(Widget w, XtPointer client_data, 
+				     XtPointer call_data)
+{
+  XawListReturnStruct *ret;
+  ret=XawListShowCurrent(spy_advances_list);
+  
+  if(ret->list_index!=XAW_LIST_NONE && advance_type[ret->list_index] != -1){
+    steal_advance = advance_type[ret->list_index];
+    XtSetSensitive(spy_steal_command, TRUE);
+    return;
+  }
+  XtSetSensitive(spy_steal_command, FALSE);
+}
+
+/****************************************************************
+...
+*****************************************************************/
+static void spy_select_improvement_callback(Widget w, XtPointer client_data, 
+					    XtPointer call_data)
+{
+  XawListReturnStruct *ret;
+  ret=XawListShowCurrent(spy_improvements_list);
+  
+  if(ret->list_index!=XAW_LIST_NONE){
+    sabotage_improvement = improvement_type[ret->list_index];
+    XtSetSensitive(spy_sabotage_command, TRUE);
+    return;
+  }
+  XtSetSensitive(spy_sabotage_command, FALSE);
+}
+
+/****************************************************************
+...
+*****************************************************************/
+static void spy_steal_callback(Widget w, XtPointer client_data, 
+			       XtPointer call_data)
+{  
+  XtDestroyWidget(spy_tech_shell);
+  spy_tech_shell = 0l;
+  
+  if(!steal_advance){
+    freelog(LOG_ERROR, "Bug in spy steal tech code");
+    process_diplomat_arrival(NULL, 0);
+    return;
+  }
+  
+  if(find_unit_by_id(diplomat_id) && 
+     find_city_by_id(diplomat_target_id)) { 
+    request_diplomat_action(DIPLOMAT_STEAL, diplomat_id,
+			    diplomat_target_id, steal_advance);
+  }
+
+  process_diplomat_arrival(NULL, 0);
+}
+
+/****************************************************************
+...
+*****************************************************************/
+static void spy_sabotage_callback(Widget w, XtPointer client_data, 
+				  XtPointer call_data)
+{  
+  XtDestroyWidget(spy_sabotage_shell);
+  spy_sabotage_shell = 0l;
+  
+  if(!sabotage_improvement){
+    freelog(LOG_ERROR, "Bug in spy sabotage code");
+    process_diplomat_arrival(NULL, 0);
+    return;
+  }
+  
+  if(find_unit_by_id(diplomat_id) && 
+     find_city_by_id(diplomat_target_id)) { 
+    request_diplomat_action(DIPLOMAT_SABOTAGE, diplomat_id,
+			    diplomat_target_id, sabotage_improvement + 1);
+  }
+
+  process_diplomat_arrival(NULL, 0);
+}
+
+/****************************************************************
+...
+*****************************************************************/
+static int create_advances_list(struct player *pplayer,
+				struct player *pvictim, bool make_modal)
+{  
+  Widget spy_tech_form;
+  Widget close_command;
+  Dimension width1, width2; 
+  int i, j;
+
+  static const char *advances_can_steal[A_LAST+1]; 
+
+  spy_tech_shell =
+    I_T(XtVaCreatePopupShell("spystealtechpopup", 
+			     (make_modal ? transientShellWidgetClass :
+			      topLevelShellWidgetClass),
+			     toplevel, NULL));  
+  
+  spy_tech_form = XtVaCreateManagedWidget("spystealtechform", 
+					     formWidgetClass,
+					     spy_tech_shell,
+					     NULL);   
+
+  spy_advances_list_label =
+    I_L(XtVaCreateManagedWidget("spystealtechlistlabel", labelWidgetClass, 
+				spy_tech_form, NULL));
+
+  spy_advances_list = XtVaCreateManagedWidget("spystealtechlist", 
+					      listWidgetClass,
+					      spy_tech_form,
+					      NULL);
+
+  close_command =
+    I_L(XtVaCreateManagedWidget("spystealtechclosecommand", commandWidgetClass,
+				spy_tech_form, NULL));
+  
+  spy_steal_command =
+    I_L(XtVaCreateManagedWidget("spystealtechcommand", commandWidgetClass,
+				spy_tech_form,
+				XtNsensitive, False,
+				NULL));
+  
+
+  XtAddCallback(spy_advances_list, XtNcallback, spy_select_tech_callback, NULL);
+  XtAddCallback(close_command, XtNcallback, spy_close_tech_callback, NULL);
+  XtAddCallback(spy_steal_command, XtNcallback, spy_steal_callback, NULL);
+  XtRealizeWidget(spy_tech_shell);
+
+  /* Now populate the list */
+  
+  j = 0;
+  advances_can_steal[j] = _("NONE");
+  advance_type[j] = -1;
+
+  if (pvictim) { /* you don't want to know what lag can do -- Syela */
+    for(i=A_FIRST; i<game.num_tech_types; i++) {
+      if(get_invention(pvictim, i)==TECH_KNOWN && 
+         (get_invention(pplayer, i)==TECH_UNKNOWN || 
+          get_invention(pplayer, i)==TECH_REACHABLE)) {
+      
+        advances_can_steal[j] = advances[i].name;
+        advance_type[j++] = i;
+      }
+    }
+    if(j > 0) {
+      advances_can_steal[j] = _("At Spy's Discretion");
+      advance_type[j++] = game.num_tech_types;
+    }
+  }
+
+  if(j == 0) j++;
+  advances_can_steal[j] = NULL; 
+  
+  XtSetSensitive(spy_steal_command, FALSE);
+  
+  XawListChange(spy_advances_list, (char **)advances_can_steal, 0, 0, 1);
+  XtVaGetValues(spy_advances_list, XtNwidth, &width1, NULL);
+  XtVaGetValues(spy_advances_list_label, XtNwidth, &width2, NULL);
+  XtVaSetValues(spy_advances_list, XtNwidth, MAX(width1,width2), NULL); 
+  XtVaSetValues(spy_advances_list_label, XtNwidth, MAX(width1,width2), NULL); 
+
+  return j;
+}
+
+/****************************************************************
+...
+*****************************************************************/
+static int create_improvements_list(struct player *pplayer,
+				    struct city *pcity, bool make_modal)
+{  
+  Widget spy_sabotage_form;
+  Widget close_command;
+  Dimension width1, width2; 
+  int j;
+
+  static const char *improvements_can_sabotage[B_LAST+1]; 
+  
+  spy_sabotage_shell =
+    I_T(XtVaCreatePopupShell("spysabotageimprovementspopup", 
+			     (make_modal ? transientShellWidgetClass :
+			      topLevelShellWidgetClass),
+			     toplevel, NULL));  
+  
+  spy_sabotage_form = XtVaCreateManagedWidget("spysabotageimprovementsform", 
+					     formWidgetClass,
+					     spy_sabotage_shell,
+					     NULL);   
+
+  spy_improvements_list_label =
+    I_L(XtVaCreateManagedWidget("spysabotageimprovementslistlabel", 
+				labelWidgetClass, 
+				spy_sabotage_form,
+				NULL));
+
+  spy_improvements_list = XtVaCreateManagedWidget("spysabotageimprovementslist", 
+					      listWidgetClass,
+					      spy_sabotage_form,
+					      NULL);
+
+  close_command =
+    I_L(XtVaCreateManagedWidget("spysabotageimprovementsclosecommand", 
+				commandWidgetClass,
+				spy_sabotage_form,
+				NULL));
+  
+  spy_sabotage_command =
+    I_L(XtVaCreateManagedWidget("spysabotageimprovementscommand", 
+				commandWidgetClass,
+				spy_sabotage_form,
+				XtNsensitive, False,
+				NULL));
+  
+
+  XtAddCallback(spy_improvements_list, XtNcallback, spy_select_improvement_callback, NULL);
+  XtAddCallback(close_command, XtNcallback, spy_close_sabotage_callback, NULL);
+  XtAddCallback(spy_sabotage_command, XtNcallback, spy_sabotage_callback, NULL);
+  XtRealizeWidget(spy_sabotage_shell);
+
+  /* Now populate the list */
+  
+  j = 0;
+  improvements_can_sabotage[j] = _("City Production");
+  improvement_type[j++] = -1;
+
+  built_impr_iterate(pcity, i) {
+    if (get_improvement_type(i)->sabotage > 0) {
+      improvements_can_sabotage[j] = get_impr_name_ex(pcity, i);
+      improvement_type[j++] = i;
+    }  
+  } built_impr_iterate_end;
+
+  if(j > 1) {
+    improvements_can_sabotage[j] = _("At Spy's Discretion");
+    improvement_type[j++] = B_LAST;
+  } else {
+    improvement_type[0] = B_LAST; /* fake "discretion", since must be production */
+  }
+
+  improvements_can_sabotage[j] = NULL;
+  
+  XtSetSensitive(spy_sabotage_command, FALSE);
+  
+  XawListChange(spy_improvements_list, (String *) improvements_can_sabotage,
+		0, 0, 1);
+  XtVaGetValues(spy_improvements_list, XtNwidth, &width1, NULL);
+  XtVaGetValues(spy_improvements_list_label, XtNwidth, &width2, NULL);
+  XtVaSetValues(spy_improvements_list, XtNwidth, MAX(width1,width2), NULL); 
+  XtVaSetValues(spy_improvements_list_label, XtNwidth, MAX(width1,width2), NULL); 
+
+  return j;
+}
+
+/****************************************************************
+...
+*****************************************************************/
+static void spy_steal_popup(Widget w, XtPointer client_data, 
+			    XtPointer call_data)
+{
+  struct city *pvcity = find_city_by_id(diplomat_target_id);
+  struct player *pvictim = NULL;
+
+  if(pvcity)
+    pvictim = city_owner(pvcity);
+
+/* it is concievable that pvcity will not be found, because something
+has happened to the city during latency.  Therefore we must initialize
+pvictim to NULL and account for !pvictim in create_advances_list. -- Syela */
+  
+  destroy_message_dialog(w);
+  diplomat_dialog_open = FALSE;
+
+  if(!spy_tech_shell){
+    Position x, y;
+    Dimension width, height;
+    spy_tech_shell_is_modal=1;
+
+    create_advances_list(game.player_ptr, pvictim, spy_tech_shell_is_modal);
+    
+    XtVaGetValues(toplevel, XtNwidth, &width, XtNheight, &height, NULL);
+    
+    XtTranslateCoords(toplevel, (Position) width/10, (Position) height/10,
+		      &x, &y);
+    XtVaSetValues(spy_tech_shell, XtNx, x, XtNy, y, NULL);
+    
+    XtPopup(spy_tech_shell, XtGrabNone);
+  }
+}
+
+/****************************************************************
+ Requests up-to-date list of improvements, the return of
+ which will trigger the popup_sabotage_dialog() function.
+*****************************************************************/
+static void spy_request_sabotage_list(Widget w, XtPointer client_data,
+				      XtPointer call_data)
+{
+  destroy_message_dialog(w);
+  diplomat_dialog_open = FALSE;
+
+  if(find_unit_by_id(diplomat_id) &&
+     (find_city_by_id(diplomat_target_id))) {
+    request_diplomat_action(SPY_GET_SABOTAGE_LIST, diplomat_id,
+			    diplomat_target_id, 0);
+  }
+}
+
+/****************************************************************
+ Pops-up the Spy sabotage dialog, upon return of list of
+ available improvements requested by the above function.
+*****************************************************************/
+void popup_sabotage_dialog(struct city *pcity)
+{  
+  if(!spy_sabotage_shell){
+    Position x, y;
+    Dimension width, height;
+    spy_sabotage_shell_is_modal=1;
+
+    create_improvements_list(game.player_ptr, pcity, spy_sabotage_shell_is_modal);
+    
+    XtVaGetValues(toplevel, XtNwidth, &width, XtNheight, &height, NULL);
+    
+    XtTranslateCoords(toplevel, (Position) width/10, (Position) height/10,
+		      &x, &y);
+    XtVaSetValues(spy_sabotage_shell, XtNx, x, XtNy, y, NULL);
+    
+    XtPopup(spy_sabotage_shell, XtGrabNone);
+  }
+}
+
+/****************************************************************
+...
+*****************************************************************/
+static void diplomat_incite_yes_callback(Widget w, XtPointer client_data, 
+					 XtPointer call_data)
+{
+  request_diplomat_action(DIPLOMAT_INCITE, diplomat_id,
+			  diplomat_target_id, 0);
+
+  destroy_message_dialog(w);
+
+  process_diplomat_arrival(NULL, 0);
+}
+
+/****************************************************************
+...
+*****************************************************************/
+static void diplomat_incite_no_callback(Widget w, XtPointer client_data, 
+					XtPointer call_data)
+{
+  destroy_message_dialog(w);
+
+  process_diplomat_arrival(NULL, 0);
+}
+
+
+/****************************************************************
+...  Ask the server how much the revolt is going to cost us
+*****************************************************************/
+static void diplomat_incite_callback(Widget w, XtPointer client_data, 
+				     XtPointer call_data)
+{
+  destroy_message_dialog(w);
+  diplomat_dialog_open = FALSE;
+
+  if (find_unit_by_id(diplomat_id) && find_city_by_id(diplomat_target_id)) {
+    dsend_packet_city_incite_inq(&aconnection, diplomat_target_id);
+  }
+}
+
+/****************************************************************
+...  Popup the yes/no dialog for inciting, since we know the cost now
+*****************************************************************/
+void popup_incite_dialog(struct city *pcity)
+{
+  char buf[128];
+
+  if (pcity->incite_revolt_cost == INCITE_IMPOSSIBLE_COST) {
+    my_snprintf(buf, sizeof(buf), _("You can't incite a revolt in %s."),
+		pcity->name);
+    popup_message_dialog(toplevel, "diplomatnogolddialog", buf,
+			 diplomat_incite_no_callback, 0, 0, NULL);
+  } else if (game.player_ptr->economic.gold >= pcity->incite_revolt_cost) {
+    my_snprintf(buf, sizeof(buf),
+		_("Incite a revolt for %d gold?\n"
+		  "Treasury contains %d gold."), 
+		pcity->incite_revolt_cost, game.player_ptr->economic.gold);
+   diplomat_target_id = pcity->id;
+   popup_message_dialog(toplevel, "diplomatrevoltdialog", buf,
+			diplomat_incite_yes_callback, 0, 0,
+			diplomat_incite_no_callback, 0, 0,
+			NULL);
+  } else {
+   my_snprintf(buf, sizeof(buf),
+	       _("Inciting a revolt costs %d gold.\n"
+		 "Treasury contains %d gold."), 
+	       pcity->incite_revolt_cost, game.player_ptr->economic.gold);
+   popup_message_dialog(toplevel, "diplomatnogolddialog", buf,
+			diplomat_incite_no_callback, 0, 0,
+			NULL);
+  }
+}
+
+
+/****************************************************************
+  Callback from diplomat/spy dialog for "keep moving".
+  (This should only occur when entering allied city.)
+*****************************************************************/
+static void diplomat_keep_moving_callback(Widget w, XtPointer client_data, 
+					  XtPointer call_data)
+{
+  struct unit *punit;
+  struct city *pcity;
+  
+  destroy_message_dialog(w);
+  diplomat_dialog_open = FALSE;
+
+  if( (punit=find_unit_by_id(diplomat_id))
+      && (pcity=find_city_by_id(diplomat_target_id))
+      && !same_pos(punit->tile, pcity->tile)) {
+    request_diplomat_action(DIPLOMAT_MOVE, diplomat_id,
+			    diplomat_target_id, 0);
+  }
+  process_diplomat_arrival(NULL, 0);
+}
+
+/****************************************************************
+...
+*****************************************************************/
+static void diplomat_cancel_callback(Widget w, XtPointer a, XtPointer b)
+{
+  destroy_message_dialog(w);
+  diplomat_dialog_open = FALSE;
+
+  process_diplomat_arrival(NULL, 0);
+}
+
+
+/****************************************************************
+...
+*****************************************************************/
+void popup_diplomat_dialog(struct unit *punit, struct tile *dest_tile)
+{
+  struct city *pcity;
+  struct unit *ptunit;
+  Widget shl;
+  char buf[128];
+
+  diplomat_id=punit->id;
+
+  if((pcity=map_get_city(dest_tile))){
+    /* Spy/Diplomat acting against a city */
+
+    diplomat_target_id=pcity->id;
+    my_snprintf(buf, sizeof(buf),
+		_("Your %s has arrived at %s.\nWhat is your command?"),
+		unit_name(punit->type), pcity->name);
+
+    if(!unit_flag(punit, F_SPY)){
+      shl=popup_message_dialog(toplevel, "diplomatdialog", buf,
+			       diplomat_embassy_callback, 0, 1,
+			       diplomat_investigate_callback, 0, 1,
+			       diplomat_sabotage_callback, 0, 1,
+			       diplomat_steal_callback, 0, 1,
+			       diplomat_incite_callback, 0, 1,
+			       diplomat_keep_moving_callback, 0, 1,
+			       diplomat_cancel_callback, 0, 0,
+			       NULL);
+      
+      if(!diplomat_can_do_action(punit, DIPLOMAT_EMBASSY, dest_tile))
+	XtSetSensitive(XtNameToWidget(shl, "*button0"), FALSE);
+      if(!diplomat_can_do_action(punit, DIPLOMAT_INVESTIGATE, dest_tile))
+	XtSetSensitive(XtNameToWidget(shl, "*button1"), FALSE);
+      if(!diplomat_can_do_action(punit, DIPLOMAT_SABOTAGE, dest_tile))
+	XtSetSensitive(XtNameToWidget(shl, "*button2"), FALSE);
+      if(!diplomat_can_do_action(punit, DIPLOMAT_STEAL, dest_tile))
+	XtSetSensitive(XtNameToWidget(shl, "*button3"), FALSE);
+      if(!diplomat_can_do_action(punit, DIPLOMAT_INCITE, dest_tile))
+	XtSetSensitive(XtNameToWidget(shl, "*button4"), FALSE);
+      if(!diplomat_can_do_action(punit, DIPLOMAT_MOVE, dest_tile))
+	XtSetSensitive(XtNameToWidget(shl, "*button5"), FALSE);
+    }else{
+      shl=popup_message_dialog(toplevel, "spydialog", buf,
+			       diplomat_embassy_callback, 0,  1,
+			       diplomat_investigate_callback, 0, 1,
+			       spy_poison_callback,0, 1,
+			       spy_request_sabotage_list, 0, 1,
+			       spy_steal_popup, 0, 1,
+			       diplomat_incite_callback, 0, 1,
+			       diplomat_keep_moving_callback, 0, 1,
+			       diplomat_cancel_callback, 0, 0,
+			       NULL);
+      
+      if(!diplomat_can_do_action(punit, DIPLOMAT_EMBASSY, dest_tile))
+	XtSetSensitive(XtNameToWidget(shl, "*button0"), FALSE);
+      if(!diplomat_can_do_action(punit, DIPLOMAT_INVESTIGATE, dest_tile))
+	XtSetSensitive(XtNameToWidget(shl, "*button1"), FALSE);
+      if(!diplomat_can_do_action(punit, SPY_POISON, dest_tile))
+	XtSetSensitive(XtNameToWidget(shl, "*button2"), FALSE);
+      if(!diplomat_can_do_action(punit, DIPLOMAT_SABOTAGE, dest_tile))
+	XtSetSensitive(XtNameToWidget(shl, "*button3"), FALSE);
+      if(!diplomat_can_do_action(punit, DIPLOMAT_STEAL, dest_tile))
+	XtSetSensitive(XtNameToWidget(shl, "*button4"), FALSE);
+      if(!diplomat_can_do_action(punit, DIPLOMAT_INCITE, dest_tile))
+	XtSetSensitive(XtNameToWidget(shl, "*button5"), FALSE);
+      if(!diplomat_can_do_action(punit, DIPLOMAT_MOVE, dest_tile))
+	XtSetSensitive(XtNameToWidget(shl, "*button6"), FALSE);
+    }
+
+    diplomat_dialog_open = TRUE;
+  }else{ 
+    if((ptunit=unit_list_get(&dest_tile->units, 0))){
+      /* Spy/Diplomat acting against a unit */
+      
+      const char *message = !unit_flag(punit, F_SPY)
+	? _("Sir, the diplomat is waiting for your command")
+	: _("Sir, the spy is waiting for your command");
+      
+      diplomat_target_id=ptunit->id;
+
+      shl=popup_message_dialog(toplevel, "spybribedialog",
+			       message,
+			       diplomat_bribe_callback, 0, 0,
+			       spy_sabotage_unit_callback, 0, 0,
+			       diplomat_cancel_callback, 0, 0,
+			       NULL);
+	
+      if(!diplomat_can_do_action(punit, DIPLOMAT_BRIBE, dest_tile))
+	XtSetSensitive(XtNameToWidget(shl, "*button0"), FALSE);
+      if(!diplomat_can_do_action(punit, SPY_SABOTAGE_UNIT, dest_tile))
+	XtSetSensitive(XtNameToWidget(shl, "*button1"), FALSE);
+    }
+  }
+}
+
+/****************************************************************
+...
+*****************************************************************/
+bool diplomat_dialog_is_open(void)
+{
+  return diplomat_dialog_open;
+}
+
+
+/****************************************************************
+...
+*****************************************************************/
 static void caravan_establish_trade_callback(Widget w, XtPointer client_data,
 					     XtPointer call_data)
 {
@@ -463,17 +1212,9 @@ void popup_caravan_dialog(struct unit *punit,
 /****************************************************************
 ...
 *****************************************************************/
-bool caravan_dialog_is_open(int* unit_id, int* city_id)
+bool caravan_dialog_is_open(void)
 {
   return BOOL_VAL(caravan_dialog);
-}
-
-/**************************************************************************
-  Updates caravan dialog
-**************************************************************************/
-void caravan_dialog_update(void)
-{
-/* PORT ME */
 }
 
 /****************************************************************
@@ -482,13 +1223,13 @@ void caravan_dialog_update(void)
 static void revolution_callback_yes(Widget w, XtPointer client_data, 
 				    XtPointer call_data)
 {
-  struct government *pgovernment = client_data;
+  int government = XTPOINTER_TO_INT(client_data);
 
-  if (!pgovernment) {
+  if (government == -1) {
     start_revolution();
   } else {
     /* Player have choosed government */
-    set_government_choice(pgovernment);
+    set_government_choice(government);
   }
   destroy_message_dialog(w);
 }
@@ -507,11 +1248,12 @@ static void revolution_callback_no(Widget w, XtPointer client_data,
 /****************************************************************
 ...
 *****************************************************************/
-void popup_revolution_dialog(struct government *pgovernment)
+void popup_revolution_dialog(int government)
 {
-  popup_message_dialog(toplevel, "revolutiondialog",
+  popup_message_dialog(toplevel, "revolutiondialog", 
 		       _("You say you wanna revolution?"),
-		       revolution_callback_yes, pgovernment, 0,
+		       revolution_callback_yes,
+		       INT_TO_XTPOINTER(government), 0,
 		       revolution_callback_no, 0, 0,
 		       NULL);
 }
@@ -544,10 +1286,9 @@ static void pillage_callback(Widget w, XtPointer client_data,
 ...
 *****************************************************************/
 void popup_pillage_dialog(struct unit *punit,
-			  bv_special may_pillage)
+			  enum tile_special_type may_pillage)
 {
   Widget shell, form, dlabel, button, prev;
-  enum tile_special_type what, prereq;
 
   if (is_showing_pillage_dialog) {
     return;
@@ -563,25 +1304,19 @@ void popup_pillage_dialog(struct unit *punit,
   dlabel = I_L(XtVaCreateManagedWidget("dlabel", labelWidgetClass, form, NULL));
 
   prev = dlabel;
-  while ((what = get_preferred_pillage(may_pillage)) != S_LAST) {
-    bv_special what_bv;
+  while (may_pillage) {
+    enum tile_special_type what = get_preferred_pillage(may_pillage);
 
-    BV_CLR_ALL(what_bv);
-    BV_SET(what_bv, what);
     button =
       XtVaCreateManagedWidget ("button", commandWidgetClass, form,
 			       XtNfromVert, prev,
 			       XtNlabel,
-			       (XtArgVal)(get_infrastructure_text(what_bv)),
+			         (XtArgVal)(map_get_infrastructure_text (what)),
 			       NULL);
     XtAddCallback(button, XtNcallback, pillage_callback,
 		  INT_TO_XTPOINTER(what));
     prev = button;
-    clear_special(&may_pillage, what);
-    prereq = get_infrastructure_prereq(what);
-    if (prereq != S_LAST) {
-      clear_special(&may_pillage, prereq);
-    }
+    may_pillage &= (~(what | map_get_infrastructure_prerequisite (what)));
   }
   button =
     I_L(XtVaCreateManagedWidget("closebutton", commandWidgetClass, form,
@@ -696,7 +1431,7 @@ void popup_unit_select_dialog(struct tile *ptile)
   Widget unit_select_all_command, unit_select_close_command;
   Widget firstcolumn=0,column=0;
   Pixel bg;
-  struct unit *unit_list[unit_list_size(ptile->units)];
+  struct unit *unit_list[unit_list_size(&ptile->units)];
 
   XtSetSensitive(main_form, FALSE);
 
@@ -712,7 +1447,7 @@ void popup_unit_select_dialog(struct tile *ptile)
   XtVaGetValues(unit_select_form, XtNbackground, &bg, NULL);
   XSetForeground(display, fill_bg_gc, bg);
 
-  n = MIN(MAX_SELECT_UNITS, unit_list_size(ptile->units));
+  n = MIN(MAX_SELECT_UNITS, unit_list_size(&ptile->units));
   r = number_of_rows(n);
 
   fill_tile_unit_list(ptile, unit_list);
@@ -742,11 +1477,11 @@ void popup_unit_select_dialog(struct tile *ptile)
 	    unit_activity_text(punit));
 
     unit_select_pixmaps[i]=XCreatePixmap(display, XtWindow(map_canvas), 
-					 tileset_full_tile_width(tileset), tileset_full_tile_height(tileset),
+					 UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT,
 					 display_depth);
 
     XFillRectangle(display, unit_select_pixmaps[i], fill_bg_gc,
-		   0, 0, tileset_full_tile_width(tileset), tileset_full_tile_height(tileset));
+		   0, 0, UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT);
     store.pixmap = unit_select_pixmaps[i];
     put_unit(punit, &store, 0, 0);
 
@@ -848,16 +1583,14 @@ void unit_select_callback(Widget w, XtPointer client_data,
 /****************************************************************
 popup the dialog 5% inside the main-window 
 *****************************************************************/
-void popup_races_dialog(struct player *pplayer)
+void popup_races_dialog(void)
 {
   Position x, y;
   Dimension width, height;
 
   XtSetSensitive(main_form, FALSE);
 
-  if (!races_dialog_shell) {
-    create_races_dialog(pplayer);
-  }
+  create_races_dialog();
 
   XtVaGetValues(toplevel, XtNwidth, &width, XtNheight, &height, NULL);
 
@@ -884,23 +1617,20 @@ void popdown_races_dialog(void)
 /****************************************************************
 ...
 *****************************************************************/
-void create_races_dialog(struct player *pplayer)
+void create_races_dialog(void)
 {
   int per_row = 5;
-  int i, j, len, maxracelen, index, nat_count;
+  int i, j, len, maxracelen, index;
   char maxracename[MAX_LEN_NAME];
   char namebuf[64];
   int space;
   XtWidgetGeometry geom;
 
-  races_player = pplayer;
   maxracelen = 0;
-  nations_iterate(pnation) {
-    if (is_nation_playable(pnation)) {
-      len = strlen(get_nation_name(pnation));
-      maxracelen = MAX(maxracelen, len);
-    }
-  } nations_iterate_end;
+  for(i=0; i<game.playable_nation_count; i++) {
+    len = strlen(get_nation_name(i));
+    maxracelen = MAX(maxracelen, len);
+  }
   maxracelen = MIN(maxracelen, MAX_LEN_NAME-1);
   my_snprintf(maxracename, sizeof(maxracename), "%*s", maxracelen+2, "W");
 
@@ -916,67 +1646,53 @@ void create_races_dialog(struct player *pplayer)
 				       labelWidgetClass, 
 				       races_form, NULL));  
 
-  races_toggles_viewport =
-    XtVaCreateManagedWidget("racestogglesviewport",
-			    viewportWidgetClass,
-			    races_form,
-			    XtNfromVert, races_label,
-			    NULL);
-
-  races_toggles_form =
-    XtVaCreateManagedWidget("racestogglesform",
-			    formWidgetClass,
-			    races_toggles_viewport,
-			    NULL);
+  races_toggles_form = XtVaCreateManagedWidget("racestogglesform", 
+					       formWidgetClass, 
+					       races_form, 
+					       XtNfromVert, races_label, 
+					       NULL);   
 
   free(races_toggles);
-  races_toggles = fc_calloc(game.control.nation_count, sizeof(Widget));
+  races_toggles = fc_calloc(game.playable_nation_count,sizeof(Widget));
   free(races_toggles_to_nations);
-  races_toggles_to_nations = fc_calloc(game.control.nation_count,
-				       sizeof(struct nation_type *));
+  races_toggles_to_nations = fc_calloc(game.playable_nation_count,sizeof(int));
 
-  i = 0;
-  j = 0;
-  index = 0;
-  nations_iterate(pnation) {
-    if (!is_nation_playable(pnation)) {
-      continue;
-    }
-
-    if (j == 0) {
-      index = i * per_row;
-      my_snprintf(namebuf, sizeof(namebuf), "racestoggle%d", index);
-      if (i == 0) {
-	races_toggles[index] =
-	  XtVaCreateManagedWidget(namebuf,
-				  toggleWidgetClass,
-				  races_toggles_form,
-				  XtNlabel, maxracename,
-				  NULL);
-      } else {
-	races_toggles[index] =
-	  XtVaCreateManagedWidget(namebuf,
-				  toggleWidgetClass,
-				  races_toggles_form,
-				  XtNradioGroup,
-				  races_toggles[index - 1],
-				  XtNfromVert,
-				  races_toggles[index - per_row],
-				  XtNlabel, maxracename,
-				  NULL);
-      }
+  for( i = 0; i < ((game.playable_nation_count-1)/per_row)+1; i++) {
+    index = i * per_row;
+    my_snprintf(namebuf, sizeof(namebuf), "racestoggle%d", index);
+    if( i == 0 ) {
+      races_toggles[index] =
+	XtVaCreateManagedWidget(namebuf,
+				toggleWidgetClass,
+				races_toggles_form,
+				XtNlabel, maxracename,
+				NULL);
     } else {
+      races_toggles[index] =
+	XtVaCreateManagedWidget(namebuf,
+				toggleWidgetClass,
+				races_toggles_form,
+				XtNradioGroup,
+				races_toggles[index-1],
+				XtNfromVert,
+				races_toggles[index-per_row],
+				XtNlabel, maxracename,
+				NULL);
+    }
+
+    for( j = 1; j < per_row; j++) {
       index = i * per_row + j;
+      if( index >= game.playable_nation_count ) break;
       my_snprintf(namebuf, sizeof(namebuf), "racestoggle%d", index);
-      if (i == 0) {
+      if( i == 0 ) {
 	races_toggles[index] =
 	  XtVaCreateManagedWidget(namebuf,
 				  toggleWidgetClass,
 				  races_toggles_form,
 				  XtNradioGroup,
-				  races_toggles[index - 1],
+				  races_toggles[index-1],
 				  XtNfromHoriz,
-				  races_toggles[index - 1],
+				  races_toggles[index-1],
 				  XtNlabel, maxracename,
 				  NULL);
       } else {
@@ -985,109 +1701,91 @@ void create_races_dialog(struct player *pplayer)
 				  toggleWidgetClass,
 				  races_toggles_form,
 				  XtNradioGroup,
-				  races_toggles[index - 1],
+				  races_toggles[index-1],
 				  XtNfromVert,
-				  races_toggles[index - per_row],
+				  races_toggles[index-per_row],
 				  XtNfromHoriz,
-				  races_toggles[index - 1],
+				  races_toggles[index-1],
 				  XtNlabel, maxracename,
 				  NULL);
       }
     }
+  }
 
-    races_toggles_to_nations[index] = pnation;
-
-    j++;
-    if (j >= per_row) {
-      j = 0;
-      i++;
-    }
-  } nations_iterate_end;
-  nat_count = index + 1;
-
-  races_leader_form =
-    XtVaCreateManagedWidget("racesleaderform",
-			    formWidgetClass,
-			    races_form,
-			    XtNfromVert, races_toggles_viewport,
-/*			    XtNfromHoriz, races_toggles_viewport,*/
-			    NULL);
+  races_leader_form = XtVaCreateManagedWidget("racesleaderform",
+					      formWidgetClass,
+					      races_form,
+					      XtNfromVert, races_toggles_form,
+					      NULL);
 
   XtVaGetValues(races_leader_form, XtNdefaultDistance, &space, NULL);
   XtQueryGeometry(races_toggles[0], NULL, &geom);
-  races_leader =
-    XtVaCreateManagedWidget("racesleader",
-			    asciiTextWidgetClass,
-			    races_leader_form,
-			    XtNeditType, XawtextEdit,
-			    XtNwidth,
-			      space + 2*(geom.width + geom.border_width),
-			    XtNstring, "",
-			    NULL);
+  races_leader = XtVaCreateManagedWidget("racesleader",
+					 asciiTextWidgetClass,
+					 races_leader_form,
+					 XtNeditType, XawtextEdit,
+					 XtNwidth,
+					   space + 2*(geom.width + geom.border_width),
+					 XtNstring, "",
+					 NULL);
 
   races_leader_pick_popupmenu = 0;
 
   races_leader_pick_menubutton =
     I_L(XtVaCreateManagedWidget("racesleaderpickmenubutton",
-				menuButtonWidgetClass,
-				races_leader_form,
-/*				XtNfromVert, races_leader,*/
-				XtNfromHoriz, races_leader,
-				NULL));
+			    menuButtonWidgetClass,
+			    races_leader_form,
+			    XtNfromHoriz, races_leader,
+			    NULL));
 
-  races_sex_label = I_L(XtVaCreateManagedWidget("racessexlabel",
-				            labelWidgetClass,
-				            races_form,
-					    XtNfromVert, races_leader_form,
-					    NULL));
+  races_sex_label = I_L(XtVaCreateManagedWidget("racessexlabel", 
+				            labelWidgetClass, 
+				            races_form, 
+					    XtNfromVert, races_leader_form, 
+					    NULL));  
 
-  races_sex_form = XtVaCreateManagedWidget("racessexform",
-					   formWidgetClass,
-					   races_form,
-					   XtNfromVert, races_sex_label,
-					   NULL);
+  races_sex_form = XtVaCreateManagedWidget("racessexform", 
+					   formWidgetClass, 
+					   races_form, 
+					   XtNfromVert, races_sex_label, 
+					   NULL);   
 
   races_sex_toggles[0] =
-    I_L(XtVaCreateManagedWidget("racessextoggle0",
-				toggleWidgetClass,
+    I_L(XtVaCreateManagedWidget("racessextoggle0", 
+				toggleWidgetClass, 
 				races_sex_form,
 				NULL));
 
   races_sex_toggles[1] =
     I_L(XtVaCreateManagedWidget("racessextoggle1",
-				toggleWidgetClass,
+				toggleWidgetClass, 
 				races_sex_form,
-				XtNfromHoriz,
+				XtNfromHoriz, 
 				(XtArgVal)races_sex_toggles[0],
-				XtNradioGroup,
-				races_sex_toggles[0],
+				XtNradioGroup, 
+				races_sex_toggles[0], 
 				NULL));
 
   /* find out styles that can be used at the game beginning */
-  /* Limit of 64 city_styles should be deleted. -ev */
-  for (i = 0, b_s_num = 0; i < game.control.styles_count && i < 64; i++) {
-    if (!city_style_has_requirements(&city_styles[i])) {
+  for(i=0,b_s_num=0; i<game.styles_count && i<64; i++) {
+    if(city_styles[i].techreq == A_NONE) {
       city_style_idx[b_s_num] = i;
       city_style_ridx[i] = b_s_num;
       b_s_num++;
     }
   }
 
-  races_style_label =
-    I_L(XtVaCreateManagedWidget("racesstylelabel", 
-				labelWidgetClass, 
-				races_form,
-				XtNfromVert, races_sex_form,
-/*				XtNfromHoriz, races_toggles_viewport,*/
-				NULL));  
+  races_style_label = I_L(XtVaCreateManagedWidget("racesstylelabel", 
+					      labelWidgetClass, 
+					      races_form,
+					      XtNfromVert, races_sex_form, 
+					      NULL));  
 
-  races_style_form =
-    XtVaCreateManagedWidget("racesstyleform", 
-			    formWidgetClass, 
-			    races_form, 
-			    XtNfromVert, races_style_label,
-/*			    XtNfromHoriz, races_toggles_viewport,*/
-			    NULL);   
+  races_style_form = XtVaCreateManagedWidget("racesstyleform", 
+					       formWidgetClass, 
+					       races_form, 
+					       XtNfromVert, races_style_label, 
+					       NULL);   
 
   free(races_style_toggles);
   races_style_toggles = fc_calloc(b_s_num,sizeof(Widget));
@@ -1159,7 +1857,7 @@ void create_races_dialog(struct player *pplayer)
 				races_action_form,
 				NULL));
 
-  races_random_command =
+  races_disconnect_command =
     I_L(XtVaCreateManagedWidget("racesdisconnectcommand",
 				commandWidgetClass,
 				races_action_form,
@@ -1170,20 +1868,18 @@ void create_races_dialog(struct player *pplayer)
     I_L(XtVaCreateManagedWidget("racesquitcommand",
 				commandWidgetClass,
 				races_action_form,
-				XtNfromHoriz, races_random_command,
+				XtNfromHoriz, races_disconnect_command,
 				NULL));
 
-  XtAddCallback(races_random_command, XtNcallback,
-		races_random_command_callback, NULL);
+  XtAddCallback(races_disconnect_command, XtNcallback,
+		races_disconnect_command_callback, NULL);
   XtAddCallback(races_quit_command, XtNcallback,
 		races_quit_command_callback, NULL);
 
 
-  for (i = 0; i < game.control.nation_count; i++) {
-    if (races_toggles[i]) {
-      XtAddCallback(races_toggles[i], XtNcallback,
-		    races_toggles_callback, INT_TO_XTPOINTER(i));
-    }
+  for(i=0; i<game.playable_nation_count; i++) {
+    XtAddCallback(races_toggles[i], XtNcallback,
+		  races_toggles_callback, INT_TO_XTPOINTER(i));
   }
 
 
@@ -1195,33 +1891,23 @@ void create_races_dialog(struct player *pplayer)
 
   XtRealizeWidget(races_dialog_shell);
 
-/*  for(i=0; i<game.control.playable_nation_count; i++) {
+  for(i=0; i<game.playable_nation_count; i++) {
     races_toggles_to_nations[i] = i;
   }
-*/
-  qsort(races_toggles_to_nations, nat_count,
-	sizeof(struct nation_type *), races_indirect_compare);
+  qsort(races_toggles_to_nations, i, sizeof(int), races_indirect_compare);
 
   /* Build nation_to_race_toggle */
-  free(nation_idx_to_race_toggle);
-  nation_idx_to_race_toggle =
-      fc_calloc(game.control.nation_count, sizeof(int));
-  for (i = 0; i < game.control.nation_count; i++) {
-    nation_idx_to_race_toggle[i] = -1;
-  }
-  for (i = 0; i < game.control.nation_count; i++) {
-    if (races_toggles_to_nations[i]) {
-      nation_idx_to_race_toggle[races_toggles_to_nations[i]->index] = i;
-    }
+  free(nation_to_race_toggle);
+  nation_to_race_toggle =
+      fc_calloc(game.playable_nation_count, sizeof(int));
+  for (i = 0; i < game.playable_nation_count; i++) {
+    nation_to_race_toggle[races_toggles_to_nations[i]] = i;
   }
 
-  for (i = 0; i < game.control.nation_count; i++) {
-    if (races_toggles[i]) {
-      XtVaSetValues(races_toggles[i],
-		    XtNlabel,
-		      (XtArgVal)get_nation_name(races_toggles_to_nations[i]),
-		    NULL);
-    }
+  for(i=0; i<game.playable_nation_count; i++) {
+    XtVaSetValues (races_toggles[i],
+		   XtNlabel, (XtArgVal)get_nation_name(races_toggles_to_nations[i]),
+		   NULL);
   }
 
   for(i=0; i<b_s_num; i++) {
@@ -1245,46 +1931,35 @@ void racesdlg_key_ok(Widget w)
 /**************************************************************************
 ...
 **************************************************************************/
-void races_toggles_set_sensitive(void)
+void races_toggles_set_sensitive(bool *nations_used)
 {
   int i;
 
-  if (!races_dialog_shell) {
-    return;
-  }
-  for (i = 0; i < game.control.nation_count; i++) {
-    if (nation_idx_to_race_toggle[i] > -1) {
-      XtSetSensitive(races_toggles[nation_idx_to_race_toggle[i]], TRUE);
-    }
+  for (i = 0; i < game.playable_nation_count; i++) {
+    XtSetSensitive(races_toggles[nation_to_race_toggle[i]], TRUE);
   }
 
-  for (i = 0; i < game.control.nation_count; i++) {
-    int nation_no = i, selected_nation = -1;
-    struct nation_type *nation;
+  for (i = 0; i < game.playable_nation_count; i++) {
+    int nation = i, selected_nation = -1;
 
-    nation = get_nation_by_idx(i);
-    if (!is_nation_playable(nation)) {
-      continue;
-    }
-
-    if (nation->is_available && !nation->player) {
+    if (!nations_used[i]) {
       continue;
     }
 
     if (races_buttons_get_current() != -1) {
       selected_nation =
-	  races_toggles_to_nations[races_buttons_get_current()]->index;
+	  races_toggles_to_nations[races_buttons_get_current()];
     }
 
-    freelog(LOG_DEBUG, "  [%d]: %d = %s", i, nation_no,
-	    get_nation_name(get_nation_by_idx(nation_no)));
+    freelog(LOG_DEBUG, "  [%d]: %d = %s", i, nation,
+	    get_nation_name(nation));
 
-    if (nation_no == selected_nation) {
+    if (nation == selected_nation) {
       XawToggleUnsetCurrent(races_toggles[0]);
-      XtSetSensitive(races_toggles[nation_idx_to_race_toggle[nation_no]], FALSE);
+      XtSetSensitive(races_toggles[nation_to_race_toggle[nation]], FALSE);
       select_random_race();
     } else {
-      XtSetSensitive(races_toggles[nation_idx_to_race_toggle[nation_no]], FALSE);
+      XtSetSensitive(races_toggles[nation_to_race_toggle[nation]], FALSE);
     }
   }
 }
@@ -1299,7 +1974,7 @@ void races_toggles_callback(Widget w, XtPointer client_data,
 			    XtPointer call_data)
 {
   int index = XTPOINTER_TO_INT(client_data);
-  struct nation_type *race = races_toggles_to_nations[index];
+  int race = races_toggles_to_nations[index];
   int j;
   int leader_count;
   struct leader *leaders = get_nation_leaders(race, &leader_count);
@@ -1314,7 +1989,7 @@ void races_toggles_callback(Widget w, XtPointer client_data,
 			 races_leader_pick_menubutton,
 			 NULL);
 
-  nation_count = game.control.nation_count;
+  nation_count = game.nation_count;
 
   for(j=0; j<leader_count; j++) {
     entry =
@@ -1323,7 +1998,7 @@ void races_toggles_callback(Widget w, XtPointer client_data,
 			      races_leader_pick_popupmenu,
 			      NULL);
     XtAddCallback(entry, XtNcallback, races_leader_pick_callback,
-		  INT_TO_XTPOINTER(nation_count * j + race->index));
+		  INT_TO_XTPOINTER(nation_count * j + race));
   }
 
   races_leader_set_values(race, myrand(leader_count));
@@ -1343,13 +2018,13 @@ void races_leader_pick_callback(Widget w, XtPointer client_data,
   int lead = XTPOINTER_TO_INT(client_data) / nation_count;
   int race = XTPOINTER_TO_INT(client_data) - (nation_count * lead);
 
-  races_leader_set_values(get_nation_by_idx(race), lead);
+  races_leader_set_values(race, lead);
 }
 
 /**************************************************************************
 ...
 **************************************************************************/
-void races_leader_set_values(struct nation_type *race, int lead)
+void races_leader_set_values(int race, int lead)
 {
   int leader_count;
   struct leader *leaders = get_nation_leaders(race, &leader_count);
@@ -1368,19 +2043,16 @@ int races_buttons_get_current(void)
   int i;
   XtPointer dp, yadp;
 
-  if ((game.control.nation_count) == 1) {
+  if((game.playable_nation_count)==1)
     return 0;
-  }
 
   if(!(dp=XawToggleGetCurrent(races_toggles[0])))
     return -1;
 
-  for(i = 0; i < game.control.nation_count; i++) {
-    if (races_toggles[i]) {
-      XtVaGetValues(races_toggles[i], XtNradioData, &yadp, NULL);
-      if(dp==yadp)
-	return i;
-    }
+  for(i=0; i<game.playable_nation_count; i++) {
+    XtVaGetValues(races_toggles[i], XtNradioData, &yadp, NULL);
+    if(dp==yadp)
+      return i;
   }
 
   return -1;
@@ -1446,14 +2118,16 @@ void races_sex_buttons_set_current(int i)
 **************************************************************************/
 int races_indirect_compare(const void *first, const void *second)
 {
+  int first_index;
+  int second_index;
   const char *first_string;
   const char *second_string;
 
-  const struct nation_type *first_nation = *(const struct nation_type **)first;
-  const struct nation_type *second_nation = *(const struct nation_type **)second;
+  first_index = *((const int *)first);
+  second_index = *((const int *)second);
 
-  first_string = get_nation_name(first_nation);
-  second_string = get_nation_name(second_nation);
+  first_string = get_nation_name(first_index);
+  second_string = get_nation_name(second_index);
 
   return mystrcasecmp(first_string, second_string);
 }
@@ -1491,21 +2165,19 @@ void races_ok_command_callback(Widget w, XtPointer client_data,
   }
 
   dsend_packet_nation_select_req(&aconnection,
-				 races_player->player_no,
-				 races_toggles_to_nations[selected_index]->index,
+				 races_toggles_to_nations[selected_index],
 				 selected_sex ? FALSE : TRUE,
 				 dp, city_style_idx[selected_style]);
-  popdown_races_dialog();
 }
 
 /**************************************************************************
 ...
 **************************************************************************/
-void races_random_command_callback(Widget w, XtPointer client_data, 
+void races_disconnect_command_callback(Widget w, XtPointer client_data, 
 				       XtPointer call_data)
 {
   popdown_races_dialog();
-/*  disconnect_from_server();*/
+  disconnect_from_server();
 }
 
 /**************************************************************************
@@ -1514,7 +2186,7 @@ void races_random_command_callback(Widget w, XtPointer client_data,
 void races_quit_command_callback(Widget w, XtPointer client_data, 
 				 XtPointer call_data)
 {
-  client_exit();
+  exit(EXIT_SUCCESS);
 }
 
 /**************************************************************************

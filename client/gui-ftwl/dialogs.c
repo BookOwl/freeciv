@@ -36,7 +36,7 @@ static struct sw_widget *nations_window;
 static struct sw_widget *nations_list;
 static struct sw_widget *leaders_list;
 static struct sw_widget *leaders_sex_list;
-static Nation_type_id selected_nation;
+static Nation_Type_id selected_nation;
 #endif
 
 /**************************************************************************
@@ -85,7 +85,7 @@ static void select_random_nation(void)
 {
   /* try to find a free nation */
   while (1) {
-    int index = myrand(game.control.playable_nation_count);
+    int index = myrand(game.playable_nation_count);
 
     if (sw_list_is_row_enabled(nations_list, index)) {
       sw_list_set_selected_row(nations_list, index, TRUE);
@@ -213,7 +213,7 @@ void popup_races_dialog(void)
   label = sw_label_create_text(root_window, string);
   sw_list_set_item(leaders_sex_list, 0, 1, label);
 
-  for (i = 0; i < game.control.playable_nation_count; i++) {
+  for (i = 0; i < game.playable_nation_count; i++) {
     struct nation_type *nation = get_nation_by_idx(i);
 
     button = sw_button_create(nations_window, NULL,
@@ -228,7 +228,7 @@ void popup_races_dialog(void)
 
     string = ct_string_create(STYLE_ITALIC, 14,
 			      ct_extend_std_color(COLOR_STD_BLACK),
-			      COLOR_EXT_GRAY, Q_(nation->category));
+			      COLOR_EXT_GRAY, Q_(nation->class));
     label = sw_label_create_text(root_window, string);
     sw_list_set_item(nations_list, 2, i, label);    
   }
@@ -260,9 +260,20 @@ void popup_unit_select_dialog(struct tile *ptile)
   In the nation selection dialog, make already-taken nations unavailable.
   This information is contained in the packet_nations_used packet.
 **************************************************************************/
-void races_toggles_set_sensitive(void)
+void races_toggles_set_sensitive(bool *nations_used)
 {
   /* PORTME */
+}
+
+/**************************************************************************
+  Popup a dialog asking if the player wants to start a revolution.
+**************************************************************************/
+void popup_revolution_dialog(void)
+{
+  /* PORTME */
+#if 0				/* Demo code */
+  popup_message_dialog(_("Revolution!"), _("You say you wanna revolution?"));
+#endif
 }
 
 /**************************************************************************

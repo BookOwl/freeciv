@@ -43,7 +43,6 @@ libguiclient_a_SOURCES = \
 	dialogs.h	\
 	diplodlg.c	\
 	diplodlg.h	\
-	diplomat_dialog.c	\
 	finddlg.c	\
 	finddlg.h	\
 	gotodlg.c	\
@@ -87,6 +86,5 @@ libguiclient_a_SOURCES = \
 	resources.h	\
 	spaceshipdlg.c	\
 	spaceshipdlg.h  \
-	themes.c	\
 	wldlg.c		\
 	wldlg.h

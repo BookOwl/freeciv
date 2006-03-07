@@ -2,26 +2,17 @@
 
 name=_("Portuguese")
 plural=_("?plural:Portuguese")
-groups=_("Medieval"), _("Modern"), _("European")
-legend=_("Portugal founded the first of the great mercantile empires\
- in the 1400s on the shipbuilding advances funded by Prince Henry the\
- Navigator.")
-leader=
- "Afonso Henriques",
- "Sancho I",
- "Dinis",
- "Afonso IV",
- "João I",
- "João II",
- "Manuel I",
- "João IV",
- "Maria II",
- "António de Oliveira Salazar"
+class=_("Modern")
+legend=_("Portugal founded the first of the great mercantile empires \
+in the 1400s on the shipbuilding advances funded by Prince Henry the \
+Navigator.")
+leader="Afonso Henriques", "Sancho I", "Dinis", "Afonso IV",
+       "João I", "João II", "Manuel I", "João IV", "Maria II", "Salazar"
 leader_sex="Male", "Male", "Male", "Male",
 	   "Male", "Male", "Male", "Male", "Female", "Male"
-flag="portugal"
+flag="f.portugal"
 flag_alt = "-"
-city_style = "Classical"
+city_style = "European"
 
 ruler_titles = { "government",      "male_title",      "female_title"
                  "Democracy",       _("Prime Minister"), _("Prime Minister")
@@ -29,8 +20,10 @@ ruler_titles = { "government",      "male_title",      "female_title"
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
+tech_goals = "Monarchy", "Iron Working", "Navigation", "Trade",
+	     "The Republic", "Railroad"
+wonder="Magellan's Expedition"
+government="Republic"
 civilwar_nations = "brazilian"
 
 cities =

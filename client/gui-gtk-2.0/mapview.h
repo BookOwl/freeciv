@@ -15,20 +15,18 @@
 
 #include <gtk/gtk.h>
 
-#include "fc_types.h"
-
 #include "gtkpixcomm.h"
 
 #include "citydlg_common.h"
 #include "mapview_g.h"
 #include "mapview_common.h"
 
-#include "canvas.h"
 #include "graphics.h"
 
-GdkPixbuf *get_thumb_pixbuf(int onoff);
+struct unit;
+struct city;
 
-#define CURSOR_INTERVAL 200 /* milliseconds */
+GdkPixmap *get_thumb_pixmap(int onoff);
 
 gboolean overview_canvas_expose(GtkWidget *w, GdkEventExpose *ev, gpointer data);
 gboolean map_canvas_expose(GtkWidget *w, GdkEventExpose *ev, gpointer data);
@@ -41,14 +39,5 @@ void put_unit_gpixmap_city_overlays(struct unit *punit, GtkPixcomm *p);
 
 void scrollbar_jump_callback(GtkAdjustment *adj, gpointer hscrollbar);
 void update_map_canvas_scrollbars_size(void);
-
-void pixmap_put_overlay_tile(GdkDrawable *pixmap,
-			     int canvas_x, int canvas_y,
-			     struct sprite *ssprite);
-
-void pixmap_put_overlay_tile_draw(GdkDrawable *pixmap,
-				  int canvas_x, int canvas_y,
-				  struct sprite *ssprite,
-				  bool fog);
 
 #endif  /* FC__MAPVIEW_H */

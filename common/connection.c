@@ -261,8 +261,7 @@ static int write_socket_data(struct connection *pc,
   if (start > 0) {
     buf->ndata -= start;
     memmove(buf->data, buf->data+start, buf->ndata);
-    pc->last_write = renew_timer_start(pc->last_write,
-				       TIMER_USER, TIMER_ACTIVE);
+    (void) time(&pc->last_write);
   }
   return 0;
 }
@@ -398,13 +397,13 @@ void connection_do_unbuffer(struct connection *pc)
 **************************************************************************/
 void conn_list_do_buffer(struct conn_list *dest)
 {
-  conn_list_iterate(dest, pconn)
+  conn_list_iterate(*dest, pconn)
     connection_do_buffer(pconn);
   conn_list_iterate_end;
 }
 void conn_list_do_unbuffer(struct conn_list *dest)
 {
-  conn_list_iterate(dest, pconn)
+  conn_list_iterate(*dest, pconn)
     connection_do_unbuffer(pconn);
   conn_list_iterate_end;
 }
@@ -431,7 +430,7 @@ struct connection *find_conn_by_user(const char *user_name)
   match/non-match (see shared.[ch])
 ***************************************************************/
 static const char *connection_accessor(int i) {
-  return conn_list_get(game.all_connections, i)->username;
+  return conn_list_get(&game.all_connections, i)->username;
 }
 
 struct connection *find_conn_by_user_prefix(const char *user_name,
@@ -440,11 +439,11 @@ struct connection *find_conn_by_user_prefix(const char *user_name,
   int ind;
 
   *result = match_prefix(connection_accessor,
-			 conn_list_size(game.all_connections),
+			 conn_list_size(&game.all_connections),
 			 MAX_LEN_NAME-1, mystrncasecmp, user_name, &ind);
   
   if (*result < M_PRE_AMBIGUOUS) {
-    return conn_list_get(game.all_connections, ind);
+    return conn_list_get(&game.all_connections, ind);
   } else {
     return NULL;
   }
@@ -474,7 +473,7 @@ struct socket_packet_buffer *new_socket_packet_buffer(void)
 {
   struct socket_packet_buffer *buf;
 
-  buf = fc_malloc(sizeof(*buf));
+  buf = (struct socket_packet_buffer *)fc_malloc(sizeof(*buf));
   buf->ndata = 0;
   buf->do_buffer_sends = 0;
   buf->nsize = 10*MAX_LEN_PACKET;
@@ -620,7 +619,7 @@ void connection_common_init(struct connection *pconn)
 {
   pconn->established = FALSE;
   pconn->used = TRUE;
-  pconn->last_write = NULL;
+  pconn->last_write = 0;
   pconn->buffer = new_socket_packet_buffer();
   pconn->send_buffer = new_socket_packet_buffer();
   pconn->statistics.bytes_send = 0;
@@ -649,11 +648,6 @@ void connection_common_close(struct connection *pconn)
 
     free_socket_packet_buffer(pconn->send_buffer);
     pconn->send_buffer = NULL;
-
-    if (pconn->last_write) {
-      free_timer(pconn->last_write);
-      pconn->last_write = NULL;
-    }
 
     free_compression_queue(pconn);
     free_packet_hashes(pconn);

@@ -42,126 +42,6 @@
 #include "citydlg.h"
 
 
-typedef int wid;
-
-/* 
- * A worklist id (wid) can hold all objects which can be part of a
- * city worklist: improvements (with wonders), units and global
- * worklists. This is achieved by seperation the value set: 
- *  - (wid < B_LAST) denotes a improvement (including wonders)
- *  - (B_LAST <= wid < B_LAST + U_LAST) denotes a unit with the
- *  unit_type_id of (wid - B_LAST)
- *  - (B_LAST + U_LAST<= wid) denotes a global worklist with the id of
- *  (wid - (B_LAST + U_LAST))
- *
- * This used to be used globally but has been moved into the GUI code
- * because it is of limited usefulness.
- */
-
-#define WORKLIST_END (-1)
-
-/**************************************************************************
-...
-**************************************************************************/
-static wid wid_encode(bool is_unit, bool is_worklist, int id)
-{
-  assert(!is_unit || !is_worklist);
-
-  if (is_unit) {
-    return id + B_LAST;
-  }
-  if (is_worklist) {
-    return id + B_LAST + U_LAST;
-  }
-  return id;
-}
-
-/**************************************************************************
-...
-**************************************************************************/
-static bool wid_is_unit(wid wid)
-{
-  assert(wid != WORKLIST_END);
-
-  return (wid >= B_LAST && wid < B_LAST + U_LAST);
-}
-
-/**************************************************************************
-...
-**************************************************************************/
-static bool wid_is_worklist(wid wid)
-{
-  assert(wid != WORKLIST_END);
-
-  return (wid >= B_LAST + U_LAST);
-}
-
-/**************************************************************************
-...
-**************************************************************************/
-static int wid_id(wid wid)
-{
-  assert(wid != WORKLIST_END);
-
-  if (wid >= B_LAST + U_LAST) {
-    return wid - (B_LAST + U_LAST);
-  }
-  if (wid >= B_LAST) {
-    return wid - B_LAST;
-  }
-  return wid;
-}
-
-/**************************************************************************
- Collect the wids of all possible targets of the given city.
-**************************************************************************/
-static int collect_wids1(wid * dest_wids, struct city *pcity, bool wl_first, 
-			 bool advanced_tech)
-{
-  struct city_production targets[MAX_NUM_PRODUCTION_TARGETS];
-  struct item items[MAX_NUM_PRODUCTION_TARGETS];
-  int item, targets_used, wids_used = 0;
-
-  /* Fill in the global worklists now?                      */
-  /* perhaps judicious use of goto would be good here? -mck */
-  if (wl_first && game.player_ptr->worklists[0].is_valid && pcity) {
-    int i;
-
-    for (i = 0; i < MAX_NUM_WORKLISTS; i++) {
-      if (game.player_ptr->worklists[i].is_valid) {
-	dest_wids[wids_used] = wid_encode(FALSE, TRUE, i);
-	wids_used++;
-      }
-    }
-  }
-
-  /* Fill in improvements and units */
-  targets_used = collect_eventually_buildable_targets(targets, pcity, advanced_tech);
-  name_and_sort_items(targets, targets_used, items, FALSE, pcity);
-
-  for (item = 0; item < targets_used; item++) {
-    struct city_production target = items[item].item;
-
-    dest_wids[wids_used] = wid_encode(target.is_unit, FALSE, target.value);
-    wids_used++;
-  }
-
-  /* we didn't fill in the global worklists above */
-  if (!wl_first && game.player_ptr->worklists[0].is_valid && pcity) {
-    int i;
-
-    for (i = 0; i < MAX_NUM_WORKLISTS; i++) {
-      if (game.player_ptr->worklists[i].is_valid) {
-        dest_wids[wids_used] = wid_encode(FALSE, TRUE, i);
-        wids_used++;
-      }
-    }
-  }
-
-  return wids_used;
-}
-
-
 #define COLUMNS                         4
 #define BUFFER_SIZE                     100
 #define NUM_TARGET_TYPES                3
@@ -458,7 +338,7 @@ static void worklist_help(int id, bool is_unit)
   if (id >= 0) {
     if (is_unit) {
       popup_help_dialog_typed(get_unit_type(id)->name, HELP_UNIT);
-    } else if (is_great_wonder(id)) {
+    } else if (is_wonder(id)) {
       popup_help_dialog_typed(get_improvement_name(id), HELP_WONDER);
     } else {
       popup_help_dialog_typed(get_improvement_name(id), HELP_IMPROVEMENT);
@@ -496,25 +376,23 @@ static void global_commit_worklist(struct worklist *pwl, void *data)
 static void copy_editor_to_worklist(struct worklist_editor *peditor,
                                     struct worklist *pwl)
 {
-  int i, n;
+  int i;
 
   /* Fill in this worklist with the parameters set in the worklist dialog. */
   init_worklist(pwl);
 
-  n = 0;
   for (i = 0; i < MAX_LEN_WORKLIST; i++) {
     if (peditor->worklist_wids[i] == WORKLIST_END) {
+      pwl->wlefs[i] = WEF_END;
+      pwl->wlids[i] = 0;
       break;
     } else {
-      struct city_production prod;
       wid wid = peditor->worklist_wids[i];
 
       assert(!wid_is_worklist(wid));
 
-      prod.is_unit = wid_is_unit(wid);
-      prod.value = wid_id(wid);
-
-      worklist_append(pwl, prod);
+      pwl->wlefs[i] = wid_is_unit(wid) ? WEF_UNIT : WEF_IMPR;
+      pwl->wlids[i] = wid_id(wid);
     }
   }
   strcpy(pwl->name, peditor->pwl->name);
@@ -901,24 +779,19 @@ static void worklist_really_insert_item(struct worklist_editor *peditor,
                                         int before, wid wid)
 {
   int i, first_free;
-  struct city_production target;
+  int target = wid_id(wid);
+  bool is_unit = wid_is_unit(wid);
 
   assert(!wid_is_worklist(wid));
-
-  target.is_unit = wid_is_unit(wid);
-  target.value = wid_id(wid);
 
   /* If this worklist is a city worklist, double check that the city
      really can (eventually) build the target.  We've made sure that
      the list of available targets is okay for this city, but a global
      worklist may try to insert an odd-ball unit or target. */
-  if (peditor->pcity
-      && ((target.is_unit
-	   && !can_eventually_build_unit(peditor->pcity,
-					 get_unit_type(target.value)))
-	  || (!target.is_unit
-	      && !can_eventually_build_improvement(peditor->pcity,
-						   target.value)))) {
+  if (peditor->pcity &&
+      ((is_unit && !can_eventually_build_unit(peditor->pcity, target)) ||
+       (!is_unit
+        && !can_eventually_build_improvement(peditor->pcity, target)))) {
     /* Nope, this city can't build this target, ever.  Don't put it into
        the worklist. */
     return;
@@ -965,16 +838,16 @@ static void copy_worklist_to_editor(struct worklist *pwl,
   int i;
 
   for (i = 0; i < MAX_LEN_WORKLIST; i++) {
-    struct city_production target;
+    int target;
+    bool is_unit;
 
     /* end of list */
-    if (!worklist_peek_ith(pwl, &target, i)) {
+    if (!worklist_peek_ith(pwl, &target, &is_unit, i)) {
       break;
     }
 
     worklist_really_insert_item(peditor, where,
-                                wid_encode(target.is_unit, FALSE,
-					   target.value));
+                                wid_encode(is_unit, FALSE, target));
     if (where < MAX_LEN_WORKLIST)
       where++;
   }
@@ -986,14 +859,14 @@ static void copy_worklist_to_editor(struct worklist *pwl,
 
 
 /****************************************************************
- sets aside the first space for "production.value" if in city
+ sets aside the first space for "currently_building" if in city
 *****************************************************************/
 static void worklist_prep(struct worklist_editor *peditor)
 {
   if (peditor->pcity) {
     peditor->worklist_wids[0] =
-        wid_encode(peditor->pcity->production.is_unit, FALSE,
-                   peditor->pcity->production.value);
+        wid_encode(peditor->pcity->is_building_unit, FALSE,
+                   peditor->pcity->currently_building);
     peditor->worklist_wids[1] = WORKLIST_END;
     copy_worklist_to_editor(&peditor->pcity->worklist, peditor,
                             MAX_LEN_WORKLIST);
@@ -1023,18 +896,13 @@ static void worklist_list_update(struct worklist_editor *peditor)
   for (i = 0; n < MAX_LEN_WORKLIST; i++, n++) {
     wid wid = peditor->worklist_wids[i];
 
-    struct city_production target;
-
     if (wid == WORKLIST_END) {
       break;
     }
-
     assert(!wid_is_worklist(wid));
 
-    target.is_unit = wid_is_unit(wid);
-    target.value = wid_id(wid);
-
-    get_city_dialog_production_row(row, BUFFER_SIZE, target,
+    get_city_dialog_production_row(row, BUFFER_SIZE,
+                                   wid_id(wid), wid_is_unit(wid),
                                    peditor->pcity);
     fcwin_listview_add_row(peditor->worklist,i,COLUMNS,row);
   }
@@ -1089,12 +957,8 @@ static void targets_list_update(struct worklist_editor *peditor)
       my_snprintf(buf[2], BUFFER_SIZE, "---");
       my_snprintf(buf[3], BUFFER_SIZE, "---");
     } else {
-      struct city_production target;
-
-      target.is_unit = wid_is_unit(wid);
-      target.value = wid_id(wid);
-
-      get_city_dialog_production_row(row, BUFFER_SIZE, target,
+      get_city_dialog_production_row(row, BUFFER_SIZE,
+                                     wid_id(wid), wid_is_unit(wid),
                                      peditor->pcity);
     }
     fcwin_listview_add_row(peditor->avail,i,COLUMNS,row);

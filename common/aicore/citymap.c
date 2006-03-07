@@ -28,7 +28,6 @@
 #include "mem.h"
 #include "support.h"
 #include "unit.h"
-#include "unitlist.h"
 #include "unittype.h"
 
 #include "citymap.h"
@@ -63,8 +62,8 @@ void citymap_turn_init(struct player *pplayer)
   /* The citymap is reinitialized at the start of ever turn.  This includes
    * a call to realloc, which only really matters if this is the first turn
    * of the game (but it's easier than a separate function to do this). */
-  citymap = fc_realloc(citymap, MAP_INDEX_SIZE * sizeof(*citymap));
-  memset(citymap, 0, MAP_INDEX_SIZE * sizeof(*citymap));
+  citymap = fc_realloc(citymap, MAX_MAP_INDEX * sizeof(*citymap));
+  memset(citymap, 0, MAX_MAP_INDEX * sizeof(*citymap));
 
   players_iterate(pplayer) {
     city_list_iterate(pplayer->cities, pcity) {

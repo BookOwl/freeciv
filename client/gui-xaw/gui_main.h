@@ -22,10 +22,6 @@ void main_show_info_popup(XEvent *event);
 void reset_econ_label_pixmaps(void);
 void reset_unit_below_pixmaps(void);
 
-void assign_battlegroup(int battlegroup);
-void select_battlegroup(int battlegroup);
-void add_unit_to_battlegroup(int battlegroup);
-
 extern Atom         wm_delete_window;
 extern Display     *display;
 extern int          display_depth;
@@ -38,7 +34,7 @@ extern GC           font_gc;
 extern GC           prod_font_gc;
 extern Pixmap       gray50;
 extern Pixmap       gray25;
-#define single_tile_pixmap (mapview.single_tile->pixmap)
+#define single_tile_pixmap (mapview_canvas.single_tile->pixmap)
 extern Widget       map_vertical_scrollbar;
 extern Widget       map_horizontal_scrollbar;
 extern Widget       left_column_form;

@@ -2,54 +2,36 @@
 
 name = _("Irish")
 plural = _("?plural:Irish")
-groups=_("Medieval"), _("Modern"), _("European")
-legend=_("Ireland held out against the Romans and Vikings but was\
- conquered by the Normans in 1171.  It was ruled by the English until 1922\
- when most of the country was granted limited autonomy, becoming a republic\
- in 1949.  The North of Ireland was settled in the 17th century by Scottish\
- and English planters and is now part of the United Kingdom.")
+class=_("Modern")
+legend=_("Ireland held out against the Romans and Vikings but was \
+conquered by the Normans in 1171.  It was ruled by the English until 1922 \
+when most of the country was granted limited autonomy, becoming a republic \
+in 1949.  The North of Ireland was settled in the 17th century by Scottish \
+and English planters and is now part of the United Kingdom.")
 
-leader =
- "Brian Boru",
- "Eamon de Valera",
- "Grace O'Malley",
- "Edmund Burke",
- "Daniel O'Connell",
- "Charles Stuart Parnell",
- "Constance Markievicz",
- "Theobald Wolfe Tone",
- "Gormlaith",
- "Michael Collins",
- "Aoife MacMurrough",
- "Sean Lemass",
- "W.T. Cosgrave",
- "Turlough O'Connor",
- "Sean MacBride",
- "John Redmond",
- "Henry Grattan",
- "Wellington",
- "Jack Lynch",
- "Mary McSwiney",
- "Muircheartach MacLochlainn",
- "Tiernan O'Rourke"
-leader_sex = "Male", "Male", "Female", "Male", "Male", "Male", "Female",
- "Male", "Female", "Male", "Female", "Male", "Male", "Male", "Male", "Male",
- "Male", "Male", "Male", "Female", "Male", "Male"
-
-; See doc/README.nations for the current Freeciv policy on leaders
-
-; "Hanna Sheehy-Skeffington", "Padraig Pearse", "Jim Larkin",
-; "Augusta Gregory", "Maud Gonne", "Michael Davitt", "James Connolly",
-; "O'Sullivan Beara", "Robert Emmett", "Anne Devlin", "Kathleen Lynn", 
-; "W.B. Yeats", "Kathleen Clarke", "Anne Bonny", "Alice Kyteler"
-
-; "Female", "Male", "Male", "Female", "Female",
-; "Male", "Male", "Male", "Male", "Female", "Female", "Male", 
-; "Female", "Female", "Female"
-
-flag="ireland"
+leader = "Brian Boru", "Eamon de Valera", "Grace O'Malley",
+ "Hanna Sheehy-Skeffington", "Edmund Burke", "Daniel O'Connell",
+ "Charles Stuart Parnell", "Constance Markievicz", "Theobald Wolfe Tone",
+ "Padraig Pearse", "Jim Larkin", "Lady Gregory", "Gormlaith", "Maud Gonne",
+ "Michael Davitt", "Michael Collins", "James Connolly", "O'Sullivan Beara",
+ "Aoife MacMurrough", "Robert Emmett", "Anne Devlin", "Dr. Kathleen Lynn",
+ "Sean Lemass", "W.T. Cosgrave", "Turlough O'Connor", "Sean MacBride",
+ "W.B. Yeats", "John Redmond", "Henry Grattan", "Wellington", "Jack Lynch",
+ "Mary McSwiney", "Kathleen Clarke", "Anne Bonny", "Alice Kyteler",
+ "Muircheartach MacLochlainn", "Tiernan O'Rourke"
+leader_sex = "Male", "Male", "Female",
+ "Female", "Male", "Male",
+ "Male", "Female", "Male",
+ "Male", "Male", "Female", "Female", "Female",
+ "Male", "Male", "Male", "Male",
+ "Female", "Male", "Female", "Female",
+ "Male", "Male", "Male", "Male",
+ "Male", "Male", "Male", "Male", "Male",
+ "Female", "Female", "Female", "Female",
+ "Male", "Male"
+flag="f.ireland"
 flag_alt = "-"
-city_style = "Celtic"
+city_style = "European"
 
 ruler_titles = { "government",      "male_title",      "female_title"
                  "Despotism",       _("Chieftain"),    _("Chieftain")
@@ -60,11 +42,10 @@ ruler_titles = { "government",      "male_title",      "female_title"
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
-
-; Similar flags
-conflicts_with="italian"
+tech_goals = "Ceremonial Burial", "Literacy", "The Republic", "Engineering",
+ "Monotheism", "Gunpowder", "Railroad", "Explosives", "Computers"
+wonder = "Marco Polo's Embassy"
+government = "Democracy"
 civilwar_nations = "cornish", "english", "scottish", "welsh"
 
 cities =

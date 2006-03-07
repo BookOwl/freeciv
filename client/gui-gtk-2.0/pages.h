@@ -15,13 +15,9 @@
 
 #include <gtk/gtk.h>
 
-#include "shared.h"		/* bool type */
-
 #include "pages_g.h"
 
 extern GtkWidget *start_message_area;
-extern GtkWidget *ready_button;
-extern GtkTreeViewColumn *rating_col, *record_col;
 
 GtkWidget *create_main_page(void);
 GtkWidget *create_start_page(void);

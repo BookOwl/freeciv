@@ -51,7 +51,10 @@
 #include "mapctrl.h"
 #include "gui_main.h"
 
-extern HCURSOR cursors[];
+extern HCURSOR goto_cursor;
+extern HCURSOR drop_cursor;
+extern HCURSOR nuke_cursor;
+extern HCURSOR patrol_cursor;
 
 HWND popit_popup=NULL;
 static bool popit_is_orders;
@@ -60,13 +63,7 @@ static bool popit_is_orders;
 *************************************************************************/
 void map_handle_move(int window_x, int window_y)
 {
-  struct tile *ptile = NULL;
-
   update_line(window_x, window_y);
-
-  ptile = canvas_pos_to_tile(window_x, window_y);
-  handle_mouse_cursor(ptile);
-  hover_tile = ptile;
 }
 
 /*************************************************************************
@@ -91,7 +88,7 @@ static LONG CALLBACK popit_proc(HWND hwnd,UINT message,
       cross_list = fcwin_get_user_data(hwnd);
       if (cross_list) {
 	  while (*cross_list != NULL) {
-	    refresh_tile_mapcanvas(*cross_list, TRUE, TRUE);
+	    refresh_tile_mapcanvas(*cross_list, TRUE);
 	    cross_list++;
 	  }
       }
@@ -125,7 +122,7 @@ static void popit(int x, int y, struct tile *ptile)
     popit_popup=NULL;
   }
   
-  if (client_tile_get_known(ptile) < TILE_KNOWN_FOGGED)
+  if (tile_get_known(ptile) < TILE_KNOWN_FOGGED)
     return;
   
   popup=fcwin_create_layouted_window(popit_proc,NULL,WS_POPUP|WS_BORDER,
@@ -170,9 +167,9 @@ static void popit(int x, int y, struct tile *ptile)
 **************************************************************************/
 static LONG CALLBACK map_wnd_proc(HWND hwnd,UINT message,WPARAM wParam, LPARAM lParam)
 {
+  HDC hdc;
   PAINTSTRUCT ps;
   struct tile *ptile;
-
   switch(message) {
   case WM_CREATE:
     break;
@@ -229,17 +226,17 @@ static LONG CALLBACK map_wnd_proc(HWND hwnd,UINT message,WPARAM wParam, LPARAM l
       SetCursor (LoadCursor(NULL, IDC_ARROW));
       break;
     case HOVER_PATROL:
-      SetCursor (cursors[CURSOR_PATROL]);
+      SetCursor (patrol_cursor);
       break;
     case HOVER_GOTO:
     case HOVER_CONNECT:
-      SetCursor (cursors[CURSOR_GOTO]);
+      SetCursor (goto_cursor);
       break;
     case HOVER_NUKE:
-      SetCursor (cursors[CURSOR_NUKE]);
+      SetCursor (nuke_cursor);
       break;
     case HOVER_PARADROP:
-      SetCursor (cursors[CURSOR_PARADROP]);
+      SetCursor (drop_cursor);
       break;
     }
     break;
@@ -249,11 +246,9 @@ static LONG CALLBACK map_wnd_proc(HWND hwnd,UINT message,WPARAM wParam, LPARAM l
     }
     break;
   case WM_PAINT:
-    BeginPaint(hwnd, (LPPAINTSTRUCT)&ps);
-    map_expose(ps.rcPaint.left, ps.rcPaint.top,
-	       ps.rcPaint.right - ps.rcPaint.left,
-	       ps.rcPaint.bottom - ps.rcPaint.top);
-    EndPaint(hwnd, (LPPAINTSTRUCT)&ps);
+    hdc=BeginPaint(hwnd,(LPPAINTSTRUCT)&ps);
+    map_expose(hdc); 
+    EndPaint(hwnd,(LPPAINTSTRUCT)&ps);
     break;
   default:
     return DefWindowProc(hwnd,message,wParam,lParam);

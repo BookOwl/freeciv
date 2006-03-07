@@ -7,7 +7,7 @@ CSUBDIRS =
 endif
 
 if SERVER
-SSUBDIRS = ai dependencies server
+SSUBDIRS = ai server
 else
 SSUBDIRS =
 endif
@@ -31,9 +31,11 @@ endif
 
 SUBDIRS=	$(DSUBDIRS) intl utility common tests $(SSUBDIRS) $(CSUBDIRS) po doc $(MSUBDIRS)
 
-EXTRA_DIST=	autogen.sh 			\
+EXTRA_DIST=	acconfig.old			\
+		autogen.sh 			\
 		config.mac.h			\
 		configure.ac			\
+		configure.in			\
 		diff_ignore			\
 		amiga/Freeciv.start		\
 		amiga/amigaclient.c		\
@@ -64,12 +66,13 @@ EXTRA_DIST=	autogen.sh 			\
 		m4/freetype2.m4			\
 		m4/gettext.m4			\
 		m4/gettimeofday.m4		\
-		m4/ggz.m4			\
 		m4/glib-2.0.m4			\
 		m4/glib-gettext.m4		\
 		m4/glib.m4			\
 		m4/glibc21.m4			\
 		m4/gtk-2.0.m4			\
+		m4/gtk.m4			\
+		m4/gtk-client.m4		\
 		m4/gtk2-client.m4		\
 		m4/iconv.m4			\
 		m4/imlib.m4			\

@@ -22,10 +22,6 @@
 
 /* $Id$ */
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -51,6 +47,7 @@
 #include "SDL.h"
 #include "SDL_endian.h"
 #include "SDL_ttf.h"
+#include "graphics.h"
 
 #ifdef HAVE_MMX1
 #include "mmx.h"

@@ -22,17 +22,10 @@ bool server_handle_packet(enum packet_type type, void *packet,
   switch(type) {
   case PACKET_NATION_SELECT_REQ:
     handle_nation_select_req(pplayer,
-      ((struct packet_nation_select_req *)packet)->player_no,
       ((struct packet_nation_select_req *)packet)->nation_no,
       ((struct packet_nation_select_req *)packet)->is_male,
       ((struct packet_nation_select_req *)packet)->name,
       ((struct packet_nation_select_req *)packet)->city_style);
-    return TRUE;
-
-  case PACKET_PLAYER_READY:
-    handle_player_ready(pplayer,
-      ((struct packet_player_ready *)packet)->player_no,
-      ((struct packet_player_ready *)packet)->is_ready);
     return TRUE;
 
   case PACKET_CHAT_MSG_REQ:
@@ -94,7 +87,7 @@ bool server_handle_packet(enum packet_type type, void *packet,
   case PACKET_CITY_OPTIONS_REQ:
     handle_city_options_req(pplayer,
       ((struct packet_city_options_req *)packet)->city_id,
-      ((struct packet_city_options_req *)packet)->options);
+      ((struct packet_city_options_req *)packet)->value);
     return TRUE;
 
   case PACKET_CITY_REFRESH:
@@ -112,9 +105,8 @@ bool server_handle_packet(enum packet_type type, void *packet,
       ((struct packet_city_name_suggestion_req *)packet)->unit_id);
     return TRUE;
 
-  case PACKET_PLAYER_PHASE_DONE:
-    handle_player_phase_done(pplayer,
-      ((struct packet_player_phase_done *)packet)->turn);
+  case PACKET_PLAYER_TURN_DONE:
+    handle_player_turn_done(pplayer);
     return TRUE;
 
   case PACKET_PLAYER_RATES:
@@ -176,24 +168,25 @@ bool server_handle_packet(enum packet_type type, void *packet,
       ((struct packet_unit_establish_trade *)packet)->unit_id);
     return TRUE;
 
-  case PACKET_UNIT_BATTLEGROUP:
-    handle_unit_battlegroup(pplayer,
-      ((struct packet_unit_battlegroup *)packet)->unit_id,
-      ((struct packet_unit_battlegroup *)packet)->battlegroup);
-    return TRUE;
-
   case PACKET_UNIT_HELP_BUILD_WONDER:
     handle_unit_help_build_wonder(pplayer,
       ((struct packet_unit_help_build_wonder *)packet)->unit_id);
+    return TRUE;
+
+  case PACKET_UNIT_GOTO:
+    handle_unit_goto(pplayer,
+      ((struct packet_unit_goto *)packet)->unit_id,
+      ((struct packet_unit_goto *)packet)->x,
+      ((struct packet_unit_goto *)packet)->y);
     return TRUE;
 
   case PACKET_UNIT_ORDERS:
     handle_unit_orders(pplayer, packet);
     return TRUE;
 
-  case PACKET_UNIT_AUTOSETTLERS:
-    handle_unit_autosettlers(pplayer,
-      ((struct packet_unit_autosettlers *)packet)->unit_id);
+  case PACKET_UNIT_AUTO:
+    handle_unit_auto(pplayer,
+      ((struct packet_unit_auto *)packet)->unit_id);
     return TRUE;
 
   case PACKET_UNIT_LOAD:
@@ -310,45 +303,6 @@ bool server_handle_packet(enum packet_type type, void *packet,
     handle_spaceship_place(pplayer,
       ((struct packet_spaceship_place *)packet)->type,
       ((struct packet_spaceship_place *)packet)->num);
-    return TRUE;
-
-  case PACKET_SINGLE_WANT_HACK_REQ:
-    handle_single_want_hack_req(pconn, packet);
-    return TRUE;
-
-  case PACKET_EDIT_MODE:
-    handle_edit_mode(pconn,
-      ((struct packet_edit_mode *)packet)->state);
-    return TRUE;
-
-  case PACKET_EDIT_TILE:
-    handle_edit_tile(pconn,
-      ((struct packet_edit_tile *)packet)->x,
-      ((struct packet_edit_tile *)packet)->y,
-      ((struct packet_edit_tile *)packet)->terrain,
-      ((struct packet_edit_tile *)packet)->resource,
-      ((struct packet_edit_tile *)packet)->special);
-    return TRUE;
-
-  case PACKET_EDIT_UNIT:
-    handle_edit_unit(pconn, packet);
-    return TRUE;
-
-  case PACKET_EDIT_CREATE_CITY:
-    handle_edit_create_city(pconn,
-      ((struct packet_edit_create_city *)packet)->owner,
-      ((struct packet_edit_create_city *)packet)->x,
-      ((struct packet_edit_create_city *)packet)->y);
-    return TRUE;
-
-  case PACKET_EDIT_CITY_SIZE:
-    handle_edit_city_size(pconn,
-      ((struct packet_edit_city_size *)packet)->id,
-      ((struct packet_edit_city_size *)packet)->size);
-    return TRUE;
-
-  case PACKET_EDIT_PLAYER:
-    handle_edit_player(pconn, packet);
     return TRUE;
 
   default:

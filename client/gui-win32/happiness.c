@@ -28,10 +28,10 @@
 #include "text.h"
 #include "tilespec.h"
 
+#include "graphics.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "happiness.h"
-#include "sprite.h"
 
 #define HAPPINESS_PIX_WIDTH 23
 
@@ -64,8 +64,8 @@ static void refresh_happiness_bitmap(HBITMAP bmp,
 **************************************************************************/
 static void bmp_row_minsize(POINT *minsize, void *data)
 {
-  minsize->x=HAPPINESS_PIX_WIDTH*tileset_small_sprite_width(tileset);
-  minsize->y=tileset_small_sprite_height(tileset);
+  minsize->x=HAPPINESS_PIX_WIDTH*SMALL_TILE_WIDTH;
+  minsize->y=SMALL_TILE_HEIGHT;
 }
 
 /**************************************************************************
@@ -106,8 +106,8 @@ struct happiness_dlg *create_happiness_box(struct city *pcity,
   for(i=0;i<NUM_HAPPINESS_MODIFIERS;i++) {
     dlg->mod_bmp[i]=
       CreateCompatibleBitmap(hdc,
-			     HAPPINESS_PIX_WIDTH*tileset_small_sprite_width(tileset),
-			     tileset_small_sprite_height(tileset));
+			     HAPPINESS_PIX_WIDTH*SMALL_TILE_WIDTH,
+			     SMALL_TILE_HEIGHT);
   }
   ReleaseDC(win,hdc);
   return dlg;
@@ -137,8 +137,8 @@ void repaint_happiness_box(struct happiness_dlg *dlg, HDC hdc)
   for(i=0;i<NUM_HAPPINESS_MODIFIERS;i++) {
     old=SelectObject(hdcsrc,dlg->mod_bmp[i]);
     BitBlt(hdc,dlg->mod_bmp_pos[i].x,dlg->mod_bmp_pos[i].y,
-	   HAPPINESS_PIX_WIDTH*tileset_small_sprite_width(tileset),
-	   tileset_small_sprite_height(tileset),hdcsrc,0,0,SRCCOPY);
+	   HAPPINESS_PIX_WIDTH*SMALL_TILE_WIDTH,
+	   SMALL_TILE_HEIGHT,hdcsrc,0,0,SRCCOPY);
     SelectObject(hdcsrc,old);
   }
   DeleteDC(hdcsrc);
@@ -174,11 +174,12 @@ static void happiness_dialog_update_cities(struct happiness_dlg
   int nleft = sizeof(buf);
 
   struct city *pcity = pdialog->pcity;
-  struct player *pplayer = pcity->owner;
-  int cities = city_list_size(pplayer->cities);
-  int content = get_player_bonus(pcity->owner, EFT_CITY_UNHAPPY_SIZE);
-  int basis = get_player_bonus(game.player_ptr, EFT_EMPIRE_SIZE_MOD);
-  int step = get_player_bonus(game.player_ptr, EFT_EMPIRE_SIZE_STEP);
+  struct player *pplayer = &game.players[pcity->owner];
+  struct government *g = get_gov_pcity(pcity);
+  int cities = city_list_size(&pplayer->cities);
+  int content = game.unhappysize;
+  int basis = game.cityfactor + g->empire_size_mod;
+  int step = g->empire_size_inc;
   int excess = cities - basis;
   int penalty = 0;
 
@@ -217,7 +218,7 @@ static void happiness_dialog_update_luxury(struct happiness_dlg
   struct city *pcity = pdialog->pcity;
 
   my_snprintf(bptr, nleft, _("Luxury: %d total."),
-              pcity->prod[O_LUXURY]);
+              pcity->luxury_total);
 
   SetWindowText(pdialog->mod_label[LUXURIES], buf);
 }
@@ -241,7 +242,7 @@ static void happiness_dialog_update_units(struct happiness_dlg *pdialog)
   int nleft = sizeof(buf);
   struct city *pcity = pdialog->pcity;
   struct government *g = get_gov_pcity(pcity);
-  int mlmax = get_city_bonus(pcity, EFT_MARTIAL_LAW_MAX);
+  int mlmax = g->martial_law_max;
   int uhcfac = g->unit_happy_cost_factor;
 
   my_snprintf(bptr, nleft, _("Units: "));
@@ -258,8 +259,7 @@ static void happiness_dialog_update_units(struct happiness_dlg *pdialog)
                                    "%d units maximum", mlmax), mlmax);
     bptr = end_of_strn(bptr, &nleft);
 
-    my_snprintf(bptr, nleft, _("%d per unit). "),
-		get_city_bonus(pcity, EFT_MARTIAL_LAW_EACH));
+    my_snprintf(bptr, nleft, _("%d per unit). "), g->martial_law_per);
   }
   else if (uhcfac > 0) {
     my_snprintf(bptr, nleft,
@@ -295,21 +295,21 @@ static void refresh_happiness_bitmap(HBITMAP bmp,
   int i;
   struct citizen_type citizens[MAX_CITY_SIZE];
   int num_citizens = pcity->size;
-  int pix_width = HAPPINESS_PIX_WIDTH * tileset_small_sprite_width(tileset);
-  int offset = MIN(tileset_small_sprite_width(tileset), pix_width / num_citizens);
-  /* int true_pix_width = (num_citizens - 1) * offset + tileset_small_sprite_width(tileset); */
+  int pix_width = HAPPINESS_PIX_WIDTH * SMALL_TILE_WIDTH;
+  int offset = MIN(SMALL_TILE_WIDTH, pix_width / num_citizens);
+  /* int true_pix_width = (num_citizens - 1) * offset + SMALL_TILE_WIDTH; */
   hdc=CreateCompatibleDC(NULL);
   old=SelectObject(hdc,bmp);
   rc.left=0;
   rc.top=0;
   rc.right=pix_width;
-  rc.bottom=tileset_small_sprite_height(tileset);
+  rc.bottom=SMALL_TILE_HEIGHT;
   FillRect(hdc,&rc,(HBRUSH)GetClassLong(root_window,GCL_HBRBACKGROUND));
 
   get_city_citizen_types(pcity, index, citizens);
 
   for (i = 0; i < num_citizens; i++) {
-    draw_sprite(get_citizen_sprite(tileset, citizens[i], i, pcity),
+    draw_sprite(get_citizen_sprite(citizens[i], i, pcity),
 		hdc, i * offset, 0);
   }
 

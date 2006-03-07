@@ -7,6 +7,9 @@
 if CLIENT_GUI_SDL
 GUI_SUBDIR = gui-sdl
 endif
+if CLIENT_GUI_GTK
+GUI_SUBDIR = gui-gtk
+endif
 if CLIENT_GUI_GTK_2_0
 GUI_SUBDIR = gui-gtk-2.0
 endif
@@ -27,10 +30,23 @@ GUI_SUBDIR = gui-ftwl
 LIBFTWL = ../utility/ftwl/libftwl.a
 endif
 
+ALL_ESD_FILES=audio_esd.c audio_esd.h
 ALL_SDL_FILES=audio_sdl.c audio_sdl.h
+ALL_ALSA_FILES=audio_alsa.c audio_alsa.h
+ALL_WINMM_FILES=audio_winmm.c audio_winmm.h
+ALL_AMIGA_FILES=audio_amiga.c audio_amiga.h
 
+if ESD
+ESD_FILES=$(ALL_ESD_FILES)
+endif
 if SDL
 SDL_FILES=$(ALL_SDL_FILES)
+endif
+if ALSA
+ALSA_FILES=$(ALL_ALSA_FILES)
+endif
+if WINMM
+WINMM_FILES=$(ALL_WINMM_FILES)
 endif
 
 EXTRA_DIST= 	gui-mui/autogroupclass.c         \
@@ -101,7 +117,11 @@ EXTRA_DIST= 	gui-mui/autogroupclass.c         \
 		gui-mui/worklistclass.c          \
 		gui-mui/worklistclass.h          \
 		\
-		$(ALL_SDL_FILES)
+		$(ALL_ESD_FILES)                 \
+		$(ALL_SDL_FILES)                 \
+		$(ALL_ALSA_FILES)                \
+		$(ALL_WINMM_FILES)		 \
+		$(ALL_AMIGA_FILES)
 
 
 ## This is usually false, so "include" is not recursed into 
@@ -118,7 +138,7 @@ SUBDIRS = $(GUI_SUBDIR) $(CLI_INCLUDE) agents
 
 bin_PROGRAMS = civclient
 
-AM_CPPFLAGS = -I$(top_srcdir)/utility -I$(srcdir)/include -I$(top_srcdir)/common -I$(top_srcdir)/common/aicore -I../intl -I$(srcdir)/agents @SOUND_CFLAGS@ @LIBGGZ_INCLUDES@ @GGZMOD_INCLUDES@ @GGZ_GTK_INCLUDES@
+AM_CPPFLAGS = -I$(top_srcdir)/utility -I$(srcdir)/include -I$(top_srcdir)/common -I$(top_srcdir)/common/aicore -I../intl -I$(srcdir)/agents @SOUND_CFLAGS@
 
 ## Above, note -I../intl instead of -I$(top_srdir/intl) is deliberate.
 
@@ -141,14 +161,8 @@ civclient_SOURCES = $(ESD_FILES) $(SDL_FILES) $(ALSA_FILES) $(WINMM_FILES) \
 	climap.h	\
 	clinet.c	\
 	clinet.h	\
-	colors_common.c		\
-	colors_common.h		\
 	control.c	\
 	control.h	\
-	editor.c 		\
-	editor.h 		\
-	ggzclient.c	\
-	ggzclient.h	\
 	goto.c		\
 	goto.h		\
 	helpdata.c	\
@@ -159,8 +173,6 @@ civclient_SOURCES = $(ESD_FILES) $(SDL_FILES) $(ALSA_FILES) $(WINMM_FILES) \
 	mapview_common.h \
 	messagewin_common.c \
 	messagewin_common.h \
-	overview_common.c	\
-	overview_common.h	\
 	packhand.c	\
 	packhand.h	\
 	packhand_gen.h	\
@@ -171,14 +183,8 @@ civclient_SOURCES = $(ESD_FILES) $(SDL_FILES) $(ALSA_FILES) $(WINMM_FILES) \
 	options.h	\
 	repodlgs_common.c \
 	repodlgs_common.h \
-	reqtree.c \
-	reqtree.h \
-	servers.c		\
-	servers.h		\
 	text.c	\
 	text.h	\
-	themes_common.c	\
-	themes_common.h	\
 	tilespec.c	\
 	tilespec.h	\
 	audio.c         \
@@ -186,7 +192,7 @@ civclient_SOURCES = $(ESD_FILES) $(SDL_FILES) $(ALSA_FILES) $(WINMM_FILES) \
 	audio_none.c    \
 	audio_none.h
 
-civclient_LDFLAGS = @CLIENT_LDFLAGS@ @GGZMOD_LDFLAGS@
+civclient_LDFLAGS = @CLIENT_LDFLAGS@
 fc_civclient_libs =	../utility/libcivutility.a	\
 			$(LIBFTWL)			\
 			../common/libcivcommon.a	\
@@ -195,7 +201,7 @@ fc_civclient_libs =	../utility/libcivutility.a	\
 		 	@gui_sources@/libguiclient.a
 civclient_DEPENDENCIES = $(fc_civclient_libs)
 civclient_LDADD        = $(fc_civclient_libs) $(fc_civclient_libs) \
-	@INTLLIBS@ @CLIENT_LIBS@ @SOUND_LIBS@ @LIB_GGZMOD@
+	@INTLLIBS@ @CLIENT_LIBS@ @SOUND_LIBS@
 desktopfiledir = $(prefix)/share/applications
 desktopfile_DATA = \
 	freeciv.desktop

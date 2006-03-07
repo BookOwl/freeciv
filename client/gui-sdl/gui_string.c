@@ -24,21 +24,23 @@
 #endif
 
 #include <assert.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include <SDL/SDL.h>
 
-/* utility */
 #include "fcintl.h"
 #include "log.h"
+#include "support.h"
 
-/* gui-sdl */
-#include "graphics.h"
-#include "gui_iconv.h"
 #include "gui_main.h"
-#include "themespec.h"
+#include "gui_mem.h"
+#include "graphics.h"
 #include "unistring.h"
-
 #include "gui_string.h"
+
+#define DEFAULT_PTSIZE	18
+#define FONT_NAME "stdfont.ttf"
 
 /* =================================================== */
 
@@ -57,35 +59,6 @@ static TTF_Font *load_font(Uint16 ptsize);
 static SDL_Surface *create_str16_surf(SDL_String16 * pString);
 static SDL_Surface *create_str16_multi_surf(SDL_String16 * pString);
 
-/**************************************************************************
-  ...
-**************************************************************************/
-#ifdef SMALL_SCREEN
-int adj_font(int size) {
-  switch(size) {
-    case 24:
-      return 12;
-    case 20:
-      return 12;
-    case 16:
-      return 10;      
-    case 14:
-      return 8;
-    case 13:
-      return 8;
-    case 12:
-      return 8;
-    case 11:
-      return 7;
-    case 10:
-      return 7;
-    case 8:
-      return 6;
-    default:
-      return size;    
-  }
-}
-#endif
 
 /**************************************************************************
   ...
@@ -123,14 +96,14 @@ SDL_Rect str16size(SDL_String16 *pString16)
       while (UniTexts[count]) {
         if (TTF_SizeUNICODE(pString16->font, UniTexts[count], &ww, &hh) < 0) {
           do {
-	    FC_FREE(UniTexts[count]);
+	    FREE(UniTexts[count]);
             count++;
 	  } while(UniTexts[count]);
 	  die("TTF_SizeUNICODE return ERROR !");
         }
         w = MAX(w, ww);
         h += hh;
-        FC_FREE(UniTexts[count]);
+        FREE(UniTexts[count]);
         count++;
       }
     } else {  
@@ -155,22 +128,22 @@ SDL_Rect str16size(SDL_String16 *pString16)
 /**************************************************************************
   Create string16 struct with ptsize font.
   Font will be loaded or aliased with existing font of that size.
-  pInTextString must be allocated in memory (MALLOC/fc_calloc)
+  pInTextString must be allocated in memory (MALLOC/CALLOC)
 **************************************************************************/
 SDL_String16 * create_string16(Uint16 *pInTextString,
 					size_t n_alloc, Uint16 ptsize)
 {
-  SDL_String16 *str = fc_calloc(1, sizeof(SDL_String16));
+  SDL_String16 *str = MALLOC(sizeof(SDL_String16));
 
   if (!ptsize) {
-    str->ptsize = theme_default_font_size(theme);
+    str->ptsize = DEFAULT_PTSIZE;
   } else {
     str->ptsize = ptsize;
   }
   
   if ((str->font = load_font(str->ptsize)) == NULL) {
     freelog(LOG_ERROR, _("Error in create_string16: Aborting ..."));
-    FC_FREE(str);
+    FREE(str);
     return str;
   }
 
@@ -185,7 +158,7 @@ SDL_String16 * create_string16(Uint16 *pInTextString,
   str->fgcol.unused = 0xff;
   str->render = 2;		/* oh... alpha :) */
 
-  /* pInTextString must be allocated in memory (MALLOC/fc_calloc) */
+  /* pInTextString must be allocated in memory (MALLOC/CALLOC) */
   str->text = pInTextString;
   str->n_alloc = n_alloc;
   
@@ -209,7 +182,7 @@ SDL_String16 * copy_chars_to_string16(SDL_String16 *pString,
     /* allocated more if this is only a small increase on before: */
     size_t n1 = (3 * pString->n_alloc) / 2;
     pString->n_alloc = (n > n1) ? n : n1;
-    pString->text = fc_realloc(pString->text, pString->n_alloc);
+    pString->text = REALLOC(pString->text, pString->n_alloc);
   }
   
   convertcopy_to_utf16(pString->text, pString->n_alloc, pCharString);
@@ -320,7 +293,7 @@ static SDL_Surface *create_str16_multi_surf(SDL_String16 * pString)
     count++;
   }
 
-  pTmp = fc_calloc(count, sizeof(SDL_Surface *));
+  pTmp = CALLOC(count, sizeof(SDL_Surface *));
 
   for (i = 0; i < count; i++) {
     pString->text = UniTexts[i];
@@ -385,11 +358,11 @@ static SDL_Surface *create_str16_multi_surf(SDL_String16 * pString)
 
   /* Free Memmory */
   for (i = 0; i < count; i++) {
-    FC_FREE(UniTexts[i]);
-    FREESURFACE(pTmp[i]);
+    FREE(UniTexts[i]);
+    SDL_FreeSurface(pTmp[i]);
   }
   
-  FC_FREE(pTmp);
+  FREE(pTmp);
 
   return pText;
 }
@@ -619,20 +592,15 @@ static TTF_Font * load_font(Uint16 ptsize)
   }
 
   if(!pFont_with_FullPath) {
-    const char *path = theme_font_filename(theme);
-#if 0    
+    char *path = datafilename(FONT_NAME);
     if(!path) {
-      path = datafilename("stdfont.ttf");
-      if (!path) {
       die(_("Couldn't find stdfont.ttf file. Please link/copy/move any"
             "unicode ttf font to data dir as stdfont.ttf"));
     }
-    }
-#endif
     pFont_with_FullPath = mystrdup(path);
     assert(pFont_with_FullPath != NULL);
   }
-
+  
   /* Load Font */
   if ((font_tmp = TTF_OpenFont(pFont_with_FullPath, ptsize)) == NULL) {
     freelog(LOG_ERROR,
@@ -644,7 +612,7 @@ static TTF_Font * load_font(Uint16 ptsize)
   /* add new font to list */
   if (Sizeof_Font_TAB == 0) {
     Sizeof_Font_TAB++;
-    Font_TAB_TMP = fc_calloc(1, sizeof(struct TTF_Font_Chain));
+    Font_TAB_TMP = MALLOC(sizeof(struct TTF_Font_Chain));
     Font_TAB = Font_TAB_TMP;
   } else {
     /* Go to end of chain */
@@ -653,14 +621,13 @@ static TTF_Font * load_font(Uint16 ptsize)
       Font_TAB_TMP = Font_TAB_TMP->next;
 
     Sizeof_Font_TAB++;
-    Font_TAB_TMP->next = fc_calloc(1, sizeof(struct TTF_Font_Chain));
+    Font_TAB_TMP->next = MALLOC(sizeof(struct TTF_Font_Chain));
     Font_TAB_TMP = Font_TAB_TMP->next;
   }
 
   Font_TAB_TMP->ptsize = ptsize;
   Font_TAB_TMP->count = 1;
   Font_TAB_TMP->font = font_tmp;
-  Font_TAB_TMP->next = NULL;
 
   return font_tmp;
 }
@@ -711,14 +678,14 @@ void unload_font(Uint16 ptsize)
   }
   Font_TAB_TMP->next = NULL;
   Sizeof_Font_TAB--;
-  FC_FREE(Font_TAB_TMP);
+  FREE(Font_TAB_TMP);
 }
 
 void free_font_system(void)
 {
   struct TTF_Font_Chain *Font_TAB_TMP;
     
-  FC_FREE(pFont_with_FullPath);
+  FREE(pFont_with_FullPath);
   while(Font_TAB) {
     if (Font_TAB->next) {
       Font_TAB_TMP = Font_TAB;
@@ -726,12 +693,12 @@ void free_font_system(void)
       if(Font_TAB_TMP->font) {
 	TTF_CloseFont(Font_TAB_TMP->font);
       }
-      FC_FREE(Font_TAB_TMP);
+      FREE(Font_TAB_TMP);
     } else {
       if(Font_TAB->font) {
 	TTF_CloseFont(Font_TAB->font);
       }
-      FC_FREE(Font_TAB);
+      FREE(Font_TAB);
     }
   }
   

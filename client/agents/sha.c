@@ -16,11 +16,8 @@
 #endif
 
 #include "log.h"
-#include "support.h"
-
-#include "game.h"
 #include "map.h"
-#include "unitlist.h"
+#include "support.h"
 
 #include "agents.h"
 
@@ -35,7 +32,7 @@ allready got the new ones.
 **************************************************************************/
 
 static struct tile *previous_tiles = NULL;
-static struct unit_list *previous_units;
+static struct unit_list previous_units;
 
 /**************************************************************************
 ...
@@ -56,7 +53,7 @@ static void sha_tile_update(struct tile *ptile)
 static void sha_unit_change(int id)
 {
   struct unit *punit = find_unit_by_id(id);
-  struct unit *pold_unit = unit_list_find(previous_units, id);
+  struct unit *pold_unit = unit_list_find(&previous_units, id);
 
   freelog(LOG_DEBUG, "sha got unit: %d", id);
 
@@ -70,12 +67,13 @@ static void sha_unit_change(int id)
 static void sha_unit_new(int id)
 {
   struct unit *punit = find_unit_by_id(id);
-  struct unit *pold_unit = create_unit_virtual(punit->owner, NULL, 0, 0);
+  struct unit *pold_unit = create_unit_virtual(get_player(punit->owner),
+					       NULL, 0, 0);
 
   freelog(LOG_DEBUG, "sha got unit: %d", id);
 
   *pold_unit = *punit;
-  unit_list_prepend(previous_units, pold_unit);
+  unit_list_insert(&previous_units, pold_unit);
 }
 
 /**************************************************************************
@@ -83,12 +81,12 @@ static void sha_unit_new(int id)
 **************************************************************************/
 static void sha_unit_remove(int id)
 {
-  struct unit *pold_unit = unit_list_find(previous_units, id);;
+  struct unit *pold_unit = unit_list_find(&previous_units, id);;
 
   freelog(LOG_DEBUG, "sha got unit: %d", id);
 
   assert(pold_unit);
-  unit_list_unlink(previous_units, pold_unit);
+  unit_list_unlink(&previous_units, pold_unit);
 }
 
 /**************************************************************************
@@ -98,10 +96,10 @@ void simple_historian_init(void)
 {
   struct agent self;
 
-  previous_tiles = fc_malloc(MAP_INDEX_SIZE * sizeof(*previous_tiles));
-  memset(previous_tiles, 0, MAP_INDEX_SIZE * sizeof(*previous_tiles));
+  previous_tiles = fc_malloc(MAX_MAP_INDEX * sizeof(*previous_tiles));
+  memset(previous_tiles, 0, MAX_MAP_INDEX * sizeof(*previous_tiles));
 
-  previous_units = unit_list_new();
+  unit_list_init(&previous_units);
 
   memset(&self, 0, sizeof(self));
   sz_strlcpy(self.name, "Simple Historian");
@@ -115,14 +113,6 @@ void simple_historian_init(void)
   self.tile_callbacks[CB_CHANGE] = sha_tile_update;
   self.tile_callbacks[CB_NEW] = sha_tile_update;
   register_agent(&self);
-}
-
-/**************************************************************************
-...
-**************************************************************************/
-void simple_historian_done(void)
-{
-  unit_list_free(previous_units);
 }
 
 /**************************************************************************
@@ -142,5 +132,5 @@ struct tile *sha_tile_recall(struct tile *ptile)
 **************************************************************************/
 struct unit *sha_unit_recall(int id)
 {
-  return unit_list_find(previous_units, id);
+  return unit_list_find(&previous_units, id);
 }

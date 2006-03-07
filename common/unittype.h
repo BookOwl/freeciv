@@ -17,24 +17,56 @@
 
 #include "fc_types.h"
 
+struct Sprite;			/* opaque; client-gui specific */
+
+typedef int Unit_Type_id;
+/*
+  Above typedef replaces old "enum unit_type_id" (since no longer
+  enumerate the unit types); keep as typedef to help code be
+  self-documenting.
+
+  It could potentially be some other type; "unsigned char" would be
+  natural, since there are already built-in assumptions that values
+  are not too large (less than U_LAST = MAX_NUM_ITEMS) since they must
+  fit in 8-bit unsigned int for packets; and normal values are always
+  non-negative.  But note sometimes use (-1) for obsoleted_by and some
+  related uses, though these use already plain int rather than
+  Unit_Type_id?  (Ideally, these should probably have used U_LAST as
+  the flag value instead of (-1).)
+  
+  Decided to just use 'int' for several reasons:
+  - "natural integer type" may be faster on some platforms
+    (size advantage of using smaller type probably negligible);
+  - avoids any potential problems with (-1) values as mentioned above;
+  - avoids imposing any more limitations that there are already.
+*/
+  
 #define U_LAST MAX_NUM_ITEMS
 /*
   U_LAST is a value which is guaranteed to be larger than all
-  actual Unit_type_id values.  It is used as a flag value;
+  actual Unit_Type_id values.  It is used as a flag value;
   it can also be used for fixed allocations to ensure able
   to hold full number of unit types.
 */
 
-struct move_params {
-  bool terrain_affects; /* Move rate is subject to terrain and improvement effects */
-  bool damage_slows;    /* Damaged unit is slowed down */
+enum unit_move_type {
+  LAND_MOVING = 1, SEA_MOVING, HELI_MOVING, AIR_MOVING
 };
 
-struct unit_class {
-  Unit_Class_id id;
-  struct move_params move;
-  int hp_loss_pct;         /* Percentage of hitpoints lost each turn not in city or airbase */
+/* Classes for unit types.
+ * (These must correspond to unit_class_names[] in unit.c.)
+ */
+enum unit_class_id {
+  UCL_AIR,
+  UCL_HELICOPTER,
+  UCL_LAND,
+  UCL_MISSILE,
+  UCL_NUCLEAR,
+  UCL_SEA,
+  UCL_LAST	/* keep this last */
 };
+
+typedef enum unit_class_id Unit_Class_id;
 
 /* Unit "special effects" flags:
    Note this is now an enumerated type, and not power-of-two integers
@@ -85,8 +117,6 @@ enum unit_flag_id {
   F_BOMBARDER,        /* Has the ability to bombard */
   F_CITYBUSTER,       /* Gets double firepower against cities */
   F_NOBUILD,          /* Unit cannot be built (barb leader etc) */
-  F_BADWALLATTACKER,  /* Firepower set to 1 when attacking city wall */
-  F_BADCITYDEFENDER,  /* Firepower set to 1 and attackers x2 when in city */
   F_LAST
 };
 #define F_MAX 64
@@ -126,7 +156,6 @@ enum unit_role_id {
   L_SETTLERS,		/* can improve terrain */
   L_GAMELOSS,		/* loss results in loss of game */
   L_DIPLOMAT,		/* can do diplomat actions */
-  L_HUNTER,             /* AI hunter type unit */
   L_LAST
 };
 #define L_MAX 64
@@ -145,7 +174,6 @@ struct veteran_type {
 };
 
 struct unit_type {
-  int index;
   const char *name; /* Translated string - doesn't need freeing. */
   char name_orig[MAX_LEN_NAME];	      /* untranslated */
   char graphic_str[MAX_LEN_NAME];
@@ -154,6 +182,7 @@ struct unit_type {
   char sound_move_alt[MAX_LEN_NAME];
   char sound_fight[MAX_LEN_NAME];
   char sound_fight_alt[MAX_LEN_NAME];
+  struct Sprite *sprite;
   enum unit_move_type move_type;
   int build_cost;			/* Use wrappers to access this. */
   int pop_cost;  /* number of workers the unit contains (e.g., settlers, engineers)*/
@@ -161,21 +190,21 @@ struct unit_type {
   int defense_strength;
   int move_rate;
   int tech_requirement;
-  int impr_requirement;		/* should be Impr_type_id */
-  struct government *gov_requirement; /* may be NULL */
-  int vision_radius_sq;
+  int impr_requirement;		/* should be Impr_Type_id */
+  int vision_range;
   int transport_capacity;
   int hp;
   int firepower;
-#define U_NOT_OBSOLETED (NULL)
-  struct unit_type *obsoleted_by;
+  int obsoleted_by;
   int fuel;
 
   bv_flags flags;
   bv_roles roles;
 
   int happy_cost;  /* unhappy people in home city */
-  int upkeep[O_MAX];
+  int shield_cost; /* normal upkeep cost */
+  int food_cost;   /* settler food cost */
+  int gold_cost;   /* gold upkeep */
 
   int paratroopers_range; /* only valid for F_PARATROOPERS */
   int paratroopers_mr_req;
@@ -186,85 +215,75 @@ struct unit_type {
 
   /* Values for bombardment */
   int bombard_rate;
-
-  struct unit_class *class;
   
   char *helptext;
 };
 
 
-#define CHECK_UNIT_TYPE(ut) (assert((ut) != NULL			    \
-				    && (get_unit_type((ut)->index) == (ut))))
+extern struct unit_type unit_types[U_LAST];
 
-struct unit_type *get_unit_type(Unit_type_id id);
-struct unit_type *unit_type(const struct unit *punit);
+bool unit_type_exists(Unit_Type_id id);
+struct unit_type *get_unit_type(Unit_Type_id id);
+struct unit_type *unit_type(struct unit *punit);
 
-bool unit_type_flag(const struct unit_type *punittype, int flag);
-bool unit_flag(const struct unit *punit, enum unit_flag_id flag);
-bool unit_has_role(const struct unit_type *punittype, int role);
+bool unit_type_flag(Unit_Type_id id, int flag);
+bool unit_flag(struct unit *punit, enum unit_flag_id flag);
+bool unit_has_role(Unit_Type_id id, int role);
 
-int unit_build_shield_cost(const struct unit_type *punittype);
-int unit_buy_gold_cost(const struct unit_type *punittype,
-		       int shields_in_stock);
-int unit_disband_shields(const struct unit_type *punittype);
-int unit_pop_value(const struct unit_type *punittype);
+bool is_water_unit(Unit_Type_id id);
+bool is_air_unittype(Unit_Type_id id);
+bool is_heli_unittype(Unit_Type_id id);
+bool is_ground_unittype(Unit_Type_id id);
 
-struct unit_class *unit_class_get_by_id(int id);
-struct unit_class *get_unit_class(const struct unit_type *punittype);
-const char *unit_name(const struct unit_type *punittype);
-const char *unit_name_orig(const struct unit_type *punittype);
-const char *unit_class_name(const struct unit_class *pclass);
+int unit_build_shield_cost(Unit_Type_id id);
+int unit_buy_gold_cost(Unit_Type_id id, int shields_in_stock);
+int unit_disband_shields(Unit_Type_id id);
+int unit_pop_value(Unit_Type_id id);
 
-const char *get_unit_name(const struct unit_type *punittype);
+const char *unit_name(Unit_Type_id id);
+const char *unit_name_orig(Unit_Type_id id);
+const char *unit_class_name(Unit_Class_id id);
+
+const char *get_unit_name(Unit_Type_id id);
 const char *get_units_with_flag_string(int flag);
 
-int utype_upkeep_cost(const struct unit_type *ut, struct player *pplayer,
-                      Output_type_id otype);
-int utype_happy_cost(const struct unit_type *ut, const struct player *pplayer);
+int utype_shield_cost(struct unit_type *ut, struct government *g);
+int utype_food_cost(struct unit_type *ut, struct government *g);
+int utype_happy_cost(struct unit_type *ut, struct government *g);
+int utype_gold_cost(struct unit_type *ut, struct government *g);
 
-struct unit_type *can_upgrade_unittype(const struct player *pplayer,
-				       const struct unit_type *punittype);
-int unit_upgrade_price(const struct player *pplayer,
-		       const struct unit_type *from,
-		       const struct unit_type *to);
+int can_upgrade_unittype(struct player *pplayer, Unit_Type_id id);
+int unit_upgrade_price(const struct player * const pplayer,
+		       const Unit_Type_id from, const Unit_Type_id to);
 
-struct unit_type *find_unit_type_by_name(const char *name);
-struct unit_type *find_unit_type_by_name_orig(const char *name_orig);
+Unit_Type_id find_unit_type_by_name(const char *name);
+Unit_Type_id find_unit_type_by_name_orig(const char *name_orig);
 
-struct unit_class *unit_class_from_str(const char *s);
+enum unit_move_type unit_move_type_from_str(const char *s);
+Unit_Class_id unit_class_from_str(const char *s);
 enum unit_flag_id unit_flag_from_str(const char *s);
 enum unit_role_id unit_role_from_str(const char *s);
 
-const char *get_unit_flag_name(enum unit_flag_id id);
-
-bool can_player_build_unit_direct(const struct player *p,
-				  const struct unit_type *punittype);
-bool can_player_build_unit(const struct player *p,
-			   const struct unit_type *punittype);
-bool can_player_eventually_build_unit(const struct player *p,
-				      const struct unit_type *punittype);
+bool can_player_build_unit_direct(struct player *p, Unit_Type_id id);
+bool can_player_build_unit(struct player *p, Unit_Type_id id);
+bool can_player_eventually_build_unit(struct player *p, Unit_Type_id id);
 
 void role_unit_precalcs(void);
 int num_role_units(int role);
-struct unit_type *get_role_unit(int role, int index);
-struct unit_type *best_role_unit(const struct city *pcity, int role);
-struct unit_type *best_role_unit_for_player(const struct player *pplayer,
-					    int role);
-struct unit_type *first_role_unit_for_player(const struct player *pplayer,
-					     int role);
+Unit_Type_id get_role_unit(int role, int index);
+Unit_Type_id best_role_unit(struct city *pcity, int role);
+Unit_Type_id best_role_unit_for_player(struct player *pplayer, int role);
+Unit_Type_id first_role_unit_for_player(struct player *pplayer, int role);
 
-void unit_types_init(void);
 void unit_types_free(void);
 
-#define unit_type_iterate(punittype)					    \
-{									    \
-  int _index;								    \
-									    \
-  for (_index = 0; _index < game.control.num_unit_types; _index++) {	    \
-    struct unit_type *punittype = get_unit_type(_index);
+#define unit_type_iterate(m_i)                                                \
+{                                                                             \
+  Unit_Type_id m_i;                                                           \
+  for (m_i = 0; m_i < game.num_unit_types; m_i++) {
 
-#define unit_type_iterate_end                                               \
-  }                                                                         \
+#define unit_type_iterate_end                                                 \
+  }                                                                           \
 }
 
 #endif  /* FC__UNITTYPE_H */

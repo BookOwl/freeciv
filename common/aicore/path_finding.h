@@ -126,21 +126,6 @@
  * through an additional tile_behaviour callback,  which would return
  * TB_IGNORE for tiles we don't want to visit and TB_DONT_LEAVE for tiles
  * we won't be able to leave (at least alive).
- *
- * Dangerous tiles are those on which we don't want to end a turn.  If
- * the danger callback is specified it is used to determine which tiles are
- * dangerous; no path that ends a turn on such a tile will ever be
- * considered.
- *
- * There is also support for fuel, and thus indirectly for air units.  If
- * the fuel parameters are provided then the unit is considered to have
- * that much fuel.  The net effect is that if a unit has N fuel then only
- * every Nth turn will be considered a stopping point.  To support air
- * units, then, all tiles that don't have airfields (or cities/carriers)
- * should be returned as dangerous (see danger, above).  Note: fuel support
- * will only work if all moves have equal MC.  Support for fuel is
- * experimental at this time (Jun 2005) and should not be used in the
- * server.  Setting fuel==1 in the pf_parameter disables fuel support.
  * 
  * There are few other options in the path-finding, including "omniscience" 
  * (if true, all tiles are assumed to be KNOWN) and "get_zoc" callback (if 
@@ -288,7 +273,7 @@ enum turn_mode {
 /* Full specification of a position and time to reach it. */
 struct pf_position {
   struct tile *tile;
-  int turn, moves_left, fuel_left;	/* See definitions above */
+  int turn, moves_left;		/* See definitions above */
 
   int total_MC;			/* Total MC to reach this point */
   int total_EC;			/* Total EC to reach this point */
@@ -312,12 +297,8 @@ struct pf_path {
  * Examples of callbacks can be found in pf_tools.c*/
 struct pf_parameter {
   struct tile *start_tile;	/* Initial position */
-
   int moves_left_initially;
-  int fuel_left_initially;      /* Ignored for non-air units. */
-
   int move_rate;		/* Move rate of the virtual unit */
-  int fuel;                     /* Should be 1 for units without fuel. */
 
   struct player *owner;
 
@@ -355,7 +336,7 @@ struct pf_parameter {
    * ZoC for strategic planning purposes (take into account enemy cities 
    * but not units for example).
    * If this callback is NULL, ZoC are ignored.*/
-  bool (*get_zoc) (const struct player *pplayer, const struct tile *ptile);
+  bool (*get_zoc) (struct player *pplayer, const struct tile *ptile);
 
   /* If this callback is non-NULL and returns TRUE this position is
    * dangerous. The unit will never end a turn at a dangerous

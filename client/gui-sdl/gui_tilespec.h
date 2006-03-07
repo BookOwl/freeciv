@@ -22,10 +22,8 @@
 #ifndef FC__GUI_TILESPEC_H
 #define FC__GUI_TILESPEC_H
 
-#include <SDL/SDL.h>
-
-#include "tilespec.h"
-
+#include "citydlg_common.h"	/* struct citizen_type */
+  
 struct Theme {
 	SDL_Surface *Button;
 	SDL_Surface *Edit;
@@ -130,7 +128,7 @@ struct Theme {
 } *pTheme;
 
 void tilespec_setup_theme(void);
-void tilespec_free_theme(void);
+void tilespec_unload_theme(void);
 
 enum DirScrolling {
   SCROLL_NORTH = 0,
@@ -139,6 +137,21 @@ enum DirScrolling {
   SCROLL_WEST  = 3,
   SCROLL_LAST
 };
+
+struct Animation {
+  SDL_Surface **Focus;
+  struct {
+    SDL_Cursor **Patrol;
+    SDL_Cursor **Goto;
+    SDL_Cursor **Connect;
+    SDL_Cursor **Nuke;
+    SDL_Cursor **Paradrop;
+    SDL_Cursor **MapScroll[SCROLL_LAST];
+  } Cursors;
+  
+  int num_tiles_focused_unit;
+  int num_tiles_explode_nuke;
+} *pAnim;
 
 void tilespec_setup_anim(void);
 void tilespec_free_anim(void);
@@ -189,19 +202,11 @@ struct City_Icon {
 
 } *pIcons;
 
-SDL_Surface *pCity_Surf;
-
-SDL_Cursor *fc_cursors[CURSOR_LAST][NUM_CURSOR_FRAMES];
-
-void tilespec_setup_city_gfx(void);
-  
 void tilespec_setup_city_icons(void);
 void tilespec_free_city_icons(void);
-
 void reload_citizens_icons(int style);
-SDL_Surface * get_city_gfx(void);
-SDL_Surface * get_citizen_surface(enum citizen_category type,
+SDL_Surface * get_citizen_surface(struct citizen_type type,
 				  int citizen_index);
-SDL_Cursor *SurfaceToCursor(SDL_Surface *image, int hx, int hy);
+void unload_unused_graphics(void);
 
 #endif  /* FC__GUI_TILESPEC_H */

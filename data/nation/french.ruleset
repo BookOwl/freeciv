@@ -2,37 +2,26 @@
 
 name=_("French")
 plural=_("?plural:French")
-groups=_("Modern"), _("Medieval"), _("European")
-legend=_("France has long been a major power in Europe. French conquerer\
- kings like Napoleon and Charlemagne each united large parts of\
- Europe under the French flag.")
-leader=
- "Napoléon Bonaparte",
- "Charlemagne",
- "Louis XIV",
- "Charles de Gaulle",
- "Vercingétorix",
- "Chlodwig",
- "Charles Martel",
- "Jeanne d'Arc"
-leader_sex="Male", "Male", "Male", "Male", "Male", "Male", "Male",
- "Female"
-flag="france"
+class=_("Modern")
+leader="Napoleon", "Charlemagne", "Louis XIV", "Charles de Gaulle",
+       "Vercingetorix", "Chlodwig", "Charles Martel"
+leader_sex="Male", "Male", "Male", "Male", "Male", "Male", "Male"
+flag="f.france"
 flag_alt = "-"
-city_style = "Celtic"
-
+city_style = "European"
 ruler_titles = { "government",      "male_title",      "female_title"
-                 "Despotism",       _("Chieftain"),    _("Chieftain")
                  "Democracy",       _("Premier"),      _("Premier")
                  "Fundamentalism",  _("Archbishop"),   _("Archbishop")
                }
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
 
-civilwar_nations="canadian", "quebecois", "belgian"
+tech_goals = "Monarchy", "Chivalry", "Philosophy", "The Republic",
+             "Monotheism", "Engineering", "Navigation", "Railroad"
+wonder="Magellan's Expedition"
+government="Republic"
+civilwar_nations = "canadian"
 
 cities =
   "Paris", "Lyon", "Marseille", "Lille", "Bordeaux",

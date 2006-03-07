@@ -969,16 +969,48 @@ Freeciv*helpdialog.*.help_terrain_food_shield_trade_data.borderWidth: 0
 Freeciv*helpdialog.*.help_terrain_food_shield_trade_data.justify: Left
 
 ! dummy label:
-Freeciv*helpdialog.*.help_terrain_resources.label: _("Resources:")
-Freeciv*helpdialog.*.help_terrain_resources.fromVert: help_terrain_movement_defense
-Freeciv*helpdialog.*.help_terrain_resources.left: chainLeft
-Freeciv*helpdialog.*.help_terrain_resources.right: chainLeft
-Freeciv*helpdialog.*.help_terrain_resources.top: chainTop
-Freeciv*helpdialog.*.help_terrain_resources.bottom: chainTop
-Freeciv*helpdialog.*.help_terrain_resources.justify: Right
+Freeciv*helpdialog.*.help_terrain_special_1.label: _Resources F/R/T:
+Freeciv*helpdialog.*.help_terrain_special_1.fromVert: help_terrain_movement_defense
+Freeciv*helpdialog.*.help_terrain_special_1.left: chainLeft
+Freeciv*helpdialog.*.help_terrain_special_1.right: chainLeft
+Freeciv*helpdialog.*.help_terrain_special_1.top: chainTop
+Freeciv*helpdialog.*.help_terrain_special_1.bottom: chainTop
+Freeciv*helpdialog.*.help_terrain_special_1.justify: Right
+
+Freeciv*helpdialog.*.help_terrain_special_1_data.label: 1/1/1
+Freeciv*helpdialog.*.help_terrain_special_1_data.background: gray84
+Freeciv*helpdialog.*.help_terrain_special_1_data.fromVert: help_terrain_movement_defense
+Freeciv*helpdialog.*.help_terrain_special_1_data.fromHoriz: help_terrain_special_1
+Freeciv*helpdialog.*.help_terrain_special_1_data.left: chainLeft
+Freeciv*helpdialog.*.help_terrain_special_1_data.right: chainLeft
+Freeciv*helpdialog.*.help_terrain_special_1_data.top: chainTop
+Freeciv*helpdialog.*.help_terrain_special_1_data.bottom: chainTop
+Freeciv*helpdialog.*.help_terrain_special_1_data.borderWidth: 0
+Freeciv*helpdialog.*.help_terrain_special_1_data.justify: Left
+
+! dummy label:
+Freeciv*helpdialog.*.help_terrain_special_2.label: _Resources F/R/T:
+Freeciv*helpdialog.*.help_terrain_special_2.fromVert: help_terrain_movement_defense
+Freeciv*helpdialog.*.help_terrain_special_2.fromHoriz: help_terrain_special_1_data
+Freeciv*helpdialog.*.help_terrain_special_2.left: chainLeft
+Freeciv*helpdialog.*.help_terrain_special_2.right: chainLeft
+Freeciv*helpdialog.*.help_terrain_special_2.top: chainTop
+Freeciv*helpdialog.*.help_terrain_special_2.bottom: chainTop
+Freeciv*helpdialog.*.help_terrain_special_2.justify: Right
+
+Freeciv*helpdialog.*.help_terrain_special_2_data.label: 1/1/1
+Freeciv*helpdialog.*.help_terrain_special_2_data.background: gray84
+Freeciv*helpdialog.*.help_terrain_special_2_data.fromVert: help_terrain_movement_defense
+Freeciv*helpdialog.*.help_terrain_special_2_data.fromHoriz: help_terrain_special_2
+Freeciv*helpdialog.*.help_terrain_special_2_data.left: chainLeft
+Freeciv*helpdialog.*.help_terrain_special_2_data.right: chainLeft
+Freeciv*helpdialog.*.help_terrain_special_2_data.top: chainTop
+Freeciv*helpdialog.*.help_terrain_special_2_data.bottom: chainTop
+Freeciv*helpdialog.*.help_terrain_special_2_data.borderWidth: 0
+Freeciv*helpdialog.*.help_terrain_special_2_data.justify: Left
 
 Freeciv*helpdialog.*.help_terrain_road_result_time.label: _("Road Result/Time:")
-Freeciv*helpdialog.*.help_terrain_road_result_time.fromVert: help_terrain_resources
+Freeciv*helpdialog.*.help_terrain_road_result_time.fromVert: help_terrain_special_1
 Freeciv*helpdialog.*.help_terrain_road_result_time.left: chainLeft
 Freeciv*helpdialog.*.help_terrain_road_result_time.right: chainLeft
 Freeciv*helpdialog.*.help_terrain_road_result_time.top: chainTop
@@ -988,7 +1020,7 @@ Freeciv*helpdialog.*.help_terrain_road_result_time.justify: Right
 ! dummy label:
 Freeciv*helpdialog.*.help_terrain_road_result_time_data.label: Mountains / 11
 Freeciv*helpdialog.*.help_terrain_road_result_time_data.background: gray84
-Freeciv*helpdialog.*.help_terrain_road_result_time_data.fromVert: help_terrain_resources
+Freeciv*helpdialog.*.help_terrain_road_result_time_data.fromVert: help_terrain_special_1
 Freeciv*helpdialog.*.help_terrain_road_result_time_data.fromHoriz: help_terrain_road_result_time
 Freeciv*helpdialog.*.help_terrain_road_result_time_data.left: chainLeft
 Freeciv*helpdialog.*.help_terrain_road_result_time_data.right: chainLeft
@@ -998,7 +1030,7 @@ Freeciv*helpdialog.*.help_terrain_road_result_time_data.borderWidth: 0
 Freeciv*helpdialog.*.help_terrain_road_result_time_data.justify: Left
 
 Freeciv*helpdialog.*.help_terrain_irrigation_result_time.label: _("Irrig. Result/Time:")
-Freeciv*helpdialog.*.help_terrain_irrigation_result_time.fromVert: help_terrain_resources
+Freeciv*helpdialog.*.help_terrain_irrigation_result_time.fromVert: help_terrain_special_1
 Freeciv*helpdialog.*.help_terrain_irrigation_result_time.fromHoriz: help_terrain_road_result_time_data
 Freeciv*helpdialog.*.help_terrain_irrigation_result_time.left: chainLeft
 Freeciv*helpdialog.*.help_terrain_irrigation_result_time.right: chainLeft
@@ -1009,7 +1041,7 @@ Freeciv*helpdialog.*.help_terrain_irrigation_result_time.justify: Right
 ! dummy label:
 Freeciv*helpdialog.*.help_terrain_irrigation_result_time_data.label: Mountains / 11
 Freeciv*helpdialog.*.help_terrain_irrigation_result_time_data.background: gray84
-Freeciv*helpdialog.*.help_terrain_irrigation_result_time_data.fromVert: help_terrain_resources
+Freeciv*helpdialog.*.help_terrain_irrigation_result_time_data.fromVert: help_terrain_special_1
 Freeciv*helpdialog.*.help_terrain_irrigation_result_time_data.fromHoriz: help_terrain_irrigation_result_time
 Freeciv*helpdialog.*.help_terrain_irrigation_result_time_data.left: chainLeft
 Freeciv*helpdialog.*.help_terrain_irrigation_result_time_data.right: chainLeft
@@ -1228,18 +1260,13 @@ Freeciv*optionpopup*Toggle.internalHeight: 0
 Freeciv*optionlabel.label:             _("Set local options")
 Freeciv*optionlabel.borderWidth:       0
 
-Freeciv*optionviewport.fromVert:       optionlabel
-Freeciv*optionviewport.height:         510
-Freeciv*optionviewport.useRight:       True
-Freeciv*optionviewport.allowVert:      True
-
 ! dummy labels:
 Freeciv*optionpopup*label.label:           XXXXXXXXXXXXXXXXXXXXXXXXXXX
 Freeciv*optionpopup*label.borderWidth:     0
 
 Freeciv*optionpopup*input.*.foreground:    black
 Freeciv*optionpopup*input.*.background:    white
-Freeciv*optionpopup*input.width:           120
+Freeciv*optionpopup*input.width:           50
 Freeciv*optionpopup*input.*.editType:      edit
 
 Freeciv*optionokcommand.label:          _("Ok")
@@ -1456,13 +1483,13 @@ Freeciv*scienceclosecommand.right:       chainLeft
 !
 ! Citizen Management Agent dialog 
 !
-Freeciv*cmapopup.title:                   _("Citizen Governor")
+Freeciv*cmapopup.title:                   _("Citizen Management Agent")
 Freeciv*cmapresetviewport.allowVert:      True
 Freeciv*cmapresetlist.defaultColumns:     1
 Freeciv*cmapresetlist.forceColumns:       true
 Freeciv*cmapresetlist.background:         white
 
-Freeciv*cmacommand.label:                 _("Citizen governor...")
+Freeciv*cmacommand.label:                 _("CMA...")
 Freeciv*cmahelpbutton.label:              _("Help")
 Freeciv*cmaclosebutton.label:             _("Close")
 Freeciv*cmaaddbutton.label:               _("Add Preset")
@@ -2533,7 +2560,7 @@ Freeciv*overviewcanvas.left:                       chainLeft
 Freeciv*overviewcanvas.right:                      chainRight
 Freeciv*overviewcanvas.resizable:                  True
 
-Freeciv*infocommand.label:	\n\n\n\n\n\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ 
+Freeciv*infocommand.label:	\n\n\n\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ 
 Freeciv*infocommand.background:                    gray84
 Freeciv*infocommand.foreground:                    black
 Freeciv*infocommand.justify:                       left
@@ -2830,22 +2857,14 @@ Freeciv*mapcanvas.translations:\
    <MouseMoved>:      mouse-moved()                    \n\
    Shift<BtnDown>:    btn-adjust-workers()             \n\
    <BtnDown>:         btn-select-mapcanvas()           \n\
-   Shift Ctrl<Key>r:  key-unit-connect-road()          \n\
-   Shift Ctrl<Key>l:  key-unit-connect-rail()          \n\
-   Shift Ctrl<Key>i:  key-unit-connect-irrigate()      \n\
-   Shift Ctrl<Key>1:  key-unit-assign-battlegroup1()   \n\
-   Shift Ctrl<Key>2:  key-unit-assign-battlegroup2()   \n\
-   Shift Ctrl<Key>3:  key-unit-assign-battlegroup3()   \n\
-   Shift Ctrl<Key>4:  key-unit-assign-battlegroup4()   \n\
    Ctrl<Key>b:        key-map-borders-toggle()         \n\
    Ctrl<Key>g:        key-map-grid-toggle()            \n\
    Ctrl<Key>n:        key-city-names-toggle()          \n\
    Ctrl<Key>p:        key-city-productions-toggle()    \n\
    Ctrl<Key>w:        key-open-worklists()             \n\
-   Ctrl<Key>1:        key-unit-select-battlegroup1()   \n\
-   Ctrl<Key>2:        key-unit-select-battlegroup2()   \n\
-   Ctrl<Key>3:        key-unit-select-battlegroup3()   \n\
-   Ctrl<Key>4:        key-unit-select-battlegroup4()   \n\
+   Shift Ctrl<Key>r:  key-unit-connect-road()          \n\
+   Shift Ctrl<Key>l:  key-unit-connect-rail()          \n\
+   Shift Ctrl<Key>i:  key-unit-connect-irrigate()      \n\
    Shift<Key>d:       key-unit-disband()               \n\
    Shift<Key>f:       key-open-find-city()             \n\
    Shift<Key>l:       key-open-goto-airlift()          \n\
@@ -2855,12 +2874,6 @@ Freeciv*mapcanvas.translations:\
    Shift<Key>t:       key-open-rates()                 \n\
    Shift<Key>u:       key-unit-unload-all()            \n\
    Shift<Key>w:       key-unit-wakeup-others()         \n\
-   Shift<Key>1:       key-unit-add-to-battlegroup1()   \n\
-   Shift<Key>2:       key-unit-add-to-battlegroup2()   \n\
-   Shift<Key>3:       key-unit-add-to-battlegroup3()   \n\
-   Shift<Key>4:       key-unit-add-to-battlegroup4()   \n\
-   Shift<Key>Return:  key-end-turn()                   \n\
-   Shift<Key>KP_Enter: key-end-turn()                  \n\
    <Key>a:            key-unit-auto-attack-or-settle() \n\
    <Key>b:            key-unit-build-city-or-wonder()  \n\
    <Key>c:            key-center-on-unit()             \n\
@@ -2926,12 +2939,12 @@ Freeciv*mapcanvas.translations:\
 
 Freeciv*overviewcanvas.translations:\
    <BtnDown>:         btn-select-overviewcanvas()      \n\
-   Shift Ctrl<Key>i:  key-unit-connect-irrigate()      \n\
-   Shift Ctrl<Key>l:  key-unit-connect-rail()          \n\
-   Shift Ctrl<Key>r:  key-unit-connect-road()          \n\
    Ctrl<Key>g:        key-map-grid-toggle()            \n\
+   Ctrl<Key>i:        key-unit-connect-irrigate()      \n\
+   Ctrl<Key>l:        key-unit-connect-rail()          \n\
    Ctrl<Key>n:        key-city-names-toggle()          \n\
    Ctrl<Key>p:        key-city-productions-toggle()    \n\
+   Ctrl<Key>r:        key-unit-connect-road()          \n\
    Ctrl<Key>w:        key-open-worklists()             \n\
    Shift<Key>d:       key-unit-disband()               \n\
    Shift<Key>f:       key-open-find-city()             \n\
@@ -2942,8 +2955,6 @@ Freeciv*overviewcanvas.translations:\
    Shift<Key>t:       key-open-rates()                 \n\
    Shift<Key>u:       key-unit-unload-all()            \n\
    Shift<Key>w:       key-unit-wakeup-others()         \n\
-   Shift<Key>Return:  key-end-turn()                   \n\
-   Shift<Key>KP_Enter: key-end-turn()                  \n\
    <Key>a:            key-unit-auto-attack-or-settle() \n\
    <Key>b:            key-unit-build-city-or-wonder()  \n\
    <Key>c:            key-center-on-unit()             \n\
@@ -3130,15 +3141,11 @@ Freeciv*racespopup.title:		_("What Nation Will You Be?")
 Freeciv*racespopup*translations:	#override \
 			<Key>Return: key-dialog-races-ok()
 
-Freeciv*racesform.background:		gray84
-
 Freeciv*raceslabel.label:		_("Select nation and name:")
 Freeciv*raceslabel.borderWidth:		0
 Freeciv*raceslabel.background:		gray84
 
-Freeciv*racestogglesviewport.height:	412
-Freeciv*racestogglesviewport.useRight:	True
-Freeciv*racestogglesviewport.allowVert:	True
+Freeciv*racesform.background:		gray84
 
 Freeciv*racestogglesform.borderWidth:	1
 Freeciv*racestogglesform.background:	gray84
@@ -3326,99 +3333,3 @@ Freeciv*meswinpopcitycommand.top:             chainBottom
 Freeciv*meswinpopcitycommand.bottom:          chainBottom
 Freeciv*meswinpopcitycommand.left:            chainLeft
 Freeciv*meswinpopcitycommand.right:           chainLeft
-
-!
-! start page shell
-!
-Freeciv*startpage.title:  _("Pregame")
-Freeciv*startpage.iconName:   _("Pregame")
-Freeciv*startpage.allowShellResize: True
-
-Freeciv*startpageform.resizable:           true
-Freeciv*startpageform.top:                 chainTop
-Freeciv*startpageform.bottom:              chainBottom
-Freeciv*startpageform.left:                chainLeft
-Freeciv*startpageform.right:               chainRight
-
-Freeciv*startpagelabel.resizable:          true
-Freeciv*startpagelabel.justify:            left
-Freeciv*startpagelabel.borderWidth:        1
-Freeciv*startpagelabel.top:                chainTop
-Freeciv*startpagelabel.bottom:             chainTop
-Freeciv*startpagelabel.left:               chainLeft
-Freeciv*startpagelabel.right:              chainRight
-Freeciv*startpagelabel.label: _("\
-Name              Ready Leader          Nation          ")
-
-Freeciv*startpageplayerslist.fromVert:        startpagelabel
-Freeciv*startpageplayerslist.forceColumns:    true
-Freeciv*startpageplayerslist.defaultColumns:  1
-Freeciv*startpageplayerslist.verticalList:    true
-Freeciv*startpageplayerslist.resizable:       true
-Freeciv*startpageplayerslist.top:             chainTop
-Freeciv*startpageplayerslist.bottom:          chainBottom
-Freeciv*startpageplayerslist.left:            chainLeft
-Freeciv*startpageplayerslist.right:           chainRight
-Freeciv*startpageplayerslist.background:      white
-
-Freeciv*startpagecancelcommand.label:         _("Cancel")
-Freeciv*startpagecancelcommand.fromVert:      startpageplayerslist
-Freeciv*startpagecancelcommand.top:           chainBottom
-Freeciv*startpagecancelcommand.bottom:        chainBottom
-Freeciv*startpagecancelcommand.left:          chainLeft
-Freeciv*startpagecancelcommand.right:         chainLeft
-
-Freeciv*startpagenationcommand.label:         _("Pick Nation")
-Freeciv*startpagenationcommand.fromHoriz:     startpagecancelcommand
-Freeciv*startpagenationcommand.fromVert:      startpageplayerslist
-Freeciv*startpagenationcommand.top:           chainBottom
-Freeciv*startpagenationcommand.bottom:        chainBottom
-Freeciv*startpagenationcommand.left:          chainLeft
-Freeciv*startpagenationcommand.right:         chainLeft
-
-Freeciv*startpagestartcommand.label:          _("Start")
-Freeciv*startpagestartcommand.fromHoriz:      startpagenationcommand
-Freeciv*startpagestartcommand.fromVert:       startpageplayerslist
-Freeciv*startpagestartcommand.top:            chainBottom
-Freeciv*startpagestartcommand.bottom:         chainBottom
-Freeciv*startpagestartcommand.left:           chainLeft
-Freeciv*startpagestartcommand.right:          chainLeft
-
-!
-! Settable options dialog
-!
-Freeciv*settableoptionspopup.title:        _("Game Settings")
-
-Freeciv*settableoptionspopup*Label.background:       gray84
-
-Freeciv*settableoptionspopup*Toggle.background:     white
-Freeciv*settableoptionspopup*Toggle.shapeStyle:     oval
-Freeciv*settableoptionspopup*Toggle.width:          50
-Freeciv*settableoptionspopup*Toggle.internalHeight: 0
-
-Freeciv*settableoptionslabel.label:              _("Game Settings")
-Freeciv*settableoptionslabel.borderWidth:        0
-
-Freeciv*settableoptionsviewport.fromVert:        settableoptionslabel
-Freeciv*settableoptionsviewport.height:          510
-Freeciv*settableoptionsviewport.useRight:        True
-Freeciv*settableoptionsviewport.allowVert:       True
-
-! dummy labels:
-Freeciv*settableoptionspopup*label.label:        XXXXXXXXXXXXXXXXXXXXXXXXXXX
-Freeciv*settableoptionspopup*label.borderWidth:  0
-
-Freeciv*settableoptionspopup*input.*.foreground: black
-Freeciv*settableoptionspopup*input.*.background: white
-Freeciv*settableoptionspopup*input.width:        120
-Freeciv*settableoptionspopup*input.*.editType:   edit
-
-Freeciv*settableoptionspopup*rlabel.width:       120
-Freeciv*settableoptionspopup*rlabel.borderWidth: 1
-
-Freeciv*settableoptionsokcommand.label:          _("Ok")
-Freeciv*settableoptionsokcommand.fromVert:       settableoptionsviewport
-
-Freeciv*settableoptionscancelcommand.label:      _("Cancel")
-Freeciv*settableoptionscancelcommand.fromHoriz:  settableoptionsokcommand
-Freeciv*settableoptionscancelcommand.fromVert:   settableoptionsviewport

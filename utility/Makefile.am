@@ -49,5 +49,5 @@ libcivutility_a_SOURCES = \
 		support.h	\
 		timing.c	\
 		timing.h	\
-		md5.c		\
-		md5.h
+                md5.c           \
+                md5.h

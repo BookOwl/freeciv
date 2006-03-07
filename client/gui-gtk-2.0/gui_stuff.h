@@ -18,7 +18,6 @@
 #include "shared.h"
 
 GtkWidget *gtk_stockbutton_new(const gchar *stock, const gchar *label_text);
-void gtk_stockbutton_set_label(GtkWidget *button, const gchar *label_text);
 void gtk_expose_now(GtkWidget *w);
 void gtk_set_relative_position(GtkWidget *ref, GtkWidget *w, int px, int py);
 
@@ -60,7 +59,7 @@ enum gui_dialog_type {
 
 struct gui_dialog;
 
-typedef void (*GUI_DIALOG_RESPONSE_FUN)(struct gui_dialog *, int, gpointer);
+typedef void (*GUI_DIALOG_RESPONSE_FUN)(struct gui_dialog *, int);
 
 struct gui_dialog
 {
@@ -69,13 +68,7 @@ struct gui_dialog
   GtkWidget *action_area;
 
   /* private. */
-  char* title;
   enum gui_dialog_type type;
-  int id;
-  int return_dialog_id;
-  
-  int default_width;
-  int default_height;
 
   union {
     GtkWidget *window;
@@ -83,26 +76,20 @@ struct gui_dialog
       GtkWidget *label;
       GtkWidget *notebook;
       gulong handler_id;
-      GtkWidget *child;
     } tab;
   } v;
 
   struct gui_dialog **source;
 
   GUI_DIALOG_RESPONSE_FUN response_callback;
-  gpointer user_data;
-
-  GtkSizeGroup *gui_button;
 };
 
-void gui_dialog_new(struct gui_dialog **pdlg, GtkNotebook *notebook, gpointer user_data);
+void gui_dialog_new(struct gui_dialog **pdlg, GtkNotebook *notebook);
 void gui_dialog_set_default_response(struct gui_dialog *dlg, int response);
 GtkWidget *gui_dialog_add_button(struct gui_dialog *dlg,
     const char *text, int response);
 GtkWidget *gui_dialog_add_stockbutton(struct gui_dialog *dlg,
     const char *stock, const char *text, int response);
-GtkWidget *gui_dialog_add_widget(struct gui_dialog *dlg,
-				 GtkWidget *widget);
 void gui_dialog_set_default_size(struct gui_dialog *dlg,
     int width, int height);
 void gui_dialog_set_title(struct gui_dialog *dlg, const char *title);
@@ -117,7 +104,5 @@ void gui_dialog_destroy_all(void);
 GtkWidget *gui_dialog_get_toplevel(struct gui_dialog *dlg);
 void gui_dialog_response_set_callback(struct gui_dialog *dlg,
     GUI_DIALOG_RESPONSE_FUN fun);
-void gui_dialog_set_return_dialog(struct gui_dialog *dlg,
-                                  struct gui_dialog *return_dialog);
 
 #endif  /* FC__GUI_STUFF_H */

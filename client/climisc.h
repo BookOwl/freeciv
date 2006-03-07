@@ -21,25 +21,22 @@
 struct Clause;
 
 typedef int cid;
+typedef int wid;
 
 void client_remove_player(int plrno);
 void client_remove_city(struct city *pcity);
 void client_remove_unit(struct unit *punit);
 
-void client_change_all(struct city_production from,
-		       struct city_production to);
+void client_change_all(cid x, cid y);
 
-const char *get_embassy_status(const struct player *me,
-				const struct player *them);
-const char *get_vision_status(const struct player *me,
-				const struct player *them);
+const char *get_embassy_status(struct player *me, struct player *them);
+const char *get_vision_status(struct player *me, struct player *them);
 void client_diplomacy_clause_string(char *buf, int bufsiz,
 				    struct Clause *pclause);
 
-struct sprite *client_research_sprite(void);
-struct sprite *client_warming_sprite(void);
-struct sprite *client_cooling_sprite(void);
-struct sprite *client_government_sprite(void);
+int client_research_sprite(void);
+int client_warming_sprite(void);
+int client_cooling_sprite(void);
 
 void center_on_something(void);
 
@@ -51,46 +48,55 @@ void center_on_something(void);
  * unit_type_id of (cid - B_LAST).
  */
 
-cid cid_encode(struct city_production target);
-cid cid_encode_unit(const struct unit_type *punittype);
-cid cid_encode_building(Impr_type_id building);
-cid cid_encode_from_city(const struct city *pcity);
+cid cid_encode(bool is_unit, int id);
+cid cid_encode_from_city(struct city *pcity);
+void cid_decode(cid cid, bool *is_unit, int *id);
+bool cid_is_unit(cid cid);
+int cid_id(cid cid);
 
-struct city_production cid_decode(cid cid);
-#define cid_production cid_decode
+/* 
+ * A worklist id (wid) can hold all objects which can be part of a
+ * city worklist: improvements (with wonders), units and global
+ * worklists. This is achieved by seperation the value set: 
+ *  - (wid < B_LAST) denotes a improvement (including wonders)
+ *  - (B_LAST <= wid < B_LAST + U_LAST) denotes a unit with the
+ *  unit_type_id of (wid - B_LAST)
+ *  - (B_LAST + U_LAST<= wid) denotes a global worklist with the id of
+ *  (wid - (B_LAST + U_LAST))
+ */
 
-bool city_can_build_impr_or_unit(const struct city *pcity,
-				 struct city_production target);
-bool city_unit_supported(const struct city *pcity,
-			 struct city_production target);
-bool city_unit_present(const struct city *pcity,
-		       struct city_production target);
-bool city_building_present(const struct city *pcity,
-			   struct city_production target);
+#define WORKLIST_END (-1)
+
+wid wid_encode(bool is_unit, bool is_worklist, int id);
+bool wid_is_unit(wid wid);
+bool wid_is_worklist(wid wid);
+int wid_id(wid wid);
+
+bool city_can_build_impr_or_unit(struct city *pcity, cid cid);
+bool city_unit_supported(struct city *pcity, cid cid);
+bool city_unit_present(struct city *pcity, cid cid);
+bool city_building_present(struct city *pcity, cid cid);
 
 struct item {
-  struct city_production item;
+  cid cid;
   char descr[MAX_LEN_NAME + 40];
+
+  /* Privately used for sorting */
+  int section;
 };
 
-typedef bool (*TestCityFunc)(const struct city *, struct city_production);
-
-#define MAX_NUM_PRODUCTION_TARGETS (U_LAST + B_LAST)
-void name_and_sort_items(struct city_production *targets, int num_items,
-			 struct item *items,
+void name_and_sort_items(int *pcids, int num_cids, struct item *items,
 			 bool show_cost, struct city *pcity);
-int collect_production_targets(struct city_production *targets,
-			       struct city **selected_cities,
-			       int num_selected_cities, bool append_units,
-			       bool append_wonders, bool change_prod,
-			       TestCityFunc test_func);
-int collect_currently_building_targets(struct city_production *targets);
-int collect_buildable_targets(struct city_production *targets);
-int collect_eventually_buildable_targets(struct city_production *targets,
-					 struct city *pcity,
-					 bool advanced_tech);
-int collect_already_built_targets(struct city_production *targets,
-				  struct city *pcity);
+int collect_cids1(cid * dest_cids, struct city **selected_cities,
+		 int num_selected_cities, bool append_units,
+		 bool append_wonders, bool change_prod,
+		 bool (*test_func) (struct city *, int));
+int collect_cids2(cid * dest_cids);
+int collect_cids3(cid * dest_cids);
+int collect_cids4(cid * dest_cids, struct city *pcity, bool advanced_tech);
+int collect_cids5(cid * dest_cids, struct city *pcity);
+int collect_wids1(wid * dest_wids, struct city *pcity, bool wl_first, 
+		  bool advanced_tech);
 
 /* the number of units in city */
 int num_present_units_in_city(struct city* pcity);
@@ -108,12 +114,9 @@ void reports_freeze_till(int request_id);
 void reports_thaw(void);
 void reports_force_thaw(void);
 
-struct city *get_nearest_city(const struct unit *punit, int *sq_dist);
+struct city *get_nearest_city(struct unit *punit, int *sq_dist);
 
 void cityrep_buy(struct city *pcity);
 void common_taxrates_callback(int i);
-
-bool can_units_do_connect(struct unit_list *punits,
-			  enum unit_activity activity);
 
 #endif  /* FC__CLIMISC_H */

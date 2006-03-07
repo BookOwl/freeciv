@@ -16,6 +16,8 @@
 
 #include "cma_core.h"
 
+struct city;
+
 void update_city_cma_dialog(void);
 void popup_city_cma_dialog(struct city *pCity);
 void popdown_city_cma_dialog(void);

@@ -22,12 +22,7 @@
 #ifndef FC__GUI_MAIN_H
 #define FC__GUI_MAIN_H
 
-#include <SDL/SDL.h>
-
 #include "gui_main_g.h"
-
-/* enable this to adjust sizes for 320x240 resolution */
-/* #define SMALL_SCREEN */
 
 /* #define DEBUG_SDL */
 
@@ -40,7 +35,7 @@
 #define CF_OPTION_OPEN			(1<<4)
 #define CF_OPTION_MAIN			(1<<5)
 #define CF_GANE_JUST_STARTED		(1<<6)
-
+#define CF_REVOLUTION			(1<<7)
 #define CF_TOGGLED_FULLSCREEN		(1<<8)
 #define CF_FOCUS_ANIMATION		(1<<9)
 #define CF_CHANGED_PROD			(1<<10)
@@ -48,6 +43,8 @@
 #define CF_CITY_STATUS_SPECIAL		(1<<12)
 #define CF_CHANGE_TAXRATE_LUX_BLOCK	(1<<13)
 #define CF_CHANGE_TAXRATE_SCI_BLOCK	(1<<14)
+#define CF_CIV3_CITY_TEXT_STYLE		(1<<15)
+#define CF_DRAW_MAP_DITHER		(1<<16)
 #define CF_DRAW_CITY_GRID		(1<<17)
 #define CF_DRAW_CITY_WORKER_GRID	(1<<18)
 #define CF_DRAW_PLAYERS_WAR_STATUS	(1<<19)
@@ -56,24 +53,7 @@
 #define CF_DRAW_PLAYERS_ALLIANCE_STATUS	(1<<22)
 #define CF_DRAW_PLAYERS_NEUTRAL_STATUS	(1<<23)
 
-/* mouse button behavior */
-#define MB_MEDIUM_HOLD_DELAY  500         /* medium hold:  500ms */
-#define MB_LONG_HOLD_DELAY   2000         /* long hold:   2000ms */
-
-enum mouse_button_hold_state {
-  MB_HOLD_SHORT,
-  MB_HOLD_MEDIUM,
-  MB_HOLD_LONG
-};
-
-struct mouse_button_behavior {
-  Uint32 button_down_ticks;
-  enum mouse_button_hold_state hold_state;
-  SDL_MouseButtonEvent *event;
-  struct tile *ptile;
-};
-
-
+extern struct canvas Main;
 extern struct GUI *pSellected_Widget;
 extern Uint32 SDL_Client_Flags;
 extern bool LSHIFT;
@@ -82,10 +62,6 @@ extern bool LCTRL;
 extern bool RCTRL;
 extern bool LALT;
 extern bool do_focus_animation;
-extern int city_names_font_size;
-extern int city_productions_font_size;
-extern enum cursor_type mouse_cursor_type;
-extern bool mouse_cursor_changed;
 
 void force_exit_from_event_loop(void);
 void add_autoconnect_to_timer(void);
@@ -103,12 +79,5 @@ Uint16 gui_event_loop(void *pData, void (*loop_action)(void *pData),
 	Uint16 (*mouse_button_down_handler)(SDL_MouseButtonEvent *pButtonEvent, void *pData),
         Uint16 (*mouse_button_up_handler)(SDL_MouseButtonEvent *pButtonEvent, void *pData),
         Uint16 (*mouse_motion_handler)(SDL_MouseMotionEvent *pMotionEvent, void *pData));
-
-/* shrink sizes for 320x240 screen */
-#ifdef SMALL_SCREEN
-  #define adj_size(size) (size) / 2
-#else
-  #define adj_size(size) (size)
-#endif
 
 #endif	/* FC__GUI_MAIN_H */

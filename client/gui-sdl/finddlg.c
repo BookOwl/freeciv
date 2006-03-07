@@ -15,25 +15,34 @@
 #include <config.h>
 #endif
 
+#include <ctype.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <SDL/SDL.h>
 
-/* utility */
+#include "support.h"
 #include "fcintl.h"
 
-/* common */
 #include "game.h"
+#include "player.h"
+#include "map.h"
 
-/* gui-sdl */
-#include "colors.h"
-#include "graphics.h"
-#include "gui_id.h"
 #include "gui_main.h"
-#include "gui_stuff.h"
+#include "graphics.h"
+#include "gui_zoom.h"
 #include "gui_tilespec.h"
-#include "mapctrl.h"
+
+#include "gui_string.h"
+#include "gui_stuff.h"
+#include "gui_id.h"
+#include "colors.h"
+
 #include "mapview.h"
+#include "mapctrl.h"
+#include "dialogs.h"
+#include "tilespec.h"
 
 #include "finddlg.h"
 
@@ -55,7 +64,7 @@ static int exit_find_city_dlg_callback(struct GUI *pWidget)
       
   popdown_find_dialog();
   
-  center_tile_mapcanvas(map_pos_to_tile(orginal_x, orginal_y));
+  center_tile_mapcanvas(orginal_x, orginal_y);
   
   flush_dirty();
   return -1;
@@ -65,7 +74,7 @@ static int find_city_callback(struct GUI *pWidget)
 {
   struct city *pCity = pWidget->data.city;
   if(pCity) {
-    center_tile_mapcanvas(pCity->tile);
+    center_tile_mapcanvas(pCity->x, pCity->y);
     if(Main.event.button.button == SDL_BUTTON_RIGHT) {
       popdown_find_dialog();
     }
@@ -82,8 +91,8 @@ void popdown_find_dialog(void)
   if (pFind_City_Dlg) {
     popdown_window_group_dialog(pFind_City_Dlg->pBeginWidgetList,
 			pFind_City_Dlg->pEndWidgetList);
-    FC_FREE(pFind_City_Dlg->pScroll);
-    FC_FREE(pFind_City_Dlg);
+    FREE(pFind_City_Dlg->pScroll);
+    FREE(pFind_City_Dlg);
     enable_and_redraw_find_city_button();
   }
 }
@@ -97,32 +106,30 @@ void popup_find_dialog(void)
   SDL_Surface *pLogo = NULL;
   SDL_String16 *pStr;
   char cBuf[128]; 
-  int i, n = 0, w = 0, h, /*owner = 0xffff,*/ units_h = 0;
-  struct player *owner = NULL;
-  struct tile *original;
+  int i, n = 0, w = 0, h, owner = 0xffff, units_h = 0, orginal_x, orginal_y;
   bool mouse = (Main.event.type == SDL_MOUSEBUTTONDOWN);
   
   /* check that there are any cities to find */
   h = 0;
   i = 0;    
-  while(!h && i<game.info.nplayers) {
-    h = city_list_size(game.players[i++].cities);
+  while(!h && i<game.nplayers) {
+    h = city_list_size(&game.players[i++].cities);
   }
   
   if (pFind_City_Dlg && !h) {
     return;
   }
      
-  h = WINDOW_TILE_HIGH + adj_size(3) + FRAME_WH;
+  h = WINDOW_TILE_HIGH + 3 + FRAME_WH;
   
-  original = canvas_pos_to_tile(Main.map->w/2, Main.map->h/2);
+  canvas_to_map_pos(&orginal_x, &orginal_y, Main.map->w/2, Main.map->h/2);
   
-  pFind_City_Dlg = fc_calloc(1, sizeof(struct ADVANCED_DLG));
+  pFind_City_Dlg = MALLOC(sizeof(struct ADVANCED_DLG));
   
-  pStr = create_str16_from_char(_("Find City") , adj_font(12));
+  pStr = create_str16_from_char(_("Find City") , 12);
   pStr->style |= TTF_STYLE_BOLD;
   
-  pWindow = create_window(NULL, pStr, adj_size(10), adj_size(10), WF_DRAW_THEME_TRANSPARENT);
+  pWindow = create_window(NULL, pStr, 10, 10, WF_DRAW_THEME_TRANSPARENT);
     
   pWindow->action = find_city_window_dlg_callback;
   set_wstate(pWindow , FC_WS_NORMAL);
@@ -134,28 +141,28 @@ void popup_find_dialog(void)
   /* exit button */
   pBuf = create_themeicon(pTheme->Small_CANCEL_Icon, pWindow->dst,
   			  	(WF_DRAW_THEME_TRANSPARENT|WF_FREE_DATA));
-  w += pBuf->size.w + adj_size(10);
+  w += pBuf->size.w + 10;
   pBuf->action = exit_find_city_dlg_callback;
   set_wstate(pBuf, FC_WS_NORMAL);
   pBuf->key = SDLK_ESCAPE;
-  pBuf->data.cont = fc_calloc(1, sizeof(struct CONTAINER));
-  pBuf->data.cont->id0 = original->x;
-  pBuf->data.cont->id1 = original->y;
+  pBuf->data.cont = MALLOC(sizeof(struct CONTAINER));
+  pBuf->data.cont->id0 = orginal_x;
+  pBuf->data.cont->id1 = orginal_y;
 
   add_to_gui_list(ID_TERRAIN_ADV_DLG_EXIT_BUTTON, pBuf);
   /* ---------- */
   
-  for(i=0; i<game.info.nplayers; i++) {
+  for(i=0; i<game.nplayers; i++) {
     city_list_iterate(game.players[i].cities, pCity) {
     
       my_snprintf(cBuf , sizeof(cBuf), "%s (%d)",pCity->name, pCity->size);
       
-      pStr = create_str16_from_char(cBuf , adj_font(10));
+      pStr = create_str16_from_char(cBuf , 10);
       pStr->style |= (TTF_STYLE_BOLD|SF_CENTER);
    
       if(pCity->owner != owner) {
-        pLogo = GET_SURF(get_nation_flag_sprite(tileset, 
-			get_player(pCity->owner->player_no)->nation));
+        pLogo = GET_SURF(get_nation_by_idx(
+			get_player(pCity->owner)->nation)->flag_sprite);
         pLogo = make_flag_surface_smaler(pLogo);
       }
       
@@ -169,7 +176,7 @@ void popup_find_dialog(void)
       
       pBuf->string16->style &= ~SF_CENTER;
       pBuf->string16->fgcol =
-	    *(get_player_color(tileset, city_owner(pCity))->color);	  
+	    *(get_game_colorRGB(player_color(get_player(pCity->owner))));
       pBuf->string16->render = 3;
       pBuf->string16->bgcol.unused = 128;
     
@@ -207,7 +214,7 @@ void popup_find_dialog(void)
     n = units_h;
     w += n;
     
-    units_h = 20 * pBuf->size.h + WINDOW_TILE_HIGH + adj_size(3) + FRAME_WH;
+    units_h = 20 * pBuf->size.h + WINDOW_TILE_HIGH + 3 + FRAME_WH;
     
   } else {
     units_h = h;
@@ -220,15 +227,15 @@ void popup_find_dialog(void)
   h = units_h;
 
   if(!mouse) {  
-    pWindow->size.x = adj_size(10);
+    pWindow->size.x = 10;
     pWindow->size.y = (pWindow->dst->h - h) / 2;
   } else {
     pWindow->size.x = ((Main.event.motion.x + w < pWindow->dst->w) ?
-                     (Main.event.motion.x + adj_size(10)) : (pWindow->dst->w - w - adj_size(10)));
+                     (Main.event.motion.x + 10) : (pWindow->dst->w - w - 10));
     pWindow->size.y = 
-      ((Main.event.motion.y - (WINDOW_TILE_HIGH + adj_size(2)) + h < pWindow->dst->h) ?
-             (Main.event.motion.y - (WINDOW_TILE_HIGH + adj_size(2))) :
-             (pWindow->dst->h - h - adj_size(10)));
+      ((Main.event.motion.y - (WINDOW_TILE_HIGH + 2) + h < pWindow->dst->h) ?
+             (Main.event.motion.y - (WINDOW_TILE_HIGH + 2)) :
+             (pWindow->dst->h - h - 10));
     
   }
   
@@ -250,7 +257,7 @@ void popup_find_dialog(void)
   /* cities */
   pBuf = pBuf->prev;
   setup_vertical_widgets_position(1,
-	pWindow->size.x + FRAME_WH, pWindow->size.y + WINDOW_TILE_HIGH + adj_size(2),
+	pWindow->size.x + FRAME_WH, pWindow->size.y + WINDOW_TILE_HIGH + 2,
 	w, 0, pFind_City_Dlg->pBeginActiveWidgetList, pBuf);
   
   if (pFind_City_Dlg->pScroll)

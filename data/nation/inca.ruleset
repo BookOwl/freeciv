@@ -2,80 +2,35 @@
 
 name=_("Inca")
 plural=_("?plural:Incas")
-groups=_("Medieval"), _("American")
-legend=_("The Inca were an Amerind people of the Northern Andes who\
- conquered an empire stretching along the west coast of South America\
- from what is now southern Chile nearly to the Equator. They had the bad\
- timing to do it just a few decades before the Spanish conquistadors\
- arrived in their part of the world in the mid-1500s AD.")
-leader=
- "Túpac Amaru",
- "Manco Capac",
- "Atahualpa",
- "Pachacuti"
+class=_("Historical")
+legend=_("The Inca were an Amerind people of the Northern Andes who \
+conquered an empire stretching along the west coast of South America \
+from what is now southern Chile nearly to the Equator. They had the bad \
+timing to do it just a few decades before the Spanish conquistadores \
+arrived in their part of the world in the mid-1500s AD.")
+leader="Tupac", "Manco Capac", "Atahualpa", "Pachacuti"
 leader_sex="Male", "Male", "Male", "Male"
-flag="inca"
-flag_alt = "peru"	; Used previously
+flag="f.peru"
+flag_alt = "-"
 city_style = "Tropical"
 
 ruler_titles = { "government",      "male_title",      "female_title"
-                 "Despotism",       _("?title:Inca"),  _("?title:Inca")
-                 "Monarchy",        _("Sapa Inca"),    _("Sapa Inca")
+                 "Despotism",       _("Warlord"),      _("Warlord")
                }
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
-civilwar_nations="aztec", "mayan"
+
+tech_goals="Monarchy","Chivalry","Philosophy","Monotheism", "Invention"
+wonder="Great Wall"
+government="Monarchy"
+civilwar_nations = "aztec"
 
 cities =
- "Cuzco",
- "Machu Picchu",
- "Quito",
- "Chan Chan",
- "Pucara",
- "Chimbote",
- "Cupisnique",
- "Paracas",
- "Huari",
- "Pachacamac",
- "Paramonga",
- "Supe",
- "Ancon",
- "Cajamarquilla",
- "Ocucaje",
- "Cahauchi",
- "Arequipa",
- "Tihuanaco",
- "Chiripa",
- "Ollantaytambo",
- "Pikillacta",
- "Lauricocha",
- "Chavin de Huantar",
- "Cerro Sechin",
- "Moche",
- "Huamachuchu",
- "Cajamara",
- "Lambayeque",
- "Pacasmayo",
- "Huaca Prieta",
- "Pampa de Paijan",
- "Latacunga",
- "Ambato",
- "Quevedo",
- "Ingapirca",
- "Saraguro",
- "Tomebamba",
- "Tumbes",
- "Piura",
- "Huanco",
- "Jauja",
- "Urubamba",
- "Ayacucho",
- "Pica",
- "Tupiza",
- "Tilcara",
- "Talca",
- "Pisac",
- "Vitcos"
+  "Cuzco", "Machu Picchu","Tiahuanaco", "Nazca", "Paracas",
+  "Recuay", "Chavin", "Pacatnamu", "Quito", "Tumbez",
+  "Sullana", "Huanapampa", "Cajanarca", "Chanchan", "Moche",
+  "Huanuco", "Parmunca", "Pachacamac", "Janja", "Ancon",
+  "Huamanga", "Vileas",  "Ollantaytambo", "Pucara", ;modern cities
+  "Lima", "Guayaquil", "Arica", "Callao", "La Paz", "Potosi",
+  "Trujillo", "Cajamarca"

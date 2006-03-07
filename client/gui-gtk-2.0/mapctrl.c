@@ -26,8 +26,6 @@
 #include "support.h"
 #include "unit.h"
 
-#include "overview_common.h"
-
 #include "chatline.h"
 #include "citydlg.h"
 #include "civclient.h"
@@ -47,6 +45,9 @@
 #include "text.h"
 
 #include "mapctrl.h"
+
+/* Color to use to display the workers */
+int city_workers_color=COLOR_STD_WHITE;
 
 struct tmousepos { int x, y; };
 
@@ -82,18 +83,18 @@ static void popupinfo_positioning_callback(GtkWidget *w, GtkAllocation *alloc,
     maxx = minx + map_canvas->allocation.width;
     maxy = miny + map_canvas->allocation.height;
 
-    if (x > mapview.width/2) {
+    if (x > mapview_canvas.width/2) {
       /* right part of the map */
       x += minx;
-      y += miny + (tileset_tile_height(tileset) - alloc->height)/2;
+      y += miny + (NORMAL_TILE_HEIGHT - alloc->height)/2;
 
       y = CLIP(miny, y, maxy - alloc->height);
 
       gtk_window_move(GTK_WINDOW(w), x - alloc->width, y);
     } else {
       /* left part of the map */
-      x += minx + tileset_tile_width(tileset);
-      y += miny + (tileset_tile_height(tileset) - alloc->height)/2;
+      x += minx + NORMAL_TILE_WIDTH;
+      y += miny + (NORMAL_TILE_HEIGHT - alloc->height)/2;
 
       y = CLIP(miny, y, maxy - alloc->height);
 
@@ -109,14 +110,14 @@ static void popupinfo_positioning_callback(GtkWidget *w, GtkAllocation *alloc,
 static void popit(GdkEventButton *event, struct tile *ptile)
 {
   GtkWidget *p;
-  struct tile *cross_list[2 + 1];
+  static struct tile *cross_list[2 + 1];
   struct tile **cross_head = cross_list;
   int i;
   static struct tmousepos mousepos;
   struct unit *punit;
   bool is_orders;
 
-  if (client_tile_get_known(ptile) >= TILE_KNOWN_FOGGED) {
+  if (tile_get_known(ptile) >= TILE_KNOWN_FOGGED) {
     p=gtk_window_new(GTK_WINDOW_POPUP);
     gtk_widget_set_app_paintable(p, TRUE);
     gtk_container_set_border_width(GTK_CONTAINER(p), 4);
@@ -127,11 +128,9 @@ static void popit(GdkEventButton *event, struct tile *ptile)
     is_orders = show_unit_orders(punit);
 
     if (punit && punit->goto_tile) {
-      map_deco[punit->goto_tile->index].crosshair++;
       *cross_head = punit->goto_tile;
       cross_head++;
     }
-    map_deco[ptile->index].crosshair++;
     *cross_head = ptile;
     cross_head++;
 
@@ -140,7 +139,8 @@ static void popit(GdkEventButton *event, struct tile *ptile)
       put_cross_overlay_tile(cross_list[i]);
     }
     g_signal_connect(p, "destroy",
-		     G_CALLBACK(popupinfo_popdown_callback), NULL);
+		     G_CALLBACK(popupinfo_popdown_callback),
+		     GINT_TO_POINTER(is_orders));
 
     mousepos.x = event->x;
     mousepos.y = event->y;
@@ -164,13 +164,13 @@ static void popit(GdkEventButton *event, struct tile *ptile)
 **************************************************************************/
 void popupinfo_popdown_callback(GtkWidget *w, gpointer data)
 {
-  /* We could just remove the crosshairs that we placed earlier, but
-   * this is easier. */
-  whole_map_iterate(ptile) {
-    map_deco[ptile->index].crosshair = 0;
-  } whole_map_iterate_end;
+  bool full = GPOINTER_TO_INT(data);
 
-  update_map_canvas_visible();
+  if (full) {
+    update_map_canvas_visible();
+  } else {
+    dirty_all();
+  }
 }
 
  /**************************************************************************
@@ -253,13 +253,11 @@ gboolean butt_down_mapcanvas(GtkWidget *w, GdkEventButton *ev, gpointer data)
     else if (ev->state & GDK_CONTROL_MASK) {
       action_button_pressed(ev->x, ev->y, SELECT_SEA);
     }
-    /* <SHIFT> + LMB: Append focus unit Production. */
+    /* <SHIFT> + LMB: Copy Production. */
     else if (ptile && (ev->state & GDK_SHIFT_MASK)) {
-      action_button_pressed(ev->x, ev->y, SELECT_APPEND);
+      clipboard_copy_production(ptile);
     }
     /* <ALT> + LMB: popit (same as middle-click) */
-    /* FIXME: we need a general mechanism for letting freeciv work with
-     * 1- or 2-button mice. */
     else if (ptile && (ev->state & GDK_MOD1_MASK)) {
       popit(ev, ptile);
     }
@@ -310,8 +308,7 @@ gboolean butt_down_mapcanvas(GtkWidget *w, GdkEventButton *ev, gpointer data)
       }
       cancel_tile_hiliting();
       if (hover_state == HOVER_NONE) {
-        anchor_selection_rectangle(ev->x, ev->y,
-				   (ev->state & GDK_SHIFT_MASK) != 0);
+        anchor_selection_rectangle(ev->x, ev->y);
         rbutton_down = TRUE; /* causes rectangle updates */
       }
     }
@@ -334,7 +331,7 @@ void create_line_at_mouse_pos(void)
 
   gdk_window_get_pointer(map_canvas->window, &x, &y, 0);
   if (x >= 0 && y >= 0
-      && x < mapview.width && y < mapview.width) {
+      && x < mapview_canvas.width && y < mapview_canvas.width) {
     update_line(x, y);
   } else {
     gdk_window_get_pointer(overview_canvas->window, &x, &y, 0);
@@ -364,38 +361,15 @@ void update_rect_at_mouse_pos(void)
 }
 
 /**************************************************************************
-  Triggered by the mouse moving on the mapcanvas, this function will
-  update the mouse cursor and goto lines. 
+...
 **************************************************************************/
 gboolean move_mapcanvas(GtkWidget *w, GdkEventMotion *ev, gpointer data)
 {
-  struct tile *ptile = NULL;
-
-  if (!GTK_WIDGET_HAS_FOCUS(map_canvas)) {
-    gtk_widget_grab_focus(map_canvas);
-  }
-
   update_line(ev->x, ev->y);
   update_rect_at_mouse_pos();
   if (keyboardless_goto_button_down && hover_state == HOVER_NONE) {
     maybe_activate_keyboardless_goto(ev->x, ev->y);
   }
-  ptile = canvas_pos_to_tile(ev->x, ev->y);
-  handle_mouse_cursor(ptile);
-  hover_tile = ptile;
-
-  return TRUE;
-}
-
-/**************************************************************************
-  This function will reset the mouse cursor if it leaves the map.
-**************************************************************************/
-gboolean leave_mapcanvas(GtkWidget *widget, GdkEventCrossing *event)
-{
-  struct unit_list *active_units = get_units_in_focus();
-
-  action_state = CURSOR_ACTION_DEFAULT;
-  update_unit_info_label(active_units); 
   return TRUE;
 }
 
@@ -423,8 +397,7 @@ gboolean butt_down_overviewcanvas(GtkWidget *w, GdkEventButton *ev, gpointer dat
   if (can_client_change_view() && (ev->button == 3)) {
     center_tile_mapcanvas(map_pos_to_tile(xtile, ytile));
   } else if (can_client_issue_orders() && (ev->button == 1)) {
-    do_map_click(map_pos_to_tile(xtile, ytile),
-		 (ev->state & GDK_SHIFT_MASK) ? SELECT_POPUP : SELECT_APPEND);
+    do_map_click(map_pos_to_tile(xtile, ytile), SELECT_POPUP);
   }
 
   return TRUE;

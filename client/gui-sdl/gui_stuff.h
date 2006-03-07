@@ -22,26 +22,15 @@
 #ifndef FC__GUI_STUFF_H
 #define FC__GUI_STUFF_H
 
-/* utility */
-#include "fc_types.h"
+#include "gui_mem.h"
 
-/* gui-sdl */
-#include "gui_main.h"
-#include "gui_string.h"
-
-#ifdef SMALL_SCREEN
-#define	FRAME_WH		2
-#define	WINDOW_TILE_HIGH	10
-#else
-#define	FRAME_WH		3
 #define	WINDOW_TILE_HIGH	20
-#endif
+#define	FRAME_WH		3
+#define	DOUBLE_FRAME_WH		6
 
-#define	DOUBLE_FRAME_WH		FRAME_WH * 2
-
-#define STATE_MASK		0x03       /* 0..0000000000000011 */
-#define TYPE_MASK		0x03FC     /* 0..0000001111111100 */
-#define FLAG_MASK		0xFFFFFC00 /* 1..1111110000000000 */
+#define STATE_MASK		0x03
+#define TYPE_MASK		0x03FC
+#define FLAG_MASK		0xFFFFFC00
 
 #define MAX_ID			0xFFFF
 /* Text cetnter flags has been moved to 'string16->style' */
@@ -50,15 +39,10 @@
 /* default: ICON_CENTER_Y, ICON_ON_LEFT */
 enum WFlags {
   WF_HIDDEN				= (1<<10),	/* 1024 */
-  /* widget->gfx may be freed */
   WF_FREE_GFX	 			= (1<<11),	/* 2048 */
-  /* widget->theme may be freed */
   WF_FREE_THEME				= (1<<12),	/* 4096 */
-  /* widget->string may be freed */
   WF_FREE_STRING			= (1<<13),	/* 8192 */
-  /* widget->data may be freed */
   WF_FREE_DATA			 	= (1<<14),	/* 16384 */
-  /* widget->private_data may be freed */
   WF_FREE_PRIVATE_DATA			= (1<<15),	/* 32768 */
   WF_ICON_ABOVE_TEXT			= (1<<16),	/* 32768 */
   WF_ICON_UNDER_TEXT			= (1<<17),	/* 65536 */
@@ -75,9 +59,9 @@ enum WFlags {
 
 /* Widget states */
 enum WState {
-  FC_WS_NORMAL		= 0,
+  FC_WS_NORMAL	= 0,
   FC_WS_SELLECTED	= 1,
-  FC_WS_PRESSED		= 2,
+  FC_WS_PRESSED	= 2,
   FC_WS_DISABLED	= 3
 };
 
@@ -112,6 +96,10 @@ enum Edit_Return_Codes {
   ED_FORCE_EXIT = 4
 };
 
+struct city;
+struct unit;
+struct player;
+  
 struct CONTAINER {
   int id0;
   int id1;
@@ -173,9 +161,9 @@ struct GUI {
   Uint16 ID;			/* ID in widget list */
 };
 
-#define scrollbar_size(pScroll)				\
-        ((float)((float)(pScroll->active * pScroll->step) /	\
-        (float)pScroll->count) * (pScroll->max - pScroll->min))
+#define scrollbar_size(pScroll) 					\
+  fc__extension((float)((float)(pScroll->active * pScroll->step) /	\
+		(float)pScroll->count) * (pScroll->max - pScroll->min))
 
 /* Struct of basic window group dialog ( without scrollbar ) */
 struct SMALL_DLG {
@@ -192,11 +180,6 @@ struct ADVANCED_DLG {
   struct GUI *pEndActiveWidgetList;
   struct GUI *pActiveWidgetList; /* first seen widget */
   struct ScrollBar *pScroll;
-};
-
-enum scan_direction {
-  SCAN_FORWARD,
-  SCAN_BACKWARD
 };
 
 SDL_Surface *create_bcgnd_surf(SDL_Surface *pTheme, SDL_bool transp,
@@ -224,18 +207,14 @@ struct GUI *WidgetListKeyScaner(const struct GUI *pGUI_List,
 				SDL_keysym Key);
 struct GUI *MainWidgetListKeyScaner(SDL_keysym Key);
 
-struct GUI *get_widget_pointer_form_ID(const struct GUI *pGUI_List, Uint16 ID,
-                                       enum scan_direction direction);
-
+struct GUI *get_widget_pointer_form_ID(const struct GUI *pGUI_List, Uint16 ID);
 struct GUI *get_widget_pointer_form_main_list(Uint16 ID);
 
 void widget_sellected_action(struct GUI *pWidget);
 Uint16 widget_pressed_action(struct GUI *pWidget);
 
 void unsellect_widget_action(void);
-
-#define draw_widget_info_label() redraw_widget_info_label(NULL);
-void redraw_widget_info_label(SDL_Rect *area);
+void draw_widget_info_label(void);
 
 /* Group */
 Uint16 redraw_group(const struct GUI *pBeginGroupWidgetList,
@@ -409,13 +388,13 @@ do {						\
 	(pWidget)->state_types_flags &= ~((flag) & FLAG_MASK)
 
 #define get_wstate(pWidget)				\
-	((enum WState)(pWidget->state_types_flags & STATE_MASK))
+	fc__extension((enum WState)(pWidget->state_types_flags & STATE_MASK))
 
 #define get_wtype(pWidget)				\
-	((enum WTypes)(pWidget->state_types_flags & TYPE_MASK))
+	fc__extension((enum WTypes)(pWidget->state_types_flags & TYPE_MASK))
 
 #define get_wflags(pWidget)				\
-	((enum WFlags)(pWidget->state_types_flags & FLAG_MASK))
+	fc__extension((enum WFlags)(pWidget->state_types_flags & FLAG_MASK))
 
 
 #define hide_scrollbar(scrollbar)				\
@@ -457,12 +436,12 @@ do {								\
     }								\
   }								\
   if ((get_wflags(pGUI) & WF_FREE_DATA) == WF_FREE_DATA) {	\
-    FC_FREE(pGUI->data.ptr);					\
+    FREE(pGUI->data.ptr);					\
   }								\
   if ((get_wflags(pGUI) & WF_FREE_PRIVATE_DATA) == WF_FREE_PRIVATE_DATA) { 	\
-    FC_FREE(pGUI->private_data.ptr);				\
+    FREE(pGUI->private_data.ptr);				\
   }								\
-  FC_FREE(pGUI);							\
+  FREE(pGUI);							\
 } while(0)
 
 #define redraw_ID(ID) \

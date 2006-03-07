@@ -76,7 +76,7 @@ bool ct_point_valid(const struct ct_point *point)
 bool ct_rect_in_rect_list(const struct ct_rect *item,
 			  const struct region_list *region_list)
 {
-  region_list_iterate(region_list, container) {
+  region_list_iterate(*region_list, container) {
     if (ct_rect_in_rect(item, container)) {
       return TRUE;
     }
@@ -104,6 +104,8 @@ bool ct_rect_in_rect(const struct ct_rect *item,
 bool ct_point_in_rect(const struct ct_point *item,
 		      const struct ct_rect *container)
 {
+    assert(ct_rect_valid(container) && ct_point_valid(item));
+
     return (item->x >= container->x && item->y >= container->y &&
 	    item->x < container->x + container->width &&
 	    item->y < container->y + container->height);
@@ -285,8 +287,8 @@ const char *ct_rect_to_string(const struct ct_rect *rect)
 {
   static char buffer[100];
 
-  my_snprintf(buffer, 100, "{x=%d, y=%d, width=%d, height=%d}", rect->x,
-	      rect->y, rect->width, rect->height);
+  snprintf(buffer, 100, "{x=%d, y=%d, width=%d, height=%d}", rect->x,
+	   rect->y, rect->width, rect->height);
   return buffer;
 }
 
@@ -339,16 +341,7 @@ void ct_clip_rect(struct ct_rect *to_draw, const struct ct_rect *available)
   ct_clip_point(&p1, available);
   ct_clip_point(&p2, available);
 
-  /* If after clipping the points are outside we have an empty area */
-  if (!ct_point_in_rect(&p1, to_draw) || !ct_point_in_rect(&p2, to_draw)) {
-    to_draw->x = 0;
-    to_draw->y = 0;
-    to_draw->width = 0;
-    to_draw->height = 0;
-  } else {
-    ct_rect_fill_on_2_points(to_draw, &p1, &p2);
-  }
-
+  ct_rect_fill_on_2_points(to_draw, &p1, &p2);
   assert(ct_rect_in_rect(to_draw, available));
 }
 
@@ -472,16 +465,15 @@ const char *ct_key_format(const struct be_key *key)
 {
   static char out[100];
   char buffer[100];
-
   if (key->type == BE_KEY_NORMAL) {
-    my_snprintf(buffer, sizeof(buffer), "%c", key->key);
+    snprintf(buffer, sizeof(buffer), "%c", key->key);
   } else {
     int i;
     bool found = FALSE;
 
     for (i = 0; i < ARRAY_SIZE(keymap); i++) {
       if (keymap[i].type == key->type) {
-	my_snprintf(buffer, sizeof(buffer), "%s", keymap[i].name);
+	snprintf(buffer, sizeof(buffer), "%s", keymap[i].name);
 	found = TRUE;
 	break;
       }
@@ -489,7 +481,7 @@ const char *ct_key_format(const struct be_key *key)
     assert(found);
   }
 
-  my_snprintf(out, sizeof(out), "%s%s%s%s",
+  snprintf(out, sizeof(out), "%s%s%s%s",
 	   (key->alt ? "Alt-" : ""),
 	   (key->control ? "Ctrl-" : ""),
 	   (key->shift ? "Shift-" : ""), buffer);

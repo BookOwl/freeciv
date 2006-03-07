@@ -72,6 +72,9 @@ rail_shield_bonus=50
 ; percent added to trade production if square has railroad
 rail_trade_bonus=0
 
+; percent added to food production if farmland and city has supermarket
+farmland_supermarket_food_bonus=50
+
 ; percent subtracted from food production if square is polluted
 pollution_food_penalty=50
 
@@ -100,18 +103,29 @@ fallout_trade_penalty=50
 ;
 ; Notes:
 ;
-; name                 = name as seen by user; if "unused", it is not used
+; terrain_name         = name as seen by user; if "unused", it is not used
 ; graphic              = preferred base graphics tag in tilespec; must have
 ;                        tags with extensions _n0s0e0e0 etc.
 ; graphic_alt          = alternate graphics tag if preferred is not found;
 ;                        should be a standard tag if preferred is not;
 ;			 otherwise may be "-"
 ; movement_cost        = typically 1 to 3
-; defense_bonus        = percent added to defense; typically 0% to 200%
+; defense_bonus        = 10 times actual; typically 10 to 30 (1.0 to 3.0)
 ; food                 = normal food production
 ; shield               = normal shield production
 ; trade                = normal trade production
-; resources            = list of possible resources on this terrain
+; special_1_name       = name of special; if "none", special is not used
+; graphic_special_1    = full tilespec tag
+; graphic_special_1a   = alternate
+; food_special_1       = special (1) food production
+; shield_special_1     = special (1) shield production
+; trade_special_1      = special (1) trade production
+; special_2_name       = name of special; if "none", special is not used
+; graphic_special_2    = full tilespec tag
+; graphic_special_2a   = alternate
+; food_special_2       = special (2) food production
+; shield_special_2     = special (2) shield production
+; trade_special_2      = special (2) trade production
 ; road_trade_incr      = increment to trade if square has road
 ; road_time            = time to build road; if 0, cannot build road
 ; irrigation_result    = result of irrigation; one of:
@@ -159,16 +173,27 @@ fallout_trade_penalty=50
 ;		         newlines so that xgettext parsing works
 
 [terrain_glacier]
-name                 = _("Glacier")
+terrain_name         = _("Glacier")
 graphic              = "arctic"
 graphic_alt	     = "-"
 identifier	     = "a"
 movement_cost        = 2
-defense_bonus        = 0
+defense_bonus        = 10
 food                 = 0
 shield               = 0
 trade                = 0
-resources            = "Ivory", "Oil"
+special_1_name       = _("Ivory")
+graphic_special_1    = "ts.arctic_ivory"
+graphic_special_1a   = "-"
+food_special_1       = 1
+shield_special_1     = 1
+trade_special_1      = 4
+special_2_name       = _("Oil")
+graphic_special_2    = "ts.arctic_oil"
+graphic_special_2a   = "ts.oil"
+food_special_2       = 0
+shield_special_2     = 4
+trade_special_2      = 0
 road_trade_incr      = 0
 road_time            = 4
 irrigation_result    = "no"
@@ -184,7 +209,6 @@ warmer_drier_result  = "no"
 cooler_wetter_result = "no"
 cooler_drier_result  = "no"
 flags                = "NoBarbs", "CanHaveRiver"
-property_frozen      = 100
 helptext	     = _("\
 Glaciers are found only in the most northerly or southerly\
  reaches of the world.  They are very cold, and hence difficult to\
@@ -192,16 +216,27 @@ Glaciers are found only in the most northerly or southerly\
 ")
 
 [terrain_desert]
-name                 = _("Desert")
+terrain_name         = _("Desert")
 graphic              = "desert"
 graphic_alt	     = "-"
 identifier	     = "d"
 movement_cost        = 1
-defense_bonus        = 0
+defense_bonus        = 10
 food                 = 0
 shield               = 1
 trade                = 0
-resources            = "Oasis", "Petroleum"
+special_1_name       = _("Oasis")
+graphic_special_1    = "ts.oasis"
+graphic_special_1a   = "-"
+food_special_1       = 3
+shield_special_1     = 1
+trade_special_1      = 0
+special_2_name       = _("Oil")
+graphic_special_2    = "ts.oil"
+graphic_special_2a   = "-"
+food_special_2       = 0
+shield_special_2     = 4
+trade_special_2      = 0
 road_trade_incr      = 1
 road_time            = 2
 irrigation_result    = "yes"
@@ -217,24 +252,33 @@ warmer_drier_result  = "no"
 cooler_wetter_result = "no"
 cooler_drier_result  = "no"
 flags                = "CanHaveRiver"
-property_dry         = 100
-property_tropical    = 50
 helptext	     = _("\
 Deserts are regions of extreme dryness, making agriculture and\
  trade very difficult.\
 ")
 
 [terrain_forest]
-name                 = _("Forest")
+terrain_name         = _("Forest")
 graphic              = "forest"
 graphic_alt	     = "-"
 identifier	     = "f"
 movement_cost        = 2
-defense_bonus        = 50
+defense_bonus        = 15
 food                 = 1
 shield               = 2
 trade                = 0
-resources            = "Pheasant", "Silk"
+special_1_name       = _("Pheasant")
+graphic_special_1    = "ts.pheasant"
+graphic_special_1a   = "-"
+food_special_1       = 3
+shield_special_1     = 2
+trade_special_1      = 0
+special_2_name       = _("Silk")
+graphic_special_2    = "ts.silk"
+graphic_special_2a   = "-"
+food_special_2       = 1
+shield_special_2     = 2
+trade_special_2      = 3
 road_trade_incr      = 0
 road_time            = 4
 irrigation_result    = "Plains"
@@ -250,24 +294,33 @@ warmer_drier_result  = "Desert"
 cooler_wetter_result = "no"
 cooler_drier_result  = "no"
 flags                = "Starter", "CanHaveRiver"
-property_temperate   = 50
-property_foliage     = 50
 helptext	     = _("\
 Forests are densely wooded, making agriculture somewhat\
  problematic.\
 ")
 
 [terrain_grassland]
-name                 = _("Grassland")
+terrain_name         = _("Grassland")
 graphic              = "grassland"
 graphic_alt	     = "-"
 identifier	     = "g"
 movement_cost        = 1
-defense_bonus        = 0
+defense_bonus        = 10
 food                 = 2
 shield               = 0
 trade                = 0
-resources            = "Resources"
+special_1_name       = _("Resources")
+graphic_special_1    = "ts.grassland_resources"
+graphic_special_1a   = "-"
+food_special_1       = 2
+shield_special_1     = 1
+trade_special_1      = 0
+special_2_name       = _("Resources")
+graphic_special_2    = "ts.grassland_resources"
+graphic_special_2a   = "-"
+food_special_2       = 2
+shield_special_2     = 1
+trade_special_2      = 0
 road_trade_incr      = 1
 road_time            = 2
 irrigation_result    = "yes"
@@ -283,23 +336,32 @@ warmer_drier_result  = "Desert"
 cooler_wetter_result = "Desert"
 cooler_drier_result  = "Tundra"
 flags                = "Starter", "CanHaveRiver"
-property_temperate   = 50
-property_green       = 50
 helptext	     = _("\
 Grasslands afford exceptional agricultural opportunities.\
 ")
 
 [terrain_hills]
-name                 = _("Hills")
+terrain_name         = _("Hills")
 graphic              = "hills"
 graphic_alt	     = "-"
 identifier	     = "h"
 movement_cost        = 2
-defense_bonus        = 100
+defense_bonus        = 20
 food                 = 1
 shield               = 0
 trade                = 0
-resources            = "Coal", "Wine"
+special_1_name       = _("Coal")
+graphic_special_1    = "ts.coal"
+graphic_special_1a   = "-"
+food_special_1       = 1
+shield_special_1     = 2
+trade_special_1      = 0
+special_2_name       = _("Wine")
+graphic_special_2    = "ts.wine"
+graphic_special_2a   = "-"
+food_special_2       = 1
+shield_special_2     = 0
+trade_special_2      = 4
 road_trade_incr      = 0
 road_time            = 4
 irrigation_result    = "yes"
@@ -315,24 +377,33 @@ warmer_drier_result  = "no"
 cooler_wetter_result = "no"
 cooler_drier_result  = "no"
 flags                = "Starter", "CanHaveRiver"
-property_green       = 50
-property_mountainous = 30
 helptext	     = _("\
 In addition to being amenable to agriculture, Hills are frequently\
  rich in resources.\
 ")
 
 [terrain_jungle]
-name                 = _("Jungle")
+terrain_name         = _("Jungle")
 graphic              = "jungle"
 graphic_alt	     = "-"
 identifier	     = "j"
 movement_cost        = 2
-defense_bonus        = 50
+defense_bonus        = 15
 food                 = 1
 shield               = 0
 trade                = 0
-resources            = "Gems", "Fruit"
+special_1_name       = _("Gems")
+graphic_special_1    = "ts.gems"
+graphic_special_1a   = "-"
+food_special_1       = 1
+shield_special_1     = 0
+trade_special_1      = 4
+special_2_name       = _("Fruit")
+graphic_special_2    = "ts.fruit"
+graphic_special_2a   = "-"
+food_special_2       = 4
+shield_special_2     = 0
+trade_special_2      = 1
 road_trade_incr      = 0
 road_time            = 4
 irrigation_result    = "Grassland"
@@ -348,25 +419,33 @@ warmer_drier_result  = "no"
 cooler_wetter_result = "Desert"
 cooler_drier_result  = "Tundra"
 flags                = "CanHaveRiver"
-property_tropical    = 50
-property_foliage     = 50
-property_wet         = 50
 helptext	     = _("\
 Jungles are densely overgrown, making agriculture somewhat\
  problematic.\
 ")
 
 [terrain_mountains]
-name                 = _("Mountains")
+terrain_name         = _("Mountains")
 graphic              = "mountains"
 graphic_alt	     = "-"
 identifier	     = "m"
 movement_cost        = 3
-defense_bonus        = 200
+defense_bonus        = 30
 food                 = 0
 shield               = 1
 trade                = 0
-resources            = "Gold", "Iron"
+special_1_name       = _("Gold")
+graphic_special_1    = "ts.gold"
+graphic_special_1a   = "-"
+food_special_1       = 0
+shield_special_1     = 1
+trade_special_1      = 6
+special_2_name       = _("Iron")
+graphic_special_2    = "ts.iron"
+graphic_special_2a   = "-"
+food_special_2       = 0
+shield_special_2     = 4
+trade_special_2      = 0
 road_trade_incr      = 0
 road_time            = 6
 irrigation_result    = "no"
@@ -382,23 +461,33 @@ warmer_drier_result  = "no"
 cooler_wetter_result = "no"
 cooler_drier_result  = "no"
 flags                = "CanHaveRiver"
-property_mountainous = 70
 helptext	     = _("\
 Mountains are regions of extreme altitude, making agriculture and\
  trade very difficult.\
 ")
 
 [terrain_ocean]
-name                 = _("Ocean")
+terrain_name         = _("Ocean")
 graphic              = "ocean"
 graphic_alt	     = "-"
 identifier	     = " "
 movement_cost        = 1
-defense_bonus        = 0
+defense_bonus        = 10
 food                 = 1
 shield               = 0
 trade                = 2
-resources            = "Fish", "Whales"
+special_1_name       = _("Fish")
+graphic_special_1    = "ts.fish"
+graphic_special_1a   = "-"
+food_special_1       = 3
+shield_special_1     = 0
+trade_special_1      = 2
+special_2_name       = _("Whales")
+graphic_special_2    = "ts.whales"
+graphic_special_2a   = "-"
+food_special_2       = 2
+shield_special_2     = 2
+trade_special_2      = 3
 road_trade_incr      = 0
 road_time            = 0
 irrigation_result    = "no"
@@ -422,16 +511,27 @@ Ocean squares can never be polluted or subjected to fallout.\
 ")
 
 [terrain_plains]
-name                 = _("Plains")
+terrain_name         = _("Plains")
 graphic              = "plains"
 graphic_alt	     = "-"
 identifier	     = "p"
 movement_cost        = 1
-defense_bonus        = 0
+defense_bonus        = 10
 food                 = 1
 shield               = 1
 trade                = 0
-resources            = "Buffalo", "Wheat"
+special_1_name       = _("Buffalo")
+graphic_special_1    = "ts.buffalo"
+graphic_special_1a   = "-"
+food_special_1       = 1
+shield_special_1     = 3
+trade_special_1      = 0
+special_2_name       = _("Wheat")
+graphic_special_2    = "ts.wheat"
+graphic_special_2a   = "-"
+food_special_2       = 3
+shield_special_2     = 1
+trade_special_2      = 0
 road_trade_incr      = 1
 road_time            = 2
 irrigation_result    = "yes"
@@ -447,24 +547,33 @@ warmer_drier_result  = "Desert"
 cooler_wetter_result = "Desert"
 cooler_drier_result  = "Tundra"
 flags                = "Starter", "CanHaveRiver"
-property_green       = 50
-property_temperate   = 50
 helptext	     = _("\
 Plains are very broad, sparse regions, which makes trade slightly\
  inconvenient.\
 ")
 
 [terrain_swamp]
-name                 = _("Swamp")
+terrain_name         = _("Swamp")
 graphic              = "swamp"
 graphic_alt	     = "-"
 identifier	     = "s"
 movement_cost        = 2
-defense_bonus        = 50
+defense_bonus        = 15
 food                 = 1
 shield               = 0
 trade                = 0
-resources            = "Peat", "Spice"
+special_1_name       = _("Peat")
+graphic_special_1    = "ts.peat"
+graphic_special_1a   = "-"
+food_special_1       = 1
+shield_special_1     = 4
+trade_special_1      = 0
+special_2_name       = _("Spice")
+graphic_special_2    = "ts.spice"
+graphic_special_2a   = "-"
+food_special_2       = 3
+shield_special_2     = 0
+trade_special_2      = 4
 road_trade_incr      = 0
 road_time            = 4
 irrigation_result    = "Grassland"
@@ -480,24 +589,33 @@ warmer_drier_result  = "no"
 cooler_wetter_result = "Desert"
 cooler_drier_result  = "Tundra"
 flags                = "CanHaveRiver"
-property_wet         = 100
-property_foliage     = 10
 helptext	     = _("\
 Swamps suffer from an over-abundance of water, making agriculture\
  somewhat problematic.\
 ")
 
 [terrain_tundra]
-name                 = _("Tundra")
+terrain_name         = _("Tundra")
 graphic              = "tundra"
 graphic_alt	     = "-"
 identifier	     = "t"
 movement_cost        = 1
-defense_bonus        = 0
+defense_bonus        = 10
 food                 = 1
 shield               = 0
 trade                = 0
-resources            = "?animals:Game", "Furs"
+special_1_name       = _("?animals:Game")
+graphic_special_1    = "ts.tundra_game"
+graphic_special_1a   = "-"
+food_special_1       = 3
+shield_special_1     = 1
+trade_special_1      = 0
+special_2_name       = _("Furs")
+graphic_special_2    = "ts.furs"
+graphic_special_2a   = "-"
+food_special_2       = 2
+shield_special_2     = 0
+trade_special_2      = 3
 road_trade_incr      = 0
 road_time            = 2
 irrigation_result    = "yes"
@@ -513,162 +631,7 @@ warmer_drier_result  = "no"
 cooler_wetter_result = "Glacier"
 cooler_drier_result  = "Glacier"
 flags                = "Starter", "NoBarbs", "CanHaveRiver"
-property_cold        = 50
 helptext	     = _("\
 Tundra are broad, cold regions, fit for some agriculture and little\
  else.\
 ")
-
-[resource_ivory]
-name        = _("Ivory")
-graphic     = "ts.arctic_ivory"
-graphic_alt = "-"
-food        = 1
-shield      = 1
-trade       = 4
-identifier  = "i"
-
-[resource_oil]
-name        = _("Oil")
-graphic     = "ts.oil"
-graphic_alt = "-"
-shield      = 4
-identifier  = "x"
-
-[resource_petroleum]
-name        = _("Petroleum")
-graphic     = "ts.oil"
-graphic_alt = "-"
-shield      = 3
-identifier  = "P"
-
-[resource_oasis]
-name        = _("Oasis")
-graphic     = "ts.oasis"
-graphic_alt = "-"
-food        = 3
-identifier  = "o"
-
-[resource_pheasant]
-name        = _("Pheasant")
-graphic     = "ts.pheasant"
-graphic_alt = "-"
-food        = 2
-identifier  = "p"
-
-[resource_silk]
-name        = _("Silk")
-graphic     = "ts.silk"
-graphic_alt = "-"
-trade       = 3
-identifier  = "s"
-
-[resource_resources]
-name        = _("Resources")
-graphic     = "ts.grassland_resources"
-graphic_alt = "-"
-shield      = 1
-identifier  = "r"
-
-[resource_coal]
-name        = _("Coal")
-graphic     = "ts.coal"
-graphic_alt = "-"
-shield      = 2
-identifier  = "c"
-
-[resource_wine]
-name        = _("Wine")
-graphic     = "ts.wine"
-graphic_alt = "-"
-trade       = 4
-identifier  = "w"
-
-[resource_gems]
-name        = _("Gems")
-graphic     = "ts.gems"
-graphic_alt = "-"
-trade       = 4
-identifier  = "g"
-
-[resource_fruit]
-name        = _("Fruit")
-graphic     = "ts.fruit"
-graphic_alt = "-"
-food        = 3
-trade       = 1
-identifier  = "f"
-
-[resource_gold]
-name        = _("Gold")
-graphic     = "ts.gold"
-graphic_alt = "-"
-trade       = 6
-identifier  = "$"
-
-[resource_iron]
-name        = _("Iron")
-graphic     = "ts.iron"
-graphic_alt = "-"
-shield      = 3
-identifier  = "/"
-
-[resource_fish]
-name        = _("Fish")
-graphic     = "ts.fish"
-graphic_alt = "-"
-food        = 2
-identifier  = "y"
-
-[resource_whales]
-name        = _("Whales")
-graphic     = "ts.whales"
-graphic_alt = "-"
-food        = 1
-shield      = 1
-identifier  = "v"
-
-[resource_buffalo]
-name        = _("Buffalo")
-graphic     = "ts.buffalo"
-graphic_alt = "-"
-shield      = 2
-identifier  = "b"
-
-[resource_wheat]
-name        = _("Wheat")
-graphic     = "ts.wheat"
-graphic_alt = "-"
-food        = 2
-identifier  = "j"
-
-[resource_peat]
-name        = _("Peat")
-graphic     = "ts.peat"
-graphic_alt = "-"
-shield      = 4
-identifier  = "a"
-
-[resource_spice]
-name        = _("Spice")
-graphic     = "ts.spice"
-graphic_alt = "-"
-food        = 2
-trade       = 4
-identifier  = "t"
-
-[resource_game]
-name        = _("?animals:Game")
-graphic     = "ts.tundra_game"
-graphic_alt = "-"
-food        = 2
-shield      = 1
-identifier  = "e"
-
-[resource_furs]
-name        = _("Furs")
-graphic     = "ts.furs"
-graphic_alt = "-"
-food        = 1
-trade       = 3
-identifier  = "u"

@@ -22,20 +22,23 @@
 #ifndef FC__MAPVIEW_H
 #define FC__MAPVIEW_H
 
-#include <SDL/SDL.h>
-
 #include "mapview_g.h"
 #include "mapview_common.h"
 
+struct unit;
+struct city;
+  
 void center_minimap_on_minimap_window(void);
+void tmp_map_surfaces_init(void);
 void redraw_unit_info_label(struct unit *pUnit);
+void real_blink_active_unit(void);
 SDL_Surface * create_city_map(struct city *pCity);
-SDL_Surface * get_terrain_surface(struct tile *ptile);  
+SDL_Surface * get_terrain_surface(int x, int y);  
+int correction_map_pos(int *pCol, int *pRow);
 void put_unit_pixmap_draw(struct unit *pUnit, SDL_Surface *pDest,
 			  Sint16 map_x, Sint16 map_y);
 void rebuild_focus_anim_frames(void);
 void toggle_overview_mode(void);
-void refresh_overview(void);
 
 void flush_rect(SDL_Rect rect);
 void sdl_dirty_rect(SDL_Rect rect);

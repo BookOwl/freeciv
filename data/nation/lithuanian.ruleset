@@ -2,17 +2,13 @@
 
 name=_("Lithuanian")
 plural=_("?plural:Lithuanians")
-groups=_("Medieval"), _("Modern"), _("European")
-legend=_("Lithuania is a small country on the south coast of the Baltic\
- Sea, northeast of Poland.  Lithuanian is the most archaic and complex of\
- the northern Indo-European languages")
-leader=
- "Gediminas",
- "Mindaugas",
- "Vytautas",
- "Antanas Smetona"
+class=_("Modern")
+legend=_("Lithuania is a small country on the south coast of the Baltic \
+Sea, northeast of Poland.  Lithuanian is the most archaic and complex of \
+the northern Indo-European languages")
+leader="Gediminas", "Mindaugas", "Vytautas", "Antanas Smetona"
 leader_sex="Male", "Male", "Male", "Male"
-flag="lithuania"
+flag="f.lithuania"
 flag_alt = "-"
 city_style = "European"
 ruler_titles = { "government",      "male_title",         "female_title"
@@ -21,11 +17,9 @@ ruler_titles = { "government",      "male_title",         "female_title"
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
-
-; Similar flags
-conflicts_with="bulgarian"
+tech_goals = "Monarchy","Chivalry","The Republic","Railroad","Explosives"
+wonder="Copernicus' Observatory"
+government = "Republic"
 civilwar_nations = "polish", "danish"
 
 cities =

@@ -2,11 +2,10 @@
 [tilespec]
 
 ; Format and options of this tilespec file:
-options = "+tilespec3 +Freeciv.Devel.2005.Nov.25"
+options = "+tilespec3"
 
 ; A simple name for the tileset specified by this file:
 name = "isophex"
-priority = 3
 
 ; TODO: add more overall information fields on tiles, 
 ; eg, description, authors, colors, etc.
@@ -27,17 +26,8 @@ fogstyle = 0
 darkness_style = 2
  
 ; offset the flags by this amount when drawing units
-unit_flag_offset_x = 17
-unit_flag_offset_y = 11
-city_flag_offset_x = 17
-city_flag_offset_y = 11
-
-; offset the units by this amount when drawing units
-unit_offset_x = 21
-unit_offset_y = 13
-
-; offset the citybar text by this amount (from the city tile origin)
-citybar_offset_y = 20
+flag_offset_x = 17
+flag_offset_y = 11
 
 ; Hex data.
 is_hex = 1
@@ -53,10 +43,6 @@ city_productions_font = "6x13"
 ; Should flags be drawn as transparent:  (else opaque)
 flags_are_transparent = 1
 
-; Font size (points) to use to draw city names and productions:
-city_names_font_size = 10
-city_productions_font_size = 10
-
 ; These are special because they get freed and reloaded
 ; as required:
 main_intro_file    = "misc/intro"
@@ -67,33 +53,22 @@ minimap_intro_file = "misc/radar"
 ; low-color systems, and if there are any duplicate tags (lattermost
 ; tag is used).
 files = 
-  "misc/colors.spec",
-  "misc/overlays.spec",
-  "misc/citybar.spec",
   "isophex/terrain1.spec",
   "isophex/terrain2.spec",
   "isophex/darkness.spec",
   "isophex/tiles.spec",
-  "isophex/grid.spec",
   "isophex/rivers.spec",
   "misc/small.spec",
   "misc/buildings.spec",
-  "trident/units.spec",
-  "isotrident/unitextras.spec",
+  "isotrident/units.spec",
   "misc/flags.spec",
-  "misc/shields.spec",
-  "misc/cursors.spec",
   "misc/space.spec",
   "misc/treaty.spec",
-  "misc/icons.spec",
   "isotrident/nuke.spec",
   "isotrident/cities.spec",
   "isophex/gold.spec",
   "isotrident/morecities.spec"
 
-
-; Include color definitions
-*include "misc/colors.tilespec"
 
 ; Terrain info - see README.graphics
 

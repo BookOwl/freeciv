@@ -22,34 +22,63 @@
 #include <config.h>
 #endif
 
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include <SDL/SDL.h>
 
-/* utility */
+#include "events.h"
 #include "fcintl.h"
 
-/* client */
-#include "options.h"
+#include "game.h"
+#include "map.h"
 
-/* gui-sdl */
+#include "gui_mem.h"
+
+#include "packets.h"
+#include "player.h"
+
+#include "chatline.h"
 #include "citydlg.h"
+#include "clinet.h"
+#include "colors.h"
 #include "graphics.h"
-#include "gui_id.h"
 #include "gui_main.h"
+#include "gui_string.h"
+#include "gui_id.h"
 #include "gui_stuff.h"
+#include "gui_tilespec.h"
 #include "mapview.h"
+#include "options.h"
 
 #include "messagewin.h"
 
 
-#ifdef SMALL_SCREEN
-#define N_MSG_VIEW               3    /* max before scrolling happens */
-#else
-#define N_MSG_VIEW		 6          
-#endif
-
-#define PTSIZE_LOG_FONT		adj_font(10)
+#define N_MSG_VIEW		 7		/* max before scrolling happens */
+#define PTSIZE_LOG_FONT		10
 
 static struct ADVANCED_DLG *pMsg_Dlg = NULL;
+
+#ifdef UNUSED
+/**************************************************************************
+  Turn off updating of message window
+**************************************************************************/
+void meswin_update_delay_on(void)
+{
+  freelog(LOG_DEBUG, "meswin_update_delay_on : PORT ME");
+}
+
+/**************************************************************************
+  Turn on updating of message window
+**************************************************************************/
+void meswin_update_delay_off(void)
+{
+  /* dissconect_from_server call this */
+  freelog(LOG_DEBUG, "meswin_update_delay_off : PORT ME");
+}
+#endif
 
 /**************************************************************************
  Called from default clicks on a message.
@@ -65,10 +94,12 @@ static int msg_callback(struct GUI *pWidget)
   if (pMsg->city_ok
       && is_city_event(pMsg->event)) {
 	
-    struct city *pCity = tile_get_city(pMsg->tile);
+    int x = pMsg->x;
+    int y = pMsg->y;
+    struct city *pCity = map_get_city(x, y);
 
     if (center_when_popup_city) {
-      center_tile_mapcanvas(pMsg->tile);
+      center_tile_mapcanvas(x, y);
     }
 
     if (pCity) {
@@ -76,7 +107,7 @@ static int msg_callback(struct GUI *pWidget)
        * and we'd better not try to pop it up.  In this case, it would
        * be better if the popup button weren't highlighted at all, but
        * that's OK. */
-      popup_city_dialog(pCity);
+      popup_city_dialog(pCity, FALSE);
     }
     
     if (center_when_popup_city || pCity) {
@@ -84,7 +115,7 @@ static int msg_callback(struct GUI *pWidget)
     }
 	
   } else if (pMsg->location_ok) {
-    center_tile_mapcanvas(pMsg->tile);
+    center_tile_mapcanvas(pMsg->x, pMsg->y);
     flush_dirty();
   }
 
@@ -110,7 +141,6 @@ void real_update_meswin_dialog(void)
 {
   int msg_count = get_num_messages();
   int i = pMsg_Dlg->pScroll->count;
-    
   struct message *pMsg = NULL;
   struct GUI *pBuf = NULL, *pWindow = pMsg_Dlg->pEndWidgetList;
   SDL_String16 *pStr = NULL;
@@ -138,7 +168,7 @@ void real_update_meswin_dialog(void)
     for(; i<msg_count; i++)
     {
       pMsg = get_message(i);
-      pStr = create_str16_from_char(pMsg->descr , PTSIZE_LOG_FONT);
+      pStr = create_str16_from_char(pMsg->descr , 10);
       	
       pBuf = create_iconlabel(NULL, pWindow->dst, pStr, 
     		(WF_DRAW_THEME_TRANSPARENT|WF_DRAW_TEXT_LABEL_WITH_SPACE));
@@ -149,7 +179,7 @@ void real_update_meswin_dialog(void)
       pBuf->size.w = w;
       pBuf->data.ptr = (void *)pMsg;	
       pBuf->action = msg_callback;
-      if(pMsg->tile) {
+      if(pMsg->x != -1) {
         set_wstate(pBuf, FC_WS_NORMAL);
 	pBuf->string16->fgcol = active_color;
       }
@@ -161,13 +191,13 @@ void real_update_meswin_dialog(void)
         add_widget_to_vertical_scroll_widget_list(pMsg_Dlg,
 				pBuf, pWindow, FALSE,
 				pWindow->size.x + FRAME_WH,
-		      		pWindow->size.y + WINDOW_TILE_HIGH + adj_size(2));
+		      		pWindow->size.y + WINDOW_TILE_HIGH + 2);
 	 create = FALSE;
       } else {
 	add_widget_to_vertical_scroll_widget_list(pMsg_Dlg,
 				pBuf, pMsg_Dlg->pBeginActiveWidgetList, FALSE,
 				pWindow->size.x + FRAME_WH,
-		      		pWindow->size.y + WINDOW_TILE_HIGH + adj_size(2));
+		      		pWindow->size.y + WINDOW_TILE_HIGH + 2);
       }
       
       
@@ -181,13 +211,12 @@ void real_update_meswin_dialog(void)
 /**************************************************************************
   Popup (or raise) the message dialog; typically triggered by 'F10'.
 **************************************************************************/
-void popup_meswin_dialog(bool raise)
+void popup_meswin_dialog(void)
 {
-  SDL_String16 *pStr = create_str16_from_char("M", PTSIZE_LOG_FONT);
-  Sint16 start_x = (Main.screen->w - adj_size(520)) / 2;
-  Sint16 start_y = adj_size(25);
-  Uint16 w = adj_size(520);
-  Uint16 h = adj_size(8) + WINDOW_TILE_HIGH + N_MSG_VIEW * str16size(pStr).h;
+  Sint16 start_x = (Main.screen->w - 520) / 2;
+  Sint16 start_y = 25;
+  Uint16 w = 520;
+  Uint16 h = 124;
   int len, i = 0;
   struct message *pMsg = NULL;
   struct GUI *pWindow = NULL, *pBuf = NULL;
@@ -196,14 +225,13 @@ void popup_meswin_dialog(bool raise)
   SDL_Rect area;
   SDL_Color active_color = {255, 255, 100, 255};
   SDL_Color color = {255 , 255, 255, 128};
-  
-  FREESTRING16(pStr);
+  SDL_String16 *pStr;
   
   if(pMsg_Dlg) {
     return;
   }
   
-  pMsg_Dlg = fc_calloc(1, sizeof(struct ADVANCED_DLG));
+  pMsg_Dlg = MALLOC(sizeof(struct ADVANCED_DLG));
 
   /* create window */
   pWindow = create_window(NULL, NULL, w, h, WF_DRAW_THEME_TRANSPARENT);
@@ -211,7 +239,9 @@ void popup_meswin_dialog(bool raise)
   pWindow->size.x = start_x;
   pWindow->size.y = start_y;
 
-  pWindow->theme = create_surf_alpha(w, h, SDL_SWSURFACE);
+  pSurf = create_surf(w, h, SDL_SWSURFACE);
+  pWindow->theme = SDL_DisplayFormatAlpha(pSurf);
+  FREESURFACE(pSurf);
   
   SDL_FillRect(pWindow->theme , NULL, 
     SDL_MapRGBA(pWindow->theme->format,
@@ -230,14 +260,17 @@ void popup_meswin_dialog(bool raise)
 	  WINDOW_TILE_HIGH, w - 1, WINDOW_TILE_HIGH, 0xFF000000);
 
   /* create static text on window */
-  pStr = create_str16_from_char(_("Log"), adj_font(12));
+  pStr = create_str16_from_char(_("Log"), 12);
   pStr->style = TTF_STYLE_BOLD;
   pStr->render = 3;
-  pStr->bgcol = (SDL_Color) {0, 0, 0, 0};
+  SDL_GetRGBA(get_first_pixel(pWindow->theme), pWindow->theme->format,
+    &pStr->bgcol.r, &pStr->bgcol.g,
+	    &pStr->bgcol.b, &pStr->bgcol.unused);
     
   pSurf = create_text_surf_from_str16(pStr);
-  area.x += adj_size(10);
+  area.x += 10;
   area.y += ((WINDOW_TILE_HIGH - pSurf->h) / 2);
+  SDL_SetAlpha(pSurf, 0x0, 0x0);
   SDL_BlitSurface(pSurf, NULL, pWindow->theme, &area);
   FREESURFACE(pSurf);
   FREESTRING16(pStr);
@@ -257,7 +290,7 @@ void popup_meswin_dialog(bool raise)
     for(i=0; i<msg_count; i++)
     {
       pMsg = get_message(i);
-      pStr = create_str16_from_char(pMsg->descr , PTSIZE_LOG_FONT);
+      pStr = create_str16_from_char(pMsg->descr , 10);
       	
       pBuf = create_iconlabel(NULL, pWindow->dst, pStr, 
     		(WF_DRAW_THEME_TRANSPARENT|WF_DRAW_TEXT_LABEL_WITH_SPACE));
@@ -268,7 +301,7 @@ void popup_meswin_dialog(bool raise)
       pBuf->size.w = w;
       pBuf->data.ptr = (void *)pMsg;	
       pBuf->action = msg_callback;
-      if(pMsg->tile) {
+      if(pMsg->x != -1) {
         set_wstate(pBuf, FC_WS_NORMAL);
 	pBuf->string16->fgcol = active_color;
       }
@@ -289,7 +322,7 @@ void popup_meswin_dialog(bool raise)
   
   len = create_vertical_scrollbar(pMsg_Dlg, 1, N_MSG_VIEW, TRUE, TRUE);
   setup_vertical_scrollbar_area(pMsg_Dlg->pScroll,
-		start_x + w - 1, start_y + 1, h - adj_size(2), TRUE);
+		start_x + w - 1, start_y + 1, h -2, TRUE);
   
   if(i>N_MSG_VIEW-1) {
     /* find pActiveWidgetList to draw last seen part of list */
@@ -325,7 +358,7 @@ void popup_meswin_dialog(bool raise)
     }
     
     setup_vertical_widgets_position(1,
-	start_x + FRAME_WH, start_y + WINDOW_TILE_HIGH + adj_size(2), len, 0,
+	start_x + FRAME_WH, start_y + WINDOW_TILE_HIGH + 2, len, 0,
 	pMsg_Dlg->pBeginActiveWidgetList, pBuf);
   }
 
@@ -343,8 +376,8 @@ void popdown_meswin_dialog(void)
   if(pMsg_Dlg) {
     popdown_window_group_dialog(pMsg_Dlg->pBeginWidgetList,
 				  pMsg_Dlg->pEndWidgetList);
-    FC_FREE(pMsg_Dlg->pScroll);
-    FC_FREE(pMsg_Dlg);
+    FREE(pMsg_Dlg->pScroll);
+    FREE(pMsg_Dlg);
   }
   
 }

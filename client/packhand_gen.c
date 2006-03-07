@@ -54,6 +54,19 @@ bool client_handle_packet(enum packet_type type, void *packet)
     handle_server_shutdown();
     return TRUE;
 
+  case PACKET_NATION_UNAVAILABLE:
+    handle_nation_unavailable(
+      ((struct packet_nation_unavailable *)packet)->nation);
+    return TRUE;
+
+  case PACKET_SELECT_RACES:
+    handle_select_races();
+    return TRUE;
+
+  case PACKET_NATION_SELECT_OK:
+    handle_nation_select_ok();
+    return TRUE;
+
   case PACKET_GAME_STATE:
     handle_game_state(
       ((struct packet_game_state *)packet)->value);
@@ -218,23 +231,19 @@ bool client_handle_packet(enum packet_type type, void *packet)
     return TRUE;
 
   case PACKET_CONN_PING_INFO:
-    handle_conn_ping_info(
-      ((struct packet_conn_ping_info *)packet)->connections,
-      ((struct packet_conn_ping_info *)packet)->conn_id,
-      ((struct packet_conn_ping_info *)packet)->ping_time);
+    handle_conn_ping_info(packet);
     return TRUE;
 
   case PACKET_CONN_PING:
     handle_conn_ping();
     return TRUE;
 
-  case PACKET_END_PHASE:
-    handle_end_phase();
+  case PACKET_BEFORE_NEW_YEAR:
+    handle_before_new_year();
     return TRUE;
 
-  case PACKET_START_PHASE:
-    handle_start_phase(
-      ((struct packet_start_phase *)packet)->phase);
+  case PACKET_START_TURN:
+    handle_start_turn();
     return TRUE;
 
   case PACKET_NEW_YEAR:
@@ -253,10 +262,6 @@ bool client_handle_packet(enum packet_type type, void *packet)
 
   case PACKET_RULESET_GAME:
     handle_ruleset_game(packet);
-    return TRUE;
-
-  case PACKET_RULESET_SPECIALIST:
-    handle_ruleset_specialist(packet);
     return TRUE;
 
   case PACKET_RULESET_GOVERNMENT_RULER_TITLE:
@@ -300,10 +305,6 @@ bool client_handle_packet(enum packet_type type, void *packet)
       ((struct packet_single_want_hack_reply *)packet)->you_have_hack);
     return TRUE;
 
-  case PACKET_RULESET_CHOICES:
-    handle_ruleset_choices(packet);
-    return TRUE;
-
   case PACKET_GAME_LOAD:
     handle_game_load(packet);
     return TRUE;
@@ -316,16 +317,12 @@ bool client_handle_packet(enum packet_type type, void *packet)
     handle_options_settable(packet);
     return TRUE;
 
-  case PACKET_RULESET_EFFECT:
-    handle_ruleset_effect(packet);
+  case PACKET_RULESET_CACHE_GROUP:
+    handle_ruleset_cache_group(packet);
     return TRUE;
 
-  case PACKET_RULESET_EFFECT_REQ:
-    handle_ruleset_effect_req(packet);
-    return TRUE;
-
-  case PACKET_RULESET_RESOURCE:
-    handle_ruleset_resource(packet);
+  case PACKET_RULESET_CACHE_EFFECT:
+    handle_ruleset_cache_effect(packet);
     return TRUE;
 
   default:

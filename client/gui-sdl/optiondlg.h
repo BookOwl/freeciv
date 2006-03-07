@@ -22,11 +22,8 @@
 #ifndef FC__OPTIONDLG_H
 #define FC__OPTIONDLG_H
 
-struct GUI *pOptions_Button;
-
 void init_options_button(void);
 void popup_optiondlg(void);
-void popdown_optiondlg(void);
-int optiondlg_callback(struct GUI *pButton);
+void podown_optiondlg(void);
 
 #endif				/* FC__OPTIONDLG_H */

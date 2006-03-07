@@ -54,11 +54,12 @@
 #include <config.h>
 #endif
 
+#include <stdlib.h>
+#include <string.h>
 #include <SDL/SDL.h>
 
-/* gui-sdl */
+#include "gui_mem.h"
 #include "graphics.h"
-
 #include "gui_zoom.h"
 
 #ifdef HAVE_MMX1
@@ -174,11 +175,11 @@ static int AA_ZoomSurfaceFastRGBA32(const SDL_Surface *src, SDL_Surface *dst)
   /*
    * Allocate memory for row increments 
    */
-  if ((sax = (Uint32 *) fc_calloc(1, (dst->w + 1) * sizeof(Uint32))) == NULL) {
+  if ((sax = (Uint32 *) MALLOC((dst->w + 1) * sizeof(Uint32))) == NULL) {
 		return (-1);
   }
-  if ((say = (Uint32 *) fc_calloc(1, (dst->h + 1) * sizeof(Uint32))) == NULL) {
-    FC_FREE(sax);
+  if ((say = (Uint32 *) MALLOC((dst->h + 1) * sizeof(Uint32))) == NULL) {
+    FREE(sax);
     return (-1);
   }
 
@@ -284,8 +285,8 @@ static int AA_ZoomSurfaceFastRGBA32(const SDL_Surface *src, SDL_Surface *dst)
   /*
    * Remove temp arrays 
    */
-  FC_FREE(sax);
-  FC_FREE(say);
+  FREE(sax);
+  FREE(say);
 
   return (0);
 }
@@ -305,11 +306,11 @@ static int AA_ZoomSurfaceFastRGB24(const SDL_Surface *src, SDL_Surface *dst)
   /*
    * Allocate memory for row increments 
    */
-  if ((sax = (Uint32 *) fc_calloc(1, (dst->w + 1) * sizeof(Uint32))) == NULL) {
+  if ((sax = (Uint32 *) MALLOC((dst->w + 1) * sizeof(Uint32))) == NULL) {
     return (-1);
   }
-  if ((say = (Uint32 *) fc_calloc(1, (dst->h + 1) * sizeof(Uint32))) == NULL) {
-    FC_FREE(sax);
+  if ((say = (Uint32 *) MALLOC((dst->h + 1) * sizeof(Uint32))) == NULL) {
+    FREE(sax);
     return (-1);
   }
 
@@ -430,8 +431,8 @@ static int AA_ZoomSurfaceFastRGB24(const SDL_Surface *src, SDL_Surface *dst)
   /*
    * Remove temp arrays 
    */
-  FC_FREE(sax);
-  FC_FREE(say);
+  FREE(sax);
+  FREE(say);
 
   return (0);
 }
@@ -451,11 +452,11 @@ static int AA_ZoomSurfaceFastRGB16(const SDL_Surface *src, SDL_Surface *dst)
   /*
    * Allocate memory for row increments 
    */
-  if ((sax = (Uint32 *) fc_calloc(1, (dst->w + 1) * sizeof(Uint32))) == NULL) {
+  if ((sax = (Uint32 *) MALLOC((dst->w + 1) * sizeof(Uint32))) == NULL) {
     return (-1);
   }
-  if ((say = (Uint32 *) fc_calloc(1, (dst->h + 1) * sizeof(Uint32))) == NULL) {
-    FC_FREE(sax);
+  if ((say = (Uint32 *) MALLOC((dst->h + 1) * sizeof(Uint32))) == NULL) {
+    FREE(sax);
     return (-1);
   }
 
@@ -617,8 +618,8 @@ static int AA_ZoomSurfaceFastRGB16(const SDL_Surface *src, SDL_Surface *dst)
   /*
    * Remove temp arrays 
    */
-  FC_FREE(sax);
-  FC_FREE(say);
+  FREE(sax);
+  FREE(say);
   
   return (0);
 }
@@ -638,11 +639,11 @@ static int AA_ZoomSurfaceFastRGB15(const SDL_Surface *src, SDL_Surface *dst)
   /*
    * Allocate memory for row increments 
    */
-  if ((sax = (Uint32 *) fc_calloc(1, (dst->w + 1) * sizeof(Uint32))) == NULL) {
+  if ((sax = (Uint32 *) MALLOC((dst->w + 1) * sizeof(Uint32))) == NULL) {
     return (-1);
   }
-  if ((say = (Uint32 *) fc_calloc(1, (dst->h + 1) * sizeof(Uint32))) == NULL) {
-    FC_FREE(sax);
+  if ((say = (Uint32 *) MALLOC((dst->h + 1) * sizeof(Uint32))) == NULL) {
+    FREE(sax);
     return (-1);
   }
 
@@ -804,8 +805,8 @@ static int AA_ZoomSurfaceFastRGB15(const SDL_Surface *src, SDL_Surface *dst)
   /*
    * Remove temp arrays 
    */
-  FC_FREE(sax);
-  FC_FREE(say);
+  FREE(sax);
+  FREE(say);
   
   return (0);
 }
@@ -835,8 +836,8 @@ static int AA_ZoomSurfaceFastRGBA32(const SDL_Surface * src,
   /*
    * Allocate memory for row increments 
    */
-  sax = fc_calloc(1, (dst->w + 1) * sizeof(Uint32));
-  say = fc_calloc(1, (dst->h + 1) * sizeof(Uint32));
+  sax = MALLOC((dst->w + 1) * sizeof(Uint32));
+  say = MALLOC((dst->h + 1) * sizeof(Uint32));
 
   precalculate_8bit_row_increments(src, dst, sax, say);
 
@@ -940,8 +941,8 @@ static int AA_ZoomSurfaceFastRGBA32(const SDL_Surface * src,
   /*
    * Remove temp arrays 
    */
-  FC_FREE(sax);
-  FC_FREE(say);
+  FREE(sax);
+  FREE(say);
   
   return 0;
 }
@@ -965,8 +966,8 @@ static int AA_ZoomSurfaceFastRGB32(const SDL_Surface * src,
   /*
    * Allocate memory for row increments 
    */
-  sax = fc_calloc(1, (dst->w + 1) * sizeof(Uint32));
-  say = fc_calloc(1, (dst->h + 1) * sizeof(Uint32));
+  sax = MALLOC((dst->w + 1) * sizeof(Uint32));
+  say = MALLOC((dst->h + 1) * sizeof(Uint32));
 
   precalculate_8bit_row_increments(src, dst, sax, say);
 
@@ -1070,8 +1071,8 @@ static int AA_ZoomSurfaceFastRGB32(const SDL_Surface * src,
   /*
    * Remove temp arrays 
    */
-  FC_FREE(sax);
-  FC_FREE(say);
+  FREE(sax);
+  FREE(say);
 
   return 0;
 }
@@ -1093,8 +1094,8 @@ static int AA_ZoomSurfaceFastRGB24(const SDL_Surface * src,
   /*
    * Allocate memory for row increments 
    */
-  sax = fc_calloc(1, (dst->w + 1) * sizeof(Uint32));
-  say = fc_calloc(1, (dst->h + 1) * sizeof(Uint32));
+  sax = MALLOC((dst->w + 1) * sizeof(Uint32));
+  say = MALLOC((dst->h + 1) * sizeof(Uint32));
 
   precalculate_8bit_row_increments(src, dst, sax, say);
 
@@ -1192,8 +1193,8 @@ static int AA_ZoomSurfaceFastRGB24(const SDL_Surface * src,
   /*
    * Remove temp arrays 
    */
-  FC_FREE(sax);
-  FC_FREE(say);
+  FREE(sax);
+  FREE(say);
 
   return 0;
 }
@@ -1218,8 +1219,8 @@ static int AA_ZoomSurfaceFastRGB16(const SDL_Surface *src, SDL_Surface *dst)
   /*
    * Allocate memory for row increments 
    */
-  sax = fc_calloc(1, (dst->w + 1) * sizeof(Uint32));
-  say = fc_calloc(1, (dst->h + 1) * sizeof(Uint32));
+  sax = MALLOC((dst->w + 1) * sizeof(Uint32));
+  say = MALLOC((dst->h + 1) * sizeof(Uint32));
 
   precalculate_8bit_row_increments(src, dst, sax, say);
 
@@ -1328,8 +1329,8 @@ static int AA_ZoomSurfaceFastRGB16(const SDL_Surface *src, SDL_Surface *dst)
   /*
    * Remove temp arrays 
    */
-  FC_FREE(sax);
-  FC_FREE(say);
+  FREE(sax);
+  FREE(say);
 
   return 0;
 }
@@ -1355,8 +1356,8 @@ static int AA_ZoomSurfaceFastestRGB16(const SDL_Surface *src, SDL_Surface *dst)
   /*
    * Allocate memory for row increments 
    */
-  sax = fc_calloc(1, (dst->w + 1) * sizeof(Uint32));
-  say = fc_calloc(1, (dst->h + 1) * sizeof(Uint32));
+  sax = MALLOC((dst->w + 1) * sizeof(Uint32));
+  say = MALLOC((dst->h + 1) * sizeof(Uint32));
 
   precalculate_8bit_row_increments(src, dst, sax, say);
 
@@ -1449,8 +1450,8 @@ static int AA_ZoomSurfaceFastestRGB16(const SDL_Surface *src, SDL_Surface *dst)
   /*
    * Remove temp arrays 
    */
-  FC_FREE(sax);
-  FC_FREE(say);
+  FREE(sax);
+  FREE(say);
   
   return 0;
 }
@@ -1475,8 +1476,8 @@ static int AA_ZoomSurfaceFastRGB15(const SDL_Surface *src, SDL_Surface *dst)
   /*
    * Allocate memory for row increments 
    */
-  sax = fc_calloc(1, (dst->w + 1) * sizeof(Uint32));
-  say = fc_calloc(1, (dst->h + 1) * sizeof(Uint32));
+  sax = MALLOC((dst->w + 1) * sizeof(Uint32));
+  say = MALLOC((dst->h + 1) * sizeof(Uint32));
 
   precalculate_8bit_row_increments(src, dst, sax, say);
 
@@ -1586,8 +1587,8 @@ static int AA_ZoomSurfaceFastRGB15(const SDL_Surface *src, SDL_Surface *dst)
   /*
    * Remove temp arrays 
    */
-  FC_FREE(sax);
-  FC_FREE(say);
+  FREE(sax);
+  FREE(say);
   
   return 0;
 }
@@ -1613,8 +1614,8 @@ static int AA_ZoomSurfaceFastestRGB15(const SDL_Surface *src, SDL_Surface *dst)
   /*
    * Allocate memory for row increments 
    */
-  sax = fc_calloc(1, (dst->w + 1) * sizeof(Uint32));
-  say = fc_calloc(1, (dst->h + 1) * sizeof(Uint32));
+  sax = MALLOC((dst->w + 1) * sizeof(Uint32));
+  say = MALLOC((dst->h + 1) * sizeof(Uint32));
 
   precalculate_8bit_row_increments(src, dst, sax, say);
 
@@ -1707,8 +1708,8 @@ static int AA_ZoomSurfaceFastestRGB15(const SDL_Surface *src, SDL_Surface *dst)
   /*
    * Remove temp arrays 
    */
-  FC_FREE(sax);
-  FC_FREE(say);
+  FREE(sax);
+  FREE(say);
   
   return 0;
 }
@@ -1759,8 +1760,8 @@ static int AA_ZoomSurfaceRGBn(const SDL_Surface *src, SDL_Surface *dst)
   /*
    * Allocate memory for row increments 
    */
-  sax = fc_calloc(1, (dst->w + 1) * sizeof(Uint32));
-  say = fc_calloc(1, (dst->h + 1) * sizeof(Uint32));
+  sax = MALLOC((dst->w + 1) * sizeof(Uint32));
+  say = MALLOC((dst->h + 1) * sizeof(Uint32));
 
   precalculate_8bit_row_increments(src, dst, sax, say);
 
@@ -1884,8 +1885,8 @@ static int AA_ZoomSurfaceRGBn(const SDL_Surface *src, SDL_Surface *dst)
   /*
    * Remove temp arrays 
    */
-  FC_FREE(sax);
-  FC_FREE(say);
+  FREE(sax);
+  FREE(say);
 
   return 0;
 }
@@ -1906,8 +1907,8 @@ static int zoomSurfaceRGB32(const SDL_Surface *src, SDL_Surface *dst)
   /*
    * Allocate memory for row increments 
    */
-  sax = fc_calloc(1, (dst->w + 1) * sizeof(Uint32));
-  say = fc_calloc(1, (dst->h + 1) * sizeof(Uint32));
+  sax = MALLOC((dst->w + 1) * sizeof(Uint32));
+  say = MALLOC((dst->h + 1) * sizeof(Uint32));
 
   precalculate_16bit_row_increments(src, dst, sax, say);
 
@@ -1961,8 +1962,8 @@ static int zoomSurfaceRGB32(const SDL_Surface *src, SDL_Surface *dst)
   /*
    * Remove temp arrays 
    */
-  FC_FREE(sax);
-  FC_FREE(say);
+  FREE(sax);
+  FREE(say);
     
   return 0;
 }
@@ -1982,8 +1983,8 @@ static int zoomSurfaceRGB24(const SDL_Surface * src, SDL_Surface * dst)
   /*
    * Allocate memory for row increments 
    */
-  sax = fc_calloc(1, (dst->w + 1) * sizeof(Uint32));
-  say = fc_calloc(1, (dst->h + 1) * sizeof(Uint32));
+  sax = MALLOC((dst->w + 1) * sizeof(Uint32));
+  say = MALLOC((dst->h + 1) * sizeof(Uint32));
 
   precalculate_16bit_row_increments(src, dst, sax, say);
 
@@ -2041,8 +2042,8 @@ static int zoomSurfaceRGB24(const SDL_Surface * src, SDL_Surface * dst)
   /*
    * Remove temp arrays 
    */
-  FC_FREE(sax);
-  FC_FREE(say);
+  FREE(sax);
+  FREE(say);
 
   return 0;
 }
@@ -2062,8 +2063,8 @@ static int zoomSurfaceRGB16(const SDL_Surface * src, SDL_Surface * dst)
   /*
    * Allocate memory for row increments 
    */
-  sax = fc_calloc(1, (dst->w + 1) * sizeof(Uint32));
-  say = fc_calloc(1, (dst->h + 1) * sizeof(Uint32));
+  sax = MALLOC((dst->w + 1) * sizeof(Uint32));
+  say = MALLOC((dst->h + 1) * sizeof(Uint32));
 
   precalculate_16bit_row_increments(src, dst, sax, say);
 
@@ -2117,8 +2118,8 @@ static int zoomSurfaceRGB16(const SDL_Surface * src, SDL_Surface * dst)
   /*
    * Remove temp arrays 
    */
-  FC_FREE(sax);
-  FC_FREE(say);
+  FREE(sax);
+  FREE(say);
 
   return 0;
 }
@@ -2144,13 +2145,13 @@ static int zoomSurfaceY(const SDL_Surface * src, SDL_Surface * dst)
   /*
    * Allocate memory for row increments 
    */
-  if ((sax = (Uint32 *) fc_calloc(1, dst->w * sizeof(Uint32))) == NULL) {
+  if ((sax = (Uint32 *) MALLOC(dst->w * sizeof(Uint32))) == NULL) {
     return (-1);
   }
 
-  if ((say = (Uint32 *) fc_calloc(1, dst->h * sizeof(Uint32))) == NULL) {
+  if ((say = (Uint32 *) MALLOC(dst->h * sizeof(Uint32))) == NULL) {
     if (sax != NULL) {
-      FC_FREE(sax);
+      FREE(sax);
     }
     return -1;
   }
@@ -2238,8 +2239,8 @@ static int zoomSurfaceY(const SDL_Surface * src, SDL_Surface * dst)
   /*
    * Remove temp arrays 
    */
-  FC_FREE(sax);
-  FC_FREE(say);
+  FREE(sax);
+  FREE(say);
 
   return 0;
 }

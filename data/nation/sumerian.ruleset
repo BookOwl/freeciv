@@ -2,20 +2,12 @@
 
 name=_("Sumerian")
 plural=_("?plural:Sumerians")
-groups=_("Ancient"), _("Asian")
-legend=_("Sumer controlled southern Mesopotamia until the rise of\
- Babylonia. Tablets of Sumerian writing some 5500 years old have been\
- found, pre-dating every other writing in history.")
-leader=
- "Gilgamesh",
- "Lagislazuli",
- "Urukagina",
- "Urnammu",
- "Ibissin"
+class=_("Historical")
+leader="Gilgamesh", "Lagislazuli", "Urukagina", "Urnammu", "Ibissin"
 leader_sex="Male", "Male", "Male", "Male", "Male"
-flag = "sumeria"
+flag = "f.sumeria"
 flag_alt = "-"
-city_style = "Babylonian"
+city_style = "Classical"
 
 ruler_titles = { "government",	"male_title",	"female_title"
 		 "Monarchy",	_("Lugal"),	 _("Lugal")
@@ -24,9 +16,10 @@ ruler_titles = { "government",	"male_title",	"female_title"
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
-civilwar_nations="egyptian", "ethiopian"
+tech_goals = "Bronze Working","Writing","Trade","Astronomy",
+             "Theology","Code of Laws","Economics","Communism"
+wonder="A.Smith's Trading Co."
+government="Communism"
 
 cities =
   "Uruk", "Eridu", "Ur", "Lagash", "Nippur", "Umma",

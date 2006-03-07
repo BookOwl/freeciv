@@ -1,14 +1,11 @@
 ## Process this file with automake to produce Makefile.in
 
-SUBDIRS=	generator scripting
+SUBDIRS=	generator
 
 bin_PROGRAMS = civserver
 noinst_LIBRARIES = libcivserver.a
-AM_CPPFLAGS = \
-	-I$(top_srcdir)/utility -I$(srcdir)/../common -I$(srcdir)/../ai \
-	-I../intl -I$(top_srcdir)/common/aicore \
-	-I$(srcdir)/generator -I$(srcdir)/scripting \
-	@LIBGGZ_INCLUDES@ @GGZDMOD_INCLUDES@
+AM_CPPFLAGS = -I$(top_srcdir)/utility -I$(srcdir)/../common -I$(srcdir)/../ai -I../intl -I$(top_srcdir)/common/aicore -I$(srcdir)/generator
+
 
 ## Above, note -I../intl instead of -I$(top_srdir/intl) is deliberate.
 
@@ -21,6 +18,8 @@ libcivserver_a_SOURCES = \
 		airgoto.h	\
 		auth.c		\
 		auth.h		\
+		autoattack.c	\
+		autoattack.h	\
 		barbarian.c	\
 		barbarian.h	\
 		cityhand.c	\
@@ -39,13 +38,12 @@ libcivserver_a_SOURCES = \
 		diplhand.h	\
 		diplomats.c	\
 		diplomats.h	\
-		edithand.c	\
 		gamehand.c	\
 		gamehand.h	\
+		gamelog.c	\
+		gamelog.h	\
 		gotohand.c	\
 		gotohand.h	\
-		ggzserver.c	\
-		ggzserver.h	\
 		handchat.c	\
 		handchat.h	\
 		hand_gen.h	\
@@ -78,8 +76,7 @@ libcivserver_a_SOURCES = \
 		srv_main.h	\
 		stdinhand.c	\
 		stdinhand.h	\
-		techtools.h	\
-		techtools.c	\
+		stdinhand_info.h\
 		unithand.c	\
 		unithand.h	\
 		unittools.c	\
@@ -88,22 +85,11 @@ libcivserver_a_SOURCES = \
 civserver_DEPENDENCIES = ../utility/libcivutility.a ../common/libcivcommon.a \
       ../ai/libcivai.a ../utility/libcivutility.a ./libcivserver.a \
       ../utility/libcivutility.a ../common/aicore/libaicore.a \
-      ./scripting/libscripting.a \
-      ../dependencies/lua/src/liblua.a \
-      ../dependencies/lua/src/lib/liblualib.a \
-      ../dependencies/tolua/libtolua.a \
       ./generator/libgenerator.a
-civserver_LDFLAGS = @GGZDMOD_LDFLAGS@
 civserver_LDADD        = ../utility/libcivutility.a ../common/libcivcommon.a \
       ../ai/libcivai.a ../utility/libcivutility.a ./libcivserver.a @INTLLIBS@ \
       ../utility/libcivutility.a ../common/libcivcommon.a ../ai/libcivai.a \
       ../utility/libcivutility.a ./libcivserver.a ../utility/libcivutility.a \
       ../common/aicore/libaicore.a ./generator/libgenerator.a \
-      ./scripting/libscripting.a \
-      ../dependencies/lua/src/liblua.a \
-      ../dependencies/lua/src/lib/liblualib.a \
-      ../dependencies/tolua/libtolua.a \
-      $(AUTH_LIBS) $(SERVER_LIBS) @LIB_GGZDMOD@
-
-
+      $(AUTH_LIBS) $(SERVER_LIBS)
 

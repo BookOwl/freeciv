@@ -133,7 +133,6 @@ name     = _("Communism")
 req1     = "Philosophy"
 req2     = "Industrialization"
 flags    = ""
-helptext = _("Reduces the effect of Cathedrals.")
 
 [advance_computers]
 name     = _("Computers")
@@ -176,7 +175,6 @@ name     = _("Electricity")
 req1     = "Metallurgy"
 req2     = "Magnetism"
 flags    = ""
-helptext = _("Improves the effect of Colosseums.")
 
 [advance_electronics]
 name     = _("Electronics")
@@ -218,7 +216,7 @@ flags    = ""
 name     = _("Flight")
 req1     = "Combustion"
 req2     = "Theory of Gravity"
-flags    = ""
+flags    = "Trade_Revenue_Reduce"
 
 [advance_fundamentalism]
 name     = _("Fundamentalism")
@@ -375,7 +373,6 @@ name     = _("Mysticism")
 req1     = "Ceremonial Burial"
 req2     = "None"
 flags    = ""
-helptext = _("Improves the effect of Temples.")
 
 [advance_navigation]
 name     = _("Navigation")
@@ -393,8 +390,7 @@ flags    = ""
 name     = _("Nuclear Power")
 req1     = "Nuclear Fission"
 req2     = "Electronics"
-flags    = ""
-helptext = _("Gives sea units one extra move.")
+flags    = "Boat_Fast"
 
 [advance_philosophy]
 name     = _("Philosophy")
@@ -436,7 +432,7 @@ flags    = "Airbase"
 name     = _("Railroad")
 req1     = "Steam Engine"
 req2     = "Bridge Building"
-flags    = "Railroad"
+flags    = "Railroad","Trade_Revenue_Reduce"
 
 [advance_recycling]
 name     = _("Recycling")
@@ -539,7 +535,6 @@ name     = _("Theology")
 req1     = "Feudalism"
 req2     = "Monotheism"
 flags    = ""
-helptext = _("Improves the effect of Cathedrals.")
 
 [advance_theory_of_gravity]
 name     = _("Theory of Gravity")

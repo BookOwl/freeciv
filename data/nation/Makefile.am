@@ -5,15 +5,10 @@
 pkgdatadir = $(datadir)/@PACKAGE@/nation
 
 pkgdata_DATA = \
-		aborigines.ruleset \
 		afghani.ruleset \
-		algerian.ruleset \
 		american.ruleset \
-		antarctican.ruleset \
 		arab.ruleset \
-		aramean.ruleset \
 		argentine.ruleset \
-		armenian.ruleset \
 		assyrian.ruleset \
 		australian.ruleset \
 		austrian.ruleset \
@@ -22,28 +17,23 @@ pkgdata_DATA = \
 		barbarian.ruleset \
 		bavarian.ruleset \
 		belgian.ruleset \
-		bengali.ruleset \
 		boer.ruleset \
 		bosnia.ruleset \
 		brazilian.ruleset \
-		british.ruleset \
-		bulgarian.ruleset \
-		burmese.ruleset \
-		byzantium.ruleset \
 		canadian.ruleset \
 		carthaginian.ruleset \
 		catalan.ruleset \
 		chilean.ruleset \
 		chinese.ruleset \
-		colombian.ruleset \
-		confederate.ruleset \
+		columbian.ruleset \
 		cornish.ruleset \
 		croatian.ruleset \
-		cuban.ruleset \
 		czech.ruleset \
 		danish.ruleset \
+		dunedain.ruleset \
 		dutch.ruleset \
 		egyptian.ruleset \
+		elvish.ruleset \
 		english.ruleset \
 		estonian.ruleset \
 		ethiopian.ruleset \
@@ -51,85 +41,58 @@ pkgdata_DATA = \
 		finnish.ruleset \
 		french.ruleset \
 		galician.ruleset \
-		gallic.ruleset \
-		georgian.ruleset \
 		german.ruleset \
 		greek.ruleset \
-		hellenic.ruleset \
-		hittite.ruleset \
+		hobbits.ruleset \
 		hungarian.ruleset \
 		icelandic.ruleset \
-		illyrian.ruleset \
 		inca.ruleset \
 		indian.ruleset \
 		indonesian.ruleset \
-		inuit.ruleset \
-		iraqi.ruleset \
 		irish.ruleset \
-		iroquois.ruleset \
 		israeli.ruleset \
 		italian.ruleset \
 		japanese.ruleset \
 		kampuchean.ruleset \
 		kenyan.ruleset \
 		korean.ruleset \
-		lankese.ruleset \
 		latvian.ruleset \
-		libyan.ruleset \
 		lithuanian.ruleset \
-		malagasy.ruleset \
 		malaysian.ruleset \
-		malian.ruleset \
-		manchu.ruleset \
-		maori.ruleset \
 		martian.ruleset \
-		mayan.ruleset \
 		mexican.ruleset \
 		mongol.ruleset \
-		newzealand.ruleset \
+		mordor.ruleset \
 		nigerian.ruleset \
-		norwegian.ruleset \
-		ottoman.ruleset \
-		papuan.ruleset \
+		observer.ruleset \
 		persian.ruleset \
 		phoenician.ruleset \
 		polish.ruleset \
 		portuguese.ruleset \
 		quebecois.ruleset \
-		romanian.ruleset \
 		roman.ruleset \
 		russian.ruleset \
-		ryukyuan.ruleset \
-		sami.ruleset \
 		scottish.ruleset \
 		serbian.ruleset \
 		silesian.ruleset \
 		singaporean.ruleset \
 		sioux.ruleset \
-		slovakian.ruleset \
 		slovenian.ruleset \
-		southafrican.ruleset \
-		soviet.ruleset \
 		spanish.ruleset \
-		sudanese.ruleset \
 		sumerian.ruleset \
-		swazi.ruleset \
 		swedish.ruleset \
 		swiss.ruleset \
 		taiwanese.ruleset \
-		texan.ruleset \
 		thai.ruleset \
-		tibetan.ruleset \
-		tunisian.ruleset \
 		turk.ruleset \
 		ukrainian.ruleset \
-		uyghur.ruleset \
-		venezuelan.ruleset \
 		vietnamese.ruleset \
 		viking.ruleset \
 		welsh.ruleset \
-		westphalian.ruleset \
 		zulu.ruleset 
 
 EXTRA_DIST = $(pkgdata_DATA) Makefile.am.sh
+
+Makefile.am: Makefile.am.sh $(shell echo *.ruleset)
+	sh Makefile.am.sh >Makefile.am
 

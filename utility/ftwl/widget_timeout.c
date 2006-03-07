@@ -53,12 +53,6 @@ struct callback {
   void *data;
 };
 
-struct idle_callback {
-  struct timeval time;
-  void (*callback) (void *data);
-  void *data;
-};
-
 #define SPECLIST_TAG callback
 #define SPECLIST_TYPE struct callback
 #include "speclist.h"
@@ -67,17 +61,8 @@ struct idle_callback {
     TYPED_LIST_ITERATE(struct callback, list, item)
 #define callback_list_iterate_end  LIST_ITERATE_END
 
-#define SPECLIST_TAG idle_callback
-#define SPECLIST_TYPE struct idle_callback
-#include "speclist.h"
-
-#define idle_callback_list_iterate(list, item) \
-    TYPED_LIST_ITERATE(struct idle_callback, list, item)
-#define idle_callback_list_iterate_end  LIST_ITERATE_END
-
-static struct callback_list *callback_list = NULL;
-static struct idle_callback_list *idle_callback_list = NULL;
-static bool callback_lists_has_been_initialised = FALSE;
+static struct callback_list callback_list;
+static bool callback_list_list_has_been_initialised = FALSE;
 static int id_counter = 1;
 
 /*************************************************************************
@@ -85,55 +70,39 @@ static int id_counter = 1;
 *************************************************************************/
 static void ensure_init(void)
 {
-  if (!callback_lists_has_been_initialised) {
-    callback_list = callback_list_new();
-    idle_callback_list = idle_callback_list_new();
-    callback_lists_has_been_initialised = TRUE;
+  if (!callback_list_list_has_been_initialised) {
+    callback_list_init(&callback_list);
+    callback_list_list_has_been_initialised = TRUE;
   }
 }
 
 /*************************************************************************
-  If msec equals -1 it is an idle callback. This means that it will
-  only executed if the system is idle. Also note that in this case the
-  return value will be -1. I.e. you can't remove idle timeouts.
+  ...
 *************************************************************************/
 int sw_add_timeout(int msec, void (*callback) (void *data), void *data)
 {
-  if (msec == -1) {
-    struct idle_callback *p = fc_malloc(sizeof(*p));
+  struct callback *p = fc_malloc(sizeof(*p));
 
-    p->callback = callback;
-    p->data = data;
+  //printf("add_timeout(%dms)\n", msec);
+  gettimeofday(&p->time, NULL);
 
-    ensure_init();
-    idle_callback_list_prepend(idle_callback_list, p);
-    return -1;
-  } else {
-    struct callback *p = fc_malloc(sizeof(*p));
+  p->time.tv_sec += msec / 1000;
+  msec %= 1000;
 
-    assert(msec >= 0);
-
-    //printf("add_timeout(%dms)\n", msec);
-    gettimeofday(&p->time, NULL);
-
-    p->time.tv_sec += msec / 1000;
-    msec %= 1000;
-
-    p->time.tv_usec += msec * 1000;
-    while (p->time.tv_usec > 1000 * 1000) {
-      p->time.tv_usec -= 1000 * 1000;
-      p->time.tv_sec++;
-    }
-
-    p->callback = callback;
-    p->data = data;
-    p->id = id_counter;
-    id_counter++;
-
-    ensure_init();
-    callback_list_prepend(callback_list, p);
-    return p->id;
+  p->time.tv_usec += msec * 1000;
+  while (p->time.tv_usec > 1000 * 1000) {
+    p->time.tv_usec -= 1000 * 1000;
+    p->time.tv_sec++;
   }
+
+  p->callback = callback;
+  p->data = data;
+  p->id=id_counter;
+  id_counter++;
+
+  ensure_init();
+  callback_list_insert(&callback_list, p);
+  return p->id;
 }
 
 /*************************************************************************
@@ -144,7 +113,7 @@ void sw_remove_timeout(int id)
   assert(id > 0);
   callback_list_iterate(callback_list, callback) {
     if (callback->id == id) {
-      callback_list_unlink(callback_list, callback);
+      callback_list_unlink(&callback_list, callback);
       free(callback);
     }
   } callback_list_iterate_end;
@@ -171,7 +140,7 @@ void handle_callbacks(void)
          callback->time.tv_usec); */
       if (timercmp(&callback->time, &now, <)) {
 	/*printf("  call\n"); */
-	callback_list_unlink(callback_list, callback);
+	callback_list_unlink(&callback_list, callback);
 	callback->callback(callback->data);
 	free(callback);
 	one_called = TRUE;
@@ -186,29 +155,6 @@ void handle_callbacks(void)
 
   if (one_called) {
     sw_paint_all();
-  }
-}
-
-/*************************************************************************
-  ...
-*************************************************************************/
-void handle_idle_callbacks(void)
-{
-  ensure_init();
-
-  for (;;) {
-    bool change = FALSE;
-
-    idle_callback_list_iterate(idle_callback_list, callback) {
-      idle_callback_list_unlink(idle_callback_list, callback);
-      callback->callback(callback->data);
-      free(callback);
-      change = TRUE;
-      break;
-    } idle_callback_list_iterate_end;
-    if (!change) {
-      break;
-    }
   }
 }
 
@@ -239,17 +185,11 @@ void get_select_timeout(struct timeval *timeout)
       timeout->tv_sec = 0;
       timeout->tv_usec = 0;
     } else {
-      int usec;
-
-      /* Note that on some platforms the field of timeval are defined as
-       * unsigned so we must enforce a signed type for usec */
       timeout->tv_sec = earliest->time.tv_sec - now.tv_sec;
-      usec = earliest->time.tv_usec - now.tv_usec;
-      if (usec < 0) {
-	timeout->tv_sec++;
-	timeout->tv_usec = usec + 1000 * 1000;
-      } else {
-      	timeout->tv_usec = usec;
+      timeout->tv_usec = earliest->time.tv_usec - now.tv_usec;
+      if (timeout->tv_usec < 0) {
+	timeout->tv_usec += 1000 * 1000;
+	timeout->tv_sec--;
       }
     }
     assert(timeout->tv_sec >= 0 && timeout->tv_usec >= 0);

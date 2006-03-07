@@ -51,7 +51,6 @@
 #include "optiondlg.h"
 #include "options.h"
 #include "packhand_gen.h"
-#include "servers.h"
 #include "spaceshipdlg.h"
 #include "tilespec.h"
 
@@ -90,7 +89,6 @@ enum new_game_dlg_ids {
   ID_NEWGAMEDLG_AISKILL,
   ID_NEWGAMEDLG_AIFILL,
   ID_NEWGAMEDLG_OPTIONS,
-  ID_NEWGAMEDLG_NATIONS,
   ID_OK=IDOK,
   ID_CANCEL=IDCANCEL
 };
@@ -103,6 +101,7 @@ static int get_lanservers(HWND list);
 
 static int num_lanservers_timer = 0;
 
+extern void socket_timer(void);
 
 /*************************************************************************
  configure the dialog depending on what type of authentication request the
@@ -180,21 +179,12 @@ void handle_game_load(struct packet_game_load *packet)
   ShowWindow(start_dlg, SW_HIDE);
   ShowWindow(players_dlg, SW_SHOWNORMAL);
 
-  game.info.nplayers = packet->nplayers;
+  game.nplayers = packet->nplayers;
   ListView_DeleteAllItems(players_listview);
 
   for (i = 0; i < packet->nplayers; i++) {
-    const char *nation_name;
-    struct nation_type *pnation = get_nation_by_idx(packet->nations[i]);
-
-    if (pnation == NO_NATION_SELECTED) {
-      nation_name = "";
-    } else {
-      nation_name = get_nation_name(pnation);
-    }
-
     row[0] = packet->name[i];
-    row[1] = (char *)nation_name;
+    row[1] = packet->nation_name[i];
     row[2] = packet->is_alive[i] ? _("Alive") : _("Dead");
     row[3] = packet->is_ai[i] ? _("AI") : _("Human");
     fcwin_listview_add_row(players_listview, 0, 4, row);
@@ -515,7 +505,7 @@ static int get_lanservers(HWND list)
   if (server_list != NULL) {
     ListView_DeleteAllItems(list);
 
-    server_list_iterate(server_list, pserver) {
+    server_list_iterate(*server_list, pserver) {
 
       row[0] = pserver->host;
       row[1] = pserver->port;
@@ -565,7 +555,7 @@ static int get_meta_list(HWND list, char *errbuf, int n_errbuf)
   for (i = 0; i < 6; i++)
     row[i] = buf[i];
 
-  server_list_iterate(server_list, pserver) {
+  server_list_iterate(*server_list, pserver) {
     sz_strlcpy(buf[0], pserver->host);
     sz_strlcpy(buf[1], pserver->port);
     sz_strlcpy(buf[2], pserver->version);
@@ -660,6 +650,87 @@ static LONG CALLBACK tabs_page_proc(HWND dlg, UINT message, WPARAM wParam,
 }
 
 /**************************************************************************
+  Make an attempt to autoconnect to the server.
+  (server_autoconnect() gets GTK to call this function every so often.)
+**************************************************************************/
+static int try_to_autoconnect()
+{
+  char errbuf[512];
+  static int count = 0;
+
+  count++;
+
+  if (count >= MAX_AUTOCONNECT_ATTEMPTS) {
+    freelog(LOG_FATAL,
+            _("Failed to contact server \"%s\" at port "
+              "%d as \"%s\" after %d attempts"),
+            server_host, server_port, user_name, count);
+    exit(EXIT_FAILURE);
+  }
+
+  switch (try_to_connect(user_name, errbuf, sizeof(errbuf))) {
+  case 0:                       /* Success! */
+    return FALSE;               /* Do not call this
+                                   function again */
+#if 0
+  case ECONNREFUSED:            /* Server not available (yet) */
+    return TRUE;                /* Keep calling this function */
+#endif
+  default:                      /* All other errors are fatal */
+    freelog(LOG_FATAL,
+            _("Error contacting server \"%s\" at port %d "
+              "as \"%s\":\n %s\n"),
+            server_host, server_port, user_name, errbuf);
+    exit(EXIT_FAILURE);     
+  }
+}
+
+/**************************************************************************
+
+**************************************************************************/
+static void CALLBACK autoconnect_timer(HWND hwnd,UINT uMsg,
+				       UINT idEvent,DWORD  dwTime)  
+{
+  printf("Timer\n");
+  if (!try_to_autoconnect())
+    KillTimer(NULL, autoconnect_timer_id);
+}
+
+/**************************************************************************
+  Start trying to autoconnect to civserver.  Calls
+  get_server_address(), then arranges for try_to_autoconnect(), which
+  calls try_to_connect(), to be called roughly every
+  AUTOCONNECT_INTERVAL milliseconds, until success, fatal error or
+  user intervention.  
+**************************************************************************/
+void server_autoconnect()
+{
+  char buf[512];
+
+  my_snprintf(buf, sizeof(buf),
+              _("Auto-connecting to server \"%s\" at port %d "
+                "as \"%s\" every %d.%d second(s) for %d times"),
+              server_host, server_port, user_name,
+              AUTOCONNECT_INTERVAL / 1000,AUTOCONNECT_INTERVAL % 1000, 
+              MAX_AUTOCONNECT_ATTEMPTS);
+  append_output_window(buf);
+  if (get_server_address(server_host, server_port, buf, sizeof(buf)) < 0) {
+    freelog(LOG_FATAL,
+            _("Error contacting server \"%s\" at port %d "
+              "as \"%s\":\n %s\n"),
+            server_host, server_port, user_name, buf);
+    exit(EXIT_FAILURE);
+  }
+  printf("server_autoconnect\n");
+  if (try_to_autoconnect()) {
+    printf("T2\n");
+    autoconnect_timer_id = SetTimer(root_window, 3, AUTOCONNECT_INTERVAL,
+				    autoconnect_timer);
+  }
+
+}
+
+/**************************************************************************
   Handle the saving and loading functions.
 **************************************************************************/
 void handle_save_load(const char *title, bool is_save)
@@ -735,6 +806,9 @@ void handle_save_load(const char *title, bool is_save)
 static void load_game_callback()
 {
   if (is_server_running() || client_start_server()) {
+    while(!can_client_access_hack()) {
+      socket_timer();
+    }
     handle_save_load(_("Load Game"), FALSE);
   }
 }
@@ -769,8 +843,6 @@ static void set_new_game_params(HWND win)
   my_snprintf(aifill_str, sizeof(aifill_str), "/set aifill %d", aifill);
   send_chat(aifill_str);
 
-  really_close_connection_dialog();
-
   send_chat("/start");
 }
 
@@ -793,10 +865,7 @@ static LONG CALLBACK new_game_proc(HWND win, UINT message,
       switch((enum new_game_dlg_ids)LOWORD(wParam))
 	{
 	case ID_NEWGAMEDLG_OPTIONS:
-	  popup_settable_options_dialog();
-	  break;
-        case ID_NEWGAMEDLG_NATIONS:
-	  popup_races_dialog(game.player_ptr);
+	  send_report_request(REPORT_SERVER_OPTIONS2);
 	  break;
 	case ID_CANCEL:
 	  client_kill_server(TRUE);
@@ -987,9 +1056,7 @@ void gui_server_connect()
 
   fcwin_box_add_button(hbox, _("Game Options"), ID_NEWGAMEDLG_OPTIONS, 0, 
 		       TRUE, TRUE, 5);
-  fcwin_box_add_button(hbox, _("Pick Nation"), ID_NEWGAMEDLG_NATIONS, 0, 
-		       TRUE, TRUE, 5);
-  fcwin_box_add_button(hbox, _("Start Game"), ID_OK, 0, TRUE, TRUE, 5);
+  fcwin_box_add_button(hbox, _("OK"), ID_OK, 0, TRUE, TRUE, 5);
   fcwin_box_add_button(hbox, _("Cancel"), ID_CANCEL, 0, TRUE, TRUE, 5);
 
   fcwin_box_add_box(newgame_vbox, hbox, TRUE, FALSE, 5);

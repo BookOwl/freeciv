@@ -24,9 +24,6 @@ extern char default_tileset_name[512];
 extern char default_sound_set_name[512];
 extern char default_sound_plugin_name[512];
 
-extern bool save_options_on_exit;
-extern bool fullscreen_mode;
-
 /** Local Options: **/
 
 extern bool solid_color_behind_units;
@@ -34,6 +31,7 @@ extern bool sound_bell_at_new_turn;
 extern int smooth_move_unit_msec;
 extern int smooth_center_slide_msec;
 extern bool do_combat_animation;
+extern bool ai_popup_windows;
 extern bool ai_manual_turn_done;
 extern bool auto_center_on_unit;
 extern bool auto_center_on_combat;
@@ -57,22 +55,9 @@ enum client_option_type {
   COT_STR
 };
 
-enum client_option_class {
-  COC_GRAPHICS,
-  COC_OVERVIEW,
-  COC_SOUND,
-  COC_INTERFACE,
-  COC_NETWORK,
-  COC_MAX
-};
-
-extern const char *client_option_class_names[];
-
 typedef struct client_option {
-  const char *name; /* Short name - used as an identifier */
-  const char *description; /* One-line description */
-  const char *helptext; /* Paragraph-length help text */
-  enum client_option_class category;
+  const char *name;
+  const char *description;
   enum client_option_type type;
   int *p_int_value;
   bool *p_bool_value;
@@ -91,17 +76,16 @@ typedef struct client_option {
 } client_option;
 extern client_option *options;
 
-#define GEN_INT_OPTION(oname, desc, help, category)			    \
-  { #oname, desc, help, category, COT_INT,				    \
-      &oname, NULL, NULL, 0, NULL, NULL, NULL }
-#define GEN_BOOL_OPTION(oname, desc, help, category)	                    \
-  GEN_BOOL_OPTION_CB(oname, desc, help, category, NULL)
-#define GEN_BOOL_OPTION_CB(oname, desc, help, category, callback)	    \
-  { #oname, desc, help, category, COT_BOOL,				    \
-      NULL, &oname, NULL, 0, callback, NULL, NULL }
-#define GEN_STR_OPTION(oname, desc, help, category, str_defaults, callback) \
-  { #oname, desc, help, category, COT_STR,			    \
-      NULL, NULL, oname, sizeof(oname), callback, str_defaults, NULL }
+#define GEN_INT_OPTION(oname, desc) { #oname, desc, COT_INT, \
+                                      &oname, NULL, NULL, 0, NULL, \
+                                       NULL, NULL }
+#define GEN_BOOL_OPTION(oname, desc) { #oname, desc, COT_BOOL, \
+                                       NULL, &oname, NULL, 0, NULL, \
+                                       NULL, NULL }
+#define GEN_STR_OPTION(oname, desc, str_defaults, callback) \
+                                    { #oname, desc, COT_STR, \
+                                      NULL, NULL, oname, sizeof(oname), \
+                                      callback, str_defaults, NULL }
 
 extern int num_options;
 
@@ -123,7 +107,6 @@ extern client_option gui_options[];
 
 /** View Options: **/
 
-extern bool draw_city_outlines;
 extern bool draw_map_grid;
 extern bool draw_city_names;
 extern bool draw_city_growth;
@@ -141,18 +124,6 @@ extern bool draw_units;
 extern bool draw_focus_unit;
 extern bool draw_fog_of_war;
 extern bool draw_borders;
-extern bool draw_full_citybar;
-extern bool draw_unit_shields;
-
-/* It would probably be better to have function calls for these checks. */
-#define DRAW_CITY_PRODUCTIONS (draw_city_productions \
-			       || (draw_full_citybar && draw_city_growth))
-#define DRAW_CITY_GROWTH (draw_city_growth \
-			  || (draw_full_citybar && draw_city_productions))
-
-extern bool player_dlg_show_dead_players;
-
-extern bool reqtree_show_icons;
 
 typedef struct {
   const char *name;
@@ -169,16 +140,16 @@ extern view_option view_options[];
 #define MW_POPUP     4		/* popup an individual window */
 
 extern unsigned int messages_where[];	/* OR-ed MW_ values [E_LAST] */
+extern int sorted_events[];	        /* [E_LAST], sorted by the
+					   translated message text */
+const char *get_message_text(enum event_type event);
 
-void message_options_init(void);
-void message_options_free(void);
+void init_messages_where(void);
 
 void load_general_options(void);
 void load_ruleset_specific_options(void);
 void save_options(void);
-
-/* Callback functions for changing options. */
-void mapview_redraw_callback(struct client_option *option);
+const char *get_sound_tag_for_event(enum event_type event);
+bool is_city_event(enum event_type event);
 
 #endif  /* FC__OPTIONS_H */
-

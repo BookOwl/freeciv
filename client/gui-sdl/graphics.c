@@ -25,26 +25,38 @@
 #include <config.h>
 #endif
 
-#include <assert.h>
+#include <stdlib.h>
+#include <string.h>
 
+#include <SDL/SDL.h>
 #include <SDL/SDL_image.h>
+
+#include <SDL/SDL_version.h>
 #include <SDL/SDL_syswm.h>
 
-/* utility */
+#include "game.h"
+
 #include "fcintl.h"
 #include "log.h"
 
-/* client */
+#include "shared.h"
+#include "support.h"
+#include "unit.h"
+#include "version.h"
+
+#include "climisc.h"
+#include "colors.h"
+
+#include "gui_iconv.h"
+
+#include "mapview_g.h"
+#include "options.h"
 #include "tilespec.h"
-
-/* gui-sdl */
-#include "SDL_ttf.h"
-#include "gui_tilespec.h"
-#include "gui_zoom.h"
-#include "mapview.h"
-#include "themespec.h"
-
+#include "gui_mem.h"
 #include "graphics.h"
+#include "gui_zoom.h"
+#include "gui_main.h"
+#include "gui_string.h"
 
 #ifdef HAVE_MMX1
 #include "mmx.h"
@@ -52,7 +64,16 @@
 
 /* ------------------------------ */
 
-struct main Main;
+#include "goto_cursor.xbm"
+#include "goto_cursor_mask.xbm"
+#include "drop_cursor.xbm"
+#include "drop_cursor_mask.xbm"
+#include "nuke_cursor.xbm"
+#include "nuke_cursor_mask.xbm"
+#include "patrol_cursor.xbm"
+#include "patrol_cursor_mask.xbm"
+
+struct canvas Main;
 
 static SDL_Surface *pIntro_gfx = NULL;
 
@@ -62,24 +83,47 @@ SDL_Cursor *pDrop_Cursor;
 SDL_Cursor *pNuke_Cursor;
 SDL_Cursor *pPatrol_Cursor;
 
+static SDL_Cursor *init_cursor(const char *image_data,
+			       const char *image_mask, int width,
+			       int height, int hot_x, int hot_y);
+
 /* ============ FreeCiv sdl graphics function =========== */
 
-#ifdef USE_ALPHABLIT
-int alphablit(SDL_Surface *src, SDL_Rect *srcrect, 
-              SDL_Surface *dst, SDL_Rect *dstrect) {
+/**************************************************************************
+  Convert cursor from "xbm" format to SDL_Cursor format and create them.
+**************************************************************************/
+static SDL_Cursor *init_cursor(const char *image_data,
+			       const char *image_mask, int width,
+			       int height, int hot_x, int hot_y)
+{
+  Uint8 *data;
+  Uint8 *mask;
+  SDL_Cursor *mouse;
+  int i = 0;
+  size_t size = height << 2;
 
-  if (!(src && dst)) {
-    return 0;
+  data = MALLOC(size);
+  mask = MALLOC(size);
+
+  while (i != size) {
+    data[i] = image_data[i + 3];
+    mask[i] = image_mask[i + 3];
+    data[i + 1] = image_data[i + 2];
+    mask[i + 1] = image_mask[i + 2];
+    data[i + 2] = image_data[i + 1];
+    mask[i + 2] = image_mask[i + 1];
+    data[i + 3] = image_data[i];
+    mask[i + 3] = image_mask[i];
+    i += 4;
   }
 
-  /* use for RGBA->RGBA blits only */  
-  if (src->format->Amask && dst->format->Amask) {
-    return pygame_AlphaBlit(src, srcrect, dst, dstrect);
-  } else {
-    return SDL_BlitSurface(src, srcrect, dst, dstrect);
-  }   
+  mouse = SDL_CreateCursor(data, mask, width, height, hot_x, hot_y);
+  
+  FREE( data );
+  FREE( mask );
+  
+  return mouse;
 }
-#endif
 
 /**************************************************************************
   Create new surface (pRect->w x pRect->h size) and copy pRect area of
@@ -127,69 +171,6 @@ SDL_Surface * crop_rect_from_surface(SDL_Surface *pSource,
   return pNew;
 }
 
-/**************************************************************************
-  Reduce the alpha of the final surface proportional to the alpha of the mask.
-  Thus if the mask has 50% alpha the final image will be reduced by 50% alpha.
-
-  mask_offset_x, mask_offset_y is the offset of the mask relative to the
-  origin of the source image.  The pixel at (mask_offset_x,mask_offset_y)
-  in the mask image will be used to clip pixel (0,0) in the source image
-  which is pixel (-x,-y) in the new image.
-**************************************************************************/
-SDL_Surface *mask_surface(SDL_Surface * pSrc, SDL_Surface * pMask,
-                          int mask_offset_x, int mask_offset_y)
-{
-  SDL_Surface *pDest = NULL;
-  
-  int row, col;  
-  bool free_pMask = FALSE;
-  Uint32 *pSrc_Pixel = NULL;
-  Uint32 *pDest_Pixel = NULL;
-  Uint32 *pMask_Pixel = NULL;
-  unsigned char src_alpha, mask_alpha;
-
-  if (!pMask->format->Amask) {
-    pMask = SDL_DisplayFormatAlpha(pMask);
-    free_pMask = TRUE;
-  }
-  
-  pSrc = SDL_DisplayFormatAlpha(pSrc);
-  pDest = SDL_DisplayFormatAlpha(pSrc);
-  
-  lock_surf(pSrc);
-  lock_surf(pMask);  
-  lock_surf(pDest);
-  
-  pSrc_Pixel = (Uint32 *)pSrc->pixels;
-  pDest_Pixel = (Uint32 *)pDest->pixels;
-
-  for (row = 0; row < pSrc->h; row++) {
-      
-    pMask_Pixel = (Uint32 *)pMask->pixels
-                  + pMask->w * (row + mask_offset_y)
-                  + mask_offset_x;
-    
-    for (col = 0; col < pSrc->w; col++) {
-      src_alpha = (*pSrc_Pixel & pSrc->format->Amask) >> pSrc->format->Ashift;
-      mask_alpha = (*pMask_Pixel & pMask->format->Amask) >> pMask->format->Ashift;
-      
-      *pDest_Pixel = (*pSrc_Pixel & ~pSrc->format->Amask)
-                   | (((src_alpha * mask_alpha) / 255) << pDest->format->Ashift);
-      
-      pSrc_Pixel++; pDest_Pixel++; pMask_Pixel++;
-    }
-  }
-
-  unlock_surf(pDest);
-  unlock_surf(pMask);    
-  unlock_surf(pSrc);
-  
-  if (free_pMask) {
-    FREESURFACE(pMask);
-  }
-
-  return pDest;
-}
 /**************************************************************************
   Load a surface from file putting it in software mem.
 **************************************************************************/
@@ -273,31 +254,14 @@ SDL_Surface *create_surf_with_format(SDL_PixelFormat * pSpf,
 }
 
 /**************************************************************************
-  create a surface with alpha channel
-**************************************************************************/
-SDL_Surface *create_surf_alpha(int iWidth, int iHeight, Uint32 iFlags) {
-  SDL_Surface *pTmp = create_surf(iWidth, iHeight, iFlags);
-  SDL_Surface *pNew = SDL_DisplayFormatAlpha(pTmp);
-  FREESURFACE(pTmp);
-  
-  return pNew;
-}
-
-/**************************************************************************
   create an surface with screen format and fill with color.
   if pColor == NULL surface is filled with transparent white A = 128
   MUST NOT BE USED IF NO SDLSCREEN IS SET
 **************************************************************************/
 SDL_Surface *create_filled_surface(Uint16 w, Uint16 h, Uint32 iFlags,
-				   SDL_Color * pColor, bool add_alpha)
+				   SDL_Color * pColor)
 {
-  SDL_Surface *pNew;
-
-  if (add_alpha) {
-    pNew = create_surf_alpha(w, h, iFlags);
-  } else {
-    pNew = create_surf(w, h, iFlags);
-  }
+  SDL_Surface *pNew = create_surf(w, h, iFlags);
   
   if (!pNew) {
     return NULL;
@@ -458,23 +422,13 @@ void * my_memset16(void *dst_mem, Uint16 var, size_t lenght)
   Uint16 *ptr = (Uint16 *)dst_mem;
   Uint32 color = (var << 16) | var;
 #ifndef HAVE_MMX1  
-  #ifndef ARM_WINCE
   DUFFS_LOOP_DOUBLE2(
   {
     *ptr++ = var;
   },{
-    *(Uint32 *)ptr = color;  /* this statement causes an exception on my StrongARM-PDA */
+    *(Uint32 *)ptr = color;
     ptr += 2;
   }, lenght);
-  #else
-  DUFFS_LOOP_DOUBLE2(
-  {
-    *ptr++ = var;
-  },{
-    *ptr++ = var;
-    *ptr++ = var;
-  }, lenght);
-  #endif
 #else
   movd_m2r(color, mm0); /* color(0000CLCL) -> mm0 */
   punpckldq_r2r(mm0, mm0); /* CLCLCLCL -> mm0 */
@@ -660,7 +614,7 @@ static void put_hline(SDL_Surface * pDest, int y, Sint16 x0, Sint16 x1,
     x1 = y;
   }
   
-  lng = (x1 - x0) + 1;
+  lng = x1 - x0;
   
   if (!lng) return;  
   
@@ -698,60 +652,31 @@ static void put_line(SDL_Surface * pDest, Sint16 x0, Sint16 y0, Sint16 x1,
   int sx, sy;
   int swaptmp;
   register Uint8 *pPixel;
-  float m;
-  int n;
 
-  if (((x0 < 0) && (x1 < 0))
-     || ((y0 < 0) && (y1 < 0))
-     || ((x0 >= pDest->w) && (x1 >= pDest->w))
-     || ((y0 >= pDest->h) && (y1 >= pDest->h))) {
-    return;
-  }
-  
   /* correct x0, x1 position ( must be inside 'pDest' surface ) */
   if (x0 < 0) {
-    m = (y1 - y0) / (x1 - x0);
-    n = y1 - m * x1;
     x0 = 0;
-    y0 = n;                        /* y0 = m * x0 + n; */
   } else if (x0 > pDest->w - 1) {
-    m = (y1 - y0) / (x1 - x0);
-    n = y1 - m * x1;
     x0 = pDest->w - 1;
-    y0 = m * x0 + n;
-  } else if (x1 < 0) {
-    m = (y1 - y0) / (x1 - x0);
-    n = y1 - m * x1;
+  }
+
+  if (x1 < 0) {
     x1 = 0;
-    y1 = n;                        /* y1 = m * x1 + n; */
   } else if (x1 > pDest->w - 1) {
-    m = (y1 - y0) / (x1 - x0);
-    n = y1 - m * x1;
     x1 = pDest->w - 1;
-    y1 = m * x1 + n;
   }
 
   /* correct y0, y1 position ( must be inside 'pDest' surface ) */
   if (y0 < 0) {
-    m = (x1 - x0) / (y1 - y0);
-    n = x1 - m * y1;
     y0 = 0;
-    x0 = n;                        /* x0 = m * y0 + n; */
   } else if (y0 > pDest->h - 1) {
-    m = (x1 - x0) / (y1 - y0);
-    n = x1 - m * y1;
     y0 = pDest->h - 1;
-    x0 = m * y0 + n;    
-  } else if (y1 < 0) {
-    m = (x1 - x0) / (y1 - y0);
-    n = x1 - m * y1;
+  }
+
+  if (y1 < 0) {
     y1 = 0;
-    x1 = n;                        /* x1 = m * y1 + n; */
   } else if (y1 > pDest->h - 1) {
-    m = (x1 - x0) / (y1 - y0);
-    n = x1 - m * y1;
     y1 = pDest->h - 1;
-    x1 = m * y1 + n;
   }
 
   /* basic */
@@ -881,7 +806,7 @@ void putframe(SDL_Surface * pDest, Sint16 x0, Sint16 y0,
   }
 
   if ((y1 >= 0) && (y1 < pDest->h)) {	/* botton line */
-    put_hline(pDest, y1, x0, x1, color);
+    put_hline(pDest, y1, x0, x1 + 1, color);
   }
 
   if ((x0 >= 0) && (x0 < pDest->w)) {
@@ -907,8 +832,11 @@ void init_sdl(int iFlags)
   Main.guis = NULL;
   Main.gui = NULL;
   Main.map = NULL;
+  Main.text = NULL;
   Main.rects_count = 0;
   Main.guis_count = 0;
+  
+  mapview_canvas.store = &Main;
 
   if (SDL_WasInit(SDL_INIT_AUDIO)) {
     error = (SDL_InitSubSystem(iFlags) < 0);
@@ -938,9 +866,9 @@ void init_sdl(int iFlags)
 **************************************************************************/
 void quit_sdl(void)
 {
-  FC_FREE(Main.guis);
   FREESURFACE(Main.gui);
   FREESURFACE(Main.map);
+  FREESURFACE(Main.text);
 }
 
 /**************************************************************************
@@ -970,7 +898,7 @@ int set_video_mode(int iWidth, int iHeight, int iFlags)
     					"640 x 480 16 bpp SW"));
 
     Main.screen = SDL_SetVideoMode(640, 480, 16, SDL_SWSURFACE);
-  } else { /* set video mode */
+  } else /* set video mode */
     if ((Main.screen = SDL_SetVideoMode(iWidth, iHeight,
 					iDepth, iFlags)) == NULL) {
     freelog(LOG_ERROR, _("Unable to set this resolution: "
@@ -980,12 +908,24 @@ int set_video_mode(int iWidth, int iHeight, int iFlags)
     exit(-30);
   }
 
+
   freelog(LOG_DEBUG, _("Setting resolution to: %d x %d %d bpp"),
 	  					iWidth, iHeight, iDepth);
+
+  mapview_canvas.width = iWidth;
+  mapview_canvas.height = iHeight;
+  if (NORMAL_TILE_WIDTH > 0) {
+    mapview_canvas.tile_width = (iWidth - 1) / NORMAL_TILE_WIDTH + 1;
+    mapview_canvas.tile_height = (iHeight - 1) / NORMAL_TILE_HEIGHT + 1;
   }
 
   FREESURFACE(Main.map);
   Main.map = SDL_DisplayFormat(Main.screen);
+  
+  FREESURFACE(Main.text);
+  Main.text = SDL_DisplayFormatAlpha(Main.screen);
+  SDL_FillRect(Main.text, NULL, 0x0);
+  /*SDL_SetColorKey(Main.text , SDL_SRCCOLORKEY|SDL_RLEACCEL, 0x0);*/
   
   FREESURFACE(Main.gui);
   Main.gui = SDL_DisplayFormatAlpha(Main.screen);
@@ -1226,12 +1166,12 @@ static int __FillRectAlpha555(SDL_Surface * pSurface, SDL_Rect * pRect,
 	
 	  pand_r2r(mm0, mm5); /* dst & mask -> mm1 */
 	  pand_r2r(mm0, mm4); /* src & mask -> mm4 */
-	  paddd_r2r(mm5, mm4); /* mm5 + mm4 -> mm4 */ /*w*/
-	  psrld_i2r(1, mm4); /* mm4 >> 1 -> mm4 */ /*q*/
+	  paddd_r2r(mm5, mm4); /* mm5 + mm4 -> mm4 */ //w
+	  psrld_i2r(1, mm4); /* mm4 >> 1 -> mm4 */ //q
 	
 	  pand_r2r(mm2, mm3); /* src & dst -> mm3 */
 	  pand_r2r(mm1, mm3); /* mm3 & !mask -> mm3 */
-	  paddd_r2r(mm4, mm3); /* mm3 + mm4 -> mm4 */ /*w*/
+	  paddd_r2r(mm4, mm3); /* mm3 + mm4 -> mm4 */ //w
 	  movq_r2m(mm3, (*pixel));/* mm3 -> 4 dst pixels */
 	  pixel += 4;
         }, end);
@@ -1562,12 +1502,12 @@ static int __FillRectAlpha565(SDL_Surface * pSurface, SDL_Rect * pRect,
 	
 	  pand_r2r(mm0, mm5); /* dst & mask -> mm1 */
 	  pand_r2r(mm0, mm4); /* src & mask -> mm4 */
-	  paddd_r2r(mm5, mm4); /* mm5 + mm4 -> mm4 */ /*w*/
-	  psrld_i2r(1, mm4); /* mm4 >> 1 -> mm4 */ /*q*/
+	  paddd_r2r(mm5, mm4); /* mm5 + mm4 -> mm4 */ //w
+	  psrld_i2r(1, mm4); /* mm4 >> 1 -> mm4 */ //q
 	
 	  pand_r2r(mm2, mm3); /* src & dst -> mm3 */
 	  pand_r2r(mm1, mm3); /* mm3 & !mask -> mm3 */
-	  paddd_r2r(mm4, mm3); /* mm3 + mm4 -> mm4 */ /*w*/
+	  paddd_r2r(mm4, mm3); /* mm3 + mm4 -> mm4 */ //w
 	  movq_r2m(mm3, (*pixel));/* mm3 -> 4 dst pixels */
 	  pixel += 4;
         }, end);
@@ -3516,7 +3456,7 @@ SDL_Surface *make_flag_surface_smaler(SDL_Surface * pSrc)
 SDL_Surface * get_intro_gfx(void)
 {
   if(!pIntro_gfx) {
-   pIntro_gfx = load_surf(tileset_main_intro_filename(tileset));
+   pIntro_gfx = load_surf(main_intro_filename);
   }
   return pIntro_gfx;
 }
@@ -3527,16 +3467,31 @@ SDL_Surface * get_intro_gfx(void)
 SDL_Surface * get_logo_gfx(void)
 {
   SDL_Surface *pLogo;
-        
-  SDL_Surface *pLogo_Surf = adj_surf(GET_SURF(theme_lookup_sprite_tag_alt(
-                                  theme, "theme.logo", "", TRUE, "", "")));
+  SDL_Surface *pLogo_Surf = IMG_Load(minimap_intro_filename);
   assert(pLogo_Surf != NULL);
   pLogo = SDL_CreateRGBSurface(SDL_SWSURFACE,
 			pLogo_Surf->w, pLogo_Surf->h,
 				32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0x0);
   SDL_BlitSurface(pLogo_Surf, NULL, pLogo, NULL);
-  
+  FREESURFACE(pLogo_Surf);
   return pLogo;
+}
+
+/**************************************************************************
+  ...
+**************************************************************************/
+SDL_Surface * get_city_gfx(void)
+{
+  SDL_Surface *pCity_Surf;
+  struct Sprite *pSpr = load_sprite("theme.city");
+  
+  pCity_Surf = (pSpr ? GET_SURF(pSpr) : NULL);
+  assert(pCity_Surf != NULL);
+  
+  pSpr->psurface = NULL;
+  unload_sprite("theme.city");
+  
+  return pCity_Surf;
 }
 
 /**************************************************************************
@@ -3545,7 +3500,7 @@ SDL_Surface * get_logo_gfx(void)
 void draw_intro_gfx(void)
 {
   SDL_Surface *pIntro = get_intro_gfx();
-
+  
   if(pIntro->w != Main.screen->w)
   {
     SDL_Surface *pTmp = ResizeSurface(pIntro, Main.screen->w, Main.screen->h,1);
@@ -3590,24 +3545,29 @@ void load_intro_gfx(void)
 **************************************************************************/
 void load_cursors(void)
 {
-  enum cursor_type cursor;  
-  int frame;
-  SDL_Surface *pSurf;
-
+  /* standart */
   pStd_Cursor = SDL_GetCursor();
-    
-  for (cursor = 0; cursor < CURSOR_LAST; cursor++) {
-    for (frame = 0; frame < NUM_CURSOR_FRAMES; frame++) {
-      int hot_x, hot_y;
-      struct sprite *sprite
-	= get_cursor_sprite(tileset, cursor, &hot_x, &hot_y, frame);
-      
-      pSurf = GET_SURF(sprite);
-      SDL_SetColorKey(pSurf, SDL_SRCCOLORKEY, 0);
 
-      fc_cursors[cursor][frame] = SurfaceToCursor(pSurf, hot_x, hot_y);
-    }
-  }
+  /* goto */
+  pGoto_Cursor = init_cursor(goto_cursor_bits, goto_cursor_mask_bits,
+			     goto_cursor_width, goto_cursor_height,
+			/*     goto_cursor_x_hot, goto_cursor_y_hot);*/
+  				2, 2);
+
+  /* drop */
+  pDrop_Cursor = init_cursor(drop_cursor_bits, drop_cursor_mask_bits,
+			     drop_cursor_width, drop_cursor_height,
+			     drop_cursor_x_hot, drop_cursor_y_hot);
+
+  /* nuke */
+  pNuke_Cursor = init_cursor(nuke_cursor_bits, nuke_cursor_mask_bits,
+			     nuke_cursor_width, nuke_cursor_height,
+			     nuke_cursor_x_hot, nuke_cursor_y_hot);
+
+  /* patrol */
+  pPatrol_Cursor = init_cursor(patrol_cursor_bits, patrol_cursor_mask_bits,
+			       patrol_cursor_width, patrol_cursor_height,
+			       patrol_cursor_x_hot, patrol_cursor_y_hot);
 }
 
 /**************************************************************************
@@ -3615,15 +3575,6 @@ void load_cursors(void)
 **************************************************************************/
 void unload_cursors(void)
 {
-  enum cursor_type cursor;  
-  int frame;
-  
-  for (cursor = 0; cursor < CURSOR_LAST; cursor++) {
-    for (frame = 0; frame < NUM_CURSOR_FRAMES; frame++) {
-      SDL_FreeCursor(fc_cursors[cursor][frame]);
-    }
-  }
-  
   SDL_FreeCursor(pStd_Cursor);
   SDL_FreeCursor(pGoto_Cursor);
   SDL_FreeCursor(pDrop_Cursor);
@@ -3632,9 +3583,61 @@ void unload_cursors(void)
   return;
 }
 
-void gui_flush(void)
+/**************************************************************************
+  Return a NULL-terminated, permanently allocated array of possible
+  graphics types extensions.  Extensions listed first will be checked
+  first.
+**************************************************************************/
+const char **gfx_fileextensions(void)
 {
-  /* Nothing */
+  static const char *ext[] = {
+    "png",
+    "xpm",
+    NULL
+  };
+
+  return ext;
+}
+
+/**************************************************************************
+  Create a sprite struct and fill it with SDL_Surface pointer
+**************************************************************************/
+static struct Sprite * ctor_sprite(SDL_Surface *pSurface)
+{
+  struct Sprite *result = fc_malloc(sizeof(struct Sprite));
+
+  result->psurface = pSurface;
+
+  return result;
+}
+
+/**************************************************************************
+  Create a new sprite by cropping and taking only the given portion of
+  the image.
+**************************************************************************/
+struct Sprite *crop_sprite(struct Sprite *source,
+			   int x, int y, int width, int height)
+{
+  SDL_Rect src_rect =
+      { (Sint16) x, (Sint16) y, (Uint16) width, (Uint16) height };
+  SDL_Surface *pNew, *pTmp =
+      crop_rect_from_surface(GET_SURF(source), &src_rect);
+
+  if (pTmp->format->Amask) {
+    SDL_SetAlpha(pTmp, SDL_SRCALPHA, 255);
+    pNew = pTmp;
+  } else {
+    SDL_SetColorKey(pTmp, SDL_SRCCOLORKEY | SDL_RLEACCEL, pTmp->format->colorkey);
+    pNew = SDL_ConvertSurface(pTmp, pTmp->format, pTmp->flags);
+
+    if (!pNew) {
+      return ctor_sprite(pTmp);
+    }
+
+    FREESURFACE(pTmp);
+  }
+
+  return ctor_sprite(pNew);
 }
 
 /**************************************************************************
@@ -3643,7 +3646,7 @@ void gui_flush(void)
   To fix this we change all black {0, 0, 0, 255} to newblack {4, 4, 4, 255}
   (first collor != 0 in 16 bit coding).
 **************************************************************************/
-bool correct_black(SDL_Surface * pSrc)
+static bool correct_black(SDL_Surface * pSrc)
 {
   bool ret = 0;
   register int x;
@@ -3692,6 +3695,66 @@ bool correct_black(SDL_Surface * pSrc)
 
   return ret;
 }
+
+/**************************************************************************
+  Load the given graphics file into a sprite.  This function loads an
+  entire image file, which may later be broken up into individual sprites
+  with crop_sprite.
+**************************************************************************/
+struct Sprite * load_gfxfile(const char *filename)
+{
+  SDL_Surface *pNew = NULL;
+  SDL_Surface *pBuf = NULL;
+
+  if ((pBuf = IMG_Load(filename)) == NULL) {
+    freelog(LOG_ERROR,
+	    _("load_surf: Unable to load graphic file %s!"),
+	    filename);
+    return NULL;		/* Should I use abotr() ? */
+  }
+  
+  if (pBuf->flags & SDL_SRCCOLORKEY) {
+    SDL_SetColorKey(pBuf, SDL_SRCCOLORKEY, pBuf->format->colorkey);
+  }
+
+  if (correct_black(pBuf)) {
+    pNew = pBuf;
+    freelog(LOG_DEBUG, _("%s load with own %d bpp format !"), filename,
+	    pNew->format->BitsPerPixel);
+  } else {
+    Uint32 color;
+    
+    freelog(LOG_DEBUG, _("%s (%d bpp) load with screen (%d bpp) format !"),
+	    filename, pBuf->format->BitsPerPixel,
+	    Main.screen->format->BitsPerPixel);
+
+    pNew = create_surf(pBuf->w, pBuf->h, SDL_SWSURFACE);
+    color = SDL_MapRGB(pNew->format, 255, 0, 255);
+    SDL_FillRect(pNew, NULL, color);
+    
+    if (SDL_BlitSurface(pBuf, NULL, pNew, NULL)) {
+      FREESURFACE(pNew);
+      return ctor_sprite(pBuf);
+    }
+
+    FREESURFACE(pBuf);
+    SDL_SetColorKey(pNew, SDL_SRCCOLORKEY, color);
+    
+  }
+
+  return ctor_sprite(pNew);
+}
+
+/**************************************************************************
+  Free a sprite and all associated image data.
+**************************************************************************/
+void free_sprite(struct Sprite *s)
+{
+  FREESURFACE(GET_SURF(s));
+  /*s->psurface=NULL;*/
+  free(s);
+}
+
 
 /**************************************************************************
   Frees the introductory sprites.
