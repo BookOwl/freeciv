@@ -1,0 +1,129 @@
+[nation_japanese]
+
+; For cities and leaders, we use ASCII transliterations of the Japanese
+; characters.  Using true Japanese (Kanji or Hiragana) is overkill for
+; those used to latin characters (but would be desirable for Japanese
+; players).  Other transliterations that use accented latin characters
+; are also unnecessary.  Here we stick to ascii using the Hepburn
+; romanization.
+;
+; This is a serious problem for Japanese players since they would obviously
+; want to see these names using their native alphabet.  The only ways to
+; solve this would be to allow translation of city names (forcing translators
+; to translate or at least wade through all of the thousands of available
+; names) or to distribute a separate Japanese ruleset for Japanese
+; players to use (which would not be that hard; just substitute in the
+; correct native characters, in UTF-8, into this file).
+;
+; This is also a problem for many other nations that use non-latin alphabets.
+
+name=_("Japanese")
+plural=_("?plural:Japanese")
+groups=_("Medieval"), _("Modern"), _("Asian")
+legend=_("According to traditional Japanese mythology, Japan was founded\
+ in the 7th century BC by the ancestral Emperor Jimmu.")
+leader=
+  "Jimmu",
+  "Mutsuhito",
+  "Hirohito",
+  "Oda Nobunaga",
+  "Tokugawa Ieyasu"
+leader_sex="Male", "Male", "Male", "Male", "Male"
+flag="japan"
+flag_alt = "-"
+city_style = "Asian"
+
+ruler_titles = { "government",      "male_title",      "female_title"
+                 "Monarchy",        _("Emperor"),        _("Empress")
+                 "Republic",        _("Shogun"),         _("Shogun")
+                 "Democracy",       _("Prime Minister"), _("Prime Minister")
+}
+
+init_techs=""
+init_buildings=""
+init_government="Despotism"
+init_units=""
+civilwar_nations="ryukyuan"
+; Reducing to ryukyuan only: This is a "true" Japanese civil war nation
+
+cities =
+  "Tokyo (ocean)",
+  "Osaka (ocean)",
+  "Kyoto (!ocean)",
+  "Nara (!ocean)",
+  "Sapporo (ocean)",
+  "Nagoya (ocean)",
+  "Fukuoka (ocean)",
+  "Kobe (ocean)",
+  "Hiroshima (ocean)",
+  "Sendai (ocean)",
+  "Kawasaki (ocean)",
+  "Kokura (ocean)",	; Modern-day "Kita-Kyushu"
+  "Saitama (!ocean)",
+  "Yokohama (ocean)",
+  "Chiba (ocean)",
+  "Shizuoka (ocean)",
+  "Niigata (ocean)",
+  "Matsuyama (ocean)",
+  "Kanazawa (ocean)",
+  "Sakai (ocean)",
+  "Sagamihara (!ocean)",
+  "Hachioji (!ocean)",
+  "Nagano (!ocean)",
+  "Kumamoto (ocean)",
+  "Okayama (ocean)",
+  "Kagoshima (ocean)",
+  "Hamamatsu (ocean)",
+  "Akita (ocean)",
+  "Himeji (ocean)",
+  "Nagasaki (ocean)",
+  "Yokosuka (ocean)",
+  "Oita (ocean)",
+  "Gifu (!ocean)",
+  "Wakayama (ocean)",
+  "Iwaki (ocean)",
+  "Asahikawa (!ocean)",
+  "Takamatsu (ocean)",
+  "Kochi (ocean)",
+  "Toyama (ocean)",
+  "Naha (ocean)",
+  "Aomori (ocean)",
+  "Hakodate (ocean)",
+  "Maebashi (!ocean)",
+  "Morioka (!ocean)",
+  "Otsu",
+  "Tokushima (ocean)",
+  "Yamagata (!ocean)",
+  "Fukui (ocean)",
+  "Matsumoto (!ocean)",
+  "Kofu (!ocean)",
+  "Funabashi",
+  "Utsunomiya (!ocean)",
+  "Miyazaki (ocean)",
+  "Fukuyama",
+  "Toyota (!ocean)",
+  "Tokorozawa (!ocean)",
+  "Fukushima (!ocean)",
+  "Yokkaichi (ocean)",
+  "Shimonoseki (ocean)",
+  "Koganei (!ocean)",
+  "Hachinohe (ocean)",
+  "Mito (!ocean)",
+  "Sasebo (ocean)",
+  "Matsue (ocean)",
+  "Kawaguchi (!ocean)",
+  "Kushiro (ocean)",
+  "Chofu (!ocean)",
+  "Fuse (!ocean)",	; One of the old cities that now is "Higashi-Osaka"
+  "Kumagaya (!ocean)",
+  "Amagasaki (ocean)",
+  "Ichikawa",
+  "Saga",
+  "Machida (!ocean)",
+  "Tottori (ocean)",
+  "Toyonaka (!ocean)",
+  "Fujisawa (ocean)",
+  "Kurume (!ocean)",
+  "Toyohashi (ocean)",
+  "Kawagoe (!ocean)",
+  "Tsu (ocean)"
