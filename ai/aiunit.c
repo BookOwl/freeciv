@@ -1298,7 +1298,7 @@ int find_something_to_kill(struct player *pplayer, struct unit *punit,
   if (pcity && (punit->id == 0 || pcity->id == punit->homecity)) {
     /* I would have thought unhappiness should be taken into account 
      * irrespectfully the city in which it will surface...  GB */ 
-    unhap = ai_assess_military_unhappiness(pcity);
+    unhap = ai_assess_military_unhappiness(pcity, get_gov_pplayer(pplayer));
   }
 
   move_rate = unit_move_rate(punit);
@@ -2219,7 +2219,7 @@ static void ai_set_defenders(struct player *pplayer)
       }
     }
     CITY_LOG(LOG_DEBUG, pcity, "Evaluating defense: %d defense, %d incoming"
-             ", %d defenders (out of %d)", total_defense, total_attack, count,
+             " %d defenders (out of %d)", total_defense, total_attack, count,
              unit_list_size(pcity->tile->units));
   } city_list_iterate_end;
 }

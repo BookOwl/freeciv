@@ -21,7 +21,7 @@ bool server_handle_packet(enum packet_type type, void *packet,
 {
   switch(type) {
   case PACKET_NATION_SELECT_REQ:
-    handle_nation_select_req(pconn,
+    handle_nation_select_req(pplayer,
       ((struct packet_nation_select_req *)packet)->player_no,
       ((struct packet_nation_select_req *)packet)->nation_no,
       ((struct packet_nation_select_req *)packet)->is_male,
@@ -310,49 +310,6 @@ bool server_handle_packet(enum packet_type type, void *packet,
     handle_spaceship_place(pplayer,
       ((struct packet_spaceship_place *)packet)->type,
       ((struct packet_spaceship_place *)packet)->num);
-    return TRUE;
-
-  case PACKET_SINGLE_WANT_HACK_REQ:
-    handle_single_want_hack_req(pconn, packet);
-    return TRUE;
-
-  case PACKET_EDIT_MODE:
-    handle_edit_mode(pconn,
-      ((struct packet_edit_mode *)packet)->state);
-    return TRUE;
-
-  case PACKET_EDIT_TILE:
-    handle_edit_tile(pconn,
-      ((struct packet_edit_tile *)packet)->x,
-      ((struct packet_edit_tile *)packet)->y,
-      ((struct packet_edit_tile *)packet)->terrain,
-      ((struct packet_edit_tile *)packet)->resource,
-      ((struct packet_edit_tile *)packet)->special);
-    return TRUE;
-
-  case PACKET_EDIT_UNIT:
-    handle_edit_unit(pconn, packet);
-    return TRUE;
-
-  case PACKET_EDIT_CREATE_CITY:
-    handle_edit_create_city(pconn,
-      ((struct packet_edit_create_city *)packet)->owner,
-      ((struct packet_edit_create_city *)packet)->x,
-      ((struct packet_edit_create_city *)packet)->y);
-    return TRUE;
-
-  case PACKET_EDIT_CITY_SIZE:
-    handle_edit_city_size(pconn,
-      ((struct packet_edit_city_size *)packet)->id,
-      ((struct packet_edit_city_size *)packet)->size);
-    return TRUE;
-
-  case PACKET_EDIT_PLAYER:
-    handle_edit_player(pconn, packet);
-    return TRUE;
-
-  case PACKET_EDIT_RECALCULATE_BORDERS:
-    handle_edit_recalculate_borders(pconn);
     return TRUE;
 
   default:

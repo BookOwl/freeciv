@@ -16,10 +16,6 @@ options="1.0"
 ; /* <-- avoid gettext warnings
 ; */ <-- avoid gettext warnings
 
-[effect_unhappysize]
-name    = "City_Unhappy_Size"
-value   = 4
-
 ; Barbarian effects
 
 [effect_barb1]
@@ -95,14 +91,6 @@ reqs	=
     { "type", "name", "range"
       "Tech", "Nuclear Power", "Player"
       "UnitClass", "Sea", "Local"
-    }
-
-[effect_anarchy_upkeep]
-name	= "Upkeep_Free"
-value	= 99
-reqs	=
-    { "type", "name", "range"
-      "Gov", "Anarchy", "Player"
     }
 
 [effect_republic]
@@ -316,52 +304,45 @@ reqs	=
       "Gov", "Democracy", "Player"
     }
 
-[effect_empire_size_base_0]
-name    = "Empire_Size_Base"
-value   = 9
+[effect_empire_size_mod_0]
+; base value
+name    = "Empire_Size_Mod"
+value   = -5
 reqs	=
     { "type",       "name",      "range"
       "Gov", "Anarchy",   "Player"
     }
 
-[effect_empire_size_base_1]
-name    = "Empire_Size_Base"
-value   = 10
+[effect_empire_size_mod_1]
+name    = "Empire_Size_Mod"
+value   = -4
 reqs	=
     { "type",       "name",      "range"
       "Gov", "Despotism", "Player"
     }
 
-[effect_empire_size_base_2]
-name    = "Empire_Size_Base"
-value   = 11
+[effect_empire_size_mod_2]
+name    = "Empire_Size_Mod"
+value   = -3
 reqs	=
     { "type",       "name",      "range"
       "Gov", "Monarchy",  "Player"
     }
 
-[effect_empire_size_base_3]
-name    = "Empire_Size_Base"
-value   = 12
+[effect_empire_size_mod_3]
+name    = "Empire_Size_Mod"
+value   = -2
 reqs	=
     { "type",       "name",      "range"
       "Gov", "Communism", "Player"
     }
 
-[effect_empire_size_base_4]
-name    = "Empire_Size_Base"
-value   = 13
+[effect_empire_size_mod_4]
+name    = "Empire_Size_Mod"
+value   = -1
 reqs	=
     { "type",       "name",      "range"
       "Gov", "Republic",  "Player"
-    }
-
-[effect_empire_size_base_5]
-name    = "Empire_Size_Base"
-value   = 14
-reqs	=
-    { "type",       "name",      "range"
-      "Gov", "Democracy",  "Player"
     }
 
 [effect_empire_size_step_0]

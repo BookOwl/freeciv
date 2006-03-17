@@ -1027,18 +1027,15 @@ bool handle_packet_input(struct connection *pconn, void *packet, int type)
   }
   
   /* valid packets from established connections but non-players */
-  if (type == PACKET_CHAT_MSG_REQ
-      || type == PACKET_SINGLE_WANT_HACK_REQ
-      || type == PACKET_NATION_SELECT_REQ
-      || type == PACKET_EDIT_MODE
-      || type == PACKET_EDIT_TILE
-      || type == PACKET_EDIT_UNIT
-      || type == PACKET_EDIT_CREATE_CITY
-      || type == PACKET_EDIT_PLAYER) {
-    if (!server_handle_packet(type, packet, NULL, pconn)) {
-      freelog(LOG_ERROR, "Received unknown packet %d from %s",
-	      type, conn_description(pconn));
-    }
+  if (type == PACKET_CHAT_MSG_REQ) {
+    handle_chat_msg_req(pconn,
+			((struct packet_chat_msg_req *) packet)->message);
+    return TRUE;
+  }
+
+  if (type == PACKET_SINGLE_WANT_HACK_REQ) {
+    handle_single_want_hack_req(pconn,
+		                (struct packet_single_want_hack_req *) packet);
     return TRUE;
   }
 
@@ -1270,11 +1267,9 @@ void init_available_nations(void)
 }
 
 /**************************************************************************
-  Handles a pick-nation packet from the client.  These packets are
-  handled by connection because ctrl users may edit anyone's nation in
-  pregame, and editing is possible during a running game.
+...
 **************************************************************************/
-void handle_nation_select_req(struct connection *pc,
+void handle_nation_select_req(struct player *requestor,
 			      int player_no,
 			      Nation_type_id nation_no, bool is_male,
 			      char *name, int city_style)
@@ -1282,7 +1277,11 @@ void handle_nation_select_req(struct connection *pc,
   struct nation_type *old_nation, *new_nation;
   struct player *pplayer = get_player(player_no);
 
-  if (!pplayer || !can_conn_edit_players_nation(pc, pplayer)) {
+  if (server_state != PRE_GAME_STATE || !pplayer) {
+    return;
+  }
+
+  if (!can_conn_edit_players_nation(requestor->current_conn, pplayer)) {
     return;
   }
 
@@ -1920,7 +1919,7 @@ static void srv_loop(void)
     } players_iterate_end;
   } else {
     players_iterate(pplayer) {
-      ai_data_init(pplayer); /* Initialize this again to be sure */
+      ai_data_init(pplayer); /* Initialize this at last moment */
     } players_iterate_end;
   }
 

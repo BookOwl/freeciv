@@ -394,8 +394,8 @@ gboolean leave_mapcanvas(GtkWidget *widget, GdkEventCrossing *event)
 {
   struct unit_list *active_units = get_units_in_focus();
 
-  update_mouse_cursor(CURSOR_DEFAULT);
-  update_unit_info_label(active_units);
+  action_state = CURSOR_ACTION_DEFAULT;
+  update_unit_info_label(active_units); 
   return TRUE;
 }
 

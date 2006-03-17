@@ -160,11 +160,7 @@ struct ai_choice {
 
 struct ai_city {
   /* building desirabilities - easiest to handle them here -- Syela */
-  /* The units of building_want are output
-   * (shields/gold/luxuries) multiplied by a priority
-   * (SHIELD_WEIGHTING, etc or ai->shields_priority, etc)
-   */
-  int building_want[B_LAST];
+  int building_want[B_LAST];    /* not sure these will always be < 256 */
 
   unsigned int danger;          /* danger to be compared to assess_defense */
   bool diplomat_threat;         /* enemy diplomat or spy is near the city */
@@ -198,9 +194,7 @@ struct ai_city {
                       * all units coming to kill us. */
 
   int worth; /* Cache city worth here, sum of all weighted incomes */
-  /* Only recalc every Nth turn: */
-  int recalc_interval; /* Use for weighting values calculated every Nth turn */
-  int next_recalc;
+  int next_recalc; /* Only recalc every Nth turn */
 };
 
 struct city {
@@ -504,7 +498,7 @@ bool city_built_last_turn(const struct city *pcity);
 /* city creation / destruction */
 struct city *create_city_virtual(struct player *pplayer,
 				 struct tile *ptile, const char *name);
-void destroy_city_virtual(struct city *pcity);
+void remove_city_virtual(struct city *pcity);
 
 /* misc */
 bool is_city_option_set(const struct city *pcity, enum city_options option);

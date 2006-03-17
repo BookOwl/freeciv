@@ -172,7 +172,7 @@ void game_remove_city(struct city *pcity)
   city_list_unlink(city_owner(pcity)->cities, pcity);
   tile_set_city(pcity->tile, NULL);
   idex_unregister_city(pcity);
-  destroy_city_virtual(pcity);
+  remove_city_virtual(pcity);
 }
 
 /***************************************************************
@@ -205,6 +205,7 @@ void game_init(void)
   game.info.freecost      = GAME_DEFAULT_FREECOST;
   game.info.conquercost   = GAME_DEFAULT_CONQUERCOST;
   game.info.dispersion    = GAME_DEFAULT_DISPERSION;
+  game.info.cityfactor    = GAME_DEFAULT_CITYFACTOR;
   game.info.citymindist   = GAME_DEFAULT_CITYMINDIST;
   game.info.civilwarsize  = GAME_DEFAULT_CIVILWARSIZE;
   game.info.contactturns  = GAME_DEFAULT_CONTACTTURNS;
@@ -212,6 +213,7 @@ void game_init(void)
   game.info.celebratesize = GAME_DEFAULT_CELEBRATESIZE;
   game.info.savepalace    = GAME_DEFAULT_SAVEPALACE;
   game.info.natural_city_names = GAME_DEFAULT_NATURALCITYNAMES;
+  game.info.unhappysize   = GAME_DEFAULT_UNHAPPYSIZE;
   game.info.angrycitizen  = GAME_DEFAULT_ANGRYCITIZEN;
   game.info.foodbox       = GAME_DEFAULT_FOODBOX;
   game.info.shieldbox = GAME_DEFAULT_SHIELDBOX;
@@ -247,7 +249,6 @@ void game_init(void)
   game.info.government_when_anarchy_id = G_MAGIC;   /* flag */
 
   game.info.is_new_game   = TRUE;
-  game.info.is_edit_mode = FALSE;
   game.simultaneous_phases_stored = GAME_DEFAULT_SIMULTANEOUS_PHASES;
   game.timeoutint    = GAME_DEFAULT_TIMEOUTINT;
   game.timeoutintinc = GAME_DEFAULT_TIMEOUTINTINC;
