@@ -28,7 +28,7 @@
 #define PLAYER_DEFAULT_LUXURY_RATE 0
 
 #define ANON_PLAYER_NAME "noname"
-#define ANON_USER_NAME "Unassigned"
+#define ANON_USER_NAME  "Unassigned"
 
 /*
  * pplayer->ai.barbarian_type uses this enum. Note that the values
@@ -100,7 +100,6 @@ struct player_ai {
   int prev_gold;
   int maxbuycost;
   int est_upkeep; /* estimated upkeep of buildings in cities */
-  /* The units of tech_want seem to be shields */
   int tech_want[A_LAST+1];
   int handicap;			/* sum of enum handicap_type */
   int skill_level;		/* 0-10 value for save/load/display */
@@ -191,6 +190,7 @@ struct player {
   bool is_connected;
   struct connection *current_conn;     /* non-null while handling packet */
   struct conn_list *connections;       /* will replace conn */
+  struct worklist worklists[MAX_NUM_WORKLISTS];
   struct player_tile *private_map;
   unsigned int gives_shared_vision; /* bitvector those that give you shared vision */
   unsigned int really_gives_vision; /* takes into account that p3 may see what p1 has via p2 */

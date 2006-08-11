@@ -128,7 +128,7 @@ static void place_starting_unit(struct tile *ptile, struct player *pplayer,
 
     /* We cannot currently handle sea units as start units.
      * TODO: remove this code block when we can. */
-    if (get_unit_move_type(utype) == SEA_MOVING) {
+    if (utype->move_type == SEA_MOVING) {
       freelog(LOG_ERROR, _("Sea moving start units are not yet supported, "
                            "%s not created."), utype->name);
       notify_player(pplayer, NULL, E_BAD_COMMAND,
@@ -501,7 +501,8 @@ opens a file specified by the packet and compares the packet values with
 the file values. Sends an answer to the client once it's done.
 **************************************************************************/
 void handle_single_want_hack_req(struct connection *pc,
-    				 struct packet_single_want_hack_req *packet)
+    				 const struct packet_single_want_hack_req
+				 *packet)
 {
   struct section_file file;
   char *token = NULL;

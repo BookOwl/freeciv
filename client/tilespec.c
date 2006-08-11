@@ -125,7 +125,7 @@ struct named_sprites {
   struct sprite
     *indicator[INDICATOR_COUNT][NUM_TILES_PROGRESS],
     *treaty_thumb[2],     /* 0=disagree, 1=agree */
-    *arrow[ARROW_LAST], /* 0=right arrow, 1=plus, 2=minus */
+    *right_arrow,
 
     *icon[ICON_COUNT],
 
@@ -1998,9 +1998,7 @@ static void tileset_lookup_sprite_tags(struct tileset *t)
     }
   }
 
-  SET_SPRITE(arrow[ARROW_RIGHT], "s.right_arrow");
-  SET_SPRITE(arrow[ARROW_PLUS], "s.plus");
-  SET_SPRITE(arrow[ARROW_MINUS], "s.minus");
+  SET_SPRITE(right_arrow, "s.right_arrow");
   if (t->is_isometric) {
     SET_SPRITE(dither_tile, "t.dither_tile");
   }
@@ -2028,10 +2026,9 @@ static void tileset_lookup_sprite_tags(struct tileset *t)
     for (f = 0; f < NUM_CURSOR_FRAMES; f++) {
       const char *names[CURSOR_LAST] =
                {"goto", "patrol", "paradrop", "nuke", "select", 
-		"invalid", "attack", "edit_paint", "edit_add", "wait"};
+		"invalid", "attack"};
       struct small_sprite *ss;
 
-      assert(ARRAY_SIZE(names) == CURSOR_LAST);
       my_snprintf(buffer, sizeof(buffer), "cursor.%s%d", names[i], f);
       SET_SPRITE(cursor[i].frame[f], buffer);
       ss = hash_lookup_data(t->sprite_hash, buffer);
@@ -4497,14 +4494,11 @@ struct sprite *get_sample_city_sprite(const struct tileset *t,
 }
 
 /**************************************************************************
-  Return a sprite with an "arrow" theme graphic.
+  Return a sprite with the "right-arrow" theme graphic.
 **************************************************************************/
-struct sprite *get_arrow_sprite(const struct tileset *t,
-				enum arrow_type arrow)
+struct sprite *get_arrow_sprite(const struct tileset *t)
 {
-  assert(arrow >= 0 && arrow < ARROW_LAST);
-
-  return t->sprites.arrow[arrow];
+  return t->sprites.right_arrow;
 }
 
 /**************************************************************************

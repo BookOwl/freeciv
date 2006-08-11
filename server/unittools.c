@@ -387,29 +387,42 @@ void player_restore_units(struct player *pplayer)
 
       if (punit->fuel <= 1
           && !is_unit_being_refueled(punit)) {
-        struct unit *carrier;
+        bool carrier_found = FALSE;
 
-        carrier = find_transport_from_tile(punit, punit->tile);
-        if (carrier) {
-          put_unit_onto_transporter(punit, carrier);
-        } else {
+        unit_list_iterate(punit->tile->units, carrier) {
+          if ((unit_flag(carrier, F_CARRIER)
+               || (unit_flag(punit, F_MISSILE)
+                   && unit_flag(carrier, F_MISSILE_CARRIER)))
+              && get_transporter_capacity(carrier) >
+                 get_transporter_occupancy(carrier)) {
+            put_unit_onto_transporter(punit, carrier);
+            carrier_found = TRUE;
+            break;
+          }
+        } unit_list_iterate_end;
+       
+        if (!carrier_found) {
           iterate_outward(punit->tile, punit->moves_left / SINGLE_MOVE, itr_tile) {
             if (is_airunit_refuel_point(itr_tile, unit_owner(punit),
                                         punit->type, FALSE)
                 &&(air_can_move_between(punit->moves_left / SINGLE_MOVE, punit->tile,
                                         itr_tile, unit_owner(punit)) >= 0)) {
-	      /* Client orders may already be running for this unit - if so
-	       * we free them before engaging server goto. */
               free_unit_orders(punit);
               punit->goto_tile = itr_tile;
               set_unit_activity(punit, ACTIVITY_GOTO);
               (void) do_unit_goto(punit, GOTO_MOVE_ANY, FALSE);
 
               if (!is_unit_being_refueled(punit)) {
-                carrier = find_transport_from_tile(punit, punit->tile);
-                if (carrier) {
-                  put_unit_onto_transporter(punit, carrier);
-                }
+                unit_list_iterate(punit->tile->units, carrier) {
+                  if ((unit_flag(carrier, F_CARRIER)
+                       || (unit_flag(punit, F_MISSILE)
+                           && unit_flag(carrier, F_MISSILE_CARRIER)))
+                      && get_transporter_capacity(carrier) >
+                         get_transporter_occupancy(carrier)) {
+                    put_unit_onto_transporter(punit, carrier);
+                    break;
+                  }
+                } unit_list_iterate_end;
               }
 
               notify_player(pplayer, punit->tile, E_UNIT_ORDERS, 
@@ -1201,7 +1214,6 @@ bool is_airunit_refuel_point(struct tile *ptile, struct player *pplayer,
 			     const struct unit_type *type,
 			     bool unit_is_on_carrier)
 {
-  int cap;
   struct player_tile *plrtile = map_get_player_tile(ptile, pplayer);
 
   if ((is_allied_city_tile(ptile, pplayer)
@@ -1210,13 +1222,17 @@ bool is_airunit_refuel_point(struct tile *ptile, struct player *pplayer,
 	  && !is_non_allied_unit_tile(ptile, pplayer)))
     return TRUE;
 
-  cap = unit_class_transporter_capacity(ptile, pplayer, get_unit_class(type));
-
-  if (unit_is_on_carrier) {
-    cap++;
+  if (unit_type_flag(type, F_MISSILE)) {
+    int cap = missile_carrier_capacity(ptile, pplayer);
+    if (unit_is_on_carrier)
+      cap++;
+    return cap>0;
+  } else {
+    int cap = airunit_carrier_capacity(ptile, pplayer);
+    if (unit_is_on_carrier)
+      cap++;
+    return cap>0;
   }
-
-  return cap > 0;
 }
 
 /**************************************************************************
@@ -1438,118 +1454,110 @@ static void server_remove_unit(struct unit *punit)
 }
 
 /**************************************************************************
-  Handle units destroyed when their transport is destroyed
-**************************************************************************/
-static void unit_lost_with_transport(const struct player *pplayer,
-                                     struct unit *pcargo,
-                                     const struct unit_type *ptransport)
-{
-  notify_player(pplayer, pcargo->tile, E_UNIT_LOST,
-                _("%s lost when %s was lost."),
-                unit_type(pcargo)->name,
-                ptransport->name);
-  server_remove_unit(pcargo);
-}
-
-/**************************************************************************
   Remove the unit, and passengers if it is a carrying any. Remove the 
   _minimum_ number, eg there could be another boat on the square.
 **************************************************************************/
 void wipe_unit(struct unit *punit)
 {
+  bool wipe_cargo = TRUE; /* This used to be a function parameter. */
   struct tile *ptile = punit->tile;
   struct player *pplayer = unit_owner(punit);
   struct unit_type *ptype = unit_type(punit);
-  int drowning = 0;
 
   /* First pull all units off of the transporter. */
   if (get_transporter_capacity(punit) > 0) {
+    /* FIXME: there's no send_unit_info call below so these units aren't
+     * updated at the client.  I guess this works because the unit info
+     * will be sent eventually anyway, but it's surely a bug. */
     unit_list_iterate(ptile->units, pcargo) {
       if (pcargo->transported_by == punit->id) {
 	/* Could use unload_unit_from_transporter here, but that would
 	 * call send_unit_info for the transporter unnecessarily. */
 	pull_unit_from_transporter(pcargo, punit);
-        if (!can_unit_exist_at_tile(pcargo, ptile)) {
-          drowning++;
-        }
 	if (pcargo->activity == ACTIVITY_SENTRY) {
 	  /* Activate sentried units - like planes on a disbanded carrier.
 	   * Note this will activate ground units even if they just change
 	   * transporter. */
 	  set_unit_activity(pcargo, ACTIVITY_IDLE);
 	}
-        if (!can_unit_exist_at_tile(pcargo, ptile)) {
-          drowning++;
-          /* No need for send_unit_info() here. Unit info will be sent
-           * when it is assigned to a new transport or it will be removed. */
-        } else {
-          send_unit_info(NULL, pcargo);
-        }
-      }
+	send_unit_info(NULL, pcargo);
+      } 
     } unit_list_iterate_end;
   }
+
+  /* No need to wipe the cargo unless it's a ground transporter. */
+  wipe_cargo &= is_ground_units_transport(punit);
 
   /* Now remove the unit. */
   server_remove_unit(punit);
 
-  /* Finally reassign, bounce, or destroy all units that cannot exist at this
-   * location without transport. */
-  if (drowning) {
+  /* Finally reassign, bounce, or destroy all ground units at this location.
+   * There's no need to worry about air units; they can fly away. */
+  if (wipe_cargo
+      && is_ocean(tile_get_terrain(ptile))
+      && !tile_get_city(ptile)) {
     struct city *pcity = NULL;
+    int capacity = ground_unit_transporter_capacity(ptile, pplayer);
 
-    /* First save undisbandable and gameloss units */
-    unit_list_iterate_safe(ptile->units, pcargo) {
-      if (pcargo->transported_by == -1
-          && !can_unit_exist_at_tile(pcargo, ptile)
-          && (unit_flag(pcargo, F_UNDISBANDABLE) || unit_flag(pcargo, F_GAMELOSS))) {
-        struct unit *ptransport = find_transport_from_tile(pcargo, ptile);
-        if (ptransport != NULL) {
-          put_unit_onto_transporter(pcargo, ptransport);
-          send_unit_info(NULL, pcargo);
-        } else {
+    /* Get rid of excess standard units. */
+    if (capacity < 0) {
+      unit_list_iterate_safe(ptile->units, pcargo) {
+	if (is_ground_unit(pcargo)
+	    && pcargo->transported_by == -1
+	    && !unit_flag(pcargo, F_UNDISBANDABLE)
+	    && !unit_flag(pcargo, F_GAMELOSS)) {
+	  server_remove_unit(pcargo);
+	  if (++capacity >= 0) {
+	    break;
+	  }
+	}
+      } unit_list_iterate_safe_end;
+    }
+
+    /* Get rid of excess undisbandable/gameloss units. */
+    if (capacity < 0) {
+      unit_list_iterate_safe(ptile->units, pcargo) {
+	if (is_ground_unit(pcargo) && pcargo->transported_by == -1) {
 	  if (unit_flag(pcargo, F_UNDISBANDABLE)) {
 	    pcity = find_closest_owned_city(unit_owner(pcargo),
 					    pcargo->tile, TRUE, NULL);
 	    if (pcity && teleport_unit_to_city(pcargo, pcity, 0, FALSE)) {
 	      notify_player(pplayer, ptile, E_UNIT_RELOCATED,
-                            _("%s escaped the destruction of %s, and "
-                              "fled to %s."), unit_type(pcargo)->name,
-                            ptype->name, pcity->name);
+			       _("%s escaped the destruction of %s, and "
+				 "fled to %s."), unit_type(pcargo)->name,
+			       ptype->name, pcity->name);
 	    }
-          }
-          if (!unit_flag(pcargo, F_UNDISBANDABLE) || !pcity) {
-            unit_lost_with_transport(pplayer, pcargo, ptype);
-          }
-        }
+	  }
+	  if (!unit_flag(pcargo, F_UNDISBANDABLE) || !pcity) {
+	    notify_player(pplayer, ptile, E_UNIT_LOST,
+			     _("%s lost when %s was lost."),
+			     unit_type(pcargo)->name,
+			     ptype->name);
+	    server_remove_unit(pcargo);
+	  }
+	  if (++capacity >= 0) {
+	    break;
+	  }
+	}
+      } unit_list_iterate_safe_end;
+    }
 
-        drowning--;
-        if (!drowning) {
-          break;
-        }
+    /* Reassign existing units.  This is an O(n^2) operation as written. */
+    unit_list_iterate(ptile->units, ptrans) {
+      if (is_ground_units_transport(ptrans)) {
+	int occupancy = get_transporter_occupancy(ptrans);
+
+	unit_list_iterate(ptile->units, pcargo) {
+	  if (occupancy >= get_transporter_capacity(ptrans)) {
+	    break;
+	  }
+	  if (is_ground_unit(pcargo) && pcargo->transported_by == -1) {
+	    put_unit_onto_transporter(pcargo, ptrans);
+	    occupancy++;
+	  }
+	} unit_list_iterate_end;
       }
-    } unit_list_iterate_safe_end;
-  }
-
-  /* Then other units */
-  if (drowning) {
-    unit_list_iterate_safe(ptile->units, pcargo) {
-      if (pcargo->transported_by == -1
-          && !can_unit_exist_at_tile(pcargo, ptile)) {
-        struct unit *ptransport = find_transport_from_tile(pcargo, ptile);
-
-        if (ptransport != NULL) {
-          put_unit_onto_transporter(pcargo, ptransport);
-          send_unit_info(NULL, pcargo);
-        } else {
-          unit_lost_with_transport(pplayer, pcargo, ptype);
-        }
-
-        drowning--;
-        if (!drowning) {
-          break;
-        }
-      }
-    } unit_list_iterate_safe_end;
+    } unit_list_iterate_end;
   }
 }
 
@@ -2091,9 +2099,7 @@ bool do_paradrop(struct unit *punit, struct tile *ptile)
   }
 
   /* Safe terrain according to player map? */
-  if (!is_native_terrain(punit->type,
-                         map_get_player_tile(ptile, pplayer)->terrain,
-                         map_get_player_tile(ptile, pplayer)->special)) {
+  if (!is_native_terrain(punit, map_get_player_tile(ptile, pplayer)->terrain)) {
     notify_player(pplayer, ptile, E_BAD_COMMAND,
                      _("This unit cannot paradrop into %s."),
                        get_name(map_get_player_tile(ptile, pplayer)->terrain));
@@ -2510,13 +2516,15 @@ static void wakeup_neighbor_sentries(struct unit *punit)
   square_iterate(punit->tile, 3, ptile) {
     unit_list_iterate(ptile->units, penemy) {
       int radius_sq = get_unit_vision_at(penemy, penemy->tile, V_MAIN);
+      enum unit_move_type move_type = unit_type(penemy)->move_type;
+      struct terrain *pterrain = tile_get_terrain(ptile);
 
       if (!pplayers_allied(unit_owner(punit), unit_owner(penemy))
 	  && penemy->activity == ACTIVITY_SENTRY
 	  && radius_sq >= sq_map_distance(punit->tile, ptile)
 	  && can_player_see_unit(unit_owner(penemy), punit)
 	  /* on board transport; don't awaken */
-	  && can_unit_exist_at_tile(penemy, penemy->tile)) {
+	  && !(move_type == LAND_MOVING && is_ocean(pterrain))) {
 	set_unit_activity(penemy, ACTIVITY_IDLE);
 	send_unit_info(NULL, penemy);
       }

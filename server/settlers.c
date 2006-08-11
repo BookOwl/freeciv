@@ -653,6 +653,39 @@ static int ai_calc_railroad(struct city *pcity, struct player *pplayer,
 }
 
 /**************************************************************************
+  Tries to find a boat for our unit. Requires warmap to be initialized
+  with respect to x, y. cap is the requested capacity on the transport.
+  Note that it may return a transport with less than cap capacity if this
+  transport has zero move cost to x, y.
+
+  The "virtual boats" code is not used. It is probably too unreliable, 
+  since the AI switches its production back and forth continously.
+
+  FIXME: if there is a (free) boat in a city filled with units, 
+  ground_unit_transporter_capacity will return negative.
+  TODO: Kill me.  There is a reliable version of this, find_ferry.
+**************************************************************************/
+Unit_type_id find_boat(struct player *pplayer, struct tile **ptile, int cap)
+{
+  int best = 22; /* arbitrary maximum distance, I will admit! */
+  Unit_type_id id = 0;
+  unit_list_iterate(pplayer->units, aunit)
+    if (is_ground_units_transport(aunit)) {
+      if (WARMAP_COST(aunit->tile) < best &&
+	  (WARMAP_COST(aunit->tile) == 0 ||
+	   ground_unit_transporter_capacity(aunit->tile,
+					    pplayer) >= cap)) {
+        id = aunit->id;
+        best = WARMAP_COST(aunit->tile);
+	*ptile = aunit->tile;
+      }
+    }
+  unit_list_iterate_end;
+  if (id != 0) return(id);
+  return(id);
+}
+
+/**************************************************************************
   Returns TRUE if there are (other) ground units than punit stacked on
   punit's tile.
 **************************************************************************/
@@ -757,7 +790,8 @@ static int unit_foodbox_cost(struct unit *punit)
 static int unit_food_upkeep(struct unit *punit)
 {
   struct player *pplayer = unit_owner(punit);
-  int upkeep = utype_upkeep_cost(unit_type(punit), pplayer, O_FOOD);
+  int upkeep = utype_upkeep_cost(unit_type(punit), pplayer,
+				 get_gov_pplayer(pplayer), O_FOOD);
   if (punit->id != 0 && punit->homecity == 0)
     upkeep = 0; /* thanks, Peter */
 

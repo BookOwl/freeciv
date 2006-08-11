@@ -33,26 +33,20 @@
 #include "unittype.h"
 
 static struct unit_type unit_types[U_LAST];
-static struct unit_class unit_classes[UCL_LAST];
-/* the unit_types and unit_classes arrays are now setup in:
+/* the unit_types array is now setup in:
    server/ruleset.c (for the server)
    client/packhand.c (for the client)
 */
 
-static const char *unit_class_flag_names[] = {
-  "TerrainSpeed", "DamageSlows", "CanOccupy", "Missile",
-  "RoadNative", "BuildAnywhere"
-};
 static const char *flag_names[] = {
-  "TradeRoute" ,"HelpWonder", "IgZOC", "NonMil", "IgTer", 
+  "TradeRoute" ,"HelpWonder", "Missile", "IgZOC", "NonMil", "IgTer", 
   "Carrier", "OneAttack", "Pikemen", "Horse", "IgWall", "FieldUnit", 
   "AEGIS", "Fighter", "Marines", "Partial_Invis", "Settlers", "Diplomat",
   "Trireme", "Nuclear", "Spy", "Transform", "Paratroopers",
   "Airbase", "Cities", "Missile_Carrier", "No_Land_Attack",
   "AddToCity", "Fanatic", "GameLoss", "Unique", "Unbribable", 
   "Undisbandable", "SuperSpy", "NoHome", "NoVeteran", "Bombarder",
-  "CityBuster", "NoBuild", "BadWallAttacker", "BadCityDefender",
-  "Helicopter", "AirUnit"
+  "CityBuster", "NoBuild", "BadWallAttacker", "BadCityDefender"
 };
 static const char *role_names[] = {
   "FirstBuild", "Explorer", "Hut", "HutTech", "Partisan",
@@ -61,6 +55,23 @@ static const char *role_names[] = {
   "BarbarianBuild", "BarbarianBuildTech", "BarbarianLeader",
   "BarbarianSea", "BarbarianSeaTech", "Cities", "Settlers",
   "GameLoss", "Diplomat", "Hunter"
+};
+static const char *unit_class_names[] = {
+  "Missile",
+  "Land",
+  "Sea",
+  "Helicopter",
+  "Air",
+  "Nuclear",
+};
+
+struct unit_class unit_classes[] = {
+  { UCL_MISSILE,    { FALSE, FALSE },  0 },
+  { UCL_LAND,       { TRUE,  TRUE  },  0 },
+  { UCL_SEA,        { TRUE,  TRUE  },  0 },
+  { UCL_HELICOPTER, { FALSE, FALSE }, 10 },
+  { UCL_AIR,        { FALSE, FALSE },  0 },
+  { UCL_NUCLEAR,    { FALSE, FALSE },  0 }
 };
 
 /**************************************************************************
@@ -90,7 +101,7 @@ struct unit_type *unit_type(const struct unit *punit)
   Returns the upkeep of a unit of this type under the given government.
 **************************************************************************/
 int utype_upkeep_cost(const struct unit_type *ut, struct player *pplayer,
-                      Output_type_id otype)
+		      const struct government *g, Output_type_id otype)
 {
   int val = ut->upkeep[otype];
 
@@ -121,15 +132,6 @@ bool unit_type_flag(const struct unit_type *punittype, int flag)
 {
   assert(flag>=0 && flag<F_LAST);
   return BV_ISSET(punittype->flags, flag);
-}
-
-/**************************************************************************
-  Return whether the given unit class has the flag.
-**************************************************************************/
-bool unit_class_flag(const struct unit_class *punitclass, int flag)
-{
-  assert(flag >= 0 && flag < UCF_LAST);
-  return BV_ISSET(punitclass->flags, flag);
 }
 
 /**************************************************************************
@@ -193,14 +195,6 @@ int unit_pop_value(const struct unit_type *punittype)
 }
 
 /**************************************************************************
-  Return move type of the unit type
-**************************************************************************/
-enum unit_move_type get_unit_move_type(const struct unit_type *punittype)
-{
-  return get_unit_class(punittype)->move_type;
-}
-
-/**************************************************************************
   Return the (translated) name of the unit type.
 **************************************************************************/
 const char *unit_name(const struct unit_type *punittype)
@@ -244,7 +238,7 @@ const char *get_unit_name(const struct unit_type *punittype)
 const char *unit_class_name(const struct unit_class *pclass)
 {
   assert(pclass != NULL && &unit_classes[pclass->id] == pclass);
-  return pclass->name;
+  return unit_class_names[pclass->id];
 }
 
 /**************************************************************************
@@ -367,36 +361,20 @@ struct unit_type *find_unit_type_by_name_orig(const char *name_orig)
 
 /**************************************************************************
   Convert Unit_Class_id names to enum; case insensitive;
-  returns NULL if can't match.
+  returns UCL_LAST if can't match.
 **************************************************************************/
 struct unit_class *unit_class_from_str(const char *s)
 {
   Unit_Class_id i;
 
+  assert(ARRAY_SIZE(unit_class_names) == UCL_LAST);
+
   for (i = 0; i < UCL_LAST; i++) {
-    if (mystrcasecmp(unit_classes[i].name_orig, s)==0) {
+    if (mystrcasecmp(unit_class_names[i], s)==0) {
       return &unit_classes[i];
     }
   }
   return NULL;
-}
-
-/**************************************************************************
-  Convert unit class flag names to enum; case insensitive;
-  returns UCF_LAST if can't match.
-**************************************************************************/
-enum unit_class_flag_id unit_class_flag_from_str(const char *s)
-{
-  enum unit_class_flag_id i;
-
-  assert(ARRAY_SIZE(unit_class_flag_names) == UCF_LAST);
-  
-  for(i = 0; i < UCF_LAST; i++) {
-    if (mystrcasecmp(unit_class_flag_names[i], s)==0) {
-      return i;
-    }
-  }
-  return UCF_LAST;
 }
 
 /**************************************************************************
@@ -720,7 +698,7 @@ void unit_types_free(void)
 ****************************************************************************/
 struct unit_class *unit_class_get_by_id(int id)
 {
-  if (id < 0 || id >= game.control.num_unit_classes) {
+  if (id < 0 || id >= UCL_LAST) {
     return NULL;
   }
   return &unit_classes[id];
@@ -735,18 +713,4 @@ struct unit_class *unit_class_get_by_id(int id)
 struct unit_class *get_unit_class(const struct unit_type *punittype)
 {
   return punittype->class;
-}
-
-/****************************************************************************
-  Inialize unit-class structures.
-****************************************************************************/
-void unit_classes_init(void)
-{
-  int i;
-
-  /* Can't use unit_class_iterate or unit_class_get_by_id here because
-   * num_unit_classes isn't known yet. */
-  for (i = 0; i < ARRAY_SIZE(unit_classes); i++) {
-    unit_classes[i].id = i;
-  }
 }

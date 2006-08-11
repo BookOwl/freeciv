@@ -145,8 +145,6 @@ civclient_SOURCES = $(ESD_FILES) $(SDL_FILES) $(ALSA_FILES) $(WINMM_FILES) \
 	colors_common.h		\
 	control.c	\
 	control.h	\
-	editor.c 		\
-	editor.h 		\
 	ggzclient.c	\
 	ggzclient.h	\
 	goto.c		\

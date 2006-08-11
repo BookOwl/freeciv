@@ -65,7 +65,7 @@ static struct diplomat_dialog *pDiplomat_Dlg = NULL;
 /****************************************************************
 ...
 *****************************************************************/
-static int diplomat_dlg_window_callback(struct widget *pWindow)
+static int diplomat_dlg_window_callback(struct GUI *pWindow)
 {
   return std_move_window_group_callback(pDiplomat_Dlg->pdialog->pBeginWidgetList,
                                         pWindow);
@@ -74,7 +74,7 @@ static int diplomat_dlg_window_callback(struct widget *pWindow)
 /****************************************************************
 ...
 *****************************************************************/
-static int diplomat_embassy_callback(struct widget *pWidget)
+static int diplomat_embassy_callback(struct GUI *pWidget)
 {
   if (find_unit_by_id(pDiplomat_Dlg->diplomat_id)
      && find_city_by_id(pDiplomat_Dlg->diplomat_target_id)) {  
@@ -89,8 +89,10 @@ static int diplomat_embassy_callback(struct widget *pWidget)
 /****************************************************************
 ...
 *****************************************************************/
-static int diplomat_investigate_callback(struct widget *pWidget)
+static int diplomat_investigate_callback(struct GUI *pWidget)
 {
+  lock_buffer(pWidget->dst);
+
   if (find_unit_by_id(pDiplomat_Dlg->diplomat_id)
      && find_city_by_id(pDiplomat_Dlg->diplomat_target_id)) {  
     request_diplomat_action(DIPLOMAT_INVESTIGATE, pDiplomat_Dlg->diplomat_id,
@@ -104,7 +106,7 @@ static int diplomat_investigate_callback(struct widget *pWidget)
 /****************************************************************
 ...
 *****************************************************************/
-static int spy_poison_callback( struct widget *pWidget )
+static int spy_poison_callback( struct GUI *pWidget )
 {
   if (find_unit_by_id(pDiplomat_Dlg->diplomat_id)
      && find_city_by_id(pDiplomat_Dlg->diplomat_target_id)) {  
@@ -120,8 +122,9 @@ static int spy_poison_callback( struct widget *pWidget )
  Requests up-to-date list of improvements, the return of
  which will trigger the popup_sabotage_dialog() function.
 *****************************************************************/
-static int spy_sabotage_request(struct widget *pWidget)
+static int spy_sabotage_request(struct GUI *pWidget)
 {
+  lock_buffer(pWidget->dst);
   popdown_diplomat_dialog();
 
   if (find_unit_by_id(pDiplomat_Dlg->diplomat_id)
@@ -136,7 +139,7 @@ static int spy_sabotage_request(struct widget *pWidget)
 /****************************************************************
 ...
 *****************************************************************/
-static int diplomat_sabotage_callback(struct widget *pWidget)
+static int diplomat_sabotage_callback(struct GUI *pWidget)
 {
   if (find_unit_by_id(pDiplomat_Dlg->diplomat_id)
      && find_city_by_id(pDiplomat_Dlg->diplomat_target_id)) {  
@@ -149,19 +152,19 @@ static int diplomat_sabotage_callback(struct widget *pWidget)
 }
 /* --------------------------------------------------------- */
 
-static int spy_steal_dlg_window_callback(struct widget *pWindow)
+static int spy_steal_dlg_window_callback(struct GUI *pWindow)
 {
   return std_move_window_group_callback(pDiplomat_Dlg->pdialog->pBeginWidgetList,
                                         pWindow);
 }
 
-static int exit_spy_steal_dlg_callback(struct widget *pWidget)
+static int exit_spy_steal_dlg_callback(struct GUI *pWidget)
 {
   popdown_diplomat_dialog();
   return -1;  
 }
 
-static int spy_steal_callback(struct widget *pWidget)
+static int spy_steal_callback(struct GUI *pWidget)
 {
   int steal_advance = MAX_ID - pWidget->ID;
 
@@ -178,18 +181,19 @@ static int spy_steal_callback(struct widget *pWidget)
 /**************************************************************************
   ...
 **************************************************************************/
-static int spy_steal_popup(struct widget *pWidget)
+static int spy_steal_popup(struct GUI *pWidget)
 {
   struct city *pVcity = pWidget->data.city;
   int id = MAX_ID - pWidget->ID;
   struct player *pVictim = NULL;
   struct CONTAINER *pCont;
-  struct widget *pBuf = NULL;
-  struct widget *pWindow;
+  struct GUI *pBuf = NULL;
+  struct GUI *pWindow;
   SDL_String16 *pStr;
   SDL_Surface *pSurf;
   int max_col, max_row, col, i, count = 0, w = 0, h;
 
+  lock_buffer(pWidget->dst);
   popdown_diplomat_dialog();
   
   if(pVcity)
@@ -198,6 +202,7 @@ static int spy_steal_popup(struct widget *pWidget)
   }
   
   if (pDiplomat_Dlg || !pVictim) {
+    remove_locked_buffer();
     return 1;
   }
   
@@ -216,6 +221,7 @@ static int spy_steal_popup(struct widget *pWidget)
        send steal order at Spy's Discretion */
     int target_id = pVcity->id;
 
+    remove_locked_buffer();
     request_diplomat_action(DIPLOMAT_STEAL, id, target_id, game.control.num_tech_types);
     return -1;
   }
@@ -232,7 +238,8 @@ static int spy_steal_popup(struct widget *pWidget)
   pStr = create_str16_from_char(_("Select Advance to Steal"), adj_font(12));
   pStr->style |= TTF_STYLE_BOLD;
 
-  pWindow = create_window(NULL, pStr, adj_size(10), adj_size(10), 0);
+  pWindow = create_window(get_locked_buffer(), pStr, adj_size(10), adj_size(10), 0);
+  unlock_buffer();
   
   pWindow->action = spy_steal_dlg_window_callback;
   set_wstate(pWindow , FC_WS_NORMAL);
@@ -345,7 +352,6 @@ static int spy_steal_popup(struct widget *pWidget)
   h = WINDOW_TILE_HIGH + 1 + count * pBuf->size.h + adj_size(2) + FRAME_WH;
   pWindow->size.x = (Main.screen->w - w) / 2;
   pWindow->size.y = (Main.screen->h - h) / 2;
-  set_window_pos(pWindow, pWindow->size.x, pWindow->size.y);  
   
   /* alloca window theme and win background buffer */
   pSurf = get_logo_gfx();
@@ -380,7 +386,7 @@ static int spy_steal_popup(struct widget *pWidget)
 /****************************************************************
 ...
 *****************************************************************/
-static int diplomat_steal_callback(struct widget *pWidget)
+static int diplomat_steal_callback(struct GUI *pWidget)
 {
   if (find_unit_by_id(pDiplomat_Dlg->diplomat_id)
      && find_city_by_id(pDiplomat_Dlg->diplomat_target_id)) {  
@@ -395,8 +401,9 @@ static int diplomat_steal_callback(struct widget *pWidget)
 /****************************************************************
 ...  Ask the server how much the revolt is going to cost us
 *****************************************************************/
-static int diplomat_incite_callback(struct widget *pWidget)
+static int diplomat_incite_callback(struct GUI *pWidget)
 {
+  lock_buffer(pWidget->dst);
   popdown_diplomat_dialog();
 
   if (find_unit_by_id(pDiplomat_Dlg->diplomat_id)
@@ -411,7 +418,7 @@ static int diplomat_incite_callback(struct widget *pWidget)
   Callback from diplomat/spy dialog for "keep moving".
   (This should only occur when entering allied city.)
 *****************************************************************/
-static int diplomat_keep_moving_callback(struct widget *pWidget)
+static int diplomat_keep_moving_callback(struct GUI *pWidget)
 {
   struct unit *punit;
   struct city *pcity;
@@ -430,8 +437,9 @@ static int diplomat_keep_moving_callback(struct widget *pWidget)
 /****************************************************************
 ...  Ask the server how much the bribe is
 *****************************************************************/
-static int diplomat_bribe_callback(struct widget *pWidget)
+static int diplomat_bribe_callback(struct GUI *pWidget)
 {
+  lock_buffer(pWidget->dst);
   popdown_diplomat_dialog();
 
   if (find_unit_by_id(pDiplomat_Dlg->diplomat_id)
@@ -445,7 +453,7 @@ static int diplomat_bribe_callback(struct widget *pWidget)
 /****************************************************************
 ...
 *****************************************************************/
-static int spy_sabotage_unit_callback(struct widget *pWidget)
+static int spy_sabotage_unit_callback(struct GUI *pWidget)
 {
   int diplomat_id = MAX_ID - pWidget->ID;
   int target_id = pWidget->data.unit->id;
@@ -458,7 +466,7 @@ static int spy_sabotage_unit_callback(struct widget *pWidget)
 /****************************************************************
 ...
 *****************************************************************/
-static int diplomat_close_callback(struct widget *pWidget)
+static int diplomat_close_callback(struct GUI *pWidget)
 {
   popdown_diplomat_dialog();
   return -1;
@@ -487,7 +495,7 @@ void popdown_diplomat_dialog(void)
 **************************************************************************/
 void popup_diplomat_dialog(struct unit *pUnit, struct tile *ptile)
 {
-  struct widget *pWindow = NULL, *pBuf = NULL;
+  struct GUI *pWindow = NULL, *pBuf = NULL;
   SDL_String16 *pStr;
   struct city *pCity;
   struct unit *pTunit;
@@ -750,7 +758,7 @@ void close_diplomat_dialog(void)
 /* ============================ SABOTAGE DIALOG ========================= */
 /* ====================================================================== */
 
-static int sabotage_impr_callback(struct widget *pWidget)
+static int sabotage_impr_callback(struct GUI *pWidget)
 {
   int sabotage_improvement = MAX_ID - pWidget->ID;
   int diplomat_target_id = pWidget->data.cont->id0;
@@ -778,7 +786,7 @@ static int sabotage_impr_callback(struct widget *pWidget)
 *****************************************************************/
 void popup_sabotage_dialog(struct city *pCity)
 {
-  struct widget *pWindow = NULL, *pBuf = NULL , *pLast = NULL;
+  struct GUI *pWindow = NULL, *pBuf = NULL , *pLast = NULL;
   struct CONTAINER *pCont;
   struct unit *pUnit = unit_list_get(get_units_in_focus(), 0);
   SDL_String16 *pStr;
@@ -804,8 +812,9 @@ void popup_sabotage_dialog(struct city *pCity)
   pStr = create_str16_from_char(_("Select Improvement to Sabotage") , adj_font(12));
   pStr->style |= TTF_STYLE_BOLD;
   
-  pWindow = create_window(NULL,
+  pWindow = create_window(get_locked_buffer(),
 		  pStr, adj_size(10), adj_size(10), WF_DRAW_THEME_TRANSPARENT);
+  unlock_buffer();
     
   pWindow->action = diplomat_dlg_window_callback;
   set_wstate(pWindow, FC_WS_NORMAL);
@@ -1001,7 +1010,7 @@ static struct small_diplomat_dialog *pIncite_Dlg = NULL;
 /****************************************************************
 ...
 *****************************************************************/
-static int incite_dlg_window_callback(struct widget *pWindow)
+static int incite_dlg_window_callback(struct GUI *pWindow)
 {
   return std_move_window_group_callback(pIncite_Dlg->pdialog->pBeginWidgetList,
                                                                       pWindow);
@@ -1010,7 +1019,7 @@ static int incite_dlg_window_callback(struct widget *pWindow)
 /****************************************************************
 ...
 *****************************************************************/
-static int diplomat_incite_yes_callback(struct widget *pWidget)
+static int diplomat_incite_yes_callback(struct GUI *pWidget)
 {
   popdown_incite_dialog();
 
@@ -1026,7 +1035,7 @@ static int diplomat_incite_yes_callback(struct widget *pWidget)
 /****************************************************************
 ...
 *****************************************************************/
-static int exit_incite_dlg_callback(struct widget *pWidget)
+static int exit_incite_dlg_callback(struct GUI *pWidget)
 {
   popdown_incite_dialog();
   return -1;
@@ -1054,7 +1063,7 @@ void popdown_incite_dialog(void)
 **************************************************************************/
 void popup_incite_dialog(struct city *pCity)
 {
-  struct widget *pWindow = NULL, *pBuf = NULL;
+  struct GUI *pWindow = NULL, *pBuf = NULL;
   SDL_String16 *pStr;
   struct unit *pUnit;
   char cBuf[255]; 
@@ -1086,8 +1095,9 @@ void popup_incite_dialog(struct city *pCity)
     
   pStr->style |= TTF_STYLE_BOLD;
   
-  pWindow = create_window(NULL,
+  pWindow = create_window(get_locked_buffer(),
 			  pStr, adj_size(10), adj_size(10), WF_DRAW_THEME_TRANSPARENT);
+  unlock_buffer();
     
   pWindow->action = incite_dlg_window_callback;
   set_wstate(pWindow, FC_WS_NORMAL);
@@ -1240,13 +1250,13 @@ void popup_incite_dialog(struct city *pCity)
 /* ====================================================================== */
 static struct small_diplomat_dialog *pBribe_Dlg = NULL;
 
-static int bribe_dlg_window_callback(struct widget *pWindow)
+static int bribe_dlg_window_callback(struct GUI *pWindow)
 {
   return std_move_window_group_callback(pBribe_Dlg->pdialog->pBeginWidgetList,
                                                                      pWindow);
 }
 
-static int diplomat_bribe_yes_callback(struct widget *pWidget)
+static int diplomat_bribe_yes_callback(struct GUI *pWidget)
 {
   popdown_bribe_dialog();
   
@@ -1259,7 +1269,7 @@ static int diplomat_bribe_yes_callback(struct widget *pWidget)
   return -1;
 }
 
-static int exit_bribe_dlg_callback(struct widget *pWidget)
+static int exit_bribe_dlg_callback(struct GUI *pWidget)
 {
   popdown_bribe_dialog();
   return -1;
@@ -1287,7 +1297,7 @@ void popdown_bribe_dialog(void)
 **************************************************************************/
 void popup_bribe_dialog(struct unit *pUnit)
 {
-  struct widget *pWindow = NULL, *pBuf = NULL;
+  struct GUI *pWindow = NULL, *pBuf = NULL;
   SDL_String16 *pStr;
   struct unit *pDiplomatUnit;
   char cBuf[255]; 
@@ -1303,6 +1313,7 @@ void popup_bribe_dialog(struct unit *pUnit)
   
   if (!pDiplomatUnit || !(unit_flag(pDiplomatUnit, F_SPY) ||
 		    unit_flag(pDiplomatUnit, F_DIPLOMAT))) {
+    remove_locked_buffer();
     return;
   }
   
@@ -1320,8 +1331,9 @@ void popup_bribe_dialog(struct unit *pUnit)
     
   pStr->style |= TTF_STYLE_BOLD;
   
-  pWindow = create_window(NULL,
+  pWindow = create_window(get_locked_buffer(),
 			  pStr, adj_size(10), adj_size(10), WF_DRAW_THEME_TRANSPARENT);
+  unlock_buffer();
     
   pWindow->action = bribe_dlg_window_callback;
   set_wstate(pWindow, FC_WS_NORMAL);

@@ -56,7 +56,7 @@ static struct ADVANCED_DLG *pMsg_Dlg = NULL;
 /**************************************************************************
  Called from default clicks on a message.
 **************************************************************************/
-static int msg_callback(struct widget *pWidget)
+static int msg_callback(struct GUI *pWidget)
 {
 
   struct message *pMsg = (struct message *)pWidget->data.ptr;
@@ -96,7 +96,7 @@ static int msg_callback(struct widget *pWidget)
 /**************************************************************************
  Called from default clicks on a messages window.
 **************************************************************************/
-static int move_msg_window_callback(struct widget *pWindow)
+static int move_msg_window_callback(struct GUI *pWindow)
 {
   return std_move_window_group_callback(pMsg_Dlg->pBeginWidgetList, pWindow);
 }
@@ -114,7 +114,7 @@ void real_update_meswin_dialog(void)
   int i = pMsg_Dlg->pScroll->count;
     
   struct message *pMsg = NULL;
-  struct widget *pBuf = NULL, *pWindow = pMsg_Dlg->pEndWidgetList;
+  struct GUI *pBuf = NULL, *pWindow = pMsg_Dlg->pEndWidgetList;
   SDL_String16 *pStr = NULL;
 
   bool create;
@@ -192,7 +192,7 @@ void popup_meswin_dialog(bool raise)
   Uint16 h = adj_size(8) + WINDOW_TILE_HIGH + N_MSG_VIEW * str16size(pStr).h;
   int len, i = 0;
   struct message *pMsg = NULL;
-  struct widget *pWindow = NULL, *pBuf = NULL;
+  struct GUI *pWindow = NULL, *pBuf = NULL;
   int msg_count = get_num_messages();
   SDL_Surface *pSurf;
   SDL_Rect area;
@@ -206,11 +206,10 @@ void popup_meswin_dialog(bool raise)
   pMsg_Dlg = fc_calloc(1, sizeof(struct ADVANCED_DLG));
 
   /* create window */
-  pWindow = create_window(NULL, NULL, w, h, 0);
+  pWindow = create_window(NULL, NULL, w, h, WF_DRAW_THEME_TRANSPARENT);
 
   pWindow->size.x = start_x;
   pWindow->size.y = start_y;
-  set_window_pos(pWindow, pWindow->size.x, pWindow->size.y);
 
   pWindow->theme = create_surf_alpha(w, h, SDL_SWSURFACE);
   
@@ -240,7 +239,7 @@ void popup_meswin_dialog(bool raise)
   FREESTRING16(pStr);
   
   putframe(pWindow->theme, 0, 0, w - 1, h - 1,
-    map_rgba(pWindow->theme->format, *get_game_colorRGB(COLOR_THEME_MESWIN_FRAME)));
+                               map_rgba(pWindow->theme->format, *get_game_colorRGB(COLOR_THEME_MESWIN_FRAME)));
   
   clear_wflag(pWindow, WF_DRAW_FRAME_AROUND_WIDGET);
   pWindow->action = move_msg_window_callback;

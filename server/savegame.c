@@ -1055,7 +1055,7 @@ static void map_save(struct section_file *file)
         if (ptile->owner == NULL) {
           strcpy(token, "-");
         } else {
-          my_snprintf(token, sizeof(token), "%d", ptile->owner->player_no);
+          snprintf(token, sizeof(token), "%d", ptile->owner->player_no);
         }
         strcat(line, token);
         if (x + 1 < map.xsize) {
@@ -1075,7 +1075,7 @@ static void map_save(struct section_file *file)
         if (ptile->owner_source == NULL) {
           strcpy(token, "-");
         } else {
-          my_snprintf(token, sizeof(token), "%d", ptile->owner_source->index);
+          snprintf(token, sizeof(token), "%d", ptile->owner_source->index);
         }
         strcat(line, token);
         if (x + 1 < map.xsize) {
@@ -3506,34 +3506,41 @@ void game_load(struct section_file *file)
     game.info.warminglevel  = secfile_lookup_int(file, "game.warminglevel");
     game.info.cooling = secfile_lookup_int_default(file, 0, "game.cooling");
     game.info.nuclearwinter = secfile_lookup_int_default(file, 0, "game.nuclearwinter");
-    game.info.coolinglevel  = secfile_lookup_int_default(file, 8, "game.coolinglevel");
-    game.info.notradesize   = secfile_lookup_int_default(file, 0, "game.notradesize");
-    game.info.fulltradesize = secfile_lookup_int_default(file, 1, "game.fulltradesize");
-    game.info.angrycitizen  = secfile_lookup_bool_default(file, FALSE, "game.angrycitizen");
-
-    if (game.version >= 10100) {
-      game.info.diplcost    = secfile_lookup_int(file, "game.diplcost");
-      game.info.freecost    = secfile_lookup_int(file, "game.freecost");
-      game.info.conquercost = secfile_lookup_int(file, "game.conquercost");
-      game.info.foodbox
-	= secfile_lookup_int_default(file, 0, "game.box_food");
-      if (game.info.foodbox == 0) {
-	/* foodbox was used for 2.0 and earlier servers. */
-	game.info.foodbox = 10 * secfile_lookup_int(file, "game.foodbox");
-      }
-      game.info.techpenalty = secfile_lookup_int(file, "game.techpenalty");
-      game.info.razechance  = secfile_lookup_int(file, "game.razechance");
-
-      /* suppress warnings about unused entries in old savegames: */
-      (void) section_file_lookup(file, "game.rail_food");
-      (void) section_file_lookup(file, "game.rail_prod");
-      (void) section_file_lookup(file, "game.rail_trade");
-      (void) section_file_lookup(file, "game.farmfood");
+    game.info.coolinglevel = secfile_lookup_int_default(file, 8, "game.coolinglevel");
+    game.info.notradesize = 
+      secfile_lookup_int_default(file, GAME_DEFAULT_NOTRADESIZE, "game.notradesize");
+    game.info.fulltradesize = 
+      secfile_lookup_int_default(file, GAME_DEFAULT_FULLTRADESIZE, "game.fulltradesize");
+    game.info.unhappysize = 
+      secfile_lookup_int_default(file, GAME_DEFAULT_UNHAPPYSIZE, "game.unhappysize");
+    game.info.angrycitizen = 
+      secfile_lookup_bool_default(file, GAME_DEFAULT_ANGRYCITIZEN, "game.angrycitizen");
+    game.info.cityfactor  = 
+      secfile_lookup_int_default(file, GAME_DEFAULT_CITYFACTOR, "game.cityfactor");
+    game.info.diplcost    = 
+      secfile_lookup_int_default(file, GAME_DEFAULT_DIPLCOST, "game.diplcost");
+    game.info.freecost    = 
+      secfile_lookup_int_default(file, GAME_DEFAULT_FREECOST, "game.freecost");
+    game.info.conquercost = 
+      secfile_lookup_int_default(file, GAME_DEFAULT_CONQUERCOST, "game.conquercost");
+    game.info.foodbox	= secfile_lookup_int_default(file, 0, "game.box_food");
+    if (game.info.foodbox == 0) {
+      /* foodbox was used for 2.0 and earlier servers. */
+      game.info.foodbox = 10 * secfile_lookup_int_default(file, 100, "game.foodbox");
     }
-    if (game.version >= 10300) {
-      civstyle = secfile_lookup_int_default(file, 2, "game.civstyle");
-      game.info.save_nturns = secfile_lookup_int(file, "game.save_nturns");
-    }
+    game.info.techpenalty = 
+      secfile_lookup_int_default(file, GAME_DEFAULT_TECHPENALTY, "game.techpenalty");
+    game.info.razechance  = 
+      secfile_lookup_int_default(file, GAME_DEFAULT_RAZECHANCE, "game.razechance");
+    game.info.save_nturns = 
+      secfile_lookup_int_default(file, GAME_DEFAULT_SAVETURNS, "game.save_nturns");
+
+    /* suppress warnings about unused entries in old savegames: */
+    (void) section_file_lookup(file, "game.rail_food");
+    (void) section_file_lookup(file, "game.rail_prod");
+    (void) section_file_lookup(file, "game.rail_trade");
+    (void) section_file_lookup(file, "game.farmfood");
+    civstyle = secfile_lookup_int_default(file, 2, "game.civstyle");
 
     game.info.citymindist  = secfile_lookup_int_default(file,
       GAME_DEFAULT_CITYMINDIST, "game.citymindist");
@@ -4093,7 +4100,9 @@ void game_save(struct section_file *file, const char *save_reason)
   secfile_insert_int(file, game.info.coolinglevel, "game.coolinglevel");
   secfile_insert_int(file, game.info.notradesize, "game.notradesize");
   secfile_insert_int(file, game.info.fulltradesize, "game.fulltradesize");
+  secfile_insert_int(file, game.info.unhappysize, "game.unhappysize");
   secfile_insert_bool(file, game.info.angrycitizen, "game.angrycitizen");
+  secfile_insert_int(file, game.info.cityfactor, "game.cityfactor");
   secfile_insert_int(file, game.info.citymindist, "game.citymindist");
   secfile_insert_int(file, game.info.civilwarsize, "game.civilwarsize");
   secfile_insert_int(file, game.info.contactturns, "game.contactturns");

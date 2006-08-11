@@ -18,8 +18,7 @@ flag_alt = "-"
 city_style = "European"
 
 ruler_titles = { "government",      "male_title",      "female_title"
-		 ; /* TRANS: Noaydde = Shaman */
-                 "Despotism",       _("Noaydde"),      _("?female:Noaydde")
+                 "Despotism",       _("Noaydde"),      _("Noaydde")
                  "Republic",        _("Spokesman"),    _("Spokeswoman")
                }
 

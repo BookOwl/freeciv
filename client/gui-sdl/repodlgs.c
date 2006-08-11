@@ -41,7 +41,6 @@
 #include "graphics.h"
 #include "gui_id.h"
 #include "gui_main.h"
-#include "gui_stuff.h"
 #include "gui_tilespec.h"
 #include "gui_zoom.h"
 #include "helpdlg.h"
@@ -107,20 +106,22 @@ static void get_units_report_data(struct units_entry *entries,
 }
 
 
-static int units_dialog_callback(struct widget *pWindow)
+static int units_dialog_callback(struct GUI *pWindow)
 {
   return std_move_window_group_callback(
   			pUnitsDlg->pBeginWidgetList, pWindow);
 }
 
 /* --------------------------------------------------------------- */
-static int ok_upgrade_unit_window_callback(struct widget *pWidget)
+static int ok_upgrade_unit_window_callback(struct GUI *pWidget)
 {
   int ut1 = MAX_ID - pWidget->ID;
   
   /* popdown sell dlg */
+  lock_buffer(pWidget->dst);
   popdown_window_group_dialog(pUnits_Upg_Dlg->pBeginWidgetList,
 			      pUnits_Upg_Dlg->pEndWidgetList);
+  unlock_buffer();
   FC_FREE(pUnits_Upg_Dlg);
    
   dsend_packet_unit_type_upgrade(&aconnection, ut1);
@@ -128,32 +129,34 @@ static int ok_upgrade_unit_window_callback(struct widget *pWidget)
   return -1;
 }
 
-static int upgrade_unit_window_callback(struct widget *pWindow)
+static int upgrade_unit_window_callback(struct GUI *pWindow)
 {
   return std_move_window_group_callback(
   			pUnits_Upg_Dlg->pBeginWidgetList, pWindow);
 }
 
-static int cancel_upgrade_unit_callback(struct widget *pWidget)
+static int cancel_upgrade_unit_callback(struct GUI *pWidget)
 {
   if (pUnits_Upg_Dlg) {
+    lock_buffer(pWidget->dst);
     popdown_window_group_dialog(pUnits_Upg_Dlg->pBeginWidgetList,
 			      pUnits_Upg_Dlg->pEndWidgetList);
+    unlock_buffer();
     FC_FREE(pUnits_Upg_Dlg);
     flush_dirty();
   }
   return -1;
 }
 
-static int popup_upgrade_unit_callback(struct widget *pWidget)
+static int popup_upgrade_unit_callback(struct GUI *pWidget)
 {
   struct unit_type ut1;
   struct unit_type *ut2;
   int value, hh, ww = 0;
   char cBuf[128];
-  struct widget *pBuf = NULL, *pWindow;
+  struct GUI *pBuf = NULL, *pWindow;
   SDL_String16 *pStr;
-  SDL_Surface *pText;
+  SDL_Surface *pText, *pDest = pWidget->dst;
   SDL_Rect dst;
   
   ut1.index = MAX_ID - pWidget->ID;
@@ -184,7 +187,7 @@ static int popup_upgrade_unit_callback(struct widget *pWidget)
   pStr = create_str16_from_char(_("Upgrade Obsolete Units"), adj_font(12));
   pStr->style |= TTF_STYLE_BOLD;
 
-  pWindow = create_window(NULL, pStr, adj_size(100), adj_size(100), 0);
+  pWindow = create_window(pDest, pStr, adj_size(100), adj_size(100), 0);
 
   pWindow->action = upgrade_unit_window_callback;
   set_wstate(pWindow, FC_WS_NORMAL);
@@ -241,8 +244,6 @@ static int popup_upgrade_unit_callback(struct widget *pWidget)
   		(pUnitsDlg->pEndWidgetList->size.w - ww) / 2;
   pWindow->size.y = pUnitsDlg->pEndWidgetList->size.y +
 		(pUnitsDlg->pEndWidgetList->size.h - hh) / 2;
-
-  set_window_pos(pWindow, pWindow->size.x, pWindow->size.y);
   
   resize_window(pWindow, NULL,
 		get_game_colorRGB(COLOR_THEME_BACKGROUND),
@@ -283,7 +284,7 @@ static int popup_upgrade_unit_callback(struct widget *pWidget)
   return -1;
 }
 
-static int exit_units_dlg_callback(struct widget *pWidget)
+static int exit_units_dlg_callback(struct GUI *pWidget)
 {
   if (pUnitsDlg) {
     if (pUnits_Upg_Dlg) {
@@ -309,8 +310,8 @@ static void real_activeunits_report_dialog_update(struct units_entry *units,
 {
   SDL_Color bg_color = {255, 255, 255, 136};
   
-  struct widget *pBuf = NULL;
-  struct widget *pWindow , *pLast;
+  struct GUI *pBuf = NULL;
+  struct GUI *pWindow , *pLast;
   SDL_String16 *pStr;
   SDL_Surface *pText1, *pText2, *pText3 , *pText4, *pText5, *pLogo;
   int w = 0 , count , h = 0, ww, hh = 0, name_w = 0;
@@ -584,9 +585,7 @@ static void real_activeunits_report_dialog_update(struct units_entry *units,
   w += DOUBLE_FRAME_WH + adj_size(2);
   pWindow->size.x = (Main.screen->w - w) / 2;
   pWindow->size.y = (Main.screen->h - h) / 2;
-
-  set_window_pos(pWindow, pWindow->size.x, pWindow->size.y);
-  
+    
   pLogo = get_logo_gfx();
   resize_window(pWindow, pLogo,	NULL, w, h);
   FREESURFACE(pLogo);
@@ -822,7 +821,7 @@ void activeunits_report_dialog_update(void)
   if(pUnitsDlg && !is_report_dialogs_frozen()) {
     struct units_entry units[U_LAST];
     struct units_entry units_total;
-    struct widget *pWidget, *pBuf;
+    struct GUI *pWidget, *pBuf;
     bool is_in_list = FALSE;
     char cBuf[32];
     bool upgrade;  
@@ -1004,16 +1003,16 @@ static struct SMALL_DLG *pEconomy_Sell_Dlg = NULL;
 struct rates_move {
   int min, max, tax, x, gov_max;
   int *src_rate, *dst_rate;
-  struct widget *pHoriz_Src, *pHoriz_Dst;
-  struct widget *pLabel_Src, *pLabel_Dst;
+  struct GUI *pHoriz_Src, *pHoriz_Dst;
+  struct GUI *pLabel_Src, *pLabel_Dst;
 };
 
-static int economy_dialog_callback(struct widget *pWindow)
+static int economy_dialog_callback(struct GUI *pWindow)
 {
   return std_move_window_group_callback(pEconomyDlg->pBeginWidgetList, pWindow);
 }
 
-static int exit_economy_dialog_callback(struct widget *pWidget)
+static int exit_economy_dialog_callback(struct GUI *pWidget)
 {
   if(pEconomyDlg) {
     if (pEconomy_Sell_Dlg) {
@@ -1036,7 +1035,7 @@ static int exit_economy_dialog_callback(struct widget *pWidget)
 /**************************************************************************
   ...
 **************************************************************************/
-static int toggle_block_callback(struct widget *pCheckBox)
+static int toggle_block_callback(struct GUI *pCheckBox)
 {
   switch (pCheckBox->ID) {
   case ID_CHANGE_TAXRATE_DLG_LUX_BLOCK_CHECKBOX:
@@ -1070,11 +1069,10 @@ static Uint16 report_scroll_mouse_motion_handler(
 			SDL_MouseMotionEvent *pMotionEvent, void *pData)
 {
   struct rates_move *pMotion = (struct rates_move *)pData;
-  struct widget *pTax_Label = pEconomyDlg->pEndWidgetList->prev->prev;
-  struct widget *pBuf = NULL;
+  struct GUI *pTax_Label = pEconomyDlg->pEndWidgetList->prev->prev;
+  struct GUI *pBuf = NULL;
   char cBuf[8];
   int dir, inc, x, *buf_rate = NULL;
-  SDL_Rect dest;
   
   if ((abs(pMotionEvent->x - pMotion->x) > 7) &&
      (pMotionEvent->x >= pMotion->min) && (pMotionEvent->x <= pMotion->max)) {
@@ -1118,17 +1116,13 @@ static Uint16 report_scroll_mouse_motion_handler(
       }
 
       /* undraw scrollbars */    
-      dest = pMotion->pHoriz_Src->size;
-      fix_rect(pMotion->pHoriz_Src->dst, &dest);
       blit_entire_src(pMotion->pHoriz_Src->gfx, pMotion->pHoriz_Src->dst,
-		                                           dest.x, dest.y);
+		pMotion->pHoriz_Src->size.x, pMotion->pHoriz_Src->size.y);
       sdl_dirty_rect(pMotion->pHoriz_Src->size);
 	    
       if(pMotion->pHoriz_Dst) {
-        dest = pMotion->pHoriz_Dst->size;
-        fix_rect(pMotion->pHoriz_Dst->dst, &dest);
         blit_entire_src(pMotion->pHoriz_Dst->gfx, pMotion->pHoriz_Dst->dst,
-		                                            dest.x, dest.y);
+		pMotion->pHoriz_Dst->size.x, pMotion->pHoriz_Dst->size.y);
         sdl_dirty_rect(pMotion->pHoriz_Dst->size);
       }
 	  
@@ -1183,7 +1177,7 @@ static Uint16 report_scroll_mouse_motion_handler(
 /**************************************************************************
   ...
 **************************************************************************/
-static int horiz_taxrate_callback(struct widget *pHoriz_Src)
+static int horiz_taxrate_callback(struct GUI *pHoriz_Src)
 {
   struct rates_move pMotion;
   
@@ -1269,9 +1263,9 @@ END:
 /**************************************************************************
   ...
 **************************************************************************/
-static int apply_taxrates_callback(struct widget *pButton)
+static int apply_taxrates_callback(struct GUI *pButton)
 {
-  struct widget *pBuf;
+  struct GUI *pBuf;
   int science, luxury, tax;
 
   if (get_client_state() != CLIENT_GAME_RUNNING_STATE) {
@@ -1304,7 +1298,7 @@ static int apply_taxrates_callback(struct widget *pButton)
 static void enable_economy_dlg(void)
 {
   /* lux lock */
-  struct widget *pBuf = pEconomyDlg->pEndWidgetList->prev->prev->prev->prev->prev->prev;
+  struct GUI *pBuf = pEconomyDlg->pEndWidgetList->prev->prev->prev->prev->prev->prev;
   set_wstate(pBuf, FC_WS_NORMAL);
   
   /* lux scrollbar */
@@ -1339,7 +1333,7 @@ static void enable_economy_dlg(void)
 static void disable_economy_dlg(void)
 {
   /* lux lock */
-  struct widget *pBuf = pEconomyDlg->pEndWidgetList->prev->prev->prev->prev->prev->prev;
+  struct GUI *pBuf = pEconomyDlg->pEndWidgetList->prev->prev->prev->prev->prev->prev;
   set_wstate(pBuf, FC_WS_DISABLED);
   
   /* lux scrollbar */
@@ -1373,10 +1367,10 @@ static void disable_economy_dlg(void)
 }
 
 /* --------------------------------------------------------------- */
-static int ok_sell_impv_callback(struct widget *pWidget)
+static int ok_sell_impv_callback(struct GUI *pWidget)
 {
   int imp, total_count, count = 0;
-  struct widget *pImpr = (struct widget *)pWidget->data.ptr;
+  struct GUI *pImpr = (struct GUI *)pWidget->data.ptr;
     
   imp = pImpr->data.cont->id0;
   total_count = pImpr->data.cont->id1;
@@ -1404,17 +1398,19 @@ static int ok_sell_impv_callback(struct widget *pWidget)
   return -1;
 }
 
-static int sell_impv_window_callback(struct widget *pWindow)
+static int sell_impv_window_callback(struct GUI *pWindow)
 {
   return std_move_window_group_callback(
   			pEconomy_Sell_Dlg->pBeginWidgetList, pWindow);
 }
 
-static int cancel_sell_impv_callback(struct widget *pWidget)
+static int cancel_sell_impv_callback(struct GUI *pWidget)
 {
   if (pEconomy_Sell_Dlg) {
+    lock_buffer(pWidget->dst);
     popdown_window_group_dialog(pEconomy_Sell_Dlg->pBeginWidgetList,
 			      pEconomy_Sell_Dlg->pEndWidgetList);
+    unlock_buffer();
     FC_FREE(pEconomy_Sell_Dlg);
     enable_economy_dlg();
     flush_dirty();
@@ -1423,14 +1419,14 @@ static int cancel_sell_impv_callback(struct widget *pWidget)
 }
 
 
-static int popup_sell_impv_callback(struct widget *pWidget)
+static int popup_sell_impv_callback(struct GUI *pWidget)
 {
   int imp, total_count ,count = 0, gold = 0;
   int value, hh, ww = 0;
   char cBuf[128];
-  struct widget *pBuf = NULL, *pWindow;
+  struct GUI *pBuf = NULL, *pWindow;
   SDL_String16 *pStr;
-  SDL_Surface *pText;
+  SDL_Surface *pText, *pDest = pWidget->dst;
   SDL_Rect dst;
   
   if (pEconomy_Sell_Dlg) {
@@ -1471,7 +1467,7 @@ static int popup_sell_impv_callback(struct widget *pWidget)
   pStr = create_str16_from_char(_("Sell It?"), adj_font(12));
   pStr->style |= TTF_STYLE_BOLD;
 
-  pWindow = create_window(NULL, pStr, adj_size(100), adj_size(100), 0);
+  pWindow = create_window(pDest, pStr, adj_size(100), adj_size(100), 0);
 
   pWindow->action = sell_impv_window_callback;
   set_wstate(pWindow, FC_WS_NORMAL);
@@ -1529,7 +1525,6 @@ static int popup_sell_impv_callback(struct widget *pWidget)
   		(pEconomyDlg->pEndWidgetList->size.w - ww) / 2;
   pWindow->size.y = pEconomyDlg->pEndWidgetList->size.y +
 		(pEconomyDlg->pEndWidgetList->size.h - hh) / 2;
-  set_window_pos(pWindow, pWindow->size.x, pWindow->size.y);
   
   resize_window(pWindow, NULL,
 		get_game_colorRGB(COLOR_THEME_BACKGROUND),
@@ -1578,7 +1573,7 @@ static int popup_sell_impv_callback(struct widget *pWidget)
 void economy_report_dialog_update(void)
 {
   if(pEconomyDlg && !is_report_dialogs_frozen()) {
-    struct widget *pBuf = pEconomyDlg->pEndWidgetList;
+    struct GUI *pBuf = pEconomyDlg->pEndWidgetList;
     int tax, total, entries_used = 0;
     char cBuf[128];
     struct improvement_entry entries[B_LAST];
@@ -1654,8 +1649,8 @@ void popup_economy_report_dialog(bool make_modal)
   SDL_Color bg_color2 = {255,255,255,136};
   SDL_Color bg_color3 = {255,255,255,64};
 
-  struct widget *pBuf = get_tax_rates_widget();
-  struct widget *pWindow , *pLast;
+  struct GUI *pBuf = get_tax_rates_widget();
+  struct GUI *pWindow , *pLast;
   SDL_String16 *pStr;
   SDL_Surface *pSurf, *pText_Name, *pText, *pZoom, *pText2;
   SDL_Surface *pMain;
@@ -1842,6 +1837,7 @@ void popup_economy_report_dialog(bool make_modal)
   pBuf = create_themeicon_button(pTheme->Small_OK_Icon, pWindow->dst, pStr,
   			  			WF_DRAW_THEME_TRANSPARENT);
   pBuf->action = apply_taxrates_callback;
+  clear_wflag(pBuf, WF_DRAW_FRAME_AROUND_WIDGET);
   set_wstate(pBuf, FC_WS_NORMAL);
 
   add_to_gui_list(ID_CHANGE_TAXRATE_DLG_OK_BUTTON, pBuf);
@@ -1852,6 +1848,7 @@ void popup_economy_report_dialog(bool make_modal)
   pStr = create_str16_from_char(cBuf, adj_font(12));
   pBuf = create_themeicon_button(pTheme->Small_CANCEL_Icon, pWindow->dst, pStr,
   			  			WF_DRAW_THEME_TRANSPARENT);
+  clear_wflag(pBuf, WF_DRAW_FRAME_AROUND_WIDGET);
   pBuf->action = exit_economy_dialog_callback;
   set_wstate(pBuf, FC_WS_NORMAL);
   pBuf->key = SDLK_ESCAPE;
@@ -2017,8 +2014,7 @@ void popup_economy_report_dialog(bool make_modal)
   
   pWindow->size.x = (Main.screen->w - w) / 2;
   pWindow->size.y = (Main.screen->h - h) / 2;
-  set_window_pos(pWindow, pWindow->size.x, pWindow->size.y);
-
+    
   pMain = get_logo_gfx();
   if(resize_window(pWindow, pMain, NULL, w, h)) {
     FREESURFACE(pMain);
@@ -2487,14 +2483,13 @@ void science_dialog_update(void)
     SDL_String16 *pStr;
     SDL_Surface *pSurf, *pColb_Surface = pIcons->pBIG_Colb;
     int step, i, cost;
-    SDL_Rect dest = {0, 0, 0, 0};
-    SDL_Rect dest2, src;
+    SDL_Rect dest, src;
     struct impr_type *pImpr;
     struct unit_type *pUnit;
     int turns_to_advance, turns_to_next_tech, steps;
     int curent_output = 0;
           
-    struct widget *pWindow = pScienceDlg->pEndWidgetList;
+    struct GUI *pWindow = pScienceDlg->pEndWidgetList;
 
     if (get_player_research(game.player_ptr)->researching != A_UNSET) {
       cost = total_bulbs_required(game.player_ptr);
@@ -2506,13 +2501,13 @@ void science_dialog_update(void)
     pWindow->prev->prev->theme = get_tech_icon(get_player_research(game.player_ptr)->tech_goal);
     
     /* redraw Window */
-    redraw_group(pScienceDlg->pBeginWidgetList, pWindow, 0);  
-    
-    dest = pWindow->size;
-    fix_rect(pWindow->dst, &dest);
-    putframe(pWindow->dst, dest.x, dest.y, dest.x + pWindow->size.w - 1,
-		  	   dest.y + pWindow->size.h - 1, 0xffffffff);
+    redraw_group(pWindow, pWindow, 0);
   
+    putframe(pWindow->dst, pWindow->size.x, pWindow->size.y,
+	  	pWindow->size.x + pWindow->size.w - 1,
+		  	pWindow->size.y + pWindow->size.h - 1, 0xffffffff);
+  
+    redraw_group(pScienceDlg->pBeginWidgetList, pWindow->prev, 0);
     /* ------------------------------------- */
 
     city_list_iterate(game.player_ptr->cities, pCity) {
@@ -2549,10 +2544,7 @@ void science_dialog_update(void)
       
     dest.x = pWindow->size.x + (pWindow->size.w - pSurf->w) / 2;
     dest.y = pWindow->size.y + WINDOW_TILE_HIGH + adj_size(2);
-    
-    dest2 = dest;
-    fix_rect(pWindow->dst, &dest2);
-    alphablit(pSurf, NULL, pWindow->dst, &dest2);
+    alphablit(pSurf, NULL, pWindow->dst, &dest);
 
     dest.y += pSurf->h + adj_size(2);
     FREESURFACE(pSurf);
@@ -2560,9 +2552,7 @@ void science_dialog_update(void)
     /* ------------------------------------- */
     dest.x = pWindow->prev->size.x;
     /* separator */
-    dest2 = dest;
-    fix_rect(pWindow->dst, &dest2);
-    putline(pWindow->dst, dest2.x, dest2.y, dest2.x + adj_size(365), dest2.y, 0xff000000);
+    putline(pWindow->dst, dest.x, dest.y, dest.x + adj_size(365), dest.y, 0xff000000);
 
     dest.y += 6;
     /* ------------------------------------- */
@@ -2577,10 +2567,7 @@ void science_dialog_update(void)
     pSurf = create_text_surf_from_str16(pStr);
     
     dest.x = pWindow->prev->size.x + pWindow->prev->size.w + adj_size(10);
-    
-    dest2 = dest;
-    fix_rect(pWindow->dst, &dest2);
-    alphablit(pSurf, NULL, pWindow->dst, &dest2);
+    alphablit(pSurf, NULL, pWindow->dst, &dest);
 
     dest.y += pSurf->h;
     FREESURFACE(pSurf);
@@ -2598,12 +2585,10 @@ void science_dialog_update(void)
     }
 
     dest.h = pColb_Surface->h + adj_size(4);
-    dest2 = dest;
-    fix_rect(pWindow->dst, &dest2);
-    SDL_FillRectAlpha(pWindow->dst, &dest2, &bg_color);
+    SDL_FillRectAlpha(pWindow->dst, &dest, &bg_color);
   
-    putframe(pWindow->dst, dest2.x - 1, dest2.y - 1, dest2.x + dest2.w,
-      dest2.y + dest2.h, map_rgba(pWindow->dst->format, *get_game_colorRGB(COLOR_THEME_SCIENCEDLG_FRAME)));
+    putframe(pWindow->dst, dest.x - 1, dest.y - 1, dest.x + dest.w,
+      dest.y + dest.h, map_rgba(pWindow->dst->format, *get_game_colorRGB(COLOR_THEME_SCIENCEDLG_FRAME)));
   
     if (cost > adj_size(286))
     {
@@ -2618,9 +2603,7 @@ void science_dialog_update(void)
   
     dest.y += adj_size(2);
     for (i = 0; i < cost; i++) {
-      dest2 = dest;
-      fix_rect(pWindow->dst, &dest2);
-      alphablit(pColb_Surface, NULL, pWindow->dst, &dest2);
+      alphablit(pColb_Surface, NULL, pWindow->dst, &dest);
       dest.x += step;
     }
 
@@ -2635,9 +2618,7 @@ void science_dialog_update(void)
       requirement_vector_iterate(&pImpr->reqs, preq) {
         if (preq->source.value.tech == get_player_research(game.player_ptr)->researching) {		  
           pSurf = adj_surf(GET_SURF(get_building_sprite(tileset, imp)));
-          dest2 = dest;
-          fix_rect(pWindow->dst, &dest2);
-          alphablit(pSurf, NULL, pWindow->dst, &dest2);
+          alphablit(pSurf, NULL, pWindow->dst, &dest);
           dest.x += pSurf->w + 1;
       }
       } requirement_vector_iterate_end;
@@ -2653,16 +2634,12 @@ void science_dialog_update(void)
 	  SDL_Surface *pZoomed =
 	  	ZoomSurface(GET_SURF(get_unittype_sprite(tileset, un)), zoom, zoom, 1);
 	  src = get_smaller_surface_rect(pZoomed);
-          dest2 = dest;
-          fix_rect(pWindow->dst, &dest2);
-	  alphablit(pZoomed, &src, pWindow->dst, &dest2);
+	  alphablit(pZoomed, &src, pWindow->dst, &dest);
 	  FREESURFACE(pZoomed);
           dest.x += src.w + adj_size(2);
 	} else {
           src = get_smaller_surface_rect(GET_SURF(get_unittype_sprite(tileset, un)));
-          dest2 = dest;
-          fix_rect(pWindow->dst, &dest2);
-          alphablit(GET_SURF(get_unittype_sprite(tileset, un)), &src, pWindow->dst, &dest2);
+          alphablit(GET_SURF(get_unittype_sprite(tileset, un)), &src, pWindow->dst, &dest);
           dest.x += src.w + adj_size(2);
 	}
       }
@@ -2673,9 +2650,7 @@ void science_dialog_update(void)
     dest.x = pWindow->prev->size.x;
     dest.y = pWindow->prev->size.y + pWindow->prev->size.h + adj_size(35);
 
-    dest2 = dest;
-    fix_rect(pWindow->dst, &dest2);
-    putline(pWindow->dst, dest2.x, dest2.y, dest2.x + adj_size(365), dest2.y, 0xff000000);
+    putline(pWindow->dst, dest.x, dest.y, dest.x + adj_size(365), dest.y, 0xff000000);
     dest.y += adj_size(10);
     /* -------------------------------- */
     /* Goals */
@@ -2694,10 +2669,7 @@ void science_dialog_update(void)
       pSurf = create_text_surf_from_str16(pStr);
       
       dest.x = pWindow->prev->size.x + pWindow->prev->size.w + adj_size(10);
-      
-      dest2 = dest;
-      fix_rect(pWindow->dst, &dest2);
-      alphablit(pSurf, NULL, pWindow->dst, &dest2);
+      alphablit(pSurf, NULL, pWindow->dst, &dest);
 
       dest.y += pSurf->h + adj_size(4);
       FREESURFACE(pSurf);
@@ -2707,9 +2679,7 @@ void science_dialog_update(void)
 	requirement_vector_iterate(&pImpr->reqs, preq) {  
           if (preq->source.value.tech == get_player_research(game.player_ptr)->tech_goal) {			
             pSurf = adj_surf(GET_SURF(get_building_sprite(tileset, imp)));
-            dest2 = dest;
-            fix_rect(pWindow->dst, &dest2);
-            alphablit(pSurf, NULL, pWindow->dst, &dest2);
+            alphablit(pSurf, NULL, pWindow->dst, &dest);
             dest.x += pSurf->w + 1;
         }
         } requirement_vector_iterate_end;
@@ -2725,16 +2695,12 @@ void science_dialog_update(void)
 	    SDL_Surface *pZoomed =
 	  	ZoomSurface(GET_SURF(get_unittype_sprite(tileset, un)), zoom, zoom, 1);
 	    src = get_smaller_surface_rect(pZoomed);
-            dest2 = dest;
-            fix_rect(pWindow->dst, &dest2);
-	    alphablit(pZoomed, &src, pWindow->dst, &dest2);
+	    alphablit(pZoomed, &src, pWindow->dst, &dest);
 	    FREESURFACE(pZoomed);
             dest.x += src.w + adj_size(2);
 	  } else {
             src = get_smaller_surface_rect(GET_SURF(get_unittype_sprite(tileset, un)));
-            dest2 = dest;
-            fix_rect(pWindow->dst, &dest2);
-            alphablit(GET_SURF(get_unittype_sprite(tileset, un)), &src, pWindow->dst, &dest2);
+            alphablit(GET_SURF(get_unittype_sprite(tileset, un)), &src, pWindow->dst, &dest);
             dest.x += src.w + adj_size(2);
 	  }
         }
@@ -2752,7 +2718,7 @@ void science_dialog_update(void)
 /**************************************************************************
   ...
 **************************************************************************/
-static int popdown_science_dialog(struct widget *pButton)
+static int popdown_science_dialog(struct GUI *pButton)
 {
   if(pScienceDlg) {
     popdown_window_group_dialog(pScienceDlg->pBeginWidgetList,
@@ -2769,7 +2735,7 @@ static int popdown_science_dialog(struct widget *pButton)
 /**************************************************************************
   ...
 **************************************************************************/
-static int exit_change_tech_dlg_callback(struct widget *pWidget)
+static int exit_change_tech_dlg_callback(struct GUI *pWidget)
 {
   if (pChangeTechDlg) {
     popdown_window_group_dialog(pChangeTechDlg->pBeginWidgetList, 
@@ -2787,7 +2753,7 @@ static int exit_change_tech_dlg_callback(struct widget *pWidget)
 /**************************************************************************
   ...
 **************************************************************************/
-static int change_research_callback(struct widget *pWidget)
+static int change_research_callback(struct GUI *pWidget)
 {
   if (Main.event.button.button == SDL_BUTTON_RIGHT)
   {
@@ -2802,7 +2768,7 @@ static int change_research_callback(struct widget *pWidget)
 /**************************************************************************
   This function is used by change research and change goals dlgs.
 **************************************************************************/
-static int change_research_goal_dialog_callback(struct widget *pWindow)
+static int change_research_goal_dialog_callback(struct GUI *pWindow)
 {
   if(sellect_window_group_dialog(pChangeTechDlg->pBeginWidgetList, pWindow)) {
       flush_rect(pWindow->size, FALSE);
@@ -2813,10 +2779,10 @@ static int change_research_goal_dialog_callback(struct widget *pWindow)
 /**************************************************************************
   ...
 **************************************************************************/
-static int change_research(struct widget *pWidget)
+static int change_research(struct GUI *pWidget)
 {
-  struct widget *pBuf = NULL;
-  struct widget *pWindow;
+  struct GUI *pBuf = NULL;
+  struct GUI *pWindow;
   SDL_String16 *pStr;
   SDL_Surface *pSurf;
   int max_col, max_row, col, i, count = 0, w = 0, h;
@@ -2941,7 +2907,6 @@ static int change_research(struct widget *pWidget)
   h = WINDOW_TILE_HIGH + 1 + count * pBuf->size.h + adj_size(2) + FRAME_WH;
   pWindow->size.x = (Main.screen->w - w) / 2;
   pWindow->size.y = (Main.screen->h - h) / 2;
-  set_window_pos(pWindow, pWindow->size.x, pWindow->size.y);  
   disable_science_dialog();
   
   /* alloca window theme and win background buffer */
@@ -2976,7 +2941,7 @@ static int change_research(struct widget *pWidget)
 /**************************************************************************
   ...
 **************************************************************************/
-static int change_research_goal_callback(struct widget *pWidget)
+static int change_research_goal_callback(struct GUI *pWidget)
 {
   if (Main.event.button.button == SDL_BUTTON_RIGHT)
   {
@@ -2996,10 +2961,10 @@ static int change_research_goal_callback(struct widget *pWidget)
 /**************************************************************************
   ...
 **************************************************************************/
-static int change_research_goal(struct widget *pWidget)
+static int change_research_goal(struct GUI *pWidget)
 {
-  struct widget *pBuf = NULL;
-  struct widget *pWindow;
+  struct GUI *pBuf = NULL;
+  struct GUI *pWindow;
   SDL_String16 *pStr;
   SDL_Surface *pSurf;
   char cBuf[128];
@@ -3132,7 +3097,6 @@ static int change_research_goal(struct widget *pWidget)
   h = WINDOW_TILE_HIGH + 1 + count * pBuf->size.h + adj_size(2) + FRAME_WH;
   pWindow->size.x = (Main.screen->w - w) / 2;
   pWindow->size.y = (Main.screen->h - h) / 2;
-  set_window_pos(pWindow, pWindow->size.x, pWindow->size.y);  
   disable_science_dialog();
   
   /* alloca window theme and win background buffer */
@@ -3164,18 +3128,18 @@ static int change_research_goal(struct widget *pWidget)
   return -1;
 }
 
-static int science_dialog_callback(struct widget *pWindow)
+static int science_dialog_callback(struct GUI *pWindow)
 {
-  
-  if (!pChangeTechDlg) {
-    if (sellect_window_group_dialog(pScienceDlg->pBeginWidgetList, pWindow)) {
+  if (!pChangeTechDlg &&
+	    move_window_group_dialog(pScienceDlg->pBeginWidgetList, pWindow)) {
+    sellect_window_group_dialog(pScienceDlg->pBeginWidgetList, pWindow);
+    science_dialog_update();
+  } else {
+    if(!pChangeTechDlg &&
+      	sellect_window_group_dialog(pScienceDlg->pBeginWidgetList, pWindow)) {
       flush_rect(pWindow->size, FALSE);
-    }
-    if (move_window_group_dialog(pScienceDlg->pBeginWidgetList, pWindow)) {
-      science_dialog_update();
-    }
+    }      
   }
-  
   return -1;
 }
 
@@ -3184,7 +3148,7 @@ static int science_dialog_callback(struct widget *pWindow)
 **************************************************************************/
 void popup_science_dialog(bool raise)
 {
-  struct widget *pBuf = get_research_widget(), *pWindow = NULL;
+  struct GUI *pBuf = get_research_widget(), *pWindow = NULL;
   SDL_String16 *pStr;
   SDL_Surface *pLogo;
   int count, i;
@@ -3209,7 +3173,6 @@ void popup_science_dialog(bool raise)
   pWindow->action = science_dialog_callback;
   pWindow->size.x = (Main.screen->w - adj_size(400)) / 2;
   pWindow->size.y = (Main.screen->h - adj_size(260)) / 2;
-  set_window_pos(pWindow, pWindow->size.x, pWindow->size.y);  
   pWindow->size.w = adj_size(400);
   pWindow->size.h = adj_size(260);
   set_wstate(pWindow, FC_WS_NORMAL);
@@ -3218,8 +3181,7 @@ void popup_science_dialog(bool raise)
   pWindow->theme = ResizeSurface(pLogo, pWindow->size.w, pWindow->size.h, 1);
   FREESURFACE(pLogo);
     
-/* FIXME: is this needed here? */
-/*  refresh_widget_background(pWindow); */
+  refresh_widget_background(pWindow);
 
   add_to_gui_list(ID_SCIENCE_DLG_WINDOW, pWindow);
   /* ------ */
@@ -3264,7 +3226,8 @@ void popup_science_dialog(bool raise)
 
   /* ------ */
   /* exit button */
-  pBuf = create_themeicon(pTheme->Small_CANCEL_Icon, pWindow->dst, 0);
+  pBuf = create_themeicon(pTheme->Small_CANCEL_Icon, pWindow->dst,
+  			  			WF_DRAW_THEME_TRANSPARENT);
   
   pBuf->action = popdown_science_dialog;
   set_wstate(pBuf, FC_WS_NORMAL);
@@ -3287,8 +3250,10 @@ void popup_science_dialog(bool raise)
 void popdown_all_science_dialogs(void)
 {
   if(pChangeTechDlg) {
+    lock_buffer(pChangeTechDlg->pEndWidgetList->dst);
     popdown_window_group_dialog(pChangeTechDlg->pBeginWidgetList,
 				  pChangeTechDlg->pEndWidgetList);
+    unlock_buffer();
     FC_FREE(pChangeTechDlg->pScroll);
     FC_FREE(pChangeTechDlg);
   }

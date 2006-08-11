@@ -25,26 +25,15 @@
   to hold full number of unit types.
 */
 
-enum unit_class_flag_id {
-  UCF_TERRAIN_SPEED = 0,
-  UCF_DAMAGE_SLOWS,
-  UCF_CAN_OCCUPY,
-  UCF_MISSILE,
-  UCF_ROAD_NATIVE,
-  UCF_BUILD_ANYWHERE,
-  UCF_LAST
+struct move_params {
+  bool terrain_affects; /* Move rate is subject to terrain and improvement effects */
+  bool damage_slows;    /* Damaged unit is slowed down */
 };
-
-BV_DEFINE(bv_unit_classes, UCL_LAST);
-BV_DEFINE(bv_unit_class_flags, UCF_LAST);
 
 struct unit_class {
   Unit_Class_id id;
-  const char *name;        /* Translated name */
-  char name_orig[MAX_LEN_NAME];
-  enum unit_move_type move_type;
+  struct move_params move;
   int hp_loss_pct;         /* Percentage of hitpoints lost each turn not in city or airbase */
-  bv_unit_class_flags flags;
 };
 
 /* Unit "special effects" flags:
@@ -57,6 +46,7 @@ struct unit_class {
 enum unit_flag_id { 
   F_TRADE_ROUTE=0,
   F_HELP_WONDER,
+  F_MISSILE,   
   F_IGZOC,     
   F_NONMIL,      
   F_IGTER,       
@@ -96,8 +86,6 @@ enum unit_flag_id {
   F_NOBUILD,          /* Unit cannot be built (barb leader etc) */
   F_BADWALLATTACKER,  /* Firepower set to 1 when attacking city wall */
   F_BADCITYDEFENDER,  /* Firepower set to 1 and attackers x2 when in city */
-  F_HELICOPTER,       /* Defends badly against F_FIGHTER units */
-  F_AIRUNIT,          /* Bad at attacking F_AEGIS units */
   F_LAST
 };
 #define F_MAX 64
@@ -165,6 +153,7 @@ struct unit_type {
   char sound_move_alt[MAX_LEN_NAME];
   char sound_fight[MAX_LEN_NAME];
   char sound_fight_alt[MAX_LEN_NAME];
+  enum unit_move_type move_type;
   int build_cost;			/* Use wrappers to access this. */
   int pop_cost;  /* number of workers the unit contains (e.g., settlers, engineers)*/
   int attack_strength;
@@ -218,11 +207,8 @@ int unit_buy_gold_cost(const struct unit_type *punittype,
 		       int shields_in_stock);
 int unit_disband_shields(const struct unit_type *punittype);
 int unit_pop_value(const struct unit_type *punittype);
-enum unit_move_type get_unit_move_type(const struct unit_type *punittype);
 
 struct unit_class *unit_class_get_by_id(int id);
-bool unit_class_flag(const struct unit_class *punitclass, int flag);
-
 struct unit_class *get_unit_class(const struct unit_type *punittype);
 const char *unit_name(const struct unit_type *punittype);
 const char *unit_name_orig(const struct unit_type *punittype);
@@ -232,7 +218,7 @@ const char *get_unit_name(const struct unit_type *punittype);
 const char *get_units_with_flag_string(int flag);
 
 int utype_upkeep_cost(const struct unit_type *ut, struct player *pplayer,
-                      Output_type_id otype);
+                      const struct government *g, Output_type_id otype);
 int utype_happy_cost(const struct unit_type *ut, const struct player *pplayer);
 
 struct unit_type *can_upgrade_unittype(const struct player *pplayer,
@@ -245,7 +231,6 @@ struct unit_type *find_unit_type_by_name(const char *name);
 struct unit_type *find_unit_type_by_name_orig(const char *name_orig);
 
 struct unit_class *unit_class_from_str(const char *s);
-enum unit_class_flag_id unit_class_flag_from_str(const char *s);
 enum unit_flag_id unit_flag_from_str(const char *s);
 enum unit_role_id unit_role_from_str(const char *s);
 
@@ -270,8 +255,6 @@ struct unit_type *first_role_unit_for_player(const struct player *pplayer,
 void unit_types_init(void);
 void unit_types_free(void);
 
-void unit_classes_init(void);
-
 #define unit_type_iterate(punittype)					    \
 {									    \
   int _index;								    \
@@ -280,17 +263,6 @@ void unit_classes_init(void);
     struct unit_type *punittype = get_unit_type(_index);
 
 #define unit_type_iterate_end                                               \
-  }                                                                         \
-}
-
-#define unit_class_iterate(punitclass)					    \
-{									    \
-  int _index;								    \
-									    \
-  for (_index = 0; _index < game.control.num_unit_classes; _index++) {	    \
-    struct unit_class *punitclass = unit_class_get_by_id(_index);
-
-#define unit_class_iterate_end                                              \
   }                                                                         \
 }
 

@@ -39,7 +39,6 @@ libcivserver_a_SOURCES = \
 		diplhand.h	\
 		diplomats.c	\
 		diplomats.h	\
-		edithand.c	\
 		gamehand.c	\
 		gamehand.h	\
 		gotohand.c	\

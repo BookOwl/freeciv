@@ -22,10 +22,9 @@ flag_alt = "greek"
 city_style = "Classical"
 
 ruler_titles = { "government",      "male_title",      "female_title"
-                 "Despotism",       _("Imperator"),   _("Imperatrix")
-		 "Fundamentalism",  _("Patriarch"),   _("Matriarch")
-		 ; /* TRANS: Basileus = Monarch */
-                 "Monarchy",        _("Basileus"),    _("?female:Basileus")
+                 "Despotism",       _("Imperator"), _("Imperatrix")
+		 "Fundamentalism",  _("Patriarch"), _("Patriarch")
+                 "Monarchy",        _("Basileus"),  _("Basileus")
                }
 
 init_techs=""
@@ -33,51 +32,48 @@ init_buildings=""
 init_government="Despotism"
 init_units=""
 
-; Byzantium was a successor-empire of the Hellenic culture
+; Byzantium was the cultural successor-empire of Hellenic culture
 conflicts_with = "greek"
 civilwar_nations = "greek", "italian", "turk", "arab"
 
 cities =
- "Konstantinoupolis (ocean)",	; Constantinople / Istanbul
- "Efesos",			; Ephesus
- "Ikonio",			; Iconium
- "Romi",			; Rome
- "Trapezounta",			; Trapezus
- "Dyrrachio (ocean)",		; Dyrrachium
- "Antiocheia",			; Antioch
- "Nikaia",			; Nicaea
- "Thessaloniki (ocean)",
- "Rodos (ocean)",		; Rhodes
- "Tarsos",			; Tarsus
- "Kaisareia",			; Caesarea
+ "Constantinople (ocean)",
+ "Ephesus",
+ "Iconium",
+ "Roma",
+ "Trapezus",
+ "Dyrrachium (ocean)",
+ "Antioch",
+ "Nicaea",
+ "Thessalonica (ocean)",
+ "Rhodes (ocean)",
+ "Tarsus",
+ "Caesaria",
  "Trier",
  "Monemvasia",
- "Irakleia",			; Heraclea
+ "Heraclia",
  "Samosata",
- "Filadelfeia",			; Philadelphia
- "Syrakousa",			; Syracuse
- "Napoli",			; Naples
- "Karchidon",			; Carthage
- "Ierousalim",			; Jerusalem
- "Edessa",			; Edessa
- "Adrianoupoli",		; Adrianople
- "Kyrini",			; Cyrene
- "Ankyra",			; Ankara
- "Nikomideia",			; Nicomedia
- "Mystras",			; Myzethras
+ "Philadelphia",
+ "Syracusae",
+ "Neapolis",
+ "Carthage",
+ "Jerusalem",
+ "Edessa",
+ "Adrianople",
+ "Cyrenae",
+ "Ancyra",
+ "Nicomedia",
+ "Mistra",
  "Ravenna",
- "Germaniceia",			; Marash
- "Chersonesos",			; Sevastopol
- "Prousa",			; Bursa
- "Athina",			; Athens
+ "Germaniceia",
+ "Sevastoupolis",
+ "Prusa",
+ "Athinae",
  "Ioannina",
- "Pella",
+ "Pella", 
  "Doryleo",
- "Lefkosia",			; Nicosia
- "Smyrni (ocean)",		; Smyrna
- "Alexandreia (ocean)",		; Alexandria
- "Virytos",			; Beirut
- "Palmyra",
- "Pantikapaio",			; Panticapaeum / Kerch
- "Sougdeia",			; Sudak
- "Theodosia"
+ "Nicosia",
+ "Smyrne (ocean)",
+ "Alexandria (ocean)",
+ "Berytus",
+ "Palmyra"

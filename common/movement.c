@@ -26,13 +26,12 @@
 #include "map.h"
 #include "movement.h"
 #include "unit.h"
-#include "unitlist.h"
 #include "unittype.h"
 #include "terrain.h"
 
-static const char *move_type_names[] = {
-  "Air", "Land", "Sea", "Both"
-};
+
+static bool can_unit_type_transport(const struct unit_type *transporter,
+				    const struct unit_type *transported);
 
 /****************************************************************************
   This function calculates the move rate of the unit, taking into 
@@ -49,7 +48,7 @@ int unit_move_rate(const struct unit *punit)
 
   move_rate = base_move_rate;
 
-  if (unit_class_flag(pclass, UCF_DAMAGE_SLOWS)) {
+  if (pclass->move.damage_slows) {
     /* Scale the MP based on how many HP the unit has. */
     move_rate = (move_rate * punit->hp) / unit_type(punit)->hp;
   }
@@ -59,7 +58,7 @@ int unit_move_rate(const struct unit *punit)
   move_rate += (get_unit_bonus(punit, EFT_MOVE_BONUS) * SINGLE_MOVE);
 
   /* TODO: These effects should not be hardcoded to unit class enumeration */
-  if (pclass->move_type == SEA_MOVING) {
+  if (pclass->id == UCL_SEA) {
     /* Don't let the move_rate be less than 2 unless the base_move_rate is
      * also less than 2. */
     if (move_rate < 2 * SINGLE_MOVE) {
@@ -89,22 +88,13 @@ bool unit_can_defend_here(const struct unit *punit)
   return can_unit_exist_at_tile(punit, punit->tile);
 }
 
-/****************************************************************************
- This unit can attack non-native tiles (eg. Ships ability to
- shore bombardment)
-****************************************************************************/
-bool can_attack_non_native(struct unit_type *utype)
-{
-  return (get_unit_class(utype)->move_type == SEA_MOVING
-          && !unit_type_flag(utype, F_NO_LAND_ATTACK));
-}
 
 /****************************************************************************
   Return TRUE iff the unit is a sailing/naval/sea/water unit.
 ****************************************************************************/
 bool is_sailing_unit(const struct unit *punit)
 {
-  return (get_unit_move_type(unit_type(punit)) == SEA_MOVING);
+  return (unit_type(punit)->move_type == SEA_MOVING);
 }
 
 
@@ -113,7 +103,7 @@ bool is_sailing_unit(const struct unit *punit)
 ****************************************************************************/
 bool is_air_unit(const struct unit *punit)
 {
-  return (get_unit_move_type(unit_type(punit)) == AIR_MOVING);
+  return (unit_type(punit)->move_type == AIR_MOVING);
 }
 
 
@@ -122,7 +112,7 @@ bool is_air_unit(const struct unit *punit)
 ****************************************************************************/
 bool is_heli_unit(const struct unit *punit)
 {
-  return (get_unit_move_type(unit_type(punit)) == HELI_MOVING);
+  return (unit_type(punit)->move_type == HELI_MOVING);
 }
 
 
@@ -131,7 +121,7 @@ bool is_heli_unit(const struct unit *punit)
 ****************************************************************************/
 bool is_ground_unit(const struct unit *punit)
 {
-  return (get_unit_move_type(unit_type(punit)) == LAND_MOVING);
+  return (unit_type(punit)->move_type == LAND_MOVING);
 }
 
 
@@ -140,7 +130,7 @@ bool is_ground_unit(const struct unit *punit)
 ****************************************************************************/
 bool is_sailing_unittype(const struct unit_type *punittype)
 {
-  return (get_unit_move_type(punittype) == SEA_MOVING);
+  return (punittype->move_type == SEA_MOVING);
 }
 
 
@@ -149,7 +139,7 @@ bool is_sailing_unittype(const struct unit_type *punittype)
 ****************************************************************************/
 bool is_air_unittype(const struct unit_type *punittype)
 {
-  return (get_unit_move_type(punittype) == AIR_MOVING);
+  return (punittype->move_type == AIR_MOVING);
 }
 
 
@@ -158,7 +148,7 @@ bool is_air_unittype(const struct unit_type *punittype)
 ****************************************************************************/
 bool is_heli_unittype(const struct unit_type *punittype)
 {
-  return (get_unit_move_type(punittype) == HELI_MOVING);
+  return (punittype->move_type == HELI_MOVING);
 }
 
 
@@ -167,7 +157,7 @@ bool is_heli_unittype(const struct unit_type *punittype)
 ****************************************************************************/
 bool is_ground_unittype(const struct unit_type *punittype)
 {
-  return (get_unit_move_type(punittype) == LAND_MOVING);
+  return (punittype->move_type == LAND_MOVING);
 }
 
 
@@ -184,82 +174,24 @@ bool can_unit_exist_at_tile(const struct unit *punit,
     return TRUE;
   }
 
-  return is_native_tile(punit->type, ptile);
+  return is_native_terrain(punit, ptile->terrain);
 }
 
 /****************************************************************************
-  This tile is native to unit.
-
-  See is_native_to_class()
+  This terrain is native to unit. Units that require fuel dont survive
+  even on native terrain. All terrains are native to air units.
 ****************************************************************************/
-bool is_native_tile(const struct unit_type *punittype,
-                    const struct tile *ptile)
+bool is_native_terrain(const struct unit *punit,
+                       const struct terrain *pterrain)
 {
-  return is_native_to_class(get_unit_class(punittype), ptile->terrain,
-                            ptile->special);
-}
-
-
-/****************************************************************************
-  This terrain is native to unit.
-
-  See is_native_to_class()
-****************************************************************************/
-bool is_native_terrain(const struct unit_type *punittype,
-                       const struct terrain *pterrain,
-                       bv_special special)
-{
-  return is_native_to_class(get_unit_class(punittype), pterrain, special);
-}
-
-/****************************************************************************
-  This tile is native to unit class.
-
-  See is_native_to_class()
-****************************************************************************/
-bool is_native_tile_to_class(const struct unit_class *punitclass,
-                             const struct tile *ptile)
-{
-  return is_native_to_class(punitclass, ptile->terrain, ptile->special);
-}
-
-/****************************************************************************
-  This terrain is native to unit class. Units that require fuel dont survive
-  even on native terrain.
-****************************************************************************/
-bool is_native_to_class(const struct unit_class *punitclass,
-                        const struct terrain *pterrain,
-                        bv_special special)
-{
-  if (!pterrain) {
-    /* Unknown is considered native terrain */
+  switch (punit->type->move_type) {
+  case LAND_MOVING:
+    return !is_ocean(pterrain);
+  case SEA_MOVING:
+    return is_ocean(pterrain);
+  default:
     return TRUE;
   }
-
-  if (unit_class_flag(punitclass, UCF_ROAD_NATIVE)
-      && contains_special(special, S_ROAD)) {
-    return TRUE;
-  }
-
-  return BV_ISSET(pterrain->native_to, punitclass->id);
-}
-
-/****************************************************************************
-  Is there native tile adjacent to given tile
-****************************************************************************/
-bool is_native_near_tile(const struct unit_type *utype, const struct tile *ptile)
-{
-  if (is_native_tile(utype, ptile)) {
-    return TRUE;
-  }
-
-  adjc_iterate(ptile, ptile2) {
-    if (is_native_tile(utype, ptile2)) {
-      return TRUE;
-    }
-  } adjc_iterate_end;
-
-  return FALSE;
 }
 
 /****************************************************************************
@@ -284,16 +216,15 @@ bool can_unit_survive_at_tile(const struct unit *punit,
 
   /* TODO: check for dangerous positions (like triremes in deep water). */
 
-  switch (get_unit_move_type(unit_type(punit))) {
+  switch (punit->type->move_type) {
   case LAND_MOVING:
   case SEA_MOVING:
     return TRUE;
   case AIR_MOVING:
   case HELI_MOVING:
     return tile_has_special(punit->tile, S_AIRBASE);
-  default:
-    die("Invalid move type");
   }
+  die("Invalid move type");
   return TRUE;
 }
 
@@ -384,12 +315,13 @@ bool can_unit_move_to_tile(const struct unit *punit,
     1) The unit is idle or on server goto.
     2) The target location is next to the unit.
     3) There are no non-allied units on the target tile.
-    4) Unit can move to non-native tile if there is city
-       or free transport capacity.
-    5) Marines are the only land units that can attack from a ocean square.
-    6) There are no peaceful but un-allied units on the target tile.
-    7) There is not a peaceful but un-allied city on the target tile.
-    8) There is no non-allied unit blocking (zoc) [or igzoc is true].
+    4) A ground unit can only move to ocean squares if there
+       is a transporter with free capacity.
+    5) Marines are the only units that can attack from a ocean square.
+    6) Naval units can only be moved to ocean squares or city squares.
+    7) There are no peaceful but un-allied units on the target tile.
+    8) There is not a peaceful but un-allied city on the target tile.
+    9) There is no non-allied unit blocking (zoc) [or igzoc is true].
 **************************************************************************/
 enum unit_move_result test_unit_move_to_tile(const struct unit_type *punittype,
 					     const struct player *unit_owner,
@@ -421,14 +353,14 @@ enum unit_move_result test_unit_move_to_tile(const struct unit_type *punittype,
     return MR_DESTINATION_OCCUPIED_BY_NON_ALLIED_UNIT;
   }
 
-  /* 4) */
-  if (!is_native_tile(punittype, dst_tile)
-      && !is_allied_city_tile(dst_tile, unit_owner)
-      && unit_class_transporter_capacity(dst_tile, unit_owner, punittype->class) <= 0) {
-    return MR_NO_TRANSPORTER_CAPACITY;
-  }
-
-  if (get_unit_move_type(punittype) == LAND_MOVING) {
+  if (punittype->move_type == LAND_MOVING) {
+    /* 4) */
+    if (is_ocean(dst_tile->terrain) &&
+	ground_unit_transporter_capacity(dst_tile, unit_owner) <= 0) {
+      /* Ground units can't move onto ocean tiles unless there's enough
+       * room on transporters for them. */
+      return MR_NO_SEA_TRANSPORTER_CAPACITY;
+    }
 
     /* Moving from ocean */
     if (is_ocean(src_tile->terrain)) {
@@ -441,9 +373,22 @@ enum unit_move_result test_unit_move_to_tile(const struct unit_type *punittype,
 	return MR_BAD_TYPE_FOR_CITY_TAKE_OVER;
       }
     }
+  } else if (punittype->move_type == SEA_MOVING) {
+    /* 6) */
+    if (!is_ocean(dst_tile->terrain)
+	&& dst_tile->terrain != T_UNKNOWN
+	&& (!is_allied_city_tile(dst_tile, unit_owner)
+	    || !is_ocean_near_tile(dst_tile))) {
+      /* Naval units can't move onto land, except into (allied) cities.
+       *
+       * The check for T_UNKNOWN here is probably unnecessary.  Since the
+       * dst_tile is adjacent to the src_tile it must be known to punit's
+       * owner, even at the client side. */
+      return MR_DESTINATION_OCCUPIED_BY_NON_ALLIED_CITY;
+    }
   }
 
-  /* 6) */
+  /* 7) */
   if (is_non_attack_unit_tile(dst_tile, unit_owner)) {
     /* You can't move into a non-allied tile.
      *
@@ -452,7 +397,7 @@ enum unit_move_result test_unit_move_to_tile(const struct unit_type *punittype,
     return MR_NO_WAR;
   }
 
-  /* 7) */
+  /* 8) */
   pcity = dst_tile->city;
   if (pcity && pplayers_non_attack(city_owner(pcity), unit_owner)) {
     /* You can't move into an empty city of a civilization you're at
@@ -460,7 +405,7 @@ enum unit_move_result test_unit_move_to_tile(const struct unit_type *punittype,
     return MR_NO_WAR;
   }
 
-  /* 8) */
+  /* 9) */
   zoc = igzoc
     || can_step_taken_wrt_to_zoc(punittype, unit_owner, src_tile, dst_tile);
   if (!zoc) {
@@ -477,14 +422,14 @@ enum unit_move_result test_unit_move_to_tile(const struct unit_type *punittype,
 bool can_unit_transport(const struct unit *transporter,
                         const struct unit *transported)
 {
-  return can_unit_type_transport(transporter->type, transported->type->class);
+  return can_unit_type_transport(transporter->type, transported->type);
 }
 
 /**************************************************************************
-  Return TRUE iff transporter type has ability to transport transported class.
+  Return TRUE iff transporter type has ability to transport transported type.
 **************************************************************************/
-bool can_unit_type_transport(const struct unit_type *transporter,
-                             const struct unit_class *transported)
+static bool can_unit_type_transport(const struct unit_type *transporter,
+                                    const struct unit_type *transported)
 {
   if (transporter->transport_capacity <= 0) {
     return FALSE;
@@ -498,12 +443,12 @@ bool can_unit_type_transport(const struct unit_type *transporter,
     return TRUE;
   }
 
-  if (!unit_class_flag(transported, UCF_MISSILE)
+  if (!unit_type_flag(transported, F_MISSILE)
      && unit_type_flag(transporter, F_MISSILE_CARRIER)) {
     return FALSE;
   }
 
-  if (unit_class_flag(transported, UCF_MISSILE)) {
+  if (unit_type_flag(transported, F_MISSILE)) {
     if (!unit_type_flag(transporter, F_MISSILE_CARRIER)
         && !unit_type_flag(transporter, F_CARRIER)) {
       return FALSE;
@@ -520,61 +465,4 @@ bool can_unit_type_transport(const struct unit_type *transporter,
   }
 
   return TRUE;
-}
-
-/**************************************************************************
-  Convert move type names to enum; case insensitive;
-  returns MOVETYPE_LAST if can't match.
-**************************************************************************/
-enum unit_move_type move_type_from_str(const char *s)
-{
-  int i;
-
-  for (i = 0; i < MOVETYPE_LAST; i++) {
-    if (mystrcasecmp(move_type_names[i], s)==0) {
-      return i;
-    }
-  }
-  return MOVETYPE_LAST;
-}
-
-/**************************************************************************
-  Search transport suitable for given unit from tile. It has to have
-  free space in it.
-**************************************************************************/
-struct unit *find_transport_from_tile(struct unit *punit, struct tile *ptile)
-{
-  unit_list_iterate(ptile->units, ptransport) {
-    if (get_transporter_capacity(ptransport) > get_transporter_occupancy(ptransport)
-        && can_unit_transport(ptransport, punit)
-        && is_native_tile(unit_type(ptransport), ptile)) {
-      return ptransport;
-    }
-  } unit_list_iterate_end;
-
-  return NULL;
-}
- 
-/**************************************************************************
- Returns the number of free spaces for units of given class.
- Can be 0.
-**************************************************************************/
-int unit_class_transporter_capacity(const struct tile *ptile,
-                                    const struct player *pplayer,
-                                    const struct unit_class *pclass)
-{
-  int availability = 0;
-
-  unit_list_iterate(ptile->units, punit) {
-    if (unit_owner(punit) == pplayer
-        || pplayers_allied(unit_owner(punit), pplayer)) {
-
-      if (can_unit_type_transport(punit->type, pclass)) {
-        availability += get_transporter_capacity(punit);
-        availability -= get_transporter_occupancy(punit);
-      }
-    }
-  } unit_list_iterate_end;
-
-  return availability;
 }

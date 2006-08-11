@@ -13,11 +13,9 @@
 #ifndef FC__CIVCLIENT_H
 #define FC__CIVCLIENT_H
 
-#include "shared.h"		/* MAX_LEN_NAME */
-
 #include "game.h"		/* enum client_states */
 #include "packets.h"		/* enum report_type */
-#include "worklist.h"
+#include "shared.h"		/* MAX_LEN_NAME */
 
 /*
  * Every TIMER_INTERVAL milliseconds real_timer_callback is
@@ -53,13 +51,6 @@ extern bool auto_connect;
 extern bool waiting_for_end_turn;
 extern bool turn_done_sent;
 extern bool in_ggz;
-
-/* Structure for holding global client data.
- *
- * TODO: Lots more variables could be added here. */
-extern struct civclient {
-  struct worklist worklists[MAX_NUM_WORKLISTS];
-} client;
 
 void wait_till_request_got_processed(int request_id);
 bool client_is_observer(void);

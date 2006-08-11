@@ -75,7 +75,7 @@ static bool ai_should_we_air_attack_tile(struct unit *punit,
   /* TODO: There is a danger of producing too many units that will not 
    * attack anything.  Production should not happen if there is an idle 
    * unit of the same type nearby */
-  if (acity && !TEST_BIT(acity->ai.invasion, INVASION_OCCUPY) && punit->id != 0) {
+  if (acity && !TEST_BIT(acity->ai.invasion, 0) && punit->id != 0) {
     /* No ground troups are invading */
     freelog(LOG_DEBUG, "Don't want to attack %s, although we could", 
             acity->name);
@@ -119,7 +119,7 @@ static int ai_evaluate_tile_for_air_attack(struct unit *punit,
   victim_cost = stack_cost(pdefender);
 
   /* Missile would die 100% so we adjust the victim_cost -- GB */
-  if (unit_class_flag(get_unit_class(unit_type(punit)), UCF_MISSILE)) {
+  if (unit_flag(punit, F_MISSILE)) {
     victim_cost -= unit_build_shield_cost(punit->type);
   }
 
@@ -393,7 +393,7 @@ bool ai_choose_attacker_air(struct player *pplayer, struct city *pcity,
   }
 
   unit_type_iterate(punittype) {
-    if (get_unit_move_type(punittype) != AIR_MOVING) {
+    if (punittype->move_type != AIR_MOVING) {
       continue;
     }
     if (can_build_unit(pcity, punittype)) {

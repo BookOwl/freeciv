@@ -34,24 +34,24 @@
 
 #define BLOCKM_W		28
 #define BLOCKU_W                15
-#define DEFAULT_MINI_MAP_W	(78 + BLOCKM_W + DOUBLE_FRAME_WH)
-#define DEFAULT_MINI_MAP_H	(52 + DOUBLE_FRAME_WH)
-#define DEFAULT_UNITS_W		(78 + BLOCKU_W + DOUBLE_FRAME_WH)
-#define DEFAULT_UNITS_H		(52 + DOUBLE_FRAME_WH)
+#define DEFAULT_MINI_MAP_W	78 + BLOCKM_W + DOUBLE_FRAME_WH
+#define DEFAULT_MINI_MAP_H	52 + DOUBLE_FRAME_WH
+#define DEFAULT_UNITS_W		78 + BLOCKU_W + DOUBLE_FRAME_WH
+#define DEFAULT_UNITS_H		52 + DOUBLE_FRAME_WH
 
 #else
 
 #define BLOCKM_W		52
 #define BLOCKU_W                30
-#define DEFAULT_MINI_MAP_W	(156 + BLOCKM_W + DOUBLE_FRAME_WH)
-#define DEFAULT_MINI_MAP_H	(104 + DOUBLE_FRAME_WH)
-#define DEFAULT_UNITS_W		(156 + BLOCKU_W + DOUBLE_FRAME_WH)
-#define DEFAULT_UNITS_H		(104 + DOUBLE_FRAME_WH)
+#define DEFAULT_MINI_MAP_W	156 + BLOCKM_W + DOUBLE_FRAME_WH
+#define DEFAULT_MINI_MAP_H	104 + DOUBLE_FRAME_WH
+#define DEFAULT_UNITS_W		156 + BLOCKU_W + DOUBLE_FRAME_WH
+#define DEFAULT_UNITS_H		104 + DOUBLE_FRAME_WH
 
 #endif
 
-#define HIDDEN_MINI_MAP_W	(BLOCKM_W + DOUBLE_FRAME_WH)
-#define HIDDEN_UNITS_W		(BLOCKU_W + DOUBLE_FRAME_WH)
+#define HIDDEN_MINI_MAP_W	BLOCKM_W + DOUBLE_FRAME_WH
+#define HIDDEN_UNITS_W		BLOCKU_W + DOUBLE_FRAME_WH
 
 extern int MINI_MAP_W;
 extern int MINI_MAP_H;
@@ -65,11 +65,11 @@ void set_new_units_window_pos(void);
 void set_new_mini_map_window_pos(void);
 int resize_minimap(void);
 int resize_unit_info(void);
-struct widget * get_unit_info_window_widget(void);
-struct widget * get_minimap_window_widget(void);
-struct widget * get_tax_rates_widget(void);
-struct widget * get_research_widget(void);
-struct widget * get_revolution_widget(void);
+struct GUI * get_unit_info_window_widget(void);
+struct GUI * get_minimap_window_widget(void);
+struct GUI * get_tax_rates_widget(void);
+struct GUI * get_research_widget(void);
+struct GUI * get_revolution_widget(void);
 void enable_and_redraw_find_city_button(void);
 void enable_and_redraw_revolution_button(void);
 void enable_main_widgets(void);

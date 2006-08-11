@@ -37,58 +37,6 @@ veteran_highseas_loss_pct = 50, 50
 ; by a whole point 3 must be specified.
 veteran_move_bonus = 0, 0
 
-; Unit classes
-; The number can be variable, up to 32
-; When adding new classes, remember to check effects.ruleset also.
-; Eg. if you divide class 'Land' to two separate classes, you may
-; want add effect giving City Walls defence bonus against new class
-; too.
-;
-; The actual tag used (the * in [unitclass_*]) does not matter, except 
-; it must be unique within this file, and it may be used in debug 
-; output when reading this file.
-;
-; ** Fields **
-;
-; name          = Name as used in other rulesets
-; move_type     = Where unit moves; Land, Sea, Both or Air. Air is special value for
-;                 units which can only be attacked by units with "Fighter" flag
-; hp_loss_pct   = Hitpoints lost each turn if unit not in city or airbase
-; flags         = List of unit class flags
-;
-; ** Unit class Flags **
-;
-; "TerrainSpeed"  = Units use terrain spesific speed
-; "DamageSlows"   = Damages units are slowed down
-; "CanOccupy"     = Military units of this class can occupy enemy cities
-; "Missile"       = Unit is destroyed when it attacks
-; "RoadNative"    = Road tiles are always considered native terrain
-; "BuildAnywhere" = Unit can be built even in the middle of non-native terrain
-
-[unitclass_land]
-name          = _("Land")
-move_type     = "Land"
-hp_loss_pct   = 0
-flags         = "TerrainSpeed", "DamageSlows", "CanOccupy", "BuildAnywhere"
-
-[unitclass_sea]
-name          = _("Sea")
-move_type     = "Sea"
-hp_loss_pct   = 0
-flags         = "TerrainSpeed", "DamageSlows"
-
-[unitclass_air]
-name          = _("Air")
-move_type     = "Air"
-hp_loss_pct   = 0
-flags         = ""
-
-[unitclass_missile]
-name          = _("Missile")
-move_type     = "Air"
-hp_loss_pct   = 0
-flags         = "Missile"
-
 ; Below: The individual units, one per section.
 ;
 ; The number can be variable, up to 200.  
@@ -113,7 +61,7 @@ flags         = "Missile"
 ; tech_req      = required advance, names from techs.ruleset, or special:
 ;                 "None" => available from start
 ; obsolete_by   = can be upgraded to and made obsolete by another unit by name
-; class         = One of the classes listed above
+; class         = "Land", "Sea", "Air", "Heli", "Missile" or "Nuclear"
 ; transport_cap = Number of units (ground, or air/missiles, depending on flags)
 ; fuel          = number of turns air units can fly before they crash. For
 ;                 barbarians this is used as lifetime instead
@@ -589,7 +537,7 @@ uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = "FieldUnit", "Fighter", "AirUnit"
+flags         = "FieldUnit", "Fighter"
 roles         = ""
 
 [unit_bomber]
@@ -617,7 +565,7 @@ uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = "FieldUnit", "OneAttack", "AirUnit"
+flags         = "FieldUnit", "OneAttack"
 roles         = ""
 
 [unit_trireme]
@@ -883,7 +831,7 @@ roles         = "Ferryboat"
 
 [unit_nuclear]
 name          = _("Nuclear")
-class         = "Missile"
+class         = "Nuclear"
 tech_req      = "Rocketry"
 obsolete_by   = "None"
 graphic       = "u.nuclear"
@@ -906,7 +854,7 @@ uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = "FieldUnit", "OneAttack", "Nuclear", "AirUnit"
+flags         = "FieldUnit", "OneAttack", "Missile", "Nuclear"
 roles         = ""
 helptext      = _("\
 You can build Nuclear units when you have the required advance, and\

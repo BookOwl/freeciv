@@ -36,8 +36,6 @@
 #include "climisc.h"
 #include "clinet.h"
 #include "connectdlg_common.h"
-#include "dialogs.h"
-#include "editor.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "inteldlg.h"
@@ -58,8 +56,6 @@ static GtkWidget *players_meet_command;
 static GtkWidget *players_war_command;
 static GtkWidget *players_vision_command;
 static GtkWidget *players_sship_command;
-static GtkWidget *players_edit_menu;
-static GtkWidget *players_edit_nation_command;
 static GtkListStore *store;
 static GtkTreeModel *model;
 
@@ -73,7 +69,6 @@ static void players_intel_callback(GtkMenuItem *item, gpointer data);
 static void players_sship_callback(GtkMenuItem *item, gpointer data);
 static void players_ai_toggle_callback(GtkMenuItem *item, gpointer data);
 static void players_ai_skill_callback(GtkMenuItem *item, gpointer data);
-static void players_edit_nation_callback(GtkMenuItem *item, gpointer data);
 
 
 static void update_views(void);
@@ -210,7 +205,7 @@ static gboolean button_press_callback(GtkTreeView *view, GdkEventButton *ev)
       plr = get_player(id);
 
       if (ev->button == 1) {
-        if (can_intel_with_player(plr)) {
+	if (can_intel_with_player(plr)) {
 	  popup_intel_dialog(plr);
 	}
       } else {
@@ -318,7 +313,6 @@ static GtkWidget* create_show_menu(void)
   GtkWidget *menu = gtk_menu_new();
   GtkWidget *item;    
   
-  /* index starting at one (1) here to force playername to always be shown */
   for (i = 1; i < num_player_dlg_columns; i++) {
     struct player_dlg_column *pcol;
     
@@ -362,7 +356,7 @@ void create_players_dialog(void)
 
   players_list = gtk_tree_view_new_with_model(GTK_TREE_MODEL(store));
   g_object_unref(store);
-  gtk_widget_set_name(players_list, "small_font");
+  gtk_widget_set_name(players_list, "small font");
 
   players_selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(players_list));
   g_signal_connect(players_selection, "changed",
@@ -518,21 +512,7 @@ void create_players_dialog(void)
   }
   gtk_widget_show_all(menu);
 
-  players_edit_menu = gtk_menu_item_new_with_mnemonic(_("_Editor"));
-  gtk_menu_shell_append(GTK_MENU_SHELL(menubar), players_edit_menu);
-  gtk_widget_set_sensitive(players_edit_menu, can_conn_edit(&aconnection));
-
-  menu = gtk_menu_new();
-  gtk_menu_item_set_submenu(GTK_MENU_ITEM(players_edit_menu), menu);
-
-  players_edit_nation_command = 
-                         gtk_menu_item_new_with_mnemonic(_("_Edit Nation..."));
-  gtk_menu_shell_append(GTK_MENU_SHELL(menu), players_edit_nation_command);
-
   gui_dialog_show_all(players_dialog_shell);
-
-  g_signal_connect(players_edit_nation_command, "activate",
-    G_CALLBACK(players_edit_nation_callback), NULL);
 
   gtk_list_store_clear(store);
   update_players_dialog();
@@ -719,9 +699,6 @@ void update_players_dialog(void)
       }
     } players_iterate_end;
 
-    /* menu needs to be updated with edit mode changes */
-    gtk_widget_set_sensitive(players_edit_menu, can_conn_edit(&aconnection));
-
     update_players_menu();
     update_views();
   }
@@ -854,23 +831,6 @@ static void players_ai_skill_callback(GtkMenuItem *item, gpointer data)
     send_chat(buf);
   }
 }
-
-/**************************************************************************
- popup the races dialog for the selected player
-**************************************************************************/
-static void players_edit_nation_callback(GtkMenuItem *item, gpointer data)
-{
-  GtkTreeModel *model;
-  GtkTreeIter it;
-  
-  if (gtk_tree_selection_get_selected(players_selection, &model, &it)) {
-    gint plrno;
-
-    gtk_tree_model_get(model, &it, ncolumns - 1, &plrno, -1);
-
-    popup_races_dialog(get_player(plrno));
-  }
-}   
 
 /**************************************************************************
 ...

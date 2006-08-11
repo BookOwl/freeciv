@@ -392,7 +392,6 @@ gboolean move_mapcanvas(GtkWidget *w, GdkEventMotion *ev, gpointer data)
 **************************************************************************/
 gboolean leave_mapcanvas(GtkWidget *widget, GdkEventCrossing *event)
 {
-  struct unit_list *active_units = get_units_in_focus();
   int canvas_x, canvas_y;
 
   /* Bizarrely, this function can be called even when we don't "leave"
@@ -403,11 +402,13 @@ gboolean leave_mapcanvas(GtkWidget *widget, GdkEventCrossing *event)
       && canvas_x >= 0 && canvas_y >= 0
       && canvas_x < mapview.width && canvas_y < mapview.height) {
     handle_mouse_cursor(canvas_pos_to_tile(canvas_x, canvas_y));
+    /* update_unit_info_label is handled inside handle_mouse_cursor. */
   } else {
-    update_mouse_cursor(CURSOR_DEFAULT);
-  }
+    struct unit_list *active_units = get_units_in_focus();
 
-  update_unit_info_label(active_units);
+    action_state = CURSOR_ACTION_DEFAULT;
+    update_unit_info_label(active_units);
+  }
   return TRUE;
 }
 

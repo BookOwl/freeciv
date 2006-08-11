@@ -95,7 +95,7 @@ enum { OVERVIEW_PAGE, WORKLIST_PAGE,
 
 enum info_style { NORMAL, ORANGE, RED, NUM_INFO_STYLES };
 
-#define NUM_CITIZENS_SHOWN 23
+#define NUM_CITIZENS_SHOWN 25
 #define NUM_INFO_FIELDS 11      /* number of fields in city_info */
 #define NUM_PAGES 6             /* the number of pages in city dialog notebook 
                                  * (+1) if you change this, you must add an
@@ -551,7 +551,7 @@ static gboolean show_info_popup(GtkWidget *w, GdkEventButton *ev,
     gtk_window_set_position(GTK_WINDOW(p), GTK_WIN_POS_MOUSE);
 
     label = gtk_label_new(buf);
-    gtk_widget_set_name(label, "city_info_label");
+    gtk_widget_set_name(label, "city info label");
     gtk_container_add(GTK_CONTAINER(p), label);
     gtk_widget_show_all(p);
 
@@ -602,7 +602,7 @@ static GtkWidget *create_city_info_table(struct city_dialog *pdialog,
 
   for (i = 0; i < NUM_INFO_FIELDS; i++) {
     label = gtk_label_new(output_label[i]);
-    gtk_widget_set_name(label, "city_label");	/* for font style? */
+    gtk_widget_set_name(label, "city label");	/* for font style? */
     gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
     gtk_table_attach(GTK_TABLE(table), label, 0, 1, i, i + 1, GTK_FILL, 0,
 		     0, 0);
@@ -615,7 +615,7 @@ static GtkWidget *create_city_info_table(struct city_dialog *pdialog,
 
     label = gtk_label_new("");
     info_label[i] = label;
-    gtk_widget_set_name(label, "city_label");	/* ditto */
+    gtk_widget_set_name(label, "city label");	/* ditto */
     gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
 
     gtk_container_add(GTK_CONTAINER(ebox), label);
@@ -656,8 +656,7 @@ static void create_and_append_overview_page(struct city_dialog *pdialog)
   gtk_widget_add_events(ebox, GDK_BUTTON_PRESS_MASK);
   gtk_box_pack_start(GTK_BOX(hbox), ebox, FALSE, FALSE, 0);
   pdialog->citizen_pixmap =
-      gtk_pixcomm_new(tileset_small_sprite_width(tileset)
-		      * (NUM_CITIZENS_SHOWN + 2),
+      gtk_pixcomm_new(tileset_small_sprite_width(tileset) * NUM_CITIZENS_SHOWN,
 		      tileset_small_sprite_height(tileset));
   gtk_misc_set_padding(GTK_MISC(pdialog->citizen_pixmap), 2, 2);
   gtk_container_add(GTK_CONTAINER(ebox), pdialog->citizen_pixmap);
@@ -765,7 +764,7 @@ static void create_and_append_overview_page(struct city_dialog *pdialog)
   view = gtk_tree_view_new_with_model(GTK_TREE_MODEL(store));
   g_object_unref(store);
   gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(view), FALSE);
-  gtk_widget_set_name(view, "small_font");
+  gtk_widget_set_name(view, "small font");
   pdialog->overview.improvement_list = view;
 
   gtk_tooltips_set_tip(pdialog->tips,
@@ -1338,7 +1337,7 @@ static void city_dialog_update_title(struct city_dialog *pdialog)
 *****************************************************************/
 static void city_dialog_update_citizens(struct city_dialog *pdialog)
 {
-  int i, j, width;
+  int i, width;
   struct city *pcity = pdialog->pcity;
   struct citizen_type citizens[MAX_CITY_SIZE];
 
@@ -1361,18 +1360,9 @@ static void city_dialog_update_citizens(struct city_dialog *pdialog)
 
   get_city_citizen_types(pcity, 4, citizens);
 
-  i = 0;
-  if (can_conn_edit(&aconnection)) {
+  for (i = 0; i < pcity->size; i++) {
     gtk_pixcomm_copyto(GTK_PIXCOMM(pdialog->citizen_pixmap),
-                       get_arrow_sprite(tileset, ARROW_PLUS),
-		       i++ * width, 0);
-    gtk_pixcomm_copyto(GTK_PIXCOMM(pdialog->citizen_pixmap),
-                       get_arrow_sprite(tileset, ARROW_MINUS),
-		       i++ * width, 0);
-  }
-  for (j = 0; j < pcity->size; i++, j++) {
-    gtk_pixcomm_copyto(GTK_PIXCOMM(pdialog->citizen_pixmap),
-		       get_citizen_sprite(tileset, citizens[j], j, pcity),
+		       get_citizen_sprite(tileset, citizens[i], i, pcity),
 		       i * width, 0);
   }
 
@@ -2340,31 +2330,16 @@ static gboolean citizens_callback(GtkWidget * w, GdkEventButton * ev,
 {
   struct city_dialog *pdialog = data;
   struct city *pcity = pdialog->pcity;
-  int citnum, tlen, len;
+  int citnum;
 
   if (!can_client_issue_orders()) {
     return FALSE;
   }
 
-  tlen = tileset_small_sprite_width(tileset);
-  len = (pcity->size - 1) * pdialog->cwidth + tlen;
-  if (can_conn_edit(&aconnection)) {
-    if (ev->x > 0 && ev->x <= tlen) {
-      dsend_packet_edit_city_size(&aconnection, pcity->id, pcity->size + 1);
-      return TRUE;
-    } else if (ev->x > tlen && ev->x <= tlen * 2) {
-      dsend_packet_edit_city_size(&aconnection, pcity->id, pcity->size - 1);
-      return TRUE;
-    } else if (ev->x > len + tlen * 2) {
-      return FALSE;
-    }
-    citnum = MIN(pcity->size - 1, (ev->x - tlen * 2) / pdialog->cwidth);
-  } else {
-    if (ev->x > len) {
-      return FALSE;		/* no citizen that far to the right */
-    }
-    citnum = MIN(pcity->size - 1, ev->x / pdialog->cwidth);
-  }
+  if (ev->x > (pcity->size - 1) * pdialog->cwidth + tileset_small_sprite_width(tileset))
+    return FALSE;		/* no citizen that far to the right */
+
+  citnum = MIN(pcity->size - 1, ev->x / pdialog->cwidth);
 
   city_rotate_specialist(pcity, citnum);
 

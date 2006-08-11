@@ -18,7 +18,6 @@
 #include <assert.h>
 #include <string.h>
 
-#include "log.h"
 #include "mem.h"
 
 #include "game.h"
@@ -30,20 +29,6 @@
 static void pft_fill_unit_default_parameter(struct pf_parameter *parameter,
 					    struct unit *punit);
 
-/*************************************************************
-  Cost of moving one normal step.
-*************************************************************/
-static inline int single_move_cost(const struct pf_parameter *param,
-                                   const struct tile *src_tile,
-                                   const struct tile *dest_tile)
-{
-  if (unit_class_flag(param->class, UCF_TERRAIN_SPEED)) {
-    return map_move_cost(src_tile, dest_tile);
-  } else {
-    return SINGLE_MOVE;
-  }
-}
-
 /* ===================== Move Cost Callbacks ========================= */
 
 /*************************************************************
@@ -54,11 +39,8 @@ static inline int single_move_cost(const struct pf_parameter *param,
 static int seamove(const struct tile *ptile, enum direction8 dir,
                    const struct tile *ptile1, struct pf_parameter *param)
 {
-  if (is_native_tile_to_class(param->class, ptile1)) {
-    return single_move_cost(param, ptile, ptile1);
-  } else if (ptile1->city
-             || is_non_allied_unit_tile(ptile1, param->owner)) {
-    /* Entering port or shore bombardment */
+  if (is_ocean(ptile1->terrain) || ptile1->city
+      || is_non_allied_unit_tile(ptile1, param->owner)) {
     return SINGLE_MOVE;
   } else {
     return PF_IMPOSSIBLE_MC;
@@ -72,12 +54,7 @@ static int single_airmove(const struct tile *ptile, enum direction8 dir,
 			  const struct tile *ptile1,
 			  struct pf_parameter *param)
 {
-  if (!ptile->city && !is_native_tile_to_class(param->class, ptile1)) {
-    return PF_IMPOSSIBLE_MC;
-  } else if (!is_native_tile_to_class(param->class, ptile1)) {
-    return SINGLE_MOVE;
-  }
-  return single_move_cost(param, ptile, ptile1);
+  return SINGLE_MOVE; /* simple, eh? */
 }
 
 /*************************************************************
@@ -88,10 +65,9 @@ static int seamove_no_bombard(const struct tile *ptile, enum direction8 dir,
 			      const struct tile *ptile1,
 			      struct pf_parameter *param)
 {
-  if (is_native_tile_to_class(param->class, ptile1)) {
-    return single_move_cost(param, ptile, ptile1);
-  } else if (is_allied_city_tile(ptile1, param->owner)) {
-    /* Entering port */
+  /* MOVE_COST_FOR_VALID_SEA_STEP means ships can move between */
+  if (map_move_cost_ai(ptile, ptile1) == MOVE_COST_FOR_VALID_SEA_STEP
+      && !is_non_allied_city_tile(ptile1, param->owner)) {
     return SINGLE_MOVE;
   } else {
     return PF_IMPOSSIBLE_MC;
@@ -109,17 +85,14 @@ static int sea_overlap_move(const struct tile *ptile, enum direction8 dir,
 			    const struct tile *ptile1,
 			    struct pf_parameter *param)
 {
-  if (is_allied_city_tile(ptile, param->owner)
-      && is_native_tile_to_class(param->class, ptile1)) {
-    return single_move_cost(param, ptile, ptile1);
-  } else if (!is_native_tile_to_class(param->class, ptile)) {
-    return PF_IMPOSSIBLE_MC;
-  } else if (is_native_tile_to_class(param->class, ptile1)) {
-    return single_move_cost(param, ptile, ptile1);
-  } else {
-    /* Entering port or bombardment */
+  if (is_ocean(ptile->terrain)) {
+    return SINGLE_MOVE;
+  } else if (is_allied_city_tile(ptile, param->owner)
+	     && is_ocean(ptile1->terrain)) {
     return SINGLE_MOVE;
   }
+
+  return PF_IMPOSSIBLE_MC;
 }
 
 /**********************************************************************
@@ -130,17 +103,14 @@ static int sea_attack_move(const struct tile *src_tile, enum direction8 dir,
 			   const struct tile *dest_tile,
 			   struct pf_parameter *param)
 {
-  if (is_native_tile_to_class(param->class, src_tile)) {
+  if (is_ocean(src_tile->terrain)) {
     if (is_non_allied_unit_tile(src_tile, param->owner)) {
       return PF_IMPOSSIBLE_MC;
     }
-    if (is_native_tile_to_class(param->class, dest_tile)) {
-      return single_move_cost(param, src_tile, dest_tile);
-    }
     return SINGLE_MOVE;
   } else if (is_allied_city_tile(src_tile, param->owner)
-	     && is_native_tile_to_class(param->class, dest_tile)) {
-    return single_move_cost(param, src_tile, dest_tile);
+	     && is_ocean(dest_tile->terrain)) {
+    return SINGLE_MOVE;
   }
 
   return PF_IMPOSSIBLE_MC;
@@ -153,24 +123,25 @@ static int normal_move_unit(const struct tile *ptile, enum direction8 dir,
 			    const struct tile *ptile1,
 			    struct pf_parameter *param)
 {
+  struct terrain *terrain1 = ptile1->terrain;
   int move_cost;
 
-  if (!is_native_tile_to_class(param->class, ptile1)) {
-    if (unit_class_transporter_capacity(ptile1, param->owner, param->class) > 0) {
+  if (is_ocean(terrain1)) {
+    if (ground_unit_transporter_capacity(ptile1, param->owner) > 0) {
       move_cost = SINGLE_MOVE;
     } else {
       move_cost = PF_IMPOSSIBLE_MC;
     }
-  } else if (!is_native_tile_to_class(param->class, ptile)) {
+  } else if (is_ocean(ptile->terrain)) {
     if (!BV_ISSET(param->unit_flags, F_MARINES)
         && (is_non_allied_unit_tile(ptile1, param->owner) 
             || is_non_allied_city_tile(ptile1, param->owner))) {
       move_cost = PF_IMPOSSIBLE_MC;
     } else {
-      move_cost = single_move_cost(param, ptile, ptile1);
+      move_cost = terrain1->movement_cost * SINGLE_MOVE;
     }
   } else {
-    move_cost = single_move_cost(param, ptile, ptile1);
+    move_cost = map_move_cost_ai(ptile, ptile1);
   }
 
   return move_cost;
@@ -186,15 +157,15 @@ static int land_attack_move(const struct tile *src_tile, enum direction8 dir,
 {
   int move_cost;
 
-  if (!is_native_tile_to_class(param->class, tgt_tile)) {
+  if (is_ocean(tgt_tile->terrain)) {
 
     /* Any-to-Sea */
-    if (unit_class_transporter_capacity(tgt_tile, param->owner, param->class) > 0) {
+    if (ground_unit_transporter_capacity(tgt_tile, param->owner) > 0) {
       move_cost = SINGLE_MOVE;
     } else {
       move_cost = PF_IMPOSSIBLE_MC;
     }
-  } else if (!is_native_tile_to_class(param->class, src_tile)) {
+  } else if (is_ocean(src_tile->terrain)) {
 
     /* Sea-to-Land. */
     if (!is_non_allied_unit_tile(tgt_tile, param->owner)
@@ -202,7 +173,7 @@ static int land_attack_move(const struct tile *src_tile, enum direction8 dir,
       move_cost = tgt_tile->terrain->movement_cost * SINGLE_MOVE;
     } else if (BV_ISSET(param->unit_flags, F_MARINES)) {
       /* Can attack!! */
-      move_cost = single_move_cost(param, src_tile, tgt_tile);
+      move_cost = SINGLE_MOVE;
     } else {
       move_cost = PF_IMPOSSIBLE_MC;
     }
@@ -217,7 +188,8 @@ static int land_attack_move(const struct tile *src_tile, enum direction8 dir,
       /* Attack! */
       move_cost = SINGLE_MOVE;
     } else {
-      move_cost = single_move_cost(param, src_tile, tgt_tile);
+      /* Normal move */
+      move_cost = map_move_cost_ai(src_tile, tgt_tile);
     }
   }
 
@@ -232,12 +204,12 @@ static int land_attack_move(const struct tile *src_tile, enum direction8 dir,
   one, so we don't venture too far into the ocean ;)
 
   Alternatively, we can change the flow to
-  if (!is_native_tile_to_class(param->class, ptile)) {
+  if (is_ocean(ptile->terrain)) {
     move_cost = PF_IMPOSSIBLE_MC;
-  } else if (!is_native_tile_to_class(param->class, ptile1)) {
+  } else if (is_ocean(terrain1)) {
     move_cost = SINGLE_MOVE;
   } else {
-    move_cost = single_move_cost(param, ptile, ptile1);
+    move_cost = ptile->move_cost[dir];
   }
   which will achieve the same without call-back.
 ************************************************************/
@@ -245,12 +217,15 @@ static int land_overlap_move(const struct tile *ptile, enum direction8 dir,
 			     const struct tile *ptile1,
 			     struct pf_parameter *param)
 {
+  struct terrain *terrain1 = ptile1->terrain;
   int move_cost;
 
-  if (!is_native_tile_to_class(param->class, ptile1)) {
+  if (is_ocean(terrain1)) {
     move_cost = SINGLE_MOVE;
+  } else if (is_ocean(ptile->terrain)) {
+    move_cost = terrain1->movement_cost * SINGLE_MOVE;
   } else {
-    move_cost = single_move_cost(param, ptile, ptile1);
+    move_cost = map_move_cost_ai(ptile, ptile1);
   }
 
   return move_cost;
@@ -265,17 +240,19 @@ static int reverse_move_unit(const struct tile *tile0, enum direction8 dir,
 			     const struct tile *ptile,
 			     struct pf_parameter *param)
 {
+  struct terrain *terrain0 = tile0->terrain;
+  struct terrain *terrain1 = ptile->terrain;
   int move_cost = PF_IMPOSSIBLE_MC;
 
-  if (!is_native_to_class(param->class, ptile)) {
-    if (unit_class_transporter_capacity(ptile, param->owner, param->class) > 0) {
+  if (is_ocean(terrain1)) {
+    if (ground_unit_transporter_capacity(ptile, param->owner) > 0) {
       /* Landing */
       move_cost = terrain0->movement_cost * SINGLE_MOVE;
     } else {
       /* Nothing to land from */
       move_cost = PF_IMPOSSIBLE_MC;
     }
-  } else if (!is_native_tile_to_class(param->class, tile0)) {
+  } else if (is_ocean(terrain0)) {
     /* Boarding */
     move_cost = SINGLE_MOVE;
   } else {
@@ -295,13 +272,13 @@ static int igter_move_unit(const struct tile *ptile, enum direction8 dir,
 {
   int move_cost;
 
-  if (!is_native_tile_to_class(param->class, ptile1)) {
-    if (unit_class_transporter_capacity(ptile1, param->owner, param->class) > 0) {
+  if (is_ocean(ptile1->terrain)) {
+    if (ground_unit_transporter_capacity(ptile1, param->owner) > 0) {
       move_cost = MOVE_COST_ROAD;
     } else {
       move_cost = PF_IMPOSSIBLE_MC;
     }
-  } else if (!is_native_tile_to_class(param->class, ptile)) {
+  } else if (is_ocean(ptile->terrain)) {
     if (!BV_ISSET(param->unit_flags, F_MARINES)
         && (is_non_allied_unit_tile(ptile1, param->owner) 
             || is_non_allied_city_tile(ptile1, param->owner))) {
@@ -309,11 +286,9 @@ static int igter_move_unit(const struct tile *ptile, enum direction8 dir,
     } else {
       move_cost = MOVE_COST_ROAD;
     }
-  } else if (unit_class_flag(param->class, UCF_TERRAIN_SPEED)) {
-    move_cost = (map_move_cost(ptile, ptile1) != 0
-                 ? MOVE_COST_ROAD : 0);
   } else {
-    move_cost = SINGLE_MOVE;
+    move_cost = (map_move_cost_ai(ptile, ptile1) != 0
+		 ? MOVE_COST_ROAD : 0);
   }
   return move_cost;
 }
@@ -330,14 +305,14 @@ static int reverse_igter_move_unit(const struct tile *tile0,
 {
   int move_cost;
 
-  if (!is_native_to_class(param->class, ptile)) {
-    if (unit_class_transporter_capacity(ptile, param->owner, param->class) > 0) {
+  if (is_ocean(ptile->terrain)) {
+    if (ground_unit_transporter_capacity(ptile, param->owner) > 0) {
       /* Landing */
       move_cost = MOVE_COST_ROAD;
     } else {
       move_cost = PF_IMPOSSIBLE_MC;
     }
-  } else if (!is_native_to_class(param->class, tile0)) {
+  } else if (is_ocean(tile0->terrain)) {
     /* Boarding */
     move_cost = MOVE_COST_ROAD;
   } else {
@@ -356,33 +331,28 @@ static int amphibious_move(const struct tile *ptile, enum direction8 dir,
 			   const struct tile *ptile1,
 			   struct pf_parameter *param)
 {
+  const bool ocean = is_ocean(ptile->terrain);
+  const bool ocean1 = is_ocean(ptile1->terrain);
   struct pft_amphibious *amphibious = param->data;
-  const bool src_ferry = is_native_tile_to_class(amphibious->sea.class, ptile);
-  const bool dst_ferry = is_native_tile_to_class(amphibious->sea.class, ptile1);
-  const bool dst_psng = is_native_tile_to_class(amphibious->land.class, ptile1);
   int cost, scale;
 
-  if (src_ferry && dst_ferry) {
+  if (ocean && ocean1) {
     /* Sea move */
     cost = amphibious->sea.get_MC(ptile, dir, ptile1, &amphibious->sea);
     scale = amphibious->sea_scale;
-  } else if (src_ferry && is_allied_city_tile(ptile1, param->owner)) {
-    /* Moving from native terrain to a city. */
+  } else if (ocean && is_allied_city_tile(ptile1, param->owner)) {
+    /* Entering port (same as sea move) */
     cost = amphibious->sea.get_MC(ptile, dir, ptile1, &amphibious->sea);
     scale = amphibious->sea_scale;
-  } else if (src_ferry && dst_psng) {
+  } else if (ocean) {
     /* Disembark; use land movement function to handle F_MARINES */
     cost = amphibious->land.get_MC(ptile, dir, ptile1, &amphibious->land);
     scale = amphibious->land_scale;
-  } else if (src_ferry) {
-    /* Neither ferry nor passenger can enter tile. */
-    cost = PF_IMPOSSIBLE_MC;
-    scale = amphibious->sea_scale;
-  } else if (is_allied_city_tile(ptile, param->owner) && dst_ferry) {
+  } else if (is_allied_city_tile(ptile, param->owner) && ocean1) {
     /* Leaving port (same as sea move) */
     cost = amphibious->sea.get_MC(ptile, dir, ptile1, &amphibious->sea);
     scale = amphibious->sea_scale;
-  } else if (!dst_psng) {
+  } else if (ocean1) {
     /* Now we have disembarked, our ferry can not help us - we have to
      * stay on the land. */
     cost = PF_IMPOSSIBLE_MC;
@@ -425,18 +395,18 @@ static int amphibious_extra_cost(const struct tile *ptile,
 				 struct pf_parameter *param)
 {
   struct pft_amphibious *amphibious = param->data;
-  const bool ferry_move = is_native_tile_to_class(amphibious->sea.class, ptile);
+  const bool ocean = is_ocean(ptile->terrain);
   int cost, scale;
 
   if (known == TILE_UNKNOWN) {
     /* We can travel almost anywhere */
     cost = SINGLE_MOVE;
     scale = MAX(amphibious->sea_scale, amphibious->land_scale);
-  } else if (ferry_move && amphibious->sea.get_EC) {
+  } else if (ocean && amphibious->sea.get_EC) {
     /* Do the EC callback for sea moves. */
     cost = amphibious->sea.get_EC(ptile, known, &amphibious->sea);
     scale = amphibious->sea_scale;
-  } else if (!ferry_move && amphibious->land.get_EC) {
+  } else if (!ocean && amphibious->land.get_EC) {
     /* Do the EC callback for land moves. */
     cost = amphibious->land.get_EC(ptile, known, &amphibious->land);
     scale = amphibious->land_scale;
@@ -455,14 +425,14 @@ static int amphibious_extra_cost(const struct tile *ptile,
 /* ===================== Tile Behaviour Callbacks ==================== */
 
 /*********************************************************************
-  A callback for maps overlapping one square into the non-native
-  terrain.  Insures that we don't continue walking over ocean.
+  A callback for maps overlapping one square into the ocean.  Insures 
+  that we don't continue walking over ocean.
 *********************************************************************/
 static enum tile_behavior dont_cross_ocean(const struct tile *ptile,
 					   enum known_type known,
 					   struct pf_parameter *param)
 {
-  if (!is_native_tile_to_class(param->class, ptile)) {
+  if (is_ocean(ptile->terrain)) {
     return TB_DONT_LEAVE;
   }
   return TB_NORMAL;
@@ -521,12 +491,12 @@ static enum tile_behavior amphibious_behaviour(const struct tile *ptile,
 					       struct pf_parameter *param)
 {
   struct pft_amphibious *amphibious = param->data;
-  const bool ferry_move = is_native_tile_to_class(amphibious->sea.class, ptile);
+  const bool ocean = is_ocean(ptile->terrain);
 
   /* Simply a wrapper for the sea or land tile_behavior callbacks. */
-  if (ferry_move && amphibious->sea.get_TB) {
+  if (ocean && amphibious->sea.get_TB) {
     return amphibious->sea.get_TB(ptile, known, &amphibious->sea);
-  } else if (!ferry_move && amphibious->land.get_TB) {
+  } else if (!ocean && amphibious->land.get_TB) {
     return amphibious->land.get_TB(ptile, known, &amphibious->land);
   }
   return TB_NORMAL;
@@ -593,7 +563,7 @@ static bool is_overlap_pos_dangerous(const struct tile *ptile,
   /* Unsafe tiles without cities are dangerous. */
   /* Pretend all land tiles are safe. */
   return (ptile->city == NULL
-	  && is_native_tile_to_class(param->class, ptile)
+	  && is_ocean(ptile->terrain)
 	  && terrain_has_flag(ptile->terrain, TER_UNSAFE));
 }
 
@@ -617,12 +587,12 @@ static bool amphibious_is_pos_dangerous(const struct tile *ptile,
 					struct pf_parameter *param)
 {
   struct pft_amphibious *amphibious = param->data;
-  const bool ferry_move = is_native_tile_to_class(amphibious->sea.class, ptile);
+  const bool ocean = is_ocean(ptile->terrain);
 
   /* Simply a wrapper for the sea or land danger callbacks. */
-  if (ferry_move && amphibious->sea.is_pos_dangerous) {
+  if (ocean && amphibious->sea.is_pos_dangerous) {
     return amphibious->sea.is_pos_dangerous(ptile, known, param);
-  } else if (!ferry_move && amphibious->land.is_pos_dangerous) {
+  } else if (!ocean && amphibious->land.is_pos_dangerous) {
     return amphibious->land.is_pos_dangerous(ptile, known, param);
   }
   return FALSE;
@@ -638,7 +608,7 @@ void pft_fill_unit_parameter(struct pf_parameter *parameter,
 {
   pft_fill_unit_default_parameter(parameter, punit);
 
-  switch (get_unit_move_type(unit_type(punit))) {
+  switch (unit_type(punit)->move_type) {
   case LAND_MOVING:
     if (unit_flag(punit, F_IGTER)) {
       parameter->get_MC = igter_move_unit;
@@ -647,10 +617,10 @@ void pft_fill_unit_parameter(struct pf_parameter *parameter,
     }
     break;
   case SEA_MOVING:
-    if (can_attack_non_native(unit_type(punit))) {
-      parameter->get_MC = seamove;
-    } else {
+    if (unit_flag(punit, F_NO_LAND_ATTACK)) {
       parameter->get_MC = seamove_no_bombard;
+    } else {
+      parameter->get_MC = seamove;
     }
     break;
   case AIR_MOVING:
@@ -665,22 +635,19 @@ void pft_fill_unit_parameter(struct pf_parameter *parameter,
   case HELI_MOVING:
     /* Helicoptors are treated similarly to airplanes. */
     parameter->get_MC = single_airmove;
-    break;
-  default:
-    freelog(LOG_ERROR, "Impossible move type to pft_fill_unit_parameter()!");
+    if (get_player_bonus(unit_owner(punit), EFT_UNIT_RECOVER)
+	>= unit_type(punit)->hp / 10) {
+      /* United nations cancels out helicoptor fuel loss. */
+      parameter->is_pos_dangerous = NULL;
+    } else {
+      /* Otherwise, don't risk fuel loss. */
+      parameter->is_pos_dangerous = air_is_pos_dangerous;
+      parameter->turn_mode = TM_WORST_TIME;
+    }
     break;
   }
 
-  if (!parameter->is_pos_dangerous
-      && get_player_bonus(unit_owner(punit), EFT_UNIT_RECOVER)
-      < (unit_type(punit)->hp *
-         get_unit_class(unit_type(punit))->hp_loss_pct / 100)) {
-    /* United nations cancels out helicoptor fuel loss. */
-    parameter->is_pos_dangerous = air_is_pos_dangerous;
-    parameter->turn_mode = TM_WORST_TIME;
-  }
-
-  if (get_unit_move_type(unit_type(punit)) == LAND_MOVING 
+  if (unit_type(punit)->move_type == LAND_MOVING 
       && !unit_flag(punit, F_IGZOC)) {
     parameter->get_zoc = is_my_zoc;
   } else {
@@ -698,7 +665,7 @@ void pft_fill_unit_parameter(struct pf_parameter *parameter,
 }
 
 /**********************************************************************
-  Switch on one tile overlapping into the non-native terrain.
+  Switch on one tile overlapping into the sea/land.
   For sea/land bombardment and for ferries.
 **********************************************************************/
 void pft_fill_unit_overlap_param(struct pf_parameter *parameter,
@@ -711,7 +678,7 @@ void pft_fill_unit_overlap_param(struct pf_parameter *parameter,
 
   pft_fill_unit_default_parameter(parameter, punit);
 
-  switch (get_unit_move_type(unit_type(punit))) {
+  switch (unit_type(punit)->move_type) {
   case LAND_MOVING:
     parameter->get_MC = land_overlap_move;
     parameter->get_TB = dont_cross_ocean;
@@ -735,9 +702,6 @@ void pft_fill_unit_overlap_param(struct pf_parameter *parameter,
     assert(!danger && !trireme_danger);
     parameter->get_MC = single_airmove; /* very crude */
     break;
-  default:
-    freelog(LOG_ERROR, "Impossible move type to pft_fill_unit_overlap_param()!");
-    break;
   }
 
   parameter->get_zoc = NULL;
@@ -751,7 +715,7 @@ void pft_fill_unit_attack_param(struct pf_parameter *parameter,
 {
   pft_fill_unit_default_parameter(parameter, punit);
 
-  switch (get_unit_move_type(unit_type(punit))) {
+  switch (unit_type(punit)->move_type) {
   case LAND_MOVING:
     parameter->get_MC = land_attack_move;
     break;
@@ -762,12 +726,9 @@ void pft_fill_unit_attack_param(struct pf_parameter *parameter,
   case HELI_MOVING:
     parameter->get_MC = single_airmove; /* very crude */
     break;
-  default:
-    freelog(LOG_ERROR, "Impossible move type to pft_fill_unit_attack_param()!");
-    break;
   }
 
-  if (get_unit_move_type(unit_type(punit)) == LAND_MOVING 
+  if (unit_type(punit)->move_type == LAND_MOVING 
       && !unit_flag(punit, F_IGZOC)) {
     parameter->get_zoc = is_my_zoc;
   } else {
@@ -848,7 +809,6 @@ static void pft_fill_unit_default_parameter(struct pf_parameter *parameter,
     parameter->fuel_left_initially = 1;
   }
   parameter->owner = unit_owner(punit);
-  parameter->class = get_unit_class(unit_type(punit));
   parameter->unit_flags = unit_type(punit)->flags;
 
   parameter->omniscience = !ai_handicap(unit_owner(punit), H_MAP);

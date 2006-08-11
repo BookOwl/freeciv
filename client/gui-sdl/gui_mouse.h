@@ -16,6 +16,8 @@
 
 #include "mapview_g.h"
 
+void update_mouse_cursor(enum cursor_type new_cursor_type);
+
 void animate_mouse_cursor(void);
 void draw_mouse_cursor(void);
 

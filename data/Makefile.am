@@ -2,7 +2,6 @@
 
 if CLIENT
 COMMON_CLIENT_FILES =			\
-	hex2t.tilespec			\
 	amplio.tilespec			\
 	isophex.tilespec		\
 	isotrident.tilespec		\
@@ -40,7 +39,6 @@ EXTRA_DIST = \
 	civserver.dsc.in	\
 	civclient.dsc.in	\
 	civserver.room.in	\
-	hex2t.tilespec	\
 	amplio.tilespec	\
 	isophex.tilespec	\
 	isotrident.tilespec \
@@ -52,8 +50,7 @@ EXTRA_DIST = \
 	default.serv
 
 if CLIENT
-CLIENTDATADIRS = amplio misc flags buildings isotrident trident isophex \
- hex2t stdsounds
+CLIENTDATADIRS = amplio misc flags isotrident trident isophex stdsounds
 else
 CLIENTDATADIRS = 
 endif

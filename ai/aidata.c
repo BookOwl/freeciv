@@ -186,7 +186,7 @@ static void count_my_units(struct player *pplayer)
   memset(&ai->stats.units, 0, sizeof(ai->stats.units));
 
   unit_list_iterate(pplayer->units, punit) {
-    switch (get_unit_move_type(unit_type(punit))) {
+    switch (unit_type(punit)->move_type) {
     case LAND_MOVING:
       ai->stats.units.land++;
       break;
@@ -197,15 +197,12 @@ static void count_my_units(struct player *pplayer)
     case AIR_MOVING:
       ai->stats.units.air++;
       break;
-    default:
-      freelog(LOG_ERROR, "Illegal move type in count_my_units()!");
-      break;
     }
 
     if (unit_flag(punit, F_TRIREME)) {
       ai->stats.units.triremes++;
     }
-    if (unit_class_flag(get_unit_class(unit_type(punit)), UCF_MISSILE)) {
+    if (unit_flag(punit, F_MISSILE)) {
       ai->stats.units.missiles++;
     }
     if (unit_flag(punit, F_PARATROOPERS)) {
@@ -269,14 +266,9 @@ void ai_data_phase_init(struct player *pplayer, bool is_new_phase)
       if (is_sailing_unit(punit)) {
         /* If the enemy has not started sailing yet, or we have total
          * control over the seas, don't worry, keep attacking. */
-        unit_class_iterate(punitclass) {
-          if (punitclass->move_type == LAND_MOVING
-              && can_unit_type_transport(punit->type, punitclass)) {
-            /* Enemy can transport some land units! */
-            ai->threats.invasions = TRUE;
-            break;
-          }
-        } unit_class_iterate_end;
+        if (is_ground_units_transport(punit)) {
+          ai->threats.invasions = TRUE;
+        }
 
         /* The idea is that while our enemies don't have any offensive
          * seaborne units, we don't have to worry. Go on the offensive! */
@@ -304,7 +296,7 @@ void ai_data_phase_init(struct player *pplayer, bool is_new_phase)
       }
 
       /* If our enemy builds missiles, worry about missile defence. */
-      if (unit_class_flag(get_unit_class(unit_type(punit)), UCF_MISSILE)
+      if (unit_flag(punit, F_MISSILE)
           && unit_type(punit)->attack_strength > 1) {
         ai->threats.missile = TRUE;
       }

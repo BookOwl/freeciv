@@ -35,7 +35,6 @@
 #include "clinet.h"
 #include "combat.h"
 #include "dialogs_g.h"
-#include "editor.h"
 #include "goto.h"
 #include "gui_main_g.h"
 #include "mapctrl_g.h"
@@ -62,6 +61,7 @@ static struct unit_list *previous_focus;
 struct unit_list *hover_units;
 enum cursor_hover_state hover_state = HOVER_NONE;
 struct tile *hover_tile = NULL;
+enum cursor_action_state action_state = CURSOR_ACTION_DEFAULT;
 enum unit_activity connect_activity;
 enum unit_orders goto_last_order; /* Last order for goto */
 
@@ -883,24 +883,12 @@ void handle_mouse_cursor(struct tile *ptile)
   struct unit *punit = NULL;
   struct city *pcity = NULL;
   struct unit_list *active_units = get_units_in_focus();
-  enum cursor_type mouse_cursor_type = CURSOR_DEFAULT;
-
-  if (get_client_state() != CLIENT_GAME_RUNNING_STATE) {
-    update_mouse_cursor(CURSOR_DEFAULT);
-    return;
-  }
-
-  if (turn_done_sent || waiting_for_end_turn) {
-    update_mouse_cursor(CURSOR_WAIT);
-    return;
-  }
 
   if (!ptile) {
     if (hover_tile) {
       /* hover_tile is the tile which is currently under the mouse cursor. */
       ptile = hover_tile;
     } else {
-      update_mouse_cursor(mouse_cursor_type);
       return;
     }
   }
@@ -908,62 +896,42 @@ void handle_mouse_cursor(struct tile *ptile)
   punit = find_visible_unit(ptile);
   pcity = ptile ? ptile->city : NULL;
 
-  switch (hover_state) {
-  case HOVER_NONE:
-    if (can_do_editor_click(ptile)) {
-      mouse_cursor_type = editor_test_click(ptile);
-    } else if (punit && game.player_ptr == punit->owner) {
+  if (hover_state == HOVER_NONE) {
+    if (punit && game.player_ptr == punit->owner) {
       /* Set mouse cursor to select a unit.  */
-      mouse_cursor_type = CURSOR_SELECT;
-    } else if (pcity
-	       && can_player_see_city_internals(game.player_ptr, pcity)) {
+      action_state = CURSOR_ACTION_SELECT;
+    } else if (pcity && can_player_see_city_internals(game.player_ptr, pcity)) {
       /* Set mouse cursor to select a city. */
-      mouse_cursor_type = CURSOR_SELECT;
+      action_state = CURSOR_ACTION_SELECT;
     } else {
       /* Set default mouse cursor, because nothing selectable found. */
+      action_state = CURSOR_ACTION_DEFAULT;
     }
-    break;
-  case HOVER_GOTO:
+
+  } else if (hover_state == HOVER_GOTO) {
     /* Determine if the goto is valid, invalid or will attack. */
     if (is_valid_goto_destination(ptile)) {
       if (can_units_attack_at(active_units, ptile)) {
         /* Goto results in military attack. */
-	mouse_cursor_type = CURSOR_ATTACK;
+        action_state = CURSOR_ACTION_ATTACK;
       } else if (is_enemy_city_tile(ptile, game.player_ptr)) {
         /* Goto results in attack of enemy city. */
-	mouse_cursor_type = CURSOR_ATTACK;
+        action_state = CURSOR_ACTION_ATTACK;
       } else {
-	mouse_cursor_type = CURSOR_GOTO;
+        action_state = CURSOR_ACTION_GOTO;
       }
     } else {
-      mouse_cursor_type = CURSOR_INVALID;
+      action_state = CURSOR_ACTION_INVALID;
     }
-    break;
-  case HOVER_PATROL:
+  } else if (hover_state == HOVER_PATROL || hover_state == HOVER_CONNECT) {
     if (is_valid_goto_destination(ptile)) {
-      mouse_cursor_type = CURSOR_PATROL;
+      action_state = CURSOR_ACTION_GOTO;
     } else {
-      mouse_cursor_type = CURSOR_INVALID;
+      action_state = CURSOR_ACTION_INVALID;
     }
-    break;
-  case HOVER_CONNECT:
-    if (is_valid_goto_destination(ptile)) {
-      mouse_cursor_type = CURSOR_GOTO;
-    } else {
-      mouse_cursor_type = CURSOR_INVALID;
-    }
-    break;
-  case HOVER_NUKE:
-    /* FIXME: check for invalid tiles. */
-    mouse_cursor_type = CURSOR_NUKE;
-    break;
-  case HOVER_PARADROP:
-    /* FIXME: check for invalid tiles. */
-    mouse_cursor_type = CURSOR_PARADROP;
-    break;
   }
 
-  update_mouse_cursor(mouse_cursor_type);
+  update_unit_info_label(active_units);
 }
 
 /**************************************************************************
@@ -2743,20 +2711,4 @@ void key_quickselect(enum quickselect_type qtype)
 
     set_unit_focus_and_select(punit2);
   } unit_list_iterate_end;
-}
-
-/**************************************************************************
-  Toggle editor mode in the server.
-**************************************************************************/
-void key_editor_toggle(void)
-{
-  dsend_packet_edit_mode(&aconnection, !game.info.is_edit_mode);
-}
-
-/**************************************************************************
-  Recalculate borders.
-**************************************************************************/
-void key_editor_recalc_borders(void)
-{
-  send_packet_edit_recalculate_borders(&aconnection);
 }

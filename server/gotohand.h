@@ -34,6 +34,9 @@ enum goto_result do_unit_goto(struct unit *punit,
 			      enum goto_move_restriction restriction,
 			      bool trigger_special_ability);
 void generate_warmap(struct city *pcity, struct unit *punit);
+void really_generate_warmap(struct city *pcity, struct unit *punit,
+			    enum unit_move_type move_type);
+int calculate_move_cost(struct unit *punit, struct tile *dst_tile);
 int air_can_move_between(int moves, struct tile *src_tile,
 			 struct tile *dst_tile, struct player *pplayer);
 
@@ -53,16 +56,12 @@ struct move_cost_map {
   struct city *warcity; /* so we know what we're dealing with here */
   struct unit *warunit; /* so we know what we're dealing with here */
   struct tile *orig_tile;
-
-  bool invalid;         /* We have invalidated warmap */
 };
 
 extern struct move_cost_map warmap;
 
-#define WARMAP_COST(ptile) (assert(!warmap.invalid), warmap.cost[(ptile)->index])
-#define WARMAP_SEACOST(ptile) (assert(!warmap.invalid), warmap.seacost[(ptile)->index])
-#define WARMAP_VECTOR(ptile) (assert(!warmap.invalid), warmap.vector[(ptile)->index])
-
-#define WARMAP_INVALIDATE {warmap.invalid = TRUE;}
+#define WARMAP_COST(ptile) (warmap.cost[(ptile)->index])
+#define WARMAP_SEACOST(ptile) (warmap.seacost[(ptile)->index])
+#define WARMAP_VECTOR(ptile) (warmap.vector[(ptile)->index])
 
 #endif  /* FC__GOTOHAND_H */

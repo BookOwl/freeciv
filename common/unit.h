@@ -72,7 +72,7 @@ enum unit_move_result {
   MR_OK, MR_BAD_TYPE_FOR_CITY_TAKE_OVER, MR_NO_WAR, MR_ZOC,
   MR_BAD_ACTIVITY, MR_BAD_DESTINATION, MR_BAD_MAP_POSITION,
   MR_DESTINATION_OCCUPIED_BY_NON_ALLIED_UNIT,
-  MR_NO_TRANSPORTER_CAPACITY,
+  MR_NO_SEA_TRANSPORTER_CAPACITY,
   MR_DESTINATION_OCCUPIED_BY_NON_ALLIED_CITY
 };
 
@@ -255,7 +255,7 @@ bool is_square_threatened(const struct player *pplayer,
 bool is_field_unit(const struct unit *punit);              /* ships+aero */
 bool is_hiding_unit(const struct unit *punit);
 #define COULD_OCCUPY(punit) \
-  (unit_class_flag(punit->type->class, UCF_CAN_OCCUPY) && is_military_unit(punit))
+  ((is_ground_unit(punit) || is_heli_unit(punit)) && is_military_unit(punit))
 bool can_unit_add_to_city (const struct unit *punit);
 bool can_unit_build_city (const struct unit *punit);
 bool can_unit_add_or_build_city (const struct unit *punit);
@@ -264,7 +264,14 @@ enum add_build_city_result test_unit_add_or_build_city(const struct unit *
 bool kills_citizen_after_attack(const struct unit *punit);
 
 const char *unit_activity_text(const struct unit *punit);
+int ground_unit_transporter_capacity(const struct tile *ptile,
+				     const struct player *pplayer);
 int get_transporter_capacity(const struct unit *punit);
+bool is_ground_units_transport(const struct unit *punit);
+int missile_carrier_capacity(const struct tile *ptile,
+			     const struct player *pplayer);
+int airunit_carrier_capacity(const struct tile *ptile,
+			     const struct player *pplayer);
 
 struct player *unit_owner(const struct unit *punit);
 

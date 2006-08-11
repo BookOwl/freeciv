@@ -105,7 +105,6 @@ struct packet_game_info {
   int skill_level;
   int aifill;
   bool is_new_game;
-  bool is_edit_mode;
   float seconds_to_phasedone;
   int timeout;
   int turn;
@@ -124,9 +123,11 @@ struct packet_game_info {
   int nuclearwinter;
   int cooling;
   int coolinglevel;
+  int cityfactor;
   int diplcost;
   int freecost;
   int conquercost;
+  int unhappysize;
   int angrycitizen;
   int techpenalty;
   int foodbox;
@@ -769,6 +770,7 @@ struct packet_ruleset_unit {
   char sound_move_alt[MAX_LEN_NAME];
   char sound_fight[MAX_LEN_NAME];
   char sound_fight_alt[MAX_LEN_NAME];
+  int move_type;
   int unit_class_id;
   int build_cost;
   int pop_cost;
@@ -925,7 +927,6 @@ struct packet_ruleset_building {
 struct packet_ruleset_terrain {
   Terrain_type_id id;
   bv_terrain_flags flags;
-  bv_unit_classes native_to;
   char name_orig[MAX_LEN_NAME];
   char graphic_str[MAX_LEN_NAME];
   char graphic_alt[MAX_LEN_NAME];
@@ -952,16 +953,7 @@ struct packet_ruleset_terrain {
   char helptext[MAX_LEN_PACKET];
 };
 
-struct packet_ruleset_unit_class {
-  int id;
-  char name[MAX_LEN_NAME];
-  int move_type;
-  int hp_loss_pct;
-  bv_unit_class_flags flags;
-};
-
 struct packet_ruleset_control {
-  int num_unit_classes;
   int num_unit_types;
   int num_impr_types;
   int num_tech_types;
@@ -1041,88 +1033,6 @@ struct packet_ruleset_resource {
   int output[O_MAX];
   char graphic_str[MAX_LEN_NAME];
   char graphic_alt[MAX_LEN_NAME];
-};
-
-struct packet_edit_mode {
-  bool state;
-};
-
-struct packet_edit_tile {
-  int x;
-  int y;
-  Terrain_type_id terrain;
-  Resource_type_id resource;
-  bv_special special;
-};
-
-struct packet_edit_unit {
-  int id;
-  bool create_new;
-  bool delete;
-  int owner;
-  int x;
-  int y;
-  int homecity;
-  int veteran;
-  bool paradropped;
-  Unit_type_id type;
-  int transported_by;
-  int movesleft;
-  int hp;
-  int fuel;
-  int activity_count;
-};
-
-struct packet_edit_create_city {
-  int owner;
-  int x;
-  int y;
-};
-
-struct packet_edit_city_size {
-  int id;
-  int size;
-};
-
-struct packet_edit_player {
-  int playerno;
-  char name[MAX_LEN_NAME];
-  char username[MAX_LEN_NAME];
-  bool is_observer;
-  bool is_male;
-  int government;
-  int target_government;
-  bv_player embassy;
-  int city_style;
-  Nation_type_id nation;
-  int team;
-  bool phase_done;
-  int nturns_idle;
-  bool is_alive;
-  struct player_diplstate diplstates[MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS];
-  int gold;
-  int tax;
-  int science;
-  int luxury;
-  int bulbs_last_turn;
-  int bulbs_researched;
-  int techs_researched;
-  int researching;
-  int science_cost;
-  int future_tech;
-  int tech_goal;
-  bool is_connected;
-  int revolution_finishes;
-  bool ai;
-  int barbarian_type;
-  unsigned int gives_shared_vision;
-  char inventions[A_LAST+1];
-  int love[MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS];
-  int small_wonders[B_LAST];
-};
-
-struct packet_edit_recalculate_borders {
-  char __dummy;			/* to avoid malloc(0); */
 };
 
 enum packet_type {
@@ -1239,17 +1149,9 @@ enum packet_type {
   PACKET_PLAYER_READY,
   PACKET_UNIT_BATTLEGROUP,
   PACKET_RULESET_NATION_GROUPS,
-  PACKET_RULESET_UNIT_CLASS,
   PACKET_RULESET_EFFECT = 122,
   PACKET_RULESET_EFFECT_REQ,
   PACKET_RULESET_RESOURCE,
-  PACKET_EDIT_TILE,
-  PACKET_EDIT_UNIT,
-  PACKET_EDIT_CREATE_CITY,
-  PACKET_EDIT_PLAYER,
-  PACKET_EDIT_MODE,
-  PACKET_EDIT_CITY_SIZE,                 /* 130 */
-  PACKET_EDIT_RECALCULATE_BORDERS,
 
   PACKET_LAST  /* leave this last */
 };
@@ -1694,10 +1596,6 @@ struct packet_ruleset_terrain *receive_packet_ruleset_terrain(struct connection 
 int send_packet_ruleset_terrain(struct connection *pc, const struct packet_ruleset_terrain *packet);
 void lsend_packet_ruleset_terrain(struct conn_list *dest, const struct packet_ruleset_terrain *packet);
 
-struct packet_ruleset_unit_class *receive_packet_ruleset_unit_class(struct connection *pc, enum packet_type type);
-int send_packet_ruleset_unit_class(struct connection *pc, const struct packet_ruleset_unit_class *packet);
-void lsend_packet_ruleset_unit_class(struct conn_list *dest, const struct packet_ruleset_unit_class *packet);
-
 struct packet_ruleset_control *receive_packet_ruleset_control(struct connection *pc, enum packet_type type);
 int send_packet_ruleset_control(struct connection *pc, const struct packet_ruleset_control *packet);
 void lsend_packet_ruleset_control(struct conn_list *dest, const struct packet_ruleset_control *packet);
@@ -1735,32 +1633,6 @@ void lsend_packet_ruleset_effect_req(struct conn_list *dest, const struct packet
 struct packet_ruleset_resource *receive_packet_ruleset_resource(struct connection *pc, enum packet_type type);
 int send_packet_ruleset_resource(struct connection *pc, const struct packet_ruleset_resource *packet);
 void lsend_packet_ruleset_resource(struct conn_list *dest, const struct packet_ruleset_resource *packet);
-
-struct packet_edit_mode *receive_packet_edit_mode(struct connection *pc, enum packet_type type);
-int send_packet_edit_mode(struct connection *pc, const struct packet_edit_mode *packet);
-int dsend_packet_edit_mode(struct connection *pc, bool state);
-
-struct packet_edit_tile *receive_packet_edit_tile(struct connection *pc, enum packet_type type);
-int send_packet_edit_tile(struct connection *pc, const struct packet_edit_tile *packet);
-int dsend_packet_edit_tile(struct connection *pc, int x, int y, Terrain_type_id terrain, Resource_type_id resource, bv_special special);
-
-struct packet_edit_unit *receive_packet_edit_unit(struct connection *pc, enum packet_type type);
-int send_packet_edit_unit(struct connection *pc, const struct packet_edit_unit *packet);
-void lsend_packet_edit_unit(struct conn_list *dest, const struct packet_edit_unit *packet);
-
-struct packet_edit_create_city *receive_packet_edit_create_city(struct connection *pc, enum packet_type type);
-int send_packet_edit_create_city(struct connection *pc, const struct packet_edit_create_city *packet);
-
-struct packet_edit_city_size *receive_packet_edit_city_size(struct connection *pc, enum packet_type type);
-int send_packet_edit_city_size(struct connection *pc, const struct packet_edit_city_size *packet);
-int dsend_packet_edit_city_size(struct connection *pc, int id, int size);
-
-struct packet_edit_player *receive_packet_edit_player(struct connection *pc, enum packet_type type);
-int send_packet_edit_player(struct connection *pc, const struct packet_edit_player *packet);
-void lsend_packet_edit_player(struct conn_list *dest, const struct packet_edit_player *packet);
-
-struct packet_edit_recalculate_borders *receive_packet_edit_recalculate_borders(struct connection *pc, enum packet_type type);
-int send_packet_edit_recalculate_borders(struct connection *pc);
 
 
 void delta_stats_report(void);

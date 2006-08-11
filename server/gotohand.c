@@ -218,12 +218,12 @@ static void init_warmap(struct tile *orig_tile, enum unit_move_type move_type)
   case AIR_MOVING:
     assert(sizeof(*warmap.cost) == sizeof(char));
     memset(warmap.cost, MAXCOST, MAP_INDEX_SIZE * sizeof(char));
-    warmap.cost[orig_tile->index] = 0;
+    WARMAP_COST(orig_tile) = 0;
     break;
   case SEA_MOVING:
     assert(sizeof(*warmap.seacost) == sizeof(char));
     memset(warmap.seacost, MAXCOST, MAP_INDEX_SIZE * sizeof(char));
-    warmap.seacost[orig_tile->index] = 0;
+    WARMAP_SEACOST(orig_tile) = 0;
     break;
   default:
     freelog(LOG_ERROR, "Bad move_type in init_warmap().");
@@ -265,8 +265,8 @@ possible cost the first time.
 This would be done by inserting the tiles in a list after their move_cost
 as they were found.
 **************************************************************************/
-static void really_generate_warmap(struct city *pcity, struct unit *punit,
-                                   enum unit_move_type move_type)
+void really_generate_warmap(struct city *pcity, struct unit *punit,
+			    enum unit_move_type move_type)
 {
   int move_cost;
   struct tile *orig_tile;
@@ -311,9 +311,7 @@ static void really_generate_warmap(struct city *pcity, struct unit *punit,
 	  continue; /* No need for all the calculations */
 
         if (is_ocean(tile_get_terrain(tile1))) {
-          if (punit &&
-              unit_class_transporter_capacity(tile1, pplayer,
-                                              get_unit_class(unit_type(punit))) > 0)
+          if (punit && ground_unit_transporter_capacity(tile1, pplayer) > 0)
 	    move_cost = SINGLE_MOVE;
           else
 	    continue;
@@ -347,7 +345,7 @@ static void really_generate_warmap(struct city *pcity, struct unit *punit,
 
         move_cost += cost;
         if (WARMAP_COST(tile1) > move_cost && move_cost < maxcost) {
-          warmap.cost[tile1->index] = move_cost;
+          WARMAP_COST(tile1) = move_cost;
           add_to_mapqueue(move_cost, tile1);
         }
 	break;
@@ -360,7 +358,7 @@ static void really_generate_warmap(struct city *pcity, struct unit *punit,
 	  /* by adding the move_cost to the warmap regardless if we
 	     can move between we allow for shore bombardment/transport
 	     to inland positions/etc. */
-          warmap.seacost[tile1->index] = move_cost;
+          WARMAP_SEACOST(tile1) = move_cost;
 	  if (map_move_cost_ai(ptile, tile1)
 	      == MOVE_COST_FOR_VALID_SEA_STEP) {
 	    add_to_mapqueue(move_cost, tile1);
@@ -393,6 +391,14 @@ void generate_warmap(struct city *pcity, struct unit *punit)
 
   if (punit) {
     /* 
+     * Checking for an existing warmap. If the previous warmap was for
+     * a city and our unit is in that city, use city's warmap.
+     */
+    if (pcity && pcity == warmap.warcity) {
+      return;
+    }
+
+    /* 
      * If the previous warmap was for the same unit and it's still
      * correct (warmap.(sea)cost[x][y] == 0), reuse it.
      */
@@ -407,8 +413,6 @@ void generate_warmap(struct city *pcity, struct unit *punit)
 
   warmap.warcity = pcity;
   warmap.warunit = punit;
-
-  warmap.invalid = FALSE;
 
   if (punit) {
     if (is_sailing_unit(punit)) {
@@ -583,7 +587,7 @@ static bool find_the_shortest_path(struct unit *punit,
   bool igter;
   struct tile *ptile, *orig_tile;
   struct tile *psrctile, *pdesttile;
-  enum unit_move_type move_type = get_unit_move_type(unit_type(punit));
+  enum unit_move_type move_type = unit_type(punit)->move_type;
   int maxcost = MAXCOST;
   int move_cost, total_cost;
   int straight_dir = 0;	/* init to silence compiler warning */
@@ -603,9 +607,6 @@ static bool find_the_shortest_path(struct unit *punit,
   }
 
   BV_CLR_ALL(LOCAL_VECTOR(orig_tile));
-
-  warmap.warunit = NULL;
-  warmap.warcity = NULL;
 
   init_warmap(punit->tile, move_type);
   warmap_cost = (move_type == SEA_MOVING) ? warmap.seacost : warmap.cost;
@@ -656,8 +657,7 @@ static bool find_the_shortest_path(struct unit *punit,
 		       RR loops, ie you can't create a cycle with the same move_cost */
 
 	if (is_ocean(pdesttile->terrain)) {
-	  if (unit_class_transporter_capacity(tile1, unit_owner(punit),
-                                              get_unit_class(unit_type(punit))) <= 0)
+	  if (ground_unit_transporter_capacity(tile1, unit_owner(punit)) <= 0)
 	    continue;
 	  else
 	    move_cost = 3;
@@ -861,7 +861,7 @@ static bool find_the_shortest_path(struct unit *punit,
 
         add_to_mapqueue(MAXCOST-1 - move_cost, tile1);
 	/* Mark it on the warmap */
-	warmap.vector[tile1->index] |= 1 << DIR_REVERSE(dir);	
+	WARMAP_VECTOR(tile1) |= 1 << DIR_REVERSE(dir);	
 	BV_CLR(LOCAL_VECTOR(ptile), dir); /* avoid repetition */
 	freelog(LOG_DEBUG, "PATH-SEGMENT: %s from (%d, %d) to (%d, %d)",
 		dir_get_name(DIR_REVERSE(dir)),
@@ -1247,14 +1247,13 @@ bool goto_is_sane(struct unit *punit, struct tile *ptile, bool omni)
     return TRUE;
   }
 
-  switch (get_unit_move_type(unit_type(punit))) {
+  switch (unit_type(punit)->move_type) {
 
   case LAND_MOVING:
     if (is_ocean(tile_get_terrain(ptile))) {
       /* Going to a sea tile, the target should be next to our continent 
        * and with a boat */
-      if (unit_class_transporter_capacity(ptile, pplayer,
-                                          get_unit_class(unit_type(punit))) > 0) {
+      if (ground_unit_transporter_capacity(ptile, pplayer) > 0) {
         adjc_iterate(ptile, tmp_tile) {
           if (tile_get_continent(tmp_tile) == tile_get_continent(punit->tile))
             /* The target is adjacent to our continent! */
@@ -1553,9 +1552,6 @@ int air_can_move_between(int moves, struct tile *src_tile,
   freelog(LOG_DEBUG,
 	  "air_can_move_between: quick search didn't work. Lets try full.");
 
-  warmap.warunit = NULL;
-  warmap.warcity = NULL;
-
   init_warmap(src_tile, AIR_MOVING);
 
   /* The 0 is inaccurate under A*, but it doesn't matter. */
@@ -1585,7 +1581,7 @@ int air_can_move_between(int moves, struct tile *src_tile,
       if (airspace_looks_safe(tile1, pplayer)) {
 	int cost = WARMAP_COST(ptile) + 1;
 
-	warmap.cost[tile1->index] = cost;
+	WARMAP_COST(tile1) = cost;
 
 	/* Now for A* we find the minimum total cost. */
 	cost += real_map_distance(tile1, dest_tile);

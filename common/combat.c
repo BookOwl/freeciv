@@ -85,6 +85,7 @@ bool can_unit_attack_unit_at_tile(const struct unit *punit,
                                   const struct tile *dest_tile)
 {
   struct terrain *fromtile = punit->tile->terrain;
+  struct terrain *totile = dest_tile->terrain;
   struct city *pcity = dest_tile->city;
 
   /* 1. Can we attack _anything_ ? */
@@ -105,10 +106,13 @@ bool can_unit_attack_unit_at_tile(const struct unit *punit,
     return FALSE;
   }
 
-  /* 4. Most units can not attack non-native terrain.
-   *    Most ships can attack land tiles (shore bombardment) */
-  if (!is_native_tile(unit_type(punit), dest_tile)
-      && !can_attack_non_native(unit_type(punit))) {
+  /* 4. Ground units cannot attack water units */
+  if (is_ocean(totile) && is_ground_unit(punit)) {
+    return FALSE;
+  }
+
+  /* 5. Shore bombardement can be done by certain units only */
+  if (unit_flag(punit, F_NO_LAND_ATTACK) && !is_ocean(totile)) {
     return FALSE;
   }
 
@@ -272,7 +276,7 @@ void get_modified_firepower(const struct unit *attacker,
    * When attacked by fighters, helicopters have their firepower
    * reduced to 1.
    */
-  if (unit_flag(defender, F_HELICOPTER) && unit_flag(attacker, F_FIGHTER)) {
+  if (is_heli_unit(defender) && unit_flag(attacker, F_FIGHTER)) {
     *def_fp = 1;
   }
 
@@ -443,8 +447,8 @@ static int defense_multiplication(const struct unit_type *att_type,
       defensepower *= 2;
     }
 
-    if (unit_type_flag(def_type, F_AEGIS)
-        && unit_type_flag(att_type, F_AIRUNIT)) {
+    if (unit_type_flag(def_type, F_AEGIS) &&
+	(is_air_unittype(att_type) || is_heli_unittype(att_type))) {
       defensepower *= 5;
     }
 
@@ -455,7 +459,7 @@ static int defense_multiplication(const struct unit_type *att_type,
       defensepower = MAX(0, defensepower * mod / 100);
     }
 
-    if (unit_type_flag(att_type, F_FIGHTER) && unit_type_flag(def_type, F_HELICOPTER)) {
+    if (unit_type_flag(att_type, F_FIGHTER) && is_heli_unittype(def_type)) {
       defensepower /= 2;
     }
   }
@@ -485,7 +489,7 @@ int get_virtual_defense_power(const struct unit_type *att_type,
   int defensepower = def_type->defense_strength;
   int db;
 
-  if (get_unit_move_type(def_type) == LAND_MOVING
+  if (def_type->move_type == LAND_MOVING
       && is_ocean(ptile->terrain)) {
     /* Ground units on ship doesn't defend. */
     return 0;

@@ -42,13 +42,13 @@
 /* ====================================================================== */
 static struct ADVANCED_DLG  *pFind_City_Dlg = NULL;
 
-static int find_city_window_dlg_callback(struct widget *pWindow)
+static int find_city_window_dlg_callback(struct GUI *pWindow)
 {
   return std_move_window_group_callback(pFind_City_Dlg->pBeginWidgetList,
 								  pWindow);
 }
 
-static int exit_find_city_dlg_callback(struct widget *pWidget)
+static int exit_find_city_dlg_callback(struct GUI *pWidget)
 {
   int orginal_x = pWidget->data.cont->id0;
   int orginal_y = pWidget->data.cont->id1;
@@ -61,7 +61,7 @@ static int exit_find_city_dlg_callback(struct widget *pWidget)
   return -1;
 }
 
-static int find_city_callback(struct widget *pWidget)
+static int find_city_callback(struct GUI *pWidget)
 {
   struct city *pCity = pWidget->data.city;
   if(pCity) {
@@ -93,7 +93,7 @@ void popdown_find_dialog(void)
 **************************************************************************/
 void popup_find_dialog(void)
 {
-  struct widget *pWindow = NULL, *pBuf = NULL;
+  struct GUI *pWindow = NULL, *pBuf = NULL;
   SDL_Surface *pLogo = NULL;
   SDL_String16 *pStr;
   char cBuf[128]; 
@@ -220,18 +220,16 @@ void popup_find_dialog(void)
 
   if(!mouse) {  
     pWindow->size.x = adj_size(10);
-    pWindow->size.y = (Main.screen->h - h) / 2;
+    pWindow->size.y = (pWindow->dst->h - h) / 2;
   } else {
-    pWindow->size.x = ((Main.event.motion.x + w < Main.screen->w) ?
-                     (Main.event.motion.x + adj_size(10)) : (Main.screen->w - w - adj_size(10)));
+    pWindow->size.x = ((Main.event.motion.x + w < pWindow->dst->w) ?
+                     (Main.event.motion.x + adj_size(10)) : (pWindow->dst->w - w - adj_size(10)));
     pWindow->size.y = 
-      ((Main.event.motion.y - (WINDOW_TILE_HIGH + adj_size(2)) + h < Main.screen->h) ?
+      ((Main.event.motion.y - (WINDOW_TILE_HIGH + adj_size(2)) + h < pWindow->dst->h) ?
              (Main.event.motion.y - (WINDOW_TILE_HIGH + adj_size(2))) :
-             (Main.screen->h - h - adj_size(10)));
+             (pWindow->dst->h - h - adj_size(10)));
     
   }
-
-  set_window_pos(pWindow, pWindow->size.x, pWindow->size.y);  
   
   resize_window(pWindow , NULL, NULL, w, h);
   

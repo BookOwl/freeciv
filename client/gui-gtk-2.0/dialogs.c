@@ -55,7 +55,6 @@
 #include "tilespec.h"
 
 #include "dialogs.h"
-#include "editdlg.h"
 #include "wldlg.h"
 
 /******************************************************************/
@@ -116,7 +115,7 @@ void popup_notify_dialog(const char *caption, const char *headline,
 
   headline_label = gtk_label_new(headline);   
   gtk_box_pack_start(GTK_BOX(vbox), headline_label, FALSE, FALSE, 0);
-  gtk_widget_set_name(headline_label, "notify_label");
+  gtk_widget_set_name(headline_label, "notify label");
 
   gtk_label_set_justify(GTK_LABEL(headline_label), GTK_JUSTIFY_LEFT);
   gtk_misc_set_alignment(GTK_MISC(headline_label), 0.0, 0.0);
@@ -129,7 +128,7 @@ void popup_notify_dialog(const char *caption, const char *headline,
   label = gtk_label_new(lines);
   gtk_scrolled_window_add_with_viewport(GTK_SCROLLED_WINDOW(sw), label);
 
-  gtk_widget_set_name(label, "notify_label");
+  gtk_widget_set_name(label, "notify label");
   gtk_label_set_justify(GTK_LABEL(label), GTK_JUSTIFY_LEFT);
   gtk_misc_set_alignment(GTK_MISC(label), 0.0, 0.0);
 
@@ -760,24 +759,23 @@ static void create_races_dialog(struct player *pplayer)
   int i;
   char *title;
 
-  if (get_client_state() == CLIENT_GAME_RUNNING_STATE) {
-    title = _("Edit Nation");
-  } else if (pplayer && pplayer == game.player_ptr) {
+  if (pplayer && pplayer == game.player_ptr) {
     title = _("What Nation Will You Be?");
   } else {
     title = _("Pick Nation");
   }
 
-  shell = gtk_dialog_new_with_buttons(title,
-				      NULL,
-				      0,
-				      GTK_STOCK_CANCEL,
-				      GTK_RESPONSE_CANCEL,
-				      _("Random Nation"),
-				      GTK_RESPONSE_NO, /* arbitrary */
-				      GTK_STOCK_OK,
-				      GTK_RESPONSE_ACCEPT,
-				      NULL);
+  shell =
+    gtk_dialog_new_with_buttons(title,
+				NULL,
+				0,
+				GTK_STOCK_CANCEL,
+				GTK_RESPONSE_CANCEL,
+				_("Random Nation"),
+				GTK_RESPONSE_NO,
+				GTK_STOCK_OK,
+				GTK_RESPONSE_ACCEPT,
+				NULL);
   races_shell = shell;
   races_player = pplayer;
   setup_dialog(shell, toplevel);
@@ -935,16 +933,7 @@ static void create_races_dialog(struct player *pplayer)
   selected_nation = -1;
 
   /* Finish up. */
-  gtk_dialog_set_default_response(GTK_DIALOG(shell), GTK_RESPONSE_CANCEL);
-
-  /* Don't allow ok without a selection */
-  gtk_dialog_set_response_sensitive(GTK_DIALOG(shell), GTK_RESPONSE_ACCEPT,
-                                    FALSE);                                          
-  /* You can't assign NO_NATION during a running game. */
-  if (get_client_state() == CLIENT_GAME_RUNNING_STATE) {
-    gtk_dialog_set_response_sensitive(GTK_DIALOG(shell), GTK_RESPONSE_NO,
-                                      FALSE);
-  }
+  gtk_dialog_set_default_response(GTK_DIALOG(shell), GTK_RESPONSE_ACCEPT);
 
   gtk_widget_show_all(GTK_DIALOG(shell)->vbox);
 }
@@ -1163,9 +1152,6 @@ static void races_nation_callback(GtkTreeSelection *select, gpointer data)
       gtk_text_buffer_set_text(races_text, nation->legend , -1);
     }
 
-    /* Once we've made a selection, allow user to ok */
-    gtk_dialog_set_response_sensitive(GTK_DIALOG(races_shell), 
-                                      GTK_RESPONSE_ACCEPT, TRUE);
   } else {
     selected_nation = -1;
   }
@@ -1234,8 +1220,11 @@ static void races_response(GtkWidget *w, gint response, gpointer data)
   if (response == GTK_RESPONSE_ACCEPT) {
     const char *s;
 
-    /* This shouldn't be possible but... */
     if (selected_nation == -1) {
+      dsend_packet_nation_select_req(&aconnection,
+				     races_player->player_no,
+				     -1, FALSE, "", 0);
+      popdown_races_dialog();
       return;
     }
 
@@ -1261,12 +1250,15 @@ static void races_response(GtkWidget *w, gint response, gpointer data)
     dsend_packet_nation_select_req(&aconnection,
 				   races_player->player_no, selected_nation,
 				   selected_sex, s, selected_city_style);
+
   } else if (response == GTK_RESPONSE_NO) {
     dsend_packet_nation_select_req(&aconnection,
 				   races_player->player_no,
 				   -1, FALSE, "", 0);
+  } else if (response == GTK_RESPONSE_CANCEL) {
+    /* Nothing - this allows the player to keep his currently selected
+     * nation. */
   }
-
   popdown_races_dialog();
 }
 
@@ -1324,6 +1316,5 @@ void popup_upgrade_dialog(struct unit_list *punits)
 void popdown_all_game_dialogs(void)
 {
   gui_dialog_destroy_all();
-  editdlg_hide_tools();
 }
 

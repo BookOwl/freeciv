@@ -23,9 +23,10 @@ flag_alt = "taiwan"	; similar design
 city_style = "Asian"
 
 ruler_titles = { "government",     "male_title",        "female_title"
-                 "Despotism",      _("Bohmugyi"),       _("?female:Bohmugyi")
+                 "Despotism",      _("Bohmugyi"),       _("Bohmugyi")
                  "Fundamentalism", _("Saya"),           _("Sayama")
-                "Democracy", _("Prime Minister"), _("?female:Prime Minister")
+                 "Monarchy",       _("King"),           _("Queen")
+                 "Democracy",      _("Prime Minister"), _("Prime Minister")
                }
 
 

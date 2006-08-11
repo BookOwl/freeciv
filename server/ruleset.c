@@ -95,7 +95,6 @@ static void load_ruleset_effects(struct section_file *file);
 static void load_ruleset_game(void);
 
 static void send_ruleset_techs(struct conn_list *dest);
-static void send_ruleset_unit_classes(struct conn_list *dest);
 static void send_ruleset_units(struct conn_list *dest);
 static void send_ruleset_buildings(struct conn_list *dest);
 static void send_ruleset_terrain(struct conn_list *dest);
@@ -588,27 +587,6 @@ static struct government *lookup_government(struct section_file *file,
 }
 
 /**************************************************************************
-  Lookup entry in the file and return the corresponding move_type index;
-  dies if can't find/match.  filename is for error message.
-**************************************************************************/
-static enum unit_move_type lookup_move_type(struct section_file *file,
-					    const char *entry,
-					    const char *filename)
-{
-  char *sval;
-  enum unit_move_type mt;
-  
-  sval = secfile_lookup_str(file, "%s", entry);
-  mt = move_type_from_str(sval);
-  if (mt == MOVETYPE_LAST) {
-    freelog(LOG_FATAL, "for %s couldn't match move_type \"%s\" (%s)",
-	    entry, sval, filename);
-    exit(EXIT_FAILURE);
-  }
-  return mt;
-}
-
-/**************************************************************************
   Lookup optional string, returning allocated memory or NULL.
 **************************************************************************/
 static char *lookup_string(struct section_file *file, const char *prefix,
@@ -855,29 +833,6 @@ static void load_unit_names(struct section_file *file)
 
   (void) section_file_lookup(file, "datafile.description");	/* unused */
 
-  /* Unit classes */
-  sec = secfile_get_secnames_prefix(file, "unitclass_", &nval);
-  freelog(LOG_VERBOSE, "%d unit classes", nval);
-  if (nval == 0) {
-    freelog(LOG_FATAL, "No unitclasses?! (%s)", filename);
-    exit(EXIT_FAILURE);
-  }
-  if(nval > UCL_LAST) {
-    freelog(LOG_FATAL, "Too many unitclasses (%d, max %d) (%s)",
-            nval, UCL_LAST, filename);
-    exit(EXIT_FAILURE);
-  }
-
-  game.control.num_unit_classes = nval;
-
-  unit_class_iterate(punitclass) {
-    const int i = punitclass->id;
-    char *name = secfile_lookup_str(file, "%s.name", sec[i]);
-
-    name_strlcpy(punitclass->name_orig, name);
-    punitclass->name = punitclass->name_orig;
-  } unit_class_iterate_end;
-
   /* The names: */
   sec = secfile_get_secnames_prefix(file, "unit_", &nval);
   freelog(LOG_VERBOSE, "%d unit types (including possibly unused)", nval);
@@ -911,7 +866,7 @@ static void load_ruleset_units(struct section_file *file)
 {
   struct unit_type *u;
   int i, j, ival, nval, vet_levels, vet_levels_default;
-  char *sval, **slist, **sec, **csec;
+  char *sval, **slist, **sec;
   const char *filename = secfile_filename(file);
   char **vnlist, **def_vnlist;
   int *vblist, *def_vblist;
@@ -1049,44 +1004,6 @@ if (vet_levels_default > MAX_VET_LEVELS || vet_levels > MAX_VET_LEVELS) { \
     free(def_vblist);
   }
 
-  csec = secfile_get_secnames_prefix(file, "unitclass_", &nval);
-
-  unit_class_iterate(ut) {
-    int i = ut->id;
-    char tmp[200] = "\0";
-
-    mystrlcat(tmp, csec[i], 200);
-    mystrlcat(tmp, ".move_type", 200);
-    ut->move_type = lookup_move_type(file, tmp, filename);
-
-    BV_CLR_ALL(ut->flags);
-    slist = secfile_lookup_str_vec(file, &nval, "%s.flags", csec[i]);
-    for(j = 0; j < nval; j++) {
-      sval = slist[j];
-      if(strcmp(sval,"") == 0) {
-	continue;
-      }
-      ival = unit_class_flag_from_str(sval);
-      if (ival == UCF_LAST) {
-	freelog(LOG_ERROR, "for unit_class \"%s\": bad flag name \"%s\" (%s)",
-                ut->name, sval, filename);
-        ival = unit_flag_from_str(sval);
-        if (ival != F_LAST) {
-          freelog(LOG_ERROR, "it's unit_type flag!");
-        }
-      } else if (ival == UCF_ROAD_NATIVE && ut->move_type == SEA_MOVING) {
-        freelog(LOG_ERROR, "for unit_class \"%s\": cannot give flag \"%s\" to "
-                "sea moving unit (%s)", ut->name, sval, filename);
-      } else {
-        BV_SET(ut->flags, ival);
-      }
-    }
-    free(slist);
-
-    ut->hp_loss_pct = secfile_lookup_int(file,"%s.hp_loss_pct", csec[i]);
-
-  } unit_class_iterate_end;
-
   /* Tech and Gov requirements */  
   unit_type_iterate(u) {
     const int i = u->index;
@@ -1126,6 +1043,16 @@ if (vet_levels_default > MAX_VET_LEVELS || vet_levels > MAX_VET_LEVELS) { \
       exit(EXIT_FAILURE);
     }
     u->class = pclass;
+    switch (pclass->id)
+    {
+    case UCL_MISSILE:
+    case UCL_NUCLEAR:
+      u->move_type = AIR_MOVING;
+      break;
+    default:
+      u->move_type = pclass->id;
+      break;
+    }
     
     sz_strlcpy(u->sound_move,
 	       secfile_lookup_str_default(file, "-", "%s.sound_move",
@@ -1202,17 +1129,12 @@ if (vet_levels_default > MAX_VET_LEVELS || vet_levels > MAX_VET_LEVELS) { \
       if(strcmp(sval,"")==0) {
 	continue;
       }
-      ival = unit_flag_from_str(sval);
+	ival = unit_flag_from_str(sval);
       if (ival==F_LAST) {
 	freelog(LOG_ERROR, "for unit_type \"%s\": bad flag name \"%s\" (%s)",
 	     u->name, sval, filename);
-        ival = unit_class_flag_from_str(sval);
-        if (ival != UCF_LAST) {
-          freelog(LOG_ERROR, "it's unit_class flag!");
-        }
-      } else {
-        BV_SET(u->flags, ival);
       }
+      BV_SET(u->flags, ival);
       assert(unit_type_flag(u, ival));
     }
     free(slist);
@@ -1292,7 +1214,7 @@ if (vet_levels_default > MAX_VET_LEVELS || vet_levels > MAX_VET_LEVELS) { \
     exit(EXIT_FAILURE);
   } else if (num_role_units(L_BARBARIAN_BOAT) > 0) {
     u = get_role_unit(L_BARBARIAN_BOAT,0);
-    if(get_unit_move_type(u) != SEA_MOVING) {
+    if(u->move_type != SEA_MOVING) {
       freelog(LOG_FATAL, "Barbarian boat (%s) needs to be a sea unit (%s)",
               u->name, filename);
       exit(EXIT_FAILURE);
@@ -1305,7 +1227,6 @@ if (vet_levels_default > MAX_VET_LEVELS || vet_levels > MAX_VET_LEVELS) { \
 
   update_simple_ai_types();
 
-  free(csec);
   free(sec);
   section_file_check_unused(file, filename);
   section_file_free(file);
@@ -1640,7 +1561,7 @@ static void load_ruleset_terrain(struct section_file *file)
 
     pterrain->transform_result
       = lookup_terrain(secfile_lookup_str(file, "%s.transform_result",
-					    tsec[i]), pterrain);
+                                          tsec[i]), pterrain);
     pterrain->transform_time
       = secfile_lookup_int(file, "%s.transform_time", tsec[i]);
     pterrain->rail_time
@@ -1697,28 +1618,6 @@ static void load_ruleset_terrain(struct section_file *file)
 							 tsec[i], mg_names[j]);
     }
 
-    slist = secfile_lookup_str_vec(file, &nval, "%s.native_to", tsec[i]);
-    BV_CLR_ALL(pterrain->native_to);
-    for (j = 0; j < nval; j++) {
-      struct unit_class *class = unit_class_from_str(slist[j]);
-
-      if (!class) {
-        /* TRANS: message for an obscure ruleset error. */
-        freelog(LOG_FATAL, _("Terrain %s is native to unknown unit class %s"),
-                pterrain->name, slist[j]);
-        exit(EXIT_FAILURE);
-      } else if (is_ocean(pterrain) && class->move_type == LAND_MOVING) {
-        freelog(LOG_FATAL, _("Oceanic terrain %s is native to land units."),
-                pterrain->name);
-        exit(EXIT_FAILURE);
-      } else if (!is_ocean(pterrain) && class->move_type == SEA_MOVING) {
-        freelog(LOG_FATAL, _("Non oceanic terrain %s is native to sea units."),
-                pterrain->name);
-        exit(EXIT_FAILURE);
-      } else {
-        BV_SET(pterrain->native_to, class->id);
-      }
-    }
     pterrain->helptext = lookup_helptext(file, tsec[i]);
   } terrain_type_iterate_end;
 
@@ -2706,25 +2605,6 @@ static void load_ruleset_game(void)
 }
 
 /**************************************************************************
-  Send the units ruleset information (all individual unit classes) to the
-  specified connections.
-**************************************************************************/
-static void send_ruleset_unit_classes(struct conn_list *dest)
-{
-  struct packet_ruleset_unit_class packet;
-
-  unit_class_iterate(c) {
-    packet.id = c->id;
-    sz_strlcpy(packet.name, c->name);
-    packet.move_type = c->move_type;
-    packet.hp_loss_pct = c->hp_loss_pct;
-    packet.flags = c->flags;
-
-    lsend_packet_ruleset_unit_class(dest, &packet);
-  } unit_class_iterate_end;
-}
-
-/**************************************************************************
   Send the units ruleset information (all individual units) to the
   specified connections.
 **************************************************************************/
@@ -2742,6 +2622,7 @@ static void send_ruleset_units(struct conn_list *dest)
     sz_strlcpy(packet.sound_fight_alt, u->sound_fight_alt);
     sz_strlcpy(packet.graphic_str, u->graphic_str);
     sz_strlcpy(packet.graphic_alt, u->graphic_alt);
+    packet.move_type = u->move_type;
     packet.unit_class_id = u->class->id;
     packet.build_cost = u->build_cost;
     packet.pop_cost = u->pop_cost;
@@ -2894,7 +2775,6 @@ static void send_ruleset_terrain(struct conn_list *dest)
     const struct resource **r;
 
     packet.id = i;
-    packet.native_to = pterrain->native_to;
 
     sz_strlcpy(packet.name_orig, pterrain->name_orig);
     sz_strlcpy(packet.graphic_str, pterrain->graphic_str);
@@ -3221,7 +3101,6 @@ void send_rulesets(struct conn_list *dest)
   send_ruleset_game(dest);
   send_ruleset_techs(dest);
   send_ruleset_governments(dest);
-  send_ruleset_unit_classes(dest);
   send_ruleset_units(dest);
   send_ruleset_specialists(dest);
   send_ruleset_resources(dest);

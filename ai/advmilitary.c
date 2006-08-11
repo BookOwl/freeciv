@@ -58,7 +58,7 @@ struct unit_type *ai_choose_defender_versus(struct city *pcity,
   int best = 0;
 
   simple_ai_unit_type_iterate(punittype) {
-    const int move_type = get_unit_move_type(punittype);
+    const int move_type = punittype->move_type;
 
     if (can_build_unit(pcity, punittype)
 	&& (move_type == LAND_MOVING || move_type == SEA_MOVING)) {
@@ -107,7 +107,7 @@ static struct unit_type *ai_choose_attacker(struct city *pcity,
 
   simple_ai_unit_type_iterate(punittype) {
     cur = ai_unit_attack_desirability(punittype);
-    if (which == get_unit_move_type(punittype)) {
+    if (which == punittype->move_type) {
       if (can_build_unit(pcity, punittype)
           && (cur > best
               || (cur == best
@@ -146,7 +146,7 @@ static struct unit_type *ai_choose_bodyguard(struct city *pcity,
     }
 
     /* Only consider units of same move type */
-    if (get_unit_move_type(punittype) != move_type) {
+    if (punittype->move_type != move_type) {
       continue;
     }
 
@@ -490,7 +490,7 @@ static unsigned int assess_danger(struct city *pcity)
       unsigned int vulnerability = assess_danger_unit(pcity, punit);
       int dist = assess_distance(pcity, punit, move_rate);
       /* Although enemy units will not be in our cities,
-       * we might still consider allies to be dangerous,
+       * we might stll consider allies to be dangerous,
        * so dist can be 0. */
       bool igwall = unit_really_ignores_citywalls(punit);
 
@@ -498,28 +498,14 @@ static unsigned int assess_danger(struct city *pcity)
         paramove = unit_type(punit)->paratroopers_range;
       }
 
-      if (is_ground_unit(punit) && vulnerability != 0) {
+      if ((is_ground_unit(punit) && vulnerability != 0)
+          || (is_ground_units_transport(punit))) {
         if (dist <= move_rate * 3 || dist <= paramove + move_rate) {
           urgency++;
         }
         if (dist <= move_rate || dist <= paramove + move_rate) {
           pcity->ai.grave_danger++;
         }
-      } else {
-        unit_class_iterate(punitclass) {
-          if (punitclass->move_type == LAND_MOVING
-              && can_unit_type_transport(punit->type, punitclass)) {
-            /* It can transport some land moving units! */
-
-            if (dist <= move_rate * 3 || dist <= paramove + move_rate) {
-              urgency++;
-            }
-            if (dist <= move_rate || dist <= paramove + move_rate) {
-              pcity->ai.grave_danger++;
-            }
-            break;
-          }
-        } unit_class_iterate_end;
       }
       if (paramove > 0 && can_unit_paradrop(punit)) {
         move_rate += paramove; /* gross simplification */
@@ -548,7 +534,7 @@ static unsigned int assess_danger(struct city *pcity)
       } else if (is_air_unit(punit) && !unit_flag(punit, F_NUCLEAR)) {
         danger[3] += vulnerability * move_rate / MAX(dist, 1); /* SAM */
       }
-      if (unit_class_flag(get_unit_class(unit_type(punit)), UCF_MISSILE)) {
+      if (unit_flag(punit, F_MISSILE)) {
         /* SDI */
         danger[4] += vulnerability * move_rate / MAX(move_rate, dist);
       }
@@ -615,9 +601,9 @@ int ai_unit_defence_desirability(const struct unit_type *punittype)
   /* Sea and helicopters often have their firepower set to 1 when
    * defending. We can't have such units as defenders. */
   if (!unit_type_flag(punittype, F_BADCITYDEFENDER)
-      && !unit_type_flag(punittype, F_HELICOPTER)) {
+      && punittype->move_type != HELI_MOVING) {
     /* Sea units get 1 firepower in Pearl Harbour,
-     * and helicopters very bad against fighters */
+     * and helicopters very bad against air units */
     desire *= punittype->firepower;
   }
   desire *= defense;
@@ -681,7 +667,7 @@ static void process_defender_want(struct player *pplayer, struct city *pcity,
   memset(tech_desire, 0, sizeof(tech_desire));
   
   simple_ai_unit_type_iterate(punittype) {
-    int move_type = get_unit_move_type(punittype);
+    int move_type = punittype->move_type;
     int desire; /* How much we want the unit? */
 
     /* Only consider proper defenders - otherwise waste CPU and
@@ -751,7 +737,7 @@ static void process_defender_want(struct player *pplayer, struct city *pcity,
     CITY_LOG(LOG_DEBUG, pcity, "Ooops - we cannot build any defender!");
   }
 
-  if (!walls && get_unit_move_type(best_unit_type) == LAND_MOVING) {
+  if (!walls && best_unit_type->move_type == LAND_MOVING) {
     best *= pcity->ai.wallvalue;
     best /= POWER_FACTOR;
   }
@@ -809,10 +795,11 @@ static void process_attacker_want(struct city *pcity,
   /* The enemy city.  acity == NULL means stray enemy unit */
   struct city *acity = tile_get_city(ptile);
   bool shore = is_ocean_near_tile(pcity->tile);
-  int orig_move_type = get_unit_move_type(get_unit_type(best_choice->choice));
+  int orig_move_type = get_unit_type(best_choice->choice)->move_type;
   int victim_count = 1;
   int needferry = 0;
-  bool unhap = ai_assess_military_unhappiness(pcity);
+  bool unhap = ai_assess_military_unhappiness(pcity,
+                                              get_gov_pplayer(pplayer));
 
   assert(orig_move_type == SEA_MOVING || orig_move_type == LAND_MOVING);
 
@@ -829,7 +816,7 @@ static void process_attacker_want(struct city *pcity,
 
   simple_ai_unit_type_iterate(punittype) {
     Tech_type_id tech_req = punittype->tech_requirement;
-    int move_type = get_unit_move_type(punittype);
+    int move_type = punittype->move_type;
     int tech_dist;
     
     if (tech_req != A_LAST) {
@@ -906,11 +893,10 @@ static void process_attacker_want(struct city *pcity,
       if (move_type != LAND_MOVING && vuln == 0) {
         desire = 0;
         
-      } else if (unit_class_flag(punittype->class, UCF_CAN_OCCUPY) && acity
-                 && TEST_BIT(acity->ai.invasion, INVASION_ATTACK)
-                 && !TEST_BIT(acity->ai.invasion, INVASION_OCCUPY)) {
+      } else if ((move_type == LAND_MOVING || move_type == HELI_MOVING)
+                 && acity && acity->ai.invasion == 2) {
         desire = bcost * SHIELD_WEIGHTING;
-
+        
       } else {
         if (!acity) {
           desire = kill_desire(value, attack, bcost, vuln, victim_count);
@@ -1081,7 +1067,7 @@ static void kill_something_with(struct player *pplayer, struct city *pcity,
           boattype = get_role_unit(L_FERRYBOAT, 0);
         }
       }
-      assert(SEA_MOVING == get_unit_move_type(boattype));
+      assert(SEA_MOVING == boattype->move_type);
 
       go_by_boat = !(WARMAP_COST(ptile) <= (MIN(6, move_rate) * THRESHOLD)
                      && goto_is_sane(myunit, acity->tile, TRUE));
@@ -1118,7 +1104,7 @@ static void kill_something_with(struct player *pplayer, struct city *pcity,
 	def_owner = pdef->owner;
       }
     }
-    if (COULD_OCCUPY(myunit) || TEST_BIT(acity->ai.invasion, INVASION_OCCUPY)) {
+    if (COULD_OCCUPY(myunit) || TEST_BIT(acity->ai.invasion, 0)) {
       /* bonus for getting the city */
       benefit += 40;
     }
@@ -1165,7 +1151,7 @@ static void kill_something_with(struct player *pplayer, struct city *pcity,
        * if they are blockaded or in inland seas*/
       assert(is_ground_unit(myunit));
       ai_choose_role_unit(pplayer, pcity, choice, L_FERRYBOAT, choice->want);
-      if (SEA_MOVING == get_unit_move_type(get_unit_type(choice->choice))) {
+      if (SEA_MOVING == get_unit_type(choice->choice)->move_type) {
         struct ai_data *ai = ai_data_get(pplayer);
 
         freelog(LOG_DEBUG,
@@ -1229,7 +1215,7 @@ static void adjust_ai_unit_choice(struct city *pcity,
     return;
   }
 
-  move_type = get_unit_move_type(get_unit_type(choice->choice));
+  move_type = get_unit_type(choice->choice)->move_type;
 
   /* TODO: separate checks based on other requirements (e.g., unit class) 
    *  N.B.: have to check that we haven't already built the building --mck */
