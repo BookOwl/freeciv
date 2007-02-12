@@ -252,7 +252,7 @@ static void players_meet(void)
     if (can_meet_with_player(&game.players[playerno])) {
       request_diplomacy_init_meeting(game.player_idx, playerno);
     } else {
-      append_output_window(_("You need an embassy to establish a "
+      append_output_window(_("Game: You need an embassy to establish a "
                              "diplomatic meeting."));
     }
   }
@@ -368,7 +368,7 @@ void update_players_dialog(void)
 
   set(player_players_listview, MUIA_NList_Quiet, TRUE);
   DoMethod(player_players_listview, MUIM_NList_Clear);
-  for (i = 0; i < game.info.nplayers; i++)
+  for (i = 0; i < game.nplayers; i++)
   {
     if(is_barbarian(&game.players[i]))
       continue;

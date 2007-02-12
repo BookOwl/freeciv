@@ -36,7 +36,7 @@ static struct sw_widget *nations_window;
 static struct sw_widget *nations_list;
 static struct sw_widget *leaders_list;
 static struct sw_widget *leaders_sex_list;
-static Nation_type_id selected_nation;
+static Nation_Type_id selected_nation;
 #endif
 
 /**************************************************************************
@@ -85,7 +85,7 @@ static void select_random_nation(void)
 {
   /* try to find a free nation */
   while (1) {
-    int index = myrand(game.control.playable_nation_count);
+    int index = myrand(game.playable_nation_count);
 
     if (sw_list_is_row_enabled(nations_list, index)) {
       sw_list_set_selected_row(nations_list, index, TRUE);
@@ -154,7 +154,7 @@ static void leaders_list_selection_changed(struct sw_widget *widget,
 /**************************************************************************
   Popup the nation selection dialog.
 **************************************************************************/
-void popup_races_dialog(struct player *pplayer)
+void popup_races_dialog(void)
 {
 #if 0
   struct ct_string *string;
@@ -213,7 +213,7 @@ void popup_races_dialog(struct player *pplayer)
   label = sw_label_create_text(root_window, string);
   sw_list_set_item(leaders_sex_list, 0, 1, label);
 
-  for (i = 0; i < game.control.playable_nation_count; i++) {
+  for (i = 0; i < game.playable_nation_count; i++) {
     struct nation_type *nation = get_nation_by_idx(i);
 
     button = sw_button_create(nations_window, NULL,
@@ -228,7 +228,7 @@ void popup_races_dialog(struct player *pplayer)
 
     string = ct_string_create(STYLE_ITALIC, 14,
 			      ct_extend_std_color(COLOR_STD_BLACK),
-			      COLOR_EXT_GRAY, Q_(nation->category));
+			      COLOR_EXT_GRAY, Q_(nation->class));
     label = sw_label_create_text(root_window, string);
     sw_list_set_item(nations_list, 2, i, label);    
   }
@@ -260,7 +260,7 @@ void popup_unit_select_dialog(struct tile *ptile)
   In the nation selection dialog, make already-taken nations unavailable.
   This information is contained in the packet_nations_used packet.
 **************************************************************************/
-void races_toggles_set_sensitive(void)
+void races_toggles_set_sensitive(bool *nations_used)
 {
   /* PORTME */
 }
@@ -282,18 +282,10 @@ void popup_caravan_dialog(struct unit *punit,
   Is there currently a caravan dialog open?  This is important if there
   can be only one such dialog at a time; otherwise return FALSE.
 **************************************************************************/
-bool caravan_dialog_is_open(int* unit_id, int* city_id)
+bool caravan_dialog_is_open(void)
 {
   /* PORTME */
   return FALSE;
-}
-
-/****************************************************************
-  Updates caravan dialog
-****************************************************************/
-void caravan_dialog_update(void)
-{
-  /* PORTME */
 }
 
 /**************************************************************************
@@ -305,21 +297,14 @@ void popup_diplomat_dialog(struct unit *punit, struct tile *dest_tile)
   /* PORTME */
 }
 
-/****************************************************************
-  Returns id of a diplomat currently handled in diplomat dialog
-*****************************************************************/
-int diplomat_handled_in_diplomat_dialog(void)
-{
-  /* PORTME */    
-  return -1;  
-}
-
-/****************************************************************
-  Closes the diplomat dialog
-****************************************************************/
-void close_diplomat_dialog(void)
+/**************************************************************************
+  Return whether a diplomat dialog is open.  This is important if there
+  can be only one such dialog at a time; otherwise return FALSE.
+**************************************************************************/
+bool diplomat_dialog_is_open(void)
 {
   /* PORTME */
+  return FALSE;
 }
 
 /**************************************************************************
@@ -353,7 +338,8 @@ void popup_sabotage_dialog(struct city *pcity)
   Popup a dialog asking the unit which improvement they would like to
   pillage.
 **************************************************************************/
-void popup_pillage_dialog(struct unit *punit, bv_special may_pillage)
+void popup_pillage_dialog(struct unit *punit,
+			  enum tile_special_type may_pillage)
 {
   /* PORTME */
 }

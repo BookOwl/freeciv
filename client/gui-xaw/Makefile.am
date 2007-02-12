@@ -1,7 +1,7 @@
 ## Process this file with automake to produce Makefile.in
 
 noinst_LIBRARIES = libguiclient.a
-AM_CPPFLAGS = -I. -I$(srcdir)/.. -I$(srcdir)/../include -I$(top_srcdir)/utility -I$(top_srcdir)/common -I../../intl -I$(top_srcdir)/common/aicore -I../../intl -I$(srcdir)/../agents $(CLIENT_CFLAGS)
+AM_CPPFLAGS = -I. -I$(srcdir)/.. -I$(srcdir)/../include -I$(top_srcdir)/utility -I$(top_srcdir)/common -I../../intl -I$(top_srcdir)/common/aicore -I../../intl -I$(srcdir)/../agents @CLIENT_CFLAGS@
 
 ## Above, note -I../../intl instead of -I$(top_srdir/intl) is deliberate.
 # The AM_CPPFLAGS "-I." is so resources.c includes the locally generated 
@@ -43,7 +43,6 @@ libguiclient_a_SOURCES = \
 	dialogs.h	\
 	diplodlg.c	\
 	diplodlg.h	\
-	diplomat_dialog.c	\
 	finddlg.c	\
 	finddlg.h	\
 	gotodlg.c	\
@@ -87,6 +86,5 @@ libguiclient_a_SOURCES = \
 	resources.h	\
 	spaceshipdlg.c	\
 	spaceshipdlg.h  \
-	themes.c	\
 	wldlg.c		\
 	wldlg.h

@@ -19,14 +19,11 @@
 #endif
 #endif
 
-#ifdef HAVE_LIBINTL_H
+#ifdef ENABLE_NLS
 #include <libintl.h>
-#endif
 #ifdef HAVE_LOCALE_H
 #include <locale.h>
 #endif
-
-#ifdef ENABLE_NLS
 
 #define _(String) gettext(String)
 #define N_(String) String
@@ -40,18 +37,10 @@
 #define Q_(String) skip_intl_qualifier_prefix(String)
 #define PL_(String1, String2, n) ((n) == 1 ? (String1) : (String2))
 
-#undef textdomain
-#undef bindtextdomain
-
 #define textdomain(Domain)
 #define bindtextdomain(Package, Directory)
 
 #endif
-
-/* This provides an untranslated version of Q_ that allows the caller to
- * get access to the original string.  This may be needed for comparisons,
- * for instance. */
-#define Qn_(String) skip_intl_qualifier_prefix(String)
 
 const char *skip_intl_qualifier_prefix(const char *str);
 

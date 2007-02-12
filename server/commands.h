@@ -11,17 +11,13 @@
    GNU General Public License for more details.
 ***********************************************************************/
 
-#ifndef FC__COMMANDS_H
-#define FC__COMMANDS_H
-
-#include "connection.h"		/* for enum cmdlevel_id */
-
 /**************************************************************************
   Commands - can be recognised by unique prefix
 **************************************************************************/
 struct command {
   const char *name;       /* name - will be matched by unique prefix   */
-  enum cmdlevel_id level; /* access level required to use the command  */
+  enum cmdlevel_id game_level; /* access level to use the command, in-game  */
+  enum cmdlevel_id pregame_level; /* access level to use, in pregame */
   const char *synopsis;	  /* one or few-line summary of usage */
   const char *short_help; /* one line (about 70 chars) description */
   const char *extra_help; /* extra help information; will be line-wrapped */
@@ -44,6 +40,7 @@ enum command_id {
   /* completely non-harmful: */
   CMD_EXPLAIN,
   CMD_SHOW,
+  CMD_SCORE,
   CMD_WALL,
   CMD_VOTE,
   
@@ -53,6 +50,7 @@ enum command_id {
   CMD_TEAM,
   CMD_RULESETDIR,
   CMD_METAMESSAGE,
+  CMD_METATOPIC,
   CMD_METAPATCHES,
   CMD_METACONN,
   CMD_METASERVER,
@@ -73,7 +71,6 @@ enum command_id {
 
   /* potentially harmful: */
   CMD_END_GAME,
-  CMD_SURRENDER, /* not really harmful, info level */
   CMD_REMOVE,
   CMD_SAVE,
   CMD_LOAD,
@@ -91,5 +88,3 @@ enum command_id {
 };
 
 extern const struct command commands[];
-
-#endif				/* FC__COMMANDS_H */

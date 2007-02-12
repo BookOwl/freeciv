@@ -78,9 +78,6 @@
 #ifdef HAVE_WINSOCK
 #include <winsock.h>
 #endif
-#ifdef HAVE_STRINGS_H
-#  include <strings.h>
-#endif
 
 #include "fcintl.h"
 #include "mem.h"
@@ -133,27 +130,6 @@ int mystrncasecmp(const char *str0, const char *str1, size_t n)
 #endif
 }
 
-/***************************************************************
-  Compare strings like strncasecmp() but ignoring quotes in
-  either string. Quotes still count towards n.
-***************************************************************/
-int mystrncasequotecmp(const char *str0, const char *str1, size_t n)
-{
-  size_t i;
-  char c;
-
-  for (i = 0; i < n && *str0 != '\0'; i++) {
-    if (my_tolower(*str0) != my_tolower(*str1)
-        && *str0 != '"' && *str1 != '"') {
-      return ((int) (unsigned char) my_tolower(*str0))
-             - ((int) (unsigned char) my_tolower(*str1));
-    }
-    c = *str0;
-    str0 += (*str1 != '"');
-    str1 += (c != '"');
-  }
-  return 0;
-}
 
 /***************************************************************
   Return a string which describes a given error (errno-style.)

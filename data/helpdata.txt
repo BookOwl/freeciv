@@ -50,7 +50,7 @@ the extinction of all other civilizations.\
   Present administrators: \
 "), "\
              Anthony J. Stuckey  - astuckey@imsa.edu\n\
-             Raimar Falke        - rfalke@freeciv.org\n\
+             Raimar Falke        - rf13@inf.tu-dresden.de\n\
              Mike Kaufman        - kaufman@orion.physics.wisc.edu\n\
              Per I. Mathisen     - per@leftist.net\
 ", _("\
@@ -404,7 +404,7 @@ mailing list:\
 name = _("Connecting")
 text = _("\
 Before a game is started, anyone can connect to the server \
-by supplying its hostname and port number (5556 by default). \
+by supplying its hostname and port number (5555 by default). \
 If the server is started with the -m flag, it will report to \
 the metaserver,\
 "), "\
@@ -434,6 +434,7 @@ text = _("\
 Unit Orders:\n\
 ============\n\
     a: (a)uto-settler  (settler/worker units)\n\
+    a: (a)uto-attack  (military units)\n\
     b: (b)uild city  (settler units)\n\
     b: help (b)uild wonder  (caravan units)\n\
     C: unit (c)onnect  (then left-click mouse to select destination)\n\
@@ -444,7 +445,6 @@ Unit Orders:\n\
     f: build (f)ortress  (settler/worker units)\n\
     g: unit (g)oto  (then left-click mouse to select destination)\n\
     g: add a (g)oto waypoint (when in goto mode)\n\
-    G: (G)oto/return to nearest city\n\
     h: change (h)omecity  (to city at current location)\n\
     i: build (i)rrigation or convert terrain (settler/worker units)\n\
     l: (l)oad unit on boat\n\
@@ -463,16 +463,8 @@ Unit Orders:\n\
     s: (s)entry unit\n\
     u: (u)nload unit\n\
     U: (U)nload all units from a boat\n\
-    W: (W)ake up other units on tile\n\
     x: auto-e(x)plore\n\
-    y: Select all idle units of the same type as the active unit\n\
 space: unit stay put\n\
-\n\
-      Ctrl-U: (u)pgrade unit\n\
-Shift-Ctrl-B: Goto and (B)uild city on target\n\
-Shift-Ctrl-R: Connect current and target tile with (R)oad\n\
-Shift-Ctrl-L: Connect current and target tile with rai(L)\n\
-Shift-Ctrl-I: Connect current and target tile with (I)rrigation\n\
 "), _("\
 Unit Movement:\n\
 ==============\n\
@@ -487,6 +479,7 @@ Unit Movement:\n\
 \n\
   5: focus on previous unit\n\
   w: focus on next unit (wait)\n\
+  W: wake up other units on tile\n\
   c: center view on unit\n\
 "), _("\
 Main Map (Keys):\n\
@@ -773,18 +766,18 @@ in the field and supported by that city are also transferred \
 other player isn't getting a better deal than you expect.\
 ")
 
-[help_governor]
-name = _("Citizen Governor")
+[help_cma]
+name = _("Citizen Management Agent")
 text = _("\
-The Citizen Governor (formerly called the CMA) helps you manage your cities. \
+The Citizen Management Agent (CMA) helps you manage your cities. \
 It deploys the available workers on the free tiles around the \
 city to achieve maximal city output. It also changes workers to \
-scientists, taxmen, or entertainers, if appropriate. And the governor \
-has another ability: whenever possible, it keeps \
+scientists, taxmen, or entertainers, if appropriate. And the CMA \
+has another astonishing ability: whenever possible, it keeps \
 your cities content.\
 \n\n\
-There are various means to tell the governor what kind of output you \
-would like. Open the city window and click on the governor tab. There \
+There are various means to tell the CMA what kind of output you \
+would like. Open the city window and click on the CMA tab. There \
 are two kinds of sliders: On the left, you can set a Minimal \
 Surplus for each kind of production; e.g. Gold = +3 means the city \
 earns 3 gold more than it needs to upkeep its improvements. On the \
@@ -795,7 +788,7 @@ different factors for each kind of production, according to your \
 needs.\
 \n\n\
 If you set up some Minimal Surpluses which are impossible to fulfill, \
-the governor can't be activated. Whenever the governor can't fulfill its task \
+the CMA can't be activated. Whenever the CMA can't fulfill its task \
 in the ongoing game, it passes back control to you. So you'd better \
 not define too high a surplus; instead, use factors to achieve your \
 goals.\
@@ -804,22 +797,22 @@ The Celebrate checkbox lets your city - celebrate. This will work \
 only with a high luxury rate. See help about 'Happiness'.\
 \n\n\
 Clicking on 'Control city' puts the city under control of \
-the governor, 'Release city' passes control back to you.\
+the CMA, 'Release city' passes control back to you.\
 \n\n\
 For ease of use, you can save your slider setting as a preset \
 with a name. Click on 'add preset' and enter a name for your \
 setting. You can use this preset in every city by just clicking \
 on its name. Also, you can control your setting from within the \
-city report, in the governor column. And you can change it from there \
-(use 'change' --> 'Citizen Governor'), if you have saved it as a preset.\
+city report, in the CMA column. And you can change it from there \
+(use 'change' --> 'CMA'), if you have saved it as a preset.\
 \n\n\
 Use 'Game' --> 'Save Settings' to store your presets \
 permanently.\
 \n\n\
-But beware! If you use the governor for some of your cities, you will \
+But beware! If you use the CMA for some of your cities, you will \
 encounter some difficulties with managing cities nearby, by hand. \
 It's best to manage all cities on an island either by hand or by \
-governor. Read more hints, some background information, and some \
+CMA. Read more hints, some background information, and some \
 preset examples in the file README.cma, included with Freeciv.\n\
 ")
 
@@ -952,6 +945,12 @@ First, the attacker's strength is modified.\
 "), _("\
  - If the attacker is a veteran, its strength is multiplied by 1.5.\
 "), _("\
+ - \"Exhausted\" attackers are weaker: if the attacker has only 1/3 \
+movement point left, its strength is divided by 3; if it has 2/3 \
+movement point, its strength is multiplied by 2/3.  If the \
+attacker has 1 or more movement points left, no further \
+modifications occur.\
+"), _("\
 Next, the defender's strength is modified.\
 "), _("\
  - If the defender is a veteran, then its strength is multiplied by \
@@ -1045,9 +1044,12 @@ lost defender are not destroyed. \
 [help_combat_example_1]
 name = _(" Combat example 1")
 text = _("\
-Suppose a Cannon (A:8, D:1, HP:20, F:1) attacks a Musketeer \
-(A:3, D:3, HP:20, F:1) inside a city with City Walls built \
-on a Forest tile.  Neither are veteran.\
+Suppose a veteran Cannon (A:8, D:1, HP:20, F:1) with 2/3 movement \
+points left attacks a non-veteran Musketeer (A:3, D:3, HP:20, F:1) \
+inside a city with City Walls built on a Forest tile.\
+"), _("\
+The attacker's base strength is 8.  Veteran status makes this 12, \
+but because it only has 2/3 movement points its final strength is 8.\
 "), _("\
 The defender's base strength is 3.  Because it is on a Forest tile, \
 its strength becomes 4.5.  It is behind City Walls, so its strength \

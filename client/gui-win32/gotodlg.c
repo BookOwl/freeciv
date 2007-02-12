@@ -1,4 +1,4 @@
-/**********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -28,13 +28,11 @@
 #include "player.h"
 #include "support.h"
 #include "unit.h"
-#include "unitlist.h"
 
 #include "clinet.h"
 #include "civclient.h"
 #include "control.h"
 #include "dialogs.h"
-#include "goto.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "mapview.h"
@@ -81,7 +79,7 @@ static LONG CALLBACK goto_dialog_proc(HWND dlg,UINT message,
 	{
 	case ID_LIST:
 	  if((pdestcity=get_selected_city())) {
-	    struct unit *punit=unit_list_get(get_units_in_focus(), 0);
+	    struct unit *punit=get_unit_in_focus();
 	    center_tile_mapcanvas(pdestcity->tile);
 	    if(punit && unit_can_airlift_to(punit, pdestcity)) {
 	      EnableWindow(GetDlgItem(dlg,ID_AIRLIFT),TRUE);
@@ -99,10 +97,11 @@ static LONG CALLBACK goto_dialog_proc(HWND dlg,UINT message,
 	  {
 	    pdestcity=get_selected_city();
 	    if (pdestcity) {
-	      unit_list_iterate(get_units_in_focus(), punit) {
-      		send_goto_tile(punit, pdestcity->tile);
-      	} unit_list_iterate_end;
-		    DestroyWindow(dlg);
+	      struct unit *punit=get_unit_in_focus();
+	      if (punit) {
+		send_goto_unit(punit, pdestcity->tile);
+		DestroyWindow(dlg);
+	      }
 	    }
 	  }
 	  break;
@@ -110,12 +109,13 @@ static LONG CALLBACK goto_dialog_proc(HWND dlg,UINT message,
 	  {
 	    pdestcity=get_selected_city();
 	    if (pdestcity) {
-	      unit_list_iterate(get_units_in_focus(), punit) {
-          request_unit_airlift(punit, pdestcity);
-      	} unit_list_iterate_end;
-        DestroyWindow(dlg);
+	      struct unit *punit=get_unit_in_focus();
+	      if (punit) {
+		request_unit_airlift(punit, pdestcity);
+		DestroyWindow(dlg);
+	      }
 	    }
-
+	 
 	  }
 	  break;
 	case IDCANCEL:
@@ -143,12 +143,11 @@ popup_goto_dialog(void)
   if (!can_client_change_view()) {
     return;
   }
-  if (get_num_units_in_focus()==0) {
+  if (get_unit_in_focus()==0)
     return;
-  }
 
   original_tile = get_center_tile_mapcanvas();
-
+  
   goto_dialog=fcwin_create_layouted_window(goto_dialog_proc,
 					   _("Goto/Airlift Unit"),
 					   WS_OVERLAPPEDWINDOW,
@@ -186,10 +185,8 @@ static void update_goto_dialog(HWND list)
   ListBox_ResetContent(list);
   Button_SetState(GetDlgItem(goto_dialog,ID_ALL),show_all_cities);
 
-  for(i=0; i<game.info.nplayers; i++) {
-    if (!show_all_cities && i != game.info.player_idx) {
-      continue;
-    }
+  for(i=0; i<game.nplayers; i++) {
+    if(!show_all_cities && i!=game.player_idx) continue;
     city_list_iterate(game.players[i].cities, pcity) {
       sz_strlcpy(name, pcity->name);
       /* FIXME: should use unit_can_airlift_to(). */

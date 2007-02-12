@@ -14,10 +14,6 @@
 #ifndef FC__REPODLGS_H
 #define FC__REPODLGS_H
 
-#include <SDL/SDL.h>
-
-#include "gui_string.h"
-
 #include "repodlgs_g.h"
 
 enum tech_info_mode {
@@ -26,7 +22,11 @@ enum tech_info_mode {
   SMALL_MODE
 };
 
-SDL_Surface * create_sellect_tech_icon(SDL_String16 *pStr, Tech_type_id tech_id, enum tech_info_mode mode);
+SDL_Surface * create_sellect_tech_icon(SDL_String16 *pStr, Tech_Type_id tech_id, enum tech_info_mode mode);
+SDL_Surface * get_tech_icon(Tech_Type_id tech);
+SDL_Color * get_tech_color(Tech_Type_id tech_id);
+void free_auxiliary_tech_icons(void);
+void setup_auxiliary_tech_icons(void);
 void popdown_all_science_dialogs(void);
 void popdown_economy_report_dialog(void);
 void popdown_activeunits_report_dialog(void);

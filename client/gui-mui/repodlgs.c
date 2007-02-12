@@ -106,10 +106,10 @@ static void science_goal(ULONG * newgoal)
   int i;
   int to = -1;
 
-  if (game.player_ptr->research->tech_goal == A_UNSET)
+  if (game.player_ptr->ai.tech_goal == A_UNSET)
     if (help_goal_entries[*newgoal] == (STRPTR) advances[A_NONE].name)
       to = 0;
-  for (i = A_FIRST; i < game.control.num_tech_types; i++)
+  for (i = A_FIRST; i < game.num_tech_types; i++)
   {
     if (help_goal_entries[*newgoal] == (STRPTR) advances[i].name)
       to = i;
@@ -140,7 +140,7 @@ static void science_research(ULONG * newresearch)
   int i;
   int to = -1;
 
-  for (i = A_FIRST; i < game.control.num_tech_types; i++)
+  for (i = A_FIRST; i < game.num_tech_types; i++)
   {
     if (help_research_entries[*newresearch] == (STRPTR) advances[i].name)
       to = i;
@@ -193,7 +193,7 @@ void popup_science_dialog(bool make_modal)
   }
 
   if (!is_future_tech(game.player_ptr->research.researching)) {
-    for (i = A_FIRST, j = 0; i < game.control.num_tech_types; i++)
+    for (i = A_FIRST, j = 0; i < game.num_tech_types; i++)
     {
       if (get_invention(game.player_ptr, i) != TECH_REACHABLE)
 	continue;
@@ -204,7 +204,7 @@ void popup_science_dialog(bool make_modal)
     {
       if ((help_research_entries = (STRPTR *) malloc((j + 1) * sizeof(STRPTR))))
       {
-	for (i = A_FIRST, j = 0; i < game.control.num_tech_types; i++)
+	for (i = A_FIRST, j = 0; i < game.num_tech_types; i++)
 	{
 	  if (get_invention(game.player_ptr, i) != TECH_REACHABLE)
 	    continue;
@@ -220,7 +220,7 @@ void popup_science_dialog(bool make_modal)
   }
 
 
-  for (i = A_FIRST, j = 0; i < game.control.num_tech_types; i++)
+  for (i = A_FIRST, j = 0; i < game.num_tech_types; i++)
   {
     if (tech_is_available(game.player_ptr, i)
 	&& get_invention(game.player_ptr, i) != TECH_KNOWN &&
@@ -228,7 +228,7 @@ void popup_science_dialog(bool make_modal)
 	&& num_unknown_techs_for_goal(game.player_ptr, i) < 11)
       j++;
   }
-  if (game.player_ptr->research->tech_goal == A_UNSET) {
+  if (game.player_ptr->ai.tech_goal == A_UNSET) {
     j++;
   }
 
@@ -237,17 +237,17 @@ void popup_science_dialog(bool make_modal)
     if ((help_goal_entries = (STRPTR *) malloc((j + 2) * sizeof(STRPTR))))
     {
       j = 0;
-      if (game.player_ptr->research->tech_goal == A_UNSET) {
+      if (game.player_ptr->ai.tech_goal == A_UNSET) {
 	help_goal_entries[j++] = advances[A_NONE].name;
       }
 
-      for (i = A_FIRST; i < game.control.num_tech_types; i++)
+      for (i = A_FIRST; i < game.num_tech_types; i++)
       {
 	if (get_invention(game.player_ptr, i) != TECH_KNOWN &&
 	    advances[i].req[0] != A_LAST && advances[i].req[1] != A_LAST &&
 	    num_unknown_techs_for_goal(game.player_ptr, i) < 11)
 	{
-	  if (i == game.player_ptr->research->tech_goal)
+	  if (i == game.player_ptr->ai.tech_goal)
 	    science_goal_active = j;
 	  help_goal_entries[j++] = advances[i].name;
 	}
@@ -354,12 +354,12 @@ void popup_science_dialog(bool make_modal)
     DoMethod(science_steps_text, MUIM_SetAsString, MUIA_Text_Contents,
 	     _("(%ld steps)"), num_unknown_techs_for_goal(game.player_ptr,
 							  game.player_ptr->
-							  research->tech_goal));
+							  ai.tech_goal));
 
     DoMethod(science_researched_group, MUIM_Group_InitChange);
     DoMethod(science_researched_group, MUIM_AutoGroup_DisposeChilds);
 
-    for (i = A_FIRST; i < game.control.num_tech_types; i++)
+    for (i = A_FIRST; i < game.num_tech_types; i++)
     {
       if ((get_invention(game.player_ptr, i) == TECH_KNOWN))
       {
@@ -820,9 +820,9 @@ void activeunits_report_dialog_update(void)
 
   city_list_iterate(game.player_ptr->cities, pcity)
   {
-    if (pcity->production.is_unit) {
-      (unitarray[pcity->production.value].building_count)++;
-    }
+    if (pcity->is_building_unit &&
+	(unit_type_exists(pcity->currently_building)))
+      (unitarray[pcity->currently_building].building_count)++;
   }
   city_list_iterate_end;
 

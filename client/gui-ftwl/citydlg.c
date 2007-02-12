@@ -24,7 +24,7 @@
   Pop up (or bring to the front) a dialog for the given city.  It may or
   may not be modal.
 **************************************************************************/
-void popup_city_dialog(struct city *pcity)
+void popup_city_dialog(struct city *pcity, bool make_modal)
 {
   freelog(LOG_NORMAL, "popup_city_dialog('%s')", pcity->name);
   /* PORTME */
@@ -68,7 +68,7 @@ void refresh_unit_city_dialogs(struct unit *punit)
   struct city_dialog *pdialog;
 
   pcity_sup = find_city_by_id(punit->homecity);
-  pcity_pre = tile_get_city(punit->tile);
+  pcity_pre = map_get_city(punit->tile);
 
   if (pcity_sup && (pdialog = get_city_dialog(pcity_sup))) {
     city_dialog_update_supported_units(pdialog);

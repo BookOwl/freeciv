@@ -64,6 +64,7 @@ static int   metaport;
 static char *metaserver_path;
 
 static char meta_patches[256] = "";
+static char meta_topic[256] = "";
 static char meta_message[256] = "";
 
 /*************************************************************************
@@ -72,6 +73,14 @@ static char meta_message[256] = "";
 const char *default_meta_patches_string(void)
 {
   return "none";
+}
+
+/*************************************************************************
+ the default metaserver topic
+*************************************************************************/
+const char *default_meta_topic_string(void)
+{
+  return "";
 }
 
 /*************************************************************************
@@ -101,6 +110,14 @@ const char *get_meta_patches_string(void)
 }
 
 /*************************************************************************
+ the metaserver topic
+*************************************************************************/
+const char *get_meta_topic_string(void)
+{
+  return meta_topic;
+}
+
+/*************************************************************************
  the metaserver message
 *************************************************************************/
 const char *get_meta_message_string(void)
@@ -114,6 +131,14 @@ const char *get_meta_message_string(void)
 void set_meta_patches_string(const char *string)
 {
   sz_strlcpy(meta_patches, string);
+}
+
+/*************************************************************************
+ set the metaserver topic string
+*************************************************************************/
+void set_meta_topic_string(const char *string)
+{
+  sz_strlcpy(meta_topic, string);
 }
 
 /*************************************************************************
@@ -179,6 +204,9 @@ static bool send_to_metaserver(enum meta_flag flag)
   case PRE_GAME_STATE:
     sz_strlcpy(state, "Pregame");
     break;
+  case SELECT_RACES_STATE:
+    sz_strlcpy(state, "Nation Select");
+    break;
   case RUN_GAME_STATE:
     sz_strlcpy(state, "Running");
     break;
@@ -210,6 +238,10 @@ static bool send_to_metaserver(enum meta_flag flag)
     s = end_of_strn(s, &rest);
 
     my_snprintf(s, rest, "capability=%s&", my_url_encode(our_capability));
+    s = end_of_strn(s, &rest);
+
+    my_snprintf(s, rest, "topic=%s&",
+                my_url_encode(get_meta_topic_string()));
     s = end_of_strn(s, &rest);
 
     my_snprintf(s, rest, "serverid=%s&",
@@ -269,10 +301,10 @@ static bool send_to_metaserver(enum meta_flag flag)
         } else if (!plr->is_alive && !strchr(game.allow_take, 'd')) {
           is_player_available = FALSE;
         } else if (plr->ai.control
-            && !strchr(game.allow_take, (game.info.is_new_game ? 'A' : 'a'))) {
+            && !strchr(game.allow_take, (game.is_new_game ? 'A' : 'a'))) {
           is_player_available = FALSE;
         } else if (!plr->ai.control
-            && !strchr(game.allow_take, (game.info.is_new_game ? 'H' : 'h'))) {
+            && !strchr(game.allow_take, (game.is_new_game ? 'H' : 'h'))) {
           is_player_available = FALSE;
         }
 
@@ -293,27 +325,27 @@ static bool send_to_metaserver(enum meta_flag flag)
     /* send some variables: should be listed in inverted order
      * FIXME: these should be input from the settings array */
     my_snprintf(s, rest, "vn[]=%s&vv[]=%d&",
-                my_url_encode("timeout"), game.info.timeout);
+                my_url_encode("timeout"), game.timeout);
     s = end_of_strn(s, &rest);
 
     my_snprintf(s, rest, "vn[]=%s&vv[]=%d&",
-                my_url_encode("year"), game.info.year);
+                my_url_encode("year"), game.year);
     s = end_of_strn(s, &rest);
 
     my_snprintf(s, rest, "vn[]=%s&vv[]=%d&",
-                my_url_encode("turn"), game.info.turn);
+                my_url_encode("turn"), game.turn);
     s = end_of_strn(s, &rest);
 
     my_snprintf(s, rest, "vn[]=%s&vv[]=%d&",
-                my_url_encode("endyear"), game.info.end_year);
+                my_url_encode("endyear"), game.end_year);
     s = end_of_strn(s, &rest);
 
     my_snprintf(s, rest, "vn[]=%s&vv[]=%d&",
-                my_url_encode("mirules.nplayers"), game.info.min_players);
+                my_url_encode("minplayers"), game.min_players);
     s = end_of_strn(s, &rest);
 
     my_snprintf(s, rest, "vn[]=%s&vv[]=%d&",
-                my_url_encode("maxplayers"), game.info.max_players);
+                my_url_encode("maxplayers"), game.max_players);
     s = end_of_strn(s, &rest);
 
     my_snprintf(s, rest, "vn[]=%s&vv[]=%s&",
@@ -385,6 +417,9 @@ void server_open_meta(void)
 
   if (meta_patches[0] == '\0') {
     set_meta_patches_string(default_meta_patches_string());
+  }
+  if (meta_topic[0] == '\0') {
+    set_meta_topic_string(default_meta_topic_string());
   }
   if (meta_message[0] == '\0') {
     set_meta_message_string(default_meta_message_string());

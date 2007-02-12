@@ -19,18 +19,10 @@
 
 #include "colors_g.h"
 
-struct color {
-  XColor color;
-};
-
-enum Display_color_type {
-  BW_DISPLAY, GRAYSCALE_DISPLAY, COLOR_DISPLAY
-};
-
 void alloc_colors(XColor *colors, int ncols);
 void free_colors(unsigned long *pixels, int ncols);
-enum Display_color_type get_visual(void);
 
+extern unsigned long colors_standard[COLOR_STD_LAST];
 extern Colormap cmap;
 
 #endif  /* FC__COLORS_H */

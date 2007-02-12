@@ -13,9 +13,8 @@
 #ifndef FC__EVENTS_H
 #define FC__EVENTS_H
 
-#include "shared.h"          /* bool type */
-
 enum event_type {
+  E_NOEVENT = -1,
   E_CITY_CANTBUILD,
   E_CITY_LOST,
   E_CITY_LOVE,
@@ -32,7 +31,6 @@ enum event_type {
   E_CITY_GRAN_THROTTLE,
   E_CITY_TRANSFER,
   E_CITY_BUILD,
-  E_CITY_PRODUCTION_CHANGED,
   E_WORKLIST,
   E_UPRISING,
   E_CIVIL_WAR,
@@ -60,11 +58,10 @@ enum event_type {
   E_ENEMY_DIPLOMAT_POISON,
   E_ENEMY_DIPLOMAT_SABOTAGE,
   E_ENEMY_DIPLOMAT_THEFT,
-  E_CARAVAN_ACTION,
-  E_TUTORIAL,
   E_BROADCAST_REPORT,
   E_GAME_END,
   E_GAME_START,
+  E_MESSAGE_WALL,
   E_NATION_SELECTED,
   E_DESTROYED,
   E_REPORT,
@@ -108,47 +105,14 @@ enum event_type {
   E_WONDER_STOPPED,
   E_WONDER_WILL_BE_BUILT,
   E_DIPLOMACY,
+  E_CITY_PRODUCTION_CHANGED,
   E_TREATY_EMBASSY,
-  E_BAD_COMMAND,  /* Illegal command sent from client. */
-  E_SETTING, /* Messages for changed server settings */
-  E_CHAT_MSG, /* Chatline messages */
-  E_MESSAGE_WALL,
-  E_CHAT_ERROR, /* Chatline errors (bad syntax, etc.) */
-  E_CONNECTION, /* Messages about acquired or lost connections */
-  E_AI_DEBUG, /* AI debugging messages */
-  E_PLAYER_SETTINGS, /* taxes etc */
   /* 
    * Note: If you add a new event, make sure you make a similar change
-   * to the events array in common/events.c using GEN_EV and to
+   * to the events array in client/options.c using GEN_EV and to
    * data/stdsounds.spec.
    */
   E_LAST
 };
 
-extern int sorted_events[];	        /* [E_LAST], sorted by the
-					   translated message text */
-
-const char *get_event_message_text(enum event_type event);
-const char *get_event_sound_tag(enum event_type event);
-
-bool is_city_event(enum event_type event);
-
-void events_init(void);
-void events_free(void);
-
-
-/* Iterates over all events, sorted by the message text string. */
-#define sorted_event_iterate(event)                                           \
-{                                                                             \
-  enum event_type _event, event;                                              \
-  for (_event = 0; _event < E_LAST; _event++) {                               \
-    event = sorted_events[_event];                                            \
-    {
-
-#define sorted_event_iterate_end                                              \
-    }                                                                         \
-  }                                                                           \
-}
-
 #endif /* FC__EVENTS_H */
-

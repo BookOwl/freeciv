@@ -15,7 +15,7 @@ AC_TRY_RUN([
 /*
  * Check to make sure that ngettext works at runtime. Specifically,
  * some gettext versions dump core if the ngettext function is called.
- * (c) 2002 Raimar Falke <rfalke@freeciv.org>
+ * (c) 2002 Raimar Falke <rf13@inf.tu-dresden.de>
  */
 #include <string.h>
 #include <libintl.h>

@@ -34,7 +34,6 @@
 #include "genlist.h"
 #include "government.h"
 #include "mem.h"
-#include "movement.h"
 #include "shared.h"
 #include "support.h"
 #include "tech.h"
@@ -541,8 +540,8 @@ static void create_help_page(enum help_page_type type)
 	Child, HGroup,
 	    Child, HSpace(0),
 	    Child, help_unit_sprite = SpriteObject,
-		MUIA_FixWidth, tileset_full_tile_width(tileset),
-		MUIA_FixHeight, tileset_full_tile_height(tileset),
+		MUIA_FixWidth, UNIT_TILE_WIDTH,
+		MUIA_FixHeight, UNIT_TILE_HEIGHT,
 		MUIA_Sprite_Transparent, TRUE,
 		End,
 	    Child, HSpace(0),
@@ -610,7 +609,7 @@ static void help_update_improvement(const struct help_item *pitem,
 
   create_help_page(HELP_IMPROVEMENT);
 
-  if (which < game.control.num_impr_types)
+  if (which < game.num_impr_types)
   {
     struct impr_type *imp = &improvement_types[which];
 
@@ -635,7 +634,7 @@ static void help_update_wonder(const struct help_item *pitem,
 
   create_help_page(HELP_WONDER);
 
-  if (which < game.control.num_impr_types)
+  if (which < game.num_impr_types)
   {
     struct impr_type *imp = &improvement_types[which];
 
@@ -666,7 +665,7 @@ static void help_update_unit_type(const struct help_item *pitem,
 
   create_help_page(HELP_UNIT);
 
-  if (i < game.control.num_unit_types)
+  if (i < game.num_unit_types)
   {
     ULONG bg_color;
     struct unit_type *utype = get_unit_type(i);
@@ -689,7 +688,7 @@ static void help_update_unit_type(const struct help_item *pitem,
 
     UpdateTechButton(help_unit_needs_button, utype->tech_requirement);
 
-    if (utype->obsoleted_by == U_NOT_OBSOLETED)
+    if (utype->obsoleted_by == -1)
       text = _("None");
     else
       text = get_unit_type(utype->obsoleted_by)->name;
@@ -780,7 +779,7 @@ static void help_update_tech(const struct help_item *pitem, char *title, int i)
 	} unit_type_iterate_end;
 
 
-	for (j = 0; j < game.control.num_tech_types; j++) {
+	for (j = 0; j < game.num_tech_types; j++) {
 	  Object *o, *button;
 	  if (i == advances[j].req[0])
 	  {
@@ -852,12 +851,12 @@ static void help_update_terrain(const struct help_item *pitem,
 
   if (i < T_COUNT)
   {
-    struct terrain *tile = get_terrain(i);
+    struct tile_type *tile = get_tile_type(i);
     char buf[256];
     Object *o,*g;
 
-    settextf(help_terrain_move_text, _("Movecost: %ld"), terrains[i].movement_cost);
-    settextf(help_terrain_defense_text, _("Defense: %ld.%ld"), (terrains[i].defense_bonus / 10), terrains[i].defense_bonus % 10);
+    settextf(help_terrain_move_text, _("Movecost: %ld"), tile_types[i].movement_cost);
+    settextf(help_terrain_defense_text, _("Defense: %ld.%ld"), (tile_types[i].defense_bonus / 10), tile_types[i].defense_bonus % 10);
 
     DoMethod(help_right_group, MUIM_Group_InitChange);
     DoMethod(help_page_group, MUIM_Group_InitChange);
@@ -869,15 +868,13 @@ static void help_update_terrain(const struct help_item *pitem,
 
     help_terrain_dynamic_group = VGroup,End;
 
-    my_snprintf(buf,sizeof(buf),_("Food:   %d\nShield: %d\nTrade:  %d"),
-		tile->output[O_FOOD], tile->output[O_SHIELD],
-		tile->output[O_TRADE]);
+    my_snprintf(buf,sizeof(buf),_("Food:   %d\nShield: %d\nTrade:  %d"),tile->food, tile->shield, tile->trade);
     if((o = HGroup,
               Child, HSpace(0),
 	      Child, TextObject, MUIA_Text_Contents, "", End,
 	      Child, SpriteObject, MUIA_Sprite_Sprite, tile->sprite[NUM_DIRECTION_NSEW - 1],
-	        MUIA_FixWidth, tileset_tile_width(tileset),
-	        MUIA_FixHeight, tileset_tile_height(tileset),
+	        MUIA_FixWidth, NORMAL_TILE_WIDTH,
+	        MUIA_FixHeight, NORMAL_TILE_HEIGHT,
 	      	End,
 	      Child, TextObject, MUIA_Text_Contents, buf, End,
               Child, HSpace(0),
@@ -888,18 +885,16 @@ static void help_update_terrain(const struct help_item *pitem,
 
     g = HGroup, Child, HSpace(0), End;
 
-    my_snprintf(buf,sizeof(buf),_("Food:   %d\nShield: %d\nTrade:  %d"),
-		tile->special[0].output[O_FOOD],
-		tile->special[0].output[O_SHIELD],
-		tile->special[0].output[O_TRADE]);
+    my_snprintf(buf,sizeof(buf),_("Food:   %d\nShield: %d\nTrade:  %d"),tile->food_special_1, tile->shield_special_1,
+    tile->trade_special_1);
     if((o = HGroup,
               Child, HSpace(0),
 	      Child, TextObject, MUIA_Text_Contents, tile->special_1_name, End,
 	      Child, SpriteObject,
 		  MUIA_Sprite_Sprite, tile->sprite[NUM_DIRECTION_NSEW - 1],
 		  MUIA_Sprite_OverlaySprite, tile->special[0].sprite,
-		  MUIA_FixWidth, tileset_tile_width(tileset),
-		  MUIA_FixHeight, tileset_tile_height(tileset),
+		  MUIA_FixWidth, NORMAL_TILE_WIDTH,
+		  MUIA_FixHeight, NORMAL_TILE_HEIGHT,
 		  End,
 	      Child, TextObject, MUIA_Text_Contents, buf, End,
               Child, HSpace(0),
@@ -908,10 +903,7 @@ static void help_update_terrain(const struct help_item *pitem,
       DoMethod(g, OM_ADDMEMBER, o);
     }
 
-    my_snprintf(buf,sizeof(buf),_("Food:   %d\nShield: %d\nTrade:  %d"),
-		tile->special[1].output[O_FOOD],
-		tile->special[1].output[O_SHIELD],
-		tile->special[1].output[O_TRADE]);
+    my_snprintf(buf,sizeof(buf),_("Food:   %d\nShield: %d\nTrade:  %d"),tile->food_special_2, tile->shield_special_2,
     tile->trade_special_2);
     if((o = HGroup,
               Child, HSpace(0),
@@ -919,8 +911,8 @@ static void help_update_terrain(const struct help_item *pitem,
 	      Child, SpriteObject,
 		  MUIA_Sprite_Sprite, tile->sprite[NUM_DIRECTION_NSEW - 1],
 		  MUIA_Sprite_OverlaySprite, tile->special[1].sprite,
-		  MUIA_FixWidth, tileset_tile_width(tileset),
-		  MUIA_FixHeight, tileset_tile_height(tileset),
+		  MUIA_FixWidth, NORMAL_TILE_WIDTH,
+		  MUIA_FixHeight, NORMAL_TILE_HEIGHT,
 		  End,
 	      Child, TextObject, MUIA_Text_Contents, buf, End,
               Child, HSpace(0),

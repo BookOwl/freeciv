@@ -20,28 +20,12 @@ struct Treaty;
 struct Clause;
 struct ai_data;
 
-enum war_reason {
-  WAR_REASON_BEHAVIOUR, WAR_REASON_SPACE, WAR_REASON_EXCUSE,
-  WAR_REASON_HATRED, WAR_REASON_ALLIANCE, WAR_REASON_NONE
-};
-
-void ai_diplomacy_begin_new_phase(struct player *pplayer,
-				  struct ai_data *ai);
+void ai_diplomacy_calculate(struct player *pplayer, struct ai_data *ai);
 void ai_diplomacy_actions(struct player *pplayer);
 
 void ai_treaty_evaluate(struct player *pplayer, struct player *aplayer,
                         struct Treaty *ptreaty);
 void ai_treaty_accepted(struct player *pplayer, struct player *aplayer, 
                         struct Treaty *ptreaty);
-
-void ai_incident_war(struct player *violator, struct player *victim);
-void ai_incident_diplomat(struct player *violator, struct player *victim);
-void ai_incident_nuclear(struct player *violator, struct player *victim);
-void ai_incident_pillage(struct player *violator, struct player *victim);
-
-bool ai_on_war_footing(struct player *pplayer);
-
-void ai_diplomacy_first_contact(struct player *pplayer,
-                                struct player *aplayer);
 
 #endif

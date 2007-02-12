@@ -124,9 +124,8 @@ static void intel_create_dialog(struct player *p)
   hbox=fcwin_hbox_new(intel_dialog,FALSE);
    
   my_snprintf(buf, sizeof(buf), _("Researching: %s(%d/%d)"),
-	      get_tech_name(p, get_player_research(p)->researching),
-	      get_player_research(p)->bulbs_researched,
-	      total_bulbs_required(p));
+	      get_tech_name(p, p->research.researching),
+	      p->research.bulbs_researched, total_bulbs_required(p));
   fcwin_box_add_static(hbox,buf,0,SS_CENTER,TRUE,TRUE,10);
   
   pcity = find_palace(p);
@@ -139,7 +138,7 @@ static void intel_create_dialog(struct player *p)
   lb=fcwin_box_add_list(vbox,10,0,LBS_NOSEL | LBS_SORT | WS_VSCROLL,
 			TRUE,TRUE,5);
   
-  for(i=A_FIRST, j=0; i<game.control.num_tech_types; i++)
+  for(i=A_FIRST, j=0; i<game.num_tech_types; i++)
     if(get_invention(p, i)==TECH_KNOWN) {
       if(get_invention(game.player_ptr, i)==TECH_KNOWN) {
         sz_strlcpy(tech_list_names[j], advances[i].name);

@@ -16,9 +16,5 @@
 
 #include "colors_g.h"
 
-struct color {
-  /* PORTME: color structure */
-  int r, g, b;
-};
 
 #endif				/* FC__COLORS_H */

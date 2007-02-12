@@ -142,15 +142,15 @@ static const char *const get_prod_complete_string(struct city *pcity,
   }
 
   stock = pcity->shield_stock;
-  if (pcity->production.is_unit) {
-    cost = unit_build_shield_cost(pcity->production.value);
+  if (pcity->is_building_unit) {
+    cost = unit_build_shield_cost(pcity->currently_building);
   } else {
-    if (pcity->production.value == B_CAPITAL) {
+    if (pcity->currently_building == B_CAPITAL) {
       my_snprintf(buffer, sizeof(buffer),
-		  get_improvement_type(pcity->production.value)->name);
+		  get_improvement_type(pcity->currently_building)->name);
       return buffer;
     }
-    cost = impr_build_shield_cost(pcity->production.value);
+    cost = impr_build_shield_cost(pcity->currently_building);
   }
 
   stock += surplus;
@@ -403,7 +403,7 @@ void refresh_unit_city_dialogs(struct unit *punit)
   struct city_dialog *pdialog;
 
   pcity_sup = player_find_city_by_id(game.player_ptr, punit->homecity);
-  pcity_pre = tile_get_city(punit->tile);
+  pcity_pre = map_get_city(punit->tile);
 
   if (pcity_sup && (pdialog = get_city_dialog(pcity_sup)))
     city_dialog_update_supported_units(pdialog, 0);
@@ -827,8 +827,8 @@ static void commit_city_worklist(struct worklist *pwl, void *data)
     if (!worklist_peek_ith(pwl, &id, &is_unit, k))
       break;
 
-    same_as_current_build = id == pdialog->pcity->production.value
-	&& is_unit == pdialog->pcity->production.is_unit;
+    same_as_current_build = id == pdialog->pcity->currently_building
+	&& is_unit == pdialog->pcity->is_building_unit;
 
     /* Very special case: If we are currently building a wonder we
        allow the construction to continue, even if we the wonder is
@@ -944,13 +944,13 @@ static void city_buy(struct city_dialog **ppdialog)
   char *name;
   char buf[512];
 
-  if (pdialog->pcity->production.is_unit)
+  if (pdialog->pcity->is_building_unit)
   {
-    name = get_unit_type(pdialog->pcity->production.value)->name;
+    name = get_unit_type(pdialog->pcity->currently_building)->name;
   }
   else
   {
-    name = get_impr_name_ex(pdialog->pcity, pdialog->pcity->production.value);
+    name = get_impr_name_ex(pdialog->pcity, pdialog->pcity->currently_building);
   }
 
   value = city_buy_cost(pdialog->pcity);
@@ -1147,12 +1147,13 @@ static void city_cma_changed(struct city_dialog **ppdialog)
 {
   struct city_dialog *pdialog = *ppdialog; 
   struct cm_parameter param;
+  int i;
 
   cmafec_get_fe_parameter(pdialog->pcity, &param);
-  output_type_iterate(i) {
+  for (i = 0; i < NUM_STATS; i++) {
     param.minimal_surplus[i] = (int)xget(pdialog->minimal_surplus_slider[i],MUIA_Numeric_Value);
     param.factor[i] = (int)xget(pdialog->factor_slider[i],MUIA_Numeric_Value);
-  } output_type_iterate_end;
+  }
   param.require_happy = xget(pdialog->celebrate_check, MUIA_Selected);
   param.happy_factor = xget(pdialog->factor_slider[6],MUIA_Numeric_Value);
 
@@ -1266,7 +1267,7 @@ void popup_city_production_dialog(struct city *pcity)
 
         DoMethod(pcprod->available_listview, MUIM_NList_InsertSingle, i + 1, MUIV_NList_Insert_Bottom);
 
-        if (i == pcity->production.value && !pcity->production.is_unit)
+        if (i == pcity->currently_building && !pcity->is_building_unit)
          current = pos++;
 
         pos++;
@@ -1286,7 +1287,7 @@ void popup_city_production_dialog(struct city *pcity)
       {
         DoMethod(pcprod->available_listview, MUIM_NList_InsertSingle, i + 10000, MUIV_NList_Insert_Bottom);
 
-        if(i == pcity->production.value && pcity->production.is_unit)
+        if(i == pcity->currently_building && pcity->is_building_unit)
          current = pos++;
 
         pos++;
@@ -1371,7 +1372,7 @@ static struct city_dialog *create_city_dialog(struct city *pcity)
   page_labels[1] = _("Units");
   page_labels[2] = _("Worklist");
   page_labels[3] = _("Happiness");
-  page_labels[4] = _("Citizen Governor");
+  page_labels[4] = _("CMA");
   page_labels[5] = _("Trade Routes");
   page_labels[6] = _("Misc. Settings");
 
@@ -1379,7 +1380,7 @@ static struct city_dialog *create_city_dialog(struct city *pcity)
   misc_whichtab_label[1] = _("Units page");
   misc_whichtab_label[2] = _("Worklist page");
   misc_whichtab_label[3] = _("Happiness page");
-  misc_whichtab_label[4] = _("Governor page");
+  misc_whichtab_label[4] = _("CMA page");
   misc_whichtab_label[5] = _("Trade Routes page");
   misc_whichtab_label[6] = _("This Misc. Settings page");
   misc_whichtab_label[7] = _("Last active page");
@@ -1735,7 +1736,7 @@ static struct city_dialog *create_city_dialog(struct city *pcity)
 
     DoMethod(app, OM_ADDMEMBER, pdialog->wnd);
 
-    genlist_prepend(&dialog_list, pdialog, 0);
+    genlist_insert(&dialog_list, pdialog, 0);
     refresh_city_dialog(pdialog->pcity);
     return pdialog;
   }
@@ -1762,12 +1763,12 @@ static void city_dialog_update_building(struct city_dialog *pdialog)
   get_city_dialog_production(pcity, buf, sizeof(buf));
 
   shield = pcity->shield_stock;
-  if (pcity->production.is_unit) {
-    max_shield = unit_build_shield_cost(pcity->production.value);
-    descr = get_unit_type(pcity->production.value)->name;
+  if (pcity->is_building_unit) {
+    max_shield = unit_build_shield_cost(pcity->currently_building);
+    descr = get_unit_type(pcity->currently_building)->name;
   } else {
-    max_shield = impr_build_shield_cost(pcity->production.value);
-    descr = get_impr_name_ex(pcity, pcity->production.value);
+    max_shield = impr_build_shield_cost(pcity->currently_building);
+    descr = get_impr_name_ex(pcity, pcity->currently_building);
   }
 
   if (!worklist_is_empty(&pcity->worklist)) {
@@ -1806,15 +1807,12 @@ static void city_dialog_update_information(struct city_dialog *pdialog, struct c
   granarystyle = (pcity->food_surplus < 0 && granaryturns < 4) ? RED : NORMAL;
   pollutionstyle = (pcity->pollution >= 10) ? RED : NORMAL;
 
-  settextf(info->food_text, "%2d (%+2d)", pcity->prod[O_FOOD], pcity->food_surplus);
-  settextf(info->shield_text, "%2d (%+2d)", pcity->prod[O_SHIELD] + pcity->waste[O_SHIELD], pcity->shield_surplus);
-  settextf(info->trade_text, "%2d (%+2d)",
-	   pcity->trade_prod + pcity->waste[O_TRADE],
-	   pcity->trade_prod);
-  settextf(info->gold_text, "%2d (%+2d)", pcity->prod[O_GOLD],
-	   pcity->surplus[O_GOLD]);
-  settextf(info->luxury_text, "%2d", pcity->prod[O_LUXURY]);
-  settextf(info->science_text, "%2d", pcity->prod[O_SCIENCE]);
+  settextf(info->food_text, "%2d (%+2d)", pcity->food_prod, pcity->food_surplus);
+  settextf(info->shield_text, "%2d (%+2d)", pcity->shield_prod + pcity->shield_waste, pcity->shield_surplus);
+  settextf(info->trade_text, "%2d (%+2d)", pcity->trade_prod + pcity->corruption, pcity->trade_prod);
+  settextf(info->gold_text, "%2d (%+2d)", pcity->tax_total, city_gold_surplus(pcity, pcity->tax_total));
+  settextf(info->luxury_text, "%2d", pcity->luxury_total);
+  settextf(info->science_text, "%2d", pcity->science_total);
 
   set(info->granary_text, MUIA_Text_PreParse, granarystyle==RED?MUIX_B:"");
   set(info->growth_text, MUIA_Text_PreParse, growthstyle==RED?MUIX_B:"");
@@ -1832,8 +1830,8 @@ static void city_dialog_update_information(struct city_dialog *pdialog, struct c
     settext(info->growth_text,buf);
   }
 
-  settextf(info->corruption_text, "%ld", pcity->waste[O_TRADE]);
-  settextf(info->waste_text, "%ld", pcity->waste[O_SHIELD]);
+  settextf(info->corruption_text, "%ld", pcity->corruption);
+  settextf(info->waste_text, "%ld", pcity->shield_waste);
   settextf(info->pollution_text, "%ld", pcity->pollution);
 }
 
@@ -1869,7 +1867,7 @@ static void city_dialog_update_citizens(struct city_dialog *pdialog)
   get_city_citizen_types(pcity, 4, citizens);
 
   for (i = 0; i < pcity->size; i++) {
-    Object *o = MakeSprite(get_citizen_sprite(tileset, citizens[i], i, pcity));
+    Object *o = MakeSprite(get_citizen_sprite(citizens[i], i, pcity));
 
     if (o) {
       DoMethod(pdialog->citizen2_group, OM_ADDMEMBER, o);
@@ -2041,15 +2039,17 @@ static void city_dialog_update_tradelist(struct city_dialog *pdialog)
       } else {
 	my_snprintf(cityname, sizeof(cityname), _("%s"), _("Unknown"));
       }
-      cat_snprintf(buf, sizeof(buf), _("Trade with %s gives %d trade.\n"),
+      my_snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf),
+		  _("Trade with %s gives %d trade.\n"),
 		  cityname, pdialog->pcity->trade_value[i]);
     }
   }
   if (!x) {
-    cat_snprintf(buf, sizeof(buf), _("No trade routes exist."));
+    my_snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf),
+		_("No trade routes exist."));
   } else {
-    cat_snprintf(buf, sizeof(buf), _("Total trade from trade routes: %d"),
-		 total);
+    my_snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf),
+		_("Total trade from trade routes: %d"), total);
   }
   settext(pdialog->trade_text,buf);
 }
@@ -2154,10 +2154,11 @@ static void refresh_cma_dialog(struct city_dialog *pdialog)
 
   
   /* if called from a hscale, we _don't_ want to do this */
-  output_type_iterate(i) {
+  for (i = 0; i < NUM_STATS; i++)
+  {
     nnset(pdialog->minimal_surplus_slider[i],MUIA_Numeric_Value,param.minimal_surplus[i]);
     nnset(pdialog->factor_slider[i],MUIA_Numeric_Value,param.factor[i]);
-  } output_type_iterate_end;
+  }
   nnset(pdialog->celebrate_check, MUIA_Selected,param.require_happy);
   nnset(pdialog->factor_slider[6], MUIA_Numeric_Value, param.happy_factor);
 
@@ -2193,8 +2194,8 @@ static void refresh_happiness_dialog(struct city_dialog *pdialog)
   struct player *pplayer = &game.players[pcity->owner];
   struct government *g = get_gov_pcity(pcity);
   int cities = city_list_size(&pplayer->cities);
-  int content = game.info.unhappysize;
-  int basis = game.info.cityfactor + g->empire_size_mod;
+  int content = game.unhappysize;
+  int basis = game.cityfactor + g->empire_size_mod;
   int step = g->empire_size_inc;
   int excess = cities - basis;
   int penalty = 0;
@@ -2227,7 +2228,7 @@ static void refresh_happiness_dialog(struct city_dialog *pdialog)
 
   /* LUXURY */
   my_snprintf(bptr, nleft, _("Luxury: %d total (maximum %d usable). "),
-	      pcity->prod[O_LUXURY], 2 * pcity->size);
+	      pcity->luxury_total, 2 * pcity->size);
 
   settext(pdialog->happiness_citizen_text[1], buf);
 
@@ -2281,7 +2282,7 @@ static void refresh_happiness_dialog(struct city_dialog *pdialog)
     for (j = 0; j < num_citizens; j++) {
       Object *obj;
 
-      obj = MakeSprite(get_citizen_sprite(tileset, citizens[j], j, pcity));
+      obj = MakeSprite(get_citizen_sprite(citizens[j], j, pcity));
       if (obj) {
 	DoMethod(pdialog->happiness_citizen_group[i], OM_ADDMEMBER, obj);
       }

@@ -1,4 +1,4 @@
-/********************7************************************************** 
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -24,7 +24,6 @@
 
 #include "city.h"
 #include "citydlg_common.h"
-#include "civclient.h"
 #include "fcintl.h"
 #include "game.h"
 #include "gui_main.h"
@@ -40,10 +39,9 @@
 #include "options.h"
 #include "tilespec.h"
 
-#include "canvas.h"
-#include "citydlg.h"
-#include "graphics.h"
 #include "wldlg.h"
+#include "citydlg.h"
+#include "civclient.h"
 
 static GtkWidget *worklists_shell;
 static GtkWidget *worklists_list;
@@ -61,8 +59,7 @@ static int max_unit_height = -1, max_unit_width = -1;
 
 static void popup_worklist(struct worklist *pwl);
 static void popdown_worklist(struct worklist *pwl);
-static void dst_row_callback(GtkTreeView *view, GtkTreePath *path,
-			     GtkTreeViewColumn *col, gpointer data);
+
 
 /****************************************************************
 ...
@@ -82,10 +79,10 @@ static void update_max_unit_size(void)
   max_unit_width = 0;
 
   unit_type_iterate(i) {
+    struct unit_type *type = get_unit_type(i);
     int x1, x2, y1, y2;
-    struct sprite *sprite = get_unittype_sprite(tileset, i);
 
-    sprite_get_bounding_box(sprite, &x1, &y1, &x2, &y2);
+    sprite_get_bounding_box(type->sprite, &x1, &y1, &x2, &y2);
     max_unit_width = MAX(max_unit_width, x2 - x1);
     max_unit_height = MAX(max_unit_height, y2 - y1);
   } unit_type_iterate_end;
@@ -106,6 +103,7 @@ static void worklists_destroy_callback(GtkWidget *w, gpointer data)
 *****************************************************************/
 void update_worklist_report_dialog(void)
 {
+  struct player *plr;
   int i;
   GtkTreeIter it;
 
@@ -113,14 +111,16 @@ void update_worklist_report_dialog(void)
     return;
   }
 
-  gtk_list_store_clear(worklists_store);
+  plr = game.player_ptr;
 
+  gtk_list_store_clear(worklists_store);
+  
   for (i = 0; i < MAX_NUM_WORKLISTS; i++) {
-    if (client.worklists[i].is_valid) {
+    if (plr->worklists[i].is_valid) {
       gtk_list_store_append(worklists_store, &it);
       
        gtk_list_store_set(worklists_store, &it,
-			  0, client.worklists[i].name,
+			  0, plr->worklists[i].name,
 			  1, i,
 			  -1); 
     }
@@ -132,13 +132,16 @@ void update_worklist_report_dialog(void)
 *****************************************************************/
 static void worklists_response(GtkWidget *w, gint response)
 {
+  struct player *plr;
   int i, pos;
   GtkTreeSelection *selection;
   GtkTreeModel *model;
   GtkTreeIter it;
 
+  plr = game.player_ptr;
+
   for (i = 0; i < MAX_NUM_WORKLISTS; i++) {
-    if (!client.worklists[i].is_valid) {
+    if (!plr->worklists[i].is_valid) {
       break;
     }
   }
@@ -159,9 +162,9 @@ static void worklists_response(GtkWidget *w, gint response)
       }
 
       /* Validate this slot. */
-      init_worklist(&client.worklists[i]);
-      client.worklists[i].is_valid = TRUE;
-      strcpy(client.worklists[i].name, _("new"));
+      init_worklist(&plr->worklists[i]);
+      plr->worklists[i].is_valid = TRUE;
+      strcpy(plr->worklists[i].name, _("new"));
 
       update_worklist_report_dialog();
       return;
@@ -171,10 +174,10 @@ static void worklists_response(GtkWidget *w, gint response)
 	return;
       }
 
-      popdown_worklist(&client.worklists[pos]);
+      popdown_worklist(&plr->worklists[pos]);
 
-      client.worklists[pos].is_valid = FALSE;
-      client.worklists[pos].name[0] = '\0';
+      plr->worklists[pos].is_valid = FALSE;
+      plr->worklists[pos].name[0] = '\0';
 
       update_worklist_report_dialog();
       return;
@@ -184,7 +187,7 @@ static void worklists_response(GtkWidget *w, gint response)
 	return;
       }
 
-      popup_worklist(&client.worklists[pos]);
+      popup_worklist(&plr->worklists[pos]);
       return;
 
     default:
@@ -203,13 +206,15 @@ static void cell_edited(GtkCellRendererText *cell,
   GtkTreePath *path;
   GtkTreeIter it;
   int pos;
+  struct player *plr;
 
   path = gtk_tree_path_new_from_string(spath);
   gtk_tree_model_get_iter(GTK_TREE_MODEL(worklists_store), &it, path);
   
   gtk_tree_model_get(GTK_TREE_MODEL(worklists_store), &it, 1, &pos, -1);
+  plr = game.player_ptr;
 
-  sz_strlcpy(client.worklists[pos].name, text);
+  sz_strlcpy(plr->worklists[pos].name, text);
   gtk_list_store_set(worklists_store, &it, 0, text, -1);
 
   gtk_tree_path_free(path);
@@ -317,7 +322,7 @@ struct worklist_data {
   GtkTreeViewColumn *src_col, *dst_col;
 
   GtkWidget *add_cmd, *change_cmd, *help_cmd;
-  GtkWidget *up_cmd, *down_cmd, *prepend_cmd, *append_cmd, *remove_cmd;
+  GtkWidget *up_cmd, *down_cmd, *prepend_cmd, *append_cmd;
 
   bool future;
 };
@@ -461,25 +466,27 @@ static void worklist_destroy(GtkWidget *editor, gpointer data)
 *****************************************************************/
 static void menu_item_callback(GtkMenuItem *item, struct worklist_data *ptr)
 {
+  struct player *plr;
   gint pos;
   struct worklist *pwl;
 
-  if (!game.player_ptr) {
-    return;
-  }
-
+  plr = game.player_ptr;
   pos = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(item), "pos"));
 
-  pwl = &client.worklists[pos];
+  pwl = &plr->worklists[pos];
 
   if (pwl->is_valid) {
     int i;
 
-    for (i = 0; i < worklist_length(pwl); i++) {
+    for (i = 0; i < MAX_LEN_WORKLIST; i++) {
       GtkTreeIter it;
       cid cid;
 
-      cid = cid_encode(pwl->entries[i]);
+      if (pwl->wlefs[i] == WEF_END) {
+	break;
+      }
+
+      cid = cid_encode(pwl->wlefs[i] == WEF_UNIT, pwl->wlids[i]);
 
       gtk_list_store_append(ptr->dst, &it);
       gtk_list_store_set(ptr->dst, &it, 0, (gint) cid, -1);
@@ -494,15 +501,17 @@ static void menu_item_callback(GtkMenuItem *item, struct worklist_data *ptr)
 *****************************************************************/
 static void popup_add_menu(GtkMenuShell *menu, gpointer data)
 {
+  struct player *plr;
   int i;
   GtkWidget *item;
 
   gtk_container_foreach(GTK_CONTAINER(menu),
 			(GtkCallback) gtk_widget_destroy, NULL);
+  plr = game.player_ptr;
 
   for (i = 0; i < MAX_NUM_WORKLISTS; i++) {
-    if (client.worklists[i].is_valid) {
-      item = gtk_menu_item_new_with_label(client.worklists[i].name);
+    if (plr->worklists[i].is_valid) {
+      item = gtk_menu_item_new_with_label(plr->worklists[i].name);
       g_object_set_data(G_OBJECT(item), "pos", GINT_TO_POINTER(i));
       gtk_widget_show(item);
 
@@ -540,19 +549,19 @@ static void help_callback(GtkWidget *w, gpointer data)
 
   if (gtk_tree_selection_get_selected(selection, &model, &it)) {
     gint cid;
-    struct city_production target;
+    int id;
+    bool is_unit;
 
     gtk_tree_model_get(model, &it, 0, &cid, -1);
-    target = cid_decode(cid);
+    is_unit = cid_is_unit(cid);
+    id = cid_id(cid);
 
-    if (target.is_unit) {
-      popup_help_dialog_typed(get_unit_type(target.value)->name, HELP_UNIT);
-    } else if (is_great_wonder(target.value)) {
-      popup_help_dialog_typed(get_improvement_name(target.value),
-			      HELP_WONDER);
+    if (is_unit) {
+      popup_help_dialog_typed(get_unit_type(id)->name, HELP_UNIT);
+    } else if (is_wonder(id)) {
+      popup_help_dialog_typed(get_improvement_name(id), HELP_WONDER);
     } else {
-      popup_help_dialog_typed(get_improvement_name(target.value),
-			      HELP_IMPROVEMENT);
+      popup_help_dialog_typed(get_improvement_name(id), HELP_IMPROVEMENT);
     }
   } else {
     popup_help_dialog_string(HELP_WORKLIST_EDITOR_ITEM);
@@ -577,7 +586,7 @@ static void change_callback(GtkWidget *w, gpointer data)
 
     gtk_tree_model_get(model, &it, 0, &cid, -1);
 
-    city_change_production(ptr->pcity, cid_production(cid));
+    city_change_production(ptr->pcity, cid_is_unit(cid), cid_id(cid));
   }
 }
 
@@ -624,21 +633,6 @@ static void queue_bubble_up(struct worklist_data *ptr)
     }
   }
   gtk_tree_path_free(path);
-}
-
-/****************************************************************
-...
-*****************************************************************/
-static void queue_remove(struct worklist_data *ptr)
-{
-  GtkTreePath *path;
-  GtkTreeViewColumn *col;
-
-  gtk_tree_view_get_cursor(GTK_TREE_VIEW(ptr->dst_view), &path, &col);
-  if (path) {
-    dst_row_callback(GTK_TREE_VIEW(ptr->dst_view), path, col, ptr);
-    gtk_tree_path_free(path);
-  }
 }
 
 /****************************************************************
@@ -903,25 +897,11 @@ static void dst_selection_callback(GtkTreeSelection *selection, gpointer data)
 
   /* update widget sensitivity. */
   if (gtk_tree_selection_count_selected_rows(selection) > 0) {
-    int num_rows = 0;
-    GtkTreeIter it;
-    
     gtk_widget_set_sensitive(ptr->up_cmd, TRUE);
     gtk_widget_set_sensitive(ptr->down_cmd, TRUE);
-    if (gtk_tree_model_get_iter_first(GTK_TREE_MODEL(ptr->dst), &it)) {
-      do {
-	num_rows++;
-      } while (gtk_tree_model_iter_next(GTK_TREE_MODEL(ptr->dst), &it));
-    }
-    if (num_rows > 1) {
-      gtk_widget_set_sensitive(ptr->remove_cmd, TRUE);      
-    } else {
-      gtk_widget_set_sensitive(ptr->remove_cmd, FALSE);
-    }
   } else {
     gtk_widget_set_sensitive(ptr->up_cmd, FALSE);
     gtk_widget_set_sensitive(ptr->down_cmd, FALSE);
-    gtk_widget_set_sensitive(ptr->remove_cmd, FALSE);
   }
 }
 
@@ -942,16 +922,17 @@ static void cell_render_func(GtkTreeViewColumn *col, GtkCellRenderer *rend,
 			     GtkTreeModel *model, GtkTreeIter *it,
 			     gpointer data)
 {
-  gint cid;
-  struct city_production target;
+  gint cid, id;
+  bool is_unit;
 
   gtk_tree_model_get(model, it, 0, &cid, -1);
-  target = cid_production(cid);
+  is_unit = cid_is_unit(cid);
+  id = cid_id(cid);
 
   if (GTK_IS_CELL_RENDERER_PIXBUF(rend)) {
     GdkPixbuf *pix;
 
-    if (target.is_unit) {
+    if (is_unit) {
       struct canvas store;
 
       pix = gdk_pixbuf_new(GDK_COLORSPACE_RGB, TRUE, 8,
@@ -959,35 +940,39 @@ static void cell_render_func(GtkTreeViewColumn *col, GtkCellRenderer *rend,
 
       store.type = CANVAS_PIXBUF;
       store.v.pixbuf = pix;
-      create_overlay_unit(&store, get_unit_type(target.value));
+      create_overlay_unit(&store, id);
 
       g_object_set(rend, "pixbuf", pix, NULL);
       g_object_unref(pix);
     } else {
-      struct sprite *sprite = get_building_sprite(tileset, target.value);
+      struct impr_type *impr = get_improvement_type(id);
 
-      pix = sprite_get_pixbuf(sprite);
+      pix = sprite_get_pixbuf(impr->sprite);
       g_object_set(rend, "pixbuf", pix, NULL);
     }
   } else {
-    struct city **pcity = data;
+    struct city **pcity;
+    struct player *plr;
     gint column;
     char *row[4];
     char  buf[4][64];
     int   i;
     gboolean useless;
 
+    pcity = (struct city **) data;
+
     for (i = 0; i < ARRAY_SIZE(row); i++) {
       row[i] = buf[i];
     }
     column = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(rend), "column"));
 
-    get_city_dialog_production_row(row, sizeof(buf[0]), target, *pcity);
+    get_city_dialog_production_row(row, sizeof(buf[0]), id, is_unit, *pcity);
     g_object_set(rend, "text", row[column], NULL);
 
-    if (!target.is_unit && *pcity) {
-      useless = improvement_obsolete(city_owner(*pcity), target.value)
-	|| is_building_replaced(*pcity, target.value);
+    if (!is_unit && *pcity) {
+      plr = city_owner(*pcity);
+      useless = improvement_obsolete(plr, id)
+	|| improvement_redundant(plr, *pcity, id, FALSE);
       g_object_set(rend, "strikethrough", useless, NULL);
     } else {
       g_object_set(rend, "strikethrough", FALSE, NULL);
@@ -1105,7 +1090,7 @@ GtkWidget *create_worklist(void)
   src_view = gtk_tree_view_new_with_model(GTK_TREE_MODEL(src_store));
   g_object_unref(src_store);
   gtk_size_group_add_widget(group, src_view);
-  gtk_widget_set_name(src_view, "small_font");
+  gtk_widget_set_name(src_view, "small font");
 
   populate_view(GTK_TREE_VIEW(src_view), &ptr->pcity, &ptr->src_col);
   gtk_container_add(GTK_CONTAINER(sw), src_view);
@@ -1124,7 +1109,7 @@ GtkWidget *create_worklist(void)
   g_signal_connect(check, "toggled", G_CALLBACK(future_callback), ptr);
 
 
-  table2 = gtk_table_new(5, 1, FALSE);
+  table2 = gtk_table_new(4, 1, FALSE);
   gtk_table_attach(GTK_TABLE(table), table2, 2, 3, 1, 2,
 		   GTK_FILL, GTK_FILL, 0, 0);
 
@@ -1174,17 +1159,6 @@ GtkWidget *create_worklist(void)
 			   G_CALLBACK(queue_append), ptr);
   gtk_widget_set_sensitive(ptr->append_cmd, FALSE);
 
-  button = gtk_button_new();
-  ptr->remove_cmd = button;
-  gtk_button_set_relief(GTK_BUTTON(button), GTK_RELIEF_NONE);
-  gtk_table_attach(GTK_TABLE(table2), button, 0, 1, 4, 5,
-      0, GTK_EXPAND|GTK_FILL, 0, 24);
-  
-  arrow = gtk_arrow_new(GTK_ARROW_RIGHT, GTK_SHADOW_IN);
-  gtk_container_add(GTK_CONTAINER(button), arrow);
-  g_signal_connect_swapped(button, "clicked",
-                           G_CALLBACK(queue_remove), ptr);
-  gtk_widget_set_sensitive(ptr->remove_cmd, FALSE);
 
   sw = gtk_scrolled_window_new(NULL, NULL);
   gtk_scrolled_window_set_shadow_type(GTK_SCROLLED_WINDOW(sw),
@@ -1197,7 +1171,7 @@ GtkWidget *create_worklist(void)
   dst_view = gtk_tree_view_new_with_model(GTK_TREE_MODEL(dst_store));
   g_object_unref(dst_store);
   gtk_size_group_add_widget(group, dst_view);
-  gtk_widget_set_name(dst_view, "small_font");
+  gtk_widget_set_name(dst_view, "small font");
 
   populate_view(GTK_TREE_VIEW(dst_view), &ptr->pcity, &ptr->dst_col);
   gtk_container_add(GTK_CONTAINER(sw), dst_view);
@@ -1322,9 +1296,9 @@ void refresh_worklist(GtkWidget *editor)
   struct worklist_data *ptr;
   struct worklist *pwl, queue;
 
-  struct city_production targets[MAX_NUM_PRODUCTION_TARGETS];
-  int i, targets_used;
-  struct item items[MAX_NUM_PRODUCTION_TARGETS];
+  cid cids[U_LAST + B_LAST];
+  int i, cids_used;
+  struct item items[U_LAST + B_LAST];
 
   bool selected;
   gint id;
@@ -1351,15 +1325,15 @@ void refresh_worklist(GtkWidget *editor)
   }
   gtk_list_store_clear(ptr->src);
 
-  targets_used = collect_eventually_buildable_targets(targets, ptr->pcity, ptr->future);
-  name_and_sort_items(targets, targets_used, items, FALSE, ptr->pcity);
+  cids_used = collect_cids4(cids, ptr->pcity, ptr->future);
+  name_and_sort_items(cids, cids_used, items, FALSE, ptr->pcity);
 
   path = NULL;
-  for (i = 0; i < targets_used; i++) {
+  for (i = 0; i < cids_used; i++) {
     gtk_list_store_append(ptr->src, &it);
-    gtk_list_store_set(ptr->src, &it, 0, (gint) cid_encode(items[i].item), -1);
+    gtk_list_store_set(ptr->src, &it, 0, (gint) items[i].cid, -1);
 
-    if (selected && cid_encode(items[i].item) == id) {
+    if (selected && items[i].cid == id) {
       path = gtk_tree_model_get_path(GTK_TREE_MODEL(ptr->src), &it);
     }
   }
@@ -1380,14 +1354,20 @@ void refresh_worklist(GtkWidget *editor)
     copy_worklist(&queue, pwl);
   }
 
-  for (i = 0; i < worklist_length(&queue); i++) {
-    struct city_production target = queue.entries[i];
+  for (i = 0; i < MAX_LEN_WORKLIST; i++) {
+    cid cid;
+
+    if (queue.wlefs[i] == WEF_END) {
+      break;
+    }
+
+    cid = cid_encode(queue.wlefs[i] == WEF_UNIT, queue.wlids[i]);
 
     if (!exists) {
       gtk_list_store_append(ptr->dst, &it);
     }
 
-    gtk_list_store_set(ptr->dst, &it, 0, (gint) cid_encode(target), -1);
+    gtk_list_store_set(ptr->dst, &it, 0, (gint) cid, -1);
 
     if (exists) {
       exists = gtk_tree_model_iter_next(model, &it);
@@ -1455,8 +1435,8 @@ static void commit_worklist(struct worklist_data *ptr)
       }
 
       gtk_tree_model_get(model, &it, 0, &cid, -1);
-
-      worklist_append(&queue, cid_production(cid));
+      queue.wlefs[i] = cid_is_unit(cid) ? WEF_UNIT : WEF_IMPR;
+      queue.wlids[i] = cid_id(cid);
 
       i++;
     } while (gtk_tree_model_iter_next(model, &it));

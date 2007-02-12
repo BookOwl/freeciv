@@ -15,8 +15,15 @@
 #include <config.h>
 #endif
 
-/* utility */
+#include <SDL/SDL.h>
+
+#include "events.h"
+#include "fcintl.h"
 #include "log.h"
+
+#include "graphics.h"
+#include "gui_main.h"
+#include "options.h"
 
 #include "messagedlg.h"
 

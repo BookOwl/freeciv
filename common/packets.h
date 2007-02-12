@@ -22,10 +22,8 @@ struct data_in;
 #include "improvement.h"
 #include "map.h"
 #include "player.h"
-#include "requirements.h"
 #include "shared.h"		/* MAX_LEN_NAME, MAX_LEN_ADDR */
 #include "spaceship.h"
-#include "team.h"
 #include "unittype.h"
 #include "worklist.h"
 
@@ -39,7 +37,10 @@ struct data_in;
 enum report_type {
   REPORT_WONDERS_OF_THE_WORLD,
   REPORT_TOP_5_CITIES,
-  REPORT_DEMOGRAPHIC
+  REPORT_DEMOGRAPHIC,
+  REPORT_SERVER_OPTIONS,   /* obsolete */
+  REPORT_SERVER_OPTIONS1,
+  REPORT_SERVER_OPTIONS2
 };
 
 enum spaceship_place_type {

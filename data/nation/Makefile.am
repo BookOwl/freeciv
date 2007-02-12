@@ -2,146 +2,97 @@
 # Note: After adding a new nation file, 'make Makefile.am'
 
 ## Override automake so that "make install" puts these in proper place:
-pkgdatadir = $(datadir)/$(PACKAGE)/nation
+pkgdatadir = $(datadir)/@PACKAGE@/nation
 
 pkgdata_DATA = \
-		aborigines.ruleset \
 		afghani.ruleset \
-		algerian.ruleset \
 		american.ruleset \
-		antarctican.ruleset \
 		arab.ruleset \
-		aramean.ruleset \
 		argentine.ruleset \
-		armenian.ruleset \
 		assyrian.ruleset \
 		australian.ruleset \
 		austrian.ruleset \
-		aymara.ruleset \
 		aztec.ruleset \
 		babylonian.ruleset \
 		barbarian.ruleset \
-		basque.ruleset \
 		bavarian.ruleset \
 		belgian.ruleset \
-		bengali.ruleset \
 		boer.ruleset \
 		bosnia.ruleset \
 		brazilian.ruleset \
-		british.ruleset \
-		bulgarian.ruleset \
-		burmese.ruleset \
-		byzantium.ruleset \
-		cambodian.ruleset \
 		canadian.ruleset \
 		carthaginian.ruleset \
 		catalan.ruleset \
-		cherokee.ruleset \
 		chilean.ruleset \
 		chinese.ruleset \
-		colombian.ruleset \
-		confederate.ruleset \
+		columbian.ruleset \
 		cornish.ruleset \
 		croatian.ruleset \
-		cuban.ruleset \
 		czech.ruleset \
 		danish.ruleset \
+		dunedain.ruleset \
 		dutch.ruleset \
 		egyptian.ruleset \
+		elvish.ruleset \
 		english.ruleset \
-		esperant.ruleset \
 		estonian.ruleset \
 		ethiopian.ruleset \
-		european.ruleset \
 		filipino.ruleset \
 		finnish.ruleset \
 		french.ruleset \
 		galician.ruleset \
-		gallic.ruleset \
-		georgian.ruleset \
 		german.ruleset \
 		greek.ruleset \
-		hacker.ruleset \
-		hellenic.ruleset \
-		hittite.ruleset \
+		hobbits.ruleset \
 		hungarian.ruleset \
 		icelandic.ruleset \
-		illyrian.ruleset \
 		inca.ruleset \
 		indian.ruleset \
 		indonesian.ruleset \
-		inuit.ruleset \
-		iranian.ruleset \
-		iraqi.ruleset \
 		irish.ruleset \
-		iroquois.ruleset \
 		israeli.ruleset \
 		italian.ruleset \
 		japanese.ruleset \
+		kampuchean.ruleset \
 		kenyan.ruleset \
 		korean.ruleset \
-		lankese.ruleset \
 		latvian.ruleset \
-		libyan.ruleset \
 		lithuanian.ruleset \
-		lojbanistani.ruleset \
-		malagasy.ruleset \
 		malaysian.ruleset \
-		malian.ruleset \
-		manchu.ruleset \
-		maori.ruleset \
 		martian.ruleset \
-		mayan.ruleset \
 		mexican.ruleset \
 		mongol.ruleset \
-		newzealand.ruleset \
+		mordor.ruleset \
 		nigerian.ruleset \
-		norwegian.ruleset \
-		ottoman.ruleset \
-		papuan.ruleset \
+		observer.ruleset \
 		persian.ruleset \
 		phoenician.ruleset \
 		polish.ruleset \
-		polynesian.ruleset \
 		portuguese.ruleset \
 		quebecois.ruleset \
-		romanian.ruleset \
 		roman.ruleset \
 		russian.ruleset \
-		ryukyuan.ruleset \
-		sami.ruleset \
-		samogitian.ruleset \
 		scottish.ruleset \
 		serbian.ruleset \
 		silesian.ruleset \
 		singaporean.ruleset \
 		sioux.ruleset \
-		slovakian.ruleset \
 		slovenian.ruleset \
-		southafrican.ruleset \
-		soviet.ruleset \
 		spanish.ruleset \
-		sudanese.ruleset \
 		sumerian.ruleset \
-		swazi.ruleset \
 		swedish.ruleset \
 		swiss.ruleset \
 		taiwanese.ruleset \
-		texan.ruleset \
 		thai.ruleset \
-		tibetan.ruleset \
-		tunisian.ruleset \
 		turk.ruleset \
 		ukrainian.ruleset \
-		un.ruleset \
-		uruguayan.ruleset \
-		uyghur.ruleset \
-		venezuelan.ruleset \
 		vietnamese.ruleset \
 		viking.ruleset \
 		welsh.ruleset \
-		westphalian.ruleset \
 		zulu.ruleset 
 
 EXTRA_DIST = $(pkgdata_DATA) Makefile.am.sh
+
+Makefile.am: Makefile.am.sh $(shell echo *.ruleset)
+	sh Makefile.am.sh >Makefile.am
 

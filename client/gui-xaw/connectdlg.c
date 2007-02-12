@@ -37,16 +37,13 @@
 #include "version.h"
 
 #include "civclient.h"
-#include "clinet.h"
-#include "packhand.h"
-#include "servers.h"
-
 #include "chatline.h"
+#include "clinet.h"
+#include "connectdlg_g.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
-#include "pages.h"
+#include "packhand.h"
 
-#include "connectdlg_common.h"
 #include "connectdlg.h"
 
 static enum {
@@ -90,8 +87,6 @@ static int get_server_list(char **list, char *errbuf, int n_errbuf);
 static bool lan_mode;  /* true for LAN mode, false when Meta mode */
 static int num_lanservers_timer = 0;
 
-struct server_scan *lan, *meta;
-
 /**************************************************************************
  really close and destroy the dialog.
 **************************************************************************/
@@ -105,23 +100,14 @@ void really_close_connection_dialog(void)
 **************************************************************************/
 void close_connection_dialog()
 {
-  if (lan) {
-    server_scan_finish(lan);
-    lan = NULL;
-  }
-  if (meta) {
-    server_scan_finish(meta);
-    meta = NULL;
-  }
-
   if (shell) {
     XtDestroyWidget(shell);
-    shell = NULL;
+    shell = 0;
   }
 
-  if (meta_dialog_shell) {
+  if(meta_dialog_shell) {
     XtDestroyWidget(meta_dialog_shell);
-    meta_dialog_shell = NULL;
+    meta_dialog_shell = 0;
   }
 }
 
@@ -300,7 +286,6 @@ void connect_callback(Widget w, XtPointer client_data,
       }
 
       XtSetSensitive(toplevel, True);
-      popup_start_page();
       return;
     } else {
       append_output_window(errbuf);
@@ -339,38 +324,13 @@ void connect_callback(Widget w, XtPointer client_data,
   }
 }
 
-/**************************************************************************
-  Callback function for when there's an error in the server scan.
-**************************************************************************/
-static void server_scan_error(struct server_scan *scan,
-			      const char *message)
-{
-  append_output_window(message);
-  freelog(LOG_NORMAL, "%s", message);
-  switch (server_scan_get_type(scan)) {
-  case SERVER_SCAN_LOCAL:
-    server_scan_finish(lan);
-    lan = NULL;
-    break;
-  case SERVER_SCAN_GLOBAL:
-    server_scan_finish(meta);
-    meta = NULL;
-    break;
-  case SERVER_SCAN_LAST:
-    break;
-  }
-}
-
 /****************************************************************
-  Callback function for Metaserver button
+...
 *****************************************************************/
 void connect_meta_callback(Widget w, XtPointer client_data,
                            XtPointer call_data)
 {
   lan_mode = false;
-  if (!meta) {
-    meta = server_scan_begin(SERVER_SCAN_GLOBAL, server_scan_error);
-  }
   if (meta_dialog_shell) {
     /* Metaserver window already poped up */
     return;
@@ -379,20 +339,19 @@ void connect_meta_callback(Widget w, XtPointer client_data,
 }
 
 /****************************************************************
-  Callback function for LAN Server button
+...
 *****************************************************************/
 void connect_lan_callback(Widget w, XtPointer client_data,
                           XtPointer call_data)
 {
   lan_mode = true;
-  if (!lan) {
-    lan = server_scan_begin(SERVER_SCAN_LOCAL, server_scan_error);
-  }
   if (meta_dialog_shell) {
     /* Metaserver window already poped up */
     return;
   }
-  create_meta_dialog((Widget)client_data);
+  if (begin_lanserver_scan()) {
+    create_meta_dialog((Widget)client_data);
+  }
 }
 
 /**************************************************************************
@@ -417,7 +376,7 @@ static void server_list_timer(XtPointer meta_list, XtIntervalId * id)
 
   if (lan_mode) {
     if (num_lanservers_timer == 50 && lan_mode) {
-      server_scan_finish(lan);
+      finish_lanserver_scan();
       num_lanservers_timer = 0;
       return;
     }
@@ -479,7 +438,7 @@ void meta_update_callback(Widget w, XtPointer client_data, XtPointer call_data)
 {
   if (num_lanservers_timer == 0) {
     if (lan_mode) {
-      if (lan) {
+      if (begin_lanserver_scan()) {
         server_list_timer((Widget)client_data, NULL);
       }
     } else {
@@ -522,7 +481,7 @@ void meta_list_destroy(Widget w, XtPointer client_data, XtPointer call_data)
     server_list[i]=NULL;
   }
   if (num_lanservers_timer != 0) {    
-    server_scan_finish(lan);
+    finish_lanserver_scan();
   }
 }
 
@@ -536,27 +495,23 @@ static int get_server_list(char **list, char *errbuf, int n_errbuf)
   struct server_list *server_list = NULL;
 
   if (lan_mode) {
-    if (lan) {
-      server_list = server_scan_get_servers(lan);
-      if (server_list == NULL) {
-	if (num_lanservers_timer == 0) {
-	  *list = mystrdup(" ");;
-	  return 0;
-	} else {
-	  return -1;
-	}
+    server_list = get_lan_server_list();
+    if (server_list == NULL) {
+      if (num_lanservers_timer == 0) {
+        *list = mystrdup(" ");;
+        return 0;
+      } else {
+        return -1;
       }
     }
   } else {
-    if (meta) {
-      server_list = server_scan_get_servers(meta); 
-      if (!server_list) {
-	return -1;
-      }
+    server_list = create_server_list(errbuf, n_errbuf); 
+    if (!server_list) {
+      return -1;
     }
   }
 
-  server_list_iterate(server_list,pserver) {
+  server_list_iterate(*server_list,pserver) {
     if (pserver == NULL) continue;
     my_snprintf(line, sizeof(line), "%-35s %-5s %-11s %-11s %2s   %s",
 		pserver->host, pserver->port, pserver->version,
@@ -566,11 +521,80 @@ static int get_server_list(char **list, char *errbuf, int n_errbuf)
     list++;
   } server_list_iterate_end;
 
-/*
   if (!lan_mode) {
     delete_server_list(server_list);
   } 
-*/
   *list=NULL;
   return 0;
+}
+
+/**************************************************************************
+  Make an attempt to autoconnect to the server.  If the server isn't
+  there yet, get the Xt kit to call this routine again about
+  AUTOCONNECT_INTERVAL milliseconds.  If anything else goes wrong, log
+  a fatal error.
+**************************************************************************/
+static void try_to_autoconnect(XtPointer data, XtIntervalId * id)
+{
+  char errbuf[512];
+  static int count = 0;
+
+  count++;
+
+  if (count >= MAX_AUTOCONNECT_ATTEMPTS) {
+    freelog(LOG_FATAL,
+	    _("Failed to contact server \"%s\" at port "
+	      "%d as \"%s\" after %d attempts"),
+	    server_host, server_port, user_name, count);
+    exit(EXIT_FAILURE);
+  }
+
+  switch (try_to_connect(user_name, errbuf, sizeof(errbuf))) {
+    /* Success! */
+  case 0:
+    return;
+
+    /* Server not available (yet) - wait & retry */
+  case ECONNREFUSED:
+    XtAppAddTimeOut(app_context,
+		    AUTOCONNECT_INTERVAL, try_to_autoconnect, NULL);
+    break;
+
+    /* All other errors are fatal */
+  default:
+    freelog(LOG_FATAL,
+	    _("Error contacting server \"%s\" at port %d "
+	      "as \"%s\":\n %s\n"),
+	    server_host, server_port, user_name, errbuf);
+    exit(EXIT_FAILURE);
+  }
+}
+
+/**************************************************************************
+  Start trying to autoconnect to civserver.
+  Calls get_server_address() then try_to_autoconnect().
+**************************************************************************/
+void server_autoconnect()
+{
+  char buf[512];
+  int outcome;
+
+  my_snprintf(buf, sizeof(buf),
+	      _("Auto-connecting to server \"%s\" at port %d "
+		"as \"%s\" every %d.%d second(s) for %d times"),
+	      server_host, server_port, user_name,
+	      AUTOCONNECT_INTERVAL / 1000,AUTOCONNECT_INTERVAL % 1000, 
+	      MAX_AUTOCONNECT_ATTEMPTS);
+  append_output_window(buf);
+  outcome = get_server_address(server_host, server_port, buf, sizeof(buf));
+  if (outcome < 0) {
+    freelog(LOG_FATAL,
+	    _("Error contacting server \"%s\" at port %d "
+	      "as \"%s\":\n %s\n"),
+	    server_host, server_port, user_name, buf);
+    exit(EXIT_FAILURE);
+  }
+
+  try_to_autoconnect(NULL, NULL);
+  XtSetSensitive(toplevel, True);
 }

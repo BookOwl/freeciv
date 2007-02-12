@@ -54,11 +54,13 @@
 #include "inputdlg.h"
 #include "mapview.h"
 #include "menu.h"
-#include "overview_common.h"
 #include "text.h"
 #include "tilespec.h"
 
 #include "mapctrl.h"
+
+/* Color to use to display the workers */
+int city_workers_color=COLOR_STD_WHITE;
 
 static void popupinfo_popdown_callback(Widget w, XtPointer client_data, XtPointer call_data);
 
@@ -106,7 +108,7 @@ static void popit(int xin, int yin, struct tile *ptile)
   char *content;
   static bool is_orders;
   
-  if (client_tile_get_known(ptile)>=TILE_KNOWN_FOGGED) {
+  if (tile_get_known(ptile)>=TILE_KNOWN_FOGGED) {
     Widget p=XtCreatePopupShell("popupinfo", simpleMenuWidgetClass,
 				map_canvas, NULL, 0);
     content = (char *) popup_info_text(ptile);
@@ -136,11 +138,11 @@ static void popit(int xin, int yin, struct tile *ptile)
     *cross_head = ptile;
     cross_head++;
 
-    xin /= tileset_tile_width(tileset);
-    xin *= tileset_tile_width(tileset);
-    yin /= tileset_tile_height(tileset);
-    yin *= tileset_tile_height(tileset);
-    xin += (tileset_tile_width(tileset) / 2);
+    xin /= NORMAL_TILE_WIDTH;
+    xin *= NORMAL_TILE_WIDTH;
+    yin /= NORMAL_TILE_HEIGHT;
+    yin *= NORMAL_TILE_HEIGHT;
+    xin += (NORMAL_TILE_WIDTH / 2);
     XtTranslateCoords(map_canvas, xin, yin, &x, &y);
     dw = XDisplayWidth (display, screen_number);
     dh = XDisplayHeight (display, screen_number);

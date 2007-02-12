@@ -254,7 +254,7 @@ static int fill_diplomacy_tech_menu(Object *menu_title, struct Diplomacy_dialog 
   int i, flag;
   Object *entry;
 
-  for(i=1, flag=0; i<game.control.num_tech_types; i++)
+  for(i=1, flag=0; i<game.num_tech_types; i++)
   {
     if (get_invention(plr0, i) == TECH_KNOWN 
         && (get_invention(plr1, i) == TECH_UNKNOWN
@@ -379,7 +379,7 @@ static void diplomacy_gold( struct Diplomacy_data *data)
   if(amount>=0 && amount<=game.players[data->playerno].economic.gold)
   {
     request_diplomacy_create_clause(&pdialog->treaty, CLAUSE_GOLD, data->playerno,amount);
-  } else append_output_window(_("Invalid amount of gold specified."));
+  } else append_output_window(_("Game: Invalid amount of gold specified."));
 }
 
 /****************************************************************
@@ -542,7 +542,7 @@ struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0,
     Object *menu_strip;
     Object *menu_title;
 
-    dialog_list_prepend(&dialog_list, pdialog);
+    dialog_list_insert(&dialog_list, pdialog);
     init_treaty(&pdialog->treaty, plr0, plr1);
 
     pdialog->plr0_maps_menu = menu_strip = MenustripObject,

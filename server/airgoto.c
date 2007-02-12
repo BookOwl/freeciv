@@ -18,7 +18,6 @@
 #include "log.h"
 #include "map.h"
 #include "mem.h"
-#include "movement.h"
 #include "pqueue.h"
 
 #include "gotohand.h"
@@ -112,7 +111,7 @@ static void add_refuel_point(struct tile *ptile,
     /* If refuels.alloc_size was zero (on the first call), 
      * then refuels.points is NULL and realloc will actually malloc */
     refuels.points = fc_realloc(refuels.points, 
-                                refuels.alloc_size * sizeof(*refuels.points));
+                                refuels.alloc_size * sizeof(struct refuel));
     /* This memory, because refuels is static, is never freed.
      * It is just reused. */  
   }
@@ -162,7 +161,7 @@ static void make_list_of_refuel_points(struct player *pplayer,
 	&& !is_non_allied_unit_tile(ptile, pplayer) ) {
       add_refuel_point(ptile, FUEL_CITY, 
                        MAP_MAX_HEIGHT + MAP_MAX_WIDTH, 0, FALSE);
-    } else if (tile_has_base_flag(ptile, BF_REFUEL)
+    } else if (tile_has_special(ptile, S_AIRBASE)
                && !is_non_allied_unit_tile(ptile, pplayer)
                && !cities_only) {
       add_refuel_point(ptile, FUEL_AIRBASE, 

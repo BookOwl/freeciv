@@ -55,8 +55,9 @@ int max_improvement_id;
 static int city_sort_id;
 static int city_sort_order;
 static HMENU menu_shown; 
-static HWND *sort_buttons;
+static HWND sort_buttons[NUM_CREPORT_COLS];
 HWND cityrep_list;
+typedef bool TestCityFunc(struct city *, int);     
 
 #define ID_CITYREP_SORTBASE 6400
 #define ID_CHANGE_POPUP_BASE 7000
@@ -185,9 +186,9 @@ append_impr_or_unit_to_menu_sub(HMENU menu,
 				int *selitems,
 				int selcount, int *idcount)
 {
-  struct city_production targets[MAX_NUM_PRODUCTION_TARGETS];
-  struct item items[MAX_NUM_PRODUCTION_TARGETS];
-  int item, targets_used, num_selected_cities = 0;
+  cid cids[U_LAST + B_LAST];
+  struct item items[U_LAST + B_LAST];
+  int item, cids_used, num_selected_cities = 0;
   struct city **selected_cities = NULL;
 
   if (change_prod) {
@@ -204,26 +205,26 @@ append_impr_or_unit_to_menu_sub(HMENU menu,
     }
   }
 
-  targets_used = collect_production_targets(targets, selected_cities,
+  cids_used = collect_cids1(cids, selected_cities,
 			    num_selected_cities, append_units,
 			    append_wonders, change_prod, test_func);
   if (selected_cities) {
     free(selected_cities);
   }
-  name_and_sort_items(targets, targets_used, items, change_prod, NULL);
+  name_and_sort_items(cids, cids_used, items, change_prod, NULL);
 
-  for (item = 0; item < targets_used; item++) {
+  for (item = 0; item < cids_used; item++) {
     MENUITEMINFO iteminfo;
 
     AppendMenu(menu, MF_STRING, (*idcount), items[item].descr);
-    iteminfo.dwItemData = cid_encode(items[item].item);
+    iteminfo.dwItemData = items[item].cid;
     iteminfo.fMask = MIIM_DATA;
     iteminfo.cbSize = sizeof(MENUITEMINFO);
     SetMenuItemInfo(menu, (*idcount), FALSE, &iteminfo);
     (*idcount)++;
   }
 
-  if (targets_used == 0) {
+  if (cids_used == 0) {
     AppendMenu(menu, MF_STRING, -1, nothing_appended_text);
   }
 }
@@ -244,6 +245,7 @@ static void append_impr_or_unit_to_menu(HMENU menu,
     /* Add all buildings */
     append_impr_or_unit_to_menu_sub(menu, _("No Buildings Available"),
 				    FALSE, FALSE, change_prod,
+				    (bool (*)(struct city *, int))
 				    test_func,
 				    selitems, selcount, idcount);
     /* Add a separator */
@@ -267,6 +269,7 @@ static void append_impr_or_unit_to_menu(HMENU menu,
     /* Add all wonders */
     append_impr_or_unit_to_menu_sub(menu, _("No Wonders Available"),
 				    FALSE, TRUE, change_prod,
+				    (bool (*)(struct city *, int))
 				    test_func,
 				    selitems, selcount, idcount);
   }
@@ -297,8 +300,7 @@ static void get_city_text(struct city *pcity, char *buf[], int n)
   for(i=0, spec=city_report_specs; i<NUM_CREPORT_COLS; i++, spec++) {
     buf[i][0]='\0';
     if(!spec->show) continue;
-    my_snprintf(buf[i], n, "%*s", NEG_VAL(spec->width)-2,
-		(spec->func)(pcity, spec->data)); 
+    my_snprintf(buf[i], n, "%*s", NEG_VAL(spec->width)-2, (spec->func)(pcity)); 
   }
 }
 
@@ -338,7 +340,7 @@ static void cityrep_popup(HWND hWnd)
     {
       pcity=(struct city *)ListBox_GetItemData(GetDlgItem(hWnd,ID_CITYREP_LIST),
 				cityids[i]);
-      popup_city_dialog(pcity);
+      popup_city_dialog(pcity,0);
     }
 }
 
@@ -485,8 +487,9 @@ static void cityrep_change_menu(HWND hWnd, cid cid)
 {  
   int cityids[256];
   int selcount, i, last_request_id = 0;
-  struct city *pcity;
-  struct city_production target = cid_production(cid);
+  struct city *pcity; 
+  bool is_unit = cid_is_unit(cid);
+  int number = cid_id(cid);
   
   selcount=ListBox_GetSelCount(GetDlgItem(hWnd,ID_CITYREP_LIST));
   if (selcount==LB_ERR) return;
@@ -500,7 +503,7 @@ static void cityrep_change_menu(HWND hWnd, cid cid)
 							   ID_CITYREP_LIST),
 						cityids[i]);
     last_request_id =
-      city_change_production(pcity, target);
+      city_change_production(pcity, is_unit, number);
     ListBox_SetSel(GetDlgItem(hWnd, ID_CITYREP_LIST), FALSE, cityids[i]);
   }
 
@@ -577,8 +580,8 @@ static void list_sameisland_select(HWND hLst)
 	{
 	  struct city *selectedcity;
 	  selectedcity=(struct city *)ListBox_GetItemData(hLst,cityids[j]);
-          if (tile_get_continent(pcity->tile)
-              == tile_get_continent(selectedcity->tile))
+          if (map_get_continent(pcity->tile)
+              == map_get_continent(selectedcity->tile))
 	    {    
 	      ListBox_SetSel(hLst,TRUE,i);
 	      break;
@@ -590,9 +593,8 @@ static void list_sameisland_select(HWND hLst)
 /**************************************************************************
 
 **************************************************************************/
-static void list_impr_or_unit_select(HWND hLst,
-				     struct city_production target,
-				     TestCityFunc test_func)
+static void list_impr_or_unit_select(HWND hLst, int num,
+				     TestCityFunc *test_func)
 {
   int i,rows;
   list_all_select(hLst,FALSE);
@@ -600,7 +602,7 @@ static void list_impr_or_unit_select(HWND hLst,
   for (i=0;i<rows;i++)
     {
       struct city *pcity=(struct city *)ListBox_GetItemData(hLst,i);
-      if (test_func(pcity, target))
+      if (test_func(pcity,num))
 	ListBox_SetSel(hLst,TRUE,i);
     }
 }
@@ -611,7 +613,6 @@ static void list_impr_or_unit_select(HWND hLst,
 static void menu_proc(HWND hWnd,int cmd, DWORD num)
 {
   HWND hLst;
-  struct city_production target = cid_decode(num);
   hLst=GetDlgItem(hWnd,ID_CITYREP_LIST);
   if ((cmd>=ID_CHANGE_POPUP_BASE)&&
       (cmd<max_changemenu_id))
@@ -622,25 +623,25 @@ static void menu_proc(HWND hWnd,int cmd, DWORD num)
   if ((cmd>=ID_SUPPORTED_POPUP_BASE)&&
       (cmd<max_supportmenu_id))
     {
-      list_impr_or_unit_select(hLst, target, city_unit_supported);
+      list_impr_or_unit_select(hLst,num,city_unit_supported);
       max_supportmenu_id=0;
     }
   if ((cmd>=ID_PRESENT_POPUP_BASE)&&
       (cmd<max_presentmenu_id))
     {
-      list_impr_or_unit_select(hLst, target, city_unit_present);
+      list_impr_or_unit_select(hLst,num,city_unit_present);
       max_presentmenu_id=0;
     }
   if ((cmd>=ID_AVAILABLE_POPUP_BASE)&&
       (cmd<max_availablemenu_id))
     {
-      list_impr_or_unit_select(hLst, target, city_can_build_impr_or_unit);
+      list_impr_or_unit_select(hLst,num,city_can_build_impr_or_unit);
       max_availablemenu_id=0;
     }
   if ((cmd>=ID_IMPROVEMENTS_POPUP_BASE)&&
       (cmd<max_improvement_id))
     {
-      list_impr_or_unit_select(hLst, target, city_building_present);
+      list_impr_or_unit_select(hLst,num,city_building_present);
       max_improvement_id=0;
     }
 }
@@ -675,12 +676,12 @@ static LONG CALLBACK cityrep_changeall_proc(HWND hWnd,
 	case ID_PRODCHANGE_CHANGE:
 	  {
 	    int id;
-	    int from, to;
+	    cid from, to;
 
 	    id=ListBox_GetCurSel(GetDlgItem(hWnd,ID_PRODCHANGE_FROM));
 	    if (id==LB_ERR)
 	      {
-		append_output_window(_("Select a unit or improvement"
+		append_output_window(_("Game: Select a unit or improvement"
 				       " to change production from."));
 		break;        
 	      }
@@ -689,16 +690,16 @@ static LONG CALLBACK cityrep_changeall_proc(HWND hWnd,
 	    id=ListBox_GetCurSel(GetDlgItem(hWnd,ID_PRODCHANGE_TO));
 	    if (id==LB_ERR)
 	      {
-		append_output_window(_("Select a unit or improvement"
+		append_output_window(_("Game: Select a unit or improvement"
 				       " to change production to."));
 		break;          
 	      }
 	    to=ListBox_GetItemData(GetDlgItem(hWnd,ID_PRODCHANGE_TO),id);
 	    if (from==to) {
-	      append_output_window(_("That's the same thing!"));
+	      append_output_window(_("Game: That's the same thing!"));
 	      break;
 	    }
-	    client_change_all(cid_decode(from), cid_decode(to));
+	    client_change_all(from,to);
 	    DestroyWindow(hWnd);
 	    hChangeAll=NULL;
 	  }
@@ -720,10 +721,10 @@ static void cityrep_changeall(HWND hWnd)
   struct fcwin_box *vbox;
   struct fcwin_box *hbox;
   int selid;
-  struct city_production targets[MAX_NUM_PRODUCTION_TARGETS];
-  struct item items[MAX_NUM_PRODUCTION_TARGETS];
-  int targets_used;
+  cid cids[B_LAST + U_LAST];
+  int cids_used;
   cid selected_cid;
+  struct item items[U_LAST + B_LAST];
   int id,i;
   HWND hDlg;
   HWND hLst;
@@ -764,24 +765,24 @@ static void cityrep_changeall(HWND hWnd)
 						 selid));
   }
 
-  targets_used = collect_currently_building_targets(targets);
-  name_and_sort_items(targets, targets_used, items, FALSE, NULL);
+  cids_used = collect_cids2(cids);
+  name_and_sort_items(cids, cids_used, items, FALSE, NULL);
 
   hLst = GetDlgItem(hDlg, ID_PRODCHANGE_FROM);
-  for (i = 0; i < targets_used; i++) {
+  for (i = 0; i < cids_used; i++) {
     id = ListBox_AddString(hLst, items[i].descr);
-    ListBox_SetItemData(hLst, id, cid_encode(items[i].item));
-    if (cid_encode(items[i].item) == selected_cid)
+    ListBox_SetItemData(hLst, id, items[i].cid);
+    if (items[i].cid == selected_cid)
       ListBox_SetCurSel(hLst, id);
   }
 
-  targets_used = collect_buildable_targets(targets);
-  name_and_sort_items(targets, targets_used, items, TRUE, NULL);
+  cids_used = collect_cids3(cids);
+  name_and_sort_items(cids, cids_used, items, TRUE, NULL);
 
   hLst = GetDlgItem(hDlg, ID_PRODCHANGE_TO);
-  for (i = 0; i < targets_used; i++) {
+  for (i = 0; i < cids_used; i++) {
     id = ListBox_AddString(hLst, items[i].descr);
-    ListBox_SetItemData(hLst, id, cid_encode(items[i].item));
+    ListBox_SetItemData(hLst, id, items[i].cid);
   }
 
   fcwin_set_box(hDlg,hbox);
@@ -865,8 +866,8 @@ static void list_del(void *data)
 **************************************************************************/
 static void city_report_create(HWND hWnd)
 {
-  static char **titles;
-  static char (*buf)[64];   
+  static char *titles   [NUM_CREPORT_COLS];
+  static char  buf      [NUM_CREPORT_COLS][64];   
   struct city_report_spec *spec;        
   struct fcwin_box *vbox;
   struct fcwin_box *hbox;
@@ -888,35 +889,24 @@ static void city_report_create(HWND hWnd)
 			TRUE,TRUE,5);
   fcwin_box_add_box(vbox,hbox,FALSE,FALSE,5);
   
-  if (titles) {
-    free(titles);
-  }
-  if (buf) {
-    free(buf);
-  }
-  if (sort_buttons) {
-    free(sort_buttons);
-  }
-  
-  titles = fc_malloc(sizeof(*titles) * NUM_CREPORT_COLS);
-  buf = fc_malloc(sizeof(*buf) * NUM_CREPORT_COLS);
-  sort_buttons = fc_malloc(sizeof(*sort_buttons) * NUM_CREPORT_COLS);
-
+ 
   for (i=0;i<NUM_CREPORT_COLS;i++)
     titles[i]=buf[i];
   
   get_city_table_header(titles, sizeof(buf[0]));  
   for(i=0, spec=city_report_specs; i<NUM_CREPORT_COLS; i++, spec++) {         
-    if (spec->show) {
-      sort_buttons[i]=CreateWindow("BUTTON", titles[i], WS_CHILD | WS_VISIBLE
-				   | BS_MULTILINE, 0, 0, 0, 0, hWnd,
-				   (HMENU)(ID_CITYREP_SORTBASE+i),
-				   freecivhinst, NULL);
-      SendMessage(sort_buttons[i], WM_SETFONT, (WPARAM)font_12courier,
-		  MAKELPARAM(TRUE,0));
-    } else {
-      sort_buttons[i] = NULL;
-    }
+    if (spec->show)
+      {
+	sort_buttons[i]=CreateWindow("BUTTON",titles[i],
+				     WS_CHILD | WS_VISIBLE | BS_MULTILINE,
+				     0,0,0,0,
+				     hWnd,
+				     (HMENU)(ID_CITYREP_SORTBASE+i),
+				     freecivhinst,
+				     NULL);
+	SendMessage(sort_buttons[i],
+		    WM_SETFONT,(WPARAM) font_12courier,MAKELPARAM(TRUE,0));
+ 				           }
   }
 
   cityrep_list=CreateWindow("LISTBOX",NULL,WS_CHILD | WS_VISIBLE | 
@@ -1070,24 +1060,21 @@ static LONG APIENTRY city_report_proc(HWND hWnd,
 
 **************************************************************************/
 void
-popup_city_report_dialog(bool raise)
+popup_city_report_dialog(bool make_modal)
 {
-  if (!hCityRep) {
-    hCityRep =
-      fcwin_create_layouted_window(city_report_proc,_("City Report"),
-				   WS_OVERLAPPED | WS_SYSMENU | WS_MINIMIZEBOX
-				    | WS_MAXIMIZEBOX | WS_THICKFRAME,
-				   CW_USEDEFAULT, CW_USEDEFAULT,
-				   root_window, NULL, JUST_CLEANUP, NULL);
+  if (hCityRep) return;
+  hCityRep=
+    fcwin_create_layouted_window(city_report_proc,_("City Report"),
+				 WS_OVERLAPPED | WS_SYSMENU | WS_MINIMIZEBOX | 
+				 WS_MAXIMIZEBOX | WS_THICKFRAME,
+				 CW_USEDEFAULT,CW_USEDEFAULT,
+				 root_window,NULL,
+				 JUST_CLEANUP,
+				 NULL);
   
-    hChangeAll = NULL;
-    city_report_dialog_update();
-  }
-
-  ShowWindow(hCityRep, SW_SHOWNORMAL);
-  if (raise) {
-    SetFocus(hCityRep);
-  }
+  hChangeAll=NULL;
+  city_report_dialog_update();
+  ShowWindow(hCityRep,SW_SHOWNORMAL);
 }
 
 /**************************************************************************

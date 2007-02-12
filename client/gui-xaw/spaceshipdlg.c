@@ -78,7 +78,7 @@ struct spaceship_dialog {
     TYPED_LIST_ITERATE(struct spaceship_dialog, dialoglist, pdialog)
 #define dialog_list_iterate_end  LIST_ITERATE_END
 
-static struct dialog_list *dialog_list = NULL;
+static struct dialog_list dialog_list;
 static bool dialog_list_has_been_initialised = FALSE;
 
 struct spaceship_dialog *get_spaceship_dialog(struct player *pplayer);
@@ -97,7 +97,7 @@ void spaceship_launch_callback(Widget w, XtPointer client_data, XtPointer call_d
 struct spaceship_dialog *get_spaceship_dialog(struct player *pplayer)
 {
   if (!dialog_list_has_been_initialised) {
-    dialog_list = dialog_list_new();
+    dialog_list_init(&dialog_list);
     dialog_list_has_been_initialised = TRUE;
   }
 
@@ -123,8 +123,8 @@ void refresh_spaceship_dialog(struct player *pplayer)
 
   pship=&(pdialog->pplayer->spaceship);
 
-  if (game.info.spacerace
-     && pplayer->player_no == game.info.player_idx
+  if(game.spacerace
+     && pplayer->player_no == game.player_idx
      && pship->state == SSHIP_STARTED
      && pship->success_rate > 0) {
     XtSetSensitive(pdialog->launch_command, TRUE);
@@ -182,7 +182,6 @@ static void spaceship_image_canvas_expose(Widget w, XEvent *event,
 struct spaceship_dialog *create_spaceship_dialog(struct player *pplayer)
 {
   struct spaceship_dialog *pdialog;
-  int ss_w, ss_h;
 
   pdialog=fc_malloc(sizeof(struct spaceship_dialog));
   pdialog->pplayer=pplayer;
@@ -206,15 +205,14 @@ struct spaceship_dialog *create_spaceship_dialog(struct player *pplayer)
 
   XtVaSetValues(pdialog->player_label, XtNlabel, (XtArgVal)pplayer->name, NULL);
 
-  get_spaceship_dimensions(&ss_w, &ss_h);
   pdialog->image_canvas=
     XtVaCreateManagedWidget("spaceshipimagecanvas",
 			    xfwfcanvasWidgetClass,
 			    pdialog->main_form,
 			    "exposeProc", (XtArgVal)spaceship_image_canvas_expose,
 			    "exposeProcData", (XtArgVal)pdialog,
-			    XtNwidth, ss_w,
-			    XtNheight, ss_h,
+			    XtNwidth,  sprites.spaceship.habitation->width * 7,
+			    XtNheight, sprites.spaceship.habitation->height * 7,
 			    NULL);
 
   pdialog->info_label=
@@ -238,7 +236,7 @@ struct spaceship_dialog *create_spaceship_dialog(struct player *pplayer)
   XtAddCallback(pdialog->close_command, XtNcallback, spaceship_close_callback,
 		(XtPointer)pdialog);
 
-  dialog_list_prepend(dialog_list, pdialog);
+  dialog_list_insert(&dialog_list, pdialog);
 
   XtRealizeWidget(pdialog->shell);
 
@@ -269,9 +267,74 @@ parts differently.
 *****************************************************************/
 void spaceship_dialog_update_image(struct spaceship_dialog *pdialog)
 {
-  struct canvas canvas = {.pixmap = XtWindow(pdialog->image_canvas)};
+  int i, j, k, x, y;  
+  struct Sprite *sprite = sprites.spaceship.habitation;   /* for size */
+  struct player_spaceship *ship = &pdialog->pplayer->spaceship;
 
-  put_spaceship(&canvas, 0, 0, pdialog->pplayer);
+  XSetForeground(display, fill_bg_gc, colors_standard[COLOR_STD_BLACK]);
+  XFillRectangle(display, XtWindow(pdialog->image_canvas), fill_bg_gc, 0, 0,
+		 sprite->width * 7, sprite->height * 7);
+
+  for (i=0; i < NUM_SS_MODULES; i++) {
+    j = i/3;
+    k = i%3;
+    if ((k==0 && j >= ship->habitation)
+	|| (k==1 && j >= ship->life_support)
+	|| (k==2 && j >= ship->solar_panels)) {
+      continue;
+    }
+    x = modules_info[i].x * sprite->width  / 4 - sprite->width / 2;
+    y = modules_info[i].y * sprite->height / 4 - sprite->height / 2;
+
+    sprite = (k==0 ? sprites.spaceship.habitation :
+	      k==1 ? sprites.spaceship.life_support :
+	             sprites.spaceship.solar_panels);
+    XSetClipOrigin(display, civ_gc, x, y);
+    XSetClipMask(display, civ_gc, sprite->mask);
+    XCopyArea(display, sprite->pixmap, XtWindow(pdialog->image_canvas), 
+	      civ_gc, 
+	      0, 0,
+	      sprite->width, sprite->height, x, y);
+    XSetClipMask(display,civ_gc,None);
+  }
+
+  for (i=0; i < NUM_SS_COMPONENTS; i++) {
+    j = i/2;
+    k = i%2;
+    if ((k==0 && j >= ship->fuel)
+	|| (k==1 && j >= ship->propulsion)) {
+      continue;
+    }
+    x = components_info[i].x * sprite->width  / 4 - sprite->width / 2;
+    y = components_info[i].y * sprite->height / 4 - sprite->height / 2;
+
+    sprite = (k==0) ? sprites.spaceship.fuel : sprites.spaceship.propulsion;
+
+    XSetClipOrigin(display, civ_gc, x, y);
+    XSetClipMask(display, civ_gc, sprite->mask);
+    XCopyArea(display, sprite->pixmap, XtWindow(pdialog->image_canvas), 
+	      civ_gc, 
+	      0, 0,
+	      sprite->width, sprite->height, x, y);
+    XSetClipMask(display,civ_gc,None);
+  }
+
+  sprite = sprites.spaceship.structural;
+
+  for (i=0; i < NUM_SS_STRUCTURALS; i++) {
+    if (!ship->structure[i])
+      continue;
+    x = structurals_info[i].x * sprite->width  / 4 - sprite->width / 2;
+    y = structurals_info[i].y * sprite->height / 4 - sprite->height / 2;
+
+    XSetClipOrigin(display, civ_gc, x, y);
+    XSetClipMask(display, civ_gc, sprite->mask);
+    XCopyArea(display, sprite->pixmap, XtWindow(pdialog->image_canvas), 
+	      civ_gc, 
+	      0, 0,
+	      sprite->width, sprite->height, x, y);
+    XSetClipMask(display,civ_gc,None);
+  }
 }
 
 
@@ -281,7 +344,7 @@ void spaceship_dialog_update_image(struct spaceship_dialog *pdialog)
 void close_spaceship_dialog(struct spaceship_dialog *pdialog)
 {
   XtDestroyWidget(pdialog->shell);
-  dialog_list_unlink(dialog_list, pdialog);
+  dialog_list_unlink(&dialog_list, pdialog);
 
   free(pdialog);
 }

@@ -61,7 +61,7 @@ void free_intro_radar_sprites(void)
 {
 }
 
-void free_sprite(struct sprite *sprite)
+void free_sprite(struct Sprite *sprite)
 {
 }
 
@@ -84,16 +84,13 @@ const char **gfx_fileextensions(void)
 /****************************************************************
  Crop a sprite from a bigger sprite (called from the gui
  independend part)
+ Note that the ImageData is not copied but only referenced,
+ this saves memory (because Data of BitMaps are aligned) and
+ loading time
 *****************************************************************/
-struct sprite *crop_sprite(struct sprite *source, int x, int y, int width, int height)
+struct Sprite *crop_sprite(struct Sprite *source, int x, int y, int width, int height)
 {
-  struct sprite *sprite = (struct sprite *) malloc(sizeof(struct sprite));
-
-  /* 
-   * Note that the ImageData is not copied but only referenced, this
-   * saves memory (because Data of BitMaps are aligned) and loading
-   * time.
-   */
+  struct Sprite *sprite = (struct Sprite *) malloc(sizeof(struct Sprite));
 
   if (sprite)
   {
@@ -117,12 +114,12 @@ struct sprite *crop_sprite(struct sprite *source, int x, int y, int width, int h
  Load a gfxfile as a sprite (called from the gui independend
  part)
 *****************************************************************/
-struct sprite *load_gfxfile(const char *filename)
+struct Sprite *load_gfxfile(const char *filename)
 {
-  struct spriteNode *node = (struct spriteNode *) AllocVec(sizeof(*node), 0x10000);
+  struct SpriteNode *node = (struct SpriteNode *) AllocVec(sizeof(*node), 0x10000);
   if (node)
   {
-    struct sprite *sprite = load_sprite(tileset, filename, TRUE);
+    struct Sprite *sprite = load_sprite(filename, TRUE);
     if (sprite)
     {
       if (!sprite_initialized)
@@ -146,7 +143,7 @@ struct sprite *load_gfxfile(const char *filename)
 *****************************************************************/
 int get_normal_tile_height(void)
 {
-  return tileset_tile_height(tileset);
+  return NORMAL_TILE_HEIGHT;
 }
 
 /****************************************************************
@@ -154,16 +151,16 @@ int get_normal_tile_height(void)
 *****************************************************************/
 int get_normal_tile_width(void)
 {
-  return tileset_tile_width(tileset);
+  return NORMAL_TILE_WIDTH;
 }
 
 
 /****************************************************************
  Allocate and load a sprite
 *****************************************************************/
-struct sprite *load_sprite(tileset, const char *filename, ULONG usemask)
+struct Sprite *load_sprite(const char *filename, ULONG usemask)
 {
-  struct sprite *sprite = (struct sprite *) malloc(sizeof(struct sprite));
+  struct Sprite *sprite = (struct Sprite *) malloc(sizeof(struct Sprite));
 
   if (sprite)
   {
@@ -203,7 +200,7 @@ struct sprite *load_sprite(tileset, const char *filename, ULONG usemask)
 /****************************************************************
  Cleanup the sprite
 *****************************************************************/
-static void cleanup_sprite(struct sprite *sprite)
+static void cleanup_sprite(struct Sprite *sprite)
 {
   if (!sprite->reference)
   {
@@ -230,11 +227,11 @@ static void cleanup_sprite(struct sprite *sprite)
 *****************************************************************/
 void cleanup_sprites(void)
 {
-  struct spriteNode *node = (struct spriteNode *) sprite_list.mlh_Head;
+  struct SpriteNode *node = (struct SpriteNode *) sprite_list.mlh_Head;
   while (node->node.mln_Succ)
   {
     cleanup_sprite(node->sprite);
-    node = (struct spriteNode *) node->node.mln_Succ;
+    node = (struct SpriteNode *) node->node.mln_Succ;
   }
 
   if (iso_fog_mask)
@@ -247,7 +244,7 @@ void cleanup_sprites(void)
 /****************************************************************
  Free the sprite
 *****************************************************************/
-void real_free_sprite(struct sprite *sprite)
+void real_free_sprite(struct Sprite *sprite)
 {
   cleanup_sprite(sprite);
   free(sprite);
@@ -258,10 +255,10 @@ void real_free_sprite(struct sprite *sprite)
 *****************************************************************/
 static void free_sprites(void)
 {
-  struct spriteNode *node;
+  struct SpriteNode *node;
   if(sprite_initialized)
   {
-    while ((node = (struct spriteNode *) RemHead((struct List *) &sprite_list)))
+    while ((node = (struct SpriteNode *) RemHead((struct List *) &sprite_list)))
     {
       real_free_sprite(node->sprite);
       if (node->filename)
@@ -274,17 +271,17 @@ static void free_sprites(void)
 /****************************************************************
  Render the sprite for this drawhandle
 *****************************************************************/
-static int render_sprite(APTR drawhandle, struct spriteNode *node)
+static int render_sprite(APTR drawhandle, struct SpriteNode *node)
 {
-  struct sprite *sprite = node->sprite;
+  struct Sprite *sprite = node->sprite;
 
   if (!sprite->picture)
   {
-    struct sprite *ns;
+    struct Sprite *ns;
 
     cleanup_sprite(sprite);
 
-    if ((ns = load_sprite(tileset, node->filename, sprite->hasmask)))
+    if ((ns = load_sprite(node->filename, sprite->hasmask)))
     {
       sprite->picture = ns->picture;
       sprite->hasmask = ns->hasmask;
@@ -344,15 +341,15 @@ static int render_sprite(APTR drawhandle, struct spriteNode *node)
 *****************************************************************/
 int render_sprites(APTR drawhandle)
 {
-  struct spriteNode *node = (struct spriteNode *) sprite_list.mlh_Head;
+  struct SpriteNode *node = (struct SpriteNode *) sprite_list.mlh_Head;
   while (node->node.mln_Succ)
   {
     if (!render_sprite(drawhandle, node))
       return FALSE;
-    node = (struct spriteNode *) node->node.mln_Succ;
+    node = (struct SpriteNode *) node->node.mln_Succ;
   }
 
-  if (tileset_is_isometric(tileset))
+  if (is_isometric)
   {
     /* In isometric view we needs to build a fog mask, we could use BltPattern()
        to avoid this but the mask position can not be specified fine enough */
@@ -362,16 +359,16 @@ int render_sprites(APTR drawhandle)
     if (!CyberGfxBase)
       mem_flags = MEMF_CHIP;
 
-    if ((iso_fog_mask = AllocVec(RASSIZE(tileset_tile_width(tileset),tileset_tile_height(tileset)),MEMF_CLEAR)))
+    if ((iso_fog_mask = AllocVec(RASSIZE(NORMAL_TILE_WIDTH,NORMAL_TILE_HEIGHT),MEMF_CLEAR)))
     {
       struct RastPort rp;
       struct BitMap bmap;
-      struct sprite *sprite = sprites.black_tile;
+      struct Sprite *sprite = sprites.black_tile;
       const static UWORD patt[] = {0xaaaa,0x5555};
       LONG bpr = GetBitMapAttr(sprite->parent->bitmap, BMA_WIDTH) / 8;
       PLANEPTR mask = (PLANEPTR)(((UWORD*)sprite->parent->mask)+(sprite->offx/16+(sprite->offy)*bpr/2));
 
-      InitBitMap(&bmap,1,tileset_tile_width(tileset),tileset_tile_height(tileset));
+      InitBitMap(&bmap,1,NORMAL_TILE_WIDTH,NORMAL_TILE_HEIGHT);
       InitRastPort(&rp);
 
       bmap.Planes[0]=iso_fog_mask;
@@ -379,12 +376,12 @@ int render_sprites(APTR drawhandle)
 
       SetABPenDrMd(&rp,1,0,JAM1);
       /* Blit the black tile */
-      BltTemplate(mask,sprite->offx % 16, bpr, &rp,0,0,tileset_tile_width(tileset),tileset_tile_height(tileset));
+      BltTemplate(mask,sprite->offx % 16, bpr, &rp,0,0,NORMAL_TILE_WIDTH,NORMAL_TILE_HEIGHT);
 
       SetAPen(&rp,0);
       /* Fog the mask */
       SetAfPt(&rp,patt,1);
-      RectFill(&rp,0,0,tileset_tile_width(tileset)-1,tileset_tile_height(tileset)-1);
+      RectFill(&rp,0,0,NORMAL_TILE_WIDTH-1,NORMAL_TILE_HEIGHT-1);
       SetAfPt(&rp,NULL,0);  
     }
   }
@@ -395,7 +392,7 @@ int render_sprites(APTR drawhandle)
 /****************************************************************
  Returns a thumb sprite
 *****************************************************************/
-struct sprite *get_thumb_sprite(int onoff)
+struct Sprite *get_thumb_sprite(int onoff)
 {
   return sprites.treaty_thumb[BOOL_VAL(onoff)];
 }
@@ -409,7 +406,7 @@ int load_all_sprites(void)
 {
   if ((pen_shared_map = CreatePenShareMapA(NULL)))
   {
-    tileset_load_tiles(tileset);
+    tilespec_load_tiles();
     return TRUE;
   }
   return FALSE;
@@ -432,7 +429,7 @@ void free_all_sprites(void)
 /****************************************************************
  Draw the whole sprite on position x,y in the Rastport
 *****************************************************************/
-void put_sprite(struct RastPort *rp, struct sprite *sprite, LONG x, LONG y)
+void put_sprite(struct RastPort *rp, struct Sprite *sprite, LONG x, LONG y)
 {
   struct BitMap *bmap;
   if (!sprite)
@@ -689,7 +686,7 @@ VOID MyBltMaskBitMapRastPort(struct BitMap *srcBitMap, LONG xSrc, LONG ySrc, str
  Draw the sprite on position x,y in the Rastport (with a mask of
  a differnt sprite) restricted to height and width with offset
 *****************************************************************/
-static void put_sprite_overlay_total_with_different_mask(struct RastPort *rp, struct sprite *sprite, struct sprite *masksprite, LONG x, LONG y, LONG ox, LONG oy, LONG width, LONG height)
+static void put_sprite_overlay_total_with_different_mask(struct RastPort *rp, struct Sprite *sprite, struct Sprite *masksprite, LONG x, LONG y, LONG ox, LONG oy, LONG width, LONG height)
 {
   struct BitMap *bmap;
   struct BitMap *maskbmap;
@@ -750,7 +747,7 @@ static void put_sprite_overlay_total_with_different_mask(struct RastPort *rp, st
  Draw the sprite on position x,y in the Rastport (masked)
  restricted to height and width with offset
 *****************************************************************/
-static void put_sprite_overlay_total(struct RastPort *rp, struct sprite *sprite, LONG x, LONG y, LONG ox, LONG oy, LONG width, LONG height)
+static void put_sprite_overlay_total(struct RastPort *rp, struct Sprite *sprite, LONG x, LONG y, LONG ox, LONG oy, LONG width, LONG height)
 {
   struct BitMap *bmap;
   APTR mask = NULL;
@@ -783,7 +780,7 @@ static void put_sprite_overlay_total(struct RastPort *rp, struct sprite *sprite,
 static void fog_tile(struct RastPort *rp, LONG x, LONG y,
                      LONG ox, LONG oy, LONG width, LONG height)
 {
-  LONG bpr = (tileset_tile_width(tileset)+15)/16*2;
+  LONG bpr = (NORMAL_TILE_WIDTH+15)/16*2;
   PLANEPTR mask = (PLANEPTR)((UWORD*)iso_fog_mask+ox/16+oy*bpr/2);
 
   SetABPenDrMd(rp,GetColorPen(COLOR_STD_BLACK),0,JAM1);
@@ -794,7 +791,7 @@ static void fog_tile(struct RastPort *rp, LONG x, LONG y,
  Draw the sprite on position x,y in the Rastport (masked)
  restricted to height
 *****************************************************************/
-void put_sprite_overlay_height(struct RastPort *rp, struct sprite *sprite, LONG x, LONG y, LONG height)
+void put_sprite_overlay_height(struct RastPort *rp, struct Sprite *sprite, LONG x, LONG y, LONG height)
 {
   put_sprite_overlay_total(rp,sprite,x,y,0,0,sprite->width, height);
 }
@@ -802,7 +799,7 @@ void put_sprite_overlay_height(struct RastPort *rp, struct sprite *sprite, LONG 
 /****************************************************************
  Draw the whole sprite on position x,y in the Rastport (masked)
 *****************************************************************/
-void put_sprite_overlay(struct RastPort *rp, struct sprite *sprite, LONG x, LONG y)
+void put_sprite_overlay(struct RastPort *rp, struct Sprite *sprite, LONG x, LONG y)
 {
   put_sprite_overlay_height(rp, sprite, x, y, sprite->height);
 }
@@ -813,7 +810,7 @@ void put_sprite_overlay(struct RastPort *rp, struct sprite *sprite, LONG x, LONG
 void put_black_tile(struct RastPort *rp, int canvas_x, int canvas_y)
 {
   SetAPen(rp, GetColorPen(COLOR_STD_BLACK));
-  RectFill(rp, canvas_x, canvas_y, canvas_x + tileset_tile_width(tileset) - 1, canvas_y + tileset_tile_height(tileset) - 1);
+  RectFill(rp, canvas_x, canvas_y, canvas_x + NORMAL_TILE_WIDTH - 1, canvas_y + NORMAL_TILE_HEIGHT - 1);
 }
 
 
@@ -841,11 +838,11 @@ void put_line(struct RastPort *rp, int dest_x, int dest_y, int x, int y, int dir
 {
   int canvas_src_x, canvas_src_y, canvas_dest_x, canvas_dest_y;
   get_canvas_xy(x, y, &canvas_src_x, &canvas_src_y);
-  canvas_src_x += tileset_tile_width(tileset)/2;
-  canvas_src_y += tileset_tile_height(tileset)/2;
+  canvas_src_x += NORMAL_TILE_WIDTH/2;
+  canvas_src_y += NORMAL_TILE_HEIGHT/2;
   DIRSTEP(canvas_dest_x, canvas_dest_y, dir);
-  canvas_dest_x = canvas_src_x + (tileset_tile_width(tileset) * canvas_dest_x) / 2;
-  canvas_dest_y = canvas_src_y + (tileset_tile_width(tileset) * canvas_dest_y) / 2;
+  canvas_dest_x = canvas_src_x + (NORMAL_TILE_WIDTH * canvas_dest_x) / 2;
+  canvas_dest_y = canvas_src_y + (NORMAL_TILE_WIDTH * canvas_dest_y) / 2;
 
   SetAPen(rp,GetColorPen(COLOR_STD_CYAN));
   Move(rp,canvas_src_x+dest_x, canvas_src_y+dest_y);
@@ -857,7 +854,7 @@ void put_line(struct RastPort *rp, int dest_x, int dest_y, int x, int y, int dir
 *****************************************************************/
 void put_unit_tile(struct RastPort *rp, struct unit *punit, int x1, int y1)
 {
-  struct sprite *sprites[40];
+  struct Sprite *sprites[40];
   int solid_bg;
   int count = fill_unit_sprite_array(sprites, punit, &solid_bg);
 
@@ -868,7 +865,7 @@ void put_unit_tile(struct RastPort *rp, struct unit *punit, int x1, int y1)
     if (solid_bg)
     {
       SetAPen(rp, GetColorPen(COLOR_STD_BLACK));
-      RectFill(rp, x1, y1, x1 + tileset_tile_width(tileset) - 1, y1 + tileset_tile_height(tileset) - 1);
+      RectFill(rp, x1, y1, x1 + NORMAL_TILE_WIDTH - 1, y1 + NORMAL_TILE_HEIGHT - 1);
     }
     else
     {
@@ -891,11 +888,11 @@ void put_unit_tile(struct RastPort *rp, struct unit *punit, int x1, int y1)
 **************************************************************************/
 void put_tile(struct RastPort *rp, int x, int y, int canvas_x, int canvas_y, int citymode)
 {
-  struct sprite *tile_sprs[80];
+  struct Sprite *tile_sprs[80];
   int fill_bg;
   struct player *pplayer;
 
-  if (normalize_map_pos(&x, &y) && client_tile_get_known(x, y)) {
+  if (normalize_map_pos(&x, &y) && tile_get_known(x, y)) {
     int count = fill_tile_sprite_array(tile_sprs, x, y, citymode, &fill_bg, &pplayer);
     int i = 0;
 
@@ -905,7 +902,7 @@ void put_tile(struct RastPort *rp, int x, int y, int canvas_x, int canvas_y, int
       } else {
         SetAPen(rp,GetColorPen(COLOR_STD_BACKGROUND));
       }
-      RectFill(rp,canvas_x,canvas_y,canvas_x + tileset_tile_width(tileset) - 1, canvas_y + tileset_tile_height(tileset) - 1);
+      RectFill(rp,canvas_x,canvas_y,canvas_x + NORMAL_TILE_WIDTH - 1, canvas_y + NORMAL_TILE_HEIGHT - 1);
     } else {
       /* first tile without mask */
       put_sprite(rp, tile_sprs[0], canvas_x, canvas_y);
@@ -930,7 +927,7 @@ void put_tile(struct RastPort *rp, int x, int y, int canvas_x, int canvas_y, int
         SetAPen(rp,GetColorPen(COLOR_STD_BLACK));
       }
       Move(rp,canvas_x,canvas_y);
-      Draw(rp,canvas_x,canvas_y + tileset_tile_height(tileset)-1);
+      Draw(rp,canvas_x,canvas_y + NORMAL_TILE_HEIGHT-1);
 
       /* top side... */
       if((map_get_tile(x, y-1))->known &&
@@ -941,28 +938,28 @@ void put_tile(struct RastPort *rp, int x, int y, int canvas_x, int canvas_y, int
 	SetAPen(rp,GetColorPen(COLOR_STD_BLACK));
       }
       Move(rp,canvas_x,canvas_y);
-      Draw(rp,canvas_x + tileset_tile_width(tileset)-1,canvas_y);
+      Draw(rp,canvas_x + NORMAL_TILE_WIDTH-1,canvas_y);
     }
 
     if (draw_coastline && !draw_terrain) {
-      Terrain_type_id t1 = tile_get_terrain(x, y), t2;
+      Terrain_type_id t1 = map_get_terrain(x, y), t2;
       int x1 = x-1, y1 = y;
       SetAPen(rp,GetColorPen(COLOR_STD_OCEAN));
       if (normalize_map_pos(&x1, &y1)) {
-	t2 = tile_get_terrain(x1, y1);
+	t2 = map_get_terrain(x1, y1);
 	/* left side */
 	if (is_ocean(t1) ^ is_ocean(t2)) {
 	  Move(rp, canvas_x, canvas_y);
-	  Draw(rp, canvas_x, canvas_y + tileset_tile_height(tileset)-1);
+	  Draw(rp, canvas_x, canvas_y + NORMAL_TILE_HEIGHT-1);
 	}
       }
       /* top side */
       x1 = x; y1 = y-1;
       if (normalize_map_pos(&x1, &y1)) {
-	t2 = tile_get_terrain(x1, y1);
+	t2 = map_get_terrain(x1, y1);
 	if (is_ocean(t1) ^ is_ocean(t2)) {
 	  Move(rp, canvas_x, canvas_y);
-	  Draw(rp, canvas_x + tileset_tile_width(tileset)-1, canvas_y);
+	  Draw(rp, canvas_x + NORMAL_TILE_WIDTH-1, canvas_y);
 	}
       }
     }
@@ -983,7 +980,7 @@ void put_tile(struct RastPort *rp, int x, int y, int canvas_x, int canvas_y, int
     }
 
     /* Some goto lines overlap onto the tile... */
-    if (tileset_tile_width(tileset)%2 == 0 || tileset_tile_height(tileset)%2 == 0) {
+    if (NORMAL_TILE_WIDTH%2 == 0 || NORMAL_TILE_HEIGHT%2 == 0) {
       int line_x = x - 1;
       int line_y = y;
       if (normalize_map_pos(&line_x, &line_y)
@@ -1031,16 +1028,16 @@ void really_draw_segment(struct RastPort *rp, int dest_x_add, int dest_y_add,
      horizontal line when we refresh the tile below-between. */
   get_canvas_xy(src_x, src_y, &canvas_start_x, &canvas_start_y);
   get_canvas_xy(dest_x, dest_y, &canvas_end_x, &canvas_end_y);
-  canvas_start_x += tileset_tile_width(tileset)/2;
-  canvas_start_y += tileset_tile_height(tileset)/2-1;
-  canvas_end_x += tileset_tile_width(tileset)/2;
-  canvas_end_y += tileset_tile_height(tileset)/2-1;
+  canvas_start_x += NORMAL_TILE_WIDTH/2;
+  canvas_start_y += NORMAL_TILE_HEIGHT/2-1;
+  canvas_end_x += NORMAL_TILE_WIDTH/2;
+  canvas_end_y += NORMAL_TILE_HEIGHT/2-1;
 
   /* somewhat hackish way of solving the problem where draw from a tile on
      one side of the screen out of the screen, and the tile we draw to is
      found to be on the other side of the screen. */
-  if (abs(canvas_end_x - canvas_start_x) > tileset_tile_width(tileset)
-      || abs(canvas_end_y - canvas_start_y) > tileset_tile_height(tileset))
+  if (abs(canvas_end_x - canvas_start_x) > NORMAL_TILE_WIDTH
+      || abs(canvas_end_y - canvas_start_y) > NORMAL_TILE_HEIGHT)
     return;
 
   /* draw it! */
@@ -1059,8 +1056,8 @@ static void put_black_tile_iso(struct RastPort *rp,
 			       int offset_x, int offset_y,
 			       int width, int height)
 {
-  assert(width <= tileset_tile_width(tileset));
-  assert(height <= tileset_tile_height(tileset));
+  assert(width <= NORMAL_TILE_WIDTH);
+  assert(height <= NORMAL_TILE_HEIGHT);
   put_sprite_overlay_total(rp, sprites.black_tile, canvas_x + offset_x, canvas_y + offset_y, offset_x, offset_y, width, height);
 }
 
@@ -1072,7 +1069,7 @@ static void put_color_tile_iso(struct RastPort *rp,
 			       int offset_x, int offset_y,
 			       int width, int height, int color)
 {
-  struct sprite *sprite = sprites.black_tile;
+  struct Sprite *sprite = sprites.black_tile;
   LONG bpr = GetBitMapAttr(sprite->parent->bitmap, BMA_WIDTH) / 8;
   PLANEPTR mask = (PLANEPTR)(((UWORD*)sprite->parent->mask)+((sprite->offx+offset_x)/16+(sprite->offy+offset_y)*bpr/2));
 
@@ -1086,7 +1083,7 @@ Only used for isometric view.
 **************************************************************************/
 static void put_overlay_tile_draw(struct RastPort *rp,
 				  int canvas_x, int canvas_y,
-				  struct sprite *ssprite,
+				  struct Sprite *ssprite,
 				  int offset_x, int offset_y,
 				  int width, int height,
 				  int fog)
@@ -1120,7 +1117,7 @@ static void put_city_draw(struct city *pcity, struct RastPort *rp,
 			  int width, int height_unit,
 			  int fog)
 {
-  struct sprite *sprites[80];
+  struct Sprite *sprites[80];
   int count = fill_city_sprite_array_iso(sprites, pcity);
   int i;
 
@@ -1142,7 +1139,7 @@ static void put_unit_draw(struct unit *punit, struct RastPort *rp,
 			  int offset_x, int offset_y_unit,
 			  int width, int height_unit)
 {
-  struct sprite *sprites[40];
+  struct Sprite *sprites[40];
   int dummy;
   int count = fill_unit_sprite_array(sprites, punit, &dummy);
   int i;
@@ -1160,7 +1157,7 @@ static void put_unit_draw(struct unit *punit, struct RastPort *rp,
 Blend the tile with neighboring tiles.
 Only used for isometric view.
 **************************************************************************/
-static void dither_tile(struct RastPort *rp, struct sprite **dither,
+static void dither_tile(struct RastPort *rp, struct Sprite **dither,
 			int canvas_x, int canvas_y,
 			int offset_x, int offset_y,
 			int width, int height, int fog)
@@ -1168,39 +1165,39 @@ static void dither_tile(struct RastPort *rp, struct sprite **dither,
   if (!width || !height)
     return;
 
-  assert(offset_x == 0 || offset_x == tileset_tile_width(tileset)/2);
-  assert(offset_y == 0 || offset_y == tileset_tile_height(tileset)/2);
-  assert(width == tileset_tile_width(tileset) || width == tileset_tile_width(tileset)/2);
-  assert(height == tileset_tile_height(tileset) || height == tileset_tile_height(tileset)/2);
+  assert(offset_x == 0 || offset_x == NORMAL_TILE_WIDTH/2);
+  assert(offset_y == 0 || offset_y == NORMAL_TILE_HEIGHT/2);
+  assert(width == NORMAL_TILE_WIDTH || width == NORMAL_TILE_WIDTH/2);
+  assert(height == NORMAL_TILE_HEIGHT || height == NORMAL_TILE_HEIGHT/2);
 
   /* north */
   if (dither[0]
-      && (offset_x != 0 || width == tileset_tile_width(tileset))
+      && (offset_x != 0 || width == NORMAL_TILE_WIDTH)
       && (offset_y == 0)) {
-    put_sprite_overlay_total_with_different_mask(rp, dither[0], sprites.dither_tile, canvas_x + tileset_tile_width(tileset) / 2, canvas_y,
-    			     tileset_tile_width(tileset)/2,0,tileset_tile_width(tileset)/2, tileset_tile_height(tileset)/2);
+    put_sprite_overlay_total_with_different_mask(rp, dither[0], sprites.dither_tile, canvas_x + NORMAL_TILE_WIDTH / 2, canvas_y,
+    			     NORMAL_TILE_WIDTH/2,0,NORMAL_TILE_WIDTH/2, NORMAL_TILE_HEIGHT/2);
   }
 
   /* south */
   if (dither[1] && offset_x == 0
-      && (offset_y == tileset_tile_height(tileset)/2 || height == tileset_tile_height(tileset))) {
+      && (offset_y == NORMAL_TILE_HEIGHT/2 || height == NORMAL_TILE_HEIGHT)) {
 
-    put_sprite_overlay_total_with_different_mask(rp, dither[1], sprites.dither_tile, canvas_x, canvas_y + tileset_tile_height(tileset)/2,
-    			     0,tileset_tile_height(tileset)/2,tileset_tile_width(tileset)/2, tileset_tile_height(tileset)/2);
+    put_sprite_overlay_total_with_different_mask(rp, dither[1], sprites.dither_tile, canvas_x, canvas_y + NORMAL_TILE_HEIGHT/2,
+    			     0,NORMAL_TILE_HEIGHT/2,NORMAL_TILE_WIDTH/2, NORMAL_TILE_HEIGHT/2);
   }
 
   /* east */
   if (dither[2]
-      && (offset_x != 0 || width == tileset_tile_width(tileset))
-      && (offset_y != 0 || height == tileset_tile_height(tileset))) {
-    put_sprite_overlay_total_with_different_mask(rp,dither[2],sprites.dither_tile,canvas_x+tileset_tile_width(tileset)/2,canvas_y+tileset_tile_height(tileset)/2,
-    			     tileset_tile_width(tileset)/2,tileset_tile_height(tileset)/2,tileset_tile_width(tileset)/2, tileset_tile_height(tileset)/2);
+      && (offset_x != 0 || width == NORMAL_TILE_WIDTH)
+      && (offset_y != 0 || height == NORMAL_TILE_HEIGHT)) {
+    put_sprite_overlay_total_with_different_mask(rp,dither[2],sprites.dither_tile,canvas_x+NORMAL_TILE_WIDTH/2,canvas_y+NORMAL_TILE_HEIGHT/2,
+    			     NORMAL_TILE_WIDTH/2,NORMAL_TILE_HEIGHT/2,NORMAL_TILE_WIDTH/2, NORMAL_TILE_HEIGHT/2);
   }
 
   /* west */
   if (dither[3] && offset_x == 0 && offset_y == 0) {
     put_sprite_overlay_total_with_different_mask(rp,dither[3],sprites.dither_tile,canvas_x,canvas_y,0,0,
-		    tileset_tile_width(tileset)/2, tileset_tile_height(tileset)/2);
+		    NORMAL_TILE_WIDTH/2, NORMAL_TILE_HEIGHT/2);
   }
 
   if(fog)
@@ -1220,9 +1217,9 @@ static void put_tile_iso(struct RastPort *rp, int x, int y,
 				int width, int height, int height_unit,
 				enum draw_type draw)
 {
-  struct sprite *tile_sprs[80];
-  struct sprite *coasts[4];
-  struct sprite *dither[4];
+  struct Sprite *tile_sprs[80];
+  struct Sprite *coasts[4];
+  struct Sprite *dither[4];
   struct city *pcity;
   struct unit *punit, *pfocus;
   enum tile_special_type special;
@@ -1244,11 +1241,11 @@ static void put_tile_iso(struct RastPort *rp, int x, int y,
 
   assert(is_real_map_pos(x, y));
   normalize_map_pos(&x, &y);
-  fog = client_tile_get_known(x, y) == TILE_KNOWN_FOGGED && draw_fog_of_war;
-  pcity = tile_get_city(x, y);
+  fog = tile_get_known(x, y) == TILE_KNOWN_FOGGED && draw_fog_of_war;
+  pcity = map_get_city(x, y);
   punit = get_drawable_unit(x, y, citymode);
   pfocus = get_unit_in_focus();
-  special = tile_get_special(x, y);
+  special = map_get_special(x, y);
 
   if (solid_bg)
   {
@@ -1270,12 +1267,12 @@ static void put_tile_iso(struct RastPort *rp, int x, int y,
   }
 
   if (draw_terrain) {
-    if (is_ocean(tile_get_terrain(x, y))) { /* coasts */
+    if (is_ocean(map_get_terrain(x, y))) { /* coasts */
       int dx, dy;
 
       /* top */
-      dx = offset_x-tileset_tile_width(tileset)/4;
-      put_overlay_tile_draw(rp, canvas_x + tileset_tile_width(tileset)/4,
+      dx = offset_x-NORMAL_TILE_WIDTH/4;
+      put_overlay_tile_draw(rp, canvas_x + NORMAL_TILE_WIDTH/4,
 			    canvas_y, coasts[0],
 			    MAX(0, dx),
 			    offset_y,
@@ -1283,29 +1280,29 @@ static void put_tile_iso(struct RastPort *rp, int x, int y,
 			    height,
 			    fog);
       /* bottom */
-      dx = offset_x-tileset_tile_width(tileset)/4;
-      dy = offset_y-tileset_tile_height(tileset)/2;
-      put_overlay_tile_draw(rp, canvas_x + tileset_tile_width(tileset)/4,
-				canvas_y + tileset_tile_height(tileset)/2, coasts[1],
+      dx = offset_x-NORMAL_TILE_WIDTH/4;
+      dy = offset_y-NORMAL_TILE_HEIGHT/2;
+      put_overlay_tile_draw(rp, canvas_x + NORMAL_TILE_WIDTH/4,
+				canvas_y + NORMAL_TILE_HEIGHT/2, coasts[1],
 				MAX(0, dx),
 				MAX(0, dy),
 				MAX(0, width-MAX(0, -dx)),
 				MAX(0, height-MAX(0, -dy)),
 				fog);
       /* left */
-      dy = offset_y-tileset_tile_height(tileset)/4;
+      dy = offset_y-NORMAL_TILE_HEIGHT/4;
       put_overlay_tile_draw(rp, canvas_x,
-			    canvas_y + tileset_tile_height(tileset)/4, coasts[2],
+			    canvas_y + NORMAL_TILE_HEIGHT/4, coasts[2],
 			    offset_x,
 			    MAX(0, dy),
 			    width,
 			    MAX(0, height-MAX(0, -dy)),
 			    fog);
       /* right */
-      dx = offset_x-tileset_tile_width(tileset)/2;
-      dy = offset_y-tileset_tile_height(tileset)/4;
-      put_overlay_tile_draw(rp, canvas_x + tileset_tile_width(tileset)/2,
-			   canvas_y + tileset_tile_height(tileset)/4, coasts[3],
+      dx = offset_x-NORMAL_TILE_WIDTH/2;
+      dy = offset_y-NORMAL_TILE_HEIGHT/4;
+      put_overlay_tile_draw(rp, canvas_x + NORMAL_TILE_WIDTH/2,
+			   canvas_y + NORMAL_TILE_HEIGHT/4, coasts[3],
 			   MAX(0, dx),
 			   MAX(0, dy),
 			   MAX(0, width-MAX(0, -dx)),
@@ -1336,33 +1333,33 @@ static void put_tile_iso(struct RastPort *rp, int x, int y,
        drawn by the tiles underneath. */
     SetAPen(rp,GetColorPen(COLOR_STD_BLACK));
     if (draw & D_M_R) {
-      Move(rp,canvas_x+tileset_tile_width(tileset)/2-1, canvas_y);
-      Draw(rp,canvas_x+tileset_tile_width(tileset)-1, canvas_y+tileset_tile_height(tileset)/2-1);
+      Move(rp,canvas_x+NORMAL_TILE_WIDTH/2-1, canvas_y);
+      Draw(rp,canvas_x+NORMAL_TILE_WIDTH-1, canvas_y+NORMAL_TILE_HEIGHT/2-1);
     }
     if (draw & D_M_L) {
-      Move(rp, canvas_x, canvas_y + tileset_tile_height(tileset)/2-1);
-      Draw(rp, canvas_x+tileset_tile_width(tileset)/2, canvas_y);
+      Move(rp, canvas_x, canvas_y + NORMAL_TILE_HEIGHT/2-1);
+      Draw(rp, canvas_x+NORMAL_TILE_WIDTH/2, canvas_y);
     }
   }
 
   if (draw_coastline && !draw_terrain) {
-    Terrain_type_id t1 = tile_get_terrain(x, y), t2;
+    Terrain_type_id t1 = map_get_terrain(x, y), t2;
     int x1, y1;
     SetAPen(rp,GetColorPen(COLOR_STD_OCEAN));
     x1 = x; y1 = y-1;
     if (normalize_map_pos(&x1, &y1)) {
-      t2 = tile_get_terrain(x1, y1);
+      t2 = map_get_terrain(x1, y1);
       if (draw & D_M_R && (is_ocean(t1) ^ is_ocean(t2))) {
-      	Move(rp, canvas_x + tileset_tile_width(tileset)/2, canvas_y);
-      	Draw(rp, canvas_x + tileset_tile_width(tileset), canvas_y+tileset_tile_height(tileset)/2);
+      	Move(rp, canvas_x + NORMAL_TILE_WIDTH/2, canvas_y);
+      	Draw(rp, canvas_x + NORMAL_TILE_WIDTH, canvas_y+NORMAL_TILE_HEIGHT/2);
       }
     }
     x1 = x-1; y1 = y;
     if (normalize_map_pos(&x1, &y1)) {
-      t2 = tile_get_terrain(x1, y1);
+      t2 = map_get_terrain(x1, y1);
       if (draw & D_M_L && (is_ocean(t1) ^ is_ocean(t2))) {
-      	Move(rp, canvas_x, canvas_y + tileset_tile_height(tileset)/2);
-      	Draw(rp, canvas_x+tileset_tile_width(tileset)/2, canvas_y);
+      	Move(rp, canvas_x, canvas_y + NORMAL_TILE_HEIGHT/2);
+      	Draw(rp, canvas_x+NORMAL_TILE_WIDTH/2, canvas_y);
       }
     }
   }
@@ -1370,13 +1367,13 @@ static void put_tile_iso(struct RastPort *rp, int x, int y,
   /*** City and various terrain improvements ***/
   if (pcity && draw_cities) {
     put_city_draw(pcity, rp,
-		  canvas_x, canvas_y - tileset_tile_height(tileset)/2,
+		  canvas_x, canvas_y - NORMAL_TILE_HEIGHT/2,
 		  offset_x, offset_y_unit,
 		  width, height_unit, fog);
   }
   if (contains_special(special, S_AIRBASE) && draw_fortress_airbase)
     put_overlay_tile_draw(rp,
-			  canvas_x, canvas_y-tileset_tile_height(tileset)/2,
+			  canvas_x, canvas_y-NORMAL_TILE_HEIGHT/2,
 			  sprites.tx.airbase,
 			  offset_x, offset_y_unit,
 			  width, height_unit, fog);
@@ -1397,12 +1394,12 @@ static void put_tile_iso(struct RastPort *rp, int x, int y,
   /* Not fogged as it would be unreadable */
   if (pcity && draw_cities) {
     if (pcity->size>=10)
-      put_overlay_tile_draw(rp, canvas_x, canvas_y-tileset_tile_height(tileset)/2,
+      put_overlay_tile_draw(rp, canvas_x, canvas_y-NORMAL_TILE_HEIGHT/2,
 			    sprites.city.size_tens[pcity->size/10],
 			    offset_x, offset_y_unit,
 			    width, height_unit, 0);
 
-    put_overlay_tile_draw(rp, canvas_x, canvas_y-tileset_tile_height(tileset)/2,
+    put_overlay_tile_draw(rp, canvas_x, canvas_y-NORMAL_TILE_HEIGHT/2,
 			  sprites.city.size[pcity->size%10],
 			  offset_x, offset_y_unit,
 			  width, height_unit, 0);
@@ -1411,12 +1408,12 @@ static void put_tile_iso(struct RastPort *rp, int x, int y,
   /*** Unit ***/
   if (punit && (draw_units || (punit == pfocus && draw_focus_unit))) {
     put_unit_draw(punit, rp,
-		  canvas_x, canvas_y - tileset_tile_height(tileset)/2,
+		  canvas_x, canvas_y - NORMAL_TILE_HEIGHT/2,
 		  offset_x, offset_y_unit,
 		  width, height_unit);
     if (!pcity && unit_list_size(&map_get_tile(x, y)->units) > 1)
       put_overlay_tile_draw(rp,
-			    canvas_x, canvas_y-tileset_tile_height(tileset)/2,
+			    canvas_x, canvas_y-NORMAL_TILE_HEIGHT/2,
 			    sprites.unit.stack,
 			    offset_x, offset_y_unit,
 			    width, height_unit, fog);
@@ -1424,7 +1421,7 @@ static void put_tile_iso(struct RastPort *rp, int x, int y,
 
   if (contains_special(special, S_FORTRESS) && draw_fortress_airbase)
     put_overlay_tile_draw(rp,
-			  canvas_x, canvas_y-tileset_tile_height(tileset)/2,
+			  canvas_x, canvas_y-NORMAL_TILE_HEIGHT/2,
 			  sprites.tx.fortress,
 			  offset_x, offset_y_unit,
 			  width, height_unit, fog);
@@ -1446,23 +1443,23 @@ void put_one_tile(struct RastPort *rp, int x, int y, enum draw_type draw)
   }
   freelog(LOG_DEBUG, "putting %d,%d draw %x", x, y, draw);
 
-  width = (draw & D_TMB_L) && (draw & D_TMB_R) ? tileset_tile_width(tileset) : tileset_tile_width(tileset)/2;
+  width = (draw & D_TMB_L) && (draw & D_TMB_R) ? NORMAL_TILE_WIDTH : NORMAL_TILE_WIDTH/2;
   if (!(draw & D_TMB_L))
-    offset_x = tileset_tile_width(tileset)/2;
+    offset_x = NORMAL_TILE_WIDTH/2;
   else
     offset_x = 0;
 
   height = 0;
-  if (draw & D_M_LR) height += tileset_tile_height(tileset)/2;
-  if (draw & D_B_LR) height += tileset_tile_height(tileset)/2;
+  if (draw & D_M_LR) height += NORMAL_TILE_HEIGHT/2;
+  if (draw & D_B_LR) height += NORMAL_TILE_HEIGHT/2;
   if (draw & D_T_LR)
-    height_unit = height + tileset_tile_height(tileset)/2;
+    height_unit = height + NORMAL_TILE_HEIGHT/2;
   else
     height_unit = height;
 
-  offset_y = (draw & D_M_LR) ? 0 : tileset_tile_height(tileset)/2;
+  offset_y = (draw & D_M_LR) ? 0 : NORMAL_TILE_HEIGHT/2;
   if (!(draw & D_T_LR))
-    offset_y_unit = (draw & D_M_LR) ? tileset_tile_height(tileset)/2 : tileset_tile_height(tileset);
+    offset_y_unit = (draw & D_M_LR) ? NORMAL_TILE_HEIGHT/2 : NORMAL_TILE_HEIGHT;
   else
     offset_y_unit = 0;
 
@@ -1485,6 +1482,6 @@ void put_one_tile_full(struct RastPort *rp, int x, int y, int canvas_x, int canv
 {
   put_tile_iso(rp, x, y, canvas_x, canvas_y, citymode,
 	       0, 0, 0,
-	       tileset_tile_width(tileset), tileset_tile_height(tileset), tileset_full_tile_height(tileset),
+	       NORMAL_TILE_WIDTH, NORMAL_TILE_HEIGHT, UNIT_TILE_HEIGHT,
 	       D_FULL);
 }

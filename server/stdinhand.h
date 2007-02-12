@@ -25,11 +25,10 @@ void stdinhand_free(void);
 
 bool handle_stdin_input(struct connection *caller, char *str, bool check);
 void report_server_options(struct conn_list *dest, int which);
-void send_server_settings(struct conn_list *dest);
+void report_settable_server_options(struct connection *dest, int which);
 void set_ai_level_direct(struct player *pplayer, int level);
 void set_ai_level_directer(struct player *pplayer, int level);
-bool read_init_script(struct connection *caller, char *script_filename,
-                      bool from_cmdline);
+bool read_init_script(struct connection *caller, char *script_filename);
 void show_players(struct connection *caller);
 
 bool load_command(struct connection *caller, char *arg, bool check);

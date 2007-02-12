@@ -15,13 +15,12 @@
 #include <config.h>
 #endif
 
-#include "game.h"
 #include "map.h"
 #include "shared.h"
 
-#include "civclient.h"
+#include "tilespec.h"           /* is_isometric */
+
 #include "climap.h"
-#include "tilespec.h"           /* tileset_is_isometric(tileset) */
 
 /************************************************************************
  A tile's "known" field is used by the server to store whether _each_
@@ -33,12 +32,9 @@
  uses the stock tilespec.c file, this function serves as a wrapper.
 
 *************************************************************************/
-enum known_type client_tile_get_known(const struct tile *ptile)
+enum known_type tile_get_known(const struct tile *ptile)
 {
-  if (!game.player_ptr && client_is_observer()) {
-    return TILE_KNOWN;
-  }
-  return tile_get_known(ptile, game.player_ptr);
+  return (enum known_type) ptile->known;
 }
 
 /**************************************************************************
@@ -54,7 +50,7 @@ enum known_type client_tile_get_known(const struct tile *ptile)
 **************************************************************************/
 enum direction8 gui_to_map_dir(enum direction8 gui_dir)
 {
-  if (tileset_is_isometric(tileset)) {
+  if (is_isometric) {
     return dir_ccw(gui_dir);
   } else {
     return gui_dir;
@@ -68,7 +64,7 @@ enum direction8 gui_to_map_dir(enum direction8 gui_dir)
 **************************************************************************/
 enum direction8 map_to_gui_dir(enum direction8 map_dir)
 {
-  if (tileset_is_isometric(tileset)) {
+  if (is_isometric) {
     return dir_cw(map_dir);
   } else {
     return map_dir;

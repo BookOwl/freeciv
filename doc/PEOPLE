@@ -16,7 +16,7 @@ contributions to the Freeciv project.
   Present administrators:
 
      Tony Stuckey <astuckey@imsa.edu> (since Jul 1999 [from 1.8.1])
-     Raimar Falke <rfalke@freeciv.org> (since Aug 2001 [from 1.12.0])
+     Raimar Falke <rf13@inf.tu-dresden.de> (since Aug 2001 [from 1.12.0])
      Vasco Alexandre da Silva Costa <vasc@rnl.ist.utl.pt> (since August 2001 [from 1.12.0])
      Mike Kaufman <kaufman@orion.physics.wisc.edu> (since Dec 2001 [from 1.12.0])
      Per I. Mathisen <per@leftist.net> (since April 2002 [from 1.12.0])
@@ -26,7 +26,7 @@ contributions to the Freeciv project.
      Arnstein Lindgard <a-l@c2i.net> (since June 2003 [from 1.14.0])
      Mateusz Stefek <mstefek@poczta.fm> (since August 2004 [from 1.14.2])
      James Canete <use_less@ignmail.com> (since October 2004 [from 1.14.2])
-     Marko Lindqvist <marko.lindqvist@pp1.inet.fi> (since December 2004 [from 2.0.0])
+     Marko Lindqvist <marko.lindqvist@pp5.inet.fi> (since December 2004 [from 2.0.0])
 
   Past administrators:
 
@@ -36,47 +36,6 @@ contributions to the Freeciv project.
      Nicolas Brunel <brunel@ham.esil.univ-mrs.fr> (Jan 1999 to Jun 1999 [1.8.0])
      Mitch Davis <mjd@alphalink.com.au> (Dec 1997 to Dec 1998 [1.5.2 to 1.7.2])
      James Blackwell <innocent@jupiter.linuxguru.net> (versions 1.5.0 to 1.5.3)
-
-  Coders since 2.0 release:
-
-     Petr Baudis <pasky@ucw.cz>
-     SUENAGA Yasuo <s_keishi@mutt.freemail.ne.jp>
-     Pete Shinners <pete@shinners.org>
-     Brendon Oram <yautja@paradise.net.nz>
-     Jerome Plut <Jerome.Plut@ens.fr>
-     Andreas Røsdal <andrearo@stud.ntnu.no>
-     Homr Zodyssey <programmer@nashclan.net>
-     Nicolas A. Mendoza <mendoza@pvv.ntnu.no>
-     Christian Prochaska <cp.ml.freeciv.dev@googlemail.com>
-     Jordi Negrevernis i Font <jorneg@retemail.es>
-     David A Knight <david@ritter.demon.co.uk>
-     Brian Pepple <bdpepple@gmail.com>
-     Alexander Sayenko <sayenko@cc.jyu.fi>
-     Guillaume Melquiond <guillaume.melquiond@gmail.com>
-     Daniel Markstedt <himasaram@spray.se>
-     Ulrich Drepper <drepper@gnu.ai.mit.edu>
-     Dmitry V. Levin <ldv@altlinux.org>
-     Rich Pinkall Pollei <whraven@worldnet.att.net>
-     Frédéric Brière <fbriere@fbriere.net>
-     Mike Jing <miky40@hotmail.com>
-     Thomas Müller <mail@elfstone.de>
-     Marko Lindqvist <marko.lindqvist@pp1.inet.fi>
-     Daniel Speyer <dspeyer@gmail.com>
-     Benedict Adamson <badamson@spamcop.net>
-     John Bauman <john@baumanfamily.com>
-     David Stewart <dmstewart@gmail.com>
-     Egor Vyscrebentsov <evyscr@murom.net>
-     Mateusz Stefek <matusik_s@o2.pl>
-     Arnstein Lindgard <a-l@c2i.net>
-     Mike Kaufman <kaufman@orion.physics.wisc.edu>
-     Raimar Falke <rfalke@freeciv.org>
-     Vasco Alexandre da Silva Costa <vasc@rnl.ist.utl.pt>
-     Vijay Kiran Kamuju <infyquest@gmail.com>
-     Benoit Hudson <bh@techhouse.brown.edu>
-     James Canete <use_less@ignmail.com>
-     Per I. Mathisen <per@freeciv.org>
-     Brian Dunstan <bdunstan149@yahoo.com>
-     Jason Dorje Short <jdorje@users.sourceforge.net>
 
   Coders since 1.14.2 release:
      Vladimir Kondratiev <vladimir.kondratiev@gmail.com>
@@ -165,7 +124,7 @@ contributions to the Freeciv project.
      Per I. Mathisen <per@leftist.net> (co-admin, AI cleanup, server cleanup)
      Petr Baudis <pasky@pasky.ji.cz> (AI cleanup)
      Raahul Kumar <raahul_da_man@yahoo.com> (ruleset cleanup)
-     Raimar Falke <rfalke@freeciv.org> (co-admin, dataio, network thaw/freeze, code cleanup)
+     Raimar Falke <rf13@inf.tu-dresden.de> (co-admin, dataio, network thaw/freeze, code cleanup)
      Reinier Post <reinpost@win.tue.nl> (server command spy, fix command)
      Ross W. Wetmore <rwetmore@sympatico.ca> (AI cleanup)
      Sami Liedes (fix)
@@ -177,7 +136,7 @@ contributions to the Freeciv project.
 
   Coders since 1.12.0 release:
 
-     Raimar Falke <rfalke@freeciv.org>
+     Raimar Falke <rf13@inf.tu-dresden.de>
   (co-admin, nation limit, code cleanup, CMA, events
   generalisation, bools, gettext fixes, tech and trade
   cleanup, agents)
@@ -254,7 +213,7 @@ contributions to the Freeciv project.
      Sebastian Bauer <sebauer@t-online.de> (amiga maintainance)
      Dirk Stoecker <stoecker@rcs.urz.tu-dresden.de>
   (amiga, patches, internationalization, cleanup)
-     Marko Lindqvist <marko.lindqvist@pp1.inet.fi>
+     Marko Lindqvist <marko.lindqvist@pp5.inet.fi>
   (autosave name prefix, patches, README.ruleset,
   client-server interface improvements, cleanup)
      Vasco Alexandre da Silva Costa <vasc@rnl.ist.utl.pt>
@@ -274,7 +233,7 @@ contributions to the Freeciv project.
      Kero van Gelder <kero@ipc3799cba.dial.wxs.nl>
   (patches, goto improvement)
      Chris Chittleborough <cchittleborough@yahoo.com.au> (patch)
-     Raimar Falke <rfalke@freeciv.org> (patch)
+     Raimar Falke <rf13@inf.tu-dresden.de> (patch)
      Daniel M Church <dchurch@crossbreed.mbhs.edu> (layer view)
      Joona Kiiski <joona.kiiski@iki.fi> (patches, production fixes)
      Arien Malec <arien_malec@yahoo.com> (patches)
@@ -348,7 +307,7 @@ contributions to the Freeciv project.
      IQ <iquin@technologist.com>
   (cleanup 1.11.4, gen. improvements part 1, cleanup 1.11.0,
   "concise" opt., better gen 2+ rivers 1.10.0)
-     Marko Lindqvist <marko.lindqvist@pp1.inet.fi> (game.ruleset, bugfixes 1.11.4,
+     Marko Lindqvist <marko.lindqvist@pp5.inet.fi> (game.ruleset, bugfixes 1.11.4,
   patches 1.11.0)
      Joseph Beckenbach <jrb3@bdhsw.com>
   (BeOS 1.11.x, 1.10.0, 1.9.0, cleanup 1.11.0, multi-client 1.10.0)
@@ -387,7 +346,7 @@ contributions to the Freeciv project.
      Anders Wegge Jakobsen <wegge@wegge.dk> (bugfix 1.11.0, bugfix 1.10.0)
      Cameron Morland <cjmorlan@uwaterloo.ca> (land/ocean xfm 1.11.0)
      Moses Lei <mlei6@mtmis.com> (patch 1.11.0)
-     Raimar Falke <rfalke@freeciv.org> (patches 1.11.0)
+     Raimar Falke <rf13@inf.tu-dresden.de> (patches 1.11.0)
      Anthony J. Stuckey <stuckey@jaka.ece.uiuc.edu>
   (co-admin 1.11.0-1.8.1, bugfixes 1.11.0, AI diplomats 1.10.0,
   AI spacerace 1.9.0, admin help 1.8.1, patches 1.8.x, 1.7.2, 1.7.1)
@@ -497,78 +456,6 @@ contributions to the Freeciv project.
 
   Graphics:
 
-     Alex Mor (Amplio)
-     Allard H.S. Höfelt (Amplio)
-     Bebro (Amplio)
-     Captain Nemo (Amplio)
-     CapTVK <thomas@worldonline.nl> (Amplio)
-     Curt Sibling (Amplio)
-     Erwan (Amplio)
-     Fairline (Amplio)
-     GoPostal (Amplio)
-     Oprisan Sorin (Amplio)
-     Tanelorn (Amplio)
-     Vodvakov (Amplio)
-     Yautja (Amplio)
-     Smiley (Amplio)
-     Finer (icons)
-     Tekgen (intro splash)
-     Andreas Røsdal <andrearo@stud.ntnu.no> (cursors)
-     Daniel Markstedt <himasaram@spray.se> (flags, misc tilesets)
-     bytecoder (icon)
-     Jason Dorje Short <jdorje@users.sourceforge.net> (misc tilesets, flags)
-     Hogne Håskjold <haskjold@idi.ntnu.no> (city bar, Amplio)
-     Andrew Duhan <andrew.b.duhan@ttu.edu> (flags)
-     Brett Roper <roperb@iinet.net.au> (flags)
-     Lauris Kaplinski <lauris@kaplinski.com> (flags)
-     Sigge Kotliar <sigge@hystrix.se> (flags)
-     Daniel McRae <djm158@student.canterbury.ac.nz> (flags)
-     Christoph Breitler (flags)
-     Tobias Jakobs <tobias.jakobs@web.de> (flags)
-     Jörgen Scheibengruber <Joergen.Scheibengruber@wh-hms.uni-ulm.de> (flags)
-     Caleb Moore <calebmm@tpg.com.au> (flags)
-     Cezary Biele <yemu@gazeta.pl> (flags)
-     Nikos Mavrogiannopoulos <nmav@gnutls.org> (flags)
-     James Leigh <james@leighnet.ca> (flags)
-     Matt Jecrell (flags)
-     Xavier Conde Rueda <xaviconde@eresmas.com> (flags)
-     Arturo Espinosa-Aldama <pupitetris@yahoo.com> (flags)
-     Mario Fuentes <mario@gnome.cl> (flags)
-     Stephen Silver (flags)
-     Frank Zeko <frankz@dogstone.com> (flags)
-     Jens Bech Madsen <jbm@oncable.dk> (flags)
-     Thom Sanders <thom.sanders@btinternet.com> (flags)
-     Christian Schaller <christian.schaller@gnome.org> (flags)
-     Patricia Fidi (flags)
-     Miguel Rodríguez <Miguel.Rodriguez@det.uvigo.es> (flags)
-     Kilian Valkhof (flags)
-     Philipp Sadleder <philipp.sadleder@web.de> (flags)
-     Vzb83 (flags)
-     Laszlo Dvornik (flags)
-     Áki G. Karlsson <aki@akademia.is> (flags)
-     William Allen Simpson <wsimpson@greendragon.com> (flags)
-     Kuswanto <zeus@bajingloncat.com> (flags)
-     John C Meuser <meuserj@purdue.edu> (flags)
-     James Ots (flags)
-     Lauris Bukšis <lauris@nix.lv> (flags)
-     Russell Cloran (flags)
-     Sebastian Koppehel <basti@bastisoft.de> (flags)
-     Marc Maurer <j.m.maurer@student.utwente.nl> (flags)
-     JB Grout <JBGrout@aol.com> (flags)
-     Diogo Mamede <euept@myrealbox.com> (flags)
-     Patrick Guimond (flags)
-     Oleg Krivosheev (flags)
-     Dean Tersigni <thealmightyguru@gmail.com> (flags)
-     Nikola Pizurica (flags)
-     Matthew Gatto <poobar@nycap.rr.com> (flags)
-     Farrel Lifson <flifson@cs.uct.ac.za> (flags)
-     Pedro A. Gracia Fajardo <pedro@neuroomante.com> (flags)
-     Richard Torkar (flags)
-     Philipp Frauenfelder <pfrauenf@math.ethz.ch> (flags)
-     Craig Kacinko <ckacinko@hotmail.com> (flags)
-     Paul B. Joiner (flags)
-     Onur Yalaz <onuryalazi@mersin.edu.tr> (flags)
-     Clevelander (flags)
      Daniel L Speyer <dspeyer@wam.umd.edu> (isotrident tileset)
      Tim Smith <yoohootim@hotmail.com> (HiRes tileset)
      Thue Janus Kristensen <thue@diku.dk> (misc HiRes fixes)
@@ -610,41 +497,6 @@ contributions to the Freeciv project.
      Christian Grothoff <ma0035@stud.uni-wuppertal.de> (Europe v1.0)
      Daniel Gudlat <gudlat@informatik.hu-berlin.de> (Earth)
      Jerzy Klek <qpkjeek@epk.ericsson.se> (Europe v1.1)
-
-  Ruleset data since 2.0 release:
-
-     Māris Ozols <ozolkaajis@inbox.lv> (nations)
-     William Allen Simpson <wsimpson@greendragon.com> (nations)
-     Ribannah of Gobs <ribannah@castlegobs.nl> (nations)
-     Duane Wysynski <dwysynski@hotmail.com> (nations)
-     Christian Knoke <chrisk@cknoke.de> (nations)
-     Moritz Muehlenhoff <jmm@inutil.org> (nations)
-     Jake Kesinger <kesinger@math.ttu.edu> (nations)
-     Giorgos Vaiolos (nations)
-     Nikos Mavrogiannopoulos <nmav@gnutls.org> (nations)
-     Heiko Schaefer (nations)
-     Aho Esen (nations)
-     Benedict Adamson <badamson@spamcop.net> (nations)
-     Bobby Bryant <bdbryant@mail.utexas.edu> (nations)
-     Nicolas Évrard (nations)
-     Dmitriy Genzel <dg@cs.brown.edu> (nations)
-     Thanasis Kinias <tkinias@optimalco.com> (nations)
-     Andreas Røsdal <andrearo@stud.ntnu.no> (nations)
-     Elias Markstedt <gedebao@hotmail.com> (nations)
-     Cederik De Leon Acuna <torvalds@yahoo.com> (nations)
-     Wen-Hung Fang <wenhungf@yahoo.co.jp> (nations)
-     Loh Yap Kant <yapkant@mac.com> (nations)
-     Jason Tan Boon Teck <jasontn@pc.jaring.my> (nations)
-     Pawel Sakowski <pawel@sakowski.pl> (fixes)
-     Daniel Markstedt <himasaram@spray.se> (nations maintainer)
-     Grigor Gatchev (nations)
-     Marko Lindqvist <marko.lindqvist@pp1.inet.fi> (fixes)
-     Brian Dunstan <bdunstan149@yahoo.com> (nations)
-     Netotea Sergiu <nepleausall@yahoo.com> (nations)
-     Mateusz Stefek <matusik_s@o2.pl> (fixes)
-     Billy Naylor <banjo@actrix.com> (nations)
-     David Stewart <dmstewart@gmail.com> (nations)
-     Robo Trebula <r0b0@deepblue.sk> (nations)
 
   Ruleset data since 1.12.0 release:
 
@@ -777,65 +629,6 @@ contributions to the Freeciv project.
      Paul Zastoupil <paul@zastoupil.org> (new metaserver)
      Vasco Alexandre da Silva Costa <vasc@rnl.ist.utl.pt> (new metaserver)
 
-  Bug reports since 2.0 release:
-
-     Ricky <iainuki@yahoo.com>
-     Slavy Mihov <smihov@abv.bg>
-     Christoph Petschnig <cp@123cad.de>
-     Claudio M. Camacho <claudiomkd@gmail.com>
-     Not Logged In
-     Matthias Hilbig <hilbig@upb.de>
-     Nanakaland <nanakaland@gmail.com>
-     Frédéric Rodrigo <f.rodrigo@free.fr>
-     Karl-Ingo Friese <kif@gdv.uni-hannover.de>
-     Ignacio Vicario <ignaciovicario@nodo50.org>
-     Sini Ruohomaa <sini.ruohomaa@iki.fi>
-     Daniel Strecker <daniel.strecker@gmx.net>
-     Luigi Auriemma <aluigi@autistici.org>
-     Gilderoy <aaron_talamasca@yahoo.it>
-     Genevieve Gracian <ggracian@free.fr>
-     Cyril Delalande <cyril.delalande@seznam.cz>
-     Abu Dhabi <abudhabi2@go2.pl>
-     m s <ka_xperience@yahoo.es>
-     Naoki Atagi <atagi@toki.waseda.jp>
-     Laurent Vogel <lvl@club-internet.fr>
-     Esa <esa@mursu.net>
-     Jaroslav Libák <jarol1@seznam.cz>
-     Chad Aeschliman <chadaeschliman@gmail.com>
-     Martin Gerdes <Martin.Gerdes@directbox.com>
-     Michael Mielke <michael@mielke.cc>
-     Robert M <xbxrjf@rojoma.com>
-     Bernd Pol <bernd.pol@online.de>
-     skips <skips@users.sourceforge.net>
-     Christopher Nash <chris@nashclan.net>
-     William Allen Simpson <wsimpson@greendragon.com>
-     Curtis Warren <cwarren89@gawab.com>
-     Gerhard Killesreiter <killesreiter@physik.uni-freiburg.de>
-     Fred Labrosse <ffl@aber.ac.uk>
-     Thomas Strub <ue80@stud.uni-karlsruhe.de>
-     Guido Ostkamp <freeciv@ostkamp.fastmail.fm>
-     Florian Kattner
-     C <bmorris3@san.rr.com>
-     <Bayprogrammer@aol.com>
-     Excellent One <excellent.one@sympatico.ca>
-     Carl Lobo <carllobo@gmail.com>
-     Vladimir Pekez <vbpekez@EUnet.yu>
-     Jeff <superfli@gmail.com>
-     Matz <matzjosh-freeciv2@schokokeks.org>
-     Lo'oris <looris@gmail.com>
-     Michael Lorenz <macallan@netbsd.org>
-     David Tansey <djtansey@gmail.com>
-     Dag Arneson <sanedragon@gmail.com>
-     Enrique Tamara <enrique.tamara@hp.com> 
-     Daniel Doran <dadoran@sbcglobal.net>
-     Graham Reeds <graham.reeds@gmail.com>
-     Jacob Nevins <jacobn+freecivrt@chiark.greenend.org.uk>
-     Marcel Edward Verhagen <marcel@meverhagen.com>
-     Peter Schaefer <peter.schaefer@gmail.com>
-     Christian Knoke <chrisk@cknoke.de>
-     Eddie Anderson <saywhat@softhome.net>
-     John Soltow <jasoltow@comcast.net>
-
   Bug reports since 1.14.2 release:
      Jacob Nevins <jacobn+freecivrt@chiark.greenend.org.uk>
      Carol Smith <lawndart@users.easynews.com>
@@ -845,7 +638,7 @@ contributions to the Freeciv project.
      Willem de Groot <willem@byte.nl>
      Tobias Sarner <tobias.sarner@marabu-edv.de>
      Oscar <OJMS@inicia.es>
-     Tomáš Brukner <tomas.brukner@gentlemail.com>
+     Tomá\u0161 Brukner  <tomas.brukner@gentlemail.com>
      Jeff <lightning4@gci-net.com>
      Eddie Anderson <saywhat@softhome.net>
      Peter <freeciv@maubp.freeserve.co.uk>
@@ -854,7 +647,7 @@ contributions to the Freeciv project.
      Bill Webster <bill@year0.com.au>
      Petri Pipatti <petri.pipatti@tietokone.fi>
      Christian Knoke <chrisk@cknoke.de>
-     Marko Lindqvist <marko.lindqvist@pp1.inet.fi>
+     Marko Lindqvist <marko.lindqvist@pp5.inet.fi>
      Nico Spicher <http://triplex.it-helpnet.de/>
      <uuuppz@oscar.esptl.com>
      Eric F. Paul <ericp@shelltown.net>
@@ -874,7 +667,7 @@ contributions to the Freeciv project.
      Preben Randhol <randhol@pvv.org>
      Paul Zastoupil <paul@zastoupil.org>
      Andrew Archibald <andrew.archibald@sympatico.ca>
-     Hogne Håskjold <haskjold@idi.ntnu.no>
+     Hogne Haskjold <haskjold@idi.ntnu.no>
      Matz <matzjosh-freeciv@schokokeks.org>
      qwm <qwmqwm@gmail.com>
      Ben Bettin <bwbettin@gmail.com>
@@ -939,6 +732,10 @@ contributions to the Freeciv project.
      Evan Daniel <evanbd@gmail.com>
      Nicolau C. Saldanha <nicolau.saldanha@gmail.com>
      Thomas Müller <lists@elfstone.de>
+     David Tansey <djtansey@gmail.com>
+     Michael Lorenz <macallan@netbsd.org>
+     John Soltow <jasoltow@comcast.net>
+     "White Raven" <whraven@worldnet.att.net>
 
   Bug reports since 1.13.0 release:
 
@@ -1019,7 +816,7 @@ contributions to the Freeciv project.
      Mark Saward <mark_saward@unite.com.au>
      Martin Olveyra <molv@adinet.com.uy>
      Thomas Aglassinger <agi@rieska.oulu.fi>
-     Marko Lindqvist <marko.lindqvist@pp1.inet.fi>
+     Marko Lindqvist <marko.lindqvist@pp5.inet.fi>
      Tuomas Airaksinen <tuomas.airaksinen@tuma.stc.cx>
      Lino Mastrodomenico <l.mastrodomenico@studenti.to.it>
      Patrice LaFlamme <ewd@patrix.org>
@@ -1069,7 +866,7 @@ contributions to the Freeciv project.
      (Version numbers refer to the release the bug was reported on.)
 
      Urban Mueller <mueller@relog.ch> (1.11.4)
-     Marko Lindqvist <marko.lindqvist@pp1.inet.fi> (1.11.4, 1.8.1, 1.8.0)
+     Marko Lindqvist <marko.lindqvist@pp5.inet.fi> (1.11.4, 1.8.1, 1.8.0)
      Michael Kiermaier <michael.kiermaier@gmx.net> (1.11.4)
      Tomasz Wegrzanowski <maniek@beer.com> (1.11.4, 1.9.0)
      Gaute Strokkenes <gs234@cam.ac.uk> (1.11.4)
@@ -1192,30 +989,6 @@ contributions to the Freeciv project.
      David King <crkinger@usa.net> (Freeciv Client and Server Guides)
      Bart Coppens <coppensbart@pi.be>
      Genevieve Gracian <ggracian@free.fr> (Wiki)
-
-  Localization (l10n) since 2.0 release:
-
-     stan ioan-eugen <stan.ieugen@gmail.com> (ro)
-     MITA Yuusuke <clefs@mail.goo.ne.jp> (ja)
-     Elmo Todurov <todurov@gmail.com> (et)
-     Arman Ordookhani <arman_o71@yahoo.com> (fa)
-     Ahmad M. Zawawi <zeus_go64@yahoo.com> (ar)
-     Claudio M. Camacho <claudiomkd@gmail.com> (es)
-     Jelle Pelfrene <jelle.pelfrene@student.kuleuven.ac.be> (nl)
-     SUENAGA Yasuo <s_keishi@mutt.freemail.ne.jp> (ja)
-     Jordi Negrevernis i Font <jnegrevernis@jnfprogramari.com> (es)
-     Hongjia Cao <hjcao@yahoo.com> (zh_CN)
-     Charles Wang <charles@linux.net.cn> (zh_CN)
-     Andrius Štikonas <stikonas@gmail.com> (lt)
-     Mindaugas Šukys <ateivis@gmail.com> (lt)
-     Egor Vyscrebentsov <evyscr@murom.net> (ru)
-     Daniel Markstedt <himasaram@spray.se> (sv, ja, en_GB)
-     Christian Knoke <chrisk@cknoke.de> (de)
-     Frédéric Rodrigo <f.rodrigo@free.fr> (fr)
-     Sini Ruohomaa <sini.ruohomaa@iki.fi> (fi)
-     Mateusz Stefek <matusik_s@o2.pl> (pl)
-     Dusan Hokuv <dusan@mirc.cz> (cs)
-     Alexandr Menovchicov <orders@kypi.ru> (ru)
 
   Localization (l10n) since 1.14.2 release:
 
@@ -1450,9 +1223,6 @@ contributions to the Freeciv project.
 
   Modpacks:
 
-     Billy Naylor <banjo@actrix.com> (rndCiv)
-     Rob Best <best754@sasktel.net> (Japan)
-     Lakatos Zoltán <lakatoszoltan@invitel.hu> (Magic)
      Bobby D. Bryant <bdbryant@mail.utexas.edu> (Ancients)
      Mark Polo <mark@zenit.org> (Fantasy)
      Paul Zastoupil <paul@zastoupil.org> (Middle-Earth)
@@ -1462,7 +1232,7 @@ contributions to the Freeciv project.
      Artur Biesiadowski <abies@pg.gda.pl> (Java Client 2)
      Patrice LaFlamme <ewd@patrix.org> (BeOS)
      Brandon Craig Rhodes <brandon@rhodesmill.org> (Freeciv Manual)
-     Marko Lindqvist <marko.lindqvist@pp1.inet.fi> (Client-side AI)
+     Marko Lindqvist <marko.lindqvist@pp5.inet.fi> (Client-side AI)
      Ben Webb <ben@bellatrix.pcl.ox.ac.uk> (FreecivAC)
      Stewart Adcock <stewart@bellatrix.pcl.ox.ac.uk> (FreecivAC)
      John Goerzen <jgoerzen@complete.org> (Java Client 1)

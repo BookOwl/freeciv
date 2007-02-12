@@ -55,12 +55,11 @@ static Widget players_meet_command;
 static Widget players_war_command;
 static Widget players_vision_command;
 static Widget players_sship_command;
-static bool players_dialog_shell_is_raised;
 
 static int list_index_to_player_index[MAX_NUM_PLAYERS];
 
 
-static void create_players_dialog(bool raise);
+static void create_players_dialog(void);
 static void players_close_callback(Widget w, XtPointer client_data, 
 				   XtPointer call_data);
 static void players_meet_callback(Widget w, XtPointer client_data, 
@@ -82,16 +81,10 @@ static void players_sship_callback(Widget w, XtPointer client_data,
 /****************************************************************
 popup the dialog somewhat inside the main-window 
 *****************************************************************/
-void popup_players_dialog(bool raise)
+void popup_players_dialog(void)
 {
-  players_dialog_shell_is_raised = raise;
-
   if(!players_dialog_shell)
-    create_players_dialog(raise);
-
-  if (raise) {
-    XtSetSensitive(main_form, FALSE);
-  }
+    create_players_dialog();
 
   xaw_set_relative_position(toplevel, players_dialog_shell, 5, 25);
   XtPopup(players_dialog_shell, XtGrabNone);
@@ -103,9 +96,6 @@ void popup_players_dialog(bool raise)
 void popdown_players_dialog(void)
 {
   if (players_dialog_shell) {
-    if (players_dialog_shell_is_raised) {
-      XtSetSensitive(main_form, TRUE);
-    }
     XtDestroyWidget(players_dialog_shell);
     players_dialog_shell = 0;
   }
@@ -114,12 +104,11 @@ void popdown_players_dialog(void)
 /****************************************************************
 ...
 *****************************************************************/
-void create_players_dialog(bool raise)
+void create_players_dialog(void)
 {
   players_dialog_shell =
     I_IN(I_T(XtCreatePopupShell("playerspopup", 
-				raise ? transientShellWidgetClass
-				: topLevelShellWidgetClass,
+				topLevelShellWidgetClass,
 				toplevel, NULL, 0)));
 
   players_form = XtVaCreateManagedWidget("playersform", 
@@ -203,7 +192,7 @@ void create_players_dialog(bool raise)
 
 
 /**************************************************************************
-  Updates the player list dialog.
+...
 **************************************************************************/
 void update_players_dialog(void)
 {
@@ -214,8 +203,8 @@ void update_players_dialog(void)
     static char namelist_text[MAX_NUM_PLAYERS][256];
     const struct player_diplstate *pds;
 
-    for(i=0,j=0; i<game.info.nplayers; i++) {
-      char idlebuf[32], statebuf[32], namebuf[32], dsbuf[32];
+    for(i=0,j=0; i<game.nplayers; i++) {
+      char idlebuf[32], statebuf[32], namebuf[32], dsbuf[32], repbuf[32];
       
       /* skip barbarians */
       if(is_barbarian(&game.players[i]))
@@ -234,7 +223,7 @@ void update_players_dialog(void)
       /* text for state */
       if(game.players[i].is_alive) {
 	if(game.players[i].is_connected) {
-	  if(game.players[i].phase_done)
+	  if(game.players[i].turn_done)
 	    sz_strlcpy(statebuf, _("done"));
 	  else
 	    sz_strlcpy(statebuf, _("moving"));
@@ -253,7 +242,7 @@ void update_players_dialog(void)
       namebuf[16] = '\0';
 
       /* text for diplstate type and turns -- not applicable if this is me */
-      if ((i == game.info.player_idx) || !game.player_ptr) {
+      if (i == game.player_idx) {
 	strcpy(dsbuf, "-");
       } else {
 	pds = pplayer_get_diplstate(game.player_ptr, get_player(i));
@@ -266,14 +255,19 @@ void update_players_dialog(void)
 	}
       }
 
+      /* text for reputation */
+      my_snprintf(repbuf, sizeof(repbuf),
+		  reputation_text(game.players[i].reputation));
+
       /* assemble the whole lot */
       my_snprintf(namelist_text[j], sizeof(namelist_text[j]),
-	      "%-16s %-12s %-8s %-15s %-8s %-6s   %-15s%s", 
+	      "%-16s %-12s %-8s %-15s %-8s %-13s %-6s   %-15s%s", 
 	      namebuf,
 	      get_nation_name(game.players[i].nation), 
 	      get_embassy_status(game.player_ptr, &game.players[i]),
 	      dsbuf,
 	      get_vision_status(game.player_ptr, &game.players[i]),
+	      repbuf,
 	      statebuf,
 	      player_addr_hack(&game.players[i]),  /* Fixme for multi-conn */
 	      idlebuf);
@@ -299,33 +293,28 @@ void players_list_callback(Widget w, XtPointer client_data,
 {
   XawListReturnStruct *ret;
 
-  ret = XawListShowCurrent(players_list);
+  ret=XawListShowCurrent(players_list);
 
   XtSetSensitive(players_meet_command, FALSE);
   XtSetSensitive(players_int_command, FALSE);
-  if (ret->list_index != XAW_LIST_NONE) {
-    struct player *pplayer = 
-      get_player(list_index_to_player_index[ret->list_index]);
+  if(ret->list_index!=XAW_LIST_NONE) {
+    struct player *pplayer = get_player(list_index_to_player_index[ret->list_index]);
 
-    if (pplayer->spaceship.state != SSHIP_NONE)
+    if(pplayer->spaceship.state != SSHIP_NONE)
       XtSetSensitive(players_sship_command, TRUE);
     else
       XtSetSensitive(players_sship_command, FALSE);
 
-    if (pplayer->is_alive && game.player_ptr) {
+    if(pplayer->is_alive) {
       XtSetSensitive(players_war_command,
 		     !pplayers_at_war(game.player_ptr, pplayer)
 		     && game.player_ptr != pplayer);
     }
 
-    if (game.player_ptr) {
-      XtSetSensitive(players_vision_command,
-		     gives_shared_vision(game.player_ptr, pplayer));
-    }
+    XtSetSensitive(players_vision_command,
+		   gives_shared_vision(game.player_ptr, pplayer));
 
-    if (game.player_ptr) {
-      XtSetSensitive(players_meet_command, can_meet_with_player(pplayer));
-    }
+    XtSetSensitive(players_meet_command, can_meet_with_player(pplayer));
     XtSetSensitive(players_int_command, can_intel_with_player(pplayer));
   }
 }
@@ -363,7 +352,7 @@ void players_meet_callback(Widget w, XtPointer client_data,
       dsend_packet_diplomacy_init_meeting_req(&aconnection, player_index);
     }
     else {
-      append_output_window(_("You need an embassy to establish"
+      append_output_window(_("Game: You need an embassy to establish"
 			     " a diplomatic meeting."));
     }
   }

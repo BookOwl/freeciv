@@ -15,9 +15,9 @@
 
 #include <gtk/gtk.h>
 
-#include "fc_types.h"
-
 #include "mapctrl_g.h"
+
+struct unit;
 
 void key_city_workers(GtkWidget *w, GdkEventKey *ev);
 
@@ -25,10 +25,12 @@ gboolean butt_release_mapcanvas(GtkWidget *w, GdkEventButton *ev, gpointer data)
 gboolean butt_down_mapcanvas(GtkWidget *w, GdkEventButton *ev, gpointer data);
 gboolean butt_down_overviewcanvas(GtkWidget *w, GdkEventButton *ev, gpointer data);
 gboolean move_mapcanvas(GtkWidget *w, GdkEventMotion *ev, gpointer data);
-gboolean leave_mapcanvas(GtkWidget *widget, GdkEventCrossing *event);
 gboolean move_overviewcanvas(GtkWidget *w, GdkEventMotion *ev, gpointer data);
 
 void center_on_unit(void);
 void popupinfo_popdown_callback(GtkWidget *w, gpointer data);
+
+/* Color to use to display the workers */
+extern int city_workers_color;
 
 #endif  /* FC__MAPCTRL_H */

@@ -3,7 +3,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl Initialize with some random file to ensure the source is here.
 AC_INIT
-AC_PREREQ(2.55)
+AC_PREREQ(2.52)
 AC_CONFIG_SRCDIR([common/game.c])
 AC_CONFIG_AUX_DIR(bootstrap) # This can't be quoted or automake will fail
 AM_CONFIG_HEADER(config.h)
@@ -32,15 +32,7 @@ AC_DEFINE_UNQUOTED(PATCH_VERSION, $PATCH_VERSION, [Patch version])
 AC_DEFINE_UNQUOTED(VERSION_LABEL, "${VERSION_LABEL}", [Version label])
 AC_DEFINE_UNQUOTED(VERSION_STRING, "${MAJOR_VERSION}.${MINOR_VERSION}.${PATCH_VERSION}${VERSION_LABEL}", [Version string])
 AC_DEFINE_UNQUOTED(IS_DEVEL_VERSION, $IS_DEVEL_VERSION, [Is this a devel version])
-AC_DEFINE_UNQUOTED(IS_BETA_VERSION, $IS_BETA_VERSION, [Is this a beta version])
-AC_DEFINE_UNQUOTED(NEXT_STABLE_VERSION, "$NEXT_STABLE_VERSION", [Version number of next release])
-AC_DEFINE_UNQUOTED(RELEASE_MONTH, $RELEASE_MONTH, [Month next version will be released])
-AC_SUBST(MAJOR_VERSION)
-AC_SUBST(MINOR_VERSION)
-
-AC_DEFINE_UNQUOTED(NETWORK_CAPSTRING, "$NETWORK_CAPSTRING",
-		   [Network capability string])
-AC_SUBST(NETWORK_CAPSTRING)
+AC_DEFINE_UNQUOTED(IS_BETA_VERSION, $IS_BETA_VERSION, [Is this a beta veersion])
 
 dnl Initialize automake stuff
 AM_INIT_AUTOMAKE($PACKAGE, $VERSION)
@@ -67,15 +59,13 @@ WITH_READLINE="maybe"	dnl maybe  - use if found [default]
 
 dnl  no=do not compile client,  yes=guess it,  *=use this client or error
 AC_ARG_ENABLE(client,
-[  --enable-client[=no/yes/xaw3d/xaw/gtk/win32/sdl/ftwl]
+[  --enable-client[=no/yes/xaw3d/xaw/gtk/gtk2/win32]
                           compile a client [default=yes] (if yes, guess type)],
 [case "${enableval}" in
   yes)	  client=yes ;;
   no)	  client=no ;;
   xaw3d)  client=xaw
 	  WITH_XAW3D=1 ;;
-  ftwl)   client=ftwl ;;
-  gtk)    client=gtk-2.0 ;;
   gtk2)   client=gtk-2.0 ;;
   gtk2.0) client=gtk-2.0 ;;
   gtk20)  client=gtk-2.0 ;;
@@ -88,12 +78,11 @@ AM_CONDITIONAL(CLIENT, test x$client != xno)
 
 dnl You MUST build ftwl to use the ftwl client
 AC_ARG_ENABLE(ftwl,
-[  --enable-ftwl[=no/x11/sdl/opengl]
+[  --enable-ftwl[=no/x11/sdl]
                           compile ftwl [default=no]],
 [case "${enableval}" in
   x11)	  ftwl=x11 ;;
   sdl)    ftwl=sdl ;;
-  opengl) ftwl=opengl ;;
   *)	  AC_MSG_ERROR(bad value ${enableval} for --enable-ftwl) ;;
 esac], [ftwl=no])
 AM_CONDITIONAL(FTWL, test x$ftwl != xno)
@@ -147,7 +136,6 @@ dnl Checks for programs.
 AC_PROG_AWK
 AC_PROG_CC
 AC_PROG_CPP
-AC_PROG_CXX
 AC_PROG_LN_S
 AC_PROG_RANLIB
 AC_CHECK_TOOL(AR, ar)
@@ -172,17 +160,8 @@ if test "$am_cv_func_iconv" != yes; then
 fi
 LIBS="$LIBS $LIBICONV"
 
-dnl Autoconf >= 2.60 defines localedir. For older versions of autoconf, we
-dnl have to define it here, so that it can be used in po/Makefile.
-dnl You cannot use localedir above this line or it will fail for old ac's.
-if test -z "$localedir"; then
-  localedir="$datadir/locale"
-  AC_SUBST(localedir)
-fi
-
 dnl I18n support
-ALL_LINGUAS="ar cs ca da de el en_GB es et fa fi fr he hu it ja lt nl nb 
-no pl pt pt_BR ro ru sv uk zh_CN"
+ALL_LINGUAS="ar ca cs da de en_GB es et fa fi fr he_IL hu it ja nl nb no pl pt pt_BR ro ru sv uk"
 AM_GNU_GETTEXT(,need-ngettext)
 
 dnl AM_GNU_GETTEXT doesn't have all features we want
@@ -288,21 +267,20 @@ gettext package. We recommend you versions >= 0.10.38. Or use
   fi
 fi
 
+
+dnl note this has to match the path installed by po/Makefile
+CPPFLAGS="$CFLAGS -DLOCALEDIR=\"\\\"$datadir/locale\\\"\""
+
 EXTRA_GCC_DEBUG_CFLAGS=""
-EXTRA_GCC_DEBUG_CXXFLAGS=""
 
 if test -n "$GCC"; then
    EXTRA_GCC_DEBUG_CFLAGS="$CFLAGS"
-   EXTRA_GCC_DEBUG_CXXFLAGS="$CXXFLAGS"
    CFLAGS="-Wall -Wpointer-arith -Wcast-align -Wmissing-prototypes -Wmissing-declarations"
-   CXXFLAGS="-Wall -Wpointer-arith -Wcast-align -Wmissing-prototypes"
 fi
 
 FC_DEBUG
-AC_C99_VARIADIC_MACROS
-AC_C99_VARIABLE_ARRAYS
-AC_C99_INITIALIZERS
-AC_C99_STDINT_H
+FC_VARIADIC_MACROS
+FC_VARIABLE_ARRAYS
 
 if test "$CVS_DEPS" = "maybe"; then
    dnl Should also check for gmake?
@@ -327,19 +305,12 @@ if test x`$UNAME -s` = xBeOS ; then
   # necessary with a working automake.
 fi
 
-case $host_os in
-  *mingw32* ) MINGW32=yes;;
-  *amigaos* ) AMIGA=yes;;
-  * ) AMIGA=no; MINGW32=no;;
-esac
-
-dnl Amiga-specific settings
-if test x"$AMIGA" = "xyes"; then
-  AC_DEFINE(ALWAYS_ROOT, 1, [Amiga-specific setting - root])
-fi
-
 dnl Windows-specific settings
 AC_DIAGNOSE([obsolete],[AC_MINGW32 is obsolete: use AC_CANONICAL_HOST and $host_os])
+case $host_os in
+  *mingw32* ) MINGW32=yes;;
+          * ) MINGW32=no;;
+esac
 
 if test x"$MINGW32" = "xyes"; then
   AC_DEFINE(SOCKET_ZERO_ISNT_STDIN, 1, [Mingw32-specific setting - stdin])
@@ -348,13 +319,6 @@ if test x"$MINGW32" = "xyes"; then
   AC_DEFINE(HAVE_WINSOCK, 1, [Mingw32-specific setting - winsock])
   LIBS="$LIBS -lwsock32"
 fi
-
-dnl note this has to match the path installed by po/Makefile
-if test x"$MINGW32" != "xyes"; then
-  CPPFLAGS="$CFLAGS -DLOCALEDIR=\"\\\"$localedir\\\"\""
-else
-  AC_DEFINE_UNQUOTED(LOCALEDIR, "./share/locale", [Locale directory (windows)])
-fi  
 
 dnl Check libUTF8
 AC_ARG_WITH(libutf8,
@@ -374,14 +338,6 @@ AC_CHECK_LIB(z, gzgets, ,
 AC_CHECK_HEADER(zlib.h, , 
   AC_MSG_ERROR([zlib found but not zlib.h.  
 You may need to install a zlib \"development\" package.]))
-AC_PATH_PROG(GZIP, gzip, "no")
-if test "$GZIP" = "no"; then
-  AC_MSG_ERROR([You need the gzip program for compilation.])
-fi
-
-dnl Check for libbzip2
-AC_CHECK_LIB(bz2, BZ2_bzReadOpen)
-AC_CHECK_HEADERS(bzlib.h)
 
 dnl Check and compile ftwl
 if test "$ftwl" = x11 ; then
@@ -392,11 +348,6 @@ fi
 if test "$ftwl" = sdl ; then
      FTWL_CFLAGS=`sdl-config --cflags`" "`freetype-config --cflags`
      FTWL_LIBS=`sdl-config --libs`" -lpng "`freetype-config --libs`
-fi
-
-if test "$ftwl" = opengl ; then
-     FTWL_CFLAGS=`sdl-config --cflags`" "`freetype-config --cflags`
-     FTWL_LIBS=`sdl-config --libs`" -lpng "`freetype-config --libs -lGL -lGLU`
 fi
 
 dnl Check and choose clients
@@ -416,6 +367,9 @@ if test x$client != xno; then
 
   dnl Gtk-2.0-specific overrides
   FC_GTK2_CLIENT
+
+  dnl Gtk-specific overrides
+  FC_GTK_CLIENT
 
   dnl SDL-specific overrides
   FC_SDL_CLIENT
@@ -454,7 +408,6 @@ if test x$client != xno; then
 
     if test "x$found_client" = "xyes"; then
       client=stub
-      CLIENT_LIBS="-lm"
     elif test "$client" = "stub"; then
       AC_MSG_ERROR(specified client 'stub' not configurable)
     fi
@@ -465,31 +418,26 @@ if test x$client != xno; then
     AC_MSG_ERROR(could not guess which client to compile)
   fi
 
-  dnl Check for sound support, sets SOUND_CFLAGS, SOUND_LIBS, SDL
+  dnl Check for sound support, sets SOUND_CFLAGS, SOUND_LIBS, ESD, SDL & WINMM
   FC_CHECK_SOUND()
 
   gui_sources="gui-$client"
 fi
 
-dnl Check for GGZ
-if test "$client" = "gtk-2.0" ; then
-  AC_GGZ_CHECK("gtk")
-  CLIENT_LIBS="$CLIENT_LIBS $LIB_GGZ_GTK"
-else
-  AC_GGZ_CHECK
-fi
-
 AC_SUBST(gui_sources)
 AC_SUBST(CLIENT_CFLAGS)
-AC_SUBST(CLIENT_CXXFLAGS)
 AC_SUBST(CLIENT_LIBS)
 AC_SUBST(CLIENT_LDFLAGS)
 AC_SUBST(SOUND_CFLAGS)
 AC_SUBST(SOUND_LIBS)
 AC_SUBST(VERSION_WITHOUT_LABEL)
 AC_SUBST(VERSION_LABEL)
+AM_CONDITIONAL(ESD, test "x$ESD" = "xyes")
 AM_CONDITIONAL(SDL, test "x$SDL_mixer" = "xyes")
+AM_CONDITIONAL(ALSA, test "x$ALSA" = "xyes")
+AM_CONDITIONAL(WINMM, test "x$WINMM" = "xyes")
 AM_CONDITIONAL(CLIENT_GUI_SDL, test "$gui_sources" = "gui-sdl")
+AM_CONDITIONAL(CLIENT_GUI_GTK, test "$gui_sources" = "gui-gtk")
 AM_CONDITIONAL(CLIENT_GUI_GTK_2_0, test "$gui_sources" = "gui-gtk-2.0")
 AM_CONDITIONAL(CLIENT_GUI_XAW, test "$gui_sources" = "gui-xaw")
 AM_CONDITIONAL(CLIENT_GUI_BEOS, test "$gui_sources" = "gui-beos")
@@ -499,7 +447,6 @@ AM_CONDITIONAL(CLIENT_GUI_FTWL, test "$gui_sources" = "gui-ftwl")
 AM_CONDITIONAL(FTWL, test "$ftwl" != "no")
 AM_CONDITIONAL(FTWL_X11, test "$ftwl" = "x11")
 AM_CONDITIONAL(FTWL_SDL, test "$ftwl" = "sdl")
-AM_CONDITIONAL(FTWL_OPENGL, test "$ftwl" = "opengl")
 AM_CONDITIONAL(MINGW32, test x"$MINGW32" = "xyes")
 
 dnl Checks for additional server libraries:
@@ -523,9 +470,8 @@ AC_CHECK_LIB(nls,main)
 dnl Checks for header files.
 AC_HEADER_STDC
 AC_HEADER_SYS_WAIT
-AC_CHECK_HEADERS([fcntl.h sys/time.h sys/types.h unistd.h sys/utsname.h \
-                  sys/file.h libintl.h signal.h strings.h])
-AC_HEADER_STDBOOL
+AC_CHECK_HEADERS(fcntl.h sys/time.h sys/types.h unistd.h sys/utsname.h \
+                 stdbool.h sys/file.h libintl.h)
 dnl Avoid including the unix emulation layer if we build mingw executables
 dnl There would be type conflicts between winsock and bsd/unix includes
 if test "x$MINGW32" != "xyes"; then
@@ -695,51 +641,34 @@ AC_CONFIG_COMMANDS([fc_default-5],[[if test x`uname -s` = xBeOS ; then
 
 if test -n "$GCC"; then
   CFLAGS="$EXTRA_GCC_DEBUG_CFLAGS $CFLAGS"
-  CXXFLAGS="$EXTRA_GCC_DEBUG_CXXFLAGS $CXXFLAGS"
 fi
 
 dnl Rebuild 'configure' whenever version.in changes, if maintainer mode enabled.
 AC_SUBST([CONFIGURE_DEPENDENCIES], ["$CONFIGURE_DEPENDENCIES \$(top_srcdir)/version.in"])
 
-dnl Make sure that config.h changes when ever CPPFLAGS, CFLAGS or CXXFLAGS
+dnl Make sure that config.h changes when ever CPPFLAGS or CFLAGS
 dnl change so everything gets rebuilt. LDFLAGS is not handled here
 dnl since change in it should not cause recompilation, only relinking.
-dnl Note: Variables are named FC_STORE_* instead of FC_*_STORE in order to
-dnl make them appear next to each other in config.h.  Also single-quotes are
-dnl used because some " may appear unescaped within the flag strings.
-AC_DEFINE_UNQUOTED([FC_STORE_CPPFLAGS], ['$CPPFLAGS'],
-                   [These are the CPPFLAGS used in compilation])
-AC_DEFINE_UNQUOTED([FC_STORE_CFLAGS], ['$CFLAGS'],
-                   [These are the CFLAGS used in compilation])
-AC_DEFINE_UNQUOTED([FC_STORE_CXXFLAGS], ['$CXXFLAGS'],
-                   [These are the CXXFLAGS used in compilation])
+dnl Note: Variables are named FC_STORE_* instead of FC_*_STORE in order to make them
+dnl       appear next to each other in config.h.
+AC_DEFINE_UNQUOTED([FC_STORE_CPPFLAGS], ['$CPPFLAGS'], [These are the CPPFLAGS used in compilation])
+AC_DEFINE_UNQUOTED([FC_STORE_CFLAGS], ['$CFLAGS'], [These are the CFLAGS used in compilation])
 
 AC_CONFIG_FILES([Makefile
           data/Makefile
-	  data/civclient.dsc
-	  data/civserver.dsc
-	  data/civserver.room
-	  data/hex2t/Makefile
-	  data/amplio/Makefile
-	  data/buildings/Makefile
 	  data/flags/Makefile
 	  data/misc/Makefile
 	  data/trident/Makefile
 	  data/isophex/Makefile
 	  data/isotrident/Makefile
-	  data/stdsounds/Makefile
 	  data/default/Makefile
 	  data/civ1/Makefile
 	  data/civ2/Makefile
 	  data/scenario/Makefile
 	  data/nation/Makefile
+	  data/history/Makefile
 	  utility/Makefile
 	  utility/ftwl/Makefile
-	  dependencies/Makefile
-	  dependencies/lua/Makefile
-	  dependencies/tolua/Makefile
-	  dependencies/lua/src/Makefile
-	  dependencies/lua/src/lib/Makefile
 	  common/Makefile
 	  common/aicore/Makefile
 	  ai/Makefile
@@ -749,6 +678,7 @@ AC_CONFIG_FILES([Makefile
 	  client/agents/Makefile
 	  client/include/Makefile
 	  client/gui-sdl/Makefile
+	  client/gui-gtk/Makefile
 	  client/gui-gtk-2.0/Makefile
 	  client/gui-xaw/Makefile
 	  client/gui-win32/Makefile
@@ -756,7 +686,6 @@ AC_CONFIG_FILES([Makefile
 	  client/gui-stub/Makefile
 	  server/Makefile
 	  server/generator/Makefile
-	  server/scripting/Makefile
 	  manual/Makefile
 	  intl/Makefile
 	  po/Makefile.in

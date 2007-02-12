@@ -28,10 +28,8 @@
 #include "government.h"
 #include "map.h"
 #include "mem.h"
-#include "movement.h"
 #include "support.h"
 #include "unit.h"
-#include "unitlist.h"
  
 #include "chatline.h"
 #include "cityrep.h"
@@ -69,7 +67,8 @@ enum MenuID {
   IDM_GAME_LOCAL_OPTIONS,
   IDM_GAME_MESSAGE_OPTIONS,
   IDM_GAME_SAVE_SETTINGS,
-  IDM_GAME_SERVER_OPTIONS,
+  IDM_GAME_SERVER_OPTIONS1,
+  IDM_GAME_SERVER_OPTIONS2,
   IDM_GAME_SAVE_GAME,
   IDM_GAME_SAVE_QUICK,
   IDM_GAME_EXPORT_LOG, 
@@ -305,7 +304,8 @@ static struct my_menu main_menu[] = {
   {N_("_Message Options"),			IDM_GAME_MESSAGE_OPTIONS},
   {N_("Sa_ve Settings"),			IDM_GAME_SAVE_SETTINGS},
   {"", IDM_SEPARATOR},
-  {N_("Server O_ptions"),			IDM_GAME_SERVER_OPTIONS},
+  {N_("_Initial Server Options"),		IDM_GAME_SERVER_OPTIONS1},
+  {N_("Server O_ptions"),			IDM_GAME_SERVER_OPTIONS2},
   {"", IDM_SEPARATOR},
   {N_("_Save Game"),				IDM_GAME_SAVE_QUICK},
   {N_("Save Game _As..."),			IDM_GAME_SAVE_GAME},
@@ -572,9 +572,12 @@ void handle_menu(int code)
     case IDM_GAME_SAVE_SETTINGS:
       save_options();
       break;
-    case IDM_GAME_SERVER_OPTIONS:
-      popup_settable_options_dialog();
+    case IDM_GAME_SERVER_OPTIONS1:
+      send_report_request(REPORT_SERVER_OPTIONS1);
       break;   
+    case IDM_GAME_SERVER_OPTIONS2:
+      send_report_request(REPORT_SERVER_OPTIONS2);
+      break;     
     case IDM_GAME_SAVE_GAME:
       handle_save_load(_("Select Location to Save"), TRUE);
       break;
@@ -591,7 +594,7 @@ void handle_menu(int code)
       disconnect_from_server();
       break;
     case IDM_GAME_QUIT:
-      client_exit();
+      exit(EXIT_SUCCESS);
       break;
 
 
@@ -602,10 +605,10 @@ void handle_menu(int code)
       popup_find_dialog();
       break;
     case IDM_GOVERNMENT_WORKLISTS:
-      popup_worklists_report();
+      popup_worklists_report(game.player_ptr);
       break;
     case IDM_GOVERNMENT_REVOLUTION:
-      popup_revolution_dialog(NULL);
+      popup_revolution_dialog(-1);
       break;
 
 
@@ -686,28 +689,25 @@ void handle_menu(int code)
 
 
     case IDM_ORDERS_BUILD_CITY:
-      unit_list_iterate(get_units_in_focus(), punit) {
-        /* FIXME: this can provide different actions for different units...
-         * not good! */
-        /* Enable the button for adding to a city in all cases, so we
-         * get an eventual error message from the server if we try. */
-        if (can_unit_add_or_build_city(punit)) {
-          key_unit_build_city();
-        } else {
-          key_unit_build_wonder();
-        }
-      } unit_list_iterate_end;
+      if(get_unit_in_focus()) {
+	struct unit *punit = get_unit_in_focus();
+	/* Enable the button for adding to a city in all cases, so we
+	   get an eventual error message from the server if we try. */
+	if (can_unit_add_or_build_city(punit)) {
+	  key_unit_build_city();
+	} else {
+	  key_unit_build_wonder();
+	}
+      }
       break;
     case IDM_ORDERS_ROAD:
-      unit_list_iterate(get_units_in_focus(), punit) {
-        /* FIXME: this can provide different actions for different units...
-         * not good! */
-        if (unit_can_est_traderoute_here(punit)) {
-          key_unit_traderoute();
-        } else {
-          key_unit_road();
-        }
-      } unit_list_iterate_end;
+      if (get_unit_in_focus()) {
+	if (unit_can_est_traderoute_here(get_unit_in_focus())) {
+	  key_unit_traderoute();
+	} else {
+	  key_unit_road();
+	}
+      }
       break;
     case IDM_ORDERS_IRRIGATE:
       key_unit_irrigate();
@@ -719,29 +719,22 @@ void handle_menu(int code)
       key_unit_transform();
       break;
     case IDM_ORDERS_FORTRESS:
-      unit_list_iterate(get_units_in_focus(), punit) {
-        /* FIXME: this can provide different actions for different units...
-         * not good! */
-        if (can_unit_do_activity(punit, ACTIVITY_FORTRESS)) {
-          key_unit_fortress();
-        } else {
-          key_unit_fortify();
-        }
-      } unit_list_iterate_end;
+      if (get_unit_in_focus()) {
+	if (can_unit_do_activity(get_unit_in_focus(), ACTIVITY_FORTRESS)) {
+	  key_unit_fortress();
+	} else {
+	  key_unit_fortify();
+	}
+      }
       break;
     case IDM_ORDERS_AIRBASE:
       key_unit_airbase();
       break;
     case IDM_ORDERS_POLLUTION:
-      unit_list_iterate(get_units_in_focus(), punit) {
-        /* FIXME: this can provide different actions for different units...
-         * not good! */
-        if (can_unit_paradrop(punit)) {
-          key_unit_paradrop();
-        } else {
-          key_unit_pollution();
-        }
-      } unit_list_iterate_end;
+      if (can_unit_paradrop(get_unit_in_focus()))
+	key_unit_paradrop();
+      else
+	key_unit_pollution();
       break;
     case IDM_ORDERS_FALLOUT:
       key_unit_fallout();
@@ -756,22 +749,26 @@ void handle_menu(int code)
       key_unit_homecity();
       break;
     case IDM_ORDERS_LOAD:
-      unit_list_iterate(get_units_in_focus(), punit) {
-        request_unit_load(punit, NULL);
-      } unit_list_iterate_end;
+      request_unit_load(get_unit_in_focus(), NULL);
       break;
     case IDM_ORDERS_UNLOAD:
-      unit_list_iterate(get_units_in_focus(), punit) {
-        request_unit_unload(punit);
-      } unit_list_iterate_end;
+      if (get_unit_in_focus()) {
+	struct unit *punit = get_unit_in_focus();
+	if (can_unit_unload(punit, find_unit_by_id(punit->transported_by))
+	 && can_unit_exist_at_tile(punit, punit->tile)) {
+	  request_unit_unload(punit);
+	} else if (get_transporter_occupancy(punit) > 0) {
+	  key_unit_unload_all();
+	}
+      }
       break;
     case IDM_ORDERS_WAKEUP_OTHERS:
       key_unit_wakeup_others();
       break;
     case IDM_ORDERS_AUTO_SETTLER:
-      unit_list_iterate(get_units_in_focus(), punit) {
-        request_unit_autosettlers(punit);
-      } unit_list_iterate_end;
+      if (get_unit_in_focus()) {
+	request_unit_auto(get_unit_in_focus());
+      }
       break;
     case IDM_ORDERS_AUTO_EXPLORE:
       key_unit_auto_explore();
@@ -792,14 +789,14 @@ void handle_menu(int code)
       key_unit_goto();
       break;
     case IDM_ORDERS_GOTO_CITY:
-      if (get_num_units_in_focus() > 0) {
-        popup_goto_dialog();
+      if(get_unit_in_focus()) {
+	popup_goto_dialog();
       }
       break;
     case IDM_ORDERS_RETURN:
-      unit_list_iterate(get_units_in_focus(), punit) {
-        request_unit_return(punit);
-      } unit_list_iterate_end;
+      if (get_unit_in_focus()) {
+	request_unit_return(get_unit_in_focus());
+      }
       break;
     case IDM_ORDERS_DISBAND:
       key_unit_disband();
@@ -820,28 +817,28 @@ void handle_menu(int code)
 
 
     case IDM_REPORTS_CITIES:
-      popup_city_report_dialog(TRUE);
+      popup_city_report_dialog(0);
       break;
     case IDM_REPORTS_UNITS:
-      popup_activeunits_report_dialog(TRUE);
+      popup_activeunits_report_dialog(0);
       break;
     case IDM_REPORTS_PLAYERS:
-      popup_players_dialog(TRUE);
+      popup_players_dialog();
       break;
     case IDM_REPORTS_ECONOMY:
-      popup_economy_report_dialog(TRUE);
+      popup_economy_report_dialog(0);
       break;  
     case IDM_REPORTS_SCIENCE:
-      popup_science_dialog(TRUE);
+      popup_science_dialog(0);
       break;
     case IDM_REPORTS_WONDERS:
       send_report_request(REPORT_WONDERS_OF_THE_WORLD);
-      break;
+      break;          
     case IDM_REPORTS_TOP_CITIES:
       send_report_request(REPORT_TOP_5_CITIES);
-      break;
+      break;       
     case IDM_REPORTS_MESSAGES:
-      popup_meswin_dialog(TRUE);
+      popup_meswin_dialog();
       break;
     case IDM_REPORTS_DEMOGRAPHICS:
       send_report_request(REPORT_DEMOGRAPHIC);
@@ -925,8 +922,7 @@ void handle_menu(int code)
     default:
       if ((enum MenuID)code >= IDM_GOVERNMENT_CHANGE_FIRST
 	   && (enum MenuID)code <= IDM_GOVERNMENT_CHANGE_LAST) {
-	struct government *gov = get_government(code - IDM_GOVERNMENT_CHANGE_FIRST);
-	popup_revolution_dialog(gov);
+	popup_revolution_dialog(code - IDM_GOVERNMENT_CHANGE_FIRST);
       }
       break;
     }
@@ -983,21 +979,6 @@ HMENU create_mainmenu(void)
   return my_create_menu(&items);
 }
 
-/****************************************************************************
-  Return the text for the tile, changed by the activity.
-
-  Should only be called for irrigation, mining, or transformation, and
-  only when the activity changes the base terrain type.
-****************************************************************************/
-static const char *get_tile_change_menu_text(struct tile *ptile,
-					     enum unit_activity activity)
-{
-  struct tile newtile = *ptile;
-
-  tile_apply_activity(&newtile, activity);
-  return tile_get_info_text(ptile);
-}
-
 /**************************************************************************
   Update the status and names of all menu items.
 **************************************************************************/
@@ -1014,7 +995,9 @@ update_menus(void)
   my_enable_menu(menu, IDM_GAME_SAVE_QUICK,
 		 can_client_access_hack()
 		 && get_client_state() >= CLIENT_GAME_RUNNING_STATE);
-  my_enable_menu(menu, IDM_GAME_SERVER_OPTIONS,
+  my_enable_menu(menu, IDM_GAME_SERVER_OPTIONS2,
+		 aconnection.established);
+  my_enable_menu(menu, IDM_GAME_SERVER_OPTIONS1,
 		 get_client_state() >= CLIENT_GAME_RUNNING_STATE);
   my_enable_menu(menu, IDM_GAME_DISCONNECT,
 		 aconnection.established);
@@ -1030,6 +1013,7 @@ update_menus(void)
   } else {
     struct unit *punit;
     HMENU govts;
+    int i;
 
     /* remove previous government entries. */
     for (id = IDM_GOVERNMENT_CHANGE_FIRST; id <= IDM_GOVERNMENT_CHANGE_LAST;
@@ -1041,17 +1025,15 @@ update_menus(void)
     govts = GetSubMenu(GetSubMenu(menu, 1), 5); 
 
     /* add new government entries. */
-    id = IDM_GOVERNMENT_CHANGE_FIRST;
-
-    government_iterate(g) {
-      if (g != game.government_when_anarchy) {
-	AppendMenu(govts, MF_STRING, id + g->index, g->name);
-	my_enable_menu(menu, id + g->index,
-		       can_change_to_government(game.player_ptr, g)
+    for (i = 0; i < game.government_count; i++) {
+      if (i != game.government_when_anarchy) {
+	AppendMenu(govts, MF_STRING, IDM_GOVERNMENT_CHANGE_FIRST + i,
+		   governments[i].name);
+	my_enable_menu(menu, IDM_GOVERNMENT_CHANGE_FIRST + i, 
+		       can_change_to_government(game.player_ptr, i)
 		       && can_client_issue_orders());
       }
-    } government_iterate_end;
-
+    }
     my_enable_menu(menu, IDM_GOVERNMENT_FIND_CITY, TRUE);
 
     /* Enables IDM_VIEW_MENU */
@@ -1065,17 +1047,17 @@ update_menus(void)
     }
 
     if (can_client_issue_orders()) {
-      my_enable_menu(menu, IDM_GOVERNMENT_TAX_RATE, game.info.changable_tax);
+      my_enable_menu(menu, IDM_GOVERNMENT_TAX_RATE, game.rgame.changable_tax);
       my_enable_menu(menu, IDM_GOVERNMENT_WORKLISTS, TRUE);
       my_enable_menu(menu, IDM_GOVERNMENT_REVOLUTION, TRUE);
     }
 
 
-    my_enable_menu(menu, IDM_REPORTS_SPACESHIP,
+    my_enable_menu(menu, IDM_REPORTS_SPACESHIP, 
 		   (game.player_ptr->spaceship.state!=SSHIP_NONE));
 
     my_check_menu(menu, IDM_VIEW_MAP_GRID, draw_map_grid);
-    my_enable_menu(menu, IDM_VIEW_NATIONAL_BORDERS, game.info.borders > 0);
+    my_enable_menu(menu, IDM_VIEW_NATIONAL_BORDERS, game.borders > 0);
     my_check_menu(menu, IDM_VIEW_NATIONAL_BORDERS, draw_borders);
     my_check_menu(menu, IDM_VIEW_CITY_NAMES, draw_city_names);
     my_enable_menu(menu, IDM_VIEW_CITY_GROWTH, draw_city_names);
@@ -1093,7 +1075,7 @@ update_menus(void)
     my_check_menu(menu, IDM_VIEW_CITIES, draw_cities);
     my_check_menu(menu, IDM_VIEW_UNITS, draw_units);
     my_check_menu(menu, IDM_VIEW_FOCUS_UNIT, draw_focus_unit);
-    my_enable_menu(menu, IDM_VIEW_FOCUS_UNIT, !draw_units);
+    my_enable_menu(menu, IDM_VIEW_FOCUS_UNIT, !draw_units); 
     my_check_menu(menu, IDM_VIEW_FOG_OF_WAR, draw_fog_of_war);
 
     /* Remaining part of this function: Update Orders menu */
@@ -1102,18 +1084,19 @@ update_menus(void)
       return;
     }
 
-    if ((punit = unit_list_get(get_units_in_focus(), 0))) {
+    if ((punit = get_unit_in_focus())) {
       const char *irrfmt = _("Change to %s");
       const char *minfmt = _("Change to %s");
       const char *transfmt = _("Transform to %s");
       char irrtext[128], mintext[128], transtext[128];
       char *roadtext;
-      struct terrain *pterrain;
+      Terrain_type_id  ttype;
+      struct tile_type *tinfo;
 
       sz_strlcpy(irrtext, N_("Build Irrigation") "\tI");
       sz_strlcpy(mintext, N_("Build Mine") "\tM");
       sz_strlcpy(transtext, N_("Transform Terrain") "\tO");
-
+      
       /* Since the entire menu is disabled by default, enable the
 	 items with no checks. */
       my_enable_menu(menu, IDM_ORDERS_PATROL, TRUE);
@@ -1155,7 +1138,9 @@ update_menus(void)
 		     !unit_flag(punit, F_UNDISBANDABLE));
       my_enable_menu(menu, IDM_ORDERS_HOMECITY,
 		     can_unit_change_homecity(punit));
-      my_enable_menu(menu, IDM_ORDERS_LOAD, find_transporter_for_unit(punit));
+      my_enable_menu(menu, IDM_ORDERS_LOAD,
+	can_unit_load(punit, find_transporter_for_unit(punit,
+						       punit->tile)));
       my_enable_menu(menu, IDM_ORDERS_UNLOAD,
 	(can_unit_unload(punit, find_unit_by_id(punit->transported_by))
 	 && can_unit_exist_at_tile(punit, punit->tile)) 
@@ -1164,7 +1149,7 @@ update_menus(void)
 		     is_unit_activity_on_tile(ACTIVITY_SENTRY,
 					      punit->tile));
       my_enable_menu(menu, IDM_ORDERS_AUTO_SETTLER,
-		     can_unit_do_autosettlers(punit));
+		     can_unit_do_auto(punit));
       my_enable_menu(menu, IDM_ORDERS_AUTO_EXPLORE,
 		     can_unit_do_activity(punit, ACTIVITY_EXPLORE));
       my_enable_menu(menu, IDM_ORDERS_CONNECT_ROAD,
@@ -1173,7 +1158,8 @@ update_menus(void)
 		     can_unit_do_connect(punit, ACTIVITY_RAILROAD));
       my_enable_menu(menu, IDM_ORDERS_CONNECT_IRRIGATE,
 		     can_unit_do_connect(punit, ACTIVITY_IRRIGATE));
-      my_enable_menu(menu, IDM_ORDERS_RETURN, TRUE);
+      my_enable_menu(menu, IDM_ORDERS_RETURN,
+		     !(is_air_unit(punit) || is_heli_unit(punit)));
       my_enable_menu(menu, IDM_ORDERS_DIPLOMAT_DLG,
 		     is_diplomat_unit(punit)
 		     && diplomat_can_do_action(punit, DIPLOMAT_ANY_ACTION,
@@ -1184,7 +1170,7 @@ update_menus(void)
 	my_rename_menu(menu, IDM_ORDERS_BUILD_CITY, N_("Help Build Wonder")
 		       "\tB");
       } else if (unit_flag(punit, F_CITIES)) {
-	if (tile_get_city(punit->tile)) {
+	if (map_get_city(punit->tile)) {
 	  my_rename_menu(menu, IDM_ORDERS_BUILD_CITY, N_("Add to City")
 			 "\tB");
 	} else {
@@ -1198,7 +1184,7 @@ update_menus(void)
       if (unit_flag(punit, F_TRADE_ROUTE)) {
 	my_rename_menu(menu, IDM_ORDERS_ROAD, N_("Make Trade Route") "\tR");
       } else if (unit_flag(punit, F_SETTLERS)) {
-	if (tile_has_special(punit->tile, S_ROAD)) {
+	if (map_has_special(punit->tile, S_ROAD)) {
 	  roadtext = N_("Build Railroad") "\tR";
 	  road_activity = ACTIVITY_RAILROAD;  
 	} else {
@@ -1210,30 +1196,29 @@ update_menus(void)
 	my_rename_menu(menu, IDM_ORDERS_ROAD, N_("Build Road") "\tR");
       }
 
-      pterrain = punit->tile->terrain;
-      if (pterrain->irrigation_result != T_NONE
-	  && pterrain->irrigation_result != pterrain) {
+      ttype = punit->tile->terrain;
+      tinfo = get_tile_type(ttype);
+      if (tinfo->irrigation_result != T_NONE
+	  && tinfo->irrigation_result != ttype) {
 	my_snprintf(irrtext, sizeof(irrtext), irrfmt,
-		    get_tile_change_menu_text(punit->tile,
-					      ACTIVITY_IRRIGATE));
- 	sz_strlcat(irrtext, "\tI");
-      } else if (tile_has_special(punit->tile, S_IRRIGATION)
+		    (get_tile_type(tinfo->irrigation_result))->terrain_name);
+	sz_strlcat(irrtext, "\tI");
+      } else if (map_has_special(punit->tile, S_IRRIGATION)
 		 && player_knows_techs_with_flag(game.player_ptr,
 						 TF_FARMLAND)) {
 	sz_strlcpy(irrtext, N_("Build Farmland") "\tI");
       }
-      if (pterrain->mining_result != T_NONE
-	  && pterrain->mining_result != pterrain) {
+      if (tinfo->mining_result != T_NONE
+	  && tinfo->mining_result != ttype) {
 	my_snprintf(mintext, sizeof(mintext), minfmt,
-		    get_tile_change_menu_text(punit->tile, ACTIVITY_MINE));
- 	sz_strlcat(mintext, "\tM");
+		    (get_tile_type(tinfo->mining_result))->terrain_name);
+	sz_strlcat(mintext, "\tM");
       }
-      if (pterrain->transform_result != T_NONE
-	  && pterrain->transform_result != pterrain) {
+      if (tinfo->transform_result != T_NONE
+	  && tinfo->transform_result != ttype) {
 	my_snprintf(transtext, sizeof(transtext), transfmt,
-		    get_tile_change_menu_text(punit->tile,
-					      ACTIVITY_TRANSFORM));
- 	sz_strlcat(transtext, "\tO");
+		    (get_tile_type(tinfo->transform_result))->terrain_name);
+	sz_strlcat(transtext, "\tO");
       }
 
       my_rename_menu(menu, IDM_ORDERS_IRRIGATE, irrtext);

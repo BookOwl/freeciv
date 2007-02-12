@@ -38,7 +38,7 @@ static GtkWidget *find_view;
 
 static void update_find_dialog(GtkListStore *store);
 
-static void find_response(struct gui_dialog *dlg, int response, gpointer data);
+static void find_response(struct gui_dialog *dlg, int response);
 static void find_destroy_callback(GtkWidget *w, gpointer data);
 static void find_selection_callback(GtkTreeSelection *selection,
 				    GtkTreeModel *model);
@@ -60,7 +60,7 @@ void popup_find_dialog(void)
 
     pos = get_center_tile_mapcanvas();
 
-    gui_dialog_new(&find_dialog_shell, GTK_NOTEBOOK(bottom_notebook), NULL);
+    gui_dialog_new(&find_dialog_shell, GTK_NOTEBOOK(bottom_notebook));
     gui_dialog_set_title(find_dialog_shell, _("Find City"));
     gui_dialog_set_default_size(find_dialog_shell, -1, 240);
 
@@ -133,7 +133,7 @@ static void update_find_dialog(GtkListStore *store)
 
   gtk_list_store_clear(store);
 
-  for(i = 0; i < game.info.nplayers; i++) {
+  for(i = 0; i < game.nplayers; i++) {
     city_list_iterate(game.players[i].cities, pcity) {
 	GValue value = { 0, };
 
@@ -152,7 +152,7 @@ static void update_find_dialog(GtkListStore *store)
 /**************************************************************************
 ...
 **************************************************************************/
-static void find_response(struct gui_dialog *dlg, int response, gpointer data)
+static void find_response(struct gui_dialog *dlg, int response)
 {
   if (response == GTK_RESPONSE_ACCEPT) {
     GtkTreeSelection *selection;

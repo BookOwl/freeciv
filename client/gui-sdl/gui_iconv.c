@@ -47,14 +47,8 @@
 #define ICONV_CONST	const
 #endif /* ICONV_CONST */
 
-/* utility */
-#include "fciconv.h"
-#include "log.h"
-#include "mem.h"
-
-/* gui-sdl */
+#include "gui_mem.h"
 #include "unistring.h"
-
 #include "gui_iconv.h"
 
 /**************************************************************************
@@ -84,9 +78,8 @@ Uint16 *convertcopy_to_utf16(Uint16 * pToUniString, size_t ulength,
 {
   /* Start Parametrs */
   const char *pTocode = get_display_encoding();
-  const char *pFromcode = get_internal_encoding();
+  const char *pFromcode = INTERNAL_ENCODING;
   const char *pStart = pFromString;
-  
   size_t length = strlen(pFromString) + 1;
 
   char *pResult = (char *) pToUniString;
@@ -102,7 +95,7 @@ Uint16 *convertcopy_to_utf16(Uint16 * pToUniString, size_t ulength,
   if (!pResult) {
     /* From 8 bit code to UTF-16 (16 bit code) */
     ulength = length * 2;
-    pResult = fc_calloc(1, ulength);
+    pResult = MALLOC(ulength);
   }
 
   iconv(cd, NULL, NULL, NULL, NULL);	/* return to the initial state */
@@ -126,7 +119,7 @@ Uint16 *convertcopy_to_utf16(Uint16 * pToUniString, size_t ulength,
 	  iconv_close(cd);
 	  errno = saved_errno;
 	  if(!pToUniString) {
-	    FC_FREE(pResult);
+	    FREE(pResult);
 	  }
 	  return pToUniString;
 	}
@@ -140,7 +133,7 @@ Uint16 *convertcopy_to_utf16(Uint16 * pToUniString, size_t ulength,
 	iconv_close(cd);
 	errno = saved_errno;
 	if(!pToUniString) {
-	  FC_FREE(pResult);
+	  FREE(pResult);
 	}
 	return pToUniString;
       }
@@ -166,7 +159,7 @@ char *convertcopy_to_chars(char *pToString, size_t length,
 {
   /* Start Parametrs */
   const char *pFromcode = get_display_encoding();
-  const char *pTocode = get_internal_encoding();
+  const char *pTocode = INTERNAL_ENCODING;
   const char *pStart = (char *) pFromUniString;
   size_t ulength = (unistrlen(pFromUniString) + 1) * 2;
 
@@ -191,8 +184,9 @@ char *convertcopy_to_chars(char *pToString, size_t length,
   if(pToString) {
     pResult = pToString;
   } else {
-    length = ulength * 2; /* UTF-8: up to 4 bytes per char */
-    pResult = fc_calloc(1, length);
+    /* From 16 bit code to 8 bit code */
+    length = ulength / 2;
+    pResult = MALLOC(length);
   }
   
   iconv(cd, NULL, NULL, NULL, NULL);	/* return to the initial state */
@@ -201,6 +195,7 @@ char *convertcopy_to_chars(char *pToString, size_t length,
   {
     const char *pInptr = pStart;
     size_t Insize = ulength;
+
     char *pOutptr = pResult;
     size_t Outsize = length;
 
@@ -208,7 +203,6 @@ char *convertcopy_to_chars(char *pToString, size_t length,
       size_t Res =
 	  iconv(cd, (ICONV_CONST char **) &pInptr, &Insize, &pOutptr, &Outsize);
       if (Res == (size_t) (-1)) {
-        freelog(LOG_ERROR, "iconv() error: %s", strerror(errno));        
 	if (errno == EINVAL) {
 	  break;
 	} else {
@@ -216,7 +210,7 @@ char *convertcopy_to_chars(char *pToString, size_t length,
 	  iconv_close(cd);
 	  errno = saved_errno;
 	  if(!pToString) {
-	    FC_FREE(pResult);
+	    FREE(pResult);
 	  }
 	  return pToString;
 	}
@@ -230,7 +224,7 @@ char *convertcopy_to_chars(char *pToString, size_t length,
 	iconv_close(cd);
 	errno = saved_errno;
 	if(!pToString) {
-	  FC_FREE(pResult);
+	  FREE(pResult);
 	}
 	return pToString;
       }

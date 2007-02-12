@@ -30,7 +30,7 @@ void popup_goto_dialog(void)
   if (get_client_state() != CLIENT_GAME_RUNNING_STATE) {
     return;
   }
-  if (get_num_units_in_focus() == 0) {
+  if (!get_unit_in_focus()) {
     return;
   }
   /* PORTME */

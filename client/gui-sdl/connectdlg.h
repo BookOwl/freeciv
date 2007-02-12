@@ -24,7 +24,7 @@
 
 #include "connectdlg_g.h"
 
-void popup_connection_dialog(bool lan_scan);
-void popup_join_game_dialog(void);
+/* nothing yet */
+bool try_to_autoconnect(void);
 
 #endif				/* FC__CONNECTDLG_H */
