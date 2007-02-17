@@ -29,11 +29,6 @@
 #include "packets.h"
 #include "specialist.h"
 
-enum debug_globals {
-  DEBUG_FERRIES,
-  DEBUG_LAST
-};
-
 enum server_states { 
   PRE_GAME_STATE, 
   UNUSED_STATE, /* Have to keep this around for savegame compatibility. */
@@ -64,7 +59,6 @@ struct civ_game {
   struct government *government_when_anarchy;
 
   struct packet_ruleset_control control;
-  bool debug[DEBUG_LAST];
   int version;
   char id[MAX_ID_LEN];		/* server only */
   int timeoutint;     /* increase timeout every N turns... */
@@ -112,6 +106,7 @@ struct civ_game {
     bool save_private_map; /* FoW map; will be created if not saved */
   } save_options;
 
+  int trireme_loss_chance[MAX_VET_LEVELS];
   int work_veteran_chance[MAX_VET_LEVELS];
   int veteran_chance[MAX_VET_LEVELS];
 
@@ -174,6 +169,10 @@ bool setting_class_is_changeable(enum sset_class class);
 #define GAME_MIN_TECHLEVEL       0
 #define GAME_MAX_TECHLEVEL       50
 
+#define GAME_DEFAULT_UNHAPPYSIZE 4
+#define GAME_MIN_UNHAPPYSIZE     1
+#define GAME_MAX_UNHAPPYSIZE     6
+
 #define GAME_DEFAULT_ANGRYCITIZEN TRUE
 
 #define GAME_DEFAULT_END_YEAR    5000
@@ -234,6 +233,10 @@ bool setting_class_is_changeable(enum sset_class class);
 #define GAME_DEFAULT_CONQUERCOST     0
 #define GAME_MIN_CONQUERCOST         0
 #define GAME_MAX_CONQUERCOST         100
+
+#define GAME_DEFAULT_CITYFACTOR      14
+#define GAME_MIN_CITYFACTOR          6
+#define GAME_MAX_CITYFACTOR          100
 
 #define GAME_DEFAULT_CITYMINDIST     0
 #define GAME_MIN_CITYMINDIST         0 /* if 0, ruleset will overwrite this */
@@ -348,8 +351,9 @@ bool setting_class_is_changeable(enum sset_class class);
 #define GAME_DEFAULT_ALLOW_TAKE      "HAhadOo"
 
 #define GAME_DEFAULT_COMPRESS_LEVEL 6    /* if we have compression */
-#define GAME_MIN_COMPRESS_LEVEL     1
+#define GAME_MIN_COMPRESS_LEVEL     0
 #define GAME_MAX_COMPRESS_LEVEL     9
+#define GAME_NO_COMPRESS_LEVEL      0
 
 #define GAME_DEFAULT_ALLOWED_CITY_NAMES 1
 #define GAME_MIN_ALLOWED_CITY_NAMES 0

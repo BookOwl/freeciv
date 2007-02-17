@@ -106,7 +106,6 @@ struct terrain_drawing_data {
   } layer[MAX_NUM_LAYERS];
 
   bool is_blended;
-  bool is_reversed;
   struct sprite *blend[4]; /* indexed by a direction4 */
 
   struct sprite *mine;
@@ -126,7 +125,7 @@ struct named_sprites {
   struct sprite
     *indicator[INDICATOR_COUNT][NUM_TILES_PROGRESS],
     *treaty_thumb[2],     /* 0=disagree, 1=agree */
-    *arrow[ARROW_LAST], /* 0=right arrow, 1=plus, 2=minus */
+    *right_arrow,
 
     *icon[ICON_COUNT],
 
@@ -1445,9 +1444,6 @@ struct tileset *tileset_read_toplevel(const char *tileset_name, bool verbose)
     terr->name = mystrdup(terrains[i] + strlen("terrain_"));
     terr->is_blended = secfile_lookup_bool(file, "%s.is_blended",
 					    terrains[i]);
-    terr->is_reversed = secfile_lookup_bool_default(file, FALSE,
-						    "%s.is_reversed",
-						    terrains[i]);
     terr->num_layers = secfile_lookup_int(file, "%s.num_layers",
 					  terrains[i]);
     terr->num_layers = CLIP(1, terr->num_layers, MAX_NUM_LAYERS);
@@ -2002,9 +1998,7 @@ static void tileset_lookup_sprite_tags(struct tileset *t)
     }
   }
 
-  SET_SPRITE(arrow[ARROW_RIGHT], "s.right_arrow");
-  SET_SPRITE(arrow[ARROW_PLUS], "s.plus");
-  SET_SPRITE(arrow[ARROW_MINUS], "s.minus");
+  SET_SPRITE(right_arrow, "s.right_arrow");
   if (t->is_isometric) {
     SET_SPRITE(dither_tile, "t.dither_tile");
   }
@@ -2032,10 +2026,9 @@ static void tileset_lookup_sprite_tags(struct tileset *t)
     for (f = 0; f < NUM_CURSOR_FRAMES; f++) {
       const char *names[CURSOR_LAST] =
                {"goto", "patrol", "paradrop", "nuke", "select", 
-		"invalid", "attack", "edit_paint", "edit_add", "wait"};
+		"invalid", "attack"};
       struct small_sprite *ss;
 
-      assert(ARRAY_SIZE(names) == CURSOR_LAST);
       my_snprintf(buffer, sizeof(buffer), "cursor.%s%d", names[i], f);
       SET_SPRITE(cursor[i].frame[f], buffer);
       ss = hash_lookup_data(t->sprite_hash, buffer);
@@ -2744,10 +2737,7 @@ void tileset_setup_tile_type(struct tileset *t,
 				       x[dir], y[dir], W / 2, H / 2,
 				       t->sprites.mask.tile,
 				       xo[dir], yo[dir]);
-		} else {
-                  freelog(LOG_ERROR, _("Terrain graphics tag %s missing."),
-                          buffer1);
-                }
+		}
 
 		draw->layer[l].cells[i] = sprite;
 		break;
@@ -3543,7 +3533,7 @@ static int fill_fog_sprite_array(const struct tileset *t,
 ****************************************************************************/
 static int fill_terrain_sprite_array(struct tileset *t,
 				     struct drawn_sprite *sprs,
-				     int layer_num,
+				     int layer,
 				     const struct tile *ptile,
 				     struct terrain **tterrain_near)
 {
@@ -3551,8 +3541,7 @@ static int fill_terrain_sprite_array(struct tileset *t,
   struct sprite *sprite;
   struct terrain *pterrain = ptile->terrain;
   struct terrain_drawing_data *draw = t->sprites.terrain[pterrain->index];
-  const int l = (draw->is_reversed
-		 ? (draw->num_layers - layer_num - 1) : layer_num);
+  const int l = layer;
   int i, tileno;
   struct tile *adjc_tile;
 
@@ -3564,7 +3553,7 @@ static int fill_terrain_sprite_array(struct tileset *t,
   /* FIXME: this should avoid calling load_sprite since it's slow and
    * increases the refcount without limit. */
   if (ptile->spec_sprite && (sprite = load_sprite(t, ptile->spec_sprite))) {
-    if (l == 0) {
+    if (layer == 0) {
       ADD_SPRITE_SIMPLE(sprite);
       return 1;
     } else {
@@ -4508,14 +4497,11 @@ struct sprite *get_sample_city_sprite(const struct tileset *t,
 }
 
 /**************************************************************************
-  Return a sprite with an "arrow" theme graphic.
+  Return a sprite with the "right-arrow" theme graphic.
 **************************************************************************/
-struct sprite *get_arrow_sprite(const struct tileset *t,
-				enum arrow_type arrow)
+struct sprite *get_arrow_sprite(const struct tileset *t)
 {
-  assert(arrow >= 0 && arrow < ARROW_LAST);
-
-  return t->sprites.arrow[arrow];
+  return t->sprites.right_arrow;
 }
 
 /**************************************************************************

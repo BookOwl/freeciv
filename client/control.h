@@ -24,6 +24,16 @@ enum cursor_hover_state {
   HOVER_PATROL
 };
 
+enum cursor_action_state {
+  CURSOR_ACTION_DEFAULT,
+  CURSOR_ACTION_GOTO,
+  CURSOR_ACTION_SELECT,
+  CURSOR_ACTION_INVALID,
+  CURSOR_ACTION_ATTACK,
+  CURSOR_ACTION_NUKE,
+  CURSOR_ACTION_PARATROOPER
+};
+
 /* Selecting unit from a stack without popup. */
 enum quickselect_type {
   SELECT_POPUP = 0, SELECT_SEA, SELECT_LAND, SELECT_APPEND
@@ -38,6 +48,7 @@ void unit_register_battlegroup(struct unit *punit);
 
 extern struct unit_list *hover_units; /* unit hover_state applies to */
 extern enum cursor_hover_state hover_state;
+extern enum cursor_action_state action_state;
 extern enum unit_activity connect_activity;
 extern enum unit_orders goto_last_order;
 extern bool non_ai_unit_focus;
@@ -184,9 +195,6 @@ void key_unit_wait(void);
 void key_unit_wakeup_others(void);
 void key_unit_assign_battlegroup(int battlegroup, bool append);
 void key_unit_select_battlegroup(int battlegroup, bool append);
-
-void key_editor_toggle(void);
-void key_editor_recalc_borders(void);
 
 /* don't change this unless you also put more entries in data/Freeciv */
 #define MAX_NUM_UNITS_BELOW 4

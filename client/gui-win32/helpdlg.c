@@ -655,23 +655,12 @@ static void help_draw_unit(HDC hdc, struct unit_type *utype)
   
   /* Give tile a background color, based on the type of unit
    * FIXME: make a new set of colors for this.               */
-  switch (unit_color_type(utype)) {
-  case UNIT_BG_LAND:
-    bg_color = COLOR_OVERVIEW_LAND;
-    break;
-  case UNIT_BG_SEA:
-    bg_color = COLOR_OVERVIEW_OCEAN;
-    break;
-  case UNIT_BG_HP_LOSS:
-  case UNIT_BG_AMPHIBIOUS:
-    bg_color = COLOR_OVERVIEW_MY_UNIT;
-    break;
-  case UNIT_BG_FLYING:
-    bg_color = COLOR_OVERVIEW_ENEMY_CITY;
-    break;
-  default:
-    bg_color = COLOR_OVERVIEW_UNKNOWN;
-    break;
+  switch (utype->move_type) {
+  case LAND_MOVING: bg_color = COLOR_OVERVIEW_LAND;       break;
+  case SEA_MOVING:  bg_color = COLOR_OVERVIEW_OCEAN;      break;
+  case HELI_MOVING: bg_color = COLOR_OVERVIEW_MY_UNIT;    break;
+  case AIR_MOVING:  bg_color = COLOR_OVERVIEW_ENEMY_CITY; break;
+  default:          bg_color = COLOR_OVERVIEW_UNKNOWN;    break;
   }
 
   brush = brush_alloc(get_color(tileset, bg_color));

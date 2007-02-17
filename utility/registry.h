@@ -39,8 +39,7 @@ bool section_file_load_nodup(struct section_file *my_section_file,
 bool section_file_load_from_stream(struct section_file *my_section_file,
 				   fz_FILE * stream);
 bool section_file_save(struct section_file *my_section_file,
-                       const char *filename, int compression_level,
-                       enum fz_method compression_method);
+		      const char *filename, int compression_level);
 void section_file_free(struct section_file *file);
 void section_file_check_unused(struct section_file *file,
 			       const char *filename);

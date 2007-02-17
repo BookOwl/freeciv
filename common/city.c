@@ -475,15 +475,14 @@ bool can_build_unit_direct(const struct city *pcity,
   }
 
   /* You can't build naval units inland. */
-  if (!unit_class_flag(get_unit_class(punittype), UCF_BUILD_ANYWHERE)
-      && !is_native_near_tile(punittype, pcity->tile)) {
+  if (!is_ocean_near_tile(pcity->tile) && is_sailing_unittype(punittype)) {
     return FALSE;
   }
   return TRUE;
 }
 
 /**************************************************************************
-  Return whether given city can build given unit; returns FALSE if unit is 
+  Return whether given city can build given unit; returns 0 if unit is 
   obsolete.
 **************************************************************************/
 bool can_build_unit(const struct city *pcity,
@@ -502,7 +501,7 @@ bool can_build_unit(const struct city *pcity,
 
 /**************************************************************************
   Return whether player can eventually build given unit in the city;
-  returns FALSE if unit can never possibly be built in this city.
+  returns 0 if unit can never possibly be built in this city.
 **************************************************************************/
 bool can_eventually_build_unit(const struct city *pcity,
 			       const struct unit_type *punittype)
@@ -514,8 +513,7 @@ bool can_eventually_build_unit(const struct city *pcity,
 
   /* Some units can be built only in certain cities -- for instance,
      ships may be built only in cities adjacent to ocean. */
-  if (!unit_class_flag(get_unit_class(punittype), UCF_BUILD_ANYWHERE)
-      && !is_native_near_tile(punittype, pcity->tile)) {
+  if (!is_ocean_near_tile(pcity->tile) && is_sailing_unittype(punittype)) {
     return FALSE;
   }
 
@@ -739,13 +737,10 @@ int base_city_get_output_tile(int city_x, int city_y,
 			      city_x, city_y, is_celebrating, otype);
 }
 
-/****************************************************************************
+/**************************************************************************
   Returns TRUE if the given unit can build a city at the given map
-  coordinates.
-
-  punit is the founding unit.  It may be NULL if a city is built out of the
-  blue (e.g., through editing).
-****************************************************************************/
+  coordinates.  punit is the founding unit.
+**************************************************************************/
 bool city_can_be_built_here(const struct tile *ptile, const struct unit *punit)
 {
   int citymindist;
@@ -755,13 +750,13 @@ bool city_can_be_built_here(const struct tile *ptile, const struct unit *punit)
     return FALSE;
   }
 
-  if (punit && !can_unit_exist_at_tile(punit, ptile)) {
+  if (!can_unit_exist_at_tile(punit, ptile)) {
     /* We allow land units to build land cities and sea units to build
      * ocean cities. Air units can build cities anywhere. */
     return FALSE;
   }
 
-  if (punit && ptile->owner && ptile->owner != punit->owner) {
+  if (ptile->owner && ptile->owner != punit->owner) {
     /* Cannot steal borders by settling. This has to be settled by
      * force of arms. */
     return FALSE;
@@ -1428,13 +1423,10 @@ int city_granary_size(int city_size)
 static int content_citizens(const struct player *pplayer)
 {
   int cities = city_list_size(pplayer->cities);
-  int content = get_player_bonus(pplayer, EFT_CITY_UNHAPPY_SIZE);
-  int basis = get_player_bonus(pplayer, EFT_EMPIRE_SIZE_BASE);
+  int content = game.info.unhappysize;
+  int basis = game.info.cityfactor + get_player_bonus(pplayer, 
+                                                       EFT_EMPIRE_SIZE_MOD);
   int step = get_player_bonus(pplayer, EFT_EMPIRE_SIZE_STEP);
-
-  if (basis + step <= 0) {
-    return content; /* Value of zero means effect is inactive */
-  }
 
   if (cities > basis) {
     content--;
@@ -1971,6 +1963,7 @@ static inline void city_support(struct city *pcity,
 						        struct unit *punit))
 {
   struct player *plr = city_owner(pcity);
+  struct government *g = get_gov_pcity(pcity);
   int free_upkeep[O_COUNT];
   int free_happy = get_city_bonus(pcity, EFT_MAKE_CONTENT_MIL);
 
@@ -2000,11 +1993,9 @@ static inline void city_support(struct city *pcity,
   /* military units in this city (need _not_ be home city) can make
      unhappy citizens content
    */
-  if (get_city_bonus(pcity, EFT_MARTIAL_LAW_EACH) > 0) {
-    int max = get_city_bonus(pcity, EFT_MARTIAL_LAW_MAX);
-
+  if (get_city_bonus(pcity, EFT_MARTIAL_LAW_MAX) > 0) {
     unit_list_iterate(pcity->tile->units, punit) {
-      if ((pcity->martial_law < max || max == 0)
+      if (pcity->martial_law < get_city_bonus(pcity, EFT_MARTIAL_LAW_MAX)
 	  && is_military_unit(punit)
 	  && punit->owner == pcity->owner) {
 	pcity->martial_law++;
@@ -2025,7 +2016,7 @@ static inline void city_support(struct city *pcity,
     int old_unhappiness = this_unit->unhappiness;
 
     output_type_iterate(o) {
-      upkeep_cost[o] = utype_upkeep_cost(ut, plr, o);
+      upkeep_cost[o] = utype_upkeep_cost(ut, plr, g, o);
       old_upkeep[o] = this_unit->upkeep[o];
     } output_type_iterate_end;
 
@@ -2391,15 +2382,7 @@ struct city *create_city_virtual(struct player *pplayer,
   /* Set up the worklist */
   init_worklist(&pcity->worklist);
 
-  if (!ptile) {
-    /* HACK: if a "dummy" city is created with no tile, the regular
-     * operations to choose a build target would fail.  This situation
-     * probably should be forbidden, but currently it might happen during
-     * map editing.  This fallback may also be dangerous if it gives an
-     * invalid production. */
-    pcity->production.is_unit = TRUE;
-    pcity->production.value = 0;
-  } else {
+  {
     struct unit_type *u = best_role_unit(pcity, L_FIRSTBUILD);
 
     if (u) {
@@ -2464,7 +2447,6 @@ struct city *create_city_virtual(struct player *pplayer,
   pcity->ai.invasion = 0;
   pcity->ai.bcost = 0;
   pcity->ai.attack = 0;
-  pcity->ai.recalc_interval = 1;
   pcity->ai.next_recalc = 0;
 
   memset(pcity->surplus, 0, O_COUNT * sizeof(*pcity->surplus));
@@ -2492,7 +2474,7 @@ struct city *create_city_virtual(struct player *pplayer,
   Removes the virtual skeleton of a city. You should already have removed
   all buildings and units you have added to the city before this.
 **************************************************************************/
-void destroy_city_virtual(struct city *pcity)
+void remove_city_virtual(struct city *pcity)
 {
   unit_list_free(pcity->units_supported);
   free(pcity);

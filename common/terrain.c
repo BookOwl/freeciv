@@ -113,6 +113,7 @@ enum terrain_flag_id terrain_flag_from_str(const char *s)
     "Starter",
     "CanHaveRiver",
     "UnsafeCoast",
+    "Unsafe",
     "Oceanic"
   };
 
@@ -371,14 +372,6 @@ bool contains_special(bv_special set,
 }
 
 /****************************************************************************
- Returns TRUE iff any specials are set on the tile.
-****************************************************************************/
-bool contains_any_specials(bv_special set)
-{
-  return BV_ISSET_ANY(set);
-}
-
-/****************************************************************************
   Returns TRUE iff any tile adjacent to (map_x,map_y) has the given special.
 ****************************************************************************/
 bool is_special_near_tile(const struct tile *ptile, enum tile_special_type spe)
@@ -489,13 +482,11 @@ const char *get_infrastructure_text(bv_special spe)
   }
 
   if (contains_special(spe, S_FORTRESS)) {
-    cat_snprintf(s, sizeof(s), "%s/",
-                 base_name(base_type_get_by_id(BASE_FORTRESS)));
+    cat_snprintf(s, sizeof(s), "%s/", _("Fortress"));
   }
 
   if (contains_special(spe, S_AIRBASE)) {
-    cat_snprintf(s, sizeof(s), "%s/",
-                 base_name(base_type_get_by_id(BASE_AIRBASE)));
+    cat_snprintf(s, sizeof(s), "%s/", _("Airbase"));
   }
 
   p = s + strlen(s) - 1;

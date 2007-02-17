@@ -17,7 +17,6 @@
 #include "game.h"
 #include "log.h"
 #include "fcintl.h"
-#include "movement.h"
 
 #include "map.h"
 
@@ -83,7 +82,6 @@ static int get_tile_value(struct tile *ptile)
 struct start_filter_data {
   int count;			/* Number of existing start positions. */
   int min_value;
-  struct unit_type *initial_unit;
   int *value;
 };
 
@@ -118,11 +116,6 @@ static bool is_valid_start_pos(const struct tile *ptile, const void *dataptr)
 
   /* Don't start on a hut. */
   if (tile_has_special(ptile, S_HUT)) {
-    return FALSE;
-  }
-
-  /* Has to be native for tile for initial unit */
-  if (!is_native_tile(pdata->initial_unit, ptile)) {
     return FALSE;
   }
 
@@ -200,8 +193,7 @@ static bool filter_starters(const struct tile *ptile, const void *data)
   
   Returns true on success
 **************************************************************************/
-bool create_start_positions(enum start_mode mode,
-			    struct unit_type *initial_unit)
+bool create_start_positions(enum start_mode mode)
 {
   struct tile *ptile;
   int k, sum;
@@ -223,7 +215,10 @@ bool create_start_positions(enum start_mode mode,
     create_tmap(FALSE);
   }
 
-  assign_continent_numbers();
+  /* Unsafe terrains separate continents, otherwise small areas of green
+   * near the poles could be populated by a civilization if that pole
+   * was part of a larger continent. */
+  assign_continent_numbers(TRUE);
 
   /* If the default is given, just use MT_VARIABLE. */
   if (mode == MT_DEFAULT) {
@@ -355,7 +350,6 @@ bool create_start_positions(enum start_mode mode,
   data.count = 0;
   data.value = tile_value;
   data.min_value = 900;
-  data.initial_unit = initial_unit;
   sum = 0;
   for (k = 1; k <= map.num_continents; k++) {
     sum += islands[islands_index[k]].starters;

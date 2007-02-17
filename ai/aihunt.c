@@ -72,7 +72,7 @@ static struct unit_type *ai_hunter_guess_best(struct city *pcity,
   unit_type_iterate(ut) {
     int desire;
 
-    if (get_unit_move_type(ut) != umt || !can_build_unit(pcity, ut)
+    if (ut->move_type != umt || !can_build_unit(pcity, ut)
         || ut->attack_strength < ut->transport_capacity) {
       continue;
     }
@@ -83,21 +83,17 @@ static struct unit_type *ai_hunter_guess_best(struct city *pcity,
               * ut->move_rate
               + ut->defense_strength) / MAX(UNITTYPE_COSTS(ut), 1);
 
-    unit_class_iterate(uclass) {
-      if (can_unit_type_transport(ut, uclass)
-          && unit_class_flag(uclass, UCF_MISSILE)) {
-        desire += desire / 6;
-        break;
-      }
-    } unit_class_iterate_end;
-
+    if (unit_type_flag(ut, F_CARRIER)
+        || unit_type_flag(ut, F_MISSILE_CARRIER)) {
+      desire += desire / 6;
+    }
     if (unit_type_flag(ut, F_IGTER)) {
       desire += desire / 2;
     }
     if (unit_type_flag(ut, F_PARTIAL_INVIS)) {
       desire += desire / 4;
     }
-    if (!can_attack_non_native(ut)) {
+    if (unit_type_flag(ut, F_NO_LAND_ATTACK)) {
       desire -= desire / 4; /* less flexibility */
     }
     /* Causes continual unhappiness */
@@ -127,35 +123,27 @@ static void ai_hunter_missile_want(struct player *pplayer,
 {
   int best = -1;
   struct unit_type *best_unit_type = NULL;
-  struct unit *hunter = NULL;
+  bool have_hunter = FALSE;
 
   unit_list_iterate(pcity->tile->units, punit) {
-    if (ai_hunter_qualify(pplayer, punit)) {
-      unit_class_iterate(uclass) {
-        if (can_unit_type_transport(unit_type(punit), uclass)
-            && unit_class_flag(uclass, UCF_MISSILE)) {
-          hunter = punit;
-          break;
-        }
-      } unit_class_iterate_end;
-      if (hunter) {
-        break;
-      }
+    if (ai_hunter_qualify(pplayer, punit)
+        && (unit_flag(punit, F_MISSILE_CARRIER)
+            || unit_flag(punit, F_CARRIER))) {
+      /* There is a potential hunter in our city which we can equip 
+       * with a missile. Do it. */
+      have_hunter = TRUE;
+      break;
     }
   } unit_list_iterate_end;
 
-  if (!hunter) {
+  if (!have_hunter) {
     return;
   }
 
   unit_type_iterate(ut) {
     int desire;
 
-    if (!unit_class_flag(get_unit_class(ut), UCF_MISSILE) || !can_build_unit(pcity, ut)) {
-      continue;
-    }
-
-    if (!can_unit_type_transport(unit_type(hunter), get_unit_class(ut))) {
+    if (!BV_ISSET(ut->flags, F_MISSILE) || !can_build_unit(pcity, ut)) {
       continue;
     }
 
@@ -278,8 +266,7 @@ static void ai_hunter_try_launch(struct player *pplayer,
   unit_list_iterate(punit->tile->units, missile) {
     struct unit *sucker = NULL;
 
-    if (missile->owner == pplayer
-        && unit_class_flag(get_unit_class(unit_type(missile)), UCF_MISSILE)) {
+    if (missile->owner == pplayer && unit_flag(missile, F_MISSILE)) {
       UNIT_LOG(LOGLEVEL_HUNT, missile, "checking for hunt targets");
       pft_fill_unit_parameter(&parameter, punit);
       map = pf_create_map(&parameter);
@@ -309,8 +296,8 @@ static void ai_hunter_try_launch(struct player *pplayer,
           }
           if (ut->move_rate + victim->moves_left > pos.total_MC
               && ATTACK_POWER(victim) > DEFENCE_POWER(punit)
-              && (get_unit_move_type(ut) == SEA_MOVING
-                  || get_unit_move_type(ut) == AIR_MOVING)) {
+              && (ut->move_type == SEA_MOVING
+                  || ut->move_type == AIR_MOVING)) {
             /* Threat to our carrier. Kill it. */
             sucker = victim;
             UNIT_LOG(LOGLEVEL_HUNT, missile, "found aux target %d(%d, %d)",

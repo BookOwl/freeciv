@@ -145,10 +145,6 @@ static struct {
 
 struct ct_string *text_templates[FONT_COUNT];
 
-static bool all_dirty = FALSE;
-
-struct region_list *region_list;
-
 /****************************************************************************
   Return the dimensions of the area (container widget; maximum size) for
   the overview.
@@ -454,7 +450,8 @@ void flush_mapcanvas(int canvas_x, int canvas_y,
   freelog(LOG_DEBUG, "flush_mapcanvas=%s", ct_rect_to_string(&rect));
   be_copy_osda_to_osda(sw_window_get_canvas_background(mapview_window),
 		       mapview.store->osda, &size, &pos, &pos);
-  sw_window_canvas_background_region_needs_repaint(mapview_window, &rect);
+  sw_window_canvas_background_region_needs_repaint(mapview_window,
+						   &rect);
 }
 
 /**************************************************************************
@@ -464,14 +461,10 @@ void flush_mapcanvas(int canvas_x, int canvas_y,
 void dirty_rect(int canvas_x, int canvas_y,
 		int pixel_width, int pixel_height)
 {
-  if (!all_dirty) {
-    struct ct_rect *rect = fc_malloc(sizeof(*rect));
-  
-    *rect = (struct ct_rect){ canvas_x, canvas_y, pixel_width, pixel_height };
-  
-    //freelog(LOG_NORMAL, "dirty_rect(...)");
-    region_list_append(region_list, rect);
-  }
+  struct ct_rect rect = { canvas_x, canvas_y, pixel_width, pixel_height };
+
+  //freelog(LOG_NORMAL, "dirty_rect(...)");
+  sw_window_canvas_background_region_needs_repaint(mapview_window, &rect);
 }
 
 /**************************************************************************
@@ -480,7 +473,11 @@ void dirty_rect(int canvas_x, int canvas_y,
 **************************************************************************/
 void dirty_all(void)
 {
-  all_dirty = TRUE;
+  struct ct_rect rect;
+
+  sw_widget_get_bounds(mapview_window, &rect);
+  sw_window_canvas_background_region_needs_repaint(mapview_window, 
+                                                   &rect);
 }
 
 /**************************************************************************
@@ -490,22 +487,7 @@ void dirty_all(void)
 **************************************************************************/
 void flush_dirty(void)
 {
-  if (all_dirty) {
-    region_list_iterate(region_list, region) {
-      free(region);
-    } region_list_iterate_end;
-    region_list_unlink_all(region_list);
-    
-    flush_mapcanvas(0, 0, mapview.width, mapview.height);
-    all_dirty = FALSE;
-  } else {
-    region_list_iterate(region_list, region) {
-      flush_mapcanvas(region->x, region->y, region->width, region->height);
-      free(region);
-    } region_list_iterate_end;
-    region_list_unlink_all(region_list);
-  }
-  sw_paint_all();
+  flush_mapcanvas(0, 0, mapview.width, mapview.height);
 }
 
 /**************************************************************************
@@ -872,64 +854,7 @@ static void action_button_callback(struct sw_widget *widget, void *data)
 {
   char *action = (char *) data;
 
-  freelog(LOG_NORMAL, "action_button_callback(): action '%s' requested", action);  
-  
-  if (strcmp(action, "unit_fortifying") == 0) {
-    key_unit_fortify();
-  } else if (strcmp(action, "unit_add_to_city") == 0) {
-    key_unit_build_city();
-  } else if (strcmp(action, "unit_build_city") == 0) {
-    key_unit_build_city();
-  } else if (strcmp(action, "unit_auto_explore") == 0) {
-    key_unit_auto_explore();
-  } else if (strcmp(action, "unit_irrigate") == 0) {
-    key_unit_irrigate();
-  } else if (strcmp(action, "unit_sentry") == 0) {
-    key_unit_sentry();
-  } else if (strcmp(action, "unit_return_nearest") == 0) {
-/*    key_? */
-  } else if (strcmp(action, "unit_disband") == 0) {
-    key_unit_disband();
-  } else if (strcmp(action, "unit_mine") == 0) {
-    key_unit_mine();
-  } else if (strcmp(action, "unit_road") == 0) {
-    key_unit_road();
-  } else if (strcmp(action, "unit_auto_settler") == 0) {
-    key_unit_auto_settle();
-  } else if (strcmp(action, "unit_connect") == 0) {
-/*    key_unit_connect(enum unit_activity activity);*/
-  } else if (strcmp(action, "unit_auto_attack") == 0) {
-/*    key_? */    
-  } else if (strcmp(action, "unit_homecity") == 0) {
-    key_unit_homecity();
-  } else if (strcmp(action, "unit_fortress") == 0) {
-    key_unit_fortress();
-  } else if (strcmp(action, "unit_pillage") == 0) {
-    key_unit_pillage();
-  } else if (strcmp(action, "unit_airbase") == 0) {
-    key_unit_airbase();
-  } else if (strcmp(action, "unit_transform") == 0) {
-    key_unit_transform();
-  } else if (strcmp(action, "unit_unload") == 0) {
-    key_unit_unload_all();
-  } else if (strcmp(action, "unit_goto") == 0) {
-    key_unit_goto();
-  } else if (strcmp(action, "unit_goto_city") == 0) {
-/*    key_? */
-  } else if (strcmp(action, "unit_airlift") == 0) {
-/*    key_? */
-  } else if (strcmp(action, "unit_patrol") == 0) {
-    key_unit_patrol();
-  } else if (strcmp(action, "unit_wait") == 0) {
-    key_unit_wait();
-  } else if (strcmp(action, "unit_railroad") == 0) {
-/*    key_? */
-  } else if (strcmp(action, "unit_done") == 0) {
-    key_unit_done();
-  } else {
-    freelog(LOG_NORMAL,
-      "action_button_callback(): action request '%s' not handled", action);    
-  }
+  freelog(LOG_NORMAL, "action '%s' requested", action);
 }
 
 /**************************************************************************
@@ -1244,8 +1169,6 @@ void popup_mapcanvas(void)
   struct ct_rect rect;
   struct ct_size screen_size;
 
-  region_list = region_list_new();
-  
   be_screen_get_size(&screen_size);
 
   env.info_get_value = info_get_value;
@@ -1288,12 +1211,6 @@ void popup_mapcanvas(void)
 **************************************************************************/
 void popdown_mapcanvas(void)
 {
-  region_list_iterate(region_list, region) {
-    free(region);
-  } region_list_iterate_end;
-  region_list_unlink_all(region_list);
-  region_list_free(region_list);
-  
   te_destroy_screen(screen);
 }
 
@@ -1310,13 +1227,9 @@ void draw_selection_rectangle(int canvas_x, int canvas_y, int w, int h)
 **************************************************************************/
 static void unshow_actions(void)
 {
-  struct ct_rect rect;
   int i;
 
   for (i = 0; i < actions_shown.actions; i++) {
-    sw_widget_get_bounds(actions_shown.action[i].widget, &rect);    
-    be_draw_region(sw_widget_get_osda(screen->window), &rect,
-                                       be_get_color(0, 0, 0, MIN_OPACITY));
     sw_window_remove(actions_shown.action[i].widget);
     actions_shown.action[i].widget = NULL;
     free(actions_shown.action[i].name);
@@ -1615,12 +1528,4 @@ void set_city_names_font_sizes(int my_city_names_font_size,
 {
   freelog(LOG_ERROR, "Ignore set_city_names_font_sizes call.");
   /* PORTME */
-}
-
-/**************************************************************************
-  This function will change the current mouse cursor.
-**************************************************************************/
-void update_mouse_cursor(enum cursor_type new_cursor_type)
-{
-  /* PORT ME */
 }

@@ -39,7 +39,6 @@ Freeciv - Copyright (C) 2004 - The Freeciv Project
 
 #include "capability.h"
 #include "fcintl.h"
-#include "ioz.h"
 #include "log.h"
 #include "mem.h"
 #include "netintf.h"
@@ -74,6 +73,14 @@ static char challenge_fullname[MAX_LEN_PATH];
 static bool client_has_hack = FALSE;
 
 int internal_server_port;
+
+const char *skill_level_names[NUM_SKILL_LEVELS] = { 
+  N_("novice"),
+  N_("easy"), 
+  N_("normal"), 
+  N_("hard")
+ ,N_("experimental")
+};
 
 /************************************************************************** 
 The general chain of events:
@@ -459,7 +466,7 @@ void send_client_wants_hack(const char *filename)
 
     section_file_init(&file);
     secfile_insert_str(&file, req.token, "challenge.token");
-    if (!section_file_save(&file, challenge_fullname, 0, FZ_PLAIN)) {
+    if (!section_file_save(&file, challenge_fullname, 0)) {
       freelog(LOG_ERROR, "Couldn't write token to temporary file: %s",
 	      challenge_fullname);
     }

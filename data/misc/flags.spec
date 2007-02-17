@@ -13,7 +13,7 @@ artists = "
     Open Clip Art Library http://www.openclipart.org/
 
    Aborigines		Brett Roper
-   Afghanistan		Andrew Duhan and Reisio
+   Afghanistan		Andrew Duhan
    Algeria 		Lauris Kaplinski
    Antarctica		Tobias Jakobs
    Arab			Daniel Markstedt and Andrew Duhan
@@ -23,7 +23,6 @@ artists = "
    Assyria		Clevelander and Daniel Markstedt
    Australia		Daniel McRae
    Austria		Christoph Breitler
-   Aymara		Daniel Markstedt
    Azerbaijan		Daniel McRae
    Aztec		Daniel Markstedt
    Babylon		Daniel Markstedt
@@ -52,11 +51,9 @@ artists = "
    Egypt (ancient)	Daniel Markstedt
    Egypt		Caleb Moore
    England		Thom Sanders
-   Esperanto		Gabriel Ehrnst Grundin
-   Estonia		Daniel Markstedt
+   Estonia		Daniel McRae
    Ethiopia		Lauris Kaplinski and Christian Schaller
    Europe		Lauris Kaplinski
-   Euskadi		Patricia Fidi
    Finland		Daniel McRae
    France (old)		Patricia Fidi
    France		Tobias Jakobs
@@ -67,7 +64,6 @@ artists = "
    Greece (ancient)	Daniel Markstedt and Vzb83 (Wikipedia)
    Greece		Daniel McRae
    Greenland		Daniel McRae
-   Hacker		Daniel Markstedt and Eric S. Raymond
    Hittite		Daniel Markstedt
    Hungary		Laszlo Dvornik
    Iceland		Áki G. Karlsson
@@ -84,9 +80,7 @@ artists = "
    Israel		John C Meuser
    Italy		Lauris Kaplinski
    Japan		Lauris Kaplinski
-   Jbonai		Elmo Todurov
    Kampuchea		Caleb Moore
-   Keetoowah		Daniel Markstedt
    Kenya		James Ots
    Korea		Stephen Silver
    Latvia		Lauris Bukšis
@@ -107,6 +101,7 @@ artists = "
    New Zealand		Daniel McRae
    Nigeria		Brett Roper
    Norway		Christian Schaller
+   Observer		Jason Short
    Ottoman		Daniel Markstedt
    Pakistan		Lauris Kaplinski
    Palmyra		JB Grout
@@ -115,7 +110,6 @@ artists = "
    Philippines		Lauris Kaplinski
    Phoenicia		Vasco Alexandre Da Silva Costa
    Poland		Cezary Biele
-   Polynesian		Daniel Markstedt
    Portugal		Diogo Mamede
    Qing			Caleb Moore
    Quebec		Patrick Guimond
@@ -124,7 +118,6 @@ artists = "
    Russia		Oleg Krivosheev
    Rwanda		Cezary Biele
    Ryukyu		Daniel Markstedt
-   Samogitia		Daniel Markstedt and Jarno Vasamaa
    Sapmi		Dean Tersigni
    Scotland		Sigge Kotliar
    Serbia		Nikola Pizurica
@@ -154,7 +147,6 @@ artists = "
    United Kingdom	Daniel McRae
    United Nations	Tobias Jakobs
    Unknown		Jason Short
-   Uruguay		Guillermo Romero
    USA			Daniel McRae
    Uyghur		Daniel Markstedt
    Venezuela		Sigge Kotliar
@@ -179,7 +171,6 @@ sprites =
 		"f.assyria", "flags/assyria"
 		"f.australia", "flags/australia"
 		"f.austria", "flags/austria"
-		"f.aymara", "flags/aymara"
 		"f.azerbaijan", "flags/azerbaijan"
 		"f.aztec", "flags/aztec"
 		"f.babylon", "flags/babylon"
@@ -209,11 +200,9 @@ sprites =
 		"f.egypt_ancient", "flags/egypt_ancient"
 		"f.egypt", "flags/egypt"
 		"f.england", "flags/england"
-		"f.esperanto", "flags/esperanto"
 		"f.estonia", "flags/estonia"
 		"f.ethiopia", "flags/ethiopia"
 		"f.europe", "flags/europe"
-		"f.euskadi", "flags/euskadi"
 		"f.finland", "flags/finland"
 		"f.france_old", "flags/france_old"	; alt Gallic
 		"f.france", "flags/france"
@@ -224,7 +213,6 @@ sprites =
 		"f.greece_ancient", "flags/greece_ancient"
 		"f.greece", "flags/greece"
 		"f.greenland", "flags/greenland"	; used by Inuit
-		"f.hacker", "flags/hacker"
 		"f.hittite", "flags/hittite"
 		"f.holland", "flags/netherlands"	; backward compatabiliy
 		"f.hungary", "flags/hungary"
@@ -242,9 +230,7 @@ sprites =
 		"f.israel", "flags/israel"
 		"f.italy", "flags/italy"
 		"f.japan", "flags/japan"
-		"f.jbonai", "flags/jbonai"
 		"f.kampuchea", "flags/kampuchea"
-		"f.keetoowah", "flags/keetoowah"	; used by Cherokee
 		"f.kenya", "flags/kenya"
 		"f.korea", "flags/korea"
 		"f.latvia", "flags/latvia"
@@ -265,7 +251,8 @@ sprites =
 		"f.newzealand", "flags/newzealand"
 		"f.nigeria", "flags/nigeria"
 		"f.norway", "flags/norway"
-		"f.ottoman", "flags/ottoman"
+		"f.observer", "flags/observer"
+ 		"f.ottoman", "flags/ottoman"
 		"f.papua_newguinea", "flags/papua_newguinea"
 		"f.pakistan", "flags/pakistan"
 		"f.palmyra", "flags/palmyra"
@@ -273,7 +260,6 @@ sprites =
 		"f.philippines", "flags/philippines"
 		"f.phoenicia", "flags/phoenicia"
 		"f.poland", "flags/poland"
-		"f.polynesian", "flags/polynesian"
 		"f.portugal", "flags/portugal"
 		"f.qing", "flags/qing"			; Manchu empire flag
 		"f.quebec", "flags/quebec"
@@ -282,7 +268,6 @@ sprites =
 		"f.russia", "flags/russia"
 		"f.rwanda", "flags/rwanda"		; Alternate Zulu
 		"f.ryukyu", "flags/ryukyu"
-		"f.samogitia", "flags/samogitia"
 		"f.sapmi", "flags/sapmi"
 		"f.scotland", "flags/scotland"
 		"f.serbia", "flags/serbia"
@@ -312,7 +297,6 @@ sprites =
 		"f.united_kingdom", "flags/united_kingdom"
 		"f.united_nations", "flags/united_nations"
 		"f.unknown", "flags/unknown"		; hard-coded fallback
-		"f.uruguay", "flags/uruguay"
 		"f.usa", "flags/usa"
 		"f.uyghur", "flags/uyghur"
 		"f.venezuela", "flags/venezuela"

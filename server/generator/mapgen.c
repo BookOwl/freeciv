@@ -390,7 +390,7 @@ static bool ok_for_separate_poles(struct tile *ptile)
 ****************************************************************************/
 static void make_polar_land(void)
 {
-  assign_continent_numbers();
+  assign_continent_numbers(FALSE);
   whole_map_iterate(ptile) {
     if ((tmap_is(ptile, TT_FROZEN ) &&
 	ok_for_separate_poles(ptile))
@@ -1127,7 +1127,7 @@ FIXME: Some continent numbers are unused at the end of this function, fx
   based on the map.size server parameter and the specified topology.  If
   not map.xsize and map.ysize will be used.
 **************************************************************************/
-void map_fractal_generate(bool autosize, struct unit_type *initial_unit)
+void map_fractal_generate(bool autosize)
 {
   /* save the current random state: */
   RANDOM_STATE rstate = get_myrand_state();
@@ -1232,7 +1232,7 @@ void map_fractal_generate(bool autosize, struct unit_type *initial_unit)
     }
     
     for(;;) {
-      success = create_start_positions(mode, initial_unit);
+      success = create_start_positions(mode);
       if (success) {
         break;
       }
@@ -1256,7 +1256,7 @@ void map_fractal_generate(bool autosize, struct unit_type *initial_unit)
 
   }
 
-  assign_continent_numbers();
+  assign_continent_numbers(FALSE);
   game_map_init();
 
   print_mapgen_map();

@@ -602,7 +602,7 @@ void handle_menu(int code)
       popup_find_dialog();
       break;
     case IDM_GOVERNMENT_WORKLISTS:
-      popup_worklists_report();
+      popup_worklists_report(game.player_ptr);
       break;
     case IDM_GOVERNMENT_REVOLUTION:
       popup_revolution_dialog(NULL);
@@ -1155,7 +1155,9 @@ update_menus(void)
 		     !unit_flag(punit, F_UNDISBANDABLE));
       my_enable_menu(menu, IDM_ORDERS_HOMECITY,
 		     can_unit_change_homecity(punit));
-      my_enable_menu(menu, IDM_ORDERS_LOAD, find_transporter_for_unit(punit));
+      my_enable_menu(menu, IDM_ORDERS_LOAD,
+	can_unit_load(punit, find_transporter_for_unit(punit,
+						       punit->tile)));
       my_enable_menu(menu, IDM_ORDERS_UNLOAD,
 	(can_unit_unload(punit, find_unit_by_id(punit->transported_by))
 	 && can_unit_exist_at_tile(punit, punit->tile)) 
@@ -1173,7 +1175,8 @@ update_menus(void)
 		     can_unit_do_connect(punit, ACTIVITY_RAILROAD));
       my_enable_menu(menu, IDM_ORDERS_CONNECT_IRRIGATE,
 		     can_unit_do_connect(punit, ACTIVITY_IRRIGATE));
-      my_enable_menu(menu, IDM_ORDERS_RETURN, TRUE);
+      my_enable_menu(menu, IDM_ORDERS_RETURN,
+		     !(is_air_unit(punit) || is_heli_unit(punit)));
       my_enable_menu(menu, IDM_ORDERS_DIPLOMAT_DLG,
 		     is_diplomat_unit(punit)
 		     && diplomat_can_do_action(punit, DIPLOMAT_ANY_ACTION,

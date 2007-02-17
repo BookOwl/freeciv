@@ -22,7 +22,6 @@
 #include "shared.h"
 #include "support.h"
 
-#include "base.h"
 #include "city.h"
 #include "game.h"
 #include "log.h"
@@ -79,8 +78,8 @@ bool is_diplomat_action_available(const struct unit *pdiplomat,
 {
   struct city *pcity=tile_get_city(ptile);
 
-  if (action != DIPLOMAT_MOVE
-      && !can_unit_exist_at_tile(pdiplomat, pdiplomat->tile)) {
+  if (action!=DIPLOMAT_MOVE
+      && is_ocean(tile_get_terrain(pdiplomat->tile))) {
     return FALSE;
   }
 
@@ -218,12 +217,47 @@ bool unit_can_est_traderoute_here(const struct unit *punit)
 	  && can_cities_trade(phomecity, pdestcity));
 }
 
+
+/**************************************************************************
+Returns the number of free spaces for ground units. Can be 0 or negative.
+**************************************************************************/
+int ground_unit_transporter_capacity(const struct tile *ptile,
+				     const struct player *pplayer)
+{
+  int availability = 0;
+
+  unit_list_iterate(ptile->units, punit) {
+    if (unit_owner(punit) == pplayer
+        || pplayers_allied(unit_owner(punit), pplayer)) {
+      if (is_ground_units_transport(punit)
+	  && !(is_ground_unit(punit) && is_ocean(ptile->terrain))) {
+	availability += get_transporter_capacity(punit);
+      } else if (is_ground_unit(punit)) {
+	availability--;
+      }
+    }
+  }
+  unit_list_iterate_end;
+
+  return availability;
+}
+
 /**************************************************************************
   Return the number of units the transporter can hold (or 0).
 **************************************************************************/
 int get_transporter_capacity(const struct unit *punit)
 {
   return unit_type(punit)->transport_capacity;
+}
+
+/**************************************************************************
+  Return TRUE iff the unit is a transporter of ground units.
+**************************************************************************/
+bool is_ground_units_transport(const struct unit *punit)
+{
+  return (get_transporter_capacity(punit) > 0
+	  && !unit_flag(punit, F_MISSILE_CARRIER)
+	  && !unit_flag(punit, F_CARRIER));
 }
 
 /**************************************************************************
@@ -313,7 +347,7 @@ bool is_hiding_unit(const struct unit *punit)
 bool kills_citizen_after_attack(const struct unit *punit)
 {
   return TEST_BIT(game.info.killcitizen, 
-                  (int) (get_unit_move_type(unit_type(punit))) - 1);
+                  (int) (unit_type(punit)->move_type) - 1);
 }
 
 /**************************************************************************
@@ -543,12 +577,19 @@ const char *get_activity_text(enum unit_activity activity)
 }
 
 /****************************************************************************
-  Return TRUE iff the given unit could be loaded into the transporter
-  if we moved there.
+  Return TRUE iff the given unit can be loaded into the transporter.
 ****************************************************************************/
-bool could_unit_load(const struct unit *pcargo, const struct unit *ptrans)
+bool can_unit_load(const struct unit *pcargo, const struct unit *ptrans)
 {
+  /* This function needs to check EVERYTHING. */
+
   if (!pcargo || !ptrans) {
+    return FALSE;
+  }
+
+  /* Check positions of the units.  Of course you can't load a unit onto
+   * a transporter on a different tile... */
+  if (!same_pos(pcargo->tile, ptrans->tile)) {
     return FALSE;
   }
 
@@ -569,34 +610,13 @@ bool could_unit_load(const struct unit *pcargo, const struct unit *ptrans)
   }
 
   /* Make sure this transporter can carry this type of unit. */
-  if (!can_unit_transport(ptrans, pcargo)) {
-    return FALSE;
-  }
-
-  /* Transporter must be native to the tile it is on. */
-  if (!can_unit_exist_at_tile(ptrans, ptrans->tile)) {
+  if(!can_unit_transport(ptrans, pcargo)) {
     return FALSE;
   }
 
   /* Make sure there's room in the transporter. */
   return (get_transporter_occupancy(ptrans)
 	  < get_transporter_capacity(ptrans));
-}
-
-/****************************************************************************
-  Return TRUE iff the given unit can be loaded into the transporter.
-****************************************************************************/
-bool can_unit_load(const struct unit *pcargo, const struct unit *ptrans)
-{
-  /* This function needs to check EVERYTHING. */
-
-  /* Check positions of the units.  Of course you can't load a unit onto
-   * a transporter on a different tile... */
-  if (!same_pos(pcargo->tile, ptrans->tile)) {
-    return FALSE;
-  }
-
-  return could_unit_load(pcargo, ptrans);
 }
 
 /****************************************************************************
@@ -649,7 +669,7 @@ bool can_unit_paradrop(const struct unit *punit)
   if(punit->moves_left < utype->paratroopers_mr_req)
     return FALSE;
 
-  if (tile_has_base_flag(punit->tile, BF_PARADROP_FROM)) {
+  if (tile_has_special(punit->tile, S_AIRBASE)) {
     return TRUE;
   }
 
@@ -1071,6 +1091,66 @@ struct player *unit_owner(const struct unit *punit)
   return punit->owner;
 }
 
+/****************************************************************************
+  Measure the carrier (missile + airplane) capacity of the given tile for
+  a player.
+****************************************************************************/
+static void count_carrier_capacity(int *airall, int *misonly,
+				   const struct tile *ptile,
+				   const struct player *pplayer)
+{
+  *airall = *misonly = 0;
+
+  unit_list_iterate(ptile->units, punit) {
+    if (unit_owner(punit) == pplayer) {
+      if (unit_flag(punit, F_CARRIER)
+	  && !(is_ground_unit(punit) && is_ocean(ptile->terrain))) {
+	*airall += get_transporter_capacity(punit);
+        *airall -= get_transporter_occupancy(punit);
+	continue;
+      }
+      if (unit_flag(punit, F_MISSILE_CARRIER)
+	  && !(is_ground_unit(punit) && is_ocean(ptile->terrain))) {
+	*misonly += get_transporter_capacity(punit);
+        *misonly -= get_transporter_occupancy(punit);
+	continue;
+      }
+    }
+  } unit_list_iterate_end;
+}
+
+/**************************************************************************
+  Returns the number of free spaces for missiles for the given player on
+  the given tile. Can be 0.
+**************************************************************************/
+int missile_carrier_capacity(const struct tile *ptile,
+			     const struct player *pplayer)
+{
+  int airall, misonly;
+
+  count_carrier_capacity(&airall, &misonly, ptile, pplayer);
+
+  /* Any extra air spaces can be used by missiles, but if there aren't enough
+   * air spaces this doesn't bother missiles. */
+  return airall + misonly;
+}
+
+/**************************************************************************
+  Returns the number of free spaces for airunits (includes missiles) for
+  the given player on the given tile.  Can be 0.
+**************************************************************************/
+int airunit_carrier_capacity(const struct tile *ptile,
+			     const struct player *pplayer)
+{
+  int airall, misonly;
+
+  count_carrier_capacity(&airall, &misonly, ptile, pplayer);
+
+  /* Any extra missile spaces are useless to air units, but if there aren't
+   * enough missile spaces the missles must take up airunit capacity. */
+  return airall;
+}
+
 /**************************************************************************
 Returns true if the tile contains an allied unit and only allied units.
 (ie, if your nation A is allied with B, and B is allied with C, a tile
@@ -1179,12 +1259,73 @@ bool is_my_zoc(const struct player *pplayer, const struct tile *ptile0)
 }
 
 /**************************************************************************
-  Takes into account unit class flag UCF_ZOC as well as IGZOC
+  Takes into account unit move_type as well as IGZOC
 **************************************************************************/
 bool unit_type_really_ignores_zoc(const struct unit_type *punittype)
 {
-  return (!unit_class_flag(get_unit_class(punittype), UCF_ZOC)
+  return (!is_ground_unittype(punittype)
 	  || unit_type_flag(punittype, F_IGZOC));
+}
+
+/**************************************************************************
+  Calculate the chance of losing (as a percentage) if it were to spend a
+  turn at the given location.
+
+  Note this function isn't really useful for AI planning, since it needs
+  to know more.  The AI code uses base_trireme_loss_pct and
+  base_unsafe_terrain_loss_pct directly.
+**************************************************************************/
+int unit_loss_pct(const struct player *pplayer, const struct tile *ptile,
+		  const struct unit *punit)
+{
+  int loss_pct = 0;
+
+  /* Units are never lost if they're inside cities. */
+  if (tile_get_city(ptile)) {
+    return 0; 
+  }
+
+  /* Trireme units may be lost if they stray from coastline. */
+  if (unit_flag(punit, F_TRIREME)) {
+    if (!is_safe_ocean(ptile)) {
+      loss_pct = base_trireme_loss_pct(pplayer, punit);
+    }
+  }
+
+  /* All units may be lost on unsafe terrain.  (Actually air units are
+   * exempt; see base_unsafe_terrain_loss_pct.) */
+  if (terrain_has_flag(tile_get_terrain(ptile), TER_UNSAFE)) {
+    return loss_pct + base_unsafe_terrain_loss_pct(pplayer, punit);
+  }
+
+  return loss_pct;
+}
+
+/**************************************************************************
+  Triremes have a varying loss percentage based on tech and veterancy
+  level.
+**************************************************************************/
+int base_trireme_loss_pct(const struct player *pplayer,
+			  const struct unit *punit)
+{
+  if (get_unit_bonus(punit, EFT_NO_SINK_DEEP) > 0) {
+    return 0;
+  } else if (player_knows_techs_with_flag(pplayer, TF_REDUCE_TRIREME_LOSS2)) {
+    return game.trireme_loss_chance[punit->veteran] / 4;
+  } else if (player_knows_techs_with_flag(pplayer, TF_REDUCE_TRIREME_LOSS1)) {
+    return game.trireme_loss_chance[punit->veteran] / 2;
+  } else {
+    return game.trireme_loss_chance[punit->veteran];
+  }
+}
+
+/**************************************************************************
+  All units except air units have a flat 15% chance of being lost.
+**************************************************************************/
+int base_unsafe_terrain_loss_pct(const struct player *pplayer,
+				 const struct unit *punit)
+{
+  return (is_air_unit(punit) || is_heli_unit(punit)) ? 0 : 15;
 }
 
 /**************************************************************************
@@ -1209,7 +1350,7 @@ bool unit_being_aggressive(const struct unit *punit)
     return FALSE;
   }
   if (is_ground_unit(punit) &&
-      tile_has_base_flag(punit->tile, BF_NOT_AGGRESSIVE)) {
+      tile_has_special(punit->tile, S_FORTRESS)) {
     return !is_unit_near_a_friendly_city (punit);
   }
   
@@ -1343,10 +1484,9 @@ int get_transporter_occupancy(const struct unit *ptrans)
 /****************************************************************************
   Find a transporter at the given location for the unit.
 ****************************************************************************/
-struct unit *find_transporter_for_unit(const struct unit *pcargo)
-{
-  struct tile *ptile = pcargo->tile;
-
+struct unit *find_transporter_for_unit(const struct unit *pcargo,
+				       const struct tile *ptile)
+{ 
   unit_list_iterate(ptile->units, ptrans) {
     if (can_unit_load(pcargo, ptrans)) {
       return ptrans;
@@ -1395,7 +1535,7 @@ enum unit_upgrade_result test_unit_upgrade(const struct unit *punit,
 
   if (get_transporter_occupancy(punit) > to_unittype->transport_capacity) {
     /* TODO: allow transported units to be reassigned.  Check for
-     * unit_class_transporter_capacity() here and make changes to
+     * ground_unit_transporter_capacity here and make changes to
      * upgrade_unit. */
     return UR_NOT_ENOUGH_ROOM;
   }

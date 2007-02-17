@@ -755,32 +755,12 @@ void helptext_unit(char *buf, struct unit_type *utype, const char *user_text)
   
   buf[0] = '\0';
 
-  sprintf(buf + strlen(buf), _("* Belongs to %s units class.\n"),
-          get_unit_class(utype)->name);
-  if (unit_class_flag(get_unit_class(utype), UCF_CAN_OCCUPY)
-      && !unit_type_flag(utype, F_NONMIL)) {
-    sprintf(buf + strlen(buf), _("  * Can occupy empty enemy cities.\n"));
-  }
-  if (!unit_class_flag(get_unit_class(utype), UCF_TERRAIN_SPEED)) {
-    sprintf(buf + strlen(buf), _("  * Speed is not affected by terrain.\n"));
-  }
-  if (unit_class_flag(get_unit_class(utype), UCF_DAMAGE_SLOWS)) {
-    sprintf(buf + strlen(buf), _("  * Slowed down while damaged\n"));
-  }
-  if (unit_class_flag(get_unit_class(utype), UCF_MISSILE)) {
-    sprintf(buf + strlen(buf),
-	    _("  * Gets used up in making an attack.\n"));
-  }
-  if (unit_class_flag(get_unit_class(utype), UCF_UNREACHABLE)) {
-    sprintf(buf + strlen(buf),
-	    _("  * Is unreachable. Most units cannot attack this one.\n"));
-  }
-
   if (utype->impr_requirement != B_LAST) {
     sprintf(buf + strlen(buf),
-	    _("* Can only be built if there is %s in the city.\n"), 
+            _("* Can only be built if there is %s in the city.\n"), 
             get_improvement_name(utype->impr_requirement));
   }
+
   if (utype->gov_requirement) {
     sprintf(buf + strlen(buf),
 	    _("* Can only be built with %s as government.\n"), 
@@ -805,16 +785,23 @@ void helptext_unit(char *buf, struct unit_type *utype, const char *user_text)
     sprintf(buf + strlen(buf), _("* Requires %d population to build.\n"),
 	    utype->pop_cost);
   }
-  if (utype->transport_capacity > 0) {
-    sprintf(buf + strlen(buf),
-            PL_("* Can carry and refuel %d unit from classes:\n",
-                "* Can carry and refuel up to %d units from classes:\n",
-                utype->transport_capacity), utype->transport_capacity);
-    unit_class_iterate(uclass) {
-      if (can_unit_type_transport(utype, uclass)) {
-        sprintf(buf + strlen(buf), _("  * %s units\n"), uclass->name);
-      }
-    } unit_class_iterate_end
+  if (utype->transport_capacity>0) {
+    if (unit_type_flag(utype, F_CARRIER)) {
+      sprintf(buf + strlen(buf),
+	      PL_("* Can carry and refuel %d air unit.\n",
+		  "* Can carry and refuel %d air units.\n",
+		  utype->transport_capacity), utype->transport_capacity);
+    } else if (unit_type_flag(utype, F_MISSILE_CARRIER)) {
+      sprintf(buf + strlen(buf),
+	      PL_("* Can carry and refuel %d missile unit.\n",
+		  "* Can carry and refuel %d missile units.\n",
+		  utype->transport_capacity), utype->transport_capacity);
+    } else {
+      sprintf(buf + strlen(buf),
+	      PL_("* Can carry %d ground unit across water.\n",
+		  "* Can carry %d ground units across water.\n",
+		  utype->transport_capacity), utype->transport_capacity);
+    }
   }
   if (unit_type_flag(utype, F_TRADE_ROUTE)) {
     /* TRANS: "Manhattan" distance is the distance along gridlines, with
@@ -918,8 +905,8 @@ void helptext_unit(char *buf, struct unit_type *utype, const char *user_text)
   if (unit_type_flag(utype, F_UNBRIBABLE)) {
     sprintf(buf + strlen(buf), _("* May not be bribed.\n"));
   }
-  if (unit_type_flag(utype, F_ATTACK_ANY)) {
-    sprintf(buf + strlen(buf), _("* Can attack otherwise unreachable enemy units.\n"));
+  if (unit_type_flag(utype, F_FIGHTER)) {
+    sprintf(buf + strlen(buf), _("* Can attack enemy air units.\n"));
   }
   if (unit_type_flag(utype, F_PARTIAL_INVIS)) {
     sprintf(buf + strlen(buf), _("* Is invisible except when next to an"
@@ -947,20 +934,10 @@ void helptext_unit(char *buf, struct unit_type *utype, const char *user_text)
     sprintf(buf + strlen(buf),
 	    _("* Counts as 'mounted' against certain defenders.\n"));
   }
-  if (unit_type_flag(utype, F_HELICOPTER)) {
+  if (unit_type_flag(utype, F_MISSILE)) {
     sprintf(buf + strlen(buf),
-            _("* Counts as 'helicopter' against certain attackers.\n"));
-  }
-  if (unit_type_flag(utype, F_FIGHTER)) {
-    sprintf(buf + strlen(buf),
-            _("* Very good at attacking 'helicopter' units.\n"));
-  }
-  if (unit_type_flag(utype, F_AIRUNIT)) {
-    sprintf(buf + strlen(buf),
-            _("* Very bad at attacking AEGIS units.\n"));
-  }
-  if (!unit_class_flag(get_unit_class(utype), UCF_MISSILE)
-      && unit_type_flag(utype, F_ONEATTACK)) {
+	    _("* A missile unit: gets used up in making an attack.\n"));
+  } else if(unit_type_flag(utype, F_ONEATTACK)) {
     sprintf(buf + strlen(buf),
 	    _("* Making an attack ends this unit's turn.\n"));
   }
@@ -1027,21 +1004,39 @@ void helptext_unit(char *buf, struct unit_type *utype, const char *user_text)
   if (utype->fuel > 0) {
     char allowed_units[10][64];
     int num_allowed_units = 0;
-    int j;
+    int j, n;
     struct astring astr;
 
     astr_init(&astr);
     astr_minsize(&astr,1);
     astr.str[0] = '\0';
 
-    unit_type_iterate(transport) {
-      if (can_unit_type_transport(transport, get_unit_class(utype))) {
-        mystrlcpy(allowed_units[num_allowed_units],
-                  unit_name(transport),
-                  sizeof(allowed_units[num_allowed_units]));
-        num_allowed_units++;
+    n = num_role_units(F_CARRIER);
+    for (j = 0; j < n; j++) {
+      struct unit_type *punittype = get_role_unit(F_CARRIER, j);
+
+      mystrlcpy(allowed_units[num_allowed_units],
+		unit_name(punittype),
+		sizeof(allowed_units[num_allowed_units]));
+      num_allowed_units++;
+      assert(num_allowed_units < ARRAY_SIZE(allowed_units));
+    }
+
+    if (unit_type_flag(utype, F_MISSILE)) {
+      n = num_role_units(F_MISSILE_CARRIER);
+
+      for (j = 0; j < n; j++) {
+	struct unit_type *punittype = get_role_unit(F_MISSILE_CARRIER, j);
+
+	if (punittype->transport_capacity > 0) {
+	  mystrlcpy(allowed_units[num_allowed_units],
+		    unit_name(punittype),
+		    sizeof(allowed_units[num_allowed_units]));
+	  num_allowed_units++;
+	  assert(num_allowed_units < ARRAY_SIZE(allowed_units));
+	}
       }
-    } unit_type_iterate_end;
+    }
 
     for (j = 0; j < num_allowed_units; j++) {
       const char *deli_str = NULL;
@@ -1224,6 +1219,11 @@ void helptext_terrain(char *buf, size_t bufsz, struct terrain *pterrain,
 	    _("* The coastline of this terrain is unsafe."));
     strcat(buf, "\n");
   }
+  if (terrain_has_flag(pterrain, TER_UNSAFE)) {
+    sprintf(buf + strlen(buf),
+	    _("* This terrain is unsafe for units to travel on."));
+    strcat(buf, "\n");
+  }
   if (terrain_has_flag(pterrain, TER_OCEANIC)) {
     sprintf(buf + strlen(buf),
 	    _("* Land units cannot travel on oceanic terrains."));
@@ -1332,15 +1332,15 @@ void helptext_government(char *buf, size_t bufsz, struct government *gov,
         sprintf(buf + strlen(buf), _("* Chance of civil war is %d%% if you "
                 "lose your capital.\n"), peffect->value);
         break;
-      case EFT_EMPIRE_SIZE_BASE:
+      case EFT_EMPIRE_SIZE_MOD:
         sprintf(buf + strlen(buf), _("* The first unhappy citizen in each "
         	      "city due to civilization size will appear when you have %d"
- 	              " cities.\n"), peffect->value);
+ 	              " cities.\n"), game.info.cityfactor + peffect->value);
         break;
       case EFT_EMPIRE_SIZE_STEP:
         sprintf(buf + strlen(buf), _("* After the first unhappy citizen "
-                "due to civilization size, for each %d additional cities, "
-                "another unhappy citizen will appear.\n"), peffect->value);
+                "due to city size, for each %d additional cities, another "
+                "unhappy citizen will appear.\n"), peffect->value);
         break;
       case EFT_MAX_RATES:
         if (peffect->value < 100 && game.info.changable_tax) {

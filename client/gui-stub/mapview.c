@@ -68,15 +68,6 @@ void update_unit_info_label(struct unit_list *punitlist)
 }
 
 /****************************************************************************
-  Update the mouse cursor. Cursor type depends on what user is doing and
-  pointing.
-****************************************************************************/
-void update_mouse_cursor(enum cursor_type new_cursor_type)
-{
-  /* PORTME */
-}
-
-/****************************************************************************
   Update the timeout display.  The timeout is the time until the turn
   ends, in seconds.
 ****************************************************************************/

@@ -135,7 +135,6 @@ tiles = { "row", "column","tag"
   0, 2, "mask.tile"
   0, 2, "t.unknown1"
   0, 3, "t.ocean1"
-  0, 3, "t.deep1"
   0, 4, "user.attention"
   0, 5, "tx.fog"
 }

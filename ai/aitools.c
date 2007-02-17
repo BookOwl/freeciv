@@ -544,6 +544,9 @@ static int stack_risk(const struct tile *ptile,
   const double p_killed = chance_killed_at(ptile, risk_cost, param);
   double danger = value * p_killed;
 
+  if (terrain_has_flag(ptile->terrain, TER_UNSAFE)) {
+    danger += risk_cost->unsafe_terrain_cost;
+  }
   if (is_ocean(ptile->terrain) && !is_safe_ocean(ptile)) {
     danger += risk_cost->ocean_cost;
   }
@@ -588,6 +591,7 @@ void ai_avoid_risks(struct pf_parameter *parameter,
 		    struct unit *punit,
 		    const double fearfulness)
 {
+  const struct player *pplayer = unit_owner(punit);
   /* If we stay a short time on each tile, the danger of each individual tile
    * is reduced. If we do not do this,
    * we will not favour longer but faster routs. */
@@ -599,6 +603,15 @@ void ai_avoid_risks(struct pf_parameter *parameter,
   risk_cost->base_value = unit_build_shield_cost(punit->type);
   risk_cost->fearfulness = fearfulness * linger_fraction;
 
+  if (unit_flag(punit, F_TRIREME)) {
+    risk_cost->ocean_cost = risk_cost->base_value
+      * (double)base_trireme_loss_pct(pplayer, punit)
+      / 100.0;
+  } else {
+    risk_cost->ocean_cost = 0;
+  }
+  risk_cost->unsafe_terrain_cost = risk_cost->base_value
+    * (double)base_unsafe_terrain_loss_pct(pplayer, punit) / 100.0;
   risk_cost->enemy_zoc_cost = PF_TURN_FACTOR * 20;
 }
 
@@ -629,6 +642,9 @@ void ai_fill_unit_param(struct pf_parameter *parameter,
 			struct ai_risk_cost *risk_cost,
 			struct unit *punit, struct tile *ptile)
 {
+  const bool is_ferry = get_transporter_capacity(punit) > 0
+                        && !unit_flag(punit, F_MISSILE_CARRIER)
+                        && punit->ai.ai_role != AIUNIT_HUNTER;
   const bool is_air = is_air_unit(punit)
                       && punit->ai.ai_role != AIUNIT_ESCORT;
   const bool long_path = LONG_TIME < (map_distance(punit->tile, punit->tile)
@@ -636,20 +652,6 @@ void ai_fill_unit_param(struct pf_parameter *parameter,
 				      / unit_type(punit)->move_rate);
   const bool barbarian = is_barbarian(unit_owner(punit));
   const bool is_ai = unit_owner(punit)->ai.control;
-  bool is_ferry = FALSE;
-
-  if (punit->ai.ai_role != AIUNIT_HUNTER
-      && get_transporter_capacity(punit) > 0) {
-    unit_class_iterate(uclass) {
-      if (can_unit_type_transport(unit_type(punit), uclass)
-          && (uclass->move_type == LAND_MOVING
-              || (uclass->move_type == AIR_MOVING
-                  && !unit_class_flag(uclass, UCF_MISSILE)))) {
-        is_ferry = TRUE;
-        break;
-      }
-    } unit_class_iterate_end;
-  }
 
   if (is_ferry) {
     /* The destination may be a coastal land tile,
@@ -856,17 +858,20 @@ void ai_unit_new_role(struct unit *punit, enum ai_unit_task task,
     UNIT_LOG(LOGLEVEL_HUNT, target, "is being hunted");
 
     /* Grab missiles lying around and bring them along */
-    unit_list_iterate(punit->tile->units, missile) {
-      if (missile->ai.ai_role != AIUNIT_ESCORT
-          && missile->transported_by == -1
-          && missile->owner == punit->owner
-          && unit_class_flag(get_unit_class(unit_type(missile)), UCF_MISSILE)
-          && can_unit_load(missile, punit)) {
-        UNIT_LOG(LOGLEVEL_HUNT, missile, "loaded on hunter");
-        ai_unit_new_role(missile, AIUNIT_ESCORT, target->tile);
-        load_unit_onto_transporter(missile, punit);
-      }
-    } unit_list_iterate_end;
+    if (unit_flag(punit, F_MISSILE_CARRIER)
+        || unit_flag(punit, F_CARRIER)) {
+      unit_list_iterate(punit->tile->units, missile) {
+        if (missile->ai.ai_role != AIUNIT_ESCORT
+            && missile->transported_by == -1
+            && missile->owner == punit->owner
+            && unit_flag(missile, F_MISSILE)
+            && can_unit_load(missile, punit)) {
+          UNIT_LOG(LOGLEVEL_HUNT, missile, "loaded on hunter");
+          ai_unit_new_role(missile, AIUNIT_ESCORT, target->tile);
+          load_unit_onto_transporter(missile, punit);
+        }
+      } unit_list_iterate_end;
+    }
   }
 }
 
@@ -1000,8 +1005,8 @@ bool ai_unit_move(struct unit *punit, struct tile *ptile)
   }
 
   /* Try not to end move next to an enemy if we can avoid it by waiting */
-  if (punit->moves_left <= map_move_cost_unit(punit, ptile)
-      && unit_move_rate(punit) > map_move_cost_unit(punit, ptile)
+  if (punit->moves_left <= map_move_cost(punit, ptile)
+      && unit_move_rate(punit) > map_move_cost(punit, ptile)
       && enemies_at(punit, ptile)
       && !enemies_at(punit, punit->tile)) {
     UNIT_LOG(LOG_DEBUG, punit, "ending move early to stay out of trouble");
@@ -1200,7 +1205,8 @@ void ai_advisor_choose_building(struct city *pcity, struct ai_choice *choice)
   sure whether it is fully general for all possible parameters/
   combinations." --dwp
 **********************************************************************/
-bool ai_assess_military_unhappiness(struct city *pcity)
+bool ai_assess_military_unhappiness(struct city *pcity,
+                                    struct government *g)
 {
   int free_happy;
   int unhap = 0;

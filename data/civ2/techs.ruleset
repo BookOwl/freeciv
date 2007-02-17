@@ -519,8 +519,6 @@ name     = _("Philosophy")
 req1     = "Mysticism"
 req2     = "Literacy"
 flags    = "Bonus_Tech"
-bonus_message = _("Great philosophers from all the world join \
-your civilization: you get an immediate advance.")
 graphic     = "a.philosophy"
 graphic_alt = "-"
 

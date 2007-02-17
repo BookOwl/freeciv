@@ -20,7 +20,7 @@ struct connection;
 bool server_handle_packet(enum packet_type type, void *packet,
 			  struct player *pplayer, struct connection *pconn);
 
-void handle_nation_select_req(struct connection *pc, int player_no, Nation_type_id nation_no, bool is_male, char *name, int city_style);
+void handle_nation_select_req(struct player *pplayer, int player_no, Nation_type_id nation_no, bool is_male, char *name, int city_style);
 void handle_player_ready(struct player *pplayer, int player_no, bool is_ready);
 void handle_chat_msg_req(struct connection *pc, char *message);
 void handle_city_sell(struct player *pplayer, int city_id, int build_id);
@@ -73,16 +73,5 @@ void handle_report_req(struct connection *pc, enum report_type type);
 void handle_conn_pong(struct connection *pc);
 void handle_spaceship_launch(struct player *pplayer);
 void handle_spaceship_place(struct player *pplayer, enum spaceship_place_type type, int num);
-struct packet_single_want_hack_req;
-void handle_single_want_hack_req(struct connection *pc, struct packet_single_want_hack_req *packet);
-void handle_edit_mode(struct connection *pc, bool state);
-void handle_edit_tile(struct connection *pc, int x, int y, Terrain_type_id terrain, Resource_type_id resource, bv_special special);
-struct packet_edit_unit;
-void handle_edit_unit(struct connection *pc, struct packet_edit_unit *packet);
-void handle_edit_create_city(struct connection *pc, int owner, int x, int y);
-void handle_edit_city_size(struct connection *pc, int id, int size);
-struct packet_edit_player;
-void handle_edit_player(struct connection *pc, struct packet_edit_player *packet);
-void handle_edit_recalculate_borders(struct connection *pc);
 
 #endif /* FC__HAND_GEN_H */

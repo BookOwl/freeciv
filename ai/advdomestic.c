@@ -130,104 +130,6 @@ static void ai_choose_help_wonder(struct city *pcity,
   }
 }
 
-/***************************************************************************
- * Evaluate the need for units (like caravans) that create trade routes.
- * If pplayer is not advanced enough to build caravans, the corresponding
- * tech will be stimulated.
- ***************************************************************************/
-static void ai_choose_trade_route(struct city *pcity,
-				  struct ai_choice *choice,
-                                  struct ai_data *ai)
-{
-  struct player *pplayer = city_owner(pcity);
-  struct unit_type *unit_type;
-  int want;
-  int income, bonus;
-  int trade_routes;
-  Continent_id continent = tile_get_continent(pcity->tile);
-  bool dest_city_found = FALSE;
-
-  if (city_list_size(pplayer->cities) < 5) {
-    /* Consider trade routes only if enough destination cities.
-     * This is just a quick check. We make more detailed check below. */
-    return;
-  }
-
-  if (num_role_units(F_TRADE_ROUTE) == 0) {
-    /* No such units available in the ruleset */
-    return;
-  }
-
-  /* Look for proper destination city at the same continent. */
-  city_list_iterate(pplayer->cities, acity) {
-    if (can_cities_trade(pcity, acity) && tile_get_continent(acity->tile) == continent) {
-      dest_city_found = TRUE;
-      break;
-    }
-  } city_list_iterate_end;
-
-  if(!dest_city_found) {
-    /* No proper destination city at the same continent. */
-    return;
-  }
-
-  unit_type = best_role_unit(pcity, F_TRADE_ROUTE);
-
-  if (!unit_type) {
-    /* We cannot build such units yet
-     * but we will consider it to stimulate science */
-    unit_type = get_role_unit(F_TRADE_ROUTE, 0);
-  }
-
-  trade_routes = city_num_trade_routes(pcity);
-
-  /* We consider only initial benefit from establishing trade route.
-   * We may actually get only initial benefit if both cities already
-   * have four trade routes, or if there already is route between them. */
-
-  /* We assume that we are creating trade route to city with 75% of
-   * pcitys trade 10 squares away. */
-  income = (10 + 10) * (1.75 * pcity->surplus[O_TRADE]) / 24 * 3;
-  bonus = get_city_bonus(pcity, EFT_TRADE_REVENUE_BONUS);
-  income = (float)income * pow(2.0, (double)bonus / 1000.0);
-
-  want = income * ai->gold_priority + income * ai->science_priority;
-
-  /* We get this income only once after all.
-   * This value is adjusted for most interesting gameplay.
-   * For optimal performance AI should build more caravans, but
-   * we want it to build less valued buildings too. */
-  want /= 130;
-
-  if (trade_routes == 0) {
-    /* If we have no trade routes at all, we are certainly creating a new one. */
-    want += 20;
-  } else if (trade_routes < NUM_TRADEROUTES) {
-    /* Possibly creating a new traderoute */
-    want += 5;
-  }
-
-  want -= unit_build_shield_cost(unit_type) * SHIELD_WEIGHTING / 150;
-
-  CITY_LOG(LOG_DEBUG, pcity,
-           "want for trade route unit is %d (expected initial income %d)",
-           want, income);
-
-  if (want > choice->want) {
-    /* This sets our tech want in cases where we cannot actually build
-     * the unit. */
-    unit_type = ai_wants_role_unit(pplayer, pcity, F_TRADE_ROUTE, want);
-    if (unit_type != NULL) {
-      choice->want = want;
-      choice->type = CT_NONMIL;
-      choice->choice = unit_type->index;
-    } else {
-      CITY_LOG(LOG_DEBUG, pcity,
-               "would but could not build trade route unit, bumped reqs");
-    }
-  }
-}
-
 /************************************************************************** 
   This function should fill the supplied choice structure.
 
@@ -237,6 +139,8 @@ void domestic_advisor_choose_build(struct player *pplayer, struct city *pcity,
 				   struct ai_choice *choice)
 {
   struct ai_data *ai = ai_data_get(pplayer);
+  /* Government of the player */
+  struct government *gov = get_gov_pplayer(pplayer);
   /* Unit type with certain role */
   struct unit_type *unit_type;
 
@@ -248,7 +152,7 @@ void domestic_advisor_choose_build(struct player *pplayer, struct city *pcity,
   if (unit_type
       && (pcity->id != ai->wonder_city || unit_type->pop_cost == 0)
       && pcity->surplus[O_FOOD] > utype_upkeep_cost(unit_type,
-                                                    pplayer, O_FOOD)) {
+			 	                    pplayer, gov, O_FOOD)) {
     /* The worker want is calculated in settlers.c called from
      * ai_manage_cities.  The expand value is the % that the AI should
      * value expansion (basically to handicap easier difficutly levels)
@@ -277,7 +181,7 @@ void domestic_advisor_choose_build(struct player *pplayer, struct city *pcity,
       && (pcity->id != ai->wonder_city
           || unit_type->pop_cost == 0)
       && pcity->surplus[O_FOOD] >= utype_upkeep_cost(unit_type,
-                                                     pplayer, O_FOOD)) {
+				                     pplayer, gov, O_FOOD)) {
     /* founder_want calculated in aisettlers.c */
     int want = pcity->ai.founder_want;
 
@@ -322,13 +226,8 @@ void domestic_advisor_choose_build(struct player *pplayer, struct city *pcity,
     copy_if_better_choice(&cur, choice);
 
     init_choice(&cur);
-    /* Consider city improvements */
+    /* Consider city improvments */
     ai_advisor_choose_building(pcity, &cur);
-    copy_if_better_choice(&cur, choice);
-
-    init_choice(&cur);
-    /* Consider building caravan-type units for trade route */
-    ai_choose_trade_route(pcity, &cur, ai);
     copy_if_better_choice(&cur, choice);
   }
 

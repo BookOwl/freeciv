@@ -17,11 +17,9 @@ pkgdata_DATA = \
 		assyrian.ruleset \
 		australian.ruleset \
 		austrian.ruleset \
-		aymara.ruleset \
 		aztec.ruleset \
 		babylonian.ruleset \
 		barbarian.ruleset \
-		basque.ruleset \
 		bavarian.ruleset \
 		belgian.ruleset \
 		bengali.ruleset \
@@ -32,11 +30,9 @@ pkgdata_DATA = \
 		bulgarian.ruleset \
 		burmese.ruleset \
 		byzantium.ruleset \
-		cambodian.ruleset \
 		canadian.ruleset \
 		carthaginian.ruleset \
 		catalan.ruleset \
-		cherokee.ruleset \
 		chilean.ruleset \
 		chinese.ruleset \
 		colombian.ruleset \
@@ -49,10 +45,8 @@ pkgdata_DATA = \
 		dutch.ruleset \
 		egyptian.ruleset \
 		english.ruleset \
-		esperant.ruleset \
 		estonian.ruleset \
 		ethiopian.ruleset \
-		european.ruleset \
 		filipino.ruleset \
 		finnish.ruleset \
 		french.ruleset \
@@ -61,7 +55,6 @@ pkgdata_DATA = \
 		georgian.ruleset \
 		german.ruleset \
 		greek.ruleset \
-		hacker.ruleset \
 		hellenic.ruleset \
 		hittite.ruleset \
 		hungarian.ruleset \
@@ -71,20 +64,19 @@ pkgdata_DATA = \
 		indian.ruleset \
 		indonesian.ruleset \
 		inuit.ruleset \
-		iranian.ruleset \
 		iraqi.ruleset \
 		irish.ruleset \
 		iroquois.ruleset \
 		israeli.ruleset \
 		italian.ruleset \
 		japanese.ruleset \
+		kampuchean.ruleset \
 		kenyan.ruleset \
 		korean.ruleset \
 		lankese.ruleset \
 		latvian.ruleset \
 		libyan.ruleset \
 		lithuanian.ruleset \
-		lojbanistani.ruleset \
 		malagasy.ruleset \
 		malaysian.ruleset \
 		malian.ruleset \
@@ -102,7 +94,6 @@ pkgdata_DATA = \
 		persian.ruleset \
 		phoenician.ruleset \
 		polish.ruleset \
-		polynesian.ruleset \
 		portuguese.ruleset \
 		quebecois.ruleset \
 		romanian.ruleset \
@@ -110,7 +101,6 @@ pkgdata_DATA = \
 		russian.ruleset \
 		ryukyuan.ruleset \
 		sami.ruleset \
-		samogitian.ruleset \
 		scottish.ruleset \
 		serbian.ruleset \
 		silesian.ruleset \
@@ -133,8 +123,6 @@ pkgdata_DATA = \
 		tunisian.ruleset \
 		turk.ruleset \
 		ukrainian.ruleset \
-		un.ruleset \
-		uruguayan.ruleset \
 		uyghur.ruleset \
 		venezuelan.ruleset \
 		vietnamese.ruleset \

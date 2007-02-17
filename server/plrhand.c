@@ -122,8 +122,7 @@ void kill_dying_players(void)
 /**************************************************************************
   Murder a player in cold blood.
 **************************************************************************/
-void kill_player(struct player *pplayer)
-{
+void kill_player(struct player *pplayer) {
   bool palace;
 
   pplayer->is_dying = FALSE; /* Can't get more dead than this. */
@@ -171,13 +170,6 @@ void kill_player(struct player *pplayer)
     remove_city(pcity);
   } city_list_iterate_end;
   game.info.savepalace = palace;
-
-  /* Remove ownership of tiles */
-  whole_map_iterate(ptile) {
-    if (ptile->owner == pplayer) {
-      map_claim_ownership(ptile, NULL, NULL);
-    }
-  } whole_map_iterate_end;
 
   /* Ensure this dead player doesn't win with a spaceship.
    * Now that would be truly unbelievably dumb - Per */
@@ -616,7 +608,7 @@ void handle_diplomacy_cancel_pact(struct player *pplayer,
 		   get_nation_name_plural(pplayer2->nation),
 		   diplstate_text(new_type));
   notify_player(pplayer2, NULL, E_TREATY_BROKEN,
-		   _(" %s canceled the diplomatic agreement! "
+		   _(" %s cancelled the diplomatic agreement! "
 		     "The diplomatic state between the %s and the %s "
 		     "is now %s."), pplayer->name,
 		   get_nation_name_plural(pplayer2->nation),
@@ -1504,6 +1496,7 @@ static struct player *split_player(struct player *pplayer)
   game.info.max_players = game.info.nplayers;
 
   /* Split the resources */
+  
   cplayer->economic.gold = pplayer->economic.gold;
   cplayer->economic.gold /= 2;
   pplayer->economic.gold -= cplayer->economic.gold;
