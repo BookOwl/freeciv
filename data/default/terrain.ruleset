@@ -143,7 +143,6 @@ fallout_trade_penalty=50
 ;                        see warmer_wetter_result
 ; cooler_drier_result  = result of nuclear winter for dry terrains;
 ;                        see warmer_wetter_result
-; native_to            = List of unit classes that can move here
 ; flags                = General flags for this terrain:
 ;   - NoBarbs          = Barbarians will not be spawned here.
 ;   - NoPollution      = Pollution will not be put on this terrain type.
@@ -154,6 +153,8 @@ fallout_trade_penalty=50
 ;                        separately).
 ;   - UnsafeCoast      = This terrain does not provide a safe coast for
 ;                        F_TRIRIEME units.
+;   - Unsafe           = This terrain is unsafe for alll units that travel
+;                        on it.
 ;   - Oceanic          = This is an "ocean" terrain.  This has a big effect
 ;                        on gameplay.  Naval units can move on oceanic terrain,
 ;                        while land units cannot.  Oceanic tiles can be used
@@ -207,7 +208,6 @@ warmer_wetter_result = "no"
 warmer_drier_result  = "no"
 cooler_wetter_result = "no"
 cooler_drier_result  = "no"
-native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "NoBarbs", "NoCities", "CanHaveRiver"
 property_frozen      = 100
 helptext	     = _("\
@@ -246,7 +246,6 @@ warmer_wetter_result = "Swamp"
 warmer_drier_result  = "no"
 cooler_wetter_result = "no"
 cooler_drier_result  = "no"
-native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "CanHaveRiver"
 property_dry         = 100
 property_tropical    = 50
@@ -285,7 +284,6 @@ warmer_wetter_result = "Jungle"
 warmer_drier_result  = "Desert"
 cooler_wetter_result = "no"
 cooler_drier_result  = "no"
-native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "Starter","CanHaveRiver"
 property_temperate   = 50
 property_foliage     = 50
@@ -324,7 +322,6 @@ warmer_wetter_result = "Swamp"
 warmer_drier_result  = "Desert"
 cooler_wetter_result = "Desert"
 cooler_drier_result  = "Tundra"
-native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "Starter", "CanHaveRiver"
 property_temperate   = 50
 property_green       = 50
@@ -362,7 +359,6 @@ warmer_wetter_result = "no"
 warmer_drier_result  = "no"
 cooler_wetter_result = "no"
 cooler_drier_result  = "no"
-native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "Starter", "CanHaveRiver"
 property_green       = 50
 property_mountainous = 30
@@ -401,7 +397,6 @@ warmer_wetter_result = "no"
 warmer_drier_result  = "no"
 cooler_wetter_result = "Desert"
 cooler_drier_result  = "Tundra"
-native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "CanHaveRiver"
 property_tropical    = 50
 property_foliage     = 50
@@ -441,7 +436,6 @@ warmer_wetter_result = "no"
 warmer_drier_result  = "no"
 cooler_wetter_result = "no"
 cooler_drier_result  = "no"
-native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "CanHaveRiver"
 property_mountainous = 70
 helptext	     = _("\
@@ -479,7 +473,6 @@ warmer_wetter_result = "no"
 warmer_drier_result  = "no"
 cooler_wetter_result = "no"
 cooler_drier_result  = "no"
-native_to            = "Sea", "Air", "Missile", "Helicopter"
 flags                = "Oceanic", "NoPollution", "UnsafeCoast", "NoCities"
 property_ocean_depth = 10
 helptext	     = _("\
@@ -519,7 +512,6 @@ warmer_wetter_result = "Swamp"
 warmer_drier_result  = "Desert"
 cooler_wetter_result = "Desert"
 cooler_drier_result  = "Tundra"
-native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "Starter", "CanHaveRiver"
 property_green       = 50
 property_temperate   = 50
@@ -558,7 +550,6 @@ warmer_wetter_result = "no"
 warmer_drier_result  = "no"
 cooler_wetter_result = "Desert"
 cooler_drier_result  = "Tundra"
-native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "CanHaveRiver"
 property_wet         = 100
 property_foliage     = 10
@@ -597,7 +588,6 @@ warmer_wetter_result = "no"
 warmer_drier_result  = "no"
 cooler_wetter_result = "Glacier"
 cooler_drier_result  = "Glacier"
-native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "Starter", "NoBarbs", "CanHaveRiver"
 property_cold        = 50
 helptext	     = _("\
@@ -751,53 +741,3 @@ graphic_alt = "-"
 food        = 1
 trade       = 3
 identifier  = "u"
-
-; Below has to be definition for exactly two base types:
-; fortress and airbase.
-;
-; name                    = Name of the base type.
-; graphic                 = tag specifing preferred graphic
-; graphic_alt	          = tag for alternate garphic if preferred graphic is not 
-;                           present. Can use eg "-" for no alternate graphic.
-; activity_gfx            = tag specifing graphic for unit building base
-; reqs 	                  = requirements to build the base (see effects.ruleset
-;                           and README.effects for help on requirements)
-; gui_type                = How gui should handle this base. Fortress/Airbase/Other
-; flags
-;   - "NoAggressive"      = Units inside are not considered aggressive
-;   - "DefenseBonus"      = Units inside gain defense bonus
-;   - "NoStackDeath"      = Units inside do not die all at once when attacked
-;   - "ClaimTerritory"    = Base will claim land ownership
-;   - "DiplomatDefense"   = Diplomats inside get bonus to diplomatic defense
-;   - "ParadropFrom"      = Paradrop can be initiated from base
-
-[fortress]
-name         = _("Fortress")
-graphic      = "base.fortress"
-graphic_alt  = "-"
-activity_gfx = "unit.fortress"
-reqs         =
-    { "type", "name", "range"
-      "Tech", "Construction", "Player"
-      "TerrainClass", "Land", "Local"
-      "UnitFlag", "Settlers", "Local"
-    }
-gui_type     = "Fortress"
-native_to    = "Land"
-flags        = "NoAggressive", "DefenseBonus", "ClaimTerritory",
-               "NoStackDeath", "DiplomatDefense"
-
-[airbase]
-name         = _("Airbase")
-graphic      = "base.airbase"
-graphic_alt  = "-"
-activity_gfx = "unit.airbase"
-reqs         =
-    { "type", "name", "range"
-      "Tech", "Radio", "Player"
-      "TerrainClass", "Land", "Local"
-      "UnitFlag", "Airbase", "Local"
-    }
-gui_type     = "Airbase"
-native_to    = "Air", "Helicopter", "Missile"
-flags        = "NoStackDeath", "DiplomatDefense", "ParadropFrom"

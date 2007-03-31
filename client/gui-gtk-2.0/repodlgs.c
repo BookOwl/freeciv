@@ -184,32 +184,22 @@ static void button_release_event_callback(GtkWidget *widget,
   if (tech == A_NONE) {
     return;
   }
-
-  if (event->button == 3) {
+  if (event->button == 1 && can_client_issue_orders()) {
+    /* LMB: set research or research goal */
+    switch (get_invention(game.player_ptr, tech)) {
+    case TECH_REACHABLE:
+      dsend_packet_player_research(&aconnection, tech);
+      break;
+    case TECH_UNKNOWN:
+      dsend_packet_player_tech_goal(&aconnection, tech);
+      break;
+    case TECH_KNOWN:
+      break;
+    }
+  } else if (event->button == 3) {
     /* RMB: get help */
     /* FIXME: this should work for ctrl+LMB or shift+LMB (?) too */
     popup_help_dialog_typed(get_tech_name(game.player_ptr, tech), HELP_TECH);
-  } else if (!can_conn_edit(&aconnection)) {
-    if (event->button == 1 && can_client_issue_orders()) {
-      /* LMB: set research or research goal */
-      switch (get_invention(game.player_ptr, tech)) {
-       case TECH_REACHABLE:
-         dsend_packet_player_research(&aconnection, tech);
-         break;
-       case TECH_UNKNOWN:
-         dsend_packet_player_tech_goal(&aconnection, tech);
-         break;
-       case TECH_KNOWN:
-         break;
-      }
-    }
-  } else {
-    /* Editor mode */
-    if (game.player_ptr) {
-      /* Not a global observer */
-      dsend_packet_edit_player_tech(&aconnection, game.player_ptr->player_no,
-                                    tech, ETECH_TOGGLE);
-    }
   }
 }
 
@@ -676,7 +666,7 @@ void create_economy_report_dialog(bool make_modal)
 
   view = gtk_tree_view_new_with_model(GTK_TREE_MODEL(economy_store));
   g_object_unref(economy_store);
-  gtk_widget_set_name(view, "small_font");
+  gtk_widget_set_name(view, "small font");
   gtk_tree_view_columns_autosize(GTK_TREE_VIEW(view));
   economy_selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(view));
   g_signal_connect(economy_selection, "changed",
@@ -982,7 +972,7 @@ void create_activeunits_report_dialog(bool make_modal)
 
   view = gtk_tree_view_new_with_model(GTK_TREE_MODEL(activeunits_store));
   g_object_unref(activeunits_store);
-  gtk_widget_set_name(view, "small_font");
+  gtk_widget_set_name(view, "small font");
   gtk_tree_view_columns_autosize(GTK_TREE_VIEW(view));
   activeunits_selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(view));
   g_signal_connect(activeunits_selection, "changed",
@@ -1204,26 +1194,14 @@ void activeunits_report_dialog_update(void)
     gtk_list_store_clear(activeunits_store);
 
     memset(unitarray, '\0', sizeof(unitarray));
-    city_list_iterate(game.player_ptr->cities, pcity) {
-      int free_upkeep[O_COUNT];
-
-      output_type_iterate(o) {
-        free_upkeep[o] = get_city_output_bonus(pcity, get_output_type(o),
-                                               EFT_UNIT_UPKEEP_FREE_PER_CITY);
-      } output_type_iterate_end;
-
-      unit_list_iterate(pcity->units_supported, punit) {
-        int upkeep_cost[O_COUNT];
-
-        city_unit_upkeep(punit, upkeep_cost, free_upkeep);
-        (unitarray[punit->type->index].active_count)++;
-        if (punit->homecity) {
-	  output_type_iterate(o) {
-	    unitarray[punit->type->index].upkeep[o] += upkeep_cost[o];
-	  } output_type_iterate_end;
-        }
-      } unit_list_iterate_end;
-    } city_list_iterate_end;
+    unit_list_iterate(game.player_ptr->units, punit) {
+      (unitarray[punit->type->index].active_count)++;
+      if (punit->homecity) {
+	output_type_iterate(o) {
+	  unitarray[punit->type->index].upkeep[o] += punit->upkeep[o];
+	} output_type_iterate_end;
+      }
+    } unit_list_iterate_end;
     city_list_iterate(game.player_ptr->cities,pcity) {
       if (pcity->production.is_unit) {
 	(unitarray[pcity->production.value].building_count)++;
@@ -1344,7 +1322,7 @@ static void create_endgame_report(struct packet_endgame_report *packet)
   scores_store = gtk_list_store_newv(ARRAY_SIZE(model_types), model_types);
   scores_list = gtk_tree_view_new_with_model(GTK_TREE_MODEL(scores_store));
   g_object_unref(scores_store);
-  gtk_widget_set_name(scores_list, "small_font");
+  gtk_widget_set_name(scores_list, "small font");
     
   for (i = 0; i < NUM_SCORE_COLS; i++) {
     GtkCellRenderer *renderer;

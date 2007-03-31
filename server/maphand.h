@@ -51,7 +51,7 @@ struct player_tile {
   short last_updated;
 };
 
-void assign_continent_numbers(void);
+void assign_continent_numbers(bool skip_unsafe);
 
 void global_warming(int effect);
 void nuclear_winter(int effect);
@@ -60,8 +60,7 @@ void give_seamap_from_player_to_player(struct player *pfrom, struct player *pdes
 void give_citymap_from_player_to_player(struct city *pcity,
 					struct player *pfrom, struct player *pdest);
 void send_all_known_tiles(struct conn_list *dest);
-void send_tile_info(struct conn_list *dest, struct tile *ptile,
-                    bool send_unknown);
+void send_tile_info(struct conn_list *dest, struct tile *ptile);
 void upgrade_city_rails(struct player *pplayer, bool discovery);
 void send_map_info(struct conn_list *dest);
 

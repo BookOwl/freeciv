@@ -2,7 +2,7 @@
 [tilespec]
 
 ; Format and options of this tilespec file:
-options = "+tilespec4.2007.Feb.20"
+options = "+tilespec4"
 
 ; A simple name for the tileset specified by this file:
 name = "isophex"
@@ -35,9 +35,6 @@ city_flag_offset_y = 11
 ; offset the units by this amount when drawing units
 unit_offset_x = 21
 unit_offset_y = 13
-
-; The layer in which blending is used (see terrains below)
-blend_layer = 0
 
 ; offset the citybar text by this amount (from the city tile origin)
 citybar_offset_y = 20
@@ -86,8 +83,8 @@ files =
   "misc/flags.spec",
   "misc/shields.spec",
   "misc/cursors.spec",
-  "misc/space.spec",
   "misc/techs.spec",
+  "misc/space.spec",
   "misc/treaty.spec",
   "misc/icons.spec",
   "isotrident/nuke.spec",
@@ -103,7 +100,7 @@ files =
 
 [layer0]
 match_style = "BOOL"
-match_types = "ocean", "land"
+match_types = "ocean", "other"
 
 [layer1]
 match_style = "BOOL"
@@ -112,31 +109,31 @@ match_types = "forest", "hills", "mountains"
 [terrain_arctic]
 is_blended = 1
 num_layers = 1
-layer0_match_type = "land"
+layer0_match_type = "other"
 mine_sprite = "tx.oil_mine"
 
 [terrain_desert]
 is_blended = 1
 num_layers = 1
-layer0_match_type = "land"
+layer0_match_type = "other"
 mine_sprite = "tx.oil_mine"
 
 [terrain_forest]
 is_blended = 1
 num_layers = 2
-layer0_match_type = "land"
+layer0_match_type = "other"
 layer1_match_style = "bool"
 layer1_match_type = "forest"
 
 [terrain_grassland]
 is_blended = 1
 num_layers = 1
-layer0_match_type = "land"
+layer0_match_type = "other"
 
 [terrain_hills]
 is_blended = 1
 num_layers = 2
-layer0_match_type = "land"
+layer0_match_type = "other"
 layer1_match_style = "bool"
 layer1_match_type = "hills"
 mine_sprite = "tx.mine"
@@ -144,12 +141,12 @@ mine_sprite = "tx.mine"
 [terrain_jungle]
 is_blended = 1
 num_layers = 1
-layer0_match_type = "land"
+layer0_match_type = "other"
 
 [terrain_mountains]
 is_blended = 1
 num_layers = 2
-layer0_match_type = "land"
+layer0_match_type = "other"
 layer1_match_style = "bool"
 layer1_match_type = "mountains"
 mine_sprite = "tx.mine"
@@ -164,14 +161,14 @@ layer0_cell_type = "rect"
 [terrain_plains]
 is_blended = 1
 num_layers = 1
-layer0_match_type = "land"
+layer0_match_type = "other"
 
 [terrain_swamp]
 is_blended = 1
 num_layers = 1
-layer0_match_type = "land"
+layer0_match_type = "other"
 
 [terrain_tundra]
 is_blended = 1
 num_layers = 1
-layer0_match_type = "land"
+layer0_match_type = "other"

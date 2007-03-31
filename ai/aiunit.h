@@ -49,10 +49,6 @@
   (ut->pop_cost * 3 + ut->happy_cost					\
    + ut->upkeep[O_SHIELD] + ut->upkeep[O_FOOD] + ut->upkeep[O_GOLD])
 
-/* INVASION bits */
-#define INVASION_OCCUPY  0
-#define INVASION_ATTACK  1
-
 struct ai_choice;
 struct pf_path;
 
@@ -97,9 +93,6 @@ bool is_on_unit_upgrade_path(const struct unit_type *test,
 			     const struct unit_type *base);
 
 void update_simple_ai_types(void);
-
-/* Call this after rulesets are loaded */
-void unit_class_ai_init(void);
 
 #define simple_ai_unit_type_iterate(m_i)                                    \
 {                                                                           \

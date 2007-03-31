@@ -25,8 +25,6 @@
 
 struct sprite;			/* opaque; gui-dep */
 
-struct base_type;
-
 /* Create the sprite_vector type. */
 #define SPECVEC_TAG sprite
 #define SPECVEC_TYPE struct sprite *
@@ -71,7 +69,6 @@ enum mapview_layer {
   LAYER_BACKGROUND,
   LAYER_TERRAIN1,
   LAYER_TERRAIN2,
-  LAYER_TERRAIN3,
   LAYER_WATER,
   LAYER_ROADS,
   LAYER_SPECIAL1,
@@ -102,13 +99,6 @@ enum mapview_layer {
 
 #define NUM_TILES_PROGRESS 8
 
-enum arrow_type {
-  ARROW_RIGHT,
-  ARROW_PLUS,
-  ARROW_MINUS,
-  ARROW_LAST
-};
-
 struct tileset;
 
 extern struct tileset *tileset;
@@ -132,8 +122,6 @@ void tileset_setup_tile_type(struct tileset *t,
 			     const struct terrain *pterrain);
 void tileset_setup_resource(struct tileset *t,
 			    const struct resource *presource);
-void tileset_setup_base(struct tileset *t,
-                        const struct base_type *pbase);
 void tileset_setup_government(struct tileset *t, int id);
 void tileset_setup_nation_flag(struct tileset *t, int id);
 void tileset_setup_city_tiles(struct tileset *t, int style);
@@ -165,9 +153,6 @@ enum cursor_type {
   CURSOR_SELECT,
   CURSOR_INVALID,
   CURSOR_ATTACK,
-  CURSOR_EDIT_PAINT,
-  CURSOR_EDIT_ADD,
-  CURSOR_WAIT,
   CURSOR_LAST,
   CURSOR_DEFAULT,
 };
@@ -224,8 +209,7 @@ struct sprite *get_unittype_sprite(const struct tileset *t,
 				   const struct unit_type *punittype);
 struct sprite *get_sample_city_sprite(const struct tileset *t,
 				      int city_style);
-struct sprite *get_arrow_sprite(const struct tileset *t,
-				enum arrow_type arrow);
+struct sprite *get_arrow_sprite(const struct tileset *t);
 struct sprite *get_tax_sprite(const struct tileset *t, Output_type_id otype);
 struct sprite *get_treaty_thumb_sprite(const struct tileset *t, bool on_off);
 const struct sprite_vector *get_unit_explode_animation(const struct
@@ -241,12 +225,10 @@ struct sprite *get_indicator_sprite(const struct tileset *t,
 				    enum indicator_type indicator,
 				    int index);
 struct sprite *get_unit_unhappy_sprite(const struct tileset *t,
-				       const struct unit *punit,
-				       int happy_cost);
+				       const struct unit *punit);
 struct sprite *get_unit_upkeep_sprite(const struct tileset *t,
 				      Output_type_id otype,
-				      const struct unit *punit,
-				      const int *upkeep_cost);
+				      const struct unit *punit);
 struct sprite *get_basic_fog_sprite(const struct tileset *t);
 
 struct sprite* lookup_sprite_tag_alt(struct tileset *t,

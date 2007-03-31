@@ -475,15 +475,14 @@ bool can_build_unit_direct(const struct city *pcity,
   }
 
   /* You can't build naval units inland. */
-  if (!unit_class_flag(get_unit_class(punittype), UCF_BUILD_ANYWHERE)
-      && !is_native_near_tile(punittype, pcity->tile)) {
+  if (!is_ocean_near_tile(pcity->tile) && is_sailing_unittype(punittype)) {
     return FALSE;
   }
   return TRUE;
 }
 
 /**************************************************************************
-  Return whether given city can build given unit; returns FALSE if unit is 
+  Return whether given city can build given unit; returns 0 if unit is 
   obsolete.
 **************************************************************************/
 bool can_build_unit(const struct city *pcity,
@@ -502,7 +501,7 @@ bool can_build_unit(const struct city *pcity,
 
 /**************************************************************************
   Return whether player can eventually build given unit in the city;
-  returns FALSE if unit can never possibly be built in this city.
+  returns 0 if unit can never possibly be built in this city.
 **************************************************************************/
 bool can_eventually_build_unit(const struct city *pcity,
 			       const struct unit_type *punittype)
@@ -514,8 +513,7 @@ bool can_eventually_build_unit(const struct city *pcity,
 
   /* Some units can be built only in certain cities -- for instance,
      ships may be built only in cities adjacent to ocean. */
-  if (!unit_class_flag(get_unit_class(punittype), UCF_BUILD_ANYWHERE)
-      && !is_native_near_tile(punittype, pcity->tile)) {
+  if (!is_ocean_near_tile(pcity->tile) && is_sailing_unittype(punittype)) {
     return FALSE;
   }
 
@@ -739,13 +737,10 @@ int base_city_get_output_tile(int city_x, int city_y,
 			      city_x, city_y, is_celebrating, otype);
 }
 
-/****************************************************************************
+/**************************************************************************
   Returns TRUE if the given unit can build a city at the given map
-  coordinates.
-
-  punit is the founding unit.  It may be NULL if a city is built out of the
-  blue (e.g., through editing).
-****************************************************************************/
+  coordinates.  punit is the founding unit.
+**************************************************************************/
 bool city_can_be_built_here(const struct tile *ptile, const struct unit *punit)
 {
   int citymindist;
@@ -755,13 +750,13 @@ bool city_can_be_built_here(const struct tile *ptile, const struct unit *punit)
     return FALSE;
   }
 
-  if (punit && !can_unit_exist_at_tile(punit, ptile)) {
+  if (!can_unit_exist_at_tile(punit, ptile)) {
     /* We allow land units to build land cities and sea units to build
      * ocean cities. Air units can build cities anywhere. */
     return FALSE;
   }
 
-  if (punit && ptile->owner && ptile->owner != punit->owner) {
+  if (ptile->owner && ptile->owner != punit->owner) {
     /* Cannot steal borders by settling. This has to be settled by
      * force of arms. */
     return FALSE;
@@ -868,8 +863,13 @@ int trade_between_cities(const struct city *pc1, const struct city *pc2)
   int bonus = 0;
 
   if (pc1 && pc2) {
-    bonus = real_map_distance(pc1->tile, pc2->tile) + pc1->size + pc2->size;
-    bonus /= 8;
+    bonus = (pc1->citizen_base[O_TRADE]
+	     + pc2->citizen_base[O_TRADE] + 4) / 8;
+
+    /* Double if on different continents. */
+    if (tile_get_continent(pc1->tile) != tile_get_continent(pc2->tile)) {
+      bonus *= 2;
+    }
 
     if (pc1->owner == pc2->owner) {
       bonus /= 2;
@@ -948,6 +948,20 @@ int city_building_upkeep(const struct city *pcity, Output_type_id otype)
       cost += improvement_upkeep(pcity, i);
     } built_impr_iterate_end;
   }
+
+  return cost;
+}
+
+/*************************************************************************
+  Calculate how much is needed to pay for units in this city.
+*************************************************************************/
+int city_unit_upkeep(const struct city *pcity, Output_type_id otype)
+{
+  int cost = 0;
+
+  unit_list_iterate(pcity->units_supported, punit) {
+    cost += punit->upkeep[otype];
+  } unit_list_iterate_end;
 
   return cost;
 }
@@ -1425,13 +1439,10 @@ int city_granary_size(int city_size)
 static int content_citizens(const struct player *pplayer)
 {
   int cities = city_list_size(pplayer->cities);
-  int content = get_player_bonus(pplayer, EFT_CITY_UNHAPPY_SIZE);
-  int basis = get_player_bonus(pplayer, EFT_EMPIRE_SIZE_BASE);
+  int content = game.info.unhappysize;
+  int basis = game.info.cityfactor + get_player_bonus(pplayer, 
+                                                       EFT_EMPIRE_SIZE_MOD);
   int step = get_player_bonus(pplayer, EFT_EMPIRE_SIZE_STEP);
-
-  if (basis + step <= 0) {
-    return content; /* Value of zero means effect is inactive */
-  }
 
   if (cities > basis) {
     content--;
@@ -1960,73 +1971,17 @@ static inline void set_city_production(struct city *pcity)
 }
 
 /**************************************************************************
-  Query unhappiness caused by a given unit.
-**************************************************************************/
-int city_unit_unhappiness(struct unit *punit, int *free_unhappy)
-{
-  struct city *pcity = find_city_by_id(punit->homecity);
-  struct unit_type *ut = unit_type(punit);
-  struct player *plr = punit->owner;
-  int happy_cost = utype_happy_cost(ut, plr);
-
-  if (!punit || !pcity || !free_unhappy || happy_cost <= 0) {
-    return 0;
-  }
-  assert(free_unhappy >= 0);
-
-  happy_cost -= get_city_bonus(pcity, EFT_MAKE_CONTENT_MIL_PER);
-
-  if (!unit_being_aggressive(punit) && !is_field_unit(punit)) {
-    return 0;
-  }
-  if (happy_cost <= 0) {
-    return 0;
-  }
-  if (*free_unhappy > happy_cost) {
-    *free_unhappy -= happy_cost;
-    return 0;
-  }
-  return happy_cost;
-}
-
-/**************************************************************************
-  Calculate upkeep of a given unit.
-**************************************************************************/
-void city_unit_upkeep(struct unit *punit, int *outputs, int *free_upkeep)
-{
-  struct city *pcity = find_city_by_id(punit->homecity);
-  struct unit_type *ut = unit_type(punit);
-  struct player *plr = punit->owner;
-
-  assert(punit != NULL && pcity != NULL && ut != NULL 
-         && free_upkeep != NULL && outputs != NULL);
-  memset(outputs, 0, O_COUNT * sizeof(*outputs));
-  output_type_iterate(o) {
-    outputs[o] = utype_upkeep_cost(ut, plr, o);
-  } output_type_iterate_end;
-
-  /* set current upkeep on unit to zero */
-
-  output_type_iterate(o) {
-    int cost = utype_upkeep_cost(ut, plr, o);
-    if (cost > 0) {
-      if (free_upkeep[o] > cost) {
-        free_upkeep[o] -= cost;
-        continue;
-      }
-      outputs[o] = cost;
-    }
-  } output_type_iterate_end;
-}
-
-/**************************************************************************
   Calculate upkeep costs.  This builds the pcity->usage[] array as well
   as setting some happiness values.
 **************************************************************************/
-static inline void city_support(struct city *pcity)
+static inline void city_support(struct city *pcity, 
+	 		        void (*send_unit_info) (struct player *pplayer,
+						        struct unit *punit))
 {
+  struct player *plr = city_owner(pcity);
+  struct government *g = get_gov_pcity(pcity);
   int free_upkeep[O_COUNT];
-  int free_unhappy = get_city_bonus(pcity, EFT_MAKE_CONTENT_MIL);
+  int free_happy = get_city_bonus(pcity, EFT_MAKE_CONTENT_MIL);
 
   output_type_iterate(o) {
     free_upkeep[o] = get_city_output_bonus(pcity, get_output_type(o), 
@@ -2042,14 +1997,21 @@ static inline void city_support(struct city *pcity)
   pcity->usage[O_GOLD] += city_building_upkeep(pcity, O_GOLD);
   pcity->usage[O_FOOD] += game.info.food_cost * pcity->size;
 
+  /*
+   * If you modify anything here these places might also need updating:
+   * - ai/aitools.c : ai_assess_military_unhappiness
+   *   Military discontentment evaluation for AI.
+   *
+   * P.S.  This list is by no means complete.
+   * --SKi
+   */
+
   /* military units in this city (need _not_ be home city) can make
      unhappy citizens content
    */
-  if (get_city_bonus(pcity, EFT_MARTIAL_LAW_EACH) > 0) {
-    int max = get_city_bonus(pcity, EFT_MARTIAL_LAW_MAX);
-
+  if (get_city_bonus(pcity, EFT_MARTIAL_LAW_MAX) > 0) {
     unit_list_iterate(pcity->tile->units, punit) {
-      if ((pcity->martial_law < max || max == 0)
+      if (pcity->martial_law < get_city_bonus(pcity, EFT_MARTIAL_LAW_MAX)
 	  && is_military_unit(punit)
 	  && punit->owner == pcity->owner) {
 	pcity->martial_law++;
@@ -2058,34 +2020,102 @@ static inline void city_support(struct city *pcity)
     pcity->martial_law *= get_city_bonus(pcity, EFT_MARTIAL_LAW_EACH);
   }
 
+  /* loop over units, subtracting appropriate amounts of food, shields,
+   * gold etc -- SKi */
   unit_list_iterate(pcity->units_supported, this_unit) {
-    int upkeep_cost[O_COUNT];
-    int happy_cost = city_unit_unhappiness(this_unit, &free_unhappy);
+    struct unit_type *ut = unit_type(this_unit);
+    int upkeep_cost[O_COUNT], old_upkeep[O_COUNT];
+    int happy_cost = utype_happy_cost(ut, plr);
+    bool changed = FALSE;
 
-    city_unit_upkeep(this_unit, upkeep_cost, free_upkeep);
+    /* Save old values so we can decide if the unit info should be resent */
+    int old_unhappiness = this_unit->unhappiness;
 
     output_type_iterate(o) {
-      pcity->usage[o] += upkeep_cost[o];
+      upkeep_cost[o] = utype_upkeep_cost(ut, plr, g, o);
+      old_upkeep[o] = this_unit->upkeep[o];
     } output_type_iterate_end;
-    pcity->unit_happy_upkeep += happy_cost;
+
+    /* set current upkeep on unit to zero */
+    this_unit->unhappiness = 0;
+    memset(this_unit->upkeep, 0, O_COUNT * sizeof(*this_unit->upkeep));
+
+    /* This is how I think it should work (dwp)
+     * Base happy cost (unhappiness) assumes unit is being aggressive;
+     * non-aggressive units don't pay this, _except_ that field units
+     * still pay 1.  Should this be always 1, or modified by other
+     * factors?   Will treat as flat 1.
+     */
+    if (happy_cost > 0 && !unit_being_aggressive(this_unit)) {
+      if (is_field_unit(this_unit)) {
+	happy_cost = 1;
+      } else {
+	happy_cost = 0;
+      }
+    }
+    if (happy_cost > 0
+	&& get_city_bonus(pcity, EFT_MAKE_CONTENT_MIL_PER) > 0) {
+      happy_cost--;
+    }
+
+    /* subtract values found above from city's resources -- SKi */
+    if (happy_cost > 0) {
+      adjust_city_free_cost(&free_happy, &happy_cost);
+      if (happy_cost > 0) {
+	pcity->unit_happy_upkeep += happy_cost;
+	this_unit->unhappiness = happy_cost;
+      }
+    }
+    changed |= (old_unhappiness != happy_cost);
+
+    output_type_iterate(o) {
+      if (upkeep_cost[o] > 0) {
+	adjust_city_free_cost(&free_upkeep[o], &upkeep_cost[o]);
+	if (upkeep_cost[o] > 0) {
+	  pcity->usage[o] += upkeep_cost[o];
+	  this_unit->upkeep[o] = upkeep_cost[o];
+	}
+      }
+      changed |= (old_upkeep[o] != upkeep_cost[o]);
+    } output_type_iterate_end;
+
+    /* Send unit info if anything has changed */
+    if (send_unit_info && changed) {
+      send_unit_info(unit_owner(this_unit), this_unit);
+    }
   } unit_list_iterate_end;
 }
 
 /**************************************************************************
   Refreshes the internal cached data in the city structure.
 
-  !full_refresh will not update tile_output[] or bonus[].  These two
-  values do not need to be recalculated when moving workers around, for
-  example.
+  There are two possible levels of refresh: a partial refresh and a full
+  refresh.  A partial refresh is faster but can only be used in a few
+  places.
+
+  A full refresh updates all cached data: including but not limited to
+  ppl_happy[], surplus[], waste[], citizen_base[], usage[], trade[],
+  bonus[], and tile_output[].
+
+  A partial refresh will not update tile_output[] or bonus[].  These two
+  values do not need to be recalculated when moving workers around or when
+  a trade route has changed.  A partial refresh will also not refresh any
+  cities that have trade routes with us.  Any time a partial refresh is
+  done it should be considered temporary: when finished, the city should
+  be reverted to its original state.
 **************************************************************************/
-void generic_city_refresh(struct city *pcity, bool full_refresh)
+void generic_city_refresh(struct city *pcity,
+			  bool full_refresh,
+			  void (*send_unit_info) (struct player * pplayer,
+						  struct unit * punit))
 {
   struct player *pplayer = city_owner(pcity);
+  int prev_tile_trade = pcity->citizen_base[O_TRADE];
 
   if (full_refresh) {
     set_city_bonuses(pcity);	/* Calculate the bonus[] array values. */
     set_city_tile_output(pcity); /* Calculate the tile_output[] values. */
-    city_support(pcity); /* manage settlers, and units */
+    city_support(pcity, send_unit_info); /* manage settlers, and units */
   }
 
   /* Calculate output from citizens. */
@@ -2113,6 +2143,46 @@ void generic_city_refresh(struct city *pcity, bool full_refresh)
                       &pcity->ppl_angry[4]);
   unhappy_city_check(pcity);
   set_surpluses(pcity);
+
+  if (full_refresh
+      && pcity->citizen_base[O_TRADE] != prev_tile_trade) {
+    int i;
+
+    for (i = 0; i < NUM_TRADEROUTES; i++) {
+      struct city *pcity2 = find_city_by_id(pcity->trade[i]);
+
+      if (pcity2) {
+	/* We used to pass FALSE in here to avoid multiple recursion.  This
+	 * made it impossible to initialize a city for the first time
+	 * however, since it's not safe to recurse on an unitialized
+	 * city without doing a full refresh.  See PR#12498. */
+	generic_city_refresh(pcity2, TRUE, send_unit_info);
+      }
+    }
+  }
+}
+
+/**************************************************************************
+  Here num_free is eg government->free_unhappy, and this_cost is
+  the unhappy cost for a single unit.  We subtract this_cost from
+  num_free as much as possible. 
+
+  Note this treats the free_cost as number of eg happiness points,
+  not number of eg military units.  This seems to make more sense
+  and makes results not depend on order of calculation. --dwp
+**************************************************************************/
+void adjust_city_free_cost(int *num_free, int *this_cost)
+{
+  if (*num_free <= 0 || *this_cost <= 0) {
+    return;
+  }
+  if (*num_free >= *this_cost) {
+    *num_free -= *this_cost;
+    *this_cost = 0;
+  } else {
+    *this_cost -= *num_free;
+    *num_free = 0;
+  }
 }
 
 /**************************************************************************
@@ -2328,15 +2398,7 @@ struct city *create_city_virtual(struct player *pplayer,
   /* Set up the worklist */
   init_worklist(&pcity->worklist);
 
-  if (!ptile) {
-    /* HACK: if a "dummy" city is created with no tile, the regular
-     * operations to choose a build target would fail.  This situation
-     * probably should be forbidden, but currently it might happen during
-     * map editing.  This fallback may also be dangerous if it gives an
-     * invalid production. */
-    pcity->production.is_unit = TRUE;
-    pcity->production.value = 0;
-  } else {
+  {
     struct unit_type *u = best_role_unit(pcity, L_FIRSTBUILD);
 
     if (u) {
@@ -2401,7 +2463,6 @@ struct city *create_city_virtual(struct player *pplayer,
   pcity->ai.invasion = 0;
   pcity->ai.bcost = 0;
   pcity->ai.attack = 0;
-  pcity->ai.recalc_interval = 1;
   pcity->ai.next_recalc = 0;
 
   memset(pcity->surplus, 0, O_COUNT * sizeof(*pcity->surplus));
@@ -2429,7 +2490,7 @@ struct city *create_city_virtual(struct player *pplayer,
   Removes the virtual skeleton of a city. You should already have removed
   all buildings and units you have added to the city before this.
 **************************************************************************/
-void destroy_city_virtual(struct city *pcity)
+void remove_city_virtual(struct city *pcity)
 {
   unit_list_free(pcity->units_supported);
   free(pcity);

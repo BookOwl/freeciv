@@ -21,7 +21,6 @@
 #include "log.h"
 #include "rand.h"
 
-#include "base.h"
 #include "events.h"
 #include "game.h"
 #include "government.h"
@@ -461,7 +460,6 @@ void diplomat_bribe(struct player *pplayer, struct unit *pdiplomat,
   gained_unit->fuel        = pvictim->fuel;
   gained_unit->foul        = pvictim->foul;
   gained_unit->paradropped = pvictim->paradropped;
-  gained_unit->birth_turn  = pvictim->birth_turn;
 
   /* Inform owner about less than full fuel */
   send_unit_info(pplayer, gained_unit);
@@ -1013,7 +1011,7 @@ void diplomat_sabotage(struct player *pplayer, struct unit *pdiplomat,
 static void diplomat_charge_movement (struct unit *pdiplomat, struct tile *ptile)
 {
   pdiplomat->moves_left -=
-    map_move_cost_unit(pdiplomat, ptile);
+    map_move_cost (pdiplomat, ptile);
   if (pdiplomat->moves_left < 0) {
     pdiplomat->moves_left = 0;
   }
@@ -1047,8 +1045,8 @@ static bool diplomat_success_vs_defender (struct unit *pattacker,
     chance -= chance * get_city_bonus(pdefender_tile->city,
                                       EFT_SPY_RESISTANT) / 100;
   } else {
-    if (tile_has_base_flag_for_unit(pdefender_tile, unit_type(pdefender),
-                                    BF_DIPLOMAT_DEFENSE)) {
+    if (tile_has_special(pdefender_tile, S_FORTRESS)
+       || tile_has_special(pdefender_tile, S_AIRBASE)) {
 	chance -= chance * 25 / 100; /* 25% penalty */
     }
   }

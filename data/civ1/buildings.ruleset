@@ -72,7 +72,7 @@ reqs	=
     { "type", "name", "range"
 ; Nothing
     }
-graphic		= "b.barracks_i"
+graphic		= "b.barracks"
 graphic_alt	= "-"
 obsolete_by	= "Gunpowder"
 build_cost	= 40
@@ -96,7 +96,7 @@ reqs	=
       "Tech", "Gunpowder", "Player"
     }
 graphic		= "b.barracks_ii"
-graphic_alt	= "b.barracks_i"
+graphic_alt	= "b.barracks"
 obsolete_by	= "Combustion"
 build_cost	= 40
 upkeep		= 2
@@ -119,7 +119,7 @@ reqs	=
       "Tech", "Combustion", "Player"
     }
 graphic		= "b.barracks_iii"
-graphic_alt	= "b.barracks_i"
+graphic_alt	= "b.barracks"
 obsolete_by	= "None"
 build_cost	= 40
 upkeep		= 3
@@ -874,11 +874,12 @@ sabotage	= 0
 sound		= "w_lighthouse"
 sound_alt	= "w_generic"
 helptext	= _("\
-Gives all your sea units 1 additional movement point. Makes all your\
- new sea units veterans (for all cities).\
+Gives all sea units 1 additional movement point and eliminates the\
+ risk of losing Triremes on the high seas.  Makes all new sea units\
+ veterans (for all cities).\
 ")
 ; NOTE:
-; Civ1 docs do not mention "Unit_Veteran"/"Sea" effect.
+; Civ1 docs do not mention "No_Sink_Deep" and "Unit_Veteran"/"Sea" effecets.
 
 [building_magellans_expedition]
 name		= _("Magellan's Expedition")

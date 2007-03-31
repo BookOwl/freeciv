@@ -102,7 +102,6 @@ The Freeciv client comes in the following forms:
 * AmigaOS MUI ("Mui").
 * Native Microsoft Windows Common Controls ("Win32").
 * X Athena Widgets library ("Xaw").
-* SDL
 
 These forms have different prerequisites, explained separately below.
 

@@ -123,19 +123,29 @@ struct specialist;
 #define MAX_RULESET_NAME_LENGTH 64
 #define RULESET_SUFFIX ".serv"
 
-#define UCL_LAST 32
+/* Classes for unit types.
+ * (These must correspond to unit_class_names[] in unittype.c.)
+ */
+enum unit_class_id {
+  UCL_MISSILE = 0,
+  UCL_LAND,
+  UCL_SEA,
+  UCL_HELICOPTER,
+  UCL_AIR,
+  UCL_NUCLEAR,
+  UCL_LAST	/* keep this last */
+};
 
-typedef int Unit_Class_id;
+typedef enum unit_class_id Unit_Class_id;
 
 /* This has to be put here for now, otherwise movement.h and unittype.h
  * would have a recursive dependency.
- * Order must mach order in move_type_names array. */
+ * Enumeration order must match unit_class enumeration. */
 enum unit_move_type {
-  AIR_MOVING = 0,
-  LAND_MOVING = 1,
-  SEA_MOVING = 2,
-  HELI_MOVING = 3,
-  MOVETYPE_LAST = 4
+  AIR_MOVING = UCL_AIR,
+  HELI_MOVING = UCL_HELICOPTER,
+  LAND_MOVING = UCL_LAND,
+  SEA_MOVING = UCL_SEA
 };
 
 /* The direction8 gives the 8 possible directions.  These may be used in
@@ -161,41 +171,5 @@ enum direction8 {
 };
 #define DIR8_LAST 8
 #define DIR8_COUNT DIR8_LAST
-
-/* AI levels. This must correspond to ai_level_names[] in player.c */
-enum ai_level { AI_LEVEL_AWAY         = 1,
-                AI_LEVEL_NOVICE       = 2,
-                AI_LEVEL_EASY         = 3,
-                AI_LEVEL_NORMAL       = 5,
-                AI_LEVEL_HARD         = 7,
-                AI_LEVEL_CHEATING     = 8,
-                AI_LEVEL_EXPERIMENTAL = 10,
-                AI_LEVEL_LAST};
-
-#define AI_LEVEL_DEFAULT AI_LEVEL_NOVICE
-
-enum editor_vision_mode {
-  EVISION_ADD,
-  EVISION_REMOVE,
-  EVISION_TOGGLE,
-  EVISION_LAST
-};
-
-enum editor_tech_mode {
-  ETECH_ADD,
-  ETECH_REMOVE,
-  ETECH_TOGGLE,
-  ETECH_LAST
-};
-
-/*
- * pplayer->ai.barbarian_type and nations use this enum. Note that the values
- * have to stay since they are used in savegames.
- */
-enum barbarian_type {
-  NOT_A_BARBARIAN = 0,
-  LAND_BARBARIAN = 1,
-  SEA_BARBARIAN = 2
-};
 
 #endif /* FC__FC_TYPES_H */

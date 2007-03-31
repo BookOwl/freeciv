@@ -88,7 +88,7 @@ static void nullify_caravan_and_disband_plus(struct city *pcity);
 **************************************************************************/
 void city_refresh(struct city *pcity)
 {
-   generic_city_refresh(pcity, TRUE);
+   generic_city_refresh(pcity, TRUE, send_unit_info);
    /* AI would calculate this 1000 times otherwise; better to do it
       once -- Syela */
    pcity->ai.trade_want
@@ -389,8 +389,6 @@ void update_city_activities(struct player *pplayer)
 **************************************************************************/
 bool city_reduce_size(struct city *pcity, int pop_loss)
 {
-  int i;
-
   if (pop_loss == 0) {
     return TRUE;
   }
@@ -438,16 +436,6 @@ bool city_reduce_size(struct city *pcity, int pop_loss)
     auto_arrange_workers(pcity);
     sync_cities();
   }
-
-  /* Update cities that have trade routes with us */
-  for (i = 0; i < NUM_TRADEROUTES; i++) {
-    struct city *pcity2 = find_city_by_id(pcity->trade[i]);
-
-    if (pcity2) {
-      city_refresh(pcity2);
-    }
-  }
-
   sanity_check_city(pcity);
   return TRUE;
 }
@@ -472,7 +460,7 @@ static void city_increase_size(struct city *pcity)
 {
   struct player *powner = city_owner(pcity);
   bool have_square;
-  int i, savings_pct = granary_savings(pcity), new_food;
+  int savings_pct = granary_savings(pcity), new_food;
   bool rapture_grow = city_rapture_grow(pcity); /* check before size increase! */
 
   if (!city_can_grow_to(pcity, pcity->size + 1)) { /* need improvement */
@@ -526,15 +514,6 @@ static void city_increase_size(struct city *pcity)
 
   city_refresh(pcity);
 
-  /* Update cities that have trade routes with us */
-  for (i = 0; i < NUM_TRADEROUTES; i++) {
-    struct city *pcity2 = find_city_by_id(pcity->trade[i]);
-
-    if (pcity2) {
-      city_refresh(pcity2);
-    }
-  }
-
   notify_player(powner, pcity->tile, E_CITY_GROWTH,
                    _("%s grows to size %d."), pcity->name, pcity->size);
   script_signal_emit("city_growth", 2,
@@ -542,32 +521,6 @@ static void city_increase_size(struct city *pcity)
 
   sanity_check_city(pcity);
   sync_cities();
-}
-
-/****************************************************************************
-  Change the city size.  Return TRUE if the city is still alive afterwards.
-****************************************************************************/
-bool city_change_size(struct city *pcity, int size)
-{
-  assert(size >= 0 && size <= MAX_CITY_SIZE);
-
-  if (size > pcity->size) {
-    while (size > pcity->size) {
-      const int old_size = pcity->size;
-
-      /* city_increase_size can silently fail. Don't get in an infinite
-       * loop. */
-      city_increase_size(pcity);
-      if (pcity->size <= old_size) {
-	return TRUE;
-      }
-    }
-    return TRUE;
-  } else if (size < pcity->size) {
-    return city_reduce_size(pcity, pcity->size - size);
-  } else {
-    return TRUE;
-  }
 }
 
 /**************************************************************************
@@ -856,33 +809,6 @@ static bool worklist_change_build_target(struct player *pplayer,
 				 API_TYPE_CITY, pcity,
 				 API_TYPE_STRING, "need_minsize");
 	      break;
-            case REQ_AI:
-              /* FIXME: we should skip rather than postpone, since we'll
-               * never be able to meet this req... */
-              notify_player(pplayer, pcity->tile, E_CITY_CANTBUILD,
-                            _("%s can't build %s from the worklist; "
-                              "only AI of level %s may build this.  "
-                              "Postponing..."),
-                            pcity->name,
-                            get_impr_name_ex(pcity, building->index),
-                            ai_level_name(preq->source.value.level));
-              script_signal_emit("building_cant_be_built", 3,
-                                 API_TYPE_BUILDING_TYPE, building,
-                                 API_TYPE_CITY, pcity,
-                                 API_TYPE_STRING, "need_ai_level");
-	      break;
-	    case REQ_TERRAINCLASS:
-	      notify_player(pplayer, pcity->tile, E_CITY_CANTBUILD,
-			       _("%s can't build %s from the worklist; "
-				 "%s terrain class is required.  Postponing..."),
-			       pcity->name,
-			       get_impr_name_ex(pcity, building->index),
-			       terrain_class_name(preq->source.value.terrainclass));
-	      script_signal_emit("building_cant_be_built", 3,
-				 API_TYPE_BUILDING_TYPE, building,
-				 API_TYPE_CITY, pcity,
-				 API_TYPE_STRING, "need_terrainclass");
-	      break;
 	    case REQ_NONE:
 	    case REQ_LAST:
 	      assert(0);
@@ -1064,9 +990,11 @@ static void upgrade_unit_prod(struct city *pcity)
 static bool city_distribute_surplus_shields(struct player *pplayer,
 					    struct city *pcity)
 {
+  struct government *g = get_gov_pplayer(pplayer);
+
   if (pcity->surplus[O_SHIELD] < 0) {
     unit_list_iterate_safe(pcity->units_supported, punit) {
-      if (utype_upkeep_cost(unit_type(punit), pplayer, O_SHIELD) > 0
+      if (utype_upkeep_cost(unit_type(punit), pplayer, g, O_SHIELD) > 0
 	  && pcity->surplus[O_SHIELD] < 0
           && !unit_flag(punit, F_UNDISBANDABLE)) {
 	notify_player(pplayer, pcity->tile, E_UNIT_LOST,
@@ -1084,7 +1012,7 @@ static bool city_distribute_surplus_shields(struct player *pplayer,
      * it! If we make it here all normal units are already disbanded, so only
      * undisbandable ones remain. */
     unit_list_iterate_safe(pcity->units_supported, punit) {
-      int upkeep = utype_upkeep_cost(unit_type(punit), pplayer, O_SHIELD);
+      int upkeep = utype_upkeep_cost(unit_type(punit), pplayer, g, O_SHIELD);
 
       if (upkeep > 0 && pcity->surplus[O_SHIELD] < 0) {
 	assert(unit_flag(punit, F_UNDISBANDABLE));
@@ -1333,15 +1261,14 @@ static bool city_build_stuff(struct player *pplayer, struct city *pcity)
 }
 
 /**************************************************************************
-  Pay for upkeep costs for all buildings, or sell them.
+...
 **************************************************************************/
 static void pay_for_buildings(struct player *pplayer, struct city *pcity)
 {
   built_impr_iterate(pcity, i) {
-    if (can_city_sell_building(pcity, i)) {
-      int upkeep = improvement_upkeep(pcity, i);
-
-      if (pplayer->economic.gold - upkeep < 0) {
+    if (can_city_sell_building(pcity, i)
+	&& pplayer->government != game.government_when_anarchy) {
+      if (pplayer->economic.gold - improvement_upkeep(pcity, i) < 0) {
 	notify_player(pplayer, pcity->tile, E_IMP_AUCTIONED,
 			 _("Can't afford to maintain %s in %s, "
 			   "building sold!"),
@@ -1349,7 +1276,7 @@ static void pay_for_buildings(struct player *pplayer, struct city *pcity)
 	do_sell_building(pplayer, pcity, i);
 	city_refresh(pcity);
       } else
-        pplayer->economic.gold -= upkeep;
+	pplayer->economic.gold -= improvement_upkeep(pcity, i);
     }
   } built_impr_iterate_end;
 }
@@ -1396,6 +1323,7 @@ static void check_pollution(struct city *pcity)
 **************************************************************************/
 int city_incite_cost(struct player *pplayer, struct city *pcity)
 {
+  struct government *g = get_gov_pcity(pcity);
   struct city *capital;
   int dist, size, cost;
 
@@ -1417,11 +1345,13 @@ int city_incite_cost(struct player *pplayer, struct city *pcity)
   } built_impr_iterate_end;
 
   /* Stability bonuses */
-  if (!city_unhappy(pcity)) {
-    cost *= 2;
-  }
-  if (city_celebrating(pcity)) {
-    cost *= 2;
+  if (g != game.government_when_anarchy) {
+    if (!city_unhappy(pcity)) {
+      cost *= 2;
+    }
+    if (city_celebrating(pcity)) {
+      cost *= 2;
+    }
   }
 
   /* City is empty */
@@ -1520,16 +1450,20 @@ static void update_city_activity(struct player *pplayer, struct city *pcity)
   if (city_build_stuff(pplayer, pcity)) {
     if (city_celebrating(pcity)) {
       pcity->rapture++;
-      if (pcity->rapture == 1) {
-        notify_player(pplayer, pcity->tile, E_CITY_LOVE,
-                      _("Wild celebrations in your honour in %s."),
-                      pcity->name);
-      }
-    } else {
-      if (pcity->rapture != 0) {
-        notify_player(pplayer, pcity->tile, E_CITY_NORMAL,
-                      _("Celebrations cancelled in %s."), pcity->name);
-      }
+      if (pcity->rapture == 1)
+	notify_player(pplayer, pcity->tile, E_CITY_LOVE,
+			 _("We Love The %s Day celebrated in %s."), 
+			 get_ruler_title(pplayer->government, pplayer->is_male,
+					 pplayer->nation),
+			 pcity->name);
+    }
+    else {
+      if (pcity->rapture != 0)
+	notify_player(pplayer, pcity->tile, E_CITY_NORMAL,
+			 _("We Love The %s Day canceled in %s."),
+			 get_ruler_title(pplayer->government, pplayer->is_male,
+					 pplayer->nation),
+			 pcity->name);
       pcity->rapture=0;
     }
     pcity->was_happy=city_happy(pcity);

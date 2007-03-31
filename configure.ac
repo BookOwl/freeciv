@@ -181,8 +181,7 @@ if test -z "$localedir"; then
 fi
 
 dnl I18n support
-ALL_LINGUAS="ar cs ca da de el en_GB es et fa fi fr he hu it ja lt nl nb 
-no pl pt pt_BR ro ru sv uk zh_CN"
+ALL_LINGUAS="ar cs ca da de el en_GB es et fa fi fr he hu it ja lt nl nb no pl pt pt_BR ro ru sv uk zh_CN"
 AM_GNU_GETTEXT(,need-ngettext)
 
 dnl AM_GNU_GETTEXT doesn't have all features we want
@@ -379,10 +378,6 @@ if test "$GZIP" = "no"; then
   AC_MSG_ERROR([You need the gzip program for compilation.])
 fi
 
-dnl Check for libbzip2
-AC_CHECK_LIB(bz2, BZ2_bzReadOpen)
-AC_CHECK_HEADERS(bzlib.h)
-
 dnl Check and compile ftwl
 if test "$ftwl" = x11 ; then
      FTWL_CFLAGS=`freetype-config --cflags`
@@ -454,7 +449,6 @@ if test x$client != xno; then
 
     if test "x$found_client" = "xyes"; then
       client=stub
-      CLIENT_LIBS="-lm"
     elif test "$client" = "stub"; then
       AC_MSG_ERROR(specified client 'stub' not configurable)
     fi
@@ -704,15 +698,11 @@ AC_SUBST([CONFIGURE_DEPENDENCIES], ["$CONFIGURE_DEPENDENCIES \$(top_srcdir)/vers
 dnl Make sure that config.h changes when ever CPPFLAGS, CFLAGS or CXXFLAGS
 dnl change so everything gets rebuilt. LDFLAGS is not handled here
 dnl since change in it should not cause recompilation, only relinking.
-dnl Note: Variables are named FC_STORE_* instead of FC_*_STORE in order to
-dnl make them appear next to each other in config.h.  Also single-quotes are
-dnl used because some " may appear unescaped within the flag strings.
-AC_DEFINE_UNQUOTED([FC_STORE_CPPFLAGS], ['$CPPFLAGS'],
-                   [These are the CPPFLAGS used in compilation])
-AC_DEFINE_UNQUOTED([FC_STORE_CFLAGS], ['$CFLAGS'],
-                   [These are the CFLAGS used in compilation])
-AC_DEFINE_UNQUOTED([FC_STORE_CXXFLAGS], ['$CXXFLAGS'],
-                   [These are the CXXFLAGS used in compilation])
+dnl Note: Variables are named FC_STORE_* instead of FC_*_STORE in order to make them
+dnl       appear next to each other in config.h.
+AC_DEFINE_UNQUOTED([FC_STORE_CPPFLAGS], ['$CPPFLAGS'], [These are the CPPFLAGS used in compilation])
+AC_DEFINE_UNQUOTED([FC_STORE_CFLAGS], ['$CFLAGS'], [These are the CFLAGS used in compilation])
+AC_DEFINE_UNQUOTED([FC_STORE_CXXFLAGS], ['$CXXFLAGS'], [These are the CXXFLAGS used in compilation])
 
 AC_CONFIG_FILES([Makefile
           data/Makefile

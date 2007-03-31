@@ -124,16 +124,17 @@ bool is_nation_playable(const struct nation_type *nation)
 }
 
 /****************************************************************************
-  Returns which kind of barbarians can use this nation.
+  Return whether a nation is usable as a barbarian.  If true then barbarians
+  can use this nation.
 
   This does not check whether a nation is "used" or "available".
 ****************************************************************************/
-enum barbarian_type nation_barbarian_type(const struct nation_type *nation)
+bool is_nation_barbarian(const struct nation_type *nation)
 {
-  if (!bounds_check_nation(nation, LOG_FATAL, "nation_barbarian_type")) {
+  if (!bounds_check_nation(nation, LOG_FATAL, "is_nation_barbarian")) {
     die("wrong nation %d", nation->index);
   }
-  return nation->barb_type;
+  return nation->is_barbarian;
 }
 
 /***************************************************************
@@ -446,8 +447,7 @@ void nation_groups_free(void)
 bool can_conn_edit_players_nation(const struct connection *pconn,
 				  const struct player *pplayer)
 {
-  return (can_conn_edit(pconn)
-          || (game.info.is_new_game
-	      && ((!pconn->observer && pconn->player == pplayer)
-	           || pconn->access_level >= ALLOW_CTRL)));
+  return (game.info.is_new_game
+	  && ((!pconn->observer && pconn->player == pplayer)
+	      || pconn->access_level >= ALLOW_CTRL));
 }

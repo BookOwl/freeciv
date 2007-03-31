@@ -275,6 +275,7 @@ void found_new_tech(struct player *plr, Tech_type_id tech_found,
   assert((tech_exists(tech_found)
 	  && get_invention(plr, tech_found) != TECH_KNOWN)
 	 || tech_found == A_FUTURE);
+  assert(tech_is_available(plr, tech_found) || tech_found == A_FUTURE);
 
   /* got_tech allows us to change research without applying techpenalty
    * (without loosing bulbs) */
@@ -560,7 +561,7 @@ void choose_tech_goal(struct player *plr, Tech_type_id tech)
     /* It's been suggested that if the research target is empty then
      * choose_random_tech should be called here. */
     research->tech_goal = tech;
-    notify_research(plr, E_TECH_GOAL,
+    notify_research(plr, E_TECH_GAIN /* ? */,
 		    _("Technology goal is %s."),
 		    get_tech_name(plr, tech));
   }

@@ -2,7 +2,7 @@
 [tilespec]
 
 ; Format and options of this tilespec file:
-options = "+tilespec4.2007.Feb.20"
+options = "+tilespec4"
 
 ; A simple name for the tileset specified by this file:
 name = "Trident"
@@ -39,9 +39,6 @@ city_flag_offset_y = 0
 unit_offset_x = 0
 unit_offset_y = 0
 
-; The layer in which blending is used (see terrains below)
-blend_layer = -1
-
 ; offset the citybar text by this amount (from the city tile origin)
 citybar_offset_y = 27
 
@@ -63,7 +60,6 @@ files =
   "misc/overlays.spec",
   "misc/citybar.spec",
   "trident/tiles.spec",
-  "trident/earth.spec",
   "misc/small.spec",
   "trident/units.spec",
   "trident/select.spec",
@@ -91,10 +87,6 @@ match_style = "BOOL"
 match_types = "arctic", "desert", "forest", "grassland", "hills", "jungle", "mountains", "ocean", "plains", "swamp", "tundra"
 
 [layer1]
-match_style = "BOOL"
-match_types = "ocean"
-
-[layer2]
 match_style = "BOOL"
 match_types = "ocean"
 
@@ -146,25 +138,12 @@ mine_sprite = "tx.mine"
 
 [terrain_ocean]
 is_blended = 0
-num_layers = 3
-layer0_match_style = "none"
+num_layers = 2
+layer0_match_style = "bool"
 layer0_match_type = "ocean"
 layer1_match_style = "bool"
 layer1_match_type = "ocean"
-layer2_match_type = "ocean"
-layer2_match_style = "bool"
-layer2_cell_type = "rect"
-
-[terrain_deep]
-is_blended = 0
-num_layers = 3
-layer0_match_style = "none"
-layer0_match_type = "ocean"
-layer1_match_style = "bool"
-layer1_match_type = "ocean"
-layer2_match_type = "ocean"
-layer2_match_style = "bool"
-layer2_cell_type = "rect"
+layer1_cell_type = "rect"
 
 [terrain_plains]
 is_blended = 0

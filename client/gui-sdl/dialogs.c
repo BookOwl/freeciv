@@ -804,7 +804,7 @@ const char *sdl_get_tile_defense_info_text(struct tile *ptile)
   if(tile_has_special(ptile, S_RIVER)) {
     bonus += terrain_control.river_defense_bonus;
   }
-  if(tile_has_base_flag(ptile, BF_DEFENSE_BONUS)) {
+  if(tile_has_special(ptile, S_FORTRESS)) {
     bonus += terrain_control.fortress_defense_bonus;
   }
   my_snprintf(buffer, sizeof(buffer), "Terrain Defense Bonus: +%d%% ", bonus);
@@ -1720,8 +1720,7 @@ static void popdown_pillage_dialog(void)
   pillage.
 **************************************************************************/
 void popup_pillage_dialog(struct unit *pUnit,
-			  bv_special may_pillage,
-                          struct base_type *pbase)
+			  bv_special may_pillage)
 {
   struct widget *pWindow = NULL, *pBuf = NULL;
   SDL_String16 *pStr;
@@ -1763,27 +1762,15 @@ void popup_pillage_dialog(struct unit *pUnit,
   add_to_gui_list(ID_PILLAGE_DLG_EXIT_BUTTON, pBuf);
   /* ---------- */
   
-  while ((what = get_preferred_pillage(may_pillage, pbase)) != S_LAST) {
+  while ((what = get_preferred_pillage(may_pillage)) != S_LAST) {
       
     bv_special what_bv;
-
-    if (what != S_PILLAGE_BASE) {
-      BV_CLR_ALL(what_bv);
-      BV_SET(what_bv, what);
+      
+    BV_CLR_ALL(what_bv);
+    BV_SET(what_bv, what);
     
-      create_active_iconlabel(pBuf, pWindow->dst, pStr,
-                              (char *) get_special_name(what), pillage_callback);
-      clear_special(&may_pillage, what);
-      prereq = get_infrastructure_prereq(what);
-      if (prereq != S_LAST) {
-        clear_special(&may_pillage, prereq);  
-      }
-    } else {
-      create_active_iconlabel(pBuf, pWindow->dst, pStr,
-                              (char *) base_name(pbase), pillage_callback);
-      pbase = NULL;
-    }
-
+    create_active_iconlabel(pBuf, pWindow->dst, pStr,
+	    (char *) get_special_name(what), pillage_callback);
     pBuf->data.unit = pUnit;
     set_wstate(pBuf, FC_WS_NORMAL);
   
@@ -1791,6 +1778,12 @@ void popup_pillage_dialog(struct unit *pUnit,
     
     area.w = MAX(area.w, pBuf->size.w);
     area.h += pBuf->size.h;
+        
+    clear_special(&may_pillage, what);
+    prereq = get_infrastructure_prereq(what);
+    if (prereq != S_LAST) {
+      clear_special(&may_pillage, prereq);  
+    }
   }
   pPillage_Dlg->pBeginWidgetList = pBuf;
 

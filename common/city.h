@@ -160,11 +160,7 @@ struct ai_choice {
 
 struct ai_city {
   /* building desirabilities - easiest to handle them here -- Syela */
-  /* The units of building_want are output
-   * (shields/gold/luxuries) multiplied by a priority
-   * (SHIELD_WEIGHTING, etc or ai->shields_priority, etc)
-   */
-  int building_want[B_LAST];
+  int building_want[B_LAST];    /* not sure these will always be < 256 */
 
   unsigned int danger;          /* danger to be compared to assess_defense */
   bool diplomat_threat;         /* enemy diplomat or spy is near the city */
@@ -198,9 +194,7 @@ struct ai_city {
                       * all units coming to kill us. */
 
   int worth; /* Cache city worth here, sum of all weighted incomes */
-  /* Only recalc every Nth turn: */
-  int recalc_interval; /* Use for weighting values calculated every Nth turn */
-  int next_recalc;
+  int next_recalc; /* Only recalc every Nth turn */
 };
 
 struct city {
@@ -366,8 +360,7 @@ void add_specialist_output(const struct city *pcity, int *output);
 struct player *city_owner(const struct city *pcity);
 int city_population(const struct city *pcity);
 int city_building_upkeep(const struct city *pcity, Output_type_id otype);
-int city_unit_unhappiness(struct unit *punit, int *free_happy);
-void city_unit_upkeep(struct unit *punit, int *outputs, int *free_upkeep);
+int city_unit_upkeep(const struct city *pcity, Output_type_id otype);
 int city_buy_cost(const struct city *pcity);
 bool city_happy(const struct city *pcity);  /* generally use celebrating instead */
 bool city_unhappy(const struct city *pcity);                /* anarchy??? */
@@ -495,8 +488,11 @@ void city_add_improvement(struct city *pcity, Impr_type_id impr);
 void city_remove_improvement(struct city *pcity, Impr_type_id impr);
 
 /* city update functions */
-void generic_city_refresh(struct city *pcity, bool full_refresh);
-
+void generic_city_refresh(struct city *pcity,
+			  bool full_refresh,
+			  void (*send_unit_info) (struct player * pplayer,
+						  struct unit * punit));
+void adjust_city_free_cost(int *num_free, int *this_cost);
 int city_waste(const struct city *pcity, Output_type_id otype, int total);
 int city_specialists(const struct city *pcity);                 /* elv+tax+scie */
 Specialist_type_id best_specialist(Output_type_id otype,
@@ -507,7 +503,7 @@ bool city_built_last_turn(const struct city *pcity);
 /* city creation / destruction */
 struct city *create_city_virtual(struct player *pplayer,
 				 struct tile *ptile, const char *name);
-void destroy_city_virtual(struct city *pcity);
+void remove_city_virtual(struct city *pcity);
 
 /* misc */
 bool is_city_option_set(const struct city *pcity, enum city_options option);

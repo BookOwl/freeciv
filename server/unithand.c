@@ -65,8 +65,6 @@ static void handle_unit_activity_request_targeted(struct unit *punit,
 						  new_activity,
 						  enum tile_special_type
 						  new_target);
-static void handle_unit_activity_request_base(struct unit *punit,
-                                              enum base_type_id base);
 static bool base_handle_unit_establish_trade(struct player *pplayer, int unit_id, struct city *pcity_dest);
 static bool unit_bombard(struct unit *punit, struct tile *ptile);
 
@@ -533,8 +531,7 @@ void handle_unit_build_city(struct player *pplayer, int unit_id, char *name)
 **************************************************************************/
 void handle_unit_change_activity(struct player *pplayer, int unit_id,
 				 enum unit_activity activity,
-				 enum tile_special_type activity_target,
-                                 enum base_type_id activity_base)
+				 enum tile_special_type activity_target)
 {
   struct unit *punit = player_find_unit_by_id(pplayer, unit_id);
 
@@ -542,25 +539,15 @@ void handle_unit_change_activity(struct player *pplayer, int unit_id,
     return;
   }
 
-  if (punit->activity != activity
-      || punit->activity_target != activity_target
-      || punit->activity_base != activity_base
-      || punit->ai.control) {
+  if (punit->activity != activity ||
+      punit->activity_target != activity_target ||
+      punit->ai.control) {
     /* Treat change in ai.control as change in activity, so
        * idle autosettlers behave correctly when selected --dwp
      */
     punit->ai.control = FALSE;
     punit->goto_tile = NULL;
-
-    if (activity != ACTIVITY_BASE) {
-      handle_unit_activity_request_targeted(punit, activity, activity_target);
-    } else {
-      if (!base_type_get_by_id(activity_base)) {
-        /* Illegal base type */
-        return;
-      }
-      handle_unit_activity_request_base(punit, activity_base);
-    }
+    handle_unit_activity_request_targeted(punit, activity, activity_target);
 
     /* Exploring is handled here explicitly, since the player expects to
      * see an immediate response from setting a unit to auto-explore.
@@ -712,8 +699,8 @@ static bool unit_bombard(struct unit *punit, struct tile *ptile)
 	  TILE_XY(pdefender->tile));
     }
 
-    if (is_unit_reachable_by_unit(pdefender, punit)
-	|| pcity || tile_has_native_base(ptile, unit_type(pdefender))) {
+    if (!is_air_unit(pdefender)
+	|| (pcity || tile_has_special(ptile, S_AIRBASE))) {
       see_combat(punit, pdefender);
 
       unit_versus_unit(punit, pdefender, TRUE);
@@ -889,9 +876,8 @@ static void handle_unit_attack_request(struct unit *punit, struct unit *pdefende
 	    unit_owner(pdefender)->name, unit_type(pdefender)->name);
 
     punit->moved = TRUE;	/* We moved */
-    kill_unit(pwinner, plooser,
-              vet && !unit_class_flag(get_unit_class(unit_type(punit)), UCF_MISSILE));
-    if (unit_class_flag(get_unit_class(unit_type(pwinner)), UCF_MISSILE)) {
+    kill_unit(pwinner, plooser, vet && !unit_flag(punit, F_MISSILE));
+    if (unit_flag(pwinner, F_MISSILE)) {
       wipe_unit(pwinner);
       return;
     }
@@ -963,10 +949,6 @@ static bool can_unit_move_to_tile_with_notify(struct unit *punit,
   } else if (reason == MR_ZOC) {
     notify_player(unit_owner(punit), src_tile, E_BAD_COMMAND,
 		     _("%s can only move into your own zone of control."),
-		     unit_type(punit)->name);
-  } else if (reason == MR_TRIREME) {
-    notify_player(unit_owner(punit), src_tile, E_BAD_COMMAND,
-		     _("%s cannot move that far from the coast line."),
 		     unit_type(punit)->name);
   } else if (reason == MR_PEACE) {
     notify_player(unit_owner(punit), src_tile, E_BAD_COMMAND,
@@ -1060,14 +1042,11 @@ bool handle_unit_move_request(struct unit *punit, struct tile *pdesttile,
 						 punit->id, target_id);
         return FALSE;
       } else if (!can_unit_move_to_tile(punit, pdesttile, igzoc)) {
-        if (can_unit_exist_at_tile(punit, punit->tile)) {
-          notify_player(pplayer, punit->tile, E_BAD_COMMAND,
-                        _("No diplomat action possible."));
-        } else {
-          notify_player(pplayer, punit->tile, E_BAD_COMMAND,
-                        _("Unit cannot perform diplomatic action from %s."),
-                          get_name(punit->tile->terrain));
-        }
+        notify_player(pplayer, punit->tile, E_BAD_COMMAND,
+                         is_ocean(tile_get_terrain(punit->tile))
+                         ? _("Unit must be on land to "
+                             "perform diplomatic action.")
+                         : _("No diplomat action possible."));
         return FALSE;
       }
     }
@@ -1160,7 +1139,7 @@ bool handle_unit_move_request(struct unit *punit, struct tile *pdesttile,
   }
 
   if (can_unit_move_to_tile_with_notify(punit, pdesttile, igzoc)) {
-    int move_cost = map_move_cost_unit(punit, pdesttile);
+    int move_cost = map_move_cost(punit, pdesttile);
 
     (void) move_unit(punit, pdesttile, move_cost);
 
@@ -1543,31 +1522,13 @@ static void handle_unit_activity_request_targeted(struct unit *punit,
 						  enum tile_special_type
 						  new_target)
 {
-  if (can_unit_do_activity_targeted(punit, new_activity, new_target,
-                                    BASE_LAST)) {
+  if (can_unit_do_activity_targeted(punit, new_activity, new_target)) {
     enum unit_activity old_activity = punit->activity;
     enum tile_special_type old_target = punit->activity_target;
 
     free_unit_orders(punit);
     set_unit_activity_targeted(punit, new_activity, new_target);
     send_unit_info(NULL, punit);    
-    handle_unit_activity_dependencies(punit, old_activity, old_target);
-  }
-}
-
-/**************************************************************************
-...
-**************************************************************************/
-static void handle_unit_activity_request_base(struct unit *punit, 
-                                              enum base_type_id base)
-{
-  if (can_unit_do_activity_base(punit, base)) {
-    enum unit_activity old_activity = punit->activity;
-    enum tile_special_type old_target = punit->activity_target;
-
-    free_unit_orders(punit);
-    set_unit_activity_base(punit, base);
-    send_unit_info(NULL, punit);
     handle_unit_activity_dependencies(punit, old_activity, old_target);
   }
 }
@@ -1707,10 +1668,6 @@ void handle_unit_orders(struct player *pplayer,
 	  return;
 	}
 	break;
-      case ACTIVITY_BASE:
-        if (!base_type_get_by_id(packet->base[i])) {
-          return;
-        }
       default:
 	return;
       }
@@ -1751,7 +1708,6 @@ void handle_unit_orders(struct player *pplayer,
     punit->orders.list[i].order = packet->orders[i];
     punit->orders.list[i].dir = packet->dir[i];
     punit->orders.list[i].activity = packet->activity[i];
-    punit->orders.list[i].base = packet->base[i];
   }
 
   if (!packet->repeat) {

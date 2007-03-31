@@ -122,8 +122,7 @@ void kill_dying_players(void)
 /**************************************************************************
   Murder a player in cold blood.
 **************************************************************************/
-void kill_player(struct player *pplayer)
-{
+void kill_player(struct player *pplayer) {
   bool palace;
 
   pplayer->is_dying = FALSE; /* Can't get more dead than this. */
@@ -171,13 +170,6 @@ void kill_player(struct player *pplayer)
     remove_city(pcity);
   } city_list_iterate_end;
   game.info.savepalace = palace;
-
-  /* Remove ownership of tiles */
-  whole_map_iterate(ptile) {
-    if (ptile->owner == pplayer) {
-      map_claim_ownership(ptile, NULL, NULL);
-    }
-  } whole_map_iterate_end;
 
   /* Ensure this dead player doesn't win with a spaceship.
    * Now that would be truly unbelievably dumb - Per */
@@ -616,7 +608,7 @@ void handle_diplomacy_cancel_pact(struct player *pplayer,
 		   get_nation_name_plural(pplayer2->nation),
 		   diplstate_text(new_type));
   notify_player(pplayer2, NULL, E_TREATY_BROKEN,
-		   _(" %s canceled the diplomatic agreement! "
+		   _(" %s cancelled the diplomatic agreement! "
 		     "The diplomatic state between the %s and the %s "
 		     "is now %s."), pplayer->name,
 		   get_nation_name_plural(pplayer2->nation),
@@ -1346,8 +1338,7 @@ static int nations_match(struct nation_type* n1, struct nation_type* n2,
 ****************************************************************************/
 struct nation_type *pick_a_nation(struct nation_type **choices,
                                   bool ignore_conflicts,
-                                  bool only_available,
-                                  enum barbarian_type barb_type)
+				  bool only_available)
 {
   enum {
     UNAVAILABLE, AVAILABLE, PREFERRED, UNWANTED
@@ -1362,10 +1353,9 @@ struct nation_type *pick_a_nation(struct nation_type **choices,
    * 3: unwanted - we can used this nation, but we really don't want to
    */
   nations_iterate(pnation) {
-    if (pnation->player
-        || (only_available && !pnation->is_available)
-        || (barb_type != nation_barbarian_type(pnation))
-        || (barb_type == NOT_A_BARBARIAN && !is_nation_playable(pnation))) {
+    if (!is_nation_playable(pnation)
+	|| pnation->player
+	|| (only_available && !pnation->is_available)) {
       /* Nation is unplayable or already used: don't consider it. */
       nations_used[pnation->index] = UNAVAILABLE;
       match[pnation->index] = 0;
@@ -1466,8 +1456,7 @@ static struct player *split_player(struct player *pplayer)
 
   /* select a new name and nation for the copied player. */
   /* Rebel will always be an AI player */
-  player_set_nation(cplayer, pick_a_nation(civilwar_nations, TRUE, FALSE,
-                                           NOT_A_BARBARIAN));
+  player_set_nation(cplayer, pick_a_nation(civilwar_nations, TRUE, FALSE));
   pick_random_player_name(cplayer->nation, cplayer->name);
 
   sz_strlcpy(cplayer->username, ANON_USER_NAME);
@@ -1507,6 +1496,7 @@ static struct player *split_player(struct player *pplayer)
   game.info.max_players = game.info.nplayers;
 
   /* Split the resources */
+  
   cplayer->economic.gold = pplayer->economic.gold;
   cplayer->economic.gold /= 2;
   pplayer->economic.gold -= cplayer->economic.gold;

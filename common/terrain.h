@@ -17,10 +17,6 @@
 
 #include "fc_types.h"
 
-#include "unittype.h"
-
-struct base_type;
-
 enum special_river_move {
   RMV_NORMAL=0, RMV_FAST_STRICT=1, RMV_FAST_RELAXED=2, RMV_FAST_ALWAYS=3
 };
@@ -40,26 +36,10 @@ enum tile_special_type {
   S_LAST
 };
 
-/* Special value for pillaging bases */
-#define S_PILLAGE_BASE (S_LAST + 1)
-
-enum terrain_class { TC_LAND, TC_OCEAN, TC_LAST };
-
 /* S_LAST-terminated */
 extern enum tile_special_type infrastructure_specials[];
 
 BV_DEFINE(bv_special, S_LAST);
-
-#define specials_iterate(special)					    \
-{									    \
-  enum tile_special_type special;					    \
-									    \
-  for (special = 0; special < S_LAST; special++) {
-
-#define specials_iterate_end						    \
-  }									    \
-}
-
 
 #define T_NONE (NULL) /* A special flag meaning no terrain type. */
 #define T_UNKNOWN (NULL) /* An unknown terrain. */
@@ -81,6 +61,7 @@ enum terrain_flag_id {
   TER_STARTER, /* Players will start on this terrain type. */
   TER_CAN_HAVE_RIVER, /* Terrains with this type can have S_RIVER on them. */
   TER_UNSAFE_COAST,/*this tile is not safe as coast, (all ocean / ice) */ 
+  TER_UNSAFE,  /*unsafe for all units (ice,...) */
   TER_OCEANIC, /* This is an ocean terrain. */
   TER_LAST
 };
@@ -166,8 +147,6 @@ struct terrain {
    * then 70% of 'mountainous' tiles will be given mountains. */
   int property[MG_LAST];
 
-  bv_unit_classes native_to;
-
   bv_terrain_flags flags;
 
   char *helptext;
@@ -224,7 +203,6 @@ void clear_special(bv_special *set, enum tile_special_type to_clear);
 void clear_all_specials(bv_special *set);
 bool contains_special(bv_special all,
 		      enum tile_special_type to_test_for);
-bool contains_any_specials(bv_special all);
 
 /* Functions to operate on a terrain special. */
 bool is_special_near_tile(const struct tile *ptile,
@@ -240,18 +218,10 @@ int count_terrain_flag_near_tile(const struct tile *ptile,
 				 bool cardinal_only, bool percentage,
 				 enum terrain_flag_id flag);
 
-/* Functions to operate on a terrain class. */
-bool terrain_belongs_to_class(const struct terrain *pterrain,
-                              enum terrain_class class);
-bool is_terrain_class_near_tile(const struct tile *ptile, enum terrain_class class);
-enum terrain_class get_terrain_class_by_name(const char *name);
-const char *terrain_class_name(enum terrain_class class);
-
 /* Special helper functions */
 const char *get_infrastructure_text(bv_special pset);
 enum tile_special_type get_infrastructure_prereq(enum tile_special_type spe);
-enum tile_special_type get_preferred_pillage(bv_special pset,
-                                             struct base_type *pbase);
+enum tile_special_type get_preferred_pillage(bv_special pset);
 
 /* Terrain-specific functions. */
 #define is_ocean(pterrain) ((pterrain) != T_UNKNOWN			    \

@@ -40,9 +40,9 @@ struct advance advances[A_LAST];
 static double techcoststyle1[A_LAST];
 
 static const char *flag_names[] = {
-  "Bonus_Tech", "Bridge", "Railroad",
+  "Bonus_Tech", "Bridge", "Railroad", "Fortress",
   "Population_Pollution_Inc", 
-  "Farmland",
+  "Airbase", "Farmland", "Reduce_Trireme_Loss1", "Reduce_Trireme_Loss2", 
   "Build_Airborne"
 };
 /* Note that these strings must correspond with the enums in tech_flag_id,

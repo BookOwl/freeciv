@@ -114,6 +114,11 @@ static void end_turn(void);
 static void announce_player(struct player *pplayer);
 static void srv_loop(void);
 
+
+/* this is used in strange places, and is 'extern'd where
+   needed (hence, it is not 'extern'd in srv_main.h) */
+bool is_server = TRUE;
+
 /* command-line arguments to server */
 struct server_arguments srvarg;
 
@@ -157,8 +162,6 @@ void init_game_seed(void)
 **************************************************************************/
 void srv_init(void)
 {
-  i_am_server(); /* Tell to libcivcommon that we are server */
-
   /* NLS init */
   init_nls();
 
@@ -751,32 +754,9 @@ static void end_phase(void)
 **************************************************************************/
 static void end_turn(void)
 {
-  int food = 0, shields = 0, trade = 0, settlers = 0;
-
   freelog(LOG_DEBUG, "Endturn");
 
   map_calculate_borders();
-
-  /* Output some AI measurement information */
-  players_iterate(pplayer) {
-    if (!pplayer->ai.control || is_barbarian(pplayer)) {
-      continue;
-    }
-    unit_list_iterate(pplayer->units, punit) {
-      if (unit_flag(punit, F_CITIES)) {
-        settlers++;
-      }
-    } unit_list_iterate_end;
-    city_list_iterate(pplayer->cities, pcity) {
-      shields += pcity->prod[O_SHIELD];
-      food += pcity->prod[O_FOOD];
-      trade += pcity->prod[O_TRADE];
-    } city_list_iterate_end;
-    freelog(LOG_DEBUG, "%s T%d cities:%d pop:%d food:%d prod:%d "
-            "trade:%d settlers:%d units:%d", pplayer->name, game.info.turn,
-            city_list_size(pplayer->cities), total_player_citizens(pplayer),
-            food, shields, trade, settlers, unit_list_size(pplayer->units));
-  } players_iterate_end;
 
   freelog(LOG_DEBUG, "Season of native unrests");
   summon_barbarians(); /* wild guess really, no idea where to put it, but
@@ -850,26 +830,8 @@ void save_game(char *orig_filename, const char *save_reason)
   sz_strlcat(filename, ".sav");
 
   if (game.info.save_compress_level > 0) {
-    switch (game.info.save_compress_type) {
-#ifdef HAVE_LIBZ
-    case FZ_ZLIB:
-      /* Append ".gz" to filename. */
-      sz_strlcat(filename, ".gz");
-      break;
-#endif
-#ifdef HAVE_LIBBZ2
-    case FZ_BZIP2:
-      /* Append ".bz2" to filename. */
-      sz_strlcat(filename, ".bz2");
-      break;
-#endif
-    case FZ_PLAIN:
-      break;
-    default:
-      freelog(LOG_NORMAL, "Unsupported compression type %d",
-              game.info.save_compress_type);
-      break;
-    }
+    /* Append ".gz" to filename. */
+    sz_strlcat(filename, ".gz");
   }
 
   if (!path_is_absolute(filename)) {
@@ -886,8 +848,7 @@ void save_game(char *orig_filename, const char *save_reason)
     sz_strlcpy(filename, tmpname);
   }
 
-  if (!section_file_save(&file, filename, game.info.save_compress_level,
-                         game.info.save_compress_type))
+  if(!section_file_save(&file, filename, game.info.save_compress_level))
     con_write(C_FAIL, _("Failed saving game as %s"), filename);
   else
     con_write(C_OK, _("Game saved as %s"), filename);
@@ -1096,18 +1057,15 @@ bool handle_packet_input(struct connection *pconn, void *packet, int type)
   }
   
   /* valid packets from established connections but non-players */
-  if (type == PACKET_CHAT_MSG_REQ
-      || type == PACKET_SINGLE_WANT_HACK_REQ
-      || type == PACKET_NATION_SELECT_REQ
-      || type == PACKET_EDIT_MODE
-      || type == PACKET_EDIT_TILE
-      || type == PACKET_EDIT_UNIT
-      || type == PACKET_EDIT_CREATE_CITY
-      || type == PACKET_EDIT_PLAYER) {
-    if (!server_handle_packet(type, packet, NULL, pconn)) {
-      freelog(LOG_ERROR, "Received unknown packet %d from %s",
-	      type, conn_description(pconn));
-    }
+  if (type == PACKET_CHAT_MSG_REQ) {
+    handle_chat_msg_req(pconn,
+			((struct packet_chat_msg_req *) packet)->message);
+    return TRUE;
+  }
+
+  if (type == PACKET_SINGLE_WANT_HACK_REQ) {
+    handle_single_want_hack_req(pconn,
+		                (struct packet_single_want_hack_req *) packet);
     return TRUE;
   }
 
@@ -1339,11 +1297,9 @@ void init_available_nations(void)
 }
 
 /**************************************************************************
-  Handles a pick-nation packet from the client.  These packets are
-  handled by connection because ctrl users may edit anyone's nation in
-  pregame, and editing is possible during a running game.
+...
 **************************************************************************/
-void handle_nation_select_req(struct connection *pc,
+void handle_nation_select_req(struct player *requestor,
 			      int player_no,
 			      Nation_type_id nation_no, bool is_male,
 			      char *name, int city_style)
@@ -1351,7 +1307,11 @@ void handle_nation_select_req(struct connection *pc,
   struct nation_type *new_nation;
   struct player *pplayer = get_player(player_no);
 
-  if (!pplayer || !can_conn_edit_players_nation(pc, pplayer)) {
+  if (server_state != PRE_GAME_STATE || !pplayer) {
+    return;
+  }
+
+  if (!can_conn_edit_players_nation(requestor->current_conn, pplayer)) {
     return;
   }
 
@@ -1497,11 +1457,11 @@ void aifill(int amount)
     freelog(LOG_NORMAL,
 	    _("%s has been added as %s level AI-controlled player."),
             pplayer->name,
-	    ai_level_name(pplayer->ai.skill_level));
+	    name_of_skill_level(pplayer->ai.skill_level));
     notify_conn(NULL, NULL, E_SETTING,
 		_("%s has been added as %s level AI-controlled player."),
 		pplayer->name,
-		ai_level_name(pplayer->ai.skill_level));
+		name_of_skill_level(pplayer->ai.skill_level));
 
     game.info.nplayers++;
 
@@ -1563,8 +1523,7 @@ static void generate_players(void)
       continue;
     }
 
-    player_set_nation(pplayer, pick_a_nation(NULL, FALSE, TRUE,
-                                             NOT_A_BARBARIAN));
+    player_set_nation(pplayer, pick_a_nation(NULL, FALSE, TRUE));
     assert(pplayer->nation != NO_NATION_SELECTED);
 
     pplayer->city_style = get_nation_city_style(pplayer->nation);
@@ -1906,9 +1865,7 @@ static void srv_loop(void)
   /* If we have a tile map, and map.generator==0, call map_fractal_generate
    * anyway to make the specials, huts and continent numbers. */
   if (map_is_empty() || (map.generator == 0 && game.info.is_new_game)) {
-    struct unit_type *utype = crole_to_unit_type(game.info.start_units[0], NULL);
-
-    map_fractal_generate(TRUE, utype);
+    map_fractal_generate(TRUE);
   }
 
   /* start the game */
@@ -1987,7 +1944,7 @@ static void srv_loop(void)
     } players_iterate_end;
   } else {
     players_iterate(pplayer) {
-      ai_data_init(pplayer); /* Initialize this again to be sure */
+      ai_data_init(pplayer); /* Initialize this at last moment */
     } players_iterate_end;
   }
 

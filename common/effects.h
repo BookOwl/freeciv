@@ -48,6 +48,7 @@ enum effect_type {
   /* TODO: EFT_MAKE_CONTENT_PCT, */
   EFT_MAKE_HAPPY,
   EFT_NO_ANARCHY,
+  EFT_NO_SINK_DEEP,
   EFT_NUKE_PROOF,
   /* TODO: EFT_POLLU_ADJ, */
   /* TODO: EFT_POLLU_PCT, */
@@ -82,8 +83,8 @@ enum effect_type {
   EFT_GAIN_AI_LOVE,
   EFT_SLOW_DOWN_TIMELINE,
   EFT_CIVIL_WAR_CHANCE,
-  EFT_EMPIRE_SIZE_BASE, /* +1 unhappy when more than this cities */
-  EFT_EMPIRE_SIZE_STEP, /* adds additional +1 unhappy steps to above */
+  EFT_EMPIRE_SIZE_MOD,
+  EFT_EMPIRE_SIZE_STEP,
   EFT_MAX_RATES,
   EFT_MARTIAL_LAW_EACH,
   EFT_MARTIAL_LAW_MAX,
@@ -103,9 +104,7 @@ enum effect_type {
   EFT_OUTPUT_WASTE_BY_DISTANCE,
   EFT_OUTPUT_PENALTY_TILE, /* -1 penalty to tiles producing more than this */
   EFT_OUTPUT_INC_TILE_CELEBRATE,
-  EFT_CITY_UNHAPPY_SIZE, /* all citizens after this are unhappy */
-  EFT_UPGRADE_PRICE_PCT,
-  EFT_VISIBLE_WALLS,     /* City should use walls gfx */
+  EFT_VISIBLE_WALLS,       /* City should use walls gfx */
   EFT_LAST	/* keep this last */
 };
 

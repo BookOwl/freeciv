@@ -35,7 +35,6 @@
 #include "unit.h"
 
 /* client */
-#include "civclient.h"
 #include "climisc.h"
 
 /* gui-sdl */
@@ -630,10 +629,10 @@ static int worklist_editor_item_callback(struct widget *pWidget)
  */
 static void add_global_worklist(struct widget *pWidget)
 {
-  if(!worklist_is_empty(&client.worklists[MAX_ID - pWidget->ID])) {
+  if(!worklist_is_empty(&game.player_ptr->worklists[MAX_ID - pWidget->ID])) {
     int count, firstfree;
     struct widget *pBuf = pEditor->pWork->pEndActiveWidgetList;
-    struct worklist *pWorkList = &client.worklists[MAX_ID - pWidget->ID];
+    struct worklist *pWorkList = &game.player_ptr->worklists[MAX_ID - pWidget->ID];
       
     if(worklist_length(pEditor->pCopy_WorkList) >= MAX_LEN_WORKLIST - 1) {
       /* worklist is full */
@@ -704,12 +703,12 @@ static void add_global_worklist(struct widget *pWidget)
  */
 static void set_global_worklist(struct widget *pWidget)
 {
-  if(!worklist_is_empty(&client.worklists[MAX_ID - pWidget->ID])) {
+  if(!worklist_is_empty(&game.player_ptr->worklists[MAX_ID - pWidget->ID])) {
     int count, wl_count;
     struct city_production target;
     struct widget *pBuf = pEditor->pWork->pEndActiveWidgetList;
     struct worklist wl ,
-	      *pWorkList = &client.worklists[MAX_ID - pWidget->ID];
+	      *pWorkList = &game.player_ptr->worklists[MAX_ID - pWidget->ID];
     
     /* clear tmp worklist */
     init_worklist(&wl);
@@ -1252,9 +1251,9 @@ void popup_worklist_editor(struct city *pCity, struct worklist *pWorkList)
   if(pCity) {
     count = 0;
     for (i = 0; i < MAX_NUM_WORKLISTS; i++) {
-      if (client.worklists[i].is_valid) {
+      if (game.player_ptr->worklists[i].is_valid) {
         pBuf = create_iconlabel_from_chars(NULL, pWindow->dst, 
-      		client.worklists[i].name, adj_font(10),
+      		game.player_ptr->worklists[i].name, adj_font(10),
 					      WF_RESTORE_BACKGROUND);
         set_wstate(pBuf, FC_WS_NORMAL);
         add_to_gui_list(MAX_ID - i, pBuf);

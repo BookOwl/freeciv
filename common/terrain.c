@@ -41,9 +41,6 @@ enum tile_special_type infrastructure_specials[] = {
   S_LAST
 };
 
-static const char *terrain_class_names[] = {
-  N_("Land"), N_("Oceanic") };
-
 /* T_UNKNOWN isn't allowed here. */
 #define SANITY_CHECK_TERRAIN(pterrain)					    \
   assert((pterrain)->index >= 0						    \
@@ -116,6 +113,7 @@ enum terrain_flag_id terrain_flag_from_str(const char *s)
     "Starter",
     "CanHaveRiver",
     "UnsafeCoast",
+    "Unsafe",
     "Oceanic"
   };
 
@@ -374,14 +372,6 @@ bool contains_special(bv_special set,
 }
 
 /****************************************************************************
- Returns TRUE iff any specials are set on the tile.
-****************************************************************************/
-bool contains_any_specials(bv_special set)
-{
-  return BV_ISSET_ANY(set);
-}
-
-/****************************************************************************
   Returns TRUE iff any tile adjacent to (map_x,map_y) has the given special.
 ****************************************************************************/
 bool is_special_near_tile(const struct tile *ptile, enum tile_special_type spe)
@@ -470,7 +460,6 @@ const char *get_infrastructure_text(bv_special spe)
 {
   static char s[256];
   char *p;
-  struct base_type *pbase;
   
   s[0] = '\0';
 
@@ -492,10 +481,12 @@ const char *get_infrastructure_text(bv_special spe)
     cat_snprintf(s, sizeof(s), "%s/", _("Mine"));
   }
 
-  pbase = base_type_get_from_special(spe);
+  if (contains_special(spe, S_FORTRESS)) {
+    cat_snprintf(s, sizeof(s), "%s/", _("Fortress"));
+  }
 
-  if (pbase != NULL) {
-    cat_snprintf(s, sizeof(s), "%s/", base_name(pbase));
+  if (contains_special(spe, S_AIRBASE)) {
+    cat_snprintf(s, sizeof(s), "%s/", _("Airbase"));
   }
 
   p = s + strlen(s) - 1;
@@ -522,11 +513,10 @@ enum tile_special_type get_infrastructure_prereq(enum tile_special_type spe)
 
 /****************************************************************************
   Returns the highest-priority (best) infrastructure (man-made special) to
-  be pillaged from the terrain set.  May return S_LAST if nothing
+  be pillaged from the terrain set.  May return S_NO_SPECIAL if nothing
   better is available.
 ****************************************************************************/
-enum tile_special_type get_preferred_pillage(bv_special pset,
-                                             struct base_type *pbase)
+enum tile_special_type get_preferred_pillage(bv_special pset)
 {
   if (contains_special(pset, S_FARMLAND)) {
     return S_FARMLAND;
@@ -537,8 +527,11 @@ enum tile_special_type get_preferred_pillage(bv_special pset,
   if (contains_special(pset, S_MINE)) {
     return S_MINE;
   }
-  if (pbase) {
-    return S_PILLAGE_BASE;
+  if (contains_special(pset, S_FORTRESS)) {
+    return S_FORTRESS;
+  }
+  if (contains_special(pset, S_AIRBASE)) {
+    return S_AIRBASE;
   }
   if (contains_special(pset, S_RAILROAD)) {
     return S_RAILROAD;
@@ -547,80 +540,4 @@ enum tile_special_type get_preferred_pillage(bv_special pset,
     return S_ROAD;
   }
   return S_LAST;
-}
-
-/****************************************************************************
-  Does terrain type belong to terrain class?
-****************************************************************************/
-bool terrain_belongs_to_class(const struct terrain *pterrain,
-                              enum terrain_class class)
-{
-  switch(class) {
-   case TC_LAND:
-     return !is_ocean(pterrain);
-   case TC_OCEAN:
-     return is_ocean(pterrain);
-   case TC_LAST:
-     return FALSE;
-  }
-
-  assert(FALSE);
-  return FALSE;
-}
-
-/****************************************************************************
-  Is there terrain of the given class near tile?
-****************************************************************************/
-bool is_terrain_class_near_tile(const struct tile *ptile, enum terrain_class class)
-{
-  switch(class) {
-   case TC_LAND:
-     adjc_iterate(ptile, adjc_tile) {
-       struct terrain* pterrain = tile_get_terrain(adjc_tile);
-       if (pterrain == NULL) {
-         continue;
-       }
-    
-       if (!is_ocean(pterrain)) {
-         return TRUE;
-       }
-     } adjc_iterate_end;
-     return FALSE;
-   case TC_OCEAN:
-     return is_ocean_near_tile(ptile);
-   case TC_LAST:
-     return FALSE;
-  }
-
-  assert(FALSE);
-  return FALSE;
-}
-
-
-/****************************************************************************
-  Return the terrain class value matching name, or TC_LAST if none matches.
-****************************************************************************/
-enum terrain_class get_terrain_class_by_name(const char *name)
-{
-  int i;
-
-  for (i = 0; i < TC_LAST; i++) {
-    if (!strcmp(terrain_class_names[i], name)) {
-      return i;
-    }
-  }
-
-  return TC_LAST;
-}
-
-/****************************************************************************
-  Return localized name of the terrain class
-****************************************************************************/
-const char *terrain_class_name(enum terrain_class class)
-{
-  if (class < 0 || class >= TC_LAST) {
-    return NULL;
-  }
-
-  return _(terrain_class_names[class]);
 }

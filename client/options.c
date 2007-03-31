@@ -21,7 +21,6 @@
 #include "events.h"
 #include "fcintl.h"
 #include "game.h"
-#include "ioz.h"
 #include "log.h"
 #include "mem.h"
 #include "registry.h"
@@ -89,8 +88,7 @@ const char *client_option_class_names[COC_MAX] = {
   N_("Overview"),
   N_("Sound"),
   N_("Interface"),
-  N_("Network"),
-  N_("Font")
+  N_("Network")
 };
 
 static client_option common_options[] = {
@@ -491,7 +489,6 @@ void load_general_options(void)
 				      prefix, o->name);
       break;
     case COT_STR:
-    case COT_FONT:
       mystrlcpy(o->p_string_value,
                      secfile_lookup_str_default(&sf, o->p_string_value, "%s.%s",
                      prefix, o->name), o->string_length);
@@ -549,7 +546,7 @@ void load_ruleset_specific_options(void)
   if (game.player_ptr) {
     /* load global worklists */
     for (i = 0; i < MAX_NUM_WORKLISTS; i++) {
-      worklist_load(&sf, &client.worklists[i],
+      worklist_load(&sf, &(game.player_ptr->worklists[i]),
 		    "worklists.worklist%d", i);
     }
   }
@@ -598,7 +595,6 @@ void save_options(void)
       secfile_insert_int(&sf, *(o->p_int_value), "client.%s", o->name);
       break;
     case COT_STR:
-    case COT_FONT:
       secfile_insert_str(&sf, o->p_string_value, "client.%s", o->name);
       break;
     }
@@ -626,8 +622,9 @@ void save_options(void)
   /* insert global worklists */
   if (game.player_ptr) {
     for(i = 0; i < MAX_NUM_WORKLISTS; i++){
-      if (client.worklists[i].is_valid) {
-	worklist_save(&sf, &client.worklists[i], client.worklists[i].length,
+      if (game.player_ptr->worklists[i].is_valid) {
+	worklist_save(&sf, &(game.player_ptr->worklists[i]),
+                      game.player_ptr->worklists[i].length,
 		      "worklists.worklist%d", i);
       }
     }
@@ -645,7 +642,7 @@ void save_options(void)
   }
 
   /* save to disk */
-  if (!section_file_save(&sf, name, 0, FZ_PLAIN)) {
+  if (!section_file_save(&sf, name, 0)) {
     my_snprintf(output_buffer, sizeof(output_buffer),
 		_("Save failed, cannot write to file %s"), name);
   } else {

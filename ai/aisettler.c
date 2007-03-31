@@ -261,7 +261,7 @@ void cityresult_fill(struct player *pplayer,
 
   pplayer->government = curr_govt;
   if (virtual_city) {
-    destroy_city_virtual(pcity);
+    remove_city_virtual(pcity);
   }
 
   assert(result->city_center >= 0);
@@ -605,7 +605,7 @@ void find_best_city_placement(struct unit *punit, struct cityresult *best,
       ferry->tile = punit->tile;
     }
 
-    assert(SEA_MOVING == get_unit_move_type(unit_type(ferry)));
+    assert(SEA_MOVING == unit_type(ferry)->move_type);
     pft_fill_unit_overlap_param(&parameter, ferry);
     parameter.get_TB = no_fights_or_unknown;
 

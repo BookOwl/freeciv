@@ -59,12 +59,29 @@ static void init_game_id(void)
 }
 
 /****************************************************************************
-  Get unit_type for given role character
+  Place a starting unit for the player.
 ****************************************************************************/
-struct unit_type *crole_to_unit_type(char crole,struct player *pplayer)
+static void place_starting_unit(struct tile *ptile, struct player *pplayer,
+				char crole)
 {
-  struct unit_type *utype = NULL;
+  struct unit_type *utype;
   enum unit_flag_id role;
+
+  assert(!is_non_allied_unit_tile(ptile, pplayer));
+
+  /* For scenarios or dispersion, huts may coincide with player starts (in 
+   * other cases, huts are avoided as start positions).  Remove any such hut,
+   * and make sure to tell the client, since we may have already sent this
+   * tile (with the hut) earlier: */
+  if (tile_has_special(ptile, S_HUT)) {
+    tile_clear_special(ptile, S_HUT);
+    update_tile_knowledge(ptile);
+    freelog(LOG_VERBOSE, "Removed hut on start position for %s",
+	    pplayer->name);
+  }
+
+  /* Expose visible area. */
+  map_show_circle(pplayer, ptile, game.info.init_vis_radius_sq);
 
   switch(crole) {
   case 'c':
@@ -99,81 +116,29 @@ struct unit_type *crole_to_unit_type(char crole,struct player *pplayer)
     break;
   default: 
     assert(FALSE);
-    return NULL;
+    return;
   }
 
   /* Create the unit of an appropriate type, if it exists */
   if (num_role_units(role) > 0) {
-    if (pplayer != NULL) {
-      utype = first_role_unit_for_player(pplayer, role);
-    }
+    utype = first_role_unit_for_player(pplayer, role);
     if (utype == NULL) {
       utype = get_role_unit(role, 0);
     }
-  }
 
-  return utype;
-}
-
-/****************************************************************************
-  Place a starting unit for the player. Returns tile where unit was really
-  placed.
-****************************************************************************/
-static struct tile *place_starting_unit(struct tile *starttile,
-                                        struct player *pplayer,
-                                        char crole)
-{
-  struct tile *ptile = NULL;
-  struct unit_type *utype = crole_to_unit_type(crole, pplayer);
-
-  if (utype != NULL) {
-    iterate_outward(starttile, map.xsize + map.ysize, itertile) {
-      if (!is_non_allied_unit_tile(itertile, pplayer)
-          && is_native_tile(utype, itertile)) {
-        ptile = itertile;
-        break;
-      }
-    } iterate_outward_end;
-  }
-
-  if (ptile == NULL) {
-    /* No place where unit may exist. */
-    return NULL;
-  }
-
-  assert(!is_non_allied_unit_tile(ptile, pplayer));
-
-  /* For scenarios or dispersion, huts may coincide with player starts (in 
-   * other cases, huts are avoided as start positions).  Remove any such hut,
-   * and make sure to tell the client, since we may have already sent this
-   * tile (with the hut) earlier: */
-  if (tile_has_special(ptile, S_HUT)) {
-    tile_clear_special(ptile, S_HUT);
-    update_tile_knowledge(ptile);
-    freelog(LOG_VERBOSE, "Removed hut on start position for %s",
-	    pplayer->name);
-  }
-
-  /* Expose visible area. */
-  map_show_circle(pplayer, ptile, game.info.init_vis_radius_sq);
-
-  if (utype != NULL) {
     /* We cannot currently handle sea units as start units.
      * TODO: remove this code block when we can. */
-    if (get_unit_move_type(utype) == SEA_MOVING) {
+    if (utype->move_type == SEA_MOVING) {
       freelog(LOG_ERROR, _("Sea moving start units are not yet supported, "
                            "%s not created."), utype->name);
       notify_player(pplayer, NULL, E_BAD_COMMAND,
 		    _("Sea moving start units are not yet supported. "
 		      "Nobody gets %s."), utype->name);
-      return NULL;
+      return;
     }
 
     (void) create_unit(pplayer, ptile, utype, FALSE, 0, 0);
-    return ptile;
   }
-
-  return NULL;
 }
 
 /****************************************************************************
@@ -205,7 +170,6 @@ void init_new_game(void)
 {
   const int NO_START_POS = -1;
   int start_pos[game.info.nplayers];
-  int placed_units[game.info.nplayers];
   bool pos_used[map.num_start_positions];
   int i, num_used = 0;
 
@@ -275,12 +239,7 @@ void init_new_game(void)
       = map.start_positions[start_pos[pplayer->player_no]];
 
     /* Place the first unit. */
-    if (place_starting_unit(pos.tile, pplayer,
-                            game.info.start_units[0]) != NULL) {
-      placed_units[pplayer->player_no] = 1;
-    } else {
-      placed_units[pplayer->player_no] = 0;
-    }
+    place_starting_unit(pos.tile, pplayer, game.info.start_units[0]);
   } players_iterate_end;
 
   /* Place all other units. */
@@ -296,10 +255,7 @@ void init_new_game(void)
       ptile = find_dispersed_position(pplayer, &p);
 
       /* Create the unit of an appropriate type. */
-      if (place_starting_unit(ptile, pplayer,
-                              game.info.start_units[i]) != NULL) {
-        placed_units[pplayer->player_no]++;
-      }
+      place_starting_unit(ptile, pplayer, game.info.start_units[i]);
     }
 
     /* Place nation specific start units (not role based!) */
@@ -307,15 +263,7 @@ void init_new_game(void)
     while (nation->init_units[i] != NULL && i < MAX_NUM_UNIT_LIST) {
       ptile = find_dispersed_position(pplayer, &p);
       create_unit(pplayer, ptile, nation->init_units[i], FALSE, 0, 0);
-      placed_units[pplayer->player_no]++;
       i++;
-    }
-  } players_iterate_end;
-
-  players_iterate(pplayer) {
-    if (placed_units[pplayer->player_no] == 0) {
-      /* No units at all for some player! */
-      die(_("No units placed for %s!"), pplayer->name);
     }
   } players_iterate_end;
 
@@ -553,7 +501,8 @@ opens a file specified by the packet and compares the packet values with
 the file values. Sends an answer to the client once it's done.
 **************************************************************************/
 void handle_single_want_hack_req(struct connection *pc,
-    				 struct packet_single_want_hack_req *packet)
+    				 const struct packet_single_want_hack_req
+				 *packet)
 {
   struct section_file file;
   char *token = NULL;

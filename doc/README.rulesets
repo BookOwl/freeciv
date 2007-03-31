@@ -104,6 +104,7 @@ units.ruleset:
       - "Diplomat" and "Caravan"
 
     - These flags and roles work only for move_type "Land" units:
+      - "Diplomat"
       - "Partisan"
       - "Settler"
       - "IgTer"
@@ -111,9 +112,6 @@ units.ruleset:
       - "Airbase"
       - "Barbarian"
       - "BarbarianTech"
-
-    - These flags and roles work only for move_type "Sea" units:
-      - "No_Land_Attack"
 
 ----------------------------------------------------------------------
 Implementation details:

@@ -100,7 +100,6 @@ GdkWindow *root_window;
 GtkWidget *toplevel_tabs;
 GtkWidget *top_vbox;
 GtkWidget *top_notebook, *bottom_notebook;
-GtkWidget *map_widget;
 
 int city_names_font_size = 0, city_productions_font_size = 0;
 PangoFontDescription *main_font;
@@ -145,19 +144,6 @@ GtkWidget *government_ebox;
 const char * const gui_character_encoding = "UTF-8";
 const bool gui_use_transliteration = FALSE;
 
-char font_city_label[512] = "Monospace 8";
-char font_notify_label[512] = "Monospace Bold 9";
-char font_spaceship_label[512] = "Monospace 8";
-char font_help_label[512] = "Sans Bold 10";
-char font_help_link[512] = "Sans 9";
-char font_help_text[512] = "Monospace 8";
-char font_chatline[512] = "Monospace 8";
-char font_beta_label[512] = "Sans Italic 10";
-char font_small[512] = "Sans 9";
-char font_comment_label[512] = "Sans Italic 9";
-char font_city_names[512] = "Sans Bold 10";
-char font_city_productions[512] = "Serif 10";
-
 client_option gui_options[] = {
   /* This option is the same as the one in gui-gtk */
   GEN_BOOL_OPTION(map_scrollbars, N_("Show Map Scrollbars"),
@@ -191,67 +177,7 @@ client_option gui_options[] = {
 		     N_("If this is enabled then a better method is used "
 			"for drawing fog-of-war.  It is not any slower but "
 			"will consume about twice as much memory."),
-		     COC_GRAPHICS, mapview_redraw_callback),
-  GEN_FONT_OPTION(font_city_label,
-  		  city_label,
-		  N_("City Label"),
-		  N_("FIXME"),
-		  COC_FONT),
-  GEN_FONT_OPTION(font_notify_label,
-  		  notify_label,
-		  N_("Notify Label"),
-		  N_("FIXME"),
-		  COC_FONT),
-  GEN_FONT_OPTION(font_spaceship_label,
-  		  spaceship_label,
-		  N_("Spaceship Label"),
-		  N_("FIXME"),
-		  COC_FONT),
-  GEN_FONT_OPTION(font_help_label,
-  		  help_label,
-		  N_("Help Label"),
-		  N_("FIXME"),
-		  COC_FONT),
-  GEN_FONT_OPTION(font_help_link,
-  		  help_link,
-		  N_("Help Link"),
-		  N_("FIXME"),
-		  COC_FONT),
-  GEN_FONT_OPTION(font_help_text,
-  		  help_text,
-		  N_("Help Text"),
-		  N_("FIXME"),
-		  COC_FONT),
-  GEN_FONT_OPTION(font_chatline,
-  		  chatline,
-		  N_("Chatline Area"),
-		  N_("FIXME"),
-		  COC_FONT),
-  GEN_FONT_OPTION(font_beta_label,
-  		  beta_label,
-		  N_("Beta Label"),
-		  N_("FIXME"),
-		  COC_FONT),
-  GEN_FONT_OPTION(font_small,
-  		  small_font,
-		  N_("Small Font"),
-		  N_("FIXME"),
-		  COC_FONT),
-  GEN_FONT_OPTION(font_comment_label,
-  		  comment_label,
-		  N_("Comment Label"),
-		  N_("FIXME"),
-		  COC_FONT),
-  GEN_FONT_OPTION(font_city_names,
-  		  city_names_font,
-		  N_("City Names"),
-		  N_("FIXME"),
-		  COC_FONT),
-  GEN_FONT_OPTION(font_city_productions,
-  		  city_productions_font,
-		  N_("City Productions"),
-		  N_("FIXME"),
-		  COC_FONT)
+		     COC_GRAPHICS, mapview_redraw_callback)
 };
 const int num_gui_options = ARRAY_SIZE(gui_options);
 
@@ -790,8 +716,7 @@ static void populate_unit_pixmap_table(void)
   }
 
   more_arrow_pixmap
-    = gtk_image_new_from_pixbuf(sprite_get_pixbuf(get_arrow_sprite(tileset,
-						   ARROW_RIGHT)));
+    = gtk_image_new_from_pixbuf(sprite_get_pixbuf(get_arrow_sprite(tileset)));
   gtk_widget_ref(more_arrow_pixmap);
   gtk_table_attach_defaults(GTK_TABLE(table), more_arrow_pixmap, 4, 5, 1, 2);
 
@@ -1108,13 +1033,13 @@ static void setup_widgets(void)
 
   /* Map canvas and scrollbars */
 
-  map_widget = gtk_table_new(2, 2, FALSE);
+  table = gtk_table_new(2, 2, FALSE);
 
   label = gtk_label_new_with_mnemonic(_("_Map"));
-  gtk_notebook_append_page(GTK_NOTEBOOK(top_notebook), map_widget, label);
+  gtk_notebook_append_page(GTK_NOTEBOOK(top_notebook), table, label);
 
   frame = gtk_frame_new(NULL);
-  gtk_table_attach(GTK_TABLE(map_widget), frame, 0, 1, 0, 1,
+  gtk_table_attach(GTK_TABLE(table), frame, 0, 1, 0, 1,
                    GTK_EXPAND|GTK_SHRINK|GTK_FILL,
                    GTK_EXPAND|GTK_SHRINK|GTK_FILL, 0, 0);
 
@@ -1138,11 +1063,11 @@ static void setup_widgets(void)
   gtk_container_add(GTK_CONTAINER(frame), map_canvas);
 
   map_horizontal_scrollbar = gtk_hscrollbar_new(NULL);
-  gtk_table_attach(GTK_TABLE(map_widget), map_horizontal_scrollbar, 0, 1, 1, 2,
+  gtk_table_attach(GTK_TABLE(table), map_horizontal_scrollbar, 0, 1, 1, 2,
                    GTK_EXPAND|GTK_SHRINK|GTK_FILL, 0, 0, 0);
 
   map_vertical_scrollbar = gtk_vscrollbar_new(NULL);
-  gtk_table_attach(GTK_TABLE(map_widget), map_vertical_scrollbar, 1, 2, 0, 1,
+  gtk_table_attach(GTK_TABLE(table), map_vertical_scrollbar, 1, 2, 0, 1,
                    0, GTK_EXPAND|GTK_SHRINK|GTK_FILL, 0, 0);
 
   g_signal_connect(map_canvas, "expose_event",
@@ -1306,10 +1231,6 @@ void ui_main(int argc, char **argv)
     gtk_rc_parse(str);
     g_free(str);
   }
-
-  client_options_iterate(o) {
-    gui_update_font_from_option(o);
-  } client_options_iterate_end;
 
   toplevel = gtk_window_new(GTK_WINDOW_TOPLEVEL);
   g_signal_connect(toplevel, "key_press_event",
@@ -1523,9 +1444,21 @@ void update_conn_list_dialog(void)
       } conn_list_iterate_end;
 
       if (pplayer->ai.control) {
-        /* TRANS: "<Novice AI>" */
-        my_snprintf(name, sizeof(name), _("<%s AI>"),
-                    ai_level_name(pplayer->ai.skill_level));
+	sz_strlcpy(name, _("<AI>"));
+	switch (pplayer->ai.skill_level) {
+	case 2:
+	  sz_strlcpy(name, _("<Novice AI>"));
+	  break;
+	case 3:
+	  sz_strlcpy(name, _("<Easy AI>"));
+	  break;
+	case 5:
+	  sz_strlcpy(name, _("<Normal AI>"));
+	  break;
+	case 7:
+	  sz_strlcpy(name, _("<Hard AI>"));
+	  break;
+	}
       } else if (access_level <= ALLOW_INFO) {
 	sz_strlcpy(name, pplayer->username);
       } else {

@@ -131,7 +131,6 @@ fallout_trade_penalty=50
 ;                        see warmer_wetter_result
 ; cooler_drier_result  = result of nuclear winter for dry terrains;
 ;                        see warmer_wetter_result
-; native_to            = List of unit classes that can move here
 ; flags                = General flags for this terrain:
 ;   - NoBarbs          = Barbarians will not be spawned here.
 ;   - NoPollution      = Pollution will not be put on this terrain type.
@@ -175,7 +174,6 @@ warmer_wetter_result = "no"
 warmer_drier_result  = "no"
 cooler_wetter_result = "no"
 cooler_drier_result  = "no"
-native_to            = "Land", "Air", "Missile"
 flags                = "NoBarbs"
 property_frozen      = 100
 helptext	     = _("\
@@ -241,7 +239,6 @@ warmer_wetter_result = "Jungle"
 warmer_drier_result  = "Desert"
 cooler_wetter_result = "no"
 cooler_drier_result  = "no"
-native_to            = "Land", "Air", "Missile"
 flags                = "Starter"
 property_temperate   = 50
 property_foliage     = 50
@@ -275,7 +272,6 @@ warmer_wetter_result = "Swamp"
 warmer_drier_result  = "Desert"
 cooler_wetter_result = "Desert"
 cooler_drier_result  = "Tundra"
-native_to            = "Land", "Air", "Missile"
 flags                = "Starter", "CanHaveRiver"
 property_temperate   = 50
 property_green       = 50
@@ -308,7 +304,6 @@ warmer_wetter_result = "no"
 warmer_drier_result  = "no"
 cooler_wetter_result = "no"
 cooler_drier_result  = "no"
-native_to            = "Land", "Air", "Missile"
 flags                = "Starter"
 property_mountainous = 30
 property_green       = 10
@@ -405,7 +400,6 @@ warmer_wetter_result = "no"
 warmer_drier_result  = "no"
 cooler_wetter_result = "no"
 cooler_drier_result  = "no"
-native_to            = "Sea", "Air", "Missile"
 flags                = "Oceanic", "NoPollution", "UnsafeCoast", "NoCities"
 helptext	     = _("\
 Oceans cover much of the world, and only sea units (Triremes and\
@@ -439,7 +433,6 @@ warmer_wetter_result = "Swamp"
 warmer_drier_result  = "Desert"
 cooler_wetter_result = "Desert"
 cooler_drier_result  = "Tundra"
-native_to            = "Land", "Air", "Missile"
 flags                = "Starter"
 property_temperate   = 50
 property_green       = 50
@@ -505,7 +498,6 @@ warmer_wetter_result = "no"
 warmer_drier_result  = "no"
 cooler_wetter_result = "Arctic"
 cooler_drier_result  = "Arctic"
-native_to            = "Land", "Air", "Missile"
 flags                = "Starter", "NoBarbs"
 property_cold        = 50
 helptext	     = _("\
@@ -592,51 +584,3 @@ graphic     = "ts.seals"
 graphic_alt = "-"
 identifier  = "S"
 food        = 2
-
-; Below has to be definition for exactly two base types:
-; fortress and airbase.
-;
-; name                    = Name of the base type.
-; graphic                 = tag specifing preferred graphic
-; graphic_alt	          = tag for alternate garphic if preferred graphic is not 
-;                           present. Can use eg "-" for no alternate graphic.
-; activity_gfx            = tag specifing graphic for unit building base
-; reqs 	                  = requirements to build the base (see effects.ruleset
-;                           and README.effects for help on requirements)
-; gui_type                = How gui should handle this base. Fortress/Airbase/Other 
-; flags
-;   - "NoAggressive"      = Units inside are not considered aggressive
-;   - "DefenseBonus"      = Units inside gain defense bonus
-;   - "NoStackDeath"      = Units inside do not die all at once when attacked
-;   - "ClaimTerritory"    = Base will claim land ownership
-;   - "DiplomatDefense"   = Diplomats inside get bonus to diplomatic defense
-;   - "ParadropFrom"      = Paradrop can be initiated from base
-
-[fortress]
-name         = _("Fortress")
-graphic      = "base.fortress"
-graphic_alt  = "-"
-activity_gfx = "unit.fortress"
-reqs         =
-    { "type", "name", "range"
-      "Tech", "Construction", "Player"
-      "TerrainClass", "Land", "Local"
-      "UnitFlag", "Settlers", "Local"
-    }
-gui_type     = "Fortress"
-native_to    = "Land"
-flags        = "NoAggressive", "DefenseBonus", "ClaimTerritory",
-               "NoStackDeath", "DiplomatDefense"
-
-[airbase]
-name         = _("Airbase")
-graphic      = "base.airbase"
-graphic_alt  = "-"
-activity_gfx = "unit.airbase"
-reqs         =
-    { "type", "name", "range"
-      "Tech", "Never", "Player"
-    }
-gui_type     = "Airbase"
-native_to    = "Air", "Missile"
-flags        = "NoStackDeath", "DiplomatDefense", "ParadropFrom"

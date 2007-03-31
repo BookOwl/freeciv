@@ -243,9 +243,8 @@ bool is_water_adjacent_to_tile(const struct tile *ptile);
 bool is_tiles_adjacent(const struct tile *ptile0, const struct tile *ptile1);
 bool is_move_cardinal(const struct tile *src_tile,
 		      const struct tile *dst_tile);
-int map_move_cost_unit(struct unit *punit, const struct tile *ptile);
+int map_move_cost(struct unit *punit, const struct tile *ptile);
 int map_move_cost_ai(const struct tile *tile0, const struct tile *tile1);
-int map_move_cost(const struct tile *src_tile, const struct tile *dst_tile);
 bool is_safe_ocean(const struct tile *ptile);
 bool is_cardinally_adj_to_ocean(const struct tile *ptile);
 bv_special get_tile_infrastructure_set(const struct tile *ptile,
@@ -433,7 +432,6 @@ struct unit_order {
   enum unit_orders order;
   enum direction8 dir;		/* Only valid for ORDER_MOVE. */
   enum unit_activity activity;	/* Only valid for ORDER_ACTIVITY. */
-  enum base_type_id base;       /* Only valid for activity ACTVITY_BASE */
 };
 
 /* return the reverse of the direction */

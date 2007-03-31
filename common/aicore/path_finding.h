@@ -320,7 +320,6 @@ struct pf_parameter {
   int fuel;                     /* Should be 1 for units without fuel. */
 
   struct player *owner;
-  struct unit_class *class;
 
   bv_flags unit_flags;          /* Like F_MARINE and F_TRIREME */
   bool omniscience;		/* Do we care if the tile is visible? */

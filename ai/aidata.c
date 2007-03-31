@@ -186,24 +186,23 @@ static void count_my_units(struct player *pplayer)
   memset(&ai->stats.units, 0, sizeof(ai->stats.units));
 
   unit_list_iterate(pplayer->units, punit) {
-    struct unit_class *pclass = get_unit_class(unit_type(punit));
-
-    if (pclass->ai.land_move != MOVE_NONE
-        && pclass->ai.sea_move != MOVE_NONE) {
-      /* Can move both land and ocean */
-      ai->stats.units.amphibious++;
-    } else if (pclass->ai.land_move != MOVE_NONE) {
-      /* Can move only at land */
+    switch (unit_type(punit)->move_type) {
+    case LAND_MOVING:
       ai->stats.units.land++;
-    } else if (pclass->ai.sea_move != MOVE_NONE) {
-      /* Can move only at sea */
+      break;
+    case SEA_MOVING:
       ai->stats.units.sea++;
+      break;
+    case HELI_MOVING:
+    case AIR_MOVING:
+      ai->stats.units.air++;
+      break;
     }
 
     if (unit_flag(punit, F_TRIREME)) {
       ai->stats.units.triremes++;
     }
-    if (unit_class_flag(get_unit_class(unit_type(punit)), UCF_MISSILE)) {
+    if (unit_flag(punit, F_MISSILE)) {
       ai->stats.units.missiles++;
     }
     if (unit_flag(punit, F_PARATROOPERS)) {
@@ -229,8 +228,7 @@ static void count_my_units(struct player *pplayer)
 void ai_data_phase_init(struct player *pplayer, bool is_new_phase)
 {
   struct ai_data *ai = &aidata[pplayer->player_no];
-  int i, j, k;
-  int nuke_units = num_role_units(F_NUCLEAR);
+  int i, nuke_units = num_role_units(F_NUCLEAR);
   bool danger_of_nukes = FALSE;
 
   /*** Threats ***/
@@ -241,6 +239,7 @@ void ai_data_phase_init(struct player *pplayer, bool is_new_phase)
   ai->num_oceans        = map.num_oceans;
   ai->threats.continent = fc_calloc(ai->num_continents + 1, sizeof(bool));
   ai->threats.invasions = FALSE;
+  ai->threats.air       = FALSE;
   ai->threats.nuclear   = 0; /* none */
   ai->threats.ocean     = fc_calloc(ai->num_oceans + 1, sizeof(bool));
   ai->threats.igwall    = FALSE;
@@ -267,15 +266,8 @@ void ai_data_phase_init(struct player *pplayer, bool is_new_phase)
       if (is_sailing_unit(punit)) {
         /* If the enemy has not started sailing yet, or we have total
          * control over the seas, don't worry, keep attacking. */
-        if (get_transporter_capacity(punit) > 0) {
-          unit_class_iterate(punitclass) {
-            if (punitclass->move_type == LAND_MOVING
-                && can_unit_type_transport(punit->type, punitclass)) {
-              /* Enemy can transport some land units! */
-              ai->threats.invasions = TRUE;
-              break;
-            }
-          } unit_class_iterate_end;
+        if (is_ground_units_transport(punit)) {
+          ai->threats.invasions = TRUE;
         }
 
         /* The idea is that while our enemies don't have any offensive
@@ -296,8 +288,15 @@ void ai_data_phase_init(struct player *pplayer, bool is_new_phase)
         continue;
       }
 
+      /* The next idea is that if our enemies don't have any offensive
+       * airborne units, we don't have to worry. Go on the offensive! */
+      if ((is_air_unit(punit) || is_heli_unit(punit))
+           && unit_type(punit)->attack_strength > 1) {
+        ai->threats.air = TRUE;
+      }
+
       /* If our enemy builds missiles, worry about missile defence. */
-      if (unit_class_flag(get_unit_class(unit_type(punit)), UCF_MISSILE)
+      if (unit_flag(punit, F_MISSILE)
           && unit_type(punit)->attack_strength > 1) {
         ai->threats.missile = TRUE;
       }
@@ -320,53 +319,6 @@ void ai_data_phase_init(struct player *pplayer, bool is_new_phase)
 
   /* Increase from fear to terror if opponent actually has nukes */
   if (danger_of_nukes) ai->threats.nuclear++; /* sum of both fears */
-
-  /*** Channels ***/
-
-  /* Ways to cross from one ocean to another through a city. */
-  ai->channels = fc_calloc((ai->num_oceans + 1) * (ai->num_oceans + 1), sizeof(int));
-  players_iterate(aplayer) {
-    if (pplayers_allied(pplayer, aplayer)) {
-      city_list_iterate(aplayer->cities, pcity) {
-        adjc_iterate(pcity->tile, tile1) {
-          if (is_ocean(tile1->terrain)) {
-            adjc_iterate(pcity->tile, tile2) {
-              if (is_ocean(tile2->terrain) 
-                  && tile_get_continent(tile1) != tile_get_continent(tile2)) {
-                ai->channels[(-tile1->continent) * ai->num_oceans
-                             + (-tile2->continent)] = TRUE;
-                ai->channels[(-tile2->continent) * ai->num_oceans
-                             + (-tile1->continent)] = TRUE;
-              }
-            } adjc_iterate_end;
-          }
-        } adjc_iterate_end;
-      } city_list_iterate_end;
-    }
-  } players_iterate_end;
-
-  /* If we can go i -> j and j -> k, we can also go i -> k. */
-  for(i = 1; i <= ai->num_oceans; i++) {
-    for(j = 1; j <= ai->num_oceans; j++) {
-      if (ai->channels[i * ai->num_oceans + j]) {
-        for(k = 1; k <= ai->num_oceans; k++) {
-          ai->channels[i * ai->num_oceans + k] |= 
-            ai->channels[j * ai->num_oceans + k];
-        }
-      }
-    }
-  }
-
-  if (game.debug[DEBUG_FERRIES]) {
-    for(i = 1; i <= ai->num_oceans; i++) {
-      for(j = 1; j <= ai->num_oceans; j++) {
-        if (ai->channels[i * ai->num_oceans + j]) {
-          freelog(LOG_NORMAL, "%s: oceans %d and %d are connected",
-                  pplayer->name, i, j);
-       }
-      }
-    }
-  }
 
   /*** Exploration ***/
 
@@ -591,9 +543,6 @@ void ai_data_phase_done(struct player *pplayer)
 
   free(ai->stats.cities);
   ai->stats.cities = NULL;
-
-  free(ai->channels);
-  ai->channels = NULL;
 }
 
 /**************************************************************************
@@ -638,7 +587,6 @@ void ai_data_init(struct player *pplayer)
   memset(ai->government_want, 0,
 	 (game.control.government_count + 1) * sizeof(*ai->government_want));
 
-  ai->channels = NULL;
   ai->wonder_city = 0;
   ai->diplomacy.strategy = WIN_OPEN;
   ai->diplomacy.timer = 0;
@@ -661,18 +609,4 @@ void ai_data_init(struct player *pplayer)
   }
   ai->wants_no_science = FALSE;
   ai->max_num_cities = 10000;
-}
-
-/**************************************************************************
-  Is there a channel going from ocean c1 to ocean c2?
-  Returns FALSE if either is not an ocean.
-**************************************************************************/
-bool ai_channel(struct player *pplayer, Continent_id c1, Continent_id c2)
-{
-  struct ai_data *ai = ai_data_get(pplayer);
-
-  if (c1 >= 0 || c2 >= 0) {
-    return FALSE;
-  }
-  return (c1 == c2 || ai->channels[(-c1) * ai->num_oceans + (-c2)]);
 }

@@ -780,41 +780,36 @@ void redraw_unit_info_label(struct unit_list *punitlist)
             	  
 	    citywall = pTile->city->client.walls;
                           
-#if 0       
-            /* This has hardcoded assumption that EFT_LAND_REGEN is always
-             * provided by *building* named *Barracks*. Similar assumptions for
-             * other effects. */     
+#if 0                          
 	    if (pplayers_allied(game.player_ptr, pOwner)) {
 	      barrack = (get_city_bonus(pTile->city, EFT_LAND_REGEN) > 0);
 	      airport = (get_city_bonus(pTile->city, EFT_AIR_VETERAN) > 0);
 	      port = (get_city_bonus(pTile->city, EFT_SEA_VETERAN) > 0);
 	    }
-
+	  
 	    if (citywall || barrack || airport || port) {
-	      cat_snprintf(buffer, sizeof(buffer), Q_("?blistbegin: with "));
+	      cat_snprintf(buffer, sizeof(buffer), _(" with "));
 	      if (barrack) {
                 cat_snprintf(buffer, sizeof(buffer), _("Barracks"));
 	        if (port || airport || citywall) {
-	          cat_snprintf(buffer, sizeof(buffer), Q_("?blistmore:, "));
+	          cat_snprintf(buffer, sizeof(buffer), ", ");
 	        }
 	      }
 	      if (port) {
 	        cat_snprintf(buffer, sizeof(buffer), _("Port"));
 	        if (airport || citywall) {
-	          cat_snprintf(buffer, sizeof(buffer), Q_("?blistmore:, "));
+	          cat_snprintf(buffer, sizeof(buffer), ", ");
 	        }
 	      }
 	      if (airport) {
 	        cat_snprintf(buffer, sizeof(buffer), _("Airport"));
 	        if (citywall) {
-	          cat_snprintf(buffer, sizeof(buffer), Q_("?blistmore:, "));
+	          cat_snprintf(buffer, sizeof(buffer), ", ");
 	        }
 	      }
 	      if (citywall) {
 	        cat_snprintf(buffer, sizeof(buffer), _("City Walls"));
               }
-
-              cat_snprintf(buffer, sizeof(buffer), Q_("?blistend:"));
 	    }
 #endif
 	    
@@ -1145,8 +1140,53 @@ void update_unit_info_label(struct unit_list *punitlist)
   redraw_unit_info_label(punitlist);
   
   if (punitlist) {
+
     if(!is_anim_enabled()) {
       enable_focus_animation();
+    }
+    switch (hover_state) {
+    case HOVER_NONE:
+      if (action_state == CURSOR_ACTION_SELECT) {
+        update_mouse_cursor(CURSOR_SELECT); 
+      } else if (action_state == CURSOR_ACTION_PARATROOPER) {
+        update_mouse_cursor(CURSOR_PARADROP);  
+      } else if (action_state == CURSOR_ACTION_NUKE) {
+        update_mouse_cursor(CURSOR_NUKE);
+      } else {
+        update_mouse_cursor(CURSOR_DEFAULT);
+      }  
+      break;
+    case HOVER_GOTO:
+      if (action_state == CURSOR_ACTION_GOTO) {
+        update_mouse_cursor(CURSOR_GOTO);
+      } else if (action_state == CURSOR_ACTION_DEFAULT) {
+        update_mouse_cursor(CURSOR_DEFAULT);
+      } else if (action_state == CURSOR_ACTION_ATTACK) {
+        update_mouse_cursor(CURSOR_ATTACK); 
+      } else {
+        update_mouse_cursor(CURSOR_INVALID);  
+      }
+      break;
+    case HOVER_PATROL:
+      if (action_state == CURSOR_ACTION_INVALID) {
+        update_mouse_cursor(CURSOR_INVALID);
+      } else {
+        update_mouse_cursor(CURSOR_PATROL);
+      }
+      break;
+    case HOVER_CONNECT:
+      if (action_state == CURSOR_ACTION_INVALID) {
+        update_mouse_cursor(CURSOR_INVALID);
+      } else {
+        update_mouse_cursor(CURSOR_GOTO);
+      }
+      break;
+    case HOVER_NUKE:
+      update_mouse_cursor(CURSOR_NUKE);
+      break;
+    case HOVER_PARADROP:
+      update_mouse_cursor(CURSOR_PARADROP);
+      break;
     }
   } else {
     disable_focus_animation();
