@@ -22,12 +22,14 @@
 #include <time.h>
 
 #include "fcintl.h"
+#include "game.h"
 #include "log.h"
 #include "map.h"
 #include "maphand.h" /* assign_continent_numbers(), MAP_NCONT */
 #include "mem.h"
 #include "rand.h"
 #include "shared.h"
+#include "srv_main.h"
 
 #include "height_map.h"
 #include "mapgen.h"
@@ -221,36 +223,6 @@ static bool terrain_is_too_high(struct tile *ptile,
 }
 
 /****************************************************************************
-  Return a random terrain that has the specified flag.
-  Returns T_UNKNOWN when there is no matching terrain.
-****************************************************************************/
-static struct terrain *pick_terrain_by_flag(enum terrain_flag_id flag)
-{
-  bool has_flag[terrain_count()];
-  int count = 0;
-
-  terrain_type_iterate(pterrain) {
-    if ((has_flag[terrain_index(pterrain)] = terrain_has_flag(pterrain, flag))) {
-      count++;
-    }
-  } terrain_type_iterate_end;
-
-  count = myrand(count);
-  terrain_type_iterate(pterrain) {
-    if (has_flag[terrain_index(pterrain)]) {
-      if (count == 0) {
-	return pterrain;
-      }
-      count--;
-    }
-  } terrain_type_iterate_end;
-#if 0
-  die("Reached end of pick_terrain_by_flag!");
-#endif
-  return T_UNKNOWN;
-}
-
-/****************************************************************************
   Pick a terrain based on the target property and a property to avoid.
 
   If the target property is given, then all terrains with that property
@@ -325,20 +297,21 @@ static struct terrain *pick_terrain(enum mapgen_terrain_property target,
 }
 
 /**************************************************************************
-  Picks an ocean terrain to match the given depth.
-  Return NULL when there is no available ocean.
+  Picks an ocean terrain to match the given depth (as a percentage).
+
+  FIXME: this should return NULL if there is no available ocean.
 **************************************************************************/
 static struct terrain *pick_ocean(int depth)
 {
-  struct terrain *best_terrain = NULL;
-  int best_match = TERRAIN_OCEAN_DEPTH_MAXIMUM;
+  /* FIXME: pick_terrain_by_flag may return NULL if there is no match. */
+  struct terrain *best_terrain = pick_terrain_by_flag(TER_OCEANIC);
+  int best_match = abs(depth - best_terrain->property[MG_OCEAN_DEPTH]);
 
   terrain_type_iterate(pterrain) {
-    if (terrain_has_flag(pterrain, TER_OCEANIC)
-      &&  TERRAIN_OCEAN_DEPTH_MINIMUM <= pterrain->property[MG_OCEAN_DEPTH]) {
+    if (terrain_has_flag(pterrain, TER_OCEANIC)) {
       int match = abs(depth - pterrain->property[MG_OCEAN_DEPTH]);
 
-      if (best_match > match) {
+      if (match < best_match) {
 	best_match = match;
 	best_terrain = pterrain;
       }
@@ -417,7 +390,7 @@ static bool ok_for_separate_poles(struct tile *ptile)
 ****************************************************************************/
 static void make_polar_land(void)
 {
-  assign_continent_numbers();
+  assign_continent_numbers(FALSE);
   whole_map_iterate(ptile) {
     if ((tmap_is(ptile, TT_FROZEN ) &&
 	ok_for_separate_poles(ptile))
@@ -1007,10 +980,10 @@ static void make_rivers(void)
 
 	    if (!terrain_has_flag(pterrain, TER_CAN_HAVE_RIVER)) {
 	      /* We have to change the terrain to put a river here. */
+	      /* FIXME: pick_terrain_by_flag may return NULL
+	       * if there is no match. */
 	      pterrain = pick_terrain_by_flag(TER_CAN_HAVE_RIVER);
-	      if (pterrain) {
-		tile_set_terrain(tile1, pterrain);
-	      }
+	      tile_set_terrain(tile1, pterrain);
 	    }
 	    tile_set_special(tile1, S_RIVER);
 	    current_riverlength++;
@@ -1019,7 +992,8 @@ static void make_rivers(void)
 		    tile1->x, tile1->y);
 	  }
 	} whole_map_iterate_end;
-      } else {
+      }
+      else {
 	freelog(LOG_DEBUG,
 		"mapgen.c: A river failed. It might have gotten stuck in a helix.");
       }
@@ -1101,12 +1075,9 @@ static bool is_tiny_island(struct tile *ptile)
 **************************************************************************/
 static void remove_tiny_islands(void)
 {
-  struct terrain *ridge = find_terrain_by_identifier(TERRAIN_RIDGE_IDENTIFIER);
-
-  assert(NULL != ridge);
   whole_map_iterate(ptile) {
     if (is_tiny_island(ptile)) {
-      tile_set_terrain(ptile, ridge);
+      tile_set_terrain(ptile, pick_ocean(0));
       tile_clear_special(ptile, S_RIVER);
       tile_set_continent(ptile, 0);
     }
@@ -1120,17 +1091,17 @@ static void remove_tiny_islands(void)
 static void print_mapgen_map(void)
 {
   const int loglevel = LOG_DEBUG;
-  int terrain_counts[terrain_count()];
+  int terrain_count[T_COUNT];
   int total = 0;
 
   terrain_type_iterate(pterrain) {
-    terrain_counts[terrain_index(pterrain)] = 0;
+    terrain_count[pterrain->index] = 0;
   } terrain_type_iterate_end;
 
   whole_map_iterate(ptile) {
     struct terrain *pterrain = tile_get_terrain(ptile);
 
-    terrain_counts[terrain_index(pterrain)]++;
+    terrain_count[pterrain->index]++;
     if (!is_ocean(pterrain)) {
       total++;
     }
@@ -1139,8 +1110,8 @@ static void print_mapgen_map(void)
   terrain_type_iterate(pterrain) {
     freelog(loglevel, "%20s : %4d %d%%  ",
 	    terrain_rule_name(pterrain),
-	    terrain_counts[terrain_index(pterrain)],
-	    (terrain_counts[terrain_index(pterrain)] * 100 + 50) / total);
+	    terrain_count[pterrain->index],
+	    (terrain_count[pterrain->index] * 100 + 50) / total);
   } terrain_type_iterate_end;
 }
 
@@ -1157,7 +1128,7 @@ FIXME: Some continent numbers are unused at the end of this function, fx
   based on the map.size server parameter and the specified topology.  If
   not map.xsize and map.ysize will be used.
 **************************************************************************/
-void map_fractal_generate(bool autosize, struct unit_type *initial_unit)
+void map_fractal_generate(bool autosize)
 {
   /* save the current random state: */
   RANDOM_STATE rstate = get_myrand_state();
@@ -1198,12 +1169,12 @@ void map_fractal_generate(bool autosize, struct unit_type *initial_unit)
     if (map.generator == 2) {
       make_pseudofractal1_hmap(1 + ((map.startpos == 0
 				     || map.startpos == 3)
-				    ? 0 : player_count()));
+				    ? 0 : game.info.nplayers));
     }
 
     if (map.generator == 1) {
       make_random_hmap(MAX(1, 1 + get_sqsize() 
-			   - (map.startpos ? player_count() / 4 : 0)));
+			   - (map.startpos ? game.info.nplayers / 4 : 0)));
     }
 
     /* if hmap only generator make anything else */
@@ -1216,7 +1187,6 @@ void map_fractal_generate(bool autosize, struct unit_type *initial_unit)
       remove_tiny_islands();
     }
   }
-  assign_continent_numbers();
 
   if (!temperature_is_initialized()) {
     create_tmap(FALSE);
@@ -1263,7 +1233,7 @@ void map_fractal_generate(bool autosize, struct unit_type *initial_unit)
     }
     
     for(;;) {
-      success = create_start_positions(mode, initial_unit);
+      success = create_start_positions(mode);
       if (success) {
         break;
       }
@@ -1283,7 +1253,12 @@ void map_fractal_generate(bool autosize, struct unit_type *initial_unit)
 	  die("The server couldn't allocate starting positions.");
       }
     }
+
+
   }
+
+  assign_continent_numbers(FALSE);
+  game_map_init();
 
   print_mapgen_map();
 }
@@ -1842,15 +1817,12 @@ static bool make_island(int islemass, int starters,
 **************************************************************************/
 static void initworld(struct gen234_state *pstate)
 {
-  struct terrain *deepest_ocean = pick_ocean(TERRAIN_OCEAN_DEPTH_MAXIMUM);
-
-  assert(NULL != deepest_ocean);
   height_map = fc_malloc(MAP_INDEX_SIZE * sizeof(*height_map));
   create_placed_map(); /* land tiles which aren't placed yet */
   create_tmap(FALSE);
   
   whole_map_iterate(ptile) {
-    tile_set_terrain(ptile, deepest_ocean);
+    tile_set_terrain(ptile, pick_ocean(100));
     tile_set_continent(ptile, 0);
     map_set_placed(ptile); /* not a land tile */
     tile_clear_all_specials(ptile);
@@ -1898,7 +1870,7 @@ static void mapgenerator2(void)
 
   pstate->totalmass = ((map.ysize - 6 - spares) * map.landpercent 
                        * (map.xsize - spares)) / 100;
-  totalweight = 100 * player_count();
+  totalweight = 100 * game.info.nplayers;
 
   assert(!placed_map_is_initialized());
 
@@ -1913,7 +1885,7 @@ static void mapgenerator2(void)
     initworld(pstate);
     
     /* Create one big island for each player. */
-    for (i = player_count(); i > 0; i--) {
+    for (i = game.info.nplayers; i > 0; i--) {
       if (!make_island(bigfrac * pstate->totalmass / totalweight,
                       1, pstate, 95)) {
 	/* we couldn't make an island at least 95% as big as we wanted,
@@ -1949,10 +1921,10 @@ static void mapgenerator2(void)
 
   /* Now place smaller islands, but don't worry if they're small,
    * or even non-existent. One medium and one small per player. */
-  for (i = player_count(); i > 0; i--) {
+  for (i = game.info.nplayers; i > 0; i--) {
     make_island(midfrac * pstate->totalmass / totalweight, 0, pstate, DMSIS);
   }
-  for (i = player_count(); i > 0; i--) {
+  for (i = game.info.nplayers; i > 0; i--) {
     make_island(smallfrac * pstate->totalmass / totalweight, 0, pstate, DMSIS);
   }
 
@@ -1989,11 +1961,11 @@ static void mapgenerator3(void)
       ((map.ysize - 6 - spares) * map.landpercent * (map.xsize - spares)) /
       100;
 
-  bigislands= player_count();
+  bigislands= game.info.nplayers;
 
   landmass = (map.xsize * (map.ysize - 6) * map.landpercent)/100;
   /* subtracting the arctics */
-  if (landmass > 3 * map.ysize + player_count() * 3){
+  if (landmass > 3 * map.ysize + game.info.nplayers * 3){
     landmass -= 3 * map.ysize;
   }
 
@@ -2002,7 +1974,7 @@ static void mapgenerator3(void)
   if (islandmass < 4 * maxmassdiv6) {
     islandmass = (landmass)/(2 * bigislands);
   }
-  if (islandmass < 3 * maxmassdiv6 && player_count() * 2 < landmass) {
+  if (islandmass < 3 * maxmassdiv6 && game.info.nplayers * 2 < landmass) {
     islandmass= (landmass)/(bigislands);
   }
 
@@ -2046,7 +2018,7 @@ static void mapgenerator3(void)
       size=2;
     }
 
-    make_island(size, (pstate->isleindex - 2 <= player_count()) ? 1 : 0,
+    make_island(size, (pstate->isleindex - 2 <= game.info.nplayers) ? 1 : 0,
 		pstate, DMSIS);
   }
 
@@ -2077,7 +2049,7 @@ static void mapgenerator4(void)
 
   /* no islands with mass >> sqr(min(xsize,ysize)) */
 
-  if (player_count() < 2 || map.landpercent > 80) {
+  if (game.info.nplayers < 2 || map.landpercent > 80) {
     map.startpos = 1;
     return;
   }
@@ -2097,12 +2069,12 @@ static void mapgenerator4(void)
       100;
 
   /*!PS: The weights NEED to sum up to totalweight (dammit) */
-  totalweight = (30 + bigweight) * player_count();
+  totalweight = (30 + bigweight) * game.info.nplayers;
 
   initworld(pstate);
 
-  i = player_count() / 2;
-  if ((player_count() % 2) == 1) {
+  i = game.info.nplayers / 2;
+  if ((game.info.nplayers % 2) == 1) {
     make_island(bigweight * 3 * pstate->totalmass / totalweight, 3, 
 		pstate, DMSIS);
   } else {
@@ -2112,10 +2084,10 @@ static void mapgenerator4(void)
     make_island(bigweight * 2 * pstate->totalmass / totalweight, 2,
 		pstate, DMSIS);
   }
-  for (i = player_count(); i > 0; i--) {
+  for (i = game.info.nplayers; i > 0; i--) {
     make_island(20 * pstate->totalmass / totalweight, 0, pstate, DMSIS);
   }
-  for (i = player_count(); i > 0; i--) {
+  for (i = game.info.nplayers; i > 0; i--) {
     make_island(10 * pstate->totalmass / totalweight, 0, pstate, DMSIS);
   }
   make_plains();  

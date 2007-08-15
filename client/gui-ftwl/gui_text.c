@@ -338,13 +338,19 @@ const char *mapview_get_city_action_tooltip(struct city *pcity,
   INIT;
 
   if (strcmp(action, "city_buy") == 0) {
+    const char *name;
+
+    if (pcity->production.is_unit) {
+      name = utype_name_translation(utype_by_number(pcity->production.value));
+    } else {
+      name = get_impr_name_ex(pcity, pcity->production.value);
+    }
+
     add_line(_("Buy production"));
     add_line(_("Cost: %d (%d in treasury)"),
-	     city_production_buy_gold_cost(pcity),
-	     game.player_ptr->economic.gold);
-    add_line(_("Producting: %s (%d turns)"),
-	     city_production_name_translation(pcity),
-	     city_production_turns_to_build(pcity, TRUE));
+	     city_buy_cost(pcity), game.player_ptr->economic.gold);
+    add_line(_("Producting: %s (%d turns)"), name,
+	     city_turns_to_build(pcity, pcity->production, TRUE));
   } else {
     add_line("tooltip for action %s isn't written yet", action);
     freelog(LOG_NORMAL,
@@ -419,7 +425,7 @@ const char *mapview_get_unit_info_text(struct unit *punit)
     char tmp[64] = { 0 };
     struct unit_type *ptype = unit_type(punit);
 
-    if (player_number(punit->owner) == game.info.player_idx) {
+    if (punit->owner->player_no == game.info.player_idx) {
       struct city *pcity =
 	  player_find_city_by_id(game.player_ptr, punit->homecity);
 
@@ -429,7 +435,7 @@ const char *mapview_get_unit_info_text(struct unit *punit)
     }
     add_line(_("Unit: %s(%s%s)"), utype_name_translation(ptype),
 	     nation_name_translation(nation_of_unit(punit)), tmp);
-    if (player_number(punit->owner) != game.info.player_idx) {
+    if (punit->owner->player_no != game.info.player_idx) {
       struct unit *apunit = unit_list_get(get_units_in_focus(), 0);
 
       if (apunit) {

@@ -87,25 +87,25 @@ static void ai_select_tech(struct player *pplayer,
 
   /* Fill in values for the techs: want of the tech 
    * + average want of those we will discover en route */
-  advance_index_iterate(A_FIRST, i) {
-    if (valid_advance_by_number(i)) {
+  tech_type_iterate(i) {
+    if (tech_exists(i)) {
       int steps = num_unknown_techs_for_goal(pplayer, i);
 
       /* We only want it if we haven't got it (so AI is human after all) */
       if (steps > 0) { 
 	values[i] += pplayer->ai.tech_want[i];
-	advance_index_iterate(A_FIRST, k) {
+	tech_type_iterate(k) {
 	  if (is_tech_a_req_for_goal(pplayer, k, i)) {
 	    values[k] += pplayer->ai.tech_want[i] / steps;
 	  }
-	} advance_index_iterate_end;
+	} tech_type_iterate_end;
       }
     }
-  } advance_index_iterate_end;
+  } tech_type_iterate_end;
 
   /* Fill in the values for the tech goals */
-  advance_index_iterate(A_FIRST, i) {
-    if (valid_advance_by_number(i)) {
+  tech_type_iterate(i) {
+    if (tech_exists(i)) {
       int steps = num_unknown_techs_for_goal(pplayer, i);
 
       if (steps == 0) {
@@ -113,11 +113,11 @@ static void ai_select_tech(struct player *pplayer,
       }
 
       goal_values[i] = values[i];      
-      advance_index_iterate(A_FIRST, k) {
+      tech_type_iterate(k) {
 	if (is_tech_a_req_for_goal(pplayer, k, i)) {
 	  goal_values[i] += values[k];
 	}
-      } advance_index_iterate_end;
+      } tech_type_iterate_end;
 
       /* This is the best I could do.  It still sometimes does freaky stuff
        * like setting goal to Republic and learning Monarchy, but that's what
@@ -129,30 +129,29 @@ static void ai_select_tech(struct player *pplayer,
 		values[i], goal_values[i]);
       }
     }
-  } advance_index_iterate_end;
+  } tech_type_iterate_end;
 
   newtech = A_UNSET;
   newgoal = A_UNSET;
-  advance_index_iterate(A_FIRST, i) {
-    if (valid_advance_by_number(i)) {
+  tech_type_iterate(i) {
+    if (tech_exists(i)) {
       if (values[i] > values[newtech]
-	  && player_invention_is_ready(pplayer, i)
-	  && player_invention_state(pplayer, i) == TECH_REACHABLE) {
+	  && tech_is_available(pplayer, i)
+	  && get_invention(pplayer, i) == TECH_REACHABLE) {
 	newtech = i;
       }
       if (goal_values[i] > goal_values[newgoal]
-	  && player_invention_is_ready(pplayer, i)) {
+	  && tech_is_available(pplayer, i)) {
 	newgoal = i;
       }
     }
-  } advance_index_iterate_end;
+  } tech_type_iterate_end;
 #ifdef REALLY_DEBUG_THIS
-  advance_index_iterate(A_FIRST, id) {
-    if (values[id] > 0 && player_invention_state(pplayer, id) == TECH_REACHABLE) {
-      TECH_LOG(LOG_DEBUG, pplayer, advance_by_number(id),
-              "turn end want: %d", values[id]);
+  tech_type_iterate(id) {
+    if (values[id] > 0 && get_invention(pplayer, id) == TECH_REACHABLE) {
+      TECH_LOG(LOG_DEBUG, pplayer, id, "turn end want: %d", values[id]);
     }
-  } advance_index_iterate_end;
+  } tech_type_iterate_end;
 #endif
   if (choice) {
     choice->choice = newtech;
@@ -210,8 +209,8 @@ void ai_manage_tech(struct player *pplayer)
     if ((choice.want - choice.current_want) > penalty &&
 	penalty + research->bulbs_researched <=
 	total_bulbs_required(pplayer)) {
-      TECH_LOG(LOG_DEBUG, pplayer, advance_by_number(choice.choice), 
-               "new research, was %s, penalty was %d", 
+      TECH_LOG(LOG_DEBUG, pplayer, choice.choice, "new research, was %s, "
+               "penalty was %d", 
                advance_name_by_player(pplayer, research->researching),
                penalty);
       choose_tech(pplayer, choice.choice);
@@ -223,10 +222,8 @@ void ai_manage_tech(struct player *pplayer)
    * is practically never used, see the comment for ai_next_tech_goal */
   if (goal.choice != research->tech_goal) {
     freelog(LOG_DEBUG, "%s change goal from %s (want=%d) to %s (want=%d)",
-	    pplayer->name,
-	    advance_name_by_player(pplayer, research->tech_goal), 
-	    goal.current_want,
-	    advance_name_by_player(pplayer, goal.choice),
+	    pplayer->name, advance_name_by_player(pplayer, research->tech_goal), 
+	    goal.current_want, advance_name_by_player(pplayer, goal.choice),
 	    goal.want);
     choose_tech_goal(pplayer, goal.choice);
   }
@@ -243,53 +240,51 @@ struct unit_type *ai_wants_role_unit(struct player *pplayer,
 				     int role, int want)
 {
   int i, n;
+  Tech_type_id best_tech = A_NONE;
   int best_cost = FC_INFINITY;
-  struct advance *best_tech = A_NEVER;
   struct unit_type *best_unit = NULL;
   struct unit_type *build_unit = NULL;
 
   n = num_role_units(role);
   for (i = n - 1; i >= 0; i--) {
     struct unit_type *iunit = get_role_unit(role, i);
-    struct advance *itech = iunit->require_advance;
+    Tech_type_id itech = iunit->tech_requirement;
 
-    if (can_city_build_unit_now(pcity, iunit)) {
+    if (can_build_unit(pcity, iunit)) {
       build_unit = iunit;
       break;
-    } else if (can_city_build_unit_later(pcity, iunit)) {
+    } else if (can_eventually_build_unit(pcity, iunit)) {
       int cost = 0;
+      Impr_type_id iimpr = iunit->impr_requirement;
 
-      if (A_NEVER != itech
-       && player_invention_state(pplayer, advance_number(itech)) != TECH_KNOWN) {
+      if (itech != A_LAST && get_invention(pplayer, itech) != TECH_KNOWN) {
         /* See if we want to invent this. */
-        cost = total_bulbs_required_for_goal(pplayer, advance_number(itech));
+        cost = total_bulbs_required_for_goal(pplayer, itech);
       }
-      if (iunit->need_improvement 
-          && !can_player_build_improvement_direct(pplayer, iunit->need_improvement)) {
-        struct impr_type *building = iunit->need_improvement;
+      if (iimpr != B_LAST 
+          && !can_player_build_improvement_direct(pplayer, iimpr)) {
+	struct impr_type *building = improvement_by_number(iimpr);
 
 	requirement_vector_iterate(&building->reqs, preq) {
-	  if (VUT_ADVANCE == preq->source.kind) {
-	    int iimprtech = advance_number(preq->source.value.advance);
+	  if (preq->source.type == REQ_TECH
+	      && (get_invention(pplayer, preq->source.value.tech)
+		!= TECH_KNOWN)) {
+	    int iimprtech = preq->source.value.tech;
+	    int imprcost = total_bulbs_required_for_goal(pplayer, iimprtech);
 
-	    if (TECH_KNOWN != player_invention_state(pplayer, iimprtech)) {
-	      int imprcost = total_bulbs_required_for_goal(pplayer, iimprtech);
-
-	      if (imprcost < cost || cost == 0) {
-	        /* If we already have the primary tech (cost==0),
-	         * or the building's tech is cheaper,
-	         * go for the building's required tech. */
-	        itech = preq->source.value.advance;
-	        cost = 0;
-	      }
-	      cost += imprcost;
+	    if (imprcost < cost || cost == 0) {
+	      /* If we already have the primary tech (cost==0),
+	       * or the building's
+	       * tech is cheaper, go for the building's required tech. */
+	      itech = iimprtech; /* get this first */
+	      cost = 0;
 	    }
+	    cost += imprcost;
 	  }
 	} requirement_vector_iterate_end;
       }
 
-      if (cost < best_cost
-       && player_invention_is_ready(pplayer, advance_number(itech))) {
+      if (cost < best_cost && tech_is_available(pplayer, itech)) {
         best_tech = itech;
         best_cost = cost;
         best_unit = iunit;
@@ -297,15 +292,14 @@ struct unit_type *ai_wants_role_unit(struct player *pplayer,
     }
   }
 
-  if (A_NEVER != best_tech) {
+  if (best_tech != A_NONE) {
     /* Crank up chosen tech want */
     if (build_unit != NULL) {
       /* We already have a role unit of this kind */
       want /= 2;
     }
-    pplayer->ai.tech_want[advance_index(best_tech)] += want;
-    TECH_LOG(LOG_DEBUG, pplayer, best_tech,
-             "+ %d for %s by role",
+    pplayer->ai.tech_want[best_tech] += want;
+    TECH_LOG(LOG_DEBUG, pplayer, best_tech, "+ %d for %s by role",
              want,
              utype_rule_name(best_unit));
   }

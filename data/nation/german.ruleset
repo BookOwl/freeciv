@@ -30,10 +30,10 @@ flag         = "germany"
 flag_alt     = "-"
 city_style   = "European"
 ruler_titles = { "government",      "male_title",       "female_title"
-                 "Republic",       _("President"),     _("?female:President") 
-                 "Democracy",      _("Chancellor"),   _("?female:Chancellor")
-                 "Fundamentalism", _("Archbishop"),   _("?female:Archbishop")
-                "Communism",_("First Secretary"),_("?female:First Secretary")
+                 "Republic",       _("President"),       _("President") 
+                 "Democracy",      _("Chancellor"),      _("Chancellor")
+                 "Fundamentalism", _("Archbishop"),      _("Archbishop")
+                 "Communism",      _("First Secretary"), _("First Secretary")
                }
 
 init_techs = ""
@@ -41,8 +41,15 @@ init_buildings=""
 init_government="Despotism"
 init_units=""
 
-conflicts_with="bavarian", "westphalian", "prussian"
-civilwar_nations="bavarian", "westphalian", "prussian"
+conflicts_with=
+; "Member-nations" of the German federation
+ "bavarian", "westphalian"
+
+civilwar_nations=
+; Sub-national nations
+ "bavarian", "westphalian",
+; German-speaking nations
+ "austrian", "swiss"
 
 cities =
   "Berlin (grassland, !mountains)", 

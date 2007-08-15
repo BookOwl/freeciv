@@ -15,9 +15,6 @@
 
 #include "shared.h"          /* bool type */
 
-/* Add new event types to the end. Client saves message settings by
- * type number and installing new event type in between would cause
- * erronous loading of existing .civclientrc */
 enum event_type {
   E_CITY_CANTBUILD,
   E_CITY_LOST,
@@ -119,11 +116,9 @@ enum event_type {
   E_CHAT_ERROR, /* Chatline errors (bad syntax, etc.) */
   E_CONNECTION, /* Messages about acquired or lost connections */
   E_AI_DEBUG, /* AI debugging messages */
-  E_PLAYER_SETTINGS, /* taxes etc */
-  E_TECH_GOAL,       /* Changed tech goal */
   /* 
    * Note: If you add a new event, make sure you make a similar change
-   * to the events array in common/events.c using GEN_EV and to
+   * to the events array in client/options.c using GEN_EV and to
    * data/stdsounds.spec.
    */
   E_LAST
@@ -144,12 +139,9 @@ void events_free(void);
 /* Iterates over all events, sorted by the message text string. */
 #define sorted_event_iterate(event)                                           \
 {                                                                             \
-  enum event_type event;                                                      \
-  enum event_type event##_index;                                              \
-  for (event##_index = 0;                                                     \
-       event##_index < E_LAST;                                                \
-       event##_index++) {                                                     \
-    event = sorted_events[event##_index];                                     \
+  enum event_type _event, event;                                              \
+  for (_event = 0; _event < E_LAST; _event++) {                               \
+    event = sorted_events[_event];                                            \
     {
 
 #define sorted_event_iterate_end                                              \

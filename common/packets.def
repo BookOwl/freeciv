@@ -191,22 +191,14 @@ type DIRECTION		= uint8(enum direction8)
 type ORDERS		= uint8(enum unit_orders)
 type SSET_TYPE		= uint8(enum sset_type)
 type SSET_CLASS         = uint8(enum sset_class)
-type REQ_TYPE	        = uint8(enum universals_n)
+type REQ_TYPE	        = uint8(enum req_source_type)
 type REQ_RANGE		= uint8(enum req_range)
 type EFFECT_TYPE	= uint8(enum effect_type)
-type BASE               = uint8(enum base_type_id)
-type BASE_GUI           = uint8(enum base_gui_type)
-
 type BV_IMPRS		= bitvector(bv_imprs)
-type BV_UCLASS_FLAGS    = bitvector(bv_unit_class_flags)
 type BV_FLAGS		= bitvector(bv_flags)
 type BV_ROLES		= bitvector(bv_roles)
 type BV_TERRAIN_FLAGS	= bitvector(bv_terrain_flags)
-type BV_BASE_FLAGS      = bitvector(bv_base_flags)
 type BV_CITY_OPTIONS    = bitvector(bv_city_options)
-type BV_SPECIAL         = bitvector(bv_special)
-type BV_PLAYER          = bitvector(bv_player)
-type BV_UNIT_CLASSES    = bitvector(bv_unit_classes)
 type DIPLSTATE		= diplstate(struct player_diplstate)
 type VISION		= uint32(unsigned int)
 
@@ -222,7 +214,6 @@ type CONNECTION		= UINT8
 type TEAM		= UINT8
 type CONTINENT          = sint16(Continent_id)
 type IMPROVEMENT	= uint8(Impr_type_id)
-type EDIT_TECH_MODE     = uint8(enum editor_tech_mode)
 
 # other typedefs
 type COORD  		= UINT8
@@ -251,7 +242,7 @@ grouped together. There are the following groups:
   Spaceship
   Ruleset
 
-The last used packet number is 131.
+The last used packet number is 118.
 ****************************************************/
 
 
@@ -303,7 +294,7 @@ end
 PACKET_SERVER_SHUTDOWN=8;sc,lsend
 end
 
-PACKET_NATION_SELECT_REQ=10;cs,handle-per-conn,dsend
+PACKET_NATION_SELECT_REQ=10;cs,dsend
   PLAYER player_no;
   NATION nation_no;
   BOOL is_male;
@@ -366,7 +357,6 @@ PACKET_GAME_INFO=15; sc
   UINT8 aifill;
 
   BOOL is_new_game;   # TRUE only in pregame for "new" (not loaded) games
-  BOOL is_edit_mode;  # If set, editing is allowed
   FLOAT seconds_to_phasedone;
   UINT32 timeout;
   TURN turn;
@@ -384,7 +374,9 @@ PACKET_GAME_INFO=15; sc
   UINT32 globalwarming, heating, warminglevel;
   UINT32 nuclearwinter, cooling, coolinglevel;
 
+  UINT8 cityfactor;
   UINT8 diplcost, freecost, conquercost;
+  UINT8 unhappysize;
   UINT8 angrycitizen;
   UINT8 techpenalty;
   UINT32 foodbox;
@@ -429,10 +421,10 @@ PACKET_GAME_INFO=15; sc
   UINT8 forced_science;
   UINT8 forced_luxury;
   UINT8 forced_gold;
-  BOOL city_reveal_tiles;
   UINT8 min_city_center_output[O_MAX];
   UINT8 min_dist_bw_cities;
   UINT8 init_vis_radius_sq;
+  UINT8 hut_overflight;
   BOOL pillage_select;
   UINT8 nuke_contamination;
   UINT8 granary_food_ini[MAX_GRANARY_INIS];
@@ -442,7 +434,6 @@ PACKET_GAME_INFO=15; sc
   UINT8 tech_leakage;
   YEAR tech_cost_double_year;
   BOOL killstack;
-  UINT8 upgrade_veteran_loss;
   UINT8 autoupgrade_veteran_loss;
   UINT16 incite_improvement_factor;
   UINT16 incite_unit_factor;
@@ -459,7 +450,6 @@ PACKET_GAME_INFO=15; sc
 
   UINT8 save_nturns;
   UINT8 save_compress_level;
-  UINT8 save_compress_type;
 
   STRING start_units[MAX_LEN_STARTUNIT];
 
@@ -525,12 +515,12 @@ PACKET_CITY_INFO=21; sc,lsend
 
   UINT16 pollution;
 
-  UINT8 production_kind;
+  BOOL production_is_unit;
   UINT8 production_value;
 
   TURN turn_last_built;
-  UINT8 changed_from_kind;
-  UINT8 changed_from_value;
+  UINT8 changed_from_id;
+  BOOL changed_from_is_unit;
   UINT16 before_change_shields;
   UINT16 disbanded_shields;
   UINT16 caravan_shields;
@@ -546,7 +536,7 @@ PACKET_CITY_INFO=21; sc,lsend
   BV_CITY_OPTIONS city_options;
   TURN turn_founded;
 
-  BOOL walls;
+  BOOL walls; add-cap(CitywallFix)
 end
 
 PACKET_CITY_SHORT_INFO=22; sc,lsend
@@ -686,7 +676,7 @@ PACKET_PLAYER_INFO=39; sc
   UINT8 ai_skill_level;
   UINT8 barbarian_type;
   VISION gives_shared_vision;
-  STRING inventions[A_LAST+1];
+  BIT_STRING inventions[A_LAST+1];
   SINT16 love[MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS];
 
   UINT16 small_wonders[B_LAST]; diff
@@ -740,11 +730,10 @@ PACKET_UNIT_INFO=49; sc,lsend
   UNIT_TYPE type;
   UNIT transported_by; /* Only valid if transported is set. */
   UINT8 movesleft, hp, fuel, activity_count;
-  UINT8 occupy;
+  UINT8 unhappiness, upkeep[O_MAX], occupy;
   COORD goto_dest_x,goto_dest_y;
   ACTIVITY activity;
   SPECIAL activity_target;
-  BASE activity_base;
 
   SINT8 battlegroup;
 
@@ -754,7 +743,6 @@ PACKET_UNIT_INFO=49; sc,lsend
   ORDERS orders[MAX_LEN_ROUTE:orders_length];
   DIRECTION orders_dirs[MAX_LEN_ROUTE:orders_length];
   ACTIVITY orders_activities[MAX_LEN_ROUTE:orders_length];
-  BASE orders_bases[MAX_LEN_ROUTE:orders_length];
 end
 
 PACKET_UNIT_SHORT_INFO=50; sc,lsend
@@ -767,7 +755,6 @@ PACKET_UNIT_SHORT_INFO=50; sc,lsend
   BOOL occupied, goes_out_of_sight, transported;
 
   UINT8 hp, activity;
-  BASE activity_base;
   UNIT transported_by; /* Only valid if transported is set. */
 
   /* in packet only, not in unit struct */
@@ -828,7 +815,6 @@ PACKET_UNIT_ORDERS=59;cs
   ORDERS orders[MAX_LEN_ROUTE:length];
   DIRECTION dir[MAX_LEN_ROUTE:length];
   ACTIVITY activity[MAX_LEN_ROUTE:length];
-  BASE base[MAX_LEN_ROUTE:length];
   COORD dest_x, dest_y;
 end
 
@@ -894,7 +880,6 @@ PACKET_UNIT_CHANGE_ACTIVITY=72; cs,dsend
   UNIT unit_id;
   ACTIVITY activity;
   SPECIAL activity_target;
-  BASE activity_base;
 end
 
 /************** Diplomacy packets **********************/
@@ -1072,6 +1057,7 @@ PACKET_RULESET_UNIT=96;sc,lsend
   STRING sound_move_alt[MAX_LEN_NAME];
   STRING sound_fight[MAX_LEN_NAME];
   STRING sound_fight_alt[MAX_LEN_NAME];
+  UINT8 move_type;
   UINT8 unit_class_id;
   UINT16 build_cost;
   UINT8 pop_cost;
@@ -1101,8 +1087,6 @@ PACKET_RULESET_UNIT=96;sc,lsend
 
   UINT8 bombard_rate;
 
-  BV_UNIT_CLASSES cargo;
-
   STRING helptext[MAX_LEN_PACKET];
 
   BV_FLAGS flags;
@@ -1113,6 +1097,7 @@ PACKET_RULESET_GAME=97;sc,lsend
   UINT8 default_specialist;
 
   TECH_LIST global_init_techs[MAX_NUM_TECH_LIST];
+  UINT8 trireme_loss_chance[MAX_VET_LEVELS];
   UINT8 work_veteran_chance[MAX_VET_LEVELS];
   UINT8 veteran_chance[MAX_VET_LEVELS];
 end
@@ -1204,8 +1189,7 @@ PACKET_RULESET_NATION=102;sc,lsend
   STRING leader_name[MAX_NUM_LEADERS:leader_count][MAX_LEN_NAME];
   BOOL leader_sex[MAX_NUM_LEADERS:leader_count];
 
-  BOOL is_available, is_playable;
-  UINT8 barbarian_type;
+  BOOL is_available, is_playable, is_barbarian;
   
   UINT8 ngroups;
   UINT8 groups[MAX_NUM_NATION_GROUPS:ngroups];
@@ -1245,7 +1229,6 @@ PACKET_RULESET_TERRAIN=105;sc,lsend
   TERRAIN id;
 
   BV_TERRAIN_FLAGS flags;
-  BV_UNIT_CLASSES native_to;
 
   STRING name_orig[MAX_LEN_NAME];
   STRING graphic_str[MAX_LEN_NAME];
@@ -1272,34 +1255,12 @@ PACKET_RULESET_TERRAIN=105;sc,lsend
   TERRAIN transform_result;
   UINT8 transform_time;
   UINT8 rail_time;
+  UINT8 airbase_time;
+  UINT8 fortress_time;
   UINT8 clean_pollution_time;
   UINT8 clean_fallout_time;
   
   STRING helptext[MAX_LEN_PACKET];
-end
-
-PACKET_RULESET_UNIT_CLASS=119;sc,lsend
-  UINT8 id;
-  STRING name[MAX_LEN_NAME];
-  UINT8 move_type;
-  UINT8 min_speed;
-  UINT8 hp_loss_pct;
-  UINT8 hut_behavior;
-  BV_UCLASS_FLAGS flags;
-end
-
-PACKET_RULESET_BASE=120;sc,lsend
-  UINT8 id;
-  STRING name[MAX_LEN_NAME];
-  STRING graphic_str[MAX_LEN_NAME];
-  STRING graphic_alt[MAX_LEN_NAME];
-  STRING activity_gfx[MAX_LEN_NAME];
-  UINT8 reqs_count;
-  REQUIREMENT reqs[MAX_NUM_REQS:reqs_count];
-  BASE_GUI gui_type;
-  BV_UNIT_CLASSES native_to;
-  UINT8 build_time;
-  BV_BASE_FLAGS flags;
 end
 
 /*********************************************************
@@ -1311,11 +1272,9 @@ end
   info for its own "control" packet, done separately.)
 *********************************************************/
 PACKET_RULESET_CONTROL=106;sc,lsend
-  UINT8 num_unit_classes;
   UINT8 num_unit_types;
   UINT8 num_impr_types;
   UINT8 num_tech_types;
-  UINT8 num_base_types;
   UINT8 government_count;
   UINT8 nation_count;
   UINT8 styles_count;
@@ -1323,13 +1282,14 @@ PACKET_RULESET_CONTROL=106;sc,lsend
   UINT8 resource_count;
   UINT8 num_specialist_types;
 
-  STRING prefered_tileset[MAX_LEN_NAME];
+  STRING prefered_tileset[MAX_LEN_NAME]; add-cap(PreferedTileset)
 end
+
 
 /*********************************************************
  Below are the packets that control single-player mode.  
 *********************************************************/
-PACKET_SINGLE_WANT_HACK_REQ=108;cs,handle-per-conn,handle-via-packet
+PACKET_SINGLE_WANT_HACK_REQ=108;cs,handle-per-conn,no-handle
  STRING token[MAX_LEN_NAME];
 end
 
@@ -1406,99 +1366,4 @@ PACKET_RULESET_RESOURCE=124;sc,lsend
   UINT8 output[O_MAX];
   STRING graphic_str[MAX_LEN_NAME];
   STRING graphic_alt[MAX_LEN_NAME];
-end
-
-/************** Editing hash packets **********************/
-
-PACKET_EDIT_MODE=129;cs,handle-per-conn,dsend
-  BOOL state;
-end
-
-PACKET_EDIT_TILE=125;cs,handle-per-conn,dsend
-  COORD x, y; key
-  TERRAIN terrain;
-  RESOURCE resource;
-  BV_SPECIAL special;
-end
-
-PACKET_EDIT_UNIT=126;cs,handle-per-conn,lsend
-  UNIT id; key
-  BOOL create_new, delete;
-  PLAYER owner;
-  COORD x,y;
-  CITY homecity;
-
-  UINT8 veteran;
-  BOOL paradropped;
-
-  UNIT_TYPE type;
-  UNIT transported_by; /* Only valid if transported is set. */
-  UINT8 movesleft, hp, fuel, activity_count;
-
-  # Other values of the unit (done_moving, orders, etc.) can be set directly
-  # through regular packets.  Some values are simply caches and cannot
-  # be controlled even by a privilidged client.
-end
-
-PACKET_EDIT_CREATE_CITY=127;cs,handle-per-conn
-  PLAYER owner;
-  COORD x, y;
-end
-
-PACKET_EDIT_CITY_SIZE=130;cs,handle-per-conn,dsend
-  CITY id;
-  UINT8 size;
-end
-
-PACKET_EDIT_PLAYER=128;cs,handle-per-conn,lsend
-  PLAYER playerno; key 
-  STRING name[MAX_LEN_NAME];
-  STRING username[MAX_LEN_NAME];
-  BOOL is_observer;
-  BOOL is_male;
-  GOVERNMENT government;
-  GOVERNMENT target_government;
-  BV_PLAYER embassy;
-  UINT8 city_style;
-  NATION nation;
-  TEAM team;
-  BOOL phase_done;
-  TURN nturns_idle;
-  BOOL is_alive;
-  DIPLSTATE diplstates[MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS];
-  GOLD gold;
-  PERCENT tax, science,luxury;
-  UINT16 bulbs_last_turn;
-  UINT32 bulbs_researched;
-  UINT32 techs_researched;
-  UINT8 researching;
-  UINT16 science_cost;
-  UINT16 future_tech;
-  UINT8 tech_goal;
-  BOOL is_connected;
-  TURN revolution_finishes;
-  BOOL ai;
-  UINT8 barbarian_type;
-  VISION gives_shared_vision;
-  STRING inventions[A_LAST+1];
-  SINT16 love[MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS];
-  UINT16 small_wonders[B_LAST]; diff
-end
-
-PACKET_EDIT_RECALCULATE_BORDERS=131;cs,handle-per-conn
-end
-
-PACKET_EDIT_VISION=132;cs,handle-per-conn,dsend
-  PLAYER player;
-  COORD x, y;
-  UINT8 mode;
-end
-
-PACKET_EDIT_PLAYER_TECH=133;cs,handle-per-conn,dsend
-  PLAYER          playerno;
-  TECH            tech;
-  EDIT_TECH_MODE  mode;
-end
-
-PACKET_EDIT_REGENERATE_WATER=134;cs,handle-per-conn
 end

@@ -92,7 +92,7 @@ static void diplomat_bribe_callback(Widget w, XtPointer client_data,
 {
   destroy_message_dialog(w);
 
-  if (game_find_unit_by_number(diplomat_id) && game_find_unit_by_number(diplomat_target_id)) {
+  if (find_unit_by_id(diplomat_id) && find_unit_by_id(diplomat_target_id)) {
     dsend_packet_unit_bribe_inq(&aconnection, diplomat_target_id);
   }
 }
@@ -137,8 +137,8 @@ static void diplomat_sabotage_callback(Widget w, XtPointer client_data,
   destroy_message_dialog(w);
   diplomat_dialog = NULL;
 
-  if(game_find_unit_by_number(diplomat_id) && 
-     game_find_city_by_number(diplomat_target_id)) { 
+  if(find_unit_by_id(diplomat_id) && 
+     find_city_by_id(diplomat_target_id)) { 
     request_diplomat_action(DIPLOMAT_SABOTAGE, diplomat_id,
 			    diplomat_target_id, -1);
   }
@@ -155,8 +155,8 @@ static void diplomat_embassy_callback(Widget w, XtPointer client_data,
   destroy_message_dialog(w);
   diplomat_dialog = NULL;
 
-  if(game_find_unit_by_number(diplomat_id) && 
-     (game_find_city_by_number(diplomat_target_id))) { 
+  if(find_unit_by_id(diplomat_id) && 
+     (find_city_by_id(diplomat_target_id))) { 
     request_diplomat_action(DIPLOMAT_EMBASSY, diplomat_id,
 			    diplomat_target_id, 0);
   }
@@ -173,8 +173,8 @@ static void diplomat_investigate_callback(Widget w, XtPointer client_data,
   destroy_message_dialog(w);
   diplomat_dialog = NULL;
 
-  if(game_find_unit_by_number(diplomat_id) && 
-     (game_find_city_by_number(diplomat_target_id))) { 
+  if(find_unit_by_id(diplomat_id) && 
+     (find_city_by_id(diplomat_target_id))) { 
     request_diplomat_action(DIPLOMAT_INVESTIGATE, diplomat_id,
 			    diplomat_target_id, 0);
   }
@@ -203,8 +203,8 @@ static void spy_poison_callback(Widget w, XtPointer client_data,
   destroy_message_dialog(w);
   diplomat_dialog = NULL;
 
-  if(game_find_unit_by_number(diplomat_id) && 
-     (game_find_city_by_number(diplomat_target_id))) { 
+  if(find_unit_by_id(diplomat_id) && 
+     (find_city_by_id(diplomat_target_id))) { 
     request_diplomat_action(SPY_POISON, diplomat_id, diplomat_target_id, 0);
   }
 
@@ -220,8 +220,8 @@ static void diplomat_steal_callback(Widget w, XtPointer client_data,
   destroy_message_dialog(w);
   diplomat_dialog = NULL;
 
-  if(game_find_unit_by_number(diplomat_id) && 
-     game_find_city_by_number(diplomat_target_id)) { 
+  if(find_unit_by_id(diplomat_id) && 
+     find_city_by_id(diplomat_target_id)) { 
     request_diplomat_action(DIPLOMAT_STEAL, diplomat_id,
 			    diplomat_target_id, A_UNSET);
   }
@@ -306,8 +306,8 @@ static void spy_steal_callback(Widget w, XtPointer client_data,
     return;
   }
   
-  if(game_find_unit_by_number(diplomat_id) && 
-     game_find_city_by_number(diplomat_target_id)) { 
+  if(find_unit_by_id(diplomat_id) && 
+     find_city_by_id(diplomat_target_id)) { 
     request_diplomat_action(DIPLOMAT_STEAL, diplomat_id,
 			    diplomat_target_id, steal_advance);
   }
@@ -330,8 +330,8 @@ static void spy_sabotage_callback(Widget w, XtPointer client_data,
     return;
   }
   
-  if(game_find_unit_by_number(diplomat_id) && 
-     game_find_city_by_number(diplomat_target_id)) { 
+  if(find_unit_by_id(diplomat_id) && 
+     find_city_by_id(diplomat_target_id)) { 
     request_diplomat_action(DIPLOMAT_SABOTAGE, diplomat_id,
 			    diplomat_target_id, sabotage_improvement + 1);
   }
@@ -348,7 +348,7 @@ static int create_advances_list(struct player *pplayer,
   Widget spy_tech_form;
   Widget close_command;
   Dimension width1, width2; 
-  int j;
+  int i, j;
 
   static const char *advances_can_steal[A_LAST+1]; 
 
@@ -395,18 +395,18 @@ static int create_advances_list(struct player *pplayer,
   advance_type[j] = -1;
 
   if (pvictim) { /* you don't want to know what lag can do -- Syela */
-    advance_index_iterate(A_FIRST, i) {
-      if(player_invention_state(pvictim, i)==TECH_KNOWN && 
-         (player_invention_state(pplayer, i)==TECH_UNKNOWN || 
-          player_invention_state(pplayer, i)==TECH_REACHABLE)) {
+    for(i=A_FIRST; i<game.control.num_tech_types; i++) {
+      if(get_invention(pvictim, i)==TECH_KNOWN && 
+         (get_invention(pplayer, i)==TECH_UNKNOWN || 
+          get_invention(pplayer, i)==TECH_REACHABLE)) {
       
-        advances_can_steal[j] = advance_name_translation(advance_by_number(i));
+        advances_can_steal[j] = advance_name_translation(i);
         advance_type[j++] = i;
       }
     }
     advances_can_steal[j] = _("At Spy's Discretion");
     advance_type[j++] = A_UNSET;
-  } advance_index_iterate_end;
+  }
 
   if(j == 0) j++;
   advances_can_steal[j] = NULL; 
@@ -482,12 +482,12 @@ static int create_improvements_list(struct player *pplayer,
   improvements_can_sabotage[j] = _("City Production");
   improvement_type[j++] = -1;
 
-  city_built_iterate(pcity, pimprove) {
-    if (pimprove->sabotage > 0) {
-      improvements_can_sabotage[j] = city_improvement_name_translation(pcity, pimprove);
-      improvement_type[j++] = improvement_number(pimprove);
+  built_impr_iterate(pcity, i) {
+    if (improvement_by_number(i)->sabotage > 0) {
+      improvements_can_sabotage[j] = get_impr_name_ex(pcity, i);
+      improvement_type[j++] = i;
     }  
-  } city_built_iterate_end;
+  } built_impr_iterate_end;
 
   if(j > 1) {
     improvements_can_sabotage[j] = _("At Spy's Discretion");
@@ -516,7 +516,7 @@ static int create_improvements_list(struct player *pplayer,
 static void spy_steal_popup(Widget w, XtPointer client_data, 
 			    XtPointer call_data)
 {
-  struct city *pvcity = game_find_city_by_number(diplomat_target_id);
+  struct city *pvcity = find_city_by_id(diplomat_target_id);
   struct player *pvictim = NULL;
 
   if(pvcity)
@@ -556,8 +556,8 @@ static void spy_request_sabotage_list(Widget w, XtPointer client_data,
   destroy_message_dialog(w);
   diplomat_dialog = NULL;
 
-  if(game_find_unit_by_number(diplomat_id) &&
-     (game_find_city_by_number(diplomat_target_id))) {
+  if(find_unit_by_id(diplomat_id) &&
+     (find_city_by_id(diplomat_target_id))) {
     request_diplomat_action(SPY_GET_SABOTAGE_LIST, diplomat_id,
 			    diplomat_target_id, 0);
   }
@@ -621,7 +621,7 @@ static void diplomat_incite_callback(Widget w, XtPointer client_data,
   destroy_message_dialog(w);
   diplomat_dialog = NULL;
 
-  if (game_find_unit_by_number(diplomat_id) && game_find_city_by_number(diplomat_target_id)) {
+  if (find_unit_by_id(diplomat_id) && find_city_by_id(diplomat_target_id)) {
     dsend_packet_city_incite_inq(&aconnection, diplomat_target_id);
   }
 }
@@ -673,8 +673,8 @@ static void diplomat_keep_moving_callback(Widget w, XtPointer client_data,
   destroy_message_dialog(w);
   diplomat_dialog = NULL;
 
-  if( (punit=game_find_unit_by_number(diplomat_id))
-      && (pcity=game_find_city_by_number(diplomat_target_id))
+  if( (punit=find_unit_by_id(diplomat_id))
+      && (pcity=find_city_by_id(diplomat_target_id))
       && !same_pos(punit->tile, pcity->tile)) {
     request_diplomat_action(DIPLOMAT_MOVE, diplomat_id,
 			    diplomat_target_id, 0);

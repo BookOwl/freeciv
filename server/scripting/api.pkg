@@ -65,65 +65,45 @@ struct Tile {
 };
 
 struct Government {
-  const int item_number @ id;
+  const int index @ id;
 };
 
 struct Nation_Type {
-  const int item_number @ id;
+  const int index @ id;
 };
 
 struct Building_Type {
   int build_cost;
 
-  const int item_number @ id;
+  const int index @ id;
 };
 
 struct Unit_Type {
   int build_cost;
 
-  const int item_number @ id;
+  const int index @ id;
 };
 
 struct Tech_Type {
-  const int item_number @ id;
+  const int index @ id;
 };
 
 struct Terrain {
-  const int item_number @ id;
+  const int index @ id;
 };
 
 
 /* Class methods. */
-
-/* Player */
 int api_methods_player_num_cities
 	@ methods_player_num_cities (Player *pplayer);
 int api_methods_player_num_units
 	@ methods_player_num_units (Player *pplayer);
 
-/* Unit */
-bool api_methods_unit_city_can_be_built_here
-	@ methods_unit_city_can_be_built_here (Unit *punit);
+bool api_methods_unit_type_has_flag
+	@ methods_unit_type_has_flag (Unit_Type *punit_type, const char *flag);
+bool api_methods_unit_type_has_role
+	@ methods_unit_type_has_role (Unit_Type *punit_type, const char *role);
 
-/* Tile */
-bool api_methods_tile_city_exists_within_city_radius
-	@ methods_tile_city_exists_within_city_radius (Tile *ptile, bool center);
-
-/* Government */
-const char *api_methods_government_rule_name
-	@ methods_government_rule_name (Government *pgovernment);
-const char *api_methods_government_name_translation
-	@ methods_government_name_translation (Government *pgovernment);
-
-/* Nation_Type */
-const char *api_methods_nation_type_rule_name
-	@ methods_nation_type_rule_name (Nation_Type *pnation);
-const char *api_methods_nation_type_name_translation
-	@ methods_nation_type_name_translation (Nation_Type *pnation);
-const char *api_methods_nation_type_plural_translation
-	@ methods_nation_type_plural_translation (Nation_Type *pnation);
-
-/* Building_Type */
 bool api_methods_building_type_is_wonder
 	@ methods_building_type_is_wonder (Building_Type *pbuilding);
 bool api_methods_building_type_is_great_wonder
@@ -132,32 +112,7 @@ bool api_methods_building_type_is_small_wonder
 	@ methods_building_type_is_small_wonder (Building_Type *pbuilding);
 bool api_methods_building_type_is_improvement
 	@ methods_building_type_is_improvement (Building_Type *pbuilding);
-const char *api_methods_building_type_rule_name
-	@ methods_building_type_rule_name (Building_Type *pbuilding);
-const char *api_methods_building_type_name_translation
-	@ methods_building_type_name_translation (Building_Type *pbuilding);
 
-/* Unit_Type */
-bool api_methods_unit_type_has_flag
-	@ methods_unit_type_has_flag (Unit_Type *punit_type, const char *flag);
-bool api_methods_unit_type_has_role
-	@ methods_unit_type_has_role (Unit_Type *punit_type, const char *role);
-const char *api_methods_unit_type_rule_name
-	@ methods_unit_type_rule_name (Unit_Type *punit_type);
-const char *api_methods_unit_type_name_translation
-	@ methods_unit_type_name_translation (Unit_Type *punit_type);
-
-/* Tech_Type */
-const char *api_methods_tech_type_rule_name
-	@ methods_tech_type_rule_name (Tech_Type *ptech);
-const char *api_methods_tech_type_name_translation
-	@ methods_tech_type_name_translation (Tech_Type *ptech);
-
-/* Terrain */
-const char *api_methods_terrain_rule_name
-	@ methods_terrain_rule_name (Terrain *pterrain);
-const char *api_methods_terrain_name_translation
-	@ methods_terrain_name_translation (Terrain *pterrain);
 
 $[
 -- Player methods.
@@ -176,37 +131,6 @@ end
 -- Unit methods.
 function Unit:homecity()
   return find.city(self.owner, self.homecity_id)
-end
-
-function Unit:is_on_possible_city_tile()
-  return methods_unit_city_can_be_built_here(self)
-end
-
--- Tile methods
-function Tile:city_exists_within_city_radius(center)
-  return methods_tile_city_exists_within_city_radius(self, center)
-end
-
--- Government methods
-function Government:rule_name()
-  return methods_government_rule_name(self)
-end
-
-function Government:name_translation()
-  return methods_government_name_translation(self)
-end
-
--- Nation_Type methods
-function Nation_Type:rule_name()
-  return methods_nation_type_rule_name(self)
-end
-
-function Nation_Type:name_translation()
-  return methods_nation_type_name_translation(self)
-end
-
-function Nation_Type:plural_translation()
-  return methods_nation_type_plural_translation(self)
 end
 
 -- Building_Type methods.
@@ -230,14 +154,6 @@ function Building_Type:is_improvement()
   return methods_building_type_is_improvement(self)
 end
 
-function Building_Type:rule_name()
-  return methods_building_type_rule_name(self)
-end
-
-function Building_Type:name_translation()
-  return methods_building_type_name_translation(self)
-end
-
 -- Unit_Type methods.
 function Unit_Type:build_shield_cost()
   return self.build_cost
@@ -249,32 +165,6 @@ end
 
 function Unit_Type:has_role(role)
   return methods_unit_type_has_role(self, role)
-end
-
-function Unit_Type:rule_name()
-  return methods_unit_type_rule_name(self)
-end
-
-function Unit_Type:name_translation()
-  return methods_unit_type_name_translation(self)
-end
-
--- Tech_Type methods
-function Tech_Type:rule_name()
-  return methods_tech_type_rule_name(self)
-end
-
-function Tech_Type:name_translation()
-  return methods_tech_type_name_translation(self)
-end
-
--- Terrain methods
-function Terrain:rule_name()
-  return methods_terrain_rule_name(self)
-end
-
-function Terrain:name_translation()
-  return methods_terrain_name_translation(self)
 end
 $]
 
@@ -510,7 +400,6 @@ Unit *api_actions_create_unit @ create_unit (Player *pplayer, Tile *ptile,
 void api_actions_create_city @ create_city (Player *pplayer, Tile *ptile,
 					    const char *name);
 void api_actions_change_gold @ change_gold (Player *pplayer, int amount);
-Tech_Type *api_actions_give_technology @ give_technology (Player *pplayer,
-						    Tech_Type *ptech,
-						    const char *reason);
-bool api_actions_unleash_barbarians @ unleash_barbarians (Tile *ptile);
+bool api_actions_give_technology @ give_technology (Player *pplayer,
+						    Tech_Type *ptech);
+

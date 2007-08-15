@@ -13,22 +13,32 @@
 #ifndef FC__PLAYER_H
 #define FC__PLAYER_H
 
-#include "fc_types.h"
-
 #include "city.h"
 #include "connection.h"
+#include "fc_types.h"
+#include "improvement.h"	/* Impr_Status */
 #include "nation.h"
 #include "shared.h"
 #include "spaceship.h"
 #include "tech.h"
-#include "unitlist.h"
+#include "unit.h"
 
 #define PLAYER_DEFAULT_TAX_RATE 0
 #define PLAYER_DEFAULT_SCIENCE_RATE 100
 #define PLAYER_DEFAULT_LUXURY_RATE 0
 
 #define ANON_PLAYER_NAME "noname"
-#define ANON_USER_NAME "Unassigned"
+#define ANON_USER_NAME  "Unassigned"
+
+/*
+ * pplayer->ai.barbarian_type uses this enum. Note that the values
+ * have to stay since they are used in savegames.
+ */
+enum barbarian_type {
+  NOT_A_BARBARIAN = 0,
+  LAND_BARBARIAN = 1,
+  SEA_BARBARIAN = 2
+};
 
 enum handicap_type {
   H_NONE = 0,         /* No handicaps */
@@ -91,10 +101,9 @@ struct player_ai {
   int prev_gold;
   int maxbuycost;
   int est_upkeep; /* estimated upkeep of buildings in cities */
-  /* The units of tech_want seem to be shields */
   int tech_want[A_LAST+1];
   int handicap;			/* sum of enum handicap_type */
-  enum ai_level skill_level;   	/* 0-10 value for save/load/display */
+  int skill_level;		/* 0-10 value for save/load/display */
   int fuzzy;			/* chance in 1000 to mis-decide */
   int expand;			/* percentage factor to value new cities */
   int science_cost;             /* Cost in bulbs to get new tech, relative
@@ -189,6 +198,7 @@ struct player {
   bool is_connected;
   struct connection *current_conn;     /* non-null while handling packet */
   struct conn_list *connections;       /* will replace conn */
+  struct worklist worklists[MAX_NUM_WORKLISTS];
   struct player_tile *private_map;
   unsigned int gives_shared_vision; /* bitvector those that give you shared vision */
   unsigned int really_gives_vision; /* takes into account that p3 may see what p1 has via p2 */
@@ -201,14 +211,7 @@ struct player {
   bv_debug debug;
 };
 
-/* General player accessor functions. */
-int player_count(void);
-int player_index(const struct player *pplayer);
-int player_number(const struct player *pplayer);
-
-struct player *player_by_number(const int player_id);
-struct player *valid_player_by_number(const int player_id);
-
+void player_init(struct player *plr);
 struct player *find_player_by_name(const char *name);
 struct player *find_player_by_name_prefix(const char *name,
 					  enum m_pre_result *result);
@@ -287,21 +290,15 @@ bool gives_shared_vision(const struct player *me, const struct player *them);
 
 struct player_research *get_player_research(const struct player *p1);
 
-/* Initialization and iteration */
-void player_init(struct player *plr);
+#define players_iterate(PI_player)                                            \
+{                                                                             \
+  struct player *PI_player;                                                   \
+  int PI_p_itr;                                                               \
+  for (PI_p_itr = 0; PI_p_itr < game.info.nplayers; PI_p_itr++) {            \
+    PI_player = get_player(PI_p_itr);
 
-struct player *player_array_first(void);
-const struct player *player_array_last(void);
-
-#define players_iterate(_p)						\
-{									\
-  struct player *_p = player_array_first();				\
-  if (NULL != _p) {							\
-    for (; _p <= player_array_last(); _p++) {
-
-#define players_iterate_end						\
-    }									\
-  }									\
+#define players_iterate_end                                                   \
+  }                                                                           \
 }
 
 /* ai love values should be in range [-MAX_AI_LOVE..MAX_AI_LOVE] */
@@ -311,10 +308,5 @@ const struct player *player_array_last(void);
 /* User functions. */
 bool is_valid_username(const char *name);
 
-enum ai_level find_ai_level_by_name(const char *name);
-const char *ai_level_name(enum ai_level level);
-const char *ai_level_cmd(enum ai_level level);
-bool is_settable_ai_level(enum ai_level level);
-int number_of_ai_levels(void);
 
 #endif  /* FC__PLAYER_H */

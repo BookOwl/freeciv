@@ -261,7 +261,7 @@ void cityresult_fill(struct player *pplayer,
 
   pplayer->government = curr_govt;
   if (virtual_city) {
-    destroy_city_virtual(pcity);
+    remove_city_virtual(pcity);
   }
 
   assert(result->city_center >= 0);
@@ -402,7 +402,7 @@ static void city_desirability(struct player *pplayer, struct ai_data *ai,
     return;
   }
 
-  if (pcity && (pcity->size + unit_pop_value(punit)
+  if (pcity && (pcity->size + unit_pop_value(unit_type(punit))
 		> game.info.add_to_size_limit)) {
     /* Can't exceed population limit. */
     return;
@@ -510,7 +510,7 @@ static bool settler_map_iterate(struct pf_parameter *parameter,
      * weeds out very small wants. ie we create a threshold here. */
     /* We also penalise here for using a boat (either virtual or real)
      * it's crude but what isn't? */
-    result.result -= unit_build_shield_cost(punit) + boat_cost;
+    result.result -= unit_build_shield_cost(unit_type(punit)) + boat_cost;
 
     /* Find best spot */
     if (result.result > best->result) {
@@ -552,7 +552,6 @@ void find_best_city_placement(struct unit *punit, struct cityresult *best,
   struct player *pplayer = unit_owner(punit);
   struct pf_parameter parameter;
   struct unit *ferry = NULL;
-  struct unit_class *ferry_class = NULL;
 
   assert(pplayer->ai.control);
   /* Only virtual units may use virtual boats: */
@@ -578,7 +577,7 @@ void find_best_city_placement(struct unit *punit, struct cityresult *best,
   if (look_for_boat) {
     int ferry_id = aiferry_find_boat(punit, 1, NULL);
 
-    ferry = game_find_unit_by_number(ferry_id);
+    ferry = find_unit_by_id(ferry_id);
   }
 
   if (ferry 
@@ -591,13 +590,13 @@ void find_best_city_placement(struct unit *punit, struct cityresult *best,
 
       if (boattype == NULL) {
         /* Sea travel not possible yet. Bump tech want for ferries. */
-        boattype = get_role_unit(L_FERRYBOAT, 0);
+        struct unit_type *boattype = get_role_unit(L_FERRYBOAT, 0);
 
-        if (NULL != boattype
-         && A_NEVER != boattype->require_advance) {
-          pplayer->ai.tech_want[advance_index(boattype->require_advance)] += FERRY_TECH_WANT;
-          TECH_LOG(LOG_DEBUG, pplayer, boattype->require_advance,
-                   "+ %d for %s to ferry settler",
+        if (boattype != NULL) {
+          Tech_type_id tech_req = boattype->tech_requirement;
+
+          pplayer->ai.tech_want[tech_req] += FERRY_TECH_WANT;
+          TECH_LOG(LOG_DEBUG, pplayer, tech_req, "+ %d for %s to ferry settler",
                    FERRY_TECH_WANT,
                    utype_rule_name(boattype));
         }
@@ -607,9 +606,7 @@ void find_best_city_placement(struct unit *punit, struct cityresult *best,
       ferry->tile = punit->tile;
     }
 
-    ferry_class = unit_class(ferry);
-
-    assert(ferry_class->ai.sea_move != MOVE_NONE);
+    assert(LAND_MOVING != unit_type(ferry)->move_type);
     pft_fill_unit_overlap_param(&parameter, ferry);
     parameter.get_TB = no_fights_or_unknown;
 
@@ -618,7 +615,7 @@ void find_best_city_placement(struct unit *punit, struct cityresult *best,
      * Building a new boat is like a war against a weaker enemy -- 
      * good for the economy. (c) Bush family */
     if (settler_map_iterate(&parameter, punit, best, pplayer, 
-			    unit_build_shield_cost(ferry))) {
+			    unit_build_shield_cost(unit_type(ferry)))) {
       best->overseas = TRUE;
       best->virt_boat = (ferry->id == 0);
     }

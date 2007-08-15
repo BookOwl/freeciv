@@ -94,7 +94,7 @@ f_mech_inf = "stdsounds/MgHeavy.ogg" ; [warzone]
 ;f_musketeers = ""
 f_nuclear = "stdsounds/LrgExpl.ogg" ; [warzone]
 f_paratroopers = "stdsounds/MgBar2.ogg" ; [warzone]
-f_partisan = "stdsounds/MgBar1.ogg" ; [warzone]
+f_partisan = "stdounds/MgBar1.ogg" ; [warzone]
 ;f_phalanx = ""
 ;f_pikemen = ""
 f_riflemen = "stdsounds/MgBar1.ogg" ; [warzone]
@@ -258,6 +258,5 @@ e_imp_sold = "stdsounds/metbrk.ogg" ; [pox]
 ;e_wonder_started = ""
 ;e_wonder_stopped = ""
 ;e_worklist = ""
-;e_player_settings = ""
 
 ;music_start = ""

@@ -26,15 +26,15 @@ flag_alt = "-"
 city_style = "Classical"
 
 ruler_titles = { "government",      "male_title",      "female_title"
-                 "Despotism",       _("Khan"),         _("?female:Khan")
-                 "Monarchy",        _("Khagan"),       _("?female:Khagan")
+                 "Despotism",       _("Khan"),         _("Khan")
+                 "Monarchy",        _("Khagan"),       _("Khagan")
                }
 
 init_techs=""
 init_buildings=""
 init_government="Despotism"
 init_units=""
-civilwar_nations = "turk", "tocharian"
+civilwar_nations = "turk", "mongol"
 
 cities =
  "Ürümqi",

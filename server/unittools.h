@@ -14,10 +14,10 @@
 #define FC__UNITTOOLS_H
 
 #include "fc_types.h"
+#include "packets.h"		/* enum unit_info_use */
+#include "unit.h"
 
 #include "gotohand.h"
-#include "packets.h"		/* enum unit_info_use */
-#include "unitlist.h"
 
 /* battle related */
 struct unit_type *find_a_unit_type(enum unit_role_id role,
@@ -85,7 +85,7 @@ bool do_airline(struct unit *punit, struct city *city2);
 bool do_paradrop(struct unit *punit, struct tile *ptile);
 void load_unit_onto_transporter(struct unit *punit, struct unit *ptrans);
 void unload_unit_from_transporter(struct unit *punit);
-void move_unit(struct unit *punit, struct tile *ptile, int move_cost);
+bool move_unit(struct unit *punit, struct tile *ptile, int move_cost);
 bool execute_orders(struct unit *punit);
 
 #endif  /* FC__UNITTOOLS_H */

@@ -109,7 +109,7 @@ static void print_landarea_map(struct claim_map *pcmap, int turn)
   if (turn == 0) {
     printf("Player Info...\n");
 
-    for (p = 0; p < player_count(); p++) {
+    for (p = 0; p < game.info.nplayers; p++) {
       printf(".know (%d)\n  ", p);
       WRITE_MAP_DATA("%c",
 		     TEST_BIT(pcmap->claims[map_pos_to_index(x, y)].know,
@@ -150,7 +150,7 @@ static void build_landarea_map(struct claim_map *pcmap)
   players_iterate(pplayer) {
     city_list_iterate(pplayer->cities, pcity) {
       map_city_radius_iterate(pcity->tile, tile1) {
-	BV_SET(claims[tile1->index], player_index(pcity->owner));
+	BV_SET(claims[tile1->index], pcity->owner->player_no);
       } map_city_radius_iterate_end;
     } city_list_iterate_end;
   } players_iterate_end;
@@ -163,15 +163,15 @@ static void build_landarea_map(struct claim_map *pcmap)
       /* Nothing. */
     } else if (ptile->city) {
       owner = ptile->city->owner;
-      pcmap->player[player_index(owner)].settledarea++;
+      pcmap->player[owner->player_no].settledarea++;
     } else if (ptile->worked) {
       owner = ptile->worked->owner;
-      pcmap->player[player_index(owner)].settledarea++;
+      pcmap->player[owner->player_no].settledarea++;
     } else if (unit_list_size(ptile->units) > 0) {
       /* Because of allied stacking these calculations are a bit off. */
       owner = (unit_list_get(ptile->units, 0))->owner;
-      if (BV_ISSET(*pclaim, player_index(owner))) {
-	pcmap->player[player_index(owner)].settledarea++;
+      if (BV_ISSET(*pclaim, owner->player_no)) {
+	pcmap->player[owner->player_no].settledarea++;
       }
     }
 
@@ -181,7 +181,7 @@ static void build_landarea_map(struct claim_map *pcmap)
       owner = ptile->owner;
     }
     if (owner) {
-      pcmap->player[player_index(owner)].landarea++;
+      pcmap->player[owner->player_no].landarea++;
     }
   } whole_map_iterate_end;
 
@@ -204,14 +204,14 @@ static void get_player_landarea(struct claim_map *pcmap,
 #endif
     if (return_landarea) {
       *return_landarea
-	= USER_AREA_MULT * pcmap->player[player_index(pplayer)].landarea;
+	= USER_AREA_MULT * pcmap->player[pplayer->player_no].landarea;
 #if LAND_AREA_DEBUG >= 1
       printf(" l=%d", *return_landarea / USER_AREA_MULT);
 #endif
     }
     if (return_settledarea) {
       *return_settledarea
-	= USER_AREA_MULT * pcmap->player[player_index(pplayer)].settledarea;
+	= USER_AREA_MULT * pcmap->player[pplayer->player_no].settledarea;
 #if LAND_AREA_DEBUG >= 1
       printf(" s=%d", *return_settledarea / USER_AREA_MULT);
 #endif
@@ -284,11 +284,11 @@ void calc_civ_score(struct player *pplayer)
   pplayer->score.landarea = landarea;
   pplayer->score.settledarea = settledarea;
 
-  advance_index_iterate(A_FIRST, i) {
-    if (player_invention_state(pplayer, i) == TECH_KNOWN) {
+  tech_type_iterate(i) {
+    if (i > A_NONE && get_invention(pplayer, i) == TECH_KNOWN) {
       pplayer->score.techs++;
     }
-  } advance_index_iterate_end;
+  } tech_type_iterate_end;
   pplayer->score.techs += get_player_research(pplayer)->future_tech * 5 / 2;
   
   unit_list_iterate(pplayer->units, punit) {
@@ -297,13 +297,13 @@ void calc_civ_score(struct player *pplayer)
     }
   } unit_list_iterate_end
 
-  improvement_iterate(i) {
+  impr_type_iterate(i) {
     if (is_great_wonder(i)
 	&& (pcity = find_city_from_great_wonder(i))
 	&& player_owns_city(pplayer, pcity)) {
       pplayer->score.wonders++;
     }
-  } improvement_iterate_end;
+  } impr_type_iterate_end;
 
   /* How much should a spaceship be worth?
    * This gives 100 points per 10,000 citizens. */
@@ -402,14 +402,12 @@ void save_ppm(void)
   fprintf(fp, "# An intermediate map from saved Freeciv game %s%+05d\n",
           game.save_name, game.info.year);
 
-  players_iterate(pplayer) {
+  for (i = 0; i < game.info.nplayers; i++) {
+    struct player *pplayer = get_player(i);
     fprintf(fp, "# playerno:%d:color:#%02x%02x%02x:name:\"%s\"\n", 
-            player_number(pplayer),
-            col[player_index(pplayer)][0],
-            col[player_index(pplayer)][1],
-            col[player_index(pplayer)][2],
+            pplayer->player_no, col[i][0], col[i][1], col[i][2],
             pplayer->name);
-  } players_iterate_end;
+  }
 
   fprintf(fp, "%d %d\n", map.xsize, map.ysize);
   fprintf(fp, "255\n");
@@ -421,9 +419,9 @@ void save_ppm(void)
 
        /* color for cities first, then units, then land */
        if (ptile->city) {
-         color = col[player_index(city_owner(ptile->city))];
+         color = col[city_owner(ptile->city)->player_no];
        } else if (unit_list_size(ptile->units) > 0) {
-         color = col[player_index(unit_owner(unit_list_get(ptile->units, 0)))];
+         color = col[unit_owner(unit_list_get(ptile->units, 0))->player_no];
        } else if (is_ocean(ptile->terrain)) {
          color = watercol;
        } else {
@@ -505,20 +503,20 @@ void rank_users(void)
    * barbarians won't count, and everybody else is a loser for now. */
   players_iterate(pplayer) {
     if (is_barbarian(pplayer)) {
-      plr_state[player_index(pplayer)] = VS_NONE;
+      plr_state[pplayer->player_no] = VS_NONE;
     } else if (pplayer->is_alive && !pplayer->surrendered) {
-      plr_state[player_index(pplayer)] = VS_WINNER;
+      plr_state[pplayer->player_no] = VS_WINNER;
     } else {
-      plr_state[player_index(pplayer)] = VS_LOSER;
+      plr_state[pplayer->player_no] = VS_LOSER;
     }
   } players_iterate_end;
 
   /* second pass: find the teammates of those winners, they win too. */
   players_iterate(pplayer) {
-    if (plr_state[player_index(pplayer)] == VS_WINNER) {
+    if (plr_state[pplayer->player_no] == VS_WINNER) {
       players_iterate(aplayer) {
         if (aplayer->team == pplayer->team) {
-          plr_state[player_index(aplayer)] = VS_WINNER;
+          plr_state[aplayer->player_no] = VS_WINNER;
         }
       } players_iterate_end;
     }
@@ -528,14 +526,14 @@ void rank_users(void)
   fprintf(fp, "turns: %d\n", game.info.turn);
   fprintf(fp, "winners: ");
   players_iterate(pplayer) {
-    if (plr_state[player_index(pplayer)] == VS_WINNER) {
+    if (plr_state[pplayer->player_no] == VS_WINNER) {
       fprintf(fp, "%s (%s,%s), ", pplayer->ranked_username, pplayer->name,
                                   pplayer->username);
     }
   } players_iterate_end;
   fprintf(fp, "\nlosers: ");
   players_iterate(pplayer) {
-    if (plr_state[player_index(pplayer)] == VS_LOSER) {
+    if (plr_state[pplayer->player_no] == VS_LOSER) {
       fprintf(fp, "%s (%s,%s), ", pplayer->ranked_username, pplayer->name,
                                   pplayer->username);
     }

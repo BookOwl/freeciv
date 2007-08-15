@@ -101,12 +101,6 @@ AM_CONDITIONAL(FTWL, test x$ftwl != xno)
 if test "$ftwl" = no && test "$client" = ftwl ; then
   AC_MSG_ERROR(You must use --enable-ftwl to use the ftwl client)
 fi
-if test "$ftwl" != no ; then
-  PKG_CHECK_MODULES([CAIRO], [cairo],,
-    [AC_MSG_ERROR([--enable-ftwl requires cairo])])
-  CLIENT_CFLAGS="$CLIENT_CFLAGS $CAIRO_CFLAGS"
-  CLIENT_LIBS="$CLIENT_LIBS $CAIRO_LIBS"
-fi
 
 AC_ARG_WITH(xaw,
 [  --with-xaw              use the Xaw widget set for the xaw client],
@@ -190,40 +184,34 @@ if test -z "$localedir"; then
 fi
 
 dnl I18n support
-ALL_LINGUAS="ar cs ca da de el en_GB es et fa fi fr he hu it ja lt nl nb 
-no pl pt pt_BR ro ru sv uk zh_CN"
+ALL_LINGUAS="ar cs ca da de el en_GB es et fa fi fr he hu it ja lt nl nb no pl pt pt_BR ro ru sv uk zh_CN"
+AM_GNU_GETTEXT(,need-ngettext)
 
-AC_ARG_ENABLE([nls],
-[  --disable-nls        do not use add localization support],
-[case "${enableval}" in
-  yes) USE_NLS=yes ;;
-  no)  USE_NLS=no ;;
-  *)   AC_MSG_ERROR([bad value ${enableval} for --disable-nls]) ;;
-esac], [USE_NLS=yes])
+dnl AM_GNU_GETTEXT doesn't have all features we want
+dnl or they don't behave correctly.
+dnl Old gettext binaries don't understand plurals. (ngettext, msgid_plural)
+dnl and there are some problems with missing ngettext.
 
-if test "$USE_NLS" = "yes" ; then
-  AM_GLIB_GNU_GETTEXT
+if test "$USE_NLS" = "yes"; then
+  dnl nls_cv_force_use_gnu_gettext is set by AM_GNU_GETTEXT
+  dnl it is "yes" when --with-included-gettext is given
 
-  dnl AM_GLIB_GNU_GETTEXT doesn't have all features we want
-  dnl or they don't behave correctly.
-  dnl Old gettext binaries don't understand plurals. (ngettext, msgid_plural)
-  dnl and there are some problems with missing ngettext.
-  dnl Is that ngettext part still true? AM_GLIB_GNU_GETTEXT does check for it
+  if test "$nls_cv_force_use_gnu_gettext" != "yes"; then
+    have_working_ngettext=0
+    AC_CHECK_LIB(c, ngettext,
+      [AC_MSG_CHECKING(whether libc's ngettext works at runtime)
+       FC_CHECK_NGETTEXT_RUNTIME(,have_working_ngettext=1,)],)
 
-  have_working_ngettext=0
-  AC_CHECK_LIB(c, ngettext,
-    [AC_MSG_CHECKING(whether libc's ngettext works at runtime)
-     FC_CHECK_NGETTEXT_RUNTIME(,have_working_ngettext=1,)],)
+    if test "$have_working_ngettext" = "0"; then
+      AC_CHECK_LIB(intl, ngettext,
+        [AC_MSG_CHECKING(whether libintl's ngettext works at runtime)
+         FC_CHECK_NGETTEXT_RUNTIME("-lintl",have_working_ngettext=1,)],)
+    fi
 
-  if test "$have_working_ngettext" = "0"; then
-    AC_CHECK_LIB(intl, ngettext,
-      [AC_MSG_CHECKING(whether libintl's ngettext works at runtime)
-       FC_CHECK_NGETTEXT_RUNTIME("-lintl",have_working_ngettext=1,)],)
-  fi
-
-  if test "$have_working_ngettext" = "0"; then
-    AC_MSG_ERROR(I haven't found a working ngettext function in your system. 
-Try --disable-nls. Read ABOUT-NLS.)
+    if test "$have_working_ngettext" = "0"; then
+      AC_MSG_ERROR(I haven't found a working ngettext function in your system. 
+Try --with-included-gettext or --disable-nls. Read ABOUT-NLS.)
+    fi
   fi
 
   if test "$IS_BETA_VERSION" = "1" || test "$IS_DEVEL_VERSION" = "1"; then
@@ -387,10 +375,6 @@ if test "$GZIP" = "no"; then
   AC_MSG_ERROR([You need the gzip program for compilation.])
 fi
 
-dnl Check for libbzip2
-AC_CHECK_LIB(bz2, BZ2_bzReadOpen)
-AC_CHECK_HEADERS(bzlib.h)
-
 dnl Check and compile ftwl
 if test "$ftwl" = x11 ; then
      FTWL_CFLAGS=`freetype-config --cflags`
@@ -462,7 +446,6 @@ if test x$client != xno; then
 
     if test "x$found_client" = "xyes"; then
       client=stub
-      CLIENT_LIBS="-lm"
     elif test "$client" = "stub"; then
       AC_MSG_ERROR(specified client 'stub' not configurable)
     fi
@@ -717,15 +700,11 @@ AC_SUBST([CONFIGURE_DEPENDENCIES], ["$CONFIGURE_DEPENDENCIES \$(top_srcdir)/vers
 dnl Make sure that config.h changes when ever CPPFLAGS, CFLAGS or CXXFLAGS
 dnl change so everything gets rebuilt. LDFLAGS is not handled here
 dnl since change in it should not cause recompilation, only relinking.
-dnl Note: Variables are named FC_STORE_* instead of FC_*_STORE in order to
-dnl make them appear next to each other in config.h.  Also single-quotes are
-dnl used because some " may appear unescaped within the flag strings.
-AC_DEFINE_UNQUOTED([FC_STORE_CPPFLAGS], ['$CPPFLAGS'],
-                   [These are the CPPFLAGS used in compilation])
-AC_DEFINE_UNQUOTED([FC_STORE_CFLAGS], ['$CFLAGS'],
-                   [These are the CFLAGS used in compilation])
-AC_DEFINE_UNQUOTED([FC_STORE_CXXFLAGS], ['$CXXFLAGS'],
-                   [These are the CXXFLAGS used in compilation])
+dnl Note: Variables are named FC_STORE_* instead of FC_*_STORE in order to make them
+dnl       appear next to each other in config.h.
+AC_DEFINE_UNQUOTED([FC_STORE_CPPFLAGS], ['$CPPFLAGS'], [These are the CPPFLAGS used in compilation])
+AC_DEFINE_UNQUOTED([FC_STORE_CFLAGS], ['$CFLAGS'], [These are the CFLAGS used in compilation])
+AC_DEFINE_UNQUOTED([FC_STORE_CXXFLAGS], ['$CXXFLAGS'], [These are the CXXFLAGS used in compilation])
 
 AC_CONFIG_FILES([Makefile
           data/Makefile
@@ -796,6 +775,7 @@ AC_CONFIG_FILES([Makefile
 	  server/generator/Makefile
 	  server/scripting/Makefile
 	  manual/Makefile
+	  intl/Makefile
 	  po/Makefile.in
 	  doc/Makefile
 	  doc/man/Makefile

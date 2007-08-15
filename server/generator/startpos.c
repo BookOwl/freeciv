@@ -14,9 +14,9 @@
 #include <config.h>
 #endif
 
+#include "game.h"
 #include "log.h"
 #include "fcintl.h"
-#include "movement.h"
 
 #include "map.h"
 
@@ -82,7 +82,6 @@ static int get_tile_value(struct tile *ptile)
 struct start_filter_data {
   int count;			/* Number of existing start positions. */
   int min_value;
-  struct unit_type *initial_unit;
   int *value;
 };
 
@@ -117,11 +116,6 @@ static bool is_valid_start_pos(const struct tile *ptile, const void *dataptr)
 
   /* Don't start on a hut. */
   if (tile_has_special(ptile, S_HUT)) {
-    return FALSE;
-  }
-
-  /* Has to be native for tile for initial unit */
-  if (!is_native_tile(pdata->initial_unit, ptile)) {
     return FALSE;
   }
 
@@ -197,11 +191,9 @@ static bool filter_starters(const struct tile *ptile, const void *data)
   MT_ALL: all players in asingle isle
   MT_VARIABLE: at least 2 player per isle
   
-  Assumes assign_continent_numbers() has already been done!
   Returns true on success
 **************************************************************************/
-bool create_start_positions(enum start_mode mode,
-			    struct unit_type *initial_unit)
+bool create_start_positions(enum start_mode mode)
 {
   struct tile *ptile;
   int k, sum;
@@ -210,7 +202,7 @@ bool create_start_positions(enum start_mode mode,
   int min_goodies_per_player = 2000;
   int total_goodies = 0;
   /* this is factor is used to maximize land used in extreme little maps */
-  float efactor =  player_count() / map.size / 4; 
+  float efactor =  game.info.nplayers / map.size / 4; 
   bool failure = FALSE;
   bool is_tmap = temperature_is_initialized();
 
@@ -222,6 +214,11 @@ bool create_start_positions(enum start_mode mode,
      * map and other information which has already been destroyed. */
     create_tmap(FALSE);
   }
+
+  /* Unsafe terrains separate continents, otherwise small areas of green
+   * near the poles could be populated by a civilization if that pole
+   * was part of a larger continent. */
+  assign_continent_numbers(TRUE);
 
   /* If the default is given, just use MT_VARIABLE. */
   if (mode == MT_DEFAULT) {
@@ -275,16 +272,16 @@ bool create_start_positions(enum start_mode mode,
 
   /* If we can't place starters according to the first choice, change the
    * choice. */
-  if (mode == MT_SINGLE && map.num_continents < player_count() + 3) {
+  if (mode == MT_SINGLE && map.num_continents < game.info.nplayers + 3) {
     mode = MT_2or3;
   }
 
-  if (mode == MT_2or3 && map.num_continents < player_count() / 2 + 4) {
+  if (mode == MT_2or3 && map.num_continents < game.info.nplayers / 2 + 4) {
     mode = MT_VARIABLE;
   }
 
   if (mode == MT_ALL 
-      && (islands[1].goodies < player_count() * min_goodies_per_player
+      && (islands[1].goodies < game.info.nplayers * min_goodies_per_player
 	  || islands[1].goodies < total_goodies * (0.5 + 0.8 * efactor)
 	  / (1 + efactor))) {
     mode = MT_VARIABLE;
@@ -293,11 +290,11 @@ bool create_start_positions(enum start_mode mode,
   /* the variable way is the last posibility */
   if (mode == MT_VARIABLE) {
     min_goodies_per_player = total_goodies * (0.65 + 0.8 * efactor) 
-      / (1 + efactor)  / player_count();
+      / (1 + efactor)  / game.info.nplayers;
   }
 
   { 
-    int nr, to_place = player_count(), first = 1;
+    int nr, to_place = game.info.nplayers, first = 1;
 
     /* inizialize islands_index */
     for (nr = 1; nr <= map.num_continents; nr++) {
@@ -308,7 +305,7 @@ bool create_start_positions(enum start_mode mode,
     if ((mode == MT_SINGLE) || (mode == MT_2or3)) {
       float var_goodies, best = HUGE_VAL;
       int num_islands
-	= (mode == MT_SINGLE) ? player_count() : (player_count() / 2);
+	= (mode == MT_SINGLE) ? game.info.nplayers : (game.info.nplayers / 2);
 
       for (nr = 1; nr <= 1 + map.num_continents - num_islands; nr++) {
 	if (islands[nr + num_islands - 1].goodies < min_goodies_per_player) {
@@ -338,7 +335,7 @@ bool create_start_positions(enum start_mode mode,
 	to_place--;
       }
       if (mode == MT_2or3 && to_place > 0 && nr >= first) {
-	islands[nr].starters = 2 + (nr == 1 ? (player_count() % 2) : 0);
+	islands[nr].starters = 2 + (nr == 1 ? (game.info.nplayers % 2) : 0);
 	to_place -= islands[nr].total = islands[nr].starters;
       }
 
@@ -353,7 +350,6 @@ bool create_start_positions(enum start_mode mode,
   data.count = 0;
   data.value = tile_value;
   data.min_value = 900;
-  data.initial_unit = initial_unit;
   sum = 0;
   for (k = 1; k <= map.num_continents; k++) {
     sum += islands[islands_index[k]].starters;
@@ -361,13 +357,13 @@ bool create_start_positions(enum start_mode mode,
       freelog(LOG_VERBOSE, "starters on isle %i", k);
     }
   }
-  assert(player_count() <= data.count + sum);
+  assert(game.info.nplayers <= data.count + sum);
 
   /* now search for the best place and set start_positions */
   map.start_positions = fc_realloc(map.start_positions,
-				   player_count()
+				   game.info.nplayers
 				   * sizeof(*map.start_positions));
-  while (data.count < player_count()) {
+  while (data.count < game.info.nplayers) {
     if ((ptile = rand_map_pos_filtered(&data, is_valid_start_pos))) {
       islands[islands_index[(int) tile_get_continent(ptile)]].starters--;
       map.start_positions[data.count].tile = ptile;
@@ -391,7 +387,7 @@ bool create_start_positions(enum start_mode mode,
       }
     }
   }
-  map.num_start_positions = player_count();
+  map.num_start_positions = game.info.nplayers;
 
   free(islands);
   free(islands_index);
