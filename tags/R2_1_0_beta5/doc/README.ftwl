@@ -1,0 +1,12 @@
+==============================
+Freeciv Theme and Widget Layer
+==============================
+
+Freeciv Theme and Widget Layer (FTWL) is a low-level library for 
+manipulating the graphics and input systems on your computer,
+and displaying screens with widgets based on themes loaded from 
+configuration files.
+
+Work on the FTWL library and client has stalled and is not working 
+in this version. See later versions or the svn trunk version for
+news, documentation and newer versions of this code.
