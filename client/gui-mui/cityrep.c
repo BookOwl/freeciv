@@ -116,6 +116,7 @@ static void cityrep_active(void)
   if (pcity)
   {
     int flag;
+    size_t i;
 
     set(cityrep_center_button, MUIA_Disabled, FALSE);
     set(cityrep_popup_button, MUIA_Disabled, FALSE);
@@ -123,15 +124,15 @@ static void cityrep_active(void)
 
     flag = 0;
 
-    improvement_iterate(pimprove) {
-      if (can_city_build_improvement_now(pcity, pimprove))
+    impr_type_iterate(i) {
+      if (can_build_improvement(pcity, i))
       {
 	flag = 1;
       }
-    } improvement_iterate_end;
+    } impr_type_iterate_end;
 
-    unit_type_iterate(punittype) {
-      if (can_city_build_unit_now(pcity, punittype))
+    unit_type_iterate(i) {
+      if (can_build_unit(pcity, i))
       {
 	flag = 1;
       }

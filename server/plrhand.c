@@ -122,8 +122,7 @@ void kill_dying_players(void)
 /**************************************************************************
   Murder a player in cold blood.
 **************************************************************************/
-void kill_player(struct player *pplayer)
-{
+void kill_player(struct player *pplayer) {
   bool palace;
 
   pplayer->is_dying = FALSE; /* Can't get more dead than this. */
@@ -171,13 +170,6 @@ void kill_player(struct player *pplayer)
     remove_city(pcity);
   } city_list_iterate_end;
   game.info.savepalace = palace;
-
-  /* Remove ownership of tiles */
-  whole_map_iterate(ptile) {
-    if (ptile->owner == pplayer) {
-      map_claim_ownership(ptile, NULL, NULL);
-    }
-  } whole_map_iterate_end;
 
   /* Ensure this dead player doesn't win with a spaceship.
    * Now that would be truly unbelievably dumb - Per */
@@ -494,15 +486,16 @@ void handle_diplomacy_cancel_pact(struct player *pplayer,
 {
   enum diplstate_type old_type;
   enum diplstate_type new_type;
-  enum dipl_reason diplcheck;
+  struct player *pplayer2;
   bool repeat = FALSE;
-  struct player *pplayer2 = valid_player_by_number(other_player_id);
+  enum dipl_reason diplcheck;
 
-  if (NULL == pplayer2) {
+  if (!is_valid_player_id(other_player_id)) {
     return;
   }
 
   old_type = pplayer->diplstates[other_player_id].type;
+  pplayer2 = get_player(other_player_id);
 
   if (clause == CLAUSE_VISION) {
     if (!gives_shared_vision(pplayer, pplayer2)) {
@@ -554,11 +547,11 @@ void handle_diplomacy_cancel_pact(struct player *pplayer,
   }
 
   /* do the change */
-  pplayer->diplstates[player_index(pplayer2)].type =
-    pplayer2->diplstates[player_index(pplayer)].type =
+  pplayer->diplstates[pplayer2->player_no].type =
+    pplayer2->diplstates[pplayer->player_no].type =
     new_type;
-  pplayer->diplstates[player_index(pplayer2)].turns_left =
-    pplayer2->diplstates[player_index(pplayer)].turns_left =
+  pplayer->diplstates[pplayer2->player_no].turns_left =
+    pplayer2->diplstates[pplayer->player_no].turns_left =
     16;
 
   /* If the old state was alliance, the players' units can share tiles
@@ -572,7 +565,7 @@ void handle_diplomacy_cancel_pact(struct player *pplayer,
    * treaty simultaneously it may partially succed: the first treaty-breaking
    * will happen but the second one will fail. */
   if (get_player_bonus(pplayer, EFT_HAS_SENATE) > 0 && !repeat) {
-    if (pplayer->diplstates[player_index(pplayer2)].has_reason_to_cancel > 0) {
+    if (pplayer->diplstates[pplayer2->player_no].has_reason_to_cancel > 0) {
       notify_player(pplayer, NULL, E_TREATY_BROKEN,
 		       _("The senate passes your bill because of the "
 			 "constant provocations of the %s."),
@@ -587,7 +580,7 @@ void handle_diplomacy_cancel_pact(struct player *pplayer,
   if (new_type == DS_WAR) {
     ai_incident_war(pplayer, pplayer2);
   }
-  pplayer->diplstates[player_index(pplayer2)].has_reason_to_cancel = 0;
+  pplayer->diplstates[pplayer2->player_no].has_reason_to_cancel = 0;
 
   send_player_info(pplayer, NULL);
   send_player_info(pplayer2, NULL);
@@ -617,7 +610,7 @@ void handle_diplomacy_cancel_pact(struct player *pplayer,
 		   nation_plural_for_player(pplayer2),
 		   diplstate_text(new_type));
   notify_player(pplayer2, NULL, E_TREATY_BROKEN,
-		   _(" %s canceled the diplomatic agreement! "
+		   _(" %s cancelled the diplomatic agreement! "
 		     "The diplomatic state between the %s and the %s "
 		     "is now %s."), pplayer->name,
 		   nation_plural_for_player(pplayer2),
@@ -637,8 +630,8 @@ void handle_diplomacy_cancel_pact(struct player *pplayer,
                          _("%s has attacked your ally %s! "
                            "You cancel your alliance to the aggressor."),
                        pplayer->name, pplayer2->name);
-        other->diplstates[player_index(pplayer)].has_reason_to_cancel = 1;
-        handle_diplomacy_cancel_pact(other, player_number(pplayer),
+        other->diplstates[pplayer->player_no].has_reason_to_cancel = 1;
+        handle_diplomacy_cancel_pact(other, pplayer->player_no,
                                      CLAUSE_ALLIANCE);
       } else {
         /* We are in the same team as the agressor; we cannot break 
@@ -650,7 +643,7 @@ void handle_diplomacy_cancel_pact(struct player *pplayer,
                          pplayer->name,
                          nation_plural_for_player(pplayer2),
                          pplayer2->name);
-        handle_diplomacy_cancel_pact(other, player_number(pplayer2), CLAUSE_ALLIANCE);
+        handle_diplomacy_cancel_pact(other, pplayer2->player_no, CLAUSE_ALLIANCE);
       }
     }
   } players_iterate_end;
@@ -854,12 +847,12 @@ static void package_player_common(struct player *plr,
 {
   int i;
 
-  packet->playerno=player_number(plr);
+  packet->playerno=plr->player_no;
   sz_strlcpy(packet->name, plr->name);
   sz_strlcpy(packet->username, plr->username);
-  packet->nation = plr->nation ? nation_number(plr->nation) : -1;
+  packet->nation = plr->nation ? plr->nation->index : -1;
   packet->is_male=plr->is_male;
-  packet->team = plr->team ? team_number(plr->team) : -1;
+  packet->team = plr->team ? plr->team->index : -1;
   packet->is_ready = plr->is_ready;
   if (city_styles != NULL) {
     packet->city_style = city_style_of_player(plr);
@@ -879,14 +872,14 @@ static void package_player_common(struct player *plr,
   packet->phase_done = plr->phase_done;
   packet->nturns_idle=plr->nturns_idle;
 
-  for (i = 0; i < B_LAST/*improvement_count()*/; i++) {
+  for (i = 0; i < B_LAST /*game.control.num_impr_types */ ; i++) {
     packet->small_wonders[i] = plr->small_wonders[i];
   }
   packet->science_cost = plr->ai.science_cost;
 
   packet->gold = plr->economic.gold;
   packet->government = government_of_player(plr)
-                       ? government_number(government_of_player(plr))
+                       ? government_of_player(plr)->index
                        : -1;
 }
 
@@ -938,14 +931,13 @@ static void package_player_info(struct player *plr,
    * contact with. */
   if (info_level >= INFO_EMBASSY
       || (receiver
-	  && receiver->diplstates[player_index(plr)].contact_turns_left > 0)) {
-    packet->target_government = plr->target_government
-                                ? government_number(plr->target_government)
-                                : -1;
+	  && receiver->diplstates[plr->player_no].contact_turns_left > 0)) {
+    packet->target_government
+      = plr->target_government ? plr->target_government->index : -1;
     memset(&packet->embassy, 0, sizeof(packet->embassy));
     players_iterate(pother) {
-      packet->embassy[player_index(pother)]
-	= BV_ISSET(plr->embassy, player_index(pother));
+      packet->embassy[pother->player_no]
+	= BV_ISSET(plr->embassy, pother->player_no);
     } players_iterate_end;
     packet->gives_shared_vision = plr->gives_shared_vision;
     for(i = 0; i < MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS; i++) {
@@ -959,12 +951,12 @@ static void package_player_info(struct player *plr,
     packet->target_government = packet->government;
     memset(&packet->embassy, 0, sizeof(packet->embassy));
     if (receiver && player_has_embassy(plr, receiver)) {
-      packet->embassy[player_index(receiver)] = TRUE;
+      packet->embassy[receiver->player_no] = TRUE;
     }
     if (!receiver || !gives_shared_vision(plr, receiver)) {
       packet->gives_shared_vision = 0;
     } else {
-      packet->gives_shared_vision = 1 << player_index(receiver);
+      packet->gives_shared_vision = 1 << receiver->player_no;
     }
 
     for (i = 0; i < MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS; i++) {
@@ -975,7 +967,7 @@ static void package_player_info(struct player *plr,
     }
     /* We always know the player's relation to us */
     if (receiver) {
-      int p_no = player_index(receiver);
+      int p_no = receiver->player_no;
 
       packet->diplstates[p_no].type       = plr->diplstates[p_no].type;
       packet->diplstates[p_no].turns_left = plr->diplstates[p_no].turns_left;
@@ -998,10 +990,11 @@ static void package_player_info(struct player *plr,
   /* Send most civ info about the player only to players who have an
    * embassy. */
   if (highest_team_level >= INFO_EMBASSY) {
-    advance_index_iterate(A_FIRST, i) {
+    for (i = A_FIRST; i < game.control.num_tech_types; i++) {
       packet->inventions[i] = 
         research->inventions[i].state + '0';
-    } advance_index_iterate_end;
+    }
+    packet->inventions[i]   = '\0';
     packet->tax             = plr->economic.tax;
     packet->science         = plr->economic.science;
     packet->luxury          = plr->economic.luxury;
@@ -1011,9 +1004,10 @@ static void package_player_info(struct player *plr,
     packet->future_tech = research->future_tech;
     packet->revolution_finishes = plr->revolution_finishes;
   } else {
-    advance_index_iterate(A_FIRST, i) {
+    for (i = A_FIRST; i < game.control.num_tech_types; i++) {
       packet->inventions[i] = '0';
-    } advance_index_iterate_end;
+    }
+    packet->inventions[i]   = '\0';
     packet->tax             = 0;
     packet->science         = 0;
     packet->luxury          = 0;
@@ -1027,16 +1021,10 @@ static void package_player_info(struct player *plr,
   /* We have to inform the client that the other players also know
    * A_NONE. */
   packet->inventions[A_NONE] = research->inventions[A_NONE].state + '0';
-  packet->inventions[advance_count()] = '\0';
-#ifdef DEBUG
-  freelog(LOG_VERBOSE, "Player%d inventions:%s",
-          player_number(plr),
-          packet->inventions);
-#endif
 
   if (info_level >= INFO_FULL
       || (receiver
-	  && plr->diplstates[player_index(receiver)].type == DS_TEAM)) {
+	  && plr->diplstates[receiver->player_no].type == DS_TEAM)) {
     packet->tech_goal       = research->tech_goal;
   } else {
     packet->tech_goal       = A_UNSET;
@@ -1047,13 +1035,12 @@ static void package_player_info(struct player *plr,
    * to have a consistent state here.
    */
   assert(server_state != RUN_GAME_STATE
-         || A_UNSET == research->researching
-	 || is_future_tech(research->researching)
-	 || (A_NONE != research->researching
-	     && valid_advance_by_number(research->researching)));
-  assert(A_UNSET == research->tech_goal
-	 || (A_NONE != research->tech_goal
-	     && valid_advance_by_number(research->tech_goal)));
+	 || ((tech_exists(research->researching)
+	      && research->researching != A_NONE)
+	     || is_future_tech(research->researching)
+             || research->researching == A_UNSET));
+  assert((tech_exists(research->tech_goal) && research->tech_goal != A_NONE)
+	 || research->tech_goal == A_UNSET);
 }
 
 /**************************************************************************
@@ -1129,7 +1116,7 @@ void server_remove_player(struct player *pplayer)
   notify_conn(game.est_connections, NULL, E_CONNECTION,
 	      _("%s has been removed from the game."), pplayer->name);
   
-  dlsend_packet_player_remove(game.est_connections, player_number(pplayer));
+  dlsend_packet_player_remove(game.est_connections, pplayer->player_no);
 
   /* Note it is ok to remove the _current_ item in a list_iterate. */
   conn_list_iterate(pplayer->connections, pconn) {
@@ -1140,7 +1127,7 @@ void server_remove_player(struct player *pplayer)
 
   team_remove_player(pplayer);
   game_remove_player(pplayer);
-  game_renumber_players(player_number(pplayer));
+  game_renumber_players(pplayer->player_no);
 }
 
 /**************************************************************************
@@ -1149,7 +1136,7 @@ void server_remove_player(struct player *pplayer)
 void make_contact(struct player *pplayer1, struct player *pplayer2,
 		  struct tile *ptile)
 {
-  int player1 = player_number(pplayer1), player2 = player_number(pplayer2);
+  int player1 = pplayer1->player_no, player2 = pplayer2->player_no;
 
   if (pplayer1 == pplayer2
       || !pplayer1->is_alive
@@ -1195,10 +1182,10 @@ void make_contact(struct player *pplayer1, struct player *pplayer2,
         notify_player(pplayer3, NULL, E_TREATY_BROKEN,
                       _("%s and %s meet and go to instant war. You cancel your alliance "
                         "with both."), pplayer1->name, pplayer2->name);
-        pplayer3->diplstates[player_index(pplayer1)].has_reason_to_cancel = TRUE;
-        pplayer3->diplstates[player_index(pplayer2)].has_reason_to_cancel = TRUE;
-        handle_diplomacy_cancel_pact(pplayer3, player_number(pplayer1), CLAUSE_ALLIANCE);
-        handle_diplomacy_cancel_pact(pplayer3, player_number(pplayer2), CLAUSE_ALLIANCE);
+        pplayer3->diplstates[pplayer1->player_no].has_reason_to_cancel = TRUE;
+        pplayer3->diplstates[pplayer2->player_no].has_reason_to_cancel = TRUE;
+        handle_diplomacy_cancel_pact(pplayer3, pplayer1->player_no, CLAUSE_ALLIANCE);
+        handle_diplomacy_cancel_pact(pplayer3, pplayer2->player_no, CLAUSE_ALLIANCE);
       }
     } players_iterate_end;
 
@@ -1244,31 +1231,31 @@ void shuffle_players(void)
   int i, pos;
   struct player *tmp_plr;
 
-  freelog(LOG_DEBUG, "shuffling %d players", player_count());
+  freelog(LOG_DEBUG, "shuffling %d players", game.info.nplayers);
 
   /* Initialize array in unshuffled order: */
-  for(i = 0; i < player_count(); i++) {
+  for(i = 0; i < game.info.nplayers; i++) {
     shuffled_plr[i] = &game.players[i];
   }
 
   /* Now shuffle them: */
-  for(i = 0; i < player_count() - 1; i++) {
+  for(i = 0; i < game.info.nplayers - 1; i++) {
     /* for each run: shuffled[ <i ] is already shuffled [Kero+dwp] */
-    pos = i + myrand(player_count() - i);
+    pos = i + myrand(game.info.nplayers - i);
     tmp_plr = shuffled_plr[i]; 
     shuffled_plr[i] = shuffled_plr[pos];
     shuffled_plr[pos] = tmp_plr;
   }
 
 #ifdef DEBUG
-  for (i = 0; i < player_count(); i++) {
+  for (i = 0; i < game.info.nplayers; i++) {
     freelog(LOG_DEBUG, "Shuffling player %d as %d.",
-	    i, player_number(shuffled_plr[i]));
+	    i, shuffled_plr[i]->player_no);
   }
 #endif
 
   /* Record how many players there were when shuffled: */
-  shuffled_nplayers = player_count();
+  shuffled_nplayers = game.info.nplayers;
 }
 
 /**************************************************************************
@@ -1278,14 +1265,14 @@ void set_shuffled_players(int *shuffled_players)
 {
   int i;
 
-  for (i = 0; i < player_count(); i++) {
-    shuffled_plr[i] = player_by_number(shuffled_players[i]);
+  for (i = 0; i < game.info.nplayers; i++) {
+    shuffled_plr[i] = get_player(shuffled_players[i]);
 
     freelog(LOG_DEBUG, "Set shuffled player %d as %d.",
-	    i, player_number(shuffled_plr[i]));
+	    i, shuffled_plr[i]->player_no);
   }
 
-  shuffled_nplayers = player_count();
+  shuffled_nplayers = game.info.nplayers;
 }
 
 /**************************************************************************
@@ -1295,16 +1282,16 @@ void set_shuffled_players(int *shuffled_players)
 **************************************************************************/
 struct player *shuffled_player(int i)
 {
-  assert(i >= 0 && i < player_count());
+  assert(i >= 0 && i < game.info.nplayers);
   
   if (shuffled_nplayers == 0) {
     freelog(LOG_ERROR, "shuffled_player() called before shuffled");
     return &game.players[i];
   }
   /* This shouldn't happen: */
-  if (player_count() < shuffled_nplayers) {
+  if (game.info.nplayers < shuffled_nplayers) {
     freelog(LOG_ERROR, "number of players shrunk between shuffles (%d < %d)",
-	    player_count(), shuffled_nplayers);
+	    game.info.nplayers, shuffled_nplayers);
     return &game.players[i];	/* ?? */
   }
   if (i < shuffled_nplayers) {
@@ -1357,13 +1344,12 @@ static int nations_match(struct nation_type* n1, struct nation_type* n2,
 ****************************************************************************/
 struct nation_type *pick_a_nation(struct nation_type **choices,
                                   bool ignore_conflicts,
-                                  bool only_available,
-                                  enum barbarian_type barb_type)
+				  bool only_available)
 {
   enum {
     UNAVAILABLE, AVAILABLE, PREFERRED, UNWANTED
-  } nations_used[nation_count()], looking_for;
-  int match[nation_count()], pick;
+  } nations_used[game.control.nation_count], looking_for;
+  int match[game.control.nation_count], pick;
   int num_nations_avail = 0, pref_nations_avail = 0;
 
   /* Values of nations_used: 
@@ -1373,47 +1359,46 @@ struct nation_type *pick_a_nation(struct nation_type **choices,
    * 3: unwanted - we can used this nation, but we really don't want to
    */
   nations_iterate(pnation) {
-    if (pnation->player
-        || (only_available && !pnation->is_available)
-        || (barb_type != nation_barbarian_type(pnation))
-        || (barb_type == NOT_A_BARBARIAN && !is_nation_playable(pnation))) {
+    if (!is_nation_playable(pnation)
+	|| pnation->player
+	|| (only_available && !pnation->is_available)) {
       /* Nation is unplayable or already used: don't consider it. */
-      nations_used[nation_index(pnation)] = UNAVAILABLE;
-      match[nation_index(pnation)] = 0;
+      nations_used[pnation->index] = UNAVAILABLE;
+      match[pnation->index] = 0;
       continue;
     }
 
-    nations_used[nation_index(pnation)] = AVAILABLE;
+    nations_used[pnation->index] = AVAILABLE;
 
-    match[nation_index(pnation)] = 1;
+    match[pnation->index] = 1;
     players_iterate(pplayer) {
       if (pplayer->nation != NO_NATION_SELECTED) {
         int x = nations_match(pnation, nation_of_player(pplayer), ignore_conflicts);
 	if (x < 0) {
-	  nations_used[nation_index(pnation)] = UNWANTED;
-	  match[nation_index(pnation)] = 1;
+	  nations_used[pnation->index] = UNWANTED;
+	  match[pnation->index] = 1;
 	  break;
 	} else {
-	  match[nation_index(pnation)] += x * 100;
+	  match[pnation->index] += x * 100;
 	}
       }
     } players_iterate_end;
 
-    num_nations_avail += match[nation_index(pnation)];
+    num_nations_avail += match[pnation->index];
   } nations_iterate_end;
 
   /* Mark as prefered those nations which are on the choices list and
    * which are AVAILABLE, but no UNWANTED */
   for (; choices && *choices != NO_NATION_SELECTED; choices++) {
-    if (nations_used[nation_index(*choices)] == AVAILABLE) {
-      pref_nations_avail += match[nation_index(*choices)];
-      nations_used[nation_index(*choices)] = PREFERRED;
+    if (nations_used[(*choices)->index] == AVAILABLE) {
+      pref_nations_avail += match[(*choices)->index];
+      nations_used[(*choices)->index] = PREFERRED;
     }
   }
   
   nations_iterate(pnation) {
-    if (nations_used[nation_index(pnation)] == UNWANTED) {
-      nations_used[nation_index(pnation)] = AVAILABLE;
+    if (nations_used[pnation->index] == UNWANTED) {
+      nations_used[pnation->index] = AVAILABLE;
     }
   } nations_iterate_end;
 
@@ -1429,8 +1414,8 @@ struct nation_type *pick_a_nation(struct nation_type **choices,
   }
 
   nations_iterate(pnation) {
-    if (nations_used[nation_index(pnation)] == looking_for) {
-      pick -= match[nation_index(pnation)];
+    if (nations_used[pnation->index] == looking_for) {
+      pick -= match[pnation->index];
 
       if (pick < 0) {
 	return pnation;
@@ -1466,7 +1451,7 @@ split between both players.
 ***********************************************************************/
 static struct player *split_player(struct player *pplayer)
 {
-  int newplayer = player_count();
+  int newplayer = game.info.nplayers;
   struct player *cplayer = &game.players[newplayer];
   struct nation_type **civilwar_nations
     = get_nation_civilwar(nation_of_player(pplayer));
@@ -1477,8 +1462,7 @@ static struct player *split_player(struct player *pplayer)
 
   /* select a new name and nation for the copied player. */
   /* Rebel will always be an AI player */
-  player_set_nation(cplayer, pick_a_nation(civilwar_nations, TRUE, FALSE,
-                                           NOT_A_BARBARIAN));
+  player_set_nation(cplayer, pick_a_nation(civilwar_nations, TRUE, FALSE));
   pick_random_player_name(nation_of_player(cplayer), cplayer->name);
 
   sz_strlcpy(cplayer->username, ANON_USER_NAME);
@@ -1488,22 +1472,22 @@ static struct player *split_player(struct player *pplayer)
   cplayer->capital = TRUE;
 
   /* cplayer is not yet part of players_iterate which goes only
-     to player_count(). */
+     to game.info.nplayers. */
   players_iterate(other_player) {
     if (get_player_bonus(other_player, EFT_NO_DIPLOMACY)) {
-      cplayer->diplstates[player_index(other_player)].type = DS_WAR;
-      other_player->diplstates[player_index(cplayer)].type = DS_WAR;
+      cplayer->diplstates[other_player->player_no].type = DS_WAR;
+      other_player->diplstates[cplayer->player_no].type = DS_WAR;
     } else {
-      cplayer->diplstates[player_index(other_player)].type = DS_NO_CONTACT;
-      other_player->diplstates[player_index(cplayer)].type = DS_NO_CONTACT;
+      cplayer->diplstates[other_player->player_no].type = DS_NO_CONTACT;
+      other_player->diplstates[cplayer->player_no].type = DS_NO_CONTACT;
     }
 
-    cplayer->diplstates[player_index(other_player)].has_reason_to_cancel = 0;
-    cplayer->diplstates[player_index(other_player)].turns_left = 0;
-    cplayer->diplstates[player_index(other_player)].contact_turns_left = 0;
-    other_player->diplstates[player_index(cplayer)].has_reason_to_cancel = 0;
-    other_player->diplstates[player_index(cplayer)].turns_left = 0;
-    other_player->diplstates[player_index(cplayer)].contact_turns_left = 0;
+    cplayer->diplstates[other_player->player_no].has_reason_to_cancel = 0;
+    cplayer->diplstates[other_player->player_no].turns_left = 0;
+    cplayer->diplstates[other_player->player_no].contact_turns_left = 0;
+    other_player->diplstates[cplayer->player_no].has_reason_to_cancel = 0;
+    other_player->diplstates[cplayer->player_no].turns_left = 0;
+    other_player->diplstates[cplayer->player_no].contact_turns_left = 0;
     
     /* Send so that other_player sees updated diplomatic info;
      * pplayer will be sent later anyway
@@ -1518,6 +1502,7 @@ static struct player *split_player(struct player *pplayer)
   game.info.max_players = game.info.nplayers;
 
   /* Split the resources */
+  
   cplayer->economic.gold = pplayer->economic.gold;
   cplayer->economic.gold /= 2;
   pplayer->economic.gold -= cplayer->economic.gold;
@@ -1531,9 +1516,9 @@ static struct player *split_player(struct player *pplayer)
   new_research->researching = old_research->researching;
   new_research->tech_goal = old_research->tech_goal;
 
-  advance_index_iterate(A_NONE, i) {
+  tech_type_iterate(i) {
     new_research->inventions[i] = old_research->inventions[i];
-  } advance_index_iterate_end;
+  } tech_type_iterate_end;
   cplayer->phase_done = TRUE; /* Have other things to think
 				 about - paralysis */
   BV_CLR_ALL(cplayer->embassy);   /* all embassies destroyed */
@@ -1548,9 +1533,9 @@ static struct player *split_player(struct player *pplayer)
   cplayer->ai.frost = pplayer->ai.frost;
   set_ai_level_direct(cplayer, game.info.skill_level);
 
-  advance_index_iterate(A_NONE, i) {
+  tech_type_iterate(i) {
     cplayer->ai.tech_want[i] = pplayer->ai.tech_want[i];
-  } advance_index_iterate_end;
+  } tech_type_iterate_end;
   
   /* change the original player */
   if (government_of_player(pplayer) != game.government_when_anarchy) {
@@ -1672,7 +1657,7 @@ void civil_war(struct player *pplayer)
   int i, j;
   struct player *cplayer;
 
-  if (player_count() >= MAX_NUM_PLAYERS) {
+  if (game.info.nplayers >= MAX_NUM_PLAYERS) {
     /* No space to make additional player */
     freelog(LOG_NORMAL, _("Could not throw %s into civil war - too many "
             "players"), pplayer->name);
@@ -1681,7 +1666,7 @@ void civil_war(struct player *pplayer)
 
   cplayer = split_player(pplayer);
 
-  /* So that clients get the correct player_count(): */
+  /* So that clients get the correct game.info.nplayers: */
   send_game_info(NULL);
   
   /* Before units, cities, so clients know name of new nation

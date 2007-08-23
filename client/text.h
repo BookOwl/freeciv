@@ -15,7 +15,6 @@
 #define FC__TEXT_H
 
 #include "fc_types.h"
-#include "unitlist.h"
 
 struct player_spaceship;
 

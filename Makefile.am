@@ -29,7 +29,7 @@ DSUBDIRS =
 endif
 
 
-SUBDIRS=	$(DSUBDIRS) utility common tests win32 $(SSUBDIRS) $(CSUBDIRS) po doc $(MSUBDIRS)
+SUBDIRS=	$(DSUBDIRS) intl utility common tests win32 $(SSUBDIRS) $(CSUBDIRS) po doc $(MSUBDIRS)
 
 EXTRA_DIST=	autogen.sh 			\
 		config.mac.h			\
@@ -62,6 +62,7 @@ EXTRA_DIST=	autogen.sh 			\
 		m4/esd.m4			\
 		m4/alsa.m4			\
 		m4/freetype2.m4			\
+		m4/gettext.m4			\
 		m4/gettimeofday.m4		\
 		m4/ggz.m4			\
 		m4/glib-2.0.m4			\
@@ -82,6 +83,7 @@ EXTRA_DIST=	autogen.sh 			\
 		m4/sdl-client.m4		\
 		m4/sdl.m4			\
 		m4/sound.m4			\
+		m4/version.m4			\
 		m4/vsnprintf.m4			\
 		m4/win32-client.m4		\
 		m4/x.m4				\
@@ -98,3 +100,4 @@ src-check:
 	cd tests && $(MAKE) $(AM_MAKEFLAGS) src-check
 
 .PHONY: src-check
+

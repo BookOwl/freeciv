@@ -9,8 +9,6 @@ AM_CPPFLAGS = -I../intl -I$(top_srcdir)/utility -I$(srcdir)/aicore
 ## Above, note -I../intl instead of -I$(top_srcdir/intl) is deliberate.
 
 libcivcommon_a_SOURCES = \
-		base.c		\
-		base.h		\
 		capstr.c	\
 		capstr.h	\
 		city.c		\

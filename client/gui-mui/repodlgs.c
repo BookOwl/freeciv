@@ -103,24 +103,24 @@ void update_report_dialogs(void)
 ****************************************************************/
 static void science_goal(ULONG * newgoal)
 {
+  int i;
   int to = -1;
 
   if (game.player_ptr->research->tech_goal == A_UNSET)
-    if (help_goal_entries[*newgoal] == (STRPTR) advance_name_translation(advance_by_number(A_NONE)))
+    if (help_goal_entries[*newgoal] == (STRPTR) advance_name_translation(A_NONE))
       to = 0;
-
-  advance_index_iterate(A_FIRST, i)
+  for (i = A_FIRST; i < game.control.num_tech_types; i++)
   {
-    if (help_goal_entries[*newgoal] == (STRPTR) advance_name_translation(advance_by_number(i)))
+    if (help_goal_entries[*newgoal] == (STRPTR) advance_name_translation(i))
       to = i;
-  } advance_index_iterate_end;
+  }
 
   if (to != -1)
   {
     if (xget(science_help_button, MUIA_Selected))
     {
       nnset(science_goal_popup, MUIA_Cycle_Active, science_goal_active);
-      popup_help_dialog_typed(advance_name_translation(advance_by_number(to)), HELP_TECH);
+      popup_help_dialog_typed(advance_name_translation(to), HELP_TECH);
     }
     else
     {
@@ -137,20 +137,21 @@ static void science_goal(ULONG * newgoal)
 ****************************************************************/
 static void science_research(ULONG * newresearch)
 {
+  int i;
   int to = -1;
 
-  advance_index_iterate(A_FIRST, i)
+  for (i = A_FIRST; i < game.control.num_tech_types; i++)
   {
-    if (help_research_entries[*newresearch] == (STRPTR) advance_name_translation(advance_by_number(i)))
+    if (help_research_entries[*newresearch] == (STRPTR) advance_name_translation(i))
       to = i;
-  } advance_index_iterate_end;
+  }
 
   if (to != -1)
   {
     if (xget(science_help_button, MUIA_Selected))
     {
       nnset(science_goal_popup, MUIA_Cycle_Active, science_goal_active);
-      popup_help_dialog_typed(advance_name_translation(advance_by_number(to)), HELP_TECH);
+      popup_help_dialog_typed(advance_name_translation(to), HELP_TECH);
     }
     else
     {
@@ -164,7 +165,7 @@ static void science_research(ULONG * newresearch)
 ****************************************************************/
 static void science_researched(ULONG * tech)
 {
-  popup_help_dialog_typed(advance_name_translation(advance_by_number(*tech)), HELP_TECH);
+  popup_help_dialog_typed(advance_name_translation(*tech), HELP_TECH);
 }
 
 /****************************************************************
@@ -175,7 +176,7 @@ void popup_science_dialog(bool make_modal)
   static STRPTR def_entries[2];
   STRPTR *goal_entries = def_entries;
   STRPTR *research_entries = def_entries;
-  int j = 0;
+  int i, j;
 
   def_entries[0] = _("None");
   def_entries[1] = 0;
@@ -191,42 +192,42 @@ void popup_science_dialog(bool make_modal)
     help_goal_entries = NULL;
   }
 
-  if (!is_future_tech(get_player_research(game.player_ptr)->researching)) {
-    int j = 0;
-    advance_index_iterate(A_FIRST, i)
+  if (!is_future_tech(game.player_ptr->research.researching)) {
+    for (i = A_FIRST, j = 0; i < game.control.num_tech_types; i++)
     {
-      if (player_invention_state(game.player_ptr, i) != TECH_REACHABLE)
+      if (get_invention(game.player_ptr, i) != TECH_REACHABLE)
 	continue;
       j++;
-    } advance_index_iterate_end;
+    }
 
     if (j)
     {
       if ((help_research_entries = (STRPTR *) malloc((j + 1) * sizeof(STRPTR))))
       {
-        int j = 0;
-	advance_index_iterate(A_FIRST, i)
+	for (i = A_FIRST, j = 0; i < game.control.num_tech_types; i++)
 	{
-	  if (player_invention_state(game.player_ptr, i) != TECH_REACHABLE)
+	  if (get_invention(game.player_ptr, i) != TECH_REACHABLE)
 	    continue;
 	  if (i == game.player_ptr->research.researching)
 	    science_research_active = j;
 
-	  help_research_entries[j++] = advance_name_translation(advance_by_number(i));
-	} advance_index_iterate_end;
+	  help_research_entries[j++] = advance_name_translation(i);
+	}
 	help_research_entries[j] = NULL;
 	research_entries = help_research_entries;
       }
     }
   }
 
-  advance_index_iterate(A_FIRST, i)
+
+  for (i = A_FIRST, j = 0; i < game.control.num_tech_types; i++)
   {
-    if (player_invention_is_ready(game.player_ptr, i)
-	&& player_invention_state(game.player_ptr, i) != TECH_KNOWN
+    if (tech_is_available(game.player_ptr, i)
+	&& get_invention(game.player_ptr, i) != TECH_KNOWN &&
+	&& advances[i].req[0] != A_LAST && advances[i].req[1] != A_LAST
 	&& num_unknown_techs_for_goal(game.player_ptr, i) < 11)
       j++;
-  } advance_index_iterate_end;
+  }
   if (game.player_ptr->research->tech_goal == A_UNSET) {
     j++;
   }
@@ -235,22 +236,22 @@ void popup_science_dialog(bool make_modal)
   {
     if ((help_goal_entries = (STRPTR *) malloc((j + 2) * sizeof(STRPTR))))
     {
-      int j = 0;
+      j = 0;
       if (game.player_ptr->research->tech_goal == A_UNSET) {
-	help_goal_entries[j++] = advance_name_translation(advance_by_number(A_NONE));
+	help_goal_entries[j++] = advance_name_translation(A_NONE);
       }
 
-      advance_index_iterate(A_FIRST, i)
+      for (i = A_FIRST; i < game.control.num_tech_types; i++)
       {
-	if (player_invention_is_ready(game.player_ptr, i)
-            && player_invention_state(game.player_ptr, i) != TECH_KNOWN
-	    && num_unknown_techs_for_goal(game.player_ptr, i) < 11)
+	if (get_invention(game.player_ptr, i) != TECH_KNOWN &&
+	    advances[i].req[0] != A_LAST && advances[i].req[1] != A_LAST &&
+	    num_unknown_techs_for_goal(game.player_ptr, i) < 11)
 	{
 	  if (i == game.player_ptr->research->tech_goal)
 	    science_goal_active = j;
-	  help_goal_entries[j++] = advance_name_translation(advance_by_number(i));
+	  help_goal_entries[j++] = advance_name_translation(i);
 	}
-      } advance_index_iterate_end;
+      }
 
       help_goal_entries[j] = NULL;
       goal_entries = help_goal_entries;
@@ -351,20 +352,20 @@ void popup_science_dialog(bool make_modal)
     DoMethod(science_cycle_group, MUIM_Group_ExitChange);
 
     DoMethod(science_steps_text, MUIM_SetAsString, MUIA_Text_Contents,
-	     _("(%ld steps)"),
-	     num_unknown_techs_for_goal(game.player_ptr,
-					game.player_ptr->research->tech_goal));
+	     _("(%ld steps)"), num_unknown_techs_for_goal(game.player_ptr,
+							  game.player_ptr->
+							  research->tech_goal));
 
     DoMethod(science_researched_group, MUIM_Group_InitChange);
     DoMethod(science_researched_group, MUIM_AutoGroup_DisposeChilds);
 
-    advance_index_iterate(A_FIRST, i)
+    for (i = A_FIRST; i < game.control.num_tech_types; i++)
     {
-      if ((player_invention_state(game.player_ptr, i) == TECH_KNOWN))
+      if ((get_invention(game.player_ptr, i) == TECH_KNOWN))
       {
       	Object *tech = TextObject,
       	    MUIA_Text_Contents,
-      	    advance_name_translation(advance_by_number(i)),
+      	    advance_name_translation(i),
      	    MUIA_InputMode, MUIV_InputMode_RelVerify,
      	    MUIA_CycleChain, 1,
       	    End;
@@ -375,7 +376,7 @@ void popup_science_dialog(bool make_modal)
       	  DoMethod(science_researched_group, OM_ADDMEMBER, tech);
       	}
       }
-    } advance_index_iterate_end;
+    }
 
     DoMethod(science_researched_group, MUIM_Group_ExitChange);
 
@@ -449,7 +450,7 @@ HOOKPROTONH(trade_imprv_render, void, char **array, struct improvement_entry *en
     my_snprintf(coststr, sizeof(coststr), "%5d", entry->cost);
     my_snprintf(utotal, sizeof(utotal), "%6d", entry->total_cost);
 
-    *array++ = improvement_name_translation(improvement_by_number(entry->type));
+    *array++ = improvement_name_translation(entry->type);
     *array++ = count;
     *array++ = coststr;
     *array = utotal;
@@ -487,7 +488,7 @@ static void trade_sell(int *data)
   if (entry) {
     char str[1024];
 
-    sell_all_improvements(improvement_by_number(entry->type), data == NULL, str, sizeof(str));
+    sell_all_improvements(entry->type, data == NULL, str, sizeof(str));
     popup_notify_dialog(_("Sell-Off:"), _("Results"), str);
   }
 }
@@ -717,8 +718,7 @@ static void actunit_upgrade(void)
       my_snprintf(buf, sizeof(buf),
 	      _("Upgrade as many %s to %s as possible for %d gold each?\n"
 	      "Treasury contains %d gold."),
-	      utype_name_translation(utype_by_number(ut1)),
-	      utype_name_translation(utype_by_number(ut2)),
+	      unit_types[ut1].name, unit_types[ut2].name,
 	      unit_upgrade_price(game.player_ptr, ut1, ut2),
 	      game.player_ptr->economic.gold);
 
@@ -821,9 +821,8 @@ void activeunits_report_dialog_update(void)
 
   city_list_iterate(game.player_ptr->cities, pcity)
   {
-    if (VUT_UTYPE == pcity->production.kind) {
-      struct unit_type *punittype = pcity->production.value.utype;
-      (unitarray[utype_index(punittype)].building_count)++;
+    if (pcity->production.is_unit) {
+      (unitarray[pcity->production.value].building_count)++;
     }
   }
   city_list_iterate_end;
@@ -864,8 +863,8 @@ void popup_endgame_report_dialog(struct packet_endgame_report *packet)
                      "%2d: The %s ruler %s scored %d points\n",
                      packet->score[i]),
                  i + 1,
-                 nation_name_for_player(player_by_number(packet->id[i])),
-                 player_by_number(packet->id[i])->name,
+                 nation_name_for_player(get_player(packet->id[i])),
+                 get_player(packet->id[i])->name,
                  packet->score[i]);
   }
   popup_notify_dialog(_("Final Report:"),

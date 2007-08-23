@@ -804,7 +804,7 @@ const char *sdl_get_tile_defense_info_text(struct tile *ptile)
   if(tile_has_special(ptile, S_RIVER)) {
     bonus += terrain_control.river_defense_bonus;
   }
-  if(tile_has_base_flag(ptile, BF_DEFENSE_BONUS)) {
+  if(tile_has_special(ptile, S_FORTRESS)) {
     bonus += terrain_control.fortress_defense_bonus;
   }
   my_snprintf(buffer, sizeof(buffer), "Terrain Defense Bonus: +%d%% ", bonus);
@@ -1568,7 +1568,7 @@ void popup_advanced_terrain_dialog(struct tile *ptile, Uint16 pos_x, Uint16 pos_
       create_active_iconlabel(pBuf, pWindow->dst, pStr,
 	    cBuf, unit_help_callback);
       set_wstate(pBuf , FC_WS_NORMAL);
-      add_to_gui_list(MAX_ID - utype_number(pUnitType), pBuf);
+      add_to_gui_list(MAX_ID - pUnitType->index, pBuf);
     
       area.w = MAX(area.w, pBuf->size.w);
       units_h += pBuf->size.h;
@@ -1721,8 +1721,7 @@ static void popdown_pillage_dialog(void)
   pillage.
 **************************************************************************/
 void popup_pillage_dialog(struct unit *pUnit,
-			  bv_special may_pillage,
-                          struct base_type *pbase)
+			  bv_special may_pillage)
 {
   struct widget *pWindow = NULL, *pBuf = NULL;
   SDL_String16 *pStr;
@@ -1764,27 +1763,15 @@ void popup_pillage_dialog(struct unit *pUnit,
   add_to_gui_list(ID_PILLAGE_DLG_EXIT_BUTTON, pBuf);
   /* ---------- */
   
-  while ((what = get_preferred_pillage(may_pillage, pbase)) != S_LAST) {
+  while ((what = get_preferred_pillage(may_pillage)) != S_LAST) {
       
     bv_special what_bv;
-
-    if (what != S_PILLAGE_BASE) {
-      BV_CLR_ALL(what_bv);
-      BV_SET(what_bv, what);
+      
+    BV_CLR_ALL(what_bv);
+    BV_SET(what_bv, what);
     
-      create_active_iconlabel(pBuf, pWindow->dst, pStr,
-                              (char *) special_name_translation(what), pillage_callback);
-      clear_special(&may_pillage, what);
-      prereq = get_infrastructure_prereq(what);
-      if (prereq != S_LAST) {
-        clear_special(&may_pillage, prereq);  
-      }
-    } else {
-      create_active_iconlabel(pBuf, pWindow->dst, pStr,
-                              (char *) base_name_translation(pbase), pillage_callback);
-      pbase = NULL;
-    }
-
+    create_active_iconlabel(pBuf, pWindow->dst, pStr,
+	    (char *) special_name_translation(what), pillage_callback);
     pBuf->data.unit = pUnit;
     set_wstate(pBuf, FC_WS_NORMAL);
   
@@ -1792,6 +1779,12 @@ void popup_pillage_dialog(struct unit *pUnit,
     
     area.w = MAX(area.w, pBuf->size.w);
     area.h += pBuf->size.h;
+        
+    clear_special(&may_pillage, what);
+    prereq = get_infrastructure_prereq(what);
+    if (prereq != S_LAST) {
+      clear_special(&may_pillage, prereq);  
+    }
   }
   pPillage_Dlg->pBeginWidgetList = pBuf;
 
@@ -1957,7 +1950,8 @@ static void popup_government_dialog(void)
   struct SDL_String16 *pStr = NULL;
   struct widget *pGov_Button = NULL;
   struct widget *pWindow = NULL;
-  int j;
+  struct government *pGov = NULL;
+  int i, j;
   Uint16 max_w = 0, max_h = 0;
   SDL_Rect area;
 
@@ -1981,14 +1975,15 @@ static void popup_government_dialog(void)
   
   /* create gov. buttons */
   j = 0;
-  government_iterate(pGov) {
+  for (i = 0; i < game.control.government_count; i++) {
 
-    if (pGov == game.government_when_anarchy) {
+    if (i == game.government_when_anarchy->index) {
       continue;
     }
 
-    if (can_change_to_government(game.player_ptr, pGov)) {
+    if (can_change_to_government(game.player_ptr, government_by_number(i))) {
 
+      pGov = government_by_number(i);
       pStr = create_str16_from_char(government_name_translation(pGov), adj_font(12));
       pGov_Button =
           create_icon_button(get_government_surface(pGov), pWindow->dst, pStr, 0);
@@ -1998,11 +1993,11 @@ static void popup_government_dialog(void)
       max_h = MAX(max_h, pGov_Button->size.h);
       
       /* ugly hack */
-      add_to_gui_list((MAX_ID - government_number(pGov)), pGov_Button);
+      add_to_gui_list((MAX_ID - i), pGov_Button);
       j++;
 
     }
-  } government_iterate_end;
+  }
 
   pGov_Dlg->pBeginWidgetList = pGov_Button;
 
@@ -2209,8 +2204,7 @@ static int races_dialog_ok_callback(struct widget *pStart_Button)
       return (-1);
     }
   
-    dsend_packet_nation_select_req(&aconnection, player_number(races_player),
-                                   pSetup->nation,
+    dsend_packet_nation_select_req(&aconnection, races_player->player_no, pSetup->nation,
                                    pSetup->leader_sex, pStr,
                                    pSetup->nation_city_style);
     FC_FREE(pStr);
@@ -2760,9 +2754,9 @@ void popup_races_dialog(struct player *pplayer)
     w = MAX(w, pWidget->size.w);
     h = MAX(h, pWidget->size.h);
 
-    add_to_gui_list(MAX_ID - nation_index(pNation), pWidget);
+    add_to_gui_list(MAX_ID - pNation->index, pWidget);
     
-    if (nation_index(pNation) > (TARGETS_ROW * TARGETS_COL - 1)) {
+    if (pNation->index > (TARGETS_ROW * TARGETS_COL - 1)) {
       set_wflag(pWidget, WF_HIDDEN);
     }
     
@@ -3050,14 +3044,14 @@ void races_toggles_set_sensitive()
   
     if (!nation->is_available || nation->player) {
       freelog(LOG_DEBUG,"  [%d]: %d = %s",
-	      nation_index(nation),
+	      nation->index,
 	      (!nation->is_available || nation->player),
 	      nation_rule_name(nation));
 
-      pNat = get_widget_pointer_form_main_list(MAX_ID - nation_index(nation));
+      pNat = get_widget_pointer_form_main_list(MAX_ID - nation->index);
       set_wstate(pNat, FC_WS_DISABLED);
     
-      if (nation_index(nation) == pSetup->nation) {
+      if (nation->index == pSetup->nation) {
         change = TRUE;
       }
     }

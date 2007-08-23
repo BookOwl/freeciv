@@ -602,7 +602,7 @@ void handle_menu(int code)
       popup_find_dialog();
       break;
     case IDM_GOVERNMENT_WORKLISTS:
-      popup_worklists_report();
+      popup_worklists_report(game.player_ptr);
       break;
     case IDM_GOVERNMENT_REVOLUTION:
       popup_revolution_dialog(NULL);
@@ -1045,9 +1045,9 @@ update_menus(void)
 
     government_iterate(g) {
       if (g != game.government_when_anarchy) {
-	AppendMenu(govts, MF_STRING, id + government_number(g),
+	AppendMenu(govts, MF_STRING, id + g->index,
 		   government_name_translation(g));
-	my_enable_menu(menu, id + government_number(g),
+	my_enable_menu(menu, id + g->index,
 		       can_change_to_government(game.player_ptr, g)
 		       && can_client_issue_orders());
       }
@@ -1156,9 +1156,11 @@ update_menus(void)
 		     !unit_has_type_flag(punit, F_UNDISBANDABLE));
       my_enable_menu(menu, IDM_ORDERS_HOMECITY,
 		     can_unit_change_homecity(punit));
-      my_enable_menu(menu, IDM_ORDERS_LOAD, find_transporter_for_unit(punit));
+      my_enable_menu(menu, IDM_ORDERS_LOAD,
+	can_unit_load(punit, find_transporter_for_unit(punit,
+						       punit->tile)));
       my_enable_menu(menu, IDM_ORDERS_UNLOAD,
-	(can_unit_unload(punit, game_find_unit_by_number(punit->transported_by))
+	(can_unit_unload(punit, find_unit_by_id(punit->transported_by))
 	 && can_unit_exist_at_tile(punit, punit->tile)) 
 	|| get_transporter_occupancy(punit) > 0);
       my_enable_menu(menu, IDM_ORDERS_WAKEUP_OTHERS,
@@ -1174,7 +1176,8 @@ update_menus(void)
 		     can_unit_do_connect(punit, ACTIVITY_RAILROAD));
       my_enable_menu(menu, IDM_ORDERS_CONNECT_IRRIGATE,
 		     can_unit_do_connect(punit, ACTIVITY_IRRIGATE));
-      my_enable_menu(menu, IDM_ORDERS_RETURN, TRUE);
+      my_enable_menu(menu, IDM_ORDERS_RETURN,
+		     !(is_air_unit(punit) || is_heli_unit(punit)));
       my_enable_menu(menu, IDM_ORDERS_DIPLOMAT_DLG,
 		     is_diplomat_unit(punit)
 		     && diplomat_can_do_action(punit, DIPLOMAT_ANY_ACTION,

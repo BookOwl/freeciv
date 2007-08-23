@@ -137,7 +137,7 @@ HOOKPROTONH(players_render, void, char **array, APTR msg)
     if (i == game.player_idx) {
       sz_strlcpy(dsbuf, "-");
     } else {
-      pds = pplayer_get_diplstate(game.player_ptr, player_by_number(i));
+      pds = pplayer_get_diplstate(game.player_ptr, get_player(i));
       if (pds->type == DS_CEASEFIRE) {
 	my_snprintf(dsbuf, sizeof(dsbuf), "%s (%d)",
 		    diplstate_text(pds->type), pds->turns_left);
@@ -188,7 +188,7 @@ static void players_active(void)
     struct player *pplayer;
     playerno -= 100;
 
-    pplayer = player_by_number(playerno);
+    pplayer = get_player(playerno);
 
     if (pplayer->spaceship.state != SSHIP_NONE)
       set(player_spaceship_button, MUIA_Disabled, FALSE);
@@ -361,21 +361,19 @@ static void create_players_dialog(void)
 **************************************************************************/
 void update_players_dialog(void)
 {
+  int i;
+
   if (!player_wnd || is_plrdlg_frozen())
     return;
 
   set(player_players_listview, MUIA_NList_Quiet, TRUE);
   DoMethod(player_players_listview, MUIM_NList_Clear);
-
-  players_iterate(pplayer)
+  for (i = 0; i < game.info.nplayers; i++)
   {
-    if(is_barbarian(pplayer))
+    if(is_barbarian(&game.players[i]))
       continue;
 
-    DoMethod(player_players_listview, MUIM_NList_InsertSingle,
-	     player_number(pplayer) + 100, MUIV_NList_Insert_Bottom);
+    DoMethod(player_players_listview, MUIM_NList_InsertSingle, i + 100, MUIV_NList_Insert_Bottom);
   }
-  players_iterate_end;
-
   set(player_players_listview, MUIA_NList_Quiet, FALSE);
 }

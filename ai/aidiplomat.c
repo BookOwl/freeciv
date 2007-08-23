@@ -72,11 +72,11 @@ static int count_sabotagable_improvements(struct city *pcity)
 {
   int count = 0;
 
-  city_built_iterate(pcity, pimprove) {
-    if (pimprove->sabotage > 0) {
+  built_impr_iterate(pcity, index) {
+    if (improvement_by_number(index)->sabotage > 0) {
       count++;
     }
-  } city_built_iterate_end;
+  } built_impr_iterate_end;
 
   return count;
 }
@@ -88,12 +88,12 @@ static int count_stealable_techs(struct player *pplayer, struct player *tplayer)
 {
   int count = 0;
 
-  advance_index_iterate(A_FIRST, index) {
-    if ((player_invention_state(pplayer, index) != TECH_KNOWN)
-        && (player_invention_state(tplayer, index) == TECH_KNOWN)) {
+  tech_type_iterate(index) {
+    if ((get_invention(pplayer, index) != TECH_KNOWN)
+        && (get_invention(tplayer, index) == TECH_KNOWN)) {
       count++;
     }
-  } advance_index_iterate_end;
+  } tech_type_iterate_end;
 
   return count;
 }
@@ -120,17 +120,17 @@ void ai_choose_diplomat_defensive(struct player *pplayer,
        choice->want = 16000; /* diplomat more important than soldiers */
        pcity->ai.urgency = 1;
        choice->type = CT_DEFENDER;
-       choice->value.utype = ut;
-       choice->need_boat = FALSE;
+       choice->choice = ut->index;
     } else if (num_role_units(F_DIPLOMAT) > 0) {
       /* We don't know diplomats yet... */
       freelog(LOG_DIPLOMAT_BUILD,
               "A defensive diplomat is wanted badly in city %s.", pcity->name);
       ut = get_role_unit(F_DIPLOMAT, 0);
       if (ut) {
-        pplayer->ai.tech_want[advance_index(ut->require_advance)] += DIPLO_DEFENSE_WANT;
-        TECH_LOG(LOG_DEBUG, pplayer, ut->require_advance,
-                 "+ %d for %s in diplo defense",
+        Tech_type_id tech_req = ut->tech_requirement;
+
+        pplayer->ai.tech_want[tech_req] += DIPLO_DEFENSE_WANT;
+        TECH_LOG(LOG_DEBUG, pplayer, tech_req, "+ %d for %s in diplo defense",
                  DIPLO_DEFENSE_WANT,
                  utype_rule_name(ut));
       }
@@ -204,7 +204,7 @@ void ai_choose_diplomat_offensive(struct player *pplayer,
       gain_theft = total_bulbs_required(pplayer) * TRADE_WEIGHTING;
     }
     gain = MAX(gain_incite, gain_theft);
-    loss = utype_build_shield_cost(ut) * SHIELD_WEIGHTING;
+    loss = unit_build_shield_cost(ut) * SHIELD_WEIGHTING;
 
     /* Probability to succeed, assuming no defending diplomat */
     p_success = game.info.diplchance;
@@ -224,7 +224,7 @@ void ai_choose_diplomat_offensive(struct player *pplayer,
     }
 
     want = military_amortize(pplayer, pcity, want, time_to_dest, 
-                             utype_build_shield_cost(ut));
+                             unit_build_shield_cost(ut));
 
     if (!player_has_embassy(pplayer, city_owner(acity))
         && want < 99) {
@@ -246,9 +246,8 @@ void ai_choose_diplomat_offensive(struct player *pplayer,
               pplayer->economic.gold - pplayer->ai.est_upkeep, 
               gain_theft, time_to_dest);
       choice->want = want;
-      choice->type = CT_CIVILIAN; /* so we don't build barracks for it */
-      choice->value.utype = ut;
-      choice->need_boat = FALSE;
+      choice->type = CT_NONMIL; /* so we don't build barracks for it */
+      choice->choice = ut->index;
       BV_SET(ai->stats.diplomat_reservations, acity->id);
     }
   }
@@ -528,7 +527,7 @@ static bool ai_diplomat_bribe_nearby(struct player *pplayer,
       handle_unit_diplomat_action(pplayer, punit->id, DIPLOMAT_BRIBE,
 				  unit_list_get(ptile->units, 0)->id, -1);
       /* autoattack might kill us as we move in */
-      if (game_find_unit_by_number(sanity) && punit->moves_left > 0) {
+      if (find_unit_by_id(sanity) && punit->moves_left > 0) {
         return TRUE;
       } else {
         return FALSE;

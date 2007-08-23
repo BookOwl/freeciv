@@ -395,29 +395,27 @@ gboolean move_mapcanvas(GtkWidget *w, GdkEventMotion *ev, gpointer data)
 **************************************************************************/
 gboolean leave_mapcanvas(GtkWidget *widget, GdkEventCrossing *event)
 {
-  struct unit_list *active_units = get_units_in_focus();
   int canvas_x, canvas_y;
-
-  if (gtk_notebook_get_current_page(GTK_NOTEBOOK(top_notebook))
-      != gtk_notebook_page_num(GTK_NOTEBOOK(top_notebook), map_widget)) {
-    /* Map is not currently topmost tab. Do not use tile specific cursors. */
-    update_mouse_cursor(CURSOR_DEFAULT);
-    return TRUE;
-  }
-
+  bool map_is_topmost = 
+       (gtk_notebook_get_current_page(GTK_NOTEBOOK(top_notebook))
+       == gtk_notebook_page_num(GTK_NOTEBOOK(top_notebook), map_widget));
+  
   /* Bizarrely, this function can be called even when we don't "leave"
    * the map canvas, for instance, it gets called any time the mouse is
    * clicked. */
   gdk_window_get_pointer(map_canvas->window, &canvas_x, &canvas_y, NULL);
   if (map_exists()
       && canvas_x >= 0 && canvas_y >= 0
-      && canvas_x < mapview.width && canvas_y < mapview.height) {
+      && canvas_x < mapview.width && canvas_y < mapview.height
+      && map_is_topmost) {
     handle_mouse_cursor(canvas_pos_to_tile(canvas_x, canvas_y));
+    /* update_unit_info_label is handled inside handle_mouse_cursor. */
   } else {
-    update_mouse_cursor(CURSOR_DEFAULT);
-  }
+    struct unit_list *active_units = get_units_in_focus();
 
-  update_unit_info_label(active_units);
+    action_state = CURSOR_ACTION_DEFAULT;
+    update_unit_info_label(active_units);
+  }
   return TRUE;
 }
 

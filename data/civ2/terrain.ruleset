@@ -22,12 +22,12 @@ may_transform=1      ; 0 means no, 1 means yes
 
 [parameters]
 
-; Percentage of "land" tiles required to be adjacent to a water tile before
+; Percentage of "land" tiles required to be adjacent to an ocean tile before
 ; it may be "reclaimed" into a land tile (0-101; 0=anywhere, 101=nowhere)
 ocean_reclaim_requirement_pct=101
 
-; Percentage of "water" tiles required to be adjacent to a land tile before
-; it may be "channeled" into a water tile (0-101; 0=anywhere, 101=nowhere)
+; Percentage of "ocean" tiles required to be adjacent to a land tile before
+; it may be "channeled" into an ocean tile (0-101; 0=anywhere, 101=nowhere)
 land_channel_requirement_pct=101
 
 ; special movement costs for rivers:
@@ -91,11 +91,9 @@ fallout_shield_penalty=50
 fallout_trade_penalty=50
 
 ; Below: The individual terrain types, one per section.
-; <PRESUMED OBSOLETE>
 ; For now, the number of such sections must be kept the same (=12).
 ; Also, terrains should be in the same order as defined in common/map.h,
 ; and have similar roles/effects, as some things are still hardwired.
-; </PRESUMED OBSOLETE>
 ; The actual tag used (the * in [terrain_*]) does not matter, except 
 ; it must be unique for each terrain, and it may be used in debug 
 ; output when reading this file.
@@ -107,10 +105,7 @@ fallout_trade_penalty=50
 ;                        tags with extensions _n0s0e0e0 etc.
 ; graphic_alt          = alternate graphics tag if preferred is not found;
 ;                        should be a standard tag if preferred is not;
-;                        otherwise may be "-"
-; identifier           = single-character identifier used in savegames.  This
-;                        must be unique for each terrain, and changing it will
-;                        break savegame compatibility.
+;			 otherwise may be "-"
 ; movement_cost        = typically 1 to 3
 ; defense_bonus        = percent added to defense; typically 0% to 200%
 ; food                 = normal food production
@@ -145,19 +140,10 @@ fallout_trade_penalty=50
 ;                        see warmer_wetter_result
 ; cooler_drier_result  = result of nuclear winter for dry terrains;
 ;                        see warmer_wetter_result
-; native_to            = List of unit classes that can move here
 ; flags                = General flags for this terrain:
 ;   - NoBarbs          = Barbarians will not be spawned here.
-;   - NoCities         = Cities may not be built or found on this terrain.
 ;   - NoPollution      = Pollution will not be put on this terrain type.
 ;   - Starter          = Players will only be started on "Starter" terrain.
-;   - CanHaveRiver     = Set to 1 if this terrain can have river on it (the
-;                        actual chance of river generation is controlled
-;                        separately).
-;   - UnsafeCoast      = This terrain does not provide a safe voyage for
-;                        F_TRIRIEME units.
-;   - UnsafeOcean      = This terrain does not provide a safe voyage for
-;                        F_COASTAL or F_SEAWORTHY units.
 ;   - Oceanic          = This is an "ocean" terrain.  This has a big effect
 ;                        on gameplay.  Naval units can move on oceanic terrain,
 ;                        while land units cannot.  Oceanic tiles can be used
@@ -166,336 +152,11 @@ fallout_trade_penalty=50
 ;                        units.  Most terrain improvements can only be built
 ;                        on land.  Oceanic terrain has no zones of control.
 ;                        The list goes on.
-; property_*           = specific property % values used by mapgen.  Most
-;                        terrains will have 0 for most values.
-;  - mountainous       = degree to which this terrain is mountainous
-;  - green             = how much life this terrain has
-;  - foliage           = how much thick undergrowth the terrain has 
-;  - tropical          = how "tropical" the terrain is (high temperature)
-;  - temperate         = how "temperate" the terrain is (med temperature)
-;  - cold              = how "cold" the terrain is (low temperature)
-;  - frozen            = how "frozen" the terrain is (very low temperature)
-;  - wet               = how "wet" the terrain is (moisture)
-;  - dry               = how "dry" the terrain is (moisture)
-;  - ocean_depth       = the depth of an ocean, as an average level
+;   - CanHaveRiver     = Set to 1 if this terrain can have river on it (the
+;                        actual chance of river generation is controlled
+;                        separately).
 ; helptext	       = optional help text string; should escape all raw 
 ;		         newlines so that xgettext parsing works
-
-[terrain_legacy_water]
-; undifferentiated open water from old savefiles
-name                 = _("Water")
-graphic              = "coast"
-graphic_alt          = "-"
-identifier           = " "
-movement_cost        = 1
-defense_bonus        = 0
-food                 = 1
-shield               = 0
-trade                = 2
-resources            = "Fish", "Whales"
-road_trade_incr      = 0
-road_time            = 0
-irrigation_result    = "no"
-irrigation_food_incr = 0
-irrigation_time      = 0
-mining_result        = "no"
-mining_shield_incr   = 0
-mining_time          = 0
-transform_result     = "no"
-transform_time       = 0
-warmer_wetter_result = "no"
-warmer_drier_result  = "no"
-cooler_wetter_result = "no"
-cooler_drier_result  = "no"
-native_to            = "Sea", "Air", "Missile", "Helicopter"
-flags                = "Oceanic", "NoCities", "NoPollution", "UnsafeCoast"
-property_ocean_depth = 0
-helptext             = _("\
-Oceans cover much of the world, and only sea units (Triremes and\
- other boats) can travel on them.\
-\n\n\
-Ocean squares can never be polluted or subjected to fallout.\
-")
-
-[terrain_fresh_water]
-name                 = _("Lake")
-graphic              = "coast"
-graphic_alt          = "-"
-identifier           = "+"
-movement_cost        = 1
-defense_bonus        = 0
-food                 = 1
-shield               = 0
-trade                = 2
-resources            = "Fish"
-road_trade_incr      = 0
-road_time            = 0
-irrigation_result    = "no"
-irrigation_food_incr = 0
-irrigation_time      = 0
-mining_result        = "no"
-mining_shield_incr   = 0
-mining_time          = 0
-transform_result     = "no"
-transform_time       = 0
-warmer_wetter_result = "no"
-warmer_drier_result  = "no"
-cooler_wetter_result = "no"
-cooler_drier_result  = "no"
-native_to            = "Sea", "Air", "Missile", "Helicopter"
-flags                = "Oceanic", "NoCities", "NoPollution"
-property_ocean_depth = 0
-helptext             = _("\
-Oceans cover much of the world, and only sea units (Triremes and\
- other boats) can travel on them.\
-\n\n\
-Ocean squares can never be polluted or subjected to fallout.\
-")
-
-[terrain_salt_water]
-name                 = _("Sea")
-graphic              = "coast"
-graphic_alt          = "-"
-identifier           = "-"
-movement_cost        = 1
-defense_bonus        = 0
-food                 = 1
-shield               = 0
-trade                = 2
-resources            = "Fish"
-road_trade_incr      = 0
-road_time            = 0
-irrigation_result    = "no"
-irrigation_food_incr = 0
-irrigation_time      = 0
-mining_result        = "no"
-mining_shield_incr   = 0
-mining_time          = 0
-transform_result     = "no"
-transform_time       = 0
-warmer_wetter_result = "no"
-warmer_drier_result  = "no"
-cooler_wetter_result = "no"
-cooler_drier_result  = "no"
-native_to            = "Sea", "Air", "Missile", "Helicopter"
-flags                = "Oceanic", "NoCities", "NoPollution"
-property_ocean_depth = 0
-helptext             = _("\
-Oceans cover much of the world, and only sea units (Triremes and\
- other boats) can travel on them.\
-\n\n\
-Ocean squares can never be polluted or subjected to fallout.\
-")
-
-[terrain_ocean_coast]
-name                 = _("Ocean")
-graphic              = "coast"
-graphic_alt          = "-"
-identifier           = "."
-movement_cost        = 1
-defense_bonus        = 0
-food                 = 1
-shield               = 0
-trade                = 2
-resources            = "Fish"
-road_trade_incr      = 0
-road_time            = 0
-irrigation_result    = "no"
-irrigation_food_incr = 0
-irrigation_time      = 0
-mining_result        = "no"
-mining_shield_incr   = 0
-mining_time          = 0
-transform_result     = "no"
-transform_time       = 0
-warmer_wetter_result = "no"
-warmer_drier_result  = "no"
-cooler_wetter_result = "no"
-cooler_drier_result  = "no"
-native_to            = "Sea", "Air", "Missile", "Helicopter"
-flags                = "Oceanic", "NoCities", "NoPollution"
-property_ocean_depth = 36
-helptext             = _("\
-Oceans cover much of the world, and only sea units (Triremes and\
- other boats) can travel on them.\
-\n\n\
-Ocean squares can never be polluted or subjected to fallout.\
-")
-
-[terrain_ocean_shelf]
-name                 = _("?ocean:Shelf")
-graphic              = "shelf"
-graphic_alt          = "-"
-identifier           = ","
-movement_cost        = 1
-defense_bonus        = 0
-food                 = 1
-shield               = 0
-trade                = 2
-resources            = "Fish", "Whales"
-road_trade_incr      = 0
-road_time            = 0
-irrigation_result    = "no"
-irrigation_food_incr = 0
-irrigation_time      = 0
-mining_result        = "no"
-mining_shield_incr   = 0
-mining_time          = 0
-transform_result     = "no"
-transform_time       = 0
-warmer_wetter_result = "no"
-warmer_drier_result  = "no"
-cooler_wetter_result = "no"
-cooler_drier_result  = "no"
-native_to            = "Sea", "Air", "Missile", "Helicopter"
-flags                = "Oceanic", "NoCities", "NoPollution", "UnsafeCoast"
-property_ocean_depth = 48
-helptext             = _("\
-Oceans cover much of the world, and only sea units (Triremes and\
- other boats) can travel on them.\
-\n\n\
-Ocean squares can never be polluted or subjected to fallout.\
-")
-
-[terrain_ocean_floor]
-name                 = _("Briny Deep")
-graphic              = "floor"
-graphic_alt          = "-"
-identifier           = ":"
-movement_cost        = 1
-defense_bonus        = 0
-food                 = 1
-shield               = 0
-trade                = 2
-;resources            = "none"
-road_trade_incr      = 0
-road_time            = 0
-irrigation_result    = "no"
-irrigation_food_incr = 0
-irrigation_time      = 0
-mining_result        = "no"
-mining_shield_incr   = 0
-mining_time          = 0
-transform_result     = "no"
-transform_time       = 0
-warmer_wetter_result = "no"
-warmer_drier_result  = "no"
-cooler_wetter_result = "no"
-cooler_drier_result  = "no"
-native_to            = "Sea", "Air", "Missile", "Helicopter"
-flags                = "Oceanic", "NoCities", "NoPollution", "UnsafeCoast"; "UnsafeOcean"
-property_ocean_depth = 87
-helptext             = _("\
-Oceans cover much of the world, and only sea units (Triremes and\
- other boats) can travel on them.\
-\n\n\
-Ocean squares can never be polluted or subjected to fallout.\
-")
-
-[terrain_ocean_trench]
-name                 = _("?ocean:Abyss")
-graphic              = "trench"
-graphic_alt          = "-"
-identifier           = ";"
-movement_cost        = 1
-defense_bonus        = 0
-food                 = 1
-shield               = 0
-trade                = 2
-;resources            = "none"
-road_trade_incr      = 0
-road_time            = 0
-irrigation_result    = "no"
-irrigation_food_incr = 0
-irrigation_time      = 0
-mining_result        = "no"
-mining_shield_incr   = 0
-mining_time          = 0
-transform_result     = "no"
-transform_time       = 0
-warmer_wetter_result = "no"
-warmer_drier_result  = "no"
-cooler_wetter_result = "no"
-cooler_drier_result  = "no"
-native_to            = "Sea", "Air", "Missile", "Helicopter"
-flags                = "Oceanic", "NoCities", "NoPollution", "UnsafeCoast"; "UnsafeOcean"
-property_ocean_depth = 99
-helptext             = _("\
-Oceans cover much of the world, and only sea units (Triremes and\
- other boats) can travel on them.\
-\n\n\
-Ocean squares can never be polluted or subjected to fallout.\
-")
-
-[terrain_ocean_ridge]
-name                 = _("Oceanic Ridge")
-graphic              = "ridge"
-graphic_alt          = "-"
-identifier           = "^"
-movement_cost        = 1
-defense_bonus        = 0
-food                 = 1
-shield               = 0
-trade                = 2
-;resources            = "none"
-road_trade_incr      = 0
-road_time            = 0
-irrigation_result    = "no"
-irrigation_food_incr = 0
-irrigation_time      = 0
-mining_result        = "no"
-mining_shield_incr   = 0
-mining_time          = 0
-transform_result     = "no"
-transform_time       = 0
-warmer_wetter_result = "no"
-warmer_drier_result  = "no"
-cooler_wetter_result = "no"
-cooler_drier_result  = "no"
-native_to            = "Sea", "Air", "Missile", "Helicopter"
-flags                = "Oceanic", "NoCities", "NoPollution", "UnsafeCoast"; "UnsafeOcean"
-property_ocean_depth = 36 ; same as coast, for now
-helptext             = _("\
-Oceans cover much of the world, and only sea units (Triremes and\
- other boats) can travel on them.\
-\n\n\
-Ocean squares can never be polluted or subjected to fallout.\
-")
-
-[terrain_ocean_vent]
-name                 = _("Oceanic Vent")
-graphic              = "vent"
-graphic_alt          = "-"
-identifier           = "!"
-movement_cost        = 1
-defense_bonus        = 0
-food                 = 1
-shield               = 0
-trade                = 2
-;resources            = "none"
-road_trade_incr      = 0
-road_time            = 0
-irrigation_result    = "no"
-irrigation_food_incr = 0
-irrigation_time      = 0
-mining_result        = "no"
-mining_shield_incr   = 0
-mining_time          = 0
-transform_result     = "no"
-transform_time       = 0
-warmer_wetter_result = "no"
-warmer_drier_result  = "no"
-cooler_wetter_result = "no"
-cooler_drier_result  = "no"
-native_to            = "Sea", "Air", "Missile", "Helicopter"
-flags                = "Oceanic", "NoCities", "NoPollution", "UnsafeCoast"; "UnsafeOcean"
-property_ocean_depth = 36 ; same as ridge, not generated
-helptext             = _("\
-Oceans cover much of the world, and only sea units (Triremes and\
- other boats) can travel on them.\
-\n\n\
-Ocean squares can never be polluted or subjected to fallout.\
-")
 
 [terrain_glacier]
 name                 = _("Glacier")
@@ -522,7 +183,6 @@ warmer_wetter_result = "no"
 warmer_drier_result  = "no"
 cooler_wetter_result = "no"
 cooler_drier_result  = "no"
-native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "NoBarbs", "CanHaveRiver"
 property_frozen      = 100
 helptext	     = _("\
@@ -556,7 +216,6 @@ warmer_wetter_result = "Swamp"
 warmer_drier_result  = "no"
 cooler_wetter_result = "no"
 cooler_drier_result  = "no"
-native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "CanHaveRiver"
 property_dry         = 100
 property_tropical    = 50
@@ -590,7 +249,6 @@ warmer_wetter_result = "Jungle"
 warmer_drier_result  = "Desert"
 cooler_wetter_result = "no"
 cooler_drier_result  = "no"
-native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "Starter", "CanHaveRiver"
 property_temperate   = 50
 property_foliage     = 50
@@ -624,10 +282,9 @@ warmer_wetter_result = "Swamp"
 warmer_drier_result  = "Desert"
 cooler_wetter_result = "Desert"
 cooler_drier_result  = "Tundra"
-native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "Starter", "CanHaveRiver"
-property_green       = 50
 property_temperate   = 50
+property_green       = 50
 helptext	     = _("\
 Grasslands afford exceptional agricultural opportunities.\
 ")
@@ -657,7 +314,6 @@ warmer_wetter_result = "no"
 warmer_drier_result  = "no"
 cooler_wetter_result = "no"
 cooler_drier_result  = "no"
-native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "Starter", "CanHaveRiver"
 property_green       = 50
 property_mountainous = 30
@@ -691,10 +347,9 @@ warmer_wetter_result = "no"
 warmer_drier_result  = "no"
 cooler_wetter_result = "Desert"
 cooler_drier_result  = "Tundra"
-native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "CanHaveRiver"
-property_foliage     = 50
 property_tropical    = 50
+property_foliage     = 50
 property_wet         = 50
 helptext	     = _("\
 Jungles are densely overgrown, making agriculture somewhat\
@@ -726,12 +381,44 @@ warmer_wetter_result = "no"
 warmer_drier_result  = "no"
 cooler_wetter_result = "no"
 cooler_drier_result  = "no"
-native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "CanHaveRiver"
 property_mountainous = 70
 helptext	     = _("\
 Mountains are regions of extreme altitude, making agriculture and\
  trade very difficult.\
+")
+
+[terrain_ocean]
+name                 = _("Ocean")
+graphic              = "ocean"
+graphic_alt	     = "-"
+identifier	     = " "
+movement_cost        = 1
+defense_bonus        = 0
+food                 = 1
+shield               = 0
+trade                = 2
+resources            = "Fish", "Whales"
+road_trade_incr      = 0
+road_time            = 0
+irrigation_result    = "no"
+irrigation_food_incr = 0
+irrigation_time      = 0
+mining_result        = "no"
+mining_shield_incr   = 0
+mining_time          = 0
+transform_result     = "no"
+transform_time       = 0
+warmer_wetter_result = "no"
+warmer_drier_result  = "no"
+cooler_wetter_result = "no"
+cooler_drier_result  = "no"
+flags                = "Oceanic", "NoPollution", "UnsafeCoast", "NoCities"
+helptext	     = _("\
+Oceans cover much of the world, and only sea units (Triremes and\
+ other boats) can travel on them.\
+\n\n\
+Ocean squares can never be polluted or subjected to fallout.\
 ")
 
 [terrain_plains]
@@ -759,7 +446,6 @@ warmer_wetter_result = "Swamp"
 warmer_drier_result  = "Desert"
 cooler_wetter_result = "Desert"
 cooler_drier_result  = "Tundra"
-native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "Starter", "CanHaveRiver"
 property_green       = 50
 property_temperate   = 50
@@ -793,10 +479,9 @@ warmer_wetter_result = "no"
 warmer_drier_result  = "no"
 cooler_wetter_result = "Desert"
 cooler_drier_result  = "Tundra"
-native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "CanHaveRiver"
-property_foliage     = 10
 property_wet         = 100
+property_foliage     = 10
 helptext	     = _("\
 Swamps suffer from an over-abundance of water, making agriculture\
  somewhat problematic.\
@@ -827,7 +512,6 @@ warmer_wetter_result = "no"
 warmer_drier_result  = "no"
 cooler_wetter_result = "Glacier"
 cooler_drier_result  = "Glacier"
-native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "Starter", "NoBarbs", "CanHaveRiver"
 property_cold        = 50
 helptext	     = _("\
@@ -988,56 +672,3 @@ graphic_alt = "-"
 food        = 1
 trade       = 3
 identifier  = "u"
-
-; Below has to be definition for exactly two base types:
-; fortress and airbase.
-;
-; name                    = Name of the base type.
-; graphic                 = tag specifing preferred graphic
-; graphic_alt	          = tag for alternate garphic if preferred graphic is not 
-;                           present. Can use eg "-" for no alternate graphic.
-; activity_gfx            = tag specifing graphic for unit building base
-; reqs 	                  = requirements to build the base (see effects.ruleset
-;                           and README.effects for help on requirements)
-; gui_type                = How gui should handle this base. Fortress/Airbase/Other
-; build_time              = How long it takes for a unit to build this base
-; flags
-;   - "NoAggressive"      = Units inside are not considered aggressive
-;   - "DefenseBonus"      = Units inside gain defense bonus
-;   - "NoStackDeath"      = Units inside do not die all at once when attacked
-;   - "ClaimTerritory"    = Base will claim land ownership
-;   - "DiplomatDefense"   = Diplomats inside get bonus to diplomatic defense
-;   - "ParadropFrom"      = Paradrop can be initiated from base
-
-[fortress]
-name         = _("Fortress")
-graphic      = "base.fortress"
-graphic_alt  = "-"
-activity_gfx = "unit.fortress"
-reqs         =
-    { "type", "name", "range"
-      "Tech", "Construction", "Player"
-      "TerrainClass", "Land", "Local"
-      "UnitFlag", "Settlers", "Local"
-    }
-gui_type     = "Fortress"
-build_time   = 3
-native_to    = "Land"
-flags        = "NoAggressive", "DefenseBonus", "ClaimTerritory",
-               "NoStackDeath", "DiplomatDefense"
-
-[airbase]
-name         = _("Airbase")
-graphic      = "base.airbase"
-graphic_alt  = "-"
-activity_gfx = "unit.airbase"
-reqs         =
-    { "type", "name", "range"
-      "Tech", "Radio", "Player"
-      "TerrainClass", "Land", "Local"
-      "UnitFlag", "Airbase", "Local"
-    }
-gui_type     = "Airbase"
-build_time   = 3
-native_to    = "Air", "Helicopter", "Missile"
-flags        = "NoStackDeath", "DiplomatDefense", "ParadropFrom"

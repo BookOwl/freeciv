@@ -141,16 +141,19 @@ static const char *const get_prod_complete_string(struct city *pcity,
     return buffer;
   }
 
-  if (VUT_IMPROVEMENT == pcity->production.kind) {
-    struct impr_type *pimprove = pcity->production.value.building;
-    if (improvement_number(pimprove) == B_CAPITAL) {
+  stock = pcity->shield_stock;
+  if (pcity->production.is_unit) {
+    cost = unit_build_shield_cost(pcity->production.value);
+  } else {
+    if (pcity->production.value == B_CAPITAL) {
       my_snprintf(buffer, sizeof(buffer),
-		  improvement_name_translation(pimprove));
+		  improvement_name_translation(pcity->production.value));
       return buffer;
     }
+    cost = impr_build_shield_cost(pcity->production.value);
   }
-  stock = pcity->shield_stock + surplus;
-  cost = city_production_build_shield_cost(pcity);
+
+  stock += surplus;
 
   if (stock >= cost) {
     turns = 1;
@@ -558,14 +561,14 @@ HOOKPROTO(city_prod_display, int, char **array, APTR msg)
 	else
 	{
 	  /* Unit */
-	  struct unit_type *putype = utype_by_number(which -= 10000);
-	  sz_strlcpy(name, utype_name_translation(putype));
+	  which -= 10000;
+	  sz_strlcpy(name, utype_name_translation(which /* FIXME?!? */));
 
 	  my_snprintf(info, sizeof(info),
-	  	      utype_values_string(putype));
+	  	      utype_values_string(utype_by_number(which)));
 
 	  my_snprintf(cost, sizeof(cost),
-		      "(%d)", utype_build_shield_cost(putype));
+		      "(%d)", unit_build_shield_cost(which));
 	  my_snprintf(rounds, sizeof(rounds), "%d",
 		      city_turns_to_build(pcity, which, TRUE, TRUE));
 	}
@@ -573,13 +576,12 @@ HOOKPROTO(city_prod_display, int, char **array, APTR msg)
     }
     else
     {
-      struct impr_type *pimprove = improvement_by_number(--which);
-
-      sz_strlcpy(name, improvement_name_translation(pimprove));
+      which--;
+      sz_strlcpy(name, improvement_name_translation(which));
       info[0] = 0;
 
       {
-	/* from city.c city_improvement_name_translation() */
+	/* from city.c get_impr_name_ex() */
 	if (wonder_replacement(pcity, which))
         {
           sz_strlcpy(info, "*");
@@ -599,7 +601,7 @@ HOOKPROTO(city_prod_display, int, char **array, APTR msg)
 
       if (which != B_CAPITAL)
       {
-	my_snprintf(cost, sizeof(cost), "%d", impr_build_shield_cost(pimprove));
+	my_snprintf(cost, sizeof(cost), "%d", impr_build_shield_cost(which));
 	my_snprintf(rounds, sizeof(rounds), "%d",
 		    city_turns_to_build(pcity, which, FALSE, TRUE));
       }
@@ -639,8 +641,8 @@ HOOKPROTO(city_imprv_display, int, char **array, APTR msg)
   {
     struct city_dialog *pdialog = (struct city_dialog *) hook->h_Data;
     which--;
-    my_snprintf(name, sizeof(name), "%s", city_improvement_name_translation(pdialog->pcity, improvement_by_number(which)));
-    my_snprintf(cost, sizeof(cost), "%d", city_improvement_upkeep(pdialog->pcity, improvement_by_number(which)));
+    my_snprintf(name, sizeof(name), "%s", get_impr_name_ex(pdialog->pcity, which));
+    my_snprintf(cost, sizeof(cost), "%d", improvement_upkeep(pdialog->pcity, which));
     *array++ = name;
     *array = cost;
   }
@@ -798,8 +800,51 @@ static void city_change(struct city_dialog **ppdialog)
 static void commit_city_worklist(struct worklist *pwl, void *data)
 {
   struct city_dialog *pdialog = data;
+  int k, id;
+  bool is_unit;
 
-  city_worklist_commit(pdialog->pcity, pwl);
+  /* Update the worklist.  Remember, though -- the current build
+     target really isn't in the worklist; don't send it to the server
+     as part of the worklist.  Of course, we have to search through
+     the current worklist to find the first _now_available_ build
+     target (to cope with players who try mean things like adding a
+     Battleship to a city worklist when the player doesn't even yet
+     have the Map Making tech).  */
+
+  for (k = 0; k < MAX_LEN_WORKLIST; k++) {
+    int same_as_current_build;
+    if (!worklist_peek_ith(pwl, &id, &is_unit, k))
+      break;
+
+    same_as_current_build = id == pdialog->pcity->production.value
+	&& is_unit == pdialog->pcity->production.is_unit;
+
+    /* Very special case: If we are currently building a wonder we
+       allow the construction to continue, even if we the wonder is
+       finished elsewhere, ie unbuildable. */
+    if (k == 0 && !is_unit && is_wonder(id) && same_as_current_build) {
+      worklist_remove(pwl, k);
+      break;
+    }
+
+    /* If it can be built... */
+    if ((is_unit && can_build_unit(pdialog->pcity, id)) ||
+	(!is_unit && can_build_improvement(pdialog->pcity, id))) {
+      /* ...but we're not yet building it, then switch. */
+      if (!same_as_current_build) {
+	/* Change the current target */
+	city_change_production(pdialog->pcity, is_unit, id);
+      }
+
+      /* This item is now (and may have always been) the current
+         build target.  Drop it out of the worklist. */
+      worklist_remove(pwl, k);
+      break;
+    }
+  }
+
+  /* Send the rest of the worklist on its way. */
+  city_set_worklist(pdialog->pcity, pwl);
 }
 
 /****************************************************************
@@ -816,7 +861,7 @@ static void cancel_city_worklist(void *data)
 **************************************************************************/
 static void city_browse(struct city_browse_msg *msg)
 {
-  struct player *pplayer = player_by_number(msg->pdialog->pcity->owner);
+  struct player *pplayer = get_player(msg->pdialog->pcity->owner);
   struct city *pcity_new;
   struct MinList list;
   struct city_node *node;
@@ -883,10 +928,21 @@ static void city_browse(struct city_browse_msg *msg)
 **************************************************************************/
 static void city_buy(struct city_dialog **ppdialog)
 {
-  char buf[512];
   struct city_dialog *pdialog = *ppdialog;
-  const char *name = city_production_name_translation(pdialog->pcity);;
-  int value = city_production_buy_gold_cost(pdialog->pcity);
+  int value;
+  char *name;
+  char buf[512];
+
+  if (pdialog->pcity->production.is_unit)
+  {
+    name = utype_name_translation(utype_by_number(pdialog->pcity->production.value));
+  }
+  else
+  {
+    name = get_impr_name_ex(pdialog->pcity, pdialog->pcity->production.value);
+  }
+
+  value = city_buy_cost(pdialog->pcity);
 
   if (game.player_ptr->economic.gold >= value)
   {
@@ -925,12 +981,11 @@ static void city_sell(struct city_dialog **ppdialog)
     if (!i--)
       return;
 
-    if (is_wonder(improvement_by_number(i)))
+    if (is_wonder(i))
       return;
 
     my_snprintf(buf, sizeof(buf), _("Sell %s for %d gold?"),
-		city_improvement_name_translation(pdialog->pcity, improvement_by_number(i)),
-		impr_sell_gold(improvement_by_number(i)));
+		get_impr_name_ex(pdialog->pcity, i), impr_sell_gold(i));
 
     pdialog->sell_id = i;
     pdialog->sell_wnd = popup_message_dialog(pdialog->wnd,
@@ -1062,13 +1117,13 @@ static void city_prod_help(struct city_prod **ppcprod)
     else
     {
       which--;
-      if (is_wonder(improvement_by_number(which)))
+      if (is_wonder(which))
       {
-	popup_help_dialog_typed(improvement_name_translation(improvement_by_number(which)), HELP_WONDER);
+	popup_help_dialog_typed(improvement_name_translation(which), HELP_WONDER);
       }
       else
       {
-	popup_help_dialog_typed(improvement_name_translation(improvement_by_number(which)), HELP_IMPROVEMENT);
+	popup_help_dialog_typed(improvement_name_translation(which), HELP_IMPROVEMENT);
       }
     }
   }
@@ -1193,20 +1248,19 @@ void popup_city_production_dialog(struct city *pcity)
 
     DoMethod(pcprod->available_listview, MUIM_NList_Clear);
 
-    improvement_iterate(pimprove) {
-      if (can_city_build_improvement_now(pcity, pimprove))
+    impr_type_iterate(i) {
+      if (can_build_improvement(pcity, i))
       {
         improv = TRUE;
 
-        DoMethod(pcprod->available_listview, MUIM_NList_InsertSingle, pimprove + 1, MUIV_NList_Insert_Bottom);
+        DoMethod(pcprod->available_listview, MUIM_NList_InsertSingle, i + 1, MUIV_NList_Insert_Bottom);
 
-        if (VUT_IMPROVEMENT == pcity->production.kind
-         && pimprove == pcity->production.value.building)
+        if (i == pcity->production.value && !pcity->production.is_unit)
          current = pos++;
 
         pos++;
       }
-    } improvement_iterate_end;
+    } impr_type_iterate_end;
 
     if (improv)
     {
@@ -1216,13 +1270,12 @@ void popup_city_production_dialog(struct city *pcity)
     }
     DoMethod(pcprod->available_listview, MUIM_NList_InsertSingle, 20000, MUIV_NList_Insert_Bottom);
 
-    unit_type_iterate(punittype) {
-      if (can_city_build_unit_now(pcity, punittype))
+    unit_type_iterate(i) {
+      if (can_build_unit(pcity, i))
       {
-        DoMethod(pcprod->available_listview, MUIM_NList_InsertSingle, punittype + 10000, MUIV_NList_Insert_Bottom);
+        DoMethod(pcprod->available_listview, MUIM_NList_InsertSingle, i + 10000, MUIV_NList_Insert_Bottom);
 
-        if(VUT_UTYPE == pcity->production.kind
-         && punittype == pcity->production.value.utype)
+        if(i == pcity->production.value && pcity->production.is_unit)
          current = pos++;
 
         pos++;
@@ -1688,16 +1741,23 @@ static struct city_dialog *create_city_dialog(struct city *pcity)
 *****************************************************************/
 static void city_dialog_update_building(struct city_dialog *pdialog)
 {
-  char buf[32], buf2[64];
+  char buf[32], buf2[64], *descr;
   struct city *pcity = pdialog->pcity;
-  const char *descr = city_production_name_translation(pcity);
-  int max_shield = city_production_build_shield_cost(pcity);
-  int shield = pcity->shield_stock;
+  int max_shield, shield;
 
   set(pdialog->buy_button, MUIA_Disabled, city_can_buy(pcity));
   set(pdialog->sell_button, MUIA_Disabled, pcity->did_sell || pdialog->sell_wnd);
 
   get_city_dialog_production(pcity, buf, sizeof(buf));
+
+  shield = pcity->shield_stock;
+  if (pcity->production.is_unit) {
+    max_shield = unit_build_shield_cost(pcity->production.value);
+    descr = utype_name_translation(utype_by_number(pcity->production.value));
+  } else {
+    max_shield = impr_build_shield_cost(pcity->production.value);
+    descr = get_impr_name_ex(pcity, pcity->production.value);
+  }
 
   if (!worklist_is_empty(&pcity->worklist)) {
     my_snprintf(buf2, sizeof(buf2), _("%s (%s) (worklist)"), buf, descr);
@@ -1965,7 +2025,7 @@ static void city_dialog_update_tradelist(struct city_dialog *pdialog)
       x = 1;
       total += pdialog->pcity->trade_value[i];
 
-      if ((pcity = game_find_city_by_number(pdialog->pcity->trade[i]))) {
+      if ((pcity = find_city_by_id(pdialog->pcity->trade[i]))) {
 	my_snprintf(cityname, sizeof(cityname), "%s", pcity->name);
       } else {
 	my_snprintf(cityname, sizeof(cityname), _("%s"), _("Unknown"));
@@ -2018,13 +2078,13 @@ static void city_dialog_update_improvement_list(struct city_dialog *pdialog)
 {
   LONG j = 0, refresh = FALSE, imprv;
 
-  city_built_iterate(pdialog->pcity, pimprove) {
+  built_impr_iterate(pdialog->pcity, i) {
     DoMethod(pdialog->imprv_listview, MUIM_NList_GetEntry, j++, &imprv);
-    if (!imprv || imprv - 1 != improvement_number(pimprove)) {
+    if (!imprv || imprv - 1 != i) {
       refresh = TRUE;
       goto out;
     }
-  } city_built_iterate_end;
+  } built_impr_iterate_end;
  out:
   /* check the case for to much improvements in list */
   DoMethod(pdialog->imprv_listview, MUIM_NList_GetEntry, j, &imprv);
@@ -2034,11 +2094,10 @@ static void city_dialog_update_improvement_list(struct city_dialog *pdialog)
     set(pdialog->imprv_listview, MUIA_NList_Quiet, TRUE);
     DoMethod(pdialog->imprv_listview, MUIM_NList_Clear);
 
-    city_built_iterate(pdialog->pcity, pimprove) {
-      DoMethod(pdialog->imprv_listview, MUIM_NList_InsertSingle,
-               improvement_number(pimprove) + 1,
+    built_impr_iterate(pdialog->pcity, i) {
+      DoMethod(pdialog->imprv_listview, MUIM_NList_InsertSingle, i + 1,
 	       MUIV_NList_Insert_Bottom);
-    } city_built_iterate_end;
+    } built_impr_iterate_end;
 
     set(pdialog->imprv_listview, MUIA_NList_Quiet, FALSE);
   }

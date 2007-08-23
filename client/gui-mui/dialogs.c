@@ -274,8 +274,8 @@ static void advance_steal(struct spy_data *data)
   if(which)
   {
     which-=100;
-    if (game_find_unit_by_number(diplomat_id) && 
-	game_find_city_by_number(diplomat_target_id)) { 
+    if (find_unit_by_id(diplomat_id) && 
+	find_city_by_id(diplomat_target_id)) { 
       request_diplomat_action(DIPLOMAT_STEAL, diplomat_id,
 			      diplomat_target_id, which);
     }
@@ -295,14 +295,11 @@ HOOKPROTONH(advance_display, void, char **array, APTR msg)
   if(which)
   {
     int tech = which-100;
-    if (tech == advance_count()) {
-      *array = _("At Spy's Discretion");
-    } else {
-      *array = advance_name_translation(advance_by_number(tech));
-    }
-  } else {
-    *array = _("Technology");
+    if (tech == game.control.num_tech_types) *array = _("At Spy's Discretion");
+    else *array = advance_name_translation(which-100);
   }
+  else
+    *array = _("Technology");
 }
 
 
@@ -339,21 +336,22 @@ static void create_advances_list(struct player *pplayer,
 
   if(wnd)
   {
+    int i;
     if (pvictim)
     {
       /* you don't want to know what lag can do -- Syela */
       int any_tech = FALSE;
-      advance_index_iterate(A_FIRST, i)
+      for(i=A_FIRST; i<game.control.num_tech_types; i++)
       {
-        if(player_invention_state(pvictim, i)==TECH_KNOWN && (player_invention_state(pplayer, i)==TECH_UNKNOWN || player_invention_state(pplayer, i)==TECH_REACHABLE))
+        if(get_invention(pvictim, i)==TECH_KNOWN && (get_invention(pplayer, i)==TECH_UNKNOWN || get_invention(pplayer, i)==TECH_REACHABLE))
         {
           DoMethod(listview, MUIM_NList_InsertSingle, i+100,MUIV_NList_Insert_Bottom);
           any_tech = TRUE;
         }
-      } advance_index_iterate_end;
+      }
 
       if (any_tech)
-	DoMethod(listview, MUIM_NList_InsertSingle, 100+advance_count(), MUIV_NList_Insert_Bottom);
+	DoMethod(listview, MUIM_NList_InsertSingle, 100+game.control.num_tech_types,MUIV_NList_Insert_Bottom);
     }
 
     DoMethod(wnd,MUIM_Notify, MUIA_Window_CloseRequest, TRUE, app, 5, MUIM_CallHook, &civstandard_hook, spy_close, wnd, listview);
@@ -373,7 +371,7 @@ static void imprv_sabotage(struct spy_data *data)
   DoMethod(data->listview, MUIM_NList_GetEntry, MUIV_NList_GetEntry_Active,&which);
   if(which)
   {
-    if(game_find_unit_by_number(diplomat_id) && game_find_city_by_number(diplomat_target_id))
+    if(find_unit_by_id(diplomat_id) && find_city_by_id(diplomat_target_id))
     { 
       request_diplomat_action(DIPLOMAT_SABOTAGE, diplomat_id,
 			      diplomat_target_id, which - 100 + 1);
@@ -393,7 +391,7 @@ HOOKPROTONH(imprv_display, void, char **array, APTR which)
   int imprv = ((LONG) which)-100;
   if (imprv == -1) *array = _("City Production");
   else if (imprv == B_LAST) *array = _("At Spy's Discretion");
-  else *array = improvement_name_translation(improvement_by_number(imprv));
+  else *array = improvement_name_translation(imprv);
 }
 
 
@@ -432,15 +430,13 @@ static void create_improvements_list(struct city *pcity)
     int any_improvements=FALSE;
 
     DoMethod(listview, MUIM_NList_InsertSingle, 100-1,MUIV_NList_Insert_Bottom);
-    city_built_iterate(pcity, pimprove) {
-      if (pimprove->sabotage > 0) {
+    built_impr_iterate(pcity, i) {
+      if (improvement_by_number(i)->sabotage > 0) {
       {
-        DoMethod(listview, MUIM_NList_InsertSingle,
-                 improvement_number(pimprove) + 100,
-                 MUIV_NList_Insert_Bottom);
+        DoMethod(listview, MUIM_NList_InsertSingle, i+100,MUIV_NList_Insert_Bottom);
         any_improvements = TRUE;
       }
-    } city_built_iterate_end;
+    } built_impr_iterate_end;
 
     if (any_improvements)
     {
@@ -516,8 +512,8 @@ static void diplomat_embassy(struct popup_message_data *data)
   message_close(data);
   diplomat_dialog_open = 0;
 
-   if(game_find_unit_by_number(diplomat_id) && 
-     (game_find_city_by_number(diplomat_target_id))) { 
+   if(find_unit_by_id(diplomat_id) && 
+     (find_city_by_id(diplomat_target_id))) { 
     request_diplomat_action(DIPLOMAT_EMBASSY, diplomat_id,
 			    diplomat_target_id, 0);
   }
@@ -532,8 +528,8 @@ static void diplomat_investigate(struct popup_message_data *data)
   message_close(data);
   diplomat_dialog_open=0;
 
-  if(game_find_unit_by_number(diplomat_id) && 
-     (game_find_city_by_number(diplomat_target_id))) { 
+  if(find_unit_by_id(diplomat_id) && 
+     (find_city_by_id(diplomat_target_id))) { 
     request_diplomat_action(DIPLOMAT_INVESTIGATE, diplomat_id,
 			    diplomat_target_id, 0);
   }
@@ -548,8 +544,8 @@ static void diplomat_sabotage(struct popup_message_data *data)
   message_close(data);
   diplomat_dialog_open=0;
 
-  if(game_find_unit_by_number(diplomat_id) && 
-     game_find_city_by_number(diplomat_target_id)) { 
+  if(find_unit_by_id(diplomat_id) && 
+     find_city_by_id(diplomat_target_id)) { 
     request_diplomat_action(DIPLOMAT_SABOTAGE, diplomat_id,
 			    diplomat_target_id, -1);
   }
@@ -564,8 +560,8 @@ static void diplomat_steal(struct popup_message_data *data)
   message_close(data);
   diplomat_dialog_open=0;
 
-  if(game_find_unit_by_number(diplomat_id) && 
-     game_find_city_by_number(diplomat_target_id)) { 
+  if(find_unit_by_id(diplomat_id) && 
+     find_city_by_id(diplomat_target_id)) { 
     request_diplomat_action(DIPLOMAT_STEAL, diplomat_id,
 			    diplomat_target_id, 0);
   }
@@ -584,8 +580,8 @@ static void diplomat_incite(struct popup_message_data *data)
   message_close(data);
   diplomat_dialog_open=0;
 
-  if(game_find_unit_by_number(diplomat_id) && 
-     (pcity=game_find_city_by_number(diplomat_target_id))) { 
+  if(find_unit_by_id(diplomat_id) && 
+     (pcity=find_city_by_id(diplomat_target_id))) { 
     packet.value = diplomat_target_id;
     send_packet_generic_integer(&aconnection, PACKET_INCITE_INQ, &packet);
   }
@@ -600,8 +596,8 @@ static void diplomat_bribe_unit(struct popup_message_data *data)
 
   message_close(data);
   
-  if(game_find_unit_by_number(diplomat_id) && 
-     game_find_unit_by_number(diplomat_target_id)) { 
+  if(find_unit_by_id(diplomat_id) && 
+     find_unit_by_id(diplomat_target_id)) { 
     packet.value = diplomat_target_id;
     send_packet_generic_integer(&aconnection, PACKET_INCITE_INQ, &packet);
   }
@@ -619,8 +615,8 @@ static void diplomat_move(struct popup_message_data *data)
   message_close(data);
   diplomat_dialog_open=0;
 
-  if( (punit=game_find_unit_by_number(diplomat_id))
-      && (pcity=game_find_city_by_number(diplomat_target_id))
+  if( (punit=find_unit_by_id(diplomat_id))
+      && (pcity=find_city_by_id(diplomat_target_id))
       && !same_pos(punit->tile, pcity->tile)) {
     request_diplomat_action(DIPLOMAT_MOVE, diplomat_id,
 			    diplomat_target_id, 0);
@@ -647,8 +643,8 @@ static void spy_poison(struct popup_message_data *data)
   message_close(data);
   diplomat_dialog_open=0;
 
-  if(game_find_unit_by_number(diplomat_id) &&
-    (game_find_city_by_number(diplomat_target_id))) {
+  if(find_unit_by_id(diplomat_id) &&
+    (find_city_by_id(diplomat_target_id))) {
     request_diplomat_action(SPY_POISON, diplomat_id, diplomat_target_id, 0);
   }
   process_diplomat_arrival(NULL, 0);
@@ -663,8 +659,8 @@ static void spy_request_sabotage_list(struct popup_message_data *data)
   message_close(data);
   diplomat_dialog_open=0;
 
-  if(game_find_unit_by_number(diplomat_id) &&
-     (game_find_city_by_number(diplomat_target_id))) {
+  if(find_unit_by_id(diplomat_id) &&
+     (find_city_by_id(diplomat_target_id))) {
     request_diplomat_action(SPY_GET_SABOTAGE_LIST, diplomat_id,
 			    diplomat_target_id, 0);
   }
@@ -684,7 +680,7 @@ void popup_sabotage_dialog(struct city *pcity)
 *****************************************************************/
 static void spy_steal(struct popup_message_data *data)
 {
-  struct city *pvcity = game_find_city_by_number(diplomat_target_id);
+  struct city *pvcity = find_city_by_id(diplomat_target_id);
   struct player *pvictim;
 
   message_close(data);
@@ -1059,7 +1055,7 @@ static void pillage_button(struct popup_message_data *msg)
 
   if(msg->data)
   {
-    struct unit *punit = game_find_unit_by_number (unit_to_use_to_pillage);
+    struct unit *punit = find_unit_by_id (unit_to_use_to_pillage);
     if (punit) {
       request_new_unit_activity_targeted(punit,
                                          ACTIVITY_PILLAGE,
@@ -1144,7 +1140,7 @@ static void connect_button(struct popup_message_data *msg)
     struct unit *punit;
     int activity = (int)msg->data;
 
-    if ((punit = game_find_unit_by_number(unit_to_use_to_connect)))
+    if ((punit = find_unit_by_id(unit_to_use_to_connect)))
     {
       if (activity != ACTIVITY_IDLE)
       {
@@ -1725,7 +1721,7 @@ static void upgrade_yes(struct popup_message_data *msg)
 {
   if(msg->data)
   {
-    struct unit *punit = game_find_unit_by_number ((int)msg->data);
+    struct unit *punit = find_unit_by_id ((int)msg->data);
     if (punit) {
       request_unit_upgrade(punit);
     }
@@ -1749,8 +1745,7 @@ void popup_upgrade_dialog(struct unit *punit)
   {
     /* this shouldn't generally happen, but it is conceivable */
     my_snprintf(buf, sizeof(buf),
-		_("Sorry: cannot upgrade %s."),
-		utype_name_translation(utype_by_number(ut1)));
+		_("Sorry: cannot upgrade %s."), unit_types[ut1].name);
     popup_message_dialog( main_wnd, _("Upgrade Unit!"), buf,
 			  _("_Darn"), message_close, 0,
 			  NULL);
@@ -1762,8 +1757,7 @@ void popup_upgrade_dialog(struct unit *punit)
     {
       my_snprintf(buf, sizeof(buf), _("Upgrade %s to %s for %d gold?\n"
 	         "Treasury contains %d gold."),
-	         utype_name_translation(utype_by_number(ut1)),
-	         utype_name_translation(utype_by_number(ut2)),
+	         unit_types[ut1].name, unit_types[ut2].name,
 	         value, game.player_ptr->economic.gold);
       popup_message_dialog(main_wnd, _("Upgrade Obsolete Units"), buf,
 			   _("_Yes"), upgrade_yes, punit->id,
@@ -1773,8 +1767,7 @@ void popup_upgrade_dialog(struct unit *punit)
     {
 	my_snprintf(buf, sizeof(buf), _("Upgrading %s to %s costs %d gold.\n"
 	       "Treasury contains %d gold."),
-	       utype_name_translation(utype_by_number(ut1)),
-	       utype_name_translation(utype_by_number(ut2)),
+	       unit_types[ut1].name, unit_types[ut2].name,
 	       value, game.player_ptr->economic.gold);
 	popup_message_dialog(main_wnd,
 			     _("Upgrade Unit!"), buf,

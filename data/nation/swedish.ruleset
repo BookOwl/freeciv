@@ -21,15 +21,16 @@ leader=
  "Kristina",
  "Oscar II",
  "Per Albin Hansson",
+ "Dag Hammarskjöld",
  "Olof Palme",
  "Anna Lindh"
 leader_sex="Male", "Male", "Male", "Male", "Male", "Male", "Male",
-           "Female", "Male", "Male", "Male", "Female"
+           "Female", "Male", "Male", "Male", "Male", "Female"
 flag="sweden"
 flag_alt = "-"
 city_style = "European"
 ruler_titles = { "government",      "male_title",      "female_title"
-                 "Democracy",_("Prime Minister"), _("?female:Prime Minister")
+                 "Democracy",       _("Prime Minister"), _("Prime Minister")
                }
 
 init_techs=""

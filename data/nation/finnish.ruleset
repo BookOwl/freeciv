@@ -9,15 +9,16 @@ legend=_("Finland is a small, cold country on the northern fringe of Europe,\
 leader=
  "C.G.E. Mannerheim",
  "Urho Kekkonen",
- "Martti Ahtisaari"
-leader_sex="Male", "Male", "Male"
+ "Martti Ahtisaari",
+ "Linus Torvalds"
+leader_sex="Male", "Male", "Male", "Male"
 flag="finland"
 flag_alt = "-"
 city_style = "European"
 
 ruler_titles = { "government",      "male_title",        "female_title"
-                 "Republic",        _("President"),    _("?female:President")
-                 "Democracy",_("Prime Minister"), _("?female:Prime Minister")
+                 "Republic",        _("President"),      _("President")
+                 "Democracy",       _("Prime Minister"), _("Prime Minister")
                }
 
 init_techs=""

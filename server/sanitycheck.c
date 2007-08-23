@@ -85,8 +85,8 @@ static void check_specials(void)
       SANITY_TILE(ptile, pterrain->irrigation_result == pterrain);
     }
 
-    SANITY_TILE(ptile, terrain_index(pterrain) >= T_FIRST 
-                       && terrain_index(pterrain) < terrain_count());
+    SANITY_TILE(ptile, pterrain->index >= T_FIRST 
+                       && pterrain->index < T_COUNT);
   } whole_map_iterate_end;
 }
 
@@ -109,9 +109,9 @@ static void check_fow(void)
 	 * defined. */
 	if (game.info.fogofwar) {
 	  if (plr_tile->seen_count[v] > 0) {
-	    SANITY_TILE(ptile, BV_ISSET(ptile->tile_seen[v], player_index(pplayer)));
+	    SANITY_TILE(ptile, BV_ISSET(ptile->tile_seen[v], pplayer->player_no));
 	  } else {
-	    SANITY_TILE(ptile, !BV_ISSET(ptile->tile_seen[v], player_index(pplayer)));
+	    SANITY_TILE(ptile, !BV_ISSET(ptile->tile_seen[v], pplayer->player_no));
 	  }
 	}
 
@@ -144,8 +144,8 @@ static void check_misc(void)
   } players_iterate_end;
   SANITY_CHECK(nbarbs == game.info.nbarbarians);
 
-  SANITY_CHECK(player_count() <= MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS);
-  SANITY_CHECK(team_count() <= MAX_NUM_TEAMS);
+  SANITY_CHECK(game.info.nplayers <= MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS);
+  SANITY_CHECK(NUM_TEAMS <= MAX_NUM_TEAMS);
 }
 
 /**************************************************************************
@@ -229,13 +229,13 @@ void real_sanity_check_city(struct city *pcity, const char *file, int line)
     SANITY_CITY(pcity, unit_owner(punit) == pplayer);
   } unit_list_iterate_end;
 
-  city_built_iterate(pcity, pimprove) {
-    if (is_small_wonder(pimprove)) {
-      SANITY_CITY(pcity, find_city_from_small_wonder(pplayer, pimprove) == pcity);
-    } else if (is_great_wonder(pimprove)) {
-      SANITY_CITY(pcity, find_city_from_great_wonder(pimprove) == pcity);
+  built_impr_iterate(pcity, id) {
+    if (is_small_wonder(id)) {
+      SANITY_CITY(pcity, find_city_from_small_wonder(pplayer, id) == pcity);
+    } else if (is_great_wonder(id)) {
+      SANITY_CITY(pcity, find_city_from_great_wonder(id) == pcity);
     }
-  } city_built_iterate_end;
+  } built_impr_iterate_end;
 
   /* Note that cities may be found on land or water. */
 
@@ -248,65 +248,56 @@ void real_sanity_check_city(struct city *pcity, const char *file, int line)
       switch (get_worker_city(pcity, x, y)) {
       case C_TILE_EMPTY:
 	if (ptile->worked) {
-	  freelog(LOG_ERROR, "Tile at %s->%d,%d%s marked as "
+	  freelog(LOG_ERROR, "Tile at %s->%d,%d marked as "
 		  "empty but worked by %s!",
 		  pcity->name, TILE_XY(ptile),
-                  is_city_center(x, y) ? " (city center)" : "",
 		  (ptile)->worked->name);
 	}
 	if (is_enemy_unit_tile(ptile, pplayer)) {
-	  freelog(LOG_ERROR, "Tile at %s->%d,%d%s marked as "
+	  freelog(LOG_ERROR, "Tile at %s->%d,%d marked as "
 		  "empty but occupied by an enemy unit!",
-		  pcity->name, TILE_XY(ptile),
-                  is_city_center(x, y) ? " (city center)" : "");
+		  pcity->name, TILE_XY(ptile));
 	}
 	if (game.info.borders > 0 && owner && owner != pcity->owner) {
-	  freelog(LOG_ERROR, "Tile at %s->%d,%d%s marked as "
+	  freelog(LOG_ERROR, "Tile at %s->%d,%d marked as "
 		  "empty but in enemy territory!",
-		  pcity->name, TILE_XY(ptile),
-                  is_city_center(x, y) ? " (city center)" : "");
+		  pcity->name, TILE_XY(ptile));
 	}
 	if (!city_can_work_tile(pcity, x, y)) {
 	  /* Complete check. */
-	  freelog(LOG_ERROR, "Tile at %s->%d,%d%s marked as "
+	  freelog(LOG_ERROR, "Tile at %s->%d,%d marked as "
 		  "empty but is unavailable!",
-		  pcity->name, TILE_XY(ptile),
-                  is_city_center(x, y) ? " (city center)" : "");
+		  pcity->name, TILE_XY(ptile));
 	}
 	break;
       case C_TILE_WORKER:
 	if ((ptile)->worked != pcity) {
-	  freelog(LOG_ERROR, "Tile at %s->%d,%d%s marked as "
+	  freelog(LOG_ERROR, "Tile at %s->%d,%d marked as "
 		  "worked but main map disagrees!",
-		  pcity->name, TILE_XY(ptile),
-                  is_city_center(x, y) ? " (city center)" : "");
+		  pcity->name, TILE_XY(ptile));
 	}
 	if (is_enemy_unit_tile(ptile, pplayer)) {
-	  freelog(LOG_ERROR, "Tile at %s->%d,%d%s marked as "
+	  freelog(LOG_ERROR, "Tile at %s->%d,%d marked as "
 		  "worked but occupied by an enemy unit!",
-		  pcity->name, TILE_XY(ptile),
-                  is_city_center(x, y) ? " (city center)" : "");
+		  pcity->name, TILE_XY(ptile));
 	}
 	if (game.info.borders > 0 && owner && owner != pcity->owner) {
-	  freelog(LOG_ERROR, "Tile at %s->%d,%d%s marked as "
+	  freelog(LOG_ERROR, "Tile at %s->%d,%d marked as "
 		  "worked but in enemy territory!",
-		  pcity->name, TILE_XY(ptile),
-                  is_city_center(x, y) ? " (city center)" : "");
+		  pcity->name, TILE_XY(ptile));
 	}
 	if (!city_can_work_tile(pcity, x, y)) {
 	  /* Complete check. */
-	  freelog(LOG_ERROR, "Tile at %s->%d,%d%s marked as "
+	  freelog(LOG_ERROR, "Tile at %s->%d,%d marked as "
 		  "worked but is unavailable!",
-		  pcity->name, TILE_XY(ptile),
-                  is_city_center(x, y) ? " (city center)" : "");
+		  pcity->name, TILE_XY(ptile));
 	}
 	break;
       case C_TILE_UNAVAILABLE:
 	if (city_can_work_tile(pcity, x, y)) {
-	  freelog(LOG_ERROR, "Tile at %s->%d,%d%s marked as "
+	  freelog(LOG_ERROR, "Tile at %s->%d,%d marked as "
 		  "unavailable but seems to be available!",
-		  pcity->name, TILE_XY(ptile),
-                  is_city_center(x, y) ? " (city center)" : "");
+		  pcity->name, TILE_XY(ptile));
 	}
 	break;
       }
@@ -345,7 +336,7 @@ void real_sanity_check_city(struct city *pcity, const char *file, int line)
       }
     }
 
-    generic_city_refresh(pcity, TRUE);
+    generic_city_refresh(pcity, TRUE, NULL);
   }
 }
 
@@ -417,7 +408,7 @@ static void check_units(void) {
       SANITY_CHECK(punit->hp > 0);
 
       if (punit->transported_by != -1) {
-        transporter = game_find_unit_by_number(punit->transported_by);
+        transporter = find_unit_by_id(punit->transported_by);
         SANITY_CHECK(transporter != NULL);
 
 	/* Make sure the transporter is on the tile. */
@@ -466,8 +457,6 @@ static void check_players(void)
       continue;
     }
 
-    SANITY_CHECK(!pplayer->nation || pplayer->nation->player == pplayer);
-
     city_list_iterate(pplayer->cities, pcity) {
       if (is_capital(pcity)) {
 	found_palace++;
@@ -476,11 +465,11 @@ static void check_players(void)
     } city_list_iterate_end;
 
     players_iterate(pplayer2) {
-      SANITY_CHECK(pplayer->diplstates[player_index(pplayer2)].type
-	     == pplayer2->diplstates[player_index(pplayer)].type);
-      if (pplayer->diplstates[player_index(pplayer2)].type == DS_CEASEFIRE) {
-	SANITY_CHECK(pplayer->diplstates[player_index(pplayer2)].turns_left
-	       == pplayer2->diplstates[player_index(pplayer)].turns_left);
+      SANITY_CHECK(pplayer->diplstates[pplayer2->player_no].type
+	     == pplayer2->diplstates[pplayer->player_no].type);
+      if (pplayer->diplstates[pplayer2->player_no].type == DS_CEASEFIRE) {
+	SANITY_CHECK(pplayer->diplstates[pplayer2->player_no].turns_left
+	       == pplayer2->diplstates[pplayer->player_no].turns_left);
       }
       if (pplayer->is_alive
           && pplayer2->is_alive
@@ -535,12 +524,12 @@ static void check_teams(void)
     /* For the moment, all players (including observers) have teams. */
     SANITY_CHECK(pplayer->team != NULL);
     if (pplayer->team) {
-      count[team_index(pplayer->team)]++;
+      count[pplayer->team->index]++;
     }
   } players_iterate_end;
 
   for (i = 0; i < MAX_NUM_TEAMS; i++) {
-    SANITY_CHECK(team_by_number(i)->players == count[i]);
+    SANITY_CHECK(team_get_by_id(i)->players == count[i]);
   }
 }
 

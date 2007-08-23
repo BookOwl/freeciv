@@ -553,13 +553,8 @@ bool is_cardinally_adj_to_ocean(const struct tile *ptile)
 ****************************************************************************/
 bool is_safe_ocean(const struct tile *ptile)
 {
-  adjc_iterate(ptile, adjc_tile) {
-    if (adjc_tile->terrain != T_UNKNOWN
-        && !terrain_has_flag(adjc_tile->terrain, TER_UNSAFE_COAST)) {
-      return TRUE;
-    }
-  } adjc_iterate_end;
-  return FALSE;
+  return count_terrain_flag_near_tile(ptile, FALSE, TRUE,
+				      TER_UNSAFE_COAST) < 100;
 }
 
 /***************************************************************
@@ -628,7 +623,7 @@ static int tile_move_cost_ptrs(struct unit *punit,
 
   if (punit) {
     pclass = unit_class(punit);
-    native = is_native_tile(unit_type(punit), t2);
+    native = is_native_terrain(punit, t2->terrain);
   }
 
   if (game.info.slow_invasions
@@ -641,7 +636,7 @@ static int tile_move_cost_ptrs(struct unit *punit,
     return punit->moves_left;
   }
 
-  if (punit && !uclass_has_flag(pclass, UCF_TERRAIN_SPEED)) {
+  if (punit && !pclass->move.terrain_affects) {
     return SINGLE_MOVE;
   }
 
@@ -657,7 +652,6 @@ static int tile_move_cost_ptrs(struct unit *punit,
     return SINGLE_MOVE/3;
   }
   if (!native) {
-    /* Loading to transport or entering port */
     return SINGLE_MOVE;
   }
   if (tile_has_special(t1, S_ROAD) && tile_has_special(t2, S_ROAD)) {
@@ -705,7 +699,7 @@ int map_move_cost_ai(const struct tile *tile0, const struct tile *tile1)
 {
   const int maxcost = 72; /* Arbitrary. */
 
-  assert(!is_server()
+  assert(!is_server
 	 || (tile0->terrain != T_UNKNOWN && tile1->terrain != T_UNKNOWN));
 
   /* A ship can take the step if:
@@ -741,17 +735,9 @@ int map_move_cost_ai(const struct tile *tile0, const struct tile *tile1)
   The cost to move punit from where it is to tile x,y.
   It is assumed the move is a valid one, e.g. the tiles are adjacent.
 ***************************************************************/
-int map_move_cost_unit(struct unit *punit, const struct tile *ptile)
+int map_move_cost(struct unit *punit, const struct tile *ptile)
 {
   return tile_move_cost_ptrs(punit, punit->tile, ptile);
-}
-
-/***************************************************************
-  Move cost between two tiles
-***************************************************************/
-int map_move_cost(const struct tile *src_tile, const struct tile *dst_tile)
-{
-  return tile_move_cost_ptrs(NULL, src_tile, dst_tile);
 }
 
 /***************************************************************

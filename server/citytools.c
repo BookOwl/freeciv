@@ -27,16 +27,13 @@
 #include "shared.h"
 #include "support.h"
 
-#include "base.h"
 #include "city.h"
 #include "events.h"
 #include "government.h"
-#include "improvement.h"
 #include "idex.h"
 #include "map.h"
 #include "movement.h"
 #include "player.h"
-#include "requirements.h"
 #include "tech.h"
 #include "unit.h"
 #include "unitlist.h"
@@ -189,8 +186,8 @@ static int evaluate_city_name_priority(struct tile *ptile,
     /* Now we do the same for every available terrain. */
     goodness
       = is_terrain_near_tile(ptile, pterrain)
-      ? city_name->terrain[terrain_index(pterrain)]
-      : -city_name->terrain[terrain_index(pterrain)];
+      ? city_name->terrain[pterrain->index]
+      : -city_name->terrain[pterrain->index];
     if (goodness > 0) {
       priority /= mult_factor;
     } else if (goodness < 0) {
@@ -352,8 +349,8 @@ by caller.
 char *city_name_suggestion(struct player *pplayer, struct tile *ptile)
 {
   int i = 0, j;
-  bool nations_selected[nation_count()];
-  struct nation_type *nation_list[nation_count()];
+  bool nations_selected[game.control.nation_count];
+  struct nation_type *nation_list[game.control.nation_count];
   int queue_size;
 
   static const int num_tiles = MAP_MAX_WIDTH * MAP_MAX_HEIGHT; 
@@ -386,9 +383,9 @@ char *city_name_suggestion(struct player *pplayer, struct tile *ptile)
 
   queue_size = 1;
   nation_list[0] = nation_of_player(pplayer);
-  nations_selected[nation_index(nation_list[0])] = TRUE;
+  nations_selected[nation_list[0]->index] = TRUE;
 
-  while (i < nation_count()) {
+  while (i < game.control.nation_count) {
     for (; i < queue_size; i++) {
       char *name;
       struct nation_type *nation;
@@ -415,9 +412,9 @@ char *city_name_suggestion(struct player *pplayer, struct tile *ptile)
       for (j = 0; nation->parent_nations[j] != NO_NATION_SELECTED; j++) {
 	struct nation_type *n = nation->parent_nations[j];
 
-	if (!nations_selected[nation_index(n)]) {
+	if (!nations_selected[n->index]) {
 	  nation_list[queue_size] = n;
-	  nations_selected[nation_index(n)] = TRUE;
+	  nations_selected[n->index] = TRUE;
 	  queue_size++;
 	  freelog(LOG_DEBUG, "Parent %s.", nation_rule_name(n));
 	}
@@ -427,9 +424,9 @@ char *city_name_suggestion(struct player *pplayer, struct tile *ptile)
       for (j = 0; nation->civilwar_nations[j] != NO_NATION_SELECTED; j++) {
 	struct nation_type *n = nation->civilwar_nations[j];
 
-	if (!nations_selected[nation_index(n)]) {
+	if (!nations_selected[n->index]) {
 	  nation_list[queue_size] = n;
-	  nations_selected[nation_index(n)] = TRUE;
+	  nations_selected[n->index] = TRUE;
 	  queue_size++;
 	  freelog(LOG_DEBUG, "Child %s.", nation_rule_name(n));
 	}
@@ -438,9 +435,9 @@ char *city_name_suggestion(struct player *pplayer, struct tile *ptile)
 
     /* Append all remaining nations. */
     nations_iterate(n) {
-      if (!nations_selected[nation_index(n)]) {
+      if (!nations_selected[n->index]) {
 	nation_list[queue_size] = n;
-	nations_selected[nation_index(n)] = TRUE;
+	nations_selected[n->index] = TRUE;
 	queue_size++;
 	freelog(LOG_DEBUG, "Misc nation %s.", nation_rule_name(n));
       }
@@ -465,7 +462,7 @@ char *city_name_suggestion(struct player *pplayer, struct tile *ptile)
 **************************************************************************/
 int build_points_left(struct city *pcity)
 {
-  int cost = impr_build_shield_cost(pcity->production.value.building);
+  int cost = impr_build_shield_cost(pcity->production.value);
 
   return cost - pcity->shield_stock;
 }
@@ -592,7 +589,7 @@ void transfer_city_units(struct player *pplayer, struct player *pvictim,
     } unit_list_iterate_safe_end;
   }
 
-  /* Any units supported by the city are either given new home
+  /* Any remaining units supported by the city are either given new home
      cities or maybe destroyed */
   unit_list_iterate_safe(units, vunit) {
     struct city *new_home_city = tile_get_city(vunit->tile);
@@ -607,7 +604,7 @@ void transfer_city_units(struct player *pplayer, struct player *pvictim,
       transfer_unit(vunit, pcity, verbose);
     } else {
       /* The unit is lost.  Call notify_player (in all other cases it is
-       * called automatically). */
+       * called autmatically). */
       freelog(LOG_VERBOSE, "Lost %s's %s at (%d,%d) when %s was lost.",
 	      unit_owner(vunit)->name,
 	      unit_rule_name(vunit),
@@ -670,17 +667,17 @@ static void raze_city(struct city *pcity)
   if (is_land_barbarian(city_owner(pcity)))
     razechance += 30;
 
-  city_built_iterate(pcity, pimprove) {
-    if (is_small_wonder(pimprove)) {
+  built_impr_iterate(pcity, i) {
+    if (is_small_wonder(i)) {
       /* small wonders are always razed
        * This is not strictly necessary as transfer_city()
        * would remove small wonders anyway. */
-      city_remove_improvement(pcity, pimprove);
+      pcity->improvements[i] = I_NONE;
     }
-    if (is_improvement(pimprove) && (myrand(100) < razechance)) {
-      city_remove_improvement(pcity, pimprove);
+    if (is_improvement(i) && (myrand(100) < razechance)) {
+      pcity->improvements[i] = I_NONE;
     }
-  } city_built_iterate_end;
+  } built_impr_iterate_end;
 
   nullify_prechange_production(pcity);
   pcity->shield_stock = 0;
@@ -697,7 +694,7 @@ static void reestablish_city_trade_routes(struct city *pcity, int cities[])
 
   for (i = 0; i < NUM_TRADEROUTES; i++) {
     if (cities[i] != 0) {
-      oldtradecity = game_find_city_by_number(cities[i]);
+      oldtradecity = find_city_by_id(cities[i]);
       assert(oldtradecity != NULL);
       if (can_cities_trade(pcity, oldtradecity)
           && can_establish_trade_route(pcity, oldtradecity)) {   
@@ -725,16 +722,16 @@ static void build_free_small_wonders(struct player *pplayer,
     return;
   }
 
-  improvement_iterate(pimprove) {
-    if (BV_ISSET(*had_small_wonders, improvement_index(pimprove))) {
+  impr_type_iterate(id) {
+    if (BV_ISSET(*had_small_wonders, id)) {
       struct city *pnew_city;
 
-      assert(find_city_from_small_wonder(pplayer, pimprove) == NULL);
+      assert(find_city_from_small_wonder(pplayer, id) == NULL);
 
       pnew_city = city_list_get(pplayer->cities, myrand(size));
 
-      city_add_improvement(pnew_city, pimprove);
-      pplayer->small_wonders[improvement_index(pimprove)] = pnew_city->id;
+      city_add_improvement(pnew_city, id);
+      pplayer->small_wonders[id] = pnew_city->id;
 
       /*
        * send_player_cities will recalculate all cities and send them to
@@ -745,7 +742,7 @@ static void build_free_small_wonders(struct player *pplayer,
       notify_player(pplayer, pnew_city->tile, E_CITY_LOST,
 		    _("You lost %s. A new %s was built in %s."),
 		    old_capital_name,
-		    improvement_name_translation(pimprove),
+		    improvement_name_translation(id),
 		    pnew_city->name);
       /* 
        * The enemy want to see the new capital in his intelligence
@@ -753,7 +750,7 @@ static void build_free_small_wonders(struct player *pplayer,
        */
       send_city_info(NULL, pnew_city);
     }
-  } improvement_iterate_end;
+  } impr_type_iterate_end;
 }
 
 /**********************************************************************
@@ -780,11 +777,8 @@ void transfer_city(struct player *ptaker, struct city *pcity,
 
   unit_list_iterate(pcity->units_supported, punit) {
     unit_list_prepend(old_city_units, punit);
-    /* Mark unit to have no homecity at all.
-     * 1. We remove unit from units_supported list here,
-     *    real_change_unit_homecity() should not attempt it.
-     * 2. Otherwise we might delete the homecity from under the unit
-     *    in the client */
+    /* otherwise we might delete the homecity from under the unit
+       in the client. */
     punit->homecity = 0;
     send_unit_info(NULL, punit);
   } unit_list_iterate_end;
@@ -794,21 +788,19 @@ void transfer_city(struct player *ptaker, struct city *pcity,
      then restore the local improvement list - we need this to restore the
      global effects for the new city owner) */
   BV_CLR_ALL(had_small_wonders);
-  city_built_iterate(pcity, pimprove) {
-    city_remove_improvement(pcity, pimprove);
+  built_impr_iterate(pcity, i) {
+    city_remove_improvement(pcity, i);
 
-    if (is_small_wonder(pimprove)) {
-      BV_SET(had_small_wonders, improvement_index(pimprove));
+    if (is_small_wonder(i)) {
+      BV_SET(had_small_wonders, i);
     } else {
-      /* note: internal turn here, next city_built_iterate(). */
-      pcity->built[improvement_index(pimprove)].turn = game.info.turn; /*I_ACTIVE*/
+      pcity->improvements[i] = I_ACTIVE;
     }
-  } city_built_iterate_end;
+  } built_impr_iterate_end;
 
   give_citymap_from_player_to_player(pcity, pgiver, ptaker);
   old_vision = pcity->server.vision;
-  pcity->server.vision = vision_new(ptaker, pcity->tile);
-  vision_reveal_tiles(pcity->server.vision, game.info.city_reveal_tiles);
+  pcity->server.vision = vision_new(ptaker, pcity->tile, FALSE);
   vision_layer_iterate(v) {
     vision_change_sight(pcity->server.vision, v,
 			vision_get_sight(old_vision, v));
@@ -846,7 +838,7 @@ void transfer_city(struct player *ptaker, struct city *pcity,
   for (i = 0; i < NUM_TRADEROUTES; i++)
     old_trade_routes[i] = pcity->trade[i];
   for (i = 0; i < NUM_TRADEROUTES; i++) {
-    struct city *pother_city = game_find_city_by_number(pcity->trade[i]);
+    struct city *pother_city = find_city_by_id(pcity->trade[i]);
 
     assert(pcity->trade[i] == 0 || pother_city != NULL);
 
@@ -861,7 +853,7 @@ void transfer_city(struct player *ptaker, struct city *pcity,
    * with the transferred city.
    */
   for (i = 0; i < NUM_TRADEROUTES; i++) {
-    struct city *pother_city = game_find_city_by_number(pcity->trade[i]);
+    struct city *pother_city = find_city_by_id(pcity->trade[i]);
     if (pother_city) {
       reality_check_city(ptaker, pother_city->tile);
       update_dumb_city(ptaker, pother_city);
@@ -887,13 +879,16 @@ void transfer_city(struct player *ptaker, struct city *pcity,
     raze_city(pcity);
 
   /* Restore any global improvement effects that this city confers */
-  city_built_iterate(pcity, pimprove) {
-    city_add_improvement(pcity, pimprove);
-  } city_built_iterate_end;
+  built_impr_iterate(pcity, i) {
+    city_add_improvement(pcity, i);
+  } built_impr_iterate_end;
 
-  /* Set production to something valid for pplayer, if not.
-   * (previously allowed building obsolete units.) */
-  if (!can_city_build_now(pcity, pcity->production)) {
+  /* Set production to something valid for pplayer, if not. */
+  if ((pcity->production.is_unit
+       && !can_build_unit_direct(pcity,
+				 utype_by_number(pcity->production.value)))
+      || (!pcity->production.is_unit
+          && !can_build_improvement(pcity, pcity->production.value))) {
     advisor_choose_build(ptaker, pcity);
   } 
 
@@ -940,7 +935,6 @@ void create_city(struct player *pplayer, struct tile *ptile,
   struct city *pcity;
   int x_itr, y_itr;
   struct nation_type *nation = nation_of_player(pplayer);
-  struct base_type *pbase;
 
   freelog(LOG_DEBUG, "Creating city %s", name);
 
@@ -959,7 +953,7 @@ void create_city(struct player *pplayer, struct tile *ptile,
    * to some players, but we don't want to make any special handling for
    * those cases.  The network code may prevent asecond packet from being
    * sent anyway. */
-  send_tile_info(NULL, ptile, FALSE);
+  send_tile_info(NULL, ptile);
 
   pcity = create_city_virtual(pplayer, ptile, name);
   pcity->ai.trade_want = TRADE_WEIGHTING;
@@ -971,30 +965,25 @@ void create_city(struct player *pplayer, struct tile *ptile,
     pplayer->capital = TRUE;
 
     for (i = 0; i < MAX_NUM_BUILDING_LIST; i++) {
-      Impr_type_id n = game.rgame.global_init_buildings[i];
-      struct impr_type *pimprove = improvement_by_number(n);
-      if (n == B_LAST) {
+      if (game.rgame.global_init_buildings[i] == B_LAST) {
 	break;
       }
-      city_add_improvement(pcity, pimprove);
-      if (is_small_wonder(pimprove)) {
-        pplayer->small_wonders[improvement_index(pimprove)] = pcity->id;
+      city_add_improvement(pcity, game.rgame.global_init_buildings[i]);
+      if (is_small_wonder(game.rgame.global_init_buildings[i])) {
+        pplayer->small_wonders[game.rgame.global_init_buildings[i]] = pcity->id;
       }
-      assert(!is_great_wonder(pimprove));
+      assert(!is_great_wonder(game.rgame.global_init_buildings[i]));
     }
     for (i = 0; i < MAX_NUM_BUILDING_LIST; i++) {
-      Impr_type_id n = nation->init_buildings[i];
-      struct impr_type *pimprove = improvement_by_number(n);
-      if (n == B_LAST) {
+      if (nation->init_buildings[i] == B_LAST) {
 	break;
       }
-      city_add_improvement(pcity, pimprove);
+      city_add_improvement(pcity, nation->init_buildings[i]);
     }
   }
 
   /* Before arranging workers to show unknown land */
-  pcity->server.vision = vision_new(pplayer, ptile);
-  vision_reveal_tiles(pcity->server.vision, game.info.city_reveal_tiles);
+  pcity->server.vision = vision_new(pplayer, ptile, FALSE);
   city_refresh_vision(pcity);
 
   tile_set_city(ptile, pcity);
@@ -1016,12 +1005,6 @@ void create_city(struct player *pplayer, struct tile *ptile,
   /* Place a worker at the city center; this is the free-worked tile.
    * This must be done before the city refresh (below) so that the city
    * is in a sane state. */
-  /* Ugly detail here is that if another city is currently working
-   * this tile, we first update only ptile->worked and our own
-   * city_map. At that point city_map of both cities claim that they
-   * are working that tile. But then we refresh adjacent cities - one of
-   * which that other city certainly is. And once it notices that
-   * ptile->worked does not point to it, it will give tile up. */
   server_set_tile_city(pcity, CITY_MAP_SIZE/2, CITY_MAP_SIZE/2, C_TILE_WORKER);
 
   /* Refresh the city.  First a city refresh is done (this shouldn't
@@ -1032,10 +1015,9 @@ void create_city(struct player *pplayer, struct tile *ptile,
   city_refresh(pcity);
   auto_arrange_workers(pcity);
 
-  /* Put vision back to normal, if base acted as a watchtower */
-  pbase = tile_get_base(ptile);
-  if (pbase) {
-    tile_remove_base(ptile);
+  /* Put vision back to normal, if fortress acted as a watchtower */
+  if (tile_has_special(ptile, S_FORTRESS)) {
+    tile_clear_special(ptile, S_FORTRESS);
     unit_list_refresh_vision(ptile->units);
   }
 
@@ -1050,7 +1032,7 @@ void create_city(struct player *pplayer, struct tile *ptile,
   maybe_make_contact(ptile, city_owner(pcity));
 
   unit_list_iterate((ptile)->units, punit) {
-    struct city *home = game_find_city_by_number(punit->homecity);
+    struct city *home = find_city_by_id(punit->homecity);
 
     /* Catch fortress building, transforming into ocean, etc. */
     if (!can_unit_continue_current_activity(punit)) {
@@ -1082,13 +1064,13 @@ void remove_city(struct city *pcity)
   int id = pcity->id; /* We need this even after memory has been freed */
 
   BV_CLR_ALL(had_small_wonders);
-  city_built_iterate(pcity, pimprove) {
-    city_remove_improvement(pcity, pimprove);
+  built_impr_iterate(pcity, i) {
+    city_remove_improvement(pcity, i);
 
-    if (is_small_wonder(pimprove)) {
-      BV_SET(had_small_wonders, improvement_index(pimprove));
+    if (is_small_wonder(i)) {
+      BV_SET(had_small_wonders, i);
     }
-  } city_built_iterate_end;
+  } built_impr_iterate_end;
 
   /* Rehome units in other cities */
   unit_list_iterate_safe(pcity->units_supported, punit) {
@@ -1104,25 +1086,23 @@ void remove_city(struct city *pcity)
   /* make sure ships are not left on land when city is removed. */
   unit_list_iterate_safe(ptile->units, punit) {
     bool moved;
-    struct unit_type *punittype = unit_type(punit);
 
-    if (is_native_tile(punittype, ptile)) {
+    if (!is_sailing_unit(punit)) {
       continue;
     }
 
     handle_unit_activity_request(punit, ACTIVITY_IDLE);
     moved = FALSE;
     adjc_iterate(ptile, tile1) {
-      if (!moved && is_native_tile(punittype, tile1)) {
+      if (!moved && is_ocean(tile_get_terrain(tile1))) {
 	if (could_unit_move_to_tile(punit, tile1) == 1) {
 	  moved = handle_unit_move_request(punit, tile1, FALSE, TRUE);
 	  if (moved) {
 	    notify_player(unit_owner(punit), NULL, E_UNIT_RELOCATED,
-                          _("Moved %s out of disbanded city %s "
-                            "since it cannot stay on %s."),
-                          unit_name_translation(punit),
-                          pcity->name,
-                          terrain_name_translation(tile_get_terrain(ptile)));
+			     _("Moved %s out of disbanded city %s "
+			       "to avoid being landlocked."),
+			     unit_name_translation(punit),
+			     pcity->name);
             break;
 	  }
 	}
@@ -1138,13 +1118,25 @@ void remove_city(struct city *pcity)
     }
   } unit_list_iterate_safe_end;
 
+  /* Destroy final ineligible units (land units in ocean city) */
+  unit_list_iterate_safe(ptile->units, punit) {
+    if (is_ocean(tile_get_terrain(ptile)) && is_ground_unit(punit)) {
+      notify_player(unit_owner(punit), NULL, E_UNIT_LOST,
+		       _("When %s was disbanded your %s could not "
+			 "get out, and it was therefore lost."),
+		       pcity->name,
+		       unit_name_translation(punit));
+      wipe_unit(punit);
+    }
+  } unit_list_iterate_safe_end;
+
   /* Any remaining supported units are destroyed */
   unit_list_iterate_safe(pcity->units_supported, punit) {
     wipe_unit(punit);
   } unit_list_iterate_safe_end;
 
   for (o = 0; o < NUM_TRADEROUTES; o++) {
-    struct city *pother_city = game_find_city_by_number(pcity->trade[o]);
+    struct city *pother_city = find_city_by_id(pcity->trade[o]);
 
     assert(pcity->trade[o] == 0 || pother_city != NULL);
 
@@ -1336,7 +1328,7 @@ static bool player_has_traderoute_with_city(struct player *pplayer,
   int i;
 
   for (i = 0; i < NUM_TRADEROUTES; i++) {
-    struct city *other = game_find_city_by_number(pcity->trade[i]);
+    struct city *other = find_city_by_id(pcity->trade[i]);
     if (other && city_owner(other) == pplayer) {
       return TRUE;
     }
@@ -1357,9 +1349,9 @@ static void package_dumb_city(struct player* pplayer, struct tile *ptile,
   packet->id = pdcity->id;
   if (ptile->owner) {
     /* Use tile owner information not city owner information. */
-    packet->owner = player_number(ptile->owner);
+    packet->owner = ptile->owner->player_no;
   } else {
-    packet->owner = player_number(pdcity->owner);
+    packet->owner = pdcity->owner->player_no;
   }
   packet->x = ptile->x;
   packet->y = ptile->y;
@@ -1594,7 +1586,7 @@ void package_city(struct city *pcity, struct packet_city_info *packet,
   int x, y, i;
 
   packet->id=pcity->id;
-  packet->owner = player_number(pcity->owner);
+  packet->owner = pcity->owner->player_no;
   packet->x = pcity->tile->x;
   packet->y = pcity->tile->y;
   sz_strlcpy(packet->name, pcity->name);
@@ -1607,11 +1599,10 @@ void package_city(struct city *pcity, struct packet_city_info *packet,
     packet->ppl_angry[i]=pcity->ppl_angry[i];
   }
   /* The number of data in specilists[] array */
-  packet->specialists_size = specialist_count();
+  packet->specialists_size = SP_COUNT;
   specialist_type_iterate(sp) {
     packet->specialists[sp] = pcity->specialists[sp];
   } specialist_type_iterate_end;
-
   for (i = 0; i < NUM_TRADEROUTES; i++) {
     packet->trade[i]=pcity->trade[i];
     packet->trade_value[i]=pcity->trade_value[i];
@@ -1631,15 +1622,13 @@ void package_city(struct city *pcity, struct packet_city_info *packet,
   packet->pollution=pcity->pollution;
   packet->city_options = pcity->city_options;
   
-  packet->production_kind = pcity->production.kind;
-  packet->production_value = universal_number(&pcity->production);
+  packet->production_is_unit = pcity->production.is_unit;
+  packet->production_value = pcity->production.value;
 
   packet->turn_last_built=pcity->turn_last_built;
   packet->turn_founded = pcity->turn_founded;
-
-  packet->changed_from_kind = pcity->changed_from.kind;
-  packet->changed_from_value = universal_number(&pcity->changed_from);
-
+  packet->changed_from_id = pcity->changed_from.value;
+  packet->changed_from_is_unit = pcity->changed_from.is_unit;
   packet->before_change_shields=pcity->before_change_shields;
   packet->disbanded_shields=pcity->disbanded_shields;
   packet->caravan_shields=pcity->caravan_shields;
@@ -1659,11 +1648,11 @@ void package_city(struct city *pcity, struct packet_city_info *packet,
   }
 
   BV_CLR_ALL(packet->improvements);
-  improvement_iterate(pimprove) {
-    if (city_has_building(pcity, pimprove)) {
-      BV_SET(packet->improvements, improvement_index(pimprove));
+  impr_type_iterate(i) {
+    if (city_got_building(pcity, i)) {
+      BV_SET(packet->improvements, i);
     }
-  } improvement_iterate_end;
+  } impr_type_iterate_end;
 
   packet->walls = city_got_citywalls(pcity);
 }
@@ -1692,12 +1681,11 @@ bool update_dumb_city(struct player *pplayer, struct city *pcity)
   bv_imprs improvements;
 
   BV_CLR_ALL(improvements);
-  improvement_iterate(pimprove) {
-    if (is_improvement_visible(pimprove)
-     && city_has_building(pcity, pimprove)) {
-      BV_SET(improvements, improvement_index(pimprove));
+  impr_type_iterate(i) {
+    if (is_improvement_visible(i) && city_got_building(pcity, i)) {
+      BV_SET(improvements, i);
     }
-  } improvement_iterate_end;
+  } impr_type_iterate_end;
 
   if (pdcity
       && pdcity->id == pcity->id
@@ -1780,7 +1768,7 @@ static void remove_smallest_trade_route(struct city *pcity)
     return;
   }
 
-  remove_trade_route(pcity, game_find_city_by_number(pcity->trade[slot]));
+  remove_trade_route(pcity, find_city_by_id(pcity->trade[slot]));
 }
 
 /**************************************************************************
@@ -1820,11 +1808,11 @@ void establish_trade_route(struct city *pc1, struct city *pc2)
   I guess the player should always be the city owner?
 ****************************************************************************/
 void do_sell_building(struct player *pplayer, struct city *pcity,
-		      struct impr_type *pimprove)
+		      Impr_type_id id)
 {
-  if (can_city_sell_building(pcity, pimprove)) {
-    pplayer->economic.gold += impr_sell_gold(pimprove);
-    building_lost(pcity, pimprove);
+  if (can_city_sell_building(pcity, id)) {
+    pplayer->economic.gold += impr_sell_gold(id);
+    building_lost(pcity, id);
   }
 }
 
@@ -1832,12 +1820,12 @@ void do_sell_building(struct player *pplayer, struct city *pcity,
   Destroy the improvement in the city straight-out.  Note that this is
   different from selling a building.
 ****************************************************************************/
-void building_lost(struct city *pcity, const struct impr_type *pimprove)
+void building_lost(struct city *pcity, Impr_type_id id)
 {
   struct player *owner = city_owner(pcity);
   bool was_capital = is_capital(pcity);
 
-  city_remove_improvement(pcity, pimprove);
+  city_remove_improvement(pcity,id);
   if ((was_capital && !is_capital(pcity))
       && (owner->spaceship.state == SSHIP_STARTED
 	  || owner->spaceship.state == SSHIP_LAUNCHED)) {
@@ -1855,22 +1843,21 @@ void building_lost(struct city *pcity, const struct impr_type *pimprove)
   Change the build target.
 **************************************************************************/
 void change_build_target(struct player *pplayer, struct city *pcity,
-			 struct universal target,
+			 struct city_production target,
 			 enum event_type event)
 {
   const char *name;
   const char *source;
 
   /* If the city is already building this thing, don't do anything */
-  if (are_universals_equal(&pcity->production, &target)) {
+  if (pcity->production.is_unit == target.is_unit &&
+      pcity->production.value == target.value) {
     return;
   }
 
   /* Is the city no longer building a wonder? */
-  if (VUT_IMPROVEMENT == pcity->production.kind
-   && is_great_wonder(pcity->production.value.building)
-   && event != E_IMP_AUTO
-   && event != E_WORKLIST) {
+  if (!pcity->production.is_unit && is_great_wonder(pcity->production.value) &&
+      (event != E_IMP_AUTO && event != E_WORKLIST)) {
     /* If the build target is changed because of an advisor's suggestion or
        because the worklist advances, then the wonder was completed -- 
        don't announce that the player has *stopped* building that wonder. 
@@ -1878,7 +1865,7 @@ void change_build_target(struct player *pplayer, struct city *pcity,
     notify_player(NULL, pcity->tile, E_WONDER_STOPPED,
 		     _("The %s have stopped building The %s in %s."),
 		     nation_plural_for_player(pplayer),
-		     city_improvement_name_translation(pcity, pcity->production.value.building),
+		     get_impr_name_ex(pcity, pcity->production.value),
 		     pcity->name);
   }
 
@@ -1890,10 +1877,10 @@ void change_build_target(struct player *pplayer, struct city *pcity,
   pcity->production = target;
 
   /* What's the name of the target? */
-  if (VUT_UTYPE == target.kind) {
-    name = utype_name_translation(pcity->production.value.utype);
+  if (target.is_unit) {
+    name = utype_name_translation(utype_by_number(pcity->production.value));
   } else {
-    name = improvement_name_translation(pcity->production.value.building);
+    name = improvement_name_translation(pcity->production.value);
   }
 
   switch (event) {
@@ -1914,12 +1901,11 @@ void change_build_target(struct player *pplayer, struct city *pcity,
 
   /* If the city is building a wonder, tell the rest of the world
      about it. */
-  if (VUT_IMPROVEMENT == pcity->production.kind
-   && is_great_wonder(pcity->production.value.building)) {
+  if (!pcity->production.is_unit && is_great_wonder(pcity->production.value)) {
     notify_player(NULL, pcity->tile, E_WONDER_STARTED,
 		     _("The %s have started building The %s in %s."),
 		     nation_plural_for_player(pplayer),
-		     city_improvement_name_translation(pcity, pcity->production.value.building),
+		     get_impr_name_ex(pcity, pcity->production.value),
 		     pcity->name);
   }
 }
@@ -2143,26 +2129,26 @@ void city_landlocked_sell_coastal_improvements(struct tile *ptile)
       struct player *pplayer = city_owner(pcity);
 
       /* Sell all buildings (but not Wonders) that must be next to the ocean */
-      city_built_iterate(pcity, pimprove) {
-        if (!can_city_sell_building(pcity, pimprove)) {
+      built_impr_iterate(pcity, impr) {
+        if (!can_city_sell_building(pcity, impr)) {
           continue;
         }
 
-	requirement_vector_iterate(&pimprove->reqs, preq) {
-	  if (VUT_TERRAIN == preq->source.kind
+	requirement_vector_iterate(&improvement_by_number(impr)->reqs, preq) {
+	  if (preq->source.type == REQ_TERRAIN
 	      && !is_req_active(city_owner(pcity), pcity, NULL,
 				NULL, NULL, NULL, NULL,
-				preq, TRUE)) {
-            do_sell_building(pplayer, pcity, pimprove);
-            notify_player(pplayer, tile1, E_IMP_SOLD,
-                          _("You sell %s in %s (now landlocked)"
-                            " for %d gold."),
-                          improvement_name_translation(pimprove),
-                          pcity->name,
-                          impr_sell_gold(pimprove)); 
+				preq, RPT_CERTAIN)) {
+          do_sell_building(pplayer, pcity, impr);
+          notify_player(pplayer, tile1, E_IMP_SOLD,
+                           _("You sell %s in %s (now landlocked)"
+                             " for %d gold."),
+                           improvement_name_translation(impr),
+                           pcity->name,
+                           impr_sell_gold(impr)); 
 	  }
 	} requirement_vector_iterate_end;
-      } city_built_iterate_end;
+      } built_impr_iterate_end;
     }
   } adjc_iterate_end;
 }

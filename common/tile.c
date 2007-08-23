@@ -17,7 +17,6 @@
 
 #include <assert.h>
 
-#include "log.h"
 #include "support.h"
 
 #include "tile.h"
@@ -89,113 +88,6 @@ bool tile_has_special(const struct tile *ptile,
 		      enum tile_special_type special)
 {
   return contains_special(ptile->special, special);
-}
-
-/****************************************************************************
-  Returns TRUE iff the given tile has any specials.
-****************************************************************************/
-bool tile_has_any_specials(const struct tile *ptile)
-{
-  return contains_any_specials(ptile->special);
-}
-
-/****************************************************************************
-  Returns base at tile or NULL if no base
-****************************************************************************/
-struct base_type *tile_get_base(const struct tile *ptile)
-{
-  return base_of_bv_special(ptile->special);
-}
-
-/****************************************************************************
-  Adds base to tile.
-  FIXME: Currently this asserts that tile contains no old base.
-         Instead should remove old base and return bool indicating that.
-****************************************************************************/
-void tile_add_base(struct tile *ptile, const struct base_type *pbase)
-{
-  assert(pbase != NULL);
-
-  switch (base_number(pbase)) {
-  case BASE_FORTRESS:
-    assert(!tile_has_special(ptile, S_AIRBASE));
-    tile_set_special(ptile, S_FORTRESS);
-    break;
-  case BASE_AIRBASE:
-    assert(!tile_has_special(ptile, S_FORTRESS));
-    tile_set_special(ptile, S_AIRBASE);
-    break;
-  default:
-    freelog(LOG_ERROR, "tile_set_base(): impossible base type %d.",
-            base_number(pbase));
-    break;
-  };
-}
-
-/****************************************************************************
-  Removes base from tile if such exist
-****************************************************************************/
-void tile_remove_base(struct tile *ptile)
-{
-  tile_clear_special(ptile, S_FORTRESS);
-  tile_clear_special(ptile, S_AIRBASE);
-}
-
-/****************************************************************************
-  Check if tile contains base providing effect
-****************************************************************************/
-bool tile_has_base_flag(const struct tile *ptile, enum base_flag_id flag)
-{
-  struct base_type *pbase;
-
-  pbase = tile_get_base(ptile);
-
-  if (pbase != NULL) {
-    /* Some base at tile, check its flags */
-    return base_has_flag(pbase, flag);
-  }
-
-  /* No base at tile */
-  return FALSE;
-}
-
-/****************************************************************************
-  Check if tile contains base providing effect for unit
-****************************************************************************/
-bool tile_has_base_flag_for_unit(const struct tile *ptile,
-                                 const struct unit_type *punittype,
-                                 enum base_flag_id flag)
-{
-  struct base_type *pbase;
-
-  pbase = tile_get_base(ptile);
-
-  if (pbase != NULL) {
-    /* Some base at tile, check its flags */
-    return base_has_flag_for_utype(pbase, flag, punittype);
-  }
-
-  /* No base at tile */
-  return FALSE;
-}
-
-/****************************************************************************
-  Check if tile contains base native for unit
-****************************************************************************/
-bool tile_has_native_base(const struct tile *ptile,
-                          const struct unit_type *punittype)
-{
-  struct base_type *pbase;
-
-  pbase = tile_get_base(ptile);
-
-  if (pbase != NULL) {
-    /* Some base at tile, check if it's native */
-    return is_native_base_to_utype(pbase, punittype);
-  }
-
-  /* No base at tile */
-  return FALSE;
 }
 
 /****************************************************************************
@@ -272,9 +164,9 @@ void tile_set_continent(struct tile *ptile, Continent_id val)
 enum known_type tile_get_known(const struct tile *ptile,
 			       const struct player *pplayer)
 {
-  if (!BV_ISSET(ptile->tile_known, player_index(pplayer))) {
+  if (!BV_ISSET(ptile->tile_known, pplayer->player_no)) {
     return TILE_UNKNOWN;
-  } else if (!BV_ISSET(ptile->tile_seen[V_MAIN], player_index(pplayer))) {
+  } else if (!BV_ISSET(ptile->tile_seen[V_MAIN], pplayer->player_no)) {
     return TILE_KNOWN_FOGGED;
   } else {
     return TILE_KNOWN;
@@ -286,12 +178,6 @@ enum known_type tile_get_known(const struct tile *ptile,
 ****************************************************************************/
 int tile_activity_time(enum unit_activity activity, const struct tile *ptile)
 {
-  /* Make sure nobody uses old activities */
-  assert(activity != ACTIVITY_FORTRESS && activity != ACTIVITY_AIRBASE);
-
-  /* ACTIVITY_BASE not handled here */
-  assert(activity != ACTIVITY_BASE);
-
   switch (activity) {
   case ACTIVITY_POLLUTION:
     return ptile->terrain->clean_pollution_time * ACTIVITY_FACTOR;
@@ -301,30 +187,19 @@ int tile_activity_time(enum unit_activity activity, const struct tile *ptile)
     return ptile->terrain->mining_time * ACTIVITY_FACTOR;
   case ACTIVITY_IRRIGATE:
     return ptile->terrain->irrigation_time * ACTIVITY_FACTOR;
+  case ACTIVITY_FORTRESS:
+    return ptile->terrain->fortress_time * ACTIVITY_FACTOR;
   case ACTIVITY_RAILROAD:
     return ptile->terrain->rail_time * ACTIVITY_FACTOR;
   case ACTIVITY_TRANSFORM:
     return ptile->terrain->transform_time * ACTIVITY_FACTOR;
+  case ACTIVITY_AIRBASE:
+    return ptile->terrain->airbase_time * ACTIVITY_FACTOR;
   case ACTIVITY_FALLOUT:
     return ptile->terrain->clean_fallout_time * ACTIVITY_FACTOR;
   default:
     return 0;
   }
-}
-
-/****************************************************************************
-  Time to complete the given activity on the given tile.
-****************************************************************************/
-int tile_activity_base_time(const struct tile *ptile,
-                            enum base_type_id base)
-{
-  if (base == BASE_AIRBASE) {
-    return base_by_number(BASE_AIRBASE)->build_time * ACTIVITY_FACTOR;
-  } else {
-    return base_by_number(BASE_FORTRESS)->build_time * ACTIVITY_FACTOR;
-  }
-
-  return 0;
 }
 
 /****************************************************************************
@@ -533,7 +408,6 @@ bool tile_apply_activity(struct tile *ptile, Activity_type_id act)
   case ACTIVITY_FORTRESS:
   case ACTIVITY_PILLAGE: 
   case ACTIVITY_AIRBASE:   
-  case ACTIVITY_BASE:
     /* do nothing  - not implemented */
     return FALSE;
 

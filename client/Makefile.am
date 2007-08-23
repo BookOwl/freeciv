@@ -149,8 +149,6 @@ civclient_SOURCES = $(AUDIO_SDL_FILES) \
 	colors_common.h		\
 	control.c	\
 	control.h	\
-	editor.c 		\
-	editor.h 		\
 	ggzclient.c	\
 	ggzclient.h	\
 	goto.c		\

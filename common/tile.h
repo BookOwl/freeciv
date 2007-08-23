@@ -14,11 +14,10 @@
 #ifndef FC__TILE_H
 #define FC__TILE_H
 
-#include "base.h"
 #include "fc_types.h"
 #include "player.h"
 #include "terrain.h"
-#include "unitlist.h"
+#include "unit.h"
 
 /* Convenience macro for accessing tile coordinates.  This should only be
  * used for debugging. */
@@ -61,17 +60,7 @@ void tile_set_terrain(struct tile *ptile, struct terrain *pterrain);
 bv_special tile_get_special(const struct tile *ptile);
 bool tile_has_special(const struct tile *ptile,
 		      enum tile_special_type to_test_for);
-bool tile_has_any_specials(const struct tile *ptile);
 void tile_set_special(struct tile *ptile, enum tile_special_type spe);
-struct base_type *tile_get_base(const struct tile *ptile);
-void tile_add_base(struct tile *ptile, const struct base_type *pbase);
-void tile_remove_base(struct tile *ptile);
-bool tile_has_base_flag(const struct tile *ptile, enum base_flag_id flag);
-bool tile_has_base_flag_for_unit(const struct tile *ptile,
-                                 const struct unit_type *punittype,
-                                 enum base_flag_id flag);
-bool tile_has_native_base(const struct tile *ptile,
-                          const struct unit_type *punittype);
 const struct resource *tile_get_resource(const struct tile *ptile);
 void tile_set_resource(struct tile *ptile, struct resource *presource);
 void tile_clear_special(struct tile *ptile, enum tile_special_type spe);
@@ -87,8 +76,6 @@ enum known_type tile_get_known(const struct tile *ptile,
 #define ACTIVITY_FACTOR 10
 int tile_activity_time(enum unit_activity activity,
 		       const struct tile *ptile);
-int tile_activity_base_time(const struct tile *ptile,
-                            enum base_type_id base);
 
 /* These are higher-level functions that handle side effects on the tile. */
 void tile_change_terrain(struct tile *ptile, struct terrain *pterrain);

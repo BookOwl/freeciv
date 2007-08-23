@@ -1012,7 +1012,7 @@ void update_menus(void)
       
 	/* unit_can_est_traderoute_here(pUnit) */
       if (pTile->city && unit_has_type_flag(pUnit, F_TRADE_ROUTE)
-        && (pHomecity = game_find_city_by_number(pUnit->homecity))
+        && (pHomecity = find_city_by_id(pUnit->homecity))
 	&& can_cities_trade(pHomecity, pTile->city)) {
 	int revenue = get_caravan_enter_city_trade_bonus(pHomecity, pTile->city);
 	
@@ -1066,7 +1066,6 @@ void update_menus(void)
       if (can_unit_do_activity(pUnit, ACTIVITY_MINE)) {
 	time = tile_activity_time(ACTIVITY_MINE, pUnit->tile);
 
-	/* FIXME: THIS CODE IS WRONG */
    if (!strcmp(terrain_rule_name(pTile->terrain), "Forest")) {  
 	  /* set Irrigate Icon -> make swamp */
 	  my_snprintf(cBuf, sizeof(cBuf),"%s %s%s %d %s",
@@ -1111,7 +1110,7 @@ void update_menus(void)
 	set_wflag(pOrder_Transform_Button, WF_HIDDEN);
       }
 
-      if (!pTile->city && can_unit_do_activity_base(pUnit, BASE_FORTRESS)) {
+      if (!pTile->city && can_unit_do_activity(pUnit, ACTIVITY_FORTRESS)) {
 	local_show(ID_UNIT_ORDER_FORTRESS);
       } else {
 	local_hide(ID_UNIT_ORDER_FORTRESS);
@@ -1123,7 +1122,7 @@ void update_menus(void)
 	local_hide(ID_UNIT_ORDER_FORTIFY);
       }
 
-      if (!pTile->city && can_unit_do_activity_base(pUnit, BASE_AIRBASE)) {
+      if (!pTile->city && can_unit_do_activity(pUnit, ACTIVITY_AIRBASE)) {
 	local_show(ID_UNIT_ORDER_AIRBASE);
       } else {
 	local_hide(ID_UNIT_ORDER_AIRBASE);

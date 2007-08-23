@@ -78,8 +78,8 @@ static RANDOM_STATE rand_state;
   directly representable in type RANDOM_TYPE, so we do instead:
          divisor = MAX_UINT32/size
 *************************************************************************/
-RANDOM_TYPE myrand_debug(RANDOM_TYPE size, const char *called_as, int line,
-                         const char *file)
+RANDOM_TYPE myrand_debug(RANDOM_TYPE size,
+		     const char *called_as, int line, const char *file) 
 {
   RANDOM_TYPE new_rand, divisor, max;
   int bailout = 0;

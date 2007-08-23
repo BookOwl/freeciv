@@ -30,90 +30,34 @@
 
 #include "tech.h"
 
-/* the advances array is now setup in:
- * server/ruleset.c (for the server)
- * client/packhand.c (for the client)
- */
 struct advance advances[A_LAST];
+/* the advances array is now setup in:
+   server/ruleset.c (for the server)
+   client/packhand.c (for the client) */
 
 /* Precalculated costs according to techcost style 1.  These do not include
  * the sciencebox multiplier. */
 static double techcoststyle1[A_LAST];
 
-/* Note that these strings must correspond with the enums in tech_flag_id,
-   in common/tech.h */
 static const char *flag_names[] = {
-  "Bonus_Tech",
-  "Bridge",
-  "Railroad",
+  "Bonus_Tech", "Bridge", "Railroad", "Fortress",
   "Population_Pollution_Inc", 
-  "Farmland",
+  "Airbase", "Farmland", "Reduce_Trireme_Loss1", "Reduce_Trireme_Loss2", 
   "Build_Airborne"
 };
-
-
-/**************************************************************************
-  Return the last item of advances/technologies.
-**************************************************************************/
-const struct advance *advance_array_last(void)
-{
-  if (game.control.num_tech_types > 0) {
-    return &advances[game.control.num_tech_types - 1];
-  }
-  return NULL;
-}
-
-/**************************************************************************
-  Return the number of advances/technologies.
-**************************************************************************/
-Tech_type_id advance_count(void)
-{
-  return game.control.num_tech_types;
-}
-
-/**************************************************************************
-  Return the advance index.
-
-  Currently same as advance_number(), paired with advance_count()
-  indicates use as an array index.
-**************************************************************************/
-Tech_type_id advance_index(const struct advance *padvance)
-{
-  assert(padvance);
-  return padvance - advances;
-}
-
-/**************************************************************************
-  Return the advance index.
-**************************************************************************/
-Tech_type_id advance_number(const struct advance *padvance)
-{
-  assert(padvance);
-  return padvance->item_number;
-}
-
-/**************************************************************************
-  Return the advance for the given advance index.
-**************************************************************************/
-struct advance *advance_by_number(const Tech_type_id atype)
-{
-  if (atype < 0 || atype >= game.control.num_tech_types) {
-    /* This isn't an error; some callers depend on it. */
-    return NULL;
-  }
-  return &advances[atype];
-}
+/* Note that these strings must correspond with the enums in tech_flag_id,
+   in common/tech.h */
 
 /**************************************************************************
   Returns state of the tech for current pplayer.
-  This can be: TECH_KNOWN, TECH_UNKNOWN, or TECH_REACHABLE
+  This can be: TECH_KNOW, TECH_UNKNOWN or TECH_REACHABLE
   Should be called with existing techs or A_FUTURE
 
   If pplayer is NULL this checks whether any player knows the tech (used
   by the client).
 **************************************************************************/
-enum tech_state player_invention_state(const struct player *pplayer,
-				       Tech_type_id tech)
+enum tech_state get_invention(const struct player *pplayer,
+			      Tech_type_id tech)
 {
   assert(tech == A_FUTURE
          || (tech >= 0 && tech < game.control.num_tech_types));
@@ -132,23 +76,20 @@ enum tech_state player_invention_state(const struct player *pplayer,
 /**************************************************************************
 ...
 **************************************************************************/
-enum tech_state player_invention_set(struct player *pplayer,
-				     Tech_type_id tech,
-				     enum tech_state value)
+void set_invention(struct player *pplayer, Tech_type_id tech,
+		   enum tech_state value)
 {
   struct player_research *research = get_player_research(pplayer);
-  enum tech_state old = research->inventions[tech].state;
 
-  if (old == value) {
-    return old;
+  if (research->inventions[tech].state == value) {
+    return;
   }
-  assert(tech != A_FUTURE);
+
   research->inventions[tech].state = value;
 
   if (value == TECH_KNOWN) {
     game.info.global_advances[tech] = TRUE;
   }
-  return old;
 }
 
 /**************************************************************************
@@ -174,32 +115,6 @@ bool is_tech_a_req_for_goal(const struct player *pplayer, Tech_type_id tech,
 }
 
 /**************************************************************************
-  Accessor for requirements.
-**************************************************************************/
-Tech_type_id advance_required(const Tech_type_id tech,
-			      enum tech_req require)
-{
-  assert(require >= 0 && require < AR_SIZE);
-  assert(tech >= A_NONE || tech < A_LAST);
-  if (A_NEVER == advances[tech].require[require]) {
-    /* out of range */
-    return A_LAST;
-  }
-  return advance_number(advances[tech].require[require]);
-}
-
-/**************************************************************************
-  Accessor for requirements.
-**************************************************************************/
-struct advance *advance_requires(const struct advance *padvance,
-				 enum tech_req require)
-{
-  assert(require >= 0 && require < AR_SIZE);
-  assert(NULL != padvance);
-  return padvance->require[require];
-}
-
-/**************************************************************************
   Marks all techs which are requirements for goal in
   pplayer->research->inventions[goal].required_techs. Works recursive.
 **************************************************************************/
@@ -209,8 +124,8 @@ static void build_required_techs_helper(struct player *pplayer,
 {
   /* The is_tech_a_req_for_goal condition is true if the tech is
    * already marked */
-  if (!player_invention_is_ready(pplayer, tech)
-      || player_invention_state(pplayer, tech) == TECH_KNOWN
+  if (!tech_is_available(pplayer, tech)
+      || get_invention(pplayer, tech) == TECH_KNOWN
       || is_tech_a_req_for_goal(pplayer, tech, goal)) {
     return;
   }
@@ -218,15 +133,14 @@ static void build_required_techs_helper(struct player *pplayer,
   /* Mark the tech as required for the goal */
   BV_SET(get_player_research(pplayer)->inventions[goal].required_techs, tech);
 
-  if (advance_required(tech, AR_ONE) == goal
-   || advance_required(tech, AR_TWO) == goal) {
+  if (advances[tech].req[0] == goal || advances[tech].req[1] == goal) {
     freelog(LOG_FATAL, "tech \"%s\": requires itself",
 	    advance_name_by_player(pplayer, goal));
     exit(EXIT_FAILURE);
   }
 
-  build_required_techs_helper(pplayer, advance_required(tech, AR_ONE), goal);
-  build_required_techs_helper(pplayer, advance_required(tech, AR_TWO), goal);
+  build_required_techs_helper(pplayer, advances[tech].req[0], goal);
+  build_required_techs_helper(pplayer, advances[tech].req[1], goal);
 }
 
 /**************************************************************************
@@ -240,7 +154,7 @@ static void build_required_techs(struct player *pplayer, Tech_type_id goal)
 
   BV_CLR_ALL(research->inventions[goal].required_techs);
   
-  if (player_invention_state(pplayer, goal) == TECH_KNOWN) {
+  if (get_invention(pplayer, goal) == TECH_KNOWN) {
     research->inventions[goal].num_required_techs = 0;
     research->inventions[goal].bulbs_required = 0;
     return;
@@ -254,8 +168,8 @@ static void build_required_techs(struct player *pplayer, Tech_type_id goal)
   research->inventions[goal].num_required_techs = 1;
 
   counter = 0;
-  advance_index_iterate(A_FIRST, i) {
-    if (!is_tech_a_req_for_goal(pplayer, i, goal)) {
+  tech_type_iterate(i) {
+    if (i == A_NONE || !is_tech_a_req_for_goal(pplayer, i, goal)) {
       continue;
     }
 
@@ -269,7 +183,7 @@ static void build_required_techs(struct player *pplayer, Tech_type_id goal)
     research->inventions[goal].num_required_techs++;
     research->inventions[goal].bulbs_required +=
 	base_total_bulbs_required(pplayer, i);
-  } advance_index_iterate_end;
+  } tech_type_iterate_end;
 
   /* Undo the changes made above */
   research->techs_researched -= counter;
@@ -282,18 +196,14 @@ static void build_required_techs(struct player *pplayer, Tech_type_id goal)
   pplayer may be NULL in which case a simplified result is returned
   (used by the client).
 **************************************************************************/
-bool player_invention_is_ready(const struct player *pplayer,
-			       const Tech_type_id tech)
+bool tech_is_available(const struct player *pplayer, Tech_type_id id)
 {
-  Tech_type_id root;
-
-  if (!valid_advance_by_number(tech)) {
+  if (!tech_exists(id)) {
     return FALSE;
   }
 
-  root = advance_required(tech, AR_ROOT);
-  if (A_NONE != root
-   && TECH_KNOWN != player_invention_state(pplayer, root)) {
+  if (advances[id].root_req != A_NONE
+      && get_invention(pplayer, advances[id].root_req) != TECH_KNOWN) {
     /* This tech requires knowledge of another tech before being 
      * available. Prevents sharing of untransferable techs. */
     return FALSE;
@@ -307,49 +217,48 @@ bool player_invention_is_ready(const struct player *pplayer,
   If there is no such a tech mark A_FUTURE as researchable.
   
   Recalculate research->num_known_tech_with_flag
-  Should always be called after player_invention_set()
+  Should be called always after set_invention()
 **************************************************************************/
-void player_research_update(struct player *pplayer)
+void update_research(struct player *pplayer)
 {
   enum tech_flag_id flag;
   int researchable = 0;
 
-  /* This is set when the game starts, but not everybody finds out
-   * right away. */
-  player_invention_set(pplayer, A_NONE, TECH_KNOWN);
-
-  advance_index_iterate(A_FIRST, i) {
-    if (!player_invention_is_ready(pplayer, i)) {
-      player_invention_set(pplayer, i, TECH_UNKNOWN);
+  tech_type_iterate(i) {
+    if (i == A_NONE) {
+      /* This is set when the game starts, but not everybody finds out
+       * right away. */
+      set_invention(pplayer, i, TECH_KNOWN);
+    } else if (!tech_is_available(pplayer, i)) {
+      set_invention(pplayer, i, TECH_UNKNOWN);
     } else {
-      if (player_invention_state(pplayer, i) == TECH_REACHABLE) {
-	player_invention_set(pplayer, i, TECH_UNKNOWN);
+      if (get_invention(pplayer, i) == TECH_REACHABLE) {
+	set_invention(pplayer, i, TECH_UNKNOWN);
       }
 
-      if (player_invention_state(pplayer, i) == TECH_UNKNOWN
-	  && player_invention_state(pplayer, advance_required(i, AR_ONE)) == TECH_KNOWN
-	  && player_invention_state(pplayer, advance_required(i, AR_TWO)) == TECH_KNOWN) {
-	player_invention_set(pplayer, i, TECH_REACHABLE);
+      if (get_invention(pplayer, i) == TECH_UNKNOWN
+	  && get_invention(pplayer, advances[i].req[0]) == TECH_KNOWN
+	  && get_invention(pplayer, advances[i].req[1]) == TECH_KNOWN) {
+	set_invention(pplayer, i, TECH_REACHABLE);
 	researchable++;
       }
     }
     build_required_techs(pplayer, i);
-  } advance_index_iterate_end;
+  } tech_type_iterate_end;
   
   /* No techs we can research? Mark A_FUTURE as researchable */
   if (researchable == 0) {
-    player_invention_set(pplayer, A_FUTURE, TECH_REACHABLE);
+    set_invention(pplayer, A_FUTURE, TECH_REACHABLE);
   }
 
   for (flag = 0; flag < TF_LAST; flag++) {
     get_player_research(pplayer)->num_known_tech_with_flag[flag] = 0;
 
-    advance_index_iterate(A_NONE, i) {
-      if (player_invention_state(pplayer, i) == TECH_KNOWN
-       && advance_has_flag(i, flag)) {
+    tech_type_iterate(i) {
+      if (get_invention(pplayer, i) == TECH_KNOWN && advance_has_flag(i, flag)) {
 	get_player_research(pplayer)->num_known_tech_with_flag[flag]++;
       }
-    } advance_index_iterate_end;
+    } tech_type_iterate_end;
   }
 }
 
@@ -357,92 +266,70 @@ void player_research_update(struct player *pplayer)
   Return the next tech we should research to advance towards our goal.
   Returns A_UNSET if nothing is available or the goal is already known.
 **************************************************************************/
-Tech_type_id player_research_step(const struct player *pplayer,
-				  Tech_type_id goal)
+Tech_type_id get_next_tech(const struct player *pplayer, Tech_type_id goal)
 {
   Tech_type_id sub_goal;
 
-  if (!player_invention_is_ready(pplayer, goal)) {
+  if (!tech_is_available(pplayer, goal)
+      || get_invention(pplayer, goal) == TECH_KNOWN) {
     return A_UNSET;
   }
-  switch (player_invention_state(pplayer, goal)) {
-  case TECH_KNOWN:
-    return A_UNSET;
-  case TECH_REACHABLE:
+  if (get_invention(pplayer, goal) == TECH_REACHABLE) {
     return goal;
-  case TECH_UNKNOWN:
-  default:
-    break;
-  };
-  sub_goal = player_research_step(pplayer, advance_required(goal, AR_ONE));
+  }
+  sub_goal = get_next_tech(pplayer, advances[goal].req[0]);
   if (sub_goal != A_UNSET) {
     return sub_goal;
   } else {
-    return player_research_step(pplayer, advance_required(goal, AR_TWO));
+    return get_next_tech(pplayer, advances[goal].req[1]);
   }
 }
 
 /**************************************************************************
-  Returns pointer when the advance "exists" in this game,
-  returns NULL otherwise.
-
-  A tech doesn't exist for any of:
-   - the tech has been flagged as removed by setting its require values
-     to A_LAST (this function returns 0 if either req is A_LAST, rather
-     than both, to be on the safe side)
+Returns 1 if the tech "exists" in this game, 0 otherwise.
+A tech doesn't exist if one of:
+- id is out of range
+- the tech has been flagged as removed by setting its req values
+  to A_LAST (this function returns 0 if either req is A_LAST, rather
+  than both, to be on the safe side)
 **************************************************************************/
-struct advance *valid_advance(struct advance *padvance)
+bool tech_exists(Tech_type_id id)
 {
-  if (NULL == padvance
-   || A_NEVER == padvance->require[AR_ONE]
-   || A_NEVER == padvance->require[AR_TWO]) {
-    return NULL;
+  if (id < 0 || id >= game.control.num_tech_types) {
+    return FALSE;
+  } else {
+    return advances[id].req[0] != A_LAST && advances[id].req[1] != A_LAST;
   }
-
-  return padvance;
-}
-
-/**************************************************************************
-  Returns pointer when the advance "exists" in this game,
-  returns NULL otherwise.
-
-  In addition to valid_advance(), tests for id is out of range.
-**************************************************************************/
-struct advance *valid_advance_by_number(const Tech_type_id id)
-{
-  return valid_advance(advance_by_number(id));
 }
 
 /**************************************************************************
  Does a linear search of advances[].name.translated
- Returns NULL when none match.
+ Returns A_LAST if none match.
 **************************************************************************/
-struct advance *find_advance_by_translated_name(const char *name)
+Tech_type_id find_advance_by_translated_name(const char *s)
 {
-  advance_iterate(A_NONE, padvance) {
-    if (0 == strcmp(advance_name_translation(padvance), name)) {
-      return padvance;
+  tech_type_iterate(i) {
+    if (0 == strcmp(advance_name_translation(i), s)) {
+      return i;
     }
-  } advance_iterate_end;
-
-  return NULL;
+  } tech_type_iterate_end;
+  return A_LAST;
 }
 
 /**************************************************************************
  Does a linear search of advances[].name.vernacular
- Returns NULL when none match.
+ Returns A_LAST if none match.
 **************************************************************************/
-struct advance *find_advance_by_rule_name(const char *name)
+Tech_type_id find_advance_by_rule_name(const char *s)
 {
-  const char *qname = Qn_(name);
+  const char *qs = Qn_(s);
 
-  advance_iterate(A_NONE, padvance) {
-    if (0 == mystrcasecmp(advance_rule_name(padvance), qname)) {
-      return padvance;
+  tech_type_iterate(i) {
+    if (0 == mystrcasecmp(advance_rule_name(i), qs)) {
+      return i;
     }
-  } advance_iterate_end;
-
-  return NULL;
+  } tech_type_iterate_end;
+  return A_LAST;
 }
 
 /**************************************************************************
@@ -451,7 +338,7 @@ struct advance *find_advance_by_rule_name(const char *name)
 bool advance_has_flag(Tech_type_id tech, enum tech_flag_id flag)
 {
   assert(flag >= 0 && flag < TF_LAST);
-  return TEST_BIT(advance_by_number(tech)->flags, flag);
+  return TEST_BIT(advances[tech].flags, flag);
 }
 
 /**************************************************************************
@@ -476,12 +363,13 @@ enum tech_flag_id find_advance_flag_by_rule_name(const char *s)
  Search for a tech with a given flag starting at index
  Returns A_LAST if no tech has been found
 **************************************************************************/
-Tech_type_id find_advance_by_flag(Tech_type_id index, enum tech_flag_id flag)
+Tech_type_id find_advance_by_flag(int index, enum tech_flag_id flag)
 {
-  advance_index_iterate(index, i)
+  Tech_type_id i;
+  for(i = index;i < game.control.num_tech_types; i++)
   {
     if(advance_has_flag(i,flag)) return i;
-  } advance_index_iterate_end
+  }
   return A_LAST;
 }
 
@@ -534,7 +422,7 @@ int base_total_bulbs_required(const struct player *pplayer,
 
   if (pplayer
       && !is_future_tech(tech)
-      && player_invention_state(pplayer, tech) == TECH_KNOWN) {
+      && get_invention(pplayer, tech) == TECH_KNOWN) {
     /* A non-future tech which is already known costs nothing. */
     return 0;
   }
@@ -587,7 +475,7 @@ int base_total_bulbs_required(const struct player *pplayer,
 
       players_iterate(other) {
 	players++;
-	if (player_invention_state(other, tech) == TECH_KNOWN
+	if (get_invention(other, tech) == TECH_KNOWN
 	    && pplayer && player_has_embassy(pplayer, other)) {
 	  players_with_tech_and_embassy++;
 	}
@@ -604,7 +492,7 @@ int base_total_bulbs_required(const struct player *pplayer,
 
       players_iterate(other) {
 	players++;
-	if (player_invention_state(other, tech) == TECH_KNOWN) {
+	if (get_invention(other, tech) == TECH_KNOWN) {
 	  players_with_tech++;
 	}
       } players_iterate_end;
@@ -623,7 +511,7 @@ int base_total_bulbs_required(const struct player *pplayer,
 	  continue;
 	}
 	players++;
-	if (player_invention_state(other, tech) == TECH_KNOWN) {
+	if (get_invention(other, tech) == TECH_KNOWN) {
 	  players_with_tech++;
 	}
       } players_iterate_end;
@@ -691,15 +579,15 @@ int total_bulbs_required_for_goal(const struct player *pplayer,
 **************************************************************************/
 static int precalc_tech_data_helper(Tech_type_id tech, bool *counted)
 {
-  if (tech == A_NONE || !valid_advance_by_number(tech) || counted[tech]) {
+  if (tech == A_NONE || !tech_exists(tech) || counted[tech]) {
     return 0;
   }
 
   counted[tech] = TRUE;
 
   return 1 + 
-      precalc_tech_data_helper(advance_required(tech, AR_ONE), counted)+ 
-      precalc_tech_data_helper(advance_required(tech, AR_TWO), counted);
+      precalc_tech_data_helper(advances[tech].req[0], counted)+ 
+      precalc_tech_data_helper(advances[tech].req[1], counted);
 }
 
 /**************************************************************************
@@ -709,18 +597,18 @@ void precalc_tech_data()
 {
   bool counted[A_LAST];
 
-  advance_index_iterate(A_NONE, tech) {
+  tech_type_iterate(tech) {
     memset(counted, 0, sizeof(counted));
     advances[tech].num_reqs = precalc_tech_data_helper(tech, counted);
-  } advance_index_iterate_end;
+  } tech_type_iterate_end;
 
-  advance_index_iterate(A_NONE, tech) {
+  tech_type_iterate(tech) {
     double reqs = advances[tech].num_reqs + 1;
     const double base = game.info.base_tech_cost / 2;
     const double cost = base * reqs * sqrt(reqs);
 
     techcoststyle1[tech] = MAX(cost, game.info.base_tech_cost);
-  } advance_index_iterate_end;
+  } tech_type_iterate_end;
 }
 
 /**************************************************************************
@@ -763,20 +651,17 @@ const char *advance_name_by_player(const struct player *pplayer, Tech_type_id te
         char buffer[1024];
   
         my_snprintf(buffer, sizeof(buffer), "%s %d",
-                    advance_rule_name(&advances[tech]),
+                    advance_rule_name(tech),
                     research->future_tech + 1);
         future.p[research->future_tech] = mystrdup(buffer);
       }
       return future.p[research->future_tech];
     } else {
-      return advance_rule_name(&advances[tech]);
+      return advance_rule_name(tech);
     }
-  case A_UNKNOWN:
-  case A_UNSET:
-    return advance_rule_name(&advances[tech]);
   default:
     /* Includes A_NONE */
-    return advance_rule_name(advance_by_number(tech));
+    return advance_rule_name(tech);
   };
 }
 
@@ -813,14 +698,11 @@ const char *advance_name_for_player(const struct player *pplayer, Tech_type_id t
       }
       return future.p[research->future_tech];
     } else {
-      return advance_name_translation(&advances[tech]);
+      return advance_name_translation(tech);
     }
-  case A_UNKNOWN:
-  case A_UNSET:
-    return advance_name_translation(&advances[tech]);
   default:
     /* Includes A_NONE */
-    return advance_name_translation(advance_by_number(tech));
+    return advance_name_translation(tech);
   };
 }
 
@@ -840,24 +722,25 @@ const char *advance_name_researching(const struct player *pplayer)
   Return the (translated) name of the given advance/technology.
   You don't have to free the return pointer.
 **************************************************************************/
-const char *advance_name_translation(struct advance *padvance)
+const char *advance_name_translation(Tech_type_id tech)
 {
-  if (NULL == padvance->name.translated) {
+/*  assert(tech_exists(tech)); now called for A_UNSET, A_FUTURE */
+  if (NULL == advances[tech].name.translated) {
     /* delayed (unified) translation */
-    padvance->name.translated = ('\0' == padvance->name.vernacular[0])
-				? padvance->name.vernacular
-				: Q_(padvance->name.vernacular);
+    advances[tech].name.translated = ('\0' == advances[tech].name.vernacular[0])
+				     ? advances[tech].name.vernacular
+				     : Q_(advances[tech].name.vernacular);
   }
-  return padvance->name.translated;
+  return advances[tech].name.translated;
 }
 
 /****************************************************************************
   Return the (untranslated) rule name of the advance/technology.
   You don't have to free the return pointer.
 ****************************************************************************/
-const char *advance_rule_name(const struct advance *padvance)
+const char *advance_rule_name(Tech_type_id tech)
 {
-  return Qn_(padvance->name.vernacular); 
+  return Qn_(advances[tech].name.vernacular); 
 }
 
 /**************************************************************************
@@ -879,7 +762,7 @@ void techs_init(void)
   int i;
 
   for (i = 0; i < ARRAY_SIZE(advances); i++) {
-    advances[i].item_number = i;
+    advances[i].index = i;
   }
 
   /* Initialize dummy tech A_NONE */
@@ -922,9 +805,11 @@ static void tech_free(Tech_type_id tech)
 ***************************************************************/
 void techs_free(void)
 {
-  advance_index_iterate(A_FIRST, i) {
+  Tech_type_id i;
+
+  for (i = A_FIRST; i < game.control.num_tech_types; i++) {
     tech_free(i);
-  } advance_index_iterate_end;
+  }
 }
 
 /***************************************************************
@@ -934,6 +819,5 @@ void player_research_init(struct player_research* research)
 {
   memset(research, 0, sizeof(*research));
   research->tech_goal = A_UNSET;
-  research->researching = A_UNSET;
-  research->researching_saved = A_UNKNOWN;
+  research->changed_from = -1;
 }

@@ -14,13 +14,23 @@
 #define FC__UNIT_H
 
 #include "fc_types.h"
-#include "base.h"
 #include "terrain.h"		/* enum tile_special_type */
 #include "unittype.h"
 
 struct unit_order;
 
 #define BARBARIAN_LIFE    5
+
+/* Changing this enum will break savegame and network compatability. */
+enum unit_activity {
+  ACTIVITY_IDLE, ACTIVITY_POLLUTION, ACTIVITY_ROAD, ACTIVITY_MINE,
+  ACTIVITY_IRRIGATE, ACTIVITY_FORTIFIED, ACTIVITY_FORTRESS, ACTIVITY_SENTRY,
+  ACTIVITY_RAILROAD, ACTIVITY_PILLAGE, ACTIVITY_GOTO, ACTIVITY_EXPLORE,
+  ACTIVITY_TRANSFORM, ACTIVITY_UNKNOWN, ACTIVITY_AIRBASE, ACTIVITY_FORTIFYING,
+  ACTIVITY_FALLOUT,
+  ACTIVITY_PATROL_UNUSED, /* Needed for savegame compatability. */
+  ACTIVITY_LAST   /* leave this one last */
+};
 
 /* Changing this enum will break network compatability. */
 enum unit_orders {
@@ -65,8 +75,8 @@ enum unit_move_result {
   MR_ZOC,
   MR_BAD_ACTIVITY, MR_BAD_DESTINATION, MR_BAD_MAP_POSITION,
   MR_DESTINATION_OCCUPIED_BY_NON_ALLIED_UNIT,
-  MR_NO_TRANSPORTER_CAPACITY,
-  MR_DESTINATION_OCCUPIED_BY_NON_ALLIED_CITY, MR_TRIREME
+  MR_NO_SEA_TRANSPORTER_CAPACITY,
+  MR_DESTINATION_OCCUPIED_BY_NON_ALLIED_CITY
 };
 
 enum add_build_city_result {
@@ -123,8 +133,9 @@ struct unit {
   int moves_left;
   int hp;
   int veteran;
+  int unhappiness;
+  int upkeep[O_MAX];
   int fuel;
-  int birth_turn;
   int bribe_cost;
   struct unit_ai ai;
   enum unit_activity activity;
@@ -136,7 +147,6 @@ struct unit {
   int activity_count;
 
   enum tile_special_type activity_target;
-  enum base_type_id activity_base;
   enum unit_focus_status focus_status;
   int ord_map, ord_city;
   /* ord_map and ord_city are the order index of this unit in tile.units
@@ -212,7 +222,6 @@ bool unit_can_est_traderoute_here(const struct unit *punit);
 bool unit_can_airlift_to(const struct unit *punit, const struct city *pcity);
 bool unit_has_orders(const struct unit *punit);
 
-bool could_unit_load(const struct unit *pcargo, const struct unit *ptrans);
 bool can_unit_load(const struct unit *punit, const struct unit *ptrans);
 bool can_unit_unload(const struct unit *punit, const struct unit *ptrans);
 bool can_unit_paradrop(const struct unit *punit);
@@ -226,21 +235,15 @@ bool can_unit_do_activity(const struct unit *punit,
 			  enum unit_activity activity);
 bool can_unit_do_activity_targeted(const struct unit *punit,
 				   enum unit_activity activity,
-				   enum tile_special_type target,
-                                   enum base_type_id base);
+				   enum tile_special_type target);
 bool can_unit_do_activity_targeted_at(const struct unit *punit,
 				      enum unit_activity activity,
 				      enum tile_special_type target,
-				      const struct tile *ptile,
-                                      enum base_type_id base);
-bool can_unit_do_activity_base(const struct unit *punit,
-                               enum base_type_id base);
+				      const struct tile *ptile);
 void set_unit_activity(struct unit *punit, enum unit_activity new_activity);
 void set_unit_activity_targeted(struct unit *punit,
 				enum unit_activity new_activity,
 				enum tile_special_type new_target);
-void set_unit_activity_base(struct unit *punit,
-                            enum base_type_id base);
 int get_activity_rate(const struct unit *punit);
 int get_activity_rate_this_turn(const struct unit *punit);
 int get_turns_for_activity_at(const struct unit *punit,
@@ -258,7 +261,7 @@ bool is_square_threatened(const struct player *pplayer,
 bool is_field_unit(const struct unit *punit);              /* ships+aero */
 bool is_hiding_unit(const struct unit *punit);
 #define COULD_OCCUPY(punit) \
-  (uclass_has_flag(unit_class(punit), UCF_CAN_OCCUPY) && is_military_unit(punit))
+  ((is_ground_unit(punit) || is_heli_unit(punit)) && is_military_unit(punit))
 bool can_unit_add_to_city (const struct unit *punit);
 bool can_unit_build_city (const struct unit *punit);
 bool can_unit_add_or_build_city (const struct unit *punit);
@@ -267,7 +270,14 @@ enum add_build_city_result test_unit_add_or_build_city(const struct unit *
 bool kills_citizen_after_attack(const struct unit *punit);
 
 const char *unit_activity_text(const struct unit *punit);
+int ground_unit_transporter_capacity(const struct tile *ptile,
+				     const struct player *pplayer);
 int get_transporter_capacity(const struct unit *punit);
+bool is_ground_units_transport(const struct unit *punit);
+int missile_carrier_capacity(const struct tile *ptile,
+			     const struct player *pplayer);
+int airunit_carrier_capacity(const struct tile *ptile,
+			     const struct player *pplayer);
 
 struct player *unit_owner(const struct unit *punit);
 
@@ -279,6 +289,13 @@ struct unit *is_non_allied_unit_tile(const struct tile *ptile,
 				     const struct player *pplayer);
 struct unit *is_non_attack_unit_tile(const struct tile *ptile,
 				     const struct player *pplayer);
+
+int unit_loss_pct(const struct player *pplayer, const struct tile *ptile,
+		  const struct unit *punit);
+int base_trireme_loss_pct(const struct player *pplayer,
+			  const struct unit *punit);
+int base_unsafe_terrain_loss_pct(const struct player *pplayer,
+				 const struct unit *punit);
 
 bool is_my_zoc(const struct player *unit_owner, const struct tile *ptile);
 bool unit_being_aggressive(const struct unit *punit);
@@ -293,14 +310,12 @@ void destroy_unit_virtual(struct unit *punit);
 void free_unit_orders(struct unit *punit);
 
 int get_transporter_occupancy(const struct unit *ptrans);
-struct unit *find_transporter_for_unit(const struct unit *pcargo);
+struct unit *find_transporter_for_unit(const struct unit *pcargo,
+				       const struct tile *ptile);
 
 enum unit_upgrade_result test_unit_upgrade(const struct unit *punit,
 					   bool is_free);
 enum unit_upgrade_result get_unit_upgrade_info(char *buf, size_t bufsz,
 					       const struct unit *punit);
-bool is_losing_hp(const struct unit *punit);
-bool unit_type_is_losing_hp(const struct player *pplayer,
-                            const struct unit_type *punittype);
 
 #endif  /* FC__UNIT_H */

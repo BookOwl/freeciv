@@ -14,8 +14,6 @@
 #define FC__MAPHAND_H
 
 #include "fc_types.h"
-
-#include "improvement.h"		/* bv_imprs */
 #include "map.h"
 #include "packets.h"
 #include "terrain.h"
@@ -53,8 +51,7 @@ struct player_tile {
   short last_updated;
 };
 
-void assign_continent_numbers(void);
-void map_regenerate_water(void);
+void assign_continent_numbers(bool skip_unsafe);
 
 void global_warming(int effect);
 void nuclear_winter(int effect);
@@ -63,8 +60,7 @@ void give_seamap_from_player_to_player(struct player *pfrom, struct player *pdes
 void give_citymap_from_player_to_player(struct city *pcity,
 					struct player *pfrom, struct player *pdest);
 void send_all_known_tiles(struct conn_list *dest);
-void send_tile_info(struct conn_list *dest, struct tile *ptile,
-                    bool send_unknown);
+void send_tile_info(struct conn_list *dest, struct tile *ptile);
 void upgrade_city_rails(struct player *pplayer, bool discovery);
 void send_map_info(struct conn_list *dest);
 
@@ -123,9 +119,9 @@ int get_ocean_size(Continent_id id);
   only rarely be necessary since all fogging and unfogging operations
   are taken care of internally.
 
-  vision_reveal_tiles() controls whether the vision source can discover
-  new (unknown) tiles or simply maintain vision on already-known tiles.
-  By default, cities should pass FALSE for this since they cannot
+  The can_reveal_tiles parameter controls whether the vision source can
+  discover new (unknown) tiles or simply maintain vision on already-known
+  tiles.  Currently cities should pass FALSE for this since they cannot
   discover new tiles.
 
   ***** IMPORTANT *****
@@ -140,7 +136,7 @@ int get_ocean_size(Continent_id id);
   visible.  For instance to move a unit:
 
     old_vision = punit->server.vision;
-    punit->server.vision = vision_new(punit->owner, dest_tile);
+    punit->server.vision = vision_new(punit->owner, dest_tile, TRUE);
     vision_change_sight(punit->server.vision,
                         get_unit_vision_at(punit, dest_tile));
 
@@ -154,8 +150,8 @@ int get_ocean_size(Continent_id id);
   a unit or city between players, etc.
 ****************************************************************************/
 struct vision;
-struct vision *vision_new(struct player *pplayer, struct tile *ptile);
-bool vision_reveal_tiles(struct vision *vision, bool reveal_tiles);
+struct vision *vision_new(struct player *pplayer, struct tile *ptile,
+			  bool can_reveal_tiles);
 int vision_get_sight(const struct vision *vision, enum vision_layer vlayer);
 void vision_change_sight(struct vision *vision, enum vision_layer vlayer,
 			 int radius_sq);

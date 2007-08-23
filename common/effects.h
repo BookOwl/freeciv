@@ -14,11 +14,12 @@
 #define FC__EFFECTS_H
 
 #include "shared.h"		/* bool */
-#include "fc_types.h"
 
 #include "connection.h"
-
-struct requirement;
+#include "fc_types.h"
+#include "requirements.h"
+#include "tech.h"
+#include "terrain.h"
 
 /* Type of effects. (Used in effect.type field)
  * These must correspond to effect_type_names[] in effects.c. */
@@ -47,6 +48,7 @@ enum effect_type {
   /* TODO: EFT_MAKE_CONTENT_PCT, */
   EFT_MAKE_HAPPY,
   EFT_NO_ANARCHY,
+  EFT_NO_SINK_DEEP,
   EFT_NUKE_PROOF,
   /* TODO: EFT_POLLU_ADJ, */
   /* TODO: EFT_POLLU_PCT, */
@@ -81,8 +83,8 @@ enum effect_type {
   EFT_GAIN_AI_LOVE,
   EFT_SLOW_DOWN_TIMELINE,
   EFT_CIVIL_WAR_CHANCE,
-  EFT_EMPIRE_SIZE_BASE, /* +1 unhappy when more than this cities */
-  EFT_EMPIRE_SIZE_STEP, /* adds additional +1 unhappy steps to above */
+  EFT_EMPIRE_SIZE_MOD,
+  EFT_EMPIRE_SIZE_STEP,
   EFT_MAX_RATES,
   EFT_MARTIAL_LAW_EACH,
   EFT_MARTIAL_LAW_MAX,
@@ -102,9 +104,7 @@ enum effect_type {
   EFT_OUTPUT_WASTE_BY_DISTANCE,
   EFT_OUTPUT_PENALTY_TILE, /* -1 penalty to tiles producing more than this */
   EFT_OUTPUT_INC_TILE_CELEBRATE,
-  EFT_CITY_UNHAPPY_SIZE, /* all citizens after this are unhappy */
-  EFT_UPGRADE_PRICE_PCT,
-  EFT_VISIBLE_WALLS,     /* City should use walls gfx */
+  EFT_VISIBLE_WALLS,       /* City should use walls gfx */
   EFT_LAST	/* keep this last */
 };
 
@@ -163,12 +163,10 @@ bool is_effect_useful(const struct player *target_player,
 		      const struct unit_type *target_unittype,
 		      const struct output_type *target_output,
 		      const struct specialist *target_specialist,
-		      const struct impr_type *source,
-		      const struct effect *effect,
+		      Impr_type_id source, const struct effect *effect,
                       const enum   req_problem_type prob_type);
 
-bool is_building_replaced(const struct city *pcity,
-			  struct impr_type *pimprove,
+bool is_building_replaced(const struct city *pcity, Impr_type_id building,
                           const enum req_problem_type prob_type);
 
 /* functions to know the bonuses a certain effect is granting */
@@ -189,8 +187,7 @@ int get_player_output_bonus(const struct player *pplayer,
 int get_city_output_bonus(const struct city *pcity,
                           const struct output_type *poutput,
                           enum effect_type effect_type);
-int get_building_bonus(const struct city *pcity,
-		       const struct impr_type *building,
+int get_building_bonus(const struct city *pcity, Impr_type_id building,
 		       enum effect_type effect_type);
 int get_unittype_bonus(const struct player *pplayer,
 		       const struct tile *ptile, /* pcity is implied */
@@ -199,7 +196,7 @@ int get_unittype_bonus(const struct player *pplayer,
 int get_unit_bonus(const struct unit *punit, enum effect_type effect_type);
 
 /* miscellaneous auxiliary effects functions */
-struct effect_list *get_req_source_effects(struct universal *psource);
+struct effect_list *get_req_source_effects(struct req_source *psource);
 bool is_effect_disabled(const struct player *target_player,
 		        const struct city *target_city,
 		        const struct impr_type *target_building,
@@ -217,7 +214,7 @@ int get_city_bonus_effects(struct effect_list *plist,
 			   const struct output_type *poutput,
 			   enum effect_type effect_type);
 
-bool building_has_effect(const struct impr_type *pimprove,
+bool building_has_effect(Impr_type_id building,
 			 enum effect_type effect_type);
 int get_current_construction_bonus(const struct city *pcity,
 				   enum effect_type effect_type,
