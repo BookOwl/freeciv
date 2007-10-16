@@ -17,7 +17,6 @@
 
 #include <assert.h>
 
-#include "base.h"
 #include "capstr.h"
 #include "city.h"
 #include "cm.h"
@@ -25,7 +24,6 @@
 #include "fcintl.h"
 #include "government.h"
 #include "idex.h"
-#include "ioz.h"
 #include "log.h"
 #include "map.h"
 #include "mem.h"
@@ -67,33 +65,6 @@ struct player_score {
 };
 */
 
-bool am_i_server = FALSE;
-
-
-/**************************************************************************
-  Is program type server?
-**************************************************************************/
-bool is_server(void)
-{
-  return am_i_server;
-}
-
-/**************************************************************************
-  Set program type to server.
-**************************************************************************/
-void i_am_server(void)
-{
-  am_i_server = TRUE;
-}
-
-/**************************************************************************
-  Set program type to client.
-**************************************************************************/
-void i_am_client(void)
-{
-  am_i_server = FALSE;
-}
-
 /**************************************************************************
 Count the # of thousand citizen in a civilisation.
 **************************************************************************/
@@ -129,7 +100,7 @@ struct city *game_find_city_by_name(const char *name)
   City may be any city in the game.  This now always uses fast idex
   method, instead of looking through all cities of all players.
 **************************************************************************/
-struct city *game_find_city_by_number(int id)
+struct city *find_city_by_id(int id)
 {
   return idex_lookup_city(id);
 }
@@ -139,7 +110,7 @@ struct city *game_find_city_by_number(int id)
   Find unit out of all units in game: now uses fast idex method,
   instead of looking through all units of all players.
 **************************************************************************/
-struct unit *game_find_unit_by_number(int id)
+struct unit *find_unit_by_id(int id)
 {
   return idex_lookup_unit(id);
 }
@@ -208,7 +179,7 @@ void game_remove_city(struct city *pcity)
   city_list_unlink(city_owner(pcity)->cities, pcity);
   tile_set_city(pcity->tile, NULL);
   idex_unregister_city(pcity);
-  destroy_city_virtual(pcity);
+  remove_city_virtual(pcity);
 }
 
 /***************************************************************
@@ -242,6 +213,7 @@ void game_init(void)
   game.info.freecost      = GAME_DEFAULT_FREECOST;
   game.info.conquercost   = GAME_DEFAULT_CONQUERCOST;
   game.info.dispersion    = GAME_DEFAULT_DISPERSION;
+  game.info.cityfactor    = GAME_DEFAULT_CITYFACTOR;
   game.info.citymindist   = GAME_DEFAULT_CITYMINDIST;
   game.info.civilwarsize  = GAME_DEFAULT_CIVILWARSIZE;
   game.info.contactturns  = GAME_DEFAULT_CONTACTTURNS;
@@ -249,6 +221,7 @@ void game_init(void)
   game.info.celebratesize = GAME_DEFAULT_CELEBRATESIZE;
   game.info.savepalace    = GAME_DEFAULT_SAVEPALACE;
   game.info.natural_city_names = GAME_DEFAULT_NATURALCITYNAMES;
+  game.info.unhappysize   = GAME_DEFAULT_UNHAPPYSIZE;
   game.info.angrycitizen  = GAME_DEFAULT_ANGRYCITIZEN;
   game.info.foodbox       = GAME_DEFAULT_FOODBOX;
   game.info.shieldbox = GAME_DEFAULT_SHIELDBOX;
@@ -276,22 +249,14 @@ void game_init(void)
   game.info.cooling       = 0;
   game.info.allowed_city_names = GAME_DEFAULT_ALLOWED_CITY_NAMES;
   game.info.save_nturns   = GAME_DEFAULT_SAVETURNS;
+#ifdef HAVE_LIBZ
   game.info.save_compress_level = GAME_DEFAULT_COMPRESS_LEVEL;
-#ifdef HAVE_LIBBZ2
-  game.info.save_compress_type = FZ_BZIP2;
-#elif defined (HAVE_LIBZ)
-  game.info.save_compress_type = FZ_ZLIB;
 #else
-  game.info.save_compress_type = FZ_PLAIN;
+  game.info.save_compress_level = GAME_NO_COMPRESS_LEVEL;
 #endif
   game.info.government_when_anarchy_id = G_MAGIC;   /* flag */
 
   game.info.is_new_game   = TRUE;
-  game.info.is_edit_mode = FALSE;
-
-  game.info.aifill      = GAME_DEFAULT_AIFILL;
-  sz_strlcpy(game.info.start_units, GAME_DEFAULT_START_UNITS);
-
   game.fogofwar_old = game.info.fogofwar;
   game.simultaneous_phases_stored = GAME_DEFAULT_SIMULTANEOUS_PHASES;
   game.timeoutint    = GAME_DEFAULT_TIMEOUTINT;
@@ -299,7 +264,9 @@ void game_init(void)
   game.timeoutinc    = GAME_DEFAULT_TIMEOUTINC;
   game.timeoutincmult= GAME_DEFAULT_TIMEOUTINCMULT;
   game.timeoutcounter= 1;
-  game.timeoutaddenemymove = GAME_DEFAULT_TIMEOUTADDEMOVE; 
+  game.timeoutaddenemymove = GAME_DEFAULT_TIMEOUTADDEMOVE;
+  game.info.aifill      = GAME_DEFAULT_AIFILL;
+  sz_strlcpy(game.info.start_units, GAME_DEFAULT_START_UNITS);
 
   game.last_ping     = 0;
   game.scorelog    = GAME_DEFAULT_SCORELOG;
@@ -309,19 +276,12 @@ void game_init(void)
   sz_strlcpy(game.save_name, GAME_DEFAULT_SAVE_NAME);
   sz_strlcpy(game.rulesetdir, GAME_DEFAULT_RULESETDIR);
 
-  game.control.num_unit_classes = 0;
   game.control.num_unit_types = 0;
   game.control.num_impr_types = 0;
   game.control.num_tech_types = 0;
-  game.control.num_base_types = 0;
   
   game.control.government_count = 0;
   game.control.nation_count = 0;
-  game.control.styles_count = 0;
-  game.control.terrain_count = 0;
-  game.control.resource_count = 0;
-
-  game.control.num_specialist_types = 0;
 
   game.control.prefered_tileset[0] = '\0';
 
@@ -337,7 +297,6 @@ void game_init(void)
   init_our_capability();    
   map_init();
   terrains_init();
-  base_types_init();
   improvements_init();
   techs_init();
   unit_classes_init();
@@ -346,10 +305,7 @@ void game_init(void)
   teams_init();
   idex_init();
   cm_init();
-
-  for (i = 0; i < DEBUG_LAST; i++) {
-    game.debug[i] = FALSE;
-  }
+  
   for(i=0; i<MAX_NUM_PLAYERS+MAX_NUM_BARBARIANS; i++)
     player_init(&game.players[i]);
   for (i=0; i<A_LAST; i++)      /* game.num_tech_types = 0 here */
@@ -417,7 +373,6 @@ void ruleset_data_free()
   nations_free();
   unit_types_free();
   improvements_free();
-  base_types_free();
   city_styles_free();
   terrains_free();
   ruleset_cache_free();
@@ -431,13 +386,13 @@ void initialize_globals(void)
 {
   players_iterate(plr) {
     city_list_iterate(plr->cities, pcity) {
-      city_built_iterate(pcity, pimprove) {
-	if (is_great_wonder(pimprove)) {
-	  game.info.great_wonders[improvement_index(pimprove)] = pcity->id;
-	} else if (is_small_wonder(pimprove)) {
-	  plr->small_wonders[improvement_index(pimprove)] = pcity->id;
+      built_impr_iterate(pcity, i) {
+	if (is_great_wonder(i)) {
+	  game.info.great_wonders[i] = pcity->id;
+	} else if (is_small_wonder(i)) {
+	  plr->small_wonders[i] = pcity->id;
 	}
-      } city_built_iterate_end;
+      } built_impr_iterate_end;
     } city_list_iterate_end;
   } players_iterate_end;
 }
@@ -592,6 +547,32 @@ void game_renumber_players(int plrno)
 }
 
 /**************************************************************************
+get_player() - Return player struct pointer corresponding to player_id.
+               Eg: player_id = punit->owner, or pcity->owner
+
+  You can retrieve players that are no in the game (with IDs larger than
+  game.info.nplayers).  An out-of-range player request will return NULL.
+**************************************************************************/
+struct player *get_player(int player_id)
+{
+  if (player_id < 0 || player_id >= ARRAY_SIZE(game.players)) {
+    /* This isn't an error; some callers rely on this behavior. */
+    return NULL;
+  }
+  assert(game.players[player_id].player_no == player_id);
+  return &game.players[player_id];
+}
+
+/**************************************************************************
+  Return TRUE iff the player ID refers to an in-game player.  Unlike
+  get_player any index larger than nplayers is not considered "valid".
+**************************************************************************/
+bool is_valid_player_id(int player_id)
+{
+  return player_id >= 0 && player_id < game.info.nplayers;
+}
+
+/**************************************************************************
 This function is used by is_wonder_useful to estimate if it is worthwhile
 to build the great library.
 **************************************************************************/
@@ -605,7 +586,7 @@ int get_num_human_and_ai_players(void)
 **************************************************************************/
 bool is_player_phase(const struct player *pplayer, int phase)
 {
-  return game.info.simultaneous_phases || player_number(pplayer) == phase;
+  return game.info.simultaneous_phases || pplayer->player_no == phase;
 }
 
 /****************************************************************************

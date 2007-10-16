@@ -18,9 +18,8 @@ struct data_in;
 
 #include "connection.h"		/* struct connection, MAX_LEN_* */
 #include "diptreaty.h"
-#include "effects.h"
 #include "events.h"
-#include "improvement.h"	/* bv_imprs */
+#include "improvement.h"
 #include "map.h"
 #include "player.h"
 #include "requirements.h"

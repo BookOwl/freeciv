@@ -207,8 +207,8 @@ void update_unit_info_label(struct unit_list *punitlist)
   char buffer[512];
 
   my_snprintf(buffer, sizeof(buffer), "%s\n%s",
-              get_unit_info_label_text1(punitlist),
-              get_unit_info_label_text2(punitlist, 0));
+		get_unit_info_label_text1(punitlist),
+		get_unit_info_label_text2(punitlist));
   xaw_set_label(unit_info_label, buffer);
 
   if (unit_list_size(punitlist) > 0) {
@@ -236,14 +236,6 @@ void update_unit_info_label(struct unit_list *punitlist)
   }
 
   update_unit_pix_label(punitlist);
-}
-
-/**************************************************************************
-  This function will change the current mouse cursor.
-**************************************************************************/
-void update_mouse_cursor(enum cursor_type new_cursor_type)
-{
-  /* PORT ME */
 }
 
 /**************************************************************************
@@ -721,8 +713,7 @@ void canvas_put_text(struct canvas *pcanvas, int canvas_x, int canvas_y,
   the proper way to do this is probably something like what Civ II does.
   (One food/shield/mask drawn N times, possibly one top of itself. -- SKi 
 **************************************************************************/
-void put_unit_pixmap_city_overlays(struct unit *punit, Pixmap pm,
-                                   int *upkeep_cost, int happy_cost)
+void put_unit_pixmap_city_overlays(struct unit *punit, Pixmap pm)
 {
   struct canvas store = {pm};
  
@@ -734,8 +725,7 @@ void put_unit_pixmap_city_overlays(struct unit *punit, Pixmap pm,
 		 tileset_tile_height(tileset)
 		 + tileset_small_sprite_height(tileset));
 
-  put_unit_city_overlays(punit, &store, 0, tileset_tile_height(tileset),
-                         upkeep_cost, happy_cost);
+  put_unit_city_overlays(punit, &store, 0, tileset_tile_height(tileset));
 }
 
 /**************************************************************************

@@ -72,13 +72,13 @@ static void caravan_destroy_callback(GtkWidget *w, gpointer data)
 static void get_help_build_wonder_button_label(char* buf, int bufsize,
                                                bool* help_build_possible)
 {
-  struct city* destcity = game_find_city_by_number(caravan_city_id);
-  struct unit* caravan = game_find_unit_by_number(caravan_unit_id);
+  struct city* destcity = find_city_by_id(caravan_city_id);
+  struct unit* caravan = find_unit_by_id(caravan_unit_id);
   
   if (destcity && caravan
       && unit_can_help_build_wonder(caravan, destcity)) {
     my_snprintf(buf, bufsize, _("Help build _Wonder (%d remaining)"),
-	impr_build_shield_cost(destcity->production.value.building)
+	impr_build_shield_cost(destcity->production.value)
 	- destcity->shield_stock);
     *help_build_possible = TRUE;
   } else {

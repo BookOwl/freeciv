@@ -460,9 +460,7 @@ static void xaw_key_unit_fortify(Widget w, XEvent *event, String *argv, Cardinal
 static void xaw_key_unit_fortify_or_fortress(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
   unit_list_iterate(get_units_in_focus(), punit) {
-    struct base_type *pbase = get_base_by_gui_type(BASE_GUI_FORTRESS,
-                                                   punit, punit->tile);
-    if (pbase != NULL) {
+    if (can_unit_do_activity(punit, ACTIVITY_FORTRESS)) {
       key_unit_fortress();
     } else {
       key_unit_fortify();

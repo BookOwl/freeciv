@@ -954,18 +954,17 @@ void put_terrain(struct tile *ptile,
 ****************************************************************************/
 void put_unit_city_overlays(struct unit *punit,
 			    struct canvas *pcanvas,
-			    int canvas_x, int canvas_y, int *upkeep_cost,
-                            int happy_cost)
+			    int canvas_x, int canvas_y)
 {
   struct sprite *sprite;
 
-  sprite = get_unit_unhappy_sprite(tileset, punit, happy_cost);
+  sprite = get_unit_unhappy_sprite(tileset, punit);
   if (sprite) {
     canvas_put_sprite_full(pcanvas, canvas_x, canvas_y, sprite);
   }
 
   output_type_iterate(o) {
-    sprite = get_unit_upkeep_sprite(tileset, o, punit, upkeep_cost);
+    sprite = get_unit_upkeep_sprite(tileset, o, punit);
     if (sprite) {
       canvas_put_sprite_full(pcanvas, canvas_x, canvas_y, sprite);
     }
@@ -1912,11 +1911,11 @@ struct city *find_city_near_tile(const struct tile *ptile)
 void get_city_mapview_production(struct city *pcity,
                                  char *buffer, size_t buffer_len)
 {
-  int turns = city_production_turns_to_build(pcity, TRUE);
-  /* FIXME: rewrite with universal_name_translation and concatenation */
+  int turns = city_turns_to_build(pcity, pcity->production, TRUE);
 				
-  if (VUT_UTYPE == pcity->production.kind) {
-    struct unit_type *punit_type = pcity->production.value.utype;
+  if (pcity->production.is_unit) {
+    struct unit_type *punit_type =
+		utype_by_number(pcity->production.value);
     if (turns < 999) {
       my_snprintf(buffer, buffer_len, "%s %d",
                   utype_name_translation(punit_type),
@@ -1926,17 +1925,17 @@ void get_city_mapview_production(struct city *pcity,
                   utype_name_translation(punit_type));
     }
   } else {
-    struct impr_type *pimprove = pcity->production.value.building;
-    if (improvement_has_flag(pimprove, IF_GOLD)) {
+    if (!pcity->production.is_unit
+	&& improvement_has_flag(pcity->production.value, IF_GOLD)) {
       my_snprintf(buffer, buffer_len, "%s",
-		  improvement_name_translation(pimprove));
+		  improvement_name_translation(pcity->production.value));
     } else if (turns < 999) {
       my_snprintf(buffer, buffer_len, "%s %d",
-		  improvement_name_translation(pimprove),
+		  improvement_name_translation(pcity->production.value),
 		  turns);
     } else {
       my_snprintf(buffer, buffer_len, "%s -",
-		  improvement_name_translation(pimprove));
+		  improvement_name_translation(pcity->production.value));
     }
   }
 }

@@ -37,9 +37,7 @@
 #include "log.h"
 #include "climisc.h"
 #include "clinet.h"
-
-#include "civclient.h"
-    
+                        
 #include "wldlg.h"
 #include "citydlg.h"
 
@@ -120,17 +118,17 @@ static int wid_id(wid wid)
 static int collect_wids1(wid * dest_wids, struct city *pcity, bool wl_first, 
 			 bool advanced_tech)
 {
-  struct universal targets[MAX_NUM_PRODUCTION_TARGETS];
+  struct city_production targets[MAX_NUM_PRODUCTION_TARGETS];
   struct item items[MAX_NUM_PRODUCTION_TARGETS];
   int item, targets_used, wids_used = 0;
 
   /* Fill in the global worklists now?                      */
   /* perhaps judicious use of goto would be good here? -mck */
-  if (wl_first && client.worklists[0].is_valid && pcity) {
+  if (wl_first && game.player_ptr->worklists[0].is_valid && pcity) {
     int i;
 
     for (i = 0; i < MAX_NUM_WORKLISTS; i++) {
-      if (client.worklists[i].is_valid) {
+      if (game.player_ptr->worklists[i].is_valid) {
 	dest_wids[wids_used] = wid_encode(FALSE, TRUE, i);
 	wids_used++;
       }
@@ -142,22 +140,18 @@ static int collect_wids1(wid * dest_wids, struct city *pcity, bool wl_first,
   name_and_sort_items(targets, targets_used, items, FALSE, pcity);
 
   for (item = 0; item < targets_used; item++) {
-    struct universal target = items[item].item;
+    struct city_production target = items[item].item;
 
-    if (VUT_UTYPE == target.kind) {
-      dest_wids[wids_used] = wid_encode(TRUE, FALSE, utype_number(target.value.utype));
-    } else {
-      dest_wids[wids_used] = wid_encode(FALSE, FALSE, improvement_number(target.value.building));
-    }
+    dest_wids[wids_used] = wid_encode(target.is_unit, FALSE, target.value);
     wids_used++;
   }
 
   /* we didn't fill in the global worklists above */
-  if (!wl_first && client.worklists[0].is_valid && pcity) {
+  if (!wl_first && game.player_ptr->worklists[0].is_valid && pcity) {
     int i;
 
     for (i = 0; i < MAX_NUM_WORKLISTS; i++) {
-      if (client.worklists[i].is_valid) {
+      if (game.player_ptr->worklists[i].is_valid) {
         dest_wids[wids_used] = wid_encode(FALSE, TRUE, i);
         wids_used++;
       }
@@ -175,6 +169,7 @@ static int collect_wids1(wid * dest_wids, struct city *pcity, bool wl_first,
 struct worklist_report {
   HWND win;
   HWND list;
+  struct player *pplr;
   char worklist_names[MAX_NUM_WORKLISTS][MAX_LEN_NAME];
   char *worklist_names_ptrs[MAX_NUM_WORKLISTS + 1];
   struct worklist *worklist_ptr[MAX_NUM_WORKLISTS];
@@ -240,10 +235,10 @@ static void global_list_update(struct worklist_report *preport)
   int i, n;
 
   for (i = 0, n = 0; i < MAX_NUM_WORKLISTS; i++) {
-    if (client.worklists[i].is_valid) {
-      strcpy(preport->worklist_names[n], client.worklists[i].name);
+    if (preport->pplr->worklists[i].is_valid) {
+      strcpy(preport->worklist_names[n], preport->pplr->worklists[i].name);
       preport->worklist_names_ptrs[n] = preport->worklist_names[n];
-      preport->worklist_ptr[n] = &client.worklists[i];
+      preport->worklist_ptr[n] = &preport->pplr->worklists[i];
 
       n++;
     }
@@ -273,18 +268,18 @@ static void global_delete_callback(struct worklist_report *preport, int sel)
 
   /* Look for the last free worklist */
   for (i = 0; i < MAX_NUM_WORKLISTS; i++)
-    if (!client.worklists[i].is_valid)
+    if (!preport->pplr->worklists[i].is_valid)
       break;
 
   for (j = sel; j < i - 1; j++) {
-    copy_worklist(&client.worklists[j],
-                  &client.worklists[j + 1]);
+    copy_worklist(&preport->pplr->worklists[j],
+                  &preport->pplr->worklists[j + 1]);
   }
 
   /* The last worklist in the set is no longer valid -- it's been slid up
    * one slot. */
-  client.worklists[i-1].is_valid = FALSE;
-  strcpy(client.worklists[i-1].name, "\0");
+  preport->pplr->worklists[i-1].is_valid = FALSE;
+  strcpy(preport->pplr->worklists[i-1].name, "\0");
 
   global_list_update(preport);
 }
@@ -297,9 +292,9 @@ static void global_rename_sub_callback(HWND w, void * data)
   struct worklist_report *preport = (struct worklist_report *) data;
 
   if (preport) {
-    strncpy(client.worklists[preport->wl_idx].name,
+    strncpy(preport->pplr->worklists[preport->wl_idx].name,
             input_dialog_get_input(w), MAX_LEN_NAME);
-    client.worklists[preport->wl_idx].name[MAX_LEN_NAME - 1] = '\0';
+    preport->pplr->worklists[preport->wl_idx].name[MAX_LEN_NAME - 1] = '\0';
 
     global_list_update(preport);
   }
@@ -317,7 +312,7 @@ static void global_insert_callback(struct worklist_report *preport)
   /* Find the next free worklist for this player */
 
   for (j = 0; j < MAX_NUM_WORKLISTS; j++)
-    if (!client.worklists[j].is_valid)
+    if (!preport->pplr->worklists[j].is_valid)
       break;
 
   /* No more worklist slots free.  (!!!Maybe we should tell the user?) */
@@ -325,9 +320,9 @@ static void global_insert_callback(struct worklist_report *preport)
     return;
 
   /* Validate this slot. */
-  init_worklist(&client.worklists[j]);
-  client.worklists[j].is_valid = TRUE;
-  strcpy(client.worklists[j].name, _("empty worklist"));
+  init_worklist(&preport->pplr->worklists[j]);
+  preport->pplr->worklists[j].is_valid = TRUE;
+  strcpy(preport->pplr->worklists[j].name, _("empty worklist"));
 
   global_list_update(preport);
 }
@@ -366,7 +361,7 @@ static LONG CALLBACK global_wl_proc(HWND hwnd,UINT message,
 	input_dialog_create(hwnd,
 			    _("Rename Worklist"),
 			    _("What should the new name be?"),
-			    client.worklists[preport->wl_idx].name,
+			    preport->pplr->worklists[preport->wl_idx].name,
 			    (void *) global_rename_sub_callback,
 			    (void *) preport,
 			    (void *) global_rename_sub_callback,
@@ -406,14 +401,16 @@ static LONG CALLBACK global_wl_proc(HWND hwnd,UINT message,
 /****************************************************************
   Bring up the global worklist report.
 *****************************************************************/
-void popup_worklists_report(void)
+void popup_worklists_report(struct player *pplr)
 {
   struct fcwin_box *vbox;
   struct fcwin_box *hbox;
   if (report_dialog && report_dialog->win)
     return;
   assert(!report_dialog);
+  assert(pplr);
   report_dialog = fc_malloc(sizeof(struct worklist_report));
+  report_dialog->pplr = pplr;
   report_dialog->win=fcwin_create_layouted_window(global_wl_proc,
 						  _("Edit worklists"),
 						  WS_OVERLAPPEDWINDOW,
@@ -461,10 +458,10 @@ static void worklist_help(int id, bool is_unit)
   if (id >= 0) {
     if (is_unit) {
       popup_help_dialog_typed(utype_name_translation(utype_by_number(id)), HELP_UNIT);
-    } else if (is_great_wonder(improvement_by_number(id))) {
-      popup_help_dialog_typed(improvement_name_translation(improvement_by_number(id)), HELP_WONDER);
+    } else if (is_great_wonder(id)) {
+      popup_help_dialog_typed(improvement_name_translation(id), HELP_WONDER);
     } else {
-      popup_help_dialog_typed(improvement_name_translation(improvement_by_number(id)), HELP_IMPROVEMENT);
+      popup_help_dialog_typed(improvement_name_translation(id), HELP_IMPROVEMENT);
     }
   } else
     popup_help_dialog_string(HELP_WORKLIST_EDITOR_ITEM);
@@ -490,7 +487,7 @@ static void global_commit_worklist(struct worklist *pwl, void *data)
 {
   struct worklist_report *preport = (struct worklist_report *) data;
   
-  copy_worklist(&client.worklists[preport->wl_idx], pwl);
+  copy_worklist(&preport->pplr->worklists[preport->wl_idx], pwl);
 }
 
 /****************************************************************
@@ -509,12 +506,14 @@ static void copy_editor_to_worklist(struct worklist_editor *peditor,
     if (peditor->worklist_wids[i] == WORKLIST_END) {
       break;
     } else {
+      struct city_production prod;
       wid wid = peditor->worklist_wids[i];
-      struct universal prod =
-        universal_by_number(wid_is_unit(wid) ? VUT_UTYPE : VUT_IMPROVEMENT,
-                               wid_id(wid));
 
       assert(!wid_is_worklist(wid));
+
+      prod.is_unit = wid_is_unit(wid);
+      prod.value = wid_id(wid);
+
       worklist_append(pwl, prod);
     }
   }
@@ -632,7 +631,8 @@ static void worklist_insert_item(struct worklist_editor *peditor,
   
   /* target is a global worklist id */
   if (wid_is_worklist(wid)) {
-    struct worklist *pwl = &client.worklists[wid_id(wid)];
+    struct player *pplr = city_owner(peditor->pcity);
+    struct worklist *pwl = &pplr->worklists[wid_id(wid)];
 
     copy_worklist_to_editor(pwl, peditor, where);
     where += worklist_length(pwl);
@@ -901,18 +901,24 @@ static void worklist_really_insert_item(struct worklist_editor *peditor,
                                         int before, wid wid)
 {
   int i, first_free;
-  struct universal target =
-    universal_by_number(wid_is_unit(wid) ? VUT_UTYPE : VUT_IMPROVEMENT,
-                           wid_id(wid));
+  struct city_production target;
 
   assert(!wid_is_worklist(wid));
+
+  target.is_unit = wid_is_unit(wid);
+  target.value = wid_id(wid);
 
   /* If this worklist is a city worklist, double check that the city
      really can (eventually) build the target.  We've made sure that
      the list of available targets is okay for this city, but a global
      worklist may try to insert an odd-ball unit or target. */
   if (peditor->pcity
-      && !can_city_build_later(peditor->pcity, target)) {
+      && ((target.is_unit
+	   && !can_eventually_build_unit(peditor->pcity,
+					 utype_by_number(target.value)))
+	  || (!target.is_unit
+	      && !can_eventually_build_improvement(peditor->pcity,
+						   target.value)))) {
     /* Nope, this city can't build this target, ever.  Don't put it into
        the worklist. */
     return;
@@ -959,7 +965,7 @@ static void copy_worklist_to_editor(struct worklist *pwl,
   int i;
 
   for (i = 0; i < MAX_LEN_WORKLIST; i++) {
-    struct universal target;
+    struct city_production target;
 
     /* end of list */
     if (!worklist_peek_ith(pwl, &target, i)) {
@@ -967,8 +973,8 @@ static void copy_worklist_to_editor(struct worklist *pwl,
     }
 
     worklist_really_insert_item(peditor, where,
-                                wid_encode(VUT_UTYPE == target.kind, FALSE,
-					   universal_number(&target)));
+                                wid_encode(target.is_unit, FALSE,
+					   target.value));
     if (where < MAX_LEN_WORKLIST)
       where++;
   }
@@ -986,8 +992,8 @@ static void worklist_prep(struct worklist_editor *peditor)
 {
   if (peditor->pcity) {
     peditor->worklist_wids[0] =
-        wid_encode(VUT_UTYPE == peditor->pcity->production.kind, FALSE,
-                   universal_number(&peditor->pcity->production));
+        wid_encode(peditor->pcity->production.is_unit, FALSE,
+                   peditor->pcity->production.value);
     peditor->worklist_wids[1] = WORKLIST_END;
     copy_worklist_to_editor(&peditor->pcity->worklist, peditor,
                             MAX_LEN_WORKLIST);
@@ -1016,7 +1022,8 @@ static void worklist_list_update(struct worklist_editor *peditor)
   /* Fill in the rest of the worklist list */
   for (i = 0; n < MAX_LEN_WORKLIST; i++, n++) {
     wid wid = peditor->worklist_wids[i];
-    struct universal target;
+
+    struct city_production target;
 
     if (wid == WORKLIST_END) {
       break;
@@ -1024,9 +1031,8 @@ static void worklist_list_update(struct worklist_editor *peditor)
 
     assert(!wid_is_worklist(wid));
 
-    target = universal_by_number(wid_is_unit(wid)
-                                    ? VUT_UTYPE : VUT_IMPROVEMENT,
-                                    wid_id(wid));
+    target.is_unit = wid_is_unit(wid);
+    target.value = wid_id(wid);
 
     get_city_dialog_production_row(row, BUFFER_SIZE, target,
                                    peditor->pcity);
@@ -1047,6 +1053,7 @@ static void worklist_list_update(struct worklist_editor *peditor)
 static void targets_list_update(struct worklist_editor *peditor)
 {
   int i = 0, wids_used = 0;
+  struct player *pplr = game.player_ptr;
   int advanced_tech;
   char *row[COLUMNS];
   char buf[COLUMNS][BUFFER_SIZE];
@@ -1077,14 +1084,15 @@ static void targets_list_update(struct worklist_editor *peditor)
 
     if (wid_is_worklist(wid)) {
       my_snprintf(buf[0], BUFFER_SIZE, "%s",
-		  client.worklists[wid_id(wid)].name);
+		  pplr->worklists[wid_id(wid)].name);
       my_snprintf(buf[1], BUFFER_SIZE, _("Worklist"));
       my_snprintf(buf[2], BUFFER_SIZE, "---");
       my_snprintf(buf[3], BUFFER_SIZE, "---");
     } else {
-      struct universal target = 
-        universal_by_number(wid_is_unit(wid) ? VUT_UTYPE : VUT_IMPROVEMENT,
-                               wid_id(wid));
+      struct city_production target;
+
+      target.is_unit = wid_is_unit(wid);
+      target.value = wid_id(wid);
 
       get_city_dialog_production_row(row, BUFFER_SIZE, target,
                                      peditor->pcity);

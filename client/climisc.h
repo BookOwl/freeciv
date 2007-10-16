@@ -28,9 +28,11 @@ void client_remove_player(int plrno);
 void client_remove_city(struct city *pcity);
 void client_remove_unit(struct unit *punit);
 
-void client_change_all(struct universal from,
-		       struct universal to);
+void client_change_all(struct city_production from,
+		       struct city_production to);
 
+const char *get_embassy_status(const struct player *me,
+				const struct player *them);
 const char *get_vision_status(const struct player *me,
 				const struct player *them);
 void client_diplomacy_clause_string(char *buf, int bufsiz,
@@ -51,43 +53,45 @@ void center_on_something(void);
  * unit_type_id of (cid - B_LAST).
  */
 
-cid cid_encode(struct universal target);
-cid cid_encode_unit(struct unit_type *punittype);
-cid cid_encode_building(struct impr_type *pimprove);
+cid cid_encode(struct city_production target);
+cid cid_encode_unit(const struct unit_type *punittype);
+cid cid_encode_building(Impr_type_id building);
 cid cid_encode_from_city(const struct city *pcity);
 
-struct universal cid_decode(cid cid);
+struct city_production cid_decode(cid cid);
 #define cid_production cid_decode
 
+bool city_can_build_impr_or_unit(const struct city *pcity,
+				 struct city_production target);
 bool city_unit_supported(const struct city *pcity,
-			 struct universal target);
+			 struct city_production target);
 bool city_unit_present(const struct city *pcity,
-		       struct universal target);
+		       struct city_production target);
 bool city_building_present(const struct city *pcity,
-			   struct universal target);
+			   struct city_production target);
 
 struct item {
-  struct universal item;
+  struct city_production item;
   char descr[MAX_LEN_NAME + 40];
 };
 
-typedef bool (*TestCityFunc)(const struct city *, struct universal);
+typedef bool (*TestCityFunc)(const struct city *, struct city_production);
 
 #define MAX_NUM_PRODUCTION_TARGETS (U_LAST + B_LAST)
-void name_and_sort_items(struct universal *targets, int num_items,
+void name_and_sort_items(struct city_production *targets, int num_items,
 			 struct item *items,
 			 bool show_cost, struct city *pcity);
-int collect_production_targets(struct universal *targets,
+int collect_production_targets(struct city_production *targets,
 			       struct city **selected_cities,
 			       int num_selected_cities, bool append_units,
 			       bool append_wonders, bool change_prod,
 			       TestCityFunc test_func);
-int collect_currently_building_targets(struct universal *targets);
-int collect_buildable_targets(struct universal *targets);
-int collect_eventually_buildable_targets(struct universal *targets,
+int collect_currently_building_targets(struct city_production *targets);
+int collect_buildable_targets(struct city_production *targets);
+int collect_eventually_buildable_targets(struct city_production *targets,
 					 struct city *pcity,
 					 bool advanced_tech);
-int collect_already_built_targets(struct universal *targets,
+int collect_already_built_targets(struct city_production *targets,
 				  struct city *pcity);
 
 /* the number of units in city */
@@ -113,13 +117,5 @@ void common_taxrates_callback(int i);
 
 bool can_units_do_connect(struct unit_list *punits,
 			  enum unit_activity activity);
-
-enum unit_bg_color_type { UNIT_BG_HP_LOSS,
-                          UNIT_BG_LAND,
-                          UNIT_BG_SEA,
-                          UNIT_BG_AMPHIBIOUS,
-                          UNIT_BG_FLYING };
-
-enum unit_bg_color_type unit_color_type(const struct unit_type *punittype);
 
 #endif  /* FC__CLIMISC_H */

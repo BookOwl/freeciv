@@ -23,13 +23,9 @@ void send_game_info(struct conn_list *dest);
 void send_game_state(struct conn_list *dest, int state);
 void send_start_phase_to_clients(void);
 
-struct unit_type *crole_to_unit_type(char crole,struct player *pplayer);
-
 int update_timeout(void);
 void increase_timeout_because_unit_moved(void);
 
 const char *new_challenge_filename(struct connection *pc);
-
-struct packet_single_want_hack_req;
 
 #endif  /* FC__GAMEHAND_H */

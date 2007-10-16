@@ -94,7 +94,7 @@ f_mech_inf = "stdsounds/MgHeavy.ogg" ; [warzone]
 ;f_musketeers = ""
 f_nuclear = "stdsounds/LrgExpl.ogg" ; [warzone]
 f_paratroopers = "stdsounds/MgBar2.ogg" ; [warzone]
-f_partisan = "stdsounds/MgBar1.ogg" ; [warzone]
+f_partisan = "stdounds/MgBar1.ogg" ; [warzone]
 ;f_phalanx = ""
 ;f_pikemen = ""
 f_riflemen = "stdsounds/MgBar1.ogg" ; [warzone]
@@ -192,13 +192,12 @@ m_trireme = "stdsounds/inh2o.ogg" ; [pox]
 ;w_womens_suffrage = ""
 
 
-; This list contains all events up to E_TECH_GOAL
+; This list contains all events up to E_AI_DEBUG
 ; (as numbered in common/events.h), in the sorted order.
 ; Alphabetical sorting is based on event descriptions,
 ; not to these tag names. These have been sorted using
 ; Freeciv internal language (en_US)
 
-;e_ai_debug = ""
 ;e_broadcast_report = ""
 ;e_caravan_action = ""
 ;e_chat_error = ""
@@ -270,12 +269,10 @@ e_imp_sold = "stdsounds/metbrk.ogg" ; [pox]
 ;e_message_wall = ""
 ;e_nation_selected = ""
 ;e_destroyed = ""
-;e_player_settings = ""
 ;e_report = ""
 ;e_setting = ""
 ;e_tech_gain = ""
 ;e_tech_learned = ""
-;e_tech_goal = ""
 ;e_treaty_alliance = ""
 ;e_treaty_broken = ""
 ;e_treaty_ceasefire = ""
@@ -300,5 +297,6 @@ e_imp_sold = "stdsounds/metbrk.ogg" ; [pox]
 ;e_wonder_stopped = ""
 ;e_wonder_will_be_built = ""
 ;e_next_year = ""
+
 
 ;music_start = ""

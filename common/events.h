@@ -53,14 +53,14 @@ enum event_type {
   E_MY_DIPLOMAT_BRIBE,
   E_DIPLOMATIC_INCIDENT,
   E_MY_DIPLOMAT_ESCAPE,
-  E_UNUSED1,
+  E_MY_DIPLOMAT_EMBASSY,
   E_MY_DIPLOMAT_FAILED,
   E_MY_DIPLOMAT_INCITE,
   E_MY_DIPLOMAT_POISON,
   E_MY_DIPLOMAT_SABOTAGE,
   E_MY_DIPLOMAT_THEFT,
   E_ENEMY_DIPLOMAT_BRIBE,
-  E_UNUSED2,
+  E_ENEMY_DIPLOMAT_EMBASSY,
   E_ENEMY_DIPLOMAT_FAILED,
   E_ENEMY_DIPLOMAT_INCITE,
   E_ENEMY_DIPLOMAT_POISON,
@@ -114,7 +114,7 @@ enum event_type {
   E_WONDER_STOPPED,
   E_WONDER_WILL_BE_BUILT,
   E_DIPLOMACY,
-  E_UNUSED3,
+  E_TREATY_EMBASSY,
   E_BAD_COMMAND,  /* Illegal command sent from client. */
   E_SETTING, /* Messages for changed server settings */
   E_CHAT_MSG, /* Chatline messages */
@@ -122,8 +122,6 @@ enum event_type {
   E_CHAT_ERROR, /* Chatline errors (bad syntax, etc.) */
   E_CONNECTION, /* Messages about acquired or lost connections */
   E_AI_DEBUG, /* AI debugging messages */
-  E_PLAYER_SETTINGS, /* taxes etc */
-  E_TECH_GOAL,       /* Changed tech goal */
   /* 
    * Note: If you add a new event, make sure you make a similar change
    * to the events array in common/events.c using GEN_EV and to
@@ -132,8 +130,8 @@ enum event_type {
   E_LAST
 };
 
-extern enum event_type sorted_events[];	   /* [E_LAST], sorted by the
-					    * translated message text */
+extern enum event_type sorted_events[]; /* [E_LAST], sorted by the
+					   translated message text */
 
 const char *get_event_message_text(enum event_type event);
 const char *get_event_sound_tag(enum event_type event);
@@ -147,12 +145,9 @@ void events_free(void);
 /* Iterates over all events, sorted by the message text string. */
 #define sorted_event_iterate(event)                                           \
 {                                                                             \
-  enum event_type event;                                                      \
-  enum event_type event##_index;                                              \
-  for (event##_index = 0;                                                     \
-       event##_index < E_LAST;                                                \
-       event##_index++) {                                                     \
-    event = sorted_events[event##_index];                                     \
+  enum event_type _event, event;                                              \
+  for (_event = 0; _event < E_LAST; _event++) {                               \
+    event = sorted_events[_event];                                            \
     {
 
 #define sorted_event_iterate_end                                              \

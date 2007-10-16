@@ -196,7 +196,7 @@ void ai_manage_paratrooper(struct player *pplayer, struct unit *punit)
     if (ptile_dest) {
       if (do_paradrop(punit, ptile_dest)) {
 	/* successfull! */
-	if (!game_find_unit_by_number(sanity)) {
+	if (!find_unit_by_id(sanity)) {
 	  /* the unit did not survive the move */
 	  return;
 	}
@@ -326,12 +326,9 @@ void ai_choose_paratrooper(struct player *pplayer, struct city *pcity,
     if (!utype_has_flag(u_type, F_PARATROOPERS)) {
       continue;
     }
-    if (A_NEVER == u_type->require_advance) {
-      continue;
-    }
 
     /* assign tech for paratroopers */
-    tech_req = advance_index(u_type->require_advance);
+    tech_req = u_type->tech_requirement;
     if (tech_req != A_NONE && tech_req != A_UNSET) {
       for (i = 0; i < num_requirements; i++) {
         if (requirements[i] == tech_req) {
@@ -344,7 +341,7 @@ void ai_choose_paratrooper(struct player *pplayer, struct city *pcity,
     }
 
     /* we only update choice struct if we can build it! */
-    if (!can_city_build_unit_now(pcity, u_type)) {
+    if (!can_build_unit(pcity, u_type)) {
       continue;
     }
 
@@ -358,9 +355,8 @@ void ai_choose_paratrooper(struct player *pplayer, struct city *pcity,
     if (profit > choice->want) {
       /* Update choice */
       choice->want = profit;
-      choice->value.utype = u_type;
+      choice->choice = u_type->index;
       choice->type = CT_ATTACKER;
-      choice->need_boat = FALSE;
       freelog(LOGLEVEL_PARATROOPER, "%s wants to build %s (want=%d)",
 	      pcity->name,
 	      utype_rule_name(u_type),
@@ -379,11 +375,11 @@ void ai_choose_paratrooper(struct player *pplayer, struct city *pcity,
 	      pplayer->ai.tech_want[tech_req]);
 
     /* now, we raise want for prerequisites */
-    advance_index_iterate(A_FIRST, k) {
+    tech_type_iterate(k) {
       if (is_tech_a_req_for_goal(pplayer, k, tech_req)) {
         pplayer->ai.tech_want[k] += 1;
       }
-    } advance_index_iterate_end;
+    } tech_type_iterate_end;
   }
   return;
 }
