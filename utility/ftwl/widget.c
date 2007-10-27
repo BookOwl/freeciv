@@ -30,6 +30,18 @@
 /*************************************************************************
   ...
 *************************************************************************/
+struct osda *get_osda(struct sw_widget *widget)
+{
+  if (widget->type == WT_WINDOW) {
+    return widget->data.window.target;
+  }
+  assert(widget->parent && widget->parent->type == WT_WINDOW);
+  return widget->parent->data.window.target;
+}
+
+/*************************************************************************
+  ...
+*************************************************************************/
 enum widget_face get_widget_face(struct sw_widget *widget)
 {
   if (widget->disabled) {
@@ -42,6 +54,24 @@ enum widget_face get_widget_face(struct sw_widget *widget)
     return WF_SELECTED;
   }
   return WF_NORMAL;
+}
+
+/*************************************************************************
+  ...
+*************************************************************************/
+void untooltip(struct sw_widget *widget)
+{
+  if (widget->tooltip && widget->tooltip_callback_id != 0) {
+    sw_remove_timeout(widget->tooltip_callback_id);
+    widget->tooltip_callback_id = 0;
+  }
+
+  if (!widget->tooltip || (widget->tooltip && !widget->tooltip_shown)) {
+    return;
+  }
+  widget->tooltip_shown = FALSE;
+
+  parent_needs_paint(widget);
 }
 
 /*************************************************************************
@@ -280,7 +310,7 @@ void handle_destroyed_widgets(void)
 	     (pwidget->tooltip
 	      && pwidget->tooltip_shown), dragged_widget == pwidget,
 	     selected_widget == pwidget, pressed_widget == pwidget);
-      //be_write_osda_to_file(sw_widget_get_osda(pwidget), "destroyed_widget.pnm");
+      //be_write_osda_to_file(get_osda(pwidget), "destroyed_widget.pnm");
 
       handle_mouse_motion(NULL, &pos);
     }

@@ -97,7 +97,7 @@ static const char *col_nation(const struct player *player)
 *******************************************************************/
 static const char *col_team(const struct player *player)
 {
-  return team_name_translation(player->team);
+  return team_get_name(player->team);
 }
 
 /******************************************************************
@@ -106,6 +106,15 @@ static const char *col_team(const struct player *player)
 static bool col_ai(const struct player *plr)
 {
   return plr->ai.control;
+}
+
+/******************************************************************
+  Returns a translated string giving the embassy status
+  (none/with us/with them/both).
+*******************************************************************/
+static const char *col_embassy(const struct player *player)
+{
+  return get_embassy_status(game.player_ptr, player);
 }
 
 /******************************************************************
@@ -139,7 +148,7 @@ static const char *col_love(const struct player *player)
   if (!game.player_ptr || player == game.player_ptr || !player->ai.control) {
     return "-";
   } else {
-    return love_text(player->ai.love[player_index(game.player_ptr)]);
+    return love_text(player->ai.love[game.player_ptr->player_no]);
   }
 }
 
@@ -152,19 +161,19 @@ static int cmp_love(const struct player *player1,
   int love1, love2;
 
   if (!game.player_ptr) {
-    return player_number(player1) - player_number(player2);
+    return player1->player_no - player2->player_no;
   }
 
   if (player1 == game.player_ptr || !player1->ai.control) {
     love1 = MAX_AI_LOVE + 999;
   } else {
-    love1 = player1->ai.love[player_index(game.player_ptr)];
+    love1 = player1->ai.love[game.player_ptr->player_no];
   }
 
   if (player2 == game.player_ptr || !player2->ai.control) {
     love2 = MAX_AI_LOVE + 999;
   } else {
-    love2 = player2->ai.love[player_index(game.player_ptr)];
+    love2 = player2->ai.love[game.player_ptr->player_no];
   }
   
   return love1 - love2;
@@ -246,6 +255,7 @@ struct player_dlg_column player_dlg_columns[] = {
   {TRUE, COL_TEXT, N_("Team"), col_team, NULL, NULL,  "team"},
   {TRUE, COL_BOOLEAN, N_("AI"), NULL, col_ai, NULL,  "ai"},
   {TRUE, COL_TEXT, N_("Attitude"), col_love, NULL, cmp_love,  "attitude"},
+  {TRUE, COL_TEXT, N_("Embassy"), col_embassy, NULL, NULL,  "embassy"},
   {TRUE, COL_TEXT, N_("Dipl.State"), col_diplstate, NULL, NULL,  "diplstate"},
   {TRUE, COL_TEXT, N_("Vision"), col_vision, NULL, NULL,  "vision"},
   {TRUE, COL_TEXT, N_("State"), col_state, NULL, NULL,  "state"},

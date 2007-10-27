@@ -735,8 +735,7 @@ bool section_file_load_from_stream(struct section_file *my_section_file,
 **************************************************************************/
 bool section_file_save(struct section_file *my_section_file,
                        const char *filename,
-                       int compression_level,
-                       enum fz_method compression_method)
+		       int compression_level)
 {
   char real_filename[1024];
   fz_FILE *fs;
@@ -745,7 +744,7 @@ bool section_file_save(struct section_file *my_section_file,
   int i;
   
   interpret_tilde(real_filename, sizeof(real_filename), filename);
-  fs = fz_from_file(real_filename, "w", compression_method, compression_level);
+  fs = fz_from_file(real_filename, "w", FZ_ZLIB, compression_level);
 
   if (!fs)
     return FALSE;
@@ -839,12 +838,12 @@ bool section_file_save(struct section_file *my_section_file,
 	       * format without an error message. */
 	      freelog(LOG_ERROR,
 		      "In file %s, there is no entry in the registry for \n"
-		      "%s.%s (or the entries are out of order. This means a \n"
+		      "%s (or the entries are out of order. This means a \n"
 		      "less efficient non-tabular format will be used. To\n"
 		      "avoid this make sure all rows of a table are filled\n"
 		      "out with an entry for every column.  This is surely\n"
 		      "a bug so if you're reading this message, report it\n"
-		      "at %s", real_filename, psection->name, expect, BUG_URL);
+		      "at %s", real_filename, expect, BUG_URL);
 	      fz_fprintf(fs, "\n");
 	    }
 	    fz_fprintf(fs, "}\n");

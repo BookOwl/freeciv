@@ -72,11 +72,11 @@ static int count_sabotagable_improvements(struct city *pcity)
 {
   int count = 0;
 
-  city_built_iterate(pcity, pimprove) {
-    if (pimprove->sabotage > 0) {
+  built_impr_iterate(pcity, index) {
+    if (improvement_by_number(index)->sabotage > 0) {
       count++;
     }
-  } city_built_iterate_end;
+  } built_impr_iterate_end;
 
   return count;
 }
@@ -88,12 +88,12 @@ static int count_stealable_techs(struct player *pplayer, struct player *tplayer)
 {
   int count = 0;
 
-  advance_index_iterate(A_FIRST, index) {
-    if ((player_invention_state(pplayer, index) != TECH_KNOWN)
-        && (player_invention_state(tplayer, index) == TECH_KNOWN)) {
+  tech_type_iterate(index) {
+    if ((get_invention(pplayer, index) != TECH_KNOWN)
+        && (get_invention(tplayer, index) == TECH_KNOWN)) {
       count++;
     }
-  } advance_index_iterate_end;
+  } tech_type_iterate_end;
 
   return count;
 }
@@ -120,17 +120,17 @@ void ai_choose_diplomat_defensive(struct player *pplayer,
        choice->want = 16000; /* diplomat more important than soldiers */
        pcity->ai.urgency = 1;
        choice->type = CT_DEFENDER;
-       choice->value.utype = ut;
-       choice->need_boat = FALSE;
+       choice->choice = ut->index;
     } else if (num_role_units(F_DIPLOMAT) > 0) {
       /* We don't know diplomats yet... */
       freelog(LOG_DIPLOMAT_BUILD,
               "A defensive diplomat is wanted badly in city %s.", pcity->name);
       ut = get_role_unit(F_DIPLOMAT, 0);
       if (ut) {
-        pplayer->ai.tech_want[advance_index(ut->require_advance)] += DIPLO_DEFENSE_WANT;
-        TECH_LOG(LOG_DEBUG, pplayer, ut->require_advance,
-                 "+ %d for %s in diplo defense",
+        Tech_type_id tech_req = ut->tech_requirement;
+
+        pplayer->ai.tech_want[tech_req] += DIPLO_DEFENSE_WANT;
+        TECH_LOG(LOG_DEBUG, pplayer, tech_req, "+ %d for %s in diplo defense",
                  DIPLO_DEFENSE_WANT,
                  utype_rule_name(ut));
       }
@@ -204,7 +204,7 @@ void ai_choose_diplomat_offensive(struct player *pplayer,
       gain_theft = total_bulbs_required(pplayer) * TRADE_WEIGHTING;
     }
     gain = MAX(gain_incite, gain_theft);
-    loss = utype_build_shield_cost(ut) * SHIELD_WEIGHTING;
+    loss = unit_build_shield_cost(ut) * SHIELD_WEIGHTING;
 
     /* Probability to succeed, assuming no defending diplomat */
     p_success = game.info.diplchance;
@@ -224,8 +224,15 @@ void ai_choose_diplomat_offensive(struct player *pplayer,
     }
 
     want = military_amortize(pplayer, pcity, want, time_to_dest, 
-                             utype_build_shield_cost(ut));
+                             unit_build_shield_cost(ut));
 
+    if (!player_has_embassy(pplayer, city_owner(acity))
+        && want < 99) {
+        freelog(LOG_DIPLOMAT_BUILD,
+                "A diplomat desired in %s to establish an embassy with %s "
+                "in %s", pcity->name, city_owner(acity)->name, acity->name);
+        want = 99;
+    }
     if (want > choice->want) {
       freelog(LOG_DIPLOMAT_BUILD,
               "%s, %s: %s is desired with want %d to spy in %s (incite "
@@ -239,9 +246,8 @@ void ai_choose_diplomat_offensive(struct player *pplayer,
               pplayer->economic.gold - pplayer->ai.est_upkeep, 
               gain_theft, time_to_dest);
       choice->want = want;
-      choice->type = CT_CIVILIAN; /* so we don't build barracks for it */
-      choice->value.utype = ut;
-      choice->need_boat = FALSE;
+      choice->type = CT_NONMIL; /* so we don't build barracks for it */
+      choice->choice = ut->index;
       BV_SET(ai->stats.diplomat_reservations, acity->id);
     }
   }
@@ -252,7 +258,9 @@ void ai_choose_diplomat_offensive(struct player *pplayer,
   business! Note that punit may die or be moved during this function. We
   must be adjacent to target city.
 
-  We steal, incite, sabotage or poison the city, in that order of priority.
+  We try to make embassy first, and abort if we already have one and target
+  is allied. Then we steal, incite, sabotage or poison the city, in that
+  order of priority.
 **************************************************************************/
 static void ai_diplomat_city(struct unit *punit, struct city *ctarget)
 {
@@ -275,10 +283,12 @@ static void ai_diplomat_city(struct unit *punit, struct city *ctarget)
   if (diplomat_can_do_action(punit, my_act, ctarget->tile)) {	    \
     freelog(LOG_DIPLOMAT, "Player %s's diplomat %d does " #my_act   \
             " on %s", pplayer->name, punit->id, ctarget->name);     \
-    handle_unit_diplomat_action(pplayer, punit->id, my_act,         \
-                                ctarget->id, my_val);               \
+    handle_unit_diplomat_action(pplayer, punit->id,                 \
+                                ctarget->id, my_val, my_act);       \
     return;                                                         \
   }
+
+  T(DIPLOMAT_EMBASSY,0);
 
   if (pplayers_allied(pplayer, tplayer)) {
     return; /* Don't do the rest to allies */
@@ -320,6 +330,7 @@ static void find_city_to_diplomat(struct player *pplayer, struct unit *punit,
                                   struct city **ctarget, int *move_dist,
                                   struct pf_map *map)
 {
+  bool has_embassy;
   int incite_cost = 0; /* incite cost */
   bool dipldef; /* whether target is protected by diplomats */
 
@@ -339,9 +350,10 @@ static void find_city_to_diplomat(struct player *pplayer, struct unit *punit,
     }
     aplayer = city_owner(acity);
 
-    if (aplayer == pplayer
-        || is_barbarian(aplayer)
-        || pplayers_allied(pplayer, aplayer)) {
+    has_embassy = player_has_embassy(pplayer, aplayer);
+
+    if (aplayer == pplayer || is_barbarian(aplayer)
+        || (pplayers_allied(pplayer, aplayer) && has_embassy)) {
       continue; 
     }
 
@@ -349,13 +361,15 @@ static void find_city_to_diplomat(struct player *pplayer, struct unit *punit,
     can_incite = (incite_cost < INCITE_IMPOSSIBLE_COST);
 
     dipldef = (count_diplomats_on_tile(acity->tile) > 0);
-    /* Two actions to consider:
-     * 1. stealing techs OR
-     * 2. inciting revolt */
-    if ((acity->steal == 0
-	 && get_player_research(pplayer)->techs_researched
-            < get_player_research(aplayer)->techs_researched
-	 && !dipldef)
+    /* Three actions to consider:
+     * 1. establishing embassy OR
+     * 2. stealing techs OR
+     * 3. inciting revolt */
+    if (!has_embassy
+        || (acity->steal == 0
+	    && (get_player_research(pplayer)->techs_researched
+		< get_player_research(aplayer)->techs_researched)
+	    && !dipldef)
         || (incite_cost < (pplayer->economic.gold - pplayer->ai.est_upkeep)
             && can_incite && !dipldef)) {
       /* We have the closest enemy city on the continent */
@@ -484,7 +498,7 @@ static bool ai_diplomat_bribe_nearby(struct player *pplayer,
       continue;
     }
     /* Should we make the expense? */
-    cost = pvictim->bribe_cost = unit_bribe_cost(pvictim);
+    cost = unit_bribe_cost(pvictim);
     if (!threat) {
       /* Don't empty our treasure without good reason! */
       gold_avail = pplayer->economic.gold - ai_gold_reserve(pplayer);
@@ -510,10 +524,11 @@ static bool ai_diplomat_bribe_nearby(struct player *pplayer,
     }
 
     if (diplomat_can_do_action(punit, DIPLOMAT_BRIBE, pos.tile)) {
-      handle_unit_diplomat_action(pplayer, punit->id, DIPLOMAT_BRIBE,
-				  unit_list_get(ptile->units, 0)->id, -1);
+      handle_unit_diplomat_action(pplayer, punit->id,
+				  unit_list_get(ptile->units, 0)->id, -1,
+				  DIPLOMAT_BRIBE);
       /* autoattack might kill us as we move in */
-      if (game_find_unit_by_number(sanity) && punit->moves_left > 0) {
+      if (find_unit_by_id(sanity) && punit->moves_left > 0) {
         return TRUE;
       } else {
         return FALSE;
@@ -585,7 +600,8 @@ void ai_manage_diplomat(struct player *pplayer, struct unit *punit)
       if (same_pos(ctarget->tile, punit->tile)) {
         failure = TRUE;
       } else if (pplayers_allied(pplayer, city_owner(ctarget))
-          && punit->ai.ai_role == AIUNIT_ATTACK) {
+          && punit->ai.ai_role == AIUNIT_ATTACK
+          && player_has_embassy(pplayer, city_owner(ctarget))) {
         /* We probably incited this city with another diplomat */
         failure = TRUE;
       } else if (!pplayers_allied(pplayer, city_owner(ctarget))

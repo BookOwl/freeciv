@@ -6,9 +6,11 @@ bin_PROGRAMS = civserver
 noinst_LIBRARIES = libcivserver.a
 AM_CPPFLAGS = \
 	-I$(top_srcdir)/utility -I$(srcdir)/../common -I$(srcdir)/../ai \
-	-I$(top_srcdir)/common/aicore \
+	-I../intl -I$(top_srcdir)/common/aicore \
 	-I$(srcdir)/generator -I$(srcdir)/scripting \
 	$(LIBGGZ_INCLUDES) $(GGZDMOD_INCLUDES)
+
+## Above, note -I../intl instead of -I$(top_srdir/intl) is deliberate.
 
 if MINGW32
 SERVERICON=../win32/servericon.o
@@ -41,7 +43,6 @@ libcivserver_a_SOURCES = \
 		diplhand.h	\
 		diplomats.c	\
 		diplomats.h	\
-		edithand.c	\
 		gamehand.c	\
 		gamehand.h	\
 		gotohand.c	\

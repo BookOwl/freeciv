@@ -14,7 +14,6 @@
 #ifndef FC__TILE_H
 #define FC__TILE_H
 
-#include "base.h"
 #include "fc_types.h"
 #include "player.h"
 #include "terrain.h"
@@ -64,7 +63,6 @@ void tile_set_terrain(struct tile *ptile, struct terrain *pterrain);
 bv_special tile_get_special(const struct tile *ptile);
 bool tile_has_special(const struct tile *ptile,
 		      enum tile_special_type to_test_for);
-bool tile_has_any_specials(const struct tile *ptile);
 void tile_set_special(struct tile *ptile, enum tile_special_type spe);
 void tile_clear_special(struct tile *ptile, enum tile_special_type spe);
 void tile_clear_all_specials(struct tile *ptile);
@@ -76,16 +74,6 @@ void tile_set_resource(struct tile *ptile, struct resource *presource);
 Continent_id tile_get_continent(const struct tile *ptile);
 void tile_set_continent(struct tile *ptile, Continent_id val);
 
-struct base_type *tile_get_base(const struct tile *ptile);
-void tile_add_base(struct tile *ptile, const struct base_type *pbase);
-void tile_remove_base(struct tile *ptile);
-bool tile_has_base_flag(const struct tile *ptile, enum base_flag_id flag);
-bool tile_has_base_flag_for_unit(const struct tile *ptile,
-                                 const struct unit_type *punittype,
-                                 enum base_flag_id flag);
-bool tile_has_native_base(const struct tile *ptile,
-                          const struct unit_type *punittype);
-
 enum known_type tile_get_known(const struct tile *ptile,
 			      const struct player *pplayer);
 
@@ -95,8 +83,6 @@ enum known_type tile_get_known(const struct tile *ptile,
 #define ACTIVITY_FACTOR 10
 int tile_activity_time(enum unit_activity activity,
 		       const struct tile *ptile);
-int tile_activity_base_time(const struct tile *ptile,
-                            enum base_type_id base);
 
 /* These are higher-level functions that handle side effects on the tile. */
 void tile_change_terrain(struct tile *ptile, struct terrain *pterrain);
@@ -104,9 +90,6 @@ void tile_add_special(struct tile *ptile, enum tile_special_type special);
 void tile_remove_special(struct tile *ptile, enum tile_special_type special);
 bool tile_apply_activity(struct tile *ptile, Activity_type_id act);
 
-#define TILE_LB_TERRAIN_RIVER    (1 << 0)
-#define TILE_LB_RIVER_RESOURCE   (1 << 1)
-#define TILE_LB_RESOURCE_POLL    (1 << 2)
-const char *tile_get_info_text(const struct tile *ptile, int linebreaks);
+const char *tile_get_info_text(const struct tile *ptile);
 
 #endif /* FC__TILE_H */

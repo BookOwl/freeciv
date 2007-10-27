@@ -58,13 +58,12 @@ void canvas_copy(struct canvas *dest, struct canvas *src,
   struct ct_size size = { width, height };
   struct ct_point src_pos = { src_x, src_y };
   struct ct_point dest_pos = { dest_x, dest_y };
-  struct ct_rect dest_rect = {dest_x, dest_y, width, height};
 
   freelog(LOG_DEBUG, "canvas_copy(src=%p,dest=%p)",src,dest);
 
   be_copy_osda_to_osda(dest->osda, src->osda, &size, &dest_pos, &src_pos);
   if (dest->widget) {
-    sw_window_canvas_background_region_needs_repaint(dest->widget, &dest_rect);
+    sw_window_canvas_background_region_needs_repaint(dest->widget, NULL);
   }
 }
 
@@ -80,12 +79,12 @@ void canvas_put_sprite(struct canvas *pcanvas,
   struct ct_point dest_pos = { canvas_x, canvas_y };
   struct ct_point src_pos = { offset_x, offset_y };
   struct ct_size size = { width, height };
-  struct ct_rect dest_rect = {canvas_x, canvas_y, width, height};
 
   freelog(LOG_DEBUG, "gui_put_sprite canvas=%p",pcanvas);
   be_draw_sprite(osda, sprite, &size, &dest_pos, &src_pos);
   if (pcanvas->widget) {
-    sw_window_canvas_background_region_needs_repaint(pcanvas->widget, &dest_rect);
+    sw_window_canvas_background_region_needs_repaint(pcanvas->widget,
+						     NULL);
   }
 }
 

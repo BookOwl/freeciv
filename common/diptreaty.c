@@ -51,11 +51,13 @@ bool could_meet_with_player(const struct player *pplayer,
           && pplayer != aplayer
           && diplomacy_possible(pplayer,aplayer)
           && (player_has_embassy(aplayer, pplayer) 
-              || player_has_embassy(pplayer, aplayer)));
+              || player_has_embassy(pplayer, aplayer)
+              || pplayer->diplstates[aplayer->player_no].contact_turns_left > 0
+              || aplayer->diplstates[pplayer->player_no].contact_turns_left > 0));
 }
 
 /**************************************************************************
-  Returns TRUE iff pplayer could get intelligence from aplayer.
+  Returns TRUE iff pplayer could do diplomatic meetings with aplayer.
 **************************************************************************/
 bool could_intel_with_player(const struct player *pplayer,
 			     const struct player *aplayer)
@@ -63,7 +65,9 @@ bool could_intel_with_player(const struct player *pplayer,
   return (pplayer->is_alive
           && aplayer->is_alive
           && pplayer != aplayer
-          && player_has_embassy(pplayer, aplayer));
+          && (pplayer->diplstates[aplayer->player_no].contact_turns_left > 0
+              || aplayer->diplstates[pplayer->player_no].contact_turns_left > 0
+              || player_has_embassy(pplayer, aplayer)));
 }
 
 /****************************************************************
@@ -129,7 +133,7 @@ bool add_clause(struct Treaty *ptreaty, struct player *pfrom,
     return FALSE;
   }
 
-  if (type == CLAUSE_ADVANCE && !valid_advance_by_number(val)) {
+  if (type == CLAUSE_ADVANCE && !tech_exists(val)) {
     freelog(LOG_ERROR, "Illegal tech value %i in clause.", val);
     return FALSE;
   }

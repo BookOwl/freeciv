@@ -23,7 +23,6 @@ pkgdata_DATA =          	\
 	fireflysung.ttf		\
 	icons.png		\
 	icons.spec		\
-	intro.png		\
 	options_bg.png		\
 	sazanami-gothic.ttf	\
 	small_theme_buttons.png		\

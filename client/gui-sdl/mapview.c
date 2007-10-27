@@ -473,6 +473,202 @@ static int fucus_units_info_callback(struct widget *pWidget)
   return -1;
 }
 
+/****************************************************************************
+  Return a (static) string with tile name describing terrain and specials.
+  Same as tile_get_info_text() from client/text.c, but with an additional
+  line break
+
+  Examples:
+    "Hills"
+    "Hills (Coals)"
+    "Hills (Coals)
+     [Pollution]"
+****************************************************************************/
+static const char *gui_sdl_tile_get_info_text(const struct tile *ptile)
+{
+  static char s[256];
+  bool first;
+
+  sz_strlcpy(s, terrain_name_translation(ptile->terrain));
+  if (tile_has_special(ptile, S_RIVER)) {
+    sz_strlcat(s, "/");
+    sz_strlcat(s, special_name_translation(S_RIVER));
+  }
+
+  if (tile_resource_is_valid(ptile)) {
+    cat_snprintf(s, sizeof(s), " (%s)",
+		 resource_name_translation(ptile->resource));
+  }
+
+  first = TRUE;
+  if (tile_has_special(ptile, S_POLLUTION)) {
+    if (first) {
+      first = FALSE;
+      sz_strlcat(s, "\n[");
+    } else {
+      sz_strlcat(s, "/");
+    }
+    sz_strlcat(s, special_name_translation(S_POLLUTION));
+  }
+  if (tile_has_special(ptile, S_FALLOUT)) {
+    if (first) {
+      first = FALSE;
+      sz_strlcat(s, "\n[");
+    } else {
+      sz_strlcat(s, "/");
+    }
+    sz_strlcat(s, special_name_translation(S_FALLOUT));
+  }
+  if (!first) {
+    sz_strlcat(s, "]");
+  }
+
+  return s;
+}
+
+/****************************************************************************
+  Return the text body for the unit info shown in the info panel.
+  Same as get_unit_info_label_text2() from client/text.c, but calls
+  gui_sdl_tile_get_info_text() instead.
+
+  FIXME: this should be renamed.
+****************************************************************************/
+static const char *gui_sdl_get_unit_info_label_text2(struct unit_list *punits)
+{
+  static struct astring str = ASTRING_INIT;
+  int count;
+
+  astr_clear(&str);
+
+  if (!punits) {
+    return "";
+  }
+
+  count = unit_list_size(punits);
+
+  /* This text should always have the same number of lines.  Otherwise the
+   * GUI widgets may be confused and try to resize themselves. */
+
+  /* Line 1. Goto or activity text. */
+  if (count > 0 && hover_state != HOVER_NONE) {
+    int min, max;
+
+    if (!goto_get_turns(&min, &max)) {
+      /* TRANS: Impossible to reach goto target tile */
+      astr_add_line(&str, Q_("?goto:Unreachable"), min);
+    } else if (min == max) {
+      astr_add_line(&str, _("Turns to target: %d"), max);
+    } else {
+      astr_add_line(&str, _("Turns to target: %d to %d"), min, max);
+    }
+  } else if (count == 1) {
+    astr_add_line(&str, "%s",
+      unit_activity_text(unit_list_get(punits, 0)));
+  } else if (count > 1) {
+    astr_add_line(&str, PL_("%d unit selected",
+          "%d units selected",
+          count),
+      count);
+  } else {
+    astr_add_line(&str, _("No units selected."));
+  }
+
+  /* Lines 2, 3, and 4 vary. */
+  if (count == 1) {
+    struct unit *punit = unit_list_get(punits, 0);
+    struct city *pcity =
+  player_find_city_by_id(punit->owner, punit->homecity);
+    int infracount;
+    bv_special infrastructure =
+      get_tile_infrastructure_set(punit->tile, &infracount);
+
+    astr_add_line(&str, "%s", gui_sdl_tile_get_info_text(punit->tile));
+    if (infracount > 0) {
+      astr_add_line(&str, "%s", get_infrastructure_text(infrastructure));
+    } else {
+      astr_add_line(&str, " ");
+    }
+    if (pcity) {
+      astr_add_line(&str, "%s", pcity->name);
+    } else {
+      astr_add_line(&str, " ");
+    }
+  } else if (count > 1) {
+    int mil = 0, nonmil = 0;
+    int types_count[U_LAST], i;
+    struct unit_type *top[3];
+
+    memset(types_count, 0, sizeof(types_count));
+    unit_list_iterate(punits, punit) {
+      if (unit_has_type_flag(punit, F_NONMIL)) {
+  nonmil++;
+      } else {
+  mil++;
+      }
+      types_count[unit_type(punit)->index]++;
+    } unit_list_iterate_end;
+
+    top[0] = top[1] = top[2] = NULL;
+    unit_type_iterate(utype) {
+      if (!top[2]
+    || types_count[top[2]->index] < types_count[utype->index]) {
+  top[2] = utype;
+
+  if (!top[1]
+      || types_count[top[1]->index] < types_count[top[2]->index]) {
+    top[2] = top[1];
+    top[1] = utype;
+
+    if (!top[0]
+        || types_count[top[0]->index] < types_count[utype->index]) {
+      top[1] = top[0];
+      top[0] = utype;
+    }
+  }
+      }
+    } unit_type_iterate_end;
+
+    for (i = 0; i < 3; i++) {
+      if (top[i] && types_count[top[i]->index] > 0) {
+  if (utype_has_flag(top[i], F_NONMIL)) {
+    nonmil -= types_count[top[i]->index];
+  } else {
+    mil -= types_count[top[i]->index];
+  }
+  astr_add_line(&str, "%d: %s",
+          types_count[top[i]->index], utype_name_translation(top[i]));
+      } else {
+  astr_add_line(&str, " ");
+      }
+    }
+
+    if (nonmil > 0 && mil > 0) {
+      astr_add_line(&str, _("Others: %d civil; %d military"), nonmil, mil);
+    } else if (nonmil > 0) {
+      astr_add_line(&str, _("Others: %d civilian"), nonmil);
+    } else if (mil > 0) {
+      astr_add_line(&str, _("Others: %d military"), mil);
+    } else {
+      astr_add_line(&str, " ");
+    }
+  } else {
+    astr_add_line(&str, " ");
+    astr_add_line(&str, " ");
+    astr_add_line(&str, " ");
+  }
+
+  /* Line 5. Debug text. */
+#ifdef DEBUG
+  if (count == 1) {
+    astr_add_line(&str, "(Unit ID %d)", unit_list_get(punits, 0)->id);
+  } else {
+    astr_add_line(&str, " ");
+  }
+#endif
+
+  return str.str;
+}
+
 /**************************************************************************
   Read Function Name :)
 **************************************************************************/
@@ -530,9 +726,7 @@ void redraw_unit_info_label(struct unit_list *punitlist)
       change_ptsize16(pStr, adj_font(10));
       pStr->style |= SF_CENTER;
 
-      copy_chars_to_string16(pStr,
-                             get_unit_info_label_text2(punitlist,
-                                                       TILE_LB_RESOURCE_POLL));
+      copy_chars_to_string16(pStr, gui_sdl_get_unit_info_label_text2(punitlist));
       pInfo = create_text_surf_from_str16(pStr);
       
       if (pInfo_Window->size.h > 
@@ -554,8 +748,8 @@ void redraw_unit_info_label(struct unit_list *punitlist)
               cat_snprintf(buffer, sizeof(buffer), _("\nOur Territory"));
             } else {
 	      if (pTile->owner) {
-                if (game.player_ptr->diplstates[player_index(pTile->owner)].type==DS_CEASEFIRE){
-		  int turns = game.player_ptr->diplstates[player_index(pTile->owner)].turns_left;
+                if (game.player_ptr->diplstates[pTile->owner->player_no].type==DS_CEASEFIRE){
+		  int turns = game.player_ptr->diplstates[pTile->owner->player_no].turns_left;
 		  cat_snprintf(buffer, sizeof(buffer),
 		  	PL_("\n%s territory (%d turn ceasefire)",
 				"\n%s territory (%d turn ceasefire)", turns),
@@ -563,7 +757,7 @@ void redraw_unit_info_label(struct unit_list *punitlist)
                 } else {
 	          cat_snprintf(buffer, sizeof(buffer), _("\nTerritory of the %s %s"),
 		    diplo_nation_plural_adjectives[
-		  	game.player_ptr->diplstates[player_index(pTile->owner)].type],
+		  	game.player_ptr->diplstates[pTile->owner->player_no].type],
 		    		nation_plural_for_player(pTile->owner));
                 }
               } else { /* !pTile->owner */
@@ -587,41 +781,36 @@ void redraw_unit_info_label(struct unit_list *punitlist)
             	  
 	    citywall = pTile->city->client.walls;
                           
-#if 0       
-            /* This has hardcoded assumption that EFT_LAND_REGEN is always
-             * provided by *building* named *Barracks*. Similar assumptions for
-             * other effects. */     
+#if 0                          
 	    if (pplayers_allied(game.player_ptr, pOwner)) {
 	      barrack = (get_city_bonus(pTile->city, EFT_LAND_REGEN) > 0);
 	      airport = (get_city_bonus(pTile->city, EFT_AIR_VETERAN) > 0);
 	      port = (get_city_bonus(pTile->city, EFT_SEA_VETERAN) > 0);
 	    }
-
+	  
 	    if (citywall || barrack || airport || port) {
-	      cat_snprintf(buffer, sizeof(buffer), Q_("?blistbegin: with "));
+	      cat_snprintf(buffer, sizeof(buffer), _(" with "));
 	      if (barrack) {
                 cat_snprintf(buffer, sizeof(buffer), _("Barracks"));
 	        if (port || airport || citywall) {
-	          cat_snprintf(buffer, sizeof(buffer), Q_("?blistmore:, "));
+	          cat_snprintf(buffer, sizeof(buffer), ", ");
 	        }
 	      }
 	      if (port) {
 	        cat_snprintf(buffer, sizeof(buffer), _("Port"));
 	        if (airport || citywall) {
-	          cat_snprintf(buffer, sizeof(buffer), Q_("?blistmore:, "));
+	          cat_snprintf(buffer, sizeof(buffer), ", ");
 	        }
 	      }
 	      if (airport) {
 	        cat_snprintf(buffer, sizeof(buffer), _("Airport"));
 	        if (citywall) {
-	          cat_snprintf(buffer, sizeof(buffer), Q_("?blistmore:, "));
+	          cat_snprintf(buffer, sizeof(buffer), ", ");
 	        }
 	      }
 	      if (citywall) {
 	        cat_snprintf(buffer, sizeof(buffer), _("City Walls"));
               }
-
-              cat_snprintf(buffer, sizeof(buffer), Q_("?blistend:"));
 	    }
 #endif
 	    
@@ -630,7 +819,7 @@ void redraw_unit_info_label(struct unit_list *punitlist)
               cat_snprintf(buffer, sizeof(buffer), _("\n(%s,%s)"),
 		  nation_name_for_player(pOwner),
 		  diplo_city_adjectives[game.player_ptr->
-				   diplstates[player_index(pOwner)].type]);
+				   diplstates[pOwner->player_no].type]);
 	    }
 	    
 	  }
@@ -746,7 +935,7 @@ void redraw_unit_info_label(struct unit_list *punitlist)
 	  }
 	    
 	  pUType = unit_type(aunit);
-          pHome_City = game_find_city_by_number(aunit->homecity);
+          pHome_City = find_city_by_id(aunit->homecity);
           my_snprintf(buffer, sizeof(buffer), "%s (%d,%d,%d)%s\n%s\n(%d/%d)\n%s",
 		utype_name_translation(pUType),
 		pUType->attack_strength,
@@ -947,6 +1136,54 @@ void update_unit_info_label(struct unit_list *punitlist)
   if (punitlist) {
     if(!is_anim_enabled()) {
       enable_focus_animation();
+    }
+    if (action_state == CURSOR_ACTION_WAIT) {
+      update_mouse_cursor(CURSOR_WAIT);
+    } else {
+    switch (hover_state) {
+    case HOVER_NONE:
+      if (action_state == CURSOR_ACTION_SELECT) {
+        update_mouse_cursor(CURSOR_SELECT); 
+      } else if (action_state == CURSOR_ACTION_PARATROOPER) {
+        update_mouse_cursor(CURSOR_PARADROP);  
+      } else if (action_state == CURSOR_ACTION_NUKE) {
+        update_mouse_cursor(CURSOR_NUKE);
+      } else {
+        update_mouse_cursor(CURSOR_DEFAULT);
+      }  
+      break;
+    case HOVER_GOTO:
+      if (action_state == CURSOR_ACTION_GOTO) {
+        update_mouse_cursor(CURSOR_GOTO);
+      } else if (action_state == CURSOR_ACTION_DEFAULT) {
+        update_mouse_cursor(CURSOR_DEFAULT);
+      } else if (action_state == CURSOR_ACTION_ATTACK) {
+        update_mouse_cursor(CURSOR_ATTACK); 
+      } else {
+        update_mouse_cursor(CURSOR_INVALID);  
+      }
+      break;
+    case HOVER_PATROL:
+      if (action_state == CURSOR_ACTION_INVALID) {
+        update_mouse_cursor(CURSOR_INVALID);
+      } else {
+        update_mouse_cursor(CURSOR_PATROL);
+      }
+      break;
+    case HOVER_CONNECT:
+      if (action_state == CURSOR_ACTION_INVALID) {
+        update_mouse_cursor(CURSOR_INVALID);
+      } else {
+        update_mouse_cursor(CURSOR_GOTO);
+      }
+      break;
+    case HOVER_NUKE:
+      update_mouse_cursor(CURSOR_NUKE);
+      break;
+    case HOVER_PARADROP:
+      update_mouse_cursor(CURSOR_PARADROP);
+      break;
+    }
     }
   } else {
     disable_focus_animation();

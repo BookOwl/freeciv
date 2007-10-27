@@ -34,7 +34,9 @@ city_style = "European"
 
 ruler_titles = { "government",      "male_title",      "female_title"
                  "Despotism",       _("Duke"),         _("Duchess")
-                 "Republic",        _("President"),    _("?female:President")
+        	 "Monarchy",        _("King"),         _("Queen")
+                 "Republic",        _("President"),    _("President")
+                 "Democracy",       _("President"),    _("President")
                }
 
 init_techs=""
@@ -42,7 +44,9 @@ init_buildings=""
 init_government="Despotism"
 init_units=""
 
-civilwar_nations = "slovenian", "croatian", "bosnia"
+; Chain of similar flags
+conflicts_with="russian", "slovenian", "slovakian"
+civilwar_nations = "slovenian"
 
 cities =
  "Beograd",

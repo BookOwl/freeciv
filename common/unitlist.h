@@ -38,7 +38,7 @@
       _ids[_i++] = punit->id;						    \
     } unit_list_iterate_end;						    \
     for (_i = 0; _i < _size; _i++) {					    \
-      struct unit *punit = game_find_unit_by_number(_ids[_i]);		    \
+      struct unit *punit = find_unit_by_id(_ids[_i]);			    \
 									    \
       if (punit) {
 
@@ -57,10 +57,6 @@ bool can_units_do(const struct unit_list *punits,
 		  bool (can_fn)(const struct unit *punit));
 bool can_units_do_activity(const struct unit_list *punits,
 			   enum unit_activity activity);
-bool can_units_do_base(const struct unit_list *punits,
-                       enum base_type_id base);
-bool can_units_do_base_gui(const struct unit_list *punits,
-                           enum base_gui_type base_gui);
 bool can_units_do_diplomat_action(const struct unit_list *punits,
 				  enum diplomat_actions action);
 bool units_have_flag(const struct unit_list *punits, enum unit_flag_id flag,

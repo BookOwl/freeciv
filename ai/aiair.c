@@ -75,7 +75,7 @@ static bool ai_should_we_air_attack_tile(struct unit *punit,
   /* TODO: There is a danger of producing too many units that will not 
    * attack anything.  Production should not happen if there is an idle 
    * unit of the same type nearby */
-  if (acity && !TEST_BIT(acity->ai.invasion, INVASION_OCCUPY) && punit->id != 0) {
+  if (acity && !TEST_BIT(acity->ai.invasion, 0) && punit->id != 0) {
     /* No ground troups are invading */
     freelog(LOG_DEBUG, "Don't want to attack %s, although we could", 
             acity->name);
@@ -111,7 +111,7 @@ static int ai_evaluate_tile_for_air_attack(struct unit *punit,
   /* Ok, we can attack, but is it worth it? */
 
   /* Cost of our unit */
-  unit_cost = unit_build_shield_cost(punit);
+  unit_cost = unit_build_shield_cost(unit_type(punit));
   /* This is to say "wait, ill unit will get better!" */
   unit_cost = unit_cost * unit_type(punit)->hp / punit->hp; 
 
@@ -119,8 +119,8 @@ static int ai_evaluate_tile_for_air_attack(struct unit *punit,
   victim_cost = stack_cost(pdefender);
 
   /* Missile would die 100% so we adjust the victim_cost -- GB */
-  if (uclass_has_flag(unit_class(punit), UCF_MISSILE)) {
-    victim_cost -= unit_build_shield_cost(punit);
+  if (unit_has_type_flag(punit, F_MISSILE)) {
+    victim_cost -= unit_build_shield_cost(unit_type(punit));
   }
 
   unit_attack = (int) (PROB_MULTIPLIER 
@@ -136,7 +136,7 @@ static int ai_evaluate_tile_for_air_attack(struct unit *punit,
     - SHIELD_WEIGHTING + 2 * TRADE_WEIGHTING;
   if (profit > 0) {
     profit = military_amortize(unit_owner(punit), 
-                               game_find_city_by_number(punit->homecity),
+                               find_city_by_id(punit->homecity),
                                profit, sortie_time, balanced_cost);
     freelog(LOG_DEBUG, 
 	    "%s at (%d, %d) is a worthy target with profit %d", 
@@ -204,8 +204,7 @@ static int find_something_to_bomb(struct unit *punit, struct tile *ptile)
 
     if (is_enemy_unit_tile(tile1, pplayer)
         && ai_should_we_air_attack_tile(punit, tile1)
-	&& (air_can_move_between (max_dist, ptile, tile1, pplayer) >= 0)
-        && can_unit_attack_all_at_tile(punit, ptile)) {
+	&& (air_can_move_between (max_dist, ptile, tile1, pplayer) >= 0)){
       int new_best = ai_evaluate_tile_for_air_attack(punit, tile1);
       if (new_best > best) {
 	punit->goto_tile = tile1;
@@ -236,8 +235,7 @@ static bool ai_find_strategic_airbase(struct unit *punit,
   bool found = FALSE;
 
   airbase_iterator 
-    = refuel_iterate_init(unit_owner(punit), unit_type(punit),
-                          punit->tile,
+    = refuel_iterate_init(unit_owner(punit), punit->tile,
                           punit->tile, TRUE, 
                           punit->moves_left / SINGLE_MOVE, 
                           unit_move_rate(punit) / SINGLE_MOVE, 
@@ -370,7 +368,7 @@ void ai_manage_airunit(struct player *pplayer, struct unit *punit)
     }
   }
 
-  if ((punit = game_find_unit_by_number(id)) != NULL && punit->moves_left > 0
+  if ((punit = find_unit_by_id(id)) != NULL && punit->moves_left > 0
       && punit->moves_left != moves) {
     /* We have moved this turn, might have ended up stuck out in the fields
      * so, as a safety measure, let's manage again */
@@ -406,16 +404,10 @@ bool ai_choose_attacker_air(struct player *pplayer, struct city *pcity,
   }
 
   unit_type_iterate(punittype) {
-    struct unit_class *pclass = utype_class(punittype);
-
-    if (pclass->ai.land_move == MOVE_NONE
-        || pclass->ai.sea_move == MOVE_NONE
-        || uclass_has_flag(pclass, UCF_TERRAIN_SPEED)
-        || unit_type_is_losing_hp(pplayer, punittype)) {
-      /* We don't consider this a plane */
+    if (punittype->move_type != AIR_MOVING) {
       continue;
     }
-    if (can_city_build_unit_now(pcity, punittype)) {
+    if (can_build_unit(pcity, punittype)) {
       struct unit *virtual_unit = 
 	create_unit_virtual(pplayer, pcity, punittype, 
                             do_make_unit_veteran(pcity, punittype));
@@ -424,9 +416,8 @@ bool ai_choose_attacker_air(struct player *pplayer, struct city *pcity,
       if (profit > choice->want){
 	/* Update choice */
 	choice->want = profit;
-	choice->value.utype = punittype;
+	choice->choice = punittype->index;
 	choice->type = CT_ATTACKER;
-	choice->need_boat = FALSE;
 	want_something = TRUE;
 	freelog(LOG_DEBUG, "%s wants to build %s (want=%d)",
 		pcity->name,

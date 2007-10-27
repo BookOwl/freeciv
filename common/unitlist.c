@@ -97,44 +97,8 @@ bool can_units_do(const struct unit_list *punits,
 bool can_units_do_activity(const struct unit_list *punits,
 			   enum unit_activity activity)
 {
-  /* Make sure nobody uses these old activities any more */
-  assert(activity != ACTIVITY_FORTRESS && activity != ACTIVITY_AIRBASE);
-
   unit_list_iterate(punits, punit) {
     if (can_unit_do_activity(punit, activity)) {
-      return TRUE;
-    }
-  } unit_list_iterate_end;
-
-  return FALSE;
-}
-
-/****************************************************************************
-  Returns TRUE if any of the units can do the base building activity
-****************************************************************************/
-bool can_units_do_base(const struct unit_list *punits,
-                       enum base_type_id base)
-{
-  unit_list_iterate(punits, punit) {
-    if (can_unit_do_activity_base(punit, base)) {
-      return TRUE;
-    }
-  } unit_list_iterate_end;
-
-  return FALSE;
-}
-
-/****************************************************************************
-  Returns TRUE if any of the units can build base with given gui_type.
-****************************************************************************/
-bool can_units_do_base_gui(const struct unit_list *punits,
-                           enum base_gui_type base_gui)
-{
-  unit_list_iterate(punits, punit) {
-    struct base_type *pbase = get_base_by_gui_type(base_gui, punit, punit->tile);
-
-    if (pbase) {
-      /* Some unit can build base of given gui_type */
       return TRUE;
     }
   } unit_list_iterate_end;
@@ -196,7 +160,8 @@ bool units_are_occupied(const struct unit_list *punits)
 bool units_can_load(const struct unit_list *punits)
 {
   unit_list_iterate(punits, punit) {
-    if (find_transporter_for_unit(punit)) {
+    if (can_unit_load(punit,
+		      find_transporter_for_unit(punit, punit->tile))) {
       return TRUE;
     }
   } unit_list_iterate_end;
@@ -210,7 +175,7 @@ bool units_can_load(const struct unit_list *punits)
 bool units_can_unload(const struct unit_list *punits)
 {
   unit_list_iterate(punits, punit) {
-    if (can_unit_unload(punit, game_find_unit_by_number(punit->transported_by))
+    if (can_unit_unload(punit, find_unit_by_id(punit->transported_by))
 	&& can_unit_exist_at_tile(punit, punit->tile)) {
       return TRUE;
     }
