@@ -40,7 +40,6 @@
 #include "connectdlg.h"
 #include "control.h"
 #include "dialogs.h"
-#include "editdlg.h"
 #include "finddlg.h"
 #include "gotodlg.h"
 #include "graphics.h"
@@ -147,7 +146,6 @@ enum MenuID {
   MENU_ORDER_DIPLOMAT_DLG,
   MENU_ORDER_NUKE,
   MENU_ORDER_SELECT_SAME_TYPE,
-  MENU_ORDER_SELECT_SAME_TYPE_TILE,
   MENU_ORDER_WAIT,
   MENU_ORDER_DONE,
 
@@ -161,11 +159,6 @@ enum MenuID {
   MENU_REPORT_MESSAGES,
   MENU_REPORT_DEMOGRAPHIC,
   MENU_REPORT_SPACESHIP,
- 
-  MENU_EDITOR_TOGGLE,
-  MENU_EDITOR_TOOLS,
-  MENU_EDITOR_RECALCULATE_BORDERS,
-  MENU_EDITOR_REGENERATE_WATER,
 
   MENU_HELP_LANGUAGES,
   MENU_HELP_CONNECTING,
@@ -408,9 +401,6 @@ static void orders_menu_callback(gpointer callback_data,
   case MENU_ORDER_SELECT_SAME_TYPE:
     request_unit_select_same_type(get_units_in_focus());
     break;
-  case MENU_ORDER_SELECT_SAME_TYPE_TILE:
-    request_unit_select_same_type_tile(get_units_in_focus());
-    break;
   case MENU_ORDER_BUILD_CITY:
     unit_list_iterate(get_units_in_focus(), punit) {
       /* FIXME: this can provide different actions for different units...
@@ -447,13 +437,10 @@ static void orders_menu_callback(gpointer callback_data,
     unit_list_iterate(get_units_in_focus(), punit) {
       /* FIXME: this can provide different actions for different units...
        * not good! */
-      struct base_type *pbase = get_base_by_gui_type(BASE_GUI_FORTRESS,
-                                                     punit, punit->tile);
-      if (pbase) {
+      if (can_unit_do_activity(punit, ACTIVITY_FORTRESS))
 	key_unit_fortress();
-      } else {
+      else
 	key_unit_fortify();
-      }
     } unit_list_iterate_end;
     break;
    case MENU_ORDER_AIRBASE:
@@ -597,34 +584,6 @@ static void reports_menu_callback(gpointer callback_data,
   }
 }
 
-static int menu_updating = FALSE;
-
-/****************************************************************************
-  Callback function for when an item is chosen from the "editor" menu.
-****************************************************************************/
-static void editor_menu_callback(gpointer callback_data,
-                                 guint callback_action, GtkWidget *widget)
-{   
-  if (menu_updating) {
-    return;
-  }
-
-  switch(callback_action) {
-  case MENU_EDITOR_TOGGLE:
-    key_editor_toggle();
-    popdown_science_dialog(); /* Unreachbale techs in reqtree on/off */
-    break;
-  case MENU_EDITOR_TOOLS:
-    editdlg_show_tools();
-    break;
-  case MENU_EDITOR_RECALCULATE_BORDERS:
-    key_editor_recalculate_borders();
-    break;
-  case MENU_EDITOR_REGENERATE_WATER:
-    key_editor_regenerate_water();
-    break;
-  }
-}
 
 /****************************************************************
 ...
@@ -921,8 +880,6 @@ static GtkItemFactoryEntry menu_items[]	=
 	NULL,			0,					"<Separator>"	},
   { "/" N_("Orders") "/" N_("Select same type"), "y",
     orders_menu_callback, MENU_ORDER_SELECT_SAME_TYPE },
-  { "/" N_("Orders") "/" N_("Select same type in tile"), "<shift>y",
-    orders_menu_callback, MENU_ORDER_SELECT_SAME_TYPE_TILE },
   { "/" N_("Orders") "/" N_("_Wait"),			"w",
 	orders_menu_callback,	MENU_ORDER_WAIT						},
   { "/" N_("Orders") "/" N_("Done"),			"space",
@@ -954,19 +911,6 @@ static GtkItemFactoryEntry menu_items[]	=
 	reports_menu_callback,	MENU_REPORT_DEMOGRAPHIC					},
   { "/" N_("Reports") "/" N_("S_paceship"),		"F12",
 	reports_menu_callback,	MENU_REPORT_SPACESHIP					},
-
-  /* Editor menu */
-  { "/" N_("_Editor"), NULL, NULL, 0, "<Branch>" },
-  { "/" N_("_Editor") "/tearoff1", NULL, NULL, 0, "<Tearoff>" },
-  { "/" N_("_Editor") "/" N_("_Editing Mode"), NULL,
-    editor_menu_callback, MENU_EDITOR_TOGGLE, "<CheckItem>" },
-  { "/" N_("_Editor") "/" N_("_Tools"), NULL,
-    editor_menu_callback, MENU_EDITOR_TOOLS },
-  { "/" N_("_Editor") "/" N_("Recalculate _Borders"), NULL,
-    editor_menu_callback, MENU_EDITOR_RECALCULATE_BORDERS },
-  { "/" N_("_Editor") "/" N_("Regenerate _Water"), NULL,
-    editor_menu_callback, MENU_EDITOR_REGENERATE_WATER },
-
   /* Help menu ... */
   { "/" N_("_Help"),					NULL,
 	NULL,			0,					"<Branch>"	},
@@ -1242,7 +1186,7 @@ static const char *get_tile_change_menu_text(struct tile *ptile,
   struct tile newtile = *ptile;
 
   tile_apply_activity(&newtile, activity);
-  return tile_get_info_text(&newtile, 0);
+  return tile_get_info_text(&newtile);
 }
 
 /****************************************************************
@@ -1272,7 +1216,6 @@ void update_menus(void)
     menus_set_sensitive("<main>/_Government", FALSE);
     menus_set_sensitive("<main>/_View", FALSE);
     menus_set_sensitive("<main>/_Orders", FALSE);
-    menus_set_sensitive("<main>/_Editor", FALSE);
   } else {
     const char *path =
       menu_path_remove_uline("<main>/_Government/_Change Government");
@@ -1368,19 +1311,6 @@ void update_menus(void)
 
     menus_set_active("<main>/_View/_Full Screen", fullscreen_mode);
 
-    menu_updating = TRUE;
-
-    menus_set_sensitive("<main>/_Editor",
-			can_conn_enable_editing(&aconnection));
-    menus_set_sensitive("<main>/_Editor/_Tools",
-			can_conn_edit(&aconnection));
-    menus_set_sensitive("<main>/_Editor/_Recalculate Borders",
-			can_conn_edit(&aconnection));
-    menus_set_active("<main>/_Editor/Editing Mode",
-		     can_conn_edit(&aconnection));
-
-    menu_updating = FALSE;
-
     /* Remaining part of this function: Update Orders menu */
 
     if (!can_client_issue_orders()) {
@@ -1417,11 +1347,11 @@ void update_menus(void)
       menus_set_sensitive("<main>/_Orders/Transf_orm Terrain",
 			  can_units_do_activity(punits, ACTIVITY_TRANSFORM));
       menus_set_sensitive("<main>/_Orders/Build _Fortress",
-                          (can_units_do_base_gui(punits, BASE_GUI_FORTRESS)
+                          (can_units_do_activity(punits, ACTIVITY_FORTRESS)
                            || can_units_do_activity(punits,
 						    ACTIVITY_FORTIFYING)));
       menus_set_sensitive("<main>/_Orders/Build Airbas_e",
-			  can_units_do_base_gui(punits, BASE_GUI_AIRBASE));
+			  can_units_do_activity(punits, ACTIVITY_AIRBASE));
       menus_set_sensitive("<main>/_Orders/Clean _Pollution",
                           (can_units_do_activity(punits, ACTIVITY_POLLUTION)
                            || can_units_do(punits, can_unit_paradrop)));
@@ -1470,7 +1400,7 @@ void update_menus(void)
         /* FIXME: this overloading doesn't work well with multiple focus
          * units. */
         unit_list_iterate(punits, punit) {
-          if (tile_city(punit->tile)) {
+          if (punit->tile->city) {
             city_on_tile = TRUE;
             break;
           }
@@ -1513,7 +1443,7 @@ void update_menus(void)
       if (unit_list_size(punits) == 1) {
 	struct unit *punit = unit_list_get(punits, 0);
 
-	pterrain = tile_terrain(punit->tile);
+	pterrain = punit->tile->terrain;
 	if (pterrain->irrigation_result != T_NONE
 	    && pterrain->irrigation_result != pterrain) {
 	  my_snprintf(irrtext, sizeof(irrtext), irrfmt,

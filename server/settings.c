@@ -17,7 +17,6 @@
 
 #include "fcintl.h"
 #include "game.h"
-#include "ioz.h"
 #include "log.h"
 
 #include "map.h"
@@ -175,7 +174,7 @@ static bool maxplayers_callback(int value, const char **error_string)
     return FALSE;
   }
 #endif
-  if (value < player_count()) {
+  if (value < game.info.nplayers) {
     *error_string =_("Number of players is higher than requested value;\n"
 		     "Keeping old value.");
     return FALSE;
@@ -593,6 +592,25 @@ struct settings_s settings[] = {
 	  GAME_MIN_NOTRADESIZE, GAME_MAX_NOTRADESIZE,
 	  GAME_DEFAULT_NOTRADESIZE)
 
+  GEN_INT("unhappysize", game.info.unhappysize,
+	  SSET_RULES, SSET_SOCIOLOGY, SSET_RARE, SSET_TO_CLIENT,
+	  N_("City size before people become unhappy"),
+	  N_("Before other adjustments, the first unhappysize citizens in a "
+	     "city are content, and subsequent citizens are unhappy. "
+	     "See also cityfactor."), NULL,
+	  GAME_MIN_UNHAPPYSIZE, GAME_MAX_UNHAPPYSIZE,
+	  GAME_DEFAULT_UNHAPPYSIZE)
+
+  GEN_INT("cityfactor", game.info.cityfactor,
+	  SSET_RULES, SSET_SOCIOLOGY, SSET_RARE, SSET_TO_CLIENT,
+	  N_("Number of cities for higher unhappiness"),
+	  N_("When the number of cities a player owns is greater than "
+	     "cityfactor, one extra citizen is unhappy before other "
+	     "adjustments; see also unhappysize. This assumes a "
+	     "Democracy; for other governments the effect occurs at "
+	     "smaller numbers of cities."), NULL, 
+	  GAME_MIN_CITYFACTOR, GAME_MAX_CITYFACTOR, GAME_DEFAULT_CITYFACTOR)
+
   GEN_INT("citymindist", game.info.citymindist,
 	  SSET_RULES, SSET_SOCIOLOGY, SSET_SITUATIONAL, SSET_TO_CLIENT,
 	  N_("Minimum distance between cities"),
@@ -970,30 +988,31 @@ struct settings_s settings[] = {
 	     "turns. Zero means never auto-save."), NULL, 
 	  0, 200, GAME_DEFAULT_SAVETURNS)
 
+  /* Could undef entire option if !HAVE_LIBZ, but this way users get to see
+   * what they're missing out on if they didn't compile with zlib?  --dwp
+   */
+#ifdef HAVE_LIBZ
   GEN_INT("compress", game.info.save_compress_level,
 	  SSET_META, SSET_INTERNAL, SSET_RARE, SSET_SERVER_ONLY,
 	  N_("Savegame compression level"),
 	  N_("If non-zero, saved games will be compressed using zlib "
-	     "(gzip format) or bzip2. Larger values will give better "
-	     "compression but take longer."), NULL,
+	     "(gzip format). Larger values will give better "
+	     "compression but take longer. If the maximum is zero "
+	     "this server was not compiled to use zlib."), NULL,
 
 	  GAME_MIN_COMPRESS_LEVEL, GAME_MAX_COMPRESS_LEVEL,
 	  GAME_DEFAULT_COMPRESS_LEVEL)
-
-  GEN_INT("compresstype", game.info.save_compress_type,
-          SSET_META, SSET_INTERNAL, SSET_RARE, SSET_SERVER_ONLY,
-          N_("Savegame compression algorithm"),
-          N_("Compression library to use for savegames.\n"
-             " 0 - none\n"
-             " 1 - zlib (gzip format)\n"
-             " 2 - bzip2\n"
-             "Not all servers support all compression methods."), NULL,
-#if !defined(HAVE_LIBBZ2) && !defined(HAVE_LIBZ)
-          FZ_PLAIN, FZ_PLAIN, FZ_PLAIN)
-#elif !defined(HAVE_LIBBZ2) && defined(HAVE_LIBZ)
-          FZ_PLAIN, FZ_ZLIB, FZ_ZLIB)
 #else
-          FZ_PLAIN, FZ_BZIP2, FZ_BZIP2)
+  GEN_INT("compress", game.info.save_compress_level,
+	  SSET_META, SSET_INTERNAL, SSET_RARE, SSET_SERVER_ONLY,
+	  N_("Savegame compression level"),
+	  N_("If non-zero, saved games will be compressed using zlib "
+	     "(gzip format). Larger values will give better "
+	     "compression but take longer. If the maximum is zero "
+	     "this server was not compiled to use zlib."), NULL, 
+
+	  GAME_NO_COMPRESS_LEVEL, GAME_NO_COMPRESS_LEVEL, 
+	  GAME_NO_COMPRESS_LEVEL)
 #endif
 
   GEN_STRING("savename", game.save_name,

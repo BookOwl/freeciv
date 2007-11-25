@@ -521,7 +521,7 @@ static void unit_icon_callback(Widget w, XtPointer client_data,
   assert(i>=0 && i<num_units_below);
   if (unit_ids[i] == 0) /* no unit displayed at this place */
     return;
-  punit=game_find_unit_by_number(unit_ids[i]);
+  punit=find_unit_by_id(unit_ids[i]);
   if(punit) { /* should always be true at this point */
     if (unit_owner(punit) == game.player_ptr) {
       /* may be non-true if alliance */
@@ -900,8 +900,7 @@ void set_unit_icons_more_arrow(bool onoff)
 
   if (onoff && !showing) {
     /* FIXME: what about the mask? */
-    xaw_set_bitmap(more_arrow_label,
-		   get_arrow_sprite(tileset, ARROW_RIGHT)->pixmap);
+    xaw_set_bitmap(more_arrow_label, get_arrow_sprite(tileset)->pixmap);
     showing = TRUE;
   }
   else if(!onoff && showing) {

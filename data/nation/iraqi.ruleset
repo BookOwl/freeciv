@@ -18,7 +18,7 @@ flag_alt = "iraq_old"
 city_style = "Babylonian"
 
 ruler_titles = { "government",  "male_title",      "female_title"
-	         "Communism",   _("Dictator"),     _("Dictatress")
+	         "Communism",   _("Dictator"),     _("Dictator")
 }
 
 init_techs=""
@@ -26,7 +26,7 @@ init_buildings=""
 init_government="Despotism"
 init_units=""
 
-civilwar_nations="libyan", "iranian"
+civilwar_nations="libyan"
 
 cities =
  "Baghdad",

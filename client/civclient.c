@@ -78,6 +78,10 @@
 
 #include "civclient.h"
 
+/* this is used in strange places, and is 'extern'd where
+   needed (hence, it is not 'extern'd in civclient.h) */
+bool is_server = FALSE;
+
 char *logfile = NULL;
 char *scriptfile = NULL;
 static char tileset_name[512] = "\0";
@@ -90,8 +94,6 @@ char metaserver[512] = "\0";
 int  server_port = -1;
 bool auto_connect = FALSE; /* TRUE = skip "Connect to Freeciv Server" dialog */
 bool in_ggz = FALSE;
-
-struct civclient client;
 
 static enum client_states client_state = CLIENT_BOOT_STATE;
 
@@ -195,8 +197,6 @@ int main(int argc, char *argv[])
   }
 # endif
 #endif
-
-  i_am_client(); /* Tell to libcivcommon that we are client */
 
   init_nls();
   audio_init();
@@ -480,7 +480,6 @@ void client_game_init()
   game_init();
   attribute_init();
   agents_init();
-  hover_tile = NULL;
 }
 
 /**************************************************************************
@@ -538,7 +537,7 @@ void set_client_state(enum client_states newstate)
       create_event(NULL, E_GAME_START, _("Game started."));
       precalc_tech_data();
       if (game.player_ptr) {
-	player_research_update(game.player_ptr);
+	update_research(game.player_ptr);
       }
       role_unit_precalcs();
       boot_help_texts();	/* reboot */

@@ -120,14 +120,14 @@ static void rebuild_citydlg_title_str(struct widget *pWindow, struct city *pCity
 
 /* ======================================================================= */
 
-struct impr_type *get_building_for_effect(enum effect_type effect_type) {
+Impr_type_id get_building_for_effect(enum effect_type effect_type) {
  
-  improvement_iterate(pImprove) {
-    if (building_has_effect(pImprove, effect_type))
-      return pImprove;        
-  } improvement_iterate_end;
+  impr_type_iterate(imp) {
+    if (building_has_effect(imp, effect_type))
+      return imp;        
+  } impr_type_iterate_end;
   
-  return NULL;  
+  return B_LAST;  
 }
 
 /**************************************************************************
@@ -617,11 +617,6 @@ static SDL_Surface *create_unit_surface(struct unit *pUnit, bool support, int w,
   int i, step;
   SDL_Rect src_rect, dest;
   SDL_Surface *pSurf, *pZoomed;
-  
-  int upkeep_cost[O_COUNT];
-  int free_upkeep[O_COUNT];
-  int free_unhappy;
-  int happy_cost;
 
   struct canvas *destcanvas = canvas_create_with_alpha(
                                 tileset_full_tile_width(tileset),
@@ -640,19 +635,8 @@ static SDL_Surface *create_unit_surface(struct unit *pUnit, bool support, int w,
   pSurf = pZoomed;
   
   if (support) {
-    
-    free_unhappy = get_city_bonus(pCityDlg->pCity, EFT_MAKE_CONTENT_MIL);
-    happy_cost = city_unit_unhappiness(pUnit, &free_unhappy);
-    
-    output_type_iterate(o) {
-      free_upkeep[o] = get_city_output_bonus(pCityDlg->pCity, get_output_type(o),
-                                             EFT_UNIT_UPKEEP_FREE_PER_CITY);
-    } output_type_iterate_end;
-    
-    city_unit_upkeep(pUnit, upkeep_cost, free_upkeep);
-
-    i = upkeep_cost[O_SHIELD] + upkeep_cost[O_FOOD] +
-	upkeep_cost[O_GOLD] + happy_cost;
+    i = pUnit->upkeep[O_SHIELD] + pUnit->upkeep[O_FOOD] +
+	pUnit->upkeep[O_GOLD] + pUnit->unhappiness;
 
     if (i * pIcons->pFood->w > pSurf->w / 2) {
       step = (pSurf->w / 2 - pIcons->pFood->w) / (i - 1);
@@ -663,22 +647,22 @@ static SDL_Surface *create_unit_surface(struct unit *pUnit, bool support, int w,
     dest.y = pSurf->h - pIcons->pFood->h - adj_size(2);
     dest.x = pSurf->w / 8;
 
-    for (i = 0; i < upkeep_cost[O_SHIELD]; i++) {
+    for (i = 0; i < pUnit->upkeep[O_SHIELD]; i++) {
       alphablit(pIcons->pShield, NULL, pSurf, &dest);
       dest.x += step;
     }
 
-    for (i = 0; i < upkeep_cost[O_FOOD]; i++) {
+    for (i = 0; i < pUnit->upkeep[O_FOOD]; i++) {
       alphablit(pIcons->pFood, NULL, pSurf, &dest);
       dest.x += step;
     }
 
-    for (i = 0; i < upkeep_cost[O_GOLD]; i++) {
+    for (i = 0; i < pUnit->upkeep[O_GOLD]; i++) {
       alphablit(pIcons->pCoin, NULL, pSurf, &dest);
       dest.x += step;
     }
 
-    for (i = 0; i < happy_cost; i++) {
+    for (i = 0; i < pUnit->unhappiness; i++) {
       alphablit(pIcons->pFace, NULL, pSurf, &dest);
       dest.x += step;
     }
@@ -727,7 +711,7 @@ static void create_present_supported_units_widget_list(struct unit_list *pList)
   unit_list_iterate(pList, pUnit) {
         
     pUType = unit_type(pUnit);
-    pHome_City = game_find_city_by_number(pUnit->homecity);
+    pHome_City = find_city_by_id(pUnit->homecity);
     my_snprintf(cBuf, sizeof(cBuf), "%s (%d,%d,%d)%s\n%s\n(%d/%d)\n%s",
 		utype_name_translation(pUType),
 		pUType->attack_strength,
@@ -1146,6 +1130,8 @@ static int hurry_production_window_callback(struct widget *pWindow)
 void popup_hurry_production_dialog(struct city *pCity, SDL_Surface *pDest)
 {
 
+  int value;
+  const char *name;
   char cBuf[512];
   struct widget *pBuf = NULL, *pWindow;
   SDL_String16 *pStr;
@@ -1153,15 +1139,20 @@ void popup_hurry_production_dialog(struct city *pCity, SDL_Surface *pDest)
   SDL_Rect dst;
   int window_x = 0, window_y = 0;
   SDL_Rect area;
-  const char *name = city_production_name_translation(pCity);
-  int value = city_production_buy_gold_cost(pCity);
-
+  
   if (pHurry_Prod_Dlg) {
     return;
   }
   
   pHurry_Prod_Dlg = fc_calloc(1, sizeof(struct SMALL_DLG));
   
+  if (pCity->production.is_unit) {
+    name = utype_name_translation(utype_by_number(pCity->production.value));
+  } else {
+    name = get_impr_name_ex(pCity, pCity->production.value);
+  }
+
+  value = city_buy_cost(pCity);
   if (city_can_buy(pCity)) {
     if (game.player_ptr->economic.gold >= value) {
       my_snprintf(cBuf, sizeof(cBuf),
@@ -1413,8 +1404,8 @@ static int sell_imprvm_dlg_callback(struct widget *pImpr)
     id = MAX_ID - 3000 - pImpr->ID;
   
     my_snprintf(cBuf, sizeof(cBuf), _("Sell %s for %d gold?"),
-                city_improvement_name_translation(pCityDlg->pCity, improvement_by_number(id)),
-                impr_sell_gold(improvement_by_number(id)));
+                get_impr_name_ex(pCityDlg->pCity, id),
+                impr_sell_gold(id));
     pStr = create_str16_from_char(cBuf, adj_font(10));
     pStr->style |= (TTF_STYLE_BOLD|SF_CENTER);
     pStr->fgcol = *get_game_colorRGB(COLOR_THEME_CITYDLG_SELL);
@@ -1509,7 +1500,7 @@ void enable_city_dlg_widgets(void)
         struct widget *pTmpWidget = pCityDlg->pImprv->pEndActiveWidgetList;
 
         while (TRUE) {
-	  if (is_wonder(improvement_by_number(MAX_ID - 3000 - pTmpWidget->ID))) {
+	  if (is_wonder(MAX_ID - 3000 - pTmpWidget->ID)) {
 	    set_wstate(pTmpWidget, FC_WS_DISABLED);
 	  } else {
 	    set_wstate(pTmpWidget, FC_WS_NORMAL);
@@ -1976,7 +1967,7 @@ static void redraw_info_city_dialog(struct widget *pCityWindow,
     if (pCity->trade[i]) {
       step += pCity->trade_value[i];
 
-      if ((pTradeCity = game_find_city_by_number(pCity->trade[i]))) {
+      if ((pTradeCity = find_city_by_id(pCity->trade[i]))) {
 	my_snprintf(cBuf, sizeof(cBuf), "%s: +%d", pTradeCity->name,
 		    pCity->trade_value[i]);
       } else {
@@ -2218,7 +2209,7 @@ static void redraw_happyness_city_dialog(const struct widget *pCityWindow,
         
         /* TODO: check if code replacement above is correct */
 #if 0          
-	if (city_has_building(pCity, improvement_by_number(B_TEMPLE))) {
+	if (city_got_building(pCity, B_TEMPLE)) {
 	  pTmp1 =
 	    zoomSurface(GET_SURF(improvement_by_number(B_TEMPLE)->sprite),
 			0.5, 0.5, 1);
@@ -2228,7 +2219,7 @@ static void redraw_happyness_city_dialog(const struct widget *pCityWindow,
 	  pTmp1 = NULL;
 	}
 
-	if (city_has_building(pCity, improvement_by_number(B_COLOSSEUM))) {
+	if (city_got_building(pCity, B_COLOSSEUM)) {
 	  pTmp2 =
 	    zoomSurface(GET_SURF(improvement_by_number(B_COLOSSEUM)->sprite),
 			0.5, 0.5, 1);
@@ -2240,7 +2231,7 @@ static void redraw_happyness_city_dialog(const struct widget *pCityWindow,
 	  pTmp2 = NULL;
 	}
 
-	if (city_has_building(pCity, improvement_by_number(B_CATHEDRAL)) ||
+	if (city_got_building(pCity, B_CATHEDRAL) ||
 	    city_affected_by_wonder(pCity, B_MICHELANGELO)) {
 	  pTmp3 =
 	    zoomSurface(GET_SURF(improvement_by_number(B_CATHEDRAL)->sprite),
@@ -3020,7 +3011,7 @@ static void redraw_city_dialog(struct city *pCity)
   /* food stock */
   
     /* FIXME: check if this code replacement is correct */
-    /*  if (city_has_building(pCity, improvement_by_number(B_GRANARY)) */
+    /*  if (city_got_building(pCity, B_GRANARY)              */
     /*      || city_affected_by_wonder(pCity, B_PYRAMIDS)) { */
           
     if (get_city_bonus(pCity, EFT_GROWTH_FOOD) > 0) {
@@ -3208,9 +3199,9 @@ static void redraw_city_dialog(struct city *pCity)
   /* ================================================================= */
 
   /* draw productions shields progress */
-  if (VUT_UTYPE == pCity->production.kind) {
-    struct unit_type *pUnitType = pCity->production.value.utype;
-    cost = utype_build_shield_cost(pUnitType);
+  if (pCity->production.is_unit) {
+    struct unit_type *pUnitType = utype_by_number(pCity->production.value);
+    cost = unit_build_shield_cost(pUnitType);
     count = cost / 10;
         
     copy_chars_to_string16(pStr, utype_name_translation(pUnitType));
@@ -3229,9 +3220,8 @@ static void redraw_city_dialog(struct city *pCity)
     dest.x += pBuf2->w + adj_size(5);
 
   } else {
-    struct impr_type *pImprove = pCity->production.value.building;
 
-    if (improvement_has_flag(pImprove, IF_GOLD)) {
+    if (improvement_has_flag(pCity->production.value, IF_GOLD)) {
 
       if (pCityDlg->pBuy_Button
 	 && get_wstate(pCityDlg->pBuy_Button) != FC_WS_DISABLED) {
@@ -3250,15 +3240,15 @@ static void redraw_city_dialog(struct city *pCity)
 	widget_redraw(pCityDlg->pBuy_Button);
       }
 
-      cost = impr_build_shield_cost(pImprove);
+      cost = impr_build_shield_cost(pCity->production.value);
       count = cost / 10;
       
     }
 
-    copy_chars_to_string16(pStr, improvement_name_translation(pImprove));
+    copy_chars_to_string16(pStr, improvement_name_translation(pCity->production.value));
     pBuf = create_text_surf_from_str16(pStr);
     
-    pBuf2 = get_building_surface(pCity->production.value.building);
+    pBuf2 = get_building_surface(pCity->production.value);
     pBuf2 = zoomSurface(pBuf2, DEFAULT_ZOOM * ((float)32 / pBuf2->h), DEFAULT_ZOOM * ((float)32 / pBuf2->h), 1);
 
     /* blit impr icon */
@@ -3303,7 +3293,8 @@ static void redraw_city_dialog(struct city *pCity)
     dest.y = pWindow->size.y + adj_size(270) + dest.h + 1;
     
     if (pCity->shield_stock < cost) {
-      count = city_production_turns_to_build(pCity, TRUE);
+      count = city_turns_to_build(pCity,
+    	pCity->production, TRUE);
       if (count == 999) {
         my_snprintf(cBuf, sizeof(cBuf), "(%d/%d) %s!",
 		  		pCity->shield_stock, cost,  _("blocked"));
@@ -3517,6 +3508,7 @@ static void rebuild_imprm_list(struct city *pCity)
   struct widget *pAdd_Dock, *pBuf, *pLast;
   SDL_Surface *pLogo = NULL;
   SDL_String16 *pStr = NULL;
+  struct impr_type *pImpr = NULL;
   struct player *pOwner = city_owner(pCity);
   int prev_y = 0;
     
@@ -3540,14 +3532,16 @@ static void rebuild_imprm_list(struct city *pCity)
   pBuf = pLast = pAdd_Dock;
   
   /* allock new */
-  city_built_iterate(pCity, pImprove) {
+  built_impr_iterate(pCity, imp) {
 
-    pStr = create_str16_from_char(city_improvement_name_translation(pCity, pImprove), adj_font(10));
+    pImpr = improvement_by_number(imp);
+
+    pStr = create_str16_from_char(get_impr_name_ex(pCity, imp), adj_font(10));
     pStr->fgcol = *get_game_colorRGB(COLOR_THEME_CITYDLG_IMPR);
 
     pStr->style |= TTF_STYLE_BOLD;
 
-    pLogo = get_building_surface(pImprove);
+    pLogo = get_building_surface(imp);
     pLogo = ResizeSurfaceBox(pLogo, adj_size(22), adj_size(22), 1, TRUE, TRUE);
     
     pBuf = create_iconlabel(pLogo, pWindow->dst, pStr,
@@ -3562,11 +3556,11 @@ static void rebuild_imprm_list(struct city *pCity)
     pBuf->action = sell_imprvm_dlg_callback;
 
     if (!pCityDlg->pCity->did_sell
-        && !is_wonder(pImprove) && (pOwner == game.player_ptr)) {
+        && !is_wonder(imp) && (pOwner == game.player_ptr)) {
       set_wstate(pBuf, FC_WS_NORMAL);
     }
 
-    pBuf->ID = MAX_ID - improvement_number(pImprove) - 3000;
+    pBuf->ID = MAX_ID - imp - 3000;
     DownAdd(pBuf, pAdd_Dock);
     pAdd_Dock = pBuf;
         
@@ -3576,7 +3570,7 @@ static void rebuild_imprm_list(struct city *pCity)
       set_wflag(pBuf, WF_HIDDEN);
     }
 
-  } city_built_iterate_end;
+  } built_impr_iterate_end;
 
   if (count) {
     pCityDlg->pImprv->pEndWidgetList = pLast->prev;
@@ -3717,7 +3711,6 @@ void popup_city_dialog(struct city *pCity)
   pBuf->size.x =
       area.x + adj_size(2) + 2 * ((adj_size(183) - 5 * pBuf->size.w) / 6) + pBuf->size.w;
   pBuf->size.y = area.y + adj_size(2);
-
   set_wstate(pBuf, FC_WS_NORMAL);
   add_to_gui_list(ID_CITY_DLG_SUPPORT_BUTTON, pBuf);
   /* -------- */
@@ -3932,8 +3925,8 @@ void refresh_city_dialog(struct city *pCity)
 void refresh_unit_city_dialogs(struct unit *pUnit)
 {
 
-  struct city *pCity_sup = game_find_city_by_number(pUnit->homecity);
-  struct city *pCity_pre = tile_city(pUnit->tile);
+  struct city *pCity_sup = find_city_by_id(pUnit->homecity);
+  struct city *pCity_pre = tile_get_city(pUnit->tile);
 
   if (pCityDlg && ((pCityDlg->pCity == pCity_sup)
 		   || (pCityDlg->pCity == pCity_pre))) {

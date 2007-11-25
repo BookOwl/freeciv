@@ -128,11 +128,11 @@ static void popit(GdkEventButton *event, struct tile *ptile)
     is_orders = show_unit_orders(punit);
 
     if (punit && punit->goto_tile) {
-      map_deco[tile_index(punit->goto_tile)].crosshair++;
+      map_deco[punit->goto_tile->index].crosshair++;
       *cross_head = punit->goto_tile;
       cross_head++;
     }
-    map_deco[tile_index(ptile)].crosshair++;
+    map_deco[ptile->index].crosshair++;
     *cross_head = ptile;
     cross_head++;
 
@@ -168,7 +168,7 @@ void popupinfo_popdown_callback(GtkWidget *w, gpointer data)
   /* We could just remove the crosshairs that we placed earlier, but
    * this is easier. */
   whole_map_iterate(ptile) {
-    map_deco[tile_index(ptile)].crosshair = 0;
+    map_deco[ptile->index].crosshair = 0;
   } whole_map_iterate_end;
 
   update_map_canvas_visible();
@@ -240,7 +240,7 @@ gboolean butt_down_mapcanvas(GtkWidget *w, GdkEventButton *ev, gpointer data)
 
   gtk_widget_grab_focus(map_canvas);
   ptile = canvas_pos_to_tile(ev->x, ev->y);
-  pcity = ptile ? tile_city(ptile) : NULL;
+  pcity = ptile ? ptile->city : NULL;
 
   switch (ev->button) {
 
@@ -396,27 +396,24 @@ gboolean move_mapcanvas(GtkWidget *w, GdkEventMotion *ev, gpointer data)
 gboolean leave_mapcanvas(GtkWidget *widget, GdkEventCrossing *event)
 {
   int canvas_x, canvas_y;
-
-  if (gtk_notebook_get_current_page(GTK_NOTEBOOK(top_notebook))
-      != gtk_notebook_page_num(GTK_NOTEBOOK(top_notebook), map_widget)) {
-    /* Map is not currently topmost tab. Do not use tile specific cursors. */
-    update_mouse_cursor(CURSOR_DEFAULT);
-    return TRUE;
-  }
-
+  bool map_is_topmost = 
+       (gtk_notebook_get_current_page(GTK_NOTEBOOK(top_notebook))
+       == gtk_notebook_page_num(GTK_NOTEBOOK(top_notebook), map_widget));
+  
   /* Bizarrely, this function can be called even when we don't "leave"
    * the map canvas, for instance, it gets called any time the mouse is
    * clicked. */
   gdk_window_get_pointer(map_canvas->window, &canvas_x, &canvas_y, NULL);
   if (map_exists()
       && canvas_x >= 0 && canvas_y >= 0
-      && canvas_x < mapview.width && canvas_y < mapview.height) {
+      && canvas_x < mapview.width && canvas_y < mapview.height
+      && map_is_topmost) {
     handle_mouse_cursor(canvas_pos_to_tile(canvas_x, canvas_y));
+    /* update_unit_info_label is handled inside handle_mouse_cursor. */
   } else {
-    update_mouse_cursor(CURSOR_DEFAULT);
+    action_state = CURSOR_ACTION_DEFAULT;
+    update_unit_info_label(get_units_in_focus());
   }
-
-  update_unit_info_label(get_units_in_focus());
   return TRUE;
 }
 

@@ -260,7 +260,7 @@ static Uint16 main_key_down_handler(SDL_keysym Key, void *pData)
               struct unit *pUnit;
               struct city *pCity;
               if (NULL != (pUnit = head_of_units_in_focus()) && 
-                (pCity = tile_city(pUnit->tile)) != NULL &&
+                (pCity = pUnit->tile->city) != NULL &&
                 city_owner(pCity) == game.player_ptr) {
                 popup_city_dialog(pCity);
               }
@@ -410,7 +410,10 @@ static Uint16 main_mouse_motion_handler(SDL_MouseMotionEvent *pMotionEvent, void
       unsellect_widget_action();
     } else {
       if (get_client_state() == CLIENT_GAME_RUNNING_STATE) {
-        handle_mouse_cursor(canvas_pos_to_tile(pMotionEvent->x, pMotionEvent->y));
+        struct tile *ptile = canvas_pos_to_tile(pMotionEvent->x, pMotionEvent->y);
+
+        handle_mouse_cursor(ptile);
+        hover_tile = ptile;
       }
     }
   }

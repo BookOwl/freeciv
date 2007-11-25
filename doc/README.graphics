@@ -166,25 +166,25 @@ Terrain options:
 ----------------
 
 The top-level tilespec file also contains information on how to draw each
-terrain type.  For each terrain type include a section "tile_<terrain>"
-(e.g., "tile_plains").  This section contains information on how to draw
+terrain type.  For each terrain type include a section "terrain_<terrain>"
+(e.g., "terrain_plains").  This section contains information on how to draw
 this terrain type.  (The terrain types are specified in the server ruleset
 file under the graphc and graphic_alt flags.)
 
-  [tile_XXX] options
+  [terrain_XXX] options
   ----------------
-  is_blended            : If non-zero, given layer of this terrain will be
-                          blended with adjacent terrains. Blending is done
-                          civ2-style with a dither mask.  Only iso-view
-                          currently supports blending. Only the base graphic
-                          will be blended.
+  is_blended            : If set, this terrain will be blended with adjacent
+                          terrains.  Blending is done civ2-style with a
+                          dither mask.  Only iso-view currently supports
+                          blending.  Only the base graphic will be blended.
+                          Blending is drawn on top of the first layer (see
+                          below).
                           The blending mask has sprite t.dither_tile.
-  is_reversed           : Draw layers in reverse order.
   mine_sprite           : Mine sprite for this terrain.
   num_layers            : The number of layers in the terrain.  This value
-                          must be 1, 2 or 3.  Each layer is drawn
+                          must be either 1 or 2.  Each layer is drawn
                           separately.  The layerN options below control the
-                          drawing of each layer (N should be 0, 1 or 2)
+                          drawing of each layer (N should be either 0 or 1).
   layerN_is_tall        : Left right corner of terrain sprites is not based
                           on normal_tile_width and normal_tile_height, but
                           to corner of the full tile.
@@ -196,31 +196,40 @@ file under the graphc and graphic_alt flags.)
                           matched sprite will be chosen that matches all
                           cardinally adjacent tiles whose terrain has the same
                           match_type.
-  layerN_match_with     : List of match_types to match against
-  layerN_sprite_type    :  With traditional tilesets each tile is drawn using
-                          one sprite. This default sprite_type is "whole".
-                           Which sprite to use may be specified using a
-                          match_type, and there may be multiple layers
-                          (each having one sprite). This method corresponds
-                          to sprite_type "single".
-                           A more sophisticated drawing method breaks the tile
-                          up into 4 rectangles. Each rectangular cell is
-                          adjacent to 3 different tiles. Each adjacency is
-                          matched, giving 8 different sprites for each of the
-                          4 cells. This sprite_type is "corner".
+  layerN_match_style    : A string telling how matching is to be done for
+                          this layer.
+                          "none" : No matching is to be done.
+                          "bool" : Matching is done based only on whether the
+                                   adjacent tile has the same match type.
+                          "full" : Matching is done against all possible
+                                   match types of adjacent tiles.
+  layerN_cell_type      : With traditional tilesets each tile is drawn using
+                          one sprite.  Which sprite to use may be specified
+                          using a match_type, and there may be multiple layers
+                          (each having one sprite).  This method corresponds
+                          to cell_type "single".  A more sophisticated drawing
+                          method breaks the tile up into 4 rectangles.  Each
+                          rectangular cell is adjacent to 3 different tiles.
+                          Each adjacency is matched, giving 8 different sprites
+                          for each of the 4 cells. This cell_type is "rect".
 
 Additionally the top-level tilespec file should contain information about
 the drawing of each layer.  This is needed because the way each layer is
-drawn must be consistent between different terrain types. You may not have
-more than 3 layers (either in this section or in the [tile_XXX] sections).
+drawn must be consistent between different terrain types.  As an example you
+can mix boolean and no matching but you cannot mix full and boolean matching.
+You may not have more than 2 layers (either in this section or in the
+[terrain_XXX] sections).
 
   [layerN] options
   ----------------
+  match_style            : Gives the match style for this layer.
+                           "none" : no matching
+                           "bool" : terrains may use "none" or "bool" for
+                                    matching
+                           "full" : terrains may only use "full" matching
   match_types            : Gives a string list of all different match types.
                            This list must include every possible match_type
                            used by terrains for this layer.
-                           First letter of the match_type must be unique
-                           within layer.
 
 ----------------------------------------------------------------------
 Individual spec files:

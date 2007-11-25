@@ -193,7 +193,7 @@ static void caravan_search_from(const struct unit *caravan,
       break;
     }
 
-    pcity = tile_city(p.tile);
+    pcity = tile_get_city(p.tile);
     if (pcity) {
       bool stop = callback(callback_data, pcity, turns_before + p.turn,
                            p.moves_left);
@@ -260,7 +260,7 @@ static int one_city_trade_benefit(const struct city *pcity,
   } else {
     int slot;
     int oldtrade = get_city_min_trade_route(pcity, &slot);
-    struct city *losercity = game_find_city_by_number(pcity->trade[slot]);
+    struct city *losercity = find_city_by_id(pcity->trade[slot]);
 
     /* if we own the city, the trade benefit is only by how much
        better we are than the old trade route */
@@ -326,18 +326,18 @@ static double wonder_benefit(const struct unit *caravan, int arrival_time,
 
   if (!param->consider_wonders
       || unit_owner(caravan) != city_owner(dest)
-      || VUT_UTYPE == dest->production.kind
-      || !is_wonder(dest->production.value.building)) {
+      || dest->production.is_unit
+      || !is_wonder(dest->production.value)) {
     return 0;
   }
 
   shields_at_arrival = dest->shield_stock
     + arrival_time * dest->surplus[O_SHIELD];
 
-  costwithout = impr_buy_gold_cost(dest->production.value.building,
+  costwithout = impr_buy_gold_cost(dest->production.value,
       shields_at_arrival);
-  costwith = impr_buy_gold_cost(dest->production.value.building,
-      shields_at_arrival + unit_build_shield_cost(caravan));
+  costwith = impr_buy_gold_cost(dest->production.value,
+      shields_at_arrival + unit_build_shield_cost(unit_type(caravan)));
 
   assert(costwithout >= costwith);
   return costwithout - costwith;
@@ -433,7 +433,7 @@ static void caravan_evaluate_notransit(const struct unit *caravan,
                                        const struct caravan_parameter *param,
                                        struct caravan_result *result)
 {
-  const struct city *src = game_find_city_by_number(caravan->homecity);
+  const struct city *src = find_city_by_id(caravan->homecity);
 
   caravan_result_init(result, src, dest, 0);
   get_discounted_reward(caravan, param, result);
@@ -477,7 +477,7 @@ static void caravan_evaluate_withtransit(const struct unit *caravan,
 
   data.caravan = caravan;
   data.param = param;
-  caravan_result_init(result, game_find_city_by_number(caravan->homecity), dest, 0);
+  caravan_result_init(result, find_city_by_id(caravan->homecity), dest, 0);
   caravan_search_from(caravan, param, caravan->tile, 0,
                       caravan->moves_left, cewt_callback, &data);
 }
@@ -508,7 +508,7 @@ static void caravan_find_best_destination_notransit(const struct unit *caravan,
 {
   struct caravan_result current;
 
-  caravan_result_init(best, game_find_city_by_number(caravan->homecity), NULL, 0);
+  caravan_result_init(best, find_city_by_id(caravan->homecity), NULL, 0);
   current = *best;
 
   cities_iterate(dest) {
@@ -588,7 +588,7 @@ void caravan_find_best_destination(const struct unit *caravan,
   if (parameter->ignore_transit_time) {
     caravan_find_best_destination_notransit(caravan, parameter, result);
   } else {
-    const struct city *src = game_find_city_by_number(caravan->homecity);
+    const struct city *src = find_city_by_id(caravan->homecity);
 
     caravan_find_best_destination_withtransit(caravan, parameter, src, 0, 
                                               caravan->moves_left, result);
@@ -642,7 +642,7 @@ static bool cowt_callback(void *vdata, const struct city *pcity,
   const struct unit *caravan = data->caravan;
   struct caravan_result current;
 
-  caravan_result_init(&current, game_find_city_by_number(caravan->homecity), 
+  caravan_result_init(&current, find_city_by_id(caravan->homecity), 
                       pcity, arrival_time);
 
   /* first, see what benefit we'd get from not changing home city */

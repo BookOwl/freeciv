@@ -107,7 +107,7 @@ static struct worklist_report_dialog *report_dialog;
 static int uni_id(struct worklist *pwl, int wlinx);
 
 static void worklist_id_to_name(char buf[],
-				struct universal production,
+				struct city_production production,
 				struct city *pcity);
 
 static void rename_worklist_callback(Widget w, XtPointer client_data, 
@@ -157,7 +157,7 @@ static void worklist_avail_help_callback(Widget w, XtPointer client_data,
 					  XtPointer call_data);
 static void worklist_show_advanced_callback(Widget w, XtPointer client_data, 
 					  XtPointer call_data);
-static void worklist_help(struct universal production);
+static void worklist_help(struct city_production production);
 static void worklist_populate_worklist(struct worklist_dialog *pdialog);
 static void worklist_populate_targets(struct worklist_dialog *pdialog);
 
@@ -571,10 +571,10 @@ int uni_id(struct worklist *pwl, int inx)
 {
   if ((inx < 0) || (inx >= worklist_length(pwl))) {
     return WORKLIST_END;
-  } else if (VUT_UTYPE == pwl->entries[inx].kind) {
-    return utype_number(pwl->entries[inx].value.utype) + B_LAST;
+  } else if (pwl->entries[inx].is_unit) {
+    return pwl->entries[inx].value + B_LAST;
   } else {
-    return improvement_number(pwl->entries[inx].value.building);
+    return pwl->entries[inx].value;
   }
 }
 
@@ -582,21 +582,21 @@ int uni_id(struct worklist *pwl, int inx)
 
 *****************************************************************/
 void worklist_id_to_name(char buf[],
-			 struct universal production,
+			 struct city_production production,
 			 struct city *pcity)
 {
-  if (VUT_UTYPE == production.kind)
+  if (production.is_unit)
     sprintf(buf, "%s (%d)",
-	    utype_values_translation(production.value.utype),
-	    utype_build_shield_cost(production.value.utype));
+	    utype_values_translation(utype_by_number(production.value)),
+	    unit_build_shield_cost(utype_by_number(production.value)));
   else if (pcity)
     sprintf(buf, "%s (%d)",
-	    city_improvement_name_translation(pcity, production.value.building),
-	    impr_build_shield_cost(production.value.building));
+	    get_impr_name_ex(pcity, production.value),
+	    impr_build_shield_cost(production.value));
   else
     sprintf(buf, "%s (%d)",
-	    improvement_name_translation(production.value.building),
-	    impr_build_shield_cost(production.value.building));
+	    improvement_name_translation(production.value),
+	    impr_build_shield_cost(production.value));
 }
 
 
@@ -621,7 +621,7 @@ void rename_worklist_callback(Widget w, XtPointer client_data,
   input_dialog_create(worklist_report_shell,
 		      "renameworklist",
 		      _("What should the new name be?"),
-		      client.worklists[pdialog->wl_idx].name,
+		      pdialog->pplr->worklists[pdialog->wl_idx].name,
 		      rename_worklist_sub_callback,
 		      (XtPointer)pdialog,
 		      rename_worklist_sub_callback,
@@ -639,9 +639,9 @@ void rename_worklist_sub_callback(Widget w, XtPointer client_data,
   pdialog = (struct worklist_report_dialog *)client_data;
 
   if (pdialog) {
-    strncpy(client.worklists[pdialog->wl_idx].name,
+    strncpy(pdialog->pplr->worklists[pdialog->wl_idx].name,
             input_dialog_get_input(w), MAX_LEN_NAME);
-    client.worklists[pdialog->wl_idx].name[MAX_LEN_NAME - 1] = '\0';
+    pdialog->pplr->worklists[pdialog->wl_idx].name[MAX_LEN_NAME - 1] = '\0';
 
     update_worklist_report_dialog();
   }
@@ -663,7 +663,7 @@ void insert_worklist_callback(Widget w, XtPointer client_data,
   /* Find the next free worklist for this player */
 
   for (j = 0; j < MAX_NUM_WORKLISTS; j++)
-    if (!client.worklists[j].is_valid)
+    if (!pdialog->pplr->worklists[j].is_valid)
       break;
 
   /* No more worklist slots free.  (!!!Maybe we should tell the user?) */
@@ -671,9 +671,9 @@ void insert_worklist_callback(Widget w, XtPointer client_data,
     return;
 
   /* Validate this slot. */
-  init_worklist(&client.worklists[j]);
-  client.worklists[j].is_valid = TRUE;
-  strcpy(client.worklists[j].name, _("empty worklist"));
+  init_worklist(&pdialog->pplr->worklists[j]);
+  pdialog->pplr->worklists[j].is_valid = TRUE;
+  strcpy(pdialog->pplr->worklists[j].name, _("empty worklist"));
 
   update_worklist_report_dialog();
 }
@@ -697,18 +697,18 @@ void delete_worklist_callback(Widget w, XtPointer client_data,
 
   /* Look for the last free worklist */
   for (i = 0; i < MAX_NUM_WORKLISTS; i++)
-    if (!client.worklists[i].is_valid)
+    if (!pdialog->pplr->worklists[i].is_valid)
       break;
 
   for (j = retList->list_index; j < i-1; j++) {
-    copy_worklist(&client.worklists[j], 
-                  &client.worklists[j+1]);
+    copy_worklist(&pdialog->pplr->worklists[j], 
+                  &pdialog->pplr->worklists[j+1]);
   }
 
   /* The last worklist in the set is no longer valid -- it's been slid up
    * one slot. */
-  client.worklists[i-1].is_valid = FALSE;
-  strcpy(client.worklists[i-1].name, "\0");
+  pdialog->pplr->worklists[i-1].is_valid = FALSE;
+  strcpy(pdialog->pplr->worklists[i-1].name, "\0");
   
   update_worklist_report_dialog();
 }
@@ -744,7 +744,7 @@ void commit_player_worklist(struct worklist *pwl, void *data)
 
   pdialog = (struct worklist_report_dialog *)data;
 
-  copy_worklist(&client.worklists[pdialog->wl_idx], pwl);
+  copy_worklist(&pdialog->pplr->worklists[pdialog->wl_idx], pwl);
 }
 
 /****************************************************************
@@ -767,10 +767,10 @@ void populate_worklist_report_list(struct worklist_report_dialog *pdialog)
   int i, n;
 
   for (i = 0, n = 0; i < MAX_NUM_WORKLISTS; i++) {
-    if (client.worklists[i].is_valid) {
-      strcpy(pdialog->worklist_names[n], client.worklists[i].name);
+    if (pdialog->pplr->worklists[i].is_valid) {
+      strcpy(pdialog->worklist_names[n], pdialog->pplr->worklists[i].name);
       pdialog->worklist_names_ptrs[n] = pdialog->worklist_names[n];
-      pdialog->worklist_ptr[n] = &client.worklists[i];
+      pdialog->worklist_ptr[n] = &pdialog->pplr->worklists[i];
       n++;
     }
   }
@@ -834,14 +834,19 @@ void insert_into_worklist(struct worklist_dialog *pdialog,
 			  int before, cid cid)
 {
   int i, first_free;
-  struct universal target = cid_decode(cid);
+  struct city_production target = cid_decode(cid);
 
   /* If this worklist is a city worklist, double check that the city
      really can (eventually) build the target.  We've made sure that
      the list of available targets is okay for this city, but a global
      worklist may try to insert an odd-ball unit or target. */
   if (pdialog->pcity
-      && !can_city_build_later(pdialog->pcity, target)) {
+      && ((target.is_unit
+	   && !can_eventually_build_unit(pdialog->pcity,
+					 utype_by_number(target.value)))
+	  || (!target.is_unit
+	      && !can_eventually_build_improvement(pdialog->pcity,
+						   target.value)))) {
     /* Nope, this city can't build this target, ever.  Don't put it into
        the worklist. */
     return;
@@ -931,7 +936,7 @@ void worklist_insert_common_callback(struct worklist_dialog *pdialog,
 {
   int target;
   int i, len;
-  struct universal production;
+  struct city_production production;
 
   /* Is there anything selected to insert? */
   if (retAvail->list_index == XAW_LIST_NONE)
@@ -942,9 +947,9 @@ void worklist_insert_common_callback(struct worklist_dialog *pdialog,
 
   if (retAvail->list_index >= pdialog->worklist_avail_num_targets) {
     /* target is a global worklist id */
-    /* struct player *pplr = city_owner(pdialog->pcity); */
+    struct player *pplr = city_owner(pdialog->pcity);
     int wl_idx = pdialog->worklist_avail_ids[retAvail->list_index];
-    struct worklist *pwl = &client.worklists[wl_idx];
+    struct worklist *pwl = &pplr->worklists[wl_idx];
 
     for (i = 0; i < MAX_LEN_WORKLIST && uni_id(pwl, i) != WORKLIST_END; i++) {
       insert_into_worklist(pdialog, where, uni_id(pwl, i));
@@ -954,14 +959,14 @@ void worklist_insert_common_callback(struct worklist_dialog *pdialog,
   } else if (retAvail->list_index >= 
 	     pdialog->worklist_avail_num_improvements) {
     /* target is a unit */
-    production.kind = VUT_UTYPE;
-    production.value.utype = utype_by_number(target);
+    production.is_unit = true;
+    production.value = target;
     insert_into_worklist(pdialog, where, cid_encode(production));
     where++;
   } else {
     /* target is an improvement or wonder */
-    production.kind = VUT_IMPROVEMENT;
-    production.value.building = improvement_by_number(target);
+    production.is_unit = false;
+    production.value = target;
     insert_into_worklist(pdialog, where, cid_encode(production));
     where++;
   }
@@ -1095,7 +1100,7 @@ void worklist_ok_callback(Widget w, XtPointer client_data, XtPointer call_data)
 {
   struct worklist_dialog *pdialog;
   struct worklist wl;
-  struct universal production;
+  struct city_production production;
   int i;
   
   pdialog=(struct worklist_dialog *)client_data;
@@ -1108,12 +1113,12 @@ void worklist_ok_callback(Widget w, XtPointer client_data, XtPointer call_data)
     if (pdialog->worklist_ids[i] == WORKLIST_END) {
       continue;
     } else if (pdialog->worklist_ids[i] >= B_LAST) {
-      production.kind = VUT_UTYPE;
-      production.value.utype = utype_by_number(pdialog->worklist_ids[i] - B_LAST);
+      production.is_unit = true;
+      production.value = pdialog->worklist_ids[i] - B_LAST;
       worklist_append(&wl, production);
     } else if (pdialog->worklist_ids[i] >= 0) {
-      production.kind = VUT_IMPROVEMENT;
-      production.value.building = improvement_by_number(pdialog->worklist_ids[i]);
+      production.is_unit = false;
+      production.value = pdialog->worklist_ids[i];
       worklist_append(&wl, production);
     } else {
       continue;
@@ -1161,7 +1166,7 @@ void worklist_worklist_help_callback(Widget w, XtPointer client_data,
 {
   struct worklist_dialog *pdialog;
   XawListReturnStruct *ret;
-  struct universal production;
+  struct city_production production;
 
   pdialog=(struct worklist_dialog *)client_data;
 
@@ -1170,8 +1175,7 @@ void worklist_worklist_help_callback(Widget w, XtPointer client_data,
     cid cid = pdialog->worklist_ids[ret->list_index];
     production = cid_decode(cid);
   } else {
-    production.kind = VUT_NONE;
-    production.value.building = NULL;
+    production.value = -1;
   }
 
   worklist_help(production);
@@ -1182,7 +1186,7 @@ void worklist_avail_help_callback(Widget w, XtPointer client_data,
 {
   struct worklist_dialog *pdialog;
   XawListReturnStruct *ret;
-  struct universal production;
+  struct city_production production;
 
   pdialog=(struct worklist_dialog *)client_data;
 
@@ -1190,34 +1194,31 @@ void worklist_avail_help_callback(Widget w, XtPointer client_data,
   if(ret->list_index!=XAW_LIST_NONE) {
     if (ret->list_index >= pdialog->worklist_avail_num_targets) {
       /* target is a global worklist id */
-      production.kind = VUT_NONE;
-      production.value.building = NULL;
+      production.value = -1;
     } else {
-      production =
-        universal_by_number((ret->list_index >= pdialog->worklist_avail_num_improvements)
-                               ? VUT_UTYPE : VUT_IMPROVEMENT,
-                               pdialog->worklist_avail_ids[ret->list_index]);
+      production.value = pdialog->worklist_avail_ids[ret->list_index];
+      production.is_unit =
+        ret->list_index >= pdialog->worklist_avail_num_improvements;
     }
   } else {
-    production.kind = VUT_NONE;
-    production.value.building = NULL;
+    production.value = -1;
   }
 
   worklist_help(production);
 }
 
 
-void worklist_help(struct universal production)
+void worklist_help(struct city_production production)
 {
-  if (production.value.building) {
-    if (VUT_UTYPE == production.kind) {
-      popup_help_dialog_typed(utype_name_translation(production.value.utype),
+  if (production.value >= 0) {
+    if (production.is_unit) {
+      popup_help_dialog_typed(utype_name_translation(utype_by_number(production.value)),
 					    HELP_UNIT);
-    } else if (is_great_wonder(production.value.building)) {
-      popup_help_dialog_typed(improvement_name_translation(production.value.building),
+    } else if (is_great_wonder(production.value)) {
+      popup_help_dialog_typed(improvement_name_translation(production.value),
 						   HELP_WONDER);
     } else {
-      popup_help_dialog_typed(improvement_name_translation(production.value.building),
+      popup_help_dialog_typed(improvement_name_translation(production.value),
 						   HELP_IMPROVEMENT);
     }
   }
@@ -1255,17 +1256,17 @@ void worklist_populate_worklist(struct worklist_dialog *pdialog)
 {
   int i, n;
   int id;
-  struct universal target;
+  struct city_production target;
 
   n = 0;
   if (pdialog->pcity) {
     /* First element is the current build target of the city. */
-    id = universal_number(&pdialog->pcity->production);
+    id = pdialog->pcity->production.value;
 
     worklist_id_to_name(pdialog->worklist_names[n],
 			pdialog->pcity->production, pdialog->pcity);
 
-    if (VUT_UTYPE == pdialog->pcity->production.kind)
+    if (pdialog->pcity->production.is_unit)
       id += B_LAST;
     pdialog->worklist_names_ptrs[n] = pdialog->worklist_names[n];
     pdialog->worklist_ids[n] = id;
@@ -1301,7 +1302,7 @@ void worklist_populate_targets(struct worklist_dialog *pdialog)
   Boolean b;
   int advanced_tech;
   int can_build, can_eventually_build;
-  struct universal production;
+  struct city_production production;
 
   if (!can_client_issue_orders()) {
     return;
@@ -1318,51 +1319,51 @@ void worklist_populate_targets(struct worklist_dialog *pdialog)
     advanced_tech = False;
  
   /*     + First, improvements and Wonders. */
-  improvement_iterate(pimprove) {
+  impr_type_iterate(i) {
     /* Can the player (eventually) build this improvement? */
-    can_build = can_player_build_improvement_now(pplr, pimprove);
-    can_eventually_build = can_player_build_improvement_later(pplr, pimprove);
+    can_build = can_player_build_improvement(pplr,i);
+    can_eventually_build = can_player_eventually_build_improvement(pplr,i);
 
     /* If there's a city, can the city build the improvement? */
     if (pdialog->pcity) {
-      can_build = can_build && can_city_build_improvement_now(pdialog->pcity, pimprove);
+      can_build = can_build && can_build_improvement(pdialog->pcity, i);
       can_eventually_build = can_eventually_build &&
-	can_city_build_improvement_later(pdialog->pcity, pimprove);
+	can_eventually_build_improvement(pdialog->pcity, i);
     }
     
     if (( advanced_tech && can_eventually_build) ||
 	(!advanced_tech && can_build)) {
-      production.kind = VUT_IMPROVEMENT;
-      production.value.building = pimprove;
+      production.is_unit = false;
+      production.value = i;
       worklist_id_to_name(pdialog->worklist_avail_names[n],
 			  production, pdialog->pcity);
       pdialog->worklist_avail_names_ptrs[n]=pdialog->worklist_avail_names[n];
-      pdialog->worklist_avail_ids[n++] = improvement_number(pimprove);
+      pdialog->worklist_avail_ids[n++]=i;
     }
-  } improvement_iterate_end;
+  } impr_type_iterate_end;
   pdialog->worklist_avail_num_improvements=n;
 
   /*     + Second, units. */
-  unit_type_iterate(punittype) {
+  unit_type_iterate(i) {
     /* Can the player (eventually) build this improvement? */
-    can_build = can_player_build_unit_now(pplr,punittype);
-    can_eventually_build = can_player_build_unit_later(pplr,punittype);
+    can_build = can_player_build_unit(pplr,i);
+    can_eventually_build = can_player_eventually_build_unit(pplr,i);
 
     /* If there's a city, can the city build the improvement? */
     if (pdialog->pcity) {
-      can_build = can_build && can_city_build_unit_now(pdialog->pcity, punittype);
+      can_build = can_build && can_build_unit(pdialog->pcity, i);
       can_eventually_build = can_eventually_build &&
-	can_city_build_unit_later(pdialog->pcity, punittype);
+	can_eventually_build_unit(pdialog->pcity, i);
     }
 
     if (( advanced_tech && can_eventually_build) ||
 	(!advanced_tech && can_build)) {
-      production.kind = VUT_UTYPE;
-      production.value.utype = punittype;
+      production.is_unit = true;
+      production.value = i->index;
       worklist_id_to_name(pdialog->worklist_avail_names[n],
 			  production, pdialog->pcity);
       pdialog->worklist_avail_names_ptrs[n]=pdialog->worklist_avail_names[n];
-      pdialog->worklist_avail_ids[n++] = utype_number(punittype);
+      pdialog->worklist_avail_ids[n++]=i->index;
     }
   } unit_type_iterate_end;
 
@@ -1372,8 +1373,8 @@ void worklist_populate_targets(struct worklist_dialog *pdialog)
   if (pdialog->pcity) {
     /* Now fill in the global worklists. */
     for (i = 0; i < MAX_NUM_WORKLISTS; i++)
-      if (client.worklists[i].is_valid) {
-	strcpy(pdialog->worklist_avail_names[n], client.worklists[i].name);
+      if (pplr->worklists[i].is_valid) {
+	strcpy(pdialog->worklist_avail_names[n], pplr->worklists[i].name);
 	pdialog->worklist_avail_names_ptrs[n]=pdialog->worklist_avail_names[n];
 	pdialog->worklist_avail_ids[n++]=i;
       }

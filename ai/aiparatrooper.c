@@ -54,7 +54,7 @@ static struct tile* find_best_tile_to_paradrop_to(struct unit *punit)
       continue;
     }
   
-    acity = tile_city(ptile);
+    acity = tile_get_city(ptile);
     if (acity && city_owner(acity) == unit_owner(punit)
         && unit_list_size(ptile->units) == 0) {
       val = acity->size * acity->ai.urgency;
@@ -66,7 +66,7 @@ static struct tile* find_best_tile_to_paradrop_to(struct unit *punit)
   } square_iterate_end;
   
   if (best_tile != NULL) {
-    acity = tile_city(best_tile);
+    acity = tile_get_city(best_tile);
     UNIT_LOG(LOGLEVEL_PARATROOPER, punit, 
              "Choose to jump in order to protect allied city %s (%d %d). "
 	     "Benefit: %d",
@@ -76,7 +76,7 @@ static struct tile* find_best_tile_to_paradrop_to(struct unit *punit)
 
   /* Second, we search for undefended enemy cities */
   square_iterate(punit->tile, range, ptile) {
-    acity = tile_city(ptile);
+    acity = tile_get_city(ptile);
     if (acity && pplayers_at_war(unit_owner(punit), city_owner(acity)) &&
         (unit_list_size(ptile->units) == 0)) {
       if (!map_is_known_and_seen(ptile, pplayer, V_MAIN)
@@ -85,7 +85,7 @@ static struct tile* find_best_tile_to_paradrop_to(struct unit *punit)
       }
       /* Prefer big cities on other continents */
       val = acity->size
-            + (tile_continent(punit->tile) != tile_continent(ptile));
+            + (tile_get_continent(punit->tile) != tile_get_continent(ptile));
       if (val > best) {
         best = val;
 	best_tile = ptile;
@@ -94,7 +94,7 @@ static struct tile* find_best_tile_to_paradrop_to(struct unit *punit)
   } square_iterate_end;
   
   if (best_tile != NULL) {
-    acity = tile_city(best_tile);
+    acity = tile_get_city(best_tile);
     UNIT_LOG(LOGLEVEL_PARATROOPER, punit, 
              "Choose to jump into enemy city %s (%d %d). Benefit: %d",
 	     acity->name, best_tile->x, best_tile->y, best);
@@ -103,14 +103,13 @@ static struct tile* find_best_tile_to_paradrop_to(struct unit *punit)
 
   /* Jump to kill adjacent units */
   square_iterate(punit->tile, range, ptile) {
-    struct terrain *pterrain = tile_terrain(ptile);
-    if (is_ocean(pterrain)) {
+    if (is_ocean(ptile->terrain)) {
       continue;
     }
     if (!map_is_known(ptile, pplayer)) {
       continue;
     }
-    acity = tile_city(ptile);
+    acity = tile_get_city(ptile);
     if (acity && !pplayers_allied(city_owner(acity), pplayer)) {
       continue;
     }
@@ -121,7 +120,7 @@ static struct tile* find_best_tile_to_paradrop_to(struct unit *punit)
     adjc_iterate(ptile, target) {
       if (unit_list_size(target->units) == 0
           || !can_unit_attack_tile(punit, target)
-	  || is_ocean_tile(target)
+	  || is_ocean(target->terrain)
 	  || (ai_handicap(pplayer, H_FOG)
 	      && !map_is_known_and_seen(target, pplayer, V_MAIN))) {
         continue;
@@ -138,7 +137,7 @@ static struct tile* find_best_tile_to_paradrop_to(struct unit *punit)
         val += get_defender(punit, target)->hp * 100;
       }
       val *= unit_win_chance(punit, get_defender(punit, target));
-      val += pterrain->defense_bonus / 10;
+      val += ptile->terrain->defense_bonus / 10;
       val -= punit->hp * 100;
       
       if (val > best) {
@@ -163,7 +162,7 @@ static struct tile* find_best_tile_to_paradrop_to(struct unit *punit)
 **********************************************************************/
 void ai_manage_paratrooper(struct player *pplayer, struct unit *punit)
 {
-  struct city *pcity = tile_city(punit->tile);
+  struct city *pcity = tile_get_city(punit->tile);
   struct tile *ptile_dest = NULL;
 
   int sanity = punit->id;
@@ -197,7 +196,7 @@ void ai_manage_paratrooper(struct player *pplayer, struct unit *punit)
     if (ptile_dest) {
       if (do_paradrop(punit, ptile_dest)) {
 	/* successfull! */
-	if (!game_find_unit_by_number(sanity)) {
+	if (!find_unit_by_id(sanity)) {
 	  /* the unit did not survive the move */
 	  return;
 	}
@@ -254,7 +253,7 @@ static int calculate_want_for_paratrooper(struct unit *punit,
   
   square_iterate(ptile_city, range, ptile) {
     int multiplier;
-    struct city *pcity = tile_city(ptile);
+    struct city *pcity = tile_get_city(ptile);
     
     if (!pcity) {
       continue;
@@ -266,8 +265,8 @@ static int calculate_want_for_paratrooper(struct unit *punit,
     
     /* We prefer jumping to other continents. On the same continent we 
      * can fight traditionally */    
-    if (tile_continent(ptile_city) != tile_continent(ptile)) {
-      if (get_continent_size(tile_continent(ptile)) < 3) {
+    if (tile_get_continent(ptile_city) != tile_get_continent(ptile)) {
+      if (get_continent_size(tile_get_continent(ptile)) < 3) {
         /* Tiny island are hard to conquer with traditional units */
         multiplier = 10;
       } else {
@@ -327,12 +326,9 @@ void ai_choose_paratrooper(struct player *pplayer, struct city *pcity,
     if (!utype_has_flag(u_type, F_PARATROOPERS)) {
       continue;
     }
-    if (A_NEVER == u_type->require_advance) {
-      continue;
-    }
 
     /* assign tech for paratroopers */
-    tech_req = advance_index(u_type->require_advance);
+    tech_req = u_type->tech_requirement;
     if (tech_req != A_NONE && tech_req != A_UNSET) {
       for (i = 0; i < num_requirements; i++) {
         if (requirements[i] == tech_req) {
@@ -345,7 +341,7 @@ void ai_choose_paratrooper(struct player *pplayer, struct city *pcity,
     }
 
     /* we only update choice struct if we can build it! */
-    if (!can_city_build_unit_now(pcity, u_type)) {
+    if (!can_build_unit(pcity, u_type)) {
       continue;
     }
 
@@ -359,9 +355,8 @@ void ai_choose_paratrooper(struct player *pplayer, struct city *pcity,
     if (profit > choice->want) {
       /* Update choice */
       choice->want = profit;
-      choice->value.utype = u_type;
+      choice->choice = u_type->index;
       choice->type = CT_ATTACKER;
-      choice->need_boat = FALSE;
       freelog(LOGLEVEL_PARATROOPER, "%s wants to build %s (want=%d)",
 	      pcity->name,
 	      utype_rule_name(u_type),
@@ -380,11 +375,11 @@ void ai_choose_paratrooper(struct player *pplayer, struct city *pcity,
 	      pplayer->ai.tech_want[tech_req]);
 
     /* now, we raise want for prerequisites */
-    advance_index_iterate(A_FIRST, k) {
+    tech_type_iterate(k) {
       if (is_tech_a_req_for_goal(pplayer, k, tech_req)) {
         pplayer->ai.tech_want[k] += 1;
       }
-    } advance_index_iterate_end;
+    } tech_type_iterate_end;
   }
   return;
 }
