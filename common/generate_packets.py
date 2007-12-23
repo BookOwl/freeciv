@@ -1358,16 +1358,7 @@ def strip_c_comment(s):
 # various files.
 def main():
     ### parsing input
-    src_dir=os.path.dirname(sys.argv[0])
-    src_root=src_dir+"/.."
-    input_name=src_dir+"/packets.def"
-    ### We call this variable target_root instead of build_root
-    ### to avoid confusion as we are not building to builddir in
-    ### automake sense.
-    ### We build to src dir. Building to builddir causes a lot
-    ### of problems we have been unable to solve.
-    target_root=src_root
-
+    input_name="packets.def"
     content=open(input_name).read()
     content=strip_c_comment(content)
     lines=string.split(content,"\n")
@@ -1392,7 +1383,7 @@ def main():
     ### parsing finished
 
     ### writing packets_gen.h
-    output_h_name=target_root+"/common/packets_gen.h"
+    output_h_name="packets_gen.h"
 
     if lazy_overwrite:
         output_h=my_open(output_h_name+".tmp")
@@ -1416,7 +1407,7 @@ void *get_packet_from_connection_helper(struct connection *pc, enum packet_type 
     output_h.close()
 
     ### writing packets_gen.c
-    output_c_name=target_root+"/common/packets_gen.c"
+    output_c_name="packets_gen.c"
     if lazy_overwrite:
         output_c=my_open(output_c_name+".tmp")
     else:
@@ -1492,7 +1483,7 @@ static int stats_total_sent;
                 open(i,"w").write(new)
             os.remove(i+".tmp")
 
-    f=my_open(target_root+"/server/hand_gen.h")
+    f=my_open("../server/hand_gen.h")
     f.write('''
 #ifndef FC__HAND_GEN_H
 #define FC__HAND_GEN_H
@@ -1534,7 +1525,7 @@ bool server_handle_packet(enum packet_type type, void *packet,
 ''')
     f.close()
 
-    f=my_open(target_root+"/client/packhand_gen.h")
+    f=my_open("../client/packhand_gen.h")
     f.write('''
 #ifndef FC__PACKHAND_GEN_H
 #define FC__PACKHAND_GEN_H
@@ -1565,7 +1556,7 @@ bool client_handle_packet(enum packet_type type, void *packet);
 ''')
     f.close()
 
-    f=my_open(target_root+"/server/hand_gen.c")
+    f=my_open("../server/hand_gen.c")
     f.write('''
 
 #ifdef HAVE_CONFIG_H
@@ -1620,7 +1611,7 @@ bool server_handle_packet(enum packet_type type, void *packet,
 ''')
     f.close()
 
-    f=my_open(target_root+"/client/packhand_gen.c")
+    f=my_open("../client/packhand_gen.c")
     f.write('''
 
 #ifdef HAVE_CONFIG_H

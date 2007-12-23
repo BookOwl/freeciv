@@ -95,7 +95,7 @@ void diplomacy_dialog_done()
 *****************************************************************/
 static struct diplomacy_dialog *get_diplomacy_dialog(int other_player_id)
 {
-  struct player *plr0 = game.player_ptr, *plr1 = player_by_number(other_player_id);
+  struct player *plr0 = game.player_ptr, *plr1 = get_player(other_player_id);
 
   dialog_list_iterate(dialog_list, pdialog) {
     if ((pdialog->treaty.plr0 == plr0 && pdialog->treaty.plr1 == plr1) ||
@@ -147,7 +147,7 @@ static int remove_clause_callback(struct widget *pWidget)
     }
     
     dsend_packet_diplomacy_remove_clause_req(&aconnection,
-                                             player_number(pdialog->treaty.plr1),
+                                             pdialog->treaty.plr1->player_no,
                                              pWidget->data.cont->id0,
                                              (enum clause_type) ((pWidget->data.
                                              cont->value >> 16) & 0xFFFF),
@@ -169,10 +169,10 @@ void handle_diplomacy_create_clause(int counterpart, int giver,
   }
   
   clause_list_iterate(pdialog->treaty.clauses, pclause) {
-    remove_clause_widget_from_list(player_number(pdialog->treaty.plr1), player_number(pclause->from), pclause->type, pclause->value);
+    remove_clause_widget_from_list(pdialog->treaty.plr1->player_no, pclause->from->player_no, pclause->type, pclause->value);
   } clause_list_iterate_end;
   
-  add_clause(&pdialog->treaty, player_by_number(giver), type, value);
+  add_clause(&pdialog->treaty, get_player(giver), type, value);
   
   update_clauses_list(pdialog);
   update_acceptance_icons(pdialog);
@@ -191,10 +191,10 @@ void handle_diplomacy_remove_clause(int counterpart, int giver,
   }
   
   clause_list_iterate(pdialog->treaty.clauses, pclause) {
-    remove_clause_widget_from_list(player_number(pdialog->treaty.plr1), player_number(pclause->from), pclause->type, pclause->value);
+    remove_clause_widget_from_list(pdialog->treaty.plr1->player_no, pclause->from->player_no, pclause->type, pclause->value);
   } clause_list_iterate_end;
 
-  remove_clause(&pdialog->treaty, player_by_number(giver), type, value);
+  remove_clause(&pdialog->treaty, get_player(giver), type, value);
   
   update_clauses_list(pdialog);
   update_acceptance_icons(pdialog);  
@@ -246,7 +246,7 @@ static int pact_callback(struct widget *pWidget)
     }
     
     dsend_packet_diplomacy_create_clause_req(&aconnection,
-                                             player_number(pdialog->treaty.plr1),
+                                             pdialog->treaty.plr1->player_no,
                                              pWidget->data.cont->id0,
                                              clause_type, 0);
   }  
@@ -263,9 +263,26 @@ static int vision_callback(struct widget *pWidget)
     }
   
     dsend_packet_diplomacy_create_clause_req(&aconnection,
-                                             player_number(pdialog->treaty.plr1),
+                                             pdialog->treaty.plr1->player_no,
                                              pWidget->data.cont->id0,
                                              CLAUSE_VISION, 0);
+  }
+  return -1;
+}
+
+static int embassy_callback(struct widget *pWidget)
+{
+  if (Main.event.button.button == SDL_BUTTON_LEFT) {
+    struct diplomacy_dialog *pdialog;
+      
+    if (!(pdialog = get_diplomacy_dialog(pWidget->data.cont->id1))) {
+      pdialog = get_diplomacy_dialog(pWidget->data.cont->id0);
+    }
+  
+    dsend_packet_diplomacy_create_clause_req(&aconnection,
+                                             pdialog->treaty.plr1->player_no,
+                                             pWidget->data.cont->id0,
+                                             CLAUSE_EMBASSY, 0);
   }
   return -1;
 }
@@ -291,7 +308,7 @@ static int maps_callback(struct widget *pWidget)
     }
   
     dsend_packet_diplomacy_create_clause_req(&aconnection,
-                                             player_number(pdialog->treaty.plr1),
+                                             pdialog->treaty.plr1->player_no,
                                              pWidget->data.cont->id0,
                                              clause_type, 0);
   }
@@ -308,7 +325,7 @@ static int techs_callback(struct widget *pWidget)
     }
     
     dsend_packet_diplomacy_create_clause_req(&aconnection,
-                                             player_number(pdialog->treaty.plr1),
+                                             pdialog->treaty.plr1->player_no,
                                              pWidget->data.cont->id0,
                                              CLAUSE_ADVANCE,
                                              (MAX_ID - pWidget->ID));
@@ -344,7 +361,7 @@ static int gold_callback(struct widget *pWidget)
     
     if (amount > 0) {
       dsend_packet_diplomacy_create_clause_req(&aconnection,
-                                               player_number(pdialog->treaty.plr1),
+                                               pdialog->treaty.plr1->player_no,
                                                pWidget->data.cont->id0,
                                                CLAUSE_GOLD, amount);
       
@@ -372,7 +389,7 @@ static int cities_callback(struct widget *pWidget)
     }
     
     dsend_packet_diplomacy_create_clause_req(&aconnection,
-                                             player_number(pdialog->treaty.plr1),  
+                                             pdialog->treaty.plr1->player_no,  
                                              pWidget->data.cont->id0,
                                              CLAUSE_CITY,
                                              (MAX_ID - pWidget->ID));
@@ -402,8 +419,8 @@ static struct ADVANCED_DLG * popup_diplomatic_objects(struct player *pPlayer0,
   enum diplstate_type type =
 		  pplayer_get_diplstate(pPlayer0, pPlayer1)->type;
   
-  pCont->id0 = player_number(pPlayer0);
-  pCont->id1 = player_number(pPlayer1);
+  pCont->id0 = pPlayer0->player_no;
+  pCont->id1 = pPlayer1->player_no;
   
   pStr = create_str16_from_char(nation_adjective_for_player(pPlayer0), adj_font(12));
   pStr->style |= TTF_STYLE_BOLD;
@@ -535,6 +552,20 @@ static struct ADVANCED_DLG * popup_diplomatic_objects(struct player *pPlayer0,
     count++;
   }
   
+  if (!player_has_embassy(pPlayer1, pPlayer0)) {  
+    pBuf = create_iconlabel_from_chars(NULL, pWindow->dst,
+        _("Give embassy"), adj_font(12),
+                (WF_RESTORE_BACKGROUND|WF_DRAW_TEXT_LABEL_WITH_SPACE));
+    pBuf->string16->fgcol = *get_game_colorRGB(COLOR_THEME_DIPLODLG_MEETING_TEXT);
+    width = MAX(width, pBuf->size.w);
+    height = MAX(height, pBuf->size.h);
+    pBuf->action = embassy_callback;
+    pBuf->data.cont = pCont;
+    set_wstate(pBuf, FC_WS_NORMAL);
+    add_to_gui_list(ID_LABEL, pBuf);
+    count++;
+  }
+    
   /* ---------------------------- */
   if(pPlayer0->economic.gold > 0) {
     pCont->value = pPlayer0->economic.gold;
@@ -563,13 +594,14 @@ static struct ADVANCED_DLG * popup_diplomatic_objects(struct player *pPlayer0,
   
   /* Advances */
   {
-    int flag = A_NONE;
+    bool flag = FALSE;
+    int i;
     
-    advance_index_iterate(A_FIRST, i) {
-      if (player_invention_state(pPlayer0, i) == TECH_KNOWN &&
-         player_invention_is_ready(pPlayer1, i) &&
-	(player_invention_state(pPlayer1, i) == TECH_UNKNOWN || 
-	 player_invention_state(pPlayer1, i) == TECH_REACHABLE)) {
+    for (i = 1; i < game.control.num_tech_types; i++) {
+      if (get_invention(pPlayer0, i) == TECH_KNOWN &&
+         tech_is_available(pPlayer1, i) &&
+	(get_invention(pPlayer1, i) == TECH_UNKNOWN || 
+	 get_invention(pPlayer1, i) == TECH_REACHABLE)) {
 	     
 	     pBuf = create_iconlabel_from_chars(NULL, pWindow->dst,
 		_("Advances"), adj_font(12), WF_RESTORE_BACKGROUND);
@@ -579,7 +611,7 @@ static struct ADVANCED_DLG * popup_diplomatic_objects(struct player *pPlayer0,
              add_to_gui_list(ID_LABEL, pBuf);
 	     count++;
 	     
-	     my_snprintf(cBuf, sizeof(cBuf), "  %s", advance_name_translation(advance_by_number(i)));
+	     my_snprintf(cBuf, sizeof(cBuf), "  %s", advance_name_translation(i));
   
              pBuf = create_iconlabel_from_chars(NULL, pWindow->dst, cBuf, adj_font(12),
 	         (WF_RESTORE_BACKGROUND|WF_DRAW_TEXT_LABEL_WITH_SPACE));
@@ -591,19 +623,20 @@ static struct ADVANCED_DLG * popup_diplomatic_objects(struct player *pPlayer0,
 	     pBuf->data.cont = pCont;
              add_to_gui_list(MAX_ID - i, pBuf);
 	     count++;	
-	     flag = ++i;
+	     flag = TRUE;
+	     i++;
 	     break;
       }
-    } advance_index_iterate_end;
+    }
     
-    if(flag > A_NONE) {
-      advance_index_iterate(flag, i) {
-	if (player_invention_state(pPlayer0, i) == TECH_KNOWN &&
-	   player_invention_is_ready(pPlayer1, i) &&
-	  (player_invention_state(pPlayer1, i) == TECH_UNKNOWN || 
-	   player_invention_state(pPlayer1, i) == TECH_REACHABLE)) {
+    if(flag) {
+      for (; i < game.control.num_tech_types; i++) {
+	if (get_invention(pPlayer0, i) == TECH_KNOWN &&
+	   tech_is_available(pPlayer1, i) &&
+	  (get_invention(pPlayer1, i) == TECH_UNKNOWN || 
+	   get_invention(pPlayer1, i) == TECH_REACHABLE)) {
 	     
-	     my_snprintf(cBuf, sizeof(cBuf), "  %s", advance_name_translation(advance_by_number(i)));
+	     my_snprintf(cBuf, sizeof(cBuf), "  %s", advance_name_translation(i));
   
              pBuf = create_iconlabel_from_chars(NULL, pWindow->dst, cBuf, adj_font(12),
 	         (WF_RESTORE_BACKGROUND|WF_DRAW_TEXT_LABEL_WITH_SPACE));
@@ -617,7 +650,7 @@ static struct ADVANCED_DLG * popup_diplomatic_objects(struct player *pPlayer0,
 	     count++;
 	}
       }
-    } advance_index_iterate_end;
+    }
     
   }  /* Advances */
   
@@ -786,8 +819,8 @@ static void update_diplomacy_dialog(struct diplomacy_dialog *pdialog)
     pPlayer0 = pdialog->treaty.plr0;
     pPlayer1 = pdialog->treaty.plr1;
 
-    pCont->id0 = player_number(pPlayer0);
-    pCont->id1 = player_number(pPlayer1);
+    pCont->id0 = pPlayer0->player_no;
+    pCont->id1 = pPlayer1->player_no;
     
     my_snprintf(cBuf, sizeof(cBuf), _("Diplomacy meeting"));
     
@@ -992,13 +1025,13 @@ static void update_clauses_list(struct diplomacy_dialog *pdialog) {
     pBuf = create_iconlabel(NULL, pWindow->dst, pStr,
      (WF_FREE_DATA|WF_DRAW_TEXT_LABEL_WITH_SPACE|WF_RESTORE_BACKGROUND));
         
-    if(player_number(pclause->from) != game.info.player_idx) {
+    if(pclause->from->player_no != game.info.player_idx) {
        pBuf->string16->style |= SF_CENTER_RIGHT;  
     }
   
     pBuf->data.cont = fc_calloc(1, sizeof(struct CONTAINER));
-    pBuf->data.cont->id0 = player_number(pclause->from);
-    pBuf->data.cont->id1 = player_number(pdialog->treaty.plr1);
+    pBuf->data.cont->id0 = pclause->from->player_no;
+    pBuf->data.cont->id1 = pdialog->treaty.plr1->player_no;
     pBuf->data.cont->value = ((int)pclause->type << 16) + pclause->value;
     
     pBuf->action = remove_clause_callback;
@@ -1114,7 +1147,7 @@ void handle_diplomacy_init_meeting(int counterpart, int initiated_from)
 
   if (!(pdialog = get_diplomacy_dialog(counterpart))) {
     pdialog = create_diplomacy_dialog(game.player_ptr,
-				player_by_number(counterpart));
+				get_player(counterpart));
   } else {
     /* bring existing dialog to front */
     sellect_window_group_dialog(pdialog->pdialog->pBeginWidgetList,
@@ -1159,7 +1192,7 @@ static void popdown_diplomacy_dialog(int counterpart)
 static void popdown_diplomacy_dialogs()
 {
   dialog_list_iterate(dialog_list, pdialog) {
-    popdown_diplomacy_dialog(player_number(pdialog->treaty.plr1));
+    popdown_diplomacy_dialog(pdialog->treaty.plr1->player_no);
   } dialog_list_iterate_end;
 }
 
@@ -1200,7 +1233,7 @@ static int withdraw_vision_dlg_callback(struct widget *pWidget)
     popdown_sdip_dialog();
   
     dsend_packet_diplomacy_cancel_pact(&aconnection,
-                                       player_number(pWidget->data.player),
+                                       pWidget->data.player->player_no,
                                        CLAUSE_VISION);
     
     flush_dirty();
@@ -1214,7 +1247,7 @@ static int cancel_pact_dlg_callback(struct widget *pWidget)
     popdown_sdip_dialog();
   
     dsend_packet_diplomacy_cancel_pact(&aconnection,
-                                       player_number(pWidget->data.player),
+                                       pWidget->data.player->player_no,
                                        CLAUSE_CEASEFIRE);
     
     flush_dirty();
@@ -1228,7 +1261,7 @@ static int call_meeting_dlg_callback(struct widget *pWidget)
     popdown_sdip_dialog();
     
     dsend_packet_diplomacy_init_meeting_req(&aconnection,
-                                            player_number(pWidget->data.player));
+                                            pWidget->data.player->player_no);
     
     flush_dirty();
   }

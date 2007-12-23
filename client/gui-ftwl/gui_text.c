@@ -143,9 +143,9 @@ const char *mapview_get_terrain_tooltip_text(struct tile *ptile)
 
 #ifdef DEBUG
   add_line(_("Location: (%d, %d) [%d]"),
-	   ptile->x, ptile->y, tile_continent(ptile));
+	   ptile->x, ptile->y, ptile->continent);
 #endif
-  add_line("%s", tile_get_info_text(ptile, 0));
+  add_line("%s", tile_get_info_text(ptile));
   if (count > 0) {
     add_line("%s",
 	     get_infrastructure_text(infrastructure));
@@ -296,7 +296,7 @@ const char *mapview_get_unit_action_tooltip(struct unit *punit,
     add_line(_("Effect: the computer performs settler activities"));
   } else {
 #if 0
-  ttype = tile_terrain(punit->tile);
+  ttype = punit->tile->terrain;
   tinfo = terrain_by_number(ttype);
   if ((tinfo->irrigation_result != T_LAST)
       && (tinfo->irrigation_result != ttype)) {
@@ -338,13 +338,19 @@ const char *mapview_get_city_action_tooltip(struct city *pcity,
   INIT;
 
   if (strcmp(action, "city_buy") == 0) {
+    const char *name;
+
+    if (pcity->production.is_unit) {
+      name = utype_name_translation(utype_by_number(pcity->production.value));
+    } else {
+      name = get_impr_name_ex(pcity, pcity->production.value);
+    }
+
     add_line(_("Buy production"));
     add_line(_("Cost: %d (%d in treasury)"),
-	     city_production_buy_gold_cost(pcity),
-	     game.player_ptr->economic.gold);
-    add_line(_("Producting: %s (%d turns)"),
-	     city_production_name_translation(pcity),
-	     city_production_turns_to_build(pcity, TRUE));
+	     city_buy_cost(pcity), game.player_ptr->economic.gold);
+    add_line(_("Producting: %s (%d turns)"), name,
+	     city_turns_to_build(pcity, pcity->production, TRUE));
   } else {
     add_line("tooltip for action %s isn't written yet", action);
     freelog(LOG_NORMAL,

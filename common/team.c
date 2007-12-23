@@ -27,83 +27,41 @@
 #include "player.h"
 #include "team.h"
 
+/**********************************************************************
+   Functions for handling teams.
+***********************************************************************/
 
 static struct team teams[MAX_NUM_TEAMS];
 
-
 /****************************************************************************
-  Initializes team structure
+  Returns the id of a team given its name, or TEAM_NONE if 
+  not found.
 ****************************************************************************/
-void teams_init(void)
+struct team *team_find_by_name(const char *team_name)
 {
-  Team_type_id i;
+  int index;
 
-  for (i = 0; i < MAX_NUM_TEAMS; i++) {
-    /* mark as unused */
-    teams[i].item_number = i;
+  assert(team_name != NULL);
+  assert(NUM_TEAMS <= MAX_NUM_TEAMS);
 
-    teams[i].players = 0;
-    player_research_init(&(teams[i].research));
+  /* Can't use team_iterate here since it skips empty teams. */
+  for (index = 0; index < NUM_TEAMS; index++) {
+    struct team *pteam = team_get_by_id(index);
+
+    if (mystrcasecmp(team_name, team_get_name_orig(pteam)) == 0) {
+      return pteam;
+    }
   }
-}
 
-/**************************************************************************
-  Return the first item of teams.
-**************************************************************************/
-struct team *team_array_first(void)
-{
-  if (game.info.num_teams > 0) {
-    return teams;
-  }
   return NULL;
 }
 
-/**************************************************************************
-  Return the last item of teams array.  Note this is different!
-**************************************************************************/
-const struct team *team_array_last(void)
-{
-  if (game.info.num_teams > 0) {
-    return &teams[MAX_NUM_TEAMS - 1];
-  }
-  return NULL;
-}
-
-/**************************************************************************
-  Return the number of teams.
-**************************************************************************/
-int team_count(void)
-{
-  return game.info.num_teams;
-}
-
 /****************************************************************************
-  Return the team index.
-
-  Currently same as team_number(), paired with team_count()
-  indicates use as an array index.
+  Returns pointer to a team given its id
 ****************************************************************************/
-Team_type_id team_index(const struct team *pteam)
+struct team *team_get_by_id(Team_type_id id)
 {
-  assert(pteam);
-  return pteam - teams;
-}
-
-/****************************************************************************
-  Return the team index.
-****************************************************************************/
-Team_type_id team_number(const struct team *pteam)
-{
-  assert(pteam);
-  return pteam->item_number;
-}
-
-/****************************************************************************
-  Return the team pointer for the given index
-****************************************************************************/
-struct team *team_by_number(const Team_type_id id)
-{
-  if (id < 0 || id >= game.info.num_teams) {
+  if (id < 0 || id >= NUM_TEAMS) {
     return NULL;
   }
   return &teams[id];
@@ -116,11 +74,11 @@ struct team *team_by_number(const Team_type_id id)
 void team_add_player(struct player *pplayer, struct team *pteam)
 {
   assert(pplayer != NULL);
-  assert(pteam != NULL);
+  assert(pteam != NULL && &teams[pteam->index] == pteam);
 
   freelog(LOG_DEBUG, "Adding player %d/%s to team %s.",
-	  player_number(pplayer), pplayer->username,
-	  team_rule_name(pteam));
+	  pplayer->player_no, pplayer->username,
+	  pteam ? team_get_name(pteam) : "(none)");
 
   /* Remove the player from the old team, if any.  The player's team should
    * only be NULL for a few instants after the player was created; after
@@ -147,10 +105,9 @@ void team_remove_player(struct player *pplayer)
 {
   if (pplayer->team) {
     freelog(LOG_DEBUG, "Removing player %d/%s from team %s (%d)",
-	    player_number(pplayer),
-	    pplayer->username,
-	    team_rule_name(pplayer->team),
-	    pplayer->team->players);
+	    pplayer->player_no, pplayer->username,
+	    pplayer->team ? team_get_name(pplayer->team) : "(none)",
+	    pplayer->team ? pplayer->team->players : 0);
     pplayer->team->players--;
     assert(pplayer->team->players >= 0);
   }
@@ -160,43 +117,20 @@ void team_remove_player(struct player *pplayer)
 /****************************************************************************
   Return the translated name of the team.
 ****************************************************************************/
-const char *team_name_translation(struct team *pteam)
+const char *team_get_name(const struct team *pteam)
 {
-  return _(team_rule_name(pteam));
+  return _(team_get_name_orig(pteam));
 }
 
 /****************************************************************************
   Return the untranslated name of the team.
 ****************************************************************************/
-const char *team_rule_name(const struct team *pteam)
+const char *team_get_name_orig(const struct team *pteam)
 {
   if (!pteam) {
     return N_("(none)");
   }
-  return game.info.team_names_orig[team_index(pteam)];
-}
-
-/****************************************************************************
- Does a linear search of game.info.team_names_orig[]
- Returns NULL when none match.
-****************************************************************************/
-struct team *find_team_by_rule_name(const char *team_name)
-{
-  int index;
-
-  assert(team_name != NULL);
-  assert(game.info.num_teams <= MAX_NUM_TEAMS);
-
-  /* Can't use team_iterate here since it skips empty teams. */
-  for (index = 0; index < game.info.num_teams; index++) {
-    struct team *pteam = team_by_number(index);
-
-    if (0 == mystrcasecmp(team_rule_name(pteam), team_name)) {
-      return pteam;
-    }
-  }
-
-  return NULL;
+  return game.info.team_names_orig[pteam->index];
 }
 
 /****************************************************************************
@@ -208,9 +142,9 @@ struct team *find_empty_team(void)
   Team_type_id i;
   struct team *pbest = NULL;
 
-  /* Can't use team_iterate here since it skips empty teams. */
-  for (i = 0; i < game.info.num_teams; i++) {
-    struct team *pteam = team_by_number(i);
+  /* Can't use teams_iterate here since it skips empty teams! */
+  for (i = 0; i < NUM_TEAMS; i++) {
+    struct team *pteam = team_get_by_id(i);
 
     if (!pbest || pbest->players > pteam->players) {
       pbest = pteam;
@@ -222,4 +156,20 @@ struct team *find_empty_team(void)
   }
 
   return pbest;
+}
+
+/****************************************************************************
+  Initializes team structure
+****************************************************************************/
+void teams_init(void)
+{
+  Team_type_id i;
+
+  for (i = 0; i < MAX_NUM_TEAMS; i++) {
+    /* mark as unused */
+    teams[i].index = i;
+
+    teams[i].players = 0;
+    player_research_init(&(teams[i].research));
+  }
 }

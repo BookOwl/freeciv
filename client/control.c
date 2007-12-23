@@ -22,7 +22,6 @@
 #include "mem.h"
 #include "timing.h"
 
-#include "game.h"
 #include "map.h"
 #include "movement.h"
 
@@ -35,7 +34,6 @@
 #include "clinet.h"
 #include "combat.h"
 #include "dialogs_g.h"
-#include "editor.h"
 #include "goto.h"
 #include "gui_main_g.h"
 #include "mapctrl_g.h"
@@ -64,6 +62,7 @@ static struct unit_list *urgent_focus_queue;
 
 /* These should be set via set_hover_state() */
 enum cursor_hover_state hover_state = HOVER_NONE;
+enum cursor_action_state action_state = CURSOR_ACTION_DEFAULT;
 enum unit_activity connect_activity;
 enum unit_orders goto_last_order; /* Last order for goto */
 
@@ -597,7 +596,7 @@ struct unit *find_visible_unit(struct tile *ptile)
   }
 
   /* If a city is here, return nothing (unit hidden by city). */
-  if (tile_city(ptile)) {
+  if (ptile->city) {
     return NULL;
   }
 
@@ -804,15 +803,15 @@ void process_caravan_arrival(struct unit *punit)
     id = *p_id;
     free(p_id);
     p_id = NULL;
-    punit = game_find_unit_by_number(id);
+    punit = find_unit_by_id(id);
 
     if (punit && (unit_can_help_build_wonder_here(punit)
 		  || unit_can_est_traderoute_here(punit))
 	&& (!game.player_ptr
 	    || (game.player_ptr == unit_owner(punit)
 		&& !game.player_ptr->ai.control))) {
-      struct city *pcity_dest = tile_city(punit->tile);
-      struct city *pcity_homecity = game_find_city_by_number(punit->homecity);
+      struct city *pcity_dest = tile_get_city(punit->tile);
+      struct city *pcity_homecity = find_city_by_id(punit->homecity);
 
       if (pcity_dest && pcity_homecity) {
 	popup_caravan_dialog(punit, pcity_homecity, pcity_dest);
@@ -859,8 +858,8 @@ void process_diplomat_arrival(struct unit *pdiplomat, int victim_id)
     free(p_ids);
     p_ids = NULL;
     pdiplomat = player_find_unit_by_id(game.player_ptr, diplomat_id);
-    pcity = game_find_city_by_number(victim_id);
-    punit = game_find_unit_by_number(victim_id);
+    pcity = find_city_by_id(victim_id);
+    punit = find_unit_by_id(victim_id);
 
     if (!pdiplomat || !unit_has_type_flag(pdiplomat, F_DIPLOMAT))
       continue;
@@ -931,16 +930,16 @@ void control_mouse_cursor(struct tile *ptile)
   struct unit *punit = NULL;
   struct city *pcity = NULL;
   struct unit_list *active_units = get_units_in_focus();
-  enum cursor_type mouse_cursor_type = CURSOR_DEFAULT;
 
   if (C_S_RUNNING != client_state()) {
-    update_mouse_cursor(CURSOR_DEFAULT);
+    action_state = CURSOR_ACTION_DEFAULT;
     return;
   }
 
   if (is_server_busy()) {
     /* Server will not accept any commands. */
-    update_mouse_cursor(CURSOR_WAIT);
+    action_state = CURSOR_ACTION_WAIT;
+    update_unit_info_label(active_units);
     return;
   }
 
@@ -949,7 +948,7 @@ void control_mouse_cursor(struct tile *ptile)
       /* hover_tile is the tile that was previously under the mouse cursor. */
       ptile = hover_tile;
     } else {
-      update_mouse_cursor(CURSOR_DEFAULT);
+      action_state = CURSOR_ACTION_DEFAULT;
       return;
     }
   } else {
@@ -957,21 +956,20 @@ void control_mouse_cursor(struct tile *ptile)
   }
 
   punit = find_visible_unit(ptile);
-  pcity = ptile ? tile_city(ptile) : NULL;
+  pcity = ptile ? ptile->city : NULL;
 
   switch (hover_state) {
   case HOVER_NONE:
-    if (can_do_editor_click(ptile)) {
-      mouse_cursor_type = editor_test_click(ptile);
-    } else if (punit && game.player_ptr == unit_owner(punit)) {
+    if (punit && game.player_ptr == unit_owner(punit)) {
       /* Set mouse cursor to select a unit.  */
-      mouse_cursor_type = CURSOR_SELECT;
+      action_state = CURSOR_ACTION_SELECT;
     } else if (pcity
 	       && can_player_see_city_internals(game.player_ptr, pcity)) {
       /* Set mouse cursor to select a city. */
-      mouse_cursor_type = CURSOR_SELECT;
+      action_state = CURSOR_ACTION_SELECT;
     } else {
       /* Set default mouse cursor, because nothing selectable found. */
+      action_state = CURSOR_ACTION_DEFAULT;
     }
     break;
   case HOVER_GOTO:
@@ -979,42 +977,30 @@ void control_mouse_cursor(struct tile *ptile)
     if (is_valid_goto_destination(ptile)) {
       if (can_units_attack_at(active_units, ptile)) {
         /* Goto results in military attack. */
-	mouse_cursor_type = CURSOR_ATTACK;
+        action_state = CURSOR_ACTION_ATTACK;
       } else if (is_enemy_city_tile(ptile, game.player_ptr)) {
         /* Goto results in attack of enemy city. */
-	mouse_cursor_type = CURSOR_ATTACK;
+        action_state = CURSOR_ACTION_ATTACK;
       } else {
-	mouse_cursor_type = CURSOR_GOTO;
+        action_state = CURSOR_ACTION_GOTO;
       }
     } else {
-      mouse_cursor_type = CURSOR_INVALID;
+      action_state = CURSOR_ACTION_INVALID;
     }
     break;
   case HOVER_PATROL:
-    if (is_valid_goto_destination(ptile)) {
-      mouse_cursor_type = CURSOR_PATROL;
-    } else {
-      mouse_cursor_type = CURSOR_INVALID;
-    }
-    break;
   case HOVER_CONNECT:
     if (is_valid_goto_destination(ptile)) {
-      mouse_cursor_type = CURSOR_GOTO;
+      action_state = CURSOR_ACTION_GOTO;
     } else {
-      mouse_cursor_type = CURSOR_INVALID;
+      action_state = CURSOR_ACTION_INVALID;
     }
     break;
   case HOVER_NUKE:
-    /* FIXME: check for invalid tiles. */
-    mouse_cursor_type = CURSOR_NUKE;
-    break;
   case HOVER_PARADROP:
-    /* FIXME: check for invalid tiles. */
-    mouse_cursor_type = CURSOR_PARADROP;
+    /* FIXME */
     break;
   };
-
-  update_mouse_cursor(mouse_cursor_type);
 }
 
 /**************************************************************************
@@ -1041,7 +1027,7 @@ static bool is_activity_on_tile(struct tile *ptile,
 bool can_unit_do_connect(struct unit *punit, enum unit_activity activity) 
 {
   struct player *pplayer = unit_owner(punit);
-  struct terrain *pterrain = tile_terrain(punit->tile);
+  struct terrain *pterrain = tile_get_terrain(punit->tile);
 
   /* HACK: This code duplicates that in
    * can_unit_do_activity_targeted_at(). The general logic here is that
@@ -1224,26 +1210,6 @@ void request_unit_select_same_type(struct unit_list *punits)
   }
 }
 
-/****************************************************************************
- Select all units of the same type as the given unit that have the same tile
-****************************************************************************/
-void request_unit_select_same_type_tile(struct unit_list *punits)
-{
-  if (can_client_change_view()) {
-    unit_list_iterate(punits, punit) {
-      unit_list_iterate(punit->tile->units, punit2) {
-	if (unit_type(punit2) == unit_type(punit)
-	    && !unit_list_search(punits, punit2)
-	    && punit2->activity == ACTIVITY_IDLE
-	    && !punit2->ai.control
-	    && !unit_has_orders(punit2)) {
-	  add_unit_focus(punit2);
-	}
-      } unit_list_iterate_end;
-    } unit_list_iterate_end;
-  }
-}
-
 /**************************************************************************
   Request a diplomat to do a specific action.
   - action : The action to be requested.
@@ -1255,7 +1221,21 @@ void request_unit_select_same_type_tile(struct unit_list *punits)
 void request_diplomat_action(enum diplomat_actions action, int dipl_id,
 			     int target_id, int value)
 {
-  dsend_packet_unit_diplomat_action(&aconnection, dipl_id,action,target_id,value);
+  dsend_packet_unit_diplomat_action(&aconnection, dipl_id,target_id,value,action);
+}
+
+/**************************************************************************
+  Query a diplomat about costs and infrastructure.
+  - action : The action to be requested.
+  - dipl_id : The unit ID of the diplomatic unit.
+  - target_id : The ID of the target unit or city.
+  - value : For DIPLOMAT_STEAL or DIPLOMAT_SABOTAGE, the technology
+            or building to aim for (spies only).
+**************************************************************************/
+void request_diplomat_answer(enum diplomat_actions action, int dipl_id,
+			     int target_id, int value)
+{
+  dsend_packet_unit_diplomat_query(&aconnection, dipl_id,target_id,value,action);
 }
 
 /**************************************************************************
@@ -1315,7 +1295,7 @@ void request_new_unit_activity(struct unit *punit, enum unit_activity act)
   }
 
   dsend_packet_unit_change_activity(&aconnection, punit->id, act,
-				    S_LAST, BASE_LAST);
+				    S_LAST);
 }
 
 /**************************************************************************
@@ -1325,22 +1305,7 @@ void request_new_unit_activity_targeted(struct unit *punit,
 					enum unit_activity act,
 					enum tile_special_type tgt)
 {
-  dsend_packet_unit_change_activity(&aconnection, punit->id, act, tgt,
-                                    BASE_LAST);
-}
-
-/**************************************************************************
-  Request base building activity for unit
-**************************************************************************/
-void request_new_unit_activity_base(struct unit *punit,
-				    const struct base_type *pbase)
-{
-  if (!can_client_issue_orders()) {
-    return;
-  }
-
-  dsend_packet_unit_change_activity(&aconnection, punit->id, ACTIVITY_BASE,
-				    S_LAST, base_number(pbase));
+  dsend_packet_unit_change_activity(&aconnection, punit->id, act, tgt);
 }
 
 /**************************************************************************
@@ -1356,7 +1321,7 @@ void request_unit_disband(struct unit *punit)
 **************************************************************************/
 void request_unit_change_homecity(struct unit *punit)
 {
-  struct city *pcity=tile_city(punit->tile);
+  struct city *pcity=tile_get_city(punit->tile);
   
   if (pcity) {
     dsend_packet_unit_change_homecity(&aconnection, punit->id, pcity->id);
@@ -1368,7 +1333,7 @@ void request_unit_change_homecity(struct unit *punit)
 **************************************************************************/
 void request_unit_upgrade(struct unit *punit)
 {
-  struct city *pcity=tile_city(punit->tile);
+  struct city *pcity=tile_get_city(punit->tile);
 
   if (pcity) {
     dsend_packet_unit_upgrade(&aconnection, punit->id);
@@ -1397,7 +1362,7 @@ void request_unit_autosettlers(const struct unit *punit)
 void request_unit_load(struct unit *pcargo, struct unit *ptrans)
 {
   if (!ptrans) {
-    ptrans = find_transporter_for_unit(pcargo);
+    ptrans = find_transporter_for_unit(pcargo, pcargo->tile);
   }
 
   if (can_client_issue_orders()
@@ -1407,7 +1372,7 @@ void request_unit_load(struct unit *pcargo, struct unit *ptrans)
     /* Sentry the unit.  Don't request_unit_sentry since this can give a
      * recursive loop. */
     dsend_packet_unit_change_activity(&aconnection, pcargo->id,
-				      ACTIVITY_SENTRY, S_LAST, BASE_LAST);
+				      ACTIVITY_SENTRY, S_LAST);
   }
 }
 
@@ -1417,7 +1382,7 @@ void request_unit_load(struct unit *pcargo, struct unit *ptrans)
 ****************************************************************************/
 void request_unit_unload(struct unit *pcargo)
 {
-  struct unit *ptrans = game_find_unit_by_number(pcargo->transported_by);
+  struct unit *ptrans = find_unit_by_id(pcargo->transported_by);
 
   if (can_client_issue_orders()
       && ptrans
@@ -1427,7 +1392,7 @@ void request_unit_unload(struct unit *pcargo)
 
     /* Activate the unit. */
     dsend_packet_unit_change_activity(&aconnection, pcargo->id,
-				      ACTIVITY_IDLE, S_LAST, BASE_LAST);
+				      ACTIVITY_IDLE, S_LAST);
   }
 }
 
@@ -1436,7 +1401,7 @@ void request_unit_unload(struct unit *pcargo)
 **************************************************************************/
 void request_unit_caravan_action(struct unit *punit, enum packet_type action)
 {
-  if (!tile_city(punit->tile)) {
+  if (!tile_get_city(punit->tile)) {
     return;
   }
 
@@ -1558,7 +1523,6 @@ void request_unit_pillage(struct unit *punit)
 {
   bv_special pspossible;
   struct tile *ptile = punit->tile;
-  struct base_type *pbase = tile_get_base(ptile);
   bv_special pspresent = get_tile_infrastructure_set(ptile, NULL);
   bv_special psworking = get_unit_tile_pillage_set(ptile);
   int count = 0;
@@ -1571,10 +1535,10 @@ void request_unit_pillage(struct unit *punit)
     }
   } tile_special_type_iterate_end;
 
-  if (count > 1 || pbase) {
-    popup_pillage_dialog(punit, pspossible, pbase);
+  if (count > 1) {
+    popup_pillage_dialog(punit, pspossible);
   } else {
-    enum tile_special_type what = get_preferred_pillage(pspossible, NULL);
+    enum tile_special_type what = get_preferred_pillage(pspossible);
 
     request_new_unit_activity_targeted(punit, ACTIVITY_PILLAGE, what);
   }
@@ -1912,13 +1876,13 @@ void do_move_unit(struct unit *punit, struct unit *target_unit)
   /* With the "full" citybar we have to update the citybar when units move
    * into or out of a city.  For foreign cities this is handled separately,
    * via the occupied field of the short-city packet. */
-  if (tile_city(src_tile)
-      && can_player_see_units_in_city(game.player_ptr, tile_city(src_tile))) {
-    update_city_description(tile_city(src_tile));
+  if (src_tile->city
+      && can_player_see_units_in_city(game.player_ptr, src_tile->city)) {
+    update_city_description(src_tile->city);
   }
-  if (tile_city(dst_tile)
-      && can_player_see_units_in_city(game.player_ptr, tile_city(dst_tile))) {
-    update_city_description(tile_city(dst_tile));
+  if (dst_tile->city
+      && can_player_see_units_in_city(game.player_ptr, dst_tile->city)) {
+    update_city_description(dst_tile->city);
   }
 
   if (unit_is_in_focus(punit)) {
@@ -1931,7 +1895,7 @@ void do_move_unit(struct unit *punit, struct unit *target_unit)
 **************************************************************************/
 void do_map_click(struct tile *ptile, enum quickselect_type qtype)
 {
-  struct city *pcity = tile_city(ptile);
+  struct city *pcity = tile_get_city(ptile);
   struct unit_list *punits = get_units_in_focus();
   bool maybe_goto = FALSE;
   bool possible = FALSE;
@@ -2337,7 +2301,7 @@ void key_unit_diplomat_actions(void)
   struct city *pcity;		/* need pcity->id */
   unit_list_iterate(get_units_in_focus(), punit) {
     if (is_diplomat_unit(punit)
-	&& (pcity = tile_city(punit->tile))
+	&& (pcity = tile_get_city(punit->tile))
 	&& diplomat_handled_in_diplomat_dialog() != -1    /* confusing otherwise? */
 	&& diplomat_can_do_action(punit, DIPLOMAT_ANY_ACTION,
 				  punit->tile)) {
@@ -2434,11 +2398,8 @@ void key_unit_wakeup_others(void)
 void key_unit_airbase(void)
 {
   unit_list_iterate(get_units_in_focus(), punit) {
-    struct base_type *pbase =
-      get_base_by_gui_type(BASE_GUI_AIRBASE, punit, punit->tile);
-
-    if (pbase) {
-      request_new_unit_activity_base(punit, pbase);
+    if (can_unit_do_activity(punit, ACTIVITY_AIRBASE)) {
+      request_new_unit_activity(punit, ACTIVITY_AIRBASE);
     }
   } unit_list_iterate_end;
 }
@@ -2508,11 +2469,8 @@ void key_unit_fortify(void)
 void key_unit_fortress(void)
 {
   unit_list_iterate(get_units_in_focus(), punit) {
-    struct base_type *pbase =
-      get_base_by_gui_type(BASE_GUI_FORTRESS, punit, punit->tile);
-
-    if (pbase) {
-      request_new_unit_activity_base(punit, pbase);
+    if (can_unit_do_activity(punit, ACTIVITY_FORTRESS)) {
+      request_new_unit_activity(punit, ACTIVITY_FORTRESS);
     }
   } unit_list_iterate_end;
 }
@@ -2819,28 +2777,4 @@ void key_focus_unit_toggle(void)
 void key_fog_of_war_toggle(void)
 {
   request_toggle_fog_of_war();
-}
-
-/**************************************************************************
-  Toggle editor mode in the server.
-**************************************************************************/
-void key_editor_toggle(void)
-{
-  dsend_packet_edit_mode(&aconnection, !game.info.is_edit_mode);
-}
-
-/**************************************************************************
-  Recalculate borders.
-**************************************************************************/
-void key_editor_recalculate_borders(void)
-{
-  send_packet_edit_recalculate_borders(&aconnection);
-}
-
-/**************************************************************************
-  Regenerate water.
-**************************************************************************/
-void key_editor_regenerate_water(void)
-{
-  send_packet_edit_regenerate_water(&aconnection);
 }

@@ -163,7 +163,7 @@ void create_intel_dialog(struct intel_dialog *pdialog, bool raise)
 
   static char *tech_list_names_ptrs[A_LAST+1];
   static char tech_list_names[A_LAST+1][200];
-  int j = 0;
+  int i, j;
 
   pdialog->intel_dialog_shell_is_raised = raise;
 
@@ -263,18 +263,17 @@ void create_intel_dialog(struct intel_dialog *pdialog, bool raise)
 			  XtNlabel, buf,
 			  NULL);
 
-  advance_index_iterate(A_FIRST, i) {
-    if (player_invention_state(pdialog->pplayer, i) == TECH_KNOWN) {
-      if(player_invention_state(game.player_ptr, i)==TECH_KNOWN) {
-	sz_strlcpy(tech_list_names[j], advance_name_translation(advance_by_number(i)));
+  for(i=A_FIRST, j=0; i<game.control.num_tech_types; i++)
+    if (get_invention(pdialog->pplayer, i) == TECH_KNOWN) {
+      if(get_invention(game.player_ptr, i)==TECH_KNOWN) {
+	sz_strlcpy(tech_list_names[j], advance_name_translation(i));
       } else {
 	my_snprintf(tech_list_names[j], sizeof(tech_list_names[j]),
-		    "%s*", advance_name_translation(advance_by_number(i)));
+		    "%s*", advance_name_translation(i));
       }
       tech_list_names_ptrs[j]=tech_list_names[j];
       j++;
     }
-  } advance_index_iterate_end;
   tech_list_names_ptrs[j]=0;
 
   XtVaCreateManagedWidget("inteltechlist",
@@ -297,7 +296,7 @@ void create_intel_dialog(struct intel_dialog *pdialog, bool raise)
 		intel_close_callback, (XtPointer)pdialog);
   XtAddCallback(pdialog->intel_diplo_command, XtNcallback,
 		intel_diplo_callback,
-		INT_TO_XTPOINTER(player_number(pdialog->pplayer)));
+		INT_TO_XTPOINTER(pdialog->pplayer->player_no));
   XtRealizeWidget(pdialog->intel_dialog_shell);
 
   xaw_horiz_center(pdialog->intel_label);

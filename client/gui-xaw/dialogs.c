@@ -529,7 +529,7 @@ static void pillage_callback(Widget w, XtPointer client_data,
   }
 
   if (client_data) {
-    struct unit *punit = game_find_unit_by_number (unit_to_use_to_pillage);
+    struct unit *punit = find_unit_by_id (unit_to_use_to_pillage);
     if (punit) {
       request_new_unit_activity_targeted(punit, ACTIVITY_PILLAGE,
 					 XTPOINTER_TO_INT(client_data));
@@ -544,8 +544,7 @@ static void pillage_callback(Widget w, XtPointer client_data,
 ...
 *****************************************************************/
 void popup_pillage_dialog(struct unit *punit,
-			  bv_special may_pillage,
-                          struct base_type *pbase)
+			  bv_special may_pillage)
 {
   Widget shell, form, dlabel, button, prev;
   enum tile_special_type what, prereq;
@@ -564,36 +563,25 @@ void popup_pillage_dialog(struct unit *punit,
   dlabel = I_L(XtVaCreateManagedWidget("dlabel", labelWidgetClass, form, NULL));
 
   prev = dlabel;
-  while ((what = get_preferred_pillage(may_pillage, pbase)) != S_LAST) {
+  while ((what = get_preferred_pillage(may_pillage)) != S_LAST) {
     bv_special what_bv;
 
-    if (what != S_PILLAGE_BASE) {
-      BV_CLR_ALL(what_bv);
-      BV_SET(what_bv, what);
-      button =
-        XtVaCreateManagedWidget ("button", commandWidgetClass, form,
-                                 XtNfromVert, prev,
-                                 XtNlabel,
-                                 (XtArgVal)(get_infrastructure_text(what_bv)),
-                                 NULL);
-      XtAddCallback(button, XtNcallback, pillage_callback,
-                    INT_TO_XTPOINTER(what));
-      clear_special(&may_pillage, what);
-      prereq = get_infrastructure_prereq(what);
-      if (prereq != S_LAST) {
-        clear_special(&may_pillage, prereq);
-      }
-    } else {
-      button =
-        XtVaCreateManagedWidget ("button", commandWidgetClass, form,
-                                 XtNfromVert, prev,
-                                 XtNlabel,
-                                 (XtArgVal)(base_name_translation(pbase)),
-                                 NULL);
-      XtAddCallback(button, XtNcallback, pillage_callback,
-                    INT_TO_XTPOINTER(S_PILLAGE_BASE));
-    }
+    BV_CLR_ALL(what_bv);
+    BV_SET(what_bv, what);
+    button =
+      XtVaCreateManagedWidget ("button", commandWidgetClass, form,
+			       XtNfromVert, prev,
+			       XtNlabel,
+			       (XtArgVal)(get_infrastructure_text(what_bv)),
+			       NULL);
+    XtAddCallback(button, XtNcallback, pillage_callback,
+		  INT_TO_XTPOINTER(what));
     prev = button;
+    clear_special(&may_pillage, what);
+    prereq = get_infrastructure_prereq(what);
+    if (prereq != S_LAST) {
+      clear_special(&may_pillage, prereq);
+    }
   }
   button =
     I_L(XtVaCreateManagedWidget("closebutton", commandWidgetClass, form,
@@ -1504,7 +1492,7 @@ void races_ok_command_callback(Widget w, XtPointer client_data,
   }
 
   dsend_packet_nation_select_req(&aconnection,
-				 player_number(races_player),
+				 races_player->player_no,
 				 nation_index(races_toggles_to_nations[selected_index]),
 				 selected_sex ? FALSE : TRUE,
 				 dp, city_style_idx[selected_style]);

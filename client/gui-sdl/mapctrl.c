@@ -2176,7 +2176,7 @@ void button_up_on_map(struct mouse_button_behavior *button_behavior)
               popup_advanced_terrain_dialog(ptile, button_behavior->event->x,
                                                    button_behavior->event->y);
             } else {
-              if(((pCity = tile_city(ptile)) != NULL) &&
+              if(((pCity = ptile->city) != NULL) &&
                 (city_owner(pCity) == game.player_ptr)) {
                 if(LCTRL) {
                   popup_worklist_editor(pCity, &(pCity->worklist));

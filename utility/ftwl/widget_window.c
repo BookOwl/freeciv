@@ -29,8 +29,6 @@
 /* REMOVE ME */
 #include "timing.h"
 
-#define FLUSH_RECTS TRUE       /* flush dirty rectangles or whole screen */
-
 #define DEBUG_UPDATES  0
 #define DUMP_UPDATES   0
 #define DUMP_WINDOWS   0
@@ -51,11 +49,11 @@ static void draw_extra_background(struct sw_widget *widget,
 				  const struct ct_rect *region)
 {
   if (widget->data.window.canvas_background) {
-   struct ct_size size = { region->width,
+    struct ct_size size = { region->width,
 			    region->height };
     struct ct_point pos = { region->x, region->y };
 
-    be_copy_osda_to_osda(sw_widget_get_osda(widget),
+    be_copy_osda_to_osda(get_osda(widget),
 			 widget->data.window.canvas_background,
 			 &size, &pos, &pos);
   }
@@ -74,11 +72,11 @@ static void draw(struct sw_widget *widget)
 
     be_draw_region(widget->data.window.target, &rect,
 		   widget->data.window.title->background);
-    be_draw_rectangle(sw_widget_get_osda(widget), &rect, 1,
+    be_draw_rectangle(get_osda(widget), &rect, 1,
 		      widget->data.window.title->foreground);
     pos.x = widget->inner_bounds.x + TITLE_PADDING;
     pos.y = widget->inner_bounds.y + TITLE_PADDING;
-    be_draw_string(sw_widget_get_osda(widget), &pos,
+    be_draw_string(get_osda(widget), &pos,
 		   widget->data.window.title);
   }
 }
@@ -376,17 +374,9 @@ static void flush_one_window(struct sw_widget *widget,
 /*************************************************************************
   ...
 *************************************************************************/
-void flush_rect_to_screen(const struct ct_rect *rect)
-{
-  be_copy_osda_to_screen(whole_osda, rect);  
-}
-
-/*************************************************************************
-  ...
-*************************************************************************/
 void flush_all_to_screen(void)
 {
-  be_copy_osda_to_screen(whole_osda, NULL);
+  be_copy_osda_to_screen(whole_osda);
 
   if (dump_screen) {
     static int counter = -1;
@@ -433,10 +423,10 @@ static void draw_background_region(struct sw_widget *widget,
     size.width = rect->width;
     size.height = rect->height;
 
-    be_draw_sprite(sw_widget_get_osda(widget), widget->background_sprite,
+    be_draw_sprite(get_osda(widget), widget->background_sprite,
 		   &size, &pos, &pos);
   } else if (widget->has_background_color) {
-    be_draw_region(sw_widget_get_osda(widget), rect,
+    be_draw_region(get_osda(widget), rect,
 		   widget->background_color);
   } else {
     if (widget->parent && widget->type != WT_WINDOW) {
@@ -460,7 +450,7 @@ static void draw_background(struct sw_widget *widget)
       rect.y = 0;
     }
 
-    be_draw_rectangle(sw_widget_get_osda(widget), &rect, BORDER_WIDTH,
+    be_draw_rectangle(get_osda(widget), &rect, BORDER_WIDTH,
 		      widget->border_color);
   }
 }
@@ -512,9 +502,9 @@ static void draw_tooltip(struct sw_widget *widget)
   pos.y = rect.y + PADDING;
 
   if (widget->type == WT_WINDOW) {
-    osda = sw_widget_get_osda(widget->parent);
+    osda = get_osda(widget->parent);
   } else {
-    osda = sw_widget_get_osda(widget);
+    osda = get_osda(widget);
   }
 
   for (i = 1; i < widget->tooltip->shadow; i++) {
@@ -528,61 +518,6 @@ static void draw_tooltip(struct sw_widget *widget)
   be_draw_region(osda, &rect, widget->tooltip->text->background);
   be_draw_string(osda, &pos, widget->tooltip->text);
   be_draw_rectangle(osda, &rect, 1, widget->tooltip->text->foreground);
-}
-
-/*************************************************************************
-  ...
-*************************************************************************/
-void untooltip(struct sw_widget *widget)
-{
-  struct ct_point pos;
-  struct ct_rect rect;
-  const int PADDING = 5;
-  struct osda *osda;
-  int i, extra;
-
-  if (widget->tooltip && widget->tooltip_callback_id != 0) {
-    sw_remove_timeout(widget->tooltip_callback_id);
-    widget->tooltip_callback_id = 0;
-  }
-
-  if (!widget->tooltip || (widget->tooltip && !widget->tooltip_shown)) {
-    return;
-  }
-  widget->tooltip_shown = FALSE;
-  
-  extra = 2 * PADDING + widget->tooltip->shadow;
-  
-  rect.width = widget->tooltip->text->size.width + extra;
-  rect.height = widget->tooltip->text->size.height + extra;
-
-  rect.x =
-      MAX(0,
-	  widget->outer_bounds.x + (widget->outer_bounds.width -
-				    rect.width) / 2);
-  rect.y = MAX(0,widget->outer_bounds.y - rect.height - PADDING);
-
-  pos.x = rect.x + PADDING;
-  pos.y = rect.y + PADDING;
-
-  if (widget->type == WT_WINDOW) {
-    osda = sw_widget_get_osda(widget->parent);
-  } else {
-    osda = sw_widget_get_osda(widget);
-  }
-
-  for (i = 1; i < widget->tooltip->shadow; i++) {
-    struct ct_rect rect2 = rect;
-
-    rect2.x += i;
-    rect2.y += i;
-    be_draw_region(osda, &rect2, be_get_color(0, 0, 0, MIN_OPACITY));
-  }
-
-  be_draw_region(osda, &rect, be_get_color(0, 0, 0, MIN_OPACITY));
-  be_draw_rectangle(osda, &rect, 1, be_get_color(0, 0, 0, MIN_OPACITY));  
-  
-  parent_needs_paint(widget);
 }
 
 /*************************************************************************
@@ -758,15 +693,6 @@ void sw_paint_all(void)
 
   merge_regions(normalized_regions);
 
-#if 0
-  if (DEBUG_PAINT_ALL) {
-    printf("  merged normalized_regions\n");
-    region_list_iterate(normalized_regions, region) {
-      printf("    region=%s\n", ct_rect_to_string(region));
-    } region_list_iterate_end;
-  }
-#endif
-
   if(DEBUG_PAINT_ALL) {
     printf("starting flushing of %d regions\n",
            region_list_size(normalized_regions));
@@ -817,11 +743,6 @@ void sw_paint_all(void)
       }
       window_nr++;
     } widget_list_iterate_end;
-    
-#if FLUSH_RECTS
-    flush_rect_to_screen(region);
-#endif
-    
     region_list_unlink(normalized_regions, region);
     free(region);
 #if DUMP_UPDATES
@@ -836,7 +757,6 @@ void sw_paint_all(void)
   be_write_osda_to_file(whole_osda,filename);
 #endif
 
-#if !FLUSH_RECTS
   if (DEBUG_PAINT_ALL) {
     start_timer(timer4);
   }
@@ -844,8 +764,7 @@ void sw_paint_all(void)
   if (DEBUG_PAINT_ALL) {
     stop_timer(timer4);
   }
-#endif
-  
+
   if (DEBUG_PAINT_ALL) {
     printf("PAINT-ALL: update=%fs normalize=%fs flushs=%fs flush-all=%fs\n",
            read_timer_seconds(timer1), read_timer_seconds(timer2),
@@ -969,27 +888,22 @@ void sw_window_set_mouse_press_notify(struct sw_widget *widget,
 /*************************************************************************
   ...
 *************************************************************************/
-void sw_window_canvas_background_region_needs_repaint(
-                  struct sw_widget *widget, const struct ct_rect *region)
+void sw_window_canvas_background_region_needs_repaint(struct sw_widget
+						      *widget, const struct ct_rect
+						      *region)
 {
-  struct ct_rect region2;
-  struct ct_size size;
-  struct ct_point pos;
+#if 0
+  struct ct_size size = { region->width,
+    region->height
+  };
+  struct ct_point pos = { region->x, region->y };
 
-  if (region) {
-    region2 = *region;
-  } else {
-    sw_widget_get_bounds(widget, &region2);
-  }
-
-  size = (struct ct_size){ region2.width, region2.height };
-  pos = (struct ct_point){ region2.x, region2.y };
-  
-  be_copy_osda_to_osda(sw_widget_get_osda(widget),
+  be_copy_osda_to_osda(get_osda(widget),
 		       widget->data.window.canvas_background,
-		       &size, &pos, &pos);
-
-  add_flush_region(widget, &region2);
+		       &size, &pos, &pos, 0);
+#endif
+  //add_flush_region(widget, region);
+  widget_needs_paint(widget);
 }
 
 /*************************************************************************

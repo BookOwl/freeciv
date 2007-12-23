@@ -79,7 +79,7 @@ const char *get_tile_output_text(const struct tile *ptile)
 const char *popup_info_text(struct tile *ptile)
 {
   const char *activity_text;
-  struct city *pcity = tile_city(ptile);
+  struct city *pcity = ptile->city;
   struct unit *punit = find_visible_unit(ptile);
   const char *diplo_nation_plural_adjectives[DS_LAST] =
     {Q_("?nation:Neutral"), Q_("?nation:Hostile"),
@@ -98,14 +98,14 @@ const char *popup_info_text(struct tile *ptile)
   astr_clear(&str);
 #ifdef DEBUG
   astr_add_line(&str, _("Location: (%d, %d) [%d]"), 
-		ptile->x, ptile->y, tile_continent(ptile)); 
+		ptile->x, ptile->y, ptile->continent); 
 #endif /*DEBUG*/
 
   if (client_tile_get_known(ptile) == TILE_UNKNOWN) {
     astr_add(&str, _("Unknown"));
     return str.str;
   }
-  astr_add_line(&str, _("Terrain: %s"),  tile_get_info_text(ptile, 0));
+  astr_add_line(&str, _("Terrain: %s"),  tile_get_info_text(ptile));
   astr_add_line(&str, _("Food/Prod/Trade: %s"),
 		get_tile_output_text(ptile));
   if (tile_has_special(ptile, S_HUT)) {
@@ -123,8 +123,8 @@ const char *popup_info_text(struct tile *ptile)
     } else if (owner) {
       struct player_diplstate *ds = game.player_ptr->diplstates;
 
-      if (ds[player_index(owner)].type == DS_CEASEFIRE) {
-	int turns = ds[player_index(owner)].turns_left;
+      if (ds[owner->player_no].type == DS_CEASEFIRE) {
+	int turns = ds[owner->player_no].turns_left;
 
 	/* TRANS: "Polish territory (5 turn cease-fire)" */
 	astr_add_line(&str, PL_("%s territory (%d turn cease-fire)",
@@ -133,7 +133,7 @@ const char *popup_info_text(struct tile *ptile)
 		      nation_adjective_for_player(owner),
 		      turns);
       } else {
-	int type = ds[player_index(owner)].type;
+	int type = ds[owner->player_no].type;
 
 	/* TRANS: "Polish territory (friendly)" */
 	astr_add_line(&str, _("%s territory (%s)"),
@@ -149,7 +149,6 @@ const char *popup_info_text(struct tile *ptile)
      * borders are in use). */
     struct player *owner = city_owner(pcity);
     bool has_improvements = FALSE;
-    struct impr_type *prev_impr = NULL;
 
     if (!game.player_ptr || owner == game.player_ptr){
       /* TRANS: "City: Warsaw (Polish)" */
@@ -159,8 +158,8 @@ const char *popup_info_text(struct tile *ptile)
     } else {
       struct player_diplstate *ds = game.player_ptr->diplstates;
 
-      if (ds[player_index(owner)].type == DS_CEASEFIRE) {
-	int turns = ds[player_index(owner)].turns_left;
+      if (ds[owner->player_no].type == DS_CEASEFIRE) {
+	int turns = ds[owner->player_no].turns_left;
 
 	/* TRANS:  "City: Warsaw (Polish, 5 turn cease-fire)" */
         astr_add_line(&str, PL_("City: %s (%s, %d turn cease-fire)",
@@ -174,38 +173,25 @@ const char *popup_info_text(struct tile *ptile)
         astr_add_line(&str, _("City: %s (%s, %s)"),
 		      pcity->name,
 		      nation_adjective_for_player(owner),
-		      diplo_city_adjectives[ds[player_index(owner)].type]);
+		      diplo_city_adjectives[ds[owner->player_no].type]);
       }
     }
-    improvement_iterate(pimprove) {
-      if (is_improvement_visible(pimprove)
-       && city_has_building(pcity, pimprove)) {
+    impr_type_iterate(i) {
+      if (is_improvement_visible(i) && city_got_building(pcity, i)) {
 	/* TRANS: previous lines gave other information about the city. */
-        if (NULL != prev_impr) {
-          if (has_improvements) {
-            astr_add(&str, Q_("?blistmore:, "));
-          }
-          astr_add(&str, improvement_name_translation(prev_impr));
-          has_improvements = TRUE;
-        } else {
-          astr_add(&str, Q_("?blistbegin: with "));
-        }
-        prev_impr = pimprove;
-      }
-    } improvement_iterate_end;
+	if (has_improvements) {
+	  astr_add(&str, ", ");
+	} else {
+	  astr_add(&str, _(" with "));
+	}
 
-    if (NULL != prev_impr) {
-      if (has_improvements) {
-        /* More than one improvement */
-        /* TRANS: This does not appear if there is only one building in the list */
-        astr_add(&str, Q_("?blistlast: and "));
+	astr_add(&str, improvement_name_translation(i));
+	has_improvements = TRUE;
       }
-      astr_add(&str, improvement_name_translation(prev_impr));
-      astr_add(&str, Q_("?blistend:"));
-    }
+    } impr_type_iterate_end;
 
     unit_list_iterate(get_units_in_focus(), pfocus_unit) {
-      struct city *hcity = game_find_city_by_number(pfocus_unit->homecity);
+      struct city *hcity = find_city_by_id(pfocus_unit->homecity);
 
       if (unit_has_type_flag(pfocus_unit, F_TRADE_ROUTE)
 	  && can_cities_trade(hcity, pcity)
@@ -249,8 +235,8 @@ const char *popup_info_text(struct tile *ptile)
 
       assert(owner != NULL && game.player_ptr != NULL);
 
-      if (ds[player_index(owner)].type == DS_CEASEFIRE) {
-	int turns = ds[player_index(owner)].turns_left;
+      if (ds[owner->player_no].type == DS_CEASEFIRE) {
+	int turns = ds[owner->player_no].turns_left;
 
 	/* TRANS:  "Unit: Musketeers (Polish, 5 turn cease-fire)" */
         astr_add_line(&str, PL_("Unit: %s (%s, %d turn cease-fire)",
@@ -264,7 +250,7 @@ const char *popup_info_text(struct tile *ptile)
 	astr_add_line(&str, _("Unit: %s (%s, %s)"),
 		      utype_name_translation(ptype),
 		      nation_adjective_for_player(owner),
-		      diplo_city_adjectives[ds[player_index(owner)].type]);
+		      diplo_city_adjectives[ds[owner->player_no].type]);
       }
     }
 
@@ -605,7 +591,7 @@ const char *get_info_label_text(void)
 		  game.player_ptr->economic.science);
   }
   if (!game.info.simultaneous_phases) {
-    astr_add_line(&str, _("Moving: %s"), player_by_number(game.info.phase)->name);
+    astr_add_line(&str, _("Moving: %s"), get_player(game.info.phase)->name);
   }
   astr_add_line(&str, _("(Click for more info)"));
   return str.str;
@@ -687,7 +673,7 @@ const char *get_unit_info_label_text1(struct unit_list *punits)
 
   FIXME: this should be renamed.
 ****************************************************************************/
-const char *get_unit_info_label_text2(struct unit_list *punits, int linebreaks)
+const char *get_unit_info_label_text2(struct unit_list *punits)
 {
   static struct astring str = ASTRING_INIT;
   int count;
@@ -700,11 +686,8 @@ const char *get_unit_info_label_text2(struct unit_list *punits, int linebreaks)
 
   count = unit_list_size(punits);
 
-  /* This text should always have the same number of lines if
-   * 'linebreaks' has no flags at all. Otherwise the GUI widgets may be
-   * confused and try to resize themselves. If caller asks for
-   * conditional 'linebreaks', it should take care of these problems
-   * itself. */
+  /* This text should always have the same number of lines.  Otherwise the
+   * GUI widgets may be confused and try to resize themselves. */
 
   /* Line 1. Goto or activity text. */
   if (count > 0 && hover_state != HOVER_NONE) {
@@ -739,7 +722,7 @@ const char *get_unit_info_label_text2(struct unit_list *punits, int linebreaks)
     bv_special infrastructure =
       get_tile_infrastructure_set(punit->tile, &infracount);
 
-    astr_add_line(&str, "%s", tile_get_info_text(punit->tile, linebreaks));
+    astr_add_line(&str, "%s", tile_get_info_text(punit->tile));
     if (infracount > 0) {
       astr_add_line(&str, "%s", get_infrastructure_text(infrastructure));
     } else {
@@ -757,27 +740,27 @@ const char *get_unit_info_label_text2(struct unit_list *punits, int linebreaks)
 
     memset(types_count, 0, sizeof(types_count));
     unit_list_iterate(punits, punit) {
-      if (unit_has_type_flag(punit, F_CIVILIAN)) {
+      if (unit_has_type_flag(punit, F_NONMIL)) {
 	nonmil++;
       } else {
 	mil++;
       }
-      types_count[utype_index(unit_type(punit))]++;
+      types_count[unit_type(punit)->index]++;
     } unit_list_iterate_end;
 
     top[0] = top[1] = top[2] = NULL;
     unit_type_iterate(utype) {
       if (!top[2]
-	  || types_count[utype_index(top[2])] < types_count[utype_index(utype)]) {
+	  || types_count[top[2]->index] < types_count[utype->index]) {
 	top[2] = utype;
 
 	if (!top[1]
-	    || types_count[utype_index(top[1])] < types_count[utype_index(top[2])]) {
+	    || types_count[top[1]->index] < types_count[top[2]->index]) {
 	  top[2] = top[1];
 	  top[1] = utype;
 
 	  if (!top[0]
-	      || types_count[utype_index(top[0])] < types_count[utype_index(utype)]) {
+	      || types_count[top[0]->index] < types_count[utype->index]) {
 	    top[1] = top[0];
 	    top[0] = utype;
 	  }
@@ -786,14 +769,14 @@ const char *get_unit_info_label_text2(struct unit_list *punits, int linebreaks)
     } unit_type_iterate_end;
 
     for (i = 0; i < 3; i++) {
-      if (top[i] && types_count[utype_index(top[i])] > 0) {
-	if (utype_has_flag(top[i], F_CIVILIAN)) {
-	  nonmil -= types_count[utype_index(top[i])];
+      if (top[i] && types_count[top[i]->index] > 0) {
+	if (utype_has_flag(top[i], F_NONMIL)) {
+	  nonmil -= types_count[top[i]->index];
 	} else {
-	  mil -= types_count[utype_index(top[i])];
+	  mil -= types_count[top[i]->index];
 	}
 	astr_add_line(&str, "%d: %s",
-		      types_count[utype_index(top[i])],
+		      types_count[top[i]->index],
 		      utype_name_translation(top[i]));
       } else {
 	astr_add_line(&str, " ");

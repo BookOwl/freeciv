@@ -128,11 +128,11 @@ static void popit(GdkEventButton *event, struct tile *ptile)
     is_orders = show_unit_orders(punit);
 
     if (punit && punit->goto_tile) {
-      map_deco[tile_index(punit->goto_tile)].crosshair++;
+      map_deco[punit->goto_tile->index].crosshair++;
       *cross_head = punit->goto_tile;
       cross_head++;
     }
-    map_deco[tile_index(ptile)].crosshair++;
+    map_deco[ptile->index].crosshair++;
     *cross_head = ptile;
     cross_head++;
 
@@ -168,7 +168,7 @@ void popupinfo_popdown_callback(GtkWidget *w, gpointer data)
   /* We could just remove the crosshairs that we placed earlier, but
    * this is easier. */
   whole_map_iterate(ptile) {
-    map_deco[tile_index(ptile)].crosshair = 0;
+    map_deco[ptile->index].crosshair = 0;
   } whole_map_iterate_end;
 
   update_map_canvas_visible();
@@ -240,7 +240,7 @@ gboolean butt_down_mapcanvas(GtkWidget *w, GdkEventButton *ev, gpointer data)
 
   gtk_widget_grab_focus(map_canvas);
   ptile = canvas_pos_to_tile(ev->x, ev->y);
-  pcity = ptile ? tile_city(ptile) : NULL;
+  pcity = ptile ? ptile->city : NULL;
 
   switch (ev->button) {
 
@@ -290,22 +290,14 @@ gboolean butt_down_mapcanvas(GtkWidget *w, GdkEventButton *ev, gpointer data)
 
   case 3: /* RIGHT mouse button */
 
-    /* <SHIFT> + <CONTROL> + RMB : Show/hide workers. */
-    if ((ev->state & GDK_SHIFT_MASK) && (ev->state & GDK_CONTROL_MASK)) {
-      if (NULL != pcity) {
-        overlay_workers_at_city();
-      }
-    }
     /* <CONTROL> + RMB : Quickselect a land unit. */
-    else if (ev->state & GDK_CONTROL_MASK) {
+    if (ev->state & GDK_CONTROL_MASK) {
       action_button_pressed(ev->x, ev->y, SELECT_LAND);
     }
     /* <SHIFT> + RMB: Paste Production. */
-    else if ((ev->state & GDK_SHIFT_MASK)) {
-      if (NULL != pcity) {
-        clipboard_paste_production(pcity);
-        cancel_tile_hiliting();
-      }
+    else if ((ev->state & GDK_SHIFT_MASK) && pcity) {
+      clipboard_paste_production(pcity);
+      cancel_tile_hiliting();
     }
     /* Plain RMB click. */
     else {
@@ -404,10 +396,10 @@ gboolean leave_mapcanvas(GtkWidget *widget, GdkEventCrossing *event)
   if (gtk_notebook_get_current_page(GTK_NOTEBOOK(top_notebook))
       != gtk_notebook_page_num(GTK_NOTEBOOK(top_notebook), map_widget)) {
     /* Map is not currently topmost tab. Do not use tile specific cursors. */
-    update_mouse_cursor(CURSOR_DEFAULT);
+    action_state = CURSOR_ACTION_DEFAULT;
     return TRUE;
   }
-
+  
   /* Bizarrely, this function can be called even when we don't "leave"
    * the map canvas, for instance, it gets called any time the mouse is
    * clicked. */
@@ -417,7 +409,7 @@ gboolean leave_mapcanvas(GtkWidget *widget, GdkEventCrossing *event)
       && canvas_x < mapview.width && canvas_y < mapview.height) {
     control_mouse_cursor(canvas_pos_to_tile(canvas_x, canvas_y));
   } else {
-    update_mouse_cursor(CURSOR_DEFAULT);
+    action_state = CURSOR_ACTION_DEFAULT;
   }
 
   update_unit_info_label(get_units_in_focus());
@@ -456,7 +448,7 @@ gboolean butt_down_overviewcanvas(GtkWidget *w, GdkEventButton *ev, gpointer dat
 }
 
 /**************************************************************************
-  Best effort to center the map on the currently selected unit(s)
+  Draws the on the map the tiles the given city is using
 **************************************************************************/
 void center_on_unit(void)
 {
@@ -464,9 +456,9 @@ void center_on_unit(void)
 }
 
 /**************************************************************************
-  Shows/hides overlay on the map for the city at this location
+  Draws the on the map the tiles the given city is using
 **************************************************************************/
-void overlay_workers_at_city(void)
+void key_city_workers(void)
 {
   int x, y;
   

@@ -23,7 +23,6 @@
 #include "support.h"
 #include "timing.h"
 
-#include "game.h"
 #include "map.h"
 #include "unitlist.h"
 
@@ -956,18 +955,17 @@ void put_terrain(struct tile *ptile,
 ****************************************************************************/
 void put_unit_city_overlays(struct unit *punit,
 			    struct canvas *pcanvas,
-			    int canvas_x, int canvas_y, int *upkeep_cost,
-                            int happy_cost)
+			    int canvas_x, int canvas_y)
 {
   struct sprite *sprite;
 
-  sprite = get_unit_unhappy_sprite(tileset, punit, happy_cost);
+  sprite = get_unit_unhappy_sprite(tileset, punit);
   if (sprite) {
     canvas_put_sprite_full(pcanvas, canvas_x, canvas_y, sprite);
   }
 
   output_type_iterate(o) {
-    sprite = get_unit_upkeep_sprite(tileset, o, punit, upkeep_cost);
+    sprite = get_unit_upkeep_sprite(tileset, o, punit);
     if (sprite) {
       canvas_put_sprite_full(pcanvas, canvas_x, canvas_y, sprite);
     }
@@ -1068,7 +1066,7 @@ static void put_one_tile(struct canvas *pcanvas, enum mapview_layer layer,
   if (client_tile_get_known(ptile) != TILE_UNKNOWN) {
     put_one_element(pcanvas, layer, ptile, NULL, NULL,
 		    get_drawable_unit(tileset, ptile, citymode),
-		    tile_city(ptile), canvas_x, canvas_y, citymode);
+		    ptile->city, canvas_x, canvas_y, citymode);
   }
 }
 
@@ -1519,9 +1517,9 @@ void show_city_descriptions(int canvas_x, int canvas_y,
     const int canvas_x = gui_x - mapview.gui_x0;
     const int canvas_y = gui_y - mapview.gui_y0;
 
-    if (ptile && tile_city(ptile)) {
+    if (ptile && ptile->city) {
       int width = 0, height = 0;
-      struct city *pcity = tile_city(ptile);
+      struct city *pcity = ptile->city;
 
       show_city_desc(mapview.store, canvas_x, canvas_y,
 		     pcity, &width, &height);
@@ -1841,7 +1839,7 @@ struct city *find_city_or_settler_near_tile(const struct tile *ptile,
   closest_city = NULL;
 
   city_map_checked_iterate(ptile, city_x, city_y, tile1) {
-    pcity = tile_city(tile1);
+    pcity = tile_get_city(tile1);
     if (pcity
 	&& (!game.player_ptr || city_owner(pcity) == game.player_ptr)
 	&& get_worker_city(pcity, CITY_MAP_SIZE - 1 - city_x,
@@ -1853,7 +1851,7 @@ struct city *find_city_or_settler_near_tile(const struct tile *ptile,
        * causing it to be marked as C_TILE_UNAVAILABLE.
        */
       
-      if (map_deco[tile_index(pcity->tile)].hilite == HILITE_CITY) {
+      if (map_deco[pcity->tile->index].hilite == HILITE_CITY) {
 	/* rule c */
 	return pcity;
       }
@@ -1914,23 +1912,35 @@ struct city *find_city_near_tile(const struct tile *ptile)
 void get_city_mapview_production(struct city *pcity,
                                  char *buffer, size_t buffer_len)
 {
-  int turns;
-
-  universal_name_translation(&pcity->production, buffer, buffer_len);
-
-  if (city_production_has_flag(pcity, IF_GOLD)) {
-    return;
-  }
-  turns = city_production_turns_to_build(pcity, TRUE);
-
-  if (999 < turns) {
-    cat_snprintf(buffer, buffer_len, " -");
+  int turns = city_turns_to_build(pcity, pcity->production, TRUE);
+				
+  if (pcity->production.is_unit) {
+    struct unit_type *punit_type =
+		utype_by_number(pcity->production.value);
+    if (turns < 999) {
+      my_snprintf(buffer, buffer_len, "%s %d",
+                  utype_name_translation(punit_type),
+                  turns);
+    } else {
+      my_snprintf(buffer, buffer_len, "%s -",
+                  utype_name_translation(punit_type));
+    }
   } else {
-    cat_snprintf(buffer, buffer_len, " %d", turns);
+    if (!pcity->production.is_unit
+	&& improvement_has_flag(pcity->production.value, IF_GOLD)) {
+      my_snprintf(buffer, buffer_len, "%s",
+		  improvement_name_translation(pcity->production.value));
+    } else if (turns < 999) {
+      my_snprintf(buffer, buffer_len, "%s %d",
+		  improvement_name_translation(pcity->production.value),
+		  turns);
+    } else {
+      my_snprintf(buffer, buffer_len, "%s -",
+		  improvement_name_translation(pcity->production.value));
+    }
   }
 }
 
-/***************************************************************************/
 static enum update_type needed_updates = UPDATE_NONE;
 static bool callback_queued = FALSE;
 
@@ -2246,8 +2256,8 @@ void init_mapview_decorations(void)
 
   map_deco = fc_realloc(map_deco, MAP_INDEX_SIZE * sizeof(*map_deco));
   whole_map_iterate(ptile) {
-    map_deco[tile_index(ptile)].hilite = HILITE_NONE;
-    map_deco[tile_index(ptile)].crosshair = 0;
+    map_deco[ptile->index].hilite = HILITE_NONE;
+    map_deco[ptile->index].crosshair = 0;
   } whole_map_iterate_end;
 }
 

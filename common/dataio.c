@@ -395,10 +395,8 @@ void dio_put_worklist(struct data_out *dout, const struct worklist *pwl)
 
     dio_put_uint8(dout, length);
     for (i = 0; i < length; i++) {
-      const struct universal *pcp = &(pwl->entries[i]);
-
-      dio_put_uint8(dout, pcp->kind);
-      dio_put_uint8(dout, universal_number(pcp));
+      dio_put_bool8(dout, pwl->entries[i].is_unit);
+      dio_put_uint8(dout, pwl->entries[i].value);
     }
   }
 }
@@ -652,14 +650,10 @@ void dio_get_worklist(struct data_in *din, struct worklist *pwl)
 
     dio_get_uint8(din, &length);
     for (i = 0; i < length; i++) {
-      struct universal prod;
-      int identifier;
-      int kind;
+      struct city_production prod;
 
-      dio_get_uint8(din, &kind);
-      dio_get_uint8(din, &identifier);
-
-      prod = universal_by_number(kind, identifier);
+      dio_get_bool8(din, &prod.is_unit);
+      dio_get_uint8(din, &prod.value);
       worklist_append(pwl, prod);
     }
   }
@@ -714,6 +708,7 @@ void dio_get_diplstate(struct data_in *din, struct player_diplstate *pds)
   dio_get_uint8(din, &value);
   pds->type = value;
   dio_get_uint16(din, &pds->turns_left);
+  dio_get_uint16(din, &pds->contact_turns_left);
   dio_get_uint8(din, &pds->has_reason_to_cancel);
   dio_get_uint16(din, &pds->first_contact_turn);
   value = 0;
@@ -730,6 +725,7 @@ void dio_put_diplstate(struct data_out *dout,
   /* backward compatible order defined for this transaction */
   dio_put_uint8(dout, pds->type);
   dio_put_uint16(dout, pds->turns_left);
+  dio_put_uint16(dout, pds->contact_turns_left);
   dio_put_uint8(dout, pds->has_reason_to_cancel);
   dio_put_uint16(dout, pds->first_contact_turn);
   dio_put_uint8(dout, pds->max_state);

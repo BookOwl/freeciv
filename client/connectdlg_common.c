@@ -39,13 +39,13 @@ Freeciv - Copyright (C) 2004 - The Freeciv Project
 
 #include "capability.h"
 #include "fcintl.h"
-#include "ioz.h"
 #include "log.h"
 #include "mem.h"
 #include "netintf.h"
-#include "rand.h"
 #include "registry.h"
+#include "shared.h"
 #include "support.h"
+
 #include "civclient.h"
 #include "climisc.h"
 #include "clinet.h"
@@ -74,6 +74,14 @@ static char challenge_fullname[MAX_LEN_PATH];
 static bool client_has_hack = FALSE;
 
 int internal_server_port;
+
+const char *skill_level_names[NUM_SKILL_LEVELS] = { 
+  N_("novice"),
+  N_("easy"), 
+  N_("normal"), 
+  N_("hard")
+ ,N_("experimental")
+};
 
 /************************************************************************** 
 The general chain of events:
@@ -385,21 +393,6 @@ bool client_start_server(void)
 }
 
 /*************************************************************************
-  generate a random string.
-*************************************************************************/
-static void randomize_string(char *str, size_t n)
-{
-  const char chars[] =
-    "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-  int i;
-
-  for (i = 0; i < n - 1; i++) {
-    str[i] = chars[myrand(sizeof(chars) - 1)];
-  }
-  str[i] = '\0';
-}
-
-/*************************************************************************
   returns TRUE if a filename is safe (i.e. doesn't have path components).
 *************************************************************************/
 static bool is_filename_safe(const char *filename)
@@ -441,11 +434,11 @@ void send_client_wants_hack(const char *filename)
     sz_strlcat(challenge_fullname, filename);
 
     /* generate an authentication token */ 
-    randomize_string(req.token, sizeof(req.token));
+    randomize_base64url_string(req.token, sizeof(req.token));
 
     section_file_init(&file);
     secfile_insert_str(&file, req.token, "challenge.token");
-    if (!section_file_save(&file, challenge_fullname, 0, FZ_PLAIN)) {
+    if (!section_file_save(&file, challenge_fullname, 0)) {
       freelog(LOG_ERROR, "Couldn't write token to temporary file: %s",
 	      challenge_fullname);
     }
@@ -457,7 +450,7 @@ void send_client_wants_hack(const char *filename)
 }
 
 /**************************************************************** 
-handle response (by the server) if the client has got hack or not.
+  client has hack (or not).
 *****************************************************************/ 
 void handle_single_want_hack_reply(bool you_have_hack)
 {

@@ -31,17 +31,8 @@
 #include "tech.h"
 #include "unit.h"
 #include "unitlist.h"
-#include "vision.h"
 
 #include "player.h"
-
-/* Names of AI levels. These must correspond to enum ai_level in
- * player.h. Also commands to set AI level in server/commands.c
- * must match these. */
-static const char *ai_level_names[] = {
-  NULL, N_("Away"), N_("Novice"), N_("Easy"), NULL, N_("Normal"),
-  NULL, N_("Hard"), N_("Cheating"), NULL, N_("Experimental")
-};
 
 /***************************************************************
   Returns true iff p1 can cancel treaty on p2.
@@ -62,7 +53,7 @@ enum dipl_reason pplayer_can_cancel_treaty(const struct player *p1,
   if (players_on_same_team(p1, p2)) {
     return DIPL_ERROR;
   }
-  if (p1->diplstates[player_index(p2)].has_reason_to_cancel == 0
+  if (p1->diplstates[p2->player_no].has_reason_to_cancel == 0
       && get_player_bonus(p1, EFT_HAS_SENATE) > 0
       && get_player_bonus(p1, EFT_ANY_GOVERNMENT) == 0) {
     return DIPL_SENATE_BLOCKING;
@@ -147,28 +138,16 @@ enum dipl_reason pplayer_can_make_treaty(const struct player *p1,
 }
 
 /***************************************************************
-  Check if pplayer has diplomatic relations with pplayer2. 
-  We always have that with ourselves.
+  Check if pplayer has an embassy with pplayer2. We always have
+  an embassy with ourselves.
 ***************************************************************/
 bool player_has_embassy(const struct player *pplayer,
 			const struct player *pplayer2)
 {
-  enum diplstate_type treaty = pplayer_get_diplstate(pplayer, pplayer2)->type;
-
-  if (pplayer == pplayer2) {
-    return TRUE;
-  }
-
-  if (is_barbarian(pplayer2)) {
-    return FALSE;
-  }
-
-  // Gives contact with everyone, except barbarians
-  if (get_player_bonus(pplayer, EFT_HAVE_EMBASSIES) > 0) {
-    return TRUE;
-  }
-
-  return treaty != DS_NO_CONTACT;
+  return (BV_ISSET(pplayer->embassy, pplayer2->player_no)
+          || (pplayer == pplayer2)
+          || (get_player_bonus(pplayer, EFT_HAVE_EMBASSIES) > 0
+              && !is_barbarian(pplayer2)));
 }
 
 /****************************************************************************
@@ -200,26 +179,24 @@ void player_init(struct player *plr)
   plr->nation = NO_NATION_SELECTED;
   plr->team = NULL;
   plr->is_ready = FALSE;
-
   plr->revolution_finishes = -1;
   plr->capital = FALSE;
-  plr->city_style=0;            /* should be first basic style */
-  plr->cities = city_list_new();
-  plr->sites = site_list_new();
   plr->units = unit_list_new();
-
+  plr->cities = city_list_new();
   plr->connections = conn_list_new();
   plr->current_conn = NULL;
   plr->is_connected = FALSE;
-
   plr->was_created = FALSE;
   plr->is_alive=TRUE;
   plr->is_dying = FALSE;
   plr->surrendered = FALSE;
+  BV_CLR_ALL(plr->embassy);
   for(i = 0; i < MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS; i++) {
     plr->diplstates[i].type = DS_NO_CONTACT;
     plr->diplstates[i].has_reason_to_cancel = 0;
+    plr->diplstates[i].contact_turns_left = 0;
   }
+  plr->city_style=0;            /* should be first basic style */
   plr->ai.control=FALSE;
   plr->ai.handicap = 0;
   plr->ai.skill_level = 0;
@@ -247,87 +224,6 @@ void player_init(struct player *plr)
   BV_CLR_ALL(plr->debug);
 }
 
-/**************************************************************************
-  Return the first item of players.
-**************************************************************************/
-struct player *player_array_first(void)
-{
-  if (game.info.nplayers > 0) {
-    return game.players;
-  }
-  return NULL;
-}
-
-/**************************************************************************
-  Return the last item of players.
-**************************************************************************/
-const struct player *player_array_last(void)
-{
-  if (game.info.nplayers > 0) {
-    return &game.players[game.info.nplayers - 1];
-  }
-  return NULL;
-}
-
-/**************************************************************************
-  Return the number of players.
-**************************************************************************/
-int player_count(void)
-{
-  return game.info.nplayers;
-}
-
-/**************************************************************************
-  Return the player index.
-
-  Currently same as player_number(), paired with player_count()
-  indicates use as an array index.
-**************************************************************************/
-int player_index(const struct player *pplayer)
-{
-  assert(pplayer);
-  return pplayer - game.players;
-}
-
-/**************************************************************************
-  Return the player index.
-**************************************************************************/
-int player_number(const struct player *pplayer)
-{
-  assert(pplayer);
-  return pplayer->player_no;
-}
-
-/**************************************************************************
-  Return struct player pointer for the given player index.
-
-  You can retrieve players that are not in the game (with IDs larger than
-  player_count).  An out-of-range player request will return NULL.
-**************************************************************************/
-struct player *player_by_number(const int player_id)
-{
-  if (player_id < 0 || player_id >= ARRAY_SIZE(game.players)) {
-    /* This isn't an error; some callers rely on this behavior. */
-    return NULL;
-  }
-  assert(game.players[player_id].player_no == player_id);
-  return &game.players[player_id];
-}
-
-/**************************************************************************
-  Return pointer iff the player ID refers to an in-game player.  Unlike
-  player_by_number, any index larger than player_count is not "valid".
-**************************************************************************/
-struct player *valid_player_by_number(const int player_id)
-{
-  if (player_id < 0 || player_id >= game.info.nplayers
-   || player_id >= ARRAY_SIZE(game.players)) {
-    return NULL;
-  }
-  assert(game.players[player_id].player_no == player_id);
-  return &game.players[player_id];
-}
-
 /****************************************************************************
   Set the player's nation to the given nation (may be NULL).  Returns TRUE
   iff there was a change.
@@ -336,11 +232,12 @@ bool player_set_nation(struct player *pplayer, struct nation_type *pnation)
 {
   if (pplayer->nation != pnation) {
     if (pplayer->nation) {
-      assert(pplayer->nation->player == pplayer);
       pplayer->nation->player = NULL;
     }
     if (pnation) {
-      assert(pnation->player == NULL);
+      /* Note that both barbarian players use same nation.
+       * For barbarian nations nation->player points essentially to
+       * random player */
       pnation->player = pplayer;
     }
     pplayer->nation = pnation;
@@ -395,7 +292,7 @@ struct player *find_player_by_name_prefix(const char *name,
 			 mystrncasequotecmp, name, &ind);
 
   if (*result < M_PRE_AMBIGUOUS) {
-    return player_by_number(ind);
+    return get_player(ind);
   } else {
     return NULL;
   }
@@ -444,7 +341,7 @@ bool can_player_see_unit_at(const struct player *pplayer,
   }
 
   /* Units in cities may be hidden. */
-  pcity = tile_city(ptile);
+  pcity = tile_get_city(ptile);
   if (pcity && !can_player_see_units_in_city(pplayer, pcity)) {
     return FALSE;
   }
@@ -456,7 +353,7 @@ bool can_player_see_unit_at(const struct player *pplayer,
   }
 
   /* Hiding units are only seen by the V_INVIS fog layer. */
-  return BV_ISSET(ptile->tile_seen[V_INVIS], player_index(pplayer));
+  return BV_ISSET(ptile->tile_seen[V_INVIS], pplayer->player_no);
 
   return FALSE;
 }
@@ -536,12 +433,12 @@ struct city *player_find_city_by_id(const struct player *pplayer,
   if (!pcity) {
     return NULL;
   }
-
+ 
   if (!pplayer || (city_owner(pcity) == pplayer)) {
     /* Correct owner */
     return pcity;
   }
-
+ 
   return NULL;
 }
 
@@ -580,7 +477,7 @@ bool player_in_city_radius(const struct player *pplayer,
 			   const struct tile *ptile)
 {
   map_city_radius_iterate(ptile, ptile1) {
-    struct city *pcity = tile_city(ptile1);
+    struct city *pcity = tile_get_city(ptile1);
 
     if (pcity && city_owner(pcity) == pplayer) {
       return TRUE;
@@ -610,7 +507,6 @@ int num_known_tech_with_flag(const struct player *pplayer,
 int player_get_expected_income(const struct player *pplayer)
 {
   int income = 0;
-  /* FIXME: almost the same as get_economy_report_data() */
 
   /* City income/expenses. */
   city_list_iterate(pplayer->cities, pcity) {
@@ -618,7 +514,8 @@ int player_get_expected_income(const struct player *pplayer)
     income += pcity->surplus[O_GOLD];
 
     /* Capitalization income. */
-    if (city_production_has_flag(pcity, IF_GOLD)) {
+    if (!pcity->production.is_unit
+	&& improvement_has_flag(pcity->production.value, IF_GOLD)) {
       income += pcity->shield_stock + pcity->surplus[O_SHIELD];
     }
   } city_list_iterate_end;
@@ -810,7 +707,7 @@ returns diplomatic state type between two players
 const struct player_diplstate *pplayer_get_diplstate(const struct player *pplayer,
 						     const struct player *pplayer2)
 {
-  return &(pplayer->diplstates[player_index(pplayer2)]);
+  return &(pplayer->diplstates[pplayer2->player_no]);
 }
 
 /***************************************************************
@@ -913,7 +810,7 @@ bool is_barbarian(const struct player *pplayer)
 **************************************************************************/
 bool gives_shared_vision(const struct player *me, const struct player *them)
 {
-  return TEST_BIT(me->gives_shared_vision, player_index(them));
+  return TEST_BIT(me->gives_shared_vision, them->player_no);
 }
 
 /**************************************************************************
@@ -922,8 +819,9 @@ bool gives_shared_vision(const struct player *me, const struct player *them)
 bool are_diplstates_equal(const struct player_diplstate *pds1,
 			  const struct player_diplstate *pds2)
 {
-  return (pds1->type == pds2->type
-	  && pds1->has_reason_to_cancel == pds2->has_reason_to_cancel);
+  return (pds1->type == pds2->type && pds1->turns_left == pds2->turns_left
+	  && pds1->has_reason_to_cancel == pds2->has_reason_to_cancel
+	  && pds1->contact_turns_left == pds2->contact_turns_left);
 }
 
 /***************************************************************************
@@ -963,9 +861,8 @@ int player_in_territory(const struct player *pplayer,
 ****************************************************************************/
 bool is_valid_username(const char *name)
 {
-  return (strlen(name) > 0
+  return (is_ascii_name(name)
 	  && !my_isdigit(name[0])
-	  && is_ascii_name(name)
 	  && mystrcasecmp(name, ANON_USER_NAME) != 0);
 }
 
@@ -980,91 +877,4 @@ struct player_research *get_player_research(const struct player *plr)
     return NULL;
   }
   return &(plr->team->research);
-}
-
-/****************************************************************************
-  Returns AI level associated with level name
-****************************************************************************/
-enum ai_level find_ai_level_by_name(const char *name)
-{
-  enum ai_level level;
-
-  for (level = 0; level < AI_LEVEL_LAST; level++) {
-    if (ai_level_names[level] != NULL) {
-      /* Only consider levels that really have names */
-      if (mystrcasecmp(ai_level_names[level], name) == 0) {
-        return level;
-      }
-    }
-  }
-
-  /* No level matches name */
-  return AI_LEVEL_LAST;
-}
-
-/***************************************************************
-  Return localized name of the AI level
-***************************************************************/
-const char *ai_level_name(enum ai_level level)
-{
-  assert(level >= 0 && level < AI_LEVEL_LAST);
-
-  if (ai_level_names[level] == NULL) {
-    return NULL;
-  }
-
-  return _(ai_level_names[level]);
-}
-
-/***************************************************************
-  Return cmd that sets given ai level
-***************************************************************/
-const char *ai_level_cmd(enum ai_level level)
-{
-  assert(level >= 0 && level < AI_LEVEL_LAST);
-
-  if (ai_level_names[level] == NULL) {
-    return NULL;
-  }
-
-  return ai_level_names[level];
-}
-
-/***************************************************************
-  Return is AI can be set to given level
-***************************************************************/
-bool is_settable_ai_level(enum ai_level level)
-{
-  if (level == AI_LEVEL_AWAY) {
-    /* Cannot set away level for AI */
-    return FALSE;
-  }
-
-  /* It's usable if it has name */
-  return ai_level_cmd(level) != NULL;
-}
-
-/***************************************************************
-  Return number of AI levels in game
-***************************************************************/
-int number_of_ai_levels(void)
-{
-  /* We determine this runtime instead of hardcoding correct answer.
-   * But as this is constant, we determine it only once. */
-  static int count = 0;
-  enum ai_level level;
-
-  if (count) {
-    /* Answer already known */
-    return count;
-  }
-
-  /* Determine how many levels are actually usable */
-  for (level = 0; level < AI_LEVEL_LAST; level++) {
-    if (is_settable_ai_level(level)) {
-      count++;
-    }
-  }
-
-  return count;
 }

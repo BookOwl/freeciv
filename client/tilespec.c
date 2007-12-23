@@ -27,7 +27,6 @@
 #include <string.h>
 
 #include "astring.h"
-#include "base.h"
 #include "capability.h"
 #include "fcintl.h"
 #include "game.h" /* for fill_xxx */
@@ -40,7 +39,6 @@
 #include "player.h"
 #include "registry.h"
 #include "shared.h"
-#include "specialist.h"
 #include "support.h"
 #include "unit.h"
 #include "unitlist.h"
@@ -61,11 +59,11 @@
 #include "citydlg_common.h"	/* for generate_citydlg_dimensions() */
 #include "tilespec.h"
 
-#define TILESPEC_CAPSTR "+tilespec4+2007.Oct.26 duplicates_ok"
+#define TILESPEC_CAPSTR "+tilespec4 duplicates_ok"
 /*
  * Tilespec capabilities acceptable to this program:
  *
- * +tilespec4     -  basic format; required
+ * +tilespec3     -  basic format; required
  *
  * duplicates_ok  -  we can handle existence of duplicate tags
  *                   (lattermost tag which appears is used; tilesets which
@@ -79,7 +77,7 @@
  */
 
 #define TILESPEC_SUFFIX ".tilespec"
-#define TILE_SECTION_PREFIX "tile_"
+#define TILE_SECTION_PREFIX "terrain_"
 
 /* This the way directional indices are now encoded: */
 #define MAX_INDEX_CARDINAL 		64
@@ -101,43 +99,35 @@ static const int DIR4_TO_DIR8[4] =
     { DIR8_NORTH, DIR8_SOUTH, DIR8_EAST, DIR8_WEST };
 
 enum match_style {
-  MATCH_NONE,
-  MATCH_SAME,		/* "boolean" match */
-  MATCH_PAIR,
-  MATCH_FULL
+  MATCH_NONE, MATCH_BOOLEAN, MATCH_FULL
 };
 
-enum sprite_type {
-  CELL_WHOLE,		/* entire tile */
-  CELL_CORNER		/* corner of tile */
+enum cell_type {
+  CELL_SINGLE, CELL_RECT
 };
 
-struct drawing_data {
+struct terrain_drawing_data {
   char *name;
   char *mine_tag;
 
   int num_layers; /* 1 thru MAX_NUM_LAYERS. */
-#define MAX_NUM_LAYERS 3
+#define MAX_NUM_LAYERS 2
 
-  struct drawing_layer {
+  struct {
     bool is_tall;
     int offset_x, offset_y;
 
     enum match_style match_style;
-    int match_index[1 + MATCH_FULL];
-    int match_indices; /* 0 = no match_type, 1 = no match_with */
+    int match_type, match_count;
 
-    enum sprite_type sprite_type;
+    enum cell_type cell_type;
 
     struct sprite_vector base;
     struct sprite *match[MAX_INDEX_CARDINAL];
     struct sprite **cells;
   } layer[MAX_NUM_LAYERS];
 
-  bool is_reversed;
-
-  int blending; /* layer, 0 = none */
-  struct sprite *blender;
+  bool is_blended;
   struct sprite *blend[4]; /* indexed by a direction4 */
 
   struct sprite *mine;
@@ -158,7 +148,7 @@ struct named_sprites {
   struct sprite
     *indicator[INDICATOR_COUNT][NUM_TILES_PROGRESS],
     *treaty_thumb[2],     /* 0=disagree, 1=agree */
-    *arrow[ARROW_LAST], /* 0=right arrow, 1=plus, 2=minus */
+    *right_arrow,
 
     *icon[ICON_COUNT],
 
@@ -220,6 +210,8 @@ struct named_sprites {
       *fallout,
       *fortified,
       *fortifying,
+      *fortress,
+      *airbase,
       *go_to,			/* goto is a C keyword :-) */
       *irrigate,
       *mine,
@@ -271,6 +263,9 @@ struct named_sprites {
       *irrigation[MAX_INDEX_CARDINAL],
       *pollution,
       *village,
+      *fortress,
+      *fortress_back,
+      *airbase,
       *fallout,
       *fog,
       **fullfog,
@@ -278,13 +273,6 @@ struct named_sprites {
       *darkness[MAX_INDEX_CARDINAL],         /* first unused */
       *river_outlet[4];		/* indexed by enum direction4 */
   } tx;				/* terrain extra */
-  struct {
-    struct sprite
-      *background,
-      *middleground,
-      *foreground,
-      *activity;
-  } bases[BASE_LAST];
   struct {
     struct sprite
       *main[EDGE_COUNT],
@@ -306,7 +294,7 @@ struct named_sprites {
     struct sprite *player[MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS];
   } colors;
 
-  struct drawing_data *drawing[MAX_NUM_ITEMS];
+  struct terrain_drawing_data *terrain[MAX_NUM_TERRAINS];
 };
 
 /* Don't reorder this enum since tilesets depend on it. */
@@ -411,9 +399,10 @@ struct tileset {
   int num_index_valid, num_index_cardinal;
   enum direction8 valid_tileset_dirs[8], cardinal_tileset_dirs[8];
 
-  struct tileset_layer {
+  struct {
+    enum match_style match_style;
+    int count;
     char **match_types;
-    int match_count;
   } layers[MAX_NUM_LAYERS];
 
   struct specfile_list *specfiles;
@@ -425,7 +414,7 @@ struct tileset {
   struct hash_table *sprite_hash;
 
   /* This hash table maps terrain graphic strings to drawing data. */
-  struct hash_table *tile_hash;
+  struct hash_table *terrain_hash;
 
   struct named_sprites sprites;
 
@@ -783,6 +772,7 @@ static void tileset_free_toplevel(struct tileset *t)
   }
   
   if (t->prefered_themes) {
+    int i;
     for (i = 0; i < t->num_prefered_themes; i++) {
       free(t->prefered_themes[i]);
     }
@@ -791,19 +781,21 @@ static void tileset_free_toplevel(struct tileset *t)
   }
   t->num_prefered_themes = 0;
 
-  if (t->tile_hash) {
-    while (hash_num_entries(t->tile_hash) > 0) {
-      struct drawing_data *draw
-         = (void *)hash_value_by_number(t->tile_hash, 0);
+  if (t->terrain_hash) {
+    while (hash_num_entries(t->terrain_hash) > 0) {
+      struct terrain_drawing_data *draw;
 
-      hash_delete_entry(t->tile_hash, draw->name);
+      draw = (void *)hash_value_by_number(t->terrain_hash, 0);
+      hash_delete_entry(t->terrain_hash, draw->name);
       free(draw->name);
       if (draw->mine_tag) {
 	free(draw->mine_tag);
       }
-      for (i = 0; i < 4; i++) {
-	if (draw->blend[i]) {
-	  free_sprite(draw->blend[i]);
+      if (draw->is_blended && t->is_isometric) {
+	for (i = 0; i < 4; i++) {
+	  if (draw->blend[i]) {
+	    free_sprite(draw->blend[i]);
+	  }
 	}
       }
       for (i = 0; i < draw->num_layers; i++) {
@@ -811,19 +803,17 @@ static void tileset_free_toplevel(struct tileset *t)
       }
       free(draw);
     }
-    hash_free(t->tile_hash);
-    t->tile_hash = NULL; /* Helpful for sanity. */
+    hash_free(t->terrain_hash);
+    t->terrain_hash = NULL; /* Helpful for sanity. */
   }
 
   for (i = 0; i < MAX_NUM_LAYERS; i++) {
-    struct tileset_layer *tslp = &t->layers[i];
-
-    if (tslp->match_types) {
-      for (j = 0; j < tslp->match_count; j++) {
-	free(tslp->match_types[j]);
+    if (t->layers[i].match_types) {
+      for (j = 0; j < t->layers[i].count; j++) {
+	free(t->layers[i].match_types[j]);
       }
-      free(tslp->match_types);
-      tslp->match_types = NULL;
+      free(t->layers[i].match_types);
+      t->layers[i].match_types = NULL;
     }
   }
 
@@ -904,7 +894,7 @@ void tilespec_reread(const char *new_tileset_name)
   sz_strlcpy(tileset_name, name);
   sz_strlcpy(old_name, tileset->name);
 
-  freelog(LOG_NORMAL, _("Loading tileset \"%s\"."), tileset_name);
+  freelog(LOG_NORMAL, "Loading tileset %s.", tileset_name);
 
   /* Step 0:  Record old data.
    *
@@ -954,27 +944,26 @@ void tilespec_reread(const char *new_tileset_name)
   terrain_type_iterate(pterrain) {
     tileset_setup_tile_type(tileset, pterrain);
   } terrain_type_iterate_end;
-  resource_type_iterate(presource) {
+  resource_type_iterate (presource) {
     tileset_setup_resource(tileset, presource);
   } resource_type_iterate_end;
   unit_type_iterate(punittype) {
     tileset_setup_unit_type(tileset, punittype);
   } unit_type_iterate_end;
   government_iterate(gov) {
-    tileset_setup_government(tileset, gov);
+    tileset_setup_government(tileset, gov->index);
   } government_iterate_end;
-  base_type_iterate(pbase) {
-    tileset_setup_base(tileset, pbase);
-  } base_type_iterate_end;
-  nations_iterate(pnation) {
-    tileset_setup_nation_flag(tileset, pnation);
-  } nations_iterate_end;
-  improvement_iterate(pimprove) {
-    tileset_setup_impr_type(tileset, pimprove);
-  } improvement_iterate_end;
-  advance_iterate(A_FIRST, padvance) {
-    tileset_setup_tech_type(tileset, padvance);
-  } advance_iterate_end;
+  for (id = 0; id < game.control.nation_count; id++) {
+    tileset_setup_nation_flag(tileset, id);
+  }
+  impr_type_iterate(imp_id) {
+    tileset_setup_impr_type(tileset, imp_id);
+  } impr_type_iterate_end;
+  tech_type_iterate(tech_id) {
+    if (tech_id != A_NONE && tech_exists(tech_id)) {
+      tileset_setup_tech_type(tileset, tech_id);
+    }
+  } tech_type_iterate_end;
   specialist_type_iterate(sp) {
     tileset_setup_specialist_type(tileset, sp);
   } specialist_type_iterate_end;
@@ -1032,7 +1021,7 @@ static struct sprite *load_gfx_file(const char *gfx_filename)
     }
   }
 
-  freelog(LOG_ERROR, "Could not load gfx file \"%s\".", gfx_filename);
+  freelog(LOG_VERBOSE, "Could not load gfx file \"%s\".", gfx_filename);
   return NULL;
 }
 
@@ -1243,23 +1232,38 @@ static char *tilespec_gfx_filename(const char *gfx_filename)
 }
 
 /**********************************************************************
-  Determine the sprite_type string.
+  Determine the match_style string.
 ***********************************************************************/
-static int check_sprite_type(const char *sprite_type, const char *tile_section)
+static int check_match_style(const char *style, const int layer)
 {
-  if (mystrcasecmp(sprite_type, "corner") == 0) {
-    return CELL_CORNER;
+  if (mystrcasecmp(style, "bool") == 0) {
+    return MATCH_BOOLEAN;
   }
-  if (mystrcasecmp(sprite_type, "single") == 0) {
-    return CELL_WHOLE;
+  if (mystrcasecmp(style, "full") == 0) {
+    return MATCH_FULL;
   }
-  if (mystrcasecmp(sprite_type, "whole") == 0) {
-    return CELL_WHOLE;
+  if (mystrcasecmp(style, "none") == 0) {
+    return MATCH_NONE;
   }
-  freelog(LOG_ERROR, "[%s] unknown sprite_type \"%s\".",
-	  tile_section,
-	  sprite_type);
-  return CELL_WHOLE;
+  freelog(LOG_ERROR, "Unknown match_style \"%s\" for layer %d.",
+	      style, layer);
+  return MATCH_NONE;
+}
+
+/**********************************************************************
+  Determine the cell_type string.
+***********************************************************************/
+static int check_cell_type(const char *cell_type, const char *tile_type)
+{
+  if (mystrcasecmp(cell_type, "rect") == 0) {
+    return CELL_RECT;
+  }
+  if (mystrcasecmp(cell_type, "single") == 0) {
+    return CELL_SINGLE;
+  }
+  freelog(LOG_ERROR, "Unknown cell_type \"%s\" for [%s].",
+		cell_type, tile_type);
+  return CELL_SINGLE;
 }
 
 /**********************************************************************
@@ -1277,7 +1281,6 @@ struct tileset *tileset_read_toplevel(const char *tileset_name, bool verbose)
   char *file_capstr;
   bool duplicates_ok, is_hex;
   enum direction8 dir;
-  const int spl = strlen(TILE_SECTION_PREFIX);
   struct tileset *t = tileset_new();
 
   fname = tilespec_fullname(tileset_name);
@@ -1332,8 +1335,8 @@ struct tileset *tileset_read_toplevel(const char *tileset_name, bool verbose)
   }
 
   if (t->is_isometric && !isometric_view_supported()) {
-    freelog(LOG_NORMAL, _("Client does not support isometric tilesets."));
-    freelog(LOG_NORMAL, _("Using default tileset instead."));
+    freelog(LOG_NORMAL, _("Client does not support isometric tilesets."
+	    " Using default tileset instead."));
     assert(tileset_name != NULL);
     section_file_free(file);
     free(fname);
@@ -1341,8 +1344,8 @@ struct tileset *tileset_read_toplevel(const char *tileset_name, bool verbose)
     return NULL;
   }
   if (!t->is_isometric && !overhead_view_supported()) {
-    freelog(LOG_NORMAL, _("Client does not support overhead view tilesets."));
-    freelog(LOG_NORMAL, _("Using default tileset instead."));
+    freelog(LOG_NORMAL, _("Client does not support overhead view tilesets."
+	    " Using default tileset instead."));
     assert(tileset_name != NULL);
     section_file_free(file);
     free(fname);
@@ -1433,25 +1436,17 @@ struct tileset *tileset_read_toplevel(const char *tileset_name, bool verbose)
 
   /* Terrain layer info. */
   for (i = 0; i < MAX_NUM_LAYERS; i++) {
-    struct tileset_layer *tslp = &t->layers[i];
-    int j, k;
+    char *style = secfile_lookup_str_default(file, "none",
+					     "layer%d.match_style", i);
+    int j;
 
-    tslp->match_types
-      = secfile_lookup_str_vec(file, &tslp->match_count,
+    t->layers[i].match_style = check_match_style(style,i);
+
+    t->layers[i].match_types
+      = secfile_lookup_str_vec(file, &t->layers[i].count,
 			       "layer%d.match_types", i);
-    for (j = 0; j < tslp->match_count; j++) {
-      tslp->match_types[j] = mystrdup(tslp->match_types[j]);
-
-      for (k = 0; k < j; k++) {
-        if (tslp->match_types[k][0] == tslp->match_types[j][0]) {
-          freelog(LOG_FATAL, "[layer%d] match_types: \"%s\" initial"
-                             " ('%c') is not unique.",
-                             i,
-                             tslp->match_types[j],
-                             tslp->match_types[j][0]);
-          exit(EXIT_FAILURE);
-        }
-      }
+    for (j = 0; j < t->layers[i].count; j++) {
+      t->layers[i].match_types[j] = mystrdup(t->layers[i].match_types[j]);
     }
   }
 
@@ -1466,174 +1461,117 @@ struct tileset *tileset_read_toplevel(const char *tileset_name, bool verbose)
     return NULL;
   }
 
-  assert(t->tile_hash == NULL);
-  t->tile_hash = hash_new(hash_fval_string, hash_fcmp_string);
+  assert(t->terrain_hash == NULL);
+  t->terrain_hash = hash_new(hash_fval_string, hash_fcmp_string);
 
   for (i = 0; i < num_sections; i++) {
-    struct drawing_data *draw = fc_calloc(1, sizeof(*draw));
-    char *sprite_type;
-    int l;
+    struct terrain_drawing_data *terr = fc_malloc(sizeof(*terr));
+    char *cell_type;
+    int l, j;
 
-    draw->name = mystrdup(sections[i] + spl);
-    draw->blending = secfile_lookup_int_default(file, 0,
-						"%s.is_blended",
-						sections[i]);
-    draw->blending = CLIP(0, draw->blending, MAX_NUM_LAYERS);
-
-    draw->is_reversed = secfile_lookup_bool_default(file, FALSE,
-						    "%s.is_reversed",
-						    sections[i]);
-    draw->num_layers = secfile_lookup_int(file, "%s.num_layers",
+    memset(terr, 0, sizeof(*terr));
+    terr->name = mystrdup(sections[i] + strlen(TILE_SECTION_PREFIX));
+    terr->is_blended = secfile_lookup_bool(file, "%s.is_blended",
+					    sections[i]);
+    terr->num_layers = secfile_lookup_int(file, "%s.num_layers",
 					  sections[i]);
-    draw->num_layers = CLIP(1, draw->num_layers, MAX_NUM_LAYERS);
+    terr->num_layers = CLIP(1, terr->num_layers, MAX_NUM_LAYERS);
 
-    for (l = 0; l < draw->num_layers; l++) {
-      struct drawing_layer *dlp = &draw->layer[l];
-      struct tileset_layer *tslp = &t->layers[l];
-      char *match_type;
-      char **match_with;
-      int count;
+    for (l = 0; l < terr->num_layers; l++) {
+      char *match_type, *match_style;
 
-      dlp->is_tall
+      terr->layer[l].is_tall
 	= secfile_lookup_bool_default(file, FALSE, "%s.layer%d_is_tall",
 				      sections[i], l);
-      dlp->offset_x
+      terr->layer[l].offset_x
 	= secfile_lookup_int_default(file, 0, "%s.layer%d_offset_x",
 				     sections[i], l);
-      dlp->offset_y
+      terr->layer[l].offset_y
 	= secfile_lookup_int_default(file, 0, "%s.layer%d_offset_y",
 				     sections[i], l);
+      match_style = secfile_lookup_str_default(file, "none",
+					       "%s.layer%d_match_style",
+					       sections[i], l);
+
+      terr->layer[l].match_style = check_match_style(match_style,l);
 
       match_type = secfile_lookup_str_default(file, NULL,
 					      "%s.layer%d_match_type",
 					      sections[i], l);
       if (match_type) {
-        int j;
+	/* Set match_count */
+	switch (terr->layer[l].match_style) {
+	case MATCH_FULL:
+	  terr->layer[l].match_count = t->layers[l].count;
+	  break;
+	case MATCH_BOOLEAN:
+	  terr->layer[l].match_count = 2;
+	  break;
+	default:
+	  terr->layer[l].match_count = 0;
+	  break;
+	};
 
 	/* Determine our match_type. */
-	for (j = 0; j < tslp->match_count; j++) {
-	  if (mystrcasecmp(tslp->match_types[j], match_type) == 0) {
+	for (j = 0; j < t->layers[l].count; j++) {
+	  if (mystrcasecmp(t->layers[l].match_types[j], match_type) == 0) {
 	    break;
 	  }
 	}
-	if (j >= tslp->match_count) {
-	  freelog(LOG_ERROR, "[%s] invalid match_type \"%s\".",
-	                     sections[i],
-	                     match_type);
+	if (j >= t->layers[l].count) {
+	  freelog(LOG_ERROR, "Invalid match type given for [%s].", sections[i]);
+	  terr->layer[l].match_type = 0;
+	  terr->layer[l].match_style = MATCH_NONE;
 	} else {
-	  dlp->match_index[dlp->match_indices++] = j;
+	  terr->layer[l].match_type = j;
+	}
+      } else {
+	terr->layer[l].match_style = MATCH_NONE;
+	if (t->layers[l].match_style != MATCH_NONE) {
+	  freelog(LOG_ERROR, "[Layer %d] has a match_style set;"
+				" all sections must have a match_type."
+				"  [%s] doesn't.", l, sections[i]);
 	}
       }
 
-      match_with = secfile_lookup_str_vec(file, &count,
-					  "%s.layer%d_match_with",
-					  sections[i], l);
-      if (match_with) {
-        int j, k;
-
-        if (count > MATCH_FULL) {
-          freelog(LOG_ERROR, "[%s] match_with has too many types (%d, max %d)",
-                             sections[i],
-                             count,
-                             MATCH_FULL);
-          count = MATCH_FULL;
-        }
-
-        if (1 < dlp->match_indices) {
-          freelog(LOG_ERROR, "[%s] previous match_with ignored.",
-                             sections[i]);
-          dlp->match_indices = 1;
-        } else if (1 > dlp->match_indices) {
-          freelog(LOG_ERROR, "[%s] missing match_type, using \"%s\".",
-                             sections[i],
-                             tslp->match_types[0]);
-          dlp->match_index[0] = 0;
-          dlp->match_indices = 1;
-        }
-
-        for (k = 0; k < count; k++) {
-          for (j = 0; j < tslp->match_count; j++) {
-            if (mystrcasecmp(tslp->match_types[j], match_with[k]) == 0) {
-              break;
-            }
-          }
-          if (j >= tslp->match_count) {
-            freelog(LOG_ERROR, "[%s] layer%d_match_with: invalid  \"%s\".",
-                               sections[i],
-                               l,
-                               match_with[k]);
-          } else if (1 < count) {
-            int m;
-
-            for (m = 0; m < dlp->match_indices; m++) {
-              if (dlp->match_index[m] == j) {
-                freelog(LOG_ERROR, "[%s] layer%d_match_with: duplicate \"%s\".",
-                                   sections[i],
-                                   l,
-                                   match_with[k]);
-                break;
-              }
-            }
-            if (m >= dlp->match_indices) {
-              dlp->match_index[dlp->match_indices++] = j;
-            }
-          } else {
-            dlp->match_index[dlp->match_indices++] = j;
-          }
-        }
-        free(match_with);
-        match_with = NULL;
+      if (terr->layer[l].match_style == MATCH_NONE
+	  && t->layers[l].match_style == MATCH_FULL) {
+	freelog(LOG_ERROR, "[Layer %d] has match_type full set;"
+				" all sections must match this."
+				"  [%s] doesn't.", l, sections[i]);
       }
 
-      /* Check match_indices */
-      switch (dlp->match_indices) {
-      case 0:
-      case 1:
-        dlp->match_style = MATCH_NONE;
-        break;
-      case 2:
-        if (dlp->match_index[0] == dlp->match_index[1] ) {
-          dlp->match_style = MATCH_SAME;
-        } else {
-          dlp->match_style = MATCH_PAIR;
-        }
-        break;
-      default:
-        dlp->match_style = MATCH_FULL;
-        break;
-      };
-
-      sprite_type
-	= secfile_lookup_str_default(file, "whole", "%s.layer%d_sprite_type",
+      cell_type
+	= secfile_lookup_str_default(file, "single", "%s.layer%d_cell_type",
 				     sections[i], l);
-      dlp->sprite_type = check_sprite_type(sprite_type, sections[i]);
+      terr->layer[l].cell_type = check_cell_type(cell_type, sections[i]);
 
-      switch (dlp->sprite_type) {
-      case CELL_WHOLE:
+      switch (terr->layer[l].cell_type) {
+      case CELL_SINGLE:
 	/* OK, no problem */
 	break;
-      case CELL_CORNER:
-	if (dlp->is_tall
-	    || dlp->offset_x > 0
-	    || dlp->offset_y > 0) {
+      case CELL_RECT:
+	if (terr->layer[l].is_tall
+	    || terr->layer[l].offset_x > 0
+	    || terr->layer[l].offset_y > 0) {
 	  freelog(LOG_ERROR,
 		  "[%s] layer %d: you cannot have tall terrain or\n"
-		  "a sprite offset with a cell-based drawing method.",
+		    "a sprite offset with a cell-based drawing method.",
 		  sections[i], l);
-	  dlp->is_tall = FALSE;
-	  dlp->offset_x = dlp->offset_y = 0;
+	  terr->layer[l].is_tall = FALSE;
+	  terr->layer[l].offset_x = terr->layer[l].offset_y = 0;
 	}
 	break;
       };
     }
 
-    draw->mine_tag = secfile_lookup_str_default(file, NULL, "%s.mine_sprite",
+    terr->mine_tag = secfile_lookup_str_default(file, NULL, "%s.mine_sprite",
 						sections[i]);
-    if (draw->mine_tag) {
-      draw->mine_tag = mystrdup(draw->mine_tag);
+    if (terr->mine_tag) {
+      terr->mine_tag = mystrdup(terr->mine_tag);
     }
 
-    if (!hash_insert(t->tile_hash, draw->name, draw)) {
+    if (!hash_insert(t->terrain_hash, terr->name, terr)) {
       freelog(LOG_NORMAL, "warning: duplicate tilespec entry [%s].",
 	      sections[i]);
       section_file_free(file);
@@ -1911,7 +1849,7 @@ void tileset_setup_specialist_type(struct tileset *t, Specialist_type_id id)
   /* Load the specialist sprite graphics. */
   char buffer[512];
   int j;
-  const char *name = specialist_rule_name(specialist_by_number(id));
+  const char *name = get_specialist(id)->name;
 
   for (j = 0; j < MAX_NUM_CITIZEN_SPRITES; j++) {
     my_snprintf(buffer, sizeof(buffer), "specialist.%s_%d", name, j);
@@ -2088,9 +2026,7 @@ static void tileset_lookup_sprite_tags(struct tileset *t)
     }
   }
 
-  SET_SPRITE(arrow[ARROW_RIGHT], "s.right_arrow");
-  SET_SPRITE(arrow[ARROW_PLUS], "s.plus");
-  SET_SPRITE(arrow[ARROW_MINUS], "s.minus");
+  SET_SPRITE(right_arrow, "s.right_arrow");
   if (t->is_isometric) {
     SET_SPRITE(dither_tile, "t.dither_tile");
   }
@@ -2118,10 +2054,9 @@ static void tileset_lookup_sprite_tags(struct tileset *t)
     for (f = 0; f < NUM_CURSOR_FRAMES; f++) {
       const char *names[CURSOR_LAST] =
                {"goto", "patrol", "paradrop", "nuke", "select", 
-		"invalid", "attack", "edit_paint", "edit_add", "wait"};
+		"invalid", "attack", "wait"};
       struct small_sprite *ss;
 
-      assert(ARRAY_SIZE(names) == CURSOR_LAST);
       my_snprintf(buffer, sizeof(buffer), "cursor.%s%d", names[i], f);
       SET_SPRITE(cursor[i].frame[f], buffer);
       ss = hash_lookup_data(t->sprite_hash, buffer);
@@ -2239,6 +2174,8 @@ static void tileset_lookup_sprite_tags(struct tileset *t)
   SET_SPRITE(unit.fallout,	"unit.fallout");
   SET_SPRITE(unit.fortified,	"unit.fortified");     
   SET_SPRITE(unit.fortifying,	"unit.fortifying");     
+  SET_SPRITE(unit.fortress,     "unit.fortress");
+  SET_SPRITE(unit.airbase,      "unit.airbase");
   SET_SPRITE(unit.go_to,	"unit.goto");     
   SET_SPRITE(unit.irrigate,     "unit.irrigate");
   SET_SPRITE(unit.mine,	        "unit.mine");
@@ -2338,6 +2275,9 @@ static void tileset_lookup_sprite_tags(struct tileset *t)
   SET_SPRITE(tx.fallout,    "tx.fallout");
   SET_SPRITE(tx.pollution,  "tx.pollution");
   SET_SPRITE(tx.village,    "tx.village");
+  SET_SPRITE(tx.fortress,   "tx.fortress");
+  SET_SPRITE_ALT(tx.fortress_back, "tx.fortress_back", "tx.fortress");
+  SET_SPRITE(tx.airbase,    "tx.airbase");
   SET_SPRITE(tx.fog,        "tx.fog");
 
   /* Load color sprites. */
@@ -2608,7 +2548,7 @@ struct sprite* lookup_sprite_tag_alt(struct tileset *t,
 ***********************************************************************/
 void tileset_setup_unit_type(struct tileset *t, struct unit_type *ut)
 {
-  t->sprites.unittype[utype_index(ut)]
+  t->sprites.unittype[ut->index]
     = lookup_sprite_tag_alt(t, ut->graphic_str, ut->graphic_alt,
 			    TRUE, "unit_type", utype_rule_name(ut));
 
@@ -2619,14 +2559,14 @@ void tileset_setup_unit_type(struct tileset *t, struct unit_type *ut)
   Set improvement_type sprite value; should only happen after
   tilespec_load_tiles().
 ***********************************************************************/
-void tileset_setup_impr_type(struct tileset *t,
-			     struct impr_type *pimprove)
+void tileset_setup_impr_type(struct tileset *t, int id)
 {
-  t->sprites.building[improvement_index(pimprove)]
-    = lookup_sprite_tag_alt(t, pimprove->graphic_str,
-			    pimprove->graphic_alt,
-			    FALSE, "impr_type",
-			    improvement_rule_name(pimprove));
+  struct impr_type *pimpr = improvement_by_number(id);
+
+  assert(id >= 0 && id < game.control.num_impr_types);
+  t->sprites.building[id]
+    = lookup_sprite_tag_alt(t, pimpr->graphic_str, pimpr->graphic_alt,
+			    FALSE, "impr_type", improvement_rule_name(id));
 
   /* should maybe do something if NULL, eg generic default? */
 }
@@ -2635,19 +2575,18 @@ void tileset_setup_impr_type(struct tileset *t,
   Set tech_type sprite value; should only happen after
   tilespec_load_tiles().
 ***********************************************************************/
-void tileset_setup_tech_type(struct tileset *t,
-			     struct advance *padvance)
+void tileset_setup_tech_type(struct tileset *t, int id)
 {
-  if (valid_advance(padvance)) {
-    t->sprites.tech[advance_index(padvance)]
-      = lookup_sprite_tag_alt(t, padvance->graphic_str,
-			      padvance->graphic_alt,
+  if (tech_exists(id)) {
+    t->sprites.tech[id]
+      = lookup_sprite_tag_alt(t, advances[id].graphic_str,
+			      advances[id].graphic_alt,
 			      FALSE, "technology",
-			      advance_rule_name(padvance));
+			      advance_rule_name(id));
 
     /* should maybe do something if NULL, eg generic default? */
   } else {
-    t->sprites.tech[advance_index(padvance)] = NULL;
+    t->sprites.tech[id] = NULL;
   }
 }
 
@@ -2658,78 +2597,16 @@ void tileset_setup_tech_type(struct tileset *t,
 void tileset_setup_resource(struct tileset *t,
 			    const struct resource *presource)
 {
-  assert(presource);
-  t->sprites.resource[resource_index(presource)]
+  const int id = presource->index;
+
+  assert(id >= 0 && id < game.control.resource_count);
+  t->sprites.resource[id]
     = lookup_sprite_tag_alt(t, presource->graphic_str,
 			    presource->graphic_alt,
 			    FALSE, "resource",
 			    resource_rule_name(presource));
 }
 
-/****************************************************************************
-  Set base sprite values; should only happen after
-  tilespec_load_tiles().
-****************************************************************************/
-void tileset_setup_base(struct tileset *t,
-                        const struct base_type *pbase)
-{
-  char full_tag_name[MAX_LEN_NAME + strlen("_fg")];
-  const int id = base_index(pbase);
-
-  assert(id >= 0 && id < base_count());
-
-  sz_strlcpy(full_tag_name, pbase->graphic_str);
-  strcat(full_tag_name, "_bg");
-  t->sprites.bases[id].background = load_sprite(t, full_tag_name);
-
-  sz_strlcpy(full_tag_name, pbase->graphic_str);
-  strcat(full_tag_name, "_mg");
-  t->sprites.bases[id].middleground = load_sprite(t, full_tag_name);
-
-  sz_strlcpy(full_tag_name, pbase->graphic_str);
-  strcat(full_tag_name, "_fg");
-  t->sprites.bases[id].foreground = load_sprite(t, full_tag_name);
-
-  if (t->sprites.bases[id].background == NULL
-      && t->sprites.bases[id].middleground == NULL
-      && t->sprites.bases[id].foreground == NULL) {
-    /* No primary graphics at all. Try alternative */
-    freelog(LOG_VERBOSE,
-	    "Using alternate graphic \"%s\" (instead of \"%s\") for base \"%s\".",
-            pbase->graphic_alt,
-            pbase->graphic_str,
-            base_rule_name(pbase));
-
-    sz_strlcpy(full_tag_name, pbase->graphic_alt);
-    strcat(full_tag_name, "_bg");
-    t->sprites.bases[id].background = load_sprite(t, full_tag_name);
-
-    sz_strlcpy(full_tag_name, pbase->graphic_alt);
-    strcat(full_tag_name, "_mg");
-    t->sprites.bases[id].middleground = load_sprite(t, full_tag_name);
-
-    sz_strlcpy(full_tag_name, pbase->graphic_alt);
-    strcat(full_tag_name, "_fg");
-    t->sprites.bases[id].foreground = load_sprite(t, full_tag_name);
-
-    if (t->sprites.bases[id].background == NULL
-        && t->sprites.bases[id].middleground == NULL
-        && t->sprites.bases[id].foreground == NULL) {
-      /* Cannot find alternative graphics either */
-      freelog(LOG_FATAL, "No graphics for base \"%s\" at all!",
-              base_rule_name(pbase));
-      exit(EXIT_FAILURE);
-    }
-  }
-
-  t->sprites.bases[id].activity = load_sprite(t, pbase->activity_gfx);
-  if (t->sprites.bases[id].activity == NULL) {
-    freelog(LOG_FATAL, "Missing %s building activity tag \"%s\".",
-            base_rule_name(pbase),
-            pbase->activity_gfx);
-    exit(EXIT_FAILURE);
-  }
-}
 
 
 /**********************************************************************
@@ -2739,7 +2616,7 @@ void tileset_setup_base(struct tileset *t,
 void tileset_setup_tile_type(struct tileset *t,
 			     const struct terrain *pterrain)
 {
-  struct drawing_data *draw;
+  struct terrain_drawing_data *draw;
   struct sprite *sprite;
   char buffer[MAX_LEN_NAME + 20];
   int i, l;
@@ -2748,9 +2625,9 @@ void tileset_setup_tile_type(struct tileset *t,
     return;
   }
 
-  draw = hash_lookup_data(t->tile_hash, pterrain->graphic_str);
+  draw = hash_lookup_data(t->terrain_hash, pterrain->graphic_str);
   if (!draw) {
-    draw = hash_lookup_data(t->tile_hash, pterrain->graphic_alt);
+    draw = hash_lookup_data(t->terrain_hash, pterrain->graphic_alt);
     if (!draw) {
       freelog(LOG_FATAL, "Terrain \"%s\": no graphic tile \"%s\" or \"%s\".",
 	      terrain_rule_name(pterrain),
@@ -2762,127 +2639,84 @@ void tileset_setup_tile_type(struct tileset *t,
 
   /* Set up each layer of the drawing. */
   for (l = 0; l < draw->num_layers; l++) {
-    struct drawing_layer *dlp = &draw->layer[l];
-    struct tileset_layer *tslp = &t->layers[l];
-    sprite_vector_init(&dlp->base);
+    sprite_vector_init(&draw->layer[l].base);
 
-    switch (dlp->sprite_type) {
-    case CELL_WHOLE:
-      switch (dlp->match_style) {
+    switch (draw->layer[l].cell_type) {
+    case CELL_SINGLE:
+      switch (draw->layer[l].match_style) {
       case MATCH_NONE:
 	/* Load whole sprites for this tile. */
 	for (i = 0; ; i++) {
-	  my_snprintf(buffer, sizeof(buffer), "t.l%d.%s%d",
-		      l,
+	  my_snprintf(buffer, sizeof(buffer), "t.%s%d",
 		      draw->name,
 		      i + 1);
 	  sprite = load_sprite(t, buffer);
 	  if (!sprite) {
 	    break;
 	  }
-	  sprite_vector_reserve(&dlp->base, i + 1);
-	  dlp->base.p[i] = sprite;
+	  sprite_vector_reserve(&draw->layer[l].base, i + 1);
+	  draw->layer[l].base.p[i] = sprite;
 	}
-	/* check for base sprite, allowing missing sprites above base */
-	if (0 == i  &&  0 == l) {
+	if (i == 0) {
 	  freelog(LOG_FATAL, "Missing base sprite tag \"%s\".",
 		  buffer);
 	  exit(EXIT_FAILURE);
 	}
 	break;
-      case MATCH_SAME:
+      case MATCH_BOOLEAN:
+      case MATCH_FULL:
 	/* Load 16 cardinally-matched sprites. */
 	for (i = 0; i < t->num_index_cardinal; i++) {
-	  my_snprintf(buffer, sizeof(buffer), "t.l%d.%s_%s",
-		      l,
+	  my_snprintf(buffer, sizeof(buffer), "t.%s_%s",
 		      draw->name,
 		      cardinal_index_str(t, i));
-	  dlp->match[i] =
+	  draw->layer[l].match[i] =
 	    lookup_sprite_tag_alt(t, buffer, "", TRUE, "matched terrain",
 				  terrain_rule_name(pterrain));
 	}
 	break;
-      case MATCH_PAIR:
-      case MATCH_FULL:
-	assert(0); /* not yet defined */
-	break;
       };
       break;
-    case CELL_CORNER:
+    case CELL_RECT:
       {
-	const int count = dlp->match_indices;
-	int number = NUM_CORNER_DIRS;
+	const int count = draw->layer[l].match_count;
+	/* N directions (NSEW) * 3 dimensions of matching */
+	/* FIXME: should use exp() or expi() here. */
+	const int number = NUM_CORNER_DIRS * count * count * count;
 
-	switch (dlp->match_style) {
-	case MATCH_NONE:
-	  /* do nothing */
-	  break;
-	case MATCH_PAIR:
-	case MATCH_SAME:
-	  /* N directions (NSEW) * 3 dimensions of matching */
-	  assert(count == 2);
-	  number = NUM_CORNER_DIRS * 2 * 2 * 2;
-	  break;
-	case MATCH_FULL:
-	default:
-	  /* N directions (NSEW) * 3 dimensions of matching */
-	  /* could use exp() or expi() here? */
-	  number = NUM_CORNER_DIRS * count * count * count;
-	  break;
-	};
-
-	dlp->cells
-	  = fc_calloc(number, sizeof(*dlp->cells));
+	draw->layer[l].cells
+	  = fc_malloc(number * sizeof(*draw->layer[l].cells));
 
 	for (i = 0; i < number; i++) {
 	  enum direction4 dir = i % NUM_CORNER_DIRS;
 	  int value = i / NUM_CORNER_DIRS;
 
-	  switch (dlp->match_style) {
+	  switch (draw->layer[l].match_style) {
 	  case MATCH_NONE:
-	    my_snprintf(buffer, sizeof(buffer), "t.l%d.%s_cell_%c",
-			l,
-			draw->name,
-			direction4letters[dir]);
-	    dlp->cells[i]
-	      = lookup_sprite_tag_alt(t, buffer, "", TRUE, "cell terrain",
-				      terrain_rule_name(pterrain));
+	    assert(0); /* Impossible. */
 	    break;
-	  case MATCH_SAME:
-	    my_snprintf(buffer, sizeof(buffer), "t.l%d.%s_cell_%c%d%d%d",
-			l,
+	  case MATCH_BOOLEAN:
+	    my_snprintf(buffer, sizeof(buffer), "t.%s_cell_%c%d%d%d",
 			draw->name,
 			direction4letters[dir],
-			(value) & 1,
+			(value >> 0) & 1,
 			(value >> 1) & 1,
 			(value >> 2) & 1);
-	    dlp->cells[i]
+	    draw->layer[l].cells[i]
 	      = lookup_sprite_tag_alt(t, buffer, "", TRUE, "same cell terrain",
-				      terrain_rule_name(pterrain));
-	    break;
-	  case MATCH_PAIR:
-	    my_snprintf(buffer, sizeof(buffer), "t.l%d.%s_cell_%c_%c_%c_%c",
-			l,
-			draw->name,
-			direction4letters[dir],
-			tslp->match_types[dlp->match_index[(value) & 1]][0],
-			tslp->match_types[dlp->match_index[(value >> 1) & 1]][0],
-			tslp->match_types[dlp->match_index[(value >> 2) & 1]][0]);
-	    dlp->cells[i]
-	      = lookup_sprite_tag_alt(t, buffer, "", TRUE, "cell pair terrain",
 				      terrain_rule_name(pterrain));
 	    break;
 	  case MATCH_FULL:
 	    {
-	      int this = dlp->match_index[0];
-	      int n, s, e, w;
+	      int this = draw->layer[l].match_type;
+	      int n = 0, s = 0, e = 0, w = 0;
 	      int v1, v2, v3;
 
-	      v1 = dlp->match_index[value % count];
+	      v1 = value % count;
 	      value /= count;
-	      v2 = dlp->match_index[value % count];
+	      v2 = value % count;
 	      value /= count;
-	      v3 = dlp->match_index[value % count];
+	      v3 = value % count;
 
 	      assert(v1 < count && v2 < count && v3 < count);
 
@@ -2907,23 +2741,18 @@ void tileset_setup_tile_type(struct tileset *t,
 		w = v3;
 		break;
 	      case DIR4_WEST:
-	      default:		/* avoid warnings */
 		e = this;
 		s = v1;
 		w = v2;
 		n = v3;
 		break;
 	      };
-
-	      /* Use first character of match_types,
-	       * already checked for uniqueness. */
 	      my_snprintf(buffer, sizeof(buffer),
-			  "t.l%d.cellgroup_%c_%c_%c_%c",
-			  l,
-			  tslp->match_types[n][0],
-			  tslp->match_types[e][0],
-			  tslp->match_types[s][0],
-			  tslp->match_types[w][0]);
+			  "t.cellgroup_%s_%s_%s_%s",
+			  t->layers[l].match_types[n],
+			  t->layers[l].match_types[e],
+			  t->layers[l].match_types[s],
+			  t->layers[l].match_types[w]);
 	      sprite = load_sprite(t, buffer);
 
 	      if (sprite) {
@@ -2944,7 +2773,7 @@ void tileset_setup_tile_type(struct tileset *t,
 			buffer);
 	      }
 
-	      dlp->cells[i] = sprite;
+	      draw->layer[l].cells[i] = sprite;
 	    }
 	    break;
 	  };
@@ -2954,44 +2783,25 @@ void tileset_setup_tile_type(struct tileset *t,
     };
   }
 
-  /* try an optional special name */
-  my_snprintf(buffer, sizeof(buffer), "t.blend.%s", draw->name);
-  draw->blender = lookup_sprite_tag_alt(t, buffer, "", FALSE, "blend terrain",
-                                        terrain_rule_name(pterrain));
-
-  if (draw->blending > 0) {
-    const int l = draw->blending - 1;
-
-    if (NULL == draw->blender) {
-      int i = 0;
-      /* try an already loaded base */
-      while (NULL == draw->blender
-        &&  i < draw->blending
-        &&  0 < draw->layer[i].base.size) {
-        draw->blender = draw->layer[i++].base.p[0];
-      }
-    }
-
-    if (NULL == draw->blender) {
-      /* try an unloaded base name */
-      my_snprintf(buffer, sizeof(buffer), "t.l%d.%s1", l, draw->name);
-      draw->blender
-	= lookup_sprite_tag_alt(t, buffer, "", TRUE, "base (blend) terrain",
-				terrain_rule_name(pterrain));
-    }
-  }
-
-  if (NULL != draw->blender) {
+  if (draw->is_blended && t->is_isometric) {
     /* Set up blending sprites. This only works in iso-view! */
-    const int W = t->normal_tile_width;
-    const int H = t->normal_tile_height;
+    const int W = t->normal_tile_width, H = t->normal_tile_height;
     const int offsets[4][2] = {
       {W / 2, 0}, {0, H / 2}, {W / 2, H / 2}, {0, 0}
     };
-    enum direction4 dir = 0;
+    enum direction4 dir;
 
-    for (; dir < 4; dir++) {
-      draw->blend[dir] = crop_sprite(draw->blender,
+    if (draw->layer[0].base.size < 1) {
+      my_snprintf(buffer, sizeof(buffer), "t.%s1", draw->name);
+      sprite_vector_reserve(&draw->layer[0].base, 1);
+      draw->layer[0].base.p[0]
+	= lookup_sprite_tag_alt(t, buffer, "", TRUE, "base (blend) terrain",
+				terrain_rule_name(pterrain));
+    }
+
+    for (dir = 0; dir < 4; dir++) {
+      assert(sprite_vector_size(&draw->layer[0].base) > 0);
+      draw->blend[dir] = crop_sprite(draw->layer[0].base.p[0],
 				     offsets[dir][0], offsets[dir][1],
 				     W / 2, H / 2,
 				     t->sprites.dither_tile, 0, 0);
@@ -3004,19 +2814,20 @@ void tileset_setup_tile_type(struct tileset *t,
     draw->mine = NULL;
   }
 
-  t->sprites.drawing[terrain_index(pterrain)] = draw;
+  t->sprites.terrain[pterrain->index] = draw;
 
-  color_system_setup_terrain(t->color_system, pterrain, draw->name);
+  color_system_setup_terrain(t->color_system, pterrain);
 }
 
 /**********************************************************************
   Set government sprite value; should only happen after
   tilespec_load_tiles().
 ***********************************************************************/
-void tileset_setup_government(struct tileset *t,
-			      struct government *gov)
+void tileset_setup_government(struct tileset *t, int id)
 {
-  t->sprites.government[government_index(gov)]
+  struct government *gov = government_by_number(id);
+  
+  t->sprites.government[id]
     = lookup_sprite_tag_alt(t, gov->graphic_str, gov->graphic_alt,
 			    TRUE, "government",
 			    government_name_translation(gov));
@@ -3028,9 +2839,9 @@ void tileset_setup_government(struct tileset *t,
   Set nation flag sprite value; should only happen after
   tilespec_load_tiles().
 ***********************************************************************/
-void tileset_setup_nation_flag(struct tileset *t, 
-			       struct nation_type *nation)
+void tileset_setup_nation_flag(struct tileset *t, int id)
 {
+  struct nation_type *nation = nation_by_number(id);
   char *tags[] = {nation->flag_graphic_str,
 		  nation->flag_graphic_alt,
 		  "unknown", NULL};
@@ -3053,11 +2864,11 @@ void tileset_setup_nation_flag(struct tileset *t,
     exit(EXIT_FAILURE);
   }
 
-  sprite_vector_reserve(&t->sprites.nation_flag, nation_count());
-  t->sprites.nation_flag.p[nation_index(nation)] = flag;
+  sprite_vector_reserve(&t->sprites.nation_flag, game.control.nation_count);
+  t->sprites.nation_flag.p[id] = flag;
 
-  sprite_vector_reserve(&t->sprites.nation_shield, nation_count());
-  t->sprites.nation_shield.p[nation_index(nation)] = shield;
+  sprite_vector_reserve(&t->sprites.nation_shield, game.control.nation_count);
+  t->sprites.nation_shield.p[id] = shield;
 }
 
 /**********************************************************************
@@ -3078,9 +2889,9 @@ static struct sprite *get_unit_nation_flag_sprite(const struct tileset *t,
   struct nation_type *pnation = nation_of_unit(punit);
 
   if (draw_unit_shields) {
-    return t->sprites.nation_shield.p[nation_index(pnation)];
+    return t->sprites.nation_shield.p[pnation->index];
   } else {
-    return t->sprites.nation_flag.p[nation_index(pnation)];
+    return t->sprites.nation_flag.p[pnation->index];
   }
 }
 
@@ -3115,16 +2926,16 @@ static void build_tile_data(const struct tile *ptile,
 {
   enum direction8 dir;
 
-  *tspecial = tile_specials(ptile);
-  *tterrain = tile_terrain(ptile);
+  *tspecial = tile_get_special(ptile);
+  *tterrain = tile_get_terrain(ptile);
 
   /* Loop over all adjacent tiles.  We should have an iterator for this. */
   for (dir = 0; dir < 8; dir++) {
     struct tile *tile1 = mapstep(ptile, dir);
 
     if (tile1 && client_tile_get_known(tile1) != TILE_UNKNOWN) {
-      tterrain_near[dir] = tile_terrain(tile1);
-      tspecial_near[dir] = tile_specials(tile1);
+      tterrain_near[dir] = tile_get_terrain(tile1);
+      tspecial_near[dir] = tile_get_special(tile1);
     } else {
       /* We draw the edges of the (known) map as if the same terrain just
        * continued off the edge of the map. */
@@ -3155,7 +2966,7 @@ static int fill_unit_sprite_array(const struct tileset *t,
     }
   }
 
-  ADD_SPRITE(t->sprites.unittype[utype_index(unit_type(punit))], TRUE,
+  ADD_SPRITE(t->sprites.unittype[unit_type(punit)->index], TRUE,
 	     FULL_TILE_X_OFFSET + t->unit_offset_x,
 	     FULL_TILE_Y_OFFSET + t->unit_offset_y);
 
@@ -3194,6 +3005,12 @@ static int fill_unit_sprite_array(const struct tileset *t,
     case ACTIVITY_FORTIFYING:
       s = t->sprites.unit.fortifying;
       break;
+    case ACTIVITY_FORTRESS:
+      s = t->sprites.unit.fortress;
+      break;
+    case ACTIVITY_AIRBASE:
+      s = t->sprites.unit.airbase;
+      break;
     case ACTIVITY_SENTRY:
       s = t->sprites.unit.sentry;
       break;
@@ -3202,9 +3019,6 @@ static int fill_unit_sprite_array(const struct tileset *t,
       break;
     case ACTIVITY_TRANSFORM:
       s = t->sprites.unit.transform;
-      break;
-    case ACTIVITY_BASE:
-      s = t->sprites.bases[punit->activity_base].activity;
       break;
     default:
       break;
@@ -3668,32 +3482,34 @@ static int fill_terrain_sprite_blending(const struct tileset *t,
 				      struct terrain **tterrain_near)
 {
   struct drawn_sprite *saved_sprs = sprs;
-  struct terrain *pterrain = tile_terrain(ptile);
-  const int W = t->normal_tile_width, H = t->normal_tile_height;
-  const int offsets[4][2] = {
-    {W/2, 0}, {0, H / 2}, {W / 2, H / 2}, {0, 0}
-  };
-  enum direction4 dir = 0;
+  struct terrain *pterrain = tile_get_terrain(ptile);
 
-  /*
-   * We want to mark unknown tiles so that an unreal tile will be
-   * given the same marking as our current tile - that way we won't
-   * get the "unknown" dither along the edge of the map.
-   */
-  for (; dir < 4; dir++) {
-    struct tile *tile1 = mapstep(ptile, DIR4_TO_DIR8[dir]);
-    struct terrain *other;
+  if (t->is_isometric && t->sprites.terrain[pterrain->index]->is_blended) {
+    enum direction4 dir;
+    const int W = t->normal_tile_width, H = t->normal_tile_height;
+    const int offsets[4][2] = {
+      {W/2, 0}, {0, H / 2}, {W / 2, H / 2}, {0, 0}
+    };
 
-    if (!tile1
-	|| client_tile_get_known(tile1) == TILE_UNKNOWN
-	|| pterrain == (other = tterrain_near[DIR4_TO_DIR8[dir]])
-	|| (0 == t->sprites.drawing[terrain_index(other)]->blending
-	   &&  NULL == t->sprites.drawing[terrain_index(other)]->blender)) {
-      continue;
+    /*
+     * We want to mark unknown tiles so that an unreal tile will be
+     * given the same marking as our current tile - that way we won't
+     * get the "unknown" dither along the edge of the map.
+     */
+    for (dir = 0; dir < 4; dir++) {
+      struct tile *tile1 = mapstep(ptile, DIR4_TO_DIR8[dir]);
+      struct terrain *other = tterrain_near[DIR4_TO_DIR8[dir]];
+
+      if (!tile1
+	  || client_tile_get_known(tile1) == TILE_UNKNOWN
+	  || other == pterrain
+	  || !t->sprites.terrain[other->index]->is_blended) {
+	continue;
+      }
+
+      ADD_SPRITE(t->sprites.terrain[other->index]->blend[dir], TRUE,
+		 offsets[dir][0], offsets[dir][1]);
     }
-
-    ADD_SPRITE(t->sprites.drawing[terrain_index(other)]->blend[dir], TRUE,
-	       offsets[dir][0], offsets[dir][1]);
   }
 
   return sprs - saved_sprs;
@@ -3761,27 +3577,25 @@ static int fill_terrain_sprite_array(struct tileset *t,
 				     struct terrain **tterrain_near)
 {
   struct drawn_sprite *saved_sprs = sprs;
-  struct terrain *pterrain = tile_terrain(ptile);
-  struct drawing_data *draw = t->sprites.drawing[terrain_index(pterrain)];
-  struct drawing_layer *dlp = &draw->layer[l];
-  int this = dlp->match_index[0];
-  int that = dlp->match_index[1];
-  int ox = dlp->offset_x;
-  int oy = dlp->offset_y;
+  struct terrain *pterrain = tile_get_terrain(ptile);
+  struct terrain_drawing_data *draw = t->sprites.terrain[pterrain->index];
+  int match_type = draw->layer[l].match_type;
+  int ox = draw->layer[l].offset_x;
+  int oy = draw->layer[l].offset_y;
   int i;
 
 #define MATCH(dir)							    \
-    (t->sprites.drawing[terrain_index(tterrain_near[(dir)])]->num_layers > l	    \
-     ? t->sprites.drawing[terrain_index(tterrain_near[(dir)])]->layer[l].match_index[0] \
+    (t->sprites.terrain[tterrain_near[(dir)]->index]->num_layers > l	    \
+     ? t->sprites.terrain[tterrain_near[(dir)]->index]->layer[l].match_type \
      : -1)
 
-  switch (dlp->sprite_type) {
-  case CELL_WHOLE:
+  switch (draw->layer[l].cell_type) {
+  case CELL_SINGLE:
     {
-      switch (dlp->match_style) {
+      switch (draw->layer[l].match_style) {
       case MATCH_NONE:
 	{
-	  int count = sprite_vector_size(&dlp->base);
+	  int count = sprite_vector_size(&draw->layer[l].base);
 
 	  if (count > 0) {
 	    /* Pseudo-random reproducable algorithm to pick a sprite. */
@@ -3790,43 +3604,42 @@ static int fill_terrain_sprite_array(struct tileset *t,
 
 	    assert(count < SMALL_PRIME);
 	    assert((int)(LARGE_PRIME * MAP_INDEX_SIZE) > 0);
-	    count = ((tile_index(ptile) * LARGE_PRIME) % SMALL_PRIME) % count;
+	    count = ((ptile->index * LARGE_PRIME) % SMALL_PRIME) % count;
 
-	    if (dlp->is_tall) {
+	    if (draw->layer[l].is_tall) {
 	      ox += FULL_TILE_X_OFFSET;
 	      oy += FULL_TILE_Y_OFFSET;
 	    }
-	    ADD_SPRITE(dlp->base.p[count], TRUE, ox, oy);
+	    ADD_SPRITE(draw->layer[l].base.p[count], TRUE, ox, oy);
 	  }
 	  break;
 	}
-      case MATCH_SAME:
+      case MATCH_BOOLEAN:
 	{
 	  int tileno = 0;
 
 	  for (i = 0; i < t->num_cardinal_tileset_dirs; i++) {
 	    enum direction8 dir = t->cardinal_tileset_dirs[i];
 
-	    if (MATCH(dir) == this) {
+	    if (MATCH(dir) == match_type) {
 	      tileno |= 1 << i;
 	    }
 	  }
 
-	  if (dlp->is_tall) {
+	  if (draw->layer[l].is_tall) {
 	    ox += FULL_TILE_X_OFFSET;
 	    oy += FULL_TILE_Y_OFFSET;
 	  }
-	  ADD_SPRITE(dlp->match[tileno], TRUE, ox, oy);
+	  ADD_SPRITE(draw->layer[l].match[tileno], TRUE, ox, oy);
 	  break;
 	}
-      case MATCH_PAIR:
       case MATCH_FULL:
 	assert(0); /* not yet defined */
 	break;
       };
       break;
     }
-  case CELL_CORNER:
+  case CELL_RECT:
     {
       /* Divide the tile up into four rectangular cells.  Each of these
        * cells covers one corner, and each is adjacent to 3 different
@@ -3846,7 +3659,7 @@ static int fill_terrain_sprite_array(struct tileset *t,
 
       /* put corner cells */
       for (i = 0; i < NUM_CORNER_DIRS; i++) {
-	const int count = dlp->match_indices;
+	const int count = draw->layer[l].match_count;
 	int array_index = 0;
 	enum direction8 dir = dir_ccw(DIR4_TO_DIR8[i]);
 	int x = (t->is_isometric ? iso_offsets[i][0] : noniso_offsets[i][0]);
@@ -3854,45 +3667,28 @@ static int fill_terrain_sprite_array(struct tileset *t,
 	int m[3] = {MATCH(dir_ccw(dir)), MATCH(dir), MATCH(dir_cw(dir))};
 	struct sprite *s;
 
-	/* synthesize 4 dimensional array? */
-	switch (dlp->match_style) {
+	switch (draw->layer[l].match_style) {
 	case MATCH_NONE:
-	  /* We have no need for matching, just plug the piece in place. */
+	  /* Impossible */
+	  assert(0);
 	  break;
-	case MATCH_SAME:
-	  array_index = array_index * 2 + (m[2] != this);
-	  array_index = array_index * 2 + (m[1] != this);
-	  array_index = array_index * 2 + (m[0] != this);
-	  break;
-	case MATCH_PAIR:
-	  array_index = array_index * 2 + (m[2] == that);
-	  array_index = array_index * 2 + (m[1] == that);
-	  array_index = array_index * 2 + (m[0] == that);
+	case MATCH_BOOLEAN:
+	  assert(count == 2);
+	  array_index = array_index * count + (m[2] != match_type);
+	  array_index = array_index * count + (m[1] != match_type);
+	  array_index = array_index * count + (m[0] != match_type);
 	  break;
 	case MATCH_FULL:
-	default:
-	  {
-	    int n[3];
-	    int j = 0;
-	    for (; j < 3; j++) {
-	      int k = 0;
-	      for (; k < count; k++) {
-		n[j] = k; /* default to last entry */
-		if (m[j] == dlp->match_index[k])
-		{
-		  break;
-		}
-	      }
-	    }
-	    array_index = array_index * count + n[2];
-	    array_index = array_index * count + n[1];
-	    array_index = array_index * count + n[0];
+	  if (m[0] != -1 && m[1] != -1 && m[2] != -1) {
+	    array_index = array_index * count + m[2];
+	    array_index = array_index * count + m[1];
+	    array_index = array_index * count + m[0];
 	  }
 	  break;
 	};
 	array_index = array_index * NUM_CORNER_DIRS + i;
 
-	s = dlp->cells[array_index];
+	s = draw->layer[l].cells[array_index];
 	if (s) {
 	  ADD_SPRITE(s, TRUE, x, y);
 	}
@@ -3981,10 +3777,9 @@ static int fill_terrain_sprite_layer(struct tileset *t,
 {
   struct drawn_sprite *saved_sprs = sprs;
   struct sprite *sprite;
-  struct terrain *pterrain = tile_terrain(ptile);
-  struct drawing_data *draw = t->sprites.drawing[terrain_index(pterrain)];
-  const int l = (draw->is_reversed
-		 ? (draw->num_layers - layer_num - 1) : layer_num);
+  struct terrain *pterrain = tile_get_terrain(ptile);
+  struct terrain_drawing_data *draw = t->sprites.terrain[pterrain->index];
+  const int l = layer_num;
 
   /* Skip the normal drawing process. */
   /* FIXME: this should avoid calling load_sprite since it's slow and
@@ -3998,12 +3793,15 @@ static int fill_terrain_sprite_layer(struct tileset *t,
     }
   }
 
-  if (l < draw->num_layers) {
-    sprs += fill_terrain_sprite_array(t, sprs, l, ptile, tterrain_near);
+  if (l >= draw->num_layers) {
+    return 0;
+  }
 
-    if ((l + 1) == draw->blending) {
-      sprs += fill_terrain_sprite_blending(t, sprs, ptile, tterrain_near);
-    }
+  sprs += fill_terrain_sprite_array(t, sprs, l, ptile, tterrain_near);
+
+  /* Add blending on top of the first layer. */
+  if (l == 0 && draw->is_blended) {
+    sprs += fill_terrain_sprite_blending(t, sprs, ptile, tterrain_near);
   }
 
   /* Add darkness on top of the first layer.  Note that darkness is always
@@ -4087,15 +3885,15 @@ static int fill_grid_sprite_array(const struct tileset *t,
     }
 
     if ((pedge->tile[0]
-	 && map_deco[tile_index(pedge->tile[0])].hilite == HILITE_CITY)
+	 && map_deco[pedge->tile[0]->index].hilite == HILITE_CITY)
 	|| (pedge->tile[1]
-	    && map_deco[tile_index(pedge->tile[1])].hilite == HILITE_CITY)) {
+	    && map_deco[pedge->tile[1]->index].hilite == HILITE_CITY)) {
       ADD_SPRITE_SIMPLE(t->sprites.grid.selected[pedge->type]);
     } else if (!draw_terrain && draw_coastline
 	       && pedge->tile[0] && pedge->tile[1]
 	       && known[0] && known[1]
-	       && (is_ocean_tile(pedge->tile[0])
-		   ^ is_ocean_tile(pedge->tile[1]))) {
+	       && (is_ocean(pedge->tile[0]->terrain)
+		   ^ is_ocean(pedge->tile[1]->terrain))) {
       ADD_SPRITE_SIMPLE(t->sprites.grid.coastline[pedge->type]);
     } else if (draw_map_grid) {
       if (worked[0] || worked[1]) {
@@ -4121,11 +3919,11 @@ static int fill_grid_sprite_array(const struct tileset *t,
       if (owner0 != owner1) {
 	if (owner0) {
 	  ADD_SPRITE_SIMPLE(t->sprites.grid.player_borders
-			    [player_index(owner0)][pedge->type][0]);
+			    [owner0->player_no][pedge->type][0]);
 	}
 	if (owner1) {
 	  ADD_SPRITE_SIMPLE(t->sprites.grid.player_borders
-			    [player_index(owner1)][pedge->type][1]);
+			    [owner1->player_no][pedge->type][1]);
 	}
       }
     }
@@ -4196,7 +3994,7 @@ static int fill_goto_sprite_array(const struct tileset *t,
   generally be get_drawable_unit(); otherwise it can be any unit.
 
   pcity, if specified, gives the city.  For tile drawing this should
-  generally be tile_city(ptile); otherwise it can be any city.
+  generally be ptile->city; otherwise it can be any city.
 
   citymode specifies whether this is part of a citydlg.  If so some drawing
   is done differently.
@@ -4209,16 +4007,14 @@ int fill_sprite_array(struct tileset *t,
 		      const struct unit *punit, const struct city *pcity,
 		      const struct city *citymode)
 {
+  struct terrain *pterrain = NULL, *tterrain_near[8];
+  bv_special tspecial, tspecial_near[8];
   int tileno, dir;
-  bv_special tspecial;
-  bv_special tspecial_near[8];
-  struct terrain *tterrain_near[8];
-  struct terrain *pterrain = NULL;
   struct drawn_sprite *save_sprs = sprs;
   struct player *owner = NULL;
-  struct base_type *pbase = (ptile ? tile_get_base(ptile) : NULL);
-  /* Unit drawing is disabled when the view options are turned off,
-   * but only where we're drawing on the mapview. */
+
+  /* Unit drawing is disabled if the view options is turned off, but only
+   * if we're drawing on the mapview. */
   bool do_draw_unit = (punit && (draw_units || !ptile
 				 || (draw_focus_unit
 				     && unit_is_in_focus(punit))));
@@ -4270,7 +4066,7 @@ int fill_sprite_array(struct tileset *t,
       }
     }
     if (owner) {
-      ADD_SPRITE_SIMPLE(t->sprites.backgrounds.player[player_index(owner)]);
+      ADD_SPRITE_SIMPLE(t->sprites.backgrounds.player[owner->player_no]);
     } else if (ptile && !draw_terrain) {
       ADD_SPRITE_SIMPLE(t->sprites.backgrounds.background);
     }
@@ -4286,22 +4082,14 @@ int fill_sprite_array(struct tileset *t,
   case LAYER_TERRAIN2:
     if (draw_terrain && !solid_bg
       && ptile && client_tile_get_known(ptile) != TILE_UNKNOWN) {
+      assert(MAX_NUM_LAYERS == 2);
       sprs += fill_terrain_sprite_layer(t, sprs, 1, ptile, tterrain_near);
-    }
-    break;
-
-  case LAYER_TERRAIN3:
-    if (draw_terrain && !solid_bg
-      && ptile && client_tile_get_known(ptile) != TILE_UNKNOWN) {
-      assert(MAX_NUM_LAYERS == 3);
-      sprs += fill_terrain_sprite_layer(t, sprs, 2, ptile, tterrain_near);
     }
     break;
 
   case LAYER_WATER:
     if (ptile && client_tile_get_known(ptile) != TILE_UNKNOWN) {
-      if (draw_terrain && !solid_bg
-       && terrain_has_flag(pterrain, TER_OCEANIC)) {
+      if (draw_terrain && !solid_bg && is_ocean(pterrain)) {
 	for (dir = 0; dir < 4; dir++) {
 	  if (contains_special(tspecial_near[DIR4_TO_DIR8[dir]], S_RIVER)) {
 	    ADD_SPRITE_SIMPLE(t->sprites.tx.river_outlet[dir]);
@@ -4321,7 +4109,7 @@ int fill_sprite_array(struct tileset *t,
 	  enum direction8 dir = t->cardinal_tileset_dirs[i];
 
 	  if (contains_special(tspecial_near[dir], S_RIVER)
-	      || terrain_has_flag(tterrain_near[dir], TER_OCEANIC)) {
+	      || is_ocean(tterrain_near[dir])) {
 	    tileno |= 1 << i;
 	  }
 	}
@@ -4341,18 +4129,18 @@ int fill_sprite_array(struct tileset *t,
     if (ptile && client_tile_get_known(ptile) != TILE_UNKNOWN) {
       if (draw_specials) {
 	if (tile_resource_is_valid(ptile)) {
-	  ADD_SPRITE_SIMPLE(t->sprites.resource[resource_index(tile_resource(ptile))]);
+	  ADD_SPRITE_SIMPLE(t->sprites.resource[ptile->resource->index]);
 	}
       }
 
-      if (draw_fortress_airbase && pbase != NULL
-          && t->sprites.bases[base_index(pbase)].background) {
-        ADD_SPRITE_FULL(t->sprites.bases[base_index(pbase)].background);
+      if (draw_fortress_airbase && contains_special(tspecial, S_FORTRESS)
+	  && t->sprites.tx.fortress_back) {
+	ADD_SPRITE_FULL(t->sprites.tx.fortress_back);
       }
 
       if (draw_mines && contains_special(tspecial, S_MINE)
-	  && t->sprites.drawing[terrain_index(pterrain)]->mine) {
-	ADD_SPRITE_SIMPLE(t->sprites.drawing[terrain_index(pterrain)]->mine);
+	  && t->sprites.terrain[pterrain->index]->mine) {
+	ADD_SPRITE_SIMPLE(t->sprites.terrain[pterrain->index]->mine);
       }
 
       if (draw_specials && contains_special(tspecial, S_HUT)) {
@@ -4399,9 +4187,8 @@ int fill_sprite_array(struct tileset *t,
 
   case LAYER_SPECIAL2:
     if (ptile && client_tile_get_known(ptile) != TILE_UNKNOWN) {
-      if (draw_fortress_airbase && pbase != NULL
-          && t->sprites.bases[base_index(pbase)].middleground) {
-        ADD_SPRITE_FULL(t->sprites.bases[base_index(pbase)].middleground);
+      if (draw_fortress_airbase && contains_special(tspecial, S_AIRBASE)) {
+	ADD_SPRITE_FULL(t->sprites.tx.airbase);
       }
 
       if (draw_pollution && contains_special(tspecial, S_POLLUTION)) {
@@ -4448,11 +4235,11 @@ int fill_sprite_array(struct tileset *t,
 
   case LAYER_SPECIAL3:
     if (ptile && client_tile_get_known(ptile) != TILE_UNKNOWN) {
-      if (draw_fortress_airbase && pbase != NULL
-          && t->sprites.bases[base_index(pbase)].foreground) {
+      if (t->is_isometric && draw_fortress_airbase
+	  && contains_special(tspecial, S_FORTRESS)) {
 	/* Draw fortress front in iso-view (non-iso view only has a fortress
 	 * back). */
-	ADD_SPRITE_FULL(t->sprites.bases[base_index(pbase)].foreground);
+	ADD_SPRITE_FULL(t->sprites.tx.fortress);
       }
     }
     break;
@@ -4466,7 +4253,7 @@ int fill_sprite_array(struct tileset *t,
 
   case LAYER_OVERLAYS:
     sprs += fill_city_overlays_sprite_array(t, sprs, ptile, citymode);
-    if (ptile && map_deco[tile_index(ptile)].crosshair > 0) {
+    if (ptile && map_deco[ptile->index].crosshair > 0) {
       ADD_SPRITE_SIMPLE(t->sprites.user.attention);
     }
     break;
@@ -4735,7 +4522,7 @@ struct sprite *get_citizen_sprite(const struct tileset *t,
 struct sprite *get_nation_flag_sprite(const struct tileset *t,
 				      const struct nation_type *pnation)
 {
-  return t->sprites.nation_flag.p[nation_index(pnation)];
+  return t->sprites.nation_flag.p[pnation->index];
 }
 
 /**************************************************************************
@@ -4743,7 +4530,7 @@ struct sprite *get_nation_flag_sprite(const struct tileset *t,
 **************************************************************************/
 struct sprite *get_tech_sprite(const struct tileset *t, Tech_type_id tech)
 {
-  if (tech < 0 || tech >= advance_count()) {
+  if (tech < 0 || tech >= game.control.num_tech_types) {
     assert(0);
     return NULL;
   }
@@ -4753,14 +4540,13 @@ struct sprite *get_tech_sprite(const struct tileset *t, Tech_type_id tech)
 /**************************************************************************
   Return the sprite for the building/improvement.
 **************************************************************************/
-struct sprite *get_building_sprite(const struct tileset *t,
-				   struct impr_type *pimprove)
+struct sprite *get_building_sprite(const struct tileset *t, Impr_type_id b)
 {
-  if (!pimprove) {
+  if (b < 0 || b >= B_LAST || b >= game.control.num_impr_types) {
     assert(0);
     return NULL;
   }
-  return t->sprites.building[improvement_index(pimprove)];
+  return t->sprites.building[b];
 }
 
 /****************************************************************************
@@ -4769,11 +4555,11 @@ struct sprite *get_building_sprite(const struct tileset *t,
 struct sprite *get_government_sprite(const struct tileset *t,
 				     const struct government *gov)
 {
-  if (!gov) {
+  if (!gov || gov->index < 0 || gov->index >= game.control.government_count) {
     assert(0);
     return NULL;
   }
-  return t->sprites.government[government_index(gov)];
+  return t->sprites.government[gov->index];
 }
 
 /****************************************************************************
@@ -4786,7 +4572,7 @@ struct sprite *get_unittype_sprite(const struct tileset *t,
     assert(0);
     return NULL;
   }
-  return t->sprites.unittype[utype_index(punittype)];
+  return t->sprites.unittype[punittype->index];
 }
 
 /**************************************************************************
@@ -4806,14 +4592,11 @@ struct sprite *get_sample_city_sprite(const struct tileset *t,
 }
 
 /**************************************************************************
-  Return a sprite with an "arrow" theme graphic.
+  Return a sprite with the "right-arrow" theme graphic.
 **************************************************************************/
-struct sprite *get_arrow_sprite(const struct tileset *t,
-				enum arrow_type arrow)
+struct sprite *get_arrow_sprite(const struct tileset *t)
 {
-  assert(arrow >= 0 && arrow < ARROW_LAST);
-
-  return t->sprites.arrow[arrow];
+  return t->sprites.right_arrow;
 }
 
 /**************************************************************************
@@ -4938,10 +4721,9 @@ struct sprite *get_indicator_sprite(const struct tileset *t,
   May return NULL if there's no unhappiness.
 ****************************************************************************/
 struct sprite *get_unit_unhappy_sprite(const struct tileset *t,
-				       const struct unit *punit,
-				       int happy_cost)
+				       const struct unit *punit)
 {
-  const int unhappy = CLIP(0, happy_cost, 2);
+  const int unhappy = CLIP(0, punit->unhappiness, 2);
 
   if (unhappy > 0) {
     return t->sprites.upkeep.unhappy[unhappy - 1];
@@ -4958,10 +4740,9 @@ struct sprite *get_unit_unhappy_sprite(const struct tileset *t,
 ****************************************************************************/
 struct sprite *get_unit_upkeep_sprite(const struct tileset *t,
 				      Output_type_id otype,
-				      const struct unit *punit,
-				      const int *upkeep_cost)
+				      const struct unit *punit)
 {
-  const int upkeep = CLIP(0, upkeep_cost[otype], 2);
+  const int upkeep = CLIP(0, punit->upkeep[otype], 2);
 
   if (upkeep > 0) {
     return t->sprites.upkeep.output[otype][upkeep - 1];
