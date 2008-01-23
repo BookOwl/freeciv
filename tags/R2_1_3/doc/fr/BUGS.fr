@@ -1,0 +1,86 @@
+====
+BUGS
+====
+
+Freeciv 2.1 est une version "stable" et est considérée comme suffisament
+exempte de bugs pour un usage de tous les jours. Cependant, si vous trouvez un
+bug, nous voulons réellement le savoir afin de pouvoir le corriger. Ce fichier
+liste les bugs connus de la version et donne des informations sur la manière de
+rapporter un nouveau bug. 
+
+
+RAPPORTER UN BUG:
+=================
+
+Comment faire ?
+
+ - Soyez sûr que ce bug n'est pas listé dans la liste des bugs connus! Vous
+   pouvez trouver cette liste à:
+
+        http://www.freeciv.org/wiki/Known_Bugs
+
+ - Soyez sûr d'utiliser la dernière version de Freeciv, en allant voir le
+   website officiel (peut-être avons-nous déjà reglé ce problème):
+
+        http://www.freeciv.org/
+
+ - Allez voir sur le système de traitement des bugs de Freeciv à:
+
+        http://bugs.freeciv.org/
+
+   pour regarder si le bug aurait déjà été rapporté.
+
+ - Envoyez une rapport de bug à notre système de traitement des bugs !
+
+   Si vous obetenez des messages de GDK/GTK, comme par exemple:
+
+     Gtk-CRITICAL **: file gtkobject.c: line 1163 (gtk_object_ref): 
+     assertion oject->ref_count > 0' failed.
+
+   s'il vous plait, redémarrez votre client en ajoutant
+   "-- --g-fatal-warnings" à la fin de la ligne de commande. Vous allez alors
+   obtenir une interruption du client. Dans ce cas, incluez
+   la "stack trace" de cette interruption dans votre rapport.
+
+   Que inclure dans votre rapport ?
+
+   - Décrivez le problème, y compris tout message ayant été affiché.
+
+   - Indiquez quel est (sont) le(s) client(s) utilisé (Gtk+ or Xaw).
+
+   - Communiquez nous le nom et la version :
+
+       - Du système d'exploitation que vou utilisez. Vous pouvez trouver la
+         commande "uname -a" utile pour cela.
+
+       - Le numéro de version de Freeciv.
+
+       - Si vous utilisez le client Gtk+, les numéros de version (si vous les
+         connaissez) des bibliothèques Gtk+, glib, et imlib.
+
+       - Si vous utilisez le client Xaw, les numéros de version (si vous les
+         connaissez) des bibliothèques X, des la bibliothèque Xpm et Xaw, et en
+         particulier s'il s'agit de la Xaw standard ou d'une variante telle que
+         Xaw3d, Xaw95, ou Nextaw.
+
+       - Si compilez depuis la source, le nom et le numéro de version du
+         compilateur.
+
+       - Si vous installez depuis un paquet binaire, le nom du paquet, la
+         distribution pour laquelle il est fait, et où vous l'avez obtenu.
+
+   - Si Freeciv fait un vidage de mémoire, alors nous vous demanderons
+     d'utiliser un debogueur pour nous donner un état de la pile. Vous aurez
+     besoin du fichier "core" pour cela, donc conservez-le pendant un moment.
+
+   - S'il s'agit d'un problème de traduction, il decra être rapporté au 
+     responsable de cette traduction. Pour obtenir leurs noms et adresses:
+
+        http://www.freeciv.org/wiki/Localization
+
+INFORMATIONS SUPPLÉMENTAIRES :
+============================
+
+Pour plus d'informations, comme d'habitude, voyez le site web de Freeciv :
+
+        http://www.freeciv.org/
