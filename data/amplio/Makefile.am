@@ -22,8 +22,6 @@ pkgdata_DATA =          	\
 	moderncities.spec	\
 	nuke.png		\
 	nuke.spec		\
-	ocean.png		\
-	ocean.spec		\
 	select-alpha.png	\
 	select.png		\
 	select.spec		\
@@ -35,8 +33,6 @@ pkgdata_DATA =          	\
 	tiles.spec		\
 	units.png		\
 	units.spec		\
-	water.png		\
-	water.spec		\
 	wonders.spec
 
 EXTRA_DIST = $(pkgdata_DATA)

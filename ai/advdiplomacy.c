@@ -125,15 +125,14 @@ static enum diplstate_type pact_clause_to_diplstate_type(enum clause_type type)
 static int ai_goldequiv_tech(struct player *pplayer, Tech_type_id tech)
 {
   int bulbs, tech_want, worth;
-  enum tech_state state = player_invention_state(pplayer, tech);
 
-  if (TECH_KNOWN == state) {
+  if (get_invention(pplayer, tech) == TECH_KNOWN) {
     return 0;
   }
   bulbs = total_bulbs_required_for_goal(pplayer, tech) * 3;
   tech_want = MAX(pplayer->ai.tech_want[tech], 0) / MAX(game.info.turn, 1);
   worth = bulbs + tech_want;
-  if (TECH_REACHABLE == state) {
+  if (get_invention(pplayer, tech) == TECH_REACHABLE) {
     worth /= 2;
   }
   return worth;
@@ -202,7 +201,7 @@ static int compute_tech_sell_price(struct player* giver, struct player* taker,
     }
 
     /* Do not bother wanting a tech that we already have. */
-    if (player_invention_state(taker, tech_id) == TECH_KNOWN) {
+    if (get_invention(taker, tech_id) == TECH_KNOWN) {
       return 0;
     }
 
@@ -211,7 +210,7 @@ static int compute_tech_sell_price(struct player* giver, struct player* taker,
       if (eplayer == giver
           || eplayer == taker
           || !eplayer->is_alive
-          || player_invention_state(eplayer, tech_id) == TECH_KNOWN) {
+          || get_invention(eplayer, tech_id) == TECH_KNOWN) {
         continue;
       }
       
@@ -264,7 +263,7 @@ static int ai_goldequiv_clause(struct player *pplayer,
       if (is_dangerous) {
         return -BIG_NUMBER;
       }
-    } else if (player_invention_state(pplayer, pclause->value) != TECH_KNOWN) {
+    } else if (get_invention(pplayer, pclause->value) != TECH_KNOWN) {
       worth += compute_tech_sell_price(aplayer, pplayer, pclause->value,
                                        &is_dangerous);
     }
@@ -464,6 +463,24 @@ static int ai_goldequiv_clause(struct player *pplayer,
     }
     break;
 
+  case CLAUSE_EMBASSY:
+    if (give) {
+      if (ds_after == DS_ALLIANCE) {
+        worth = 0;
+      } else if (ds_after == DS_PEACE) {
+        worth = -5 * game.info.turn;
+      } else {
+        worth = MIN(-50 * game.info.turn
+                    + pplayer->ai.love[player_index(aplayer)], 
+                    -5 * game.info.turn);
+      }
+    } else {
+      worth = 0; /* We don't need no stinkin' embassy, do we? */
+    }
+    DIPLO_LOG(LOG_DIPL, pplayer, aplayer, "embassy clause worth %d",
+              worth);
+    break;
+
   case CLAUSE_LAST:
     break;
   } /* end of switch */
@@ -658,17 +675,17 @@ static int ai_war_desire(struct player *pplayer, struct player *target,
     /* FIXME: This might be buggy if it ignores unmet UnitClass reqs. */
     fear += get_city_bonus(pcity, EFT_DEFEND_BONUS);
 
-    city_built_iterate(pcity, pimprove) {
-      want += impr_build_shield_cost(pimprove);
-      if (improvement_obsolete(pplayer, pimprove)) {
+    built_impr_iterate(pcity, id) {
+      want += impr_build_shield_cost(id);
+      if (improvement_obsolete(pplayer, id)) {
         continue;
       }
-      if (is_great_wonder(pimprove)) {
-        want += impr_build_shield_cost(pimprove) * 2;
-      } else if (is_small_wonder(pimprove)) {
-        want += impr_build_shield_cost(pimprove);
+      if (is_great_wonder(id)) {
+        want += impr_build_shield_cost(id) * 2;
+      } else if (is_small_wonder(id)) {
+        want += impr_build_shield_cost(id);
       }
-    } city_built_iterate_end;
+    } built_impr_iterate_end;
   } city_list_iterate_end;
   unit_list_iterate(target->units, punit) {
     fear += ATTACK_POWER(punit);
@@ -688,8 +705,9 @@ static int ai_war_desire(struct player *pplayer, struct player *target,
     }
   } unit_list_iterate_end;
   city_list_iterate(pplayer->cities, pcity) {
-    if (VUT_UTYPE == pcity->production.kind 
-        && utype_has_flag(pcity->production.value.utype, F_CITIES)) {
+    if (pcity->production.is_unit 
+        && utype_has_flag(utype_by_number(pcity->production.value),
+                          F_CITIES)) {
       want -= 150;
       settlers++;
     }
@@ -704,14 +722,6 @@ static int ai_war_desire(struct player *pplayer, struct player *target,
   /* Calculate average distances to other player's empire. */
   distance = player_distance_to_player(pplayer, target);
   ai->diplomacy.player_intel[player_index(target)].distance = distance;
-
-  /* Worry a bit if the other player has extreme amounts of wealth
-   * that can be used in cities to quickly buy an army. */
-  fear += (target->economic.gold / 5000) * city_list_size(target->cities);
-
-  /* Tech lead is worrisome. FIXME: Only consider 'military' techs. */
-  fear += MAX(get_player_research(target)->techs_researched
-              - get_player_research(pplayer)->techs_researched, 0) * 100;
 
   /* Spacerace loss we will not allow! */
   if (ship->state >= SSHIP_STARTED) {
@@ -954,14 +964,16 @@ void ai_diplomacy_begin_new_phase(struct player *pplayer,
 static void suggest_tech_exchange(struct player* player1,
                                   struct player* player2)
 {
-  int worth[advance_count()];
+  int worth[game.control.num_tech_types];
   bool is_dangerous;
     
-  worth[A_NONE] = 0;
-
-  advance_index_iterate(A_FIRST, tech) {
-    if (player_invention_state(player1, tech) == TECH_KNOWN) {
-      if (player_invention_state(player2, tech) != TECH_KNOWN) {
+  tech_type_iterate(tech) {
+    if (tech == A_NONE) {
+      worth[tech] = 0;
+      continue;
+    }
+    if (get_invention(player1, tech) == TECH_KNOWN) {
+      if (get_invention(player2, tech) != TECH_KNOWN) {
         worth[tech] = -compute_tech_sell_price(player1, player2, tech,
 	                                       &is_dangerous);
 	if (is_dangerous) {
@@ -972,7 +984,7 @@ static void suggest_tech_exchange(struct player* player1,
         worth[tech] = 0;
       }
     } else {
-      if (player_invention_state(player2, tech) == TECH_KNOWN) {
+      if (get_invention(player2, tech) == TECH_KNOWN) {
         worth[tech] = compute_tech_sell_price(player2, player1, tech,
 	                                      &is_dangerous);
 	if (is_dangerous) {
@@ -983,13 +995,13 @@ static void suggest_tech_exchange(struct player* player1,
         worth[tech] = 0;
       }
     }
-  } advance_index_iterate_end;
+  } tech_type_iterate_end;
     
-  advance_index_iterate(A_FIRST, tech) {
+  tech_type_iterate(tech) {
     if (worth[tech] <= 0) {
       continue;
     }
-    advance_index_iterate(A_FIRST, tech2) {
+    tech_type_iterate(tech2) {
       int diff;
 
       if (worth[tech2] >= 0) {
@@ -1009,8 +1021,8 @@ static void suggest_tech_exchange(struct player* player1,
 	}
 	return;
       }
-    } advance_index_iterate_end;
-  } advance_index_iterate_end;
+    } tech_type_iterate_end;
+  } tech_type_iterate_end;
 }
 
 /********************************************************************** 
@@ -1018,19 +1030,20 @@ static void suggest_tech_exchange(struct player* player1,
 ***********************************************************************/
 static void ai_share(struct player *pplayer, struct player *aplayer)
 {
+  int index;
   bool gives_vision;
 
   /* Only share techs with team mates */
   if (players_on_same_team(pplayer, aplayer)) {
-    advance_index_iterate(A_FIRST, index) {
-      if ((player_invention_state(pplayer, index) != TECH_KNOWN)
-          && (player_invention_state(aplayer, index) == TECH_KNOWN)) {
+    for (index = A_FIRST; index < game.control.num_tech_types; index++) {
+      if ((get_invention(pplayer, index) != TECH_KNOWN)
+          && (get_invention(aplayer, index) == TECH_KNOWN)) {
        ai_diplomacy_suggest(aplayer, pplayer, CLAUSE_ADVANCE, index);
-      } else if ((player_invention_state(pplayer, index) == TECH_KNOWN)
-          && (player_invention_state(aplayer, index) != TECH_KNOWN)) {
+      } else if ((get_invention(pplayer, index) == TECH_KNOWN)
+          && (get_invention(aplayer, index) != TECH_KNOWN)) {
         ai_diplomacy_suggest(pplayer, aplayer, CLAUSE_ADVANCE, index);
       }
-    } advance_index_iterate_end;
+    }
   }
 
   /* Only give shared vision if safe. Only ask for shared vision if fair. */
@@ -1046,6 +1059,13 @@ static void ai_share(struct player *pplayer, struct player *aplayer)
     ai_diplomacy_suggest(aplayer, pplayer, CLAUSE_VISION, 0);
   }
 
+  if (!player_has_embassy(pplayer, aplayer)) {
+    ai_diplomacy_suggest(aplayer, pplayer, CLAUSE_EMBASSY, 0);
+  }
+  if (!player_has_embassy(aplayer, pplayer)) {
+    ai_diplomacy_suggest(pplayer, aplayer, CLAUSE_EMBASSY, 0);
+  }
+  
   if (!ai_handicap(pplayer, H_DIPLOMACY) || !aplayer->ai.control) {
     suggest_tech_exchange(pplayer, aplayer);
   }

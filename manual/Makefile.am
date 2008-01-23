@@ -1,7 +1,9 @@
 ## Process this file with automake to produce Makefile.in
 
 bin_PROGRAMS = civmanual
-AM_CPPFLAGS = -I$(top_srcdir)/server -I$(top_srcdir)/utility -I$(top_srcdir)/common -I$(top_srcdir)/ai -I$(top_srcdir)/common/aicore -I$(top_srcdir)/server/generator -I$(top_srcdir)/client -I$(top_srcdir)/client/include
+AM_CPPFLAGS = -I$(top_srcdir)/server -I$(top_srcdir)/utility -I$(top_srcdir)/common -I$(top_srcdir)/ai -I../intl -I$(top_srcdir)/common/aicore -I$(top_srcdir)/server/generator -I$(top_srcdir)/client -I$(top_srcdir)/client/include
+
+## Above, note -I../intl instead of -I$(top_srcdir/intl) is deliberate.
 
 civmanual_SOURCES = \
 		civmanual.c

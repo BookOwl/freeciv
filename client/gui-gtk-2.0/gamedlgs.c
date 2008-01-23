@@ -393,8 +393,8 @@ static void option_command_processing(void)
 	break;
       case COT_STR:
 	if (o->p_string_vals) {
-	  const char *new_value =
-	    gtk_entry_get_text(GTK_ENTRY(GTK_COMBO(o->p_gui_data)->entry));
+	  const char* new_value = gtk_entry_get_text(GTK_ENTRY
+					  (GTK_COMBO(o->p_gui_data)->entry));
 	  if (strcmp(o->p_string_value, new_value)) {
 	    mystrlcpy(o->p_string_value, new_value, o->string_length);
 	    if (o->change_callback) {
@@ -407,16 +407,6 @@ static void option_command_processing(void)
 		    o->string_length);
 	}
 	break;
-      case COT_FONT:
-	{
-	  const char *new_value =
-	    gtk_font_button_get_font_name(GTK_FONT_BUTTON(o->p_gui_data));
-	  if (strcmp(o->p_string_value, new_value)) {
-	    mystrlcpy(o->p_string_value, new_value, o->string_length);
-	    gui_update_font_from_option(o);
-	  }
-	}
-        break;
       }
     } client_options_iterate_end;
 
@@ -432,8 +422,6 @@ static void option_command_processing(void)
     } else {
       gtk_window_unfullscreen(GTK_WINDOW(toplevel));
     }
-
-    gtk_rc_reset_styles(gtk_settings_get_default());
 }
 
 /**************************************************************************
@@ -535,12 +523,6 @@ static void create_option_dialog(void)
       }
       gtk_widget_set_size_request(GTK_WIDGET(o->p_gui_data), 150, -1);
       break;
-    case COT_FONT:
-      o->p_gui_data = gtk_font_button_new();
-      g_object_set(o->p_gui_data,
-	  	   "use-font", TRUE,
-		   NULL);
-      break;
     }
     gtk_container_add(GTK_CONTAINER(hbox), o->p_gui_data);
     gtk_size_group_add_widget(group[1][o->category], o->p_gui_data);
@@ -594,10 +576,6 @@ void popup_option_dialog(void)
       } else {
 	gtk_entry_set_text(GTK_ENTRY(o->p_gui_data), o->p_string_value);
       }
-      break;
-    case COT_FONT:
-      gtk_font_button_set_font_name(GTK_FONT_BUTTON(o->p_gui_data),
-	  			    o->p_string_value);
       break;
     }
   } client_options_iterate_end;

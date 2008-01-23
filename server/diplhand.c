@@ -115,7 +115,6 @@ void handle_diplomacy_accept_treaty_req(struct player *pplayer,
   struct Treaty *ptreaty;
   bool *player_accept, *other_accept;
   enum dipl_reason diplcheck;
-  bool worker_refresh_required = FALSE;
   struct player *pother = valid_player_by_number(counterpart);
 
   if (NULL == pother || pplayer == pother) {
@@ -145,8 +144,17 @@ void handle_diplomacy_accept_treaty_req(struct player *pplayer,
 
       if (pclause->from == pplayer) {
 	switch(pclause->type) {
+	case CLAUSE_EMBASSY:
+          if (player_has_embassy(pother, pplayer)) {
+            freelog(LOG_ERROR, "%s tried to give embassy to %s, who already "
+                    "has an embassy",
+                    player_name(pplayer),
+                    player_name(pother));
+            return;
+          }
+          break;
 	case CLAUSE_ADVANCE:
-          if (!player_invention_is_ready(pother, pclause->value)) {
+          if (!tech_is_available(pother, pclause->value)) {
 	    /* It is impossible to give a technology to a civilization that
 	     * can never possess it (the client should enforce this). */
 	    freelog(LOG_ERROR, "Treaty: %s can't have tech %s",
@@ -158,7 +166,7 @@ void handle_diplomacy_accept_treaty_req(struct player *pplayer,
 			  advance_name_for_player(pplayer, pclause->value));
 	    return;
           }
-	  if (player_invention_state(pplayer, pclause->value) != TECH_KNOWN) {
+	  if (get_invention(pplayer, pclause->value) != TECH_KNOWN) {
 	    freelog(LOG_ERROR,
                     "Nation %s try to give unknown tech %s to nation %s.",
 		    nation_rule_name(nation_of_player(pplayer)),
@@ -347,14 +355,23 @@ void handle_diplomacy_accept_treaty_req(struct player *pplayer,
       struct player *pgiver = pclause->from;
       struct player *pdest = (pplayer == pgiver) ? pother : pplayer;
       enum diplstate_type old_diplstate = 
-        pgiver->diplstates[player_index(pdest)].type;
+        pgiver->diplstates[pdest->player_no].type;
 
       switch (pclause->type) {
+      case CLAUSE_EMBASSY:
+        establish_embassy(pdest, pgiver); /* sic */
+        notify_player(pgiver, NULL, E_TREATY_SHARED_VISION,
+                         _("You gave an embassy to %s."),
+                         player_name(pdest));
+        notify_player(pdest, NULL, E_TREATY_SHARED_VISION,
+                         _("%s allowed you to create an embassy!"),
+                         player_name(pgiver));
+        break;
       case CLAUSE_ADVANCE:
         /* It is possible that two players open the diplomacy dialog
          * and try to give us the same tech at the same time. This
          * should be handled discreetly instead of giving a core dump. */
-        if (player_invention_state(pdest, pclause->value) == TECH_KNOWN) {
+        if (get_invention(pdest, pclause->value) == TECH_KNOWN) {
 	  freelog(LOG_VERBOSE,
                   "Nation %s already know tech %s, that %s want to give them.",
 		  nation_rule_name(nation_of_player(pdest)),
@@ -373,7 +390,7 @@ void handle_diplomacy_accept_treaty_req(struct player *pplayer,
 			 nation_plural_for_player(pgiver));
 
 	script_signal_emit("tech_researched", 3,
-			   API_TYPE_TECH_TYPE, advance_by_number(pclause->value),
+			   API_TYPE_TECH_TYPE, &advances[pclause->value],
 			   API_TYPE_PLAYER, pdest,
 			   API_TYPE_STRING, "traded");
 	do_dipl_cost(pdest, pclause->value);
@@ -393,7 +410,7 @@ void handle_diplomacy_accept_treaty_req(struct player *pplayer,
 		      _("You receive the %s worldmap."),
 		      nation_adjective_for_player(pgiver));
 
-        worker_refresh_required = TRUE; /* See CLAUSE_VISION */
+	check_city_workers(pdest); /* See CLAUSE_VISION */
 	break;
       case CLAUSE_SEAMAP:
 	give_seamap_from_player_to_player(pgiver, pdest);
@@ -402,7 +419,7 @@ void handle_diplomacy_accept_treaty_req(struct player *pplayer,
 		      _("You receive the %s seamap."),
 		      nation_adjective_for_player(pgiver));
 
-        worker_refresh_required = TRUE; /* See CLAUSE_VISION */
+	check_city_workers(pdest); /* See CLAUSE_VISION */
 	break;
       case CLAUSE_CITY:
 	{
@@ -429,10 +446,10 @@ void handle_diplomacy_accept_treaty_req(struct player *pplayer,
 	  break;
 	}
       case CLAUSE_CEASEFIRE:
-	pgiver->diplstates[player_index(pdest)].type=DS_CEASEFIRE;
-	pgiver->diplstates[player_index(pdest)].turns_left = TURNS_LEFT;
-	pdest->diplstates[player_index(pgiver)].type=DS_CEASEFIRE;
-	pdest->diplstates[player_index(pgiver)].turns_left = TURNS_LEFT;
+	pgiver->diplstates[pdest->player_no].type=DS_CEASEFIRE;
+	pgiver->diplstates[pdest->player_no].turns_left = TURNS_LEFT;
+	pdest->diplstates[pgiver->player_no].type=DS_CEASEFIRE;
+	pdest->diplstates[pgiver->player_no].turns_left = TURNS_LEFT;
 	notify_player(pgiver, NULL, E_TREATY_CEASEFIRE,
 			 _("You agree on a cease-fire with %s."),
 			 player_name(pdest));
@@ -442,18 +459,18 @@ void handle_diplomacy_accept_treaty_req(struct player *pplayer,
 	if (old_diplstate == DS_ALLIANCE) {
 	  update_players_after_alliance_breakup(pgiver, pdest);
 	}
-
-        worker_refresh_required = TRUE;
+	check_city_workers(pplayer);
+	check_city_workers(pother);
 	break;
       case CLAUSE_PEACE:
-	pgiver->diplstates[player_index(pdest)].type = DS_ARMISTICE;
-	pdest->diplstates[player_index(pgiver)].type = DS_ARMISTICE;
-	pgiver->diplstates[player_index(pdest)].turns_left = TURNS_LEFT;
-	pdest->diplstates[player_index(pgiver)].turns_left = TURNS_LEFT;
-	pgiver->diplstates[player_index(pdest)].max_state = 
-          MAX(DS_PEACE, pgiver->diplstates[player_index(pdest)].max_state);
-	pdest->diplstates[player_index(pgiver)].max_state = 
-          MAX(DS_PEACE, pdest->diplstates[player_index(pgiver)].max_state);
+	pgiver->diplstates[pdest->player_no].type = DS_ARMISTICE;
+	pdest->diplstates[pgiver->player_no].type = DS_ARMISTICE;
+	pgiver->diplstates[pdest->player_no].turns_left = TURNS_LEFT;
+	pdest->diplstates[pgiver->player_no].turns_left = TURNS_LEFT;
+	pgiver->diplstates[pdest->player_no].max_state = 
+          MAX(DS_PEACE, pgiver->diplstates[pdest->player_no].max_state);
+	pdest->diplstates[pgiver->player_no].max_state = 
+          MAX(DS_PEACE, pdest->diplstates[pgiver->player_no].max_state);
 	notify_player(pgiver, NULL, E_TREATY_PEACE,
 		      /* TRANS: ... the Poles ... Polish territory. */
 		      PL_("You agree on an armistice with the %s. In %d turn, "
@@ -481,16 +498,16 @@ void handle_diplomacy_accept_treaty_req(struct player *pplayer,
 	if (old_diplstate == DS_ALLIANCE) {
 	  update_players_after_alliance_breakup(pgiver, pdest);
 	}
-
-        worker_refresh_required = TRUE;
+	check_city_workers(pplayer);
+	check_city_workers(pother);
 	break;
       case CLAUSE_ALLIANCE:
-	pgiver->diplstates[player_index(pdest)].type=DS_ALLIANCE;
-	pdest->diplstates[player_index(pgiver)].type=DS_ALLIANCE;
-	pgiver->diplstates[player_index(pdest)].max_state = 
-          MAX(DS_ALLIANCE, pgiver->diplstates[player_index(pdest)].max_state);
-	pdest->diplstates[player_index(pgiver)].max_state = 
-          MAX(DS_ALLIANCE, pdest->diplstates[player_index(pgiver)].max_state);
+	pgiver->diplstates[pdest->player_no].type=DS_ALLIANCE;
+	pdest->diplstates[pgiver->player_no].type=DS_ALLIANCE;
+	pgiver->diplstates[pdest->player_no].max_state = 
+          MAX(DS_ALLIANCE, pgiver->diplstates[pdest->player_no].max_state);
+	pdest->diplstates[pgiver->player_no].max_state = 
+          MAX(DS_ALLIANCE, pdest->diplstates[pgiver->player_no].max_state);
 	notify_player(pgiver, NULL, E_TREATY_ALLIANCE,
 			 _("You agree on an alliance with %s."),
 			 player_name(pdest));
@@ -498,7 +515,8 @@ void handle_diplomacy_accept_treaty_req(struct player *pplayer,
 			 _("You agree on an alliance with %s."),
 			 player_name(pgiver));
 
-        worker_refresh_required = TRUE;
+	check_city_workers(pplayer);
+	check_city_workers(pother);
 	break;
       case CLAUSE_VISION:
 	give_shared_vision(pgiver, pdest);
@@ -511,7 +529,7 @@ void handle_diplomacy_accept_treaty_req(struct player *pplayer,
 
         /* Yes, shared vision may let us to _know_ tiles
          * within radius of our own city. */
-        worker_refresh_required = TRUE;
+	check_city_workers(pdest);
 	break;
       case CLAUSE_LAST:
         freelog(LOG_ERROR, "Received bad clause type");
@@ -519,17 +537,6 @@ void handle_diplomacy_accept_treaty_req(struct player *pplayer,
       }
 
     } clause_list_iterate_end;
-
-    /* In theory, we would need refresh only receiving party of
-     * CLAUSE_MAP, CLAUSE_SEAMAP and CLAUSE_VISION clauses.
-     * It's quite unlikely that there is such a clause going one
-     * way but no clauses affecting both parties or going other
-     * way. */
-    if (worker_refresh_required) {
-      check_city_workers(pplayer);
-      check_city_workers(pother);
-    }
-
   cleanup:
     treaty_list_unlink(treaties, ptreaty);
     clear_treaty(ptreaty);
@@ -537,6 +544,18 @@ void handle_diplomacy_accept_treaty_req(struct player *pplayer,
     send_player_info(pplayer, NULL);
     send_player_info(pother, NULL);
   }
+}
+
+/****************************************************************************
+  Create an embassy. pplayer gets an embassy with aplayer.
+****************************************************************************/
+void establish_embassy(struct player *pplayer, struct player *aplayer)
+{
+  /* Establish the embassy. */
+  BV_SET(pplayer->embassy, player_index(aplayer));
+  send_player_info(pplayer, pplayer);
+  send_player_info(pplayer, aplayer);  /* update player dialog with embassy */
+  send_player_info(aplayer, pplayer);  /* INFO_EMBASSY level info */
 }
 
 /**************************************************************************

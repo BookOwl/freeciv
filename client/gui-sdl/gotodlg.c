@@ -107,7 +107,7 @@ static void update_goto_dialog(void)
   SDL_Surface *pLogo = NULL;
   SDL_String16 *pStr;
   char cBuf[128]; 
-  int n = 0;  
+  int i, n = 0/*, owner = 0xffff*/;  
   struct player *owner = NULL;
   
   if(pGotoDlg->pEndActiveWidgetList) {
@@ -121,13 +121,13 @@ static void update_goto_dialog(void)
   
   pLast = pAdd_Dock;
   
-  players_iterate(pPlayer) {
+  for(i = 0; i < game.info.nplayers; i++) {
     
-    if (!TEST_BIT(all_players, player_index(pPlayer))) {
+    if (!TEST_BIT(all_players, game.players[i].player_no)) {
       continue;
     }
 
-    city_list_iterate(pPlayer->cities, pCity) {
+    city_list_iterate(game.players[i].cities, pCity) {
       
       /* FIXME: should use unit_can_airlift_to(). */
       if (!GOTO && !pCity->airlift) {
@@ -139,15 +139,15 @@ static void update_goto_dialog(void)
       pStr = create_str16_from_char(cBuf, adj_font(12));
       pStr->style |= TTF_STYLE_BOLD;
    
-      if(!player_owns_city(owner, pCity)) {
-        pLogo = get_nation_flag_surface(nation_of_player(city_owner(pCity)));
+      if(city_owner(pCity) != owner) {
+        pLogo = get_nation_flag_surface(nation_of_player(get_player(city_owner(pCity)->player_no)));
         pLogo = crop_visible_part_from_surface(pLogo);
       }
       
       pBuf = create_iconlabel(pLogo, pGotoDlg->pEndWidgetList->dst, pStr, 
     	(WF_RESTORE_BACKGROUND|WF_DRAW_TEXT_LABEL_WITH_SPACE));
     
-      if(!player_owns_city(owner, pCity)) {
+      if(city_owner(pCity) != owner) {
         set_wflag(pBuf, WF_FREE_THEME);
         owner = city_owner(pCity);
       }
@@ -173,7 +173,7 @@ static void update_goto_dialog(void)
       
       n++;  
     } city_list_iterate_end;
-  } players_iterate_end;
+  }
 
   if (n > 0) {
     pGotoDlg->pBeginWidgetList = pBuf;
@@ -258,14 +258,14 @@ static void popup_goto_airlift_dialog(void)
   
   col = 0;
   /* --------------------------------------------- */
-  players_iterate(pPlayer) {
-    if(player_number(pPlayer) != game.info.player_idx
+  for(i = 0; i < game.info.nplayers; i++) {
+    if(i != game.info.player_idx
       && pplayer_get_diplstate(
-    		game.player_ptr, pPlayer)->type == DS_NO_CONTACT) {
+    		game.player_ptr, &game.players[i])->type == DS_NO_CONTACT) {
       continue;
     }
     
-    pFlag = ResizeSurfaceBox(get_nation_flag_surface(pPlayer->nation),
+    pFlag = ResizeSurfaceBox(get_nation_flag_surface(game.players[i].nation),
                              adj_size(30), adj_size(30), 1, TRUE, FALSE);
   
     pEnabled = create_icon_theme_surf(pFlag);
@@ -274,20 +274,20 @@ static void popup_goto_airlift_dialog(void)
     FREESURFACE(pFlag);
     
     pBuf = create_checkbox(pWindow->dst,
-      TEST_BIT(all_players, player_index(pPlayer)),
+      TEST_BIT(all_players, game.players[i].player_no),
     	(WF_FREE_STRING|WF_FREE_THEME|WF_RESTORE_BACKGROUND|WF_WIDGET_HAS_INFO_LABEL));
     set_new_checkbox_theme(pBuf, pEnabled, pDisabled);
     
     pBuf->string16 = create_str16_from_char(
-    			nation_adjective_for_player(pPlayer),
+    			nation_adjective_for_player(&game.players[i]),
     			adj_font(12));
     pBuf->string16->style &= ~SF_CENTER;
     set_wstate(pBuf, FC_WS_NORMAL);
     
     pBuf->action = toggle_goto_nations_cities_dialog_callback;
-    add_to_gui_list(MAX_ID - player_number(pPlayer), pBuf);
+    add_to_gui_list(MAX_ID - i, pBuf);
     col++;  
-  } players_iterate_end;
+  }
     
   pGotoDlg->pBeginWidgetList = pBuf;
 

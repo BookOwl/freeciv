@@ -276,6 +276,23 @@ static int vision_callback(struct widget *pWidget)
   return -1;
 }
 
+static int embassy_callback(struct widget *pWidget)
+{
+  if (Main.event.button.button == SDL_BUTTON_LEFT) {
+    struct diplomacy_dialog *pdialog;
+      
+    if (!(pdialog = get_diplomacy_dialog(pWidget->data.cont->id1))) {
+      pdialog = get_diplomacy_dialog(pWidget->data.cont->id0);
+    }
+  
+    dsend_packet_diplomacy_create_clause_req(&aconnection,
+                                             player_number(pdialog->treaty.plr1),
+                                             pWidget->data.cont->id0,
+                                             CLAUSE_EMBASSY, 0);
+  }
+  return -1;
+}
+
 static int maps_callback(struct widget *pWidget)
 {
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
@@ -541,6 +558,20 @@ static struct ADVANCED_DLG * popup_diplomatic_objects(struct player *pPlayer0,
     count++;
   }
   
+  if (!player_has_embassy(pPlayer1, pPlayer0)) {  
+    pBuf = create_iconlabel_from_chars(NULL, pWindow->dst,
+        _("Give embassy"), adj_font(12),
+                (WF_RESTORE_BACKGROUND|WF_DRAW_TEXT_LABEL_WITH_SPACE));
+    pBuf->string16->fgcol = *get_game_colorRGB(COLOR_THEME_DIPLODLG_MEETING_TEXT);
+    width = MAX(width, pBuf->size.w);
+    height = MAX(height, pBuf->size.h);
+    pBuf->action = embassy_callback;
+    pBuf->data.cont = pCont;
+    set_wstate(pBuf, FC_WS_NORMAL);
+    add_to_gui_list(ID_LABEL, pBuf);
+    count++;
+  }
+    
   /* ---------------------------- */
   if(pPlayer0->economic.gold > 0) {
     pCont->value = pPlayer0->economic.gold;
@@ -569,13 +600,14 @@ static struct ADVANCED_DLG * popup_diplomatic_objects(struct player *pPlayer0,
   
   /* Advances */
   {
-    int flag = A_NONE;
+    bool flag = FALSE;
+    int i;
     
-    advance_index_iterate(A_FIRST, i) {
-      if (player_invention_state(pPlayer0, i) == TECH_KNOWN &&
-         player_invention_is_ready(pPlayer1, i) &&
-	(player_invention_state(pPlayer1, i) == TECH_UNKNOWN || 
-	 player_invention_state(pPlayer1, i) == TECH_REACHABLE)) {
+    for (i = 1; i < game.control.num_tech_types; i++) {
+      if (get_invention(pPlayer0, i) == TECH_KNOWN &&
+         tech_is_available(pPlayer1, i) &&
+	(get_invention(pPlayer1, i) == TECH_UNKNOWN || 
+	 get_invention(pPlayer1, i) == TECH_REACHABLE)) {
 	     
 	     pBuf = create_iconlabel_from_chars(NULL, pWindow->dst,
 		_("Advances"), adj_font(12), WF_RESTORE_BACKGROUND);
@@ -585,7 +617,7 @@ static struct ADVANCED_DLG * popup_diplomatic_objects(struct player *pPlayer0,
              add_to_gui_list(ID_LABEL, pBuf);
 	     count++;
 	     
-	     my_snprintf(cBuf, sizeof(cBuf), "  %s", advance_name_translation(advance_by_number(i)));
+	     my_snprintf(cBuf, sizeof(cBuf), "  %s", advance_name_translation(i));
   
              pBuf = create_iconlabel_from_chars(NULL, pWindow->dst, cBuf, adj_font(12),
 	         (WF_RESTORE_BACKGROUND|WF_DRAW_TEXT_LABEL_WITH_SPACE));
@@ -597,19 +629,20 @@ static struct ADVANCED_DLG * popup_diplomatic_objects(struct player *pPlayer0,
 	     pBuf->data.cont = pCont;
              add_to_gui_list(MAX_ID - i, pBuf);
 	     count++;	
-	     flag = ++i;
+	     flag = TRUE;
+	     i++;
 	     break;
       }
-    } advance_index_iterate_end;
+    }
     
-    if(flag > A_NONE) {
-      advance_index_iterate(flag, i) {
-	if (player_invention_state(pPlayer0, i) == TECH_KNOWN &&
-	   player_invention_is_ready(pPlayer1, i) &&
-	  (player_invention_state(pPlayer1, i) == TECH_UNKNOWN || 
-	   player_invention_state(pPlayer1, i) == TECH_REACHABLE)) {
+    if(flag) {
+      for (; i < game.control.num_tech_types; i++) {
+	if (get_invention(pPlayer0, i) == TECH_KNOWN &&
+	   tech_is_available(pPlayer1, i) &&
+	  (get_invention(pPlayer1, i) == TECH_UNKNOWN || 
+	   get_invention(pPlayer1, i) == TECH_REACHABLE)) {
 	     
-	     my_snprintf(cBuf, sizeof(cBuf), "  %s", advance_name_translation(advance_by_number(i)));
+	     my_snprintf(cBuf, sizeof(cBuf), "  %s", advance_name_translation(i));
   
              pBuf = create_iconlabel_from_chars(NULL, pWindow->dst, cBuf, adj_font(12),
 	         (WF_RESTORE_BACKGROUND|WF_DRAW_TEXT_LABEL_WITH_SPACE));
@@ -623,7 +656,7 @@ static struct ADVANCED_DLG * popup_diplomatic_objects(struct player *pPlayer0,
 	     count++;
 	}
       }
-    } advance_index_iterate_end;
+    }
     
   }  /* Advances */
   

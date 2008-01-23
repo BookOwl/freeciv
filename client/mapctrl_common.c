@@ -23,7 +23,6 @@
 #include "support.h"
 
 #include "combat.h"
-#include "game.h"
 #include "unitlist.h"
 
 #include "agents.h"
@@ -34,15 +33,15 @@
 #include "clinet.h"
 #include "cma_core.h"
 #include "control.h"
-#include "editor.h"
 #include "fcintl.h"
 #include "goto.h"
-#include "mapctrl_common.h"
 #include "mapctrl_g.h"
 #include "mapview_g.h"
 #include "options.h"
 #include "overview_common.h"
 #include "tilespec.h"
+
+#include "mapctrl_common.h"
 
 /* Selection Rectangle */
 static int rec_anchor_x, rec_anchor_y;  /* canvas coordinates for anchor */
@@ -59,10 +58,7 @@ static bool rectangle_append;
 bool tiles_hilited_cities = FALSE;
 
 /* The mapcanvas clipboard */
-struct universal clipboard =
-{ .kind = VUT_NONE,
-  .value = {.building = NULL}
-};
+struct city_production clipboard = {.value = -1};
 
 /* Goto with drag and drop. */
 bool keyboardless_goto_button_down = FALSE;
@@ -152,9 +148,9 @@ static void define_tiles_within_rectangle(void)
 
       /*  Tile passed all tests; process it.
        */
-      if (tile_city(ptile) && tile_owner(ptile) == game.player_ptr) {
+      if (ptile->city && city_owner(ptile->city) == game.player_ptr) {
 	/* FIXME: handle rectangle_append */
-        map_deco[tile_index(ptile)].hilite = HILITE_CITY;
+        map_deco[ptile->index].hilite = HILITE_CITY;
         tiles_hilited_cities = TRUE;
       }
       unit_list_iterate(ptile->units, punit) {
@@ -280,7 +276,7 @@ void cancel_selection_rectangle(void)
 **************************************************************************/
 bool is_city_hilited(struct city *pcity)
 {
-  return map_deco[tile_index(pcity->tile)].hilite == HILITE_CITY;
+  return map_deco[pcity->tile->index].hilite == HILITE_CITY;
 }
 
 /**************************************************************************
@@ -292,7 +288,7 @@ void cancel_tile_hiliting(void)
     tiles_hilited_cities = FALSE;
 
     whole_map_iterate(ptile) {
-      map_deco[tile_index(ptile)].hilite = HILITE_NONE;
+      map_deco[ptile->index].hilite = HILITE_NONE;
     } whole_map_iterate_end;
 
     update_map_canvas_visible();
@@ -320,16 +316,16 @@ void release_right_button(int canvas_x, int canvas_y)
 **************************************************************************/
 void toggle_tile_hilite(struct tile *ptile)
 {
-  struct city *pcity = tile_city(ptile);
+  struct city *pcity = ptile->city;
 
-  if (map_deco[tile_index(ptile)].hilite == HILITE_CITY) {
-    map_deco[tile_index(ptile)].hilite = HILITE_NONE;
+  if (map_deco[ptile->index].hilite == HILITE_CITY) {
+    map_deco[ptile->index].hilite = HILITE_NONE;
     if (pcity) {
       toggle_city_hilite(pcity, FALSE); /* cityrep.c */
     }
   }
   else if (pcity && city_owner(pcity) == game.player_ptr) {
-    map_deco[tile_index(ptile)].hilite = HILITE_CITY;
+    map_deco[ptile->index].hilite = HILITE_CITY;
     tiles_hilited_cities = TRUE;
     toggle_city_hilite(pcity, TRUE);
   }
@@ -365,8 +361,7 @@ void key_city_overlay(int canvas_x, int canvas_y)
 **************************************************************************/
 void clipboard_copy_production(struct tile *ptile)
 {
-  char buffer[256];
-  struct city *pcity = tile_city(ptile);
+  struct city *pcity = ptile->city;
 
   if (!can_client_issue_orders()) {
     return;
@@ -388,14 +383,16 @@ void clipboard_copy_production(struct tile *ptile)
 		   unit_name_translation(punit));
       return;
     }
-    clipboard.kind = VUT_UTYPE;
-    clipboard.value.utype = unit_type(punit);
+    clipboard.is_unit = TRUE;
+    clipboard.value = unit_type(punit)->index;
   }
   upgrade_canvas_clipboard();
 
   create_event(ptile, E_CITY_PRODUCTION_CHANGED, /* ? */
 	       _("Copy %s to clipboard."),
-	       universal_name_translation(&clipboard, buffer, sizeof(buffer)));
+	       clipboard.is_unit
+	       ? utype_name_translation(utype_by_number(clipboard.value))
+	       : improvement_name_translation(clipboard.value));
 }
 
 /**************************************************************************
@@ -407,7 +404,7 @@ void clipboard_paste_production(struct city *pcity)
   if (!can_client_issue_orders()) {
     return;
   }
-  if (NULL == clipboard.value.building) {
+  if (clipboard.value == -1) {
     create_event(pcity->tile, E_BAD_COMMAND, _("Clipboard is empty."));
     return;
   }
@@ -433,14 +430,14 @@ void clipboard_paste_production(struct city *pcity)
 **************************************************************************/
 static void clipboard_send_production_packet(struct city *pcity)
 {
-  if (are_universals_equal(&pcity->production, &clipboard)
-      || !can_city_build_now(pcity, clipboard)) {
+  if ((clipboard.is_unit == pcity->production.is_unit
+       && clipboard.value == pcity->production.value)
+      || !city_can_build_impr_or_unit(pcity, clipboard)) {
     return;
   }
 
-  dsend_packet_city_change(&aconnection, pcity->id,
-			   clipboard.kind,
-			   universal_number(&clipboard));
+  dsend_packet_city_change(&aconnection, pcity->id, clipboard.value,
+			   clipboard.is_unit);
 }
 
 /**************************************************************************
@@ -452,12 +449,12 @@ void upgrade_canvas_clipboard(void)
   if (!can_client_issue_orders()) {
     return;
   }
-  if (VUT_UTYPE == clipboard.kind)  {
+  if (clipboard.is_unit)  {
     struct unit_type *u
-      = can_upgrade_unittype(game.player_ptr, clipboard.value.utype);
+      = can_upgrade_unittype(game.player_ptr, utype_by_number(clipboard.value));
 
     if (u)  {
-      clipboard.value.utype = u;
+      clipboard.value = u->index;
     }
   }
 }
@@ -535,9 +532,7 @@ void action_button_pressed(int canvas_x, int canvas_y,
 {
   struct tile *ptile = canvas_pos_to_tile(canvas_x, canvas_y);
 
-  if (can_do_editor_click(ptile)) {
-    editor_do_click(ptile);
-  } else if (can_client_change_view() && ptile) {
+  if (can_client_change_view() && ptile) {
     /* FIXME: Some actions here will need to check can_client_issue_orders.
      * But all we can check is the lowest common requirement. */
     do_map_click(ptile, qtype);
@@ -635,7 +630,6 @@ void update_turn_done_button_state()
   turn_done_state = new_state;
 
   set_turn_done_button_state(turn_done_state);
-  control_mouse_cursor(NULL);
 
   if (turn_done_state) {
     if (waiting_for_end_turn

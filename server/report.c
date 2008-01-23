@@ -53,11 +53,11 @@ enum historian_type {
 #define HISTORIAN_LAST 		HISTORIAN_LARGEST
 
 static const char *historian_message[]={
-    N_("%s report on the RICHEST Civilizations in the World %s."),
-    N_("%s report on the most ADVANCED Civilizations in the World %s."),
-    N_("%s report on the most MILITARIZED Civilizations in the World %s."),
-    N_("%s report on the HAPPIEST Civilizations in the World %s."),
-    N_("%s report on the LARGEST Civilizations in the World %s.")
+    N_("%s report on the RICHEST Civilizations in the World."),
+    N_("%s report on the most ADVANCED Civilizations in the World."),
+    N_("%s report on the most MILITARIZED Civilizations in the World."),
+    N_("%s report on the HAPPIEST Civilizations in the World."),
+    N_("%s report on the LARGEST Civilizations in the World.")
 };
 
 static const char *historian_name[]={
@@ -204,8 +204,7 @@ static void historian_generic(enum historian_type which_news)
 		 nation_plural_for_player(size[i].player));
   }
   my_snprintf(title, sizeof(title), _(historian_message[which_news]),
-              _(historian_name[myrand(ARRAY_SIZE(historian_name))]),
-              textyear(game.info.year));
+    _(historian_name[myrand(ARRAY_SIZE(historian_name))]));
   page_conn_etype(game.est_connections, _("Historian Publishes!"),
 		  title, buffer, E_BROADCAST_REPORT);
 }
@@ -217,11 +216,11 @@ static int nr_wonders(struct city *pcity)
 {
   int result = 0;
 
-  city_built_iterate(pcity, i) {
+  built_impr_iterate(pcity, i) {
     if (is_great_wonder(i)) {
       result++;
     }
-  } city_built_iterate_end;
+  } built_impr_iterate_end;
 
   return result;
 }
@@ -295,13 +294,13 @@ void report_wonders_of_the_world(struct conn_list *dest)
 
   buffer[0] = '\0';
 
-  improvement_iterate(i) {
+  impr_type_iterate(i) {
     if (is_great_wonder(i)) {
       struct city *pcity = find_city_from_great_wonder(i);
 
       if (pcity) {
 	cat_snprintf(buffer, sizeof(buffer), _("%s in %s (%s)\n"),
-		     city_improvement_name_translation(pcity, i),
+		     get_impr_name_ex(pcity, i),
 		     city_name(pcity),
 		     nation_adjective_for_player(city_owner(pcity)));
       } else if (great_wonder_was_built(i)) {
@@ -309,14 +308,13 @@ void report_wonders_of_the_world(struct conn_list *dest)
 		     improvement_name_translation(i));
       }
     }
-  } improvement_iterate_end;
+  } impr_type_iterate_end;
 
-  improvement_iterate(i) {
+  impr_type_iterate(i) {
     if (is_great_wonder(i)) {
       players_iterate(pplayer) {
 	city_list_iterate(pplayer->cities, pcity) {
-	  if (VUT_IMPROVEMENT == pcity->production.kind
-	   && pcity->production.value.building == i) {
+	  if (pcity->production.value == i && !pcity->production.is_unit) {
 	    cat_snprintf(buffer, sizeof(buffer),
 			 _("(building %s in %s (%s))\n"),
 			 improvement_name_translation(i),
@@ -326,7 +324,7 @@ void report_wonders_of_the_world(struct conn_list *dest)
 	} city_list_iterate_end;
       } players_iterate_end;
     }
-  } improvement_iterate_end;
+  } impr_type_iterate_end;
 
   page_conn(dest, _("Traveler's Report:"),
 	    _("Wonders of the World"), buffer);
@@ -512,7 +510,7 @@ static int get_specialists(struct player *pplayer)
 
 static int get_gov(struct player *pplayer)
 {
-  return government_number(government_of_player(pplayer));
+  return government_of_player(pplayer)->index;
 }
 
 static int get_corruption(struct player *pplayer)
@@ -1078,7 +1076,6 @@ void make_history_report(void)
 
 /**************************************************************************
   Inform clients about player scores and statistics when the game ends.
-  Called only from server/srv_main.c srv_scores()
 **************************************************************************/
 void report_final_scores(void)
 {

@@ -19,7 +19,6 @@
 
 #include "astring.h"
 #include "city.h"
-#include "game.h"
 #include "log.h"
 #include "shared.h"
 #include "support.h"
@@ -41,15 +40,15 @@ static int recursion[AIT_LAST];
 /**************************************************************************
   Log player tech messages.
 **************************************************************************/
-void TECH_LOG(int level, const struct player *pplayer,
-              struct advance *padvance, const char *msg, ...)
+void TECH_LOG(int level, const struct player *pplayer, Tech_type_id id,
+              const char *msg, ...)
 {
   char buffer[500];
   char buffer2[500];
   va_list ap;
   int minlevel = MIN(LOGLEVEL_TECH, level);
 
-  if (!valid_advance(padvance) || advance_by_number(A_NONE) == padvance) {
+  if (!tech_exists(id) || id == A_NONE) {
     return;
   }
 
@@ -61,9 +60,9 @@ void TECH_LOG(int level, const struct player *pplayer,
 
   my_snprintf(buffer, sizeof(buffer), "%s::%s (want %d, dist %d) ", 
               player_name(pplayer),
-              advance_name_by_player(pplayer, advance_number(padvance)), 
-              pplayer->ai.tech_want[advance_index(padvance)], 
-              num_unknown_techs_for_goal(pplayer, advance_number(padvance)));
+              advance_name_by_player(pplayer, id), 
+              pplayer->ai.tech_want[id], 
+              num_unknown_techs_for_goal(pplayer, id));
 
   va_start(ap, msg);
   my_vsnprintf(buffer2, sizeof(buffer2), msg, ap);
@@ -174,7 +173,7 @@ void UNIT_LOG(int level, const struct unit *punit, const char *msg, ...)
   } else {
     /* Are we a virtual unit evaluated in a debug city?. */
     if (punit->id == 0) {
-      struct city *pcity = tile_city(punit->tile);
+      struct city *pcity = tile_get_city(punit->tile);
 
       if (pcity && pcity->debug) {
         minlevel = LOG_NORMAL;

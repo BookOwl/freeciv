@@ -277,9 +277,11 @@ static void tile_init(struct tile *ptile)
   tile_clear_all_specials (ptile);
   ptile->resource = NULL;
   ptile->terrain  = T_UNKNOWN;
+  ptile->city     = NULL;
   ptile->units    = unit_list_new();
-  ptile->owner    = NULL; /* Not claimed by any player. */
-  ptile->worked   = NULL; /* No city working here. */
+  ptile->worked   = NULL; /* pointer to city working tile */
+  ptile->owner    = NULL; /* Tile not claimed by any nation. */
+  ptile->owner_source = NULL;
   ptile->spec_sprite = NULL;
 }
 
@@ -397,16 +399,16 @@ void map_allocate(void)
 	  (void *)map.tiles, map.xsize, map.ysize);
 
   assert(map.tiles == NULL);
-  map.tiles = fc_calloc(MAP_INDEX_SIZE, sizeof(*map.tiles));
+  map.tiles = fc_malloc(MAP_INDEX_SIZE * sizeof(*map.tiles));
 
   /* Note this use of whole_map_iterate may be a bit sketchy, since the
    * tile values (ptile->index, etc.) haven't been set yet.  It might be
    * better to do a manual loop here. */
   whole_map_iterate(ptile) {
     ptile->index = ptile - map.tiles;
-    index_to_map_pos(&ptile->x, &ptile->y, tile_index(ptile));
-    index_to_native_pos(&ptile->nat_x, &ptile->nat_y, tile_index(ptile));
-    CHECK_INDEX(tile_index(ptile));
+    index_to_map_pos(&ptile->x, &ptile->y, ptile->index);
+    index_to_native_pos(&ptile->nat_x, &ptile->nat_y, ptile->index);
+    CHECK_INDEX(ptile->index);
     CHECK_MAP_POS(ptile->x, ptile->y);
     CHECK_NATIVE_POS(ptile->nat_x, ptile->nat_y);
 
@@ -553,13 +555,8 @@ bool is_cardinally_adj_to_ocean(const struct tile *ptile)
 ****************************************************************************/
 bool is_safe_ocean(const struct tile *ptile)
 {
-  adjc_iterate(ptile, adjc_tile) {
-    if (tile_terrain(adjc_tile) != T_UNKNOWN
-        && !terrain_has_flag(tile_terrain(adjc_tile), TER_UNSAFE_COAST)) {
-      return TRUE;
-    }
-  } adjc_iterate_end;
-  return FALSE;
+  return count_terrain_flag_near_tile(ptile, FALSE, TRUE,
+				      TER_UNSAFE_COAST) < 100;
 }
 
 /***************************************************************
@@ -567,28 +564,18 @@ bool is_safe_ocean(const struct tile *ptile)
 ***************************************************************/
 bool is_water_adjacent_to_tile(const struct tile *ptile)
 {
-  struct terrain* pterrain = tile_terrain(ptile);
-
-  if (T_UNKNOWN == pterrain) {
-    return FALSE;
-  }
-
-  if (tile_has_special(ptile, S_RIVER)
-   || tile_has_special(ptile, S_IRRIGATION)
-   || terrain_has_flag(pterrain, TER_OCEANIC)) {
+  if (ptile->terrain != T_UNKNOWN
+      && (is_ocean(ptile->terrain)
+	  || tile_has_special(ptile, S_RIVER)
+	  || tile_has_special(ptile, S_IRRIGATION))) {
     return TRUE;
   }
 
   cardinal_adjc_iterate(ptile, tile1) {
-    struct terrain* pterrain1 = tile_terrain(tile1);
-
-    if (T_UNKNOWN == pterrain1) {
-      continue;
-    }
-
-    if (tile_has_special(tile1, S_RIVER)
-     || tile_has_special(tile1, S_IRRIGATION)
-     || terrain_has_flag(pterrain1, TER_OCEANIC)) {
+    if (ptile->terrain != T_UNKNOWN
+	&& (is_ocean(tile1->terrain)
+	    || tile_has_special(tile1, S_RIVER)
+	    || tile_has_special(tile1, S_IRRIGATION))) {
       return TRUE;
     }
   } cardinal_adjc_iterate_end;
@@ -638,20 +625,20 @@ static int tile_move_cost_ptrs(struct unit *punit,
 
   if (punit) {
     pclass = unit_class(punit);
-    native = is_native_tile(unit_type(punit), t2);
+    native = is_native_terrain(punit, t2->terrain);
   }
 
   if (game.info.slow_invasions
       && punit 
       && is_ground_unit(punit) 
-      && is_ocean_tile(t1)
-      && !is_ocean_tile(t2)) {
+      && is_ocean(t1->terrain)
+      && !is_ocean(t2->terrain)) {
     /* Ground units moving from sea to land lose all their movement
      * if "slowinvasions" server option is turned on. */
     return punit->moves_left;
   }
 
-  if (punit && !uclass_has_flag(pclass, UCF_TERRAIN_SPEED)) {
+  if (punit && !pclass->move.terrain_affects) {
     return SINGLE_MOVE;
   }
 
@@ -667,7 +654,6 @@ static int tile_move_cost_ptrs(struct unit *punit,
     return SINGLE_MOVE/3;
   }
   if (!native) {
-    /* Loading to transport or entering port */
     return SINGLE_MOVE;
   }
   if (tile_has_special(t1, S_ROAD) && tile_has_special(t2, S_ROAD)) {
@@ -695,7 +681,7 @@ static int tile_move_cost_ptrs(struct unit *punit,
     }
   }
 
-  return tile_terrain(t2)->movement_cost * SINGLE_MOVE;
+  return t2->terrain->movement_cost * SINGLE_MOVE;
 }
 
 /****************************************************************************
@@ -715,30 +701,29 @@ int map_move_cost_ai(const struct tile *tile0, const struct tile *tile1)
 {
   const int maxcost = 72; /* Arbitrary. */
 
-  assert(!is_server()
-	 || (tile_terrain(tile0) != T_UNKNOWN 
-	  && tile_terrain(tile1) != T_UNKNOWN));
+  assert(!is_server
+	 || (tile0->terrain != T_UNKNOWN && tile1->terrain != T_UNKNOWN));
 
   /* A ship can take the step if:
    * - both tiles are ocean or
    * - one of the tiles is ocean and the other is a city or is unknown
    *
    * Note tileX->terrain will only be T_UNKNOWN at the client. */
-  if (is_ocean_tile(tile0) && is_ocean_tile(tile1)) {
+  if (is_ocean(tile0->terrain) && is_ocean(tile1->terrain)) {
     return MOVE_COST_FOR_VALID_SEA_STEP;
   }
 
-  if (is_ocean_tile(tile0)
-      && (tile_city(tile1) || tile_terrain(tile1) == T_UNKNOWN)) {
+  if (is_ocean(tile0->terrain)
+      && (tile1->city || tile1->terrain == T_UNKNOWN)) {
     return MOVE_COST_FOR_VALID_SEA_STEP;
   }
 
-  if (is_ocean_tile(tile1)
-      && (tile_city(tile0) || tile_terrain(tile0) == T_UNKNOWN)) {
+  if (is_ocean(tile1->terrain)
+      && (tile0->city || tile0->terrain == T_UNKNOWN)) {
     return MOVE_COST_FOR_VALID_SEA_STEP;
   }
 
-  if (is_ocean_tile(tile0) || is_ocean_tile(tile1)) {
+  if (is_ocean(tile0->terrain) || is_ocean(tile1->terrain)) {
     /* FIXME: Shouldn't this return MOVE_COST_FOR_VALID_AIR_STEP?
      * Note that MOVE_COST_FOR_VALID_AIR_STEP is currently equal to
      * MOVE_COST_FOR_VALID_SEA_STEP. */
@@ -752,17 +737,9 @@ int map_move_cost_ai(const struct tile *tile0, const struct tile *tile1)
   The cost to move punit from where it is to tile x,y.
   It is assumed the move is a valid one, e.g. the tiles are adjacent.
 ***************************************************************/
-int map_move_cost_unit(struct unit *punit, const struct tile *ptile)
+int map_move_cost(struct unit *punit, const struct tile *ptile)
 {
   return tile_move_cost_ptrs(punit, punit->tile, ptile);
-}
-
-/***************************************************************
-  Move cost between two tiles
-***************************************************************/
-int map_move_cost(const struct tile *src_tile, const struct tile *dst_tile)
-{
-  return tile_move_cost_ptrs(NULL, src_tile, dst_tile);
 }
 
 /***************************************************************
@@ -987,7 +964,7 @@ struct tile *rand_map_pos_filtered(void *data,
 
     whole_map_iterate(ptile) {
       if (filter(ptile, data)) {
-	positions[count] = tile_index(ptile);
+	positions[count] = ptile->index;
 	count++;
       }
     } whole_map_iterate_end;

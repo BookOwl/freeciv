@@ -87,6 +87,7 @@ struct ai_data {
     bool invasions;   /* check if we need to consider invasions */
     bool *continent;  /* non-allied cities on continent? */
     bool *ocean;      /* non-allied offensive ships in ocean? */
+    bool air;         /* check for non-allied offensive aircraft */
     bool missile;     /* check for non-allied missiles */
     int nuclear;      /* nuke check: 0=no, 1=capability, 2=built */
     bool igwall;      /* enemies have igwall units */
@@ -100,9 +101,6 @@ struct ai_data {
     bool sea_done;    /* nothing more to explore at sea */
   } explore;
 
-  /* Keep track of available ocean channels */
-  bool *channels;
-
   /* This struct is used for statistical unit building, eg to ensure
    * that we don't build too few or too many units of a given type. */
   struct {
@@ -111,8 +109,8 @@ struct ai_data {
       /* Unit-flag counts. */
       int triremes, missiles;
 
-      /* Move-type counts */
-      int land, sea, amphibious;
+      /* Move-type counts (air includes helicoptor here). */
+      int land, sea, air;
 
       /* Upgradeable units */
       int upgradeable;
@@ -173,7 +171,5 @@ void ai_data_analyze_rulesets(struct player *pplayer);
 struct ai_data *ai_data_get(struct player *pplayer);
 const struct ai_dip_intel *ai_diplomacy_get(const struct player *pplayer,
 					    const struct player *aplayer);
-
-bool ai_channel(struct player *pplayer, Continent_id c1, Continent_id c2);
 
 #endif

@@ -205,7 +205,7 @@ static struct city *get_selected_city(void)
 **************************************************************************/
 void update_goto_dialog(Widget goto_list)
 {
-  int j = 0;
+  int i, j;
   Boolean all_cities;
 
   if (!can_client_issue_orders()) {
@@ -217,21 +217,18 @@ void update_goto_dialog(Widget goto_list)
   cleanup_goto_list();
 
   if(all_cities) {
-    ncities_total = 0;
-    players_iterate(pplayer) {
-      ncities_total += city_list_size(pplayer->cities);
-    } players_iterate_end;
+    for(i=0, ncities_total=0; i<game.info.nplayers; i++) {
+      ncities_total += city_list_size(game.players[i].cities);
+    }
   } else {
     ncities_total = city_list_size(game.player_ptr->cities);
   }
 
   city_name_ptrs=fc_malloc(ncities_total*sizeof(char*));
   
-  players_iterate(pplayer) {
-    if (!all_cities && player_number(pplayer) != game.info.player_idx) {
-      continue;
-    }
-    city_list_iterate(pplayer->cities, pcity) {
+  for(i=0, j=0; i<game.info.nplayers; i++) {
+    if (!all_cities && i != game.info.player_idx) continue;
+    city_list_iterate(game.players[i].cities, pcity) {
       char name[MAX_LEN_NAME+3];
       sz_strlcpy(name, city_name(pcity));
       /* FIXME: should use unit_can_airlift_to(). */
@@ -239,8 +236,9 @@ void update_goto_dialog(Widget goto_list)
 	sz_strlcat(name, "(A)");
       }
       city_name_ptrs[j++]=mystrdup(name);
-    } city_list_iterate_end;
-  } players_iterate_end;
+    }
+    city_list_iterate_end;
+  }
 
   if(ncities_total) {
     qsort(city_name_ptrs, ncities_total, sizeof(char *), compare_strings_ptrs);

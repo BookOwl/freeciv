@@ -113,11 +113,17 @@
 static void end_turn(void);
 static void announce_player(struct player *pplayer);
 
+static void freeze_clients(void);
+static void thaw_clients(void);
+static void send_begin_turn(void);
+static void send_end_turn(void);
+
+/* this is used in strange places, and is 'extern'd where
+   needed (hence, it is not 'extern'd in srv_main.h) */
+bool is_server = TRUE;
+
 /* command-line arguments to server */
 struct server_arguments srvarg;
-
-/* server aggregate information */
-struct civserver server;
 
 /* server state information */
 static enum server_states civserver_state = S_S_INITIAL;
@@ -159,8 +165,6 @@ void init_game_seed(void)
 **************************************************************************/
 void srv_init(void)
 {
-  i_am_server(); /* Tell to libcivcommon that we are server */
-
   /* NLS init */
   init_nls();
 
@@ -281,7 +285,7 @@ bool check_for_game_over(void)
     if (!loner) {
       notify_conn(NULL, NULL, E_GAME_END,
                   _("Team victory to %s"),
-                  team_name_translation(victor->team));
+                  team_get_name_orig(victor->team));
       players_iterate(pplayer) {
 	if (pplayer->team == victor->team) {
 	  ggz_report_victor(pplayer);
@@ -316,7 +320,7 @@ bool check_for_game_over(void)
     if (win) {
       notify_conn(game.est_connections, NULL, E_GAME_END,
 		  _("Team victory to %s"),
-		  team_name_translation(pteam));
+		  team_get_name_orig(pteam));
       players_iterate(pplayer) {
 	if (pplayer->is_alive
 	    && !pplayer->surrendered) {
@@ -487,6 +491,7 @@ static void update_diplomatics(void)
       struct player_diplstate *state2 = &plr2->diplstates[player_index(plr1)];
 
       state->has_reason_to_cancel = MAX(state->has_reason_to_cancel - 1, 0);
+      state->contact_turns_left = MAX(state->contact_turns_left - 1, 0);
 
       if (state->type == DS_ARMISTICE) {
         state->turns_left--;
@@ -676,7 +681,7 @@ static void begin_phase(bool is_new_phase)
   } phase_players_iterate_end;
   send_player_info(NULL, NULL);
 
-  dlsend_packet_start_phase(game.est_connections, game.info.phase);
+  send_start_phase_to_clients();
 
   if (is_new_phase) {
     /* Unit "end of turn" activities - of course these actually go at
@@ -732,7 +737,7 @@ static void begin_phase(bool is_new_phase)
     /* All players in the same phase.
      * This means that AI has been handled above, and server
      * will be responsive again */
-    lsend_packet_begin_turn(game.est_connections);
+    send_begin_turn();
   }
 }
 
@@ -793,7 +798,7 @@ static void end_phase(void)
     do_tech_parasite_effect(pplayer);
     player_restore_units(pplayer);
     update_city_activities(pplayer);
-    get_player_research(pplayer)->researching_saved = A_UNKNOWN;
+    get_player_research(pplayer)->changed_from=-1;
     flush_packets();
   } phase_players_iterate_end;
 
@@ -815,8 +820,6 @@ static void end_phase(void)
 **************************************************************************/
 static void end_turn(void)
 {
-  int food = 0, shields = 0, trade = 0, settlers = 0;
-
   freelog(LOG_DEBUG, "Endturn");
 
   /* Hack: because observer players never get an end-phase packet we send
@@ -827,30 +830,9 @@ static void end_turn(void)
     }
   } conn_list_iterate_end;
 
-  lsend_packet_end_turn(game.est_connections);
+  send_end_turn();
 
   map_calculate_borders();
-
-  /* Output some AI measurement information */
-  players_iterate(pplayer) {
-    if (!pplayer->ai.control || is_barbarian(pplayer)) {
-      continue;
-    }
-    unit_list_iterate(pplayer->units, punit) {
-      if (unit_has_type_flag(punit, F_CITIES)) {
-        settlers++;
-      }
-    } unit_list_iterate_end;
-    city_list_iterate(pplayer->cities, pcity) {
-      shields += pcity->prod[O_SHIELD];
-      food += pcity->prod[O_FOOD];
-      trade += pcity->prod[O_TRADE];
-    } city_list_iterate_end;
-    freelog(LOG_DEBUG, "%s T%d cities:%d pop:%d food:%d prod:%d "
-            "trade:%d settlers:%d units:%d", player_name(pplayer), game.info.turn,
-            city_list_size(pplayer->cities), total_player_citizens(pplayer),
-            food, shields, trade, settlers, unit_list_size(pplayer->units));
-  } players_iterate_end;
 
   freelog(LOG_DEBUG, "Season of native unrests");
   summon_barbarians(); /* wild guess really, no idea where to put it, but
@@ -924,26 +906,8 @@ void save_game(char *orig_filename, const char *save_reason)
   sz_strlcat(filename, ".sav");
 
   if (game.info.save_compress_level > 0) {
-    switch (game.info.save_compress_type) {
-#ifdef HAVE_LIBZ
-    case FZ_ZLIB:
-      /* Append ".gz" to filename. */
-      sz_strlcat(filename, ".gz");
-      break;
-#endif
-#ifdef HAVE_LIBBZ2
-    case FZ_BZIP2:
-      /* Append ".bz2" to filename. */
-      sz_strlcat(filename, ".bz2");
-      break;
-#endif
-    case FZ_PLAIN:
-      break;
-    default:
-      freelog(LOG_NORMAL, "Unsupported compression type %d",
-              game.info.save_compress_type);
-      break;
-    }
+    /* Append ".gz" to filename. */
+    sz_strlcat(filename, ".gz");
   }
 
   if (!path_is_absolute(filename)) {
@@ -960,8 +924,7 @@ void save_game(char *orig_filename, const char *save_reason)
     sz_strlcpy(filename, tmpname);
   }
 
-  if (!section_file_save(&file, filename, game.info.save_compress_level,
-                         game.info.save_compress_type))
+  if(!section_file_save(&file, filename, game.info.save_compress_level))
     con_write(C_FAIL, _("Failed saving game as %s"), filename);
   else
     con_write(C_OK, _("Game saved as %s"), filename);
@@ -1106,14 +1069,6 @@ int get_next_id_number(void)
 }
 
 /**************************************************************************
-...
-**************************************************************************/
-int player_count_no_barbarians(void)
-{
-  return player_count() - server.nbarbarians;
-}
-
-/**************************************************************************
 Returns 0 if connection should be closed (because the clients was
 rejected). Returns 1 else.
 **************************************************************************/
@@ -1125,13 +1080,16 @@ bool server_packet_input(struct connection *pconn, void *packet, int type)
   if (!packet)
     return TRUE;
 
+  /* These packets may appear before the connection is "established" */
+  switch (type) {
+  case PACKET_PROCESSING_STARTED:
   /* 
    * Old pre-delta clients (before 2003-11-28) send a
    * PACKET_LOGIN_REQUEST (type 0) to the server. We catch this and
    * reply with an old reject packet. Since there is no struct for
    * this old packet anymore we build it by hand.
    */
-  if (type == 0) {
+  {
     unsigned char buffer[4096];
     struct data_out dout;
 
@@ -1142,12 +1100,10 @@ bool server_packet_input(struct connection *pconn, void *packet, int type)
     dio_put_uint16(&dout, 0);
 
     /* 1 == PACKET_LOGIN_REPLY in the old client */
-    dio_put_uint8(&dout, 1);
+    dio_put_uint8(&dout, PACKET_PROCESSING_FINISHED);
 
     dio_put_bool32(&dout, FALSE);
-    dio_put_string(&dout, _("Your client is too old. To use this server, "
-			    "please upgrade your client to a "
-			    "Freeciv 2.2 or later."));
+    dio_put_string(&dout, "Freeciv " VERSION_STRING);
     dio_put_string(&dout, "");
 
     {
@@ -1165,22 +1121,21 @@ bool server_packet_input(struct connection *pconn, void *packet, int type)
     return FALSE;
   }
 
-  if (type == PACKET_SERVER_JOIN_REQ) {
-    return handle_login_request(pconn,
-				(struct packet_server_join_req *) packet);
-  }
+  case PACKET_SERVER_JOIN_REQ:
+    return server_join_request(pconn, packet);
 
-  /* May be received on a non-established connection. */
-  if (type == PACKET_AUTHENTICATION_REPLY) {
+  case PACKET_AUTHENTICATION_REPLY:
     return handle_authentication_reply(pconn,
 				((struct packet_authentication_reply *)
 				 packet)->password);
-  }
 
-  if (type == PACKET_CONN_PONG) {
+  case PACKET_CONN_PONG:
     handle_conn_pong(pconn);
     return TRUE;
-  }
+
+  default:
+    break;
+  };
 
   if (!pconn->established) {
     freelog(LOG_ERROR, "Received game packet from unaccepted connection %s",
@@ -1189,21 +1144,18 @@ bool server_packet_input(struct connection *pconn, void *packet, int type)
   }
   
   /* valid packets from established connections but non-players */
-  if (type == PACKET_CHAT_MSG_REQ
-      || type == PACKET_SINGLE_WANT_HACK_REQ
-      || type == PACKET_NATION_SELECT_REQ
-      || type == PACKET_REPORT_REQ
-      || type == PACKET_EDIT_MODE
-      || type == PACKET_EDIT_TILE
-      || type == PACKET_EDIT_UNIT
-      || type == PACKET_EDIT_CREATE_CITY
-      || type == PACKET_EDIT_PLAYER) {
+  switch (type) {
+  case PACKET_CHAT_MSG_REQ:
+  case PACKET_SINGLE_WANT_HACK_REQ:
+  case PACKET_REPORT_REQ:
     if (!server_handle_packet(type, packet, NULL, pconn)) {
       freelog(LOG_ERROR, "Received unknown packet %d from %s",
 	      type, conn_description(pconn));
     }
     return TRUE;
-  }
+  default:
+    break;
+  };
 
   pplayer = pconn->player;
 
@@ -1214,22 +1166,31 @@ bool server_packet_input(struct connection *pconn, void *packet, int type)
     return TRUE;
   }
 
-  if (S_S_RUNNING != server_state()
-      && type != PACKET_NATION_SELECT_REQ
-      && type != PACKET_PLAYER_READY
-      && type != PACKET_CONN_PONG
-      && type != PACKET_REPORT_REQ) {
-    if (S_S_OVER == server_state()) {
+  switch (type) {
+  case PACKET_NATION_SELECT_REQ:
+  case PACKET_PLAYER_READY:
+  case PACKET_CONN_PONG:
+  case PACKET_REPORT_REQ:
+    /* FIXME: appear anytime? */
+    break;
+  default:
+    switch (server_state()) {
+    case S_S_RUNNING:
+      /* OK */
+      break;
+    case S_S_OVER:
       /* This can happen by accident, so we don't want to print
 	 out lots of error messages. Ie, we use LOG_DEBUG. */
       freelog(LOG_DEBUG, "got a packet of type %d "
 			  "in S_S_OVER", type);
-    } else {
+      return TRUE;
+    default:
       freelog(LOG_ERROR, "got a packet of type %d "
 	                 "outside S_S_RUNNING", type);
-    }
-    return TRUE;
-  }
+      return TRUE;
+    };
+    break;
+  };
 
   pplayer->nturns_idle=0;
 
@@ -1456,11 +1417,9 @@ void init_available_nations(void)
 }
 
 /**************************************************************************
-  Handles a pick-nation packet from the client.  These packets are
-  handled by connection because ctrl users may edit anyone's nation in
-  pregame, and editing is possible during a running game.
+...
 **************************************************************************/
-void handle_nation_select_req(struct connection *pc,
+void handle_nation_select_req(struct player *requestor,
 			      int player_no,
 			      Nation_type_id nation_no, bool is_male,
 			      char *name, int city_style)
@@ -1468,7 +1427,11 @@ void handle_nation_select_req(struct connection *pc,
   struct nation_type *new_nation;
   struct player *pplayer = player_by_number(player_no);
 
-  if (!pplayer || !can_conn_edit_players_nation(pc, pplayer)) {
+  if (NULL == pplayer || S_S_INITIAL != server_state()) {
+    return;
+  }
+
+  if (!can_conn_edit_players_nation(requestor->current_conn, pplayer)) {
     return;
   }
 
@@ -1595,7 +1558,8 @@ void aifill(int amount)
   amount = MIN(amount, game.info.max_players);
 
   while (game.info.nplayers < amount) {
-    struct player *pplayer = player_by_number(game.info.nplayers);
+    const int old_nplayers = game.info.nplayers;
+    struct player *pplayer = player_by_number(old_nplayers);
     char leader_name[ARRAY_SIZE(pplayer->name)];
 
     server_player_init(pplayer, FALSE, TRUE);
@@ -1613,23 +1577,26 @@ void aifill(int amount)
     freelog(LOG_NORMAL,
 	    _("%s has been added as %s level AI-controlled player."),
             player_name(pplayer),
-	    ai_level_name(pplayer->ai.skill_level));
+	    name_of_skill_level(pplayer->ai.skill_level));
     notify_conn(NULL, NULL, E_SETTING,
 		_("%s has been added as %s level AI-controlled player."),
 		player_name(pplayer),
-		ai_level_name(pplayer->ai.skill_level));
+		name_of_skill_level(pplayer->ai.skill_level));
 
-    dlsend_packet_player_control(game.est_connections, ++game.info.nplayers);
+    game.info.nplayers++;
+
+    send_game_info(NULL);
     send_player_info(pplayer, NULL);
   }
 
   remove = game.info.nplayers - 1;
   while (game.info.nplayers > amount && remove >= 0) {
-    struct player *pplayer = player_by_number(remove--);
+    struct player *pplayer = player_by_number(remove);
 
     if (!pplayer->is_connected && !pplayer->was_created) {
       server_remove_player(pplayer);
     }
+    remove--;
   }
 }
 
@@ -1677,8 +1644,7 @@ static void generate_players(void)
       continue;
     }
 
-    player_set_nation(pplayer, pick_a_nation(NULL, FALSE, TRUE,
-                                             NOT_A_BARBARIAN));
+    player_set_nation(pplayer, pick_a_nation(NULL, FALSE, TRUE));
     assert(pplayer->nation != NO_NATION_SELECTED);
 
     pplayer->city_style = city_style_of_nation(nation_of_player(pplayer));
@@ -1766,6 +1732,46 @@ static void announce_player (struct player *pplayer)
 }
 
 /**************************************************************************
+  Send PACKET_FREEZE_CLIENT to all clients capable of handling it.
+**************************************************************************/
+static void freeze_clients(void)
+{
+  conn_list_iterate(game.est_connections, pconn) {
+    send_packet_freeze_client(pconn);
+  } conn_list_iterate_end;
+}
+
+/**************************************************************************
+  Send PACKET_THAW_CLIENT to all clients capable of handling it.
+**************************************************************************/
+static void thaw_clients(void)
+{
+  conn_list_iterate(game.est_connections, pconn) {
+    send_packet_thaw_client(pconn);
+  } conn_list_iterate_end;
+}
+
+/**************************************************************************
+  Send PACKET_BEGIN_TURN to all clients capable of handling it.
+**************************************************************************/
+static void send_begin_turn(void)
+{
+  conn_list_iterate(game.est_connections, pconn) {
+    send_packet_begin_turn(pconn);
+  } conn_list_iterate_end;
+}
+
+/**************************************************************************
+  Send PACKET_END_TURN to all clients capable of handling it.
+**************************************************************************/
+static void send_end_turn(void)
+{
+  conn_list_iterate(game.est_connections, pconn) {
+    send_packet_end_turn(pconn);
+  } conn_list_iterate_end;
+}
+
+/**************************************************************************
   Play the game! Returns when S_S_RUNNING != server_state().
 **************************************************************************/
 static void srv_running(void)
@@ -1783,9 +1789,9 @@ static void srv_running(void)
    * This will freeze the reports and agents at the client.
    * 
    * Do this before the body so that the PACKET_THAW_CLIENT packet is
-   * balanced. 
+   * balanced.
    */
-  lsend_packet_freeze_client(game.est_connections);
+  freeze_clients();
 
   assert(S_S_RUNNING == server_state());
   while (S_S_RUNNING == server_state()) {
@@ -1801,7 +1807,7 @@ static void srv_running(void)
        * from the beginning of the turn.
        * With simultaneous movement we send begin_turn packet in
        * begin_phase() only after AI players have finished their actions. */
-      lsend_packet_begin_turn(game.est_connections);
+      send_begin_turn();
     }
 
     for (; game.info.phase < game.info.num_phases; game.info.phase++) {
@@ -1815,7 +1821,7 @@ static void srv_running(void)
       /* 
        * This will thaw the reports and agents at the client.
        */
-      lsend_packet_thaw_client(game.est_connections);
+      thaw_clients();
 
       /* Before sniff (human player activites), report time to now: */
       freelog(LOG_VERBOSE, "End/start-turn server/ai activities: %g seconds",
@@ -1850,7 +1856,7 @@ static void srv_running(void)
       /* 
        * This will freeze the reports and agents at the client.
        */
-      lsend_packet_freeze_client(game.est_connections);
+      freeze_clients();
 
       end_phase();
 
@@ -1872,7 +1878,7 @@ static void srv_running(void)
   }
 
   /* This will thaw the reports and agents at the client.  */
-  lsend_packet_thaw_client(game.est_connections);
+  thaw_clients();
 
   free_timer(eot_timer);
 }
@@ -1963,6 +1969,7 @@ static void srv_scores(void)
     calc_civ_score(pplayer);
   } players_iterate_end;
 
+  send_game_state(game.est_connections, C_S_OVER);
   report_final_scores();
   show_map_to_all();
   notify_player(NULL, NULL, E_GAME_END, _("The game is over..."));
@@ -2028,10 +2035,7 @@ static void srv_ready(void)
   /* If we have a tile map, and map.generator==0, call map_fractal_generate
    * anyway to make the specials, huts and continent numbers. */
   if (map_is_empty() || (map.generator == 0 && game.info.is_new_game)) {
-    struct unit_type *utype = crole_to_unit_type(game.info.start_units[0], NULL);
-
-    map_fractal_generate(TRUE, utype);
-    game_map_init();
+    map_fractal_generate(TRUE);
   }
 
   /* start the game */
@@ -2090,6 +2094,7 @@ static void srv_ready(void)
             && player_number(pplayer) != player_number(pdest)) {
           pplayer->diplstates[player_index(pdest)].type = DS_TEAM;
           give_shared_vision(pplayer, pdest);
+	  BV_SET(pplayer->embassy, player_index(pdest));
         }
       } players_iterate_end;
     } players_iterate_end;
@@ -2119,6 +2124,8 @@ static void srv_ready(void)
   if (game.info.is_new_game) {
     init_new_game();
   }
+
+  send_game_state(game.est_connections, C_S_RUNNING);
 }
 
 /**************************************************************************
@@ -2127,8 +2134,6 @@ static void srv_ready(void)
 void server_game_init(void)
 {
   game_init();
-
-  server.nbarbarians = 0;
 
   /* Rulesets are loaded on game initialization, but may be changed later
    * if /load or /rulesetdir is done. */

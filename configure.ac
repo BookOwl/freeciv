@@ -8,7 +8,6 @@ AC_CONFIG_SRCDIR([common/game.c])
 AC_CONFIG_AUX_DIR(bootstrap) # This can't be quoted or automake will fail
 AM_CONFIG_HEADER(config.h)
 AC_CANONICAL_HOST
-AC_GNU_SOURCE
 
 PACKAGE=freeciv
 
@@ -102,12 +101,6 @@ AM_CONDITIONAL(FTWL, test x$ftwl != xno)
 if test "$ftwl" = no && test "$client" = ftwl ; then
   AC_MSG_ERROR(You must use --enable-ftwl to use the ftwl client)
 fi
-if test "$ftwl" != no ; then
-  PKG_CHECK_MODULES([CAIRO], [cairo],,
-    [AC_MSG_ERROR([--enable-ftwl requires cairo])])
-  FTWL_CFLAGS="$FTWL_CFLAGS $CAIRO_CFLAGS"
-  FTWL_LIBS="$FTWL_LIBS $CAIRO_LIBS"
-fi
 
 AC_ARG_WITH(xaw,
 [  --with-xaw              use the Xaw widget set for the xaw client],
@@ -118,18 +111,6 @@ AC_ARG_WITH(xaw3d,
 [  --with-xaw3d            use the Xaw3d widget set for the xaw client],
 WITH_XAW3D=1
 )
-
-AC_ARG_ENABLE([svnrev],
-[  --enable-svnrev         get svn revision to version information],
-[case "${enableval}" in
-  yes) svnrev=true  ;;
-  no)  svnrev=false ;;
-  *)   AC_MSG_ERROR([bad value ${enableval} for --enable-svnrev]) ;;
-esac], [svnrev=false])
-AM_CONDITIONAL([SVNREV], [test x$svnrev = xtrue])
-if test x$svnrev = xtrue ; then
-  AC_DEFINE([SVNREV], [1], [Get svn revision information to version number])
-fi
 
 AC_ARG_ENABLE(make_data,
 [  --disable-make-data     do not recurse make into data directories
@@ -203,50 +184,39 @@ if test -z "$localedir"; then
 fi
 
 dnl I18n support
-ALL_LINGUAS="ar cs ca da de el en_GB es et fa fi fr he hu it ja ko lt nl nb 
-no pl pt pt_BR ro ru sv uk zh_CN"
+ALL_LINGUAS="ar cs ca da de el en_GB es et fa fi fr he hu it ja ko lt nl nb no pl pt pt_BR ro ru sv tr uk zh_CN"
+AM_GNU_GETTEXT(,need-ngettext)
 
-AC_ARG_ENABLE([nls],
-[  --disable-nls        do not add localization support],
-[case "${enableval}" in
-  yes) USE_NLS=yes ;;
-  no)  USE_NLS=no  ;;
+dnl AM_GNU_GETTEXT doesn't have all features we want
+dnl or they don't behave correctly.
+dnl Old gettext binaries don't understand plurals. (ngettext, msgid_plural)
+dnl and there are some problems with missing ngettext.
 
-  dnl NLS disabled, but 'make dist' allowed. That dist will lack
-  dnl all generated localization files.
-  no-gmo-dist) USE_NLS=no
-               FORCE_DIST=yes ;;
-  *)   AC_MSG_ERROR([bad value ${enableval} for --enable-nls]) ;;
-esac], [USE_NLS=yes])
+if test "$USE_NLS" = "yes"; then
+  dnl nls_cv_force_use_gnu_gettext is set by AM_GNU_GETTEXT
+  dnl it is "yes" when --with-included-gettext is given
 
-if test "$USE_NLS" = "yes" ; then
-  AM_GLIB_GNU_GETTEXT
+  if test "$nls_cv_force_use_gnu_gettext" != "yes"; then
+    have_working_ngettext=0
+    AC_CHECK_LIB(c, ngettext,
+      [AC_MSG_CHECKING(whether libc's ngettext works at runtime)
+       FC_CHECK_NGETTEXT_RUNTIME(,have_working_ngettext=1,)],)
 
-  dnl AM_GLIB_GNU_GETTEXT doesn't have all features we want
-  dnl or they don't behave correctly.
-  dnl Old gettext binaries don't understand plurals. (ngettext, msgid_plural)
-  dnl and there are some problems with missing ngettext.
-  dnl Is that ngettext part still true? AM_GLIB_GNU_GETTEXT does check for it
+    if test "$have_working_ngettext" = "0"; then
+      AC_CHECK_LIB(intl, ngettext,
+        [AC_MSG_CHECKING(whether libintl's ngettext works at runtime)
+         FC_CHECK_NGETTEXT_RUNTIME("-lintl",have_working_ngettext=1,)],)
+    fi
 
-  have_working_ngettext=0
-  AC_CHECK_LIB(c, ngettext,
-    [AC_MSG_CHECKING(whether libc's ngettext works at runtime)
-     FC_CHECK_NGETTEXT_RUNTIME(,have_working_ngettext=1,)],)
-
-  if test "$have_working_ngettext" = "0"; then
-    AC_CHECK_LIB(intl, ngettext,
-      [AC_MSG_CHECKING(whether libintl's ngettext works at runtime)
-       FC_CHECK_NGETTEXT_RUNTIME("-lintl",have_working_ngettext=1,)],)
-  fi
-
-  if test "$have_working_ngettext" = "0"; then
-    AC_MSG_ERROR(I haven't found a working ngettext function in your system. 
-Try --disable-nls. Read ABOUT-NLS.)
+    if test "$have_working_ngettext" = "0"; then
+      AC_MSG_ERROR(I haven't found a working ngettext function in your system. 
+Try --with-included-gettext or --disable-nls. Read ABOUT-NLS.)
+    fi
   fi
 
   if test "$IS_BETA_VERSION" = "1" || test "$IS_DEVEL_VERSION" = "1"; then
     AC_MSG_CHECKING(for GNU xgettext version >= 0.10.36)
-    xgettext_version=`$XGETTEXT --version 2>&1 | grep GNU | head -n 1 | sed 's/"/ /g'`
+    xgettext_version=`$XGETTEXT --version 2>&1 | grep GNU | sed 's/"/ /g'`
     AC_TRY_RUN([
 #include <stdio.h>
 
@@ -281,7 +251,7 @@ Please update your gettext package.)
     )
 
     AC_MSG_CHECKING(for GNU msgfmt version >= 0.10.35)
-    msgfmt_version=`$MSGFMT --version 2>&1 | grep GNU | head -n 1 | sed 's/"/ /g'`
+    msgfmt_version=`$MSGFMT --version 2>&1 | grep GNU | sed 's/"/ /g'`
     AC_TRY_RUN([
 #include <stdio.h>
 
@@ -318,13 +288,6 @@ gettext package. We recommend you versions >= 0.10.38. Or use
     echo error
     )
   fi
-else
-  dnl Setup POFILES even when NLS disabled.
-  dnl AM_GLIB_GNU_GETTEXT does this when NLS enabled.
-  for lang in $ALL_LINGUAS; do
-    POFILES="$POFILES $lang.po"
-  done
-  AC_SUBST([POFILES])
 fi
 
 EXTRA_GCC_DEBUG_CFLAGS=""
@@ -420,25 +383,21 @@ if test "$GZIP" = "no"; then
   AC_MSG_ERROR([You need the gzip program for compilation.])
 fi
 
-dnl Check for libbzip2
-AC_CHECK_LIB(bz2, BZ2_bzReadOpen)
-AC_CHECK_HEADERS(bzlib.h)
-
 dnl Check and compile ftwl
 if test "$ftwl" = x11 ; then
-     FTWL_CFLAGS="$FTWL_CFLAGS "`freetype-config --cflags`
-     FTWL_LIBS="$FTWL_LIBS -L/usr/X11R6/lib -lX11 -lpng "`freetype-config --libs`
+     FTWL_CFLAGS=`freetype-config --cflags`
+     FTWL_LIBS="-L/usr/X11R6/lib -lX11 -lpng "`freetype-config --libs`
 fi
 
 if test "$ftwl" = sdl ; then
-     FTWL_CFLAGS="$FTWL_CFLAGS "`sdl-config --cflags`" "`freetype-config --cflags`
-     FTWL_LIBS="$FTWL_LIBS "`sdl-config --libs`" -lpng "`freetype-config --libs`
+     FTWL_CFLAGS=`sdl-config --cflags`" "`freetype-config --cflags`
+     FTWL_LIBS=`sdl-config --libs`" -lpng "`freetype-config --libs`
      AC_DEFINE(SDL, 1, [SDL is used])
 fi
 
 if test "$ftwl" = opengl ; then
-     FTWL_CFLAGS="$FTWL_CFLAGS "`sdl-config --cflags`" "`freetype-config --cflags`
-     FTWL_LIBS="$FTWL_LIBS "`sdl-config --libs`" -lpng "`freetype-config --libs -lGL -lGLU`
+     FTWL_CFLAGS=`sdl-config --cflags`" "`freetype-config --cflags`
+     FTWL_LIBS=`sdl-config --libs`" -lpng "`freetype-config --libs -lGL -lGLU`
 fi
 
 dnl Check and choose clients
@@ -496,7 +455,6 @@ if test x$client != xno; then
 
     if test "x$found_client" = "xyes"; then
       client=stub
-      CLIENT_LIBS="-lm"
     elif test "$client" = "stub"; then
       AC_MSG_ERROR(specified client 'stub' not configurable)
     fi
@@ -606,9 +564,10 @@ AC_FUNC_VSNPRINTF
 AC_CHECK_FUNCS([vsnprintf])
 fi
 
-AC_CHECK_FUNCS([bind connect fileno flock ftime gethostbyname gethostname \
-		getpwuid inet_aton select snooze strcasecmp strcasestr \
-		strerror strlcat strlcpy strncasecmp strstr uname usleep])
+AC_CHECK_FUNCS([fileno ftime gethostname getpwuid inet_aton \
+		select snooze strerror strcasecmp strncasecmp \
+		strlcat strlcpy strstr usleep uname flock \
+		gethostbyname connect bind])
 
 AC_MSG_CHECKING(for working gettimeofday)
   FC_CHECK_GETTIMEOFDAY_RUNTIME(,AC_DEFINE(HAVE_GETTIMEOFDAY, 1,
@@ -686,7 +645,7 @@ dnl and builds 'po/Makefile.in' then 'po/Makefile'.  In order for the
 dnl commonly used _() and N_() macros to work, there should be somewhere
 dnl in that 'po/Makefile' a call to xgettext with "--keyword=_" and
 dnl "--keyword=N_" as arguments.  To support Q_() and PL_(),
-dnl the following simply replaces instances of 
+dnl the following simply dnl replaces instances of 
 dnl "--keyword=N_" with "--keyword=N_ --keyword=Q_ --keyword=PL_:1,2"
 dnl in the 'po/Makefile' file.
 AC_CONFIG_COMMANDS([fc_default-1],[[if test -f po/Makefile ; then
@@ -753,15 +712,11 @@ AC_SUBST([CONFIGURE_DEPENDENCIES], ["$CONFIGURE_DEPENDENCIES \$(top_srcdir)/vers
 dnl Make sure that config.h changes when ever CPPFLAGS, CFLAGS or CXXFLAGS
 dnl change so everything gets rebuilt. LDFLAGS is not handled here
 dnl since change in it should not cause recompilation, only relinking.
-dnl Note: Variables are named FC_STORE_* instead of FC_*_STORE in order to
-dnl make them appear next to each other in config.h.  Also single-quotes are
-dnl used because some " may appear unescaped within the flag strings.
-AC_DEFINE_UNQUOTED([FC_STORE_CPPFLAGS], ['$CPPFLAGS'],
-                   [These are the CPPFLAGS used in compilation])
-AC_DEFINE_UNQUOTED([FC_STORE_CFLAGS], ['$CFLAGS'],
-                   [These are the CFLAGS used in compilation])
-AC_DEFINE_UNQUOTED([FC_STORE_CXXFLAGS], ['$CXXFLAGS'],
-                   [These are the CXXFLAGS used in compilation])
+dnl Note: Variables are named FC_STORE_* instead of FC_*_STORE in order to make them
+dnl       appear next to each other in config.h.
+AC_DEFINE_UNQUOTED([FC_STORE_CPPFLAGS], ['$CPPFLAGS'], [These are the CPPFLAGS used in compilation])
+AC_DEFINE_UNQUOTED([FC_STORE_CFLAGS], ['$CFLAGS'], [These are the CFLAGS used in compilation])
+AC_DEFINE_UNQUOTED([FC_STORE_CXXFLAGS], ['$CXXFLAGS'], [These are the CXXFLAGS used in compilation])
 
 AC_CONFIG_FILES([Makefile
           data/Makefile
@@ -833,6 +788,7 @@ AC_CONFIG_FILES([Makefile
 	  server/generator/Makefile
 	  server/scripting/Makefile
 	  manual/Makefile
+	  intl/Makefile
 	  po/Makefile.in
 	  doc/Makefile
 	  doc/man/Makefile
@@ -851,35 +807,4 @@ AC_CONFIG_FILES([Makefile
 AC_CONFIG_FILES([civ:bootstrap/civ.in], [chmod +x civ])
 AC_CONFIG_FILES([ser:bootstrap/ser.in], [chmod +x ser])
 AC_CONFIG_COMMANDS([default],[[ chmod +x bootstrap/undep.sh ; bootstrap/undep.sh ]],[[]])
-
-if test "$USE_NLS" != "yes" ; then
-
-  dnl Produced config.status will have constant value of FORCE_DIST,
-  dnl but it still checks 'if test x$FORCE_DIST = xyes'. We cannot
-  dnl do that check in configure when producing config.status.
-  AC_CONFIG_COMMANDS([po/Makefile], [
-    dnl Usually glib-gettext.m4:AM_GLIB_GNU_GETTEXT outputs commands to
-    dnl generate po/Makefile.
-    dnl If NLS is disabled, we generate one here.
-    rm -f po/Makefile
-
-    dnl - Add nonls_warn as dependency to dist -target
-    dnl - Remove dependencies from update-po, so it is never rebuilt
-    dnl - Set list of distributed files (no generated files)
-    sed -e 's/^dist distdir:.*/dist distdir: nonls_warn/' \
-        -e 's/^update-po:.*/update-po:/' \
-        -e 's/^DISTFILES =.*/DISTFILES = ChangeLog Makefile.in.in POTFILES.in POTFILES.skip \$(POFILES)/' \
-        po/Makefile.in > po/Makefile
-
-    dnl Create nonls_warn target.
-    echo >> po/Makefile
-    echo nonls_warn: >> po/Makefile
-    if test "x$FORCE_DIST" = "xyes" ; then
-      echo "	@echo Building dist without generated localization files!" >> po/Makefile
-    else
-      echo "	@echo Cannot build dist with NLS disabled! && /bin/false" >> po/Makefile
-    fi
-  ], [FORCE_DIST=$FORCE_DIST])
-fi
-
 AC_OUTPUT

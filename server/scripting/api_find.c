@@ -25,7 +25,7 @@
 **************************************************************************/
 Player *api_find_player(int player_id)
 {
-  return player_by_number(player_id);
+  return get_player(player_id);
 }
 
 /**************************************************************************
@@ -105,7 +105,8 @@ Building_Type *api_find_building_type(int building_type_id)
 **************************************************************************/
 Building_Type *api_find_building_type_by_name(const char *name_orig)
 {
-  return find_improvement_by_rule_name(name_orig);
+  Impr_type_id id = find_improvement_by_rule_name(name_orig);
+  return api_find_building_type(id);
 }
 
 /**************************************************************************
@@ -129,7 +130,7 @@ Unit_Type *api_find_unit_type_by_name(const char *name_orig)
 **************************************************************************/
 Tech_Type *api_find_tech_type(int tech_type_id)
 {
-  return advance_by_number(tech_type_id);
+  return &advances[tech_type_id];
 }
 
 /**************************************************************************
@@ -137,7 +138,8 @@ Tech_Type *api_find_tech_type(int tech_type_id)
 **************************************************************************/
 Tech_Type *api_find_tech_type_by_name(const char *name_orig)
 {
-  return find_advance_by_rule_name(name_orig);
+  Tech_type_id id = find_advance_by_rule_name(name_orig);
+  return api_find_tech_type(id);
 }
 
 /**************************************************************************
@@ -153,6 +155,8 @@ Terrain *api_find_terrain(int terrain_id)
 **************************************************************************/
 Terrain *api_find_terrain_by_name(const char *name_orig)
 {
-  return find_terrain_by_rule_name(name_orig);
+  struct terrain *pterrain = find_terrain_by_rule_name(name_orig);
+
+  return pterrain;
 }
 

@@ -70,49 +70,49 @@ enum sset_class {
   SSET_LAST
 };
 
+/* Invariants: V_MAIN vision ranges must always be more than V_INVIS
+ * ranges. */
+enum vision_layer {
+  V_MAIN,
+  V_INVIS,
+  V_COUNT
+};
+
 enum output_type_id {
   O_FOOD, O_SHIELD, O_TRADE, O_GOLD, O_LUXURY, O_SCIENCE, O_LAST
 };
 #define O_COUNT num_output_types
 #define O_MAX O_LAST /* Changing this breaks network compatibility. */
 
-/* Changing this enum will break savegame and network compatability. */
-enum unit_activity {
-  ACTIVITY_IDLE, ACTIVITY_POLLUTION, ACTIVITY_ROAD, ACTIVITY_MINE,
-  ACTIVITY_IRRIGATE, ACTIVITY_FORTIFIED, ACTIVITY_FORTRESS, ACTIVITY_SENTRY,
-  ACTIVITY_RAILROAD, ACTIVITY_PILLAGE, ACTIVITY_GOTO, ACTIVITY_EXPLORE,
-  ACTIVITY_TRANSFORM, ACTIVITY_UNKNOWN, ACTIVITY_AIRBASE, ACTIVITY_FORTIFYING,
-  ACTIVITY_FALLOUT,
-  ACTIVITY_PATROL_UNUSED, /* Needed for savegame compatability. */
-  ACTIVITY_BASE,          /* Build base */
-  ACTIVITY_LAST   /* leave this one last */
+struct city_production {
+  bool is_unit;
+  int value; /* Unit_type_id or Impr_type_id */
 };
 
+/* Some integers here could be uint8 values perhaps, but this is probably
+ * not worth it.  Storage space is not an issue for these types. */
 typedef signed short Continent_id;
 typedef int Terrain_type_id;
 typedef int Resource_type_id;
 typedef int Specialist_type_id;
 typedef int Impr_type_id;
-typedef int Tech_type_id;
 typedef enum output_type_id Output_type_id;
 typedef enum unit_activity Activity_type_id;
 typedef int Nation_type_id;
 typedef int Team_type_id;
 typedef int Unit_type_id;
 
-struct advance;
 struct city;
 struct connection;
 struct government;
-struct impr_type;
 struct nation_type;
-struct output_type;
 struct player;
-struct specialist;
 struct terrain;
 struct tile;
 struct unit;
-
+struct impr_type;
+struct output_type;
+struct specialist;
 
 /* Changing these will break network compatibility. */
 #define SP_MAX 20
@@ -122,19 +122,29 @@ struct unit;
 #define MAX_RULESET_NAME_LENGTH 64
 #define RULESET_SUFFIX ".serv"
 
-/* Unit Class List, also 32-bit vector? */
-#define UCL_LAST 32
-typedef int Unit_Class_id;
+/* Classes for unit types.
+ * (These must correspond to unit_class_names[] in unittype.c.)
+ */
+enum unit_class_id {
+  UCL_MISSILE = 0,
+  UCL_LAND,
+  UCL_SEA,
+  UCL_HELICOPTER,
+  UCL_AIR,
+  UCL_NUCLEAR,
+  UCL_LAST	/* keep this last */
+};
+
+typedef enum unit_class_id Unit_Class_id;
 
 /* This has to be put here for now, otherwise movement.h and unittype.h
  * would have a recursive dependency.
- * Order must mach order in move_type_names array. */
+ * Enumeration order must match unit_class enumeration. */
 enum unit_move_type {
-  AIR_MOVING = 0,
-  LAND_MOVING = 1,
-  SEA_MOVING = 2,
-  HELI_MOVING = 3,
-  MOVETYPE_LAST = 4
+  AIR_MOVING = UCL_AIR,
+  HELI_MOVING = UCL_HELICOPTER,
+  LAND_MOVING = UCL_LAND,
+  SEA_MOVING = UCL_SEA
 };
 
 /* The direction8 gives the 8 possible directions.  These may be used in
@@ -161,44 +171,6 @@ enum direction8 {
 #define DIR8_LAST 8
 #define DIR8_COUNT DIR8_LAST
 
-/* AI levels. This must correspond to ai_level_names[] in player.c */
-enum ai_level {
-  AI_LEVEL_AWAY         = 1,
-  AI_LEVEL_NOVICE       = 2,
-  AI_LEVEL_EASY         = 3,
-  AI_LEVEL_NORMAL       = 5,
-  AI_LEVEL_HARD         = 7,
-  AI_LEVEL_CHEATING     = 8,
-  AI_LEVEL_EXPERIMENTAL = 10,
-  AI_LEVEL_LAST
-};
-
-#define AI_LEVEL_DEFAULT AI_LEVEL_NOVICE
-
-enum editor_vision_mode {
-  EVISION_ADD,
-  EVISION_REMOVE,
-  EVISION_TOGGLE,
-  EVISION_LAST
-};
-
-enum editor_tech_mode {
-  ETECH_ADD,
-  ETECH_REMOVE,
-  ETECH_TOGGLE,
-  ETECH_LAST
-};
-
-/*
- * pplayer->ai.barbarian_type and nations use this enum. Note that the values
- * have to stay since they are used in savegames.
- */
-enum barbarian_type {
-  NOT_A_BARBARIAN = 0,
-  LAND_BARBARIAN = 1,
-  SEA_BARBARIAN = 2
-};
-
 /* Sometimes we don't know (or don't care) if some requirements for effect
  * are currently fulfilled or not. This enum tells lower level functions
  * how to handle uncertain requirements.
@@ -219,57 +191,5 @@ struct name_translation
   const char *translated;		/* string doesn't need freeing */
   char vernacular[MAX_LEN_NAME];	/* original string for comparisons */
 };
-
-/* Originally in requirements.h, bumped up and revised to unify with
- * city_production and worklists.  Functions remain in requirements.c
- */
-typedef union {
-  struct advance *advance;
-  struct government *govern;
-  struct impr_type *building;
-  struct nation_type *nation;
-  struct specialist *specialist;
-  struct terrain *terrain;
-  struct unit_class *uclass;
-  struct unit_type *utype;
-
-  enum ai_level ai_level;
-  int minsize;
-  Output_type_id outputtype;
-  int terrainclass;			/* enum terrain_class */
-  int special;				/* enum tile_special_type */
-  int unitclassflag;			/* enum unit_class_flag_id */
-  int unitflag;				/* enum unit_flag_id */
-} universals_u;
-
-/* The kind of universals_u (value_union_type was req_source_type).
- * Note: order must correspond to universal_names[] in requirements.c.
- */
-enum universals_n {
-  VUT_NONE,
-  VUT_ADVANCE,
-  VUT_GOVERNMENT,
-  VUT_IMPROVEMENT,
-  VUT_SPECIAL,
-  VUT_TERRAIN,
-  VUT_NATION,
-  VUT_UTYPE,
-  VUT_UTFLAG,
-  VUT_UCLASS,
-  VUT_UCFLAG,
-  VUT_OTYPE,
-  VUT_SPECIALIST,
-  VUT_MINSIZE,		/* Minimum size: at city range means city size */
-  VUT_AI_LEVEL,		/* AI level of the player */
-  VUT_TERRAINCLASS,	/* More generic terrain type, currently "Land" or "Ocean" */
-  VUT_LAST
-};
-
-struct universal {
-  universals_u value;
-  enum universals_n kind;		/* formerly .type and .is_unit */
-};
-
-struct ai_choice;			/* incorporates universals_u */
 
 #endif /* FC__FC_TYPES_H */

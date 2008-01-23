@@ -46,7 +46,6 @@
 #include "netintf.h"
 
 /* common */
-#include "game.h"
 #include "unitlist.h"
 
 /* client */
@@ -261,7 +260,7 @@ static Uint16 main_key_down_handler(SDL_keysym Key, void *pData)
               struct unit *pUnit;
               struct city *pCity;
               if (NULL != (pUnit = head_of_units_in_focus()) && 
-                (pCity = tile_city(pUnit->tile)) != NULL &&
+                (pCity = pUnit->tile->city) != NULL &&
                 city_owner(pCity) == game.player_ptr) {
                 popup_city_dialog(pCity);
               }

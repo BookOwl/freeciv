@@ -25,7 +25,6 @@
 #include "city.h"
 #include "game.h"
 #include "map.h"
-#include "specialist.h"
 #include "unitlist.h"
 
 #include "cma_fec.h"
@@ -133,7 +132,7 @@ static const char *cr_entry_specialist(const struct city *pcity,
   static char buf[8];
   const struct specialist *sp = data;
 
-  my_snprintf(buf, sizeof(buf), "%2d", pcity->specialists[specialist_index(sp)]);
+  my_snprintf(buf, sizeof(buf), "%2d", pcity->specialists[sp->index]);
   return buf;
 }
 
@@ -358,15 +357,25 @@ static const char *cr_entry_building(const struct city *pcity,
     worklist_is_empty(&pcity->worklist) ? "" :
     concise_city_production ? "+" : _("(worklist)");
 	
-  if (city_production_has_flag(pcity, IF_GOLD)) {
+  if (!pcity->production.is_unit
+      && improvement_has_flag(pcity->production.value, IF_GOLD)) {
     my_snprintf(buf, sizeof(buf), "%s (%d)%s",
-		city_production_name_translation(pcity),
+		get_impr_name_ex(pcity, pcity->production.value),
 		MAX(0, pcity->surplus[O_SHIELD]), from_worklist);
   } else {
-    my_snprintf(buf, sizeof(buf), "%s (%d/%d)%s",
-		city_production_name_translation(pcity),
-		pcity->shield_stock,
-		city_production_build_shield_cost(pcity),
+    const char *name;
+    int cost;
+
+    if(pcity->production.is_unit) {
+      name = utype_name_translation(utype_by_number(pcity->production.value));
+      cost = unit_build_shield_cost(utype_by_number(pcity->production.value));
+    } else {
+      name = get_impr_name_ex(pcity, pcity->production.value);
+      cost = impr_build_shield_cost(pcity->production.value);
+    }
+
+    my_snprintf(buf, sizeof(buf), "%s (%d/%d)%s", name,
+		pcity->shield_stock, cost,
 		from_worklist);
   }
 
@@ -376,18 +385,17 @@ static const char *cr_entry_building(const struct city *pcity,
 static const char *cr_entry_build_cost(const struct city *pcity,
 				  const void *data)
 {
+  int price = city_buy_cost(pcity);
+  int turns = city_turns_to_build(pcity, pcity->production, TRUE);
   char bufone[8];
   char buftwo[8];
   static char buf[32];
-  int price;
-  int turns;
 
-  if (city_production_has_flag(pcity, IF_GOLD)) {
+  if (!pcity->production.is_unit
+      && improvement_has_flag(pcity->production.value, IF_GOLD)) {
     my_snprintf(buf, sizeof(buf), "*");
     return buf;
   }
-  price = city_production_buy_gold_cost(pcity);
-  turns = city_production_turns_to_build(pcity, TRUE);
 
   if (price > 99999) {
     my_snprintf(bufone, sizeof(bufone), "---");
@@ -516,7 +524,6 @@ static const struct city_report_spec base_city_report_specs[] = {
     NULL, FUNC_TAG(cma) },
 
   { TRUE,   9, 1, N_("Production"), N_("Turns/Buy"),
-  /*N_("Turns or gold to complete production"), future menu needs translation */
     N_("Production"),
     NULL, FUNC_TAG(build_cost) },
   { TRUE,   0, 1, N_("Currently Building"),
@@ -555,26 +562,24 @@ void init_city_report_game_data(void)
   struct city_report_spec *p;
   int i;
 
-  num_creport_cols = ARRAY_SIZE(base_city_report_specs) + specialist_count();
+  num_creport_cols = ARRAY_SIZE(base_city_report_specs) + SP_COUNT;
   city_report_specs
     = fc_realloc(city_report_specs,
 		 num_creport_cols * sizeof(*city_report_specs));
   p = &city_report_specs[0];
 
-  specialist_type_iterate(i) {
-    struct specialist *s = specialist_by_number(i);
+  specialist_type_iterate(sp) {
     p->show = FALSE;
     p->width = 2;
     p->space = 1;
     p->title1 = Q_("?specialist:S");
-    p->title2 = specialist_abbreviation_translation(s);
-    my_snprintf(explanation[i], sizeof(explanation[i]),
-		_("Specialists: %s"),
-		specialist_name_translation(s));
-    p->explanation = explanation[i];
-    p->data = s;
+    p->title2 = Q_(get_specialist(sp)->short_name);
+    my_snprintf(explanation[sp], sizeof(explanation[sp]), "%s: %s",
+		_("Specialists"), _(get_specialist(sp)->name));
+    p->explanation = explanation[sp];
+    p->data = get_specialist(sp);
     p->func = cr_entry_specialist;
-    p->tagname = specialist_rule_name(s);
+    p->tagname = get_specialist(sp)->name;
     p++;
   } specialist_type_iterate_end;
 
@@ -592,7 +597,7 @@ void init_city_report_game_data(void)
     p++;
   }
 
-  assert(NUM_CREPORT_COLS == ARRAY_SIZE(base_city_report_specs) + specialist_count());
+  assert(NUM_CREPORT_COLS == ARRAY_SIZE(base_city_report_specs) + SP_COUNT);
 }
 
 /**********************************************************************

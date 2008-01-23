@@ -174,7 +174,7 @@ static void node_rectangle_minimum_size(struct tree_node *node,
     if (reqtree_show_icons) {
       /* units */
       unit_type_iterate(unit) {
-        if (advance_number(unit->require_advance) != node->tech) {
+        if (unit->tech_requirement != node->tech) {
           continue;
         }
         sprite = get_unittype_sprite(tileset, unit);
@@ -184,11 +184,12 @@ static void node_rectangle_minimum_size(struct tree_node *node,
       } unit_type_iterate_end;
     
       /* buildings */
-      improvement_iterate(pimprove) {
-        requirement_vector_iterate(&(pimprove->reqs), preq) {
-          if (VUT_ADVANCE == preq->source.kind
-	   && advance_number(preq->source.value.advance) == node->tech) {
-	    sprite = get_building_sprite(tileset, pimprove);
+      impr_type_iterate(impr_type) {
+        struct impr_type* impr = improvement_by_number(impr_type);
+        requirement_vector_iterate(&(impr->reqs), preq) {
+          if (preq->source.type == REQ_TECH
+	      && preq->source.value.tech == node->tech) {
+	    sprite = get_building_sprite(tileset, impr_type);
             /* Improvement icons are not guaranteed to exist */
             if (sprite) {
               get_sprite_dimensions(sprite, &swidth, &sheight);
@@ -197,13 +198,13 @@ static void node_rectangle_minimum_size(struct tree_node *node,
             }
 	  }
         } requirement_vector_iterate_end;
-      } improvement_iterate_end;
+      } impr_type_iterate_end;
     
       /* governments */
       government_iterate(gov) {
         requirement_vector_iterate(&(gov->reqs), preq) {
-          if (VUT_ADVANCE == preq->source.kind
-	   && advance_number(preq->source.value.advance) == node->tech) {
+          if (preq->source.type == REQ_TECH
+	      && preq->source.value.tech == node->tech) {
             sprite = get_government_sprite(tileset, gov);
 	    get_sprite_dimensions(sprite, &swidth, &sheight);
             max_icon_height = MAX(max_icon_height, sheight);
@@ -383,16 +384,16 @@ static void calculate_diagram_layout(struct reqtree *tree)
 static struct reqtree *create_dummy_reqtree(struct player *pplayer)
 {
   struct reqtree *tree = fc_malloc(sizeof(*tree));
+  struct advance *advance;
   int j;
-  struct tree_node *nodes[advance_count()];
+  struct tree_node *nodes[game.control.num_tech_types];
 
-  nodes[A_NONE] = NULL;
-  advance_index_iterate(A_FIRST, tech) {
-    if (!valid_advance_by_number(tech)) {
+  tech_type_iterate(tech) {
+    if (!tech_exists(tech) || tech == A_NONE) {
       nodes[tech] = NULL;
       continue;
     }
-    if (pplayer && !player_invention_is_ready(pplayer, tech)) {
+    if (pplayer && !tech_is_available(pplayer, tech)) {
       /* Reqtree requested for particular player and this tech is
        * unreachable to him/her. */
       nodes[tech] = NULL;
@@ -401,47 +402,48 @@ static struct reqtree *create_dummy_reqtree(struct player *pplayer)
     nodes[tech] = new_tree_node();
     nodes[tech]->is_dummy = FALSE;
     nodes[tech]->tech = tech;
-  } advance_index_iterate_end;
+  } tech_type_iterate_end;
 
-  advance_index_iterate(A_FIRST, tech) {
-    struct advance *padvance = valid_advance_by_number(tech);
-
-    if (!padvance) {
+  tech_type_iterate(tech) {
+    if (!tech_exists(tech)) {
       continue;
     }
     if (nodes[tech] == NULL) {
       continue;
     }
 
+    advance = &advances[tech];
     /* Don't include redundant edges */
-    if (A_NONE != advance_required(tech, AR_ONE)
-     && A_LAST != advance_required(tech, AR_TWO)) {
-      if (A_NONE == advance_required(tech, AR_TWO)
-       || !is_tech_a_req_for_goal(game.player_ptr,
-				  advance_required(tech, AR_ONE),
-				  advance_required(tech, AR_TWO))) {
-	add_requirement(nodes[tech], nodes[advance_required(tech, AR_ONE)]);
+    if (advance->req[0] != A_NONE && advance->req[1] != A_LAST) {
+      if ((advance->req[1] != A_NONE
+          && !is_tech_a_req_for_goal(game.player_ptr, advance->req[0],
+                                     advance->req[1]))
+         || advance->req[1] == A_NONE) {
+
+	add_requirement(nodes[tech], nodes[advance->req[0]]);
       }
 
-      if (A_NONE != advance_required(tech, AR_TWO)
-       && !is_tech_a_req_for_goal(game.player_ptr,
-				  advance_required(tech, AR_TWO),
-				  advance_required(tech, AR_ONE))) {
-	add_requirement(nodes[tech], nodes[advance_required(tech, AR_TWO)]);
+      if (advance->req[1] != A_NONE) {
+	if (!is_tech_a_req_for_goal(game.player_ptr, advance->req[1],
+				    advance->req[0])) {
+	  add_requirement(nodes[tech], nodes[advance->req[1]]);
+	}
       }
     }
-  } advance_index_iterate_end;
+  } tech_type_iterate_end;
 
   /* Copy nodes from local array to dynamically allocated one. 
    * Skip non-existing entries */
-  tree->nodes = fc_calloc(advance_count(), sizeof(*tree->nodes));
+  tree->nodes = fc_malloc(game.control.num_tech_types * sizeof(*tree->nodes));
   j = 0;
-  advance_index_iterate(A_FIRST, tech) {
+  tech_type_iterate(tech) {
     if (nodes[tech]) {
-      assert(valid_advance_by_number(nodes[tech]->tech));
-      tree->nodes[j++] = nodes[tech];
+      tree->nodes[j] = nodes[tech];
+      assert(tech_exists(tree->nodes[j]->tech));
+      j++;
     }
-  } advance_index_iterate_end;
+  }
+  tech_type_iterate_end;
   tree->num_nodes = j;
   tree->layers = NULL;
 
@@ -872,21 +874,21 @@ static enum color_std node_color(struct tree_node *node)
       return COLOR_REQTREE_RESEARCHING;
     }
     
-    if (player_invention_state(game.player_ptr, node->tech) == TECH_KNOWN) {
+    if (get_invention(game.player_ptr, node->tech) == TECH_KNOWN) {
       return COLOR_REQTREE_KNOWN;
     }
 
     if (is_tech_a_req_for_goal(game.player_ptr, node->tech,
 			       research->tech_goal)
 	|| node->tech == research->tech_goal) {
-      if (player_invention_state(game.player_ptr, node->tech) == TECH_REACHABLE) {
+      if (get_invention(game.player_ptr, node->tech) == TECH_REACHABLE) {
 	return COLOR_REQTREE_REACHABLE_GOAL;
       } else {
 	return COLOR_REQTREE_UNREACHABLE_GOAL;
       }
     }
 
-    if (player_invention_state(game.player_ptr, node->tech) == TECH_REACHABLE) {
+    if (get_invention(game.player_ptr, node->tech) == TECH_REACHABLE) {
       return COLOR_REQTREE_REACHABLE;
     }
 
@@ -959,8 +961,8 @@ static enum reqtree_edge_type get_edge_type(struct tree_node *node,
     return REQTREE_GOAL_EDGE;
   }
 
-  if (player_invention_state(game.player_ptr, node->tech) == TECH_KNOWN) {
-    if (player_invention_state(game.player_ptr, dest_node->tech) == TECH_KNOWN) {
+  if (get_invention(game.player_ptr, node->tech) == TECH_KNOWN) {
+    if (get_invention(game.player_ptr, dest_node->tech) == TECH_KNOWN) {
       return REQTREE_KNOWN_EDGE;
     } else {
       return REQTREE_READY_EDGE;
@@ -1054,7 +1056,7 @@ void draw_reqtree(struct reqtree *tree, struct canvas *pcanvas,
 	
 	if (reqtree_show_icons) {
  	  unit_type_iterate(unit) {
-            if (advance_number(unit->require_advance) != node->tech) {
+            if (unit->tech_requirement != node->tech) {
 	      continue;
 	    }
  	    sprite = get_unittype_sprite(tileset, unit);
@@ -1067,11 +1069,12 @@ void draw_reqtree(struct reqtree *tree, struct canvas *pcanvas,
  	    icon_startx += swidth + 2;
  	  } unit_type_iterate_end;
        
-          improvement_iterate(pimprove) {
-            requirement_vector_iterate(&(pimprove->reqs), preq) {
-              if (VUT_ADVANCE == preq->source.kind
-	       && advance_number(preq->source.value.advance) == node->tech) {
- 	        sprite = get_building_sprite(tileset, pimprove);
+          impr_type_iterate(impr_type) {
+	    struct impr_type* impr = improvement_by_number(impr_type);
+            requirement_vector_iterate(&(impr->reqs), preq) {
+              if (preq->source.type == REQ_TECH
+	          && preq->source.value.tech == node->tech) {
+ 	        sprite = get_building_sprite(tileset, impr_type);
                 /* Improvement icons are not guaranteed to exist */
                 if (sprite) {
                   get_sprite_dimensions(sprite, &swidth, &sheight);
@@ -1084,12 +1087,12 @@ void draw_reqtree(struct reqtree *tree, struct canvas *pcanvas,
                 }
  	      }
  	    } requirement_vector_iterate_end;
-          } improvement_iterate_end;
+          } impr_type_iterate_end;
 
           government_iterate(gov) {
             requirement_vector_iterate(&(gov->reqs), preq) {
-              if (VUT_ADVANCE == preq->source.kind
-               && advance_number(preq->source.value.advance) == node->tech) {
+              if (preq->source.type == REQ_TECH
+                && preq->source.value.tech == node->tech) {
                 sprite = get_government_sprite(tileset, gov);
                 get_sprite_dimensions(sprite, &swidth, &sheight);
  	        canvas_put_sprite_full(pcanvas,

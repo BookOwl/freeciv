@@ -22,8 +22,6 @@
 #include "support.h"
 
 #include "city.h"
-#include "game.h"
-#include "specialist.h"
 #include "unitlist.h"
 
 #include "citydlg_g.h"
@@ -185,7 +183,7 @@ void city_dialog_redraw_map(struct city *pcity,
     citydlg_iterate(pcity, ptile, pedge, pcorner, canvas_x, canvas_y) {
       struct unit *punit
 	= ptile ? get_drawable_unit(tileset, ptile, pcity) : NULL;
-      struct city *pcity_draw = ptile ? tile_city(ptile) : NULL;
+      struct city *pcity_draw = ptile ? ptile->city : NULL;
 
       put_one_element(pcanvas, layer, ptile, pedge, pcorner,
 		      punit, pcity_draw, canvas_x, canvas_y, pcity);
@@ -202,7 +200,6 @@ void city_dialog_redraw_map(struct city *pcity,
 void get_city_dialog_production(struct city *pcity,
 				char *buffer, size_t buffer_len)
 {
-  char time[50];
   int turns, cost, stock;
 
   if (pcity == NULL) {
@@ -218,31 +215,39 @@ void get_city_dialog_production(struct city *pcity,
     return;
   }
 
-  if (city_production_has_flag(pcity, IF_GOLD)) {
-    my_snprintf(buffer, buffer_len, _("%3d gold per turn"),
-                MAX(0, pcity->surplus[O_SHIELD]));
-    return;
-  }
-  turns = city_production_turns_to_build(pcity, TRUE);
+  turns = city_turns_to_build(pcity, pcity->production, TRUE);
   stock = pcity->shield_stock;
-  cost = city_production_build_shield_cost(pcity);
 
-  if (turns < FC_INFINITY) {
-    if (concise_city_production) {
-      my_snprintf(time, sizeof(time), "%3d", turns);
-    } else {
-      my_snprintf(time, sizeof(time),
-                  PL_("%3d turn", "%3d turns", turns), turns);
-    }
+  if (pcity->production.is_unit) {
+    cost = unit_build_shield_cost(utype_by_number(pcity->production.value));
   } else {
-    my_snprintf(time, sizeof(time), "%s",
-                concise_city_production ? "-" : _("never"));
+    cost = impr_build_shield_cost(pcity->production.value);
   }
 
-  if (concise_city_production) {
-    my_snprintf(buffer, buffer_len, _("%3d/%3d:%s"), stock, cost, time);
+  if (!pcity->production.is_unit
+      && improvement_has_flag(pcity->production.value, IF_GOLD)) {
+    my_snprintf(buffer, buffer_len, _("%3d gold per turn"),
+		MAX(0, pcity->surplus[O_SHIELD]));
   } else {
-    my_snprintf(buffer, buffer_len, _("%3d/%3d %s"), stock, cost, time);
+    char time[50];
+
+    if (turns < FC_INFINITY) {
+      if (concise_city_production) {
+	my_snprintf(time, sizeof(time), "%3d", turns);
+      } else {
+	my_snprintf(time, sizeof(time),
+		    PL_("%3d turn", "%3d turns", turns), turns);
+      }
+    } else {
+      my_snprintf(time, sizeof(time), "%s",
+		  concise_city_production ? "-" : _("never"));
+    }
+
+    if (concise_city_production) {
+      my_snprintf(buffer, buffer_len, _("%3d/%3d:%s"), stock, cost, time);
+    } else {
+      my_snprintf(buffer, buffer_len, _("%3d/%3d %s"), stock, cost, time);
+    }
   }
 }
 
@@ -258,36 +263,33 @@ void get_city_dialog_production(struct city *pcity,
  less flexibility.
 **************************************************************************/
 void get_city_dialog_production_full(char *buffer, size_t buffer_len,
-				     struct universal target,
+				     struct city_production target,
 				     struct city *pcity)
 {
-  int turns = city_turns_to_build(pcity, target, TRUE);
-  int cost = universal_build_shield_cost(&target);
-
-  switch (target.kind) {
-  case VUT_IMPROVEMENT:
-    my_snprintf(buffer, buffer_len,
-                city_improvement_name_translation(pcity, target.value.building));
-
-    if (improvement_has_flag(target.value.building, IF_GOLD)) {
-      cat_snprintf(buffer, buffer_len, " (--) ");
-      cat_snprintf(buffer, buffer_len, _("%d/turn"),
-		   MAX(0, pcity->surplus[O_SHIELD]));
-      return;
-    }
-    break;
-  default:
-    universal_name_translation(&target, buffer, buffer_len);
-    break;
-  };
-  cat_snprintf(buffer, buffer_len, " (%d) ", cost);
-
-  if (turns < FC_INFINITY) {
-    cat_snprintf(buffer, buffer_len,
-		 PL_("%d turn", "%d turns", turns),
-		 turns);
+  if (!target.is_unit && improvement_has_flag(target.value, IF_GOLD)) {
+    my_snprintf(buffer, buffer_len, _("%s (XX) %d/turn"),
+		get_impr_name_ex(pcity, target.value),
+		MAX(0, pcity->surplus[O_SHIELD]));
   } else {
-    cat_snprintf(buffer, buffer_len, "never");
+    int turns = city_turns_to_build(pcity, target, TRUE);
+    const char *name;
+    int cost;
+
+    if (target.is_unit) {
+      name = utype_values_translation(utype_by_number(target.value));
+      cost = unit_build_shield_cost(utype_by_number(target.value));
+    } else {
+      name = get_impr_name_ex(pcity, target.value);
+      cost = impr_build_shield_cost(target.value);
+    }
+
+    if (turns < FC_INFINITY) {
+      my_snprintf(buffer, buffer_len,
+		  PL_("%s (%d) %d turn", "%s (%d) %d turns", turns),
+		  name, cost, turns);
+    } else {
+      my_snprintf(buffer, buffer_len, "%s (%d) never", name, cost);
+    }
   }
 }
 
@@ -297,71 +299,61 @@ void get_city_dialog_production_full(char *buffer, size_t buffer_len,
  column_size bytes.  City may be NULL.
 **************************************************************************/
 void get_city_dialog_production_row(char *buf[], size_t column_size,
-				    struct universal target,
+				    struct city_production target,
 				    struct city *pcity)
 {
-  universal_name_translation(&target, buf[0], column_size);
+  if (target.is_unit) {
+    struct unit_type *ptype = utype_by_number(target.value);
 
-  switch (target.kind) {
-  case VUT_UTYPE:
-  {
-    struct unit_type *ptype = target.value.utype;
-
+    my_snprintf(buf[0], column_size, utype_name_translation(ptype));
     my_snprintf(buf[1], column_size, utype_values_string(ptype));
-    my_snprintf(buf[2], column_size, "(%d)", utype_build_shield_cost(ptype));
-    break;
-  }
-  case VUT_IMPROVEMENT:
-  {
+    my_snprintf(buf[2], column_size, "(%d)", unit_build_shield_cost(ptype));
+  } else {
     struct player *pplayer = pcity ? city_owner(pcity) : game.player_ptr;
-    struct impr_type *pimprove = target.value.building;
 
     /* Total & turns left meaningless on capitalization */
-    if (improvement_has_flag(pimprove, IF_GOLD)) {
+    if (improvement_has_flag(target.value, IF_GOLD)) {
+      my_snprintf(buf[0], column_size, improvement_name_translation(target.value));
       buf[1][0] = '\0';
       my_snprintf(buf[2], column_size, "---");
     } else {
-      /* from city.c city_improvement_name_translation() */
-      if (pcity && is_building_replaced(pcity, pimprove, RPT_CERTAIN)) {
+      my_snprintf(buf[0], column_size, improvement_name_translation(target.value));
+
+      /* from city.c get_impr_name_ex() */
+      if (pcity && is_building_replaced(pcity, target.value, RPT_CERTAIN)) {
 	my_snprintf(buf[1], column_size, "*");
       } else {
 	const char *state = "";
 
-	if (is_great_wonder(pimprove)) {
-          if (improvement_obsolete(pplayer, pimprove)) {
+	if (is_great_wonder(target.value)) {
+          if (improvement_obsolete(pplayer, target.value)) {
             state = _("Obsolete");
-          } else if (great_wonder_was_built(pimprove)) {
+          } else if (great_wonder_was_built(target.value)) {
             state = _("Built");
           } else {
             state = _("Great Wonder");
           }
-	} else if (is_small_wonder(pimprove)) {
-	  if (improvement_obsolete(pplayer, pimprove)) {
-	    state = _("Obsolete");
-	  } else if (find_city_from_small_wonder(pplayer, target.value.building)) {
-	    state = _("Built");
-          } else {
-            state = _("Small Wonder");
-          }
 	}
-	my_snprintf(buf[1], column_size, state);
+	if (is_small_wonder(target.value)) {
+	  state = _("Small Wonder");
+	  if (find_city_from_small_wonder(pplayer, target.value)) {
+	    state = _("Built");
+	  }
+	  if (improvement_obsolete(pplayer, target.value)) {
+	    state = _("Obsolete");
+	  }
+	}
+	my_snprintf(buf[1], column_size, "%s", state);
       }
 
       my_snprintf(buf[2], column_size, "%d",
-		  impr_build_shield_cost(pimprove));
+		  impr_build_shield_cost(target.value));
     }
-    break;
   }
-  default:
-    buf[1][0] = '\0';
-    buf[2][0] = '\0';
-    break;
-  };
 
   /* Add the turns-to-build entry in the 4th position */
   if (pcity) {
-    if (VUT_IMPROVEMENT == target.kind
-     && improvement_has_flag(target.value.building, IF_GOLD)) {
+    if (!target.is_unit && improvement_has_flag(target.value, IF_GOLD)) {
       my_snprintf(buf[3], column_size, _("%d/turn"),
 		  MAX(0, pcity->surplus[O_SHIELD]));
     } else {
@@ -370,7 +362,7 @@ void get_city_dialog_production_row(char *buf[], size_t column_size,
       if (turns < FC_INFINITY) {
 	my_snprintf(buf[3], column_size, "%d", turns);
       } else {
-	my_snprintf(buf[3], column_size, _("never"));
+	my_snprintf(buf[3], column_size, "%s", _("never"));
       }
     }
   } else {
@@ -568,9 +560,9 @@ void city_rotate_specialist(struct city *pcity, int citizen_index)
   /* Loop through all specialists in order until we find a usable one
    * (or run out of choices). */
   to = from;
-  assert(to >= 0 && to < specialist_count());
+  assert(to >= 0 && to < SP_COUNT);
   do {
-    to = (to + 1) % specialist_count();
+    to = (to + 1) % SP_COUNT;
   } while (to != from && !city_can_use_specialist(pcity, to));
 
   if (from != to) {
@@ -602,11 +594,10 @@ void activate_all_units(struct tile *ptile)
 /**************************************************************************
   Change the production of a given city.  Return the request ID.
 **************************************************************************/
-int city_change_production(struct city *pcity, struct universal target)
+int city_change_production(struct city *pcity, struct city_production target)
 {
   return dsend_packet_city_change(&aconnection, pcity->id,
-				  target.kind,
-				  universal_number(&target));
+				  target.value, target.is_unit);
 }
 
 /**************************************************************************
@@ -628,61 +619,6 @@ int city_set_worklist(struct city *pcity, struct worklist *pworklist)
 
 
 /**************************************************************************
-  Commit the changes to the worklist for the city.
-**************************************************************************/
-void city_worklist_commit(struct city *pcity, struct worklist *pwl)
-{
-  int k;
-
-  /* Update the worklist.  Remember, though -- the current build
-     target really isn't in the worklist; don't send it to the server
-     as part of the worklist.  Of course, we have to search through
-     the current worklist to find the first _now_available_ build
-     target (to cope with players who try mean things like adding a
-     Battleship to a city worklist when the player doesn't even yet
-     have the Map Making tech).  */
-
-  for (k = 0; k < MAX_LEN_WORKLIST; k++) {
-    int same_as_current_build;
-    struct universal target;
-
-    if (!worklist_peek_ith(pwl, &target, k))
-      break;
-
-    same_as_current_build = are_universals_equal(&pcity->production, &target);
-
-    /* Very special case: If we are currently building a wonder we
-       allow the construction to continue, even if we the wonder is
-       finished elsewhere, ie unbuildable. */
-    if (k == 0
-     && VUT_IMPROVEMENT == target.kind
-     && is_wonder(target.value.building)
-     && same_as_current_build) {
-      worklist_remove(pwl, k);
-      break;
-    }
-
-    /* If it can be built... */
-    if (can_city_build_now(pcity, target)) {
-      /* ...but we're not yet building it, then switch. */
-      if (!same_as_current_build) {
-        /* Change the current target */
-	city_change_production(pcity, target);
-      }
-
-      /* This item is now (and may have always been) the current
-         build target.  Drop it out of the worklist. */
-      worklist_remove(pwl, k);
-      break;
-    }
-  }
-
-  /* Send the rest of the worklist on its way. */
-  city_set_worklist(pcity, pwl);
-}
-
-
-/**************************************************************************
   Insert an item into the city's queue.  This function will send new
   production requests to the server but will NOT send the new worklist
   to the server - the caller should call city_set_worklist() if the
@@ -691,13 +627,17 @@ void city_worklist_commit(struct city *pcity, struct worklist *pwl)
   Note that the queue DOES include the current production.
 **************************************************************************/
 static bool base_city_queue_insert(struct city *pcity, int position,
-				   struct universal item)
+				   struct city_production item)
 {
   if (position == 0) {
-    struct universal old = pcity->production;
+    struct city_production old = pcity->production;
 
     /* Insert as current production. */
-    if (!can_city_build_direct(pcity, item)) {
+    if (item.is_unit
+	&& !can_build_unit_direct(pcity, utype_by_number(item.value))) {
+      return FALSE;
+    }
+    if (!item.is_unit && !can_build_improvement_direct(pcity, item.value)) {
       return FALSE;
     }
 
@@ -709,7 +649,12 @@ static bool base_city_queue_insert(struct city *pcity, int position,
   } else if (position >= 1
 	     && position <= worklist_length(&pcity->worklist)) {
     /* Insert into middle. */
-    if (!can_city_build_later(pcity, item)) {
+    if (item.is_unit
+	&& !can_eventually_build_unit(pcity, utype_by_number(item.value))) {
+      return FALSE;
+    }
+    if (!item.is_unit
+	&& !can_eventually_build_improvement(pcity, item.value)) {
       return FALSE;
     }
     if (!worklist_insert(&pcity->worklist, item, position - 1)) {
@@ -717,7 +662,12 @@ static bool base_city_queue_insert(struct city *pcity, int position,
     }
   } else {
     /* Insert at end. */
-    if (!can_city_build_later(pcity, item)) {
+    if (item.is_unit
+	&& !can_eventually_build_unit(pcity, utype_by_number(item.value))) {
+      return FALSE;
+    }
+    if (!item.is_unit
+	&& !can_eventually_build_improvement(pcity, item.value)) {
       return FALSE;
     }
     if (!worklist_append(&pcity->worklist, item)) {
@@ -733,7 +683,7 @@ static bool base_city_queue_insert(struct city *pcity, int position,
   Note that the queue DOES include the current production.
 **************************************************************************/
 bool city_queue_insert(struct city *pcity, int position,
-		       struct universal item)
+		       struct city_production item)
 {
   if (base_city_queue_insert(pcity, position, item)) {
     city_set_worklist(pcity, &pcity->worklist);
@@ -810,7 +760,7 @@ void city_get_queue(struct city *pcity, struct worklist *pqueue)
 bool city_set_queue(struct city *pcity, struct worklist *pqueue)
 {
   struct worklist copy;
-  struct universal target;
+  struct city_production target;
 
   copy_worklist(&copy, pqueue);
 
@@ -820,7 +770,8 @@ bool city_set_queue(struct city *pcity, struct worklist *pqueue)
   if (worklist_peek(&copy, &target)) {
 
     if (!city_can_change_build(pcity)
-        && !are_universals_equal(&pcity->production, &target)) {
+        && (target.value != pcity->production.value
+            || target.is_unit != pcity->production.is_unit)) {
       /* We cannot change production to one from worklist.
        * Do not replace old worklist with new one. */
       return FALSE;
@@ -855,11 +806,9 @@ bool city_can_buy(const struct city *pcity)
 	  && city_owner(pcity) == game.player_ptr
 	  && pcity->turn_founded != game.info.turn
 	  && !pcity->did_buy
-	  && (VUT_UTYPE == pcity->production.kind
-	     || !improvement_has_flag(pcity->production.value.building, IF_GOLD))
-	  && !(VUT_UTYPE == pcity->production.kind 
-	      && pcity->anarchy != 0)
-	  && city_production_buy_gold_cost(pcity) > 0);
+	  && (pcity->production.is_unit || !improvement_has_flag(pcity->production.value, IF_GOLD))
+	  && !(pcity->production.is_unit && pcity->anarchy != 0)
+	  && city_buy_cost(pcity) > 0);
 }
 
 /**************************************************************************

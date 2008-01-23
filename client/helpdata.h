@@ -38,8 +38,7 @@ const struct help_item *get_help_item_spec(const char *name,
 void help_iter_start(void);
 const struct help_item *help_iter_next(void);
 
-char *helptext_building(char *buf, size_t bufsz,
-			struct impr_type *pimprove,
+char *helptext_building(char *buf, size_t bufsz, Impr_type_id which,
 			const char *user_text);
 char *helptext_unit(char *buf, size_t bufsz, struct unit_type *putype,
 		    const char *user_text);

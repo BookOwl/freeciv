@@ -222,8 +222,8 @@ static bool manual_command(void)
       fprintf(doc, "<th>%s<br/>%s</th>", _("Move cost"), _("Defense bonus"));
       fprintf(doc, "<th>%s<br/>%s<br/>%s<br/>%s<br/>(%s)</th>",
               _("Irrigation"), _("Mining"), _("Road"), _("Transform"), _("turns"));
-      fprintf(doc, "<th>%s<br/>%s<br/>%s</th></tr>\n\n",
-              _("Rail"),
+      fprintf(doc, "<th>%s<br/>%s<br/>%s<br/>%s<br/>%s</th></tr>\n\n",
+              _("Airbase"), _("Fortress"), _("Rail"),
               _("Clean pollution"), _("Clean fallout"));
       terrain_type_iterate(pterrain) {
         struct resource **r;
@@ -281,8 +281,8 @@ static bool manual_command(void)
                 terrain_name_translation(pterrain->transform_result),
                 pterrain->transform_time);
 
-        fprintf(doc, "<td align=\"center\">%d / %d / %d</td></tr>\n\n",
-                pterrain->rail_time,
+        fprintf(doc, "<td align=\"center\">%d / %d / %d / %d / %d</td></tr>\n\n",
+                pterrain->airbase_time, pterrain->fortress_time, pterrain->rail_time,
                 pterrain->clean_pollution_time, pterrain->clean_fallout_time);
       } terrain_type_iterate_end;
       fprintf(doc, "</table>\n");
@@ -302,37 +302,37 @@ static bool manual_command(void)
               _("Name"), _("Cost"), _("Upkeep"),
               _("Requirement"), _("Obsolete by"), _("More info"));
 
-      improvement_iterate(pimprove) {
+      impr_type_iterate(id) {
+        struct impr_type *pimpr = improvement_by_number(id);
         char buf[64000];
 
-        if (!valid_improvement(pimprove)
-         || is_great_wonder(pimprove) == (manuals == MANUAL_BUILDINGS)) {
+        if (is_great_wonder(id) == (manuals == MANUAL_BUILDINGS)) {
           continue;
         }
 
-        helptext_building(buf, sizeof(buf), pimprove, NULL);
+        helptext_building(buf, sizeof(buf), id, NULL);
 
         fprintf(doc, "<tr><td>" IMAGE_BEGIN "%s" IMAGE_END "</td><td>%s</td>\n"
                      "<td align=\"center\"><b>%d</b><br/>%d</td>\n<td>",
-                pimprove->graphic_str,
-                improvement_name_translation(pimprove),
-                pimprove->build_cost,
-                pimprove->upkeep);
+                pimpr->graphic_str,
+                improvement_name_translation(id),
+                pimpr->build_cost,
+                pimpr->upkeep);
 
-        requirement_vector_iterate(&pimprove->reqs, req) {
+        requirement_vector_iterate(&pimpr->reqs, req) {
           char text[512];
           fprintf(doc, "%s<br/>",
-                  VUT_NONE != req->source.kind
-                  ? universal_name_translation(&req->source, text, sizeof(text))
+                  req->source.type != REQ_NONE
+                  ? get_req_source_text(&req->source, text, sizeof(text))
                   : _("None"));
         } requirement_vector_iterate_end;
 
         fprintf(doc, "<em>%s</em></td>\n",
-                valid_advance(pimprove->obsolete_by)
-                ? advance_name_translation(pimprove->obsolete_by)
+                tech_exists(pimpr->obsolete_by)
+                ? advance_name_translation(pimpr->obsolete_by)
                 : _("None"));
         fprintf(doc, "<td>%s</td>\n</tr>\n\n", buf);
-      } improvement_iterate_end;
+      } impr_type_iterate_end;
       break;
 
     case MANUAL_COUNT:

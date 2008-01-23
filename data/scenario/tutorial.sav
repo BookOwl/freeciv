@@ -87,7 +87,7 @@ view.  This display shows some useful information about the city.\n\
 The flag and background color indicate what civilization the city\n\
 belongs to (this will be useful when you meet other civilizations).\n\
 The top row of the bar also shows the name and size of the city, and\n\
-will show one or more stars to indicate if there are units in the\n\
+will show one or more starts to indicate if there are units in the\n\
 city.  The bottom row shows what the city is building, and how long it\n\
 will take; it also shows how long the city will take to grow to the\n\
 next largest size."))
@@ -95,7 +95,7 @@ next largest size."))
       notify.event(city.owner, city.tile, E.TUTORIAL,
 _("As the number of cities in your empire grows, it becomes harder to\n\
 manage individual cities.  This is where the city report becomes\n\
-useful.  Press F4 to bring it up.  This report shows a list of cities\n\
+useful.  Press F1 to bring it up.  This report shows a list of cities\n\
 with various statistics about each.  Play around with it a bit if you\n\
 like (return to the map view by clicking on the Map tab).  With a bit\n\
 of practice it is possible to control almost every aspect of the cities\n\
@@ -227,7 +227,7 @@ already on the map view that shows which tiles are covered by your\n\
 existing cities.  Generally when building new cities you want to make\n\
 sure that all tiles are covered by at least one city, but after that\n\
 it is best that your cities overlap as little as possible.  Spreading\n\
-out cities properly gives each city access to more resources, allowing\n\
+out cities properly gives each city access to more resrouces, allowing\n\
 them to grow to larger sizes."))
     end
     settlersbuilt = settlersbuilt + 1
@@ -279,7 +279,7 @@ notify.event(city.owner, city.tile, E.TUTORIAL,
 _("You have built your first military unit!  Military units have two\n\
 basic purposes: attack and defense.  Each unit has an attack strength\n\
 and a defense strength.  While a Warriors is a measly 1/1, a Phalanx\n\
-is a much stronger defender with 2 defense (1/2).  A Catapult is a good\n\
+is a must stronger defender with 2 defense (1/2).  A Catapult is a good\n\
 attacking unit because it has 6 attack (6/1).\n\
 \n\
 Usually it is a good idea to keep one or two defenders in each city.\n\
@@ -344,7 +344,7 @@ government options will give you some choice of whether your\n\
 civilization is to be a peaceful trading nation or a conquering\n\
 juggernaut.  Each has advantages.\n\
 \n\
-For now, you probably want to switch straight into Republic.  In the\n\
+For now, you probably want to switch staight into Republic.  In the\n\
 Government menu, go to the Change Government submenu and choose\n\
 Republic.  Yes you want a revolution!  Changing governments means\n\
 going through a few turns of anarchy, so it is not without cost.\n\
@@ -363,7 +363,7 @@ function hut_entered_callback(unit)
   if not hutmsg then
     notify.event(unit.owner, unit.tile, E.TUTORIAL,
 _("Your unit has found a Hut.  These are small villages scattered across\n\
-the landscape.  When a unit enters one, several things may happen.  The\n\
+the landscape.  When a unit enters one several things may happen.  The\n\
 most likely outcome is that you will find resources worth a small\n\
 amount of gold.  However it is also possible to find technologies or\n\
 mercenary units inside a hut.  Some huts contain native settlers\n\

@@ -24,8 +24,6 @@
 #include "astring.h"
 #include "fcintl.h"
 #include "log.h"
-
-#include "game.h"
 #include "government.h"
 #include "map.h"
 #include "mem.h"
@@ -42,7 +40,6 @@
 #include "connectdlg.h"
 #include "control.h"
 #include "dialogs.h"
-#include "editdlg.h"
 #include "finddlg.h"
 #include "gotodlg.h"
 #include "graphics.h"
@@ -103,6 +100,7 @@ enum MenuID {
   MENU_VIEW_SHOW_CITY_NAMES,
   MENU_VIEW_SHOW_CITY_GROWTH_TURNS,
   MENU_VIEW_SHOW_CITY_PRODUCTIONS,
+  MENU_VIEW_SHOW_CITY_WORKERS,
   MENU_VIEW_SHOW_TERRAIN,
   MENU_VIEW_SHOW_COASTLINE,
   MENU_VIEW_SHOW_ROADS_RAILS,
@@ -149,7 +147,6 @@ enum MenuID {
   MENU_ORDER_DIPLOMAT_DLG,
   MENU_ORDER_NUKE,
   MENU_ORDER_SELECT_SAME_TYPE,
-  MENU_ORDER_SELECT_SAME_TYPE_TILE,
   MENU_ORDER_WAIT,
   MENU_ORDER_DONE,
 
@@ -164,11 +161,6 @@ enum MenuID {
   MENU_REPORT_MESSAGES,
   MENU_REPORT_DEMOGRAPHIC,
   MENU_REPORT_SPACESHIP,
- 
-  MENU_EDITOR_TOGGLE,
-  MENU_EDITOR_TOOLS,
-  MENU_EDITOR_RECALCULATE_BORDERS,
-  MENU_EDITOR_REGENERATE_WATER,
 
   MENU_HELP_LANGUAGES,
   MENU_HELP_CONNECTING,
@@ -331,6 +323,9 @@ static void view_menu_callback(gpointer callback_data, guint callback_action,
     if (draw_city_productions ^ GTK_CHECK_MENU_ITEM(widget)->active)
       key_city_productions_toggle();
     break;
+  case MENU_VIEW_SHOW_CITY_WORKERS:
+    key_city_workers();
+    break;
   case MENU_VIEW_SHOW_TERRAIN:
     if (draw_terrain ^ GTK_CHECK_MENU_ITEM(widget)->active) {
       key_terrain_toggle();
@@ -411,9 +406,6 @@ static void orders_menu_callback(gpointer callback_data,
   case MENU_ORDER_SELECT_SAME_TYPE:
     request_unit_select_same_type(get_units_in_focus());
     break;
-  case MENU_ORDER_SELECT_SAME_TYPE_TILE:
-    request_unit_select_same_type_tile(get_units_in_focus());
-    break;
   case MENU_ORDER_BUILD_CITY:
     unit_list_iterate(get_units_in_focus(), punit) {
       /* FIXME: this can provide different actions for different units...
@@ -450,9 +442,7 @@ static void orders_menu_callback(gpointer callback_data,
     unit_list_iterate(get_units_in_focus(), punit) {
       /* FIXME: this can provide different actions for different units...
        * not good! */
-      struct base_type *pbase = get_base_by_gui_type(BASE_GUI_FORTRESS,
-                                                     punit, punit->tile);
-      if (pbase) {
+      if (can_unit_do_activity(punit, ACTIVITY_FORTRESS)) {
 	key_unit_fortress();
       } else {
 	key_unit_fortify();
@@ -603,34 +593,6 @@ static void reports_menu_callback(gpointer callback_data,
   }
 }
 
-static int menu_updating = FALSE;
-
-/****************************************************************************
-  Callback function for when an item is chosen from the "editor" menu.
-****************************************************************************/
-static void editor_menu_callback(gpointer callback_data,
-                                 guint callback_action, GtkWidget *widget)
-{   
-  if (menu_updating) {
-    return;
-  }
-
-  switch(callback_action) {
-  case MENU_EDITOR_TOGGLE:
-    key_editor_toggle();
-    popdown_science_dialog(); /* Unreachbale techs in reqtree on/off */
-    break;
-  case MENU_EDITOR_TOOLS:
-    editdlg_show_tools();
-    break;
-  case MENU_EDITOR_RECALCULATE_BORDERS:
-    key_editor_recalculate_borders();
-    break;
-  case MENU_EDITOR_REGENERATE_WATER:
-    key_editor_regenerate_water();
-    break;
-  }
-}
 
 /****************************************************************
 ...
@@ -739,32 +701,26 @@ static GtkItemFactoryEntry menu_items[]	=
 	game_menu_callback,	MENU_GAME_CLEAR_OUTPUT					},
   { "/" N_("Game") "/" N_("_Chat") "/" N_("_Write Log"),		NULL,
 	game_menu_callback,	MENU_GAME_OUTPUT_LOG					},
-  { "/" N_("Game") "/" N_("_Government"),		NULL,
-	NULL,			0,					"<Branch>"	},
-  { "/" N_("Game") "/" N_("_Government") "/" N_("_Tax Rates"),		"<shift>t",
-	government_menu_callback,	MENU_GOVERNMENT_TAX_RATE			},
-  { "/" N_("Game") "/" N_("_Government") "/" N_("_Revolution..."),	"<shift>r",
-	government_menu_callback,	MENU_GOVERNMENT_REVOLUTION			},
-  { "/" N_("Game") "/" N_("_Government") "/sep1", NULL,
-	NULL,			0,					"<Separator>"	},
-  { "/" N_("Game") "/" N_("_Options"),			NULL,
-	NULL,			0,					"<Branch>"	},
-  { "/" N_("Game") "/" N_("_Options") "/" N_("_Local Client"),		NULL,
+  { "/" N_("Game") "/" N_("Local _Options"),		NULL,
 	game_menu_callback,	MENU_GAME_OPTIONS					},
-  { "/" N_("Game") "/" N_("_Options") "/" N_("_Message"),	NULL,
+  { "/" N_("Game") "/" N_("_Message Options"),		NULL,
 	game_menu_callback,	MENU_GAME_MSG_OPTIONS					},
-  { "/" N_("Game") "/" N_("_Options") "/" N_("_Remote Server"),	NULL,
-	game_menu_callback,	MENU_GAME_SERVER_OPTIONS},
-  { "/" N_("Game") "/" N_("_Options") "/" N_("Save Options _Now"),		NULL,
-	game_menu_callback,	MENU_GAME_SAVE_OPTIONS					},
-  { "/" N_("Game") "/" N_("_Options") "/" N_("Save Options on _Exit"),	NULL,
-	game_menu_callback,	MENU_GAME_SAVE_OPTIONS_ON_EXIT,		"<CheckItem>"	},
-  { "/" N_("Game") "/sep4",				NULL,
+  { "/" N_("Game") "/sep1",				NULL,
 	NULL,			0,					"<Separator>"	},
 #ifdef DEBUG
   { "/" N_("Game") "/" N_("_Reload Tileset"), "<ctrl><alt>r",
     game_menu_callback, MENU_GAME_RELOAD_TILESET },
 #endif
+  { "/" N_("Game") "/" N_("Save Options on _Exit"),	NULL,
+	game_menu_callback,	MENU_GAME_SAVE_OPTIONS_ON_EXIT,		"<CheckItem>"	},
+  { "/" N_("Game") "/" N_("Sa_ve Options"),		NULL,
+	game_menu_callback,	MENU_GAME_SAVE_OPTIONS					},
+  { "/" N_("Game") "/sep2",				NULL,
+	NULL,			0,					"<Separator>"	},
+  { "/" N_("Game") "/" N_("Server O_ptions"),	NULL,
+    game_menu_callback,	MENU_GAME_SERVER_OPTIONS},
+  { "/" N_("Game") "/sep3",				NULL,
+	NULL,			0,					"<Separator>"	},
   { "/" N_("Game") "/" N_("_Save Game"),		NULL,
 	game_menu_callback,	MENU_GAME_SAVE_QUICK, 			"<StockItem>",
 	GTK_STOCK_SAVE									},
@@ -779,26 +735,28 @@ static GtkItemFactoryEntry menu_items[]	=
 	game_menu_callback,	MENU_GAME_QUIT,				"<StockItem>",
 	GTK_STOCK_QUIT									},
 
-  /* was Government menu ... */
-  { "/" N_("_Edit"),					NULL,
+  /* Government menu ... */
+  { "/" N_("Gov_ernment"),					NULL,
 	NULL,			0,					"<Branch>"	},
-  { "/" N_("_Edit") "/tearoff1",			NULL,
+  { "/" N_("Government") "/tearoff1",			NULL,
 	NULL,			0,					"<Tearoff>"	},
-  { "/" N_("_Edit") "/" N_("_Find City"),		"<shift>f",
-	government_menu_callback,	MENU_GOVERNMENT_FIND_CITY			},
-  { "/" N_("_Edit") "/" N_("_Worklists"),		"<control>l",
-	government_menu_callback,	MENU_GOVERNMENT_WORKLISTS			},
-  { "/" N_("_Edit") "/sep1",				NULL,
+  { "/" N_("Government") "/" N_("_Tax Rates"),		"<shift>t",
+	government_menu_callback,	MENU_GOVERNMENT_TAX_RATE			},
+  { "/" N_("Government") "/sep1",				NULL,
 	NULL,			0,					"<Separator>"	},
-  /* was Editor menu */
-  { "/" N_("_Edit") "/" N_("Editing _Mode"), NULL,
-	editor_menu_callback, MENU_EDITOR_TOGGLE, "<CheckItem>" },
-  { "/" N_("_Edit") "/" N_("Editing _Tools"), NULL,
-	editor_menu_callback, MENU_EDITOR_TOOLS },
-  { "/" N_("_Edit") "/" N_("Recalculate _Borders"), NULL,
-	editor_menu_callback, MENU_EDITOR_RECALCULATE_BORDERS },
-  { "/" N_("_Edit") "/" N_("Regenerate _Water"), NULL,
-	editor_menu_callback, MENU_EDITOR_REGENERATE_WATER },
+  { "/" N_("Government") "/" N_("_Find City"),		"<shift>f",
+	government_menu_callback,	MENU_GOVERNMENT_FIND_CITY			},
+  { "/" N_("Government") "/" N_("_Worklists"),		"<control>l",
+	government_menu_callback,	MENU_GOVERNMENT_WORKLISTS			},
+  { "/" N_("Government") "/sep2",				NULL,
+	NULL,			0,					"<Separator>"	},
+  { "/" N_("Government") "/" N_("_Change Government"),           NULL,
+	NULL,			0,					"<Branch>"	},
+  { "/" N_("Government") "/" N_("_Change Government") "/" N_("_Revolution..."),
+                                                        "<shift>r",
+	government_menu_callback,	MENU_GOVERNMENT_REVOLUTION			},
+  { "/" N_("_Government") "/" N_("_Change Government") "/sep1", NULL,
+	NULL,			0,					"<Separator>"	},
 
   /* View menu ... */
   { "/" N_("_View"),					NULL,
@@ -814,10 +772,11 @@ static GtkItemFactoryEntry menu_items[]	=
   { "/" N_("View") "/" N_("City _Names"),		"<control>n",
 	view_menu_callback,	MENU_VIEW_SHOW_CITY_NAMES,		"<CheckItem>"	},
   { "/" N_("View") "/" N_("City G_rowth"),		"<control>r",
-	view_menu_callback,	MENU_VIEW_SHOW_CITY_GROWTH_TURNS,
-	"<CheckItem>"	},
+	view_menu_callback,	MENU_VIEW_SHOW_CITY_GROWTH_TURNS,	"<CheckItem>"	},
   { "/" N_("View") "/" N_("City _Productions"),		"<control>p",
 	view_menu_callback,	MENU_VIEW_SHOW_CITY_PRODUCTIONS,	"<CheckItem>"	},
+  { "/" N_("View") "/" N_("Draw city worker map grid"),	"t",
+        view_menu_callback,     MENU_VIEW_SHOW_CITY_WORKERS				},
   { "/" N_("View") "/sep1",				NULL,
 	NULL,			0,					"<Separator>"	},
   { "/" N_("View") "/" N_("Terrain"),                   NULL,
@@ -933,8 +892,6 @@ static GtkItemFactoryEntry menu_items[]	=
 	NULL,			0,					"<Separator>"	},
   { "/" N_("Orders") "/" N_("Select same type"), "y",
     orders_menu_callback, MENU_ORDER_SELECT_SAME_TYPE },
-  { "/" N_("Orders") "/" N_("Select same type in tile"), "<shift>y",
-    orders_menu_callback, MENU_ORDER_SELECT_SAME_TYPE_TILE },
   { "/" N_("Orders") "/" N_("_Wait"),			"w",
 	orders_menu_callback,	MENU_ORDER_WAIT						},
   { "/" N_("Orders") "/" N_("Done"),			"space",
@@ -944,14 +901,14 @@ static GtkItemFactoryEntry menu_items[]	=
 	NULL,			0,					"<Branch>"	},
   { "/" N_("Reports") "/tearoff1",			NULL,
 	NULL,			0,					"<Tearoff>"	},
-  { "/" N_("Reports") "/" N_("_View"),			"F1",
-	reports_menu_callback,	MENU_REPORT_MAP_VIEW					},
+  { "/" N_("Reports") "/" N_("_Cities"),		"F1",
+	reports_menu_callback,	MENU_REPORT_CITIES					},
   { "/" N_("Reports") "/" N_("_Units"),			"F2",
 	reports_menu_callback,	MENU_REPORT_UNITS					},
   { "/" N_("Reports") "/" N_("_Nations"),		"F3",
 	reports_menu_callback,	MENU_REPORT_PLAYERS					},
-  { "/" N_("Reports") "/" N_("_Cities"),		"F4",
-	reports_menu_callback,	MENU_REPORT_CITIES					},
+  { "/" N_("Reports") "/" N_("_View"),			"F4",
+	reports_menu_callback,	MENU_REPORT_MAP_VIEW					},
   { "/" N_("Reports") "/" N_("_Economy"),		"F5",
 	reports_menu_callback,	MENU_REPORT_ECONOMY					},
   { "/" N_("Reports") "/" N_("_Research"),		"F6",
@@ -1244,7 +1201,7 @@ static const char *get_tile_change_menu_text(struct tile *ptile,
   struct tile newtile = *ptile;
 
   tile_apply_activity(&newtile, activity);
-  return tile_get_info_text(&newtile, 0);
+  return tile_get_info_text(&newtile);
 }
 
 /****************************************************************
@@ -1258,10 +1215,7 @@ void update_menus(void)
     return;
   }
 
-  menus_set_active("<main>/_Game/_Options/Save Options on _Exit",
-		   save_options_on_exit);
-  menus_set_sensitive("<main>/_Game/_Options/_Remote Server", 
-		      aconnection.established);
+  menus_set_active("<main>/_Game/Save Options on _Exit", save_options_on_exit);
 
   menus_set_sensitive("<main>/_Game/Save Game _As...",
 		      can_client_access_hack()
@@ -1269,17 +1223,18 @@ void update_menus(void)
   menus_set_sensitive("<main>/_Game/_Save Game",
 		      can_client_access_hack()
 		      && C_S_RUNNING <= client_state());
-  menus_set_sensitive("<main>/_Game/_Leave",
+  menus_set_sensitive("<main>/_Game/Server O_ptions", 
 		      aconnection.established);
+  menus_set_sensitive("<main>/_Game/L_eave", aconnection.established);
 
   if (!can_client_change_view()) {
-    menus_set_sensitive("<main>/_Edit", FALSE);
+    menus_set_sensitive("<main>/_Reports", FALSE);
+    menus_set_sensitive("<main>/_Government", FALSE);
     menus_set_sensitive("<main>/_View", FALSE);
     menus_set_sensitive("<main>/_Orders", FALSE);
-    menus_set_sensitive("<main>/_Reports", FALSE);
   } else {
     const char *path =
-      menu_path_remove_uline("<main>/_Game/_Government");
+      menu_path_remove_uline("<main>/_Government/_Change Government");
     GtkWidget *parent = gtk_item_factory_get_widget(item_factory, path);
     bool attached_to_player = (game.player_ptr != NULL);
 
@@ -1324,31 +1279,17 @@ void update_menus(void)
     }
 
     menus_set_sensitive("<main>/_Reports", TRUE);
-    menus_set_sensitive("<main>/_Edit", TRUE);
+    menus_set_sensitive("<main>/_Government", TRUE);
     menus_set_sensitive("<main>/_View", TRUE);
     menus_set_sensitive("<main>/_Orders", can_client_issue_orders());
 
-    menus_set_sensitive("<main>/_Game/_Government",
-			can_client_issue_orders());
-    menus_set_sensitive("<main>/_Game/_Government/Tax Rates",
+    menus_set_sensitive("<main>/_Government/_Tax Rates",
 			game.info.changable_tax
                         && can_client_issue_orders());
-
-    menus_set_sensitive("<main>/_Edit/Worklists",
+    menus_set_sensitive("<main>/_Government/_Worklists",
 			can_client_issue_orders());
-
-    menu_updating = TRUE;
-
-    menus_set_active("<main>/_Edit/Editing _Mode",
-		     can_conn_enable_editing(&aconnection));
-    menus_set_sensitive("<main>/_Edit/Editing _Tools",
-			can_conn_edit(&aconnection));
-    menus_set_sensitive("<main>/_Edit/Recalculate _Borders",
-			can_conn_edit(&aconnection));
-    menus_set_sensitive("<main>/_Edit/Regenerate _Water",
-			can_conn_edit(&aconnection));
-
-    menu_updating = FALSE;
+    menus_set_sensitive("<main>/_Government/_Change Government",
+			can_client_issue_orders());
 
     /* If the client is not attached to a player these reports are
      * disabled. */
@@ -1422,11 +1363,11 @@ void update_menus(void)
       menus_set_sensitive("<main>/_Orders/Transf_orm Terrain",
 			  can_units_do_activity(punits, ACTIVITY_TRANSFORM));
       menus_set_sensitive("<main>/_Orders/Build _Fortress",
-                          (can_units_do_base_gui(punits, BASE_GUI_FORTRESS)
+                          (can_units_do_activity(punits, ACTIVITY_FORTRESS)
                            || can_units_do_activity(punits,
 						    ACTIVITY_FORTIFYING)));
       menus_set_sensitive("<main>/_Orders/Build Airbas_e",
-			  can_units_do_base_gui(punits, BASE_GUI_AIRBASE));
+			  can_units_do_activity(punits, ACTIVITY_AIRBASE));
       menus_set_sensitive("<main>/_Orders/Clean _Pollution",
                           (can_units_do_activity(punits, ACTIVITY_POLLUTION)
                            || can_units_do(punits, can_unit_paradrop)));
@@ -1475,7 +1416,7 @@ void update_menus(void)
         /* FIXME: this overloading doesn't work well with multiple focus
          * units. */
         unit_list_iterate(punits, punit) {
-          if (tile_city(punit->tile)) {
+          if (punit->tile->city) {
             city_on_tile = TRUE;
             break;
           }
@@ -1518,7 +1459,7 @@ void update_menus(void)
       if (unit_list_size(punits) == 1) {
 	struct unit *punit = unit_list_get(punits, 0);
 
-	pterrain = tile_terrain(punit->tile);
+	pterrain = punit->tile->terrain;
 	if (pterrain->irrigation_result != T_NONE
 	    && pterrain->irrigation_result != pterrain) {
 	  my_snprintf(irrtext, sizeof(irrtext), irrfmt,

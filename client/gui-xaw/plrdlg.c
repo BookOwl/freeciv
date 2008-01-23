@@ -303,29 +303,24 @@ void players_list_callback(Widget w, XtPointer client_data,
 
   XtSetSensitive(players_meet_command, FALSE);
   XtSetSensitive(players_int_command, FALSE);
-  if (ret->list_index != XAW_LIST_NONE) {
-    struct player *pplayer = 
-      player_by_number(list_index_to_player_index[ret->list_index]);
+  if(ret->list_index!=XAW_LIST_NONE) {
+    struct player *pplayer = get_player(list_index_to_player_index[ret->list_index]);
 
-    if (pplayer->spaceship.state != SSHIP_NONE)
+    if(pplayer->spaceship.state != SSHIP_NONE)
       XtSetSensitive(players_sship_command, TRUE);
     else
       XtSetSensitive(players_sship_command, FALSE);
 
-    if (pplayer->is_alive && game.player_ptr) {
+    if(pplayer->is_alive) {
       XtSetSensitive(players_war_command,
 		     !pplayers_at_war(game.player_ptr, pplayer)
 		     && game.player_ptr != pplayer);
     }
 
-    if (game.player_ptr) {
-      XtSetSensitive(players_vision_command,
-		     gives_shared_vision(game.player_ptr, pplayer));
-    }
+    XtSetSensitive(players_vision_command,
+		   gives_shared_vision(game.player_ptr, pplayer));
 
-    if (game.player_ptr) {
-      XtSetSensitive(players_meet_command, can_meet_with_player(pplayer));
-    }
+    XtSetSensitive(players_meet_command, can_meet_with_player(pplayer));
     XtSetSensitive(players_int_command, can_intel_with_player(pplayer));
   }
 }

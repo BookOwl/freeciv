@@ -62,8 +62,7 @@ void establish_new_connection(struct connection *pconn)
   /* send join_reply packet */
   packet.you_can_join = TRUE;
   sz_strlcpy(packet.capability, our_capability);
-  my_snprintf(packet.message, sizeof(packet.message), _("%s Welcome"),
-              pconn->username);
+  sz_strlcpy(packet.message, pconn->username);
   sz_strlcpy(packet.challenge_file, new_challenge_filename(pconn));
   packet.conn_id = pconn->id;
   send_packet_server_join_reply(pconn, &packet);
@@ -94,9 +93,11 @@ void establish_new_connection(struct connection *pconn)
   /* FIXME: this (getting messages about others logging on) should be a 
    * message option for the client with event */
 
-  /* notify the console and other established connections that you're here */
-  freelog(LOG_NORMAL, _("%s has connected from %s."),
-          pconn->username, pconn->addr);
+  /* TRANS: (connection) identifier: ... [network address] */
+  freelog(LOG_NORMAL, _("(%d) %s: connected [%s]"),
+          pconn->id, pconn->username, pconn->addr);
+
+  /* notify the other established connections that you're here */
   conn_list_iterate(game.est_connections, aconn) {
     if (aconn != pconn) {
       notify_conn(aconn->self, NULL, E_CONNECTION,
@@ -121,23 +122,23 @@ void establish_new_connection(struct connection *pconn)
        * See the comment in lost_connection_to_client(). */
       send_packet_freeze_hint(pconn);
       send_all_info(dest);
+      send_game_state(dest, C_S_RUNNING);
       send_diplomatic_meetings(pconn);
       send_packet_thaw_hint(pconn);
       dsend_packet_start_phase(pconn, game.info.phase);
     } else {
-      send_game_info(dest);
       /* send new player connection to everybody */
+      send_game_info(game.est_connections);
       send_player_info_c(NULL, game.est_connections);
       send_conn_info(game.est_connections, dest);
     }
   } else {
-    send_game_info(dest);
-
     if (S_S_INITIAL == server_state() && game.info.is_new_game) {
       if (attach_connection_to_player(pconn, NULL)) {
         sz_strlcpy(pconn->player->name, pconn->username);
 
         /* send new player connection to everybody */
+        send_game_info(game.est_connections);
         send_player_info_c(NULL, game.est_connections);
       } else {
         notify_conn(dest, NULL, E_CONNECTION,
@@ -145,10 +146,12 @@ void establish_new_connection(struct connection *pconn)
         freelog(LOG_VERBOSE, "%s is not attached to a player", pconn->username);
 
         /* send old player connections to self */
+        send_game_info(dest);
         send_player_info_c(NULL, dest);
       }
     } else {
       /* send old player connections to self */
+      send_game_info(dest);
       send_player_info_c(NULL, dest);
     }
     send_conn_info(game.est_connections, dest);
@@ -200,70 +203,82 @@ void establish_new_connection(struct connection *pconn)
 /**************************************************************************
   send the rejection packet to the client.
 **************************************************************************/
-void reject_new_connection(const char *msg, struct connection *pconn)
+void reject_new_connection(struct connection *pconn, const char *message)
 {
   struct packet_server_join_reply packet;
 
   /* zero out the password */
   memset(pconn->server.password, 0, sizeof(pconn->server.password));
 
+  /* now send join_reply packet */
+  memset(&packet, 0, sizeof(packet));
   packet.you_can_join = FALSE;
+  sz_strlcpy(packet.message, message);
   sz_strlcpy(packet.capability, our_capability);
-  sz_strlcpy(packet.message, msg);
   packet.challenge_file[0] = '\0';
   packet.conn_id = -1;
+
   send_packet_server_join_reply(pconn, &packet);
-  freelog(LOG_NORMAL, _("Client rejected: %s."), conn_description(pconn));
   flush_connection_send_buffer_all(pconn);
 }
 
 /**************************************************************************
- Returns FALSE if the clients gets rejected and the connection should be
- closed. Returns TRUE if the client get accepted.
+ Returns FALSE when the clients are rejected and the connection should be
+ closed. Returns TRUE otherwise.
 **************************************************************************/
-bool handle_login_request(struct connection *pconn, 
-                          struct packet_server_join_req *req)
+bool server_join_request(struct connection *pconn, void *packet)
 {
-  char msg[MAX_LEN_MSG];
-  
-  freelog(LOG_NORMAL, _("Connection request from %s from %s"),
-          req->username, pconn->addr);
-  
-  /* print server and client capabilities to console */
-  freelog(LOG_NORMAL, _("%s has client version %d.%d.%d%s"),
-          pconn->username, req->major_version, req->minor_version,
-          req->patch_version, req->version_label);
-  freelog(LOG_VERBOSE, "Client caps: %s", req->capability);
-  freelog(LOG_VERBOSE, "Server caps: %s", our_capability);
-  sz_strlcpy(pconn->capability, req->capability);
-  
+  char username[MAX_LEN_NAME];
+#define req ((struct packet_server_join_req *)packet)
+
+  /* Never assume network data is valid and printable! */
+  sz_strlcpy(username,
+             is_valid_username(req->username)
+             ? req->username
+             : "?");
+  /* TRANS: (connection) identifier: ... [network address] */
+  freelog(LOG_NORMAL, _("(%d) %s: connection request [%s]"),
+          pconn->id,
+          username,
+          pconn->addr);
+
+  /* log client and server capabilities */
+  freelog(LOG_VERBOSE, "(%d) %s: client version %d.%d.%d%s",
+          pconn->id,
+          username,
+          req->major_version,
+          req->minor_version,
+          req->patch_version,
+          ('\0' == req->version_label[0] || is_ascii_name(req->version_label))
+          ? req->version_label
+          : "?");
+
+  sz_strlcpy(pconn->capability,
+             ('\0' == req->capability[0] || is_ascii_name(req->capability))
+             ? req->capability
+             : "?");
+  freelog(LOG_VERBOSE, "Client: %s", pconn->capability);
+  freelog(LOG_VERBOSE, "Server: %s", our_capability);
+
   /* Make sure the server has every capability the client needs */
-  if (!has_capabilities(our_capability, req->capability)) {
-    my_snprintf(msg, sizeof(msg),
-                _("The client is missing a capability that this server needs.\n"
-                   "Server version: %d.%d.%d%s Client version: %d.%d.%d%s."
-                   "  Upgrading may help!"),
-                MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION, VERSION_LABEL,
-                req->major_version, req->minor_version,
-                req->patch_version, req->version_label);
-    reject_new_connection(msg, pconn);
-    freelog(LOG_NORMAL, _("%s was rejected: Mismatched capabilities."),
-            req->username);
+  if (!has_capabilities(our_capability, pconn->capability)) {
+    reject_new_connection(pconn,
+                          N_("The client is missing a capability"
+                             " that this server needs."));
+    freelog(LOG_NORMAL, _("(%d) %s rejected: mismatched capabilities!"),
+            pconn->id,
+            username);
     return FALSE;
   }
 
   /* Make sure the client has every capability the server needs */
-  if (!has_capabilities(req->capability, our_capability)) {
-    my_snprintf(msg, sizeof(msg),
-                _("The server is missing a capability that the client needs.\n"
-                   "Server version: %d.%d.%d%s Client version: %d.%d.%d%s."
-                   "  Upgrading may help!"),
-                MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION, VERSION_LABEL,
-                req->major_version, req->minor_version,
-                req->patch_version, req->version_label);
-    reject_new_connection(msg, pconn);
-    freelog(LOG_NORMAL, _("%s was rejected: Mismatched capabilities."),
-            req->username);
+  if (!has_capabilities(pconn->capability, our_capability)) {
+    reject_new_connection(pconn,
+                          N_("This server is missing a capability"
+                             " that the client needs."));
+    freelog(LOG_NORMAL, _("(%d) %s rejected: mismatched capabilities!"),
+            pconn->id,
+            username);
     return FALSE;
   }
 
@@ -271,21 +286,26 @@ bool handle_login_request(struct connection *pconn,
 
   /* Name-sanity check: could add more checks? */
   if (!is_valid_username(req->username)) {
-    my_snprintf(msg, sizeof(msg), _("Invalid username '%s'"), req->username);
-    reject_new_connection(msg, pconn);
-    freelog(LOG_NORMAL, _("%s was rejected: Invalid name [%s]."),
-            req->username, pconn->addr);
+    reject_new_connection(pconn,
+                          N_("The username is invalid!"));
+    /* TRANS: (connection) identifier: ... [network address] */
+    freelog(LOG_NORMAL, _("(%d) %s rejected: invalid username [%s]"),
+            pconn->id,
+            username,
+            pconn->addr);
     return FALSE;
   } 
 
   /* don't allow duplicate logins */
   conn_list_iterate(game.all_connections, aconn) {
     if (mystrcasecmp(req->username, aconn->username) == 0) { 
-      my_snprintf(msg, sizeof(msg), _("'%s' already connected."), 
-                  req->username);
-      reject_new_connection(msg, pconn);
-      freelog(LOG_NORMAL, _("%s was rejected: Duplicate login name [%s]."),
-              req->username, pconn->addr);
+      reject_new_connection(pconn,
+                            N_("Your username is already connected!"));
+      /* TRANS: (connection) identifier: ... [network address] */
+      freelog(LOG_NORMAL, _("(%d) %s rejected: duplicate username [%s]"),
+              pconn->id,
+              username,
+              pconn->addr);
       return FALSE;
     }
   } conn_list_iterate_end;
@@ -369,7 +389,7 @@ static void package_conn_info(struct connection *pconn,
   packet->id           = pconn->id;
   packet->used         = pconn->used;
   packet->established  = pconn->established;
-  packet->player_num   = pconn->player ? player_number(pconn->player) : -1;
+  packet->player_num   = pconn->player ? pconn->player->player_no : -1;
   packet->observer     = pconn->observer;
   packet->access_level = pconn->access_level;
 
@@ -440,8 +460,8 @@ bool attach_connection_to_player(struct connection *pconn,
     } else {
       pplayer = &game.players[game.info.nplayers];
       server_player_init(pplayer, FALSE, TRUE);
-
-      dlsend_packet_player_control(game.est_connections, ++game.info.nplayers);
+      game.info.nplayers++;
+      send_game_info(game.est_connections);
     }
   }
 

@@ -14,8 +14,12 @@
 #define FC__SRV_MAIN_H
 
 #include "fc_types.h"
+#include "game.h"
+#include "packets.h"
 
-struct conn_list;
+struct connection;
+
+BV_DEFINE(bv_draw, MAX_NUM_PLAYERS);
 
 struct server_arguments {
   /* metaserver information */
@@ -48,22 +52,6 @@ struct server_arguments {
   bool auth_allow_newusers;     /* defaults to TRUE */
 };
 
-/* used in savegame values */
-enum server_states { 
-  S_S_INITIAL = 0, 
-  S_S_GENERATING_WAITING = 1,
-  S_S_RUNNING = 2,
-  S_S_OVER = 3,
-};
-
-/* Structure for holding global server data.
- *
- * TODO: Lots more variables could be added here. */
-extern struct civserver {
-  int nbarbarians;
-} server;
-
-
 void init_game_seed(void);
 void srv_init(void);
 void srv_main(void);
@@ -86,7 +74,6 @@ void send_all_info(struct conn_list *dest);
 void dealloc_id(int id);
 void alloc_id(int id);
 int get_next_id_number(void);
-int player_count_no_barbarians(void);
 void server_game_init(void);
 void server_game_free(void);
 void aifill(int amount);

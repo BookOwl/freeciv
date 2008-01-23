@@ -1,6 +1,6 @@
 [nation_turk]
 
-name=_("Turkish")
+name=_("Turk")
 plural=_("?plural:Turks")
 groups="Modern", "Asian"
 legend=_("Modern Turkey is the successor state of the Ottoman Empire, which\

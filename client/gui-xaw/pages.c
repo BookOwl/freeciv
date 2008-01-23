@@ -227,7 +227,7 @@ void update_start_page(void)
 		  is_ready ? " Yes " : " No  ",
 		  leader,
 		  nation,
-		  player_number(pplayer));
+		  pplayer->player_no);
 
       namelist_ptrs[j]=namelist_text[j];
       j++;
