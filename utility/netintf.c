@@ -50,7 +50,6 @@
 #include <windows.h>	/* GetTempPath */
 #endif
 
-#include "fcintl.h"
 #include "log.h"
 #include "shared.h"		/* TRUE, FALSE */
 #include "support.h"
@@ -76,16 +75,12 @@ static void set_socket_errno(void)
       errno = WSAGetLastError();
       return;
     default:
-      freelog(LOG_ERROR,
-              "Missing errno mapping for Winsock error #%d.",
-              WSAGetLastError());
-      freelog(LOG_ERROR,
-              /* TRANS: No full stop after the URL, could cause confusion. */
-              _("Please report this message at %s"),
-              BUG_URL);
+      freelog(LOG_ERROR, "Missing errno mapping for Winsock error #%d. "
+                         "Please report this message at %s.",
+                         WSAGetLastError(), BUG_URL);
   }
 }
-#endif /* HAVE_WINSOCK */
+#endif
 
 /***************************************************************
   Connect a socket to an address

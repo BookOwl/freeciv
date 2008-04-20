@@ -68,9 +68,33 @@ bool is_land_barbarian(struct player *pplayer)
 /**************************************************************************
   Is player a sea barbarian?
 **************************************************************************/
-bool is_sea_barbarian(struct player *pplayer)
+static bool is_sea_barbarian(struct player *pplayer)
 {
   return (pplayer->ai.barbarian_type == SEA_BARBARIAN);
+}
+
+/****************************************************************************
+  Return an available barbarian nation.  This simply returns the first
+  available nation, or the first nation already in use by another barbarian
+  player.
+****************************************************************************/
+struct nation_type *pick_barbarian_nation(void)
+{
+  nations_iterate(pnation) {
+    if (is_nation_barbarian(pnation) && !pnation->player) {
+      return pnation;
+    }
+  } nations_iterate_end;
+
+  players_iterate(pplayer) {
+    if (is_barbarian(pplayer)) {
+      assert(is_nation_barbarian(nation_of_player(pplayer)));
+      return nation_of_player(pplayer);
+    }
+  } players_iterate_end;
+
+  assert(0);
+  return NO_NATION_SELECTED;
 }
 
 /**************************************************************************
@@ -80,15 +104,15 @@ bool is_sea_barbarian(struct player *pplayer)
 
   Dead barbarians forget the map and lose the money.
 **************************************************************************/
-static struct player *create_barbarian_player(enum barbarian_type type)
+static struct player *create_barbarian_player(bool land)
 {
+  int newplayer = game.info.nplayers;
   struct player *barbarians;
   struct nation_type *nation;
-  int newplayer = player_count();
 
   players_iterate(barbarians) {
-    if ((type == LAND_BARBARIAN && is_land_barbarian(barbarians))
-        || (type == SEA_BARBARIAN && is_sea_barbarian(barbarians))) {
+    if ((land && is_land_barbarian(barbarians))
+        || (!land && is_sea_barbarian(barbarians))) {
       if (!barbarians->is_alive) {
         barbarians->economic.gold = 0;
         barbarians->is_alive = TRUE;
@@ -109,19 +133,20 @@ static struct player *create_barbarian_player(enum barbarian_type type)
     die("Too many players in server/barbarian.c");
   }
 
+  nation = pick_barbarian_nation();
+
   barbarians = &game.players[newplayer];
 
   /* make a new player */
 
   server_player_init(barbarians, TRUE, TRUE);
 
-  nation = pick_a_nation(NULL, FALSE, TRUE, type);
   player_set_nation(barbarians, nation);
   pick_random_player_name(nation, barbarians->name);
 
-  server.nbarbarians++;
-  dlsend_packet_player_control(game.est_connections,
-                               (game.info.max_players = ++game.info.nplayers));
+  game.info.nplayers++;
+  game.info.nbarbarians++;
+  game.info.max_players = game.info.nplayers;
 
   sz_strlcpy(barbarians->username, ANON_USER_NAME);
   barbarians->is_connected = FALSE;
@@ -134,7 +159,11 @@ static struct player *create_barbarian_player(enum barbarian_type type)
 
   /* Do the ai */
   barbarians->ai.control = TRUE;
-  barbarians->ai.barbarian_type = type;
+  if (land) {
+    barbarians->ai.barbarian_type = LAND_BARBARIAN;
+  } else {
+    barbarians->ai.barbarian_type = SEA_BARBARIAN;
+  }
   set_ai_level_directer(barbarians, game.info.skill_level);
   init_tech(barbarians);
   give_initial_techs(barbarians);
@@ -156,6 +185,7 @@ static struct player *create_barbarian_player(enum barbarian_type type)
                 nation_plural_for_player(barbarians),
                 player_name(barbarians));
 
+  send_game_info(NULL);
   send_player_info(barbarians, NULL);
 
   return barbarians;
@@ -166,7 +196,7 @@ static struct player *create_barbarian_player(enum barbarian_type type)
 **************************************************************************/
 static bool is_free_land(struct tile *ptile, struct player *who)
 {
-  return (!is_ocean_tile(ptile)
+  return (!is_ocean(tile_get_terrain(ptile))
 	  && !is_non_allied_unit_tile((ptile), who));
 }
 
@@ -175,7 +205,7 @@ static bool is_free_land(struct tile *ptile, struct player *who)
 **************************************************************************/
 static bool is_free_sea(struct tile *ptile, struct player *who)
 {
-  return (is_ocean_tile(ptile)
+  return (is_ocean(tile_get_terrain(ptile))
 	  && !is_non_allied_unit_tile((ptile), who));
 }
 
@@ -206,7 +236,7 @@ bool unleash_barbarians(struct tile *ptile)
     return FALSE;
   }
 
-  barbarians = create_barbarian_player(LAND_BARBARIAN);
+  barbarians = create_barbarian_player(TRUE);
   if (!barbarians) {
     return FALSE;
   }
@@ -234,7 +264,7 @@ bool unleash_barbarians(struct tile *ptile)
 	  do {
 	    utile = rand_neighbour(ptile);
 	  } while (!is_free_land(utile, barbarians));
-        } while (!unit_move_handling(punit2, utile, TRUE, FALSE));
+        } while (!handle_unit_move_request(punit2, utile, TRUE, FALSE));
         freelog(LOG_DEBUG, "Moved barbarian unit from %d %d to %d, %d", 
                 ptile->x, ptile->y, utile->x, utile->y);
       }
@@ -264,7 +294,7 @@ bool unleash_barbarians(struct tile *ptile)
 	      break;
 	    }
           }
-          (void) unit_move_handling(punit2, utile, TRUE, FALSE);
+          (void) handle_unit_move_request(punit2, utile, TRUE, FALSE);
         }
       } unit_list_iterate_end;
     } else {             /* The village is surrounded! Kill the explorer. */
@@ -293,7 +323,7 @@ bool unleash_barbarians(struct tile *ptile)
 static bool is_near_land(struct tile *tile0)
 {
   square_iterate(tile0, 4, ptile) {
-    if (!is_ocean_tile(ptile)) {
+    if (!is_ocean(tile_get_terrain(ptile))) {
       return TRUE;
     }
   } square_iterate_end;
@@ -348,7 +378,7 @@ static void try_summon_barbarians(void)
    * gameplay. */
   ptile = rand_map_pos();
 
-  if (terrain_has_flag(tile_terrain(ptile), TER_NO_BARBS)) {
+  if (terrain_has_flag(tile_get_terrain(ptile), TER_NO_BARBS)) {
     return;
   }
 
@@ -370,7 +400,7 @@ static void try_summon_barbarians(void)
   /* I think Sea Raiders can come out of unknown sea territory */
   if (!(utile = find_empty_tile_nearby(ptile))
       || (!map_is_known(utile, victim)
-	  && !is_ocean_tile(utile))
+	  && !is_ocean(tile_get_terrain(utile)))
       || !is_near_land(utile)) {
     return;
   }
@@ -390,11 +420,11 @@ static void try_summon_barbarians(void)
     update_tile_knowledge(utile);
   }
 
-  if (!is_ocean_tile(utile)) {
+  if (!is_ocean(tile_get_terrain(utile))) {
     int rand_factor = myrand(3);
 
     /* land (disembark) barbarians */
-    barbarians = create_barbarian_player(LAND_BARBARIAN);
+    barbarians = create_barbarian_player(TRUE);
     if (city_list_size(victim->cities) > UPRISE_CIV_MOST) {
       uprise = 3;
     }
@@ -412,7 +442,7 @@ static void try_summon_barbarians(void)
     struct unit *ptrans;
     struct unit_type *boat;
 
-    barbarians = create_barbarian_player(SEA_BARBARIAN);
+    barbarians = create_barbarian_player(FALSE);
     boat = find_a_unit_type(L_BARBARIAN_BOAT,-1);
     ptrans = create_unit(barbarians, utile, boat, 0, 0, -1);
     cap = get_transporter_capacity(unit_list_get(utile->units, 0));

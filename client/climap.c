@@ -15,6 +15,7 @@
 #include <config.h>
 #endif
 
+#include "game.h"
 #include "map.h"
 #include "shared.h"
 
@@ -34,14 +35,10 @@
 *************************************************************************/
 enum known_type client_tile_get_known(const struct tile *ptile)
 {
-  if (NULL == client.conn.playing) {
-    if (client_is_observer()) {
-      return TILE_KNOWN_SEEN;
-    } else {
-      return TILE_UNKNOWN;
-    }
+  if (!game.player_ptr && client_is_observer()) {
+    return TILE_KNOWN;
   }
-  return tile_get_known(ptile, client.conn.playing);
+  return tile_get_known(ptile, game.player_ptr);
 }
 
 /**************************************************************************

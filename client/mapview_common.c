@@ -895,7 +895,7 @@ void put_one_element(struct canvas *pcanvas, enum mapview_layer layer,
 				ptile, pedge, pcorner,
 				punit, pcity, citymode);
   bool fog = (ptile && draw_fog_of_war
-	      && TILE_KNOWN_UNSEEN == client_tile_get_known(ptile));
+	      && client_tile_get_known(ptile) == TILE_KNOWN_FOGGED);
 
   /*** Draw terrain and specials ***/
   put_drawn_sprites(pcanvas, canvas_x, canvas_y, count, tile_sprs, fog);
@@ -955,18 +955,17 @@ void put_terrain(struct tile *ptile,
 ****************************************************************************/
 void put_unit_city_overlays(struct unit *punit,
 			    struct canvas *pcanvas,
-			    int canvas_x, int canvas_y, int *upkeep_cost,
-                            int happy_cost)
+			    int canvas_x, int canvas_y)
 {
   struct sprite *sprite;
 
-  sprite = get_unit_unhappy_sprite(tileset, punit, happy_cost);
+  sprite = get_unit_unhappy_sprite(tileset, punit);
   if (sprite) {
     canvas_put_sprite_full(pcanvas, canvas_x, canvas_y, sprite);
   }
 
   output_type_iterate(o) {
-    sprite = get_unit_upkeep_sprite(tileset, o, punit, upkeep_cost);
+    sprite = get_unit_upkeep_sprite(tileset, o, punit);
     if (sprite) {
       canvas_put_sprite_full(pcanvas, canvas_x, canvas_y, sprite);
     }
@@ -1067,7 +1066,7 @@ static void put_one_tile(struct canvas *pcanvas, enum mapview_layer layer,
   if (client_tile_get_known(ptile) != TILE_UNKNOWN) {
     put_one_element(pcanvas, layer, ptile, NULL, NULL,
 		    get_drawable_unit(tileset, ptile, citymode),
-		    tile_city(ptile), canvas_x, canvas_y, citymode);
+		    ptile->city, canvas_x, canvas_y, citymode);
   }
 }
 
@@ -1222,8 +1221,8 @@ static void show_full_citybar(struct canvas *pcanvas,
   const struct citybar_sprites *citybar = get_citybar_sprites(tileset);
   const bool line1 = draw_city_names;
   const bool line2 = ((draw_city_productions || draw_city_growth)
-		      && (NULL == client.conn.playing
-			  || city_owner(pcity) == client.conn.playing));
+		      && (!game.player_ptr
+			  || city_owner(pcity) == game.player_ptr));
   static char name[512], growth[32], prod[512], size[32];
   enum color_std growth_color;
   struct color *owner_color;
@@ -1259,7 +1258,7 @@ static void show_full_citybar(struct canvas *pcanvas,
     get_text_size(&size_rect.w, &size_rect.h, FONT_CITY_SIZE, size);
     get_text_size(&name_rect.w, &name_rect.h, FONT_CITY_NAME, name);
 
-    if (can_player_see_units_in_city(client.conn.playing, pcity)) {
+    if (can_player_see_units_in_city(game.player_ptr, pcity)) {
       int count = unit_list_size(pcity->tile->units);
 
       count = CLIP(0, count, citybar->occupancy.size - 1);
@@ -1439,8 +1438,7 @@ static void show_small_citybar(struct canvas *pcanvas,
     *height += total_height + 3;
   }
   if (draw_city_productions
-      && (NULL == client.conn.playing
-          || city_owner(pcity) == client.conn.playing)) {
+      && (city_owner(pcity) == game.player_ptr || !game.player_ptr)) {
     get_city_mapview_production(pcity, prod, sizeof(prod));
     get_text_size(&prod_rect.w, &prod_rect.h, FONT_CITY_PROD, prod);
 
@@ -1519,9 +1517,9 @@ void show_city_descriptions(int canvas_x, int canvas_y,
     const int canvas_x = gui_x - mapview.gui_x0;
     const int canvas_y = gui_y - mapview.gui_y0;
 
-    if (ptile && tile_city(ptile)) {
+    if (ptile && ptile->city) {
       int width = 0, height = 0;
-      struct city *pcity = tile_city(ptile);
+      struct city *pcity = ptile->city;
 
       show_city_desc(mapview.store, canvas_x, canvas_y,
 		     pcity, &width, &height);
@@ -1820,8 +1818,7 @@ void move_unit_map_canvas(struct unit *punit,
 struct city *find_city_or_settler_near_tile(const struct tile *ptile,
 					    struct unit **punit)
 {
-  struct city *closest_city;
-  struct city *pcity = tile_worked(ptile);
+  struct city *pcity = ptile->worked, *closest_city;
   struct unit *closest_settler = NULL, *best_settler = NULL;
 
   if (punit) {
@@ -1829,8 +1826,7 @@ struct city *find_city_or_settler_near_tile(const struct tile *ptile,
   }
 
   if (pcity) {
-    if (NULL == client.conn.playing
-        || city_owner(pcity) == client.conn.playing) {
+    if (!game.player_ptr || city_owner(pcity) == game.player_ptr) {
       /* rule a */
       return pcity;
     } else {
@@ -1842,19 +1838,20 @@ struct city *find_city_or_settler_near_tile(const struct tile *ptile,
   /* rule e */
   closest_city = NULL;
 
-  city_tile_iterate(ptile, tile1) {
-    pcity = tile_city(tile1);
+  city_map_checked_iterate(ptile, city_x, city_y, tile1) {
+    pcity = tile_get_city(tile1);
     if (pcity
-	&& (NULL == client.conn.playing
-	    || city_owner(pcity) == client.conn.playing)
-	&& city_can_work_tile(pcity, tile1)) {
+	&& (!game.player_ptr || city_owner(pcity) == game.player_ptr)
+	&& get_worker_city(pcity, CITY_MAP_SIZE - 1 - city_x,
+			   CITY_MAP_SIZE - 1 - city_y) == C_TILE_EMPTY) {
       /*
        * Note, we must explicitly check if the tile is workable (with
-       * city_can_work_tile() above), since it is possible that another
-       * city (perhaps an UNSEEN city) may be working it!
+       * get_worker_city(), above) since it is possible that another
+       * city (perhaps an unseen enemy city) may be working it,
+       * causing it to be marked as C_TILE_UNAVAILABLE.
        */
       
-      if (map_deco[tile_index(pcity->tile)].hilite == HILITE_CITY) {
+      if (map_deco[pcity->tile->index].hilite == HILITE_CITY) {
 	/* rule c */
 	return pcity;
       }
@@ -1862,17 +1859,19 @@ struct city *find_city_or_settler_near_tile(const struct tile *ptile,
 	closest_city = pcity;
       }
     }
-  } city_tile_iterate_end;
+  } city_map_checked_iterate_end;
 
   /* rule d */
   if (closest_city || !punit) {
     return closest_city;
   }
 
-  city_tile_iterate(ptile, tile1) {
+  city_map_iterate_outwards(city_x, city_y) {
+    struct tile *tile1 = base_city_map_to_map(ptile, city_x, city_y);;
+
+    if (tile1) {
       unit_list_iterate(tile1->units, psettler) {
-	if ((NULL == client.conn.playing
-	     || unit_owner(psettler) == client.conn.playing)
+	if ((!game.player_ptr || unit_owner(psettler) == game.player_ptr)
 	    && unit_has_type_flag(psettler, F_CITIES)
 	    && city_can_be_built_here(psettler->tile, psettler)) {
 	  if (!closest_settler) {
@@ -1883,7 +1882,8 @@ struct city *find_city_or_settler_near_tile(const struct tile *ptile,
 	  }
 	}
       } unit_list_iterate_end;
-  } city_tile_iterate_end;
+    }
+  } city_map_iterate_outwards_end;
 
   if (best_settler) {
     /* Rule e */
@@ -1912,23 +1912,35 @@ struct city *find_city_near_tile(const struct tile *ptile)
 void get_city_mapview_production(struct city *pcity,
                                  char *buffer, size_t buffer_len)
 {
-  int turns;
-
-  universal_name_translation(&pcity->production, buffer, buffer_len);
-
-  if (city_production_has_flag(pcity, IF_GOLD)) {
-    return;
-  }
-  turns = city_production_turns_to_build(pcity, TRUE);
-
-  if (999 < turns) {
-    cat_snprintf(buffer, buffer_len, " -");
+  int turns = city_turns_to_build(pcity, pcity->production, TRUE);
+				
+  if (pcity->production.is_unit) {
+    struct unit_type *punit_type =
+		utype_by_number(pcity->production.value);
+    if (turns < 999) {
+      my_snprintf(buffer, buffer_len, "%s %d",
+                  utype_name_translation(punit_type),
+                  turns);
+    } else {
+      my_snprintf(buffer, buffer_len, "%s -",
+                  utype_name_translation(punit_type));
+    }
   } else {
-    cat_snprintf(buffer, buffer_len, " %d", turns);
+    if (!pcity->production.is_unit
+	&& improvement_has_flag(pcity->production.value, IF_GOLD)) {
+      my_snprintf(buffer, buffer_len, "%s",
+		  improvement_name_translation(pcity->production.value));
+    } else if (turns < 999) {
+      my_snprintf(buffer, buffer_len, "%s %d",
+		  improvement_name_translation(pcity->production.value),
+		  turns);
+    } else {
+      my_snprintf(buffer, buffer_len, "%s -",
+		  improvement_name_translation(pcity->production.value));
+    }
   }
 }
 
-/***************************************************************************/
 static enum update_type needed_updates = UPDATE_NONE;
 static bool callback_queued = FALSE;
 
@@ -2134,8 +2146,7 @@ void get_city_mapview_name_and_growth(struct city *pcity,
 {
   my_snprintf(name_buffer, name_buffer_len, city_name(pcity));
 
-  if (NULL == client.conn.playing
-      || city_owner(pcity) == client.conn.playing) {
+  if (!game.player_ptr || city_owner(pcity) == game.player_ptr) {
     int turns = city_turns_to_grow(pcity);
 
     if (turns == 0) {
@@ -2245,8 +2256,8 @@ void init_mapview_decorations(void)
 
   map_deco = fc_realloc(map_deco, MAP_INDEX_SIZE * sizeof(*map_deco));
   whole_map_iterate(ptile) {
-    map_deco[tile_index(ptile)].hilite = HILITE_NONE;
-    map_deco[tile_index(ptile)].crosshair = 0;
+    map_deco[ptile->index].hilite = HILITE_NONE;
+    map_deco[ptile->index].crosshair = 0;
   } whole_map_iterate_end;
 }
 

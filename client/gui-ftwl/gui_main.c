@@ -185,9 +185,7 @@ void ui_main(int argc, char *argv[])
 
   while (i < argc) {
     if (is_option("--help", argv[i])) {
-      fc_fprintf(stderr,
-                 "  -d, --dump\t\t%s\n",
-                 _("Enable screen dumper"));
+      fc_fprintf(stderr, _("  -d, --dump\t\tEnable screen dumper\n"));
       if (be_supports_fullscreen()) {
 	fc_fprintf(stderr,
 		   _("  -f, --fullscreen\t"
@@ -204,7 +202,7 @@ void ui_main(int argc, char *argv[])
 		 DEFAULT_THEME);
       exit(EXIT_SUCCESS);
     } else if (is_option("--dump", argv[i])) {
-      freelog(LOG_VERBOSE, "Enable screen dumper");
+      freelog(LOG_NORMAL, "enabling screen dumper");
       sw_set_dump_screen(TRUE);
     } else if (is_option("--fullscreen", argv[i])) {
       fullscreen = TRUE;
@@ -217,13 +215,13 @@ void ui_main(int argc, char *argv[])
       theme = mystrdup(option);
       free(option);
     } else {
-      freelog(LOG_ERROR, _("Unknown option \"%s\""), argv[i]);
+      freelog(LOG_ERROR, "unknown option '%s'", argv[i]);
     }
     i++;
   }
 
   if (sscanf(resolution, "%dx%d", &res.width, &res.height) != 2) {
-    freelog(LOG_ERROR, _("Resolution \"%s\" doesn't parse"), resolution);
+    freelog(LOG_ERROR, "The resolution '%s' doesn't parse", resolution);
   }
   free(resolution);
 

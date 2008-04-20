@@ -19,6 +19,7 @@
 #include <string.h>
 
 #include "fcintl.h"
+#include "game.h"
 #include "map.h"
 #include "mem.h"
 
@@ -76,8 +77,8 @@ void update_meswin_dialog(void)
 
   if (!is_meswin_open() && messages_total > 0
       && !client_is_observer()
-      && NULL != client.conn.playing
-      && !client.conn.playing->ai.control) {
+      && game.player_ptr
+      && !game.player_ptr->ai.control) {
     popup_meswin_dialog(FALSE);
     change = FALSE;
     return;
@@ -143,10 +144,11 @@ void add_notify_window(char *message, struct tile *ptile,
    */
   for (i = 0; i < messages_total; i++) {
     if (messages[i].location_ok) {
-      struct city *pcity = tile_city(messages[i].tile);
+      struct city *pcity = tile_get_city(messages[i].tile);
 
-      messages[i].city_ok =
-        (pcity && can_player_see_city_internals(client.conn.playing, pcity));
+      messages[i].city_ok
+	= (pcity
+	   && can_player_see_city_internals(game.player_ptr, pcity));
     } else {
       messages[i].city_ok = FALSE;
     }
@@ -189,14 +191,14 @@ void meswin_popup_city(int message_index)
 
   if (messages[message_index].city_ok) {
     struct tile *ptile = messages[message_index].tile;
-    struct city *pcity = tile_city(ptile);
+    struct city *pcity = tile_get_city(ptile);
 
     if (center_when_popup_city) {
       center_tile_mapcanvas(ptile);
     }
 
     if (pcity
-	&& can_player_see_units_in_city(client.conn.playing, pcity)) {
+	&& can_player_see_units_in_city(game.player_ptr, pcity)) {
       /* If the event was the city being destroyed, pcity will be NULL
        * and we'd better not try to pop it up.  It's also possible that
        * events will happen on enemy cities; we generally don't want to pop

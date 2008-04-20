@@ -24,7 +24,6 @@
 #include "astring.h"
 #include "capability.h"
 #include "fcintl.h"
-#include "game.h"
 #include "log.h"
 #include "government.h"
 #include "map.h"
@@ -319,13 +318,13 @@ static struct my_menu main_menu[] = {
   {NULL, 0},
 
 
-  {N_("_Edit"),					IDM_SUBMENU},
+  {N_("Gov_ernment"),				IDM_SUBMENU},
   {N_("_Tax Rates")		"\tShift+T",	IDM_GOVERNMENT_TAX_RATE},
   { "", IDM_SEPARATOR},
   {N_("_Find City")		"\tCtl+F",	IDM_GOVERNMENT_FIND_CITY},
   {N_("_Worklists")		"\tCtl+W",	IDM_GOVERNMENT_WORKLISTS},
   { "", IDM_SEPARATOR},
-  {N_("_Government"),				IDM_SUBMENU},
+  {N_("_Change Government"),			IDM_SUBMENU},
   {N_("_Revolution"),				IDM_GOVERNMENT_REVOLUTION},
   {"", IDM_SEPARATOR},
   {NULL, 0},
@@ -605,7 +604,7 @@ void handle_menu(int code)
       popup_find_dialog();
       break;
     case IDM_GOVERNMENT_WORKLISTS:
-      popup_worklists_report();
+      popup_worklists_report(game.player_ptr);
       break;
     case IDM_GOVERNMENT_REVOLUTION:
       popup_revolution_dialog(NULL);
@@ -850,7 +849,7 @@ void handle_menu(int code)
       send_report_request(REPORT_DEMOGRAPHIC);
       break;
     case IDM_REPORTS_SPACESHIP:
-      popup_spaceship_dialog(client.conn.playing);
+      popup_spaceship_dialog(game.player_ptr);
       break;
 
 
@@ -998,7 +997,7 @@ static const char *get_tile_change_menu_text(struct tile *ptile,
   struct tile newtile = *ptile;
 
   tile_apply_activity(&newtile, activity);
-  return tile_get_info_text(ptile, 0);
+  return tile_get_info_text(ptile);
 }
 
 /**************************************************************************
@@ -1020,7 +1019,7 @@ update_menus(void)
   my_enable_menu(menu, IDM_GAME_SERVER_OPTIONS,
 		 C_S_RUNNING <= client_state());
   my_enable_menu(menu, IDM_GAME_DISCONNECT,
-		 client.conn.established);
+		 aconnection.established);
 
   if (!can_client_change_view()) {
 
@@ -1048,10 +1047,10 @@ update_menus(void)
 
     government_iterate(g) {
       if (g != game.government_when_anarchy) {
-	AppendMenu(govts, MF_STRING, id + government_number(g),
+	AppendMenu(govts, MF_STRING, id + g->index,
 		   government_name_translation(g));
-	my_enable_menu(menu, id + government_number(g),
-		       can_change_to_government(client.conn.playing, g)
+	my_enable_menu(menu, id + g->index,
+		       can_change_to_government(game.player_ptr, g)
 		       && can_client_issue_orders());
       }
     } government_iterate_end;
@@ -1076,7 +1075,7 @@ update_menus(void)
 
 
     my_enable_menu(menu, IDM_REPORTS_SPACESHIP,
-		   (SSHIP_NONE != client.conn.playing->spaceship.state));
+		   (game.player_ptr->spaceship.state!=SSHIP_NONE));
 
     my_check_menu(menu, IDM_VIEW_MAP_GRID, draw_map_grid);
     my_enable_menu(menu, IDM_VIEW_NATIONAL_BORDERS, game.info.borders > 0);
@@ -1160,7 +1159,8 @@ update_menus(void)
       my_enable_menu(menu, IDM_ORDERS_HOMECITY,
 		     can_unit_change_homecity(punit));
       my_enable_menu(menu, IDM_ORDERS_LOAD,
-                     find_transporter_for_unit(punit)->id);
+	can_unit_load(punit, find_transporter_for_unit(punit,
+						       punit->tile)));
       my_enable_menu(menu, IDM_ORDERS_UNLOAD,
 	(can_unit_unload(punit, game_find_unit_by_number(punit->transported_by))
 	 && can_unit_exist_at_tile(punit, punit->tile)) 
@@ -1178,7 +1178,8 @@ update_menus(void)
 		     can_unit_do_connect(punit, ACTIVITY_RAILROAD));
       my_enable_menu(menu, IDM_ORDERS_CONNECT_IRRIGATE,
 		     can_unit_do_connect(punit, ACTIVITY_IRRIGATE));
-      my_enable_menu(menu, IDM_ORDERS_RETURN, TRUE);
+      my_enable_menu(menu, IDM_ORDERS_RETURN,
+		     !(is_air_unit(punit) || is_heli_unit(punit)));
       my_enable_menu(menu, IDM_ORDERS_DIPLOMAT_DLG,
 		     is_diplomat_unit(punit)
 		     && diplomat_can_do_action(punit, DIPLOMAT_ANY_ACTION,
@@ -1189,7 +1190,7 @@ update_menus(void)
 	my_rename_menu(menu, IDM_ORDERS_BUILD_CITY, N_("Help Build Wonder")
 		       "\tB");
       } else if (unit_has_type_flag(punit, F_CITIES)) {
-	if (tile_city(punit->tile)) {
+	if (tile_get_city(punit->tile)) {
 	  my_rename_menu(menu, IDM_ORDERS_BUILD_CITY, N_("Add to City")
 			 "\tB");
 	} else {
@@ -1215,7 +1216,7 @@ update_menus(void)
 	my_rename_menu(menu, IDM_ORDERS_ROAD, N_("Build Road") "\tR");
       }
 
-      pterrain = tile_terrain(punit->tile);
+      pterrain = punit->tile->terrain;
       if (pterrain->irrigation_result != T_NONE
 	  && pterrain->irrigation_result != pterrain) {
 	my_snprintf(irrtext, sizeof(irrtext), irrfmt,
@@ -1223,7 +1224,7 @@ update_menus(void)
 					      ACTIVITY_IRRIGATE));
  	sz_strlcat(irrtext, "\tI");
       } else if (tile_has_special(punit->tile, S_IRRIGATION)
-		 && player_knows_techs_with_flag(client.conn.playing,
+		 && player_knows_techs_with_flag(game.player_ptr,
 						 TF_FARMLAND)) {
 	sz_strlcpy(irrtext, N_("Build Farmland") "\tI");
       }

@@ -110,7 +110,7 @@ static void print_landarea_map(struct claim_map *pcmap, int turn)
   if (turn == 0) {
     printf("Player Info...\n");
 
-    for (p = 0; p < player_count(); p++) {
+    for (p = 0; p < game.info.nplayers; p++) {
       printf(".know (%d)\n  ", p);
       WRITE_MAP_DATA("%c",
 		     TEST_BIT(pcmap->claims[map_pos_to_index(x, y)].know,
@@ -150,25 +150,23 @@ static void build_landarea_map(struct claim_map *pcmap)
   /* First calculate claims: which tiles are owned by each player. */
   players_iterate(pplayer) {
     city_list_iterate(pplayer->cities, pcity) {
-      struct tile *pcenter = city_tile(pcity);
-
-      city_tile_iterate(pcenter, tile1) {
-	BV_SET(claims[tile_index(tile1)], player_index(city_owner(pcity)));
-      } city_tile_iterate_end;
+      map_city_radius_iterate(pcity->tile, tile1) {
+	BV_SET(claims[tile1->index], city_owner(pcity)->player_no);
+      } map_city_radius_iterate_end;
     } city_list_iterate_end;
   } players_iterate_end;
 
   whole_map_iterate(ptile) {
     struct player *owner = NULL;
-    bv_player *pclaim = &claims[tile_index(ptile)];
+    bv_player *pclaim = &claims[ptile->index];
 
-    if (is_ocean_tile(ptile)) {
+    if (is_ocean(ptile->terrain)) {
       /* Nothing. */
-    } else if (NULL != tile_city(ptile)) {
-      owner = city_owner(tile_city(ptile));
+    } else if (ptile->city) {
+      owner = city_owner(ptile->city);
       pcmap->player[player_index(owner)].settledarea++;
-    } else if (NULL != tile_worked(ptile)) {
-      owner = city_owner(tile_worked(ptile));
+    } else if (ptile->worked) {
+      owner = city_owner(ptile->worked);
       pcmap->player[player_index(owner)].settledarea++;
     } else if (unit_list_size(ptile->units) > 0) {
       /* Because of allied stacking these calculations are a bit off. */
@@ -287,11 +285,11 @@ void calc_civ_score(struct player *pplayer)
   pplayer->score.landarea = landarea;
   pplayer->score.settledarea = settledarea;
 
-  advance_index_iterate(A_FIRST, i) {
-    if (player_invention_state(pplayer, i) == TECH_KNOWN) {
+  tech_type_iterate(i) {
+    if (i > A_NONE && get_invention(pplayer, i) == TECH_KNOWN) {
       pplayer->score.techs++;
     }
-  } advance_index_iterate_end;
+  } tech_type_iterate_end;
   pplayer->score.techs += get_player_research(pplayer)->future_tech * 5 / 2;
   
   unit_list_iterate(pplayer->units, punit) {
@@ -300,13 +298,13 @@ void calc_civ_score(struct player *pplayer)
     }
   } unit_list_iterate_end
 
-  improvement_iterate(i) {
+  impr_type_iterate(i) {
     if (is_great_wonder(i)
 	&& (pcity = find_city_from_great_wonder(i))
 	&& player_owns_city(pplayer, pcity)) {
       pplayer->score.wonders++;
     }
-  } improvement_iterate_end;
+  } impr_type_iterate_end;
 
   /* How much should a spaceship be worth?
    * This gives 100 points per 10,000 citizens. */
@@ -401,18 +399,16 @@ void save_ppm(void)
     return;
   }
 
-  fprintf(fp, "P3\n# version:2\n# gameid: %s\n", server.game_identifier);
+  fprintf(fp, "P3\n# version:2\n# gameid: %s\n", game.id);
   fprintf(fp, "# An intermediate map from saved Freeciv game %s%+05d\n",
           game.save_name, game.info.year);
 
-  players_iterate(pplayer) {
+  for (i = 0; i < game.info.nplayers; i++) {
+    struct player *pplayer = get_player(i);
     fprintf(fp, "# playerno:%d:color:#%02x%02x%02x:name:\"%s\"\n", 
-            player_number(pplayer),
-            col[player_index(pplayer)][0],
-            col[player_index(pplayer)][1],
-            col[player_index(pplayer)][2],
+            pplayer->player_no, col[i][0], col[i][1], col[i][2],
             player_name(pplayer));
-  } players_iterate_end;
+  }
 
   fprintf(fp, "%d %d\n", map.xsize, map.ysize);
   fprintf(fp, "255\n");
@@ -423,11 +419,11 @@ void save_ppm(void)
        int *color;
 
        /* color for cities first, then units, then land */
-       if (tile_city(ptile)) {
-         color = col[player_index(tile_owner(ptile))];
+       if (ptile->city) {
+         color = col[city_owner(ptile->city)->player_no];
        } else if (unit_list_size(ptile->units) > 0) {
-         color = col[player_index(unit_owner(unit_list_get(ptile->units, 0)))];
-       } else if (is_ocean_tile(ptile)) {
+         color = col[unit_owner(unit_list_get(ptile->units, 0))->player_no];
+       } else if (is_ocean(ptile->terrain)) {
          color = watercol;
        } else {
          color = landcol;

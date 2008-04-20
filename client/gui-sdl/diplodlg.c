@@ -23,10 +23,12 @@
 
 /* common */
 #include "diptreaty.h"
+#include "game.h"
 
 /* client */
 #include "civclient.h"
 #include "climisc.h"
+#include "clinet.h"
 #include "packhand.h"
 
 /* gui-sdl */
@@ -93,8 +95,7 @@ void diplomacy_dialog_done()
 *****************************************************************/
 static struct diplomacy_dialog *get_diplomacy_dialog(int other_player_id)
 {
-  struct player *plr0 = client.conn.playing;
-  struct player *plr1 = player_by_number(other_player_id);
+  struct player *plr0 = game.player_ptr, *plr1 = player_by_number(other_player_id);
 
   dialog_list_iterate(dialog_list, pdialog) {
     if ((pdialog->treaty.plr0 == plr0 && pdialog->treaty.plr1 == plr1) ||
@@ -145,7 +146,7 @@ static int remove_clause_callback(struct widget *pWidget)
       pdialog = get_diplomacy_dialog(pWidget->data.cont->id0);
     }
     
-    dsend_packet_diplomacy_remove_clause_req(&client.conn,
+    dsend_packet_diplomacy_remove_clause_req(&aconnection,
                                              player_number(pdialog->treaty.plr1),
                                              pWidget->data.cont->id0,
                                              (enum clause_type) ((pWidget->data.
@@ -210,7 +211,7 @@ void handle_diplomacy_remove_clause(int counterpart, int giver,
 static int cancel_meeting_callback(struct widget *pWidget)
 {
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
-    dsend_packet_diplomacy_cancel_meeting_req(&client.conn,
+    dsend_packet_diplomacy_cancel_meeting_req(&aconnection,
 					    pWidget->data.cont->id1);
   }
   return -1;
@@ -219,7 +220,7 @@ static int cancel_meeting_callback(struct widget *pWidget)
 static int accept_treaty_callback(struct widget *pWidget)
 {
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
-    dsend_packet_diplomacy_accept_treaty_req(&client.conn,
+    dsend_packet_diplomacy_accept_treaty_req(&aconnection,
 					   pWidget->data.cont->id1);
   }
   return -1;
@@ -250,7 +251,7 @@ static int pact_callback(struct widget *pWidget)
       break;
     }
     
-    dsend_packet_diplomacy_create_clause_req(&client.conn,
+    dsend_packet_diplomacy_create_clause_req(&aconnection,
                                              player_number(pdialog->treaty.plr1),
                                              pWidget->data.cont->id0,
                                              clause_type, 0);
@@ -267,10 +268,27 @@ static int vision_callback(struct widget *pWidget)
       pdialog = get_diplomacy_dialog(pWidget->data.cont->id0);
     }
   
-    dsend_packet_diplomacy_create_clause_req(&client.conn,
+    dsend_packet_diplomacy_create_clause_req(&aconnection,
                                              player_number(pdialog->treaty.plr1),
                                              pWidget->data.cont->id0,
                                              CLAUSE_VISION, 0);
+  }
+  return -1;
+}
+
+static int embassy_callback(struct widget *pWidget)
+{
+  if (Main.event.button.button == SDL_BUTTON_LEFT) {
+    struct diplomacy_dialog *pdialog;
+      
+    if (!(pdialog = get_diplomacy_dialog(pWidget->data.cont->id1))) {
+      pdialog = get_diplomacy_dialog(pWidget->data.cont->id0);
+    }
+  
+    dsend_packet_diplomacy_create_clause_req(&aconnection,
+                                             player_number(pdialog->treaty.plr1),
+                                             pWidget->data.cont->id0,
+                                             CLAUSE_EMBASSY, 0);
   }
   return -1;
 }
@@ -295,7 +313,7 @@ static int maps_callback(struct widget *pWidget)
       break;
     }
   
-    dsend_packet_diplomacy_create_clause_req(&client.conn,
+    dsend_packet_diplomacy_create_clause_req(&aconnection,
                                              player_number(pdialog->treaty.plr1),
                                              pWidget->data.cont->id0,
                                              clause_type, 0);
@@ -312,7 +330,7 @@ static int techs_callback(struct widget *pWidget)
       pdialog = get_diplomacy_dialog(pWidget->data.cont->id0);
     }
     
-    dsend_packet_diplomacy_create_clause_req(&client.conn,
+    dsend_packet_diplomacy_create_clause_req(&aconnection,
                                              player_number(pdialog->treaty.plr1),
                                              pWidget->data.cont->id0,
                                              CLAUSE_ADVANCE,
@@ -348,7 +366,7 @@ static int gold_callback(struct widget *pWidget)
     }
     
     if (amount > 0) {
-      dsend_packet_diplomacy_create_clause_req(&client.conn,
+      dsend_packet_diplomacy_create_clause_req(&aconnection,
                                                player_number(pdialog->treaty.plr1),
                                                pWidget->data.cont->id0,
                                                CLAUSE_GOLD, amount);
@@ -376,7 +394,7 @@ static int cities_callback(struct widget *pWidget)
       pdialog = get_diplomacy_dialog(pWidget->data.cont->id0);
     }
     
-    dsend_packet_diplomacy_create_clause_req(&client.conn,
+    dsend_packet_diplomacy_create_clause_req(&aconnection,
                                              player_number(pdialog->treaty.plr1),  
                                              pWidget->data.cont->id0,
                                              CLAUSE_CITY,
@@ -429,7 +447,7 @@ static struct ADVANCED_DLG * popup_diplomatic_objects(struct player *pPlayer0,
   height = 0;
   
   /* Pacts. */
-  if (pPlayer0 == client.conn.playing && DS_ALLIANCE != type) {
+  if (game.player_ptr == pPlayer0 && type != DS_ALLIANCE) {
     
     pBuf = create_iconlabel_from_chars(NULL, pWindow->dst,
 			  _("Pacts"), adj_font(12), WF_RESTORE_BACKGROUND);
@@ -540,6 +558,20 @@ static struct ADVANCED_DLG * popup_diplomatic_objects(struct player *pPlayer0,
     count++;
   }
   
+  if (!player_has_embassy(pPlayer1, pPlayer0)) {  
+    pBuf = create_iconlabel_from_chars(NULL, pWindow->dst,
+        _("Give embassy"), adj_font(12),
+                (WF_RESTORE_BACKGROUND|WF_DRAW_TEXT_LABEL_WITH_SPACE));
+    pBuf->string16->fgcol = *get_game_colorRGB(COLOR_THEME_DIPLODLG_MEETING_TEXT);
+    width = MAX(width, pBuf->size.w);
+    height = MAX(height, pBuf->size.h);
+    pBuf->action = embassy_callback;
+    pBuf->data.cont = pCont;
+    set_wstate(pBuf, FC_WS_NORMAL);
+    add_to_gui_list(ID_LABEL, pBuf);
+    count++;
+  }
+    
   /* ---------------------------- */
   if(pPlayer0->economic.gold > 0) {
     pCont->value = pPlayer0->economic.gold;
@@ -568,13 +600,14 @@ static struct ADVANCED_DLG * popup_diplomatic_objects(struct player *pPlayer0,
   
   /* Advances */
   {
-    int flag = A_NONE;
+    bool flag = FALSE;
+    int i;
     
-    advance_index_iterate(A_FIRST, i) {
-      if (player_invention_state(pPlayer0, i) == TECH_KNOWN &&
-         player_invention_is_ready(pPlayer1, i) &&
-	(player_invention_state(pPlayer1, i) == TECH_UNKNOWN || 
-	 player_invention_state(pPlayer1, i) == TECH_REACHABLE)) {
+    for (i = 1; i < game.control.num_tech_types; i++) {
+      if (get_invention(pPlayer0, i) == TECH_KNOWN &&
+         tech_is_available(pPlayer1, i) &&
+	(get_invention(pPlayer1, i) == TECH_UNKNOWN || 
+	 get_invention(pPlayer1, i) == TECH_REACHABLE)) {
 	     
 	     pBuf = create_iconlabel_from_chars(NULL, pWindow->dst,
 		_("Advances"), adj_font(12), WF_RESTORE_BACKGROUND);
@@ -584,7 +617,7 @@ static struct ADVANCED_DLG * popup_diplomatic_objects(struct player *pPlayer0,
              add_to_gui_list(ID_LABEL, pBuf);
 	     count++;
 	     
-	     my_snprintf(cBuf, sizeof(cBuf), "  %s", advance_name_translation(advance_by_number(i)));
+	     my_snprintf(cBuf, sizeof(cBuf), "  %s", advance_name_translation(i));
   
              pBuf = create_iconlabel_from_chars(NULL, pWindow->dst, cBuf, adj_font(12),
 	         (WF_RESTORE_BACKGROUND|WF_DRAW_TEXT_LABEL_WITH_SPACE));
@@ -596,19 +629,20 @@ static struct ADVANCED_DLG * popup_diplomatic_objects(struct player *pPlayer0,
 	     pBuf->data.cont = pCont;
              add_to_gui_list(MAX_ID - i, pBuf);
 	     count++;	
-	     flag = ++i;
+	     flag = TRUE;
+	     i++;
 	     break;
       }
-    } advance_index_iterate_end;
+    }
     
-    if(flag > A_NONE) {
-      advance_index_iterate(flag, i) {
-	if (player_invention_state(pPlayer0, i) == TECH_KNOWN &&
-	   player_invention_is_ready(pPlayer1, i) &&
-	  (player_invention_state(pPlayer1, i) == TECH_UNKNOWN || 
-	   player_invention_state(pPlayer1, i) == TECH_REACHABLE)) {
+    if(flag) {
+      for (; i < game.control.num_tech_types; i++) {
+	if (get_invention(pPlayer0, i) == TECH_KNOWN &&
+	   tech_is_available(pPlayer1, i) &&
+	  (get_invention(pPlayer1, i) == TECH_UNKNOWN || 
+	   get_invention(pPlayer1, i) == TECH_REACHABLE)) {
 	     
-	     my_snprintf(cBuf, sizeof(cBuf), "  %s", advance_name_translation(advance_by_number(i)));
+	     my_snprintf(cBuf, sizeof(cBuf), "  %s", advance_name_translation(i));
   
              pBuf = create_iconlabel_from_chars(NULL, pWindow->dst, cBuf, adj_font(12),
 	         (WF_RESTORE_BACKGROUND|WF_DRAW_TEXT_LABEL_WITH_SPACE));
@@ -622,7 +656,7 @@ static struct ADVANCED_DLG * popup_diplomatic_objects(struct player *pPlayer0,
 	     count++;
 	}
       }
-    } advance_index_iterate_end;
+    }
     
   }  /* Advances */
   
@@ -997,7 +1031,7 @@ static void update_clauses_list(struct diplomacy_dialog *pdialog) {
     pBuf = create_iconlabel(NULL, pWindow->dst, pStr,
      (WF_FREE_DATA|WF_DRAW_TEXT_LABEL_WITH_SPACE|WF_RESTORE_BACKGROUND));
         
-    if (pclause->from != client.conn.playing) {
+    if(player_number(pclause->from) != game.info.player_idx) {
        pBuf->string16->style |= SF_CENTER_RIGHT;  
     }
   
@@ -1113,12 +1147,12 @@ void handle_diplomacy_init_meeting(int counterpart, int initiated_from)
     return;
   }
 
-  if (client.conn.playing->ai.control) {
+  if (game.player_ptr->ai.control) {
     return;			/* Don't show if we are AI controlled. */
   }
 
   if (!(pdialog = get_diplomacy_dialog(counterpart))) {
-    pdialog = create_diplomacy_dialog(client.conn.playing,
+    pdialog = create_diplomacy_dialog(game.player_ptr,
 				player_by_number(counterpart));
   } else {
     /* bring existing dialog to front */
@@ -1204,7 +1238,7 @@ static int withdraw_vision_dlg_callback(struct widget *pWidget)
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
     popdown_sdip_dialog();
   
-    dsend_packet_diplomacy_cancel_pact(&client.conn,
+    dsend_packet_diplomacy_cancel_pact(&aconnection,
                                        player_number(pWidget->data.player),
                                        CLAUSE_VISION);
     
@@ -1218,7 +1252,7 @@ static int cancel_pact_dlg_callback(struct widget *pWidget)
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
     popdown_sdip_dialog();
   
-    dsend_packet_diplomacy_cancel_pact(&client.conn,
+    dsend_packet_diplomacy_cancel_pact(&aconnection,
                                        player_number(pWidget->data.player),
                                        CLAUSE_CEASEFIRE);
     
@@ -1232,7 +1266,7 @@ static int call_meeting_dlg_callback(struct widget *pWidget)
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
     popdown_sdip_dialog();
     
-    dsend_packet_diplomacy_init_meeting_req(&client.conn,
+    dsend_packet_diplomacy_init_meeting_req(&aconnection,
                                             player_number(pWidget->data.player));
     
     flush_dirty();
@@ -1370,10 +1404,10 @@ static void popup_war_dialog(struct player *pPlayer)
 void popup_diplomacy_dialog(struct player *pPlayer)
 {
   enum diplstate_type type =
-		  pplayer_get_diplstate(client.conn.playing, pPlayer)->type;
+		  pplayer_get_diplstate(game.player_ptr, pPlayer)->type;
 
-  if (!can_meet_with_player(pPlayer)) {
-    if (DS_WAR == type || pPlayer == client.conn.playing) {
+  if(!can_meet_with_player(pPlayer)) {
+    if(type == DS_WAR || pPlayer == game.player_ptr) {
       flush_dirty();
       return;
     } else {
@@ -1447,9 +1481,9 @@ void popup_diplomacy_dialog(struct player *pPlayer)
       pBuf->next->size.w = pBuf->size.w;
       button_w = MAX(button_w , pBuf->size.w);
       button_h = MAX(button_h , pBuf->size.h);
-
-      shared = gives_shared_vision(client.conn.playing, pPlayer);
-
+    
+      shared = gives_shared_vision(game.player_ptr, pPlayer);
+      
       if(shared) {
         /* shared vision */
         pBuf = create_themeicon_button_from_chars(pTheme->UNITS2_Icon, pWindow->dst,

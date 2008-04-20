@@ -1,8 +1,9 @@
 ## Process this file with automake to produce Makefile.in
 
 noinst_LIBRARIES = libguiclient.a
-AM_CPPFLAGS = -I. -I$(srcdir)/.. -I$(srcdir)/../include -I$(top_srcdir)/utility -I$(top_srcdir)/common -I$(top_srcdir)/common/aicore -I$(srcdir)/../agents $(CLIENT_CFLAGS) $(GGZ_GTK_INCLUDES)
+AM_CPPFLAGS = -I. -I$(srcdir)/.. -I$(srcdir)/../include -I$(top_srcdir)/utility -I$(top_srcdir)/common -I$(top_srcdir)/common/aicore -I../../intl -I$(srcdir)/../agents $(CLIENT_CFLAGS) $(GGZ_GTK_INCLUDES)
 
+## Above, note -I../../intl instead of -I$(top_srdir/intl) is deliberate.
 # The AM_CPPFLAGS "-I." is so resources.c includes the locally generated 
 # Freeciv.h in the builddir, in preference to the one 
 # in the source dir (when compiling from another dir). --dwp
@@ -42,8 +43,6 @@ libguiclient_a_SOURCES = \
 	dialogs.h	\
 	diplodlg.c	\
 	diplodlg.h	\
-	editdlg.c	\
-	editdlg.h	\
 	diplomat_dialog.c \
 	finddlg.c	\
 	finddlg.h	\

@@ -206,8 +206,7 @@ static void print_usage(const char *argv0)
 		       "other thread (only Linux and BeOS)\n"));
   fc_fprintf(stderr, _("  -t,  --theme THEME\tUse GUI theme THEME\n"));
 
-  /* TRANS: No full stop after the URL, could cause confusion. */
-  fc_fprintf(stderr, _("Report bugs at %s\n"), BUG_URL);
+  fc_fprintf(stderr, _("Report bugs at %s.\n"), BUG_URL);
 }
 
 /**************************************************************************
@@ -261,8 +260,8 @@ static Uint16 main_key_down_handler(SDL_keysym Key, void *pData)
               struct unit *pUnit;
               struct city *pCity;
               if (NULL != (pUnit = head_of_units_in_focus()) && 
-                (pCity = tile_city(pUnit->tile)) != NULL &&
-                city_owner(pCity) == client.conn.playing) {
+                (pCity = pUnit->tile->city) != NULL &&
+                city_owner(pCity) == game.player_ptr) {
                 popup_city_dialog(pCity);
               }
 	    }
@@ -298,7 +297,7 @@ static Uint16 main_key_down_handler(SDL_keysym Key, void *pData)
           return ID_ERROR;
 	    
 	  case SDLK_F12:
-            popup_spaceship_dialog(client.conn.playing);
+            popup_spaceship_dialog(game.player_ptr);
           return ID_ERROR;
 	  
 	  default:
@@ -657,8 +656,8 @@ Uint16 gui_event_loop(void *pData,
         case SDL_KEYDOWN:
           switch(Main.event.key.keysym.sym) {
             case SDLK_PRINT:
+              freelog(LOG_NORMAL, _("Making screenshot fc_%05d.bmp"), schot_nr);
               my_snprintf(schot, sizeof(schot), "fc_%05d.bmp", schot_nr++);
-              freelog(LOG_NORMAL, _("Making screenshot %s"), schot);
               SDL_SaveBMP(Main.screen, schot);
             break;
             

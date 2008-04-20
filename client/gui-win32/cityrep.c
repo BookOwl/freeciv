@@ -18,36 +18,35 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+                         
 #include <windows.h>
 #include <windowsx.h>
 
 #include "city.h"
 #include "fcintl.h"
+#include "game.h"
 #include "packets.h"
 #include "shared.h"
 #include "support.h"
 #include "unit.h"
 #include "mem.h"
-
+ 
 #include "chatline.h"
 #include "citydlg.h"
 #include "cityrepdata.h"
-#include "civclient.h"
-#include "climisc.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "mapview.h"
 #include "optiondlg.h"
 #include "options.h"
 #include "repodlgs.h"
+#include "climisc.h"
 #include "text.h"
-
+                           
 #include "cityrep.h"
-
 extern HINSTANCE freecivhinst;
 extern HFONT font_12courier;
-
+extern struct connection aconnection;   
 int max_changemenu_id;
 int max_supportmenu_id;
 int max_presentmenu_id;
@@ -186,7 +185,7 @@ append_impr_or_unit_to_menu_sub(HMENU menu,
 				int *selitems,
 				int selcount, int *idcount)
 {
-  struct universal targets[MAX_NUM_PRODUCTION_TARGETS];
+  struct city_production targets[MAX_NUM_PRODUCTION_TARGETS];
   struct item items[MAX_NUM_PRODUCTION_TARGETS];
   int item, targets_used, num_selected_cities = 0;
   struct city **selected_cities = NULL;
@@ -380,7 +379,7 @@ static void cityrep_refresh(HWND hWnd)
   if ((selcount==LB_ERR)||(selcount==0))
     {
       packet.value = 0;
-      send_packet_generic_integer(&client.conn, PACKET_CITY_REFRESH, &packet);
+      send_packet_generic_integer(&aconnection, PACKET_CITY_REFRESH, &packet);
       return;
     }
   selcount=MIN(256,selcount);
@@ -392,7 +391,7 @@ static void cityrep_refresh(HWND hWnd)
 							  ID_CITYREP_LIST),
 					       cityids[i]);
       packet.value = pcity->id;
-      send_packet_generic_integer(&client.conn, PACKET_CITY_REFRESH,
+      send_packet_generic_integer(&aconnection, PACKET_CITY_REFRESH,
 				  &packet);      
     }
 }
@@ -418,7 +417,7 @@ static void cityrep_change(HWND hWnd)
   popup=CreatePopupMenu();
   max_changemenu_id=ID_CHANGE_POPUP_BASE;
   append_impr_or_unit_to_menu(popup,TRUE,TRUE,TRUE,
-			      can_city_build_now,
+			      city_can_build_impr_or_unit,
 			      &cityids[0],selcount,&max_changemenu_id);
   GetWindowRect(GetDlgItem(hWnd,ID_CITYREP_CHANGE),&rc);
   menu_shown=popup;
@@ -463,7 +462,7 @@ static void cityrep_select(HWND hWnd)
   AppendMenu(popup,MF_POPUP,(UINT)submenu,_("Available To Build"));
   max_availablemenu_id=ID_AVAILABLE_POPUP_BASE;
   append_impr_or_unit_to_menu(submenu, FALSE, TRUE, TRUE,
-			      can_city_build_now,&cityids,selcount,
+			      city_can_build_impr_or_unit,&cityids,selcount,
 			      &max_availablemenu_id);
   
   submenu=CreatePopupMenu(); 
@@ -487,7 +486,7 @@ static void cityrep_change_menu(HWND hWnd, cid cid)
   int cityids[256];
   int selcount, i, last_request_id = 0;
   struct city *pcity;
-  struct universal target = cid_production(cid);
+  struct city_production target = cid_production(cid);
   
   selcount=ListBox_GetSelCount(GetDlgItem(hWnd,ID_CITYREP_LIST));
   if (selcount==LB_ERR) return;
@@ -495,7 +494,7 @@ static void cityrep_change_menu(HWND hWnd, cid cid)
   selcount=ListBox_GetSelItems(GetDlgItem(hWnd,ID_CITYREP_LIST),
 			       selcount,&cityids[0]);
 
-  connection_do_buffer(&client.conn);
+  connection_do_buffer(&aconnection);
   for (i = 0; i < selcount; i++) {
     pcity = (struct city *) ListBox_GetItemData(GetDlgItem(hWnd,
 							   ID_CITYREP_LIST),
@@ -505,7 +504,7 @@ static void cityrep_change_menu(HWND hWnd, cid cid)
     ListBox_SetSel(GetDlgItem(hWnd, ID_CITYREP_LIST), FALSE, cityids[i]);
   }
 
-  connection_do_unbuffer(&client.conn);
+  connection_do_unbuffer(&aconnection);
   reports_freeze_till(last_request_id);
 }
 
@@ -578,8 +577,8 @@ static void list_sameisland_select(HWND hLst)
 	{
 	  struct city *selectedcity;
 	  selectedcity=(struct city *)ListBox_GetItemData(hLst,cityids[j]);
-          if (tile_continent(pcity->tile)
-              == tile_continent(selectedcity->tile))
+          if (tile_get_continent(pcity->tile)
+              == tile_get_continent(selectedcity->tile))
 	    {    
 	      ListBox_SetSel(hLst,TRUE,i);
 	      break;
@@ -592,7 +591,7 @@ static void list_sameisland_select(HWND hLst)
 
 **************************************************************************/
 static void list_impr_or_unit_select(HWND hLst,
-				     struct universal target,
+				     struct city_production target,
 				     TestCityFunc test_func)
 {
   int i,rows;
@@ -612,7 +611,7 @@ static void list_impr_or_unit_select(HWND hLst,
 static void menu_proc(HWND hWnd,int cmd, DWORD num)
 {
   HWND hLst;
-  struct universal target = cid_decode(num);
+  struct city_production target = cid_decode(num);
   hLst=GetDlgItem(hWnd,ID_CITYREP_LIST);
   if ((cmd>=ID_CHANGE_POPUP_BASE)&&
       (cmd<max_changemenu_id))
@@ -635,7 +634,7 @@ static void menu_proc(HWND hWnd,int cmd, DWORD num)
   if ((cmd>=ID_AVAILABLE_POPUP_BASE)&&
       (cmd<max_availablemenu_id))
     {
-      list_impr_or_unit_select(hLst, target, can_city_build_now);
+      list_impr_or_unit_select(hLst, target, city_can_build_impr_or_unit);
       max_availablemenu_id=0;
     }
   if ((cmd>=ID_IMPROVEMENTS_POPUP_BASE)&&
@@ -721,7 +720,7 @@ static void cityrep_changeall(HWND hWnd)
   struct fcwin_box *vbox;
   struct fcwin_box *hbox;
   int selid;
-  struct universal targets[MAX_NUM_PRODUCTION_TARGETS];
+  struct city_production targets[MAX_NUM_PRODUCTION_TARGETS];
   struct item items[MAX_NUM_PRODUCTION_TARGETS];
   int targets_used;
   cid selected_cid;
@@ -1156,7 +1155,7 @@ city_report_dialog_update(void)
     }
   /* FIXME restore old selection */
   ListBox_ResetContent(GetDlgItem(hCityRep,ID_CITYREP_LIST));
-  city_list_iterate(client.conn.playing->cities, pcity) {
+  city_list_iterate(game.player_ptr->cities, pcity) {
     get_city_text(pcity, row, sizeof(buf[0]));
     full_row[0]=0;
     for(i=0; i<NUM_CREPORT_COLS; i++)

@@ -33,6 +33,7 @@
 
 #include "city.h"
 #include "fcintl.h"
+#include "game.h"
 #include "log.h"
 #include "mem.h"
 #include "packets.h"
@@ -40,8 +41,8 @@
 #include "support.h"
 #include "unit.h"
 
-#include "civclient.h"
 #include "climisc.h"
+#include "clinet.h"
 
 #include "chatline.h"
 #include "citydlg.h"
@@ -320,7 +321,7 @@ void city_list_callback(Widget w, XtPointer client_data,
 
   if(ret->list_index!=XAW_LIST_NONE && 
      (pcity=cities_in_list[ret->list_index])) {
-    struct universal targets[MAX_NUM_PRODUCTION_TARGETS];
+    struct city_production targets[MAX_NUM_PRODUCTION_TARGETS];
     struct item items[MAX_NUM_PRODUCTION_TARGETS];
     int targets_used = 0;
     size_t i;
@@ -337,18 +338,18 @@ void city_list_callback(Widget w, XtPointer client_data,
 				        city_change_command,
 				        NULL);
 
-    improvement_iterate(pimprove) {
-      if (can_city_build_improvement_now(pcity, pimprove)) {
-	targets[targets_used].kind = VUT_IMPROVEMENT;
-	targets[targets_used].value.building = pimprove;
+    impr_type_iterate(impr) {
+      if (can_build_improvement(pcity, impr)) {
+	targets[targets_used].is_unit = false;
+	targets[targets_used].value = impr;
 	targets_used++;
       }
-    } improvement_iterate_end;
+    } impr_type_iterate_end;
 
     unit_type_iterate(punittype) {
-      if (can_city_build_unit_now(pcity, punittype)) {
-	targets[targets_used].kind = VUT_UTYPE;
-	targets[targets_used].value.utype = punittype;
+      if (can_build_unit(pcity, punittype)) {
+	targets[targets_used].is_unit = true;
+	targets[targets_used].value = punittype->index;
 	targets_used++;
       }
     } unit_type_iterate_end;
@@ -381,7 +382,7 @@ void city_change_callback(Widget w, XtPointer client_data,
 {
   XawListReturnStruct *ret=XawListShowCurrent(city_list);
   struct city *pcity;
-  struct universal production;
+  struct city_production production;
 
   if(ret->list_index!=XAW_LIST_NONE && 
      (pcity=cities_in_list[ret->list_index])) {
@@ -430,10 +431,10 @@ void city_refresh_callback(Widget w, XtPointer client_data,
     struct city *pcity = cities_in_list[ret->list_index];
 
     if (pcity) {
-      dsend_packet_city_refresh(&client.conn, pcity->id);
+      dsend_packet_city_refresh(&aconnection, pcity->id);
     }
   } else {
-    dsend_packet_city_refresh(&client.conn, 0);
+    dsend_packet_city_refresh(&aconnection, 0);
   }
 }
 
@@ -503,10 +504,9 @@ void city_config_callback(Widget w, XtPointer client_data,
 *****************************************************************/
 void city_report_dialog_update(void)
 {
-  if (NULL == client.conn.playing || is_report_dialogs_frozen()) {
+  if (is_report_dialogs_frozen() || !game.player_ptr) {
     return;
   }
-
   if(city_dialog_shell) {
     int i=0, n;
     Dimension width;
@@ -514,7 +514,7 @@ void city_report_dialog_update(void)
     static char **city_list_text = NULL;
     const char *report_title;
 
-    n = city_list_size(client.conn.playing->cities);
+    n = city_list_size(game.player_ptr->cities);
     freelog(LOG_DEBUG, "%d cities in report", n);
     if(n_alloc == 0 || n > n_alloc) {
       int j, n_prev = n_alloc;
@@ -546,7 +546,7 @@ void city_report_dialog_update(void)
      * having to find city corresponding to id for each comparison.
      */
     i=0;
-    city_list_iterate(client.conn.playing->cities, pcity) {
+    city_list_iterate(game.player_ptr->cities, pcity) {
       cities_in_list[i++] = pcity;
     } city_list_iterate_end;
     assert(i==n);
@@ -1078,7 +1078,7 @@ static void chgall_refresh_command_callback(Widget w,
 					    XtPointer call_data)
 {
   struct chgall_data *state = (struct chgall_data *) client_data;
-  struct universal targets[MAX_NUM_PRODUCTION_TARGETS];
+  struct city_production targets[MAX_NUM_PRODUCTION_TARGETS];
   struct item items[MAX_NUM_PRODUCTION_TARGETS];
   int i;
 

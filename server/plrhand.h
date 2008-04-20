@@ -16,9 +16,9 @@
 #include <stdarg.h>
 
 #include "shared.h"		/* fc__attribute */
-#include "fc_types.h"
 
-#include "events.h"		/* enum event_type */
+#include "events.h"
+#include "fc_types.h"
 #include "packets.h"
 
 #include "hand_gen.h"
@@ -27,7 +27,7 @@ struct section_file;
 struct connection;
 struct conn_list;
 
-enum plr_info_level { INFO_MINIMUM, INFO_EMBASSY, INFO_FULL };
+enum plr_info_level { INFO_MINIMUM, INFO_MEETING, INFO_EMBASSY, INFO_FULL };
 
 void server_player_init(struct player *pplayer,
 			bool initmap, bool needs_team);
@@ -37,8 +37,7 @@ void update_revolution(struct player *pplayer);
 
 struct nation_type *pick_a_nation(struct nation_type **choices,
                                   bool ignore_conflicts,
-                                  bool only_available,
-                                  enum barbarian_type barb_type);
+				  bool only_available);
 
 void check_player_government_rates(struct player *pplayer);
 void make_contact(struct player *pplayer1, struct player *pplayer2,
@@ -77,17 +76,17 @@ void set_shuffled_players(int *shuffled_players);
 struct player *shuffled_player(int i);
 void reset_all_start_commands(void);
 
-#define shuffled_players_iterate(_p)					\
-{									\
-  int _p##_index;							\
-									\
-  for (_p##_index = 0;							\
-       _p##_index < player_count();					\
-       _p##_index++) {							\
-    struct player *_p = shuffled_player(_p##_index);
+#define shuffled_players_iterate(pplayer)                                   \
+{                                                                           \
+  struct player *pplayer;                                                   \
+  int i;                                                                    \
+  for (i = 0; i < game.info.nplayers; i++) {                               \
+    pplayer = shuffled_player(i);                                           \
+    {
 
-#define shuffled_players_iterate_end					\
-  }									\
+#define shuffled_players_iterate_end                                        \
+    }                                                                       \
+  }                                                                         \
 }
 
 #define phase_players_iterate(pplayer) \

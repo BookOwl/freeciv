@@ -25,6 +25,7 @@
 
 #include "chatline_common.h"	/* for append_output_window */
 #include "civclient.h"
+#include "clinet.h"		/* for get_server_address */
 #include "connectdlg.h"
 #include "packhand_gen.h"
 
@@ -65,7 +66,7 @@ void handle_authentication_req(enum authentication_type type, char *message)
       struct packet_authentication_reply reply;
 
       sz_strlcpy(reply.password, password);
-      send_packet_authentication_reply(&client.conn, &reply);
+      send_packet_authentication_reply(&aconnection, &reply);
       return;
     } else {
      /* PORTME: switch configs if need be */

@@ -31,6 +31,7 @@
 #include "support.h"
 #include "timing.h"
 
+#include "game.h"
 #include "government.h"		/* government_graphic() */
 #include "map.h"
 #include "player.h"
@@ -99,9 +100,9 @@ void update_info_label( void )
   GtkWidget *label;
 
   label = gtk_frame_get_label_widget(GTK_FRAME(main_frame_civ_name));
-  if (NULL != client.conn.playing) {
+  if (game.player_ptr) {
     gtk_label_set_text(GTK_LABEL(label),
-		       nation_plural_for_player(client.conn.playing));
+		       nation_adjective_for_player(game.player_ptr));
   } else {
     gtk_label_set_text(GTK_LABEL(label), "-");
   }
@@ -113,18 +114,18 @@ void update_info_label( void )
 		      client_cooling_sprite(),
 		      client_government_sprite());
 
-  if (NULL != client.conn.playing) {
+  if (game.player_ptr) {
     int d = 0;
 
-    for (; d < client.conn.playing->economic.luxury /10; d++) {
+    for (; d < game.player_ptr->economic.luxury /10; d++) {
       struct sprite *sprite = get_tax_sprite(tileset, O_LUXURY);
 
       gtk_image_set_from_pixbuf(GTK_IMAGE(econ_label[d]),
 				sprite_get_pixbuf(sprite));
     }
  
-    for (; d < (client.conn.playing->economic.science
-		+ client.conn.playing->economic.luxury) / 10; d++) {
+    for (; d < (game.player_ptr->economic.science
+		+ game.player_ptr->economic.luxury) / 10; d++) {
       struct sprite *sprite = get_tax_sprite(tileset, O_SCIENCE);
 
       gtk_image_set_from_pixbuf(GTK_IMAGE(econ_label[d]),
@@ -184,7 +185,7 @@ static gint anim_cursor_cb(gpointer data)
 /**************************************************************************
   This function will change the current mouse cursor.
 **************************************************************************/
-void update_mouse_cursor(enum cursor_type new_cursor_type)
+static void modify_mouse_cursor(enum cursor_type new_cursor_type)
 {
   cursor_type = new_cursor_type;
   if (!cursor_timer_id) {
@@ -204,6 +205,7 @@ void update_mouse_cursor(enum cursor_type new_cursor_type)
 **************************************************************************/
 void update_unit_info_label(struct unit_list *punits)
 {
+  enum cursor_type mouse_cursor_type = CURSOR_DEFAULT;
   GtkWidget *label;
 
   label = gtk_frame_get_label_widget(GTK_FRAME(unit_info_frame));
@@ -211,7 +213,58 @@ void update_unit_info_label(struct unit_list *punits)
 		     get_unit_info_label_text1(punits));
 
   gtk_label_set_text(GTK_LABEL(unit_info_label),
-		     get_unit_info_label_text2(punits, 0));
+		     get_unit_info_label_text2(punits));
+
+  if (action_state == CURSOR_ACTION_WAIT) {
+    mouse_cursor_type = CURSOR_WAIT;
+  } else {
+  switch (hover_state) {
+  case HOVER_NONE:
+    if (action_state == CURSOR_ACTION_SELECT) {
+      mouse_cursor_type = CURSOR_SELECT;
+    } else if (action_state == CURSOR_ACTION_PARATROOPER) {
+      mouse_cursor_type = CURSOR_PARADROP;
+    } else if (action_state == CURSOR_ACTION_NUKE) {
+      mouse_cursor_type = CURSOR_NUKE;
+    } else {
+      mouse_cursor_type = CURSOR_DEFAULT;
+    }
+    break;
+  case HOVER_PATROL:
+    if (action_state == CURSOR_ACTION_INVALID) {
+      mouse_cursor_type = CURSOR_INVALID;
+    } else {
+      mouse_cursor_type = CURSOR_PATROL;
+    }
+    break;
+  case HOVER_GOTO:
+    if (action_state == CURSOR_ACTION_GOTO) {
+      mouse_cursor_type = CURSOR_GOTO;
+    } else if (action_state == CURSOR_ACTION_DEFAULT) {
+      mouse_cursor_type = CURSOR_DEFAULT;
+    } else if (action_state == CURSOR_ACTION_ATTACK) {
+      mouse_cursor_type = CURSOR_ATTACK;
+    } else {
+      mouse_cursor_type = CURSOR_INVALID;
+    }
+    break;
+  case HOVER_CONNECT:
+    if (action_state == CURSOR_ACTION_INVALID) {
+      mouse_cursor_type = CURSOR_INVALID;
+    } else {
+      mouse_cursor_type = CURSOR_GOTO;
+    }
+    break;
+  case HOVER_NUKE:
+    mouse_cursor_type = CURSOR_NUKE;
+    break;
+  case HOVER_PARADROP:
+    mouse_cursor_type = CURSOR_PARADROP;
+    break;
+  }
+  }
+
+  modify_mouse_cursor(mouse_cursor_type);
 
   update_unit_pix_label(punits);
 }
@@ -485,8 +538,7 @@ void put_unit_gpixmap(struct unit *punit, GtkPixcomm *p)
   unit, the proper way to do this is probably something like what Civ II does.
   (One food/shield/mask drawn N times, possibly one top of itself. -- SKi 
 **************************************************************************/
-void put_unit_gpixmap_city_overlays(struct unit *punit, GtkPixcomm *p,
-                                    int *upkeep_cost, int happy_cost)
+void put_unit_gpixmap_city_overlays(struct unit *punit, GtkPixcomm *p)
 {
   struct canvas store;
  
@@ -495,8 +547,7 @@ void put_unit_gpixmap_city_overlays(struct unit *punit, GtkPixcomm *p,
 
   gtk_pixcomm_freeze(p);
 
-  put_unit_city_overlays(punit, &store, 0, tileset_tile_height(tileset),
-                         upkeep_cost, happy_cost);
+  put_unit_city_overlays(punit, &store, 0, tileset_tile_height(tileset));
 
   gtk_pixcomm_thaw(p);
 }

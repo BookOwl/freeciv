@@ -22,7 +22,7 @@ generate_stats=0
 
 # generate_freelogs will generate freelog calls to debug the delta code.
 generate_freelogs=0
-freelog_log_level="LOG_PACKET"
+freelog_log_level="LOG_NORMAL"
 generate_variant_freelogs=0
 
 ### The following parameters CHANGE the protocol. You have been warned.
@@ -461,7 +461,7 @@ class Field:
             array_size_u=self.array_size_u
             array_size_d=self.array_size_d
 
-        if not self.diff or self.dataio_type=="memory":
+        if not self.diff or self.dataio_type == "memory":
             if array_size_u != array_size_d:
                 extra='''
   if(%(array_size_u)s > %(array_size_d)s) {
@@ -470,7 +470,7 @@ class Field:
   }'''%self.get_dict(vars())
             else:
                 extra=""
-            if self.dataio_type=="memory":
+            if self.dataio_type == "memory":
                 return '''%(extra)s
   dio_get_%(dataio_type)s(&din, real_packet->%(name)s, %(array_size_u)s);'''%self.get_dict(vars())
             return '''
@@ -590,11 +590,11 @@ static char *stats_%(name)s_names[] = {%(names)s};
         return '''
   if (stats_%(name)s_sent > 0 &&
       stats_%(name)s_discarded != stats_%(name)s_sent) {
-    freelog(LOG_TEST, \"%(name)s %%d out of %%d got discarded\",
+    freelog(LOG_NORMAL, \"%(name)s %%d out of %%d got discarded\",
       stats_%(name)s_discarded, stats_%(name)s_sent);
     for (i = 0; i < %(bits)d; i++) {
       if(stats_%(name)s_counters[i] > 0) {
-        freelog(LOG_TEST, \"  %%4d / %%4d: %%2d = %%s\",
+        freelog(LOG_NORMAL, \"  %%4d / %%4d: %%2d = %%s\",
           stats_%(name)s_counters[i],
           (stats_%(name)s_sent - stats_%(name)s_discarded),
           i, stats_%(name)s_names[i]);
@@ -1085,7 +1085,7 @@ class Packet:
             no=v.no
             result=result+'  } else if(%(cond)s) {\n    variant = %(no)s;\n'%self.get_dict(vars())
         if generate_variant_freelogs and len(self.variants)>1:
-            log='  freelog(LOG_TEST, "%(name)s: using variant=%%d cap=%%s", variant, pc->capability);\n'%self.get_dict(vars())
+            log='  freelog(LOG_NORMAL, "%(name)s: using variant=%%d cap=%%s", variant, pc->capability);\n'%self.get_dict(vars())
         else:
             log=""
         result=result+'''  } else {
@@ -1358,16 +1358,7 @@ def strip_c_comment(s):
 # various files.
 def main():
     ### parsing input
-    src_dir=os.path.dirname(sys.argv[0])
-    src_root=src_dir+"/.."
-    input_name=src_dir+"/packets.def"
-    ### We call this variable target_root instead of build_root
-    ### to avoid confusion as we are not building to builddir in
-    ### automake sense.
-    ### We build to src dir. Building to builddir causes a lot
-    ### of problems we have been unable to solve.
-    target_root=src_root
-
+    input_name="packets.def"
     content=open(input_name).read()
     content=strip_c_comment(content)
     lines=string.split(content,"\n")
@@ -1392,7 +1383,7 @@ def main():
     ### parsing finished
 
     ### writing packets_gen.h
-    output_h_name=target_root+"/common/packets_gen.h"
+    output_h_name="packets_gen.h"
 
     if lazy_overwrite:
         output_h=my_open(output_h_name+".tmp")
@@ -1416,7 +1407,7 @@ void *get_packet_from_connection_helper(struct connection *pc, enum packet_type 
     output_h.close()
 
     ### writing packets_gen.c
-    output_c_name=target_root+"/common/packets_gen.c"
+    output_c_name="packets_gen.c"
     if lazy_overwrite:
         output_c=my_open(output_c_name+".tmp")
     else:
@@ -1492,7 +1483,7 @@ static int stats_total_sent;
                 open(i,"w").write(new)
             os.remove(i+".tmp")
 
-    f=my_open(target_root+"/server/hand_gen.h")
+    f=my_open("../server/hand_gen.h")
     f.write('''
 #ifndef FC__HAND_GEN_H
 #define FC__HAND_GEN_H
@@ -1534,7 +1525,7 @@ bool server_handle_packet(enum packet_type type, void *packet,
 ''')
     f.close()
 
-    f=my_open(target_root+"/client/packhand_gen.h")
+    f=my_open("../client/packhand_gen.h")
     f.write('''
 #ifndef FC__PACKHAND_GEN_H
 #define FC__PACKHAND_GEN_H
@@ -1565,7 +1556,7 @@ bool client_handle_packet(enum packet_type type, void *packet);
 ''')
     f.close()
 
-    f=my_open(target_root+"/server/hand_gen.c")
+    f=my_open("../server/hand_gen.c")
     f.write('''
 
 #ifdef HAVE_CONFIG_H
@@ -1620,7 +1611,7 @@ bool server_handle_packet(enum packet_type type, void *packet,
 ''')
     f.close()
 
-    f=my_open(target_root+"/client/packhand_gen.c")
+    f=my_open("../client/packhand_gen.c")
     f.write('''
 
 #ifdef HAVE_CONFIG_H

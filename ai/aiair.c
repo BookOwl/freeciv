@@ -69,13 +69,13 @@ static bool find_nearest_airbase(struct tile *ptile, struct unit *punit,
 static bool ai_should_we_air_attack_tile(struct unit *punit,
 					 struct tile *ptile)
 {
-  struct city *acity = tile_city(ptile);
+  struct city *acity = tile_get_city(ptile);
 
   /* For a virtual unit (punit->id == 0), all targets are good */
   /* TODO: There is a danger of producing too many units that will not 
    * attack anything.  Production should not happen if there is an idle 
    * unit of the same type nearby */
-  if (acity && !TEST_BIT(acity->ai.invasion, INVASION_OCCUPY) && punit->id != 0) {
+  if (acity && !TEST_BIT(acity->ai.invasion, 0) && punit->id != 0) {
     /* No ground troups are invading */
     freelog(LOG_DEBUG, "Don't want to attack %s, although we could", 
             city_name(acity));
@@ -111,7 +111,7 @@ static int ai_evaluate_tile_for_air_attack(struct unit *punit,
   /* Ok, we can attack, but is it worth it? */
 
   /* Cost of our unit */
-  unit_cost = unit_build_shield_cost(punit);
+  unit_cost = unit_build_shield_cost(unit_type(punit));
   /* This is to say "wait, ill unit will get better!" */
   unit_cost = unit_cost * unit_type(punit)->hp / punit->hp; 
 
@@ -119,8 +119,8 @@ static int ai_evaluate_tile_for_air_attack(struct unit *punit,
   victim_cost = stack_cost(pdefender);
 
   /* Missile would die 100% so we adjust the victim_cost -- GB */
-  if (uclass_has_flag(unit_class(punit), UCF_MISSILE)) {
-    victim_cost -= unit_build_shield_cost(punit);
+  if (unit_has_type_flag(punit, F_MISSILE)) {
+    victim_cost -= unit_build_shield_cost(unit_type(punit));
   }
 
   unit_attack = (int) (PROB_MULTIPLIER 
@@ -204,8 +204,7 @@ static int find_something_to_bomb(struct unit *punit, struct tile *ptile)
 
     if (is_enemy_unit_tile(tile1, pplayer)
         && ai_should_we_air_attack_tile(punit, tile1)
-	&& (air_can_move_between (max_dist, ptile, tile1, pplayer) >= 0)
-        && can_unit_attack_all_at_tile(punit, ptile)) {
+	&& (air_can_move_between (max_dist, ptile, tile1, pplayer) >= 0)){
       int new_best = ai_evaluate_tile_for_air_attack(punit, tile1);
       if (new_best > best) {
 	punit->goto_tile = tile1;
@@ -236,8 +235,7 @@ static bool ai_find_strategic_airbase(struct unit *punit,
   bool found = FALSE;
 
   airbase_iterator 
-    = refuel_iterate_init(unit_owner(punit), unit_type(punit),
-                          punit->tile,
+    = refuel_iterate_init(unit_owner(punit), punit->tile,
                           punit->tile, TRUE, 
                           punit->moves_left / SINGLE_MOVE, 
                           unit_move_rate(punit) / SINGLE_MOVE, 
@@ -256,7 +254,7 @@ static bool ai_find_strategic_airbase(struct unit *punit,
     if ((target_worth
 	 = find_something_to_bomb(punit, get_refuel_tile(airbase))) > 0) {
       struct city *base_city 
-        = tile_city(get_refuel_tile(airbase));
+        = tile_get_city(get_refuel_tile(airbase));
      
       if (base_city && base_city->ai.grave_danger != 0) {
         /* Fly there immediately!! */
@@ -347,16 +345,17 @@ void ai_manage_airunit(struct player *pplayer, struct unit *punit)
       /* goto would be aborted: "Aborting GOTO for AI attack procedures"
        * now actually need to attack */
       /* We could use ai_military_findvictim here, but I don't trust it... */
-      unit_activity_handling(punit, ACTIVITY_IDLE);
+      handle_unit_activity_request(punit, ACTIVITY_IDLE);
       if (is_tiles_adjacent(punit->tile, punit->goto_tile)) {
-        (void) unit_move_handling(punit, punit->goto_tile, TRUE, FALSE);
+        (void) handle_unit_move_request(punit, punit->goto_tile,
+					TRUE, FALSE);
       }
     } else if (ai_find_strategic_airbase(punit, &dst_tile)) {
       freelog(LOG_DEBUG, "%s will fly to (%i, %i) (%s) to fight there",
               unit_rule_name(punit),
               TILE_XY(dst_tile),
-              tile_city(dst_tile)
-              ? city_name(tile_city(dst_tile))
+              tile_get_city(dst_tile)
+              ? city_name(tile_get_city(dst_tile))
               : "");
       punit->goto_tile = dst_tile;
       punit->ai.done = TRUE; /* Wait for next turn */
@@ -365,7 +364,7 @@ void ai_manage_airunit(struct player *pplayer, struct unit *punit)
       freelog(LOG_DEBUG, "%s cannot find anything to kill and is staying put", 
               unit_rule_name(punit));
       punit->ai.done = TRUE;
-      unit_activity_handling(punit, ACTIVITY_IDLE);
+      handle_unit_activity_request(punit, ACTIVITY_IDLE);
     }
   }
 
@@ -405,16 +404,10 @@ bool ai_choose_attacker_air(struct player *pplayer, struct city *pcity,
   }
 
   unit_type_iterate(punittype) {
-    struct unit_class *pclass = utype_class(punittype);
-
-    if (pclass->ai.land_move == MOVE_NONE
-        || pclass->ai.sea_move == MOVE_NONE
-        || uclass_has_flag(pclass, UCF_TERRAIN_SPEED)
-        || unit_type_is_losing_hp(pplayer, punittype)) {
-      /* We don't consider this a plane */
+    if (punittype->move_type != AIR_MOVING) {
       continue;
     }
-    if (can_city_build_unit_now(pcity, punittype)) {
+    if (can_build_unit(pcity, punittype)) {
       struct unit *virtual_unit = 
 	create_unit_virtual(pplayer, pcity, punittype, 
                             do_make_unit_veteran(pcity, punittype));
@@ -423,7 +416,7 @@ bool ai_choose_attacker_air(struct player *pplayer, struct city *pcity,
       if (profit > choice->want){
 	/* Update choice */
 	choice->want = profit;
-	choice->value.utype = punittype;
+	choice->choice = punittype->index;
 	choice->type = CT_ATTACKER;
 	choice->need_boat = FALSE;
 	want_something = TRUE;

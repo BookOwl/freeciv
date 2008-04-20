@@ -18,6 +18,7 @@
 #include "fc_types.h"
 #include "unit.h"		/* enum ai_unit_task */
 
+struct ai_choice;
 struct pf_path;
 struct pf_parameter;
 struct pft_amphibious;
@@ -31,9 +32,9 @@ struct pft_amphibious;
 #ifdef DEBUG
 #define CHECK_UNIT(punit)                                                   \
   (assert(punit != NULL),						    \
-   assert(unit_type(punit) != NULL),						    \
+   assert(unit_type(punit) != NULL),					    \
    assert(unit_owner(punit) != NULL),					    \
-   assert(&game.players[player_index(unit_owner(punit))] == unit_owner(punit)),	    \
+   assert(unit_owner(punit) == &game.players[unit_owner(punit)->player_no]), \
    assert(game_find_unit_by_number(punit->id) != NULL))
 #else
 #define CHECK_UNIT(punit) assert(TRUE)
@@ -51,8 +52,7 @@ struct ai_risk_cost
   double enemy_zoc_cost;
 };
 
-const char *ai_unit_task_rule_name(const enum ai_unit_task task);
-const char *ai_choice_rule_name(const struct ai_choice *choice);
+const char *get_ai_role_str(enum ai_unit_task task);
 
 int military_amortize(struct player *pplayer, struct city *pcity, 
                       int value, int delay, int build_cost);
@@ -93,14 +93,11 @@ int ai_gold_reserve(struct player *pplayer);
 void init_choice(struct ai_choice *choice);
 void adjust_choice(int value, struct ai_choice *choice);
 void copy_if_better_choice(struct ai_choice *cur, struct ai_choice *best);
-
-bool is_unit_choice_type(enum choice_type type);
-
 bool ai_choose_role_unit(struct player *pplayer, struct city *pcity,
                          struct ai_choice *choice, enum choice_type type,
                          int role, int want, bool need_boat);
 void ai_advisor_choose_building(struct city *pcity, struct ai_choice *choice);
-bool ai_assess_military_unhappiness(struct city *pcity);
+bool ai_assess_military_unhappiness(struct city *pcity, struct government *g);
 
 bool ai_wants_no_science(struct player *pplayer);
 

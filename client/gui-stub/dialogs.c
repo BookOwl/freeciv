@@ -118,7 +118,7 @@ void popup_diplomat_dialog(struct unit *punit, struct tile *ptile)
   Popup a window asking a diplomatic unit if it wishes to incite the
   given enemy city.
 **************************************************************************/
-void popup_incite_dialog(struct city *pcity)
+void popup_incite_dialog(struct city *pcity, int cost)
 {
   /* PORTME */
 }
@@ -127,7 +127,7 @@ void popup_incite_dialog(struct city *pcity)
   Popup a dialog asking a diplomatic unit if it wishes to bribe the
   given enemy unit.
 **************************************************************************/
-void popup_bribe_dialog(struct unit *punit)
+void popup_bribe_dialog(struct unit *punit, int cost)
 {
   /* PORTME */
 }
@@ -145,8 +145,7 @@ void popup_sabotage_dialog(struct city *pcity)
   Popup a dialog asking the unit which improvement they would like to
   pillage.
 **************************************************************************/
-void popup_pillage_dialog(struct unit *punit, bv_special may_pillage,
-                          struct base_type *pbase)
+void popup_pillage_dialog(struct unit *punit, bv_special may_pillage)
 {
   /* PORTME */
 }
