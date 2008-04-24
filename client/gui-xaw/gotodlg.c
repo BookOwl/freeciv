@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -29,20 +28,17 @@
 #include <X11/Xaw/Viewport.h>
 #include <X11/Xaw/Toggle.h>     
 
-#include "mem.h"
-#include "support.h"
-
 #include "game.h"
 #include "map.h"
+#include "mem.h"
 #include "packets.h"
 #include "player.h"
+#include "support.h"
 #include "unit.h"
-#include "unitlist.h"
 
 #include "civclient.h"
+#include "clinet.h"
 #include "control.h" /* get_unit_in_focus */
-#include "goto.h"
-
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "mapctrl.h"
@@ -89,7 +85,7 @@ static char *dummy_city_list[]={
 
 static int ncities_total = 0;
 static char **city_name_ptrs = NULL;
-static struct tile *original_tile;
+static int original_x, original_y;
 
 
 /****************************************************************
@@ -99,15 +95,14 @@ void popup_goto_dialog(void)
 {
   Position x, y;
   Dimension width, height;
-  Boolean no_player_cities;
+  Boolean no_player_cities = !(city_list_size(&game.player_ptr->cities));
 
-  if (!can_client_issue_orders() || get_num_units_in_focus() == 0) {
+  if(get_client_state()!=CLIENT_GAME_RUNNING_STATE)
     return;
-  }
+  if(get_unit_in_focus()==0)
+    return;
 
-  no_player_cities = !(city_list_size(client.conn.playing->cities));
-
-  original_tile = get_center_tile_mapcanvas();
+  get_center_tile_mapcanvas(&original_x, &original_y);
   
   XtSetSensitive(main_form, FALSE);
   
@@ -204,42 +199,34 @@ static struct city *get_selected_city(void)
 **************************************************************************/
 void update_goto_dialog(Widget goto_list)
 {
-  int j = 0;
+  int i, j;
   Boolean all_cities;
-
-  if (!can_client_issue_orders()) {
-    return;
-  }
 
   XtVaGetValues(goto_all_toggle, XtNstate, &all_cities, NULL);
 
   cleanup_goto_list();
 
   if(all_cities) {
-    ncities_total = 0;
-    players_iterate(pplayer) {
-      ncities_total += city_list_size(pplayer->cities);
-    } players_iterate_end;
+    for(i=0, ncities_total=0; i<game.nplayers; i++) {
+      ncities_total+=city_list_size(&game.players[i].cities);
+    }
   } else {
-    ncities_total = city_list_size(client.conn.playing->cities);
+    ncities_total=city_list_size(&game.player_ptr->cities);
   }
 
   city_name_ptrs=fc_malloc(ncities_total*sizeof(char*));
   
-  players_iterate(pplayer) {
-    if (!all_cities && pplayer != client.conn.playing) {
-      continue;
-    }
-    city_list_iterate(pplayer->cities, pcity) {
+  for(i=0, j=0; i<game.nplayers; i++) {
+    if(!all_cities && i!=game.player_idx) continue;
+    city_list_iterate(game.players[i].cities, pcity) {
       char name[MAX_LEN_NAME+3];
-      sz_strlcpy(name, city_name(pcity));
-      /* FIXME: should use unit_can_airlift_to(). */
-      if (pcity->airlift) {
+      sz_strlcpy(name, pcity->name);
+      if (pcity->improvements[B_AIRPORT] == I_ACTIVE)
 	sz_strlcat(name, "(A)");
-      }
       city_name_ptrs[j++]=mystrdup(name);
-    } city_list_iterate_end;
-  } players_iterate_end;
+    }
+    city_list_iterate_end;
+  }
 
   if(ncities_total) {
     qsort(city_name_ptrs, ncities_total, sizeof(char *), compare_strings_ptrs);
@@ -266,19 +253,12 @@ void goto_list_callback(Widget w, XtPointer client_data, XtPointer call_data)
   XawListReturnStruct *ret;
   ret=XawListShowCurrent(goto_list);
   
-  if (ret->list_index != XAW_LIST_NONE) {
+  if(ret->list_index!=XAW_LIST_NONE) {
     struct city *pdestcity;
-    if ((pdestcity = get_selected_city())) {
-      bool can_airlift = FALSE;
-      unit_list_iterate(get_units_in_focus(), punit) {
-        if (unit_can_airlift_to(punit, pdestcity)) {
-	  can_airlift = TRUE;
-	  break;
-	}
-      } unit_list_iterate_end;
-
-      center_tile_mapcanvas(pdestcity->tile);
-      if (can_airlift) {
+    if((pdestcity=get_selected_city())) {
+      struct unit *punit=get_unit_in_focus();
+      center_tile_mapcanvas(pdestcity->x, pdestcity->y);
+      if(punit && unit_can_airlift_to(punit, pdestcity)) {
 	XtSetSensitive(goto_airlift_command, True);
 	return;
       }
@@ -294,10 +274,11 @@ void goto_airlift_command_callback(Widget w, XtPointer client_data,
 				  XtPointer call_data)
 {
   struct city *pdestcity=get_selected_city();
-  if (pdestcity) {
-    unit_list_iterate(get_units_in_focus(), punit) {
+  if(pdestcity) {
+    struct unit *punit=get_unit_in_focus();
+    if(punit) {
       request_unit_airlift(punit, pdestcity);
-    } unit_list_iterate_end;
+    }
   }
   popdown_goto_dialog();
 }
@@ -319,9 +300,10 @@ void goto_goto_command_callback(Widget w, XtPointer client_data,
 {
   struct city *pdestcity = get_selected_city();
   if (pdestcity) {
-    unit_list_iterate(get_units_in_focus(), punit) {
-      send_goto_tile(punit, pdestcity->tile);
-    } unit_list_iterate_end;
+    struct unit *punit = get_unit_in_focus();
+    if (punit) {
+      send_goto_unit(punit, pdestcity->x, pdestcity->y);
+    }
   }
   popdown_goto_dialog();
 }
@@ -332,7 +314,7 @@ void goto_goto_command_callback(Widget w, XtPointer client_data,
 void goto_cancel_command_callback(Widget w, XtPointer client_data, 
 				  XtPointer call_data)
 {
-  center_tile_mapcanvas(original_tile);
+  center_tile_mapcanvas(original_x, original_y);
   popdown_goto_dialog();
 }
 

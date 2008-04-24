@@ -1,102 +1,82 @@
-/********************************************************************** 
- Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2, or (at your option)
-   any later version.
-
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-***********************************************************************/
-
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
+/* connectdlg.c -- PLACEHOLDER */
 
 #include <errno.h>
 
-#include "fcintl.h"
 #include "log.h"
-#include "support.h"
 
-#include "connectdlg_g.h"
-
-#include "chatline_common.h"	/* for append_output_window */
-#include "civclient.h"
 #include "connectdlg.h"
-#include "packhand_gen.h"
+
+static void try_to_autoconnect(void);
+
+
+void
+gui_server_connect(void)
+{
+	/* PORTME */
+}
+
 
 /**************************************************************************
- Really close and destroy the dialog.
+  Start trying to autoconnect to civserver.
+  Calls get_server_address(), then arranges for
+  autoconnect_callback(), which calls try_to_connect(), to be called
+  roughly every AUTOCONNECT_INTERVAL milliseconds, until success,
+  fatal error or user intervention.
 **************************************************************************/
-void really_close_connection_dialog(void)
+void server_autoconnect()
 {
-  /* PORTME */
+  char buf[512];
+  int outcome;
+
+  my_snprintf(buf, sizeof(buf),
+	      _("Auto-connecting to server \"%s\" at port %d as \"%s\""),
+	      server_host, server_port, connect_name);
+  append_output_window(buf);
+  outcome = get_server_address(server_host, server_port, buf, sizeof(buf));
+  if (outcome < 0) {
+    freelog(LOG_FATAL,
+	    _("Error contacting server \"%s\" at port %d "
+	      "as \"%s\":\n %s\n"),
+	    server_host, server_port, connect_name, buf);
+    exit(EXIT_FAILURE);
+  }
+  try_to_autoconnect();
 }
 
 /**************************************************************************
- Close and destroy the dialog. But only if we don't have a local
- server running (that we started).
+  Make an attempt to autoconnect to the server.  If the server isn't
+  there yet, arrange for this routine to be called again in about
+  AUTOCONNECT_INTERVAL milliseconds.  If anything else goes wrong, log
+  a fatal error.
 **************************************************************************/
-void close_connection_dialog()
+static int try_to_autoconnect()
 {
-  /* PORTME */
-}
+  char errbuf[512];
+  static int count = 0;
 
-/**************************************************************************
- Configure the dialog depending on what type of authentication request the
- server is making.
-**************************************************************************/
-void handle_authentication_req(enum authentication_type type, char *message)
-{
-  switch (type) {
-  case AUTH_NEWUSER_FIRST:
-     /* PORTME: switch configs if need be */
-    break;
-  case AUTH_NEWUSER_RETRY:
-     /* PORTME: switch configs if need be */
-    break;
-  case AUTH_LOGIN_FIRST:
-    /* if we magically have a password already present in 'password'
-     * then, use that and skip the password entry dialog */
-    if (password[0] != '\0') {
-      struct packet_authentication_reply reply;
+  count++;
 
-      sz_strlcpy(reply.password, password);
-      send_packet_authentication_reply(&client.conn, &reply);
-      return;
-    } else {
-     /* PORTME: switch configs if need be */
-    }
-    break;
-  case AUTH_LOGIN_RETRY:
-     /* PORTME: switch configs if need be */
-    break;
-  default:
-    assert(0);
+  /* abort if after 10 seconds the server couldn't be reached */
+
+  if (AUTOCONNECT_INTERVAL * count >= 10000) {
+    freelog(LOG_FATAL,
+	    _("Failed to contact server \"%s\" at port "
+	      "%d as \"%s\" after %d attempts"),
+	    server_host, server_port, connect_name, count);
+    gtk_exit(EXIT_FAILURE);
   }
 
-  /* PORTME etc. */
-}
-
-/**************************************************************************
- Provide a packet handler for packet_game_load.
-
- This regenerates the player information from a loaded game on the
- server.
-**************************************************************************/
-void handle_game_load(struct packet_game_load *packet)
-{ 
-  /* PORTME */
-}
-
-
-/**************************************************************************
-  Provide an interface for connecting to a FreeCiv server.
-**************************************************************************/
-void gui_server_connect(void)
-{
-  /* PORTME */
+  switch (try_to_connect(connect_name, errbuf, sizeof(errbuf))) {
+  case 0:			/* Success! */
+    return;
+  case ECONNREFUSED:		/* Server not available (yet) - wait & retry */
+     /*PORTME*/ schedule_timer
+	(AUTOCONNECT_INTERVAL, try_to_autoconnect, NULL);
+  default:			/* All other errors are fatal */
+    freelog(LOG_FATAL,
+	    _("Error contacting server \"%s\" at port %d "
+	      "as \"%s\":\n %s\n"),
+	    server_host, server_port, connect_name, errbuf);
+     /*PORTME*/ exit_application(error code);
+  }
 }

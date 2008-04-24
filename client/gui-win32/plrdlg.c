@@ -10,30 +10,29 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
-#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 
 #include <windows.h>
 #include <windowsx.h>
 #include <commctrl.h>
 
-#include "diptreaty.h"
 #include "fcintl.h"
+#include "game.h"
 #include "packets.h"
 #include "nation.h"
 #include "player.h"
 #include "support.h"
 
 #include "chatline.h"
-#include "civclient.h"
 #include "climisc.h"
+#include "clinet.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "inteldlg.h"
@@ -56,18 +55,23 @@ static int sort_column=2;
 #define ID_PLAYERS_VISION 105
 #define ID_PLAYERS_SSHIP 106
 
-#define NUM_COLUMNS 8
+#define NUM_COLUMNS 10
 
 /******************************************************************
 
 *******************************************************************/
-static void players_meet(int player_index)
+void players_meet(int player_index)
 {
-  if (can_meet_with_player(player_by_number(player_index))) {
-    dsend_packet_diplomacy_init_meeting_req(&client.conn, player_index);
+  if (player_has_embassy(game.player_ptr,&game.players[player_index])) {
+    struct packet_diplomacy_info pa;
+    pa.plrno0=game.player_idx;
+    pa.plrno1=player_index;
+    pa.plrno_from=pa.plrno0;
+    send_packet_diplomacy_info(&aconnection, PACKET_DIPLOMACY_INIT_MEETING,
+			       &pa);
 
   } else {
-    append_output_window(_("You need an embassy to "
+    append_output_window(_("Game: You need an embassy to "
 			   "establish a diplomatic meeting."));
   }
 }
@@ -75,76 +79,73 @@ static void players_meet(int player_index)
 /******************************************************************
 
 *******************************************************************/
-static void players_war(int player_index)
+void players_war(int player_index)
 {
-  dsend_packet_diplomacy_cancel_pact(&client.conn, player_index,
-				     CLAUSE_CEASEFIRE);
+  struct packet_generic_integer pa;  
+  pa.value = player_index;
+  send_packet_generic_integer(&aconnection, PACKET_PLAYER_CANCEL_PACT,
+			      &pa);
 }
 
 /******************************************************************
 
 *******************************************************************/
-static void players_vision(int player_index)
+void players_vision(int player_index)
 {
-  dsend_packet_diplomacy_cancel_pact(&client.conn, player_index,
-				     CLAUSE_VISION);
+  struct packet_generic_integer pa;  
+  pa.value = player_index;
+  send_packet_generic_integer(&aconnection, PACKET_PLAYER_REMOVE_VISION,
+			      &pa);
 }
 
 /******************************************************************
 
 *******************************************************************/
-static void players_intel(int player_index)
+void players_intel(int player_index)
 {
-  struct player *pplayer = player_by_number(player_index);
-
-  if (can_intel_with_player(pplayer)) {
-    popup_intel_dialog(pplayer);
-  } 
+  if(player_has_embassy(game.player_ptr, &game.players[player_index]))
+    popup_intel_dialog(&game.players[player_index]);
+  
 }
 
 /******************************************************************
 
 *******************************************************************/
-static void players_sship(int player_index)
+void players_sship(int player_index)
 {
-  struct player *pplayer = player_by_number(player_index);
-
-  popup_spaceship_dialog(pplayer);
+  popup_spaceship_dialog(&game.players[player_index]);
 }
 
-/******************************************************************
+/* 
  * Builds the text for the cells of a row in the player report. If
  * update is 1, only the changable entries are build.
-
-  FIXME: use plrdlg_common.c
-*******************************************************************/
-static void build_row(const char **row, int player_index, int update)
+ */
+static void build_row(char **row, int i, int update)
 {
   static char namebuf[MAX_LEN_NAME],  aibuf[2], dsbuf[32],
-      statebuf[32], idlebuf[32];
+      repbuf[32], statebuf[32], idlebuf[32];
   const struct player_diplstate *pds;
-  struct player *pplayer = player_by_number(player_index);
 
   /* we cassume that neither name nor the nation of a player changes */
   if (update == 0) {
     /* the playername */
-    my_snprintf(namebuf, sizeof(namebuf), "%-16s", player_name(pplayer));
+    my_snprintf(namebuf, sizeof(namebuf), "%-16s", game.players[i].name);
     row[0] = namebuf;
 
 
     /* the nation */
-    row[1] = nation_adjective_for_player(pplayer);
+    row[1] = get_nation_name(game.players[i].nation);
   }
 
   /* text for name, plus AI marker */
-  aibuf[0] = (pplayer->ai.control ? '*' : '\0');
+  aibuf[0] = (game.players[i].ai.control ? '*' : '\0');
   aibuf[1] = '\0';
 
   /* text for diplstate type and turns -- not applicable if this is me */
-  if (pplayer == client.conn.playing) {
+  if (i == game.player_idx) {
     strcpy(dsbuf, "-");
   } else {
-    pds = pplayer_get_diplstate(client.conn.playing, pplayer);
+    pds = pplayer_get_diplstate(game.player_ptr, get_player(i));
     if (pds->type == DS_CEASEFIRE) {
       my_snprintf(dsbuf, sizeof(dsbuf), "%s (%d)",
 		  diplstate_text(pds->type), pds->turns_left);
@@ -154,26 +155,43 @@ static void build_row(const char **row, int player_index, int update)
   }
 
   /* text for state */
-  sz_strlcpy(statebuf, plrdlg_col_state(pplayer));
+  if (game.players[i].is_alive) {
+    if (game.players[i].is_connected) {
+      if (game.players[i].turn_done) {
+	sz_strlcpy(statebuf, _("done"));
+      } else {
+	sz_strlcpy(statebuf, _("moving"));
+      }
+    } else {
+      statebuf[0] = '\0';
+    }
+  } else {
+    sz_strlcpy(statebuf, _("R.I.P"));
+  }
 
   /* text for idleness */
-  if (pplayer->nturns_idle > 3) {
+  if (game.players[i].nturns_idle > 3) {
     my_snprintf(idlebuf, sizeof(idlebuf),
-		PL_("(idle %d turn)",
-		    "(idle %d turns)",
-		    pplayer->nturns_idle - 1),
-		pplayer->nturns_idle - 1);
+		PL_("(idle %d turn)", "(idle %d turns)",
+		    game.players[i].nturns_idle - 1),
+		game.players[i].nturns_idle - 1);
   } else {
     idlebuf[0] = '\0';
   }
 
+  /* text for reputation */
+  my_snprintf(repbuf, sizeof(repbuf),
+	      reputation_text(game.players[i].reputation));
+
   /* assemble the whole lot */
   row[2] = aibuf;
-  row[3] = dsbuf;
-  row[4] = get_vision_status(client.conn.playing, pplayer);
-  row[5] = statebuf;
-  row[6] = (char *) player_addr_hack(pplayer);	/* Fixme */
-  row[7] = idlebuf;
+  row[3] = get_embassy_status(game.player_ptr, &game.players[i]);
+  row[4] = dsbuf;
+  row[5] = get_vision_status(game.player_ptr, &game.players[i]);
+  row[6] = repbuf;
+  row[7] = statebuf;
+  row[8] = (char *) player_addr_hack(&game.players[i]);	/* Fixme */
+  row[9] = idlebuf;
 }
 
 
@@ -181,12 +199,11 @@ static void build_row(const char **row, int player_index, int update)
 /******************************************************************
 
 *******************************************************************/
-static int CALLBACK sort_proc(LPARAM lParam1, LPARAM lParam2,
-			      LPARAM lParamSort)
+int CALLBACK sort_proc(LPARAM lParam1,LPARAM lParam2,LPARAM lParamSort)
 {
   char text1[128];
   char text2[128];
-  const char *row_texts[NUM_COLUMNS];
+  char *row_texts[NUM_COLUMNS];
   build_row(row_texts,lParam1,0);
   sz_strlcpy(text1,row_texts[lParamSort]);
   build_row(row_texts,lParam2,0);
@@ -199,16 +216,15 @@ static int CALLBACK sort_proc(LPARAM lParam1, LPARAM lParam2,
  ******************************************************************/
 static void enable_buttons(int player_index)
 {
-  struct player *pplayer = player_by_number(player_index);
-
+  struct player *pplayer=&game.players[player_index];
   if (pplayer->spaceship.state!=SSHIP_NONE)
     EnableWindow(GetDlgItem(players_dialog,ID_PLAYERS_SSHIP),
 		 TRUE);
   else
     EnableWindow(GetDlgItem(players_dialog,ID_PLAYERS_SSHIP),
 		 FALSE);
-  switch (pplayer_get_diplstate(client.conn.playing,
-                                player_by_number(player_index))->type) {
+  switch (pplayer_get_diplstate
+	  (game.player_ptr, get_player(player_index))->type) {
   case DS_WAR:
   case DS_NO_CONTACT:
     EnableWindow(GetDlgItem(players_dialog,ID_PLAYERS_WAR), FALSE);
@@ -218,12 +234,21 @@ static void enable_buttons(int player_index)
   }
   
   EnableWindow(GetDlgItem(players_dialog, ID_PLAYERS_VISION),
-	       gives_shared_vision(client.conn.playing, pplayer));
+	       gives_shared_vision(game.player_ptr, pplayer));
 
-  EnableWindow(GetDlgItem(players_dialog, ID_PLAYERS_MEET),
-               can_meet_with_player(pplayer));
-  EnableWindow(GetDlgItem(players_dialog, ID_PLAYERS_INT),
-               can_intel_with_player(pplayer));
+  if (pplayer->is_alive 
+      && pplayer != game.player_ptr
+      && player_has_embassy(game.player_ptr, pplayer)) {
+    if (pplayer->is_connected)
+      EnableWindow(GetDlgItem(players_dialog,ID_PLAYERS_MEET), TRUE);
+    else
+      EnableWindow(GetDlgItem(players_dialog,ID_PLAYERS_MEET), FALSE);
+    EnableWindow(GetDlgItem(players_dialog,ID_PLAYERS_INT), TRUE);
+    return;
+  }
+
+  EnableWindow(GetDlgItem(players_dialog,ID_PLAYERS_MEET), FALSE);
+  EnableWindow(GetDlgItem(players_dialog,ID_PLAYERS_INT), FALSE);
 }
 
 /******************************************************************
@@ -322,20 +347,17 @@ static LONG CALLBACK players_proc(HWND dlg,UINT message,
 /******************************************************************
 
 *******************************************************************/
-static void create_players_dialog(void)
+void create_players_dialog()
 {
   int i;
   static char *titles_[NUM_COLUMNS] =
-    { N_("Name"), N_("Nation"), N_("AI"),
-      N_("Dipl.State"), N_("Vision"),
+    { N_("Name"), N_("Nation"), N_("Ai"),
+      N_("Embassy"), N_("Dipl.State"), N_("Vision"), N_("Reputation"),
       N_("State"), N_("Host"), N_("Idle")
     };
   struct fcwin_box *vbox;
   struct fcwin_box *hbox;
-
-  players_dialog=fcwin_create_layouted_window(players_proc,
-					      /* TRANS: Nations report title */
-					      _("Nations"),
+  players_dialog=fcwin_create_layouted_window(players_proc,_("Players"),
 					      WS_OVERLAPPEDWINDOW,
 					      CW_USEDEFAULT,CW_USEDEFAULT,
 					      root_window,NULL,
@@ -373,14 +395,11 @@ static void create_players_dialog(void)
 
 *******************************************************************/      
 void
-popup_players_dialog(bool raise)
+popup_players_dialog(void)
 {
   if (!players_dialog)
     create_players_dialog();
   ShowWindow(players_dialog,SW_SHOWNORMAL);
-  if (raise) {
-    SetFocus(players_dialog);
-  }
 }
 
 /**************************************************************************
@@ -392,14 +411,13 @@ update_players_dialog(void)
   if (players_dialog && !is_plrdlg_frozen()) {
     LV_ITEM lvi;
     HWND lv;
-    const char *row_texts[NUM_COLUMNS];
+    char *row_texts[NUM_COLUMNS];
     int i,row;
     lv=GetDlgItem(players_dialog,ID_PLAYERS_LIST);
     ListView_DeleteAllItems(lv);
-
-    for (i = 0; i < player_count(); i++) {
+    for (i = 0; i < game.nplayers; i++) {
       build_row(row_texts, i, 0);
-      row=fcwin_listview_add_row(lv,i,NUM_COLUMNS, (char **)row_texts);
+      row=fcwin_listview_add_row(lv,i,NUM_COLUMNS,row_texts);
       lvi.iItem=row;
       lvi.iSubItem=0;
       lvi.lParam=i;

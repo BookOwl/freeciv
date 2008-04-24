@@ -16,9 +16,9 @@
 
 #include <gtk/gtk.h>
 
-#include "fc_types.h"
-
 #include "cma_core.h"
+
+struct city;
 
 enum cma_refresh {
   REFRESH_ALL,
@@ -35,20 +35,15 @@ struct cma_dialog {
   GtkWidget *result_label;
   GtkWidget *add_preset_command;
   GtkWidget *del_preset_command;
-  GtkWidget *active_label;
-  GtkWidget *active_image;
-  GtkWidget *active_command;
-  GtkAdjustment *minimal_surplus[O_MAX];
+  GtkWidget *change_command;
+  GtkWidget *perm_command;
+  GtkWidget *release_command;
+  GtkAdjustment *minimal_surplus[NUM_STATS];
   GtkWidget *happy_button;
-  GtkAdjustment *factor[O_MAX + 1];
-  GtkTooltips *tips;
-  GtkTreeSelection *selection;
-  GtkListStore *store;
+  GtkAdjustment *factor[NUM_STATS + 1];
   int id;			/* needed to pass a preset_index */
 };
 
-void cma_fe_init(void);
-void cma_fe_done(void);
 struct cma_dialog *create_cma_dialog(struct city *pcity);
 void close_cma_dialog(struct city *pcity);
 void refresh_cma_dialog(struct city *pcity, enum cma_refresh refresh);

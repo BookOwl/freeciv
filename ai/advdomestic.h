@@ -13,9 +13,14 @@
 #ifndef FC__ADVDOMESTIC_H
 #define FC__ADVDOMESTIC_H
 
-#include "fc_types.h"
+struct player;
+struct city;
+struct ai_choice;
 
+void ai_eval_threat_init(struct player *pplayer);
+void ai_eval_threat_done(struct player *pplayer);
 void domestic_advisor_choose_build(struct player *pplayer, struct city *pcity,
 				   struct ai_choice *choice);
+void ai_eval_buildings(struct city *pcity);
 
 #endif  /* FC__ADVDOMESTIC_H */

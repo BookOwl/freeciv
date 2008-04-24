@@ -10,28 +10,23 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
-
 #include <windows.h>
 #include <winsock.h>
 #include <windowsx.h>
 #include <commctrl.h>
 #include <richedit.h>
 
-#include "fciconv.h"
 #include "fcintl.h"
 #include "game.h"
 #include "log.h"
 #include "map.h"
 #include "mem.h"
-#include "netintf.h"
 #include "shared.h"
 #include "support.h"
 #include "version.h"
-#include "timing.h"
 
 #include "chatline.h"
 #include "civclient.h"
@@ -42,8 +37,8 @@
 #include "control.h"
 #include "dialogs.h"
 #include "gotodlg.h"
-#include "gui_stuff.h"
 #include "graphics.h"
+#include "gui_stuff.h"
 #include "helpdata.h"           /* boot_help_texts() */
 #include "mapctrl.h"
 #include "mapview.h"
@@ -51,7 +46,6 @@
 #include "optiondlg.h"
 #include "options.h"
 #include "spaceshipdlg.h"
-#include "sprite.h"
 #include "tilespec.h"
 
 #include <stdio.h>
@@ -65,8 +59,7 @@ HWND hchatline;
 HWND root_window;
 HWND logoutput_win;
 HWND infolabel_win;
-HWND unit_info_frame;
-HWND unit_info_label;
+HWND unitinfo_win;
 HWND turndone_button;
 HWND timeout_label;
 HWND map_window;
@@ -80,6 +73,8 @@ int main_win_width;
 int main_win_height;
 int map_win_x;
 int map_win_y;
+int map_win_width;
+int map_win_height;
 int taxinfoline_y;
 int indicator_y;
 int overview_win_x;
@@ -88,101 +83,19 @@ int overview_win_width;
 int overview_win_height;
 static int net_input=-1;
 
-int city_names_font_size = 0, city_productions_font_size = 0;
-HFONT main_font;
-HFONT city_descriptions_font;
 
 extern int seconds_to_turndone;   
 
-bool better_fog = TRUE;
-bool enable_alpha = TRUE;
 
 const static RECT textwin_size={0,1,0,100};
 
 struct fcwin_box *main_win_box;
 struct fcwin_box *output_box;
 
-const char * const gui_character_encoding = NULL;
-const bool gui_use_transliteration = TRUE;
-
-client_option gui_options[] = {
-  GEN_BOOL_OPTION_CB(better_fog,
-		     N_("Better fog-of-war drawing"),
-		     N_("If this is enabled then a better method is used for "
-			"drawing fog-of-war.  It is not any slower but will "
-			"consume about twice as much memory."),
-		     COC_GRAPHICS, mapview_redraw_callback),
-  GEN_BOOL_OPTION_CB(enable_alpha,
-		     N_("Enable alpha blending"),
-		     N_("If this is enabled, then alpha blending will be "
-			"used in rendering, instead of an ordered dither.  "
-			"If there is no hardware support for alpha "
-			"blending, this is much slower."),
-		     COC_GRAPHICS, mapview_redraw_callback)
-};
-const int num_gui_options = ARRAY_SIZE(gui_options);
-
-bool process_net_input(void);
-
-struct callback {
-  void (*callback)(void *data);
-  void *data;
-};
-
-#define SPECLIST_TAG callback
-#define SPECLIST_TYPE struct callback
-#include "speclist.h"
-
-struct callback_list *callbacks;
-
-/****************************************************************************
-  Called by the tileset code to set the font size that should be used to
-  draw the city names and productions.
-****************************************************************************/
-void set_city_names_font_sizes(int my_city_names_font_size,
-			       int my_city_productions_font_size)
-{
-  LOGFONT lf;
-  HDC hdc;
-
-  city_names_font_size = my_city_names_font_size;
-  city_productions_font_size = my_city_productions_font_size;
-
-  lf.lfWidth = 0;
-  lf.lfEscapement = 0;
-  lf.lfOrientation = 0;
-  lf.lfWeight = FW_SEMIBOLD;
-  lf.lfItalic = FALSE;
-  lf.lfUnderline = FALSE;
-  lf.lfStrikeOut = FALSE;
-  lf.lfCharSet = DEFAULT_CHARSET;
-  lf.lfOutPrecision = OUT_DEFAULT_PRECIS;
-  lf.lfClipPrecision = CLIP_DEFAULT_PRECIS;
-  lf.lfQuality = DEFAULT_QUALITY;
-  lf.lfPitchAndFamily = DEFAULT_PITCH;
-  strcpy(lf.lfFaceName, "");
-
-  hdc = GetDC(root_window);
-
-  lf.lfHeight = -MulDiv(city_names_font_size, GetDeviceCaps(hdc, LOGPIXELSY),
-			72);
-  main_font = CreateFontIndirect(&lf);
-
-  lf.lfHeight = -MulDiv(city_productions_font_size,
-			GetDeviceCaps(hdc, LOGPIXELSY), 72);
-  city_descriptions_font = CreateFontIndirect(&lf);
-
-  ReleaseDC(root_window, hdc);
-}
-
-BOOL have_AlphaBlend = FALSE;
-
-BOOL (WINAPI * AlphaBlend)(HDC,int,int,int,int,HDC,int,int,int,int,BLENDFUNCTION);
-
 /**************************************************************************
 
 **************************************************************************/
-static void HandleRMouse(int x, int y)
+void HandleRMouse(int x, int y)
 {
   SetFocus(root_window);
 }
@@ -190,21 +103,21 @@ static void HandleRMouse(int x, int y)
 /**************************************************************************
 
 **************************************************************************/
-static void HandleLMouse(int x, int y)
+void HandleLMouse(int x, int y)
 {
   SetFocus(root_window);
   if ((x>overview_win_x)&&(x<overview_win_x+overview_win_width)
 	   &&(y>overview_win_y)&&(y<overview_win_y+overview_win_height))
     overview_handle_rbut(x-overview_win_x,y-overview_win_y);
-  else if ((x<10*tileset_small_sprite_width(tileset))&&(y>taxinfoline_y)
-	   &&(y<taxinfoline_y+2*tileset_small_sprite_height(tileset)))
-    indicator_handle_but(x/tileset_small_sprite_width(tileset));
+  else if ((x<10*SMALL_TILE_WIDTH)&&(y>taxinfoline_y)
+	   &&(y<taxinfoline_y+2*SMALL_TILE_HEIGHT))
+    indicator_handle_but(x/SMALL_TILE_WIDTH);
 }
 
 /**************************************************************************
 
  **************************************************************************/
-static void HandlePaint(HDC hdc)
+void HandlePaint(HDC hdc)
 {
   overview_expose(hdc);
 }
@@ -212,16 +125,17 @@ static void HandlePaint(HDC hdc)
 /**************************************************************************
 
 **************************************************************************/
-void do_mainwin_layout(void)
+void do_mainwin_layout()
 {
   fcwin_redo_layout(root_window);
  
 }
 
+
 /**************************************************************************
 
 **************************************************************************/
-void set_overview_win_dim(int w, int h)
+void set_overview_win_dim(int w,int h)
 {
   overview_win_width=w;
   overview_win_height=h;
@@ -229,28 +143,15 @@ void set_overview_win_dim(int w, int h)
   do_mainwin_layout();
   
 }
-
-static void Handle_Hscroll(HWND hWnd, HWND hWndCtl, UINT code, int pos)
+void Handle_Hscroll(HWND hWnd,HWND hWndCtl,UINT code,int pos)
 {
-  int PosCur, PosMax, PosMin, id, xstep, ystep;
-  get_mapview_scroll_step(&xstep, &ystep);
+  int PosCur,PosMax,PosMin,id;
   PosCur=ScrollBar_GetPos(hWndCtl);
   ScrollBar_GetRange(hWndCtl,&PosMin,&PosMax);
-  id=GetDlgCtrlID(hWndCtl);
   switch(code)
     {
-    case SB_LINELEFT: 
-      if (id==ID_MAPHSCROLL)
-	PosCur -= xstep;
-      if (id==ID_MAPVSCROLL)
-	PosCur -= ystep;
-      break;
-    case SB_LINERIGHT: 
-      if (id==ID_MAPHSCROLL)
-	PosCur += xstep;
-      if (id==ID_MAPVSCROLL)
-	PosCur += ystep;
-      break;
+    case SB_LINELEFT: PosCur--; break;
+    case SB_LINERIGHT: PosCur++; break;
     case SB_PAGELEFT: PosCur-=(PosMax-PosMin+1)/10; break;
     case SB_PAGERIGHT: PosCur+=(PosMax-PosMin+1)/10; break;
     case SB_LEFT: PosCur=PosMin; break;
@@ -258,6 +159,7 @@ static void Handle_Hscroll(HWND hWnd, HWND hWndCtl, UINT code, int pos)
     case SB_THUMBTRACK: PosCur=pos; break;
     case SB_THUMBPOSITION:
     case SB_ENDSCROLL:
+      id=GetDlgCtrlID(hWndCtl);
       if (id==ID_MAPHSCROLL)
 	map_handle_hscroll(PosCur);
       if (id==ID_MAPVSCROLL)
@@ -285,8 +187,8 @@ static void box_fixedsize(POINT * minsize,void *data)
 **************************************************************************/
 static void taxinfoline_minsize(POINT * minsize,void *data)
 {
-  minsize->x=10*tileset_small_sprite_width(tileset);
-  minsize->y=1*tileset_small_sprite_height(tileset);
+  minsize->x=10*SMALL_TILE_WIDTH;
+  minsize->y=1*SMALL_TILE_HEIGHT;
 }
 
 /**************************************************************************
@@ -294,8 +196,8 @@ static void taxinfoline_minsize(POINT * minsize,void *data)
 **************************************************************************/
 static void indicator_line_minsize(POINT *minsize, void *data)
 {
-  minsize->x=4*tileset_small_sprite_width(tileset);
-  minsize->y=1*tileset_small_sprite_height(tileset);
+  minsize->x=4*SMALL_TILE_WIDTH;
+  minsize->y=1*SMALL_TILE_HEIGHT;
 }
 /**************************************************************************
 
@@ -312,7 +214,7 @@ static void taxinfoline_setsize(LPRECT newsize,void *data)
 {
   RECT rc;
   rc=*newsize;
-  rc.bottom+=tileset_small_sprite_height(tileset);
+  rc.bottom+=SMALL_TILE_HEIGHT;
   InvalidateRect(root_window,newsize,TRUE);
   taxinfoline_y=newsize->top;
 		 
@@ -355,8 +257,8 @@ static void overview_setsize(LPRECT newsize, void *data)
 **************************************************************************/
 static void map_minsize(POINT * minsize, void *data)
 {
-  minsize->x=tileset_tile_width(tileset)+15;
-  minsize->y=tileset_tile_height(tileset)+15;
+  minsize->x=NORMAL_TILE_WIDTH+15;
+  minsize->y=NORMAL_TILE_HEIGHT+15;
 }
 
 /**************************************************************************
@@ -372,7 +274,7 @@ static void map_setsize(LPRECT newsize, void *data)
   if ((mx==map_win_x)&&(map_win_y==my)&&
       (map_win_width==mw)&&(map_win_height==mh))
     return;
-  if ((mw<(2*tileset_tile_width(tileset)))||(mh<(2*tileset_tile_height(tileset)))) {
+  if ((mw<(2*NORMAL_TILE_WIDTH))||(mh<(2*NORMAL_TILE_HEIGHT))) {
     return;
   }
   map_win_x=mx;
@@ -386,15 +288,18 @@ static void map_setsize(LPRECT newsize, void *data)
   MoveWindow(map_scroll_h,map_win_x,map_win_y+map_win_height,
 	     map_win_width,15,TRUE);
   
-  map_canvas_resized(mw, mh);
+  map_resize();
 }
 
 
 /**************************************************************************
 
 **************************************************************************/
-static LONG APIENTRY FreecivWndProc(HWND hWnd, UINT message,
-				    UINT wParam, LONG lParam)
+LONG APIENTRY FreecivWndProc (
+                           HWND hWnd,
+                           UINT message,
+                           UINT wParam,
+                           LONG lParam)
 {
   HDC hdc;
   PAINTSTRUCT ps;
@@ -422,7 +327,11 @@ static LONG APIENTRY FreecivWndProc(HWND hWnd, UINT message,
       return TRUE;
       break;
     case WM_COMMAND:       
-      handle_menu(LOWORD(wParam));
+      if (LOWORD(wParam)==ID_SERVERBUTTON) {
+	handle_server_buttons((HWND)lParam);
+      } else {
+	handle_menu(LOWORD(wParam));
+      }
       break;
     case WM_HSCROLL:
       HANDLE_WM_HSCROLL(hWnd,wParam,lParam,Handle_Hscroll); 
@@ -449,7 +358,7 @@ static LONG APIENTRY FreecivWndProc(HWND hWnd, UINT message,
 /**************************************************************************
 
 **************************************************************************/
-static void create_main_window(void)
+void create_main_window()
 {
   HINSTANCE riched;
   struct fcwin_box *upper;
@@ -481,11 +390,8 @@ static void create_main_window(void)
   fcwin_box_add_box(leftrow,hbox,FALSE,FALSE,0);
   turndone_button=fcwin_box_add_button_default(leftrow,_("Turn Done"),
 					       ID_TURNDONE,0);
-  hbox = fcwin_hbox_new(root_window, FALSE);
-  unit_info_label = fcwin_box_add_static_default(hbox, " \n \n \n \n", 0,
-						 SS_LEFT);
-  unit_info_frame = fcwin_box_add_groupbox(leftrow, "", hbox, 0, FALSE,
-					   FALSE, 0);
+  unitinfo_win=fcwin_box_add_static_default(leftrow," \n \n \n \n",0,
+					    SS_CENTER);
   fcwin_box_add_box(upper,leftrow,FALSE,FALSE,5);
   map_window=CreateWindow("freecivmapwindow",NULL,WS_CHILD | WS_VISIBLE,
 			  0,0,20,20,root_window,
@@ -531,56 +437,67 @@ static void create_main_window(void)
 			    NULL);
   SendMessage(infolabel_win,
 	      WM_SETFONT,(WPARAM) font_12arial,MAKELPARAM(TRUE,0)); 
-  SendMessage(unit_info_frame,
+  SendMessage(unitinfo_win,
 	      WM_SETFONT,(WPARAM) font_12arial,MAKELPARAM(TRUE,0)); 
-  SendMessage(unit_info_label,
-	      WM_SETFONT,(WPARAM) font_12arial,MAKELPARAM(TRUE,0)); 
-  chat_welcome_message();
+  append_output_window(_("Freeciv is free software and you are welcome to distribute copies of"
+			 " it\nunder certain conditions; See the \"Copying\" item on the Help"
+			 " menu.\nNow.. Go give'em hell!") );
   hchatline=fcwin_box_add_edit(main_win_box,"",40,
 			       IDOK, 
 			       ES_WANTRETURN | ES_AUTOVSCROLL | ES_MULTILINE,
 			       FALSE,FALSE,10);
   
   fcwin_set_box(root_window,main_win_box);
-  init_mapcanvas_and_overview();
-
-  /* Need to set these so the version number shows up properly */
-  overview_win_width = 160;
-  overview_win_height = 100;
+  init_map_win();
+  init_color_system();
 }
 
 /**************************************************************************
-   Check the network input for messages, and process them.  Returns true
-   if a message was received.
-**************************************************************************/
-bool process_net_input()
-{
-  struct timeval tv;
-  fd_set civfdset;
-  bool processed = FALSE;
 
-  while (net_input>=0) {
-    FD_ZERO(&civfdset);
-    FD_SET(net_input, &civfdset);
-    tv.tv_sec = 0;
-    tv.tv_usec = 0;
-    if (my_select(1, &civfdset, NULL, NULL, &tv)) {
-      if (FD_ISSET(net_input, &civfdset)) {
-	input_from_server(net_input);
-	processed = TRUE;
-      }
-    } else {
-      break;
-    }
+**************************************************************************/
+static VOID CALLBACK blink_timer(HWND hwnd, UINT uMsg, UINT idEvent,
+				 DWORD dwTime)
+{
+  if (get_client_state() == CLIENT_GAME_RUNNING_STATE) {
+    check_mapstore();
   }
 
-  return processed;
+  real_timer_callback();
+}
+
+/**************************************************************************
+
+**************************************************************************/
+static VOID CALLBACK socket_timer(HWND  hwnd,UINT uMsg,UINT idEvent,DWORD  dwTime)  
+{
+    struct timeval tv;
+  fd_set civfdset;
+  while (net_input>=0)
+    {
+ 
+      FD_ZERO(&civfdset);
+      FD_SET(net_input,&civfdset);
+      tv.tv_sec=0;
+      tv.tv_usec=0;
+      if (select(1,&civfdset,NULL,NULL,&tv))
+        {
+          if (FD_ISSET(net_input,&civfdset))
+            {
+              input_from_server(net_input);
+            }
+        }
+      else
+        {
+          break;
+        }
+    }           
+  handle_pipe_and_process();
 } 
 
 /**************************************************************************
   This pops down every dialog
 **************************************************************************/
-void popdown_all_game_dialogs(void)
+void popdown_everything(void)
 {
   RECT rc;
   fcwin_close_all_childs(root_window);
@@ -595,122 +512,7 @@ void popdown_all_game_dialogs(void)
 **************************************************************************/
 void ui_init(void)
 {
-
 }
-
-static HINSTANCE hmsimg32;
-
-/**************************************************************************
-  Look for the alphablend function, then return TRUE if it works.
-**************************************************************************/
-static bool test_alphablend()
-{
-  HDC hdc;
-  BLENDFUNCTION bf;
-  COLORREF cr;
-  BITMAP bmp;
-  unsigned char *p;
-  HBITMAP src, dst;
-  HDC srcdc, dstdc;
-  HGDIOBJ tmpsrc, tmpdst;
-
-  /* Try to get AlphaBlend() from msimg32.dll */
-  if ((hmsimg32 = LoadLibrary("msimg32.dll"))) {
-    if ((AlphaBlend = GetProcAddress(hmsimg32, "AlphaBlend"))) {
-      /* fall through, do nothing */
-    } else {
-      freelog(LOG_TEST, "No AlphaBlend() in msimg32.dll, alpha blending disabled");
-      return FALSE;
-    }
-  } else {
-    freelog(LOG_TEST, "No msimg32.dll, alpha blending disabled");
-    return FALSE;
-  }
-
-  hdc = GetDC(map_window);
-
-  if (GetDeviceCaps(hdc, BITSPIXEL) < 32) {
-    freelog(LOG_TEST, "Not running in 32 bit color, alpha blending disabled");
-    ReleaseDC(map_window, hdc);
-    return FALSE;
-  }
-
-  /* As of version 3.2 of mingw's w32api, SHADEBLENDCAPS is not defined. */
-#define SHADEBLENDCAPS 120
-#define SB_NONE 0
-
-  if (GetDeviceCaps(hdc, SHADEBLENDCAPS) == SB_NONE) {
-    freelog(LOG_TEST, "Device does not support alpha blending, alpha blending disabled");
-    ReleaseDC(map_window, hdc);
-    return FALSE;
-  }
-
-#undef SB_NONE
-#undef SHADEBLENDCAPS
-
-  ReleaseDC(map_window, hdc);
-
-  /* It's not enough to simply have AlphaBlend, we must test it to see it
-     actually works. */
-  
-  p = fc_malloc(4);
-
-  bmp.bmType       = 0;
-  bmp.bmWidth      = 1;
-  bmp.bmHeight     = 1;
-  bmp.bmWidthBytes = 4;
-  bmp.bmPlanes     = 1;
-  bmp.bmBitsPixel  = 32;
-  bmp.bmBits       = p;
-
-  p[0] = 32;
-  p[1] = 64;
-  p[2] = 128;
-  p[3] = 128;
-
-  src = CreateBitmapIndirect(&bmp);
-
-  p[0] = 255;
-  p[1] = 170;
-  p[2] = 85;
-  p[3] = 0;
-
-  dst = CreateBitmapIndirect(&bmp);
-
-  free(p);
-
-  hdc = GetDC(root_window);
-  srcdc = CreateCompatibleDC(hdc);
-  dstdc = CreateCompatibleDC(hdc);
-  ReleaseDC(root_window, hdc);
-
-  tmpsrc = SelectObject(srcdc, src);
-  tmpdst = SelectObject(dstdc, dst);
-
-  bf.BlendOp = AC_SRC_OVER;
-  bf.BlendFlags = 0;
-  bf.SourceConstantAlpha = 255;
-  bf.AlphaFormat = AC_SRC_ALPHA;
-  AlphaBlend(dstdc, 0, 0, 1, 1, srcdc, 0, 0, 1, 1, bf);
-
-  cr = GetPixel(dstdc, 0, 0);
-
-  SelectObject(srcdc, tmpsrc);
-  SelectObject(dstdc, tmpdst);
-
-  DeleteObject(dstdc);
-  DeleteObject(srcdc);
-  DeleteObject(dst);
-  DeleteObject(src);
-
-  if (abs(GetRValue(cr) - 170) + abs(GetGValue(cr) - 149)
-      + abs(GetBValue(cr) - 159) > 25) {
-    return FALSE;
-  }
-  return TRUE;
-}
-
-extern void anim_cursor(float time);
 
 /**************************************************************************
 
@@ -720,20 +522,9 @@ ui_main(int argc, char *argv[])
 {
   RECT rc;
   MSG msg;
-  bool quit = FALSE;
-  bool idle;
-  struct timer *callback_timer;
-  struct timer *anim_timer;
-  float callback_seconds = 0;
-
-  freecivhinst = GetModuleHandle(NULL); /* There is no WinMain! */
-
+  freecivhinst=GetModuleHandle(NULL); /* There is no WinMain! */
   init_layoutwindow();
   InitCommonControls();
-
-  have_AlphaBlend = test_alphablend();
-  enable_alpha = have_AlphaBlend;
-
   unitselect_init(freecivhinst);
   init_mapwindow();
   font_8courier=GetStockObject(ANSI_FIXED_FONT);
@@ -745,90 +536,28 @@ ui_main(int argc, char *argv[])
   SetMenu(root_window,create_mainmenu());
   ShowWindow(root_window,SW_SHOWNORMAL);
   UpdateWindow(root_window);
-  tileset_init(tileset);
-  tileset_load_tiles(tileset);
+  tilespec_load_tiles();
   init_fog_bmp();
-  load_cursors();
 
   freecivaccel=my_create_menu_acceltable();
  
-  set_client_state(C_S_PREPARING);
-
-  callbacks = callback_list_new();
-
-  callback_timer = new_timer_start(TIMER_USER, TIMER_ACTIVE);
-  anim_timer = new_timer_start(TIMER_USER, TIMER_ACTIVE);
-
-  while (!quit) {
-
-    /* Network input */
-    idle = !process_net_input();
-
-    /* real_timer_callback() */
-    if (callback_seconds < read_timer_seconds(callback_timer)) {
-      idle = FALSE;
-
-      if (can_client_change_view()) {
-	check_mapstore();
-      }
-
-      callback_seconds = real_timer_callback();
-      clear_timer_start(callback_timer);
-    }
-
-    /* Win32 message queue */
-    while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
-      idle = FALSE;
-      if (msg.message == WM_QUIT) {
-	quit = TRUE;
-      }
-      if (!((msg.hwnd == root_window)
-	  && (TranslateAccelerator(root_window, freecivaccel, &msg)))) {
-	TranslateMessage(&msg);
-	DispatchMessage(&msg);   
-      }
-    }
-
-    /* If nothing happened in the three blocks above, call an idle function
-     * and do animations */
-    if (idle && callbacks && callback_list_size(callbacks) > 0) {
-      struct callback *cb = callback_list_get(callbacks, 0);
-      callback_list_unlink(callbacks, cb);
-      (cb->callback)(cb->data);
-      free(cb);
-
-      anim_cursor(read_timer_seconds(anim_timer));
-    }
-
-    /* If we're idle, give up the CPU. */
-    if (idle) {
-      Sleep(1);
-    }
-  }
-
-  free_timer(anim_timer);
-  free_timer(callback_timer);
-  callback_list_unlink_all(callbacks);
-  free(callbacks);
-
-  FreeLibrary(hmsimg32);
+  set_client_state(CLIENT_PRE_GAME_STATE);
+  
+  SetTimer(root_window,1,100,socket_timer);
+  SetTimer(root_window, 2, TIMER_INTERVAL, blink_timer);
+  while (GetMessage(&msg,NULL,0,0))
+    {
+      if (!((msg.hwnd==root_window)&&(TranslateAccelerator(root_window,
+                                                           freecivaccel,
+                                                           &msg))))
+        {     
+          TranslateMessage(&msg);
+          DispatchMessage(&msg);
+        }
+      
+    }      
 }
 
-/**************************************************************************
-  Do any necessary UI-specific cleanup
-**************************************************************************/
-void ui_exit()
-{
-
-}
-
-/**************************************************************************
- Update the connected users list at pregame state.
-**************************************************************************/
-void update_conn_list_dialog(void)
-{
-  /* PORTME */
-}
 
 /**************************************************************************
 
@@ -858,23 +587,6 @@ remove_net_input(void)
 }
 
 /**************************************************************************
-  Called to monitor a GGZ socket.
-**************************************************************************/
-void add_ggz_input(int sock)
-{
-  /* PORTME */
-}
-
-/**************************************************************************
-  Called on disconnection to remove monitoring on the GGZ socket.  Only
-  call this if we're actually in GGZ mode.
-**************************************************************************/
-void remove_ggz_input(void)
-{
-  /* PORTME */
-}
-
-/**************************************************************************
 
 **************************************************************************/
 void
@@ -890,19 +602,4 @@ void
 set_unit_icons_more_arrow(bool onoff)
 {
 	/* PORTME */
-}
-
-/****************************************************************************
-  Enqueue a callback to be called during an idle moment.  The 'callback'
-  function should be called sometimes soon, and passed the 'data' pointer
-  as its data.
-****************************************************************************/
-void add_idle_callback(void (callback)(void *), void *data)
-{
-  struct callback *cb = fc_malloc(sizeof(*cb));
-
-  cb->callback = callback;
-  cb->data = data;
-
-  callback_list_prepend(callbacks, cb);
 }

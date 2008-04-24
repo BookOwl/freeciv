@@ -15,12 +15,11 @@
 
 struct conn_list;
 
-/* savegame conversion: resource identifiers */
-extern char *update22one;
-extern char *update22two;
-
-/* functions */
 void load_rulesets(void);
 void send_rulesets(struct conn_list *dest);
+
+char *valid_ruleset_filename(char *subdir, char *whichset);
+  /* used as a partial pre-check on ruleset validity */
+  /* doesn't try to fall back on a default           */
 
 #endif  /* FC__RULESET_H */

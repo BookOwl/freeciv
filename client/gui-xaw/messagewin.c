@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -36,6 +35,7 @@
 
 #include "chatline.h"
 #include "citydlg.h"
+#include "clinet.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "mapview.h"
@@ -51,9 +51,8 @@ static Widget meswin_viewport;
 static Widget meswin_close_command;
 static Widget meswin_goto_command;
 static Widget meswin_popcity_command;
-static bool meswin_dialog_shell_is_raised;
 
-static void create_meswin_dialog(bool raise);
+static void create_meswin_dialog(void);
 static void meswin_scroll_down(void);
 static void meswin_close_callback(Widget w, XtPointer client_data,
 				  XtPointer call_data);
@@ -72,19 +71,13 @@ static char *dummy_message_list[] = {
 /****************************************************************
 popup the dialog 10% inside the main-window 
 *****************************************************************/
-void popup_meswin_dialog(bool raise)
+void popup_meswin_dialog(void)
 {
   int updated = 0;
   
-  meswin_dialog_shell_is_raised = raise;
-
   if(!meswin_dialog_shell) {
-    create_meswin_dialog(raise);
+    create_meswin_dialog();
     updated = 1;		/* create_ calls update_ */
-  }
-
-  if (raise) {
-    XtSetSensitive(main_form, FALSE);
   }
 
   xaw_set_relative_position(toplevel, meswin_dialog_shell, 25, 25);
@@ -103,20 +96,6 @@ void popup_meswin_dialog(bool raise)
 }
 
 /****************************************************************
-  Closes the message window dialog.
-*****************************************************************/
-void popdown_meswin_dialog(void)
-{
-  if (meswin_dialog_shell) {
-    if (meswin_dialog_shell_is_raised) {
-      XtSetSensitive(main_form, TRUE);
-    }
-    XtDestroyWidget(meswin_dialog_shell);
-    meswin_dialog_shell = 0;
-  }
-}
-
-/****************************************************************
 ...
 *****************************************************************/
 bool is_meswin_open(void)
@@ -131,14 +110,12 @@ static bool creating = FALSE;
 /****************************************************************
 ...
 *****************************************************************/
-static void create_meswin_dialog(bool raise)
+static void create_meswin_dialog(void)
 {
   creating = TRUE;
 
   meswin_dialog_shell =
-    I_IN(I_T(XtCreatePopupShell("meswinpopup",
-				raise ? transientShellWidgetClass
-				: topLevelShellWidgetClass,
+    I_IN(I_T(XtCreatePopupShell("meswinpopup", topLevelShellWidgetClass,
 				toplevel, NULL, 0)));
 
   meswin_form = XtVaCreateManagedWidget("meswinform", 
@@ -232,18 +209,17 @@ static void meswin_scroll_down(void)
 **************************************************************************/
 void real_update_meswin_dialog(void)
 {
-  Dimension height, iheight, width, oldheight, newheight;
-  int i, num = get_num_messages();
+  Dimension height, iheight, width;
+  int i;
 
   XawFormDoLayout(meswin_form, False);
 
-  XtVaGetValues(meswin_viewport, XtNheight, &oldheight, NULL);
-
-  if (num == 0) {
+  if (get_num_messages() == 0) {
     XawListChange(meswin_list, dummy_message_list, 1, 0, True);
   } else {
     /* strings will not be freed */
     static char **strings = NULL;
+    int i, num = get_num_messages();
 
     strings = fc_realloc(strings, num * sizeof(char *));
 
@@ -251,7 +227,7 @@ void real_update_meswin_dialog(void)
       strings[i] = get_message(i)->descr;
     }
 
-    XawListChange(meswin_list, strings, num, 0, True);
+    XawListChange(meswin_list, strings, get_num_messages(), 0, True);
   }
 
   /* Much of the following copied from city_report_dialog_update() */
@@ -265,33 +241,19 @@ void real_update_meswin_dialog(void)
   /* Seems have to do this here so we get the correct height below. */
   XawFormDoLayout(meswin_form, True);
 
-  if (num <= N_MSG_VIEW) {
+  if (get_num_messages() <= N_MSG_VIEW) {
     XtVaGetValues(meswin_list, XtNheight, &height, NULL);
-    if ((oldheight == 0) || (num == 0)) {
-      XtVaSetValues(meswin_viewport, XtNheight, height, NULL);
-    } else {
-      XtVaGetValues(meswin_form, XtNheight, &newheight, NULL);
-      newheight = newheight + height - oldheight;
-      XtVaSetValues(meswin_form, XtNheight, newheight, NULL);
-    }
+    XtVaSetValues(meswin_viewport, XtNheight, height, NULL);
   } else {
     XtVaGetValues(meswin_list, XtNheight, &height, NULL);
     XtVaGetValues(meswin_list, XtNinternalHeight, &iheight, NULL);
     height -= (iheight * 2);
-    height /= num;
+    height /= get_num_messages();
     height *= N_MSG_VIEW;
     height += (iheight * 2);
-    if (height != oldheight) {
-      if (oldheight == 0) {
-	XtVaSetValues(meswin_viewport, XtNheight, height, NULL);
-      } else {
-	XtVaGetValues(meswin_form, XtNheight, &newheight, NULL);
-	newheight = newheight + height - oldheight;
-	XtVaSetValues(meswin_form, XtNheight, newheight, NULL);
-      }
-    }
-    meswin_scroll_down();
+    XtVaSetValues(meswin_viewport, XtNheight, height, NULL);
   }
+  meswin_scroll_down();
 
   XtSetSensitive(meswin_goto_command, FALSE);
   XtSetSensitive(meswin_popcity_command, FALSE);
@@ -305,7 +267,7 @@ static void meswin_list_callback(Widget w, XtPointer client_data,
 {
   XawListReturnStruct *ret = XawListShowCurrent(meswin_list);
 
-  if ((ret->list_index != XAW_LIST_NONE) && (get_num_messages() != 0)) {
+  if (ret->list_index != XAW_LIST_NONE) {
     struct message *message = get_message(ret->list_index);
 
     XtSetSensitive(meswin_goto_command, message->location_ok ? True : False);
@@ -322,7 +284,8 @@ static void meswin_list_callback(Widget w, XtPointer client_data,
 static void meswin_close_callback(Widget w, XtPointer client_data,
 				  XtPointer call_data)
 {
-  popdown_meswin_dialog();
+  XtDestroyWidget(meswin_dialog_shell);
+  meswin_dialog_shell=0;
 }
 
 /****************************************************************

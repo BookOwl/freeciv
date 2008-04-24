@@ -2,31 +2,27 @@
 
 name=_("Slovenian")
 plural=_("?plural:Slovenians")
-groups="Medieval", "Modern", "European"
-legend=_("Slovenia was the most western and northern republic of the old\
- Yugoslav Federation.")
-leader=
- "Valuka",
- "Valtunk",
- "Kocelj",
- "Primož Trubar"
+leader="Valuka", "Valtunk", "Kocelj", "Primoz Trubar"
 leader_sex="Male", "Male", "Male", "Male"
-flag="slovenia"
+flag="f.slovenia"
 flag_alt = "-"
 city_style = "European"
 
 ruler_titles = { "government",      "male_title",      "female_title"
-                 "Republic",        _("President"),    _("?female:President")
+                 "Republic",        _("President"),    _("President")
+                 "Democracy",       _("President"),    _("President")
                }
 
+attack=0
+expand=1
+civilized=1
+advisors=100,100,100,100,100,100,100
 init_techs=""
-init_buildings=""
-init_government="Despotism"
-init_units=""
 
-; Chain of similar flags: Previously "russian"
-conflicts_with="slovakian"
-civilwar_nations = "serbian"
+tech_goals="The Republic", "Trade", "Engineering", "Democracy",
+           "Railroad", "Explosives", "Automobile"
+wonder="Hoover Dam"
+government="Democracy"
 
 cities =
   "Ljubljana", "Maribor", "Nova Gorica", "Celje", "Kranj", "Jesenice",

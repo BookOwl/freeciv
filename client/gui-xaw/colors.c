@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -21,13 +20,11 @@
 #include <X11/Xutil.h>
 #include <X11/Xos.h>
 
-#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 #include "fcintl.h"
 #include "log.h"
-#include "mem.h"
 
 #include "gui_main.h"
 
@@ -45,59 +42,80 @@ Colormap cmap;
    "DirectColor"
 };
 */
+struct rgbtriple {
+  int r, g, b;
+} colors_standard_rgb[COLOR_STD_LAST] = {
+  {  0,   0,   0},  /* Black */
+  {255, 255, 255},  /* White */
+  {255,   0,   0},  /* Red */
+  {255, 255,   0},  /* Yellow */
+  {  0, 255, 200},  /* Cyan */
+  {  0, 200,   0},  /* Ground (green) */
+  {  0,   0, 200},  /* Ocean (blue) */
+  { 86,  86,  86},  /* Background (gray) */
+  {128,   0,   0},  /* race0 */
+  {128, 255, 255},  /* race1 */
+  {255,   0,   0},  /* race2 */
+  {255,   0, 128},  /* race3 */
+  {  0,   0, 128},  /* race4 */
+  {255,   0, 255},  /* race5 */
+  {255, 128,   0},  /* race6 */
+  {255, 255, 128},  /* race7 */
+  {255, 128, 128},  /* race8 */
+  {  0,   0, 255},  /* race9 */
+  {  0, 255,   0},  /* race10 */
+  {  0, 128, 128},  /* race11 */
+  {  0,  64,  64},  /* race12 */
+  {198, 198, 198},  /* race13 */
+};
 
-void alloc_color_for_colormap(XColor *color);
+unsigned long colors_standard[COLOR_STD_LAST];
 
-/****************************************************************************
-  Allocate a color (adjusting it for our colormap if necessary on paletted
-  systems) and return a pointer to it.
-****************************************************************************/
-struct color *color_alloc(int r, int g, int b)
+
+/*************************************************************
+...
+*************************************************************/
+void color_error(void)
 {
-  XColor mycolor;
-  struct color *color = fc_malloc(sizeof(*color));
-
-  mycolor.red = r << 8;
-  mycolor.green = g << 8;
-  mycolor.blue = b << 8;
-
-  alloc_color_for_colormap(&mycolor);
-
-  color->color.pixel = mycolor.pixel;
-  return color;
+  static int using_private_cmap;
+  
+  if(using_private_cmap) {
+    freelog(LOG_FATAL, _("Private colormap ran out of entries -  exiting."));
+    exit(EXIT_FAILURE);
+  }
+  else {
+    freelog(LOG_NORMAL,
+	    _("Ran out of colors -  trying with a private colormap.")); 
+    cmap=XCopyColormapAndFree(display, cmap);
+    XtVaSetValues(toplevel, XtNcolormap, cmap, NULL);
+    using_private_cmap=1;
+  }
+  
 }
 
-/****************************************************************************
-  Free a previously allocated color.  See color_alloc.
-****************************************************************************/
-void color_free(struct color *color)
-{
-  free(color);
-}
 
-
-#if 0
 /*************************************************************
 ...
 *************************************************************/
 static void alloc_standard_colors(void)
 {
-  XColor mycolors[COLOR_STD_LAST];
   int i;
 
   for(i=0; i<COLOR_STD_LAST; i++) {
-    mycolors[i].red = colors_standard_rgb[i].r << 8;
-    mycolors[i].green = colors_standard_rgb[i].g << 8;
-    mycolors[i].blue =  colors_standard_rgb[i].b << 8;
-  }
+    XColor mycolor;
 
-  alloc_colors(mycolors, COLOR_STD_LAST);  
-
-  for (i = 0; i < COLOR_STD_LAST; i++) {
-    colors_standard[i] = mycolors[i].pixel;
+    mycolor.red=colors_standard_rgb[i].r<<8;
+    mycolor.green=colors_standard_rgb[i].g<<8;
+    mycolor.blue=colors_standard_rgb[i].b<<8;
+    
+    if(XAllocColor(display, cmap, &mycolor))
+      colors_standard[i]=mycolor.pixel;
+    else
+      color_error();
+  
   }
+  
 }
-#endif
 
 /*************************************************************
 ...
@@ -159,7 +177,7 @@ enum Display_color_type get_visual(void)
 }
 
 
-#if 0
+
 /*************************************************************
 ...
 *************************************************************/
@@ -169,140 +187,11 @@ void init_color_system(void)
 
   alloc_standard_colors();
 }
-#endif
-
-/*************************************************************
-  Allocate all needed colors given in the array.
-*************************************************************/
-void alloc_colors(XColor *colors, int ncols)
-{
-  int i;
-
-  if (!cmap) {
-    cmap = DefaultColormap(display, screen_number);
-  }
-
-  for (i = 0; i < ncols; i++) {
-    if (!XAllocColor(display, cmap, &colors[i])) {
-      /* We're out of colors.  For the rest of the palette, just
-       * find the closest match and use it.  We could instead try
-       * to use a private colormap, but this is ugly, takes extra
-       * code, and has no guarantee of getting better performance
-       * unless we do a lot of work to optimize the colormap. */
-      XColor *cells;
-      int ncells, j;
-
-      ncells = DisplayCells(display, screen_number);
-      cells = fc_malloc(sizeof(XColor) * ncells);
-
-      for (j = 0; j < ncells; j++) {
-        cells[j].pixel = j;
-      }
-
-      /* We need to lock the server so that the colors don't change
-       * while we're searching through them. */
-      XGrabServer(display);
-
-      XQueryColors(display, cmap, cells, ncells);
-
-      for (; i < ncols; i++) {
-        int best = INT_MAX;
-        unsigned long pixel = 0;
-
-	/* Find the best match among all available colors. */
-        for (j = 0; j < ncells; j++) {
-          int rd, gd, bd, dist;
-          
-          rd = (cells[j].red - colors[i].red) >> 8;
-          gd = (cells[j].green - colors[i].green) >> 8;
-          bd = (cells[j].blue - colors[i].blue) >> 8;
-          dist = rd * rd + gd * gd + bd * bd;
-          
-          if (dist < best) {
-            best = dist;
-            pixel = j;
-          }
-        }
-
-  	XAllocColor(display, cmap, &cells[pixel]);
-        colors[i].pixel = pixel;
-      }
-
-      /* Unlock the server, since we're done querying it. */
-      XUngrabServer(display);
-
-      free(cells);
-      break;
-    }
-  }
-}
-
-/*************************************************************
-  Alloc given color for our colormap.
-*************************************************************/
-void alloc_color_for_colormap(XColor *color)
-{
-  if (!cmap) {
-    cmap = DefaultColormap(display, screen_number);
-  }
-
-  if (!XAllocColor(display, cmap, color)) {
-    /* We're out of colors.  For the rest of the palette, just
-     * find the closest match and use it.  We could instead try
-     * to use a private colormap, but this is ugly, takes extra
-     * code, and has no guarantee of getting better performance
-     * unless we do a lot of work to optimize the colormap. */
-    XColor *cells;
-    int ncells, j;
-    int best = INT_MAX;
-    unsigned long pixel = 0;
-
-    ncells = DisplayCells(display, screen_number);
-    cells = fc_malloc(sizeof(XColor) * ncells);
-
-    for (j = 0; j < ncells; j++) {
-      cells[j].pixel = j;
-    }
-
-    /* We need to lock the server so that the colors don't change
-     * while we're searching through them. */
-    XGrabServer(display);
-
-    XQueryColors(display, cmap, cells, ncells);
-
-    /* Find the best match among all available colors. */
-    for (j = 0; j < ncells; j++) {
-      int rd, gd, bd, dist;
-
-      rd = (cells[j].red - color->red) >> 8;
-      gd = (cells[j].green - color->green) >> 8;
-      bd = (cells[j].blue - color->blue) >> 8;
-      dist = rd * rd + gd * gd + bd * bd;
-
-      if (dist < best) {
-	best = dist;
-	pixel = j;
-      }
-    }
-
-    XAllocColor(display, cmap, &cells[pixel]);
-    color->pixel = pixel;
-
-    /* Unlock the server, since we're done querying it. */
-    XUngrabServer(display);
-
-    free(cells);
-  }
-}
-
-
 
 /*************************************************************
 ...
 *************************************************************/
 void free_colors(unsigned long *pixels, int ncols)
 {
-#if 0
   XFreeColors(display, cmap, pixels, ncols, 0);
-#endif
 }

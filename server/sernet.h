@@ -15,27 +15,15 @@
 
 struct connection;
 
+#define MAX_NUM_CONNECTIONS (MAX_NUM_PLAYERS+MAX_NUM_BARBARIANS)
+#define DEFAULT_SOCK_PORT 5555
 #define BUF_SIZE 512
-
-#define SERVER_LAN_PORT 4555
-#define SERVER_LAN_TTL 1
-#define SERVER_LAN_VERSION 1
-
-enum server_events {
-  S_E_END_OF_TURN_TIMEOUT,
-  S_E_OTHERWISE,
-  S_E_FORCE_END_OF_SNIFF,
-};
-
-enum server_events server_sniff_all_input(void);
 
 int server_open_socket(void);
 void flush_packets(void);
+int sniff_packets(void);
 void close_connections_and_socket(void);
 void init_connections(void);
-int server_make_connection(int new_sock,
-			   const char *client_addr, const char *client_ip);
 void close_connection(struct connection *pconn);
-void handle_conn_pong(struct connection *pconn);
 
 #endif  /* FC__SERNET_H */

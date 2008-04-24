@@ -1,7 +1,5 @@
 ## Process this file with automake to produce Makefile.in
 
-ACLOCAL_AMFLAGS = -I m4
-
 if CLIENT
 CSUBDIRS = client
 else
@@ -9,19 +7,9 @@ CSUBDIRS =
 endif
 
 if SERVER
-SSUBDIRS = ai dependencies server
+SSUBDIRS = ai server
 else
 SSUBDIRS =
-endif
-
-if SERVER
-if CLIENT
-MSUBDIRS = manual
-else
-MSUBDIRS = 
-endif
-else
-MSUBDIRS = 
 endif
 
 if MAKE_DATA
@@ -31,62 +19,79 @@ DSUBDIRS =
 endif
 
 
-SUBDIRS=	$(DSUBDIRS) utility common tests win32 $(SSUBDIRS) $(CSUBDIRS) po doc $(MSUBDIRS)
+SUBDIRS=	$(DSUBDIRS) intl common $(SSUBDIRS) $(CSUBDIRS) po doc
 
-EXTRA_DIST=	autogen.sh 			\
+EXTRA_DIST=	acconfig.old			\
+		autogen.sh 			\
+		civ				\
 		config.mac.h			\
 		configure.ac			\
+		configure.in			\
 		diff_ignore			\
-		bootstrap/civ.in		\
-		bootstrap/ser.in		\
-		bootstrap/fc_svnrev_gen.h.in	\
-		bootstrap/generate_svnrev.sh	\
-		bootstrap/freeciv.desktop.in	\
-		bootstrap/freeciv-server.desktop.in	\
-		bootstrap/freeciv.spec.in	\
-		bootstrap/undep.sh.in		\
+		ser				\
+		amiga/Freeciv.start		\
+		amiga/amigaclient.c		\
+		amiga/amigaserver.c		\
+		amiga/config.h			\
+		amiga/gettext.c			\
+		amiga/libintl.h			\
+		amiga/ReadMe			\
+		amiga/ReadMe.2Amigas		\
+		amiga/ReadMe.developer		\
+		amiga/SDI_compiler.h		\
+		amiga/smakefile			\
+		amiga/vmakefile			\
+		amiga/vsnprintf.c		\
+		debian/INSTALL.debian		\
+		debian/README.debian		\
+		debian/build.debian		\
+		debian/changelog		\
+		debian/civclient.6		\
+		debian/civserver.6		\
+		debian/control			\
+		debian/copyright		\
+		debian/dirs			\
+		debian/docs			\
+		debian/freeciv-gtk.dirs		\
+		debian/freeciv-gtk.menu		\
+		debian/freeciv-gtk.postinst	\
+		debian/freeciv-gtk.postrm	\
+		debian/freeciv-xaw3d.dirs	\
+		debian/freeciv-xaw3d.menu	\
+		debian/freeciv-xaw3d.postinst	\
+		debian/freeciv-xaw3d.postrm	\
+		debian/freeciv.desktop		\
+		debian/menu			\
+		debian/rules			\
+		debian/watch			\
 		m4/ac_path_lib.m4		\
-		m4/alsa.m4			\
-		m4/auth.m4			\
-		m4/c99.m4			\
+		m4/locale.m4			\
 		m4/debug.m4			\
 		m4/esd.m4			\
-		m4/freetype2.m4			\
-		m4/gettimeofday.m4		\
-		m4/ggz.m4			\
+		m4/gettext.m4			\
 		m4/glib-2.0.m4			\
-		m4/glibc21.m4			\
 		m4/glib-gettext.m4		\
 		m4/glib.m4			\
+		m4/glibc21.m4			\
 		m4/gtk-2.0.m4			\
-		m4/gtk2-client.m4		\
+		m4/gtk.m4			\
 		m4/iconv.m4			\
 		m4/imlib.m4			\
 		m4/isc-posix.m4			\
 		m4/lcmessage.m4			\
-		m4/locale.m4			\
+		m4/lib-ld.m4			\
+		m4/lib-link.m4			\
+		m4/lib-prefix.m4		\
 		m4/ngettext.m4			\
-		m4/no-client.m4			\
-		m4/pkg.m4			\
 		m4/progtest.m4			\
 		m4/readline.m4			\
-		m4/sdl-client.m4		\
 		m4/sdl.m4			\
 		m4/sound.m4			\
 		m4/vsnprintf.m4			\
-		m4/win32-client.m4		\
-		m4/xaw-client.m4		\
-		m4/x.m4				\
+		m4/x.213			\
+		m4/x.252			\
 		vms/config.h_vms		\
 		vms/freeciv_h.vms		\
 		vms/imlib_config.h_vms		\
 		vms/readme.vms			\
-		vms/vms_build.com		\
-		scripts/setup_auth_server.sh
-
-noinst_HEADERS= version.in
-
-src-check:
-	cd tests && $(MAKE) $(AM_MAKEFLAGS) src-check
-
-.PHONY: src-check
+		vms/vms_build.com

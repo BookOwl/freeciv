@@ -2,162 +2,49 @@
 
 name=_("Catalan")
 plural=_("?plural:Catalans")
-groups="European"
-legend=_("During the Middle Ages, Catalan kings conquered and presided over\
- several kingdoms on the shores of the Mediterranean Sea, from the Iberian\
- peninsula to parts of Italy and Greece. This confederation/empire became a\
- major naval and trading power in the Mediterranean area. Catalans kept\
- their self-rule after a dynastic union with the neighboring kingdom of\
- Castile, and sided with England and Austria against France and Castile in\
- the Spanish Succession War. In 1713, England signed the Treaty of Utrecht\
- and dropped out of the alliance, and the Catalans were finally defeated in\
- 1714, losing their national rights as a result.")
-leader=
- "Guifr√© el Pil√≥s",
- "Ramon Berenguer IV",
- "Jaume I",
- "Pere II",
- "Pau Claris",
- "Francesc Maci√†",
- "Llu√≠s Companys",
- "Josep Tarradellas"
+leader="GuifrÈ el PilÛs", "Ramon Berenguer IV", "Jaume I", "Pere II",
+       "Lluis Companys", "Josep Tarradellas"
 leader_sex="Male", "Male", "Male", "Male",
-           "Male", "Male", "Male", "Male"
-flag="catalan"
+           "Male", "Male"
+flag="f.catalan"
 flag_alt = "-"
-city_style = "Classical"
-
+city_style = "European"
 ruler_titles = { "government",      "male_title",          "female_title"
-                 "Democracy",    _("Primer Ministre"),  _("Primera Ministre")
+                 "Democracy",       _("Primer Ministre"),  _("Primera Ministre")
                  "Despotism",       _("Dictador"),         _("Dictadora")
-		 ; /* TRANS: Rei/Reina = King/Queen */
                  "Monarchy",        _("Rei"),              _("Reina")
-                 "Republic",        _("President"),    _("?female:President")
-		 ; /* TRANS: Arquebisbe = Archbishop */
+                 "Republic",        _("President"),        _("President")
                  "Fundamentalism",  _("Arquebisbe"),       _("Gran Bruixa")
                }
 
-
+attack=1
+expand=1
+civilized=0
+advisors=100,100,100,100,100,100,100
 init_techs=""
-init_buildings=""
-init_government="Despotism"
-init_units=""
 
-conflicts_with = "spanish"
-civilwar_nations = "spanish", "french"
+tech_goals = "Monarchy", "Navigation", "Chivalry", "Trade",
+  "Monotheism", "Economics", "Leadership", "The Republic", "Railroad"
+wonder="A.Smith's Trading Co."
+government="Republic"
 
-; This city list does not actually correspond to medieval Catalonia,
-; but rather to all lands settled by Catalans, where Catalan is still spoken
-; nowadays. It corresponds to the "Pa√Øsos Catalans" of modern ethnolinguistic
-; nationalists.
 cities =
- "Barcelona",
- "Tarragona",
- "Lleida",
- "Girona",
- "Perpiny√†",
- "Val√®ncia",
- "Ripoll",
- "Vic",
- "La Seu d'Urgell",
- "Cardona",
- "Tortosa",
- "Montserrat (hills)",
- "Poblet",
- "Santes Creus",
- "Vallbona de les Monges",
- "Balaguer",
- "Manresa",
- "Terrassa",
- "Sabadell",
- "Palma de Mallorca",
- "Eivissa",
- "Alacant",
- "Elx",
- "Ma√≥",
- "Castell√≥ de la Plana",
- "Montblanc (hills)",
- "Igualada",
- "Cervera",
- "Berga",
- "D√©nia",
- "Alcoi",
- "Reus",
- "Granollers",
- "Salses",
- "Matar√≥",
- "Figueres",
- "X√†tiva",
- "Olot",
- "Cadaqu√©s",
- "Badalona",
- "T√†rrega",
- "Amposta",
- "El Bruc",
- "Valls",
- "Sant Fruit√≥s de Bages",
- "Vilafranca del Pened√®s",
- "Manacor",
- "Alc√∫dia",
- "S√≥ller",
- "Guardamar del Segura (ocean)",
- "Art√†",
- "Llucmajor",
- "Felanitx",
- "Andratx",
- "Andorra la Vella",
- "Ciutadella",
- "Pen√≠scola (hills, ocean)",
- "Sant Salvador de Guardiola",
- "Fraga",
- "Almacelles",
- "Sitges",
- "Vilanova i la Geltr√∫",
- "Vielha",
- "L'Alguer",
- "El Perell√≥",
- "Torell√≥",
- "Sant Cugat",
- "Portbou (ocean)",
- "Palafrugell",
- "Prada",
- "Manlleu",
- "Sallent",
- "Puigcerd√†",
- "Bellver",
- "Sant Boi de Llobregat",
- "Vandell√≤s",
- "Cornell√†",
- "Tremp",
- "Palam√≥s",
- "El Vendrell",
- "Sant Feliu de Gu√≠xols",
- "Sant Celoni",
- "Martorell",
- "L'Hospitalet",
- "Mollet del Vall√®s",
- "Banyoles",
- "Blanes",
- "Sant Juli√† de L√≤ria",
- "Lloret de mar (ocean)",
- "Malgrat de mar (ocean)",
- "Canet de mar (ocean)",
- "Molins de Rei",
- "Ponts",
- "Encamp",
- "S√∫ria",
- "Ll√≠via",
- "La Bisbal d'Empord√†",
- "Elna",
- "Ceret",
- "Roses",
- "Calonge",
- "Treumal",
- "Cambrils",
- "Tossa de Mar (ocean)",
- "Solsona",
- "Agramunt",
- "Begur",
- "Guardamar de la Safor (ocean)",
- "Olesa de Montserrat (hills)",
- "Soldeu"
+  "Barcelona", "Tarragona", "Lleida", "Girona", "Perpiny‡", "Valencia",
+  "Tolosa", "Ripoll", "Vic", "La Seu d'Urgell", "Cardona", "Tortosa",
+  "Montserrat (hills)", "Poblet", "Santes Creus",
+  "Vallbona de les Monges", "Balaguer", "Manresa", "Terrassa",
+  "Sabadell", "Palma de Mallorca", "Eivissa", "Alacant", "Elx",
+  "CastellÛ de la Plana", "Montblanc (hills)", "Igualada", "Cervera",
+  "Berga", "DÈnia", "Reus", "Granollers", "MatarÛ", "Figueres", "Olot",
+  "Badalona", "T‡rrega", "Amposta", "El Bruc", "Valls",
+  "Vilafranca del PenedÈs", "Manacor", "Alc˙dia", "SÛller", "Art‡",
+  "Llucmajor", "Felanitx", "Andratx", "Ciutadella", "Penyiscola",
+  "Sitges", "Vilanova i la Geltr˙", "Viella", "L'Alguer", "PerellÛ",
+  "TorellÛ", "Sant Cugat", "Portbou (ocean)", "Palafrugell", "Manlleu",
+  "Sallent", "Puigcerd‡", "Bellver", "Sant Boi de Llobregat",
+  "VandellÛs", "Cornell‡", "Tremp", "PalamÛs", "El Vendrell",
+  "Sant Feliu de GuÌxols", "Sant Celoni", "Martorell", "L'Hospitalet",
+  "Mollet del VallËs", "Banyoles", "Blanes", "Lloret de mar (ocean)",
+  "Malgrat de mar (ocean)", "Canet de mar (ocean)", "Molins de Rei",
+  "Pons", "S˙ria", "LlÌvia", "La Bisbal d'Empurd‡", "Prada", "Elna",
+  "Ceret", "CadaquÈs", "Begur", "Olesa de Montserrat (hills)"

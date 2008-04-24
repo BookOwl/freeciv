@@ -10,19 +10,19 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/  
-
+#include <windows.h>
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
-
-#include <windows.h>
  
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
                       
+#include <stdlib.h>
 #include "capability.h"
 #include "fcintl.h"
+#include "game.h"
 #include "map.h"
 #include "mem.h"
 #include "player.h"
@@ -32,8 +32,8 @@
 #include "chatline.h"
 #include "citydlg.h"
 #include "civclient.h"
-#include "climap.h"
 #include "climisc.h"
+#include "clinet.h"
 #include "colors.h"
 #include "control.h"
 #include "dialogs.h"
@@ -42,26 +42,32 @@
 #include "inputdlg.h"
 #include "mapview.h"
 #include "menu.h"
-#include "overview_common.h"
 #include "tilespec.h" 
-#include "text.h"
 
-#include "goto.h"
+#include "goto.h" 
 #include "mapctrl.h"
 #include "gui_main.h"
 
-extern HCURSOR cursors[];
+struct city *city_workers_display = NULL;
 
 HWND popit_popup=NULL;
-static bool popit_is_orders;
 /*************************************************************************
 
 *************************************************************************/
 void map_handle_move(int window_x, int window_y)
 {
-  update_line(window_x, window_y);
+  int x, y, old_x, old_y;
 
-  control_mouse_cursor(canvas_pos_to_tile(window_x, window_y));
+  if ((hover_state == HOVER_GOTO || hover_state == HOVER_PATROL)
+      && draw_goto_line) {
+    get_map_xy(window_x, window_y, &x, &y);
+    
+    get_line_dest(&old_x, &old_y);
+    if (old_x != x || old_y != y) {
+      draw_line(x, y);
+    }
+  }
+  
 }
 
 /*************************************************************************
@@ -70,7 +76,7 @@ void map_handle_move(int window_x, int window_y)
 static LONG CALLBACK popit_proc(HWND hwnd,UINT message,
 				WPARAM wParam,LPARAM lParam)
 {
-  struct tile **cross_list;
+  struct map_position *cross_list;
   switch(message)
     {
     case WM_CREATE:
@@ -79,19 +85,15 @@ static LONG CALLBACK popit_proc(HWND hwnd,UINT message,
       break;
     case WM_LBUTTONUP:
     case WM_RBUTTONUP:
-    case WM_MBUTTONUP:
       DestroyWindow(hwnd);
       break;
     case WM_DESTROY:
       cross_list = fcwin_get_user_data(hwnd);
       if (cross_list) {
-	  while (*cross_list != NULL) {
-	    refresh_tile_mapcanvas(*cross_list, TRUE, TRUE);
+	  while (cross_list->x >= 0) {
+	    refresh_tile_mapcanvas(cross_list->x, cross_list->y, TRUE);
 	    cross_list++;
 	  }
-      }
-      if (popit_is_orders) {
-	update_map_canvas_visible();
       }
       popit_popup = NULL;
       break;
@@ -104,23 +106,26 @@ static LONG CALLBACK popit_proc(HWND hwnd,UINT message,
 /*************************************************************************
 
 *************************************************************************/
-static void popit(int x, int y, struct tile *ptile)
+static void popit(int x, int y, int xtile, int ytile)
 {
   HWND popup;
   POINT pt;
   RECT rc;
+  RECT rc2;
   struct fcwin_box *vbox;
-  static struct tile *cross_list[2+1];
-  struct tile **cross_head = cross_list;
+  static struct map_position cross_list[2+1];
+  struct map_position *cross_head = cross_list;
   int i;
+  char s[512];
+  struct city *pcity;
   struct unit *punit;
-
+  struct tile *ptile=map_get_tile(xtile, ytile);
   if (popit_popup!=NULL) {
     DestroyWindow(popit_popup);
     popit_popup=NULL;
   }
   
-  if (TILE_UNKNOWN == client_tile_get_known(ptile))
+  if (tile_get_known(xtile,ytile)<TILE_KNOWN_FOGGED)
     return;
   
   popup=fcwin_create_layouted_window(popit_proc,NULL,WS_POPUP|WS_BORDER,
@@ -128,34 +133,104 @@ static void popit(int x, int y, struct tile *ptile)
 				     FAKE_CHILD,
 				     cross_head);
   vbox=fcwin_vbox_new(popup,FALSE);
-
-  fcwin_box_add_static(vbox, popup_info_text(ptile), 0, SS_LEFT,
-		       FALSE, FALSE, 0);
-
-  punit = find_visible_unit(ptile);
-
-  popit_is_orders = show_unit_orders(punit);
-
-  if (punit && punit->goto_tile) {
-    *cross_head = punit->goto_tile;
-    cross_head++;
+  
+  my_snprintf(s, sizeof(s), _("Terrain: %s"),
+	      map_get_tile_info_text(xtile, ytile));
+  fcwin_box_add_static(vbox,s,0,SS_LEFT,FALSE,FALSE,0);
+  my_snprintf(s, sizeof(s), _("Food/Prod/Trade: %s"),
+	      map_get_tile_fpt_text(xtile, ytile));
+  fcwin_box_add_static(vbox,s,0,SS_LEFT,FALSE,FALSE,0);
+  
+  if (tile_has_special(ptile, S_HUT)) {
+    fcwin_box_add_static(vbox,_("Minor Tribe Village"),
+			 0,SS_LEFT,FALSE,FALSE,0);
   }
-  *cross_head = ptile;
+  
+  if((pcity=map_get_city(xtile, ytile))) {
+    my_snprintf(s, sizeof(s), _("City: %s(%s)"), pcity->name,
+		get_nation_name(city_owner(pcity)->nation));
+    fcwin_box_add_static(vbox,s,0,SS_LEFT,FALSE,FALSE,0);
+    if (city_got_citywalls(pcity)) {
+      fcwin_box_add_static(vbox,s,0,SS_LEFT,FALSE,FALSE,0);
+    }
+  }
+   
+  if (get_tile_infrastructure_set(ptile)) {
+    sz_strlcpy(s, _("Infrastructure: "));
+    sz_strlcat(s, map_get_infrastructure_text(ptile->special));
+    fcwin_box_add_static(vbox,s,0,SS_LEFT,FALSE,FALSE,0);
+  }
+
+  sz_strlcpy(s, _("Activity: "));
+  if (concat_tile_activity_text(s, sizeof(s), xtile, ytile)) {
+    fcwin_box_add_static(vbox,s,0,SS_LEFT,FALSE,FALSE,0);
+  }
+
+  if((punit=find_visible_unit(ptile)) && !pcity) {
+    char cn[64];
+    struct unit_type *ptype=unit_type(punit);
+    cn[0]='\0';
+    if(punit->owner==game.player_idx) {
+      struct city *pcity;
+      pcity=player_find_city_by_id(game.player_ptr, punit->homecity);
+      if(pcity)
+	my_snprintf(cn, sizeof(cn), "/%s", pcity->name);
+    }
+    my_snprintf(s, sizeof(s), _("Unit: %s(%s%s)"), ptype->name,
+		get_nation_name(unit_owner(punit)->nation), cn);
+
+    fcwin_box_add_static(vbox,s,0,SS_LEFT,FALSE,FALSE,0);
+    if(punit->owner==game.player_idx)  {
+      char uc[64] = "";
+      if(unit_list_size(&ptile->units)>=2) {
+	my_snprintf(uc, sizeof(uc), _("  (%d more)"),
+		    unit_list_size(&ptile->units) - 1);
+      }
+      my_snprintf(s, sizeof(s), _("A:%d D:%d FP:%d HP:%d/%d%s%s"),
+		  ptype->attack_strength, 
+		  ptype->defense_strength, ptype->firepower, punit->hp, 
+		  ptype->hp, punit->veteran?_(" V"):"", uc);
+      
+      if(punit->activity==ACTIVITY_GOTO || punit->connecting)  {
+	cross_head->x = punit->goto_dest_x;
+	cross_head->y = punit->goto_dest_y;
+	cross_head++;
+      }
+    } else {
+      my_snprintf(s, sizeof(s), _("A:%d D:%d FP:%d HP:%d0%%"),
+		  ptype->attack_strength, 
+		  ptype->defense_strength, ptype->firepower, 
+		  (punit->hp*100/ptype->hp + 9)/10 );
+    }
+    fcwin_box_add_static(vbox,s,0,SS_LEFT,FALSE,FALSE,0);
+  }
+  
+  cross_head->x = xtile;
+  cross_head->y = ytile;
   cross_head++;
-
-  *cross_head = NULL;
-  for (i = 0; cross_list[i] != NULL; i++) {
-    put_cross_overlay_tile(cross_list[i]);
+  
+  cross_head->x = -1;
+  for (i = 0; cross_list[i].x >= 0; i++) {
+    put_cross_overlay_tile(cross_list[i].x,cross_list[i].y);
   }
-
   fcwin_set_box(popup,vbox);
 
   GetWindowRect(popup,&rc);
   pt.x=x;
   pt.y=y;
-  ClientToScreen(map_window,&pt);
-  MoveWindow(popup,pt.x+16,pt.y-rc.bottom+rc.top,
-	     rc.right-rc.left,rc.bottom-rc.top,FALSE);
+  ClientToScreen(map_window, &pt);
+  rc2.left = rc.left + pt.x + 16;
+  rc2.right = rc.right + pt.x + 16;
+  rc2.top = rc.top + pt.y - rc.bottom;
+  rc2.bottom = rc.bottom - rc.top + rc2.top;
+  GetWindowRect(root_window,&rc);
+  if (rc2.right > rc.right) {
+    rc2.left -= (rc2.right - rc.right);
+    rc2.right = rc.right;
+  }
+  MoveWindow(popup, rc2.left, rc2.top,
+	     rc2.right - rc2.left,
+	     rc2.bottom - rc2.top, FALSE);
   ShowWindow(popup,SW_SHOWNORMAL);
   popit_popup=popup;
 } 
@@ -163,45 +238,77 @@ static void popit(int x, int y, struct tile *ptile)
 /**************************************************************************
 
 **************************************************************************/
+static void adjust_workers(int map_x, int map_y)
+{
+  int x, y, is_valid;
+  struct city *pcity;
+  struct packet_city_request packet;
+  enum city_tile_type wrk;
+  
+
+  pcity = find_city_near_tile(map_x, map_y);
+  if (!pcity) {
+    return;
+  }
+  
+  is_valid = map_to_city_map(&x, &y, pcity, map_x, map_y);
+  assert(is_valid);
+  
+  packet.city_id=pcity->id;
+  packet.worker_x=x;
+  packet.worker_y=y;
+  
+  wrk = get_worker_city(pcity, x, y);
+  if(wrk==C_TILE_WORKER)
+    send_packet_city_request(&aconnection, &packet, 
+			     PACKET_CITY_MAKE_SPECIALIST);
+  else if(wrk==C_TILE_EMPTY)
+    send_packet_city_request(&aconnection, &packet, 
+			     PACKET_CITY_MAKE_WORKER);
+  
+  /* When the city info packet is received, update the workers on the map*/
+  city_workers_display = pcity;
+}
+
+/**************************************************************************
+
+**************************************************************************/
 static LONG CALLBACK map_wnd_proc(HWND hwnd,UINT message,WPARAM wParam, LPARAM lParam)
 {
+  HDC hdc;
   PAINTSTRUCT ps;
-  struct tile *ptile;
-
+  int xtile;
+  int ytile;
   switch(message) {
   case WM_CREATE:
     break;
   case WM_LBUTTONDOWN:
-    if (!can_client_change_view()) {
+    if (get_client_state()!=CLIENT_GAME_RUNNING_STATE)
       break;
-    }
     SetFocus(root_window);
+    get_map_xy(LOWORD(lParam),HIWORD(lParam),&xtile,&ytile);
     if (wParam&MK_SHIFT) {
-      adjust_workers_button_pressed(LOWORD(lParam), HIWORD(lParam));
-      wakeup_button_pressed(LOWORD(lParam), HIWORD(lParam));
-    } else if (wParam & MK_CONTROL
-	       && (ptile = canvas_pos_to_tile(LOWORD(lParam),
-					      HIWORD(lParam)))) {
-      popit(LOWORD(lParam),HIWORD(lParam),ptile);
+      adjust_workers(xtile,ytile);
+      wakeup_sentried_units(xtile,ytile);
+    } else if (wParam&MK_CONTROL){
+      popit(LOWORD(lParam),HIWORD(lParam),xtile,ytile);
     } else {
-      action_button_pressed(LOWORD(lParam), HIWORD(lParam), SELECT_POPUP);
+      do_map_click(xtile,ytile);
     }
     break;
   case WM_MBUTTONDOWN:
-    if (can_client_change_view()
-        && (ptile = canvas_pos_to_tile(LOWORD(lParam),
-					      HIWORD(lParam)))) {
-      popit(LOWORD(lParam), HIWORD(lParam), ptile);
+    if (get_client_state() == CLIENT_GAME_RUNNING_STATE) {
+      get_map_xy(LOWORD(lParam), HIWORD(lParam), &xtile, &ytile);
+      popit(LOWORD(lParam), HIWORD(lParam), xtile, ytile);
     }
     break;
   case WM_RBUTTONDOWN:
-    if (can_client_change_view()) {
+    if (get_client_state()==CLIENT_GAME_RUNNING_STATE) {
+      get_map_xy(LOWORD(lParam),HIWORD(lParam),&xtile,&ytile);
       if (wParam&MK_CONTROL) {
-        if ((ptile = canvas_pos_to_tile(LOWORD(lParam), HIWORD(lParam)))) {
-          popit(LOWORD(lParam), HIWORD(lParam), ptile);
-        }
+	popit(LOWORD(lParam),HIWORD(lParam),xtile,ytile);	
       } else {
-	recenter_button_pressed(LOWORD(lParam), HIWORD(lParam));
+	center_tile_mapcanvas(xtile,ytile);
       }
     }
     break;
@@ -211,44 +318,21 @@ static LONG CALLBACK map_wnd_proc(HWND hwnd,UINT message,WPARAM wParam, LPARAM l
     break;
   case WM_LBUTTONUP:
   case WM_RBUTTONUP:
-  case WM_MBUTTONUP:
     if (popit_popup!=NULL) {
       DestroyWindow(popit_popup);
       popit_popup=NULL;
       SetFocus(root_window);
     }
     break;
-  case WM_SETCURSOR:
-    switch (hover_state) {
-    case HOVER_NONE:
-      SetCursor (LoadCursor(NULL, IDC_ARROW));
-      break;
-    case HOVER_PATROL:
-      SetCursor (cursors[CURSOR_PATROL]);
-      break;
-    case HOVER_GOTO:
-    case HOVER_CONNECT:
-      SetCursor (cursors[CURSOR_GOTO]);
-      break;
-    case HOVER_NUKE:
-      SetCursor (cursors[CURSOR_NUKE]);
-      break;
-    case HOVER_PARADROP:
-      SetCursor (cursors[CURSOR_PARADROP]);
-      break;
-    }
-    break;
   case WM_MOUSEMOVE:
-    if (can_client_change_view()) {
+    if (get_client_state()==CLIENT_GAME_RUNNING_STATE) {
       map_handle_move(LOWORD(lParam),HIWORD(lParam));
     }
     break;
   case WM_PAINT:
-    BeginPaint(hwnd, (LPPAINTSTRUCT)&ps);
-    map_expose(ps.rcPaint.left, ps.rcPaint.top,
-	       ps.rcPaint.right - ps.rcPaint.left,
-	       ps.rcPaint.bottom - ps.rcPaint.top);
-    EndPaint(hwnd, (LPPAINTSTRUCT)&ps);
+    hdc=BeginPaint(hwnd,(LPPAINTSTRUCT)&ps);
+    map_expose(hdc); 
+    EndPaint(hwnd,(LPPAINTSTRUCT)&ps);
     break;
   default:
     return DefWindowProc(hwnd,message,wParam,lParam);
@@ -259,7 +343,7 @@ static LONG CALLBACK map_wnd_proc(HWND hwnd,UINT message,WPARAM wParam, LPARAM l
 /**************************************************************************
 
 **************************************************************************/
-void init_mapwindow(void)
+void init_mapwindow()
 {
   WNDCLASS *wndclass;
   wndclass=fc_malloc(sizeof(WNDCLASS));
@@ -282,17 +366,18 @@ void init_mapwindow(void)
 **************************************************************************/
 void overview_handle_rbut(int x, int y)
 {
- int xtile, ytile;
- struct tile *ptile;
-
- if (!can_client_change_view()) {
-   return;
+ int xtile, ytile;        
+ if (is_isometric) {
+   xtile=x/2-(map.xsize/2-(map_view_x+(map_view_width+map_view_height)/2));
+ } else {
+   xtile=x/2-(map.xsize/2-(map_view_x+map_view_width/2));
  }
 
- overview_to_map_pos(&xtile, &ytile, x, y);
- ptile = map_pos_to_tile(xtile, ytile);
+ ytile=y/2; 
 
- center_tile_mapcanvas(ptile);
+ if(get_client_state()!=CLIENT_GAME_RUNNING_STATE)
+     return ;
+ center_tile_mapcanvas(xtile,ytile); 
 
 }
 
@@ -301,29 +386,27 @@ void overview_handle_rbut(int x, int y)
 **************************************************************************/
 void indicator_handle_but(int i)
 {
-  int delta = 10;
-  int lux_end = client.conn.playing->economic.luxury;
-  int sci_end = lux_end + client.conn.playing->economic.science;
-#if 0 /* Unneeded. */
-  int tax_end = 100; 
-#endif
-  int luxury = client.conn.playing->economic.luxury;
-  int science = client.conn.playing->economic.science;
-  int tax = client.conn.playing->economic.tax;
+  int tax_end,lux_end,sci_end;
+  int delta=10;
+  struct packet_player_request packet;       
+  lux_end= game.player_ptr->economic.luxury;
+  sci_end= lux_end + game.player_ptr->economic.science;
+  tax_end= 100; 
   
-  i *= 10;
-  if (i < lux_end) {
-    luxury -= delta;
-    science += delta;
-  } else if (i < sci_end) {
-    science -= delta;
-    tax += delta;
-  } else {
-    tax -= delta;
-    luxury += delta;
+  packet.luxury= game.player_ptr->economic.luxury;
+  packet.science= game.player_ptr->economic.science;
+  packet.tax= game.player_ptr->economic.tax;
+  
+  i*= 10;
+  if(i<lux_end){
+    packet.luxury-= delta; packet.science+= delta;
+  }else if(i<sci_end){
+    packet.science-= delta; packet.tax+= delta;
+  }else{
+   packet.tax-= delta; packet.luxury+= delta;
   }
-
-  dsend_packet_player_rates(&client.conn, tax, luxury, science);
+  send_packet_player_request(&aconnection, &packet, PACKET_PLAYER_RATES);
+  
 }
 
 /**************************************************************************
@@ -333,9 +416,11 @@ static void name_new_city_callback(HWND w, void *data)
 {
   size_t unit_id;
  
-  if ((unit_id = (size_t)data)) {
-    dsend_packet_unit_build_city(&client.conn, unit_id,
-				 input_dialog_get_input(w));
+  if((unit_id=(size_t)data)) {
+    struct packet_unit_request req;
+    req.unit_id=unit_id;
+    sz_strlcpy(req.name, input_dialog_get_input(w));
+    send_packet_unit_request(&aconnection, &req, PACKET_UNIT_BUILD_CITY);
   }
   input_dialog_destroy(w);
 }
@@ -358,7 +443,7 @@ popup_newcity_dialog(struct unit *punit, char *suggestname)
 /**************************************************************************
 
 **************************************************************************/
-void center_on_unit(void)
+void center_on_unit()
 {
    request_center_focus_unit(); 
 }
@@ -374,19 +459,15 @@ void set_turn_done_button_state(bool state)
 /**************************************************************************
 
 **************************************************************************/
+void focus_to_next_unit(void)
+{
+  advance_unit_focus();
+}
+           
+/**************************************************************************
+
+**************************************************************************/
 void create_line_at_mouse_pos(void)
 {
-  POINT pos;
-  GetCursorPos(&pos);
-  ScreenToClient(map_window, &pos);
-  update_line(pos.x, pos.y);
-}
-
-/**************************************************************************
- The Area Selection rectangle. Called by center_tile_mapcanvas() and
- when the mouse pointer moves.
-**************************************************************************/
-void update_rect_at_mouse_pos(void)
-{
-  /* PORTME */
+        /* PORTME */
 }

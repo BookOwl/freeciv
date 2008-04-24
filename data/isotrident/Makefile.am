@@ -1,30 +1,24 @@
 ## Process this file with automake to produce Makefile.in
 
 ## Override automake so that "make install" puts these in proper place:
-pkgdatadir = $(datadir)/$(PACKAGE)/isotrident
+pkgdatadir = $(datadir)/@PACKAGE@/isotrident
 
 pkgdata_DATA =          \
-	cities.png	\
+	cities.xpm	\
 	cities.spec	\
-	fog.png		\
-	fog.spec	\
-	grid.png	\
-	grid.spec	\
-	morecities.png	\
-	morecities.spec	\
+	flags.xpm	\
+	flags.spec	\
 	nuke.spec	\
-	nuke.png	\
-	select.png	\
-	select.spec	\
-	terrain1.png	\
+	nuke.xpm	\
+	small.spec	\
+	small.xpm	\
 	terrain1.spec	\
-	terrain2.png	\
+	terrain1.xpm	\
 	terrain2.spec	\
-	tiles.png	\
+	terrain2.xpm	\
+	tiles.xpm	\
 	tiles.spec	\
-	unitextras.png	\
-	unitextras.spec	\
-	water.png	\
-	water.spec
+	units.xpm	\
+	units.spec
 
 EXTRA_DIST = $(pkgdata_DATA)

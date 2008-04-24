@@ -10,14 +10,13 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
-#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
 
 #include <X11/Intrinsic.h>
 #include <X11/StringDefs.h>
@@ -31,6 +30,7 @@
 
 #include "city.h"
 #include "fcintl.h"
+#include "game.h"
 #include "genlist.h"
 #include "government.h"
 #include "mem.h"
@@ -41,7 +41,6 @@
 #include "support.h"
 #include "version.h"
 
-#include "civclient.h"
 #include "climisc.h"
 #include "dialogs.h"
 #include "graphics.h"
@@ -65,7 +64,9 @@ static Widget help_title;
 static Widget help_improvement_cost, help_improvement_cost_data;
 static Widget help_improvement_upkeep, help_improvement_upkeep_data;
 static Widget help_improvement_req, help_improvement_req_data;
+static Widget help_improvement_variant, help_improvement_variant_data;
 static Widget help_wonder_obsolete, help_wonder_obsolete_data;
+static Widget help_wonder_variant, help_wonder_variant_data;
 
 static Widget help_tech_tree;
 static Widget help_tree_viewport;
@@ -82,12 +83,12 @@ static Widget help_unit_tile;
 
 static Widget help_terrain_movement_defense, help_terrain_movement_defense_data;
 static Widget help_terrain_food_shield_trade, help_terrain_food_shield_trade_data;
-static Widget help_terrain_resources;
+static Widget help_terrain_special_1, help_terrain_special_1_data;
+static Widget help_terrain_special_2, help_terrain_special_2_data;
 static Widget help_terrain_road_result_time, help_terrain_road_result_time_data;
 static Widget help_terrain_irrigation_result_time, help_terrain_irrigation_result_time_data;
 static Widget help_terrain_mining_result_time, help_terrain_mining_result_time_data;
 static Widget help_terrain_transform_result_time, help_terrain_transform_result_time_data;
-
 
 static void create_help_page(enum help_page_type type);
 
@@ -251,7 +252,7 @@ static void create_tech_tree(Widget tree, Widget parent, int tech, int levels)
   char *bg="";
   char label[MAX_LEN_NAME+3];
   
-  type = (tech==A_LAST) ? TECH_UNKNOWN : player_invention_state(client.conn.playing, tech);
+  type = (tech==A_LAST) ? TECH_UNKNOWN : get_invention(game.player_ptr, tech);
   switch(type) {
     case TECH_UNKNOWN:
       bg=TREE_NODE_UNKNOWN_TECH_BG;
@@ -265,8 +266,7 @@ static void create_tech_tree(Widget tree, Widget parent, int tech, int levels)
   }
   
   if(tech==A_LAST ||
-     (advance_required(tech, AR_ONE)==A_LAST
-     && advance_required(tech, AR_TWO)==A_LAST))  {
+     (advances[tech].req[0]==A_LAST && advances[tech].req[1]==A_LAST))  {
     sz_strlcpy(label, _("Removed"));
     bg=TREE_NODE_REMOVED_TECH_BG;
     l=XtVaCreateManagedWidget("treenode", commandWidgetClass, 
@@ -279,8 +279,8 @@ static void create_tech_tree(Widget tree, Widget parent, int tech, int levels)
   }
   
   my_snprintf(label, sizeof(label),
-	      "%s:%d", advance_name_translation(advance_by_number(tech)),
-	      num_unknown_techs_for_goal(client.conn.playing, tech));
+	      "%s:%d", advances[tech].name,
+	      num_unknown_techs_for_goal(game.player_ptr, tech));
 
   if(parent) {
     l=XtVaCreateManagedWidget("treenode", 
@@ -306,10 +306,10 @@ static void create_tech_tree(Widget tree, Widget parent, int tech, int levels)
 
   
   if(--levels>0) {
-    if(advance_required(tech, AR_ONE)!=A_NONE)
-      create_tech_tree(tree, l, advance_required(tech, AR_ONE), levels);
-    if(advance_required(tech, AR_TWO)!=A_NONE)
-      create_tech_tree(tree, l, advance_required(tech, AR_TWO), levels);
+    if(advances[tech].req[0]!=A_NONE)
+      create_tech_tree(tree, l, advances[tech].req[0], levels);
+    if(advances[tech].req[1]!=A_NONE)
+      create_tech_tree(tree, l, advances[tech].req[1], levels);
   }
   
   
@@ -403,7 +403,18 @@ static void create_help_page(enum help_page_type type)
 				labelWidgetClass, 
 				help_right_form,
 				NULL);
-    } else {
+      help_improvement_variant =
+	I_L(XtVaCreateManagedWidget("helpimprvariant", 
+				    labelWidgetClass, 
+				    help_right_form,
+				    NULL));
+      help_improvement_variant_data =
+	XtVaCreateManagedWidget("helpimprvariantdata",
+				labelWidgetClass, 
+				help_right_form,
+				NULL);
+    }
+    else {
       help_wonder_obsolete =
 	I_L(XtVaCreateManagedWidget("helpwonderobsolete", 
 				    labelWidgetClass, 
@@ -411,6 +422,16 @@ static void create_help_page(enum help_page_type type)
 				    NULL));
       help_wonder_obsolete_data =
 	XtVaCreateManagedWidget("helpwonderobsoletedata", 
+				labelWidgetClass, 
+				help_right_form,
+				NULL);
+      help_wonder_variant =
+	I_L(XtVaCreateManagedWidget("helpwondervariant", 
+				    labelWidgetClass, 
+				    help_right_form,
+				    NULL));
+      help_wonder_variant_data =
+	XtVaCreateManagedWidget("helpwondervariantdata",
 				labelWidgetClass, 
 				help_right_form,
 				NULL);
@@ -488,8 +509,8 @@ static void create_help_page(enum help_page_type type)
       XtVaCreateManagedWidget("helpunittile",
 			      labelWidgetClass,
 			      help_right_form,
-			      XtNwidth, tileset_full_tile_width(tileset),
-			      XtNheight, tileset_full_tile_height(tileset),
+			      XtNwidth, UNIT_TILE_WIDTH,
+			      XtNheight, UNIT_TILE_HEIGHT,
 			      NULL);  
     XtAddCallback(help_unit_tile,
                   XtNdestroyCallback,free_bitmap_destroy_callback,
@@ -643,10 +664,32 @@ static void create_help_page(enum help_page_type type)
        help_right_form,
        NULL);
 
-    help_terrain_resources =
+    help_terrain_special_1 =
       XtVaCreateManagedWidget
       (
-       "help_terrain_resources",
+       "help_terrain_special_1",
+       labelWidgetClass,
+       help_right_form,
+       NULL);
+    help_terrain_special_1_data =
+      XtVaCreateManagedWidget
+      (
+       "help_terrain_special_1_data",
+       labelWidgetClass,
+       help_right_form,
+       NULL);
+
+    help_terrain_special_2 =
+      XtVaCreateManagedWidget
+      (
+       "help_terrain_special_2",
+       labelWidgetClass,
+       help_right_form,
+       NULL);
+    help_terrain_special_2_data =
+      XtVaCreateManagedWidget
+      (
+       "help_terrain_special_2_data",
        labelWidgetClass,
        help_right_form,
        NULL);
@@ -717,51 +760,37 @@ static void create_help_page(enum help_page_type type)
 ...
 **************************************************************************/
 static void help_update_improvement(const struct help_item *pitem,
-				    char *title)
+				    char *title, int which)
 {
-  char buf[64000];
-  struct impr_type *imp = find_improvement_by_translated_name(title);
+  char *buf = &long_buffer[0];
   
   create_help_page(HELP_IMPROVEMENT);
-
-  if (imp  &&  !is_great_wonder(imp)) {
-    char req_buf[512];
-    int i;
-
-    sprintf(buf, "%d ", impr_build_shield_cost(imp));
+  
+  if (which<game.num_impr_types) {
+    struct impr_type *imp = &improvement_types[which];
+    sprintf(buf, "%d ", imp->build_cost);
     xaw_set_label(help_improvement_cost_data, buf);
     sprintf(buf, "%d ", imp->upkeep);
     xaw_set_label(help_improvement_upkeep_data, buf);
-    /*if (imp->tech_req == A_LAST) {
+    sprintf(buf, "%d ", imp->variant);
+    xaw_set_label(help_improvement_variant_data, buf);
+    if (imp->tech_req == A_LAST) {
       xaw_set_label(help_improvement_req_data, _("(Never)"));
     } else {
       xaw_set_label(help_improvement_req_data,
-		    advance_name_translation(advance_by_number(imp->tech_req)));
-    }*/
-    
-    /* FIXME: this should show ranges and all the MAX_NUM_REQS reqs. 
-     * Currently it's limited to 1 req but this code is partially prepared
-     * to be extended.  Remember MAX_NUM_REQS is a compile-time
-     * definition. */
-    i = 0;
-    requirement_vector_iterate(&imp->reqs, preq) {
-      xaw_set_label(help_improvement_req_data,
-                    universal_name_translation(&preq->source,
-                                               req_buf, sizeof(req_buf)));
-      i++;
-      break;
-    } requirement_vector_iterate_end;
-/*    create_tech_tree(help_tech_tree, 0,
-                     imp->req[0].source.value.advance, 3);
-*/
-  } else {
+		    advances[imp->tech_req].name);
+    }
+    create_tech_tree(help_tech_tree, 0, imp->tech_req, 3);
+  }
+  else {
     xaw_set_label(help_improvement_cost_data, "0 ");
     xaw_set_label(help_improvement_upkeep_data, "0 ");
+    xaw_set_label(help_improvement_variant_data,"0 ");
     xaw_set_label(help_improvement_req_data, _("(Never)"));
     create_tech_tree(help_tech_tree, 0, A_LAST, 3);
   }
   set_title_topic(pitem);
-  helptext_building(buf, sizeof(buf), client.conn.playing, pitem->text, imp);
+  helptext_improvement(buf, which, pitem->text);
   XtVaSetValues(help_text, XtNstring, buf, NULL);
 }
   
@@ -769,52 +798,38 @@ static void help_update_improvement(const struct help_item *pitem,
 ...
 **************************************************************************/
 static void help_update_wonder(const struct help_item *pitem,
-			       char *title)
+			       char *title, int which)
 {
-  char buf[64000];
-  struct impr_type *imp = find_improvement_by_translated_name(title);
-
+  char *buf = &long_buffer[0];
+  
   create_help_page(HELP_WONDER);
 
-  if (imp  &&  is_great_wonder(imp)) {
-    char req_buf[512];
-    int i;
-    struct advance *vap;
-
-    sprintf(buf, "%d ", impr_build_shield_cost(imp));
+  if (which<game.num_impr_types) {
+    struct impr_type *imp = &improvement_types[which];
+    sprintf(buf, "%d ", imp->build_cost);
     xaw_set_label(help_improvement_cost_data, buf);
-     /* FIXME: this should show ranges and all the MAX_NUM_REQS reqs. 
-      * Currently it's limited to 1 req but this code is partially prepared
-      * to be extended.  Remember MAX_NUM_REQS is a compile-time
-      * definition. */
-    i = 0;
-    requirement_vector_iterate(&imp->reqs, preq) {
-      xaw_set_label(help_improvement_req_data,
-                    universal_name_translation(&preq->source,
-                                               req_buf, sizeof(req_buf)));
-      i++;
-      break;
-    } requirement_vector_iterate_end;
-
-    vap = valid_advance(imp->obsolete_by);
-    if (vap) {
-      xaw_set_label(help_wonder_obsolete_data,
-		    advance_name_translation(vap));
+    sprintf(buf, "%d ", imp->variant);
+    xaw_set_label(help_wonder_variant_data, buf);
+    if (imp->tech_req == A_LAST) {
+      xaw_set_label(help_improvement_req_data, _("(Never)"));
     } else {
-      xaw_set_label(help_wonder_obsolete_data, _("(Never)"));
+      xaw_set_label(help_improvement_req_data,
+		    advances[imp->tech_req].name);
     }
-/*    create_tech_tree(help_tech_tree, 0, 
-                     imp->req[0].source.value.advance, 3);
-*/
-  } else {
+    xaw_set_label(help_wonder_obsolete_data,
+		  advances[imp->obsolete_by].name);
+    create_tech_tree(help_tech_tree, 0, imp->tech_req, 3);
+  }
+  else {
     /* can't find wonder */
     xaw_set_label(help_improvement_cost_data, "0 ");
+    xaw_set_label(help_wonder_variant_data, "0 ");
     xaw_set_label(help_improvement_req_data, _("(Never)"));
     xaw_set_label(help_wonder_obsolete_data, _("None"));
-    create_tech_tree(help_tech_tree, 0, advance_count(), 3); 
+    create_tech_tree(help_tech_tree, 0, game.num_tech_types, 3); 
   }
   set_title_topic(pitem);
-  helptext_building(buf, sizeof(buf), client.conn.playing, pitem->text, imp);
+  helptext_wonder(buf, which, pitem->text);
   XtVaSetValues(help_text, XtNstring, buf, NULL);
 }
 
@@ -822,46 +837,43 @@ static void help_update_wonder(const struct help_item *pitem,
 ...
 **************************************************************************/
 static void help_update_unit_type(const struct help_item *pitem,
-				  char *title)
+				  char *title, int i)
 {
-  char buf[64000];
-  struct unit_type *punittype = find_unit_type_by_translated_name(title);
+  char *buf = &long_buffer[0];
   
   create_help_page(HELP_UNIT);
-  if (punittype) {
-/*    struct unit_type *punittype = utype_by_number(i);*/
-    sprintf(buf, "%d ", utype_build_shield_cost(punittype));
+  if (i<game.num_unit_types) {
+    struct unit_type *utype = get_unit_type(i);
+    sprintf(buf, "%d ", utype->build_cost);
     xaw_set_label(help_unit_cost_data, buf);
-    sprintf(buf, "%d ", punittype->attack_strength);
+    sprintf(buf, "%d ", utype->attack_strength);
     xaw_set_label(help_unit_attack_data, buf);
-    sprintf(buf, "%d ", punittype->defense_strength);
+    sprintf(buf, "%d ", utype->defense_strength);
     xaw_set_label(help_unit_def_data, buf);
-    sprintf(buf, "%d ", punittype->move_rate/3);
+    sprintf(buf, "%d ", utype->move_rate/3);
     xaw_set_label(help_unit_move_data, buf);
-    sprintf(buf, "%d ", punittype->firepower);
+    sprintf(buf, "%d ", utype->firepower);
     xaw_set_label(help_unit_fp_data, buf);
-    sprintf(buf, "%d ", punittype->hp);
+    sprintf(buf, "%d ", utype->hp);
     xaw_set_label(help_unit_hp_data, buf);
-    sprintf(buf, "%d ", (int)sqrt((double)punittype->vision_radius_sq));
+    sprintf(buf, "%d ", utype->vision_range);
     xaw_set_label(help_unit_visrange_data, buf);
-    xaw_set_label(help_unit_upkeep_data,
-		  helptext_unit_upkeep_str(punittype));
-    if (A_NEVER == punittype->require_advance) {
+    xaw_set_label(help_unit_upkeep_data, helptext_unit_upkeep_str(i));
+    if(utype->tech_requirement==A_LAST) {
       xaw_set_label(help_improvement_req_data, _("(Never)"));
     } else {
       xaw_set_label(help_improvement_req_data,
-		    advance_name_for_player(client.conn.playing,
-				  advance_number(punittype->require_advance)));
+		    advances[utype->tech_requirement].name);
     }
-    create_tech_tree(help_tech_tree, 0, advance_number(punittype->require_advance), 3);
-    if (U_NOT_OBSOLETED == punittype->obsoleted_by) {
+    create_tech_tree(help_tech_tree, 0, utype->tech_requirement, 3);
+    if(utype->obsoleted_by==-1) {
       xaw_set_label(help_wonder_obsolete_data, _("None"));
     } else {
       xaw_set_label(help_wonder_obsolete_data,
-		    utype_name_translation(punittype->obsoleted_by));
+		    get_unit_type(utype->obsoleted_by)->name);
     }
     /* add text for transport_capacity, fuel, and flags: */
-    helptext_unit(buf, sizeof(buf), client.conn.playing, pitem->text, punittype);
+    helptext_unit(buf, i, pitem->text);
     XtVaSetValues(help_text, XtNstring, buf, NULL);
   }
   else {
@@ -873,83 +885,66 @@ static void help_update_unit_type(const struct help_item *pitem,
     xaw_set_label(help_unit_hp_data, "0 ");
     xaw_set_label(help_unit_visrange_data, "0 ");
     xaw_set_label(help_improvement_req_data, _("(Never)"));
-    create_tech_tree(help_tech_tree, 0, advance_count(), 3);
+    create_tech_tree(help_tech_tree, 0, game.num_tech_types, 3);
     xaw_set_label(help_wonder_obsolete_data, _("None"));
     XtVaSetValues(help_text, XtNstring, pitem->text, NULL);
   }
-  xaw_set_bitmap(help_unit_tile, create_overlay_unit(punittype));
+  xaw_set_bitmap(help_unit_tile, create_overlay_unit(i));
   set_title_topic(pitem);
 }
 
 /**************************************************************************
 ...
 **************************************************************************/
-static void help_update_tech(const struct help_item *pitem, char *title)
+static void help_update_tech(const struct help_item *pitem, char *title, int i)
 {
-  char buf[4096];
-  int i;
-  struct advance *padvance = find_advance_by_translated_name(title);
+  char *buf = &long_buffer[0];
+  int j;
 
   create_help_page(HELP_TECH);
   set_title_topic(pitem);
 
-  if (padvance  &&  !is_future_tech(i = advance_number(padvance))) {
+  if (!is_future_tech(i)) {
     create_tech_tree(help_tech_tree, 0, i, 3);
-    helptext_advance(buf, sizeof(buf), client.conn.playing, pitem->text, i);
+    helptext_tech(buf, i, pitem->text);
 
-    improvement_iterate(pimprove) {
-      /*if (i == j->tech_req) 
+    impr_type_iterate(j) {
+      if(i==improvement_types[j].tech_req) 
 	sprintf(buf+strlen(buf), _("Allows %s.\n"),
-		improvement_name_translation(j));
-      */
-
-       /* FIXME: need a more general mechanism for this, since this
-        * helptext needs to be shown in all possible req source types. */
-      requirement_vector_iterate(&pimprove->reqs, preq) {
-	if (VUT_IMPROVEMENT == preq->source.kind
-	    && preq->source.value.building == pimprove) {
-	  sprintf(buf+strlen(buf), _("Allows %s.\n"),
-		  improvement_name_translation(pimprove));
-        }
-      } requirement_vector_iterate_end;
-      if (padvance == pimprove->obsolete_by)
+		improvement_types[j].name);
+      if(i==improvement_types[j].obsolete_by)
 	sprintf(buf+strlen(buf), _("Obsoletes %s.\n"),
-		improvement_name_translation(pimprove));
-    } improvement_iterate_end;
+		improvement_types[j].name);
+    } impr_type_iterate_end;
 
-    unit_type_iterate(punittype) {
-      if (padvance != punittype->require_advance) {
-	continue;
-      }
-      sprintf(buf + strlen(buf), _("Allows %s.\n"),
-	      utype_name_translation(punittype));
+    unit_type_iterate(j) {
+      if(i==get_unit_type(j)->tech_requirement) 
+	sprintf(buf+strlen(buf), _("Allows %s.\n"), 
+		get_unit_type(j)->name);
     } unit_type_iterate_end;
 
-    advance_iterate(A_NONE, ptest) {
-      if (padvance == advance_requires(ptest, AR_ONE)) {
-	if (advance_by_number(A_NONE) == advance_requires(ptest, AR_TWO))
+    for(j=0; j<game.num_tech_types; ++j) {
+      if(i==advances[j].req[0]) {
+	if(advances[j].req[1]==A_NONE)
 	  sprintf(buf+strlen(buf), _("Allows %s.\n"), 
-		  advance_name_translation(ptest));
+		  advances[j].name);
 	else
 	  sprintf(buf+strlen(buf), _("Allows %s (with %s).\n"), 
-		  advance_name_translation(ptest),
-		  advance_name_translation(advance_requires(ptest, AR_TWO)));
+		  advances[j].name, advances[advances[j].req[1]].name);
       }
-      if (padvance == advance_requires(ptest, AR_TWO)) {
+      if(i==advances[j].req[1]) {
 	sprintf(buf+strlen(buf), _("Allows %s (with %s).\n"), 
-		advance_name_translation(ptest),
-		advance_name_translation(advance_requires(ptest, AR_ONE)));
+		advances[j].name, advances[advances[j].req[0]].name);
       }
-    } advance_iterate_end;
+    }
     if (strlen(buf)) strcat(buf, "\n");
-/*
     if (advances[i].helptext) {
       sprintf(buf+strlen(buf), "%s\n", _(advances[i].helptext));
     }
-*/
-  } else {
+  }
+  else {
     create_help_page(HELP_TECH);
-    create_tech_tree(help_tech_tree, 0, advance_count(), 3);
+    create_tech_tree(help_tech_tree, 0, game.num_tech_types, 3);
     strcpy(buf, pitem->text);
   }
   wordwrap_string(buf, 68);
@@ -960,107 +955,136 @@ static void help_update_tech(const struct help_item *pitem, char *title)
 ...
 **************************************************************************/
 static void help_update_terrain(const struct help_item *pitem,
-				char *title)
+				char *title, int i)
 {
-  char buf[4096];
-  struct terrain *pterrain = find_terrain_by_translated_name(title);
+  char *buf = &long_buffer[0];
 
   create_help_page(HELP_TERRAIN);
   set_title_topic(pitem);
 
-  helptext_terrain(buf, sizeof(buf), client.conn.playing, pitem->text, pterrain);
+  helptext_terrain(buf, i, pitem->text);
   XtVaSetValues(help_text, XtNstring, buf, NULL);
 
-  if (pterrain) {
-    sprintf(buf, "%d/%d.%d",
-	    pterrain->movement_cost,
-	    (int)((pterrain->defense_bonus + 100) / 100),
-	    (pterrain->defense_bonus + 100) % 100 / 10);
-    xaw_set_label(help_terrain_movement_defense_data, buf);
+  if (i < T_COUNT)
+    {
+      sprintf (buf, "%d/%d.%d",
+	       tile_types[i].movement_cost,
+	       (int)(tile_types[i].defense_bonus/10), tile_types[i].defense_bonus%10);
+      xaw_set_label (help_terrain_movement_defense_data, buf);
 
-    sprintf(buf, "%d/%d/%d",
-	    pterrain->output[O_FOOD],
-	    pterrain->output[O_SHIELD],
-	    pterrain->output[O_TRADE]);
-    xaw_set_label(help_terrain_food_shield_trade_data, buf);
+      sprintf (buf, "%d/%d/%d",
+	       tile_types[i].food,
+	       tile_types[i].shield,
+	       tile_types[i].trade);
+      xaw_set_label (help_terrain_food_shield_trade_data, buf);
 
-    buf[0] = '\0';
-    if (*(pterrain->resources)) {
-      struct resource **r;
+      if (*(tile_types[i].special_1_name))
+	{
+	  sprintf (buf, _("%s F/R/T:"),
+		   tile_types[i].special_1_name);
+	  xaw_set_label (help_terrain_special_1, buf);
+	  sprintf (buf, "%d/%d/%d",
+		   tile_types[i].food_special_1,
+		   tile_types[i].shield_special_1,
+		   tile_types[i].trade_special_1);
+	  xaw_set_label (help_terrain_special_1_data, buf);
+	} else {
+	  xaw_set_label (help_terrain_special_1, "");
+	  xaw_set_label (help_terrain_special_1_data, "");
+	}
 
-      for (r = pterrain->resources; *r; r++) {
-	sprintf (buf + strlen (buf), " %s,", resource_name_translation(*r));
-      }
-      buf[strlen (buf) - 1] = '.';
-    } else {
-      /* TRANS: "Resources: (none)". */
-      sprintf (buf + strlen (buf), _("(none)"));
+      if (*(tile_types[i].special_2_name))
+	{
+	  sprintf (buf, _("%s F/R/T:"),
+		   tile_types[i].special_2_name);
+	  xaw_set_label (help_terrain_special_2, buf);
+	  sprintf (buf, "%d/%d/%d",
+		   tile_types[i].food_special_2,
+		   tile_types[i].shield_special_2,
+		   tile_types[i].trade_special_2);
+	  xaw_set_label (help_terrain_special_2_data, buf);
+	} else {
+	  xaw_set_label (help_terrain_special_2, "");
+	  xaw_set_label (help_terrain_special_2_data, "");
+	}
+
+      if (tile_types[i].road_trade_incr > 0)
+	{
+	  sprintf (buf, _("+%d Trade / %d"),
+		   tile_types[i].road_trade_incr,
+		   tile_types[i].road_time);
+	}
+      else if (tile_types[i].road_time > 0)
+	{
+	  sprintf (buf, _("no extra / %d"),
+		   tile_types[i].road_time);
+	}
+      else
+	{
+	  strcpy (buf, _("n/a"));
+	}
+      xaw_set_label (help_terrain_road_result_time_data, buf);
+
+      strcpy (buf, _("n/a"));
+      if (tile_types[i].irrigation_result == i)
+	{
+	  if (tile_types[i].irrigation_food_incr > 0)
+	    {
+	      sprintf (buf, _("+%d Food / %d"),
+		       tile_types[i].irrigation_food_incr,
+		       tile_types[i].irrigation_time);
+	    }
+	}
+      else if (tile_types[i].irrigation_result != T_LAST)
+	{
+	  sprintf (buf, "%s / %d",
+		   tile_types[tile_types[i].irrigation_result].terrain_name,
+		   tile_types[i].irrigation_time);
+	}
+      xaw_set_label (help_terrain_irrigation_result_time_data, buf);
+
+      strcpy (buf, _("n/a"));
+      if (tile_types[i].mining_result == i)
+	{
+	  if (tile_types[i].mining_shield_incr > 0)
+	    {
+	      sprintf (buf, _("+%d Res. / %d"),
+		       tile_types[i].mining_shield_incr,
+		       tile_types[i].mining_time);
+	    }
+	}
+      else if (tile_types[i].mining_result != T_LAST)
+	{
+	  sprintf (buf, "%s / %d",
+		   tile_types[tile_types[i].mining_result].terrain_name,
+		   tile_types[i].mining_time);
+	}
+      xaw_set_label (help_terrain_mining_result_time_data, buf);
+
+      if (tile_types[i].transform_result != T_LAST)
+	{
+	  sprintf (buf, "%s / %d",
+		   tile_types[tile_types[i].transform_result].terrain_name,
+		   tile_types[i].transform_time);
+	} else {
+	  strcpy (buf, _("n/a"));
+	}
+      xaw_set_label (help_terrain_transform_result_time_data, buf);
     }
-    xaw_set_label(help_terrain_resources, buf);
-
-    if (pterrain->road_trade_incr > 0) {
-      sprintf(buf, _("+%d Trade / %d"),
-	      pterrain->road_trade_incr,
-	      pterrain->road_time);
-    } else if (pterrain->road_time > 0) {
-      sprintf(buf, _("no extra / %d"), pterrain->road_time);
-    } else {
-      strcpy(buf, _("n/a"));
-    }
-    xaw_set_label(help_terrain_road_result_time_data, buf);
-
-    strcpy(buf, _("n/a"));
-    if (pterrain->irrigation_result == pterrain) {
-      if (pterrain->irrigation_food_incr > 0) {
-	sprintf(buf, _("+%d Food / %d"),
-		pterrain->irrigation_food_incr,
-		pterrain->irrigation_time);
-      }
-    } else if (pterrain->irrigation_result != T_NONE) {
-      sprintf(buf, "%s / %d",
-	      terrain_name_translation(pterrain->irrigation_result),
-	      pterrain->irrigation_time);
-    }
-    xaw_set_label(help_terrain_irrigation_result_time_data, buf);
-
-    strcpy(buf, _("n/a"));
-    if (pterrain->mining_result == pterrain) {
-      if (pterrain->mining_shield_incr > 0) {
-	sprintf(buf, _("+%d Res. / %d"),
-		pterrain->mining_shield_incr,
-		pterrain->mining_time);
-      }
-    } else if (pterrain->mining_result != T_NONE) {
-      sprintf(buf, "%s / %d",
-	      terrain_name_translation(pterrain->mining_result),
-	      pterrain->mining_time);
-    }
-    xaw_set_label (help_terrain_mining_result_time_data, buf);
-
-    if (pterrain->transform_result != T_NONE) {
-      sprintf(buf, "%s / %d",
-	      terrain_name_translation(pterrain->transform_result),
-	      pterrain->transform_time);
-    } else {
-      strcpy(buf, _("n/a"));
-    }
-    xaw_set_label (help_terrain_transform_result_time_data, buf);
-  }
 }
 
 /**************************************************************************
   This is currently just a text page, with special text:
 **************************************************************************/
 static void help_update_government(const struct help_item *pitem,
-				   char *title)
+				   char *title, struct government *gov)
 {
-  char buf[4096];
-  struct government *pgovernment = find_government_by_translated_name(title);
+  char *buf = &long_buffer[0];
 
-  if (!pgovernment) {
+  if (gov==NULL) {
     strcat(buf, pitem->text);
   } else {
-    helptext_government(buf, sizeof(buf), client.conn.playing, pitem->text, pgovernment);
+    helptext_government(buf, gov-governments, pitem->text);
   }
   create_help_page(HELP_TEXT);
   set_title_topic(pitem);
@@ -1072,32 +1096,35 @@ static void help_update_government(const struct help_item *pitem,
 **************************************************************************/
 static void help_update_dialog(const struct help_item *pitem)
 {
+  int i;
   char *top;
 
   /* figure out what kind of item is required for pitem ingo */
 
-  for (top = pitem->topic; *top == ' '; top++) {
-    /* nothing */
-  }
+  for(top=pitem->topic; *top==' '; ++top);
 
   switch(pitem->type) {
   case HELP_IMPROVEMENT:
-    help_update_improvement(pitem, top);
+    i = find_improvement_by_name(top);
+    if(i!=B_LAST && is_wonder(i)) i = B_LAST;
+    help_update_improvement(pitem, top, i);
     break;
   case HELP_WONDER:
-    help_update_wonder(pitem, top);
+    i = find_improvement_by_name(top);
+    if(i!=B_LAST && !is_wonder(i)) i = B_LAST;
+    help_update_wonder(pitem, top, i);
     break;
   case HELP_UNIT:
-    help_update_unit_type(pitem, top);
+    help_update_unit_type(pitem, top, find_unit_type_by_name(top));
     break;
   case HELP_TECH:
-    help_update_tech(pitem, top);
+    help_update_tech(pitem, top, find_tech_by_name(top));
     break;
   case HELP_TERRAIN:
-    help_update_terrain(pitem, top);
+    help_update_terrain(pitem, top, get_terrain_by_name(top));
     break;
   case HELP_GOVERNMENT:
-    help_update_government(pitem, top);
+    help_update_government(pitem, top, find_government_by_name(top));
     break;
   case HELP_TEXT:
   default:
@@ -1128,7 +1155,7 @@ static int help_tree_destroy_children(Widget w)
 		XtNnumChildren, &cnt,
 		NULL);
 
-  for (; cnt > 0; cnt--, children++) {
+  for(; cnt>0; --cnt, ++children) {
     if(XtIsSubclass(*children, commandWidgetClass)) {
       Widget par;
       XtVaGetValues(*children, XtNtreeParent, &par, NULL);
@@ -1153,10 +1180,10 @@ static void help_tree_node_callback(Widget w, XtPointer client_data,
   size_t tech=(size_t)client_data;
   
   if(!help_tree_destroy_children(w)) {
-    if(advance_required(tech, AR_ONE)!=A_NONE)
-      create_tech_tree(help_tech_tree, w, advance_required(tech, AR_ONE), 1);
-    if(advance_required(tech, AR_TWO)!=A_NONE)
-      create_tech_tree(help_tech_tree, w, advance_required(tech, AR_TWO), 1);
+    if(advances[tech].req[0]!=A_NONE)
+      create_tech_tree(help_tech_tree, w, advances[tech].req[0], 1);
+    if(advances[tech].req[1]!=A_NONE)
+      create_tech_tree(help_tech_tree, w, advances[tech].req[1], 1);
   }
   
 }

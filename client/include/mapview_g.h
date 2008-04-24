@@ -13,43 +13,45 @@
 #ifndef FC__MAPVIEW_G_H
 #define FC__MAPVIEW_G_H
 
+#include "mapview_common.h"
 #include "shared.h"		/* bool type */
 
-#include "fc_types.h"
+struct unit;
+struct city;
 
-#include "canvas_g.h"
-
-#include "mapview_common.h"
-
-#include "unitlist.h"
+bool tile_visible_mapcanvas(int x, int y);
+bool tile_visible_and_not_on_border_mapcanvas(int x, int y);
 
 void update_info_label(void);
-void update_unit_info_label(struct unit_list *punitlist);
-void update_mouse_cursor(enum cursor_type new_cursor_type);
+void update_unit_info_label(struct unit *punit);
 void update_timeout_label(void);
 void update_turn_done_button(bool do_restore);
 void update_city_descriptions(void);
-void set_indicator_icons(struct sprite *bulb, struct sprite *sol,
-			 struct sprite *flake, struct sprite *gov);
+void set_indicator_icons(int bulb, int sol, int flake, int gov);
 
-void overview_size_changed(void);
-void get_overview_area_dimensions(int *width, int *height);
-struct canvas *get_overview_window(void);
+void set_overview_dimensions(int x, int y);
+void overview_update_tile(int x, int y);
 
-void flush_mapcanvas(int canvas_x, int canvas_y,
-		     int pixel_width, int pixel_height);
-void dirty_rect(int canvas_x, int canvas_y,
-		int pixel_width, int pixel_height);
-void dirty_all(void);
-void flush_dirty(void);
-void gui_flush(void);
+void center_tile_mapcanvas(int x, int y);
+void get_center_tile_mapcanvas(int *x, int *y);
 
+void update_map_canvas(int x, int y, int width, int height,
+		       bool write_to_screen);
+void update_map_canvas_visible(void);
 void update_map_canvas_scrollbars(void);
-void update_map_canvas_scrollbars_size(void);
 
-void put_cross_overlay_tile(struct tile *ptile);
+void put_cross_overlay_tile(int x,int y);
+void put_city_workers(struct city *pcity, int color);
 
-void draw_selection_rectangle(int canvas_x, int canvas_y, int w, int h);
-void tileset_changed(void);
+void move_unit_map_canvas(struct unit *punit, int x0, int y0, int dx, int dy);
+void decrease_unit_hp_smooth(struct unit *punit0, int hp0, 
+			     struct unit *punit1, int hp1);
+void put_nuke_mushroom_pixmaps(int x, int y);
+
+void refresh_overview_canvas(void);
+void refresh_overview_viewrect(void);
+
+void draw_segment(int src_x, int src_y, int dir);
+void undraw_segment(int src_x, int src_y, int dir);
 
 #endif  /* FC__MAPVIEW_G_H */

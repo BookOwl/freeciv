@@ -10,54 +10,42 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
 #include <assert.h>
-#include <stdarg.h>
 
+#include "events.h"
 #include "fcintl.h"
+#include "government.h"
 #include "log.h"
 #include "mem.h"
-#include "rand.h"
-#include "shared.h"
-#include "support.h"
-
-#include "diptreaty.h"
-#include "events.h"
-#include "game.h"
-#include "government.h"
-#include "movement.h"
 #include "packets.h"
 #include "player.h"
+#include "rand.h"
+#include "support.h"
 #include "tech.h"
-#include "unitlist.h"
-
-#include "script.h"
+#include "shared.h"
 
 #include "citytools.h"
 #include "cityturn.h"
-#include "connecthand.h"
 #include "diplhand.h"
 #include "gamehand.h"
+#include "gamelog.h"
 #include "maphand.h"
-#include "plrhand.h"
 #include "sernet.h"
 #include "settlers.h"
 #include "srv_main.h"
 #include "stdinhand.h"
-#include "techtools.h"
-#include "unittools.h"
-#include "spaceship.h"
-#include "spacerace.h"
 #include "unittools.h"
 
-#include "advdiplomacy.h"
 #include "advmilitary.h"
 #include "aidata.h"
 #include "aihand.h"
+#include "aitech.h"
+
+#include "plrhand.h"
 
 static void package_player_common(struct player *plr,
                                   struct packet_player_info *packet);
@@ -66,8 +54,33 @@ static void package_player_info(struct player *plr,
                                 struct packet_player_info *packet,
                                 struct player *receiver,
                                 enum plr_info_level min_info_level);
-static enum plr_info_level player_info_level(struct player *plr,
-					     struct player *receiver);
+
+/**************************************************************************
+...
+**************************************************************************/
+void do_dipl_cost(struct player *pplayer)
+{
+  pplayer->research.bulbs_researched -=
+      (total_bulbs_required(pplayer) * game.diplcost) / 100;
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+void do_free_cost(struct player *pplayer)
+{
+  pplayer->research.bulbs_researched -=
+      (total_bulbs_required(pplayer) * game.freecost) / 100;
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+void do_conquer_cost(struct player *pplayer)
+{
+  pplayer->research.bulbs_researched -=
+      (total_bulbs_required(pplayer) * game.conquercost) / 100;
+}
 
 /**************************************************************************
   Send end-of-turn notifications relevant to specified dests.
@@ -76,12 +89,11 @@ static enum plr_info_level player_info_level(struct player *plr,
 void send_player_turn_notifications(struct conn_list *dest)
 {
   if (dest) {
-    conn_list_iterate(dest, pconn) {
-      struct player *pplayer = pconn->playing;
-
-      if (NULL != pplayer) {
+    conn_list_iterate(*dest, pconn) {
+      struct player *pplayer = pconn->player;
+      if (pplayer) {
 	city_list_iterate(pplayer->cities, pcity) {
-	  send_city_turn_notifications(pconn->self, pcity);
+	  send_city_turn_notifications(&pconn->self, pcity);
 	}
 	city_list_iterate_end;
       }
@@ -91,7 +103,7 @@ void send_player_turn_notifications(struct conn_list *dest)
   else {
     players_iterate(pplayer) {
       city_list_iterate(pplayer->cities, pcity) {
-	send_city_turn_notifications(pplayer->connections, pcity);
+	send_city_turn_notifications(&pplayer->connections, pcity);
       } city_list_iterate_end;
     } players_iterate_end;
   }
@@ -100,321 +112,644 @@ void send_player_turn_notifications(struct conn_list *dest)
 }
 
 /**************************************************************************
-  Murder a player in cold blood.
-
-  Called only from srv_main kill_dying_players()
+...
 **************************************************************************/
-void kill_player(struct player *pplayer)
+void great_library(struct player *pplayer)
 {
-  bool palace;
-
-  pplayer->is_alive = FALSE;
-
-  /* Remove shared vision from dead player to friends. */
-  players_iterate(aplayer) {
-    if (gives_shared_vision(pplayer, aplayer)) {
-      remove_shared_vision(pplayer, aplayer);
-    }
-  } players_iterate_end;
-    
-  cancel_all_meetings(pplayer);
-
-  /* Show entire map for players who are *not* in a team. */
-  if (pplayer->team->players == 1) {
-    map_know_and_see_all(pplayer);
-  }
-
-  if (!is_barbarian(pplayer)) {
-    notify_player(NULL, NULL, E_DESTROYED, _("The %s are no more!"),
-                  nation_plural_for_player(pplayer));
-  }
-
-  /* Transfer back all cities not originally owned by player to their
-     rightful owners, if they are still around */
-  palace = game.info.savepalace;
-  game.info.savepalace = FALSE; /* moving it around is dumb */
-  city_list_iterate(pplayer->cities, pcity) {
-    if (pcity->original != pplayer && pcity->original->is_alive) {
-      /* Transfer city to original owner, kill all its units outside of
-         a radius of 3, give verbose messages of every unit transferred,
-         and raze buildings according to raze chance (also removes palace) */
-      transfer_city(pcity->original, pcity, 3, TRUE, TRUE, TRUE);
-    }
-  } city_list_iterate_end;
-
-  /* Remove all units that are still ours */
-  unit_list_iterate_safe(pplayer->units, punit) {
-    wipe_unit(punit);
-  } unit_list_iterate_safe_end;
-
-  /* Destroy any remaining cities */
-  city_list_iterate(pplayer->cities, pcity) {
-    remove_city(pcity);
-  } city_list_iterate_end;
-  game.info.savepalace = palace;
-
-  /* Remove ownership of tiles */
-  whole_map_iterate(ptile) {
-    if (tile_owner(ptile) == pplayer) {
-      map_claim_ownership(ptile, NULL, NULL);
-    }
-  } whole_map_iterate_end;
-
-  /* Ensure this dead player doesn't win with a spaceship.
-   * Now that would be truly unbelievably dumb - Per */
-  spaceship_init(&pplayer->spaceship);
-  send_spaceship_info(pplayer, NULL);
-
-  send_player_info_c(pplayer, game.est_connections);
-}
-
-/**************************************************************************
-  Handle a client or AI request to change the tax/luxury/science rates.
-  This function does full sanity checking.
-**************************************************************************/
-void handle_player_rates(struct player *pplayer,
-			 int tax, int luxury, int science)
-{
-  int maxrate;
-
-  if (S_S_RUNNING != server_state()) {
-    freelog(LOG_ERROR, "received player_rates packet from %s before start",
-	    player_name(pplayer));
-    notify_player(pplayer, NULL, E_BAD_COMMAND,
-		  _("Cannot change rates before game start."));
+  int i;
+  if (wonder_obsolete(B_GREAT)) 
     return;
-  }
-	
-  if (tax + luxury + science != 100) {
-    return;
-  }
-  if (tax < 0 || tax > 100 || luxury < 0 || luxury > 100 || science < 0
-      || science > 100) {
-    return;
-  }
-  maxrate = get_player_bonus(pplayer, EFT_MAX_RATES);
-  if (tax > maxrate || luxury > maxrate || science > maxrate) {
-    const char *rtype;
+  if (find_city_wonder(B_GREAT)) {
+    if (pplayer->player_no==find_city_wonder(B_GREAT)->owner) {
+      for (i=0;i<game.num_tech_types;i++) {
+	if (get_invention(pplayer, i)!=TECH_KNOWN 
+	    && game.global_advances[i]>=2) {
+	  notify_player_ex(pplayer, -1, -1, E_TECH_GAIN,
+			   _("Game: %s acquired from The Great Library!"),
+			   advances[i].name);
+	  gamelog(GAMELOG_TECH, _("%s discover %s (Library)"),
+		  get_nation_name_plural(pplayer->nation), advances[i].name);
+	  notify_embassies(pplayer, NULL,
+			   _("Game: The %s have acquired %s"
+			     " from the Great Library."),
+			   get_nation_name_plural(pplayer->nation),
+			   advances[i].name);
 
-    if (tax > maxrate) {
-      rtype = _("Tax");
-    } else if (luxury > maxrate) {
-      rtype = _("Luxury");
-    } else {
-      rtype = _("Science");
+	  do_free_cost(pplayer);
+	  found_new_tech(pplayer, i, FALSE, FALSE);
+	  break;
+	}
+      }
     }
-
-    notify_player(pplayer, NULL, E_BAD_COMMAND,
-		  _("%s rate exceeds the max rate for %s."),
-                  rtype,
-                  government_name_for_player(pplayer));
-  } else {
-    pplayer->economic.tax = tax;
-    pplayer->economic.luxury = luxury;
-    pplayer->economic.science = science;
-
-    city_refresh_for_player(pplayer);
-    send_player_info(pplayer, pplayer);
   }
 }
 
 /**************************************************************************
-  Finish the revolution and set the player's government.  Call this as soon
-  as the player has set a target_government and the revolution_finishes
-  turn has arrived.
-**************************************************************************/
-static void finish_revolution(struct player *pplayer)
-{
-  struct government *government = pplayer->target_government;
-
-  if (pplayer->target_government == game.government_when_anarchy
-      || pplayer->target_government == NULL) {
-    /* More descriptive assert than just assert(FALSE) */
-    assert(pplayer->target_government != game.government_when_anarchy
-           && pplayer->target_government != NULL);
-    return;
-  }
-  if (pplayer->revolution_finishes > game.info.turn) {
-    /* More descriptive assert than just assert(FALSE) */
-    assert(pplayer->revolution_finishes <= game.info.turn);
-    return;
-  }
-
-  pplayer->government = government;
-  pplayer->target_government = NULL;
-
-  freelog(LOG_DEBUG,
-	  "Revolution finished for %s.  Government is %s.  Revofin %d (%d).",
-	  player_name(pplayer),
-	  government_rule_name(government),
-	  pplayer->revolution_finishes, game.info.turn);
-  notify_player(pplayer, NULL, E_REVOLT_DONE,
-		   _("%s now governs the %s as a %s."), 
-		   player_name(pplayer), 
-		   nation_plural_for_player(pplayer),
-		   government_name_translation(government));
-
-  if (!pplayer->ai.control) {
-    /* Keep luxuries if we have any.  Try to max out science. -GJW */
-    int max = get_player_bonus(pplayer, EFT_MAX_RATES);
-
-    pplayer->economic.science
-      = MIN(100 - pplayer->economic.luxury, max);
-    pplayer->economic.tax
-      = MIN(100 - pplayer->economic.luxury - pplayer->economic.science, max);
-    pplayer->economic.luxury
-      = 100 - pplayer->economic.science - pplayer->economic.tax;
-  }
-
-  check_player_government_rates(pplayer);
-  city_refresh_for_player(pplayer);
-  send_player_info(pplayer, pplayer);
-}
-
-/**************************************************************************
-  Called by the client or AI to change government.
-**************************************************************************/
-void handle_player_change_government(struct player *pplayer, int government)
-{
-  int turns;
-  struct government *gov = government_by_number(government);
-
-  if (!gov || !can_change_to_government(pplayer, gov)) {
-    return;
-  }
-
-  freelog(LOG_DEBUG,
-	  "Government changed for %s.  Target government is %s; "
-	  "old %s.  Revofin %d, Turn %d.",
-	  player_name(pplayer),
-	  government_rule_name(gov),
-	  government_rule_name(government_of_player(pplayer)),
-	  pplayer->revolution_finishes, game.info.turn);
-
-  /* Set revolution_finishes value. */
-  if (pplayer->revolution_finishes > 0) {
-    /* Player already has an active revolution.  Note that the finish time
-     * may be in the future (we're waiting for it to finish), the current
-     * turn (it just finished - but isn't reset until the end of the turn)
-     * or even in the past (if the player is in anarchy and hasn't chosen
-     * a government). */
-    turns = pplayer->revolution_finishes - game.info.turn;
-  } else if ((pplayer->ai.control && !ai_handicap(pplayer, H_REVOLUTION))
-	     || get_player_bonus(pplayer, EFT_NO_ANARCHY)) {
-    /* AI players without the H_REVOLUTION handicap can skip anarchy */
-    turns = 0;
-  } else if (game.info.revolution_length == 0) {
-    turns = myrand(5) + 1;
-  } else {
-    turns = game.info.revolution_length;
-  }
-
-  pplayer->government = game.government_when_anarchy;
-  pplayer->target_government = gov;
-  pplayer->revolution_finishes = game.info.turn + turns;
-
-  freelog(LOG_DEBUG,
-	  "Revolution started for %s.  Target government is %s.  "
-	  "Revofin %d (%d).",
-	  player_name(pplayer),
-	  government_rule_name(pplayer->target_government),
-	  pplayer->revolution_finishes, game.info.turn);
-
-  /* Now see if the revolution is instantaneous. */
-  if (turns <= 0
-      && pplayer->target_government != game.government_when_anarchy) {
-    finish_revolution(pplayer);
-    return;
-  } else if (turns > 0) {
-    notify_player(pplayer, NULL, E_REVOLT_START,
-		     /* TRANS: this is a message event so don't make it
-		      * too long. */
-		     PL_("The %s have incited a revolt! "
-			 "%d turn of anarchy will ensue! "
-			 "Target government is %s.",
-			 "The %s have incited a revolt! "
-			 "%d turns of anarchy will ensue! "
-			 "Target government is %s.",
-			 turns),
-		     nation_plural_for_player(pplayer),
-		     turns,
-		     government_name_translation(pplayer->target_government));
-  } else {
-    assert(pplayer->target_government == game.government_when_anarchy);
-    notify_player(pplayer, NULL, E_REVOLT_START,
-		     _("Revolution: returning to anarchy."));
-  }
-
-  check_player_government_rates(pplayer);
-  city_refresh_for_player(pplayer);
-  send_player_info(pplayer, pplayer);
-
-  freelog(LOG_DEBUG,
-	  "Government change complete for %s.  Target government is %s; "
-	  "now %s.  Turn %d; revofin %d.",
-	  player_name(pplayer),
-	  government_rule_name(pplayer->target_government),
-	  government_rule_name(government_of_player(pplayer)),
-	  game.info.turn, pplayer->revolution_finishes);
-}
-
-/**************************************************************************
-  See if the player has finished their revolution.  This function should
-  be called at the beginning of a player's phase.
+Count down if the player are in a revolution, notify him when revolution
+has ended.
 **************************************************************************/
 void update_revolution(struct player *pplayer)
 {
-  /* The player's revolution counter is stored in the revolution_finishes
-   * field.  This value has the following meanings:
-   *   - If negative (-1), then the player is not in a revolution.  In this
-   *     case the player should never be in anarchy.
-   *   - If positive, the player is in the middle of a revolution.  In this
-   *     case the value indicates the turn in which the revolution finishes.
-   *     * If this value is > than the current turn, then the revolution is
-   *       in progress.  In this case the player should always be in anarchy.
-   *     * If the value is == to the current turn, then the revolution is
-   *       finished.  The player may now choose a government.  However the
-   *       value isn't reset until the end of the turn.  If the player has
-   *       chosen a government by the end of the turn, then the revolution is
-   *       over and the value is reset to -1.
-   *     * If the player doesn't pick a government then the revolution
-   *       continues.  At this point the value is <= to the current turn,
-   *       and the player can leave the revolution at any time.  The value
-   *       is reset at the end of any turn when a non-anarchy government is
-   *       chosen.
-   */
-  freelog(LOG_DEBUG, "Update revolution for %s.  Current government %s, "
-	  "target %s, revofin %d, turn %d.",
-	  player_name(pplayer),
-	  government_rule_name(government_of_player(pplayer)),
-	  pplayer->target_government
-	  ? government_rule_name(pplayer->target_government)
-	  : "(none)",
-	  pplayer->revolution_finishes, game.info.turn);
-  if (government_of_player(pplayer) == game.government_when_anarchy
-      && pplayer->revolution_finishes <= game.info.turn) {
-    if (pplayer->target_government != game.government_when_anarchy) {
-      /* If the revolution is over and a target government is set, go into
-       * the new government. */
-      freelog(LOG_DEBUG, "Update: finishing revolution for %s.",
-	      player_name(pplayer));
-      finish_revolution(pplayer);
-    } else {
-      /* If the revolution is over but there's no target government set,
-       * alert the player. */
-      notify_player(pplayer, NULL, E_REVOLT_DONE,
-		       _("You should choose a new government from the "
-			 "government menu."));
+  if(pplayer->revolution > 0) 
+    pplayer->revolution--;
+}
+
+/**************************************************************************
+Turn info update loop, for each player at beginning of turn.
+**************************************************************************/
+void begin_player_turn(struct player *pplayer)
+{
+  begin_cities_turn(pplayer);
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+void update_player_aliveness(struct player *pplayer)
+{
+  assert(pplayer != NULL);
+  if(pplayer->is_alive) {
+    if(unit_list_size(&pplayer->units)==0 && 
+       city_list_size(&pplayer->cities)==0) {
+      notify_player_ex(pplayer, -1, -1, E_GAME_END,
+		       _("Game: You are dead!"));
+      pplayer->is_alive = FALSE;
+      if( !is_barbarian(pplayer) ) {
+	notify_player_ex(NULL, -1, -1, E_DESTROYED,
+			 _("Game: The %s are no more!"),
+			 get_nation_name_plural(pplayer->nation));
+	gamelog(GAMELOG_GENO, _("%s civilization destroyed"),
+		get_nation_name(pplayer->nation));
+      }
+      players_iterate(pplayer2) {
+	if (gives_shared_vision(pplayer, pplayer2))
+	  remove_shared_vision(pplayer, pplayer2);
+      } players_iterate_end;
+
+      cancel_all_meetings(pplayer);
+      map_know_and_see_all(pplayer);
     }
-  } else if (government_of_player(pplayer) != game.government_when_anarchy
-	     && pplayer->revolution_finishes < game.info.turn) {
-    /* Reset the revolution counter.  If the player has another revolution
-     * they'll have to re-enter anarchy. */
-    freelog(LOG_DEBUG, "Update: resetting revofin for %s.",
-	    player_name(pplayer));
-    pplayer->revolution_finishes = -1;
-    send_player_info(pplayer, pplayer);
   }
+}
+
+/**************************************************************************
+Player has a new technology (from somewhere)
+was_discovery is passed on to upgrade_city_rails
+Logging & notification is not done here as it depends on how the tech came.
+**************************************************************************/
+void found_new_tech(struct player *plr, int tech_found, bool was_discovery,
+		    bool saving_bulbs)
+{
+  int i;
+  bool bonus_tech_hack = FALSE;
+  bool was_first = FALSE;
+  bool macro_polo_was_obsolete = wonder_obsolete(B_MARCO);
+  struct city *pcity;
+
+  plr->got_tech = TRUE;
+  plr->research.techs_researched++;
+  was_first = (game.global_advances[tech_found] == 0);
+
+  if (was_first) {
+    gamelog(GAMELOG_TECH, _("%s are first to learn %s"),
+	    get_nation_name_plural(plr->nation), advances[tech_found].name);
+    
+    /* Alert the owners of any wonders that have been made obsolete */
+    impr_type_iterate(id) {
+      if (game.global_wonders[id] != 0 && is_wonder(id) &&
+	  improvement_types[id].obsolete_by == tech_found &&
+	  (pcity = find_city_by_id(game.global_wonders[id]))) {
+	notify_player_ex(city_owner(pcity), -1, -1, E_WONDER_OBSOLETE,
+	                 _("Game: Discovery of %s OBSOLETES %s in %s!"), 
+	                 advances[tech_found].name, get_improvement_name(id),
+	                 pcity->name);
+      }
+    } impr_type_iterate_end;
+  }
+
+  for (i=0; i<game.government_count; i++) {
+    if (tech_found == governments[i].required_tech
+	&& tech_found != A_NONE) {
+      notify_player_ex(plr,-1,-1, E_NEW_GOVERNMENT,
+		       _("Game: Discovery of %s makes the government form %s"
+			 " available. You may want to start a revolution."),
+		       advances[tech_found].name, get_government_name(i));
+    }
+  }
+    
+  if (tech_flag(tech_found, TF_BONUS_TECH) && was_first) {
+    bonus_tech_hack = TRUE;
+  }
+
+  set_invention(plr, tech_found, TECH_KNOWN);
+  update_research(plr);
+  update_all_effects();
+  remove_obsolete_buildings(plr);
+  if (tech_flag(tech_found,TF_RAILROAD)) {
+    upgrade_city_rails(plr, was_discovery);
+  }
+
+  /* enhace vision of units inside a fortress */
+  if (tech_flag(tech_found, TF_WATCHTOWER)) {
+    unit_list_iterate(plr->units, punit) {
+      if (map_has_special(punit->x, punit->y, S_FORTRESS)
+	  && is_ground_unit(punit)) {
+	unfog_area(plr, punit->x, punit->y, get_watchtower_vision(punit));
+	fog_area(plr, punit->x, punit->y,
+		 unit_type(punit)->vision_range);
+      }
+    }
+    unit_list_iterate_end;
+  }
+
+  if (tech_found==plr->ai.tech_goal)
+    plr->ai.tech_goal=A_NONE;
+
+  if (tech_found==plr->research.researching) {
+    /* need to pick new tech to research */
+
+    int saved_bulbs = plr->research.bulbs_researched;
+
+    if (choose_goal_tech(plr) != 0) {
+      notify_player_ex(plr, -1, -1, E_TECH_LEARNED,
+		       _("Game: Learned %s.  "
+			 "Our scientists focus on %s, goal is %s."),
+		       advances[tech_found].name,
+		       advances[plr->research.researching].name,
+		       advances[plr->ai.tech_goal].name);
+    } else {
+      choose_random_tech(plr);
+      if (!is_future_tech(plr->research.researching)
+	  || !is_future_tech(tech_found)) {
+	notify_player_ex(plr, -1, -1, E_TECH_LEARNED,
+			 _("Game: Learned %s.  Scientists "
+			   "choose to research %s."),
+			 advances[tech_found].name,
+			 get_tech_name(plr, plr->research.researching));
+      } else {
+	char buffer1[300];
+	char buffer2[300];
+
+	my_snprintf(buffer1, sizeof(buffer1), _("Game: Learned %s. "),
+		    get_tech_name(plr, plr->research.researching));
+	plr->future_tech++;
+	my_snprintf(buffer2, sizeof(buffer2), _("Researching %s."),
+		    get_tech_name(plr, plr->research.researching));
+	notify_player_ex(plr, -1, -1, E_TECH_LEARNED, "%s%s", buffer1,
+			 buffer2);
+      }
+    }
+    if (saving_bulbs) {
+      plr->research.bulbs_researched = saved_bulbs;
+    }
+  }
+
+  if (bonus_tech_hack) {
+    if (advances[tech_found].bonus_message) {
+      notify_player(plr, _("Game: %s"),
+		    _(advances[tech_found].bonus_message));
+    } else {
+      notify_player(plr, _("Game: Great scientists from all the "
+			   "world join your civilization: you get "
+			   "an immediate advance."));
+    }
+    tech_researched(plr);
+  }
+
+  /*
+   * Inform all players about new global advances to give them a
+   * chance to obsolete buildings.
+   */
+  send_game_info(NULL);
+
+  /*
+   * Inform player about his new tech.
+   */
+  send_player_info(plr, plr);
+  
+  /*
+   * Update all cities if the new tech affects happiness.
+   */
+  if (tech_found == game.rtech.cathedral_plus
+      || tech_found == game.rtech.cathedral_minus
+      || tech_found == game.rtech.colosseum_plus
+      || tech_found == game.rtech.temple_plus) {
+    city_list_iterate(plr->cities, pcity) {
+      city_refresh(pcity);
+      send_city_info(plr, pcity);
+    } city_list_iterate_end;
+  }
+
+  /*
+   * Send all player an updated info of the owner of the Marco Polo
+   * Wonder if this wonder has become obsolete.
+   */
+  if (!macro_polo_was_obsolete && wonder_obsolete(B_MARCO)) {
+    struct city *pcity = find_city_wonder(B_MARCO);
+
+    if (pcity) {
+      struct player *owner = city_owner(pcity);
+
+      players_iterate(other_player) {
+	send_player_info(owner, other_player);
+      } players_iterate_end;
+    }
+  }
+}
+
+/**************************************************************************
+Player has a new future technology (from somewhere). Logging &
+notification is not done here as it depends on how the tech came.
+**************************************************************************/
+void found_new_future_tech(struct player *pplayer)
+{
+  pplayer->future_tech++;
+  pplayer->research.techs_researched++;
+}
+
+/**************************************************************************
+Player has researched a new technology
+**************************************************************************/
+void tech_researched(struct player* plr)
+{
+  /* plr will be notified when new tech is chosen */
+
+  if (!is_future_tech(plr->research.researching)) {
+    notify_embassies(plr, NULL,
+		     _("Game: The %s have researched %s."), 
+		     get_nation_name_plural(plr->nation),
+		     advances[plr->research.researching].name);
+
+    gamelog(GAMELOG_TECH, _("%s discover %s"),
+	    get_nation_name_plural(plr->nation),
+	    advances[plr->research.researching].name);
+  } else {
+    notify_embassies(plr, NULL,
+		     _("Game: The %s have researched Future Tech. %d."), 
+		     get_nation_name_plural(plr->nation),
+		     plr->future_tech);
+  
+    gamelog(GAMELOG_TECH, _("%s discover Future Tech %d"),
+	    get_nation_name_plural(plr->nation), plr->future_tech);
+  }
+
+  /* do all the updates needed after finding new tech */
+  found_new_tech(plr, plr->research.researching, TRUE, FALSE);
+}
+
+/**************************************************************************
+  Called from each city to update the research.
+**************************************************************************/
+void update_tech(struct player *plr, int bulbs)
+{
+  int excessive_bulbs;
+
+  plr->research.bulbs_researched += bulbs;
+  
+  excessive_bulbs =
+      (plr->research.bulbs_researched - total_bulbs_required(plr));
+
+  if (excessive_bulbs >= 0) {
+    tech_researched(plr);
+    plr->research.bulbs_researched += excessive_bulbs;
+    update_tech(plr, 0);
+  }
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+int choose_goal_tech(struct player *plr)
+{
+  int sub_goal;
+
+  if (plr->research.bulbs_researched > 0) {
+    plr->research.bulbs_researched = 0;
+  }
+  if (plr->ai.control) {
+    ai_next_tech_goal(plr); /* tech-AI has been changed */
+    sub_goal = get_next_tech(plr, plr->ai.tech_goal); /* should be changed */
+  } else sub_goal = get_next_tech(plr, plr->ai.tech_goal);
+  if (sub_goal == 0) {
+    if (plr->ai.control || plr->research.techs_researched == 1) {
+      ai_next_tech_goal(plr);
+      sub_goal = get_next_tech(plr, plr->ai.tech_goal);
+    } else {
+      plr->ai.tech_goal = A_NONE; /* clear goal when it is achieved */
+    }
+  }
+
+  if (sub_goal != 0) {
+    plr->research.researching=sub_goal;
+  }   
+  return sub_goal;
+}
+
+
+/**************************************************************************
+...
+**************************************************************************/
+void choose_random_tech(struct player *plr)
+{
+  int choosen, researchable = 0;
+  Tech_Type_id i;
+
+  if (plr->research.bulbs_researched >0) {
+    plr->research.bulbs_researched = 0;
+  }
+  for (i = 0; i < game.num_tech_types; i++) {
+    if (get_invention(plr, i) == TECH_REACHABLE) {
+      researchable++;
+    }
+  }
+  if (researchable == 0) {
+    plr->research.researching = A_NONE;
+    return;
+  }
+  choosen = myrand(researchable) + 1;
+  
+  for (i = 0; i < game.num_tech_types; i++) {
+    if (get_invention(plr, i) == TECH_REACHABLE) {
+      choosen--;
+      if (choosen == 0) {
+	break;
+      }
+    }
+  }
+  plr->research.researching = i;
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+void choose_tech(struct player *plr, int tech)
+{
+  if (plr->research.researching==tech)
+    return;
+  if (get_invention(plr, tech)!=TECH_REACHABLE) { /* can't research this */
+    return;
+  }
+  if (!plr->got_tech && plr->research.changed_from == -1) {
+    plr->research.bulbs_researched_before = plr->research.bulbs_researched;
+    plr->research.changed_from = plr->research.researching;
+    /* subtract a penalty because we changed subject */
+    if (plr->research.bulbs_researched > 0) {
+      plr->research.bulbs_researched -=
+	  ((plr->research.bulbs_researched * game.techpenalty) / 100);
+      assert(plr->research.bulbs_researched >= 0);
+    }
+  } else if (tech == plr->research.changed_from) {
+    plr->research.bulbs_researched = plr->research.bulbs_researched_before;
+    plr->research.changed_from = -1;
+  }
+  plr->research.researching=tech;
+}
+
+void choose_tech_goal(struct player *plr, int tech)
+{
+  notify_player(plr, _("Game: Technology goal is %s."), advances[tech].name);
+  plr->ai.tech_goal = tech;
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+void init_tech(struct player *plr, int tech)
+{
+  int i;
+  struct nation_type *nation = get_nation_by_plr(plr);
+
+  for (i = 0; i < game.num_tech_types; i++) {
+    set_invention(plr, i, TECH_UNKNOWN);
+  }
+  set_invention(plr, A_NONE, TECH_KNOWN);
+
+  plr->research.techs_researched = 1;
+
+  /*
+   * Give game wide initial techs
+   */
+  for (i = 0; i < MAX_NUM_TECH_LIST; i++) {
+    if (game.rgame.global_init_techs[i] == A_LAST) {
+      break;
+    }
+    set_invention(plr, game.rgame.global_init_techs[i], TECH_KNOWN);
+  }
+
+  /*
+   * Give nation specific initial techs
+   */
+  for (i = 0; i < MAX_NUM_TECH_LIST; i++) {
+    if (nation->init_techs[i] == A_LAST) {
+      break;
+    }
+    set_invention(plr, nation->init_techs[i], TECH_KNOWN);
+  }
+
+  for (i = 0; i < tech; i++) {
+    update_research(plr);
+    choose_random_tech(plr); /* could be choose_goal_tech -- Syela */
+    set_invention(plr, plr->research.researching, TECH_KNOWN);
+  }
+
+  /* Mark the reachable techs */
+  update_research(plr);
+  if (choose_goal_tech(plr) == 0) {
+    choose_random_tech(plr);
+  }
+}
+
+/**************************************************************************
+  If target has more techs than pplayer, pplayer will get a random of
+  these, the clients will both be notified and the conquer cost
+  penalty applied. Used for diplomats and city conquest.
+**************************************************************************/
+void get_a_tech(struct player *pplayer, struct player *target)
+{
+  int i;
+  int j=0;
+  for (i=0;i<game.num_tech_types;i++) {
+    if (get_invention(pplayer, i)!=TECH_KNOWN && 
+	get_invention(target, i)== TECH_KNOWN) {
+      j++;
+    }
+  }
+  if (j == 0)  {
+    /* we've moved on to future tech */
+    if (target->future_tech > pplayer->future_tech) {
+      found_new_future_tech(pplayer);
+      i = game.num_tech_types + pplayer->future_tech;
+    } else {
+      return; /* nothing to learn here, move on */
+    }
+    return;
+  } else {
+    /* pick random tech */
+    j = myrand(j) + 1;
+    for (i = 0; i < game.num_tech_types; i++) {
+      if (get_invention(pplayer, i) != TECH_KNOWN &&
+	  get_invention(target, i) == TECH_KNOWN) {
+	j--;
+      }
+      if (j == 0) {
+	break;
+      }
+    }
+  }
+  gamelog(GAMELOG_TECH, _("%s steal %s from %s"),
+	  get_nation_name_plural(pplayer->nation),
+	  get_tech_name(pplayer, i),
+	  get_nation_name_plural(target->nation));
+
+  notify_player_ex(pplayer, -1, -1, E_TECH_GAIN,
+		   _("Game: You steal %s from the %s."),
+		   get_tech_name(pplayer, i),
+		   get_nation_name_plural(target->nation));
+
+  notify_player(target, _("Game: The %s stole %s from you!"),
+		get_nation_name_plural(pplayer->nation),
+		get_tech_name(pplayer, i));
+
+  notify_embassies(pplayer, target,
+		   _("Game: The %s have stolen %s from the %s."),
+		   get_nation_name_plural(pplayer->nation),
+		   get_tech_name(pplayer, i),
+		   get_nation_name_plural(target->nation));
+
+  do_conquer_cost(pplayer);
+  found_new_tech(pplayer, i, FALSE, TRUE);
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+void handle_player_rates(struct player *pplayer, 
+                         struct packet_player_request *preq)
+{
+  int maxrate;
+
+  if (server_state!=RUN_GAME_STATE) {
+    freelog(LOG_ERROR, "received player_rates packet from %s before start",
+	    pplayer->name);
+    notify_player(pplayer, _("Game: Cannot change rates before game start."));
+    return;
+  }
+	
+  if (preq->tax+preq->luxury+preq->science!=100)
+    return;
+  if (preq->tax<0 || preq->tax >100) return;
+  if (preq->luxury<0 || preq->luxury > 100) return;
+  if (preq->science<0 || preq->science >100) return;
+  maxrate=get_government_max_rate (pplayer->government);
+  if (preq->tax>maxrate || preq->luxury>maxrate || preq->science>maxrate) {
+    char *rtype;
+    if (preq->tax > maxrate)
+      rtype = _("Tax");
+    else if (preq->luxury > maxrate)
+      rtype = _("Luxury");
+    else
+      rtype = _("Science");
+    notify_player(pplayer, _("Game: %s rate exceeds the max rate for %s."),
+                  rtype, get_government_name(pplayer->government));
+  } else {
+    pplayer->economic.tax=preq->tax;
+    pplayer->economic.luxury=preq->luxury;
+    pplayer->economic.science=preq->science;
+    gamelog(GAMELOG_EVERYTHING, _("RATE CHANGE: %s %i %i %i"),
+	    get_nation_name_plural(pplayer->nation), preq->tax, preq->luxury,
+	    preq->science);
+    conn_list_do_buffer(&pplayer->connections);
+    send_player_info(pplayer, pplayer);
+    global_city_refresh(pplayer);
+    conn_list_do_unbuffer(&pplayer->connections);
+  }
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+void handle_player_research(struct player *pplayer,
+			    struct packet_player_request *preq)
+{
+  choose_tech(pplayer, preq->tech);
+  send_player_info(pplayer, pplayer);
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+void handle_player_tech_goal(struct player *pplayer,
+			    struct packet_player_request *preq)
+{
+  choose_tech_goal(pplayer, preq->tech);
+  send_player_info(pplayer, pplayer);
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+void handle_player_government(struct player *pplayer,
+			     struct packet_player_request *preq)
+{
+  if (pplayer->government != game.government_when_anarchy ||
+      preq->government < 0 || preq->government >= game.government_count ||
+      !can_change_to_government(pplayer, preq->government)) {
+    return;
+  }
+
+  if((pplayer->revolution<=5) && (pplayer->revolution>0))
+    return;
+
+  pplayer->government=preq->government;
+  notify_player(pplayer, _("Game: %s now governs the %s as a %s."), 
+		pplayer->name, 
+  	        get_nation_name_plural(pplayer->nation),
+		get_government_name(preq->government));  
+  gamelog(GAMELOG_GOVERNMENT, _("%s form a %s"),
+	  get_nation_name_plural(pplayer->nation),
+	  get_government_name(preq->government));
+
+  if (!pplayer->ai.control) {
+    /* Keep luxuries if we have any.  Try to max out science. -GJW */
+    pplayer->economic.science = MIN (100 - pplayer->economic.luxury,
+				     get_government_max_rate (pplayer->government));
+    pplayer->economic.tax = MIN(100 - (pplayer->economic.luxury + pplayer->economic.science),
+				get_government_max_rate (pplayer->government));
+    pplayer->economic.luxury = 100 - pplayer->economic.science - pplayer->economic.tax;
+  }
+
+  check_player_government_rates(pplayer);
+
+  send_player_info(pplayer, pplayer);
+
+  global_city_refresh(pplayer);
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+void handle_player_revolution(struct player *pplayer)
+{
+  if ((pplayer->revolution<=5) &&
+      (pplayer->revolution>0) &&
+      ( pplayer->government==game.government_when_anarchy))
+    return;
+
+  pplayer->revolution=myrand(5)+1;
+  pplayer->government=game.government_when_anarchy;
+  notify_player_ex(pplayer, -1, -1, E_REVOLT_START,
+		   _("Game: The %s have incited a revolt!"),
+		   get_nation_name_plural(pplayer->nation));
+  gamelog(GAMELOG_REVOLT, _("The %s revolt!"),
+	  get_nation_name_plural(pplayer->nation));
+
+  check_player_government_rates(pplayer);
+
+  send_player_info(pplayer, pplayer);
+  if (player_owns_active_govchange_wonder(pplayer))
+    pplayer->revolution=1;
+
+  global_city_refresh(pplayer);
 }
 
 /**************************************************************************
@@ -429,221 +764,173 @@ void check_player_government_rates(struct player *pplayer)
   player_limit_to_government_rates(pplayer);
   if (pplayer->economic.tax != old_econ.tax) {
     changed = TRUE;
-    notify_player(pplayer, NULL, E_NEW_GOVERNMENT,
-		  _("Tax rate exceeded the max rate for %s; adjusted."), 
-		  government_name_for_player(pplayer));
+    notify_player(pplayer,
+		  _("Game: Tax rate exceeded the max rate for %s; adjusted."), 
+		  get_government_name(pplayer->government));
   }
   if (pplayer->economic.science != old_econ.science) {
     changed = TRUE;
-    notify_player(pplayer, NULL, E_NEW_GOVERNMENT,
-		  _("Science rate exceeded the max rate for %s; adjusted."), 
-		  government_name_for_player(pplayer));
+    notify_player(pplayer,
+		  _("Game: Science rate exceeded the max rate for %s; adjusted."), 
+		  get_government_name(pplayer->government));
   }
   if (pplayer->economic.luxury != old_econ.luxury) {
     changed = TRUE;
-    notify_player(pplayer, NULL, E_NEW_GOVERNMENT,
-		  _("Luxury rate exceeded the max rate for %s; adjusted."), 
-		  government_name_for_player(pplayer));
+    notify_player(pplayer,
+		  _("Game: Luxury rate exceeded the max rate for %s; adjusted."), 
+		  get_government_name(pplayer->government));
+  }
+
+  if (changed) {
+    gamelog(GAMELOG_EVERYTHING, _("RATE CHANGE: %s %i %i %i"),
+	    get_nation_name_plural(pplayer->nation), pplayer->economic.tax,
+	    pplayer->economic.luxury, pplayer->economic.science);
   }
 }
 
 /**************************************************************************
-  After the alliance is breaken, we need to do two things:
-  - Inform clients that they cannot see units inside the former's ally
-    cities
-  - Remove units stacked together
+Handles a player cancelling a "pact" with another player.
 **************************************************************************/
-void update_players_after_alliance_breakup(struct player* pplayer,
-                                          struct player* pplayer2)
-{
-  /* The client needs updated diplomatic state, because it is used
-   * during calculation of new states of occupied flags in cities */
-   send_player_info(pplayer, NULL);
-   send_player_info(pplayer2, NULL);
-   remove_allied_visibility(pplayer, pplayer2);
-   remove_allied_visibility(pplayer2, pplayer);    
-   resolve_unit_stacks(pplayer, pplayer2, TRUE);
-}
-
-
-/**************************************************************************
-  Handles a player cancelling a "pact" with another player.
-
-  packet.id is id of player we want to cancel a pact with
-  packet.val1 is a special value indicating what kind of treaty we want
-    to break. If this is CLAUSE_VISION we break shared vision. If it is
-    a pact treaty type, we break one pact level. If it is CLAUSE_LAST
-    we break _all_ treaties and go straight to war.
-**************************************************************************/
-void handle_diplomacy_cancel_pact(struct player *pplayer,
-				  int other_player_id,
-				  enum clause_type clause)
+void handle_player_cancel_pact(struct player *pplayer, int other_player)
 {
   enum diplstate_type old_type;
   enum diplstate_type new_type;
-  enum dipl_reason diplcheck;
-  bool repeat = FALSE;
-  struct player *pplayer2 = valid_player_by_number(other_player_id);
-
-  if (NULL == pplayer2) {
+  struct player *pplayer2;
+  int reppenalty = 0;
+  bool has_senate;
+    
+  if (other_player < 0 || other_player >= game.nplayers) {
     return;
   }
 
-  old_type = pplayer->diplstates[other_player_id].type;
+  old_type = pplayer->diplstates[other_player].type;
+  pplayer2 = get_player(other_player);
+  has_senate = government_has_flag(get_gov_pplayer(pplayer), G_HAS_SENATE);
 
-  if (clause == CLAUSE_VISION) {
-    if (!gives_shared_vision(pplayer, pplayer2)) {
-      return;
-    }
-    remove_shared_vision(pplayer, pplayer2);
-    notify_player(pplayer2, NULL, E_TREATY_BROKEN,
-                     _("%s no longer gives us shared vision!"),
-                     player_name(pplayer));
+  /* can't break a pact with yourself */
+  if (pplayer == pplayer2)
+    return;
+
+  /* can't break a pact with a team member */
+  if (pplayer->team != TEAM_NONE && pplayer->team == pplayer2->team) {
     return;
   }
 
-  diplcheck = pplayer_can_cancel_treaty(pplayer, pplayer2);
-
-  /* The senate may not allow you to break the treaty.  In this case you
-   * must first dissolve the senate then you can break it. */
-  if (diplcheck == DIPL_SENATE_BLOCKING) {
-    notify_player(pplayer, NULL, E_TREATY_BROKEN,
-		     _("The senate will not allow you to break treaty "
-		       "with the %s.  You must either dissolve the senate "
-		       "or wait until a more timely moment."),
-		     nation_plural_for_player(pplayer2));
-    return;
-  }
-
-  if (diplcheck != DIPL_OK) {
-    return;
-  }
-
-  reject_all_treaties(pplayer);
-  reject_all_treaties(pplayer2);
-  /* else, breaking a treaty */
-
-  /* check what the new status will be */
+  /* check what the new status will be, and what will happen to our
+     reputation */
   switch(old_type) {
-  case DS_NO_CONTACT: /* possible if someone declares war on our ally */
-  case DS_ARMISTICE:
-  case DS_CEASEFIRE:
-  case DS_PEACE:
+  case DS_NEUTRAL:
     new_type = DS_WAR;
+    reppenalty = 0;
+    break;
+  case DS_CEASEFIRE:
+    new_type = DS_NEUTRAL;
+    reppenalty = GAME_MAX_REPUTATION/6;
+    break;
+  case DS_PEACE:
+    new_type = DS_NEUTRAL;
+    reppenalty = GAME_MAX_REPUTATION/5;
     break;
   case DS_ALLIANCE:
-    new_type = DS_ARMISTICE;
+    new_type = DS_PEACE;
+    reppenalty = GAME_MAX_REPUTATION/4;
     break;
   default:
-    freelog(LOG_ERROR, "non-pact diplstate in handle_player_cancel_pact");
-    assert(FALSE);
+    freelog(LOG_VERBOSE, "non-pact diplstate in handle_player_cancel_pact");
     return;
-  }
-
-  /* do the change */
-  pplayer->diplstates[player_index(pplayer2)].type =
-    pplayer2->diplstates[player_index(pplayer)].type =
-    new_type;
-  pplayer->diplstates[player_index(pplayer2)].turns_left =
-    pplayer2->diplstates[player_index(pplayer)].turns_left =
-    16;
-
-  /* If the old state was alliance, the players' units can share tiles
-     illegally, and we need to call resolve_unit_stacks() */
-  if (old_type == DS_ALLIANCE) {
-    update_players_after_alliance_breakup(pplayer, pplayer2);
   }
 
   /* if there's a reason to cancel the pact, do it without penalty */
-  /* FIXME: in the current implementation if you break more than one
-   * treaty simultaneously it may partially succed: the first treaty-breaking
-   * will happen but the second one will fail. */
-  if (get_player_bonus(pplayer, EFT_HAS_SENATE) > 0 && !repeat) {
-    if (pplayer->diplstates[player_index(pplayer2)].has_reason_to_cancel > 0) {
-      notify_player(pplayer, NULL, E_TREATY_BROKEN,
-		       _("The senate passes your bill because of the "
-			 "constant provocations of the %s."),
-		       nation_plural_for_player(pplayer2));
-    } else if (new_type == DS_WAR) {
-      notify_player(pplayer, NULL, E_TREATY_BROKEN,
-		       _("The senate refuses to break treaty with the %s, "
-			 "but you have no trouble finding a new senate."),
-		       nation_plural_for_player(pplayer2));
+  if (pplayer->diplstates[pplayer2->player_no].has_reason_to_cancel > 0) {
+    pplayer->diplstates[pplayer2->player_no].has_reason_to_cancel = 0;
+    if (has_senate)
+      notify_player(pplayer, _("The senate passes your bill because of the "
+			       "constant provocations of the %s."),
+		    get_nation_name_plural(pplayer2->nation));
+  }
+  /* no reason to cancel, apply penalty (and maybe suffer a revolution) */
+  /* FIXME: according to civII rules, republics and democracies
+     have different chances of revolution; maybe we need to
+     extend the govt rulesets to mimic this -- pt */
+  else {
+    pplayer->reputation = MAX(pplayer->reputation - reppenalty, 0);
+    notify_player(pplayer, _("Game: Your reputation is now %s."),
+		  reputation_text(pplayer->reputation));
+    if (has_senate) {
+      if (myrand(GAME_MAX_REPUTATION) > pplayer->reputation) {
+	notify_player(pplayer, _("Game: The senate decides to dissolve "
+				 "rather than support your actions any longer."));
+	handle_player_revolution(pplayer);
+      }
     }
   }
-  if (new_type == DS_WAR) {
-    ai_incident_war(pplayer, pplayer2);
-  }
-  pplayer->diplstates[player_index(pplayer2)].has_reason_to_cancel = 0;
+
+  /* do the change */
+  pplayer->diplstates[pplayer2->player_no].type =
+    pplayer2->diplstates[pplayer->player_no].type =
+    new_type;
+  pplayer->diplstates[pplayer2->player_no].turns_left =
+    pplayer2->diplstates[pplayer->player_no].turns_left =
+    16;
 
   send_player_info(pplayer, NULL);
   send_player_info(pplayer2, NULL);
 
+  /* If the old state was alliance the players' units can share tiles
+     illegally, and we need to call resolve_unit_stack() on all the players'
+     units. We can't just iterate through the unitlist as it could get
+     corrupted when resolve_unit_stack() deletes units. */
   if (old_type == DS_ALLIANCE) {
-    /* Inform clients about units that have been hidden.  Units in cities
-     * and transporters are visible to allies but not visible once the
-     * alliance is broken.  We have to call this after resolve_unit_stacks
-     * because that function may change units' locations.  It also sends
-     * out new city info packets to tell the client about occupied cities,
-     * so it should also come after the send_player_info calls above. */
-    remove_allied_visibility(pplayer, pplayer2);
-    remove_allied_visibility(pplayer2, pplayer);
+    int *resolve_list = NULL;
+    int tot_units = unit_list_size(&(pplayer->units))
+      + unit_list_size(&(pplayer2->units));
+    int no_units = unit_list_size(&(pplayer->units));
+    int i;
+
+    if (tot_units > 0)
+      resolve_list = fc_malloc(tot_units * 2 * sizeof(int));
+    i = 0;
+    unit_list_iterate(pplayer->units, punit) {
+      resolve_list[i]   = punit->x;
+      resolve_list[i+1] = punit->y;
+      i += 2;
+    } unit_list_iterate_end;
+
+    no_units = unit_list_size(&(pplayer2->units));
+    unit_list_iterate(pplayer2->units, punit) {
+      resolve_list[i]   = punit->x;
+      resolve_list[i+1] = punit->y;
+      i += 2;
+    } unit_list_iterate_end;
+
+    if (resolve_list) {
+      for (i = 0; i < tot_units * 2; i += 2)
+	resolve_unit_stack(resolve_list[i], resolve_list[i+1], TRUE);
+      free(resolve_list);
+      resolve_list = NULL;
+    }
   }
 
   /* 
    * Refresh all cities which have a unit of the other side within
    * city range. 
    */
-  city_map_update_all_cities_for_player(pplayer);
-  city_map_update_all_cities_for_player(pplayer2);
-  sync_cities();
+  check_city_workers(pplayer);
+  check_city_workers(pplayer2);
 
-  notify_player(pplayer, NULL, E_TREATY_BROKEN,
-		   _("The diplomatic state between the %s "
+  notify_player_ex(pplayer, -1, -1, E_TREATY_BROKEN,
+		   _("Game: The diplomatic state between the %s "
 		     "and the %s is now %s."),
-		   nation_plural_for_player(pplayer),
-		   nation_plural_for_player(pplayer2),
+		   get_nation_name_plural(pplayer->nation),
+		   get_nation_name_plural(pplayer2->nation),
 		   diplstate_text(new_type));
-  notify_player(pplayer2, NULL, E_TREATY_BROKEN,
-		   _(" %s canceled the diplomatic agreement! "
+  notify_player_ex(pplayer2, -1, -1, E_TREATY_BROKEN,
+		   _("Game:  %s cancelled the diplomatic agreement! "
 		     "The diplomatic state between the %s and the %s "
-		     "is now %s."),
-		   player_name(pplayer),
-		   nation_plural_for_player(pplayer2),
-		   nation_plural_for_player(pplayer),
+		     "is now %s."), pplayer->name,
+		   get_nation_name_plural(pplayer2->nation),
+		   get_nation_name_plural(pplayer->nation),
 		   diplstate_text(new_type));
-
-  /* Check fall-out of a war declaration. */
-  players_iterate(other) {
-    if (other->is_alive && other != pplayer && other != pplayer2
-        && new_type == DS_WAR && pplayers_allied(pplayer2, other)
-        && pplayers_allied(pplayer, other)) {
-      if (!players_on_same_team(pplayer, other)) {
-        /* If an ally declares war on another ally, break off your alliance
-         * to the aggressor. This prevents in-alliance wars, which are not
-         * permitted. */
-        notify_player(other, NULL, E_TREATY_BROKEN,
-                         _("%s has attacked your ally %s! "
-                           "You cancel your alliance to the aggressor."),
-                       player_name(pplayer),
-                       player_name(pplayer2));
-        other->diplstates[player_index(pplayer)].has_reason_to_cancel = 1;
-        handle_diplomacy_cancel_pact(other, player_number(pplayer),
-                                     CLAUSE_ALLIANCE);
-      } else {
-        /* We are in the same team as the agressor; we cannot break 
-         * alliance with him. We trust our team mate and break alliance
-         * with the attacked player */
-        notify_player(other, NULL, E_TREATY_BROKEN,
-                         _("Your team mate %s declared war on %s. "
-                           "You are obligated to cancel alliance with %s."),
-                         player_name(pplayer),
-                         nation_plural_for_player(pplayer2),
-                         player_name(pplayer2));
-        handle_diplomacy_cancel_pact(other, player_number(pplayer2), CLAUSE_ALLIANCE);
-      }
-    }
-  } players_iterate_end;
 }
 
 /**************************************************************************
@@ -651,154 +938,126 @@ void handle_diplomacy_cancel_pact(struct player *pplayer,
   Notify specified connections of an event of specified type (from events.h)
   and specified (x,y) coords associated with the event.  Coords will only
   apply if game has started and the conn's player knows that tile (or
-  NULL == pconn->playing && pconn->observer).  If coords are not required,
+  pconn->player==NULL && pconn->observer).  If coords are not required,
   caller should specify (x,y) = (-1,-1); otherwise make sure that the
-  coordinates have been normalized.
+  coordinates have been normalized.  For generic event use E_NOEVENT.
+  (But current clients do not use (x,y) data for E_NOEVENT events.)
 **************************************************************************/
-void vnotify_conn(struct conn_list *dest, struct tile *ptile,
-		  enum event_type event, const char *format,
-		  va_list vargs)
+static void vnotify_conn_ex(struct conn_list *dest, int x, int y, int event,
+			    const char *format, va_list vargs) 
 {
-  struct packet_chat_msg genmsg;
-
-  if (!dest) {
-    dest = game.est_connections;
-  }
+  struct packet_generic_message genmsg;
   
   my_vsnprintf(genmsg.message, sizeof(genmsg.message), format, vargs);
   genmsg.event = event;
-  genmsg.conn_id = -1;
 
-  conn_list_iterate(dest, pconn) {
-
-    /* Avoid sending messages that could potentially reveal
-     * internal information about the server machine to
-     * connections that do not already have hack access. */
-    if ((event == E_LOG_ERROR || event == E_LOG_FATAL)
-        && pconn->access_level != ALLOW_HACK) {
-      continue;
-    }
-
-    if (S_S_RUNNING <= server_state()
-	&& ptile /* special case, see above */
-	&& ((NULL == pconn->playing && pconn->observer)
-	    || (NULL != pconn->playing && map_is_known(ptile, pconn->playing)))) {
-      genmsg.x = ptile->x;
-      genmsg.y = ptile->y;
+  conn_list_iterate(*dest, pconn) {
+    if (server_state >= RUN_GAME_STATE
+	&& (x != -1 || y != -1) /* special case, see above */
+	&& ((!pconn->player && pconn->observer)
+	    || (pconn->player && map_get_known(x, y, pconn->player)))) {
+      CHECK_MAP_POS(x, y);
+      genmsg.x = x;
+      genmsg.y = y;
     } else {
-      assert(S_S_RUNNING > server_state() || !is_normal_map_pos(-1, -1));
+      assert(server_state < RUN_GAME_STATE || !is_normal_map_pos(-1, -1));
       genmsg.x = -1;
       genmsg.y = -1;
     }
-    send_packet_chat_msg(pconn, &genmsg);
+    send_packet_generic_message(pconn, PACKET_CHAT_MSG, &genmsg);
   }
   conn_list_iterate_end;
 }
 
 /**************************************************************************
-  See vnotify_conn - this is just the "non-v" version, with varargs.
+  See vnotify_conn_ex - this is just the "non-v" version, with varargs.
 **************************************************************************/
-void notify_conn(struct conn_list *dest, struct tile *ptile,
-		 enum event_type event, const char *format, ...)
+void notify_conn_ex(struct conn_list *dest, int x, int y, int event,
+		    const char *format, ...) 
 {
   va_list args;
   va_start(args, format);
-  vnotify_conn(dest, ptile, event, format, args);
+  vnotify_conn_ex(dest, x, y, event, format, args);
   va_end(args);
 }
 
 /**************************************************************************
-  Similar to vnotify_conn (see also), but takes player as "destination".
-  If player != NULL, sends to all connections for that player.
-  If player == NULL, sends to all game connections, to support
-  old code, but this feature may go away - should use notify_conn(NULL)
-  instead.
+  See vnotify_conn_ex - this is varargs, and cannot specify (x,y), event.
 **************************************************************************/
-void notify_player(const struct player *pplayer, struct tile *ptile,
-		      enum event_type event, const char *format, ...) 
+void notify_conn(struct conn_list *dest, const char *format, ...) 
 {
-  struct conn_list *dest = pplayer ? pplayer->connections : NULL;
+  va_list args;
+  va_start(args, format);
+  vnotify_conn_ex(dest, -1, -1, E_NOEVENT, format, args);
+  va_end(args);
+}
+
+/**************************************************************************
+  Similar to vnotify_conn_ex (see also), but takes player as "destination".
+  If player != NULL, sends to all connections for that player.
+  If player == NULL, sends to all established connections, to support
+  old code, but this feature may go away - should use notify_conn with
+  explicitly game.est_connections or game.game_connections as dest.
+**************************************************************************/
+void notify_player_ex(const struct player *pplayer, int x, int y,
+		      int event, const char *format, ...) 
+{
+  struct conn_list *dest;
   va_list args;
 
+  if (pplayer) {
+    dest = (struct conn_list*)&pplayer->connections;
+  } else {
+    dest = &game.est_connections;
+  }
+  
   va_start(args, format);
-  vnotify_conn(dest, ptile, event, format, args);
+  vnotify_conn_ex(dest, x, y, event, format, args);
+  va_end(args);
+}
+
+/**************************************************************************
+  Just like notify_player_ex, but no (x,y) nor event type.
+**************************************************************************/
+void notify_player(const struct player *pplayer, const char *format, ...) 
+{
+  struct conn_list *dest;
+  va_list args;
+
+  if (pplayer) {
+    dest = (struct conn_list*)&pplayer->connections;
+  } else {
+    dest = &game.est_connections;
+  }
+  
+  va_start(args, format);
+  vnotify_conn_ex(dest, -1, -1, E_NOEVENT, format, args);
   va_end(args);
 }
 
 /**************************************************************************
   Send message to all players who have an embassy with pplayer,
-  but excluding pplayer and specified player. Embassy is defined
-  as being in contact.
+  but excluding pplayer and specified player.
 **************************************************************************/
 void notify_embassies(struct player *pplayer, struct player *exclude,
-		      struct tile *ptile, enum event_type event,
 		      const char *format, ...) 
 {
-  struct packet_chat_msg genmsg;
+  struct packet_generic_message genmsg;
   va_list args;
-
   va_start(args, format);
   my_vsnprintf(genmsg.message, sizeof(genmsg.message), format, args);
   va_end(args);
-
-  if (ptile) {
-    genmsg.x = ptile->x;
-    genmsg.y = ptile->y;
-  } else {
-    genmsg.x = -1;
-    genmsg.y = -1;
-  }
-  genmsg.event = event;
-  genmsg.conn_id = -1;
+  genmsg.x = -1;
+  genmsg.y = -1;
+  genmsg.event = E_NOEVENT;
 
   players_iterate(other_player) {
     if (player_has_embassy(other_player, pplayer)
 	&& exclude != other_player
         && pplayer != other_player) {
-      lsend_packet_chat_msg(other_player->connections, &genmsg);
+      lsend_packet_generic_message(&other_player->connections,
+				   PACKET_CHAT_MSG, &genmsg);
     }
-  } players_iterate_end;
-}
-
-/**************************************************************************
-  Sends a message to all players on pplayer's team
-**************************************************************************/
-void notify_team(struct player *pplayer,
-		 struct tile *ptile, enum event_type event,
-		 const char* format, ...)
-{
-  va_list args;
-
-  players_iterate(other_player) {
-    va_start(args, format);
-    if (!players_on_same_team(pplayer, other_player)) {
-      continue;
-    }
-    vnotify_conn(other_player->connections, ptile, event, format, args);
-    va_end(args);
-  } players_iterate_end;
-}
-
-/****************************************************************************
-  Sends a message to all players that share research with pplayer.  Currently
-  this is all players on the same team but it may not always be that way.
-
-  Unlike other notify functions this one does not take a tile argument.  We
-  assume no research message will have a tile associated.
-****************************************************************************/
-void notify_research(struct player *pplayer,
-		     enum event_type event, const char *format, ...)
-{
-  va_list args;
-  struct player_research *research = get_player_research(pplayer);
-
-  /* This function is structured just like notify_team. */
-  players_iterate(other_player) {
-    va_start(args, format);
-    if (get_player_research(other_player) == research) {
-      vnotify_conn(other_player->connections, NULL, event, format, args);
-    }
-    va_end(args);
   } players_iterate_end;
 }
 
@@ -817,15 +1076,16 @@ void send_player_info_c(struct player *src, struct conn_list *dest)
 
       package_player_common(pplayer, &info);
 
-      conn_list_iterate(dest, pconn) {
-	if (NULL == pconn->playing && pconn->observer) {
-	  /* Global observer. */
-	  package_player_info(pplayer, &info, pconn->playing, INFO_FULL);
-	} else if (NULL != pconn->playing) {
-	  /* Players (including regular observers) */
-	  package_player_info(pplayer, &info, pconn->playing, INFO_MINIMUM);
-	} else {
+      conn_list_iterate(*dest, pconn) {
+	if (!pconn->player && pconn->observer) {
+	  /* Observer for all players. */
+	  package_player_info(pplayer, &info, NULL, INFO_FULL);
+	} else if (!pconn->player) {
+	  /* Client not yet attached to player. */
 	  package_player_info(pplayer, &info, NULL, INFO_MINIMUM);
+	} else {
+	  /* Player clients (including one player observers) */
+	  package_player_info(pplayer, &info, pconn->player, INFO_MINIMUM);
 	}
 
         send_packet_player_info(pconn, &info);
@@ -839,11 +1099,12 @@ void send_player_info_c(struct player *src, struct conn_list *dest)
   Send information about player src, or all players if src is NULL,
   to specified players dest (that is, to dest->connections).
   As convenience to old code, dest may be NULL meaning send to
-  game.est_connections.  
+  game.est_connections.  (In general this may be overkill and may only
+  want game.game_connections, but this is safest for now...?)
 **************************************************************************/
 void send_player_info(struct player *src, struct player *dest)
 {
-  send_player_info_c(src, (dest ? dest->connections : game.est_connections));
+  send_player_info_c(src, (dest ? &dest->connections : &game.est_connections));
 }
 
 /**************************************************************************
@@ -852,51 +1113,28 @@ void send_player_info(struct player *src, struct player *dest)
 static void package_player_common(struct player *plr,
                                   struct packet_player_info *packet)
 {
-  int i;
-
-  packet->playerno=player_number(plr);
-  sz_strlcpy(packet->name, player_name(plr));
-  sz_strlcpy(packet->username, plr->username);
-  packet->nation = plr->nation ? nation_number(plr->nation) : -1;
+  packet->playerno=plr->player_no;
+  sz_strlcpy(packet->name, plr->name);
+  packet->nation=plr->nation;
   packet->is_male=plr->is_male;
-  packet->team = plr->team ? team_number(plr->team) : -1;
-  packet->is_ready = plr->is_ready;
-  if (city_styles != NULL) {
-    packet->city_style = city_style_of_player(plr);
-  } else {
-    packet->city_style = 0;
-  }
+  packet->team = plr->team;
+  packet->city_style=plr->city_style;
 
   packet->is_alive=plr->is_alive;
   packet->is_connected=plr->is_connected;
   packet->ai=plr->ai.control;
-  packet->ai_skill_level = plr->ai.control ? plr->ai.skill_level : 0;
-  for (i = 0; i < MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS; i++) {
-    packet->love[i] = plr->ai.love[i];
-  }
   packet->barbarian_type = plr->ai.barbarian_type;
+  packet->reputation=plr->reputation;
 
-  packet->phase_done = plr->phase_done;
+  packet->turn_done=plr->turn_done;
   packet->nturns_idle=plr->nturns_idle;
-
-  for (i = 0; i < B_LAST/*improvement_count()*/; i++) {
-    packet->small_wonders[i] = plr->small_wonders[i];
-  }
-  packet->science_cost = plr->ai.science_cost;
-
-  packet->gold = plr->economic.gold;
-  packet->government = government_of_player(plr)
-                       ? government_number(government_of_player(plr))
-                       : -1;
 }
 
 /**************************************************************************
-  Package player info depending on info_level. We send everything to
-  plr's connections, we send almost everything to players we are in contact 
-  with and almost nothing to everyone else.
+ Package player info dependant on info_level.
 
-  Receiver may be NULL in which cases dummy values are sent for some
-  fields.
+ Note: if reciever is NULL and info < INFO_EMBASSY the info related to the
+       receiving player are not set correctly.
 **************************************************************************/
 static void package_player_info(struct player *plr,
                                 struct packet_player_info *packet,
@@ -905,63 +1143,80 @@ static void package_player_info(struct player *plr,
 {
   int i;
   enum plr_info_level info_level;
-  enum plr_info_level highest_team_level;
-  struct player_research* research = get_player_research(plr);
 
-  if (receiver) {
-    info_level = player_info_level(plr, receiver);
-    info_level = MAX(min_info_level, info_level);
-  } else {
+  info_level = player_info_level(plr, receiver);
+  if (info_level < min_info_level)
     info_level = min_info_level;
-  }
 
-  /* We need to send all tech info for all players on the same
-   * team, even if they are not in contact yet; otherwise we will
-   * overwrite team research or confuse the client. */
-  highest_team_level = info_level;
-  players_iterate(aplayer) {
-    if (players_on_same_team(plr, aplayer) && receiver) {
-      highest_team_level = MAX(highest_team_level,
-                               player_info_level(aplayer, receiver));
+  if (info_level >= INFO_MEETING) {
+    packet->gold            = plr->economic.gold;
+    for (i = 0; i < game.num_tech_types; i++) {
+      packet->inventions[i] = plr->research.inventions[i].state + '0';
     }
-  } players_iterate_end;
-
-  /* Only send score if we have contact */
-  if (info_level >= INFO_EMBASSY) {
-    packet->score = plr->score.game;
+    packet->inventions[i]   = '\0';
+    packet->government      = plr->government;
   } else {
-    packet->score = 0;
+    packet->gold            = 0;
+    for(i=0; i<game.num_tech_types; i++)
+      packet->inventions[i] = '0';
+    packet->inventions[i]   = '\0';
+
+    /* Ideally, we should check whether receiver really sees any cities owned
+       by player before this. */
+    if (server_state == RUN_GAME_STATE)
+      packet->inventions[city_styles[get_player_city_style(plr)].techreq] = '1';
+
+    /* FIXME: temporary kludge */
+    packet->government      = plr->government; /*G_MAGIC;*/
   }
 
-  /* Send diplomatic status of the player to everyone they are in
-   * contact with. */
   if (info_level >= INFO_EMBASSY) {
-    packet->target_government = plr->target_government
-                                ? government_number(plr->target_government)
-                                : -1;
+    packet->tax             = plr->economic.tax;
+    packet->science         = plr->economic.science;
+    packet->luxury          = plr->economic.luxury;
+    packet->bulbs_researched= plr->research.bulbs_researched;
+    packet->techs_researched= plr->research.techs_researched;
+    packet->researching     = plr->research.researching;
+    packet->future_tech     = plr->future_tech;
+    if (plr->revolution != 0)
+      packet->revolution    = 1;
+    else
+      packet->revolution    = 0;
+
+    packet->embassy = plr->embassy;
     packet->gives_shared_vision = plr->gives_shared_vision;
-    for(i = 0; i < MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS; i++) {
+    for(i=0; i<MAX_NUM_PLAYERS+MAX_NUM_BARBARIANS; i++) {
       packet->diplstates[i].type       = plr->diplstates[i].type;
       packet->diplstates[i].turns_left = plr->diplstates[i].turns_left;
       packet->diplstates[i].has_reason_to_cancel = plr->diplstates[i].has_reason_to_cancel;
     }
   } else {
-    packet->target_government = packet->government;
-    if (!receiver || !gives_shared_vision(plr, receiver)) {
-      packet->gives_shared_vision = 0;
-    } else {
-      packet->gives_shared_vision = 1 << player_index(receiver);
-    }
+    packet->tax             = 0;
+    packet->science         = 0;
+    packet->luxury          = 0;
+    packet->bulbs_researched= 0;
+    packet->techs_researched= 0;
+    packet->researching     = A_NONE;
+    packet->future_tech     = 0;
+    packet->revolution      = 0;
 
-    for (i = 0; i < MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS; i++) {
-      packet->diplstates[i].type       = DS_WAR;
+    if (!receiver || !player_has_embassy(plr, receiver))
+      packet->embassy  = 0;
+    else
+      packet->embassy  = 1 << receiver->player_no;
+    if (!receiver || !gives_shared_vision(plr, receiver))
+      packet->gives_shared_vision = 0;
+    else
+      packet->gives_shared_vision = 1 << receiver->player_no;
+
+    for(i=0; i<MAX_NUM_PLAYERS+MAX_NUM_BARBARIANS; i++) {
+      packet->diplstates[i].type       = DS_NEUTRAL;
       packet->diplstates[i].turns_left = 0;
       packet->diplstates[i].has_reason_to_cancel = 0;
     }
-    /* We always know the player's relation to us */
+    /* We always know the players relation to us */
     if (receiver) {
-      int p_no = player_index(receiver);
-
+      int p_no = receiver->player_no;
       packet->diplstates[p_no].type       = plr->diplstates[p_no].type;
       packet->diplstates[p_no].turns_left = plr->diplstates[p_no].turns_left;
       packet->diplstates[p_no].has_reason_to_cancel =
@@ -969,92 +1224,82 @@ static void package_player_info(struct player *plr,
     }
   }
 
-  /* Make absolutely sure - in case you lose your embassy! */
-  if (info_level >= INFO_EMBASSY 
-      || (receiver
-	  && pplayer_get_diplstate(plr, receiver)->type == DS_TEAM)) {
-    packet->bulbs_last_turn = plr->bulbs_last_turn;
+  if (info_level >= INFO_FULL) {
+    packet->tech_goal       = plr->ai.tech_goal;
   } else {
-    packet->bulbs_last_turn = 0;
+    packet->tech_goal       = A_NONE;
   }
-
-  /* Send most civ info about the player only to players who have an
-   * embassy. */
-  if (highest_team_level >= INFO_EMBASSY) {
-    advance_index_iterate(A_FIRST, i) {
-      packet->inventions[i] = 
-        research->inventions[i].state + '0';
-    } advance_index_iterate_end;
-    packet->tax             = plr->economic.tax;
-    packet->science         = plr->economic.science;
-    packet->luxury          = plr->economic.luxury;
-    packet->bulbs_researched = research->bulbs_researched;
-    packet->techs_researched = research->techs_researched;
-    packet->researching = research->researching;
-    packet->future_tech = research->future_tech;
-    packet->revolution_finishes = plr->revolution_finishes;
-  } else {
-    advance_index_iterate(A_FIRST, i) {
-      packet->inventions[i] = '0';
-    } advance_index_iterate_end;
-    packet->tax             = 0;
-    packet->science         = 0;
-    packet->luxury          = 0;
-    packet->bulbs_researched= 0;
-    packet->techs_researched= 0;
-    packet->researching     = A_UNKNOWN;
-    packet->future_tech     = 0;
-    packet->revolution_finishes = -1;
-  }
-
-  /* We have to inform the client that the other players also know
-   * A_NONE. */
-  packet->inventions[A_NONE] = research->inventions[A_NONE].state + '0';
-  packet->inventions[advance_count()] = '\0';
-#ifdef DEBUG
-  freelog(LOG_VERBOSE, "Player%d inventions:%s",
-          player_number(plr),
-          packet->inventions);
-#endif
-
-  if (info_level >= INFO_FULL
-      || (receiver
-	  && plr->diplstates[player_index(receiver)].type == DS_TEAM)) {
-    packet->tech_goal       = research->tech_goal;
-  } else {
-    packet->tech_goal       = A_UNSET;
-  }
-
-  /* 
-   * This may be an odd time to check these values but we can be sure
-   * to have a consistent state here.
-   */
-  assert(S_S_RUNNING != server_state()
-         || A_UNSET == research->researching
-	 || is_future_tech(research->researching)
-	 || (A_NONE != research->researching
-	     && valid_advance_by_number(research->researching)));
-  assert(A_UNSET == research->tech_goal
-	 || (A_NONE != research->tech_goal
-	     && valid_advance_by_number(research->tech_goal)));
 }
 
 /**************************************************************************
   ...
 **************************************************************************/
-static enum plr_info_level player_info_level(struct player *plr,
-					     struct player *receiver)
+enum plr_info_level player_info_level(struct player *plr,
+                                      struct player *receiver)
 {
-  if (S_S_RUNNING > server_state()) {
-    return INFO_MINIMUM;
-  }
-  if (plr == receiver) {
+  if (plr == receiver)
     return INFO_FULL;
-  }
-  if (receiver && player_has_embassy(receiver, plr)) {
+  if (receiver && player_has_embassy(receiver, plr))
     return INFO_EMBASSY;
-  }
+  if (receiver && find_treaty(plr, receiver))
+    return INFO_MEETING;
   return INFO_MINIMUM;
+}
+
+/**************************************************************************
+  Fill in packet_conn_info from full connection struct.
+**************************************************************************/
+static void package_conn_info(struct connection *pconn,
+			      struct packet_conn_info *packet)
+{
+  packet->id           = pconn->id;
+  packet->used         = pconn->used;
+  packet->established  = pconn->established;
+  packet->player_num   = pconn->player ? pconn->player->player_no : -1;
+  packet->observer     = pconn->observer;
+  packet->access_level = pconn->access_level;
+
+  sz_strlcpy(packet->name, pconn->name);
+  sz_strlcpy(packet->addr, pconn->addr);
+  sz_strlcpy(packet->capability, pconn->capability);
+}
+
+/**************************************************************************
+  Handle both send_conn_info() and send_conn_info_removed(), depending
+  on 'remove' arg.  Sends conn_info packets for 'src' to 'dest', turning
+  off 'used' if 'remove' is specified.
+**************************************************************************/
+static void send_conn_info_arg(struct conn_list *src,
+			       struct conn_list *dest, bool remove)
+{
+  struct packet_conn_info packet;
+  
+  conn_list_iterate(*src, psrc) {
+    package_conn_info(psrc, &packet);
+    if (remove) {
+      packet.used = FALSE;
+    }
+    lsend_packet_conn_info(dest, &packet);
+  }
+  conn_list_iterate_end;
+}
+
+/**************************************************************************
+  Send conn_info packets to tell 'dest' connections all about
+  'src' connections.
+**************************************************************************/
+void send_conn_info(struct conn_list *src, struct conn_list *dest)
+{
+  send_conn_info_arg(src, dest, FALSE);
+}
+
+/**************************************************************************
+  Like send_conn_info(), but turn off the 'used' bits to tell clients
+  to remove info about these connections instead of adding it.
+**************************************************************************/
+void send_conn_info_remove(struct conn_list *src, struct conn_list *dest)
+{
+  send_conn_info_arg(src, dest, TRUE);
 }
 
 /**************************************************************************
@@ -1064,154 +1309,146 @@ static enum plr_info_level player_info_level(struct player *plr,
 struct conn_list *player_reply_dest(struct player *pplayer)
 {
   return (pplayer->current_conn ?
-	  pplayer->current_conn->self :
-	  pplayer->connections);
-}
-
-/****************************************************************************
-  Initialize ANY newly-created player on the server.
-
-  The initmap option is used because we don't want to initialize the map
-  before the x and y sizes have been determined.  This should generally
-  be FALSE in pregame.
-
-  The needs_team options should be set for players who should be assigned
-  a team.  They will be put on their own newly-created team.
-****************************************************************************/
-void server_player_init(struct player *pplayer,
-			bool initmap, bool needs_team)
-{
-  if (initmap) {
-    player_map_allocate(pplayer);
-  }
-  if (needs_team) {
-    team_add_player(pplayer, find_empty_team());
-  }
-  ai_data_init(pplayer);
+	  &pplayer->current_conn->self :
+	  &pplayer->connections);
 }
 
 /********************************************************************** 
- This function does _not_ close any connections attached to this player.
- cut_connection is used for that.
+The initmap option is used because we don't want to initialize the map
+before the x and y sizes have been determined
+***********************************************************************/
+void server_player_init(struct player *pplayer, bool initmap)
+{
+  if (initmap)
+    player_map_allocate(pplayer);
+  player_init(pplayer);
+
+  player_init_island_imprs(pplayer, map.num_continents);
+}
+
+/********************************************************************** 
+...
 ***********************************************************************/
 void server_remove_player(struct player *pplayer)
 {
+  struct packet_generic_integer pack;
+
   /* Not allowed after a game has started */
-  if (!game.info.is_new_game || (S_S_INITIAL != server_state())) {
-    die("You can't remove players after the game has started!");
+  if (!(game.is_new_game && (server_state==PRE_GAME_STATE ||
+			     server_state==SELECT_RACES_STATE))) {
+    freelog(LOG_FATAL, "You can't remove players after the game has started!");
+    abort();
   }
 
-  freelog(LOG_NORMAL, _("Removing player %s."), player_name(pplayer));
-  notify_conn(pplayer->connections, NULL, E_CONNECTION,
-	      _("You've been removed from the game!"));
+  freelog(LOG_NORMAL, _("Removing player %s."), pplayer->name);
+  notify_player(pplayer, _("Game: You've been removed from the game!"));
 
-  notify_conn(game.est_connections, NULL, E_CONNECTION,
-	      _("%s has been removed from the game."),
-	      player_name(pplayer));
-
-  if (is_barbarian(pplayer)) {
-    server.nbarbarians--;
-  }
-  dlsend_packet_player_control(game.est_connections, player_index(pplayer));
-
-  /* Note it is ok to remove the _current_ item in a list_iterate. */
+  /* Note it is ok to remove the _current_ item in a list_iterate: */
   conn_list_iterate(pplayer->connections, pconn) {
-    if (!detach_connection_to_player(pconn, FALSE)) {
-      die("player had a connection attached that didn't belong to it!");
-    }
-  } conn_list_iterate_end;
+    unassociate_player_connection(pplayer, pconn);
+    close_connection(pconn);
+  }
+  conn_list_iterate_end;
+  
+  notify_conn(&game.est_connections,
+	      _("Game: %s has been removed from the game."), pplayer->name);
+  
+  pack.value=pplayer->player_no;
+  lsend_packet_generic_integer(&game.est_connections,
+			       PACKET_REMOVE_PLAYER, &pack);
 
-  team_remove_player(pplayer);
   game_remove_player(pplayer);
-  game_renumber_players(player_number(pplayer));
+  game_renumber_players(pplayer->player_no);
 }
 
 /**************************************************************************
-  Update contact info.
+...
 **************************************************************************/
 void make_contact(struct player *pplayer1, struct player *pplayer2,
-		  struct tile *ptile)
+		  int x, int y)
 {
-  int player1 = player_index(pplayer1);
-  int player2 = player_index(pplayer2);
+  int player1 = pplayer1->player_no, player2 = pplayer2->player_no;
 
   if (pplayer1 == pplayer2
-      || !pplayer1->is_alive
-      || !pplayer2->is_alive) {
+      || !pplayer1->is_alive || !pplayer2->is_alive
+      || is_barbarian(pplayer1) || is_barbarian(pplayer2)
+      || pplayer_get_diplstate(pplayer1, pplayer2)->type != DS_NO_CONTACT)
     return;
-  }
-  if (get_player_bonus(pplayer1, EFT_NO_DIPLOMACY) == 0
-      && get_player_bonus(pplayer2, EFT_NO_DIPLOMACY) == 0) {
-  }
-  if (pplayer_get_diplstate(pplayer1, pplayer2)->type == DS_NO_CONTACT) {
-    pplayer1->diplstates[player2].type = DS_WAR;
-    pplayer2->diplstates[player1].type = DS_WAR;
-    pplayer1->diplstates[player2].first_contact_turn = game.info.turn;
-    pplayer2->diplstates[player1].first_contact_turn = game.info.turn;
-    notify_player(pplayer1, ptile,
-		     E_FIRST_CONTACT,
-		     _("You have made contact with the %s, ruled by %s."),
-		     nation_plural_for_player(pplayer2),
-		     player_name(pplayer2));
-    notify_player(pplayer2, ptile,
-		     E_FIRST_CONTACT,
-		     _("You have made contact with the %s, ruled by %s."),
-		     nation_plural_for_player(pplayer1),
-		     player_name(pplayer1));
-    if (pplayer1->ai.control) {
-      ai_diplomacy_first_contact(pplayer1, pplayer2);
-    }
-    if (pplayer2->ai.control && !pplayer1->ai.control) {
-      ai_diplomacy_first_contact(pplayer2, pplayer1);
-    }
-    send_player_info(pplayer1, pplayer2);
-    send_player_info(pplayer2, pplayer1);
-    send_player_info(pplayer1, pplayer1);
-    send_player_info(pplayer2, pplayer2);
 
-    /* Check for new love-love-hate triangles and resolve them */
-    players_iterate(pplayer3) {
-      if (pplayer1 != pplayer3 && pplayer2 != pplayer3 && pplayer3->is_alive
-          && pplayers_allied(pplayer1, pplayer3)
-          && pplayers_allied(pplayer2, pplayer3)) {
-        notify_player(pplayer3, NULL, E_TREATY_BROKEN,
-                      _("%s and %s meet and go to instant war. You cancel your alliance "
-                        "with both."),
-                      player_name(pplayer1),
-                      player_name(pplayer2));
-        pplayer3->diplstates[player_index(pplayer1)].has_reason_to_cancel = TRUE;
-        pplayer3->diplstates[player_index(pplayer2)].has_reason_to_cancel = TRUE;
-        handle_diplomacy_cancel_pact(pplayer3, player_number(pplayer1), CLAUSE_ALLIANCE);
-        handle_diplomacy_cancel_pact(pplayer3, player_number(pplayer2), CLAUSE_ALLIANCE);
-      }
-    } players_iterate_end;
-
-    return;
-  } else {
-    assert(pplayer_get_diplstate(pplayer2, pplayer1)->type != DS_NO_CONTACT);
-  }
-  if (player_has_embassy(pplayer1, pplayer2)
-      || player_has_embassy(pplayer2, pplayer1)) {
-    return; /* Avoid sending too much info over the network */
-  }
+  /* FIXME: Always declairing war for the AI is a kludge until AI
+     diplomacy is implemented. */
+  pplayer1->diplstates[player2].type
+    = pplayer2->diplstates[player1].type
+    = pplayer1->ai.control || pplayer2->ai.control ? DS_WAR : DS_NEUTRAL;
+  notify_player_ex(pplayer1, x, y,
+		   E_FIRST_CONTACT,
+		   _("Game: You have made contact with the %s, ruled by %s."),
+		   get_nation_name_plural(pplayer2->nation), pplayer2->name);
+  notify_player_ex(pplayer2, x, y,
+		   E_FIRST_CONTACT,
+		   _("Game: You have made contact with the %s, ruled by %s."),
+		   get_nation_name_plural(pplayer1->nation), pplayer1->name);
   send_player_info(pplayer1, pplayer1);
+  send_player_info(pplayer1, pplayer2);
+  send_player_info(pplayer2, pplayer1);
   send_player_info(pplayer2, pplayer2);
 }
 
 /**************************************************************************
-  Check if we make contact with anyone.
+...
 **************************************************************************/
-void maybe_make_contact(struct tile *ptile, struct player *pplayer)
+void maybe_make_first_contact(int x, int y, struct player *pplayer)
 {
-  square_iterate(ptile, 1, tile1) {
-    struct city *pcity = tile_city(tile1);
-    if (pcity) {
-      make_contact(pplayer, city_owner(pcity), ptile);
-    }
-    unit_list_iterate_safe(tile1->units, punit) {
-      make_contact(pplayer, unit_owner(punit), ptile);
-    } unit_list_iterate_safe_end;
+  square_iterate(x, y, 1, x_itr, y_itr) {
+    struct tile *ptile = map_get_tile(x_itr, y_itr);
+    struct city *pcity = ptile->city;
+    if (pcity)
+      make_contact(pplayer, city_owner(pcity), x, y);
+    unit_list_iterate(ptile->units, punit) {
+      make_contact(pplayer, unit_owner(punit), x, y);
+    } unit_list_iterate_end;
   } square_iterate_end;
+}
+
+/**************************************************************************
+  Setup pconn as a client connected to pplayer:
+  Updates pconn->player, pplayer->connections, pplayer->is_connected.
+  Note "observer" connections do not count for is_connected.
+**************************************************************************/
+void associate_player_connection(struct player *pplayer,
+				 struct connection *pconn)
+{
+  assert(pplayer && pconn);
+  
+  pconn->player = pplayer;
+  conn_list_insert_back(&pplayer->connections, pconn);
+  if (!pconn->observer) {
+    pplayer->is_connected = TRUE;
+  }
+}
+
+/**************************************************************************
+  Remove pconn as a client connected to pplayer:
+  Update pplayer->connections, pplayer->is_connected.
+  Sets pconn->player to NULL (normally expect pconn->player==pplayer
+  when function entered, but not checked).
+**************************************************************************/
+void unassociate_player_connection(struct player *pplayer,
+				   struct connection *pconn)
+{
+  assert(pplayer && pconn);
+
+  pconn->player = NULL;
+  conn_list_unlink(&pplayer->connections, pconn);
+
+  pplayer->is_connected = FALSE;
+  conn_list_iterate(pplayer->connections, aconn) {
+    if (!aconn->observer) {
+      pplayer->is_connected = TRUE;
+      break;
+    }
+  }
+  conn_list_iterate_end;
 }
 
 /**************************************************************************
@@ -1228,48 +1465,24 @@ void shuffle_players(void)
   int i, pos;
   struct player *tmp_plr;
 
-  freelog(LOG_DEBUG, "shuffling %d players", player_count());
+  freelog(LOG_DEBUG, "shuffling %d players", game.nplayers);
 
   /* Initialize array in unshuffled order: */
-  for(i = 0; i < player_count(); i++) {
+  for(i=0; i<game.nplayers; i++) {
     shuffled_plr[i] = &game.players[i];
   }
 
   /* Now shuffle them: */
-  for(i = 0; i < player_count() - 1; i++) {
+  for(i=0; i<game.nplayers-1; i++) {
     /* for each run: shuffled[ <i ] is already shuffled [Kero+dwp] */
-    pos = i + myrand(player_count() - i);
+    pos = i + myrand(game.nplayers-i);
     tmp_plr = shuffled_plr[i]; 
     shuffled_plr[i] = shuffled_plr[pos];
     shuffled_plr[pos] = tmp_plr;
   }
 
-#ifdef DEBUG
-  for (i = 0; i < player_count(); i++) {
-    freelog(LOG_DEBUG, "Shuffling player %d as %d.",
-	    i, player_number(shuffled_plr[i]));
-  }
-#endif
-
   /* Record how many players there were when shuffled: */
-  shuffled_nplayers = player_count();
-}
-
-/**************************************************************************
-  Initialize the shuffled players list (as from a loaded savegame).
-**************************************************************************/
-void set_shuffled_players(int *shuffled_players)
-{
-  int i;
-
-  for (i = 0; i < player_count(); i++) {
-    shuffled_plr[i] = player_by_number(shuffled_players[i]);
-
-    freelog(LOG_DEBUG, "Set shuffled player %d as %d.",
-	    i, player_number(shuffled_plr[i]));
-  }
-
-  shuffled_nplayers = player_count();
+  shuffled_nplayers = game.nplayers;
 }
 
 /**************************************************************************
@@ -1279,16 +1492,16 @@ void set_shuffled_players(int *shuffled_players)
 **************************************************************************/
 struct player *shuffled_player(int i)
 {
-  assert(i >= 0 && i < player_count());
+  assert(i>=0 && i<game.nplayers);
   
   if (shuffled_nplayers == 0) {
     freelog(LOG_ERROR, "shuffled_player() called before shuffled");
     return &game.players[i];
   }
   /* This shouldn't happen: */
-  if (player_count() < shuffled_nplayers) {
+  if (game.nplayers < shuffled_nplayers) {
     freelog(LOG_ERROR, "number of players shrunk between shuffles (%d < %d)",
-	    player_count(), shuffled_nplayers);
+	    game.nplayers, shuffled_nplayers);
     return &game.players[i];	/* ?? */
   }
   if (i < shuffled_nplayers) {
@@ -1298,149 +1511,6 @@ struct player *shuffled_player(int i)
   }
 }
 
-/**************************************************************************
-  Returns how much two nations looks good in the same game.
-  Negative return value means that we really really don't want these
-  nations together.
-**************************************************************************/
-static int nations_match(struct nation_type* n1, struct nation_type* n2,
-                         bool ignore_conflicts)
-{
-  int i, sum = 0;
-  
-  /* Scottish is a good civil war nation for British */
-  if (!ignore_conflicts) {
-  
-    for (i = 0; i < n1->num_conflicts; i++) {
-      if (n1->conflicts_with[i] == n2) {
-        return -1;
-      }
-    }
-
-    for (i = 0; i < n2->num_conflicts; i++) {
-      if (n2->conflicts_with[i] == n1) {
-        return -1;
-      }
-    }
-  }
-  for (i = 0; i < n1->num_groups; i++) {
-    if (is_nation_in_group(n2, n1->groups[i])) {
-      sum += n1->groups[i]->match;
-    }
-  }
-  return sum;
-}
-
-/****************************************************************************
-  This function return one of the nations available from the
-  NO_NATION_SELECTED-terminated choices list. If no available nations in this
-  file were found, return a random nation. If no nations are available, die.
-
-  choices may be NULL; if so it's ignored.
-  If only_available is set choose only nations that have is_available bit set.
-****************************************************************************/
-struct nation_type *pick_a_nation(struct nation_type **choices,
-                                  bool ignore_conflicts,
-                                  bool only_available,
-                                  enum barbarian_type barb_type)
-{
-  enum {
-    UNAVAILABLE, AVAILABLE, PREFERRED, UNWANTED
-  } nations_used[nation_count()], looking_for;
-  int match[nation_count()], pick;
-  int num_nations_avail = 0, pref_nations_avail = 0;
-
-  /* Values of nations_used: 
-   * 0: not available - nation is already used or is a special nation
-   * 1: available - we can use this nation
-   * 2: preferred - we can use this nation and it is on the choices list 
-   * 3: unwanted - we can used this nation, but we really don't want to
-   */
-  nations_iterate(pnation) {
-    if (pnation->player
-        || (only_available && !pnation->is_available)
-        || (barb_type != nation_barbarian_type(pnation))
-        || (barb_type == NOT_A_BARBARIAN && !is_nation_playable(pnation))) {
-      /* Nation is unplayable or already used: don't consider it. */
-      nations_used[nation_index(pnation)] = UNAVAILABLE;
-      match[nation_index(pnation)] = 0;
-      continue;
-    }
-
-    nations_used[nation_index(pnation)] = AVAILABLE;
-
-    match[nation_index(pnation)] = 1;
-    players_iterate(pplayer) {
-      if (pplayer->nation != NO_NATION_SELECTED) {
-        int x = nations_match(pnation, nation_of_player(pplayer), ignore_conflicts);
-	if (x < 0) {
-	  nations_used[nation_index(pnation)] = UNWANTED;
-	  match[nation_index(pnation)] = 1;
-	  break;
-	} else {
-	  match[nation_index(pnation)] += x * 100;
-	}
-      }
-    } players_iterate_end;
-
-    num_nations_avail += match[nation_index(pnation)];
-  } nations_iterate_end;
-
-  /* Mark as prefered those nations which are on the choices list and
-   * which are AVAILABLE, but no UNWANTED */
-  for (; choices && *choices != NO_NATION_SELECTED; choices++) {
-    if (nations_used[nation_index(*choices)] == AVAILABLE) {
-      pref_nations_avail += match[nation_index(*choices)];
-      nations_used[nation_index(*choices)] = PREFERRED;
-    }
-  }
-  
-  nations_iterate(pnation) {
-    if (nations_used[nation_index(pnation)] == UNWANTED) {
-      nations_used[nation_index(pnation)] = AVAILABLE;
-    }
-  } nations_iterate_end;
-
-  assert(num_nations_avail > 0);
-  assert(pref_nations_avail >= 0);
-
-  if (pref_nations_avail == 0) {
-    pick = myrand(num_nations_avail);
-    looking_for = AVAILABLE; /* Use any available nation. */
-  } else {
-    pick = myrand(pref_nations_avail);
-    looking_for = PREFERRED; /* Use a preferred nation only. */
-  }
-
-  nations_iterate(pnation) {
-    if (nations_used[nation_index(pnation)] == looking_for) {
-      pick -= match[nation_index(pnation)];
-
-      if (pick < 0) {
-	return pnation;
-      }
-    }
-  } nations_iterate_end;
-
-  assert(0);
-  return NO_NATION_SELECTED;
-}
-
-/****************************************************************************
-  Called when something is changed; this resets everyone's readiness.
-****************************************************************************/
-void reset_all_start_commands(void)
-{
-  if (S_S_INITIAL != server_state()) {
-    return;
-  }
-  players_iterate(pplayer) {
-    if (pplayer->is_ready) {
-      pplayer->is_ready = FALSE;
-      send_player_info_c(pplayer, game.est_connections);
-    }
-  } players_iterate_end;
-}
 
 /**********************************************************************
 This function creates a new player and copies all of it's science
@@ -1448,97 +1518,109 @@ research etc.  Players are both thrown into anarchy and gold is
 split between both players.
                                - Kris Bubendorfer 
 ***********************************************************************/
-static struct player *split_player(struct player *pplayer)
+struct player *split_player(struct player *pplayer)
 {
-  struct player_research *new_research, *old_research;
-  struct player *cplayer = &game.players[player_count()];
-  struct nation_type **civilwar_nations
-    = get_nation_civilwar(nation_of_player(pplayer));
+  int *nations_used, i, num_nations_avail=game.playable_nation_count, pick;
+  int newplayer = game.nplayers;
+  struct player *cplayer = &game.players[newplayer];
 
+  nations_used = fc_calloc(game.playable_nation_count,sizeof(int));
+  
   /* make a new player */
-  server_player_init(cplayer, TRUE, TRUE);
 
+  server_player_init(cplayer, TRUE);
+  
   /* select a new name and nation for the copied player. */
-  /* Rebel will always be an AI player */
-  player_set_nation(cplayer, pick_a_nation(civilwar_nations, TRUE, FALSE,
-                                           NOT_A_BARBARIAN));
-  pick_random_player_name(nation_of_player(cplayer), cplayer->name);
 
-  sz_strlcpy(cplayer->username, ANON_USER_NAME);
-  cplayer->is_connected = FALSE;
-  cplayer->government = nation_of_player(cplayer)->init_government;
-  assert(cplayer->revolution_finishes < 0);
-  cplayer->capital = TRUE;
+  for(i=0; i<game.playable_nation_count;i++){
+    nations_used[i]=i;
+  }
 
-  /* cplayer is not yet part of players_iterate which goes only
-     to player_count(). */
   players_iterate(other_player) {
-    if (get_player_bonus(other_player, EFT_NO_DIPLOMACY)) {
-      cplayer->diplstates[player_index(other_player)].type = DS_WAR;
-      other_player->diplstates[player_index(cplayer)].type = DS_WAR;
-    } else {
-      cplayer->diplstates[player_index(other_player)].type = DS_NO_CONTACT;
-      other_player->diplstates[player_index(cplayer)].type = DS_NO_CONTACT;
-    }
-
-    cplayer->diplstates[player_index(other_player)].has_reason_to_cancel = 0;
-    cplayer->diplstates[player_index(other_player)].turns_left = 0;
-    other_player->diplstates[player_index(cplayer)].has_reason_to_cancel = 0;
-    other_player->diplstates[player_index(cplayer)].turns_left = 0;
-    
-    /* Send so that other_player sees updated diplomatic info;
-     * pplayer will be sent later anyway
-     */
-    if (other_player != pplayer) {
-      send_player_info(other_player, other_player);
+    if (other_player->nation < game.playable_nation_count) {
+      nations_used[other_player->nation] = -1;
+      num_nations_avail--;
     }
   } players_iterate_end;
 
-  /* FIXME: this should be sent before above, so that fields can be verified? */
-  dlsend_packet_player_control(game.est_connections,
-                               (game.info.max_players = ++game.info.nplayers));
+  pick = myrand(num_nations_avail);
+
+  for(i=0; i<game.playable_nation_count; i++){ 
+    if(nations_used[i] != -1)
+      pick--;
+    if(pick < 0) break;
+  }
+  
+  /* Rebel will always be an AI player */
+
+  cplayer->nation = nations_used[i];
+  free(nations_used);
+  nations_used = NULL;
+  pick_ai_player_name(cplayer->nation,cplayer->name);
+
+  sz_strlcpy(cplayer->username, cplayer->name);
+  cplayer->is_connected = FALSE;
+  cplayer->government = game.government_when_anarchy;  
+  cplayer->revolution = 1;
+  cplayer->capital = TRUE;
+
+  /* This should probably be DS_NEUTRAL when AI knows about diplomacy,
+   * but for now AI players are always at war.
+   */
+  players_iterate(other_player) {
+    cplayer->diplstates[other_player->player_no].type = DS_WAR;
+    cplayer->diplstates[other_player->player_no].has_reason_to_cancel = 0;
+    cplayer->diplstates[other_player->player_no].turns_left = 0;
+    other_player->diplstates[cplayer->player_no].type = DS_WAR;
+    other_player->diplstates[cplayer->player_no].has_reason_to_cancel = 0;
+    other_player->diplstates[cplayer->player_no].turns_left = 0;
+    
+    /* Send so that other_player sees updated diplomatic info;
+     * cplayer and pplayer will be sent later anyway
+     */
+    if (other_player != cplayer && other_player != pplayer) {
+      send_player_info(other_player, other_player);
+    }
+  }
+  players_iterate_end;
 
   /* Split the resources */
-  cplayer->economic.gold = pplayer->economic.gold;
-  cplayer->economic.gold /= 2;
-  pplayer->economic.gold -= cplayer->economic.gold;
+  
+  cplayer->economic.gold = pplayer->economic.gold/2;
 
   /* Copy the research */
-  new_research = get_player_research(cplayer);
-  old_research = get_player_research(pplayer);
 
-  new_research->bulbs_researched = 0;
-  new_research->techs_researched = old_research->techs_researched;
-  new_research->researching = old_research->researching;
-  new_research->tech_goal = old_research->tech_goal;
-
-  advance_index_iterate(A_NONE, i) {
-    new_research->inventions[i] = old_research->inventions[i];
-  } advance_index_iterate_end;
-  cplayer->phase_done = TRUE; /* Have other things to think
-				 about - paralysis */
+  cplayer->research.bulbs_researched = 0;
+  cplayer->research.techs_researched = pplayer->research.techs_researched;
+  cplayer->research.researching = pplayer->research.researching;
+  
+  for(i = 0; i<game.num_tech_types ; i++)
+    cplayer->research.inventions[i] = pplayer->research.inventions[i];
+  cplayer->turn_done = TRUE; /* Have other things to think about - paralysis*/
+  cplayer->embassy = 0;   /* all embassys destroyed */
 
   /* Do the ai */
 
   cplayer->ai.control = TRUE;
+  cplayer->ai.tech_goal = pplayer->ai.tech_goal;
   cplayer->ai.prev_gold = pplayer->ai.prev_gold;
   cplayer->ai.maxbuycost = pplayer->ai.maxbuycost;
   cplayer->ai.handicap = pplayer->ai.handicap;
   cplayer->ai.warmth = pplayer->ai.warmth;
-  cplayer->ai.frost = pplayer->ai.frost;
-  set_ai_level_direct(cplayer, game.info.skill_level);
-
-  advance_index_iterate(A_NONE, i) {
+  set_ai_level_direct(cplayer, game.skill_level);
+		    
+  for(i = 0; i<game.num_tech_types ; i++){
     cplayer->ai.tech_want[i] = pplayer->ai.tech_want[i];
-  } advance_index_iterate_end;
+  }
   
   /* change the original player */
-  if (government_of_player(pplayer) != game.government_when_anarchy) {
-    pplayer->target_government = pplayer->government;
+  if (pplayer->government != game.government_when_anarchy) {
     pplayer->government = game.government_when_anarchy;
-    pplayer->revolution_finishes = game.info.turn + 1;
+    pplayer->revolution = 1;
   }
-  get_player_research(pplayer)->bulbs_researched = 0;
+  pplayer->economic.gold = cplayer->economic.gold;
+  pplayer->research.bulbs_researched = 0;
+  pplayer->embassy = 0; /* all embassys destroyed */
 
   player_limit_to_government_rates(pplayer);
 
@@ -1546,14 +1628,18 @@ static struct player *split_player(struct player *pplayer)
 
   give_map_from_player_to_player(pplayer, cplayer);
 
+  game.nplayers++;
+  game.max_players = game.nplayers;
+  
   /* Not sure if this is necessary, but might be a good idea
-   * to avoid doing some ai calculations with bogus data. */
-  ai_data_phase_init(cplayer, TRUE);
+     to avoid doing some ai calculations with bogus data:
+  */
+  ai_data_turn_init(cplayer);
   assess_danger_player(cplayer);
   if (pplayer->ai.control) {
     assess_danger_player(pplayer);
   }
-
+		    
   return cplayer;
 }
 
@@ -1562,13 +1648,16 @@ civil_war_triggered:
  * The capture of a capital is not a sure fire way to throw
 and empire into civil war.  Some governments are more susceptible 
 than others, here are the base probabilities:
-Anarchy   	90%
+ *      Anarchy   	90%   
 Despotism 	80%
 Monarchy  	70%
-Fundamentalism  60% (Only in civ2 ruleset)
+Fundamentalism  60% (In case it gets implemented one day)
 Communism 	50%
-Republic  	40%
-Democracy 	30%
+  	Republic  	40%
+Democracy 	30%	
+ * Note:  In the event that Fundamentalism is added, you need to
+update the array government_civil_war[G_LAST] in player.c
+ * [ SKi: That would now be data/default/governments.ruleset. ]
  * In addition each city in revolt adds 5%, each city in rapture 
 subtracts 5% from the probability of a civil war.  
  * If you have at least 1 turns notice of the impending loss of 
@@ -1587,7 +1676,7 @@ bool civil_war_triggered(struct player *pplayer)
   /* Get base probabilities */
 
   int dice = myrand(100); /* Throw the dice */
-  int prob = get_player_bonus(pplayer, EFT_CIVIL_WAR_CHANCE);
+  int prob = get_government_civil_war_prob(pplayer->government);
 
   /* Now compute the contribution of the cities. */
   
@@ -1601,7 +1690,7 @@ bool civil_war_triggered(struct player *pplayer)
   city_list_iterate_end;
 
   freelog(LOG_VERBOSE, "Civil war chance for %s: prob %d, dice %d",
-	  player_name(pplayer), prob, dice);
+	  pplayer->name, prob, dice);
   
   return(dice < prob);
 }
@@ -1639,16 +1728,11 @@ void civil_war(struct player *pplayer)
   int i, j;
   struct player *cplayer;
 
-  if (player_count() >= MAX_NUM_PLAYERS) {
-    /* No space to make additional player */
-    freelog(LOG_NORMAL,
-            _("Could not throw %s into civil war - too many players"),
-            nation_plural_for_player(pplayer));
-    return;
-  }
-
   cplayer = split_player(pplayer);
 
+  /* So that clients get the correct game.nplayers: */
+  send_game_info(NULL);
+  
   /* Before units, cities, so clients know name of new nation
    * (for debugging etc).
    */
@@ -1658,22 +1742,17 @@ void civil_war(struct player *pplayer)
   /* Now split the empire */
 
   freelog(LOG_VERBOSE,
-	  "%s civil war; created AI %s",
-	  nation_rule_name(nation_of_player(pplayer)),
-	  nation_rule_name(nation_of_player(cplayer)));
-  notify_player(pplayer, NULL, E_CIVIL_WAR,
-                _("Your nation is thrust into civil war."));
+	  "%s's nation is thrust into civil war, created AI player %s",
+	  pplayer->name, cplayer->name);
+  notify_player_ex(pplayer, -1, -1, E_CIVIL_WAR,
+		   _("Game: Your nation is thrust into civil war, "
+		     " %s is declared the leader of the rebel states."),
+		   cplayer->name);
 
-  notify_player(pplayer, NULL, E_FIRST_CONTACT,
-                /* TRANS: <leader> ... the Poles. */
-                _("%s is the rebellious leader of the %s."),
-                player_name(cplayer),
-                nation_plural_for_player(cplayer));
-
-  i = city_list_size(pplayer->cities)/2;   /* number to flip */
-  j = city_list_size(pplayer->cities);	    /* number left to process */
+  i = city_list_size(&pplayer->cities)/2;   /* number to flip */
+  j = city_list_size(&pplayer->cities);	    /* number left to process */
   city_list_iterate(pplayer->cities, pcity) {
-    if (!is_capital(pcity)) {
+    if (!city_got_building(pcity, B_PALACE)) {
       if (i >= j || (i > 0 && myrand(2) == 1)) {
 	/* Transfer city and units supported by this city to the new owner
 
@@ -1683,44 +1762,49 @@ void civil_war(struct player *pplayer)
 	 resolved stack conflicts for each city we would teleport the first
 	 of the units we met since the other would have another owner */
 	transfer_city(cplayer, pcity, -1, FALSE, FALSE, FALSE);
-	freelog(LOG_VERBOSE, "%s declares allegiance to the %s.",
-		city_name(pcity),
-		nation_rule_name(nation_of_player(cplayer)));
-	notify_player(pplayer, pcity->tile, E_CITY_LOST,
-                      /* TRANS: <city> ... the Poles. */
-                      _("%s declares allegiance to the %s."),
-                      city_name(pcity),
-                      nation_plural_for_player(cplayer));
+	freelog(LOG_VERBOSE, "%s declares allegiance to %s",
+		pcity->name, cplayer->name);
+	notify_player_ex(pplayer, pcity->x, pcity->y, E_CITY_LOST,
+			 _("Game: %s declares allegiance to %s."),
+			 pcity->name, cplayer->name);
 	i--;
       }
     }
     j--;
+  }
+  city_list_iterate_end;
+
+  i = 0;
+  
+  unit_list_iterate(pplayer->units, punit) 
+    resolve_unit_stack(punit->x, punit->y, FALSE);
+  unit_list_iterate_end;
+  city_list_iterate(pplayer->cities, pcity) {
+    resolve_unit_stack(pcity->x, pcity->y, FALSE);
+  } city_list_iterate_end;
+  city_list_iterate(cplayer->cities, pcity) {
+    resolve_unit_stack(pcity->x, pcity->y, FALSE);
   } city_list_iterate_end;
 
-  resolve_unit_stacks(pplayer, cplayer, FALSE);
 
-  i = city_list_size(cplayer->cities);
-
-  notify_player(NULL, NULL, E_CIVIL_WAR,
-		/* TRANS: ... Danes ... Poles ... <7> cities. */
-		PL_("Civil war partitions the %s;"
-		    " the %s now hold %d city.",
-		    "Civil war partitions the %s;"
-		    " the %s now hold %d cities.",
-		    i),
-		nation_plural_for_player(pplayer),
-		nation_plural_for_player(cplayer),
-		i);
-}
+  notify_player(NULL,
+		_("Game: The capture of %s's capital and the destruction "
+		  "of the empire's administrative\n"
+		  "      structures have sparked a civil war.  "
+		  "Opportunists have flocked to the rebel cause,\n"
+		  "      and the upstart %s now holds power in %d "
+		  "rebel provinces."),
+		pplayer->name, cplayer->name,
+		city_list_size(&cplayer->cities));
+}  
 
 /**************************************************************************
  The client has send as a chunk of the attribute block.
 **************************************************************************/
 void handle_player_attribute_chunk(struct player *pplayer,
-				   struct packet_player_attribute_chunk
-				   *chunk)
+				   struct packet_attribute_chunk *chunk)
 {
-  generic_handle_player_attribute_chunk(pplayer, chunk);
+  generic_handle_attribute_chunk(pplayer, chunk);
 }
 
 /**************************************************************************
@@ -1729,24 +1813,4 @@ void handle_player_attribute_chunk(struct player *pplayer,
 void handle_player_attribute_block(struct player *pplayer)
 {
   send_attribute_block(pplayer, pplayer->current_conn);
-}
-
-/**************************************************************************
-...
-(Hmm, how should "turn done" work for multi-connected non-observer players?)
-**************************************************************************/
-void handle_player_phase_done(struct player *pplayer,
-			      int turn)
-{
-  if (turn != game.info.turn) {
-    /* If this happens then the player actually pressed turn-done on a
-     * previous turn but we didn't receive it until now.  The player
-     * probably didn't actually mean to end their turn! */
-    return;
-  }
-  pplayer->phase_done = TRUE;
-
-  check_for_full_turn_done();
-
-  send_player_info(pplayer, NULL);
 }

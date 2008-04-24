@@ -10,278 +10,116 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
 #include <assert.h>
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
+#include "audio.h"
+#include "clinet.h"
 #include "events.h"
 #include "fcintl.h"
-#include "ioz.h"
 #include "log.h"
-#include "mem.h"
+#include "game.h"
 #include "registry.h"
 #include "shared.h"
 #include "support.h"
-#include "version.h"
-
-#include "audio.h"
-#include "chatline_g.h"
-#include "cityrepdata.h"
-#include "civclient.h"
-#include "cma_fec.h"
-#include "dialogs_g.h"
-#include "mapview_common.h"
-#include "options.h"
-#include "overview_common.h"
-#include "plrdlg_common.h"
-#include "repodlgs_common.h"
-#include "servers.h"
-#include "themes_common.h"
 #include "tilespec.h"
+#include "version.h"
+#include "mem.h"
 
-/****************************************************************
- The "options" file handles actual "options", and also view options,
- message options, dialog/report settings, cma settings, server settings,
- and global worklists.
-*****************************************************************/
+#include "chatline_g.h"
+#include "cma_fec.h"
+#include "cityrepdata.h"
 
+#include "options.h"
+ 
 /** Defaults for options normally on command line **/
 
-char default_user_name[512] = "\0";
+char default_player_name[512] = "\0";
 char default_server_host[512] = "localhost";
 int  default_server_port = DEFAULT_SOCK_PORT;
-char default_metaserver[512] = META_URL;
-char default_theme_name[512] = "\0";
-char default_tileset_name[512] = "\0";
+char default_metaserver[512] = METALIST_ADDR;
+char default_tile_set_name[512] = "\0";
 char default_sound_set_name[512] = "stdsounds";
 char default_sound_plugin_name[512] = "\0";
-
-bool save_options_on_exit = TRUE;
-bool fullscreen_mode = FALSE;
 
 /** Local Options: **/
 
 bool solid_color_behind_units = FALSE;
 bool sound_bell_at_new_turn = FALSE;
-int  smooth_move_unit_msec = 30;
-int smooth_center_slide_msec = 200;
+bool smooth_move_units = TRUE;
+int  smooth_move_unit_steps = 3;
 bool do_combat_animation = TRUE;
-bool ai_manual_turn_done = TRUE;
+bool ai_popup_windows = FALSE;
+bool ai_manual_turn_done = FALSE;
 bool auto_center_on_unit = TRUE;
 bool auto_center_on_combat = FALSE;
 bool wakeup_focus = TRUE;
-bool goto_into_unknown = TRUE;
+bool draw_diagonal_roads = TRUE;
 bool center_when_popup_city = TRUE;
 bool concise_city_production = FALSE;
 bool auto_turn_done = FALSE;
 bool meta_accelerators = TRUE;
-bool map_scrollbars = FALSE;
+bool map_scrollbars = TRUE;
 bool dialogs_on_top = TRUE;
-bool ask_city_name = TRUE;
-bool popup_new_cities = TRUE;
-bool keyboardless_goto = TRUE;
-bool show_task_icons = TRUE;
 
-/* This option is currently set by the client - not by the user. */
-bool update_city_text_in_refresh_tile = TRUE;
+#define GEN_INT_OPTION(name, desc) { #name, desc, COT_INT, \
+                                     &name, NULL, NULL, 0, NULL, NULL }
+#define GEN_BOOL_OPTION(name, desc) { #name, desc, COT_BOOL, \
+                                      NULL, &name, NULL, 0, NULL, NULL }
+#define GEN_STR_OPTION(name, desc, dflt) { #name, desc, COT_STR, \
+                                     NULL, NULL, name, sizeof(name), \
+                                     dflt, NULL }
+#define GEN_OPTION_TERMINATOR { NULL, NULL, COT_BOOL, \
+                                NULL, NULL, NULL, 0, NULL }
 
-static void reqtree_show_icons_callback(struct client_option *option);
+client_option options[] = {
+  GEN_STR_OPTION(default_player_name,       N_("Default player's username"),
+		 NULL), 
+  GEN_STR_OPTION(default_server_host,       N_("Default server"), NULL),
+  GEN_INT_OPTION(default_server_port,       N_("Default server's port")),
+  GEN_STR_OPTION(default_metaserver,        N_("Default metaserver"), NULL),
+  GEN_STR_OPTION(default_tile_set_name,     N_("Default tileset"),
+		 get_tileset_list),
+  GEN_STR_OPTION(default_sound_set_name,    N_("Default name of sound set"),
+		 get_soundset_list),
+  GEN_STR_OPTION(default_sound_plugin_name, N_("Default sound plugin"),
+		 get_soundplugin_list),
 
-const char *client_option_class_names[COC_MAX] = {
-  N_("Graphics"),
-  N_("Overview"),
-  N_("Sound"),
-  N_("Interface"),
-  N_("Network"),
-  N_("Font")
-};
-
-static client_option common_options[] = {
-  GEN_STR_OPTION(default_user_name,
-		 N_("Login name"),
-		 N_("This is the default login username that will be used "
-		    "in the connection dialogs or with the -a command-line "
-		    "parameter."),
-		 COC_NETWORK, NULL, NULL),
-  GEN_STR_OPTION(default_server_host,
-		 N_("Server"),
-		 N_("This is the default server hostname that will be used "
-		    "in the connection dialogs or with the -a command-line "
-		    "parameter."),
-		 COC_NETWORK, NULL, NULL),
-  GEN_INT_OPTION(default_server_port,
-		 N_("Server port"),
-		 N_("This is the default server port that will be used "
-		    "in the connection dialogs or with the -a command-line "
-		    "parameter."),
-		 COC_NETWORK),
-  GEN_STR_OPTION(default_metaserver,
-		 N_("Metaserver"),
-		 N_("The metaserver is a host that the client contacts to "
-		    "find out about games on the internet.  Don't change "
-		    "this from its default value unless you know what "
-		    "you're doing."),
-		 COC_NETWORK, NULL, NULL),
-  GEN_STR_OPTION(default_sound_set_name,
-		 N_("Soundset"),
-		 N_("This is the soundset that will be used.  Changing "
-		    "this is the same as using the -S command-line "
-		    "parameter."),
-		 COC_SOUND, get_soundset_list, NULL),
-  GEN_STR_OPTION(default_sound_plugin_name,
-		 N_("Sound plugin"),
-		 N_("If you have a problem with sound, try changing the "
-		    "sound plugin.  The new plugin won't take effect until "
-		    "you restart Freeciv.  Changing this is the same as "
-		    "using the -P command-line option."),
-		 COC_SOUND, get_soundplugin_list, NULL),
-  GEN_STR_OPTION(default_theme_name, N_("Theme"),
-		 N_("By changing this option you change the active theme."),
-		 COC_GRAPHICS,
-		 get_themes_list, theme_reread_callback),
-  GEN_STR_OPTION(default_tileset_name, N_("Tileset"),
-		 N_("By changing this option you change the active tileset. "
-		    "This is the same as using the -t command-line "
-		    "parameter."),
-		 COC_GRAPHICS,
-		 get_tileset_list, tilespec_reread_callback),
-
-  GEN_BOOL_OPTION_CB(solid_color_behind_units,
-		     N_("Solid unit background color"),
-		     N_("Setting this option will cause units on the map "
-			"view to be drawn with a solid background color "
-			"instead of the flag backdrop."),
-		     COC_GRAPHICS, mapview_redraw_callback),
-  GEN_BOOL_OPTION(sound_bell_at_new_turn, N_("Sound bell at new turn"),
-		  N_("Set this option to have a \"bell\" event be generated "
-		     "at the start of a new turn.  You can control the "
-		     "behavior of the \"bell\" event by editing the message "
-		     "options."),
-		  COC_SOUND),
-  GEN_INT_OPTION(smooth_move_unit_msec,
-		 N_("Unit movement animation time (milliseconds)"),
-		 N_("This option controls how long unit \"animation\" takes "
-		    "when a unit moves on the map view.  Set it to 0 to "
-		    "disable animation entirely."),
-		 COC_GRAPHICS),
-  GEN_INT_OPTION(smooth_center_slide_msec,
-		 N_("Mapview recentering time (milliseconds)"),
-		 N_("When the map view is recentered, it will slide "
-		    "smoothly over the map to its new position.  This "
-		    "option controls how long this slide lasts.  Set it to "
-		    "0 to disable mapview sliding entirely."),
-		 COC_GRAPHICS),
-  GEN_BOOL_OPTION(do_combat_animation, N_("Show combat animation"),
-		  N_("Disabling this option will turn off combat animation "
-		     "between units on the mapview."),
-		  COC_GRAPHICS),
-  GEN_BOOL_OPTION_CB(draw_full_citybar, N_("Draw the citybar"),
-		     N_("Setting this option will display a 'citybar' "
-			"containing useful information beneath each city. "
-			"Disabling this option will display only the city's "
-			"name and optionally, production."),
-		     COC_GRAPHICS, mapview_redraw_callback),
-  GEN_BOOL_OPTION_CB(reqtree_show_icons,
-                     N_("Show icons in the technology tree"),
-                     N_("Setting this option will display icons "
-		        "on the technology tree diagram. Turning "
-		        "this option off makes the technology tree "
-		        "more compact."),
-		     COC_GRAPHICS, reqtree_show_icons_callback),
-  GEN_BOOL_OPTION_CB(draw_unit_shields, N_("Draw shield graphics for units"),
-		     N_("Setting this option will draw a shield icon "
-			"as the flags on units.  If unset, the full flag will "
-			"be drawn."),
-		     COC_GRAPHICS, mapview_redraw_callback),
-  GEN_BOOL_OPTION(ai_manual_turn_done, N_("Manual Turn Done in AI Mode"),
-		  N_("Disable this option if you do not want to "
-		     "press the Turn Done button manually when watching "
-		     "an AI player."),
-		  COC_INTERFACE),
-  GEN_BOOL_OPTION(auto_center_on_unit, N_("Auto Center on Units"),
-		  N_("Set this option to have the active unit centered "
-		     "automatically when the unit focus changes."),
-		  COC_INTERFACE),
-  GEN_BOOL_OPTION(auto_center_on_combat, N_("Auto Center on Combat"),
-		  N_("Set this option to have any combat be centered "
-		     "automatically.  Disabled this will speed up the time "
-		     "between turns but may cause you to miss combat "
-		     "entirely."),
-		  COC_INTERFACE),
-  GEN_BOOL_OPTION(wakeup_focus, N_("Focus on Awakened Units"),
-		  N_("Set this option to have newly awoken units be "
-		     "focused automatically."),
-		  COC_INTERFACE),
-  GEN_BOOL_OPTION(goto_into_unknown, N_("Allow goto into the unknown"),
-		  N_("Setting this option will make the game consider "
-		     "moving into unknown tiles.  If not, then goto routes "
-		     "will detour around or be blocked by unknown tiles."),
-		  COC_INTERFACE),
-  GEN_BOOL_OPTION(center_when_popup_city, N_("Center map when Popup city"),
-		  N_("Setting this option makes the mapview center on a "
-		     "city when its city dialog is popped up."),
-		  COC_INTERFACE),
-  GEN_BOOL_OPTION(concise_city_production, N_("Concise City Production"),
-		  N_("Set this option to make the city production (as shown "
-		     "in the city dialog) to be more compact."),
-		  COC_INTERFACE),
-  GEN_BOOL_OPTION(auto_turn_done, N_("End Turn when done moving"),
-		  N_("Setting this option makes your turn end automatically "
-		     "when all your units are done moving."),
-		  COC_INTERFACE),
-  GEN_BOOL_OPTION(ask_city_name, N_("Prompt for city names"),
-		  N_("Disabling this option will make the names of newly "
-		     "founded cities chosen automatically by the server."),
-		  COC_INTERFACE),
-  GEN_BOOL_OPTION(popup_new_cities, N_("Pop up city dialog for new cities"),
-		  N_("Setting this option will pop up a newly-founded "
-		     "city's city dialog automatically."),
-		  COC_INTERFACE),
-
-  GEN_BOOL_OPTION(overview.layers[OLAYER_BACKGROUND],
-		  N_("Background layer"),
-		  N_("The background layer of the overview shows just "
-		     "ocean and land."), COC_OVERVIEW),
-  GEN_BOOL_OPTION_CB(overview.layers[OLAYER_RELIEF],
-		     N_("Terrain relief map layer"),
-		     N_("The relief layer shows all terrains on the map."),
-		     COC_OVERVIEW, overview_redraw_callback),
-  GEN_BOOL_OPTION_CB(overview.layers[OLAYER_BORDERS],
-		     N_("Borders layer"),
-		     N_("The borders layer of the overview shows which tiles "
-			"are owned by each player."),
-		     COC_OVERVIEW, overview_redraw_callback),
-  GEN_BOOL_OPTION_CB(overview.layers[OLAYER_UNITS],
-		     N_("Units layer"),
-		     N_("Enabling this will draw units on the overview."),
-		     COC_OVERVIEW, overview_redraw_callback),
-  GEN_BOOL_OPTION_CB(overview.layers[OLAYER_CITIES],
-		     N_("Cities layer"),
-		     N_("Enabling this will draw cities on the overview."),
-		     COC_OVERVIEW, overview_redraw_callback),
-  GEN_BOOL_OPTION_CB(overview.fog,
-		     N_("Overview fog of war"),
-		     N_("Enabling this will show fog of war on the "
-		        "overview."),
-		     COC_OVERVIEW, overview_redraw_callback)
+  GEN_BOOL_OPTION(solid_color_behind_units, N_("Solid unit background color")),
+  GEN_BOOL_OPTION(sound_bell_at_new_turn,   N_("Sound bell at new turn")),
+  GEN_BOOL_OPTION(smooth_move_units,        N_("Smooth unit moves")),
+  GEN_INT_OPTION(smooth_move_unit_steps,    N_("Smooth unit move steps")),
+  GEN_BOOL_OPTION(do_combat_animation,      N_("Show combat animation")),
+  GEN_BOOL_OPTION(ai_popup_windows,         N_("Popup dialogs in AI Mode")),
+  GEN_BOOL_OPTION(ai_manual_turn_done,      N_("Manual Turn Done in AI Mode")),
+  GEN_BOOL_OPTION(auto_center_on_unit,      N_("Auto Center on Units")),
+  GEN_BOOL_OPTION(auto_center_on_combat,    N_("Auto Center on Combat")),
+  GEN_BOOL_OPTION(wakeup_focus,             N_("Focus on Awakened Units")),
+  GEN_BOOL_OPTION(draw_diagonal_roads,      N_("Draw Diagonal Roads/Rails")),
+  GEN_BOOL_OPTION(center_when_popup_city,   N_("Center map when Popup city")),
+  GEN_BOOL_OPTION(concise_city_production,  N_("Concise City Production")),
+  GEN_BOOL_OPTION(auto_turn_done,           N_("End Turn when done moving")),
+  GEN_BOOL_OPTION(meta_accelerators,        N_("Use Alt/Meta for accelerators (GTK+ only)")),
+  GEN_BOOL_OPTION(map_scrollbars,	    N_("Show Map Scrollbars (GTK+ only)")),
+  GEN_BOOL_OPTION(dialogs_on_top,	    N_("Keep dialogs on top (GTK+ 2.0 only)")),
+  GEN_OPTION_TERMINATOR
 };
 #undef GEN_INT_OPTION
 #undef GEN_BOOL_OPTION
 #undef GEN_STR_OPTION
-
-static client_option *fc_options = NULL;
-static int num_options = 0;
+#undef GEN_OPTION_TERMINATOR
 
 /** View Options: **/
 
-bool draw_city_outlines = TRUE;
 bool draw_map_grid = FALSE;
 bool draw_city_names = TRUE;
-bool draw_city_growth = TRUE;
 bool draw_city_productions = FALSE;
 bool draw_terrain = TRUE;
 bool draw_coastline = FALSE;
@@ -295,20 +133,13 @@ bool draw_cities = TRUE;
 bool draw_units = TRUE;
 bool draw_focus_unit = FALSE;
 bool draw_fog_of_war = TRUE;
-bool draw_borders = TRUE;
-bool draw_full_citybar = TRUE;
-bool draw_unit_shields = TRUE;
-bool player_dlg_show_dead_players = TRUE;
-bool reqtree_show_icons = TRUE;
 
 #define VIEW_OPTION(name) { #name, &name }
 #define VIEW_OPTION_TERMINATOR { NULL, NULL }
 
 view_option view_options[] = {
-  VIEW_OPTION(draw_city_outlines),
   VIEW_OPTION(draw_map_grid),
   VIEW_OPTION(draw_city_names),
-  VIEW_OPTION(draw_city_growth),
   VIEW_OPTION(draw_city_productions),
   VIEW_OPTION(draw_terrain),
   VIEW_OPTION(draw_coastline),
@@ -322,8 +153,6 @@ view_option view_options[] = {
   VIEW_OPTION(draw_units),
   VIEW_OPTION(draw_focus_unit),
   VIEW_OPTION(draw_fog_of_war),
-  VIEW_OPTION(draw_borders),
-  VIEW_OPTION(player_dlg_show_dead_players),
   VIEW_OPTION_TERMINATOR
 };
 
@@ -333,168 +162,210 @@ view_option view_options[] = {
 /** Message Options: **/
 
 unsigned int messages_where[E_LAST];
+int sorted_events[E_LAST];
 
+#define GEN_EV(descr, event) { #event, NULL, descr, NULL, event }
+#define GEN_EV_TERMINATOR { NULL, NULL, NULL, NULL, E_NOEVENT }
+
+/*
+ * Holds information about all event types. The entries don't have
+ * to be sorted.
+ */
+static struct {
+  char *enum_name, *tag_name, *descr_orig, *descr;
+  enum event_type event;
+} events[] = {
+  GEN_EV(N_("City: Building Unavailable Item"),       E_CITY_CANTBUILD),
+  GEN_EV(N_("City: Captured/Destroyed"),              E_CITY_LOST),
+  GEN_EV(N_("City: Celebrating"),                     E_CITY_LOVE),
+  GEN_EV(N_("City: Civil Disorder"),                  E_CITY_DISORDER),
+  GEN_EV(N_("City: Famine"),                          E_CITY_FAMINE),
+  GEN_EV(N_("City: Famine Feared"),       	      E_CITY_FAMINE_FEARED),
+  GEN_EV(N_("City: Growth"),                          E_CITY_GROWTH),
+  GEN_EV(N_("City: May Soon Grow"),                   E_CITY_MAY_SOON_GROW),
+  GEN_EV(N_("City: Needs Aqueduct"),                  E_CITY_AQUEDUCT),
+  GEN_EV(N_("City: Needs Aqueduct Being Built"),      E_CITY_AQ_BUILDING),
+  GEN_EV(N_("City: Normal"),                          E_CITY_NORMAL),
+  GEN_EV(N_("City: Nuked"),                           E_CITY_NUKED),
+  GEN_EV(N_("City: Released from CMA"),               E_CITY_CMA_RELEASE),
+  GEN_EV(N_("City: Suggest Growth Throttling"),       E_CITY_GRAN_THROTTLE),
+  GEN_EV(N_("City: Transfer"),                        E_CITY_TRANSFER),
+  GEN_EV(N_("City: Was Built"),                       E_CITY_BUILD),
+  GEN_EV(N_("City: Worklist Events"),                 E_WORKLIST),
+  GEN_EV(N_("Civ: Barbarian Uprising"),               E_UPRISING ),
+  GEN_EV(N_("Civ: Civil War"),                        E_CIVIL_WAR),
+  GEN_EV(N_("Civ: Collapse to Anarchy"),              E_ANARCHY),
+  GEN_EV(N_("Civ: First Contact"),                    E_FIRST_CONTACT),
+  GEN_EV(N_("Civ: Learned New Government"),	      E_NEW_GOVERNMENT),
+  GEN_EV(N_("Civ: Low Funds"),                        E_LOW_ON_FUNDS),
+  GEN_EV(N_("Civ: Pollution"),                        E_POLLUTION),
+  GEN_EV(N_("Civ: Revolt Ended"),                     E_REVOLT_DONE),
+  GEN_EV(N_("Civ: Revolt Started"),                   E_REVOLT_START),
+  GEN_EV(N_("Civ: Spaceship Events"),                 E_SPACESHIP),
+  GEN_EV(N_("Diplomat Action: Bribe"),              E_MY_DIPLOMAT_BRIBE),
+  GEN_EV(N_("Diplomat Action: Caused Incident"),    E_DIPLOMATIC_INCIDENT),
+  GEN_EV(N_("Diplomat Action: Escape"),             E_MY_DIPLOMAT_ESCAPE),
+  GEN_EV(N_("Diplomat Action: Embassy"),            E_MY_DIPLOMAT_EMBASSY),
+  GEN_EV(N_("Diplomat Action: Failed"),             E_MY_DIPLOMAT_FAILED),
+  GEN_EV(N_("Diplomat Action: Incite"),             E_MY_DIPLOMAT_INCITE),
+  GEN_EV(N_("Diplomat Action: Poison"),             E_MY_DIPLOMAT_POISON),
+  GEN_EV(N_("Diplomat Action: Sabotage"),           E_MY_DIPLOMAT_SABOTAGE),
+  GEN_EV(N_("Diplomat Action: Theft"),              E_MY_DIPLOMAT_THEFT),
+  GEN_EV(N_("Enemy Diplomat: Bribe"),               E_ENEMY_DIPLOMAT_BRIBE),
+  GEN_EV(N_("Enemy Diplomat: Embassy"),             E_ENEMY_DIPLOMAT_EMBASSY),
+  GEN_EV(N_("Enemy Diplomat: Failed"),              E_ENEMY_DIPLOMAT_FAILED),
+  GEN_EV(N_("Enemy Diplomat: Incite"),              E_ENEMY_DIPLOMAT_INCITE),
+  GEN_EV(N_("Enemy Diplomat: Poison"),              E_ENEMY_DIPLOMAT_POISON),
+  GEN_EV(N_("Enemy Diplomat: Sabotage"),            E_ENEMY_DIPLOMAT_SABOTAGE),
+  GEN_EV(N_("Enemy Diplomat: Theft"),               E_ENEMY_DIPLOMAT_THEFT),
+  GEN_EV(N_("Game: Broadcast Report"),                E_BROADCAST_REPORT),
+  GEN_EV(N_("Game: Game Ended"),                      E_GAME_END),
+  GEN_EV(N_("Game: Game Started"),                    E_GAME_START),
+  GEN_EV(N_("Game: Message from Server Operator"),    E_MESSAGE_WALL),
+  GEN_EV(N_("Game: Nation Selected"),                 E_NATION_SELECTED),
+  GEN_EV(N_("Game: Player Destroyed"),                E_DESTROYED),
+  GEN_EV(N_("Game: Report"),                          E_REPORT),
+  GEN_EV(N_("Game: Turn Bell"),                       E_TURN_BELL),
+  GEN_EV(N_("Game: Year Advance"),                    E_NEXT_YEAR),
+  GEN_EV(N_("Global: Eco-Disaster"),                  E_GLOBAL_ECO),
+  GEN_EV(N_("Global: Nuke Detonated"),                E_NUKE),
+  GEN_EV(N_("Hut: Barbarians in a Hut Roused"),       E_HUT_BARB),
+  GEN_EV(N_("Hut: City Founded from Hut"),            E_HUT_CITY),
+  GEN_EV(N_("Hut: Gold Found in Hut"),                E_HUT_GOLD),
+  GEN_EV(N_("Hut: Killed by Barbarians in a Hut"),    E_HUT_BARB_KILLED),
+  GEN_EV(N_("Hut: Mercenaries Found in Hut"),         E_HUT_MERC),
+  GEN_EV(N_("Hut: Settler Found in Hut"),             E_HUT_SETTLER),
+  GEN_EV(N_("Hut: Tech Found in Hut"),                E_HUT_TECH),
+  GEN_EV(N_("Hut: Unit Spared by Barbarians"),        E_HUT_BARB_CITY_NEAR),
+  GEN_EV(N_("Improvement: Bought"),                   E_IMP_BUY),
+  GEN_EV(N_("Improvement: Built"),                    E_IMP_BUILD),
+  GEN_EV(N_("Improvement: Forced to Sell"),           E_IMP_AUCTIONED),
+  GEN_EV(N_("Improvement: New Improvement Selected"), E_IMP_AUTO),
+  GEN_EV(N_("Improvement: Sold"),                     E_IMP_SOLD),
+  GEN_EV(N_("Tech: Learned From Great Library"),      E_TECH_GAIN),
+  GEN_EV(N_("Tech: Learned New Tech"),                E_TECH_LEARNED),
+  GEN_EV(N_("Treaty: Alliance"),                      E_TREATY_ALLIANCE),
+  GEN_EV(N_("Treaty: Broken"),                        E_TREATY_BROKEN),
+  GEN_EV(N_("Treaty: Ceasefire"),                     E_TREATY_CEASEFIRE),
+  GEN_EV(N_("Treaty: Peace"),                         E_TREATY_PEACE),
+  GEN_EV(N_("Treaty: Shared Vision"),                 E_TREATY_SHARED_VISION),
+  GEN_EV(N_("Unit: Attack Failed"),                   E_UNIT_LOST_ATT),
+  GEN_EV(N_("Unit: Attack Succeeded"),                E_UNIT_WIN_ATT),
+  GEN_EV(N_("Unit: Bought"),                          E_UNIT_BUY),
+  GEN_EV(N_("Unit: Built"),                           E_UNIT_BUILD),
+  GEN_EV(N_("Unit: Defender Destroyed"),              E_UNIT_LOST),
+  GEN_EV(N_("Unit: Defender Survived"),               E_UNIT_WIN),
+  GEN_EV(N_("Unit: Production Upgraded"),             E_UNIT_UPGRADED),
+  GEN_EV(N_("Unit: Relocated"),                       E_UNIT_RELOCATED),
+  GEN_EV(N_("Wonder: Finished"),                      E_WONDER_BUILD),
+  GEN_EV(N_("Wonder: Made Obsolete"),                 E_WONDER_OBSOLETE),
+  GEN_EV(N_("Wonder: Started"),                       E_WONDER_STARTED),
+  GEN_EV(N_("Wonder: Stopped"),                       E_WONDER_STOPPED),
+  GEN_EV(N_("Wonder: Will Finish Next Turn"),         E_WONDER_WILL_BE_BUILT),
+  GEN_EV_TERMINATOR
+};
+
+/* 
+ * Maps from enum event_type to indexes of events[]. Set by
+ * init_messages_where. 
+ */
+static int event_to_index[E_LAST];
+
+static void save_cma_preset(struct section_file *file, char *name,
+			    const struct cma_parameter *const pparam,
+			    int inx);
+static void load_cma_preset(struct section_file *file, int inx);
+
+static void save_global_worklist(struct section_file *file, char *path, 
+                                 int wlinx, struct worklist *pwl);
+
+static void load_global_worklist(struct section_file *file, char *path, 
+                                 int wlinx, struct worklist *pwl);
 
 /**************************************************************************
-  Return the first item of fc_options.
+  Returns the translated description of the given event.
 **************************************************************************/
-struct client_option *client_option_array_first(void)
+const char *const get_message_text(enum event_type event)
 {
-  if (num_options > 0) {
-    return fc_options;
+  assert(event >= 0 && event < E_LAST);
+
+  if (events[event_to_index[event]].event == event) {
+    return events[event_to_index[event]].descr;
   }
-  return NULL;
+  freelog(LOG_ERROR, "unknown event %d", event);
+  return "UNKNOWN EVENT";
 }
 
 /**************************************************************************
-  Return the last item of fc_options.
+  Comparison function for qsort; i1 and i2 are pointers to an event
+  (enum event_type).
 **************************************************************************/
-const struct client_option *client_option_array_last(void)
+static int compar_message_texts(const void *i1, const void *i2)
 {
-  if (num_options > 0) {
-    return &fc_options[num_options - 1];
-  }
-  return NULL;
+  int j1 = *(const int*)i1;
+  int j2 = *(const int*)i2;
+  
+  return mystrcasecmp(get_message_text(j1), get_message_text(j2));
 }
 
 /****************************************************************
   These could be a static table initialisation, except
   its easier to do it this way.
+  Now also initialise sorted_events[].
 *****************************************************************/
-void message_options_init(void)
+void init_messages_where(void)
 {
-  int none[] = {
-    E_IMP_BUY, E_IMP_SOLD, E_UNIT_BUY,
-    E_UNIT_LOST_ATT, E_UNIT_WIN_ATT, E_GAME_START,
-    E_NATION_SELECTED, E_CITY_BUILD, E_NEXT_YEAR,
-    E_CITY_PRODUCTION_CHANGED,
-    E_CITY_MAY_SOON_GROW, E_WORKLIST, E_AI_DEBUG
-  };
-  int out_only[] = {
-    E_CHAT_MSG, E_CHAT_ERROR, E_CONNECTION, E_LOG_ERROR, E_SETTING
-  };
-  int all[] = {
-    E_LOG_FATAL, E_TUTORIAL
-  };
+  int out_only[] = { E_IMP_BUY, E_IMP_SOLD, E_UNIT_BUY,
+		     E_UNIT_LOST_ATT, E_UNIT_WIN_ATT, E_GAME_START,
+		     E_NATION_SELECTED, E_CITY_BUILD, E_NEXT_YEAR,
+		     E_TECH_LEARNED};
+  int all[] = { E_MESSAGE_WALL };
   int i;
 
-  for (i = 0; i < E_LAST; i++) {
-    messages_where[i] = MW_MESSAGES;
-  }
-  for (i = 0; i < ARRAY_SIZE(none); i++) {
-    messages_where[none[i]] = 0;
+  for(i=0; i<E_LAST; i++) {
+    messages_where[i] = MW_OUTPUT | MW_MESSAGES;
   }
   for (i = 0; i < ARRAY_SIZE(out_only); i++) {
     messages_where[out_only[i]] = MW_OUTPUT;
   }
   for (i = 0; i < ARRAY_SIZE(all); i++) {
-    messages_where[all[i]] = MW_MESSAGES | MW_POPUP;
+    messages_where[all[i]] = MW_OUTPUT | MW_MESSAGES | MW_POPUP;
+  }
+  
+  for (i = 0; i < ARRAY_SIZE(event_to_index); i++) {
+    event_to_index[i] = 0;
   }
 
-  events_init();
-}
+  for (i = 0;; i++) {
+    int j;
 
-/****************************************************************
-... 
-*****************************************************************/
-void message_options_free(void)
-{
-  events_free();
-}
-
-/****************************************************************
-... 
-*****************************************************************/
-static void message_options_load(struct section_file *file, const char *prefix)
-{
-  int i;
-
-  for (i = 0; i < E_LAST; i++) {
-    messages_where[i] =
-      secfile_lookup_int_default(file, messages_where[i],
-				 "%s.message_where_%02d", prefix, i);
+    if (events[i].event == E_NOEVENT) {
+      break;
+    }
+    events[i].descr = _(events[i].descr_orig);
+    event_to_index[events[i].event] = i;
+    events[i].tag_name = mystrdup(events[i].enum_name);
+    for (j = 0; j < strlen(events[i].tag_name); j++) {
+      events[i].tag_name[j] = my_tolower(events[i].tag_name[j]);
+    }
+    freelog(LOG_DEBUG,
+	    "event[%d]=%d: name='%s' / '%s'\n\tdescr_orig='%s'\n\tdescr='%s'",
+	    i, events[i].event, events[i].enum_name, events[i].tag_name,
+	    events[i].descr_orig, events[i].descr);
   }
-}
 
-/****************************************************************
-... 
-*****************************************************************/
-static void message_options_save(struct section_file *file, const char *prefix)
-{
-  int i;
-
-  for (i = 0; i < E_LAST; i++) {
-    secfile_insert_int_comment(file, messages_where[i],
-			       get_event_message_text(i),
-			       "%s.message_where_%02d", prefix, i);
+  for(i=0;i<E_LAST;i++)  {
+    sorted_events[i] = i;
   }
+  qsort(sorted_events, E_LAST, sizeof(int), compar_message_texts);
 }
 
 
 /****************************************************************
- Does heavy lifting for looking up a preset.
+ The "options" file handles actual "options", and also view options,
+ message options, city report settings, cma settings, and 
+ saved global worklists
 *****************************************************************/
-static void load_cma_preset(struct section_file *file, int i)
-{
-  struct cm_parameter parameter;
-  const char *name =
-    secfile_lookup_str_default(file, "preset",
-                               "cma.preset%d.name", i);
-
-  output_type_iterate(o) {
-    parameter.minimal_surplus[o] =
-        secfile_lookup_int_default(file, 0, "cma.preset%d.minsurp%d", i, o);
-    parameter.factor[o] =
-        secfile_lookup_int_default(file, 0, "cma.preset%d.factor%d", i, o);
-  } output_type_iterate_end;
-  parameter.require_happy =
-      secfile_lookup_bool_default(file, FALSE, "cma.preset%d.reqhappy", i);
-  parameter.happy_factor =
-      secfile_lookup_int_default(file, 0, "cma.preset%d.happyfactor", i);
-  parameter.allow_disorder = FALSE;
-  parameter.allow_specialists = TRUE;
-
-  cmafec_preset_add(name, &parameter);
-}
-
-/****************************************************************
- Does heavy lifting for inserting a preset.
-*****************************************************************/
-static void save_cma_preset(struct section_file *file, int i)
-{
-  const struct cm_parameter *const pparam = cmafec_preset_get_parameter(i);
-  char *name = cmafec_preset_get_descr(i);
-
-  secfile_insert_str(file, name, "cma.preset%d.name", i);
-
-  output_type_iterate(o) {
-    secfile_insert_int(file, pparam->minimal_surplus[o],
-                       "cma.preset%d.minsurp%d", i, o);
-    secfile_insert_int(file, pparam->factor[o],
-                       "cma.preset%d.factor%d", i, o);
-  } output_type_iterate_end;
-  secfile_insert_bool(file, pparam->require_happy,
-                      "cma.preset%d.reqhappy", i);
-  secfile_insert_int(file, pparam->happy_factor,
-                     "cma.preset%d.happyfactor", i);
-}
-
-/****************************************************************
- Insert all cma presets.
-*****************************************************************/
-static void save_cma_presets(struct section_file *file)
-{
-  int i;
-
-  secfile_insert_int_comment(file, cmafec_preset_num(),
-                             _("If you add a preset by hand,"
-                               " also update \"number_of_presets\""),
-                             "cma.number_of_presets");
-  for (i = 0; i < cmafec_preset_num(); i++) {
-    save_cma_preset(file, i);
-  }
-}
-
 
 /****************************************************************
  Returns pointer to static memory containing name of option file.
@@ -515,7 +386,7 @@ static char *option_file_name(void)
 #ifndef OPTION_FILE_NAME
     name = user_home_dir();
     if (!name) {
-      freelog(LOG_ERROR, _("Cannot find your home directory"));
+      append_output_window(_("Cannot find your home directory"));
       return NULL;
     }
     mystrlcpy(name_buffer, name, 231);
@@ -527,18 +398,19 @@ static char *option_file_name(void)
   freelog(LOG_VERBOSE, "settings file is %s", name_buffer);
   return name_buffer;
 }
-
-
+  
 /****************************************************************
- Load settable per connection/server options.
+ this loads from the rc file any options which are not ruleset specific 
+ it is called on client init.
 *****************************************************************/
-void load_settable_options(bool send_it)
+void load_general_options(void)
 {
-  char buffer[MAX_LEN_MSG];
   struct section_file sf;
+  const char * const prefix = "client";
   char *name;
-  char *desired_string;
-  int i = 0;
+  int i, num;
+  client_option *o;
+  view_option *v;
 
   name = option_file_name();
   if (!name) {
@@ -546,157 +418,9 @@ void load_settable_options(bool send_it)
     return;
   }
   if (!section_file_load(&sf, name))
-    return;
+    return;  
 
-  for (; i < num_settable_options; i++) {
-    struct options_settable *o = &settable_options[i];
-    bool changed = FALSE;
-
-    my_snprintf(buffer, sizeof(buffer), "/set %s ", o->name);
-
-    switch (o->stype) {
-    case SSET_BOOL:
-      o->desired_val = secfile_lookup_bool_default(&sf, o->default_val,
-                                                   "server.%s", o->name);
-      changed = (o->desired_val != o->default_val
-              && o->desired_val != o->val);
-      if (changed) {
-        sz_strlcat(buffer, o->desired_val ? "1" : "0");
-      }
-      break;
-    case SSET_INT:
-      o->desired_val = secfile_lookup_int_default(&sf, o->default_val,
-                                                  "server.%s", o->name);
-      changed = (o->desired_val != o->default_val
-              && o->desired_val != o->val);
-      if (changed) {
-        cat_snprintf(buffer, sizeof(buffer), "%d", o->desired_val);
-      }
-      break;
-    case SSET_STRING:
-      desired_string = secfile_lookup_str_default(&sf, o->default_strval,
-                                                  "server.%s", o->name);
-      if (NULL != desired_string) {
-        if (NULL != o->desired_strval) {
-          free(o->desired_strval);
-        }
-        o->desired_strval = mystrdup(desired_string);
-        changed = (0 != strcmp(desired_string, o->default_strval)
-                && 0 != strcmp(desired_string, o->strval));
-        if (changed) {
-          sz_strlcat(buffer, desired_string);
-        }
-      }
-      break;
-    default:
-      freelog(LOG_ERROR,
-              "load_settable_options() bad type %d.",
-              o->stype);
-      break;
-    };
-
-    if (changed && send_it) {
-      send_chat(buffer);
-    }
-  }
-
-  section_file_free(&sf);
-}
-
-/****************************************************************
- Save settable per connection/server options.
-*****************************************************************/
-static void save_settable_options(struct section_file *sf)
-{
-  int i = 0;
-
-  for (; i < num_settable_options; i++) {
-    struct options_settable *o = &settable_options[i];
-
-    switch (o->stype) {
-    case SSET_BOOL:
-      if (o->desired_val != o->default_val) {
-        secfile_insert_bool(sf, o->desired_val, "server.%s", o->name);
-      }
-      break;
-    case SSET_INT:
-      if (o->desired_val != o->default_val) {
-        secfile_insert_int(sf, o->desired_val, "server.%s",  o->name);
-      }
-      break;
-    case SSET_STRING:
-      if (NULL != o->desired_strval
-       && 0 != strcmp(o->desired_strval, o->default_strval)) {
-        secfile_insert_str(sf, o->desired_strval, "server.%s", o->name);
-      }
-      break;
-    default:
-      freelog(LOG_ERROR,
-              "save_settable_options() bad type %d.",
-              o->stype);
-      break;
-    };
-  }
-}
-
-
-/****************************************************************
- Load from the rc file any options that are not ruleset specific.
- It is called after ui_init(), yet before ui_main().
- Unfortunately, this means that some clients cannot display.
- Instead, use freelog().
-*****************************************************************/
-void load_general_options(void)
-{
-  struct section_file sf;
-  int i, num;
-  view_option *v;
-  char *name;
-  const char * const prefix = "client";
-
-  assert(fc_options == NULL);
-  num_options = ARRAY_SIZE(common_options) + num_gui_options;
-  fc_options = fc_calloc(num_options, sizeof(*fc_options));
-  memcpy(fc_options, common_options, sizeof(common_options));
-  memcpy(fc_options + ARRAY_SIZE(common_options), gui_options,
-	 num_gui_options * sizeof(*fc_options));
-
-  name = option_file_name();
-  if (!name) {
-    /* FIXME: need better messages */
-    freelog(LOG_ERROR, _("Save failed, cannot find a filename."));
-    return;
-  }
-  if (!section_file_load(&sf, name)) {
-    /* try to create the rc file */
-    section_file_init(&sf);
-    secfile_insert_str(&sf, VERSION_STRING, "client.version");
-
-    create_default_cma_presets();
-    save_cma_presets(&sf);
-
-    /* FIXME: need better messages */
-    if (!section_file_save(&sf, name, 0, FZ_PLAIN)) {
-      freelog(LOG_ERROR, _("Save failed, cannot write to file %s"), name);
-    } else {
-      freelog(LOG_NORMAL, _("Saved settings to file %s"), name);
-    }
-    section_file_free(&sf);
-    return;
-  }
-
-  /* a "secret" option for the lazy. TODO: make this saveable */
-  sz_strlcpy(password, 
-             secfile_lookup_str_default(&sf, "", "%s.password", prefix));
-
-  save_options_on_exit =
-    secfile_lookup_bool_default(&sf, save_options_on_exit,
-				"%s.save_options_on_exit", prefix);
-  fullscreen_mode =
-    secfile_lookup_bool_default(&sf, fullscreen_mode,
-				"%s.fullscreen_mode", prefix);
-
-  client_options_iterate(o) {
+  for (o = options; o->name; o++) {
     switch (o->type) {
     case COT_BOOL:
       *(o->p_bool_value) =
@@ -709,38 +433,33 @@ void load_general_options(void)
 				      prefix, o->name);
       break;
     case COT_STR:
-    case COT_FONT:
       mystrlcpy(o->p_string_value,
                      secfile_lookup_str_default(&sf, o->p_string_value, "%s.%s",
                      prefix, o->name), o->string_length);
       break;
     }
-  } client_options_iterate_end;
-
+  }
   for (v = view_options; v->name; v++) {
     *(v->p_value) =
 	secfile_lookup_bool_default(&sf, *(v->p_value), "%s.%s", prefix,
 				    v->name);
   }
-
-  message_options_load(&sf, prefix);
-  
-  /* Players dialog */
-  for(i = 1; i < num_player_dlg_columns; i++) {
-    bool *show = &(player_dlg_columns[i].show);
-    *show = secfile_lookup_bool_default(&sf, *show, "%s.player_dlg_%s", prefix,
-                                        player_dlg_columns[i].tagname);
+  for (i = 0; i < E_LAST; i++) {
+    messages_where[i] =
+      secfile_lookup_int_default(&sf, messages_where[i],
+				 "%s.message_where_%02d", prefix, i);
   }
-  
+  for (i = 1; i < num_city_report_spec(); i++) {
+    bool *ip = city_report_spec_show_ptr(i);
+    *ip = secfile_lookup_bool_default(&sf, *ip, "%s.city_report_%s", prefix,
+				     city_report_spec_tagname(i));
+  }
+
   /* Load cma presets. If cma.number_of_presets doesn't exist, don't load 
    * any, the order here should be reversed to keep the order the same */
-  num = secfile_lookup_int_default(&sf, -1, "cma.number_of_presets");
-  if (num == -1) {
-    create_default_cma_presets();
-  } else {
-    for (i = num - 1; i >= 0; i--) {
-      load_cma_preset(&sf, i);
-    }
+  num = secfile_lookup_int_default(&sf, 0, "cma.number_of_presets");
+  for (i = num - 1; i >= 0; i--) {
+    load_cma_preset(&sf, i);
   }
  
   section_file_free(&sf);
@@ -749,14 +468,15 @@ void load_general_options(void)
 /****************************************************************
  this loads from the rc file any options which need to know what the 
  current ruleset is. It's called the first time client goes into
- C_S_RUNNING
+ CLIENT_GAME_RUNNING_STATE
 *****************************************************************/
 void load_ruleset_specific_options(void)
 {
   struct section_file sf;
+  char *name;
   int i;
-  char *name = option_file_name();
 
+  name = option_file_name();
   if (!name) {
     /* fail silently */
     return;
@@ -764,20 +484,16 @@ void load_ruleset_specific_options(void)
   if (!section_file_load(&sf, name))
     return;
 
-  if (NULL != client.conn.playing) {
-    /* load global worklists */
-    for (i = 0; i < MAX_NUM_WORKLISTS; i++) {
-      worklist_load(&sf, &client.worklists[i],
-		    "worklists.worklist%d", i);
-    }
-  }
-
-  /* Load city report columns (which include some ruleset data). */
-  for (i = 0; i < num_city_report_spec(); i++) {
-    bool *ip = city_report_spec_show_ptr(i);
-
-    *ip = secfile_lookup_bool_default(&sf, *ip, "client.city_report_%s",
-				     city_report_spec_tagname(i));
+  /* load global worklists */
+  for (i = 0; i < MAX_NUM_WORKLISTS; i++) {
+    game.player_ptr->worklists[i].is_valid =
+                secfile_lookup_int_default(&sf, FALSE,
+                                          "worklists.worklist%d.is_valid", i);
+    strcpy(game.player_ptr->worklists[i].name,
+           secfile_lookup_str_default(&sf, "",
+                                      "worklists.worklist%d.name", i));
+    load_global_worklist(&sf, "worklists.worklist%d", i, 
+                         &(game.player_ptr->worklists[i]));
   }
 
   section_file_free(&sf);
@@ -789,10 +505,11 @@ void load_ruleset_specific_options(void)
 void save_options(void)
 {
   struct section_file sf;
-  char output_buffer[256];
-  int i;
-  view_option *v;
+  client_option *o;
   char *name = option_file_name();
+  char output_buffer[256];
+  view_option *v;
+  int i;
 
   if(!name) {
     append_output_window(_("Save failed, cannot find a filename."));
@@ -802,10 +519,7 @@ void save_options(void)
   section_file_init(&sf);
   secfile_insert_str(&sf, VERSION_STRING, "client.version");
 
-  secfile_insert_bool(&sf, save_options_on_exit, "client.save_options_on_exit");
-  secfile_insert_bool(&sf, fullscreen_mode, "client.fullscreen_mode");
-
-  client_options_iterate(o) {
+  for (o = options; o->name; o++) {
     switch (o->type) {
     case COT_BOOL:
       secfile_insert_bool(&sf, *(o->p_bool_value), "client.%s", o->name);
@@ -814,72 +528,225 @@ void save_options(void)
       secfile_insert_int(&sf, *(o->p_int_value), "client.%s", o->name);
       break;
     case COT_STR:
-    case COT_FONT:
       secfile_insert_str(&sf, o->p_string_value, "client.%s", o->name);
       break;
     }
-  } client_options_iterate_end;
+  }
 
   for (v = view_options; v->name; v++) {
     secfile_insert_bool(&sf, *(v->p_value), "client.%s", v->name);
   }
 
-  message_options_save(&sf, "client");
+  for (i = 0; i < E_LAST; i++) {
+    secfile_insert_int_comment(&sf, messages_where[i],
+			       get_message_text(i),
+			       "client.message_where_%02d", i);
+  }
 
-  for (i = 0; i < num_city_report_spec(); i++) {
+  for (i = 1; i < num_city_report_spec(); i++) {
     secfile_insert_bool(&sf, *(city_report_spec_show_ptr(i)),
 		       "client.city_report_%s",
 		       city_report_spec_tagname(i));
   }
-  
-  /* Players dialog */
-  for (i = 1; i < num_player_dlg_columns; i++) {
-    secfile_insert_bool(&sf, player_dlg_columns[i].show,
-                        "client.player_dlg_%s",
-                        player_dlg_columns[i].tagname);
-  }
-
-  /* server settings */
-  save_cma_presets(&sf);
-  save_settable_options(&sf);
 
   /* insert global worklists */
-  if (NULL != client.conn.playing) {
-    for(i = 0; i < MAX_NUM_WORKLISTS; i++){
-      if (client.worklists[i].is_valid) {
-	worklist_save(&sf, &client.worklists[i], client.worklists[i].length,
-		      "worklists.worklist%d", i);
-      }
+  for(i = 0; i < MAX_NUM_WORKLISTS; i++){
+    if (game.player_ptr->worklists[i].is_valid) {
+      secfile_insert_int(&sf, game.player_ptr->worklists[i].is_valid,
+                         "worklists.worklist%d.is_valid", i);
+      secfile_insert_str(&sf, game.player_ptr->worklists[i].name,
+                         "worklists.worklist%d.name", i);
+      save_global_worklist(&sf, "worklists.worklist%d", i, 
+                           &(game.player_ptr->worklists[i]));
     }
   }
 
+
+  /* insert cma presets */
+  secfile_insert_int_comment(&sf, cmafec_preset_num(),
+			     _("If you add a preset by "
+			       "hand, also update \"number_of_presets\""),
+			     "cma.number_of_presets");
+  for (i = 0; i < cmafec_preset_num(); i++) {
+    save_cma_preset(&sf, cmafec_preset_get_descr(i),
+		    cmafec_preset_get_parameter(i), i);
+  }
+
   /* save to disk */
-  if (!section_file_save(&sf, name, 0, FZ_PLAIN)) {
+  if (!section_file_save(&sf, name, 0)) {
     my_snprintf(output_buffer, sizeof(output_buffer),
 		_("Save failed, cannot write to file %s"), name);
   } else {
     my_snprintf(output_buffer, sizeof(output_buffer),
 		_("Saved settings to file %s"), name);
   }
+
   append_output_window(output_buffer);
   section_file_free(&sf);
 }
 
-/****************************************************************************
-  Callback when a mapview graphics option is changed (redraws the canvas).
-****************************************************************************/
-void mapview_redraw_callback(struct client_option *option)
+/****************************************************************
+ Does heavy lifting for looking up a preset.
+*****************************************************************/
+static void load_cma_preset(struct section_file *file, int inx)
 {
-  update_map_canvas_visible();
+  struct cma_parameter parameter;
+  char *name;
+  int i;
+
+  name = secfile_lookup_str_default(file, "preset", 
+				    "cma.preset%d.name", inx);
+  for (i = 0; i < NUM_STATS; i++) {
+    parameter.minimal_surplus[i] =
+	secfile_lookup_int_default(file, 0, "cma.preset%d.minsurp%d", inx, i);
+    parameter.factor[i] =
+	secfile_lookup_int_default(file, 0, "cma.preset%d.factor%d", inx, i);
+  }
+  parameter.require_happy =
+      secfile_lookup_int_default(file, 0, "cma.preset%d.reqhappy", inx);
+  parameter.factor_target =
+      secfile_lookup_int_default(file, 0, "cma.preset%d.factortarget", inx);
+  parameter.happy_factor =
+      secfile_lookup_int_default(file, 0, "cma.preset%d.happyfactor", inx);
+
+  cmafec_preset_add(name, &parameter);
 }
 
-/****************************************************************************
-   Callback when the reqtree  show icons option is changed.
-   The tree is recalculated.
-****************************************************************************/
-static void reqtree_show_icons_callback(struct client_option *option)
+/****************************************************************
+ Does heavy lifting for inserting a preset.
+*****************************************************************/
+static void save_cma_preset(struct section_file *file, char *name,
+			    const struct cma_parameter *const pparam,
+			    int inx)
 {
-  /* This will close research dialog, when it's open again the techtree will
-   * be recalculated */
-  popdown_all_game_dialogs();
+  int i;
+
+  secfile_insert_str(file, name, "cma.preset%d.name", inx);
+  for (i = 0; i < NUM_STATS; i++) {
+    secfile_insert_int(file, pparam->minimal_surplus[i],
+		       "cma.preset%d.minsurp%d", inx, i);
+    secfile_insert_int(file, pparam->factor[i],
+		       "cma.preset%d.factor%d", inx, i);
+  }
+  secfile_insert_int(file, pparam->require_happy,
+		     "cma.preset%d.reqhappy", inx);
+  secfile_insert_int(file, pparam->factor_target,
+		     "cma.preset%d.factortarget", inx);
+  secfile_insert_int(file, pparam->happy_factor,
+		     "cma.preset%d.happyfactor", inx);
+}
+
+/****************************************************************
+... 
+*****************************************************************/
+const char *const get_sound_tag_for_event(enum event_type event)
+{
+  if (event == E_NOEVENT) {
+    return NULL;
+  }
+
+  assert(event >= 0 && event < E_LAST);
+
+  if (events[event_to_index[event]].event == event) {
+    return events[event_to_index[event]].tag_name;
+  }
+  freelog(LOG_ERROR, "unknown event %d", event);
+  return NULL;
+}
+
+/****************************************************************
+ loads global worklist from rc file
+*****************************************************************/
+static void load_global_worklist(struct section_file *file, char *path, 
+                                  int wlinx, struct worklist *pwl)
+{
+  char efpath[64];
+  char idpath[64];
+  int i;
+  bool end = FALSE;
+
+  sz_strlcpy(efpath, path);
+  sz_strlcat(efpath, ".wlef%d");
+  sz_strlcpy(idpath, path);
+  sz_strlcat(idpath, ".wlid%d");
+
+  for (i = 0; i < MAX_LEN_WORKLIST; i++) {
+    if (end) {
+      pwl->wlefs[i] = WEF_END;
+      pwl->wlids[i] = 0;
+      section_file_lookup(file, efpath, wlinx, i);
+      section_file_lookup(file, idpath, wlinx, i);
+    } else {
+      pwl->wlefs[i] =
+        secfile_lookup_int_default(file, WEF_END, efpath, wlinx, i);
+      pwl->wlids[i] =
+        secfile_lookup_int_default(file, 0, idpath,wlinx, i);
+
+      if ((pwl->wlefs[i] <= WEF_END) || (pwl->wlefs[i] >= WEF_LAST) ||
+          ((pwl->wlefs[i] == WEF_UNIT) && !unit_type_exists(pwl->wlids[i])) ||
+          ((pwl->wlefs[i] == WEF_IMPR) && !improvement_exists(pwl->wlids[i]))) {
+        pwl->wlefs[i] = WEF_END;
+        pwl->wlids[i] = 0;
+        end = TRUE;
+      }
+    }
+  }
+}
+
+/****************************************************************
+ saves global worklist to rc file
+*****************************************************************/
+static void save_global_worklist(struct section_file *file, char *path, 
+                                  int wlinx, struct worklist *pwl)
+{
+  char efpath[64];
+  char idpath[64];
+  int i;
+
+  sz_strlcpy(efpath, path);
+  sz_strlcat(efpath, ".wlef%d");
+  sz_strlcpy(idpath, path);
+  sz_strlcat(idpath, ".wlid%d");
+
+  for (i = 0; i < MAX_LEN_WORKLIST; i++) {
+    secfile_insert_int(file, pwl->wlefs[i], efpath, wlinx, i);
+    secfile_insert_int(file, pwl->wlids[i], idpath, wlinx, i);
+  }
+}
+
+/****************************************************************
+ If is_city_event is FALSE this event doesn't effect a city even if
+ there is a city at the event location.
+*****************************************************************/
+bool is_city_event(enum event_type event)
+{
+  switch (event) {
+  case E_GLOBAL_ECO:
+  case E_CITY_LOST:
+  case E_UNIT_LOST:
+  case E_UNIT_WIN:
+  case E_ENEMY_DIPLOMAT_FAILED:
+  case E_ENEMY_DIPLOMAT_EMBASSY:
+  case E_ENEMY_DIPLOMAT_POISON:
+  case E_ENEMY_DIPLOMAT_BRIBE:
+  case E_ENEMY_DIPLOMAT_INCITE:
+  case E_ENEMY_DIPLOMAT_SABOTAGE:
+  case E_ENEMY_DIPLOMAT_THEFT:
+  case E_MY_DIPLOMAT_FAILED:
+  case E_MY_DIPLOMAT_EMBASSY:
+  case E_MY_DIPLOMAT_POISON:
+  case E_MY_DIPLOMAT_BRIBE:
+  case E_MY_DIPLOMAT_INCITE:
+  case E_MY_DIPLOMAT_SABOTAGE:
+  case E_MY_DIPLOMAT_THEFT:
+  case E_MY_DIPLOMAT_ESCAPE:
+  case E_UNIT_LOST_ATT:
+  case E_UNIT_WIN_ATT:
+  case E_UPRISING:
+  case E_UNIT_RELOCATED:
+    return FALSE;
+
+  default:
+    return TRUE;
+  }
 }

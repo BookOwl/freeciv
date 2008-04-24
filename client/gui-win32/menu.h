@@ -14,9 +14,7 @@
 #define FC__MENU_H
 
 #include "menu_g.h"
-
-HMENU create_mainmenu(void);
+HMENU create_mainmenu();
 void handle_menu(int code);
-HACCEL my_create_menu_acceltable(void);
-
+HACCEL my_create_menu_acceltable();
 #endif  /* FC__MENU_H */

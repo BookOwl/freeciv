@@ -30,6 +30,7 @@
 #include "player.h"
 #include "chatline.h"
 #include "citydlg.h"
+#include "clinet.h"
 #include "colors.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
@@ -38,42 +39,45 @@
 
 #include "messagewin.h"
 
-static struct gui_dialog *meswin_shell;
+static GtkWidget *meswin_shell;
 static GtkListStore *meswin_store;
 static GtkTreeSelection *meswin_selection;
 
 static void create_meswin_dialog(void);
+static void meswin_response(GtkWidget *w, gint response);
+
 static void meswin_selection_callback(GtkTreeSelection *selection,
                                       gpointer data);
 static void meswin_row_activated_callback(GtkTreeView *view,
 					  GtkTreePath *path,
 					  GtkTreeViewColumn *col,
 					  gpointer data);
-static void meswin_response_callback(struct gui_dialog *dlg, int response,
-                                     gpointer data);
+static void meswin_goto_callback(GtkWidget *w, gpointer data);
+static void meswin_popcity_callback(GtkWidget *w, gpointer data);
 
 enum {
-  CMD_GOTO = 1, CMD_POPCITY
+    CMD_GOTO = 1, CMD_POPCITY
 };
 
 #define N_MSG_VIEW 24	       /* max before scrolling happens */
 
 /****************************************************************
-popup the dialog 10% inside the main-window, and optionally
-raise it.
+popup the dialog 10% inside the main-window 
 *****************************************************************/
-void popup_meswin_dialog(bool raise)
+void popup_meswin_dialog(void)
 {
-  if (!meswin_shell) {
+  int updated = 0;
+  
+  if(!meswin_shell) {
     create_meswin_dialog();
+    gtk_set_relative_position(toplevel, meswin_shell, 25, 25);
+    updated = 1;	       /* create_ calls update_ */
   }
 
-  update_meswin_dialog();
+  gtk_window_present(GTK_WINDOW(meswin_shell));
 
-  gui_dialog_present(meswin_shell);
-  if (raise) {
-    gui_dialog_raise(meswin_shell);
-  }
+  if(!updated) 
+    update_meswin_dialog();
 }
 
 /**************************************************************************
@@ -82,7 +86,7 @@ void popup_meswin_dialog(bool raise)
 void popdown_meswin_dialog(void)
 {
   if (meswin_shell) {
-    gui_dialog_destroy(meswin_shell);
+    gtk_widget_destroy(meswin_shell);
   }
 }
 
@@ -91,7 +95,7 @@ void popdown_meswin_dialog(void)
 *****************************************************************/
 bool is_meswin_open(void)
 {
-  return (meswin_shell != NULL);
+  return meswin_shell != NULL;
 }
 
 /****************************************************************
@@ -134,10 +138,10 @@ static void meswin_cell_data_func(GtkTreeViewColumn *col,
 
   if (b) {
     g_object_set(G_OBJECT(cell), "style", PANGO_STYLE_ITALIC,
-		 "weight", PANGO_WEIGHT_NORMAL, NULL);
+		 "foreground", "blue", "weight", PANGO_WEIGHT_NORMAL, NULL);
   } else {
     g_object_set(G_OBJECT(cell), "style", PANGO_STYLE_NORMAL,
-		 "weight", PANGO_WEIGHT_BOLD, NULL);
+		 "foreground", "black", "weight", PANGO_WEIGHT_BOLD, NULL);
   }
 }
 					     
@@ -146,12 +150,43 @@ static void meswin_cell_data_func(GtkTreeViewColumn *col,
 *****************************************************************/
 static void create_meswin_dialog(void)
 {
+  static char *titles[1] = { N_("Messages") };
+  static bool titles_done;
   GtkCellRenderer *renderer;
   GtkTreeViewColumn *col;
-  GtkWidget *view, *sw, *cmd;
+  GtkWidget *view, *sw;
+  GtkWidget *cmd;
 
-  gui_dialog_new(&meswin_shell, GTK_NOTEBOOK(bottom_notebook), NULL);
-  gui_dialog_set_title(meswin_shell, _("Messages"));
+  intl_slist(ARRAY_SIZE(titles), titles, &titles_done);
+
+  meswin_shell = gtk_dialog_new_with_buttons(_("Messages"),
+  	NULL,
+	0,
+	NULL);
+  if (dialogs_on_top) {
+    gtk_window_set_transient_for(GTK_WINDOW(meswin_shell),
+				 GTK_WINDOW(toplevel));
+  }
+  gtk_window_set_type_hint(GTK_WINDOW(meswin_shell),
+			   GDK_WINDOW_TYPE_HINT_NORMAL);
+  gtk_dialog_set_default_response(GTK_DIALOG(meswin_shell),
+	GTK_RESPONSE_CLOSE);
+  gtk_window_set_default_size(GTK_WINDOW(meswin_shell), 520, 300);
+
+  cmd = gtk_stockbutton_new(GTK_STOCK_JUMP_TO, _("_Goto location"));
+  gtk_widget_set_sensitive(cmd, FALSE);
+  gtk_dialog_add_action_widget(GTK_DIALOG(meswin_shell), cmd, CMD_GOTO);
+
+  g_signal_connect(cmd, "clicked", G_CALLBACK(meswin_goto_callback), NULL);
+  
+  cmd = gtk_stockbutton_new(GTK_STOCK_ZOOM_IN, _("_Popup City"));
+  gtk_widget_set_sensitive(cmd, FALSE);
+  gtk_dialog_add_action_widget(GTK_DIALOG(meswin_shell), cmd, CMD_POPCITY);
+
+  g_signal_connect(cmd, "clicked", G_CALLBACK(meswin_popcity_callback), NULL);
+
+  gtk_dialog_add_button(GTK_DIALOG(meswin_shell),
+			GTK_STOCK_CLOSE, GTK_RESPONSE_CLOSE);
 
   meswin_store = gtk_list_store_new(2, G_TYPE_STRING, G_TYPE_BOOLEAN);
 
@@ -160,16 +195,16 @@ static void create_meswin_dialog(void)
 				      GTK_SHADOW_ETCHED_IN);
   gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sw),
                           GTK_POLICY_AUTOMATIC, GTK_POLICY_ALWAYS);
-  gtk_box_pack_start(GTK_BOX(meswin_shell->vbox), sw, TRUE, TRUE, 0);
+  gtk_box_pack_start(GTK_BOX(GTK_DIALOG(meswin_shell)->vbox),
+		     sw, TRUE, TRUE, 0);
 
   view = gtk_tree_view_new_with_model(GTK_TREE_MODEL(meswin_store));
   meswin_selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(view));
   g_object_unref(meswin_store);
   gtk_tree_view_columns_autosize(GTK_TREE_VIEW(view));
-  gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(view), FALSE);
 
   renderer = gtk_cell_renderer_text_new();
-  col = gtk_tree_view_column_new_with_attributes(NULL, renderer,
+  col = gtk_tree_view_column_new_with_attributes(titles[0], renderer,
   	"text", 0, NULL);
   gtk_tree_view_append_column(GTK_TREE_VIEW(view), col);
   gtk_tree_view_column_set_cell_data_func(col, renderer,
@@ -180,23 +215,14 @@ static void create_meswin_dialog(void)
 		   G_CALLBACK(meswin_selection_callback), NULL);
   g_signal_connect(view, "row_activated",
 		   G_CALLBACK(meswin_row_activated_callback), NULL);
+  g_signal_connect(meswin_shell, "response",
+		   G_CALLBACK(meswin_response), NULL);
+  g_signal_connect(meswin_shell, "destroy",
+		   G_CALLBACK(gtk_widget_destroyed), &meswin_shell);
 
-  cmd = gui_dialog_add_stockbutton(meswin_shell, GTK_STOCK_JUMP_TO,
-      _("Goto _Location"), CMD_GOTO);
-  gtk_widget_set_sensitive(cmd, FALSE);
-  
-  cmd = gui_dialog_add_stockbutton(meswin_shell, GTK_STOCK_ZOOM_IN,
-      _("Inspect _City"), CMD_POPCITY);
-  gtk_widget_set_sensitive(cmd, FALSE);
+  gtk_widget_show_all(GTK_DIALOG(meswin_shell)->vbox);
 
-  gui_dialog_add_button(meswin_shell, GTK_STOCK_CLOSE, GTK_RESPONSE_CLOSE);
-
-  gui_dialog_response_set_callback(meswin_shell, meswin_response_callback);
-  gui_dialog_set_default_size(meswin_shell, 520, 300);
-
-  gui_dialog_show_all(meswin_shell);
-
-  gtk_tree_view_focus(GTK_TREE_VIEW(view));
+  real_update_meswin_dialog();
 }
 
 /**************************************************************************
@@ -204,7 +230,7 @@ static void create_meswin_dialog(void)
 **************************************************************************/
 void real_update_meswin_dialog(void)
 {
-  int i, num = get_num_messages(), num_not_visited = 0;
+  int i, num = get_num_messages();
   GtkTreeIter it;
 
   gtk_list_store_clear(meswin_store);
@@ -223,16 +249,13 @@ void real_update_meswin_dialog(void)
       meswin_visited_item(i);
     } else {
       meswin_not_visited_item(i);
-      num_not_visited++;
     }
   }
-
-  gui_dialog_set_response_sensitive(meswin_shell, CMD_GOTO, FALSE);
-  gui_dialog_set_response_sensitive(meswin_shell, CMD_POPCITY, FALSE);
-
-  if (num_not_visited > 0) {
-    gui_dialog_alert(meswin_shell);
-  }
+  
+  gtk_dialog_set_response_sensitive(GTK_DIALOG(meswin_shell), CMD_GOTO,
+				    FALSE);
+  gtk_dialog_set_response_sensitive(GTK_DIALOG(meswin_shell), CMD_POPCITY,
+				    FALSE);
 }
 
 /**************************************************************************
@@ -246,10 +269,10 @@ static void meswin_selection_callback(GtkTreeSelection *selection,
   if (row != -1) {
     struct message *message = get_message(row);
 
-    gui_dialog_set_response_sensitive(meswin_shell, CMD_GOTO,
-	message->location_ok);
-    gui_dialog_set_response_sensitive(meswin_shell, CMD_POPCITY,
-	message->city_ok);
+    gtk_dialog_set_response_sensitive(GTK_DIALOG(meswin_shell), CMD_GOTO,
+				      message->location_ok);
+    gtk_dialog_set_response_sensitive(GTK_DIALOG(meswin_shell), CMD_POPCITY,
+				      message->city_ok);
   }
 }
 
@@ -267,45 +290,46 @@ static void meswin_row_activated_callback(GtkTreeView *view,
   meswin_double_click(row);
   meswin_visited_item(row);
 
-  gui_dialog_set_response_sensitive(meswin_shell, CMD_GOTO,
-      message->location_ok);
-  gui_dialog_set_response_sensitive(meswin_shell, CMD_POPCITY,
-      message->city_ok);
+  gtk_dialog_set_response_sensitive(GTK_DIALOG(meswin_shell), CMD_GOTO,
+				    message->location_ok);
+  gtk_dialog_set_response_sensitive(GTK_DIALOG(meswin_shell), CMD_POPCITY,
+				    message->city_ok);
 }
 
 /**************************************************************************
 ...
 **************************************************************************/
-static void meswin_response_callback(struct gui_dialog *dlg, int response,
-                                     gpointer data)
+static void meswin_response(GtkWidget *w, gint response)
 {
-  switch (response) {
-  case CMD_GOTO:
-    {
-      gint row = gtk_tree_selection_get_row(meswin_selection);
-
-      if (row == -1) {
-	return;
-      }
-
-      meswin_goto(row);
-      meswin_visited_item(row);
-    }
-    break;
-  case CMD_POPCITY:
-    {
-      gint row = gtk_tree_selection_get_row(meswin_selection);
-
-      if (row == -1) {
-	return;
-      }
-      meswin_popup_city(row);
-      meswin_visited_item(row);
-    }
-    break;
-  default:
-    gui_dialog_destroy(dlg);
-    break;
-  }
+  if (response <= 0)
+    gtk_widget_destroy(w);
 }
 
+/**************************************************************************
+...
+**************************************************************************/
+void meswin_goto_callback(GtkWidget *w, gpointer data)
+{
+  gint row = gtk_tree_selection_get_row(meswin_selection);
+
+  if (row == -1) {
+    return;
+  }
+
+  meswin_goto(row);
+  meswin_visited_item(row);
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+static void meswin_popcity_callback(GtkWidget *w, gpointer data)
+{
+  gint row = gtk_tree_selection_get_row(meswin_selection);
+
+  if (row == -1) {
+    return;
+  }
+  meswin_popup_city(row);
+  meswin_visited_item(row);
+}

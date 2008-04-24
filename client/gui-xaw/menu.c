@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -25,29 +24,20 @@
 #include <X11/Xaw/SmeBSB.h>
 #include <X11/Xaw/SmeLine.h>
 
-/* utility */
 #include "fcintl.h"
-#include "mem.h"
-#include "movement.h"
-#include "support.h"
-
-/* common */
-#include "game.h"
-#include "government.h"
 #include "map.h"
+#include "mem.h"
+#include "support.h"
 #include "unit.h"
-#include "unitlist.h"
 
 #include "chatline.h"
 #include "cityrep.h"
 #include "civclient.h"
-#include "climisc.h"	/* can_units_do_connect */
 #include "clinet.h"
 #include "control.h" /* request_xxx and get_unit_in_focus */
 #include "dialogs.h"
 #include "finddlg.h"
 #include "gotodlg.h"
-#include "gui_main.h"
 #include "gui_stuff.h"
 #include "helpdlg.h"
 #include "mapctrl.h" 
@@ -55,7 +45,6 @@
 #include "messagewin.h"
 #include "optiondlg.h"
 #include "options.h"
-#include "packhand.h"
 #include "plrdlg.h"
 #include "ratesdlg.h"
 #include "repodlgs.h"
@@ -115,7 +104,8 @@ static struct MenuEntry game_menu_entries[]={
     { { N_("Message Options"), 0      },      "", MENU_GAME_MSG_OPTIONS, 0 },
     { { N_("Save Settings"), 0        },      "", MENU_GAME_SAVE_SETTINGS, 0 },
     { { 0                             },      "", MENU_SEPARATOR_LINE, 0 },
-    { { N_("Server Options"), 0       },      "", MENU_GAME_SERVER_OPTIONS, 0 },
+    { { N_("Server Opt initial"), 0   },      "", MENU_GAME_SERVER_OPTIONS1, 0 },
+    { { N_("Server Opt ongoing"), 0   },      "", MENU_GAME_SERVER_OPTIONS2, 0 },
     { { 0                             },      "", MENU_SEPARATOR_LINE, 0 },
     { { N_("Export Log"), 0           },      "", MENU_GAME_OUTPUT_LOG, 0 },
     { { N_("Clear Log"), 0            },      "", MENU_GAME_CLEAR_OUTPUT, 0 },
@@ -125,27 +115,19 @@ static struct MenuEntry game_menu_entries[]={
     { { 0,                            },       0, MENU_END_OF_LIST, 0 }
 };
 
-static struct MenuEntry government_menu_entries[]={
-    { { N_("Tax Rates"), 0            },     "T", MENU_GOVERNMENT_RATES, 0 },
+static struct MenuEntry kingdom_menu_entries[]={
+    { { N_("Tax Rates"), 0            },     "T", MENU_KINGDOM_RATES, 0 },
     { { 0                             },      "", MENU_SEPARATOR_LINE, 0 },
-    { { N_("Find City"), 0            },     "F", MENU_GOVERNMENT_FIND_CITY, 0 },
-    { { N_("Worklists"), 0            },     "Ctl-W", MENU_GOVERNMENT_WORKLISTS, 0 },
+    { { N_("Find City"), 0            },     "F", MENU_KINGDOM_FIND_CITY, 0 },
+    { { N_("Worklists"), 0            },     "L", MENU_KINGDOM_WORKLISTS, 0 },
     { { 0                             },      "", MENU_SEPARATOR_LINE, 0 },
-    { { N_("Revolution"), 0           },     "R", MENU_GOVERNMENT_REVOLUTION, 0 },
+    { { N_("Revolution"), 0           },     "R", MENU_KINGDOM_REVOLUTION, 0 },
     { { 0,                            },       0, MENU_END_OF_LIST, 0 }
 };
 
-/* One entry for every government, appended to the government menu. */
-static int num_government_entries = 0;
-static Widget government_widgets[G_MAGIC];
-
 static struct MenuEntry view_menu_entries[]={
     { { N_("Map Grid"), 0             }, "ctl-g", MENU_VIEW_SHOW_MAP_GRID, 0 },
-    { { N_("National Borders"), 0     }, "ctl-b",
-      MENU_VIEW_SHOW_NATIONAL_BORDERS, 0 },
     { { N_("City Names"), 0           }, "ctl-n", MENU_VIEW_SHOW_CITY_NAMES, 0 },
-    { { N_("City Growth"), 0          }, "ctl-r",
-      MENU_VIEW_SHOW_CITY_GROWTH, 0 },
     { { N_("City Productions"), 0     }, "ctl-p", MENU_VIEW_SHOW_CITY_PRODUCTIONS, 0 },
     { { 0                             },      "", MENU_SEPARATOR_LINE, 0 },
     { { N_("Terrain"), 0              },      "", MENU_VIEW_SHOW_TERRAIN, 0 },
@@ -188,22 +170,16 @@ static struct MenuEntry order_menu_entries[]={
     { { N_("Pillage"), 0              },     "P", MENU_ORDER_PILLAGE, 0 },
     { { 0                             },      "", MENU_SEPARATOR_LINE, 0 },
     { { N_("Make Homecity"), 0        },     "h", MENU_ORDER_HOMECITY, 0 },
-    { { N_("Unload Transporter"), 0   },     "U",
-      MENU_ORDER_UNLOAD_TRANSPORTER, 0 },
-    { { N_("Load"), 0                 },     "l", MENU_ORDER_LOAD, 0 },
     { { N_("Unload"), 0               },     "u", MENU_ORDER_UNLOAD, 0 },
     { { N_("Wake up others"), 0       },     "W", MENU_ORDER_WAKEUP_OTHERS, 0 },
     { { 0                             },      "", MENU_SEPARATOR_LINE, 0 },
     { { N_("Auto Settler"), 0         },     "a", MENU_ORDER_AUTO_SETTLER, 0 },
     { { N_("Auto Attack"), 0          },     "a", MENU_ORDER_AUTO_ATTACK, 0 },
     { { N_("Auto Explore"), 0         },     "x", MENU_ORDER_AUTO_EXPLORE, 0 },
-    { { N_("Connect/Road"), 0         }, "ctl-R", MENU_ORDER_CONNECT_ROAD, 0 },
-    { { N_("Connect/Rail"), 0         }, "ctl-L", MENU_ORDER_CONNECT_RAIL, 0 },
-    { { N_("Connect/Irrigation"), 0   }, "ctl-I", MENU_ORDER_CONNECT_IRRIGATE, 0 },
+    { { N_("Connect"), 0              },     "C", MENU_ORDER_CONNECT, 0 },
     { { N_("Patrol"), 0               },     "q", MENU_ORDER_PATROL, 0 },
     { { N_("Go to"), 0                },     "g", MENU_ORDER_GOTO, 0 },
-    { { N_("Go/Airlift to City"), 0   },     "L", MENU_ORDER_GOTO_CITY, 0 },
-    { { N_("Return to nearest city"), 0 },    "", MENU_ORDER_RETURN, 0 },
+    { { N_("Go/Airlift to City"), 0   },     "l", MENU_ORDER_GOTO_CITY, 0 },
     { { 0                             },      "", MENU_SEPARATOR_LINE, 0 },
     { { N_("Disband Unit"), 0         },     "D", MENU_ORDER_DISBAND, 0 },
     { { N_("Help Build Wonder"), 0    },     "b", MENU_ORDER_BUILD_WONDER, 0 },
@@ -211,7 +187,6 @@ static struct MenuEntry order_menu_entries[]={
     { { N_("Diplomat/Spy Actions"), 0 },     "d", MENU_ORDER_DIPLOMAT_DLG, 0},
     { { N_("Explode Nuclear"), 0      },     "N", MENU_ORDER_NUKE, 0 },
     { { 0                             },      "", MENU_SEPARATOR_LINE, 0 },
-    { { N_("Select Same Type"), 0     },      "", MENU_ORDER_SELECT_SAME_TYPE, 0 },
     { { N_("Wait"), 0                 },     "w", MENU_ORDER_WAIT, 0 },
     { { N_("Done"), 0                 },   "spc", MENU_ORDER_DONE, 0 },
     { { 0,                            },       0, MENU_END_OF_LIST, 0 }
@@ -220,23 +195,15 @@ static struct MenuEntry order_menu_entries[]={
 static struct MenuEntry reports_menu_entries[]={
     { { N_("Cities"), 0               },    "F1", MENU_REPORT_CITIES, 0 },
     { { N_("Units"), 0                },    "F2", MENU_REPORT_UNITS, 0 },
-    /* TRANS: Nations report action */
-    { { N_("Nations"), 0              },    "F3", MENU_REPORT_PLAYERS, 0 },
+    { { N_("Players"), 0              },    "F3", MENU_REPORT_PLAYERS, 0 },
     { { N_("Economy"), 0              },    "F5", MENU_REPORT_ECONOMY, 0 },
-    /* TRANS: Research report action */
-    { { N_("Research"), 0             },    "F6", MENU_REPORT_SCIENCE, 0 },
+    { { N_("Science"), 0              },    "F6", MENU_REPORT_SCIENCE, 0 },
     { { 0                             },      "", MENU_SEPARATOR_LINE, 0 },
     { { N_("Wonders of the World"), 0 },    "F7", MENU_REPORT_WOW, 0 },
     { { N_("Top Five Cities"), 0      },    "F8", MENU_REPORT_TOP_CITIES, 0 },
     { { N_("Messages"), 0             },   "F10", MENU_REPORT_MESSAGES, 0 },
     { { N_("Demographics"), 0         },   "F11", MENU_REPORT_DEMOGRAPHIC, 0 },
     { { N_("Spaceship"), 0            },   "F12", MENU_REPORT_SPACESHIP, 0 },
-    { { 0,                            },       0, MENU_END_OF_LIST, 0 }
-};
-
-static struct MenuEntry editor_menu_entries[] = {
-    { { N_("Editing Mode"), 0         },      "", MENU_EDITOR_TOGGLE, 0 },
-    { { N_("Tools"), 0                },      "", MENU_EDITOR_TOOLS, 0 },
     { { 0,                            },       0, MENU_END_OF_LIST, 0 }
 };
 
@@ -268,81 +235,47 @@ static void create_menu(enum MenuIndex menu, char *name, struct MenuEntry entrie
 			void (*menucallback)(Widget, XtPointer, XtPointer),
 			Widget parent);
 static void menu_entry_sensitive(enum MenuIndex menu, enum MenuID id, Bool s);
-static void menu_entry_rename(enum MenuIndex menu, enum MenuID id, int var,
-			      const char *terr);
-static char *menu_entry_text(enum MenuIndex menu, int ent, int var,
-			     const char *terr);
-
-static void revolution_menu_callback(Widget w, XtPointer client_data,
-				     XtPointer garbage);
+static void menu_entry_rename(enum MenuIndex menu, enum MenuID id, int var, char *terr);
+static char *menu_entry_text(enum MenuIndex menu, int ent, int var, char *terr);
 
 /****************************************************************
 ...
 *****************************************************************/
 void update_menus(void)
 {
-  if (!can_client_change_view()) {
+  if(get_client_state()!=CLIENT_GAME_RUNNING_STATE) {
     XtSetSensitive(menus[MENU_REPORT]->button, False);
     XtSetSensitive(menus[MENU_ORDER]->button, False);
     XtSetSensitive(menus[MENU_VIEW]->button, False);
-    XtSetSensitive(menus[MENU_GOVERNMENT]->button, False);
+    XtSetSensitive(menus[MENU_KINGDOM]->button, False);
 
     menu_entry_sensitive(MENU_GAME, MENU_GAME_OPTIONS, 0);
     menu_entry_sensitive(MENU_GAME, MENU_GAME_MSG_OPTIONS, 0);
     menu_entry_sensitive(MENU_GAME, MENU_GAME_SAVE_SETTINGS, 0);
-    menu_entry_sensitive(MENU_GAME, MENU_GAME_SERVER_OPTIONS, 1);
+    menu_entry_sensitive(MENU_GAME, MENU_GAME_SERVER_OPTIONS1, 1);
+    menu_entry_sensitive(MENU_GAME, MENU_GAME_SERVER_OPTIONS2, 1);
     menu_entry_sensitive(MENU_GAME, MENU_GAME_OUTPUT_LOG, 1);
     menu_entry_sensitive(MENU_GAME, MENU_GAME_CLEAR_OUTPUT, 1);
-  } else {
+  }
+  else {
+    struct unit *punit;
     int i;
     int any_cities = FALSE;
 
-    players_iterate(pplayer) {
-      if (city_list_size(pplayer->cities)) {
+    punit=get_unit_in_focus();
+
+    for(i=0; i<game.nplayers; i++) {
+      if (city_list_size(&game.players[i].cities)) {
 	any_cities = TRUE;
 	break;
       }
-    } players_iterate_end;
+    }
 
     XtSetSensitive(menus[MENU_REPORT]->button, True);
+    XtSetSensitive(menus[MENU_ORDER]->button, (punit != NULL));
     XtSetSensitive(menus[MENU_VIEW]->button, True);
-    XtSetSensitive(menus[MENU_GOVERNMENT]->button, True);
+    XtSetSensitive(menus[MENU_KINGDOM]->button, True);
 
-    menu_entry_sensitive(MENU_GOVERNMENT, MENU_GOVERNMENT_RATES,
-                         can_client_issue_orders());
-    menu_entry_sensitive(MENU_GOVERNMENT, MENU_GOVERNMENT_WORKLISTS,
-                         can_client_issue_orders());
-    menu_entry_sensitive(MENU_GOVERNMENT, MENU_GOVERNMENT_REVOLUTION,
-                         can_client_issue_orders());
-
-    /* Destroy all government-change entries and build them from scratch.
-     * This could probably be done more efficiently if it were only done
-     * when the client receives the rulesets or disconnects. */
-    for (i = 0; i < num_government_entries; i++) {
-      XtDestroyWidget(government_widgets[i]);
-    }
-    i = 0;
-    government_iterate(pgovernment) {
-      Widget w;
-
-      if (pgovernment == game.government_when_anarchy) {
-	continue;
-      }
-
-      w = XtCreateManagedWidget(government_name_translation(pgovernment),
-				smeBSBObjectClass,
-				menus[MENU_GOVERNMENT]->shell, NULL, 0);
-      XtAddCallback(w, XtNcallback, revolution_menu_callback, pgovernment);
-      XtSetSensitive(w, can_change_to_government(client.conn.playing,
-						 pgovernment));
-
-      government_widgets[i] = w;
-      i++;
-    } government_iterate_end;
-    num_government_entries = i;
-
-    menu_entry_sensitive(MENU_VIEW, MENU_VIEW_SHOW_CITY_GROWTH,
-			 draw_city_names);
     menu_entry_sensitive(MENU_VIEW, MENU_VIEW_SHOW_TERRAIN, 1);
     menu_entry_sensitive(MENU_VIEW, MENU_VIEW_SHOW_COASTLINE, !draw_terrain);
     menu_entry_sensitive(MENU_VIEW, MENU_VIEW_SHOW_ROADS_RAILS, 1);
@@ -359,120 +292,95 @@ void update_menus(void)
     menu_entry_sensitive(MENU_GAME, MENU_GAME_OPTIONS, 1);
     menu_entry_sensitive(MENU_GAME, MENU_GAME_MSG_OPTIONS, 1);
     menu_entry_sensitive(MENU_GAME, MENU_GAME_SAVE_SETTINGS, 1);
-    menu_entry_sensitive(MENU_GAME, MENU_GAME_SERVER_OPTIONS, 1);
+    menu_entry_sensitive(MENU_GAME, MENU_GAME_SERVER_OPTIONS1, 1);
+    menu_entry_sensitive(MENU_GAME, MENU_GAME_SERVER_OPTIONS2, 1);
     menu_entry_sensitive(MENU_GAME, MENU_GAME_OUTPUT_LOG, 1);
     menu_entry_sensitive(MENU_GAME, MENU_GAME_CLEAR_OUTPUT, 1);
     menu_entry_sensitive(MENU_GAME, MENU_GAME_DISCONNECT, 1);
 
-    if (NULL != client.conn.playing) {
-      menu_entry_sensitive(MENU_REPORT, MENU_REPORT_SPACESHIP,
-			   (SSHIP_NONE != client.conn.playing->spaceship.state));
-    } else {
-      menu_entry_sensitive(MENU_REPORT, MENU_REPORT_SPACESHIP, 0);
-    }
+    menu_entry_sensitive(MENU_REPORT, MENU_REPORT_SPACESHIP,
+			 (game.player_ptr->spaceship.state!=SSHIP_NONE));
 
-    if ((get_num_units_in_focus() > 0) && can_client_issue_orders()) {
-      struct terrain *tinfo;
-      struct tile *ptile = NULL;
-      bool can_build;
-      struct unit_list *punits = get_units_in_focus();
+    if(punit) {
+      enum tile_terrain_type  ttype;
+      struct tile_type *      tinfo;
 
-      XtSetSensitive(menus[MENU_ORDER]->button, True);
-
-      menu_entry_sensitive(MENU_ORDER, MENU_ORDER_SELECT_SAME_TYPE, True);
+      ttype = map_get_tile(punit->x, punit->y)->terrain;
+      tinfo = get_tile_type(ttype);
 
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_BUILD_CITY,
-			   can_units_do(punits, can_unit_add_or_build_city));
+			   can_unit_add_or_build_city(punit));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_ROAD, 
-			   can_units_do_activity(punits, ACTIVITY_ROAD)
-			   || can_units_do_activity(punits,
-						    ACTIVITY_RAILROAD));
+			   can_unit_do_activity(punit, ACTIVITY_ROAD) ||
+			   can_unit_do_activity(punit, ACTIVITY_RAILROAD));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_IRRIGATE, 
-			   can_units_do_activity(punits, ACTIVITY_IRRIGATE));
+			   can_unit_do_activity(punit, ACTIVITY_IRRIGATE));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_MINE, 
-			   can_units_do_activity(punits, ACTIVITY_MINE));
+			   can_unit_do_activity(punit, ACTIVITY_MINE));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_TRANSFORM, 
-			   can_units_do_activity(punits, ACTIVITY_TRANSFORM));
+			   can_unit_do_activity(punit, ACTIVITY_TRANSFORM));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_FORTRESS, 
-			   can_units_do_base_gui(punits, BASE_GUI_FORTRESS));
+			   can_unit_do_activity(punit, ACTIVITY_FORTRESS));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_AIRBASE,
-			   can_units_do_base_gui(punits, BASE_GUI_AIRBASE));
+			   can_unit_do_activity(punit, ACTIVITY_AIRBASE));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_POLLUTION, 
-			   can_units_do_activity(punits, ACTIVITY_POLLUTION)
-			   || can_units_do(punits, can_unit_paradrop));
+			   can_unit_do_activity(punit, ACTIVITY_POLLUTION) ||
+			   can_unit_paradrop(punit));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_FALLOUT, 
-			   can_units_do_activity(punits, ACTIVITY_FALLOUT));
+			   can_unit_do_activity(punit, ACTIVITY_FALLOUT));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_FORTIFY, 
-			   can_units_do_activity(punits, ACTIVITY_FORTIFYING));
+			   can_unit_do_activity(punit, ACTIVITY_FORTIFYING));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_SENTRY, 
-			   can_units_do_activity(punits, ACTIVITY_SENTRY));
+			   can_unit_do_activity(punit, ACTIVITY_SENTRY));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_PILLAGE, 
-			   can_units_do_activity(punits, ACTIVITY_PILLAGE));
+			   can_unit_do_activity(punit, ACTIVITY_PILLAGE));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_HOMECITY, 
-			   can_units_do(punits, can_unit_change_homecity));
-      menu_entry_sensitive(MENU_ORDER, MENU_ORDER_UNLOAD_TRANSPORTER, 
-			   units_are_occupied(punits));
-      menu_entry_sensitive(MENU_ORDER, MENU_ORDER_LOAD,
-			   units_can_load(punits));
-      menu_entry_sensitive(MENU_ORDER, MENU_ORDER_UNLOAD,
-			   units_can_unload(punits));
+			   can_unit_change_homecity(punit));
+      menu_entry_sensitive(MENU_ORDER, MENU_ORDER_UNLOAD, 
+			   get_transporter_capacity(punit)>0);
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_WAKEUP_OTHERS, 
-			   units_have_activity_on_tile(punits,
-						       ACTIVITY_SENTRY));
+			   is_unit_activity_on_tile(ACTIVITY_SENTRY,
+				punit->x,punit->y));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_AUTO_SETTLER,
-			   can_units_do(punits, can_unit_do_autosettlers));
-      menu_entry_sensitive(MENU_ORDER, MENU_ORDER_AUTO_ATTACK, false);
-      menu_entry_sensitive(MENU_ORDER, MENU_ORDER_DISBAND,
-			   units_have_flag(punits, F_UNDISBANDABLE, FALSE));
+			   (can_unit_do_auto(punit)
+			    && unit_flag(punit, F_SETTLERS)));
+      menu_entry_sensitive(MENU_ORDER, MENU_ORDER_AUTO_ATTACK, 
+			   (can_unit_do_auto(punit)
+			    && !unit_flag(punit, F_SETTLERS)));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_AUTO_EXPLORE, 
-			   can_units_do_activity(punits, ACTIVITY_EXPLORE));
-      menu_entry_sensitive(MENU_ORDER, MENU_ORDER_CONNECT_ROAD,
-			   can_units_do_connect(punits, ACTIVITY_ROAD));
-      menu_entry_sensitive(MENU_ORDER, MENU_ORDER_CONNECT_RAIL,
-			   can_units_do_connect(punits, ACTIVITY_RAILROAD));
-      menu_entry_sensitive(MENU_ORDER, MENU_ORDER_CONNECT_IRRIGATE,
-			   can_units_do_connect(punits, ACTIVITY_IRRIGATE));
+			   can_unit_do_activity(punit, ACTIVITY_EXPLORE));
+      menu_entry_sensitive(MENU_ORDER, MENU_ORDER_CONNECT, 
+			   can_unit_do_connect(punit, ACTIVITY_IDLE));
+      menu_entry_sensitive(MENU_ORDER, MENU_ORDER_PATROL, 
+			   can_unit_do_activity(punit, ACTIVITY_PATROL));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_GOTO_CITY,
 			   any_cities);
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_BUILD_WONDER,
-			   can_units_do(punits,
-				        unit_can_help_build_wonder_here));
+			   unit_can_help_build_wonder_here(punit));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_TRADEROUTE,
-			   can_units_do(punits,
-				        unit_can_est_traderoute_here));
+			   unit_can_est_traderoute_here(punit));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_DIPLOMAT_DLG,
-			   can_units_do_diplomat_action(punits,
-							DIPLOMAT_ANY_ACTION));
+			   (is_diplomat_unit(punit)
+			    && diplomat_can_do_action(punit, DIPLOMAT_ANY_ACTION,
+						      punit->x, punit->y)));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_NUKE,
-                           units_have_flag(punits, F_NUCLEAR, TRUE));
+                           unit_flag(punit, F_NUCLEAR));
 
-      /* FiXME: very odd, iterating for the first entry! */
-      unit_list_iterate(punits, punit) {
-	ptile = punit->tile;
-	break;
-      } unit_list_iterate_end;
-
-      tinfo = tile_terrain(ptile);
-      can_build = !(tile_city(ptile));
-
-      if (units_have_flag(punits, F_CITIES, TRUE)) {
-	if (!can_build) {
-	  menu_entry_rename(MENU_ORDER, MENU_ORDER_BUILD_CITY,
+      if (unit_flag(punit, F_CITIES) && map_get_city(punit->x, punit->y)) {
+	menu_entry_rename(MENU_ORDER, MENU_ORDER_BUILD_CITY,
 			  TEXT_ORDER_CITY_ADD_TO, NULL);
-	} else {
-	  menu_entry_rename(MENU_ORDER, MENU_ORDER_BUILD_CITY,
+      } else {
+	menu_entry_rename(MENU_ORDER, MENU_ORDER_BUILD_CITY,
 			  TEXT_ORDER_CITY_BUILD, NULL);
-	}
       }
 
-      if ((tinfo->irrigation_result != T_NONE)
-	  && (tinfo->irrigation_result != tinfo)) {
+      if ((tinfo->irrigation_result != T_LAST) && (tinfo->irrigation_result != ttype)) {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_IRRIGATE,
 			  TEXT_ORDER_IRRIGATE_CHANGE_TO,
-			  terrain_name_translation(tinfo->irrigation_result));
+			  (get_tile_type(tinfo->irrigation_result))->terrain_name);
       }
-      else if (tile_has_special(ptile, S_IRRIGATION) &&
-	       player_knows_techs_with_flag(client.conn.playing, TF_FARMLAND)) {
+      else if (map_has_special(punit->x, punit->y, S_IRRIGATION) &&
+	       player_knows_techs_with_flag(game.player_ptr, TF_FARMLAND)) {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_IRRIGATE,
 			  TEXT_ORDER_IRRIGATE_FARMLAND, NULL);
       } else {
@@ -480,27 +388,25 @@ void update_menus(void)
 			  TEXT_ORDER_IRRIGATE_IRRIGATE, NULL);
       }
 
-      if ((tinfo->mining_result != T_NONE)
-	  && (tinfo->mining_result != tinfo)) {
+      if ((tinfo->mining_result != T_LAST) && (tinfo->mining_result != ttype)) {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_MINE,
 			  TEXT_ORDER_MINE_CHANGE_TO,
-			  terrain_name_translation(tinfo->mining_result));
+			  (get_tile_type(tinfo->mining_result))->terrain_name);
       } else {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_MINE,
 			  TEXT_ORDER_MINE_MINE, NULL);
       }
 
-      if ((tinfo->transform_result != T_NONE)
-	  && (tinfo->transform_result != tinfo)) {
+      if ((tinfo->transform_result != T_LAST) && (tinfo->transform_result != ttype)) {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_TRANSFORM,
 			  TEXT_ORDER_TRANSFORM_TRANSFORM_TO,
-			  terrain_name_translation(tinfo->transform_result));
+			  (get_tile_type(tinfo->transform_result))->terrain_name);
       } else {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_TRANSFORM,
 			  TEXT_ORDER_TRANSFORM_TERRAIN, NULL);
       }
 
-      if (units_have_flag(punits, F_PARATROOPERS, TRUE)) {
+      if (unit_flag(punit, F_PARATROOPERS)) {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_POLLUTION,
 			  TEXT_ORDER_POLLUTION_PARADROP, NULL);
       } else {
@@ -508,7 +414,7 @@ void update_menus(void)
 			  TEXT_ORDER_POLLUTION_POLLUTION, NULL);
       }
 
-      if (tile_has_special(ptile, S_ROAD)) {
+      if (map_has_special(punit->x, punit->y, S_ROAD)) {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_ROAD,
 			  TEXT_ORDER_ROAD_RAILROAD, NULL);
       } else {
@@ -537,8 +443,11 @@ static void game_menu_callback(Widget w, XtPointer client_data,
   case MENU_GAME_SAVE_SETTINGS:
     save_options();
     break;
-  case MENU_GAME_SERVER_OPTIONS:
-    popup_settable_options_dialog();
+  case MENU_GAME_SERVER_OPTIONS1:
+    send_report_request(REPORT_SERVER_OPTIONS1);
+    break;
+  case MENU_GAME_SERVER_OPTIONS2:
+    send_report_request(REPORT_SERVER_OPTIONS2);
     break;
   case MENU_GAME_OUTPUT_LOG:
     log_output_window();
@@ -550,7 +459,7 @@ static void game_menu_callback(Widget w, XtPointer client_data,
     disconnect_from_server();
     break;
   case MENU_GAME_QUIT:
-    xaw_ui_exit();
+    exit(EXIT_SUCCESS);
     break;
   }
 }
@@ -558,43 +467,24 @@ static void game_menu_callback(Widget w, XtPointer client_data,
 /****************************************************************
 ...
 *****************************************************************/
-static void government_menu_callback(Widget w, XtPointer client_data,
-				     XtPointer garbage)
+static void kingdom_menu_callback(Widget w, XtPointer client_data,
+				  XtPointer garbage)
 {
   size_t pane_num = (size_t)client_data;
 
   switch(pane_num) {
-  case MENU_GOVERNMENT_FIND_CITY:
+  case MENU_KINGDOM_FIND_CITY:
     popup_find_dialog();
     break;
-  case MENU_GOVERNMENT_RATES:
+  case MENU_KINGDOM_RATES:
     popup_rates_dialog();
     break;
-  case MENU_GOVERNMENT_WORKLISTS:
-    popup_worklists_dialog(client.conn.playing);
+  case MENU_KINGDOM_WORKLISTS:
+    popup_worklists_dialog(game.player_ptr);
     break;
-  case MENU_GOVERNMENT_REVOLUTION:
-    popup_revolution_dialog(NULL);
+  case MENU_KINGDOM_REVOLUTION:
+    popup_revolution_dialog();
     break;
-  }
-}
-
-/****************************************************************************
-  Callback for the government change entries in the government menu.
-****************************************************************************/
-static void revolution_menu_callback(Widget w, XtPointer client_data,
-				     XtPointer garbage)
-{
-  struct government *pgovernment = client_data;
-
-  if (!can_client_issue_orders()) {
-    return;
-  }
-  if (-1 == client.conn.playing->revolution_finishes) {
-    popup_revolution_dialog(pgovernment);
-  } else {
-    /* Player already has a revolution and should just choose a government */
-    set_government_choice(pgovernment);
   }
 }
 
@@ -610,16 +500,8 @@ static void view_menu_callback(Widget w, XtPointer client_data,
   case MENU_VIEW_SHOW_MAP_GRID:
     key_map_grid_toggle();
     break;
-  case MENU_VIEW_SHOW_NATIONAL_BORDERS:
-    key_map_borders_toggle();
-    break;
   case MENU_VIEW_SHOW_CITY_NAMES:
     key_city_names_toggle();
-    menu_entry_sensitive(MENU_VIEW, MENU_VIEW_SHOW_CITY_GROWTH,
-			 draw_city_names);
-    break;
-  case MENU_VIEW_SHOW_CITY_GROWTH:
-    key_city_growth_toggle();
     break;
   case MENU_VIEW_SHOW_CITY_PRODUCTIONS:
     key_city_productions_toggle();
@@ -674,6 +556,7 @@ static void view_menu_callback(Widget w, XtPointer client_data,
 static void orders_menu_callback(Widget w, XtPointer client_data,
 				 XtPointer garbage)
 {
+  struct unit *punit;
   size_t pane_num = (size_t)client_data;
 
   switch(pane_num) {
@@ -699,13 +582,12 @@ static void orders_menu_callback(Widget w, XtPointer client_data,
     key_unit_airbase(); 
     break;
   case MENU_ORDER_POLLUTION: /* or MENU_ORDER_PARADROP */
-    unit_list_iterate(get_units_in_focus(), punit) {
-      if (can_unit_paradrop(punit)) {
-	key_unit_paradrop();
-      } else {
+    if((punit = get_unit_in_focus())) {
+      if (unit_flag(punit, F_SETTLERS))
 	key_unit_pollution();
-      }
-    } unit_list_iterate_end;
+      else
+	key_unit_paradrop();
+    }
     break;
   case MENU_ORDER_FALLOUT:
     key_unit_fallout();
@@ -722,18 +604,8 @@ static void orders_menu_callback(Widget w, XtPointer client_data,
   case MENU_ORDER_HOMECITY:
     key_unit_homecity();
     break;
-  case MENU_ORDER_UNLOAD_TRANSPORTER:
-    key_unit_unload_all();
-    break;
-  case MENU_ORDER_LOAD:
-    unit_list_iterate(get_units_in_focus(), punit) {
-      request_unit_load(punit, NULL);
-    } unit_list_iterate_end;
-    break;
   case MENU_ORDER_UNLOAD:
-    unit_list_iterate(get_units_in_focus(), punit) {
-      request_unit_unload(punit);
-    } unit_list_iterate_end;
+    key_unit_unload();
     break;
   case MENU_ORDER_WAKEUP_OTHERS:
     key_unit_wakeup_others();
@@ -741,17 +613,14 @@ static void orders_menu_callback(Widget w, XtPointer client_data,
   case MENU_ORDER_AUTO_SETTLER:
     key_unit_auto_settle();
     break;
+  case MENU_ORDER_AUTO_ATTACK:
+    key_unit_auto_attack();
+    break;
   case MENU_ORDER_AUTO_EXPLORE:
     key_unit_auto_explore();
     break;
-  case MENU_ORDER_CONNECT_ROAD:
-    key_unit_connect(ACTIVITY_ROAD);
-    break;
-  case MENU_ORDER_CONNECT_RAIL:
-    key_unit_connect(ACTIVITY_RAILROAD);
-    break;
-  case MENU_ORDER_CONNECT_IRRIGATE:
-    key_unit_connect(ACTIVITY_IRRIGATE);
+  case MENU_ORDER_CONNECT:
+    key_unit_connect();
     break;
   case MENU_ORDER_PATROL:
     key_unit_patrol();
@@ -760,13 +629,8 @@ static void orders_menu_callback(Widget w, XtPointer client_data,
     key_unit_goto();
     break;
   case MENU_ORDER_GOTO_CITY:
-    if (get_num_units_in_focus() > 0)
+    if(get_unit_in_focus())
       popup_goto_dialog();
-    break;
-  case MENU_ORDER_RETURN:
-    unit_list_iterate(get_units_in_focus(), punit) {
-      request_unit_return(punit);
-    } unit_list_iterate_end;
     break;
   case MENU_ORDER_DISBAND:
     key_unit_disband();
@@ -782,9 +646,6 @@ static void orders_menu_callback(Widget w, XtPointer client_data,
     break;
   case MENU_ORDER_NUKE:
     key_unit_nuke();
-    break;
-  case MENU_ORDER_SELECT_SAME_TYPE:
-    request_unit_select_same_type(get_units_in_focus());
     break;
   case MENU_ORDER_WAIT:
     key_unit_wait();
@@ -811,7 +672,7 @@ static void reports_menu_callback(Widget w, XtPointer client_data,
     popup_activeunits_report_dialog(0);
     break;
   case MENU_REPORT_PLAYERS:
-    popup_players_dialog(FALSE);
+    popup_players_dialog();
     break;
    case MENU_REPORT_ECONOMY:
     popup_economy_report_dialog(0);
@@ -826,32 +687,13 @@ static void reports_menu_callback(Widget w, XtPointer client_data,
     send_report_request(REPORT_TOP_5_CITIES);
     break;
   case MENU_REPORT_MESSAGES:
-    popup_meswin_dialog(FALSE);
+    popup_meswin_dialog();
     break;
    case MENU_REPORT_DEMOGRAPHIC:
     send_report_request(REPORT_DEMOGRAPHIC);
     break;
    case MENU_REPORT_SPACESHIP:
-    if (NULL != client.conn.playing) {
-      popup_spaceship_dialog(client.conn.playing);
-    }
-    break;
-  }
-}
-
-/****************************************************************
-  Callback for Editor menu entries.
-*****************************************************************/
-static void editor_menu_callback(Widget w, XtPointer client_data,
-				 XtPointer garbage)
-{
-  size_t pane_num = (size_t)client_data;
-
-  switch(pane_num) {
-  case MENU_EDITOR_TOGGLE:
-    key_editor_toggle();
-    break;
-  case MENU_EDITOR_TOOLS:
+    popup_spaceship_dialog(game.player_ptr);
     break;
   }
 }
@@ -927,8 +769,8 @@ void setup_menus(Widget parent_form)
   create_menu(MENU_GAME, "gamemenu", 
 	      game_menu_entries, game_menu_callback, 
 	      parent_form);
-  create_menu(MENU_GOVERNMENT, "governmentmenu", 
-	      government_menu_entries, government_menu_callback, 
+  create_menu(MENU_KINGDOM, "kingdommenu", 
+	      kingdom_menu_entries, kingdom_menu_callback, 
 	      parent_form);
   create_menu(MENU_VIEW, "viewmenu", 
 	      view_menu_entries, view_menu_callback, 
@@ -938,9 +780,6 @@ void setup_menus(Widget parent_form)
 	      parent_form);
   create_menu(MENU_REPORT, "reportsmenu", 
 	      reports_menu_entries, reports_menu_callback, 
-	      parent_form);
-  create_menu(MENU_EDITOR, "editormenu",
-	      editor_menu_entries, editor_menu_callback,
 	      parent_form);
   create_menu(MENU_HELP, "helpmenu", 
 	      help_menu_entries, help_menu_callback, 
@@ -955,7 +794,7 @@ int is_menu_item_active(enum MenuIndex menu, enum MenuID id)
   struct Menu *pmenu = menus[menu];
   int i;
 
-  for (i = 0; pmenu->entries[i].id != MENU_END_OF_LIST; i++) {
+  for(i=0; pmenu->entries[i].id != MENU_END_OF_LIST; ++i) {
     if(pmenu->entries[i].id==id) {
       return XtIsSensitive(pmenu->entries[i].w);
     }
@@ -973,7 +812,7 @@ void create_menu(enum MenuIndex menu, char *name, struct MenuEntry entries[],
 {
   int i, j;
   struct Menu *mymenu;
-  const char *xlt;
+  char *xlt;
   int lstr;
   int litem;
   int lacel;
@@ -985,13 +824,13 @@ void create_menu(enum MenuIndex menu, char *name, struct MenuEntry entries[],
   /* Calculate the longest string in this menu so if the font
    * is fixed then we will know where to put the accelerator key.- Serrada */
   litem=lacel=0;
-  for (i = 0; entries[i].id != MENU_END_OF_LIST; i++) {
+  for(i=0; entries[i].id != MENU_END_OF_LIST; ++i) {
     if (entries[i].id != MENU_SEPARATOR_LINE) {
       lstr=strlen(entries[i].acel);
       if (lacel<lstr) {
 	lacel=lstr;
       }
-      for (j = 0; entries[i].text[j]; j++) {
+      for(j=0; entries[i].text[j]; ++j) {
 	xlt=_(entries[i].text[j]);
 	lstr=strlen(xlt);
 	if (strstr(xlt, "%s")) {
@@ -1018,7 +857,7 @@ void create_menu(enum MenuIndex menu, char *name, struct MenuEntry entries[],
   mymenu->shell=XtCreatePopupShell("menu", simpleMenuWidgetClass, 
 				   mymenu->button, NULL, 0);
 
-  for (i = 0; entries[i].id != MENU_END_OF_LIST; i++) {
+  for(i=0; entries[i].id != MENU_END_OF_LIST; ++i) {
     if (entries[i].id == MENU_SEPARATOR_LINE) {
       entries[i].w = XtCreateManagedWidget(NULL, smeLineObjectClass, 
 					   mymenu->shell, NULL, 0);
@@ -1037,14 +876,13 @@ void create_menu(enum MenuIndex menu, char *name, struct MenuEntry entries[],
 /****************************************************************
 ...
 *****************************************************************/
-void menu_entry_rename(enum MenuIndex menu, enum MenuID id, int var,
-		       const char *terr)
+void menu_entry_rename(enum MenuIndex menu, enum MenuID id, int var, char *terr)
 {
   struct Menu *pmenu = menus[menu];
   int i;
   char *item;
 
-  for (i = 0; pmenu->entries[i].id != MENU_END_OF_LIST; i++) {
+  for(i=0; pmenu->entries[i].id != MENU_END_OF_LIST; ++i) {
     if(pmenu->entries[i].id==id) {
       item=menu_entry_text(menu, i, var, terr);
       XtVaSetValues(pmenu->entries[i].w, XtNlabel, item, NULL);
@@ -1061,7 +899,7 @@ void menu_entry_sensitive(enum MenuIndex menu, enum MenuID id, Bool s)
   struct Menu *pmenu = menus[menu];
   int i;
 
-  for (i = 0; pmenu->entries[i].id != MENU_END_OF_LIST; i++) {
+  for(i=0; pmenu->entries[i].id != MENU_END_OF_LIST; ++i) {
     if(pmenu->entries[i].id==id) {
       XtSetSensitive(pmenu->entries[i].w, (s ? True : False));
       return;
@@ -1072,13 +910,12 @@ void menu_entry_sensitive(enum MenuIndex menu, enum MenuID id, Bool s)
 /****************************************************************
 ...
 *****************************************************************/
-static char *menu_entry_text(enum MenuIndex menu, int ent, int var,
-			     const char *terr)
+char *menu_entry_text(enum MenuIndex menu, int ent, int var, char *terr)
 {
   struct Menu *pmenu = menus[menu];
   static char retbuf[256];
   char tmp[256];
-  const char *xlt;
+  char *xlt;
 
   xlt=_(pmenu->entries[ent].text[var]);
 

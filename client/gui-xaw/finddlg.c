@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -69,7 +68,7 @@ static char *dummy_city_list[]={
 
 static int ncities_total;
 static char **city_name_ptrs;
-static struct tile *original_tile;
+static int original_x, original_y;
 
 /****************************************************************
 popup the dialog 10% inside the main-window 
@@ -79,7 +78,7 @@ void popup_find_dialog(void)
   Position x, y;
   Dimension width, height;
 
-  original_tile = get_center_tile_mapcanvas();
+  get_center_tile_mapcanvas(&original_x, &original_y);
 
   XtSetSensitive(main_form, FALSE);
   
@@ -147,20 +146,18 @@ void popup_find_dialog(void)
 **************************************************************************/
 void update_find_dialog(Widget find_list)
 {
-  int j = 0;
+  int i, j;
 
-  ncities_total = 0;
-  players_iterate(pplayer) {
-    ncities_total += city_list_size(pplayer->cities);
-  } players_iterate_end;
+  for(i=0, ncities_total=0; i<game.nplayers; i++)
+    ncities_total+=city_list_size(&game.players[i].cities);
 
   city_name_ptrs=fc_malloc(ncities_total*sizeof(char*));
   
-  players_iterate(pplayer) {
-    city_list_iterate(pplayer->cities, pcity) {
-      *(city_name_ptrs+j++)=mystrdup(city_name(pcity));
-    } city_list_iterate_end;
-  } players_iterate_end;
+  for(i=0, j=0; i<game.nplayers; i++) {
+    city_list_iterate(game.players[i].cities, pcity) 
+      *(city_name_ptrs+j++)=mystrdup(pcity->name);
+    city_list_iterate_end;
+  }
   
   if(ncities_total) {
     qsort(city_name_ptrs, ncities_total, sizeof(char *), compare_strings_ptrs);
@@ -197,7 +194,7 @@ void find_center_command_callback(Widget w, XtPointer client_data,
 
   if(ret->list_index!=XAW_LIST_NONE)
     if((pcity=game_find_city_by_name(ret->string)))
-      center_tile_mapcanvas(pcity->tile);
+      center_tile_mapcanvas(pcity->x, pcity->y);
   
   popdown_find_dialog();
 }
@@ -208,7 +205,7 @@ void find_center_command_callback(Widget w, XtPointer client_data,
 void find_cancel_command_callback(Widget w, XtPointer client_data, 
 				  XtPointer call_data)
 {
-  center_tile_mapcanvas(original_tile);
+  center_tile_mapcanvas(original_x, original_y);
   popdown_find_dialog();
 }
 
@@ -224,5 +221,5 @@ void find_list_callback(Widget w, XtPointer client_data, XtPointer call_data)
 
   if(ret->list_index!=XAW_LIST_NONE)
     if((pcity=game_find_city_by_name(ret->string)))
-      center_tile_mapcanvas(pcity->tile);
+      center_tile_mapcanvas(pcity->x, pcity->y);
 }

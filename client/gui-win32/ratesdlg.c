@@ -10,17 +10,19 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/ 
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
-
+ 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>     
 #include <windows.h>
 #include <windowsx.h>
 
+
 #include "fcintl.h"
+#include "game.h"
 #include "government.h"
 #include "packets.h"
 #include "player.h"
@@ -28,18 +30,16 @@
 #include "support.h"
 #include "gui_main.h" 
 
-#include "civclient.h"
 #include "gui_stuff.h"
 #include "mapview.h"
 
 #include "ratesdlg.h"
 
+
+extern struct connection aconnection;    
 extern HINSTANCE freecivhinst;
-
 static HWND ratesdlg;
-
-int rates_tax_value, rates_lux_value, rates_sci_value;
-
+int rates_tax_value, rates_lux_value, rates_sci_value;     
 
 /**************************************************************************
 
@@ -58,7 +58,7 @@ static void rates_set_values(int tax, int no_tax_scroll,
   lux_lock=IsDlgButtonChecked(ratesdlg,ID_RATES_LUXURYLOCK);
   sci_lock=IsDlgButtonChecked(ratesdlg,ID_RATES_SCIENCELOCK);
   
-  maxrate = get_player_bonus(client.conn.playing, EFT_MAX_RATES);
+  maxrate=get_government_max_rate(game.player_ptr->government);
   /* This's quite a simple-minded "double check".. */     
   tax=MIN(tax, maxrate);
   lux=MIN(lux, maxrate);
@@ -165,7 +165,7 @@ static void handle_hscroll(HWND hWnd,HWND hWndCtl,UINT code,int pos)
       return;
     }
   id=GetDlgCtrlID(hWndCtl);
-  pos = min(10, max(0, PosCur));
+  pos=PosCur;
   if (id==ID_RATES_TAX)
     {
       int tax_value;
@@ -264,8 +264,14 @@ static LONG CALLBACK ratesdlg_proc(HWND hWnd,
 	  break;
 	case IDOK:
 	  DestroyWindow(hWnd);
-	  dsend_packet_player_rates(&client.conn, rates_tax_value,
-				    rates_lux_value, rates_sci_value);
+	  { 
+	    struct packet_player_request packet;                
+	    packet.tax=rates_tax_value;
+	    packet.science=rates_sci_value;
+	    packet.luxury=rates_lux_value;
+	    send_packet_player_request(&aconnection, &packet,
+				       PACKET_PLAYER_RATES);  
+	  }
 	  break;
 	}
       break;
@@ -309,36 +315,36 @@ popup_rates_dialog(void)
     fcwin_box_add_groupbox(vbox,_("Tax"),hbox,0,FALSE,FALSE,10);
     ratesdlg_add_scroll(hbox,ID_RATES_TAX);
     fcwin_box_add_static(hbox,"100%",0,SS_RIGHT,FALSE,FALSE,20);
-    fcwin_box_add_checkbox(hbox,_("Lock"),ID_RATES_TAXLOCK,0,FALSE,FALSE,20);
+    fcwin_box_add_checkbox(hbox,"Lock",ID_RATES_TAXLOCK,0,FALSE,FALSE,20);
     
     hbox=fcwin_hbox_new(ratesdlg,FALSE);
     fcwin_box_add_groupbox(vbox,_("Luxury"),hbox,0,FALSE,FALSE,10);  
     ratesdlg_add_scroll(hbox,ID_RATES_LUXURY);
     fcwin_box_add_static(hbox,"100%",0,SS_RIGHT,FALSE,FALSE,20);
-    fcwin_box_add_checkbox(hbox,_("Lock"),ID_RATES_LUXURYLOCK,0,FALSE,FALSE,20);
+    fcwin_box_add_checkbox(hbox,"Lock",ID_RATES_LUXURYLOCK,0,FALSE,FALSE,20);
 
     hbox=fcwin_hbox_new(ratesdlg,FALSE);
     fcwin_box_add_groupbox(vbox,_("Science"),hbox,0,FALSE,FALSE,10);
     ratesdlg_add_scroll(hbox,ID_RATES_SCIENCE);
     fcwin_box_add_static(hbox,"100%",0,SS_RIGHT,FALSE,FALSE,20);
-    fcwin_box_add_checkbox(hbox,_("Lock"),ID_RATES_SCIENCELOCK,0,FALSE,FALSE,20);
+    fcwin_box_add_checkbox(hbox,"Lock",ID_RATES_SCIENCELOCK,0,FALSE,FALSE,20);
     hbox=fcwin_hbox_new(ratesdlg,TRUE);
 
     fcwin_box_add_button(hbox,_("Ok"),IDOK,0,TRUE,TRUE,20);
     fcwin_box_add_button(hbox,_("Cancel"),IDCANCEL,0,TRUE,TRUE,20);
     fcwin_box_add_box(vbox,hbox,TRUE,TRUE,10);
-
+  
     my_snprintf(buf, sizeof(buf), _("%s max rate: %d%%"),
-		government_name_for_player(client.conn.playing),
-		get_player_bonus(client.conn.playing, EFT_MAX_RATES));
+		get_government_name(game.player_ptr->government),
+		get_government_max_rate(game.player_ptr->government)); 
     SetWindowText(GetDlgItem(ratesdlg,ID_RATES_MAX),buf);
     ScrollBar_SetRange(GetDlgItem(ratesdlg,ID_RATES_TAX),0,10,TRUE);
     ScrollBar_SetRange(GetDlgItem(ratesdlg,ID_RATES_LUXURY),0,10,TRUE);
     ScrollBar_SetRange(GetDlgItem(ratesdlg,ID_RATES_SCIENCE),0,10,TRUE);
-    rates_set_values( client.conn.playing->economic.tax, 0,
-		      client.conn.playing->economic.luxury, 0,
-		      client.conn.playing->economic.science, 0 );
-
+    rates_set_values( game.player_ptr->economic.tax, 0,
+		      game.player_ptr->economic.luxury, 0,
+		      game.player_ptr->economic.science, 0 );          
+    
     fcwin_set_box(ratesdlg,vbox);
     ShowWindow(ratesdlg,SW_SHOWNORMAL);
   }

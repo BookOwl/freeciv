@@ -2,7 +2,7 @@
 [spec]
 
 ; Format and options of this spec file:
-options = "+spec3"
+options = "+spec2"
 
 [info]
 
@@ -27,7 +27,6 @@ tiles = { "row", "column", "tag"
   0, 18, "unit.auto_attack",
          "unit.auto_settler"
   0, 19, "unit.stack"
-  1, 17, "unit.loaded"
   1, 18, "unit.connect"
   1, 19, "unit.auto_explore"
   2, 12, "unit.transform"
@@ -120,8 +119,6 @@ tiles = { "row", "column", "tag"
 ; These should probably be handled differently and have
 ; a different size...
 
-  7, 12, "upkeep.gold"
-  7, 13, "upkeep.gold2"
   7, 15, "upkeep.food"
   7, 16, "upkeep.food2"
   7, 17, "upkeep.unhappy"

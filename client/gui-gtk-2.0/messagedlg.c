@@ -30,12 +30,12 @@
 #define NUM_LISTS 1
 
 /*************************************************************************/
-static struct gui_dialog *shell;
+static GtkWidget *shell;
 static GtkListStore *model[NUM_LISTS];
 
-static void create_messageopt_dialog(void);
-static void messageopt_response(struct gui_dialog *dlg, int response,
-                                gpointer data);
+static GtkWidget *create_messageopt_dialog(void);
+static void messageopt_command_callback(GtkWidget *w, gint response_id);
+static void messageopt_destroy_callback(GtkWidget *w, gpointer data);
 static void item_toggled(GtkCellRendererToggle *cell,
 			 gchar *spath, gpointer data);
 
@@ -45,26 +45,36 @@ static void item_toggled(GtkCellRendererToggle *cell,
 void popup_messageopt_dialog(void)
 {
   if (!shell)
-    create_messageopt_dialog();
+    shell = create_messageopt_dialog();
 
-  gui_dialog_raise(shell);
+  gtk_window_present(GTK_WINDOW(shell));
 }
 
 /**************************************************************************
 ...
 **************************************************************************/
-static void create_messageopt_dialog(void)
+static GtkWidget *create_messageopt_dialog(void)
 {
-  GtkWidget *form, *explanation;
+  GtkWidget *shell, *form, *explanation;
   int n, i, j;
   
-  gui_dialog_new(&shell, GTK_NOTEBOOK(top_notebook), NULL);
-  gui_dialog_set_title(shell, _("Message Options"));
-
-  gui_dialog_set_default_size(shell, -1, 450);
-
-  gui_dialog_add_button(shell, GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL);
-  gui_dialog_add_button(shell, GTK_STOCK_OK, GTK_RESPONSE_OK);
+  shell = gtk_dialog_new_with_buttons(_("Message Options"),
+  	NULL,
+	0,
+	GTK_STOCK_CANCEL,
+	GTK_RESPONSE_CANCEL,
+	GTK_STOCK_OK,
+	GTK_RESPONSE_OK,
+	NULL);
+  if (dialogs_on_top) {
+    gtk_window_set_transient_for(GTK_WINDOW(shell),
+				 GTK_WINDOW(toplevel));
+  }
+  gtk_window_set_type_hint(GTK_WINDOW(shell),
+			   GDK_WINDOW_TYPE_HINT_NORMAL);
+  gtk_dialog_set_default_response(GTK_DIALOG(shell), GTK_RESPONSE_OK);
+  gtk_window_set_position(GTK_WINDOW(shell), GTK_WIN_POS_MOUSE);
+  gtk_widget_set_name(shell, "Freeciv");
 
   explanation = gtk_label_new(NULL);
   gtk_label_set_markup(GTK_LABEL(explanation),
@@ -72,19 +82,20 @@ static void create_messageopt_dialog(void)
       "<b>Out</b>put window ; "
       "<b>Mes</b>sages window ; "
       "<b>Pop</b>up individual window"));
-  gtk_widget_set_name(explanation, "comment_label");
-  gtk_box_pack_start(GTK_BOX(shell->vbox), explanation, FALSE, FALSE, 4);
+  gtk_widget_set_name(explanation, "comment label");
+  gtk_box_pack_start(GTK_BOX(GTK_DIALOG(shell)->vbox), explanation,
+	FALSE, FALSE, 0);
   gtk_widget_show(explanation);	
 
-  form = gtk_vbox_new(FALSE, 0);
-  gtk_box_pack_start(GTK_BOX(shell->vbox), form, TRUE, TRUE, 0);
+  form = gtk_hbox_new(FALSE, 0);
+  gtk_box_pack_start(GTK_BOX(GTK_DIALOG(shell)->vbox), form, TRUE, TRUE, 5);
 
   for (n=0; n<NUM_LISTS; n++) {
     model[n] = gtk_list_store_new(5,
      G_TYPE_BOOLEAN, G_TYPE_BOOLEAN, G_TYPE_BOOLEAN, G_TYPE_STRING, G_TYPE_INT);
   }
 
-  sorted_event_iterate(ev) {
+  for (i=0; i<E_LAST; i++)  {
     GtkTreeIter it;
     GValue value = { 0, };
 
@@ -93,31 +104,29 @@ static void create_messageopt_dialog(void)
     gtk_list_store_append(model[n], &it);
 
     g_value_init(&value, G_TYPE_STRING);
-    g_value_set_static_string(&value, get_event_message_text(ev));
+    g_value_set_static_string(&value, get_message_text(sorted_events[i]));
     gtk_list_store_set_value(model[n], &it, 3, &value);
     g_value_unset(&value);
 
-    gtk_list_store_set(model[n], &it, 4, ev, -1);
+    gtk_list_store_set(model[n], &it, 4, sorted_events[i], -1);
 
     for (j=0; j<NUM_MW; j++) {
-      gtk_list_store_set(model[n], &it, j, messages_where[ev] & (1<<j), -1);
+      gtk_list_store_set(model[n], &it,
+        j, messages_where[sorted_events[i]] & (1<<j), -1);
     }
-  } sorted_event_iterate_end;
+  }
 
   for (n=0; n<NUM_LISTS; n++) {
     GtkWidget *view, *sw;
     GtkCellRenderer *renderer;
     gint col;
-    GtkTreeViewColumn *column;
 
     view = gtk_tree_view_new_with_model(GTK_TREE_MODEL(model[n]));
     g_object_unref(model[n]);
 
     renderer = gtk_cell_renderer_text_new();
-    column = gtk_tree_view_column_new_with_attributes(_("Event"),
-	renderer, "text", 3, NULL);
-    gtk_tree_view_append_column(GTK_TREE_VIEW(view), column);
-    gtk_tree_view_column_set_expand(column, TRUE);
+    col = gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(view),
+	-1, _("Event"), renderer, "text", 3, NULL);
 
     renderer = gtk_cell_renderer_toggle_new();
     g_object_set_data(G_OBJECT(renderer), "column", GINT_TO_POINTER(0));
@@ -146,23 +155,36 @@ static void create_messageopt_dialog(void)
     gtk_container_add(GTK_CONTAINER(sw), view);
 
     gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sw),
-				   GTK_POLICY_AUTOMATIC, GTK_POLICY_ALWAYS);
+				   GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+    gtk_widget_set_size_request(sw, -1, 425);
     gtk_box_pack_start(GTK_BOX(form), sw, TRUE, TRUE, 0);
 
     gtk_tree_view_focus(GTK_TREE_VIEW(view));
   }
 
-  gui_dialog_response_set_callback(shell, messageopt_response);
-  gui_dialog_show_all(shell);
+  g_signal_connect(shell, "response",
+		   G_CALLBACK(messageopt_command_callback), NULL);
+  g_signal_connect(shell, "destroy",
+		   G_CALLBACK(messageopt_destroy_callback), NULL);
+  gtk_widget_show_all(form);
+
+  return shell;
 }
 
 /**************************************************************************
 ...
 **************************************************************************/
-static void messageopt_response(struct gui_dialog *dlg, int response,
-                                gpointer data)
+static void messageopt_destroy_callback(GtkWidget *w, gpointer data)
 {
-  if (response == GTK_RESPONSE_OK) {
+  shell = NULL;
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+static void messageopt_command_callback(GtkWidget *w, gint response_id)
+{
+  if (response_id == GTK_RESPONSE_OK) {
     ITree it;
     gint n, j, i;
     gboolean toggle;
@@ -184,7 +206,7 @@ static void messageopt_response(struct gui_dialog *dlg, int response,
       }
     }
   }
-  gui_dialog_destroy(dlg);
+  gtk_widget_destroy(shell);
 }
 
 /**************************************************************************

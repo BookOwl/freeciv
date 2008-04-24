@@ -10,38 +10,36 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
-#include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-#include "base.h"
+#include "assert.h"
 #include "capstr.h"
 #include "city.h"
-#include "cm.h"
 #include "connection.h"
 #include "fcintl.h"
 #include "government.h"
 #include "idex.h"
-#include "ioz.h"
 #include "log.h"
 #include "map.h"
 #include "mem.h"
 #include "nation.h"
-#include "packets.h"
 #include "player.h"
 #include "shared.h"
 #include "spaceship.h"
-#include "specialist.h"
 #include "support.h"
 #include "tech.h"
 #include "unit.h"
-#include "unitlist.h"
 
 #include "game.h"
 
+void dealloc_id(int id);
+extern bool is_server;
 struct civ_game game;
 
 /*
@@ -68,37 +66,473 @@ struct player_score {
 };
 */
 
-bool am_i_server = FALSE;
+#define USER_AREA_MULT (1000)
 
+struct claim_cell {
+  int when;
+  int whom;
+  int know;
+  int cities;
+};
+
+struct claim_map {
+  struct claim_cell *claims;
+  int *player_landarea;
+  int *player_owndarea;
+  struct map_position *edges;
+};
 
 /**************************************************************************
-  Is program type server?
+Land Area Debug...
 **************************************************************************/
-bool is_server(void)
+
+#define LAND_AREA_DEBUG 0
+
+#if LAND_AREA_DEBUG >= 2
+
+static char when_char (int when)
 {
-  return am_i_server;
+  static char list[] =
+  {
+    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
+    'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T',
+    'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd',
+    'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
+    'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x',
+    'y', 'z'
+  };
+
+  return (((when >= 0) && (when < sizeof (list))) ? list[when] : '?');
+}
+
+/* 
+ * Writes the map_char_expr expression for each position on the map.
+ * map_char_expr is provided with the variables x,y to evaluate the
+ * position. The 'type' argument is used for formatting by printf; for
+ * instance it should be "%c" for characters.
+ */
+#define WRITE_MAP_DATA(type, map_char_expr)        \
+{                                                  \
+  int x, y;                                        \
+  for (x = 0; x < map.xsize; x++) {                \
+    printf("%d", x % 10);                          \
+  }                                                \
+  putchar('\n');                                   \
+  for (y = 0; y < map.ysize; y++) {                \
+    printf("%d ", y % 10);                         \
+    for (x = 0; x < map.xsize; x++) {              \
+      if (regular_map_pos_is_normal(x, y)) {       \
+	printf(type, map_char_expr);               \
+      } else {                                     \
+	putchar(' ');                              \
+      }                                            \
+    }                                              \
+    printf(" %d\n", y % 10);                        \
+  }                                                \
 }
 
 /**************************************************************************
-  Set program type to server.
+...
 **************************************************************************/
-void i_am_server(void)
+static void print_landarea_map(struct claim_map *pcmap, int turn)
 {
-  am_i_server = TRUE;
+  int p;
+
+  if (turn == 0) {
+    putchar ('\n');
+  }
+
+  if (turn == 0)
+    {
+      printf ("Player Info...\n");
+
+      for (p = 0; p < game.nplayers; p++)
+	{
+	  printf (".know (%d)\n  ", p);
+	  WRITE_MAP_DATA("%c",
+			 TEST_BIT(pcmap->claims[map_inx(x, y)].know,
+				  p) ? 'X' : '-');
+	  printf (".cities (%d)\n  ", p);
+	  WRITE_MAP_DATA("%c",
+			 TEST_BIT(pcmap->claims[map_inx(x, y)].cities,
+				  p) ? 'O' : '-');
+	}
+    }
+
+  printf ("Turn %d (%c)...\n", turn, when_char (turn));
+
+  printf (".whom\n  ");
+  WRITE_MAP_DATA((pcmap->claims[map_inx(x, y)].whom ==
+		  32) ? "%c" : "%X",
+		 (pcmap->claims[map_inx(x, y)].whom ==
+		  32) ? '-' : pcmap->claims[map_inx(x, y)].whom);
+
+  printf (".when\n  ");
+  WRITE_MAP_DATA("%c", when_char(pcmap->claims[map_inx(x, y)].when));
+}
+
+#endif
+
+/**************************************************************************
+Allocates, fills and returns a land area claim map.
+Call free_landarea_map(&cmap) to free allocated memory.
+**************************************************************************/
+
+static int no_owner = MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS;
+
+/**************************************************************************
+allocate and clear claim map; determine city radii
+**************************************************************************/
+static void build_landarea_map_new(struct claim_map *pcmap)
+{
+  int nbytes;
+
+  nbytes = map.xsize * map.ysize * sizeof(struct claim_cell);
+  pcmap->claims = (struct claim_cell *)fc_malloc(nbytes);
+  memset (pcmap->claims, 0, nbytes);
+
+  nbytes  = game.nplayers * sizeof(int);
+  pcmap->player_landarea = (int *)fc_malloc(nbytes);
+  memset (pcmap->player_landarea, 0, nbytes);
+
+  nbytes  = game.nplayers * sizeof(int);
+  pcmap->player_owndarea = (int *)fc_malloc(nbytes);
+  memset (pcmap->player_owndarea, 0, nbytes);
+
+  nbytes = 2 * map.xsize * map.ysize * sizeof(struct map_position);
+  pcmap->edges = (struct map_position *)fc_malloc(nbytes);
+
+  players_iterate(pplayer) {
+    city_list_iterate(pplayer->cities, pcity) {
+      map_city_radius_iterate(pcity->x, pcity->y, x, y) {
+	int i = map_inx(x, y);
+	pcmap->claims[i].cities |= (1u << pcity->owner);
+      } map_city_radius_iterate_end;
+    } city_list_iterate_end;
+  } players_iterate_end;
 }
 
 /**************************************************************************
-  Set program type to client.
+0th turn: install starting points, counting their tiles
 **************************************************************************/
-void i_am_client(void)
+static void build_landarea_map_turn_0(struct claim_map *pcmap)
 {
-  am_i_server = FALSE;
+  int turn;
+  struct map_position *nextedge;
+  struct claim_cell *pclaim;
+  struct tile *ptile;
+  int owner;
+
+  turn = 0;
+  nextedge = pcmap->edges;
+
+  whole_map_iterate(x, y) {
+    int i = map_inx(x, y);
+    pclaim = &(pcmap->claims[i]);
+    ptile = &(map.tiles[i]);
+
+    if (ptile->terrain == T_OCEAN) {
+      /* pclaim->when = 0; */
+      pclaim->whom = no_owner;
+      /* pclaim->know = 0; */
+    } else if (ptile->city) {
+      owner = ptile->city->owner;
+      pclaim->when = turn + 1;
+      pclaim->whom = owner;
+      nextedge->x = x;
+      nextedge->y = y;
+      nextedge++;
+      (pcmap->player_landarea[owner])++;
+      (pcmap->player_owndarea[owner])++;
+      pclaim->know = ptile->known;
+    } else if (ptile->worked) {
+      owner = ptile->worked->owner;
+      pclaim->when = turn + 1;
+      pclaim->whom = owner;
+      nextedge->x = x;
+      nextedge->y = y;
+      nextedge++;
+      (pcmap->player_landarea[owner])++;
+      (pcmap->player_owndarea[owner])++;
+      pclaim->know = ptile->known;
+    } else if (unit_list_size (&(ptile->units)) > 0) {
+      owner = (unit_list_get (&(ptile->units), 0))->owner;
+      pclaim->when = turn + 1;
+      pclaim->whom = owner;
+      nextedge->x = x;
+      nextedge->y = y;
+      nextedge++;
+      (pcmap->player_landarea[owner])++;
+      if (TEST_BIT(pclaim->cities, owner)) {
+	(pcmap->player_owndarea[owner])++;
+      }
+      pclaim->know = ptile->known;
+    } else {
+      /* pclaim->when = 0; */
+      pclaim->whom = no_owner;
+      pclaim->know = ptile->known;
+    }
+  } whole_map_iterate_end;
+
+  nextedge->x = -1;
+
+#if LAND_AREA_DEBUG >= 2
+  print_landarea_map (pcmap, turn);
+#endif
+}
+
+
+/**************************************************************************
+expand outwards evenly from each starting point, counting tiles
+**************************************************************************/
+static void build_landarea_map_expand(struct claim_map *pcmap)
+{
+  int x, y, i, j;
+  struct map_position *midedge;
+  int turn;
+  struct map_position *thisedge;
+  struct map_position *nextedge;
+  int accum;
+  struct claim_cell *pclaim;
+  int owner, other;
+
+  midedge = &(pcmap->edges[map.xsize * map.ysize]);
+
+  for (accum = 1, turn = 1; accum > 0; turn++) {
+    thisedge = ((turn & 0x1) == 1) ? pcmap->edges : midedge;
+    nextedge = ((turn & 0x1) == 1) ? midedge : pcmap->edges;
+
+    for (accum = 0; thisedge->x >= 0; thisedge++) {
+      x = thisedge->x;
+      y = thisedge->y;
+      i = map_inx (x, y);
+      owner = pcmap->claims[i].whom;
+
+      if (owner != no_owner) {
+	adjc_iterate(x, y, mx, my) {
+	  j = map_inx(mx, my);
+	  pclaim = &(pcmap->claims[j]);
+
+	  if (TEST_BIT(pclaim->know, owner)) {
+	    if (pclaim->when == 0) {
+	      pclaim->when = turn + 1;
+	      pclaim->whom = owner;
+	      nextedge->x = mx;
+	      nextedge->y = my;
+	      nextedge++;
+	      (pcmap->player_landarea[owner])++;
+	      if (TEST_BIT(pclaim->cities, owner)) {
+		(pcmap->player_owndarea[owner])++;
+	      }
+	      accum++;
+	    } else if ((pclaim->when == (turn + 1)) &&
+		       (pclaim->whom != no_owner) &&
+		       (pclaim->whom != owner)) {
+	      other = pclaim->whom;
+	      if (TEST_BIT(pclaim->cities, other)) {
+		(pcmap->player_owndarea[other])--;
+	      }
+	      (pcmap->player_landarea[other])--;
+	      pclaim->whom = no_owner;
+	      accum--;
+	    }
+	  }
+	} adjc_iterate_end;
+      }
+    }
+
+    nextedge->x = -1;
+
+#if LAND_AREA_DEBUG >= 2
+    print_landarea_map (pcmap, turn);
+#endif
+  }
+}
+
+/**************************************************************************
+this just calls the three worker routines
+**************************************************************************/
+static void build_landarea_map(struct claim_map *pcmap)
+{
+  build_landarea_map_new (pcmap);
+  build_landarea_map_turn_0 (pcmap);
+  build_landarea_map_expand (pcmap);
+}
+
+/**************************************************************************
+Frees and NULLs an allocated claim map.
+**************************************************************************/
+static void free_landarea_map(struct claim_map *pcmap)
+{
+  if (pcmap) {
+    if (pcmap->claims) {
+      free (pcmap->claims);
+      pcmap->claims = NULL;
+    }
+    if (pcmap->player_landarea) {
+      free (pcmap->player_landarea);
+      pcmap->player_landarea = NULL;
+    }
+    if (pcmap->player_owndarea) {
+      free (pcmap->player_owndarea);
+      pcmap->player_owndarea = NULL;
+    }
+    if (pcmap->edges) {
+      free (pcmap->edges);
+      pcmap->edges = NULL;
+    }
+  }
+}
+
+/**************************************************************************
+Returns the given player's land and settled areas from a claim map.
+**************************************************************************/
+static void get_player_landarea(struct claim_map *pcmap, struct player *pplayer,
+				 int *return_landarea, int *return_settledarea)
+{
+  if (pcmap && pplayer) {
+#if LAND_AREA_DEBUG >= 1
+    printf ("%-14s", pplayer->name);
+#endif
+    if (return_landarea && pcmap->player_landarea) {
+      *return_landarea =
+	USER_AREA_MULT * pcmap->player_landarea[pplayer->player_no];
+#if LAND_AREA_DEBUG >= 1
+      printf (" l=%d", *return_landarea / USER_AREA_MULT);
+#endif
+    }
+    if (return_settledarea && pcmap->player_owndarea) {
+      *return_settledarea =
+	USER_AREA_MULT * pcmap->player_owndarea[pplayer->player_no];
+#if LAND_AREA_DEBUG >= 1
+      printf (" s=%d", *return_settledarea / USER_AREA_MULT);
+#endif
+    }
+#if LAND_AREA_DEBUG >= 1
+    printf ("\n");
+#endif
+  }
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+int total_player_citizens(struct player *pplayer)
+{
+  return (pplayer->score.happy
+	  +pplayer->score.content
+	  +pplayer->score.unhappy
+	  +pplayer->score.angry
+	  +pplayer->score.scientists
+	  +pplayer->score.elvis
+	  +pplayer->score.taxmen);
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+int civ_score(struct player *pplayer)
+{
+  int i;
+  struct city *pcity;
+  int landarea, settledarea;
+  static struct claim_map cmap = { NULL, NULL, NULL,NULL };
+
+  pplayer->score.happy=0;                       /* done */
+  pplayer->score.content=0;                     /* done */   
+  pplayer->score.unhappy=0;                     /* done */
+  pplayer->score.angry=0;                       /* done */
+  pplayer->score.taxmen=0;                      /* done */
+  pplayer->score.scientists=0;                  /* done */
+  pplayer->score.elvis=0;                       /* done */ 
+  pplayer->score.wonders=0;                     /* done */
+  pplayer->score.techs=0;                       /* done */
+  pplayer->score.techout=0;                     /* done */
+  pplayer->score.landarea=0;
+  pplayer->score.settledarea=0;
+  pplayer->score.population=0;
+  pplayer->score.cities=0;                      /* done */
+  pplayer->score.units=0;                       /* done */
+  pplayer->score.pollution=0;                   /* done */
+  pplayer->score.bnp=0;                         /* done */
+  pplayer->score.mfg=0;                         /* done */
+  pplayer->score.literacy=0;
+  pplayer->score.spaceship=0;
+
+  if (is_barbarian(pplayer)) {
+    if (pplayer->player_no == (game.nplayers - 1)) {
+      free_landarea_map(&cmap);
+    }
+    return 0;
+  }
+
+  city_list_iterate(pplayer->cities, pcity) {
+    pplayer->score.happy+=pcity->ppl_happy[4];
+    pplayer->score.content+=pcity->ppl_content[4];
+    pplayer->score.unhappy+=pcity->ppl_unhappy[4];
+    pplayer->score.angry+=pcity->ppl_angry[4];
+    pplayer->score.taxmen+=pcity->ppl_taxman;
+    pplayer->score.scientists+=pcity->ppl_scientist;
+    pplayer->score.elvis+=pcity->ppl_elvis;
+    pplayer->score.population+=city_population(pcity);
+    pplayer->score.cities++;
+    pplayer->score.pollution+=pcity->pollution;
+    pplayer->score.techout+=pcity->science_total;
+    pplayer->score.bnp+=pcity->trade_prod;
+    pplayer->score.mfg+=pcity->shield_surplus;
+    if (city_got_building(pcity, B_UNIVERSITY)) 
+      pplayer->score.literacy+=city_population(pcity);
+    else if (city_got_building(pcity,B_LIBRARY))
+      pplayer->score.literacy+=(city_population(pcity)/2);
+  }
+  city_list_iterate_end;
+
+  if (pplayer->player_no == 0) {
+    free_landarea_map(&cmap);
+    build_landarea_map(&cmap);
+  }
+  get_player_landarea(&cmap, pplayer, &landarea, &settledarea);
+  pplayer->score.landarea=landarea;
+  pplayer->score.settledarea=settledarea;
+  if (pplayer->player_no == (game.nplayers - 1)) {
+    free_landarea_map(&cmap);
+  }
+
+  for (i=0;i<game.num_tech_types;i++) 
+    if (get_invention(pplayer, i)==TECH_KNOWN) 
+      pplayer->score.techs++;
+  pplayer->score.techs+=(((pplayer->future_tech)*5)/2);
+  
+  unit_list_iterate(pplayer->units, punit) 
+    if (is_military_unit(punit)) pplayer->score.units++;
+  unit_list_iterate_end;
+
+  impr_type_iterate(i) {
+    if (is_wonder(i) && (pcity=find_city_by_id(game.global_wonders[i])) && 
+	player_owns_city(pplayer, pcity))
+      pplayer->score.wonders++;
+  } impr_type_iterate_end;
+
+  /* How much should a spaceship be worth??
+     This gives 100 points per 10,000 citizens.  --dwp
+  */
+  if (pplayer->spaceship.state == SSHIP_ARRIVED) {
+    pplayer->score.spaceship += (int)(100 * pplayer->spaceship.habitation
+				      * pplayer->spaceship.success_rate);
+  }
+
+  return (total_player_citizens(pplayer)
+	  +pplayer->score.happy
+	  +pplayer->score.techs*2
+	  +pplayer->score.wonders*5
+	  +pplayer->score.spaceship);
 }
 
 /**************************************************************************
 Count the # of thousand citizen in a civilisation.
 **************************************************************************/
-int civ_population(const struct player *pplayer)
+int civ_population(struct player *pplayer)
 {
   int ppl=0;
   city_list_iterate(pplayer->cities, pcity)
@@ -114,7 +548,7 @@ int civ_population(const struct player *pplayer)
 struct city *game_find_city_by_name(const char *name)
 {
   players_iterate(pplayer) {
-    struct city *pcity = city_list_find_name(pplayer->cities, name);
+    struct city *pcity = city_list_find_name(&pplayer->cities, name);
 
     if (pcity) {
       return pcity;
@@ -130,7 +564,7 @@ struct city *game_find_city_by_name(const char *name)
   City may be any city in the game.  This now always uses fast idex
   method, instead of looking through all cities of all players.
 **************************************************************************/
-struct city *game_find_city_by_number(int id)
+struct city *find_city_by_id(int id)
 {
   return idex_lookup_city(id);
 }
@@ -140,62 +574,42 @@ struct city *game_find_city_by_number(int id)
   Find unit out of all units in game: now uses fast idex method,
   instead of looking through all units of all players.
 **************************************************************************/
-struct unit *game_find_unit_by_number(int id)
+struct unit *find_unit_by_id(int id)
 {
   return idex_lookup_unit(id);
 }
 
+
 /**************************************************************************
-  In the server call wipe_unit(), and never this function directly.
+If in the server use wipe_unit().
 **************************************************************************/
 void game_remove_unit(struct unit *punit)
 {
   struct city *pcity;
 
-  /* Opaque server-only variable: the server must free this earlier. */
-  assert(punit->server.vision == NULL);
+  freelog(LOG_DEBUG, "game_remove_unit %d", punit->id);
+  freelog(LOG_DEBUG, "removing unit %d, %s %s (%d %d) hcity %d",
+	  punit->id, get_nation_name(unit_owner(punit)->nation),
+	  unit_name(punit->type), punit->x, punit->y, punit->homecity);
 
   pcity = player_find_city_by_id(unit_owner(punit), punit->homecity);
-  if (pcity) {
-    unit_list_unlink(pcity->units_supported, punit);
+  if (pcity)
+    unit_list_unlink(&pcity->units_supported, punit);
 
-    freelog(LOG_DEBUG, "game_remove_unit()"
-	    " at (%d,%d) unit %d, %s %s home (%d,%d) city %d, %s %s",
-	    TILE_XY(punit->tile),
-	    punit->id, 
-	    nation_rule_name(nation_of_unit(punit)),
-	    unit_rule_name(punit),
-	    TILE_XY(pcity->tile),
-	    punit->homecity,
-	    nation_rule_name(nation_of_city(pcity)),
-	    city_name(pcity));
-  } else if (IDENTITY_NUMBER_ZERO == punit->homecity) {
-    freelog(LOG_DEBUG, "game_remove_unit()"
-	    " at (%d,%d) unit %d, %s %s home %d",
-	    TILE_XY(punit->tile),
-	    punit->id, 
-	    nation_rule_name(nation_of_unit(punit)),
-	    unit_rule_name(punit),
-	    punit->homecity);
-  } else {
-    freelog(LOG_ERROR, "game_remove_unit()"
-	    " at (%d,%d) unit %d, %s %s home %d invalid",
-	    TILE_XY(punit->tile),
-	    punit->id, 
-	    nation_rule_name(nation_of_unit(punit)),
-	    unit_rule_name(punit),
-	    punit->homecity);
+  if (pcity) {
+    freelog(LOG_DEBUG, "home city %s, %s, (%d %d)", pcity->name,
+	    get_nation_name(city_owner(pcity)->nation), pcity->x,
+	    pcity->y);
   }
 
-  unit_list_unlink(punit->tile->units, punit);
-  unit_list_unlink(unit_owner(punit)->units, punit);
+  unit_list_unlink(&map_get_tile(punit->x, punit->y)->units, punit);
+  unit_list_unlink(&unit_owner(punit)->units, punit);
 
   idex_unregister_unit(punit);
 
-  if (game.callbacks.unit_deallocate) {
-    (game.callbacks.unit_deallocate)(punit->id);
-  }
-  destroy_unit_virtual(punit);
+  if (is_server)
+    dealloc_id(punit->id);
+  free(punit);
 }
 
 /**************************************************************************
@@ -203,39 +617,19 @@ void game_remove_unit(struct unit *punit)
 **************************************************************************/
 void game_remove_city(struct city *pcity)
 {
-  struct tile *pcenter = city_tile(pcity);
-  struct player *powner = city_owner(pcity);
+  freelog(LOG_DEBUG, "game_remove_city %d", pcity->id);
+  freelog(LOG_DEBUG, "removing city %s, %s, (%d %d)", pcity->name,
+	   get_nation_name(city_owner(pcity)->nation), pcity->x, pcity->y);
 
-  if (NULL != powner) {
-    /* always unlink before clearing data */
-    city_list_unlink(powner->cities, pcity);
-  }
+  ceff_vector_free(&pcity->effects);
 
-  if (NULL == pcenter) {
-    freelog(LOG_DEBUG, "game_remove_city()"
-            " virtual city %d, %s",
-            pcity->id,
-            city_name(pcity));
-  } else {
-    freelog(LOG_DEBUG, "game_remove_city()"
-            " at (%d,%d) city %d, %s %s",
-            TILE_XY(pcenter),
-            pcity->id,
-            nation_rule_name(nation_of_player(powner)),
-            city_name(pcity));
-
-    city_tile_iterate(pcenter, ptile) {
-      if (tile_worked(ptile) == pcity) {
-        tile_set_worked(ptile, NULL);
-      }
-    } city_tile_iterate_end;
-  }
-  
-  /* Opaque server-only variable: the server must free this earlier. */
-  assert(pcity->server.vision == NULL);
-
+  city_map_checked_iterate(pcity->x, pcity->y, x, y, mx, my) {
+    set_worker_city(pcity, x, y, C_TILE_EMPTY);
+  } city_map_checked_iterate_end;
+  city_list_unlink(&city_owner(pcity)->cities, pcity);
+  map_set_city(pcity->x, pcity->y, NULL);
   idex_unregister_city(pcity);
-  destroy_city_virtual(pcity);
+  free(pcity);
 }
 
 /***************************************************************
@@ -244,115 +638,96 @@ void game_remove_city(struct city *pcity)
 void game_init(void)
 {
   int i;
-
-  game.info.globalwarming = 0;
-  game.info.warminglevel  = 0; /* set later */
-  game.info.nuclearwinter = 0;
-  game.info.coolinglevel  = 0; /* set later */
-  game.info.gold          = GAME_DEFAULT_GOLD;
-  game.info.tech          = GAME_DEFAULT_TECHLEVEL;
-  game.info.skill_level   = GAME_DEFAULT_SKILL_LEVEL;
-  game.info.timeout       = GAME_DEFAULT_TIMEOUT;
-  game.info.tcptimeout    = GAME_DEFAULT_TCPTIMEOUT;
-  game.info.netwait       = GAME_DEFAULT_NETWAIT;
-  game.info.end_year      = GAME_DEFAULT_END_YEAR;
-  game.info.year          = GAME_START_YEAR;
-  game.info.turn          = 0;
-  game.info.min_players   = GAME_DEFAULT_MIN_PLAYERS;
-  game.info.max_players   = GAME_DEFAULT_MAX_PLAYERS;
-  game.info.nplayers	   = 0;
-  game.info.pingtimeout   = GAME_DEFAULT_PINGTIMEOUT;
-  game.info.pingtime      = GAME_DEFAULT_PINGTIME;
-  game.info.diplomacy     = GAME_DEFAULT_DIPLOMACY;
-  game.info.diplcost      = GAME_DEFAULT_DIPLCOST;
-  game.info.diplchance    = GAME_DEFAULT_DIPLCHANCE;
-  game.info.freecost      = GAME_DEFAULT_FREECOST;
-  game.info.conquercost   = GAME_DEFAULT_CONQUERCOST;
-  game.info.dispersion    = GAME_DEFAULT_DISPERSION;
-  game.info.citymindist   = GAME_DEFAULT_CITYMINDIST;
-  game.info.civilwarsize  = GAME_DEFAULT_CIVILWARSIZE;
-  game.info.contactturns  = GAME_DEFAULT_CONTACTTURNS;
-  game.info.rapturedelay  = GAME_DEFAULT_RAPTUREDELAY;
-  game.info.celebratesize = GAME_DEFAULT_CELEBRATESIZE;
-  game.info.savepalace    = GAME_DEFAULT_SAVEPALACE;
-  game.info.natural_city_names = GAME_DEFAULT_NATURALCITYNAMES;
-  game.info.angrycitizen  = GAME_DEFAULT_ANGRYCITIZEN;
-  game.info.foodbox       = GAME_DEFAULT_FOODBOX;
-  game.info.shieldbox = GAME_DEFAULT_SHIELDBOX;
-  game.info.sciencebox = GAME_DEFAULT_SCIENCEBOX;
-  game.info.aqueductloss  = GAME_DEFAULT_AQUEDUCTLOSS;
-  game.info.killcitizen   = GAME_DEFAULT_KILLCITIZEN;
-  game.info.techpenalty   = GAME_DEFAULT_TECHPENALTY;
-  game.info.razechance    = GAME_DEFAULT_RAZECHANCE;
-  game.info.spacerace     = GAME_DEFAULT_SPACERACE;
-  game.info.turnblock     = GAME_DEFAULT_TURNBLOCK;
-  game.info.fogofwar      = GAME_DEFAULT_FOGOFWAR;
-  game.info.borders       = GAME_DEFAULT_BORDERS;
-  game.info.happyborders  = GAME_DEFAULT_HAPPYBORDERS;
-  game.info.slow_invasions= GAME_DEFAULT_SLOW_INVASIONS;
-  game.info.auto_ai_toggle= GAME_DEFAULT_AUTO_AI_TOGGLE;
-  game.info.notradesize   = GAME_DEFAULT_NOTRADESIZE;
-  game.info.fulltradesize = GAME_DEFAULT_FULLTRADESIZE;
-  game.info.barbarianrate = GAME_DEFAULT_BARBARIANRATE;
-  game.info.onsetbarbarian= GAME_DEFAULT_ONSETBARBARIAN;
-  game.info.occupychance  = GAME_DEFAULT_OCCUPYCHANCE;
-  game.info.autoattack    = GAME_DEFAULT_AUTOATTACK;
-  game.info.revolution_length = GAME_DEFAULT_REVOLUTION_LENGTH;
-  game.info.heating       = 0;
-  game.info.cooling       = 0;
-  game.info.allowed_city_names = GAME_DEFAULT_ALLOWED_CITY_NAMES;
-  game.info.save_nturns   = GAME_DEFAULT_SAVETURNS;
-  game.info.save_compress_level = GAME_DEFAULT_COMPRESS_LEVEL;
-#ifdef HAVE_LIBBZ2
-  game.info.save_compress_type = FZ_BZIP2;
-#elif defined (HAVE_LIBZ)
-  game.info.save_compress_type = FZ_ZLIB;
-#else
-  game.info.save_compress_type = FZ_PLAIN;
-#endif
-  game.info.government_when_anarchy_id = G_MAGIC;   /* flag */
-
-  game.info.is_new_game   = TRUE;
-  game.info.is_edit_mode = FALSE;
-
-  game.info.aifill      = GAME_DEFAULT_AIFILL;
-  sz_strlcpy(game.info.start_units, GAME_DEFAULT_START_UNITS);
-
-  game.fogofwar_old = game.info.fogofwar;
-  game.simultaneous_phases_stored = GAME_DEFAULT_SIMULTANEOUS_PHASES;
+  game.is_new_game   = TRUE;
+  game.globalwarming = 0;
+  game.warminglevel  = 8;
+  game.nuclearwinter = 0;
+  game.coolinglevel  = 8;
+  game.gold          = GAME_DEFAULT_GOLD;
+  game.tech          = GAME_DEFAULT_TECHLEVEL;
+  game.skill_level   = GAME_DEFAULT_SKILL_LEVEL;
+  game.timeout       = GAME_DEFAULT_TIMEOUT;
   game.timeoutint    = GAME_DEFAULT_TIMEOUTINT;
   game.timeoutintinc = GAME_DEFAULT_TIMEOUTINTINC;
   game.timeoutinc    = GAME_DEFAULT_TIMEOUTINC;
   game.timeoutincmult= GAME_DEFAULT_TIMEOUTINCMULT;
   game.timeoutcounter= 1;
-  game.timeoutaddenemymove = GAME_DEFAULT_TIMEOUTADDEMOVE; 
-
+  game.tcptimeout    = GAME_DEFAULT_TCPTIMEOUT;
+  game.netwait       = GAME_DEFAULT_NETWAIT;
   game.last_ping     = 0;
+  game.pingtimeout   = GAME_DEFAULT_PINGTIMEOUT;
+  game.end_year      = GAME_DEFAULT_END_YEAR;
+  game.year          = GAME_START_YEAR;
+  game.turn          = 0;
+  game.min_players   = GAME_DEFAULT_MIN_PLAYERS;
+  game.max_players  = GAME_DEFAULT_MAX_PLAYERS;
+  game.aifill      = GAME_DEFAULT_AIFILL;
+  game.nplayers=0;
+  game.researchcost = GAME_DEFAULT_RESEARCHCOST;
+  game.diplcost    = GAME_DEFAULT_DIPLCOST;
+  game.diplchance  = GAME_DEFAULT_DIPLCHANCE;
+  game.freecost    = GAME_DEFAULT_FREECOST;
+  game.conquercost = GAME_DEFAULT_CONQUERCOST;
+  game.settlers    = GAME_DEFAULT_SETTLERS;
+  game.explorer    = GAME_DEFAULT_EXPLORER;
+  game.dispersion  = GAME_DEFAULT_DISPERSION;
+  game.cityfactor  = GAME_DEFAULT_CITYFACTOR;
+  game.citymindist = GAME_DEFAULT_CITYMINDIST;
+  game.civilwarsize= GAME_DEFAULT_CIVILWARSIZE;
+  game.rapturedelay= GAME_DEFAULT_RAPTUREDELAY;
+  game.savepalace  = GAME_DEFAULT_SAVEPALACE;
+  game.natural_city_names = GAME_DEFAULT_NATURALCITYNAMES;
+  game.unhappysize = GAME_DEFAULT_UNHAPPYSIZE;
+  game.angrycitizen= GAME_DEFAULT_ANGRYCITIZEN;
+  game.foodbox     = GAME_DEFAULT_FOODBOX;
+  game.aqueductloss= GAME_DEFAULT_AQUEDUCTLOSS;
+  game.killcitizen = GAME_DEFAULT_KILLCITIZEN;
   game.scorelog    = GAME_DEFAULT_SCORELOG;
-  game.scoreturn   = GAME_DEFAULT_SCORETURN;
-  game.seed = GAME_DEFAULT_SEED;
+  game.techpenalty = GAME_DEFAULT_TECHPENALTY;
+  game.civstyle    = GAME_DEFAULT_CIVSTYLE;
+  game.razechance  = GAME_DEFAULT_RAZECHANCE;
+  game.spacerace   = GAME_DEFAULT_SPACERACE;
+  game.fogofwar    = GAME_DEFAULT_FOGOFWAR;
+  game.fogofwar_old= game.fogofwar;
+  game.auto_ai_toggle = GAME_DEFAULT_AUTO_AI_TOGGLE;
+  game.notradesize    = GAME_DEFAULT_NOTRADESIZE;
+  game.fulltradesize  = GAME_DEFAULT_FULLTRADESIZE;
+  game.barbarianrate  = GAME_DEFAULT_BARBARIANRATE;
+  game.onsetbarbarian = GAME_DEFAULT_ONSETBARBARIAN;
+  game.nbarbarians = 0;
+  game.occupychance= GAME_DEFAULT_OCCUPYCHANCE;
 
+  geff_vector_init(&game.effects);
+  ceff_vector_init(&game.destroyed_effects);
+
+  game.heating     = 0;
+  game.cooling     = 0;
   sz_strlcpy(game.save_name, GAME_DEFAULT_SAVE_NAME);
+  game.save_nturns=10;
+#ifdef HAVE_LIBZ
+  game.save_compress_level = GAME_DEFAULT_COMPRESS_LEVEL;
+#else
+  game.save_compress_level = GAME_NO_COMPRESS_LEVEL;
+#endif
+  game.randseed=GAME_DEFAULT_RANDSEED;
+  game.watchtower_vision=GAME_DEFAULT_WATCHTOWER_VISION;
+  game.watchtower_extra_vision=GAME_DEFAULT_WATCHTOWER_EXTRA_VISION,
+  game.allowed_city_names = GAME_DEFAULT_ALLOWED_CITY_NAMES;
+
   sz_strlcpy(game.rulesetdir, GAME_DEFAULT_RULESETDIR);
 
-  game.control.num_unit_classes = 0;
-  game.control.num_unit_types = 0;
-  game.control.num_impr_types = 0;
-  game.control.num_tech_types = 0;
-  game.control.num_base_types = 0;
-  
-  game.control.government_count = 0;
-  game.control.nation_count = 0;
-  game.control.styles_count = 0;
-  game.control.terrain_count = 0;
-  game.control.resource_count = 0;
+  game.firepower_factor = 1;
+  game.num_unit_types = 0;
+  game.num_impr_types = 0;
+  game.num_tech_types = 0;
 
-  game.control.num_specialist_types = 0;
-
-  game.control.prefered_tileset[0] = '\0';
+  game.government_count = 0;
+  game.default_government = G_MAGIC;        /* flag */
+  game.government_when_anarchy = G_MAGIC;   /* flag */
+  game.ai_goal_government = G_MAGIC;        /* flag */
 
   sz_strlcpy(game.demography, GAME_DEFAULT_DEMOGRAPHY);
-  sz_strlcpy(game.allow_take, GAME_DEFAULT_ALLOW_TAKE);
+  sz_strlcpy(game.allow_connect, GAME_DEFAULT_ALLOW_CONNECT);
 
   game.save_options.save_random = TRUE;
   game.save_options.save_players = TRUE;
@@ -360,62 +735,27 @@ void game_init(void)
   game.save_options.save_starts = TRUE;
   game.save_options.save_private_map = TRUE;
 
+  game.load_options.load_random = TRUE;
+  game.load_options.load_players = TRUE;
+  game.load_options.load_known = TRUE;
+  game.load_options.load_starts = TRUE;
+  game.load_options.load_private_map = TRUE;
+  game.load_options.load_settings = TRUE;
+
   init_our_capability();    
   map_init();
-  terrains_init();
-  base_types_init();
-  improvements_init();
-  techs_init();
-  unit_classes_init();
-  unit_types_init();
-  specialists_init();
-  teams_init();
   idex_init();
-  cm_init();
-
-  for (i = 0; i < DEBUG_LAST; i++) {
-    game.debug[i] = FALSE;
-  }
+  
   for(i=0; i<MAX_NUM_PLAYERS+MAX_NUM_BARBARIANS; i++)
     player_init(&game.players[i]);
   for (i=0; i<A_LAST; i++)      /* game.num_tech_types = 0 here */
-    game.info.global_advances[i]=FALSE;
+    game.global_advances[i]=0;
   for (i=0; i<B_LAST; i++)      /* game.num_impr_types = 0 here */
-    game.info.great_wonders[i]=0;
-
-  terrain_control.river_help_text[0] = '\0';
-
-  game.meta_info.user_message_set = FALSE;
-  game.meta_info.user_message[0] = '\0';
-}
-
-/****************************************************************************
-  Initialize map-specific parts of the game structure.  Maybe these should
-  be moved into the map structure?
-****************************************************************************/
-void game_map_init(void)
-{
-  /* FIXME: it's not clear where these values should be initialized.  It
-   * can't be done in game_init because the map isn't created yet.  Maybe it
-   * should be done in the mapgen code or in the maphand code.  It should
-   * surely be called when the map is generated. */
-  game.info.warminglevel = (map_num_tiles() + 499) / 500;
-  game.info.coolinglevel = (map_num_tiles() + 499) / 500;
-}
-
-/***************************************************************
-  Remove all initialized players. This is all player slots, 
-  since we initialize them all on game initialization.
-***************************************************************/
-static void game_remove_all_players(void)
-{
-  int i;
-
-  for (i = 0; i < MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS; i++) {
-    game_remove_player(&game.players[i]);
-  }
-
-  set_player_count(0);
+    game.global_wonders[i]=0;
+  game.conn_id = 0;
+  game.player_idx=0;
+  game.player_ptr=&game.players[0];
+  terrain_control.river_help_text = NULL;
 }
 
 /***************************************************************
@@ -423,11 +763,12 @@ static void game_remove_all_players(void)
 ***************************************************************/
 void game_free(void)
 {
+  geff_vector_free(&game.effects);
+  ceff_vector_free(&game.destroyed_effects);
   game_remove_all_players();
   map_free();
   idex_free();
   ruleset_data_free();
-  cm_free();
 }
 
 /***************************************************************
@@ -435,17 +776,13 @@ void game_free(void)
 ***************************************************************/
 void ruleset_data_free()
 {
-  specialists_free();
   techs_free();
   governments_free();
   nations_free();
   unit_types_free();
   improvements_free();
-  base_types_free();
   city_styles_free();
-  terrains_free();
-  ruleset_cache_free();
-  nation_groups_free();
+  tile_types_free();
 }
 
 /***************************************************************
@@ -455,13 +792,10 @@ void initialize_globals(void)
 {
   players_iterate(plr) {
     city_list_iterate(plr->cities, pcity) {
-      city_built_iterate(pcity, pimprove) {
-	if (is_great_wonder(pimprove)) {
-	  game.info.great_wonders[improvement_index(pimprove)] = pcity->id;
-	} else if (is_small_wonder(pimprove)) {
-	  plr->small_wonders[improvement_index(pimprove)] = pcity->id;
-	}
-      } city_built_iterate_end;
+      built_impr_iterate(pcity, i) {
+	if (is_wonder(i))
+	  game.global_wonders[i] = pcity->id;
+      } built_impr_iterate_end;
     } city_list_iterate_end;
   } players_iterate_end;
 }
@@ -471,8 +805,8 @@ void initialize_globals(void)
 ***************************************************************/
 int game_next_year(int year)
 {
-  const int slowdown = (game.info.spacerace
-			? get_world_bonus(EFT_SLOW_DOWN_TIMELINE) : 0);
+  int spaceshipparts, i;
+  Impr_Type_id parts[] = { B_SCOMP, B_SMODULE, B_SSTRUCTURAL, B_LAST };
 
   if (year == 1) /* hacked it to get rid of year 0 */
     year = 0;
@@ -490,15 +824,22 @@ int game_next_year(int year)
    * about 1900 AD
    */
 
-  /* Note the slowdown operates even if Enable_Space is not active.  See
-   * README.effects for specifics. */
-  if (year >= 1900 || (slowdown >= 3 && year > 0)) {
+  spaceshipparts= 0;
+  if (game.spacerace) {
+    for(i=0; parts[i] < B_LAST; i++) {
+      int t = improvement_types[parts[i]].tech_req;
+      if (tech_exists(t) && game.global_advances[t] != 0)
+	spaceshipparts++;
+    }
+  }
+
+  if( year >= 1900 || ( spaceshipparts>=3 && year>0 ) )
     year += 1;
-  } else if (year >= 1750 || slowdown >= 2) {
+  else if( year >= 1750 || spaceshipparts>=2 )
     year += 2;
-  } else if (year >= 1500 || slowdown >= 1) {
+  else if( year >= 1500 || spaceshipparts>=1 )
     year += 5;
-  } else if( year >= 1000 )
+  else if( year >= 1000 )
     year += 10;
   else if( year >= 0 )
     year += 20;
@@ -518,152 +859,236 @@ int game_next_year(int year)
 ***************************************************************/
 void game_advance_year(void)
 {
-  game.info.year = game_next_year(game.info.year);
-  game.info.turn++;
+  game.year = game_next_year(game.year);
+  game.turn++;
 }
 
-/****************************************************************************
-  Reset a player's data to its initial state.  After calling this you
-  must call player_init before the player can be used again.
-****************************************************************************/
+
+/***************************************************************
+...
+***************************************************************/
+void game_remove_all_players(void)
+{
+  players_iterate(pplayer) {
+    game_remove_player(pplayer);
+  } players_iterate_end;
+
+  game.nplayers=0;
+  game.nbarbarians=0;
+}
+
+
+/***************************************************************
+...
+***************************************************************/
 void game_remove_player(struct player *pplayer)
 {
   if (pplayer->attribute_block.data) {
     free(pplayer->attribute_block.data);
     pplayer->attribute_block.data = NULL;
   }
-  pplayer->attribute_block.length = 0;
 
-  if (pplayer->attribute_block_buffer.data) {
-    free(pplayer->attribute_block_buffer.data);
-    pplayer->attribute_block_buffer.data = NULL;
-  }
-  pplayer->attribute_block_buffer.length = 0;
+  geff_vector_free(&pplayer->effects);
+  player_free_island_imprs(pplayer);
 
-#if 0
-  assert(conn_list_size(pplayer->connections) == 0);
-  /* FIXME: Connections that are unlinked here are left dangling.  It's up to
-   * the caller to fix them.  This happens when /loading a game while a
-   * client is connected. */
-#endif
-  conn_list_unlink_all(pplayer->connections);
-  conn_list_free(pplayer->connections);
-  pplayer->connections = NULL;
-
-  unit_list_iterate(pplayer->units, punit) {
+  unit_list_iterate(pplayer->units, punit) 
     game_remove_unit(punit);
-  } unit_list_iterate_end;
-  if (0 != unit_list_size(pplayer->units)) {
-    freelog(LOG_ERROR, "game_remove_player() failed to remove %d %s units",
-            unit_list_size(pplayer->units),
-            nation_rule_name(nation_of_player(pplayer)));
-  }
-  unit_list_unlink_all(pplayer->units);
-  unit_list_free(pplayer->units);
-  pplayer->units = NULL;
+  unit_list_iterate_end;
 
-  city_list_iterate(pplayer->cities, pcity) {
+  city_list_iterate(pplayer->cities, pcity) 
     game_remove_city(pcity);
-  } city_list_iterate_end;
-  if (0 != city_list_size(pplayer->cities)) {
-    freelog(LOG_ERROR, "game_remove_player() failed to remove %d %s cities",
-            city_list_size(pplayer->cities),
-            nation_rule_name(nation_of_player(pplayer)));
-  }
-  city_list_unlink_all(pplayer->cities);
-  city_list_free(pplayer->cities);
-  pplayer->cities = NULL;
+  city_list_iterate_end;
 
-  /* This comes last because log calls in the above functions may use it. */
-  if (pplayer->nation != NULL) {
-    player_set_nation(pplayer, NULL);
-  }
+  if (is_barbarian(pplayer)) game.nbarbarians--;
 }
 
-/****************************************************************************
-  Called after game_remove_player() to fill the empty player gap.
-
-  FIXME: this cannot be called once the game is started.  You can't remove
-  players of a running game.
-****************************************************************************/
+/***************************************************************
+...
+***************************************************************/
 void game_renumber_players(int plrno)
 {
   int i;
 
-  for (i = plrno; i < game.info.nplayers - 1; i++) {
-    /* structure copy including pointers */
-    game.players[i] = game.players[i+1];
-
-    conn_list_iterate(game.players[i].connections, pconn) {
-      pconn->playing = &game.players[i];
-    } conn_list_iterate_end;
-
-    if (game.players[i].nation) {
-      game.players[i].nation->player = &game.players[i];
-    }
-
-    /* FiXME: This could renumber players in-game by updating the unit and
-     * city owners.  But for now, just make sure these lists are empty. */
-    assert(unit_list_size(game.players[i].units) == 0);
-    assert(city_list_size(game.players[i].cities) == 0);
+  for(i=plrno; i<game.nplayers-1; ++i) {
+    game.players[i]=game.players[i+1];
+    game.players[i].player_no=i;
+    conn_list_iterate(game.players[i].connections, pconn)
+      pconn->player = &game.players[i];
+    conn_list_iterate_end;
   }
 
-  game.info.nplayers--;
+  if(game.player_idx>plrno) {
+    game.player_idx--;
+    game.player_ptr=&game.players[game.player_idx];
+  }
 
-  player_init(&game.players[game.info.nplayers]);
+  game.nplayers--;
 }
 
 /**************************************************************************
-  Return TRUE if it is this player's phase.
+get_player() - Return player struct pointer corresponding to player_id.
+               Eg: player_id = punit->owner, or pcity->owner
 **************************************************************************/
-bool is_player_phase(const struct player *pplayer, int phase)
+struct player *get_player(int player_id)
 {
-  return game.info.simultaneous_phases || player_number(pplayer) == phase;
+    return &game.players[player_id];
 }
 
-/****************************************************************************
-  Return a prettily formatted string containing the population text.  The
-  population is passed in as the number of citizens, in thousands.
-****************************************************************************/
-const char *population_to_text(int thousand_citizen)
+/**************************************************************************
+This function is used by is_wonder_useful to estimate if it is worthwhile
+to build the great library.
+**************************************************************************/
+int get_num_human_and_ai_players(void)
 {
-  /* big_int_to_text can't handle negative values, and in any case we'd
-   * better not have a negative population. */
-  assert(thousand_citizen >= 0);
-  return big_int_to_text(thousand_citizen, 3);
+  return game.nplayers-game.nbarbarians;
 }
 
-/****************************************************************************
-  Returns whether the specified server setting class can currently
-  be changed.  Does not indicate whether it can be changed by clients.
-****************************************************************************/
-bool setting_class_is_changeable(enum sset_class class)
+/***************************************************************
+  For various data, copy eg .name to .name_orig and put
+  translated version in .name
+  (These could be in the separate modules, but since they are
+  all almost the same, and all needed together, it seems a bit
+  easier to just do them all here.)
+***************************************************************/
+void translate_data_names(void)
 {
-  switch (class) {
-  case SSET_MAP_SIZE:
-  case SSET_MAP_GEN:
-    /* Only change map options if we don't yet have a map: */
-    return map_is_empty();
+  int i;
+  static const char too_long_msg[]
+    = "Translated name is too long, truncating: %s";
 
-  case SSET_MAP_ADD:
-  case SSET_PLAYERS:
-  case SSET_GAME_INIT:
-  case SSET_RULES:
-    /* Only change start params and most rules if we don't yet have a map,
-     * or if we do have a map but its a scenario one (ie, the game has
-     * never actually been started).
-     */
-    return (map_is_empty() || game.info.is_new_game);
-
-  case SSET_RULES_FLEXIBLE:
-  case SSET_META:
-    /* These can always be changed: */
-    return TRUE;
-
-  case SSET_LAST:
-    break;
+#define name_strlcpy(dst, src) ((void) sz_loud_strlcpy(dst, src, too_long_msg))
+  
+  for (i=0; i<game.num_tech_types; i++) {
+    struct advance *tthis = &advances[i];
+    sz_strlcpy(tthis->name_orig, tthis->name);
+    name_strlcpy(tthis->name, Q_(tthis->name_orig));
   }
-  freelog(LOG_ERROR, "Unexpected case %d in %s line %d",
-	  class, __FILE__, __LINE__);
-  return FALSE;
+
+  unit_type_iterate(i) {
+    struct unit_type *tthis = &unit_types[i];
+    sz_strlcpy(tthis->name_orig, tthis->name);
+    name_strlcpy(tthis->name, Q_(tthis->name_orig));
+  } unit_type_iterate_end;
+
+  impr_type_iterate(i) {
+    struct impr_type *tthis = &improvement_types[i];
+    sz_strlcpy(tthis->name_orig, tthis->name);
+    name_strlcpy(tthis->name, Q_(tthis->name_orig));
+  } impr_type_iterate_end;
+
+  for (i=T_FIRST; i<T_COUNT; i++) {
+    struct tile_type *tthis = &tile_types[i];
+    sz_strlcpy(tthis->terrain_name_orig, tthis->terrain_name);
+    name_strlcpy(tthis->terrain_name,
+		 (strcmp(tthis->terrain_name_orig, "") != 0) ?
+			Q_(tthis->terrain_name_orig) : "");
+    sz_strlcpy(tthis->special_1_name_orig, tthis->special_1_name);
+    name_strlcpy(tthis->special_1_name,
+		 (strcmp(tthis->special_1_name_orig, "") != 0) ?
+			Q_(tthis->special_1_name_orig) : "");
+    sz_strlcpy(tthis->special_2_name_orig, tthis->special_2_name);
+    name_strlcpy(tthis->special_2_name,
+		 (strcmp(tthis->special_2_name_orig, "") != 0) ?
+			Q_(tthis->special_2_name_orig) : "");
+  }
+  for (i=0; i<game.government_count; i++) {
+    int j;
+    struct government *tthis = &governments[i];
+    sz_strlcpy(tthis->name_orig, tthis->name);
+    name_strlcpy(tthis->name, Q_(tthis->name_orig));
+    for(j=0; j<tthis->num_ruler_titles; j++) {
+      struct ruler_title *that = &tthis->ruler_titles[j];
+      sz_strlcpy(that->male_title_orig, that->male_title);
+      name_strlcpy(that->male_title, Q_(that->male_title_orig));
+      sz_strlcpy(that->female_title_orig, that->female_title);
+      name_strlcpy(that->female_title, Q_(that->female_title_orig));
+    }
+  }
+  for (i=0; i<game.nation_count; i++) {
+    struct nation_type *tthis = get_nation_by_idx(i);
+    sz_strlcpy(tthis->name_orig, tthis->name);
+    name_strlcpy(tthis->name, Q_(tthis->name_orig));
+    sz_strlcpy(tthis->name_plural_orig, tthis->name_plural);
+    name_strlcpy(tthis->name_plural, Q_(tthis->name_plural_orig));
+  }
+  for (i=0; i<game.styles_count; i++) {
+    struct citystyle *tthis = &city_styles[i];
+    sz_strlcpy(tthis->name_orig, tthis->name);
+    name_strlcpy(tthis->name, Q_(tthis->name_orig));
+  }
+
+#undef name_strlcpy
+
+}
+
+/***************************************************************
+  Redimensions the lists of island-range improvements and
+  effects (from oldmax to maxcont) for all players
+  N.B. On initialisation, oldmax = -1
+***************************************************************/
+void update_island_impr_effect(int oldmax, int maxcont)
+{
+  int i;
+
+  players_iterate(plr) {
+    /* First do improvements with island-wide equiv_range. */
+    plr->island_improv=(Impr_Status *)fc_realloc(plr->island_improv,
+      	      	      	  (maxcont+1)*game.num_impr_types);
+    for (i=oldmax+1;i<=maxcont;i++) {
+      improvement_status_init(&plr->island_improv[i * game.num_impr_types],
+			      game.num_impr_types);
+    }
+
+    /* Next, do the island-wide effects. */
+    if (plr->island_effects) {
+      for (i=maxcont+1; i<=oldmax; i++) {
+        geff_vector_free(&plr->island_effects[i]);
+      }
+    }
+    plr->island_effects=(struct geff_vector *)fc_realloc(plr->island_effects,
+      	      	      	  (maxcont+1)*sizeof(struct geff_vector));
+    for (i=oldmax+1; i<=maxcont; i++) {
+      geff_vector_init(&plr->island_effects[i]);
+    }
+    plr->max_continent = maxcont;
+  } players_iterate_end;
+}
+
+/***************************************************************
+ Update the improvments effects
+***************************************************************/
+void update_all_effects(void)
+{
+  freelog(LOG_DEBUG,"update_all_effects");
+
+  players_iterate(pplayer) {
+    city_list_iterate(pplayer->cities,pcity) {
+      built_impr_iterate(pcity, i) {
+        if (improvement_obsolete(pplayer,i)) {
+          freelog(LOG_DEBUG,"%s in %s is obsolete",
+                  improvement_types[i].name,pcity->name);
+          mark_improvement(pcity,i,I_OBSOLETE);
+        }
+      } built_impr_iterate_end;
+    } city_list_iterate_end;
+  } players_iterate_end;
+
+  players_iterate(pplayer) {
+    city_list_iterate(pplayer->cities,pcity) {
+      built_impr_iterate(pcity, i) {
+	if (pcity->improvements[i] == I_OBSOLETE) {
+	  continue;
+	}
+	if (improvement_redundant(pplayer, pcity, i, FALSE)) {
+          freelog(LOG_DEBUG,"%s in %s is redundant",
+                  improvement_types[i].name,pcity->name);
+          mark_improvement(pcity,i,I_REDUNDANT);
+        } else {
+          mark_improvement(pcity,i,I_ACTIVE);
+          freelog(LOG_DEBUG,"%s in %s is active!",
+                  improvement_types[i].name,pcity->name);
+        }
+      } built_impr_iterate_end;
+    } city_list_iterate_end;
+  } players_iterate_end;
 }

@@ -14,7 +14,6 @@
 #define FC__GUI_MAIN_H
 
 #define ID_TURNDONE 26
-#define ID_ESCAPE 27
 
 #define ID_MAPWINDOW 28
 #define ID_OUTPUTWINDOW 29
@@ -28,11 +27,6 @@
 #define ID_CONNECTDLG_PORT 131
 #define ID_CONNECTDLG_CONNECT 132
 #define ID_CONNECTDLG_QUIT 133
-#define ID_CONNECTDLG_BACK 134
-#define ID_STARTDLG_NEWGAME 135
-#define ID_STARTDLG_LOADGAME 136
-#define ID_STARTDLG_CONNECTGAME 137
-
 #define ID_RACESDLG_NATION 144
 #define ID_RACESDLG_LEADER 145
 #define ID_RACESDLG_MALE 146
@@ -122,15 +116,15 @@
 
 #ifndef RC_INVOKED
 #include "gui_main_g.h"
-extern HFONT main_font;
-extern HFONT city_descriptions_font;
 extern HFONT font_8courier;
 extern HFONT font_12courier;
 extern HFONT font_12arial;
 extern int map_win_x;
 extern int map_win_y;
+extern int map_win_width;
+extern int map_win_height;
 extern HWND root_window;
-extern void do_mainwin_layout(void);
+extern void do_mainwin_layout();
 extern int overview_win_x;
 extern int overview_win_y;
 extern int overview_win_width;
@@ -141,18 +135,12 @@ extern int taxinfoline_y;
 extern HWND logoutput_win;
 extern HWND turndone_button;
 extern HINSTANCE freecivhinst;
-extern HWND unit_info_frame;
-extern HWND unit_info_label;
+extern HWND unitinfo_win;
 extern HWND timeout_label;
 extern HWND hchatline;
 extern HWND map_window;
 extern HWND map_scroll_h;
 extern HWND map_scroll_v;
 extern struct fcwin_box *output_box;
-
-extern bool better_fog;
-
-void set_overview_win_dim(int w, int h);
-
 #endif  /* RC_INVOKED */
 #endif  /* FC__GUI_MAIN_H */

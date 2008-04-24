@@ -11,7 +11,7 @@
 ;
 ; 'generate' = means replace this node with generated list of game
 ;	       elements; current categories are: 
-;	          "Units", "Improvements", "Wonders", "Techs", 
+;	          "Units", "Improvments", "Wonders", "Techs", 
 ;		  "Terrain", "Governments"
 ;
 ; Within the text, the help engine recognizes a few "generated table"s.  
@@ -22,7 +22,7 @@
 ; hich can be referenced.
 ;
 ; This file no longer has a max line length: strings are wrapped 
-; internally.  However to do non-wrapping formatting, make sure to 
+; internally.  However to do non-wrapping formating, make sure to 
 ; insert hard newlines "\n" such that lines are less than 68 chars 
 ; long.
 ;  This marks 68 char limit -------------------------------------->|
@@ -49,15 +49,18 @@ the extinction of all other civilizations.\
 ", _("\
   Present administrators: \
 "), "\
-            Marko Lindqvist      - cazfi74@gmail.com\n\
-            R. Daniel Markstedt  - markstedt@gmail.com\n\
-            Christian Prochaska  - cp.ml.freeciv.dev@googlemail.com\n\
+             Anthony J. Stuckey  - astuckey@imsa.edu\n\
+             Raimar Falke        - rf13@inf.tu-dresden.de\n\
+             Mike Kaufman        - kaufman@orion.physics.wisc.edu\n\
+             Per I. Mathisen     - per@leftist.net\
 ", _("\
 If you find any bugs, then please send us a bug report.  This is \
 best done by visiting the Freeciv Bug Tracking System, at:\
-"), "\
-  http://bugs.freeciv.org/\
-", _("\
+\n\n\
+  http://www.freeciv.org/cgi-bin/bugs\
+\n\n\
+or by sending email to:  bugs@cvs.freeciv.org\
+"), _("\
 For more information about submitting bug reports see the file BUGS \
 in the Freeciv distribution.  For more information in general, \
 visit the Freeciv website, at:\
@@ -381,40 +384,39 @@ Freeciv supports several local languages.  See the Native \
 Language Support section of the README file for instructions \
 on how to use one of these languages.\
 \n\n\
-First, check whether a localization is already in progress \
-for your language:\
-"), "\
-  http://www.freeciv.org/wiki/Translations\
-", _("\
 If you would like to add a localization (translation) for your \
 language, please see the instructions at:\
-"), "\
-  http://www.freeciv.org/wiki/Localization\
-", _("\
-You are also welcome to send any questions to the translation \
+\n\n\
+  http://www.freeciv.org/l10n.phtml\
+\n\n\
+(Check here first to see if a localization is already in progress \
+for your language.)\
+\n\n\
+You are also welcome to send any questions to the freeciv-dev \
 mailing list:\
-"), "\
-  freeciv-i18n@gna.org\
-"
+\n\n\
+  freeciv-dev@freeciv.org\
+")
 
 [help_connecting]
 name = _("Connecting")
 text = _("\
 Before a game is started, anyone can connect to the server \
-by supplying its hostname and port number (5556 by default). \
+by supplying its hostname and port number (5555 by default). \
 If the server is started with the -m flag, it will report to \
 the metaserver,\
 "), "\
-  http://meta.freeciv.org/metaserver.phtml\
+  http://meta.freeciv.org/metaserver/\
 ", _("\
 The client can fetch this page, too: use the Metaserver button \
 in the connection dialog.  If it never shows any results, check \
-whether your WWW browser is using a HTTP proxy; to make civclient \
-use the same proxy, before starting civclient, \
-set the $http_proxy environment variable to:\
-"), "\
+if your WWW browser is using a HTTP proxy; to make civclient \
+use the same proxy, set the $http_proxy environment variable to\
+\n\n\
   http://proxyhost:proxyportnumber/\
-", _("\
+\n\n\
+before starting civclient.\
+"), _("\
 When the game has started, everyone can connect as any player who \
 isn't already connected, including AI players.  Merely connecting \
 to an AI player doesn't make it human controlled; this is an \
@@ -427,119 +429,68 @@ metaserver, the player names can be found there.\
 [help_controls]
 name = _("Controls")
 text = _("\
-Unit Orders:\n\
-============\n\
-    a: (a)uto-settler  (settler/worker units)\n\
-    b: (b)uild city  (settler units)\n\
-    b: help (b)uild wonder  (caravan units)\n\
-    C: unit (c)onnect  (then left-click mouse to select destination)\n\
-    d: (d)iplomat/spy actions  (diplomat/spy units)\n\
-    D: (D)isband unit\n\
-    e: build airbas(e)  (airbase units)\n\
-    f: (f)ortify unit  (military units)\n\
-    f: build (f)ortress  (settler/worker units)\n\
-    g: unit (g)oto  (then left-click mouse to select destination)\n\
-    g: add a (g)oto waypoint (when in goto mode)\n\
-    G: (G)oto/return to nearest city\n\
-    h: change (h)omecity  (to city at current location)\n\
-    i: build (i)rrigation or convert terrain (settler/worker units)\n\
-    l: (l)oad unit on boat\n\
-    L: go/air(l)ift to city\n\
-    m: build (m)ine or convert terrain (settler/worker units)\n\
-    n: clean (n)uclear fallout\n\
-    N: explode (N)uclear\n\
-    o: transf(o)rm terrain (engineer unit)\n\
-    p: clean (p)ollution  (settler/worker units)\n\
-    p: (p)aradrop  (paratroop units)\n\
-    P: (P)illage terrain alteration\n\
-    q: unit patrol  (then left-click mouse to select destination)\n\
-    q: add a patrol waypoint (when in patrol mode)\n\
-    r: build (r)oad/railroad  (settler/worker units)\n\
-    r: establish trade (r)oute  (caravan units)\n\
-    s: (s)entry unit\n\
-    u: (u)nload unit\n\
-    U: (U)nload all units from a boat\n\
-    W: (W)ake up other units on tile\n\
-    x: auto-e(x)plore\n\
-    y: Select all idle units of the same type as the active unit\n\
-space: unit stay put\n\
-\n\
-      Ctrl-U: (u)pgrade unit\n\
-Shift-Ctrl-B: Goto and (B)uild city on target\n\
-Shift-Ctrl-R: Connect current and target tile with (R)oad\n\
-Shift-Ctrl-L: Connect current and target tile with rai(L)\n\
-Shift-Ctrl-I: Connect current and target tile with (I)rrigation\n\
+Mouse:\n\
+======\n\
+  Left-click:  (on city):  Pop up city window\n\
+               (on unit):  Activate unit\n\
+  Center-click or\n\
+     Control-right-click:  Show tile info\n\
+  Right-click:             Center tile in view\n\
+  Shift-click:             Adjust city workers from main map\
 "), _("\
-Unit Movement:\n\
-==============\n\
-  1: move south-west\n\
-  2: move south\n\
-  3: move south-east\n\
-  4: move west\n\
-  6: move east\n\
-  7: move north-west\n\
-  8: move north\n\
-  9: move north-east\n\
+Keyboard:\n\
+=========\n\
+  a: (a)uto-settler  (settler units)\n\
+  a: (a)uto-attack  (military units)\n\
+  b: (b)uild city  (settler units)\n\
+  b: help (b)uild wonder  (caravan units)\n\
+  c: (c)enter view on unit\n\
+  C: unit (c)onnect  (then left-click mouse to select destination)\n\
+  d: (d)iplomat/spy actions  (diplomat/spy units)\n\
+  D: (D)isband unit\n\
+  e: build airbas(e)  (airbase units)\n\
+  f: (f)ortify unit  (military units)\n\
+  f: build (f)ortress  (settler units)\n\
+  F: open (F)ind City dialog\n\
+  g: unit (g)oto  (then left-click mouse to select destination)\n\
+  h: change (h)omecity  (to city at current location)\n\
+  i: build (i)rrigation/farmland  (settler units; may convert terr)\n\
+  l: go/air(l)ift to city\n\
+  L: open Work(L)ists dialog\n\
+  m: build (m)ine  (settler units; may convert terrain)\n\
+  n: clean (n)uclear fallout\n\
+  N: explode (N)uclear\n\
+  o: transf(o)rm terrain\n\
+  p: clean (p)ollution  (settler units)\n\
+  p: (p)aradrop  (paratroop units)\n\
+  P: (P)illage terrain alteration\n\
+  q: unit patrol  (then left-click mouse to select destination)\n\
+  r: build (r)oad/railroad  (settler units)\n\
+  r: establish trade (r)oute  (caravan units)\n\
+  R: incite a (R)evolution\n\
+  s: (s)entry unit\n\
+  t: show (t)iles city is using  (mouse over or near city)\n\
+  T: open (T)ax/Lux/Sci Rates dialog\n\
+  u: (u)nload boat\n\
+  w: (w)ait until later in turn\n\
+  W: (W)ake up other units on tile\n\
+  x: auto-e(x)plore\n\
 \n\
-  5: focus on previous unit\n\
-  w: focus on next unit (wait)\n\
-  c: center view on unit\n\
-"), _("\
-Main Map (Keys):\n\
-================\n\
-    Shift-home: center on capital\n\
-  Shift-arrows: scroll map\n\
-        Ctrl-G: show grid lines on/off\n\
-        Ctrl-B: show national borders on/off\n\
-        Ctrl-N: show city names on/off\n\
-        Ctrl-R: show city growth on/off\n\
-        Ctrl-P: show city production on/off\n\
-"), _("\
-Main Map (Mouse):\n\
-=================\n\
-  Left-click on city:          Pop up city dialog\n\
-  Left-click on unit:          Activate unit\n\
-  Left-click-and-drag on unit: Goto command for unit\n\
-  Center-click:                Show tile info\n\
-  Right-click:                 Center tile in view\n\
+  1: move south-west                  F1: open City Report\n\
+  2: move south                       F2: open Unit Report\n\
+  3: move south-east                  F3: open Players dialog\n\
+  4: move west                        F5: open Economy Report\n\
+  5: focus on next unit               F6: open Science Report\n\
+  6: move east                        F7: open World Wonders\n\
+  7: move north-west                  F8: open Top Five Cities\n\
+  8: move north                      F10: open Messages dialog\n\
+  9: move north-east                 F11: open Demographics\n\
+                                     F12: open Spaceship\n\
 \n\
-  Shift-Left-click:            Copy production (GTK)\n\
-  Shift-Right-click on city:   Paste production into city (GTK)\n\
-\n\
-  Shift-Control-Left-click:    Adjust city workers\n\
-  Control-Center-click:        Wake up sentried units\n\
-  Shift-Control-Right-click:   Show city workers (mouse over or near city)\n\
-\n\
-  Area Selection mode (GTK):\n\
-  ==========================\n\
-  Right-click-and-drag: Enter Area Selection mode\n\
-  Left-click:           Toggle tile highlighting\n\
-  Shift-Right-click:    Paste production into highlighted cities\n\
-  Right-click:          Cancel Area Selection mode\n\
-\n\
-  The cities that become highlighted on the map,\n\
-  will also be highlighted in the City Report.\
-"), _("\
-Dialogs and Reports:\n\
-====================\n\
-     F1: show Map View\n\
-     F2: open Unit Report\n\
-     F3: open Nations Report\n\
-     F4: open City Report\n\
-     F5: open Economy Report\n\
-     F6: open Research Report\n\
-     F7: open World Wonders\n\
-     F8: open Top Five Cities\n\
-     F9: open Messages dialog\n\
-    F11: open Demographics\n\
-    F12: open Spaceship\n\
-\n\
-      T: open Tax/Lux/Sci Rates dialog\n\
-      F: open Find City dialog\n\
- Ctrl-L: open Worklists dialog\n\
-      R: open Revolution dialog\n\
-\n\
-Shift-Return: Turn done\
+  arrows: move unit            Control-g: grid lines on/off\n\
+   space: unit stay put        Control-n: city names on/off\n\
+     tab: focus on next unit   Control-p: city production on/off\n\
+  return: turn done\
 ")
 
 [help_chatline]
@@ -548,26 +499,19 @@ text = _("\
 The client has a primitive chat interface.  The lines you type \
 are sent to all players, except:\
 "), _("\
+  - Messages starting with 'foo:' are private messages to the \
+player named 'foo'; player names can be abbreviated.\
+"), _("\
   - Messages starting with '/' are interpreted as server commands \
-and executed, if you have the required access level.\
-"), _("\
-  - Messages starting with 'John:' are private messages to 'John'. \
-Names can be abbreviated. The server looks for players named 'John' \
-and if that fails tries to match a username beginning with 'John' (like \
-'Johnathan').\
-"), _("\
-  - Messages starting with 'John::' are private messages as above, but \
-will match only users (not players) named 'John'.  'Johnathan' will \
-still match.\
-"), _("\
-  - Messages starting with '.' will be sent only to all your allies.\
+(if the server is recent enough; regular 1.8.0 servers are not) \
+and executed, if you have the required access rights.\
 ")
 
 [help_worklist_editor]
 name = _("Worklist Editor")
 text = _("\
 The worklist editor is used to edit both worklists for each city (from the \
-city dialog) and global worklists. Using this editor you can create lists \
+city dialog) and global worklists. Using this editor You can create lists \
 specifying what to build in the turns to come.\
 "), _("\
 To add an item to the worklist, double-click the desired item in the list \
@@ -582,9 +526,6 @@ list, Up/Down arrows to select previous/next item \
 in worklist or available list, PageUp/Down to move items up/down \
 in the worklist, Insert to insert items from the available list into \
 the worklist and Delete to delete the selected item from the worklist.\
-"), _("\
-If you want to buy the unit that's first on the list, you can do that \
-from the City Overview window.\
 ")
 
 [help_strategy_and_tactics]
@@ -728,41 +669,36 @@ well, especially in the beginning of the game.  But to improve, \
 you need to study the various units and advances, and PRACTICE, \
 PRACTICE, PRACTICE!  Freeciv has many twists, so if you haven't \
 played a similar game before, try consulting the Freeciv WWW \
-pages at:\
-"), "\
-  http://www.freeciv.org/\
-", _("\
+pages at http://www.freeciv.org/\n\
 You'll find more tips for playing, and details of how to contact \
 other players.\
 "), _("\
  10. Interacting with other players (Diplomacy).\
 \n\n\
-    If you have recently contacted (or established an embassy \
-with) another player, then you can arrange a diplomatic meeting. \
-This is done by going to the `Reports' menu, selecting `Players', \
-clicking on the player with whom you wish to meet, and finally \
-clicking the `Meet' button below.  If the entry under the embassy \
-column is not blank and the other player is connected (or is a \
-server AI) then a diplomacy menu will pop up.\
+    Humans and AI differ in many ways, but the most significant is \
+the additional diplomacy that you can take part in with other \
+humans - and no, we are not talking about using spies and \
+diplomats to incite and steal.\
+"), _("\
+    If you have established an embassy with another human player, \
+then you can arrange a diplomatic meeting. This is done by \
+going to the `Game' menu, selecting players and clicking on \
+the player with whom you wish to meet.  If you actually have \
+an embassy (denoted by an X) and the other player is connected \
+then a diplomacy menu will pop up.\
 "), _("\
     In this menu you can choose to:\
 \n\n\
    - Trade Maps (Sea or entire map),\
 \n\n\
-   - Trade Advances,\
+   - Trade advances,\
 \n\n\
    - Trade Cities,\
-\n\n\
-   - Trade Shared Vision,\
-\n\n\
-   - Exchange Embassies,\
-\n\n\
-   - Create Treaties,\
 \n\n\
    - and Give Gold.\
 "), _("\
     There is no need to trade like for like, by trading say, \
-an advance or city for gold - you can consider this \
+an advance or city for gold - you can can consider this \
 buying and selling.\
 "), _("\
     A couple of notes:\
@@ -774,63 +710,23 @@ buying and selling.\
      Of course, the owner of that city can still give it to \
 you, in which case the area around the city is shown \
 on your map.  One important thing to note: any units \
-in the field and supported by that city are also transferred \
+in the field and supported by that city are also transfered \
 (but not those sitting in other cities).  So make sure the \
 other player isn't getting a better deal than you expect.\
-"), _("\
-     There are five diplomatic states between players: War, \
-Cease-fire, Armistice, Peace, and Alliance. The first is the default state, \
-while the others can be achieved by signing diplomatic treaties.\
-"), _("\
-     To have a diplomatic relationship with another player, you must \
-establish contact with that player. Contact occurs whenever \
-one of your units is within sight of a city or unit belonging to another \
-player, or vice versa. Unless you establish an embassy with that player, \
-you may again lose contact with them a set number of turns after \
-most recent contact.\
-"), _("\
-     The diplomatic state between players defaults to War. \
-During War, you can freely move your units inside enemy territory and \
-attack their units and cities at will.\
-"), _("\
-     When two players decide to end hostilities between them, they can \
-agree on a Cease-fire treaty. After a set number of turns, the Cease-fire \
-will lead back to War. Upon first contact with an AI player, it will \
-automatically offer you a Cease-fire treaty.\
-"), _("\
-     If you wish for a more permanent peaceful coexistence with another \
-player, you may enter an Armistice, that after another set number of turns \
-will turn into a permanent Peace treaty. Breaking an Armistice will drop \
-you directly back to War.\
-"), _("\
-     At the moment two players enter into the diplomatic state of Peace, \
-all units belonging to either player that happen to be within the other's \
-borders will be automatically disbanded according to the treaty. After \
-this, you may not move units into the other's territory until you either \
-declare War, or forge an Alliance. Breaking a Peace treaty will drop you \
-directly back to War.\
-"), _("\
-     An Alliance is the ultimate diplomatic relationship between two \
-players. In this state, you may move units into each other's cities and \
-your units may share the same square. An allied AI player will freely give \
-you its world maps, shared vision, as well as seriously consider trading \
-technologies and cities. The only drawback with an alliance is that it \
-will draw you into any wars your ally enters against other players. \
-Breaking an Alliance will drop you to an Armistice treaty.\
 ")
 
-[help_governor]
-name = _("Citizen Governor")
+[help_cma]
+name = _("Citizen Management Agent")
 text = _("\
-The Citizen Governor (formerly called the CMA) helps you manage your cities. \
+The Citizen Management Agent (CMA) helps you manage your cities. \
 It deploys the available workers on the free tiles around the \
 city to achieve maximal city output. It also changes workers to \
-scientists, taxmen, or entertainers, if appropriate. And the governor \
-has another ability: whenever possible, it keeps \
+scientists, taxmen, or entertainers, if appropriate. And the CMA \
+has another astonishing ability: whenever possible, it keeps \
 your cities content.\
 \n\n\
-There are various means to tell the governor what kind of output you \
-would like. Open the city window and click on the governor tab. There \
+There are various means to tell the CMA what kind of output you \
+would like. Open the city window and click on the CMA tab. There \
 are two kinds of sliders: On the left, you can set a Minimal \
 Surplus for each kind of production; e.g. Gold = +3 means the city \
 earns 3 gold more than it needs to upkeep its improvements. On the \
@@ -841,7 +737,7 @@ different factors for each kind of production, according to your \
 needs.\
 \n\n\
 If you set up some Minimal Surpluses which are impossible to fulfill, \
-the governor can't be activated. Whenever the governor can't fulfill its task \
+the CMA can't be activated. Whenever the CMA can't fulfill its task \
 in the ongoing game, it passes back control to you. So you'd better \
 not define too high a surplus; instead, use factors to achieve your \
 goals.\
@@ -850,22 +746,22 @@ The Celebrate checkbox lets your city - celebrate. This will work \
 only with a high luxury rate. See help about 'Happiness'.\
 \n\n\
 Clicking on 'Control city' puts the city under control of \
-the governor, 'Release city' passes control back to you.\
+the CMA, 'Release city' passes control back to you.\
 \n\n\
 For ease of use, you can save your slider setting as a preset \
 with a name. Click on 'add preset' and enter a name for your \
 setting. You can use this preset in every city by just clicking \
 on its name. Also, you can control your setting from within the \
-city report, in the governor column. And you can change it from there \
-(use 'change' --> 'Citizen Governor'), if you have saved it as a preset.\
+city report, in the CMA column. And you can change it from there \
+(use 'change' --> 'CMA'), if you have saved it as a preset.\
 \n\n\
 Use 'Game' --> 'Save Settings' to store your presets \
 permanently.\
 \n\n\
-But beware! If you use the governor for some of your cities, you will \
+But beware! If you use the CMA for some of your cities, you will \
 encounter some difficulties with managing cities nearby, by hand. \
 It's best to manage all cities on an island either by hand or by \
-governor. Read more hints, some background information, and some \
+CMA. Read more hints, some background information, and some \
 preset examples in the file README.cma, included with Freeciv.\n\
 ")
 
@@ -987,8 +883,7 @@ generate = "Units"
 
 [help_combat]
 name = _("Combat")
-text = _("Default Combat Rules\n---------------------"),
-_("\
+text = _("\
 When one unit attacks another unit, either the attacker will be \
 destroyed, or the defender will be destroyed -- never both (unless \
 the attacker was a missile).  The outcome depends on several \
@@ -997,6 +892,12 @@ factors, including chance.\
 First, the attacker's strength is modified.\
 "), _("\
  - If the attacker is a veteran, its strength is multiplied by 1.5.\
+"), _("\
+ - \"Exhausted\" attackers are weaker: if the attacker has only 1/3 \
+movement point left, its strength is divided by 3; if it has 2/3 \
+movement point, its strength is multiplied by 2/3.  If the \
+attacker has 1 or more movement points left, no further \
+modifications occur.\
 "), _("\
 Next, the defender's strength is modified.\
 "), _("\
@@ -1077,23 +978,15 @@ other units at the defender's location are destroyed along with the \
 defender.\
 ")
 
-[help_combat_modifying]
-name = _(" Modifying Combat Rules")
-text = _("Modifying Combat Rules\n----------------------"),
-_("\
-The combat rules described before can be modified by changing the \
-following modifiers in game.ruleset, section combat_rules: \
-"), _("\
- - killstack. (default: 1) If set to 0, units in the same tile of a \
-lost defender are not destroyed. \
-")
-
 [help_combat_example_1]
 name = _(" Combat example 1")
 text = _("\
-Suppose a Cannon (A:8, D:1, HP:20, F:1) attacks a Musketeer \
-(A:3, D:3, HP:20, F:1) inside a city with City Walls built \
-on a Forest tile.  Neither are veteran.\
+Suppose a veteran Cannon (A:8, D:1, HP:20, F:1) with 2/3 movement \
+points left attacks a non-veteran Musketeer (A:3, D:3, HP:20, F:1) \
+inside a city with City Walls built on a Forest tile.\
+"), _("\
+The attacker's base strength is 8.  Veteran status makes this 12, \
+but because it only has 2/3 movement points its final strength is 8.\
 "), _("\
 The defender's base strength is 3.  Because it is on a Forest tile, \
 its strength becomes 4.5.  It is behind City Walls, so its strength \
@@ -1284,14 +1177,7 @@ half (rounded up) for Engineers, and they can be reduced further by \
 stockpiling several Settlers/Engineers, doing teamwork.\
 "), "\
 $TerrainAlterations\
-", _("\
-City centers (the tile a city is on) are special.  A city center is \
-worked for free in the default rules. When a city is built a road is \
-automatically put on the city, and a railroad will also be placed there \
-whenever possible.  City centers are auto-irrigated: they get the \
-benefits of irrigation, although they are not actually irrigated. \
-Finally the city center may have a ruleset-dependent minimum for \
-food, shield, and trade output.")
+"
 
 [help_pillaging]
 name = _("  Pillaging")
@@ -1338,13 +1224,6 @@ city is, the more trade will be lost to corruption.  (If you do not \
 have a capital, your cities will suffer extremely high levels of \
 corruption.)  A Courthouse will reduce the level of corruption in a \
 city.\
-"), _("\
-Waste is the loss of shields due to inefficiency and greed. \
-Under most forms of government, the farther away from the capital a \
-city is, the more shields will be lost to waste.  (If you do not \
-have a capital, your cities will suffer extremely high levels of \
-waste.)  A Courthouse will reduce the level of waste in a \
-city. Waste can result in your cities not building anything.\
 "), _("\
 TIP 1:  Offensive military campaigns are difficult under Republican \
 and Democratic governments unless you give your citizens \

@@ -14,14 +14,7 @@
 #define FC__COLORS_H
 
 #include "colors_g.h"
-
-struct color {
-  LONG rgb;
-};
-
-HPEN pen_alloc(struct color *color);
-void pen_free(HPEN pen);
-HBRUSH brush_alloc(struct color *color);
-void brush_free(HBRUSH brush);
+extern HPEN pen_std[COLOR_STD_LAST];
+extern HBRUSH brush_std[COLOR_STD_LAST];
 
 #endif  /* FC__COLORS_H */

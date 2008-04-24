@@ -13,25 +13,32 @@
 #ifndef FC__SETTLERS_H
 #define FC__SETTLERS_H
 
-#include "fc_types.h"
 #include "map.h"
 
-void auto_settlers_init(void);
-void auto_settlers_player(struct player *pplayer);
+struct player;
+struct unit;
+struct city;
+
+void auto_settler_do_goto(struct player *pplayer, struct unit *punit, int x,
+			  int y);
+void auto_settlers(void);
+int find_boat(struct player *pplayer, int *x, int *y, int cap);
 
 #define MORT 24
 
 int amortize(int benefit, int delay);
 void ai_manage_settler(struct player *pplayer, struct unit *punit);
 
-void init_settlers(void);
-
-void initialize_infrastructure_cache(struct player *pplayer);
+void generate_minimap(void);
+void remove_city_from_minimap(int x, int y);
+void add_city_to_minimap(int x, int y);
+void initialize_infrastructure_cache(struct city *pcity);
 
 void contemplate_terrain_improvements(struct city *pcity);
 void contemplate_new_city(struct city *pcity);
 
-extern signed int *minimap;
-#define MINIMAP(_tile) minimap[tile_index(_tile)]
+struct unit *other_passengers(struct unit *punit);
+
+extern signed int minimap[MAP_MAX_WIDTH][MAP_MAX_HEIGHT];
 
 #endif   /* FC__SETTLERS_H */

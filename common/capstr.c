@@ -11,10 +11,7 @@
    GNU General Public License for more details.
 ***********************************************************************/
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
+#include <string.h>
 #include <stdlib.h>		/* getenv() */
 
 #include "connection.h"		/* MAX_LEN_CAPSTR */
@@ -49,7 +46,7 @@ const char * const our_capability = our_capability_internal;
  * "struct connection" has a capability string, which gives the
  * capability of the executable at the other end of the connection.
  * So for the client, the capability of the server is in
- * client.conn.capability, and for the server, the capabilities of
+ * aconnection.capability, and for the server, the capabilities of 
  * connected clients are in game.players[i]->conn.capability
  * The client now also knows the capabilities of other clients,
  * via game.players[i]->conn.capability.
@@ -71,9 +68,17 @@ const char * const our_capability = our_capability_internal;
  * (The savefile and ruleset files have strings which are used similarly,
  * and checked by the same has_capability function, but the strings there
  * are not directly related to the capability strings discussed here.)
- *
- * The actual capability string is now defined in version.in.
  */
+
+#define CAPABILITY "+1.14.0 conn_info team"
+  
+/* "+1.14.0" is protocol for 1.14.0 release.
+  
+   "conn_info" is sending the conn_id field. To preserve compatability
+   with old clients trying to connect this should persist across releases.
+
+   "team" is support for player teams.
+*/
 
 void init_our_capability(void)
 {
@@ -81,7 +86,7 @@ void init_our_capability(void)
 
   s = getenv("FREECIV_CAPS");
   if (!s) {
-    s = NETWORK_CAPSTRING;
+    s = CAPABILITY;
   }
   sz_strlcpy(our_capability_internal, s);
 }

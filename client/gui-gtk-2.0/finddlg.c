@@ -33,92 +33,102 @@
 
 #include "finddlg.h"
 
-static struct gui_dialog *find_dialog_shell;
+static GtkWidget *find_dialog_shell;
 static GtkWidget *find_view;
 
 static void update_find_dialog(GtkListStore *store);
 
-static void find_response(struct gui_dialog *dlg, int response, gpointer data);
+static void find_command_callback(GtkWidget *w, gint response_id);
 static void find_destroy_callback(GtkWidget *w, gpointer data);
 static void find_selection_callback(GtkTreeSelection *selection,
 				    GtkTreeModel *model);
 
-static struct tile *pos;
+static int pos_x, pos_y;
 
 /****************************************************************
 popup the dialog 10% inside the main-window 
 *****************************************************************/
 void popup_find_dialog(void)
 {
-  if (!find_dialog_shell) {
-    GtkWidget         *label;
-    GtkWidget         *sw;
-    GtkListStore      *store;
-    GtkTreeSelection  *selection;
-    GtkCellRenderer   *renderer;
-    GtkTreeViewColumn *column;
+  GtkWidget         *shell, *label;
+  GtkWidget         *sw;
+  GtkListStore      *store;
+  GtkTreeSelection  *selection;
+  GtkCellRenderer   *renderer;
+  GtkTreeViewColumn *column;
 
-    pos = get_center_tile_mapcanvas();
-
-    gui_dialog_new(&find_dialog_shell, GTK_NOTEBOOK(bottom_notebook), NULL);
-    gui_dialog_set_title(find_dialog_shell, _("Find City"));
-    gui_dialog_set_default_size(find_dialog_shell, -1, 240);
-
-    gui_dialog_add_button(find_dialog_shell,
-	GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL);
-    gui_dialog_add_button(find_dialog_shell,
-	GTK_STOCK_FIND, GTK_RESPONSE_ACCEPT);
-
-    gui_dialog_set_default_response(find_dialog_shell, GTK_RESPONSE_ACCEPT);
-
-    gui_dialog_response_set_callback(find_dialog_shell, find_response);
-
-    g_signal_connect(find_dialog_shell->vbox, "destroy",
-	G_CALLBACK(find_destroy_callback), NULL);
-
-    store = gtk_list_store_new(2, G_TYPE_STRING, G_TYPE_POINTER);
-    gtk_tree_sortable_set_sort_column_id(GTK_TREE_SORTABLE(store),
-	0, GTK_SORT_ASCENDING);
-
-    find_view = gtk_tree_view_new_with_model(GTK_TREE_MODEL(store));
-    selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(find_view));
-    g_object_unref(store);
-    gtk_tree_view_columns_autosize(GTK_TREE_VIEW(find_view));
-    gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(find_view), FALSE);
-
-    renderer = gtk_cell_renderer_text_new();
-    column = gtk_tree_view_column_new_with_attributes(NULL, renderer,
-	"text", 0, NULL);
-    gtk_tree_view_column_set_sort_order(column, GTK_SORT_ASCENDING);
-    gtk_tree_view_append_column(GTK_TREE_VIEW(find_view), column);
-
-    sw = gtk_scrolled_window_new(NULL, NULL);
-    gtk_scrolled_window_set_shadow_type(GTK_SCROLLED_WINDOW(sw),
-	GTK_SHADOW_ETCHED_IN);
-    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sw),
-	GTK_POLICY_AUTOMATIC, GTK_POLICY_ALWAYS);
-    gtk_container_add(GTK_CONTAINER(sw), find_view);
-
-    label = g_object_new(GTK_TYPE_LABEL,
-	"use-underline", TRUE,
-	"mnemonic-widget", find_view,
-	"label", _("Ci_ties:"),
-	"xalign", 0.0, "yalign", 0.5, NULL);
-    gtk_box_pack_start(GTK_BOX(find_dialog_shell->vbox), label,
-	FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(find_dialog_shell->vbox), sw,
-	TRUE, TRUE, 2);
-
-    g_signal_connect(selection, "changed",
-	G_CALLBACK(find_selection_callback), store);
-
-    update_find_dialog(store);
-    gtk_tree_view_focus(GTK_TREE_VIEW(find_view));
-
-    gui_dialog_show_all(find_dialog_shell);
+  if (find_dialog_shell) {
+    gtk_window_present(GTK_WINDOW(find_dialog_shell));
+    return;
   }
 
-  gui_dialog_raise(find_dialog_shell);
+  get_center_tile_mapcanvas(&pos_x, &pos_y);
+
+  shell = gtk_dialog_new_with_buttons(_("Find City"),
+  	NULL,
+	0,
+	GTK_STOCK_CANCEL,
+	GTK_RESPONSE_CANCEL,
+	GTK_STOCK_FIND,
+	GTK_RESPONSE_ACCEPT,
+	NULL);
+  find_dialog_shell = shell;
+  if (dialogs_on_top) {
+    gtk_window_set_transient_for(GTK_WINDOW(shell),
+				 GTK_WINDOW(toplevel));
+  }
+  gtk_window_set_type_hint(GTK_WINDOW(shell),
+			   GDK_WINDOW_TYPE_HINT_NORMAL);
+  gtk_dialog_set_default_response(GTK_DIALOG(shell),
+	GTK_RESPONSE_ACCEPT);
+  gtk_window_set_position(GTK_WINDOW(shell), GTK_WIN_POS_MOUSE);
+
+  g_signal_connect(shell, "response",
+		   G_CALLBACK(find_command_callback), NULL);
+  g_signal_connect(shell, "destroy",
+		   G_CALLBACK(find_destroy_callback), NULL);
+
+  store = gtk_list_store_new(2, G_TYPE_STRING, G_TYPE_POINTER);
+  gtk_tree_sortable_set_sort_column_id(GTK_TREE_SORTABLE(store),
+    0, GTK_SORT_ASCENDING);
+
+  find_view = gtk_tree_view_new_with_model(GTK_TREE_MODEL(store));
+  selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(find_view));
+  g_object_unref(store);
+  gtk_tree_view_columns_autosize(GTK_TREE_VIEW(find_view));
+  gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(find_view), FALSE);
+
+  renderer = gtk_cell_renderer_text_new();
+  column = gtk_tree_view_column_new_with_attributes(NULL, renderer,
+  	"text", 0, NULL);
+  gtk_tree_view_column_set_sort_order(column, GTK_SORT_ASCENDING);
+  gtk_tree_view_append_column(GTK_TREE_VIEW(find_view), column);
+
+  sw = gtk_scrolled_window_new(NULL, NULL);
+  gtk_scrolled_window_set_shadow_type(GTK_SCROLLED_WINDOW(sw),
+				      GTK_SHADOW_ETCHED_IN);
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sw),
+                          GTK_POLICY_AUTOMATIC, GTK_POLICY_ALWAYS);
+  gtk_widget_set_size_request(sw, -1, 200);
+  gtk_container_add(GTK_CONTAINER(sw), find_view);
+
+  label = g_object_new(GTK_TYPE_LABEL,
+		       "use-underline", TRUE,
+		       "mnemonic-widget", find_view,
+		       "label", _("Ci_ties:"),
+		       "xalign", 0.0, "yalign", 0.5, NULL);
+  gtk_box_pack_start(GTK_BOX(GTK_DIALOG(shell)->vbox), label, FALSE, FALSE, 0);
+  gtk_box_pack_start(GTK_BOX(GTK_DIALOG(shell)->vbox), sw, TRUE, TRUE, 2);
+
+
+  g_signal_connect(selection, "changed",
+		   G_CALLBACK(find_selection_callback), store);
+
+  update_find_dialog(store);
+  gtk_tree_view_focus(GTK_TREE_VIEW(find_view));
+
+  gtk_widget_show_all(GTK_DIALOG(shell)->vbox);
+  gtk_window_present(GTK_WINDOW(shell));
 }
 
 
@@ -128,32 +138,33 @@ void popup_find_dialog(void)
 **************************************************************************/
 static void update_find_dialog(GtkListStore *store)
 {
+  int i;
   GtkTreeIter it;
 
   gtk_list_store_clear(store);
 
-  players_iterate(pplayer) {
-    city_list_iterate(pplayer->cities, pcity) {
+  for(i = 0; i < game.nplayers; i++) {
+    city_list_iterate(game.players[i].cities, pcity) {
 	GValue value = { 0, };
 
 	gtk_list_store_append(store, &it);
 
 	g_value_init(&value, G_TYPE_STRING);
-	g_value_set_static_string(&value, city_name(pcity));
+	g_value_set_static_string(&value, pcity->name);
 	gtk_list_store_set_value(store, &it, 0, &value);
 	g_value_unset(&value);
 
 	gtk_list_store_set(store, &it, 1, pcity, -1);
     } city_list_iterate_end;
-  } players_iterate_end;
+  }
 }
 
 /**************************************************************************
 ...
 **************************************************************************/
-static void find_response(struct gui_dialog *dlg, int response, gpointer data)
+static void find_command_callback(GtkWidget *w, gint response_id)
 {
-  if (response == GTK_RESPONSE_ACCEPT) {
+  if (response_id == GTK_RESPONSE_ACCEPT) {
     GtkTreeSelection *selection;
     GtkTreeModel *model;
     GtkTreeIter it;
@@ -166,11 +177,12 @@ static void find_response(struct gui_dialog *dlg, int response, gpointer data)
       gtk_tree_model_get(model, &it, 1, &pcity, -1);
 
       if (pcity) {
-	pos = pcity->tile;
+        pos_x = pcity->x;
+        pos_y = pcity->y;
       }
     }
   }
-  gui_dialog_destroy(dlg);
+  gtk_widget_destroy(find_dialog_shell);
 }
 
 /**************************************************************************
@@ -178,9 +190,8 @@ static void find_response(struct gui_dialog *dlg, int response, gpointer data)
 **************************************************************************/
 static void find_destroy_callback(GtkWidget *w, gpointer data)
 {
-  can_slide = FALSE;
-  center_tile_mapcanvas(pos);
-  can_slide = TRUE;
+  center_tile_mapcanvas(pos_x, pos_y);
+  find_dialog_shell = NULL;
 }
 
 /**************************************************************************
@@ -197,9 +208,6 @@ static void find_selection_callback(GtkTreeSelection *selection,
 
   gtk_tree_model_get(model, &it, 1, &pcity, -1);
 
-  if (pcity) {
-    can_slide = FALSE;
-    center_tile_mapcanvas(pcity->tile);
-    can_slide = TRUE;
-  }
+  if (pcity)
+    center_tile_mapcanvas(pcity->x, pcity->y);
 }

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -24,29 +23,19 @@
 #include "astring.h"
 #include "fcintl.h"
 #include "log.h"
-
-#include "game.h"
-#include "government.h"
 #include "map.h"
 #include "mem.h"
-#include "movement.h"
 #include "support.h"
 #include "unit.h"
-#include "unitlist.h"
 
 #include "chatline.h"
 #include "cityrep.h"
 #include "civclient.h"
 #include "clinet.h"
-#include "connectdlg_common.h"
-#include "connectdlg.h"
 #include "control.h"
 #include "dialogs.h"
-#include "editdlg.h"
 #include "finddlg.h"
 #include "gotodlg.h"
-#include "graphics.h"
-#include "gui_main.h"
 #include "gui_stuff.h"
 #include "helpdlg.h"
 #include "mapctrl.h"   /* center_on_unit */
@@ -54,8 +43,6 @@
 #include "messagewin.h"
 #include "optiondlg.h"
 #include "options.h"
-#include "packhand.h"
-#include "pages.h"
 #include "plrdlg.h"
 #include "ratesdlg.h"
 #include "repodlgs.h"
@@ -65,13 +52,10 @@
 #include "menu.h"
 
 static GtkItemFactory *item_factory = NULL;
-static GtkWidget *main_menubar = NULL;
 GtkAccelGroup *toplevel_accel = NULL;
 static enum unit_activity road_activity;
 
-static void menus_rename(const char *path, const char *s);
-static void menus_set_active_no_callback(const gchar *path,
-                                         gboolean active);
+static void menus_rename(const char *path, char *s);
 
 /****************************************************************
 ...
@@ -81,29 +65,21 @@ enum MenuID {
 
   MENU_GAME_OPTIONS,
   MENU_GAME_MSG_OPTIONS,
-#ifdef DEBUG
-  MENU_GAME_RELOAD_TILESET,
-#endif
-  MENU_GAME_SAVE_OPTIONS_ON_EXIT,
-  MENU_GAME_SAVE_OPTIONS,
-  MENU_GAME_SERVER_OPTIONS,
-  MENU_GAME_SAVE_GAME,
-  MENU_GAME_SAVE_QUICK, 
+  MENU_GAME_SAVE_SETTINGS,
+  MENU_GAME_SERVER_OPTIONS1,
+  MENU_GAME_SERVER_OPTIONS2,
   MENU_GAME_OUTPUT_LOG,
   MENU_GAME_CLEAR_OUTPUT,
-  MENU_GAME_LEAVE,
+  MENU_GAME_DISCONNECT,
   MENU_GAME_QUIT,
   
-  MENU_GOVERNMENT_TAX_RATE,
-  MENU_GOVERNMENT_FIND_CITY,
-  MENU_GOVERNMENT_WORKLISTS,
-  MENU_GOVERNMENT_REVOLUTION,
+  MENU_KINGDOM_TAX_RATE,
+  MENU_KINGDOM_FIND_CITY,
+  MENU_KINGDOM_WORKLISTS,
+  MENU_KINGDOM_REVOLUTION,
 
-  MENU_VIEW_SHOW_CITY_OUTLINES,
   MENU_VIEW_SHOW_MAP_GRID,
-  MENU_VIEW_SHOW_NATIONAL_BORDERS,
   MENU_VIEW_SHOW_CITY_NAMES,
-  MENU_VIEW_SHOW_CITY_GROWTH_TURNS,
   MENU_VIEW_SHOW_CITY_PRODUCTIONS,
   MENU_VIEW_SHOW_TERRAIN,
   MENU_VIEW_SHOW_COASTLINE,
@@ -117,7 +93,6 @@ enum MenuID {
   MENU_VIEW_SHOW_UNITS,
   MENU_VIEW_SHOW_FOCUS_UNIT,
   MENU_VIEW_SHOW_FOG_OF_WAR,
-  MENU_VIEW_FULL_SCREEN,
   MENU_VIEW_CENTER_VIEW,
 
   MENU_ORDER_BUILD_CITY,     /* shared with BUILD_WONDER */
@@ -132,33 +107,23 @@ enum MenuID {
   MENU_ORDER_SENTRY,
   MENU_ORDER_PILLAGE,
   MENU_ORDER_HOMECITY,
-  MENU_ORDER_UNLOAD_TRANSPORTER,
-  MENU_ORDER_LOAD,
   MENU_ORDER_UNLOAD,
   MENU_ORDER_WAKEUP_OTHERS,
   MENU_ORDER_AUTO_SETTLER,   /* shared with AUTO_ATTACK */
   MENU_ORDER_AUTO_EXPLORE,
-  MENU_ORDER_CONNECT_ROAD,
-  MENU_ORDER_CONNECT_RAIL,
-  MENU_ORDER_CONNECT_IRRIGATE,
-  MENU_ORDER_GO_BUILD_CITY,
+  MENU_ORDER_CONNECT,
   MENU_ORDER_PATROL,
   MENU_ORDER_GOTO,
   MENU_ORDER_GOTO_CITY,
-  MENU_ORDER_RETURN,
   MENU_ORDER_DISBAND,
-  MENU_ORDER_UPGRADE,
   MENU_ORDER_DIPLOMAT_DLG,
   MENU_ORDER_NUKE,
-  MENU_ORDER_SELECT_SAME_TYPE,
-  MENU_ORDER_SELECT_SAME_TYPE_TILE,
   MENU_ORDER_WAIT,
   MENU_ORDER_DONE,
 
   MENU_REPORT_CITIES,
   MENU_REPORT_UNITS,
   MENU_REPORT_PLAYERS,
-  MENU_REPORT_MAP_VIEW,
   MENU_REPORT_ECONOMY,
   MENU_REPORT_SCIENCE,
   MENU_REPORT_WOW,
@@ -166,11 +131,6 @@ enum MenuID {
   MENU_REPORT_MESSAGES,
   MENU_REPORT_DEMOGRAPHIC,
   MENU_REPORT_SPACESHIP,
- 
-  MENU_EDITOR_TOGGLE,
-  MENU_EDITOR_TOOLS,
-  MENU_EDITOR_RECALCULATE_BORDERS,
-  MENU_EDITOR_REGENERATE_WATER,
 
   MENU_HELP_LANGUAGES,
   MENU_HELP_CONNECTING,
@@ -195,26 +155,10 @@ enum MenuID {
 
 
 /****************************************************************
-  This is the response callback for the dialog with the message:
-  Leaving a local game will end it!
-****************************************************************/
-static void leave_local_game_response(GtkWidget* dialog, gint response)
-{
-  gtk_widget_destroy(dialog);
-  if (response == GTK_RESPONSE_OK) {
-    /* It might be killed already */
-    if (client.conn.used) {
-      /* It will also kill the server */
-      disconnect_from_server();
-    }
-  }
-}
-
-/****************************************************************
-  ...
- *****************************************************************/
+...
+*****************************************************************/
 static void game_menu_callback(gpointer callback_data,
-    guint callback_action, GtkWidget *widget)
+			       guint callback_action, GtkWidget *widget)
 {
   switch(callback_action) {
   case MENU_GAME_OPTIONS:
@@ -223,27 +167,14 @@ static void game_menu_callback(gpointer callback_data,
   case MENU_GAME_MSG_OPTIONS:
     popup_messageopt_dialog();
     break;
-#ifdef DEBUG
-  case MENU_GAME_RELOAD_TILESET:
-    tilespec_reread(NULL);
-    break;
-#endif
-  case MENU_GAME_SAVE_OPTIONS_ON_EXIT:
-    if (save_options_on_exit ^ GTK_CHECK_MENU_ITEM(widget)->active) {
-      save_options_on_exit ^= 1;
-    }
-    break;
-  case MENU_GAME_SAVE_OPTIONS:
+  case MENU_GAME_SAVE_SETTINGS:
     save_options();
     break;
-  case MENU_GAME_SERVER_OPTIONS:
-    popup_settable_options_dialog();
+  case MENU_GAME_SERVER_OPTIONS1:
+    send_report_request(REPORT_SERVER_OPTIONS1);
     break;
-  case MENU_GAME_SAVE_GAME:
-    popup_save_dialog();
-    break;
-  case MENU_GAME_SAVE_QUICK:
-    send_save_game(NULL);
+  case MENU_GAME_SERVER_OPTIONS2:
+    send_report_request(REPORT_SERVER_OPTIONS2);
     break;
   case MENU_GAME_OUTPUT_LOG:
     log_output_window();
@@ -251,25 +182,11 @@ static void game_menu_callback(gpointer callback_data,
   case MENU_GAME_CLEAR_OUTPUT:
     clear_output_window();
     break;
-  case MENU_GAME_LEAVE:
-    if (is_server_running()) {
-      GtkWidget* dialog = gtk_message_dialog_new(NULL,
-	  0,
-	  GTK_MESSAGE_WARNING,
-	  GTK_BUTTONS_OK_CANCEL,
-	  _("Leaving a local game will end it!"));
-      setup_dialog(dialog, toplevel);
-      gtk_window_set_position(GTK_WINDOW(dialog), GTK_WIN_POS_MOUSE);
-      g_signal_connect(dialog, "response", 
-	  G_CALLBACK(leave_local_game_response), NULL);
-      gtk_window_present(GTK_WINDOW(dialog));
-    } else {
-      disconnect_from_server();
-    }
+  case MENU_GAME_DISCONNECT:
+    disconnect_from_server();
     break;
   case MENU_GAME_QUIT:
-    popup_quit_dialog();
-    break;
+    exit(EXIT_SUCCESS);
   }
 }
 
@@ -277,21 +194,21 @@ static void game_menu_callback(gpointer callback_data,
 /****************************************************************
 ...
 *****************************************************************/
-static void government_menu_callback(gpointer callback_data,
+static void kingdom_menu_callback(gpointer callback_data,
 				  guint callback_action, GtkWidget *widget)
 {
   switch(callback_action) {
-  case MENU_GOVERNMENT_TAX_RATE:
+  case MENU_KINGDOM_TAX_RATE:
     popup_rates_dialog();
     break;
-  case MENU_GOVERNMENT_FIND_CITY:
+  case MENU_KINGDOM_FIND_CITY:
     popup_find_dialog();
     break;
-  case MENU_GOVERNMENT_WORKLISTS:
+  case MENU_KINGDOM_WORKLISTS:
     popup_worklists_report();
     break;
-  case MENU_GOVERNMENT_REVOLUTION:
-    popup_revolution_dialog(NULL);
+  case MENU_KINGDOM_REVOLUTION:
+    popup_revolution_dialog();
     break;
   }
 }
@@ -305,29 +222,13 @@ static void view_menu_callback(gpointer callback_data, guint callback_action,
 			       GtkWidget *widget)
 {
   switch(callback_action) {
-  case MENU_VIEW_SHOW_CITY_OUTLINES:
-    if (draw_city_outlines ^ GTK_CHECK_MENU_ITEM(widget)->active) {
-      key_city_outlines_toggle();
-    }
-    break;
   case MENU_VIEW_SHOW_MAP_GRID:
     if (draw_map_grid ^ GTK_CHECK_MENU_ITEM(widget)->active)
       key_map_grid_toggle();
     break;
-  case MENU_VIEW_SHOW_NATIONAL_BORDERS:
-    if (draw_borders ^ GTK_CHECK_MENU_ITEM(widget)->active) {
-      key_map_borders_toggle();
-    }
-    break;
   case MENU_VIEW_SHOW_CITY_NAMES:
-    if (draw_city_names ^ GTK_CHECK_MENU_ITEM(widget)->active) {
+    if (draw_city_names ^ GTK_CHECK_MENU_ITEM(widget)->active)
       key_city_names_toggle();
-      menus_set_sensitive("<main>/_View/City G_rowth", draw_city_names);
-    }
-    break;
-  case MENU_VIEW_SHOW_CITY_GROWTH_TURNS:
-    if (draw_city_growth ^ GTK_CHECK_MENU_ITEM(widget)->active)
-      key_city_growth_toggle();
     break;
   case MENU_VIEW_SHOW_CITY_PRODUCTIONS:
     if (draw_city_productions ^ GTK_CHECK_MENU_ITEM(widget)->active)
@@ -385,17 +286,6 @@ static void view_menu_callback(gpointer callback_data, guint callback_action,
     if (draw_fog_of_war ^ GTK_CHECK_MENU_ITEM(widget)->active)
       key_fog_of_war_toggle();
     break;
-  case MENU_VIEW_FULL_SCREEN:
-    if (fullscreen_mode ^ GTK_CHECK_MENU_ITEM(widget)->active) {
-      fullscreen_mode ^= 1;
-
-      if (fullscreen_mode) {
-	gtk_window_fullscreen(GTK_WINDOW(toplevel));
-      } else {
-	gtk_window_unfullscreen(GTK_WINDOW(toplevel));
-      }
-    }
-    break;
   case MENU_VIEW_CENTER_VIEW:
     center_on_unit();
     break;
@@ -410,34 +300,25 @@ static void orders_menu_callback(gpointer callback_data,
 				 guint callback_action, GtkWidget *widget)
 {
   switch(callback_action) {
-  case MENU_ORDER_SELECT_SAME_TYPE:
-    request_unit_select_same_type(get_units_in_focus());
-    break;
-  case MENU_ORDER_SELECT_SAME_TYPE_TILE:
-    request_unit_select_same_type_tile(get_units_in_focus());
-    break;
-  case MENU_ORDER_BUILD_CITY:
-    unit_list_iterate(get_units_in_focus(), punit) {
-      /* FIXME: this can provide different actions for different units...
-       * not good! */
+   case MENU_ORDER_BUILD_CITY:
+    if (get_unit_in_focus()) {
+      struct unit *punit = get_unit_in_focus();
       /* Enable the button for adding to a city in all cases, so we
 	 get an eventual error message from the server if we try. */
       if (can_unit_add_or_build_city(punit)) {
-	request_unit_build_city(punit);
+	key_unit_build_city();
       } else {
-	request_unit_caravan_action(punit, PACKET_UNIT_HELP_BUILD_WONDER);
+	key_unit_build_wonder();
       }
-    } unit_list_iterate_end;
+    }
     break;
-  case MENU_ORDER_ROAD:
-    unit_list_iterate(get_units_in_focus(), punit) {
-      /* FIXME: this can provide different actions for different units...
-       * not good! */
-      if (unit_can_est_traderoute_here(punit))
+   case MENU_ORDER_ROAD:
+    if (get_unit_in_focus()) {
+      if (unit_can_est_traderoute_here(get_unit_in_focus()))
 	key_unit_traderoute();
       else
 	key_unit_road();
-    } unit_list_iterate_end;
+    }
     break;
    case MENU_ORDER_IRRIGATE:
     key_unit_irrigate();
@@ -448,31 +329,24 @@ static void orders_menu_callback(gpointer callback_data,
    case MENU_ORDER_TRANSFORM:
     key_unit_transform();
     break;
-  case MENU_ORDER_FORTRESS:
-    unit_list_iterate(get_units_in_focus(), punit) {
-      /* FIXME: this can provide different actions for different units...
-       * not good! */
-      struct base_type *pbase = get_base_by_gui_type(BASE_GUI_FORTRESS,
-                                                     punit, punit->tile);
-      if (pbase) {
+   case MENU_ORDER_FORTRESS:
+    if (get_unit_in_focus()) {
+      if (can_unit_do_activity(get_unit_in_focus(), ACTIVITY_FORTRESS))
 	key_unit_fortress();
-      } else {
+      else
 	key_unit_fortify();
-      }
-    } unit_list_iterate_end;
+    }
     break;
    case MENU_ORDER_AIRBASE:
     key_unit_airbase(); 
     break;
    case MENU_ORDER_POLLUTION:
-    unit_list_iterate(get_units_in_focus(), punit) {
-      /* FIXME: this can provide different actions for different units...
-       * not good! */
-      if (can_unit_paradrop(punit))
+    if (get_unit_in_focus()) {
+      if (can_unit_paradrop(get_unit_in_focus()))
 	key_unit_paradrop();
       else
 	key_unit_pollution();
-    } unit_list_iterate_end;
+    }
     break;
    case MENU_ORDER_FALLOUT:
     key_unit_fallout();
@@ -486,41 +360,21 @@ static void orders_menu_callback(gpointer callback_data,
    case MENU_ORDER_HOMECITY:
     key_unit_homecity();
     break;
-   case MENU_ORDER_UNLOAD_TRANSPORTER:
-    key_unit_unload_all();
-    break;
-  case MENU_ORDER_LOAD:
-    unit_list_iterate(get_units_in_focus(), punit) {
-      request_unit_load(punit, NULL);
-    } unit_list_iterate_end;
-    break;
-  case MENU_ORDER_UNLOAD:
-    unit_list_iterate(get_units_in_focus(), punit) {
-      request_unit_unload(punit);
-    } unit_list_iterate_end;
+   case MENU_ORDER_UNLOAD:
+    key_unit_unload();
     break;
    case MENU_ORDER_WAKEUP_OTHERS:
     key_unit_wakeup_others();
     break;
-  case MENU_ORDER_AUTO_SETTLER:
-    unit_list_iterate(get_units_in_focus(), punit) {
-      request_unit_autosettlers(punit);
-    } unit_list_iterate_end;
+   case MENU_ORDER_AUTO_SETTLER:
+    if(get_unit_in_focus())
+      request_unit_auto(get_unit_in_focus());
     break;
    case MENU_ORDER_AUTO_EXPLORE:
     key_unit_auto_explore();
     break;
-   case MENU_ORDER_CONNECT_ROAD:
-    key_unit_connect(ACTIVITY_ROAD);
-    break;
-  case MENU_ORDER_GO_BUILD_CITY:
-    request_unit_goto(ORDER_BUILD_CITY);
-    break;
-   case MENU_ORDER_CONNECT_RAIL:
-    key_unit_connect(ACTIVITY_RAILROAD);
-    break;
-   case MENU_ORDER_CONNECT_IRRIGATE:
-    key_unit_connect(ACTIVITY_IRRIGATE);
+   case MENU_ORDER_CONNECT:
+    key_unit_connect();
     break;
    case MENU_ORDER_PATROL:
     key_unit_patrol();
@@ -528,21 +382,12 @@ static void orders_menu_callback(gpointer callback_data,
    case MENU_ORDER_GOTO:
     key_unit_goto();
     break;
-  case MENU_ORDER_GOTO_CITY:
-    if (get_num_units_in_focus() > 0) {
+   case MENU_ORDER_GOTO_CITY:
+    if(get_unit_in_focus())
       popup_goto_dialog();
-    }
-    break;
-  case MENU_ORDER_RETURN:
-    unit_list_iterate(get_units_in_focus(), punit) {
-      request_unit_return(punit);
-    } unit_list_iterate_end;
     break;
    case MENU_ORDER_DISBAND:
     key_unit_disband();
-    break;
-  case MENU_ORDER_UPGRADE:
-    popup_upgrade_dialog(get_units_in_focus());
     break;
    case MENU_ORDER_DIPLOMAT_DLG:
     key_unit_diplomat_actions();
@@ -568,22 +413,19 @@ static void reports_menu_callback(gpointer callback_data,
 {
   switch(callback_action) {
    case MENU_REPORT_CITIES:
-    popup_city_report_dialog(TRUE);
+    popup_city_report_dialog(0);
     break;
    case MENU_REPORT_UNITS:
-    popup_activeunits_report_dialog(TRUE);
+    popup_activeunits_report_dialog(0);
     break;
   case MENU_REPORT_PLAYERS:
-    popup_players_dialog(TRUE);
-    break;
-  case MENU_REPORT_MAP_VIEW:
-    map_canvas_focus();
+    popup_players_dialog();
     break;
    case MENU_REPORT_ECONOMY:
-    popup_economy_report_dialog(TRUE);
+    popup_economy_report_dialog(0);
     break;
    case MENU_REPORT_SCIENCE:
-    popup_science_dialog(TRUE);
+    popup_science_dialog(0);
     break;
    case MENU_REPORT_WOW:
     send_report_request(REPORT_WONDERS_OF_THE_WORLD);
@@ -592,48 +434,17 @@ static void reports_menu_callback(gpointer callback_data,
     send_report_request(REPORT_TOP_5_CITIES);
     break;
   case MENU_REPORT_MESSAGES:
-    popup_meswin_dialog(TRUE);
+    popup_meswin_dialog();
     break;
    case MENU_REPORT_DEMOGRAPHIC:
     send_report_request(REPORT_DEMOGRAPHIC);
     break;
-  case MENU_REPORT_SPACESHIP:
-    if (NULL != client.conn.playing) {
-      popup_spaceship_dialog(client.conn.playing);
-    }
+   case MENU_REPORT_SPACESHIP:
+    popup_spaceship_dialog(game.player_ptr);
     break;
   }
 }
 
-/****************************************************************************
-  Callback function for when an item is chosen from the "editor" menu.
-****************************************************************************/
-static void editor_menu_callback(gpointer callback_data,
-                                 guint callback_action, GtkWidget *widget)
-{   
-  switch(callback_action) {
-  case MENU_EDITOR_TOGGLE:
-    key_editor_toggle();
-    popdown_science_dialog(); /* Unreachbale techs in reqtree on/off */
-
-    /* Because the user click on this check menu item would
-     * cause the checkmark to appear, indicating wrongly that
-     * edit mode is activated, reset the checkmark to the
-     * correct, expected setting. */
-    menus_set_active_no_callback("<main>/_Edit/Editing _Mode",
-                                 game.info.is_edit_mode);
-    break;
-  case MENU_EDITOR_TOOLS:
-    editdlg_show_tools();
-    break;
-  case MENU_EDITOR_RECALCULATE_BORDERS:
-    key_editor_recalculate_borders();
-    break;
-  case MENU_EDITOR_REGENERATE_WATER:
-    key_editor_regenerate_water();
-    break;
-  }
-}
 
 /****************************************************************
 ...
@@ -736,89 +547,56 @@ static GtkItemFactoryEntry menu_items[]	=
 	NULL,			0,					"<Branch>"	},
   { "/" N_("Game") "/tearoff1",				NULL,
 	NULL,			0,					"<Tearoff>"	},
-  { "/" N_("Game") "/" N_("_Chat"),			NULL,
-	NULL,			0,					"<Branch>"	},
-  { "/" N_("Game") "/" N_("_Chat") "/" N_("_Clear Log"),		NULL,
-	game_menu_callback,	MENU_GAME_CLEAR_OUTPUT					},
-  { "/" N_("Game") "/" N_("_Chat") "/" N_("_Write Log"),		NULL,
-	game_menu_callback,	MENU_GAME_OUTPUT_LOG					},
-  { "/" N_("Game") "/" N_("_Government"),		NULL,
-	NULL,			0,					"<Branch>"	},
-  { "/" N_("Game") "/" N_("_Government") "/" N_("_Tax Rates"),		"<shift>t",
-	government_menu_callback,	MENU_GOVERNMENT_TAX_RATE			},
-  { "/" N_("Game") "/" N_("_Government") "/" N_("_Revolution..."),	"<shift>r",
-	government_menu_callback,	MENU_GOVERNMENT_REVOLUTION			},
-  { "/" N_("Game") "/" N_("_Government") "/sep1", NULL,
-	NULL,			0,					"<Separator>"	},
-  { "/" N_("Game") "/" N_("_Options"),			NULL,
-	NULL,			0,					"<Branch>"	},
-  { "/" N_("Game") "/" N_("_Options") "/" N_("_Local Client"),		NULL,
+  { "/" N_("Game") "/" N_("_Local Options"),		NULL,
 	game_menu_callback,	MENU_GAME_OPTIONS					},
-  { "/" N_("Game") "/" N_("_Options") "/" N_("_Message"),	NULL,
+  { "/" N_("Game") "/" N_("Messa_ge Options"),		NULL,
 	game_menu_callback,	MENU_GAME_MSG_OPTIONS					},
-  { "/" N_("Game") "/" N_("_Options") "/" N_("_Remote Server"),	NULL,
-	game_menu_callback,	MENU_GAME_SERVER_OPTIONS},
-  { "/" N_("Game") "/" N_("_Options") "/" N_("Save Options _Now"),		NULL,
-	game_menu_callback,	MENU_GAME_SAVE_OPTIONS					},
-  { "/" N_("Game") "/" N_("_Options") "/" N_("Save Options on _Exit"),	NULL,
-	game_menu_callback,	MENU_GAME_SAVE_OPTIONS_ON_EXIT,		"<CheckItem>"	},
+  { "/" N_("Game") "/" N_("_Save Settings"),		NULL,
+	game_menu_callback,	MENU_GAME_SAVE_SETTINGS					},
+  { "/" N_("Game") "/sep2",				NULL,
+	NULL,			0,					"<Separator>"	},
+  { "/" N_("Game") "/" N_("Server Opt _initial"),	NULL,
+	game_menu_callback,	MENU_GAME_SERVER_OPTIONS1				},
+  { "/" N_("Game") "/" N_("Server Opt _ongoing"),	NULL,
+	game_menu_callback,	MENU_GAME_SERVER_OPTIONS2				},
+  { "/" N_("Game") "/sep3",				NULL,
+	NULL,			0,					"<Separator>"	},
+  { "/" N_("Game") "/" N_("_Export Log"),		NULL,
+	game_menu_callback,	MENU_GAME_OUTPUT_LOG					},
+  { "/" N_("Game") "/" N_("_Clear Log"),		NULL,
+	game_menu_callback,	MENU_GAME_CLEAR_OUTPUT					},
   { "/" N_("Game") "/sep4",				NULL,
 	NULL,			0,					"<Separator>"	},
-#ifdef DEBUG
-  { "/" N_("Game") "/" N_("_Reload Tileset"), "<ctrl><alt>r",
-    game_menu_callback, MENU_GAME_RELOAD_TILESET },
-#endif
-  { "/" N_("Game") "/" N_("_Save Game"),		NULL,
-	game_menu_callback,	MENU_GAME_SAVE_QUICK, 			"<StockItem>",
-	GTK_STOCK_SAVE									},
-  { "/" N_("Game") "/" N_("Save Game _As..."),		NULL,
-	game_menu_callback,	MENU_GAME_SAVE_GAME,			"<StockItem>",
-	GTK_STOCK_SAVE_AS								},
-  { "/" N_("Game") "/sep6",				NULL,
-	NULL,			0,					"<Separator>"	},
-  { "/" N_("Game") "/" N_("_Leave"),			NULL,
-	game_menu_callback,	MENU_GAME_LEAVE						},
-  { "/" N_("Game") "/" N_("_Quit"),			NULL,
-	game_menu_callback,	MENU_GAME_QUIT,				"<StockItem>",
-	GTK_STOCK_QUIT									},
-
-  /* was Government menu ... */
-  { "/" N_("_Edit"),					NULL,
+  { "/" N_("Game") "/" N_("_Disconnect"),		NULL,
+	game_menu_callback,	MENU_GAME_DISCONNECT					},
+  { "/" N_("Game") "/" N_("_Quit"),			"<control>q",
+	gtk_main_quit,		0							},
+  /* Kingdom menu ... */
+  { "/" N_("_Kingdom"),					NULL,
 	NULL,			0,					"<Branch>"	},
-  { "/" N_("_Edit") "/tearoff1",			NULL,
+  { "/" N_("Kingdom") "/tearoff1",			NULL,
 	NULL,			0,					"<Tearoff>"	},
-  { "/" N_("_Edit") "/" N_("_Find City"),		"<shift>f",
-	government_menu_callback,	MENU_GOVERNMENT_FIND_CITY			},
-  { "/" N_("_Edit") "/" N_("_Worklists"),		"<control>l",
-	government_menu_callback,	MENU_GOVERNMENT_WORKLISTS			},
-  { "/" N_("_Edit") "/sep1",				NULL,
+  { "/" N_("Kingdom") "/" N_("_Tax Rates"),		"<shift>t",
+	kingdom_menu_callback,	MENU_KINGDOM_TAX_RATE					},
+  { "/" N_("Kingdom") "/sep1",				NULL,
 	NULL,			0,					"<Separator>"	},
-  /* was Editor menu */
-  { "/" N_("_Edit") "/" N_("Editing _Mode"), "<control>e",
-	editor_menu_callback, MENU_EDITOR_TOGGLE, "<CheckItem>" },
-  { "/" N_("_Edit") "/" N_("Editing _Tools"), NULL,
-	editor_menu_callback, MENU_EDITOR_TOOLS },
-  { "/" N_("_Edit") "/" N_("Recalculate _Borders"), NULL,
-	editor_menu_callback, MENU_EDITOR_RECALCULATE_BORDERS },
-  { "/" N_("_Edit") "/" N_("Regenerate _Water"), NULL,
-	editor_menu_callback, MENU_EDITOR_REGENERATE_WATER },
-
+  { "/" N_("Kingdom") "/" N_("_Find City"),		"<shift>f",
+	kingdom_menu_callback,	MENU_KINGDOM_FIND_CITY					},
+  { "/" N_("Kingdom") "/" N_("Work_lists"),		"<shift>l",
+	kingdom_menu_callback,	MENU_KINGDOM_WORKLISTS					},
+  { "/" N_("Kingdom") "/sep2",				NULL,
+	NULL,			0,					"<Separator>"	},
+  { "/" N_("Kingdom") "/" N_("_Revolution"),	        "<shift>r",
+	kingdom_menu_callback,	MENU_KINGDOM_REVOLUTION					},
   /* View menu ... */
   { "/" N_("_View"),					NULL,
 	NULL,			0,					"<Branch>"	},
   { "/" N_("View") "/tearoff1",				NULL,
 	NULL,			0,					"<Tearoff>"	},
-  { "/" N_("View") "/" N_("City Outlines"), "<control>y",
-    view_menu_callback, MENU_VIEW_SHOW_CITY_OUTLINES, "<CheckItem>"},
   { "/" N_("View") "/" N_("Map _Grid"),			"<control>g",
 	view_menu_callback,	MENU_VIEW_SHOW_MAP_GRID,		"<CheckItem>"	},
-  { "/" N_("View") "/" N_("National _Borders"),		"<control>b",
-	view_menu_callback,	MENU_VIEW_SHOW_NATIONAL_BORDERS,	"<CheckItem>"	},
   { "/" N_("View") "/" N_("City _Names"),		"<control>n",
 	view_menu_callback,	MENU_VIEW_SHOW_CITY_NAMES,		"<CheckItem>"	},
-  { "/" N_("View") "/" N_("City G_rowth"),		"<control>r",
-	view_menu_callback,	MENU_VIEW_SHOW_CITY_GROWTH_TURNS,
-	"<CheckItem>"	},
   { "/" N_("View") "/" N_("City _Productions"),		"<control>p",
 	view_menu_callback,	MENU_VIEW_SHOW_CITY_PRODUCTIONS,	"<CheckItem>"	},
   { "/" N_("View") "/sep1",				NULL,
@@ -852,10 +630,6 @@ static GtkItemFactoryEntry menu_items[]	=
   { "/" N_("View") "/" N_("Fog of War"),		NULL,
 	view_menu_callback,	MENU_VIEW_SHOW_FOG_OF_WAR,		"<CheckItem>"	},
   { "/" N_("View") "/sep2",				NULL,
-	NULL,			0,					"<Separator>"	},
-  { "/" N_("View") "/" N_("_Full Screen"),		"<alt>Return",
-	view_menu_callback,	MENU_VIEW_FULL_SCREEN,			"<CheckItem>"	},
-  { "/" N_("View") "/sep3",				NULL,
 	NULL,			0,					"<Separator>"	},
   { "/" N_("View") "/" N_("_Center View"),		"c",
 	view_menu_callback,	MENU_VIEW_CENTER_VIEW					},
@@ -892,12 +666,8 @@ static GtkItemFactoryEntry menu_items[]	=
 	NULL,			0,					"<Separator>"	},
   { "/" N_("Orders") "/" N_("Make _Homecity"),		"h",
 	orders_menu_callback,	MENU_ORDER_HOMECITY					},
-  { "/" N_("Orders") "/" N_("_Load"),			"l",
-    orders_menu_callback, MENU_ORDER_LOAD},
-  { "/" N_("Orders") "/" N_("_Unload Transporter"),	"<shift>u",
-	orders_menu_callback,	MENU_ORDER_UNLOAD_TRANSPORTER					},
   { "/" N_("Orders") "/" N_("_Unload"),			"u",
-    orders_menu_callback, MENU_ORDER_UNLOAD},
+	orders_menu_callback,	MENU_ORDER_UNLOAD					},
   { "/" N_("Orders") "/" N_("Wake up o_thers"),		"<shift>w",
 	orders_menu_callback,	MENU_ORDER_WAKEUP_OTHERS				},
   { "/" N_("Orders") "/sep3",				NULL,
@@ -906,38 +676,24 @@ static GtkItemFactoryEntry menu_items[]	=
 	orders_menu_callback,	MENU_ORDER_AUTO_SETTLER					},
   { "/" N_("Orders") "/" N_("Auto E_xplore"),		"x",
 	orders_menu_callback,	MENU_ORDER_AUTO_EXPLORE					},
-  {"/" N_("Orders") "/" N_("_Connect") "/" N_("_Road"), "<ctrl><shift>r",
-   orders_menu_callback, MENU_ORDER_CONNECT_ROAD},
-  {"/" N_("Orders") "/" N_("_Connect") "/" N_("Rai_l"), "<ctrl><shift>l",
-   orders_menu_callback, MENU_ORDER_CONNECT_RAIL},
-  {"/" N_("Orders") "/" N_("_Connect") "/" N_("_Irrigate"), "<ctrl><shift>i",
-   orders_menu_callback, MENU_ORDER_CONNECT_IRRIGATE},
-  {"/" N_("Orders") "/" N_("Go _to") "/" N_("_Build city"), "<ctrl><shift>b",
-   orders_menu_callback, MENU_ORDER_GO_BUILD_CITY},
+  { "/" N_("Orders") "/" N_("_Connect"),		"<shift>c",
+	orders_menu_callback,	MENU_ORDER_CONNECT					},
   { "/" N_("Orders") "/" N_("Patrol (_Q)"),		"q",
 	orders_menu_callback,	MENU_ORDER_PATROL					},
   { "/" N_("Orders") "/" N_("_Go to"),			"g",
 	orders_menu_callback,	MENU_ORDER_GOTO						},
-  { "/" N_("Orders") "/" N_("Go\\/Airlift to City"),	"<shift>l",
+  { "/" N_("Orders") "/" N_("Go\\/Airlift to City"),	"l",
 	orders_menu_callback,	MENU_ORDER_GOTO_CITY					},
-  { "/" N_("Orders") "/" N_("Return to nearest city"),	"<shift>g",
-	orders_menu_callback,	MENU_ORDER_RETURN },
   { "/" N_("Orders") "/sep4",				NULL,
 	NULL,			0,					"<Separator>"	},
   { "/" N_("Orders") "/" N_("Disband Unit"),		"<shift>d",
 	orders_menu_callback,	MENU_ORDER_DISBAND					},
-  { "/" N_("Orders") "/" N_("Upgrade unit"), "<ctrl>u",
-    orders_menu_callback, MENU_ORDER_UPGRADE },
   { "/" N_("Orders") "/" N_("Diplomat\\/Spy Actions"),	"d",
 	orders_menu_callback,	MENU_ORDER_DIPLOMAT_DLG					},
   { "/" N_("Orders") "/" N_("Explode Nuclear"),        "<shift>n",
 	orders_menu_callback,	MENU_ORDER_NUKE						},
   { "/" N_("Orders") "/sep5",				NULL,
 	NULL,			0,					"<Separator>"	},
-  { "/" N_("Orders") "/" N_("Select same type"), "y",
-    orders_menu_callback, MENU_ORDER_SELECT_SAME_TYPE },
-  { "/" N_("Orders") "/" N_("Select same type in tile"), "<shift>y",
-    orders_menu_callback, MENU_ORDER_SELECT_SAME_TYPE_TILE },
   { "/" N_("Orders") "/" N_("_Wait"),			"w",
 	orders_menu_callback,	MENU_ORDER_WAIT						},
   { "/" N_("Orders") "/" N_("Done"),			"space",
@@ -947,17 +703,15 @@ static GtkItemFactoryEntry menu_items[]	=
 	NULL,			0,					"<Branch>"	},
   { "/" N_("Reports") "/tearoff1",			NULL,
 	NULL,			0,					"<Tearoff>"	},
-  { "/" N_("Reports") "/" N_("_View"),			"F1",
-	reports_menu_callback,	MENU_REPORT_MAP_VIEW					},
+  { "/" N_("Reports") "/" N_("_Cities"),		"F1",
+	reports_menu_callback,	MENU_REPORT_CITIES					},
   { "/" N_("Reports") "/" N_("_Units"),			"F2",
 	reports_menu_callback,	MENU_REPORT_UNITS					},
-  { "/" N_("Reports") "/" N_("_Nations"),		"F3",
+  { "/" N_("Reports") "/" N_("_Players"),		"F3",
 	reports_menu_callback,	MENU_REPORT_PLAYERS					},
-  { "/" N_("Reports") "/" N_("_Cities"),		"F4",
-	reports_menu_callback,	MENU_REPORT_CITIES					},
   { "/" N_("Reports") "/" N_("_Economy"),		"F5",
 	reports_menu_callback,	MENU_REPORT_ECONOMY					},
-  { "/" N_("Reports") "/" N_("_Research"),		"F6",
+  { "/" N_("Reports") "/" N_("_Science"),		"F6",
 	reports_menu_callback,	MENU_REPORT_SCIENCE					},
   { "/" N_("Reports") "/sep1",				NULL,
 	NULL,			0,					"<Separator>"	},
@@ -969,9 +723,8 @@ static GtkItemFactoryEntry menu_items[]	=
 	reports_menu_callback,	MENU_REPORT_MESSAGES					},
   { "/" N_("Reports") "/" N_("_Demographics"),		"F11",
 	reports_menu_callback,	MENU_REPORT_DEMOGRAPHIC					},
-  { "/" N_("Reports") "/" N_("_Spaceship"),		"F12",
+  { "/" N_("Reports") "/" N_("S_paceship"),		"F12",
 	reports_menu_callback,	MENU_REPORT_SPACESHIP					},
-
   /* Help menu ... */
   { "/" N_("_Help"),					NULL,
 	NULL,			0,					"<Branch>"	},
@@ -1063,8 +816,7 @@ static gchar *translate_func(const gchar *path, gpointer data)
     g_strlcpy(res, path, sizeof(res));
 #else
     static struct astring in, out, tmp;   /* these are never free'd */
-    char *tok, *next, *t;
-    const char *trn;
+    char *tok, *next, *trn, *t;
     int len;
     char *res;
 
@@ -1123,9 +875,10 @@ static const char *menu_path_remove_uline(const char *path)
   return res;
 }
 
+
 /****************************************************************
-  ...
- *****************************************************************/
+...
+*****************************************************************/
 void setup_menus(GtkWidget *window, GtkWidget **menubar)
 {
   const int nmenu_items = ARRAY_SIZE(menu_items);
@@ -1133,19 +886,14 @@ void setup_menus(GtkWidget *window, GtkWidget **menubar)
   toplevel_accel = gtk_accel_group_new();
   item_factory = gtk_item_factory_new(GTK_TYPE_MENU_BAR, "<main>",
       toplevel_accel);
-  gtk_item_factory_set_translate_func(item_factory, translate_func,
-      NULL, NULL);
+  gtk_item_factory_set_translate_func(item_factory, translate_func, NULL, NULL);
 
   gtk_accel_group_lock(toplevel_accel);
   gtk_item_factory_create_items(item_factory, nmenu_items, menu_items, NULL);
   gtk_window_add_accel_group(GTK_WINDOW(window), toplevel_accel);
 
-  main_menubar = gtk_item_factory_get_widget(item_factory, "<main>");
-  g_signal_connect(main_menubar, "destroy",
-      G_CALLBACK(gtk_widget_destroyed), &main_menubar);
-
   if (menubar) {
-    *menubar = main_menubar;
+    *menubar = gtk_item_factory_get_widget(item_factory, "<main>");
   }
 }
 
@@ -1165,55 +913,6 @@ static void menus_set_sensitive(const char *path, int sensitive)
   }
 
   gtk_widget_set_sensitive(item, sensitive);
-}
-
-/****************************************************************
-  Sets the toggled state on the check menu item given by 'path'
-  according to 'active', without the associated callback being
-  called.
-*****************************************************************/
-static void menus_set_active_no_callback(const gchar *path,
-                                         gboolean active)
-{
-  GtkWidget *w, *item;
-  guint sid;
-  gulong hid;
-
-  path = menu_path_remove_uline(path);
-
-  if (!(item = gtk_item_factory_get_item(item_factory, path))) {
-    freelog(LOG_ERROR, "Can't set active for non-existent menu %s.",
-            path);
-    return;
-  }
-
-  if (!(w = gtk_item_factory_get_widget(item_factory, path))) {
-    freelog(LOG_ERROR, "Can't set active for non-existent menu %s.",
-            path);
-    return;
-  }
-
-  sid = g_signal_lookup("activate", G_TYPE_FROM_INSTANCE(w));
-  if (sid == 0) {
-    freelog(LOG_ERROR, "Can't block menu callback because "
-            "the \"activate\" signal id was not found for "
-            "the menu widget at path \"%s\".", path);
-    return;
-  }
-
-  hid = g_signal_handler_find(w, G_SIGNAL_MATCH_ID,
-                              sid, 0, NULL, NULL, NULL);
-
-  if (hid == 0) {
-    freelog(LOG_ERROR, "Can't block menu callback because "
-            "the \"activate\" signal handler id was not found "
-            "for the menu widget at path \"%s\".", path);
-    return;
-  }
-
-  g_signal_handler_block(w, hid);
-  gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(item), active);
-  g_signal_handler_unblock(w, hid);
 }
 
 /****************************************************************
@@ -1260,12 +959,12 @@ static void menus_set_shown(const char *path, int shown)
 /****************************************************************
 ...
 *****************************************************************/
-static void menus_rename(const char *path, const char *s)
+static void menus_rename(const char *path, char *s)
 {
   GtkWidget *item;
-
+  
   path = menu_path_remove_uline(path);
-
+  
   if(!(item = gtk_item_factory_get_item(item_factory, path))) {
     freelog(LOG_ERROR, "Can't rename non-existent menu %s.", path);
     return;
@@ -1274,30 +973,6 @@ static void menus_rename(const char *path, const char *s)
   gtk_label_set_text_with_mnemonic(GTK_LABEL(GTK_BIN(item)->child), s);
 }
 
-/****************************************************************
-  The player has chosen a government from the menu.
-*****************************************************************/
-static void government_callback(GtkMenuItem *item, gpointer data)
-{
-  struct government *gov = data;
-
-  popup_revolution_dialog(gov);
-}
-
-/****************************************************************************
-  Return the text for the tile, changed by the activity.
-
-  Should only be called for irrigation, mining, or transformation, and
-  only when the activity changes the base terrain type.
-****************************************************************************/
-static const char *get_tile_change_menu_text(struct tile *ptile,
-					     enum unit_activity activity)
-{
-  struct tile newtile = *ptile;
-
-  tile_apply_activity(&newtile, activity);
-  return tile_get_info_text(&newtile, 0);
-}
 
 /****************************************************************
 Note: the menu strings should contain underscores as in the
@@ -1306,120 +981,28 @@ the string is used for a lookup via gtk_item_factory_get_widget()
 *****************************************************************/
 void update_menus(void)
 {
-  if (!main_menubar) {
-    return;
-  }
-
-  menus_set_active("<main>/_Game/_Options/Save Options on _Exit",
-		   save_options_on_exit);
-  menus_set_sensitive("<main>/_Game/_Options/_Remote Server", 
-		      client.conn.established);
-
-  menus_set_sensitive("<main>/_Game/Save Game _As...",
-		      can_client_access_hack()
-		      && C_S_RUNNING <= client_state());
-  menus_set_sensitive("<main>/_Game/_Save Game",
-		      can_client_access_hack()
-		      && C_S_RUNNING <= client_state());
-  menus_set_sensitive("<main>/_Game/_Leave",
-		      client.conn.established);
-
-  if (!can_client_change_view()) {
-    menus_set_sensitive("<main>/_Edit", FALSE);
+  if(get_client_state()!=CLIENT_GAME_RUNNING_STATE) {
+    menus_set_sensitive("<main>/_Reports", FALSE);
+    menus_set_sensitive("<main>/_Kingdom", FALSE);
     menus_set_sensitive("<main>/_View", FALSE);
     menus_set_sensitive("<main>/_Orders", FALSE);
-    menus_set_sensitive("<main>/_Reports", FALSE);
   } else {
-    const char *path =
-      menu_path_remove_uline("<main>/_Game/_Government");
-    GtkWidget *parent = gtk_item_factory_get_widget(item_factory, path);
-
-    if (parent) {
-      GList *list, *iter;
-
-      /* remove previous government entries. */
-      list = gtk_container_get_children(GTK_CONTAINER(parent));
-      for (iter = g_list_nth(list, 2); iter; iter = g_list_next(iter)) {
-	gtk_widget_destroy(GTK_WIDGET(iter->data));
-      }
-      g_list_free(list);
-
-      /* add new government entries. */
-      government_iterate(g) {
-        if (g != game.government_when_anarchy) {
-          GtkWidget *item, *image;
-          struct sprite *gsprite;
-	  char buf[256];
-
-	  my_snprintf(buf, sizeof(buf), _("%s..."),
-		      government_name_translation(g));
-          item = gtk_image_menu_item_new_with_label(buf);
-
-	  if ((gsprite = get_government_sprite(tileset, g))) {
-	    image = gtk_image_new_from_pixbuf(sprite_get_pixbuf(gsprite));
-	    gtk_image_menu_item_set_image(GTK_IMAGE_MENU_ITEM(item), image);
-	    gtk_widget_show(image);
-	  }
-
-          g_signal_connect(item, "activate",
-			   G_CALLBACK(government_callback), g);
-
-          if (!can_change_to_government(client.conn.playing, g)) {
-            gtk_widget_set_sensitive(item, FALSE);
-	  }
-
-          gtk_menu_shell_append(GTK_MENU_SHELL(parent), item);
-          gtk_widget_show(item);
-        }
-      } government_iterate_end;
-    }
-
+    struct unit *punit;
     menus_set_sensitive("<main>/_Reports", TRUE);
-    menus_set_sensitive("<main>/_Edit", TRUE);
+    menus_set_sensitive("<main>/_Kingdom", TRUE);
     menus_set_sensitive("<main>/_View", TRUE);
-    menus_set_sensitive("<main>/_Orders", can_client_issue_orders());
+    menus_set_sensitive("<main>/_Orders", !client_is_observer());
 
-    menus_set_sensitive("<main>/_Game/_Government",
-			can_client_issue_orders());
-    menus_set_sensitive("<main>/_Game/_Government/Tax Rates",
-			game.info.changable_tax
-                        && can_client_issue_orders());
+    menus_set_sensitive("<main>/_Kingdom/_Tax Rates", !client_is_observer());
+    menus_set_sensitive("<main>/_Kingdom/Work_lists", !client_is_observer());
+    menus_set_sensitive("<main>/_Kingdom/_Revolution",
+			!client_is_observer());
 
-    menus_set_sensitive("<main>/_Edit/Worklists",
-			can_client_issue_orders());
-    menus_set_active_no_callback("<main>/_Edit/Editing _Mode",
-                                 game.info.is_edit_mode);
-    menus_set_sensitive("<main>/_Edit/Editing _Mode",
-                        can_conn_enable_editing(&client.conn));
-    menus_set_sensitive("<main>/_Edit/Editing _Tools",
-			can_conn_edit(&client.conn));
-    menus_set_sensitive("<main>/_Edit/Recalculate _Borders",
-			can_conn_edit(&client.conn));
-    menus_set_sensitive("<main>/_Edit/Regenerate _Water",
-			can_conn_edit(&client.conn));
+    menus_set_sensitive("<main>/_Reports/S_paceship",
+			(game.player_ptr->spaceship.state!=SSHIP_NONE));
 
-    /* If the client is not attached to a player, disable these reports. */
-    menus_set_sensitive("<main>/_Reports/_Cities",
-			(NULL != client.conn.playing));
-    menus_set_sensitive("<main>/_Reports/_Units",
-			(NULL != client.conn.playing));
-    menus_set_sensitive("<main>/_Reports/_Economy",
-			(NULL != client.conn.playing));
-    menus_set_sensitive("<main>/_Reports/_Research",
-			(NULL != client.conn.playing));
-    menus_set_sensitive("<main>/_Reports/_Demographics",
-			(NULL != client.conn.playing));
-    menus_set_sensitive("<main>/_Reports/_Spaceship",
-			(NULL != client.conn.playing
-			 && SSHIP_NONE != client.conn.playing->spaceship.state));
-
-    menus_set_active("<main>/_View/City Outlines", draw_city_outlines);
     menus_set_active("<main>/_View/Map _Grid", draw_map_grid);
-    menus_set_sensitive("<main>/_View/National _Borders", game.info.borders > 0);
-    menus_set_active("<main>/_View/National _Borders", draw_borders);
     menus_set_active("<main>/_View/City _Names", draw_city_names);
-    menus_set_sensitive("<main>/_View/City G_rowth", draw_city_names);
-    menus_set_active("<main>/_View/City G_rowth", draw_city_growth);
     menus_set_active("<main>/_View/City _Productions", draw_city_productions);
     menus_set_active("<main>/_View/Terrain", draw_terrain);
     menus_set_active("<main>/_View/Coastline", draw_coastline);
@@ -1436,22 +1019,20 @@ void update_menus(void)
     menus_set_sensitive("<main>/_View/Focus Unit", !draw_units);
     menus_set_active("<main>/_View/Fog of War", draw_fog_of_war);
 
-    menus_set_active("<main>/_View/_Full Screen", fullscreen_mode);
-
     /* Remaining part of this function: Update Orders menu */
 
-    if (!can_client_issue_orders()) {
+    if (client_is_observer()) {
       return;
     }
 
-    if (get_num_units_in_focus() > 0) {
-      const char *irrfmt = _("Change to %s (_I)");
-      const char *minfmt = _("Change to %s (_M)");
-      const char *transfmt = _("Transf_orm to %s");
+    if((punit=get_unit_in_focus())) {
+      char *irrfmt = _("Change to %s (_I)");
+      char *minfmt = _("Change to %s (_M)");
+      char *transfmt = _("Transf_orm to %s");
       char irrtext[128], mintext[128], transtext[128];
-      const char *roadtext;
-      struct terrain *pterrain;
-      struct unit_list *punits = get_units_in_focus();
+      char *roadtext;
+      enum tile_terrain_type  ttype;
+      struct tile_type *      tinfo;
 
       sz_strlcpy(irrtext, _("Build _Irrigation"));
       sz_strlcpy(mintext, _("Build _Mine"));
@@ -1460,105 +1041,72 @@ void update_menus(void)
       /* Enable the button for adding to a city in all cases, so we
 	 get an eventual error message from the server if we try. */
       menus_set_sensitive("<main>/_Orders/_Build City",
-		(can_units_do(punits, can_unit_add_or_build_city)
-		 || can_units_do(punits, unit_can_help_build_wonder_here)));
+			  can_unit_add_or_build_city(punit) ||
+			  unit_can_help_build_wonder_here(punit));
       menus_set_sensitive("<main>/_Orders/Build _Road",
-                          (can_units_do_activity(punits, ACTIVITY_ROAD)
-                           || can_units_do_activity(punits, ACTIVITY_RAILROAD)
-                           || can_units_do(punits,
-					   unit_can_est_traderoute_here)));
+                          (can_unit_do_activity(punit, ACTIVITY_ROAD) ||
+                           can_unit_do_activity(punit, ACTIVITY_RAILROAD) ||
+                           unit_can_est_traderoute_here(punit)));
       menus_set_sensitive("<main>/_Orders/Build _Irrigation",
-                          can_units_do_activity(punits, ACTIVITY_IRRIGATE));
+                          can_unit_do_activity(punit, ACTIVITY_IRRIGATE));
       menus_set_sensitive("<main>/_Orders/Build _Mine",
-                          can_units_do_activity(punits, ACTIVITY_MINE));
+                          can_unit_do_activity(punit, ACTIVITY_MINE));
       menus_set_sensitive("<main>/_Orders/Transf_orm Terrain",
-			  can_units_do_activity(punits, ACTIVITY_TRANSFORM));
+			  can_unit_do_activity(punit, ACTIVITY_TRANSFORM));
       menus_set_sensitive("<main>/_Orders/Build _Fortress",
-                          (can_units_do_base_gui(punits, BASE_GUI_FORTRESS)
-                           || can_units_do_activity(punits,
-						    ACTIVITY_FORTIFYING)));
+                          (can_unit_do_activity(punit, ACTIVITY_FORTRESS) ||
+                           can_unit_do_activity(punit, ACTIVITY_FORTIFYING)));
       menus_set_sensitive("<main>/_Orders/Build Airbas_e",
-			  can_units_do_base_gui(punits, BASE_GUI_AIRBASE));
+			  can_unit_do_activity(punit, ACTIVITY_AIRBASE));
       menus_set_sensitive("<main>/_Orders/Clean _Pollution",
-                          (can_units_do_activity(punits, ACTIVITY_POLLUTION)
-                           || can_units_do(punits, can_unit_paradrop)));
+                          (can_unit_do_activity(punit, ACTIVITY_POLLUTION) ||
+                           can_unit_paradrop(punit)));
       menus_set_sensitive("<main>/_Orders/Clean _Nuclear Fallout",
-			  can_units_do_activity(punits, ACTIVITY_FALLOUT));
+			  can_unit_do_activity(punit, ACTIVITY_FALLOUT));
       menus_set_sensitive("<main>/_Orders/_Sentry",
-			  can_units_do_activity(punits, ACTIVITY_SENTRY));
+			  can_unit_do_activity(punit, ACTIVITY_SENTRY));
       menus_set_sensitive("<main>/_Orders/Pillage",
-			  can_units_do_activity(punits, ACTIVITY_PILLAGE));
-      menus_set_sensitive("<main>/_Orders/_Disband Unit",
-			  units_have_flag(punits, F_UNDISBANDABLE, FALSE));
-      menus_set_sensitive("<main>/_Orders/_Upgrade unit",
-			  TRUE /* FIXME: what check should we do? */);
+			  can_unit_do_activity(punit, ACTIVITY_PILLAGE));
       menus_set_sensitive("<main>/_Orders/Make _Homecity",
-			  can_units_do(punits, can_unit_change_homecity));
-      menus_set_sensitive("<main>/_Orders/_Unload Transporter",
-			  units_are_occupied(punits));
-      menus_set_sensitive("<main>/_Orders/_Load",
-			  units_can_load(punits));
+			  can_unit_change_homecity(punit));
       menus_set_sensitive("<main>/_Orders/_Unload",
-			  units_can_unload(punits));
+			  get_transporter_capacity(punit)>0);
       menus_set_sensitive("<main>/_Orders/Wake up o_thers", 
-			  units_have_activity_on_tile(punits,
-						      ACTIVITY_SENTRY));
+			  is_unit_activity_on_tile(ACTIVITY_SENTRY,
+                                                   punit->x, punit->y));
       menus_set_sensitive("<main>/_Orders/_Auto Settler",
-                          can_units_do(punits, can_unit_do_autosettlers));
+                          can_unit_do_auto(punit));
       menus_set_sensitive("<main>/_Orders/Auto E_xplore",
-                          can_units_do_activity(punits, ACTIVITY_EXPLORE));
-      menus_set_sensitive("<main>/_Orders/_Connect/_Road",
-                          can_units_do_connect(punits, ACTIVITY_ROAD));
-      menus_set_sensitive("<main>/_Orders/_Connect/_Rail",
-                          can_units_do_connect(punits, ACTIVITY_RAILROAD));
-      menus_set_sensitive("<main>/_Orders/_Connect/_Irrigate",
-                          can_units_do_connect(punits, ACTIVITY_IRRIGATE));
+                          can_unit_do_activity(punit, ACTIVITY_EXPLORE));
+      menus_set_sensitive("<main>/_Orders/_Connect",
+                          can_unit_do_connect(punit, ACTIVITY_IDLE));
+      menus_set_sensitive("<main>/_Orders/Patrol (_Q)",
+                          can_unit_do_activity(punit, ACTIVITY_PATROL));
       menus_set_sensitive("<main>/_Orders/Diplomat\\/Spy Actions",
-			  can_units_do_diplomat_action(punits,
-						       DIPLOMAT_ANY_ACTION));
+                          (is_diplomat_unit(punit)
+                           && diplomat_can_do_action(punit, DIPLOMAT_ANY_ACTION,
+						     punit->x, punit->y)));
       menus_set_sensitive("<main>/_Orders/Explode Nuclear",
-			  units_have_flag(punits, F_NUCLEAR, TRUE));
-
-      if (units_have_flag(punits, F_HELP_WONDER, TRUE)) {
-        menus_rename("<main>/_Orders/_Build City", _("Help _Build Wonder"));
-      } else {
-        bool city_on_tile = FALSE;
-
-        /* FIXME: this overloading doesn't work well with multiple focus
-         * units. */
-        unit_list_iterate(punits, punit) {
-          if (tile_city(punit->tile)) {
-            city_on_tile = TRUE;
-            break;
-          }
-        } unit_list_iterate_end;
-        
-        if (city_on_tile && units_have_flag(punits, F_ADD_TO_CITY, TRUE)) {
-          menus_rename("<main>/_Orders/_Build City", _("Add to City (_B)"));
-        } else {
-          /* refresh default order */
-          menus_rename("<main>/_Orders/_Build City", _("_Build City"));
-        }
+			  unit_flag(punit, F_NUCLEAR));
+      if (unit_flag(punit, F_HELP_WONDER))
+	menus_rename("<main>/_Orders/_Build City", _("Help _Build Wonder"));
+      else if (unit_flag(punit, F_CITIES)) {
+	if (map_get_city(punit->x, punit->y))
+	  menus_rename("<main>/_Orders/_Build City", _("Add to City (_B)"));
+	else
+	  menus_rename("<main>/_Orders/_Build City", _("_Build City"));
       }
+      else 
+	menus_rename("<main>/_Orders/_Build City", _("_Build City"));
  
-      if (units_have_flag(punits, F_TRADE_ROUTE, TRUE))
+      if (unit_flag(punit, F_TRADE_ROUTE))
 	menus_rename("<main>/_Orders/Build _Road", _("Make Trade _Route"));
-      else if (units_have_flag(punits, F_SETTLERS, TRUE)) {
-	bool has_road = FALSE;
-
-	/* FIXME: this overloading doesn't work well with multiple focus
-	 * units. */
-	unit_list_iterate(punits, punit) {
-	  if (tile_has_special(punit->tile, S_ROAD)) {
-	    has_road = TRUE;
-	    break;
-	  }
-	} unit_list_iterate_end;
-
-	if (has_road) {
+      else if (unit_flag(punit, F_SETTLERS)) {
+	if (map_has_special(punit->x, punit->y, S_ROAD)) {
 	  roadtext = _("Build _Railroad");
 	  road_activity=ACTIVITY_RAILROAD;  
-	} else {
+	} 
+	else {
 	  roadtext = _("Build _Road");
 	  road_activity=ACTIVITY_ROAD;  
 	}
@@ -1567,52 +1115,51 @@ void update_menus(void)
       else
 	menus_rename("<main>/_Orders/Build _Road", _("Build _Road"));
 
-      if (unit_list_size(punits) == 1) {
-	struct unit *punit = unit_list_get(punits, 0);
-
-	pterrain = tile_terrain(punit->tile);
-	if (pterrain->irrigation_result != T_NONE
-	    && pterrain->irrigation_result != pterrain) {
-	  my_snprintf(irrtext, sizeof(irrtext), irrfmt,
-		      get_tile_change_menu_text(punit->tile,
-						ACTIVITY_IRRIGATE));
-	} else if (tile_has_special(punit->tile, S_IRRIGATION)
-		   && player_knows_techs_with_flag(unit_owner(punit),
-						   TF_FARMLAND)) {
-	  sz_strlcpy(irrtext, _("Bu_ild Farmland"));
+      ttype = map_get_tile(punit->x, punit->y)->terrain;
+      tinfo = get_tile_type(ttype);
+      if ((tinfo->irrigation_result != T_LAST) && (tinfo->irrigation_result != ttype))
+	{
+	  my_snprintf (irrtext, sizeof(irrtext), irrfmt,
+		   (get_tile_type(tinfo->irrigation_result))->terrain_name);
 	}
-	if (pterrain->mining_result != T_NONE
-	    && pterrain->mining_result != pterrain) {
-	  my_snprintf(mintext, sizeof(mintext), minfmt,
-		      get_tile_change_menu_text(punit->tile, ACTIVITY_MINE));
+      else if (map_has_special(punit->x, punit->y, S_IRRIGATION) &&
+	       player_knows_techs_with_flag(game.player_ptr, TF_FARMLAND))
+	{
+	  sz_strlcpy (irrtext, _("Bu_ild Farmland"));
 	}
-	if (pterrain->transform_result != T_NONE
-	    && pterrain->transform_result != pterrain) {
-	  my_snprintf(transtext, sizeof(transtext), transfmt,
-		      get_tile_change_menu_text(punit->tile,
-						ACTIVITY_TRANSFORM));
+      if ((tinfo->mining_result != T_LAST) && (tinfo->mining_result != ttype))
+	{
+	  my_snprintf (mintext, sizeof(mintext), minfmt,
+		   (get_tile_type(tinfo->mining_result))->terrain_name);
 	}
-      }
+      if ((tinfo->transform_result != T_LAST) && (tinfo->transform_result != ttype))
+	{
+	  my_snprintf (transtext, sizeof(transtext), transfmt,
+		   (get_tile_type(tinfo->transform_result))->terrain_name);
+	}
 
       menus_rename("<main>/_Orders/Build _Irrigation", irrtext);
       menus_rename("<main>/_Orders/Build _Mine", mintext);
       menus_rename("<main>/_Orders/Transf_orm Terrain", transtext);
 
-      if (can_units_do_activity(punits, ACTIVITY_FORTIFYING)) {
+      if (can_unit_do_activity(punit, ACTIVITY_FORTIFYING))
 	menus_rename("<main>/_Orders/Build _Fortress", _("_Fortify"));
-      } else {
+      else
 	menus_rename("<main>/_Orders/Build _Fortress", _("Build _Fortress"));
-      }
 
-      if (units_have_flag(punits, F_PARATROOPERS, TRUE)) {
+      if (unit_flag(punit, F_PARATROOPERS))
 	menus_rename("<main>/_Orders/Clean _Pollution", _("_Paradrop"));
-      } else {
+      else
 	menus_rename("<main>/_Orders/Clean _Pollution", _("Clean _Pollution"));
-      }
+
+      if (!unit_flag(punit, F_SETTLERS))
+	menus_rename("<main>/_Orders/_Auto Settler", _("_Auto Attack"));
+      else
+	menus_rename("<main>/_Orders/_Auto Settler", _("_Auto Settler"));
 
       menus_set_sensitive("<main>/_Orders", TRUE);
-    } else {
-      menus_set_sensitive("<main>/_Orders", FALSE);
     }
+    else
+      menus_set_sensitive("<main>/_Orders", FALSE);
   }
 }

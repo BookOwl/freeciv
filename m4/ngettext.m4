@@ -5,7 +5,7 @@ dnl means "doesn't dump core", as some versions (for exmaple the
 dnl version which comes with glibc 2.2.5 is broken, gettext 
 dnl version 0.10.38 however is ok).
 
-AC_DEFUN([FC_CHECK_NGETTEXT_RUNTIME],
+AC_DEFUN(FC_CHECK_NGETTEXT_RUNTIME,
 [
 templibs="$LIBS"
 LIBS="$1 $LIBS"
@@ -15,7 +15,7 @@ AC_TRY_RUN([
 /*
  * Check to make sure that ngettext works at runtime. Specifically,
  * some gettext versions dump core if the ngettext function is called.
- * (c) 2002 Raimar Falke <rfalke@freeciv.org>
+ * (c) 2002 Raimar Falke <rf13@inf.tu-dresden.de>
  */
 #include <string.h>
 #include <libintl.h>

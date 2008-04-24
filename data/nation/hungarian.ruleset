@@ -2,43 +2,37 @@
 
 name=_("Hungarian")
 plural=_("?plural:Hungarians")
-groups="Medieval", "Modern", "European"
-legend=_("Legend says that Hungary was founded by Arpad in the 9th\
- century.")
-conflicts_with="indian"	; Similar flags
-leader=
- "√Årp√°d",
- "Szent Istv√°n",
- "K√°roly R√≥bert",
- "Hunyadi M√°ty√°s",
- "M√°ria Ter√©zia",
- "Batthy√°ny",
- "B√©la IV"
-leader_sex="Male", "Male", "Male", "Male", "Female", "Male", "Male"
-flag="hungary"
+leader="¡rp·d", "Szent Istv·n", "K·roly RÛbert",
+       "Hunyadi M·ty·s", "M·ria TerÈzia", "Batthy·ny"
+leader_sex="Male", "Male", "Male", "Male", "Female", "Male"
+flag="f.hungary"
 flag_alt = "-"
 city_style = "European"
 
+attack=2
+expand=0
+civilized=2
+advisors=100,100,100,100,100,100,100
 init_techs=""
-init_buildings=""
 
-init_government="Despotism"
-init_units=""
-civilwar_nations = "lithuanian", "croatian", "slovenian"
+tech_goals = "The Republic", "Iron Working", "Chivalry", "Theology",
+             "Gunpowder", "Railroad", "Industrialization"
+wonder="J.S. Bach's Cathedral"
+government="Republic"
 
 cities =
- "Budapest", "Debrecen", "Sz√©kesfeh√©rv√°r", "Kolozsv√°r", "Szeged",
- "Kassa", "P√©cs", "Pozsony", "Miskolc", "Nagyv√°rad", "Gy√µr",
- "Esztergom", "Temesv√°r", "Kom√°rom", "Ny√≠regyh√°za", "Marosv√°s√°rhely",
- "Sopron", "Szabadka", "Kecskem√©t", "Veszpr√©m", "Beszterceb√°nya",
- "B√©k√©scsaba", "Munk√°cs", "Eger", "Eperjes", "Gyulafeh√©rv√°r", "Kaposv√°r",
+ "Budapest", "Debrecen", "SzÈkesfehÈrv·r", "Kolozsv·r", "Szeged",
+ "Kassa", "PÈcs", "Pozsony", "Miskolc", "Nagyv·rad", "Gyır",
+ "Esztergom", "Temesv·r", "Kom·rom", "NyÌregyh·za", "Marosv·s·rhely",
+ "Sopron", "Szabadka", "KecskemÈt", "VeszprÈm", "Beszterceb·nya",
+ "BÈkÈscsaba", "Munk·cs", "Eger", "Eperjes", "GyulafehÈrv·r", "Kaposv·r",
  "Szolnok", "Paks", "Zalaegerszeg", "Arad", "Szombathely",
- "Moh√°cs", "Hatvan", "Selmecb√°nya", "Keszthely", "Ungv√°r", "Szeksz√°rd",
- "S√°rospatak", "Tatab√°nya", "Baja", "Szigetv√°r", "Cs√≠kszereda",
- "Nagykanizsa", "H√≥dmez√µv√°s√°rhely", "Sikl√≥s", "√ârsek√∫jv√°r", "P√°pa",
- "Gy√∂ngy√∂s",  "Duna√∫jv√°ros", "Szatm√°rn√©meti", "Szentes",
- "Mosonmagyar√≥v√°r",  "L√©va", "Szarvas", "Cs√°ktornya",
- "M√°t√©szalka", "Tata", "Nagyk√µr√∂s", "Nagyszeben",
- "Salg√≥tarj√°n", "√öjvid√©k", "Si√≥fok", "Losonc", "Gyula",
- "S√°toralja√∫jhely", "D√©va", "Tapolca", "Tisza√∫jv√°ros", "Domb√≥v√°r",
- "P√ºsp√∂klad√°ny", "Balatonf√ºred", "V√°c"
+ "Moh·cs", "Hatvan", "Selmecb·nya", "Keszthely", "Ungv·r", "Szeksz·rd",
+ "S·rospatak", "Tatab·nya", "Baja", "Szigetv·r", "CsÌkszereda",
+ "Nagykanizsa", "HÛdmezıv·s·rhely", "SiklÛs", "…rsek˙jv·r", "P·pa",
+ "Gyˆngyˆs",  "Duna˙jv·ros", "Szatm·rnÈmeti", "Szentes",
+ "MosonmagyarÛv·r",  "LÈva", "Szarvas", "Cs·ktornya",
+ "M·tÈszalka", "Tata", "Nagykırˆs", "Nagyszeben",
+ "SalgÛtarj·n", "⁄jvidÈk", "SiÛfok", "Losonc", "Gyula",
+ "S·toralja˙jhely", "DÈva", "Tapolca", "Tisza˙jv·ros", "DombÛv·r",
+ "P¸spˆklad·ny", "Balatonf¸red", "V·c"

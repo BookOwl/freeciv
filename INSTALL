@@ -2,32 +2,10 @@
 Installing Freeciv:
 ===================
 
-This file describes how to compile and install Freeciv. Last time we
-made sure this file is up to date was 16-Jul-06.
-Last minor update was 12-Aug-07.
+This file describes how to compile and install Freeciv.
 
 There may be a localized version of this file in the ./doc directory,
 named INSTALL.<locale> (e.g., INSTALL.de).
-
-This document contains sections and subsections as follows:
-     0. Prerequisites:
-     1. Prerequisites for the clients:
-          1a. Prerequisites for the Gtk+ client:
-          1b. Prerequisites for the SDL client:
-          1c. Prerequisites for the Xaw client:
-     2. Generating Makefiles
-          2a. Generating the Makefile for svn versions:
-          2b. Generating the Makefile for release versions:
-     3. Compiling Freeciv:
-     4. Installation:
-     5. Native Language Support:
-     6. Readline Support:
-     7. Reinier's Solaris Installation Notes:
-     8. Reinier's libXpm Solaris Installation Notes:
-     9. Mac OS X and Darwin notes:
-    10. Debian GNU/Linux notes:
-    11. Cygwin notes:
-    12. Win32 ("native MS Windows") notes:
 
 
 0. Prerequisites:
@@ -55,8 +33,8 @@ out whether your system is suitable.  If in doubt, just try it.
    Development of Freeciv is primarily done with "gcc", the GNU
    project's excellent C compiler.  Releases can be compiled with gcc
    or most other compilers (such as the unbundled Solaris C compiler).
-   Development releases and svn snapshots will not work without gcc,
-   unless you give configure the "--disable-auto-deps" option.  See
+   Development releases and CVS snapshots will not work without gcc,
+   unless you give configure the "--disable-cvs-deps" option.  See
    the section below for more information.
    Note that there have been reports that gcc with -O3 miscompiled
    freeciv. No problems have been reported with -O2.
@@ -67,9 +45,9 @@ out whether your system is suitable.  If in doubt, just try it.
 
    Officially released versions of Freeciv are designed to have
    makefiles which work with most make programs.  Development releases
-   and svn snapshots contain things (like dependencies) which use
+   and CVS snapshots contain things (like dependencies) which use
    gmake's enhanced features, so gmake is necessary for development,
-   unless you give configure the "--disable-auto-deps" option.  See the
+   unless you give configure the "--disable-cvs-deps" option.  See the
    section below for more information.
 
    You can check if you have GNU make installed on your system by
@@ -79,19 +57,19 @@ out whether your system is suitable.  If in doubt, just try it.
 
    The output should include "GNU Make" somewhere.
 
-The svn version has additional requirements. A release version
+The CVS version has additional requirements. A release version
 contains the generated files.
 
  - The programs from GNU gettext version 0.10.36 or better
 
    Especial the xgettext program is required to create the *.gmo
-   files which aren't included in the svn tree.
+   files which aren't included in the CVS tree.
 
- - GNU autoconf version 2.55 or better
+ - GNU autoconf version 2.13 or better
 
    Autoconf is required to create configure from configure.in. 
 
- - GNU automake version 1.6 or better
+ - GNU automake version 1.4 or better
 
    Automake is required to create the various Makefile.in from
    Makefile.am.
@@ -100,11 +78,11 @@ contains the generated files.
 =================================
 
 The Freeciv client comes in the following forms:
+* Gtk+ 1.2 widget library ("Gtk+ 1.2").
 * Gtk+ 2.0 widget library ("Gtk+ 2.0").
 * AmigaOS MUI ("Mui").
 * Native Microsoft Windows Common Controls ("Win32").
 * X Athena Widgets library ("Xaw").
-* SDL
 
 These forms have different prerequisites, explained separately below.
 
@@ -117,7 +95,63 @@ will need to have the appropriate "development" packages installed.
 (Attention Red Hat users: this means you! :-)
 
 
-1a. Prerequisites for the Gtk+ 2.0 client:
+1a. Prerequisites for the Gtk+ 1.2 client:
+==========================================
+
+ - The "Glib" utility library.
+
+   The "Glib" utility library provides non-graphical functions used by the
+   "Gdk" and "Gtk+" libraries, like hash tables, single linked lists, etc.
+
+   Freeciv requires a version of "Glib" greater or equal to 1.2.5.
+
+   If the Freeciv configure process tells you that you don't have the
+   Glib library installed, then it may be obtained from here:
+
+     ftp://ftp.gtk.org/pub/gtk/v1.2/glib-1.2.10.tar.gz
+
+ - The "Gtk+" widget library.
+
+   The "Gtk+" widget library was designed for the GIMP graphics program.
+   Since then it has gained popularity as an easy to program, free toolkit.
+   The "Gtk+" library comes with a companion library "Gdk" which provides
+   an abstraction layer over X-Windows to implement basic drawing functions,
+   windows, clipping, etc.
+
+   To compile the client using the "Gtk+" library add "--enable-client=gtk"
+   to the Freeciv configure script.  See the section below for more 
+   information about the configure script.
+
+   Freeciv requires a version of "Gtk+" greater or equal to 1.2.5.
+
+   If the Freeciv configure process tells you that you don't have the
+   Gtk+ library installed, then it may be obtained from here:
+
+     ftp://ftp.gtk.org/pub/gtk/v1.2/gtk+-1.2.10.tar.gz
+
+   Note: several bugs have been found in Gtk+ versions previous to 1.2.10.
+         Use those at your own risk.
+
+ - The "Imlib" library.
+
+   This library is essential for bitmap handling.  It is also
+   used by the GNOME project.
+
+   Freeciv requires a version of "Imlib" greater or equal to 1.9.2.
+
+   If the Freeciv configure process tells you that you don't have the
+   Imlib library installed, then it may be obtained from here:
+
+     ftp://ftp.gnome.org/pub/GNOME/sources/imlib/1.9/imlib-1.9.14.tar.gz
+
+   (Imlib documentation says that you require other libraries to use
+   certain features but none of those are needed by the Freeciv client).
+
+If you are going to make these yourself, build and install them in the
+following order: Glib, Gtk+, Imlib.
+
+
+1b. Prerequisites for the Gtk+ 2.0 client:
 ==========================================
 
  - "pkg-config".
@@ -125,19 +159,19 @@ will need to have the appropriate "development" packages installed.
    "pkg-config" is a system for managing library compile/link flags that
    works with automake and autoconf. You may obtain it at:
 
-      ftp://ftp.gtk.org/pub/gtk/v2.0/dependencies/pkgconfig-0.14.0.tar.gz
+      ftp://ftp.gtk.org/pub/gtk/v2.0/dependencies/pkgconfig-0.12.0.tar.gz
 
  - The "Glib" utility library.
 
    The "Glib" utility library provides non-graphical functions used by the
    "Gdk" and "Gtk+" libraries, like hash tables, single linked lists, etc.
 
-   Freeciv requires a version of "Glib" greater or equal to 2.4.0.
+   Freeciv requires a version of "Glib" greater or equal to 2.0.0.
 
    If the Freeciv configure process tells you that you don't have the
    Glib library installed, then it may be obtained from here:
 
-     ftp://ftp.gtk.org/pub/gtk/v2.4/glib-2.4.8.tar.bz2
+     ftp://ftp.gtk.org/pub/gtk/v2.0/glib-2.0.7.tar.bz2
 
  - The "Atk" accessibility library.
 
@@ -145,22 +179,23 @@ will need to have the appropriate "development" packages installed.
    It allows people with disabilities to utilize all the functionality
    provided by Gtk+ apps. You may obtain it at:
 
-     ftp://ftp.gtk.org/pub/gtk/v2.4/atk-1.8.0.tar.bz2
+     ftp://ftp.gtk.org/pub/gtk/v2.0/atk-1.0.3.tar.bz2
 
  - The "Pango" text layout and rendering library.
 
    "Pango" is library for layout and rendering of text, with an emphasis
    on internationalization. You may obtain it at:
 
-     ftp://ftp.gtk.org/pub/gtk/v2.4/pango-1.4.1.tar.bz2
+     ftp://ftp.gtk.org/pub/gtk/v2.0/pango-1.0.5.tar.bz2
 
  - The "Gtk+" widget library.
 
    The "Gtk+" widget library was designed for the GIMP graphics program.
    Since then it has gained popularity as an easy to program, free toolkit.
 
-   "Gtk+" is the default client. If you don't specify any client with
-   "--enablie-client" to configure, you will get "Gtk+" client.
+   To compile the client using the "Gtk+" library add "--enable-client=gtk-2.0"
+   to the Freeciv configure script.  See the section below for more 
+   information about the configure script.
 
    The "Gtk+" library comes with two companion libraries:
 
@@ -171,53 +206,20 @@ will need to have the appropriate "development" packages installed.
      "GdkPixbuf":
        Provides image loading/saving facilities.
 
-   Freeciv requires a version of "Gtk+" greater or equal to 2.4.0.
+   Freeciv requires a version of "Gtk+" greater or equal to 2.0.0.
 
    If the Freeciv configure process tells you that you don't have the
    Gtk+ library installed, then it may be obtained from here:
 
-     ftp://ftp.gtk.org/pub/gtk/v2.4/gtk+-2.4.14.tar.bz2
+     ftp://ftp.gtk.org/pub/gtk/v2.0/gtk+-2.0.9.tar.bz2
 
    "Gtk+" depends on the "Glib", "Atk" and "Pango" libraries.
 
 If you are going to make these yourself, build and install them in the
 following order: pkg-config, Glib, Atk, Pango, Gtk+.
 
-1b. Prerequisites for the SDL client:
-=====================================
 
- - The "SDL" library.
-
-   "Simple DirectMedia Layer is a cross-platform multimedia library designed
-    to provide low level access to audio, keyboard, mouse, joystick, 3D hardware
-    via OpenGL, and 2D video framebuffer." (http://www.libsdl.org)
-    
-   These features make it a good choice for portable games. You may obtain it
-   at:
-    
-   http://www.libsdl.org/release/SDL-1.2.11.tar.gz
-
-   To compile the client using the "SDL" library add "--enable-client=sdl"
-   to the Freeciv configure script.  See the section below for more 
-   information about the configure script.
-    
- - The "SDL_image" library.
- 
-   This library loads the PNG images (with the help of libpng) and converts
-   them to "SDL surfaces" that can be handled by the "SDL" library. You may
-   obtain it at:
-   
-   http://www.libsdl.org/projects/SDL_image/release/SDL_image-1.2.5.tar.gz
-   
- - The "freetype" library.
-
-   This library helps to render text for the SDL client, using an externally
-   provided TrueType font. You may obtain it at:
-   
-   http://download.savannah.gnu.org/releases/freetype/freetype-2.3.2.tar.gz
-   
- 
-1c. Prerequisites for the Xaw client:
+1b. Prerequisites for the Xaw client:
 =====================================
 
  - X-Windows.
@@ -277,15 +279,10 @@ following order: pkg-config, Glib, Atk, Pango, Gtk+.
    section near the end of this file.
 
 
-2. Generating Makefiles
-=======================
-This section contains two parts, one for generating makefiles from svn
-versions and one for generating makefiles from release versions.
-
-2a. Generating the Makefile for svn versions:
+2a. Generating the Makefile for CVS versions:
 =============================================
 
-This step is only needed for svn versions.
+This step is only needed for CVS versions.
 
 To create the makefile just type
 
@@ -317,9 +314,9 @@ script, try the --help option, like this:
 
  % ./configure --help
 
-If you're compiling a development release or a svn snapshot, and you
+If you're compiling a development release or a CVS snapshot, and you
 don't have both GNU make AND gcc, then pass configure the
-"--disable-auto-deps" option.  You'll especially need to do this if
+"--disable-cvs-deps" option.  You'll especially need to do this if
 you're using the Solaris cc and make programs.
 
 Note that if you do this, dependency checking is disabled.  If you
@@ -327,11 +324,12 @@ change any Freeciv .h files after this for any reason, you should do
 a "make clean" before doing "make" to ensure everything is compiled
 correctly.
 
-"--disable-auto-deps" has no effect when run with a stable release.
+"--disable-cvs-deps" has no effect when run with a stable release.
 
 By default the configure script will choose the Gtk+ client if the 
-required libraries are found. If you prefer to override this default,
-you can give configure the "--enable-client=xaw" option.
+required libraries are found, or else fall back to the Xaw client.
+If you prefer to override this default, you can give configure the
+"--enable-client=xaw" option.
 
 If you want to change the compiler options, set the CFLAGS environment
 variable in your shell before running "configure".  For example:
@@ -356,6 +354,13 @@ If for some reason using "configure" gives you trouble, follow these steps:
 
   - Read the prerequisites section carefully, to determine if your
     system meets all the requirements.
+
+  - If you are compiling the Gtk+ 1.2 version of the client: Ensure that
+    you have the Gtk+, Gdk, Glib & Imlib libraries installed on your
+    system.  Make sure that the configure script can find them,
+    either by installing them in the standard places on your system,
+    or by instructing the configure script with the appropriate
+    command-line options.  (See ./configure --help)
 
   - If you are compiling the Xaw version of the client: Ensure that
     you have both the Xpm and Xaw libraries installed on your system.
@@ -458,10 +463,17 @@ Freeciv, there are a few work-arounds you can try:
       % ./configure --disable-nls
       % make
 
-2. You can try to install the latest version of GNU gettext.
+2. If you want Native Language Support, try the version of gettext that
+   is included with Freeciv by specifying the "--with-included-gettext"
+   ./configure option:
+
+      % ./configure --with-included-gettext
+      % make
+
+3. Finally, you can try to install the latest version of GNU gettext.
    It may be obtained from here:
 
-      ftp://ftp.gnu.org/pub/gnu/gettext/gettext-0.16.1.tar.gz
+      ftp://ftp.gnu.org/pub/gnu/gettext/gettext-0.11.4.tar.gz
 
 
 6. Readline Support:
@@ -525,10 +537,10 @@ libraries are on their own in the nonstandard location /path/to/xpm:
   % setenv PATH /opt/SUNWspro/bin:/usr/ccs/bin:/bin
   % unsetenv LD_LIBRARY_PATH
   % ./configure --with-xpm-prefix=/path/to/xpm
-                --disable-auto-deps
+                --disable-cvs-deps --with-included-gettext
   % make
 
-The "--disable-auto-deps" prevents ./configure from creating Makefiles
+The "--disable-cvs-deps" prevents ./configure from creating Makefiles
 specific to GNU make.  The symptoms of this happening are:
 
   make: Fatal error in reader:
@@ -674,8 +686,12 @@ make -f scripts/makefile.gcc CC=i386-mingw32-gcc RANLIB=i386-mingw32-ranlib
 These things have to be put to a place where your compiler will find it.
 
 Autoconf and co:
-If you build from svn, you will have to replace ./configure with ./autogen.sh 
+If you build from cvs, you will have to replace ./configure with ./autogen.sh 
 in the following lines.
+You will have trouble with the paths (especially with the localedir) if you 
+use autoconf2.52.
+So autoconf 2.13 is the preferred version (you can use the 
+--disable-autoconf2.52 switch from autogen.sh). 
 
 Configuring the source:
 -----------------------
@@ -686,7 +702,7 @@ export CC="gcc -mno-cygwin"
 ./configure --with-included-gettext --prefix=.
 
 2. cross compiling from a real unix.
-replace X with a number which you have chosen when you have configured your 
+replace X with a number which you have choosen when you have configured your 
 cross compiler.
 
 export CC=iX86-mingw32-gcc
@@ -695,7 +711,7 @@ export RANLIB=iX86-mingw32-ranlib
 ./configure --host=iX86-mingw32 --build=$(./config.guess) --with-included-gettext --enable-client=win32 --prefix=.
 
 
-Build and install:
+Buld and install:
 --------------------
 make
 make DESTDIR=absolute_install_path bindir=./ install

@@ -1,10 +1,11 @@
 ## Process this file with automake to produce Makefile.in
 
 noinst_LIBRARIES = libguiclient.a
-AM_CPPFLAGS = -I. -I$(srcdir)/.. -I$(srcdir)/../include -I$(top_srcdir)/utility -I$(top_srcdir)/common -I$(top_srcdir)/common/aicore -I$(srcdir)/../agents $(CLIENT_CFLAGS) $(GGZ_GTK_INCLUDES)
+INCLUDES = -I. -I$(srcdir)/.. -I$(srcdir)/../include -I$(top_srcdir)/common -I../../intl -I$(srcdir)/../agents @CLIENT_CFLAGS@
 
-# The AM_CPPFLAGS "-I." is so resources.c includes the locally generated 
-# Freeciv.h in the builddir, in preference to the one 
+## Above, note -I../../intl instead of -I$(top_srdir/intl) is deliberate.
+# The INCLUDES "-I." is so resources.c includes the locally generated 
+# Freeciv.h in the compilation dir, in preference to the one 
 # in the source dir (when compiling from another dir). --dwp
 
 BUILT_SOURCES = Freeciv.h
@@ -21,13 +22,8 @@ libguiclient_a_DEPENDENCIES = rc2c
 libguiclient_a_SOURCES = \
 	rc2c		\
 	Freeciv.h	\
-	canvas.c	\
-	canvas.h	\
-	caravan_dialog.c \
 	chatline.h	\
 	chatline.c	\
-	choice_dialog.c	\
-	choice_dialog.h \
 	citydlg.c	\
 	citydlg.h	\
 	cityrep.c	\
@@ -42,11 +38,7 @@ libguiclient_a_SOURCES = \
 	dialogs.h	\
 	diplodlg.c	\
 	diplodlg.h	\
-	editdlg.c	\
-	editdlg.h	\
-	diplomat_dialog.c \
 	finddlg.c	\
-	finddlg.h	\
 	gamedlgs.c	\
 	gotodlg.c	\
 	gotodlg.h	\
@@ -65,7 +57,6 @@ libguiclient_a_SOURCES = \
 	inputdlg.c	\
 	inputdlg.h	\
 	inteldlg.c	\
-	inteldlg.h	\
 	mapctrl.c	\
 	mapctrl.h	\
 	mapview.c	\
@@ -73,25 +64,17 @@ libguiclient_a_SOURCES = \
 	menu.c		\
 	menu.h		\
 	messagedlg.c	\
-	messagedlg.h	\
 	messagewin.c	\
 	messagewin.h	\
 	optiondlg.h	\
-	pages.c		\
-	pages.h		\
 	plrdlg.c	\
 	plrdlg.h	\
-	ratesdlg.h	\
 	repodlgs.c	\
 	repodlgs.h	\
 	resources.c	\
 	resources.h	\
 	spaceshipdlg.c	\
 	spaceshipdlg.h  \
-	sprite.c	\
-	sprite.h	\
-	theme_dlg.c	\
-	themes.c	\
-	tileset_dlg.c	\
 	wldlg.c		\
 	wldlg.h	
+

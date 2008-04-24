@@ -2,17 +2,15 @@
 
 noinst_LIBRARIES = libguiclient.a
 
-AM_CPPFLAGS = -I. -I$(srcdir)/.. -I$(srcdir)/../agents -I$(top_srcdir)/utility -I$(srcdir)/../include -I$(top_srcdir)/common/aicore -I$(top_srcdir)/common $(CLIENT_CFLAGS)
+INCLUDES = -I. -I$(srcdir)/.. -I$(srcdir)/../include -I$(top_srcdir)/common -I../../intl @CLIENT_CFLAGS@
+
+## Above, note -I../../intl instead of -I$(top_srdir)/intl is deliberate.
 
 libguiclient_a_SOURCES = \
-	canvas.c	\
-	canvas.h	\
 	chatline.c	\
 	chatline.h	\
 	citydlg.c	\
 	citydlg.h	\
-	cma_fe.c 	\
-	cma_fe.h	\
 	cityrep.c	\
 	cityrep.h	\
 	colors.c	\
@@ -24,7 +22,6 @@ libguiclient_a_SOURCES = \
 	diplodlg.c	\
 	diplodlg.h	\
 	finddlg.c	\
-	finddlg.h	\
 	gotodlg.c	\
 	gotodlg.h	\
 	graphics.c	\
@@ -40,7 +37,6 @@ libguiclient_a_SOURCES = \
 	inputdlg.c	\
 	inputdlg.h	\
 	inteldlg.c	\
-	inteldlg.h	\
 	mapctrl.c	\
 	mapctrl.h	\
 	mapview.c	\
@@ -48,23 +44,16 @@ libguiclient_a_SOURCES = \
 	menu.c		\
 	menu.h		\
 	messagedlg.c	\
-	messagedlg.h	\
 	messagewin.c	\
 	messagewin.h	\
 	optiondlg.h	\
 	optiondlg.c	\
-	pages.c		\
-	pages.h		\
 	plrdlg.c	\
 	plrdlg.h	\
 	ratesdlg.c	\
-	ratesdlg.h	\
 	repodlgs.c	\
 	repodlgs.h	\
 	spaceshipdlg.c	\
 	spaceshipdlg.h	\
-	sprite.c	\
-	sprite.h	\
-	themes.c	\
 	wldlg.c		\
 	wldlg.h

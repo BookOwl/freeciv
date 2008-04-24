@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -18,17 +17,14 @@
 #include <assert.h>
 #include <string.h>
 
-#include "fcintl.h"
-#include "map.h"
 #include "mem.h"
-
-#include "citydlg_g.h"
-#include "mapview_g.h"
 #include "messagewin_g.h"
-
-#include "civclient.h"
-#include "messagewin_common.h"
 #include "options.h"
+#include "fcintl.h"
+#include "mapview_g.h"
+#include "citydlg_g.h"
+
+#include "messagewin_common.h"
 
 static int frozen_level = 0;
 static bool change = FALSE;
@@ -70,15 +66,13 @@ void meswin_force_thaw(void)
 **************************************************************************/
 void update_meswin_dialog(void)
 {
-  if (frozen_level > 0 || !change || !can_client_change_view()) {
+  if (frozen_level > 0 || !change) {
     return;
   }
 
-  if (!is_meswin_open() && messages_total > 0
-      && !client_is_observer()
-      && NULL != client.conn.playing
-      && !client.conn.playing->ai.control) {
-    popup_meswin_dialog(FALSE);
+  if (!is_meswin_open() && messages_total > 0 &&
+      (!game.player_ptr->ai.control || ai_popup_windows)) {
+    popup_meswin_dialog();
     change = FALSE;
     return;
   }
@@ -108,12 +102,14 @@ void clear_notify_window(void)
 /**************************************************************************
 ...
 **************************************************************************/
-void add_notify_window(char *message, struct tile *ptile,
-		       enum event_type event)
+void add_notify_window(struct packet_generic_message *packet)
 {
   const size_t min_msg_len = 50;
-  size_t msg_len = strlen(message);
-  char *s = fc_malloc(MAX(msg_len, min_msg_len) + 1);
+  char *game_prefix1 = "Game: ";
+  char *game_prefix2 = _("Game: ");
+  size_t gp_len1 = strlen(game_prefix1);
+  size_t gp_len2 = strlen(game_prefix2);
+  char *s = fc_malloc(MAX(strlen(packet->message), min_msg_len) + 1);
   int i, nspc;
 
   change = TRUE;
@@ -123,17 +119,24 @@ void add_notify_window(char *message, struct tile *ptile,
     messages = fc_realloc(messages, messages_alloc * sizeof(*messages));
   }
 
-  strcpy(s, message);
+  if (strncmp(packet->message, game_prefix1, gp_len1) == 0) {
+    strcpy(s, packet->message + gp_len1);
+  } else if (strncmp(packet->message, game_prefix2, gp_len2) == 0) {
+    strcpy(s, packet->message + gp_len2);
+  } else {
+    strcpy(s, packet->message);
+  }
 
   nspc = min_msg_len - strlen(s);
   if (nspc > 0) {
     strncat(s, "                                                  ", nspc);
   }
 
-  messages[messages_total].tile = ptile;
-  messages[messages_total].event = event;
+  messages[messages_total].x = packet->x;
+  messages[messages_total].y = packet->y;
+  messages[messages_total].event = packet->event;
   messages[messages_total].descr = s;
-  messages[messages_total].location_ok = (ptile != NULL);
+  messages[messages_total].location_ok = (packet->x != -1 && packet->y != -1);
   messages[messages_total].visited = FALSE;
   messages_total++;
 
@@ -143,10 +146,9 @@ void add_notify_window(char *message, struct tile *ptile,
    */
   for (i = 0; i < messages_total; i++) {
     if (messages[i].location_ok) {
-      struct city *pcity = tile_city(messages[i].tile);
+      struct city *pcity = map_get_city(messages[i].x, messages[i].y);
 
-      messages[i].city_ok =
-        (pcity && can_player_see_city_internals(client.conn.playing, pcity));
+      messages[i].city_ok = (pcity && city_owner(pcity) == game.player_ptr);
     } else {
       messages[i].city_ok = FALSE;
     }
@@ -188,23 +190,20 @@ void meswin_popup_city(int message_index)
   assert(message_index < messages_total);
 
   if (messages[message_index].city_ok) {
-    struct tile *ptile = messages[message_index].tile;
-    struct city *pcity = tile_city(ptile);
+    int x = messages[message_index].x;
+    int y = messages[message_index].y;
+    struct city *pcity = map_get_city(x, y);
 
     if (center_when_popup_city) {
-      center_tile_mapcanvas(ptile);
+      center_tile_mapcanvas(x, y);
     }
 
-    if (pcity
-	&& can_player_see_units_in_city(client.conn.playing, pcity)) {
+    if (pcity) {
       /* If the event was the city being destroyed, pcity will be NULL
-       * and we'd better not try to pop it up.  It's also possible that
-       * events will happen on enemy cities; we generally don't want to pop
-       * those dialogs up either (although it's hard to be certain).
-       *
-       * In both cases, it would be better if the popup button weren't
-       * highlighted at all - this is left up to the GUI. */
-      popup_city_dialog(pcity);
+       * and we'd better not try to pop it up.  In this case, it would
+       * be better if the popup button weren't highlighted at all, but
+       * that's OK. */
+      popup_city_dialog(pcity, 0);
     }
   }
 }
@@ -217,7 +216,8 @@ void meswin_goto(int message_index)
   assert(message_index < messages_total);
 
   if (messages[message_index].location_ok) {
-    center_tile_mapcanvas(messages[message_index].tile);
+    center_tile_mapcanvas(messages[message_index].x,
+			  messages[message_index].y);
   }
 }
 

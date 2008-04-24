@@ -13,21 +13,25 @@
 #ifndef FC__DIPLHAND_H
 #define FC__DIPLHAND_H
 
-#include "fc_types.h"
-
-#include "hand_gen.h"
-
 struct Treaty;
+struct player;
 struct packet_diplomacy_info;
 struct connection;
 
-void diplhand_init(void);
-void diplhand_free(void);
-void free_treaties(void);
-
 struct Treaty *find_treaty(struct player *plr0, struct player *plr1);
+
+void handle_diplomacy_cancel_meeting(struct player *pplayer, 
+				     struct packet_diplomacy_info *packet);
+void handle_diplomacy_create_clause(struct player *pplayer, 
+				    struct packet_diplomacy_info *packet);
+void handle_diplomacy_remove_clause(struct player *pplayer, 
+				    struct packet_diplomacy_info *packet);
+void handle_diplomacy_init(struct player *pplayer, 
+			   struct packet_diplomacy_info *packet);
+void handle_diplomacy_accept_treaty(struct player *pplayer, 
+				    struct packet_diplomacy_info *packet);
 
 void send_diplomatic_meetings(struct connection *dest);
 void cancel_all_meetings(struct player *pplayer);
-void reject_all_treaties(struct player *pplayer);
+
 #endif  /* FC__DIPLHAND_H */

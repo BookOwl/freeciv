@@ -17,28 +17,27 @@
 
 #include "gui_main_g.h"
 
-void xaw_ui_exit(void);
+void main_quit_freeciv(void);
 void main_show_info_popup(XEvent *event);
-void reset_econ_label_pixmaps(void);
-void reset_unit_below_pixmaps(void);
-
-void assign_battlegroup(int battlegroup);
-void select_battlegroup(int battlegroup);
-void add_unit_to_battlegroup(int battlegroup);
 
 extern Atom         wm_delete_window;
 extern Display     *display;
 extern int          display_depth;
 extern int          screen_number;
 extern GC           civ_gc; 
-extern GC           border_line_gc; 
 extern GC           fill_bg_gc;
 extern GC           fill_tile_gc;
 extern GC           font_gc;
 extern GC           prod_font_gc;
 extern Pixmap       gray50;
 extern Pixmap       gray25;
-#define single_tile_pixmap (mapview.single_tile->pixmap)
+extern Pixmap       single_tile_pixmap;
+extern Pixmap       map_canvas_store;
+extern int          map_canvas_store_twidth;
+extern int          map_canvas_store_theight;
+extern Pixmap       overview_canvas_store;
+extern int          overview_canvas_store_width;
+extern int          overview_canvas_store_height;
 extern Widget       map_vertical_scrollbar;
 extern Widget       map_horizontal_scrollbar;
 extern Widget       left_column_form;
@@ -62,8 +61,8 @@ extern Widget       main_form;
 extern Window       root_window;
 extern Widget       inputline_text;
 extern Widget       outputwindow_text;
-extern XFontSet     main_font_set;
-extern XFontSet     prod_font_set;
+extern XFontStruct *main_font_struct;
+extern XFontStruct *prod_font_struct;
 extern XtAppContext app_context;
 
 #endif  /* FC__GUI_MAIN_H */

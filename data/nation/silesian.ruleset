@@ -2,75 +2,33 @@
 
 name=_("Silesian")
 plural=_("?plural:Silesians")
-groups="Medieval", "European"
-legend=_("Silesia is a region of southern Poland that was at one time an\
- independent kingdom.")
-leader = "W艂adys艂aw Wygnaniec",
-         "Henryk Brodaty",
-         "Henryk Pobo偶ny",
-	 "Jerzy IV Wilhelm",
-         "J贸zef Ko偶do艅",
-         "Jan Kustos",
-         "Wojciech Korfanty"
-leader_sex = "Male", "Male", "Male", "Male", "Male", "Male", "Male"
-flag="silesia"
+leader="Wladislaw the Exile", "Henryk the Godfearing"
+leader_sex="Male", "Male"
+flag="f.silesia"
 flag_alt = "-"
 city_style = "European"
 
-ruler_titles = { "government",      "male_title",      "female_title"
+ruler_titles = { "government",      "male_title",      "female_title",
                  "Monarchy",        _("Prince"),         _("Princess")
-                 "Democracy",_("Prime Minister"), _("?female:Prime Minister")
+                 "Democracy",       _("Prime Minister"), _("Prime Minister")
                }
+attack=0
+expand=2
+civilized=1
+advisors=100,100,100,100,100,100,100
 init_techs=""
-init_buildings=""
 
-init_government="Despotism"
-init_units=""
-civilwar_nations = "polish"
+tech_goals="The Republic", "Trade", "Navigation", "Railroad", "Steel"
+wonder="Great Wall" ; Yes, we had own great wall ( iso-8896-2 ("Wa硑 眘kie") )
+government="Democracy"
 
 ; if you want your favourite city to be in more prominent place, go ahead
 ; only leave first 3 cities where they are
 
 cities =
-  "Wroc艂aw",
-  "Opole",
-  "Katowice",
-  "Legnica",
-  "Zielona G贸ra (hills, grassland)",
-  "G艂og贸w (forest)",
-  "Boles艂awiec",
-  "Wa艂brzych",
-  "Gliwice",
-  "Rybnik (river)",
-  "Jelenia G贸ra (mountains)",
-  "艢widnica",
-  "Lubin",
-  "Chojn贸w",
-  "Ma艂czyce", 
-  "K艂odzko",
-  "Bytom",
-  "O艣wiecim",
-  "Z艂otoryja",
-  "Bielany",
-  "Zgorzelec", 
-  "呕ary",
-  "Bystrzyca (river)",
-  "呕agan",
-  "Bogatynia", 
-  "Chocian贸w",
-  "Nowa S贸l",
-  "Zabrze",
-  "Sosnowiec (forest)",
-  "Rokitki",
-  "Luba艅",
-  "Polkowice",
-  "Lubi膮偶",
-  "K臋dzierzyn-Ko藕le",
-  "Chorz贸w",
-  "Bielsko",
-  "Cieszyn",
-  "Siemianowice 艢l膮skie",
-  "Wojkowice",
-  "Lubliniec",
-  "B臋dzin",
-  "Czelad藕"
+  "Wroclaw", "Legnica", "Opole", "Katowice", "Zielona G髍a", "Glog體",
+  "Boleslawiec", "Walbrzych", "Gliwice", "Rybnik", "Jelenia Gora",
+  "Swidnica", "Lubin", "Chojn體", "Malczyce", "Klodzko", "Bytom",
+  "Oswiecim", "Zlotoryja", "Bielany", "Zgorzelec", "Zary", "Bystrzyca",
+  "Zagan", "Bogatynia", "Chocian體", "Nowa S髄", "Zabrze", "Sosnowiec",
+  "Rokitki", "Luban", "Polkowice", "Lubiaz", "Kedziezyn-Kozle"

@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -23,13 +22,11 @@
 #include "city.h"
 #include "events.h"
 #include "fcintl.h"
-#include "game.h"
 #include "idex.h"
 #include "log.h"
 #include "map.h"
 #include "player.h"
 #include "rand.h"
-#include "specialist.h"
 #include "support.h"
 #include "unit.h"
 #include "worklist.h"
@@ -37,7 +34,6 @@
 #include "citytools.h"
 #include "cityturn.h"
 #include "plrhand.h"
-#include "sanitycheck.h"
 
 #include "cityhand.h"
 
@@ -46,48 +42,75 @@
   suggested name and with same id which was passed in (either unit id
   for city builder or existing city id for rename, we don't care here).
 **************************************************************************/
-void handle_city_name_suggestion_req(struct player *pplayer, int value)
+void handle_city_name_suggest_req(struct connection *pconn,
+				  struct packet_generic_integer *packet)
 {
-  struct unit *punit = player_find_unit_by_id(pplayer, value);
+  struct packet_city_name_suggestion reply;
+  struct unit *punit =
+      player_find_unit_by_id(pconn->player, packet->value);
+
+  if (!pconn->player) {
+    freelog(LOG_ERROR, "City-name suggestion request from non-player %s",
+	    conn_description(pconn));
+    return;
+  }
   
   if (!punit) {
     return;
   }
 
   freelog(LOG_VERBOSE, "handle_city_name_suggest_req(unit_pos=(%d,%d))",
-	  punit->tile->x, punit->tile->y);
+	  punit->x, punit->y);
 
-  dlsend_packet_city_name_suggestion_info(pplayer->connections, value, 
-      city_name_suggestion(pplayer, punit->tile));
+  reply.id = packet->value;
+  sz_strlcpy(reply.name,
+	     city_name_suggestion(pconn->player, punit->x, punit->y));
+  send_packet_city_name_suggestion(pconn, &reply);
 }
 
 /**************************************************************************
 ...
 **************************************************************************/
-void handle_city_change_specialist(struct player *pplayer, int city_id,
-				   Specialist_type_id from,
-				   Specialist_type_id to)
+void handle_city_change_specialist(struct player *pplayer, 
+				   struct packet_city_request *preq)
 {
-  struct city *pcity = player_find_city_by_id(pplayer, city_id);
+  struct city *pcity = player_find_city_by_id(pplayer, preq->city_id);
 
   if (!pcity) {
     return;
   }
 
-  if (to < 0 || to >= specialist_count()
-      || from < 0 || from >= specialist_count()
-      || !city_can_use_specialist(pcity, to)
-      || pcity->specialists[from] == 0) {
-    /* This could easily just be due to clicking faster on the specialist
-     * than the server can cope with. */
-    freelog(LOG_VERBOSE, "Error in specialist change request from client.");
+  if(preq->specialist_from==SP_ELVIS) {
+    if(pcity->size<5) 
+      return; 
+
+    if(pcity->ppl_elvis == 0)
+      return;
+    pcity->ppl_elvis--;
+  } else if(preq->specialist_from==SP_TAXMAN) {
+    if (pcity->ppl_taxman == 0)
+      return;
+    pcity->ppl_taxman--;
+  } else if (preq->specialist_from==SP_SCIENTIST) {
+    if (pcity->ppl_scientist == 0)
+      return;
+    pcity->ppl_scientist--;
+  } else {
     return;
   }
+  switch (preq->specialist_to) {
+  case SP_TAXMAN:
+    pcity->ppl_taxman++;
+    break;
+  case SP_SCIENTIST:
+    pcity->ppl_scientist++;
+    break;
+  case SP_ELVIS:
+  default:
+    pcity->ppl_elvis++;
+    break;
+  }
 
-  pcity->specialists[from]--;
-  pcity->specialists[to]++;
-
-  sanity_check_city(pcity);
   city_refresh(pcity);
   send_city_info(pplayer, pcity);
 }
@@ -95,132 +118,67 @@ void handle_city_change_specialist(struct player *pplayer, int city_id,
 /**************************************************************************
 ...
 **************************************************************************/
-void handle_city_make_specialist(struct player *pplayer, int city_id,
-				 int worker_x, int worker_y)
+void handle_city_make_specialist(struct player *pplayer, 
+				 struct packet_city_request *preq)
 {
-  struct tile *ptile;
-  struct tile *pcenter;
-  struct city *pcity = player_find_city_by_id(pplayer, city_id);
+  struct city *pcity = player_find_city_by_id(pplayer, preq->city_id);
 
-  if (NULL == pcity) {
-    freelog(LOG_ERROR,
-            "handle_city_make_specialist() bad city number %d.",
-            city_id);
+  if (!pcity) {
     return;
   }
-
-  if (!is_valid_city_coords(worker_x, worker_y)) {
-    freelog(LOG_ERROR,
-            "handle_city_make_specialist() invalid city map {%d,%d} \"%s\".",
-            worker_x, worker_y,
-            city_name(pcity));
-    return;
-  }
-  pcenter = city_tile(pcity);
-
-  if (NULL == (ptile = city_map_to_tile(pcenter, worker_x, worker_y))) {
-    freelog(LOG_ERROR,
-            "handle_city_make_specialist() unavailable city map {%d,%d} \"%s\".",
-            worker_x, worker_y,
-            city_name(pcity));
-    return;
-  }
-
-  if (is_free_worked(pcity, ptile)) {
+  if (is_city_center(preq->worker_x, preq->worker_y)) {
     auto_arrange_workers(pcity);
     sync_cities();
     return;
   }
-
-  if (tile_worked(ptile) == pcity) {
-    city_map_update_empty(pcity, ptile, worker_x, worker_y);
-    pcity->specialists[DEFAULT_SPECIALIST]++;
+  if (is_worker_here(pcity, preq->worker_x, preq->worker_y)) {
+    server_remove_worker_city(pcity, preq->worker_x, preq->worker_y);
+    pcity->ppl_elvis++;
     city_refresh(pcity);
     sync_cities();
   } else {
-    freelog(LOG_VERBOSE,
-            "handle_city_make_specialist() not working {%d,%d} \"%s\".",
-            worker_x, worker_y,
-            city_name(pcity));
+    notify_player_ex(pplayer, pcity->x, pcity->y, E_NOEVENT,
+		     _("Game: you don't have a worker here.")); 
   }
-
-  sanity_check_city(pcity);
 }
 
 /**************************************************************************
 ...
 **************************************************************************/
-void handle_city_make_worker(struct player *pplayer, int city_id,
-			     int worker_x, int worker_y)
+void handle_city_make_worker(struct player *pplayer, 
+			     struct packet_city_request *preq)
 {
-  struct tile *ptile;
-  struct tile *pcenter;
-  struct city *pcity = player_find_city_by_id(pplayer, city_id);
+  struct city *pcity = player_find_city_by_id(pplayer, preq->city_id);
 
-  if (NULL == pcity) {
-    freelog(LOG_ERROR,
-            "handle_city_make_worker() bad city number %d.",
-            city_id);
+  if (!is_valid_city_coords(preq->worker_x, preq->worker_y)) {
+    freelog(LOG_ERROR, "invalid city coords %d,%d in package",
+	    preq->worker_x, preq->worker_y);
+    return;
+  }
+  
+  if (!pcity) {
     return;
   }
 
-  if (!is_valid_city_coords(worker_x, worker_y)) {
-    freelog(LOG_ERROR,
-            "handle_city_make_worker() invalid city map {%d,%d} \"%s\".",
-            worker_x, worker_y,
-            city_name(pcity));
-    return;
-  }
-  pcenter = city_tile(pcity);
-
-  if (NULL == (ptile = city_map_to_tile(pcenter, worker_x, worker_y))) {
-    freelog(LOG_ERROR,
-            "handle_city_make_worker() unavailable city map {%d,%d} \"%s\".",
-            worker_x, worker_y,
-            city_name(pcity));
-    return;
-  }
-
-  if (is_free_worked(pcity, ptile)) {
+  if (is_city_center(preq->worker_x, preq->worker_y)) {
     auto_arrange_workers(pcity);
     sync_cities();
     return;
   }
 
-  if (tile_worked(ptile) == pcity) {
-    freelog(LOG_VERBOSE,
-            "handle_city_make_worker() already working {%d,%d} \"%s\".",
-            worker_x, worker_y,
-            city_name(pcity));
+  if (city_specialists(pcity) == 0
+      || get_worker_city(pcity, preq->worker_x, preq->worker_y) != C_TILE_EMPTY)
     return;
-  }
 
-  if (0 == city_specialists(pcity)) {
-    freelog(LOG_VERBOSE,
-            "handle_city_make_worker() no specialists {%d,%d} \"%s\".",
-            worker_x, worker_y,
-            city_name(pcity));
-    return;
-  }
+  server_set_worker_city(pcity, preq->worker_x, preq->worker_y);
 
-  if (!city_can_work_tile(pcity, ptile)) {
-    freelog(LOG_VERBOSE,
-            "handle_city_make_worker() cannot work here {%d,%d} \"%s\".",
-            worker_x, worker_y,
-            city_name(pcity));
-    return;
-  }
+  if (pcity->ppl_elvis > 0) 
+    pcity->ppl_elvis--;
+  else if (pcity->ppl_scientist > 0) 
+    pcity->ppl_scientist--;
+  else 
+    pcity->ppl_taxman--;
 
-  city_map_update_worker(pcity, ptile, worker_x, worker_y);
-
-  specialist_type_iterate(i) {
-    if (pcity->specialists[i] > 0) {
-      pcity->specialists[i]--;
-      break;
-    }
-  } specialist_type_iterate_end;
-
-  sanity_check_city(pcity);
   city_refresh(pcity);
   sync_cities();
 }
@@ -228,25 +186,23 @@ void handle_city_make_worker(struct player *pplayer, int city_id,
 /**************************************************************************
 ...
 **************************************************************************/
-void really_handle_city_sell(struct player *pplayer, struct city *pcity,
-			     struct impr_type *pimprove)
-{
+void really_handle_city_sell(struct player *pplayer, struct city *pcity, int id)
+{  
   if (pcity->did_sell) {
-    notify_player(pplayer, pcity->tile, E_BAD_COMMAND, 
-		  _("You have already sold something here this turn."));
+    notify_player_ex(pplayer, pcity->x, pcity->y, E_NOEVENT, 
+		  _("Game: You have already sold something here this turn."));
     return;
   }
 
-  if (!can_city_sell_building(pcity, pimprove))
+  if (!can_sell_building(pcity, id))
     return;
 
   pcity->did_sell=TRUE;
-  notify_player(pplayer, pcity->tile, E_IMP_SOLD,
-		   _("You sell %s in %s for %d gold."), 
-		   improvement_name_translation(pimprove),
-		   city_name(pcity),
-		   impr_sell_gold(pimprove));
-  do_sell_building(pplayer, pcity, pimprove);
+  notify_player_ex(pplayer, pcity->x, pcity->y, E_IMP_SOLD,
+		   _("Game: You sell %s in %s for %d gold."), 
+		   get_improvement_name(id), pcity->name,
+		   improvement_value(id));
+  do_sell_building(pplayer, pcity, id);
 
   city_refresh(pcity);
 
@@ -258,15 +214,14 @@ void really_handle_city_sell(struct player *pplayer, struct city *pcity,
 /**************************************************************************
 ...
 **************************************************************************/
-void handle_city_sell(struct player *pplayer, int city_id, int build_id)
+void handle_city_sell(struct player *pplayer, struct packet_city_request *preq)
 {
-  struct city *pcity = player_find_city_by_id(pplayer, city_id);
-  struct impr_type *pimprove = improvement_by_number(build_id);
+  struct city *pcity = player_find_city_by_id(pplayer, preq->city_id);
 
-  if (!pcity || !pimprove) {
+  if (!pcity || preq->build_id >= game.num_impr_types) {
     return;
   }
-  really_handle_city_sell(pplayer, pcity, pimprove);
+  really_handle_city_sell(pplayer, pcity, preq->build_id);
 }
 
 /**************************************************************************
@@ -274,50 +229,55 @@ void handle_city_sell(struct player *pplayer, int city_id, int build_id)
 **************************************************************************/
 void really_handle_city_buy(struct player *pplayer, struct city *pcity)
 {
+  const char *name;
   int cost, total;
-
-  /* This function corresponds to city_can_buy() in the client. */
 
   assert(pcity && player_owns_city(pplayer, pcity));
  
-  if (pcity->turn_founded == game.info.turn) {
-    notify_player(pplayer, pcity->tile, E_BAD_COMMAND,
-		  _("Cannot buy in city created this turn."));
+  if (pcity->turn_founded == game.turn) {
+    notify_player_ex(pplayer, pcity->x, pcity->y, E_NOEVENT,
+		  _("Game: Cannot buy in city created this turn."));
     return;
   }
 
   if (pcity->did_buy) {
-    notify_player(pplayer, pcity->tile, E_BAD_COMMAND,
-		  _("You have already bought this turn."));
+    notify_player_ex(pplayer, pcity->x, pcity->y, E_NOEVENT,
+		  _("Game: You have already bought this turn."));
     return;
   }
 
-  if (city_production_has_flag(pcity, IF_GOLD)) {
-    notify_player(pplayer, pcity->tile, E_BAD_COMMAND,
-                     _("You don't buy %s!"),
-		     improvement_name_translation(pcity->production.value.building));
+  if (!pcity->is_building_unit && pcity->currently_building==B_CAPITAL)  {
+    notify_player_ex(pplayer, pcity->x, pcity->y, E_NOEVENT,
+                     _("Game: You don't buy %s!"),
+		     improvement_types[B_CAPITAL].name);
     return;
   }
 
-  if (VUT_UTYPE == pcity->production.kind && pcity->anarchy != 0) {
-    notify_player(pplayer, pcity->tile, E_BAD_COMMAND, 
-		     _("Can't buy units when city is in disorder."));
+  if (pcity->is_building_unit && pcity->anarchy != 0) {
+    notify_player_ex(pplayer, pcity->x, pcity->y, E_NOEVENT, 
+		     _("Game: Can't buy units when city is in disorder."));
     return;
   }
 
-  total = city_production_build_shield_cost(pcity);
-  cost = city_production_buy_gold_cost(pcity);
-  if (cost <= 0) {
-    return; /* sanity */
+  if (pcity->is_building_unit) {
+    name=unit_types[pcity->currently_building].name;
+    total=unit_value(pcity->currently_building);
+  } else {
+    name=get_improvement_name(pcity->currently_building);
+    total=improvement_value(pcity->currently_building);
   }
-  if (cost > pplayer->economic.gold) {
-    /* In case something changed while player tried to buy, or player 
-     * tried to cheat! */
-    notify_player(pplayer, pcity->tile, E_BAD_COMMAND,
-		     _("%d gold required.  You only have %d gold."), cost,
-                     pplayer->economic.gold);
-    return;
-  }
+  cost=city_buy_cost(pcity);
+  if (cost == 0 || cost > pplayer->economic.gold)
+   return;
+
+  /*
+   * Need to make this more restrictive.  AI is sometimes buying
+   * things that force it to sell buildings due to upkeep problems.
+   * upkeep expense is only known in ai_manage_taxes().
+   * Also, we should sort this list so cheapest things are bought first,
+   * and/or take danger into account.
+   * AJS, 1999110
+   */
 
   pplayer->economic.gold-=cost;
   if (pcity->shield_stock < total){
@@ -329,25 +289,28 @@ void really_handle_city_buy(struct player *pplayer, struct city *pcity)
   }
   city_refresh(pcity);
   
-  conn_list_do_buffer(pplayer->connections);
+  conn_list_do_buffer(&pplayer->connections);
+  notify_player_ex(pplayer, pcity->x, pcity->y, 
+                   pcity->is_building_unit?E_UNIT_BUY:E_IMP_BUY,
+		   _("Game: %s bought in %s for %d gold."), 
+		   name, pcity->name, cost);
   send_city_info(pplayer, pcity);
   send_player_info(pplayer,pplayer);
-  conn_list_do_unbuffer(pplayer->connections);
+  conn_list_do_unbuffer(&pplayer->connections);
 }
 
 /**************************************************************************
 ...
 **************************************************************************/
-void handle_city_worklist(struct player *pplayer, int city_id,
-			  struct worklist *worklist)
+void handle_city_worklist(struct player *pplayer, struct packet_city_request *preq)
 {
-  struct city *pcity = player_find_city_by_id(pplayer, city_id);
+  struct city *pcity = player_find_city_by_id(pplayer, preq->city_id);
 
   if (!pcity) {
     return;
   }
 
-  copy_worklist(&pcity->worklist, worklist);
+  copy_worklist(&pcity->worklist, &preq->worklist);
 
   send_city_info(pplayer, pcity);
 }
@@ -355,9 +318,9 @@ void handle_city_worklist(struct player *pplayer, int city_id,
 /**************************************************************************
 ...
 **************************************************************************/
-void handle_city_buy(struct player *pplayer, int city_id)
+void handle_city_buy(struct player *pplayer, struct packet_city_request *preq)
 {
-  struct city *pcity = player_find_city_by_id(pplayer, city_id);
+  struct city *pcity = player_find_city_by_id(pplayer, preq->city_id);
 
   if (!pcity) {
     return;
@@ -369,10 +332,10 @@ void handle_city_buy(struct player *pplayer, int city_id)
 /**************************************************************************
 ...
 **************************************************************************/
-void handle_city_refresh(struct player *pplayer, int city_id)
+void handle_city_refresh(struct player *pplayer, struct packet_generic_integer *preq)
 {
-  if (city_id != 0) {
-    struct city *pcity = player_find_city_by_id(pplayer, city_id);
+  if (preq->value != 0) {
+    struct city *pcity = player_find_city_by_id(pplayer, preq->value);
 
     if (!pcity) {
       return;
@@ -381,58 +344,35 @@ void handle_city_refresh(struct player *pplayer, int city_id)
     city_refresh(pcity);
     send_city_info(pplayer, pcity);
   } else {
-    city_refresh_for_player(pplayer);
+    global_city_refresh(pplayer);
   }
 }
 
 /**************************************************************************
 ...
 **************************************************************************/
-void handle_city_change(struct player *pplayer, int city_id,
-			int production_kind, int production_value)
+void handle_city_change(struct player *pplayer, 
+			struct packet_city_request *preq)
 {
-  struct universal prod;
-  struct city *pcity = player_find_city_by_id(pplayer, city_id);
-
-  if (production_kind < VUT_NONE || production_kind >= VUT_LAST) {
-    freelog(LOG_ERROR, "handle_city_change()"
-            " bad production_kind %d.",
-            production_kind);
-    prod.kind = VUT_NONE;
-    return;
-  } else {
-    prod = universal_by_number(production_kind, production_value);
-    if (prod.kind < VUT_NONE || prod.kind >= VUT_LAST) {
-      freelog(LOG_ERROR, "handle_city_change()"
-              " production_kind %d with bad production_value %d.",
-              production_kind,
-              production_value);
-      prod.kind = VUT_NONE;
-      return;
-    }
-  }
+  struct city *pcity = player_find_city_by_id(pplayer, preq->city_id);
 
   if (!pcity) {
     return;
   }
 
-  if (are_universals_equal(&pcity->production, &prod)) {
-    /* The client probably shouldn't send such a packet. */
+   if (preq->is_build_id_unit_id && !can_build_unit(pcity, preq->build_id))
+     return;
+   if (!preq->is_build_id_unit_id && !can_build_improvement(pcity, preq->build_id))
+     return;
+  if (pcity->did_buy && pcity->shield_stock) {
+    notify_player_ex(pplayer, pcity->x, pcity->y, E_NOEVENT,
+		     _("Game: You have bought this turn, can't change."));
     return;
   }
 
-  if (!can_city_build_now(pcity, prod)) {
-    return;
-  }
-  if (!city_can_change_build(pcity)) {
-    notify_player(pplayer, pcity->tile, E_BAD_COMMAND,
-		     _("You have bought this turn, can't change."));
-    return;
-  }
+  change_build_target(pplayer, pcity, preq->build_id,
+		      preq->is_build_id_unit_id, E_NOEVENT);
 
-  change_build_target(pplayer, pcity, prod, E_CITY_PRODUCTION_CHANGED);
-
-  sanity_check_city(pcity);
   city_refresh(pcity);
   send_city_info(pplayer, pcity);
 }
@@ -440,56 +380,48 @@ void handle_city_change(struct player *pplayer, int city_id,
 /**************************************************************************
 ...
 **************************************************************************/
-void handle_city_rename(struct player *pplayer, int city_id, char *name)
+void handle_city_rename(struct player *pplayer, 
+			struct packet_city_request *preq)
 {
-  struct city *pcity = player_find_city_by_id(pplayer, city_id);
-  char message[1024];
+  const char *cp;
+  struct city *pcity = player_find_city_by_id(pplayer, preq->city_id);
 
   if (!pcity) {
     return;
   }
 
-  if (!is_allowed_city_name(pplayer, name, message, sizeof(message))) {
-    notify_player(pplayer, pcity->tile, E_BAD_COMMAND,
-		  message);
+  cp = get_sane_name(preq->name);
+  if (!cp) {
+    notify_player(pplayer, _("Game: %s is not a valid name."), preq->name);
     return;
   }
 
-  sz_strlcpy(pcity->name, name);
+  if (!is_allowed_city_name(pplayer, cp, pcity->x, pcity->y, TRUE)) {
+    return;
+  }
+
+  sz_strlcpy(pcity->name, cp);
   city_refresh(pcity);
   send_city_info(NULL, pcity);
 }
 
-/****************************************************************************
-  Handles a packet from the client that requests the city options for the
-  given city be changed.
-****************************************************************************/
-void handle_city_options_req(struct player *pplayer, int city_id,
-			     bv_city_options options)
+/**************************************************************************
+...
+**************************************************************************/
+void handle_city_options(struct player *pplayer,
+				struct packet_generic_values *preq)
 {
-  struct city *pcity = player_find_city_by_id(pplayer, city_id);
+  struct city *pcity = player_find_city_by_id(pplayer, preq->value1);
 
   if (!pcity) {
     return;
   }
 
-  pcity->city_options = options;
-
-  send_city_info(pplayer, pcity);
-}
-
-/***************************************************************
-  Tell the client the cost of inciting a revolt or bribing a unit.
-  Only send result back to the requesting connection, not all
-  connections for that player.
-***************************************************************/
-void handle_city_incite_inq(struct connection *pc, int city_id)
-{
-  struct player *pplayer = pc->playing;
-  struct city *pcity = game_find_city_by_number(city_id);
-
-  if (pplayer && pcity) {
-    dsend_packet_city_incite_info(pc, city_id,
-				  city_incite_cost(pplayer, pcity));
-  }
+  pcity->city_options = preq->value2;
+  /* We don't need to send the full city info, since no other properties
+   * depend on the attack options. --dwp
+   * Otherwise could do:
+   *   send_city_info(pplayer, pcity);
+   */
+  lsend_packet_generic_values(&pplayer->connections, PACKET_CITY_OPTIONS, preq);
 }

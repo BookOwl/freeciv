@@ -10,64 +10,49 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
-#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
+#include <assert.h>
 
 #include <X11/Intrinsic.h>
 #include <X11/Shell.h>
 #include <X11/StringDefs.h>
-#include <X11/Xaw/AsciiText.h>  
-#include <X11/Xaw/Command.h>
 #include <X11/Xaw/Form.h>
 #include <X11/Xaw/Label.h>
+#include <X11/Xaw/SimpleMenu.h> 
+#include <X11/Xaw/Command.h>
 #include <X11/Xaw/List.h>
 #include <X11/Xaw/MenuButton.h>
-#include <X11/Xaw/SimpleMenu.h> 
+#include <X11/Xaw/SimpleMenu.h>
 #include <X11/Xaw/SmeBSB.h>
 #include <X11/Xaw/Toggle.h>
-#include <X11/Xaw/Viewport.h>
-
-#include "fcintl.h"
-#include "shared.h"
-#include "support.h"
 
 #include "city.h"
+#include "fcintl.h"
 #include "game.h"
 #include "government.h"
 #include "packets.h"
-#include "unitlist.h"
-
-#include "chatline_common.h" /* for send_chat() */
-#include "civclient.h"
-#include "climisc.h"
-#include "text.h"
+#include "shared.h"
+#include "support.h"
 
 #include "cityrep.h"
+#include "clinet.h"
 #include "dialogs.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "helpdlg.h"
 #include "optiondlg.h"
 
-#include "repodlgs_common.h"
 #include "repodlgs.h"
+#include "repodlgs_common.h"
 
 /******************************************************************/
-static Widget science_dialog_shell;
-static Widget science_label;
-static Widget science_current_label, science_goal_label;
-static Widget science_change_menu_button, science_goal_menu_button;
-static Widget science_list, science_help_toggle;
-static Widget science_help_note;
-static Widget popupmenu, goalmenu;
-static int science_dialog_shell_is_modal;
 
 void create_science_dialog(bool make_modal);
 void science_close_callback(Widget w, XtPointer client_data, 
@@ -81,13 +66,16 @@ void science_goal_callback(Widget w, XtPointer client_data,
 
 
 /******************************************************************/
-static Widget economy_dialog_shell;
-static Widget economy_label, economy_label2;
-static Widget economy_list, economy_list_label;
-static Widget sellall_command, sellobsolete_command;
-static int economy_dialog_shell_is_modal;
-static struct impr_type *economy_improvement_type[B_LAST];
+static Widget science_dialog_shell;
+static Widget science_label;
+static Widget science_current_label, science_goal_label;
+static Widget science_change_menu_button, science_goal_menu_button;
+static Widget science_list, science_help_toggle;
+static Widget science_help_note;
+static int science_dialog_shell_is_modal;
+static Widget popupmenu, goalmenu;
 
+/******************************************************************/
 void create_economy_report_dialog(bool make_modal);
 void economy_close_callback(Widget w, XtPointer client_data, 
 			 XtPointer call_data);
@@ -95,15 +83,15 @@ void economy_selloff_callback(Widget w, XtPointer client_data,
                             XtPointer call_data);
 void economy_list_callback(Widget w, XtPointer client_data,
                          XtPointer call_data);
+static int economy_improvement_type[B_LAST];
+
+static Widget economy_dialog_shell;
+static Widget economy_label, economy_label2;
+static Widget economy_list, economy_list_label;
+static Widget sellall_command, sellobsolete_command;
+static int economy_dialog_shell_is_modal;
 
 /******************************************************************/
-static Widget activeunits_dialog_shell;
-static Widget activeunits_label, activeunits_label2;
-static Widget activeunits_list, activeunits_list_label;
-static Widget upgrade_command;
-static int activeunits_dialog_shell_is_modal;
-static int activeunits_type[U_LAST];
-
 void create_activeunits_report_dialog(bool make_modal);
 void activeunits_close_callback(Widget w, XtPointer client_data, 
 			 XtPointer call_data);
@@ -113,24 +101,15 @@ void activeunits_refresh_callback(Widget w, XtPointer client_data,
 			 XtPointer call_data);
 void activeunits_list_callback(Widget w, XtPointer client_data, 
                            XtPointer call_data);
-/******************************************************************/
-static Widget settable_options_dialog_shell;
-static Widget settable_options_form;
-static Widget settable_options_label;
-static Widget settable_options_viewport;
-static Widget settable_options_scrollform;
-static Widget *settable_options_widgets = NULL;
-static Widget settable_options_ok_command;
-static Widget settable_options_cancel_command;
+static int activeunits_type[U_LAST];
 
-void create_settable_options_dialog(void);
-void update_settable_options_dialog(void);
-void settable_options_toggle_callback(Widget w, XtPointer client_data,
-				      XtPointer call_data);
-void settable_options_ok_callback(Widget w, XtPointer client_data,
-				  XtPointer call_data);
-void settable_options_cancel_callback(Widget w, XtPointer client_data,
-				      XtPointer call_data);
+static Widget activeunits_dialog_shell;
+static Widget activeunits_label, activeunits_label2;
+static Widget activeunits_list, activeunits_list_label;
+static Widget upgrade_command;
+
+static int activeunits_dialog_shell_is_modal;
+/******************************************************************/
 
 /******************************************************************
 ...
@@ -147,20 +126,37 @@ void update_report_dialogs(void)
 /****************************************************************
 ...
 ****************************************************************/
-const char *get_centered_report_title(const char *report_name)
+char *get_report_title(char *report_name)
 {
-  return create_centered_string(get_report_title(report_name));
+  char buf[512];
+  
+  my_snprintf(buf, sizeof(buf), _("%s\n%s of the %s\n%s %s: %s"),
+	      report_name,
+	      get_government_name(game.player_ptr->government),
+	      get_nation_name_plural(game.player_ptr->nation),
+	      get_ruler_title(game.player_ptr->government,
+			      game.player_ptr->is_male, game.player_ptr->nation),
+	      game.player_ptr->name,
+	      textyear(game.year));
+
+  return create_centered_string(buf);
 }
 
 /****************************************************************
 ...
 ****************************************************************/
-static const char *get_report_title_plus(const char *report_name,
-					 const char *additional)
+static char *get_report_title_plus(char *report_name, char *additional)
 {
   char buf[512];
   
-  my_snprintf(buf, sizeof(buf), "%s%s", get_report_title(report_name),
+  my_snprintf(buf, sizeof(buf), _("%s\n%s of the %s\n%s %s: %s%s"),
+	      report_name,
+	      get_government_name(game.player_ptr->government),
+	      get_nation_name_plural(game.player_ptr->nation),
+	      get_ruler_title(game.player_ptr->government,
+			      game.player_ptr->is_male, game.player_ptr->nation),
+	      game.player_ptr->name,
+	      textyear(game.year),
 	      additional);
 
   return create_centered_string(buf);
@@ -171,7 +167,8 @@ static const char *get_report_title_plus(const char *report_name,
 ************************ ***************************************/
 void popup_science_dialog(bool make_modal)
 {
-  if (!science_dialog_shell && NULL != client.conn.playing) {
+
+  if(!science_dialog_shell) {
     Position x, y;
     Dimension width, height;
     
@@ -190,21 +187,9 @@ void popup_science_dialog(bool make_modal)
     
     XtPopup(science_dialog_shell, XtGrabNone);
   }
+
 }
 
-/****************************************************************
-  Closes the science dialog.
-*****************************************************************/
-void popdown_science_dialog(void)
-{
-  if (science_dialog_shell) {
-    if (science_dialog_shell_is_modal) {
-      XtSetSensitive(main_form, TRUE);
-    }
-    XtDestroyWidget(science_dialog_shell);
-    science_dialog_shell = 0;
-  }
-}
 
 /****************************************************************
 ...
@@ -213,196 +198,166 @@ void create_science_dialog(bool make_modal)
 {
   Widget science_form;
   Widget  close_command;
-  const static char *tech_list_names_ptrs[A_LAST + 1];
+  static char *tech_list_names_ptrs[A_LAST+1];
+  int j, flag, num_list;
+  size_t i;
   Dimension width;
   char rate_text[128];
   char current_text[512];
   char goal_text[512];
-  const char *report_title;
-  int num_list, j = 0, flag = 0;
+  char *report_title;
+  
+  my_snprintf(current_text, sizeof(current_text),
+	      _("Researching %s: %d/%d"),
+	      get_tech_name(game.player_ptr,
+			    game.player_ptr->research.researching),
+	      game.player_ptr->research.bulbs_researched,
+	      total_bulbs_required(game.player_ptr));
 
-  if (NULL != client.conn.playing) {
-    struct player_research *research = get_player_research(client.conn.playing);
-
-    if (research->researching == A_UNSET) {
-      my_snprintf(current_text, sizeof(current_text),
-		  _("Researching %s: %d/%s"),
-		  advance_name_translation(advance_by_number(A_NONE)),
-		  research->bulbs_researched,
-		  _("unknown"));
-    } else {
-      my_snprintf(current_text, sizeof(current_text),
-		  _("Researching %s: %d/%d"),
-		  advance_name_researching(client.conn.playing),
-		  research->bulbs_researched,
-		  total_bulbs_required(client.conn.playing));
+  my_snprintf(goal_text, sizeof(goal_text),
+	      _("Goal: %s (%d steps)"),
+	      advances[game.player_ptr->ai.tech_goal].name,
+	      num_unknown_techs_for_goal(game.player_ptr,
+					 game.player_ptr->ai.tech_goal));
+  
+  for(i=A_FIRST, j=0; i<game.num_tech_types; i++)
+    if(get_invention(game.player_ptr, i)==TECH_KNOWN) {
+      tech_list_names_ptrs[j]=advances[i].name;
+      j++;
     }
+  tech_list_names_ptrs[j]=0;
+  qsort(tech_list_names_ptrs, j, sizeof(char *), compare_strings_ptrs);
+  num_list = j;
+  /* printf("science list num: %d\n", num_list); */
+  
+  science_dialog_shell =
+    I_T(XtVaCreatePopupShell("sciencepopup", 
+			     (make_modal ? transientShellWidgetClass :
+			      topLevelShellWidgetClass),
+			     toplevel, 0));
 
-    if (research->tech_goal == A_UNSET) {
-      my_snprintf(goal_text, sizeof(goal_text),
-		  _("Goal: %s (%d steps)"),
-		  advance_name_translation(advance_by_number(A_NONE)),
-		  0);
-    } else {
-      my_snprintf(goal_text, sizeof(goal_text),
-		  _("Goal: %s (%d steps)"),
-		  advance_name_translation(advance_by_number(research->tech_goal)),
-		  num_unknown_techs_for_goal(client.conn.playing,
-					     research->tech_goal));
+  science_form = XtVaCreateManagedWidget("scienceform", 
+					 formWidgetClass,
+					 science_dialog_shell,
+					 NULL);   
+  my_snprintf(rate_text, sizeof(rate_text), "\ntext not set yet");
+  report_title=get_report_title_plus(_("Science"), rate_text);
+  science_label = XtVaCreateManagedWidget("sciencelabel", 
+					  labelWidgetClass, 
+					  science_form,
+					  XtNlabel, 
+					  report_title,
+					  NULL);
+  free(report_title);
+
+  science_current_label = XtVaCreateManagedWidget("sciencecurrentlabel", 
+						  labelWidgetClass, 
+						  science_form,
+						  XtNlabel, 
+						  current_text,
+						  NULL);
+
+  science_goal_label = XtVaCreateManagedWidget("sciencegoallabel", 
+					       labelWidgetClass, 
+					       science_form,
+					       XtNlabel, goal_text,
+					       NULL);
+
+  science_change_menu_button =
+    I_L(XtVaCreateManagedWidget("sciencechangemenubutton", 
+				menuButtonWidgetClass,
+				science_form, NULL));
+
+  science_goal_menu_button =
+    I_L(XtVaCreateManagedWidget("sciencegoalmenubutton", 
+				menuButtonWidgetClass,
+				science_form, NULL));
+
+  science_help_note =
+    I_L(XtVaCreateManagedWidget("sciencehelpnote",
+				labelWidgetClass,
+				science_form, NULL));
+  
+  science_help_toggle = XtVaCreateManagedWidget("sciencehelptoggle", 
+						toggleWidgetClass, 
+						science_form,
+						NULL);
+  
+  science_list = XtVaCreateManagedWidget("sciencelist", 
+					 listWidgetClass,
+					 science_form,
+					 XtNlist, tech_list_names_ptrs,
+					 NULL);
+
+  close_command =
+    I_L(XtVaCreateManagedWidget("scienceclosecommand", 
+				commandWidgetClass,
+				science_form, NULL));
+  
+  
+  popupmenu=XtVaCreatePopupShell("menu", 
+				 simpleMenuWidgetClass, 
+				 science_change_menu_button, 
+				 NULL);
+
+  goalmenu=XtVaCreatePopupShell("menu", 
+				simpleMenuWidgetClass, 
+				science_goal_menu_button, 
+				NULL);
+
+  
+  for(i=A_FIRST, flag=0; i<game.num_tech_types; i++)
+    if(get_invention(game.player_ptr, i)==TECH_REACHABLE) {
+      Widget entry=
+      XtVaCreateManagedWidget(advances[i].name, smeBSBObjectClass, 
+			      popupmenu, NULL);
+      XtAddCallback(entry, XtNcallback, science_change_callback, 
+		    (XtPointer) i); 
+      flag=1;
     }
-
-    advance_index_iterate(A_FIRST, i) {
-      if (TECH_KNOWN == player_invention_state(client.conn.playing, i)) {
-	tech_list_names_ptrs[j] = advance_name_translation(advance_by_number(i));
-	j++;
-      }
-    } advance_index_iterate_end;
-    tech_list_names_ptrs[j] = 0;
-    qsort(tech_list_names_ptrs, j, sizeof(char *), compare_strings_ptrs);
-    num_list = j;
-
-    science_dialog_shell =
-      I_T(XtVaCreatePopupShell("sciencepopup",
-			       (make_modal ? transientShellWidgetClass :
-			        topLevelShellWidgetClass),
-			        toplevel, NULL));
-
-    science_form = XtVaCreateManagedWidget("scienceform",
-					   formWidgetClass,
-					   science_dialog_shell,
-					   NULL);
-    my_snprintf(rate_text, sizeof(rate_text), "\ntext not set yet");
-    /* TRANS: Research report title */
-    report_title = get_report_title_plus(_("Research"), rate_text);
-    science_label = XtVaCreateManagedWidget("sciencelabel",
-					    labelWidgetClass,
-					    science_form,
-					    XtNlabel, report_title,
-					    NULL);
-    free((void *) report_title);
-
-    science_current_label =
-      XtVaCreateManagedWidget("sciencecurrentlabel",
-			      labelWidgetClass,
-			      science_form,
-			      XtNlabel, current_text,
-			      NULL);
-
-    science_goal_label =
-      XtVaCreateManagedWidget("sciencegoallabel",
-			      labelWidgetClass,
-			      science_form,
-			      XtNlabel, goal_text,
-			      NULL);
-
-    science_change_menu_button =
-      I_L(XtVaCreateManagedWidget("sciencechangemenubutton",
-				  menuButtonWidgetClass,
-				  science_form, NULL));
-
-    science_goal_menu_button =
-      I_L(XtVaCreateManagedWidget("sciencegoalmenubutton",
-				  menuButtonWidgetClass,
-				  science_form, NULL));
-
-    science_help_note =
-      I_L(XtVaCreateManagedWidget("sciencehelpnote",
-				  labelWidgetClass,
-				  science_form, NULL));
-
-    science_help_toggle =
-      XtVaCreateManagedWidget("sciencehelptoggle",
-			      toggleWidgetClass,
-			      science_form,
-			      NULL);
-
-    science_list =
-      XtVaCreateManagedWidget("sciencelist",
-			      listWidgetClass,
-			      science_form,
-			      XtNlist, tech_list_names_ptrs,
-			      NULL);
-
-    close_command =
-      I_L(XtVaCreateManagedWidget("scienceclosecommand",
-				  commandWidgetClass,
-				  science_form, NULL));
-
-    popupmenu =
-      XtVaCreatePopupShell("menu",
-			   simpleMenuWidgetClass,
-			   science_change_menu_button,
-			   NULL);
-
-    goalmenu =
-      XtVaCreatePopupShell("menu",
-			   simpleMenuWidgetClass,
-			   science_goal_menu_button,
-			   NULL);
-
-    advance_index_iterate(A_FIRST, i) {
-      if (TECH_REACHABLE == player_invention_state(client.conn.playing, i)) {
-	Widget entry =
-	  XtVaCreateManagedWidget(advance_name_translation(advance_by_number(i)),
-				  smeBSBObjectClass,
-				  popupmenu,
-				  NULL);
-	XtAddCallback(entry, XtNcallback, science_change_callback,
-		      INT_TO_XTPOINTER(i));
-      flag = 1;
-      }
-    } advance_index_iterate_end;
-
-    if (!flag) {
-      XtSetSensitive(science_change_menu_button, FALSE);
+  
+  if(!flag)
+    XtSetSensitive(science_change_menu_button, FALSE);
+  
+ for(i=A_FIRST, flag=0; i<game.num_tech_types; i++)
+    if(get_invention(game.player_ptr, i) != TECH_KNOWN &&
+       advances[i].req[0] != A_LAST && advances[i].req[1] != A_LAST &&
+       num_unknown_techs_for_goal(game.player_ptr, i) < 11) {
+      Widget entry=
+      XtVaCreateManagedWidget(advances[i].name, smeBSBObjectClass, 
+			      goalmenu, NULL);
+      XtAddCallback(entry, XtNcallback, science_goal_callback, 
+		    (XtPointer) i); 
+      flag=1;
     }
+  
+  if(!flag)
+    XtSetSensitive(science_goal_menu_button, FALSE);
 
-    flag = 0;
-    advance_index_iterate(A_FIRST, i) {
-      if (player_invention_is_ready(client.conn.playing, i)
-	  && TECH_KNOWN != player_invention_state(client.conn.playing, i)
-	  && (11 > num_unknown_techs_for_goal(client.conn.playing, i)
-	      || i == research->tech_goal)) {
-	Widget entry =
-	  XtVaCreateManagedWidget(advance_name_translation(advance_by_number(i)),
-				  smeBSBObjectClass,
-				  goalmenu,
-				  NULL);
-	XtAddCallback(entry, XtNcallback, science_goal_callback, 
-		      INT_TO_XTPOINTER(i)); 
-	flag = 1;
-      }
-    } advance_index_iterate_end;
+  XtAddCallback(close_command, XtNcallback, science_close_callback, NULL);
+  XtAddCallback(science_list, XtNcallback, science_help_callback, NULL);
+  XtAddCallback(science_help_toggle, XtNcallback, toggle_callback, NULL);
 
-    if (!flag) {
-      XtSetSensitive(science_goal_menu_button, FALSE);
-    }
-
-    XtAddCallback(close_command, XtNcallback, science_close_callback, NULL);
-    XtAddCallback(science_list, XtNcallback, science_help_callback, NULL);
-    XtAddCallback(science_help_toggle, XtNcallback, toggle_callback, NULL);
-
-    if (num_list > 60) {
-      int ncol;
-      XtVaGetValues(science_list, XtNdefaultColumns, &ncol, NULL);
-      XtVaSetValues(science_list, XtNdefaultColumns, ncol+1, NULL);
-    }
-
-    XtRealizeWidget(science_dialog_shell);
-
-    if (!make_modal) {
-      XSetWMProtocols(display, XtWindow(science_dialog_shell), 
-		      &wm_delete_window, 1);
-      XtOverrideTranslations(science_dialog_shell,
-        XtParseTranslationTable("<Message>WM_PROTOCOLS: msg-close-science-report()"));
-    }
-
-    width = 500;
-    XtVaSetValues(science_label, XtNwidth, &width, NULL);
-
-    toggle_callback(science_help_toggle, NULL, NULL);
-    science_dialog_update();
+  if(num_list>60) {
+    int ncol;
+    XtVaGetValues(science_list, XtNdefaultColumns, &ncol, NULL);
+    XtVaSetValues(science_list, XtNdefaultColumns, ncol+1, NULL);
   }
+
+  XtRealizeWidget(science_dialog_shell);
+
+  if(!make_modal)  {
+    XSetWMProtocols(display, XtWindow(science_dialog_shell), 
+		    &wm_delete_window, 1);
+    XtOverrideTranslations(science_dialog_shell,
+      XtParseTranslationTable("<Message>WM_PROTOCOLS: msg-close-science-report()"));
+  }
+
+  width=500;
+  XtVaSetValues(science_label, XtNwidth, &width, NULL);
+
+  toggle_callback(science_help_toggle, NULL, NULL);
+  science_dialog_update();
 }
 
 
@@ -412,15 +367,27 @@ void create_science_dialog(bool make_modal)
 void science_change_callback(Widget w, XtPointer client_data, 
 			     XtPointer call_data)
 {
-  size_t to = (size_t) client_data;
+  char current_text[512];
+  struct packet_player_request packet;
+  size_t to;
   Boolean b;
+
+  to=(size_t)client_data;
 
   XtVaGetValues(science_help_toggle, XtNstate, &b, NULL);
   if (b == TRUE) {
-    popup_help_dialog_typed(advance_name_translation(advance_by_number(to)),
-                            HELP_TECH);
+    popup_help_dialog_typed(advances[to].name, HELP_TECH);
   } else {
-    dsend_packet_player_research(&client.conn, to);
+    my_snprintf(current_text, sizeof(current_text),
+		_("Researching %s: %d/%d"),
+		advances[to].name, game.player_ptr->research.bulbs_researched,
+		total_bulbs_required(game.player_ptr));
+
+    XtVaSetValues(science_current_label, XtNlabel, current_text, NULL);
+
+    packet.tech = to;
+    send_packet_player_request(&aconnection, &packet,
+			       PACKET_PLAYER_RESEARCH);
   }
 }
 
@@ -430,15 +397,25 @@ void science_change_callback(Widget w, XtPointer client_data,
 void science_goal_callback(Widget w, XtPointer client_data, 
 			   XtPointer call_data)
 {
-  size_t to = (size_t) client_data;
+  char goal_text[512];
+  struct packet_player_request packet;
+  size_t to;
   Boolean b;
 
+  to=(size_t)client_data;
+
   XtVaGetValues(science_help_toggle, XtNstate, &b, NULL);
-  if (b == TRUE) {
-    popup_help_dialog_typed(advance_name_translation(advance_by_number(to)),
-                            HELP_TECH);
-  } else {
-    dsend_packet_player_tech_goal(&client.conn, to);
+  if (b == TRUE)
+    popup_help_dialog_typed(advances[to].name, HELP_TECH);
+  else {  
+    my_snprintf(goal_text, sizeof(goal_text), _("Goal: %s (%d steps)"),
+		advances[to].name,
+		num_unknown_techs_for_goal(game.player_ptr, to));
+
+    XtVaSetValues(science_goal_label, XtNlabel, goal_text, NULL);
+
+    packet.tech=to;
+    send_packet_player_request(&aconnection, &packet, PACKET_PLAYER_TECH_GOAL);
   }
 }
 
@@ -449,7 +426,11 @@ void science_goal_callback(Widget w, XtPointer client_data,
 void science_close_callback(Widget w, XtPointer client_data, 
 			    XtPointer call_data)
 {
-  popdown_science_dialog();
+
+  if(science_dialog_shell_is_modal)
+    XtSetSensitive(main_form, TRUE);
+  XtDestroyWidget(science_dialog_shell);
+  science_dialog_shell=0;
 }
 
 
@@ -490,58 +471,49 @@ void science_dialog_update(void)
   if(is_report_dialogs_frozen()) return;
   if(science_dialog_shell) {
     char text[512];
-    static const char *tech_list_names_ptrs[A_LAST + 1];
+    static char *tech_list_names_ptrs[A_LAST+1];
     int j, flag;
-    const char *report_title;
-    struct player_research *research = get_player_research(client.conn.playing);
+    size_t i;
+    char rate_text[128];
+    char *report_title;
+    int turns_to_advance;
     
-    /* TRANS: Research report title */
-    report_title = get_report_title_plus(_("Research"), science_dialog_text());
-    xaw_set_label(science_label, report_title);
-    free((void *) report_title);
-
-    if (research->researching == A_UNSET) {
-      my_snprintf(text, sizeof(text),
-		  _("Researching %s: %d/%s"),
-		  advance_name_translation(advance_by_number(A_NONE)),
-		  research->bulbs_researched,
-		  _("unknown"));
+    turns_to_advance = tech_turns_to_advance(game.player_ptr);
+    if (turns_to_advance == FC_INFINITY) {
+      my_snprintf(rate_text, sizeof(rate_text), _("\n(no research)"));
     } else {
-      my_snprintf(text, sizeof(text),
-		  _("Researching %s: %d/%d"),
-		  advance_name_researching(client.conn.playing),
-		  research->bulbs_researched,
-		  total_bulbs_required(client.conn.playing));
+      my_snprintf(rate_text, sizeof(rate_text),
+		  PL_("\n(%d turn/advance)", "\n(%d turns/advance)",
+		      turns_to_advance), turns_to_advance);
     }
+    report_title=get_report_title_plus(_("Science"), rate_text);
+    xaw_set_label(science_label, report_title);
+    free(report_title);
 
+    my_snprintf(text, sizeof(text), _("Researching %s: %d/%d"),
+		get_tech_name(game.player_ptr,
+			      game.player_ptr->research.researching),
+		game.player_ptr->research.bulbs_researched,
+		total_bulbs_required(game.player_ptr));
+    
     xaw_set_label(science_current_label, text);
 
-    if (research->tech_goal == A_UNSET) {
-      my_snprintf(text, sizeof(text),
-		  _("Goal: %s (%d steps)"),
-		  advance_name_translation(advance_by_number(A_NONE)),
-		  0);
-    } else {
-      my_snprintf(text, sizeof(text),
-		  _("Goal: %s (%d steps)"),
-		  advance_name_translation(advance_by_number(research->tech_goal)),
-		  num_unknown_techs_for_goal(client.conn.playing,
-					     research->tech_goal));
-    }
+    my_snprintf(text, sizeof(text), _("Goal: %s (%d steps)"),
+		advances[game.player_ptr->ai.tech_goal].name,
+		num_unknown_techs_for_goal(game.player_ptr,
+					   game.player_ptr->ai.tech_goal));
 
     xaw_set_label(science_goal_label, text);
 
-    j=0;
-    advance_index_iterate(A_FIRST, i) {
-      if (TECH_KNOWN == player_invention_state(client.conn.playing, i)) {
-	tech_list_names_ptrs[j]=advance_name_translation(advance_by_number(i));
+    for(i=A_FIRST, j=0; i<game.num_tech_types; i++)
+      if(get_invention(game.player_ptr, i)==TECH_KNOWN) {
+	tech_list_names_ptrs[j]=advances[i].name;
 	j++;
       }
-    } advance_index_iterate_end;
     tech_list_names_ptrs[j]=0;
     qsort(tech_list_names_ptrs, j, sizeof(char *), compare_strings_ptrs);
 
-    XawListChange(science_list, (char **)tech_list_names_ptrs, 0/*j*/, 0, 1);
+    XawListChange(science_list, tech_list_names_ptrs, 0/*j*/, 0, 1);
 
     XtDestroyWidget(popupmenu);
     
@@ -550,19 +522,16 @@ void science_dialog_update(void)
 				   science_change_menu_button, 
 				   NULL);
     
-    flag=0;
-    advance_index_iterate(A_FIRST, i) {
-      if (TECH_REACHABLE == player_invention_state(client.conn.playing, i)) {
+      for(i=A_FIRST, flag=0; i<game.num_tech_types; i++)
+      if(get_invention(game.player_ptr, i)==TECH_REACHABLE) {
 	Widget entry=
-	  XtVaCreateManagedWidget(advance_name_translation(advance_by_number(i)),
-				  smeBSBObjectClass,
-				  popupmenu,
-				  NULL);
+	  XtVaCreateManagedWidget(advances[i].name, smeBSBObjectClass, 
+				  popupmenu, NULL);
 	XtAddCallback(entry, XtNcallback, science_change_callback, 
-		      INT_TO_XTPOINTER(i)); 
+		      (XtPointer) i); 
 	flag=1;
       }
-    } advance_index_iterate_end;
+    
     if(!flag)
       XtSetSensitive(science_change_menu_button, FALSE);
 
@@ -573,22 +542,17 @@ void science_dialog_update(void)
 				  science_goal_menu_button, 
 				  NULL);
     
-    flag=0;
-    advance_index_iterate(A_FIRST, i) {
-      if (player_invention_is_ready(client.conn.playing, i)
-	  && TECH_KNOWN != player_invention_state(client.conn.playing, i)
-	  && (11 > num_unknown_techs_for_goal(client.conn.playing, i)
-	      || i == research->tech_goal)) {
+    for(i=A_FIRST, flag=0; i<game.num_tech_types; i++)
+      if(get_invention(game.player_ptr, i) != TECH_KNOWN &&
+         advances[i].req[0] != A_LAST && advances[i].req[1] != A_LAST &&
+         num_unknown_techs_for_goal(game.player_ptr, i) < 11) {
 	Widget entry=
-	  XtVaCreateManagedWidget(advance_name_translation(advance_by_number(i)),
-				  smeBSBObjectClass,
-				  goalmenu,
-				  NULL);
+	  XtVaCreateManagedWidget(advances[i].name, smeBSBObjectClass, 
+				  goalmenu, NULL);
 	XtAddCallback(entry, XtNcallback, science_goal_callback, 
-		      INT_TO_XTPOINTER(i)); 
+		      (XtPointer) i); 
 	flag=1;
       }
-    } advance_index_iterate_end;
     
     if(!flag)
       XtSetSensitive(science_goal_menu_button, FALSE);
@@ -629,19 +593,6 @@ void popup_economy_report_dialog(bool make_modal)
    }
 }
 
-/****************************************************************
-  Closes the economy report.
-****************************************************************/
-void popdown_economy_report_dialog(void)
-{
-  if (economy_dialog_shell) {
-    if (economy_dialog_shell_is_modal) {
-      XtSetSensitive(main_form, TRUE);
-    }
-    XtDestroyWidget(economy_dialog_shell);
-    economy_dialog_shell = 0;
-  }
-}
 
 /****************************************************************
 ...
@@ -650,26 +601,26 @@ void create_economy_report_dialog(bool make_modal)
 {
   Widget economy_form;
   Widget close_command;
-  const char *report_title;
+  char *report_title;
   
   economy_dialog_shell =
     I_T(XtVaCreatePopupShell("reporteconomypopup", 
 			     (make_modal ? transientShellWidgetClass :
 			      topLevelShellWidgetClass),
-			     toplevel, NULL));
+			     toplevel, 0));
 
   economy_form = XtVaCreateManagedWidget("reporteconomyform", 
 					 formWidgetClass,
 					 economy_dialog_shell,
 					 NULL);   
 
-  report_title=get_centered_report_title(_("Economy"));
+  report_title=get_report_title(_("Economy"));
   economy_label = XtVaCreateManagedWidget("reporteconomylabel", 
 				       labelWidgetClass, 
 				       economy_form,
 				       XtNlabel, report_title,
 				       NULL);
-  free((void *) report_title);
+  free(report_title);
 
   economy_list_label =
     I_L(XtVaCreateManagedWidget("reporteconomylistlabel", labelWidgetClass, 
@@ -720,26 +671,25 @@ void create_economy_report_dialog(bool make_modal)
 
 
 /****************************************************************
-  Called when a building type is selected in the economy list.
+...
 *****************************************************************/
 void economy_list_callback(Widget w, XtPointer client_data, 
 			 XtPointer call_data)
 {
-  XawListReturnStruct *ret = XawListShowCurrent(economy_list);
+  XawListReturnStruct *ret;
+  int i;
+  ret = XawListShowCurrent(economy_list);
 
-  if (ret->list_index != XAW_LIST_NONE) {
-    /* The user has selected an improvement type. */
-    struct impr_type *pimprove = economy_improvement_type[ret->list_index];
-    bool is_sellable = can_sell_building(pimprove);
-
-    XtSetSensitive(sellobsolete_command, is_sellable
-		   && improvement_obsolete(client.conn.playing, pimprove));
-    XtSetSensitive(sellall_command, is_sellable);
-  } else {
-    /* No selection has been made. */
-    XtSetSensitive(sellobsolete_command, FALSE);
-    XtSetSensitive(sellall_command, FALSE);
+  if(ret->list_index!=XAW_LIST_NONE) {
+    i = economy_improvement_type[ret->list_index];
+    if (i >= 0 && i < game.num_impr_types && !is_wonder(i)) {
+      XtSetSensitive(sellobsolete_command, TRUE);
+      XtSetSensitive(sellall_command, TRUE);
+    }
+    return;
   }
+  XtSetSensitive(sellobsolete_command, FALSE);
+  XtSetSensitive(sellall_command, FALSE);
 }
 
 /****************************************************************
@@ -748,7 +698,11 @@ void economy_list_callback(Widget w, XtPointer client_data,
 void economy_close_callback(Widget w, XtPointer client_data, 
 			 XtPointer call_data)
 {
-  popdown_economy_report_dialog();
+
+  if(economy_dialog_shell_is_modal)
+     XtSetSensitive(main_form, TRUE);
+  XtDestroyWidget(economy_dialog_shell);
+  economy_dialog_shell=0;
 }
 
 /****************************************************************
@@ -765,16 +719,39 @@ void economyreport_msg_close(Widget w)
 void economy_selloff_callback(Widget w, XtPointer client_data, 
 			    XtPointer call_data)
 {
-  char str[1024];
-  XawListReturnStruct *ret = XawListShowCurrent(economy_list);
+  int i,count=0,gold=0;
+  struct genlist_iterator myiter;
+  struct city *pcity;
+  struct packet_city_request packet;
+  char str[64];
+  XawListReturnStruct *ret=XawListShowCurrent(economy_list);
 
-  if (ret->list_index == XAW_LIST_NONE) {
-    return;
+  if(ret->list_index==XAW_LIST_NONE) return;
+
+  i=economy_improvement_type[ret->list_index];
+
+  genlist_iterator_init(&myiter, &game.player_ptr->cities.list, 0);
+  for(; ITERATOR_PTR(myiter);ITERATOR_NEXT(myiter)) {
+    pcity=(struct city *)ITERATOR_PTR(myiter);
+    if(!pcity->did_sell && city_got_building(pcity, i) && 
+       (client_data ||
+	improvement_obsolete(game.player_ptr,i) ||
+        wonder_replacement(pcity, i) ))  {
+	count++; gold+=improvement_value(i);
+        packet.city_id=pcity->id;
+        packet.build_id=i;
+        send_packet_city_request(&aconnection, &packet, PACKET_CITY_SELL);
+    }
   }
-
-  sell_all_improvements(economy_improvement_type[ret->list_index],
-			client_data == NULL, str, sizeof(str));
+  if(count)  {
+    my_snprintf(str, sizeof(str), _("Sold %d %s for %d gold"),
+		count, get_improvement_name(i), gold);
+  } else {
+    my_snprintf(str, sizeof(str), _("No %s could be sold"),
+		get_improvement_name(i));
+  }
   popup_notify_dialog(_("Sell-Off:"), _("Results"), str);
+  return;
 }
 
 /****************************************************************
@@ -788,13 +765,13 @@ void economy_report_dialog_update(void)
     Dimension width; 
     static char *economy_list_names_ptrs[B_LAST+1];
     static char economy_list_names[B_LAST][200];
-    const char *report_title;
+    char *report_title;
     char economy_total[48];
     struct improvement_entry entries[B_LAST];
     
-    report_title=get_centered_report_title(_("Economy"));
+    report_title=get_report_title(_("Economy"));
     xaw_set_label(economy_label, report_title);
-    free((void *) report_title);
+    free(report_title);
 
     get_economy_report_data(entries, &entries_used, &total, &tax);
 
@@ -802,8 +779,7 @@ void economy_report_dialog_update(void)
       struct improvement_entry *p = &entries[i];
 
       my_snprintf(economy_list_names[i], sizeof(economy_list_names[i]),
-		  "%-20s%5d%5d%6d",
-		  improvement_name_translation(p->type),
+		  "%-20s%5d%5d%6d", get_improvement_name(p->type),
 		  p->count, p->cost, p->total_cost);
       economy_list_names_ptrs[i] = economy_list_names[i];
       economy_improvement_type[i] = p->type;
@@ -866,19 +842,6 @@ void popup_activeunits_report_dialog(bool make_modal)
    }
 }
 
-/****************************************************************
-  Closes the active units report.
-*****************************************************************/
-void popdown_activeunits_report_dialog(void)
-{
-  if (activeunits_dialog_shell) {
-    if (activeunits_dialog_shell_is_modal) {
-      XtSetSensitive(main_form, TRUE);
-    }
-    XtDestroyWidget(activeunits_dialog_shell);
-    activeunits_dialog_shell = 0;
-  }
-}
 
 /****************************************************************
 ...
@@ -887,26 +850,26 @@ void create_activeunits_report_dialog(bool make_modal)
 {
   Widget activeunits_form;
   Widget close_command, refresh_command;
-  const char *report_title;
+  char *report_title;
   
   activeunits_dialog_shell =
     I_T(XtVaCreatePopupShell("reportactiveunitspopup", 
 			     (make_modal ? transientShellWidgetClass :
 			      topLevelShellWidgetClass),
-			     toplevel, NULL));
+			     toplevel, 0));
 
   activeunits_form = XtVaCreateManagedWidget("reportactiveunitsform", 
 					 formWidgetClass,
 					 activeunits_dialog_shell,
 					 NULL);   
 
-  report_title=get_centered_report_title(_("Units"));
+  report_title=get_report_title(_("Units"));
   activeunits_label = XtVaCreateManagedWidget("reportactiveunitslabel", 
 				       labelWidgetClass, 
 				       activeunits_form,
 				       XtNlabel, report_title,
 				       NULL);
-  free((void *) report_title);
+  free(report_title);
 
   activeunits_list_label =
     I_L(XtVaCreateManagedWidget("reportactiveunitslistlabel", 
@@ -977,8 +940,8 @@ void activeunits_list_callback(Widget w, XtPointer client_data,
 
   may_upgrade =
     ((inx != XAW_LIST_NONE) &&
-     (can_upgrade_unittype(client.conn.playing,
-       utype_by_number(activeunits_type[inx])) != NULL));
+     (unit_type_exists (activeunits_type[inx])) &&
+     (can_upgrade_unittype (game.player_ptr, activeunits_type[inx]) != -1));
 
   XtSetSensitive (upgrade_command, may_upgrade);
 }
@@ -989,7 +952,8 @@ void activeunits_list_callback(Widget w, XtPointer client_data,
 static void upgrade_callback_yes(Widget w, XtPointer client_data, 
                                  XtPointer call_data)
 {
-  dsend_packet_unit_type_upgrade(&client.conn, (size_t) client_data);
+  send_packet_unittype_info(&aconnection, (size_t)client_data,
+			    PACKET_UNITTYPE_UPGRADE);
   destroy_message_dialog(w);
 }
 
@@ -1009,24 +973,27 @@ void activeunits_upgrade_callback(Widget w, XtPointer client_data,
 			 XtPointer call_data)
 {
   char buf[512];
-  struct unit_type *punittype1, *punittype2;
+  int ut1,ut2;
 
   XawListReturnStruct *ret;
   ret=XawListShowCurrent(activeunits_list);
 
   if(ret->list_index!=XAW_LIST_NONE) {
-    punittype1 = utype_by_number(activeunits_type[ret->list_index]);
-    CHECK_UNIT_TYPE(punittype1);
+    ut1 = activeunits_type[ret->list_index];
+    if (!(unit_type_exists (ut1))) {
+      return;
+    }
+    /* puts(unit_types[ut1].name); */
 
-    punittype2 = can_upgrade_unittype(client.conn.playing, punittype1);
+    ut2 = can_upgrade_unittype(game.player_ptr,
+			       activeunits_type[ret->list_index]);
 
     my_snprintf(buf, sizeof(buf),
-		_("Upgrade as many %s to %s as possible for %d gold each?\n"
-		  "Treasury contains %d gold."),
-		utype_name_translation(punittype1),
-		utype_name_translation(punittype2),
-		unit_upgrade_price(client.conn.playing, punittype1, punittype2),
-		client.conn.playing->economic.gold);
+	    _("Upgrade as many %s to %s as possible for %d gold each?\n"
+	      "Treasury contains %d gold."),
+	    unit_types[ut1].name, unit_types[ut2].name,
+	    unit_upgrade_price(game.player_ptr, ut1, ut2),
+	    game.player_ptr->economic.gold);
 
     popup_message_dialog(toplevel, "upgradedialog", buf,
 			 upgrade_callback_yes,
@@ -1041,7 +1008,11 @@ void activeunits_upgrade_callback(Widget w, XtPointer client_data,
 void activeunits_close_callback(Widget w, XtPointer client_data, 
 			 XtPointer call_data)
 {
-  popdown_activeunits_report_dialog();
+
+  if(activeunits_dialog_shell_is_modal)
+     XtSetSensitive(main_form, TRUE);
+   XtDestroyWidget(activeunits_dialog_shell);
+   activeunits_dialog_shell=0;
 }
 
 /****************************************************************
@@ -1073,74 +1044,48 @@ void activeunits_report_dialog_update(void)
     /* int upkeep_gold;   FIXME: add gold when gold is implemented --jjm */
     int building_count;
   };
-
-  if (NULL == client.conn.playing) {
-    return;
-  }
-
-  if (is_report_dialogs_frozen()) {
-    return;
-  }
-
-  if (activeunits_dialog_shell) {
+  if(is_report_dialogs_frozen()) return;
+  if(activeunits_dialog_shell) {
     int k;
     Dimension width; 
     static char *activeunits_list_names_ptrs[U_LAST+1];
     static char activeunits_list_names[U_LAST][200];
     struct repoinfo unitarray[U_LAST];
     struct repoinfo unittotals;
-    const char *report_title;
+    char *report_title;
     char activeunits_total[100];
-    Unit_type_id i;
     
-    report_title = get_centered_report_title(_("Units"));
+    report_title=get_report_title(_("Units"));
     xaw_set_label(activeunits_label, report_title);
-    free((void *) report_title);
+    free(report_title);
 
     memset(unitarray, '\0', sizeof(unitarray));
-
-    city_list_iterate(client.conn.playing->cities, pcity) {
-      int free_upkeep[O_COUNT];
-
-      output_type_iterate(o) {
-        free_upkeep[o] = get_city_output_bonus(pcity, get_output_type(o),
-                                               EFT_UNIT_UPKEEP_FREE_PER_CITY);
-      } output_type_iterate_end;
-
-      unit_list_iterate(client.conn.playing->units, punit) {
-        int upkeep_cost[O_COUNT];
-        Unit_type_id uti = utype_index(unit_type(punit));
-
-        city_unit_upkeep(punit, upkeep_cost, free_upkeep);
-        (unitarray[uti].active_count)++;
-        if (punit->homecity) {
-          /* TODO: upkeep for generic output types. */
-          unitarray[uti].upkeep_shield += upkeep_cost[O_SHIELD];
-          unitarray[uti].upkeep_food += upkeep_cost[O_FOOD];
-        }
-      } unit_list_iterate_end;
-    } city_list_iterate_end;
-
-    city_list_iterate(client.conn.playing->cities,pcity) {
-      if (VUT_UTYPE == pcity->production.kind) {
-	struct unit_type *punittype = pcity->production.value.utype;
-	(unitarray[utype_index(punittype)].building_count)++;
+    unit_list_iterate(game.player_ptr->units, punit) {
+      (unitarray[punit->type].active_count)++;
+      if (punit->homecity) {
+	unitarray[punit->type].upkeep_shield += punit->upkeep;
+	unitarray[punit->type].upkeep_food += punit->upkeep_food;
       }
+    }
+    unit_list_iterate_end;
+    city_list_iterate(game.player_ptr->cities,pcity) {
+      if (pcity->is_building_unit &&
+	  (unit_type_exists (pcity->currently_building)))
+	(unitarray[pcity->currently_building].building_count)++;
     }
     city_list_iterate_end;
 
     k = 0;
     memset(&unittotals, '\0', sizeof(unittotals));
-    unit_type_iterate(punittype) {
-      i = utype_index(punittype);
+    unit_type_iterate(i) {
       if ((unitarray[i].active_count > 0) || (unitarray[i].building_count > 0)) {
 	my_snprintf
 	  (
 	   activeunits_list_names[k],
 	   sizeof(activeunits_list_names[k]),
 	   "%-27s%c%9d%9d%9d%9d",
-	   utype_name_translation(punittype),
-	   can_upgrade_unittype(client.conn.playing, punittype) != NULL ? '*': '-',
+	   unit_name(i),
+	   can_upgrade_unittype(game.player_ptr, i) != -1 ? '*': '-',
 	   unitarray[i].building_count,
 	   unitarray[i].active_count,
 	   unitarray[i].upkeep_shield,
@@ -1178,363 +1123,4 @@ void activeunits_report_dialog_update(void)
 
     activeunits_list_callback(NULL, NULL, NULL);
   }
-}
-
-/****************************************************************
-  Show a dialog with player statistics at endgame.
-  TODO: Display all statistics in packet_endgame_report.
-*****************************************************************/
-void popup_endgame_report_dialog(struct packet_endgame_report *packet)
-{
-  char buffer[150 * MAX_NUM_PLAYERS];
-  int i;
- 
-  buffer[0] = '\0';
-  for (i = 0; i < packet->nscores; i++) {
-    cat_snprintf(buffer, sizeof(buffer),
-                 PL_("%2d: The %s ruler %s scored %d point\n",
-                     "%2d: The %s ruler %s scored %d points\n",
-                     packet->score[i]),
-                 i + 1,
-                 nation_adjective_for_player(player_by_number(packet->id[i])),
-                 player_name(player_by_number(packet->id[i])),
-                 packet->score[i]);
-  }
-  popup_notify_dialog(_("Final Report:"),
-                      _("The Greatest Civilizations in the world."),
-                      buffer);
-}
-
-/****************************************************************************
-			SERVER OPTIONS DIALOG
-****************************************************************************/
-
-/****************************************************************************
-  Show a dialog with the server options.
-****************************************************************************/
-void popup_settable_options_dialog(void)
-{
-  if (!settable_options_dialog_shell) {
-    create_settable_options_dialog();
-  }
-
-  update_settable_options_dialog();
-
-  XtPopup(settable_options_dialog_shell, XtGrabNone);
-}
-
-/****************************************************************************
-  Popdown server options dialog.
-****************************************************************************/
-void popdown_settable_options_dialog(void)
-{
-  if (settable_options_dialog_shell) {
-    XtDestroyWidget(settable_options_dialog_shell);
-    settable_options_dialog_shell = NULL;
-  }
-}
-
-/****************************************************************************
-  Server options dialog.
-****************************************************************************/
-void create_settable_options_dialog(void)
-{
-  Widget prev_widget, longest_label = NULL;
-  size_t longest_len = 0;
-  Dimension width;
-  int i;
-
-  settable_options_dialog_shell =
-    I_T(XtCreatePopupShell("settableoptionspopup", transientShellWidgetClass,
-			   toplevel, NULL, 0));
-  settable_options_form =
-    XtVaCreateManagedWidget("settableoptionsform", formWidgetClass,
-			    settable_options_dialog_shell, NULL);
-
-  settable_options_label =
-    I_L(XtVaCreateManagedWidget("settableoptionslabel", labelWidgetClass,
-				settable_options_form, NULL));
-
-  settable_options_viewport =
-    XtVaCreateManagedWidget("settableoptionsviewport", viewportWidgetClass,
-			    settable_options_form, NULL);
-  settable_options_scrollform =
-    XtVaCreateManagedWidget("settableoptionsscrollform", formWidgetClass, 
-			    settable_options_viewport, NULL);
-
-  if (!settable_options_widgets) {
-    settable_options_widgets = fc_calloc(num_settable_options, sizeof(Widget));
-  }
-
-  prev_widget = NULL; /* init the prev-Widget */
-
-  for (i = 0; i < num_settable_options; i++) {
-    char buf[256];
-    size_t len;
-    struct options_settable *o = &settable_options[i];
-
-    my_snprintf(buf, sizeof(buf), "%s: %s", o->name,
-		_(o->short_help));
-    len = strlen(buf);
-
-    /* 
-     * Remember widget so we can reset the vertical position.
-     */
-    settable_options_widgets[i] = prev_widget;
-
-    if (prev_widget) {
-      prev_widget =
-	XtVaCreateManagedWidget("label", labelWidgetClass,
-				settable_options_scrollform,
-				XtNlabel, buf,
-				XtNfromVert, prev_widget,
-				NULL);
-    } else {
-      prev_widget =
-	XtVaCreateManagedWidget("label", labelWidgetClass,
-				settable_options_scrollform,
-				XtNlabel, buf,
-				NULL);
-    }
-
-    if (len > longest_len) {
-      longest_len = len;
-      longest_label = prev_widget;
-    }
-
-    /* 
-     * The addition of a scrollbar screws things up. There must be a
-     * better way to do this.
-     */
-    XtVaGetValues(prev_widget, XtNwidth, &width, NULL);
-    XtVaSetValues(prev_widget, XtNwidth, width + 15, NULL);
-  }
-
-  XtVaGetValues(longest_label, XtNwidth, &width, NULL);
-  XtVaSetValues(settable_options_label, XtNwidth, width + 15, NULL);
-
-  for (i = 0; i < num_settable_options; i++) {
-    struct options_settable *o = &settable_options[i];
-
-    if (setting_class_is_changeable(o->sclass)
-	&& o->is_visible) {
-      switch (o->stype) {
-      case SSET_BOOL:
-	if (settable_options_widgets[i]) {
-	  prev_widget =
-	    XtVaCreateManagedWidget("toggle", toggleWidgetClass,
-				    settable_options_scrollform,
-				    XtNfromHoriz, settable_options_label,
-				    XtNfromVert, settable_options_widgets[i],
-				    NULL);
-	} else {
-	  prev_widget =
-	    XtVaCreateManagedWidget("toggle", toggleWidgetClass,
-				    settable_options_scrollform,
-				    XtNfromHoriz, settable_options_label,
-				    NULL);
-	}
-	XtAddCallback(prev_widget, XtNcallback,
-		      settable_options_toggle_callback, NULL);
-	break;
-      case SSET_INT:
-      case SSET_STRING:
-	if (settable_options_widgets[i]) {
-	  prev_widget =
-	    XtVaCreateManagedWidget("input", asciiTextWidgetClass,
-				    settable_options_scrollform,
-				    XtNfromHoriz, settable_options_label,
-				    XtNfromVert, settable_options_widgets[i],
-				    NULL);
-	} else {
-	  prev_widget =
-	    XtVaCreateManagedWidget("input", asciiTextWidgetClass,
-				    settable_options_scrollform,
-				    XtNfromHoriz, settable_options_label,
-				    NULL);
-	}
-	break;
-      }
-
-    } else {
-      if (settable_options_widgets[i]) {
-	prev_widget =
-	  XtVaCreateManagedWidget("rlabel", labelWidgetClass,
-				  settable_options_scrollform,
-				  XtNfromHoriz, settable_options_label,
-				  XtNfromVert, settable_options_widgets[i],
-				  NULL);
-      } else {
-	prev_widget =
-	  XtVaCreateManagedWidget("rlabel", labelWidgetClass,
-				  settable_options_scrollform,
-				  XtNfromHoriz, settable_options_label,
-				  NULL);
-      }
-    }
-    /* store the final widget */
-    settable_options_widgets[i] = prev_widget;
-  }
-
-  settable_options_ok_command =
-    I_L(XtVaCreateManagedWidget("settableoptionsokcommand",
-				commandWidgetClass,
-				settable_options_form,
-				NULL));
-
-  settable_options_cancel_command =
-    I_L(XtVaCreateManagedWidget("settableoptionscancelcommand",
-				commandWidgetClass,
-				settable_options_form,
-				NULL));
-
-  XtAddCallback(settable_options_ok_command, XtNcallback,
-		settable_options_ok_callback, NULL);
-  XtAddCallback(settable_options_cancel_command, XtNcallback,
-		settable_options_cancel_callback, NULL);
-
-  XtRealizeWidget(settable_options_dialog_shell);
-
-  XSetWMProtocols(display, XtWindow(settable_options_dialog_shell),
-		  &wm_delete_window, 1);
-  XtOverrideTranslations(settable_options_dialog_shell,
-    XtParseTranslationTable("<Message>WM_PROTOCOLS: msg-close-settable-options()"));
-
-  xaw_horiz_center(settable_options_label);
-}
-
-/****************************************************************************
-  Update server options dialog.
-****************************************************************************/
-void update_settable_options_dialog(void)
-{
-  if (settable_options_dialog_shell) {
-    char buf[256];
-    int i;
-
-    for (i = 0; i < num_settable_options; i++) {
-      struct options_settable *o = &settable_options[i];
-
-      if (setting_class_is_changeable(o->sclass)
-	  && o->is_visible) {
-	switch (o->stype) {
-	case SSET_BOOL:
-	  XtVaSetValues(settable_options_widgets[i],
-			XtNstate, o->val ? True : False,
-			XtNlabel,
-			o->val ? _("Yes") : _("No"), NULL);
-	  break;
-	case SSET_INT:
-	  my_snprintf(buf, sizeof(buf), "%d", o->val);
-	  XtVaSetValues(settable_options_widgets[i], XtNstring, buf, NULL);
-	  break;
-	case SSET_STRING:
-	  my_snprintf(buf, sizeof(buf), "%s", o->strval);
-	  XtVaSetValues(settable_options_widgets[i], XtNstring, buf, NULL);
-	  break;
-	}
-      } else {
-	if (o->is_visible) {
-	  switch (o->stype) {
-	  case SSET_BOOL:
-	    my_snprintf(buf, sizeof(buf), "%s",
-	      o->val != 0 ? _("true") : _("false"));
-	    break;
-	  case SSET_INT:
-	    my_snprintf(buf, sizeof(buf), "%d", o->val);
-	    break;
-	  case SSET_STRING:
-	    my_snprintf(buf, sizeof(buf), "%s", o->strval);
-	    break;
-	  }
-	} else {
-	  my_snprintf(buf, sizeof(buf), _("(hidden)"));
-	}
-	XtVaSetValues(settable_options_widgets[i], XtNlabel, buf, NULL);
-      }
-    }
-  }
-}
-
-/****************************************************************************
-  Changes the label of the toggle widget to Yes/No depending on the state of
-  the toggle.
-****************************************************************************/
-void settable_options_toggle_callback(Widget w, XtPointer client_data,
-				      XtPointer call_data)
-{
-  Boolean b;
-
-  XtVaGetValues(w, XtNstate, &b, NULL);
-  XtVaSetValues(w, XtNlabel, b ? _("Yes") : _("No"), NULL);
-}
-
-/****************************************************************************
-  OK button callback.
-****************************************************************************/
-void settable_options_ok_callback(Widget w, XtPointer client_data,
-				  XtPointer call_data)
-{
-  if (settable_options_dialog_shell) {
-    Boolean b, old_b;
-    int val, i;
-    XtPointer dp;
-
-    for (i = 0; i < num_settable_options; i++) {
-      struct options_settable *o = &settable_options[i];
-
-      if (setting_class_is_changeable(o->sclass)
-	  && o->is_visible) {
-	char buffer[MAX_LEN_MSG];
-
-	switch (o->stype) {
-	case SSET_BOOL:
-	  old_b = o->val ? True: False;
-	  XtVaGetValues(settable_options_widgets[i], XtNstate, &b, NULL);
-	  if (b != old_b) {
-	    my_snprintf(buffer, MAX_LEN_MSG, "/set %s %s",
-			o->name, b ? "1" : "0");
-	    send_chat(buffer);
-	  }
-	  break;
-	case SSET_INT:
-	  XtVaGetValues(settable_options_widgets[i], XtNstring, &dp, NULL);
-	  sscanf(dp, "%d", &val);
-	  if (val != o->val) {
-	    my_snprintf(buffer, MAX_LEN_MSG, "/set %s %d",
-			o->name, val);
-	    send_chat(buffer);
-	  }
-	  break;
-	case SSET_STRING:
-	  XtVaGetValues(settable_options_widgets[i], XtNstring, &dp, NULL);
-	  if (strcmp(o->strval, dp)) {
-	    my_snprintf(buffer, MAX_LEN_MSG, "/set %s %s",
-			o->name, (char *)dp);
-	    send_chat(buffer);
-	  }
-	  break;
-	}
-      }
-    }
-
-    popdown_settable_options_dialog();
-  }
-}
-
-/****************************************************************************
-  Cancel button callback.
-****************************************************************************/
-void settable_options_cancel_callback(Widget w, XtPointer client_data,
-				      XtPointer call_data)
-{
-  popdown_settable_options_dialog();
-}
-
-/****************************************************************************
-  Callback for overrided wm_delete_window of server options dialog.
-****************************************************************************/
-void settable_options_msg_close(Widget w)
-{
-  popdown_settable_options_dialog();
 }

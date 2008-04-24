@@ -27,14 +27,14 @@
 #include "support.h"
 
 #include "climisc.h"
+#include "clinet.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
 
 #include "chatline.h"
-#include "pages.h"
 
-struct genlist *history_list;
-int history_pos;
+struct genlist	history_list;
+int		history_pos;
 
 
 /**************************************************************************
@@ -42,22 +42,24 @@ int history_pos;
 **************************************************************************/
 void inputline_return(GtkEntry *w, gpointer data)
 {
+  struct packet_generic_message apacket;
   const char *theinput;
 
   theinput = gtk_entry_get_text(w);
   
   if (*theinput) {
-    send_chat(theinput);
+    mystrlcpy(apacket.message, theinput, MAX_LEN_MSG-MAX_LEN_USERNAME+1);
+    send_packet_generic_message(&aconnection, PACKET_CHAT_MSG, &apacket);
 
-    if (genlist_size(history_list) >= MAX_CHATLINE_HISTORY) {
+    if (genlist_size(&history_list) >= MAX_CHATLINE_HISTORY) {
       void *data;
 
-      data = genlist_get(history_list, -1);
-      genlist_unlink(history_list, data);
+      data=genlist_get(&history_list, -1);
+      genlist_unlink(&history_list, data);
       free(data);
     }
 
-    genlist_prepend(history_list, mystrdup(theinput));
+    genlist_insert(&history_list, mystrdup(theinput), 0);
     history_pos=-1;
   }
 
@@ -65,21 +67,15 @@ void inputline_return(GtkEntry *w, gpointer data)
 }
 
 /**************************************************************************
-  Appends the string to the chat output window.  The string should be
-  inserted on its own line, although it will have no newline.
+...
 **************************************************************************/
-void real_append_output_window(const char *astring, int conn_id)
+void real_append_output_window(const char *astring)
 {
-  GtkWidget *sw;
-  GtkAdjustment *slider;
-  bool scroll;
-
   GtkTextBuffer *buf;
   GtkTextIter i;
   GtkTextMark *mark;
-
-
-  buf = message_buffer;
+  
+  buf = gtk_text_view_get_buffer(GTK_TEXT_VIEW(main_message_area));
   gtk_text_buffer_get_end_iter(buf, &i);
   gtk_text_buffer_insert(buf, &i, "\n", -1);
   gtk_text_buffer_insert(buf, &i, astring, -1);
@@ -87,35 +83,8 @@ void real_append_output_window(const char *astring, int conn_id)
   /* have to use a mark, or this won't work properly */
   gtk_text_buffer_get_end_iter(buf, &i);
   mark = gtk_text_buffer_create_mark(buf, NULL, &i, FALSE);
-
-
-  sw = gtk_widget_get_parent(GTK_WIDGET(main_message_area));
-  slider = gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(sw));
-
-  /* scroll forward only if slider is near the bottom */
-  scroll = ((slider->value + slider->page_size) >=
-      (slider->upper - slider->step_increment));
-  if (scroll) {
-    gtk_text_view_scroll_mark_onscreen(GTK_TEXT_VIEW(main_message_area),
-	mark);
-  }
-
-  sw = gtk_widget_get_parent(GTK_WIDGET(start_message_area));
-  slider = gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(sw));
-
-  /* scroll forward only if slider is near the bottom */
-  scroll = ((slider->value + slider->page_size) >=
-      (slider->upper - slider->step_increment));
-  if (scroll) {
-    gtk_text_view_scroll_mark_onscreen(GTK_TEXT_VIEW(start_message_area),
-	mark);
-  }
-
-
+  gtk_text_view_scroll_mark_onscreen(GTK_TEXT_VIEW(main_message_area), mark);
   gtk_text_buffer_delete_mark(buf, mark);
-
-
-  append_network_statusbar(astring, FALSE);
 }
 
 /**************************************************************************
@@ -125,11 +94,13 @@ void real_append_output_window(const char *astring, int conn_id)
 **************************************************************************/
 void log_output_window(void)
 {
+  GtkTextBuffer *buf;
   GtkTextIter start, end;
   gchar *txt;
 
-  gtk_text_buffer_get_bounds(message_buffer, &start, &end);
-  txt = gtk_text_buffer_get_text(message_buffer, &start, &end, TRUE);
+  buf = gtk_text_view_get_buffer(GTK_TEXT_VIEW(main_message_area));
+  gtk_text_buffer_get_bounds(buf, &start, &end);
+  txt = gtk_text_buffer_get_text(buf, &start, &end, TRUE);
 
   write_chatline_content(txt);
   g_free(txt);
@@ -148,5 +119,8 @@ void clear_output_window(void)
 **************************************************************************/
 void set_output_window_text(const char *text)
 {
-  gtk_text_buffer_set_text(message_buffer, text, -1);
+  GtkTextBuffer *buf;
+  
+  buf = gtk_text_view_get_buffer(GTK_TEXT_VIEW(main_message_area));
+  gtk_text_buffer_set_text(buf, text, -1);
 }

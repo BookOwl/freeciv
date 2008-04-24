@@ -13,13 +13,9 @@
 #ifndef FC__AITECH_H
 #define FC__AITECH_H
 
-#include "fc_types.h"
-#include "unittype.h"
+struct player;
 
 void ai_manage_tech(struct player *pplayer); 
 void ai_next_tech_goal(struct player *pplayer);
-struct unit_type *ai_wants_role_unit(struct player *pplayer,
-				     struct city *pcity,
-				     int role, int want);
 
 #endif  /* FC__AITECH_H */

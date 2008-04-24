@@ -10,11 +10,10 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
-
+ 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -32,6 +31,7 @@
  
 #include "chatline.h"
 #include "citydlg.h"
+#include "clinet.h"
 #include "colors.h"
 #include "gui_stuff.h"
 #include "mapview.h"
@@ -52,10 +52,10 @@ static int max_list_width;
 /**************************************************************************
 
 **************************************************************************/
-static LONG APIENTRY MsgdlgProc(HWND hWnd,
-				UINT message,
-				UINT wParam,
-				LONG lParam)
+LONG APIENTRY MsgdlgProc(HWND hWnd,
+			 UINT message,
+			 UINT wParam,
+			 LONG lParam)
 {
   switch(message)
     {
@@ -158,7 +158,7 @@ static void create_meswin_dialog(void)
 /**************************************************************************
 
 **************************************************************************/
-void popup_meswin_dialog(bool raise)
+void popup_meswin_dialog(void)
 {
   int updated = 0;
  
@@ -166,9 +166,7 @@ void popup_meswin_dialog(bool raise)
     create_meswin_dialog();
     updated = 1;               /* create_ calls update_ */
   }
-  if (raise) {
-    SetFocus(meswin_dlg);
-  }
+  
 }
 
 /****************************************************************

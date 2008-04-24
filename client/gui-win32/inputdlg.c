@@ -10,11 +10,10 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/  
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
-
+ 
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -153,6 +152,5 @@ HWND input_dialog_create(HWND parent, char *dialogname,
   fcwin_box_add_box(vbox,hbox,FALSE,FALSE,5);
   fcwin_set_box(dlg,vbox);
   ShowWindow(dlg,SW_SHOWNORMAL);
-  SetFocus(GetDlgItem(dlg, ID_INPUT_TEXT));
   return dlg;
 }

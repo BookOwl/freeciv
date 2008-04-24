@@ -1,7 +1,7 @@
 [spec]
 
 ; Format and options of this spec file:
-options = "+spec3"
+options = "+spec2"
 
 [info]
 
@@ -19,8 +19,8 @@ x_top_left = 0
 y_top_left = 0
 dx = 90
 dy = 88
-pixel_border = 0
+is_pixel_border = 0
 
 tiles = { "row", "column", "tag"
- 0, 0, "explode.nuke"
+ 0, 0, "explode.iso_nuke"
 }

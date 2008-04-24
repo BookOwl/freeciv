@@ -11,25 +11,20 @@
    GNU General Public License for more details.
 ***********************************************************************/
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <assert.h>
-#include <stdarg.h>
 #include <string.h>
 
 #include "capability.h"
 #include "hash.h"
-#include "log.h"
 #include "mem.h"
-#include "timing.h"
-
 #include "civclient.h"
+#include "log.h"
+#include "clinet.h"
+#include "timing.h"
+#include "mapctrl_g.h"
+
 #include "cma_core.h"
 #include "cma_fec.h"
-#include "mapctrl_g.h"
-#include "sha.h"
 
 #include "agents.h"
 
@@ -44,7 +39,7 @@ struct my_agent;
 
 struct call {
   struct my_agent *agent;
-  enum oct { OCT_NEW_TURN, OCT_UNIT, OCT_CITY, OCT_TILE } type;
+  enum oct { OCT_NEW_TURN, OCT_UNIT, OCT_CITY } type;
   enum callback_type cb_type;
   int arg;
 };
@@ -52,6 +47,10 @@ struct call {
 #define SPECLIST_TAG call
 #define SPECLIST_TYPE struct call
 #include "speclist.h"
+
+#define SPECLIST_TAG call
+#define SPECLIST_TYPE struct call
+#include "speclist_c.h"
 
 #define call_list_iterate(calllist, pcall) \
     TYPED_LIST_ITERATE(struct call, calllist, pcall)
@@ -71,35 +70,12 @@ static struct {
       int wait_at_network, wait_at_network_requests;
     } stats;
   } entries[MAX_AGENTS];
-  struct call_list *calls;
+  struct call_list calls;
 } agents;
 
 static bool initialized = FALSE;
 static int frozen_level;
 static bool currently_running = FALSE;
-
-/****************************************************************************
-  Return TRUE iff the two agent calls are equal.
-****************************************************************************/
-static bool calls_are_equal(const struct call *pcall1,
-			    const struct call *pcall2)
-{
-  if (pcall1->type != pcall2->type && pcall1->cb_type != pcall2->cb_type) {
-    return FALSE;
-  }
-
-  switch (pcall1->type) {
-  case OCT_UNIT:
-  case OCT_CITY:
-  case OCT_TILE:
-    return (pcall1->arg == pcall2->arg);
-  case OCT_NEW_TURN:
-    return TRUE;
-  }
-
-  assert(0);
-  return FALSE;
-}
 
 /***********************************************************************
  If the call described by the given arguments isn't contained in
@@ -107,35 +83,20 @@ static bool calls_are_equal(const struct call *pcall1,
 ***********************************************************************/
 static void enqueue_call(struct my_agent *agent,
 			 enum oct type,
-			 enum callback_type cb_type, ...)
+			 enum callback_type cb_type, int arg)
 {
-  va_list ap;
   struct call *pcall2;
-  int x, y, arg = 0;
-
-  va_start(ap, cb_type);
 
   if (client_is_observer()) {
     return;
   }
 
-  switch (type) {
-  case OCT_UNIT:
-  case OCT_CITY:
-    arg = va_arg(ap, int);
-    break;
-  case OCT_TILE:
-    x = va_arg(ap, int);
-    y = va_arg(ap, int);
-    arg = map_pos_to_index(x, y);
-    break;
-  case OCT_NEW_TURN:
-    /* nothing */
-    break;
-  default:
-    assert(0);
-  }
-  va_end(ap);
+  call_list_iterate(agents.calls, pcall) {
+    if (pcall->type == type && pcall->cb_type == cb_type
+	&& pcall->arg == arg && pcall->agent == agent) {
+      return;
+    }
+  } call_list_iterate_end;
 
   pcall2 = fc_malloc(sizeof(struct call));
 
@@ -144,17 +105,10 @@ static void enqueue_call(struct my_agent *agent,
   pcall2->cb_type = cb_type;
   pcall2->arg = arg;
 
-  call_list_iterate(agents.calls, pcall) {
-    if (calls_are_equal(pcall, pcall2)) {
-      free(pcall2);
-      return;
-    }
-  } call_list_iterate_end;
-
-  call_list_prepend(agents.calls, pcall2);
+  call_list_insert(&agents.calls, pcall2);
 
   if (DEBUG_TODO_LISTS) {
-    freelog(LOG_TEST, "A: adding call");
+    freelog(LOG_NORMAL, "A: adding call");
   }
 
   update_turn_done_button_state();
@@ -179,18 +133,18 @@ static struct call *remove_and_return_a_call(void)
 {
   struct call *result;
 
-  if (call_list_size(agents.calls) == 0) {
+  if (call_list_size(&agents.calls) == 0) {
     return NULL;
   }
 
   /* get calls to agents with low levels first */
-  call_list_sort(agents.calls, my_call_sort);
+  call_list_sort(&agents.calls, my_call_sort);
 
-  result = call_list_get(agents.calls, 0);
-  call_list_unlink(agents.calls, result);
+  result = call_list_get(&agents.calls, 0);
+  call_list_unlink(&agents.calls, result);
 
   if (DEBUG_TODO_LISTS) {
-    freelog(LOG_TEST, "A: removed call");
+    freelog(LOG_NORMAL, "A: removed call");
   }
   return result;
 }
@@ -206,9 +160,6 @@ static void execute_call(const struct call *call)
     call->agent->agent.unit_callbacks[call->cb_type] (call->arg);
   } else if (call->type == OCT_CITY) {
     call->agent->agent.city_callbacks[call->cb_type] (call->arg);
-  } else if (call->type == OCT_TILE) {
-    call->agent->agent.tile_callbacks[call->cb_type]
-      (index_to_tile(call->arg));
   } else {
     assert(0);
   }
@@ -260,7 +211,7 @@ static void freeze(void)
     initialized = TRUE;
   }
   if (DEBUG_FREEZE) {
-    freelog(LOG_TEST, "A: freeze() current level=%d", frozen_level);
+    freelog(LOG_NORMAL, "A: freeze() current level=%d", frozen_level);
   }
   frozen_level++;
 }
@@ -272,11 +223,11 @@ static void freeze(void)
 static void thaw(void)
 {
   if (DEBUG_FREEZE) {
-    freelog(LOG_TEST, "A: thaw() current level=%d", frozen_level);
+    freelog(LOG_NORMAL, "A: thaw() current level=%d", frozen_level);
   }
   frozen_level--;
   assert(frozen_level >= 0);
-  if (0 == frozen_level && C_S_RUNNING == client_state()) {
+  if (frozen_level == 0) {
     call_handle_methods();
   }
 }
@@ -284,7 +235,7 @@ static void thaw(void)
 /***********************************************************************
  Helper.
 ***********************************************************************/
-static struct my_agent *find_agent_by_name(const char *agent_name)
+static struct my_agent *find_agent_by_name(char *agent_name)
 {
   int i;
 
@@ -304,17 +255,17 @@ static struct my_agent *find_agent_by_name(const char *agent_name)
 static bool is_outstanding_request(struct my_agent *agent)
 {
   if (agent->first_outstanding_request_id != 0 &&
-      client.conn.client.request_id_of_currently_handled_packet != 0 &&
+      aconnection.client.request_id_of_currently_handled_packet != 0 &&
       agent->first_outstanding_request_id <=
-      client.conn.client.request_id_of_currently_handled_packet &&
+      aconnection.client.request_id_of_currently_handled_packet &&
       agent->last_outstanding_request_id >=
-      client.conn.client.request_id_of_currently_handled_packet) {
+      aconnection.client.request_id_of_currently_handled_packet) {
     freelog(LOG_DEBUG,
 	    "A:%s: ignoring packet; outstanding [%d..%d] got=%d",
 	    agent->agent.name,
 	    agent->first_outstanding_request_id,
 	    agent->last_outstanding_request_id,
-	    client.conn.client.request_id_of_currently_handled_packet);
+	    aconnection.client.request_id_of_currently_handled_packet);
     return TRUE;
   }
   return FALSE;
@@ -340,12 +291,11 @@ static void print_stats(struct my_agent *agent)
 void agents_init(void)
 {
   agents.entries_used = 0;
-  agents.calls = call_list_new();
+  call_list_init(&agents.calls);
 
   /* Add init calls of agents here */
   cma_init();
   cmafec_init();
-  /*simple_historian_init();*/
 }
 
 /***********************************************************************
@@ -360,8 +310,7 @@ void agents_free(void)
    * for a simple disconnect and a client quit. for right now, we just
    * let the OS free the memory on exit instead of doing it ourselves. */
   /* cmafec_free(); */
-
-  /*simple_historian_done();*/
+  cma_free();
 
   for (;;) {
     struct call *pcall = remove_and_return_a_call();
@@ -377,7 +326,6 @@ void agents_free(void)
 
     free_timer(agent->stats.network_wall_timer);
   }
-  call_list_free(agents.calls);
 }
 
 /***********************************************************************
@@ -461,7 +409,6 @@ void agents_game_joined(void)
 void agents_game_start(void)
 {
   freelog(META_CALLBACKS_LOGLEVEL, "agents_game_start()");
-  call_handle_methods();
 }
 
 /***********************************************************************
@@ -495,7 +442,7 @@ void agents_new_turn(void)
       continue;
     }
     if (agent->agent.turn_start_notify) {
-      enqueue_call(agent, OCT_NEW_TURN, CB_LAST);
+      enqueue_call(agent, OCT_NEW_TURN, CB_LAST, 0);
     }
   }
   /*
@@ -508,8 +455,8 @@ void agents_new_turn(void)
  Called from client/packhand.c. A call is created and added to the
  list of outstanding calls if an agent wants to be informed about this
  event and the change wasn't caused by the agent. We then try (this
- may not be successful in every case since we can be frozen or another
- call_handle_methods may be running higher up on the stack) to execute
+ may no be successfull in every case since we can be frozen or another
+ call_handle_methods is running higher up on the stack) to execute
  all outstanding calls.
 ***********************************************************************/
 void agents_unit_changed(struct unit *punit)
@@ -518,10 +465,8 @@ void agents_unit_changed(struct unit *punit)
 
   freelog(LOG_DEBUG,
 	  "A: agents_unit_changed(unit=%d) type=%s pos=(%d,%d) owner=%s",
-	  punit->id,
-	  unit_rule_name(punit),
-	  TILE_XY(punit->tile),
-	  player_name(unit_owner(punit)));
+	  punit->id, unit_types[punit->type].name, punit->x, punit->y,
+	  unit_owner(punit)->name);
 
   for (i = 0; i < agents.entries_used; i++) {
     struct my_agent *agent = &agents.entries[i];
@@ -546,10 +491,8 @@ void agents_unit_new(struct unit *punit)
 
   freelog(LOG_DEBUG,
 	  "A: agents_new_unit(unit=%d) type=%s pos=(%d,%d) owner=%s",
-	  punit->id,
-	  unit_rule_name(punit),
-	  TILE_XY(punit->tile),
-	  player_name(unit_owner(punit)));
+	  punit->id, unit_types[punit->type].name, punit->x, punit->y,
+	  unit_owner(punit)->name);
 
   for (i = 0; i < agents.entries_used; i++) {
     struct my_agent *agent = &agents.entries[i];
@@ -575,10 +518,8 @@ void agents_unit_remove(struct unit *punit)
 
   freelog(LOG_DEBUG,
 	  "A: agents_remove_unit(unit=%d) type=%s pos=(%d,%d) owner=%s",
-	  punit->id,
-	  unit_rule_name(punit),
-	  TILE_XY(punit->tile),
-	  player_name(unit_owner(punit)));
+	  punit->id, unit_types[punit->type].name, punit->x, punit->y,
+	  unit_owner(punit)->name);
 
   for (i = 0; i < agents.entries_used; i++) {
     struct my_agent *agent = &agents.entries[i];
@@ -602,10 +543,8 @@ void agents_city_changed(struct city *pcity)
 {
   int i;
 
-  freelog(LOG_DEBUG, "A: agents_city_changed(city %d=\"%s\") owner=%s",
-	  pcity->id,
-	  city_name(pcity),
-	  nation_rule_name(nation_of_city(pcity)));
+  freelog(LOG_DEBUG, "A: agents_city_changed(city='%s'(%d)) owner=%s",
+	  pcity->name, pcity->id, city_owner(pcity)->name);
 
   for (i = 0; i < agents.entries_used; i++) {
     struct my_agent *agent = &agents.entries[i];
@@ -617,7 +556,6 @@ void agents_city_changed(struct city *pcity)
       enqueue_call(agent, OCT_CITY, CB_CHANGE, pcity->id);
     }
   }
-
   call_handle_methods();
 }
 
@@ -630,11 +568,9 @@ void agents_city_new(struct city *pcity)
   int i;
 
   freelog(LOG_DEBUG,
-	  "A: agents_city_new(city %d=\"%s\") pos=(%d,%d) owner=%s",
-	  pcity->id,
-	  city_name(pcity),
-	  TILE_XY(pcity->tile),
-	  nation_rule_name(nation_of_city(pcity)));
+	  "A: agents_city_new(city='%s'(%d)) pos=(%d,%d) owner=%s",
+	  pcity->name, pcity->id, pcity->x, pcity->y,
+	  city_owner(pcity)->name);
 
   for (i = 0; i < agents.entries_used; i++) {
     struct my_agent *agent = &agents.entries[i];
@@ -659,11 +595,9 @@ void agents_city_remove(struct city *pcity)
   int i;
 
   freelog(LOG_DEBUG,
-	  "A: agents_city_remove(city %d=\"%s\") pos=(%d,%d) owner=%s",
-	  pcity->id,
-	  city_name(pcity),
-	  TILE_XY(pcity->tile),
-	  nation_rule_name(nation_of_city(pcity)));
+	  "A: agents_city_remove(city='%s'(%d)) pos=(%d,%d) owner=%s",
+	  pcity->name, pcity->id, pcity->x, pcity->y,
+	  city_owner(pcity)->name);
 
   for (i = 0; i < agents.entries_used; i++) {
     struct my_agent *agent = &agents.entries[i];
@@ -680,89 +614,16 @@ void agents_city_remove(struct city *pcity)
 }
 
 /***********************************************************************
- Called from client/packhand.c. See agents_unit_changed for a generic
- documentation.
- Tiles got removed because of FOW.
-***********************************************************************/
-void agents_tile_remove(struct tile *ptile)
-{
-  int i;
-
-  freelog(LOG_DEBUG, "A: agents_tile_remove(tile=(%d, %d))", TILE_XY(ptile));
-
-  for (i = 0; i < agents.entries_used; i++) {
-    struct my_agent *agent = &agents.entries[i];
-
-    if (is_outstanding_request(agent)) {
-      continue;
-    }
-    if (agent->agent.tile_callbacks[CB_REMOVE]) {
-      enqueue_call(agent, OCT_TILE, CB_REMOVE, ptile);
-    }
-  }
-
-  call_handle_methods();
-}
-
-/***********************************************************************
- Called from client/packhand.c. See agents_unit_changed for a generic
- documentation.
-***********************************************************************/
-void agents_tile_changed(struct tile *ptile)
-{
-  int i;
-
-  freelog(LOG_DEBUG, "A: agents_tile_changed(tile=(%d, %d))", TILE_XY(ptile));
-
-  for (i = 0; i < agents.entries_used; i++) {
-    struct my_agent *agent = &agents.entries[i];
-
-    if (is_outstanding_request(agent)) {
-      continue;
-    }
-    if (agent->agent.tile_callbacks[CB_CHANGE]) {
-      enqueue_call(agent, OCT_TILE, CB_CHANGE, ptile);
-    }
-  }
-
-  call_handle_methods();
-}
-
-/***********************************************************************
- Called from client/packhand.c. See agents_unit_changed for a generic
- documentation.
-***********************************************************************/
-void agents_tile_new(struct tile *ptile)
-{
-  int i;
-
-  freelog(LOG_DEBUG, "A: agents_tile_new(tile=(%d, %d))", TILE_XY(ptile));
-
-  for (i = 0; i < agents.entries_used; i++) {
-    struct my_agent *agent = &agents.entries[i];
-
-    if (is_outstanding_request(agent)) {
-      continue;
-    }
-    if (agent->agent.tile_callbacks[CB_NEW]) {
-      enqueue_call(agent, OCT_TILE, CB_NEW, ptile);
-    }
-  }
-
-  call_handle_methods();
-}
-
-/***********************************************************************
  Called from an agent. This function will return until the last
  request has been processed by the server.
 ***********************************************************************/
-void wait_for_requests(const char *agent_name, int first_request_id,
+void wait_for_requests(char *agent_name, int first_request_id,
 		       int last_request_id)
 {
   struct my_agent *agent = find_agent_by_name(agent_name);
 
   if (DEBUG_REQUEST_IDS) {
-    freelog(LOG_TEST, "A:%s: wait_for_request(ids=[%d..%d])",
+    freelog(LOG_NORMAL, "A:%s: wait_for_request(ids=[%d..%d])",
 	    agent->agent.name, first_request_id, last_request_id);
   }
 
@@ -781,7 +642,7 @@ void wait_for_requests(const char *agent_name, int first_request_id,
       (1 + (last_request_id - first_request_id));
 
   if (DEBUG_REQUEST_IDS) {
-    freelog(LOG_TEST, "A:%s: wait_for_request: ids=[%d..%d]; got it",
+    freelog(LOG_NORMAL, "A:%s: wait_for_request: ids=[%d..%d]; got it",
 	    agent->agent.name, first_request_id, last_request_id);
   }
 
@@ -793,7 +654,7 @@ void wait_for_requests(const char *agent_name, int first_request_id,
 /***********************************************************************
  Adds a specific call for the given agent.
 ***********************************************************************/
-void cause_a_unit_changed_for_agent(const char *name_of_calling_agent,
+void cause_a_unit_changed_for_agent(char *name_of_calling_agent,
 				    struct unit *punit)
 {
   struct my_agent *agent = find_agent_by_name(name_of_calling_agent);
@@ -806,7 +667,7 @@ void cause_a_unit_changed_for_agent(const char *name_of_calling_agent,
 /***********************************************************************
  Adds a specific call for the given agent.
 ***********************************************************************/
-void cause_a_city_changed_for_agent(const char *name_of_calling_agent,
+void cause_a_city_changed_for_agent(char *name_of_calling_agent,
 				    struct city *pcity)
 {
   struct my_agent *agent = find_agent_by_name(name_of_calling_agent);
@@ -823,7 +684,7 @@ bool agents_busy(void)
 {
   int i;
 
-  if (!initialized || call_list_size(agents.calls) > 0 || frozen_level > 0
+  if (!initialized || call_list_size(&agents.calls) > 0 || frozen_level > 0
       || currently_running) {
     return TRUE;
   }

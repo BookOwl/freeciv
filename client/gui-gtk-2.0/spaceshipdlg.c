@@ -22,6 +22,7 @@
 
 #include "fcintl.h"
 #include "game.h"
+#include "genlist.h"
 #include "map.h"
 #include "mem.h"
 #include "packets.h"
@@ -29,8 +30,7 @@
 #include "shared.h"
 #include "support.h"
 
-#include "civclient.h"
-#include "climisc.h"
+#include "clinet.h"
 #include "colors.h"
 #include "dialogs.h"
 #include "graphics.h"
@@ -43,28 +43,24 @@
 #include "options.h"
 #include "repodlgs.h"
 #include "spaceship.h"
-#include "text.h"
 #include "tilespec.h"
+#include "climisc.h"
 
 #include "spaceshipdlg.h"
 
 struct spaceship_dialog {
   struct player *pplayer;
-  struct gui_dialog *shell;
+  GtkWidget *shell;
   GtkWidget *main_form;
   GtkWidget *info_label;
   GtkWidget *image_canvas;
+  GtkWidget *launch_command;
+  GtkWidget *close_command;
 };
 
-#define SPECLIST_TAG dialog
-#define SPECLIST_TYPE struct spaceship_dialog
-#include "speclist.h"
 
-#define dialog_list_iterate(dialoglist, pdialog) \
-    TYPED_LIST_ITERATE(struct spaceship_dialog, dialoglist, pdialog)
-#define dialog_list_iterate_end  LIST_ITERATE_END
-
-static struct dialog_list *dialog_list;
+static struct genlist dialog_list;
+static bool dialog_list_has_been_initialised = FALSE;
 
 static struct spaceship_dialog *get_spaceship_dialog(struct player *pplayer);
 static struct spaceship_dialog *create_spaceship_dialog(struct player
@@ -76,29 +72,20 @@ static void spaceship_dialog_update_info(struct spaceship_dialog *pdialog);
 /****************************************************************
 ...
 *****************************************************************/
-void spaceship_dialog_init()
-{
-  dialog_list = dialog_list_new();
-}
-
-/****************************************************************
-...
-*****************************************************************/
-void spaceship_dialog_done()
-{
-  dialog_list_free(dialog_list);
-}
-
-/****************************************************************
-...
-*****************************************************************/
 struct spaceship_dialog *get_spaceship_dialog(struct player *pplayer)
 {
-  dialog_list_iterate(dialog_list, pdialog) {
-    if (pdialog->pplayer == pplayer) {
-      return pdialog;
-    }
-  } dialog_list_iterate_end;
+  struct genlist_iterator myiter;
+  
+  if (!dialog_list_has_been_initialised) {
+    genlist_init(&dialog_list);
+    dialog_list_has_been_initialised = TRUE;
+  }
+
+  genlist_iterator_init(&myiter, &dialog_list, 0);
+  
+  for(; ITERATOR_PTR(myiter); ITERATOR_NEXT(myiter))
+    if(((struct spaceship_dialog *)ITERATOR_PTR(myiter))->pplayer==pplayer)
+      return ITERATOR_PTR(myiter);
 
   return NULL;
 }
@@ -116,15 +103,13 @@ void refresh_spaceship_dialog(struct player *pplayer)
 
   pship=&(pdialog->pplayer->spaceship);
 
-  if (game.info.spacerace
-     && pplayer == client.conn.playing
+  if(game.spacerace
+     && pplayer->player_no == game.player_idx
      && pship->state == SSHIP_STARTED
      && pship->success_rate > 0.0) {
-    gui_dialog_set_response_sensitive(pdialog->shell,
-	GTK_RESPONSE_ACCEPT, TRUE);
+    gtk_widget_set_sensitive(pdialog->launch_command, TRUE);
   } else {
-    gui_dialog_set_response_sensitive(pdialog->shell,
-	GTK_RESPONSE_ACCEPT, FALSE);
+    gtk_widget_set_sensitive(pdialog->launch_command, FALSE);
   }
   
   spaceship_dialog_update_info(pdialog);
@@ -141,7 +126,7 @@ void popup_spaceship_dialog(struct player *pplayer)
   if(!(pdialog=get_spaceship_dialog(pplayer)))
     pdialog=create_spaceship_dialog(pplayer);
 
-  gui_dialog_raise(pdialog->shell);
+  gtk_window_present(GTK_WINDOW(pdialog->shell));
 }
 
 /****************************************************************
@@ -152,7 +137,7 @@ void popdown_spaceship_dialog(struct player *pplayer)
   struct spaceship_dialog *pdialog;
   
   if((pdialog=get_spaceship_dialog(pplayer)))
-    gui_dialog_destroy(pdialog->shell);
+    gtk_widget_destroy(pdialog->shell);
 }
 
 
@@ -178,7 +163,7 @@ static void spaceship_destroy_callback(GtkWidget *w, gpointer data)
 {
   struct spaceship_dialog *pdialog = (struct spaceship_dialog *)data;
   
-  dialog_list_unlink(dialog_list, pdialog);
+  genlist_unlink(&dialog_list, pdialog);
 
   free(pdialog);
 }
@@ -186,18 +171,21 @@ static void spaceship_destroy_callback(GtkWidget *w, gpointer data)
 /****************************************************************
 ...
 *****************************************************************/
-static void spaceship_response(struct gui_dialog *dlg, int response,
-                               gpointer data)
+static void spaceship_response(GtkWidget *w, gint response)
 {
   switch (response) {
   case GTK_RESPONSE_ACCEPT:
     {
-      send_packet_spaceship_launch(&client.conn);
+      struct packet_spaceship_action packet;
+
+      packet.action = SSHIP_ACT_LAUNCH;
+      packet.num = 0;
+      send_packet_spaceship_action(&aconnection, &packet);
     }
     break;
 
   default:
-    gui_dialog_destroy(dlg);
+    gtk_widget_destroy(w);
     break;
   }
 }
@@ -209,34 +197,46 @@ struct spaceship_dialog *create_spaceship_dialog(struct player *pplayer)
 {
   struct spaceship_dialog *pdialog;
   GtkWidget *hbox, *frame;
-  int w, h;
   
   pdialog=fc_malloc(sizeof(struct spaceship_dialog));
   pdialog->pplayer=pplayer;
 
-  gui_dialog_new(&pdialog->shell, GTK_NOTEBOOK(top_notebook), NULL);
-  gui_dialog_set_title(pdialog->shell, player_name(pplayer));
+  pdialog->shell =
+    gtk_dialog_new_with_buttons(pplayer->name,
+				NULL,
+				0,
+				NULL);
+  if (dialogs_on_top) {
+    gtk_window_set_transient_for(GTK_WINDOW(pdialog->shell),
+				 GTK_WINDOW(toplevel));
+  }
+  gtk_widget_set_name(pdialog->shell, "Freeciv");
 
-  gui_dialog_add_button(pdialog->shell,
-      _("_Launch"), GTK_RESPONSE_ACCEPT);
-  gui_dialog_add_button(pdialog->shell,
-      GTK_STOCK_CLOSE, GTK_RESPONSE_CLOSE);
+  gtk_window_set_position(GTK_WINDOW(pdialog->shell), GTK_WIN_POS_MOUSE);
 
-  g_signal_connect(pdialog->shell->vbox, "destroy",
+  pdialog->launch_command = gtk_dialog_add_button(GTK_DIALOG(pdialog->shell),
+						  _("_Launch"),
+						  GTK_RESPONSE_ACCEPT);
+  pdialog->close_command = gtk_dialog_add_button(GTK_DIALOG(pdialog->shell),
+						 GTK_STOCK_CLOSE,
+						 GTK_RESPONSE_CLOSE);
+
+  g_signal_connect(pdialog->shell, "destroy",
 		   G_CALLBACK(spaceship_destroy_callback), pdialog);
-  gui_dialog_response_set_callback(pdialog->shell, spaceship_response);
+  g_signal_connect(pdialog->shell, "response",
+		   G_CALLBACK(spaceship_response), NULL);
 
   hbox=gtk_hbox_new(FALSE, 5);
-  gtk_box_pack_start(GTK_BOX(pdialog->shell->vbox), hbox, FALSE, FALSE, 0);
+  gtk_container_add(GTK_CONTAINER(GTK_DIALOG(pdialog->shell)->vbox),
+	hbox);
 
   frame=gtk_frame_new(NULL);
   gtk_box_pack_start(GTK_BOX(hbox), frame, FALSE, FALSE, 0);
 
   pdialog->image_canvas=gtk_drawing_area_new();
-  GTK_WIDGET_SET_FLAGS(pdialog->image_canvas, GTK_CAN_FOCUS);
-  get_spaceship_dimensions(&w, &h);
-  gtk_widget_set_size_request(pdialog->image_canvas, w, h);
-
+  gtk_widget_set_size_request(pdialog->image_canvas,
+			      sprites.spaceship.habitation->width*7,
+			      sprites.spaceship.habitation->height*7);
   gtk_widget_set_events(pdialog->image_canvas, GDK_EXPOSURE_MASK);
   gtk_container_add(GTK_CONTAINER(frame), pdialog->image_canvas);
   gtk_widget_realize(pdialog->image_canvas);
@@ -245,18 +245,14 @@ struct spaceship_dialog *create_spaceship_dialog(struct player *pplayer)
 		   G_CALLBACK(spaceship_image_canvas_expose), pdialog);
 
   pdialog->info_label = gtk_label_new(get_spaceship_descr(NULL));
-
   gtk_label_set_justify(GTK_LABEL(pdialog->info_label), GTK_JUSTIFY_LEFT);
   gtk_misc_set_alignment(GTK_MISC(pdialog->info_label), 0.0, 0.0);
-
   gtk_box_pack_start(GTK_BOX(hbox), pdialog->info_label, FALSE, FALSE, 0);
-  gtk_widget_set_name(pdialog->info_label, "spaceship_label");
+  gtk_widget_set_name(pdialog->info_label, "spaceship label");
 
-  dialog_list_prepend(dialog_list, pdialog);
+  genlist_insert(&dialog_list, pdialog, 0);
 
-  gtk_widget_grab_focus(pdialog->image_canvas);
-
-  gui_dialog_show_all(pdialog->shell);
+  gtk_widget_show_all(GTK_DIALOG(pdialog->shell)->vbox);
 
   refresh_spaceship_dialog(pdialog->pplayer);
 
@@ -279,9 +275,73 @@ parts differently.
 *****************************************************************/
 void spaceship_dialog_update_image(struct spaceship_dialog *pdialog)
 {
-  struct canvas store = {.type = CANVAS_PIXMAP,
-			 .v = {.pixmap = pdialog->image_canvas->window}};
+  int i, j, k, x, y;  
+  struct Sprite *sprite = sprites.spaceship.habitation;   /* for size */
+  struct player_spaceship *ship = &pdialog->pplayer->spaceship;
 
-  put_spaceship(&store, 0, 0, pdialog->pplayer);
+  gdk_gc_set_foreground(fill_bg_gc, colors_standard[COLOR_STD_BLACK]);
+  gdk_draw_rectangle(pdialog->image_canvas->window, fill_bg_gc, TRUE,
+		0, 0, sprite->width * 7, sprite->height * 7);
+
+  for (i=0; i < NUM_SS_MODULES; i++) {
+    j = i/3;
+    k = i%3;
+    if ((k==0 && j >= ship->habitation)
+	|| (k==1 && j >= ship->life_support)
+	|| (k==2 && j >= ship->solar_panels)) {
+      continue;
+    }
+    x = modules_info[i].x * sprite->width  / 4 - sprite->width / 2;
+    y = modules_info[i].y * sprite->height / 4 - sprite->height / 2;
+
+    sprite = (k==0 ? sprites.spaceship.habitation :
+	      k==1 ? sprites.spaceship.life_support :
+	             sprites.spaceship.solar_panels);
+    gdk_gc_set_clip_origin(civ_gc, x, y);
+    gdk_gc_set_clip_mask(civ_gc, sprite->mask);
+    gdk_draw_drawable(pdialog->image_canvas->window, civ_gc, sprite->pixmap, 
+	      0, 0,
+	      x, y,
+	      sprite->width, sprite->height);
+    gdk_gc_set_clip_mask(civ_gc,NULL);
+  }
+
+  for (i=0; i < NUM_SS_COMPONENTS; i++) {
+    j = i/2;
+    k = i%2;
+    if ((k==0 && j >= ship->fuel)
+	|| (k==1 && j >= ship->propulsion)) {
+      continue;
+    }
+    x = components_info[i].x * sprite->width  / 4 - sprite->width / 2;
+    y = components_info[i].y * sprite->height / 4 - sprite->height / 2;
+
+    sprite = (k==0) ? sprites.spaceship.fuel : sprites.spaceship.propulsion;
+
+    gdk_gc_set_clip_origin(civ_gc, x, y);
+    gdk_gc_set_clip_mask(civ_gc, sprite->mask);
+    gdk_draw_drawable(pdialog->image_canvas->window, civ_gc, sprite->pixmap,
+	      0, 0,
+	      x, y,
+	      sprite->width, sprite->height);
+    gdk_gc_set_clip_mask(civ_gc,NULL);
+  }
+
+  sprite = sprites.spaceship.structural;
+
+  for (i=0; i < NUM_SS_STRUCTURALS; i++) {
+    if (!ship->structure[i])
+      continue;
+    x = structurals_info[i].x * sprite->width  / 4 - sprite->width / 2;
+    y = structurals_info[i].y * sprite->height / 4 - sprite->height / 2;
+
+    gdk_gc_set_clip_origin(civ_gc, x, y);
+    gdk_gc_set_clip_mask(civ_gc, sprite->mask);
+    gdk_draw_drawable(pdialog->image_canvas->window, civ_gc, sprite->pixmap,
+	      0, 0,
+	      x, y,
+	      sprite->width, sprite->height);
+    gdk_gc_set_clip_mask(civ_gc,NULL);
+  }
 }
 

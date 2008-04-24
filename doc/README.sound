@@ -23,8 +23,9 @@ the Freeciv website in the tar format. You will either need to unpack them
 with eg "tar -xzvf stdsoundsX.tar.gz" or use WinZip (for Windows), and
 put the files in the data directory mentioned above.
 
-You can get additional soundsets (sound files and a spec file)
-from <ftp://ftp.freeciv.org/freeciv/contrib/audio/soundsets>. At this address
+Note that the CVS version neither includes any sound files nor any
+sound spec file. You can get soundsets (sound files and a spec file)
+from <ftp://ftp.freeciv.org/freeciv/contrib/sounds/>. At this address
 you find also extra sound files to change an existing soundset or
 create a new one.
 
@@ -42,6 +43,7 @@ command line:
 You can choose "none" to mute the client. Freeciv currently supports
 the following plugins:
   - dummy (none)
+  - Esound (esd)
   - SDL with SDL_mixer library (sdl)
 
 To add support for a new plugin, change these files (where "whatever"
@@ -61,7 +63,7 @@ There are two kinds of sound tags:
  - defined in the rulesets
  - defined in the program code
 
-While the former can be chosen freely the latter can't be changed.
+While the former can be choosen freely the latter can't be changed.
 
 The sound tags associated with improvements (wonders and normal
 buildings), unit movements and unit fights have to be set in the

@@ -1,86 +1,184 @@
-======
-BUGGAR
-======
+==========
+PROGRAMFEL
+==========
 
-Freeciv 2.1 Ã¤r en "driftssÃ¤ker" utgÃ¥va och anses vara tillrÃ¤ckligt
-fri frÃ¥n programfel fÃ¶r dagligt bruk. Om man trots allt hittar
-buggar skulle vi vilja fÃ¥ reda pÃ¥ det sÃ¥ att vi kan rÃ¤tta
-dem.
+Freeciv 1.14.0 är en "driftssäker" utgåva och anses vara tillräckligt
+fri från programfel för dagligt bruk. Om man ändå hittar ett
+programfel skulle vi vilja få reda på det så att vi kan rätta
+det. Denna fil listar kända programfel i denna utgåva och ger
+information om att anmäla programfel.
 
+Listan innehåller endast de tydligaste programfelen. För en
+fullständig lista, se:
 
-ATT ANMÃ„LA BUGGAR:
-==================
+    http://rt.freeciv.org/
 
-SÃ¥ hÃ¤r gÃ¶r man:
+KÄNDA PROGRAMFEL:
+=================
 
-- Ser efter att det inte Ã¤r en kÃ¤nd bugg! Se listan vid:
+ - I XAW-klienten fungerar inte valmöjligheten -t för val av
+   rutbildsuppsättningar. Använd --tiles i stället i detta fall.
 
-        http://www.freeciv.org/wiki/Known_Bugs
+ - Visningen av enheter i fältet under "Avsluta omgång"-knappen är
+   lite felaktig. Datorstyrda spelare kan flytta enheter utan att
+   fältet uppdateras. Så man kan till exempel se 3 - 4 enheter där när
+   det skall vara endast 1. Se ärende PR#2625 för ytterligare
+   upplysningar (på engelska).
 
-- Tittar pÃ¥ <http://www.freeciv.org> och fÃ¶rsÃ¤krar sig om att man har
-  den nyaste versionen. (Vi kanske redan har rÃ¤ttat felet.)
+ - Stadsförvaltningsinställningarna skickas endast till servern när
+   man trycker på "Avsluta omgång". Ändringarna som man gör i
+   stadsförvaltningsinställningarna samma omgång som man sparar går
+   därför förlorade.
 
-- Tittar pÃ¥ Freecivs system fÃ¶r spÃ¥rning av buggar vid:
+ - Om man använder stadsförvaltningen så blir de sparade spelen inte
+   endian- och 64-bitarssäkra, så man kan inte använda filerna på
+   datorer med annan arkitektur.
 
-        http://bugs.freeciv.org/
+ - De enkla datorstyrda fienderna är inte tillräckligt enkla för
+   nybörjare. Om de datorstyrda spelarna besegrar dig tidigt i spelet,
+   prova att sätta sververvalmöjligheten "generator" till 2 eller 3,
+   det vill säga skriv "set generator 2" eller "set generator 3" innan
+   spelet har satts igång.
 
-  fÃ¶r att se om programfelet redan har anmÃ¤lts.
+ - De svåra datorstyrda fienderna är inte tillräckligt svåra för
+   erfarna spelare. De gör fortfarande dumma saker, till exempel så
+   föredrar de att lämna städer i upplopp i stället för att svälta ner
+   dem.
 
-- AnmÃ¤ler buggen via buggsÃ¶karsystemet ovan!
+ - Ibland är det för många framsteg i "Mål"-menyn i
+   forskningsredogörelsen så att menyn sträcker sig utanför skärmens
+   underkant så att man inte kan välja alla framsteg. Detta berör
+   endast GTK+-1.2-klienten.
 
-   Om du fÃ¥r nÃ¥gra GDK/GTK-meddelanden, som t.ex.:
+ - Alla valmöjligheter som ges till klienten vidarebefordras även till
+   användargränssnittet. Detta innebär att när valmöjligheter är lika
+   så stör de varandra. Detta orsakar problem för valmöjligheten -d
+   och i bland -t vid användande av XAW-klienten. Problemet kan
+   undvikas genom att använda de långa versionerna i stället (--debug
+   och --tiles i detta fall). Se ärende PR#1752 för ytterligare
+   upplysningar (på engelska).
 
-     Gtk-CRITICAL **: file gtkobject.c: line 1163 (gtk_object_ref): 
-     assertion oject->ref_count > 0' failed.
+ - I bland kan man få meddelandena
+   {ss} player for sample <01> not found
+	 {ss} player for sample <01> not found
+   när man använder ljuddrivrutinen esound. Detta är inget att oroa
+   sig för.
 
-   v.g. starta om din klient och lÃ¤gg till "-- --g-fatal-warnings" vid
-   kommandoraden. PÃ¥ detta sÃ¤tt fÃ¥r du en "core dump". V.g. bifoga den
-   del av denna core dump som kallas "stack trace" med din buggrapport.
+ - Om man trycker Ctrl+C i klienten när man använder ljuddrivrutinen
+   esound kan det hända att den ljudslinga som för närvarande spelas
+   upp inte avbryts ordentligt.
 
-   Vad man ska nÃ¤mna i sin buggrapport:
+ - Vissa världsunder börjar inte verka förrän omgången efter att de
+   har färdigställts. När man till exempel färdigställer Fyrtornet får
+   vissa triremer sitt extra drag först nästa omgång.
 
-   - Beskrivning av problemet och i fÃ¶rekommande fall det felmeddelande
-     man fÃ¥r.
+ - XAW-klienten kan endast visa 25 städer i stadsredogörelsen.
 
-   - Vilken klient man anvÃ¤nder (GTK+, SDL, Win32 eller Xaw).
+ - Självständigt angrepp fungerar i allmänhet inte bra.
 
-   - Namn och versionsnummer av:
+ - När en förflyttningsväg planeras i servern, till exempel för en
+   självständig bosättare eller ett flygplan, används information som
+   inte är tillgänglig för spelaren.
 
-       - Det operativsystem som man anvÃ¤nder. Kommandot "uname -a" kan
-         vara anvÃ¤ndbart.
+ - Forskningsdialogen uppdateras inte när man lär sig en teknologi.
+   Man måste stänga och öppna den.
 
-       - Versionsnumret fÃ¶r Freeciv.
+ - I GTK+-klienten förekommer i bland skräp i området nära den lilla
+   kartan.
 
-       - Om man anvÃ¤nder Gtk+-klienten, versionsnumren (om man kÃ¤nner
-         till dem) fÃ¶r sina Gtk+-, glib- och imlib-bibliotek.
+ - Triremer hanteras inte bra i självständigt läge.
 
-       - Om man anvÃ¤nder SDL-klienten, versionsnumren (om man kÃ¤nner
-         till dem) fÃ¶r sina SDL-, SDL_image-, PNG- och
-         freetype-biblioteken.
+ - LOG_DEBUG fungerar inte med andra kompilatorer än GCC.
 
-       - Om man anvÃ¤nder Xaw-klienten, versionsnumren (om man kÃ¤nner
-         till dem) fÃ¶r X-, PNG-, Z- och Xaw-biblioteken, samt i
-         synnerhet om det Ã¤r en variant sÃ¥som Xaw3d, Xaw95 eller Nextaw.
+ - När man sätter servervariabler kontrollerar servern ofta inte
+   värdena så bra som den skulle kunna.
 
-       - Om man kompilerar frÃ¥n kÃ¤llkod: namnet och versionsnumret fÃ¶r
+ - Dåliga saker händer om man ändrar flera övergripande arbetslistor
+   samtidigt.
+
+ - Även i spel där datormotståndare är de enda motståndarna får de
+   möjlighet att utföra drag både före och efter den mänskliga
+   spelaren varje omgång. Detta ger i bland sken av att datorn gör 2
+   drag.
+
+ - XAW-klienten fungerar inte bra ben KDEs fönsterhanterare. Försök
+   med GTK+-klienten eller en annan fönsterhanterare.
+
+ANMÄLA PROGRAMFEL
+=================
+
+Om det är ett fel i en översättning ska det anmälas till översättaren
+för språket i fråga. För svenska är det "Erik Sigra", "sigra@home.se".
+Se <http://www.freeciv.org/l10n.phtml> för namn på och epostadresser
+till övriga översättare.
+
+Så här gör man:
+
+- Ser efter att det inte är något av programfelen i listan ovan! :-)
+
+- Tittar på <http://www.freeciv.org> och försäkrar sig om att man har
+  den nyaste versionen. (Vi kanske redan har rättat felet.)
+
+  Man kanske vill prova en utvecklarversion från CVS-upplaget. De kan
+  hämtas från:
+
+        http://www.freeciv.org/latest.html
+
+- Tittar på Freecivs FAQ på <http://www.freeciv.org/faq> för att se om
+  något sätt att upphäva problemet har offentliggjorts.
+
+- Tittar på Freecivs system för spårning av programfel vid:
+
+        http://www.freeciv.org/cgi-bin/bugs
+
+  för att se om programfelet redan har anmälts.
+
+- Anmäler programfelet
+
+   Man kan änmäla ett programfel genom att skicka epost till
+    <bugs@freeciv.freeciv.org> eller på väven vid
+    <http://www.freeciv.org/cgi-bin/bugs>.
+
+   Om man vill skicka förslag till freecivutvecklarna utan att göra en
+   programfelsanmälan kan man skicka epost till
+   <freeciv-dev@freeciv.org>, freecivutvecklarnas sändlista.
+
+   Vad man ska nämna i sin programfelsanmälan:
+
+   - Beskrivning av problemet och i förekommande fall det felmeddeland
+     man får.
+
+   - Vilken klient man använder (Gtk+ eller Xaw).
+
+   - Namn och versionsnummer:
+
+       - Det operativsystem som man använder. Kommandot "uname -a" kan
+         vara användbart.
+
+       - Versionsnumret för Freeciv.
+
+       - Om man använder Gtk+-klienten, versionsnumren (om man känner
+         till dem) för sina Gtk+-, glib- och imlibbibliotek.
+
+       - Om man använder Xaw-klienten, versionsnumren (om man känner
+         till dem) för X-biblioteken, Xpm-biblioteket och
+         Xaw-biblioteket och i synnerhet om det är en variant såsom
+         Xaw3d, Xaw95 eller Nextaw.
+
+       - Om man kompilerar från källkod, namnet och versionsnumret för
          kompilatorn.
 
-       - Om man installerar frÃ¥n ett fÃ¤rdigkompilerat paket, dess
-         namn, vilken distribution det Ã¤r fÃ¶r och varifrÃ¥n man hÃ¤mtat
+       - Om man installerar från ett färdigkompilerat paket, dess
+         namn, vilken distribution det är för och varifrån man hämtat
          det.
 
-   - Om Freeciv gÃ¶r en "core dump", kan vi efterfrÃ¥ga en "stack trace"
-     som du kan skaffa fram m.h.a. en avlusare. FÃ¶r detta behÃ¶vs
-     "core"-filen samt binÃ¤ren, sÃ¥ var god behÃ¥ll de ett tag.
-
-   - Om det Ã¤r ett fel i en Ã¶versÃ¤ttning ska det anmÃ¤las till
-     Ã¶versÃ¤ttaren fÃ¶r sprÃ¥ket i frÃ¥ga. FÃ¶r deras namn och addresser,
-     se:
-
+   - Om Freeciv "dumpar core", kan vi efterfråga en "stackspårning",
+     vilken ges vid användning av en avlusare. För detta behövs
+     "core"-filen, så var god behåll den ett tag.
 
 YTTERLIGARE INFORMATION:
 ========================
 
-Freecivs webbplats tillhandahÃ¥ller mycket mer material:
+För mer information se Freecivs plats på världsväven:
 
         http://www.freeciv.org/

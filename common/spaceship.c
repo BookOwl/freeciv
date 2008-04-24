@@ -11,10 +11,6 @@
    GNU General Public License for more details.
 ***********************************************************************/
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include "shared.h"		/* TRUE, FALSE */
 
 #include "spaceship.h"
@@ -113,7 +109,7 @@ void spaceship_init(struct player_spaceship *ship)
 /**********************************************************************
 Count the number of structurals placed; that is, in ship->structure[]
 **********************************************************************/
-int num_spaceship_structurals_placed(const struct player_spaceship *ship)
+int num_spaceship_structurals_placed(struct player_spaceship *ship)
 {
   int i, num = 0;
   for(i=0; i<NUM_SS_STRUCTURALS; i++) {

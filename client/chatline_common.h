@@ -15,19 +15,11 @@
 
 #include "shared.h"		/* bool type */
 
-void send_chat(const char *message);
-
-void chatline_common_init(void);
-void chatline_common_done(void);
-
 void append_output_window(const char *astring);
-void append_output_window_full(const char *astring, int conn_id);
 
 void output_window_freeze(void);
 void output_window_thaw(void);
 void output_window_force_thaw(void);
 bool is_output_window_frozen(void);
-
-void chat_welcome_message(void);
 
 #endif  /* FC__CHATLINE_COMMON_H */

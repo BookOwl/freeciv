@@ -13,7 +13,7 @@
 #ifndef FC__SPACESHIPDLG_G_H
 #define FC__SPACESHIPDLG_G_H
 
-#include "fc_types.h"
+struct player;
 
 void popup_spaceship_dialog(struct player *pplayer);
 void popdown_spaceship_dialog(struct player *pplayer);

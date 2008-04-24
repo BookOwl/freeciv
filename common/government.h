@@ -15,24 +15,53 @@
 
 #include "shared.h"
 
-#include "fc_types.h"
-#include "requirements.h"
+struct city;
+struct player;
+struct Sprite;			/* opaque; client-gui specific */
 
-#define G_MAGIC (127)		/* magic constant */
+#define G_MAGIC (127)		/* magic constant, used as flag value */
 
 /* special values for free_* fields -- SKi */
 #define G_CITY_SIZE_FREE          G_MAGIC
 
+enum government_flag_id {
+  G_BUILD_VETERAN_DIPLOMAT=0,	/* and Spies (in general: all F_DIPLOMAT) */
+  G_REVOLUTION_WHEN_UNHAPPY,
+  G_HAS_SENATE,			/* not implemented */
+  G_UNBRIBABLE,
+  G_INSPIRES_PARTISANS,
+  G_RAPTURE_CITY_GROWTH,        /* allows city to grow by celebrating */
+  G_FANATIC_TROOPS,             /* for building troops with F_FANATIC flag */
+  G_NO_UNHAPPY_CITIZENS,        /* no unhappy citizen, needed by
+				   fundamentism */
+  G_CONVERT_TITHES_TO_MONEY,    /* tithes to money, needed by fundamentalism */
+  G_REDUCED_RESEARCH,           /* penalty for research, needed by
+				   fundamentalism */
+  G_LAST_FLAG
+};
+#define G_FIRST_FLAG G_BUILD_VETERAN_DIPLOMAT
+
+enum government_hint_id {
+  G_IS_NICE=0,			/* spaceship auto-placement, among others */
+  G_FAVORS_GROWTH,
+  G_LAST_HINT
+};
+#define G_FIRST_HINT G_IS_NICE
+
 /* each government has a list of ruler titles, where at least
  * one entry should have nation=DEFAULT_TITLE.
  */
-#define DEFAULT_TITLE NULL
+#define DEFAULT_TITLE  MAX_NUM_ITEMS
 
 struct ruler_title
 {
-  struct nation_type *nation;
-  struct name_translation female;
-  struct name_translation male;
+  int  nation;
+  char male_title[MAX_LEN_NAME];
+  char female_title[MAX_LEN_NAME];
+  
+  /* untranslated copies: */
+  char male_title_orig[MAX_LEN_NAME];    
+  char female_title_orig[MAX_LEN_NAME];
 };
 
 /* This is struct government itself.  All information about
@@ -40,62 +69,125 @@ struct ruler_title
  * -- SKi */
 struct government
 {
-  int item_number;
-  struct name_translation name;
-  char graphic_str[MAX_LEN_NAME];
-  char graphic_alt[MAX_LEN_NAME];
-  struct requirement_vector reqs;
+  int   index;			/* index into governments[] array */
+  char  name[MAX_LEN_NAME];	/* government name */
+  char  name_orig[MAX_LEN_NAME]; /* untranslated copy */
+  char  graphic_str[MAX_LEN_NAME];
+  char  graphic_alt[MAX_LEN_NAME];
+  int   required_tech;		/* tech required to change to this gov */
+  int   subgoal;		/* for AI; another government or -1 */
 
   struct ruler_title *ruler_titles;
   int   num_ruler_titles;
 
-  char *helptext;
+  int   max_rate;		/* max individual Tax/Lux/Sci rate  */
+  int   civil_war;              /* chance (from 100) of civil war in
+				   right conditions */
+  int   martial_law_max;	/* maximum number of units which can
+				   enforce martial law */
+  int   martial_law_per;        /* number of unhappy citizens made
+				   content by each enforcer unit */
+  int   empire_size_mod;	/* (signed) offset to game.cityfactor to
+				   give city count when number of naturally
+				   content citizens is decreased */
+  int   empire_size_inc;	/* if non-zero, reduce one content citizen for
+				   every empire_size_inc cities once #cities
+				   exceeds game.cityfactor + empire_size_mod */
+  int   rapture_size;		/* minimum city size for rapture; if 255,
+				   rapture is (practically) impossible */
 
-  /* AI cached data for this government. */
-  struct {
-    struct government *better; /* hint: a better government (or NULL) */
-  } ai;
+  /* unit cost modifiers */
+  int   unit_happy_cost_factor;
+  int   unit_shield_cost_factor;
+  int   unit_food_cost_factor;
+  int   unit_gold_cost_factor;
+  
+  /* base cost that a city does not have to "pay" for */
+  int   free_happy;
+  int   free_shield;
+  int   free_food;
+  int   free_gold;
+  
+  /* government production penalties -- SKi */
+  int   trade_before_penalty;
+  int   shields_before_penalty;
+  int   food_before_penalty;
+
+  /* government production penalties when celebrating */
+  int   celeb_trade_before_penalty;
+  int   celeb_shields_before_penalty;
+  int   celeb_food_before_penalty;
+
+  /* government production bonuses -- SKi */
+  int   trade_bonus;
+  int   shield_bonus;
+  int   food_bonus;
+
+  /* government production bonuses when celebrating */
+  int   celeb_trade_bonus;
+  int   celeb_shield_bonus;
+  int   celeb_food_bonus;
+
+  /* corruption modifiers -- SKi */
+  int   corruption_level;
+  int   corruption_modifier;
+  int   fixed_corruption_distance;
+  int   corruption_distance_factor;
+  int   extra_corruption_distance;
+  
+  /* other flags: bits in enum government_flag_id order,
+     use government_has_flag() to access */
+  int   flags;
+  /* other hints: bits in enum government_hint_id order,
+     use government_has_hint() to access */
+  int   hints;
+
+  struct Sprite *sprite;
+  
+  char *helptext;
 };
 
+/* This should possibly disappear; we don't bother sending these to client;
+   see code in ai_city.c: ai_manage_cities() for what they mean...
+*/
+struct ai_gov_tech_hint {
+  int tech;
+  int turns_factor;
+  int const_factor;
+  bool get_first;
+  bool done;
+};
 
-/* General government accessor functions. */
-int government_count(void);
-int government_index(const struct government *pgovern);
-int government_number(const struct government *pgovern);
+extern struct government *governments;
 
-struct government *government_by_number(const int gov);
-struct government *government_of_player(const struct player *pplayer);
-struct government *government_of_city(const struct city *pcity);
+extern struct ai_gov_tech_hint ai_gov_tech_hints[MAX_NUM_TECH_LIST];
+/* like game.rtech lists, A_LAST terminated (for .tech)
+   and techs before that are guaranteed to exist */
 
-struct government *find_government_by_rule_name(const char *name);
-struct government *find_government_by_translated_name(const char *name);
+struct government *get_government(int gov);
+struct government *get_gov_pplayer(struct player *pplayer);
+struct government *get_gov_pcity(struct city *pcity);
 
-const char *government_rule_name(const struct government *pgovern);
-const char *government_name_translation(struct government *pgovern);
-const char *government_name_for_player(const struct player *pplayer);
+struct government *find_government_by_name(const char *name);
 
-/* Ancillary routines */
-const char *ruler_title_translation(const struct player *pplayer);
+enum government_flag_id government_flag_from_str(const char *s);
+bool government_has_flag(const struct government *gov,
+			enum government_flag_id flag);
+enum government_hint_id government_hint_from_str(const char *s);
+bool government_has_hint(const struct government *gov,
+			enum government_hint_id hint);
 
-bool can_change_to_government(struct player *pplayer,
-			      const struct government *pgovern);
+int get_government_max_rate(int type);
+int get_government_civil_war_prob(int type);
+const char *get_government_name(int type);
+const char *get_ruler_title(int gov, bool male, int nation);
 
-/* Initialization and iteration */
+bool can_change_to_government(struct player *pplayer, int government);
+
+void set_ruler_title(struct government *gov, int nation, 
+                     const char *male, const char *female);
 void governments_alloc(int num);
+void government_free(struct government *gov);
 void governments_free(void);
-
-struct government *government_array_first(void);
-const struct government *government_array_last(void);
-
-#define government_iterate(_p)						\
-{									\
-  struct government *_p = government_array_first();			\
-  if (NULL != _p) {							\
-    for (; _p <= government_array_last(); _p++) {
-
-#define government_iterate_end						\
-    }									\
-  }									\
-}
 
 #endif  /* FC__GOVERNMENT_H */

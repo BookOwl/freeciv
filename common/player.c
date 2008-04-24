@@ -10,12 +10,13 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
 #include <assert.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "city.h"
 #include "fcintl.h"
@@ -23,6 +24,7 @@
 #include "government.h"
 #include "idex.h"
 #include "improvement.h"
+#include "log.h"
 #include "map.h"
 #include "mem.h"
 #include "rand.h"
@@ -30,327 +32,143 @@
 #include "support.h"
 #include "tech.h"
 #include "unit.h"
-#include "unitlist.h"
-#include "vision.h"
 
 #include "player.h"
 
-/* Names of AI levels. These must correspond to enum ai_level in
- * player.h. Also commands to set AI level in server/commands.c
- * must match these. */
-static const char *ai_level_names[] = {
-  NULL, N_("Away"), N_("Novice"), N_("Easy"), NULL, N_("Normal"),
-  NULL, N_("Hard"), N_("Cheating"), NULL, N_("Experimental")
-};
-
 /***************************************************************
-  Returns true iff p1 can cancel treaty on p2.
-
-  The senate may not allow you to break the treaty.  In this 
-  case you must first dissolve the senate then you can break 
-  it.  This is waived if you have statue of liberty since you 
-  could easily just dissolve and then recreate it. 
+  Check if pplayer has an embassy with pplayer2. We always have
+  an embassy with ourselves.
 ***************************************************************/
-enum dipl_reason pplayer_can_cancel_treaty(const struct player *p1, 
-                                           const struct player *p2)
+bool player_has_embassy(struct player *pplayer, struct player *pplayer2)
 {
-  enum diplstate_type ds = pplayer_get_diplstate(p1, p2)->type;
+  return (TEST_BIT(pplayer->embassy, pplayer2->player_no)
+          || (pplayer == pplayer2)
+          || (player_owns_active_wonder(pplayer, B_MARCO)
+              && !is_barbarian(pplayer2)));
+}
 
-  if (p1 == p2 || ds == DS_WAR) {
-    return DIPL_ERROR;
-  }
-  if (players_on_same_team(p1, p2)) {
-    return DIPL_ERROR;
-  }
-  if (p1->diplstates[player_index(p2)].has_reason_to_cancel == 0
-      && get_player_bonus(p1, EFT_HAS_SENATE) > 0
-      && get_player_bonus(p1, EFT_ANY_GOVERNMENT) == 0) {
-    return DIPL_SENATE_BLOCKING;
-  }
-  return DIPL_OK;
+/****************************************************************
+...
+*****************************************************************/
+bool player_owns_city(struct player *pplayer, struct city *pcity)
+{
+  if (!pcity || !pplayer)
+    return FALSE;			/* better safe than sorry */
+  return (pcity->owner==pplayer->player_no);
 }
 
 /***************************************************************
-  Returns true iff p1 can be in alliance with p2.
-
-  Check that we are not at war with any of p2's allies. Note 
-  that for an alliance to be made, we need to check this both 
-  ways.
-
-  The reason for this is to avoid the dread 'love-love-hate' 
-  triad, in which p1 is allied to p2 is allied to p3 is at
-  war with p1. These lead to strange situations.
-***************************************************************/
-static bool is_valid_alliance(const struct player *p1, 
-                              const struct player *p2)
-{
-  players_iterate(pplayer) {
-    enum diplstate_type ds = pplayer_get_diplstate(p1, pplayer)->type;
-
-    if (pplayer != p1
-        && pplayer != p2
-        && pplayers_allied(p2, pplayer)
-        && ds == DS_WAR /* do not count 'never met' as war here */
-        && pplayer->is_alive) {
-      return FALSE;
-    }
-  } players_iterate_end;
-
-  return TRUE;
-}
-
-/***************************************************************
-  Returns true iff p1 can make given treaty with p2.
-
-  We cannot regress in a treaty chain. So we cannot suggest
-  'Peace' if we are in 'Alliance'. Then you have to cancel.
-
-  For alliance there is only one condition: We are not at war 
-  with any of p2's allies.
-***************************************************************/
-enum dipl_reason pplayer_can_make_treaty(const struct player *p1,
-                                         const struct player *p2,
-                                         enum diplstate_type treaty)
-{
-  enum diplstate_type existing = pplayer_get_diplstate(p1, p2)->type;
-
-  if (p1 == p2) {
-    return DIPL_ERROR; /* duh! */
-  }
-  if (get_player_bonus(p1, EFT_NO_DIPLOMACY)
-      || get_player_bonus(p2, EFT_NO_DIPLOMACY)) {
-    return DIPL_ERROR;
-  }
-  if (treaty == DS_WAR 
-      || treaty == DS_NO_CONTACT 
-      || treaty == DS_ARMISTICE 
-      || treaty == DS_TEAM
-      || treaty == DS_LAST) {
-    return DIPL_ERROR; /* these are not negotiable treaties */
-  }
-  if (treaty == DS_CEASEFIRE && existing != DS_WAR) {
-    return DIPL_ERROR; /* only available from war */
-  }
-  if (treaty == DS_PEACE 
-      && (existing != DS_WAR && existing != DS_CEASEFIRE)) {
-    return DIPL_ERROR;
-  }
-  if (treaty == DS_ALLIANCE
-      && (!is_valid_alliance(p1, p2) || !is_valid_alliance(p2, p1))) {
-    return DIPL_ALLIANCE_PROBLEM;
-  }
-  /* this check must be last: */
-  if (treaty == existing) {
-    return DIPL_ERROR;
-  }
-  return DIPL_OK;
-}
-
-/***************************************************************
-  Check if pplayer has diplomatic relations with pplayer2. 
-  We always have that with ourselves.
-***************************************************************/
-bool player_has_embassy(const struct player *pplayer,
-			const struct player *pplayer2)
-{
-  enum diplstate_type treaty = pplayer_get_diplstate(pplayer, pplayer2)->type;
-
-  if (pplayer == pplayer2) {
-    return TRUE;
-  }
-
-  if (is_barbarian(pplayer2)) {
-    return FALSE;
-  }
-
-  // Gives contact with everyone, except barbarians
-  if (get_player_bonus(pplayer, EFT_HAVE_EMBASSIES) > 0) {
-    return TRUE;
-  }
-
-  return treaty != DS_NO_CONTACT;
-}
-
-/****************************************************************************
-  Return TRUE iff the given player owns the city.
-****************************************************************************/
-bool player_owns_city(const struct player *pplayer, const struct city *pcity)
-{
-  return (pcity && pplayer && city_owner(pcity) == pplayer);
-}
-
-/***************************************************************
-  In the server you must use server_player_init.  Note that
-  this function is matched by game_remove_player() in game.c,
-  there is no corresponding player_free() in this file.
+In the server you must use server_player_init
 ***************************************************************/
 void player_init(struct player *plr)
 {
   int i;
 
-  sz_strlcpy(plr->name, ANON_PLAYER_NAME);
-  sz_strlcpy(plr->username, ANON_USER_NAME);
-  sz_strlcpy(plr->ranked_username, ANON_USER_NAME);
-  plr->user_turns = 0;
+  plr->player_no=plr-game.players;
+
+  sz_strlcpy(plr->name, "YourName");
+  sz_strlcpy(plr->username, "UserName");
   plr->is_male = TRUE;
-  plr->government = NULL;
-  plr->target_government = NULL;
-  plr->nation = NO_NATION_SELECTED;
-  plr->team = NULL;
-  plr->is_ready = FALSE;
-
-  plr->revolution_finishes = -1;
+  plr->government=game.default_government;
+  plr->nation=MAX_NUM_NATIONS;
+  plr->team = TEAM_NONE;
   plr->capital = FALSE;
-  plr->city_style=0;            /* should be first basic style */
-  plr->cities = city_list_new();
-  plr->sites = site_list_new();
-  plr->units = unit_list_new();
-
-  plr->connections = conn_list_new();
+  unit_list_init(&plr->units);
+  city_list_init(&plr->cities);
+  conn_list_init(&plr->connections);
   plr->current_conn = NULL;
   plr->is_connected = FALSE;
-
-  plr->was_created = FALSE;
   plr->is_alive=TRUE;
-  plr->is_dying = FALSE;
-  plr->surrendered = FALSE;
+  plr->embassy=0;
+  plr->reputation=GAME_DEFAULT_REPUTATION;
   for(i = 0; i < MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS; i++) {
     plr->diplstates[i].type = DS_NO_CONTACT;
     plr->diplstates[i].has_reason_to_cancel = 0;
   }
+  plr->city_style=0;            /* should be first basic style */
   plr->ai.control=FALSE;
+  plr->ai.tech_goal = A_NONE;
   plr->ai.handicap = 0;
   plr->ai.skill_level = 0;
   plr->ai.fuzzy = 0;
   plr->ai.expand = 100;
   plr->ai.barbarian_type = NOT_A_BARBARIAN;
+  plr->future_tech=0;
   plr->economic.tax=PLAYER_DEFAULT_TAX_RATE;
   plr->economic.science=PLAYER_DEFAULT_SCIENCE_RATE;
   plr->economic.luxury=PLAYER_DEFAULT_LUXURY_RATE;
-
+  plr->research.changed_from = -1;
   player_limit_to_government_rates(plr);
   spaceship_init(&plr->spaceship);
 
   plr->gives_shared_vision = 0;
   plr->really_gives_vision = 0;
 
-  for (i = 0; i < B_LAST; i++) {
-    plr->small_wonders[i] = 0;
-  }
+  /* Initialise list of improvements with Player-wide equiv_range */
+  improvement_status_init(plr->improvements, ARRAY_SIZE(plr->improvements));
+  /* Initialise vector of effects with player range. */
+  geff_vector_init(&plr->effects);
+
+  /* Blank lists of Island-range improvements and effects (these are
+     initialised by player_init_island_impr) */
+  plr->island_improv = NULL;
+  plr->island_effects = NULL;
 
   plr->attribute_block.data = NULL;
   plr->attribute_block.length = 0;
-  plr->attribute_block_buffer.data = NULL;
-  plr->attribute_block_buffer.length = 0;
-  BV_CLR_ALL(plr->debug);
-}
-
-/**************************************************************************
-  Return the first item of players.
-**************************************************************************/
-struct player *player_array_first(void)
-{
-  if (game.info.nplayers > 0) {
-    return game.players;
-  }
-  return NULL;
-}
-
-/**************************************************************************
-  Return the last item of players.
-**************************************************************************/
-const struct player *player_array_last(void)
-{
-  if (game.info.nplayers > 0) {
-    return &game.players[game.info.nplayers - 1];
-  }
-  return NULL;
-}
-
-/**************************************************************************
-  Return the number of players.
-**************************************************************************/
-int player_count(void)
-{
-  return game.info.nplayers;
 }
 
 /***************************************************************
-  Set the number of players.
+  Set up the player's lists of Island-range improvements and
+  effects. These lists must also be redimensioned (e.g. by
+  update_island_impr_effect) if the number of islands later
+  changes.
 ***************************************************************/
-void set_player_count(int count)
+void player_init_island_imprs(struct player *plr, int numcont)
 {
-  game.info.nplayers = count;
-}
+  int i;
 
-/**************************************************************************
-  Return the player index.
-
-  Currently same as player_number(), paired with player_count()
-  indicates use as an array index.
-**************************************************************************/
-int player_index(const struct player *pplayer)
-{
-  assert(pplayer);
-  return pplayer - game.players;
-}
-
-/**************************************************************************
-  Return the player index.
-**************************************************************************/
-int player_number(const struct player *pplayer)
-{
-  assert(pplayer);
-  return pplayer - game.players;
-}
-
-/**************************************************************************
-  Return struct player pointer for the given player index.
-
-  You can retrieve players that are not in the game (with IDs larger than
-  player_count).  An out-of-range player request will return NULL.
-**************************************************************************/
-struct player *player_by_number(const int player_id)
-{
-  if (player_id < 0 || player_id >= ARRAY_SIZE(game.players)) {
-    /* This isn't an error; some callers rely on this behavior. */
-    return NULL;
-  }
-  return &game.players[player_id];
-}
-
-/**************************************************************************
-  Return pointer iff the player ID refers to an in-game player.  Unlike
-  player_by_number, any index larger than player_count is not "valid".
-**************************************************************************/
-struct player *valid_player_by_number(const int player_id)
-{
-  if (player_id < 0 || player_id >= game.info.nplayers
-   || player_id >= ARRAY_SIZE(game.players)) {
-    return NULL;
-  }
-  return &game.players[player_id];
-}
-
-/****************************************************************************
-  Set the player's nation to the given nation (may be NULL).  Returns TRUE
-  iff there was a change.
-****************************************************************************/
-bool player_set_nation(struct player *pplayer, struct nation_type *pnation)
-{
-  if (pplayer->nation != pnation) {
-    if (pplayer->nation) {
-      assert(pplayer->nation->player == pplayer);
-      pplayer->nation->player = NULL;
+  player_free_island_imprs(plr);
+  if (game.num_impr_types>0) {
+    /* Initialise lists of improvements with island-wide equiv_range. */
+    if (plr->island_improv)
+      free(plr->island_improv);
+    plr->island_improv=fc_calloc((numcont+1)*game.num_impr_types,
+				 sizeof(Impr_Status));
+    for (i=0; i<=numcont; i++) {
+      improvement_status_init(&plr->island_improv[i * game.num_impr_types],
+			      game.num_impr_types);
     }
-    if (pnation) {
-      assert(pnation->player == NULL);
-      pnation->player = pplayer;
+
+    /* Initialise lists of island-range effects. */
+    plr->island_effects=fc_calloc(numcont+1, sizeof(struct geff_vector));
+    for (i=0; i<=numcont; i++) {
+      geff_vector_init(&plr->island_effects[i]);
     }
-    pplayer->nation = pnation;
-    return TRUE;
   }
-  return FALSE;
+}
+
+/***************************************************************
+  Frees the player's list of island-range improvements and
+  effects.
+***************************************************************/
+void player_free_island_imprs(struct player *plr)
+{
+  int i;
+
+  if (plr->island_improv) {
+    free(plr->island_improv);
+    plr->island_improv = NULL;
+  }
+
+  if (plr->island_effects) {
+    for (i = 0; i <= plr->max_continent; i++) {
+      geff_vector_free(&plr->island_effects[i]);
+    }
+    free(plr->island_effects);
+    plr->island_effects = NULL;
+    plr->max_continent = 0;
+  }
 }
 
 /***************************************************************
@@ -377,40 +195,25 @@ struct player *find_player_by_name(const char *name)
   return NULL;
 }
 
-/**************************************************************************
-  Return the leader name of the player.
-**************************************************************************/
-const char *player_name(const struct player *pplayer)
-{
-  assert(NULL != pplayer && NULL != pplayer->name);
-  return pplayer->name;
-}
-
 /***************************************************************
   Find player by name, allowing unambigous prefix (ie abbreviation).
   Returns NULL if could not match, or if ambiguous or other
   problem, and fills *result with characterisation of match/non-match
   (see shared.[ch])
 ***************************************************************/
-static const char *player_name_by_number(int i)
-{
+static const char *pname_accessor(int i) {
   return game.players[i].name;
 }
-
-/***************************************************************
-Find player by its name prefix
-***************************************************************/
 struct player *find_player_by_name_prefix(const char *name,
 					  enum m_pre_result *result)
 {
   int ind;
 
-  *result = match_prefix(player_name_by_number, game.info.nplayers,
-			 MAX_LEN_NAME-1, mystrncasequotecmp,
-                         effectivestrlenquote, name, &ind);
+  *result = match_prefix(pname_accessor, game.nplayers, MAX_LEN_NAME-1,
+			 mystrncasecmp, name, &ind);
 
   if (*result < M_PRE_AMBIGUOUS) {
-    return player_by_number(ind);
+    return get_player(ind);
   } else {
     return NULL;
   }
@@ -430,179 +233,116 @@ struct player *find_player_by_user(const char *name)
   return NULL;
 }
 
-/****************************************************************************
-  Checks if a unit can be seen by pplayer at (x,y).
-  A player can see a unit if he:
-  (a) can see the tile AND
-  (b) can see the unit at the tile (i.e. unit not invisible at this tile) AND
-  (c) the unit is outside a city OR in an allied city AND
-  (d) the unit isn't in a transporter, or we are allied AND
-  (e) the unit isn't in a transporter, or we can see the transporter
-****************************************************************************/
-bool can_player_see_unit_at(const struct player *pplayer,
-			    const struct unit *punit,
-			    const struct tile *ptile)
+/***************************************************************
+  Returns TRUE iff the player can see the unit at (x,y), i.e. if 
+  the unit is not invisible or if it is adjacent to one of our 
+  cities or units.  No map visibility check here! The unit does 
+  not have to be at (x,y)! 
+  Allied units and cities can be used for sub hunting. 
+***************************************************************/
+bool player_can_see_unit_at_location(struct player *pplayer, 
+                                     struct unit *punit, 
+                                     int x, int y)
 {
-  struct city *pcity;
-
-  /* If the player can't even see the tile... */
-  if (TILE_KNOWN_SEEN != tile_get_known(ptile, pplayer)) {
-    return FALSE;
-  }
-
-  /* Don't show non-allied units that are in transports.  This is logical
-   * because allied transports can also contain our units.  Shared vision
-   * isn't taken into account. */
-  if (punit->transported_by != -1 && unit_owner(punit) != pplayer
-      && !pplayers_allied(pplayer, unit_owner(punit))) {
-    return FALSE;
-  }
-
-  /* Units in cities may be hidden. */
-  pcity = tile_city(ptile);
-  if (pcity && !can_player_see_units_in_city(pplayer, pcity)) {
-    return FALSE;
-  }
-
-  /* Allied or non-hiding units are always seen. */
   if (pplayers_allied(unit_owner(punit), pplayer)
       || !is_hiding_unit(punit)) {
     return TRUE;
   }
 
-  /* Hiding units are only seen by the V_INVIS fog layer. */
-  return BV_ISSET(ptile->tile_seen[V_INVIS], player_index(pplayer));
+  /* Search for units/cities that might be able to see the sub/missile */
+  adjc_iterate(x, y, x1, y1) {
+    struct city *pcity = map_get_city(x1, y1);
+    unit_list_iterate(map_get_tile(x1, y1)->units, punit2) {
+      if (pplayers_allied(unit_owner(punit2), pplayer)) {
+	return TRUE;
+      }
+    } unit_list_iterate_end;
+
+    if (pcity && pplayers_allied(city_owner(pcity), pplayer)) {
+      return TRUE;
+    }
+  } adjc_iterate_end;
 
   return FALSE;
 }
 
-
-/****************************************************************************
-  Checks if a unit can be seen by pplayer at its current location.
-
-  See can_player_see_unit_at.
-****************************************************************************/
-bool can_player_see_unit(const struct player *pplayer,
-			 const struct unit *punit)
+/***************************************************************
+  Same thing as above only the location is the unit's current one.
+***************************************************************/
+bool player_can_see_unit(struct player *pplayer, struct unit *punit)
 {
-  return can_player_see_unit_at(pplayer, punit, punit->tile);
-}
-
-/****************************************************************************
-  Return TRUE iff the player can see units in the city.  Either they
-  can see all units or none.
-
-  If the player can see units in the city, then the server sends the
-  unit info for units in the city to the client.  The client uses the
-  tile's unitlist to determine whether to show the city occupied flag.  Of
-  course the units will be visible to the player as well, if he clicks on
-  them.
-
-  If the player can't see units in the city, then the server doesn't send
-  the unit info for these units.  The client therefore uses the "occupied"
-  flag sent in the short city packet to determine whether to show the city
-  occupied flag.
-
-  Note that can_player_see_city_internals => can_player_see_units_in_city.
-  Otherwise the player would not know anything about the city's units at
-  all, since the full city packet has no "occupied" flag.
-
-  Returns TRUE if given a NULL player.  This is used by the client when in
-  observer mode.
-****************************************************************************/
-bool can_player_see_units_in_city(const struct player *pplayer,
-				  const struct city *pcity)
-{
-  return (!pplayer
-	  || can_player_see_city_internals(pplayer, pcity)
-	  || pplayers_allied(pplayer, city_owner(pcity)));
-}
-
-/****************************************************************************
-  Return TRUE iff the player can see the city's internals.  This means the
-  full city packet is sent to the client, who should then be able to popup
-  a dialog for it.
-
-  Returns TRUE if given a NULL player.  This is used by the client when in
-  observer mode.
-****************************************************************************/
-bool can_player_see_city_internals(const struct player *pplayer,
-				   const struct city *pcity)
-{
-  return (!pplayer || pplayer == city_owner(pcity));
+  return player_can_see_unit_at_location(pplayer, punit, punit->x, punit->y);
 }
 
 /***************************************************************
  If the specified player owns the city with the specified id,
  return pointer to the city struct.  Else return NULL.
  Now always uses fast idex_lookup_city.
-
- pplayer may be NULL in which case all cities registered to
- hash are considered - even those not currently owned by any
- player. Callers expect this behavior.
 ***************************************************************/
-struct city *player_find_city_by_id(const struct player *pplayer,
-				    int city_id)
+struct city *player_find_city_by_id(struct player *pplayer, int city_id)
 {
-  /* We call idex directly. Should use game_find_city_by_id()
-   * instead? */
   struct city *pcity = idex_lookup_city(city_id);
-
-  if (!pcity) {
+  
+  if(pcity && (pcity->owner==pplayer->player_no)) {
+    return pcity;
+  } else {
     return NULL;
   }
-
-  if (!pplayer || (city_owner(pcity) == pplayer)) {
-    /* Correct owner */
-    return pcity;
-  }
-
-  return NULL;
 }
 
 /***************************************************************
  If the specified player owns the unit with the specified id,
  return pointer to the unit struct.  Else return NULL.
  Uses fast idex_lookup_city.
-
- pplayer may be NULL in which case all units registered to
- hash are considered - even those not currently owned by any
- player. Callers expect this behavior.
 ***************************************************************/
-struct unit *player_find_unit_by_id(const struct player *pplayer,
-				    int unit_id)
+struct unit *player_find_unit_by_id(struct player *pplayer, int unit_id)
 {
-  /* We call idex directly. Should use game_find_unit_by_id()
-   * instead? */
   struct unit *punit = idex_lookup_unit(unit_id);
-
-  if (!punit) {
+  
+  if(punit && (punit->owner==pplayer->player_no)) {
+    return punit;
+  } else {
     return NULL;
   }
-
-  if (!pplayer || (unit_owner(punit) == pplayer)) {
-    /* Correct owner */
-    return punit;
-  }
-
-  return NULL;
 }
 
 /*************************************************************************
 Return 1 if x,y is inside any of the player's city radii.
 **************************************************************************/
-bool player_in_city_radius(const struct player *pplayer,
-			   const struct tile *ptile)
+bool player_in_city_radius(struct player *pplayer, int x, int y)
 {
-  city_tile_iterate(ptile, ptile1) {
-    struct city *pcity = tile_city(ptile1);
-
-    if (pcity && city_owner(pcity) == pplayer) {
+  struct city *pcity;
+  map_city_radius_iterate(x, y, x1, y1) {
+    pcity = map_get_city(x1, y1);
+    if (pcity && (pcity->owner == pplayer->player_no))
       return TRUE;
-    }
-  } city_tile_iterate_end;
-
+  } map_city_radius_iterate_end;
   return FALSE;
+}
+
+/**************************************************************************
+ Return 1 if one of the player's cities has the specified wonder,
+ and it is not obsolete.
+**************************************************************************/
+bool player_owns_active_wonder(struct player *pplayer,
+			      Impr_Type_id id)
+{
+  return (improvement_exists(id)
+	  && is_wonder(id)
+	  && (!wonder_obsolete(id))
+	  && player_find_city_by_id(pplayer, game.global_wonders[id]));
+}
+
+/**************************************************************************
+ ...
+**************************************************************************/
+bool player_owns_active_govchange_wonder(struct player *pplayer)
+{
+  return ( player_owns_active_wonder(pplayer, B_LIBERTY) ||
+	   ( (improvement_variant(B_PYRAMIDS)==1) &&
+	     player_owns_active_wonder(pplayer, B_PYRAMIDS) ) ||
+	   ( (improvement_variant(B_UNITED)==1) &&
+	     player_owns_active_wonder(pplayer, B_UNITED) ) );
 }
 
 /**************************************************************************
@@ -610,44 +350,17 @@ bool player_in_city_radius(const struct player *pplayer,
  flag. Needs to be optimized later (e.g. int tech_flags[TF_LAST] in
  struct player)
 **************************************************************************/
-int num_known_tech_with_flag(const struct player *pplayer,
-			     enum tech_flag_id flag)
+int num_known_tech_with_flag(struct player *pplayer, enum tech_flag_id flag)
 {
-  return get_player_research(pplayer)->num_known_tech_with_flag[flag];
-}
-
-/**************************************************************************
-  Return the expected net income of the player this turn.  This includes
-  tax revenue and upkeep, but not one-time purchases or found gold.
-
-  This function depends on pcity->prod[O_GOLD] being set for all cities, so
-  make sure the player's cities have been refreshed.
-**************************************************************************/
-int player_get_expected_income(const struct player *pplayer)
-{
-  int income = 0;
-  /* FIXME: almost the same as get_economy_report_data() */
-
-  /* City income/expenses. */
-  city_list_iterate(pplayer->cities, pcity) {
-    /* Gold suplus accounts for imcome plus building and unit upkeep. */
-    income += pcity->surplus[O_GOLD];
-
-    /* Capitalization income. */
-    if (city_production_has_flag(pcity, IF_GOLD)) {
-      income += pcity->shield_stock + pcity->surplus[O_SHIELD];
-    }
-  } city_list_iterate_end;
-
-  return income;
+  return pplayer->research.num_known_tech_with_flag[flag];
 }
 
 /**************************************************************************
  Returns TRUE iff the player knows at least one tech which has the
  given flag.
 **************************************************************************/
-bool player_knows_techs_with_flag(const struct player *pplayer,
-				  enum tech_flag_id flag)
+bool player_knows_techs_with_flag(struct player *pplayer,
+				 enum tech_flag_id flag)
 {
   return num_known_tech_with_flag(pplayer, flag) > 0;
 }
@@ -668,10 +381,7 @@ void player_limit_to_government_rates(struct player *pplayer)
     return;
   }
 
-  maxrate = get_player_bonus(pplayer, EFT_MAX_RATES);
-  if (maxrate == 0) {
-    maxrate = 100; /* effects not initialized yet */
-  }
+  maxrate = get_government_max_rate(pplayer->government);
   surplus = 0;
   if (pplayer->economic.luxury > maxrate) {
     surplus += pplayer->economic.luxury - maxrate;
@@ -695,7 +405,7 @@ void player_limit_to_government_rates(struct player *pplayer)
     } else if (pplayer->economic.luxury < maxrate) {
       pplayer->economic.luxury += 10;
     } else {
-      die("byebye");
+      abort();
     }
     surplus -= 10;
   }
@@ -704,29 +414,53 @@ void player_limit_to_government_rates(struct player *pplayer)
 }
 
 /**************************************************************************
+  Hack to support old code which expects player to have single address
+  string (possibly blank_addr_str) and not yet updated for multi-connects.
+  When all such code is converted, this function should be removed.
+  Returns "blank" address for no connections, single address for one,
+  or string "<multiple>" if there are multiple connections.
+  
+  Currently used by:
+      civserver.c: send_server_info_to_metaserver()
+      plrhand.c: send_player_info_c()
+      gui-{xaw,gtk,mui}/plrdlg.c: update_players_dialog()
+**************************************************************************/
+const char *player_addr_hack(struct player *pplayer)
+{
+  int n = conn_list_size(&pplayer->connections);
+  return ((n==0) ? blank_addr_str :
+	  (n==1) ? conn_list_get(&pplayer->connections, 0)->addr :
+	  "<multiple>");
+}
+
+/**************************************************************************
 Locate the city where the players palace is located, (NULL Otherwise) 
 **************************************************************************/
-struct city *find_palace(const struct player *pplayer)
+struct city *find_palace(struct player *pplayer)
 {
-  if (!pplayer) {
-    /* The client depends on this behavior in some places. */
-    return NULL;
-  }
-  city_list_iterate(pplayer->cities, pcity) {
-    if (is_capital(pcity)) {
+  city_list_iterate(pplayer->cities, pcity) 
+    if (city_got_building(pcity, B_PALACE)) 
       return pcity;
-    }
-  } city_list_iterate_end;
+  city_list_iterate_end;
   return NULL;
 }
 
 /**************************************************************************
-  AI players may have handicaps - allowing them to cheat or preventing
-  them from using certain algorithms.  This function returns whether the
-  player has the given handicap.  Human players are assumed to have no
-  handicaps.
+...
 **************************************************************************/
-bool ai_handicap(const struct player *pplayer, enum handicap_type htype)
+bool player_knows_improvement_tech(struct player *pplayer,
+				   Impr_Type_id id)
+{
+  int t;
+  if (!improvement_exists(id)) return FALSE;
+  t = get_improvement_type(id)->tech_req;
+  return (get_invention(pplayer, t) == TECH_KNOWN);
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+bool ai_handicap(struct player *pplayer, enum handicap_type htype)
 {
   if (!pplayer->ai.control) {
     return TRUE;
@@ -750,74 +484,57 @@ the "ai_fuzzy(pplayer," part, and read the previous example as:
     if (condition && 1) { action }
 --dwp
 **************************************************************************/
-bool ai_fuzzy(const struct player *pplayer, bool normal_decision)
+bool ai_fuzzy(struct player *pplayer, bool normal_decision)
 {
-  if (!pplayer->ai.control || pplayer->ai.fuzzy == 0) {
-    return normal_decision;
-  }
-  if (myrand(1000) >= pplayer->ai.fuzzy) {
-    return normal_decision;
-  }
+  if (!pplayer->ai.control || pplayer->ai.fuzzy == 0) return normal_decision;
+  if (myrand(1000) >= pplayer->ai.fuzzy) return normal_decision;
   return !normal_decision;
 }
 
-
-
 /**************************************************************************
-  Return a text describing an AI's love for you.  (Oooh, kinky!!)
-  These words should be adjectives which can fit in the sentence
-  "The x are y towards us"
-  "The Babylonians are respectful towards us"
+Return a reputation level as a human-readable string
 **************************************************************************/
-const char *love_text(const int love)
+const char *reputation_text(const int rep)
 {
-  if (love <= - MAX_AI_LOVE * 90 / 100) {
-    return Q_("?attitude:Genocidal");
-  } else if (love <= - MAX_AI_LOVE * 70 / 100) {
-    return Q_("?attitude:Belligerent");
-  } else if (love <= - MAX_AI_LOVE * 50 / 100) {
-    return Q_("?attitude:Hostile");
-  } else if (love <= - MAX_AI_LOVE * 25 / 100) {
-    return Q_("?attitude:Uncooperative");
-  } else if (love <= - MAX_AI_LOVE * 10 / 100) {
-    return Q_("?attitude:Uneasy");
-  } else if (love <= MAX_AI_LOVE * 10 / 100) {
-    return Q_("?attitude:Neutral");
-  } else if (love <= MAX_AI_LOVE * 25 / 100) {
-    return Q_("?attitude:Respectful");
-  } else if (love <= MAX_AI_LOVE * 50 / 100) {
-    return Q_("?attitude:Helpful");
-  } else if (love <= MAX_AI_LOVE * 70 / 100) {
-    return Q_("?attitude:Enthusiastic");
-  } else if (love <= MAX_AI_LOVE * 90 / 100) {
-    return Q_("?attitude:Admiring");
-  } else {
-    assert(love > MAX_AI_LOVE * 90 / 100);
-    return Q_("?attitude:Worshipful");
-  }
+  if (rep == -1)
+    return "-";
+  else if (rep > GAME_MAX_REPUTATION * 0.95)
+    return _("Spotless");
+  else if (rep > GAME_MAX_REPUTATION * 0.85)
+    return _("Excellent");
+  else if (rep > GAME_MAX_REPUTATION * 0.75)
+    return _("Honorable");
+  else if (rep > GAME_MAX_REPUTATION * 0.55)
+    return _("Questionable");
+  else if (rep > GAME_MAX_REPUTATION * 0.30)
+    return _("Dishonorable");
+  else if (rep > GAME_MAX_REPUTATION * 0.15)
+    return _("Poor");
+  else if (rep > GAME_MAX_REPUTATION * 0.07)
+    return _("Despicable");
+  else
+    return _("Atrocious");
 }
 
 /**************************************************************************
-  Return a diplomatic state as a human-readable string
+Return a diplomatic state as a human-readable string
 **************************************************************************/
 const char *diplstate_text(const enum diplstate_type type)
 {
   static const char *ds_names[DS_LAST] = 
   {
-    N_("?diplomatic_state:Armistice"),
+    N_("?diplomatic_state:Neutral"),
     N_("?diplomatic_state:War"), 
     N_("?diplomatic_state:Cease-fire"),
     N_("?diplomatic_state:Peace"),
     N_("?diplomatic_state:Alliance"),
-    N_("?diplomatic_state:Never met"),
-    N_("?diplomatic_state:Team")
+    N_("?diplomatic_state:No Contact")
   };
 
-  if (type < DS_LAST) {
+  if (type < DS_LAST)
     return Q_(ds_names[type]);
-  }
-  die("Bad diplstate_type in diplstate_text: %d", type);
-  return NULL;
+  freelog(LOG_FATAL, "Bad diplstate_type in diplstate_text: %d", type);
+  abort();
 }
 
 /***************************************************************
@@ -826,78 +543,13 @@ returns diplomatic state type between two players
 const struct player_diplstate *pplayer_get_diplstate(const struct player *pplayer,
 						     const struct player *pplayer2)
 {
-  return &(pplayer->diplstates[player_index(pplayer2)]);
+  return &(pplayer->diplstates[pplayer2->player_no]);
 }
 
 /***************************************************************
-  Returns true iff players can attack each other.
+  Returns true iff players have no contact status.
 ***************************************************************/
-bool pplayers_at_war(const struct player *pplayer,
-                     const struct player *pplayer2)
-{
-  enum diplstate_type ds = pplayer_get_diplstate(pplayer, pplayer2)->type;
-  if (pplayer == pplayer2) {
-    return FALSE;
-  }
-  if (is_barbarian(pplayer) || is_barbarian(pplayer2)) {
-    return TRUE;
-  }
-  return ds == DS_WAR || ds == DS_NO_CONTACT;
-}
-
-/***************************************************************
-  Returns true iff players are allied.
-***************************************************************/
-bool pplayers_allied(const struct player *pplayer,
-                     const struct player *pplayer2)
-{
-  enum diplstate_type ds = pplayer_get_diplstate(pplayer, pplayer2)->type;
-  if (pplayer == pplayer2) {
-    return TRUE;
-  }
-  if (is_barbarian(pplayer) || is_barbarian(pplayer2)) {
-    return FALSE;
-  }
-  return (ds == DS_ALLIANCE || ds == DS_TEAM);
-}
-
-/***************************************************************
-  Returns true iff players are allied or at peace.
-***************************************************************/
-bool pplayers_in_peace(const struct player *pplayer,
-                       const struct player *pplayer2)
-{
-  enum diplstate_type ds = pplayer_get_diplstate(pplayer, pplayer2)->type;
-
-  if (pplayer == pplayer2) {
-    return TRUE;
-  }
-  if (is_barbarian(pplayer) || is_barbarian(pplayer2)) {
-    return FALSE;
-  }
-  return (ds == DS_PEACE || ds == DS_ALLIANCE || ds == DS_TEAM);
-}
-
-/****************************************************************************
-  Returns TRUE if players can't enter each others' territory.
-****************************************************************************/
-bool players_non_invade(const struct player *pplayer1,
-			const struct player *pplayer2)
-{
-  if (pplayer1 == pplayer2 || !pplayer1 || !pplayer2) {
-    return FALSE;
-  }
-  if (is_barbarian(pplayer1) || is_barbarian(pplayer2)) {
-    /* Likely an unnecessary test. */
-    return FALSE;
-  }
-  return pplayer_get_diplstate(pplayer1, pplayer2)->type == DS_PEACE;
-}
-
-/***************************************************************
-  Returns true iff players have peace or cease-fire.
-***************************************************************/
-bool pplayers_non_attack(const struct player *pplayer,
+bool pplayers_no_contact(const struct player *pplayer,
                          const struct player *pplayer2)
 {
   enum diplstate_type ds = pplayer_get_diplstate(pplayer, pplayer2)->type;
@@ -907,18 +559,53 @@ bool pplayers_non_attack(const struct player *pplayer,
   if (is_barbarian(pplayer) || is_barbarian(pplayer2)) {
     return FALSE;
   }
-  return (ds == DS_PEACE || ds == DS_CEASEFIRE || ds == DS_ARMISTICE);
+  return ds == DS_NO_CONTACT;
+}
+
+/***************************************************************
+returns true iff players can attack each other.
+***************************************************************/
+bool pplayers_at_war(const struct player *pplayer,
+		    const struct player *pplayer2)
+{
+  enum diplstate_type ds = pplayer_get_diplstate(pplayer, pplayer2)->type;
+  if (pplayer == pplayer2) return FALSE;
+  if (is_barbarian(pplayer) || is_barbarian(pplayer2))
+    return TRUE;
+  return ds == DS_WAR || ds == DS_NO_CONTACT;
+}
+
+/***************************************************************
+returns true iff players are allied
+***************************************************************/
+bool pplayers_allied(const struct player *pplayer,
+		    const struct player *pplayer2)
+{
+  enum diplstate_type ds = pplayer_get_diplstate(pplayer, pplayer2)->type;
+  if (pplayer == pplayer2)
+    return TRUE;
+  if (is_barbarian(pplayer) || is_barbarian(pplayer2))
+    return FALSE;
+  return (ds == DS_ALLIANCE);
+}
+
+/***************************************************************
+returns true iff players have peace or cease-fire
+***************************************************************/
+bool pplayers_non_attack(const struct player *pplayer,
+			const struct player *pplayer2)
+{
+  enum diplstate_type ds = pplayer_get_diplstate(pplayer, pplayer2)->type;
+  if (pplayer == pplayer2)
+    return FALSE;
+  if (is_barbarian(pplayer) || is_barbarian(pplayer2))
+    return FALSE;
+  return (ds == DS_PEACE || ds == DS_CEASEFIRE || ds == DS_NEUTRAL);
 }
 
 /**************************************************************************
-  Return TRUE if players are in the same team
+...
 **************************************************************************/
-bool players_on_same_team(const struct player *pplayer1,
-                          const struct player *pplayer2)
-{
-  return (pplayer1->team && pplayer1->team == pplayer2->team);
-}
-
 bool is_barbarian(const struct player *pplayer)
 {
   return pplayer->ai.barbarian_type != NOT_A_BARBARIAN;
@@ -927,160 +614,7 @@ bool is_barbarian(const struct player *pplayer)
 /**************************************************************************
   Return TRUE iff the player me gives shared vision to player them.
 **************************************************************************/
-bool gives_shared_vision(const struct player *me, const struct player *them)
+bool gives_shared_vision(struct player *me, struct player *them)
 {
-  return TEST_BIT(me->gives_shared_vision, player_index(them));
-}
-
-/**************************************************************************
-  Return TRUE iff the two diplstates are equal.
-**************************************************************************/
-bool are_diplstates_equal(const struct player_diplstate *pds1,
-			  const struct player_diplstate *pds2)
-{
-  return (pds1->type == pds2->type
-	  && pds1->has_reason_to_cancel == pds2->has_reason_to_cancel);
-}
-
-/***************************************************************************
-  Return the number of pplayer2's visible units in pplayer's territory,
-  from the point of view of pplayer.  Units that cannot be seen by pplayer
-  will not be found (this function doesn't cheat).
-***************************************************************************/
-int player_in_territory(const struct player *pplayer,
-			const struct player *pplayer2)
-{
-  int in_territory = 0;
-
-  /* This algorithm should work at server or client.  It only returns the
-   * number of visible units (a unit can potentially hide inside the
-   * transport of a different player).
-   *
-   * Note this may be quite slow.  An even slower alternative is to iterate
-   * over the entire map, checking all units inside the player's territory
-   * to see if they're owned by the enemy. */
-  unit_list_iterate(pplayer2->units, punit) {
-    /* Get the owner of the tile/territory. */
-    struct player *owner = tile_owner(punit->tile);
-
-    if (owner == pplayer && can_player_see_unit(pplayer, punit)) {
-      /* Found one! */
-      in_territory += 1;
-    }
-  } unit_list_iterate_end;
-
-  return in_territory;
-}
-
-/****************************************************************************
-  Returns whether this is a valid username.  This is used by the server to
-  validate usernames and should be used by the client to avoid invalid
-  ones.
-****************************************************************************/
-bool is_valid_username(const char *name)
-{
-  return (strlen(name) > 0
-	  && !my_isdigit(name[0])
-	  && is_ascii_name(name)
-	  && mystrcasecmp(name, ANON_USER_NAME) != 0);
-}
-
-/****************************************************************************
-  Returns player_research struct of the given player. Note that team
-  members share research
-****************************************************************************/
-struct player_research *get_player_research(const struct player *plr)
-{
-  if (!plr || !plr->team) {
-    /* Some client users depend on this behavior. */
-    return NULL;
-  }
-  return &(plr->team->research);
-}
-
-/****************************************************************************
-  Returns AI level associated with level name
-****************************************************************************/
-enum ai_level find_ai_level_by_name(const char *name)
-{
-  enum ai_level level;
-
-  for (level = 0; level < AI_LEVEL_LAST; level++) {
-    if (ai_level_names[level] != NULL) {
-      /* Only consider levels that really have names */
-      if (mystrcasecmp(ai_level_names[level], name) == 0) {
-        return level;
-      }
-    }
-  }
-
-  /* No level matches name */
-  return AI_LEVEL_LAST;
-}
-
-/***************************************************************
-  Return localized name of the AI level
-***************************************************************/
-const char *ai_level_name(enum ai_level level)
-{
-  assert(level >= 0 && level < AI_LEVEL_LAST);
-
-  if (ai_level_names[level] == NULL) {
-    return NULL;
-  }
-
-  return _(ai_level_names[level]);
-}
-
-/***************************************************************
-  Return cmd that sets given ai level
-***************************************************************/
-const char *ai_level_cmd(enum ai_level level)
-{
-  assert(level >= 0 && level < AI_LEVEL_LAST);
-
-  if (ai_level_names[level] == NULL) {
-    return NULL;
-  }
-
-  return ai_level_names[level];
-}
-
-/***************************************************************
-  Return is AI can be set to given level
-***************************************************************/
-bool is_settable_ai_level(enum ai_level level)
-{
-  if (level == AI_LEVEL_AWAY) {
-    /* Cannot set away level for AI */
-    return FALSE;
-  }
-
-  /* It's usable if it has name */
-  return ai_level_cmd(level) != NULL;
-}
-
-/***************************************************************
-  Return number of AI levels in game
-***************************************************************/
-int number_of_ai_levels(void)
-{
-  /* We determine this runtime instead of hardcoding correct answer.
-   * But as this is constant, we determine it only once. */
-  static int count = 0;
-  enum ai_level level;
-
-  if (count) {
-    /* Answer already known */
-    return count;
-  }
-
-  /* Determine how many levels are actually usable */
-  for (level = 0; level < AI_LEVEL_LAST; level++) {
-    if (is_settable_ai_level(level)) {
-      count++;
-    }
-  }
-
-  return count;
+  return TEST_BIT(me->gives_shared_vision, them->player_no);
 }

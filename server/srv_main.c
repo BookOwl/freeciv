@@ -10,7 +10,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -22,6 +21,12 @@
 #include <string.h>
 #include <time.h>
 
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+#ifdef HAVE_SYS_TYPES_H
+#include <sys/types.h>
+#endif
 #ifdef HAVE_NETDB_H
 #include <netdb.h>
 #endif
@@ -31,57 +36,45 @@
 #ifdef HAVE_SYS_TERMIO_H
 #include <sys/termio.h>
 #endif
-#ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
-#endif
 #ifdef HAVE_TERMIOS_H
 #include <termios.h>
-#endif
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
 #endif
 #ifdef HAVE_WINSOCK
 #include <winsock.h>
 #endif
 
-#include "fciconv.h"
+#include "capability.h"
+#include "capstr.h"
+#include "city.h"
+#include "events.h"
 #include "fcintl.h"
+#include "game.h"
 #include "log.h"
+#include "map.h"
 #include "mem.h"
+#include "nation.h"
 #include "netintf.h"
+#include "packets.h"
+#include "player.h"
 #include "rand.h"
 #include "registry.h"
 #include "shared.h"
 #include "support.h"
-#include "timing.h"
-
-#include "capability.h"
-#include "capstr.h"
-#include "city.h"
-#include "dataio.h"
-#include "effects.h"
-#include "events.h"
-#include "game.h"
-#include "government.h"
-#include "map.h"
-#include "nation.h"
-#include "packets.h"
-#include "player.h"
 #include "tech.h"
-#include "unitlist.h"
+#include "timing.h"
 #include "version.h"
 
-#include "auth.h"
+#include "autoattack.h"
 #include "barbarian.h"
 #include "cityhand.h"
 #include "citytools.h"
 #include "cityturn.h"
-#include "connecthand.h"
 #include "console.h"
 #include "diplhand.h"
 #include "gamehand.h"
-#include "ggzserver.h"
+#include "gamelog.h"
 #include "handchat.h"
+#include "mapgen.h"
 #include "maphand.h"
 #include "meta.h"
 #include "plrhand.h"
@@ -89,38 +82,51 @@
 #include "ruleset.h"
 #include "sanitycheck.h"
 #include "savegame.h"
-#include "score.h"
-#include "script_signal.h"
 #include "sernet.h"
 #include "settlers.h"
 #include "spacerace.h"
-#include "srv_main.h"
 #include "stdinhand.h"
-#include "techtools.h"
 #include "unithand.h"
 #include "unittools.h"
 
-#include "advdiplomacy.h"
 #include "advmilitary.h"
-#include "aicity.h"
 #include "aidata.h"
 #include "aihand.h"
-#include "aisettler.h"
-#include "citymap.h"
 
-#include "mapgen.h"
+#include "srv_main.h"
 
+
+static void begin_turn(void);
+static void before_end_year(void);
 static void end_turn(void);
-static void announce_player(struct player *pplayer);
+static void send_all_info(struct conn_list *dest);
+static void ai_start_turn(void);
+static bool is_game_over(void);
+static void save_game_auto(void);
+static void generate_ai_players(void);
+static int mark_nation_as_used(int nation);
+static void announce_ai_player(struct player *pplayer);
+static void reject_new_player(char *msg, struct connection *pconn);
+
+static void handle_alloc_nation(struct player *pplayer,
+				struct packet_alloc_nation *packet);
+static bool handle_request_join_game(struct connection *pconn, 
+				    struct packet_req_join_game *req);
+static void handle_turn_done(struct player *pplayer);
+static void send_select_nation(struct player *pplayer);
+static void check_for_full_turn_done(void);
+
+
+/* this is used in strange places, and is 'extern'd where
+   needed (hence, it is not 'extern'd in srv_main.h) */
+bool is_server = TRUE;
 
 /* command-line arguments to server */
 struct server_arguments srvarg;
 
-/* server aggregate information */
-struct civserver server;
-
 /* server state information */
-static enum server_states civserver_state = S_S_INITIAL;
+enum server_states server_state = PRE_GAME_STATE;
+bool nocity_send = FALSE;
 
 /* this global is checked deep down the netcode. 
    packets handling functions can set it to none-zero, to
@@ -128,215 +134,141 @@ static enum server_states civserver_state = S_S_INITIAL;
 */
 bool force_end_of_sniff;
 
-#define IDENTITY_NUMBER_SIZE (1+MAX_UINT16)
-static unsigned char identity_numbers_used[IDENTITY_NUMBER_SIZE/8]={0};
+
+/* The next three variables make selecting nations for AI players cleaner */
+static int *nations_avail;
+static int *nations_used;
+static int num_nations_avail;
+
+/* this counter creates all the id numbers used */
+/* use get_next_id_number()                     */
+static unsigned short global_id_counter=100;
+static unsigned char used_ids[8192]={0};
 
 /* server initialized flag */
 static bool has_been_srv_init = FALSE;
-
-/**************************************************************************
-  Initialize the game seed.  This may safely be called multiple times.
-**************************************************************************/
-void init_game_seed(void)
-{
-  if (game.seed == 0) {
-    /* We strip the high bit for now because neither game file nor
-       server options can handle unsigned ints yet. - Cedric */
-    game.seed = time(NULL) & (MAX_UINT32 >> 1);
-    freelog(LOG_DEBUG, "Setting game.seed:%d", game.seed);
-  }
- 
-  if (!myrand_is_init()) {
-    mysrand(game.seed);
-  }
-}
 
 /**************************************************************************
 ...
 **************************************************************************/
 void srv_init(void)
 {
-  i_am_server(); /* Tell to libcivcommon that we are server */
-
   /* NLS init */
   init_nls();
 
   /* init server arguments... */
 
   srvarg.metaserver_no_send = DEFAULT_META_SERVER_NO_SEND;
+  sz_strlcpy(srvarg.metaserver_info_line, default_meta_server_info_string());
   sz_strlcpy(srvarg.metaserver_addr, DEFAULT_META_SERVER_ADDR);
+  srvarg.metaserver_port = DEFAULT_META_SERVER_PORT;
 
-  srvarg.bind_addr = NULL;
   srvarg.port = DEFAULT_SOCK_PORT;
 
   srvarg.loglevel = LOG_NORMAL;
 
   srvarg.log_filename = NULL;
-  srvarg.ranklog_filename = NULL;
-  srvarg.load_filename[0] = '\0';
+  srvarg.gamelog_filename = NULL;
+  srvarg.load_filename = NULL;
   srvarg.script_filename = NULL;
-  srvarg.saves_pathname = "";
 
   srvarg.quitidle = 0;
 
-  srvarg.auth_enabled = FALSE;
-  srvarg.auth_conf = NULL;
-  srvarg.auth_allow_guests = FALSE;
-  srvarg.auth_allow_newusers = FALSE;
+  srvarg.extra_metaserver_info[0] = '\0';
 
-  srvarg.save_ppm = FALSE;
+  /* initialize teams */
+  team_init();
 
   /* mark as initialized */
   has_been_srv_init = TRUE;
-
-  /* init character encodings. */
-  init_character_encodings(FC_DEFAULT_DATA_ENCODING, FALSE);
-
-  /* Initialize callbacks. */
-  game.callbacks.unit_deallocate = identity_number_release;
 
   /* done */
   return;
 }
 
 /**************************************************************************
-...
+  Returns TRUE if any one game end condition is fulfilled, FALSE otherwise
 **************************************************************************/
-enum server_states server_state(void)
-{
-  return civserver_state;
-}
-
-/**************************************************************************
-...
-**************************************************************************/
-void set_server_state(enum server_states newstate)
-{
-  civserver_state = newstate;
-}
-
-/**************************************************************************
-  Returns TRUE if any one game end condition is fulfilled, FALSE otherwise.
-
-  This function will notify players but will not set the server_state(). The
-  caller must set the server state to S_S_OVER if the function
-  returns TRUE.
-**************************************************************************/
-bool check_for_game_over(void)
+static bool is_game_over(void)
 {
   int barbs = 0, alive = 0;
-  struct player *victor = NULL, *spacer = NULL;
+  bool all_allied;
+  struct player *victor = NULL;
 
   /* quit if we are past the year limit */
-  if (game.info.year > game.info.end_year) {
-    notify_conn(game.est_connections, NULL, E_GAME_END, 
-		_("Game ended in a draw as end year exceeded"));
-    ggz_report_victory();
+  if (game.year > game.end_year) {
+    notify_conn(&game.est_connections, 
+       _("Game ended in a draw as end year exceeded"));
+    gamelog(GAMELOG_NORMAL, _("Game ended in a draw as end year exceeded"));
     return TRUE;
   }
 
-  /* count barbarians and observers */
+  /* count barbarians */
   players_iterate(pplayer) {
     if (is_barbarian(pplayer)) {
       barbs++;
     }
   } players_iterate_end;
 
+  /* the game does not quit if we are playing solo */
+  if (game.nplayers == (barbs + 1)) {
+    return FALSE;
+  }
+
   /* count the living */
   players_iterate(pplayer) {
-    if (pplayer->is_alive
-        && !is_barbarian(pplayer)
-        && !pplayer->surrendered) {
+    if (pplayer->is_alive && !is_barbarian(pplayer)) {
       alive++;
       victor = pplayer;
     }
   } players_iterate_end;
 
-  /* the game does not quit if we are playing solo */
-  if (game.info.nplayers == (barbs + 1)
-      && alive >= 1) {
-    return FALSE;
-  }
-
-  /* check for a spacerace win */
-  if ((spacer = check_spaceship_arrival())) {
-    bool loner = TRUE;
-    victor = spacer;
- 
-    notify_player(NULL, NULL, E_SPACESHIP,
-                  _("The %s spaceship has arrived at Alpha Centauri."),
-                  nation_adjective_for_player(victor));
-
-    /* this guy has won, now check if anybody else wins with him */
-    players_iterate(pplayer) {
-      if (pplayer->team == victor->team && pplayer != victor) {
-        loner = FALSE;
-        break;
-      }
-    } players_iterate_end;
-
-    if (!loner) {
-      notify_conn(NULL, NULL, E_GAME_END,
-                  _("Team victory to %s"),
-                  team_name_translation(victor->team));
-      players_iterate(pplayer) {
-	if (pplayer->team == victor->team) {
-	  ggz_report_victor(pplayer);
-	}
-      } players_iterate_end;
-      ggz_report_victory();
-    } else {
-      notify_conn(NULL, NULL, E_GAME_END,
-                  _("Game ended in victory for %s"),
-                  player_name(victor));
-      ggz_report_victor(victor);
-      ggz_report_victory();
-    }
-
-    return TRUE;
-  }
-
   /* quit if we have team victory */
   team_iterate(pteam) {
-    bool win = TRUE; /* optimistic */
-
-    /* If there are any players alive and unconceded outside our
-     * team, we have not yet won. */
-    players_iterate(pplayer) {
-      if (pplayer->is_alive
-          && !pplayer->surrendered
-          && pplayer->team != pteam) {
-        win = FALSE;
-        break;
-      }
-    } players_iterate_end;
-    if (win) {
-      notify_conn(game.est_connections, NULL, E_GAME_END,
-		  _("Team victory to %s"),
-		  team_name_translation(pteam));
-      players_iterate(pplayer) {
-	if (pplayer->is_alive
-	    && !pplayer->surrendered) {
-	  ggz_report_victor(pplayer);
-	}
-      } players_iterate_end;
-      ggz_report_victory();
+    if (team_count_members_alive(pteam->id) == alive) {
+      notify_conn(&game.est_connections, 
+          _("Team victory to %s"), pteam->name);
+      gamelog(GAMELOG_NORMAL, _("Team victory to %s"), pteam->name);
+      gamelog(GAMELOG_TEAM, "TEAMVICTORY %s", pteam->name);
       return TRUE;
     }
   } team_iterate_end;
 
   /* quit if only one player is left alive */
   if (alive == 1) {
-    notify_conn(game.est_connections, NULL, E_GAME_END,
-		_("Game ended in victory for %s"),
-		player_name(victor));
-    ggz_report_victor(victor);
-    ggz_report_victory();
+    notify_conn(&game.est_connections, 
+        _("Game ended in victory for %s"), victor->name);
+    gamelog(GAMELOG_NORMAL, _("Game ended in victory for %s"), 
+        victor->name);
+    gamelog(GAMELOG_TEAM, "SINGLEWINNER %s", victor->name);
     return TRUE;
   } else if (alive == 0) {
-    notify_conn(game.est_connections, NULL, E_GAME_END, 
-		   _("Game ended in a draw"));
-    ggz_report_victory();
+    notify_conn(&game.est_connections, _("Game ended in a draw"));
+    gamelog(GAMELOG_NORMAL, _("Game ended in a draw"));
+    gamelog(GAMELOG_TEAM, "NOWINNER");
+    return TRUE;
+  }
+
+  /* quit if all remaining players are allied to each other */
+  all_allied = TRUE;
+  players_iterate(pplayer) {
+    if (!pplayer->is_alive) {
+      continue;
+    }
+    players_iterate(aplayer) {
+      if (!pplayers_allied(pplayer, aplayer) && aplayer->is_alive) {
+        all_allied = FALSE;
+        break;
+      }
+    } players_iterate_end;
+    if (!all_allied) {
+      break;
+    }
+  } players_iterate_end;
+  if (all_allied) {
+    notify_conn(&game.est_connections, _("Game ended in allied victory"));
+    gamelog(GAMELOG_NORMAL, _("Game ended in allied victory"));
+    gamelog(GAMELOG_TEAM, "ALLIEDVICTORY");
     return TRUE;
   }
 
@@ -347,18 +279,17 @@ bool check_for_game_over(void)
   Send all information for when game starts or client reconnects.
   Ruleset information should have been sent before this.
 **************************************************************************/
-void send_all_info(struct conn_list *dest)
+static void send_all_info(struct conn_list *dest)
 {
-  conn_list_iterate(dest, pconn) {
-      send_attribute_block(pconn->playing, pconn);
+  conn_list_iterate(*dest, pconn) {
+      send_attribute_block(pconn->player,pconn);
   }
   conn_list_iterate_end;
 
   send_game_info(dest);
   send_map_info(dest);
-  /* avoid redundancy, send to everybody */
-  send_player_info_c(NULL, game.est_connections);
-  send_conn_info(game.est_connections, dest);
+  send_player_info_c(NULL, dest);
+  send_conn_info(&game.est_connections, dest);
   send_spaceship_info(NULL, dest);
   send_all_known_tiles(dest);
   send_all_known_cities(dest);
@@ -367,44 +298,41 @@ void send_all_info(struct conn_list *dest)
 }
 
 /**************************************************************************
-  Give map information to players with EFT_REVEAL_CITIES or
-  EFT_REVEAL_MAP effects (traditionally from the Apollo Program).
+...
 **************************************************************************/
-static void do_reveal_effects(void)
+static void do_apollo_program(void)
 {
-  phase_players_iterate(pplayer) {
-    if (get_player_bonus(pplayer, EFT_REVEAL_CITIES) > 0) {
+  struct city *pcity = find_city_wonder(B_APOLLO);
+
+  if (pcity) {
+    struct player *pplayer = city_owner(pcity);
+
+    if (game.civstyle == 1) {
       players_iterate(other_player) {
 	city_list_iterate(other_player->cities, pcity) {
-	  map_show_tile(pplayer, pcity->tile);
+	  show_area(pplayer, pcity->x, pcity->y, 0);
 	} city_list_iterate_end;
       } players_iterate_end;
+    } else {
+      map_know_all(pplayer);
+      send_all_known_tiles(&pplayer->connections);
+      send_all_known_cities(&pplayer->connections);
     }
-    if (get_player_bonus(pplayer, EFT_REVEAL_MAP) > 0) {
-      /* map_know_all will mark all unknown tiles as known and send
-       * tile, unit, and city updates as necessary.  No other actions are
-       * needed. */
-      map_show_all(pplayer);
-    }
-  } phase_players_iterate_end;
+  }
 }
 
 /**************************************************************************
-  Give contact to players with the EFT_HAVE_EMBASSIES effect (traditionally
-  from Marco Polo's Embassy).
+...
 **************************************************************************/
-static void do_have_embassies_effect(void)
+static void marco_polo_make_contact(void)
 {
-  phase_players_iterate(pplayer) {
-    if (get_player_bonus(pplayer, EFT_HAVE_EMBASSIES) > 0) {
-      players_iterate(pother) {
-	/* Note this gives pplayer contact with pother, but doesn't give
-	 * pother contact with pplayer.  This may cause problems in other
-	 * parts of the code if we're not careful. */
-	make_contact(pplayer, pother, NULL);
-      } players_iterate_end;
-    }
-  } phase_players_iterate_end;
+  struct city *pcity = find_city_wonder(B_MARCO);
+
+  if (pcity) {
+    players_iterate(pplayer) {
+      make_contact(city_owner(pcity), pplayer, pcity->x, pcity->y);
+    } players_iterate_end;
+  }
 }
 
 /**************************************************************************
@@ -417,8 +345,8 @@ static void update_environmental_upset(enum tile_special_type cause,
   int count;
 
   count = 0;
-  whole_map_iterate(ptile) {
-    if (tile_has_special(ptile, cause)) {
+  whole_map_iterate(x, y) {
+    if (map_has_special(x, y, cause)) {
       count++;
     }
   } whole_map_iterate_end;
@@ -429,10 +357,10 @@ static void update_environmental_upset(enum tile_special_type cause,
     *accum = 0;
   } else {
     *accum -= *level;
-    if (myrand((map_num_tiles() + 19) / 20) <= *accum) {
+    if (myrand(200) <= *accum) {
       upset_action_fn((map.xsize / 10) + (map.ysize / 10) + ((*accum) * 5));
       *accum = 0;
-      *level += (map_num_tiles() + 999) / 1000;
+      *level+=4;
     }
   }
 
@@ -442,153 +370,69 @@ static void update_environmental_upset(enum tile_special_type cause,
 }
 
 /**************************************************************************
-  Remove illegal units when armistice turns into peace treaty.
-**************************************************************************/
-static void remove_illegal_armistice_units(struct player *plr1,
-                                           struct player *plr2)
-{
-  /* Remove illegal units */
-  unit_list_iterate_safe(plr1->units, punit) {
-    if (tile_owner(punit->tile) == plr2
-        && is_military_unit(punit)) {
-      notify_player(plr1, punit->tile, E_DIPLOMACY, _("Your %s was "
-                    "disbanded in accordance with your peace treaty with "
-                    "the %s."),
-                    unit_name_translation(punit),
-                    nation_plural_for_player(plr2));
-      wipe_unit(punit);
-    }
-  } unit_list_iterate_safe_end;
-  unit_list_iterate_safe(plr2->units, punit) {
-    if (tile_owner(punit->tile) == plr1
-        && is_military_unit(punit)) {
-      notify_player(plr2, punit->tile, E_DIPLOMACY, _("Your %s was "
-                    "disbanded in accordance with your peace treaty with "
-                    "the %s."),
-                    unit_name_translation(punit),
-                    nation_plural_for_player(plr1));
-      wipe_unit(punit);
-    }
-  } unit_list_iterate_safe_end;
-}
-
-/**************************************************************************
-  Check for cease-fires and armistices running out; update cancelling 
-  reasons and contact information.
+ check for cease-fires running out; update reputation; update cancelling
+ reasons
 **************************************************************************/
 static void update_diplomatics(void)
 {
-  players_iterate(plr1) {
-    players_iterate(plr2) {
-      struct player_diplstate *state = &plr1->diplstates[player_index(plr2)];
-      struct player_diplstate *state2 = &plr2->diplstates[player_index(plr1)];
+  players_iterate(player1) {
+    players_iterate(player2) {
+      struct player_diplstate *pdiplstate =
+	  &player1->diplstates[player2->player_no];
 
-      state->has_reason_to_cancel = MAX(state->has_reason_to_cancel - 1, 0);
+      pdiplstate->has_reason_to_cancel =
+	  MAX(pdiplstate->has_reason_to_cancel - 1, 0);
 
-      if (state->type == DS_ARMISTICE) {
-        state->turns_left--;
-        if (state->turns_left <= 0) {
-          state->type = DS_PEACE;
-          state2->type = DS_PEACE;
-          state->turns_left = 0;
-          state2->turns_left = 0;
-          remove_illegal_armistice_units(plr1, plr2);
+      if(pdiplstate->type == DS_CEASEFIRE) {
+	switch(--pdiplstate->turns_left) {
+	case 1:
+	  notify_player(player1,
+			_("Game: Concerned citizens point "
+  			  "out that the cease-fire with %s will run out soon."),
+			player2->name);
+  	  break;
+  	case -1:
+	  notify_player(player1,
+  			_("Game: The cease-fire with %s has "
+  			  "run out. You are now neutral towards the %s."),
+			player2->name,
+			get_nation_name_plural(player2->nation));
+	  pdiplstate->type = DS_NEUTRAL;
+	  check_city_workers(player1);
+	  check_city_workers(player2);
+  	  break;
+  	}
         }
-      }
-
-      if (state->type == DS_CEASEFIRE) {
-        state->turns_left--;
-        switch(state->turns_left) {
-        case 1:
-          notify_player(plr1, NULL, E_DIPLOMACY,
-                        _("Concerned citizens point out that the cease-fire "
-                          "with %s will run out soon."),
-                        player_name(plr2));
-          notify_player(plr2, NULL, E_DIPLOMACY,
-                        _("Concerned citizens point out that the cease-fire "
-                          "with %s will run out soon."),
-                        player_name(plr1));
-          break;
-        case 0:
-          notify_player(plr1, NULL, E_DIPLOMACY, _("The cease-fire with "
-                        "%s has run out. You are now at war with the %s."),
-                        player_name(plr2),
-                        nation_plural_for_player(plr2));
-          notify_player(plr2, NULL, E_DIPLOMACY, _("The cease-fire with "
-                        "%s has run out. You are now at war with the %s."),
-                        player_name(plr1),
-                        nation_plural_for_player(plr1));
-          state->type = DS_WAR;
-          state2->type = DS_WAR;
-          state->turns_left = 0;
-          state2->turns_left = 0;
-          city_map_update_all_cities_for_player(plr1);
-          city_map_update_all_cities_for_player(plr2);
-          sync_cities();
-
-          /* Avoid love-love-hate triangles */
-          players_iterate(plr3) {
-            if (plr3->is_alive && plr3 != plr1 && plr3 != plr2
-                && pplayers_allied(plr3, plr1)
-                && pplayers_allied(plr3, plr2)) {
-              notify_player(plr3, NULL, E_TREATY_BROKEN,
-                            _("Ceasefire between %s and %s has run out. "
-                              "They are at war. You cancel your alliance "
-                              "with both."),
-                            player_name(plr1),
-                            player_name(plr2));
-              plr3->diplstates[player_index(plr1)].has_reason_to_cancel = TRUE;
-              plr3->diplstates[player_index(plr2)].has_reason_to_cancel = TRUE;
-              handle_diplomacy_cancel_pact(plr3, player_number(plr1), CLAUSE_ALLIANCE);
-              handle_diplomacy_cancel_pact(plr3, player_number(plr2), CLAUSE_ALLIANCE);
-            }
-          } players_iterate_end;
-          break;
-        }
-      }
+      player1->reputation = MIN(player1->reputation + GAME_REPUTATION_INCR,
+				GAME_MAX_REPUTATION);
     } players_iterate_end;
   } players_iterate_end;
 }
 
-/****************************************************************************
-  Check all players to see whether they are dying.
-
-  WARNING: do not call this while doing any handling of players, units,
-  etc.  If a player dies, all his units will be wiped and other data will
-  be overwritten.
-
-  FIXME: merge is_alive (105) with is_dying (8) and surrendered (7)?
-****************************************************************************/
-static void kill_dying_players(void)
+/**************************************************************************
+  Send packet which tells clients that the server is starting its
+  "end year" calculations (and will be sending end-turn updates etc).
+  (This is referred to as "before new year" in packet and client code.)
+**************************************************************************/
+static void before_end_year(void)
 {
-  players_iterate(pplayer) {
-    if (pplayer->is_alive) {
-      /* cities or units remain? */
-      if (0 == city_list_size(pplayer->cities)
-       && 0 == unit_list_size(pplayer->units)) {
-	pplayer->is_dying = TRUE;
-      }
-      /* also F_GAMELOSS in unittools server_remove_unit() */
-      if (pplayer->is_dying) {
-	pplayer->is_dying = FALSE; /* Can't get more dead than this. */
-	kill_player(pplayer);
-      }
-    }
-  } players_iterate_end;
+  lsend_packet_generic_empty(&game.est_connections, PACKET_BEFORE_NEW_YEAR);
 }
 
 /**************************************************************************
-  Called at the start of each (new) phase to do AI activities.
+...
 **************************************************************************/
-static void ai_start_phase(void)
+static void ai_start_turn(void)
 {
-  phase_players_iterate(pplayer) {
+  int i;
+
+  for (i = 0; i < game.nplayers; i++) {
+    struct player *pplayer = shuffled_player(i);
     if (pplayer->ai.control) {
       ai_do_first_activities(pplayer);
       flush_packets();			/* AIs can be such spammers... */
     }
-  } phase_players_iterate_end;
-  kill_dying_players();
+  }
 }
 
 /**************************************************************************
@@ -596,49 +440,11 @@ Handle the beginning of each turn.
 Note: This does not give "time" to any player;
       it is solely for updating turn-dependent data.
 **************************************************************************/
-static void begin_turn(bool is_new_turn)
+static void begin_turn(void)
 {
-  freelog(LOG_DEBUG, "Begin turn");
-
-  /* Reset this each turn. */
-  if (is_new_turn) {
-    game.info.simultaneous_phases = game.simultaneous_phases_stored;
-  }
-  if (game.info.simultaneous_phases) {
-    game.info.num_phases = 1;
-  } else {
-    game.info.num_phases = game.info.nplayers;
-  }
-  send_game_info(NULL);
-
-  if (is_new_turn) {
-    script_signal_emit("turn_started", 2,
-		       API_TYPE_INT, game.info.turn,
-		       API_TYPE_INT, game.info.year);
-  }
-
-  if (is_new_turn) {
-    /* We build scores at the beginning of every turn.  We have to
-     * build them at the beginning so that the AI can use the data,
-     * and we are sure to have it when we need it. */
-    players_iterate(pplayer) {
-      calc_civ_score(pplayer);
-    } players_iterate_end;
-  }
-
-  /* find out if users attached to players have been attached to those players
-   * for long enough. The first user to do so becomes "associated" to that
-   * player for ranking purposes. */
-  players_iterate(pplayer) {
-    if (strcmp(pplayer->ranked_username, ANON_USER_NAME) == 0
-        && pplayer->user_turns++ > TURNS_NEEDED_TO_RANK) {
-      sz_strlcpy(pplayer->ranked_username, pplayer->username);
-    }
-  } players_iterate_end;
-
   /* See if the value of fog of war has changed */
-  if (is_new_turn && game.info.fogofwar != game.fogofwar_old) {
-    if (game.info.fogofwar) {
+  if (game.fogofwar != game.fogofwar_old) {
+    if (game.fogofwar) {
       enable_fog_of_war();
       game.fogofwar_old = TRUE;
     } else {
@@ -647,323 +453,118 @@ static void begin_turn(bool is_new_turn)
     }
   }
 
-  if (is_new_turn && game.info.simultaneous_phases) {
-    freelog(LOG_DEBUG, "Shuffleplayers");
-    shuffle_players();
-  }
+  conn_list_do_buffer(&game.game_connections);
 
-  if (is_new_turn) {
-    game.info.phase = 0;
-  }
-
-  sanity_check();
-}
-
-/**************************************************************************
-  Begin a phase of movement.  This handles all beginning-of-phase actions
-  for one or more players.
-**************************************************************************/
-static void begin_phase(bool is_new_phase)
-{
-  freelog(LOG_DEBUG, "Begin phase");
-
-  conn_list_do_buffer(game.est_connections);
-
-  phase_players_iterate(pplayer) {
-    pplayer->phase_done = FALSE;
-  } phase_players_iterate_end;
-  send_player_info(NULL, NULL);
-
-  dlsend_packet_start_phase(game.est_connections, game.info.phase);
-
-  if (is_new_phase) {
-    /* Unit "end of turn" activities - of course these actually go at
-     * the start of the turn! */
-    phase_players_iterate(pplayer) {
-      update_unit_activities(pplayer); /* major network traffic */
-      flush_packets();
-    } phase_players_iterate_end;
-  }
-
-  phase_players_iterate(pplayer) {
-    freelog(LOG_DEBUG, "beginning player turn for #%d (%s)",
-	    player_number(pplayer),
-	    player_name(pplayer));
-    /* human players also need this for building advice */
-    ai_data_phase_init(pplayer, is_new_phase);
-    if (!pplayer->ai.control) {
-      ai_manage_buildings(pplayer); /* building advisor */
-    }
-  } phase_players_iterate_end;
-
-  phase_players_iterate(pplayer) {
-    send_player_cities(pplayer);
-  } phase_players_iterate_end;
-
-  flush_packets();  /* to curb major city spam */
-  conn_list_do_unbuffer(game.est_connections);
-
-  phase_players_iterate(pplayer) {
-    update_revolution(pplayer);
-  } phase_players_iterate_end;
-
-  if (is_new_phase) {
-    /* Try to avoid hiding events under a diplomacy dialog */
-    phase_players_iterate(pplayer) {
-      if (pplayer->ai.control && !is_barbarian(pplayer)) {
-	ai_diplomacy_actions(pplayer);
-      }
-    } phase_players_iterate_end;
-
-    freelog(LOG_DEBUG, "Aistartturn");
-    ai_start_phase();
-  }
-
-  sanity_check();
-
-  game.info.seconds_to_phasedone = (double)game.info.timeout;
-  game.phase_timer = renew_timer_start(game.phase_timer,
-				       TIMER_USER, TIMER_ACTIVE);
-  send_game_info(NULL);
-
-  if (game.info.num_phases == 1) {
-    /* All players in the same phase.
-     * This means that AI has been handled above, and server
-     * will be responsive again */
-    lsend_packet_begin_turn(game.est_connections);
-  }
-}
-
-/**************************************************************************
-  End a phase of movement.  This handles all end-of-phase actions
-  for one or more players.
-**************************************************************************/
-static void end_phase(void)
-{
-  freelog(LOG_DEBUG, "Endphase");
- 
-  /* 
-   * This empties the client Messages window; put this before
-   * everything else below, since otherwise any messages from the
-   * following parts get wiped out before the user gets a chance to
-   * see them.  --dwp
-   */
-  phase_players_iterate(pplayer) {
-    /* Unlike the start_phase packet we only send this one to the active
-     * player. */
-    lsend_packet_end_phase(pplayer->connections);
-  } phase_players_iterate_end;
-
-  phase_players_iterate(pplayer) {
-    if (get_player_research(pplayer)->researching == A_UNSET) {
-      if (choose_goal_tech(pplayer) == A_UNSET) {
-        choose_random_tech(pplayer);
-      }
-      update_tech(pplayer, 0);
-    }
-  } phase_players_iterate_end;
-
-  /* Freeze sending of cities. */
-  send_city_suppression(TRUE);
-
-  /* AI end of turn activities */
   players_iterate(pplayer) {
-    unit_list_iterate(pplayer->units, punit) {
-      punit->ai.hunted = 0;
-    } unit_list_iterate_end;
+    freelog(LOG_DEBUG, "beginning player turn for #%d (%s)",
+	    pplayer->player_no, pplayer->name);
+    begin_player_turn(pplayer);
+    /* human players also need this for building advice */
+    ai_data_turn_init(pplayer);
   } players_iterate_end;
-  phase_players_iterate(pplayer) {
-    if (pplayer->ai.control) {
-      ai_settler_init(pplayer);
-    }
-    auto_settlers_player(pplayer);
-    if (pplayer->ai.control) {
-      ai_do_last_activities(pplayer);
-    }
-  } phase_players_iterate_end;
 
-  /* Refresh cities */
-  phase_players_iterate(pplayer) {
-    get_player_research(pplayer)->got_tech = FALSE;
-  } phase_players_iterate_end;
-  
-  phase_players_iterate(pplayer) {
-    do_tech_parasite_effect(pplayer);
-    player_restore_units(pplayer);
-    update_city_activities(pplayer);
-    get_player_research(pplayer)->researching_saved = A_UNKNOWN;
-    flush_packets();
-  } phase_players_iterate_end;
-
-  kill_dying_players();
-
-  /* Unfreeze sending of cities. */
-  send_city_suppression(FALSE);
-
-  phase_players_iterate(pplayer) {
+  players_iterate(pplayer) {
     send_player_cities(pplayer);
-  } phase_players_iterate_end;
-  flush_packets();  /* to curb major city spam */
+  } players_iterate_end;
 
-  do_reveal_effects();
-  do_have_embassies_effect();
+  flush_packets();			/* to curb major city spam */
+
+  conn_list_do_unbuffer(&game.game_connections);
 }
 
 /**************************************************************************
-  Handle the end of each turn.
+...
 **************************************************************************/
 static void end_turn(void)
 {
-  int food = 0, shields = 0, trade = 0, settlers = 0;
+  int i;
 
-  freelog(LOG_DEBUG, "Endturn");
+  nocity_send = TRUE;
 
-  /* Hack: because observer players never get an end-phase packet we send
-   * one here. */
-  conn_list_iterate(game.est_connections, pconn) {
-    if (NULL == pconn->playing) {
-      send_packet_end_phase(pconn);
-    }
-  } conn_list_iterate_end;
-
-  lsend_packet_end_turn(game.est_connections);
-
-  map_calculate_borders();
-
-  /* Output some AI measurement information */
+  /* AI end of turn activities */
   players_iterate(pplayer) {
-    if (!pplayer->ai.control || is_barbarian(pplayer)) {
-      continue;
+    if (pplayer->ai.control) {
+      ai_do_last_activities(pplayer);
     }
-    unit_list_iterate(pplayer->units, punit) {
-      if (unit_has_type_flag(punit, F_CITIES)) {
-        settlers++;
-      }
-    } unit_list_iterate_end;
-    city_list_iterate(pplayer->cities, pcity) {
-      shields += pcity->prod[O_SHIELD];
-      food += pcity->prod[O_FOOD];
-      trade += pcity->prod[O_TRADE];
-    } city_list_iterate_end;
-    freelog(LOG_DEBUG, "%s T%d cities:%d pop:%d food:%d prod:%d "
-            "trade:%d settlers:%d units:%d", player_name(pplayer), game.info.turn,
-            city_list_size(pplayer->cities), total_player_citizens(pplayer),
-            food, shields, trade, settlers, unit_list_size(pplayer->units));
   } players_iterate_end;
 
-  freelog(LOG_DEBUG, "Season of native unrests");
-  summon_barbarians(); /* wild guess really, no idea where to put it, but
-			  I want to give them chance to move their units */
+  /* Refresh cities */
+  for(i=0; i<game.nplayers; i++) {
+    struct player *pplayer = shuffled_player(i);
+    great_library(pplayer);
+    update_revolution(pplayer);
+    player_restore_units(pplayer);
+    update_city_activities(pplayer);
+    pplayer->research.changed_from=-1;
+    flush_packets();
+  }
 
-  update_environmental_upset(S_POLLUTION, &game.info.heating,
-			     &game.info.globalwarming, &game.info.warminglevel,
+  /* Unit end of turn activities */
+  for(i=0; i<game.nplayers; i++) {
+    struct player *pplayer = shuffled_player(i);
+    update_unit_activities(pplayer); /* major network traffic */
+    update_player_aliveness(pplayer);
+    flush_packets();
+    pplayer->turn_done = FALSE;
+  }
+
+  nocity_send = FALSE;
+  players_iterate(pplayer) {
+    send_player_cities(pplayer);
+    ai_data_turn_done(pplayer);
+  } players_iterate_end;
+  flush_packets();  /* to curb major city spam */
+
+  update_environmental_upset(S_POLLUTION, &game.heating,
+			     &game.globalwarming, &game.warminglevel,
 			     global_warming);
-  update_environmental_upset(S_FALLOUT, &game.info.cooling,
-			     &game.info.nuclearwinter, &game.info.coolinglevel,
+  update_environmental_upset(S_FALLOUT, &game.cooling,
+			     &game.nuclearwinter, &game.coolinglevel,
 			     nuclear_winter);
   update_diplomatics();
+  do_apollo_program();
+  marco_polo_make_contact();
   make_history_report();
-  stdinhand_turn();
   send_player_turn_notifications(NULL);
-
-  freelog(LOG_DEBUG, "Gamenextyear");
-  game_advance_year();
-
-  freelog(LOG_DEBUG, "Updatetimeout");
-  update_timeout();
-
-  freelog(LOG_DEBUG, "Sendgameinfo");
-  send_game_info(NULL);
-
-  freelog(LOG_DEBUG, "Sendplayerinfo");
-  send_player_info(NULL, NULL);
-
-  freelog(LOG_DEBUG, "Sendyeartoclients");
-  send_year_to_clients(game.info.year);
+  freelog(LOG_DEBUG, "Turn ended.");
+  game.turn_start = time(NULL);
 }
 
 /**************************************************************************
 Unconditionally save the game, with specified filename.
 Always prints a message: either save ok, or failed.
 
-Note that if !HAVE_LIBZ, then game.info.save_compress_level should never
+Note that if !HAVE_LIBZ, then game.save_compress_level should never
 become non-zero, so no need to check HAVE_LIBZ explicitly here as well.
 **************************************************************************/
-void save_game(char *orig_filename, const char *save_reason)
+void save_game(char *orig_filename)
 {
   char filename[600];
-  char *dot;
   struct section_file file;
   struct timer *timer_cpu, *timer_user;
 
-  if (!orig_filename) {
-    filename[0] = '\0';
-  } else {
+  if (orig_filename && orig_filename[0] != '\0'){
     sz_strlcpy(filename, orig_filename);
-  }
-
-  /* Strip extension. */
-  if ((dot = strchr(filename, '.'))) {
-    *dot = '\0';
-  }
-
-  /* If orig_filename is NULL or empty, use "civgame.info.year>m". */
-  if (filename[0] == '\0'){
+  } else { /* If orig_filename is NULL or empty, use "civgame<year>m.sav" */
     my_snprintf(filename, sizeof(filename),
-	"%s%+05dm", game.save_name, game.info.year);
+		"%s%+05dm.sav", game.save_name, game.year);
   }
   
   timer_cpu = new_timer_start(TIMER_CPU, TIMER_ACTIVE);
   timer_user = new_timer_start(TIMER_USER, TIMER_ACTIVE);
     
   section_file_init(&file);
-  game_save(&file, save_reason);
+  game_save(&file);
 
-  /* Append ".sav" to filename. */
-  sz_strlcat(filename, ".sav");
-
-  if (game.info.save_compress_level > 0) {
-    switch (game.info.save_compress_type) {
-#ifdef HAVE_LIBZ
-    case FZ_ZLIB:
-      /* Append ".gz" to filename. */
+  if (game.save_compress_level > 0) {
+    /* Append ".gz" to filename if not there: */
+    size_t len = strlen(filename);
+    if (len < 3 || strcmp(filename+len-3, ".gz") != 0) {
       sz_strlcat(filename, ".gz");
-      break;
-#endif
-#ifdef HAVE_LIBBZ2
-    case FZ_BZIP2:
-      /* Append ".bz2" to filename. */
-      sz_strlcat(filename, ".bz2");
-      break;
-#endif
-    case FZ_PLAIN:
-      break;
-    default:
-      freelog(LOG_ERROR, _("Unsupported compression type %d"),
-              game.info.save_compress_type);
-      notify_conn(NULL, NULL, E_SETTING,
-                  _("Unsupported compression type %d"),
-                  game.info.save_compress_type);
-      break;
     }
   }
 
-  if (!path_is_absolute(filename)) {
-    char tmpname[600];
-
-    /* Ensure the saves directory exists. */
-    make_dir(srvarg.saves_pathname);
-
-    sz_strlcpy(tmpname, srvarg.saves_pathname);
-    if (tmpname[0] != '\0') {
-      sz_strlcat(tmpname, "/");
-    }
-    sz_strlcat(tmpname, filename);
-    sz_strlcpy(filename, tmpname);
-  }
-
-  if (!section_file_save(&file, filename, game.info.save_compress_level,
-                         game.info.save_compress_type))
+  if(!section_file_save(&file, filename, game.save_compress_level))
     con_write(C_FAIL, _("Failed saving game as %s"), filename);
   else
     con_write(C_OK, _("Game saved as %s"), filename);
@@ -976,18 +577,18 @@ void save_game(char *orig_filename, const char *save_reason)
 }
 
 /**************************************************************************
-Save game with autosave filename
+Save game with autosave filename, and call gamelog_save().
 **************************************************************************/
-void save_game_auto(const char *save_reason)
+static void save_game_auto(void)
 {
   char filename[512];
 
   assert(strlen(game.save_name)<256);
   
   my_snprintf(filename, sizeof(filename),
-	      "%s%+05d.sav", game.save_name, game.info.year);
-  save_game(filename, save_reason);
-  save_ppm();
+	      "%s%+05d.sav", game.save_name, game.year);
+  save_game(filename);
+  gamelog_save();		/* should this be in save_game()? --dwp */
 }
 
 /**************************************************************************
@@ -995,137 +596,95 @@ void save_game_auto(const char *save_reason)
 **************************************************************************/
 void start_game(void)
 {
-  if (S_S_INITIAL != server_state()) {
+  if(server_state!=PRE_GAME_STATE) {
     con_puts(C_SYNTAX, _("The game is already running."));
     return;
   }
 
-  /* Remove ALLOW_CTRL from whoever has it (gotten from 'first'). */
-  conn_list_iterate(game.est_connections, pconn) {
-    if (pconn->access_level == ALLOW_CTRL) {
-      notify_conn(NULL, NULL, E_SETTING,
-		  _("%s lost control cmdlevel on "
-		    "game start.  Use voting from now on."),
-		  pconn->username);
-      pconn->access_level = ALLOW_INFO;
-    }
-  } conn_list_iterate_end;
-
   con_puts(C_OK, _("Starting game."));
 
-  set_server_state(S_S_GENERATING_WAITING); /* loaded ??? */
+  server_state=SELECT_RACES_STATE; /* loaded ??? */
   force_end_of_sniff = TRUE;
-  /* There's no stateful packet set to client until srv_ready(). */
-}
-
-/**************************************************************************
- Quit the server and exit.
-**************************************************************************/
-void server_quit(void)
-{
-  set_server_state(S_S_OVER);
-  server_game_free();
-  diplhand_free();
-#ifdef HAVE_AUTH
-  if (srvarg.auth_enabled) {
-    /* If auth has been initialized */
-    auth_free();
-  }
-#endif /* HAVE_AUTH */
-  stdinhand_free();
-  close_connections_and_socket();
-  exit(EXIT_SUCCESS);
+  game.turn_start = time(NULL);
 }
 
 /**************************************************************************
 ...
 **************************************************************************/
-void handle_report_req(struct connection *pconn, enum report_type type)
+static void handle_report_request(struct connection *pconn,
+				  enum report_type type)
 {
-  struct conn_list *dest = pconn->self;
+  struct conn_list *dest = &pconn->self;
   
-  if (S_S_RUNNING != server_state() && S_S_OVER != server_state()) {
+  if (server_state != RUN_GAME_STATE && server_state != GAME_OVER_STATE
+      && type != REPORT_SERVER_OPTIONS1 && type != REPORT_SERVER_OPTIONS2) {
     freelog(LOG_ERROR, "Got a report request %d before game start", type);
     return;
   }
 
-  if (NULL == pconn->playing && !pconn->observer) {
-    freelog(LOG_ERROR,
-            "Got a report request %d from detached connection", type);
-    return;
-  }
-
   switch(type) {
-  case REPORT_WONDERS_OF_THE_WORLD:
+   case REPORT_WONDERS_OF_THE_WORLD:
     report_wonders_of_the_world(dest);
-    return;
-  case REPORT_TOP_5_CITIES:
+    break;
+   case REPORT_TOP_5_CITIES:
     report_top_five_cities(dest);
-    return;
-  case REPORT_DEMOGRAPHIC:
+    break;
+   case REPORT_DEMOGRAPHIC:
     report_demographics(pconn);
-    return;
+    break;
+  case REPORT_SERVER_OPTIONS1:
+    report_server_options(dest, 1);
+    break;
+  case REPORT_SERVER_OPTIONS2:
+    report_server_options(dest, 2);
+    break;
+  case REPORT_SERVER_OPTIONS: /* obsolete */
+  default:
+    notify_conn(dest, "Game: request for unknown report (type %d)", type);
   }
-
-  notify_conn(dest, NULL, E_BAD_COMMAND,
-	      _("request for unknown report (type %d)"), type);
 }
 
 /**************************************************************************
 ...
 **************************************************************************/
-void identity_number_release(int id)
+void dealloc_id(int id)
 {
-  identity_numbers_used[id/8] &= 0xff ^ (1<<(id%8));
+  used_ids[id/8]&= 0xff ^ (1<<(id%8));
 }
 
 /**************************************************************************
 ...
 **************************************************************************/
-void identity_number_reserve(int id)
+bool is_id_allocated(int id)
 {
-  identity_numbers_used[id/8] |= (1<<(id%8));
+  return TEST_BIT(used_ids[id / 8], id % 8);
 }
 
 /**************************************************************************
 ...
 **************************************************************************/
-static bool identity_number_is_used(int id)
+void alloc_id(int id)
 {
-  return TEST_BIT(identity_numbers_used[id/8], id%8);
+  used_ids[id/8]|= (1<<(id%8));
 }
 
 /**************************************************************************
-  Truncation of unsigned short wraps at 65K, skipping IDENTITY_NUMBER_ZERO
-  Setup in server_game_init()
+...
 **************************************************************************/
-int identity_number(void)
-{
-  int retries = 0;
 
-  while (identity_number_is_used(++server.identity_number)) {
-    /* try again */
-    if (++retries >= IDENTITY_NUMBER_SIZE) {
-      die("exhausted city and unit numbers!");
-    }
+int get_next_id_number(void)
+{
+  while (is_id_allocated(++global_id_counter) || global_id_counter == 0) {
+    /* nothing */
   }
-  identity_number_reserve(server.identity_number);
-  return server.identity_number;
-}
-
-/**************************************************************************
-...
-**************************************************************************/
-int player_count_no_barbarians(void)
-{
-  return player_count() - server.nbarbarians;
+  return global_id_counter;
 }
 
 /**************************************************************************
 Returns 0 if connection should be closed (because the clients was
 rejected). Returns 1 else.
 **************************************************************************/
-bool server_packet_input(struct connection *pconn, void *packet, int type)
+bool handle_packet_input(struct connection *pconn, void *packet, int type)
 {
   struct player *pplayer;
 
@@ -1133,138 +692,256 @@ bool server_packet_input(struct connection *pconn, void *packet, int type)
   if (!packet)
     return TRUE;
 
-  /* 
-   * Old pre-delta clients (before 2003-11-28) send a
-   * PACKET_LOGIN_REQUEST (type 0) to the server. We catch this and
-   * reply with an old reject packet. Since there is no struct for
-   * this old packet anymore we build it by hand.
-   */
-  if (type == 0) {
-    unsigned char buffer[4096];
-    struct data_out dout;
-
-    freelog(LOG_NORMAL,
-	    _("Warning: rejecting old client %s"), conn_description(pconn));
-
-    dio_output_init(&dout, buffer, sizeof(buffer));
-    dio_put_uint16(&dout, 0);
-
-    /* 1 == PACKET_LOGIN_REPLY in the old client */
-    dio_put_uint8(&dout, 1);
-
-    dio_put_bool32(&dout, FALSE);
-    dio_put_string(&dout, _("Your client is too old. To use this server, "
-			    "please upgrade your client to a "
-			    "Freeciv 2.2 or later."));
-    dio_put_string(&dout, "");
-
-    {
-      size_t size = dio_output_used(&dout);
-      dio_output_rewind(&dout);
-      dio_put_uint16(&dout, size);
-
-      /* 
-       * Use send_connection_data instead of send_packet_data to avoid
-       * compression.
-       */
-      send_connection_data(pconn, buffer, size);
-    }
-
-    return FALSE;
-  }
-
-  if (type == PACKET_SERVER_JOIN_REQ) {
-    return handle_login_request(pconn,
-				(struct packet_server_join_req *) packet);
-  }
-
-  /* May be received on a non-established connection. */
-  if (type == PACKET_AUTHENTICATION_REPLY) {
-    return handle_authentication_reply(pconn,
-				((struct packet_authentication_reply *)
-				 packet)->password);
-  }
-
-  if (type == PACKET_CONN_PONG) {
-    handle_conn_pong(pconn);
-    return TRUE;
+  if (type == PACKET_REQUEST_JOIN_GAME) {
+    bool result = handle_request_join_game(pconn,
+					  (struct packet_req_join_game *) packet);
+    free(packet);
+    return result;
   }
 
   if (!pconn->established) {
     freelog(LOG_ERROR, "Received game packet from unaccepted connection %s",
 	    conn_description(pconn));
+    free(packet);
     return TRUE;
   }
   
-  /* valid packets from established connections but non-players */
-  if (type == PACKET_CHAT_MSG_REQ
-      || type == PACKET_SINGLE_WANT_HACK_REQ
-      || type == PACKET_NATION_SELECT_REQ
-      || type == PACKET_REPORT_REQ
-      || type == PACKET_EDIT_MODE
-      || type == PACKET_EDIT_TILE
-      || type == PACKET_EDIT_UNIT
-      || type == PACKET_EDIT_CREATE_CITY
-      || type == PACKET_EDIT_PLAYER) {
-    if (!server_handle_packet(type, packet, NULL, pconn)) {
-      freelog(LOG_ERROR, "Received unknown packet %d from %s",
-	      type, conn_description(pconn));
-    }
-    return TRUE;
-  }
+  pplayer = pconn->player;
 
-  pplayer = pconn->playing;
-
-  if (NULL == pplayer) {
+  if(!pplayer) {
     /* don't support these yet */
     freelog(LOG_ERROR, "Received packet from non-player connection %s",
  	    conn_description(pconn));
+    free(packet);
     return TRUE;
   }
 
-  if (S_S_RUNNING != server_state()
-      && type != PACKET_NATION_SELECT_REQ
-      && type != PACKET_PLAYER_READY
+  if (server_state != RUN_GAME_STATE
+      && type != PACKET_ALLOC_NATION
+      && type != PACKET_CHAT_MSG
       && type != PACKET_CONN_PONG
-      && type != PACKET_REPORT_REQ) {
-    if (S_S_OVER == server_state()) {
+      && type != PACKET_REPORT_REQUEST) {
+    if (server_state == GAME_OVER_STATE) {
       /* This can happen by accident, so we don't want to print
 	 out lots of error messages. Ie, we use LOG_DEBUG. */
       freelog(LOG_DEBUG, "got a packet of type %d "
-			  "in S_S_OVER", type);
+			  "in GAME_OVER_STATE", type);
     } else {
       freelog(LOG_ERROR, "got a packet of type %d "
-	                 "outside S_S_RUNNING", type);
+	                 "outside RUN_GAME_STATE", type);
     }
+    free(packet);
     return TRUE;
   }
 
   pplayer->nturns_idle=0;
 
   if((!pplayer->is_alive || pconn->observer)
-     && !(type == PACKET_REPORT_REQ || type == PACKET_CONN_PONG)) {
+     && !(type == PACKET_CHAT_MSG || type == PACKET_REPORT_REQUEST
+	  || type == PACKET_CONN_PONG)) {
     freelog(LOG_ERROR, _("Got a packet of type %d from a "
 			 "dead or observer player"), type);
+    free(packet);
     return TRUE;
   }
   
   /* Make sure to set this back to NULL before leaving this function: */
   pplayer->current_conn = pconn;
+  
+  switch(type) {
+    
+  case PACKET_TURN_DONE:
+    handle_turn_done(pplayer);
+    break;
 
-  if (!server_handle_packet(type, packet, pplayer, pconn)) {
+  case PACKET_ALLOC_NATION:
+    handle_alloc_nation(pplayer, (struct packet_alloc_nation *)packet);
+    break;
+
+  case PACKET_UNIT_INFO:
+    handle_unit_info(pplayer, (struct packet_unit_info *)packet);
+    break;
+
+  case PACKET_MOVE_UNIT:
+    handle_move_unit(pplayer, (struct packet_move_unit *)packet);
+    break;
+ 
+  case PACKET_CHAT_MSG:
+    handle_chat_msg(pconn, (struct packet_generic_message *)packet);
+    break;
+
+  case PACKET_CITY_SELL:
+    handle_city_sell(pplayer, (struct packet_city_request *)packet);
+    break;
+
+  case PACKET_CITY_BUY:
+    handle_city_buy(pplayer, (struct packet_city_request *)packet);
+    break;
+   
+  case PACKET_CITY_CHANGE:
+    handle_city_change(pplayer, (struct packet_city_request *)packet);
+    break;
+
+  case PACKET_CITY_WORKLIST:
+    handle_city_worklist(pplayer, (struct packet_city_request *)packet);
+    break;
+
+  case PACKET_CITY_MAKE_SPECIALIST:
+    handle_city_make_specialist(pplayer, (struct packet_city_request *)packet);
+    break;
+
+  case PACKET_CITY_MAKE_WORKER:
+    handle_city_make_worker(pplayer, (struct packet_city_request *)packet);
+    break;
+
+  case PACKET_CITY_CHANGE_SPECIALIST:
+    handle_city_change_specialist(pplayer, (struct packet_city_request *)packet);
+    break;
+
+  case PACKET_CITY_RENAME:
+    handle_city_rename(pplayer, (struct packet_city_request *)packet);
+    break;
+
+  case PACKET_PLAYER_RATES:
+    handle_player_rates(pplayer, (struct packet_player_request *)packet);
+    break;
+
+  case PACKET_PLAYER_REVOLUTION:
+    handle_player_revolution(pplayer);
+    break;
+
+  case PACKET_PLAYER_GOVERNMENT:
+    handle_player_government(pplayer, (struct packet_player_request *)packet);
+    break;
+
+  case PACKET_PLAYER_RESEARCH:
+    handle_player_research(pplayer, (struct packet_player_request *)packet);
+    break;
+
+  case PACKET_PLAYER_TECH_GOAL:
+    handle_player_tech_goal(pplayer, (struct packet_player_request *)packet);
+    break;
+
+  case PACKET_UNIT_BUILD_CITY:
+    handle_unit_build_city(pplayer, (struct packet_unit_request *)packet);
+    break;
+
+  case PACKET_UNIT_DISBAND:
+    handle_unit_disband(pplayer, (struct packet_unit_request *)packet);
+    break;
+
+  case PACKET_UNIT_CHANGE_HOMECITY:
+    handle_unit_change_homecity(pplayer, (struct packet_unit_request *)packet);
+    break;
+
+  case PACKET_UNIT_AUTO:
+    handle_unit_auto_request(pplayer, (struct packet_unit_request *)packet);
+    break;
+
+  case PACKET_UNIT_UNLOAD:
+    handle_unit_unload_request(pplayer, (struct packet_unit_request *)packet);
+    break;
+
+  case PACKET_UNITTYPE_UPGRADE:
+    handle_upgrade_unittype_request(pplayer, (struct packet_unittype_info *)packet);
+    break;
+
+  case PACKET_UNIT_ESTABLISH_TRADE:
+    (void) handle_unit_establish_trade(pplayer, (struct packet_unit_request *)packet);
+    break;
+
+  case PACKET_UNIT_HELP_BUILD_WONDER:
+    handle_unit_help_build_wonder(pplayer, (struct packet_unit_request *)packet);
+    break;
+
+  case PACKET_UNIT_GOTO_TILE:
+    handle_unit_goto_tile(pplayer, (struct packet_unit_request *)packet);
+    break;
+    
+  case PACKET_DIPLOMAT_ACTION:
+    handle_diplomat_action(pplayer, (struct packet_diplomat_action *)packet);
+    break;
+  case PACKET_REPORT_REQUEST:
+    handle_report_request(pconn,
+			  ((struct packet_generic_integer *)packet)->value);
+    break;
+  case PACKET_DIPLOMACY_INIT_MEETING:
+    handle_diplomacy_init(pplayer, (struct packet_diplomacy_info *)packet);
+    break;
+  case PACKET_DIPLOMACY_CANCEL_MEETING:
+    handle_diplomacy_cancel_meeting(pplayer, (struct packet_diplomacy_info *)packet);  
+    break;
+  case PACKET_DIPLOMACY_CREATE_CLAUSE:
+    handle_diplomacy_create_clause(pplayer, (struct packet_diplomacy_info *)packet);  
+    break;
+  case PACKET_DIPLOMACY_REMOVE_CLAUSE:
+    handle_diplomacy_remove_clause(pplayer, (struct packet_diplomacy_info *)packet);  
+    break;
+  case PACKET_DIPLOMACY_ACCEPT_TREATY:
+    handle_diplomacy_accept_treaty(pplayer, (struct packet_diplomacy_info *)packet);  
+    break;
+  case PACKET_CITY_REFRESH:
+    handle_city_refresh(pplayer, (struct packet_generic_integer *)packet);
+    break;
+  case PACKET_INCITE_INQ:
+    handle_incite_inq(pconn, (struct packet_generic_integer *)packet);
+    break;
+  case PACKET_UNIT_UPGRADE:
+    handle_unit_upgrade_request(pplayer, (struct packet_unit_request *)packet);
+    break;
+  case PACKET_CITY_OPTIONS:
+    handle_city_options(pplayer, (struct packet_generic_values *)packet);
+    break;
+  case PACKET_SPACESHIP_ACTION:
+    handle_spaceship_action(pplayer, (struct packet_spaceship_action *)packet);
+    break;
+  case PACKET_UNIT_NUKE:
+    handle_unit_nuke(pplayer, (struct packet_unit_request *)packet);
+    break;
+  case PACKET_CITY_NAME_SUGGEST_REQ:
+    handle_city_name_suggest_req(pconn,
+				 (struct packet_generic_integer *)packet);
+    break;
+  case PACKET_UNIT_PARADROP_TO:
+    handle_unit_paradrop_to(pplayer, (struct packet_unit_request *)packet);
+    break;
+  case PACKET_PLAYER_CANCEL_PACT:
+    handle_player_cancel_pact(pplayer,
+			      ((struct packet_generic_integer *)packet)->value);
+    break;
+  case PACKET_UNIT_CONNECT:
+    handle_unit_connect(pplayer, (struct packet_unit_connect *)packet);
+    break;
+  case PACKET_PLAYER_REMOVE_VISION:
+    handle_player_remove_vision(pplayer, (struct packet_generic_integer *)packet);
+    break;
+  case PACKET_GOTO_ROUTE:
+    handle_goto_route(pplayer, (struct packet_goto_route *)packet);
+    break;
+  case PACKET_PATROL_ROUTE:
+    handle_patrol_route(pplayer, (struct packet_goto_route *)packet);
+    break;
+  case PACKET_CONN_PONG:
+    pconn->ponged = TRUE;
+    break;
+  case PACKET_UNIT_AIRLIFT:
+    handle_unit_airlift(pplayer, (struct packet_unit_request *)packet);
+    break;
+  case PACKET_ATTRIBUTE_CHUNK:
+    handle_player_attribute_chunk(pplayer,
+				  (struct packet_attribute_chunk *)
+				  packet);
+    break;
+  case PACKET_PLAYER_ATTRIBUTE_BLOCK:
+    handle_player_attribute_block(pplayer);
+    break;
+
+  default:
     freelog(LOG_ERROR, "Received unknown packet %d from %s",
 	    type, conn_description(pconn));
   }
 
-  if (S_S_RUNNING == server_state()
-      && type != PACKET_PLAYER_READY) {
-    /* handle_player_ready() calls start_game(), but the game isn't started
-     * until the main loop is re-entered, so kill_dying_players would think
-     * all players are dead.  This should be solved by adding a new
-     * game state (now S_S_GENERATING_WAITING). */
-    kill_dying_players();
-  }
-
+  free(packet);
   pplayer->current_conn = NULL;
   return TRUE;
 }
@@ -1272,97 +949,78 @@ bool server_packet_input(struct connection *pconn, void *packet, int type)
 /**************************************************************************
 ...
 **************************************************************************/
-void check_for_full_turn_done(void)
+static void check_for_full_turn_done(void)
 {
-  bool connected = FALSE;
-
   /* fixedlength is only applicable if we have a timeout set */
-  if (game.info.fixedlength && game.info.timeout != 0) {
+  if (game.fixedlength && game.timeout != 0)
     return;
-  }
 
-  /* If there are no connected players, don't automatically advance.  This is
-   * a hack to prevent all-AI games from running rampant.  Note that if
-   * timeout is set to -1 this function call is skipped entirely and the
-   * server will run rampant. */
   players_iterate(pplayer) {
-    if (pplayer->is_connected) {
-      connected = TRUE;
-      break;
+    if (game.turnblock) {
+      if (!pplayer->ai.control && pplayer->is_alive && !pplayer->turn_done)
+        return;
+    } else {
+      if(pplayer->is_connected && pplayer->is_alive && !pplayer->turn_done) {
+        return;
+      }
     }
   } players_iterate_end;
-  if (!connected) {
-    return;
-  }
-
-  phase_players_iterate(pplayer) {
-    if (game.info.turnblock && !pplayer->ai.control && pplayer->is_alive
-	&& !pplayer->phase_done) {
-      /* If turnblock is enabled check for human players, connected
-       * or not. */
-      return;
-    } else if (pplayer->is_connected && pplayer->is_alive
-	       && !pplayer->phase_done) {
-      /* In all cases, we wait for any connected players. */
-      return;
-    }
-  } phase_players_iterate_end;
 
   force_end_of_sniff = TRUE;
 }
 
 /**************************************************************************
-  Checks if the player name belongs to the default player names of a
-  particular player.
+...
+(Hmm, how should "turn done" work for multi-connected non-observer players?)
 **************************************************************************/
-static bool is_default_nation_name(const char *name,
-				   const struct nation_type *nation)
+static void handle_turn_done(struct player *pplayer)
 {
-  int choice;
+  pplayer->turn_done = TRUE;
 
-  for (choice = 0; choice < nation->leader_count; choice++) {
-    if (mystrcasecmp(name, nation->leaders[choice].name) == 0) {
-      return TRUE;
-    }
-  }
+  check_for_full_turn_done();
 
-  return FALSE;
+  send_player_info(pplayer, NULL);
 }
 
 /**************************************************************************
-  Check if this name is allowed for the player.  Fill out the error message
-  (a translated string to be sent to the client) if not.
+...
 **************************************************************************/
-static bool is_allowed_player_name(struct player *pplayer,
-				   const struct nation_type *nation,
-				   const char *name,
-				   char *error_buf, size_t bufsz)
+static void handle_alloc_nation(struct player *pplayer,
+				struct packet_alloc_nation *packet)
 {
-  struct connection *pconn = find_conn_by_user(pplayer->username);
+  int nation_used_count;
 
-  /* An empty name is surely not allowed. */
-  if (strlen(name) == 0) {
-    if (error_buf) {
-      my_snprintf(error_buf, bufsz, _("Please choose a non-blank name."));
-    }
-    return FALSE;
+  if (server_state != SELECT_RACES_STATE) {
+    freelog(LOG_ERROR, _("Trying to alloc nation outside "
+			 "of SELECT_RACES_STATE!"));
+    return;
+  }  
+  
+  if (packet->nation_no < 0 || packet->nation_no >= game.nation_count) {
+    return;
   }
 
-  /* Any name already taken is not allowed. */
+  remove_leading_trailing_spaces(packet->name);
+
+  if (strlen(packet->name)==0) {
+    notify_player(pplayer, _("Please choose a non-blank name."));
+    send_select_nation(pplayer);
+    return;
+  }
+
+  if (!get_sane_name(packet->name)) {
+    notify_player(pplayer, _("Please choose a legal name."));
+    send_select_nation(pplayer);
+    return;
+  }
+
+  packet->name[0] = my_toupper(packet->name[0]);
+
   players_iterate(other_player) {
-    if (other_player == pplayer) {
-      /* We don't care if we're the one using the name/nation. */
-      continue;
-    }
-    /* FIXME: currently cannot use nation_of_player(other_player)
-     * as the nation debug code is buggy and doesn't test nation for NULL
-     */
-    if (other_player->nation == nation) {
-      if (error_buf) {
-	my_snprintf(error_buf, bufsz, _("That nation is already in use."));
-      }
-      return FALSE;
-    } else {
+    if(other_player->nation==packet->nation_no) {
+       send_select_nation(pplayer); /* it failed - nation taken */
+       return;
+    } else
       /* Check to see if name has been taken.
        * Ignore case because matches elsewhere are case-insenstive.
        * Don't limit this check to just players with allocated nation:
@@ -1372,349 +1030,640 @@ static bool is_allowed_player_name(struct player *pplayer,
        * times (for server commands etc), including during nation
        * allocation phase.
        */
-      if (mystrcasecmp(player_name(other_player), name) == 0) {
-	if (error_buf) {
-	  my_snprintf(error_buf, bufsz,
-		      _("Another player already has the name '%s'.  Please "
-			"choose another name."), name);
-	}
-	return FALSE;
-      }
+      if (other_player->player_no != pplayer->player_no
+	  && mystrcasecmp(other_player->name,packet->name) == 0) {
+	notify_player(pplayer,
+		     _("Another player already has the name '%s'.  "
+		       "Please choose another name."), packet->name);
+       send_select_nation(pplayer);
+       return;
     }
   } players_iterate_end;
 
-  /* Any name from the default list is always allowed. */
-  if (is_default_nation_name(name, nation)) {
-    return TRUE;
+  notify_conn_ex(&game.est_connections, -1, -1, E_NATION_SELECTED,
+		 _("Game: %s is the %s ruler %s."), pplayer->name,
+		 get_nation_name(packet->nation_no), packet->name);
+
+  /* inform player his choice was ok */
+  lsend_packet_generic_empty(&pplayer->connections,
+			     PACKET_SELECT_NATION_OK);
+
+  pplayer->nation=packet->nation_no;
+  sz_strlcpy(pplayer->name, packet->name);
+  pplayer->is_male=packet->is_male;
+  pplayer->city_style=packet->city_style;
+
+  /* tell the other players, that the nation is now unavailable */
+  nation_used_count = 0;
+
+  players_iterate(other_player) {
+    if (other_player->nation == MAX_NUM_NATIONS) {
+      send_select_nation(other_player);
+    } else {
+      nation_used_count++;	/* count used nations */
+    }
+  } players_iterate_end;
+
+  mark_nation_as_used(packet->nation_no);
+
+  /* if there's no nation left, reject remaining players, sorry */
+  if( nation_used_count == game.playable_nation_count ) {   /* barb */
+    players_iterate(other_player) {
+      if (other_player->nation == MAX_NUM_NATIONS) {
+	freelog(LOG_NORMAL, _("No nations left: Removing player %s."),
+		other_player->name);
+	notify_player(other_player,
+		      _("Game: Sorry, there are no nations left."));
+	server_remove_player(other_player);
+      }
+    } players_iterate_end;
+  }
+}
+
+/**************************************************************************
+ Sends the currently collected selected nations to the given player.
+**************************************************************************/
+static void send_select_nation(struct player *pplayer)
+{
+  struct packet_nations_used packet;
+
+  packet.num_nations_used = 0;
+
+  players_iterate(other_player) {
+    if (other_player->nation == MAX_NUM_NATIONS) {
+      continue;
+    }
+    packet.nations_used[packet.num_nations_used] = other_player->nation;
+    packet.num_nations_used++;
+  } players_iterate_end;
+
+  lsend_packet_nations_used(&pplayer->connections, &packet);
+}
+
+/**************************************************************************
+ Send a join_game reply, accepting the connection.
+ pconn->player should be set and non-NULL.
+ 'rejoin' is whether this is a new player, or re-connection.
+ Prints a log message, and notifies other players.
+**************************************************************************/
+static void join_game_accept(struct connection *pconn, bool rejoin)
+{
+  struct packet_join_game_reply packet;
+  struct player *pplayer = pconn->player;
+
+  assert(pplayer != NULL);
+  packet.you_can_join = TRUE;
+  sz_strlcpy(packet.capability, our_capability);
+  my_snprintf(packet.message, sizeof(packet.message),
+	      "%s %s.", (rejoin?"Welcome back":"Welcome"), pplayer->name);
+  send_packet_join_game_reply(pconn, &packet);
+  pconn->established = TRUE;
+  conn_list_insert_back(&game.est_connections, pconn);
+  conn_list_insert_back(&game.game_connections, pconn);
+
+  send_conn_info(&pconn->self, &game.est_connections);
+
+  freelog(LOG_NORMAL, _("%s has joined as player %s."),
+	  pconn->name, pplayer->name);
+  conn_list_iterate(game.est_connections, aconn) {
+    if (aconn!=pconn) {
+      notify_conn(&aconn->self,
+		  _("Game: Connection %s from %s has joined as player %s."),
+		  pconn->name, pconn->addr, pplayer->name);
+    }
+  }
+  conn_list_iterate_end;
+}
+
+/**************************************************************************
+ Introduce connection/client/player to server, and notify of other players.
+**************************************************************************/
+static void introduce_game_to_connection(struct connection *pconn)
+{
+  struct conn_list *dest;
+  char hostname[512];
+
+  if (!pconn) {
+    return;
+  }
+  dest = &pconn->self;
+  
+  if (my_gethostname(hostname, sizeof(hostname))==0) {
+    notify_conn(dest, _("Welcome to the %s Server running at %s port %d."), 
+		freeciv_name_version(), hostname, srvarg.port);
+  } else {
+    notify_conn(dest, _("Welcome to the %s Server at port %d."),
+		freeciv_name_version(), srvarg.port);
   }
 
-  /* To prevent abuse, only players with HACK access (usually local
-   * connections) can use non-ascii names.  Otherwise players could use
-   * confusing garbage names in multi-player games. */
-    /* FIXME: is there a better way to determine if a *player* has hack
-     * access? */
-  if (!is_ascii_name(name)
-      && (!pconn || pconn->access_level != ALLOW_HACK)) {
-    if (error_buf) {
-      my_snprintf(error_buf, bufsz, _("Please choose a name containing "
-				      "only ASCII characters."));
+  /* tell who we're waiting on to end the game turn */
+  if (game.turnblock) {
+    players_iterate(cplayer) {
+      if (cplayer->is_alive
+	  && !cplayer->ai.control
+	  && !cplayer->turn_done
+	  && cplayer != pconn->player) {  /* skip current player */
+	notify_conn(dest, _("Turn-blocking game play: "
+			    "waiting on %s to finish turn..."),
+		    cplayer->name);
+      }
+    } players_iterate_end;
+  }
+
+  if (server_state==RUN_GAME_STATE) {
+    /* if the game is running, players can just view the Players menu?  --dwp */
+    return;
+  }
+
+  /* Just use output of server command 'list' to inform about other
+   * players and player-connections:
+   */
+  show_players(pconn);
+
+  /* notify_conn(dest, "Waiting for the server to start the game."); */
+  /* I would put this here, but then would need another message when
+     the game is started. --dwp */
+}
+
+/**************************************************************************
+  This is used when a new player joins a game, before the game
+  has started.  If pconn is NULL, is an AI, else a client.
+  ...
+**************************************************************************/
+void accept_new_player(char *name, struct connection *pconn)
+{
+  struct player *pplayer = &game.players[game.nplayers];
+
+  server_player_init(pplayer, FALSE);
+  /* sometimes needed if players connect/disconnect to avoid
+   * inheriting stale AI status etc
+   */
+  
+  sz_strlcpy(pplayer->name, name);
+  sz_strlcpy(pplayer->username, name);
+
+  if (pconn) {
+    associate_player_connection(pplayer, pconn);
+    join_game_accept(pconn, FALSE);
+  } else {
+    freelog(LOG_NORMAL, _("%s has been added as an AI-controlled player."),
+	    name);
+    notify_player(NULL,
+		  _("Game: %s has been added as an AI-controlled player."),
+		  name);
+  }
+
+  game.nplayers++;
+
+  introduce_game_to_connection(pconn);
+  (void) send_server_info_to_metaserver(TRUE, FALSE);
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+static void reject_new_player(char *msg, struct connection *pconn)
+{
+  struct packet_join_game_reply packet;
+  
+  packet.you_can_join = FALSE;
+  sz_strlcpy(packet.capability, our_capability);
+  sz_strlcpy(packet.message, msg);
+  send_packet_join_game_reply(pconn, &packet);
+}
+  
+/**************************************************************************
+  Try a single name as new connection name for set_unique_conn_name().
+  If name is ok, copy to pconn->name and return 1, else return 0.
+**************************************************************************/
+static bool try_conn_name(struct connection *pconn, const char *name)
+{
+  char save_name[MAX_LEN_NAME];
+
+  /* avoid matching current name in find_conn_by_name() */
+  sz_strlcpy(save_name, pconn->name);
+  pconn->name[0] = '\0';
+  
+  if (!find_conn_by_name(name)) {
+    sz_strlcpy(pconn->name, name);
+    return TRUE;
+  } else {
+    sz_strlcpy(pconn->name, save_name);
+    return FALSE;
+  }
+}
+
+/**************************************************************************
+  Set pconn->name based on reqested name req_name: either use req_name,
+  if no other connection has that name, else a modified name based on
+  req_name (req_name prefixed by digit and dash).
+  Returns 0 if req_name used unchanged, else 1.
+**************************************************************************/
+static bool set_unique_conn_name(struct connection *pconn, const char *req_name)
+{
+  char adjusted_name[MAX_LEN_NAME];
+  int i;
+  
+  if (try_conn_name(pconn, req_name)) {
+    return FALSE;
+  }
+  for(i=1; i<10000; i++) {
+    my_snprintf(adjusted_name, sizeof(adjusted_name), "%d-%s", i, req_name);
+    if (try_conn_name(pconn, adjusted_name)) {
+      return TRUE;
     }
+  }
+  /* This should never happen */
+  freelog(LOG_ERROR, "Too many failures in set_unique_conn_name(%s,%s)",
+	  pconn->name, req_name);
+  sz_strlcpy(pconn->name, req_name);
+  return FALSE;
+}
+
+/**************************************************************************
+Returns 0 if the clients gets rejected and the connection should be
+closed. Returns 1 if the client get accepted.
+**************************************************************************/
+static bool handle_request_join_game(struct connection *pconn, 
+				    struct packet_req_join_game *req)
+{
+  struct player *pplayer;
+  char msg[MAX_LEN_MSG];
+  char orig_name[MAX_LEN_NAME];
+  const char *allow;		/* pointer into game.allow_connect */
+  
+  sz_strlcpy(orig_name, req->name);
+  remove_leading_trailing_spaces(req->name);
+
+  /* Name-sanity check: could add more checks? */
+  if (strlen(req->name)==0) {
+    my_snprintf(msg, sizeof(msg), _("Invalid name '%s'"), orig_name);
+    reject_new_player(msg, pconn);
+    freelog(LOG_NORMAL, _("Rejected connection from %s with invalid name."),
+	    pconn->addr);
     return FALSE;
   }
 
+  if (!set_unique_conn_name(pconn, req->name)) {
+    freelog(LOG_NORMAL, _("Connection request from %s from %s"),
+	    req->name, pconn->addr);
+  } else {
+    freelog(LOG_NORMAL,
+	    _("Connection request from %s from %s (connection named %s)"),
+	    req->name, pconn->addr, pconn->name);
+  }
+  
+  freelog(LOG_NORMAL, _("%s has client version %d.%d.%d%s"),
+	  pconn->name, req->major_version, req->minor_version,
+	  req->patch_version, req->version_label);
+  freelog(LOG_VERBOSE, "Client caps: %s", req->capability);
+  freelog(LOG_VERBOSE, "Server caps: %s", our_capability);
+  sz_strlcpy(pconn->capability, req->capability);
+  
+  /* Make sure the server has every capability the client needs */
+  if (!has_capabilities(our_capability, req->capability)) {
+    my_snprintf(msg, sizeof(msg),
+		_("The client is missing a capability that this server needs.\n"
+		   "Server version: %d.%d.%d%s Client version: %d.%d.%d%s."
+		   "  Upgrading may help!"),
+	    MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION, VERSION_LABEL,
+	    req->major_version, req->minor_version,
+	    req->patch_version, req->version_label);
+    reject_new_player(msg, pconn);
+    freelog(LOG_NORMAL, _("%s was rejected: Mismatched capabilities."),
+	    pconn->name);
+    return FALSE;
+  }
+
+  /* Make sure the client has every capability the server needs */
+  if (!has_capabilities(req->capability, our_capability)) {
+    my_snprintf(msg, sizeof(msg),
+		_("The server is missing a capability that the client needs.\n"
+		   "Server version: %d.%d.%d%s Client version: %d.%d.%d%s."
+		   "  Upgrading may help!"),
+	    MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION, VERSION_LABEL,
+	    req->major_version, req->minor_version,
+	    req->patch_version, req->version_label);
+    reject_new_player(msg, pconn);
+    freelog(LOG_NORMAL, _("%s was rejected: Mismatched capabilities."),
+	    pconn->name);
+    return FALSE;
+  }
+
+  if( (pplayer=find_player_by_name(req->name)) || 
+      (pplayer=find_player_by_user(req->name))     ) {
+    if(is_barbarian(pplayer)) {
+      if(!(allow = strchr(game.allow_connect, 'b'))) {
+	reject_new_player(_("Sorry, no observation of barbarians "
+			    "in this game."), pconn);
+	freelog(LOG_NORMAL,
+		_("%s was rejected: No observation of barbarians."),
+		pconn->name);
+	return FALSE;
+      }
+    } else if(!pplayer->is_alive) {
+      if(!(allow = strchr(game.allow_connect, 'd'))) {
+	reject_new_player(_("Sorry, no observation of dead players "
+			    "in this game."), pconn);
+	freelog(LOG_NORMAL,
+		_("%s was rejected: No observation of dead players."),
+		pconn->name);
+	return FALSE;
+      }
+    } else if(pplayer->ai.control) {
+      if(!(allow = strchr(game.allow_connect, (game.is_new_game ? 'A' : 'a')))) {
+	reject_new_player(_("Sorry, no observation of AI players "
+			    "in this game."), pconn);
+	freelog(LOG_NORMAL,
+		_("%s was rejected: No observation of AI players."),
+		pconn->name);
+	return FALSE;
+      }
+    } else {
+      if(!(allow = strchr(game.allow_connect, (game.is_new_game ? 'H' : 'h')))) {
+	reject_new_player(_("Sorry, no reconnections to human-mode players "
+			    "in this game."), pconn);
+	freelog(LOG_NORMAL,
+		_("%s was rejected: No reconnection to human players."),
+		pconn->name);
+	return FALSE;
+      }
+    }
+
+    allow++;
+    if (conn_list_size(&pplayer->connections) > 0
+	&& !(*allow == '*' || *allow == '+' || *allow == '=')) {
+
+      /* The player exists but is already connected and multiple
+       * connections not permitted. */
+      
+      if(game.is_new_game && server_state==PRE_GAME_STATE) {
+	/* Duplicate names cause problems even in PRE_GAME_STATE
+	 * because they are used to identify players for various
+	 * server commands. --dwp
+	 */
+	reject_new_player(_("Sorry, someone else already has that name."),
+			  pconn);
+	freelog(LOG_NORMAL, _("%s was rejected: Name %s already used."),
+		pconn->name, req->name);
+	return FALSE;
+      }
+      else {
+	my_snprintf(msg, sizeof(msg), _("Sorry, %s is already connected."), 
+		    pplayer->name);
+	reject_new_player(msg, pconn);
+	freelog(LOG_NORMAL, _("%s was rejected: %s already connected."),
+		pconn->name, pplayer->name);
+	return FALSE;
+      }
+    }
+
+    /* The player exists and not connected or multi-conn allowed: */
+    if ((*allow == '=') || (*allow == '-')
+	|| (pplayer->is_connected && (*allow != '*'))) {
+      pconn->observer = TRUE;
+    }
+    associate_player_connection(pplayer, pconn);
+    join_game_accept(pconn, TRUE);
+    introduce_game_to_connection(pconn);
+    if(server_state==RUN_GAME_STATE) {
+      send_packet_generic_empty(pconn, PACKET_FREEZE_HINT);
+      send_rulesets(&pconn->self);
+      send_all_info(&pconn->self);
+      send_game_state(&pconn->self, CLIENT_GAME_RUNNING_STATE);
+      send_player_info(NULL,NULL);
+      send_diplomatic_meetings(pconn);
+      send_packet_generic_empty(pconn, PACKET_THAW_HINT);
+      send_packet_generic_empty(pconn, PACKET_START_TURN);
+    }
+    if (game.auto_ai_toggle && pplayer->ai.control) {
+      toggle_ai_player_direct(NULL, pplayer);
+    }
+    return TRUE;
+  }
+
+  /* unknown name */
+
+  if (server_state != PRE_GAME_STATE || !game.is_new_game) {
+    reject_new_player(_("Sorry, the game is already running."), pconn);
+    freelog(LOG_NORMAL, _("%s was rejected: Game running and unknown name %s."),
+	    pconn->name, req->name);
+    return FALSE;
+  }
+
+  if(game.nplayers >= game.max_players) {
+    reject_new_player(_("Sorry, the game is full."), pconn);
+    freelog(LOG_NORMAL, _("%s was rejected: Maximum number of players reached."),
+	    pconn->name);    
+    return FALSE;
+  }
+
+  if(!(allow = strchr(game.allow_connect, 'N'))) {
+    reject_new_player(_("Sorry, no new players allowed in this game."), pconn);
+    freelog(LOG_NORMAL, _("%s was rejected: No connections as new player."),
+	    pconn->name);
+    return FALSE;
+  }
+  
+  accept_new_player(req->name, pconn);
   return TRUE;
 }
 
-/****************************************************************************
-  Initialize the list of available nations.
-
-  Call this on server start, or when loading a scenario.
-****************************************************************************/
-void init_available_nations(void)
-{
-  bool start_nations;
-  int i;
-
-  if (map.num_start_positions > 0) {
-    start_nations = TRUE;
-
-    for (i = 0; i < map.num_start_positions; i++) {
-      if (map.start_positions[i].nation == NO_NATION_SELECTED) {
-	start_nations = FALSE;
-	break;
-      }
-    }
-  } else {
-    start_nations = FALSE;
-  }
-
-  if (start_nations) {
-    nations_iterate(nation) {
-      nation->is_available = FALSE;
-    } nations_iterate_end;
-    for (i = 0; i < map.num_start_positions; i++) {
-      map.start_positions[i].nation->is_available = TRUE;
-    }
-  }
-  nations_iterate(nation) {
-    /* Even though this function is called init_available_nations(),
-     * nation->player should never have value assigned to it
-     * (since it has beeen initialized in load_rulesets() ). */
-    if (nation->player != NULL) {
-
-      freelog(LOG_ERROR, "Player assigned to nation before "
-                         "init_available_nations()");
-
-      /* When we enter this execution branch, assert() will always
-       * fail. This one just provides more informative message than
-       * simple assert(FAIL); */
-      assert(nation->player == NULL);
-
-      /* Try to handle error situation as well as we can */
-      if (nation->player->nation == nation) {
-        /* At least assignment is consistent. Leave nation assigned,
-         * and make sure that nation is also marked available. */
-        nation->is_available = TRUE;
-      } else {
-        /* Not consistent. Just initialize the pointer and hope for the best */
-        nation->player = NULL;
-      }
-    }
-  } nations_iterate_end;
-}
-
 /**************************************************************************
-  Handles a pick-nation packet from the client.  These packets are
-  handled by connection because ctrl users may edit anyone's nation in
-  pregame, and editing is possible during a running game.
+  High-level server stuff when connection to client is closed or lost.
+  Reports loss to log, and to other players if the connection was a
+  player.  Also removes player if in pregame, applies auto_toggle, and
+  does check for turn done (since can depend on connection/ai status).
+  Note caller should also call close_connection() after this, to do
+  lower-level close stuff.
 **************************************************************************/
-void handle_nation_select_req(struct connection *pc,
-			      int player_no,
-			      Nation_type_id nation_no, bool is_male,
-			      char *name, int city_style)
+void lost_connection_to_client(struct connection *pconn)
 {
-  struct nation_type *new_nation;
-  struct player *pplayer = player_by_number(player_no);
+  struct player *pplayer = pconn->player;
+  const char *desc = conn_description(pconn);
 
-  if (!pplayer || !can_conn_edit_players_nation(pc, pplayer)) {
+  freelog(LOG_NORMAL, _("Lost connection: %s."), desc);
+  
+  /* _Must_ avoid sending to pconn, in case pconn connection is
+   * really lost (as opposed to server shutting it down) which would
+   * trigger an error on send and recurse back to here.
+   * Safe to unlink even if not in list:
+   */
+  conn_list_unlink(&game.est_connections, pconn);
+  delayed_disconnect++;
+  notify_conn(&game.est_connections, _("Game: Lost connection: %s."), desc);
+
+  if (!pplayer) {
+    /* This happens eg if the player has not yet joined properly. */
+    delayed_disconnect--;
     return;
   }
 
-  new_nation = nation_by_number(nation_no);
+  unassociate_player_connection(pplayer, pconn);
 
-  if (new_nation != NO_NATION_SELECTED) {
-    char message[1024];
-
-    /* check sanity of the packet sent by client */
-    if (city_style < 0 || city_style >= game.control.styles_count
-	|| city_style_has_requirements(&city_styles[city_style])) {
-      return;
-    }
-
-    if (!new_nation->is_available) {
-      notify_conn(pplayer->connections, NULL, E_NATION_SELECTED,
-		  _("%s nation is not available in this scenario."),
-		  nation_adjective_translation(new_nation));
-      return;
-    }
-    if (new_nation->player && new_nation->player != pplayer) {
-      notify_conn(pplayer->connections, NULL, E_NATION_SELECTED,
-		  _("%s nation is already in use."),
-		  nation_adjective_translation(new_nation));
-      return;
-    }
-
-    remove_leading_trailing_spaces(name);
-
-    if (!is_allowed_player_name(pplayer, new_nation, name,
-				message, sizeof(message))) {
-      notify_conn(pplayer->connections, NULL, E_NATION_SELECTED,
-		  "%s", message);
-      return;
-    }
-
-    name[0] = my_toupper(name[0]);
-    sz_strlcpy(pplayer->name, name);
-
-    notify_conn(NULL, NULL, E_NATION_SELECTED,
-		_("%s is the %s ruler %s."),
-		pplayer->username,
-		nation_adjective_translation(new_nation),
-		player_name(pplayer));
-
-    pplayer->is_male = is_male;
-    pplayer->city_style = city_style;
-  }
-
-  (void) player_set_nation(pplayer, new_nation);
-  send_player_info_c(pplayer, game.est_connections);
-}
-
-/****************************************************************************
-  Handle a player-ready packet.
-****************************************************************************/
-void handle_player_ready(struct player *requestor,
-			 int player_no,
-			 bool is_ready)
-{
-  struct player *pplayer = player_by_number(player_no);
-  bool old_ready;
-
-  if (NULL == pplayer || S_S_INITIAL != server_state()) {
-    return;
-  }
-
-  if (pplayer != requestor) {
-    /* Currently you can only change your own readiness. */
-    return;
-  }
-
-  old_ready = pplayer->is_ready;
-  pplayer->is_ready = is_ready;
+  /* Remove from lists so this conn is not included in broadcasts.
+   * safe to do these even if not in lists:
+   */
+  conn_list_unlink(&game.all_connections, pconn);
+  conn_list_unlink(&game.game_connections, pconn);
+  pconn->established = FALSE;
+  
+  send_conn_info_remove(&pconn->self, &game.est_connections);
   send_player_info(pplayer, NULL);
+  notify_if_first_access_level_is_available();
 
-  /* Note this is called even if the player has pressed /start once
-   * before.  For instance, when a player leaves everyone remaining
-   * might have pressed /start already but the start won't happen
-   * until someone presses it again.  Also you can press start more
-   * than once to remind other people to start (which is a good thing
-   * until somebody does it too much and it gets labeled as spam). */
-  if (is_ready) {
-    int num_ready = 0, num_unready = 0;
-
-    players_iterate(pplayer) {
-      if (pplayer->is_connected) {
-	if (pplayer->is_ready) {
-	  num_ready++;
-	} else {
-	  num_unready++;
-	}
+  /* Cancel diplomacy meetings */
+  if (!pplayer->is_connected) { /* may be still true if multiple connections */
+    players_iterate(other_player) {
+      if (find_treaty(pplayer, other_player)) {
+	struct packet_diplomacy_info packet;
+	packet.plrno0 = pplayer->player_no;
+	packet.plrno1 = other_player->player_no;
+	handle_diplomacy_cancel_meeting(pplayer, &packet);
       }
     } players_iterate_end;
-    if (num_unready > 0) {
-      notify_conn(NULL, NULL, E_SETTING,
-		  _("Waiting to start game: %d out of %d players "
-		    "are ready to start."),
-		  num_ready, num_ready + num_unready);
-    } else {
-      /* Check minplayers etc. and then start */
-      start_command(NULL, FALSE, TRUE);
+  }
+
+  if (game.is_new_game
+      && !pplayer->is_connected /* eg multiple controllers */
+      && !pplayer->ai.control    /* eg created AI player */
+      && (server_state==PRE_GAME_STATE || server_state==SELECT_RACES_STATE)) {
+    server_remove_player(pplayer);
+  }
+  else {
+    if (game.auto_ai_toggle
+	&& !pplayer->ai.control
+	&& !pplayer->is_connected /* eg multiple controllers */) {
+      toggle_ai_player_direct(NULL, pplayer);
     }
+    check_for_full_turn_done();
   }
-}
-
-/****************************************************************************
-  Fill or remove players to meet the given aifill.
-****************************************************************************/
-void aifill(int amount)
-{
-  int limit = MIN(amount, game.info.max_players);
-
-  if (!game.info.is_new_game || S_S_INITIAL != server_state()) {
-    return;
-  }
-
-  if (limit < game.info.nplayers) {
-    int remove = game.info.nplayers - 1;
-
-    while (limit < game.info.nplayers && 0 <= remove) {
-      struct player *pplayer = player_by_number(remove--);
-
-      if (!pplayer->is_connected && !pplayer->was_created) {
-        server_remove_player(pplayer);
-      }
-    }
-    return;
-  }
-
-  while (limit > game.info.nplayers) {
-    int filled = game.info.nplayers;
-    struct player *pplayer = player_by_number(game.info.nplayers);
-    char leader_name[ARRAY_SIZE(pplayer->name)];
-
-    server_player_init(pplayer, FALSE, TRUE);
-    player_set_nation(pplayer, NULL);
-
-    do {
-      my_snprintf(leader_name, sizeof(leader_name),
-		  "AI*%d", filled++);
-    } while (find_player_by_name(leader_name));
-    sz_strlcpy(pplayer->name, leader_name);
-    sz_strlcpy(pplayer->username, ANON_USER_NAME);
-
-    pplayer->ai.skill_level = game.info.skill_level;
-    pplayer->ai.control = TRUE;
-    set_ai_level_directer(pplayer, game.info.skill_level);
-
-    freelog(LOG_NORMAL,
-	    _("%s has been added as %s level AI-controlled player."),
-            player_name(pplayer),
-	    ai_level_name(pplayer->ai.skill_level));
-    notify_conn(NULL, NULL, E_SETTING,
-		_("%s has been added as %s level AI-controlled player."),
-		player_name(pplayer),
-		ai_level_name(pplayer->ai.skill_level));
-
-    dlsend_packet_player_control(game.est_connections, ++game.info.nplayers);
-    send_player_info(pplayer, NULL);
-  }
+  delayed_disconnect--;
 }
 
 /**************************************************************************
-   Selects a nation for players created with "create <PlayerName>", or
-   with "set aifill <X>".
+generate_ai_players() - Selects a nation for players created with
+   server's "create <PlayerName>" command.  If <PlayerName> matches
+   one of the leader names for some nation, we choose that nation.
+   (I.e. if we issue "create Shaka" then we will make that AI player's
+   nation the Zulus if the Zulus have not been chosen by anyone else.
+   If they have, then we pick an available nation at random.)
 
-   If <PlayerName> matches one of the leader names for some nation,
-   choose that nation.  For example, when the Zulus have not been chosen
-   by anyone else, "create Shaka" will make that AI player's nation the
-   Zulus.  Otherwise, pick an available nation at random.
+   After that, we check to see if the server option "aifill" is greater
+   than the number of players currently connected.  If so, we create the
+   appropriate number of players (game.aifill - game.nplayers) from
+   scratch, choosing a random nation and appropriate name for each.
 
    If the AI player name is one of the leader names for the AI player's
    nation, the player sex is set to the sex for that leader, else it
    is chosen randomly.  (So if English are ruled by Elisabeth, she is
    female, but if "Player 1" rules English, may be male or female.)
 **************************************************************************/
-static void generate_players(void)
+static void generate_ai_players(void)
 {
+  Nation_Type_id nation;
+  char player_name[MAX_LEN_NAME];
+  struct player *pplayer;
+  int i, old_nplayers;
+
   /* Select nations for AI players generated with server
    * 'create <name>' command
    */
-  players_iterate(pplayer) {
-    if (pplayer->nation != NO_NATION_SELECTED) {
-      announce_player(pplayer);
+  for (i=0; i<game.nplayers; i++) {
+    pplayer = &game.players[i];
+    
+    if (pplayer->nation != MAX_NUM_NATIONS)
+      continue;
+
+    if (num_nations_avail == 0) {
+      freelog(LOG_NORMAL,
+	      _("Ran out of nations.  AI controlled player %s not created."),
+	      pplayer->name );
+      server_remove_player(pplayer); 
+      /*
+       * Below decrement loop index 'i' so that the loop is redone with
+       * the current index (if 'i' is still less than new game.nplayers).
+       * This is because subsequent players in list will have been shifted
+       * down one spot by the remove, and may need handling.
+       */
+      i--;  
       continue;
     }
 
-    /* See if the player name matches a known leader name. */
-    nations_iterate(pnation) {
-      const char *name = player_name(pplayer);
-      if (is_nation_playable(pnation)
-	  && pnation->is_available
-	  && !pnation->player
-	  && check_nation_leader_name(pnation, name)) {
-	player_set_nation(pplayer, pnation);
-	pplayer->city_style = city_style_of_nation(pnation);
-	pplayer->is_male = get_nation_leader_sex(pnation, name);
-	break;
+    for (nation = 0; nation < game.playable_nation_count; nation++) {
+      if (check_nation_leader_name(nation, pplayer->name)) {
+        if (nations_used[nation] != -1) {
+	  pplayer->nation = mark_nation_as_used(nation);
+	  pplayer->city_style = get_nation_city_style(nation);
+          pplayer->is_male = get_nation_leader_sex(nation, pplayer->name);
+	  break;
+        }
       }
-    } nations_iterate_end;
-    if (pplayer->nation != NO_NATION_SELECTED) {
-      announce_player(pplayer);
-      continue;
     }
 
-    player_set_nation(pplayer, pick_a_nation(NULL, FALSE, TRUE,
-                                             NOT_A_BARBARIAN));
-    assert(pplayer->nation != NO_NATION_SELECTED);
-
-    pplayer->city_style = city_style_of_nation(nation_of_player(pplayer));
-
-    /* don't change the name of a created player */
-    if (!pplayer->was_created) {
-      char leader_name[MAX_LEN_NAME];
-
-      pick_random_player_name(nation_of_player(pplayer), leader_name);
-      sz_strlcpy(pplayer->name, leader_name);
-    }
-
-    if (check_nation_leader_name(nation_of_player(pplayer), pplayer->name)) {
-      pplayer->is_male = get_nation_leader_sex(nation_of_player(pplayer),
-                                               pplayer->name);
-    } else {
+    if (nation == game.playable_nation_count) {
+      pplayer->nation =
+	mark_nation_as_used(nations_avail[myrand(num_nations_avail)]);
+      pplayer->city_style = get_nation_city_style(pplayer->nation);
       pplayer->is_male = (myrand(2) == 1);
     }
 
-    announce_player(pplayer);
-  } players_iterate_end;
+    announce_ai_player(pplayer);
+  }
 
-  (void) send_server_info_to_metaserver(META_INFO);
+  /* Create and pick nation and name for AI players needed to bring the
+   * total number of players to equal game.aifill
+   */
+
+  if (game.playable_nation_count < game.aifill) {
+    game.aifill = game.playable_nation_count;
+    freelog(LOG_NORMAL,
+	     _("Nation count smaller than aifill; aifill reduced to %d."),
+             game.playable_nation_count);
+  }
+
+  if (game.max_players < game.aifill) {
+    game.aifill = game.max_players;
+    freelog(LOG_NORMAL,
+	     _("Maxplayers smaller than aifill; aifill reduced to %d."),
+             game.max_players);
+  }
+
+  for(;game.nplayers < game.aifill;) {
+    nation = mark_nation_as_used(nations_avail[myrand(num_nations_avail)]);
+    pick_ai_player_name(nation, player_name);
+
+    old_nplayers = game.nplayers;
+    accept_new_player(player_name, NULL);
+    pplayer = get_player(old_nplayers);
+     
+    if (!((game.nplayers == old_nplayers+1)
+	  && strcmp(player_name, pplayer->name)==0)) {
+      con_write(C_FAIL, _("Error creating new ai player: %s\n"),
+		player_name);
+      break;			/* don't loop forever */
+    }
+      
+    pplayer->nation = nation;
+    pplayer->city_style = get_nation_city_style(nation);
+    pplayer->ai.control = TRUE;
+    pplayer->ai.skill_level = game.skill_level;
+    if (check_nation_leader_name(nation, player_name)) {
+      pplayer->is_male = get_nation_leader_sex(nation, player_name);
+    } else {
+      pplayer->is_male = (myrand(2) == 1);
+    }
+    announce_ai_player(pplayer);
+    set_ai_level_direct(pplayer, pplayer->ai.skill_level);
+  }
+  (void) send_server_info_to_metaserver(TRUE, FALSE);
 }
 
 /*************************************************************************
- Used in pick_random_player_name() below; buf has size at least MAX_LEN_NAME;
+ Used in pick_ai_player_name() below; buf has size at least MAX_LEN_NAME;
 *************************************************************************/
 static bool good_name(char *ptry, char *buf) {
-  if (!(find_player_by_name(ptry) || find_player_by_user(ptry))) {
+  if (!find_player_by_name(ptry)) {
      (void) mystrlcpy(buf, ptry, MAX_LEN_NAME);
      return TRUE;
   }
@@ -1722,34 +1671,29 @@ static bool good_name(char *ptry, char *buf) {
 }
 
 /*************************************************************************
-  Returns a random ruler name picked from given nation
+ pick_ai_player_name() - Returns a random ruler name picked from given nation
      ruler names, given that nation's number. If that player name is already 
      taken, iterates through all leader names to find unused one. If it fails
      it iterates through "Player 1", "Player 2", ... until an unused name
      is found.
  newname should point to a buffer of size at least MAX_LEN_NAME.
 *************************************************************************/
-void pick_random_player_name(const struct nation_type *pnation,
-			     char *newname)
+void pick_ai_player_name(Nation_Type_id nation, char *newname) 
 {
    int i, names_count;
-   struct nation_leader *leaders;
+   char **names;
 
-   leaders = get_nation_leaders(pnation, &names_count);
+   names = get_nation_leader_names(nation, &names_count);
 
    /* Try random names (scattershot), then all available,
     * then "Player 1" etc:
     */
    for(i=0; i<names_count; i++) {
-     if (good_name(leaders[myrand(names_count)].name, newname)) {
-       return;
-     }
+     if (good_name(names[myrand(names_count)], newname)) return;
    }
    
    for(i=0; i<names_count; i++) {
-     if (good_name(leaders[i].name, newname)) {
-       return;
-     }
+     if (good_name(names[i], newname)) return;
    }
    
    for(i=1; /**/; i++) {
@@ -1760,145 +1704,169 @@ void pick_random_player_name(const struct nation_type *pnation,
 }
 
 /*************************************************************************
+ mark_nation_as_used() - shuffles the appropriate arrays to indicate that
+ the specified nation number has been allocated to some player and is
+ therefore no longer available to any other player.  We do things this way
+ so that the process of determining which nations are available to AI players
+ is more efficient.
+*************************************************************************/
+static int mark_nation_as_used (int nation) 
+{
+  if(num_nations_avail <= 0) {/* no more unused nation */
+      freelog(LOG_FATAL, _("Argh! ran out of nations!"));
+      exit(EXIT_FAILURE);
+  }
+
+   nations_used[nations_avail[num_nations_avail-1]]=nations_used[nation];
+   nations_avail[nations_used[nation]]=nations_avail[--num_nations_avail];
+   nations_used[nation]=-1;
+
+   return nation;
+}
+
+/*************************************************************************
 ...
 *************************************************************************/
-static void announce_player (struct player *pplayer)
-{
-   freelog(LOG_NORMAL,
-	   _("%s rules the %s."),
-	   player_name(pplayer),
-	   nation_plural_for_player(pplayer));
+static void announce_ai_player (struct player *pplayer) {
+   freelog(LOG_NORMAL, _("AI is controlling the %s ruled by %s."),
+                    get_nation_name_plural(pplayer->nation),
+                    pplayer->name);
 
   players_iterate(other_player) {
-    notify_player(other_player, NULL, E_GAME_START,
-		  _("%s rules the %s."),
-		  player_name(pplayer),
-		  nation_plural_for_player(pplayer));
+    notify_player(other_player,
+		  _("Game: %s rules the %s."), pplayer->name,
+		  get_nation_name_plural(pplayer->nation));
   } players_iterate_end;
 }
 
 /**************************************************************************
-  Play the game! Returns when S_S_RUNNING != server_state().
+Play the game! Returns when server_state == GAME_OVER_STATE.
 **************************************************************************/
-static void srv_running(void)
+static void main_loop(void)
 {
   struct timer *eot_timer;	/* time server processing at end-of-turn */
   int save_counter = 0;
-  bool is_new_turn = game.info.is_new_game;
-
-  /* We may as well reset is_new_game now. */
-  game.info.is_new_game = FALSE;
 
   eot_timer = new_timer_start(TIMER_CPU, TIMER_ACTIVE);
 
   /* 
    * This will freeze the reports and agents at the client.
    * 
-   * Do this before the body so that the PACKET_THAW_CLIENT packet is
+   * Do this before the body so that the PACKET_THAW_HINT packet is
    * balanced. 
    */
-  lsend_packet_freeze_client(game.est_connections);
+  lsend_packet_generic_empty(&game.est_connections, PACKET_FREEZE_HINT);
 
-  assert(S_S_RUNNING == server_state());
-  while (S_S_RUNNING == server_state()) {
-    /* The beginning of a turn.
-     *
-     * We have to initialize data as well as do some actions.  However when
-     * loading a game we don't want to do these actions (like AI unit
-     * movement and AI diplomacy). */
-    begin_turn(is_new_turn);
+  while(server_state==RUN_GAME_STATE) {
+    /* absolute beginning of a turn */
+    freelog(LOG_DEBUG, "Begin turn");
+    begin_turn();
 
-    if (game.info.num_phases != 1) {
-      /* We allow everyone to begin adjusting cities and such
-       * from the beginning of the turn.
-       * With simultaneous movement we send begin_turn packet in
-       * begin_phase() only after AI players have finished their actions. */
-      lsend_packet_begin_turn(game.est_connections);
+#if (IS_DEVEL_VERSION || IS_BETA_VERSION)
+    sanity_check();
+#endif
+
+    force_end_of_sniff = FALSE;
+
+    freelog(LOG_DEBUG, "Shuffleplayers");
+    shuffle_players();
+    freelog(LOG_DEBUG, "Aistartturn");
+    ai_start_turn();
+    send_start_turn_to_clients();
+
+    /* 
+     * This will thaw the reports and agents at the client.
+     */
+    lsend_packet_generic_empty(&game.est_connections, PACKET_THAW_HINT);
+
+    /* Before sniff (human player activites), report time to now: */
+    freelog(LOG_VERBOSE, "End/start-turn server/ai activities: %g seconds",
+	    read_timer_seconds(eot_timer));
+
+    /* Do auto-saves just before starting sniff_packets(), so that
+     * autosave happens effectively "at the same time" as manual
+     * saves, from the point of view of restarting and AI players.
+     * Post-increment so we don't count the first loop.
+     */
+    if(save_counter >= game.save_nturns && game.save_nturns>0) {
+      save_counter=0;
+      save_game_auto();
+    }
+    save_counter++;
+    
+    freelog(LOG_DEBUG, "sniffingpackets");
+    while (sniff_packets() == 1) {
+      /* nothing */
     }
 
-    for (; game.info.phase < game.info.num_phases; game.info.phase++) {
-      freelog(LOG_DEBUG, "Starting phase %d/%d.", game.info.phase,
-	      game.info.num_phases);
-      begin_phase(is_new_turn);
-      is_new_turn = TRUE;
+    /* After sniff, re-zero the timer: (read-out above on next loop) */
+    clear_timer_start(eot_timer);
+    
+    conn_list_do_buffer(&game.game_connections);
 
-      force_end_of_sniff = FALSE;
+#if (IS_DEVEL_VERSION || IS_BETA_VERSION)
+    sanity_check();
+#endif
 
-      /* 
-       * This will thaw the reports and agents at the client.
-       */
-      lsend_packet_thaw_client(game.est_connections);
+    /* 
+     * This empties the client Messages window; put this before
+     * everything else below, since otherwise any messages from the
+     * following parts get wiped out before the user gets a chance to
+     * see them.  --dwp
+    */
+    before_end_year();
 
-      /* Before sniff (human player activites), report time to now: */
-      freelog(LOG_VERBOSE, "End/start-turn server/ai activities: %g seconds",
-	      read_timer_seconds(eot_timer));
+    /* 
+     * This will freeze the reports and agents at the client.
+     */
+    lsend_packet_generic_empty(&game.est_connections, PACKET_FREEZE_HINT);
 
-      /* Do auto-saves just before starting server_sniff_all_input(), so that
-       * autosave happens effectively "at the same time" as manual
-       * saves, from the point of view of restarting and AI players.
-       * Post-increment so we don't count the first loop.
-       */
-      if (game.info.phase == 0) {
-	if (save_counter >= game.info.save_nturns && game.info.save_nturns > 0) {
-	  save_counter = 0;
-	  save_game_auto("Autosave");
-	}
-	save_counter++;
-      }
-
-      freelog(LOG_DEBUG, "sniffingpackets");
-      check_for_full_turn_done(); /* HACK: don't wait during AI phases */
-      while (server_sniff_all_input() == S_E_OTHERWISE) {
-	/* nothing */
-      }
-
-      /* After sniff, re-zero the timer: (read-out above on next loop) */
-      clear_timer_start(eot_timer);
-
-      conn_list_do_buffer(game.est_connections);
-
-      sanity_check();
-
-      /* 
-       * This will freeze the reports and agents at the client.
-       */
-      lsend_packet_freeze_client(game.est_connections);
-
-      end_phase();
-
-      conn_list_do_unbuffer(game.est_connections);
-
-      if (S_S_OVER == server_state()) {
-	break;
-      }
-    }
+    freelog(LOG_DEBUG, "Season of native unrests");
+    summon_barbarians(); /* wild guess really, no idea where to put it, but
+                            I want to give them chance to move their units */
+    freelog(LOG_DEBUG, "Autosettlers");
+    auto_settlers(); /* moved this after ai_start_turn for efficiency -- Syela */
+    /* moved after sniff_packets for even more efficiency.
+       What a guy I am. -- Syela */
+    /* and now, we must manage our remaining units BEFORE the cities that are
+       empty get to refresh and defend themselves.  How totally stupid. */
+    ai_start_turn(); /* Misleading name for manage_units -- Syela */
+    freelog(LOG_DEBUG, "Auto-Attack phase");
+    auto_attack();
+    freelog(LOG_DEBUG, "Endturn");
     end_turn();
+    freelog(LOG_DEBUG, "Gamenextyear");
+    game_advance_year();
+    freelog(LOG_DEBUG, "Updatetimeout");
+    update_timeout();
+    check_spaceship_arrivals();
+    freelog(LOG_DEBUG, "Sendplayerinfo");
+    send_player_info(NULL, NULL);
+    freelog(LOG_DEBUG, "Sendgameinfo");
+    send_game_info(NULL);
+    freelog(LOG_DEBUG, "Sendyeartoclients");
+    send_year_to_clients(game.year);
     freelog(LOG_DEBUG, "Sendinfotometaserver");
-    (void) send_server_info_to_metaserver(META_REFRESH);
+    (void) send_server_info_to_metaserver(FALSE, FALSE);
 
-    if (S_S_OVER != server_state() && check_for_game_over()) {
-      set_server_state(S_S_OVER);
-      /* this goes here, because we don't rank users after an /endgame */
-      rank_users();
-    }
+    conn_list_do_unbuffer(&game.game_connections);
+
+    if (is_game_over()) 
+      server_state=GAME_OVER_STATE;
   }
 
-  /* This will thaw the reports and agents at the client.  */
-  lsend_packet_thaw_client(game.est_connections);
-
-  free_timer(eot_timer);
+  /* 
+   * This will thaw the reports and agents at the client.
+   */
+  lsend_packet_generic_empty(&game.est_connections, PACKET_THAW_HINT);
 }
 
 /**************************************************************************
-  Server initialization.
+Server initialization.
 **************************************************************************/
-static void srv_prepare(void)
+void srv_main(void)
 {
-#ifdef HAVE_AUTH
-  if (!srvarg.auth_enabled) {
-    con_write(C_COMMENT, _("This civserver program has player authentication support, but it's currently not in use."));
-  }
-#endif /* HAVE_AUTH */
+  int i;
 
   /* make sure it's initialized */
   if (!has_been_srv_init) {
@@ -1908,7 +1876,17 @@ static void srv_prepare(void)
   my_init_network();
 
   con_log_init(srvarg.log_filename, srvarg.loglevel);
+  gamelog_init(srvarg.gamelog_filename);
+  gamelog_set_level(GAMELOG_FULL);
+  gamelog(GAMELOG_NORMAL, _("Starting new log"));
   
+#ifdef GENERATING_MAC	/* mac beta notice */
+  con_puts(C_COMMENT, "");
+  con_puts(C_COMMENT, "This is an alpha/beta version of MacFreeciv.");
+  con_puts(C_COMMENT, "Visit http://www.geocities.com/SiliconValley/Orchard/8738/MFC/index.html");
+  con_puts(C_COMMENT, "for new versions of this project and information about it.");
+  con_puts(C_COMMENT, "");
+#endif
 #if IS_BETA_VERSION
   con_puts(C_COMMENT, "");
   con_puts(C_COMMENT, beta_message());
@@ -1917,108 +1895,59 @@ static void srv_prepare(void)
   
   con_flush();
 
-  stdinhand_init();
-  diplhand_init();
+  game_init();
 
   /* init network */  
   init_connections(); 
-  if (!with_ggz) {
-    server_open_socket();
-  }
-
-  server_game_init();
-
-#ifdef HAVE_AUTH
-  if (srvarg.auth_enabled) {
-    bool success;
-
-    success = auth_init(srvarg.auth_conf);
-    free(srvarg.auth_conf); /* Never needed again */
-    srvarg.auth_conf = NULL;
-    if (!success) {
-      exit(EXIT_FAILURE);
-    }
-  }
-#endif /* HAVE_AUTH */
+  server_open_socket();
 
   /* load a saved game */
-  if ('\0' == srvarg.load_filename[0]
-   || !load_command(NULL, srvarg.load_filename, FALSE)) {
-    /* Rulesets are loaded on game initialization, but may be changed later
-     * if /load or /rulesetdir is done. */
-    load_rulesets();
-  }
+  if (srvarg.load_filename) {
+    load_command(NULL, srvarg.load_filename);
+  } 
 
   if(!(srvarg.metaserver_no_send)) {
     freelog(LOG_NORMAL, _("Sending info to metaserver [%s]"),
 	    meta_addr_port());
-    server_open_meta(); /* open socket for meta server */ 
+    server_open_udp(); /* open socket for meta server */ 
   }
 
-  maybe_automatic_meta_message(default_meta_message_string());
-  (void) send_server_info_to_metaserver(META_INFO);
+  (void) send_server_info_to_metaserver(TRUE, FALSE);
 
   /* accept new players, wait for serverop to start..*/
-  set_server_state(S_S_INITIAL);
+  server_state=PRE_GAME_STATE;
 
   /* load a script file */
   if (srvarg.script_filename
-      && !read_init_script(NULL, srvarg.script_filename, TRUE)) {
+      && !read_init_script(NULL, srvarg.script_filename)) {
     exit(EXIT_FAILURE);
   }
-}
 
-/**************************************************************************
-  Score calculation.
-**************************************************************************/
-static void srv_scores(void)
-{
-  /* Recalculate the scores in case of a spaceship victory */
-  players_iterate(pplayer) {
-    calc_civ_score(pplayer);
-  } players_iterate_end;
+  freelog(LOG_NORMAL, _("Now accepting new client connections."));
+  while(server_state==PRE_GAME_STATE)
+    sniff_packets(); /* Accepting commands. */
 
-  report_final_scores();
-  show_map_to_all();
-  notify_player(NULL, NULL, E_GAME_END, _("The game is over..."));
-  send_server_info_to_metaserver(META_INFO);
+  (void) send_server_info_to_metaserver(TRUE, FALSE);
 
-  if (game.info.save_nturns > 0
-      && conn_list_size(game.est_connections) > 0) {
-    /* Save game on game_over, but not when the gameover was caused by
-     * the -q parameter. */
-    save_game_auto("Game over");
+  if(game.is_new_game) {
+    load_rulesets();
+    /* otherwise rulesets were loaded when savegame was loaded */
   }
-}
 
-/**************************************************************************
-  Apply some final adjustments from the ruleset on to the game state.
-  We cannot do this during ruleset loading, since some players may be
-  added later than that.
-**************************************************************************/
-static void final_ruleset_adjustments()
-{
-  players_iterate(pplayer) {
-    struct nation_type *pnation = nation_of_player(pplayer);
+  nations_avail = fc_calloc(game.playable_nation_count, sizeof(int));
+  nations_used = fc_calloc(game.playable_nation_count, sizeof(int));
 
-    pplayer->government = pnation->init_government;
+main_start_players:
 
-    if (pnation->init_government == game.government_when_anarchy) {
-      /* If we do not do this, an assert will trigger. This enables us to
-       * select a valid government on game start. */
-      pplayer->revolution_finishes = 0;
-    }
-  } players_iterate_end;
-}
+  send_rulesets(&game.est_connections);
 
-/**************************************************************************
-  Set up one game.
-**************************************************************************/
-static void srv_ready(void)
-{
-  (void) send_server_info_to_metaserver(META_INFO);
+  num_nations_avail = game.playable_nation_count;
+  for(i=0; i<game.playable_nation_count; i++) {
+    nations_avail[i]=i;
+    nations_used[i]=i;
+  }
 
-  if (game.info.auto_ai_toggle) {
+  if (game.auto_ai_toggle) {
     players_iterate(pplayer) {
       if (!pplayer->is_connected && !pplayer->ai.control) {
 	toggle_ai_player_direct(NULL, pplayer);
@@ -2026,202 +1955,166 @@ static void srv_ready(void)
     } players_iterate_end;
   }
 
-  init_game_seed();
+  /* Allow players to select a nation (case new game).
+   * AI players may not yet have a nation; these will be selected
+   * in generate_ai_players() later
+   */
+  server_state = RUN_GAME_STATE;
+  players_iterate(pplayer) {
+    if (pplayer->nation == MAX_NUM_NATIONS && !pplayer->ai.control) {
+      send_select_nation(pplayer);
+      server_state = SELECT_RACES_STATE;
+    }
+  } players_iterate_end;
 
-#ifdef TEST_RANDOM /* not defined anywhere, set it if you want it */
+  while(server_state==SELECT_RACES_STATE) {
+    bool flag = FALSE;
+
+    sniff_packets();
+
+    players_iterate(pplayer) {
+      if (pplayer->nation == MAX_NUM_NATIONS && !pplayer->ai.control) {
+	flag = TRUE;
+	break;
+      }
+    } players_iterate_end;
+
+    if(!flag) {
+      if (game.nplayers > 0) {
+	server_state=RUN_GAME_STATE;
+      } else {
+	con_write(C_COMMENT,
+		  _("Last player has disconnected: will need to restart."));
+	server_state=PRE_GAME_STATE;
+	while(server_state==PRE_GAME_STATE) {
+	  sniff_packets();
+	}
+	goto main_start_players;
+      }
+    }
+  }
+
+  if(game.randseed == 0) {
+    /* We strip the high bit for now because neither game file nor
+       server options can handle unsigned ints yet. - Cedric */
+    game.randseed = time(NULL) & (MAX_UINT32 >> 1);
+  }
+ 
+  if(!myrand_is_init())
+    mysrand(game.randseed);
+
+#ifdef TEST_RANDOM		/* not defined anywhere, set it if you want it */
   test_random1(200);
   test_random1(2000);
   test_random1(20000);
   test_random1(200000);
 #endif
-
-  if (game.info.is_new_game) {
-    generate_players();
-    final_ruleset_adjustments();
-  }
+    
+  if(game.is_new_game)
+    generate_ai_players();
    
-  /* If we have a tile map, and map.generator==0, call map_fractal_generate
-   * anyway to make the specials, huts and continent numbers. */
-  if (map_is_empty() || (map.generator == 0 && game.info.is_new_game)) {
-    struct unit_type *utype = crole_to_unit_type(game.info.start_units[0], NULL);
+  /* if we have a tile map, and map.generator==0, call map_fractal_generate
+     anyway, to make the specials and huts */
+  if(map_is_empty() || (map.generator == 0 && game.is_new_game))
+    map_fractal_generate();
 
-    map_fractal_generate(TRUE, utype);
-    game_map_init();
+  if (map.num_continents == 0) {
+    assign_continent_numbers();
+    update_island_impr_effect(-1, map.num_continents);
   }
 
+  gamelog_map();
   /* start the game */
 
-  set_server_state(S_S_RUNNING);
-  (void) send_server_info_to_metaserver(META_INFO);
+  server_state=RUN_GAME_STATE;
+  (void) send_server_info_to_metaserver(TRUE, FALSE);
 
-  freelog(LOG_VERBOSE, "srv_ready() mostly redundant send_server_settings()");
-  send_server_settings(NULL);
-
-  if (game.info.is_new_game) {
-    /* If we're starting a new game, reset the max_players to be the
-     * number of players currently in the game.
-     */
-    game.info.max_players = game.info.nplayers;
-
-    /* Before the player map is allocated (and initialized)! */
-    game.fogofwar_old = game.info.fogofwar;
+  if(game.is_new_game) {
+    /* Before the player map is allocated (and initiailized)! */
+    game.fogofwar_old = game.fogofwar;
 
     players_iterate(pplayer) {
       player_map_allocate(pplayer);
-      init_tech(pplayer);
+      init_tech(pplayer, game.tech);
       player_limit_to_government_rates(pplayer);
-      pplayer->economic.gold = game.info.gold;
+      pplayer->economic.gold=game.gold;
     } players_iterate_end;
+    game.max_players=game.nplayers;
 
-    players_iterate(pplayer) {
-      give_initial_techs(pplayer);
-    } players_iterate_end;
-    
-    players_iterate(pplayer) {
-      int i;
-      bool free_techs_already_given = FALSE;
-      
-      players_iterate(eplayer) {
-        if (players_on_same_team(eplayer, pplayer) &&
-	    player_number(eplayer) < player_number(pplayer)) {
-          free_techs_already_given = TRUE;
-	  break;
-        }
-      } players_iterate_end;
-      
-      if (free_techs_already_given) {
-        break;
-      }
-      
-      for (i = 0; i < game.info.tech; i++) {
-        give_random_initial_tech(pplayer);
-      }
-    } players_iterate_end;
-
-    /* Set up alliances based on team selections */
-    players_iterate(pplayer) {
-      players_iterate(pdest) {
-        if (players_on_same_team(pplayer, pdest)
-            && player_number(pplayer) != player_number(pdest)) {
-          pplayer->diplstates[player_index(pdest)].type = DS_TEAM;
-          give_shared_vision(pplayer, pdest);
-        }
-      } players_iterate_end;
-    } players_iterate_end;
+    /* we don't want random start positions in a scenario which already
+       provides them.  -- Gudy */
+    if(map.num_start_positions==0) {
+      create_start_positions();
+    }
   }
 
-  /* FIXME: can this be moved? */
-  players_iterate(pplayer) {
-    ai_data_analyze_rulesets(pplayer);
-  } players_iterate_end;
+  /* Set up alliances based on team selections */
+  if (game.is_new_game) {
+   players_iterate(pplayer) {
+     players_iterate(pdest) {
+      if (pplayer->team == pdest->team && pplayer->team != TEAM_NONE
+          && pplayer->player_no != pdest->player_no) {
+        pplayer->diplstates[pdest->player_no].type = DS_ALLIANCE;
+        give_shared_vision(pplayer, pdest);
+        pplayer->embassy |= (1 << pdest->player_no);
+      }
+    } players_iterate_end;
+   } players_iterate_end;
+  }
 
-  if (!game.info.is_new_game) {
+  initialize_move_costs(); /* this may be the wrong place to do this */
+  generate_minimap(); /* for city_desire; saves a lot of calculations */
+
+  if (!game.is_new_game) {
     players_iterate(pplayer) {
+      civ_score(pplayer);	/* if we don't, the AI gets really confused */
       if (pplayer->ai.control) {
 	set_ai_level_direct(pplayer, pplayer->ai.skill_level);
+	assess_danger_player(pplayer); /* a slowdown, but a necessary one */
       }
     } players_iterate_end;
-  } else {
-    players_iterate(pplayer) {
-      ai_data_init(pplayer); /* Initialize this again to be sure */
-    } players_iterate_end;
   }
-
-  lsend_packet_freeze_hint(game.est_connections);
-  send_all_info(game.est_connections);
-  lsend_packet_thaw_hint(game.est_connections);
   
-  if (game.info.is_new_game) {
+  lsend_packet_generic_empty(&game.est_connections, PACKET_FREEZE_HINT);
+  send_all_info(&game.game_connections);
+  lsend_packet_generic_empty(&game.est_connections, PACKET_THAW_HINT);
+  
+  if(game.is_new_game)
     init_new_game();
+
+  game.is_new_game = FALSE;
+
+  send_game_state(&game.est_connections, CLIENT_GAME_RUNNING_STATE);
+
+  /*** Where the action is. ***/
+  main_loop();
+
+  send_game_state(&game.est_connections, CLIENT_GAME_OVER_STATE);
+
+  report_scores(TRUE);
+  show_map_to_all();
+  notify_player(NULL, _("Game: The game is over..."));
+  gamelog(GAMELOG_NORMAL, _("The game is over!"));
+  if (game.save_nturns > 0) save_game_auto();
+
+  while (server_state == GAME_OVER_STATE) {
+    force_end_of_sniff = FALSE;
+    sniff_packets();
   }
+
+  close_connections_and_socket();
+  server_game_free();
 }
 
 /**************************************************************************
-  Initialize game data for the server (corresponds to server_game_free).
+ ...
 **************************************************************************/
-void server_game_init(void)
+void server_game_free()
 {
-  /* was redundantly in game_load() */
-  server.nbarbarians = 0;
-  server.identity_number = IDENTITY_NUMBER_SKIP;
-
-  memset(identity_numbers_used, 0, sizeof(identity_numbers_used));
-  identity_number_reserve(IDENTITY_NUMBER_ZERO);
-
-  game_init();
-}
-
-/**************************************************************************
-  Free game data that we reinitialize as part of a server soft restart.
-  Bear in mind that this function is called when the 'load' command is
-  used, for instance.
-**************************************************************************/
-void server_game_free(void)
-{
-  /* Free all the treaties that were left open when game finished. */
-  free_treaties();
-
-  /* Free the vision data, without sending updates. */
   players_iterate(pplayer) {
-    unit_list_iterate(pplayer->units, punit) {
-      /* don't bother using vision_clear_sight() */
-      vision_layer_iterate(v) {
-        punit->server.vision->radius_sq[v] = -1;
-      } vision_layer_iterate_end;
-      vision_free(punit->server.vision);
-      punit->server.vision = NULL;
-    } unit_list_iterate_end;
-
-    city_list_iterate(pplayer->cities, pcity) {
-      /* don't bother using vision_clear_sight() */
-      vision_layer_iterate(v) {
-        pcity->server.vision->radius_sq[v] = -1;
-      } vision_layer_iterate_end;
-      vision_free(pcity->server.vision);
-      pcity->server.vision = NULL;
-    } city_list_iterate_end;
-
     player_map_free(pplayer);
   } players_iterate_end;
 
+  nation_city_names_free(misc_city_names);
   game_free();
-}
-
-/**************************************************************************
-  Server main loop.
-**************************************************************************/
-void srv_main(void)
-{
-  srv_prepare();
-
-  /* Run server loop */
-  do {
-    freelog(LOG_NORMAL, _("Now accepting new client connections."));
-    while (S_S_INITIAL == server_state()) {
-      server_sniff_all_input(); /* Accepting commands. */
-    }
-
-    srv_ready();
-    srv_running();
-    srv_scores();
-
-    /* Remain in S_S_OVER until players log out */
-    while (conn_list_size(game.est_connections) > 0) {
-      server_sniff_all_input();
-    }
-
-    if (game.info.timeout == -1 || srvarg.exit_on_end) {
-      /* For autogames or if the -e option is specified, exit the server. */
-      server_quit();
-    }
-
-    /* Reset server */
-    server_game_free();
-    server_game_init();
-    load_rulesets();
-    game.info.is_new_game = TRUE;
-    set_server_state(S_S_INITIAL);
-  } while (TRUE);
-
-  /* Technically, we won't ever get here. We exit via server_quit. */
 }

@@ -23,21 +23,20 @@
 #include <config.h>
 #endif
 
-#include <assert.h>
-#include <limits.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
+#include <limits.h>
 
-#ifdef HAVE_ARPA_INET_H
-#include <arpa/inet.h>
+#ifdef HAVE_SYS_TYPES_H
+#include <sys/types.h>
 #endif
 #ifdef HAVE_NETINET_IN_H
 #include <netinet/in.h>
 #endif
-#ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
+#ifdef HAVE_ARPA_INET_H
+#include <arpa/inet.h>
 #endif
 #ifdef HAVE_WINSOCK
 #include <winsock.h>
@@ -47,13 +46,15 @@
 #include "events.h"
 #include "log.h"
 #include "mem.h"
-#include "player.h"
-#include "requirements.h"
 #include "support.h"
 #include "tech.h"
 #include "worklist.h"
 
 #include "dataio.h"
+
+static const int city_map_index[20] = {
+  1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 21, 22, 23
+};
 
 /**************************************************************************
 ...
@@ -72,7 +73,7 @@ void dio_set_put_conv_callback(DIO_PUT_CONV_FUN fun)
  Returns FALSE if the destination isn't large enough or the source was
  bad.
 **************************************************************************/
-static bool get_conv(char *dst, size_t ndst, const char *src,
+static bool get_conv(char *dst, size_t ndst, const unsigned char *src,
 		     size_t nsrc)
 {
   size_t len = nsrc;		/* length to copy, not including null */
@@ -198,9 +199,8 @@ size_t dio_input_remaining(struct data_in *din)
 void dio_put_uint8(struct data_out *dout, int value)
 {
   if (enough_space(dout, 1)) {
-    uint8_t x = value;
+    unsigned char x = value;
 
-    assert(sizeof(x) == 1);
     memcpy(ADD_TO_POINTER(dout->dest, dout->current), &x, 1);
     dout->current++;
   }
@@ -212,9 +212,8 @@ void dio_put_uint8(struct data_out *dout, int value)
 void dio_put_uint16(struct data_out *dout, int value)
 {
   if (enough_space(dout, 2)) {
-    uint16_t x = htons(value);
+    unsigned short x = htons(value);
 
-    assert(sizeof(x) == 2);
     memcpy(ADD_TO_POINTER(dout->dest, dout->current), &x, 2);
     dout->current += 2;
   }
@@ -226,9 +225,8 @@ void dio_put_uint16(struct data_out *dout, int value)
 void dio_put_uint32(struct data_out *dout, int value)
 {
   if (enough_space(dout, 4)) {
-    uint32_t x = htonl(value);
+    unsigned long x = htonl(value);
 
-    assert(sizeof(x) == 4);
     memcpy(ADD_TO_POINTER(dout->dest, dout->current), &x, 4);
     dout->current += 4;
   }
@@ -322,7 +320,7 @@ void dio_put_string(struct data_out *dout, const char *value)
 {
   if (put_conv_callback) {
     size_t length;
-    char *buffer;
+    unsigned char *buffer;
 
     if ((buffer = (*put_conv_callback) (value, &length))) {
       dio_put_memory(dout, buffer, length + 1);
@@ -386,80 +384,89 @@ void dio_put_tech_list(struct data_out *dout, const int *value)
 /**************************************************************************
 ...
 **************************************************************************/
-void dio_put_worklist(struct data_out *dout, const struct worklist *pwl)
+void dio_put_worklist(struct data_out *dout, const struct worklist *pwl,
+		      bool real_wl)
 {
   dio_put_bool8(dout, pwl->is_valid);
 
   if (pwl->is_valid) {
     int i, length = worklist_length(pwl);
 
+    if (real_wl) {
+      dio_put_string(dout, pwl->name);
+    } else {
+      dio_put_string(dout, "\0");
+    }
+
     dio_put_uint8(dout, length);
     for (i = 0; i < length; i++) {
-      const struct universal *pcp = &(pwl->entries[i]);
-
-      dio_put_uint8(dout, pcp->kind);
-      dio_put_uint8(dout, universal_number(pcp));
+      dio_put_uint8(dout, pwl->wlefs[i]);
+      dio_put_uint8(dout, pwl->wlids[i]);
     }
   }
 }
 
 /**************************************************************************
- Receive uint8 value to dest. In case of failure, value stored to dest
- will be zero. Note that zero is legal value even when there is no failure.
+...
+**************************************************************************/
+void dio_put_city_map(struct data_out *dout, const char *value)
+{
+  int i;
+
+  for (i = 0; i < 20; i += 5) {
+    dio_put_uint8(dout, (value[city_map_index[i]] - '0') * 81 +
+		  (value[city_map_index[i + 1]] - '0') * 27 +
+		  (value[city_map_index[i + 2]] - '0') * 9 +
+		  (value[city_map_index[i + 3]] - '0') * 3 +
+		  (value[city_map_index[i + 4]] - '0') * 1);
+  }
+}
+
+/**************************************************************************
+...
 **************************************************************************/
 void dio_get_uint8(struct data_in *din, int *dest)
 {
   if (enough_data(din, 1)) {
     if (dest) {
-      uint8_t x;
+      unsigned char x;
 
-      assert(sizeof(x) == 1);
       memcpy(&x, ADD_TO_POINTER(din->src, din->current), 1);
       *dest = x;
     }
     din->current++;
-  } else if (dest) {
-    *dest = 0;
   }
 }
 
 /**************************************************************************
- Receive uint16 value to dest. In case of failure, value stored to dest
- will be zero. Note that zero is legal value even when there is no failure.
+...
 **************************************************************************/
 void dio_get_uint16(struct data_in *din, int *dest)
 {
   if (enough_data(din, 2)) {
     if (dest) {
-      uint16_t x;
+      unsigned short x;
 
-      assert(sizeof(x) == 2);
       memcpy(&x, ADD_TO_POINTER(din->src, din->current), 2);
       *dest = ntohs(x);
     }
     din->current += 2;
-  } else if (dest) {
-    *dest = 0;
   }
 }
 
 /**************************************************************************
- Receive uint32 value to dest. In case of failure, value stored to dest
- will be zero. Note that zero is legal value even when there is no failure.
+...
 **************************************************************************/
 void dio_get_uint32(struct data_in *din, int *dest)
 {
   if (enough_data(din, 4)) {
     if (dest) {
-      uint32_t x;
+      unsigned long x;
 
-      assert(sizeof(x) == 4);
       memcpy(&x, ADD_TO_POINTER(din->src, din->current), 4);
       *dest = ntohl(x);
     }
     din->current += 4;
-  } else if (dest) {
-    *dest = 0;
   }
 }
 
@@ -485,7 +492,7 @@ void dio_get_bool8(struct data_in *din, bool * dest)
 **************************************************************************/
 void dio_get_bool32(struct data_in *din, bool * dest)
 {
-  int ival = 0;
+  int ival;
 
   dio_get_uint32(din, &ival);
 
@@ -500,25 +507,9 @@ void dio_get_bool32(struct data_in *din, bool * dest)
 /**************************************************************************
 ...
 **************************************************************************/
-void dio_get_sint8(struct data_in *din, int *dest)
-{
-  int tmp;
-
-  dio_get_uint8(din, &tmp);
-  if (dest) {
-    if (tmp > 0x7f) {
-      tmp -= 0x100;
-    }
-    *dest = tmp;
-  }
-}
-
-/**************************************************************************
-...
-**************************************************************************/
 void dio_get_sint16(struct data_in *din, int *dest)
 {
-  int tmp = 0;
+  int tmp;
 
   dio_get_uint16(din, &tmp);
   if (dest) {
@@ -547,7 +538,7 @@ void dio_get_memory(struct data_in *din, void *dest, size_t dest_size)
 **************************************************************************/
 void dio_get_string(struct data_in *din, char *dest, size_t max_dest_size)
 {
-  char *c;
+  unsigned char *c;
   size_t ps_len;		/* length in packet, not including null */
   size_t offset, remaining;
 
@@ -562,7 +553,7 @@ void dio_get_string(struct data_in *din, char *dest, size_t max_dest_size)
   c = ADD_TO_POINTER(din->src, din->current);
 
   /* avoid using strlen (or strcpy) on an (unsigned char*)  --dwp */
-  for (offset = 0; offset < remaining && c[offset] != '\0'; offset++) {
+  for (offset = 0; c[offset] != '\0' && offset < remaining; offset++) {
     /* nothing */
   }
 
@@ -589,7 +580,7 @@ void dio_get_string(struct data_in *din, char *dest, size_t max_dest_size)
 void dio_get_bit_string(struct data_in *din, char *dest,
 			size_t max_dest_size)
 {
-  int npack = 0;		/* number claimed in packet */
+  int npack;			/* number claimed in packet */
   int i;			/* iterate the bytes */
 
   assert(dest != NULL && max_dest_size > 0);
@@ -601,8 +592,6 @@ void dio_get_bit_string(struct data_in *din, char *dest,
 
   dio_get_uint16(din, &npack);
   if (npack >= max_dest_size) {
-      freelog(LOG_ERROR, "Have size for %lu, got %d",
-              (unsigned long)max_dest_size, npack);
     din->bad_bit_string = TRUE;
     dest[0] = '\0';
     return;
@@ -625,6 +614,55 @@ void dio_get_bit_string(struct data_in *din, char *dest,
 
   if (din->too_short) {
     din->bad_bit_string = TRUE;
+  }
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+void dio_get_city_map(struct data_in *din, char *dest, size_t max_dest_size)
+{
+  int i;
+
+  if (dest) {
+    assert(max_dest_size >= 26);
+    dest[0] = '2';
+    dest[4] = '2';
+    dest[12] = '1';
+    dest[20] = '2';
+    dest[24] = '2';
+    dest[25] = '\0';
+  }
+
+  if (!enough_data(din, 4)) {
+    if (dest) {
+      for (i = 0; i < 20;) {
+	int j;
+
+	for (j = 0; j < 5; j++) {
+	  dest[city_map_index[i++]] = '0';
+	}
+      }
+    }
+    return;
+  }
+
+  for (i = 0; i < 20;) {
+    int j;
+
+    dio_get_uint8(din, &j);
+
+    if (dest) {
+      dest[city_map_index[i++]] = '0' + j / 81;
+      j %= 81;
+      dest[city_map_index[i++]] = '0' + j / 27;
+      j %= 27;
+      dest[city_map_index[i++]] = '0' + j / 9;
+      j %= 9;
+      dest[city_map_index[i++]] = '0' + j / 3;
+      j %= 3;
+      dest[city_map_index[i++]] = '0' + j;
+    }
   }
 }
 
@@ -657,19 +695,22 @@ void dio_get_worklist(struct data_in *din, struct worklist *pwl)
   if (pwl->is_valid) {
     int i, length;
 
-    init_worklist(pwl);
+    dio_get_string(din, pwl->name, MAX_LEN_NAME);
 
     dio_get_uint8(din, &length);
+
+    if (length < MAX_LEN_WORKLIST) {
+      pwl->wlefs[length] = WEF_END;
+      pwl->wlids[length] = 0;
+    }
+
+    if (length > MAX_LEN_WORKLIST) {
+      length = MAX_LEN_WORKLIST;
+    }
+
     for (i = 0; i < length; i++) {
-      struct universal prod;
-      int identifier;
-      int kind;
-
-      dio_get_uint8(din, &kind);
-      dio_get_uint8(din, &identifier);
-
-      prod = universal_by_number(kind, identifier);
-      worklist_append(pwl, prod);
+      dio_get_uint8(din, (int *) &pwl->wlefs[i]);
+      dio_get_uint8(din, &pwl->wlids[i]);
     }
   }
 }
@@ -683,7 +724,7 @@ void dio_get_uint8_vec8(struct data_in *din, int **values, int stop_value)
 
   dio_get_uint8(din, &count);
   if (values) {
-    *values = fc_calloc((count + 1), sizeof(**values));
+    *values = fc_malloc((count + 1) * sizeof(int));
   }
   for (inx = 0; inx < count; inx++) {
     dio_get_uint8(din, values ? &((*values)[inx]) : NULL);
@@ -694,7 +735,7 @@ void dio_get_uint8_vec8(struct data_in *din, int **values, int stop_value)
 }
 
 /**************************************************************************
- Receive vector of uint6 values.
+...
 **************************************************************************/
 void dio_get_uint16_vec8(struct data_in *din, int **values, int stop_value)
 {
@@ -702,7 +743,7 @@ void dio_get_uint16_vec8(struct data_in *din, int **values, int stop_value)
 
   dio_get_uint8(din, &count);
   if (values) {
-    *values = fc_calloc((count + 1), sizeof(**values));
+    *values = fc_malloc((count + 1) * sizeof(int));
   }
   for (inx = 0; inx < count; inx++) {
     dio_get_uint16(din, values ? &((*values)[inx]) : NULL);
@@ -711,70 +752,3 @@ void dio_get_uint16_vec8(struct data_in *din, int **values, int stop_value)
     (*values)[inx] = stop_value;
   }
 }
-
-/**************************************************************************
-  De-serialize a player diplomatic state.
-**************************************************************************/
-void dio_get_diplstate(struct data_in *din, struct player_diplstate *pds)
-{
-  int value = 0;
-
-  /* backward compatible order defined for this transaction */
-  dio_get_uint8(din, &value);
-  pds->type = value;
-  dio_get_uint16(din, &pds->turns_left);
-  dio_get_uint8(din, &pds->has_reason_to_cancel);
-  dio_get_uint16(din, &pds->first_contact_turn);
-  value = 0;
-  dio_get_uint8(din, &value);
-  pds->max_state = value;
-}
-
-/**************************************************************************
-  Serialize a player diplomatic state.
-**************************************************************************/
-void dio_put_diplstate(struct data_out *dout,
-		       const struct player_diplstate *pds)
-{
-  /* backward compatible order defined for this transaction */
-  dio_put_uint8(dout, pds->type);
-  dio_put_uint16(dout, pds->turns_left);
-  dio_put_uint8(dout, pds->has_reason_to_cancel);
-  dio_put_uint16(dout, pds->first_contact_turn);
-  dio_put_uint8(dout, pds->max_state);
-}
-
-/**************************************************************************
-  De-serialize a requirement.
-**************************************************************************/
-void dio_get_requirement(struct data_in *din, struct requirement *preq)
-{
-  int type, range, value;
-  bool survives, negated;
-
-  dio_get_uint8(din, &type);
-  dio_get_sint32(din, &value);
-  dio_get_uint8(din, &range);
-  dio_get_bool8(din, &survives);
-  dio_get_bool8(din, &negated);
-
-  *preq = req_from_values(type, range, survives, negated, value);
-}
-
-/**************************************************************************
-  Serialize a requirement.
-**************************************************************************/
-void dio_put_requirement(struct data_out *dout, const struct requirement *preq)
-{
-  int type, range, value;
-  bool survives, negated;
-
-  req_get_values(preq, &type, &range, &survives, &negated, &value);
-
-  dio_put_uint8(dout, type);
-  dio_put_sint32(dout, value);
-  dio_put_uint8(dout, range);
-  dio_put_bool8(dout, survives);
-  dio_put_bool8(dout, negated);
-}
-

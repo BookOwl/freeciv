@@ -53,9 +53,13 @@ enum rfc_status {
 /* initialize logging via console */
 void con_log_init(const char *log_filename, int log_level);
 
+/* write to console without line-break, don't print prompt */
+int con_dump(enum rfc_status rfc_status, const char *message, ...)
+     fc__attribute((format (printf, 2, 3)));
+
 /* write to console and add line-break, and show prompt if required. */
 void con_write(enum rfc_status rfc_status, const char *message, ...)
-     fc__attribute((__format__ (__printf__, 2, 3)));
+     fc__attribute((format (printf, 2, 3)));
 
 /* write to console and add line-break, and show prompt if required.
    ie, same as con_write, but without the format string stuff. */

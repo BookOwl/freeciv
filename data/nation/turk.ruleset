@@ -1,114 +1,34 @@
 [nation_turk]
 
-name=_("Turkish")
+name=_("Turk")
 plural=_("?plural:Turks")
-groups="Modern", "Asian"
-legend=_("Modern Turkey is the successor state of the Ottoman Empire, which\
- collapsed and was dismembered by the victors in World War I after backing\
- the Central Powers.  The country was subsequently reformed and secularized\
- by Kemal Mustapha, the hero of the defense of Gallipoli.")
-leader=
- "Kemal Atatürk",
- "İsmet İnönü",
- "Alparslan",
- "Enver Paşa",
- "Selçuk Bey",
- "Kılıçarslan"
-leader_sex="Male", "Male", "Male", "Male", "Male", "Male"
-flag="turkey"
+leader="Kemal Atat�rk", "S�leyman", "Osman", "Murat",
+       "Selim", "Mehmet"
+leader_sex="Male", "Male", "Male", "Male",
+           "Male", "Male"
+flag="f.turkey"
 flag_alt = "-"
-city_style = "Classical"
+city_style = "European"
 
 ruler_titles = { "government",      "male_title",      "female_title"
-                 "Monarchy",        _("Sultan"),       _("Sultana")
+                 "Monarchy",        _("Sultan"),       _("Sultan")
                }
 
+attack=1
+expand=2
+civilized=2
+advisors=100,100,100,100,100,100,100
 init_techs=""
-init_buildings=""
-init_government="Despotism"
-init_units=""
-civilwar_nations="mongol", "uyghur"
+
+tech_goals = "Monarchy", "Philosophy", "Mathematics", "Chivalry",
+             "Theology", "Railroad"
+wonder="Sun Tzu's War Academy"
+government="Republic"
 
 cities =
- "Ankara (grassland, !mountains, plains, !ocean)",
- "İstanbul (grassland, !hills, !mountains, plains, ocean)",
- "İzmir (!mountains, ocean)",
- "Kırıkkale (plains, !ocean)",
- "Eskişehir (grassland, plains, !ocean)",
- "Yozgat (grassland, plains, !ocean)",
- "Kırşehir (grassland, plains, !ocean)",
- "Çankırı (forest, hills, !ocean)",
- "Çorum (plains, hills, !ocean)",
- "Aksaray (plains, !ocean)",
- "Adana (!hills, !mountains, river, ocean)",
- "Nevşehir (plains, river, !ocean)",
- "Bolu (hills, mountains)",
- "Kayseri (plains, !ocean)",
- "Amasya (forest, hills, mountains, !ocean)",
- "Tokat (hills, river, !ocean)",
- "Sivas (plains, river, !ocean)",
- "Erzincan (hills, mountains, !ocean)",
- "Afyon (forest, grassland, plains, !river, !ocean)",
- "Kütahya (plains, !ocean)",
- "Kahramanmaraş (plains, river, !ocean)",
- "Malatya (hills, river, !ocean)",
- "Mersin (grassland, plains, ocean)",
- "Hatay (river, swamp, ocean)",
- "Gaziantep (desert, plains, !ocean)",
- "Adıyaman (!forest, !grassland, mountains, plains, river, !ocean)",
- "Elazığ (hills, mountains, !ocean)",
- "Tunceli (hills, mountains, !ocean)",
- "Ağrı (!grassland, hills, mountains, !plains, !ocean)",
- "Antalya (mountains, hills, ocean)",
- "Burdur (forest, swamp)",
- "Uşak (plains, !ocean)",
- "Bilecik (hills, river)",
- "Isparta (plains, !ocean)",
- "Düzce (plains, ocean)",
- "Zonguldak (hills, mountains, ocean)",
- "Niğde (hills, plains, !ocean)",
- "Bartın (hills, ocean)",
- "Karabük (forest, hills, mountains, ocean)",
- "Kastamonu (hills, !ocean)",
- "Osmaniye (river, ocean)",
- "Şanlıurfa (desert, plains, !ocean)",
- "Diyarbakır (desert, plains, !ocean)",
- "Mardin (hills, !ocean)",
- "Batman (desert, !ocean)",
- "Siirt (hills, mountains, !ocean)",
- "Bitlis (plains, hills, ocean)",
- "Bingöl (hills)",
- "Muş (hills, river, !ocean)",
- "Denizli (hills, river, !ocean)",
- "Muğla (plains, hills, ocean)",
- "Aydın (river, ocean)",
- "Bursa (plains, ocean)",
- "Balıkesir (forest, hills, plains, ocean)",
- "Çanakkale (forest, hills, ocean)",
- "Erzurum (hills, mountains, !ocean)",
- "Gümüşhane (hills, !ocean)",
- "Karaman (plains, !ocean)",
- "Konya (plains, !ocean)",
- "Sakarya (river, ocean)",
- "Samsun (river, ocean)",
- "Sinop (plains, ocean)",
- "Giresun (forest, ocean)",
- "Yalova (grassland, plains, ocean)",
- "Ordu (forest, ocean)",
- "Trabzon (hills, mountains, ocean)",
- "Rize (hills, mountains, ocean)",
- "Manisa (hills, ocean)",
- "Kilis (desert, plains, !ocean)",
- "Ardahan (mountains, !ocean)",
- "Kars (mountains, !ocean)",
- "Artvin (mountains, hills, ocean)",
- "Bayburt (hills, mountains, river, !ocean)",
- "Edirne (hills, river, ocean)",
- "Hakkari (hills, mountains, !ocean)",
- "Iğdır (grassland, plains, !ocean)",
- "Kırklareli (grassland, plains, ocean)",
- "Kocaeli (grassland, plains, ocean)",
- "Şırnak (hills, mountains, !ocean)",
- "Tekirdağ (forest, grassland, plains, ocean)",
- "Van (plains, ocean)",
- "Girne (ocean)"
+ "Ankara", "Istanbul", "Izmir", "Adana", "Antalya",
+ "Bursa", "Edirne", "Erzurum", "Eskisehir", "Trabzon",
+ "Konya", "Ordu", "Iskenderun", "Aydin", "Denizli",
+ "Kutahya", "Nevsehir", "Sivas", "Adiyaman", "Kirsehir",
+ "Elazig", "Malatya", "Tunceli", "Balikesli", "Yozgat",
+ "Diyarbakir", "Giresun", "Kocaeli", "Samsun", "Kirklareli"

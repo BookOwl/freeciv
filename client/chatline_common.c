@@ -11,63 +11,16 @@
    GNU General Public License for more details.
 ***********************************************************************/
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <assert.h>
 #include <string.h>
 
 #include "astring.h"
-#include "fcintl.h"
-#include "log.h"
-#include "packets.h"
-#include "support.h"
-
 #include "chatline_g.h"
 
 #include "chatline_common.h"
-#include "civclient.h"
-
-
-/* Stored up buffer of lines for the chatline */
-struct remaining {
-  char *text;
-  int conn_id;
-};
-#define SPECLIST_TAG remaining
-#include "speclist.h"
-#define remaining_list_iterate(rlist, pline) \
-  TYPED_LIST_ITERATE(struct remaining, rlist, pline)
-#define remaining_list_iterate_end LIST_ITERATE_END
-
-static struct remaining_list *remains;
-
-/**************************************************************************
-  Initialize data structures.
-**************************************************************************/
-void chatline_common_init(void)
-{
-  remains = remaining_list_new();
-}
-
-/**************************************************************************
-  Clean up.
-**************************************************************************/
-void chatline_common_done(void)
-{
-  remaining_list_free(remains);
-}
-
-/**************************************************************************
-  Send the message as a chat to the server.
-**************************************************************************/
-void send_chat(const char *message)
-{
-  dsend_packet_chat_msg_req(&client.conn, message);
-}
 
 static int frozen_level = 0;
+static struct astring remaining = ASTRING_INIT;
 
 /**************************************************************************
   Turn on buffering, using a counter so that calls may be nested.
@@ -77,7 +30,9 @@ void output_window_freeze()
   frozen_level++;
 
   if (frozen_level == 1) {
-    assert(remaining_list_size(remains) == 0);
+    assert(remaining.str == NULL);
+    astr_minsize(&remaining, 1);
+    remaining.str[0] = '\0';
   }
 }
 
@@ -92,12 +47,11 @@ void output_window_thaw()
   assert(frozen_level >= 0);
 
   if (frozen_level == 0) {
-    remaining_list_iterate(remains, pline) {
-      append_output_window_full(pline->text, pline->conn_id);
-      free(pline->text);
-      free(pline);
-    } remaining_list_iterate_end;
-    remaining_list_unlink_all(remains);
+    if (remaining.n > 2) {
+      /* +1 to skip the initial '\n' */
+      append_output_window(remaining.str + 1);
+    }
+    astr_free(&remaining);
   }
 }
 
@@ -113,37 +67,24 @@ void output_window_force_thaw()
 }
 
 /**************************************************************************
-  Add a line of text to the output ("chatline") window.
+...
 **************************************************************************/
 void append_output_window(const char *astring)
 {
-  append_output_window_full(astring, -1);
-}
-
-/**************************************************************************
-  Same as above, but here we know the connection id of the sender of the
-  text in question.
-**************************************************************************/
-void append_output_window_full(const char *astring, int conn_id)
-{
   if (frozen_level == 0) {
-    real_append_output_window(astring, conn_id);
+    real_append_output_window(astring);
   } else {
-    struct remaining *premain = fc_malloc(sizeof(*premain));
+    /* 
+     * len_src doesn't include the trailing '\0'
+     * len_dst does include the trailing '\0'
+     */
+    size_t len_src = strlen(astring), len_dst = remaining.n;
 
-    remaining_list_append(remains, premain);
-    premain->text = mystrdup(astring);
-    premain->conn_id = conn_id;
+    /* +1 for the "\n" */
+    astr_minsize(&remaining, len_dst + 1 + len_src);
+    remaining.str[len_dst - 1] = '\n';
+
+    /* +1 for the "\0" */
+    memcpy(&remaining.str[len_dst], astring, len_src + 1);
   }
-}
-
-/****************************************************************************
-  Standard welcome message.
-****************************************************************************/
-void chat_welcome_message(void)
-{
-  append_output_window(_("Freeciv is free software and you are welcome to "
-			 "distribute copies of it under certain conditions;"));
-  append_output_window(_("See the \"Copying\" item on the Help menu."));
-  append_output_window(_("Now ... Go give 'em hell!"));
 }

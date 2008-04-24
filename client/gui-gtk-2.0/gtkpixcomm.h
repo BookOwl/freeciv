@@ -29,19 +29,20 @@
 
 
 #include <gtk/gtkmisc.h>
+#include "graphics.h"
 
-#include "sprite.h"
 
-
-G_BEGIN_DECLS
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
 
 
 #define GTK_TYPE_PIXCOMM		 (gtk_pixcomm_get_type ())
-#define GTK_PIXCOMM(obj)		 (G_TYPE_CHECK_INSTANCE_CAST ((obj), GTK_TYPE_PIXCOMM, GtkPixcomm))
-#define GTK_PIXCOMM_CLASS(klass)	 (G_TYPE_CHECK_CLASS_CAST ((klass), GTK_TYPE_PIXCOMM, GtkPixcommClass))
-#define GTK_IS_PIXCOMM(obj)		 (G_TYPE_CHECK_INSTANCE_TYPE ((obj), GTK_TYPE_PIXCOMM))
-#define GTK_IS_PIXCOMM_CLASS(klass)	 (G_TYPE_CHECK_CLASS_TYPE ((klass), GTK_TYPE_PIXCOMM))
-#define GTK_PIXCOMM_GET_CLASS(obj)	 (G_TYPE_INSTANCE_GET_CLASS ((obj), GTK_TYPE_PIXCOMM, GtkPixcommClass))
+#define GTK_PIXCOMM(obj)		 (GTK_CHECK_CAST ((obj), GTK_TYPE_PIXCOMM, GtkPixcomm))
+#define GTK_PIXCOMM_CLASS(klass)	 (GTK_CHECK_CLASS_CAST ((klass), GTK_TYPE_PIXCOMM, GtkPixcommClass))
+#define GTK_IS_PIXCOMM(obj)		 (GTK_CHECK_TYPE ((obj), GTK_TYPE_PIXCOMM))
+#define GTK_IS_PIXCOMM_CLASS(klass)	 (GTK_CHECK_CLASS_TYPE ((klass), GTK_TYPE_PIXCOMM))
+#define GTK_PIXCOMM_GET_CLASS(obj)	 (GTK_CHECK_GET_CLASS ((obj), GTK_TYPE_PIXCOMM, GtkPixcommClass))
 
 
 typedef struct _GtkPixcomm	GtkPixcomm;
@@ -55,9 +56,6 @@ struct _GtkPixcomm
 
   gint w, h;
   GArray *actions;
-
-  gboolean is_scaled;
-  gdouble scale;
 };
 
 struct _GtkPixcommClass
@@ -66,11 +64,10 @@ struct _GtkPixcommClass
 };
 
 
-GType	   gtk_pixcomm_get_type	 (void) G_GNUC_CONST;
-GtkWidget *gtk_pixcomm_new	 (gint width, gint height);
-void gtk_pixcomm_set_scale(GtkPixcomm *pixcomm, gdouble scale);
-void gtk_pixcomm_copyto(GtkPixcomm *pixcomm, struct sprite *src,
-			gint x, gint y);
+GtkType	   gtk_pixcomm_get_type	 (void) G_GNUC_CONST;
+GtkWidget* gtk_pixcomm_new	 (gint width, gint height);
+void       gtk_pixcomm_copyto	 (GtkPixcomm *pixcomm, SPRITE *src,
+				  gint x, gint y);
 void       gtk_pixcomm_clear	 (GtkPixcomm *pixcomm);
 void	   gtk_pixcomm_fill	 (GtkPixcomm *pixcomm, GdkColor *color);
 
@@ -78,7 +75,9 @@ void	   gtk_pixcomm_freeze	 (GtkPixcomm *pixcomm);
 void	   gtk_pixcomm_thaw	 (GtkPixcomm *pixcomm);
 
 
-G_END_DECLS
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
+
 
 #endif /* __GTK_PIXCOMM_H__ */
-

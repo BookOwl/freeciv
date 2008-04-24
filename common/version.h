@@ -19,18 +19,48 @@
 #endif
 #endif
 
+/* The following is for the benefit (?) of non-configure make methods. */
+/* !! These must be the same as their counterparts in configure.in. !! */
+#ifndef MAJOR_VERSION
+#define MAJOR_VERSION		1
+#endif
+#ifndef MINOR_VERSION
+#define MINOR_VERSION		14
+#endif
+#ifndef PATCH_VERSION
+#define PATCH_VERSION		1
+#endif
+#ifndef VERSION_LABEL
+#define VERSION_LABEL		"-beta2"
+#endif
+#ifndef IS_DEVEL_VERSION
+#define IS_DEVEL_VERSION	0
+#endif
+#ifndef IS_BETA_VERSION
+#define IS_BETA_VERSION		1
+#endif
+
+/* This is only used if IS_BETA_VERSION is true. */
+#ifndef NEXT_STABLE_VERSION
+#define NEXT_STABLE_VERSION	"1.14.1"
+#endif
 /* This is only used in version.c, and only if IS_BETA_VERSION is true.
    The month[] array is defined in version.c (index: 1==Jan, 2==Feb, ...). */
 #ifndef NEXT_RELEASE_MONTH
-#define NEXT_RELEASE_MONTH	(month[RELEASE_MONTH])
+#define NEXT_RELEASE_MONTH	(month[10])
+#endif
+
+#ifndef VERSION_STRING
+#define VER_STRINGIFY1(x) #x
+#define VER_STRINGIFY(x) VER_STRINGIFY1(x)
+#define VERSION_STRING VER_STRINGIFY(MAJOR_VERSION) "." \
+                       VER_STRINGIFY(MINOR_VERSION) "." \
+                       VER_STRINGIFY(PATCH_VERSION) VERSION_LABEL
 #endif
 
 /* version informational strings */
 const char *freeciv_name_version(void);
 const char *word_version(void);
-const char *fc_svn_revision(void);
-
-const char *freeciv_motto(void);
 
 /* If returns NULL, not a beta version. */
 const char *beta_message(void);

@@ -7,7 +7,7 @@ dnl against wrong ncurses library.  Compiles with LIBS modified
 dnl to included -lreadline and parameter EXTRA-LIBS.
 dnl Should already have checked that header and library exist.
 dnl
-AC_DEFUN([FC_CHECK_READLINE_RUNTIME],
+AC_DEFUN(FC_CHECK_READLINE_RUNTIME,
 [AC_MSG_CHECKING(whether readline works at runtime)
 templibs="$LIBS"
 LIBS="-lreadline $1 $LIBS"
@@ -87,17 +87,12 @@ Configuring server without readline support.)
                dnl We give them a hand by trying to guess what might be needed.
                dnl
                dnl Some older Unices may need both -lcurses and -ltermlib,
-               dnl but we don't support that just yet.  This check will take
-               dnl the first lib that it finds and just link to that.
-               AC_CHECK_LIB(tinfo, tgetent, HAVE_TERMCAP="-ltinfo",
-                 AC_CHECK_LIB(ncurses, tgetent, HAVE_TERMCAP="-lncurses",
-                   AC_CHECK_LIB(curses, tgetent, HAVE_TERMCAP="-lcurses",
-                     AC_CHECK_LIB(termcap, tgetent, HAVE_TERMCAP="-ltermcap",
-                       AC_CHECK_LIB(termlib, tgetent, HAVE_TERMCAP="-ltermlib")
-                     )
-                   )
-                 )
-               )
+               dnl but we don't support that just yet....
+
+               AC_CHECK_LIB(termlib, tgetent, HAVE_TERMCAP="-ltermlib")
+               AC_CHECK_LIB(termcap, tgetent, HAVE_TERMCAP="-ltermcap")
+               AC_CHECK_LIB(curses, tgetent, HAVE_TERMCAP="-lcurses")
+               AC_CHECK_LIB(ncurses, tgetent, HAVE_TERMCAP="-lncurses")
 
                if test x"$HAVE_TERMCAP" != "x"; then
                    dnl We can't check for completion_matches() again,

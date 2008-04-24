@@ -2,7 +2,7 @@
 [spec]
 
 ; Format and options of this spec file:
-options = "+spec3"
+options = "+spec2"
 
 [info]
 

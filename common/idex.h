@@ -18,7 +18,8 @@
    id values to unit and city pointers.
 ***************************************************************************/
 
-#include "fc_types.h"
+struct city;
+struct unit;
 
 void idex_init(void);
 void idex_free(void);

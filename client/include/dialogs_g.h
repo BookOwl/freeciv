@@ -14,43 +14,35 @@
 #define FC__DIALOGS_G_H
 
 #include "shared.h"		/* bool type */
-
-#include "fc_types.h"
-#include "nation.h"		/* Nation_type_id */
 #include "terrain.h"		/* enum tile_special_type */
-#include "unitlist.h"
 
-struct packet_nations_selected_info;
+struct tile;
+struct unit;
+struct city;
+struct packet_nations_used;
 
-void popup_notify_goto_dialog(const char *headline, const char *lines,
-			      struct tile *ptile);
-void popup_notify_dialog(const char *caption, const char *headline,
-			 const char *lines);
+void popup_notify_goto_dialog(char *headline, char *lines, int x, int y);
+void popup_notify_dialog(char *caption, char *headline, char *lines);
 
-void popup_races_dialog(struct player *pplayer);
+void popup_races_dialog(void);
 void popdown_races_dialog(void);
 
 void popup_unit_select_dialog(struct tile *ptile);
 
-void races_toggles_set_sensitive(void);
+void races_toggles_set_sensitive(struct packet_nations_used *packet);
 
+void popup_revolution_dialog(void);
+void popup_government_dialog(void);
 void popup_caravan_dialog(struct unit *punit,
 			  struct city *phomecity, struct city *pdestcity);
-bool caravan_dialog_is_open(int* unit_id, int* city_id);
-void caravan_dialog_update(void);
-
-void popup_diplomat_dialog(struct unit *punit, struct tile *ptile);
-int diplomat_handled_in_diplomat_dialog(void);
-void close_diplomat_dialog(void);
+bool caravan_dialog_is_open(void);
+void popup_diplomat_dialog(struct unit *punit, int dest_x, int dest_y);
+bool diplomat_dialog_is_open(void);
 void popup_incite_dialog(struct city *pcity);
 void popup_bribe_dialog(struct unit *punit);
 void popup_sabotage_dialog(struct city *pcity);
-void popup_pillage_dialog(struct unit *punit, bv_special may_pillage,
-                          struct base_type *pbase);
-void popup_upgrade_dialog(struct unit_list *punits);
-void popup_tileset_suggestion_dialog(void);
-bool popup_theme_suggestion_dialog(const char *theme_name);
-
-void popdown_all_game_dialogs(void);
+void popup_pillage_dialog(struct unit *punit,
+			  enum tile_special_type may_pillage);
+void popup_unit_connect_dialog (struct unit *punit, int dest_x, int dest_y);
 
 #endif  /* FC__DIALOGS_G_H */

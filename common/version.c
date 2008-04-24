@@ -10,21 +10,15 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
 #include "fcintl.h"
-#include "fc_types.h"
 #include "shared.h"
 #include "support.h"
 
 #include "version.h"
-
-#ifdef SVNREV
-#include "fc_svnrev_gen.h"
-#endif /* SVNREV */
 
 
 /**********************************************************************
@@ -37,9 +31,6 @@ const char *freeciv_name_version(void)
 #if IS_BETA_VERSION
   my_snprintf(msgbuf, sizeof (msgbuf), _("Freeciv version %s %s"),
               VERSION_STRING, _("(beta version)"));
-#elif defined(SVNREV) && !defined(FC_SVNREV_OFF)
-  my_snprintf(msgbuf, sizeof (msgbuf), _("Freeciv version %s (%s)"),
-              VERSION_STRING, fc_svn_revision());
 #else
   my_snprintf(msgbuf, sizeof (msgbuf), _("Freeciv version %s"),
               VERSION_STRING);
@@ -58,19 +49,6 @@ const char *word_version(void)
 #else
   return _("version ");
 #endif
-}
-
-/**********************************************************************
-  Returns string with svn revision information if it is possible to
-  determine. Can return also some fallback string or even NULL.
-***********************************************************************/
-const char *fc_svn_revision(void)
-{
-#if defined(SVNREV) && !defined(FC_SVNREV_OFF)
-  return FC_SVNREV; /* Either revision, or modified revision */
-#else  /* FC_SVNREV_OFF */
-  return NULL;
-#endif /* FC_SVNREV_OFF */
 }
 
 /**********************************************************************
@@ -98,25 +76,16 @@ const char *beta_message(void)
     N_("December")
   };
   my_snprintf (msgbuf, sizeof (msgbuf),
-	       /* TRANS: No full stop after the URL, could cause confusion. */
 	       _("THIS IS A BETA VERSION\n"
-		 "Freeciv %s will be released in %s, at %s"),
+		 "Freeciv %s will be released in\n"
+		 "%s, at %s"), /* No full stop here since it would be
+				  immediately following a URL, which
+				  would only cause confusion. */
 	       NEXT_STABLE_VERSION,
 	       _(NEXT_RELEASE_MONTH),
-	       WIKI_URL);
+	       WEBSITE_URL);
   return msgbuf;
 #else
   return NULL;
 #endif
-}
-
-/***************************************************************************
-  Return the Freeciv motto.
-  (The motto is common code:
-   only one instance of the string in the source;
-   only one time gettext needs to translate it. --jjm)
-***************************************************************************/
-const char *freeciv_motto(void)
-{
-  return _("'Cause civilization should be free!");
 }

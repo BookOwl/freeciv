@@ -10,25 +10,26 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 
 #include <windows.h>
 #include <windowsx.h>
 
 #include "fcintl.h"
+#include "game.h"
 #include "government.h"
 #include "packets.h"
 #include "player.h"
 #include "shared.h"
 #include "support.h"
 
-#include "civclient.h"
+#include "clinet.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "mapview.h"
@@ -78,7 +79,7 @@ static void intel_create_dialog(struct player *p)
   
 
   static char tech_list_names[A_LAST+1][200];
-  int j = 0;
+  int i, j;
   
   intel_dialog=fcwin_create_layouted_window(intel_proc,
 					    _("Foreign Intelligence Report"),
@@ -91,17 +92,16 @@ static void intel_create_dialog(struct player *p)
 
   my_snprintf(buf, sizeof(buf),
               _("Intelligence Information for the %s Empire"), 
-              nation_adjective_for_player(p));
+              get_nation_name(p->nation));
   fcwin_box_add_static(vbox,buf,0,SS_LEFT,FALSE,FALSE,5);
   hbox=fcwin_hbox_new(intel_dialog,FALSE);
   
   my_snprintf(buf, sizeof(buf), _("Ruler: %s %s"), 
-              ruler_title_translation(p),
-              player_name(p));
+              get_ruler_title(p->government, p->is_male, p->nation), p->name);
   fcwin_box_add_static(hbox,buf,0,SS_CENTER,TRUE,TRUE,10);
 
   my_snprintf(buf, sizeof(buf), _("Government: %s"),  
-	      government_name_for_player(p));
+	      get_government_name(p->government));
   fcwin_box_add_static(hbox,buf,0,SS_CENTER,TRUE,TRUE,10);
   fcwin_box_add_box(vbox,hbox,FALSE,FALSE,5);
   
@@ -123,27 +123,14 @@ static void intel_create_dialog(struct player *p)
   
   hbox=fcwin_hbox_new(intel_dialog,FALSE);
    
-  switch (get_player_research(p)->researching) {
-  case A_UNKNOWN:
-    my_snprintf(buf, sizeof(buf), _("Researching: (Unknown)"));
-    break;
-  case A_UNSET:
-    my_snprintf(buf, sizeof(buf), _("Researching: Unknown(%d/-)"),
-		get_player_research(p)->bulbs_researched);
-    break;
-  default:
-    my_snprintf(buf, sizeof(buf), _("Researching: %s(%d/%d)"),
-	        advance_name_researching(p),
-	        get_player_research(p)->bulbs_researched,
-	        total_bulbs_required(p));
-    break;
-  };
+  my_snprintf(buf, sizeof(buf), _("Researching: %s(%d/%d)"),
+	      get_tech_name(p, p->research.researching),
+	      p->research.bulbs_researched, total_bulbs_required(p));
   fcwin_box_add_static(hbox,buf,0,SS_CENTER,TRUE,TRUE,10);
   
   pcity = find_palace(p);
   my_snprintf(buf, sizeof(buf), _("Capital: %s"),
-              /* TRANS: "unknown" location */
-              (!pcity) ? _("(unknown)") : city_name(pcity));
+              (!pcity)?_("(Unknown)"):pcity->name);
   fcwin_box_add_static(hbox,buf,0,SS_CENTER,TRUE,TRUE,10);
   
   fcwin_box_add_box(vbox,hbox,FALSE,FALSE,5);
@@ -151,18 +138,17 @@ static void intel_create_dialog(struct player *p)
   lb=fcwin_box_add_list(vbox,10,0,LBS_NOSEL | LBS_SORT | WS_VSCROLL,
 			TRUE,TRUE,5);
   
-  advance_index_iterate(A_FIRST, i) {
-    if(player_invention_state(p, i)==TECH_KNOWN) {
-      if (TECH_KNOWN == player_invention_state(client.conn.playing, i)) {
-        sz_strlcpy(tech_list_names[j], advance_name_translation(advance_by_number(i)));
+  for(i=A_FIRST, j=0; i<game.num_tech_types; i++)
+    if(get_invention(p, i)==TECH_KNOWN) {
+      if(get_invention(game.player_ptr, i)==TECH_KNOWN) {
+        sz_strlcpy(tech_list_names[j], advances[i].name);
       } else {
         my_snprintf(tech_list_names[j], sizeof(tech_list_names[j]),
-                    "%s*", advance_name_translation(advance_by_number(i)));
+                    "%s*", advances[i].name);
       }
       ListBox_AddString(lb,tech_list_names[j]);
       j++;
     }
-  } advance_index_iterate_end;
 
   fcwin_box_add_button(vbox,_("Close"),IDCANCEL,0,FALSE,FALSE,5);
   fcwin_set_box(intel_dialog,vbox);
@@ -178,13 +164,4 @@ popup_intel_dialog(struct player *p)
     intel_create_dialog(p);
     ShowWindow(intel_dialog,SW_SHOWNORMAL);
   }
-}
-
-/****************************************************************************
-  Update the intelligence dialog for the given player.  This is called by
-  the core client code when that player's information changes.
-****************************************************************************/
-void update_intel_dialog(struct player *p)
-{
-  /* PORTME */
 }

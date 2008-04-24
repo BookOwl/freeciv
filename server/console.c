@@ -10,26 +10,22 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
-#include <stdarg.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <string.h>
 
 #ifdef HAVE_LIBREADLINE
 #include <readline/readline.h>
 #endif
 
-#include "fciconv.h"
 #include "fcintl.h"
-#include "game.h"
 #include "log.h"
 #include "support.h"
 
-#include "plrhand.h"
 #include "srv_main.h"
 
 #include "console.h"
@@ -39,38 +35,18 @@ static bool console_prompt_is_showing = FALSE;
 static bool console_rfcstyle = FALSE;
 #ifdef HAVE_LIBREADLINE
 static bool readline_received_enter = TRUE;
-#else
-static int con_dump(enum rfc_status rfc_status, const char *message, ...);
 #endif
 
 /************************************************************************
 Function to handle log messages.
 This must match the log_callback_fn typedef signature.
 ************************************************************************/
-static void con_handle_log(int level, const char *message, bool file_too)
+static void con_handle_log(int level, const char *message)
 {
-  if (LOG_ERROR == level) {
-    notify_conn(NULL, NULL, E_LOG_ERROR, message);
-  } else if (LOG_FATAL >= level) {
-    /* Make sure that message is not left to buffers when server dies */
-    conn_list_iterate(game.est_connections, pconn) {
-      pconn->send_buffer->do_buffer_sends = 0;
-      pconn->compression.frozen_level = 0;
-    } conn_list_iterate_end;
-
-    notify_conn(NULL, NULL, E_LOG_FATAL, message);
-    notify_conn(NULL, NULL, E_LOG_FATAL,
-                _("Please report this message at %s"),
-                BUG_URL);
-  }
-
-  /* Write debug/verbose message to console only when not written to file. */
-  if (!file_too || level <= LOG_NORMAL) {
-    if (console_rfcstyle) {
-      con_write(C_LOG_BASE + level, "%s", message);
-    } else {
-      con_write(C_LOG_BASE + level, "%d: %s", level, message);
-    }
+  if(console_rfcstyle) {
+    con_write(C_LOG_BASE+level, "%s", message);
+  } else {
+    con_write(C_LOG_BASE+level, "%d: %s", level, message);
   }
 }
 
@@ -97,18 +73,18 @@ static void con_update_prompt(void)
 }
 
 /************************************************************************
-  Initialize logging via console.
+Initialize logging via console.
 ************************************************************************/
 void con_log_init(const char *log_filename, int log_level)
 {
-  log_init(log_filename, log_level, con_handle_log);
+  log_init(log_filename, log_level, (log_filename ? NULL : con_handle_log));
+  logdebug_suppress_warning;
 }
 
-#ifndef HAVE_LIBREADLINE
 /************************************************************************
 Write to console without line-break, don't print prompt.
 ************************************************************************/
-static int con_dump(enum rfc_status rfc_status, const char *message, ...)
+int con_dump(enum rfc_status rfc_status, const char *message, ...)
 {
   static char buf[MAX_LEN_CONSOLE_LINE];
   va_list args;
@@ -117,18 +93,17 @@ static int con_dump(enum rfc_status rfc_status, const char *message, ...)
   my_vsnprintf(buf, sizeof(buf), message, args);
   va_end(args);
 
-  if (console_prompt_is_showing) {
-    fc_printf("\n");
+  if(console_prompt_is_showing) {
+    printf("\n");
   }
   if ((console_rfcstyle) && (rfc_status >= 0)) {
-    fc_printf("%.3d %s", rfc_status, buf);
+    printf("%.3d %s", rfc_status, buf);
   } else {
-    fc_printf("%s", buf);
+    printf("%s", buf);
   }
   console_prompt_is_showing = FALSE;
   return (int) strlen(buf);
 }
-#endif
 
 /************************************************************************
 Write to console and add line-break, and show prompt if required.
@@ -154,13 +129,13 @@ this allows con_puts(C_COMMENT,"");
 ************************************************************************/
 void con_puts(enum rfc_status rfc_status, const char *str)
 {
-  if (console_prompt_is_showing) {
-    fc_printf("\n");
+  if(console_prompt_is_showing) {
+    printf("\n");
   }
   if ((console_rfcstyle) && (rfc_status >= 0)) {
-    fc_printf("%.3d %s\n", rfc_status, str);
+    printf("%.3d %s\n", rfc_status, str);
   } else {
-    fc_printf("%s\n", str);
+    printf("%s\n", str);
   }
   console_prompt_is_showing = FALSE;
   con_update_prompt();

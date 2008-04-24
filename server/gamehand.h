@@ -14,18 +14,14 @@
 #define FC__GAMEHAND_H
 
 struct section_file;
-struct connection;
 struct conn_list;
 
 void init_new_game(void);
 void send_year_to_clients(int year);
 void send_game_info(struct conn_list *dest);
-
-struct unit_type *crole_to_unit_type(char crole,struct player *pplayer);
+void send_game_state(struct conn_list *dest, int state);
+void send_start_turn_to_clients(void);
 
 int update_timeout(void);
-void increase_timeout_because_unit_moved(void);
-
-const char *new_challenge_filename(struct connection *pc);
 
 #endif  /* FC__GAMEHAND_H */
