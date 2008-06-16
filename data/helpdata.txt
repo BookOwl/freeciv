@@ -55,9 +55,9 @@ the extinction of all other civilizations.\
 ", _("\
 If you find any bugs, then please send us a bug report.  This is \
 best done by visiting the Freeciv Bug Tracking System, at:\
-"), "\
+\n\n\
   http://bugs.freeciv.org/\
-", _("\
+"), _("\
 For more information about submitting bug reports see the file BUGS \
 in the Freeciv distribution.  For more information in general, \
 visit the Freeciv website, at:\
@@ -381,21 +381,21 @@ Freeciv supports several local languages.  See the Native \
 Language Support section of the README file for instructions \
 on how to use one of these languages.\
 \n\n\
-First, check whether a localization is already in progress \
-for your language:\
-"), "\
-  http://www.freeciv.org/wiki/Translations\
-", _("\
 If you would like to add a localization (translation) for your \
 language, please see the instructions at:\
-"), "\
+\n\n\
   http://www.freeciv.org/wiki/Localization\
-", _("\
-You are also welcome to send any questions to the translation \
+\n\n\
+Check first if a localization is already in progress \
+for your language:\
+\n\n\
+  http://www.freeciv.org/wiki/Translations\
+\n\n\
+You are also welcome to send any questions to the freeciv-i18n \
 mailing list:\
-"), "\
+\n\n\
   freeciv-i18n@gna.org\
-"
+")
 
 [help_connecting]
 name = _("Connecting")
@@ -409,12 +409,13 @@ the metaserver,\
 ", _("\
 The client can fetch this page, too: use the Metaserver button \
 in the connection dialog.  If it never shows any results, check \
-whether your WWW browser is using a HTTP proxy; to make civclient \
-use the same proxy, before starting civclient, \
-set the $http_proxy environment variable to:\
-"), "\
+if your WWW browser is using a HTTP proxy; to make civclient \
+use the same proxy, set the $http_proxy environment variable to\
+\n\n\
   http://proxyhost:proxyportnumber/\
-", _("\
+\n\n\
+before starting civclient.\
+"), _("\
 When the game has started, everyone can connect as any player who \
 isn't already connected, including AI players.  Merely connecting \
 to an AI player doesn't make it human controlled; this is an \
@@ -494,6 +495,7 @@ Main Map (Keys):\n\
         Ctrl-N: show city names on/off\n\
         Ctrl-R: show city growth on/off\n\
         Ctrl-P: show city production on/off\n\
+             t: show city workers (mouse over or near city)\n\
 "), _("\
 Main Map (Mouse):\n\
 =================\n\
@@ -508,7 +510,6 @@ Main Map (Mouse):\n\
 \n\
   Shift-Control-Left-click:    Adjust city workers\n\
   Control-Center-click:        Wake up sentried units\n\
-  Shift-Control-Right-click:   Show city workers (mouse over or near city)\n\
 \n\
   Area Selection mode (GTK):\n\
   ==========================\n\
@@ -522,12 +523,11 @@ Main Map (Mouse):\n\
 "), _("\
 Dialogs and Reports:\n\
 ====================\n\
-     F1: show Map View\n\
+     F1: open City Report\n\
      F2: open Unit Report\n\
-     F3: open Nations Report\n\
-     F4: open City Report\n\
+     F3: open Players dialog\n\
      F5: open Economy Report\n\
-     F6: open Research Report\n\
+     F6: open Science Report\n\
      F7: open World Wonders\n\
      F8: open Top Five Cities\n\
      F9: open Messages dialog\n\
@@ -728,10 +728,7 @@ well, especially in the beginning of the game.  But to improve, \
 you need to study the various units and advances, and PRACTICE, \
 PRACTICE, PRACTICE!  Freeciv has many twists, so if you haven't \
 played a similar game before, try consulting the Freeciv WWW \
-pages at:\
-"), "\
-  http://www.freeciv.org/\
-", _("\
+pages at http://www.freeciv.org/\n\
 You'll find more tips for playing, and details of how to contact \
 other players.\
 "), _("\
@@ -782,15 +779,15 @@ other player isn't getting a better deal than you expect.\
 Cease-fire, Armistice, Peace, and Alliance. The first is the default state, \
 while the others can be achieved by signing diplomatic treaties.\
 "), _("\
-     To have a diplomatic relationship with another player, you must \
-establish contact with that player. Contact occurs whenever \
-one of your units is within sight of a city or unit belonging to another \
+     To have a diplomatic relationship with another player, you must fist \
+establish first contact with that player. To establish first contact, you \
+have to move one of your units next to a city or unit belonging to that \
 player, or vice versa. Unless you establish an embassy with that player, \
-you may again lose contact with them a set number of turns after \
-most recent contact.\
+you may again lose contact with them after a set number of turns without \
+direct physical contact.\
 "), _("\
      The diplomatic state between players defaults to War. \
-During War, you can freely move your units inside enemy territory and \
+During War, you can freely move you units inside enemy territory and \
 attack their units and cities at will.\
 "), _("\
      When two players decide to end hostilities between them, they can \
@@ -805,7 +802,7 @@ you directly back to War.\
 "), _("\
      At the moment two players enter into the diplomatic state of Peace, \
 all units belonging to either player that happen to be within the other's \
-borders will be automatically disbanded according to the treaty. After \
+borders, will be automatically disbanded according to the treaty. After \
 this, you may not move units into the other's territory until you either \
 declare War, or forge an Alliance. Breaking a Peace treaty will drop you \
 directly back to War.\
@@ -814,8 +811,8 @@ directly back to War.\
 players. In this state, you may move units into each other's cities and \
 your units may share the same square. An allied AI player will freely give \
 you its world maps, shared vision, as well as seriously consider trading \
-technologies and cities. The only drawback with an alliance is that it \
-will draw you into any wars your ally enters against other players. \
+technologies and cities. The only drawback with an alliance, is that it \
+will draw you into to any wars your ally enters against other players. \
 Breaking an Alliance will drop you to an Armistice treaty.\
 ")
 

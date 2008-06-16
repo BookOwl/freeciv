@@ -66,7 +66,6 @@
 #include "dataio.h"
 #include "events.h"
 #include "fcintl.h"
-#include "game.h"
 #include "log.h"
 #include "mem.h"
 #include "netintf.h"
@@ -210,7 +209,7 @@ void close_connection(struct connection *pconn)
   conn_list_unlink(game.all_connections, pconn);
   conn_list_unlink(game.est_connections, pconn);
 
-  pconn->playing = NULL;
+  pconn->player = NULL;
   pconn->access_level = ALLOW_NONE;
   connection_common_close(pconn);
 }
@@ -490,8 +489,8 @@ enum server_events server_sniff_all_input(void)
 	if (last_noplayers != 0) {
 	  if (time(NULL) > last_noplayers + srvarg.quitidle) {
 	    save_game_auto("Lost all connections");
-	    set_meta_message_string(N_("restarting for lack of players"));
-	    freelog(LOG_NORMAL, Q_(get_meta_message_string()));
+	    set_meta_message_string("restarting for lack of players");
+	    freelog(LOG_NORMAL, get_meta_message_string());
 	    (void) send_server_info_to_metaserver(META_INFO);
 
             set_server_state(S_S_OVER);
@@ -510,8 +509,14 @@ enum server_events server_sniff_all_input(void)
             connections = FALSE;
 	  }
 	} else {
-          set_meta_message_string(N_("restarting for lack of players"));
-	  freelog(LOG_NORMAL, Q_(get_meta_message_string()));
+          char buf[256];
+	  last_noplayers = time(NULL);
+	  
+	  my_snprintf(buf, sizeof(buf),
+		      "restarting in %d seconds for lack of players",
+		      srvarg.quitidle);
+          set_meta_message_string((const char *)buf);
+	  freelog(LOG_NORMAL, get_meta_message_string());
 	  (void) send_server_info_to_metaserver(META_INFO);
 	}
       } else {
@@ -853,7 +858,7 @@ int server_make_connection(int new_sock, const char *client_addr, const char *cl
       connection_common_init(pconn);
       pconn->sock = new_sock;
       pconn->observer = FALSE;
-      pconn->playing = NULL;
+      pconn->player = NULL;
       pconn->capability[0] = '\0';
       pconn->access_level = access_level_for_next_connection();
       pconn->delayed_disconnect = FALSE;
@@ -913,7 +918,7 @@ int server_open_socket(void)
   }
 
   if (!net_lookup_service(srvarg.bind_addr, srvarg.port, &src)) {
-    freelog(LOG_FATAL, _("Server: bad address: [%s:%d]."),
+    freelog(LOG_ERROR, _("Server: bad address: [%s:%d]."),
 	    srvarg.bind_addr, srvarg.port);
     exit(EXIT_FAILURE);
   }
@@ -1037,7 +1042,7 @@ void handle_conn_pong(struct connection *pconn)
   struct timer *timer;
 
   if (timer_list_size(pconn->server.ping_timers) == 0) {
-    freelog(LOG_ERROR, "got unexpected pong from %s",
+    freelog(LOG_NORMAL, "got unexpected pong from %s",
 	    conn_description(pconn));
     return;
   }
@@ -1183,24 +1188,20 @@ static void send_lanserver_response(void)
 
   switch (server_state()) {
   case S_S_INITIAL:
-    /* TRANS: Game state for local server */
-    my_snprintf(status, sizeof(status), _("Pregame"));
+    my_snprintf(status, sizeof(status), "Pregame");
     break;
   case S_S_RUNNING:
-    /* TRANS: Game state for local server */
-    my_snprintf(status, sizeof(status), _("Running"));
+    my_snprintf(status, sizeof(status), "Running");
     break;
   case S_S_OVER:
-    /* TRANS: Game state for local server */
-    my_snprintf(status, sizeof(status), _("Game over"));
+    my_snprintf(status, sizeof(status), "Game over");
     break;
   case S_S_GENERATING_WAITING:
-    /* TRANS: Game state for local server */
-    my_snprintf(status, sizeof(status), _("Waiting"));
+    my_snprintf(status, sizeof(status), "Waiting");
   }
 
    my_snprintf(players, sizeof(players), "%d",
-               player_count_no_barbarians());
+               get_num_human_and_ai_players());
    my_snprintf(port, sizeof(port), "%d",
               srvarg.port );
 

@@ -17,6 +17,7 @@ BUILDDIR=`pwd`
 #DEBUG=defined
 
 FC_USE_NLS=yes
+FC_USE_NEWAUTOCONF=yes
 FC_HELP=no
 
 # Leave out NLS checks

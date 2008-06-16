@@ -39,7 +39,7 @@
 **************************************************************************/
 static void form_chat_name(struct connection *pconn, char *buffer, size_t len)
 {
-  struct player *pplayer = pconn->playing;
+  struct player *pplayer = pconn->player;
 
   if (!pplayer
       || pconn->observer
@@ -181,7 +181,7 @@ void handle_chat_msg_req(struct connection *pconn, char *message)
     char sender_name[MAX_LEN_CHAT_NAME];
 
     /* this won't work if we aren't attached to a player */
-    if (NULL == pconn->playing) {
+    if (!pconn->player) {
       my_snprintf(chat, sizeof(chat),
                   _("You are not attached to a player."));
       dsend_packet_chat_msg(pconn, chat, -1, -1, E_CHAT_ERROR, -1);
@@ -196,7 +196,7 @@ void handle_chat_msg_req(struct connection *pconn, char *message)
     /* FIXME: there should be a special case for the sender, like in
      * chat_msg_to_player_multi(). */
     players_iterate(aplayer) {
-      if (!pplayers_allied(pconn->playing, aplayer)) {
+      if (!pplayers_allied(pconn->player, aplayer)) {
         continue;
       }
       dlsend_packet_chat_msg(aplayer->connections, chat, -1, -1,

@@ -56,7 +56,8 @@ const char blank_addr_str[] = "---.---.---.---";
    a connection list might corrupt the list. */
 int delayed_disconnect = 0;
 
-
+struct connection *current_connection;
+  
 /**************************************************************************
   Command access levels for client-side use; at present, they are only
   used to control access to server commands typed at the client chatline.
@@ -498,10 +499,10 @@ static void free_socket_packet_buffer(struct socket_packet_buffer *buf)
 /**************************************************************************
   Return pointer to static string containing a description for this
   connection, based on pconn->name, pconn->addr, and (if applicable)
-  pconn->playing->name.  (Also pconn->established and pconn->observer.)
+  pconn->player->name.  (Also pconn->established and pconn->observer.)
 
-  Note that when pconn is client.conn (connection to server),
-  pconn->name and pconn->addr contain empty string, and pconn->playing
+  Note that if pconn is client's aconnection (connection to server),
+  pconn->name and pconn->addr contain empty string, and pconn->player
   is NULL: in this case return string "server".
 **************************************************************************/
 const char *conn_description(const struct connection *pconn)
@@ -520,30 +521,14 @@ const char *conn_description(const struct connection *pconn)
     sz_strlcat(buffer, _(" (connection incomplete)"));
     return buffer;
   }
-  if (NULL != pconn->playing) {
+  if (pconn->player) {
     cat_snprintf(buffer, sizeof(buffer), _(" (player %s)"),
-		 player_name(pconn->playing));
+		 player_name(pconn->player));
   }
   if (pconn->observer) {
     sz_strlcat(buffer, _(" (observer)"));
   }
   return buffer;
-}
-
-/****************************************************************************
-  Return TRUE iff the connection is currently allowed to edit.
-****************************************************************************/
-bool can_conn_edit(const struct connection *pconn)
-{
-  return can_conn_enable_editing(pconn) && game.info.is_edit_mode;
-}
-
-/****************************************************************************
-  Return TRUE iff the connection is allowed to start editing.
-****************************************************************************/
-bool can_conn_enable_editing(const struct connection *pconn)
-{
-  return pconn->access_level == ALLOW_HACK;
 }
 
 /**************************************************************************
@@ -555,7 +540,7 @@ int get_next_request_id(int old_request_id)
   int result = old_request_id + 1;
 
   if ((result & 0xffff) == 0) {
-    freelog(LOG_PACKET,
+    freelog(LOG_NORMAL,
 	    "INFORMATION: request_id has wrapped around; "
 	    "setting from %d to 2", result);
     result = 2;

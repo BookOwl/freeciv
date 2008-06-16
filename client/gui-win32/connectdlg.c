@@ -22,6 +22,7 @@
 #include <commctrl.h>
 
 #include "fcintl.h"
+#include "game.h"
 #include "log.h"
 #include "map.h"
 #include "mem.h"
@@ -33,7 +34,7 @@
 #include "chatline.h"
 #include "civclient.h"
 #include "climisc.h"
-#include "clinet.h"		/* connect_to_server() */
+#include "clinet.h"
 #include "colors.h"
 #include "connectdlg_common.h"
 #include "connectdlg.h"
@@ -130,7 +131,7 @@ void handle_authentication_req(enum authentication_type type, char *message)
       struct packet_authentication_reply reply;
 
       sz_strlcpy(reply.password, password);
-      send_packet_authentication_reply(&client.conn, &reply);
+      send_packet_authentication_reply(&aconnection, &reply);
       return;
     } else {
       dialog_config = ENTER_PASSWORD_TYPE;
@@ -181,7 +182,7 @@ void handle_game_load(struct packet_game_load *packet)
   ShowWindow(start_dlg, SW_HIDE);
   ShowWindow(players_dlg, SW_SHOWNORMAL);
 
-  set_player_count(packet->nplayers);
+  game.info.nplayers = packet->nplayers;
   ListView_DeleteAllItems(players_listview);
 
   for (i = 0; i < packet->nplayers; i++) {
@@ -291,7 +292,7 @@ static void connect_callback()
     if (strncmp(reply.password, password, MAX_LEN_NAME) == 0) {
       EnableWindow(GetDlgItem(network_dlg, ID_CONNECTDLG_CONNECT), FALSE);
       password[0] = '\0';
-      send_packet_authentication_reply(&client.conn, &reply);
+      send_packet_authentication_reply(&aconnection, &reply);
     } else { 
       SetFocus(GetDlgItem(network_tabs[0], ID_CONNECTDLG_NAME));
       SetWindowText(GetDlgItem(network_tabs[0], ID_CONNECTDLG_NAME), "");
@@ -304,7 +305,7 @@ static void connect_callback()
     EnableWindow(GetDlgItem(network_dlg, ID_CONNECTDLG_CONNECT), FALSE);
     Edit_GetText(GetDlgItem(network_tabs[0], ID_CONNECTDLG_NAME),
 		 reply.password, 512);
-    send_packet_authentication_reply(&client.conn, &reply);
+    send_packet_authentication_reply(&aconnection, &reply);
     break;
   default:
     assert(0);
@@ -793,7 +794,7 @@ static void set_new_game_params(HWND win)
   aiskill = ComboBox_GetCurSel(GetDlgItem(newgame_dlg,
 					  ID_NEWGAMEDLG_AISKILL));
 
-  my_snprintf(buf, sizeof(buf), "/%s", ai_level_cmd(aiskill));
+  my_snprintf(buf, sizeof(buf), "/%s", skill_level_names[aiskill]);
   send_chat(buf);
 
 #if 0 
@@ -832,7 +833,7 @@ static LONG CALLBACK new_game_proc(HWND win, UINT message,
 	  popup_settable_options_dialog();
 	  break;
         case ID_NEWGAMEDLG_NATIONS:
-	  popup_races_dialog(client.conn.playing);
+	  popup_races_dialog(game.player_ptr);
 	  break;
 	case ID_CANCEL:
 	  client_kill_server(TRUE);
@@ -924,7 +925,6 @@ void gui_server_connect()
   struct fcwin_box *players_vbox;
   struct fcwin_box *newgame_vbox;
   LV_COLUMN lvc;
-  enum ai_level level;
   
   titles[0] =_(titles_[0]);
   titles[1] =_(titles_[1]);
@@ -1019,16 +1019,11 @@ void gui_server_connect()
 
   fcwin_box_add_static(hbox, _("AI skill level:"), 0, SS_LEFT, TRUE, TRUE,
 		       5);
-
-  fcwin_box_add_combo(hbox, number_of_ai_levels(), ID_NEWGAMEDLG_AISKILL,
+  fcwin_box_add_combo(hbox, NUM_SKILL_LEVELS, ID_NEWGAMEDLG_AISKILL,
 		      CBS_DROPDOWN | WS_VSCROLL, TRUE, TRUE, 5);
-  for (level = 0; level < AI_LEVEL_LAST; level++) {
-    if (is_settable_ai_level(level)) {
-      /* We insert translated ai_level_name here. This cannot be used as
-       * command for setting ai level (that would be ai_level_cmd(level) */
-      ComboBox_AddString(GetDlgItem(newgame_dlg, ID_NEWGAMEDLG_AISKILL),
-                         ai_level_name(level));
-    }
+  for (i = 0; i < NUM_SKILL_LEVELS; i++) {
+    ComboBox_AddString(GetDlgItem(newgame_dlg, ID_NEWGAMEDLG_AISKILL), 
+		       _(skill_level_names[i]));
   }
   ComboBox_SetCurSel(GetDlgItem(newgame_dlg, ID_NEWGAMEDLG_AISKILL), 1);
 

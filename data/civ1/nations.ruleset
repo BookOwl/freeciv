@@ -55,4 +55,3 @@ match=0
 *include "nation/english.ruleset"
 *include "nation/mongol.ruleset"
 *include "nation/barbarian.ruleset"
-*include "nation/pirate.ruleset"

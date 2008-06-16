@@ -14,7 +14,6 @@
 #ifndef FC__TILE_H
 #define FC__TILE_H
 
-#include "base.h"
 #include "fc_types.h"
 #include "player.h"
 #include "terrain.h"
@@ -23,8 +22,8 @@
 /* network, order dependent */
 enum known_type {
  TILE_UNKNOWN = 0,
- TILE_KNOWN_UNSEEN = 1,
- TILE_KNOWN_SEEN = 2,
+ TILE_KNOWN_FOGGED = 1,
+ TILE_KNOWN = 2,
 };
 
 /* Convenience macro for accessing tile coordinates.  This should only be
@@ -41,9 +40,11 @@ struct tile {
   bv_special special;
   struct resource *resource;		/* NULL for no resource */
   struct terrain *terrain;		/* NULL for unknown tiles */
+  struct city *city;        /* city standing on the tile, NULL if none */
   struct unit_list *units;
-  struct player *owner;			/* NULL for not owned */
-  struct city *worked;			/* NULL for not worked */
+  struct city *worked;      /* city working tile, or NULL if none */
+  struct player *owner;     /* Player owning this tile, or NULL. */
+  struct tile *owner_source; /* what makes it owned by owner */
   char *spec_sprite;
 };
 
@@ -57,52 +58,29 @@ struct tile {
 #define tile_list_iterate_end  LIST_ITERATE_END
 
 /* Tile accessor functions. */
-int tile_index(const struct tile *ptile);
-
-struct city *tile_city(const struct tile *ptile);
-
-#define tile_continent(_tile) ((_tile)->continent)
-/*Continent_id tile_continent(const struct tile *ptile);*/
-void tile_set_continent(struct tile *ptile, Continent_id val);
-
-#define tile_owner(_tile) ((_tile)->owner)
-/*struct player *tile_owner(const struct tile *ptile);*/
+struct player *tile_owner(const struct tile *ptile);
 void tile_set_owner(struct tile *ptile, struct player *pplayer);
 
-#define tile_resource(_tile) ((_tile)->resource)
-#define tile_resource_is_valid(_tile) BV_ISSET((_tile)->special, S_RESOURCE_VALID)
-/*const struct resource *tile_resource(const struct tile *ptile);*/
-void tile_set_resource(struct tile *ptile, struct resource *presource);
+struct city *tile_get_city(const struct tile *ptile);
+void tile_set_city(struct tile *ptile, struct city *pcity);
 
-#define tile_terrain(_tile) ((_tile)->terrain)
-/*struct terrain *tile_terrain(const struct tile *ptile);*/
+struct terrain *tile_get_terrain(const struct tile *ptile);
 void tile_set_terrain(struct tile *ptile, struct terrain *pterrain);
 
-#define tile_worked(_tile) ((_tile)->worked)
-/* struct city *tile_worked(const struct tile *ptile); */
-void tile_set_worked(struct tile *ptile, struct city *pcity);
-
-/* Specials are a bit different */
-bv_special tile_specials(const struct tile *ptile);
+bv_special tile_get_special(const struct tile *ptile);
 bool tile_has_special(const struct tile *ptile,
 		      enum tile_special_type to_test_for);
-bool tile_has_any_specials(const struct tile *ptile);
 void tile_set_special(struct tile *ptile, enum tile_special_type spe);
 void tile_clear_special(struct tile *ptile, enum tile_special_type spe);
 void tile_clear_all_specials(struct tile *ptile);
 
-/* Bases map onto specials */
-struct base_type *tile_get_base(const struct tile *ptile);
-void tile_add_base(struct tile *ptile, const struct base_type *pbase);
-void tile_remove_base(struct tile *ptile);
-bool tile_has_base_flag(const struct tile *ptile, enum base_flag_id flag);
-bool tile_has_base_flag_for_unit(const struct tile *ptile,
-                                 const struct unit_type *punittype,
-                                 enum base_flag_id flag);
-bool tile_has_native_base(const struct tile *ptile,
-                          const struct unit_type *punittype);
+#define tile_resource_is_valid(vtile) BV_ISSET((vtile)->special, S_RESOURCE_VALID)
+const struct resource *tile_get_resource(const struct tile *ptile);
+void tile_set_resource(struct tile *ptile, struct resource *presource);
 
-/* Vision related */
+Continent_id tile_get_continent(const struct tile *ptile);
+void tile_set_continent(struct tile *ptile, Continent_id val);
+
 enum known_type tile_get_known(const struct tile *ptile,
 			      const struct player *pplayer);
 
@@ -112,8 +90,6 @@ enum known_type tile_get_known(const struct tile *ptile,
 #define ACTIVITY_FACTOR 10
 int tile_activity_time(enum unit_activity activity,
 		       const struct tile *ptile);
-int tile_activity_base_time(const struct tile *ptile,
-                            enum base_type_id base);
 
 /* These are higher-level functions that handle side effects on the tile. */
 void tile_change_terrain(struct tile *ptile, struct terrain *pterrain);
@@ -121,9 +97,6 @@ void tile_add_special(struct tile *ptile, enum tile_special_type special);
 void tile_remove_special(struct tile *ptile, enum tile_special_type special);
 bool tile_apply_activity(struct tile *ptile, Activity_type_id act);
 
-#define TILE_LB_TERRAIN_RIVER    (1 << 0)
-#define TILE_LB_RIVER_RESOURCE   (1 << 1)
-#define TILE_LB_RESOURCE_POLL    (1 << 2)
-const char *tile_get_info_text(const struct tile *ptile, int linebreaks);
+const char *tile_get_info_text(const struct tile *ptile);
 
 #endif /* FC__TILE_H */

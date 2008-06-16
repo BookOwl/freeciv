@@ -128,12 +128,13 @@ void popup_find_dialog(void)
 **************************************************************************/
 static void update_find_dialog(GtkListStore *store)
 {
+  int i;
   GtkTreeIter it;
 
   gtk_list_store_clear(store);
 
-  players_iterate(pplayer) {
-    city_list_iterate(pplayer->cities, pcity) {
+  for(i = 0; i < game.info.nplayers; i++) {
+    city_list_iterate(game.players[i].cities, pcity) {
 	GValue value = { 0, };
 
 	gtk_list_store_append(store, &it);
@@ -145,7 +146,7 @@ static void update_find_dialog(GtkListStore *store)
 
 	gtk_list_store_set(store, &it, 1, pcity, -1);
     } city_list_iterate_end;
-  } players_iterate_end;
+  }
 }
 
 /**************************************************************************

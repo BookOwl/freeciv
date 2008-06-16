@@ -39,17 +39,16 @@ Freeciv - Copyright (C) 2004 - The Freeciv Project
 
 #include "capability.h"
 #include "fcintl.h"
-#include "ioz.h"
 #include "log.h"
 #include "mem.h"
 #include "netintf.h"
-#include "rand.h"
 #include "registry.h"
+#include "shared.h"
 #include "support.h"
 
 #include "civclient.h"
 #include "climisc.h"
-#include "clinet.h"		/* connect_to_server() */
+#include "clinet.h"
 #include "packhand_gen.h"
 
 #include "chatline_common.h"
@@ -75,6 +74,14 @@ static char challenge_fullname[MAX_LEN_PATH];
 static bool client_has_hack = FALSE;
 
 int internal_server_port;
+
+const char *skill_level_names[NUM_SKILL_LEVELS] = { 
+  N_("novice"),
+  N_("easy"), 
+  N_("normal"), 
+  N_("hard")
+ ,N_("experimental")
+};
 
 /************************************************************************** 
 The general chain of events:
@@ -131,7 +138,7 @@ bool can_client_access_hack(void)
 void client_kill_server(bool force)
 {
   if (is_server_running()) {
-    if (client.conn.used) {
+    if (aconnection.used) {
       /* This does a "soft" shutdown of the server by sending a /quit.
        *
        * This is useful when closing the client or disconnecting because it
@@ -320,7 +327,7 @@ bool client_start_server(void)
 			DETACHED_PROCESS | NORMAL_PRIORITY_CLASS,
 			NULL, NULL, &si, &pi)) {
     append_output_window(_("Couldn't start the server."));
-    append_output_window(_("You'll have to start one manually. Sorry..."));
+    append_output_window(_("You'll have to " "start one manually. Sorry..."));
     return FALSE;
   }
   
@@ -347,7 +354,7 @@ bool client_start_server(void)
 
   /* weird, but could happen, if server doesn't support new startup stuff
    * capabilities won't help us here... */ 
-  if (!client.conn.used) {
+  if (!aconnection.used) {
     /* possible that server is still running. kill it */ 
     client_kill_server(TRUE);
 
@@ -383,21 +390,6 @@ bool client_start_server(void)
 
   return TRUE;
 #endif
-}
-
-/*************************************************************************
-  generate a random string.
-*************************************************************************/
-static void randomize_string(char *str, size_t n)
-{
-  const char chars[] =
-    "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-  int i;
-
-  for (i = 0; i < n - 1; i++) {
-    str[i] = chars[myrand(sizeof(chars) - 1)];
-  }
-  str[i] = '\0';
 }
 
 /*************************************************************************
@@ -442,23 +434,23 @@ void send_client_wants_hack(const char *filename)
     sz_strlcat(challenge_fullname, filename);
 
     /* generate an authentication token */ 
-    randomize_string(req.token, sizeof(req.token));
+    randomize_base64url_string(req.token, sizeof(req.token));
 
     section_file_init(&file);
     secfile_insert_str(&file, req.token, "challenge.token");
-    if (!section_file_save(&file, challenge_fullname, 0, FZ_PLAIN)) {
+    if (!section_file_save(&file, challenge_fullname, 0)) {
       freelog(LOG_ERROR, "Couldn't write token to temporary file: %s",
 	      challenge_fullname);
     }
     section_file_free(&file);
 
     /* tell the server what we put into the file */ 
-    send_packet_single_want_hack_req(&client.conn, &req);
+    send_packet_single_want_hack_req(&aconnection, &req);
   }
 }
 
 /**************************************************************** 
-handle response (by the server) if the client has got hack or not.
+  client has hack (or not).
 *****************************************************************/ 
 void handle_single_want_hack_reply(bool you_have_hack)
 {

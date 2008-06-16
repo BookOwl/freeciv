@@ -27,13 +27,14 @@
 #include <X11/Xaw/List.h>
 
 #include "fcintl.h"
+#include "game.h"
 #include "government.h"
 #include "packets.h"
 #include "player.h"
 #include "shared.h"
 #include "support.h"
 
-#include "civclient.h"
+#include "clinet.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "mapview.h"
@@ -162,7 +163,7 @@ void create_intel_dialog(struct intel_dialog *pdialog, bool raise)
 
   static char *tech_list_names_ptrs[A_LAST+1];
   static char tech_list_names[A_LAST+1][200];
-  int j = 0;
+  int i, j;
 
   pdialog->intel_dialog_shell_is_raised = raise;
 
@@ -268,18 +269,17 @@ void create_intel_dialog(struct intel_dialog *pdialog, bool raise)
 			  XtNlabel, buf,
 			  NULL);
 
-  advance_index_iterate(A_FIRST, i) {
-    if (player_invention_state(pdialog->pplayer, i) == TECH_KNOWN) {
-      if (TECH_KNOWN == player_invention_state(client.conn.playing, i)) {
-	sz_strlcpy(tech_list_names[j], advance_name_translation(advance_by_number(i)));
+  for(i=A_FIRST, j=0; i<game.control.num_tech_types; i++)
+    if (get_invention(pdialog->pplayer, i) == TECH_KNOWN) {
+      if(get_invention(game.player_ptr, i)==TECH_KNOWN) {
+	sz_strlcpy(tech_list_names[j], advance_name_translation(i));
       } else {
 	my_snprintf(tech_list_names[j], sizeof(tech_list_names[j]),
-		    "%s*", advance_name_translation(advance_by_number(i)));
+		    "%s*", advance_name_translation(i));
       }
       tech_list_names_ptrs[j]=tech_list_names[j];
       j++;
     }
-  } advance_index_iterate_end;
   tech_list_names_ptrs[j]=0;
 
   XtVaCreateManagedWidget("inteltechlist",
@@ -337,7 +337,7 @@ void intel_close_callback(Widget w, XtPointer client_data,
 void intel_diplo_callback(Widget w, XtPointer client_data,
 			  XtPointer call_data)
 {
-  popup_intel_diplo_dialog(player_by_number(XTPOINTER_TO_INT(client_data)),
+  popup_intel_diplo_dialog(&game.players[XTPOINTER_TO_INT(client_data)],
 			   FALSE);
 }
 

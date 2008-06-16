@@ -41,12 +41,11 @@ void update_info_label(void)
 		"Year: %s\n"
 		"Gold %d\n"
 		"Tax: %d Lux: %d Sci: %d"),
-	      population_to_text(civ_population(client.conn.playing)),
-	      textyear(game.info.year),
-	      client.conn.playing->economic.gold,
-	      client.conn.playing->economic.tax,
-	      client.conn.playing->economic.luxury,
-	      client.conn.playing->economic.science);
+	      population_to_text(civ_population(game.player_ptr)),
+	      textyear(game.info.year), game.player_ptr->economic.gold,
+	      game.player_ptr->economic.tax,
+	      game.player_ptr->economic.luxury,
+	      game.player_ptr->economic.science);
 
   /* ... */
 }
@@ -64,15 +63,6 @@ void update_info_label(void)
   icons for units on this tile.
 ****************************************************************************/
 void update_unit_info_label(struct unit_list *punitlist)
-{
-  /* PORTME */
-}
-
-/****************************************************************************
-  Update the mouse cursor. Cursor type depends on what user is doing and
-  pointing.
-****************************************************************************/
-void update_mouse_cursor(enum cursor_type new_cursor_type)
 {
   /* PORTME */
 }

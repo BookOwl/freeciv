@@ -16,9 +16,6 @@ options="1.0"
 ; /* <-- avoid gettext warnings
 ; */ <-- avoid gettext warnings
 
-; Cheating AI effects are in separate file
-*include "default/ai_effects.ruleset"
-
 [effect_gov_tile_bonus_0]
 name    = "Output_Penalty_Tile"
 value   = 2
@@ -480,41 +477,42 @@ reqs    =
       "Gov", "Democracy", "Player"
     }
 
-[effect_empire_size_base_0]
-name    = "Empire_Size_Base"
-value   = 9
+[effect_empire_size_mod_0]
+; base value
+name    = "Empire_Size_Mod"
+value   = -6
 reqs    =
     { "type",       "name",      "range"
       "Gov", "Anarchy",   "Player"
     }
 
-[effect_empire_size_base_1]
-name    = "Empire_Size_Base"
-value   = 10
+[effect_empire_size_mod_1]
+name    = "Empire_Size_Mod"
+value   = -6
 reqs    =
     { "type",       "name",      "range"
       "Gov", "Despotism", "Player"
     }
 
-[effect_empire_size_base_2]
-name    = "Empire_Size_Base"
-value   = 11
+[effect_empire_size_mod_2]
+name    = "Empire_Size_Mod"
+value   = -3
 reqs    =
     { "type",       "name",      "range"
       "Gov", "Monarchy",  "Player"
     }
 
-[effect_empire_size_base_3]
-name    = "Empire_Size_Base"
-value   = 14
+[effect_empire_size_mod_3]
+name    = "Empire_Size_Mod"
+value   = 127 ; unlimited
 reqs    =
     { "type",       "name",      "range"
-      "Gov", "Republic",  "Player"
+      "Gov", "Communism", "Player"
     }
 
-[effect_empire_size_base_4]
-name    = "Empire_Size_Base"
-value   = 17
+[effect_empire_size_mod_4]
+name    = "Empire_Size_Mod"
+value   = 3
 reqs    =
     { "type",       "name",      "range"
       "Gov", "Democracy",  "Player"
@@ -1111,7 +1109,7 @@ name	= "Output_Add_Tile"
 value	= 1
 reqs	=
     { "type", "name", "range"
-      "TerrainClass", "Oceanic", "Local"
+      "Terrain", "Ocean", "Local"
       "Building", "Harbour", "City"
       "OutputType", "food", "local"
     }
@@ -1251,7 +1249,7 @@ name	= "Output_Add_Tile"
 value	= 1
 reqs	=
     { "type", "name", "range"
-      "TerrainClass", "Oceanic", "Local"
+      "Terrain", "Ocean", "Local"
       "Building", "Offshore Platform", "City"
       "OutputType", "shield", "local"
     }
@@ -1429,72 +1427,6 @@ reqs	=
     { "type", "name", "range"
       "Building", "Aqueduct", "City"
       "Building", "Sewer System", "City"
-    }
-
-[effect_solar_plant]
-name	= "Output_Bonus"
-value	= 25
-reqs	=
-    { "type", "name", "range"
-      "Building", "Factory", "City"
-      "Building", "Solar Plant", "City"
-      "OutputType", "Shield", "Local"
-    }
-nreqs	=
-    { "type", "name", "range"
-      "Building", "Hoover Dam", "Player"
-      "Building", "Power Plant", "City"
-      "Building", "Hydro Plant", "City"
-      "Building", "Nuclear Plant", "City"
-    }
-
-[effect_solar_plant_1]
-name	= "Output_Bonus"
-value	= 25
-reqs	=
-    { "type", "name", "range"
-      "Building", "Mfg. Plant", "City"
-      "Building", "Solar Plant", "City"
-      "OutputType", "Shield", "Local"
-    }
-nreqs	=
-    { "type", "name", "range"
-      "Building", "Hoover Dam", "Player"
-      "Building", "Power Plant", "City"
-      "Building", "Hydro Plant", "City"
-      "Building", "Nuclear Plant", "City"
-    }
-
-[effect_solar_plant_2]
-name	= "Pollu_Prod_Pct"
-value	= -50
-reqs	=
-    { "type", "name", "range"
-      "Building", "Factory", "City"
-      "Building", "Solar Plant", "City"
-    }
-nreqs	=
-    { "type", "name", "range"
-      "Building", "Recycling Center", "City"
-      "Building", "Hoover Dam", "Player"
-      "Building", "Nuclear Plant", "City"
-      "Building", "Hydro Plant", "City"
-    }
-
-[effect_solar_plant_3]
-name	= "Pollu_Prod_Pct"
-value	= -50
-reqs	=
-    { "type", "name", "range"
-      "Building", "Mfg. Plant", "City"
-      "Building", "Solar Plant", "City"
-    }
-nreqs	=
-    { "type", "name", "range"
-      "Building", "Recycling Center", "City"
-      "Building", "Hoover Dam", "Player"
-      "Building", "Nuclear Plant", "City"
-      "Building", "Hydro Plant", "City"
     }
 
 [effect_space_component]
@@ -1785,6 +1717,14 @@ reqs	=
     { "type", "name", "range"
       "Building", "Lighthouse", "Player"
       "UnitClass", "Sea", "Local"
+    }
+
+[effect_lighthouse_1]
+name	= "No_Sink_Deep"
+value	= 1
+reqs	=
+    { "type", "name", "range"
+      "Building", "Lighthouse", "Player"
     }
 
 [effect_lighthouse_2]

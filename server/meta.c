@@ -44,7 +44,6 @@
 #include "connection.h"
 #include "dataio.h"
 #include "fcintl.h"
-#include "game.h"
 #include "log.h"
 #include "mem.h"
 #include "netintf.h"
@@ -272,7 +271,7 @@ static bool send_to_metaserver(enum meta_flag flag)
     s = end_of_strn(s, &rest);
 
     /* NOTE: send info for ALL players or none at all. */
-    if (player_count_no_barbarians() == 0) {
+    if (get_num_human_and_ai_players() == 0) {
       mystrlcpy(s, "dropplrs=1&", rest);
       s = end_of_strn(s, &rest);
     } else {
@@ -412,7 +411,7 @@ void server_close_meta(void)
 /*************************************************************************
  lookup the correct address for the metaserver.
 *************************************************************************/
-bool server_open_meta(void)
+void server_open_meta(void)
 {
   const char *path;
  
@@ -422,7 +421,7 @@ bool server_open_meta(void)
   }
   
   if (!(path = my_lookup_httpd(metaname, &metaport, srvarg.metaserver_addr))) {
-    return FALSE;
+    return;
   }
   
   metaserver_path = mystrdup(path);
@@ -431,7 +430,7 @@ bool server_open_meta(void)
     freelog(LOG_ERROR, _("Metaserver: bad address: [%s:%d]."),
             metaname, metaport);
     metaserver_failed();
-    return FALSE;
+    return;
   }
 
   if (meta_patches[0] == '\0') {
@@ -442,8 +441,6 @@ bool server_open_meta(void)
   }
 
   server_is_open = TRUE;
-
-  return TRUE;
 }
 
 /**************************************************************************

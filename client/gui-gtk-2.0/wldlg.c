@@ -26,6 +26,7 @@
 #include "citydlg_common.h"
 #include "civclient.h"
 #include "fcintl.h"
+#include "game.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "helpdlg.h"
@@ -35,6 +36,7 @@
 #include "worklist.h"
 #include "support.h"
 #include "climisc.h"
+#include "clinet.h"
 #include "options.h"
 #include "tilespec.h"
 
@@ -104,6 +106,7 @@ static void worklists_destroy_callback(GtkWidget *w, gpointer data)
 *****************************************************************/
 void update_worklist_report_dialog(void)
 {
+  struct player *plr;
   int i;
   GtkTreeIter it;
 
@@ -111,14 +114,20 @@ void update_worklist_report_dialog(void)
     return;
   }
 
+  plr = game.player_ptr;
+
   gtk_list_store_clear(worklists_store);
 
+  if (!game.player_ptr) {
+    return;
+  }
+
   for (i = 0; i < MAX_NUM_WORKLISTS; i++) {
-    if (client.worklists[i].is_valid) {
+    if (plr->worklists[i].is_valid) {
       gtk_list_store_append(worklists_store, &it);
       
        gtk_list_store_set(worklists_store, &it,
-			  0, client.worklists[i].name,
+			  0, plr->worklists[i].name,
 			  1, i,
 			  -1); 
     }
@@ -130,13 +139,20 @@ void update_worklist_report_dialog(void)
 *****************************************************************/
 static void worklists_response(GtkWidget *w, gint response)
 {
+  struct player *plr;
   int i, pos;
   GtkTreeSelection *selection;
   GtkTreeModel *model;
   GtkTreeIter it;
 
+  plr = game.player_ptr;
+
+  if (!game.player_ptr) {
+    return;
+  }
+
   for (i = 0; i < MAX_NUM_WORKLISTS; i++) {
-    if (!client.worklists[i].is_valid) {
+    if (!plr->worklists[i].is_valid) {
       break;
     }
   }
@@ -157,9 +173,9 @@ static void worklists_response(GtkWidget *w, gint response)
       }
 
       /* Validate this slot. */
-      init_worklist(&client.worklists[i]);
-      client.worklists[i].is_valid = TRUE;
-      strcpy(client.worklists[i].name, _("new"));
+      init_worklist(&plr->worklists[i]);
+      plr->worklists[i].is_valid = TRUE;
+      strcpy(plr->worklists[i].name, _("new"));
 
       update_worklist_report_dialog();
       return;
@@ -169,10 +185,10 @@ static void worklists_response(GtkWidget *w, gint response)
 	return;
       }
 
-      popdown_worklist(&client.worklists[pos]);
+      popdown_worklist(&plr->worklists[pos]);
 
-      client.worklists[pos].is_valid = FALSE;
-      client.worklists[pos].name[0] = '\0';
+      plr->worklists[pos].is_valid = FALSE;
+      plr->worklists[pos].name[0] = '\0';
 
       update_worklist_report_dialog();
       return;
@@ -182,7 +198,7 @@ static void worklists_response(GtkWidget *w, gint response)
 	return;
       }
 
-      popup_worklist(&client.worklists[pos]);
+      popup_worklist(&plr->worklists[pos]);
       return;
 
     default:
@@ -201,13 +217,14 @@ static void cell_edited(GtkCellRendererText *cell,
   GtkTreePath *path;
   GtkTreeIter it;
   int pos;
+  struct player *plr = game.player_ptr;
 
   path = gtk_tree_path_new_from_string(spath);
   gtk_tree_model_get_iter(GTK_TREE_MODEL(worklists_store), &it, path);
   
   gtk_tree_model_get(GTK_TREE_MODEL(worklists_store), &it, 1, &pos, -1);
 
-  sz_strlcpy(client.worklists[pos].name, text);
+  sz_strlcpy(plr->worklists[pos].name, text);
   gtk_list_store_set(worklists_store, &it, 0, text, -1);
 
   gtk_tree_path_free(path);
@@ -459,16 +476,18 @@ static void worklist_destroy(GtkWidget *editor, gpointer data)
 *****************************************************************/
 static void menu_item_callback(GtkMenuItem *item, struct worklist_data *ptr)
 {
+  struct player *plr;
   gint pos;
   struct worklist *pwl;
 
-  if (NULL == client.conn.playing) {
+  if (!game.player_ptr) {
     return;
   }
 
+  plr = game.player_ptr;
   pos = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(item), "pos"));
 
-  pwl = &client.worklists[pos];
+  pwl = &plr->worklists[pos];
 
   if (pwl->is_valid) {
     int i;
@@ -492,15 +511,21 @@ static void menu_item_callback(GtkMenuItem *item, struct worklist_data *ptr)
 *****************************************************************/
 static void popup_add_menu(GtkMenuShell *menu, gpointer data)
 {
+  struct player *plr;
   int i;
   GtkWidget *item;
 
   gtk_container_foreach(GTK_CONTAINER(menu),
 			(GtkCallback) gtk_widget_destroy, NULL);
+  plr = game.player_ptr;
+
+  if (!game.player_ptr) {
+    return;
+  }
 
   for (i = 0; i < MAX_NUM_WORKLISTS; i++) {
-    if (client.worklists[i].is_valid) {
-      item = gtk_menu_item_new_with_label(client.worklists[i].name);
+    if (plr->worklists[i].is_valid) {
+      item = gtk_menu_item_new_with_label(plr->worklists[i].name);
       g_object_set_data(G_OBJECT(item), "pos", GINT_TO_POINTER(i));
       gtk_widget_show(item);
 
@@ -538,19 +563,19 @@ static void help_callback(GtkWidget *w, gpointer data)
 
   if (gtk_tree_selection_get_selected(selection, &model, &it)) {
     gint cid;
-    struct universal target;
+    struct city_production target;
 
     gtk_tree_model_get(model, &it, 0, &cid, -1);
     target = cid_decode(cid);
 
-    if (VUT_UTYPE == target.kind) {
-      popup_help_dialog_typed(utype_name_translation(target.value.utype),
+    if (target.is_unit) {
+      popup_help_dialog_typed(utype_name_translation(utype_by_number(target.value)),
 			      HELP_UNIT);
-    } else if (is_great_wonder(target.value.building)) {
-      popup_help_dialog_typed(improvement_name_translation(target.value.building),
+    } else if (is_great_wonder(target.value)) {
+      popup_help_dialog_typed(improvement_name_translation(target.value),
 			      HELP_WONDER);
     } else {
-      popup_help_dialog_typed(improvement_name_translation(target.value.building),
+      popup_help_dialog_typed(improvement_name_translation(target.value),
 			      HELP_IMPROVEMENT);
     }
   } else {
@@ -873,7 +898,7 @@ static void src_selection_callback(GtkTreeSelection *selection, gpointer data)
   /* update widget sensitivity. */
   if (gtk_tree_selection_get_selected(selection, NULL, NULL)) {
     if (can_client_issue_orders()
-      && (!ptr->pcity || city_owner(ptr->pcity) == client.conn.playing)) {
+      && (!ptr->pcity || city_owner(ptr->pcity) == game.player_ptr)) {
       /* if ptr->pcity is NULL, this is a global worklist */
       gtk_widget_set_sensitive(ptr->change_cmd, TRUE);
       gtk_widget_set_sensitive(ptr->prepend_cmd, TRUE);
@@ -943,7 +968,7 @@ static void cell_render_func(GtkTreeViewColumn *col, GtkCellRenderer *rend,
 			     gpointer data)
 {
   gint cid;
-  struct universal target;
+  struct city_production target;
 
   gtk_tree_model_get(model, it, 0, &cid, -1);
   target = cid_production(cid);
@@ -951,7 +976,7 @@ static void cell_render_func(GtkTreeViewColumn *col, GtkCellRenderer *rend,
   if (GTK_IS_CELL_RENDERER_PIXBUF(rend)) {
     GdkPixbuf *pix;
 
-    if (VUT_UTYPE == target.kind) {
+    if (target.is_unit) {
       struct canvas store;
 
       pix = gdk_pixbuf_new(GDK_COLORSPACE_RGB, TRUE, 8,
@@ -959,18 +984,19 @@ static void cell_render_func(GtkTreeViewColumn *col, GtkCellRenderer *rend,
 
       store.type = CANVAS_PIXBUF;
       store.v.pixbuf = pix;
-      create_overlay_unit(&store, target.value.utype);
+      create_overlay_unit(&store, utype_by_number(target.value));
 
       g_object_set(rend, "pixbuf", pix, NULL);
       g_object_unref(pix);
     } else {
-      struct sprite *sprite = get_building_sprite(tileset, target.value.building);
+      struct sprite *sprite = get_building_sprite(tileset, target.value);
 
       pix = sprite_get_pixbuf(sprite);
       g_object_set(rend, "pixbuf", pix, NULL);
     }
   } else {
     struct city **pcity = data;
+    struct player *plr;
     gint column;
     char *row[4];
     char  buf[4][64];
@@ -985,9 +1011,10 @@ static void cell_render_func(GtkTreeViewColumn *col, GtkCellRenderer *rend,
     get_city_dialog_production_row(row, sizeof(buf[0]), target, *pcity);
     g_object_set(rend, "text", row[column], NULL);
 
-    if (NULL != *pcity  &&  VUT_IMPROVEMENT == target.kind) {
-      useless = improvement_obsolete(city_owner(*pcity), target.value.building)
-	|| is_building_replaced(*pcity, target.value.building, RPT_CERTAIN);
+    if (!target.is_unit && *pcity) {
+      plr = city_owner(*pcity);
+      useless = improvement_obsolete(plr, target.value)
+	|| is_building_replaced(*pcity, target.value, RPT_CERTAIN);
       /* Mark building redundant if we are really certain that there is
        * no use for it. */
       g_object_set(rend, "strikethrough", useless, NULL);
@@ -1112,7 +1139,7 @@ GtkWidget *create_worklist(void)
   src_view = gtk_tree_view_new_with_model(GTK_TREE_MODEL(src_store));
   g_object_unref(src_store);
   gtk_size_group_add_widget(group, src_view);
-  gtk_widget_set_name(src_view, "small_font");
+  gtk_widget_set_name(src_view, "small font");
 
   populate_view(GTK_TREE_VIEW(src_view), &ptr->pcity, &ptr->src_col);
   gtk_container_add(GTK_CONTAINER(sw), src_view);
@@ -1204,7 +1231,7 @@ GtkWidget *create_worklist(void)
   dst_view = gtk_tree_view_new_with_model(GTK_TREE_MODEL(dst_store));
   g_object_unref(dst_store);
   gtk_size_group_add_widget(group, dst_view);
-  gtk_widget_set_name(dst_view, "small_font");
+  gtk_widget_set_name(dst_view, "small font");
 
   populate_view(GTK_TREE_VIEW(dst_view), &ptr->pcity, &ptr->dst_col);
   gtk_container_add(GTK_CONTAINER(sw), dst_view);
@@ -1329,7 +1356,7 @@ void refresh_worklist(GtkWidget *editor)
   struct worklist_data *ptr;
   struct worklist *pwl, queue;
 
-  struct universal targets[MAX_NUM_PRODUCTION_TARGETS];
+  struct city_production targets[MAX_NUM_PRODUCTION_TARGETS];
   int i, targets_used;
   struct item items[MAX_NUM_PRODUCTION_TARGETS];
 
@@ -1388,7 +1415,7 @@ void refresh_worklist(GtkWidget *editor)
   }
 
   for (i = 0; i < worklist_length(&queue); i++) {
-    struct universal target = queue.entries[i];
+    struct city_production target = queue.entries[i];
 
     if (!exists) {
       gtk_list_store_append(ptr->dst, &it);
@@ -1417,7 +1444,7 @@ void refresh_worklist(GtkWidget *editor)
   /* update widget sensitivity. */
   if (ptr->pcity) {
     if ((can_client_issue_orders() &&
-	 city_owner(ptr->pcity) == client.conn.playing)) {
+	 city_owner(ptr->pcity) == game.player_ptr)) {
       gtk_widget_set_sensitive(ptr->add_cmd, TRUE);
       gtk_widget_set_sensitive(ptr->dst_view, TRUE);
     } else {

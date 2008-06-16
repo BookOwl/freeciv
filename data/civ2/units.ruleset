@@ -28,85 +28,14 @@ veteran_power_fact = 100, 150
 ; performing useful work (per turn)
 veteran_work_raise_chance = 0, 0
 
+; The chances of a trireme being lost at sea when not adjacent to a
+; land tile.
+veteran_highseas_loss_pct = 50, 50
+
 ; The additional number of movement points granted for different veteran
 ; levels.  These are thirds of points, so to increase movement
 ; by a whole point 3 must be specified.
 veteran_move_bonus = 0, 0
-
-; Unit classes
-; The number can be variable, up to 32
-; When adding new classes, remember to check effects.ruleset also.
-; Eg. if you divide class 'Land' to two separate classes, you may
-; want add effect giving City Walls defence bonus against new class
-; too.
-;
-; The actual tag used (the * in [unitclass_*]) does not matter, except 
-; it must be unique within this file, and it may be used in debug 
-; output when reading this file.
-;
-; ** Fields **
-;
-; name          = Name as used in other 
-; move_type     = Where unit moves; Land, Sea, Both or Air. Air is special value for
-;                 airplanes
-; min_speed     = Minimum speed after damage and effects
-; hp_loss_pct   = Hitpoints lost each turn if unit not in city or airbase
-; hut_behavior  = What happens to huts when unit enters tile: "Normal", "Nothing" or
-;                 "Frighten"
-; flags         = List of unit class flags
-;
-; ** Unit class Flags **
-;
-; "TerrainSpeed"  = Units use terrain spesific speed
-; "DamageSlows"   = Damages units are slowed down
-; "CanOccupy"     = Military units of this class can occupy enemy cities
-; "Missile"       = Unit is destroyed when it attacks
-; "RoadNative"    = Road tiles are always considered native terrain
-; "BuildAnywhere" = Unit can be built even in the middle of non-native terrain
-; "Unreachable"   = Unit can be attacked only by units with "AttackAny" flag or on
-;                   city or airbase
-; "CollectRansom" = Unit can collect ransom when killing lone barbarian leader
-; "ZOC"           = Unit is subject to ZOC rules. Unit type flag "IgZOC" can
-;                   override this
-; "CanFortify"    = Unit can fortify at land squares
-
-[unitclass_missile]
-name          = _("Missile")
-move_type     = "Air"
-min_speed     = 1
-hp_loss_pct   = 0
-hut_behavior  = "Frighten"
-flags         = "Missile", "Unreachable"
-
-[unitclass_land]
-name          = _("Land")
-move_type     = "Land"
-min_speed     = 1
-hp_loss_pct   = 0
-flags         = "TerrainSpeed", "DamageSlows", "CanOccupy", "BuildAnywhere",
-                "CollectRansom", "ZOC", "CanFortify"
-
-[unitclass_sea]
-name          = _("Sea")
-move_type     = "Sea"
-min_speed     = 2
-hp_loss_pct   = 0
-flags         = "TerrainSpeed", "DamageSlows"
-
-[unitclass_heli]
-name          = _("Helicopter")
-move_type     = "Both"
-min_speed     = 1
-hp_loss_pct   = 10
-flags         = "CanOccupy", "CollectRansom"
-
-[unitclass_air]
-name          = _("Air")
-move_type     = "Air"
-min_speed     = 1
-hp_loss_pct   = 0
-hut_behavior  = "Frighten"
-flags         = "Unreachable"
 
 ; Below: The individual units, one per section.
 ;
@@ -132,12 +61,11 @@ flags         = "Unreachable"
 ; tech_req      = required advance, names from techs.ruleset, or special:
 ;                 "None" => available from start
 ; obsolete_by   = can be upgraded to and made obsolete by another unit by name
-; class         = One of the classes listed above
+; class         = "Land", "Sea", "Air", "Helicopter", "Missile" or "Nuclear"
 ; transport_cap = Number of units (ground, or air/missiles, depending on flags)
 ; fuel          = number of turns air units can fly before they crash. For
 ;                 barbarians this is used as lifetime instead
 ; uk_*          = upkeep costs, these are used as base values in the game
-; cargo         = Unit classes this unit can transport
 ; flags         = special flag strings
 ; roles         = special role strings
 ; sound_move	= optional sound effect when the unit moves
@@ -271,7 +199,7 @@ flags         = ""
 roles         = "DefendOk", "FirstBuild"
 helptext      = _("\
 This unit may be built from the start of the game.  It is the\
- weakest offensive unit.\
+ weakest unit.\
 ")
 
 [unit_phalanx]
@@ -464,8 +392,6 @@ uk_gold       = 0
 flags         = "Fanatic"
 roles         = "DefendGood"
 helptext      = _("\
-Fanatics are warriors extremely devoted to a higher cause.\
-\n\n\
 Fundamentalist nations can maintain Fanatic units without\
  having to pay any shields for upkeep.\
 ")
@@ -498,9 +424,6 @@ uk_gold       = 0
 flags         = "IgTer", "IgZOC"
 roles         = "DefendGood", "Partisan", "BarbarianTech"
 helptext      = _("\
-Partisans are guerilla fighters who are experts\
- at using the terrain to their advantage.\
-\n\n\
 A number of Partisans are granted free when an enemy conquers your\
  city, but only under these conditions:\
 \n\n\
@@ -671,7 +594,7 @@ uk_gold       = 0
 flags         = ""
 roles         = "DefendGood"
 helptext      = _("\
-The Mechanized Infantry has the strongest defensive strength\
+Mechanized Infantry; this unit has the strongest defence strength\
  of any land unit, but is only available near the end of the\
  technology tree.\
 ")
@@ -1090,7 +1013,7 @@ uk_happy      = 0
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = "Fighter", "AirUnit", "AttackAny"
+flags         = "Fighter"
 roles         = ""
 helptext      = _("\
 Fighters are your first airborne units. They can\
@@ -1122,7 +1045,7 @@ uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = "FieldUnit", "OneAttack", "AirUnit"
+flags         = "FieldUnit", "OneAttack"
 roles         = ""
 helptext      = _("\
 Bombers are specialized airborne units that may\
@@ -1155,7 +1078,7 @@ uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = "FieldUnit", "OneAttack", "Helicopter", "AirUnit"
+flags         = "FieldUnit", "OneAttack"
 roles         = ""
 helptext      = _("\
 The Helicopter is a very powerful unit, as it can both fly and\
@@ -1189,7 +1112,7 @@ uk_happy      = 0
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = "Fighter", "AirUnit", "AttackAny"
+flags         = "Fighter"
 roles         = ""
 helptext      = _("\
 An improved Fighter, with improved attack and a higher movement\
@@ -1221,7 +1144,7 @@ uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = "FieldUnit", "OneAttack", "AirUnit"
+flags         = "FieldUnit", "OneAttack"
 roles         = ""
 helptext      = _("\
 An improved Bomber, with improved attack and a higher movement\
@@ -1253,7 +1176,6 @@ uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-cargo         = "Land"
 flags         = "Trireme", "BadCityDefender"
 roles         = "Ferryboat"
 helptext      = _("\
@@ -1287,7 +1209,6 @@ uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-cargo         = "Land"
 flags         = "BadCityDefender"
 roles         = "Ferryboat", "BarbarianBoat"
 helptext      = _("\
@@ -1320,7 +1241,6 @@ uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-cargo         = "Land"
 flags         = "BadCityDefender"
 roles         = "Ferryboat", "BarbarianBoat"
 helptext      = _("\
@@ -1354,7 +1274,6 @@ uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-cargo         = "Land"
 flags         = "BadCityDefender"
 roles         = "Hunter"
 helptext      = _("\
@@ -1424,8 +1343,6 @@ uk_gold       = 0
 flags         = "BadCityDefender"
 roles         = "Hunter"
 helptext      = _("\
-An improved Ironclad, with better move rate and vision.\
-\n\n\
 TIP:  A very fast unit, which is very useful for hunting down enemy\
  Transports.\
 ")
@@ -1550,14 +1467,12 @@ uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-cargo         = "Missile"
 flags         = "Partial_Invis", "BadCityDefender",
-	        "No_Land_Attack"
+	        "Missile_Carrier", "No_Land_Attack"
 roles         = "Hunter"
 helptext      = _("\
-Traveling under the surface of the ocean, Submarines have\
- a very high strategic value, but a weak defense if caught\
- off guard.\
+Submarines have a very high strategic value, but have a weak\
+ defence.\
 ")
 
 [unit_carrier]
@@ -1585,13 +1500,9 @@ uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-cargo         = "Air", "Missile", "Helicopter"
-flags         = ""
+flags         = "Carrier"
 roles         = ""
 helptext      = _("\
-The Carrier is a mobile airport and cannot attack\
- other units on its own.\
-\n\n\
 TIP:  Guard Carriers with a handful of fast-moving ships and a\
  battleship, as losing a fully-equipped Carrier is VERY\
  painful and expensive.\
@@ -1622,7 +1533,6 @@ uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-cargo         = "Land"
 flags         = "BadCityDefender"
 roles         = "Ferryboat"
 helptext      = _("\
@@ -1655,19 +1565,16 @@ uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = "FieldUnit", "OneAttack", "AirUnit"
+flags         = "FieldUnit", "OneAttack", "Missile"
 roles         = ""
 helptext      = _("\
-The Cruise Missile is a long-distance missile\
- that can strike deep into enemy territory.\
-\n\n\
 TIP:  A handful of these can successfully keep the waters around\
  your treasured homeland free of enemy ships.\
 ")
 
 [unit_nuclear]
 name          = _("Nuclear")
-class         = "Missile"
+class         = "Nuclear"
 tech_req      = "Rocketry"
 obsolete_by   = "None"
 graphic       = "u.nuclear"
@@ -1690,7 +1597,7 @@ uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = "FieldUnit", "OneAttack", "Nuclear", "AirUnit"
+flags         = "FieldUnit", "OneAttack", "Missile", "Nuclear"
 roles         = ""
 helptext      = _("\
 You can build Nuclear units when you have the required advance, and\
@@ -1745,20 +1652,20 @@ A Diplomat is an official that carries your dispatches and\
  also undertake various covert operations with the intent of\
  harming your opponents.\
 \n\n\
-- A Diplomat can establish embassies with other civilizations\
- by moving into another player's city.\
+If an enemy unit is alone on a tile, you may attempt to bribe it\
+ with your diplomat. By paying a sum of gold the unit will immediately\
+ become yours.\
 \n\n\
-- Diplomats can also try to sabotage enemy production, or steal\
- an advance from an enemy city.  (An advance can only be stolen\
- once per city).\
+The diplomat can also perform a number of actions in another player's\
+ city:\n\
+- \"Investigate\" Reveal detailed information about the city.\n\
+- \"Establish Embassy\" Get permanent intelligence on the player.\n\
+- \"Sabotage\" Ruin any production in the city.\n\
+- \"Steal Technology\" Acquire an advance from the city's owner.\n\
+- \"Incite a Revolt\" Make a city your own by paying a sum of gold.\
+ Note that you cannot incite a revolt in a capital city.\
 \n\n\
-- A Diplomat can also bribe an enemy unit, if that unit is the only\
- unit on its square.\
-\n\n\
-- Diplomats can even start a revolution in an enemy city and turn\
- it into your own, if you have the money!\
-\n\n\
-- In some game strategies, hordes of Diplomats can be used to wreak\
+In some game strategies, hordes of Diplomats can be used to wreak\
  havoc on the enemy.  Little wonder that Diplomats are often\
  viewed with suspicion and fear!\
 ")
@@ -1791,14 +1698,10 @@ uk_gold       = 0
 flags         = "Diplomat", "IgZOC", "NonMil", "Spy"
 roles         = "Diplomat"
 helptext      = _("\
-A Spy is a full time professional and as such is much more\
- skilled in the arts of espionage than her Diplomat predecessor.\
+A Spy is more skilled in the arts of espionage than her Diplomat predecessor.\
 \n\n\
-The most inoffensive skills in a Spy's repertoire are her ability\
- to investigate cities - revealing detailed information, and\
- the establishment of embassies.  However, if your Spy has gained\
- herself a reputation for clandestine behaviour she will be\
- executed if she tries to establish an embassy.\
+She can perform all the functions of the Diplomat, but with a higher rate of\
+ success. Refer to the Diplomat entry for an outline.\
 \n\n\
 She can also be used to: poison the water supply of an enemy city\
  (reducing the population); steal specific technology; and sabotage\
@@ -1838,9 +1741,6 @@ uk_gold       = 0
 flags         = "TradeRoute", "HelpWonder", "IgZOC", "NonMil"
 roles         = ""
 helptext      = _("\
-A Caravan carries goods or material for trading with foreign\
- countries, or to help building wonders in your cities.\
-\n\n\
 Every Caravan that is used to build a wonder will add 50 shields\
  towards the production of the wonder.\
 \n\n\
@@ -1908,8 +1808,7 @@ uk_gold       = 0
 flags         = "IgTer", "IgZOC", "NonMil"
 roles         = "Explorer"
 helptext      = _("\
-Explorers are brave individuals that are very useful for\
- mapping unknown territory.\
+Explorers are very useful for mapping unknown territory.\
 ")
 
 [unit_barbarian_leader]
@@ -1940,9 +1839,6 @@ uk_gold       = 0
 flags         = "IgZOC", "NonMil", "NoBuild"
 roles         = "BarbarianLeader"
 helptext      = _("\
-One Barbarian Leader appears every time there is a barbarian uprising\
- somewhere in the world.\
-\n\n\
 When barbarian leader is killed on a tile without any defending units, \
 the 100 gold ransom is paid, but only to land units and helicopters.\
 ")
