@@ -24,10 +24,6 @@
 #define LOG_DEBUG   4		/* suppressed unless DEBUG defined;
 				   may be enabled on file/line basis */
 
-/* Used by game debug command */
-#define LOG_TEST LOG_NORMAL
-#define LOG_PACKET LOG_VERBOSE
-
 /* Some variables local to each file which includes log.h,
    to record whether LOG_DEBUG messages apply for that file
    and if so for which lines (min,max) :
@@ -53,13 +49,13 @@ struct logdebug_afile_info logdebug_update(const char *file);
  * via fputs(stderr).  Eg, to the server console while handling prompts,
  * rfcstyle, client notifications; Eg, to the client window output window?
  */
-typedef void (*log_callback_fn)(int, const char*, bool file_too);
+typedef void (*log_callback_fn)(int, const char*);
 
 int log_parse_level_str(const char *level_str);
 void log_init(const char *filename, int initial_level,
 	      log_callback_fn callback);
 void log_set_level(int level);
-log_callback_fn log_set_callback(log_callback_fn callback);
+void log_set_callback(log_callback_fn callback);
 
 void real_freelog(int level, const char *message, ...)
                   fc__attribute((__format__ (__printf__, 2, 3)));

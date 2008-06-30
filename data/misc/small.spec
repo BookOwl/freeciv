@@ -11,7 +11,6 @@ artists = "
     Jeff Mallatt <jjm@codewell.com> (cooling flakes)
     Davide Pagnin <nightmare@freeciv.it> (angry citizens)
     Enrico Bini <e.bini@sssup.it> (fundamentalism icon)
-    Hogne Håskjold <haskjold@gmail.com> (gold coin)
 "
 
 [file]
@@ -119,6 +118,4 @@ tiles = { "row", "column", "tag"
   1, 8,  "ev.wonderobsolete"
   1, 9,  "ev.wonderwillbebuilt"
   1, 10, "ev.wonderbuilt"
-  1, 11, "s.plus"
-  1, 12, "s.minus"
 }

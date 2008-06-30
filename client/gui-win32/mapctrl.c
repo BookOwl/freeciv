@@ -23,6 +23,7 @@
                       
 #include "capability.h"
 #include "fcintl.h"
+#include "game.h"
 #include "map.h"
 #include "mem.h"
 #include "player.h"
@@ -34,6 +35,7 @@
 #include "civclient.h"
 #include "climap.h"
 #include "climisc.h"
+#include "clinet.h"
 #include "colors.h"
 #include "control.h"
 #include "dialogs.h"
@@ -42,15 +44,17 @@
 #include "inputdlg.h"
 #include "mapview.h"
 #include "menu.h"
-#include "overview_common.h"
 #include "tilespec.h" 
 #include "text.h"
 
-#include "goto.h"
+#include "goto.h" 
 #include "mapctrl.h"
 #include "gui_main.h"
 
-extern HCURSOR cursors[];
+extern HCURSOR goto_cursor;
+extern HCURSOR drop_cursor;
+extern HCURSOR nuke_cursor;
+extern HCURSOR patrol_cursor;
 
 HWND popit_popup=NULL;
 static bool popit_is_orders;
@@ -60,8 +64,6 @@ static bool popit_is_orders;
 void map_handle_move(int window_x, int window_y)
 {
   update_line(window_x, window_y);
-
-  control_mouse_cursor(canvas_pos_to_tile(window_x, window_y));
 }
 
 /*************************************************************************
@@ -86,7 +88,7 @@ static LONG CALLBACK popit_proc(HWND hwnd,UINT message,
       cross_list = fcwin_get_user_data(hwnd);
       if (cross_list) {
 	  while (*cross_list != NULL) {
-	    refresh_tile_mapcanvas(*cross_list, TRUE, TRUE);
+	    refresh_tile_mapcanvas(*cross_list, TRUE);
 	    cross_list++;
 	  }
       }
@@ -114,13 +116,13 @@ static void popit(int x, int y, struct tile *ptile)
   struct tile **cross_head = cross_list;
   int i;
   struct unit *punit;
-
+  
   if (popit_popup!=NULL) {
     DestroyWindow(popit_popup);
     popit_popup=NULL;
   }
   
-  if (TILE_UNKNOWN == client_tile_get_known(ptile))
+  if (tile_get_known(ptile) < TILE_KNOWN_FOGGED)
     return;
   
   popup=fcwin_create_layouted_window(popit_proc,NULL,WS_POPUP|WS_BORDER,
@@ -165,9 +167,9 @@ static void popit(int x, int y, struct tile *ptile)
 **************************************************************************/
 static LONG CALLBACK map_wnd_proc(HWND hwnd,UINT message,WPARAM wParam, LPARAM lParam)
 {
+  HDC hdc;
   PAINTSTRUCT ps;
   struct tile *ptile;
-
   switch(message) {
   case WM_CREATE:
     break;
@@ -224,17 +226,17 @@ static LONG CALLBACK map_wnd_proc(HWND hwnd,UINT message,WPARAM wParam, LPARAM l
       SetCursor (LoadCursor(NULL, IDC_ARROW));
       break;
     case HOVER_PATROL:
-      SetCursor (cursors[CURSOR_PATROL]);
+      SetCursor (patrol_cursor);
       break;
     case HOVER_GOTO:
     case HOVER_CONNECT:
-      SetCursor (cursors[CURSOR_GOTO]);
+      SetCursor (goto_cursor);
       break;
     case HOVER_NUKE:
-      SetCursor (cursors[CURSOR_NUKE]);
+      SetCursor (nuke_cursor);
       break;
     case HOVER_PARADROP:
-      SetCursor (cursors[CURSOR_PARADROP]);
+      SetCursor (drop_cursor);
       break;
     }
     break;
@@ -244,11 +246,9 @@ static LONG CALLBACK map_wnd_proc(HWND hwnd,UINT message,WPARAM wParam, LPARAM l
     }
     break;
   case WM_PAINT:
-    BeginPaint(hwnd, (LPPAINTSTRUCT)&ps);
-    map_expose(ps.rcPaint.left, ps.rcPaint.top,
-	       ps.rcPaint.right - ps.rcPaint.left,
-	       ps.rcPaint.bottom - ps.rcPaint.top);
-    EndPaint(hwnd, (LPPAINTSTRUCT)&ps);
+    hdc=BeginPaint(hwnd,(LPPAINTSTRUCT)&ps);
+    map_expose(hdc); 
+    EndPaint(hwnd,(LPPAINTSTRUCT)&ps);
     break;
   default:
     return DefWindowProc(hwnd,message,wParam,lParam);
@@ -302,14 +302,14 @@ void overview_handle_rbut(int x, int y)
 void indicator_handle_but(int i)
 {
   int delta = 10;
-  int lux_end = client.conn.playing->economic.luxury;
-  int sci_end = lux_end + client.conn.playing->economic.science;
+  int lux_end = game.player_ptr->economic.luxury;
+  int sci_end = lux_end + game.player_ptr->economic.science;
 #if 0 /* Unneeded. */
   int tax_end = 100; 
 #endif
-  int luxury = client.conn.playing->economic.luxury;
-  int science = client.conn.playing->economic.science;
-  int tax = client.conn.playing->economic.tax;
+  int luxury = game.player_ptr->economic.luxury;
+  int science = game.player_ptr->economic.science;
+  int tax = game.player_ptr->economic.tax;
   
   i *= 10;
   if (i < lux_end) {
@@ -323,7 +323,7 @@ void indicator_handle_but(int i)
     luxury += delta;
   }
 
-  dsend_packet_player_rates(&client.conn, tax, luxury, science);
+  dsend_packet_player_rates(&aconnection, tax, luxury, science);
 }
 
 /**************************************************************************
@@ -334,7 +334,7 @@ static void name_new_city_callback(HWND w, void *data)
   size_t unit_id;
  
   if ((unit_id = (size_t)data)) {
-    dsend_packet_unit_build_city(&client.conn, unit_id,
+    dsend_packet_unit_build_city(&aconnection, unit_id, 
 				 input_dialog_get_input(w));
   }
   input_dialog_destroy(w);

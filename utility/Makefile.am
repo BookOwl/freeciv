@@ -4,6 +4,10 @@ SUBDIRS=        ftwl
 
 noinst_LIBRARIES = libcivutility.a
 
+AM_CPPFLAGS = -I../intl
+
+## Above, note -I../intl instead of -I$(top_srdir/intl) is deliberate.
+
 libcivutility_a_SOURCES = \
 		astring.c       \
 		astring.h       \
@@ -45,5 +49,5 @@ libcivutility_a_SOURCES = \
 		support.h	\
 		timing.c	\
 		timing.h	\
-		md5.c		\
-		md5.h
+                md5.c           \
+                md5.h

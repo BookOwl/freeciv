@@ -37,8 +37,6 @@
 #include <config.h>
 #endif
 
-#include <math.h>
-
 #include "gui_main.h"
 #include "gtkpixcomm.h"
 
@@ -67,7 +65,7 @@ struct op {
   GdkColor *color;
 
   /* OP_COPY */
-  struct sprite *src;
+  SPRITE *src;
   gint x, y;
 };
 
@@ -145,34 +143,12 @@ gtk_pixcomm_new(gint width, gint height)
   p = g_object_new(gtk_pixcomm_get_type(), NULL);
   p->w = width; p->h = height;
 
-  p->is_scaled = FALSE;
-  p->scale = 1.0;
-
   p->actions = g_array_new(FALSE, FALSE, sizeof(struct op));
 
   GTK_WIDGET(p)->requisition.width = p->w + GTK_MISC(p)->xpad * 2;
   GTK_WIDGET(p)->requisition.height = p->h + GTK_MISC(p)->ypad * 2;
 
   return GTK_WIDGET(p);
-}
-
-/****************************************************************************
-  Set the scaling on the pixcomm.  All operations drawn on the pixcomm
-  (before or after this function is called) will simply be scaled
-  by this amount.
-****************************************************************************/
-void gtk_pixcomm_set_scale(GtkPixcomm *pixcomm, gdouble scale)
-{
-  g_return_if_fail(GTK_IS_PIXCOMM(pixcomm));
-  g_return_if_fail(scale > 0.0);
-
-  if (scale == 1.0) {
-    pixcomm->is_scaled = FALSE;
-    pixcomm->scale = 1.0;
-  } else {
-    pixcomm->is_scaled = TRUE;
-    pixcomm->scale = scale;
-  }
 }
 
 static void
@@ -209,7 +185,8 @@ gtk_pixcomm_fill(GtkPixcomm *p, GdkColor *color)
   refresh(p);
 }
 
-void gtk_pixcomm_copyto(GtkPixcomm *p, struct sprite *src, gint x, gint y)
+void
+gtk_pixcomm_copyto(GtkPixcomm *p, SPRITE *src, gint x, gint y)
 {
   struct op v;
 
@@ -269,46 +246,24 @@ gtk_pixcomm_expose(GtkWidget *widget, GdkEventExpose *ev)
         break;
 
       case OP_COPY:
-	if (p->is_scaled) {
-	  int w = rop->src->width * p->scale + 0.5;
-	  int h = rop->src->height * p->scale + 0.5;
-	  int ox = rop->x * p->scale + 0.5;
-	  int oy = rop->y * p->scale + 0.5;
-	  GdkPixbuf *pixbuf = sprite_get_pixbuf(rop->src);
-	  GdkPixbuf *scaled
-	    = gdk_pixbuf_scale_simple(pixbuf, w, h, GDK_INTERP_BILINEAR);
+        if (rop->src->has_mask) {
+          gdk_gc_set_clip_mask(civ_gc, rop->src->mask);
+          gdk_gc_set_clip_origin(civ_gc, x + rop->x, y + rop->y);
 
-	  gdk_draw_pixbuf(widget->window, civ_gc,
-			  scaled, 0, 0, x + ox, y + oy,
-			  w, h, GDK_RGB_DITHER_NONE, 0, 0);
-	  g_object_unref(scaled);
-	} else if (rop->src->pixmap) {
-	  if (rop->src->mask) {
-	    gdk_gc_set_clip_mask(civ_gc, rop->src->mask);
-	    gdk_gc_set_clip_origin(civ_gc, x + rop->x, y + rop->y);
+          gdk_draw_drawable(widget->window, civ_gc,
+	      rop->src->pixmap,
+	      0, 0,
+	      x + rop->x, y + rop->y,
+	      rop->src->width, rop->src->height);
 
-	    gdk_draw_drawable(widget->window, civ_gc,
-			      rop->src->pixmap,
-			      0, 0,
-			      x + rop->x, y + rop->y,
-			      rop->src->width, rop->src->height);
-
-	    gdk_gc_set_clip_origin(civ_gc, 0, 0);
-	    gdk_gc_set_clip_mask(civ_gc, NULL);
-	  } else {
-	    gdk_draw_drawable(widget->window, civ_gc,
-			      rop->src->pixmap,
-			      0, 0,
-			      x + rop->x, y + rop->y,
-			      rop->src->width, rop->src->height);
-	  }
-	} else {
-	  gdk_draw_pixbuf(widget->window, civ_gc,
-			  rop->src->pixbuf,
-			  0, 0,
-			  x + rop->x, y + rop->y,
-			  rop->src->width, rop->src->height,
-			  GDK_RGB_DITHER_NONE, 0, 0);
+          gdk_gc_set_clip_origin(civ_gc, 0, 0);
+          gdk_gc_set_clip_mask(civ_gc, NULL);
+        } else {
+          gdk_draw_drawable(widget->window, civ_gc,
+	      rop->src->pixmap,
+	      0, 0,
+	      x + rop->x, y + rop->y,
+	      rop->src->width, rop->src->height);
 	}
         break;
 

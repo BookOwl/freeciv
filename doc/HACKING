@@ -12,8 +12,8 @@ To read about the AI, see README.AI
 ===========================================================================
 Basic
 ===========================================================================
-Freeciv is a client/server civilization style of game.
-The client is pretty dumb. Almost all calculations are performed on the
+Freeciv is a client/server civilization style of game, written in C.
+The client is pretty dumb. Almost all calculations is performed on the
 server.
 
 [It wasn't like this always. Originally more code was placed in the
@@ -31,10 +31,6 @@ client/* (fx gui-gtk): a specific gui implementation of the client.
 data: graphics, rulesets and stuff
 po: translations
 ai: the ai, later linked into the server.
-
-Freeciv is written in C.  Header files should be compatible with C++ so
-that C++ add-ons (particularly new clients) are possible.  See the
-CodingStyle file for more.
 
 ===========================================================================
 Server
@@ -73,11 +69,10 @@ set aifill 7            # fill to 7 players
 hard                    # make the AI do complex things
 create Caesar           # first player (with known name) created and 
                         # toggled to AI mode
-start                   # start game
+start
 
-Note: The server prompt is unusable when game with timeout set to -1
-is running. You can stop such game with single ctrl+c, and continue by
-setting timeout to -1 again.
+Note: After the start command the server prompt is unusable in
+autogame mode.
 
 The commandline to run server-only games can be typed as variations
 of:
@@ -592,29 +587,28 @@ map_pos_to_native_x, and map_pos_to_native_y that are defined in map.h.
 Unknown tiles and Fog of War
 =========================================================================
 
-In common/tile.h, there are several fields:
+In the tile struct there is a field
 
 struct tile {
   ...
-  bv_player tile_known, tile_seen[V_COUNT];
+  unsigned int known;
   ...
 };
 
-While tile_get_known() returns:
+On the server the known fields is considered to be a bitvector, one
+bit for each player, 0==tile unknown, 1==tile known.
+On the client this field contains one of the following 3 values:
 
-/* network, order dependent */
 enum known_type {
- TILE_UNKNOWN = 0,
- TILE_KNOWN_UNSEEN = 1,
- TILE_KNOWN_SEEN = 2,
+ TILE_UNKNOWN, TILE_KNOWN_FOGGED, TILE_KNOWN
 };
 
-The values TILE_UNKNOWN, TILE_KNOWN_SEEN are straightforward.
-TILE_KNOWN_UNSEEN is a tile of which the user knows the terrain,
-but not recent cities, roads, etc.
+The values TILE_UNKNOWN, TILE_KNOWN are straightforward. TILE_FOGGED
+is a tile of which the user knows the terrain (inclusive cities, roads,
+etc...).
 
-TILE_UNKNOWN tiles never are (nor should be) sent to the client.  In the
-past, UNKNOWN tiles that were adjacent to UNSEEN or SEEN were sent to make
+TILE_UNKNOWN tiles are (or should be) never sent to the client.  In the past
+UNKNOWN tiles that were adjacent to FOGGED or KNOWN ones were sent to make
 the drawing process easier, but this has now been removed.  This means
 exploring new land may sometimes change the appearance of existing land (but
 this is not fundamentally different from what might happen when you
@@ -624,10 +618,9 @@ goto code but allowed cheating.
 Fog of war is the fact that even when you have seen a tile once you are
 not sent updates unless it is inside the sight range of one of your units
 or cities.
-
 We keep track of fog of war by counting the number of units and cities
 [and nifty future things like radar outposts] of each client that can
-see the tile. This requires a number per player, per tile, so each player_tile
+see the tile. This requires a number per player, per tile, so each tile
 has a short[]. Every time a unit/city/miscellaneous can observe a tile
 1 is added to its player's number at the tile, and when it can't observe
 any more (killed/moved/pillaged) 1 is subtracted. In addition to the
@@ -881,8 +874,8 @@ only, to allowing multiple connections for each player (recall
 be either an "observer" or "controller".
 
 This discussion is mostly about connection in the server.  The client
-only has one real connection (client.conn) -- its connection to the
-server -- though it does use some other connection structs (currently
+only has one real connection: 'aconnection' - its connection to the
+server, though it does use some other connection structs (currently
 pplayer->conn) to store information about other connected clients
 (eg, capability strings).
 
@@ -1050,16 +1043,5 @@ Messages and text in general which are shown in the GUI should be
 translated by using the "_()" macro. In addition freelog(LOG_NORMAL,
 ...) messages should be translated. The other loglevels (LOG_FATAL,
 LOG_ERROR,LOG_VERBOSE, LOG_DEBUG) should NOT be translated.
-
-(See utility/fciconv.[ch])
-The data_encoding is used in all data files and network transactions.
-This is UTF-8.  Currently, the rulesets are in latin1 (ISO-8859-1).
-
-The internal_encoding is used internally within freeciv.  This is always
-UTF-8 at the server, but can be configured by the GUI client.  (When your
-charset is the same as your GUI library, GUI writing is easier.)
-
-The local_encoding is the one supported on the command line.  This is not
-under our control, and all output to the command line must be converted.
 
 ===========================================================================

@@ -14,9 +14,12 @@
 #define FC__DIPLOMATS_H
 
 #include "fc_types.h"
+#include "unit.h"		/* Unit_Type_id, enum unit_activity */
 
 #include "gotohand.h"		/* enum goto_move_restriction */
 
+void diplomat_embassy(struct player *pplayer, struct unit *pdiplomat,
+			  struct city *pcity);
 void diplomat_investigate(struct player *pplayer, struct unit *pdiplomat,
 			  struct city *pcity);
 void spy_get_sabotage_list(struct player *pplayer, struct unit *pdiplomat,
@@ -32,7 +35,7 @@ void diplomat_get_tech(struct player *pplayer, struct unit *pdiplomat,
 void diplomat_incite(struct player *pplayer, struct unit *pdiplomat, 
 		     struct city *pcity);
 void diplomat_sabotage(struct player *pplayer, struct unit *pdiplomat, 
-		       struct city *pcity, Impr_type_id improvement);
+		       struct city *pcity, Impr_Type_id improvement);
 
 int count_diplomats_on_tile(struct tile *ptile);
 int unit_bribe_cost(struct unit *punit);

@@ -78,11 +78,7 @@
 #ifdef HAVE_WINSOCK
 #include <winsock.h>
 #endif
-#ifdef HAVE_STRINGS_H
-#  include <strings.h>
-#endif
 
-#include "fciconv.h"
 #include "fcintl.h"
 #include "mem.h"
 #include "netintf.h"
@@ -134,111 +130,9 @@ int mystrncasecmp(const char *str0, const char *str1, size_t n)
 #endif
 }
 
-/***************************************************************
-  Count length of string without possible surrounding quotes.
-***************************************************************/
-size_t effectivestrlenquote(const char *str)
-{
-  int len = strlen(str);
-
-  if (str[0] == '"' && str[len-1] == '"') {
-    return len - 2;
-  }
-
-  return len;
-}
-
-/***************************************************************
-  Compare strings like strncasecmp() but ignoring surrounding
-  quotes in either string.
-***************************************************************/
-int mystrncasequotecmp(const char *str0, const char *str1, size_t n)
-{
-  size_t i;
-  size_t len0 = strlen(str0); /* TODO: We iterate string once already here, */
-  size_t len1 = strlen(str1); /*       could iterate only once */
-  size_t cmplen;
-
-  if (str0[0] == '"') {
-    if (str0[len0 - 1] == '"') {
-      /* Surrounded with quotes */
-      str0++;
-      len0 -= 2;
-    }
-  }
-
-  if (str1[0] == '"') {
-    if (str1[len1 - 1] == '"') {
-      /* Surrounded with quotes */
-      str1++;
-      len1 -= 2;
-    }
-  }
-
-  if (len0 < n || len1 < n) {
-    /* One of the strings is shorter than what should be compared... */
-    if (len0 != len1) {
-      /* ...and another is longer than it. */
-      return len0 - len1;
-    }
-
-    cmplen = len0; /* This avoids comparing ending quote */
-  } else {
-    cmplen = n;
-  }
-
-  for (i = 0; i < cmplen ; i++, str0++, str1++) {
-    if (my_tolower(*str0) != my_tolower(*str1)) {
-      return ((int) (unsigned char) my_tolower(*str0))
-             - ((int) (unsigned char) my_tolower(*str1));
-    }
-  }
-
-  /* All characters compared and all matched */
-  return 0;
-}
-
-/***************************************************************
-  Return the needle in the haystack (or NULL).
-  Naive implementation.
-***************************************************************/
-char *mystrcasestr(const char *haystack, const char *needle)
-{
-#ifdef HAVE_STRCASESTR
-  return strcasestr(haystack, needle);
-#else
-  size_t haystacks;
-  size_t needles;
-  const char *p;
-
-  if (NULL == needle || '\0' == *needle) {
-    return (char *)haystack;
-  }
-  if (NULL == haystack || '\0' == *haystack) {
-    return NULL;
-  }
-  haystacks = strlen(haystack);
-  needles = strlen(needle);
-  if (haystacks < needles) {
-    return NULL;
-  }
-
-  for (p = haystack; p <= &haystack[haystacks - needles]; p++) {
-    if (0 == mystrncasecmp(p, needle, needles)) {
-      return (char *)p;
-    }
-  }
-  return NULL;
-#endif
-}
 
 /***************************************************************
   Return a string which describes a given error (errno-style.)
-  The string is converted as necessary from the local_encoding
-  to internal_encoding, for inclusion in translations.  May be
-  subsequently converted back to local_encoding for display.
-
-  Note that this is not the reentrant form.
 ***************************************************************/
 const char *mystrerror(void)
 {
@@ -255,10 +149,7 @@ const char *mystrerror(void)
   return buf;
 #else
 #ifdef HAVE_STRERROR
-  static char buf[256];
-
-  return local_to_internal_string_buffer(strerror(errno),
-                                         buf, sizeof(buf));
+  return strerror(errno);
 #else
   static char buf[64];
 
@@ -296,7 +187,7 @@ void myusleep(unsigned long usec)
   tv.tv_usec=usec;
   /* FIXME: an interrupt can cause an EINTR return here.  In that case we
    * need to have another select call. */
-  my_select(0, NULL, NULL, NULL, &tv);
+  select(0, NULL, NULL, NULL, &tv);
 #endif
 #endif
 #endif

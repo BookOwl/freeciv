@@ -28,7 +28,6 @@
 #include "mem.h"
 #include "support.h"
 #include "unit.h"
-#include "unitlist.h"
 #include "unittype.h"
 
 #include "citymap.h"
@@ -63,36 +62,29 @@ void citymap_turn_init(struct player *pplayer)
   /* The citymap is reinitialized at the start of ever turn.  This includes
    * a call to realloc, which only really matters if this is the first turn
    * of the game (but it's easier than a separate function to do this). */
-  citymap = fc_realloc(citymap, MAP_INDEX_SIZE * sizeof(*citymap));
-  memset(citymap, 0, MAP_INDEX_SIZE * sizeof(*citymap));
+  citymap = fc_realloc(citymap, MAX_MAP_INDEX * sizeof(*citymap));
+  memset(citymap, 0, MAX_MAP_INDEX * sizeof(*citymap));
 
   players_iterate(pplayer) {
     city_list_iterate(pplayer->cities, pcity) {
-      struct tile *pcenter = city_tile(pcity);
-
-      city_tile_iterate(pcenter, ptile) {
-        struct city *pwork = tile_worked(ptile);
-
-        if (NULL != pwork) {
-          citymap[tile_index(ptile)] = -(pwork->id);
+      map_city_radius_iterate(pcity->tile, ptile) {
+        if (ptile->worked) {
+          citymap[ptile->index] = -(ptile->worked->id);
         } else {
-	  citymap[tile_index(ptile)]++;
+	  citymap[ptile->index]++;
         }
-      } city_tile_iterate_end;
+      } map_city_radius_iterate_end;
     } city_list_iterate_end;
   } players_iterate_end;
-
   unit_list_iterate(pplayer->units, punit) {
-    if (unit_has_type_flag(punit, F_CITIES)
+    if (unit_flag(punit, F_CITIES)
         && punit->ai.ai_role == AIUNIT_BUILD_CITY) {
-
-      city_tile_iterate(punit->goto_tile, ptile) {
-        if (citymap[tile_index(ptile)] >= 0) {
-          citymap[tile_index(ptile)]++;
+      map_city_radius_iterate(punit->goto_tile, ptile) {
+        if (citymap[ptile->index] >= 0) {
+          citymap[ptile->index]++;
         }
-      } city_tile_iterate_end;
-
-      citymap[tile_index(punit->goto_tile)] = -(punit->id);
+      } map_city_radius_iterate_end;
+      citymap[punit->goto_tile->index] = -(punit->id);
     }
   } unit_list_iterate_end;
 }
@@ -106,23 +98,22 @@ void citymap_reserve_city_spot(struct tile *ptile, int id)
 {
 #ifdef DEBUG
   freelog(LOG_CITYMAP, "id %d reserving (%d, %d), was %d", 
-          id, TILE_XY(ptile), citymap[tile_index(ptile)]);
-  assert(citymap[tile_index(ptile)] >= 0);
+          id, TILE_XY(ptile), citymap[ptile->index]);
+  assert(citymap[ptile->index] >= 0);
 #endif
 
   /* Tiles will now be "reserved" by actual workers, so free excess
    * reservations. Also mark tiles for city overlapping, or 
    * 'crowding'. */
-  city_tile_iterate(ptile, ptile1) {
-    if (citymap[tile_index(ptile1)] == -id) {
-      citymap[tile_index(ptile1)] = 0;
+  map_city_radius_iterate(ptile, ptile1) {
+    if (citymap[ptile1->index] == -id) {
+      citymap[ptile1->index] = 0;
     }
-    if (citymap[tile_index(ptile1)] >= 0) {
-      citymap[tile_index(ptile1)]++;
+    if (citymap[ptile1->index] >= 0) {
+      citymap[ptile1->index]++;
     }
-  } city_tile_iterate_end;
-
-  citymap[tile_index(ptile)] = -(id);
+  } map_city_radius_iterate_end;
+  citymap[ptile->index] = -(id);
 }
 
 /**************************************************************************
@@ -130,13 +121,13 @@ void citymap_reserve_city_spot(struct tile *ptile, int id)
 **************************************************************************/
 void citymap_free_city_spot(struct tile *ptile, int id)
 {
-  city_tile_iterate(ptile, ptile1) {
-    if (citymap[tile_index(ptile1)] == -(id)) {
-      citymap[tile_index(ptile1)] = 0;
-    } else if (citymap[tile_index(ptile1)] > 0) {
-      citymap[tile_index(ptile1)]--;
+  map_city_radius_iterate(ptile, ptile1) {
+    if (citymap[ptile1->index] == -(id)) {
+      citymap[ptile1->index] = 0;
+    } else if (citymap[ptile1->index] > 0) {
+      citymap[ptile1->index]--;
     }
-  } city_tile_iterate_end;
+  } map_city_radius_iterate_end;
 }
 
 /**************************************************************************
@@ -149,7 +140,7 @@ void citymap_reserve_tile(struct tile *ptile, int id)
   assert(!citymap_is_reserved(ptile));
 #endif
 
-  citymap[tile_index(ptile)] = -id;
+  citymap[ptile->index] = -id;
 }
 
 /**************************************************************************
@@ -159,7 +150,7 @@ void citymap_reserve_tile(struct tile *ptile, int id)
 **************************************************************************/
 int citymap_read(struct tile *ptile)
 {
-  return citymap[tile_index(ptile)];
+  return citymap[ptile->index];
 }
 
 /**************************************************************************
@@ -168,8 +159,8 @@ int citymap_read(struct tile *ptile)
 **************************************************************************/
 bool citymap_is_reserved(struct tile *ptile)
 {
-  if (NULL != tile_worked(ptile) /*|| tile_city(ptile)*/) {
+  if (ptile->worked || ptile->city) {
     return TRUE;
   }
-  return (citymap[tile_index(ptile)] < 0);
+  return (citymap[ptile->index] < 0);
 }

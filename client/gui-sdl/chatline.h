@@ -25,10 +25,8 @@
 #include "chatline_g.h"
 
 void popup_input_line(void);
-bool popdown_conn_list_dialog(void);
-void popdown_load_game_dialog(void);
 
 #define set_output_window_text( pString )	\
-	append_output_window( pString )
+	real_append_output_window( pString )
 
 #endif	/* FC__CHATLINE_H */

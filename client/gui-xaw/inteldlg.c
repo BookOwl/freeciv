@@ -27,13 +27,14 @@
 #include <X11/Xaw/List.h>
 
 #include "fcintl.h"
+#include "game.h"
 #include "government.h"
 #include "packets.h"
 #include "player.h"
 #include "shared.h"
 #include "support.h"
 
-#include "civclient.h"
+#include "clinet.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "mapview.h"
@@ -68,7 +69,7 @@ struct intel_dialog {
     TYPED_LIST_ITERATE(struct intel_dialog, dialoglist, pdialog)
 #define dialog_list_iterate_end  LIST_ITERATE_END
 
-static struct dialog_list *dialog_list = NULL;
+static struct dialog_list dialog_list;
 static bool dialog_list_has_been_initialised = FALSE;
 
 /******************************************************************/
@@ -95,7 +96,7 @@ void intel_diplo_close_callback(Widget w, XtPointer client_data,
 struct intel_dialog *get_intel_dialog(struct player *pplayer)
 {
   if (!dialog_list_has_been_initialised) {
-    dialog_list = dialog_list_new();
+    dialog_list_init(&dialog_list);
     dialog_list_has_been_initialised = TRUE;
   }
 
@@ -121,7 +122,7 @@ void popup_intel_dialog(struct player *pplayer)
     pdialog->pplayer = pplayer;
     pdialog->intel_dialog_shell = 0;
     pdialog->intel_diplo_dialog_shell = 0;
-    dialog_list_prepend(dialog_list, pdialog);
+    dialog_list_insert(&dialog_list, pdialog);
   }
 
   if (!(pdialog->intel_dialog_shell)) {
@@ -147,7 +148,7 @@ void popdown_intel_dialog(struct intel_dialog *pdialog)
   pdialog->intel_dialog_shell = 0;
 
   if (!(pdialog->intel_diplo_dialog_shell)) {
-    dialog_list_unlink(dialog_list, pdialog);
+    dialog_list_unlink(&dialog_list, pdialog);
     free(pdialog);
   }
 }
@@ -162,7 +163,7 @@ void create_intel_dialog(struct intel_dialog *pdialog, bool raise)
 
   static char *tech_list_names_ptrs[A_LAST+1];
   static char tech_list_names[A_LAST+1][200];
-  int j = 0;
+  int i, j;
 
   pdialog->intel_dialog_shell_is_raised = raise;
 
@@ -179,7 +180,7 @@ void create_intel_dialog(struct intel_dialog *pdialog, bool raise)
 
   my_snprintf(buf, sizeof(buf),
 	      _("Intelligence Information for the %s Empire"),
-	      nation_adjective_for_player(pdialog->pplayer));
+	      get_nation_name(pdialog->pplayer->nation));
 
   pdialog->intel_label = I_L(XtVaCreateManagedWidget("inteltitlelabel",
 						     labelWidgetClass,
@@ -188,8 +189,10 @@ void create_intel_dialog(struct intel_dialog *pdialog, bool raise)
 						     NULL));
 
   my_snprintf(buf, sizeof(buf), _("Ruler: %s %s"),
-	      ruler_title_translation(pdialog->pplayer),
-	      player_name(pdialog->pplayer));
+	      get_ruler_title(pdialog->pplayer->government,
+			      pdialog->pplayer->is_male,
+			      pdialog->pplayer->nation),
+	      pdialog->pplayer->name);
   XtVaCreateManagedWidget("intelnamelabel",
 			  labelWidgetClass,
 			  pdialog->intel_form,
@@ -197,7 +200,7 @@ void create_intel_dialog(struct intel_dialog *pdialog, bool raise)
 			  NULL);
 
   my_snprintf(buf, sizeof(buf), _("Government: %s"),
-	      government_name_for_player(pdialog->pplayer));
+	      get_government_name(pdialog->pplayer->government));
   XtVaCreateManagedWidget("intelgovlabel",
 			  labelWidgetClass,
 			  pdialog->intel_form,
@@ -236,21 +239,18 @@ void create_intel_dialog(struct intel_dialog *pdialog, bool raise)
 			  XtNlabel, buf,
 			  NULL);
 
-  switch (get_player_research(pdialog->pplayer)->researching) {
-  case A_UNKNOWN:
-    my_snprintf(buf, sizeof(buf), _("Researching: (Unknown)"));
-    break;
-  case A_UNSET:
-    my_snprintf(buf, sizeof(buf), _("Researching: Unknown(%d/-)"),
-		get_player_research(pdialog->pplayer)->bulbs_researched);
-    break;
-  default:
+  if (pdialog->pplayer->research.researching == A_UNSET) {
     my_snprintf(buf, sizeof(buf), _("Researching: %s(%d/%d)"),
-		advance_name_researching(pdialog->pplayer),
-		get_player_research(pdialog->pplayer)->bulbs_researched,
+		advances[A_NONE].name,
+		pdialog->pplayer->research.bulbs_researched,
 		total_bulbs_required(pdialog->pplayer));
-    break;
-  };
+  } else {
+    my_snprintf(buf, sizeof(buf), _("Researching: %s(%d/%d)"),
+		get_tech_name(pdialog->pplayer,
+			      pdialog->pplayer->research.researching),
+		pdialog->pplayer->research.bulbs_researched,
+		total_bulbs_required(pdialog->pplayer));
+  }
 
   XtVaCreateManagedWidget("intelreslabel",
 			  labelWidgetClass,
@@ -260,26 +260,24 @@ void create_intel_dialog(struct intel_dialog *pdialog, bool raise)
 
   pcity = find_palace(pdialog->pplayer);
   my_snprintf(buf, sizeof(buf), _("Capital: %s"),
-	      /* TRANS: "unknown" location */
-	      (!pcity) ? _("(unknown)") : city_name(pcity));
+	      (!pcity)?_("(Unknown)"):pcity->name);
   XtVaCreateManagedWidget("intelcapitallabel",
 			  labelWidgetClass,
 			  pdialog->intel_form,
 			  XtNlabel, buf,
 			  NULL);
 
-  advance_index_iterate(A_FIRST, i) {
-    if (player_invention_state(pdialog->pplayer, i) == TECH_KNOWN) {
-      if (TECH_KNOWN == player_invention_state(client.conn.playing, i)) {
-	sz_strlcpy(tech_list_names[j], advance_name_translation(advance_by_number(i)));
+  for(i=A_FIRST, j=0; i<game.num_tech_types; i++)
+    if (get_invention(pdialog->pplayer, i) == TECH_KNOWN) {
+      if(get_invention(game.player_ptr, i)==TECH_KNOWN) {
+	sz_strlcpy(tech_list_names[j], advances[i].name);
       } else {
 	my_snprintf(tech_list_names[j], sizeof(tech_list_names[j]),
-		    "%s*", advance_name_translation(advance_by_number(i)));
+		    "%s*", advances[i].name);
       }
       tech_list_names_ptrs[j]=tech_list_names[j];
       j++;
     }
-  } advance_index_iterate_end;
   tech_list_names_ptrs[j]=0;
 
   XtVaCreateManagedWidget("inteltechlist",
@@ -302,7 +300,7 @@ void create_intel_dialog(struct intel_dialog *pdialog, bool raise)
 		intel_close_callback, (XtPointer)pdialog);
   XtAddCallback(pdialog->intel_diplo_command, XtNcallback,
 		intel_diplo_callback,
-		INT_TO_XTPOINTER(player_number(pdialog->pplayer)));
+		INT_TO_XTPOINTER(pdialog->pplayer->player_no));
   XtRealizeWidget(pdialog->intel_dialog_shell);
 
   xaw_horiz_center(pdialog->intel_label);
@@ -337,7 +335,7 @@ void intel_close_callback(Widget w, XtPointer client_data,
 void intel_diplo_callback(Widget w, XtPointer client_data,
 			  XtPointer call_data)
 {
-  popup_intel_diplo_dialog(player_by_number(XTPOINTER_TO_INT(client_data)),
+  popup_intel_diplo_dialog(&game.players[XTPOINTER_TO_INT(client_data)],
 			   FALSE);
 }
 
@@ -366,7 +364,7 @@ void popup_intel_diplo_dialog(struct player *pplayer, bool raise)
     pdialog->pplayer = pplayer;
     pdialog->intel_dialog_shell = 0;
     pdialog->intel_diplo_dialog_shell = 0;
-    dialog_list_prepend(dialog_list, pdialog);
+    dialog_list_insert(&dialog_list, pdialog);
   }
 
   if (!(pdialog->intel_diplo_dialog_shell)) {
@@ -393,7 +391,7 @@ void popdown_intel_diplo_dialog(struct intel_dialog *pdialog)
   pdialog->intel_diplo_dialog_shell = 0;
 
   if (!(pdialog->intel_dialog_shell)) {
-    dialog_list_unlink(dialog_list, pdialog);
+    dialog_list_unlink(&dialog_list, pdialog);
     free(pdialog);
   }
 }
@@ -421,7 +419,7 @@ void create_intel_diplo_dialog(struct intel_dialog *pdialog, bool raise)
 
   my_snprintf(buf, sizeof(buf),
 	      _("Intelligence Diplomacy Information for the %s Empire"),
-	      nation_adjective_for_player(pdialog->pplayer));
+	      get_nation_name(pdialog->pplayer->nation));
 
   pdialog->intel_diplo_label =
     I_L(XtVaCreateManagedWidget("inteldiplolabel",
@@ -431,8 +429,10 @@ void create_intel_diplo_dialog(struct intel_dialog *pdialog, bool raise)
 				NULL));
    
   my_snprintf(buf, sizeof(buf), _("Ruler: %s %s"), 
-	      ruler_title_translation(pdialog->pplayer),
-	      player_name(pdialog->pplayer));
+	      get_ruler_title(pdialog->pplayer->government,
+			      pdialog->pplayer->is_male,
+			      pdialog->pplayer->nation),
+	      pdialog->pplayer->name);
   XtVaCreateManagedWidget("inteldiplonamelabel", 
 			  labelWidgetClass, 
 			  pdialog->intel_diplo_form, 
@@ -484,8 +484,8 @@ void update_intel_diplo_dialog(struct intel_dialog *pdialog)
       state = pplayer_get_diplstate(pdialog->pplayer, other);
       my_snprintf(namelist_text[i], sizeof(namelist_text[i]),
 		  "%-32s %-16s %-16s",
-		  player_name(other),
-		  nation_adjective_for_player(other),
+		  other->name,
+		  get_nation_name(other->nation),
 		  diplstate_text(state->type));
       namelist_ptrs[i] = namelist_text[i];
       i++;

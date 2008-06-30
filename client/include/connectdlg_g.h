@@ -17,7 +17,6 @@ void close_connection_dialog(void);
 void really_close_connection_dialog(void);
 
 void gui_server_connect(void);
-
-void gui_set_rulesets(int num_rulesets, char **rulesets);
+void server_autoconnect(void);
 
 #endif  /* FC__CONNECTDLG_G_H */

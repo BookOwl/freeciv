@@ -10,8 +10,8 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-#ifndef FC__STARTPOS_H
-#define FC__STARTPOS_H
+#ifndef FC__STARTING_POSITIONS
+#define FC__STARTING_POSITIONS
 
 enum start_mode {
   MT_DEFAULT,
@@ -21,7 +21,6 @@ enum start_mode {
   MT_VARIABLE
 };
 
-bool create_start_positions(enum start_mode mode,
-			    struct unit_type *initial_unit);
+bool create_start_positions(enum start_mode mode);
 
 #endif

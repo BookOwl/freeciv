@@ -40,16 +40,17 @@ static HWND finddialog;
 **************************************************************************/
 static void update_find_dialog()
 {
+  int i,id;
   ListBox_ResetContent(GetDlgItem(finddialog,ID_FINDCITY_LIST));
-
-  players_iterate(pplayer) {
-    city_list_iterate(pplayer->cities, pcity) {
-      HWND hList = GetDlgItem(finddialog,ID_FINDCITY_LIST);
-      int id = ListBox_AddString(hList,city_name(pcity));
-
-      ListBox_SetItemData(hList,id,player_number(pplayer));
-    } city_list_iterate_end;
-  } players_iterate_end;
+   
+  for(i=0; i<game.nplayers; i++) {
+    city_list_iterate(game.players[i].cities, pcity);
+    id=ListBox_AddString(GetDlgItem(finddialog,ID_FINDCITY_LIST),pcity->name);
+    ListBox_SetItemData(GetDlgItem(finddialog,ID_FINDCITY_LIST),id,i);
+    
+    city_list_iterate_end;
+ 
+  }        
 }
 
 /**************************************************************************
@@ -79,11 +80,11 @@ static LONG CALLBACK find_city_proc(HWND hWnd,
 	  id=ListBox_GetCurSel(GetDlgItem(hWnd,ID_FINDCITY_LIST));
 	  if (id!=LB_ERR)
 	    {
-	      char cityname[512];
+	      char city_name[512];
 	      struct city *pcity;    
 	      ListBox_GetText(GetDlgItem(hWnd,ID_FINDCITY_LIST),id,
-			      cityname);
-	      if ((pcity=game_find_city_by_name(cityname)))
+			      city_name);
+	      if ((pcity=game_find_city_by_name(city_name)))
 		{
 		  center_tile_mapcanvas(pcity->tile);
 		}

@@ -22,10 +22,9 @@ options="1.9"
 ;
 ; name          = name as seen by user 
 ; req1, req2	= advances required before researching this one
-; root_req      = tech required before acquiring this tech, by any
-;     means, inherited by all techs that require this tech in turn unless
-;     "None" is given here explicitly; and you can make a tech available
-;     only through the init_tech of a nation by making it root_req itself.
+; root_req      = advance required before acquiring this one, inherited
+;                 by all techs that require this tech in turn unless
+;                 "None" is given explicitly
 ; flags         = special flag strings
 ; graphic       = icon for technology
 ; graphic_alt   = alternate icon
@@ -42,11 +41,18 @@ options="1.9"
 ; Following flag strings are possible
 ;
 ; "Bonus_Tech" = player gets extra tech if rearched first
+; "Boat_Fast" = all sea units get one extra move point
 ; "Bridge"   = "Settler" unit types can build bridges over rivers
 ; "Railroad" = "Settler" unit types can build rail roads
 ; "Farmland" = "Settler" unit types can build farmland
+; "Fortress" = "Settler" unit types can build fortress
+; "Watchtower" = Units get enhanced visionrange in a fortress
 ; "Population_Pollution_Inc" = Increase the pollution factor created by
-;                              population by one
+;                              popultaion by one
+; "Trade_Revenue_Reduce" = When known by the player establishing a trade
+;                          route reduces the initial revenue by cumulative
+;                          factors of 2/3
+; "Airbase" = "Airbase" unit types can build Airbases
 ; "Build_Airborne" = from now on can build air units (for use by AI)
 
 [advance_advanced_flight]
@@ -176,7 +182,6 @@ req2     = "Industrialization"
 flags    = ""
 graphic     = "a.communism"
 graphic_alt = "-"
-helptext = _("Reduces the effect of Cathedrals.")
 
 [advance_computers]
 name     = _("Computers")
@@ -198,7 +203,7 @@ graphic_alt = "-"
 name     = _("Construction")
 req1     = "Masonry"
 req2     = "Currency"
-flags    = ""
+flags    = "Fortress"
 graphic     = "a.construction"
 graphic_alt = "-"
 
@@ -233,7 +238,6 @@ req2     = "Magnetism"
 flags    = ""
 graphic     = "a.electricity"
 graphic_alt = "-"
-helptext = _("Improves the effect of Colosseums.")
 
 [advance_electronics]
 name     = _("Electronics")
@@ -253,8 +257,8 @@ graphic_alt = "-"
 
 [advance_environmentalism]
 name     = _("Environmentalism")
-req1     = "Recycling"
-req2     = "Space Flight"
+req1     = "Never"		; "Recycling"
+req2     = "Never"		; "Space Flight"
 flags    = ""
 graphic     = "a.environmentalism"
 graphic_alt = "-"
@@ -287,8 +291,16 @@ graphic_alt = "-"
 name     = _("Flight")
 req1     = "Combustion"
 req2     = "Theory of Gravity"
-flags    = "Build_Airborne"
+flags    = "Trade_Revenue_Reduce","Build_Airborne"
 graphic     = "a.flight"
+graphic_alt = "-"
+
+[advance_fundamentalism]
+name     = _("Fundamentalism")
+req1     = "Never";		; "Theology"
+req2     = "Never"		; "Conscription"
+flags    = ""
+graphic     = "a.fundamentalism"
 graphic_alt = "-"
 
 [advance_fusion_power]
@@ -343,7 +355,7 @@ graphic_alt = "-"
 name     = _("Invention")
 req1     = "Engineering"
 req2     = "Literacy"
-flags    = ""
+flags    = "Watchtower"
 graphic     = "a.invention"
 graphic_alt = "-"
 
@@ -490,13 +502,12 @@ req2     = "None"
 flags    = ""
 graphic     = "a.mysticism"
 graphic_alt = "-"
-helptext = _("Improves the effect of Temples.")
 
 [advance_navigation]
 name     = _("Navigation")
 req1     = "Seafaring"
 req2     = "Astronomy"
-flags    = ""
+flags    = "Reduce_Trireme_Loss2"
 graphic     = "a.navigation"
 graphic_alt = "-"
 
@@ -512,10 +523,9 @@ graphic_alt = "-"
 name     = _("Nuclear Power")
 req1     = "Nuclear Fission"
 req2     = "Electronics"
-flags    = ""
+flags    = "Boat_Fast"
 graphic     = "a.nuclear_power"
 graphic_alt = "-"
-helptext = _("Gives sea units one extra move.")
 
 [advance_philosophy]
 name     = _("Philosophy")
@@ -563,7 +573,7 @@ graphic_alt = "-"
 name     = _("Radio")
 req1     = "Flight"
 req2     = "Electricity"
-flags    = ""
+flags    = "Airbase"
 graphic     = "a.radio"
 graphic_alt = "-"
 
@@ -571,7 +581,7 @@ graphic_alt = "-"
 name     = _("Railroad")
 req1     = "Steam Engine"
 req2     = "Bridge Building"
-flags    = "Railroad"
+flags    = "Railroad","Trade_Revenue_Reduce"
 graphic     = "a.railroad"
 graphic_alt = "-"
 
@@ -627,7 +637,7 @@ graphic_alt = "-"
 name     = _("Seafaring")
 req1     = "Pottery"
 req2     = "Map Making"
-flags    = ""
+flags    = "Reduce_Trireme_Loss1"
 graphic     = "a.seafaring"
 graphic_alt = "-"
 
@@ -642,7 +652,7 @@ graphic_alt = "-"
 [advance_stealth]
 name     = _("Stealth")
 req1     = "Superconductors"
-req2     = "Advanced Flight"
+req2     = "Robotics"
 flags    = ""
 graphic     = "a.stealth"
 graphic_alt = "-"
@@ -710,7 +720,6 @@ req2     = "Monotheism"
 flags    = ""
 graphic     = "a.theology"
 graphic_alt = "-"
-helptext = _("Improves the effect of Cathedrals.")
 
 [advance_theory_of_gravity]
 name     = _("Theory of Gravity")

@@ -21,13 +21,14 @@
 #include <gtk/gtk.h>
 
 #include "fcintl.h"
+#include "game.h"
 #include "government.h"
 #include "packets.h"
 #include "player.h"
 #include "shared.h"
 #include "support.h"
 
-#include "civclient.h"
+#include "clinet.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "mapview.h"
@@ -80,30 +81,23 @@ struct intel_dialog {
     TYPED_LIST_ITERATE(struct intel_dialog, dialoglist, pdialog)
 #define dialog_list_iterate_end  LIST_ITERATE_END
 
-static struct dialog_list *dialog_list;
+static struct dialog_list dialog_list;
+static bool dialog_list_has_been_initialised = FALSE;
+/******************************************************************/
+
+
 static struct intel_dialog *create_intel_dialog(struct player *p);
-
-/****************************************************************
-...
-*****************************************************************/
-void intel_dialog_init()
-{
-  dialog_list = dialog_list_new();
-}
-
-/****************************************************************
-...
-*****************************************************************/
-void intel_dialog_done()
-{
-  dialog_list_free(dialog_list);
-}
 
 /****************************************************************
 ...
 *****************************************************************/
 static struct intel_dialog *get_intel_dialog(struct player *pplayer)
 {
+  if (!dialog_list_has_been_initialised) {
+    dialog_list_init(&dialog_list);
+    dialog_list_has_been_initialised = TRUE;
+  }
+
   dialog_list_iterate(dialog_list, pdialog) {
     if (pdialog->pplayer == pplayer) {
       return pdialog;
@@ -136,7 +130,7 @@ static void intel_destroy_callback(GtkWidget *w, gpointer data)
 {
   struct intel_dialog *pdialog = (struct intel_dialog *)data;
 
-  dialog_list_unlink(dialog_list, pdialog);
+  dialog_list_unlink(&dialog_list, pdialog);
 
   free(pdialog);
 }
@@ -275,7 +269,7 @@ static struct intel_dialog *create_intel_dialog(struct player *p)
 
   gtk_widget_show_all(GTK_DIALOG(shell)->vbox);
 
-  dialog_list_prepend(dialog_list, pdialog);
+  dialog_list_insert(&dialog_list, pdialog);
 
   return pdialog;
 }
@@ -295,8 +289,7 @@ void update_intel_dialog(struct player *p)
 
     /* window title. */
     my_snprintf(buf, sizeof(buf),
-	_("Foreign Intelligence: %s Empire"),
-	nation_adjective_for_player(p));
+	_("Foreign Intelligence: %s Empire"), get_nation_name(p->nation));
     gtk_window_set_title(GTK_WINDOW(pdialog->shell), buf);
 
     /* diplomacy tab. */
@@ -319,14 +312,14 @@ void update_intel_dialog(struct player *p)
       GtkTreeIter it;
       GValue v = { 0, };
 
-      if (other == p || !other->is_alive) {
+      if (other == p) {
 	continue;
       }
       state = pplayer_get_diplstate(p, other);
       gtk_tree_store_append(pdialog->diplstates, &it,
 			    &diplstates[state->type]);
       g_value_init(&v, G_TYPE_STRING);
-      g_value_set_static_string(&v, player_name(other));
+      g_value_set_static_string(&v, other->name);
       gtk_tree_store_set_value(pdialog->diplstates, &it, 0, &v);
       g_value_unset(&v);
     } players_iterate_end;
@@ -334,18 +327,17 @@ void update_intel_dialog(struct player *p)
     /* techs tab. */
     gtk_list_store_clear(pdialog->techs);
 
-    advance_index_iterate(A_FIRST, i) {
-      if(player_invention_state(p, i)==TECH_KNOWN) {
+    for(i=A_FIRST; i<game.num_tech_types; i++)
+      if(get_invention(p, i)==TECH_KNOWN) {
 	GtkTreeIter it;
 
 	gtk_list_store_append(pdialog->techs, &it);
 
 	gtk_list_store_set(pdialog->techs, &it,
-			   0, (TECH_KNOWN != player_invention_state(client.conn.playing, i)),
-			   1, advance_name_for_player(p, i),
+			   0, (get_invention(game.player_ptr, i)!=TECH_KNOWN),
+			   1, get_tech_name(p, i),
 			   -1);
       }
-    } advance_index_iterate_end;
 
     /* table labels. */
     for (i = 0; i < ARRAY_SIZE(pdialog->table_labels); i++) {
@@ -355,16 +347,14 @@ void update_intel_dialog(struct player *p)
 	switch (i) {
 	  case LABEL_RULER:
 	    my_snprintf(buf, sizeof(buf), "%s %s", 
-		ruler_title_translation(p),
-		player_name(p));
+		get_ruler_title(p->government, p->is_male, p->nation), p->name);
 	    break;
 	  case LABEL_GOVERNMENT:
-	    sz_strlcpy(buf, government_name_for_player(p));
+	    sz_strlcpy(buf, get_government_name(p->government));
 	    break;
 	  case LABEL_CAPITAL:
 	    pcity = find_palace(p);
-	    /* TRANS: "unknown" location */
-	    sz_strlcpy(buf, (!pcity) ? _("(unknown)") : city_name(pcity));
+	    sz_strlcpy(buf, (!pcity) ? _("(Unknown)") : pcity->name);
 	    break;
 	  case LABEL_GOLD:
 	    my_snprintf(buf, sizeof(buf), "%d", p->economic.gold);
@@ -378,25 +368,15 @@ void update_intel_dialog(struct player *p)
 	  case LABEL_LUXURY:
 	    my_snprintf(buf, sizeof(buf), "%d%%", p->economic.luxury);
 	    break;
-	  case LABEL_RESEARCHING: {
-	    struct player_research* research = get_player_research(p);
-	    switch (research->researching) {
-	    case A_UNKNOWN:
-	      /* TRANS: "Unknown" advance/technology */
-	      my_snprintf(buf, sizeof(buf), _("(Unknown)"));
-	      break;
-	    case A_UNSET:
-	      /* TRANS: missing value */
-	      my_snprintf(buf, sizeof(buf), _("(none)"));
-	      break;
-	    default:
+	  case LABEL_RESEARCHING:
+	    if (p->research.researching != A_NOINFO) {
 	      my_snprintf(buf, sizeof(buf), "%s(%d/%d)",
-		  advance_name_researching(p),
-		  research->bulbs_researched, total_bulbs_required(p));
-	      break;
-	    };
+		  get_tech_name(p, p->research.researching),
+		  p->research.bulbs_researched, total_bulbs_required(p));
+	    } else {
+	      my_snprintf(buf, sizeof(buf), _("(Unknown)"));
+	    }
 	    break;
-	  }
 	  default:
 	    buf[0] = '\0';
 	    break;

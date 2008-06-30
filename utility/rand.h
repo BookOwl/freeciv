@@ -13,14 +13,12 @@
 #ifndef FC__RAND_H
 #define FC__RAND_H
 
-#include <stdint.h>
-
 #include "shared.h"		/* bool type */
 
 /* This is duplicated in shared.h to avoid extra includes: */
 #define MAX_UINT32 0xFFFFFFFF
 
-typedef uint32_t RANDOM_TYPE;
+typedef unsigned int RANDOM_TYPE;
 
 typedef struct {
   RANDOM_TYPE v[56];
@@ -28,12 +26,7 @@ typedef struct {
   bool is_init;			/* initially 0 for static storage */
 } RANDOM_STATE;
 
-#define myrand(_size) \
-  myrand_debug((_size), "myrand", __LINE__, __FILE__)
-
-RANDOM_TYPE myrand_debug(RANDOM_TYPE size, const char *called_as, 
-                         int line, const char *file);
-
+RANDOM_TYPE myrand(RANDOM_TYPE size);
 void mysrand(RANDOM_TYPE seed);
 
 bool myrand_is_init(void);
@@ -41,13 +34,5 @@ RANDOM_STATE get_myrand_state(void);
 void set_myrand_state(RANDOM_STATE state);
 
 void test_random1(int n);
-
-/*===*/
-
-#define myrandomly(_seed, _size) \
-  myrandomly_debug((_seed), (_size), "myrandomly", __LINE__, __FILE__)
-
-RANDOM_TYPE myrandomly_debug(RANDOM_TYPE seed, RANDOM_TYPE size,
-			     const char *called_as, int line, const char *file);
 
 #endif  /* FC__RAND_H */

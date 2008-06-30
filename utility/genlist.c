@@ -25,44 +25,16 @@ static struct genlist_link *find_genlist_position(const struct genlist *pgenlist
 						  int pos);
 
 /************************************************************************
-  Create a new empty genlist.
+  Initialize a genlist.
+  This should be called before the genlist is used in any other way.
 ************************************************************************/
-struct genlist *genlist_new(void)
+void genlist_init(struct genlist *pgenlist)
 {
-  struct genlist *pgenlist = fc_malloc(sizeof(*pgenlist));
-
   pgenlist->nelements=0;
   pgenlist->head_link = NULL;
   pgenlist->tail_link = NULL;
-
-  return pgenlist;
 }
 
-/************************************************************************
-  Returns a new genlist that's a copy of the existing one.
-************************************************************************/
-struct genlist *genlist_copy(struct genlist *pgenlist)
-{
-  struct genlist *pcopy = genlist_new();
-
-  if (pgenlist) {
-    struct genlist_link *plink;
-
-    for (plink = pgenlist->head_link; plink; plink = plink->next) {
-      genlist_append(pcopy, plink->dataptr);
-    }
-  }
-
-  return pcopy;
-}
-
-/************************************************************************
-  Remove a genlist.  The list must be empty first!
-************************************************************************/
-void genlist_free(struct genlist *pgenlist)
-{
-  free(pgenlist);
-}
 
 /************************************************************************
   Returns the number of elements stored in the genlist.
@@ -153,7 +125,7 @@ void genlist_unlink(struct genlist *pgenlist, void *punlink)
   A bad 'pos' value for a non-empty list is treated as -1 (is this
   a good idea?)
 ************************************************************************/
-static void genlist_insert(struct genlist *pgenlist, void *data, int pos)
+void genlist_insert(struct genlist *pgenlist, void *data, int pos)
 {
   if(pgenlist->nelements == 0) { /*list is empty, ignore pos */
     
@@ -199,23 +171,6 @@ static void genlist_insert(struct genlist *pgenlist, void *data, int pos)
 
 
 /************************************************************************
-  Insert an item at the start of the list.
-************************************************************************/
-void genlist_prepend(struct genlist *pgenlist, void *data)
-{
-  genlist_insert(pgenlist, data, 0); /* beginning */
-}
-
-
-/************************************************************************
-  Insert an item at the end of the list.
-************************************************************************/
-void genlist_append(struct genlist *pgenlist, void *data)
-{
-  genlist_insert(pgenlist, data, -1); /* end */
-}
-
-/************************************************************************
   Returns a pointer to the genlist link structure at the specified
   position.  Recall 'pos' -1 refers to the last position.
   For pos out of range returns NULL.
@@ -245,23 +200,6 @@ static struct genlist_link *find_genlist_position(const struct genlist *pgenlist
   return plink;
 }
 
-/****************************************************************************
-  Return TRUE iff this element is in the list.
-
-  This is an O(n) operation.  Hence, "search".
-****************************************************************************/
-bool genlist_search(struct genlist *pgenlist, const void *data)
-{
-  struct genlist_link *plink;
-
-  for (plink = pgenlist->head_link; plink; plink = plink->next) {
-    if (plink->dataptr == data) {
-      return TRUE;
-    }
-  }
-
-  return FALSE;
-}
 
 /************************************************************************
  Sort the elements of a genlist.

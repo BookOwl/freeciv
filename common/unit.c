@@ -18,27 +18,84 @@
 #include <assert.h>
 
 #include "fcintl.h"
-#include "mem.h"
-#include "shared.h"
-#include "support.h"
-
-#include "base.h"
-#include "city.h"
 #include "game.h"
 #include "log.h"
 #include "map.h"
-#include "movement.h"
+#include "mem.h"
 #include "packets.h"
 #include "player.h"
+#include "shared.h"
+#include "support.h"
 #include "tech.h"
+
+#include "city.h"
 #include "unit.h"
-#include "unitlist.h"
+
+/***************************************************************
+This function calculates the move rate of the unit taking into 
+account the penalty for reduced hitpoints (affects sea and land 
+units only) and the effects of wonders for sea units
++ veteran bonus.
+
+FIXME: Use generalised improvements code instead of hardcoded
+wonder effects --RK
+***************************************************************/
+int unit_move_rate(struct unit *punit)
+{
+  int move_rate = 0;
+  int base_move_rate = unit_type(punit)->move_rate 
+                       + unit_type(punit)->veteran[punit->veteran].move_bonus;
+
+  switch (unit_type(punit)->move_type) {
+  case LAND_MOVING:
+    move_rate = (base_move_rate * punit->hp) / unit_type(punit)->hp;
+    break;
+ 
+  case SEA_MOVING:
+    move_rate = (base_move_rate * punit->hp) / unit_type(punit)->hp;
+
+    move_rate += (get_player_bonus(unit_owner(punit), EFT_SEA_MOVE)
+		  * SINGLE_MOVE);
+
+    if (player_knows_techs_with_flag(unit_owner(punit), TF_BOAT_FAST)) {
+      move_rate += SINGLE_MOVE;
+    }
+ 
+    if (move_rate < 2 * SINGLE_MOVE) {
+      move_rate = MIN(2 * SINGLE_MOVE, base_move_rate);
+    }
+    break;
+
+  case HELI_MOVING:
+  case AIR_MOVING:
+    move_rate = base_move_rate;
+    break;
+
+  default:
+    die("In common/unit.c:unit_move_rate: illegal move type %d",
+  					unit_type(punit)->move_type);
+  }
+  
+  if (move_rate < SINGLE_MOVE && base_move_rate > 0) {
+    move_rate = SINGLE_MOVE;
+  }
+  return move_rate;
+}
+
+/**************************************************************************
+bribe unit
+investigate
+poison
+make revolt
+establish embassy
+sabotage city
+**************************************************************************/
 
 /**************************************************************************
 Whether a diplomat can move to a particular tile and perform a
 particular action there.
 **************************************************************************/
-bool diplomat_can_do_action(const struct unit *pdiplomat,
+bool diplomat_can_do_action(struct unit *pdiplomat,
 			    enum diplomat_actions action, 
 			    const struct tile *ptile)
 {
@@ -63,58 +120,60 @@ tile.  This does _not_ check whether the diplomat can move there.
 If the action is DIPLOMAT_ANY_ACTION, checks whether there is any
 action the diplomat can perform at the tile.
 **************************************************************************/
-bool is_diplomat_action_available(const struct unit *pdiplomat,
+bool is_diplomat_action_available(struct unit *pdiplomat,
 				  enum diplomat_actions action, 
 				  const struct tile *ptile)
 {
-  struct city *pcity=tile_city(ptile);
+  struct city *pcity=map_get_city(ptile);
 
-  if (action != DIPLOMAT_MOVE
-      && !can_unit_exist_at_tile(pdiplomat, pdiplomat->tile)) {
+  if (action!=DIPLOMAT_MOVE
+      && is_ocean(map_get_terrain(pdiplomat->tile))) {
     return FALSE;
   }
 
   if (pcity) {
-    if (city_owner(pcity) != unit_owner(pdiplomat)
+    if (pcity->owner != pdiplomat->owner
        && real_map_distance(pdiplomat->tile, pcity->tile) <= 1) {
       if(action==DIPLOMAT_SABOTAGE)
 	return pplayers_at_war(unit_owner(pdiplomat), city_owner(pcity));
       if(action==DIPLOMAT_MOVE)
         return pplayers_allied(unit_owner(pdiplomat), city_owner(pcity));
+      if (action == DIPLOMAT_EMBASSY && !is_barbarian(city_owner(pcity)) &&
+	  !player_has_embassy(unit_owner(pdiplomat), city_owner(pcity)))
+	return TRUE;
       if(action==SPY_POISON &&
 	 pcity->size>1 &&
-	 unit_has_type_flag(pdiplomat, F_SPY))
+	 unit_flag(pdiplomat, F_SPY))
 	return pplayers_at_war(unit_owner(pdiplomat), city_owner(pcity));
       if(action==DIPLOMAT_INVESTIGATE)
         return TRUE;
-      if (action == DIPLOMAT_STEAL && !is_barbarian(city_owner(pcity))) {
+      if (action == DIPLOMAT_STEAL && !is_barbarian(city_owner(pcity)))
 	return TRUE;
-      }
       if(action==DIPLOMAT_INCITE)
         return !pplayers_allied(city_owner(pcity), unit_owner(pdiplomat));
       if(action==DIPLOMAT_ANY_ACTION)
         return TRUE;
-      if (action==SPY_GET_SABOTAGE_LIST && unit_has_type_flag(pdiplomat, F_SPY))
+      if (action==SPY_GET_SABOTAGE_LIST && unit_flag(pdiplomat, F_SPY))
 	return pplayers_at_war(unit_owner(pdiplomat), city_owner(pcity));
     }
   } else { /* Action against a unit at a tile */
     /* If it is made possible to do action against allied units
-       unit_move_handling() should be changed so that pdefender
+       handle_unit_move_request() should be changed so that pdefender
        is also set to allied units */
     struct unit *punit;
 
     if ((action == SPY_SABOTAGE_UNIT || action == DIPLOMAT_ANY_ACTION) 
-        && unit_list_size(ptile->units) == 1
-        && unit_has_type_flag(pdiplomat, F_SPY)) {
-      punit = unit_list_get(ptile->units, 0);
+        && unit_list_size(&ptile->units) == 1
+        && unit_flag(pdiplomat, F_SPY)) {
+      punit = unit_list_get(&ptile->units, 0);
       if (pplayers_at_war(unit_owner(pdiplomat), unit_owner(punit))) {
         return TRUE;
       }
     }
 
     if ((action == DIPLOMAT_BRIBE || action == DIPLOMAT_ANY_ACTION)
-        && unit_list_size(ptile->units) == 1) {
-      punit = unit_list_get(ptile->units, 0);
+        && unit_list_size(&ptile->units) == 1) {
+      punit = unit_list_get(&ptile->units, 0);
       if (!pplayers_allied(unit_owner(punit), unit_owner(pdiplomat))) {
         return TRUE;
       }
@@ -126,22 +185,20 @@ bool is_diplomat_action_available(const struct unit *pdiplomat,
 /**************************************************************************
 FIXME: Maybe we should allow airlifts between allies
 **************************************************************************/
-bool unit_can_airlift_to(const struct unit *punit, const struct city *pcity)
+bool unit_can_airlift_to(struct unit *punit, struct city *pcity)
 {
-  struct city *acity = tile_city(punit->tile);
-
   if(punit->moves_left == 0)
     return FALSE;
-  if (!acity) {
+  if (!punit->tile->city) {
     return FALSE;
   }
-  if (acity == pcity) {
+  if (punit->tile->city == pcity) {
     return FALSE;
   }
-  if (city_owner(acity) != city_owner(pcity)) {
+  if (punit->tile->city->owner != pcity->owner) {
     return FALSE;
   }
-  if (!acity->airlift || !pcity->airlift) {
+  if (!punit->tile->city->airlift || !pcity->airlift) {
     return FALSE;
   }
   if (!is_ground_unit(punit))
@@ -153,70 +210,152 @@ bool unit_can_airlift_to(const struct unit *punit, const struct city *pcity)
 /****************************************************************************
   Return TRUE iff the unit is following client-side orders.
 ****************************************************************************/
-bool unit_has_orders(const struct unit *punit)
+bool unit_has_orders(struct unit *punit)
 {
   return punit->has_orders;
 }
 
 /**************************************************************************
-  Return TRUE iff this unit can be disbanded at the given city to get full
-  shields for building a wonder.
+...
 **************************************************************************/
-bool unit_can_help_build_wonder(const struct unit *punit,
-				const struct city *pcity)
+bool unit_can_help_build_wonder(struct unit *punit, struct city *pcity)
 {
   if (!is_tiles_adjacent(punit->tile, pcity->tile)
-      && !same_pos(punit->tile, pcity->tile)) {
+      && !same_pos(punit->tile, pcity->tile))
     return FALSE;
-  }
 
-  return (unit_has_type_flag(punit, F_HELP_WONDER)
-	  && unit_owner(punit) == city_owner(pcity)
-	  && VUT_IMPROVEMENT == pcity->production.kind
-	  && is_wonder(pcity->production.value.building)
+  return (unit_flag(punit, F_HELP_WONDER)
+	  && punit->owner == pcity->owner
+	  && !pcity->is_building_unit && is_wonder(pcity->currently_building)
 	  && (pcity->shield_stock
-	      < impr_build_shield_cost(pcity->production.value.building)));
+	      < impr_build_shield_cost(pcity->currently_building)));
 }
 
 
 /**************************************************************************
-  Return TRUE iff this unit can be disbanded at its current position to
-  get full shields for building a wonder.
+...
 **************************************************************************/
-bool unit_can_help_build_wonder_here(const struct unit *punit)
+bool unit_can_help_build_wonder_here(struct unit *punit)
 {
-  struct city *pcity = tile_city(punit->tile);
-
+  struct city *pcity = map_get_city(punit->tile);
   return pcity && unit_can_help_build_wonder(punit, pcity);
 }
 
 
 /**************************************************************************
-  Return TRUE iff this unit can be disbanded at its current location to
-  provide a trade route from the homecity to the target city.
+...
 **************************************************************************/
-bool unit_can_est_traderoute_here(const struct unit *punit)
+bool unit_can_est_traderoute_here(struct unit *punit)
 {
   struct city *phomecity, *pdestcity;
 
-  return (unit_has_type_flag(punit, F_TRADE_ROUTE)
-	  && (pdestcity = tile_city(punit->tile))
-	  && (phomecity = game_find_city_by_number(punit->homecity))
+  return (unit_flag(punit, F_TRADE_ROUTE)
+	  && (pdestcity = map_get_city(punit->tile))
+	  && (phomecity = find_city_by_id(punit->homecity))
 	  && can_cities_trade(phomecity, pdestcity));
 }
 
 /**************************************************************************
-  Return the number of units the transporter can hold (or 0).
+...
 **************************************************************************/
-int get_transporter_capacity(const struct unit *punit)
+bool unit_can_defend_here(struct unit *punit)
+{
+  if (is_ground_unit(punit)
+      && is_ocean(map_get_terrain(punit->tile))) {
+    return FALSE;
+  }
+  
+  return TRUE;
+}
+
+/**************************************************************************
+Returns the number of free spaces for ground units. Can be 0 or negative.
+**************************************************************************/
+int ground_unit_transporter_capacity(const struct tile *ptile,
+				     struct player *pplayer)
+{
+  int availability = 0;
+
+  unit_list_iterate(ptile->units, punit) {
+    if (unit_owner(punit) == pplayer
+        || pplayers_allied(unit_owner(punit), pplayer)) {
+      if (is_ground_units_transport(punit)
+	  && !(is_ground_unit(punit) && is_ocean(ptile->terrain))) {
+	availability += get_transporter_capacity(punit);
+      } else if (is_ground_unit(punit)) {
+	availability--;
+      }
+    }
+  }
+  unit_list_iterate_end;
+
+  return availability;
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+int get_transporter_capacity(struct unit *punit)
 {
   return unit_type(punit)->transport_capacity;
 }
 
 /**************************************************************************
+...
+**************************************************************************/
+bool is_ground_units_transport(struct unit *punit)
+{
+  return (get_transporter_capacity(punit) > 0
+	  && !unit_flag(punit, F_MISSILE_CARRIER)
+	  && !unit_flag(punit, F_CARRIER));
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+bool is_air_units_transport(struct unit *punit)
+{
+  return (get_transporter_capacity(punit) > 0
+	  && (unit_flag(punit, F_MISSILE_CARRIER)
+	      || unit_flag(punit, F_CARRIER)));
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+bool is_sailing_unit(struct unit *punit)
+{
+  return (unit_type(punit)->move_type == SEA_MOVING);
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+bool is_air_unit(struct unit *punit)
+{
+  return (unit_type(punit)->move_type == AIR_MOVING);
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+bool is_heli_unit(struct unit *punit)
+{
+  return (unit_type(punit)->move_type == HELI_MOVING);
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+bool is_ground_unit(struct unit *punit)
+{
+  return (unit_type(punit)->move_type == LAND_MOVING);
+}
+
+/**************************************************************************
   Is the unit capable of attacking?
 **************************************************************************/
-bool is_attack_unit(const struct unit *punit)
+bool is_attack_unit(struct unit *punit)
 {
   return (unit_type(punit)->attack_strength > 0);
 }
@@ -226,38 +365,33 @@ bool is_attack_unit(const struct unit *punit)
   and heli units can occupy empty cities -- see COULD_OCCUPY(punit).
   Some military units, like the Galleon, have no attack strength.
 **************************************************************************/
-bool is_military_unit(const struct unit *punit)
+bool is_military_unit(struct unit *punit)
 {
-  return !unit_has_type_flag(punit, F_CIVILIAN);
+  return !unit_flag(punit, F_NONMIL);
 }
 
 /**************************************************************************
-  Return TRUE iff this unit is a diplomat (spy) unit.  Diplomatic units
-  can do diplomatic actions (not to be confused with diplomacy).
+...
 **************************************************************************/
-bool is_diplomat_unit(const struct unit *punit)
+bool is_diplomat_unit(struct unit *punit)
 {
-  return (unit_has_type_flag(punit, F_DIPLOMAT));
+  return (unit_flag(punit, F_DIPLOMAT));
 }
 
 /**************************************************************************
-  Return TRUE iff the player should consider this unit to be a threat on
-  the ground.
+...
 **************************************************************************/
-static bool is_ground_threat(const struct player *pplayer,
-			     const struct unit *punit)
+static bool is_ground_threat(struct player *pplayer, struct unit *punit)
 {
   return (pplayers_at_war(pplayer, unit_owner(punit))
-	  && (unit_has_type_flag(punit, F_DIPLOMAT)
+	  && (unit_flag(punit, F_DIPLOMAT)
 	      || (is_ground_unit(punit) && is_military_unit(punit))));
 }
 
 /**************************************************************************
-  Return TRUE iff this tile is threatened from any threatening ground unit
-  within 2 tiles.
+...
 **************************************************************************/
-bool is_square_threatened(const struct player *pplayer,
-			  const struct tile *ptile)
+bool is_square_threatened(struct player *pplayer, const struct tile *ptile)
 {
   square_iterate(ptile, 2, ptile1) {
     unit_list_iterate(ptile1->units, punit) {
@@ -271,12 +405,11 @@ bool is_square_threatened(const struct player *pplayer,
 }
 
 /**************************************************************************
-  This checks the "field unit" flag on the unit.  Field units cause
-  unhappiness (under certain governments) even when they aren't abroad.
+...
 **************************************************************************/
-bool is_field_unit(const struct unit *punit)
+bool is_field_unit(struct unit *punit)
 {
-  return unit_has_type_flag(punit, F_FIELDUNIT);
+  return unit_flag(punit, F_FIELDUNIT);
 }
 
 
@@ -285,64 +418,55 @@ bool is_field_unit(const struct unit *punit)
   it has the F_PARTIAL_INVIS flag or if it transported by a unit with
   this flag.
 **************************************************************************/
-bool is_hiding_unit(const struct unit *punit)
+bool is_hiding_unit(struct unit *punit)
 {
-  struct unit *transporter = game_find_unit_by_number(punit->transported_by);
+  struct unit *transporter = find_unit_by_id(punit->transported_by);
 
-  return (unit_has_type_flag(punit, F_PARTIAL_INVIS)
-	  || (transporter && unit_has_type_flag(transporter, F_PARTIAL_INVIS)));
+  return (unit_flag(punit, F_PARTIAL_INVIS)
+	  || (transporter && unit_flag(transporter, F_PARTIAL_INVIS)));
 }
 
 /**************************************************************************
-  Return TRUE iff an attack from this unit would kill a citizen in a city
-  (city walls protect against this).
+...
 **************************************************************************/
-bool kills_citizen_after_attack(const struct unit *punit)
+bool kills_citizen_after_attack(struct unit *punit)
 {
-  return TEST_BIT(game.info.killcitizen, 
-                  (int) (uclass_move_type(unit_class(punit))) - 1);
+  return TEST_BIT(game.killcitizen, (int) (unit_type(punit)->move_type) - 1);
 }
 
 /**************************************************************************
-  Return TRUE iff this unit may be disbanded to add its pop_cost to a
-  city at its current location.
+...
 **************************************************************************/
-bool can_unit_add_to_city(const struct unit *punit)
+bool can_unit_add_to_city(struct unit *punit)
 {
   return (test_unit_add_or_build_city(punit) == AB_ADD_OK);
 }
 
 /**************************************************************************
-  Return TRUE iff this unit is capable of building a new city at its
-  current location.
+...
 **************************************************************************/
-bool can_unit_build_city(const struct unit *punit)
+bool can_unit_build_city(struct unit *punit)
 {
   return (test_unit_add_or_build_city(punit) == AB_BUILD_OK);
 }
 
 /**************************************************************************
-  Return TRUE iff this unit can add to a current city or build a new city
-  at its current location.
+...
 **************************************************************************/
-bool can_unit_add_or_build_city(const struct unit *punit)
+bool can_unit_add_or_build_city(struct unit *punit)
 {
   enum add_build_city_result r = test_unit_add_or_build_city(punit);
-
   return (r == AB_BUILD_OK || r == AB_ADD_OK);
 }
 
 /**************************************************************************
-  See if the unit can add to an existing city or build a new city at
-  its current location, and return a 'result' value telling what is
-  allowed.
+...
 **************************************************************************/
-enum add_build_city_result test_unit_add_or_build_city(const struct unit *
-						       punit)
+enum add_build_city_result test_unit_add_or_build_city(struct unit *punit)
 {
-  struct city *pcity = tile_city(punit->tile);
-  bool is_build = unit_has_type_flag(punit, F_CITIES);
-  bool is_add = unit_has_type_flag(punit, F_ADD_TO_CITY);
+  struct city *pcity = map_get_city(punit->tile);
+  bool is_build = unit_flag(punit, F_CITIES);
+  bool is_add = unit_flag(punit, F_ADD_TO_CITY);
   int new_pop;
 
   /* See if we can build */
@@ -364,12 +488,12 @@ enum add_build_city_result test_unit_add_or_build_city(const struct unit *
   if (punit->moves_left == 0)
     return AB_NO_MOVES_ADD;
 
-  assert(unit_pop_value(punit) > 0);
-  new_pop = pcity->size + unit_pop_value(punit);
+  assert(unit_pop_value(punit->type) > 0);
+  new_pop = pcity->size + unit_pop_value(punit->type);
 
-  if (new_pop > game.info.add_to_size_limit)
+  if (new_pop > game.add_to_size_limit)
     return AB_TOO_BIG;
-  if (city_owner(pcity) != unit_owner(punit))
+  if (pcity->owner != punit->owner)
     return AB_NOT_OWNER;
   if (!city_can_grow_to(pcity, new_pop))
     return AB_NO_SPACE;
@@ -377,33 +501,30 @@ enum add_build_city_result test_unit_add_or_build_city(const struct unit *
 }
 
 /**************************************************************************
-  Return TRUE iff the unit can change homecity to the given city.
+...
 **************************************************************************/
-bool can_unit_change_homecity_to(const struct unit *punit,
-				 const struct city *pcity)
+bool can_unit_change_homecity_to(struct unit *punit, struct city *pcity)
 {
-  struct city *acity = tile_city(punit->tile);
-
   /* Requirements to change homecity:
    *
-   * 1. Homeless units can't change homecity (this is a feature since
+   * 1. Homeless cities can't change homecity (this is a feature since
    *    being homeless is a big benefit).
    * 2. The unit must be inside the city it is rehoming to.
    * 3. Of course you can only have your own cities as homecity.
    * 4. You can't rehome to the current homecity. */
   return (punit && pcity
 	  && punit->homecity > 0
-	  && acity
-	  && city_owner(acity) == unit_owner(punit)
-	  && punit->homecity != acity->id);
+	  && punit->tile->city
+	  && punit->tile->city->owner == punit->owner
+	  && punit->homecity != punit->tile->city->id);
 }
-
+  
 /**************************************************************************
   Return TRUE iff the unit can change homecity at its current location.
 **************************************************************************/
-bool can_unit_change_homecity(const struct unit *punit)
+bool can_unit_change_homecity(struct unit *punit)
 {
-  return can_unit_change_homecity_to(punit, tile_city(punit->tile));
+  return can_unit_change_homecity_to(punit, punit->tile->city);
 }
 
 /**************************************************************************
@@ -414,9 +535,9 @@ bool can_unit_change_homecity(const struct unit *punit)
 
   The speed is multiplied by ACTIVITY_COUNT.
 **************************************************************************/
-int get_activity_rate(const struct unit *punit)
+int get_activity_rate(struct unit *punit)
 {
-  int fact = unit_type(punit)->veteran[punit->veteran].power_fact;
+  int fact = get_unit_type(punit->type)->veteran[punit->veteran].power_fact;
 
   /* The speed of the settler depends on its base move_rate, not on
    * the number of moves actually remaining or the adjusted move rate.
@@ -435,7 +556,7 @@ int get_activity_rate(const struct unit *punit)
 
   The speed is multiplied by ACTIVITY_COUNT.
 **************************************************************************/
-int get_activity_rate_this_turn(const struct unit *punit)
+int get_activity_rate_this_turn(struct unit *punit)
 {
   /* This logic is also coded in client/goto.c. */
   if (punit->moves_left > 0) {
@@ -450,14 +571,14 @@ int get_activity_rate_this_turn(const struct unit *punit)
   complete the activity at the given location.  This assumes no other
   worker units are helping out.
 **************************************************************************/
-int get_turns_for_activity_at(const struct unit *punit,
+int get_turns_for_activity_at(struct unit *punit,
 			      enum unit_activity activity,
 			      const struct tile *ptile)
 {
   /* FIXME: This is just an approximation since we don't account for
    * get_activity_rate_this_turn. */
   int speed = get_activity_rate(punit);
-  int time = tile_activity_time(activity, ptile);
+  int time = map_activity_time(activity, ptile);
 
   if (time >= 0 && speed >= 0) {
     return (time - 1) / speed + 1; /* round up */
@@ -467,30 +588,19 @@ int get_turns_for_activity_at(const struct unit *punit,
 }
 
 /**************************************************************************
-  Return whether the unit can be put in auto-settler mode.
-
-  NOTE: we used to have "auto" mode including autosettlers and auto-attack.
-  This was bad because the two were indestinguishable even though they
-  are very different.  Now auto-attack is done differently so we just have
-  auto-settlers.  If any new auto modes are introduced they should be
-  handled separately.
+Return whether the unit can be put in auto-mode.
+(Auto-settler for settlers, auto-attack for military units.)
 **************************************************************************/
-bool can_unit_do_autosettlers(const struct unit *punit) 
+bool can_unit_do_auto(struct unit *punit) 
 {
-  return unit_has_type_flag(punit, F_SETTLERS);
-}
-
-/**************************************************************************
-  Return if given activity really is in game. For savegame compatibility
-  activity enum cannot be reordered and there is holes in it.
-**************************************************************************/
-bool is_real_activity(enum unit_activity activity)
-{
-  /* ACTIVITY_FORTRESS and ACTIVITY_AIRBASE are deprecated */
-  return activity != ACTIVITY_FORTRESS
-    && activity != ACTIVITY_AIRBASE
-    && activity != ACTIVITY_UNKNOWN
-    && activity != ACTIVITY_PATROL_UNUSED;
+  if (unit_flag(punit, F_SETTLERS)) {
+    return TRUE;
+  }
+  if (is_military_unit(punit) && is_attack_unit(punit)
+      && map_get_city(punit->tile)) {
+    return TRUE;
+  }
+  return FALSE;
 }
 
 /**************************************************************************
@@ -534,8 +644,6 @@ const char *get_activity_text(enum unit_activity activity)
     return _("Airbase");
   case ACTIVITY_FALLOUT:
     return _("Fallout");
-  case ACTIVITY_BASE:
-    return _("Base");
   case ACTIVITY_UNKNOWN:
   case ACTIVITY_PATROL_UNUSED:
   case ACTIVITY_LAST:
@@ -547,12 +655,19 @@ const char *get_activity_text(enum unit_activity activity)
 }
 
 /****************************************************************************
-  Return TRUE iff the given unit could be loaded into the transporter
-  if we moved there.
+  Return TRUE iff the given unit can be loaded into the transporter.
 ****************************************************************************/
-bool could_unit_load(const struct unit *pcargo, const struct unit *ptrans)
+bool can_unit_load(struct unit *pcargo, struct unit *ptrans)
 {
+  /* This function needs to check EVERYTHING. */
+
   if (!pcargo || !ptrans) {
+    return FALSE;
+  }
+
+  /* Check positions of the units.  Of course you can't load a unit onto
+   * a transporter on a different tile... */
+  if (!same_pos(pcargo->tile, ptrans->tile)) {
     return FALSE;
   }
 
@@ -573,34 +688,25 @@ bool could_unit_load(const struct unit *pcargo, const struct unit *ptrans)
   }
 
   /* Make sure this transporter can carry this type of unit. */
-  if (!can_unit_transport(ptrans, pcargo)) {
-    return FALSE;
-  }
-
-  /* Transporter must be native to the tile it is on. */
-  if (!can_unit_exist_at_tile(ptrans, ptrans->tile)) {
+  if (is_ground_unit(pcargo)) {
+    if (!is_ground_units_transport(ptrans)) {
+      return FALSE;
+    }
+  } else if (unit_flag(pcargo, F_MISSILE)) {
+    if (!is_air_units_transport(ptrans)) {
+      return FALSE;
+    }
+  } else if (is_air_unit(pcargo) || is_heli_unit(pcargo)) {
+    if (!unit_flag(ptrans, F_CARRIER)) {
+      return FALSE;
+    }
+  } else {
     return FALSE;
   }
 
   /* Make sure there's room in the transporter. */
   return (get_transporter_occupancy(ptrans)
 	  < get_transporter_capacity(ptrans));
-}
-
-/****************************************************************************
-  Return TRUE iff the given unit can be loaded into the transporter.
-****************************************************************************/
-bool can_unit_load(const struct unit *pcargo, const struct unit *ptrans)
-{
-  /* This function needs to check EVERYTHING. */
-
-  /* Check positions of the units.  Of course you can't load a unit onto
-   * a transporter on a different tile... */
-  if (!same_pos(pcargo->tile, ptrans->tile)) {
-    return FALSE;
-  }
-
-  return could_unit_load(pcargo, ptrans);
 }
 
 /****************************************************************************
@@ -612,7 +718,7 @@ bool can_unit_load(const struct unit *pcargo, const struct unit *ptrans)
   can_unit_exist_at_tile() to check this, unless the unit is unloading and
   moving at the same time.
 ****************************************************************************/
-bool can_unit_unload(const struct unit *pcargo, const struct unit *ptrans)
+bool can_unit_unload(struct unit *pcargo, struct unit *ptrans)
 {
   if (!pcargo || !ptrans) {
     return FALSE;
@@ -634,15 +740,16 @@ bool can_unit_unload(const struct unit *pcargo, const struct unit *ptrans)
 }
 
 /**************************************************************************
-  Return whether the unit can be paradropped - that is, if the unit is in
-  a friendly city or on an airbase special, has enough movepoints left, and
-  has not paradropped yet this turn.
+Return whether the unit can be paradropped.
+That is if the unit is in a friendly city or on an Airbase
+special, have enough movepoints left and have not paradropped
+before in this turn.
 **************************************************************************/
-bool can_unit_paradrop(const struct unit *punit)
+bool can_unit_paradrop(struct unit *punit)
 {
   struct unit_type *utype;
 
-  if (!unit_has_type_flag(punit, F_PARATROOPERS))
+  if (!unit_flag(punit, F_PARATROOPERS))
     return FALSE;
 
   if(punit->paradropped)
@@ -653,13 +760,11 @@ bool can_unit_paradrop(const struct unit *punit)
   if(punit->moves_left < utype->paratroopers_mr_req)
     return FALSE;
 
-  if (tile_has_base_flag(punit->tile, BF_PARADROP_FROM)) {
-    /* Paradrop has to be possible from non-native base.
-     * Paratroopers are "Land" units, but they can paradrom from Airbase. */
+  if (tile_has_special(punit->tile, S_AIRBASE)) {
     return TRUE;
   }
 
-  if (!tile_city(punit->tile)) {
+  if (!map_get_city(punit->tile)) {
     return FALSE;
   }
 
@@ -671,9 +776,9 @@ bool can_unit_paradrop(const struct unit *punit)
   Basically if it is a bombarder, isn't being transported, and hasn't 
   moved this turn.
 **************************************************************************/
-bool can_unit_bombard(const struct unit *punit)
+bool can_unit_bombard(struct unit *punit)
 {
-  if (!unit_has_type_flag(punit, F_BOMBARDER)) {
+  if (!unit_flag(punit, F_BOMBARDER)) {
     return FALSE;
   }
 
@@ -685,64 +790,45 @@ bool can_unit_bombard(const struct unit *punit)
 }
 
 /**************************************************************************
-  Check if the unit's current activity is actually legal.
+Check if the unit's current activity is actually legal.
 **************************************************************************/
 bool can_unit_continue_current_activity(struct unit *punit)
 {
   enum unit_activity current = punit->activity;
   enum tile_special_type target = punit->activity_target;
-  enum base_type_id base = punit->activity_base;
   enum unit_activity current2 = 
               (current == ACTIVITY_FORTIFIED) ? ACTIVITY_FORTIFYING : current;
   bool result;
 
   punit->activity = ACTIVITY_IDLE;
-  punit->activity_target = S_LAST;
-  punit->activity_base = BASE_LAST;
+  punit->activity_target = S_NO_SPECIAL;
 
-  result = can_unit_do_activity_targeted(punit, current2, target, base);
+  result = can_unit_do_activity_targeted(punit, current2, target);
 
   punit->activity = current;
   punit->activity_target = target;
-  punit->activity_base = base;
 
   return result;
 }
 
 /**************************************************************************
-  Return TRUE iff the unit can do the given untargeted activity at its
-  current location.
-
-  Note that some activities must be targeted; see
-  can_unit_do_activity_targeted.
+...
 **************************************************************************/
-bool can_unit_do_activity(const struct unit *punit,
-			  enum unit_activity activity)
+bool can_unit_do_activity(struct unit *punit, enum unit_activity activity)
 {
-  return can_unit_do_activity_targeted(punit, activity, S_LAST, BASE_LAST);
-}
-
-/**************************************************************************
-  Return TRUE iff the unit can do the given base building activity at its
-  current location.
-**************************************************************************/
-bool can_unit_do_activity_base(const struct unit *punit,
-                               enum base_type_id base)
-{
-  return can_unit_do_activity_targeted(punit, ACTIVITY_BASE, S_LAST, base);
+  return can_unit_do_activity_targeted(punit, activity, S_NO_SPECIAL);
 }
 
 /**************************************************************************
   Return whether the unit can do the targeted activity at its current
   location.
 **************************************************************************/
-bool can_unit_do_activity_targeted(const struct unit *punit,
+bool can_unit_do_activity_targeted(struct unit *punit,
 				   enum unit_activity activity,
-				   enum tile_special_type target,
-                                   enum base_type_id base)
+				   enum tile_special_type target)
 {
   return can_unit_do_activity_targeted_at(punit, activity, target,
-					  punit->tile, base);
+					  punit->tile);
 }
 
 /**************************************************************************
@@ -753,17 +839,13 @@ bool can_unit_do_activity_targeted(const struct unit *punit,
   autosettlers in server/settler.c. The code there does not use this
   function as it would be a major CPU hog.
 **************************************************************************/
-bool can_unit_do_activity_targeted_at(const struct unit *punit,
+bool can_unit_do_activity_targeted_at(struct unit *punit,
 				      enum unit_activity activity,
 				      enum tile_special_type target,
-				      const struct tile *ptile,
-                                      enum base_type_id base)
+				      const struct tile *ptile)
 {
   struct player *pplayer = unit_owner(punit);
-  struct terrain *pterrain = tile_terrain(ptile);
-  struct unit_class *pclass = unit_class(punit);
-  struct base_type *old_base;
-  struct base_type *pbase = base_by_number(base);
+  struct tile_type *type = get_tile_type(ptile->terrain);
 
   switch(activity) {
   case ACTIVITY_IDLE:
@@ -771,18 +853,18 @@ bool can_unit_do_activity_targeted_at(const struct unit *punit,
     return TRUE;
 
   case ACTIVITY_POLLUTION:
-    return (unit_has_type_flag(punit, F_SETTLERS)
+    return (unit_flag(punit, F_SETTLERS)
 	    && tile_has_special(ptile, S_POLLUTION));
 
   case ACTIVITY_FALLOUT:
-    return (unit_has_type_flag(punit, F_SETTLERS)
+    return (unit_flag(punit, F_SETTLERS)
 	    && tile_has_special(ptile, S_FALLOUT));
 
   case ACTIVITY_ROAD:
     return (terrain_control.may_road
-	    && unit_has_type_flag(punit, F_SETTLERS)
+	    && unit_flag(punit, F_SETTLERS)
 	    && !tile_has_special(ptile, S_ROAD)
-	    && pterrain->road_time != 0
+	    && type->road_time != 0
 	    && (!tile_has_special(ptile, S_RIVER)
 		|| player_knows_techs_with_flag(pplayer, TF_BRIDGE)));
 
@@ -790,19 +872,19 @@ bool can_unit_do_activity_targeted_at(const struct unit *punit,
     /* Don't allow it if someone else is irrigating this tile.
      * *Do* allow it if they're transforming - the mine may survive */
     if (terrain_control.may_mine
-	&& unit_has_type_flag(punit, F_SETTLERS)
-	&& ((pterrain == pterrain->mining_result
+	&& unit_flag(punit, F_SETTLERS)
+	&& ((ptile->terrain == type->mining_result
 	     && !tile_has_special(ptile, S_MINE))
-	    || (pterrain != pterrain->mining_result
-		&& pterrain->mining_result != T_NONE
-		&& (!is_ocean(pterrain)
-		    || is_ocean(pterrain->mining_result)
+	    || (ptile->terrain != type->mining_result
+		&& type->mining_result != T_NONE
+		&& (!is_ocean(ptile->terrain)
+		    || is_ocean(type->mining_result)
 		    || can_reclaim_ocean(ptile))
-		&& (is_ocean(pterrain)
-		    || !is_ocean(pterrain->mining_result)
+		&& (is_ocean(ptile->terrain)
+		    || !is_ocean(type->mining_result)
 		    || can_channel_land(ptile))
-		&& (!is_ocean(pterrain->mining_result)
-		    || !tile_city(ptile))))) {
+		&& (!is_ocean(type->mining_result)
+		    || !map_get_city(ptile))))) {
       unit_list_iterate(ptile->units, tunit) {
 	if (tunit->activity == ACTIVITY_IRRIGATE) {
 	  return FALSE;
@@ -817,22 +899,22 @@ bool can_unit_do_activity_targeted_at(const struct unit *punit,
     /* Don't allow it if someone else is mining this tile.
      * *Do* allow it if they're transforming - the irrigation may survive */
     if (terrain_control.may_irrigate
-	&& unit_has_type_flag(punit, F_SETTLERS)
+	&& unit_flag(punit, F_SETTLERS)
 	&& (!tile_has_special(ptile, S_IRRIGATION)
 	    || (!tile_has_special(ptile, S_FARMLAND)
 		&& player_knows_techs_with_flag(pplayer, TF_FARMLAND)))
-	&& ((pterrain == pterrain->irrigation_result
+	&& ((ptile->terrain == type->irrigation_result
 	     && is_water_adjacent_to_tile(ptile))
-	    || (pterrain != pterrain->irrigation_result
-		&& pterrain->irrigation_result != T_NONE
-		&& (!is_ocean(pterrain)
-		    || is_ocean(pterrain->irrigation_result)
+	    || (ptile->terrain != type->irrigation_result
+		&& type->irrigation_result != T_NONE
+		&& (!is_ocean(ptile->terrain)
+		    || is_ocean(type->irrigation_result)
 		    || can_reclaim_ocean(ptile))
-		&& (is_ocean(pterrain)
-		    || !is_ocean(pterrain->irrigation_result)
+		&& (is_ocean(ptile->terrain)
+		    || !is_ocean(type->irrigation_result)
 		    || can_channel_land(ptile))
-		&& (!is_ocean(pterrain->irrigation_result)
-		    || !tile_city(ptile))))) {
+		&& (!is_ocean(type->irrigation_result)
+		    || !map_get_city(ptile))))) {
       unit_list_iterate(ptile->units, tunit) {
 	if (tunit->activity == ACTIVITY_MINE) {
 	  return FALSE;
@@ -844,18 +926,26 @@ bool can_unit_do_activity_targeted_at(const struct unit *punit,
     }
 
   case ACTIVITY_FORTIFYING:
-    return (uclass_has_flag(pclass, UCF_CAN_FORTIFY)
+    return (is_ground_unit(punit)
 	    && punit->activity != ACTIVITY_FORTIFIED
-	    && !unit_has_type_flag(punit, F_SETTLERS)
-	    && (!is_ocean(pterrain) || tile_city(ptile)));
+	    && !unit_flag(punit, F_SETTLERS)
+	    && !is_ocean(ptile->terrain));
 
   case ACTIVITY_FORTIFIED:
     return FALSE;
 
-  case ACTIVITY_BASE:
-    old_base = tile_get_base(ptile);
-    return (can_build_base(punit, pbase, ptile)
-            && (old_base == NULL || old_base != pbase));
+  case ACTIVITY_FORTRESS:
+    return (unit_flag(punit, F_SETTLERS)
+	    && !map_get_city(ptile)
+	    && player_knows_techs_with_flag(pplayer, TF_FORTRESS)
+	    && !tile_has_special(ptile, S_FORTRESS)
+	    && !is_ocean(ptile->terrain));
+
+  case ACTIVITY_AIRBASE:
+    return (unit_flag(punit, F_AIRBASE)
+	    && player_knows_techs_with_flag(pplayer, TF_AIRBASE)
+	    && !tile_has_special(ptile, S_AIRBASE)
+	    && !is_ocean(ptile->terrain));
 
   case ACTIVITY_SENTRY:
     if (!can_unit_survive_at_tile(punit, punit->tile)
@@ -868,48 +958,34 @@ bool can_unit_do_activity_targeted_at(const struct unit *punit,
   case ACTIVITY_RAILROAD:
     /* if the tile has road, the terrain must be ok.. */
     return (terrain_control.may_road
-	    && unit_has_type_flag(punit, F_SETTLERS)
+	    && unit_flag(punit, F_SETTLERS)
 	    && tile_has_special(ptile, S_ROAD)
 	    && !tile_has_special(ptile, S_RAILROAD)
 	    && player_knows_techs_with_flag(pplayer, TF_RAILROAD));
 
   case ACTIVITY_PILLAGE:
     {
-      int numpresent;
-      bv_special pspresent = get_tile_infrastructure_set(ptile, &numpresent);
-      old_base = tile_get_base(ptile);
+      enum tile_special_type pspresent = get_tile_infrastructure_set(ptile);
+      enum tile_special_type psworking;
 
-      if (numpresent > 0 && is_ground_unit(punit)) {
-	bv_special psworking;
-	int i;
-
-	if (tile_city(ptile) && (target == S_ROAD || target == S_RAILROAD)) {
+      if (pspresent != S_NO_SPECIAL && is_ground_unit(punit)) {
+	psworking = get_unit_tile_pillage_set(ptile);
+	if (ptile->city && (contains_special(target, S_ROAD)
+			    || contains_special(target, S_RAILROAD))) {
 	  return FALSE;
 	}
-	psworking = get_unit_tile_pillage_set(ptile);
-	if (target == S_LAST) {
-	  for (i = 0; infrastructure_specials[i] != S_LAST; i++) {
-	    enum tile_special_type spe = infrastructure_specials[i];
-
-	    if (tile_city(ptile) && (spe == S_ROAD || spe == S_RAILROAD)) {
-	      /* Can't pillage this. */
-	      continue;
-	    }
-	    if (BV_ISSET(pspresent, spe) && !BV_ISSET(psworking, spe)) {
-	      /* Can pillage this! */
-	      return TRUE;
-	    }
+	if (target == S_NO_SPECIAL) {
+	  if (ptile->city) {
+	    return ((pspresent & (~(psworking | S_ROAD | S_RAILROAD)))
+		    != S_NO_SPECIAL);
+	  } else {
+	    return ((pspresent & (~psworking)) != S_NO_SPECIAL);
 	  }
-	} else if (!game.info.pillage_select
-		   && target != get_preferred_pillage(pspresent,
-                                                      tile_get_base(ptile))) {
+	} else if (!game.rgame.pillage_select
+		   && target != get_preferred_pillage(pspresent)) {
 	  return FALSE;
 	} else {
-          if (target == S_PILLAGE_BASE) {
-            return old_base != NULL;
-          } else {
-            return BV_ISSET(pspresent, target) && !BV_ISSET(psworking, target);
-          }
+	  return ((pspresent & (~psworking) & target) != S_NO_SPECIAL);
 	}
       } else {
 	return FALSE;
@@ -921,27 +997,25 @@ bool can_unit_do_activity_targeted_at(const struct unit *punit,
 
   case ACTIVITY_TRANSFORM:
     return (terrain_control.may_transform
-	    && pterrain->transform_result != T_NONE
-	    && pterrain != pterrain->transform_result
-	    && (!is_ocean(pterrain)
-		|| is_ocean(pterrain->transform_result)
+	    && type->transform_result != T_NONE
+	    && ptile->terrain != type->transform_result
+	    && (!is_ocean(ptile->terrain)
+		|| is_ocean(type->transform_result)
 		|| can_reclaim_ocean(ptile))
-	    && (is_ocean(pterrain)
-		|| !is_ocean(pterrain->transform_result)
+	    && (is_ocean(ptile->terrain)
+		|| !is_ocean(type->transform_result)
 		|| can_channel_land(ptile))
-	    && (!terrain_has_flag(pterrain->transform_result, TER_NO_CITIES)
-		|| !(tile_city(ptile)))
-	    && unit_has_type_flag(punit, F_TRANSFORM));
+	    && (!terrain_has_flag(type->transform_result, TER_NO_CITIES)
+		|| !(map_get_city(ptile)))
+	    && unit_flag(punit, F_TRANSFORM));
 
-  case ACTIVITY_FORTRESS:
-  case ACTIVITY_AIRBASE:
   case ACTIVITY_PATROL_UNUSED:
   case ACTIVITY_LAST:
   case ACTIVITY_UNKNOWN:
     break;
   }
   freelog(LOG_ERROR,
-	  "can_unit_do_activity_targeted_at() unknown activity %d",
+	  "Unknown activity %d in can_unit_do_activity_targeted_at()",
 	  activity);
   return FALSE;
 }
@@ -953,8 +1027,7 @@ void set_unit_activity(struct unit *punit, enum unit_activity new_activity)
 {
   punit->activity=new_activity;
   punit->activity_count=0;
-  punit->activity_target = S_LAST;
-  punit->activity_base = BASE_LAST;
+  punit->activity_target = S_NO_SPECIAL;
   if (new_activity == ACTIVITY_IDLE && punit->moves_left > 0) {
     /* No longer done. */
     punit->done_moving = FALSE;
@@ -968,61 +1041,41 @@ void set_unit_activity_targeted(struct unit *punit,
 				enum unit_activity new_activity,
 				enum tile_special_type new_target)
 {
-  assert(new_target != ACTIVITY_FORTRESS
-         && new_target != ACTIVITY_AIRBASE);
-
   set_unit_activity(punit, new_activity);
   punit->activity_target = new_target;
 }
 
 /**************************************************************************
-  Assign a new base building task to unit
-**************************************************************************/
-void set_unit_activity_base(struct unit *punit,
-                            enum base_type_id base)
-{
-  set_unit_activity(punit, ACTIVITY_BASE);
-  punit->activity_base = base;
-}
-
-/**************************************************************************
-  Return whether any units on the tile are doing this activity.
+...
 **************************************************************************/
 bool is_unit_activity_on_tile(enum unit_activity activity,
 			      const struct tile *ptile)
 {
-  unit_list_iterate(ptile->units, punit) {
-    if (punit->activity == activity) {
+  unit_list_iterate(ptile->units, punit) 
+    if(punit->activity==activity)
       return TRUE;
-    }
-  } unit_list_iterate_end;
+  unit_list_iterate_end;
   return FALSE;
 }
 
-/****************************************************************************
-  Return a mask of the specials which are actively (currently) being
-  pillaged on the given tile.
-****************************************************************************/
-bv_special get_unit_tile_pillage_set(const struct tile *ptile)
+/**************************************************************************
+...
+**************************************************************************/
+enum tile_special_type get_unit_tile_pillage_set(const struct tile *ptile)
 {
-  bv_special tgt_ret;
+  enum tile_special_type tgt_ret = S_NO_SPECIAL;
 
-  BV_CLR_ALL(tgt_ret);
-  unit_list_iterate(ptile->units, punit) {
-    if (punit->activity == ACTIVITY_PILLAGE
-	&& punit->activity_target != S_LAST) {
-      assert(punit->activity_target < S_LAST);
-      BV_SET(tgt_ret, punit->activity_target);
-    }
-  } unit_list_iterate_end;
-
+  unit_list_iterate(ptile->units, punit)
+    if(punit->activity==ACTIVITY_PILLAGE)
+      tgt_ret |= punit->activity_target;
+  unit_list_iterate_end;
   return tgt_ret;
 }
 
 /**************************************************************************
   Return text describing the current unit's activity.
 **************************************************************************/
-const char *unit_activity_text(const struct unit *punit)
+const char *unit_activity_text(struct unit *punit)
 {
   static char text[64];
   const char *moves_str;
@@ -1030,7 +1083,7 @@ const char *unit_activity_text(const struct unit *punit)
   switch(punit->activity) {
    case ACTIVITY_IDLE:
      moves_str = _("Moves");
-     if (unit_type(punit)->fuel) {
+     if (is_air_unit(punit) && unit_type(punit)->fuel > 0) {
        int rate,f;
        rate=unit_type(punit)->move_rate/SINGLE_MOVE;
        f=((punit->fuel)-1);
@@ -1083,23 +1136,14 @@ const char *unit_activity_text(const struct unit *punit)
    case ACTIVITY_EXPLORE:
      return get_activity_text (punit->activity);
    case ACTIVITY_PILLAGE:
-     if (punit->activity_target == S_LAST) {
+     if(punit->activity_target == S_NO_SPECIAL) {
        return get_activity_text (punit->activity);
      } else {
-       bv_special pset;
-
-       BV_CLR_ALL(pset);
-       BV_SET(pset, punit->activity_target);
        my_snprintf(text, sizeof(text), "%s: %s",
 		   get_activity_text (punit->activity),
-		   get_infrastructure_text(pset));
+		   map_get_infrastructure_text(punit->activity_target));
        return (text);
      }
-   case ACTIVITY_BASE:
-     my_snprintf(text, sizeof(text), "%s: %s",
-                 get_activity_text(punit->activity),
-                 base_name_translation(base_by_number(punit->activity_base)));
-     return text;
    default:
     die("Unknown unit activity %d in unit_activity_text()", punit->activity);
   }
@@ -1107,23 +1151,148 @@ const char *unit_activity_text(const struct unit *punit)
 }
 
 /**************************************************************************
-  Return the owner of the unit.
+...
 **************************************************************************/
-struct player *unit_owner(const struct unit *punit)
+struct unit *unit_list_find(struct unit_list *This, int id)
 {
-  assert(NULL != punit);
-  assert(NULL != punit->owner);
-  return punit->owner;
+  unit_list_iterate(*This, punit) {
+    if (punit->id == id) {
+      return punit;
+    }
+  } unit_list_iterate_end;
+
+  return NULL;
 }
 
 /**************************************************************************
-  Return the tile location of the unit.
-  Not (yet) always used, mostly for debugging.
+ Comparison function for genlist_sort, sorting by ord_map:
+ The indirection is a bit gory:
+ Read from the right:
+   1. cast arg "a" to "ptr to void*"   (we're sorting a list of "void*"'s)
+   2. dereference to get the "void*"
+   3. cast that "void*" to a "struct unit*"
 **************************************************************************/
-struct tile *unit_tile(const struct unit *punit)
+static int compar_unit_ord_map(const void *a, const void *b)
 {
-  assert(NULL != punit);
-  return punit->tile;
+  const struct unit *ua, *ub;
+  ua = (const struct unit*) *(const void**)a;
+  ub = (const struct unit*) *(const void**)b;
+  return ua->ord_map - ub->ord_map;
+}
+
+/**************************************************************************
+ Comparison function for genlist_sort, sorting by ord_city: see above.
+**************************************************************************/
+static int compar_unit_ord_city(const void *a, const void *b)
+{
+  const struct unit *ua, *ub;
+  ua = (const struct unit*) *(const void**)a;
+  ub = (const struct unit*) *(const void**)b;
+  return ua->ord_city - ub->ord_city;
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+void unit_list_sort_ord_map(struct unit_list *This)
+{
+  if (unit_list_size(This) > 1) {
+    genlist_sort(&This->list, compar_unit_ord_map);
+  }
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+void unit_list_sort_ord_city(struct unit_list *This)
+{
+  if (unit_list_size(This) > 1) {
+    genlist_sort(&This->list, compar_unit_ord_city);
+  }
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+struct player *unit_owner(struct unit *punit)
+{
+  return (&game.players[punit->owner]);
+}
+
+/****************************************************************************
+  Measure the carrier (missile + airplane) capacity of the given tile for
+  a player.
+
+  In the future this should probably look at the actual occupancy of the
+  transporters.  However for now we only look at the potential capacity and
+  leave loading up to the caller.
+****************************************************************************/
+static void count_carrier_capacity(int *airall, int *misonly,
+				   const struct tile *ptile,
+				   struct player *pplayer,
+				   bool count_units_with_extra_fuel)
+{
+  *airall = *misonly = 0;
+
+  unit_list_iterate(ptile->units, punit) {
+    if (unit_owner(punit) == pplayer) {
+      if (unit_flag(punit, F_CARRIER)
+	  && !(is_ground_unit(punit) && is_ocean(ptile->terrain))) {
+	*airall += get_transporter_capacity(punit);
+	continue;
+      }
+      if (unit_flag(punit, F_MISSILE_CARRIER)
+	  && !(is_ground_unit(punit) && is_ocean(ptile->terrain))) {
+	*misonly += get_transporter_capacity(punit);
+	continue;
+      }
+
+      /* Don't count units which have enough fuel (>1) */
+      if (is_air_unit(punit)
+	  && (count_units_with_extra_fuel || punit->fuel <= 1)) {
+	if (unit_flag(punit, F_MISSILE)) {
+	  (*misonly)--;
+	} else {
+	  (*airall)--;
+	}
+      }
+    }
+  } unit_list_iterate_end;
+}
+
+/**************************************************************************
+Returns the number of free spaces for missiles. Can be 0 or negative.
+**************************************************************************/
+int missile_carrier_capacity(const struct tile *ptile,
+			     struct player *pplayer,
+			     bool count_units_with_extra_fuel)
+{
+  int airall, misonly;
+
+  count_carrier_capacity(&airall, &misonly, ptile, pplayer,
+			 count_units_with_extra_fuel);
+
+  /* Any extra air spaces can be used by missles, but if there aren't enough
+   * air spaces this doesn't bother missiles. */
+  return MAX(airall, 0) + misonly;
+}
+
+/**************************************************************************
+Returns the number of free spaces for airunits (includes missiles).
+Can be 0 or negative.
+**************************************************************************/
+int airunit_carrier_capacity(const struct tile *ptile,
+			     struct player *pplayer,
+			     bool count_units_with_extra_fuel)
+{
+  int airall, misonly;
+
+  count_carrier_capacity(&airall, &misonly, ptile, pplayer,
+			 count_units_with_extra_fuel);
+
+  /* Any extra missile spaces are useless to air units, but if there aren't
+   * enough missile spaces the missles must take up airunit capacity. */
+  return airall + MIN(misonly, 0);
 }
 
 /**************************************************************************
@@ -1132,7 +1301,7 @@ Returns true if the tile contains an allied unit and only allied units.
 containing units from B and C will return false)
 **************************************************************************/
 struct unit *is_allied_unit_tile(const struct tile *ptile,
-				 const struct player *pplayer)
+				 struct player *pplayer)
 {
   struct unit *punit = NULL;
 
@@ -1147,19 +1316,17 @@ struct unit *is_allied_unit_tile(const struct tile *ptile,
   return punit;
 }
 
-/****************************************************************************
-  Is there an enemy unit on this tile?  Returns the unit or NULL if none.
-
-  This function is likely to fail if used at the client because the client
-  doesn't see all units.  (Maybe it should be moved into the server code.)
-****************************************************************************/
+/**************************************************************************
+ is there an enemy unit on this tile?
+**************************************************************************/
 struct unit *is_enemy_unit_tile(const struct tile *ptile,
-				const struct player *pplayer)
+				struct player *pplayer)
 {
   unit_list_iterate(ptile->units, punit) {
     if (pplayers_at_war(unit_owner(punit), pplayer))
       return punit;
-  } unit_list_iterate_end;
+  }
+  unit_list_iterate_end;
 
   return NULL;
 }
@@ -1168,7 +1335,7 @@ struct unit *is_enemy_unit_tile(const struct tile *ptile,
  is there an non-allied unit on this tile?
 **************************************************************************/
 struct unit *is_non_allied_unit_tile(const struct tile *ptile,
-				     const struct player *pplayer)
+				     struct player *pplayer)
 {
   unit_list_iterate(ptile->units, punit) {
     if (!pplayers_allied(unit_owner(punit), pplayer))
@@ -1183,41 +1350,13 @@ struct unit *is_non_allied_unit_tile(const struct tile *ptile,
  is there an unit we have peace or ceasefire with on this tile?
 **************************************************************************/
 struct unit *is_non_attack_unit_tile(const struct tile *ptile,
-				     const struct player *pplayer)
+				     struct player *pplayer)
 {
   unit_list_iterate(ptile->units, punit) {
     if (pplayers_non_attack(unit_owner(punit), pplayer))
       return punit;
   }
   unit_list_iterate_end;
-
-  return NULL;
-}
-
-/****************************************************************************
-  Is there an occupying unit on this tile?
-
-  Intended for both client and server; assumes that hiding units are not
-  sent to client.  First check tile for known and seen.
-
-  called by city_can_work_tile().
-****************************************************************************/
-struct unit *unit_occupies_tile(const struct tile *ptile,
-				const struct player *pplayer)
-{
-  unit_list_iterate(ptile->units, punit) {
-    if (!is_military_unit(punit)) {
-      continue;
-    }
-
-    if (is_air_unit(punit)) {
-      continue;
-    }
-
-    if (pplayers_at_war(unit_owner(punit), pplayer)) {
-      return punit;
-    }
-  } unit_list_iterate_end;
 
   return NULL;
 }
@@ -1234,10 +1373,10 @@ struct unit *unit_occupies_tile(const struct tile *ptile,
   client-specific features, like FoW and the fact that the client cannot 
   see units inside enemy cities.
 **************************************************************************/
-bool is_my_zoc(const struct player *pplayer, const struct tile *ptile0)
+bool is_my_zoc(struct player *pplayer, const struct tile *ptile0)
 {
   square_iterate(ptile0, 1, ptile) {
-    if (is_ocean_tile(ptile)) {
+    if (is_ocean(ptile->terrain)) {
       continue;
     }
     if (is_non_allied_unit_tile(ptile, pplayer)) {
@@ -1246,12 +1385,12 @@ bool is_my_zoc(const struct player *pplayer, const struct tile *ptile0)
       return FALSE;
     }
     
-    if (!is_server()) {
+    if (!is_server) {
       struct city *pcity = is_non_allied_city_tile(ptile, pplayer);
 
       if (pcity 
           && (pcity->client.occupied 
-              || TILE_KNOWN_UNSEEN == tile_get_known(ptile, pplayer))) {
+              || map_get_known(ptile, pplayer) == TILE_KNOWN_FOGGED)) {
         /* If the city is fogged, we assume it's occupied */
         return FALSE;
       }
@@ -1262,12 +1401,272 @@ bool is_my_zoc(const struct player *pplayer, const struct tile *ptile0)
 }
 
 /**************************************************************************
-  Takes into account unit class flag UCF_ZOC as well as IGZOC
+  Takes into account unit move_type as well as IGZOC
 **************************************************************************/
-bool unit_type_really_ignores_zoc(const struct unit_type *punittype)
+bool unit_type_really_ignores_zoc(Unit_Type_id type)
 {
-  return (!uclass_has_flag(utype_class(punittype), UCF_ZOC)
-	  || utype_has_flag(punittype, F_IGZOC));
+  return (!is_ground_unittype(type)) || (unit_type_flag(type, F_IGZOC));
+}
+
+/**************************************************************************
+  Returns whether the unit is allowed (by ZOC) to move from (src_x,src_y)
+  to (dest_x,dest_y) (assumed adjacent).
+  You CAN move if:
+  1. You have units there already
+  2. Your unit isn't a ground unit
+  3. Your unit ignores ZOC (diplomat, freight, etc.)
+  4. You're moving from or to a city
+  5. You're moving from an ocean square (from a boat)
+  6. The spot you're moving from or to is in your ZOC
+**************************************************************************/
+bool can_step_taken_wrt_to_zoc(Unit_Type_id type,
+			       struct player *unit_owner,
+			       const struct tile *src_tile,
+			       const struct tile *dst_tile)
+{
+  if (unit_type_really_ignores_zoc(type))
+    return TRUE;
+  if (is_allied_unit_tile(dst_tile, unit_owner)) {
+    return TRUE;
+  }
+  if (map_get_city(src_tile) || map_get_city(dst_tile)) {
+    return TRUE;
+  }
+  if (is_ocean(map_get_terrain(src_tile))
+      || is_ocean(map_get_terrain(dst_tile))) {
+    return TRUE;
+  }
+  return (is_my_zoc(unit_owner, src_tile)
+	  || is_my_zoc(unit_owner, dst_tile));
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+static bool zoc_ok_move_gen(struct unit *punit, const struct tile *ptile1,
+			    const struct tile *ptile2)
+{
+  return can_step_taken_wrt_to_zoc(punit->type, unit_owner(punit),
+				   ptile1, ptile2);
+}
+
+/**************************************************************************
+  Convenience wrapper for zoc_ok_move_gen(), using the unit's (x,y)
+  as the starting point.
+**************************************************************************/
+bool zoc_ok_move(struct unit *punit, const struct tile *ptile)
+{
+  return zoc_ok_move_gen(punit, punit->tile, ptile);
+}
+
+/****************************************************************************
+  Return TRUE iff the unit can "exist" at this location.  This means it can
+  physically be present on the tile (without the use of a transporter).
+****************************************************************************/
+bool can_unit_exist_at_tile(struct unit *punit, const struct tile *ptile)
+{
+  if (ptile->city) {
+    return TRUE;
+  }
+
+  switch (unit_types[punit->type].move_type) {
+  case LAND_MOVING:
+    return !is_ocean(ptile->terrain);
+  case SEA_MOVING:
+    return is_ocean(ptile->terrain);
+  case AIR_MOVING:
+  case HELI_MOVING:
+    return TRUE;
+  }
+  die("Invalid move type");
+  return FALSE;
+}
+
+/****************************************************************************
+  Return TRUE iff the unit can "survive" at this location.  This means it can
+  not only be phsically present at the tile but will be able to survive
+  indefinitely on its own (without a transporter).  Units that require fuel
+  or have a danger of drowning are examples of non-survivable units.
+****************************************************************************/
+bool can_unit_survive_at_tile(struct unit *punit, const struct tile *ptile)
+{
+  if (!can_unit_exist_at_tile(punit, ptile)) {
+    return FALSE;
+  }
+
+  if (map_get_city(ptile)) {
+    return TRUE;
+  }
+
+  /* TODO: check for dangerous positions (like triremes in deep water). */
+
+  switch (unit_types[punit->type].move_type) {
+  case LAND_MOVING:
+  case SEA_MOVING:
+    return TRUE;
+  case AIR_MOVING:
+  case HELI_MOVING:
+    return tile_has_special(punit->tile, S_AIRBASE);
+  }
+  die("Invalid move type");
+  return TRUE;
+}
+
+/**************************************************************************
+  Convenience wrapper for test_unit_move_to_tile.
+**************************************************************************/
+bool can_unit_move_to_tile(struct unit *punit, const struct tile *dst_tile,
+			   bool igzoc)
+{
+  return MR_OK == test_unit_move_to_tile(punit->type, unit_owner(punit),
+					 punit->activity,
+					 punit->tile, dst_tile,
+					 igzoc);
+}
+
+/**************************************************************************
+  unit can be moved if:
+  1) the unit is idle or on server goto.
+  2) the target location is on the map
+  3) the target location is next to the unit
+  4) there are no non-allied units on the target tile
+  5) a ground unit can only move to ocean squares if there
+     is a transporter with free capacity
+  6) marines are the only units that can attack from a ocean square
+  7) naval units can only be moved to ocean squares or city squares
+  8) there are no peaceful but un-allied units on the target tile
+  9) there is not a peaceful but un-allied city on the target tile
+  10) there is no non-allied unit blocking (zoc) [or igzoc is true]
+**************************************************************************/
+enum unit_move_result test_unit_move_to_tile(Unit_Type_id type,
+					     struct player *unit_owner,
+					     enum unit_activity activity,
+					     const struct tile *pfromtile,
+					     const struct tile *ptotile,
+					     bool igzoc)
+{
+  bool zoc;
+  struct city *pcity;
+
+  /* 1) */
+  if (activity != ACTIVITY_IDLE
+      && activity != ACTIVITY_GOTO) {
+    return MR_BAD_ACTIVITY;
+  }
+
+  /* 3) */
+  if (!is_tiles_adjacent(pfromtile, ptotile)) {
+    return MR_BAD_DESTINATION;
+  }
+
+  /* 4) */
+  if (is_non_allied_unit_tile(ptotile, unit_owner)) {
+    return MR_DESTINATION_OCCUPIED_BY_NON_ALLIED_UNIT;
+  }
+
+  if (unit_types[type].move_type == LAND_MOVING) {
+    /* 5) */
+    if (is_ocean(ptotile->terrain) &&
+	ground_unit_transporter_capacity(ptotile, unit_owner) <= 0) {
+      return MR_NO_SEA_TRANSPORTER_CAPACITY;
+    }
+
+    /* Moving from ocean */
+    if (is_ocean(pfromtile->terrain)) {
+      /* 6) */
+      if (!unit_type_flag(type, F_MARINES)
+	  && is_enemy_city_tile(ptotile, unit_owner)) {
+	return MR_BAD_TYPE_FOR_CITY_TAKE_OVER;
+      }
+    }
+  } else if (unit_types[type].move_type == SEA_MOVING) {
+    /* 7) */
+    if (!is_ocean(ptotile->terrain)
+	&& ptotile->terrain != T_UNKNOWN
+	&& (!is_allied_city_tile(ptotile, unit_owner)
+	    || !is_ocean_near_tile(ptotile))) {
+      return MR_DESTINATION_OCCUPIED_BY_NON_ALLIED_CITY;
+    }
+  }
+
+  /* 8) */
+  if (is_non_attack_unit_tile(ptotile, unit_owner)) {
+    return MR_NO_WAR;
+  }
+
+  /* 9) */
+  pcity = ptotile->city;
+  if (pcity && pplayers_non_attack(city_owner(pcity), unit_owner)) {
+    return MR_NO_WAR;
+  }
+
+  /* 10) */
+  zoc = igzoc
+    || can_step_taken_wrt_to_zoc(type, unit_owner, pfromtile, ptotile);
+  if (!zoc) {
+    return MR_ZOC;
+  }
+
+  return MR_OK;
+}
+
+/**************************************************************************
+  Calculate the chance of losing (as a percentage) if it were to spend a
+  turn at the given location.
+
+  Note this function isn't really useful for AI planning, since it needs
+  to know more.  The AI code uses base_trireme_loss_pct and
+  base_unsafe_terrain_loss_pct directly.
+**************************************************************************/
+int unit_loss_pct(struct player *pplayer, const struct tile *ptile,
+		  struct unit *punit)
+{
+  int loss_pct = 0;
+
+  /* Units are never lost if they're inside cities. */
+  if (map_get_city(ptile)) {
+    return 0; 
+  }
+
+  /* Trireme units may be lost if they stray from coastline. */
+  if (unit_flag(punit, F_TRIREME)) {
+    if (!is_safe_ocean(ptile)) {
+      loss_pct = base_trireme_loss_pct(pplayer, punit);
+    }
+  }
+
+  /* All units may be lost on unsafe terrain.  (Actually air units are
+   * exempt; see base_unsafe_terrain_loss_pct.) */
+  if (terrain_has_flag(map_get_terrain(ptile), TER_UNSAFE)) {
+    return loss_pct + base_unsafe_terrain_loss_pct(pplayer, punit);
+  }
+
+  return loss_pct;
+}
+
+/**************************************************************************
+  Triremes have a varying loss percentage based on tech and veterancy
+  level.
+**************************************************************************/
+int base_trireme_loss_pct(struct player *pplayer, struct unit *punit)
+{
+  if (get_player_bonus(pplayer, EFT_NO_SINK_DEEP) > 0) {
+    return 0;
+  } else if (player_knows_techs_with_flag(pplayer, TF_REDUCE_TRIREME_LOSS2)) {
+    return game.trireme_loss_chance[punit->veteran] / 4;
+  } else if (player_knows_techs_with_flag(pplayer, TF_REDUCE_TRIREME_LOSS1)) {
+    return game.trireme_loss_chance[punit->veteran] / 2;
+  } else {
+    return game.trireme_loss_chance[punit->veteran];
+  }
+}
+
+/**************************************************************************
+  All units except air units have a flat 15% chance of being lost.
+**************************************************************************/
+int base_unsafe_terrain_loss_pct(struct player *pplayer, struct unit *punit)
+{
+  return (is_air_unit(punit) || is_heli_unit(punit)) ? 0 : 15;
 }
 
 /**************************************************************************
@@ -1278,32 +1677,27 @@ A unit is *not* aggressive if one or more of following is true:
 - inside a city
 - ground unit inside a fortress within 3 squares of a friendly city
 **************************************************************************/
-bool unit_being_aggressive(const struct unit *punit)
+bool unit_being_aggressive(struct unit *punit)
 {
-  if (!is_attack_unit(punit)) {
+  if (!is_attack_unit(punit))
     return FALSE;
-  }
-  if (tile_city(punit->tile)) {
+  if (map_get_city(punit->tile))
     return FALSE;
-  }
-  if (game.info.borders > 0
-      && game.info.happyborders
-      && tile_owner(punit->tile) == unit_owner(punit)) {
+  if (game.borders > 0
+      && game.happyborders
+      && map_get_owner(punit->tile) == unit_owner(punit)) {
     return FALSE;
   }
   if (is_ground_unit(punit) &&
-      tile_has_base_flag_for_unit(punit->tile,
-                                  unit_type(punit),
-                                  BF_NOT_AGGRESSIVE)) {
+      map_has_special(punit->tile, S_FORTRESS))
     return !is_unit_near_a_friendly_city (punit);
-  }
   
   return TRUE;
 }
 
-/**************************************************************************
-  Returns true if given activity is some kind of building/cleaning.
-**************************************************************************/
+/*
+ * Returns true if given activity is some kind of building/cleaning.
+ */
 bool is_build_or_clean_activity(enum unit_activity activity)
 {
   switch (activity) {
@@ -1327,33 +1721,28 @@ bool is_build_or_clean_activity(enum unit_activity activity)
   to set x, y and homecity yourself.
 **************************************************************************/
 struct unit *create_unit_virtual(struct player *pplayer, struct city *pcity,
-                                 struct unit_type *punittype,
-				 int veteran_level)
+                                 Unit_Type_id type, int veteran_level)
 {
-  struct unit *punit = fc_calloc(1, sizeof(*punit));
+  struct unit *punit = fc_calloc(1, sizeof(struct unit));
 
-  /* It does not register the unit so the id is set to 0. */
-  punit->id = IDENTITY_NUMBER_ZERO;
-
-  CHECK_UNIT_TYPE(punittype); /* No untyped units! */
-  punit->utype = punittype;
-
-  assert(pplayer != NULL); /* No unowned units! */
-  punit->owner = pplayer;
-
+  punit->type = type;
+  punit->owner = pplayer->player_no;
   if (pcity) {
     punit->tile = pcity->tile;
     punit->homecity = pcity->id;
   } else {
     punit->tile = NULL;
-    punit->homecity = IDENTITY_NUMBER_ZERO;
+    punit->homecity = 0;
   }
   punit->goto_tile = NULL;
   punit->veteran = veteran_level;
+  punit->upkeep = 0;
+  punit->upkeep_food = 0;
+  punit->upkeep_gold = 0;
+  punit->unhappiness = 0;
   /* A unit new and fresh ... */
   punit->debug = FALSE;
   punit->fuel = unit_type(punit)->fuel;
-  punit->birth_turn = game.info.turn;
   punit->hp = unit_type(punit)->hp;
   punit->moves_left = unit_move_rate(punit);
   punit->moved = FALSE;
@@ -1362,7 +1751,6 @@ struct unit *create_unit_virtual(struct player *pplayer, struct city *pcity,
   if (is_barbarian(pplayer)) {
     punit->fuel = BARBARIAN_LIFE;
   }
-  punit->ai.done = FALSE;
   punit->ai.cur_pos = NULL;
   punit->ai.prev_pos = NULL;
   punit->ai.target = 0;
@@ -1380,9 +1768,7 @@ struct unit *create_unit_virtual(struct player *pplayer, struct city *pcity,
   punit->ord_city = 0;
   set_unit_activity(punit, ACTIVITY_IDLE);
   punit->occupy = 0;
-  punit->battlegroup = BATTLEGROUP_NONE;
   punit->client.colored = FALSE;
-  punit->server.vision = NULL; /* No vision. */
   punit->has_orders = FALSE;
 
   return punit;
@@ -1395,7 +1781,6 @@ struct unit *create_unit_virtual(struct player *pplayer, struct city *pcity,
 void destroy_unit_virtual(struct unit *punit)
 {
   free_unit_orders(punit);
-  memset(punit, 0, sizeof(*punit)); /* ensure no pointers remain */
   free(punit);
 }
 
@@ -1416,7 +1801,7 @@ void free_unit_orders(struct unit *punit)
 /****************************************************************************
   Expensive function to check how many units are in the transport.
 ****************************************************************************/
-int get_transporter_occupancy(const struct unit *ptrans)
+int get_transporter_occupancy(struct unit *ptrans)
 {
   int occupied = 0;
 
@@ -1432,10 +1817,9 @@ int get_transporter_occupancy(const struct unit *ptrans)
 /****************************************************************************
   Find a transporter at the given location for the unit.
 ****************************************************************************/
-struct unit *find_transporter_for_unit(const struct unit *pcargo)
-{
-  struct tile *ptile = pcargo->tile;
-
+struct unit *find_transporter_for_unit(struct unit *pcargo,
+				       const struct tile *ptile)
+{ 
   unit_list_iterate(ptile->units, ptrans) {
     if (can_unit_load(pcargo, ptrans)) {
       return ptrans;
@@ -1454,25 +1838,24 @@ struct unit *find_transporter_for_unit(const struct unit *pcargo)
 
   Note that this function is strongly tied to unittools.c:upgrade_unit().
 ***************************************************************************/
-enum unit_upgrade_result test_unit_upgrade(const struct unit *punit,
-					   bool is_free)
+enum unit_upgrade_result test_unit_upgrade(struct unit *punit, bool is_free)
 {
   struct player *pplayer = unit_owner(punit);
-  struct unit_type *to_unittype = can_upgrade_unittype(pplayer, unit_type(punit));
+  Unit_Type_id to_unittype = can_upgrade_unittype(pplayer, punit->type);
   struct city *pcity;
   int cost;
 
-  if (!to_unittype) {
+  if (to_unittype == -1) {
     return UR_NO_UNITTYPE;
   }
 
   if (!is_free) {
-    cost = unit_upgrade_price(pplayer, unit_type(punit), to_unittype);
+    cost = unit_upgrade_price(pplayer, punit->type, to_unittype);
     if (pplayer->economic.gold < cost) {
       return UR_NO_MONEY;
     }
 
-    pcity = tile_city(punit->tile);
+    pcity = map_get_city(punit->tile);
     if (!pcity) {
       return UR_NOT_IN_CITY;
     }
@@ -1482,9 +1865,10 @@ enum unit_upgrade_result test_unit_upgrade(const struct unit *punit,
     }
   }
 
-  if (get_transporter_occupancy(punit) > to_unittype->transport_capacity) {
+  if (get_transporter_occupancy(punit) >
+      unit_types[to_unittype].transport_capacity) {
     /* TODO: allow transported units to be reassigned.  Check for
-     * unit_class_transporter_capacity() here and make changes to
+     * ground_unit_transporter_capacity here and make changes to
      * upgrade_unit. */
     return UR_NOT_ENOUGH_ROOM;
   }
@@ -1497,14 +1881,14 @@ enum unit_upgrade_result test_unit_upgrade(const struct unit *punit,
   most callers can use directly.
 **************************************************************************/
 enum unit_upgrade_result get_unit_upgrade_info(char *buf, size_t bufsz,
-					       const struct unit *punit)
+					       struct unit *punit)
 {
   struct player *pplayer = unit_owner(punit);
   enum unit_upgrade_result result = test_unit_upgrade(punit, FALSE);
   int upgrade_cost;
-  struct unit_type *from_unittype = unit_type(punit);
-  struct unit_type *to_unittype = can_upgrade_unittype(pplayer,
-						  unit_type(punit));
+  Unit_Type_id from_unittype = punit->type;
+  Unit_Type_id to_unittype = can_upgrade_unittype(pplayer,
+						  punit->type);
 
   switch (result) {
   case UR_OK:
@@ -1512,22 +1896,20 @@ enum unit_upgrade_result get_unit_upgrade_info(char *buf, size_t bufsz,
     /* This message is targeted toward the GUI callers. */
     my_snprintf(buf, bufsz, _("Upgrade %s to %s for %d gold?\n"
 			      "Treasury contains %d gold."),
-		utype_name_translation(from_unittype),
-		utype_name_translation(to_unittype),
+		unit_types[from_unittype].name, unit_types[to_unittype].name,
 		upgrade_cost, pplayer->economic.gold);
     break;
   case UR_NO_UNITTYPE:
     my_snprintf(buf, bufsz,
 		_("Sorry, cannot upgrade %s (yet)."),
-		utype_name_translation(from_unittype));
+		unit_types[from_unittype].name);
     break;
   case UR_NO_MONEY:
     upgrade_cost = unit_upgrade_price(pplayer, from_unittype, to_unittype);
     my_snprintf(buf, bufsz,
 		_("Upgrading %s to %s costs %d gold.\n"
 		  "Treasury contains %d gold."),
-		utype_name_translation(from_unittype),
-		utype_name_translation(to_unittype),
+		unit_types[from_unittype].name, unit_types[to_unittype].name,
 		upgrade_cost, pplayer->economic.gold);
     break;
   case UR_NOT_IN_CITY:
@@ -1538,42 +1920,9 @@ enum unit_upgrade_result get_unit_upgrade_info(char *buf, size_t bufsz,
   case UR_NOT_ENOUGH_ROOM:
     my_snprintf(buf, bufsz,
 		_("Upgrading this %s would strand units it transports."),
-		utype_name_translation(from_unittype));
+		unit_types[from_unittype].name);
     break;
   }
 
   return result;
-}
-
-/**************************************************************************
-  Does unit lose hitpoints each turn?
-**************************************************************************/
-bool is_losing_hp(const struct unit *punit)
-{
-  return unit_type_is_losing_hp(unit_owner(punit), unit_type(punit));
-}
-
-/**************************************************************************
-  Does unit lose hitpoints each turn?
-**************************************************************************/
-bool unit_type_is_losing_hp(const struct player *pplayer,
-                            const struct unit_type *punittype)
-{
-  return get_player_bonus(pplayer, EFT_UNIT_RECOVER)
-    < (punittype->hp *
-       utype_class(punittype)->hp_loss_pct / 100);
-}
-
-/**************************************************************************
-  Check if unit with given id is still alive. Use this before using
-  old unit pointers when unit might have dead.
-**************************************************************************/
-bool unit_alive(int id)
-{
-  /* Check if unit exist in game */
-  if (game_find_unit_by_number(id)) {
-    return TRUE;
-  }
-
-  return FALSE;
 }

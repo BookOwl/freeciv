@@ -49,7 +49,7 @@ const char * const our_capability = our_capability_internal;
  * "struct connection" has a capability string, which gives the
  * capability of the executable at the other end of the connection.
  * So for the client, the capability of the server is in
- * client.conn.capability, and for the server, the capabilities of
+ * aconnection.capability, and for the server, the capabilities of 
  * connected clients are in game.players[i]->conn.capability
  * The client now also knows the capabilities of other clients,
  * via game.players[i]->conn.capability.
@@ -71,9 +71,26 @@ const char * const our_capability = our_capability_internal;
  * (The savefile and ruleset files have strings which are used similarly,
  * and checked by the same has_capability function, but the strings there
  * are not directly related to the capability strings discussed here.)
- *
- * The actual capability string is now defined in version.in.
  */
+
+/* +2.0 is the capability string for the 2.0.x release(s).
+ *
+ * "conn_ping_info" means the packet_conn_ping_info uses MAX_NUM_CONNECTIONS
+ * not MAX_NUM_PLAYERS.
+ *
+ * "username_info" means that the username is sent in the player_info packet
+ *
+ * "ReportFreezeFix" allows clients to correctly freeze reports and agents
+ *                   over turn change.
+ *
+ *   - No new manditory capabilities can be added to the release branch; doing
+ *     so would break network capability of supposedly "compatible" releases.
+ *
+ *   - Avoid adding a new manditory capbility to the development branch for
+ *     as long as possible.  We want to maintain network compatibility with
+ *     the stable branch for as long as possible.
+ */
+#define CAPABILITY "+2.0 conn_ping_info username_info new_hack ReportFreezeFix AttrSerialFix"
 
 void init_our_capability(void)
 {
@@ -81,7 +98,7 @@ void init_our_capability(void)
 
   s = getenv("FREECIV_CAPS");
   if (!s) {
-    s = NETWORK_CAPSTRING;
+    s = CAPABILITY;
   }
   sz_strlcpy(our_capability_internal, s);
 }

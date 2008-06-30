@@ -48,7 +48,6 @@
 #include "log.h"
 #include "mem.h"
 #include "player.h"
-#include "requirements.h"
 #include "support.h"
 #include "tech.h"
 #include "worklist.h"
@@ -395,10 +394,8 @@ void dio_put_worklist(struct data_out *dout, const struct worklist *pwl)
 
     dio_put_uint8(dout, length);
     for (i = 0; i < length; i++) {
-      const struct universal *pcp = &(pwl->entries[i]);
-
-      dio_put_uint8(dout, pcp->kind);
-      dio_put_uint8(dout, universal_number(pcp));
+      dio_put_uint8(dout, pwl->wlefs[i]);
+      dio_put_uint8(dout, pwl->wlids[i]);
     }
   }
 }
@@ -601,7 +598,7 @@ void dio_get_bit_string(struct data_in *din, char *dest,
 
   dio_get_uint16(din, &npack);
   if (npack >= max_dest_size) {
-      freelog(LOG_ERROR, "Have size for %lu, got %d",
+      freelog(LOG_NORMAL, "Have size for %lu, got %d",
               (unsigned long)max_dest_size, npack);
     din->bad_bit_string = TRUE;
     dest[0] = '\0';
@@ -657,19 +654,22 @@ void dio_get_worklist(struct data_in *din, struct worklist *pwl)
   if (pwl->is_valid) {
     int i, length;
 
-    init_worklist(pwl);
+    strcpy(pwl->name,"xyz");
 
     dio_get_uint8(din, &length);
+
+    if (length < MAX_LEN_WORKLIST) {
+      pwl->wlefs[length] = WEF_END;
+      pwl->wlids[length] = 0;
+    }
+
+    if (length > MAX_LEN_WORKLIST) {
+      length = MAX_LEN_WORKLIST;
+    }
+
     for (i = 0; i < length; i++) {
-      struct universal prod;
-      int identifier;
-      int kind;
-
-      dio_get_uint8(din, &kind);
-      dio_get_uint8(din, &identifier);
-
-      prod = universal_by_number(kind, identifier);
-      worklist_append(pwl, prod);
+      dio_get_uint8(din, (int *) &pwl->wlefs[i]);
+      dio_get_uint8(din, &pwl->wlids[i]);
     }
   }
 }
@@ -717,17 +717,13 @@ void dio_get_uint16_vec8(struct data_in *din, int **values, int stop_value)
 **************************************************************************/
 void dio_get_diplstate(struct data_in *din, struct player_diplstate *pds)
 {
-  int value = 0;
+  int type;
 
-  /* backward compatible order defined for this transaction */
-  dio_get_uint8(din, &value);
-  pds->type = value;
+  dio_get_uint8(din, &type);
+  pds->type = type;
   dio_get_uint16(din, &pds->turns_left);
+  dio_get_uint16(din, &pds->contact_turns_left);
   dio_get_uint8(din, &pds->has_reason_to_cancel);
-  dio_get_uint16(din, &pds->first_contact_turn);
-  value = 0;
-  dio_get_uint8(din, &value);
-  pds->max_state = value;
 }
 
 /**************************************************************************
@@ -736,45 +732,8 @@ void dio_get_diplstate(struct data_in *din, struct player_diplstate *pds)
 void dio_put_diplstate(struct data_out *dout,
 		       const struct player_diplstate *pds)
 {
-  /* backward compatible order defined for this transaction */
   dio_put_uint8(dout, pds->type);
   dio_put_uint16(dout, pds->turns_left);
+  dio_put_uint16(dout, pds->contact_turns_left);
   dio_put_uint8(dout, pds->has_reason_to_cancel);
-  dio_put_uint16(dout, pds->first_contact_turn);
-  dio_put_uint8(dout, pds->max_state);
 }
-
-/**************************************************************************
-  De-serialize a requirement.
-**************************************************************************/
-void dio_get_requirement(struct data_in *din, struct requirement *preq)
-{
-  int type, range, value;
-  bool survives, negated;
-
-  dio_get_uint8(din, &type);
-  dio_get_sint32(din, &value);
-  dio_get_uint8(din, &range);
-  dio_get_bool8(din, &survives);
-  dio_get_bool8(din, &negated);
-
-  *preq = req_from_values(type, range, survives, negated, value);
-}
-
-/**************************************************************************
-  Serialize a requirement.
-**************************************************************************/
-void dio_put_requirement(struct data_out *dout, const struct requirement *preq)
-{
-  int type, range, value;
-  bool survives, negated;
-
-  req_get_values(preq, &type, &range, &survives, &negated, &value);
-
-  dio_put_uint8(dout, type);
-  dio_put_sint32(dout, value);
-  dio_put_uint8(dout, range);
-  dio_put_bool8(dout, survives);
-  dio_put_bool8(dout, negated);
-}
-

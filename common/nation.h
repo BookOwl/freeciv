@@ -16,12 +16,14 @@
 #include "shared.h"		/* MAX_LEN_NAME */
 
 #include "fc_types.h"
-#include "terrain.h"            /* MAX_NUM_TERRAINS */
+#include "terrain.h"		/* T_COUNT */
 
 #define MAX_NUM_TECH_GOALS 10
 
 /* Changing this value will break network compatibility. */
-#define NO_NATION_SELECTED (NULL)
+#define NO_NATION_SELECTED (Nation_Type_id)(-1)
+
+#define OBSERVER_NATION (game.nation_count - 2)
 
 /* 
  * Purpose of this constant is to catch invalid ruleset and network
@@ -29,10 +31,16 @@
  */
 #define MAX_NUM_LEADERS MAX_NUM_ITEMS
 
-#define MAX_NUM_NATION_GROUPS 128
+#define MAX_NUM_TEAMS MAX_NUM_PLAYERS
+#define TEAM_NONE 255
+
+typedef int Nation_Type_id;
+typedef int Team_Type_id;
+
+struct Sprite;			/* opaque; client-gui specific */
 
 /*
- * The nation_city structure holds information about a default choice for
+ * The city_name structure holds information about a default choice for
  * the city name.  The "name" field is, of course, just the name for
  * the city.  The "river" and "terrain" fields are entries recording
  * whether the terrain is present near the city - we give higher priority
@@ -46,154 +54,94 @@
  *   cities = "Washington (ocean, river, swamp)", "New York (!mountains)"
  */
 typedef int ternary;
-
-struct nation_city {
-  char *name;
+struct city_name {
+  char* name;
   ternary river;
   ternary terrain[MAX_NUM_TERRAINS];	
 };
 
-struct nation_leader {
+struct leader {
   char *name;
   bool is_male;
 };
 
-struct nation_group {
-  int item_number;
-
-  char name[MAX_LEN_NAME];
-  
-  /* How much the AI will try to select a nation in the same group */
-  int match;
-};
-
-/* Pointer values are allocated on load then freed in free_nations(). */
 struct nation_type {
-  Nation_type_id item_number;
-  struct name_translation adjective;
-  struct name_translation noun_plural;
+  /* Pointer values are allocated on load then freed in free_nations(). */
+  const char *name; /* Translated string - doesn't need freeing. */
+  const char *name_plural; /* Translated string - doesn't need freeing. */
   char flag_graphic_str[MAX_LEN_NAME];
   char flag_graphic_alt[MAX_LEN_NAME];
   int  leader_count;
-  struct nation_leader *leaders;
+  struct leader *leaders;
   int city_style;
-  struct nation_city *city_names;	/* The default city names. */
+  struct city_name *city_names;		/* The default city names. */
+  struct Sprite *flag_sprite;
+  char *class;				/* may be empty */
   char *legend;				/* may be empty */
-
-  bool is_playable;
-  enum barbarian_type barb_type;
 
   /* civilwar_nations is a NO_NATION_SELECTED-terminated list of index of
    * the nations that can fork from this one.  parent_nations is the inverse
    * of this array.  Server only. */
-  struct nation_type **civilwar_nations;
-  struct nation_type **parent_nations;
+  Nation_Type_id *civilwar_nations;
+  Nation_Type_id *parent_nations;
+
+  /* untranslated copies: */
+  char name_orig[MAX_LEN_NAME];
+  char name_plural_orig[MAX_LEN_NAME];
 
   /* Items given to this nation at game start.  Server only. */
   int init_techs[MAX_NUM_TECH_LIST];
   int init_buildings[MAX_NUM_BUILDING_LIST];
-  struct government *init_government;
-  struct unit_type *init_units[MAX_NUM_UNIT_LIST];
 
-  /* Groups which this nation is assigned to */
-  int num_groups;
-  struct nation_group **groups;
-  
-  /* Nations which we don't want in the same game.
-   * For example, British and English. */
-  int num_conflicts;
-  struct nation_type **conflicts_with;
-
-  /* Unavailable nations aren't allowed to be chosen in the scenario. */
-  bool is_available;
-
-  struct player *player; /* Who's using the nation, or NULL. */
+  /* Following basically disabled -- Syela */
+  /* Note the client doesn't use/have these. */
+  struct {
+    int tech[MAX_NUM_TECH_GOALS];               /* tech goals     */
+    int wonder;                                 /* primary Wonder */
+    int government;
+  } goals;
 };
 
-/* General nation accessor functions. */
-Nation_type_id nation_count(void);
-Nation_type_id nation_index(const struct nation_type *pnation);
-Nation_type_id nation_number(const struct nation_type *pnation);
+struct team {
+  char name[MAX_LEN_NAME];
+  Team_Type_id id; /* equal to array index if active, else TEAM_NONE */
+};
 
-struct nation_type *nation_by_number(const Nation_type_id nation);
-struct nation_type *nation_of_player(const struct player *pplayer);
-struct nation_type *nation_of_city(const struct city *pcity);
-struct nation_type *nation_of_unit(const struct unit *punit);
-
-struct nation_type *find_nation_by_rule_name(const char *name);
-struct nation_type *find_nation_by_translated_name(const char *name);
-
-const char *nation_rule_name(const struct nation_type *pnation);
-
-const char *nation_adjective_translation(struct nation_type *pnation);
-const char *nation_adjective_for_player(const struct player *pplayer);
-const char *nation_plural_translation(struct nation_type *pnation);
-const char *nation_plural_for_player(const struct player *pplayer);
-
-int city_style_of_nation(const struct nation_type *nation);
-
-/* Ancillary nation routines */
-bool is_nation_playable(const struct nation_type *nation);
-enum barbarian_type nation_barbarian_type(const struct nation_type *nation);
-bool can_conn_edit_players_nation(const struct connection *pconn,
-				  const struct player *pplayer);
-
-/* General nation leader accessor functions. */
-struct nation_leader *get_nation_leaders(const struct nation_type *nation, int *dim);
-struct nation_type **get_nation_civilwar(const struct nation_type *nation);
-bool get_nation_leader_sex(const struct nation_type *nation,
-			   const char *name);
-bool check_nation_leader_name(const struct nation_type *nation,
-			      const char *name);
-
-/* General nation group accessor routines */
-int nation_group_count(void);
-int nation_group_index(const struct nation_group *pgroup);
-int nation_group_number(const struct nation_group *pgroup);
-
-struct nation_group *nation_group_by_number(int id);
-struct nation_group *find_nation_group_by_rule_name(const char *name);
-
-bool is_nation_in_group(struct nation_type *nation,
-			struct nation_group *group);
-
-/* Initialization and iteration */
-void nation_groups_free(void);
-struct nation_group *add_new_nation_group(const char *name);
-
-struct nation_group *nation_group_array_first(void);
-const struct nation_group *nation_group_array_last(void);
-
-#define nation_groups_iterate(_p)					\
-{									\
-  struct nation_group *_p = nation_group_array_first();			\
-  if (NULL != _p) {							\
-    for (; _p <= nation_group_array_last(); _p++) {
-
-#define nation_groups_iterate_end					\
-    }									\
-  }									\
-}
-
-/* Initialization and iteration */
+Nation_Type_id find_nation_by_name(const char *name);
+Nation_Type_id find_nation_by_name_orig(const char *name);
+const char *get_nation_name(Nation_Type_id nation);
+const char *get_nation_name_plural(Nation_Type_id nation);
+const char *get_nation_name_orig(Nation_Type_id nation);
+struct leader *get_nation_leaders(Nation_Type_id nation, int *dim);
+Nation_Type_id *get_nation_civilwar(Nation_Type_id nation);
+bool get_nation_leader_sex(Nation_Type_id nation, const char *name);
+struct nation_type *get_nation_by_plr(struct player *plr);
+struct nation_type *get_nation_by_idx(Nation_Type_id nation);
+bool check_nation_leader_name(Nation_Type_id nation, const char *name);
 void nations_alloc(int num);
 void nations_free(void);
-void nation_city_names_free(struct nation_city *city_names);
+void nation_city_names_free(struct city_name *city_names);
+int get_nation_city_style(Nation_Type_id nation);
 
-struct nation_type *nation_array_first(void);
-const struct nation_type *nation_array_last(void);
+void team_init(void);
+Team_Type_id team_find_by_name(const char *team_name);
+struct team *team_get_by_id(Team_Type_id id);
+void team_add_player(struct player *pplayer, const char *team_name);
+void team_remove_player(struct player *pplayer);
+int team_count_members_alive(Team_Type_id id);
 
-/* Iterate over nations.  This iterates over all nations, including
- * unplayable ones (use is_nation_playable to filter if necessary). */
-#define nations_iterate(_p)						\
-{									\
-  struct nation_type *_p = nation_array_first();			\
-  if (NULL != _p) {							\
-    for (; _p <= nation_array_last(); _p++) {
+#define team_iterate(PI_team)                                                 \
+{                                                                             \
+  struct team *PI_team;                                                       \
+  Team_Type_id PI_p_itr;                                                      \
+  for (PI_p_itr = 0; PI_p_itr < MAX_NUM_TEAMS; PI_p_itr++) {                  \
+    PI_team = team_get_by_id(PI_p_itr);                                       \
+    if (PI_team->id == TEAM_NONE) {                                           \
+      continue;                                                               \
+    }
 
-#define nations_iterate_end						\
-    }									\
-  }									\
+#define team_iterate_end                                                      \
+  }                                                                           \
 }
 
 #endif  /* FC__NATION_H */

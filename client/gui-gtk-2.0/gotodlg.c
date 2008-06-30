@@ -29,17 +29,15 @@
 #include "player.h"
 #include "support.h"
 #include "unit.h"
-#include "unitlist.h"
 
+#include "clinet.h"
 #include "civclient.h"
 #include "control.h"
-#include "goto.h"
-#include "options.h"
-
 #include "dialogs.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "mapview.h"
+#include "options.h"
 
 #include "gotodlg.h"
 
@@ -82,9 +80,11 @@ static void goto_cmd_callback(GtkWidget *dlg, gint arg)
       struct city *pdestcity = get_selected_city();
 
       if (pdestcity) {
-	unit_list_iterate(get_units_in_focus(), punit) {
+        struct unit *punit = get_unit_in_focus();
+
+        if (punit) {
           request_unit_airlift(punit, pdestcity);
-        } unit_list_iterate_end;
+        }
       }
     }
     break;
@@ -94,9 +94,11 @@ static void goto_cmd_callback(GtkWidget *dlg, gint arg)
       struct city *pdestcity = get_selected_city();
 
       if (pdestcity) {
-	unit_list_iterate(get_units_in_focus(), punit) {
-          send_goto_tile(punit, pdestcity->tile);
-        } unit_list_iterate_end;
+        struct unit *punit = get_unit_in_focus();
+
+        if (punit) {
+          send_goto_unit(punit, pdestcity->tile);
+        }
       }
     }
     break;
@@ -125,7 +127,7 @@ static void create_goto_dialog(void)
     GTK_RESPONSE_CANCEL,
     _("Air_lift"),
     CMD_AIRLIFT,
-    _("_Goto"),
+    ("_Goto"),
     CMD_GOTO,
     NULL);
   setup_dialog(dshell, toplevel);
@@ -202,7 +204,7 @@ popup the dialog
 *****************************************************************/
 void popup_goto_dialog(void)
 {
-  if (!can_client_issue_orders() || get_num_units_in_focus() == 0) {
+  if (!can_client_issue_orders() || !get_unit_in_focus()) {
     return;
   }
 
@@ -236,6 +238,7 @@ static struct city *get_selected_city(void)
 **************************************************************************/
 static void update_goto_dialog(GtkToggleButton *button)
 {
+  int i, j;
   GtkTreeIter it;
   gboolean all_cities;
 
@@ -243,18 +246,18 @@ static void update_goto_dialog(GtkToggleButton *button)
 
   gtk_list_store_clear(store);
 
-  players_iterate(pplayer) {
-    if (!all_cities && pplayer != client.conn.playing) {
+  for(i = 0, j = 0; i < game.nplayers; i++) {
+    if (!all_cities && i != game.player_idx)
       continue;
-    }
 
-    city_list_iterate(pplayer->cities, pcity) {
+    city_list_iterate(game.players[i].cities, pcity) {
       gtk_list_store_append(store, &it);
 
       /* FIXME: should use unit_can_airlift_to(). */
-      gtk_list_store_set(store, &it, 0, city_name(pcity), 1, pcity->airlift, -1);
-    } city_list_iterate_end;
-  } players_iterate_end;
+      gtk_list_store_set(store, &it, 0, pcity->name, 1, pcity->airlift, -1);
+    }
+    city_list_iterate_end;
+  }
 }
 
 /**************************************************************************
@@ -265,17 +268,9 @@ static void goto_selection_callback(GtkTreeSelection *selection, gpointer data)
   struct city *pdestcity;
 
   if((pdestcity = get_selected_city())) {
-    bool can_airlift = FALSE;
-
-    unit_list_iterate(get_units_in_focus(), punit) {
-      if (unit_can_airlift_to(punit, pdestcity)) {
-	can_airlift = TRUE;
-	break;
-      }
-    } unit_list_iterate_end;
-
+    struct unit *punit = get_unit_in_focus();
     center_tile_mapcanvas(pdestcity->tile);
-    if (can_airlift) {
+    if(punit && unit_can_airlift_to(punit, pdestcity)) {
       gtk_dialog_set_response_sensitive(GTK_DIALOG(dshell), CMD_AIRLIFT, TRUE);
       return;
     }

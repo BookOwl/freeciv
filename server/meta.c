@@ -44,7 +44,6 @@
 #include "connection.h"
 #include "dataio.h"
 #include "fcintl.h"
-#include "game.h"
 #include "log.h"
 #include "mem.h"
 #include "netintf.h"
@@ -65,6 +64,7 @@ static int   metaport;
 static char *metaserver_path;
 
 static char meta_patches[256] = "";
+static char meta_topic[256] = "";
 static char meta_message[256] = "";
 
 /*************************************************************************
@@ -73,6 +73,14 @@ static char meta_message[256] = "";
 const char *default_meta_patches_string(void)
 {
   return "none";
+}
+
+/*************************************************************************
+ the default metaserver topic
+*************************************************************************/
+const char *default_meta_topic_string(void)
+{
+  return "";
 }
 
 /*************************************************************************
@@ -97,6 +105,14 @@ const char *default_meta_message_string(void)
 const char *get_meta_patches_string(void)
 {
   return meta_patches;
+}
+
+/*************************************************************************
+ the metaserver topic
+*************************************************************************/
+const char *get_meta_topic_string(void)
+{
+  return meta_topic;
 }
 
 /*************************************************************************
@@ -148,6 +164,14 @@ void maybe_automatic_meta_message(const char *automatic)
 void set_meta_patches_string(const char *string)
 {
   sz_strlcpy(meta_patches, string);
+}
+
+/*************************************************************************
+ set the metaserver topic string
+*************************************************************************/
+void set_meta_topic_string(const char *string)
+{
+  sz_strlcpy(meta_topic, string);
 }
 
 /*************************************************************************
@@ -219,25 +243,28 @@ static bool send_to_metaserver(enum meta_flag flag)
     return FALSE;
   }
 
-  if (my_connect(sock, (struct sockaddr *) &meta_addr, sizeof(meta_addr)) == -1) {
+  if (connect(sock, (struct sockaddr *) &meta_addr, sizeof(meta_addr)) == -1) {
     freelog(LOG_ERROR, "Metaserver: connect failed: %s", mystrerror());
     metaserver_failed();
     my_closesocket(sock);
     return FALSE;
   }
 
-  switch(server_state()) {
-  case S_S_INITIAL:
+  switch(server_state) {
+  case PRE_GAME_STATE:
     sz_strlcpy(state, "Pregame");
     break;
-  case S_S_RUNNING:
+  case SELECT_RACES_STATE:
+    sz_strlcpy(state, "Nation Select");
+    break;
+  case RUN_GAME_STATE:
     sz_strlcpy(state, "Running");
     break;
-  case S_S_OVER:
+  case GAME_OVER_STATE:
     sz_strlcpy(state, "Game Ended");
     break;
-  case S_S_GENERATING_WAITING:
-    sz_strlcpy(state, "Generating");
+  default:
+    sz_strlcpy(state, "Unknown");
     break;
   }
 
@@ -263,6 +290,10 @@ static bool send_to_metaserver(enum meta_flag flag)
     my_snprintf(s, rest, "capability=%s&", my_url_encode(our_capability));
     s = end_of_strn(s, &rest);
 
+    my_snprintf(s, rest, "topic=%s&",
+                my_url_encode(get_meta_topic_string()));
+    s = end_of_strn(s, &rest);
+
     my_snprintf(s, rest, "serverid=%s&",
                 my_url_encode(srvarg.serverid));
     s = end_of_strn(s, &rest);
@@ -272,7 +303,7 @@ static bool send_to_metaserver(enum meta_flag flag)
     s = end_of_strn(s, &rest);
 
     /* NOTE: send info for ALL players or none at all. */
-    if (player_count_no_barbarians() == 0) {
+    if (get_num_human_and_ai_players() == 0) {
       mystrlcpy(s, "dropplrs=1&", rest);
       s = end_of_strn(s, &rest);
     } else {
@@ -299,12 +330,12 @@ static bool send_to_metaserver(enum meta_flag flag)
         my_snprintf(s, rest, "plt[]=%s&", type);
         s = end_of_strn(s, &rest);
 
-        my_snprintf(s, rest, "pll[]=%s&", my_url_encode(player_name(plr)));
+        my_snprintf(s, rest, "pll[]=%s&", my_url_encode(plr->name));
         s = end_of_strn(s, &rest);
 
         my_snprintf(s, rest, "pln[]=%s&",
                     my_url_encode(plr->nation != NO_NATION_SELECTED 
-                                  ? nation_plural_for_player(plr)
+                                  ? get_nation_name_plural(plr->nation)
                                   : "none"));
         s = end_of_strn(s, &rest);
 
@@ -320,10 +351,10 @@ static bool send_to_metaserver(enum meta_flag flag)
         } else if (!plr->is_alive && !strchr(game.allow_take, 'd')) {
           is_player_available = FALSE;
         } else if (plr->ai.control
-            && !strchr(game.allow_take, (game.info.is_new_game ? 'A' : 'a'))) {
+            && !strchr(game.allow_take, (game.is_new_game ? 'A' : 'a'))) {
           is_player_available = FALSE;
         } else if (!plr->ai.control
-            && !strchr(game.allow_take, (game.info.is_new_game ? 'H' : 'h'))) {
+            && !strchr(game.allow_take, (game.is_new_game ? 'H' : 'h'))) {
           is_player_available = FALSE;
         }
 
@@ -344,27 +375,27 @@ static bool send_to_metaserver(enum meta_flag flag)
     /* send some variables: should be listed in inverted order
      * FIXME: these should be input from the settings array */
     my_snprintf(s, rest, "vn[]=%s&vv[]=%d&",
-                my_url_encode("timeout"), game.info.timeout);
+                my_url_encode("timeout"), game.timeout);
     s = end_of_strn(s, &rest);
 
     my_snprintf(s, rest, "vn[]=%s&vv[]=%d&",
-                my_url_encode("year"), game.info.year);
+                my_url_encode("year"), game.year);
     s = end_of_strn(s, &rest);
 
     my_snprintf(s, rest, "vn[]=%s&vv[]=%d&",
-                my_url_encode("turn"), game.info.turn);
+                my_url_encode("turn"), game.turn);
     s = end_of_strn(s, &rest);
 
     my_snprintf(s, rest, "vn[]=%s&vv[]=%d&",
-                my_url_encode("endyear"), game.info.end_year);
+                my_url_encode("endyear"), game.end_year);
     s = end_of_strn(s, &rest);
 
     my_snprintf(s, rest, "vn[]=%s&vv[]=%d&",
-                my_url_encode("minplayers"), game.info.min_players);
+                my_url_encode("minplayers"), game.min_players);
     s = end_of_strn(s, &rest);
 
     my_snprintf(s, rest, "vn[]=%s&vv[]=%d&",
-                my_url_encode("maxplayers"), game.info.max_players);
+                my_url_encode("maxplayers"), game.max_players);
     s = end_of_strn(s, &rest);
 
     my_snprintf(s, rest, "vn[]=%s&vv[]=%s&",
@@ -412,7 +443,7 @@ void server_close_meta(void)
 /*************************************************************************
  lookup the correct address for the metaserver.
 *************************************************************************/
-bool server_open_meta(void)
+void server_open_meta(void)
 {
   const char *path;
  
@@ -422,28 +453,29 @@ bool server_open_meta(void)
   }
   
   if (!(path = my_lookup_httpd(metaname, &metaport, srvarg.metaserver_addr))) {
-    return FALSE;
+    return;
   }
   
   metaserver_path = mystrdup(path);
 
   if (!net_lookup_service(metaname, metaport, &meta_addr)) {
-    freelog(LOG_ERROR, _("Metaserver: bad address: <%s %d>."),
+    freelog(LOG_ERROR, _("Metaserver: bad address: [%s:%d]."),
             metaname, metaport);
     metaserver_failed();
-    return FALSE;
+    return;
   }
 
   if (meta_patches[0] == '\0') {
     set_meta_patches_string(default_meta_patches_string());
+  }
+  if (meta_topic[0] == '\0') {
+    set_meta_topic_string(default_meta_topic_string());
   }
   if (meta_message[0] == '\0') {
     set_meta_message_string(default_meta_message_string());
   }
 
   server_is_open = TRUE;
-
-  return TRUE;
 }
 
 /**************************************************************************

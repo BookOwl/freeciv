@@ -26,10 +26,6 @@
 
 #include "graphics_g.h"
 
-#include "SDL_rotozoom.h"
-#include "canvas.h"
-#include "gui_main.h"
-
 #define	RECT_LIMIT	80
 /* #define	HAVE_MMX1 */
 
@@ -168,54 +164,23 @@
 
 #endif /* USE_DUFFS_LOOP */
 
-/* shrink surface on 320x240 screen*/
-#ifdef SMALL_SCREEN
-#define DEFAULT_ZOOM 0.5
-#define adj_surf(surf) zoomSurface((surf), DEFAULT_ZOOM, DEFAULT_ZOOM, 0)
-#else
-#define DEFAULT_ZOOM 1.0
-#define adj_surf(surf) SDL_DisplayFormatAlpha((surf))
-#endif
+struct Sprite {
+  struct SDL_Surface *psurface;
+};
 
-struct gui_layer;
-  
-struct main {
+#define GET_SURF(m_sprite)	(m_sprite->psurface)
+
+struct canvas {
   int rects_count;		/* update rect. array counter */
   int guis_count;		/* gui buffers array counter */
   SDL_Rect rects[RECT_LIMIT];	/* update rect. list */
   SDL_Surface *screen;		/* main screen buffer */
   SDL_Surface *map;		/* map buffer */
-  struct canvas map_canvas;
-  struct gui_layer *gui;        /* gui buffer */
-  struct gui_layer **guis;      /* gui buffers used by sdlclient widgets window menager */
+  SDL_Surface *text;		/* city descriptions buffer */
+  SDL_Surface *gui;		/* gui buffer */
+  SDL_Surface **guis;		/* gui buffers used by sdlclient widgets window menager */
   SDL_Event event;		/* main event struct */
 };
-
-extern struct main Main;
-
-/* GUI layer */
-
-struct gui_layer {
-  SDL_Rect dest_rect;  /* only x and y are used */
-  SDL_Surface *surface;  
-};
-
-struct gui_layer *gui_layer_new(int x, int y, SDL_Surface *surface);
-void gui_layer_destroy(struct gui_layer **gui_layer);
-  
-struct gui_layer *get_gui_layer(SDL_Surface *surface);
-  
-struct gui_layer *add_gui_layer(int width, int height);  
-void remove_gui_layer(struct gui_layer *gui_layer);
-
-void screen_rect_to_layer_rect(struct gui_layer *gui_layer, SDL_Rect *dest_rect);
-
-/* ---------- */
-
-int pygame_AlphaBlit(SDL_Surface *src, SDL_Rect *srcrect, 
-                     SDL_Surface *dst, SDL_Rect *dstrect);
-int alphablit(SDL_Surface *src, SDL_Rect *srcrect, 
-              SDL_Surface *dst, SDL_Rect *dstrect);
 
 SDL_Surface *load_surf(const char *pFname);
 SDL_Surface *load_surf_with_flags(const char *pFname, int iFlags);
@@ -224,17 +189,10 @@ SDL_Surface *create_surf_with_format(SDL_PixelFormat *pSpf,
 				     int w, int h, Uint32 f);
 
 SDL_Surface *create_filled_surface(Uint16 w, Uint16 h, Uint32 iFlags,
-				   SDL_Color *pColor, bool add_alpha);
+				   SDL_Color *pColor);
 
 SDL_Surface *crop_rect_from_surface(SDL_Surface *pSource,
 				    SDL_Rect *pRect);
-
-SDL_Surface *mask_surface(SDL_Surface * pSrc, SDL_Surface * pMask,
-                          int mask_offset_x, int mask_offset_y);
-
-SDL_Surface *blend_surface(SDL_Surface *pSrc, unsigned char alpha); 
-
-bool correct_black(SDL_Surface * pSrc);
 
 int blit_entire_src(SDL_Surface *pSrc,
 		    SDL_Surface *pDest, Sint16 iDest_x, Sint16 iDest_y);
@@ -265,28 +223,26 @@ bool is_in_rect_area(int x, int y, SDL_Rect rect);
 
 int SDL_FillRectAlpha(SDL_Surface *pSurface, SDL_Rect *pRect,
 		      SDL_Color *pColor);
-                      
-int clear_surface(SDL_Surface *pSurf, SDL_Rect *dstrect);
-  
+
 /* ================================================================= */
+extern SDL_Cursor *pStd_Cursor;
+extern SDL_Cursor *pGoto_Cursor;
+extern SDL_Cursor *pDrop_Cursor;
+extern SDL_Cursor *pNuke_Cursor;
+extern SDL_Cursor *pPatrol_Cursor;
 
-SDL_Surface *ResizeSurface(const SDL_Surface * pSrc, Uint16 new_width,
-			   Uint16 new_height, int smooth);
+void unload_cursors(void);
 
-SDL_Surface *ResizeSurfaceBox(const SDL_Surface * pSrc,
-                              Uint16 new_width, Uint16 new_height, int smooth,
-                              bool scale_up, bool absolute_dimensions);
+SDL_Surface *get_logo_gfx(void);
+SDL_Surface *get_intro_gfx(void);
+SDL_Surface *get_city_gfx(void);
+void draw_intro_gfx(void);
 
-SDL_Surface *crop_visible_part_from_surface(SDL_Surface *pSrc);
+SDL_Surface *make_flag_surface_smaler(SDL_Surface *pSrc);
 SDL_Rect get_smaller_surface_rect(SDL_Surface *pSrc);
 
 #define create_surf(w, h, f) \
 	create_surf_with_format(Main.screen->format , w , h, f)
-
-#define map_rgba(format, color) \
-        SDL_MapRGBA(format, (color).r, (color).g, (color).b, (color).unused)
-
-SDL_Surface *create_surf_alpha(int iWidth, int iHeight, Uint32 iFlags);
 
 #define crop_rect_from_screen(rect) \
 		crop_rect_from_surface(Main.screen, &rect)
@@ -360,25 +316,6 @@ do {									  \
 			*((Uint32 *)buf_ptr) = pixel;			\
 		break;							\
     }									\
-} while(0)
-
-/* Blend the RGB values of two pixels based on a source alpha value */
-#define ALPHA_BLEND(sR, sG, sB, A, dR, dG, dB)	\
-do {						\
-	dR = (((sR-dR)*(A))>>8)+dR;		\
-	dG = (((sG-dG)*(A))>>8)+dG;		\
-	dB = (((sB-dB)*(A))>>8)+dB;		\
-} while(0)
-
-#define ALPHA_BLEND128(sR, sG, sB, dR, dG, dB)	\
-do {						\
-  Uint32 __Src = (sR << 16 | sG << 8 | sB);	\
-  Uint32 __Dst = (dR << 16 | dG << 8 | dB);	\
-  __Dst = ((((__Src & 0x00fefefe) + (__Dst & 0x00fefefe)) >> 1)		\
-			       + (__Src & __Dst & 0x00010101)) | 0xFF000000; \
-  dR = (__Dst >> 16) & 0xFF;			\
-  dG = (__Dst >> 8 ) & 0xFF;			\
-  dB = (__Dst      ) & 0xFF;			\
 } while(0)
 
 #endif				/* FC__GRAPHICS_H */

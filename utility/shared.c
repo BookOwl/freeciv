@@ -47,7 +47,6 @@
 #include "fcintl.h"
 #include "log.h"
 #include "mem.h"
-#include "rand.h"
 #include "support.h"
 
 #include "shared.h"
@@ -62,27 +61,16 @@
 #endif
 #endif
 
-#define PARENT_DIR_OPERATOR ".."
-
 /* If no default data path is defined use the default default one */
 #ifndef DEFAULT_DATA_PATH
 #define DEFAULT_DATA_PATH "." PATH_SEPARATOR "data" PATH_SEPARATOR \
                           "~/.freeciv"
 #endif
 
-/* environment */
-#ifndef FREECIV_PATH
-#define FREECIV_PATH "FREECIV_PATH"
-#endif
-
 /* Both of these are stored in the local encoding.  The grouping_sep must
  * be converted to the internal encoding when it's used. */
 static char *grouping = NULL;
 static char *grouping_sep = NULL;
-
-static const char base64url[] =
-  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-
 
 /***************************************************************
   Take a string containing multiple lines and create a copy where
@@ -157,12 +145,8 @@ char *create_centered_string(const char *s)
   *i can be increased to get next string in the array argv[].
   It is an error for the option to exist but be an empty string.
   This doesn't use freelog() because it is used before logging is set up.
-
-  The argv strings are assumed to be in the local encoding; the returned
-  string is in the internal encoding.
 **************************************************************************/
-char *get_option_malloc(const char *option_name,
-			char **argv, int *i, int argc)
+char *get_option(const char *option_name, char **argv, int *i, int argc)
 {
   int len = strlen(option_name);
 
@@ -187,7 +171,7 @@ char *get_option_malloc(const char *option_name,
       }
     }
 
-    return local_to_internal_string_malloc(opt);
+    return opt;
   }
 
   return NULL;
@@ -389,34 +373,6 @@ static bool is_ascii(char ch)
   return ch >= ' ' && ch <= '~';
 }
 
-/****************************************************************************
-  Check if the name is safe security-wise.  This is intended to be used to
-  make sure an untrusted filename is safe to be used. 
-****************************************************************************/
-bool is_safe_filename(const char *name)
-{
-  int i = 0;
-
-  /* must not be NULL or empty */
-  if (!name || *name == '\0') {
-    return FALSE; 
-  }
-
-  for (; '\0' != name[i]; i++) {
-    if ('.' != name[i] && NULL == strchr(base64url, name[i])) {
-      return FALSE;
-    }
-  }
-
-  /* we don't allow the filename to ascend directories */
-  if (strstr(name, PARENT_DIR_OPERATOR)) {
-    return FALSE;
-  }
-
-  /* Otherwise, it is okay... */
-  return TRUE;
-}
-
 /***************************************************************
   This is used in sundry places to make sure that names of cities,
   players etc. do not contain yucky characters of various sorts.
@@ -453,45 +409,6 @@ bool is_ascii_name(const char *name)
 
   /* otherwise, it's okay... */
   return TRUE;
-}
-
-/*************************************************************************
-  Check for valid base64url.
-*************************************************************************/
-bool is_base64url(const char *s)
-{
-  size_t i = 0;
-
-  /* must not be NULL or empty */
-  if (NULL == s || '\0' == *s) {
-    return FALSE; 
-  }
-
-  for (; '\0' != s[i]; i++) {
-    if (NULL == strchr(base64url, s[i])) {
-      return FALSE;
-    }
-  }
-  return TRUE;
-}
-
-/*************************************************************************
-  generate a random string meeting criteria such as is_ascii_name(),
-  is_base64url(), and is_safe_filename().
-*************************************************************************/
-void randomize_base64url_string(char *s, size_t n)
-{
-  size_t i = 0;
-
-  /* must not be NULL or too short */
-  if (NULL == s || 1 > n) {
-    return; 
-  }
-
-  for (; i < (n - 1); i++) {
-    s[i] = base64url[myrand(sizeof(base64url) - 1)];
-  }
-  s[i] = '\0';
 }
 
 /***************************************************************
@@ -805,23 +722,30 @@ char *user_home_dir(void)
   Gets value once, and then caches result.
   Note the caller should not mess with returned string.
 ***************************************************************************/
-char *user_username(char *buf, size_t bufsz)
+const char *user_username(void)
 {
+  static char username[MAX_LEN_NAME];
+
   /* This function uses a number of different methods to try to find a
-   * username.  This username then has to be truncated to bufsz
+   * username.  This username then has to be truncated to MAX_LEN_NAME
    * characters (including terminator) and checked for sanity.  Note that
    * truncating a sane name can leave you with an insane name under some
    * charsets. */
+
+  if (username[0] != '\0') {
+    /* Username is already known; just return it. */
+    return username;
+  }
 
   /* If the environment variable $USER is present and sane, use it. */
   {
     char *env = getenv("USER");
 
     if (env) {
-      mystrlcpy(buf, env, bufsz);
-      if (is_ascii_name(buf)) {
-	freelog(LOG_VERBOSE, "USER username is %s", buf);
-	return buf;
+      sz_strlcpy(username, env);
+      if (is_ascii_name(username)) {
+	freelog(LOG_VERBOSE, "USER username is %s", username);
+	return username;
       }
     }
   }
@@ -833,10 +757,10 @@ char *user_username(char *buf, size_t bufsz)
     struct passwd *pwent = getpwuid(getuid());
 
     if (pwent) {
-      mystrlcpy(buf, pwent->pw_name, bufsz);
-      if (is_ascii_name(buf)) {
-	freelog(LOG_VERBOSE, "getpwuid username is %s", buf);
-	return buf;
+      sz_strlcpy(username, pwent->pw_name);
+      if (is_ascii_name(username)) {
+	freelog(LOG_VERBOSE, "getpwuid username is %s", username);
+	return username;
       }
     }
   }
@@ -849,23 +773,23 @@ char *user_username(char *buf, size_t bufsz)
     DWORD length = sizeof(name);
 
     if (GetUserName(name, &length)) {
-      mystrlcpy(buf, name, bufsz);
-      if (is_ascii_name(buf)) {
-	freelog(LOG_VERBOSE, "GetUserName username is %s", buf);
-	return buf;
+      sz_strlcpy(username, name);
+      if (is_ascii_name(username)) {
+	freelog(LOG_VERBOSE, "GetUserName username is %s", username);
+	return username;
       }
     }
   }
 #endif
 
 #ifdef ALWAYS_ROOT
-  mystrlcpy(buf, "name", bufsz);
+  sz_strlcpy(username, "name");
 #else
-  my_snprintf(buf, bufsz, "name%d", (int)getuid());
+  my_snprintf(username, MAX_LEN_NAME, "name%d", (int)getuid());
 #endif
-  freelog(LOG_VERBOSE, "fake username is %s", buf);
-  assert(is_ascii_name(buf));
-  return buf;
+  freelog(LOG_VERBOSE, "fake username is %s", username);
+  assert(is_ascii_name(username));
+  return username;
 }
 
 /***************************************************************************
@@ -880,7 +804,7 @@ char *user_username(char *buf, size_t bufsz)
 
   num_dirs, if not NULL, will be set to the number of entries in the list.
 ***************************************************************************/
-const char **get_data_dirs(int *num_dirs)
+static const char **get_data_dirs(int *num_dirs)
 {
   const char *path;
   char *path2, *tok;
@@ -897,14 +821,12 @@ const char **get_data_dirs(int *num_dirs)
     return dirs;
   }
 
-  path = getenv(FREECIV_PATH);
+  path = getenv("FREECIV_PATH");
   if (!path) {
     path = DEFAULT_DATA_PATH;
   } else if (*path == '\0') {
-    freelog(LOG_ERROR,
-            /* TRANS: <FREECIV_PATH> configuration error */
-            _("\"%s\" is set but empty; using default \"%s\" instead."),
-            FREECIV_PATH, DEFAULT_DATA_PATH);
+    freelog(LOG_ERROR, _("FREECIV_PATH is set but empty; "
+			 "using default path instead."));
     path = DEFAULT_DATA_PATH;
   }
   assert(path != NULL);
@@ -984,7 +906,7 @@ const char **get_data_dirs(int *num_dirs)
   The suffixes are removed from the filenames before the list is
   returned.
 ***************************************************************************/
-char **datafilelist(const char* suffix)
+const char **datafilelist(const char* suffix)
 {
   const char **dirs = get_data_dirs(NULL);
   char **file_list = NULL;
@@ -1007,8 +929,7 @@ char **datafilelist(const char* suffix)
 	freelog(LOG_VERBOSE, "Skipping non-existing data directory %s.",
 		dirs[dir_num]);
       } else {
-	/* TRANS: "...: <externally translated error string>."*/
-        freelog(LOG_ERROR, _("Could not read data directory %s: %s."),
+	freelog(LOG_ERROR, _("Could not read data directory %s: %s."),
 		dirs[dir_num], mystrerror());
       }
       continue;
@@ -1065,7 +986,7 @@ char **datafilelist(const char* suffix)
   file_list = fc_realloc(file_list, (num_matches + 1) * sizeof(*file_list));
   file_list[num_matches] = NULL;
 
-  return file_list;
+  return (const char **)file_list;
 }
 
 /***************************************************************************
@@ -1154,20 +1075,19 @@ static int compare_file_name_ptrs(const void *a, const void *b)
   second. Returned "name"s will be truncated starting at the "infix"
   substring. The returned list must be freed.
 **************************************************************************/
-struct datafile_list *datafilelist_infix(const char *subpath,
-                                         const char *infix, bool nodups)
+struct datafile_list datafilelist_infix(const char *subpath,
+    const char *infix, bool nodups)
 {
   const char **dirs = get_data_dirs(NULL);
   int num_matches = 0;
   int dir_num;
-  struct datafile_list *res;
+  struct datafile_list res;
 
-  res = datafile_list_new();
+  datafile_list_init(&res);
 
   /* First assemble a full list of names. */
   for (dir_num = 0; dirs[dir_num]; dir_num++) {
-    size_t len = (subpath ? strlen(subpath) : 0) + strlen(dirs[dir_num]) + 2;
-    char path[len];
+    char path[PATH_MAX];
     DIR *dir;
     struct dirent *entry;
 
@@ -1209,7 +1129,7 @@ struct datafile_list *datafilelist_infix(const char *subpath,
 	  file->fullname = mystrdup(fullname);
 	  file->mtime = buf.st_mtime;
 
-	  datafile_list_append(res, file);
+	  datafile_list_insert_back(&res, file);
 	  num_matches++;
 	}
 
@@ -1223,7 +1143,7 @@ struct datafile_list *datafilelist_infix(const char *subpath,
   }
 
   /* Sort the list by name. */
-  datafile_list_sort(res, compare_file_name_ptrs);
+  datafile_list_sort(&res, compare_file_name_ptrs);
 
   if (nodups) {
     char *name = "";
@@ -1234,16 +1154,18 @@ struct datafile_list *datafilelist_infix(const char *subpath,
       } else {
 	free(pfile->name);
 	free(pfile->fullname);
-	datafile_list_unlink(res, pfile);
+	datafile_list_unlink(&res, pfile);
       }
     } datafile_list_iterate_end;
   }
 
   /* Sort the list by last modification time. */
-  datafile_list_sort(res, compare_file_mtime_ptrs);
+  datafile_list_sort(&res, compare_file_mtime_ptrs);
 
   return res;
 }
+
+
 
 /***************************************************************************
   As datafilename(), above, except die with an appropriate log
@@ -1259,113 +1181,15 @@ char *datafilename_required(const char *filename)
   if (dname) {
     return dname;
   } else {
-    freelog(LOG_ERROR,
-            /* TRANS: <FREECIV_PATH> configuration error */
-            _("The data path may be set via the \"%s\" environment variable."),
-            FREECIV_PATH);
-    freelog(LOG_ERROR,
-            _("Current data path is: \"%s\""),
-            datafilename(NULL));
+    freelog(LOG_ERROR, _("The data path may be set via"
+			 " the environment variable FREECIV_PATH."));
+    freelog(LOG_ERROR, _("Current data path is: \"%s\""), datafilename(NULL));
     freelog(LOG_FATAL,
-            _("The \"%s\" file is required ... aborting!"), filename);
+		 _("The \"%s\" file is required ... aborting!"), filename);
     exit(EXIT_FAILURE);
   }
 }
 
-/***************************************************************************
-  Language environmental variable (with emulation).
-***************************************************************************/
-char *get_langname(void)
-{
-  char *langname = NULL;      
-        
-#ifdef ENABLE_NLS
-
-  langname = getenv("LANG");
-  
-#ifdef WIN32_NATIVE
-  /* set LANG by hand if it is not set */
-  if (!langname) {
-    switch (PRIMARYLANGID(GetUserDefaultLangID())) {
-      case LANG_ARABIC:
-        return "ar";
-      case LANG_CATALAN:
-        return "ca";
-      case LANG_CZECH:
-        return "cs";
-      case LANG_DANISH:
-        return "da"; 
-      case LANG_GERMAN:
-        return "de";
-      case LANG_GREEK:
-        return "el";
-      case LANG_ENGLISH:
-        switch (SUBLANGID(GetUserDefaultLangID())) {
-          case SUBLANG_ENGLISH_UK:
-            return "en_GB";
-          default:
-            return "en"; 
-        }
-      case LANG_SPANISH:
-        return "es";
-      case LANG_ESTONIAN:
-        return "et";
-      case LANG_FARSI:
-        return "fa";
-      case LANG_FINNISH:
-        return "fi";
-      case LANG_FRENCH:
-        return "fr";
-      case LANG_HEBREW:
-        return "he";
-      case LANG_HUNGARIAN:
-        return "hu";
-      case LANG_ITALIAN:
-        return "it";
-      case LANG_JAPANESE:
-        return "ja";
-      case LANG_KOREAN:
-        return "ko";
-      case LANG_LITHUANIAN:
-        return "lt";
-      case LANG_DUTCH:
-        return "nl";
-      case LANG_NORWEGIAN:
-        switch (SUBLANGID(GetUserDefaultLangID())) {
-          case SUBLANG_NORWEGIAN_BOKMAL:
-            return "nb";
-          default:
-            return "no";
-        }
-      case LANG_POLISH:
-        return "pl";
-      case LANG_PORTUGUESE:
-        switch (SUBLANGID(GetUserDefaultLangID())) {
-          case SUBLANG_PORTUGUESE_BRAZILIAN:
-            return "pt_BR";
-          default:
-            return "pt";
-        }
-      case LANG_ROMANIAN:
-        return "ro";
-      case LANG_RUSSIAN:
-        return "ru";
-      case LANG_SWEDISH:
-        return "sv";
-      case LANG_TURKISH:
-        return "tr";
-      case LANG_UKRAINIAN:
-        return "uk";
-      case LANG_CHINESE:
-        return "zh_CN";
-    }
-  }
-#endif /* WIN32_NATIVE */
-#endif /* ENABLE_NLS */
-
-  return langname;
-}
-        
 /***************************************************************************
   Setup for Native Language Support, if configured to use it.
   (Call this only once, or it may leak memory.)
@@ -1380,14 +1204,55 @@ void init_nls(void)
   grouping_sep = mystrdup(",");
 
 #ifdef ENABLE_NLS
-
 #ifdef WIN32_NATIVE
-  char *langname = get_langname();  
-  if (langname) {
-    static char envstr[40];
+  /* set LANG by hand if it is not set */
+  if (!getenv("LANG")) {
+    char *langname = NULL;
 
-    my_snprintf(envstr, sizeof(envstr), "LANG=%s", langname);
-    putenv(envstr);
+    switch (PRIMARYLANGID(LANGIDFROMLCID(GetUserDefaultLCID()))) {
+    case LANG_SPANISH:
+      langname = "es";
+      break;
+    case LANG_GERMAN:
+      langname = "de";
+      break;
+    case LANG_ENGLISH:
+      langname = "en";
+      break;
+    case LANG_FRENCH:
+      langname = "fr";
+      break;
+    case LANG_DUTCH:
+      langname = "nl";
+      break;
+    case LANG_POLISH:
+      langname = "pl";
+      break;
+    case LANG_HUNGARIAN:
+      langname = "hu";
+      break;
+    case LANG_NORWEGIAN:
+      langname = "no";
+      break;
+    case LANG_JAPANESE:
+      langname = "ja";
+      break;
+    case LANG_PORTUGUESE:
+      langname = "pt";
+      break;
+    case LANG_ROMANIAN:
+      langname = "ro";
+      break;
+    case LANG_RUSSIAN:
+      langname = "ru";
+      break;
+    }
+    if (langname) {
+      static char envstr[40];
+
+      my_snprintf(envstr, sizeof(envstr), "LANG=%s", langname);
+      putenv(envstr);
+    }
   }
 #endif
 
@@ -1485,17 +1350,12 @@ enum m_pre_result match_prefix(m_pre_accessor_fn_t accessor_fn,
 			       size_t n_names,
 			       size_t max_len_name,
 			       m_pre_strncmp_fn_t cmp_fn,
-                               m_strlen_fn_t len_fn,
 			       const char *prefix,
 			       int *ind_result)
 {
   int i, len, nmatches;
 
-  if (len_fn == NULL) {
-    len = strlen(prefix);
-  } else {
-    len = len_fn(prefix);
-  }
+  len = strlen(prefix);
   if (len == 0) {
     return M_PRE_EMPTY;
   }
@@ -1575,7 +1435,7 @@ char *get_multicast_group(void)
 {
   static bool init = FALSE;
   static char *group = NULL;
-  static char *default_multicast_group = "225.1.1.1";
+  static char *default_multicast_group = "225.0.0.1";
   
   if (!init) {
     char *env = getenv("FREECIV_MULTICAST_GROUP");
@@ -1592,9 +1452,6 @@ char *get_multicast_group(void)
 /***************************************************************************
   Interpret ~/ in filename as home dir
   New path is returned in buf of size buf_size
-
-  This may fail if the path is too long.  It is better to use
-  interpret_tilde_alloc.
 ***************************************************************************/
 void interpret_tilde(char* buf, size_t buf_size, const char* filename)
 {
@@ -1607,31 +1464,6 @@ void interpret_tilde(char* buf, size_t buf_size, const char* filename)
   }
 }
 
-/***************************************************************************
-  Interpret ~/ in filename as home dir
-
-  The new path is returned in buf, as a newly allocated buffer.  The new
-  path will always be allocated and written, even if there is no ~ present.
-***************************************************************************/
-char *interpret_tilde_alloc(const char* filename)
-{
-  if (filename[0] == '~' && filename[1] == '/') {
-    const char *home = user_home_dir();
-    size_t sz;
-    char *buf;
-
-    filename += 2; /* Skip past "~/" */
-    sz = strlen(home) + strlen(filename) + 2;
-    buf = fc_malloc(sz);
-    my_snprintf(buf, sz, "%s/%s", home, filename);
-    return buf;
-  } else if (filename[0] == '~' && filename[1] == '\0') {
-    return mystrdup(user_home_dir());
-  } else  {
-    return mystrdup(filename);
-  }
-}
-
 /**************************************************************************
   If the directory "pathname" does not exist, recursively create all
   directories until it does.
@@ -1639,30 +1471,31 @@ char *interpret_tilde_alloc(const char* filename)
 bool make_dir(const char *pathname)
 {
   char *dir;
-  char *path = NULL;
+  char file[PATH_MAX];
+  char path[PATH_MAX];
 
-  path = interpret_tilde_alloc(pathname);
-  dir = path;
-  do {
-    dir = strchr(dir, '/');
-    /* We set the current / with 0, and restore it afterwards */
-    if (dir) {
-      *dir = 0;
-    }
+  interpret_tilde(file, sizeof(file), pathname);
+  path[0] = '\0';
+
+#ifndef WIN32_NATIVE
+  /* Ensure we are starting from the root in absolute pathnames. */
+  if (file[0] == '/') {
+    sz_strlcat(path, "/");
+  }
+#endif
+
+  for (dir = strtok(file, "/"); dir; dir = strtok(NULL, "/")) {
+    sz_strlcat(path, dir);
 
 #ifdef WIN32_NATIVE
     mkdir(path);
 #else
     mkdir(path, 0755);
 #endif
-      
-    if (dir) {
-      *dir = '/';
-      dir++;
-    }
-  } while (dir);
 
-  free(path);
+    sz_strlcat(path, "/");
+  }
+
   return TRUE;
 }
 
@@ -1682,63 +1515,3 @@ bool path_is_absolute(const char *filename)
   return FALSE;
 }
 
-/**************************************************************************
-  Scan in a word or set of words from start to but not including
-  any of the given delimiters. The buf pointer will point past delimiter,
-  or be set to NULL if there is nothing there. Removes excess white
-  space.
-
-  This function should be safe, and dest will contain "\0" and
-  *buf == NULL on failure. We always fail gently.
-
-  Due to the way the scanning is performed, looking for a space
-  will give you the first word even if it comes before multiple
-  spaces.
-
-  Returns delimiter found.
-
-  Pass in NULL for dest and -1 for size to just skip ahead.  Note that if
-  nothing is found, dest will contain the whole string, minus leading and
-  trailing whitespace.  You can scan for "" to conveniently grab the
-  remainder of a string.
-**************************************************************************/
-char scanin(char **buf, char *delimiters, char *dest, int size)
-{
-  char *ptr, found = '?';
-
-  if (*buf == NULL || strlen(*buf) == 0 || size == 0) {
-    if (dest) {
-      dest[0] = '\0';
-    }
-    *buf = NULL;
-    return '\0';
-  }
-
-  if (dest) {
-    strncpy(dest, *buf, size-1);
-    dest[size-1] = '\0';
-    remove_leading_trailing_spaces(dest);
-    ptr = strpbrk(dest, delimiters);
-  } else {
-    /* Just skip ahead. */
-    ptr = strpbrk(*buf, delimiters);
-  }
-  if (ptr != NULL) {
-    found = *ptr;
-    if (dest) {
-      *ptr = '\0';
-    }
-    if (dest) {
-      remove_leading_trailing_spaces(dest);
-    }
-    *buf = strpbrk(*buf, delimiters);
-    if (*buf != NULL) {
-      (*buf)++; /* skip delimiter */
-    } else {
-    }
-  } else {
-    *buf = NULL;
-  }
-
-  return found;
-}

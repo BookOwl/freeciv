@@ -15,7 +15,7 @@
 
 enum help_page_type { HELP_ANY, HELP_TEXT, HELP_UNIT, HELP_IMPROVEMENT,
 		      HELP_WONDER, HELP_TECH, HELP_TERRAIN,
-                      HELP_GOVERNMENT, HELP_LAST };
+                      HELP_GOVERNMENT };
 
 void popup_help_dialog_string(const char *item);
 void popup_help_dialog_typed(const char *item, enum help_page_type);
@@ -26,7 +26,7 @@ void popdown_help_dialog(void);
 #define HELP_CONNECTING_ITEM "Connecting"
 #define HELP_CHATLINE_ITEM "Chatline"
 #define HELP_WORKLIST_EDITOR_ITEM "Worklist Editor"
-#define HELP_CMA_ITEM "Citizen Governor"
+#define HELP_CMA_ITEM "Citizen Management Agent"
 #define HELP_CONTROLS_ITEM "Controls"
 #define HELP_IMPROVEMENTS_ITEM "City Improvements"
 #define HELP_UNITS_ITEM "Units"

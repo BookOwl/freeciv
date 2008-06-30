@@ -33,7 +33,6 @@
 #include "control.h"
 #include "goto.h"
 #include "text.h"
-#include "unitlist.h"
 
 #include "gui_text.h"
 
@@ -135,21 +134,17 @@ static void real_add(char **buffer, size_t * buffer_size, const char *format,
 ****************************************************************************/
 const char *mapview_get_terrain_tooltip_text(struct tile *ptile)
 {
-  int count;
-    
-  bv_special infrastructure = get_tile_infrastructure_set(ptile, &count);
-               
+  int infrastructure = get_tile_infrastructure_set(ptile);
   INIT;
 
 #ifdef DEBUG
   add_line(_("Location: (%d, %d) [%d]"),
-	   TILE_XY(ptile),
-	   tile_continent(ptile));
+	   ptile->x, ptile->y, ptile->continent);
 #endif
-  add_line("%s", tile_get_info_text(ptile, 0));
-  if (count > 0) {
+  add_line("%s", map_get_tile_info_text(ptile));
+  if (infrastructure) {
     add_line("%s",
-	     get_infrastructure_text(infrastructure));
+	     map_get_infrastructure_text(infrastructure));
   }
   RETURN;
 }
@@ -162,32 +157,42 @@ static void calc_effect(enum unit_activity activity, struct tile *ptile,
 {
   struct tile backup = *ptile;
   int stats_before[3], stats_after[3];
-  /* FIXME: use output_type_iterate! */
 
-  stats_before[0] = city_tile_output(NULL, ptile, FALSE, O_FOOD);
-  stats_before[1] = city_tile_output(NULL, ptile, FALSE, O_SHIELD);
-  stats_before[2] = city_tile_output(NULL, ptile, FALSE, O_TRADE);
+  stats_before[0] = get_food_tile(ptile);
+  stats_before[1] = get_shields_tile(ptile);
+  stats_before[2] = get_trade_tile(ptile);
 
   /* BEWARE UGLY HACK AHEAD */
 
   switch (activity) {
   case ACTIVITY_ROAD:
+    map_set_special(ptile, S_ROAD);
+    break;
   case ACTIVITY_RAILROAD:
+    map_set_special(ptile, S_RAILROAD);
+    break;
   case ACTIVITY_MINE:
+    map_mine_tile(ptile);
+    break;
+
   case ACTIVITY_IRRIGATE:
+    map_irrigate_tile(ptile);
+    break;
+
   case ACTIVITY_TRANSFORM:
-    tile_apply_activity(ptile, activity);
+    map_transform_tile(ptile);
     break;
   default:
     assert(0);
   }
 
-  stats_after[0] = city_tile_output(NULL, ptile, FALSE, O_FOOD);
-  stats_after[1] = city_tile_output(NULL, ptile, FALSE, O_SHIELD);
-  stats_after[2] = city_tile_output(NULL, ptile, FALSE, O_TRADE);
+  stats_after[0] = get_food_tile(ptile);
+  stats_after[1] = get_shields_tile(ptile);
+  stats_after[2] = get_trade_tile(ptile);
 
   ptile->terrain = backup.terrain;
   ptile->special = backup.special;
+  reset_move_costs(ptile);
   /* hopefully everything is now back in place */
 
   diff[0] = stats_after[0] - stats_before[0];
@@ -298,24 +303,24 @@ const char *mapview_get_unit_action_tooltip(struct unit *punit,
     add_line(_("Effect: the computer performs settler activities"));
   } else {
 #if 0
-  ttype = tile_terrain(punit->tile);
-  tinfo = terrain_by_number(ttype);
+  ttype = punit->tile->terrain;
+  tinfo = get_tile_type(ttype);
   if ((tinfo->irrigation_result != T_LAST)
       && (tinfo->irrigation_result != ttype)) {
     my_snprintf(irrtext, sizeof(irrtext), irrfmt,
-		terrain_name_translation(tinfo->irrigation_result));
-  } else if (tile_has_special(punit->tile, S_IRRIGATION)
-	     && player_knows_techs_with_flag(client.conn.playing, TF_FARMLAND)) {
+		(get_tile_type(tinfo->irrigation_result))->terrain_name);
+  } else if (map_has_special(punit->tile, S_IRRIGATION)
+	     && player_knows_techs_with_flag(game.player_ptr, TF_FARMLAND)) {
     sz_strlcpy(irrtext, _("Bu_ild Farmland"));
   }
   if ((tinfo->mining_result != T_LAST) && (tinfo->mining_result != ttype)) {
     my_snprintf(mintext, sizeof(mintext), minfmt,
-		terrain_name_translation(tinfo->mining_result));
+		(get_tile_type(tinfo->mining_result))->terrain_name);
   }
   if ((tinfo->transform_result != T_LAST)
       && (tinfo->transform_result != ttype)) {
     my_snprintf(transtext, sizeof(transtext), transfmt,
-		terrain_name_translation(tinfo->transform_result));
+		(get_tile_type(tinfo->transform_result))->terrain_name);
   }
 
   menus_rename("<main>/_Orders/Build _Irrigation", irrtext);
@@ -324,8 +329,7 @@ const char *mapview_get_unit_action_tooltip(struct unit *punit,
 #endif
     add_line("tooltip for action %s isn't written yet",
 	     action);
-    freelog(LOG_VERBOSE,
-	    "warning: get_unit_action_tooltip: unknown action %s",
+    freelog(LOG_NORMAL, "warning: get_unit_action_tooltip: unknown action %s",
 	    action);
   }
   RETURN;
@@ -341,16 +345,23 @@ const char *mapview_get_city_action_tooltip(struct city *pcity,
   INIT;
 
   if (strcmp(action, "city_buy") == 0) {
+    const char *name;
+
+    if (pcity->is_building_unit) {
+      name = get_unit_type(pcity->currently_building)->name;
+    } else {
+      name = get_impr_name_ex(pcity, pcity->currently_building);
+    }
+
     add_line(_("Buy production"));
     add_line(_("Cost: %d (%d in treasury)"),
-	     city_production_buy_gold_cost(pcity),
-	     client.conn.playing->economic.gold);
-    add_line(_("Producting: %s (%d turns)"),
-	     city_production_name_translation(pcity),
-	     city_production_turns_to_build(pcity, TRUE));
+	     city_buy_cost(pcity), game.player_ptr->economic.gold);
+    add_line(_("Producting: %s (%d turns)"), name,
+	     city_turns_to_build(pcity, pcity->currently_building,
+				 pcity->is_building_unit, TRUE));
   } else {
     add_line("tooltip for action %s isn't written yet", action);
-    freelog(LOG_VERBOSE,
+    freelog(LOG_NORMAL,
 	    "warning: get_city_action_tooltip: unknown action %s", action);
   }
   RETURN;
@@ -364,8 +375,8 @@ const char *mapview_get_city_tooltip_text(struct city *pcity)
   struct player *owner = city_owner(pcity);
   INIT;
 
-  add_line("%s", city_name(pcity));
-  add_line("%s", player_name(owner));
+  add_line("%s", pcity->name);
+  add_line("%s", owner->name);
   RETURN;
 }
 
@@ -374,10 +385,11 @@ const char *mapview_get_city_tooltip_text(struct city *pcity)
 ****************************************************************************/
 const char *mapview_get_city_info_text(struct city *pcity)
 {
+  struct player *owner = city_owner(pcity);
   INIT;
 
-  add_line(_("City: %s (%s)"), city_name(pcity),
-	   nation_adjective_for_player(city_owner(pcity)));
+  add_line(_("City: %s (%s)"), pcity->name,
+	   get_nation_name(owner->nation));
   if (city_got_citywalls(pcity)) {
     add(_(" with City Walls"));
   }
@@ -391,24 +403,23 @@ const char *mapview_get_unit_tooltip_text(struct unit *punit)
 {
   struct unit_type *ptype = unit_type(punit);
   struct city *pcity =
-      player_find_city_by_id(client.conn.playing, punit->homecity);
+      player_find_city_by_id(game.player_ptr, punit->homecity);
   INIT;
 
-  add("%s", utype_name_translation(ptype));
+  add("%s", ptype->name);
   if (ptype->veteran[punit->veteran].name[0] != '\0') {
     add(" (%s)", ptype->veteran[punit->veteran].name);
   }
   add("\n");
   add_line("%s", unit_activity_text(punit));
   if (pcity) {
-    add_line("%s", city_name(pcity));
+    add_line("%s", pcity->name);
   }
   RETURN;
 }
 
 /****************************************************************************
   Get a longer tooltip for a unit.
-  FIXME: should use same method as client/text.c popup_info_text()
 ****************************************************************************/
 const char *mapview_get_unit_info_text(struct unit *punit)
 {
@@ -420,31 +431,21 @@ const char *mapview_get_unit_info_text(struct unit *punit)
     add_line(_("Activity: %s"), activity_text);
   }
   if (punit) {
-    struct player *owner = unit_owner(punit);
+    char tmp[64] = { 0 };
     struct unit_type *ptype = unit_type(punit);
 
-    if (owner == client.conn.playing) {
-      struct city *pcity = player_find_city_by_id(owner, punit->homecity);
+    if (punit->owner == game.player_idx) {
+      struct city *pcity =
+	  player_find_city_by_id(game.player_ptr, punit->homecity);
 
       if (pcity){
-	/* TRANS: "Unit: Musketeers (Polish, Warsaw)" */
-	add_line(_("Unit: %s (%s, %s)"),
-		 utype_name_translation(ptype),
-		 nation_adjective_for_player(owner),
-		 city_name(pcity));
-      } else {
-	/* TRANS: "Unit: Musketeers (Polish)" */
-	add_line(_("Unit: %s (%s)"),
-		 utype_name_translation(ptype),
-		 nation_adjective_for_player(owner));
+	my_snprintf(tmp, sizeof(tmp), "/%s", pcity->name);
       }
-    } else {
-      struct unit *apunit = head_of_units_in_focus();  /* FIXME, need best in stack */
-
-      /* TRANS: "Unit: Musketeers (Polish)" */
-      add_line(_("Unit: %s (%s)"),
-               utype_name_translation(ptype),
-               nation_adjective_for_player(owner));
+    }
+    add_line(_("Unit: %s(%s%s)"), ptype->name,
+	     get_nation_name(unit_owner(punit)->nation), tmp);
+    if (punit->owner != game.player_idx) {
+      struct unit *apunit = get_unit_in_focus();
 
       if (apunit) {
 	/* chance to win when active unit is attacking the selected unit */

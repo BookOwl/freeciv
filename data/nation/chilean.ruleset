@@ -2,36 +2,33 @@
 
 name=_("Chilean")
 plural=_("?plural:Chileans")
-groups="Modern", "American"
+class=_("Modern")
 legend=_("Chile is located on the south-western coast of South America.")
-leader=
- "Pedro de Valdivia",
- "Bernardo O'Higgins",
- "José Miguel Carrera",
- "Manuel Blanco Encalada",
- "Diego Portales",
- "Manuel Montt",
- "Arturo Alessandri",
- "Augusto Pinochet"
+leader="Pedro de Valdivia", "Bernardo O'Higgins", "José Miguel Carrera",
+       "Manuel Blanco Encalada", "Diego Portales", "Manuel Montt",
+       "Arturo Alessandri", "Augusto Pinochet"
 leader_sex="Male", "Male", "Male",
            "Male", "Male", "Male",
            "Male", "Male"
-flag="chile"
+flag="f.chile"
 flag_alt = "-"
 city_style = "European"
 
-ruler_titles = { "government",      "male_title",        "female_title"
-                 "Despotism",       _("Captain General"),_("Captain General")
-                 "Fundamentalism",  _("Archbishop"),     _("Archbishop")
-                 "Republic",      _("Supreme Director"),_("Supreme Director")
+ruler_titles = { "government",      "male_title",          "female_title"
+                 "Despotism",       _("Captain General"),  _("Captain General")
+                 "Fundamentalism",  _("Archbishop"),       _("Archbishop")
+                 "Republic",        _("Supreme Director"), _("Supreme Director")
+                 "Democracy",       _("President"),        _("President")
                }
 
 init_techs=""
 init_buildings=""
 
-init_government="Despotism"
-init_units=""
-civilwar_nations = "argentine", "mapuche"
+tech_goals="Iron Working", "Trade", "Navigation", "The Republic",
+           "Railroad", "Steel", "Industrialization"
+wonder="Hoover Dam"
+government="Democracy"
+civilwar_nations = "argentine"
 
 cities =
   "Santiago", "La Serena", "Concepción", "Valparaíso (hills)",

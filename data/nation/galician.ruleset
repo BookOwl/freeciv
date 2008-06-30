@@ -2,37 +2,28 @@
 
 name=_("Galician")
 plural=_("?plural:Galicians")
-groups="Medieval", "European"
-legend=_("Galicia is a region in the northwest of Spain, just above\
- Portugal.")
-leader=
- "Afonso",
- "Diego Xelmírez",
- "Hermerico",
- "Pero Pardo de Cela",
- "Rosalía de Castro",
- "Manuel"
+class=_("Historical")
+leader="Don Afonso", "Diego Xelmírez", "Hermerico", "Pedro Pardo de Cela",
+       "Rosalía de Castro", "Don Manuel"
 leader_sex="Male", "Male", "Male", "Male",
            "Female", "Male"
-flag="galicia"
+flag="f.galicia"
 flag_alt = "-"
-city_style = "Celtic"
-
+city_style = "European"
 ruler_titles = { "government",      "male_title",          "female_title"
-                 "Democracy", _("Primeiro Ministro"),  _("Primeira Ministra")
-; /* TRANS: The third letter in "Dona" should be U+00F1 LATIN SMALL LETTER */
-; /* TRANS: N WITH TILDE */
-                 "Despotism",       _("Don"),              _("Dona")
+                 "Democracy",       _("Primeiro Ministro"),  _("Primeira Ministra")
+                 "Despotism",       _("Dictador"),         _("Dictadora")
                  "Monarchy",        _("Rei"),              _("Raina")
-                 "Republic",        _("Presidente"),       _("Presidenta")
-                 "Fundamentalism",  _("Gran Bardo"),      _("Grande Bardesa")
+                 "Republic",        _("Presidente"),        _("Presidenta")
+                 "Fundamentalism",  _("Gran Bardo"),       _("Grande Bardesa")
                }
 
 init_techs=""
 init_buildings=""
-init_government="Despotism"
-init_units=""
-civilwar_nations="portuguese", "spanish"
+tech_goals = "Monarchy", "Iron Working", "Navigation", "Chivalry", "Trade",
+  "Monotheism", "The Republic"
+wonder="Magellan's Expedition"
+government="Republic"
 
 cities =
   "Santiago de Compostela", "A Coruña", "Vigo", "Lugo", "Pontevedra",

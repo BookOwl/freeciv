@@ -50,7 +50,6 @@
 #include <windows.h>	/* GetTempPath */
 #endif
 
-#include "fcintl.h"
 #include "log.h"
 #include "shared.h"		/* TRUE, FALSE */
 #include "support.h"
@@ -61,86 +60,17 @@
 #define INADDR_NONE 0xffffffff
 #endif
 
-#ifdef HAVE_WINSOCK
-/***************************************************************
-  Set errno variable on Winsock error
-***************************************************************/
-static void set_socket_errno(void)
-{
-  switch(WSAGetLastError()) {
-    /* these have mappings to symbolic errno names in netintf.h */ 
-    case WSAEINTR:
-    case WSAEWOULDBLOCK:
-    case WSAECONNRESET:
-    case WSAECONNREFUSED:
-      errno = WSAGetLastError();
-      return;
-    default:
-      freelog(LOG_ERROR,
-              "Missing errno mapping for Winsock error #%d.",
-              WSAGetLastError());
-      freelog(LOG_ERROR,
-              /* TRANS: No full stop after the URL, could cause confusion. */
-              _("Please report this message at %s"),
-              BUG_URL);
-  }
-}
-#endif /* HAVE_WINSOCK */
-
-/***************************************************************
-  Connect a socket to an address
-***************************************************************/
-int my_connect(int sockfd, const struct sockaddr *serv_addr, socklen_t addrlen)
-{
-  int result;
-  
-  result = connect(sockfd, serv_addr, addrlen);
-  
-#ifdef HAVE_WINSOCK
-  if (result == -1) {
-    set_socket_errno();
-  }
-#endif
-
-  return result;
-}
-
-/***************************************************************
-  Wait for a number of sockets to change status
-**************************************************************/
-int my_select(int n, fd_set *readfds, fd_set *writefds, fd_set *exceptfds,
-              struct timeval *timeout)
-{
-  int result;
-  
-  result = select(n, readfds, writefds, exceptfds, timeout);
-  
-#ifdef HAVE_WINSOCK
-  if (result == -1) {
-    set_socket_errno();
-  }
-#endif
-
-  return result;       
-}
 
 /***************************************************************
   Read from a socket.
 ***************************************************************/
 int my_readsocket(int sock, void *buf, size_t size)
 {
-  int result;
-  
 #ifdef HAVE_WINSOCK
-  result = recv(sock, buf, size, 0);
-  if (result == -1) {
-    set_socket_errno();
-  }
+  return recv(sock, buf, size, 0);
 #else
-  result = read(sock, buf, size);
+  return read(sock, buf, size);
 #endif
-
-  return result;
 }
 
 /***************************************************************
@@ -148,18 +78,11 @@ int my_readsocket(int sock, void *buf, size_t size)
 ***************************************************************/
 int my_writesocket(int sock, const void *buf, size_t size)
 {
-  int result;
-        
 #ifdef HAVE_WINSOCK
-  result = send(sock, buf, size, 0);
-  if (result == -1) {
-    set_socket_errno();
-  }
+  return send(sock, buf, size, 0);
 #else
-  result = write(sock, buf, size);
+  return write(sock, buf, size);
 #endif
-
-  return result;
 }
 
 /***************************************************************
@@ -209,10 +132,6 @@ void my_shutdown_network(void)
 void my_nonblock(int sockfd)
 {
 #ifdef NONBLOCKING_SOCKETS
-#ifdef HAVE_WINSOCK
-  unsigned long b = 1;
-  ioctlsocket(sockfd, FIONBIO, &b);
-#else
 #ifdef HAVE_FCNTL
   int f_set;
 
@@ -232,7 +151,6 @@ void my_nonblock(int sockfd)
   if (ioctl(sockfd, FIONBIO, (char*)&value) == -1) {
     freelog(LOG_ERROR, "ioctl failed: %s", mystrerror());
   }
-#endif
 #endif
 #endif
 #else
@@ -342,8 +260,6 @@ fz_FILE *my_querysocket(int sock, void *buf, size_t size)
 const char *my_lookup_httpd(char *server, int *port, const char *url)
 {
   const char *purl, *str, *ppath, *pport;
-  const char *str2;
-  int chars_between = 0;
 
   if ((purl = getenv("http_proxy")) && purl[0] != '\0') {
     if (strncmp(purl, "http://", strlen("http://")) != 0) {
@@ -360,29 +276,17 @@ const char *my_lookup_httpd(char *server, int *port, const char *url)
 
   str += strlen("http://");
 
-  if (*str == '[') {
-    /* Literal IPv6 address (RFC 2732) */
-    str++;
-    str2 = strchr(str, ']') + 1;
-    if (!str2) {
-      str2 = str + strlen(str);
-    }
-    chars_between = 1;
-  } else {
-    str2 = str;
-  }
-
-  pport = strchr(str2, ':');
-  ppath = strchr(str2, '/');
+  pport = strchr(str, ':');
+  ppath = strchr(str, '/');
 
   /* snarf server. */
   server[0] = '\0';
 
   if (pport) {
-    strncat(server, str, MIN(MAX_LEN_ADDR, pport-str-chars_between));
+    strncat(server, str, MIN(MAX_LEN_ADDR, pport-str));
   } else {
     if (ppath) {
-      strncat(server, str, MIN(MAX_LEN_ADDR, ppath-str-chars_between));
+      strncat(server, str, MIN(MAX_LEN_ADDR, ppath-str));
     } else {
       strncat(server, str, MAX_LEN_ADDR);
     }

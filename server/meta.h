@@ -16,7 +16,7 @@
 #include "shared.h"		/* bool type */
 
 #define DEFAULT_META_SERVER_NO_SEND  TRUE
-#define DEFAULT_META_SERVER_ADDR     META_URL /* config.h */
+#define DEFAULT_META_SERVER_ADDR     "http://meta.freeciv.org/metaserver.phtml"
 #define METASERVER_REFRESH_INTERVAL   (3*60)
 #define METASERVER_MIN_UPDATE_INTERVAL 7   /* not too short, not too long */
 
@@ -27,22 +27,25 @@ enum meta_flag {
 };
 
 const char *default_meta_patches_string(void);
+const char *default_meta_topic_string(void);
 const char *default_meta_message_string(void);
 
 const char *get_meta_patches_string(void);
+const char *get_meta_topic_string(void);
 const char *get_meta_message_string(void);
 const char *get_user_meta_message_string(void);
-
+ 
 void maybe_automatic_meta_message(const char *automatic);
 
 void set_meta_patches_string(const char *string);
+void set_meta_topic_string(const char *string);
 void set_meta_message_string(const char *string);
 void set_user_meta_message_string(const char *string);
 
 char *meta_addr_port(void);
 
 void server_close_meta(void);
-bool server_open_meta(void);
+void server_open_meta(void);
 bool is_metaserver_open(void);
 
 bool send_server_info_to_metaserver(enum meta_flag flag);

@@ -2,7 +2,7 @@
 
 noinst_LIBRARIES = libaicore.a
 
-AM_CPPFLAGS = -I$(top_srcdir)/utility -I.. -I$(top_srcdir)/common
+AM_CPPFLAGS = -I$(top_srcdir)/utility -I.. -I$(top_srcdir)/common -I../../intl
 
 libaicore_a_SOURCES = 		\
 	aisupport.c		\
@@ -14,6 +14,4 @@ libaicore_a_SOURCES = 		\
 	cm.c	 		\
 	cm.h			\
 	citymap.c		\
-	citymap.h               \
-        caravan.c               \
-        caravan.h
+	citymap.h

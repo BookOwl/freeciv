@@ -1,5 +1,5 @@
 /********************************************************************** 
- Freeciv - Copyright (C) 1996-2007 - The Freeciv Project
+   Copyright (C) 1996 - 2004  The Freeciv Project
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
    the Free Software Foundation; either version 2, or (at your option)
@@ -72,9 +72,9 @@ void renormalize_hmap_poles(void)
 void make_random_hmap(int smooth)
 {
   int i = 0;
-  height_map = fc_malloc(sizeof(*height_map) * MAP_INDEX_SIZE);
+  height_map = fc_malloc (sizeof(int) * MAX_MAP_INDEX);
 
-  INITIALIZE_ARRAY(height_map, MAP_INDEX_SIZE, myrand(1000 * smooth));
+  INITIALIZE_ARRAY(height_map, MAX_MAP_INDEX, myrand(1000 * smooth) );
 
   for (; i < smooth; i++) {
     smooth_int_map(height_map, TRUE);
@@ -183,10 +183,10 @@ void make_pseudofractal1_hmap(int extra_div)
   /* edges are avoided more strongly as this increases */
   int avoidedge = (100 - map.landpercent) * step / 100 + step / 3; 
 
-  height_map = fc_malloc(sizeof(*height_map) * MAP_INDEX_SIZE);
+  height_map = fc_malloc(sizeof(int) * MAX_MAP_INDEX);
 
  /* initialize map */
-  INITIALIZE_ARRAY(height_map, MAP_INDEX_SIZE, 0);
+  INITIALIZE_ARRAY(height_map, MAX_MAP_INDEX, 0);
 
   /* set initial points */
   for (xn = 0; xn < xdiv2; xn++) {

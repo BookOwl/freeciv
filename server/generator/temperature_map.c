@@ -1,5 +1,5 @@
 /********************************************************************** 
- Freeciv - Copyright (C) 2004 - Marcelo J. Burda
+   Copyright (C) 2004 - Marcelo J. Burda
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
    the Free Software Foundation; either version 2, or (at your option)
@@ -24,7 +24,7 @@
 
 static int *temperature_map;
 
-#define tmap(_tile) (temperature_map[tile_index(_tile)])
+#define tmap(ptile) (temperature_map[(ptile)->index])
 
 /**************************************************************
   Return TRUE if temperateure_map is initialized
@@ -80,7 +80,7 @@ void create_tmap(bool real)
     return;
   }
 
-  temperature_map = fc_malloc(sizeof(*temperature_map) * MAP_INDEX_SIZE);
+  temperature_map = fc_malloc(sizeof(int) * MAX_MAP_INDEX);
   whole_map_iterate(ptile) {
   
      /* the base temperature is equal to base map_colatitude */
@@ -107,7 +107,7 @@ void create_tmap(bool real)
     adjust_int_map(temperature_map, MAX_COLATITUDE);
   }
   /* now simplify to 4 base values */ 
-  for (i = 0; i < MAP_INDEX_SIZE; i++) {
+  for (i = 0; i < MAX_MAP_INDEX; i++) {
     int t = temperature_map[i];
 
     if (t >= TROPICAL_LEVEL) {

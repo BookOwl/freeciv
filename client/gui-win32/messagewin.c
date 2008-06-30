@@ -32,6 +32,7 @@
  
 #include "chatline.h"
 #include "citydlg.h"
+#include "clinet.h"
 #include "colors.h"
 #include "gui_stuff.h"
 #include "mapview.h"
@@ -158,7 +159,7 @@ static void create_meswin_dialog(void)
 /**************************************************************************
 
 **************************************************************************/
-void popup_meswin_dialog(bool raise)
+void popup_meswin_dialog(void)
 {
   int updated = 0;
  
@@ -166,9 +167,7 @@ void popup_meswin_dialog(bool raise)
     create_meswin_dialog();
     updated = 1;               /* create_ calls update_ */
   }
-  if (raise) {
-    SetFocus(meswin_dlg);
-  }
+  
 }
 
 /****************************************************************

@@ -34,11 +34,8 @@ void lost_connection_to_client(struct connection *pconn);
 void send_conn_info(struct conn_list *src, struct conn_list *dest);
 void send_conn_info_remove(struct conn_list *src, struct conn_list *dest);
 
-struct player *find_uncontrolled_player(void);
-bool attach_connection_to_player(struct connection *pconn,
-                                 struct player *pplayer,
-                                 bool observing);
-bool detach_connection_to_player(struct connection *pconn,
-                                 bool observing);
+bool attach_connection_to_player(struct connection *pconn, 
+                                 struct player *pplayer);
+bool unattach_connection_from_player(struct connection *pconn);
 
 #endif /* FC__CONNECTHAND_H */

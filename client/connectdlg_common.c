@@ -39,17 +39,15 @@ Freeciv - Copyright (C) 2004 - The Freeciv Project
 
 #include "capability.h"
 #include "fcintl.h"
-#include "ioz.h"
 #include "log.h"
 #include "mem.h"
 #include "netintf.h"
 #include "rand.h"
 #include "registry.h"
 #include "support.h"
-
 #include "civclient.h"
 #include "climisc.h"
-#include "clinet.h"		/* connect_to_server() */
+#include "clinet.h"
 #include "packhand_gen.h"
 
 #include "chatline_common.h"
@@ -68,13 +66,21 @@ HANDLE loghandle = INVALID_HANDLE_VALUE;
 static pid_t server_pid = - 1;
 #endif
 
-char leader_name[MAX_LEN_NAME];
+char player_name[MAX_LEN_NAME];
 char *current_filename = NULL;
 
 static char challenge_fullname[MAX_LEN_PATH];
 static bool client_has_hack = FALSE;
 
 int internal_server_port;
+
+const char *skill_level_names[NUM_SKILL_LEVELS] = { 
+  N_("novice"),
+  N_("easy"), 
+  N_("normal"), 
+  N_("hard")
+ ,N_("experimental")
+};
 
 /************************************************************************** 
 The general chain of events:
@@ -131,7 +137,7 @@ bool can_client_access_hack(void)
 void client_kill_server(bool force)
 {
   if (is_server_running()) {
-    if (client.conn.used) {
+    if (aconnection.used) {
       /* This does a "soft" shutdown of the server by sending a /quit.
        *
        * This is useful when closing the client or disconnecting because it
@@ -162,7 +168,7 @@ void client_kill_server(bool force)
       }
       server_process = INVALID_HANDLE_VALUE;
       loghandle = INVALID_HANDLE_VALUE;
-#elif HAVE_WORKING_FORK
+#else
       kill(server_pid, SIGTERM);
       waitpid(server_pid, NULL, WUNTRACED);
       server_pid = -1;
@@ -183,7 +189,7 @@ bool client_start_server(void)
 #if !defined(HAVE_WORKING_FORK) && !defined(WIN32_NATIVE)
   /* Can't do much without fork */
   return FALSE;
-#else /* HAVE_WORKING_FORK || WIN32_NATIVE */
+#else
   char buf[512];
   int connect_tries = 0;
 # ifdef WIN32_NATIVE
@@ -196,7 +202,7 @@ bool client_start_server(void)
   char cmdline3[512];
   char logcmdline[512];
   char scriptcmdline[512];
-# endif /* WIN32_NATIVE */
+# endif
 
   /* only one server (forked from this client) shall be running at a time */
   /* This also resets client_has_hack. */
@@ -244,9 +250,9 @@ bool client_start_server(void)
     fclose(stdout);
     fclose(stderr);
 
-    /* FIXME: include the port to avoid duplication? */
+    /* include the port to avoid duplication */
     if (logfile) {
-      fd = open(logfile, O_WRONLY | O_CREAT | O_APPEND, 0644);
+      fd = open(logfile, O_WRONLY | O_CREAT);
 
       if (fd != 1) {
         dup2(fd, 1);
@@ -275,7 +281,7 @@ bool client_start_server(void)
      * Calling exit here is dangerous due to X11 problems (async replies) */ 
     _exit(1);
   } 
-# else /* HAVE_WORKING_FORK */
+# else
 #  ifdef WIN32_NATIVE
   if (logfile) {
     loghandle = CreateFile(logfile, GENERIC_WRITE,
@@ -320,14 +326,14 @@ bool client_start_server(void)
 			DETACHED_PROCESS | NORMAL_PRIORITY_CLASS,
 			NULL, NULL, &si, &pi)) {
     append_output_window(_("Couldn't start the server."));
-    append_output_window(_("You'll have to start one manually. Sorry..."));
+    append_output_window(_("You'll have to " "start one manually. Sorry..."));
     return FALSE;
   }
   
   server_process = pi.hProcess;
 
-#  endif /* WIN32_NATIVE */
-# endif /* HAVE_WORKING_FORK */
+#  endif
+# endif
  
   /* a reasonable number of tries */ 
   while (connect_to_server(user_name, "localhost", internal_server_port, 
@@ -338,8 +344,8 @@ bool client_start_server(void)
     if (waitpid(server_pid, NULL, WNOHANG) != 0) {
       break;
     }
-#endif /* WIN32_NATIVE */
-#endif /* HAVE_WORKING_FORK */
+#endif
+#endif
     if (connect_tries++ > NUMBER_OF_TRIES) {
       break;
     }
@@ -347,7 +353,7 @@ bool client_start_server(void)
 
   /* weird, but could happen, if server doesn't support new startup stuff
    * capabilities won't help us here... */ 
-  if (!client.conn.used) {
+  if (!aconnection.used) {
     /* possible that server is still running. kill it */ 
     client_kill_server(TRUE);
 
@@ -364,24 +370,22 @@ bool client_start_server(void)
    * get an iso-map and for a classic tileset you get a classic map.  In
    * both cases the map wraps in the X direction by default.
    *
-   * This works with hex maps too now.  A hex map always has
-   * tileset_is_isometric(tileset) return TRUE.  An iso-hex map has
-   * tileset_hex_height(tileset) != 0, while a non-iso hex map
-   * has tileset_hex_width(tileset) != 0.
+   * This works with hex maps too now.  A hex map always has is_isometric
+   * set.  An iso-hex map has hex_height != 0, while a non-iso hex map
+   * has hex_width != 0.
    *
    * Setting the option here is a bit of a hack, but so long as the client
    * has sufficient permissions to do so (it doesn't have HACK access yet) it
    * is safe enough.  Note that if you load a savegame the topology will be
    * set but then overwritten during the load. */
-  send_chat_printf("/set topology %d",
-                   (TF_WRAPX
-                    | ((tileset_is_isometric(tileset)
-                        && tileset_hex_height(tileset) == 0) ? TF_ISO : 0)
-                    | ((tileset_hex_width(tileset) != 0
-                        || tileset_hex_height(tileset) != 0) ? TF_HEX : 0)));
+  my_snprintf(buf, sizeof(buf), "/set topology %d",
+	      (TF_WRAPX
+	       | ((is_isometric && hex_height == 0) ? TF_ISO : 0)
+	       | ((hex_width != 0 || hex_height != 0) ? TF_HEX : 0)));
+  send_chat(buf);
 
   return TRUE;
-#endif /* HAVE_WORKING_FORK || WIN32_NATIVE */
+#endif
 }
 
 /*************************************************************************
@@ -425,34 +429,36 @@ and read the string, then the client is given hack access.
 *****************************************************************/ 
 void send_client_wants_hack(const char *filename)
 {
-  if (filename[0] != '\0') {
-    struct packet_single_want_hack_req req;
-    struct section_file file;
+  if (has_capability("new_hack", aconnection.capability)) {
+    if (filename[0] != '\0') {
+      struct packet_single_want_hack_req req;
+      struct section_file file;
 
-    if (!is_filename_safe(filename)) {
-      return;
+      if (!is_filename_safe(filename)) {
+	return;
+      }
+
+      /* get the full filename path */
+      interpret_tilde(challenge_fullname, sizeof(challenge_fullname),
+	  "~/.freeciv/");
+      make_dir(challenge_fullname);
+
+      sz_strlcat(challenge_fullname, filename);
+
+      /* generate an authentication token */ 
+      randomize_string(req.token, sizeof(req.token));
+
+      section_file_init(&file);
+      secfile_insert_str(&file, req.token, "challenge.token");
+      if (!section_file_save(&file, challenge_fullname, 0)) {
+	freelog(LOG_ERROR, "Couldn't write token to temporary file: %s",
+	    challenge_fullname);
+      }
+      section_file_free(&file);
+
+      /* tell the server what we put into the file */ 
+      send_packet_single_want_hack_req(&aconnection, &req);
     }
-
-    /* get the full filename path */
-    interpret_tilde(challenge_fullname, sizeof(challenge_fullname),
-		    "~/.freeciv/");
-    make_dir(challenge_fullname);
-
-    sz_strlcat(challenge_fullname, filename);
-
-    /* generate an authentication token */ 
-    randomize_string(req.token, sizeof(req.token));
-
-    section_file_init(&file);
-    secfile_insert_str(&file, req.token, "challenge.token");
-    if (!section_file_save(&file, challenge_fullname, 0, FZ_PLAIN)) {
-      freelog(LOG_ERROR, "Couldn't write token to temporary file: %s",
-	      challenge_fullname);
-    }
-    section_file_free(&file);
-
-    /* tell the server what we put into the file */ 
-    send_packet_single_want_hack_req(&client.conn, &req);
   }
 }
 
@@ -461,13 +467,15 @@ handle response (by the server) if the client has got hack or not.
 *****************************************************************/ 
 void handle_single_want_hack_reply(bool you_have_hack)
 {
-  /* remove challenge file */
-  if (challenge_fullname[0] != '\0') {
-    if (remove(challenge_fullname) == -1) {
-      freelog(LOG_ERROR, "Couldn't remove temporary file: %s",
-	      challenge_fullname);
+  if (has_capability("new_hack", aconnection.capability)) {
+    /* remove challenge file */
+    if (challenge_fullname[0] != '\0') {
+      if (remove(challenge_fullname) == -1) {
+	freelog(LOG_ERROR, "Couldn't remove temporary file: %s",
+	    challenge_fullname);
+      }
+      challenge_fullname[0] = '\0';
     }
-    challenge_fullname[0] = '\0';
   }
 
   if (you_have_hack) {
@@ -487,9 +495,13 @@ send server commands to start a saved game.
 *****************************************************************/ 
 void send_start_saved_game(void)
 {   
+  char buf[MAX_LEN_MSG];
+
   send_chat("/set timeout 0");
   send_chat("/set autotoggle 1");
-  send_chat_printf("/take \"%s\" \"%s\"", user_name, leader_name);
+  my_snprintf(buf, sizeof(buf), "/take \"%s\" \"%s\"",
+      	      user_name, player_name);
+  send_chat(buf);
   send_chat("/start");
 }
 
@@ -498,49 +510,13 @@ send server command to save game.
 *****************************************************************/ 
 void send_save_game(char *filename)
 {   
+  char message[MAX_LEN_MSG];
+
   if (filename) {
-    send_chat_printf("/save %s", filename);
+    my_snprintf(message, MAX_LEN_MSG, "/save %s", filename);
   } else {
-    send_chat("/save");
+    my_snprintf(message, MAX_LEN_MSG, "/save");
   }
-}
 
-/**************************************************************************
-  Handle the list of rulesets sent by the server.
-**************************************************************************/
-void handle_ruleset_choices(struct packet_ruleset_choices *packet)
-{
-  char *rulesets[packet->ruleset_count];
-  int i;
-  size_t suf_len = strlen(RULESET_SUFFIX);
-
-  for (i = 0; i < packet->ruleset_count; i++) {
-    size_t len = strlen(packet->rulesets[i]);
-
-    rulesets[i] = mystrdup(packet->rulesets[i]);
-
-    if (len > suf_len
-	&& strcmp(rulesets[i] + len - suf_len, RULESET_SUFFIX) == 0) {
-      rulesets[i][len - suf_len] = '\0';
-    }
-  }
-  gui_set_rulesets(packet->ruleset_count, rulesets);
-
-  for (i = 0; i < packet->ruleset_count; i++) {
-    free(rulesets[i]);
-  }
-}
-
-/**************************************************************************
-  Called by the GUI code when the user sets the ruleset.  The ruleset
-  passed in here should match one of the strings given to gui_set_rulesets.
-**************************************************************************/
-void set_ruleset(const char *ruleset)
-{
-  char buf[4096];
-
-  my_snprintf(buf, sizeof(buf), "/read %s%s",
-	      ruleset, RULESET_SUFFIX);
-  freelog(LOG_DEBUG, "Executing '%s'", buf);
-  send_chat(buf);
+  send_chat(message);
 }

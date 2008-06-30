@@ -27,15 +27,14 @@
 #include <png.h>
 
 #include "fcintl.h"
+#include "game.h"
 #include "log.h"
 #include "mem.h"
-#include "movement.h"
 #include "shared.h"
 #include "support.h"
 #include "unit.h"
 #include "version.h"
 
-#include "civclient.h"
 #include "climisc.h"
 #include "colors.h"
 #include "gui_main.h"
@@ -45,13 +44,25 @@
 
 #include "graphics.h"
 
-struct sprite *intro_gfx_sprite;
-struct sprite *radar_gfx_sprite;
+#include "goto_cursor.xbm"
+#include "goto_cursor_mask.xbm"
+#include "drop_cursor.xbm"
+#include "drop_cursor_mask.xbm"
+#include "nuke_cursor.xbm"
+#include "nuke_cursor_mask.xbm"
+#include "patrol_cursor.xbm"
+#include "patrol_cursor_mask.xbm"
 
-Cursor cursors[CURSOR_LAST];
+struct Sprite *intro_gfx_sprite;
+struct Sprite *radar_gfx_sprite;
 
-static struct sprite *ctor_sprite(Pixmap mypixmap, int width, int height);
-static struct sprite *ctor_sprite_mask(Pixmap mypixmap, Pixmap mask, 
+Cursor goto_cursor;
+Cursor drop_cursor;
+Cursor nuke_cursor;
+Cursor patrol_cursor;
+
+static struct Sprite *ctor_sprite(Pixmap mypixmap, int width, int height);
+static struct Sprite *ctor_sprite_mask(Pixmap mypixmap, Pixmap mask, 
  				       int width, int height);
 
 /***************************************************************************
@@ -95,68 +106,63 @@ void load_intro_gfx(void)
      XAllocColor(display, cmap, &face)) {
     have_face = TRUE;
   } else {
-    face.pixel = get_color(tileset, COLOR_OVERVIEW_VIEWRECT)->color.pixel;
+    face.pixel = colors_standard[COLOR_STD_WHITE];
     have_face = FALSE;
   }
 
   /* Main graphic */
 
-  intro_gfx_sprite = load_gfxfile(tileset_main_intro_filename(tileset));
-  tot = intro_gfx_sprite->width;
+  intro_gfx_sprite=load_gfxfile(main_intro_filename);
+  tot=intro_gfx_sprite->width;
 
-  y = intro_gfx_sprite->height - (2 * lin);
+  y=intro_gfx_sprite->height-(2*lin);
 
   w = XmbTextEscapement(main_font_set, motto, strlen(motto));
   XSetForeground(display, font_gc, face.pixel);
   XmbDrawString(display, intro_gfx_sprite->pixmap,
-      		main_font_set, font_gc,
-		tot / 2 - w / 2, y,
-		motto, strlen(motto));
+      	      main_font_set, font_gc, 
+	      tot/2-w/2, y, 
+	      motto, strlen(motto));
 
   /* Minimap graphic */
 
-  radar_gfx_sprite = load_gfxfile(tileset_mini_intro_filename(tileset));
-  tot = radar_gfx_sprite->width;
+  radar_gfx_sprite=load_gfxfile(minimap_intro_filename);
+  tot=radar_gfx_sprite->width;
 
   y = radar_gfx_sprite->height - (lin +
       1.5 * (exts->max_logical_extent.height + exts->max_logical_extent.y));
 
   w = XmbTextEscapement(main_font_set, word_version(), strlen(word_version()));
-  XSetForeground(display, font_gc,
-		 get_color(tileset, COLOR_OVERVIEW_UNKNOWN)->color.pixel);
+  XSetForeground(display, font_gc, colors_standard[COLOR_STD_BLACK]);
   XmbDrawString(display, radar_gfx_sprite->pixmap,
-		main_font_set, font_gc,
-		(tot / 2 - w / 2) + 1, y + 1,
-		word_version(), strlen(word_version()));
-  XSetForeground(display, font_gc,
-		 get_color(tileset, COLOR_OVERVIEW_VIEWRECT)->color.pixel);
+      	      main_font_set, font_gc, 
+	      (tot/2-w/2)+1, y+1, 
+	      word_version(), strlen(word_version()));
+  XSetForeground(display, font_gc, colors_standard[COLOR_STD_WHITE]);
   XmbDrawString(display, radar_gfx_sprite->pixmap,
-		main_font_set, font_gc,
-		tot / 2 - w / 2, y,
-		word_version(), strlen(word_version()));
+      	      main_font_set, font_gc, 
+	      tot/2-w/2, y, 
+	      word_version(), strlen(word_version()));
 
-  y += lin;
+  y+=lin;
 
   my_snprintf(s, sizeof(s), "%d.%d.%d%s",
 	      MAJOR_VERSION, MINOR_VERSION,
 	      PATCH_VERSION, VERSION_LABEL);
   w = XmbTextEscapement(main_font_set, s, strlen(s));
-  XSetForeground(display, font_gc,
-		 get_color(tileset, COLOR_OVERVIEW_UNKNOWN)->color.pixel);
+  XSetForeground(display, font_gc, colors_standard[COLOR_STD_BLACK]);
   XmbDrawString(display, radar_gfx_sprite->pixmap,
-		main_font_set, font_gc,
-		(tot / 2 - w / 2) + 1, y + 1, s, strlen(s));
-  XSetForeground(display, font_gc,
-		 get_color(tileset, COLOR_OVERVIEW_VIEWRECT)->color.pixel);
+      	      main_font_set, font_gc, 
+	      (tot/2-w/2)+1, y+1, s, strlen(s));
+  XSetForeground(display, font_gc, colors_standard[COLOR_STD_WHITE]);
   XmbDrawString(display, radar_gfx_sprite->pixmap,
-		main_font_set, font_gc,
-		tot / 2 - w / 2, y, s, strlen(s));
+      	      main_font_set, font_gc, 
+	      tot/2-w/2, y, s, strlen(s));
 
   /* free colors */
 
-  if (have_face) {
+  if (have_face)
     XFreeColors(display, cmap, &(face.pixel), 1, 0);
-  }
 
   /* done */
 
@@ -167,9 +173,9 @@ void load_intro_gfx(void)
   Create a new sprite by cropping and taking only the given portion of
   the image.
 ****************************************************************************/
-struct sprite *crop_sprite(struct sprite *source,
+struct Sprite *crop_sprite(struct Sprite *source,
 			   int x, int y, int width, int height,
-			   struct sprite *mask,
+			   struct Sprite *mask,
 			   int mask_offset_x, int mask_offset_y)
 {
   Pixmap mypixmap, mymask;
@@ -216,7 +222,7 @@ struct sprite *crop_sprite(struct sprite *source,
 /****************************************************************************
   Find the dimensions of the sprite.
 ****************************************************************************/
-void get_sprite_dimensions(struct sprite *sprite, int *width, int *height)
+void get_sprite_dimensions(struct Sprite *sprite, int *width, int *height)
 {
   *width = sprite->width;
   *height = sprite->height;
@@ -227,34 +233,79 @@ void get_sprite_dimensions(struct sprite *sprite, int *width, int *height)
 ***************************************************************************/
 void load_cursors(void)
 {
-  enum cursor_type cursor;
+  Pixmap pixmap, mask;
   XColor white, black;
-  struct sprite *sprite;
-  int hot_x, hot_y;
 
-  white.pixel = get_color(tileset, COLOR_OVERVIEW_VIEWRECT)->color.pixel;
-  black.pixel = get_color(tileset, COLOR_OVERVIEW_UNKNOWN)->color.pixel;
+  white.pixel = colors_standard[COLOR_STD_WHITE];
+  black.pixel = colors_standard[COLOR_STD_BLACK];
   XQueryColor(display, cmap, &white);
   XQueryColor(display, cmap, &black);
 
-  for (cursor = 0; cursor < CURSOR_LAST; cursor++) {
-    sprite = get_cursor_sprite(tileset, cursor, &hot_x, &hot_y, 0);
+  /* goto */
+  pixmap =
+      XCreateBitmapFromData(display, root_window, goto_cursor_bits,
+			    goto_cursor_width, goto_cursor_height);
+  mask =
+      XCreateBitmapFromData(display, root_window,
+			    goto_cursor_mask_bits,
+			    goto_cursor_mask_width, goto_cursor_mask_height);
+  goto_cursor = XCreatePixmapCursor(display, pixmap, mask,
+				    &white, &black,
+				    goto_cursor_x_hot, goto_cursor_y_hot);
+  XFreePixmap(display, pixmap);
+  XFreePixmap(display, mask);
 
-    /* FIXME: this is entirely wrong.  It should be rewritten using
-     * XcursorImageLoadCursor.  See gdkcursor-x11.c in the GTK sources for
-     * examples. */
-    cursors[cursor] = XCreatePixmapCursor(display,
-					  sprite->mask, sprite->mask,
-					  &white, &black, hot_x, hot_y);
-  }
+  /* drop */
+  pixmap =
+      XCreateBitmapFromData(display, root_window, drop_cursor_bits,
+			    drop_cursor_width, drop_cursor_height);
+  mask =
+      XCreateBitmapFromData(display, root_window,
+			    drop_cursor_mask_bits,
+			    drop_cursor_mask_width, drop_cursor_mask_height);
+  drop_cursor = XCreatePixmapCursor(display, pixmap, mask,
+				    &white, &black,
+				    drop_cursor_x_hot, drop_cursor_y_hot);
+  XFreePixmap(display, pixmap);
+  XFreePixmap(display, mask);
+
+  /* nuke */
+  pixmap =
+      XCreateBitmapFromData(display, root_window, nuke_cursor_bits,
+			    nuke_cursor_width, nuke_cursor_height);
+  mask =
+      XCreateBitmapFromData(display, root_window,
+			    nuke_cursor_mask_bits,
+			    nuke_cursor_mask_width, nuke_cursor_mask_height);
+  nuke_cursor = XCreatePixmapCursor(display, pixmap, mask,
+				    &white, &black,
+				    nuke_cursor_x_hot, nuke_cursor_y_hot);
+  XFreePixmap(display, pixmap);
+  XFreePixmap(display, mask);
+
+  /* patrol */
+  pixmap =
+      XCreateBitmapFromData(display, root_window,
+			    patrol_cursor_bits, patrol_cursor_width,
+			    patrol_cursor_height);
+  mask =
+      XCreateBitmapFromData(display, root_window,
+			    patrol_cursor_mask_bits,
+			    patrol_cursor_mask_width,
+			    patrol_cursor_mask_height);
+  patrol_cursor = XCreatePixmapCursor(display, pixmap, mask,
+				      &white, &black,
+				      patrol_cursor_x_hot, patrol_cursor_y_hot);
+  XFreePixmap(display, pixmap);
+  XFreePixmap(display, mask);
 }
 
 /***************************************************************************
 ...
 ***************************************************************************/
-static struct sprite *ctor_sprite(Pixmap mypixmap, int width, int height)
+static struct Sprite *ctor_sprite(Pixmap mypixmap, int width, int height)
 {
-  struct sprite *mysprite=fc_malloc(sizeof(struct sprite));
+  struct Sprite *mysprite=fc_malloc(sizeof(struct Sprite));
   mysprite->pixmap=mypixmap;
   mysprite->width=width;
   mysprite->height=height;
@@ -266,10 +317,10 @@ static struct sprite *ctor_sprite(Pixmap mypixmap, int width, int height)
 /***************************************************************************
 ...
 ***************************************************************************/
-static struct sprite *ctor_sprite_mask(Pixmap mypixmap, Pixmap mask, 
+static struct Sprite *ctor_sprite_mask(Pixmap mypixmap, Pixmap mask, 
 				       int width, int height)
 {
-  struct sprite *mysprite=fc_malloc(sizeof(struct sprite));
+  struct Sprite *mysprite=fc_malloc(sizeof(struct Sprite));
   mysprite->pixmap=mypixmap;
   mysprite->mask=mask;
 
@@ -318,7 +369,7 @@ static Pixmap image2pixmap(XImage *xi)
 /***************************************************************************
 ...
 ***************************************************************************/
-struct sprite *load_gfxfile(const char *filename)
+struct Sprite *load_gfxfile(const char *filename)
 {
   png_structp pngp;
   png_infop infop;
@@ -331,33 +382,30 @@ struct sprite *load_gfxfile(const char *filename)
   png_uint_32 stride;
   unsigned long *pcolorarray;
   bool *ptransarray;
-  struct sprite *mysprite;
+  struct Sprite *mysprite;
   XImage *xi;
   int has_mask;
-  png_byte color_type;
-  png_byte alpha;
-  bool pixel, reported;
 
   fp = fopen(filename, "rb");
   if (!fp) {
-    freelog(LOG_FATAL, "Failed reading PNG file: \"%s\"", filename);
+    freelog(LOG_FATAL, _("Failed reading PNG file: %s"), filename);
     exit(EXIT_FAILURE);
   }
 
   pngp = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
   if (!pngp) {
-    freelog(LOG_FATAL, "Failed creating PNG struct");
+    freelog(LOG_FATAL, _("Failed creating PNG struct"));
     exit(EXIT_FAILURE);
   }
 
   infop = png_create_info_struct(pngp);
   if (!infop) {
-    freelog(LOG_FATAL, "Failed creating PNG struct");
+    freelog(LOG_FATAL, _("Failed creating PNG struct"));
     exit(EXIT_FAILURE);
   }
   
   if (setjmp(pngp->jmpbuf)) {
-    freelog(LOG_FATAL, "Failed while reading PNG file: \"%s\"", filename);
+    freelog(LOG_FATAL, _("Failed while reading PNG file: %s"), filename);
     exit(EXIT_FAILURE);
   }
 
@@ -369,67 +417,45 @@ struct sprite *load_gfxfile(const char *filename)
   png_read_info(pngp, infop);
   width = png_get_image_width(pngp, infop);
   height = png_get_image_height(pngp, infop);
-  color_type = png_get_color_type(pngp, infop);
 
-  if (color_type == PNG_COLOR_TYPE_PALETTE) {
-    if (png_get_PLTE(pngp, infop, &palette, &npalette)) {
-      int i;
-      XColor *mycolors;
+  if (png_get_PLTE(pngp, infop, &palette, &npalette)) {
+    int i;
+    XColor *mycolors;
 
-      pcolorarray = fc_malloc(npalette * sizeof(*pcolorarray));
+    pcolorarray = fc_malloc(npalette * sizeof(*pcolorarray));
 
-      mycolors = fc_malloc(npalette * sizeof(*mycolors));
+    mycolors = fc_malloc(npalette * sizeof(*mycolors));
 
-      for (i = 0; i < npalette; i++) {
-	mycolors[i].red  = palette[i].red << 8;
-	mycolors[i].green = palette[i].green << 8;
-	mycolors[i].blue = palette[i].blue << 8;
-      }
-
-      alloc_colors(mycolors, npalette);
-
-      for (i = 0; i < npalette; i++) {
-	pcolorarray[i] = mycolors[i].pixel;
-      }
-
-      free(mycolors);
-    } else {
-      freelog(LOG_FATAL, "PNG file has no palette: \"%s\"", filename);
-      exit(EXIT_FAILURE);
+    for (i = 0; i < npalette; i++) {
+      mycolors[i].red  = palette[i].red << 8;
+      mycolors[i].green = palette[i].green << 8;
+      mycolors[i].blue = palette[i].blue << 8;
     }
 
-    has_mask = png_get_tRNS(pngp, infop, &trans, &ntrans, NULL);
+    alloc_colors(mycolors, npalette);
 
-    if (has_mask) {
-      int i;
-
-      ptransarray = fc_calloc(npalette, sizeof(*ptransarray));
-
-      reported = FALSE;
-      for (i = 0; i < ntrans; i++) {
-	if (trans[i] < npalette) {
-	  ptransarray[trans[i]] = TRUE;
-	} else if (!reported) {
-	  freelog(LOG_VERBOSE,
-		  "PNG: Transparent array entry is out of palette: \"%s\"",
-		  filename);
-	  reported = TRUE;
-	}
-      }
-    } else {
-      ptransarray = NULL;
+    for (i = 0; i < npalette; i++) {
+      pcolorarray[i] = mycolors[i].pixel;
     }
 
+    free(mycolors);
   } else {
-    pcolorarray = NULL;
-    ptransarray = NULL;
-    npalette = 0;
-    if (color_type == PNG_COLOR_TYPE_RGB_ALPHA) {
-      has_mask = 1;
-    } else {
-      has_mask = 0;
+    freelog(LOG_FATAL, _("PNG file has no palette: %s"), filename);
+    exit(EXIT_FAILURE);
+  }
+
+  has_mask = png_get_tRNS(pngp, infop, &trans, &ntrans, NULL);
+
+  if (has_mask) {
+    int i;
+
+    ptransarray = fc_calloc(npalette, sizeof(*ptransarray));
+
+    for (i = 0; i < ntrans; i++) {
+      ptransarray[trans[i]] = TRUE;
     }
-    ntrans = 0;
+  } else {
+    ptransarray = NULL;
   }
 
   png_read_update_info(pngp, infop);
@@ -451,14 +477,7 @@ struct sprite *load_gfxfile(const char *filename)
     fclose(fp);
 
     free(row_pointers);
-    if (infop != NULL) {
-      png_destroy_read_struct(&pngp, &infop, (png_infopp)NULL);
-    } else {
-      freelog(LOG_ERROR,
-	      "PNG info struct is NULL (non-fatal): \"%s\"",
-	      filename);
-      png_destroy_read_struct(&pngp, (png_infopp)NULL, (png_infopp)NULL);
-    }
+    png_destroy_read_struct(&pngp, &infop, NULL);
   }
 
   mysprite = fc_malloc(sizeof(*mysprite));
@@ -471,19 +490,7 @@ struct sprite *load_gfxfile(const char *filename)
   pb = buf;
   for (y = 0; y < height; y++) {
     for (x = 0; x < width; x++) {
-      if (pcolorarray) {
-	XPutPixel(xi, x, y, pcolorarray[pb[x]]);
-      } else {
-	if (has_mask) {
-	  XPutPixel(xi, x, y,
-		    (pb[4 * x] << 16) + (pb[4 * x + 1] << 8)
-		    + pb[4 * x + 2]);
-	} else {
-	  XPutPixel(xi, x, y,
-		    (pb[3 * x] << 16) + (pb[3 * x + 1] << 8)
-		    + pb[3 * x + 2]);
-	}
-      }
+      XPutPixel(xi, x, y, pcolorarray[pb[x]]);
     }
     pb += stride;
   }
@@ -500,35 +507,7 @@ struct sprite *load_gfxfile(const char *filename)
     pb = buf;
     for (y = 0; y < height; y++) {
       for (x = 0; x < width; x++) {
-	if (ptransarray) {
-	  XPutPixel(xm, x, y, !ptransarray[pb[x]]);
-	} else {
-	  alpha = pb[4 * x + 3];
-	  if (alpha > 204) {
-	    pixel = FALSE;
-	  } else if (alpha > 153) {
-	    if ((y + x * 2) % 4 == 0) {
-	      pixel = TRUE;
-	    } else {
-	      pixel = FALSE;
-	    }
-	  } else if (alpha > 102) {
-	    if ((y + x) % 2 == 0) {
-	      pixel = TRUE;
-	    } else {
-	      pixel = FALSE;
-	    }
-	  } else if (alpha > 51) {
-	    if ((y + x * 2) % 4 == 0) {
-	      pixel = FALSE;
-	    } else {
-	      pixel = TRUE;
-	    }
-	  } else {
-	    pixel = TRUE;
-	  }
-	  XPutPixel(xm, x, y, !pixel);
-	}
+	XPutPixel(xm, x, y, !ptransarray[pb[x]]);
       }
       pb += stride;
     }
@@ -542,7 +521,7 @@ struct sprite *load_gfxfile(const char *filename)
   mysprite->pcolorarray = pcolorarray;
   mysprite->ncols = npalette;
 
-  if (ptransarray) {
+  if (has_mask) {
     free(ptransarray);
   }
   free(buf);
@@ -552,7 +531,7 @@ struct sprite *load_gfxfile(const char *filename)
 /***************************************************************************
    Deletes a sprite.  These things can use a lot of memory.
 ***************************************************************************/
-void free_sprite(struct sprite *s)
+void free_sprite(struct Sprite *s)
 {
   XFreePixmap(display, s->pixmap);
   if (s->has_mask) {
@@ -569,42 +548,29 @@ void free_sprite(struct sprite *s)
 /***************************************************************************
 ...
 ***************************************************************************/
-Pixmap create_overlay_unit(const struct unit_type *punittype)
+Pixmap create_overlay_unit(int i)
 {
   Pixmap pm;
   enum color_std bg_color;
   
   pm=XCreatePixmap(display, root_window, 
-		   tileset_full_tile_width(tileset), tileset_full_tile_height(tileset), display_depth);
+		   UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT, display_depth);
 
   /* Give tile a background color, based on the type of unit */
-  /* Should there be colors like COLOR_MAPVIEW_LAND etc? -ev */
-  switch (unit_color_type(punittype)) {
-    case UNIT_BG_LAND:
-      bg_color = COLOR_OVERVIEW_LAND;
-      break;
-    case UNIT_BG_SEA:
-      bg_color = COLOR_OVERVIEW_OCEAN;
-      break;
-    case UNIT_BG_HP_LOSS:
-    case UNIT_BG_AMPHIBIOUS:
-      bg_color = COLOR_OVERVIEW_MY_UNIT;
-      break;
-    case UNIT_BG_FLYING:
-      bg_color = COLOR_OVERVIEW_ENEMY_CITY;
-      break;
-    default:
-      bg_color = COLOR_OVERVIEW_UNKNOWN;
-      break;
+  switch (get_unit_type(i)->move_type) {
+    case LAND_MOVING: bg_color = COLOR_STD_GROUND; break;
+    case SEA_MOVING:  bg_color = COLOR_STD_OCEAN; break;
+    case HELI_MOVING: bg_color = COLOR_STD_YELLOW; break;
+    case AIR_MOVING:  bg_color = COLOR_STD_CYAN; break;
+    default:          bg_color = COLOR_STD_BLACK; break;
   }
-  XSetForeground(display, fill_bg_gc,
-		 get_color(tileset, bg_color)->color.pixel);
+  XSetForeground(display, fill_bg_gc, colors_standard[bg_color]);
   XFillRectangle(display, pm, fill_bg_gc, 0,0, 
-		 tileset_full_tile_width(tileset), tileset_full_tile_height(tileset));
+		 UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT);
 
   /* If we're using flags, put one on the tile */
   if(!solid_color_behind_units)  {
-    struct sprite *flag = get_nation_flag_sprite(tileset, nation_of_player(client.conn.playing));
+    struct Sprite *flag=get_nation_by_plr(game.player_ptr)->flag_sprite;
 
     XSetClipOrigin(display, civ_gc, 0,0);
     XSetClipMask(display, civ_gc, flag->mask);
@@ -614,8 +580,8 @@ Pixmap create_overlay_unit(const struct unit_type *punittype)
   }
 
   /* Finally, put a picture of the unit in the tile */
-/*  if(i<utype_count()) */ {
-    struct sprite *s = get_unittype_sprite(tileset, punittype);
+  if(i<game.num_unit_types) {
+    struct Sprite *s=get_unit_type(i)->sprite;
 
     XSetClipOrigin(display,civ_gc,0,0);
     XSetClipMask(display,civ_gc,s->mask);
@@ -623,6 +589,7 @@ Pixmap create_overlay_unit(const struct unit_type *punittype)
 	      0,0, s->width,s->height, 0,0 );
     XSetClipMask(display,civ_gc,None);
   }
+
   return(pm);
 }
 

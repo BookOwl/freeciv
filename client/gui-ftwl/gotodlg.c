@@ -27,10 +27,10 @@
 **************************************************************************/
 void popup_goto_dialog(void)
 {
-  if (C_S_RUNNING != client_state()) {
+  if (get_client_state() != CLIENT_GAME_RUNNING_STATE) {
     return;
   }
-  if (0 == get_num_units_in_focus()) {
+  if (!get_unit_in_focus()) {
     return;
   }
   /* PORTME */

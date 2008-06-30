@@ -18,30 +18,27 @@
 #include <assert.h>
 #include <stdlib.h>		/* qsort */
 
+#include "combat.h"
 #include "fcintl.h"
 #include "log.h"
 #include "support.h"
-
-#include "combat.h"
-#include "game.h"
-#include "unitlist.h"
 
 #include "agents.h"
 #include "chatline_common.h"
 #include "cityrep_g.h"
 #include "civclient.h"
 #include "climisc.h"
+#include "clinet.h"
 #include "cma_core.h"
 #include "control.h"
-#include "editor.h"
 #include "fcintl.h"
 #include "goto.h"
-#include "mapctrl_common.h"
 #include "mapctrl_g.h"
 #include "mapview_g.h"
 #include "options.h"
-#include "overview_common.h"
 #include "tilespec.h"
+
+#include "mapctrl_common.h"
 
 /* Selection Rectangle */
 static int rec_anchor_x, rec_anchor_y;  /* canvas coordinates for anchor */
@@ -51,17 +48,14 @@ static int rec_w, rec_h;                /* width, heigth in pixels */
 
 bool rbutton_down = FALSE;
 bool rectangle_active = FALSE;
-static bool rectangle_append;
 
 /* This changes the behaviour of left mouse
    button in Area Selection mode. */
 bool tiles_hilited_cities = FALSE;
 
 /* The mapcanvas clipboard */
-struct universal clipboard =
-{ .kind = VUT_NONE,
-  .value = {.building = NULL}
-};
+static int clipboard = -1;
+static bool clipboard_is_unit;
 
 /* Goto with drag and drop. */
 bool keyboardless_goto_button_down = FALSE;
@@ -85,18 +79,16 @@ static void define_tiles_within_rectangle(void);
  anchor is not the drawing start point, but is used to calculate
  width, height. Also record the current mapview centering.
 **************************************************************************/
-void anchor_selection_rectangle(int canvas_x, int canvas_y,
-				bool append)
+void anchor_selection_rectangle(int canvas_x, int canvas_y)
 {
   struct tile *ptile = canvas_pos_to_nearest_tile(canvas_x, canvas_y);
 
   tile_to_canvas_pos(&rec_anchor_x, &rec_anchor_y, ptile);
-  rec_anchor_x += tileset_tile_width(tileset) / 2;
-  rec_anchor_y += tileset_tile_height(tileset) / 2;
+  rec_anchor_x += NORMAL_TILE_WIDTH / 2;
+  rec_anchor_y += NORMAL_TILE_HEIGHT / 2;
   /* FIXME: This may be off-by-one. */
   rec_canvas_center_tile = get_center_tile_mapcanvas();
   rec_w = rec_h = 0;
-  rectangle_append = append;
 }
 
 /**************************************************************************
@@ -112,16 +104,16 @@ void anchor_selection_rectangle(int canvas_x, int canvas_y,
 **************************************************************************/
 static void define_tiles_within_rectangle(void)
 {
-  const int W = tileset_tile_width(tileset),   half_W = W / 2;
-  const int H = tileset_tile_height(tileset),  half_H = H / 2;
+  const int W = NORMAL_TILE_WIDTH,   half_W = W / 2;
+  const int H = NORMAL_TILE_HEIGHT,  half_H = H / 2;
   const int segments_x = abs(rec_w / half_W);
   const int segments_y = abs(rec_h / half_H);
 
   /* Iteration direction */
   const int inc_x = (rec_w > 0 ? half_W : -half_W);
   const int inc_y = (rec_h > 0 ? half_H : -half_H);
+
   int x, y, x2, y2, xx, yy;
-  int units = 0;
 
   y = rec_corner_y;
   for (yy = 0; yy <= segments_y; yy++, y += inc_y) {
@@ -151,22 +143,10 @@ static void define_tiles_within_rectangle(void)
 
       /*  Tile passed all tests; process it.
        */
-      if (NULL != tile_city(ptile)
-          && tile_owner(ptile) == client.conn.playing) {
-	/* FIXME: handle rectangle_append */
-        map_deco[tile_index(ptile)].hilite = HILITE_CITY;
+      if (ptile->city && ptile->city->owner == game.player_idx) {
+        ptile->client.hilite = HILITE_CITY;
         tiles_hilited_cities = TRUE;
       }
-      unit_list_iterate(ptile->units, punit) {
-	if (unit_owner(punit) == client.conn.playing) {
-	  if (units == 0 && !rectangle_append) {
-	    set_unit_focus(punit);
-	  } else {
-	    add_unit_focus(punit);
-	  }
-	  units++;
-	}
-      } unit_list_iterate_end;
     }
   }
 
@@ -181,8 +161,8 @@ static void define_tiles_within_rectangle(void)
 **************************************************************************/
 void update_selection_rectangle(int canvas_x, int canvas_y)
 {
-  const int W = tileset_tile_width(tileset),    half_W = W / 2;
-  const int H = tileset_tile_height(tileset),   half_H = H / 2;
+  const int W = NORMAL_TILE_WIDTH,    half_W = W / 2;
+  const int H = NORMAL_TILE_HEIGHT,   half_H = H / 2;
   static struct tile *rec_tile = NULL;
   int diff_x, diff_y;
   struct tile *center_tile;
@@ -219,7 +199,7 @@ void update_selection_rectangle(int canvas_x, int canvas_y)
    */
   if (diff_x != 0 || diff_y != 0) {
 
-    if (tileset_is_isometric(tileset)) {
+    if (is_isometric) {
       rec_w += (diff_x - diff_y) * half_W;
       rec_h += (diff_x + diff_y) * half_H;
 
@@ -264,23 +244,11 @@ void redraw_selection_rectangle(void)
 }
 
 /**************************************************************************
-  Redraws the selection rectangle after a map flush.
-**************************************************************************/
-void cancel_selection_rectangle(void)
-{
-  if (rectangle_active) {
-    rectangle_active = FALSE;
-    rbutton_down = FALSE;
-    dirty_rect(rec_corner_x, rec_corner_y, rec_w, rec_h);
-  }
-}
-
-/**************************************************************************
 ...
 **************************************************************************/
 bool is_city_hilited(struct city *pcity)
 {
-  return map_deco[tile_index(pcity->tile)].hilite == HILITE_CITY;
+  return pcity->tile->client.hilite == HILITE_CITY;
 }
 
 /**************************************************************************
@@ -292,7 +260,7 @@ void cancel_tile_hiliting(void)
     tiles_hilited_cities = FALSE;
 
     whole_map_iterate(ptile) {
-      map_deco[tile_index(ptile)].hilite = HILITE_NONE;
+      ptile->client.hilite = HILITE_NONE;
     } whole_map_iterate_end;
 
     update_map_canvas_visible();
@@ -320,16 +288,16 @@ void release_right_button(int canvas_x, int canvas_y)
 **************************************************************************/
 void toggle_tile_hilite(struct tile *ptile)
 {
-  struct city *pcity = tile_city(ptile);
+  struct city *pcity = ptile->city;
 
-  if (map_deco[tile_index(ptile)].hilite == HILITE_CITY) {
-    map_deco[tile_index(ptile)].hilite = HILITE_NONE;
+  if (ptile->client.hilite == HILITE_CITY) {
+    ptile->client.hilite = HILITE_NONE;
     if (pcity) {
       toggle_city_hilite(pcity, FALSE); /* cityrep.c */
     }
   }
-  else if (NULL != pcity && city_owner(pcity) == client.conn.playing) {
-    map_deco[tile_index(ptile)].hilite = HILITE_CITY;
+  else if (pcity && pcity->owner == game.player_idx) {
+    ptile->client.hilite = HILITE_CITY;
     tiles_hilited_cities = TRUE;
     toggle_city_hilite(pcity, TRUE);
   }
@@ -337,7 +305,7 @@ void toggle_tile_hilite(struct tile *ptile)
     return;
   }
 
-  refresh_tile_mapcanvas(ptile, FALSE, TRUE);
+  refresh_tile_mapcanvas(ptile, TRUE);
 }
 
 /**************************************************************************
@@ -365,37 +333,36 @@ void key_city_overlay(int canvas_x, int canvas_y)
 **************************************************************************/
 void clipboard_copy_production(struct tile *ptile)
 {
-  char buffer[256];
-  struct city *pcity = tile_city(ptile);
-
-  if (!can_client_issue_orders()) {
-    return;
-  }
+  char msg[MAX_LEN_MSG];
+  struct city *pcity = ptile->city;
 
   if (pcity) {
-    if (city_owner(pcity) != client.conn.playing)  {
+    if (pcity->owner != game.player_idx)  {
       return;
     }
-    clipboard = pcity->production;
+    clipboard = pcity->currently_building;
+    clipboard_is_unit = pcity->is_building_unit;
   } else {
     struct unit *punit = find_visible_unit(ptile);
     if (!punit) {
       return;
     }
-    if (!can_player_build_unit_direct(client.conn.playing, unit_type(punit)))  {
-      create_event(ptile, E_BAD_COMMAND,
-		   _("You don't know how to build %s!"),
-		   unit_name_translation(punit));
+    if (!can_player_build_unit_direct(game.player_ptr, punit->type))  {
+      my_snprintf(msg, sizeof(msg),
+      _("Game: You don't know how to build %s!"),
+        unit_types[punit->type].name);
+      append_output_window(msg);
       return;
     }
-    clipboard.kind = VUT_UTYPE;
-    clipboard.value.utype = unit_type(punit);
+    clipboard_is_unit = TRUE;
+    clipboard = punit->type;
   }
   upgrade_canvas_clipboard();
 
-  create_event(ptile, E_CITY_PRODUCTION_CHANGED, /* ? */
-	       _("Copy %s to clipboard."),
-	       universal_name_translation(&clipboard, buffer, sizeof(buffer)));
+  my_snprintf(msg, sizeof(msg), _("Game: Copy %s to clipboard."),
+    clipboard_is_unit ? unit_types[clipboard].name :
+    get_improvement_name(clipboard));
+  append_output_window(msg);
 }
 
 /**************************************************************************
@@ -407,24 +374,25 @@ void clipboard_paste_production(struct city *pcity)
   if (!can_client_issue_orders()) {
     return;
   }
-  if (NULL == clipboard.value.building) {
-    create_event(pcity->tile, E_BAD_COMMAND, _("Clipboard is empty."));
+  if (clipboard == -1) {
+    append_output_window(
+    _("Game: Clipboard is empty."));
     return;
   }
   if (!tiles_hilited_cities) {
-    if (NULL != pcity && city_owner(pcity) == client.conn.playing) {
+    if (pcity && pcity->owner == game.player_idx) {
       clipboard_send_production_packet(pcity);
     }
     return;
   }
   else {
-    connection_do_buffer(&client.conn);
-    city_list_iterate(client.conn.playing->cities, pcity) {
+    connection_do_buffer(&aconnection);
+    city_list_iterate(game.player_ptr->cities, pcity) {
       if (is_city_hilited(pcity)) {
         clipboard_send_production_packet(pcity);
       }
     } city_list_iterate_end;
-    connection_do_unbuffer(&client.conn);
+    connection_do_unbuffer(&aconnection);
   }
 }
 
@@ -433,14 +401,15 @@ void clipboard_paste_production(struct city *pcity)
 **************************************************************************/
 static void clipboard_send_production_packet(struct city *pcity)
 {
-  if (are_universals_equal(&pcity->production, &clipboard)
-      || !can_city_build_now(pcity, clipboard)) {
+  cid mycid = cid_encode(clipboard_is_unit, clipboard);
+
+  if (mycid == cid_encode_from_city(pcity)
+      || !city_can_build_impr_or_unit(pcity, mycid)) {
     return;
   }
 
-  dsend_packet_city_change(&client.conn, pcity->id,
-			   clipboard.kind,
-			   universal_number(&clipboard));
+  dsend_packet_city_change(&aconnection, pcity->id, clipboard,
+			   clipboard_is_unit);
 }
 
 /**************************************************************************
@@ -449,15 +418,10 @@ static void clipboard_send_production_packet(struct city *pcity)
 **************************************************************************/
 void upgrade_canvas_clipboard(void)
 {
-  if (!can_client_issue_orders()) {
-    return;
-  }
-  if (VUT_UTYPE == clipboard.kind)  {
-    struct unit_type *u =
-      can_upgrade_unittype(client.conn.playing, clipboard.value.utype);
-
-    if (u)  {
-      clipboard.value.utype = u;
+  if (clipboard_is_unit)  {
+    int u = can_upgrade_unittype(game.player_ptr, clipboard);
+    if (u != -1)  {
+      clipboard = u;
     }
   }
 }
@@ -470,9 +434,12 @@ void release_goto_button(int canvas_x, int canvas_y)
   struct tile *ptile = canvas_pos_to_tile(canvas_x, canvas_y);
 
   if (keyboardless_goto_active && hover_state == HOVER_GOTO && ptile) {
+    struct unit *punit =
+        player_find_unit_by_id(game.player_ptr, hover_unit);
+
     do_unit_goto(ptile);
-    set_hover_state(NULL, HOVER_NONE, ACTIVITY_LAST, ORDER_LAST);
-    update_unit_info_label(get_units_in_focus());
+    set_hover_state(NULL, HOVER_NONE, ACTIVITY_LAST);
+    update_unit_info_label(punit);
   }
   keyboardless_goto_active = FALSE;
   keyboardless_goto_button_down = FALSE;
@@ -487,11 +454,11 @@ void maybe_activate_keyboardless_goto(int canvas_x, int canvas_y)
 {
   struct tile *ptile = canvas_pos_to_tile(canvas_x, canvas_y);
 
-  if (ptile && get_num_units_in_focus() > 0
+  if (ptile && get_unit_in_focus()
       && !same_pos(keyboardless_goto_start_tile, ptile)
       && can_client_issue_orders()) {
     keyboardless_goto_active = TRUE;
-    request_unit_goto(ORDER_LAST);
+    request_unit_goto();
   }
 }
 
@@ -514,14 +481,14 @@ bool get_turn_done_button_state()
 **************************************************************************/
 void scroll_mapview(enum direction8 gui_dir)
 {
-  int gui_x = mapview.gui_x0, gui_y = mapview.gui_y0;
+  int gui_x = mapview_canvas.gui_x0, gui_y = mapview_canvas.gui_y0;
 
   if (!can_client_change_view()) {
     return;
   }
 
-  gui_x += DIR_DX[gui_dir] * mapview.width / 2;
-  gui_y += DIR_DY[gui_dir] * mapview.height / 2;
+  gui_x += DIR_DX[gui_dir] * mapview_canvas.width / 2;
+  gui_y += DIR_DY[gui_dir] * mapview_canvas.height / 2;
   set_mapview_origin(gui_x, gui_y);
 }
 
@@ -559,24 +526,28 @@ void wakeup_button_pressed(int canvas_x, int canvas_y)
 **************************************************************************/
 void adjust_workers_button_pressed(int canvas_x, int canvas_y)
 {
+  int city_x, city_y;
+  enum city_tile_type worker;
   struct tile *ptile = canvas_pos_to_tile(canvas_x, canvas_y);
 
-  if (NULL != ptile && can_client_issue_orders()) {
+  if (can_client_issue_orders() && ptile) {
     struct city *pcity = find_city_near_tile(ptile);
 
     if (pcity && !cma_is_city_under_agent(pcity, NULL)) {
-      int city_x, city_y;
-      bool success = city_base_to_city_map(&city_x, &city_y, pcity, ptile);
+      if (!map_to_city_map(&city_x, &city_y, pcity, ptile)) {
+	assert(0);
+      }
 
-      assert(success);
-
-      if (NULL != tile_worked(ptile) && tile_worked(ptile) == pcity) {
-	dsend_packet_city_make_specialist(&client.conn, pcity->id,
+      worker = get_worker_city(pcity, city_x, city_y);
+      if (worker == C_TILE_WORKER) {
+	dsend_packet_city_make_specialist(&aconnection, pcity->id,
 					  city_x, city_y);
-      } else if (city_can_work_tile(pcity, ptile)) {
-	dsend_packet_city_make_worker(&client.conn, pcity->id,
+      } else if (worker == C_TILE_EMPTY) {
+	dsend_packet_city_make_worker(&aconnection, pcity->id,
 				      city_x, city_y);
       } else {
+	/* If worker == C_TILE_UNAVAILABLE then we can't use this tile.  No
+	 * packet is sent and city_workers_display is not updated. */
 	return;
       }
 
@@ -618,8 +589,7 @@ void update_turn_done_button_state()
   }
 
   new_state = (can_client_issue_orders()
-	       && !client.conn.playing->phase_done
-	       && !agents_busy()
+	       && !game.player_ptr->turn_done && !agents_busy()
 	       && !turn_done_sent);
   if (new_state == turn_done_state) {
     return;
@@ -630,13 +600,10 @@ void update_turn_done_button_state()
   turn_done_state = new_state;
 
   set_turn_done_button_state(turn_done_state);
-  control_mouse_cursor(NULL);
 
   if (turn_done_state) {
     if (waiting_for_end_turn
-	|| (NULL != client.conn.playing
-	    && client.conn.playing->ai.control
-	    && !ai_manual_turn_done)) {
+	|| (game.player_ptr->ai.control && !ai_manual_turn_done)) {
       send_turn_done();
     } else {
       update_turn_done_button(TRUE);
@@ -649,18 +616,22 @@ void update_turn_done_button_state()
 **************************************************************************/
 void update_line(int canvas_x, int canvas_y)
 {
-  struct tile *ptile;
+  if ((hover_state == HOVER_GOTO
+       || hover_state == HOVER_PATROL
+       || hover_state == HOVER_CONNECT)
+      && draw_goto_line) {
+    struct tile *ptile, *old_tile;
 
-  switch (hover_state) {
-  case HOVER_GOTO:
-  case HOVER_PATROL:
-  case HOVER_CONNECT:
     ptile = canvas_pos_to_tile(canvas_x, canvas_y);
+    if (!ptile) {
+      return;
+    }
 
-    is_valid_goto_draw_line(ptile);
-  default:
-    break;
-  };
+    old_tile = get_line_dest();
+    if (!same_pos(old_tile, ptile)) {
+      draw_line(ptile);
+    }
+  }
 }
 
 /****************************************************************************
@@ -668,20 +639,45 @@ void update_line(int canvas_x, int canvas_y)
 ****************************************************************************/
 void overview_update_line(int overview_x, int overview_y)
 {
-  struct tile *ptile;
-  int x, y;
+  if ((hover_state == HOVER_GOTO
+       || hover_state == HOVER_PATROL
+       || hover_state == HOVER_CONNECT)
+      && draw_goto_line) {
+    struct tile *ptile, *old_tile;
+    int x, y;
 
-  switch (hover_state) {
-  case HOVER_GOTO:
-  case HOVER_PATROL:
-  case HOVER_CONNECT:
     overview_to_map_pos(&x, &y, overview_x, overview_y);
     ptile = map_pos_to_tile(x, y);
 
-    is_valid_goto_draw_line(ptile);
-  default:
-    break;
-  };
+    old_tile = get_line_dest();
+    if (!same_pos(ptile, old_tile)) {
+      draw_line(ptile);
+    }
+  }
+}
+
+/**************************************************************************
+  Find the focus unit's chance of success at attacking/defending the
+  given tile.  Return FALSE if the values cannot be determined (e.g., no
+  units on the tile).
+**************************************************************************/
+bool get_chance_to_win(int *att_chance, int *def_chance, struct tile *ptile)
+{
+  struct unit *my_unit, *defender, *attacker;
+
+  if (!(my_unit = get_unit_in_focus())
+      || !(defender = get_defender(my_unit, ptile))
+      || !(attacker = get_attacker(my_unit, ptile))) {
+    return FALSE;
+  }
+
+  /* chance to win when active unit is attacking the selected unit */
+  *att_chance = unit_win_chance(my_unit, defender) * 100;
+
+  /* chance to win when selected unit is attacking the active unit */
+  *def_chance = (1.0 - unit_win_chance(attacker, my_unit)) * 100;
+
+  return TRUE;
 }
 
 /****************************************************************************
@@ -707,8 +703,8 @@ static int unit_list_compare(const void *a, const void *b)
   } else {
     /* If the transporters aren't the same, put in order by the
      * transporters. */
-    const struct unit *ptrans1 = game_find_unit_by_number(punit1->transported_by);
-    const struct unit *ptrans2 = game_find_unit_by_number(punit2->transported_by);
+    const struct unit *ptrans1 = find_unit_by_id(punit1->transported_by);
+    const struct unit *ptrans2 = find_unit_by_id(punit2->transported_by);
 
     if (!ptrans1) {
       ptrans1 = punit1;
@@ -724,7 +720,7 @@ static int unit_list_compare(const void *a, const void *b)
 /****************************************************************************
   Fill and sort the list of units on the tile.
 ****************************************************************************/
-void fill_tile_unit_list(const struct tile *ptile, struct unit **unit_list)
+void fill_tile_unit_list(struct tile *ptile, struct unit **unit_list)
 {
   int i = 0;
 

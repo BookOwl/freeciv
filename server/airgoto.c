@@ -18,7 +18,6 @@
 #include "log.h"
 #include "map.h"
 #include "mem.h"
-#include "movement.h"
 #include "pqueue.h"
 
 #include "gotohand.h"
@@ -63,8 +62,7 @@ static struct player_refuel_list {
   int moves_per_turn;
 } refuels;
 
-static void make_list_of_refuel_points(struct player *pplayer,
-                                       const struct unit_type *punittype,
+static void make_list_of_refuel_points(struct player *pplayer, 
                                        bool cities_only, 
                                        int moves_per_turn, int max_moves);
 
@@ -113,7 +111,7 @@ static void add_refuel_point(struct tile *ptile,
     /* If refuels.alloc_size was zero (on the first call), 
      * then refuels.points is NULL and realloc will actually malloc */
     refuels.points = fc_realloc(refuels.points, 
-                                refuels.alloc_size * sizeof(*refuels.points));
+                                refuels.alloc_size * sizeof(struct refuel));
     /* This memory, because refuels is static, is never freed.
      * It is just reused. */  
   }
@@ -148,8 +146,7 @@ as it is now, but as it is only used in the players turn that does not
 matter.
 Can probably do some caching...
 *************************************************************************/
-static void make_list_of_refuel_points(struct player *pplayer,
-                                       const struct unit_type *punittype,
+static void make_list_of_refuel_points(struct player *pplayer, 
                                        bool cities_only, 
                                        int moves_per_turn, 
                                        int max_moves)
@@ -164,7 +161,7 @@ static void make_list_of_refuel_points(struct player *pplayer,
 	&& !is_non_allied_unit_tile(ptile, pplayer) ) {
       add_refuel_point(ptile, FUEL_CITY, 
                        MAP_MAX_HEIGHT + MAP_MAX_WIDTH, 0, FALSE);
-    } else if (tile_has_native_base(ptile, punittype)
+    } else if (tile_has_special(ptile, S_AIRBASE)
                && !is_non_allied_unit_tile(ptile, pplayer)
                && !cities_only) {
       add_refuel_point(ptile, FUEL_AIRBASE, 
@@ -199,7 +196,6 @@ static int queue_priority_function(const void *value)
  * max_fuel -- max fuel
  ************************************************************************/
 struct pqueue *refuel_iterate_init(struct player *pplayer,
-                                   const struct unit_type *punittype,
 				   struct tile *ptile,
                                    struct tile *dest_tile,
                                    bool cities_only, int moves_left, 
@@ -211,7 +207,7 @@ struct pqueue *refuel_iterate_init(struct player *pplayer,
 
   /* List of all refuel points of the player!  
    * TODO: Should cache the results */
-  make_list_of_refuel_points(pplayer, punittype, cities_only, 
+  make_list_of_refuel_points(pplayer, cities_only, 
                              moves_per_turn, moves_per_turn * max_fuel);
   /* Add the starting point: we keep it for later backtracking */
   add_refuel_point(ptile, FUEL_START, 0, moves_left, TRUE);
@@ -367,7 +363,7 @@ bool find_air_first_destination(struct unit *punit, struct tile **dest_tile)
   unsigned int moves_and_fuel_left 
     = punit->moves_left / SINGLE_MOVE + fullmoves * (punit->fuel - 1);
   struct pqueue *my_list 
-    = refuel_iterate_init(unit_owner(punit), unit_type(punit), punit->tile, 
+    = refuel_iterate_init(unit_owner(punit), punit->tile, 
                           *dest_tile, FALSE, 
                           moves_and_fuel_left, fullmoves, fullfuel);
   struct refuel *next_point;

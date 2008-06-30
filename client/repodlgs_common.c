@@ -18,31 +18,23 @@
 #include <assert.h>
 
 #include "fcintl.h"
-#include "log.h"
+#include "game.h"
+#include "government.h"
 #include "mem.h"		/* free */
 #include "support.h"		/* my_snprintf */
 
-#include "game.h"
-#include "government.h"
-#include "unitlist.h"
-
 #include "repodlgs_g.h"
 
-#include "civclient.h"
+#include "civclient.h"		/* can_client_issue_orders */
 #include "control.h"
-#include "options.h"
 #include "repodlgs_common.h"
 #include "packhand_gen.h"
 
+struct options_settable *settable_options;
+int num_settable_options;
 
-char **options_categories = NULL;
-struct options_settable *settable_options = NULL;
-
-int num_options_categories = 0;
-int num_settable_options = 0;
-
-static bool settable_options_loaded = FALSE;	/* desired options from file */
-
+char **options_categories;
+int num_options_categories;
 
 /****************************************************************
   Fills out the array of struct improvement_entry given by
@@ -55,17 +47,13 @@ void get_economy_report_data(struct improvement_entry *entries,
   *num_entries_used = 0;
   *total_cost = 0;
 
-  if (NULL == client.conn.playing) {
-    return;
-  }
-
-  improvement_iterate(pimprove) {
-    if (is_improvement(pimprove)) {
+  impr_type_iterate(impr_id) {
+    if (!is_wonder(impr_id)) {
       int count = 0, cost = 0;
-      city_list_iterate(client.conn.playing->cities, pcity) {
-	if (city_has_building(pcity, pimprove)) {
+      city_list_iterate(game.player_ptr->cities, pcity) {
+	if (city_got_building(pcity, impr_id)) {
 	  count++;
-	  cost += city_improvement_upkeep(pcity, pimprove);
+	  cost += improvement_upkeep(pcity, impr_id);
 	}
       }
       city_list_iterate_end;
@@ -74,7 +62,7 @@ void get_economy_report_data(struct improvement_entry *entries,
 	continue;
       }
 
-      entries[*num_entries_used].type = pimprove;
+      entries[*num_entries_used].type = impr_id;
       entries[*num_entries_used].count = count;
       entries[*num_entries_used].total_cost = cost;
       entries[*num_entries_used].cost = cost / count;
@@ -83,19 +71,18 @@ void get_economy_report_data(struct improvement_entry *entries,
       /* Currently there is no building expense under anarchy.  It's
        * not a good idea to hard-code this in the client, but what
        * else can we do? */
-      if (government_of_player(client.conn.playing) != game.government_when_anarchy) {
+      if (game.player_ptr->government != game.government_when_anarchy) {
         *total_cost += cost;
       }
     }
-  } improvement_iterate_end;
+  } impr_type_iterate_end;
 
   *total_income = 0;
-  /* FIXME: almost the same as player_get_expected_income() */
 
-  city_list_iterate(client.conn.playing->cities, pcity) {
-    *total_income += pcity->prod[O_GOLD];
-    if (city_production_has_flag(pcity, IF_GOLD)) {
-      *total_income += MAX(0, pcity->surplus[O_SHIELD]);
+  city_list_iterate(game.player_ptr->cities, pcity) {
+    *total_income += pcity->tax_total;
+    if (get_current_construction_bonus(pcity, EFT_PROD_TO_GOLD) > 0) {
+      *total_income += MAX(0, pcity->shield_surplus);
     }
   } city_list_iterate_end;
 }
@@ -108,39 +95,25 @@ void get_economy_report_units_data(struct unit_entry *entries,
 				   int *num_entries_used, int *total_cost)
 {
   int count, cost, partial_cost;
-  int free_upkeep[O_COUNT];
+  struct unit_type *unittype;
 
-  *num_entries_used = 0;
-  *total_cost = 0;
-
-  if (NULL == client.conn.playing) {
-    return;
-  }
-  memset(free_upkeep, 0, O_COUNT * sizeof(*free_upkeep));
-
-  unit_type_iterate(unittype) {
-    cost = utype_upkeep_cost(unittype, client.conn.playing, O_GOLD);
+  unit_type_iterate(utype) {
+    unittype = get_unit_type(utype);
+    cost = utype_gold_cost(unittype, get_gov_pplayer(game.player_ptr));
 
     if (cost == 0) {
-      /* Short-circuit all of the following checks. */
       continue;
     }
 
     count = 0;
     partial_cost = 0;
 
-    city_list_iterate(client.conn.playing->cities, pcity) {
-      free_upkeep[O_GOLD] = get_city_output_bonus(pcity, get_output_type(O_GOLD),
-                                                  EFT_UNIT_UPKEEP_FREE_PER_CITY);
-
+    city_list_iterate(game.player_ptr->cities, pcity) {
       unit_list_iterate(pcity->units_supported, punit) {
-        int upkeep_cost[O_COUNT];
 
-        city_unit_upkeep(punit, upkeep_cost, free_upkeep);
-
-	if (unit_type(punit) == unittype) {
+	if (punit->type == utype) {
 	  count++;
-	  partial_cost += upkeep_cost[O_GOLD];
+	  partial_cost += punit->upkeep_gold;
 	}
 
       } unit_list_iterate_end;
@@ -152,7 +125,7 @@ void get_economy_report_units_data(struct unit_entry *entries,
 
     (*total_cost) += partial_cost;
 
-    entries[*num_entries_used].type = unittype;
+    entries[*num_entries_used].type = utype;
     entries[*num_entries_used].count = count;
     entries[*num_entries_used].cost = cost;
     entries[*num_entries_used].total_cost = partial_cost;
@@ -205,40 +178,11 @@ bool is_report_dialogs_frozen(void)
 *******************************************************************/
 void settable_options_init(void)
 {
-  settable_options_loaded = FALSE;
-
   settable_options = NULL;
   num_settable_options = 0;
 
   options_categories = NULL;
   num_options_categories = 0;
-}
-
-/******************************************************************
- free and clear all settable_option packet strings
-*******************************************************************/
-static void settable_option_strings_free(struct options_settable *o)
-{
-  if (NULL != o->name) {
-    free(o->name);
-    o->name = NULL;
-  }
-  if (NULL != o->short_help) {
-    free(o->short_help);
-    o->short_help = NULL;
-  }
-  if (NULL != o->extra_help) {
-    free(o->extra_help);
-    o->extra_help = NULL;
-  }
-  if (NULL != o->strval) {
-    free(o->strval);
-    o->strval = NULL;
-  }
-  if (NULL != o->default_strval) {
-    free(o->default_strval);
-    o->default_strval = NULL;
-  }
 }
 
 /******************************************************************
@@ -249,13 +193,20 @@ void settable_options_free(void)
   int i;
 
   for (i = 0; i < num_settable_options; i++) {
-    struct options_settable *o = &settable_options[i];
-    settable_option_strings_free(o);
-
-    /* special handling for non-packet strings */
-    if (NULL != o->desired_strval) {
-      free(o->desired_strval);
-      o->desired_strval = NULL;
+    if (settable_options[i].name) {
+      free(settable_options[i].name);
+    }
+    if (settable_options[i].short_help) {
+      free(settable_options[i].short_help);
+    }
+    if (settable_options[i].extra_help) {
+      free(settable_options[i].extra_help);
+    }
+    if (settable_options[i].strval) {
+      free(settable_options[i].strval);
+    }
+    if (settable_options[i].default_strval) {
+      free(settable_options[i].default_strval);
     }
   }
   free(settable_options);
@@ -269,7 +220,7 @@ void settable_options_free(void)
 }
 
 /******************************************************************
- reinitialize the struct options_settable: allocate enough
+ reinitialize the options_settable struct: allocate enough
  space for all the options that the server is going to send us.
 *******************************************************************/
 void handle_options_settable_control(
@@ -279,86 +230,73 @@ void handle_options_settable_control(
 
   settable_options_free();
 
-  /* avoid a malloc of size 0 warning */
-  if (0 == packet->num_categories
-   || 0 == packet->num_settings) {
-    return;
-  }
-
-  options_categories = fc_calloc(packet->num_categories,
-				 sizeof(*options_categories));
-  num_options_categories = packet->num_categories;
+  options_categories = fc_malloc(packet->ncategories * sizeof(char *));
+  num_options_categories = packet->ncategories;
   
   for (i = 0; i < num_options_categories; i++) {
     options_categories[i] = mystrdup(packet->category_names[i]);
   }
 
-  settable_options = fc_calloc(packet->num_settings,
-			       sizeof(*settable_options));
-  num_settable_options = packet->num_settings;
+  /* avoid a malloc of size 0 warning */
+  if (packet->nids == 0) {
+    return;
+  }
+
+  settable_options = fc_malloc(packet->nids * sizeof(struct options_settable));
+  num_settable_options = packet->nids;
+
+  for (i = 0; i < num_settable_options; i++) {
+    settable_options[i].name = NULL;
+    settable_options[i].short_help = NULL;
+    settable_options[i].extra_help = NULL;
+    settable_options[i].strval = NULL;
+    settable_options[i].default_strval = NULL;
+  }
 }
 
 /******************************************************************
  Fill the settable_options array with an option.
+ If we've filled the last option, popup the dialog.
 *******************************************************************/
 void handle_options_settable(struct packet_options_settable *packet)
 {
-  struct options_settable *o;
   int i = packet->id;
 
-  if (i < 0 || i > num_settable_options) {
-    freelog(LOG_ERROR,
-	    "handle_options_settable() bad id %d.",
-	    packet->id);
-    return;
-  }
-  o = &settable_options[i];
+  assert(i >= 0);
 
-  o->stype = packet->stype;
-  o->scategory = packet->scategory;
-  o->sclass = packet->sclass;
+  settable_options[i].name = mystrdup(packet->name);
+  settable_options[i].short_help = mystrdup(packet->short_help);
+  settable_options[i].extra_help = mystrdup(packet->extra_help);
 
-  o->val = packet->val;
-  o->default_val = packet->default_val;
-  if (!settable_options_loaded) {
-    o->desired_val = packet->default_val;
-    /* desired_val is loaded later */
-  }
-  o->min = packet->min;
-  o->max = packet->max;
+  settable_options[i].type = packet->type;
+  settable_options[i].category = packet->category;
 
-  /* ensure packet string fields are NULL for repeat calls */
-  settable_option_strings_free(o);
-
-  switch (o->stype) {
+  switch (packet->type) {
   case SSET_BOOL:
-    o->min = FALSE;
-    o->max = TRUE;				/* server sent FALSE */
+    settable_options[i].val = packet->val;
+    settable_options[i].min = FALSE;
+    settable_options[i].max = TRUE;
+    settable_options[i].strval = NULL;
+    settable_options[i].default_strval = NULL;
     break;
   case SSET_INT:
+    settable_options[i].val = packet->val;
+    settable_options[i].min = packet->min;
+    settable_options[i].max = packet->max;
+    settable_options[i].strval = NULL;
+    settable_options[i].default_strval = NULL;
     break;
   case SSET_STRING:
-    o->strval = mystrdup(packet->strval);
-    o->default_strval = mystrdup(packet->default_strval);
-    /* desired_strval is loaded later */
+    settable_options[i].strval = mystrdup(packet->strval);
+    settable_options[i].default_strval = mystrdup(packet->default_strval);
     break;
   default:
-    freelog(LOG_ERROR,
-	    "handle_options_settable() bad type %d.",
-	    packet->stype);
-    return;
-  };
+    assert(0);
+  }
 
-  /* only set for valid type */
-  o->is_visible = packet->is_visible;
-  o->name = mystrdup(packet->name);
-  o->short_help = mystrdup(packet->short_help);
-  o->extra_help = mystrdup(packet->extra_help);
-
-  /* have no proper final packet, test for the last instead */
-  if (i == (num_settable_options - 1) && !settable_options_loaded) {
-    load_settable_options(TRUE);
-    settable_options_loaded = TRUE;
+  /* if we've received all the options, pop up the settings dialog */
+  if (i == num_settable_options - 1) {
+    popup_settable_options_dialog();
   }
 }
 
@@ -369,7 +307,7 @@ void handle_options_settable(struct packet_options_settable *packet)
   The "message" string will be filled with a GUI-friendly message about
   what was sold.
 ****************************************************************************/
-void sell_all_improvements(struct impr_type *pimprove, bool obsolete_only,
+void sell_all_improvements(Impr_Type_id impr, bool obsolete_only,
 			   char *message, size_t message_sz)
 {
   int count = 0, gold = 0;
@@ -379,25 +317,23 @@ void sell_all_improvements(struct impr_type *pimprove, bool obsolete_only,
     return;
   }
 
-  city_list_iterate(client.conn.playing->cities, pcity) {
-    if (!pcity->did_sell && city_has_building(pcity, pimprove)
+  city_list_iterate(game.player_ptr->cities, pcity) {
+    if (!pcity->did_sell && city_got_building(pcity, impr)
 	&& (!obsolete_only
-	    || improvement_obsolete(client.conn.playing, pimprove)
-	    || is_building_replaced(pcity, pimprove, RPT_CERTAIN))) {
+	    || improvement_obsolete(game.player_ptr, impr)
+	    || is_building_replaced(pcity, impr))) {
       count++;
-      gold += impr_sell_gold(pimprove);
-      city_sell_improvement(pcity, improvement_number(pimprove));
+      gold += impr_sell_gold(impr);
+      city_sell_improvement(pcity, impr);
     }
   } city_list_iterate_end;
 
   if (count > 0) {
     my_snprintf(message, message_sz, _("Sold %d %s for %d gold."),
-		count,
-		improvement_name_translation(pimprove),
-		gold);
+		count, get_improvement_name(impr), gold);
   } else {
     my_snprintf(message, message_sz, _("No %s could be sold."),
-		improvement_name_translation(pimprove));
+		get_improvement_name(impr));
   }
 }
 
@@ -408,7 +344,7 @@ void sell_all_improvements(struct impr_type *pimprove, bool obsolete_only,
   The "message" string will be filled with a GUI-friendly message about
   what was sold.
 ****************************************************************************/
-void disband_all_units(struct unit_type *punittype, bool in_cities_only,
+void disband_all_units(Unit_Type_id type, bool in_cities_only,
 		       char *message, size_t message_sz)
 {
   int count = 0;
@@ -419,21 +355,21 @@ void disband_all_units(struct unit_type *punittype, bool in_cities_only,
     return;
   }
 
-  if (utype_has_flag(punittype, F_UNDISBANDABLE)) {
+  if (unit_type_flag(type, F_UNDISBANDABLE)) {
     my_snprintf(message, message_sz, _("%s cannot be disbanded."),
-		utype_name_translation(punittype));
+		unit_name(type));
     return;
   }
 
-  city_list_iterate(client.conn.playing->cities, pcity) {
+  city_list_iterate(game.player_ptr->cities, pcity) {
     /* Only supported units are disbanded.  Units with no homecity have no
      * cost and are not disbanded. */
     unit_list_iterate(pcity->units_supported, punit) {
-      struct city *incity = tile_city(punit->tile);
+      struct city *incity = map_get_city(punit->tile);
 
-      if (unit_type(punit) == punittype
+      if (punit->type == type
 	  && (!in_cities_only
-	      || (incity && city_owner(incity) == client.conn.playing))) {
+	      || (incity && city_owner(incity) == game.player_ptr))) {
 	count++;
 	request_unit_disband(punit);
       }
@@ -442,10 +378,9 @@ void disband_all_units(struct unit_type *punittype, bool in_cities_only,
 
   if (count > 0) {
     my_snprintf(message, message_sz, _("Disbanded %d %s."),
-		count,
-		utype_name_translation(punittype));
+		count, unit_name(type));
   } else {
     my_snprintf(message, message_sz, _("No %s could be disbanded."),
-		utype_name_translation(punittype));
+		unit_name(type));
   }
 }

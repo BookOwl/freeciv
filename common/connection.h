@@ -30,7 +30,6 @@
 ***************************************************************************/
 
 #include "shared.h"		/* MAX_LEN_ADDR, bool type */
-#include "timing.h"
 
 #include "fc_types.h"
 
@@ -110,23 +109,20 @@ struct connection {
   int sock;
   bool used;
   bool established;		/* have negotiated initial packets */
-
-  /* connection is "observer", not controller; may be observing
+  struct player *player;	/* NULL for connections not yet associated
+				   with a specific player */
+  /* 
+   * connection is "observer", not controller; may be observing
    * specific player, or all (implementation incomplete).
    */
   bool observer;
-
-  /* NULL for connections not yet associated with a specific player.
-   */
-  struct player *playing;
-
   struct socket_packet_buffer *buffer;
   struct socket_packet_buffer *send_buffer;
-  struct timer *last_write;
+  time_t last_write;
 
   double ping_time;
   
-  struct conn_list *self;     /* list with this connection as single element */
+  struct conn_list self;     /* list with this connection as single element */
   char username[MAX_LEN_NAME];
   char addr[MAX_LEN_ADDR];
 
@@ -151,8 +147,6 @@ struct connection {
   void (*notify_of_writable_data) (struct connection * pc,
 				   bool data_available_and_socket_full);
 
-  /* Determines whether client or server behavior should be used. */
-  bool is_server;
   struct {
     /* 
      * Increases for every packet send to the server.
@@ -271,9 +265,6 @@ void free_compression_queue(struct connection *pconn);
 void conn_clear_packet_cache(struct connection *pconn);
 
 const char *conn_description(const struct connection *pconn);
-
-bool can_conn_edit(const struct connection *pconn);
-bool can_conn_enable_editing(const struct connection *pconn);
 
 int get_next_request_id(int old_request_id);
 

@@ -21,6 +21,19 @@
 #include <assert.h>
 #include <limits.h>
 
+#ifdef HAVE_SYS_TYPES_H
+#include <sys/types.h>
+#endif
+#ifdef HAVE_NETINET_IN_H
+#include <netinet/in.h>
+#endif
+#ifdef HAVE_ARPA_INET_H
+#include <arpa/inet.h>
+#endif
+#ifdef HAVE_WINSOCK
+#include <winsock.h>
+#endif
+
 #include "capability.h"
 #include "dataio.h"
 #include "events.h"
@@ -80,7 +93,8 @@
 ***********************************************************************/
 
 /**************************************************************************
-  It returns the request id of the outgoing packet (or 0 if pc->is_server).
+It returns the request id of the outgoing packet or 0 if the packet
+was no request (i.e. server sends packet).
 **************************************************************************/
 int send_packet_data(struct connection *pc, unsigned char *data, int len)
 {
@@ -90,7 +104,7 @@ int send_packet_data(struct connection *pc, unsigned char *data, int len)
   freelog(BASIC_PACKET_LOG_LEVEL, "sending packet type=%s(%d) len=%d",
 	  get_packet_name(data[2]), data[2], len);
 
-  if (!pc->is_server) {
+  if (!is_server) {
     pc->client.last_request_id_used =
 	get_next_request_id(pc->client.last_request_id_used);
     result = pc->client.last_request_id_used;
@@ -273,11 +287,11 @@ int send_packet_data(struct connection *pc, unsigned char *data, int len)
 		packets_stats[i].size / packets_stats[i].counter,
 		get_packet_name(i),i);
       }
-      freelog(LOG_TEST,
+      freelog(LOG_NORMAL,
 	      "turn=%d; transmitted %d bytes in %d packets;average size "
 	      "per packet %d bytes", game.turn, sum, packet_counter,
 	      sum / packet_counter);
-      freelog(LOG_TEST, "turn=%d; transmitted %d bytes", game.turn,
+      freelog(LOG_NORMAL, "turn=%d; transmitted %d bytes", game.turn,
 	      pc->statistics.bytes_send);
     }    
     if (clear) {
@@ -365,7 +379,7 @@ void *get_packet_from_connection(struct connection *pc,
      * We don't know the decompressed size. We assume a bad case
      * here: an expansion by an factor of 100. 
      */
-    unsigned long int decompressed_size = 100 * compressed_size;
+    uLongf decompressed_size = 100 * compressed_size;
     void *decompressed = fc_malloc(decompressed_size);
     int error;
     struct socket_packet_buffer *buffer = pc->buffer;
@@ -470,22 +484,23 @@ void *get_packet_from_connection(struct connection *pc,
     packets_stats[packet_type].size += size;
 
     packet_counter++;
-    if (packet_counter % 100 == 0) {
+    if ((is_server && (packet_counter % 10 == 0))
+	|| (!is_server && (packet_counter % 1000 == 0))) {
       int i, sum = 0;
 
-      freelog(LOG_TEST, "Received packets:");
+      freelog(LOG_NORMAL, "Received packets:");
       for (i = 0; i < PACKET_LAST; i++) {
 	if (packets_stats[i].counter == 0)
 	  continue;
 	sum += packets_stats[i].size;
-	freelog(LOG_TEST,
+	freelog(LOG_NORMAL,
 		"  [%-25.25s %3d]: %6d packets; %8d bytes total; "
 		"%5d bytes/packet average",
 		get_packet_name(i), i, packets_stats[i].counter,
 		packets_stats[i].size,
 		packets_stats[i].size / packets_stats[i].counter);
       }
-      freelog(LOG_TEST,
+      freelog(LOG_NORMAL,
 	      "received %d bytes in %d packets;average size "
 	      "per packet %d bytes",
 	      sum, packet_counter, sum / packet_counter);
@@ -562,12 +577,19 @@ void check_packet(struct data_in *din, struct connection *pc)
 void generic_handle_player_attribute_chunk(struct player *pplayer,
 					   const struct
 					   packet_player_attribute_chunk
-					   *chunk)
+                                           *chunk,
+                                           struct connection *pconn)
 {
-  freelog(BASIC_PACKET_LOG_LEVEL, "received attribute chunk %u/%u %u",
+  freelog(BASIC_PACKET_LOG_LEVEL, "received attribute chunk %u+%u->%u/%u",
 	  (unsigned int) chunk->offset,
 	  (unsigned int) chunk->total_length,
+     	  (unsigned int) chunk->offset + chunk->total_length,
 	  (unsigned int) chunk->chunk_length);
+
+  if (!has_capability("AttrSerialFix", pconn->capability)) {
+    /* Discard attribute chunks from incompatible connection */
+    return;
+  }
 
   if (chunk->total_length < 0
       || chunk->chunk_length < 0
@@ -622,6 +644,10 @@ void send_attribute_block(const struct player *pplayer,
   int current_chunk, chunks, bytes_left;
 
   if (!pplayer || !pplayer->attribute_block.data) {
+    return;
+  }
+
+  if (!has_capability("AttrSerialFix", pconn->capability)) {
     return;
   }
 
@@ -721,8 +747,8 @@ void pre_send_packet_player_attribute_chunk(struct connection *pc,
 /**************************************************************************
   ...
 **************************************************************************/
-void post_receive_packet_ruleset_control(struct connection *pc,
-					 struct packet_ruleset_control *packet)
+void post_receive_packet_game_state(struct connection *pc,
+				    struct packet_game_state *packet)
 {
   conn_clear_packet_cache(pc);
 }
@@ -730,8 +756,8 @@ void post_receive_packet_ruleset_control(struct connection *pc,
 /**************************************************************************
   ...
 **************************************************************************/
-void post_send_packet_ruleset_control(struct connection *pc,
-				      const struct packet_ruleset_control *packet)
+void post_send_packet_game_state(struct connection *pc,
+				 const struct packet_game_state *packet)
 {
   conn_clear_packet_cache(pc);
 }

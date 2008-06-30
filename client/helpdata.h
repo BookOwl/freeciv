@@ -13,10 +13,6 @@
 #ifndef FC__HELPDATA_H
 #define FC__HELPDATA_H
 
-#include <stddef.h>		/* size_t */
-
-#include "improvement.h" 	/* Impr_type_id */
-
 #include "helpdlg_g.h"		/* enum help_page_type */
 
 struct help_item {
@@ -24,10 +20,7 @@ struct help_item {
   enum help_page_type type;
 };
 
-void helpdata_init(void);
-void helpdata_done(void);
-
-void boot_help_texts(struct player *pplayer);
+void boot_help_texts(void);
 void free_help_texts(void);
 
 int num_help_items(void);
@@ -38,18 +31,14 @@ const struct help_item *get_help_item_spec(const char *name,
 void help_iter_start(void);
 const struct help_item *help_iter_next(void);
 
-char *helptext_building(char *buf, size_t bufsz, struct player *pplayer,
-			const char *user_text, struct impr_type *pimprove);
-char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
-		    const char *user_text, struct unit_type *utype);
-void helptext_advance(char *buf, size_t bufsz, struct player *pplayer,
-		      const char *user_text, int i);
-void helptext_terrain(char *buf, size_t bufsz, struct player *pplayer,
-		      const char *user_text, struct terrain *pterrain);
-void helptext_government(char *buf, size_t bufsz, struct player *pplayer,
-			 const char *user_text, struct government *gov);
+char *helptext_building(char *buf, size_t bufsz, Impr_Type_id which,
+			const char *user_text);
+void helptext_unit(char *buf, int i, const char *user_text);
+void helptext_tech(char *buf, int i, const char *user_text);
+void helptext_terrain(char *buf, int i, const char *user_text);
+void helptext_government(char *buf, int i, const char *user_text);
 
-char *helptext_unit_upkeep_str(struct unit_type *punittype);
+char *helptext_unit_upkeep_str(int i);
 
 #define help_items_iterate(pitem) {       \
         const struct help_item *pitem;    \

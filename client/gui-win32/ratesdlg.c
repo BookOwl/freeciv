@@ -20,7 +20,9 @@
 #include <windows.h>
 #include <windowsx.h>
 
+
 #include "fcintl.h"
+#include "game.h"
 #include "government.h"
 #include "packets.h"
 #include "player.h"
@@ -28,18 +30,16 @@
 #include "support.h"
 #include "gui_main.h" 
 
-#include "civclient.h"
 #include "gui_stuff.h"
 #include "mapview.h"
 
 #include "ratesdlg.h"
 
+
+extern struct connection aconnection;    
 extern HINSTANCE freecivhinst;
-
 static HWND ratesdlg;
-
-int rates_tax_value, rates_lux_value, rates_sci_value;
-
+int rates_tax_value, rates_lux_value, rates_sci_value;     
 
 /**************************************************************************
 
@@ -58,7 +58,7 @@ static void rates_set_values(int tax, int no_tax_scroll,
   lux_lock=IsDlgButtonChecked(ratesdlg,ID_RATES_LUXURYLOCK);
   sci_lock=IsDlgButtonChecked(ratesdlg,ID_RATES_SCIENCELOCK);
   
-  maxrate = get_player_bonus(client.conn.playing, EFT_MAX_RATES);
+  maxrate=get_government_max_rate(game.player_ptr->government);
   /* This's quite a simple-minded "double check".. */     
   tax=MIN(tax, maxrate);
   lux=MIN(lux, maxrate);
@@ -264,7 +264,7 @@ static LONG CALLBACK ratesdlg_proc(HWND hWnd,
 	  break;
 	case IDOK:
 	  DestroyWindow(hWnd);
-	  dsend_packet_player_rates(&client.conn, rates_tax_value,
+	  dsend_packet_player_rates(&aconnection, rates_tax_value,
 				    rates_lux_value, rates_sci_value);
 	  break;
 	}
@@ -327,18 +327,18 @@ popup_rates_dialog(void)
     fcwin_box_add_button(hbox,_("Ok"),IDOK,0,TRUE,TRUE,20);
     fcwin_box_add_button(hbox,_("Cancel"),IDCANCEL,0,TRUE,TRUE,20);
     fcwin_box_add_box(vbox,hbox,TRUE,TRUE,10);
-
+  
     my_snprintf(buf, sizeof(buf), _("%s max rate: %d%%"),
-		government_name_for_player(client.conn.playing),
-		get_player_bonus(client.conn.playing, EFT_MAX_RATES));
+		get_government_name(game.player_ptr->government),
+		get_government_max_rate(game.player_ptr->government)); 
     SetWindowText(GetDlgItem(ratesdlg,ID_RATES_MAX),buf);
     ScrollBar_SetRange(GetDlgItem(ratesdlg,ID_RATES_TAX),0,10,TRUE);
     ScrollBar_SetRange(GetDlgItem(ratesdlg,ID_RATES_LUXURY),0,10,TRUE);
     ScrollBar_SetRange(GetDlgItem(ratesdlg,ID_RATES_SCIENCE),0,10,TRUE);
-    rates_set_values( client.conn.playing->economic.tax, 0,
-		      client.conn.playing->economic.luxury, 0,
-		      client.conn.playing->economic.science, 0 );
-
+    rates_set_values( game.player_ptr->economic.tax, 0,
+		      game.player_ptr->economic.luxury, 0,
+		      game.player_ptr->economic.science, 0 );          
+    
     fcwin_set_box(ratesdlg,vbox);
     ShowWindow(ratesdlg,SW_SHOWNORMAL);
   }

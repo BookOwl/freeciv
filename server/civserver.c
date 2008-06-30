@@ -19,10 +19,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef HAVE_SIGNAL_H
-#include <signal.h>
-#endif
-
 #ifdef GENERATING_MAC  /* mac header(s) */
 #include <Controls.h>
 #include <Dialogs.h>
@@ -34,15 +30,12 @@
 
 #include "fciconv.h"
 #include "fcintl.h"
-#include "game.h"
 #include "log.h"
 #include "shared.h"
 #include "support.h"
-#include "timing.h"
 #include "version.h"
 
 #include "console.h"
-#include "ggzserver.h"
 #include "meta.h"
 #include "sernet.h"
 #include "srv_main.h"
@@ -51,41 +44,6 @@
 
 #ifdef GENERATING_MAC
 static void Mac_options(int argc);  /* don't need argv */
-#endif
-
-#ifdef HAVE_SIGNAL_H
-#  define USE_INTERRUPT_HANDLERS
-#endif
-
-#ifdef USE_INTERRUPT_HANDLERS
-/**************************************************************************
-  This function is called when a SIGINT (ctrl-c) is received.  It will exit
-  only if two SIGINTs are received within a second.
-
-  TODO: SIGHUP and SIGTERM should be handled too.  At a minimum we should
-  save the game before exiting.
-**************************************************************************/
-static void sigint_handler(int sig)
-{
-  static struct timer *timer = NULL;
-
-  if (with_ggz) {
-    exit(EXIT_SUCCESS);
-  }
-  if (timer && read_timer_seconds(timer) <= 1.0) {
-    exit(EXIT_SUCCESS);
-  } else {
-    if (game.info.timeout == -1) {
-      freelog(LOG_NORMAL, _("Setting timeout to 0. Autogame will stop.\n"));
-      game.info.timeout = 0;
-    }
-    if (!timer) {
-      freelog(LOG_NORMAL, _("You must interrupt Freeciv twice"
-                            " within one second to make it exit.\n"));
-    }
-  }
-  timer = renew_timer_start(timer, TIMER_USER, TIMER_ACTIVE);
-}
 #endif
 
 /**************************************************************************
@@ -111,10 +69,6 @@ int main(int argc, char *argv[])
 # endif
 #endif
 
-#ifdef USE_INTERRUPT_HANDLERS
-  signal(SIGINT, sigint_handler);
-#endif
-
   /* initialize server */
   srv_init();
 
@@ -127,57 +81,50 @@ int main(int argc, char *argv[])
   /* yes we do have reasons ;)                                   */
   inx = 1;
   while (inx < argc) {
-    if ((option = get_option_malloc("--file", argv, &inx, argc))) {
+    if ((option = get_option("--file", argv, &inx, argc)))
       sz_strlcpy(srvarg.load_filename, option);
-      free(option);
-    } else if (is_option("--help", argv[inx])) {
+    else if (is_option("--help", argv[inx])) {
       showhelp = TRUE;
       break;
-    } else if ((option = get_option_malloc("--log", argv, &inx, argc))) {
-      srvarg.log_filename = option; /* Never freed. */
-    } else if ((option = get_option_malloc("--Ranklog", argv, &inx, argc))) {
-      srvarg.ranklog_filename = option; /* Never freed. */
-    } else if (is_option("--nometa", argv[inx])) {
+    } else if ((option = get_option("--log", argv, &inx, argc)))
+      srvarg.log_filename = option;
+    else if ((option = get_option("--gamelog", argv, &inx, argc)))
+      srvarg.gamelog_filename = option;
+    else if (is_option("--nometa", argv[inx])) {
       fc_fprintf(stderr, _("Warning: the %s option is obsolete.  "
 			   "Use -m to enable the metaserver.\n"), argv[inx]);
       showhelp = TRUE;
     } else if (is_option("--meta", argv[inx]))
       srvarg.metaserver_no_send = FALSE;
-    else if ((option = get_option_malloc("--Metaserver",
-					 argv, &inx, argc))) {
-      sz_strlcpy(srvarg.metaserver_addr, option);
-      free(option);
+    else if ((option = get_option("--Metaserver", argv, &inx, argc))) {
+      sz_strlcpy(srvarg.metaserver_addr, argv[inx]);
       srvarg.metaserver_no_send = FALSE;      /* --Metaserver implies --meta */
-    } else if ((option = get_option_malloc("--port", argv, &inx, argc))) {
+    } else if ((option = get_option("--port", argv, &inx, argc))) {
       if (sscanf(option, "%d", &srvarg.port) != 1) {
 	showhelp = TRUE;
 	break;
       }
-      free(option);
-    } else if ((option = get_option_malloc("--bind", argv, &inx, argc))) {
-      srvarg.bind_addr = option; /* Never freed. */
-    } else if ((option = get_option_malloc("--read", argv, &inx, argc)))
-      srvarg.script_filename = option; /* Never freed. */
-    else if ((option = get_option_malloc("--quitidle", argv, &inx, argc))) {
+    } else if ((option = get_option("--bind", argv, &inx, argc))) {
+      srvarg.bind_addr = option;
+    } else if ((option = get_option("--read", argv, &inx, argc)))
+      srvarg.script_filename = option;
+    else if ((option = get_option("--quitidle", argv, &inx, argc))) {
       if (sscanf(option, "%d", &srvarg.quitidle) != 1) {
 	showhelp = TRUE;
 	break;
       }
-      free(option);
     } else if (is_option("--exit-on-end", argv[inx])) {
       srvarg.exit_on_end = TRUE;
-    } else if ((option = get_option_malloc("--debug", argv, &inx, argc))) {
+    } else if ((option = get_option("--debug", argv, &inx, argc))) {
       srvarg.loglevel = log_parse_level_str(option);
       if (srvarg.loglevel == -1) {
 	srvarg.loglevel = LOG_NORMAL;
 	showhelp = TRUE;
 	break;
       }
-      free(option);
 #ifdef HAVE_AUTH
-    } else if ((option = get_option_malloc("--auth", argv, &inx, argc))) {
+    } else if (is_option("--auth", argv[inx])) {
       srvarg.auth_enabled = TRUE;
-      srvarg.auth_conf = option;
     } else if (is_option("--Guests", argv[inx])) {
       srvarg.auth_allow_guests = TRUE;
     } else if (is_option("--Newusers", argv[inx])) {
@@ -185,11 +132,10 @@ int main(int argc, char *argv[])
 #endif
     } else if (is_option("--Ppm", argv[inx])) {
       srvarg.save_ppm = TRUE;
-    } else if ((option = get_option_malloc("--Serverid", argv, &inx, argc))) {
+    } else if ((option = get_option("--Serverid", argv, &inx, argc))) {
       sz_strlcpy(srvarg.serverid, option);
-      free(option);
-    } else if ((option = get_option_malloc("--saves", argv, &inx, argc))) {
-      srvarg.saves_pathname = option; /* Never freed. */
+    } else if ((option = get_option("--saves", argv, &inx, argc))) {
+      srvarg.saves_pathname = option;
     } else if (is_option("--version", argv[inx]))
       showvers = TRUE;
     else {
@@ -205,16 +151,14 @@ int main(int argc, char *argv[])
     exit(EXIT_SUCCESS);
   }
   con_write(C_VERSION, _("This is the server for %s"), freeciv_name_version());
-  /* TRANS: No full stop after the URL, could cause confusion. */
   con_write(C_COMMENT, _("You can learn a lot about Freeciv at %s"),
-	    WIKI_URL);
+	    WEBSITE_URL);
 
   if (showhelp) {
     fc_fprintf(stderr,
 	       _("Usage: %s [option ...]\nValid options are:\n"), argv[0]);
 #ifdef HAVE_AUTH
-    fc_fprintf(stderr, _("  -a  --auth FILE\tEnable server authentication "
-                         "with configuration from FILE.\n"));
+    fc_fprintf(stderr, _("  -a  --auth\t\tEnable server authentication.\n"));
     fc_fprintf(stderr, _("  -G  --Guests\t\tAllow guests to "
 			 "login if auth is enabled.\n"));
     fc_fprintf(stderr, _("  -N  --Newusers\tAllow new users to "
@@ -229,6 +173,8 @@ int main(int argc, char *argv[])
 	       _("  -d, --debug NUM\tSet debug log level (0 to 3)\n"));
 #endif
     fc_fprintf(stderr, _("  -f, --file FILE\tLoad saved game FILE\n"));
+    fc_fprintf(stderr,
+	       _("  -g, --gamelog FILE\tUse FILE as game logfile\n"));
     fc_fprintf(stderr,
 	       _("  -h, --help\t\tPrint a summary of the options\n"));
     fc_fprintf(stderr, _("  -l, --log FILE\tUse FILE as logfile\n"));
@@ -250,18 +196,13 @@ int main(int argc, char *argv[])
     fc_fprintf(stderr,
 	     _("  -P, --Ppm\t\tSave ppms of the map when saving the game.\n"));
     fc_fprintf(stderr, _("  -r, --read FILE\tRead startup script FILE\n"));
-    fc_fprintf(stderr,
-	       _("  -R, --Ranklog FILE\tUse FILE as ranking logfile\n"));
     fc_fprintf(stderr, _("  -v, --version\t\tPrint the version number\n"));
-    /* TRANS: No full stop after the URL, could cause confusion. */
-    fc_fprintf(stderr, _("Report bugs at %s\n"), BUG_URL);
+    fc_fprintf(stderr, _("Report bugs at %s.\n"), BUG_URL);
     exit(EXIT_SUCCESS);
   }
 
   /* disallow running as root -- too dangerous */
   dont_run_as_root(argv[0], "freeciv_server");
-
-  ggz_initialize();
 
   /* have arguments, call the main server loop... */
   srv_main();
@@ -283,7 +224,7 @@ static void Mac_options(int argc)
 #ifdef HARDCODED_OPT
   srvarg.log_filename="log.out";
   srvarg.loglevel=LOG_DEBUG;
-#else  /* HARDCODED_OPT */
+#else
   if (argc == 0)
   {
     OSErr err;
@@ -337,9 +278,9 @@ static void Mac_options(int argc)
 
     while(!done)/*loop*/
     {
-      ModalDialog(0L, &the_item);/* don't feed 0 where a upp is expected? */
-      	/* old book suggests using OL(NIL) as the first argument, but
-           It doesn't include anything about UPPs either, so... */
+      ModalDialog(0L, &the_item);/*don't feed 0 where a upp is expected?*/
+      	/*old book sugests using OL(NIL) as the first argument, but
+      	It doesn't include anything about UPPs either, so...*/
       switch (the_item)
       {
         case 1:
@@ -364,9 +305,11 @@ static void Mac_options(int argc)
         break;
       }
     }
-    /* now, load the dialog items into the correct variables interpritation */
+    /*now, load the dialog items into the corect variables interpritation*/
     GetDItem( optptr, 4, &the_type, &the_handle, &the_rect);
     GetIText( the_handle, (unsigned char *)srvarg.load_filename);
+    GetDItem( optptr, 6, &the_type, &the_handle, &the_rect);
+    GetIText( the_handle, (unsigned char *)srvarg.gamelog_filename);
     GetDItem( optptr, 8, &the_type, &the_handle, &the_rect);
     GetIText( the_handle, (unsigned char *)srvarg.log_filename);
     GetDItem( optptr, 12, &the_type, &the_handle, &the_rect);
@@ -392,7 +335,7 @@ static void Mac_options(int argc)
     DisposeDialog(optptr);/*get rid of the dialog after sorting out the options*/
     DisposePtr(storage);/*clean up the allocated memory*/
   }
-#endif /* HARDCODED_OPT */
+#endif
 #undef  HARDCODED_OPT
 }
-#endif /* GENERATING_MAC */
+#endif

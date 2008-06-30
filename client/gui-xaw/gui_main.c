@@ -39,43 +39,35 @@
 
 #include "fciconv.h"
 #include "fcintl.h"
-#include "log.h"
-#include "support.h"
-
 #include "game.h"
 #include "government.h"
+#include "log.h"
 #include "map.h"
-#include "unitlist.h"
+#include "support.h"
 #include "version.h"
 
-/* client */
+#include "actions.h"
 #include "civclient.h"
 #include "climisc.h"
 #include "clinet.h"
-#include "control.h"
-#include "editgui_g.h"
-#include "options.h"
-#include "text.h"
-#include "tilespec.h"
-
-/* gui-xaw */
-#include "actions.h"
 #include "colors.h"
+#include "control.h"
 #include "dialogs.h"
 #include "graphics.h"
 #include "gui_stuff.h"		/* I_SW() */
+#include "helpdata.h"		/* boot_help_texts() */
 #include "mapview.h"
 #include "menu.h"
 #include "optiondlg.h"
-#include "pages.h"
+#include "options.h"
 #include "resources.h"
+#include "tilespec.h"
 
 #include "gui_main.h"
 
-const char *client_string = "gui-xaw";
+#include "freeciv.ico"
 
-const char * const gui_character_encoding = NULL;
-const bool gui_use_transliteration = TRUE;
+const char *client_string = "gui-xaw";
 
 client_option gui_options[] = {
   /* None. */
@@ -88,7 +80,6 @@ static AppResources appResources;
 static int unit_ids[MAX_NUM_UNITS_BELOW];  
 
 static void setup_widgets(void);
-
 void fill_econ_label_pixmaps(void);
 void fill_unit_below_pixmaps(void);
 
@@ -214,16 +205,6 @@ XtInputId x_input_id;
 XtIntervalId x_interval_id;
 Atom wm_delete_window;
 
-/****************************************************************************
-  Called by the tileset code to set the font size that should be used to
-  draw the city names and productions.
-****************************************************************************/
-void set_city_names_font_sizes(int my_city_names_font_size,
-			       int my_city_productions_font_size)
-{
-  freelog(LOG_ERROR, "Unimplemented set_city_names_font_sizes.");
-  /* PORTME */
-}
 
 #ifdef UNUSED
 /**************************************************************************
@@ -244,10 +225,7 @@ static int myerr(Display *p, XErrorEvent *e)
 static void print_usage(const char *argv0)
 {
   /* add client-specific usage information here */
-  fc_fprintf(stderr, _("This client has no special command line options\n\n"));
-
-  /* TRANS: No full stop after the URL, could cause confusion. */
-  fc_fprintf(stderr, _("Report bugs at %s\n"), BUG_URL);
+  fc_fprintf(stderr, _("Report bugs at %s.\n"), BUG_URL);
 }
 
 /**************************************************************************
@@ -277,7 +255,7 @@ static Boolean toplevel_work_proc(XtPointer client_data)
   /* This will cause the connect dialog to pop-up.
      We do it here so that the main window exists when that happens,
      so that the connect dialog can position itself relative to it. */
-  set_client_state(C_S_PREPARING);
+  set_client_state(CLIENT_PRE_GAME_STATE);
   return (True);
 }
 
@@ -286,7 +264,7 @@ static Boolean toplevel_work_proc(XtPointer client_data)
 **************************************************************************/
 void ui_init(void)
 {
-
+  init_character_encodings(NULL, TRUE);
 }
 
 /**************************************************************************
@@ -295,7 +273,7 @@ void ui_init(void)
 void ui_main(int argc, char *argv[])
 {
   int i;
-  struct sprite *icon; 
+  Pixmap icon_pixmap; 
 
   parse_options(argc, argv);
 
@@ -355,38 +333,45 @@ void ui_main(int argc, char *argv[])
     freelog(LOG_FATAL, _("Only color displays are supported for now..."));
     /*    exit(EXIT_FAILURE); */
   }
+  
+  icon_pixmap = XCreateBitmapFromData(display,
+				      RootWindowOfScreen(XtScreen(toplevel)),
+				      freeciv_bits,
+				      freeciv_width, freeciv_height);
+  XtVaSetValues(toplevel, XtNiconPixmap, icon_pixmap, NULL);
+
+  init_color_system();
 
   {
     XGCValues values;
     char **missing_charset_list_return;
     int missing_charset_count_return;
     char *def_string_return;
-    char *city_names_font, *city_productions_font_name;
 
     values.graphics_exposures = False;
     civ_gc = XCreateGC(display, root_window, GCGraphicsExposures, &values);
 
-    city_names_font = mystrdup("-*-*-*-*-*-*-14-*");
+    free(city_names_font);
+    city_names_font = mystrdup("-*-*-*-*-*--14-*");
 
-    city_productions_font_name = mystrdup("-*-*-*-*-*-*-14-*");
+    free(city_productions_font_name);
+    city_productions_font_name = mystrdup("-*-*-*-*-*--14-*");
 
     main_font_set = XCreateFontSet(display, city_names_font,
 	&missing_charset_list_return,
 	&missing_charset_count_return,
 	&def_string_return);
-    if (!main_font_set) {
+    if(!main_font_set) {
       freelog(LOG_FATAL, _("Unable to open fontset: %s"),
-	      city_names_font);
-      freelog(LOG_FATAL,
-	      _("Doing 'xset fp rehash' may temporarily solve a problem."));
+	  city_names_font);
       exit(EXIT_FAILURE);
     }
-    for (i = 0; i < missing_charset_count_return; i++) {
+    for(i = 0; i < missing_charset_count_return; i++) {
       freelog(LOG_ERROR, _("Font for charset %s is lacking"),
-	      missing_charset_list_return[i]);
+	  missing_charset_list_return[i]);
     }
-    values.foreground = get_color(tileset, COLOR_MAPVIEW_CITYTEXT)->color.pixel;
-    values.background = get_color(tileset, COLOR_MAPVIEW_UNKNOWN)->color.pixel;
+    values.foreground = colors_standard[COLOR_STD_WHITE];
+    values.background = colors_standard[COLOR_STD_BLACK];
     font_gc= XCreateGC(display, root_window, 
 		       GCForeground|GCBackground|GCGraphicsExposures, 
 		       &values);
@@ -395,19 +380,17 @@ void ui_main(int argc, char *argv[])
 	&missing_charset_list_return,
 	&missing_charset_count_return,
 	&def_string_return);
-    if (!prod_font_set) {
+    if(!prod_font_set) {
       freelog(LOG_FATAL, _("Unable to open fontset: %s"),
-	      city_productions_font_name);
-      freelog(LOG_FATAL,
-	      _("Doing 'xset fp rehash' may temporarily solve a problem."));
+	  city_productions_font_name);
       exit(EXIT_FAILURE);
     }
-    for (i = 0; i < missing_charset_count_return; i++) {
+    for(i = 0; i < missing_charset_count_return; i++) {
       freelog(LOG_ERROR, _("Font for charset %s is lacking"),
-	      missing_charset_list_return[i]);
+	  missing_charset_list_return[i]);
     }
-    values.foreground = get_color(tileset, COLOR_MAPVIEW_CITYTEXT)->color.pixel;
-    values.background = get_color(tileset, COLOR_MAPVIEW_UNKNOWN)->color.pixel;
+    values.foreground = colors_standard[COLOR_STD_WHITE];
+    values.background = colors_standard[COLOR_STD_BLACK];
     prod_font_gc= XCreateGC(display, root_window,
 			    GCForeground|GCBackground|GCGraphicsExposures,
 			    &values);
@@ -441,7 +424,7 @@ void ui_main(int argc, char *argv[])
   }
   
   /* 135 below is rough value (could be more intelligent) --dwp */
-  num_units_below = 135 / tileset_full_tile_width(tileset);
+  num_units_below = 135 / UNIT_TILE_WIDTH;
   num_units_below = MIN(num_units_below,MAX_NUM_UNITS_BELOW);
   num_units_below = MAX(num_units_below,1);
   
@@ -449,14 +432,9 @@ void ui_main(int argc, char *argv[])
      setup_widgets() has enough colors available:  (on 256-colour systems)
   */
   setup_widgets();
-  tileset_init(tileset);
-  tileset_load_tiles(tileset);
+  tilespec_load_tiles();
   load_intro_gfx();
   load_cursors();
-
-  /* FIXME: what about the mask? */
-  icon = get_icon_sprite(tileset, ICON_FREECIV);
-  XtVaSetValues(toplevel, XtNiconPixmap, icon->pixmap, NULL);
 
   XtSetKeyboardFocus(bottom_form, inputline_text);
   XtSetKeyboardFocus(below_menu_form, map_canvas);
@@ -464,6 +442,7 @@ void ui_main(int argc, char *argv[])
   InitializeActions(app_context);
 
   /* Do this outside setup_widgets() so after tiles are loaded */
+
   fill_econ_label_pixmaps();
 		
   XtAddCallback(map_horizontal_scrollbar, XtNjumpProc, 
@@ -487,10 +466,7 @@ void ui_main(int argc, char *argv[])
 
   fill_unit_below_pixmaps();
 
-  set_indicator_icons(client_research_sprite(),
-		      client_warming_sprite(),
-		      client_cooling_sprite(),
-		      client_government_sprite());
+  set_indicator_icons(0, 0, 0, 0);
 
   wm_delete_window = XInternAtom(XtDisplay(toplevel), "WM_DELETE_WINDOW", 0);
   XSetWMProtocols(display, XtWindow(toplevel), &wm_delete_window, 1);
@@ -502,13 +478,6 @@ void ui_main(int argc, char *argv[])
   XtAppMainLoop(app_context);
 }
 
-/**************************************************************************
-  Do any necessary UI-specific cleanup
-**************************************************************************/
-void ui_exit()
-{
-
-}
 
 /**************************************************************************
   Callack for when user clicks one of the unit icons on left hand side
@@ -524,10 +493,9 @@ static void unit_icon_callback(Widget w, XtPointer client_data,
   assert(i>=0 && i<num_units_below);
   if (unit_ids[i] == 0) /* no unit displayed at this place */
     return;
-  punit=game_find_unit_by_number(unit_ids[i]);
+  punit=find_unit_by_id(unit_ids[i]);
   if(punit) { /* should always be true at this point */
-    if (unit_owner(punit) == client.conn.playing) {
-      /* may be non-true if alliance */
+    if (punit->owner == game.player_idx) {  /* may be non-true if alliance */
       set_unit_focus(punit);
     }
   }
@@ -603,8 +571,8 @@ void setup_widgets(void)
     econ_label[i] = XtVaCreateManagedWidget("econlabels",
 					    commandWidgetClass,
 					    left_column_form,
-					    XtNwidth, tileset_small_sprite_width(tileset),
-					    XtNheight, tileset_small_sprite_height(tileset),
+					    XtNwidth, SMALL_TILE_WIDTH,
+					    XtNheight, SMALL_TILE_HEIGHT,
 					    i?XtNfromHoriz:NULL, 
 					    i?econ_label[i-1]:NULL,
 					    XtNhorizDistance, econ_label_space,
@@ -642,7 +610,7 @@ void setup_widgets(void)
 				 commandWidgetClass,
 				 left_column_form,
 				 XtNwidth, econ_label_count*
-						(tileset_small_sprite_width(tileset)+econ_label_space),
+						(SMALL_TILE_WIDTH+econ_label_space),
 				 NULL));
 
   
@@ -654,8 +622,8 @@ void setup_widgets(void)
   unit_pix_canvas = XtVaCreateManagedWidget("unitpixcanvas", 
 					   pixcommWidgetClass,
 					   left_column_form, 
-					   XtNwidth, tileset_full_tile_width(tileset),
-					   XtNheight, tileset_full_tile_height(tileset),
+					   XtNwidth, UNIT_TILE_WIDTH,
+					   XtNheight, UNIT_TILE_HEIGHT,
 					   NULL);
 
   for(i=0; i<num_units_below; i++) {
@@ -666,9 +634,9 @@ void setup_widgets(void)
 						   pixcommWidgetClass,
 						   left_column_form, 
 						   XtNwidth,
-						   tileset_full_tile_width(tileset),
+						   UNIT_TILE_WIDTH,
 						   XtNheight,
-						   tileset_full_tile_height(tileset),
+						   UNIT_TILE_HEIGHT,
 						   NULL);
     XtAddCallback(unit_below_canvas[i], XtNcallback, unit_icon_callback,
 		  (XtPointer)i);  
@@ -721,8 +689,8 @@ void setup_widgets(void)
 **************************************************************************/
 void xaw_ui_exit(void)
 {
-  tileset_free_tiles(tileset);
-  client_exit();
+  tilespec_free_tiles();
+  ui_exit();
 }
 
 /**************************************************************************
@@ -730,23 +698,45 @@ void xaw_ui_exit(void)
 **************************************************************************/
 void main_show_info_popup(XEvent *event)
 {
-  XButtonEvent *ev = (XButtonEvent *)event;
-
-  if (ev->button == Button1) {
+  XButtonEvent *ev=(XButtonEvent *)event;
+  if(ev->button==Button1) {
     Widget  p;
     Position x, y;
     Dimension w, h;
+    char buf[512];
 
-    p = XtCreatePopupShell("popupinfo", 
-			   overrideShellWidgetClass, 
-			   info_command, NULL, 0);
+    my_snprintf(buf, sizeof(buf),
+		_("%s People\n"
+		  "Year: %s Turn: %d\n"
+		  "Gold: %d\n"
+		  "Net Income: %d\n"
+		  "Tax:%d Lux:%d Sci:%d\n"
+		  "Researching %s: %d/%d\n"
+		  "Government: %s"),
+		population_to_text(civ_population(game.player_ptr)),
+		textyear(game.year), game.turn,
+		game.player_ptr->economic.gold,
+		player_get_expected_income(game.player_ptr),
+		game.player_ptr->economic.tax,
+		game.player_ptr->economic.luxury,
+		game.player_ptr->economic.science,
+		(game.player_ptr->research.researching == A_UNSET) ?
+		  advances[A_NONE].name :
+		  advances[game.player_ptr->research.researching].name,
+		game.player_ptr->research.bulbs_researched,
+		total_bulbs_required(game.player_ptr),
+		get_government_name(game.player_ptr->government));
 
-    XtAddCallback(p, XtNpopdownCallback, destroy_me_callback, NULL);
+    p=XtCreatePopupShell("popupinfo", 
+			 overrideShellWidgetClass, 
+			 info_command, NULL, 0);
 
-    XtVaCreateManagedWidget("fullinfopopuplabel",
+    XtAddCallback(p,XtNpopdownCallback,destroy_me_callback,NULL);
+
+    XtVaCreateManagedWidget("fullinfopopuplabel", 
 			    labelWidgetClass,
 			    p,
-			    XtNlabel, get_info_label_text_popup(),
+			    XtNlabel, buf,
 			    NULL);
 
     XtRealizeWidget(p);
@@ -764,7 +754,6 @@ void main_show_info_popup(XEvent *event)
 void update_conn_list_dialog(void)
 {
   /* PORTME */
-  update_start_page();
 }
 
 /**************************************************************************
@@ -795,7 +784,7 @@ static void set_wait_for_writable_socket(struct connection *pc,
     return;
   freelog(LOG_DEBUG, "set_wait_for_writable_socket(%d)", socket_writable);
   XtRemoveInput(x_input_id);
-  x_input_id = XtAppAddInput(app_context, client.conn.sock,
+  x_input_id = XtAppAddInput(app_context, aconnection.sock,
 			     (XtPointer) (XtInputReadMask |
 					  (socket_writable ?
 					   XtInputWriteMask : 0) |
@@ -814,7 +803,7 @@ void add_net_input(int sock)
 			     (XtPointer) (XtInputReadMask |
 					  XtInputExceptMask),
 			     (XtInputCallbackProc) get_net_input, NULL);
-  client.conn.notify_of_writable_data = set_wait_for_writable_socket;
+  aconnection.notify_of_writable_data = set_wait_for_writable_socket;
 }
 
 /**************************************************************************
@@ -825,23 +814,6 @@ void remove_net_input(void)
 {
   XtRemoveInput(x_input_id);
   XUndefineCursor(display, XtWindow(map_canvas));
-}
-
-/**************************************************************************
-  Called to monitor a GGZ socket.
-**************************************************************************/
-void add_ggz_input(int sock)
-{
-  /* PORTME */
-}
-
-/**************************************************************************
-  Called on disconnection to remove monitoring on the GGZ socket.  Only
-  call this if we're actually in GGZ mode.
-**************************************************************************/
-void remove_ggz_input(void)
-{
-  /* PORTME */
 }
 
 /**************************************************************************
@@ -859,10 +831,9 @@ void end_turn_callback(Widget w, XtPointer client_data, XtPointer call_data)
 **************************************************************************/
 void timer_callback(XtPointer client_data, XtIntervalId * id)
 {
-  int msec = real_timer_callback() * 1000;
-
-  x_interval_id = XtAppAddTimeOut(app_context, msec,
+  x_interval_id = XtAppAddTimeOut(app_context, TIMER_INTERVAL,
 				  timer_callback, NULL);
+  real_timer_callback();
 }
 
 /**************************************************************************
@@ -902,47 +873,13 @@ void set_unit_icons_more_arrow(bool onoff)
   static bool showing = FALSE;
 
   if (onoff && !showing) {
-    /* FIXME: what about the mask? */
-    xaw_set_bitmap(more_arrow_label,
-		   get_arrow_sprite(tileset, ARROW_RIGHT)->pixmap);
+    xaw_set_bitmap(more_arrow_label, sprites.right_arrow->pixmap);
     showing = TRUE;
   }
   else if(!onoff && showing) {
     xaw_set_bitmap(more_arrow_label, None);
     showing = FALSE;
   }
-}
-
-struct callback {
-  void (*callback)(void *data);
-  void *data;
-};
-
-/****************************************************************************
-  A wrapper for the callback called through add_idle_callback.
-****************************************************************************/
-static Boolean idle_callback_wrapper(XtPointer data)
-{
-  struct callback *cb = data;
-
-  (cb->callback)(cb->data);
-  free(cb);
-  /* return True if we want to remove WorkProc */
-  return True;
-}
-
-/****************************************************************************
-  Enqueue a callback to be called during an idle moment.  The 'callback'
-  function should be called sometimes soon, and passed the 'data' pointer
-  as its data.
-****************************************************************************/
-void add_idle_callback(void (callback)(void *), void *data)
-{
-  struct callback *cb = fc_malloc(sizeof(*cb));
-
-  cb->callback = callback;
-  cb->data = data;
-  XtAppAddWorkProc(app_context, idle_callback_wrapper, cb);
 }
 
 /**************************************************************************
@@ -956,8 +893,7 @@ void fill_econ_label_pixmaps(void)
   int econ_label_count = 10;
 
   for(i = 0; i < econ_label_count; i++) {
-    struct sprite *s = i < 5 ? get_tax_sprite(tileset, O_SCIENCE)
-			     : get_tax_sprite(tileset, O_GOLD);
+    struct Sprite *s = i < 5 ? sprites.tax_science : sprites.tax_gold;
 
     XtVaSetValues(econ_label[i], XtNbitmap,
 		  s->pixmap, NULL);
@@ -977,13 +913,8 @@ void fill_unit_below_pixmaps(void)
   long i;
 
   for (i = 0; i < num_units_below; i++) {
-/*    XtVaSetValues(unit_below_canvas[i],
-		  XtNwidth, tileset_full_tile_width(tileset),
-		  XtNheight, tileset_full_tile_height(tileset),
-		  NULL);
-*/    unit_below_pixmap[i] = XCreatePixmap(display, XtWindow(overview_canvas),
-					 tileset_full_tile_width(tileset),
-					 tileset_full_tile_height(tileset),
+    unit_below_pixmap[i] = XCreatePixmap(display, XtWindow(overview_canvas),
+					 UNIT_TILE_WIDTH, UNIT_TILE_HEIGHT,
 					 display_depth);
   }
 }
@@ -1006,68 +937,5 @@ void reset_unit_below_pixmaps(void)
   for (i = 0; i < num_units_below; i++) {
     XFreePixmap(display, unit_below_pixmap[i]);
   }
-  xaw_set_bitmap(more_arrow_label, None);
   fill_unit_below_pixmaps();
-
-  set_unit_icons_more_arrow(FALSE);
-  if (get_num_units_in_focus() == 1) {
-    set_unit_icon(-1, head_of_units_in_focus());
-  } else {
-    set_unit_icon(-1, NULL);
-  }
-  update_unit_pix_label(get_units_in_focus());
 }
-
-/****************************************************************************
-  Assigns focus units to given battlegroup.
-****************************************************************************/
-void assign_battlegroup(int battlegroup)
-{
-  key_unit_assign_battlegroup(battlegroup, FALSE);
-}
-
-/****************************************************************************
-  Brings given battlegroup into focus.
-****************************************************************************/
-void select_battlegroup(int battlegroup)
-{
-  key_unit_select_battlegroup(battlegroup, FALSE);
-}
-
-/****************************************************************************
-  Adds focus units to given battlegroup
-  (or removes unit from battlegoup if battlegroup is the same that unit has).
-****************************************************************************/
-void add_unit_to_battlegroup(int battlegroup)
-{
-  if (NULL != client.conn.playing && can_client_issue_orders()) {
-    struct unit *punit;
-
-    punit = head_of_units_in_focus();
-    if (punit && punit->battlegroup == battlegroup) {
-      /* If top unit already in the same battlegroup, detach it */
-      unit_change_battlegroup(punit, BATTLEGROUP_NONE);
-      refresh_unit_mapcanvas(punit, punit->tile, TRUE, FALSE);
-    } else {
-      key_unit_assign_battlegroup(battlegroup, TRUE);
-    }
-  }
-}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_tileset_changed(void)
-{}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_refresh(void)
-{}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_popup_properties(const struct tile_list *tiles)
-{}

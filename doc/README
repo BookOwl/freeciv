@@ -1,5 +1,5 @@
 ===================
-Freeciv Version 2.2
+Freeciv Version 2.0
 ===================
 
 Welcome to Freeciv!
@@ -23,7 +23,6 @@ Translations:
 You may find a translated version of this file, as well as of other parts
 of the Freeciv documentation, in the following places:
 
-	Catalan			./doc/ca
 	Dutch			./doc/nl
 	French			./doc/fr
 	German			./doc/de
@@ -166,16 +165,16 @@ Client:
   Another option for the client you may like to try is the '--tiles'
   option, which can be used to select different "tilesets" (that is,
   different graphics for the map terrain, units, and so on).  The
-  distribution comes with 5 main tilesets:
-  - amplio: An isometric tileset with larger and more detailed tiles.
+  distribution comes with 3 main tilesets:
   - isotrident: An isometric tileset similar in shape to the one in Civ 2.
+    (not yet supported by the Xaw client.)
   - trident: a Civ 1-style tileset with 30x30 tiles.
+    The trident tileset has a variant called "trident_shields".
   - isophex: an isometric hexagonal tileset
-  - hex2t: an overhead hexagonal tileset
 
-  In this release the amplio tileset is the default tileset.
-  To try another one, for instance the trident tileset, start the
-  client with:
+  In this release the isotrident tileset is the default tileset.
+  The "_shields" variants use a smaller shield-shaped flag.
+  To try another tileset, for instance trident, start the client with:
 
   |  % civclient --tiles trident
 
@@ -227,15 +226,6 @@ Server:
   |  > start
 
 And the game is on!
-
-  NOTE: In this version of Freeciv, the GTK and SDL clients have the
-  capability to automagically start a civserver session when the user
-  selects "Start New Game" from the main menu. This reduces the steps
-  needed to get started playing a game of Freeciv. On the other hand,
-  it also means that if the client crashes for some reason or becomes
-  unavailable, the civserver session will also be lost. So starting a
-  separate civserver session and then connect to it with the client is
-  generally the recommended method.
 
 
 Announcing the game:
@@ -329,7 +319,7 @@ file.
 
 For lots more information about the client, the server, and the
 concepts and rules of the game, see the Freeciv manual, available
-at the wiki:
+at the web pages at:
 
   http://www.freeciv.org/wiki/Manual
 
@@ -337,14 +327,12 @@ at the wiki:
 Ending the game:
 ================
 
-There are four ways in which a game can end:
+There are three ways in which a game can end:
 
-1) Only one nation or one team is left, or all other players of all
-   other teams have ceded the game (/surrender).
+1) Only one nation is left.
 2) The final year is reached.
 3) A player builds and launches a spaceship, which reaches Alpha
    Centauri first.
-4) The server operator uses the /endgame command.
 
 A score-table will be shown in all cases.  Hint: The server operator
 can set the final year while the game is still going by changing the
@@ -393,15 +381,6 @@ or
   setenv LANG de         (in the C shell (csh)).
 
 (You could do this in your .profile or .login file.)
-
-Sometimes there is a conflict between the local library implementation
-and the internal locale determination.  It is often possible to work
-around problems with a more detailed descriptor:
-
-  LANG=de_DE.UTF-8
-
-We'd like to know about such problems.  Please report them as bugs
-(see BUGS).
 
 
 Log messages:
@@ -477,6 +456,7 @@ We maintain 4 mailing lists:
   freeciv-announce Announcements of general interest.
                    This is a "Read Only" list, with infrequent messages.
                    In other words you can't mail this list, just read it.
+                   (Announcements sent to this are also sent to freeciv.)
   freeciv-i18n     Freeciv translation.
                    All discussions related to translating the Freeciv code,
                    documentation, and website, into other languages than
@@ -489,17 +469,25 @@ We maintain 4 mailing lists:
 All lists are open to the general public and everyone is welcome to join.
 Only maintainers may post to the -announce and -commits lists.
 
-The lists are hosted at gna.org. For more information, to join, or to leave 
+The lists are hosted at gna.org. For more information, to join, or to leave
 these lists, go to https://gna.org/mail/?group=freeciv
 
 
 Internet Relay Chat (IRC)
 =========================
 
-Several players and developers hang out on #freeciv and #freeciv-dev 
+Several players and developers hang out on #freeciv and #freeciv-dev
 channels on the freenode network. Try connecting to the server
 
 	irc.freenode.net
+
+
+New Releases:
+=============
+
+We hope to make a major new release of Freeciv available about every
+four months.  Check the Freeciv website from time to time to see if
+there's a newer version!!
 
 
 And finally:

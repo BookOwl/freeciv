@@ -14,8 +14,12 @@
 #define FC__SRV_MAIN_H
 
 #include "fc_types.h"
+#include "game.h"
+#include "packets.h"
 
-struct conn_list;
+struct connection;
+
+BV_DEFINE(bv_draw, MAX_NUM_PLAYERS);
 
 struct server_arguments {
   /* metaserver information */
@@ -30,7 +34,7 @@ struct server_arguments {
   int loglevel;
   /* filenames */
   char *log_filename;
-  char *ranklog_filename;
+  char *gamelog_filename;
   char load_filename[512]; /* FIXME: may not be long enough? use MAX_PATH? */
   char *script_filename;
   char *saves_pathname;
@@ -41,69 +45,39 @@ struct server_arguments {
   int quitidle;
   /* exit the server on game ending */
   bool exit_on_end;
+  /* what kind of end game we should use */
+  bv_draw draw;
   /* authentication options */
   bool auth_enabled;            /* defaults to FALSE */
-  char *auth_conf;              /* auth configuration file */
   bool auth_allow_guests;       /* defaults to TRUE */
   bool auth_allow_newusers;     /* defaults to TRUE */
 };
-
-/* used in savegame values */
-enum server_states { 
-  S_S_INITIAL = 0, 
-  S_S_GENERATING_WAITING = 1,
-  S_S_RUNNING = 2,
-  S_S_OVER = 3,
-};
-
-/* Structure for holding global server data.
- *
- * TODO: Lots more variables could be added here. */
-extern struct civserver {
-  int playable_nations;
-  int nbarbarians;
-
-  /* this counter creates all the city and unit numbers used.
-   * arbitrarily starts at 101, but at 65K wraps to 1.
-   * use identity_number()
-   */
-#define IDENTITY_NUMBER_SKIP (100)
-  unsigned short identity_number;
-
-  char game_identifier[MAX_LEN_GAME_IDENTIFIER];
-} server;
-
 
 void init_game_seed(void);
 void srv_init(void);
 void srv_main(void);
 void server_quit(void);
-void save_game_auto(const char *save_reason);
 
-enum server_states server_state(void);
-void set_server_state(enum server_states newstate);
+void save_game_auto(void);
 
-void check_for_full_turn_done(void);
-bool check_for_game_over(void);
-
-bool server_packet_input(struct connection *pconn, void *packet, int type);
+bool handle_packet_input(struct connection *pconn, void *packet, int type);
 void start_game(void);
-void save_game(char *orig_filename, const char *save_reason);
-void pick_random_player_name(const struct nation_type *pnation,
-			     char *newname);
+void save_game(char *orig_filename);
+void pick_ai_player_name(Nation_Type_id nation, char *newname);
 void send_all_info(struct conn_list *dest);
+void check_for_full_turn_done(void);
 
-void identity_number_release(int id);
-void identity_number_reserve(int id);
-int identity_number(void);
-int player_count_no_barbarians(void);
-void server_game_init(void);
+void dealloc_id(int id);
+void alloc_id(int id);
+int get_next_id_number(void);
 void server_game_free(void);
-void aifill(int amount);
+void check_for_full_turn_done(void);
 
 extern struct server_arguments srvarg;
 
+extern enum server_states server_state;
+extern bool nocity_send;
+
 extern bool force_end_of_sniff;
 
-void init_available_nations(void);
 #endif /* FC__SRV_MAIN_H */

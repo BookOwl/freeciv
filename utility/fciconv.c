@@ -17,7 +17,6 @@
 
 #include <assert.h>
 #include <errno.h>
-#include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -42,19 +41,6 @@
 static bool is_init = FALSE;
 static char convert_buffer[4096];
 
-/*
-  See PR#40028 for additional explanation.
-
-  The data_encoding is used in all data files and network transactions.
-  This is UTF-8.  Currently, the rulesets are in latin1 (ISO-8859-1).
-
-  The internal_encoding is used internally within freeciv.  This is always
-  UTF-8 at the server, but can be configured by the GUI client.  (When your
-  charset is the same as your GUI library, GUI writing is easier.)
-
-  The local_encoding is the one supported on the command line.  This is not
-  under our control, and all output to the command line must be converted.
-*/
 #ifdef HAVE_ICONV
 static const char *local_encoding, *data_encoding, *internal_encoding;
 static const char *transliteration_string;
@@ -71,7 +57,7 @@ static const char *transliteration_string;
 
   Pass an internal encoding of NULL to use the local encoding internally.
 ***************************************************************************/
-void init_character_encodings(const char *my_internal_encoding,
+void init_character_encodings(char *my_internal_encoding,
 			      bool my_use_transliteration)
 {
 #ifdef HAVE_ICONV
@@ -141,12 +127,7 @@ void init_character_encodings(const char *my_internal_encoding,
 #endif
 
 #else
-   /* freelog may not work at this point. */
-  fprintf(stderr,
-	     _("You are running Freeciv without using iconv.  Unless\n"
-	       "you are using the latin1 character set, some characters\n"
-	       "may not be displayed properly.  You can download iconv\n"
-	       "at http://gnu.org/.\n"));
+#  error No iconv present!
 #endif
 
   is_init = TRUE;
@@ -196,14 +177,11 @@ const char *get_internal_encoding(void)
   Convert the text.  Both 'from' and 'to' must be 8-bit charsets.  The
   result will be put into the buf buffer unless it is NULL, in which case it
   will be allocated on demand.
-
-  Don't use this function if you can avoid it.  Use one of the
-  xxx_to_yyy_string functions.
 ***************************************************************************/
-char *convert_string(const char *text,
-		     const char *from,
-		     const char *to,
-		     char *buf, size_t bufsz)
+static char *convert_string(const char *text,
+			    const char *from,
+			    const char *to,
+			    char *buf, size_t bufsz)
 {
 #ifdef HAVE_ICONV
   iconv_t cd = iconv_open(to, from);
@@ -214,10 +192,9 @@ char *convert_string(const char *text,
   assert(text != NULL);
 
   if (cd == (iconv_t) (-1)) {
-    /* TRANS: "Could not convert text from <encoding a> to <encoding b>:" 
-     *        <externally translated error string>."*/
-    freelog(LOG_ERROR, _("Could not convert text from %s to %s: %s"), from,
-	    to, mystrerror());
+    freelog(LOG_ERROR,
+	    _("Could not convert text from %s to %s: %s"),
+	    from, to, strerror(errno));
     /* The best we can do? */
     if (alloc) {
       return mystrdup(text);
@@ -389,7 +366,6 @@ size_t get_internal_string_length(const char *text)
 
   convert_string(text, internal_encoding, "UCS-4",
 		 (char *)text2, sizeof(text2));
-  assert(text2[0] != 0x0000FEFF && text2[0] != 0xFFFE0000); /* No BOM */
   for (i = 0; ; i++) {
     if (text2[i] == 0) {
       return i;

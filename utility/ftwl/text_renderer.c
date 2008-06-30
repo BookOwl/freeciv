@@ -180,7 +180,8 @@ void tr_prepare_string(struct ct_string *string)
 
 	glyph_index = FT_Get_Char_Index(face, c);
 	if (glyph_index == 0) {
-	  freelog(LOG_VERBOSE, "can't find glyph for %d '%c'", c, c);
+	  freelog(LOG_ERROR, "can't find glyph for %d '%c'", c, c);
+	  assert(0);
 	}
 
 	if (use_kerning && previous && glyph_index) {
@@ -190,7 +191,7 @@ void tr_prepare_string(struct ct_string *string)
 			 ft_kerning_default, &delta);
 	  pen.x += delta.x >> 6;
 	  if (0 && delta.x)
-	    freelog(LOG_VERBOSE, "kerning between %c and %c is %ld in '%s'\n",
+	    freelog(LOG_NORMAL, "kerning between %c and %c is %ld in '%s'\n",
 		    text[i - 1], c, delta.x >> 6, text);
 	}
 
@@ -205,7 +206,7 @@ void tr_prepare_string(struct ct_string *string)
 	if (error) {
 	  freelog(LOG_ERROR, "can't render glyph for %d '%c': error=0x%x", c,
 		  c, error);
-//	  assert(0);
+	  assert(0);
 	}
 
 	if (0)
@@ -275,7 +276,7 @@ void tr_string_get_size(struct ct_size *size, const struct ct_string *string)
 /*************************************************************************
   ...
 *************************************************************************/
-void tr_draw_string(struct osda *target,
+void tr_draw_string(struct osda *target, enum be_draw_type draw_type,
 		    const struct ct_point *position,
 		    const struct ct_string *string)
 {
@@ -304,12 +305,12 @@ void tr_draw_string(struct osda *target,
 
 	    p2.x += HALO_DX[w][d];
 	    p2.y += HALO_DY[w][d];
-	    be_draw_bitmap(target, string->outline_color, &p2,
+	    be_draw_bitmap(target, draw_type, string->outline_color, &p2,
 			   data->glyphs[i].bitmap);
 	  }
 	}
 
-	be_draw_bitmap(target, string->foreground, &p,
+	be_draw_bitmap(target, draw_type, string->foreground, &p,
 		       data->glyphs[i].bitmap);
       }
     }

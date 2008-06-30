@@ -14,12 +14,12 @@
 #ifndef FC__CLIMAP_H
 #define FC__CLIMAP_H
 
-#include "fc_types.h"           /* enum direction8, struct tile */
-#include "tile.h"               /* enum known_type */
+#include "map.h"                /* enum direction8 */
+#include "terrain.h"            /* enum known_type */
 
-#define map_exists() (map.tiles != NULL)
+#define map_exists() (map.xsize != 0)
 
-enum known_type client_tile_get_known(const struct tile *ptile);
+enum known_type tile_get_known(const struct tile *ptile);
 
 enum direction8 gui_to_map_dir(enum direction8 gui_dir);
 enum direction8 map_to_gui_dir(enum direction8 map_dir);

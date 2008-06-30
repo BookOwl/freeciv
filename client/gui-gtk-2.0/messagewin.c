@@ -30,6 +30,7 @@
 #include "player.h"
 #include "chatline.h"
 #include "citydlg.h"
+#include "clinet.h"
 #include "colors.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
@@ -49,8 +50,7 @@ static void meswin_row_activated_callback(GtkTreeView *view,
 					  GtkTreePath *path,
 					  GtkTreeViewColumn *col,
 					  gpointer data);
-static void meswin_response_callback(struct gui_dialog *dlg, int response,
-                                     gpointer data);
+static void meswin_response_callback(struct gui_dialog *dlg, int response);
 
 enum {
   CMD_GOTO = 1, CMD_POPCITY
@@ -59,10 +59,9 @@ enum {
 #define N_MSG_VIEW 24	       /* max before scrolling happens */
 
 /****************************************************************
-popup the dialog 10% inside the main-window, and optionally
-raise it.
+popup the dialog 10% inside the main-window 
 *****************************************************************/
-void popup_meswin_dialog(bool raise)
+void popup_meswin_dialog(void)
 {
   if (!meswin_shell) {
     create_meswin_dialog();
@@ -71,9 +70,15 @@ void popup_meswin_dialog(bool raise)
   update_meswin_dialog();
 
   gui_dialog_present(meswin_shell);
-  if (raise) {
-    gui_dialog_raise(meswin_shell);
-  }
+}
+
+/****************************************************************
+ Raises the message window dialog.
+****************************************************************/
+void raise_meswin_dialog(void)
+{
+  popup_meswin_dialog();
+  gui_dialog_raise(meswin_shell);
 }
 
 /**************************************************************************
@@ -150,7 +155,7 @@ static void create_meswin_dialog(void)
   GtkTreeViewColumn *col;
   GtkWidget *view, *sw, *cmd;
 
-  gui_dialog_new(&meswin_shell, GTK_NOTEBOOK(bottom_notebook), NULL);
+  gui_dialog_new(&meswin_shell, GTK_NOTEBOOK(bottom_notebook));
   gui_dialog_set_title(meswin_shell, _("Messages"));
 
   meswin_store = gtk_list_store_new(2, G_TYPE_STRING, G_TYPE_BOOLEAN);
@@ -182,11 +187,11 @@ static void create_meswin_dialog(void)
 		   G_CALLBACK(meswin_row_activated_callback), NULL);
 
   cmd = gui_dialog_add_stockbutton(meswin_shell, GTK_STOCK_JUMP_TO,
-      _("Goto _Location"), CMD_GOTO);
+      _("Goto _location"), CMD_GOTO);
   gtk_widget_set_sensitive(cmd, FALSE);
   
   cmd = gui_dialog_add_stockbutton(meswin_shell, GTK_STOCK_ZOOM_IN,
-      _("Inspect _City"), CMD_POPCITY);
+      _("_Popup City"), CMD_POPCITY);
   gtk_widget_set_sensitive(cmd, FALSE);
 
   gui_dialog_add_button(meswin_shell, GTK_STOCK_CLOSE, GTK_RESPONSE_CLOSE);
@@ -276,8 +281,7 @@ static void meswin_row_activated_callback(GtkTreeView *view,
 /**************************************************************************
 ...
 **************************************************************************/
-static void meswin_response_callback(struct gui_dialog *dlg, int response,
-                                     gpointer data)
+static void meswin_response_callback(struct gui_dialog *dlg, int response)
 {
   switch (response) {
   case CMD_GOTO:

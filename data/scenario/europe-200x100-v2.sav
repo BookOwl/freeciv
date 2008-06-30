@@ -1,7 +1,3 @@
-# Keep this section first
-[scenario]
-name=_("Europe (giant/classic)")
-description=_("Very large classic-style map of Europe.")
 
 [game]
 version=11105
@@ -159,7 +155,7 @@ r24sy=84
 r24snation="Arab"
 r25sx=121
 r25sy=80
-r25snation="Turkish"
+r25snation="Turk"
 r26sx=63
 r26sy=90
 r26snation="Carthaginian"
@@ -180,19 +176,13 @@ r31sy=55
 r31snation="Austrian"
 r32sx=81
 r32sy=70
-r32snation="Bosnian-Herzegovinian"
+r32snation="Bosnia & Herzegovina"
 r33sx=54
 r33sy=48
 r33snation="Belgian"
 r34sx=85
 r34sy=53
 r34snation="Slovakian"
-r35sx=109
-r35sy=59
-r35snation="Romanian"
-r36sx=97
-r36sy=65
-r36snation="Bulgarian"
 t000="aaag                                                                  tttttttttttttt       ffffffffffffffffffftffffffffffffftfffffffffffffffffffffffffffffffffffffffffffmmmmaaaaa"
 t001="aag                                                                  ttthmmtttffffff      ffffffffffffffffffffffffftttttffffffffftttttttttttttttttttttttttttttttttttthhhmmmmmmmmm"
 t002="gg                                                                  pphmmmmhffffffff     ffffffffffffffffffffffffffffffffffffffffffffffffffffffffttttttttttfttttttffffhhmmmmmmmmf"

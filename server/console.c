@@ -25,11 +25,9 @@
 
 #include "fciconv.h"
 #include "fcintl.h"
-#include "game.h"
 #include "log.h"
 #include "support.h"
 
-#include "plrhand.h"
 #include "srv_main.h"
 
 #include "console.h"
@@ -47,30 +45,12 @@ static int con_dump(enum rfc_status rfc_status, const char *message, ...);
 Function to handle log messages.
 This must match the log_callback_fn typedef signature.
 ************************************************************************/
-static void con_handle_log(int level, const char *message, bool file_too)
+static void con_handle_log(int level, const char *message)
 {
-  if (LOG_ERROR == level) {
-    notify_conn(NULL, NULL, E_LOG_ERROR, message);
-  } else if (LOG_FATAL >= level) {
-    /* Make sure that message is not left to buffers when server dies */
-    conn_list_iterate(game.est_connections, pconn) {
-      pconn->send_buffer->do_buffer_sends = 0;
-      pconn->compression.frozen_level = 0;
-    } conn_list_iterate_end;
-
-    notify_conn(NULL, NULL, E_LOG_FATAL, message);
-    notify_conn(NULL, NULL, E_LOG_FATAL,
-                _("Please report this message at %s"),
-                BUG_URL);
-  }
-
-  /* Write debug/verbose message to console only when not written to file. */
-  if (!file_too || level <= LOG_NORMAL) {
-    if (console_rfcstyle) {
-      con_write(C_LOG_BASE + level, "%s", message);
-    } else {
-      con_write(C_LOG_BASE + level, "%d: %s", level, message);
-    }
+  if(console_rfcstyle) {
+    con_write(C_LOG_BASE+level, "%s", message);
+  } else {
+    con_write(C_LOG_BASE+level, "%d: %s", level, message);
   }
 }
 
@@ -101,7 +81,9 @@ static void con_update_prompt(void)
 ************************************************************************/
 void con_log_init(const char *log_filename, int log_level)
 {
-  log_init(log_filename, log_level, con_handle_log);
+  bool has_file = (log_filename && strlen(log_filename) > 0);
+
+  log_init(log_filename, log_level, has_file ? NULL : con_handle_log);
 }
 
 #ifndef HAVE_LIBREADLINE
@@ -117,7 +99,7 @@ static int con_dump(enum rfc_status rfc_status, const char *message, ...)
   my_vsnprintf(buf, sizeof(buf), message, args);
   va_end(args);
 
-  if (console_prompt_is_showing) {
+  if(console_prompt_is_showing) {
     fc_printf("\n");
   }
   if ((console_rfcstyle) && (rfc_status >= 0)) {
@@ -154,7 +136,7 @@ this allows con_puts(C_COMMENT,"");
 ************************************************************************/
 void con_puts(enum rfc_status rfc_status, const char *str)
 {
-  if (console_prompt_is_showing) {
+  if(console_prompt_is_showing) {
     fc_printf("\n");
   }
   if ((console_rfcstyle) && (rfc_status >= 0)) {

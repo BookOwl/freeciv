@@ -17,70 +17,61 @@
 
 #include <windows.h>
 
-#include "log.h"
-#include "assert.h"
-#include "mem.h"
-
 #include "colors.h"
 
-/****************************************************************************
-  Allocate a color and return a pointer to it.
-****************************************************************************/
-struct color *color_alloc(int r, int g, int b)
+
+struct rgbtriple {
+  int r, g, b;
+} colors_standard_rgb[COLOR_STD_LAST] = {
+  {  0,   0,   0},  /* Black */
+  {255, 255, 255},  /* White */
+  {255,   0,   0},  /* Red */
+  {255, 255,   0},  /* Yellow */
+  {  0, 255, 200},  /* Cyan */
+  {  0, 200,   0},  /* Ground (green) */
+  {  0,   0, 200},  /* Ocean (blue) */
+  { 86,  86,  86},  /* Background (gray) */
+  {128,   0,   0},  /* race0 */
+  {128, 255, 255},  /* race1 */
+  {255,   0,   0},  /* race2 */
+  {255,   0, 128},  /* race3 */
+  {  0,   0, 128},  /* race4 */
+  {255,   0, 255},  /* race5 */
+  {255, 128,   0},  /* race6 */
+  {255, 255, 128},  /* race7 */
+  {255, 128, 128},  /* race8 */
+  {  0,   0, 255},  /* race9 */
+  {  0, 255,   0},  /* race10 */
+  {  0, 128, 128},  /* race11 */
+  {  0,  64,  64},  /* race12 */
+  {198, 198, 198},  /* race13 */
+};
+HPEN pen_std[COLOR_STD_LAST];
+HBRUSH brush_std[COLOR_STD_LAST];  
+
+/**************************************************************************
+
+**************************************************************************/       
+static void alloc_standard_colors(void)
 {
-  struct color *color = fc_malloc(sizeof(*color));
-
-  color->rgb = RGB(r, g, b);
-
-  return color;
+  int i;
+  for(i=0;i<COLOR_STD_LAST;i++)
+    {
+      pen_std[i]=CreatePen(PS_SOLID,0,
+			   RGB(colors_standard_rgb[i].r,
+			       colors_standard_rgb[i].g,
+			       colors_standard_rgb[i].b));
+      brush_std[i]=CreateSolidBrush(RGB(colors_standard_rgb[i].r,
+					colors_standard_rgb[i].g,
+					colors_standard_rgb[i].b));
+    }
 }
 
-/****************************************************************************
-  Free a previously allocated color.  See color_alloc.
-****************************************************************************/
-void color_free(struct color *color)
+/**************************************************************************
+
+**************************************************************************/
+void
+init_color_system(void)
 {
-  free(color);
-}
-
-/****************************************************************************
-  Allocate a pen based on this color.
-****************************************************************************/
-HPEN pen_alloc(struct color *color)
-{
-  if (!color) {
-    /* Color table has not been allocated yet, return a black pen */
-    return CreatePen(PS_SOLID, 0, RGB(0, 0, 0));
-  }
-
-  return CreatePen(PS_SOLID, 0, color->rgb);
-}
-
-/****************************************************************************
-  Free a previously allocated pen.  See pen_alloc.
-****************************************************************************/
-void pen_free(HPEN pen)
-{
-  DeleteObject(pen);
-}
-
-/****************************************************************************
-  Allocate a brush based on this color.
-****************************************************************************/
-HBRUSH brush_alloc(struct color *color)
-{
-  if (!color) {
-    /* Color table has not been allocated yet, return a black brush */
-    return CreateSolidBrush(RGB(0, 0, 0));
-  }
-
-  return CreateSolidBrush(color->rgb);
-}
-
-/****************************************************************************
-  Free a previously allocated brush.  See brush_alloc.
-****************************************************************************/
-void brush_free(HBRUSH brush)
-{
-  DeleteObject(brush);
+  alloc_standard_colors();
 }

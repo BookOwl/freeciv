@@ -18,13 +18,32 @@
 #include "gtkpixcomm.h"
 #include "gui_main_g.h"
 
+enum canvas_type {
+  CANVAS_PIXMAP,
+  CANVAS_PIXCOMM,
+  CANVAS_PIXBUF
+};
+
+struct canvas
+{
+  enum canvas_type type;
+
+  union {
+    GdkPixmap *pixmap;
+    GtkPixcomm *pixcomm;
+    GdkPixbuf *pixbuf;
+  } v;
+};
+
 /* network string charset conversion */
 gchar *ntoh_str(const gchar *netstr);
 
 extern PangoFontDescription *        main_font;
 extern PangoFontDescription *        city_productions_font;
 
+extern bool fullscreen_mode;
 extern bool enable_tabs;
+extern bool solid_unit_icon_bg;
 extern bool better_fog;
 
 extern GdkGC *          civ_gc;
@@ -39,7 +58,7 @@ extern GdkPixmap *      gray50;
 extern GdkPixmap *      gray25;
 extern GdkPixmap *      black50;
 extern GdkPixmap *      mask_bitmap;
-#define single_tile_pixmap (mapview.single_tile->pixmap)
+#define single_tile_pixmap (mapview_canvas.single_tile->pixmap)
 extern GtkTextView *	main_message_area;
 extern GtkWidget *      text_scrollbar;
 extern GtkWidget *      toplevel;
@@ -61,7 +80,6 @@ extern GtkWidget *      map_canvas;             /* GtkDrawingArea */
 extern GtkWidget *      overview_canvas;        /* GtkDrawingArea */
 extern GtkWidget *      timeout_label;
 extern GtkWidget *      turn_done_button;
-extern GtkWidget *      unit_info_box;
 extern GtkWidget *      unit_info_label;
 extern GtkWidget *      unit_info_frame;
 extern GtkWidget *      map_horizontal_scrollbar;
@@ -70,22 +88,15 @@ extern GdkWindow *      root_window;
 
 extern GtkWidget *	toplevel_tabs;
 extern GtkWidget *	top_notebook;
-extern GtkWidget *      map_widget;
 extern GtkWidget *	bottom_notebook;
 extern GtkTextBuffer *	message_buffer;
-extern GtkTreeStore *conn_model;
 
 void enable_menus(bool enable);
 
-gboolean map_canvas_focus(void);
-
 gboolean inputline_handler(GtkWidget *w, GdkEventKey *ev);
+gboolean show_conn_popup(GtkWidget *view, GdkEventButton *ev, gpointer data);
 
 void reset_unit_table(void);
 void popup_quit_dialog(void);
-
-/* There simply is no proper header to place this define. Creating one
- * just for this seems overkill. */
-#define FC_GTK_DEFAULT_THEME_NAME "Freeciv"
 
 #endif  /* FC__GUI_MAIN_H */

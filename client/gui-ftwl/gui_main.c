@@ -18,22 +18,15 @@
 #include <stdio.h>
 #include <assert.h>
 
-/* utility */
 #include "fcintl.h"
 #include "fciconv.h"
 #include "log.h"
 #include "registry.h"
 
-/* client */
-#include "clinet.h"
-#include "editgui_g.h"
-#include "graphics_g.h"
-
 #include "chatline.h"
-#include "colors_common.h"
-#include "colors.h"
 #include "back_end.h"
 #include "widget.h"
+#include "graphics_g.h"
 #include "civclient.h"
 #include "shared.h"
 #include "support.h"
@@ -42,11 +35,9 @@
 #include "chat.h"
 #include "mapview.h"
 #include "control.h"
+#include "clinet.h"
 
 #include "gui_main.h"
-
-const char * const gui_character_encoding = "UTF-8";
-const bool gui_use_transliteration = FALSE;
 
 client_option gui_options[] = {
 };
@@ -74,9 +65,9 @@ void ui_init(void)
 **************************************************************************/
 static void timer_callback(void *data)
 {
-  double msec = real_timer_callback() * 1000;
-
-  sw_add_timeout(msec, timer_callback, NULL);
+  real_timer_callback();
+  //sw_add_timeout(TIMER_INTERVAL, timer_callback, NULL);
+  sw_add_timeout(1000, timer_callback, NULL);
 }
 
 /**************************************************************************
@@ -137,7 +128,7 @@ static void get_colors(void)
   for (i = 0; i < COLOR_EXT_LAST; i++) {
     all_colors[i] =
 	be_get_color(all_colors_rgb[i].r, all_colors_rgb[i].g,
-		     all_colors_rgb[i].b, MAX_OPACITY);
+		     all_colors_rgb[i].b);
   }
 }
 
@@ -187,11 +178,16 @@ void ui_main(int argc, char *argv[])
   struct ct_size res;
   struct ct_size size;
 
+  init_character_encodings("ISO-8859-1", TRUE);
+
+  if (!auto_connect) {
+    die("Connection dialog not yet implemented. Start client using "
+        "the -a option.");
+  }
+
   while (i < argc) {
     if (is_option("--help", argv[i])) {
-      fc_fprintf(stderr,
-                 "  -d, --dump\t\t%s\n",
-                 _("Enable screen dumper"));
+      fc_fprintf(stderr, _("  -d, --dump\t\tEnable screen dumper\n"));
       if (be_supports_fullscreen()) {
 	fc_fprintf(stderr,
 		   _("  -f, --fullscreen\t"
@@ -208,34 +204,27 @@ void ui_main(int argc, char *argv[])
 		 DEFAULT_THEME);
       exit(EXIT_SUCCESS);
     } else if (is_option("--dump", argv[i])) {
-      freelog(LOG_VERBOSE, "Enable screen dumper");
+      freelog(LOG_NORMAL, "enabling screen dumper");
       sw_set_dump_screen(TRUE);
     } else if (is_option("--fullscreen", argv[i])) {
       fullscreen = TRUE;
-    } else if ((option = get_option_malloc("--res", argv, &i, argc))) {
+    } else if ((option = get_option("--res", argv, &i, argc))) {
       free(resolution);
       resolution = mystrdup(option);
-      free(option);
-    } else if ((option = get_option_malloc("--theme", argv, &i, argc))) {
+    } else if ((option = get_option("--theme", argv, &i, argc))) {
       free(theme);
       theme = mystrdup(option);
-      free(option);
     } else {
-      freelog(LOG_ERROR, _("Unknown option \"%s\""), argv[i]);
+      freelog(LOG_ERROR, "unknown option '%s'", argv[i]);
     }
     i++;
   }
 
   if (sscanf(resolution, "%dx%d", &res.width, &res.height) != 2) {
-    freelog(LOG_ERROR, _("Resolution \"%s\" doesn't parse"), resolution);
+    freelog(LOG_ERROR, "The resolution '%s' doesn't parse", resolution);
   }
   free(resolution);
-
-  if (!auto_connect) {
-    freelog(LOG_ERROR, "Connection dialog not yet implemented. Start client "
-                       "using the -a option.");
-  }
-
+  
   sw_init();
   be_init(&res, fullscreen);
   be_screen_get_size(&size);
@@ -246,29 +235,22 @@ void ui_main(int argc, char *argv[])
   }
   te_init(theme, "mapview.screen");
   free(theme);
+  te_init_colormodel("palette.prop");
 
   get_colors();
   root_window = sw_create_root_window();
   sw_widget_set_background_color(root_window,
-				 enum_color_to_be_color(COLOR_STD_BACKGROUND));
+				 enum_color_to_be_color(COLOR_EXT_GREEN));
 
   chat_create(); 
   chatline_create();
-  
-  tileset_load_tiles(tileset);
+  tilespec_load_tiles();
   timer_callback(NULL);
   sw_window_set_key_notify(root_window, my_key_handler, NULL);
 
-  set_client_state(C_S_PREPARING);
+  popup_mapcanvas();
+  set_client_state(CLIENT_PRE_GAME_STATE);
   sw_mainloop(input_from_server);
-}
-
-/**************************************************************************
-  Do any necessary UI-specific cleanup
-**************************************************************************/
-void ui_exit()
-{
-  /* PORTME */
 }
 
 /**************************************************************************
@@ -298,23 +280,6 @@ void remove_net_input(void)
 }
 
 /**************************************************************************
-  Called to monitor a GGZ socket.
-**************************************************************************/
-void add_ggz_input(int sock)
-{
-  /* PORTME */
-}
-
-/**************************************************************************
-  Called on disconnection to remove monitoring on the GGZ socket.  Only
-  call this if we're actually in GGZ mode.
-**************************************************************************/
-void remove_ggz_input(void)
-{
-  /* PORTME */
-}
-
-/**************************************************************************
   Set one of the unit icons in the information area based on punit.
   NULL will be pased to clear the icon. idx==-1 will be passed to
   indicate this is the active unit, or idx in [0..num_units_below-1] for
@@ -339,31 +304,3 @@ void update_conn_list_dialog(void)
 {
   /* PORTME */
 }
-
-/****************************************************************************
-  Enqueue a callback to be called during an idle moment.  The 'callback'
-  function should be called sometimes soon, and passed the 'data' pointer
-  as its data.
-****************************************************************************/
-void add_idle_callback(void (callback) (void *), void *data)
-{
-  sw_add_timeout(-1, callback, data);
-}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_tileset_changed(void)
-{}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_refresh(void)
-{}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_popup_properties(const struct tile_list *tiles)
-{}

@@ -33,6 +33,7 @@
 
 #include "city.h"
 #include "fcintl.h"
+#include "game.h"
 #include "log.h"
 #include "mem.h"
 #include "packets.h"
@@ -40,8 +41,8 @@
 #include "support.h"
 #include "unit.h"
 
-#include "civclient.h"
 #include "climisc.h"
+#include "clinet.h"
 
 #include "chatline.h"
 #include "citydlg.h"
@@ -61,7 +62,7 @@ static void popup_chgall_dialog (Widget parent);
 
 /******************************************************************/
 static Widget config_shell;
-static Widget *config_toggle;
+static Widget config_toggle[NUM_CREPORT_COLS];
 
 void create_city_report_config_dialog(void);
 void popup_city_report_config_dialog(void);
@@ -124,8 +125,7 @@ static void get_city_text(struct city *pcity, char *text, int n)
     if(spec->space>0)
       cat_snprintf(text, n, "%*s", spec->space, " ");
 
-    cat_snprintf(text, n, "%*s", spec->width,
-		 (spec->func)(pcity, spec->data));
+    cat_snprintf(text, n, "%*s", spec->width, (spec->func)(pcity));
   }
 }
 
@@ -320,9 +320,9 @@ void city_list_callback(Widget w, XtPointer client_data,
 
   if(ret->list_index!=XAW_LIST_NONE && 
      (pcity=cities_in_list[ret->list_index])) {
-    struct universal targets[MAX_NUM_PRODUCTION_TARGETS];
-    struct item items[MAX_NUM_PRODUCTION_TARGETS];
-    int targets_used = 0;
+    cid cids[U_LAST + B_LAST];
+    struct item items[U_LAST + B_LAST];
+    int cids_used = 0;
     size_t i;
 
     XtSetSensitive(city_change_command, TRUE);
@@ -337,33 +337,31 @@ void city_list_callback(Widget w, XtPointer client_data,
 				        city_change_command,
 				        NULL);
 
-    improvement_iterate(pimprove) {
-      if (can_city_build_improvement_now(pcity, pimprove)) {
-	targets[targets_used].kind = VUT_IMPROVEMENT;
-	targets[targets_used].value.building = pimprove;
-	targets_used++;
+    impr_type_iterate(i) {
+      if (can_build_improvement(pcity, i)) {
+	cids[cids_used] = cid_encode(FALSE, i);
+	cids_used++;
       }
-    } improvement_iterate_end;
+    } impr_type_iterate_end;
 
-    unit_type_iterate(punittype) {
-      if (can_city_build_unit_now(pcity, punittype)) {
-	targets[targets_used].kind = VUT_UTYPE;
-	targets[targets_used].value.utype = punittype;
-	targets_used++;
+    unit_type_iterate(i) {
+      if (can_build_unit(pcity, i)) {
+	cids[cids_used] = cid_encode(TRUE, i);
+	cids_used++;
       }
     } unit_type_iterate_end;
 
-    name_and_sort_items(targets, targets_used, items, TRUE, NULL);
+    name_and_sort_items(cids, cids_used, items, TRUE, NULL);
     
-    for (i = 0; i < targets_used; i++) {
+    for (i = 0; i < cids_used; i++) {
       Widget entry =
 	  XtVaCreateManagedWidget(items[i].descr, smeBSBObjectClass,
 				  city_popupmenu, NULL);
       XtAddCallback(entry, XtNcallback, city_change_callback,
-		    INT_TO_XTPOINTER(cid_encode(items[i].item)));
+		    INT_TO_XTPOINTER(items[i].cid));
     }
 
-    if (targets_used == 0)
+    if (cids_used == 0)
       XtSetSensitive(city_change_command, FALSE);
   } else {
     XtSetSensitive(city_change_command, FALSE);
@@ -381,15 +379,19 @@ void city_change_callback(Widget w, XtPointer client_data,
 {
   XawListReturnStruct *ret=XawListShowCurrent(city_list);
   struct city *pcity;
-  struct universal production;
+
+
 
   if(ret->list_index!=XAW_LIST_NONE && 
      (pcity=cities_in_list[ret->list_index])) {
     cid my_cid = (cid) XTPOINTER_TO_INT(client_data);
+    Boolean unit;
+    int build_nr;
       
-    production = cid_decode(my_cid);
+    unit = cid_is_unit(my_cid);
+    build_nr = cid_id(my_cid);
 
-    city_change_production(pcity, production);
+    city_change_production(pcity, unit, build_nr);
   }
 }
 
@@ -430,10 +432,10 @@ void city_refresh_callback(Widget w, XtPointer client_data,
     struct city *pcity = cities_in_list[ret->list_index];
 
     if (pcity) {
-      dsend_packet_city_refresh(&client.conn, pcity->id);
+      dsend_packet_city_refresh(&aconnection, pcity->id);
     }
   } else {
-    dsend_packet_city_refresh(&client.conn, 0);
+    dsend_packet_city_refresh(&aconnection, 0);
   }
 }
 
@@ -483,7 +485,7 @@ void city_popup_callback(Widget w, XtPointer client_data,
       if (center_when_popup_city) {
 	center_tile_mapcanvas(pcity->tile);
       }
-      popup_city_dialog(pcity);
+      popup_city_dialog(pcity, 0);
     }
   }
 }
@@ -503,10 +505,7 @@ void city_config_callback(Widget w, XtPointer client_data,
 *****************************************************************/
 void city_report_dialog_update(void)
 {
-  if (NULL == client.conn.playing || is_report_dialogs_frozen()) {
-    return;
-  }
-
+  if(is_report_dialogs_frozen()) return;
   if(city_dialog_shell) {
     int i=0, n;
     Dimension width;
@@ -514,7 +513,7 @@ void city_report_dialog_update(void)
     static char **city_list_text = NULL;
     const char *report_title;
 
-    n = city_list_size(client.conn.playing->cities);
+    n = city_list_size(&game.player_ptr->cities);
     freelog(LOG_DEBUG, "%d cities in report", n);
     if(n_alloc == 0 || n > n_alloc) {
       int j, n_prev = n_alloc;
@@ -546,7 +545,7 @@ void city_report_dialog_update(void)
      * having to find city corresponding to id for each comparison.
      */
     i=0;
-    city_list_iterate(client.conn.playing->cities, pcity) {
+    city_list_iterate(game.player_ptr->cities, pcity) {
       cities_in_list[i++] = pcity;
     } city_list_iterate_end;
     assert(i==n);
@@ -600,7 +599,7 @@ void city_report_dialog_update_city(struct city *pcity)
       char new_city_line[MAX_LEN_CITY_TEXT];
 
       XtVaGetValues(city_list, XtNnumberStrings, &n, XtNlist, &list, NULL);
-      if (0 != strcmp(city_name(pcity), list[i])) {
+      if (0 != strcmp(pcity->name, list[i])) {
 	break;
       }
       get_city_text(pcity, new_city_line, sizeof(new_city_line));
@@ -694,9 +693,7 @@ void create_city_report_config_dialog(void)
 					     labelWidgetClass, 
 					     config_form, NULL));
 
-  config_toggle = fc_realloc(config_toggle,
-			     NUM_CREPORT_COLS * sizeof(*config_toggle));
-  for(i=0, spec=city_report_specs+i; i<NUM_CREPORT_COLS; i++, spec++) {
+  for(i=1, spec=city_report_specs+i; i<NUM_CREPORT_COLS; i++, spec++) {
     my_snprintf(buf, sizeof(buf), "%-32s", spec->explanation);
     above = (i==1)?config_label:config_optlabel;
 
@@ -744,7 +741,7 @@ void config_ok_command_callback(Widget w, XtPointer client_data,
   
   XtDestroyWidget(config_shell);
 
-  for(i=0, spec=city_report_specs+i; i<NUM_CREPORT_COLS; i++, spec++) {
+  for(i=1, spec=city_report_specs+i; i<NUM_CREPORT_COLS; i++, spec++) {
     Boolean b;
 
     XtVaGetValues(config_toggle[i], XtNstate, &b, NULL);
@@ -1063,8 +1060,8 @@ static void chgall_change_command_callback (Widget w, XtPointer client_data,
       return;
     }
 
-  client_change_all(cid_decode(state->fr_cids[state->fr_index]),
-		    cid_decode(state->to_cids[state->to_index]));
+  client_change_all(state->fr_cids[state->fr_index],
+		    state->to_cids[state->to_index]);
 
   XtDestroyWidget (state->w.shell);
 }
@@ -1078,23 +1075,23 @@ static void chgall_refresh_command_callback(Widget w,
 					    XtPointer call_data)
 {
   struct chgall_data *state = (struct chgall_data *) client_data;
-  struct universal targets[MAX_NUM_PRODUCTION_TARGETS];
-  struct item items[MAX_NUM_PRODUCTION_TARGETS];
+  cid cids[U_LAST + B_LAST];
+  struct item items[U_LAST + B_LAST];
   int i;
 
-  state->fr_count = collect_currently_building_targets(targets);
-  name_and_sort_items(targets, state->fr_count, items, false, NULL);
+  state->fr_count = collect_cids2(cids);
+  name_and_sort_items(cids, state->fr_count, items, FALSE, NULL);
   for (i = 0; i < state->fr_count; i++) {
     state->fr_list[i] = mystrdup(items[i].descr);
-    state->fr_cids[i] = cid_encode(items[i].item);
+    state->fr_cids[i] = items[i].cid;
   }
   XawListChange(state->w.fr, state->fr_list, state->fr_count, 0, FALSE);
 
-  state->to_count = collect_buildable_targets(targets);
-  name_and_sort_items(targets, state->to_count, items, TRUE, NULL);
+  state->to_count = collect_cids3(cids);
+  name_and_sort_items(cids, state->to_count, items, TRUE, NULL);
   for (i = 0; i < state->to_count; i++) {
     state->to_list[i] = mystrdup(items[i].descr);
-    state->to_cids[i] = cid_encode(items[i].item);
+    state->to_cids[i] = items[i].cid;
   }
   XawListChange(state->w.to, state->to_list, state->to_count, 0, FALSE);
 

@@ -1,12 +1,12 @@
-===================
-Freeciv Version 2.1
-===================
+====================
+Freeciv Version 1.13
+====================
 
 Välkommen till Freeciv!
 
-Detta arkiv innehåller Freeciv, ett fritt Civilizationsliknande spel,
-huvudsakligen för X under Unix. Den har stöd för flerspelarspel lokalt
-eller över nätverk, samt utmanande datorstyrda spelare.
+Detta arkiv innehåller Freeciv, en fri Civilizationklon, huvudsakligen
+för X under Unix. Den har stöd för flerspelarspel lokalt eller över
+nätverk, samt utmanande datorstyrda spelare.
 
 Freeciv siktar på att ha regler som huvudsakligen stämmer överens med
 Civilisation II [tm] utgivet av Sid Meier och Microprose [tm]. Vissa
@@ -16,33 +16,37 @@ många inställbara parametrar för att anpassa sina spel.
 Freeciv har skapats helt oberoende av Civilization; man behöver inte
 äga Civilization för att spela Freeciv.
 
+Fastän datorspelarna ännu inte kan förhandla är reglerna i det
+närmaste fullständiga och vårt flerspelarstöd är utmärkt.
+
 Detta är den svenska översättningen av filen "../README". Eftersom
 denna översättning har färre läsare än originalet är det större risk
 att den innehåller felaktigheter. Det kan finnas oupptäckta
 felöversättningar, rester av gammal information som tagits bort i
 originalet men ej i översättningen, samt tillägg i originalfilen
 som ännu inte kommit med i översättningen. Jämför därför med
-originalet om tveksamhet uppstår. Vid felaktigheter, säg till på
-diskussionslistan <freeciv.se@freelists.org>.
+originalet om tveksamhet uppstår. Vid felaktigheter, kontakta
+översättaren: Erik Sigra <sigra@home.se>.
 
 
-Webbplats:
-==========
+Nätplats:
+=========
 
-Freecivs webbplats är:
+Freecivs nätplats är:
 
   http://www.freeciv.org/
 
-Här kan man få de senaste nyheterna, utgåvorna och uppdateringarna,
-hitta information om Freecivs diskussionslistor samt se metaservern
-som visar information om spel som spelas runt om i världen.
+Där kan man hämta de senaste freecivnyheterna, -utgåvorna och
+-uppdateringarna, hitta information om Freecivs sändlistor samt se
+metaservern som visar information om spel som spelas runt om i
+världen.
 
 Licens:
 =======
 
 Freeciv ges ut under GNU General Public License. Det betyder i korthet
 att man får kopiera detta program (även källkoden) fritt, men se filen
-"COPYING" för fullständiga villkor.
+"../COPYING" för fullständiga villkor.
 
 Kompilera och installera:
 =========================
@@ -116,20 +120,17 @@ Server:
 
   Till exempel:
 
-  |  > help size
-  |  Valmöjlighet: size  -  kartstorlek i 1000 rutor
-  |  Beskrivning:
-  |    Detta värde bestämmer kartans storlek.
-  |      size = 4 är en normal karta med 4000 rutor (standard)
-  |      size = 20 är en jättelik karta med 20000 rutor
+  |  > help xsize
+  |  Valmöjlighet: xsize  -  Kartbredd i rutor
   |  Status: ändringsbar
-  |  Värde: 4, Minsta möjliga: 1, Standard: 4, Högsta möjliga: 29
+  |  Värde: 80, Minsta möjliga: 40, Standard: 80, Högsta möjliga: 200
 
   Och:
 
-  |  > set size 8
+  |  > set xsize 100
+  |  > set ysize 80
 
-  Detta gör kartan dubbelt så stor som standardstorleken.
+  Detta gör kartan dubbelt så stor som standardstorleken 80x50.
 
 Klient:
 
@@ -149,28 +150,28 @@ Klient:
 
   Om man är den enda mänskliga spelaren behöver endast en klient
   användas. På vanligt Unixvis kan man köra klienten i bakgrunden
-  genom att lägga till ett och-tecken:
+  genom att lägga till en ampersand:
 
   |  % civclient &
 
   En annan valmöjlighet är "--tiles" som används för att köra klienten
   med en annan uppsättning rutbilder för landskap, enheter med mera.
   Utgåvan innehåller 2 uppsättningar rutbilder:
-  - amplio: Isometrisk, större och mer detaljerade rutor.
-  - isotrident: Isometrisk, liknar Civilization 2.
+  - isotrident: Isometrisk, liknar Civilization 2. (Stöds ännu inte av
+    xaw-klienten.)
   - trident: Liknar Civilization 1, rutstorlek 30x30 bildpunkter.
-  - isophex: Isometrisk och hexagonal.
-  - hex2t: Hexagonal.
+  Trident har en variant som heter "trident_shields".
 
-  I denna utgåva är amplio stadardrutbildsuppsättning.
-  Kör klienten med följande kommando för att använda en annan
-  uppsättning, t.ex. trident:
+  I denna utgåva är isotrident förval i GTK- och Amiga- och
+  win32klienterna emedan trident är förval i XAW-klienten.
+  "_shields"-varianterna använder sköldformade flaggor, vilka är
+  mindre och diskretare. Prova dem båda och bestäm dig vilken du vill
+  använda.Kör klienten med följande kommando för att använda trident:
 
   |  % civclient --tiles trident
 
-  Andra uppsättningar kan hämtas från:
+  Andra uppsättningar kan finnas på Freecivs FTP- och webserver.
 
-       http://www.freeciv.org/wiki/Tilesets
 
   Klienter kan ges tillåtelse att utföra serverkommandon. Skriv
   följande vid serverprompten för att endast ge dem tillåtelse att
@@ -219,15 +220,6 @@ Server:
 
   Sedan är spelet i gång!
 
-Lägg märke till att i denna version av Freeciv har GTK- samt SDL-
-klienterna förmågan att automatiskt starta en civserver-session i
-bakgrunden när spelaren väljer att starta ett nytt spel från
-huvudmenyn. Tack vare detta har det blivit mycket enklare att
-komma igång med att spela Freeciv. Å andra sidan innebär det att
-i det fall klienten krashar, drar den med sig servern i fallet och
-det pågående spelet går förlorat. P.g.a. detta är det fortfarande
-rekommenderat att starta civserver separat från civclient.
-
 
 Tillkännage spelet:
 ===================
@@ -235,7 +227,7 @@ Tillkännage spelet:
 Om man vill ha andra motståndare än lokala vänner och datorstyrda
 spelare kan man besöka Freecivs metaserver:
 
-  http://meta.freeciv.org/metaserver.phtml
+  http://meta.freeciv.org/metaserver/
 
 Det är en lista över freecivservrar. För att få sin server att anmäla
 sig där kör man civserver med kommandoradsargumentet "--meta" eller
@@ -244,8 +236,8 @@ sig där kör man civserver med kommandoradsargumentet "--meta" eller
 Varningar:
 
  1) På grund av nya funktioner är olika versioner av server och klient
-    ofta oförenliga. Versionen 2.0.0 är till exempel oförenlig med
-    1.14.2 och tidigare versioner.
+    ofta oförenliga. Versionen 1.14.0 är till exempel oförenlig med
+    1.13.0 och tidigare versioner.
 
  2) Om metaserverknappen i anslutningsdialogen inte fungerar, undersök
     om internetanslutningen kräver en WWW-proxy, och se till att
@@ -320,7 +312,7 @@ kan man titta i filen "HOWTOPLAY.sv".
 Se freecivhandboken på följande adress för mycket mer information om
 klienten, servern och spelet:
 
-  http://www.freeciv.org/wiki/Manual
+  http://www.freeciv.org/manual/manual.html
 
 
 Avsluta spelet:
@@ -366,7 +358,7 @@ Spelet kan sättas i gång igen med serverkommandot "start".
 Lokalt språkstöd:
 =================
 
-Freeciv stöder flera språk.
+Freeciv stöder flera lokala språk.
 
 Man kan välja vilket lokalt språk man vill använda genom att ange en
 "locale". Varje locale har ett standardnamn (till exempel "de" för
@@ -387,9 +379,9 @@ Loggmeddelanden:
 ================
 
 Både klienten och servern skriver loggmeddelanden. Dessa är av 5 olika
-slag: "fatal", "error", "normal", "verbose", samt "debug".
+slag, dödliga, fel-, normala, mångordiga och avlusningsmeddelanden.
 
-Som standard skrivs fatal-, error- samt normal-meddelanden till
+Som standard skrivs dödliga, fel- och normala meddelanden till
 standard output. Man man skicka loggmeddelanden till en fil i stället
 med kommandoradsargumentet "--log <filnamn>" eller "-l filnamn".
 
@@ -417,7 +409,7 @@ Exempel:
 
   |  % civserver -l mitt.log -d 3
 
-Detta skickar alla loggmeddelanden, innefattande verbose-
+Detta skickar alla loggmeddelanden, innefattande mångordiga
 meddelanden, från servern till filen "mitt.log".
 
 Exempel:
@@ -430,7 +422,7 @@ Exempel:
 
   | % civserver -d 4:log:civserver,120,500:autoattack
 
-Detta visar alla fatal-, error-, normal- samt verbose-meddelanden för
+Detta visar alla dödliga, fel-, normala och mångordiga meddelanden för
 servern, samt avlusningsmeddelanden för vissa angivna delar. Lägg
 märke till att "log" stämmer överens med både "gamelog.c" och "log.c".
 För "civserver.c" visas endast avlusningsmeddelanden mellan raderna
@@ -438,45 +430,90 @@ För "civserver.c" visas endast avlusningsmeddelanden mellan raderna
 med DEBUG.
 
 
-Buggar:
-=======
+Programfel:
+===========
 
-Vi vill gärna bli underrättade om buggar så att vi kan åtgärda dem.
-Se filen BUGS.sv för instruktioner om hur man rapporterar buggar.
+Vi vill gärna bli underrättade om programfel så att vi kan åtgärda dem. Se
+filen BUGS.sv för en lista över kända programfel i denna utgåva samt
+information om att anmäla programfel.
 
 
-Diskussionslistor:
-==================
+Sändlistor:
+===========
 
-Vi har fyra diskussionslistor:
+Vi har 8 sändlistor:
 
+  freeciv          Allmänt samtal.
   freeciv-announce Kungörelser av allmänt intresse.
-                   Denna lista kan endast läsas och har låg aktivitet.
-                   Man kan alltså inte skicka mail till
-                   listan utan bara ta emot.
+                   Denna lista kan endast läsas och sprider mycket få
+                   meddelanden. Man kan alltså inte skicka brev till
+                   listan utan bara ta emot. Kungörelser som skickas
+                   hit skickas även till sändlistan freeciv.
   freeciv-i18n     Översättning av Freeciv.
                    Samtal om översättning av Freecivkoden,
                    dokumentation och websida till andra språk än 
                    engelska.
-  freeciv-dev      Programmering och annan utveckling.
-  freeciv-commits  Kungörelser om ändringar i SVN-trädet.
+  freeciv-dev      Freecivutveckling.
+  freeciv-data     Utveckling av innehåll i "data"-katalogen
+                   (regeluppsättningar, rutbildsuppsättningar med
+                   mera).
+  freeciv-java     Utveckling av en javaklient (Java är ett annat
+                   programmeringsspråk än det som Freeciv är skrivet
+                   i).
+  freeciv-ai       Utvecklign av datorstyrning av spelare.
+  freeciv-cvs      Kungörelser om ändringar i CVS-förvaret.
                    Denna lista kan endast läsas och sprider
                    automatiska meddelanden. Man kan alltså inte skicka
                    brev till listan utan endast ta emot.
 
-Alla listor är öppna för allmänheten och alla är välkomna att prenumerera.
+Alla listor är öppna för allmänheten och alla är välkomna att anmäla sig.
 
-Listorna tillhandahålls av gna.org. För mer information hur du kan
-läsa och prenumerera, se https://gna.org/mail/?group=freeciv
+Man följer dessa anvisningar för att anmäla sig eller avanmäla sig:
+
+  1. E-posta till <listar@freeciv.org>.
+  2. Lämna ämnesraden tom.
+  3. Skriv några av följande rader i brevet:
+      För att anmäla:
+        subscribe freeciv
+        subscribe freeciv-announce
+        subscribe freeciv-i18n
+        subscribe freeciv-dev
+        subscribe freeciv-data
+        subscribe freeciv-java
+        subscribe freeciv-ai
+        subscribe freeciv-cvs
+      För att avanmäla:
+        unsubscribe freeciv
+        unsubscribe freeciv-announce
+        unsubscribe freeciv-i18n
+        unsubscribe freeciv-dev
+        unsubscribe freeciv-data
+        unsubscribe freeciv-java
+        unsubscribe freeciv-ai
+        unsubscribe freeciv-cvs
+
+Använd följande adresser för att skicka brev till sändlistorna:
+  <freeciv@freeciv.org>.
+  <freeciv-i18n@freeciv.org>.
+  <freeciv-dev@freeciv.org>.
+  <freeciv-data@freeciv.org>.
+  <freeciv-java@freeciv.org>.
+  <freeciv-ai@freeciv.org>.
 
 
 Internet Relay Chat (IRC)
 =========================
 
-Flera spelare och utvecklare håller till på #freeciv och #freeciv-dev
-på Freenode. Försök ansluta till servern:
+Flera spelare och utvecklare håller till på #freeciv på Open Projects
+network. Försök ansluta till servern
 
-	irc.freenode.net
+	irc.openprojects.net
+
+
+Nya utgåvor:
+============
+
+Se emellanåt efter på Freecivs nätplats om det finns en ny utgåva.
 
 
 Slutligen:
@@ -484,4 +521,4 @@ Slutligen:
 
 Ha det kul och lycka till!
 
-                                   --  Freecivgänget
+                                   --  Freecivlaget

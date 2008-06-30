@@ -30,6 +30,18 @@
 /*************************************************************************
   ...
 *************************************************************************/
+struct osda *get_osda(struct sw_widget *widget)
+{
+  if (widget->type == WT_WINDOW) {
+    return widget->data.window.target;
+  }
+  assert(widget->parent && widget->parent->type == WT_WINDOW);
+  return widget->parent->data.window.target;
+}
+
+/*************************************************************************
+  ...
+*************************************************************************/
 enum widget_face get_widget_face(struct sw_widget *widget)
 {
   if (widget->disabled) {
@@ -42,6 +54,24 @@ enum widget_face get_widget_face(struct sw_widget *widget)
     return WF_SELECTED;
   }
   return WF_NORMAL;
+}
+
+/*************************************************************************
+  ...
+*************************************************************************/
+void untooltip(struct sw_widget *widget)
+{
+  if (widget->tooltip && widget->tooltip_callback_id != 0) {
+    sw_remove_timeout(widget->tooltip_callback_id);
+    widget->tooltip_callback_id = 0;
+  }
+
+  if (!widget->tooltip || (widget->tooltip && !widget->tooltip_shown)) {
+    return;
+  }
+  widget->tooltip_shown = FALSE;
+
+  parent_needs_paint(widget);
 }
 
 /*************************************************************************
@@ -266,10 +296,11 @@ static void handle_mouse_release(struct sw_widget *widget,
 *************************************************************************/
 void handle_destroyed_widgets(void)
 {
-  if (widget_list_size(deferred_destroyed_widgets) == 0) {
+  if (widget_list_size(&deferred_destroyed_widgets) == 0) {
     return;
   }
 
+  freelog(LOG_NORMAL, "handle destroy");
   widget_list_iterate(deferred_destroyed_widgets, pwidget) {
     if ((pwidget->tooltip && pwidget->tooltip_shown)
 	|| dragged_widget == pwidget || selected_widget == pwidget
@@ -280,84 +311,14 @@ void handle_destroyed_widgets(void)
 	     (pwidget->tooltip
 	      && pwidget->tooltip_shown), dragged_widget == pwidget,
 	     selected_widget == pwidget, pressed_widget == pwidget);
-      //be_write_osda_to_file(sw_widget_get_osda(pwidget), "destroyed_widget.pnm");
+      //be_write_osda_to_file(get_osda(pwidget), "destroyed_widget.pnm");
 
       handle_mouse_motion(NULL, &pos);
     }
 
     real_widget_destroy(pwidget);
-    widget_list_unlink(deferred_destroyed_widgets, pwidget);
+    widget_list_unlink(&deferred_destroyed_widgets, pwidget);
   } widget_list_iterate_end;
-}
-
-/*************************************************************************
-  ...
-*************************************************************************/
-static void handle_event(const struct be_event *event,
-			 void (*input_callback) (int socket))
-{
-  switch (event->type) {
-  case BE_DATA_OTHER_FD:
-    input_callback(event->socket);
-    break;
-  case BE_EXPOSE:
-    flush_all_to_screen();
-    break;
-  case BE_TIMEOUT:
-    handle_callbacks();
-    break;
-
-  case BE_MOUSE_MOTION:
-    {
-      struct sw_widget *widget = search_widget(&event->position, EV_MOUSE);
-
-      handle_mouse_motion(widget, &event->position);
-    }
-    break;
-
-  case BE_MOUSE_PRESSED:
-    {
-      struct sw_widget *widget = search_widget(&event->position, EV_MOUSE);
-
-      handle_mouse_press(widget, &event->position, event->button,
-			 event->state);
-    }
-    break;
-
-  case BE_MOUSE_RELEASED:
-    {
-      struct sw_widget *widget = search_widget(&event->position, EV_MOUSE);
-
-      handle_mouse_release(widget, &event->position, event->button);
-    }
-    break;
-
-  case BE_KEY_PRESSED:
-    {
-      bool handled = FALSE;
-      struct sw_widget *widget;
-
-      assert(ct_key_is_valid(&event->key));
-
-      if (selected_widget_gets_keyboard && selected_widget) {
-	widget = selected_widget;
-      } else {
-	widget = search_widget(&event->position, EV_KEYBOARD);
-      }
-      if (widget && widget->key) {
-	handled = widget->key(widget, &event->key, widget->key_data);
-      }
-      if (!handled) {
-	handled = deliver_key(&event->key);
-      }
-      if (!handled) {
-	printf("WARNING: unhandled key stroke\n");
-      }
-    }
-    break;
-  case BE_NO_EVENT:
-    break;
-  }
 }
 
 /*************************************************************************
@@ -367,35 +328,78 @@ void sw_mainloop(void (*input_callback)(int socket))
 {
   sw_paint_all();
 
-  while (TRUE) {
+  while (1) {
     struct be_event event;
     struct timeval timeout;
 
-    while (TRUE) {
-      handle_callbacks();
+    handle_callbacks();
 
-      be_next_non_blocking_event(&event);
-      if (event.type == BE_NO_EVENT) {
-	break;
-      }
-      handle_event(&event, input_callback);
-    }
-
-    /* No events queued. We are idle. */
-    handle_idle_callbacks();
-
-    /* 
-     * Since the next step may take some while, we update the screen
-     * to make the user happy.
-     */
-    sw_paint_all();
-
-    /* Wait for the server, the network or the timeout */
     get_select_timeout(&timeout);    
-    be_next_blocking_event(&event, &timeout);
+    be_next_event(&event, &timeout);
 
-    if (event.type != BE_NO_EVENT) {
-      handle_event(&event, input_callback);
+    switch (event.type) {
+    case BE_DATA_OTHER_FD:
+      input_callback(event.socket);
+      break;
+    case BE_EXPOSE:
+      flush_all_to_screen();
+      break;
+    case BE_TIMEOUT:
+      handle_callbacks();
+      break;
+
+    case BE_MOUSE_MOTION:
+      {
+	struct sw_widget *widget =
+	    search_widget(&event.position, EV_MOUSE);
+
+	handle_mouse_motion(widget, &event.position);
+      }
+      break;
+
+    case BE_MOUSE_PRESSED:
+      {
+	struct sw_widget *widget =
+	    search_widget(&event.position, EV_MOUSE);
+
+	handle_mouse_press(widget, &event.position, event.button, event.state);
+      }
+      break;
+
+    case BE_MOUSE_RELEASED:
+      {
+	struct sw_widget *widget =
+	    search_widget(&event.position, EV_MOUSE);
+
+	handle_mouse_release(widget, &event.position, event.button);
+      }
+      break;
+
+    case BE_KEY_PRESSED:
+      {
+	bool handled = FALSE;
+	struct sw_widget *widget;
+
+	assert(ct_key_is_valid(&event.key));
+
+	if (selected_widget_gets_keyboard && selected_widget) {
+	  widget = selected_widget;
+	} else {
+	  widget = search_widget(&event.position, EV_KEYBOARD);
+	}
+	if (widget && widget->key) {
+	  handled = widget->key(widget, &event.key, widget->key_data);
+	}
+	if (!handled) {
+	  handled = deliver_key(&event.key);
+	}
+	if (!handled) {
+	  printf("WARNING: unhandled key stroke\n");
+	}
+      }
+      break;	    
+    default:
+      assert(0);
     }
   }
 }

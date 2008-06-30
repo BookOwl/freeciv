@@ -14,7 +14,6 @@
 #ifndef FC__REPODLGS_COMMON_H
 #define FC__REPODLGS_COMMON_H
 
-#include "fc_types.h"
 #include "improvement.h"
 #include "unittype.h"
 
@@ -22,13 +21,13 @@
 
 struct improvement_entry
 {
-  struct impr_type *type;
+  Impr_Type_id type;
   int count, cost, total_cost;
 };
 
 struct unit_entry
 {
-  struct unit_type *type;
+  Unit_Type_id type;
   int count, cost, total_cost;
 };
 
@@ -50,24 +49,19 @@ void report_dialogs_force_thaw(void);
 bool is_report_dialogs_frozen(void);
 
 struct options_settable {
-  enum sset_type stype;
-  enum sset_class sclass;
-  unsigned char scategory;
-  bool is_visible;
+  char *name;
+  char *short_help;
+  char *extra_help;
+  int type;
+  unsigned char category;
 
   int val;
   int default_val;
-  int desired_val;
   int min;
   int max;
 
   char *strval;
   char *default_strval;
-  char *desired_strval;
-
-  char *name;
-  char *short_help;
-  char *extra_help;
 };
 
 extern struct options_settable *settable_options;
@@ -79,9 +73,9 @@ extern int num_options_categories;
 void settable_options_init(void);
 void settable_options_free(void);
 
-void sell_all_improvements(struct impr_type *pimprove, bool obsolete_only,
+void sell_all_improvements(Impr_Type_id impr, bool obsolete_only,
 			   char *message, size_t message_sz);
-void disband_all_units(struct unit_type *punittype, bool in_cities_only,
+void disband_all_units(Unit_Type_id type, bool in_cities_only,
 		       char *message, size_t message_sz);
 
 #endif /* FC__REPODLGS_COMMON_H */

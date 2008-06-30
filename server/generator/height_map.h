@@ -1,5 +1,5 @@
 /********************************************************************** 
- Freeciv - Copyright (C) 1996-2007 - The Freeciv Project
+   Copyright (C) 1996 - 2004  The Freeciv Project
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
    the Free Software Foundation; either version 2, or (at your option)
@@ -14,7 +14,7 @@
 #define FC__HEIGHT_MAP_H
 
 /* Wrappers for easy access.  They are a macros so they can be a lvalues.*/
-#define hmap(_tile) (height_map[tile_index(_tile)])
+#define hmap(ptile) (height_map[(ptile)->index])
 
 /* shore_level safe unit of height */
 #define H_UNIT MIN(1, (hmap_max_level - hmap_shore_level) / 100)

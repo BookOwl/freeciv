@@ -147,20 +147,18 @@ void popup_find_dialog(void)
 **************************************************************************/
 void update_find_dialog(Widget find_list)
 {
-  int j = 0;
+  int i, j;
 
-  ncities_total = 0;
-  players_iterate(pplayer) {
-    ncities_total += city_list_size(pplayer->cities);
-  } players_iterate_end;
+  for(i=0, ncities_total=0; i<game.nplayers; i++)
+    ncities_total+=city_list_size(&game.players[i].cities);
 
   city_name_ptrs=fc_malloc(ncities_total*sizeof(char*));
   
-  players_iterate(pplayer) {
-    city_list_iterate(pplayer->cities, pcity) {
-      *(city_name_ptrs+j++)=mystrdup(city_name(pcity));
-    } city_list_iterate_end;
-  } players_iterate_end;
+  for(i=0, j=0; i<game.nplayers; i++) {
+    city_list_iterate(game.players[i].cities, pcity) 
+      *(city_name_ptrs+j++)=mystrdup(pcity->name);
+    city_list_iterate_end;
+  }
   
   if(ncities_total) {
     qsort(city_name_ptrs, ncities_total, sizeof(char *), compare_strings_ptrs);

@@ -16,7 +16,6 @@
 #endif
 
 #include "log.h"
-#include "movement.h"
 #include "player.h"
 #include "unit.h"
 
@@ -38,28 +37,85 @@
 **************************************************************************/
 static int likely_ocean(struct tile *ptile, struct player *pplayer)
 {
-  int ocean = 0;
-  int land = 0;
-  
-  /* We do not check H_MAP here, it should be done by map_is_known() */
+  int sum;
+
   if (map_is_known(ptile, pplayer)) {
     /* we've seen the tile already. */
-    return (is_ocean_tile(ptile) ? 100 : 0);
+    return (is_ocean(map_get_terrain(ptile)) ? 100 : 0);
   }
-
-  /* The central tile is likely to be the same as the
-   * nearby tiles. */
+  
+  /* Now we're going to do two things at once. We're going to see if
+   * we know any cardinally adjacent tiles, since knowing one will
+   * give a guaranteed value for the centre tile. Also, we're going
+   * to count the non-cardinal (diagonal) tiles, and see how many
+   * of them are ocean, which gives a guess for the ocean-ness of 
+   * the centre tile. */
+  sum = 50;
   adjc_dir_iterate(ptile, ptile1, dir) {
     if (map_is_known(ptile1, pplayer)) {
-      if (is_ocean_tile(ptile1)) {
-        ocean++;
+      if (is_cardinal_dir(dir)) {
+	/* If a tile is cardinally adjacent, we can tell if the 
+	 * central tile is ocean or not by the appearance of
+	 * the adjacent tile. So, given that we can tell, 
+	 * it's fair to look at the actual tile. */
+        return (is_ocean(map_get_terrain(ptile)) ? 100 : 0);
       } else {
-        land++;
+	/* We're diagonal to the tile in question. So we can't
+	 * be sure what the central tile is, but the central
+	 * tile is likely to be the same as the nearby tiles. 
+	 * If all 4 are water, return 90; if all 4 are land, 
+	 * return 10. */
+        sum += (is_ocean(map_get_terrain(ptile1)) ? 10 : -10);
       }
     }
   } adjc_dir_iterate_end;
 
-  return 50 + (50 / map.num_valid_dirs * (ocean - land));
+  return sum;
+}
+
+/***************************************************************
+Is a tile likely to be coastline, given information that the 
+player actually has.
+***************************************************************/
+static bool is_likely_coastline(struct tile *ptile, struct player *pplayer)
+{
+  int likely = 50;
+  int t;
+
+  adjc_iterate(ptile, ptile1) {
+    if ((t = likely_ocean(ptile1, pplayer)) == 0) {
+      return TRUE;
+    }
+    /* If all t values are 50, likely stays at 50. If all approach zero,
+     * ie are unlikely to be ocean, the tile is likely to be coastline, so
+     * likely will approach 100. If all approach 100, likely will 
+     * approach zero. */
+    likely += (50 - t) / 8;
+    
+  } adjc_iterate_end;
+
+  return (likely > 50);
+}
+
+/***************************************************************
+Is there a chance that a trireme would be lost, given information that 
+the player actually has.
+***************************************************************/
+static bool is_likely_trireme_loss(struct player *pplayer,
+				   struct tile *ptile)
+{
+  /*
+   * If we are in a city or next to land, we have no chance of losing
+   * the ship.  To make this really useful for ai planning purposes, we'd
+   * need to confirm that we can exist/move at the x,y location we are given.
+   */
+  if ((likely_ocean(ptile, pplayer) < 50) || 
+      is_likely_coastline(ptile, pplayer) ||
+      get_player_bonus(pplayer, EFT_NO_SINK_DEEP) > 0) {
+    return FALSE;
+  } else {
+    return TRUE;
+  }
 }
 
 /**************************************************************************
@@ -109,17 +165,19 @@ static int explorer_desirable(struct tile *ptile, struct player *pplayer,
                               struct unit *punit)
 {
   int land_score, ocean_score, known_land_score, known_ocean_score;
-  int radius_sq = unit_type(punit)->vision_radius_sq;
+  int range = unit_type(punit)->vision_range;
   int desirable = 0;
   int unknown = 0;
 
   /* First do some checks that would make a tile completely non-desirable.
-   * If there
+   * If we're a trireme and we could die at the given tile, or if there
    * is a city on the tile, or if the tile is not accessible, or if the 
    * tile is on a different continent, or if we're a barbarian and
    * the tile has a hut, don't go there. */
-  if (tile_city(ptile)
-      || (is_barbarian(pplayer) && tile_has_special(ptile, S_HUT))) {
+  if ((unit_flag(punit, F_TRIREME) && 
+       is_likely_trireme_loss(pplayer, ptile))
+      || map_get_city(ptile)
+      || (is_barbarian(pplayer) && map_has_special(ptile, S_HUT))) {
     return 0;
   }
 
@@ -137,7 +195,7 @@ static int explorer_desirable(struct tile *ptile, struct player *pplayer,
     known_ocean_score = KNOWN_SAME_TER_SCORE;
   }
 
-  circle_iterate(ptile, radius_sq, ptile1) {
+  square_iterate(ptile, range, ptile1) {
     int ocean = likely_ocean(ptile1, pplayer);
 
     if (!map_is_known(ptile1, pplayer)) {
@@ -160,7 +218,7 @@ static int explorer_desirable(struct tile *ptile, struct player *pplayer,
                       + (100 - ocean) * known_land_score);
       }
     }
-  } circle_iterate_end;
+  } square_iterate_end;
 
   if (unknown <= 0) {
     /* We make sure we'll uncover at least one unexplored tile. */
@@ -169,7 +227,7 @@ static int explorer_desirable(struct tile *ptile, struct player *pplayer,
 
   if ((!pplayer->ai.control || !ai_handicap(pplayer, H_HUTS))
       && map_is_known(ptile, pplayer)
-      && tile_has_special(ptile, S_HUT)) {
+      && map_has_special(ptile, S_HUT)) {
     /* we want to explore huts whenever we can,
      * even if doing so will not uncover any tiles. */
     desirable += HUT_SCORE;
@@ -182,12 +240,9 @@ static int explorer_desirable(struct tile *ptile, struct player *pplayer,
   Handle eXplore mode of a unit (explorers are always in eXplore mode 
   for AI) - explores unknown territory, finds huts.
 
-  MR_OK: there is more territory to be explored.
-  MR_DEATH: unit died.
-  MR_PAUSE: unit cannot explore further now.
-  Other results: unit cannot explore further.
+  Returns whether there is any more territory to be explored.
 **************************************************************************/
-enum unit_move_result ai_manage_explorer(struct unit *punit)
+bool ai_manage_explorer(struct unit *punit)
 {
   struct player *pplayer = unit_owner(punit);
   /* Loop prevention */
@@ -216,15 +271,6 @@ enum unit_move_result ai_manage_explorer(struct unit *punit)
 
   double logDF = log(DIST_FACTOR);
   double logBPS = log(BEST_POSSIBLE_SCORE);
-
-  UNIT_LOG(LOG_DEBUG, punit, "auto-exploring.");
-
-  if (pplayer->ai.control && unit_has_type_flag(punit, F_GAMELOSS)) {
-    UNIT_LOG(LOG_DEBUG, punit, "exploration too dangerous!");
-    return MR_BAD_ACTIVITY; /* too dangerous */
-  }
-
-  TIMING_LOG(AIT_EXPLORER, TIMER_START);
 
   pft_fill_unit_parameter(&parameter, punit);
   parameter.get_TB = no_fights_or_unknown;
@@ -292,17 +338,14 @@ enum unit_move_result ai_manage_explorer(struct unit *punit)
   }
   pf_destroy_map(map);
 
-  TIMING_LOG(AIT_EXPLORER, TIMER_STOP);
-
   /* Go to the best tile found. */
   if (best_tile != NULL) {
     /* TODO: read the path off the map we made.  Then we can make a path 
      * which goes beside the unknown, with a good EC callback... */
     if (!ai_unit_goto(punit, best_tile)) {
       /* Died?  Strange... */
-      return MR_DEATH;
+      return FALSE;
     }
-    UNIT_LOG(LOG_DEBUG, punit, "exploration GOTO succeeded");
     if (punit->moves_left > 0) {
       /* We can still move on... */
       if (punit->moves_left < init_moves) {
@@ -310,19 +353,28 @@ enum unit_move_result ai_manage_explorer(struct unit *punit)
          * Let's do more exploring. 
          * (Checking only whether our position changed is unsafe: can allow
          * yoyoing on a RR) */
-	UNIT_LOG(LOG_DEBUG, punit, "recursively exploring...");
 	return ai_manage_explorer(punit);          
       } else {
-	UNIT_LOG(LOG_DEBUG, punit, "done exploring (all finished)...");
-	return MR_PAUSE;
+	/* Something went wrong. What to do but return?
+	 * Answer: if we're a trireme we could get to this point,
+	 * but only with a non-full complement of movement points,
+	 * in which case the goto code is simply requesting a
+	 * one turn delay (the next tile we would occupy is not safe).
+	 * In that case, we should just wait. */
+        if (unit_flag(punit, F_TRIREME) 
+            && (punit->moves_left != unit_move_rate(punit))) {
+          /* we're a trireme with non-full complement of movement points,
+           * so wait until next turn. */
+          return TRUE;
+        }
+	return FALSE;
       }
     }
-    UNIT_LOG(LOG_DEBUG, punit, "done exploring (but more go go)...");
-    return MR_OK;
+    return TRUE;
   } else {
     /* Didn't find anything. */
     UNIT_LOG(LOG_DEBUG, punit, "failed to explore more");
-    return MR_BAD_MAP_POSITION;
+    return FALSE;
   }
 #undef DIST_FACTOR
 }

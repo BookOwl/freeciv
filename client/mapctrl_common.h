@@ -27,10 +27,9 @@ extern bool keyboardless_goto_button_down;
 extern bool keyboardless_goto_active;
 extern struct tile *keyboardless_goto_start_tile;
 
-void anchor_selection_rectangle(int canvas_x, int canvas_y, bool append);
+void anchor_selection_rectangle(int canvas_x, int canvas_y);
 void update_selection_rectangle(int canvas_x, int canvas_y);
 void redraw_selection_rectangle(void);
-void cancel_selection_rectangle(void);
 
 bool is_city_hilited(struct city *pcity);
 
@@ -59,7 +58,10 @@ void update_turn_done_button_state(void);
 void update_line(int canvas_x, int canvas_y);
 void overview_update_line(int overview_x, int overview_y);
 
-void fill_tile_unit_list(const struct tile *ptile, struct unit **unit_list);
+bool get_chance_to_win(int *att_chance, int *def_chance,
+		       struct tile *ptile);
+
+void fill_tile_unit_list(struct tile *ptile, struct unit **unit_list);
 
 extern struct city *city_workers_display;
 

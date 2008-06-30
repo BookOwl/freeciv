@@ -13,9 +13,10 @@
 #ifndef FC__CITYTOOLS_H
 #define FC__CITYTOOLS_H
 
-#include "events.h"		/* enum event_type */
+#include "city.h"
+#include "events.h"
+#include "nation.h"		/* for struct city_name */
 #include "packets.h"
-#include "unitlist.h"
 
 #define FOOD_WEIGHTING 19
 #define SHIELD_WEIGHTING 17
@@ -28,11 +29,15 @@
  */
 #define POLLUTION_WEIGHTING 14 /* tentative */
 #define WARMING_FACTOR 50
-#define COOLING_FACTOR WARMING_FACTOR
 
+bool can_sell_building(struct city *pcity, Impr_Type_id id);
+struct city *find_city_wonder(Impr_Type_id id);
 int build_points_left(struct city *pcity);
-int do_make_unit_veteran(struct city *pcity,
-			 const struct unit_type *punittype);
+int do_make_unit_veteran(struct city *pcity, Unit_Type_id id);
+int city_shield_bonus(struct city *pcity);
+int city_luxury_bonus(struct city *pcity);
+int city_science_bonus(struct city *pcity);
+int city_tax_bonus(struct city *pcity);
 
 void transfer_city_units(struct player *pplayer, struct player *pvictim, 
 			 struct unit_list *units, struct city *pcity,
@@ -45,9 +50,8 @@ struct city *find_closest_owned_city(struct player *pplayer,
 				     struct tile *ptile,
 				     bool sea_required,
 				     struct city *pexclcity);
-void unit_enter_city(struct unit *punit, struct city *pcity, bool passenger);
+void handle_unit_enter_city(struct unit *punit, struct city *pcity);
 
-bool send_city_suppression(bool now);
 void send_city_info(struct player *dest, struct city *pcity);
 void send_city_info_at_tile(struct player *pviewer, struct conn_list *dest,
 			    struct city *pcity, struct tile *ptile);
@@ -68,41 +72,23 @@ void establish_trade_route(struct city *pc1, struct city *pc2);
 void remove_trade_route(struct city *pc1, struct city *pc2);
 
 void do_sell_building(struct player *pplayer, struct city *pcity,
-		      struct impr_type *pimprove);
-void building_lost(struct city *pcity, const struct impr_type *pimprove);
-
-bool is_production_equal(const struct universal *one,
-			 const struct universal *two);
+		      Impr_Type_id id);
+void building_lost(struct city *pcity, Impr_Type_id id);
 void change_build_target(struct player *pplayer, struct city *pcity,
-			 struct universal target,
-			 enum event_type event);
+			 int target, bool is_unit, enum event_type event);
 
-bool is_allowed_city_name(struct player *pplayer, const char *cityname,
+bool is_allowed_city_name(struct player *pplayer, const char *city_name,
 			  char *error_buf, size_t bufsz);
 char *city_name_suggestion(struct player *pplayer, struct tile *ptile);
 
-void city_freeze_workers(struct city *pcity);
-void city_thaw_workers(struct city *pcity);
-void city_freeze_workers_queue(struct city *pcity);
-void city_thaw_workers_queue(void);
 
-/* city map functions */
-enum city_tile_type city_map_status(const struct city *pcity, int city_x,
-				    int city_y);
-void city_map_update_empty(struct city *pcity, struct tile *ptile,
-			   int city_x, int city_y);
-void city_map_update_worker(struct city *pcity, struct tile *ptile,
-			    int city_x, int city_y);
-
-bool city_map_update_tile_frozen(struct tile *ptile);
-bool city_map_update_tile_now(struct tile *ptile);
-
-void city_map_update_all(struct city *pcity);
-void city_map_update_all_cities_for_player(struct player *pplayer);
-
-void city_landlocked_sell_coastal_improvements(struct tile *ptile);
-void city_refresh_vision(struct city *pcity);
-
+bool city_can_work_tile(struct city *pcity, int city_x, int city_y);
+void server_remove_worker_city(struct city *pcity, int city_x, int city_y);
+void server_set_worker_city(struct city *pcity, int city_x, int city_y);
+bool update_city_tile_status_map(struct city *pcity, struct tile *ptile);
 void sync_cities(void);
+bool can_place_worker_here(struct city *pcity, int city_x, int city_y);
+void check_city_workers(struct player *pplayer);
+void city_landlocked_sell_coastal_improvements(struct tile *ptile);
 
 #endif  /* FC__CITYTOOLS_H */

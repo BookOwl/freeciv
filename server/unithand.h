@@ -13,15 +13,14 @@
 #ifndef FC__UNITHAND_H
 #define FC__UNITHAND_H
 
+#include "packets.h"
 #include "unit.h"
 
 #include "hand_gen.h"
 
-void unit_activity_handling(struct unit *punit,
-                            enum unit_activity new_activity);
-void unit_change_homecity_handling(struct unit *punit, struct city *new_pcity);
-
-bool unit_move_handling(struct unit *punit, struct tile *pdesttile,
-                        bool igzoc, bool move_diplomat_city);
+bool handle_unit_move_request(struct unit *punit, struct tile *ptile,
+			     bool igzoc, bool move_diplomat_city);
+void handle_unit_activity_request(struct unit *punit, 
+				  enum unit_activity new_activity);
 
 #endif  /* FC__UNITHAND_H */

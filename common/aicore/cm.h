@@ -29,14 +29,16 @@
 #include "city.h"		/* CITY_MAP_SIZE */
 #include "shared.h"		/* bool type */
 
+enum cm_stat { FOOD, SHIELD, TRADE, GOLD, LUXURY, SCIENCE, NUM_STATS };
+
 /* A description of the goal. */
 struct cm_parameter {
-  int minimal_surplus[O_MAX];
+  int minimal_surplus[NUM_STATS];
   bool require_happy;
   bool allow_disorder;
   bool allow_specialists;
 
-  int factor[O_MAX];
+  int factor[NUM_STATS];
   int happy_factor;
 };
 
@@ -44,16 +46,18 @@ struct cm_parameter {
 struct cm_result {
   bool found_a_valid, disorder, happy;
 
-  int surplus[O_MAX];
+  int surplus[NUM_STATS];
 
   bool worker_positions_used[CITY_MAP_SIZE][CITY_MAP_SIZE];
-  int specialists[SP_MAX];
+  int specialists[SP_COUNT];
 };
-
 
 void cm_init(void);
 void cm_init_citymap(void);
 
+/*
+ * ...
+ */
 void cm_free(void);
 
 /*
@@ -72,6 +76,7 @@ void cm_query_result(struct city *pcity,
 void cm_clear_cache(struct city *pcity);
 
 /***************** utility methods *************************************/
+const char *cm_get_stat_name(enum cm_stat stat);
 bool cm_are_parameter_equal(const struct cm_parameter *const p1,
 			    const struct cm_parameter *const p2);
 void cm_copy_parameter(struct cm_parameter *dest,
@@ -80,12 +85,12 @@ void cm_init_parameter(struct cm_parameter *dest);
 void cm_init_emergency_parameter(struct cm_parameter *dest);
 
 void cm_print_city(const struct city *pcity);
-void cm_print_result(const struct cm_result *result);
-
-int cm_result_citizens(const struct cm_result *result);
-int cm_result_specialists(const struct cm_result *result);
-int cm_result_workers(const struct cm_result *result);
-
-void cm_result_from_main_map(struct cm_result *result,
-                             const struct city *pcity, bool main_map);
+void cm_print_result(const struct city *pcity,
+		     const struct cm_result *result);
+int cm_count_worker(const struct city * pcity,
+		    const struct cm_result *result);
+int cm_count_specialist(const struct city *pcity,
+			const struct cm_result *result);
+void cm_copy_result_from_city(const struct city *pcity,
+			      struct cm_result *result);
 #endif

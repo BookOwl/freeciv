@@ -19,15 +19,11 @@
     email                : Rafał Bursig <bursig@poczta.fm>
  **********************************************************************/
 
-#ifndef FC__GUISTRING_H
-#define FC__GUISTRING_H
+#ifndef __STRING_H
+#define __STRING_H
 
-#include "SDL.h"
-
-#include "fc_types.h"
-
+#include "gui_iconv.h"
 #include "SDL_ttf.h"
-#include "gui_main.h"
 
 #define SF_CENTER	8
 #define SF_CENTER_RIGHT	16
@@ -68,15 +64,7 @@ void change_ptsize16(SDL_String16 *pString, Uint16 new_ptsize);
 void unload_font(Uint16 ptsize);
 void free_font_system(void);
 
-/* adjust font sizes on 320x240 screen */
-#ifdef SMALL_SCREEN
-  int adj_font(int size);
-#else
-  #define adj_font(size) size
-#endif
-
 #define str16len(pString16) str16size(pString16).w
-#define str16height(pString16) str16size(pString16).h
 
 /*
  *	here we use ordinary free( ... ) becouse check is made 
@@ -85,7 +73,7 @@ void free_font_system(void);
 #define FREESTRING16( pString16 )		\
 do {						\
 	if (pString16) {			\
-		FC_FREE(pString16->text);		\
+		FREE(pString16->text);		\
 		unload_font(pString16->ptsize);	\
 		free(pString16); 		\
 		pString16 = NULL;		\
@@ -95,4 +83,4 @@ do {						\
 #define create_str16_from_char(pInCharString, iPtsize) \
         copy_chars_to_string16(create_string16(NULL, 0,iPtsize), pInCharString)
 
-#endif /* FC__GUISTRING_H */
+#endif

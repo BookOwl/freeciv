@@ -1,5 +1,5 @@
 /********************************************************************** 
- Freeciv - Copyright (C) 2004 - Marcelo J. Burda
+   Copyright (C) 2004 - Marcelo J. Burda
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
    the Free Software Foundation; either version 2, or (at your option)
@@ -13,8 +13,6 @@
 #ifndef FC__TEMPERATURE_MAP_H
 #define FC__TEMPERATURE_MAP_H
 
-#include "fcintl.h"
-#include "shared.h"		/* bool type */
 
 /*
  *  temperature_map[] stores the temperature of each tile

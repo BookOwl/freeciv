@@ -25,6 +25,7 @@
 
 #include "diptreaty.h"
 #include "fcintl.h"
+#include "game.h"
 #include "packets.h"
 #include "nation.h"
 #include "player.h"
@@ -33,9 +34,8 @@
 #include "chatline.h"
 #include "civclient.h"
 #include "climisc.h"
+#include "clinet.h"
 #include "connectdlg_common.h"
-#include "dialogs.h"
-#include "editor.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "inteldlg.h"
@@ -48,7 +48,7 @@
 
 #include "plrdlg.h"
 
-struct gui_dialog *players_dialog_shell;
+static struct gui_dialog *players_dialog_shell;
 static GtkWidget *players_list;
 static GtkTreeSelection *players_selection;
 static GtkWidget *players_int_command;
@@ -56,8 +56,6 @@ static GtkWidget *players_meet_command;
 static GtkWidget *players_war_command;
 static GtkWidget *players_vision_command;
 static GtkWidget *players_sship_command;
-static GtkWidget *players_edit_menu;
-static GtkWidget *players_edit_nation_command;
 static GtkListStore *store;
 static GtkTreeModel *model;
 
@@ -71,23 +69,28 @@ static void players_intel_callback(GtkMenuItem *item, gpointer data);
 static void players_sship_callback(GtkMenuItem *item, gpointer data);
 static void players_ai_toggle_callback(GtkMenuItem *item, gpointer data);
 static void players_ai_skill_callback(GtkMenuItem *item, gpointer data);
-static void players_edit_nation_callback(GtkMenuItem *item, gpointer data);
 
 
 static void update_views(void);
 
 /**************************************************************************
-popup the dialog 10% inside the main-window, and optionally raise it.
+popup the dialog 10% inside the main-window 
 **************************************************************************/
-void popup_players_dialog(bool raise)
+void popup_players_dialog(void)
 {
   if (!players_dialog_shell){
     create_players_dialog();
   }
   gui_dialog_present(players_dialog_shell);
-  if (raise) {
-    gui_dialog_raise(players_dialog_shell);
-  }
+}
+
+/****************************************************************
+ Raises the players dialog.
+****************************************************************/
+void raise_players_dialog(void)
+{
+  popup_players_dialog();
+  gui_dialog_raise(players_dialog_shell);
 }
 
 /****************************************************************
@@ -113,12 +116,10 @@ static GdkPixbuf *create_player_icon(struct player *plr)
 
   pixmap = gdk_pixmap_new(root_window, width, height, -1);
 
-  gdk_gc_set_foreground(civ_gc,
-                        &get_color(tileset,
-				   COLOR_PLAYER_COLOR_BACKGROUND)->color);
+  gdk_gc_set_foreground(civ_gc, colors_standard[COLOR_STD_BLACK]);
   gdk_draw_rectangle(pixmap, civ_gc, TRUE, 0, 0, width, height);
 
-  gdk_gc_set_foreground(civ_gc, &get_player_color(tileset, plr)->color);
+  gdk_gc_set_foreground(civ_gc, colors_standard[player_color(plr)]);
   gdk_draw_rectangle(pixmap, civ_gc, TRUE, 1, 1, width - 2, height - 2);
 
   tmp = gdk_pixbuf_get_from_drawable(NULL, pixmap, NULL, 
@@ -141,7 +142,7 @@ static void update_players_menu(void)
     gint plrno;
 
     gtk_tree_model_get(model, &it, ncolumns - 1, &plrno, -1);
-    plr = player_by_number(plrno);
+    plr = get_player(plrno);
   
     if (plr->spaceship.state != SSHIP_NONE) {
       gtk_widget_set_sensitive(players_sship_command, TRUE);
@@ -149,25 +150,20 @@ static void update_players_menu(void)
       gtk_widget_set_sensitive(players_sship_command, FALSE);
     }
 
-    if (NULL != client.conn.playing) {
-      switch (pplayer_get_diplstate(client.conn.playing,
-				    player_by_number(plrno))->type) {
-      case DS_WAR:
-      case DS_NO_CONTACT:
-	gtk_widget_set_sensitive(players_war_command, FALSE);
-	break;
-      default:
-	gtk_widget_set_sensitive(players_war_command,
-				 can_client_issue_orders()
-				 && player_by_number(plrno) != client.conn.playing);
-      }
-    } else {
+    switch (pplayer_get_diplstate(game.player_ptr, get_player(plrno))->type) {
+    case DS_WAR:
+    case DS_NO_CONTACT:
       gtk_widget_set_sensitive(players_war_command, FALSE);
+      break;
+    default:
+      gtk_widget_set_sensitive(players_war_command,
+			       can_client_issue_orders()
+			       && game.player_idx != plrno);
     }
 
     gtk_widget_set_sensitive(players_vision_command,
 			     can_client_issue_orders()
-			     && gives_shared_vision(client.conn.playing, plr));
+			     && gives_shared_vision(game.player_ptr, plr));
 
     gtk_widget_set_sensitive(players_meet_command, can_meet_with_player(plr));
     gtk_widget_set_sensitive(players_int_command, can_intel_with_player(plr));
@@ -205,42 +201,18 @@ static gboolean button_press_callback(GtkTreeView *view, GdkEventButton *ev)
 
       gtk_tree_model_get(GTK_TREE_MODEL(store), &it,
 	  ncolumns - 1, &id, -1);
-      plr = player_by_number(id);
+      plr = get_player(id);
 
       if (ev->button == 1) {
-        if (can_intel_with_player(plr)) {
+	if (can_intel_with_player(plr)) {
 	  popup_intel_dialog(plr);
 	}
       } else {
-	dsend_packet_diplomacy_init_meeting_req(&client.conn, id);
+	dsend_packet_diplomacy_init_meeting_req(&aconnection, id);
       }
     }
   }
   return FALSE;
-}
-
-/**************************************************************************
-...
-**************************************************************************/
-static gint plrdlg_sort_func(GtkTreeModel *model,
-			      GtkTreeIter *a, GtkTreeIter *b, gpointer data)
-{
-  GValue value = { 0, };
-  struct player *player1;
-  struct player *player2;
-  gint n;
-
-  n = GPOINTER_TO_INT(data);
-
-  gtk_tree_model_get_value(model, a, num_player_dlg_columns + 2, &value);
-  player1 = player_by_number(g_value_get_int(&value));
-  g_value_unset(&value);
-  
-  gtk_tree_model_get_value(model, b, num_player_dlg_columns + 2, &value);
-  player2 = player_by_number(g_value_get_int(&value));
-  g_value_unset(&value);
-  
-  return player_dlg_columns[n].sort_func(player1, player2);
 }
 
 /**************************************************************************
@@ -276,14 +248,6 @@ static void create_store(void)
   ncolumns = i;
   store = gtk_list_store_newv(ncolumns, model_types);  
   model = GTK_TREE_MODEL(store);
-  
-  /* Set sort order */
-  for (i = 0; i < num_player_dlg_columns; i++) {
-    if (player_dlg_columns[i].sort_func != NULL) {
-        gtk_tree_sortable_set_sort_func(GTK_TREE_SORTABLE(model), i,
-	plrdlg_sort_func, GINT_TO_POINTER(i), NULL);
-    }
-  }
 }
 
 /**************************************************************************
@@ -297,16 +261,6 @@ static void toggle_view(GtkCheckMenuItem* item, gpointer data)
   update_views();
 }
 
-/*************************************************************************
-  Called whenever player toggles the 'Show/Dead Players' menu item
-*************************************************************************/
-static void toggle_dead_players(GtkCheckMenuItem* item, gpointer data)
-{
-  player_dlg_show_dead_players = 
-    gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(item));
-  update_players_dialog();
-}
-
 /**************************************************************************
 ...
 **************************************************************************/
@@ -314,10 +268,9 @@ static GtkWidget* create_show_menu(void)
 {
   int i;
   GtkWidget *menu = gtk_menu_new();
-  GtkWidget *item;    
-  
-  /* index starting at one (1) here to force playername to always be shown */
+
   for (i = 1; i < num_player_dlg_columns; i++) {
+    GtkWidget *item;    
     struct player_dlg_column *pcol;
     
     pcol = &player_dlg_columns[i];
@@ -326,16 +279,6 @@ static GtkWidget* create_show_menu(void)
     gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
     g_signal_connect(item, "toggled", G_CALLBACK(toggle_view), pcol);
   }
-  
-  item = gtk_separator_menu_item_new();
-  gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
-  
-  item = gtk_check_menu_item_new_with_label(Q_("?show:Dead Players"));
-  gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(item),
-                                 player_dlg_show_dead_players);
-  gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
-  g_signal_connect(item, "toggled", G_CALLBACK(toggle_dead_players), NULL);
-  
   return menu;
 }
 
@@ -346,12 +289,10 @@ void create_players_dialog(void)
 {
   int i;
   GtkWidget *sep, *sw;
-  GtkWidget *menubar, *menu, *item, *vbox;
-  enum ai_level level;
+  GtkWidget *menubar, *menu, *item;
 
-  gui_dialog_new(&players_dialog_shell, GTK_NOTEBOOK(top_notebook), NULL);
-  /* TRANS: Nations report title */
-  gui_dialog_set_title(players_dialog_shell, _("Nations"));
+  gui_dialog_new(&players_dialog_shell, GTK_NOTEBOOK(top_notebook));
+  gui_dialog_set_title(players_dialog_shell, _("Players"));
 
   gui_dialog_add_button(players_dialog_shell,
       GTK_STOCK_CLOSE, GTK_RESPONSE_CLOSE);
@@ -362,7 +303,7 @@ void create_players_dialog(void)
 
   players_list = gtk_tree_view_new_with_model(GTK_TREE_MODEL(store));
   g_object_unref(store);
-  gtk_widget_set_name(players_list, "small_font");
+  gtk_widget_set_name(players_list, "small font");
 
   players_selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(players_list));
   g_signal_connect(players_selection, "changed",
@@ -441,60 +382,44 @@ void create_players_dialog(void)
 		                 GTK_POLICY_AUTOMATIC, GTK_POLICY_ALWAYS);
   gtk_container_add(GTK_CONTAINER(sw), players_list);
 
-  gtk_box_pack_start(GTK_BOX(players_dialog_shell->vbox), sw,
-		     TRUE, TRUE, 0);
-
-  players_int_command = gtk_button_new_with_mnemonic(_("_Intelligence"));
-  g_signal_connect(players_int_command, "clicked",
-      G_CALLBACK(players_intel_callback), NULL);
-  gui_dialog_add_widget(players_dialog_shell, players_int_command);  
-  gtk_size_group_add_widget(players_dialog_shell->gui_button, 
-      players_int_command);
-
-  players_meet_command = gtk_button_new_with_mnemonic(_("_Meet"));
-  g_signal_connect(players_meet_command, "clicked",
-      G_CALLBACK(players_meet_callback), NULL);
-  gui_dialog_add_widget(players_dialog_shell, players_meet_command);
-  gtk_size_group_add_widget(players_dialog_shell->gui_button, 
-      players_meet_command);
-
-  players_war_command = gtk_button_new_with_mnemonic(_("Cancel _Treaty"));
-  g_signal_connect(players_war_command, "clicked",
-      G_CALLBACK(players_war_callback), NULL);
-  gui_dialog_add_widget(players_dialog_shell, players_war_command);  
-  gtk_size_group_add_widget(players_dialog_shell->gui_button,
-      players_war_command);
-
-  players_vision_command  = gtk_button_new_with_mnemonic(_("_Withdraw vision"));
-  g_signal_connect(players_vision_command, "clicked",
-      G_CALLBACK(players_vision_callback), NULL);
-  gui_dialog_add_widget(players_dialog_shell, players_vision_command);  
-  gtk_size_group_add_widget(players_dialog_shell->gui_button,
-     players_vision_command);
-
-  players_sship_command = gtk_button_new_with_mnemonic(_("_Spaceship"));
-  g_signal_connect(players_sship_command, "clicked",
-      G_CALLBACK(players_sship_callback), NULL);
-  gui_dialog_add_widget(players_dialog_shell, players_sship_command);
-  gtk_size_group_add_widget(players_dialog_shell->gui_button,
-      players_sship_command);
-
-  vbox = gtk_vbox_new(FALSE, 0);
-  
-  sep = gtk_hseparator_new();
-  gtk_box_pack_start(GTK_BOX(vbox), sep, FALSE, FALSE, 0);
-
   menubar = gtk_menu_bar_new();
-  gtk_box_pack_start(GTK_BOX(vbox), menubar, TRUE, TRUE, 0);
+  gtk_box_pack_start(GTK_BOX(players_dialog_shell->vbox), menubar,
+		     FALSE, FALSE, 0);
+  gtk_box_pack_start(GTK_BOX(players_dialog_shell->vbox), sw,
+		     TRUE, TRUE, 5);
 
-  gui_dialog_add_widget(players_dialog_shell, vbox);
-  gtk_box_set_child_packing(GTK_BOX(players_dialog_shell->action_area), 
-      vbox, FALSE, FALSE, 0, GTK_PACK_END);
-
-  item = gtk_menu_item_new_with_mnemonic(_("_Display"));
-  menu = create_show_menu();
-  gtk_menu_item_set_submenu(GTK_MENU_ITEM(item), menu);
+  item = gtk_menu_item_new_with_mnemonic(_("_Player"));
   gtk_menu_shell_append(GTK_MENU_SHELL(menubar), item);
+
+  menu = gtk_menu_new();
+  gtk_menu_item_set_submenu(GTK_MENU_ITEM(item), menu);
+
+  players_int_command = gtk_menu_item_new_with_mnemonic(_("_Intelligence"));
+  gtk_widget_set_sensitive(players_int_command, FALSE);
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), players_int_command);
+
+  sep = gtk_separator_menu_item_new();
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), sep);
+
+  players_meet_command = gtk_menu_item_new_with_mnemonic(_("_Meet"));
+  gtk_widget_set_sensitive(players_meet_command, FALSE);
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), players_meet_command);
+
+  players_war_command = gtk_menu_item_new_with_mnemonic(_("_Cancel Treaty"));
+  gtk_widget_set_sensitive(players_war_command, FALSE);
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), players_war_command);
+
+  players_vision_command=gtk_menu_item_new_with_mnemonic(_("_Withdraw vision"));
+  gtk_widget_set_sensitive(players_vision_command, FALSE);
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), players_vision_command);
+
+  sep = gtk_separator_menu_item_new();
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), sep);
+
+  players_sship_command = gtk_menu_item_new_with_mnemonic(_("_Spaceship"));
+  gtk_widget_set_sensitive(players_sship_command, FALSE);
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), players_sship_command);
+
 
   item = gtk_menu_item_new_with_mnemonic(_("_AI"));
   gtk_menu_shell_append(GTK_MENU_SHELL(menubar), item);
@@ -510,34 +435,32 @@ void create_players_dialog(void)
   sep = gtk_separator_menu_item_new();
   gtk_menu_shell_append(GTK_MENU_SHELL(menu), sep);
 
-  for (level = 0; level < AI_LEVEL_LAST; level++) {
-    if (is_settable_ai_level(level)) {
-      const char *level_name = ai_level_name(level);
-
-      item = gtk_menu_item_new_with_label(level_name);
-      g_signal_connect(item, "activate",
-                       G_CALLBACK(players_ai_skill_callback),
-                       GUINT_TO_POINTER(level));
-      gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
-    }
+  for (i = 0; i < NUM_SKILL_LEVELS; i++) {
+    item = gtk_menu_item_new_with_label(_(skill_level_names[i]));
+    g_signal_connect(item, "activate",
+	G_CALLBACK(players_ai_skill_callback), GUINT_TO_POINTER(i));
+    gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
   }
   gtk_widget_show_all(menu);
 
-  players_edit_menu = gtk_menu_item_new_with_mnemonic(_("_Editor"));
-  gtk_menu_shell_append(GTK_MENU_SHELL(menubar), players_edit_menu);
-  gtk_widget_set_sensitive(players_edit_menu, can_conn_edit(&client.conn));
 
-  menu = gtk_menu_new();
-  gtk_menu_item_set_submenu(GTK_MENU_ITEM(players_edit_menu), menu);
-
-  players_edit_nation_command = 
-                         gtk_menu_item_new_with_mnemonic(_("_Edit Nation..."));
-  gtk_menu_shell_append(GTK_MENU_SHELL(menu), players_edit_nation_command);
+  item = gtk_menu_item_new_with_mnemonic(_("S_how"));
+  menu = create_show_menu();
+  gtk_menu_item_set_submenu(GTK_MENU_ITEM(item), menu);
+  gtk_menu_shell_append(GTK_MENU_SHELL(menubar), item);
 
   gui_dialog_show_all(players_dialog_shell);
 
-  g_signal_connect(players_edit_nation_command, "activate",
-    G_CALLBACK(players_edit_nation_callback), NULL);
+  g_signal_connect(players_meet_command, "activate",
+    G_CALLBACK(players_meet_callback), NULL);
+  g_signal_connect(players_war_command, "activate",
+    G_CALLBACK(players_war_callback), NULL);
+  g_signal_connect(players_vision_command, "activate",
+    G_CALLBACK(players_vision_callback), NULL);
+  g_signal_connect(players_int_command, "activate",
+    G_CALLBACK(players_intel_callback), NULL);
+  g_signal_connect(players_sship_command, "activate",
+    G_CALLBACK(players_sship_callback), NULL);
 
   gtk_list_store_clear(store);
   update_players_dialog();
@@ -555,17 +478,15 @@ void create_players_dialog(void)
 #define MIN_DIMENSION 5
 
 /**************************************************************************
- Builds the flag pixmap. May return NULL if there is not enough memory.
- You must call g_object_unref on the returned pixbuf when it is no
- longer needed.
+ Builds the flag pixmap.
 **************************************************************************/
-GdkPixbuf *get_flag(const struct nation_type *nation)
+static GdkPixbuf *get_flag(struct nation_type *nation)
 {
   int x0, y0, x1, y1, w, h;
   GdkPixbuf *im;
-  struct sprite *flag;
+  SPRITE *flag;
 
-  flag = get_nation_flag_sprite(tileset, nation);
+  flag = nation->flag_sprite;
 
   /* calculate the bounding box ... */
   sprite_get_bounding_box(flag, &x0, &y0, &x1, &y1);
@@ -582,11 +503,12 @@ GdkPixbuf *get_flag(const struct nation_type *nation)
   assert(w >= MIN_DIMENSION && h >= MIN_DIMENSION);
 
   /* croping */
-  im = gdk_pixbuf_new(GDK_COLORSPACE_RGB, TRUE, 8, w, h);
-  if (im != NULL) {
-    gdk_pixbuf_copy_area(sprite_get_pixbuf(flag), x0, y0, w, h,
-                         im, 0, 0);
-  }
+  im = gdk_pixbuf_get_from_drawable(NULL,
+				    flag->pixmap,
+				    gdk_colormap_get_system(),
+				    x0, y0,
+				    0, 0,
+				    w, h);
 
   /* and finaly store the scaled flag pixbuf in the static flags array */
   return im;
@@ -599,9 +521,9 @@ GdkPixbuf *get_flag(const struct nation_type *nation)
 **************************************************************************/
 static void build_row(GtkTreeIter *it, int i)
 {
-  struct player *plr = player_by_number(i);
+  struct player *plr = get_player(i);
   GdkPixbuf *pixbuf;
-  gint style = PANGO_STYLE_NORMAL, weight = PANGO_WEIGHT_NORMAL;
+  gint style, weight;
   int k;
   gchar *p;
 
@@ -614,7 +536,7 @@ static void build_row(GtkTreeIter *it, int i)
 	gtk_list_store_set(store, it, k, p, -1);
 	break;
       case COL_FLAG:
-        pixbuf = get_flag(nation_of_player(plr));
+        pixbuf = get_flag(get_nation_by_plr(plr));
         gtk_list_store_set(store, it, k, pixbuf, -1);
         g_object_unref(pixbuf);
 	break;
@@ -635,46 +557,27 @@ static void build_row(GtkTreeIter *it, int i)
     -1);
 
    /* now add some eye candy ... */
-  if (NULL != client.conn.playing) {
-    switch (pplayer_get_diplstate(client.conn.playing, plr)->type) {
-    case DS_WAR:
-      weight = PANGO_WEIGHT_NORMAL;
-      style = PANGO_STYLE_ITALIC;
-      break;
-    case DS_ALLIANCE:
-    case DS_TEAM:
-      weight = PANGO_WEIGHT_BOLD;
-      style = PANGO_STYLE_NORMAL;
-      break;
-    case DS_ARMISTICE:
-    case DS_CEASEFIRE:
-    case DS_PEACE:
-    case DS_NO_CONTACT:
-      weight = PANGO_WEIGHT_NORMAL;
-      style = PANGO_STYLE_NORMAL;
-      break;
-    case DS_LAST:
-      assert(0);
-      break;
-    }
-  }
+   switch (pplayer_get_diplstate(game.player_ptr, plr)->type) {
+   case DS_WAR:
+     weight = PANGO_WEIGHT_NORMAL;
+     style = PANGO_STYLE_ITALIC;
+     break;
+   case DS_ALLIANCE:
+   case DS_TEAM:
+     weight = PANGO_WEIGHT_BOLD;
+     style = PANGO_STYLE_NORMAL;
+     break;
+   default:
+     weight = PANGO_WEIGHT_NORMAL;
+     style = PANGO_STYLE_NORMAL;
+     break;
+   }
    gtk_list_store_set(store, it,
        num_player_dlg_columns, style,
        num_player_dlg_columns + 1, weight,
        -1);
 }
 
-/**************************************************************************
-...
-**************************************************************************/
-static bool player_should_be_shown(int plrno) {
-  struct player *vpp = valid_player_by_number(plrno);
-
-  return NULL != vpp
-	 && (player_dlg_show_dead_players
-	     || vpp->is_alive)
-	 && (!is_barbarian(vpp));
-}
 
 /**************************************************************************
 ...
@@ -682,11 +585,11 @@ static bool player_should_be_shown(int plrno) {
 void update_players_dialog(void)
 {
   if (players_dialog_shell && !is_plrdlg_frozen()) {
-    gboolean exists[player_count()];
+    gboolean exists[game.nplayers];
     gint i;
     GtkTreeIter it, it_next;
 
-    for (i = 0; i < player_count(); i++) {
+    for (i = 0; i < game.nplayers; i++) {
       exists[i] = FALSE;
     }
 
@@ -702,11 +605,11 @@ void update_players_dialog(void)
 
 	/*
 	 * The nation already had a row in the player report. In that
-	 * case we just update the row. If player is dead we remove him
-	 * if necessary.
+	 * case we just update the row.
 	 */
-	if (player_should_be_shown(plrno)) {
+	if (is_valid_player_id(plrno)) {
 	  exists[plrno] = TRUE;
+
 	  build_row(&it, plrno);
 	} else {
 	  gtk_list_store_remove(store, &it);
@@ -717,21 +620,18 @@ void update_players_dialog(void)
 
     players_iterate(pplayer) {
       /* skip barbarians */
-      if (player_should_be_shown(player_number(pplayer))) {
-	if (!exists[player_index(pplayer)]) {
+      if (!is_barbarian(pplayer)) {
+	if (!exists[pplayer->player_no]) {
 	  /* 
 	   * A nation is not in the player report yet. This happens when
 	   * the report is just opened and after a split.
 	   */
 	  gtk_list_store_append(store, &it);
 
-	  build_row(&it, player_number(pplayer));
+	  build_row(&it, pplayer->player_no);
 	}
       }
     } players_iterate_end;
-
-    /* menu needs to be updated with edit mode changes */
-    gtk_widget_set_sensitive(players_edit_menu, can_conn_edit(&client.conn));
 
     update_players_menu();
     update_views();
@@ -752,7 +652,7 @@ void players_meet_callback(GtkMenuItem *item, gpointer data)
 
     gtk_tree_model_get(model, &it, ncolumns - 1, &plrno, -1);
 
-    dsend_packet_diplomacy_init_meeting_req(&client.conn, plrno);
+    dsend_packet_diplomacy_init_meeting_req(&aconnection, plrno);
   }
 }
 
@@ -770,7 +670,7 @@ void players_war_callback(GtkMenuItem *item, gpointer data)
     gtk_tree_model_get(model, &it, ncolumns - 1, &plrno, -1);
 
     /* can be any pact clause */
-    dsend_packet_diplomacy_cancel_pact(&client.conn, plrno,
+    dsend_packet_diplomacy_cancel_pact(&aconnection, plrno,
 				       CLAUSE_CEASEFIRE);
   }
 }
@@ -787,7 +687,7 @@ void players_vision_callback(GtkMenuItem *item, gpointer data)
     gint plrno;
 
     gtk_tree_model_get(model, &it, ncolumns - 1, &plrno, -1);
-    dsend_packet_diplomacy_cancel_pact(&client.conn, plrno, CLAUSE_VISION);
+    dsend_packet_diplomacy_cancel_pact(&aconnection, plrno, CLAUSE_VISION);
   }
 }
 
@@ -804,8 +704,8 @@ void players_intel_callback(GtkMenuItem *item, gpointer data)
 
     gtk_tree_model_get(model, &it, ncolumns - 1, &plrno, -1);
 
-    if (can_intel_with_player(player_by_number(plrno))) {
-      popup_intel_dialog(player_by_number(plrno));
+    if (can_intel_with_player(&game.players[plrno])) {
+      popup_intel_dialog(&game.players[plrno]);
     }
   }
 }
@@ -822,7 +722,7 @@ void players_sship_callback(GtkMenuItem *item, gpointer data)
     gint plrno;
 
     gtk_tree_model_get(model, &it, ncolumns - 1, &plrno, -1);
-    popup_spaceship_dialog(player_by_number(plrno));
+    popup_spaceship_dialog(&game.players[plrno]);
   }
 }
 
@@ -836,10 +736,12 @@ static void players_ai_toggle_callback(GtkMenuItem *item, gpointer data)
 
   if (gtk_tree_selection_get_selected(players_selection, &model, &it)) {
     gint plrno;
+    char buf[512];
 
     gtk_tree_model_get(model, &it, ncolumns - 1, &plrno, -1);
 
-    send_chat_printf("/aitoggle \"%s\"", player_name(player_by_number(plrno)));
+    my_snprintf(buf, sizeof(buf), "/aitoggle %s", get_player(plrno)->name);
+    send_chat(buf);
   }
 }
 
@@ -853,31 +755,16 @@ static void players_ai_skill_callback(GtkMenuItem *item, gpointer data)
 
   if (gtk_tree_selection_get_selected(players_selection, &model, &it)) {
     gint plrno;
+    char buf[512];
 
     gtk_tree_model_get(model, &it, ncolumns - 1, &plrno, -1);
 
-    send_chat_printf("/%s %s",
-                     ai_level_cmd(GPOINTER_TO_UINT(data)),
-                     player_name(player_by_number(plrno)));
+    my_snprintf(buf, sizeof(buf), "/%s %s",
+	skill_level_names[GPOINTER_TO_UINT(data)],
+	get_player(plrno)->name);
+    send_chat(buf);
   }
 }
-
-/**************************************************************************
- popup the races dialog for the selected player
-**************************************************************************/
-static void players_edit_nation_callback(GtkMenuItem *item, gpointer data)
-{
-  GtkTreeModel *model;
-  GtkTreeIter it;
-  
-  if (gtk_tree_selection_get_selected(players_selection, &model, &it)) {
-    gint plrno;
-
-    gtk_tree_model_get(model, &it, ncolumns - 1, &plrno, -1);
-
-    popup_races_dialog(player_by_number(plrno));
-  }
-}   
 
 /**************************************************************************
 ...
@@ -893,3 +780,4 @@ static void update_views(void)
     gtk_tree_view_column_set_visible(col, player_dlg_columns[i].show);
   }
 };
+

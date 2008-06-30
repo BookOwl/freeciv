@@ -24,7 +24,7 @@ fi
 @CLIENT_TRUE@CSUBDIRS="client client/agents client/@gui_sources@"
 @CLIENT_FALSE@CSUBDIRS=""
 
-@SERVER_TRUE@SSUBDIRS="ai server server/generator server/scripting"
+@SERVER_TRUE@SSUBDIRS="ai server server/generator"
 @SERVER_FALSE@SSUBDIRS=""
 
 SUBDIRS="common common/aicore utility $SSUBDIRS $CSUBDIRS manual"

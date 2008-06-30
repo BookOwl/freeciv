@@ -15,177 +15,286 @@
 #include <config.h>
 #endif
 
-#include "SDL.h"
+#include <stdlib.h>
+#include <SDL/SDL.h>
 
-/* utility */
 #include "fcintl.h"
-
-/* common */
+#include "game.h"
 #include "government.h"
+#include "player.h"
+#include "shared.h"
+#include "support.h"
 
-/* client */
-#include "civclient.h"
-
-/* gui-sdl */
+#include "colors.h"
 #include "graphics.h"
-#include "gui_id.h"
 #include "gui_main.h"
 #include "gui_tilespec.h"
+#include "gui_zoom.h"
+#include "gui_id.h"
+#include "gui_string.h"
+#include "gui_stuff.h"
 #include "mapview.h"
-#include "repodlgs.h"
 #include "spaceshipdlg.h"
-#include "sprite.h"
-#include "widget.h"
 
 #include "inteldlg.h"
 
-struct intel_dialog {
-  struct player *pplayer;
-  struct ADVANCED_DLG *pdialog;
-  int pos_x, pos_y;
-};
+static struct ADVANCED_DLG  *pIntel_Dlg = NULL;
 
-#define SPECLIST_TAG dialog
-#define SPECLIST_TYPE struct intel_dialog
-#include "speclist.h"
-
-#define dialog_list_iterate(dialoglist, pdialog) \
-    TYPED_LIST_ITERATE(struct intel_dialog, dialoglist, pdialog)
-#define dialog_list_iterate_end  LIST_ITERATE_END
-
-static struct dialog_list *dialog_list;
-static struct intel_dialog *create_intel_dialog(struct player *p);
-
-/****************************************************************
-...
-*****************************************************************/
-void intel_dialog_init()
+static int intel_window_dlg_callback(struct GUI *pWindow)
 {
-  dialog_list = dialog_list_new();
+  return std_move_window_group_callback(pIntel_Dlg->pBeginWidgetList, pWindow);
 }
 
-/****************************************************************
-...
-*****************************************************************/
-void intel_dialog_done()
-{
-  dialog_list_free(dialog_list);
-}
-
-/****************************************************************
-...
-*****************************************************************/
-static struct intel_dialog *get_intel_dialog(struct player *pplayer)
-{
-  dialog_list_iterate(dialog_list, pdialog) {
-    if (pdialog->pplayer == pplayer) {
-      return pdialog;
-    }
-  } dialog_list_iterate_end;
-
-  return NULL;
-}
-
-/****************************************************************
-...
-*****************************************************************/
-static int intel_window_dlg_callback(struct widget *pWindow)
-{
-  if (Main.event.button.button == SDL_BUTTON_LEFT) {
-    struct intel_dialog *pSelectedDialog = get_intel_dialog(pWindow->data.player);
-  
-    move_window_group(pSelectedDialog->pdialog->pBeginWidgetList, pWindow);
-  }
-  return -1;
-}
-
-static int tech_callback(struct widget *pWidget)
+static int tech_callback(struct GUI *pWidget)
 {
   /* get tech help - PORT ME */
   return -1;
 }
 
-static int spaceship_callback(struct widget *pWidget)
+static int spaceship_callback(struct GUI *pWidget)
 {
-  if (Main.event.button.button == SDL_BUTTON_LEFT) {
-    struct player *pPlayer = pWidget->data.player;
-    popdown_intel_dialog(pPlayer);
-    popup_spaceship_dialog(pPlayer);
-  }
+  struct player *pPlayer = pWidget->data.player;
+  popdown_intel_dialog();
+  popup_spaceship_dialog(pPlayer);
   return -1;
 }
 
 
-static int exit_intel_dlg_callback(struct widget *pWidget)
+static int exit_intel_dlg_callback(struct GUI *pWidget)
 {
-  if (Main.event.button.button == SDL_BUTTON_LEFT) {
-    popdown_intel_dialog(pWidget->data.player);
-    flush_dirty();
-  }
+  popdown_intel_dialog();
+  flush_dirty();
   return -1;
 }
-
-static struct intel_dialog *create_intel_dialog(struct player *pPlayer) {
-
-  struct intel_dialog *pdialog = fc_calloc(1, sizeof(struct intel_dialog));
-
-  pdialog->pplayer = pPlayer;
-  
-  pdialog->pdialog = fc_calloc(1, sizeof(struct ADVANCED_DLG));
-      
-  pdialog->pos_x = 0;
-  pdialog->pos_y = 0;
-    
-  dialog_list_prepend(dialog_list, pdialog);  
-  
-  return pdialog;
-}
-
 
 /**************************************************************************
   Popup an intelligence dialog for the given player.
 **************************************************************************/
-void popup_intel_dialog(struct player *p)
+void popup_intel_dialog(struct player *pPlayer)
 {
-  struct intel_dialog *pdialog;
-
-  if (!(pdialog = get_intel_dialog(p))) {
-    pdialog = create_intel_dialog(p);
-  } else {
-    /* bring existing dialog to front */
-    sellect_window_group_dialog(pdialog->pdialog->pBeginWidgetList,
-                                         pdialog->pdialog->pEndWidgetList);
+  struct GUI *pWindow = NULL, *pBuf = NULL, *pLast;
+  SDL_Surface *pLogo = NULL;
+  SDL_Surface *pText1, *pInfo, *pText2 = NULL;
+  SDL_String16 *pStr;
+  SDL_Rect dst;
+  char cBuf[256];
+  int i, n = 0, w = 0, h, count = 0, col;
+  struct city *pCapital;
+    
+  if (pIntel_Dlg) {
+    return;
   }
+     
+  h = WINDOW_TILE_HIGH + 3 + FRAME_WH;
+      
+  pIntel_Dlg = MALLOC(sizeof(struct ADVANCED_DLG));
+  
+  pStr = create_str16_from_char(_("Foreign Intelligence Report") , 12);
+  pStr->style |= TTF_STYLE_BOLD;
+  
+  pWindow = create_window(NULL, pStr, 10, 10, WF_DRAW_THEME_TRANSPARENT);
+    
+  pWindow->action = intel_window_dlg_callback;
+  set_wstate(pWindow , FC_WS_NORMAL);
+  w = MAX(w , pWindow->size.w);
+  
+  add_to_gui_list(ID_WINDOW, pWindow);
+  pIntel_Dlg->pEndWidgetList = pWindow;
+  /* ---------- */
+  /* exit button */
+  pBuf = create_themeicon(pTheme->Small_CANCEL_Icon, pWindow->dst,
+  			  			WF_DRAW_THEME_TRANSPARENT);
+  w += pBuf->size.w + 10;
+  pBuf->action = exit_intel_dlg_callback;
+  set_wstate(pBuf, FC_WS_NORMAL);
+  pBuf->key = SDLK_ESCAPE;
+  
+  add_to_gui_list(ID_BUTTON, pBuf);
+  /* ---------- */
+  
+  pLogo = GET_SURF(get_nation_by_idx(pPlayer->nation)->flag_sprite);
+  pLogo = make_flag_surface_smaler(pLogo);
+  
+  pText1 = ZoomSurface(pLogo, 4.0 , 4.0, 1);
+  FREESURFACE(pLogo);
+  pLogo = pText1;
+  SDL_SetColorKey(pLogo,
+        SDL_SRCCOLORKEY|SDL_RLEACCEL, getpixel(pLogo, pLogo->w - 1, pLogo->h - 1));
+	
+  pBuf = create_icon2(pLogo, pWindow->dst,
+	(WF_DRAW_THEME_TRANSPARENT|WF_WIDGET_HAS_INFO_LABEL|
+					WF_FREE_STRING|WF_FREE_THEME));
+  pBuf->action = spaceship_callback;
+  set_wstate(pBuf, FC_WS_NORMAL);
+  pBuf->data.player = pPlayer;
+  my_snprintf(cBuf, sizeof(cBuf),
+	      _("Intelligence Information about %s Spaceship"), 
+	      				get_nation_name(pPlayer->nation));
+  pBuf->string16 = create_str16_from_char(cBuf, 12);
+	
+  add_to_gui_list(ID_ICON, pBuf);
+	
+  /* ---------- */
+  my_snprintf(cBuf, sizeof(cBuf),
+	      _("Intelligence Information for the %s Empire"), 
+	      				get_nation_name(pPlayer->nation));
+  
+  pStr = create_str16_from_char(cBuf, 14);
+  pStr->style |= TTF_STYLE_BOLD;
+  pStr->render = 3;
+  pStr->bgcol.unused = 128;
+  
+  pText1 = create_text_surf_from_str16(pStr);
+  SDL_SetAlpha(pText1, 0x0, 0x0);
+  w = MAX(w, pText1->w + 20);
+  h += pText1->h + 20;
+    
+  /* ---------- */
+  
+  pCapital = find_palace(pPlayer);
+  change_ptsize16(pStr, 10);
+  pStr->style &= ~TTF_STYLE_BOLD;
+  my_snprintf(cBuf, sizeof(cBuf),
+    _("Ruler: %s %s  Government: %s\nCapital: %s  Gold: %d\nTax: %d%%"
+      " Science: %d%% Luxury: %d%%\nResearching: %s(%d/%d)"),
+    get_ruler_title(pPlayer->government, pPlayer->is_male, pPlayer->nation),
+    pPlayer->name, get_government_name(pPlayer->government),
+    (!pCapital) ? _("(Unknown)") : pCapital->name, pPlayer->economic.gold,
+    pPlayer->economic.tax, pPlayer->economic.science, pPlayer->economic.luxury,
+    get_tech_name(pPlayer, pPlayer->research.researching),
+    pPlayer->research.bulbs_researched, total_bulbs_required(pPlayer));
+  
+  copy_chars_to_string16(pStr, cBuf);
+  pInfo = create_text_surf_from_str16(pStr);
+  SDL_SetAlpha(pInfo, 0x0, 0x0);
+  w = MAX(w, pLogo->w + 10 + pInfo->w + 20);
+  h += MAX(pLogo->h + 20, pInfo->h + 20);
+    
+  /* ---------- */
+  col = w / (GET_SURF(advances[A_FIRST].sprite)->w + 4);
+  n = 0;
+  pLast = pBuf;
+  for(i = A_FIRST; i<game.num_tech_types; i++) {
+    if(get_invention(pPlayer, i) == TECH_KNOWN &&
+      tech_is_available(game.player_ptr, i) &&
+      get_invention(game.player_ptr, i) != TECH_KNOWN) {
+      
+      pBuf = create_icon2(GET_SURF(advances[i].sprite), pWindow->dst,
+	(WF_DRAW_THEME_TRANSPARENT|WF_WIDGET_HAS_INFO_LABEL|WF_FREE_STRING));
+      pBuf->action = tech_callback;
+      set_wstate(pBuf, FC_WS_NORMAL);
 
-  update_intel_dialog(p);
+      pBuf->string16 = create_str16_from_char(advances[i].name, 12);
+	
+      add_to_gui_list(ID_ICON, pBuf);
+	
+      if(n > ((2 * col) - 1)) {
+	set_wflag(pBuf, WF_HIDDEN);
+      }
+      
+      n++;	
+    }
+  }
+  
+  pIntel_Dlg->pBeginWidgetList = pBuf;
+  
+  if(n) {
+    pIntel_Dlg->pBeginActiveWidgetList = pBuf;
+    pIntel_Dlg->pEndActiveWidgetList = pLast->prev;
+    if(n > 2 * col) {
+      pIntel_Dlg->pActiveWidgetList = pLast->prev;
+      count = create_vertical_scrollbar(pIntel_Dlg, col, 2, TRUE, TRUE);
+      h += (2 * pBuf->size.h + 10);
+    } else {
+      count = 0;
+      if(n > col) {
+	h += pBuf->size.h;
+      }
+      h += (10 + pBuf->size.h);
+    }
+    
+    w = MAX(w, col * pBuf->size.w + count + DOUBLE_FRAME_WH);
+    
+    my_snprintf(cBuf, sizeof(cBuf), _("Their techs that we don't have :"));
+    copy_chars_to_string16(pStr, cBuf);
+    pStr->style |= TTF_STYLE_BOLD;
+    pText2 = create_text_surf_from_str16(pStr);
+    SDL_SetAlpha(pText2, 0x0, 0x0);    
+  }
+  
+  FREESTRING16(pStr);
+  
+  /* ------------------------ */  
+  pWindow->size.x = (Main.screen->w - w) / 2;
+  pWindow->size.y = (Main.screen->h - h) / 2;
+  
+  resize_window(pWindow, NULL, NULL, w, h);
+  
+  /* exit button */
+  pBuf = pWindow->prev; 
+  pBuf->size.x = pWindow->size.x + pWindow->size.w - pBuf->size.w - FRAME_WH - 1;
+  pBuf->size.y = pWindow->size.y + 1;
+  
+  dst.x = (pWindow->size.w - pText1->w) / 2;
+  dst.y = WINDOW_TILE_HIGH + 12;
+  
+  SDL_BlitSurface(pText1, NULL, pWindow->theme, &dst);
+  dst.y += pText1->h + 10;
+  FREESURFACE(pText1);
+  
+  /* space ship button */
+  pBuf = pBuf->prev;
+  dst.x = (pWindow->size.w - (pBuf->size.w + 10 + pInfo->w)) / 2;
+  pBuf->size.x = pWindow->size.x + dst.x;
+  pBuf->size.y = pWindow->size.y + dst.y;
+  
+  dst.x += pBuf->size.w + 10;  
+  SDL_BlitSurface(pInfo, NULL, pWindow->theme, &dst);
+  dst.y += pInfo->h + 10;
+  FREESURFACE(pInfo);
+      
+  /* --------------------- */
+    
+  if(n) {
+    
+    dst.x = FRAME_WH + 5;
+    SDL_BlitSurface(pText2, NULL, pWindow->theme, &dst);
+    dst.y += pText2->h + 2;
+    FREESURFACE(pText2);
+    
+    setup_vertical_widgets_position(col,
+	pWindow->size.x + FRAME_WH,
+	pWindow->size.y + dst.y,
+	  0, 0, pIntel_Dlg->pBeginActiveWidgetList,
+			  pIntel_Dlg->pEndActiveWidgetList);
+    
+    if(pIntel_Dlg->pScroll) {
+      setup_vertical_scrollbar_area(pIntel_Dlg->pScroll,
+	pWindow->size.x + pWindow->size.w - FRAME_WH,
+    	pWindow->size.y + dst.y,
+    	pWindow->size.h - (dst.y + FRAME_WH + 1), TRUE);
+    }
+  }
+    
+  /* --------------------- */
+  /* redraw */
+  redraw_group(pIntel_Dlg->pBeginWidgetList, pWindow, 0);
+  sdl_dirty_rect(pWindow->size);
+  
+  flush_dirty();
 }
 
 /**************************************************************************
   Popdown an intelligence dialog for the given player.
 **************************************************************************/
-void popdown_intel_dialog(struct player *p)
+void popdown_intel_dialog(void)
 {
-  struct intel_dialog *pdialog = get_intel_dialog(p);
-    
-  if (pdialog) {
-    popdown_window_group_dialog(pdialog->pdialog->pBeginWidgetList,
-			                  pdialog->pdialog->pEndWidgetList);
-      
-    dialog_list_unlink(dialog_list, pdialog);
-      
-    FC_FREE(pdialog->pdialog->pScroll);
-    FC_FREE(pdialog->pdialog);  
-    FC_FREE(pdialog);
+  if (pIntel_Dlg) {
+    popdown_window_group_dialog(pIntel_Dlg->pBeginWidgetList,
+			pIntel_Dlg->pEndWidgetList);
+    FREE(pIntel_Dlg->pScroll);
+    FREE(pIntel_Dlg);
   }
-}
-
-/**************************************************************************
-  Popdown all intelligence dialogs
-**************************************************************************/
-void popdown_intel_dialogs() {
-  dialog_list_iterate(dialog_list, pdialog) {
-    popdown_intel_dialog(pdialog->pplayer);
-  } dialog_list_iterate_end;
 }
 
 /****************************************************************************
@@ -194,247 +303,5 @@ void popdown_intel_dialogs() {
 ****************************************************************************/
 void update_intel_dialog(struct player *p)
 {
-  struct intel_dialog *pdialog = get_intel_dialog(p);
-      
-  struct widget *pWindow = NULL, *pBuf = NULL, *pLast;
-  SDL_Surface *pLogo = NULL, *pTmpSurf = NULL;
-  SDL_Surface *pText1, *pInfo, *pText2 = NULL;
-  SDL_String16 *pStr;
-  SDL_Rect dst;
-  char cBuf[256];
-  int n = 0, count = 0, col;
-  struct city *pCapital;
-  SDL_Rect area;
-  struct player_research* research;
-      
-  if (pdialog) {
-
-    /* save window position and delete old content */
-    if (pdialog->pdialog->pEndWidgetList) {
-      pdialog->pos_x = pdialog->pdialog->pEndWidgetList->size.x;
-      pdialog->pos_y = pdialog->pdialog->pEndWidgetList->size.y;
-        
-      popdown_window_group_dialog(pdialog->pdialog->pBeginWidgetList,
-                                            pdialog->pdialog->pEndWidgetList);
-    }
-        
-    pStr = create_str16_from_char(_("Foreign Intelligence Report") , adj_font(12));
-    pStr->style |= TTF_STYLE_BOLD;
-    
-    pWindow = create_window_skeleton(NULL, pStr, 0);
-      
-    pWindow->action = intel_window_dlg_callback;
-    set_wstate(pWindow , FC_WS_NORMAL);
-    pWindow->data.player = p;
-    
-    add_to_gui_list(ID_WINDOW, pWindow);
-    pdialog->pdialog->pEndWidgetList = pWindow;
-    
-    area = pWindow->area;
-    
-    /* ---------- */
-    /* exit button */
-    pBuf = create_themeicon(pTheme->Small_CANCEL_Icon, pWindow->dst,
-                            WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
-    pBuf->string16 = create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
-    area.w = MAX(area.w, pBuf->size.w + adj_size(10));
-    pBuf->action = exit_intel_dlg_callback;
-    set_wstate(pBuf, FC_WS_NORMAL);
-    pBuf->data.player = p;  
-    pBuf->key = SDLK_ESCAPE;
-    
-    add_to_gui_list(ID_BUTTON, pBuf);
-    /* ---------- */
-    
-    pLogo = get_nation_flag_surface(nation_of_player(p));
-    pText1 = zoomSurface(pLogo, DEFAULT_ZOOM * 4.0 , DEFAULT_ZOOM * 4.0, 1);
-    pLogo = pText1;
-          
-    pBuf = create_icon2(pLogo, pWindow->dst,
-          (WF_RESTORE_BACKGROUND|WF_WIDGET_HAS_INFO_LABEL|
-                                          WF_FREE_STRING|WF_FREE_THEME));
-    pBuf->action = spaceship_callback;
-    set_wstate(pBuf, FC_WS_NORMAL);
-    pBuf->data.player = p;
-    my_snprintf(cBuf, sizeof(cBuf),
-                _("Intelligence Information about the %s Spaceship"), 
-                nation_adjective_for_player(p));
-    pBuf->string16 = create_str16_from_char(cBuf, adj_font(12));
-          
-    add_to_gui_list(ID_ICON, pBuf);
-          
-    /* ---------- */
-    my_snprintf(cBuf, sizeof(cBuf),
-                _("Intelligence Information for the %s Empire"), 
-                nation_adjective_for_player(p));
-    
-    pStr = create_str16_from_char(cBuf, adj_font(14));
-    pStr->style |= TTF_STYLE_BOLD;
-    pStr->bgcol = (SDL_Color) {0, 0, 0, 0};
-    
-    pText1 = create_text_surf_from_str16(pStr);
-    area.w = MAX(area.w, pText1->w + adj_size(20));
-    area.h += pText1->h + adj_size(20);
-      
-    /* ---------- */
-    
-    pCapital = find_palace(p);
-    research = get_player_research(p);
-    change_ptsize16(pStr, adj_font(10));
-    pStr->style &= ~TTF_STYLE_BOLD;
-
-    /* FIXME: these should use common gui code, and avoid duplication! */
-    switch (research->researching) {
-    case A_UNKNOWN:
-    case A_UNSET:
-      my_snprintf(cBuf, sizeof(cBuf),
-        _("Ruler: %s %s  Government: %s\nCapital: %s  Gold: %d\nTax: %d%%"
-          " Science: %d%% Luxury: %d%%\nResearching: unknown"),
-        ruler_title_translation(p),
-        player_name(p),
-        government_name_for_player(p),
-        /* TRANS: "unknown" location */
-        (!pCapital) ? _("(unknown)") : city_name(pCapital),
-        p->economic.gold,
-        p->economic.tax, p->economic.science, p->economic.luxury);
-      break;
-    default:
-      my_snprintf(cBuf, sizeof(cBuf),
-        _("Ruler: %s %s  Government: %s\nCapital: %s  Gold: %d\nTax: %d%%"
-          " Science: %d%% Luxury: %d%%\nResearching: %s(%d/%d)"),
-        ruler_title_translation(p),
-        player_name(p),
-        government_name_for_player(p),
-        /* TRANS: "unknown" location */
-        (!pCapital) ? _("(unknown)") : city_name(pCapital),
-        p->economic.gold,
-        p->economic.tax, p->economic.science, p->economic.luxury,
-        advance_name_researching(p),
-        research->bulbs_researched, total_bulbs_required(p));
-      break;
-    };
-    
-    copy_chars_to_string16(pStr, cBuf);
-    pInfo = create_text_surf_from_str16(pStr);
-    area.w = MAX(area.w, pLogo->w + adj_size(10) + pInfo->w + adj_size(20));
-    area.h += MAX(pLogo->h + adj_size(20), pInfo->h + adj_size(20));
-      
-    /* ---------- */
-    pTmpSurf = get_tech_icon(A_FIRST);
-    col = area.w / (pTmpSurf->w + adj_size(4));
-    FREESURFACE(pTmpSurf);
-    n = 0;
-    pLast = pBuf;
-    advance_index_iterate(A_FIRST, i) {
-      if (TECH_KNOWN == player_invention_state(p, i)
-       && player_invention_reachable(client.conn.playing, i)
-       && TECH_KNOWN != player_invention_state(client.conn.playing, i)) {
-
-        pBuf = create_icon2(get_tech_icon(i), pWindow->dst,
-          (WF_RESTORE_BACKGROUND|WF_WIDGET_HAS_INFO_LABEL|WF_FREE_STRING | WF_FREE_THEME));
-        pBuf->action = tech_callback;
-        set_wstate(pBuf, FC_WS_NORMAL);
-  
-        pBuf->string16 = create_str16_from_char(
-                           advance_name_translation(advance_by_number(i)),
-                           adj_font(12));
-          
-        add_to_gui_list(ID_ICON, pBuf);
-          
-        if(n > ((2 * col) - 1)) {
-          set_wflag(pBuf, WF_HIDDEN);
-        }
-        
-        n++;	
-      }
-    }  advance_index_iterate_end;
-    
-    pdialog->pdialog->pBeginWidgetList = pBuf;
-    
-    if (n > 0) {
-      pdialog->pdialog->pEndActiveWidgetList = pLast->prev;
-      pdialog->pdialog->pBeginActiveWidgetList = pdialog->pdialog->pBeginWidgetList;
-      if(n > 2 * col) {
-        pdialog->pdialog->pActiveWidgetList = pdialog->pdialog->pEndActiveWidgetList;
-        count = create_vertical_scrollbar(pdialog->pdialog, col, 2, TRUE, TRUE);
-        area.h += (2 * pBuf->size.h + adj_size(10));
-      } else {
-        count = 0;
-        if(n > col) {
-          area.h += pBuf->size.h;
-        }
-        area.h += (adj_size(10) + pBuf->size.h);
-      }
-      
-      area.w = MAX(area.w, col * pBuf->size.w + count);
-      
-      my_snprintf(cBuf, sizeof(cBuf), _("Their techs that we don't have :"));
-      copy_chars_to_string16(pStr, cBuf);
-      pStr->style |= TTF_STYLE_BOLD;
-      pText2 = create_text_surf_from_str16(pStr);
-    }
-    
-    FREESTRING16(pStr);
-
-    resize_window(pWindow, NULL, NULL,
-                  (pWindow->size.w - pWindow->area.w) + area.w,
-                  (pWindow->size.h - pWindow->area.h) + area.h);
-    
-    area = pWindow->area;
-    
-    /* ------------------------ */  
-    widget_set_position(pWindow,
-      (pdialog->pos_x) ? (pdialog->pos_x) : ((Main.screen->w - pWindow->size.w) / 2),
-      (pdialog->pos_y) ? (pdialog->pos_y) : ((Main.screen->h - pWindow->size.h) / 2));
-    
-    /* exit button */
-    pBuf = pWindow->prev; 
-    pBuf->size.x = area.x + area.w - pBuf->size.w - 1;
-    pBuf->size.y = pWindow->size.y + adj_size(2);
-    
-    dst.x = area.x + (area.w - pText1->w) / 2;
-    dst.y = area.y + adj_size(8);
-    
-    alphablit(pText1, NULL, pWindow->theme, &dst);
-    dst.y += pText1->h + adj_size(10);
-    FREESURFACE(pText1);
-    
-    /* space ship button */
-    pBuf = pBuf->prev;
-    dst.x = area.x + (area.w - (pBuf->size.w + adj_size(10) + pInfo->w)) / 2;
-    pBuf->size.x = dst.x;
-    pBuf->size.y = dst.y;
-    
-    dst.x += pBuf->size.w + adj_size(10);  
-    alphablit(pInfo, NULL, pWindow->theme, &dst);
-    dst.y += pInfo->h + adj_size(10);
-    FREESURFACE(pInfo);
-        
-    /* --------------------- */
-      
-    if(n) {
-      
-      dst.x = area.x + adj_size(5);
-      alphablit(pText2, NULL, pWindow->theme, &dst);
-      dst.y += pText2->h + adj_size(2);
-      FREESURFACE(pText2);
-      
-      setup_vertical_widgets_position(col,
-          area.x, dst.y,
-            0, 0, pdialog->pdialog->pBeginActiveWidgetList,
-                            pdialog->pdialog->pEndActiveWidgetList);
-      
-      if(pdialog->pdialog->pScroll) {
-        setup_vertical_scrollbar_area(pdialog->pdialog->pScroll,
-          area.x + area.w, dst.y,
-          area.h - (dst.y + 1), TRUE);
-      }
-    }
-
-    redraw_group(pdialog->pdialog->pBeginWidgetList, pdialog->pdialog->pEndWidgetList, 0);
-    widget_mark_dirty(pWindow);
-  
-    flush_dirty();
-    
-  }
+  /* PORTME */
 }

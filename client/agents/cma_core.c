@@ -25,14 +25,12 @@
 #include "dataio.h"
 #include "events.h"
 #include "fcintl.h"
-#include "game.h"
 #include "government.h"
 #include "hash.h"
 #include "log.h"
 #include "mem.h"
 #include "packets.h"
 #include "shared.h"		/* for MIN() */
-#include "specialist.h"
 #include "support.h"
 #include "timing.h"
 
@@ -43,6 +41,7 @@
 #include "cityrep_g.h"
 #include "civclient.h"
 #include "climisc.h"
+#include "clinet.h"
 #include "messagewin_g.h"
 #include "packhand.h"
 
@@ -79,46 +78,85 @@ static struct {
   int apply_result_ignored, apply_result_applied, refresh_forced;
 } stats;
 
+#define my_city_map_iterate(pcity, cx, cy) {                           \
+  city_map_checked_iterate(pcity->tile, cx, cy, _ptile) { \
+    if(!is_city_center(cx, cy)) {
+
+#define my_city_map_iterate_end \
+    }                                \
+  } city_map_checked_iterate_end;    \
+}
+
+
+#define T(x) if (result1->x != result2->x) { \
+	freelog(RESULTS_ARE_EQUAL_LOG_LEVEL, #x); \
+	return FALSE; }
 
 /****************************************************************************
  Returns TRUE iff the two results are equal. Both results have to be
  results for the given city.
 *****************************************************************************/
-static bool my_results_are_equal(const struct cm_result *const result1,
-                                 const struct cm_result *const result2)
+static bool results_are_equal(struct city *pcity,
+			     const struct cm_result *const result1,
+			     const struct cm_result *const result2)
 {
-#define T(x) if (result1->x != result2->x) { \
-	freelog(RESULTS_ARE_EQUAL_LOG_LEVEL, #x); \
-	return FALSE; }
+  enum cm_stat stat;
 
   T(disorder);
   T(happy);
+  T(specialists[SP_ELVIS]);
+  T(specialists[SP_SCIENTIST]);
+  T(specialists[SP_TAXMAN]);
 
-  specialist_type_iterate(sp) {
-    T(specialists[sp]);
-  } specialist_type_iterate_end;
-
-  output_type_iterate(stat) {
+  for (stat = 0; stat < NUM_STATS; stat++) {
     T(surplus[stat]);
-  } output_type_iterate_end;
+  }
 
-  city_map_iterate(x, y) {
-    if (is_free_worked_cxy(x, y)) {
-      continue;
-    }
-
+  my_city_map_iterate(pcity, x, y) {
     if (result1->worker_positions_used[x][y] !=
 	result2->worker_positions_used[x][y]) {
       freelog(RESULTS_ARE_EQUAL_LOG_LEVEL, "worker_positions_used");
       return FALSE;
     }
-  } city_map_iterate_end;
+  } my_city_map_iterate_end;
 
   return TRUE;
-
-#undef T
 }
 
+#undef T
+
+
+/****************************************************************************
+ Copy the current city state (citizen assignment, production stats and
+ happy state) in the given result.
+*****************************************************************************/
+static void get_current_as_result(struct city *pcity,
+				  struct cm_result *result)
+{
+  int worker = 0, specialist = 0;
+
+  memset(result->worker_positions_used, 0,
+	 sizeof(result->worker_positions_used));
+
+  my_city_map_iterate(pcity, x, y) {
+    result->worker_positions_used[x][y] =
+	(pcity->city_map[x][y] == C_TILE_WORKER);
+    if (result->worker_positions_used[x][y]) {
+      worker++;
+    }
+  } my_city_map_iterate_end;
+
+  specialist_type_iterate(sp) {
+    result->specialists[sp] = pcity->specialists[sp];
+    specialist += pcity->specialists[sp];
+  } specialist_type_iterate_end;
+
+  assert(worker + specialist == pcity->size);
+
+  result->found_a_valid = TRUE;
+
+  cm_copy_result_from_city(pcity, result);
+}
 
 /****************************************************************************
   Returns TRUE if the city is valid for CMA. Fills parameter if TRUE
@@ -126,7 +164,7 @@ static bool my_results_are_equal(const struct cm_result *const result1,
 *****************************************************************************/
 static bool check_city(int city_id, struct cm_parameter *parameter)
 {
-  struct city *pcity = game_find_city_by_number(city_id);
+  struct city *pcity = find_city_by_id(city_id);
   struct cm_parameter dummy;
 
   if (!parameter) {
@@ -138,8 +176,11 @@ static bool check_city(int city_id, struct cm_parameter *parameter)
     return FALSE;
   }
 
-  if (city_owner(pcity) != client.conn.playing) {
+  if (city_owner(pcity) != game.player_ptr) {
     cma_release_city(pcity);
+    create_event(pcity->tile, E_CITY_CMA_RELEASE,
+		 _("CMA: You lost control of %s. Detaching from city."),
+		 pcity->name);
     return FALSE;
   }
 
@@ -153,15 +194,14 @@ static bool check_city(int city_id, struct cm_parameter *parameter)
 static bool apply_result_on_server(struct city *pcity,
 				   const struct cm_result *const result)
 {
-  int first_request_id = 0, last_request_id = 0, i;
+  int first_request_id = 0, last_request_id = 0, i, sp;
   struct cm_result current_state;
   bool success;
-  struct tile *pcenter = city_tile(pcity);
 
   assert(result->found_a_valid);
-  cm_result_from_main_map(&current_state, pcity, TRUE);
+  get_current_as_result(pcity, &current_state);
 
-  if (my_results_are_equal(&current_state, result)
+  if (results_are_equal(pcity, result, &current_state)
       && !ALWAYS_APPLY_AT_SERVER) {
     stats.apply_result_ignored++;
     return TRUE;
@@ -169,168 +209,136 @@ static bool apply_result_on_server(struct city *pcity,
 
   stats.apply_result_applied++;
 
-  freelog(APPLY_RESULT_LOG_LEVEL,
-          "apply_result_on_server(city %d=\"%s\")",
-          pcity->id,
-          city_name(pcity));
+  freelog(APPLY_RESULT_LOG_LEVEL, "apply_result(city='%s'(%d))",
+	  pcity->name, pcity->id);
 
-  connection_do_buffer(&client.conn);
+  connection_do_buffer(&aconnection);
 
   /* Do checks */
-  if (pcity->size != cm_result_citizens(result)) {
-    freelog(LOG_ERROR,
-            "apply_result_on_server(city %d=\"%s\") bad result!",
-            pcity->id,
-            city_name(pcity));
+  if (pcity->size != (cm_count_worker(pcity, result)
+		      + cm_count_specialist(pcity, result))) {
     cm_print_city(pcity);
-    cm_print_result(result);
-    return FALSE;
+    cm_print_result(pcity, result);
+    assert(0);
   }
 
   /* Remove all surplus workers */
-  city_tile_iterate_skip_free_cxy(pcenter, ptile, x, y) {
-    if (tile_worked(ptile) == pcity
-     && !result->worker_positions_used[x][y]) {
-      freelog(APPLY_RESULT_LOG_LEVEL, "Removing worker at {%d,%d}.", x, y);
-
-      last_request_id =
-        dsend_packet_city_make_specialist(&client.conn, pcity->id, x, y);
+  my_city_map_iterate(pcity, x, y) {
+    if ((pcity->city_map[x][y] == C_TILE_WORKER) &&
+	!result->worker_positions_used[x][y]) {
+      freelog(APPLY_RESULT_LOG_LEVEL, "Removing worker at %d,%d.", x, y);
+      last_request_id = city_toggle_worker(pcity, x, y);
       if (first_request_id == 0) {
 	first_request_id = last_request_id;
       }
     }
-  } city_tile_iterate_skip_free_cxy_end;
+  } my_city_map_iterate_end;
 
-  /* Change the excess non-default specialists to default. */
-  specialist_type_iterate(sp) {
-    if (sp == DEFAULT_SPECIALIST) {
-      continue;
-    }
-
+  /* Change the excess non-elvis specialists to elvises. */
+  assert(SP_ELVIS == 0);
+  for (sp = 1; sp < SP_COUNT; sp++) {
     for (i = 0; i < pcity->specialists[sp] - result->specialists[sp]; i++) {
       freelog(APPLY_RESULT_LOG_LEVEL, "Change specialist from %d to %d.",
-	      sp, DEFAULT_SPECIALIST);
-      last_request_id = city_change_specialist(pcity,
-					       sp, DEFAULT_SPECIALIST);
+	      sp, SP_ELVIS);
+      last_request_id = city_change_specialist(pcity, sp, SP_ELVIS);
       if (first_request_id == 0) {
 	first_request_id = last_request_id;
       }
     }
-  } specialist_type_iterate_end;
+  }
 
-  /* now all surplus people are DEFAULT_SPECIALIST */
+  /* now all surplus people are enterainers */
 
   /* Set workers */
-  /* FIXME: This code assumes that any toggled worker will turn into a
-   * DEFAULT_SPECIALIST! */
-  city_tile_iterate_skip_free_cxy(pcenter, ptile, x, y) {
-    if (NULL == tile_worked(ptile)
-     && result->worker_positions_used[x][y]) {
-      freelog(APPLY_RESULT_LOG_LEVEL, "Putting worker at {%d,%d}.", x, y);
-      assert(city_can_work_tile(pcity, ptile));
-
-      last_request_id =
-        dsend_packet_city_make_worker(&client.conn, pcity->id, x, y);
+  /* FIXME: This code assumes that any toggled worker will turn into an
+   * elvis! */
+  my_city_map_iterate(pcity, x, y) {
+    if (result->worker_positions_used[x][y] &&
+	pcity->city_map[x][y] != C_TILE_WORKER) {
+      assert(pcity->city_map[x][y] == C_TILE_EMPTY);
+      freelog(APPLY_RESULT_LOG_LEVEL, "Putting worker at %d,%d.", x, y);
+      last_request_id = city_toggle_worker(pcity, x, y);
       if (first_request_id == 0) {
 	first_request_id = last_request_id;
       }
     }
-  } city_tile_iterate_skip_free_cxy_end;
+  } my_city_map_iterate_end;
 
-  /* Set all specialists except DEFAULT_SPECIALIST (all the unchanged
-   * ones remain as DEFAULT_SPECIALIST). */
-  specialist_type_iterate(sp) {
-    if (sp == DEFAULT_SPECIALIST) {
-      continue;
-    }
-
+  /* Set all specialists except SP_ELVIS (all the unchanged ones remain
+   * as elvises). */
+  assert(SP_ELVIS == 0);
+  for (sp = 1; sp < SP_COUNT; sp++) {
     for (i = 0; i < result->specialists[sp] - pcity->specialists[sp]; i++) {
       freelog(APPLY_RESULT_LOG_LEVEL, "Changing specialist from %d to %d.",
-	      DEFAULT_SPECIALIST, sp);
-      last_request_id = city_change_specialist(pcity,
-					       DEFAULT_SPECIALIST, sp);
+	      SP_ELVIS, sp);
+      last_request_id = city_change_specialist(pcity, SP_ELVIS, sp);
       if (first_request_id == 0) {
 	first_request_id = last_request_id;
       }
     }
-  } specialist_type_iterate_end;
+  }
 
   if (last_request_id == 0 || ALWAYS_APPLY_AT_SERVER) {
       /*
        * If last_request is 0 no change request was send. But it also
-       * means that the results are different or the my_results_are_equal()
+       * means that the results are different or the results_are_equal
        * test at the start of the function would be true. So this
        * means that the client has other results for the same
        * allocation of citizen than the server. We just send a
        * PACKET_CITY_REFRESH to bring them in sync.
        */
     first_request_id = last_request_id =
-	dsend_packet_city_refresh(&client.conn, pcity->id);
+	dsend_packet_city_refresh(&aconnection, pcity->id);
     stats.refresh_forced++;
   }
   reports_freeze_till(last_request_id);
 
-  connection_do_unbuffer(&client.conn);
+  connection_do_unbuffer(&aconnection);
 
   if (last_request_id != 0) {
     int city_id = pcity->id;
 
     wait_for_requests("CMA", first_request_id, last_request_id);
     if (!check_city(city_id, NULL)) {
-      freelog(LOG_ERROR,
-              "apply_result_on_server(city %d=\"%s\") !check_city()!",
-              pcity->id,
-              city_name(pcity));
       return FALSE;
     }
   }
 
   /* Return. */
-  cm_result_from_main_map(&current_state, pcity, TRUE);
+  get_current_as_result(pcity, &current_state);
 
-  success = my_results_are_equal(&current_state, result);
+  freelog(APPLY_RESULT_LOG_LEVEL, "apply_result: return");
+
+  success = results_are_equal(pcity, result, &current_state);
   if (!success) {
     cm_clear_cache(pcity);
 
     if (SHOW_APPLY_RESULT_ON_SERVER_ERRORS) {
-      freelog(LOG_ERROR,
-              "apply_result_on_server(city %d=\"%s\") no match!",
-              pcity->id,
-              city_name(pcity));
-
-      freelog(LOG_TEST,
-              "apply_result_on_server(city %d=\"%s\") have:",
-              pcity->id,
-              city_name(pcity));
-      cm_print_city(pcity);
-      cm_print_result(&current_state);
-
-      freelog(LOG_TEST,
-              "apply_result_on_server(city %d=\"%s\") want:",
-              pcity->id,
-              city_name(pcity));
-      cm_print_result(result);
+      freelog(LOG_NORMAL, "expected");
+      cm_print_result(pcity, result);
+      freelog(LOG_NORMAL, "got");
+      cm_print_result(pcity, &current_state);
     }
   }
-
-  freelog(APPLY_RESULT_LOG_LEVEL,
-          "apply_result_on_server() return %d.",
-          (int)success);
   return success;
 }
 
 /****************************************************************************
- Prints the data of the stats struct via freelog(LOG_TEST,...).
+ Prints the data of the stats struct via freelog(LOG_NORMAL,...).
 *****************************************************************************/
 static void report_stats(void)
 {
 #if SHOW_TIME_STATS
   int total, per_mill;
 
+  freelog(LOG_NORMAL, "CMA: overall=%fs queries=%d %fms / query",
+	  read_timer_seconds(stats.wall_timer), stats.queries,
+	  (1000.0 * read_timer_seconds(stats.wall_timer)) /
+	  ((double) stats.queries));
   total = stats.apply_result_ignored + stats.apply_result_applied;
   per_mill = (stats.apply_result_ignored * 1000) / (total ? total : 1);
 
-  freelog(LOG_TEST,
+  freelog(LOG_NORMAL,
 	  "CMA: apply_result: ignored=%2d.%d%% (%d) "
 	  "applied=%2d.%d%% (%d) total=%d",
 	  per_mill / 10, per_mill % 10, stats.apply_result_ignored,
@@ -363,15 +371,11 @@ static void handle_city(struct city *pcity)
   int i, city_id = pcity->id;
 
   freelog(HANDLE_CITY_LOG_LEVEL,
-	  "handle_city(city %d=\"%s\") pos=(%d,%d) owner=%s",
-	  pcity->id,
-	  city_name(pcity),
-	  TILE_XY(pcity->tile),
-	  nation_rule_name(nation_of_city(pcity)));
+	  "handle_city(city='%s'(%d) pos=(%d,%d) owner=%s)", pcity->name,
+	  pcity->id, TILE_XY(pcity->tile), city_owner(pcity)->name);
 
-  freelog(HANDLE_CITY_LOG_LEVEL2, "START handle city %d=\"%s\"",
-	  pcity->id,
-	  city_name(pcity));
+  freelog(HANDLE_CITY_LOG_LEVEL2, "START handle city='%s'(%d)",
+	  pcity->name, pcity->id);
 
   handled = FALSE;
   for (i = 0; i < 5; i++) {
@@ -384,7 +388,7 @@ static void handle_city(struct city *pcity)
       break;
     }
 
-    pcity = game_find_city_by_number(city_id);
+    pcity = find_city_by_id(city_id);
 
     cm_query_result(pcity, &parameter, &result);
     if (!result.found_a_valid) {
@@ -393,18 +397,18 @@ static void handle_city(struct city *pcity)
       cma_release_city(pcity);
 
       create_event(pcity->tile, E_CITY_CMA_RELEASE,
-		   _("The citizen governor can't fulfill the requirements "
-		     "for %s. Passing back control."), city_name(pcity));
+		   _("CMA: The agent can't fulfill the requirements "
+		     "for %s. Passing back control."), pcity->name);
       handled = TRUE;
       break;
     } else {
       if (!apply_result_on_server(pcity, &result)) {
 	freelog(HANDLE_CITY_LOG_LEVEL2, "  doesn't cleanly apply");
 	if (check_city(city_id, NULL) && i == 0) {
-	  create_event(pcity->tile, E_CITY_CMA_RELEASE,
-		       _("The citizen governor has gotten confused dealing "
-			 "with %s.  You may want to have a look."),
-		       city_name(pcity));
+	  create_event(pcity->tile, E_NOEVENT,
+		       _("CMA: %s has changed and the calculated "
+			 "result can't be applied. Will retry."),
+		       pcity->name);
 	}
       } else {
 	freelog(HANDLE_CITY_LOG_LEVEL2, "  ok");
@@ -415,26 +419,22 @@ static void handle_city(struct city *pcity)
     }
   }
 
-  pcity = game_find_city_by_number(city_id);
+  pcity = find_city_by_id(city_id);
 
   if (!handled) {
     assert(pcity != NULL);
     freelog(HANDLE_CITY_LOG_LEVEL2, "  not handled");
 
     create_event(pcity->tile, E_CITY_CMA_RELEASE,
-		 _("The citizen governor has gotten confused dealing "
-		   "with %s.  You may want to have a look."),
-		 city_name(pcity));
+		 _("CMA: %s has changed multiple times. This may be "
+		   "an error in Freeciv or bad luck. The CMA will detach "
+		   "itself from the city now."), pcity->name);
 
     cma_release_city(pcity);
 
-    freelog(LOG_ERROR,
-            "handle_city() CMA: %s has changed multiple times.",
-            city_name(pcity));
-    freelog(LOG_ERROR,
-            /* TRANS: No full stop after the URL, could cause confusion. */
-            _("Please report this message at %s"),
-            BUG_URL);
+    freelog(LOG_ERROR, "CMA: %s has changed multiple times due to "
+            "an error in Freeciv. Please send a savegame that can reproduce "
+            "this bug at %s. Thank you.", pcity->name, BUG_URL);
   }
 
   freelog(HANDLE_CITY_LOG_LEVEL2, "END handle city=(%d)", city_id);
@@ -445,7 +445,7 @@ static void handle_city(struct city *pcity)
 *****************************************************************************/
 static void city_changed(int city_id)
 {
-  struct city *pcity = game_find_city_by_number(city_id);
+  struct city *pcity = find_city_by_id(city_id);
 
   if (pcity) {
     cm_clear_cache(pcity);
@@ -485,10 +485,6 @@ void cma_init(void)
 
   /* reset cache counters */
   memset(&stats, 0, sizeof(stats));
-
-  /* We used to just use new_timer here, but apparently cma_init can be
-   * called multiple times per client invocation so that lead to memory
-   * leaks. */
   stats.wall_timer = renew_timer(timer, TIMER_USER, TIMER_ACTIVE);
 
   memset(&self, 0, sizeof(self));
@@ -520,11 +516,10 @@ bool cma_apply_result(struct city *pcity,
 void cma_put_city_under_agent(struct city *pcity,
 			      const struct cm_parameter *const parameter)
 {
-  freelog(LOG_DEBUG, "cma_put_city_under_agent(city %d=\"%s\")",
-	  pcity->id,
-	  city_name(pcity));
+  freelog(LOG_DEBUG, "cma_put_city_under_agent(city='%s'(%d))",
+	  pcity->name, pcity->id);
 
-  assert(city_owner(pcity) == client.conn.playing);
+  assert(city_owner(pcity) == game.player_ptr);
 
   cma_set_parameter(ATTR_CITY_CMA_PARAMETER, pcity->id, parameter);
 
@@ -574,7 +569,7 @@ bool cma_get_parameter(enum attr_city attr, int city_id,
   size_t len;
   char buffer[SAVED_PARAMETER_SIZE];
   struct data_in din;
-  int version, dummy;
+  int i, version, dummy;
 
   /* Changing this function is likely to break compatability with old
    * savegames that store these values. */
@@ -590,18 +585,17 @@ bool cma_get_parameter(enum attr_city attr, int city_id,
   dio_get_uint8(&din, &version);
   assert(version == 2);
 
-  /* Initialize the parameter (includes some AI-only fields that aren't
-   * touched below). */
-  cm_init_parameter(parameter);
-
-  output_type_iterate(i) {
+  for (i = 0; i < NUM_STATS; i++) {
     dio_get_sint16(&din, &parameter->minimal_surplus[i]);
     dio_get_sint16(&din, &parameter->factor[i]);
-  } output_type_iterate_end;
+  }
 
   dio_get_sint16(&din, &parameter->happy_factor);
   dio_get_uint8(&din, &dummy); /* Dummy value; used to be factor_target. */
   dio_get_bool8(&din, &parameter->require_happy);
+  /* These options are only for server-AI use. */
+  parameter->allow_disorder = FALSE;
+  parameter->allow_specialists = TRUE;
 
   return TRUE;
 }
@@ -614,6 +608,7 @@ void cma_set_parameter(enum attr_city attr, int city_id,
 {
   char buffer[SAVED_PARAMETER_SIZE];
   struct data_out dout;
+  int i;
 
   /* Changing this function is likely to break compatability with old
    * savegames that store these values. */
@@ -622,10 +617,10 @@ void cma_set_parameter(enum attr_city attr, int city_id,
 
   dio_put_uint8(&dout, 2);
 
-  output_type_iterate(i) {
+  for (i = 0; i < NUM_STATS; i++) {
     dio_put_sint16(&dout, parameter->minimal_surplus[i]);
     dio_put_sint16(&dout, parameter->factor[i]);
-  } output_type_iterate_end;
+  }
 
   dio_put_sint16(&dout, parameter->happy_factor);
   dio_put_uint8(&dout, 0); /* Dummy value; used to be factor_target. */

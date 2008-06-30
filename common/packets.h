@@ -18,15 +18,12 @@ struct data_in;
 
 #include "connection.h"		/* struct connection, MAX_LEN_* */
 #include "diptreaty.h"
-#include "effects.h"
 #include "events.h"
-#include "improvement.h"	/* bv_imprs */
+#include "improvement.h"
 #include "map.h"
 #include "player.h"
-#include "requirements.h"
 #include "shared.h"		/* MAX_LEN_NAME, MAX_LEN_ADDR */
 #include "spaceship.h"
-#include "team.h"
 #include "unittype.h"
 #include "worklist.h"
 
@@ -47,7 +44,10 @@ struct data_in;
 enum report_type {
   REPORT_WONDERS_OF_THE_WORLD,
   REPORT_TOP_5_CITIES,
-  REPORT_DEMOGRAPHIC
+  REPORT_DEMOGRAPHIC,
+  REPORT_SERVER_OPTIONS,   /* obsolete */
+  REPORT_SERVER_OPTIONS1,
+  REPORT_SERVER_OPTIONS2
 };
 
 enum spaceship_place_type {
@@ -82,7 +82,8 @@ void send_attribute_block(const struct player *pplayer,
 void generic_handle_player_attribute_chunk(struct player *pplayer,
 					   const struct
 					   packet_player_attribute_chunk
-					   *chunk);
+					   *chunk,
+                                           struct connection *pconn);
 const char *get_packet_name(enum packet_type type);
 
 void pre_send_packet_chat_msg(struct connection *pc,
@@ -92,10 +93,10 @@ void post_receive_packet_chat_msg(struct connection *pc,
 void pre_send_packet_player_attribute_chunk(struct connection *pc,
 					    struct packet_player_attribute_chunk
 					    *packet);
-void post_receive_packet_ruleset_control(struct connection *pc,
-					 struct packet_ruleset_control *packet);
-void post_send_packet_ruleset_control(struct connection *pc,
-				      const struct packet_ruleset_control *packet);
+void post_receive_packet_game_state(struct connection *pc,
+				    struct packet_game_state *packet);
+void post_send_packet_game_state(struct connection *pc,
+				 const struct packet_game_state *packet);
 
 #define SEND_PACKET_START(type) \
   unsigned char buffer[MAX_LEN_PACKET]; \

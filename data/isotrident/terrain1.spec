@@ -24,34 +24,34 @@ pixel_border = 1
 tiles = { "row", "column","tag"
 
 ; terrain
-  0,    0,  "t.l0.desert1"
-;  0,    1,  "t.l0.desert2"
+  0,    0,  "t.desert1"
+;  0,    1,  "t.desert2"
 
-  1,    0,  "t.l0.plains1"
-;  1,    1,  "t.l0.plains2"
+  1,    0,  "t.plains1"
+;  1,    1,  "t.plains2"
 
-  2,    0,  "t.l0.grassland1"
-;  2,    1, "t.l0.grassland2"
+  2,    0,  "t.grassland1"
+;  2,    1, "t.grassland2"
 
   2,	0, "t.t_river1"
 ;  2,	1, "t.t_river2"
 
-  3,    0, "t.l0.forest1"
-;  3,    1, "t.l0.forest2"
+  3,    0, "t.forest1"
+;  3,    1, "t.forest2"
 
-  4,    0, "t.l0.hills1"
-;  4,    1, "t.l0.hills2"
+  4,    0, "t.hills1"
+;  4,    1, "t.hills2"
 
-  5,    0, "t.l0.mountains1"
-;  5,    1, "t.l0.mountains2"
+  5,    0, "t.mountains1"
+;  5,    1, "t.mountains2"
 
-  6,    0, "t.l0.tundra1"
+  6,    0, "t.tundra1"
 
-  7,    0, "t.l0.arctic1"
+  7,    0, "t.arctic1"
 
-  8,    0, "t.l0.swamp1"
+  8,    0, "t.swamp1"
 
-  9,    0, "t.l0.jungle1"
+  9,    0, "t.jungle1"
 
 ; Terrain special resources:
 
@@ -132,12 +132,12 @@ pixel_border = 1
 tiles = { "row", "column","tag"
   0, 0, "t.dither_tile"
   0, 0, "tx.darkness"
-  0, 2, "mask.tile"
+  0, 1, "tx.fog"
+  0, 2, "t.black_tile"
   0, 2, "t.unknown1"
-  0, 3, "t.blend.ocean"
-  0, 3, "t.blend.coast"
+  0, 3, "t.ocean1"
+
   0, 4, "user.attention"
-  0, 5, "tx.fog"
 }
 
 

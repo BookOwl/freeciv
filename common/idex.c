@@ -87,8 +87,8 @@ void idex_register_city(struct city *pcity)
   if (old) {
     /* error */
     freelog(LOG_IDEX_ERR, "IDEX: city collision: new %d %p %s, old %d %p %s",
-	    pcity->id, (void*)pcity, city_name(pcity),
-	    old->id, (void*)old, city_name(old));
+	    pcity->id, (void*)pcity, pcity->name,
+	    old->id, (void*)old, old->name);
     if (IDEX_DIE) {
       die("byebye");
     }
@@ -106,10 +106,8 @@ void idex_register_unit(struct unit *punit)
   if (old) {
     /* error */
     freelog(LOG_IDEX_ERR, "IDEX: unit collision: new %d %p %s, old %d %p %s",
-	    punit->id, (void*)punit,
-	    unit_rule_name(punit),
-	    old->id, (void*)old,
-	    unit_rule_name(old));
+	    punit->id, (void*)punit, unit_name(punit->type),
+	    old->id, (void*)old, unit_name(old->type));
     if (IDEX_DIE) {
       die("byebye");
     }
@@ -127,7 +125,7 @@ void idex_unregister_city(struct city *pcity)
   if (!old) {
     /* error */
     freelog(LOG_IDEX_ERR, "IDEX: city unreg missing: %d %p %s",
-	    pcity->id, (void*)pcity, city_name(pcity));
+	    pcity->id, (void*)pcity, pcity->name);
     if (IDEX_DIE) {
       die("byebye");
     }
@@ -135,8 +133,8 @@ void idex_unregister_city(struct city *pcity)
     /* error */
     freelog(LOG_IDEX_ERR,
 	    "IDEX: city unreg mismatch: unreg %d %p %s, old %d %p %s",
-	    pcity->id, (void*)pcity, city_name(pcity),
-	    old->id, (void*)old, city_name(old));
+	    pcity->id, (void*)pcity, pcity->name,
+	    old->id, (void*)old, old->name);
     if (IDEX_DIE) {
       die("byebye");
     }
@@ -154,8 +152,7 @@ void idex_unregister_unit(struct unit *punit)
   if (!old) {
     /* error */
     freelog(LOG_IDEX_ERR, "IDEX: unit unreg missing: %d %p %s",
-	    punit->id, (void*)punit,
-	    unit_rule_name(punit));
+	    punit->id, (void*)punit, unit_name(punit->type));
     if (IDEX_DIE) {
       die("byebye");
     }
@@ -163,10 +160,8 @@ void idex_unregister_unit(struct unit *punit)
     /* error */
     freelog(LOG_IDEX_ERR,
 	    "IDEX: unit unreg mismatch: unreg %d %p %s, old %d %p %s",
-	    punit->id, (void*)punit,
-	    unit_rule_name(punit),
-	    old->id, (void*)old,
-	    unit_rule_name(old));
+	    punit->id, (void*)punit, unit_name(punit->type),
+	    old->id, (void*)old, unit_name(old->type));
     if (IDEX_DIE) {
       die("byebye");
     }

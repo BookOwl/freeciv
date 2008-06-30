@@ -23,7 +23,7 @@ VPATH = @srcdir@
 prefix = @prefix@
 exec_prefix = @exec_prefix@
 datadir = @datadir@
-localedir = @localedir@
+localedir = $(datadir)/locale
 gettextsrcdir = $(datadir)/gettext/po
 
 INSTALL = @INSTALL@
@@ -47,9 +47,8 @@ COMPILE = $(CC) -c $(DEFS) $(INCLUDES) $(CPPFLAGS) $(CFLAGS) $(XCFLAGS)
 
 POFILES = @POFILES@
 GMOFILES = @GMOFILES@
-
-# Keep this in one line, since configure replaces it when NLS disabled
-DISTFILES = ChangeLog Makefile.in.in POTFILES.in POTFILES.skip $(PACKAGE).pot $(POFILES) $(GMOFILES)
+DISTFILES = ChangeLog Makefile.in.in POTFILES.in POTFILES.skip \
+            $(PACKAGE).pot $(POFILES) $(GMOFILES)
 
 POTFILES = \
 
@@ -155,9 +154,6 @@ maintainer-clean: distclean
 	rm -f $(GMOFILES)
 
 distdir = $(top_builddir)/$(PACKAGE)-$(VERSION)/$(subdir)
-
-# If you change following line, update also configure.ac where it
-# builds Makefile if NLS disabled.
 dist distdir:
 	$(MAKE) update-po
 	@$(MAKE) dist2
@@ -169,9 +165,7 @@ dist2: $(DISTFILES)
 	  cp -p $$dir/$$file $(distdir); \
 	done
 
-# If you change following line, update also configure.ac where it
-# builds Makefile if NLS disabled.
-update-po: Makefile nb.po
+update-po: Makefile
 	$(MAKE) $(PACKAGE).pot
 	if test "$(PACKAGE)" = "gettext"; then PATH=`pwd`/../src:$$PATH; fi; \
 	cd $(srcdir); \
@@ -179,14 +173,9 @@ update-po: Makefile nb.po
 	for cat in $$catalogs; do \
 	  cat=`basename $$cat`; \
 	  lang=`echo $$cat | sed 's/\.gmo$$//'`; \
-	  if test -x "$(builddir)/$$lang.po" ; then \
-	    dir="$(builddir)"; \
-	  else \
-	    dir=. ; \
-	  fi; \
 	  echo "$$lang:"; \
-	  if $(MSGMERGE) $$dir/$$lang.po $(PACKAGE).pot -o $$lang.new.po; then \
-	    mv -f $$lang.new.po $$dir/$$lang.po; \
+	  if $(MSGMERGE) $$lang.po $(PACKAGE).pot -o $$lang.new.po; then \
+	    mv -f $$lang.new.po $$lang.po; \
 	  else \
 	    echo "msgmerge for $$cat failed!"; \
 	    rm -f $$lang.new.po; \
