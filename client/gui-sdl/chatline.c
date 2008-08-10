@@ -129,7 +129,10 @@ static int load_selected_game_callback(struct widget *pWidget)
     char *filename = (char*)pWidget->data.ptr;
 
     if (is_server_running()) {
-      send_chat_printf("/load %s", filename);
+      char message[MAX_LEN_MSG];
+
+      my_snprintf(message, sizeof(message), "/load %s", filename);
+      send_chat(message);
       
       if (get_client_page() == PAGE_LOAD) {
         set_client_page(PAGE_START);
@@ -568,7 +571,7 @@ static int start_game_callback(struct widget *pWidget)
 static int select_nation_callback(struct widget *pWidget)
 {
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
-    popup_races_dialog(client.conn.playing);
+    popup_races_dialog(game.player_ptr);
   }  
   return -1;
 }
@@ -666,8 +669,8 @@ void update_conn_list_dialog(void)
 
 /* FIXME: implement the server settings dialog and then reactivate this part */
 #if 0
-      if (ALLOW_CTRL == client.conn.access_level
-         || ALLOW_HACK == client.conn.access_level) {
+      if (aconnection.access_level == ALLOW_CTRL
+         || aconnection.access_level == ALLOW_HACK) {
 	set_wstate(pConnDlg->pConfigure, FC_WS_NORMAL);
       } else {
 	set_wstate(pConnDlg->pConfigure, FC_WS_DISABLED);
@@ -711,7 +714,7 @@ static void popup_conn_list_dialog(void)
   SDL_Rect area;
   SDL_Surface *pSurf;
     
-  if (pConnDlg || !client.conn.established) {
+  if (pConnDlg || !aconnection.established) {
     return;
   }
   

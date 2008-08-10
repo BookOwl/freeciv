@@ -41,19 +41,14 @@ enum tile_special_type infrastructure_specials[] = {
   S_LAST
 };
 
-static const char *terrain_class_names[] = {
-  N_("Land"),
-  N_("Oceanic")
-};
-
 /* T_UNKNOWN isn't allowed here. */
-#define SANITY_CHECK_TERRAIN(pterrain)					\
-  assert((pterrain)->item_number >= 0					\
-	 && (pterrain)->item_number < terrain_count()			\
-	 && &civ_terrains[terrain_index(pterrain)] == (pterrain))
+#define SANITY_CHECK_TERRAIN(pterrain)					    \
+  assert((pterrain)->index >= 0						    \
+	 && (pterrain)->index < game.control.terrain_count		    \
+	 && &civ_terrains[(pterrain)->index] == (pterrain))
 
 /****************************************************************************
-  Initialize terrain and resource structures.
+  Inialize terrain structures.
 ****************************************************************************/
 void terrains_init(void)
 {
@@ -61,110 +56,19 @@ void terrains_init(void)
 
   for (i = 0; i < ARRAY_SIZE(civ_terrains); i++) {
     /* Can't use terrain_by_number here because it does a bounds check. */
-    civ_terrains[i].item_number = i;
+    civ_terrains[i].index = i;
   }
   for (i = 0; i < ARRAY_SIZE(civ_resources); i++) {
-    civ_resources[i].item_number = i;
+    civ_resources[i].index = i;
   }
-}
-
-/****************************************************************************
-  Free memory which is associated with terrain types.
-****************************************************************************/
-void terrains_free(void)
-{
-  terrain_type_iterate(pterrain) {
-    if (pterrain->helptext != NULL) {
-      free(pterrain->helptext);
-      pterrain->helptext = NULL;
-    }
-    if (pterrain->resources != NULL) {
-      /* Server allocates this on ruleset loading, client when
-       * ruleset packet is received. */
-      free(pterrain->resources);
-      pterrain->resources = NULL;
-    }
-  } terrain_type_iterate_end;
-}
-
-/**************************************************************************
-  Return the first item of terrains.
-**************************************************************************/
-struct terrain *terrain_array_first(void)
-{
-  if (game.control.terrain_count > 0) {
-    return civ_terrains;
-  }
-  return NULL;
-}
-
-/**************************************************************************
-  Return the last item of terrains.
-**************************************************************************/
-const struct terrain *terrain_array_last(void)
-{
-  if (game.control.terrain_count > 0) {
-    return &civ_terrains[game.control.terrain_count - 1];
-  }
-  return NULL;
-}
-
-/**************************************************************************
-  Return the number of terrains.
-**************************************************************************/
-Terrain_type_id terrain_count(void)
-{
-  return game.control.terrain_count;
-}
-
-/**************************************************************************
-  Return the terrain identifier.
-**************************************************************************/
-char terrain_identifier(const struct terrain *pterrain)
-{
-  assert(pterrain);
-  return pterrain->identifier;
-}
-
-/**************************************************************************
-  Return the terrain index.
-
-  Currently same as terrain_number(), paired with terrain_count()
-  indicates use as an array index.
-**************************************************************************/
-Terrain_type_id terrain_index(const struct terrain *pterrain)
-{
-  assert(pterrain);
-  return pterrain - civ_terrains;
-}
-
-/**************************************************************************
-  Return the terrain index.
-**************************************************************************/
-Terrain_type_id terrain_number(const struct terrain *pterrain)
-{
-  assert(pterrain);
-  return pterrain->item_number;
-}
-
-/****************************************************************************
-  Return the terrain for the given terrain index.
-****************************************************************************/
-struct terrain *terrain_by_number(const Terrain_type_id type)
-{
-  if (type < 0 || type >= game.control.terrain_count) {
-    /* This isn't an error; some T_UNKNOWN callers depend on it. */
-    return NULL;
-  }
-  return &civ_terrains[type];
 }
 
 /****************************************************************************
   Return the terrain type matching the identifier, or T_UNKNOWN if none matches.
 ****************************************************************************/
-struct terrain *find_terrain_by_identifier(const char identifier)
+struct terrain *terrain_by_identifier(const char identifier)
 {
-  if (TERRAIN_UNKNOWN_IDENTIFIER == identifier) {
+  if (UNKNOWN_TERRAIN_IDENTIFIER == identifier) {
     return T_UNKNOWN;
   }
   terrain_type_iterate(pterrain) {
@@ -174,6 +78,18 @@ struct terrain *find_terrain_by_identifier(const char identifier)
   } terrain_type_iterate_end;
 
   return T_UNKNOWN;
+}
+
+/****************************************************************************
+  Return the terrain for the given terrain index.
+****************************************************************************/
+struct terrain *terrain_by_number(Terrain_type_id type)
+{
+  if (type < 0 || type >= game.control.terrain_count) {
+    /* This isn't an error; some T_UNKNOWN callers depend on it. */
+    return NULL;
+  }
+  return &civ_terrains[type];
 }
 
 /****************************************************************************
@@ -207,52 +123,12 @@ struct terrain *find_terrain_by_translated_name(const char *name)
 }
 
 /****************************************************************************
-  Return terrain having the flag. If several terrains have the flag,
-  random one is returned.
-****************************************************************************/
-struct terrain *rand_terrain_by_flag(enum terrain_flag_id flag)
-{
-  int num = 0;
-  struct terrain *terr = NULL;
-
-  terrain_type_iterate(pterr) {
-    if (terrain_has_flag(pterr, flag)) {
-      num++;
-      if (myrand(num) == 1) {
-        terr = pterr;
-      }
-    }
-  } terrain_type_iterate_end;
-
-  return terr;
-}
-
-/****************************************************************************
-  Fill terrain with flag to buffer. Returns number of terrains found.
-  Return value can be greater than size of buffer.
-****************************************************************************/
-int terrains_by_flag(enum terrain_flag_id flag, struct terrain **buffer, int bufsize)
-{
-  int num = 0;
-
-  terrain_type_iterate(pterr) {
-    if (terrain_has_flag(pterr, flag)) {
-      if (num < bufsize) {
-        buffer[num] = pterr;
-      }
-      num++;
-    }
-  } terrain_type_iterate_end;
-
-  return num;
-}
-
-/****************************************************************************
   Return the (translated) name of the terrain.
   You don't have to free the return pointer.
 ****************************************************************************/
 const char *terrain_name_translation(struct terrain *pterrain)
 {
+  SANITY_CHECK_TERRAIN(pterrain);
   if (NULL == pterrain->name.translated) {
     /* delayed (unified) translation */
     pterrain->name.translated = ('\0' == pterrain->name.vernacular[0])
@@ -286,8 +162,8 @@ enum terrain_flag_id find_terrain_flag_by_rule_name(const char *s)
     "Starter",
     "CanHaveRiver",
     "UnsafeCoast",
-    "Oceanic",
-    "Freshwater"
+    "Unsafe",
+    "Oceanic"
   };
 
   assert(ARRAY_SIZE(flag_names) == TER_COUNT);
@@ -302,16 +178,42 @@ enum terrain_flag_id find_terrain_flag_by_rule_name(const char *s)
 }
 
 /****************************************************************************
+  Return a random terrain that has the specified flag.  Returns T_UNKNOWN if
+  there is no matching terrain.
+  FIXME: currently called only by mapgen.c, move there and check error.
+****************************************************************************/
+struct terrain *pick_terrain_by_flag(enum terrain_flag_id flag)
+{
+  bool has_flag[T_COUNT];
+  int count = 0;
+
+  terrain_type_iterate(pterrain) {
+    if ((has_flag[pterrain->index] = terrain_has_flag(pterrain, flag))) {
+      count++;
+    }
+  } terrain_type_iterate_end;
+
+  count = myrand(count);
+  terrain_type_iterate(pterrain) {
+    if (has_flag[pterrain->index]) {
+      if (count == 0) {
+	return pterrain;
+      }
+      count--;
+    }
+  } terrain_type_iterate_end;
+
+  die("Reached end of pick_terrain_by_flag!");
+  return T_UNKNOWN;
+}
+
+/****************************************************************************
   Check for resource in terrain resources list.
 ****************************************************************************/
 bool terrain_has_resource(const struct terrain *pterrain,
 			  const struct resource *presource)
 {
   struct resource **r = pterrain->resources;
-
-  if (game.info.is_edit_mode) {
-    return TRUE;
-  }
 
   while (NULL != *r) {
     if (*r == presource) {
@@ -322,61 +224,29 @@ bool terrain_has_resource(const struct terrain *pterrain,
   return FALSE;
 }
 
-/**************************************************************************
-  Return the first item of resources.
-**************************************************************************/
-struct resource *resource_array_first(void)
+/****************************************************************************
+  Free memory which is associated with terrain types.
+****************************************************************************/
+void terrains_free(void)
 {
-  if (game.control.resource_count > 0) {
-    return civ_resources;
-  }
-  return NULL;
-}
-
-/**************************************************************************
-  Return the last item of resources.
-**************************************************************************/
-const struct resource *resource_array_last(void)
-{
-  if (game.control.resource_count > 0) {
-    return &civ_resources[game.control.resource_count - 1];
-  }
-  return NULL;
-}
-
-/**************************************************************************
-  Return the resource count.
-**************************************************************************/
-Resource_type_id resource_count(void)
-{
-  return game.control.resource_count;
-}
-
-/**************************************************************************
-  Return the resource index.
-
-  Currently same as resource_number(), paired with resource_count()
-  indicates use as an array index.
-**************************************************************************/
-Resource_type_id resource_index(const struct resource *presource)
-{
-  assert(presource);
-  return presource - civ_resources;
-}
-
-/**************************************************************************
-  Return the resource index.
-**************************************************************************/
-Resource_type_id resource_number(const struct resource *presource)
-{
-  assert(presource);
-  return presource->item_number;
+  terrain_type_iterate(pterrain) {
+    if (pterrain->helptext != NULL) {
+      free(pterrain->helptext);
+      pterrain->helptext = NULL;
+    }
+    if (pterrain->resources != NULL) {
+      /* Server allocates this on ruleset loading, client when
+       * ruleset packet is received. */
+      free(pterrain->resources);
+      pterrain->resources = NULL;
+    }
+  } terrain_type_iterate_end;
 }
 
 /****************************************************************************
   Return the resource for the given resource index.
 ****************************************************************************/
-struct resource *resource_by_number(const Resource_type_id type)
+struct resource *resource_by_number(Resource_type_id type)
 {
   if (type < 0 || type >= game.control.resource_count) {
     /* This isn't an error; some callers depend on it. */
@@ -386,28 +256,14 @@ struct resource *resource_by_number(const Resource_type_id type)
 }
 
 /****************************************************************************
-  Return the resource type matching the identifier, or NULL when none matches.
-****************************************************************************/
-struct resource *find_resource_by_identifier(const char identifier)
-{
-  resource_type_iterate(presource) {
-    if (presource->identifier == identifier) {
-      return presource;
-    }
-  } resource_type_iterate_end;
-
-  return NULL;
-}
-
-/****************************************************************************
-  Return the resource type matching the name, or NULL when none matches.
+  Return the resource type matching the name, or T_UNKNOWN if none matches.
 ****************************************************************************/
 struct resource *find_resource_by_rule_name(const char *name)
 {
   const char *qname = Qn_(name);
 
   resource_type_iterate(presource) {
-    if (0 == mystrcasecmp(resource_rule_name(presource), qname)) {
+    if (0 == strcmp(resource_rule_name(presource), qname)) {
       return presource;
     }
   } resource_type_iterate_end;
@@ -476,7 +332,7 @@ bool is_terrain_near_tile(const struct tile *ptile,
   }
 
   adjc_iterate(ptile, adjc_tile) {
-    if (tile_terrain(adjc_tile) == pterrain) {
+    if (adjc_tile->terrain == pterrain) {
       return TRUE;
     }
   } adjc_iterate_end;
@@ -494,7 +350,7 @@ int count_terrain_near_tile(const struct tile *ptile,
   int count = 0, total = 0;
 
   variable_adjc_iterate(ptile, adjc_tile, cardinal_only) {
-    if (pterrain && tile_terrain(adjc_tile) == pterrain) {
+    if (pterrain && tile_get_terrain(adjc_tile) == pterrain) {
       count++;
     }
     total++;
@@ -516,8 +372,7 @@ int count_terrain_property_near_tile(const struct tile *ptile,
   int count = 0, total = 0;
 
   variable_adjc_iterate(ptile, adjc_tile, cardinal_only) {
-    struct terrain *pterrain = tile_terrain(adjc_tile);
-    if (pterrain->property[prop] > 0) {
+    if (adjc_tile->terrain->property[prop] > 0) {
       count++;
     }
     total++;
@@ -552,7 +407,6 @@ static const char *tile_special_type_names[] =
 ****************************************************************************/
 enum tile_special_type find_special_by_rule_name(const char *name)
 {
-  int spe;
   assert(ARRAY_SIZE(tile_special_type_names) == S_LAST);
 
   tile_special_type_iterate(i) {
@@ -560,16 +414,6 @@ enum tile_special_type find_special_by_rule_name(const char *name)
       return i;
     }
   } tile_special_type_iterate_end;
-
-  base_type_iterate(pbase) {
-    spe = base_get_tile_special_type(pbase);
-    if (!(0 <= spe && spe < S_LAST)) {
-      continue;
-    }
-    if (0 == strcmp(tile_special_type_names[spe], name)) {
-      return spe;
-    }
-  } base_type_iterate_end;
 
   return S_LAST;
 }
@@ -631,14 +475,6 @@ bool contains_special(bv_special set,
 }
 
 /****************************************************************************
- Returns TRUE iff any specials are set on the tile.
-****************************************************************************/
-bool contains_any_specials(bv_special set)
-{
-  return BV_ISSET_ANY(set);
-}
-
-/****************************************************************************
   Returns TRUE iff any tile adjacent to (map_x,map_y) has the given special.
 ****************************************************************************/
 bool is_special_near_tile(const struct tile *ptile, enum tile_special_type spe,
@@ -682,9 +518,12 @@ bool is_terrain_flag_near_tile(const struct tile *ptile,
 			       enum terrain_flag_id flag)
 {
   adjc_iterate(ptile, adjc_tile) {
-    struct terrain* pterrain = tile_terrain(adjc_tile);
-    if (T_UNKNOWN != pterrain
-	&& terrain_has_flag(pterrain, flag)) {
+    struct terrain* pterrain = tile_get_terrain(adjc_tile);
+    if (pterrain == NULL) {
+      continue;
+    }
+    
+    if (terrain_has_flag(pterrain, flag)) {
       return TRUE;
     }
   } adjc_iterate_end;
@@ -702,9 +541,8 @@ int count_terrain_flag_near_tile(const struct tile *ptile,
   int count = 0, total = 0;
 
   variable_adjc_iterate(ptile, adjc_tile, cardinal_only) {
-    struct terrain *pterrain = tile_terrain(adjc_tile);
-    if (T_UNKNOWN != pterrain
-	&& terrain_has_flag(pterrain, flag)) {
+    if (adjc_tile->terrain != T_UNKNOWN
+	&& terrain_has_flag(adjc_tile->terrain, flag)) {
       count++;
     }
     total++;
@@ -726,7 +564,6 @@ const char *get_infrastructure_text(bv_special spe)
 {
   static char s[256];
   char *p;
-  struct base_type *pbase;
   
   s[0] = '\0';
 
@@ -748,10 +585,12 @@ const char *get_infrastructure_text(bv_special spe)
     cat_snprintf(s, sizeof(s), "%s/", _("Mine"));
   }
 
-  pbase = base_of_bv_special(spe);
+  if (contains_special(spe, S_FORTRESS)) {
+    cat_snprintf(s, sizeof(s), "%s/", _("Fortress"));
+  }
 
-  if (pbase != NULL) {
-    cat_snprintf(s, sizeof(s), "%s/", base_name_translation(pbase));
+  if (contains_special(spe, S_AIRBASE)) {
+    cat_snprintf(s, sizeof(s), "%s/", _("Airbase"));
   }
 
   p = s + strlen(s) - 1;
@@ -778,11 +617,10 @@ enum tile_special_type get_infrastructure_prereq(enum tile_special_type spe)
 
 /****************************************************************************
   Returns the highest-priority (best) infrastructure (man-made special) to
-  be pillaged from the terrain set.  May return S_LAST if nothing
+  be pillaged from the terrain set.  May return S_NO_SPECIAL if nothing
   better is available.
 ****************************************************************************/
-enum tile_special_type get_preferred_pillage(bv_special pset,
-                                             struct base_type *pbase)
+enum tile_special_type get_preferred_pillage(bv_special pset)
 {
   if (contains_special(pset, S_FARMLAND)) {
     return S_FARMLAND;
@@ -793,8 +631,11 @@ enum tile_special_type get_preferred_pillage(bv_special pset,
   if (contains_special(pset, S_MINE)) {
     return S_MINE;
   }
-  if (pbase) {
-    return S_PILLAGE_BASE;
+  if (contains_special(pset, S_FORTRESS)) {
+    return S_FORTRESS;
+  }
+  if (contains_special(pset, S_AIRBASE)) {
+    return S_AIRBASE;
   }
   if (contains_special(pset, S_RAILROAD)) {
     return S_RAILROAD;
@@ -803,91 +644,4 @@ enum tile_special_type get_preferred_pillage(bv_special pset,
     return S_ROAD;
   }
   return S_LAST;
-}
-
-/****************************************************************************
-  Does terrain type belong to terrain class?
-****************************************************************************/
-bool terrain_belongs_to_class(const struct terrain *pterrain,
-                              enum terrain_class class)
-{
-  switch(class) {
-   case TC_LAND:
-     return !is_ocean(pterrain);
-   case TC_OCEAN:
-     return is_ocean(pterrain);
-   case TC_LAST:
-     return FALSE;
-  }
-
-  assert(FALSE);
-  return FALSE;
-}
-
-/****************************************************************************
-  Is there terrain of the given class near tile?
-****************************************************************************/
-bool is_terrain_class_near_tile(const struct tile *ptile, enum terrain_class class)
-{
-  switch(class) {
-   case TC_LAND:
-     adjc_iterate(ptile, adjc_tile) {
-       struct terrain* pterrain = tile_terrain(adjc_tile);
-       if (T_UNKNOWN != pterrain
-           && !terrain_has_flag(pterrain, TER_OCEANIC)) {
-         return TRUE;
-       }
-     } adjc_iterate_end;
-     return FALSE;
-   case TC_OCEAN:
-     return is_ocean_near_tile(ptile);
-   case TC_LAST:
-     return FALSE;
-  }
-
-  assert(FALSE);
-  return FALSE;
-}
-
-
-/****************************************************************************
-  Return the terrain class value matching name, or TC_LAST if none matches.
-****************************************************************************/
-enum terrain_class find_terrain_class_by_rule_name(const char *name)
-{
-  int i;
-
-  for (i = 0; i < TC_LAST; i++) {
-    if (0 == strcmp(terrain_class_names[i], name)) {
-      return i;
-    }
-  }
-
-  return TC_LAST;
-}
-
-/****************************************************************************
-  Return the (untranslated) rule name of the given terrain class.
-  You don't have to free the return pointer.
-****************************************************************************/
-const char *terrain_class_rule_name(enum terrain_class tclass)
-{
-  if (tclass < 0 || tclass >= TC_LAST) {
-    return NULL;
-  }
-
-  return terrain_class_names[tclass];
-}
-
-/****************************************************************************
-  Return the (translated) name of the given terrain class.
-  You don't have to free the return pointer.
-****************************************************************************/
-const char *terrain_class_name_translation(enum terrain_class tclass)
-{
-  if (tclass < 0 || tclass >= TC_LAST) {
-    return NULL;
-  }
-
-  return _(terrain_class_names[tclass]);
 }

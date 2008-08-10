@@ -28,6 +28,7 @@
 #include "unitlist.h"
 
 #include "civclient.h"
+#include "clinet.h"
 #include "control.h"
 #include "mapview_g.h"
 
@@ -94,7 +95,7 @@ struct goto_map {
 
 static struct goto_map_list *goto_maps = NULL;
 
-#define DRAWN(_tile, dir) (tiles[tile_index(_tile)].drawn[dir])
+#define DRAWN(ptile, dir) (tiles[(ptile)->index].drawn[dir])
 
 static void increment_drawn(struct tile *src_tile, enum direction8 dir);
 static void decrement_drawn(struct tile *src_tile, enum direction8 dir);
@@ -471,7 +472,7 @@ static enum tile_behavior get_TB_caravan(const struct tile *ptile,
 static int get_activity_time(const struct tile *ptile,
 			     struct player *pplayer)
 {
-  struct terrain *pterrain = tile_terrain(ptile);
+  struct terrain *pterrain = ptile->terrain;
   int activity_mc = 0;
 
   assert(hover_state == HOVER_CONNECT);
@@ -951,7 +952,7 @@ void request_orders_cleared(struct unit *punit)
   p.length = 0;
   p.dest_x = punit->tile->x;
   p.dest_y = punit->tile->y;
-  send_packet_unit_orders(&client.conn, &p);
+  send_packet_unit_orders(&aconnection, &p);
 }
 
 /**************************************************************************
@@ -1013,7 +1014,7 @@ static void send_path_orders(struct unit *punit, struct pf_path *path,
   p.dest_x = old_tile->x;
   p.dest_y = old_tile->y;
 
-  send_packet_unit_orders(&client.conn, &p);
+  send_packet_unit_orders(&aconnection, &p);
 }
 
 /**************************************************************************
@@ -1180,7 +1181,7 @@ void send_connect_route(enum unit_activity activity)
     p.dest_x = old_tile->x;
     p.dest_y = old_tile->y;
 
-    send_packet_unit_orders(&client.conn, &p);
+    send_packet_unit_orders(&aconnection, &p);
   } goto_map_unit_iterate_end;
 }
 
@@ -1214,11 +1215,6 @@ void send_goto_route(void)
       order.order = goto_last_order;
       order.dir = -1;
       order.activity = ACTIVITY_LAST;
-
-      /* ORDER_MOVE would require real direction,
-       * ORDER_ACTIVITY would require real activity */
-      assert(goto_last_order != ORDER_MOVE
-	     && goto_last_order != ORDER_ACTIVITY);
 
       send_goto_path(punit, path, &order);
     }

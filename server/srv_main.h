@@ -14,8 +14,12 @@
 #define FC__SRV_MAIN_H
 
 #include "fc_types.h"
+#include "game.h"
+#include "packets.h"
 
-struct conn_list;
+struct connection;
+
+BV_DEFINE(bv_draw, MAX_NUM_PLAYERS);
 
 struct server_arguments {
   /* metaserver information */
@@ -48,32 +52,6 @@ struct server_arguments {
   bool auth_allow_newusers;     /* defaults to TRUE */
 };
 
-/* used in savegame values */
-enum server_states { 
-  S_S_INITIAL = 0, 
-  S_S_GENERATING_WAITING = 1,
-  S_S_RUNNING = 2,
-  S_S_OVER = 3,
-};
-
-/* Structure for holding global server data.
- *
- * TODO: Lots more variables could be added here. */
-extern struct civserver {
-  int playable_nations;
-  int nbarbarians;
-
-  /* this counter creates all the city and unit numbers used.
-   * arbitrarily starts at 101, but at 65K wraps to 1.
-   * use identity_number()
-   */
-#define IDENTITY_NUMBER_SKIP (100)
-  unsigned short identity_number;
-
-  char game_identifier[MAX_LEN_GAME_IDENTIFIER];
-} server;
-
-
 void init_game_seed(void);
 void srv_init(void);
 void srv_main(void);
@@ -93,14 +71,16 @@ void pick_random_player_name(const struct nation_type *pnation,
 			     char *newname);
 void send_all_info(struct conn_list *dest);
 
-void identity_number_release(int id);
-void identity_number_reserve(int id);
-int identity_number(void);
+void dealloc_id(int id);
+void alloc_id(int id);
+int get_next_id_number(void);
 void server_game_init(void);
 void server_game_free(void);
 void aifill(int amount);
 
 extern struct server_arguments srvarg;
+
+extern bool nocity_send;
 
 extern bool force_end_of_sniff;
 

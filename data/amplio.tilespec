@@ -2,7 +2,7 @@
 [tilespec]
 
 ; Format and options of this tilespec file:
-options = "+tilespec4+2007.Oct.26"
+options = "+tilespec4"
 
 ; A simple name for the tileset specified by this file:
 name = "amplio"
@@ -17,9 +17,8 @@ normal_tile_height = 48
 small_tile_width   = 15
 small_tile_height  = 20
 
-; Basic tile style.
-is_hex = 0
 is_isometric = 1
+is_hex = 0
 
 ; Do not blend hills and mountains together.
 is_mountainous = 0
@@ -43,7 +42,6 @@ unit_offset_y = 18
 
 ;Enable citybar
 is_full_citybar = 1
-
 ; offset the citybar text by this amount (from the city tile origin)
 citybar_offset_y = 30
 
@@ -63,8 +61,6 @@ minimap_intro_file = "misc/radar"
 files = 
   "amplio/terrain1.spec",
   "amplio/terrain2.spec",
-  "amplio/ocean.spec",
-  "amplio/water.spec",
   "amplio/tiles.spec",
   "amplio/fog.spec",
   "misc/small.spec",
@@ -87,9 +83,7 @@ files =
   "misc/overlays.spec",
   "misc/citybar.spec",
   "misc/shields.spec",
-  "misc/editor.spec",
   "amplio/icons.spec"
-
 
 ; Include color definitions
 *include "misc/colors.tilespec"
@@ -97,146 +91,76 @@ files =
 ; Terrain info - see README.graphics
 
 [layer0]
-match_types = "shallow", "deep", "land"
+match_style = "BOOL"
+match_types = "ocean", "other"
 
 [layer1]
-match_types = "forest", "hills", "mountains", "ridge", "trench", "water", "ice"
+match_style = "BOOL"
+match_types = "forest", "hills", "mountains"
 
-[layer2]
-match_types = "water", "ice"
-
-; Water graphics referenced by terrain.ruleset
-;
-[tile_coast]
-is_blended = 1
-num_layers = 2
-layer0_match_type = "shallow"
-layer0_match_with = "deep", "land"
-layer0_sprite_type = "corner"
-layer1_match_type = "water"
-layer1_match_with = "ice"
-layer1_sprite_type = "corner"
-
-[tile_shelf]
-is_blended = 0
-num_layers = 2
-layer0_match_type = "shallow"
-layer0_match_with = "deep", "land"
-layer0_sprite_type = "corner"
-;layer1_match_type = "shallow"
-;layer1_match_with = "shallow"
-;layer1_sprite_type = "corner"
-layer1_match_type = "water"
-layer1_match_with = "ice"
-layer1_sprite_type = "corner"
-
-[tile_floor]
-is_blended = 0
-num_layers = 2
-layer0_match_type = "deep"
-layer0_match_with = "shallow", "land"
-layer0_sprite_type = "corner"
-layer1_match_type = "water"
-layer1_match_with = "ice"
-layer1_sprite_type = "corner"
-
-[tile_trench]
-is_blended = 0
-num_layers = 3
-layer0_match_type = "deep"
-layer0_match_with = "shallow", "land"
-layer0_sprite_type = "corner"
-layer1_match_type = "trench"
-layer1_match_with = "trench"
-layer2_match_type = "water"
-layer2_match_with = "ice"
-layer2_sprite_type = "corner"
-
-[tile_ridge]
-is_blended = 0
-num_layers = 3
-layer0_match_type = "shallow"
-layer0_match_with = "deep", "land"
-layer0_sprite_type = "corner"
-layer1_match_type = "ridge"
-layer1_match_with = "ridge"
-layer2_match_type = "water"
-layer2_match_with = "ice"
-layer2_sprite_type = "corner"
-
-[tile_vent]
-is_blended = 0
-num_layers = 3
-layer0_match_type = "shallow"
-layer0_match_with = "deep", "land"
-layer0_sprite_type = "corner"
-layer1_match_type = "ridge"
-layer1_match_with = "ridge"
-layer2_match_type = "water"
-layer2_match_with = "ice"
-layer2_sprite_type = "corner"
-
-; Land graphics referenced by terrain.ruleset
-;
-[tile_arctic]
-; treated as water for ice cliffs
-is_blended = 0
-num_layers = 3
-layer0_match_type = "shallow"
-layer1_match_type = "ice"
-layer2_match_type = "ice"
-mine_sprite = "tx.oil_mine"
-
-[tile_desert]
+[terrain_arctic]
 is_blended = 1
 num_layers = 1
-layer0_match_type = "land"
+layer0_match_type = "other"
 mine_sprite = "tx.oil_mine"
 
-[tile_forest]
+[terrain_desert]
+is_blended = 1
+num_layers = 1
+layer0_match_type = "other"
+mine_sprite = "tx.oil_mine"
+
+[terrain_forest]
 is_blended = 1
 num_layers = 2
-layer0_match_type = "land"
+layer0_match_type = "other"
 layer1_match_type = "forest"
-layer1_match_with = "forest"
+layer1_match_style = "bool"
 
-[tile_grassland]
+[terrain_grassland]
 is_blended = 1
 num_layers = 1
-layer0_match_type = "land"
+layer0_match_type = "other"
 
-[tile_hills]
+[terrain_hills]
 is_blended = 1
 num_layers = 2
-layer0_match_type = "land"
+layer0_match_type = "other"
 layer1_match_type = "hills"
-layer1_match_with = "hills"
+layer1_match_style = "bool"
 mine_sprite = "tx.mine"
 
-[tile_jungle]
+[terrain_jungle]
 is_blended = 1
 num_layers = 1
-layer0_match_type = "land"
+layer0_match_type = "other"
 
-[tile_mountains]
+[terrain_mountains]
 is_blended = 1
 num_layers = 2
-layer0_match_type = "land"
+layer0_match_type = "other"
 layer1_match_type = "mountains"
-layer1_match_with = "mountains"
+layer1_match_style = "bool"
 mine_sprite = "tx.mine"
 
-[tile_plains]
+[terrain_ocean]
 is_blended = 1
 num_layers = 1
-layer0_match_type = "land"
+layer0_match_style = "bool"
+layer0_match_type = "ocean"
+layer0_cell_type = "rect"
 
-[tile_swamp]
+[terrain_plains]
 is_blended = 1
 num_layers = 1
-layer0_match_type = "land"
+layer0_match_type = "other"
 
-[tile_tundra]
+[terrain_swamp]
 is_blended = 1
 num_layers = 1
-layer0_match_type = "land"
+layer0_match_type = "other"
+
+[terrain_tundra]
+is_blended = 1
+num_layers = 1
+layer0_match_type = "other"

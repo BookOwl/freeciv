@@ -87,7 +87,13 @@ static GtkWidget *ruleset_combo;
 static void start_new_game_callback(GtkWidget *w, gpointer data)
 {
   if (is_server_running() || client_start_server()) {
-    /* saved settings are sent in client/options.c load_settable_options() */
+    char buf[512];
+
+    /* Send new game defaults. */
+    send_chat("/set aifill 5");
+
+    my_snprintf(buf, sizeof(buf), "/%s", skill_level_names[0]);
+    send_chat(buf);
   }
 }
 
@@ -114,7 +120,7 @@ static void load_saved_game_callback(GtkWidget *w, gpointer data)
 **************************************************************************/
 static void main_callback(GtkWidget *w, gpointer data)
 {
-  if (client.conn.used) {
+  if (aconnection.used) {
     disconnect_from_server();
   } else {
     set_client_page(in_ggz ? PAGE_GGZ : PAGE_MAIN);
@@ -247,7 +253,7 @@ GtkWidget *create_main_page(void)
     GtkWidget *label;
 
     label = gtk_label_new(beta_message());
-    gtk_widget_set_name(label, "beta_label");
+    gtk_widget_set_name(label, "beta label");
     gtk_misc_set_alignment(GTK_MISC(label), 0.5, 0.5);
     gtk_label_set_justify(GTK_LABEL(label), GTK_JUSTIFY_CENTER);
     gtk_container_add(GTK_CONTAINER(sbox), label);
@@ -555,7 +561,7 @@ void handle_authentication_req(enum authentication_type type, char *message)
       struct packet_authentication_reply reply;
 
       sz_strlcpy(reply.password, password);
-      send_packet_authentication_reply(&client.conn, &reply);
+      send_packet_authentication_reply(&aconnection, &reply);
       return;
     } else {
       set_connection_state(ENTER_PASSWORD_TYPE);
@@ -601,7 +607,7 @@ static void connect_callback(GtkWidget *w, gpointer data)
 	  gtk_entry_get_text(GTK_ENTRY(network_confirm_password)));
       if (strncmp(reply.password, password, MAX_LEN_NAME) == 0) {
 	password[0] = '\0';
-	send_packet_authentication_reply(&client.conn, &reply);
+	send_packet_authentication_reply(&aconnection, &reply);
 
 	set_connection_state(WAITING_TYPE);
       } else { 
@@ -615,7 +621,7 @@ static void connect_callback(GtkWidget *w, gpointer data)
   case ENTER_PASSWORD_TYPE:
     sz_strlcpy(reply.password,
 	gtk_entry_get_text(GTK_ENTRY(network_password)));
-    send_packet_authentication_reply(&client.conn, &reply);
+    send_packet_authentication_reply(&aconnection, &reply);
 
     set_connection_state(WAITING_TYPE);
     break;
@@ -931,15 +937,12 @@ static void game_options_callback(GtkWidget *w, gpointer data)
 static void ai_skill_callback(GtkWidget *w, gpointer data)
 {
   const char *name;
-  enum ai_level level = GPOINTER_TO_UINT(data);
+  char buf[512];
 
-  if (level == AI_LEVEL_LAST) {
-    level = AI_LEVEL_DEFAULT;
-  }
+  name = skill_level_names[GPOINTER_TO_UINT(data)];
 
-  name = ai_level_cmd(level);
-
-  send_chat_printf("/%s", name);
+  my_snprintf(buf, sizeof(buf), "/%s", name);
+  send_chat(buf);
 }
 
 /* HACK: sometimes when creating the ruleset combo the value is set without
@@ -966,9 +969,12 @@ static void ruleset_callback(GtkWidget *w, gpointer data)
 static bool send_new_aifill_to_server = TRUE;
 static void ai_fill_callback(GtkWidget *w, gpointer data)
 {
+  char buf[512];
+
   if (send_new_aifill_to_server) {
-    send_chat_printf("/set aifill %d",
-                     gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(w)));
+    my_snprintf(buf, sizeof(buf), "/set aifill %d",
+      gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(w)));
+    send_chat(buf);
   }
 }
 
@@ -977,9 +983,9 @@ static void ai_fill_callback(GtkWidget *w, gpointer data)
 **************************************************************************/
 static void start_start_callback(GtkWidget *w, gpointer data)
 {
-  if (NULL != client.conn.playing) {
-    dsend_packet_player_ready(&client.conn, player_number(client.conn.playing),
-			      !client.conn.playing->is_ready);
+  if (game.player_ptr) {
+    dsend_packet_player_ready(&aconnection, game.info.player_idx,
+			      !game.player_ptr->is_ready);
   }
 }
 
@@ -988,11 +994,11 @@ static void start_start_callback(GtkWidget *w, gpointer data)
 **************************************************************************/
 static void pick_nation_callback(GtkWidget *w, gpointer data)
 {
-  if (NULL != client.conn.playing) {
-    popup_races_dialog(client.conn.playing);
+  if (aconnection.player) {
+    popup_races_dialog(game.player_ptr);
   } else if (game.info.is_new_game) {
     send_chat("/take -");
-    popup_races_dialog(NULL);
+    popup_races_dialog(game.player_ptr);
   }
 }
 
@@ -1001,27 +1007,20 @@ static void pick_nation_callback(GtkWidget *w, gpointer data)
 **************************************************************************/
 static void take_callback(GtkWidget *w, gpointer data)
 {
-  struct player *plr = client_player();
+  if (aconnection.player) {
+    if (!aconnection.player->ai.control) {
+      /* Make sure player reverts to AI control. This is much more neat,
+       * and hides the ugly double username in the name list because
+       * the player username equals the connection username. */
+      char buf[512];
 
-  if (NULL != plr) {
-    const char *name = player_name(plr);
-  
-    if (client_is_observer()) {
-      if (plr->ai.control) {
-        send_chat_printf("/aitoggle \"%s\"", name);
-      }
-      send_chat_printf("/take \"%s\"", name);
-    } else {
-      if (!plr->ai.control) {
-        /* Make sure player reverts to AI control. This is much more neat,
-         * and hides the ugly double username in the name list because
-         * the player username equals the connection username. */
-        send_chat_printf("/aitoggle \"%s\"", name);
-      }
-      send_chat("/detach");
-      send_chat("/observe");
+      my_snprintf(buf, sizeof(buf), "/aitoggle \"%s\"",
+                  player_name(aconnection.player));
+      send_chat(buf);
     }
-  } else if (!client.conn.observer) {
+    send_chat("/detach");
+    send_chat("/observe");
+  } else if (!aconnection.observer) {
     send_chat("/observe");
   } else {
     send_chat("/detach");
@@ -1035,6 +1034,7 @@ void update_start_page(void)
 {
   bool old = send_new_aifill_to_server;
   send_new_aifill_to_server = FALSE;
+  /* Default to aifill 5. */
   gtk_spin_button_set_value(GTK_SPIN_BUTTON(start_aifill_spin),
                             game.info.aifill);
   send_new_aifill_to_server = old;
@@ -1049,11 +1049,13 @@ static struct connection *conn_menu_conn;
 static void conn_menu_team_chosen(GtkMenuItem *menuitem, gpointer data)
 {
   struct team *pteam = data;
+  char buf[1024];
 
   if (pteam != conn_menu_player->team) {
-    send_chat_printf("/team \"%s\" \"%s\"",
-                     player_name(conn_menu_player),
-                     team_rule_name(pteam));
+    my_snprintf(buf, sizeof(buf), "/team \"%s\" \"%s\"",
+		player_name(conn_menu_player),
+		team_get_name_orig(pteam));
+    send_chat(buf);
   }
 }
 
@@ -1064,7 +1066,7 @@ static void conn_menu_ready_chosen(GtkMenuItem *menuitem, gpointer data)
 {
   struct player *pplayer = conn_menu_player;
 
-  dsend_packet_player_ready(&client.conn,
+  dsend_packet_player_ready(&aconnection,
 			    player_number(pplayer), !pplayer->is_ready);
 }
 
@@ -1082,12 +1084,15 @@ static void conn_menu_nation_chosen(GtkMenuItem *menuitem, gpointer data)
 ****************************************************************************/
 static void conn_menu_player_command(GtkMenuItem *menuitem, gpointer data)
 {
+  char buf[1024];
   char *command = data;
 
   assert(command != NULL);
   assert(conn_menu_player != NULL);
 
-  send_chat_printf("/%s \"%s\"", command, player_name(conn_menu_player));
+  my_snprintf(buf, sizeof(buf), "/%s \"%s\"", command, 
+              player_name(conn_menu_player));
+  send_chat(buf);
 }
 
 /****************************************************************************
@@ -1095,11 +1100,17 @@ static void conn_menu_player_command(GtkMenuItem *menuitem, gpointer data)
 ****************************************************************************/
 static void conn_menu_player_take(GtkMenuItem *menuitem, gpointer data)
 {
+  char buf[1024];
+
   if (conn_menu_player->ai.control) {
     /* See comment on detach command for why */
-    send_chat_printf("/aitoggle \"%s\"", player_name(conn_menu_player));
+    my_snprintf(buf, sizeof(buf), "/aitoggle \"%s\"",
+                player_name(conn_menu_player));
+    send_chat(buf);
   }
-  send_chat_printf("/take \"%s\"", player_name(conn_menu_player));
+  my_snprintf(buf, sizeof(buf), "/take \"%s\"",
+              player_name(conn_menu_player));
+  send_chat(buf);
 }
 
 /****************************************************************************
@@ -1108,12 +1119,15 @@ static void conn_menu_player_take(GtkMenuItem *menuitem, gpointer data)
 ****************************************************************************/
 static void conn_menu_connection_command(GtkMenuItem *menuitem, gpointer data)
 {
+  char buf[1024];
   const char *command = data;
 
   assert(conn_menu_conn != NULL);
   assert(command != NULL);
 
-  send_chat_printf("/%s \"%s\"", command, conn_menu_conn->username);
+  my_snprintf(buf, sizeof(buf), "/%s \"%s\"",
+              command, conn_menu_conn->username);
+  send_chat(buf);
 }
 
 /**************************************************************************
@@ -1188,7 +1202,7 @@ static GtkWidget *create_conn_menu(struct player *pplayer,
 
     entry = gtk_menu_item_new_with_label(_("Pick nation"));
     gtk_widget_set_sensitive(entry,
-                             can_conn_edit_players_nation(&client.conn,
+                             can_conn_edit_players_nation(&aconnection,
                                                           pplayer));
     g_object_set_data_full(G_OBJECT(menu), "nation", entry,
                            (GtkDestroyNotify) gtk_widget_unref);
@@ -1211,15 +1225,15 @@ static GtkWidget *create_conn_menu(struct player *pplayer,
                      GTK_SIGNAL_FUNC(conn_menu_player_take), "take");
   }
 
-  if (ALLOW_CTRL <= client.conn.access_level && NULL != pconn
-      && (pconn->id != client.conn.id || NULL != pplayer)) {
+  if (aconnection.access_level >= ALLOW_CTRL && pconn
+      && (pconn->id != aconnection.id || pplayer)) {
     entry = gtk_separator_menu_item_new();
     g_object_set_data_full(G_OBJECT(menu),
 			   "ctrl", entry,
 			   (GtkDestroyNotify) gtk_widget_unref);
     gtk_container_add(GTK_CONTAINER(menu), entry);
 
-    if (pconn->id != client.conn.id) {
+    if (pconn->id != aconnection.id) {
       entry = gtk_menu_item_new_with_label(_("Cut connection"));
       g_object_set_data_full(G_OBJECT(menu), "cut", entry,
 			     (GtkDestroyNotify) gtk_widget_unref);
@@ -1229,7 +1243,7 @@ static GtkWidget *create_conn_menu(struct player *pplayer,
     }
   }
 
-  if (ALLOW_CTRL <= client.conn.access_level && NULL != pplayer) {
+  if (aconnection.access_level >= ALLOW_CTRL && pplayer) {
     entry = gtk_menu_item_new_with_label(_("Aitoggle player"));
     g_object_set_data_full(G_OBJECT(menu), "aitoggle", entry,
 			   (GtkDestroyNotify) gtk_widget_unref);
@@ -1237,7 +1251,7 @@ static GtkWidget *create_conn_menu(struct player *pplayer,
     g_signal_connect(GTK_OBJECT(entry), "activate",
 		     GTK_SIGNAL_FUNC(conn_menu_player_command), "aitoggle");
 
-    if (pplayer != client.conn.playing
+    if (player_number(pplayer) != game.info.player_idx
         && game.info.is_new_game) {
       entry = gtk_menu_item_new_with_label(_("Remove player"));
       g_object_set_data_full(G_OBJECT(menu), "remove", entry,
@@ -1248,8 +1262,8 @@ static GtkWidget *create_conn_menu(struct player *pplayer,
     }
   }
 
-  if (ALLOW_HACK == client.conn.access_level && NULL != pconn
-      && pconn->id != client.conn.id) {
+  if (aconnection.access_level == ALLOW_HACK && pconn
+      && pconn->id != aconnection.id) {
     entry = gtk_menu_item_new_with_label(_("Give info access"));
     g_object_set_data_full(G_OBJECT(menu), "cmdlevel-info", entry,
 			   (GtkDestroyNotify) gtk_widget_unref);
@@ -1269,9 +1283,11 @@ static GtkWidget *create_conn_menu(struct player *pplayer,
     /* No entry for hack access; that would be a serious security hole. */
   }
 
-  if (ALLOW_CTRL <= client.conn.access_level
-      && NULL != pplayer && pplayer->ai.control) {
-    enum ai_level level;
+  if (aconnection.access_level >= ALLOW_CTRL
+      && pplayer && pplayer->ai.control) {
+    char *difficulty[] = {N_("novice"), N_("easy"),
+			  N_("normal"), N_("hard")};
+    int i;
 
     entry = gtk_separator_menu_item_new();
     g_object_set_data_full(G_OBJECT(menu),
@@ -1279,24 +1295,18 @@ static GtkWidget *create_conn_menu(struct player *pplayer,
 			   (GtkDestroyNotify) gtk_widget_unref);
     gtk_container_add(GTK_CONTAINER(menu), entry);
 
-    for (level = 0; level < AI_LEVEL_LAST; level++) {
-      if (is_settable_ai_level(level)) {
-        const char *level_name = ai_level_name(level);
-        const char *level_cmd = ai_level_cmd(level);
-        static char lvl_cmd_tmp[AI_LEVEL_LAST][50];
+    for (i = 0; i < ARRAY_SIZE(difficulty); i++) {
+      char text[128];
 
-        /* Copy to non-const string */
-        mystrlcpy(lvl_cmd_tmp[level], level_cmd, sizeof(lvl_cmd_tmp[level]));
-
-        entry = gtk_menu_item_new_with_label(level_name);
-        g_object_set_data_full(G_OBJECT(menu),
-                               lvl_cmd_tmp[level], entry,
-                               (GtkDestroyNotify) gtk_widget_unref);
-        gtk_container_add(GTK_CONTAINER(menu), entry);
-        g_signal_connect(GTK_OBJECT(entry), "activate",
-                         GTK_SIGNAL_FUNC(conn_menu_player_command),
-                         lvl_cmd_tmp[level]);
-      }
+      my_snprintf(text, sizeof(text), "%s", _(difficulty[i]));
+      entry = gtk_menu_item_new_with_label(text);
+      g_object_set_data_full(G_OBJECT(menu),
+			     difficulty[i], entry,
+			     (GtkDestroyNotify) gtk_widget_unref);
+      gtk_container_add(GTK_CONTAINER(menu), entry);
+      g_signal_connect(GTK_OBJECT(entry), "activate",
+		       GTK_SIGNAL_FUNC(conn_menu_player_command),
+		       difficulty[i]);
     }
   }
 
@@ -1313,7 +1323,7 @@ static GtkWidget *create_conn_menu(struct player *pplayer,
 
     /* Can't use team_iterate here since it skips empty teams. */
     for (index = 0; index < MAX_NUM_TEAMS; index++) {
-      struct team *pteam = team_by_number(index);
+      struct team *pteam = team_get_by_id(index);
       char text[128];
 
       if (pteam->players == 0) {
@@ -1324,10 +1334,10 @@ static GtkWidget *create_conn_menu(struct player *pplayer,
       }
 
       /* TRANS: e.g., "Put on Team 5" */
-      my_snprintf(text, sizeof(text), _("Put on %s"), team_name_translation(pteam));
+      my_snprintf(text, sizeof(text), _("Put on %s"), team_get_name(pteam));
       entry = gtk_menu_item_new_with_label(text);
       g_object_set_data_full(G_OBJECT(menu),
-			     team_rule_name(pteam), entry,
+			     team_get_name_orig(pteam), entry,
 			     (GtkDestroyNotify) gtk_widget_unref);
       gtk_container_add(GTK_CONTAINER(menu), entry);
       g_signal_connect(GTK_OBJECT(entry), "activate",
@@ -1394,7 +1404,7 @@ GtkWidget *create_start_page(void)
   GtkWidget *label, *menu, *item;
   GtkCellRenderer *rend;
   GtkTreeViewColumn *col;
-  enum ai_level level;
+  int i;
 
   box = gtk_vbox_new(FALSE, 8);
   gtk_container_set_border_width(GTK_CONTAINER(box), 4);
@@ -1437,17 +1447,13 @@ GtkWidget *create_start_page(void)
   option = gtk_option_menu_new();
 
   menu = gtk_menu_new();
-  for (level = 0; level < AI_LEVEL_LAST; level++) {
-    if (is_settable_ai_level(level)) {
-      const char *level_name = ai_level_name(level);
+  for (i = 0; i < NUM_SKILL_LEVELS; i++) {
+    item = gtk_menu_item_new_with_label(_(skill_level_names[i]));
+    g_signal_connect(item, "activate",
+	G_CALLBACK(ai_skill_callback), GUINT_TO_POINTER(i));
 
-      item = gtk_menu_item_new_with_label(level_name);
-      g_signal_connect(item, "activate",
-                       G_CALLBACK(ai_skill_callback), GUINT_TO_POINTER(level));
-
-      gtk_widget_show(item);
-      gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
-    }
+    gtk_widget_show(item);
+    gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
   }
   gtk_option_menu_set_menu(GTK_OPTION_MENU(option), menu);
   gtk_table_attach_defaults(GTK_TABLE(table), option, 1, 2, 1, 2);
@@ -1464,8 +1470,7 @@ GtkWidget *create_start_page(void)
   ruleset_combo = gtk_combo_new();
   gtk_entry_set_text(GTK_ENTRY(GTK_COMBO(ruleset_combo)->entry), "default");
   g_signal_connect(GTK_COMBO(ruleset_combo)->entry, "changed",
-                   G_CALLBACK(ruleset_callback),
-                   GUINT_TO_POINTER(AI_LEVEL_LAST));
+		   G_CALLBACK(ruleset_callback), GUINT_TO_POINTER(i));
 
   gtk_table_attach_defaults(GTK_TABLE(table), ruleset_combo, 1, 2, 2, 3);
 
@@ -1639,7 +1644,10 @@ static void load_callback(void)
   gtk_tree_model_get(GTK_TREE_MODEL(load_store), &it, 1, &filename, -1);
 
   if (is_server_running()) {
-    send_chat_printf("/load %s", filename);
+    char message[MAX_LEN_MSG];
+
+    my_snprintf(message, sizeof(message), "/load %s", filename);
+    send_chat(message);
   }
 }
 
@@ -1815,7 +1823,10 @@ static void scenario_callback(void)
   gtk_tree_model_get(GTK_TREE_MODEL(scenario_store), &it, 1, &filename, -1);
 
   if (is_server_running()) {
-    send_chat_printf("/load %s", filename);
+    char message[MAX_LEN_MSG];
+
+    my_snprintf(message, sizeof(message), "/load %s", filename);
+    send_chat(message);
   }
 }
 
@@ -1995,7 +2006,7 @@ static void update_nation_page(struct packet_game_load *packet)
 {
   int i;
 
-  set_player_count(packet->nplayers);
+  game.info.nplayers = packet->nplayers;
 
   gtk_list_store_clear(nation_store);
 

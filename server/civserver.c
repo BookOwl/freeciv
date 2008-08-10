@@ -34,7 +34,6 @@
 
 #include "fciconv.h"
 #include "fcintl.h"
-#include "game.h"
 #include "log.h"
 #include "shared.h"
 #include "support.h"
@@ -74,15 +73,9 @@ static void sigint_handler(int sig)
   }
   if (timer && read_timer_seconds(timer) <= 1.0) {
     exit(EXIT_SUCCESS);
-  } else {
-    if (game.info.timeout == -1) {
-      freelog(LOG_NORMAL, _("Setting timeout to 0. Autogame will stop.\n"));
-      game.info.timeout = 0;
-    }
-    if (!timer) {
-      freelog(LOG_NORMAL, _("You must interrupt Freeciv twice"
-                            " within one second to make it exit.\n"));
-    }
+  } else if (!timer) {
+    freelog(LOG_NORMAL, _("You must interrupt Freeciv twice"
+			  " within one second to make it exit.\n"));
   }
   timer = renew_timer_start(timer, TIMER_USER, TIMER_ACTIVE);
 }
@@ -205,9 +198,8 @@ int main(int argc, char *argv[])
     exit(EXIT_SUCCESS);
   }
   con_write(C_VERSION, _("This is the server for %s"), freeciv_name_version());
-  /* TRANS: No full stop after the URL, could cause confusion. */
   con_write(C_COMMENT, _("You can learn a lot about Freeciv at %s"),
-	    WIKI_URL);
+	    WEBSITE_URL);
 
   if (showhelp) {
     fc_fprintf(stderr,
@@ -253,8 +245,7 @@ int main(int argc, char *argv[])
     fc_fprintf(stderr,
 	       _("  -R, --Ranklog FILE\tUse FILE as ranking logfile\n"));
     fc_fprintf(stderr, _("  -v, --version\t\tPrint the version number\n"));
-    /* TRANS: No full stop after the URL, could cause confusion. */
-    fc_fprintf(stderr, _("Report bugs at %s\n"), BUG_URL);
+    fc_fprintf(stderr, _("Report bugs at %s.\n"), BUG_URL);
     exit(EXIT_SUCCESS);
   }
 

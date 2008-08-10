@@ -15,6 +15,7 @@
 
 #include "fc_types.h"
 
+struct ai_choice;
 struct Treaty;
 struct Clause;
 struct ai_data;

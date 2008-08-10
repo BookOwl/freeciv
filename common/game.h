@@ -24,13 +24,30 @@
 
 #include "connection.h"		/* struct conn_list */
 #include "fc_types.h"
+#include "improvement.h"	/* Impr_Status */
 #include "player.h"
 #include "packets.h"
+#include "specialist.h"
 
-enum debug_globals {
-  DEBUG_FERRIES,
-  DEBUG_LAST
+/* used in savegame values */
+enum server_states { 
+  S_S_INITIAL = 0, 
+  S_S_GENERATING_WAITING = 1,
+  S_S_RUNNING = 2,
+  S_S_OVER = 3,
 };
+
+/* used in network values */
+enum client_states { 
+  C_S_INITIAL = 0,
+  C_S_PREPARING = 1,
+  C_S_STARTING_UNUSED = 2,
+  C_S_RUNNING = 3,
+  C_S_OVER = 4,
+};
+
+#define OVERFLIGHT_NOTHING  1
+#define OVERFLIGHT_FRIGHTEN 2
 
 #define CONTAMINATION_POLLUTION 1
 #define CONTAMINATION_FALLOUT   2
@@ -41,11 +58,11 @@ enum debug_globals {
 
 struct civ_game {
   struct packet_game_info info;
-  struct government *government_during_revolution;
+  struct government *government_when_anarchy;
 
   struct packet_ruleset_control control;
-  bool debug[DEBUG_LAST];
   int version;
+  char id[MAX_ID_LEN];		/* server only */
   int timeoutint;     /* increase timeout every N turns... */
   int timeoutinc;     /* ... by this amount ... */
   int timeoutincmult; /* ... and multiply timeoutinc by this amount ... */
@@ -60,6 +77,7 @@ struct civ_game {
    * take effect until the next turn. */
   bool simultaneous_phases_stored;
   char *startmessage;
+  struct player *player_ptr; /* Client-only; may be NULL */
   struct player players[MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS];
   struct conn_list *all_connections;        /* including not yet established */
   struct conn_list *est_connections;        /* all established client conns */
@@ -67,6 +85,7 @@ struct civ_game {
   bool scorelog;
   int scoreturn;			/* next make_history_report() */
   int seed;
+  int playable_nations;
   bool fogofwar_old;	/* as the fog_of_war bit get changed by setting
 			   the server we need to remember the old setting */
   int ai_goal_government;	/* kludge */
@@ -92,6 +111,7 @@ struct civ_game {
     bool save_private_map; /* FoW map; will be created if not saved */
   } save_options;
 
+  int trireme_loss_chance[MAX_VET_LEVELS];
   int work_veteran_chance[MAX_VET_LEVELS];
   int veteran_chance[MAX_VET_LEVELS];
 
@@ -105,10 +125,6 @@ struct civ_game {
     void (*unit_deallocate)(int unit_id);
   } callbacks;
 };
-
-bool is_server(void);
-void i_am_server(void);
-void i_am_client(void);
 
 void game_init(void);
 void game_map_init(void);
@@ -131,11 +147,15 @@ void game_remove_unit(struct unit *punit);
 void game_remove_city(struct city *pcity);
 void initialize_globals(void);
 
+struct player *get_player(int player_id);
+bool is_valid_player_id(int player_id);
+int get_num_human_and_ai_players(void);
 bool is_player_phase(const struct player *pplayer, int phase);
 
 const char *population_to_text(int thousand_citizen);
 
 extern struct civ_game game;
+extern bool is_server;
 
 bool setting_class_is_changeable(enum sset_class class);
 
@@ -157,6 +177,10 @@ bool setting_class_is_changeable(enum sset_class class);
 #define GAME_MIN_TECHLEVEL       0
 #define GAME_MAX_TECHLEVEL       50
 
+#define GAME_DEFAULT_UNHAPPYSIZE 4
+#define GAME_MIN_UNHAPPYSIZE     1
+#define GAME_MAX_UNHAPPYSIZE     6
+
 #define GAME_DEFAULT_ANGRYCITIZEN TRUE
 
 #define GAME_DEFAULT_END_YEAR    5000
@@ -171,7 +195,7 @@ bool setting_class_is_changeable(enum sset_class class);
 #define GAME_MIN_MAX_PLAYERS         1
 #define GAME_MAX_MAX_PLAYERS         MAX_NUM_PLAYERS
 
-#define GAME_DEFAULT_AIFILL          5
+#define GAME_DEFAULT_AIFILL          0
 #define GAME_MIN_AIFILL              0
 #define GAME_MAX_AIFILL              GAME_MAX_MAX_PLAYERS
 
@@ -194,9 +218,9 @@ bool setting_class_is_changeable(enum sset_class class);
 #define GAME_DEFAULT_FOGOFWAR        TRUE
 
 /* 0 means no national borders. */
-#define GAME_DEFAULT_BORDERS         (4*4+1*1)
+#define GAME_DEFAULT_BORDERS         4
 #define GAME_MIN_BORDERS             0
-#define GAME_MAX_BORDERS             (13*13-1)
+#define GAME_MAX_BORDERS             12
 
 #define GAME_DEFAULT_HAPPYBORDERS    TRUE
 
@@ -217,6 +241,10 @@ bool setting_class_is_changeable(enum sset_class class);
 #define GAME_DEFAULT_CONQUERCOST     0
 #define GAME_MIN_CONQUERCOST         0
 #define GAME_MAX_CONQUERCOST         100
+
+#define GAME_DEFAULT_CITYFACTOR      14
+#define GAME_MIN_CITYFACTOR          6
+#define GAME_MAX_CITYFACTOR          100
 
 #define GAME_DEFAULT_CITYMINDIST     0
 #define GAME_MIN_CITYMINDIST         0 /* if 0, ruleset will overwrite this */
@@ -255,6 +283,10 @@ bool setting_class_is_changeable(enum sset_class class);
 #define GAME_DEFAULT_RAZECHANCE      20
 #define GAME_MIN_RAZECHANCE          0
 #define GAME_MAX_RAZECHANCE          100
+
+#define GAME_DEFAULT_CIVSTYLE        2
+#define GAME_MIN_CIVSTYLE            1
+#define GAME_MAX_CIVSTYLE            2
 
 #define GAME_DEFAULT_SCORELOG        FALSE
 #define GAME_DEFAULT_SCORETURN       20
@@ -319,7 +351,7 @@ bool setting_class_is_changeable(enum sset_class class);
 #define GAME_DEFAULT_RULESETDIR      "default"
 
 #define GAME_DEFAULT_SAVE_NAME       "civgame"
-#define GAME_DEFAULT_SAVETURNS       1
+#define GAME_DEFAULT_SAVETURNS       10
 
 #define GAME_DEFAULT_SKILL_LEVEL 3      /* easy */
 #define GAME_OLD_DEFAULT_SKILL_LEVEL 5  /* normal; for old save games */
@@ -328,8 +360,9 @@ bool setting_class_is_changeable(enum sset_class class);
 #define GAME_DEFAULT_ALLOW_TAKE      "HAhadOo"
 
 #define GAME_DEFAULT_COMPRESS_LEVEL 6    /* if we have compression */
-#define GAME_MIN_COMPRESS_LEVEL     1
+#define GAME_MIN_COMPRESS_LEVEL     0
 #define GAME_MAX_COMPRESS_LEVEL     9
+#define GAME_NO_COMPRESS_LEVEL      0
 
 #define GAME_DEFAULT_ALLOWED_CITY_NAMES 1
 #define GAME_MIN_ALLOWED_CITY_NAMES 0

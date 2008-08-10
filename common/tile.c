@@ -17,22 +17,10 @@
 
 #include <assert.h>
 
-#include "log.h"
 #include "support.h"
 
 #include "tile.h"
 
-#ifndef tile_index
-/****************************************************************************
-  Return the tile index.
-****************************************************************************/
-int tile_index(const struct tile *ptile)
-{
-  return ptile->index;
-}
-#endif
-
-#ifndef tile_owner
 /****************************************************************************
   Return the player who owns this tile (or NULL if none).
 ****************************************************************************/
@@ -40,59 +28,42 @@ struct player *tile_owner(const struct tile *ptile)
 {
   return ptile->owner;
 }
-#endif
 
 /****************************************************************************
   Set the owner of a tile (may be NULL).
 ****************************************************************************/
-void tile_set_owner(struct tile *ptile, struct player *pplayer)
+void tile_set_owner(struct tile *ptile, struct player *owner)
 {
-  ptile->owner = pplayer;
+  ptile->owner = owner;
 }
 
 /****************************************************************************
-  Return the city on this tile (or NULL), checking for city center.
+  Return the city on this tile (or NULL if none).
 ****************************************************************************/
-struct city *tile_city(const struct tile *ptile)
+struct city *tile_get_city(const struct tile *ptile)
 {
-  struct city *pcity = ptile->worked;
-
-  if (NULL != pcity && is_city_center(pcity, ptile)) {
-    return pcity;
-  }
-  return NULL;
+  return ptile->city;
 }
 
-#ifndef tile_worked
 /****************************************************************************
-  Return any city working the specified tile (or NULL).
+  Set the city on the tile (may be NULL).
 ****************************************************************************/
-struct city *tile_worked(const struct tile *ptile)
+void tile_set_city(struct tile *ptile, struct city *pcity)
 {
-  return ptile->worked;
-}
-#endif
-
-/****************************************************************************
-  Set the city/worker on the tile (may be NULL).
-****************************************************************************/
-void tile_set_worked(struct tile *ptile, struct city *pcity)
-{
-  ptile->worked = pcity;
+  ptile->city = pcity;
 }
 
-#ifndef tile_terrain
 /****************************************************************************
-  Return the terrain at the specified tile.
+  Return the terrain ID of the tile.  Terrains are defined in the ruleset
+  (see terrain.h).
 ****************************************************************************/
-struct terrain *tile_terrain(const struct tile *ptile)
+struct terrain *tile_get_terrain(const struct tile *ptile)
 {
   return ptile->terrain;
 }
-#endif
 
 /****************************************************************************
-  Set the given terrain at the specified tile.
+  Set the terrain ID of the tile.  See tile_get_terrain.
 ****************************************************************************/
 void tile_set_terrain(struct tile *ptile, struct terrain *pterrain)
 {
@@ -113,7 +84,7 @@ void tile_set_terrain(struct tile *ptile, struct terrain *pterrain)
   Note that this returns a mask of _all_ the specials on the tile.  To
   check a specific special use tile_has_special.
 ****************************************************************************/
-bv_special tile_specials(const struct tile *ptile)
+bv_special tile_get_special(const struct tile *ptile)
 {
   return ptile->special;
 }
@@ -125,119 +96,6 @@ bool tile_has_special(const struct tile *ptile,
 		      enum tile_special_type special)
 {
   return contains_special(ptile->special, special);
-}
-
-/****************************************************************************
-  Returns TRUE iff the given tile has any specials.
-****************************************************************************/
-bool tile_has_any_specials(const struct tile *ptile)
-{
-  return contains_any_specials(ptile->special);
-}
-
-/****************************************************************************
-  Returns base at tile or NULL if no base
-****************************************************************************/
-struct base_type *tile_get_base(const struct tile *ptile)
-{
-  return base_of_bv_special(ptile->special);
-}
-
-/****************************************************************************
-  Adds base to tile.
-  FIXME: Currently this asserts that tile contains no old base.
-         Instead should remove old base and return bool indicating that.
-****************************************************************************/
-void tile_add_base(struct tile *ptile, const struct base_type *pbase)
-{
-  assert(pbase != NULL);
-
-  switch (base_number(pbase)) {
-  case BASE_FORTRESS:
-    assert(!tile_has_special(ptile, S_AIRBASE));
-    tile_set_special(ptile, S_FORTRESS);
-    break;
-  case BASE_AIRBASE:
-    assert(!tile_has_special(ptile, S_FORTRESS));
-    tile_set_special(ptile, S_AIRBASE);
-    break;
-  default:
-    freelog(LOG_ERROR, "tile_set_base(): impossible base type %d.",
-            base_number(pbase));
-    break;
-  };
-}
-
-/****************************************************************************
-  Removes base from tile if such exist
-****************************************************************************/
-void tile_remove_base(struct tile *ptile, const struct base_type *pbase)
-{
-  int spe;
-  
-  spe = base_get_tile_special_type(pbase);
-  if (!(0 <= spe && spe < S_LAST)) {
-    return;
-  }
-
-  tile_clear_special(ptile, spe);
-}
-
-/****************************************************************************
-  Check if tile contains base providing effect
-****************************************************************************/
-bool tile_has_base_flag(const struct tile *ptile, enum base_flag_id flag)
-{
-  struct base_type *pbase;
-
-  pbase = tile_get_base(ptile);
-
-  if (pbase != NULL) {
-    /* Some base at tile, check its flags */
-    return base_has_flag(pbase, flag);
-  }
-
-  /* No base at tile */
-  return FALSE;
-}
-
-/****************************************************************************
-  Check if tile contains base providing effect for unit
-****************************************************************************/
-bool tile_has_base_flag_for_unit(const struct tile *ptile,
-                                 const struct unit_type *punittype,
-                                 enum base_flag_id flag)
-{
-  struct base_type *pbase;
-
-  pbase = tile_get_base(ptile);
-
-  if (pbase != NULL) {
-    /* Some base at tile, check its flags */
-    return base_has_flag_for_utype(pbase, flag, punittype);
-  }
-
-  /* No base at tile */
-  return FALSE;
-}
-
-/****************************************************************************
-  Check if tile contains base native for unit
-****************************************************************************/
-bool tile_has_native_base(const struct tile *ptile,
-                          const struct unit_type *punittype)
-{
-  struct base_type *pbase;
-
-  pbase = tile_get_base(ptile);
-
-  if (pbase != NULL) {
-    /* Some base at tile, check if it's native */
-    return is_native_base_to_utype(pbase, punittype);
-  }
-
-  /* No base at tile */
-  return FALSE;
 }
 
 /****************************************************************************
@@ -253,15 +111,13 @@ void tile_set_special(struct tile *ptile, enum tile_special_type spe)
   set_special(&ptile->special, spe);
 }
 
-#ifndef tile_resource
 /****************************************************************************
   Return the resource at the specified tile.
 ****************************************************************************/
-const struct resource *tile_resource(const struct tile *ptile)
+const struct resource *tile_get_resource(const struct tile *ptile)
 {
   return ptile->resource;
 }
-#endif
 
 /****************************************************************************
   Set the given resource at the specified tile.
@@ -298,20 +154,18 @@ void tile_clear_all_specials(struct tile *ptile)
   clear_all_specials(&ptile->special);
 }
 
-#ifndef tile_continent
 /****************************************************************************
   Return the continent ID of the tile.  Typically land has a positive
   continent number and ocean has a negative number; no tile should have
   a 0 continent number.
 ****************************************************************************/
-Continent_id tile_continent(const struct tile *ptile)
+Continent_id tile_get_continent(const struct tile *ptile)
 {
   return ptile->continent;
 }
-#endif
 
 /****************************************************************************
-  Set the continent ID of the tile.  See tile_continent.
+  Set the continent ID of the tile.  See tile_get_continent.
 ****************************************************************************/
 void tile_set_continent(struct tile *ptile, Continent_id val)
 {
@@ -321,17 +175,17 @@ void tile_set_continent(struct tile *ptile, Continent_id val)
 /****************************************************************************
   Return a known_type enumeration value for the tile.
 
-  Note that the client only has known data about its own player.
+  Note that the client only knows known data about game.player_ptr.
 ****************************************************************************/
 enum known_type tile_get_known(const struct tile *ptile,
 			       const struct player *pplayer)
 {
-  if (!BV_ISSET(ptile->tile_known, player_index(pplayer))) {
+  if (!BV_ISSET(ptile->tile_known, pplayer->player_no)) {
     return TILE_UNKNOWN;
-  } else if (!BV_ISSET(ptile->tile_seen[V_MAIN], player_index(pplayer))) {
-    return TILE_KNOWN_UNSEEN;
+  } else if (!BV_ISSET(ptile->tile_seen[V_MAIN], pplayer->player_no)) {
+    return TILE_KNOWN_FOGGED;
   } else {
-    return TILE_KNOWN_SEEN;
+    return TILE_KNOWN;
   }
 }
 
@@ -340,47 +194,28 @@ enum known_type tile_get_known(const struct tile *ptile,
 ****************************************************************************/
 int tile_activity_time(enum unit_activity activity, const struct tile *ptile)
 {
-  struct terrain *pterrain = tile_terrain(ptile);
-
-  /* Make sure nobody uses old activities */
-  assert(activity != ACTIVITY_FORTRESS && activity != ACTIVITY_AIRBASE);
-
-  /* ACTIVITY_BASE not handled here */
-  assert(activity != ACTIVITY_BASE);
-
   switch (activity) {
   case ACTIVITY_POLLUTION:
-    return pterrain->clean_pollution_time * ACTIVITY_FACTOR;
+    return ptile->terrain->clean_pollution_time * ACTIVITY_FACTOR;
   case ACTIVITY_ROAD:
-    return pterrain->road_time * ACTIVITY_FACTOR;
+    return ptile->terrain->road_time * ACTIVITY_FACTOR;
   case ACTIVITY_MINE:
-    return pterrain->mining_time * ACTIVITY_FACTOR;
+    return ptile->terrain->mining_time * ACTIVITY_FACTOR;
   case ACTIVITY_IRRIGATE:
-    return pterrain->irrigation_time * ACTIVITY_FACTOR;
+    return ptile->terrain->irrigation_time * ACTIVITY_FACTOR;
+  case ACTIVITY_FORTRESS:
+    return ptile->terrain->fortress_time * ACTIVITY_FACTOR;
   case ACTIVITY_RAILROAD:
-    return pterrain->rail_time * ACTIVITY_FACTOR;
+    return ptile->terrain->rail_time * ACTIVITY_FACTOR;
   case ACTIVITY_TRANSFORM:
-    return pterrain->transform_time * ACTIVITY_FACTOR;
+    return ptile->terrain->transform_time * ACTIVITY_FACTOR;
+  case ACTIVITY_AIRBASE:
+    return ptile->terrain->airbase_time * ACTIVITY_FACTOR;
   case ACTIVITY_FALLOUT:
-    return pterrain->clean_fallout_time * ACTIVITY_FACTOR;
+    return ptile->terrain->clean_fallout_time * ACTIVITY_FACTOR;
   default:
     return 0;
   }
-}
-
-/****************************************************************************
-  Time to complete the given activity on the given tile.
-****************************************************************************/
-int tile_activity_base_time(const struct tile *ptile,
-                            enum base_type_id base)
-{
-  if (base == BASE_AIRBASE) {
-    return base_by_number(BASE_AIRBASE)->build_time * ACTIVITY_FACTOR;
-  } else {
-    return base_by_number(BASE_FORTRESS)->build_time * ACTIVITY_FACTOR;
-  }
-
-  return 0;
 }
 
 /****************************************************************************
@@ -505,16 +340,14 @@ void tile_remove_special(struct tile *ptile, enum tile_special_type special)
 ****************************************************************************/
 static void tile_irrigate(struct tile *ptile)
 {
-  struct terrain *pterrain = tile_terrain(ptile);
-
-  if (pterrain == pterrain->irrigation_result) {
+  if (ptile->terrain == ptile->terrain->irrigation_result) {
     if (tile_has_special(ptile, S_IRRIGATION)) {
       tile_add_special(ptile, S_FARMLAND);
     } else {
       tile_add_special(ptile, S_IRRIGATION);
     }
-  } else if (pterrain->irrigation_result) {
-    tile_change_terrain(ptile, pterrain->irrigation_result);
+  } else if (ptile->terrain->irrigation_result) {
+    tile_change_terrain(ptile, ptile->terrain->irrigation_result);
   }
 }
 
@@ -524,14 +357,12 @@ static void tile_irrigate(struct tile *ptile)
 ****************************************************************************/
 static void tile_mine(struct tile *ptile)
 {
-  struct terrain *pterrain = tile_terrain(ptile);
-
-  if (pterrain == pterrain->mining_result) {
+  if (ptile->terrain == ptile->terrain->mining_result) {
     tile_set_special(ptile, S_MINE);
     tile_clear_special(ptile, S_FARMLAND);
     tile_clear_special(ptile, S_IRRIGATION);
-  } else if (pterrain->mining_result) {
-    tile_change_terrain(ptile, pterrain->mining_result);
+  } else if (ptile->terrain->mining_result) {
+    tile_change_terrain(ptile, ptile->terrain->mining_result);
   }
 }
 
@@ -541,10 +372,8 @@ static void tile_mine(struct tile *ptile)
 ****************************************************************************/
 static void tile_transform(struct tile *ptile)
 {
-  struct terrain *pterrain = tile_terrain(ptile);
-
-  if (pterrain->transform_result != T_NONE) {
-    tile_change_terrain(ptile, pterrain->transform_result);
+  if (ptile->terrain->transform_result != T_NONE) {
+    tile_change_terrain(ptile, ptile->terrain->transform_result);
   }
 }
 
@@ -572,7 +401,7 @@ bool tile_apply_activity(struct tile *ptile, Activity_type_id act)
     return TRUE;
 
   case ACTIVITY_ROAD: 
-    if (!is_ocean_tile(ptile)
+    if (!is_ocean(ptile->terrain)
 	&& !tile_has_special(ptile, S_ROAD)) {
       tile_set_special(ptile, S_ROAD);
       return TRUE;
@@ -580,7 +409,7 @@ bool tile_apply_activity(struct tile *ptile, Activity_type_id act)
     return FALSE;
 
   case ACTIVITY_RAILROAD:
-    if (!is_ocean_tile(ptile)
+    if (!is_ocean(ptile->terrain)
 	&& !tile_has_special(ptile, S_RAILROAD)
 	&& tile_has_special(ptile, S_ROAD)) {
       tile_set_special(ptile, S_RAILROAD);
@@ -595,7 +424,6 @@ bool tile_apply_activity(struct tile *ptile, Activity_type_id act)
   case ACTIVITY_FORTRESS:
   case ACTIVITY_PILLAGE: 
   case ACTIVITY_AIRBASE:   
-  case ACTIVITY_BASE:
     /* do nothing  - not implemented */
     return FALSE;
 
@@ -617,34 +445,6 @@ bool tile_apply_activity(struct tile *ptile, Activity_type_id act)
 }
 
 /****************************************************************************
-  Add one entry about pollution situation to buffer.
-  Return if there has been any pollution (even prior calling this)
-****************************************************************************/
-static bool tile_info_pollution(char *buf, int bufsz,
-                                const struct tile *ptile,
-                                enum tile_special_type special,
-                                bool prevp, bool linebreak)
-{
-  if (tile_has_special(ptile, special)) {
-    if (!prevp) {
-      if (linebreak) {
-        mystrlcat(buf, "\n[", bufsz);
-      } else {
-        mystrlcat(buf, " [", bufsz);
-      }
-    } else {
-      mystrlcat(buf, "/", bufsz);
-    }
-
-    mystrlcat(buf, special_name_translation(special), bufsz);
-
-    return TRUE;
-  }
-
-  return prevp;
-}
-
-/****************************************************************************
   Return a (static) string with tile name describing terrain and specials.
 
   Examples:
@@ -652,70 +452,44 @@ static bool tile_info_pollution(char *buf, int bufsz,
     "Hills (Coals)"
     "Hills (Coals) [Pollution]"
 ****************************************************************************/
-const char *tile_get_info_text(const struct tile *ptile, int linebreaks)
+const char *tile_get_info_text(const struct tile *ptile)
 {
   static char s[256];
-  bool pollution;
-  bool lb = FALSE;
-  int bufsz = sizeof(s);
+  bool first;
 
-  sz_strlcpy(s, terrain_name_translation(tile_terrain(ptile)));
-  if (linebreaks & TILE_LB_TERRAIN_RIVER) {
-    /* Linebreak needed before next text */
-    lb = TRUE;
-  }
-
+  sz_strlcpy(s, terrain_name_translation(ptile->terrain));
   if (tile_has_special(ptile, S_RIVER)) {
-    if (lb) {
-      sz_strlcat(s, "\n");
-      lb = FALSE;
-    } else {
-      sz_strlcat(s, "/");
-    }
+    sz_strlcat(s, "/");
     sz_strlcat(s, special_name_translation(S_RIVER));
-  }
-  if (linebreaks & TILE_LB_RIVER_RESOURCE) {
-    /* New linebreak requested */
-    lb = TRUE;
   }
 
   if (tile_resource_is_valid(ptile)) {
-    if (lb) {
-      sz_strlcat(s, "\n");
-      lb = FALSE;
-    } else {
-      sz_strlcat(s, " ");
-    }
-    cat_snprintf(s, sizeof(s), "(%s)",
+    cat_snprintf(s, sizeof(s), " (%s)",
 		 resource_name_translation(ptile->resource));
   }
-  if (linebreaks & TILE_LB_RESOURCE_POLL) {
-    /* New linebreak requested */
-    lb = TRUE;
-  }
 
-  pollution = FALSE;
-  pollution = tile_info_pollution(s, bufsz, ptile, S_POLLUTION, pollution, lb);
-  pollution = tile_info_pollution(s, bufsz, ptile, S_FALLOUT, pollution, lb);
-  if (pollution) {
+  first = TRUE;
+  if (tile_has_special(ptile, S_POLLUTION)) {
+    if (first) {
+      first = FALSE;
+      sz_strlcat(s, " [");
+    } else {
+      sz_strlcat(s, "/");
+    }
+    sz_strlcat(s, special_name_translation(S_POLLUTION));
+  }
+  if (tile_has_special(ptile, S_FALLOUT)) {
+    if (first) {
+      first = FALSE;
+      sz_strlcat(s, " [");
+    } else {
+      sz_strlcat(s, "/");
+    }
+    sz_strlcat(s, special_name_translation(S_FALLOUT));
+  }
+  if (!first) {
     sz_strlcat(s, "]");
   }
 
   return s;
-}
-
-/****************************************************************************
-  Returns TRUE if the given tile has a base of given type on it.
-****************************************************************************/
-bool tile_has_base(const struct tile *ptile, const struct base_type *pbase)
-{
-  struct base_type *bt;
-  
-  if (!ptile) {
-    return FALSE;
-  }
-
-  bt = tile_get_base(ptile);
-
-  return bt == pbase;
 }

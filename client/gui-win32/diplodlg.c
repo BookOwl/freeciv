@@ -22,6 +22,7 @@
 #include <windowsx.h>
 
 #include "fcintl.h"
+#include "game.h"
 #include "government.h"
 #include "map.h"
 #include "mem.h"
@@ -32,8 +33,8 @@
 
 #include "canvas.h"
 #include "chatline.h"
-#include "civclient.h"
 #include "climisc.h"
+#include "clinet.h"
 #include "diptreaty.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
@@ -60,6 +61,8 @@ enum Diplomacy_ids {
   ID_ALLIANCE,
   ID_VISION0,
   ID_VISION1,
+  ID_EMBASSY0,
+  ID_EMBASSY1,
   ID_ERASE,
   ID_LIST,
   ID_ADVANCES_BASE=1000,
@@ -125,7 +128,7 @@ static void update_diplomacy_dialog(struct Diplomacy_dialog *pdialog)
 *****************************************************************/
 static void diplomacy_dialog_close(struct Diplomacy_dialog *pdialog)
 {
-  dsend_packet_diplomacy_cancel_meeting_req(&client.conn,
+  dsend_packet_diplomacy_cancel_meeting_req(&aconnection,
 					    player_number(pdialog->treaty.plr1));
   DestroyWindow(pdialog->mainwin);
   
@@ -163,25 +166,25 @@ static void popup_tech_menu(struct Diplomacy_dialog *pdialog,int plr)
   RECT rc;
   HMENU menu;
   MENUITEMINFO iteminfo;
-  struct player *plr0 = plr?pdialog->treaty.plr1:pdialog->treaty.plr0;
-  struct player *plr1 = plr?pdialog->treaty.plr0:pdialog->treaty.plr1;
-
+  int i, flag;
+  struct player *plr0;
+  struct player *plr1;
+  plr0=plr?pdialog->treaty.plr1:pdialog->treaty.plr0;
+  plr1=plr?pdialog->treaty.plr0:pdialog->treaty.plr1;
   menu=CreatePopupMenu();
-
-  advance_index_iterate(A_FIRST, i) {
-    if (player_invention_state(plr0, i) == TECH_KNOWN
-        && player_invention_reachable(plr1, i)
-        && (player_invention_state(plr1, i) == TECH_UNKNOWN
-            || player_invention_state(plr1, i) == TECH_PREREQS_KNOWN)) {
-      AppendMenu(menu,MF_STRING,ID_ADVANCES_BASE+i,
-		 advance_name_translation(advance_by_number(i)));
-      iteminfo.dwItemData = player_number(plr0) * MAX_NUM_ITEMS * MAX_NUM_ITEMS +
-			    player_number(plr1) * MAX_NUM_ITEMS + i;
+  for(i=1, flag=0; i<game.control.num_tech_types; i++) {
+    if (get_invention(plr0, i) == TECH_KNOWN
+        && (get_invention(plr1, i) == TECH_UNKNOWN  
+            || get_invention(plr1, i) == TECH_REACHABLE)
+        && tech_is_available(plr1, i)) {
+      AppendMenu(menu,MF_STRING,ID_ADVANCES_BASE+i,advance_name_translation(i));
+      iteminfo.dwItemData = plr0->player_no * MAX_NUM_ITEMS * MAX_NUM_ITEMS +
+			    plr1->player_no * MAX_NUM_ITEMS + i;
       iteminfo.fMask = MIIM_DATA;
       iteminfo.cbSize = sizeof(MENUITEMINFO);
       SetMenuItemInfo(menu, ID_ADVANCES_BASE+i, FALSE, &iteminfo);
     }
-  } advance_index_iterate_end;
+  }
   GetWindowRect(GetDlgItem(pdialog->mainwin,plr?ID_TECH1:ID_TECH0),
 		&rc);
   TrackPopupMenu(menu,0,rc.left,rc.top,0,pdialog->mainwin,NULL);  
@@ -252,7 +255,7 @@ static void handle_gold_entry(struct Diplomacy_dialog *pdialog,int plr)
     pgiver = plr ? pdialog->treaty.plr1 : pdialog->treaty.plr0;
     if (sscanf(buf, "%d", &amount) == 1 && amount >= 0
 	&& amount <= pgiver->economic.gold) {
-       dsend_packet_diplomacy_create_clause_req(&client.conn,
+       dsend_packet_diplomacy_create_clause_req(&aconnection, 
 					player_number(pdialog->treaty.plr1),
 					player_number(pgiver),
 					CLAUSE_GOLD, amount);
@@ -270,9 +273,23 @@ static void handle_vision_button(struct Diplomacy_dialog *pdialog,int plr)
   struct player *pgiver;
   pgiver=plr?pdialog->treaty.plr1:pdialog->treaty.plr0;
 
-  dsend_packet_diplomacy_create_clause_req(&client.conn,
+  dsend_packet_diplomacy_create_clause_req(&aconnection, 
 					   player_number(pdialog->treaty.plr1),
 					   player_number(pgiver), CLAUSE_VISION,
+					   0);
+}
+
+/****************************************************************
+
+*****************************************************************/
+static void handle_embassy_button(struct Diplomacy_dialog *pdialog, int plr)
+{
+  struct player *pgiver;
+  pgiver = plr ? pdialog->treaty.plr1 : pdialog->treaty.plr0;
+
+  dsend_packet_diplomacy_create_clause_req(&aconnection, 
+					   player_number(pdialog->treaty.plr1),
+					   player_number(pgiver), CLAUSE_EMBASSY,
 					   0);
 }
 
@@ -309,7 +326,7 @@ static void give_sea_map(struct Diplomacy_dialog *pdialog, int plr)
 {
   struct player *pgiver;
   pgiver=plr?pdialog->treaty.plr1:pdialog->treaty.plr0;
-  dsend_packet_diplomacy_create_clause_req(&client.conn,
+  dsend_packet_diplomacy_create_clause_req(&aconnection,
 					   player_number(pdialog->treaty.plr1),
 					   player_number(pgiver), CLAUSE_SEAMAP,
 					   0);
@@ -322,7 +339,7 @@ static void give_map(struct Diplomacy_dialog *pdialog, int plr)
 {
   struct player *pgiver;
   pgiver=plr?pdialog->treaty.plr1:pdialog->treaty.plr0;
-  dsend_packet_diplomacy_create_clause_req(&client.conn,
+  dsend_packet_diplomacy_create_clause_req(&aconnection,
 					   player_number(pdialog->treaty.plr1),
 					   player_number(pgiver), CLAUSE_MAP,
 					   0);
@@ -339,7 +356,7 @@ static void handle_cities_menu(struct Diplomacy_dialog *pdialog,int choice)
   plrno0 = choice/32;
   choice -= plrno0 * 32;
   plrno1 = choice;
-  dsend_packet_diplomacy_create_clause_req(&client.conn,
+  dsend_packet_diplomacy_create_clause_req(&aconnection, 
 					   player_number(pdialog->treaty.plr1),
 					   plrno0, CLAUSE_CITY, value);
 }
@@ -355,7 +372,7 @@ static void handle_advances_menu(struct Diplomacy_dialog *pdialog,int choice)
 #endif
   int value = choice % MAX_NUM_ITEMS;
 
-  dsend_packet_diplomacy_create_clause_req(&client.conn,
+  dsend_packet_diplomacy_create_clause_req(&aconnection, 
 					   player_number(pdialog->treaty.plr1),
 					   plrno0, CLAUSE_ADVANCE, value);
 }
@@ -366,7 +383,7 @@ static void handle_advances_menu(struct Diplomacy_dialog *pdialog,int choice)
 static void diplomacy_dialog_add_pact_clause(struct Diplomacy_dialog *pdialog,
 					     int type)
 {
-  dsend_packet_diplomacy_create_clause_req(&client.conn,
+  dsend_packet_diplomacy_create_clause_req(&aconnection, 
 					   player_number(pdialog->treaty.plr1),
 					   player_number(pdialog->treaty.plr0),
 					   type, 0);
@@ -384,7 +401,7 @@ static void handle_erase_button(struct Diplomacy_dialog *pdialog)
     return;
   clause_list_iterate(pdialog->treaty.clauses, pclause) {
     if(i == row) {
-      dsend_packet_diplomacy_remove_clause_req(&client.conn,
+      dsend_packet_diplomacy_remove_clause_req(&aconnection,
 					       player_number(pdialog->treaty.plr1),
 					       player_number(pclause->from),
 					       pclause->type, pclause->value);
@@ -399,7 +416,7 @@ static void handle_erase_button(struct Diplomacy_dialog *pdialog)
 *****************************************************************/
 static void handle_accept_button(struct Diplomacy_dialog *pdialog)
 {
-  dsend_packet_diplomacy_accept_treaty_req(&client.conn,
+  dsend_packet_diplomacy_accept_treaty_req(&aconnection,
 					   player_number(pdialog->treaty.plr1));
 }
 
@@ -489,6 +506,12 @@ static LONG CALLBACK diplomacy_proc(HWND dlg,UINT message,WPARAM wParam,LPARAM l
     case ID_VISION1:
       handle_vision_button(pdialog,1);
       break;
+    case ID_EMBASSY0:
+      handle_embassy_button(pdialog,0);
+      break;
+    case ID_EMBASSY1:
+      handle_embassy_button(pdialog,1);
+      break;
     case ID_PACT:
       handle_pact_button(pdialog);
       break;
@@ -558,8 +581,7 @@ static void thumb_setsize(RECT *rc, void *data)
 *****************************************************************/
 static struct Diplomacy_dialog *create_diplomacy_dialog(int other_player_id)
 {
-  struct player *plr0 = client.conn.playing;
-  struct player *plr1 = player_by_number(other_player_id);
+  struct player *plr0 = game.player_ptr, *plr1 = player_by_number(other_player_id);
 
   char buf[512];
   struct fcwin_box *vbox;
@@ -587,6 +609,7 @@ static struct Diplomacy_dialog *create_diplomacy_dialog(int other_player_id)
   fcwin_box_add_button(vbox,_("Maps"),ID_MAP0,0,FALSE,FALSE,5);
   fcwin_box_add_button(vbox,_("Advances"),ID_TECH0,0,FALSE,FALSE,5);
   fcwin_box_add_button(vbox,_("Cities"),ID_CITY0,0,FALSE,FALSE,5);
+  fcwin_box_add_button(vbox,_("Embassy"), ID_EMBASSY0, 0, FALSE, FALSE, 5);
   
   my_snprintf(buf, sizeof(buf), _("Gold(max %d)"), plr0->economic.gold); 
   pdialog->gold0_label=fcwin_box_add_static(vbox,buf,0,SS_LEFT,FALSE,FALSE,5);
@@ -638,7 +661,8 @@ static struct Diplomacy_dialog *create_diplomacy_dialog(int other_player_id)
   fcwin_box_add_button(vbox,_("Maps"),ID_MAP1,0,FALSE,FALSE,5);
   fcwin_box_add_button(vbox,_("Advances"),ID_TECH1,0,FALSE,FALSE,5);
   fcwin_box_add_button(vbox,_("Cities"),ID_CITY1,0,FALSE,FALSE,5);
-
+  fcwin_box_add_button(vbox,_("Embassy"), ID_EMBASSY1, 0, FALSE, FALSE, 5);
+  
   my_snprintf(buf, sizeof(buf), _("Gold(max %d)"), plr1->economic.gold); 
   pdialog->gold1_label=fcwin_box_add_static(vbox,buf,0,SS_LEFT,FALSE,FALSE,5);
   fcwin_box_add_edit(vbox, "", 6, ID_GOLD1, ES_WANTRETURN | ES_MULTILINE
@@ -668,8 +692,7 @@ static struct Diplomacy_dialog *create_diplomacy_dialog(int other_player_id)
 *****************************************************************/
 static struct Diplomacy_dialog *find_diplomacy_dialog(int other_player_id)
 {
-  struct player *plr0 = client.conn.playing;
-  struct player *plr1 = player_by_number(other_player_id);
+  struct player *plr0 = game.player_ptr, *plr1 = player_by_number(other_player_id);
 
   if(!dialog_list_list_has_been_initialised) {
     dialog_list = dialog_list_new();
@@ -694,7 +717,7 @@ static void popup_diplomacy_dialog(int other_player_id)
 {
   struct Diplomacy_dialog *pdialog;
 
-  if (client.conn.playing->ai.control) {
+  if (game.player_ptr->ai.control) {
     return;			/* Don't show if we are AI controlled. */
   }
 

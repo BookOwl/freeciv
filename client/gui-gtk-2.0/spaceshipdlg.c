@@ -29,8 +29,7 @@
 #include "shared.h"
 #include "support.h"
 
-#include "civclient.h"
-#include "climisc.h"
+#include "clinet.h"
 #include "colors.h"
 #include "dialogs.h"
 #include "graphics.h"
@@ -43,8 +42,9 @@
 #include "options.h"
 #include "repodlgs.h"
 #include "spaceship.h"
-#include "text.h"
 #include "tilespec.h"
+#include "climisc.h"
+#include "text.h"
 
 #include "spaceshipdlg.h"
 
@@ -117,7 +117,7 @@ void refresh_spaceship_dialog(struct player *pplayer)
   pship=&(pdialog->pplayer->spaceship);
 
   if (game.info.spacerace
-     && pplayer == client.conn.playing
+     && player_number(pplayer) == game.info.player_idx
      && pship->state == SSHIP_STARTED
      && pship->success_rate > 0.0) {
     gui_dialog_set_response_sensitive(pdialog->shell,
@@ -192,7 +192,7 @@ static void spaceship_response(struct gui_dialog *dlg, int response,
   switch (response) {
   case GTK_RESPONSE_ACCEPT:
     {
-      send_packet_spaceship_launch(&client.conn);
+      send_packet_spaceship_launch(&aconnection);
     }
     break;
 
@@ -250,7 +250,7 @@ struct spaceship_dialog *create_spaceship_dialog(struct player *pplayer)
   gtk_misc_set_alignment(GTK_MISC(pdialog->info_label), 0.0, 0.0);
 
   gtk_box_pack_start(GTK_BOX(hbox), pdialog->info_label, FALSE, FALSE, 0);
-  gtk_widget_set_name(pdialog->info_label, "spaceship_label");
+  gtk_widget_set_name(pdialog->info_label, "spaceship label");
 
   dialog_list_prepend(dialog_list, pdialog);
 

@@ -64,18 +64,18 @@ enum impr_genus_id find_genus_by_rule_name(const char *s)
 }
 
 /****************************************************************************
-  Initialize building structures.
+  Inialize building structures.
 ****************************************************************************/
 void improvements_init(void)
 {
   int i;
 
-  /* Can't use improvement_iterate() or improvement_by_number() here
-   * because num_impr_types isn't known yet. */
+  /* Can't use impr_type_iterate or improvement_by_number here because
+   * num_impr_types isn't known yet. */
   for (i = 0; i < ARRAY_SIZE(improvement_types); i++) {
     struct impr_type *p = &improvement_types[i];
 
-    p->item_number = i;
+    p->index = i;
     requirement_vector_init(&p->reqs);
   }
 }
@@ -83,8 +83,10 @@ void improvements_init(void)
 /**************************************************************************
   Frees the memory associated with this improvement.
 **************************************************************************/
-static void improvement_free(struct impr_type *p)
+static void improvement_free(Impr_type_id id)
 {
+  struct impr_type *p = improvement_by_number(id);
+
   free(p->helptext);
   p->helptext = NULL;
 
@@ -96,60 +98,34 @@ static void improvement_free(struct impr_type *p)
 ***************************************************************/
 void improvements_free()
 {
-  improvement_iterate(p) {
-    improvement_free(p);
-  } improvement_iterate_end;
+  impr_type_iterate(impr) {
+    improvement_free(impr);
+  } impr_type_iterate_end;
 }
 
 /**************************************************************************
-  Return the first item of improvements.
+Returns 1 if the improvement_type "exists" in this game, 0 otherwise.
+An improvement_type doesn't exist if one of:
+- id is out of range;
+- the improvement_type has been flagged as removed by setting its
+  tech_req to A_LAST;
+- it is a space part, and the spacerace is not enabled.
+Arguably this should be called improvement_type_exists, but that's too long.
 **************************************************************************/
-struct impr_type *improvement_array_first(void)
+bool improvement_exists(Impr_type_id id)
 {
-  if (game.control.num_impr_types > 0) {
-    return improvement_types;
+  if (id < 0 || id >= B_LAST || id>= game.control.num_impr_types)
+    return FALSE;
+
+  if (!game.info.spacerace
+      && (building_has_effect(id, EFT_SS_STRUCTURAL)
+	  || building_has_effect(id, EFT_SS_COMPONENT)
+	  || building_has_effect(id, EFT_SS_MODULE))) {
+    /* This assumes that space parts don't have any other effects. */
+    return FALSE;
   }
-  return NULL;
-}
 
-/**************************************************************************
-  Return the last item of improvements.
-**************************************************************************/
-const struct impr_type *improvement_array_last(void)
-{
-  if (game.control.num_impr_types > 0) {
-    return &improvement_types[game.control.num_impr_types - 1];
-  }
-  return NULL;
-}
-
-/**************************************************************************
-  Return the number of improvements.
-**************************************************************************/
-Impr_type_id improvement_count(void)
-{
-  return game.control.num_impr_types;
-}
-
-/**************************************************************************
-  Return the improvement index.
-
-  Currently same as improvement_number(), paired with improvement_count()
-  indicates use as an array index.
-**************************************************************************/
-Impr_type_id improvement_index(const struct impr_type *pimprove)
-{
-  assert(pimprove);
-  return pimprove - improvement_types;
-}
-
-/**************************************************************************
-  Return the improvement index.
-**************************************************************************/
-Impr_type_id improvement_number(const struct impr_type *pimprove)
-{
-  assert(pimprove);
-  return pimprove->item_number;
+  return TRUE;
 }
 
 /**************************************************************************
@@ -158,79 +134,44 @@ Impr_type_id improvement_number(const struct impr_type *pimprove)
 **************************************************************************/
 struct impr_type *improvement_by_number(const Impr_type_id id)
 {
-  if (id < 0 || id >= improvement_count()) {
+  if (id < 0 || id >= game.control.num_impr_types) {
     return NULL;
   }
   return &improvement_types[id];
 }
 
 /**************************************************************************
-  Returns pointer when the improvement_type "exists" in this game,
-  returns NULL otherwise.
-
-  An improvement_type doesn't exist for any of:
-   - the improvement_type has been flagged as removed by setting its
-     tech_req to A_LAST; [was not in current 2007-07-27]
-   - it is a space part, and the spacerace is not enabled.
-**************************************************************************/
-struct impr_type *valid_improvement(struct impr_type *pimprove)
-{
-  if (NULL == pimprove) {
-    return NULL;
-  }
-
-  if (!game.info.spacerace
-      && (building_has_effect(pimprove, EFT_SS_STRUCTURAL)
-	  || building_has_effect(pimprove, EFT_SS_COMPONENT)
-	  || building_has_effect(pimprove, EFT_SS_MODULE))) {
-    /* This assumes that space parts don't have any other effects. */
-    return NULL;
-  }
-
-  return pimprove;
-}
-
-/**************************************************************************
-  Returns pointer when the improvement_type "exists" in this game,
-  returns NULL otherwise.
-
-  In addition to valid_improvement(), tests for id is out of range.
-**************************************************************************/
-struct impr_type *valid_improvement_by_number(const Impr_type_id id)
-{
-  return valid_improvement(improvement_by_number(id));
-}
-
-/**************************************************************************
   Return the (translated) name of the given improvement. 
   You don't have to free the return pointer.
 **************************************************************************/
-const char *improvement_name_translation(struct impr_type *pimprove)
+const char *improvement_name_translation(Impr_type_id id)
 {
-  if (NULL == pimprove->name.translated) {
+  struct impr_type *itp = improvement_by_number(id);
+
+  if (NULL == itp->name.translated) {
     /* delayed (unified) translation */
-    pimprove->name.translated = ('\0' == pimprove->name.vernacular[0])
-				? pimprove->name.vernacular
-				: Q_(pimprove->name.vernacular);
+    itp->name.translated = ('\0' == itp->name.vernacular[0])
+			   ? itp->name.vernacular
+			   : Q_(itp->name.vernacular);
   }
-  return pimprove->name.translated;
+  return itp->name.translated;
 }
 
 /****************************************************************************
   Return the (untranslated) rule name of the improvement.
   You don't have to free the return pointer.
 ****************************************************************************/
-const char *improvement_rule_name(const struct impr_type *pimprove)
+const char *improvement_rule_name(Impr_type_id id)
 {
-  return Qn_(pimprove->name.vernacular); 
+  return Qn_(improvement_by_number(id)->name.vernacular); 
 }
 
 /****************************************************************************
   Returns the number of shields it takes to build this improvement.
 ****************************************************************************/
-int impr_build_shield_cost(const struct impr_type *pimprove)
+int impr_build_shield_cost(Impr_type_id id)
 {
-  int base = pimprove->build_cost;
+  int base = improvement_by_number(id)->build_cost;
 
   return MAX(base * game.info.shieldbox / 100, 1);
 }
@@ -238,12 +179,12 @@ int impr_build_shield_cost(const struct impr_type *pimprove)
 /****************************************************************************
   Returns the amount of gold it takes to rush this improvement.
 ****************************************************************************/
-int impr_buy_gold_cost(const struct impr_type *pimprove, int shields_in_stock)
+int impr_buy_gold_cost(Impr_type_id id, int shields_in_stock)
 {
   int cost = 0;
-  const int missing = impr_build_shield_cost(pimprove) - shields_in_stock;
+  const int missing = impr_build_shield_cost(id) - shields_in_stock;
 
-  if (improvement_has_flag(pimprove, IF_GOLD)) {
+  if (improvement_has_flag(id, IF_GOLD)) {
     /* Can't buy capitalization. */
     return 0;
   }
@@ -252,7 +193,7 @@ int impr_buy_gold_cost(const struct impr_type *pimprove, int shields_in_stock)
     cost = 2 * missing;
   }
 
-  if (is_wonder(pimprove)) {
+  if (is_wonder(id)) {
     cost *= 2;
   }
   if (shields_in_stock == 0) {
@@ -264,59 +205,58 @@ int impr_buy_gold_cost(const struct impr_type *pimprove, int shields_in_stock)
 /****************************************************************************
   Returns the amount of gold received when this improvement is sold.
 ****************************************************************************/
-int impr_sell_gold(const struct impr_type *pimprove)
+int impr_sell_gold(Impr_type_id id)
 {
-  return impr_build_shield_cost(pimprove);
+  return impr_build_shield_cost(id);
 }
 
 /**************************************************************************
 ...
 **************************************************************************/
-bool is_wonder(const struct impr_type *pimprove)
+bool is_wonder(Impr_type_id id)
 {
-  return (is_great_wonder(pimprove) || is_small_wonder(pimprove));
+  return (is_great_wonder(id) || is_small_wonder(id));
 }
 
 /**************************************************************************
   Does a linear search of improvement_types[].name.translated
-  Returns NULL when none match.
+  Returns B_LAST if none match.
 **************************************************************************/
-struct impr_type *find_improvement_by_translated_name(const char *name)
+Impr_type_id find_improvement_by_translated_name(const char *s)
 {
-  improvement_iterate(pimprove) {
-    if (0 == strcmp(improvement_name_translation(pimprove), name)) {
-      return pimprove;
+  impr_type_iterate(i) {
+    if (0 == strcmp(improvement_name_translation(i), s)) {
+      return i;
     }
-  } improvement_iterate_end;
+  } impr_type_iterate_end;
 
-  return NULL;
+  return B_LAST;
 }
 
 /****************************************************************************
   Does a linear search of improvement_types[].name.vernacular
-  Returns NULL when none match.
+  Returns B_LAST if none match.
 ****************************************************************************/
-struct impr_type *find_improvement_by_rule_name(const char *name)
+Impr_type_id find_improvement_by_rule_name(const char *s)
 {
-  const char *qname = Qn_(name);
+  const char *qs = Qn_(s);
 
-  improvement_iterate(pimprove) {
-    if (0 == mystrcasecmp(improvement_rule_name(pimprove), qname)) {
-      return pimprove;
+  impr_type_iterate(i) {
+    if (0 == mystrcasecmp(improvement_rule_name(i), qs)) {
+      return i;
     }
-  } improvement_iterate_end;
+  } impr_type_iterate_end;
 
-  return NULL;
+  return B_LAST;
 }
 
 /**************************************************************************
  Return TRUE if the impr has this flag otherwise FALSE
 **************************************************************************/
-bool improvement_has_flag(const struct impr_type *pimprove,
-			  enum impr_flag_id flag)
+bool improvement_has_flag(Impr_type_id id, enum impr_flag_id flag)
 {
   assert(flag >= 0 && flag < IF_LAST);
-  return TEST_BIT(pimprove->flags, flag);
+  return TEST_BIT(improvement_by_number(id)->flags, flag);
 }
 
 /**************************************************************************
@@ -340,44 +280,47 @@ enum impr_flag_id find_improvement_flag_by_rule_name(const char *s)
 /**************************************************************************
  Return TRUE if the improvement should be visible to others without spying
 **************************************************************************/
-bool is_improvement_visible(const struct impr_type *pimprove)
+bool is_improvement_visible(Impr_type_id id)
 {
-  return (is_wonder(pimprove) || improvement_has_flag(pimprove, IF_VISIBLE_BY_OTHERS));
+  return (is_wonder(id) || improvement_has_flag(id, IF_VISIBLE_BY_OTHERS));
 }
 
 /**************************************************************************
  Returns 1 if the improvement is obsolete, now also works for wonders
 **************************************************************************/
-bool improvement_obsolete(const struct player *pplayer,
-			  const struct impr_type *pimprove)
+bool improvement_obsolete(const struct player *pplayer, Impr_type_id id) 
 {
-  if (!valid_advance(pimprove->obsolete_by)) {
+  struct impr_type *impr = improvement_by_number(id);
+
+  if (!tech_exists(impr->obsolete_by)) {
     return FALSE;
   }
 
-  if (is_great_wonder(pimprove)) {
+  if (is_great_wonder(id)) {
     /* a great wonder is obsolete, as soon as *any* player researched the
        obsolete tech */
-   return game.info.global_advances[advance_index(pimprove->obsolete_by)];
+   return game.info.global_advances[impr->obsolete_by];
   }
 
-  return (player_invention_state(pplayer, advance_number(pimprove->obsolete_by)) == TECH_KNOWN);
+  return (get_invention(pplayer, impr->obsolete_by) == TECH_KNOWN);
 }
 
 /**************************************************************************
   Returns TRUE iff improvement provides units buildable by player
 **************************************************************************/
 bool impr_provides_buildable_units(const struct player *pplayer,
-                                   const struct impr_type *pimprove)
+                                   Impr_type_id id)
 {
+  struct impr_type *impr = improvement_by_number(id);
+
   /* Fast check */
-  if (! pimprove->allows_units) {
+  if (! impr->allows_units) {
     return FALSE;
   }
 
   unit_type_iterate(ut) {
-    if (ut->need_improvement == pimprove) {
-      if (can_player_build_unit_now(pplayer, ut)) {
+    if (ut->impr_requirement == id) {
+      if (can_player_build_unit(pplayer, ut)) {
         return TRUE;
       }
     }
@@ -391,15 +334,19 @@ bool impr_provides_buildable_units(const struct player *pplayer,
    is obsolete.
 **************************************************************************/
 bool can_player_build_improvement_direct(const struct player *p,
-					 struct impr_type *pimprove)
+					 Impr_type_id id)
 {
+  struct impr_type *impr;
   bool space_part = FALSE;
 
-  if (!valid_improvement(pimprove)) {
+  /* This also checks if tech req is Never */
+  if (!improvement_exists(id)) {
     return FALSE;
   }
 
-  requirement_vector_iterate(&pimprove->reqs, preq) {
+  impr = improvement_by_number(id);
+
+  requirement_vector_iterate(&impr->reqs, preq) {
     if (preq->range >= REQ_RANGE_PLAYER
         && !is_req_active(p, NULL, NULL, NULL, NULL, NULL, NULL, preq,
                           RPT_CERTAIN)) {
@@ -409,19 +356,19 @@ bool can_player_build_improvement_direct(const struct player *p,
 
   /* Check for space part construction.  This assumes that space parts have
    * no other effects. */
-  if (building_has_effect(pimprove, EFT_SS_STRUCTURAL)) {
+  if (building_has_effect(id, EFT_SS_STRUCTURAL)) {
     space_part = TRUE;
     if (p->spaceship.structurals >= NUM_SS_STRUCTURALS) {
       return FALSE;
     }
   }
-  if (building_has_effect(pimprove, EFT_SS_COMPONENT)) {
+  if (building_has_effect(id, EFT_SS_COMPONENT)) {
     space_part = TRUE;
     if (p->spaceship.components >= NUM_SS_COMPONENTS) {
       return FALSE;
     }
   }
-  if (building_has_effect(pimprove, EFT_SS_MODULE)) {
+  if (building_has_effect(id, EFT_SS_MODULE)) {
     space_part = TRUE;
     if (p->spaceship.modules >= NUM_SS_MODULES) {
       return FALSE;
@@ -433,9 +380,9 @@ bool can_player_build_improvement_direct(const struct player *p,
     return FALSE;
   }
 
-  if (is_great_wonder(pimprove)) {
+  if (is_great_wonder(id)) {
     /* Can't build wonder if already built */
-    if (great_wonder_was_built(pimprove)) {
+    if (great_wonder_was_built(id)) {
       return FALSE;
     }
   }
@@ -444,16 +391,16 @@ bool can_player_build_improvement_direct(const struct player *p,
 }
 
 /**************************************************************************
-  Whether player can build given building somewhere immediately.
-  Returns FALSE if building is obsolete.
+  Whether player can _eventually_ build given building somewhere -- i.e.,
+  returns TRUE if building is available with current tech OR will be
+  available with future tech.  Returns FALSE if building is obsolete.
 **************************************************************************/
-bool can_player_build_improvement_now(const struct player *p,
-				      struct impr_type *pimprove)
+bool can_player_build_improvement(const struct player *p, Impr_type_id id)
 {
-  if (!can_player_build_improvement_direct(p, pimprove)) {
+  if (!can_player_build_improvement_direct(p, id)) {
     return FALSE;
   }
-  if (improvement_obsolete(p, pimprove)) {
+  if (improvement_obsolete(p, id)) {
     return FALSE;
   }
   return TRUE;
@@ -464,19 +411,22 @@ bool can_player_build_improvement_now(const struct player *p,
   returns TRUE if building is available with current tech OR will be
   available with future tech.  Returns FALSE if building is obsolete.
 **************************************************************************/
-bool can_player_build_improvement_later(const struct player *p,
-					struct impr_type *pimprove)
+bool can_player_eventually_build_improvement(const struct player *p,
+					     Impr_type_id id)
 {
-  if (!valid_improvement(pimprove)) {
+  struct impr_type *building;
+
+  if (!improvement_exists(id)) {
     return FALSE;
   }
-  if (improvement_obsolete(p, pimprove)) {
+  if (improvement_obsolete(p, id)) {
     return FALSE;
   }
 
   /* Check for requirements that aren't met and that are unchanging (so
    * they can never be met). */
-  requirement_vector_iterate(&pimprove->reqs, preq) {
+  building = improvement_by_number(id);
+  requirement_vector_iterate(&building->reqs, preq) {
     if (preq->range >= REQ_RANGE_PLAYER
 	&& is_req_unchanging(preq)
         && !is_req_active(p, NULL, NULL, NULL, NULL, NULL, NULL, preq,
@@ -493,69 +443,68 @@ bool can_player_build_improvement_later(const struct player *p,
 /**************************************************************************
   Is this building a great wonder?
 **************************************************************************/
-bool is_great_wonder(const struct impr_type *pimprove)
+bool is_great_wonder(Impr_type_id id)
 {
-  return (pimprove->genus == IG_GREAT_WONDER);
+  return (improvement_by_number(id)->genus == IG_GREAT_WONDER);
 }
 
 /**************************************************************************
   Is this building a small wonder?
 **************************************************************************/
-bool is_small_wonder(const struct impr_type *pimprove)
+bool is_small_wonder(Impr_type_id id)
 {
-  return (pimprove->genus == IG_SMALL_WONDER);
+  return (improvement_by_number(id)->genus == IG_SMALL_WONDER);
 }
 
 /**************************************************************************
   Is this building a regular improvement?
 **************************************************************************/
-bool is_improvement(const struct impr_type *pimprove)
+bool is_improvement(Impr_type_id id)
 {
-  return (pimprove->genus == IG_IMPROVEMENT);
+  return (improvement_by_number(id)->genus == IG_IMPROVEMENT);
 }
 
 /**************************************************************************
   Get the world city with this great wonder.
 **************************************************************************/
-struct city *find_city_from_great_wonder(const struct impr_type *pimprove)
+struct city *find_city_from_great_wonder(Impr_type_id id)
 {
-  return game_find_city_by_number(game.info.great_wonders[improvement_index(pimprove)]);
+  return (game_find_city_by_number(game.info.great_wonders[id]));
 }
 
 /**************************************************************************
   Get the player city with this small wonder.
 **************************************************************************/
 struct city *find_city_from_small_wonder(const struct player *pplayer,
-					 const struct impr_type *pimprove)
+					 Impr_type_id id)
 {
   if (!pplayer) {
     return NULL; /* Used in some places in the client. */
   }
-  return player_find_city_by_id(pplayer, pplayer->small_wonders[improvement_index(pimprove)]);
+  return (player_find_city_by_id(pplayer, pplayer->small_wonders[id]));
 }
 
 /**************************************************************************
   Was this great wonder built?
 **************************************************************************/
-bool great_wonder_was_built(const struct impr_type *pimprove)
+bool great_wonder_was_built(Impr_type_id id)
 {
-  return (game.info.great_wonders[improvement_index(pimprove)] != 0);
+  return (game.info.great_wonders[id] != 0);
 }
 
 /**************************************************************************
   Return TRUE iff the improvement can be sold.
 **************************************************************************/
-bool can_sell_building(struct impr_type *pimprove)
+bool can_sell_building(Impr_type_id id)
 {
-  return (valid_improvement(pimprove) && is_improvement(pimprove));
+  return is_improvement(id);
 }
 
 /****************************************************************************
   Return TRUE iff the city can sell the given improvement.
 ****************************************************************************/
-bool can_city_sell_building(struct city *pcity,
-			    struct impr_type *pimprove)
+bool can_city_sell_building(struct city *pcity, Impr_type_id id)
 {
-  return (city_has_building(pcity, pimprove) && is_improvement(pimprove));
+  return (city_got_building(pcity, id) ? can_sell_building(id) : FALSE);
 }
 

@@ -71,11 +71,6 @@
                           "~/.freeciv"
 #endif
 
-/* environment */
-#ifndef FREECIV_PATH
-#define FREECIV_PATH "FREECIV_PATH"
-#endif
-
 /* Both of these are stored in the local encoding.  The grouping_sep must
  * be converted to the internal encoding when it's used. */
 static char *grouping = NULL;
@@ -922,14 +917,12 @@ const char **get_data_dirs(int *num_dirs)
     return dirs;
   }
 
-  path = getenv(FREECIV_PATH);
+  path = getenv("FREECIV_PATH");
   if (!path) {
     path = DEFAULT_DATA_PATH;
   } else if (*path == '\0') {
-    freelog(LOG_ERROR,
-            /* TRANS: <FREECIV_PATH> configuration error */
-            _("\"%s\" is set but empty; using default \"%s\" instead."),
-            FREECIV_PATH, DEFAULT_DATA_PATH);
+    freelog(LOG_ERROR, _("FREECIV_PATH is set but empty; "
+			 "using default path instead."));
     path = DEFAULT_DATA_PATH;
   }
   assert(path != NULL);
@@ -1032,8 +1025,7 @@ char **datafilelist(const char* suffix)
 	freelog(LOG_VERBOSE, "Skipping non-existing data directory %s.",
 		dirs[dir_num]);
       } else {
-	/* TRANS: "...: <externally translated error string>."*/
-        freelog(LOG_ERROR, _("Could not read data directory %s: %s."),
+	freelog(LOG_ERROR, _("Could not read data directory %s: %s."),
 		dirs[dir_num], mystrerror());
       }
       continue;
@@ -1284,21 +1276,17 @@ char *datafilename_required(const char *filename)
   if (dname) {
     return dname;
   } else {
-    freelog(LOG_ERROR,
-            /* TRANS: <FREECIV_PATH> configuration error */
-            _("The data path may be set via the \"%s\" environment variable."),
-            FREECIV_PATH);
-    freelog(LOG_ERROR,
-            _("Current data path is: \"%s\""),
-            datafilename(NULL));
+    freelog(LOG_ERROR, _("The data path may be set via"
+			 " the environment variable FREECIV_PATH."));
+    freelog(LOG_ERROR, _("Current data path is: \"%s\""), datafilename(NULL));
     freelog(LOG_FATAL,
-            _("The \"%s\" file is required ... aborting!"), filename);
+		 _("The \"%s\" file is required ... aborting!"), filename);
     exit(EXIT_FAILURE);
   }
 }
 
 /***************************************************************************
-  Language environmental variable (with emulation).
+  Language environmental variable.
 ***************************************************************************/
 char *get_langname(void)
 {

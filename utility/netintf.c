@@ -50,7 +50,6 @@
 #include <windows.h>	/* GetTempPath */
 #endif
 
-#include "fcintl.h"
 #include "log.h"
 #include "shared.h"		/* TRUE, FALSE */
 #include "support.h"
@@ -76,16 +75,12 @@ static void set_socket_errno(void)
       errno = WSAGetLastError();
       return;
     default:
-      freelog(LOG_ERROR,
-              "Missing errno mapping for Winsock error #%d.",
-              WSAGetLastError());
-      freelog(LOG_ERROR,
-              /* TRANS: No full stop after the URL, could cause confusion. */
-              _("Please report this message at %s"),
-              BUG_URL);
+      freelog(LOG_ERROR, "Missing errno mapping for Winsock error #%d. "
+                         "Please report this message at %s.",
+                         WSAGetLastError(), BUG_URL);
   }
 }
-#endif /* HAVE_WINSOCK */
+#endif
 
 /***************************************************************
   Connect a socket to an address
@@ -241,137 +236,36 @@ void my_nonblock(int sockfd)
 }
 
 /***************************************************************************
-  Write information about socaddr to debug log.
-***************************************************************************/
-void sockaddr_debug(union my_sockaddr *addr)
-{
-#ifdef IPV6_SUPPORT
-  char buf[INET6_ADDRSTRLEN] = "Unknown";
-
-  if (addr->saddr.sa_family == AF_INET6) { 
-    inet_ntop(AF_INET6, &addr->saddr_in6.sin6_addr, buf, INET6_ADDRSTRLEN);
-    freelog(LOG_DEBUG, "Host: %s, Port: %d (IPv6)",
-            buf, ntohs(addr->saddr_in6.sin6_port));
-  } else {
-    inet_ntop(AF_INET, &addr->saddr_in4.sin_addr, buf, INET_ADDRSTRLEN);
-    freelog(LOG_DEBUG, "Host: %s, Port: %d (IPv4)",
-            buf, ntohs(addr->saddr_in4.sin_port));
-  }
-#else  /* IPv6 support */
-  char *buf;
-
-  buf = inet_ntoa(addr->saddr_in4.sin_addr);
-
-  freelog(LOG_DEBUG, "Host: %s, Port: %d",
-          buf, ntohs(addr->saddr_in4.sin_port));
-#endif /* IPv6 support */
-}
-
-/***************************************************************************
-  Gets size of address to my_sockaddr. IPv6/IPv4 must be selected before
-  calling this.
-***************************************************************************/
-int sockaddr_size(union my_sockaddr *addr)
-{
-#ifdef IPV6_SUPPORT
-  if (addr->saddr.sa_family == AF_INET6) {
-    return sizeof(addr->saddr_in6);
-  } else
-#endif /* IPV6_SUPPORT */
-  {
-    return sizeof(addr->saddr_in4);
-  }
-}
-
-/***************************************************************************
-  Returns wether address is IPv6 address.
-***************************************************************************/
-bool sockaddr_ipv6(union my_sockaddr *addr)
-{
-#ifdef IPV6_SUPPORT
-  if (addr->saddr.sa_family == AF_INET6) {
-    return TRUE;
-  } else
-#endif /* IPv6 support */
-  {
-    return FALSE;
-  }
-}
-
-/***************************************************************************
   Look up the service at hostname:port and fill in *sa.
 ***************************************************************************/
 bool net_lookup_service(const char *name, int port, union my_sockaddr *addr)
 {
   struct hostent *hp;
-  struct sockaddr_in *sock4;
-#ifdef IPV6_SUPPORT
-  struct sockaddr_in6 *sock6;
-#endif /* IPv6 support */
+  struct sockaddr_in *sock = &addr->sockaddr_in;
 
-  sock4 = &addr->saddr_in4;
-
-#ifdef IPV6_SUPPORT
-  sock6 = &addr->saddr_in6;
-
-  addr->saddr.sa_family = AF_INET6;
-  sock6->sin6_port = htons(port);
+  sock->sin_family = AF_INET;
+  sock->sin_port = htons(port);
 
   if (!name) {
-    sock6->sin6_addr = in6addr_any;
+    sock->sin_addr.s_addr = htonl(INADDR_ANY);
     return TRUE;
   }
-#else /* IPv6 support */
-  addr->saddr.sa_family = AF_INET;
-  sock4->sin_port = htons(port);
 
-  if (!name) {
-    sock4->sin_addr.s_addr = htonl(INADDR_ANY);
+#ifdef HAVE_INET_ATON
+  if (inet_aton(name, &sock->sin_addr) != 0) {
     return TRUE;
   }
-#endif /* IPv6 support */
-
-#ifdef IPV6_SUPPORT
-  if (inet_pton(AF_INET6, name, &sock6->sin6_addr)) {
+#else
+  if ((sock->sin_addr.s_addr = inet_addr(name)) != INADDR_NONE) {
     return TRUE;
   }
-  /* TODO: Replace gethostbyname2() with getaddrinfo() */
-  hp = gethostbyname2(name, AF_INET6);
-  if (!hp || hp->h_addrtype != AF_INET6) {
-    /* Try to fallback to IPv4 resolution */
-    freelog(LOG_DEBUG, "Falling back to IPv4");
-    hp = gethostbyname2(name, AF_INET);
-    if (!hp || hp->h_addrtype != AF_INET) {
-      return FALSE;
-    }
-    addr->saddr.sa_family = AF_INET;
-    sock4->sin_port = htons(port);
-  }
-#else  /* IPV6 support */
-#if defined(HAVE_INET_ATON)
-  if (inet_aton(name, &sock4->sin_addr) != 0) {
-    return TRUE;
-  }
-#else  /* HAVE_INET_ATON */
-  if ((sock4->sin_addr.s_addr = inet_addr(name)) != INADDR_NONE) {
-    return TRUE;
-  }
-#endif /* HAVE_INET_ATON */
+#endif
   hp = gethostbyname(name);
   if (!hp || hp->h_addrtype != AF_INET) {
     return FALSE;
   }
-#endif /* IPv6 support */
 
-#ifdef IPV6_SUPPORT
-  if (addr->saddr.sa_family == AF_INET6) {
-    memcpy(&sock6->sin6_addr, hp->h_addr, hp->h_length);
-  } else
-#endif /* IPv6 support */
-  {
-    memcpy(&sock4->sin_addr, hp->h_addr, hp->h_length);
-  }
-
+  memcpy(&sock->sin_addr, hp->h_addr, hp->h_length);
   return TRUE;
 }
 
@@ -443,8 +337,6 @@ fz_FILE *my_querysocket(int sock, void *buf, size_t size)
 const char *my_lookup_httpd(char *server, int *port, const char *url)
 {
   const char *purl, *str, *ppath, *pport;
-  const char *str2;
-  int chars_between = 0;
 
   if ((purl = getenv("http_proxy")) && purl[0] != '\0') {
     if (strncmp(purl, "http://", strlen("http://")) != 0) {
@@ -461,29 +353,17 @@ const char *my_lookup_httpd(char *server, int *port, const char *url)
 
   str += strlen("http://");
 
-  if (*str == '[') {
-    /* Literal IPv6 address (RFC 2732) */
-    str++;
-    str2 = strchr(str, ']') + 1;
-    if (!str2) {
-      str2 = str + strlen(str);
-    }
-    chars_between = 1;
-  } else {
-    str2 = str;
-  }
-
-  pport = strchr(str2, ':');
-  ppath = strchr(str2, '/');
+  pport = strchr(str, ':');
+  ppath = strchr(str, '/');
 
   /* snarf server. */
   server[0] = '\0';
 
   if (pport) {
-    strncat(server, str, MIN(MAX_LEN_ADDR, pport-str-chars_between));
+    strncat(server, str, MIN(MAX_LEN_ADDR, pport-str));
   } else {
     if (ppath) {
-      strncat(server, str, MIN(MAX_LEN_ADDR, ppath-str-chars_between));
+      strncat(server, str, MIN(MAX_LEN_ADDR, ppath-str));
     } else {
       strncat(server, str, MAX_LEN_ADDR);
     }
@@ -557,7 +437,7 @@ int find_next_free_port(int starting_port)
 
   for (port = starting_port;; port++) {
     union my_sockaddr tmp;
-    struct sockaddr_in *sock = &tmp.saddr_in4;
+    struct sockaddr_in *sock = &tmp.sockaddr_in;
 
     memset(&tmp, 0, sizeof(tmp));
 
@@ -565,7 +445,7 @@ int find_next_free_port(int starting_port)
     sock->sin_port = htons(port);
     sock->sin_addr.s_addr = htonl(INADDR_ANY);
 
-    if (bind(s, &tmp.saddr, sockaddr_size(&tmp)) == 0) {
+    if (bind(s, &tmp.sockaddr, sizeof(tmp.sockaddr)) == 0) {
       break;
     }
   }

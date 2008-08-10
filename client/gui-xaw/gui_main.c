@@ -48,22 +48,20 @@
 #include "unitlist.h"
 #include "version.h"
 
-/* client */
 #include "civclient.h"
 #include "climisc.h"
 #include "clinet.h"
 #include "control.h"
-#include "editgui_g.h"
 #include "options.h"
 #include "text.h"
 #include "tilespec.h"
 
-/* gui-xaw */
 #include "actions.h"
 #include "colors.h"
 #include "dialogs.h"
 #include "graphics.h"
 #include "gui_stuff.h"		/* I_SW() */
+#include "helpdata.h"		/* boot_help_texts() */
 #include "mapview.h"
 #include "menu.h"
 #include "optiondlg.h"
@@ -246,8 +244,7 @@ static void print_usage(const char *argv0)
   /* add client-specific usage information here */
   fc_fprintf(stderr, _("This client has no special command line options\n\n"));
 
-  /* TRANS: No full stop after the URL, could cause confusion. */
-  fc_fprintf(stderr, _("Report bugs at %s\n"), BUG_URL);
+  fc_fprintf(stderr, _("Report bugs at %s.\n"), BUG_URL);
 }
 
 /**************************************************************************
@@ -526,7 +523,7 @@ static void unit_icon_callback(Widget w, XtPointer client_data,
     return;
   punit=game_find_unit_by_number(unit_ids[i]);
   if(punit) { /* should always be true at this point */
-    if (unit_owner(punit) == client.conn.playing) {
+    if (unit_owner(punit) == game.player_ptr) {
       /* may be non-true if alliance */
       set_unit_focus(punit);
     }
@@ -795,7 +792,7 @@ static void set_wait_for_writable_socket(struct connection *pc,
     return;
   freelog(LOG_DEBUG, "set_wait_for_writable_socket(%d)", socket_writable);
   XtRemoveInput(x_input_id);
-  x_input_id = XtAppAddInput(app_context, client.conn.sock,
+  x_input_id = XtAppAddInput(app_context, aconnection.sock,
 			     (XtPointer) (XtInputReadMask |
 					  (socket_writable ?
 					   XtInputWriteMask : 0) |
@@ -814,7 +811,7 @@ void add_net_input(int sock)
 			     (XtPointer) (XtInputReadMask |
 					  XtInputExceptMask),
 			     (XtInputCallbackProc) get_net_input, NULL);
-  client.conn.notify_of_writable_data = set_wait_for_writable_socket;
+  aconnection.notify_of_writable_data = set_wait_for_writable_socket;
 }
 
 /**************************************************************************
@@ -903,8 +900,7 @@ void set_unit_icons_more_arrow(bool onoff)
 
   if (onoff && !showing) {
     /* FIXME: what about the mask? */
-    xaw_set_bitmap(more_arrow_label,
-		   get_arrow_sprite(tileset, ARROW_RIGHT)->pixmap);
+    xaw_set_bitmap(more_arrow_label, get_arrow_sprite(tileset)->pixmap);
     showing = TRUE;
   }
   else if(!onoff && showing) {
@@ -1040,7 +1036,7 @@ void select_battlegroup(int battlegroup)
 ****************************************************************************/
 void add_unit_to_battlegroup(int battlegroup)
 {
-  if (NULL != client.conn.playing && can_client_issue_orders()) {
+  if (game.player_ptr && can_client_issue_orders()) {
     struct unit *punit;
 
     punit = head_of_units_in_focus();
@@ -1053,21 +1049,3 @@ void add_unit_to_battlegroup(int battlegroup)
     }
   }
 }
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_tileset_changed(void)
-{}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_refresh(void)
-{}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_popup_properties(const struct tile_list *tiles)
-{}

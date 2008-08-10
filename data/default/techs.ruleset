@@ -45,8 +45,10 @@ options="1.9"
 ; "Bridge"   = "Settler" unit types can build bridges over rivers
 ; "Railroad" = "Settler" unit types can build rail roads
 ; "Farmland" = "Settler" unit types can build farmland
+; "Fortress" = "Settler" unit types can build fortress
 ; "Population_Pollution_Inc" = Increase the pollution factor created by
-;                              population by one
+;                              popultaion by one
+; "Airbase" = "Airbase" unit types can build Airbases
 ; "Build_Airborne" = from now on can build air units (for use by AI)
 
 [advance_advanced_flight]
@@ -198,7 +200,7 @@ graphic_alt = "-"
 name     = _("Construction")
 req1     = "Masonry"
 req2     = "Currency"
-flags    = ""
+flags    = "Fortress"
 graphic     = "a.construction"
 graphic_alt = "-"
 
@@ -253,8 +255,8 @@ graphic_alt = "-"
 
 [advance_environmentalism]
 name     = _("Environmentalism")
-req1     = "Recycling"
-req2     = "Space Flight"
+req1     = "Never"		; "Recycling"
+req2     = "Never"		; "Space Flight"
 flags    = ""
 graphic     = "a.environmentalism"
 graphic_alt = "-"
@@ -289,6 +291,14 @@ req1     = "Combustion"
 req2     = "Theory of Gravity"
 flags    = "Build_Airborne"
 graphic     = "a.flight"
+graphic_alt = "-"
+
+[advance_fundamentalism]
+name     = _("Fundamentalism")
+req1     = "Never";		; "Theology"
+req2     = "Never"		; "Conscription"
+flags    = ""
+graphic     = "a.fundamentalism"
 graphic_alt = "-"
 
 [advance_fusion_power]
@@ -496,7 +506,7 @@ helptext = _("Improves the effect of Temples.")
 name     = _("Navigation")
 req1     = "Seafaring"
 req2     = "Astronomy"
-flags    = ""
+flags    = "Reduce_Trireme_Loss2"
 graphic     = "a.navigation"
 graphic_alt = "-"
 
@@ -563,7 +573,7 @@ graphic_alt = "-"
 name     = _("Radio")
 req1     = "Flight"
 req2     = "Electricity"
-flags    = ""
+flags    = "Airbase"
 graphic     = "a.radio"
 graphic_alt = "-"
 
@@ -627,7 +637,7 @@ graphic_alt = "-"
 name     = _("Seafaring")
 req1     = "Pottery"
 req2     = "Map Making"
-flags    = ""
+flags    = "Reduce_Trireme_Loss1"
 graphic     = "a.seafaring"
 graphic_alt = "-"
 

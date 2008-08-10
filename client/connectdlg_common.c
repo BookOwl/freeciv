@@ -39,17 +39,16 @@ Freeciv - Copyright (C) 2004 - The Freeciv Project
 
 #include "capability.h"
 #include "fcintl.h"
-#include "ioz.h"
 #include "log.h"
 #include "mem.h"
 #include "netintf.h"
-#include "rand.h"
 #include "registry.h"
+#include "shared.h"
 #include "support.h"
 
 #include "civclient.h"
 #include "climisc.h"
-#include "clinet.h"		/* connect_to_server() */
+#include "clinet.h"
 #include "packhand_gen.h"
 
 #include "chatline_common.h"
@@ -75,6 +74,14 @@ static char challenge_fullname[MAX_LEN_PATH];
 static bool client_has_hack = FALSE;
 
 int internal_server_port;
+
+const char *skill_level_names[NUM_SKILL_LEVELS] = { 
+  N_("novice"),
+  N_("easy"), 
+  N_("normal"), 
+  N_("hard")
+ ,N_("experimental")
+};
 
 /************************************************************************** 
 The general chain of events:
@@ -131,7 +138,7 @@ bool can_client_access_hack(void)
 void client_kill_server(bool force)
 {
   if (is_server_running()) {
-    if (client.conn.used) {
+    if (aconnection.used) {
       /* This does a "soft" shutdown of the server by sending a /quit.
        *
        * This is useful when closing the client or disconnecting because it
@@ -183,7 +190,7 @@ bool client_start_server(void)
 #if !defined(HAVE_WORKING_FORK) && !defined(WIN32_NATIVE)
   /* Can't do much without fork */
   return FALSE;
-#else /* HAVE_WORKING_FORK || WIN32_NATIVE */
+#else
   char buf[512];
   int connect_tries = 0;
 # ifdef WIN32_NATIVE
@@ -197,7 +204,7 @@ bool client_start_server(void)
   char cmdline3[512];
   char logcmdline[512];
   char scriptcmdline[512];
-# endif /* WIN32_NATIVE */
+# endif
 
   /* only one server (forked from this client) shall be running at a time */
   /* This also resets client_has_hack. */
@@ -276,7 +283,7 @@ bool client_start_server(void)
      * Calling exit here is dangerous due to X11 problems (async replies) */ 
     _exit(1);
   } 
-# else /* HAVE_WORKING_FORK */
+# else
 #  ifdef WIN32_NATIVE
   if (logfile) {
     loghandle = CreateFile(logfile, GENERIC_WRITE,
@@ -323,14 +330,14 @@ bool client_start_server(void)
 			DETACHED_PROCESS | NORMAL_PRIORITY_CLASS,
 			NULL, NULL, &si, &pi)) {
     append_output_window(_("Couldn't start the server."));
-    append_output_window(_("You'll have to start one manually. Sorry..."));
+    append_output_window(_("You'll have to " "start one manually. Sorry..."));
     return FALSE;
   }
   
   server_process = pi.hProcess;
 
-#  endif /* WIN32_NATIVE */
-# endif /* HAVE_WORKING_FORK */
+#  endif
+# endif
  
   /* a reasonable number of tries */ 
   while (connect_to_server(user_name, "localhost", internal_server_port, 
@@ -341,8 +348,8 @@ bool client_start_server(void)
     if (waitpid(server_pid, NULL, WNOHANG) != 0) {
       break;
     }
-#endif /* WIN32_NATIVE */
-#endif /* HAVE_WORKING_FORK */
+#endif
+#endif
     if (connect_tries++ > NUMBER_OF_TRIES) {
       break;
     }
@@ -350,7 +357,7 @@ bool client_start_server(void)
 
   /* weird, but could happen, if server doesn't support new startup stuff
    * capabilities won't help us here... */ 
-  if (!client.conn.used) {
+  if (!aconnection.used) {
     /* possible that server is still running. kill it */ 
     client_kill_server(TRUE);
 
@@ -376,30 +383,16 @@ bool client_start_server(void)
    * has sufficient permissions to do so (it doesn't have HACK access yet) it
    * is safe enough.  Note that if you load a savegame the topology will be
    * set but then overwritten during the load. */
-  send_chat_printf("/set topology %d",
-                   (TF_WRAPX
-                    | ((tileset_is_isometric(tileset)
-                        && tileset_hex_height(tileset) == 0) ? TF_ISO : 0)
-                    | ((tileset_hex_width(tileset) != 0
-                        || tileset_hex_height(tileset) != 0) ? TF_HEX : 0)));
+  my_snprintf(buf, sizeof(buf), "/set topology %d",
+	      (TF_WRAPX
+	       | ((tileset_is_isometric(tileset)
+		   && tileset_hex_height(tileset) == 0) ? TF_ISO : 0)
+	       | ((tileset_hex_width(tileset) != 0
+		   || tileset_hex_height(tileset) != 0) ? TF_HEX : 0)));
+  send_chat(buf);
 
   return TRUE;
-#endif /* HAVE_WORKING_FORK || WIN32_NATIVE */
-}
-
-/*************************************************************************
-  generate a random string.
-*************************************************************************/
-static void randomize_string(char *str, size_t n)
-{
-  const char chars[] =
-    "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-  int i;
-
-  for (i = 0; i < n - 1; i++) {
-    str[i] = chars[myrand(sizeof(chars) - 1)];
-  }
-  str[i] = '\0';
+#endif
 }
 
 /*************************************************************************
@@ -444,23 +437,23 @@ void send_client_wants_hack(const char *filename)
     sz_strlcat(challenge_fullname, filename);
 
     /* generate an authentication token */ 
-    randomize_string(req.token, sizeof(req.token));
+    randomize_base64url_string(req.token, sizeof(req.token));
 
     section_file_init(&file);
     secfile_insert_str(&file, req.token, "challenge.token");
-    if (!section_file_save(&file, challenge_fullname, 0, FZ_PLAIN)) {
+    if (!section_file_save(&file, challenge_fullname, 0)) {
       freelog(LOG_ERROR, "Couldn't write token to temporary file: %s",
 	      challenge_fullname);
     }
     section_file_free(&file);
 
     /* tell the server what we put into the file */ 
-    send_packet_single_want_hack_req(&client.conn, &req);
+    send_packet_single_want_hack_req(&aconnection, &req);
   }
 }
 
 /**************************************************************** 
-handle response (by the server) if the client has got hack or not.
+  client has hack (or not).
 *****************************************************************/ 
 void handle_single_want_hack_reply(bool you_have_hack)
 {
@@ -490,9 +483,13 @@ send server commands to start a saved game.
 *****************************************************************/ 
 void send_start_saved_game(void)
 {   
+  char buf[MAX_LEN_MSG];
+
   send_chat("/set timeout 0");
   send_chat("/set autotoggle 1");
-  send_chat_printf("/take \"%s\" \"%s\"", user_name, leader_name);
+  my_snprintf(buf, sizeof(buf), "/take \"%s\" \"%s\"",
+      	      user_name, leader_name);
+  send_chat(buf);
   send_chat("/start");
 }
 
@@ -501,11 +498,15 @@ send server command to save game.
 *****************************************************************/ 
 void send_save_game(char *filename)
 {   
+  char message[MAX_LEN_MSG];
+
   if (filename) {
-    send_chat_printf("/save %s", filename);
+    my_snprintf(message, MAX_LEN_MSG, "/save %s", filename);
   } else {
-    send_chat("/save");
+    my_snprintf(message, MAX_LEN_MSG, "/save");
   }
+
+  send_chat(message);
 }
 
 /**************************************************************************

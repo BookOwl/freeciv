@@ -76,8 +76,6 @@ int mystrncasequotecmp(const char *str0, const char *str1, size_t n);
 
 size_t effectivestrlenquote(const char *str);
 
-char *mystrcasestr(const char *haystack, const char *needle);
-
 const char *mystrerror(void);
 void myusleep(unsigned long usec);
 

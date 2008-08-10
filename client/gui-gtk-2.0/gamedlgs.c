@@ -27,11 +27,13 @@
 
 #include "events.h"
 #include "fcintl.h"
+#include "game.h"
 #include "government.h"
 #include "packets.h"
 #include "player.h"
 
 #include "civclient.h"
+#include "clinet.h"
 #include "options.h"
 
 #include "chatline.h"
@@ -73,8 +75,8 @@ static void rates_set_values(int tax, int no_tax_scroll,
   lux_lock	= GTK_TOGGLE_BUTTON(rates_lux_toggle)->active;
   sci_lock	= GTK_TOGGLE_BUTTON(rates_sci_toggle)->active;
 
-  if (NULL != client.conn.playing) {
-    maxrate = get_player_bonus(client.conn.playing, EFT_MAX_RATES);
+  if (game.player_ptr) {
+    maxrate = get_player_bonus(game.player_ptr, EFT_MAX_RATES);
   } else {
     maxrate = 100;
   }
@@ -201,7 +203,7 @@ static void rates_changed_callback(GtkAdjustment *adj)
 static void rates_command_callback(GtkWidget *w, gint response_id)
 {
   if (response_id == GTK_RESPONSE_OK) {
-    dsend_packet_player_rates(&client.conn, rates_tax_value, rates_lux_value,
+    dsend_packet_player_rates(&aconnection, rates_tax_value, rates_lux_value,
 			      rates_sci_value);
   }
   gtk_widget_destroy(rates_dialog_shell);
@@ -322,11 +324,13 @@ static GtkWidget *create_rates_dialog(void)
     g_signal_connect_after(rates_sci_adj, "value_changed",
 			   G_CALLBACK(rates_changed_callback), NULL);
 
-  rates_set_values(client.conn.playing->economic.tax, 0,
-		   client.conn.playing->economic.luxury, 0,
-		   client.conn.playing->economic.science, 0);
+  rates_set_values( game.player_ptr->economic.tax, 0,
+        	    game.player_ptr->economic.luxury, 0,
+        	    game.player_ptr->economic.science, 0 );
   return shell;
 }
+
+
 
 
 /****************************************************************
@@ -348,13 +352,12 @@ void popup_rates_dialog(void)
   }
 
   my_snprintf(buf, sizeof(buf), _("%s max rate: %d%%"),
-      government_name_for_player(client.conn.playing),
-      get_player_bonus(client.conn.playing, EFT_MAX_RATES));
+      government_name_for_player(game.player_ptr),
+      get_player_bonus(game.player_ptr, EFT_MAX_RATES));
   gtk_label_set_text(GTK_LABEL(rates_gov_label), buf);
   
   gtk_window_present(GTK_WINDOW(rates_dialog_shell));
 }
-
 
 /**************************************************************************
   Option dialog 
@@ -390,8 +393,8 @@ static void option_command_processing(void)
 	break;
       case COT_STR:
 	if (o->p_string_vals) {
-	  const char *new_value =
-	    gtk_entry_get_text(GTK_ENTRY(GTK_COMBO(o->p_gui_data)->entry));
+	  const char* new_value = gtk_entry_get_text(GTK_ENTRY
+					  (GTK_COMBO(o->p_gui_data)->entry));
 	  if (strcmp(o->p_string_value, new_value)) {
 	    mystrlcpy(o->p_string_value, new_value, o->string_length);
 	    if (o->change_callback) {
@@ -404,16 +407,6 @@ static void option_command_processing(void)
 		    o->string_length);
 	}
 	break;
-      case COT_FONT:
-	{
-	  const char *new_value =
-	    gtk_font_button_get_font_name(GTK_FONT_BUTTON(o->p_gui_data));
-	  if (strcmp(o->p_string_value, new_value)) {
-	    mystrlcpy(o->p_string_value, new_value, o->string_length);
-	    gui_update_font_from_option(o);
-	  }
-	}
-        break;
       }
     } client_options_iterate_end;
 
@@ -429,8 +422,6 @@ static void option_command_processing(void)
     } else {
       gtk_window_unfullscreen(GTK_WINDOW(toplevel));
     }
-
-    gtk_rc_reset_styles(gtk_settings_get_default());
 }
 
 /**************************************************************************
@@ -532,12 +523,6 @@ static void create_option_dialog(void)
       }
       gtk_widget_set_size_request(GTK_WIDGET(o->p_gui_data), 150, -1);
       break;
-    case COT_FONT:
-      o->p_gui_data = gtk_font_button_new();
-      g_object_set(o->p_gui_data,
-	  	   "use-font", TRUE,
-		   NULL);
-      break;
     }
     gtk_container_add(GTK_CONTAINER(hbox), o->p_gui_data);
     gtk_size_group_add_widget(group[1][o->category], o->p_gui_data);
@@ -591,10 +576,6 @@ void popup_option_dialog(void)
       } else {
 	gtk_entry_set_text(GTK_ENTRY(o->p_gui_data), o->p_string_value);
       }
-      break;
-    case COT_FONT:
-      gtk_font_button_set_font_name(GTK_FONT_BUTTON(o->p_gui_data),
-	  			    o->p_string_value);
       break;
     }
   } client_options_iterate_end;

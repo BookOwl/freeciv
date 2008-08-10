@@ -20,7 +20,7 @@
 
 #include "events.h"
 #include "fcintl.h"
-#include "ioz.h"
+#include "game.h"
 #include "log.h"
 #include "mem.h"
 #include "registry.h"
@@ -32,6 +32,7 @@
 #include "chatline_g.h"
 #include "cityrepdata.h"
 #include "civclient.h"
+#include "clinet.h"
 #include "cma_fec.h"
 #include "dialogs_g.h"
 #include "mapview_common.h"
@@ -55,7 +56,7 @@
 char default_user_name[512] = "\0";
 char default_server_host[512] = "localhost";
 int  default_server_port = DEFAULT_SOCK_PORT;
-char default_metaserver[512] = META_URL;
+char default_metaserver[512] = METALIST_ADDR;
 char default_theme_name[512] = "\0";
 char default_tileset_name[512] = "\0";
 char default_sound_set_name[512] = "stdsounds";
@@ -98,8 +99,7 @@ const char *client_option_class_names[COC_MAX] = {
   N_("Overview"),
   N_("Sound"),
   N_("Interface"),
-  N_("Network"),
-  N_("Font")
+  N_("Network")
 };
 
 static client_option common_options[] = {
@@ -194,13 +194,6 @@ static client_option common_options[] = {
 		        "this option off makes the technology tree "
 		        "more compact."),
 		     COC_GRAPHICS, reqtree_show_icons_callback),
-  GEN_BOOL_OPTION_CB(reqtree_curved_lines,
-                     N_("Use curved lines in the technology tree"),
-                     N_("Setting this option make the technology tree "
-                        "diagram use curved lines to show technology "
-                        "relations. Turning this option off causes "
-                        "the lines to be drawn straight."),
-		     COC_GRAPHICS, reqtree_show_icons_callback),
   GEN_BOOL_OPTION_CB(draw_unit_shields, N_("Draw shield graphics for units"),
 		     N_("Setting this option will draw a shield icon "
 			"as the flags on units.  If unset, the full flag will "
@@ -264,13 +257,6 @@ static client_option common_options[] = {
 		     N_("The borders layer of the overview shows which tiles "
 			"are owned by each player."),
 		     COC_OVERVIEW, overview_redraw_callback),
-  GEN_BOOL_OPTION_CB(overview.layers[OLAYER_BORDERS_ON_OCEAN],
-                     N_("Borders layer on ocean tiles"),
-                     N_("The borders layer of the overview are drawn on "
-                        "ocean tiles as well (this may look ugly with many "
-                        "islands). This option is only of interest if you "
-                        "have set the option \"Borders layer\" already."),
-                     COC_OVERVIEW, overview_redraw_callback),
   GEN_BOOL_OPTION_CB(overview.layers[OLAYER_UNITS],
 		     N_("Units layer"),
 		     N_("Enabling this will draw units on the overview."),
@@ -289,13 +275,12 @@ static client_option common_options[] = {
 #undef GEN_BOOL_OPTION
 #undef GEN_STR_OPTION
 
-static client_option *fc_options = NULL;
-static int num_options = 0;
+static client_option *fc_options;
+static int num_options;
 
 /** View Options: **/
 
 bool draw_city_outlines = TRUE;
-bool draw_city_output = FALSE;
 bool draw_map_grid = FALSE;
 bool draw_city_names = TRUE;
 bool draw_city_growth = TRUE;
@@ -317,14 +302,12 @@ bool draw_full_citybar = TRUE;
 bool draw_unit_shields = TRUE;
 bool player_dlg_show_dead_players = TRUE;
 bool reqtree_show_icons = TRUE;
-bool reqtree_curved_lines = FALSE;
 
 #define VIEW_OPTION(name) { #name, &name }
 #define VIEW_OPTION_TERMINATOR { NULL, NULL }
 
 view_option view_options[] = {
   VIEW_OPTION(draw_city_outlines),
-  VIEW_OPTION(draw_city_output),
   VIEW_OPTION(draw_map_grid),
   VIEW_OPTION(draw_city_names),
   VIEW_OPTION(draw_city_growth),
@@ -389,12 +372,8 @@ void message_options_init(void)
     E_CITY_PRODUCTION_CHANGED,
     E_CITY_MAY_SOON_GROW, E_WORKLIST, E_AI_DEBUG
   };
-  int out_only[] = {
-    E_CHAT_MSG, E_CHAT_ERROR, E_CONNECTION, E_LOG_ERROR, E_SETTING
-  };
-  int all[] = {
-    E_LOG_FATAL, E_TUTORIAL
-  };
+  int out_only[] = {E_CHAT_MSG, E_CHAT_ERROR, E_SETTING, E_CONNECTION};
+  int all[] = {E_MESSAGE_WALL, E_TUTORIAL};
   int i;
 
   for (i = 0; i < E_LAST; i++) {
@@ -695,7 +674,7 @@ void load_general_options(void)
     save_cma_presets(&sf);
 
     /* FIXME: need better messages */
-    if (!section_file_save(&sf, name, 0, FZ_PLAIN)) {
+    if (!section_file_save(&sf, name, 0)) {
       freelog(LOG_ERROR, _("Save failed, cannot write to file %s"), name);
     } else {
       freelog(LOG_NORMAL, _("Saved settings to file %s"), name);
@@ -715,7 +694,9 @@ void load_general_options(void)
     secfile_lookup_bool_default(&sf, fullscreen_mode,
 				"%s.fullscreen_mode", prefix);
 
-  client_options_iterate(o) {
+  for (i = 0; i < num_options; i++) {
+    client_option *o = fc_options + i;
+
     switch (o->type) {
     case COT_BOOL:
       *(o->p_bool_value) =
@@ -728,14 +709,12 @@ void load_general_options(void)
 				      prefix, o->name);
       break;
     case COT_STR:
-    case COT_FONT:
       mystrlcpy(o->p_string_value,
                      secfile_lookup_str_default(&sf, o->p_string_value, "%s.%s",
                      prefix, o->name), o->string_length);
       break;
     }
-  } client_options_iterate_end;
-
+  }
   for (v = view_options; v->name; v++) {
     *(v->p_value) =
 	secfile_lookup_bool_default(&sf, *(v->p_value), "%s.%s", prefix,
@@ -783,10 +762,10 @@ void load_ruleset_specific_options(void)
   if (!section_file_load(&sf, name))
     return;
 
-  if (NULL != client.conn.playing) {
+  if (game.player_ptr) {
     /* load global worklists */
     for (i = 0; i < MAX_NUM_WORKLISTS; i++) {
-      worklist_load(&sf, &client.worklists[i],
+      worklist_load(&sf, &(game.player_ptr->worklists[i]),
 		    "worklists.worklist%d", i);
     }
   }
@@ -824,7 +803,9 @@ void save_options(void)
   secfile_insert_bool(&sf, save_options_on_exit, "client.save_options_on_exit");
   secfile_insert_bool(&sf, fullscreen_mode, "client.fullscreen_mode");
 
-  client_options_iterate(o) {
+  for (i = 0; i < num_options; i++) {
+    client_option *o = fc_options + i;
+
     switch (o->type) {
     case COT_BOOL:
       secfile_insert_bool(&sf, *(o->p_bool_value), "client.%s", o->name);
@@ -833,11 +814,10 @@ void save_options(void)
       secfile_insert_int(&sf, *(o->p_int_value), "client.%s", o->name);
       break;
     case COT_STR:
-    case COT_FONT:
       secfile_insert_str(&sf, o->p_string_value, "client.%s", o->name);
       break;
     }
-  } client_options_iterate_end;
+  }
 
   for (v = view_options; v->name; v++) {
     secfile_insert_bool(&sf, *(v->p_value), "client.%s", v->name);
@@ -863,17 +843,18 @@ void save_options(void)
   save_settable_options(&sf);
 
   /* insert global worklists */
-  if (NULL != client.conn.playing) {
+  if (game.player_ptr) {
     for(i = 0; i < MAX_NUM_WORKLISTS; i++){
-      if (client.worklists[i].is_valid) {
-	worklist_save(&sf, &client.worklists[i], client.worklists[i].length,
+      if (game.player_ptr->worklists[i].is_valid) {
+	worklist_save(&sf, &(game.player_ptr->worklists[i]),
+                      game.player_ptr->worklists[i].length,
 		      "worklists.worklist%d", i);
       }
     }
   }
 
   /* save to disk */
-  if (!section_file_save(&sf, name, 0, FZ_PLAIN)) {
+  if (!section_file_save(&sf, name, 0)) {
     my_snprintf(output_buffer, sizeof(output_buffer),
 		_("Save failed, cannot write to file %s"), name);
   } else {

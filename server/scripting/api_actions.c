@@ -15,25 +15,13 @@
 #include <config.h>
 #endif
 
-#include "barbarian.h"
 #include "plrhand.h"
 #include "citytools.h"
 #include "techtools.h"
 #include "unittools.h"
 
-#include "api_find.h"
-#include "script_signal.h"
-
 #include "api_actions.h"
 
-
-/**************************************************************************
-  Unleash barbarians on a tile, for example from a hut
-**************************************************************************/
-bool api_actions_unleash_barbarians(Tile *ptile)
-{
-  return unleash_barbarians(ptile);
-}
 
 /**************************************************************************
   Create a new unit.
@@ -42,11 +30,6 @@ Unit *api_actions_create_unit(Player *pplayer, Tile *ptile, Unit_Type *ptype,
 		  	      int veteran_level, City *homecity,
 			      int moves_left)
 {
-  if (ptype == NULL
-      || ptype < unit_type_array_first() || ptype > unit_type_array_last()) {
-    return NULL;
-  }
-
   return create_unit(pplayer, ptile, ptype, veteran_level,
 		     homecity ? homecity->id : 0, moves_left);
 }
@@ -56,7 +39,7 @@ Unit *api_actions_create_unit(Player *pplayer, Tile *ptile, Unit_Type *ptype,
 **************************************************************************/
 void api_actions_create_city(Player *pplayer, Tile *ptile, const char *name)
 {
-  if (!name || name[0] == '\0') {
+  if (!name) {
     name = city_name_suggestion(pplayer, ptile);
   }
   create_city(pplayer, ptile, name);
@@ -71,19 +54,14 @@ void api_actions_change_gold(Player *pplayer, int amount)
 }
 
 /**************************************************************************
-  Give pplayer technology ptech.  Quietly returns A_NONE (zero) if 
-  player already has this tech; otherwise returns the tech granted.
-  Use NULL for ptech to grant a random tech.
-  sends script signal "tech_researched" with the given reason
+  Give pplayer technology ptech.
 **************************************************************************/
-Tech_Type *api_actions_give_technology(Player *pplayer, Tech_Type *ptech,
-                                       const char *reason)
+bool api_actions_give_technology(Player *pplayer, Tech_Type *ptech)
 {
   Tech_type_id id;
-  Tech_Type *result;
 
   if (ptech) {
-    id = advance_number(ptech);
+    id = ptech->index;
   } else {
     if (get_player_research(pplayer)->researching == A_UNSET) {
       choose_random_tech(pplayer);
@@ -91,16 +69,11 @@ Tech_Type *api_actions_give_technology(Player *pplayer, Tech_Type *ptech,
     id = get_player_research(pplayer)->researching;
   }
 
-  if (player_invention_state(pplayer, id) != TECH_KNOWN) {
+  if (get_invention(pplayer, id) != TECH_KNOWN) {
     do_free_cost(pplayer, id);
     found_new_tech(pplayer, id, FALSE, TRUE);
-    result = advance_by_number(id);
-    script_signal_emit("tech_researched", 3,
-                       API_TYPE_TECH_TYPE, result,
-                       API_TYPE_PLAYER, pplayer,
-                       API_TYPE_STRING, reason);
-    return result;
+    return TRUE;
   } else {
-    return advance_by_number(A_NONE);
+    return FALSE;
   }
 }

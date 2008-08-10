@@ -45,8 +45,8 @@
 #include "unitlist.h"
 
 #include "chatline_common.h" /* for send_chat() */
-#include "civclient.h"
 #include "climisc.h"
+#include "clinet.h"
 #include "text.h"
 
 #include "cityrep.h"
@@ -86,7 +86,7 @@ static Widget economy_label, economy_label2;
 static Widget economy_list, economy_list_label;
 static Widget sellall_command, sellobsolete_command;
 static int economy_dialog_shell_is_modal;
-static struct impr_type *economy_improvement_type[B_LAST];
+static int economy_improvement_type[B_LAST];
 
 void create_economy_report_dialog(bool make_modal);
 void economy_close_callback(Widget w, XtPointer client_data, 
@@ -171,7 +171,7 @@ static const char *get_report_title_plus(const char *report_name,
 ************************ ***************************************/
 void popup_science_dialog(bool make_modal)
 {
-  if (!science_dialog_shell && NULL != client.conn.playing) {
+  if (!science_dialog_shell && game.player_ptr) {
     Position x, y;
     Dimension width, height;
     
@@ -214,196 +214,182 @@ void create_science_dialog(bool make_modal)
   Widget science_form;
   Widget  close_command;
   const static char *tech_list_names_ptrs[A_LAST + 1];
+  int j, flag, num_list;
+  size_t i;
   Dimension width;
   char rate_text[128];
   char current_text[512];
   char goal_text[512];
   const char *report_title;
-  int num_list, j = 0, flag = 0;
-
-  if (NULL != client.conn.playing) {
-    struct player_research *research = get_player_research(client.conn.playing);
-
-    if (research->researching == A_UNSET) {
-      my_snprintf(current_text, sizeof(current_text),
-		  _("Researching %s: %d/%s"),
-		  advance_name_translation(advance_by_number(A_NONE)),
-		  research->bulbs_researched,
-		  _("unknown"));
-    } else {
-      my_snprintf(current_text, sizeof(current_text),
-		  _("Researching %s: %d/%d"),
-		  advance_name_researching(client.conn.playing),
-		  research->bulbs_researched,
-		  total_bulbs_required(client.conn.playing));
-    }
-
-    if (research->tech_goal == A_UNSET) {
-      my_snprintf(goal_text, sizeof(goal_text),
-		  _("Goal: %s (%d steps)"),
-		  advance_name_translation(advance_by_number(A_NONE)),
-		  0);
-    } else {
-      my_snprintf(goal_text, sizeof(goal_text),
-		  _("Goal: %s (%d steps)"),
-		  advance_name_translation(advance_by_number(research->tech_goal)),
-		  num_unknown_techs_for_goal(client.conn.playing,
-					     research->tech_goal));
-    }
-
-    advance_index_iterate(A_FIRST, i) {
-      if (TECH_KNOWN == player_invention_state(client.conn.playing, i)) {
-	tech_list_names_ptrs[j] = advance_name_translation(advance_by_number(i));
-	j++;
-      }
-    } advance_index_iterate_end;
-    tech_list_names_ptrs[j] = 0;
-    qsort(tech_list_names_ptrs, j, sizeof(char *), compare_strings_ptrs);
-    num_list = j;
-
-    science_dialog_shell =
-      I_T(XtVaCreatePopupShell("sciencepopup",
-			       (make_modal ? transientShellWidgetClass :
-			        topLevelShellWidgetClass),
-			        toplevel, NULL));
-
-    science_form = XtVaCreateManagedWidget("scienceform",
-					   formWidgetClass,
-					   science_dialog_shell,
-					   NULL);
-    my_snprintf(rate_text, sizeof(rate_text), "\ntext not set yet");
-    /* TRANS: Research report title */
-    report_title = get_report_title_plus(_("Research"), rate_text);
-    science_label = XtVaCreateManagedWidget("sciencelabel",
-					    labelWidgetClass,
-					    science_form,
-					    XtNlabel, report_title,
-					    NULL);
-    free((void *) report_title);
-
-    science_current_label =
-      XtVaCreateManagedWidget("sciencecurrentlabel",
-			      labelWidgetClass,
-			      science_form,
-			      XtNlabel, current_text,
-			      NULL);
-
-    science_goal_label =
-      XtVaCreateManagedWidget("sciencegoallabel",
-			      labelWidgetClass,
-			      science_form,
-			      XtNlabel, goal_text,
-			      NULL);
-
-    science_change_menu_button =
-      I_L(XtVaCreateManagedWidget("sciencechangemenubutton",
-				  menuButtonWidgetClass,
-				  science_form, NULL));
-
-    science_goal_menu_button =
-      I_L(XtVaCreateManagedWidget("sciencegoalmenubutton",
-				  menuButtonWidgetClass,
-				  science_form, NULL));
-
-    science_help_note =
-      I_L(XtVaCreateManagedWidget("sciencehelpnote",
-				  labelWidgetClass,
-				  science_form, NULL));
-
-    science_help_toggle =
-      XtVaCreateManagedWidget("sciencehelptoggle",
-			      toggleWidgetClass,
-			      science_form,
-			      NULL);
-
-    science_list =
-      XtVaCreateManagedWidget("sciencelist",
-			      listWidgetClass,
-			      science_form,
-			      XtNlist, tech_list_names_ptrs,
-			      NULL);
-
-    close_command =
-      I_L(XtVaCreateManagedWidget("scienceclosecommand",
-				  commandWidgetClass,
-				  science_form, NULL));
-
-    popupmenu =
-      XtVaCreatePopupShell("menu",
-			   simpleMenuWidgetClass,
-			   science_change_menu_button,
-			   NULL);
-
-    goalmenu =
-      XtVaCreatePopupShell("menu",
-			   simpleMenuWidgetClass,
-			   science_goal_menu_button,
-			   NULL);
-
-    advance_index_iterate(A_FIRST, i) {
-      if (TECH_PREREQS_KNOWN ==
-            player_invention_state(client.conn.playing, i)) {
-	Widget entry =
-	  XtVaCreateManagedWidget(advance_name_translation(advance_by_number(i)),
-				  smeBSBObjectClass,
-				  popupmenu,
-				  NULL);
-	XtAddCallback(entry, XtNcallback, science_change_callback,
-		      INT_TO_XTPOINTER(i));
-      flag = 1;
-      }
-    } advance_index_iterate_end;
-
-    if (!flag) {
-      XtSetSensitive(science_change_menu_button, FALSE);
-    }
-
-    flag = 0;
-    advance_index_iterate(A_FIRST, i) {
-      if (player_invention_reachable(client.conn.playing, i)
-	  && TECH_KNOWN != player_invention_state(client.conn.playing, i)
-	  && (11 > num_unknown_techs_for_goal(client.conn.playing, i)
-	      || i == research->tech_goal)) {
-	Widget entry =
-	  XtVaCreateManagedWidget(advance_name_translation(advance_by_number(i)),
-				  smeBSBObjectClass,
-				  goalmenu,
-				  NULL);
-	XtAddCallback(entry, XtNcallback, science_goal_callback, 
-		      INT_TO_XTPOINTER(i)); 
-	flag = 1;
-      }
-    } advance_index_iterate_end;
-
-    if (!flag) {
-      XtSetSensitive(science_goal_menu_button, FALSE);
-    }
-
-    XtAddCallback(close_command, XtNcallback, science_close_callback, NULL);
-    XtAddCallback(science_list, XtNcallback, science_help_callback, NULL);
-    XtAddCallback(science_help_toggle, XtNcallback, toggle_callback, NULL);
-
-    if (num_list > 60) {
-      int ncol;
-      XtVaGetValues(science_list, XtNdefaultColumns, &ncol, NULL);
-      XtVaSetValues(science_list, XtNdefaultColumns, ncol+1, NULL);
-    }
-
-    XtRealizeWidget(science_dialog_shell);
-
-    if (!make_modal) {
-      XSetWMProtocols(display, XtWindow(science_dialog_shell), 
-		      &wm_delete_window, 1);
-      XtOverrideTranslations(science_dialog_shell,
-        XtParseTranslationTable("<Message>WM_PROTOCOLS: msg-close-science-report()"));
-    }
-
-    width = 500;
-    XtVaSetValues(science_label, XtNwidth, &width, NULL);
-
-    toggle_callback(science_help_toggle, NULL, NULL);
-    science_dialog_update();
+  struct player_research* research = get_player_research(game.player_ptr);
+  
+  if (research->researching == A_UNSET) {
+    my_snprintf(current_text, sizeof(current_text),
+		_("Researching %s: %d/%s"),
+		advance_name_translation(A_NONE),
+		research->bulbs_researched,
+		_("unknown"));
+  } else {
+    my_snprintf(current_text, sizeof(current_text),
+		_("Researching %s: %d/%d"),
+		advance_name_researching(game.player_ptr),
+		research->bulbs_researched,
+		total_bulbs_required(game.player_ptr));
   }
+
+  if (research->tech_goal == A_UNSET) {
+    my_snprintf(goal_text, sizeof(goal_text),
+		_("Goal: %s (%d steps)"),
+		advance_name_translation(A_NONE),
+		0);
+  } else {
+    my_snprintf(goal_text, sizeof(goal_text),
+		_("Goal: %s (%d steps)"),
+		advance_name_translation(research->tech_goal),
+		num_unknown_techs_for_goal(game.player_ptr,
+					   research->tech_goal));
+  }
+  
+  for(i=A_FIRST, j=0; i<game.control.num_tech_types; i++)
+    if(get_invention(game.player_ptr, i)==TECH_KNOWN) {
+      tech_list_names_ptrs[j]=advance_name_translation(i);
+      j++;
+    }
+  tech_list_names_ptrs[j]=0;
+  qsort(tech_list_names_ptrs, j, sizeof(char *), compare_strings_ptrs);
+  num_list = j;
+  
+  science_dialog_shell =
+    I_T(XtVaCreatePopupShell("sciencepopup", 
+			     (make_modal ? transientShellWidgetClass :
+			      topLevelShellWidgetClass),
+			     toplevel, NULL));
+
+  science_form = XtVaCreateManagedWidget("scienceform", 
+					 formWidgetClass,
+					 science_dialog_shell,
+					 NULL);
+  my_snprintf(rate_text, sizeof(rate_text), "\ntext not set yet");
+  /* TRANS: Research report title */
+  report_title=get_report_title_plus(_("Research"), rate_text);
+  science_label = XtVaCreateManagedWidget("sciencelabel", 
+					  labelWidgetClass, 
+					  science_form,
+					  XtNlabel, 
+					  report_title,
+					  NULL);
+  free((void *) report_title);
+
+  science_current_label = XtVaCreateManagedWidget("sciencecurrentlabel", 
+						  labelWidgetClass, 
+						  science_form,
+						  XtNlabel, 
+						  current_text,
+						  NULL);
+
+  science_goal_label = XtVaCreateManagedWidget("sciencegoallabel", 
+					       labelWidgetClass, 
+					       science_form,
+					       XtNlabel, goal_text,
+					       NULL);
+
+  science_change_menu_button =
+    I_L(XtVaCreateManagedWidget("sciencechangemenubutton", 
+				menuButtonWidgetClass,
+				science_form, NULL));
+
+  science_goal_menu_button =
+    I_L(XtVaCreateManagedWidget("sciencegoalmenubutton", 
+				menuButtonWidgetClass,
+				science_form, NULL));
+
+  science_help_note =
+    I_L(XtVaCreateManagedWidget("sciencehelpnote",
+				labelWidgetClass,
+				science_form, NULL));
+  
+  science_help_toggle = XtVaCreateManagedWidget("sciencehelptoggle", 
+						toggleWidgetClass, 
+						science_form,
+						NULL);
+  
+  science_list = XtVaCreateManagedWidget("sciencelist", 
+					 listWidgetClass,
+					 science_form,
+					 XtNlist, tech_list_names_ptrs,
+					 NULL);
+
+  close_command =
+    I_L(XtVaCreateManagedWidget("scienceclosecommand", 
+				commandWidgetClass,
+				science_form, NULL));
+  
+  
+  popupmenu=XtVaCreatePopupShell("menu", 
+				 simpleMenuWidgetClass, 
+				 science_change_menu_button, 
+				 NULL);
+
+  goalmenu=XtVaCreatePopupShell("menu", 
+				simpleMenuWidgetClass, 
+				science_goal_menu_button, 
+				NULL);
+
+  
+  for(i=A_FIRST, flag=0; i<game.control.num_tech_types; i++)
+    if(get_invention(game.player_ptr, i)==TECH_REACHABLE) {
+      Widget entry=
+      XtVaCreateManagedWidget(advance_name_translation(i), smeBSBObjectClass, 
+			      popupmenu, NULL);
+      XtAddCallback(entry, XtNcallback, science_change_callback, 
+		    (XtPointer) i); 
+      flag=1;
+    }
+  
+  if(!flag)
+    XtSetSensitive(science_change_menu_button, FALSE);
+  
+ for(i=A_FIRST, flag=0; i<game.control.num_tech_types; i++)
+    if (tech_is_available(game.player_ptr, i)
+        && get_invention(game.player_ptr, i) != TECH_KNOWN
+        && advances[i].req[0] != A_LAST && advances[i].req[1] != A_LAST
+        && (num_unknown_techs_for_goal(game.player_ptr, i) < 11
+	    || i == research->tech_goal)) {
+      Widget entry=
+      XtVaCreateManagedWidget(advance_name_translation(i), smeBSBObjectClass, 
+			      goalmenu, NULL);
+      XtAddCallback(entry, XtNcallback, science_goal_callback, 
+		    (XtPointer) i); 
+      flag=1;
+    }
+  
+  if(!flag)
+    XtSetSensitive(science_goal_menu_button, FALSE);
+
+  XtAddCallback(close_command, XtNcallback, science_close_callback, NULL);
+  XtAddCallback(science_list, XtNcallback, science_help_callback, NULL);
+  XtAddCallback(science_help_toggle, XtNcallback, toggle_callback, NULL);
+
+  if(num_list>60) {
+    int ncol;
+    XtVaGetValues(science_list, XtNdefaultColumns, &ncol, NULL);
+    XtVaSetValues(science_list, XtNdefaultColumns, ncol+1, NULL);
+  }
+
+  XtRealizeWidget(science_dialog_shell);
+
+  if(!make_modal)  {
+    XSetWMProtocols(display, XtWindow(science_dialog_shell), 
+		    &wm_delete_window, 1);
+    XtOverrideTranslations(science_dialog_shell,
+      XtParseTranslationTable("<Message>WM_PROTOCOLS: msg-close-science-report()"));
+  }
+
+  width=500;
+  XtVaSetValues(science_label, XtNwidth, &width, NULL);
+
+  toggle_callback(science_help_toggle, NULL, NULL);
+  science_dialog_update();
 }
 
 
@@ -418,10 +404,9 @@ void science_change_callback(Widget w, XtPointer client_data,
 
   XtVaGetValues(science_help_toggle, XtNstate, &b, NULL);
   if (b == TRUE) {
-    popup_help_dialog_typed(advance_name_translation(advance_by_number(to)),
-                            HELP_TECH);
+    popup_help_dialog_typed(advance_name_translation(to), HELP_TECH);
   } else {
-    dsend_packet_player_research(&client.conn, to);
+    dsend_packet_player_research(&aconnection, to);
   }
 }
 
@@ -436,10 +421,9 @@ void science_goal_callback(Widget w, XtPointer client_data,
 
   XtVaGetValues(science_help_toggle, XtNstate, &b, NULL);
   if (b == TRUE) {
-    popup_help_dialog_typed(advance_name_translation(advance_by_number(to)),
-                            HELP_TECH);
+    popup_help_dialog_typed(advance_name_translation(to), HELP_TECH);
   } else {
-    dsend_packet_player_tech_goal(&client.conn, to);
+    dsend_packet_player_tech_goal(&aconnection, to);
   }
 }
 
@@ -493,8 +477,9 @@ void science_dialog_update(void)
     char text[512];
     static const char *tech_list_names_ptrs[A_LAST + 1];
     int j, flag;
+    size_t i;
     const char *report_title;
-    struct player_research *research = get_player_research(client.conn.playing);
+    struct player_research* research = get_player_research(game.player_ptr);
     
     /* TRANS: Research report title */
     report_title = get_report_title_plus(_("Research"), science_dialog_text());
@@ -504,15 +489,15 @@ void science_dialog_update(void)
     if (research->researching == A_UNSET) {
       my_snprintf(text, sizeof(text),
 		  _("Researching %s: %d/%s"),
-		  advance_name_translation(advance_by_number(A_NONE)),
+		  advance_name_translation(A_NONE),
 		  research->bulbs_researched,
 		  _("unknown"));
     } else {
       my_snprintf(text, sizeof(text),
 		  _("Researching %s: %d/%d"),
-		  advance_name_researching(client.conn.playing),
+		  advance_name_researching(game.player_ptr),
 		  research->bulbs_researched,
-		  total_bulbs_required(client.conn.playing));
+		  total_bulbs_required(game.player_ptr));
     }
 
     xaw_set_label(science_current_label, text);
@@ -520,25 +505,23 @@ void science_dialog_update(void)
     if (research->tech_goal == A_UNSET) {
       my_snprintf(text, sizeof(text),
 		  _("Goal: %s (%d steps)"),
-		  advance_name_translation(advance_by_number(A_NONE)),
+		  advance_name_translation(A_NONE),
 		  0);
     } else {
       my_snprintf(text, sizeof(text),
 		  _("Goal: %s (%d steps)"),
-		  advance_name_translation(advance_by_number(research->tech_goal)),
-		  num_unknown_techs_for_goal(client.conn.playing,
+		  advance_name_translation(research->tech_goal),
+		  num_unknown_techs_for_goal(game.player_ptr,
 					     research->tech_goal));
     }
 
     xaw_set_label(science_goal_label, text);
 
-    j=0;
-    advance_index_iterate(A_FIRST, i) {
-      if (TECH_KNOWN == player_invention_state(client.conn.playing, i)) {
-	tech_list_names_ptrs[j]=advance_name_translation(advance_by_number(i));
+    for(i=A_FIRST, j=0; i<game.control.num_tech_types; i++)
+      if(get_invention(game.player_ptr, i)==TECH_KNOWN) {
+	tech_list_names_ptrs[j]=advance_name_translation(i);
 	j++;
       }
-    } advance_index_iterate_end;
     tech_list_names_ptrs[j]=0;
     qsort(tech_list_names_ptrs, j, sizeof(char *), compare_strings_ptrs);
 
@@ -551,20 +534,16 @@ void science_dialog_update(void)
 				   science_change_menu_button, 
 				   NULL);
     
-    flag=0;
-    advance_index_iterate(A_FIRST, i) {
-      if (TECH_PREREQS_KNOWN ==
-            player_invention_state(client.conn.playing, i)) {
+      for(i=A_FIRST, flag=0; i<game.control.num_tech_types; i++)
+      if(get_invention(game.player_ptr, i)==TECH_REACHABLE) {
 	Widget entry=
-	  XtVaCreateManagedWidget(advance_name_translation(advance_by_number(i)),
-				  smeBSBObjectClass,
-				  popupmenu,
-				  NULL);
+	  XtVaCreateManagedWidget(advance_name_translation(i), smeBSBObjectClass, 
+				  popupmenu, NULL);
 	XtAddCallback(entry, XtNcallback, science_change_callback, 
-		      INT_TO_XTPOINTER(i)); 
+		      (XtPointer) i); 
 	flag=1;
       }
-    } advance_index_iterate_end;
+    
     if(!flag)
       XtSetSensitive(science_change_menu_button, FALSE);
 
@@ -575,22 +554,19 @@ void science_dialog_update(void)
 				  science_goal_menu_button, 
 				  NULL);
     
-    flag=0;
-    advance_index_iterate(A_FIRST, i) {
-      if (player_invention_reachable(client.conn.playing, i)
-	  && TECH_KNOWN != player_invention_state(client.conn.playing, i)
-	  && (11 > num_unknown_techs_for_goal(client.conn.playing, i)
+    for(i=A_FIRST, flag=0; i<game.control.num_tech_types; i++)
+      if (tech_is_available(game.player_ptr, i)
+	  && get_invention(game.player_ptr, i) != TECH_KNOWN
+	  && advances[i].req[0] != A_LAST && advances[i].req[1] != A_LAST
+	  && (num_unknown_techs_for_goal(game.player_ptr, i) < 11
 	      || i == research->tech_goal)) {
 	Widget entry=
-	  XtVaCreateManagedWidget(advance_name_translation(advance_by_number(i)),
-				  smeBSBObjectClass,
-				  goalmenu,
-				  NULL);
+	  XtVaCreateManagedWidget(advance_name_translation(i), smeBSBObjectClass, 
+				  goalmenu, NULL);
 	XtAddCallback(entry, XtNcallback, science_goal_callback, 
-		      INT_TO_XTPOINTER(i)); 
+		      (XtPointer) i); 
 	flag=1;
       }
-    } advance_index_iterate_end;
     
     if(!flag)
       XtSetSensitive(science_goal_menu_button, FALSE);
@@ -731,11 +707,11 @@ void economy_list_callback(Widget w, XtPointer client_data,
 
   if (ret->list_index != XAW_LIST_NONE) {
     /* The user has selected an improvement type. */
-    struct impr_type *pimprove = economy_improvement_type[ret->list_index];
-    bool is_sellable = can_sell_building(pimprove);
+    int i = economy_improvement_type[ret->list_index];
+    bool is_sellable = (improvement_exists(i) && can_sell_building(i));
 
     XtSetSensitive(sellobsolete_command, is_sellable
-		   && improvement_obsolete(client.conn.playing, pimprove));
+		   && improvement_obsolete(game.player_ptr, i));
     XtSetSensitive(sellall_command, is_sellable);
   } else {
     /* No selection has been made. */
@@ -979,7 +955,7 @@ void activeunits_list_callback(Widget w, XtPointer client_data,
 
   may_upgrade =
     ((inx != XAW_LIST_NONE) &&
-     (can_upgrade_unittype(client.conn.playing,
+     (can_upgrade_unittype(game.player_ptr,
        utype_by_number(activeunits_type[inx])) != NULL));
 
   XtSetSensitive (upgrade_command, may_upgrade);
@@ -991,7 +967,7 @@ void activeunits_list_callback(Widget w, XtPointer client_data,
 static void upgrade_callback_yes(Widget w, XtPointer client_data, 
                                  XtPointer call_data)
 {
-  dsend_packet_unit_type_upgrade(&client.conn, (size_t) client_data);
+  dsend_packet_unit_type_upgrade(&aconnection, (size_t) client_data);
   destroy_message_dialog(w);
 }
 
@@ -1020,15 +996,18 @@ void activeunits_upgrade_callback(Widget w, XtPointer client_data,
     punittype1 = utype_by_number(activeunits_type[ret->list_index]);
     CHECK_UNIT_TYPE(punittype1);
 
-    punittype2 = can_upgrade_unittype(client.conn.playing, punittype1);
+    /* puts(unit_types[ut1].name); */
+
+    punittype2 = can_upgrade_unittype(game.player_ptr,
+		   utype_by_number(activeunits_type[ret->list_index]));
 
     my_snprintf(buf, sizeof(buf),
 		_("Upgrade as many %s to %s as possible for %d gold each?\n"
 		  "Treasury contains %d gold."),
 		utype_name_translation(punittype1),
 		utype_name_translation(punittype2),
-		unit_upgrade_price(client.conn.playing, punittype1, punittype2),
-		client.conn.playing->economic.gold);
+		unit_upgrade_price(game.player_ptr, punittype1, punittype2),
+		game.player_ptr->economic.gold);
 
     popup_message_dialog(toplevel, "upgradedialog", buf,
 			 upgrade_callback_yes,
@@ -1075,16 +1054,8 @@ void activeunits_report_dialog_update(void)
     /* int upkeep_gold;   FIXME: add gold when gold is implemented --jjm */
     int building_count;
   };
-
-  if (NULL == client.conn.playing) {
-    return;
-  }
-
-  if (is_report_dialogs_frozen()) {
-    return;
-  }
-
-  if (activeunits_dialog_shell) {
+  if(is_report_dialogs_frozen()) return;
+  if(activeunits_dialog_shell) {
     int k;
     Dimension width; 
     static char *activeunits_list_names_ptrs[U_LAST+1];
@@ -1100,33 +1071,18 @@ void activeunits_report_dialog_update(void)
     free((void *) report_title);
 
     memset(unitarray, '\0', sizeof(unitarray));
-
-    city_list_iterate(client.conn.playing->cities, pcity) {
-      int free_upkeep[O_COUNT];
-
-      output_type_iterate(o) {
-        free_upkeep[o] = get_city_output_bonus(pcity, get_output_type(o),
-                                               EFT_UNIT_UPKEEP_FREE_PER_CITY);
-      } output_type_iterate_end;
-
-      unit_list_iterate(client.conn.playing->units, punit) {
-        int upkeep_cost[O_COUNT];
-        Unit_type_id uti = utype_index(unit_type(punit));
-
-        city_unit_upkeep(punit, upkeep_cost, free_upkeep);
-        (unitarray[uti].active_count)++;
-        if (punit->homecity) {
-          /* TODO: upkeep for generic output types. */
-          unitarray[uti].upkeep_shield += upkeep_cost[O_SHIELD];
-          unitarray[uti].upkeep_food += upkeep_cost[O_FOOD];
-        }
-      } unit_list_iterate_end;
-    } city_list_iterate_end;
-
-    city_list_iterate(client.conn.playing->cities,pcity) {
-      if (VUT_UTYPE == pcity->production.kind) {
-	struct unit_type *punittype = pcity->production.value.utype;
-	(unitarray[utype_index(punittype)].building_count)++;
+    unit_list_iterate(game.player_ptr->units, punit) {
+      (unitarray[unit_type(punit)->index].active_count)++;
+      if (punit->homecity) {
+	unitarray[unit_type(punit)->index].upkeep_shield += punit->upkeep[O_SHIELD];
+	unitarray[unit_type(punit)->index].upkeep_food += punit->upkeep[O_FOOD];
+	/* TODO: gold upkeep */
+      }
+    }
+    unit_list_iterate_end;
+    city_list_iterate(game.player_ptr->cities,pcity) {
+      if (pcity->production.is_unit) {
+	(unitarray[pcity->production.value].building_count)++;
       }
     }
     city_list_iterate_end;
@@ -1134,7 +1090,7 @@ void activeunits_report_dialog_update(void)
     k = 0;
     memset(&unittotals, '\0', sizeof(unittotals));
     unit_type_iterate(punittype) {
-      i = utype_index(punittype);
+      i = punittype->index;
       if ((unitarray[i].active_count > 0) || (unitarray[i].building_count > 0)) {
 	my_snprintf
 	  (
@@ -1142,7 +1098,7 @@ void activeunits_report_dialog_update(void)
 	   sizeof(activeunits_list_names[k]),
 	   "%-27s%c%9d%9d%9d%9d",
 	   utype_name_translation(punittype),
-	   can_upgrade_unittype(client.conn.playing, punittype) != NULL ? '*': '-',
+	   can_upgrade_unittype(game.player_ptr, punittype) != NULL ? '*': '-',
 	   unitarray[i].building_count,
 	   unitarray[i].active_count,
 	   unitarray[i].upkeep_shield,
@@ -1487,29 +1443,33 @@ void settable_options_ok_callback(Widget w, XtPointer client_data,
 
       if (setting_class_is_changeable(o->sclass)
 	  && o->is_visible) {
+	char buffer[MAX_LEN_MSG];
 
 	switch (o->stype) {
 	case SSET_BOOL:
 	  old_b = o->val ? True: False;
 	  XtVaGetValues(settable_options_widgets[i], XtNstate, &b, NULL);
 	  if (b != old_b) {
-	    send_chat_printf("/set %s %s",
-                             o->name, b ? "1" : "0");
+	    my_snprintf(buffer, MAX_LEN_MSG, "/set %s %s",
+			o->name, b ? "1" : "0");
+	    send_chat(buffer);
 	  }
 	  break;
 	case SSET_INT:
 	  XtVaGetValues(settable_options_widgets[i], XtNstring, &dp, NULL);
 	  sscanf(dp, "%d", &val);
 	  if (val != o->val) {
-	    send_chat_printf("/set %s %d",
-                             o->name, val);
+	    my_snprintf(buffer, MAX_LEN_MSG, "/set %s %d",
+			o->name, val);
+	    send_chat(buffer);
 	  }
 	  break;
 	case SSET_STRING:
 	  XtVaGetValues(settable_options_widgets[i], XtNstring, &dp, NULL);
 	  if (strcmp(o->strval, dp)) {
-	    send_chat_printf("/set %s %s",
-                             o->name, (char *)dp);
+	    my_snprintf(buffer, MAX_LEN_MSG, "/set %s %s",
+			o->name, (char *)dp);
+	    send_chat(buffer);
 	  }
 	  break;
 	}

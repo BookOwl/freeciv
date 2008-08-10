@@ -78,8 +78,8 @@ static RANDOM_STATE rand_state;
   directly representable in type RANDOM_TYPE, so we do instead:
          divisor = MAX_UINT32/size
 *************************************************************************/
-RANDOM_TYPE myrand_debug(RANDOM_TYPE size, const char *called_as,
-			 int line, const char *file) 
+RANDOM_TYPE myrand_debug(RANDOM_TYPE size,
+		     const char *called_as, int line, const char *file) 
 {
   RANDOM_TYPE new_rand, divisor, max;
   int bailout = 0;
@@ -110,8 +110,8 @@ RANDOM_TYPE myrand_debug(RANDOM_TYPE size, const char *called_as,
     rand_state.v[rand_state.x] = new_rand;
 
     if (++bailout > 10000) {
-      freelog(LOG_ERROR, "%s(%lu) = %lu bailout at %s:%d", 
-	    called_as, (unsigned long)size, (unsigned long)new_rand, file, line);
+      freelog(LOG_ERROR, "%s(%lu) = %lu bailout at line %d of %s", 
+	    called_as, (unsigned long)size, (unsigned long)new_rand, line, file);
       new_rand = 0;
       break;
     }
@@ -124,8 +124,8 @@ RANDOM_TYPE myrand_debug(RANDOM_TYPE size, const char *called_as,
     new_rand = 0;
   }
 
-  freelog(LOG_RAND, "%s(%lu) = %lu at %s:%d",
-	    called_as, (unsigned long)size, (unsigned long)new_rand, file, line);
+  freelog(LOG_RAND, "%s(%lu) = %lu at line %d of %s",
+	    called_as, (unsigned long)size, (unsigned long)new_rand, line, file);
 
   return new_rand;
 } 
@@ -212,7 +212,7 @@ void set_myrand_state(RANDOM_STATE state)
 
 /*************************************************************************
   Test one aspect of randomness, using n numbers.
-  Reports results to LOG_TEST; with good randomness, behaviourchange
+  Reports results to LOG_NORMAL; with good randomness, behaviourchange
   and behavioursame should be about the same size.
   Tests current random state; saves and restores state, so can call
   without interrupting current sequence.
@@ -242,37 +242,9 @@ void test_random1(int n)
     }
     old_value = new_value;
   }
-  freelog(LOG_TEST, "test_random1(%d) same: %d, change: %d",
+  freelog(LOG_NORMAL, "test_random1(%d) same: %d, change: %d",
 	  n, behavioursame, behaviourchange);
 
   /* restore state: */
   set_myrand_state(saved_state);
-}
-
-/*************************************************************************
-  Local pseudo-random function for repeatedly reaching the same result,
-  instead of myrand().  Primarily needed for tiles.
-
-  Use an invariant equation for seed.
-  Result is 0 to (size - 1).
-*************************************************************************/
-RANDOM_TYPE myrandomly_debug(RANDOM_TYPE seed, RANDOM_TYPE size,
-			     const char *called_as, int line, const char *file)
-{
-  RANDOM_TYPE result;
-
-#define LARGE_PRIME (10007)
-#define SMALL_PRIME (1009)
-
-  /* Check for overflow and underflow */
-  assert(seed < MAX_UINT32 / LARGE_PRIME);
-  assert(size < SMALL_PRIME);
-  assert(size > 0);
-  result = ((seed * LARGE_PRIME) % SMALL_PRIME) % size;
-
-  freelog(LOG_RAND, "%s(%lu,%lu) = %lu at %s:%d",
-	  called_as, (unsigned long)seed, (unsigned long)size,
-	  (unsigned long)result, file, line);
-
-  return result;
 }

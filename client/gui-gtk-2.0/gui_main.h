@@ -61,7 +61,6 @@ extern GtkWidget *      map_canvas;             /* GtkDrawingArea */
 extern GtkWidget *      overview_canvas;        /* GtkDrawingArea */
 extern GtkWidget *      timeout_label;
 extern GtkWidget *      turn_done_button;
-extern GtkWidget *      unit_info_box;
 extern GtkWidget *      unit_info_label;
 extern GtkWidget *      unit_info_frame;
 extern GtkWidget *      map_horizontal_scrollbar;
@@ -70,7 +69,7 @@ extern GdkWindow *      root_window;
 
 extern GtkWidget *	toplevel_tabs;
 extern GtkWidget *	top_notebook;
-extern GtkWidget *      map_widget;
+extern GtkWidget *	map_widget;
 extern GtkWidget *	bottom_notebook;
 extern GtkTextBuffer *	message_buffer;
 extern GtkTreeStore *conn_model;

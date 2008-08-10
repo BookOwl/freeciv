@@ -151,15 +151,7 @@ static void signals_create(void)
 		       3, API_TYPE_TECH_TYPE, API_TYPE_PLAYER,
 		       API_TYPE_STRING);
 
-  /* First player is city owner, second is enemy. */
-  script_signal_create("city_destroyed",
-                       3, API_TYPE_CITY, API_TYPE_PLAYER, API_TYPE_PLAYER);
-  script_signal_create("city_lost",
-                       3, API_TYPE_CITY, API_TYPE_PLAYER, API_TYPE_PLAYER);
-
   script_signal_create("hut_enter", 1, API_TYPE_UNIT);
-
-  script_signal_create("unit_lost", 2, API_TYPE_UNIT, API_TYPE_PLAYER);
 }
 
 /**************************************************************************

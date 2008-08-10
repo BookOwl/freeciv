@@ -17,12 +17,12 @@
 
 #include "city.h"
 #include "connection.h"
+#include "improvement.h"	/* Impr_Status */
 #include "nation.h"
 #include "shared.h"
 #include "spaceship.h"
 #include "tech.h"
-#include "unitlist.h"
-#include "vision.h"
+#include "unit.h"
 
 #define PLAYER_DEFAULT_TAX_RATE 0
 #define PLAYER_DEFAULT_SCIENCE_RATE 100
@@ -31,28 +31,36 @@
 #define ANON_PLAYER_NAME "noname"
 #define ANON_USER_NAME "Unassigned"
 
+/*
+ * pplayer->ai.barbarian_type uses this enum. Note that the values
+ * have to stay since they are used in savegames.
+ */
+enum barbarian_type {
+  NOT_A_BARBARIAN = 0,
+  LAND_BARBARIAN = 1,
+  SEA_BARBARIAN = 2
+};
+
 enum handicap_type {
-  H_DIPLOMAT = 0,     /* Can't build offensive diplomats */
-  H_AWAY,             /* Away mode */
-  H_LIMITEDHUTS,      /* Can get only 25 gold and barbs from huts */
-  H_DEFENSIVE,        /* Build defensive buildings without calculating need */
-  H_EXPERIMENTAL,     /* Enable experimental AI features (for testing) */
-  H_RATES,            /* Can't set its rates beyond government limits */
-  H_TARGETS,          /* Can't target anything it doesn't know exists */
-  H_HUTS,             /* Doesn't know which unseen tiles have huts on them */
-  H_FOG,              /* Can't see through fog of war */
-  H_NOPLANES,         /* Doesn't build air units */
-  H_MAP,              /* Only knows map_is_known tiles */
-  H_DIPLOMACY,        /* Not very good at diplomacy */
-  H_REVOLUTION,       /* Cannot skip anarchy */
-  H_EXPANSION,        /* Don't like being much larger than human */
-  H_DANGER,           /* Always thinks its city is in danger */
-  H_LAST
+  H_NONE = 0,         /* No handicaps */
+  H_DIPLOMAT = 1,     /* Can't build offensive diplomats */
+  H_AWAY = 2,         /* Away mode */
+  H_LIMITEDHUTS = 4,  /* Can get only 25 gold and barbs from huts */
+  H_DEFENSIVE = 8,    /* Build defensive buildings without calculating need */
+  H_EXPERIMENTAL = 16,/* Enable experimental AI features (for testing) */
+  H_RATES = 32,       /* Can't set its rates beyond government limits */
+  H_TARGETS = 64,     /* Can't target anything it doesn't know exists */
+  H_HUTS = 128,       /* Doesn't know which unseen tiles have huts on them */
+  H_FOG = 256,        /* Can't see through fog of war */
+  H_NOPLANES = 512,   /* Doesn't build air units */
+  H_MAP = 1024,       /* Only knows map_is_known tiles */
+  H_DIPLOMACY = 2048, /* Not very good at diplomacy */
+  H_REVOLUTION = 4096, /* Cannot skip anarchy */
+  H_EXPANSION = 8192, /* Don't like being much larger than human */
+  H_DANGER = 16384    /* Always thinks its city is in danger */
 };
 
 BV_DEFINE(bv_player, MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS);
-
-BV_DEFINE(bv_handicap, H_LAST);
 
 struct player_economic {
   int gold;
@@ -96,8 +104,8 @@ struct player_ai {
   int est_upkeep; /* estimated upkeep of buildings in cities */
   /* The units of tech_want seem to be shields */
   int tech_want[A_LAST+1];
-  bv_handicap handicaps;        /* sum of enum handicap_type */
-  enum ai_level skill_level;   	/* 0-10 value for save/load/display */
+  int handicap;			/* sum of enum handicap_type */
+  int skill_level;		/* 0-10 value for save/load/display */
   int fuzzy;			/* chance in 1000 to mis-decide */
   int expand;			/* percentage factor to value new cities */
   int science_cost;             /* Cost in bulbs to get new tech, relative
@@ -135,6 +143,7 @@ struct player_diplstate {
   int first_contact_turn; /* turn we had first contact with this player */
   int turns_left;		/* until pact (e.g., cease-fire) ends */
   int has_reason_to_cancel;	/* 0: no, 1: this turn, 2: this or next turn */
+  int contact_turns_left;	/* until contact ends */
 };
 
 /***************************************************************************
@@ -155,6 +164,7 @@ struct attribute_block_s {
 };
 
 struct player {
+  int player_no;
   char name[MAX_LEN_NAME];
   char username[MAX_LEN_NAME];
   char ranked_username[MAX_LEN_NAME]; /* the user who will be ranked */
@@ -175,11 +185,11 @@ struct player {
   int revolution_finishes;
 
   bool capital; /* used to give player init_buildings in first city. */
+  bv_player embassy;
   struct player_diplstate diplstates[MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS];
   int city_style;
-  struct city_list *cities;
-  struct site_list *sites;
   struct unit_list *units;
+  struct city_list *cities;
   struct player_score score;
   struct player_economic economic;
 
@@ -190,6 +200,7 @@ struct player {
   bool is_connected;
   struct connection *current_conn;     /* non-null while handling packet */
   struct conn_list *connections;       /* will replace conn */
+  struct worklist worklists[MAX_NUM_WORKLISTS];
   struct player_tile *private_map;
   unsigned int gives_shared_vision; /* bitvector those that give you shared vision */
   unsigned int really_gives_vision; /* takes into account that p3 may see what p1 has via p2 */
@@ -200,15 +211,10 @@ struct player {
   struct attribute_block_s attribute_block;
   struct attribute_block_s attribute_block_buffer;
   bv_debug debug;
-  struct {
-    bool fog_of_war_disabled;
-  } editor;
 };
 
 /* General player accessor functions. */
 int player_count(void);
-void set_player_count(int count);
-
 int player_index(const struct player *pplayer);
 int player_number(const struct player *pplayer);
 
@@ -298,18 +304,15 @@ struct player_research *get_player_research(const struct player *p1);
 /* Initialization and iteration */
 void player_init(struct player *plr);
 
-struct player *player_array_first(void);
-const struct player *player_array_last(void);
+#define players_iterate(PI_player)                                            \
+{                                                                             \
+  struct player *PI_player;                                                   \
+  int PI_p_itr;                                                               \
+  for (PI_p_itr = 0; PI_p_itr < game.info.nplayers; PI_p_itr++) {            \
+    PI_player = get_player(PI_p_itr);
 
-#define players_iterate(_p)						\
-{									\
-  struct player *_p = player_array_first();				\
-  if (NULL != _p) {							\
-    for (; _p <= player_array_last(); _p++) {
-
-#define players_iterate_end						\
-    }									\
-  }									\
+#define players_iterate_end                                                   \
+  }                                                                           \
 }
 
 /* ai love values should be in range [-MAX_AI_LOVE..MAX_AI_LOVE] */
@@ -319,10 +322,5 @@ const struct player *player_array_last(void);
 /* User functions. */
 bool is_valid_username(const char *name);
 
-enum ai_level find_ai_level_by_name(const char *name);
-const char *ai_level_name(enum ai_level level);
-const char *ai_level_cmd(enum ai_level level);
-bool is_settable_ai_level(enum ai_level level);
-int number_of_ai_levels(void);
 
 #endif  /* FC__PLAYER_H */
