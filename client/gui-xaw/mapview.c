@@ -32,6 +32,7 @@
 #include "support.h"
 #include "timing.h"
 
+#include "game.h"
 #include "government.h"		/* government_graphic() */
 #include "map.h"
 #include "player.h"
@@ -164,7 +165,7 @@ void update_timeout_label(void)
 **************************************************************************/
 void update_info_label(void)
 {
-  int d = 0;
+  int d;
 
   xaw_set_label(info_command, get_info_label_text());
 
@@ -173,21 +174,19 @@ void update_info_label(void)
 		      client_cooling_sprite(),
 		      client_government_sprite());
 
-  if (NULL == client.conn.playing) {
+  if (!game.player_ptr) {
     return;
   }
 
-  for (; d < (client.conn.playing->economic.luxury) / 10; d++) {
+  d = 0;
+  for(; d < (game.player_ptr->economic.luxury) / 10; d++)
     xaw_set_bitmap(econ_label[d], get_tax_sprite(tileset, O_LUXURY)->pixmap);
-  }
  
-  for (; d < (client.conn.playing->economic.science + client.conn.playing->economic.luxury) / 10; d++) {
+  for(; d < (game.player_ptr->economic.science + game.player_ptr->economic.luxury) / 10; d++)
     xaw_set_bitmap(econ_label[d], get_tax_sprite(tileset, O_SCIENCE)->pixmap);
-  }
  
-  for(; d < 10; d++) {
-    xaw_set_bitmap(econ_label[d], get_tax_sprite(tileset, O_GOLD)->pixmap);
-  }
+   for(; d < 10; d++)
+     xaw_set_bitmap(econ_label[d], get_tax_sprite(tileset, O_GOLD)->pixmap);
  
   update_timeout_label();
 }
@@ -208,8 +207,8 @@ void update_unit_info_label(struct unit_list *punitlist)
   char buffer[512];
 
   my_snprintf(buffer, sizeof(buffer), "%s\n%s",
-              get_unit_info_label_text1(punitlist),
-              get_unit_info_label_text2(punitlist, 0));
+		get_unit_info_label_text1(punitlist),
+		get_unit_info_label_text2(punitlist));
   xaw_set_label(unit_info_label, buffer);
 
   if (unit_list_size(punitlist) > 0) {
@@ -237,14 +236,6 @@ void update_unit_info_label(struct unit_list *punitlist)
   }
 
   update_unit_pix_label(punitlist);
-}
-
-/**************************************************************************
-  This function will change the current mouse cursor.
-**************************************************************************/
-void update_mouse_cursor(enum cursor_type new_cursor_type)
-{
-  /* PORT ME */
 }
 
 /**************************************************************************
@@ -522,18 +513,6 @@ void canvas_put_line(struct canvas *pcanvas, struct color *pcolor,
 }
 
 /**************************************************************************
-  Draw a 1-pixel-width curved colored line onto the mapview or 
-  citydialog canvas.
-**************************************************************************/
-void canvas_put_curved_line(struct canvas *pcanvas, struct color *pcolor,
-                            enum line_type ltype, int start_x, int start_y,
-                            int dx, int dy)
-{
-  /* FIXME: Implement curved line drawing. */
-  canvas_put_line(pcanvas, pcolor, ltype, start_x, start_y, dx, dy);
-}
-
-/**************************************************************************
   Flush the given part of the canvas buffer (if there is one) to the
   screen.
 **************************************************************************/
@@ -734,8 +713,7 @@ void canvas_put_text(struct canvas *pcanvas, int canvas_x, int canvas_y,
   the proper way to do this is probably something like what Civ II does.
   (One food/shield/mask drawn N times, possibly one top of itself. -- SKi 
 **************************************************************************/
-void put_unit_pixmap_city_overlays(struct unit *punit, Pixmap pm,
-                                   int *upkeep_cost, int happy_cost)
+void put_unit_pixmap_city_overlays(struct unit *punit, Pixmap pm)
 {
   struct canvas store = {pm};
  
@@ -747,8 +725,7 @@ void put_unit_pixmap_city_overlays(struct unit *punit, Pixmap pm,
 		 tileset_tile_height(tileset)
 		 + tileset_small_sprite_height(tileset));
 
-  put_unit_city_overlays(punit, &store, 0, tileset_tile_height(tileset),
-                         upkeep_cost, happy_cost);
+  put_unit_city_overlays(punit, &store, 0, tileset_tile_height(tileset));
 }
 
 /**************************************************************************

@@ -25,41 +25,16 @@
   to hold full number of unit types.
 */
 
-enum unit_class_flag_id {
-  UCF_TERRAIN_SPEED = 0,
-  UCF_DAMAGE_SLOWS,
-  UCF_CAN_OCCUPY,         /* Can occupy enemy cities */
-  UCF_MISSILE,
-  UCF_ROAD_NATIVE,        /* Considers any road tile native terrain */
-  UCF_RIVER_NATIVE,       /* Considers any river tile native terrain */
-  UCF_BUILD_ANYWHERE,
-  UCF_UNREACHABLE,
-  UCF_COLLECT_RANSOM,     /* Can collect ransom from barbarian leader */
-  UCF_ZOC,                /* Is subject to ZOC */
-  UCF_CAN_FORTIFY,        /* Can fortify on land squares */
-  UCF_LAST
+struct move_params {
+  bool terrain_affects; /* Move rate is subject to terrain and improvement effects */
+  bool damage_slows;    /* Damaged unit is slowed down */
 };
 
-BV_DEFINE(bv_unit_classes, UCL_LAST);
-BV_DEFINE(bv_unit_class_flags, UCF_LAST);
-
-enum hut_behavior { HUT_NORMAL, HUT_NOTHING, HUT_FRIGHTEN };
-
-enum move_level { MOVE_NONE, MOVE_PARTIAL, MOVE_FULL };
-
 struct unit_class {
-  Unit_Class_id item_number;
+  Unit_Class_id id;
   struct name_translation name;
-  enum unit_move_type move_type;
-  int min_speed;           /* Minimum speed after damage and effects */
+  struct move_params move;
   int hp_loss_pct;         /* Percentage of hitpoints lost each turn not in city or airbase */
-  enum hut_behavior hut_behavior;
-  bv_unit_class_flags flags;
-
-  struct {
-    enum move_level land_move;
-    enum move_level sea_move;
-  } ai;
 };
 
 /* Unit "special effects" flags:
@@ -72,15 +47,18 @@ struct unit_class {
 enum unit_flag_id { 
   F_TRADE_ROUTE=0,
   F_HELP_WONDER,
+  F_MISSILE,   
   F_IGZOC,     
-  F_CIVILIAN,      
-  F_IGTER,
+  F_NONMIL,      
+  F_IGTER,       
+  F_CARRIER,     
   F_ONEATTACK,   
   F_PIKEMEN,     
   F_HORSE,       
   F_IGWALL,      
   F_FIELDUNIT,   
-  F_AEGIS,
+  F_AEGIS,       
+  F_FIGHTER,     
   F_MARINES,     
   F_PARTIAL_INVIS,    /* Invisibile except when adjacent (Submarine) */   
   F_SETTLERS,         /* Does not include ability to found cities */
@@ -90,8 +68,9 @@ enum unit_flag_id {
   F_SPY,              /* Enhanced spy abilities */
   F_TRANSFORM,        /* Can transform terrain types (Engineers) */
   F_PARATROOPERS,
-  F_AIRBASE,          /* No hardcoded behavior, rulesets use for UnitFlag requirement */
+  F_AIRBASE,          /* Can build Airbases */
   F_CITIES,           /* Can build cities */
+  F_MISSILE_CARRIER,  /* Like F_CARRIER, but missiles only (Submarine) */
   F_NO_LAND_ATTACK,   /* Cannot attack vs land squares (Submarine) */
   F_ADD_TO_CITY,      /* unit can add to city population */
   F_FANATIC,          /* Only Fundamentalist government can build
@@ -108,10 +87,6 @@ enum unit_flag_id {
   F_NOBUILD,          /* Unit cannot be built (barb leader etc) */
   F_BADWALLATTACKER,  /* Firepower set to 1 when attacking city wall */
   F_BADCITYDEFENDER,  /* Firepower set to 1 and attackers x2 when in city */
-  F_HELICOPTER,       /* Defends badly against F_FIGHTER units */
-  F_AIRUNIT,          /* Bad at attacking F_AEGIS units */
-  F_FIGHTER,          /* Good at attacking F_HELICOPTER units */
-  F_BARBARIAN_ONLY,   /* Only barbarians can build this unit */
   F_LAST
 };
 #define F_MAX 64
@@ -170,7 +145,7 @@ struct veteran_type {
 };
 
 struct unit_type {
-  Unit_type_id item_number;
+  int index;
   struct name_translation name;
   char graphic_str[MAX_LEN_NAME];
   char graphic_alt[MAX_LEN_NAME];
@@ -178,21 +153,19 @@ struct unit_type {
   char sound_move_alt[MAX_LEN_NAME];
   char sound_fight[MAX_LEN_NAME];
   char sound_fight_alt[MAX_LEN_NAME];
+  enum unit_move_type move_type;
   int build_cost;			/* Use wrappers to access this. */
   int pop_cost;  /* number of workers the unit contains (e.g., settlers, engineers)*/
   int attack_strength;
   int defense_strength;
   int move_rate;
-
-  struct advance *require_advance;	/* may be NULL */
-  struct impr_type *need_improvement;	/* may be NULL */
-  struct government *need_government;	/* may be NULL */
-
+  int tech_requirement;
+  int impr_requirement;		/* should be Impr_type_id */
+  struct government *gov_requirement; /* may be NULL */
   int vision_radius_sq;
   int transport_capacity;
   int hp;
   int firepower;
-
 #define U_NOT_OBSOLETED (NULL)
   struct unit_type *obsoleted_by;
   int fuel;
@@ -214,22 +187,15 @@ struct unit_type {
   int bombard_rate;
 
   struct unit_class *uclass;
-
-  bv_unit_classes cargo;
-
-  bv_unit_classes targets; /* Can attack these classes even if they are otherwise "Unreachable" */
-
+  
   char *helptext;
 };
 
+
 #define CHECK_UNIT_TYPE(ut) (assert((ut) != NULL			    \
-			     && (utype_by_number((ut)->item_number) == (ut))))
+			     && (utype_by_number((ut)->index) == (ut))))
 
 /* General unit and unit type (matched) routines */
-Unit_type_id utype_count(void);
-Unit_type_id utype_index(const struct unit_type *punittype);
-Unit_type_id utype_number(const struct unit_type *punittype);
-
 struct unit_type *unit_type(const struct unit *punit);
 struct unit_type *utype_by_number(const Unit_type_id id);
 
@@ -256,7 +222,6 @@ enum unit_flag_id find_unit_flag_by_rule_name(const char *s);
 enum unit_role_id find_unit_role_by_rule_name(const char *s);
 
 const char *unit_flag_rule_name(enum unit_flag_id id);
-const char *unit_role_rule_name(enum unit_role_id id);
 
 /* Functions to operate on various flag and roles. */
 void role_unit_precalcs(void);
@@ -270,91 +235,55 @@ struct unit_type *first_role_unit_for_player(const struct player *pplayer,
 const char *role_units_translations(int flag);
 
 /* General unit class routines */
-Unit_Class_id uclass_count(void);
-Unit_Class_id uclass_index(const struct unit_class *pclass);
-Unit_Class_id uclass_number(const struct unit_class *pclass);
-
 struct unit_class *unit_class(const struct unit *punit);
 struct unit_class *utype_class(const struct unit_type *punittype);
-struct unit_class *uclass_by_number(const Unit_Class_id id);
+struct unit_class *uclass_by_number(const int id);
 
 struct unit_class *find_unit_class_by_rule_name(const char *s);
 
 const char *uclass_rule_name(const struct unit_class *pclass);
 const char *uclass_name_translation(struct unit_class *pclass);
 
-bool uclass_has_flag(const struct unit_class *punitclass,
-		     enum unit_class_flag_id flag);
-enum unit_class_flag_id find_unit_class_flag_by_rule_name(const char *s);
-const char *unit_class_flag_rule_name(enum unit_class_flag_id id);
-
 /* Ancillary routines */
-int unit_build_shield_cost(const struct unit *punit);
-int utype_build_shield_cost(const struct unit_type *punittype);
-
-int utype_buy_gold_cost(const struct unit_type *punittype,
-			int shields_in_stock);
-
-int unit_disband_shields(const struct unit *punit);
-int utype_disband_shields(const struct unit_type *punittype);
-
-int unit_pop_value(const struct unit *punit);
-int utype_pop_value(const struct unit_type *punittype);
-
-enum unit_move_type utype_move_type(const struct unit_type *punittype);
-enum unit_move_type uclass_move_type(const struct unit_class *pclass);
-
-/* player related unit functions */
 int utype_upkeep_cost(const struct unit_type *ut, struct player *pplayer,
-                      Output_type_id otype);
+                      const struct government *g, Output_type_id otype);
 int utype_happy_cost(const struct unit_type *ut, const struct player *pplayer);
 
 struct unit_type *can_upgrade_unittype(const struct player *pplayer,
-				       struct unit_type *punittype);
+				       const struct unit_type *punittype);
 int unit_upgrade_price(const struct player *pplayer,
 		       const struct unit_type *from,
 		       const struct unit_type *to);
 
+int unit_build_shield_cost(const struct unit_type *punittype);
+int unit_buy_gold_cost(const struct unit_type *punittype,
+		       int shields_in_stock);
+int unit_disband_shields(const struct unit_type *punittype);
+int unit_pop_value(const struct unit_type *punittype);
+
+/* player related unit functions */
 bool can_player_build_unit_direct(const struct player *p,
 				  const struct unit_type *punittype);
-bool can_player_build_unit_later(const struct player *p,
-				 const struct unit_type *punittype);
-bool can_player_build_unit_now(const struct player *p,
-			       const struct unit_type *punittype);
+bool can_player_build_unit(const struct player *p,
+			   const struct unit_type *punittype);
+bool can_player_eventually_build_unit(const struct player *p,
+				      const struct unit_type *punittype);
 
 /* Initialization and iteration */
 void unit_types_init(void);
 void unit_types_free(void);
 
-struct unit_type *unit_type_array_first(void);
-const struct unit_type *unit_type_array_last(void);
-
-#define unit_type_iterate(_p)						\
-{									\
-  struct unit_type *_p = unit_type_array_first();			\
-  if (NULL != _p) {							\
-    for (; _p <= unit_type_array_last(); _p++) {
-
-#define unit_type_iterate_end						\
-    }									\
-  }									\
-}
-
-/* Initialization and iteration */
 void unit_classes_init(void);
 
-struct unit_class *unit_class_array_first(void);
-const struct unit_class *unit_class_array_last(void);
+#define unit_type_iterate(punittype)					    \
+{									    \
+  int _index;								    \
+									    \
+  for (_index = 0; _index < game.control.num_unit_types; _index++) {	    \
+    struct unit_type *punittype = utype_by_number(_index);
 
-#define unit_class_iterate(_p)						\
-{									\
-  struct unit_class *_p = unit_class_array_first();			\
-  if (NULL != _p) {							\
-    for (; _p <= unit_class_array_last(); _p++) {
-
-#define unit_class_iterate_end						\
-    }									\
-  }									\
+#define unit_type_iterate_end                                               \
+  }                                                                         \
 }
 
 #endif  /* FC__UNITTYPE_H */

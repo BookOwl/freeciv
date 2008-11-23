@@ -31,8 +31,7 @@ struct overview overview = {
   .fog = TRUE,
   .layers = {[OLAYER_BACKGROUND] = TRUE,
 	     [OLAYER_UNITS] = TRUE,
-	     [OLAYER_CITIES] = TRUE,
-	     [OLAYER_BORDERS_ON_OCEAN] = TRUE}
+	     [OLAYER_CITIES] = TRUE}
 };
 
 /*
@@ -110,13 +109,12 @@ static void gui_to_overview_pos(const struct tileset *t,
 static struct color *overview_tile_color(struct tile *ptile)
 {
   if (overview.layers[OLAYER_CITIES]) {
-    struct city *pcity = tile_city(ptile);
+    struct city *pcity = tile_get_city(ptile);
 
     if (pcity) {
-      if (NULL == client.conn.playing
-          || city_owner(pcity) == client.conn.playing) {
+      if (!game.player_ptr || city_owner(pcity) == game.player_ptr) {
 	return get_color(tileset, COLOR_OVERVIEW_MY_CITY);
-      } else if (pplayers_allied(city_owner(pcity), client.conn.playing)) {
+      } else if (pplayers_allied(city_owner(pcity), game.player_ptr)) {
 	/* Includes teams. */
 	return get_color(tileset, COLOR_OVERVIEW_ALLIED_CITY);
       } else {
@@ -128,10 +126,9 @@ static struct color *overview_tile_color(struct tile *ptile)
     struct unit *punit = find_visible_unit(ptile);
 
     if (punit) {
-      if (NULL == client.conn.playing
-          || unit_owner(punit) == client.conn.playing) {
+      if (!game.player_ptr || unit_owner(punit) == game.player_ptr) {
 	return get_color(tileset, COLOR_OVERVIEW_MY_UNIT);
-      } else if (pplayers_allied(unit_owner(punit), client.conn.playing)) {
+      } else if (pplayers_allied(unit_owner(punit), game.player_ptr)) {
 	/* Includes teams. */
 	return get_color(tileset, COLOR_OVERVIEW_ALLIED_UNIT);
       } else {
@@ -143,18 +140,14 @@ static struct color *overview_tile_color(struct tile *ptile)
     struct player *owner = tile_owner(ptile);
 
     if (owner) {
-      if (overview.layers[OLAYER_BORDERS_ON_OCEAN]) {
-        return get_player_color(tileset, owner);
-      } else if (!is_ocean_tile(ptile)) {
-        return get_player_color(tileset, owner);
-      }
+      return get_player_color(tileset, owner);
     }
   }
-  if (overview.layers[OLAYER_RELIEF] && tile_terrain(ptile) != T_UNKNOWN) {
-    return get_terrain_color(tileset, tile_terrain(ptile));
+  if (overview.layers[OLAYER_RELIEF] && ptile->terrain != T_UNKNOWN) {
+    return get_terrain_color(tileset, ptile->terrain);
   }
-  if (overview.layers[OLAYER_BACKGROUND] && tile_terrain(ptile) != T_UNKNOWN) {
-    if (is_ocean_tile(ptile)) {
+  if (overview.layers[OLAYER_BACKGROUND] && ptile->terrain != T_UNKNOWN) {
+    if (is_ocean(ptile->terrain)) {
       return get_color(tileset, COLOR_OVERVIEW_OCEAN);
     } else {
       return get_color(tileset, COLOR_OVERVIEW_LAND);
@@ -363,8 +356,8 @@ static void put_overview_tile_area(struct canvas *pcanvas,
   canvas_put_rectangle(pcanvas,
 		       overview_tile_color(ptile),
 		       x, y, w, h);
-  if (overview.fog
-      && TILE_KNOWN_UNSEEN == client_tile_get_known(ptile)) {
+  if (client_tile_get_known(ptile) == TILE_KNOWN_FOGGED
+      && overview.fog) {
     canvas_put_sprite(pcanvas, x, y, get_basic_fog_sprite(tileset),
 		      0, 0, w, h);
   }

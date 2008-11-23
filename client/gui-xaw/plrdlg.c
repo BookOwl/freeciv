@@ -28,6 +28,7 @@
 
 #include "diptreaty.h"
 #include "fcintl.h"
+#include "game.h"
 #include "packets.h"
 #include "player.h"
 #include "support.h"
@@ -35,6 +36,7 @@
 #include "chatline.h"
 #include "civclient.h"
 #include "climisc.h"
+#include "clinet.h"
 #include "diplodlg.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
@@ -202,8 +204,6 @@ void create_players_dialog(bool raise)
 
 /**************************************************************************
   Updates the player list dialog.
-
-  FIXME: use plrdlg_common.c
 **************************************************************************/
 void update_players_dialog(void)
 {
@@ -221,19 +221,29 @@ void update_players_dialog(void)
       if(is_barbarian(pplayer))
         continue;
 
-      /* text for state */
-      sz_strlcpy(statebuf, plrdlg_col_state(pplayer));
-
       /* text for idleness */
       if(pplayer->nturns_idle>3) {
 	my_snprintf(idlebuf, sizeof(idlebuf),
-		    PL_("(idle %d turn)",
-			"(idle %d turns)",
+		    PL_("(idle %d turn)", "(idle %d turns)",
 			pplayer->nturns_idle - 1),
 		    pplayer->nturns_idle - 1);
       } else {
 	idlebuf[0]='\0';
       }
+
+      /* text for state */
+      if(pplayer->is_alive) {
+	if(pplayer->is_connected) {
+	  if(pplayer->phase_done)
+	    sz_strlcpy(statebuf, _("done"));
+	  else
+	    sz_strlcpy(statebuf, _("moving"));
+	}
+	else
+	  statebuf[0]='\0';
+      }
+      else
+	sz_strlcpy(statebuf, _("R.I.P"));
 
       /* text for name, plus AI marker */       
       if(pplayer->ai.control)
@@ -243,11 +253,10 @@ void update_players_dialog(void)
       namebuf[16] = '\0';
 
       /* text for diplstate type and turns -- not applicable if this is me */
-      if (NULL == client.conn.playing
-          || pplayer == client.conn.playing) {
+      if ((player_number(pplayer) == game.info.player_idx) || !game.player_ptr) {
 	strcpy(dsbuf, "-");
       } else {
-	pds = pplayer_get_diplstate(client.conn.playing, pplayer);
+	pds = pplayer_get_diplstate(game.player_ptr, pplayer);
 	if (pds->type == DS_CEASEFIRE) {
 	  my_snprintf(dsbuf, sizeof(dsbuf), "%s (%d)",
 		      diplstate_text(pds->type), pds->turns_left);
@@ -262,9 +271,9 @@ void update_players_dialog(void)
 	      "%-16s %-12s %-8s %-15s %-8s %-6s   %-15s%s", 
 	      namebuf,
 	      nation_adjective_for_player(pplayer), 
-	      get_embassy_status(client.conn.playing, pplayer),
+	      get_embassy_status(game.player_ptr, pplayer),
 	      dsbuf,
-	      get_vision_status(client.conn.playing, pplayer),
+	      get_vision_status(game.player_ptr, pplayer),
 	      statebuf,
 	      player_addr_hack(pplayer),  /* Fixme for multi-conn */
 	      idlebuf);
@@ -294,27 +303,24 @@ void players_list_callback(Widget w, XtPointer client_data,
 
   XtSetSensitive(players_meet_command, FALSE);
   XtSetSensitive(players_int_command, FALSE);
-  if (ret->list_index != XAW_LIST_NONE) {
-    struct player *pplayer = 
-      player_by_number(list_index_to_player_index[ret->list_index]);
+  if(ret->list_index!=XAW_LIST_NONE) {
+    struct player *pplayer = get_player(list_index_to_player_index[ret->list_index]);
 
-    if (pplayer->spaceship.state != SSHIP_NONE)
+    if(pplayer->spaceship.state != SSHIP_NONE)
       XtSetSensitive(players_sship_command, TRUE);
     else
       XtSetSensitive(players_sship_command, FALSE);
 
-    if (NULL != client.conn.playing && pplayer->is_alive) {
+    if(pplayer->is_alive) {
       XtSetSensitive(players_war_command,
-		     client.conn.playing != pplayer
-		     && !pplayers_at_war(client.conn.playing, pplayer));
+		     !pplayers_at_war(game.player_ptr, pplayer)
+		     && game.player_ptr != pplayer);
     }
 
-    if (NULL != client.conn.playing) {
-      XtSetSensitive(players_vision_command,
-		     gives_shared_vision(client.conn.playing, pplayer));
+    XtSetSensitive(players_vision_command,
+		   gives_shared_vision(game.player_ptr, pplayer));
 
-      XtSetSensitive(players_meet_command, can_meet_with_player(pplayer));
-    }
+    XtSetSensitive(players_meet_command, can_meet_with_player(pplayer));
     XtSetSensitive(players_int_command, can_intel_with_player(pplayer));
   }
 }
@@ -347,10 +353,9 @@ void players_meet_callback(Widget w, XtPointer client_data,
 
   if (ret->list_index != XAW_LIST_NONE) {
     int player_index = list_index_to_player_index[ret->list_index];
-    struct player *pplayer = player_by_number(player_index);
 
-    if (can_meet_with_player(pplayer)) {
-      dsend_packet_diplomacy_init_meeting_req(&client.conn, player_index);
+    if (can_meet_with_player(&game.players[player_index])) {
+      dsend_packet_diplomacy_init_meeting_req(&aconnection, player_index);
     }
     else {
       append_output_window(_("You need an embassy to establish"
@@ -369,10 +374,9 @@ void players_intel_callback(Widget w, XtPointer client_data,
 
   if (ret->list_index != XAW_LIST_NONE) {
     int player_index = list_index_to_player_index[ret->list_index];
-    struct player *pplayer = player_by_number(player_index);
 
-    if (can_intel_with_player(pplayer)) {
-      popup_intel_dialog(pplayer);
+    if (can_intel_with_player(&game.players[player_index])) {
+      popup_intel_dialog(&game.players[player_index]);
     }
   }
 }
@@ -389,7 +393,7 @@ void players_war_callback(Widget w, XtPointer client_data,
     int player_index = list_index_to_player_index[ret->list_index];
 
     /* can be any pact clause */
-    dsend_packet_diplomacy_cancel_pact(&client.conn, player_index,
+    dsend_packet_diplomacy_cancel_pact(&aconnection, player_index,
 				       CLAUSE_CEASEFIRE);
   }
 }
@@ -405,7 +409,7 @@ void players_vision_callback(Widget w, XtPointer client_data,
   if (ret->list_index != XAW_LIST_NONE) {
     int player_index = list_index_to_player_index[ret->list_index];
 
-    dsend_packet_diplomacy_cancel_pact(&client.conn, player_index,
+    dsend_packet_diplomacy_cancel_pact(&aconnection, player_index,
 				       CLAUSE_VISION);
   }
 }
@@ -420,8 +424,7 @@ void players_sship_callback(Widget w, XtPointer client_data,
 
   if (ret->list_index != XAW_LIST_NONE) {
     int player_index = list_index_to_player_index[ret->list_index];
-    struct player *pplayer = player_by_number(player_index);
 
-    popup_spaceship_dialog(pplayer);
+    popup_spaceship_dialog(&game.players[player_index]);
   }
 }

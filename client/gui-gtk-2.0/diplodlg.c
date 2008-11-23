@@ -26,6 +26,7 @@
 
 #include "diptreaty.h"
 #include "fcintl.h"
+#include "game.h"
 #include "government.h"
 #include "map.h"
 #include "packets.h"
@@ -34,6 +35,7 @@
 #include "chatline.h"
 #include "civclient.h"
 #include "climisc.h"
+#include "clinet.h"
 #include "options.h"
 
 #include "diplodlg.h"
@@ -174,18 +176,19 @@ static void popup_diplomacy_dialog(int other_player_id, int initiated_from)
     return;
   }
 
-  if (client.conn.playing->ai.control) {
+  if (game.player_ptr->ai.control) {
     return;			/* Don't show if we are AI controlled. */
   }
 
   if (!pdialog) {
-    pdialog = create_diplomacy_dialog(client.conn.playing,
-				      player_by_number(other_player_id));
+    pdialog =
+	create_diplomacy_dialog(game.player_ptr,
+				player_by_number(other_player_id));
   }
 
   gui_dialog_present(pdialog->dialog);
   /* We initated the meeting - Make the tab active */
-  if (player_by_number(initiated_from) == client.conn.playing) {
+  if (initiated_from == player_number(game.player_ptr)) {
     gui_dialog_raise(pdialog->dialog);
     
     if (players_dialog_shell != NULL) {
@@ -245,17 +248,18 @@ static void popup_add_menu(GtkMenuShell *parent, gpointer data)
 
   /* Advances. */
   {
-    bool flag = FALSE;
+    bool flag;
+    int i;
 
     menu = gtk_menu_new();
 
-    advance_index_iterate(A_FIRST, i) {
-      if (player_invention_state(plr0, i) == TECH_KNOWN
-          && player_invention_reachable(plr1, i)
-	  && (player_invention_state(plr1, i) == TECH_UNKNOWN
-	      || player_invention_state(plr1, i) == TECH_PREREQS_KNOWN)) {
-	item =
-	  gtk_menu_item_new_with_label(advance_name_for_player(client.conn.playing, i));
+    for (i = 1, flag = FALSE; i < game.control.num_tech_types; i++) {
+      if (get_invention(plr0, i) == TECH_KNOWN
+	  && (get_invention(plr1, i) == TECH_UNKNOWN
+	      || get_invention(plr1, i) == TECH_REACHABLE)
+          && tech_is_available(plr1, i)) {
+	item
+	  = gtk_menu_item_new_with_label(advance_name_for_player(game.player_ptr, i));
 
 	gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
 	g_signal_connect(item, "activate",
@@ -265,7 +269,7 @@ static void popup_add_menu(GtkMenuShell *parent, gpointer data)
 					 i));
 	flag = TRUE;
       }
-    } advance_index_iterate_end;
+    }
 
     item = gtk_menu_item_new_with_mnemonic(_("_Advances"));
     gtk_widget_set_sensitive(item, flag);
@@ -391,7 +395,7 @@ static void row_callback(GtkTreeView *view, GtkTreePath *path,
   i = 0; 
   clause_list_iterate(pdialog->treaty.clauses, pclause) {
     if (i == index[0]) {
-      dsend_packet_diplomacy_remove_clause_req(&client.conn,
+      dsend_packet_diplomacy_remove_clause_req(&aconnection,
 					       player_number(pdialog->treaty.plr1),
 					       player_number(pclause->from),
 					       pclause->type,
@@ -425,11 +429,11 @@ static void diplomacy_response(struct gui_dialog *dlg, int response,
   case GTK_RESPONSE_ACCEPT:
 
 
-    dsend_packet_diplomacy_accept_treaty_req(&client.conn,
+    dsend_packet_diplomacy_accept_treaty_req(&aconnection,
 					     player_number(pdialog->treaty.plr1));
     break;
   default:
-    dsend_packet_diplomacy_cancel_meeting_req(&client.conn,
+    dsend_packet_diplomacy_cancel_meeting_req(&aconnection,
 					      player_number(pdialog->treaty.plr1));
     diplomacy_destroy(pdialog);
     break; 
@@ -711,13 +715,13 @@ static void diplomacy_dialog_tech_callback(GtkWidget *w, gpointer data)
   int giver = (choice >> 24) & 0xff, dest = (choice >> 16) & 0xff, other;
   int tech = choice & 0xffff;
 
-  if (player_by_number(giver) == client.conn.playing) {
+  if (giver == game.info.player_idx) {
     other = dest;
   } else {
     other = giver;
   }
 
-  dsend_packet_diplomacy_create_clause_req(&client.conn, other, giver,
+  dsend_packet_diplomacy_create_clause_req(&aconnection, other, giver,
 					   CLAUSE_ADVANCE, tech);
 }
 
@@ -731,13 +735,13 @@ static void diplomacy_dialog_city_callback(GtkWidget * w, gpointer data)
   int giver = (choice >> 24) & 0xff, dest = (choice >> 16) & 0xff, other;
   int city = choice & 0xffff;
 
-  if (player_by_number(giver) == client.conn.playing) {
+  if (giver == game.info.player_idx) {
     other = dest;
   } else {
     other = giver;
   }
 
-  dsend_packet_diplomacy_create_clause_req(&client.conn, other, giver,
+  dsend_packet_diplomacy_create_clause_req(&aconnection, other, giver,
 					   CLAUSE_CITY, city);
 }
 
@@ -751,7 +755,7 @@ static void diplomacy_dialog_map_callback(GtkWidget *w, gpointer data)
   
   pgiver = (struct player *)g_object_get_data(G_OBJECT(w), "plr");
 
-  dsend_packet_diplomacy_create_clause_req(&client.conn,
+  dsend_packet_diplomacy_create_clause_req(&aconnection,
 					   player_number(pdialog->treaty.plr1),
 					   player_number(pgiver), CLAUSE_MAP, 0);
 }
@@ -766,7 +770,7 @@ static void diplomacy_dialog_seamap_callback(GtkWidget *w, gpointer data)
   
   pgiver = (struct player *)g_object_get_data(G_OBJECT(w), "plr");
 
-  dsend_packet_diplomacy_create_clause_req(&client.conn,
+  dsend_packet_diplomacy_create_clause_req(&aconnection,
 					   player_number(pdialog->treaty.plr1),
 					   player_number(pgiver), CLAUSE_SEAMAP,
 					   0);
@@ -780,7 +784,7 @@ static void diplomacy_dialog_add_pact_clause(GtkWidget *w, gpointer data,
 {
   struct Diplomacy_dialog *pdialog = (struct Diplomacy_dialog *)data;
 
-  dsend_packet_diplomacy_create_clause_req(&client.conn,
+  dsend_packet_diplomacy_create_clause_req(&aconnection,
 					   player_number(pdialog->treaty.plr1),
 					   player_number(pdialog->treaty.plr0),
 					   type, 0);
@@ -819,7 +823,7 @@ static void diplomacy_dialog_vision_callback(GtkWidget *w, gpointer data)
   struct player *pgiver =
       (struct player *) g_object_get_data(G_OBJECT(w), "plr");
 
-  dsend_packet_diplomacy_create_clause_req(&client.conn,
+  dsend_packet_diplomacy_create_clause_req(&aconnection,
 					   player_number(pdialog->treaty.plr1),
 					   player_number(pgiver), CLAUSE_VISION,
 					   0);
@@ -834,7 +838,7 @@ static void diplomacy_dialog_embassy_callback(GtkWidget *w, gpointer data)
   struct player *pgiver =
       (struct player *) g_object_get_data(G_OBJECT(w), "plr");
 
-  dsend_packet_diplomacy_create_clause_req(&client.conn,
+  dsend_packet_diplomacy_create_clause_req(&aconnection,
 					   player_number(pdialog->treaty.plr1),
 					   player_number(pgiver), CLAUSE_EMBASSY,
 					   0);
@@ -870,8 +874,7 @@ void diplomacy_dialog_done()
 *****************************************************************/
 static struct Diplomacy_dialog *find_diplomacy_dialog(int other_player_id)
 {
-  struct player *plr0 = client.conn.playing;
-  struct player *plr1 = player_by_number(other_player_id);
+  struct player *plr0 = game.player_ptr, *plr1 = player_by_number(other_player_id);
 
   dialog_list_iterate(dialog_list, pdialog) {
     if ((pdialog->treaty.plr0 == plr0 && pdialog->treaty.plr1 == plr1) ||
@@ -894,7 +897,7 @@ static void diplo_dialog_returnkey(GtkWidget *w, gpointer data)
   int amount = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(w));
   
   if (amount >= 0 && amount <= pgiver->economic.gold) {
-    dsend_packet_diplomacy_create_clause_req(&client.conn,
+    dsend_packet_diplomacy_create_clause_req(&aconnection,
 					     player_number(pdialog->treaty.plr1),
 					     player_number(pgiver),
 					     CLAUSE_GOLD, amount);

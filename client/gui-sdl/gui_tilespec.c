@@ -29,8 +29,8 @@
 #include "fcintl.h"
 #include "log.h"
 
-/* client */
-#include "civclient.h"
+/* common */
+#include "game.h"
 
 /* gui-sdl */
 #include "colors.h"
@@ -53,7 +53,7 @@ static SDL_Surface *pFuture_Tech_Icon;
 
 #define load_GUI_surface(pSpr, pStruct, pSurf, tag)		  \
 do {								  \
-  pSpr = theme_lookup_sprite_tag_alt(theme, LOG_FATAL, tag, "", "", ""); \
+  pSpr = theme_lookup_sprite_tag_alt(theme, tag, "", TRUE, "", ""); \
   assert(pSpr != NULL);				                  \
   pStruct->pSurf = adj_surf(GET_SURF(pSpr));            	  \
   FREESURFACE(GET_SURF(pSpr));                                    \
@@ -121,8 +121,8 @@ void reload_citizens_icons(int style)
   ...
 **************************************************************************/
 void tilespec_setup_city_gfx(void) {
-  struct sprite *pSpr =
-    theme_lookup_sprite_tag_alt(theme, LOG_FATAL, "theme.city", "", "", "");    
+  struct sprite *pSpr = theme_lookup_sprite_tag_alt(
+                                    theme, "theme.city", "", TRUE, "", "");    
 
   pCity_Surf = (pSpr ? adj_surf(GET_SURF(pSpr)) : NULL);
   
@@ -553,16 +553,16 @@ SDL_Surface * get_tech_icon(Tech_type_id tech)
 **************************************************************************/
 SDL_Color * get_tech_color(Tech_type_id tech_id)
 {
-  if (player_invention_reachable(client.conn.playing, tech_id))
+  if (tech_is_available(game.player_ptr, tech_id))
   {
-    switch (player_invention_state(client.conn.playing, tech_id))
+    switch (get_invention(game.player_ptr, tech_id))
     {
       case TECH_UNKNOWN:
-        return get_game_colorRGB(COLOR_REQTREE_UNKNOWN);
+        return get_game_colorRGB(COLOR_REQTREE_UNREACHABLE);	  
       case TECH_KNOWN:
         return get_game_colorRGB(COLOR_REQTREE_KNOWN);
-      case TECH_PREREQS_KNOWN:
-        return get_game_colorRGB(COLOR_REQTREE_PREREQS_KNOWN);
+      case TECH_REACHABLE:
+        return get_game_colorRGB(COLOR_REQTREE_REACHABLE);
       default:
         return get_game_colorRGB(COLOR_REQTREE_BACKGROUND);
     }

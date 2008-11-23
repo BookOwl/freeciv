@@ -96,8 +96,6 @@ struct server_scan {
   } meta;
 };
 
-extern enum announce_type announce;
-
 /**************************************************************************
  The server sends a stream in a registry 'ini' type format.
  Read it using secfile functions and fill the server_list structs.
@@ -297,7 +295,7 @@ static void meta_send_request(struct server_scan *scan)
 
   my_uname(machine_string, sizeof(machine_string));
 
-  capstr = fc_url_encode(our_capability);
+  capstr = my_url_encode(our_capability);
 
   my_snprintf(str, sizeof(str),
     "POST %s HTTP/1.1\r\n"
@@ -314,7 +312,7 @@ static void meta_send_request(struct server_scan *scan)
     (unsigned long) (strlen("client_cap=") + strlen(capstr)),
     capstr);
 
-  if (fc_writesocket(scan->sock, str, strlen(str)) != strlen(str)) {
+  if (my_writesocket(scan->sock, str, strlen(str)) != strlen(str)) {
     /* Even with non-blocking this shouldn't fail. */
     (scan->error_func)(scan, mystrerror());
     return;
@@ -349,7 +347,7 @@ static void meta_read_response(struct server_scan *scan)
   }
 
   while (1) {
-    result = fc_readsocket(scan->sock, buf, sizeof(buf));
+    result = my_readsocket(scan->sock, buf, sizeof(buf));
 
     if (result < 0) {
       if (errno == EAGAIN || errno == EINTR || errno == EWOULDBLOCK) {
@@ -399,10 +397,10 @@ static void meta_read_response(struct server_scan *scan)
 ****************************************************************************/
 static bool begin_metaserver_scan(struct server_scan *scan)
 {
-  union fc_sockaddr addr;
+  union my_sockaddr addr;
   int s;
 
-  scan->meta.urlpath = fc_lookup_httpd(scan->meta.name, &scan->meta.port,
+  scan->meta.urlpath = my_lookup_httpd(scan->meta.name, &scan->meta.port,
 				       metaserver);
   if (!scan->meta.urlpath) {
     (scan->error_func)(scan,
@@ -416,20 +414,20 @@ static bool begin_metaserver_scan(struct server_scan *scan)
     return FALSE;
   }
   
-  if ((s = socket(addr.saddr.sa_family, SOCK_STREAM, 0)) == -1) {
+  if ((s = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
     (scan->error_func)(scan, mystrerror());
     return FALSE;
   }
 
-  fc_nonblock(s);
+  my_nonblock(s);
   
-  if (fc_connect(s, &addr.saddr, sockaddr_size(&addr)) == -1) {
+  if (my_connect(s, (struct sockaddr *) &addr.sockaddr, sizeof(addr)) == -1) {
     if (errno == EINPROGRESS) {
       /* With non-blocking sockets this is the expected result. */
       scan->meta.state = META_CONNECTING;
       scan->sock = s;
     } else {
-      fc_closesocket(s);
+      my_closesocket(s);
       (scan->error_func)(scan, mystrerror());
       return FALSE;
     }
@@ -462,7 +460,7 @@ static struct server_list *get_metaserver_list(struct server_scan *scan)
 
   switch (scan->meta.state) {
   case META_CONNECTING:
-    if (fc_select(scan->sock + 1, NULL, &sockset, NULL, &tv) < 0) {
+    if (my_select(scan->sock + 1, NULL, &sockset, NULL, &tv) < 0) {
       (scan->error_func)(scan, mystrerror());
     } else if (FD_ISSET(scan->sock, &sockset)) {
       meta_send_request(scan);
@@ -471,7 +469,7 @@ static struct server_list *get_metaserver_list(struct server_scan *scan)
     }
     return NULL;
   case META_WAITING:
-    if (fc_select(scan->sock + 1, &sockset, NULL, NULL, &tv) < 0) {
+    if (my_select(scan->sock + 1, &sockset, NULL, NULL, &tv) < 0) {
       (scan->error_func)(scan, mystrerror());
     } else if (FD_ISSET(scan->sock, &sockset)) {
       meta_read_response(scan);
@@ -521,6 +519,7 @@ static void delete_server_list(struct server_list *server_list)
     free(ptmp);
   } server_list_iterate_end;
 
+  server_list_unlink_all(server_list);
   server_list_free(server_list);
 }
 
@@ -531,7 +530,7 @@ static void delete_server_list(struct server_list *server_list)
 **************************************************************************/
 static bool begin_lanserver_scan(struct server_scan *scan)
 {
-  union fc_sockaddr addr;
+  union my_sockaddr addr;
   struct data_out dout;
   int sock, opt = 1;
 #ifndef HAVE_WINSOCK
@@ -539,35 +538,15 @@ static bool begin_lanserver_scan(struct server_scan *scan)
 #else  /* HAVE_WINSOCK */
   char buffer[MAX_LEN_PACKET];
 #endif /* HAVE_WINSOCK */
-  struct ip_mreq mreq4;
+  struct ip_mreq mreq;
   const char *group;
   size_t size;
-  int family;
-
-#ifdef IPV6_SUPPORT
-  struct ipv6_mreq mreq6;
-#endif
-
 #ifndef HAVE_WINSOCK
   unsigned char ttl;
 #endif
 
-  if (announce == ANNOUNCE_NONE) {
-    /* Succeeded in doing nothing */
-    return TRUE;
-  }
-
-#ifdef IPV6_SUPPORT
-  if (announce == ANNOUNCE_IPV6) {
-    family = AF_INET6;
-  } else
-#endif
-  {
-    family = AF_INET;
-  }
-
   /* Create a socket for broadcasting to servers. */
-  if ((sock = socket(family, SOCK_DGRAM, 0)) < 0) {
+  if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
     freelog(LOG_ERROR, "socket failed: %s", mystrerror());
     return FALSE;
   }
@@ -578,27 +557,11 @@ static bool begin_lanserver_scan(struct server_scan *scan)
   }
 
   /* Set the UDP Multicast group IP address. */
-  group = get_multicast_group(announce == ANNOUNCE_IPV6);
+  group = get_multicast_group();
   memset(&addr, 0, sizeof(addr));
-
-#ifndef IPV6_SUPPORT
-  {
-#ifdef HAVE_INET_ATON
-    inet_aton(group, &addr.saddr_in4.sin_addr);
-#else  /* HAVE_INET_ATON */
-    addr.saddr_in4.sin_addr.s_addr = inet_addr(group);
-#endif /* HAVE_INET_ATON */
-#else  /* IPv6 support */
-  if (family == AF_INET6) {
-    addr.saddr.sa_family = AF_INET6;
-    inet_pton(AF_INET6, group, &addr.saddr_in6.sin6_addr);
-    addr.saddr_in6.sin6_port = htons(SERVER_LAN_PORT);
-  } else {
-    inet_pton(AF_INET, group, &addr.saddr_in4.sin_addr);
-#endif /* IPv6 support */
-    addr.saddr.sa_family = AF_INET;
-    addr.saddr_in4.sin_port = htons(SERVER_LAN_PORT);
-  }
+  addr.sockaddr_in.sin_family = AF_INET;
+  addr.sockaddr_in.sin_addr.s_addr = inet_addr(get_multicast_group());
+  addr.sockaddr_in.sin_port = htons(SERVER_LAN_PORT);
 
 /* this setsockopt call fails on Windows 98, so we stick with the default
  * value of 1 on Windows, which should be fine in most cases */
@@ -610,7 +573,7 @@ static bool begin_lanserver_scan(struct server_scan *scan)
     freelog(LOG_ERROR, "setsockopt failed: %s", mystrerror());
     return FALSE;
   }
-#endif /* HAVE_WINSOCK */
+#endif
 
   if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (const char*)&opt, 
                  sizeof(opt))) {
@@ -623,25 +586,25 @@ static bool begin_lanserver_scan(struct server_scan *scan)
   size = dio_output_used(&dout);
  
 
-  if (sendto(sock, buffer, size, 0, &addr.saddr,
-             sockaddr_size(&addr)) < 0) {
+  if (sendto(sock, buffer, size, 0, &addr.sockaddr,
+      sizeof(addr)) < 0) {
     /* This can happen when there's no network connection - it should
      * give an in-game message. */
-    freelog(LOG_ERROR, "lanserver scan sendto failed: %s", mystrerror());
+    freelog(LOG_ERROR, "sendto failed: %s", mystrerror());
     return FALSE;
   } else {
     freelog(LOG_DEBUG, ("Sending request for server announcement on LAN."));
   }
 
-  fc_closesocket(sock);
+  my_closesocket(sock);
 
   /* Create a socket for listening for server packets. */
-  if ((scan->sock = socket(family, SOCK_DGRAM, 0)) < 0) {
+  if ((scan->sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
     (scan->error_func)(scan, mystrerror());
     return FALSE;
   }
 
-  fc_nonblock(scan->sock);
+  my_nonblock(scan->sock);
 
   if (setsockopt(scan->sock, SOL_SOCKET, SO_REUSEADDR,
                  (char *)&opt, sizeof(opt)) == -1) {
@@ -649,51 +612,21 @@ static bool begin_lanserver_scan(struct server_scan *scan)
   }
                                                                                
   memset(&addr, 0, sizeof(addr));
+  addr.sockaddr_in.sin_family = AF_INET;
+  addr.sockaddr_in.sin_addr.s_addr = htonl(INADDR_ANY); 
+  addr.sockaddr_in.sin_port = htons(SERVER_LAN_PORT + 1);
 
-#ifdef IPV6_SUPPORT
-  if (family == AF_INET6) {
-    addr.saddr.sa_family = AF_INET6;
-    addr.saddr_in6.sin6_port = htons(SERVER_LAN_PORT + 1);
-    addr.saddr_in6.sin6_addr = in6addr_any;
-  } else
-#endif /* IPv6 support */
-  {
-    addr.saddr.sa_family = AF_INET;
-    addr.saddr_in4.sin_port = htons(SERVER_LAN_PORT + 1);
-    addr.saddr_in4.sin_addr.s_addr = htonl(INADDR_ANY);
-  }
-
-  if (bind(scan->sock, &addr.saddr, sockaddr_size(&addr)) < 0) {
+  if (bind(scan->sock, &addr.sockaddr, sizeof(addr)) < 0) {
     (scan->error_func)(scan, mystrerror());
     return FALSE;
   }
 
-#ifndef IPV6_SUPPORT
-  {
-#ifdef HAVE_INET_ATON
-    inet_aton(group, &mreq4.imr_multiaddr);
-#else  /* HAVE_INET_ATON */
-    mreq4.imr_multiaddr.s_addr = inet_addr(group);
-#endif /* HAVE_INET_ATON */
-#else  /* IPv6 support */
-  if (family == AF_INET6) {
-    inet_pton(AF_INET6, group, &mreq6.ipv6mr_multiaddr.s6_addr);
-    mreq6.ipv6mr_interface = 0; /* TODO: Interface selection */
-
-    if (setsockopt(scan->sock, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP,
-                   (const char*)&mreq6, sizeof(mreq6)) < 0) {
-      (scan->error_func)(scan, mystrerror());
-    }
-  } else {
-    inet_pton(AF_INET, group, &mreq4.imr_multiaddr.s_addr);
-#endif /* IPv6 support */
-    mreq4.imr_interface.s_addr = htonl(INADDR_ANY);
-
-    if (setsockopt(scan->sock, IPPROTO_IP, IP_ADD_MEMBERSHIP,
-                   (const char*)&mreq4, sizeof(mreq4)) < 0) {
-      (scan->error_func)(scan, mystrerror());
-      return FALSE;
-    }
+  mreq.imr_multiaddr.s_addr = inet_addr(group);
+  mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+  if (setsockopt(scan->sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, 
+                 (const char*)&mreq, sizeof(mreq)) < 0) {
+    (scan->error_func)(scan, mystrerror());
+    return FALSE;
   }
 
   scan->servers = server_list_new();
@@ -708,7 +641,8 @@ static bool begin_lanserver_scan(struct server_scan *scan)
 static struct server_list *get_lan_server_list(struct server_scan *scan)
 {
   socklen_t fromlen;
-  union fc_sockaddr fromend;
+  union my_sockaddr fromend;
+  struct hostent *from;
   char msgbuf[128];
   int type;
   struct data_in din;
@@ -730,7 +664,7 @@ static struct server_list *get_lan_server_list(struct server_scan *scan)
     /* Try to receive a packet from a server.  No select loop is needed;
      * we just keep on reading until recvfrom returns -1. */
     if (recvfrom(scan->sock, msgbuf, sizeof(msgbuf), 0,
-		 &fromend.saddr, &fromlen) < 0) {
+		 &fromend.sockaddr, &fromlen) < 0) {
       break;
     }
 
@@ -746,40 +680,9 @@ static struct server_list *get_lan_server_list(struct server_scan *scan)
     dio_get_string(&din, message, sizeof(message));
 
     if (!mystrcasecmp("none", servername)) {
-      bool nameinfo = FALSE;
-#ifdef IPV6_SUPPORT
-      char dst[INET6_ADDRSTRLEN];
-      char host[NI_MAXHOST], service[NI_MAXSERV];
-
-      if (!getnameinfo(&fromend.saddr, fromlen, host, NI_MAXHOST,
-                       service, NI_MAXSERV, NI_NUMERICSERV)) {
-        nameinfo = TRUE;
-      }
-      if (!nameinfo) {
-        if (fromend.saddr.sa_family == AF_INET6) {
-          inet_ntop(AF_INET6, &fromend.saddr_in6.sin6_addr,
-                    dst, sizeof(dst));
-        } else {
-          inet_ntop(AF_INET, &fromend.saddr_in4.sin_addr, dst, sizeof(dst));;
-        }
-      }
-#else  /* IPv6 support */
-      const char *dst = NULL;
-      struct hostent *from;
-      const char *host = NULL;
-
-      from = gethostbyaddr((char *) &fromend.saddr_in4.sin_addr,
-			   sizeof(fromend.saddr_in4.sin_addr), AF_INET);
-      if (from) {
-        host = from->h_name;
-        nameinfo = TRUE;
-      }
-      if (!nameinfo) {
-        dst = inet_ntoa(fromend.saddr_in4.sin_addr);
-      }
-#endif /* IPv6 support */
-
-      sz_strlcpy(servername, nameinfo ? host : dst);
+      from = gethostbyaddr((char *) &fromend.sockaddr_in.sin_addr,
+			   sizeof(fromend.sockaddr_in.sin_addr), AF_INET);
+      sz_strlcpy(servername, inet_ntoa(fromend.sockaddr_in.sin_addr));
     }
 
     /* UDP can send duplicate or delayed packets. */
@@ -897,7 +800,7 @@ void server_scan_finish(struct server_scan *scan)
     return;
   }
   if (scan->sock >= 0) {
-    fc_closesocket(scan->sock);
+    my_closesocket(scan->sock);
     scan->sock = -1;
   }
 

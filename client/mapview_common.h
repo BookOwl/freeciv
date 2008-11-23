@@ -249,9 +249,8 @@ void put_terrain(struct tile *ptile,
 		 struct canvas *pcanvas, int canvas_x, int canvas_y);
 
 void put_unit_city_overlays(struct unit *punit,
-                            struct canvas *pcanvas,
-                            int canvas_x, int canvas_y, int *upkeep_cost,
-                            int happy_cost);
+			    struct canvas *pcanvas,
+			    int canvas_x, int canvas_y);
 void toggle_city_color(struct city *pcity);
 void toggle_unit_color(struct unit *punit);
 
@@ -264,11 +263,6 @@ void put_one_element(struct canvas *pcanvas, enum mapview_layer layer,
 		     const struct unit *punit, struct city *pcity,
 		     int canvas_x, int canvas_y,
 		     const struct city *citymode);
-
-void put_drawn_sprites(struct canvas *pcanvas,
-                       int canvas_x, int canvas_y,
-                       int count, struct drawn_sprite *pdrawn,
-                       bool fog);
 
 void update_map_canvas(int canvas_x, int canvas_y, int width, int height);
 void update_map_canvas_visible(void);
@@ -298,10 +292,6 @@ void get_city_mapview_name_and_growth(struct city *pcity,
 				      char *growth_buffer,
 				      size_t growth_buffer_len,
 				      enum color_std *grwoth_color);
-void get_city_mapview_traderoutes(struct city *pcity,
-                                  char *traderoutes_buffer,
-                                  size_t traderoutes_buffer_len,
-                                  enum color_std *traderoutes_color);
 
 void init_mapview_decorations(void);
 bool map_canvas_resized(int width, int height);

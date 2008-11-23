@@ -32,7 +32,6 @@
 
 /* common */
 #include "combat.h"
-#include "game.h"
 #include "government.h"
 #include "movement.h"
 #include "unitlist.h"
@@ -40,6 +39,7 @@
 /* client */
 #include "civclient.h"
 #include "climap.h" /* for client_tile_get_known() */
+#include "clinet.h"
 #include "goto.h"
 #include "packhand.h"
 #include "text.h"
@@ -207,7 +207,7 @@ static bool sdl_get_chance_to_win(int *att_chance, int *def_chance,
 void popup_notify_goto_dialog(const char *headline, const char *lines,
 			      struct tile *ptile)
 {
-  freelog(LOG_ERROR, "popup_notify_goto_dialog() PORT ME\n \
+  freelog(LOG_NORMAL, "popup_notify_goto_dialog : PORT ME\n \
   			a: %s\nb: %s",headline, lines );
 }
 
@@ -572,8 +572,8 @@ static int exit_unit_select_callback( struct widget *pWidget )
 static int unit_select_callback( struct widget *pWidget )
 {
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
-    struct unit *pUnit =
-      player_find_unit_by_id(client.conn.playing, MAX_ID - pWidget->ID);
+    struct unit *pUnit = player_find_unit_by_id(game.player_ptr,
+                                     MAX_ID - pWidget->ID);
   
     popdown_unit_select_dialog();
     if (pUnit) {
@@ -656,7 +656,7 @@ void popup_unit_select_dialog(struct tile *ptile)
     pUnit = unit_list_get(ptile->units, i);
     pUnitType = unit_type(pUnit);
         
-    if (unit_owner(pUnit) == client.conn.playing) {
+    if(unit_owner(pUnit) == game.player_ptr) {
       my_snprintf(cBuf , sizeof(cBuf), _("Contact %s (%d / %d) %s(%d,%d,%d) %s"),
             pUnit->veteran ? _("Veteran") : "" ,
             pUnit->hp, pUnitType->hp,
@@ -692,7 +692,7 @@ void popup_unit_select_dialog(struct tile *ptile)
     
     area.w = MAX(area.w, pBuf->size.w);
     area.h += pBuf->size.h;
-    if (unit_owner(pUnit) == client.conn.playing) {
+    if(unit_owner(pUnit) == game.player_ptr) {
       set_wstate(pBuf, FC_WS_NORMAL);
     }
     
@@ -801,12 +801,12 @@ static int exit_terrain_info_dialog_callback(struct widget *pButton)
 const char *sdl_get_tile_defense_info_text(struct tile *ptile)
 {
   static char buffer[64];
-  int bonus = (tile_terrain(ptile)->defense_bonus - 10) * 10;    
+  int bonus = (ptile->terrain->defense_bonus - 10) * 10;    
   
   if(tile_has_special(ptile, S_RIVER)) {
     bonus += terrain_control.river_defense_bonus;
   }
-  if(tile_has_base_flag(ptile, BF_DEFENSE_BONUS)) {
+  if(tile_has_special(ptile, S_FORTRESS)) {
     bonus += terrain_control.fortress_defense_bonus;
   }
   my_snprintf(buffer, sizeof(buffer), "Terrain Defense Bonus: +%d%% ", bonus);
@@ -1056,10 +1056,8 @@ static int adv_unit_sentry_idle_callback(struct widget *pWidget)
     if (pUnit) {
       struct tile *ptile = pUnit->tile;
       unit_list_iterate(ptile->units, punit) {
-        if (unit_owner(punit) == client.conn.playing
-         && ACTIVITY_IDLE == punit->activity
-         && !punit->ai.control
-         && can_unit_do_activity(punit, ACTIVITY_SENTRY)) {
+        if (game.player_ptr == unit_owner(punit) && (punit->activity == ACTIVITY_IDLE)
+           && !punit->ai.control && can_unit_do_activity(punit, ACTIVITY_SENTRY)) {
           request_new_unit_activity(punit, ACTIVITY_SENTRY);
         }
       } unit_list_iterate_end;
@@ -1170,7 +1168,7 @@ void popup_advanced_terrain_dialog(struct tile *ptile, Uint16 pos_x, Uint16 pos_
     return;
   }
   
-  pCity = tile_city(ptile);
+  pCity = ptile->city;
   n = unit_list_size(ptile->units);
   pFocus_Unit = head_of_units_in_focus();
   
@@ -1234,7 +1232,7 @@ void popup_advanced_terrain_dialog(struct tile *ptile, Uint16 pos_x, Uint16 pos_
   area.h += pBuf->size.h;
 
   /* ---------- */  
-  if (pCity && city_owner(pCity) == client.conn.playing)
+  if (pCity && city_owner(pCity) == game.player_ptr)
   {
     /* separator */
     pBuf = create_iconlabel(NULL, pWindow->dst, NULL, WF_FREE_THEME);
@@ -1340,10 +1338,10 @@ void popup_advanced_terrain_dialog(struct tile *ptile, Uint16 pos_x, Uint16 pos_
 #endif
 
     if(can_unit_paradrop(pFocus_Unit) && client_tile_get_known(ptile) &&
-      !(is_ocean_tile(ptile) && is_ground_unit(pFocus_Unit)) &&
-      !(is_sailing_unit(pFocus_Unit) && (!is_ocean_tile(ptile) || !pCity)) &&
-      !(((pCity && pplayers_non_attack(client.conn.playing, city_owner(pCity)))
-      || is_non_attack_unit_tile(ptile, client.conn.playing))) &&
+      !(is_ocean(ptile->terrain) && is_ground_unit(pFocus_Unit)) &&
+      !(is_sailing_unit(pFocus_Unit) && (!is_ocean(ptile->terrain) || !pCity)) &&
+      !(((pCity && pplayers_non_attack(game.player_ptr, city_owner(pCity))) 
+      || is_non_attack_unit_tile(ptile, game.player_ptr))) &&
       (unit_type(pFocus_Unit)->paratroopers_range >=
 	    real_map_distance(pFocus_Unit->tile, ptile))) {
 	      
@@ -1392,7 +1390,7 @@ void popup_advanced_terrain_dialog(struct tile *ptile, Uint16 pos_x, Uint16 pos_
 	  continue;
 	}
         pUnitType = unit_type(pUnit);
-        if (unit_owner(pUnit) == client.conn.playing) {
+        if(unit_owner(pUnit) == game.player_ptr) {
           my_snprintf(cBuf, sizeof(cBuf),
             _("Activate %s (%d / %d) %s (%d,%d,%d) %s"),
             pUnit->veteran ? _("Veteran") : "" ,
@@ -1506,8 +1504,8 @@ void popup_advanced_terrain_dialog(struct tile *ptile, Uint16 pos_x, Uint16 pos_
       pUnit = unit_list_get(ptile->units, 0);
       pUnitType = unit_type(pUnit);
       if (pUnit != pFocus_Unit) {
-        if ((pCity && city_owner(pCity) == client.conn.playing)
-	 || (unit_owner(pUnit) == client.conn.playing))
+        if ((pCity && city_owner(pCity) == game.player_ptr) ||
+	   (unit_owner(pUnit) == game.player_ptr))
         {
           my_snprintf(cBuf, sizeof(cBuf),
             _("Activate %s (%d / %d) %s (%d,%d,%d) %s"),
@@ -1573,7 +1571,7 @@ void popup_advanced_terrain_dialog(struct tile *ptile, Uint16 pos_x, Uint16 pos_
       create_active_iconlabel(pBuf, pWindow->dst, pStr,
 	    cBuf, unit_help_callback);
       set_wstate(pBuf , FC_WS_NORMAL);
-      add_to_gui_list(MAX_ID - utype_number(pUnitType), pBuf);
+      add_to_gui_list(MAX_ID - pUnitType->index, pBuf);
     
       area.w = MAX(area.w, pBuf->size.w);
       units_h += pBuf->size.h;
@@ -1726,8 +1724,7 @@ static void popdown_pillage_dialog(void)
   pillage.
 **************************************************************************/
 void popup_pillage_dialog(struct unit *pUnit,
-			  bv_special may_pillage,
-                          struct base_type *pbase)
+			  bv_special may_pillage)
 {
   struct widget *pWindow = NULL, *pBuf = NULL;
   SDL_String16 *pStr;
@@ -1770,27 +1767,15 @@ void popup_pillage_dialog(struct unit *pUnit,
   add_to_gui_list(ID_PILLAGE_DLG_EXIT_BUTTON, pBuf);
   /* ---------- */
   
-  while ((what = get_preferred_pillage(may_pillage, pbase)) != S_LAST) {
+  while ((what = get_preferred_pillage(may_pillage)) != S_LAST) {
       
     bv_special what_bv;
-
-    if (what != S_PILLAGE_BASE) {
-      BV_CLR_ALL(what_bv);
-      BV_SET(what_bv, what);
+      
+    BV_CLR_ALL(what_bv);
+    BV_SET(what_bv, what);
     
-      create_active_iconlabel(pBuf, pWindow->dst, pStr,
-                              (char *) special_name_translation(what), pillage_callback);
-      clear_special(&may_pillage, what);
-      prereq = get_infrastructure_prereq(what);
-      if (prereq != S_LAST) {
-        clear_special(&may_pillage, prereq);  
-      }
-    } else {
-      create_active_iconlabel(pBuf, pWindow->dst, pStr,
-                              (char *) base_name_translation(pbase), pillage_callback);
-      pbase = NULL;
-    }
-
+    create_active_iconlabel(pBuf, pWindow->dst, pStr,
+	    (char *) special_name_translation(what), pillage_callback);
     pBuf->data.unit = pUnit;
     set_wstate(pBuf, FC_WS_NORMAL);
   
@@ -1798,6 +1783,12 @@ void popup_pillage_dialog(struct unit *pUnit,
     
     area.w = MAX(area.w, pBuf->size.w);
     area.h += pBuf->size.h;
+        
+    clear_special(&may_pillage, what);
+    prereq = get_infrastructure_prereq(what);
+    if (prereq != S_LAST) {
+      clear_special(&may_pillage, prereq);  
+    }
   }
   pPillage_Dlg->pBeginWidgetList = pBuf;
 
@@ -1963,7 +1954,8 @@ static void popup_government_dialog(void)
   struct SDL_String16 *pStr = NULL;
   struct widget *pGov_Button = NULL;
   struct widget *pWindow = NULL;
-  int j;
+  struct government *pGov = NULL;
+  int i, j;
   Uint16 max_w = 0, max_h = 0;
   SDL_Rect area;
 
@@ -1987,14 +1979,15 @@ static void popup_government_dialog(void)
   
   /* create gov. buttons */
   j = 0;
-  government_iterate(pGov) {
+  for (i = 0; i < game.control.government_count; i++) {
 
-    if (pGov == game.government_during_revolution) {
+    if (i == game.government_when_anarchy->index) {
       continue;
     }
 
-    if (can_change_to_government(client.conn.playing, pGov)) {
+    if (can_change_to_government(game.player_ptr, government_by_number(i))) {
 
+      pGov = government_by_number(i);
       pStr = create_str16_from_char(government_name_translation(pGov), adj_font(12));
       pGov_Button =
           create_icon_button(get_government_surface(pGov), pWindow->dst, pStr, 0);
@@ -2004,11 +1997,11 @@ static void popup_government_dialog(void)
       max_h = MAX(max_h, pGov_Button->size.h);
       
       /* ugly hack */
-      add_to_gui_list((MAX_ID - government_number(pGov)), pGov_Button);
+      add_to_gui_list((MAX_ID - i), pGov_Button);
       j++;
 
     }
-  } government_iterate_end;
+  }
 
   pGov_Dlg->pBeginWidgetList = pGov_Button;
 
@@ -2070,7 +2063,7 @@ void popup_revolution_dialog(void)
     return;
   }
   
-  if (0 <= client.conn.playing->revolution_finishes) {
+  if (game.player_ptr->revolution_finishes >= 0) {
     popup_government_dialog();
     return;
   }
@@ -2215,7 +2208,7 @@ static int races_dialog_ok_callback(struct widget *pStart_Button)
       return (-1);
     }
   
-    dsend_packet_nation_select_req(&client.conn, player_number(races_player),
+    dsend_packet_nation_select_req(&aconnection, player_number(races_player),
                                    pSetup->nation,
                                    pSetup->leader_sex, pStr,
                                    pSetup->nation_city_style);
@@ -2767,9 +2760,9 @@ void popup_races_dialog(struct player *pplayer)
     w = MAX(w, pWidget->size.w);
     h = MAX(h, pWidget->size.h);
 
-    add_to_gui_list(MAX_ID - nation_index(pNation), pWidget);
+    add_to_gui_list(MAX_ID - pNation->index, pWidget);
     
-    if (nation_index(pNation) > (TARGETS_ROW * TARGETS_COL - 1)) {
+    if (pNation->index > (TARGETS_ROW * TARGETS_COL - 1)) {
       set_wflag(pWidget, WF_HIDDEN);
     }
     
@@ -3057,14 +3050,14 @@ void races_toggles_set_sensitive()
   
     if (!nation->is_available || nation->player) {
       freelog(LOG_DEBUG,"  [%d]: %d = %s",
-	      nation_index(nation),
+	      nation->index,
 	      (!nation->is_available || nation->player),
 	      nation_rule_name(nation));
 
-      pNat = get_widget_pointer_form_main_list(MAX_ID - nation_index(nation));
+      pNat = get_widget_pointer_form_main_list(MAX_ID - nation->index);
       set_wstate(pNat, FC_WS_DISABLED);
     
-      if (nation_index(nation) == pSetup->nation) {
+      if (nation->index == pSetup->nation) {
         change = TRUE;
       }
     }

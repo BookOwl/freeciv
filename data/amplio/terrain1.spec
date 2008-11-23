@@ -24,32 +24,30 @@ dx = 96
 dy = 48
 pixel_border = 1
 
-tiles = { "row", "column", "tag"
+tiles = { "row", "column","tag"
 
 ; terrain
- 0,  0, "t.l0.desert1"
+ 0,  0, "t.desert1"
 
- 1,  0, "t.l0.plains1"
+ 1,  0, "t.plains1"
 
- 2,  0, "t.l0.grassland1"
+ 2,  0, "t.grassland1"
 
- 2,  0, "t.l0.t_river1"
+ 2,  0, "t.t_river1"
 
- 3,  0, "t.l0.forest1"
+ 3,  0, "t.forest1"
 
- 4,  0, "t.l0.hills1"
+ 4,  0, "t.hills1"
 
- 5,  0, "t.l0.mountains1"
+ 5,  0, "t.mountains1"
 
- 6,  0, "t.l0.tundra1"
+ 6,  0, "t.tundra1"
 
- 7,  0, "t.l0.arctic1"
-;7,  0, "t.l1.arctic1" not redrawn
-;7,  0, "t.l2.arctic1" not redrawn
+ 7,  0, "t.arctic1"
 
- 8,  0, "t.l0.swamp1"
+ 8,  0, "t.swamp1"
 
- 9,  0, "t.l0.jungle1"
+ 9,  0, "t.jungle1"
 
 ; Terrain special resources:
 
@@ -124,8 +122,8 @@ tiles = { "row", "column", "tag"
  15,  0, "tx.darkness"
  15,  2, "mask.tile"
  15,  2, "t.unknown1"
-  7,  0, "t.blend.arctic" ;ice over neighbors
- 15,  3, "t.blend.coast"
+ 15,  3, "t.ocean1"
+ 15,  3, "t.deep1"
  15,  4, "user.attention"
  15,  5, "tx.fog"
 }

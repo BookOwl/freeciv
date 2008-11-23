@@ -20,9 +20,6 @@
 /* utility */
 #include "fcintl.h"
 
-/* common */
-#include "game.h"
-
 /* client */
 #include "civclient.h" /* can_client_issue_orders() */
 
@@ -690,7 +687,7 @@ void update_city_cma_dialog(void)
   redraw_group(pBuf->prev, pBuf, 0);
   		  
   /* fill in result label */
-  cm_result_from_main_map(&result, pCma->pCity, TRUE);
+  cm_copy_result_from_city(pCma->pCity, &result);
   
   if(result.found_a_valid) {
     /* redraw resources */

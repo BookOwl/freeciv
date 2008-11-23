@@ -33,10 +33,9 @@
 #include "unitlist.h"
 
 #include "canvas.h"
-#include "cityrep.h"
-#include "civclient.h"
 #include "climap.h"
 #include "climisc.h"
+#include "cityrep.h"
 #include "cma_fe.h"
 #include "colors.h"
 #include "control.h"
@@ -51,7 +50,6 @@
 #include "sprite.h"
 #include "tilespec.h"
 #include "wldlg.h"   
-
 #include "gui_main.h"
 #include "citydlg.h"
 #include "text.h"
@@ -101,7 +99,7 @@ struct city_dialog {
   
   int support_unit_ids[NUM_UNITS_SHOWN];
   int present_unit_ids[NUM_UNITS_SHOWN];
-  struct universal change_list_targets[MAX_NUM_PRODUCTION_TARGETS];
+  struct city_production change_list_targets[MAX_NUM_PRODUCTION_TARGETS];
   int change_list_num_improvements;
   int building_values[B_LAST];
   int is_modal;    
@@ -111,12 +109,12 @@ struct city_dialog {
 };
 
 
+extern struct connection aconnection; 
 extern HFONT font_8courier;
 extern HFONT font_12courier;
 extern HFONT font_12arial;
 extern HINSTANCE freecivhinst;
 extern HWND root_window;
-
 static int city_map_width;
 static int city_map_height;
 static struct genlist *dialog_list;
@@ -200,7 +198,7 @@ void refresh_city_dialog(struct city *pcity)
     refresh_happiness_box(pdialog->happiness);
     resize_city_dialog(pdialog);
   }
-  if (city_owner(pcity) == client.conn.playing) {
+  if (city_owner(pcity) == game.player_ptr) {
     city_report_dialog_update_city(pcity);
     economy_report_dialog_update();   
     if (pdialog != NULL) {
@@ -231,30 +229,29 @@ bool city_dialog_is_open(struct city *pcity)
 void city_dialog_update_improvement_list(struct city_dialog *pdialog)
 {
   LV_COLUMN lvc;
-  int total, item, targets_used;
-  struct universal targets[MAX_NUM_PRODUCTION_TARGETS];
+  int changed, total, item, targets_used;
+  struct city_production targets[MAX_NUM_PRODUCTION_TARGETS];
   struct item items[MAX_NUM_PRODUCTION_TARGETS];
   char buf[100];
-  bool changed;
 
   /* Test if the list improvements of pcity has changed */
-  changed = false;
-  improvement_iterate(pimprove) {
-    int index = improvement_index(pimprove);
-    bool has_building = city_has_building(pdialog->pcity, pimprove);
-    bool had_building =
-      pdialog->last_improvlist_seen[index];
-
-    if ((has_building && !had_building)
-        || (!has_building && had_building)) {
-      changed = true;
-      pdialog->last_improvlist_seen[index] = has_building;
+  changed = 0;
+  impr_type_iterate(i) {
+    if (pdialog->pcity->improvements[i] !=
+        pdialog->last_improvlist_seen[i]) {
+      changed = 1;
+      break;
     }
-  } improvement_iterate_end;
+  } impr_type_iterate_end;
 
   if (!changed) {
     return;
   }
+  
+  /* Update pdialog->last_improvlist_seen */
+  impr_type_iterate(i) {
+    pdialog->last_improvlist_seen[i] = pdialog->pcity->improvements[i];
+  } impr_type_iterate_end;
   
   targets_used = collect_already_built_targets(targets, pdialog->pcity);
   name_and_sort_items(targets, targets_used, items, FALSE, pdialog->pcity);
@@ -266,21 +263,21 @@ void city_dialog_update_improvement_list(struct city_dialog *pdialog)
     char *strings[2];
     int upkeep;
     int row;
-    struct universal target = items[item].item;
+    struct city_production target = items[item].item;
 
-    assert(VUT_IMPROVEMENT == target.kind);
+    assert (!target.is_unit);
 
     strings[0] = items[item].descr;
     strings[1] = buf;
 
     /* This takes effects (like Adam Smith's) into account. */
-    upkeep = city_improvement_upkeep(pdialog->pcity, target.value.building);
+    upkeep = improvement_upkeep(pdialog->pcity, target.value);
 
     my_snprintf(buf, sizeof(buf), "%d", upkeep);
    
     row=fcwin_listview_add_row(pdialog->buildings_list,
 			   item, 2, strings);
-    pdialog->building_values[row] = improvement_index(target.value.building);
+    pdialog->building_values[row] = target.value;
     total += upkeep;
   }
   lvc.mask=LVCF_TEXT;
@@ -308,7 +305,7 @@ void city_dialog_update_present_units(HDC hdc,struct city_dialog *pdialog)
   store.wnd = NULL;
   store.tmp = NULL;
  
-  if (city_owner(pdialog->pcity) != client.conn.playing) {
+  if (city_owner(pdialog->pcity) != game.player_ptr) {
     plist = pdialog->pcity->info_units_present;
   } else {
     plist = pdialog->pcity->tile->units;
@@ -348,8 +345,6 @@ void city_dialog_update_supported_units(HDC hdc, struct city_dialog *pdialog)
   int i;
   struct unit_list *plist;
   struct canvas store;
-  int free_upkeep[O_COUNT];
-  int free_unhappy;
 
   store.type = CANVAS_DC;
   store.hdc = hdc;
@@ -357,14 +352,7 @@ void city_dialog_update_supported_units(HDC hdc, struct city_dialog *pdialog)
   store.wnd = NULL;
   store.tmp = NULL;
 
-  free_unhappy = get_city_bonus(pdialog->pcity, EFT_MAKE_CONTENT_MIL);
-
-  output_type_iterate(o) {
-    free_upkeep[o] = get_city_output_bonus(pdialog->pcity, get_output_type(o),
-                                           EFT_UNIT_UPKEEP_FREE_PER_CITY);
-  } output_type_iterate_end;
-
-  if (city_owner(pdialog->pcity) != client.conn.playing) {
+  if  (city_owner(pdialog->pcity) != game.player_ptr) {
     plist = pdialog->pcity->info_units_supported;
   } else {
     plist = pdialog->pcity->units_supported;
@@ -384,17 +372,12 @@ void city_dialog_update_supported_units(HDC hdc, struct city_dialog *pdialog)
   i = 0;
   
   unit_list_iterate(plist, punit) {
-    int upkeep_cost[O_COUNT];
-    int happy_cost = city_unit_unhappiness(punit, &free_unhappy);
-        
-    city_unit_upkeep(punit, upkeep_cost, free_upkeep);
-
     put_unit(punit, &store,
 	     pdialog->pop_x + i * (tileset_small_sprite_width(tileset) + tileset_tile_width(tileset)),
 	     pdialog->supported_y);
     put_unit_city_overlays(punit, &store,
-             pdialog->pop_x + i * (tileset_small_sprite_width(tileset) + tileset_tile_width(tileset)),
-                           pdialog->supported_y, upkeep_cost, happy_cost);
+	     pdialog->pop_x + i * (tileset_small_sprite_width(tileset) + tileset_tile_width(tileset)),
+	     pdialog->supported_y);
     pdialog->support_unit_ids[i] = punit->id;
     i++;
     if (i == NUM_UNITS_SHOWN) {
@@ -409,14 +392,20 @@ void city_dialog_update_supported_units(HDC hdc, struct city_dialog *pdialog)
 void city_dialog_update_building(struct city_dialog *pdialog)
 {
   char buf2[100], buf[32];
+  const char *descr;
   struct city *pcity=pdialog->pcity;    
-  const char *descr = city_production_name_translation(pcity);
   
   EnableWindow(pdialog->buy_but, city_can_buy(pcity));
   EnableWindow(pdialog->sell_but, !pcity->did_sell);
 
   get_city_dialog_production(pcity, buf, sizeof(buf));
   
+  if (pcity->production.is_unit) {
+    descr = utype_name_translation(utype_by_number(pcity->production.value));
+  } else {
+    descr = get_impr_name_ex(pcity, pcity->production.value);
+  }
+
   my_snprintf(buf2, sizeof(buf2), "%s\r\n%s", descr, buf);
   SetWindowText(pdialog->build_area, buf2);
   SetWindowText(pdialog->build_area, buf2);
@@ -860,11 +849,9 @@ static void CityDlgCreate(HWND hWnd,struct city_dialog *pdialog)
   lvc.pszText=_("Upkeep");
   ListView_InsertColumn(pdialog->buildings_list,1,&lvc);
   ListView_SetColumnWidth(pdialog->buildings_list,0,LVSCW_AUTOSIZE);
-  ListView_SetColumnWidth(pdialog->buildings_list,1,LVSCW_AUTOSIZE_USEHEADER);
-
-  improvement_iterate(pimprove) {
-    pdialog->last_improvlist_seen[improvement_index(pimprove)] = 0;
-  } improvement_iterate_end;
+  ListView_SetColumnWidth(pdialog->buildings_list,1,LVSCW_AUTOSIZE_USEHEADER);   impr_type_iterate(i) {
+    pdialog->last_improvlist_seen[i] = 0;
+  } impr_type_iterate_end;
   
   pdialog->mainwindow=hWnd;
   fcwin_set_box(pdialog->tab_childs[0],child_vbox);
@@ -900,15 +887,21 @@ static void buy_callback_no(HWND w, void * data)
 **************************************************************************/
 static void buy_callback(struct city_dialog *pdialog)
 {
-  char buf[512];
-  struct city *pcity = pdialog->pcity;
-  const char *name = city_production_name_translation(pcity);
-  int value = city_production_buy_gold_cost(pcity);
+  int value;
+  const char *name;
+  char buf[512];    
+   if(pdialog->pcity->production.is_unit) {
+    name=utype_name_translation(utype_by_number(pdialog->pcity->production.value));
+  }
+  else {
+    name=get_impr_name_ex(pdialog->pcity, pdialog->pcity->production.value);
+  }
+  value=city_buy_cost(pdialog->pcity);
  
-  if (value <= client.conn.playing->economic.gold) {
+  if(game.player_ptr->economic.gold>=value) {
     my_snprintf(buf, sizeof(buf),
             _("Buy %s for %d gold?\nTreasury contains %d gold."),
-            name, value, client.conn.playing->economic.gold);
+            name, value, game.player_ptr->economic.gold);
  
     popup_message_dialog(pdialog->mainwindow, /*"buydialog"*/ _("Buy It!"), buf,
                          _("_Yes"), buy_callback_yes, pdialog,
@@ -917,7 +910,7 @@ static void buy_callback(struct city_dialog *pdialog)
   else {
     my_snprintf(buf, sizeof(buf),
             _("%s costs %d gold.\nTreasury contains %d gold."),
-            name, value, client.conn.playing->economic.gold);
+            name, value, game.player_ptr->economic.gold);
  
     popup_message_dialog(NULL, /*"buynodialog"*/ _("Buy It!"), buf,
                          _("Darn"), buy_callback_no, 0, 0);
@@ -948,7 +941,7 @@ static void sell_callback_no(HWND w, void * data)
  
 /****************************************************************
 ...
-*****************************************************************/
+*****************************************************************/            
 static void sell_callback(struct city_dialog *pdialog)
 {
   char buf[100];
@@ -956,14 +949,14 @@ static void sell_callback(struct city_dialog *pdialog)
     return;
   }
  
-  if (!can_city_sell_building(pdialog->pcity, improvement_by_number(pdialog->id_selected))) {
+  if (!can_city_sell_building(pdialog->pcity, pdialog->id_selected)) {
     return;
   }
   
   pdialog->sell_id = pdialog->id_selected;
   my_snprintf(buf, sizeof(buf), _("Sell %s for %d gold?"),
-	      city_improvement_name_translation(pdialog->pcity, improvement_by_number(pdialog->id_selected)),
-	      impr_sell_gold(improvement_by_number(pdialog->id_selected)));
+	      get_impr_name_ex(pdialog->pcity, pdialog->id_selected),
+	      impr_sell_gold(pdialog->id_selected));
   
   popup_message_dialog(pdialog->mainwindow, /*"selldialog" */
 		       _("Sell It!"), buf, _("_Yes"),
@@ -984,7 +977,7 @@ static LONG CALLBACK changedlg_proc(HWND hWnd,
 				    LPARAM lParam) 
 {
   int sel,i,n;
-  struct universal target;
+  struct city_production target;
   struct city_dialog *pdialog;
   pdialog=(struct city_dialog *)fcwin_get_user_data(hWnd);
   switch(message)
@@ -1013,14 +1006,14 @@ static LONG CALLBACK changedlg_proc(HWND hWnd,
 	case ID_PRODCHANGE_HELP:
 	  if (sel>=0)
 	    {
-	      if (VUT_UTYPE == target.kind) {
-		popup_help_dialog_typed(utype_name_translation(target.value.utype),
+	      if (target.is_unit) {
+		popup_help_dialog_typed(utype_name_translation(utype_by_number(target.value)),
 					HELP_UNIT);
-	      } else if (is_great_wonder(target.value.building)) {
-		popup_help_dialog_typed(improvement_name_translation(target.value.building),
+	      } else if(is_great_wonder(target.value)) {
+		popup_help_dialog_typed(improvement_name_translation(target.value),
 					HELP_WONDER);
 	      } else {
-		popup_help_dialog_typed(improvement_name_translation(target.value.building),
+		popup_help_dialog_typed(improvement_name_translation(target.value),
 					HELP_IMPROVEMENT);
 	      }                                                                     
 	    }
@@ -1071,7 +1064,7 @@ static void change_callback(struct city_dialog *pdialog)
       HWND lv;
       LV_COLUMN lvc;
       LV_ITEM lvi;
-      struct universal targets[MAX_NUM_PRODUCTION_TARGETS];
+      struct city_production targets[MAX_NUM_PRODUCTION_TARGETS];
       struct item items[MAX_NUM_PRODUCTION_TARGETS];
       int targets_used, item;
 
@@ -1110,8 +1103,8 @@ static void change_callback(struct city_dialog *pdialog)
 
       n = 0;
       for (item = 0; item < targets_used; item++) {
-	if (can_city_build_now(pdialog->pcity, items[item].item)) {
-	  struct universal target = items[item].item;
+	if (city_can_build_impr_or_unit(pdialog->pcity, items[item].item)) {
+	  struct city_production target = items[item].item;
 
 	  get_city_dialog_production_row(row, sizeof(buf[0]), target,
 				       pdialog->pcity);
@@ -1136,13 +1129,58 @@ static void change_callback(struct city_dialog *pdialog)
 static void commit_city_worklist(struct worklist *pwl, void *data)
 {
   struct city_dialog *pdialog = data;
+  int k;
 
-  city_worklist_commit(pdialog->pcity, pwl);
+  /* Update the worklist.  Remember, though -- the current build
+     target really isn't in the worklist; don't send it to the server
+     as part of the worklist.  Of course, we have to search through
+     the current worklist to find the first _now_available_ build
+     target (to cope with players who try mean things like adding a
+     Battleship to a city worklist when the player doesn't even yet
+     have the Map Making tech).  */
+
+  for (k = 0; k < MAX_LEN_WORKLIST; k++) {
+    int same_as_current_build;
+    struct city_production target;
+    if (!worklist_peek_ith(pwl, &target, k))
+      break;
+
+    same_as_current_build = pdialog->pcity->production.value == target.value
+	&& pdialog->pcity->production.is_unit == target.is_unit;
+
+    /* Very special case: If we are currently building a wonder we
+       allow the construction to continue, even if we the wonder is
+       finished elsewhere, ie unbuildable. */
+    if (k == 0 && !target.is_unit && is_great_wonder(target.value)
+	&& same_as_current_build) {
+      worklist_remove(pwl, k);
+      break;
+    }
+
+    /* If it can be built... */
+    if (city_can_build_impr_or_unit(pdialog->pcity, target)) {
+      /* ...but we're not yet building it, then switch. */
+      if (!same_as_current_build) {
+        /* Change the current target */
+	city_change_production(pdialog->pcity, target);
+      }
+
+      /* This item is now (and may have always been) the current
+         build target.  Drop it out of the worklist. */
+      worklist_remove(pwl, k);
+      break;
+    }
+  }
+
+  /* Send the rest of the worklist on its way. */
+  city_set_worklist(pdialog->pcity, pwl);
 }
 
 /**************************************************************************
 ...
 **************************************************************************/
+
+
 static void rename_city_callback(HWND w, void * data)
 {
   struct city_dialog *pdialog = data;
@@ -1234,35 +1272,32 @@ static void city_dialog_update_tradelist(struct city_dialog *pdialog)
 /**************************************************************************
 ...
 **************************************************************************/
-static void supported_units_activate_close_callback(HWND w, void * data)
-{
-  struct unit *punit =
-    player_find_unit_by_id(client.conn.playing, (size_t)data);
 
+
+static void supported_units_activate_close_callback(HWND w, void * data){
+  struct unit *punit;
+  struct city *pcity;
+  struct city_dialog *pdialog;
+ 
   destroy_message_dialog(w);
-
-  if (NULL != punit) {
-    struct city *pcity =
-      player_find_city_by_id(client.conn.playing, punit->homecity);
-
+ 
+  if((punit=player_find_unit_by_id(game.player_ptr, (size_t)data))) {
     set_unit_focus(punit);
-    if (NULL != pcity) {
-      struct city_dialog *pdialog = get_city_dialog(pcity);
-
-      if (NULL != pdialog) {
+    if((pcity=player_find_city_by_id(game.player_ptr, punit->homecity)))
+      if((pdialog=get_city_dialog(pcity)))
         CityDlgClose(pdialog);
-      }
-    }
   }
-}
+}   
 
 /**************************************************************************
 ...
 **************************************************************************/
+
+
 static void activate_callback(struct city_dialog *pdialog)
 {
   activate_all_units(pdialog->pcity->tile);
-}
+}      
 
 /****************************************************************
 ...
@@ -1274,37 +1309,36 @@ static void show_units_callback(struct city_dialog *pdialog)
   if(unit_list_size(ptile->units))
     popup_unit_select_dialog(ptile);
 }
+     
 
 /**************************************************************************
 ...
 **************************************************************************/
+
+
 static void present_units_disband_callback(HWND w, void *data)
 {
-  struct unit *punit =
-    player_find_unit_by_id(client.conn.playing, (size_t)data);
-
-  if (NULL != punit) {
+  struct unit *punit;
+ 
+  if((punit=player_find_unit_by_id(game.player_ptr, (size_t)data)))
     request_unit_disband(punit);
-  }
-
+ 
   destroy_message_dialog(w);
 }
-
+      
 /****************************************************************
 ...
 *****************************************************************/
 static void present_units_homecity_callback(HWND w, void * data)
 {
-  struct unit *punit =
-    player_find_unit_by_id(client.conn.playing, (size_t)data);
-
-  if (NULL != punit) {
+  struct unit *punit;
+ 
+  if((punit=player_find_unit_by_id(game.player_ptr, (size_t)data)))
     request_unit_change_homecity(punit);
-  }
-
+ 
   destroy_message_dialog(w);
 }
-
+ 
 /****************************************************************
 ...
 *****************************************************************/
@@ -1312,91 +1346,81 @@ static void present_units_cancel_callback(HWND w, void *data)
 {
   destroy_message_dialog(w);
 }
-
+ 
 /****************************************************************
 ...
 *****************************************************************/              
+
 static void present_units_activate_callback(HWND w, void * data)
 {
-  struct unit *punit =
-    player_find_unit_by_id(client.conn.playing, (size_t)data);
-
-  if (NULL != punit) {
+  struct unit *punit;
+ 
+  if((punit=player_find_unit_by_id(game.player_ptr, (size_t)data)))
     set_unit_focus(punit);
-  }
-
   destroy_message_dialog(w);
 }
-
+ 
 /****************************************************************
 ...
 *****************************************************************/
 static void present_units_activate_close_callback(HWND w, void * data)
 {
-  struct unit *punit =
-    player_find_unit_by_id(client.conn.playing, (size_t)data);
-
+  struct unit *punit;
+  struct city *pcity;
+  struct city_dialog *pdialog;
+ 
   destroy_message_dialog(w);
-
-  if (NULL != punit) {
-    struct city *pcity = tile_city(punit->tile);
-
+ 
+  if((punit=player_find_unit_by_id(game.player_ptr, (size_t)data))) {
     set_unit_focus(punit);
-    if (NULL != pcity) {
-      struct city_dialog *pdialog = get_city_dialog(pcity);
-
-      if (NULL != pdialog) {
-        CityDlgClose(pdialog);
-      }
-    }
+    if((pcity=tile_get_city(punit->tile)))
+      if((pdialog=get_city_dialog(pcity)))
+       CityDlgClose(pdialog);
   }
-}
+}              
 
 /**************************************************************************
 ...
 **************************************************************************/
+
+
 static void present_units_sentry_callback(HWND w, void * data)
 {
-  struct unit *punit =
-    player_find_unit_by_id(client.conn.playing, (size_t)data);
-
-  if (NULL != punit) {
+  struct unit *punit;
+ 
+  if((punit=player_find_unit_by_id(game.player_ptr, (size_t)data)))
     request_unit_sentry(punit);
-  }
-
   destroy_message_dialog(w);
 }
-
+ 
 /****************************************************************
 ...
 *****************************************************************/
 static void present_units_fortify_callback(HWND w, void * data)
 {
-  struct unit *punit =
-    player_find_unit_by_id(client.conn.playing, (size_t)data);
-
-  if (NULL != punit) {
+  struct unit *punit;
+ 
+  if((punit=player_find_unit_by_id(game.player_ptr, (size_t)data)))
     request_unit_fortify(punit);
-  }
-
   destroy_message_dialog(w);
 }
 
 /**************************************************************************
 ...
 **************************************************************************/
+
+
 static void unitupgrade_callback_yes(HWND w, void * data)
 {
-  struct unit *punit =
-    player_find_unit_by_id(client.conn.playing, (size_t)data);
-
-  if (NULL != punit) {
+  struct unit *punit;
+ 
+  if((punit=player_find_unit_by_id(game.player_ptr, (size_t)data))) {
     request_unit_upgrade(punit);
   }
-
   destroy_message_dialog(w);
 }
-
+ 
+ 
 /****************************************************************
 ...
 *****************************************************************/
@@ -1404,17 +1428,17 @@ static void unitupgrade_callback_no(HWND w, void * data)
 {
   destroy_message_dialog(w);
 }
-
+            
 /****************************************************************
 ...
-*****************************************************************/
+*****************************************************************/       
 static void upgrade_callback(HWND w, void * data)
 {
+  struct unit *punit = player_find_unit_by_id(game.player_ptr,
+					      (size_t) data);
   char buf[512];
-  struct unit *punit =
-    player_find_unit_by_id(client.conn.playing, (size_t) data);
 
-  if (NULL == punit) {
+  if (!punit) {
     return;
   }
 
@@ -1438,15 +1462,18 @@ static void upgrade_callback(HWND w, void * data)
 /**************************************************************************
 ...
 **************************************************************************/
+
+
 static void city_dlg_click_supported(struct city_dialog *pdialog, int n)
 {
-  struct city *pcity;
-  struct unit *punit =
-    player_find_unit_by_id(client.conn.playing, pdialog->support_unit_ids[n]);
+  struct unit *punit;
+  struct city *pcity;  
+  HWND wd;
 
-  if (NULL != punit
-      && (pcity = game_find_city_by_number(punit->homecity))) {
-    HWND wd = popup_message_dialog(NULL,
+  if((punit=player_find_unit_by_id(game.player_ptr, 
+				   pdialog->support_unit_ids[n])) &&
+     (pcity = game_find_city_by_number(punit->homecity))) {   
+    wd = popup_message_dialog(NULL,
            /*"supportunitsdialog"*/ _("Unit Commands"),
            unit_description(punit),
            _("_Activate unit"),
@@ -1457,7 +1484,6 @@ static void city_dlg_click_supported(struct city_dialog *pdialog, int n)
              present_units_disband_callback, punit->id,
            _("_Cancel"),
              present_units_cancel_callback, 0, 0, NULL);
-
     if (unit_has_type_flag(punit, F_UNDISBANDABLE)) {
       message_dialog_button_set_sensitive(wd, 3, FALSE);
     }
@@ -1467,16 +1493,18 @@ static void city_dlg_click_supported(struct city_dialog *pdialog, int n)
 /**************************************************************************
 ...
 **************************************************************************/
+
+
 static void city_dlg_click_present(struct city_dialog *pdialog, int n)
 {
+  struct unit *punit;
   struct city *pcity;
-  struct unit *punit =
-    player_find_unit_by_id(client.conn.playing, pdialog->present_unit_ids[n]);
-
-  if (NULL != punit
-      && (pcity=tile_city(punit->tile))
-      && (pdialog=get_city_dialog(pcity))) { /* ??? */
-     HWND wd = popup_message_dialog(NULL,
+  HWND wd;
+  if((punit=player_find_unit_by_id(game.player_ptr, 
+				   pdialog->present_unit_ids[n])) &&
+     (pcity=tile_get_city(punit->tile)) &&
+     (pdialog=get_city_dialog(pcity))) {   
+     wd=popup_message_dialog(NULL,
                            /*"presentunitsdialog"*/_("Unit Commands"),
                            unit_description(punit),
                            _("_Activate unit"),
@@ -1495,8 +1523,7 @@ static void city_dlg_click_present(struct city_dialog *pdialog, int n)
                              upgrade_callback, punit->id,
                            _("_Cancel"),
                              present_units_cancel_callback, 0,
-                           NULL);
-
+                           NULL);                   
      if (punit->activity == ACTIVITY_SENTRY
 	 || !can_unit_do_activity(punit, ACTIVITY_SENTRY)) {
        message_dialog_button_set_sensitive(wd,2, FALSE);
@@ -1511,10 +1538,9 @@ static void city_dlg_click_present(struct city_dialog *pdialog, int n)
      if (punit->homecity == pcity->id) {
        message_dialog_button_set_sensitive(wd,5, FALSE);
      }
-
-     if (NULL == can_upgrade_unittype(client.conn.playing,unit_type(punit))) {
+     if (can_upgrade_unittype(game.player_ptr,unit_type(punit)) == NULL) {
        message_dialog_button_set_sensitive(wd,6, FALSE);
-     }
+     }        
    }
 }
 
@@ -1906,12 +1932,15 @@ void citydlg_tileset_change(void)
 /**************************************************************************
 ...
 **************************************************************************/
-void refresh_unit_city_dialogs(struct unit *punit)
+
+
+void
+refresh_unit_city_dialogs(struct unit *punit)
 {
-  struct city_dialog *pdialog;
-  struct city *pcity_pre = tile_city(punit->tile);
-  struct city *pcity_sup =
-    player_find_city_by_id(client.conn.playing, punit->homecity);
+  struct city *pcity_sup, *pcity_pre;
+  struct city_dialog *pdialog;      
+  pcity_sup=player_find_city_by_id(game.player_ptr, punit->homecity);
+  pcity_pre=tile_get_city(punit->tile);     
   
   if(pcity_sup && (pdialog=get_city_dialog(pcity_sup)))     
     {
@@ -2003,7 +2032,7 @@ LONG APIENTRY citydlg_config_proc(HWND hWnd,
           BV_SET(new_options, CITYO_NEW_TAXMAN);
 	}
 
-	dsend_packet_city_options_req(&client.conn, pcity->id, new_options);
+	dsend_packet_city_options_req(&aconnection, pcity->id, new_options);
       }
       break;
     default: 

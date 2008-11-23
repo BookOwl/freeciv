@@ -25,16 +25,11 @@
 #include <X11/Xaw/SmeBSB.h>
 #include <X11/Xaw/SmeLine.h>
 
-/* utility */
-
 #include "fcintl.h"
 #include "mem.h"
 #include "movement.h"
 #include "support.h"
 
-/* common */
-
-#include "game.h"
 #include "government.h"
 #include "map.h"
 #include "unit.h"
@@ -236,12 +231,6 @@ static struct MenuEntry reports_menu_entries[]={
     { { 0,                            },       0, MENU_END_OF_LIST, 0 }
 };
 
-static struct MenuEntry editor_menu_entries[] = {
-    { { N_("Editing Mode"), 0         },      "", MENU_EDITOR_TOGGLE, 0 },
-    { { N_("Tools"), 0                },      "", MENU_EDITOR_TOOLS, 0 },
-    { { 0,                            },       0, MENU_END_OF_LIST, 0 }
-};
-
 static struct MenuEntry help_menu_entries[]={
     { { N_("Languages"), 0            },      "", MENU_HELP_LANGUAGES, 0 },
     { { N_("Connecting"), 0           },      "", MENU_HELP_CONNECTING, 0 },
@@ -299,12 +288,12 @@ void update_menus(void)
     int i;
     int any_cities = FALSE;
 
-    players_iterate(pplayer) {
-      if (city_list_size(pplayer->cities)) {
+    for(i=0; i<game.info.nplayers; i++) {
+      if (city_list_size(game.players[i].cities)) {
 	any_cities = TRUE;
 	break;
       }
-    } players_iterate_end;
+    }
 
     XtSetSensitive(menus[MENU_REPORT]->button, True);
     XtSetSensitive(menus[MENU_VIEW]->button, True);
@@ -327,7 +316,7 @@ void update_menus(void)
     government_iterate(pgovernment) {
       Widget w;
 
-      if (pgovernment == game.government_during_revolution) {
+      if (pgovernment == game.government_when_anarchy) {
 	continue;
       }
 
@@ -335,7 +324,7 @@ void update_menus(void)
 				smeBSBObjectClass,
 				menus[MENU_GOVERNMENT]->shell, NULL, 0);
       XtAddCallback(w, XtNcallback, revolution_menu_callback, pgovernment);
-      XtSetSensitive(w, can_change_to_government(client.conn.playing,
+      XtSetSensitive(w, can_change_to_government(game.player_ptr,
 						 pgovernment));
 
       government_widgets[i] = w;
@@ -366,14 +355,15 @@ void update_menus(void)
     menu_entry_sensitive(MENU_GAME, MENU_GAME_CLEAR_OUTPUT, 1);
     menu_entry_sensitive(MENU_GAME, MENU_GAME_DISCONNECT, 1);
 
-    if (NULL != client.conn.playing) {
+    if (game.player_ptr) {
       menu_entry_sensitive(MENU_REPORT, MENU_REPORT_SPACESHIP,
-			   (SSHIP_NONE != client.conn.playing->spaceship.state));
+			   (game.player_ptr->spaceship.state!=SSHIP_NONE));
     } else {
       menu_entry_sensitive(MENU_REPORT, MENU_REPORT_SPACESHIP, 0);
     }
 
     if ((get_num_units_in_focus() > 0) && can_client_issue_orders()) {
+      Terrain_type_id ttype;
       struct terrain *tinfo;
       struct tile *ptile = NULL;
       bool can_build;
@@ -396,9 +386,9 @@ void update_menus(void)
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_TRANSFORM, 
 			   can_units_do_activity(punits, ACTIVITY_TRANSFORM));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_FORTRESS, 
-			   can_units_do_base_gui(punits, BASE_GUI_FORTRESS));
+			   can_units_do_activity(punits, ACTIVITY_FORTRESS));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_AIRBASE,
-			   can_units_do_base_gui(punits, BASE_GUI_AIRBASE));
+			   can_units_do_activity(punits, ACTIVITY_AIRBASE));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_POLLUTION, 
 			   can_units_do_activity(punits, ACTIVITY_POLLUTION)
 			   || can_units_do(punits, can_unit_paradrop));
@@ -448,14 +438,14 @@ void update_menus(void)
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_NUKE,
                            units_have_flag(punits, F_NUCLEAR, TRUE));
 
-      /* FiXME: very odd, iterating for the first entry! */
       unit_list_iterate(punits, punit) {
 	ptile = punit->tile;
 	break;
       } unit_list_iterate_end;
 
-      tinfo = tile_terrain(ptile);
-      can_build = !(tile_city(ptile));
+      tinfo = ptile->terrain;
+      ttype = tinfo->index;
+      can_build = !(ptile->city);
 
       if (units_have_flag(punits, F_CITIES, TRUE)) {
 	if (!can_build) {
@@ -468,13 +458,13 @@ void update_menus(void)
       }
 
       if ((tinfo->irrigation_result != T_NONE)
-	  && (tinfo->irrigation_result != tinfo)) {
+	  && (tinfo->irrigation_result->index != ttype)) {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_IRRIGATE,
 			  TEXT_ORDER_IRRIGATE_CHANGE_TO,
 			  terrain_name_translation(tinfo->irrigation_result));
       }
       else if (tile_has_special(ptile, S_IRRIGATION) &&
-	       player_knows_techs_with_flag(client.conn.playing, TF_FARMLAND)) {
+	       player_knows_techs_with_flag(game.player_ptr, TF_FARMLAND)) {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_IRRIGATE,
 			  TEXT_ORDER_IRRIGATE_FARMLAND, NULL);
       } else {
@@ -483,7 +473,7 @@ void update_menus(void)
       }
 
       if ((tinfo->mining_result != T_NONE)
-	  && (tinfo->mining_result != tinfo)) {
+	  && (tinfo->mining_result->index != ttype)) {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_MINE,
 			  TEXT_ORDER_MINE_CHANGE_TO,
 			  terrain_name_translation(tinfo->mining_result));
@@ -493,7 +483,7 @@ void update_menus(void)
       }
 
       if ((tinfo->transform_result != T_NONE)
-	  && (tinfo->transform_result != tinfo)) {
+	  && (tinfo->transform_result->index != ttype)) {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_TRANSFORM,
 			  TEXT_ORDER_TRANSFORM_TRANSFORM_TO,
 			  terrain_name_translation(tinfo->transform_result));
@@ -573,7 +563,7 @@ static void government_menu_callback(Widget w, XtPointer client_data,
     popup_rates_dialog();
     break;
   case MENU_GOVERNMENT_WORKLISTS:
-    popup_worklists_dialog(client.conn.playing);
+    popup_worklists_dialog(game.player_ptr);
     break;
   case MENU_GOVERNMENT_REVOLUTION:
     popup_revolution_dialog(NULL);
@@ -592,7 +582,7 @@ static void revolution_menu_callback(Widget w, XtPointer client_data,
   if (!can_client_issue_orders()) {
     return;
   }
-  if (-1 == client.conn.playing->revolution_finishes) {
+  if (game.player_ptr->revolution_finishes == -1) {
     popup_revolution_dialog(pgovernment);
   } else {
     /* Player already has a revolution and should just choose a government */
@@ -834,26 +824,9 @@ static void reports_menu_callback(Widget w, XtPointer client_data,
     send_report_request(REPORT_DEMOGRAPHIC);
     break;
    case MENU_REPORT_SPACESHIP:
-    if (NULL != client.conn.playing) {
-      popup_spaceship_dialog(client.conn.playing);
+    if (game.player_ptr) {
+      popup_spaceship_dialog(game.player_ptr);
     }
-    break;
-  }
-}
-
-/****************************************************************
-  Callback for Editor menu entries.
-*****************************************************************/
-static void editor_menu_callback(Widget w, XtPointer client_data,
-				 XtPointer garbage)
-{
-  size_t pane_num = (size_t)client_data;
-
-  switch(pane_num) {
-  case MENU_EDITOR_TOGGLE:
-    key_editor_toggle();
-    break;
-  case MENU_EDITOR_TOOLS:
     break;
   }
 }
@@ -940,9 +913,6 @@ void setup_menus(Widget parent_form)
 	      parent_form);
   create_menu(MENU_REPORT, "reportsmenu", 
 	      reports_menu_entries, reports_menu_callback, 
-	      parent_form);
-  create_menu(MENU_EDITOR, "editormenu",
-	      editor_menu_entries, editor_menu_callback,
 	      parent_form);
   create_menu(MENU_HELP, "helpmenu", 
 	      help_menu_entries, help_menu_callback, 

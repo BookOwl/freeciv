@@ -17,7 +17,6 @@
 
 #include "fcintl.h"
 #include "game.h"
-#include "ioz.h"
 #include "log.h"
 
 #include "map.h"
@@ -162,7 +161,7 @@ static bool maxplayers_callback(int value, struct connection *caller,
     return FALSE;
   }
 #endif
-  if (value < player_count()) {
+  if (value < game.info.nplayers) {
     *error_string =_("Number of players is higher than requested value;\n"
 		     "Keeping old value.");
     return FALSE;
@@ -188,69 +187,28 @@ static bool timeout_callback(int value, struct connection *caller,
   return TRUE;
 }
 
-/*************************************************************************
-  Check that everyone is on a team for team-alternating simultaneous
-  phases. NB: Assumes that it is not possible to first set team
-  alternating phase mode then make teamless players.
-*************************************************************************/
-static bool phasemode_callback(int value, struct connection *caller,
-                               const char **error_string)
-{
-  if (value == PMT_TEAMS_ALTERNATE) {
-    players_iterate(pplayer) {
-      if (!pplayer->team) {
-        *error_string = _("All players must have a team if this option "
-                          "value is used.");
-        return FALSE;
-      }
-    } players_iterate_end;
-  }
-  *error_string = NULL;
-  return TRUE;
-}
-
-/************************************************************************/
-#if defined(HAVE_LIBBZ2)
-#define GAME_MIN_COMPRESS_TYPE FZ_PLAIN
-#define GAME_MAX_COMPRESS_TYPE FZ_BZIP2
-#define GAME_DEFAULT_COMPRESS_TYPE FZ_BZIP2
-
-#elif defined(HAVE_LIBZ)
-#define GAME_MIN_COMPRESS_TYPE FZ_PLAIN
-#define GAME_MAX_COMPRESS_TYPE FZ_ZLIB
-#define GAME_DEFAULT_COMPRESS_TYPE FZ_ZLIB
-
-#else
-#define GAME_MIN_COMPRESS_TYPE FZ_PLAIN
-#define GAME_MAX_COMPRESS_TYPE FZ_PLAIN
-#define GAME_DEFAULT_COMPRESS_TYPE FZ_PLAIN
-
-#endif
-
-/************************************************************************/
-
 #define GEN_BOOL(name, value, sclass, scateg, slevel, to_client,	\
-		 short_help, extra_help, func, _default)		\
+		 short_help, extra_help, func, default)			\
   {name, sclass, to_client, short_help, extra_help, SSET_BOOL,		\
-      scateg, slevel, &value, _default, func,				\
+      scateg, slevel, &value, default, func,				\
       NULL, 0, NULL, 0, 0,						\
       NULL, NULL, NULL, 0},
 
 #define GEN_INT(name, value, sclass, scateg, slevel, to_client,		\
-		short_help, extra_help, func, _min, _max, _default)	\
+		short_help, extra_help, func, min, max, default)	\
   {name, sclass, to_client, short_help, extra_help, SSET_INT,		\
       scateg, slevel,							\
       NULL, FALSE, NULL,						\
-      &value, _default, func, _min, _max,				\
+      &value, default, func, min, max,					\
       NULL, NULL, NULL, 0},
 
 #define GEN_STRING(name, value, sclass, scateg, slevel, to_client,	\
-		   short_help, extra_help, func, _default)		\
+		   short_help, extra_help, func, default)		\
   {name, sclass, to_client, short_help, extra_help, SSET_STRING,	\
       scateg, slevel,							\
       NULL, FALSE, NULL,						\
       NULL, 0, NULL, 0, 0,						\
-      value, _default, func, sizeof(value)},
+      value, default, func, sizeof(value)},
 
 #define GEN_END							\
   {NULL, SSET_LAST, SSET_SERVER_ONLY, NULL, NULL, SSET_INT,	\
@@ -465,12 +423,10 @@ struct settings_s settings[] = {
 
   GEN_INT("aifill", game.info.aifill,
 	  SSET_PLAYERS, SSET_INTERNAL, SSET_VITAL, SSET_TO_CLIENT,
-	  N_("Limited number of AI players"),
+	  N_("Total number of players (including AI players)"),
 	  N_("If set to a positive value, then AI players will be "
 	     "automatically created or removed to keep the total "
-	     "number of players at this amount.  As more players join, "
-	     "these AI players will be replaced.  When set to zero, "
-	     "all AI players will be removed."), NULL,
+	     "number of players at this amount."), NULL,
 	  GAME_MIN_AIFILL, GAME_MAX_AIFILL, GAME_DEFAULT_AIFILL)
 
   /* Game initialization parameters (only affect the first start of the game,
@@ -629,6 +585,25 @@ struct settings_s settings[] = {
 	  GAME_MIN_NOTRADESIZE, GAME_MAX_NOTRADESIZE,
 	  GAME_DEFAULT_NOTRADESIZE)
 
+  GEN_INT("unhappysize", game.info.unhappysize,
+	  SSET_RULES, SSET_SOCIOLOGY, SSET_RARE, SSET_TO_CLIENT,
+	  N_("City size before people become unhappy"),
+	  N_("Before other adjustments, the first unhappysize citizens in a "
+	     "city are content, and subsequent citizens are unhappy. "
+	     "See also cityfactor."), NULL,
+	  GAME_MIN_UNHAPPYSIZE, GAME_MAX_UNHAPPYSIZE,
+	  GAME_DEFAULT_UNHAPPYSIZE)
+
+  GEN_INT("cityfactor", game.info.cityfactor,
+	  SSET_RULES, SSET_SOCIOLOGY, SSET_RARE, SSET_TO_CLIENT,
+	  N_("Number of cities for higher unhappiness"),
+	  N_("When the number of cities a player owns is greater than "
+	     "cityfactor, one extra citizen is unhappy before other "
+	     "adjustments; see also unhappysize. This assumes a "
+	     "Democracy; for other governments the effect occurs at "
+	     "smaller numbers of cities."), NULL, 
+	  GAME_MIN_CITYFACTOR, GAME_MAX_CITYFACTOR, GAME_DEFAULT_CITYFACTOR)
+
   GEN_INT("citymindist", game.info.citymindist,
 	  SSET_RULES, SSET_SOCIOLOGY, SSET_SITUATIONAL, SSET_TO_CLIENT,
 	  N_("Minimum distance between cities"),
@@ -690,16 +665,13 @@ struct settings_s settings[] = {
 	  GAME_MIN_KILLCITIZEN, GAME_MAX_KILLCITIZEN,
 	  GAME_DEFAULT_KILLCITIZEN)
 
-  GEN_INT("borders", game.info.borders_sq,
+  GEN_INT("borders", game.info.borders,
 	  SSET_RULES, SSET_MILITARY, SSET_SITUATIONAL, SSET_TO_CLIENT,
-	  N_("National borders"),
+	  N_("National borders radius"),
 	  N_("If this is set to greater than 0, then any land tiles "
-	     "around a fortress or city will be owned by that nation. "
-             "Size of the claimed area is bigger for greater value. "
-             "Claimed are also grows somewhat depending on city size. "
-             "City always claims at least its workable area, no matter how "
-             "low this setting is. Special rules apply for ocean tiles "
-             "or tiles within range of more than one nation's cities."),
+	     "within the given radius of a city will be owned by that "
+	     "nation. Special rules apply for ocean tiles or tiles within "
+	     "range of more than one nation's cities."),
 	  NULL,
 	  GAME_MIN_BORDERS, GAME_MAX_BORDERS, GAME_DEFAULT_BORDERS)
 
@@ -921,18 +893,13 @@ struct settings_s settings[] = {
   /* This setting points to the "stored" value; changing it won't have
    * an effect until the next synchronization point (i.e., the start of
    * the next turn). */
-  GEN_INT("phasemode", game.phase_mode_stored,
-	  SSET_META, SSET_INTERNAL, SSET_SITUATIONAL, SSET_TO_CLIENT,
-	  N_("Whether to have simultaneous player/team phases."),
-          /* NB: The values must match enum phase_mode_types
-           * defined in common/game.h */
-	  N_("This setting controls whether players may make "
-             "moves at the same time during a turn.\n"
-             "  0 = All players move concurrently.\n"
-             "  1 = All players alternate movement.\n"
-             "  2 = Only players on the same team move concurrently."),
-          phasemode_callback, GAME_MIN_PHASE_MODE,
-          GAME_MAX_PHASE_MODE, GAME_DEFAULT_PHASE_MODE)
+  GEN_BOOL("simultaneousphases", game.simultaneous_phases_stored,
+	   SSET_META, SSET_INTERNAL, SSET_SITUATIONAL, SSET_TO_CLIENT,
+	   N_("Whether to have simultaneous player phases."),
+	   N_("If true, all players' movement phases will occur "
+	      "simultaneously; if false, then players will "
+	      "alternate movement."), NULL,
+	   GAME_DEFAULT_SIMULTANEOUS_PHASES)
 
   GEN_INT("nettimeout", game.info.tcptimeout,
 	  SSET_META, SSET_NETWORK, SSET_RARE, SSET_TO_CLIENT,
@@ -1016,25 +983,32 @@ struct settings_s settings[] = {
 	     "turns. Zero means never auto-save."), NULL, 
 	  0, 200, GAME_DEFAULT_SAVETURNS)
 
+  /* Could undef entire option if !HAVE_LIBZ, but this way users get to see
+   * what they're missing out on if they didn't compile with zlib?  --dwp
+   */
+#ifdef HAVE_LIBZ
   GEN_INT("compress", game.info.save_compress_level,
 	  SSET_META, SSET_INTERNAL, SSET_RARE, SSET_SERVER_ONLY,
 	  N_("Savegame compression level"),
 	  N_("If non-zero, saved games will be compressed using zlib "
-	     "(gzip format) or bzip2. Larger values will give better "
-	     "compression but take longer."), NULL,
+	     "(gzip format). Larger values will give better "
+	     "compression but take longer. If the maximum is zero "
+	     "this server was not compiled to use zlib."), NULL,
+
 	  GAME_MIN_COMPRESS_LEVEL, GAME_MAX_COMPRESS_LEVEL,
 	  GAME_DEFAULT_COMPRESS_LEVEL)
+#else
+  GEN_INT("compress", game.info.save_compress_level,
+	  SSET_META, SSET_INTERNAL, SSET_RARE, SSET_SERVER_ONLY,
+	  N_("Savegame compression level"),
+	  N_("If non-zero, saved games will be compressed using zlib "
+	     "(gzip format). Larger values will give better "
+	     "compression but take longer. If the maximum is zero "
+	     "this server was not compiled to use zlib."), NULL, 
 
-  GEN_INT("compresstype", game.info.save_compress_type,
-          SSET_META, SSET_INTERNAL, SSET_RARE, SSET_SERVER_ONLY,
-          N_("Savegame compression algorithm"),
-          N_("Compression library to use for savegames.\n"
-             " 0 - none\n"
-             " 1 - zlib (gzip format)\n"
-             " 2 - bzip2\n"
-             "Not all servers support all compression methods."), NULL,
-	  GAME_MIN_COMPRESS_TYPE, GAME_MAX_COMPRESS_TYPE,
-	  GAME_DEFAULT_COMPRESS_TYPE)
+	  GAME_NO_COMPRESS_LEVEL, GAME_NO_COMPRESS_LEVEL, 
+	  GAME_NO_COMPRESS_LEVEL)
+#endif
 
   GEN_STRING("savename", game.save_name,
 	     SSET_META, SSET_INTERNAL, SSET_VITAL, SSET_SERVER_ONLY,

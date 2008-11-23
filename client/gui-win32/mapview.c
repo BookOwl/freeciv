@@ -144,22 +144,17 @@ void check_mapstore()
 **************************************************************************/
 static void draw_rates(HDC hdc)
 {
-  int d = 0;
-
-  for (; d < (client.conn.playing->economic.luxury)/10; d++) {
+  int d;
+  d=0;
+  for(;d<(game.player_ptr->economic.luxury)/10;d++)
     draw_sprite(get_tax_sprite(tileset, O_LUXURY), hdc,
 		tileset_small_sprite_width(tileset)*d,taxinfoline_y);/* elvis tile */
-  }
-
-  for (; d < (client.conn.playing->economic.science + client.conn.playing->economic.luxury)/10; d++) {
+  for(;d<(game.player_ptr->economic.science+game.player_ptr->economic.luxury)/10;d++)
     draw_sprite(get_tax_sprite(tileset, O_SCIENCE), hdc,
-		tileset_small_sprite_width(tileset)*d,taxinfoline_y); /* scientist tile */
-  }
-
-  for (; d < 10; d++) {
+		tileset_small_sprite_width(tileset)*d,taxinfoline_y); /* scientist tile */    
+  for(;d<10;d++)
     draw_sprite(get_tax_sprite(tileset, O_GOLD), hdc,
-		tileset_small_sprite_width(tileset)*d,taxinfoline_y); /* taxman tile */
-  }
+		tileset_small_sprite_width(tileset)*d,taxinfoline_y); /* taxman tile */  
 }
 
 /**************************************************************************
@@ -173,15 +168,15 @@ update_info_label(void)
   HDC hdc;
   my_snprintf(buffer, sizeof(buffer),
 	      _("Population: %s\nYear: %s\nGold: %d\nTax: %d Lux: %d Sci: %d"),
-		population_to_text(civ_population(client.conn.playing)),
+		population_to_text(civ_population(game.player_ptr)),
 		textyear( game.info.year ),
-		client.conn.playing->economic.gold,
-		client.conn.playing->economic.tax,
-		client.conn.playing->economic.luxury,
-		client.conn.playing->economic.science );
+		game.player_ptr->economic.gold,
+		game.player_ptr->economic.tax,
+		game.player_ptr->economic.luxury,
+		game.player_ptr->economic.science );      
   my_snprintf(buffer2,sizeof(buffer2),
 	      "%s\n%s",
-	      nation_adjective_for_player(client.conn.playing),
+	      nation_adjective_for_player(game.player_ptr),
 	      buffer);
   SetWindowText(infolabel_win,buffer2);
   do_mainwin_layout();
@@ -204,13 +199,11 @@ void
 update_unit_info_label(struct unit_list *punitlist)
 {
   SetWindowText(unit_info_frame, get_unit_info_label_text1(punitlist));
-  SetWindowText(unit_info_label, get_unit_info_label_text2(punitlist, 0));
+  SetWindowText(unit_info_label, get_unit_info_label_text2(punitlist));
 
-  /* Cursor handling has changed a lot. New form is not yet implemented
-   * for gui-win32. Old code below is probably never needed again, but
-   * I left it here just in case. Remove when new implementation is in
-   * place. */
-#if 0
+  if (action_state == CURSOR_ACTION_WAIT) {
+    cursor_type = CURSOR_WAIT;
+  } else {
   switch (hover_state) {
     case HOVER_NONE:
       if (action_state == CURSOR_ACTION_SELECT) {
@@ -255,7 +248,7 @@ update_unit_info_label(struct unit_list *punitlist)
       cursor_type = CURSOR_PARADROP;
       break;
   }
-#endif
+  }
 
   do_mainwin_layout();
 }
@@ -266,14 +259,6 @@ update_unit_info_label(struct unit_list *punitlist)
 void update_timeout_label(void)
 {
   SetWindowText(timeout_label, get_timeout_label_text());
-}
-
-/**************************************************************************
-  This function will change the current mouse cursor.
-**************************************************************************/
-void update_mouse_cursor(enum cursor_type new_cursor_type)
-{
-  /* PORT ME */
 }
 
 /**************************************************************************

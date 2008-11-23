@@ -30,6 +30,7 @@
 
 #include "civclient.h"
 #include "chatline.h"
+#include "clinet.h"
 #include "colors.h"
 #include "connectdlg_common.h"
 #include "dialogs.h"
@@ -76,7 +77,10 @@ static void filesel_response_callback(GtkWidget *w, gint id, gpointer data)
     if (is_save) {
       send_save_game(filename);
     } else {
-      send_chat_printf("/load %s", filename);
+      char message[MAX_LEN_MSG];
+
+      my_snprintf(message, sizeof(message), "/load %s", filename);
+      send_chat(message);
     }
 
     g_free(filename);

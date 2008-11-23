@@ -19,12 +19,13 @@
 
 #include "dataio.h"
 #include "fcintl.h"
+#include "game.h"
 #include "hash.h"
 #include "log.h"
 #include "mem.h"
 #include "packets.h"
 
-#include "civclient.h"
+#include "clinet.h"
 
 #include "attribute.h"
 
@@ -320,7 +321,7 @@ static enum attribute_serial unserialize_hash( struct hash_table *hash,
 *****************************************************************************/
 void attribute_flush(void)
 {
-  struct player *pplayer = client.conn.playing;
+  struct player *pplayer = game.player_ptr;
 
   if (!pplayer) {
     return;
@@ -338,7 +339,7 @@ void attribute_flush(void)
 
   serialize_hash(attribute_hash, &(pplayer->attribute_block.data),
 		 &(pplayer->attribute_block.length));
-  send_attribute_block(pplayer, &client.conn);
+  send_attribute_block(pplayer, &aconnection);
 }
 
 /****************************************************************************
@@ -347,7 +348,7 @@ void attribute_flush(void)
 *****************************************************************************/
 void attribute_restore(void)
 {
-  struct player *pplayer = client.conn.playing;
+  struct player *pplayer = game.player_ptr;
 
   if (!pplayer) {
     return;

@@ -24,7 +24,7 @@
 #include "unitlist.h"
 
 /* client */
-#include "civclient.h"
+#include "clinet.h"
 #include "control.h"
 
 /* gui-sdl */
@@ -220,22 +220,21 @@ static int spy_steal_popup(struct widget *pWidget)
   }
   
   count = 0;
-  advance_index_iterate(A_FIRST, i) {
-    if (player_invention_reachable(client.conn.playing, i)
-     && TECH_KNOWN == player_invention_state(pVictim, i)
-     && (TECH_UNKNOWN == player_invention_state(client.conn.playing, i)
-         || TECH_PREREQS_KNOWN ==
-              player_invention_state(client.conn.playing, i))) {
-      count++;
-    }
-  } advance_index_iterate_end;
+  for(i=A_FIRST; i<game.control.num_tech_types; i++) {
+    if (tech_is_available(game.player_ptr, i)
+      && get_invention(pVictim, i)==TECH_KNOWN
+      && (get_invention(game.player_ptr, i)==TECH_UNKNOWN
+      || get_invention(game.player_ptr, i)==TECH_REACHABLE)) {
+	count++;
+      }
+  }
   
   if(!count) {    
     /* if there is no known tech to steal then 
        send steal order at Spy's Discretion */
     int target_id = pVcity->id;
 
-    request_diplomat_action(DIPLOMAT_STEAL, id, target_id, advance_count());
+    request_diplomat_action(DIPLOMAT_STEAL, id, target_id, game.control.num_tech_types);
     return -1;
   }
     
@@ -304,15 +303,14 @@ static int spy_steal_popup(struct widget *pWidget)
   pStr->style |= (TTF_STYLE_BOLD | SF_CENTER);
   
   count = 0;
-  advance_index_iterate(A_FIRST, i) {
-    if (player_invention_reachable(client.conn.playing, i)
-     && TECH_KNOWN == player_invention_state(pVictim, i)
-     && (TECH_UNKNOWN == player_invention_state(client.conn.playing, i)
-         || TECH_PREREQS_KNOWN ==
-              player_invention_state(client.conn.playing, i))) {
-      count++;
-
-      copy_chars_to_string16(pStr, advance_name_translation(advance_by_number(i)));
+  for(i=A_FIRST; i<game.control.num_tech_types; i++) {
+    if (tech_is_available(game.player_ptr, i)
+      && get_invention(pVictim, i)==TECH_KNOWN
+      && (get_invention(game.player_ptr, i)==TECH_UNKNOWN
+      || get_invention(game.player_ptr, i)==TECH_REACHABLE)) {
+    
+      count++;  
+      copy_chars_to_string16(pStr, advance_name_translation(i));
       pSurf = create_sellect_tech_icon(pStr, i, FULL_MODE);
       pBuf = create_icon2(pSurf, pWindow->dst,
       		WF_FREE_THEME | WF_RESTORE_BACKGROUND);
@@ -327,10 +325,10 @@ static int spy_steal_popup(struct widget *pWidget)
         set_wflag(pBuf, WF_HIDDEN);
       }
     }
-  } advance_index_iterate_end;
+  }
   
   /* get spy tech */
-  i = advance_number(unit_type(game_find_unit_by_number(id))->require_advance);
+  i = unit_type(game_find_unit_by_number(id))->tech_requirement;
   copy_chars_to_string16(pStr, _("At Spy's Discretion"));
   pSurf = create_sellect_tech_icon(pStr, i, FULL_MODE);
 	
@@ -340,7 +338,7 @@ static int spy_steal_popup(struct widget *pWidget)
   pBuf->action = spy_steal_callback;
   pBuf->data.cont = pCont;
     
-  add_to_gui_list(MAX_ID - advance_count(), pBuf);
+  add_to_gui_list(MAX_ID - game.control.num_tech_types, pBuf);
   count++;
   
   /* --------------------------------------------------------- */
@@ -540,7 +538,7 @@ void popup_diplomat_dialog(struct unit *pUnit, struct tile *ptile)
   }
   
   is_unit_move_blocked = TRUE;
-  pCity = tile_city(ptile);
+  pCity = tile_get_city(ptile);
   spy = unit_has_type_flag(pUnit, F_SPY);
   
   pDiplomat_Dlg = fc_calloc(1, sizeof(struct diplomat_dialog));
@@ -889,16 +887,16 @@ void popup_sabotage_dialog(struct city *pCity)
   area.h += pBuf->next->size.h;
   /* ------------------ */
   n = 0;
-  city_built_iterate(pCity, pImprove) {
-    if (pImprove->sabotage > 0) {
+  built_impr_iterate(pCity, imp) {
+    if (improvement_by_number(imp)->sabotage > 0) {
       
       create_active_iconlabel(pBuf, pWindow->dst, pStr,
-	      (char *) city_improvement_name_translation(pCity, pImprove),
+	      (char *) get_impr_name_ex(pCity, imp),
 				      sabotage_impr_callback);
       pBuf->data.cont = pCont;
       set_wstate(pBuf , FC_WS_NORMAL);
   
-      add_to_gui_list(MAX_ID - improvement_number(pImprove), pBuf);
+      add_to_gui_list(MAX_ID - imp, pBuf);
     
       area.w = MAX(area.w , pBuf->size.w);
       imp_h += pBuf->size.h;
@@ -908,7 +906,7 @@ void popup_sabotage_dialog(struct city *pCity)
 	pDiplomat_Dlg->pdialog->pEndActiveWidgetList = pBuf;
       }
     
-      if (improvement_number(pImprove) > 9)
+      if (imp > 9)
       {
         set_wflag(pBuf, WF_HIDDEN);
       }
@@ -916,7 +914,7 @@ void popup_sabotage_dialog(struct city *pCity)
       n++;    
       /* ----------- */
     }  
-  } city_built_iterate_end;
+  } built_impr_iterate_end;
 
   pDiplomat_Dlg->pdialog->pBeginActiveWidgetList = pBuf;
   
@@ -1184,10 +1182,10 @@ void popup_incite_dialog(struct city *pCity, int cost)
     area.w = MAX(area.w , pBuf->size.w);
     area.h += pBuf->size.h;
     
-  } else if (cost <= client.conn.playing->economic.gold) {
+  } else if (game.player_ptr->economic.gold >= cost) {
     my_snprintf(cBuf, sizeof(cBuf),
 		_("Incite a revolt for %d gold?\nTreasury contains %d gold."), 
-		cost, client.conn.playing->economic.gold);
+		cost, game.player_ptr->economic.gold);
     
     create_active_iconlabel(pBuf, pWindow->dst, pStr, cBuf, NULL);
         
@@ -1237,7 +1235,7 @@ void popup_incite_dialog(struct city *pCity, int cost)
     my_snprintf(cBuf, sizeof(cBuf),
 		_("Inciting a revolt costs %d gold.\n"
 		  "Treasury contains %d gold."), 
-		cost, client.conn.playing->economic.gold);
+		cost, game.player_ptr->economic.gold);
     
     create_active_iconlabel(pBuf, pWindow->dst, pStr, cBuf, NULL);
         
@@ -1392,10 +1390,10 @@ void popup_bribe_dialog(struct unit *pUnit, int cost)
   area.w = MAX(area.w, adj_size(8));
   area.h = MAX(area.h, adj_size(2));
   
-  if (cost <= client.conn.playing->economic.gold) {
+  if (game.player_ptr->economic.gold >= cost) {
     my_snprintf(cBuf, sizeof(cBuf),
 		_("Bribe unit for %d gold?\nTreasury contains %d gold."), 
-		cost, client.conn.playing->economic.gold);
+		cost, game.player_ptr->economic.gold);
     
     create_active_iconlabel(pBuf, pWindow->dst, pStr, cBuf, NULL);
   
@@ -1443,7 +1441,7 @@ void popup_bribe_dialog(struct unit *pUnit, int cost)
     my_snprintf(cBuf, sizeof(cBuf),
 		_("Bribing the unit costs %d gold.\n"
 		  "Treasury contains %d gold."), 
-		cost, client.conn.playing->economic.gold);
+		cost, game.player_ptr->economic.gold);
     
     create_active_iconlabel(pBuf, pWindow->dst, pStr, cBuf, NULL);
   
