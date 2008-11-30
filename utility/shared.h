@@ -140,7 +140,6 @@ char *get_option_malloc(const char *option_name,
 bool is_option(const char *option_name,char *option);
 int get_tokens(const char *str, char **tokens, size_t num_tokens,
 	       const char *delimiterset);
-void free_tokens(char **tokens, size_t ntokens);
 
 const char *big_int_to_text(unsigned int mantissa, unsigned int exponent);
 const char *int_to_text(unsigned int number);
@@ -236,7 +235,7 @@ enum m_pre_result match_prefix(m_pre_accessor_fn_t accessor_fn,
 			       const char *prefix,
 			       int *ind_result);
 
-char *get_multicast_group(bool ipv6_prefered);
+char *get_multicast_group(void);
 void interpret_tilde(char* buf, size_t buf_size, const char* filename);
 char *interpret_tilde_alloc(const char* filename);
 

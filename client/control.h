@@ -14,7 +14,6 @@
 #define FC__CONTROL_H
 
 #include "packets.h"
-#include "unitlist.h"
 
 enum cursor_hover_state {
   HOVER_NONE = 0,
@@ -23,6 +22,17 @@ enum cursor_hover_state {
   HOVER_PARADROP,
   HOVER_CONNECT,
   HOVER_PATROL
+};
+
+enum cursor_action_state {
+  CURSOR_ACTION_DEFAULT,
+  CURSOR_ACTION_GOTO,
+  CURSOR_ACTION_SELECT,
+  CURSOR_ACTION_INVALID,
+  CURSOR_ACTION_ATTACK,
+  CURSOR_ACTION_NUKE,
+  CURSOR_ACTION_PARATROOPER,
+  CURSOR_ACTION_WAIT
 };
 
 /* Selecting unit from a stack without popup. */
@@ -38,6 +48,7 @@ void unit_change_battlegroup(struct unit *punit, int battlegroup);
 void unit_register_battlegroup(struct unit *punit);
 
 extern enum cursor_hover_state hover_state;
+extern enum cursor_action_state action_state;
 extern enum unit_activity connect_activity;
 extern enum unit_orders goto_last_order;
 extern bool non_ai_unit_focus;
@@ -63,8 +74,6 @@ void request_new_unit_activity(struct unit *punit, enum unit_activity act);
 void request_new_unit_activity_targeted(struct unit *punit,
 					enum unit_activity act,
 					enum tile_special_type tgt);
-void request_new_unit_activity_base(struct unit *punit,
-				    const struct base_type *pbase);
 void request_unit_load(struct unit *pcargo, struct unit *ptransporter);
 void request_unit_unload(struct unit *pcargo);
 void request_unit_autosettlers(const struct unit *punit);
@@ -88,19 +97,16 @@ void request_unit_upgrade(struct unit *punit);
 void request_units_wait(struct unit_list *punits);
 void request_unit_wakeup(struct unit *punit);
 void request_unit_select_same_type(struct unit_list *punits);
-void request_unit_select_same_type_tile(struct unit_list *punits);
 void request_diplomat_action(enum diplomat_actions action, int dipl_id,
 			     int target_id, int value);
 void request_diplomat_answer(enum diplomat_actions action, int dipl_id,
 			     int target_id, int value);
 void request_toggle_city_outlines(void);
-void request_toggle_city_output(void);
 void request_toggle_map_grid(void);
 void request_toggle_map_borders(void);
 void request_toggle_city_names(void);
 void request_toggle_city_growth(void);
 void request_toggle_city_productions(void);
-void request_toggle_city_traderoutes(void);
 void request_toggle_terrain(void);
 void request_toggle_coastline(void);
 void request_toggle_roads_rails(void);
@@ -145,7 +151,6 @@ void key_center_capital(void);
 void key_city_names_toggle(void);
 void key_city_growth_toggle(void);
 void key_city_productions_toggle(void);
-void key_city_traderoutes_toggle(void);
 void key_terrain_toggle(void);
 void key_coastline_toggle(void);
 void key_roads_rails_toggle(void);
@@ -160,7 +165,6 @@ void key_focus_unit_toggle(void);
 void key_fog_of_war_toggle(void);
 void key_end_turn(void);
 void key_city_outlines_toggle(void);
-void key_city_output_toggle(void);
 void key_map_grid_toggle(void);
 void key_map_borders_toggle(void);
 void key_recall_previous_focus_unit(void);
@@ -195,10 +199,6 @@ void key_unit_wait(void);
 void key_unit_wakeup_others(void);
 void key_unit_assign_battlegroup(int battlegroup, bool append);
 void key_unit_select_battlegroup(int battlegroup, bool append);
-
-void key_editor_toggle(void);
-void key_editor_recalculate_borders(void);
-void key_editor_toggle_fogofwar(void);
 
 /* don't change this unless you also put more entries in data/Freeciv */
 #define MAX_NUM_UNITS_BELOW 4

@@ -94,12 +94,6 @@
 ***************************************************************/
 int mystrcasecmp(const char *str0, const char *str1)
 {
-  if (str0 == NULL) {
-    return -1;
-  }
-  if (str1 == NULL) {
-    return 1;
-  }
 #ifdef HAVE_STRCASECMP
   return strcasecmp (str0, str1);
 #else
@@ -120,12 +114,6 @@ int mystrcasecmp(const char *str0, const char *str1)
 ***************************************************************/
 int mystrncasecmp(const char *str0, const char *str1, size_t n)
 {
-  if (str0 == NULL) {
-    return -1;
-  }
-  if (str1 == NULL) {
-    return 1;
-  }
 #ifdef HAVE_STRNCASECMP
   return strncasecmp (str0, str1, n);
 #else
@@ -151,12 +139,7 @@ int mystrncasecmp(const char *str0, const char *str1, size_t n)
 ***************************************************************/
 size_t effectivestrlenquote(const char *str)
 {
-  int len;
-  if (!str) {
-    return 0;
-  }
-
-  len = strlen(str);
+  int len = strlen(str);
 
   if (str[0] == '"' && str[len-1] == '"') {
     return len - 2;
@@ -172,19 +155,9 @@ size_t effectivestrlenquote(const char *str)
 int mystrncasequotecmp(const char *str0, const char *str1, size_t n)
 {
   size_t i;
-  size_t len0;
-  size_t len1;
+  size_t len0 = strlen(str0); /* TODO: We iterate string once already here, */
+  size_t len1 = strlen(str1); /*       could iterate only once */
   size_t cmplen;
-
-  if (str0 == NULL) {
-    return -1;
-  }
-  if (str1 == NULL) {
-    return 1;
-  }
-
-  len0 = strlen(str0); /* TODO: We iterate string once already here, */
-  len1 = strlen(str1); /*       could iterate only once */
 
   if (str0[0] == '"') {
     if (str0[len0 - 1] == '"') {
@@ -223,40 +196,6 @@ int mystrncasequotecmp(const char *str0, const char *str1, size_t n)
 
   /* All characters compared and all matched */
   return 0;
-}
-
-/***************************************************************
-  Return the needle in the haystack (or NULL).
-  Naive implementation.
-***************************************************************/
-char *mystrcasestr(const char *haystack, const char *needle)
-{
-#ifdef HAVE_STRCASESTR
-  return strcasestr(haystack, needle);
-#else
-  size_t haystacks;
-  size_t needles;
-  const char *p;
-
-  if (NULL == needle || '\0' == *needle) {
-    return (char *)haystack;
-  }
-  if (NULL == haystack || '\0' == *haystack) {
-    return NULL;
-  }
-  haystacks = strlen(haystack);
-  needles = strlen(needle);
-  if (haystacks < needles) {
-    return NULL;
-  }
-
-  for (p = haystack; p <= &haystack[haystacks - needles]; p++) {
-    if (0 == mystrncasecmp(p, needle, needles)) {
-      return (char *)p;
-    }
-  }
-  return NULL;
-#endif
 }
 
 /***************************************************************

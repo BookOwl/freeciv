@@ -66,10 +66,6 @@
 
 #define LOGLEVEL_TAX LOG_DEBUG
 
-/* When setting rates, we accept negative balance if we have a lot of
- * gold reserves. This is how long time gold reserves should last */
-#define AI_GOLD_RESERVE_MIN_TURNS 35
-
 /**************************************************************************
  handle spaceship related stuff
 **************************************************************************/
@@ -106,14 +102,12 @@ static void ai_manage_taxes(struct player *pplayer)
   int can_celebrate = 0, total_cities = 0;
   int trade = 0; /* total amount of trade generated */
   int expenses = 0; /* total amount of gold upkeep */
-  int min_reserve = ai_gold_reserve(pplayer);
-  bool refill_coffers = pplayer->economic.gold < min_reserve;
 
   if (!game.info.changable_tax) {
     return; /* This ruleset does not support changing tax rates. */
   }
 
-  if (government_of_player(pplayer) == game.government_during_revolution) {
+  if (government_of_player(pplayer) == game.government_when_anarchy) {
     return; /* This government does not support changing tax rates. */
   }
 
@@ -133,8 +127,7 @@ static void ai_manage_taxes(struct player *pplayer)
   pplayer->economic.luxury = (100 - pplayer->economic.science
                              - pplayer->economic.tax); /* Spillover */
 
-  /* Now find the minimum tax with positive balance
-   * Negative balance is acceptable if we have a lot of gold. */
+  /* Now find the minimum tax with positive balance */
   while(pplayer->economic.tax < maxrate
         && (pplayer->economic.science > 0
             || pplayer->economic.luxury > 0)) {
@@ -149,11 +142,7 @@ static void ai_manage_taxes(struct player *pplayer)
     rates[TAX] = 100 - rates[SCIENCE] - rates[LUXURY];
     distribute(trade, 3, rates, result);
 
-    if (expenses - result[TAX] > 0
-        && (refill_coffers
-            || expenses - result[TAX] >
-               pplayer->economic.gold / AI_GOLD_RESERVE_MIN_TURNS)) {
-      /* Clearly negative balance. Unacceptable */
+    if (expenses - result[TAX] > 0) {
       pplayer->economic.tax += 10;
       if (pplayer->economic.luxury > 0) {
         pplayer->economic.luxury -= 10;
@@ -161,9 +150,8 @@ static void ai_manage_taxes(struct player *pplayer)
         pplayer->economic.science -= 10;
       }
     } else {
-      /* Ok, got positive balance
-       * Or just slightly negative, if we can afford that for a while */
-      if (refill_coffers) {
+      /* Ok, got positive balance */
+      if (pplayer->economic.gold < ai_gold_reserve(pplayer)) {
         /* Need to refill coffers, increase tax a bit */
         pplayer->economic.tax += 10;
         if (pplayer->economic.luxury > 0) {
@@ -228,7 +216,7 @@ static void ai_manage_taxes(struct player *pplayer)
           cm_query_result(pcity, &cmp, &cmr);
           if (cmr.found_a_valid) {
             apply_cmresult_to_city(pcity, &cmr);
-            city_refresh_from_main_map(pcity, TRUE);
+            generic_city_refresh(pcity, TRUE, NULL);
             if (!city_happy(pcity)) {
               CITY_LOG(LOG_ERROR, pcity, "is NOT happy when it should be!");
             }
@@ -239,10 +227,11 @@ static void ai_manage_taxes(struct player *pplayer)
       pplayer->economic.luxury = luxrate;
       pplayer->economic.science = scirate;
       city_list_iterate(pplayer->cities, pcity) {
-        /* KLUDGE: Must refresh to restore the original values which
-         * were clobbered in cm_query_result(), after the tax rates
-         * were changed. */
-        city_refresh_from_main_map(pcity, TRUE);
+        /* KLUDGE: Must refresh to restore the original values which 
+         * were clobbered in cm_query_result, after the tax rates 
+         * were changed.  This is because the cm_query_result() calls
+         * generic_city_refresh(). */
+        generic_city_refresh(pcity, TRUE, NULL);
       } city_list_iterate_end;
     }
   }
@@ -303,7 +292,7 @@ void ai_best_government(struct player *pplayer)
       int val = 0;
       int dist;
 
-      if (gov == game.government_during_revolution) {
+      if (gov == game.government_when_anarchy) {
         continue; /* pointless */
       }
       if (gov->ai.better
@@ -338,17 +327,19 @@ void ai_best_government(struct player *pplayer)
       /* FIXME: handle reqs other than technologies. */
       dist = 0;
       requirement_vector_iterate(&gov->reqs, preq) {
-	if (VUT_ADVANCE == preq->source.kind) {
+	if (preq->source.type == REQ_TECH) {
 	  dist += MAX(1, num_unknown_techs_for_goal(pplayer,
-						    advance_number(preq->source.value.advance)));
+						    preq->source.value.tech));
 	}
       } requirement_vector_iterate_end;
       val = amortize(val, dist);
-      ai->government_want[government_index(gov)] = val; /* Save want */
+      ai->government_want[gov->index] = val; /* Save want */
     } government_iterate_end;
     /* Now reset our gov to it's real state. */
     pplayer->government = current_gov;
     city_list_iterate(pplayer->cities, acity) {
+      /* This isn't strictly necessary since it's done in aaw. */
+      generic_city_refresh(acity, TRUE, NULL);
       auto_arrange_workers(acity);
     } city_list_iterate_end;
     ai->govt_reeval = CLIP(5, city_list_size(pplayer->cities), 20);
@@ -357,21 +348,20 @@ void ai_best_government(struct player *pplayer)
 
   /* Figure out which government is the best for us this turn. */
   government_iterate(gov) {
-    int gi = government_index(gov);
-    if (ai->government_want[gi] > best_val 
+    if (ai->government_want[gov->index] > best_val 
         && can_change_to_government(pplayer, gov)) {
-      best_val = ai->government_want[gi];
+      best_val = ai->government_want[gov->index];
       ai->goal.revolution = gov;
     }
-    if (ai->government_want[gi] > ai->goal.govt.val) {
+    if (ai->government_want[gov->index] > ai->goal.govt.val) {
       ai->goal.govt.gov = gov;
-      ai->goal.govt.val = ai->government_want[gi];
+      ai->goal.govt.val = ai->government_want[gov->index];
 
       /* FIXME: handle reqs other than technologies. */
       ai->goal.govt.req = A_NONE;
       requirement_vector_iterate(&gov->reqs, preq) {
-	if (VUT_ADVANCE == preq->source.kind) {
-	  ai->goal.govt.req = advance_number(preq->source.value.advance);
+	if (preq->source.type == REQ_TECH) {
+	  ai->goal.govt.req = preq->source.value.tech;
 	  break;
 	}
       } requirement_vector_iterate_end;
@@ -399,7 +389,7 @@ static void ai_manage_government(struct player *pplayer)
 
   /* Crank up tech want */
   if (ai->goal.govt.req == A_UNSET
-      || player_invention_state(pplayer, ai->goal.govt.req) == TECH_KNOWN) {
+      || get_invention(pplayer, ai->goal.govt.req) == TECH_KNOWN) {
     return; /* already got it! */
   } else if (ai->goal.govt.val > 0) {
     /* We have few cities in the beginning, compensate for this to ensure
@@ -413,7 +403,7 @@ static void ai_manage_government(struct player *pplayer)
       want += 25 * game.info.turn;
     }
     pplayer->ai.tech_want[ai->goal.govt.req] += want;
-    TECH_LOG(LOG_DEBUG, pplayer, advance_by_number(ai->goal.govt.req), 
+    TECH_LOG(LOG_DEBUG, pplayer, ai->goal.govt.req,
              "ai_manage_government() + %d for %s",
              want,
              government_rule_name(ai->goal.govt.gov));
@@ -466,4 +456,12 @@ void ai_do_last_activities(struct player *pplayer)
   ai_data_phase_done(pplayer);
 
   TIMING_LOG(AIT_ALL, TIMER_STOP);
+}
+
+/**************************************************************************
+  ...
+**************************************************************************/
+bool is_unit_choice_type(enum choice_type type)
+{
+   return type == CT_NONMIL || type == CT_ATTACKER || type == CT_DEFENDER;
 }

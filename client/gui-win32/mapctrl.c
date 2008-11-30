@@ -23,6 +23,7 @@
                       
 #include "capability.h"
 #include "fcintl.h"
+#include "game.h"
 #include "map.h"
 #include "mem.h"
 #include "player.h"
@@ -34,6 +35,7 @@
 #include "civclient.h"
 #include "climap.h"
 #include "climisc.h"
+#include "clinet.h"
 #include "colors.h"
 #include "control.h"
 #include "dialogs.h"
@@ -120,7 +122,7 @@ static void popit(int x, int y, struct tile *ptile)
     popit_popup=NULL;
   }
   
-  if (TILE_UNKNOWN == client_tile_get_known(ptile))
+  if (client_tile_get_known(ptile) < TILE_KNOWN_FOGGED)
     return;
   
   popup=fcwin_create_layouted_window(popit_proc,NULL,WS_POPUP|WS_BORDER,
@@ -302,14 +304,14 @@ void overview_handle_rbut(int x, int y)
 void indicator_handle_but(int i)
 {
   int delta = 10;
-  int lux_end = client.conn.playing->economic.luxury;
-  int sci_end = lux_end + client.conn.playing->economic.science;
+  int lux_end = game.player_ptr->economic.luxury;
+  int sci_end = lux_end + game.player_ptr->economic.science;
 #if 0 /* Unneeded. */
   int tax_end = 100; 
 #endif
-  int luxury = client.conn.playing->economic.luxury;
-  int science = client.conn.playing->economic.science;
-  int tax = client.conn.playing->economic.tax;
+  int luxury = game.player_ptr->economic.luxury;
+  int science = game.player_ptr->economic.science;
+  int tax = game.player_ptr->economic.tax;
   
   i *= 10;
   if (i < lux_end) {
@@ -323,7 +325,7 @@ void indicator_handle_but(int i)
     luxury += delta;
   }
 
-  dsend_packet_player_rates(&client.conn, tax, luxury, science);
+  dsend_packet_player_rates(&aconnection, tax, luxury, science);
 }
 
 /**************************************************************************
@@ -334,7 +336,7 @@ static void name_new_city_callback(HWND w, void *data)
   size_t unit_id;
  
   if ((unit_id = (size_t)data)) {
-    dsend_packet_unit_build_city(&client.conn, unit_id,
+    dsend_packet_unit_build_city(&aconnection, unit_id, 
 				 input_dialog_get_input(w));
   }
   input_dialog_destroy(w);

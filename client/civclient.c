@@ -60,9 +60,6 @@
 #include "control.h" 
 #include "dialogs_g.h"
 #include "diplodlg_g.h"
-#include "editgui_g.h"
-#include "editor.h"
-#include "graphics_g.h"
 #include "ggzclient.h"
 #include "gui_main_g.h"
 #include "helpdata.h"		/* boot_help_texts() */
@@ -80,6 +77,10 @@
 
 #include "civclient.h"
 
+/* this is used in strange places, and is 'extern'd where
+   needed (hence, it is not 'extern'd in civclient.h) */
+bool is_server = FALSE;
+
 char *logfile = NULL;
 char *scriptfile = NULL;
 static char tileset_name[512] = "\0";
@@ -92,9 +93,6 @@ char metaserver[512] = "\0";
 int  server_port = -1;
 bool auto_connect = FALSE; /* TRUE = skip "Connect to Freeciv Server" dialog */
 bool in_ggz = FALSE;
-enum announce_type announce;
-
-struct civclient client;
 
 static enum client_states civclient_state = C_S_INITIAL;
 
@@ -174,7 +172,7 @@ static void charsets_init(void)
 static void at_exit(void)
 {
   client_kill_server(TRUE);
-  fc_shutdown_network();
+  my_shutdown_network();
 }
 
 /**************************************************************************
@@ -193,7 +191,6 @@ static void client_game_init(void)
 **************************************************************************/
 static void client_game_free(void)
 {
-  packhand_free();
   control_done();
   free_help_texts();
   attribute_free();
@@ -223,8 +220,6 @@ int main(int argc, char *argv[])
 # endif
 #endif
 
-  i_am_client(); /* Tell to libcivcommon that we are client */
-
   init_nls();
   audio_init();
   init_character_encodings(gui_character_encoding, gui_use_transliteration);
@@ -234,8 +229,6 @@ int main(int argc, char *argv[])
 
   i = 1;
 
-  announce = ANNOUNCE_DEFAULT;
-
   while (i < argc) {
     if (ui_separator) {
       argv[1 + ui_options] = argv[i];
@@ -243,7 +236,6 @@ int main(int argc, char *argv[])
     } else if (is_option("--help", argv[i])) {
       fc_fprintf(stderr, _("Usage: %s [option ...]\n"
 			   "Valid options are:\n"), argv[0]);
-      fc_fprintf(stderr, _("  -A, --Announce PROTO\tAnnounce game in LAN using protocol PROTO (IPv4/IPv6/none)\n"));
       fc_fprintf(stderr, _("  -a, --autoconnect\tSkip connect dialog\n"));
 #ifdef DEBUG
       fc_fprintf(stderr, _("  -d, --debug NUM\tSet debug log level (0 to 4,"
@@ -327,20 +319,6 @@ int main(int argc, char *argv[])
       sz_strlcpy(tileset_name, option);
       free(option);
       user_tileset = TRUE;
-    } else if ((option = get_option_malloc("--Announce", argv, &i, argc))) {
-      if (!strcasecmp(option, "ipv4")) {
-        announce = ANNOUNCE_IPV4;
-      } else if (!strcasecmp(option, "none")) {
-        announce = ANNOUNCE_NONE;
-#ifdef IPV6_SUPPORT
-      } else if(!strcasecmp(option, "ipv6")) {
-        announce = ANNOUNCE_IPV6;
-#endif /* IPv6 support */
-      } else {
-        fc_fprintf(stderr, _("Invalid announce protocol \"%s\".\n"), option);
-        exit(EXIT_FAILURE);
-      }
-      free(option);
     } else if (is_option("--", argv[i])) {
       ui_separator = TRUE;
     } else {
@@ -381,7 +359,7 @@ int main(int argc, char *argv[])
 
   ui_init();
   charsets_init();
-  fc_init_network();
+  my_init_network();
 
   /* register exit handler */ 
   atexit(at_exit);
@@ -413,7 +391,7 @@ int main(int argc, char *argv[])
      have cosmetic effects only (eg city name suggestions).  --dwp */
   mysrand(time(NULL));
   helpdata_init();
-  boot_help_texts(NULL);
+  boot_help_texts();
 
   tilespec_try_read(tileset_name, user_tileset);
 
@@ -421,8 +399,6 @@ int main(int argc, char *argv[])
   audio_play_music("music_start", NULL);
 
   ggz_initialize();
-
-  editor_init();
 
   /* run gui-specific client */
   ui_main(argc, argv);
@@ -506,7 +482,7 @@ void send_turn_done(void)
 
   attribute_flush();
 
-  dsend_packet_player_phase_done(&client.conn, game.info.turn);
+  dsend_packet_player_phase_done(&aconnection, game.info.turn);
 
   update_turn_done_button_state();
 }
@@ -516,7 +492,7 @@ void send_turn_done(void)
 **************************************************************************/
 void send_report_request(enum report_type type)
 {
-  dsend_packet_report_req(&client.conn, type);
+  dsend_packet_report_req(&aconnection, type);
 }
 
 /**************************************************************************
@@ -532,8 +508,8 @@ void set_client_state(enum client_states newstate)
     /*
      * Extra kludge for end-game handling of the CMA.
      */
-    if (NULL != client.conn.playing) {
-      city_list_iterate(client.conn.playing->cities, pcity) {
+    if (game.player_ptr) {
+      city_list_iterate(game.player_ptr->cities, pcity) {
 	if (cma_is_city_under_agent(pcity, NULL)) {
 	  cma_release_city(pcity);
 	}
@@ -562,20 +538,15 @@ void set_client_state(enum client_states newstate)
       load_ruleset_specific_options();
       create_event(NULL, E_GAME_START, _("Game started."));
       precalc_tech_data();
-      if (NULL != client.conn.playing) {
-	player_research_update(client.conn.playing);
+      if (game.player_ptr) {
+	update_research(game.player_ptr);
       }
       role_unit_precalcs();
-      boot_help_texts(client.conn.playing);	/* reboot with player */
+      boot_help_texts();	/* reboot */
       can_slide = FALSE;
       update_unit_focus();
       can_slide = TRUE;
       set_client_page(PAGE_GAME);
-      /* Find something sensible to display instead of the intro gfx. */
-      center_on_something();
-      free_intro_radar_sprites();
-      agents_game_start();
-      editgui_tileset_changed();
       break;
     case C_S_PREPARING:
       popdown_all_city_dialogs();
@@ -587,7 +558,7 @@ void set_client_state(enum client_states newstate)
       }
       client_game_init();
       set_unit_focus(NULL);
-      if (!client.conn.established && !with_ggz) {
+      if (!aconnection.established && !with_ggz) {
 	set_client_page(in_ggz ? PAGE_GGZ : PAGE_MAIN);
       } else {
 	set_client_page(PAGE_START);
@@ -598,13 +569,11 @@ void set_client_state(enum client_states newstate)
     };
     update_menus();
   }
-  if (!client.conn.established && C_S_PREPARING == civclient_state) {
-    client_game_free();
-    client_game_init();
+  if (!aconnection.established && C_S_PREPARING == civclient_state) {
     gui_server_connect();
     if (auto_connect) {
       if (connect_error) {
-	freelog(LOG_FATAL,
+	freelog(LOG_NORMAL,
 		_("There was an error while auto connecting; aborting."));
 	exit(EXIT_FAILURE);
       } else {
@@ -631,12 +600,12 @@ enum client_states client_state(void)
 **************************************************************************/
 void client_remove_cli_conn(struct connection *pconn)
 {
-  if (NULL != pconn->playing) {
-    conn_list_unlink(pconn->playing->connections, pconn);
+  if (pconn->player) {
+    conn_list_unlink(pconn->player->connections, pconn);
   }
   conn_list_unlink(game.all_connections, pconn);
   conn_list_unlink(game.est_connections, pconn);
-  assert(pconn != &client.conn);
+  assert(pconn != &aconnection);
   free(pconn);
 }
 
@@ -657,7 +626,7 @@ void client_remove_all_cli_conn(void)
 **************************************************************************/
 void send_attribute_block_request()
 {
-  send_packet_player_attribute_block(&client.conn);
+  send_packet_player_attribute_block(&aconnection);
 }
 
 /**************************************************************************
@@ -665,7 +634,7 @@ void send_attribute_block_request()
 **************************************************************************/
 void wait_till_request_got_processed(int request_id)
 {
-  input_from_server_till_request_got_processed(client.conn.sock,
+  input_from_server_till_request_got_processed(aconnection.sock,
 					       request_id);
 }
 
@@ -674,7 +643,7 @@ void wait_till_request_got_processed(int request_id)
 **************************************************************************/
 bool client_is_observer(void)
 {
-  return client.conn.established && client.conn.observer;
+  return aconnection.established && aconnection.observer;
 }
 
 /* Seconds_to_turndone is the number of seconds the server has told us
@@ -771,22 +740,14 @@ double real_timer_callback(void)
 }
 
 /**************************************************************************
-  Returns TRUE iff the client can control player.
-**************************************************************************/
-bool can_client_control(void)
-{
-  return (NULL != client.conn.playing
-	  && !client_is_observer());
-}
-
-/**************************************************************************
-  Returns TRUE iff the client can issue orders (such as giving unit
+  Returns TRUE if the client can issue orders (such as giving unit
   commands).  This function should be called each time before allowing the
   user to give an order.
 **************************************************************************/
 bool can_client_issue_orders(void)
 {
-  return (can_client_control()
+  return (game.player_ptr
+	  && !client_is_observer()
 	  && C_S_RUNNING == client_state());
 }
 
@@ -797,8 +758,8 @@ bool can_client_issue_orders(void)
 bool can_meet_with_player(const struct player *pplayer)
 {
   return (can_client_issue_orders()
-	  /* && NULL != client.conn.playing (above) */
-	  && could_meet_with_player(client.conn.playing, pplayer));
+	  && game.player_ptr
+	  && could_meet_with_player(game.player_ptr, pplayer));
 }
 
 /**************************************************************************
@@ -808,8 +769,8 @@ bool can_meet_with_player(const struct player *pplayer)
 bool can_intel_with_player(const struct player *pplayer)
 {
   return (client_is_observer()
-	  || (NULL != client.conn.playing
-	      && could_intel_with_player(client.conn.playing, pplayer)));
+	  || (game.player_ptr
+	      && could_intel_with_player(game.player_ptr, pplayer)));
 }
 
 /**************************************************************************
@@ -819,7 +780,7 @@ bool can_intel_with_player(const struct player *pplayer)
 **************************************************************************/
 bool can_client_change_view(void)
 {
-  return ((NULL != client.conn.playing || client_is_observer())
+  return ((game.player_ptr || client_is_observer())
 	  && (C_S_RUNNING == client_state()
 	      || C_S_OVER == client_state()));
 }
@@ -845,39 +806,4 @@ void set_server_busy(bool busy)
 bool is_server_busy(void)
 {
   return server_busy;
-}
-
-/****************************************************************************
-  ...
-****************************************************************************/
-bool client_is_global_observer(void)
-{
-  return client.conn.playing == NULL && client.conn.observer == TRUE;
-}
-
-/****************************************************************************
-  ...
-****************************************************************************/
-int client_player_number(void)
-{
-  if (client.conn.playing == NULL) {
-    return -1;
-  }
-  return player_number(client.conn.playing);
-}
-
-/****************************************************************************
-  Either controlling or observing.
-****************************************************************************/
-bool client_has_player(void)
-{
-  return client.conn.playing != NULL;
-}
-
-/****************************************************************************
-  Either controlling or observing.
-****************************************************************************/
-struct player *client_player(void)
-{
-  return client.conn.playing;
 }

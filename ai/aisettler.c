@@ -113,11 +113,10 @@ void cityresult_fill(struct player *pplayer,
                      struct ai_data *ai,
                      struct cityresult *result)
 {
-  struct city *pcity = tile_city(result->tile);
-  struct government *curr_govt = government_of_player(pplayer);
-  struct player *saved_owner = NULL;
+  struct city *pcity = tile_get_city(result->tile);
   int sum = 0;
   bool virtual_city = FALSE;
+  struct government *curr_govt = government_of_player(pplayer);
   bool handicap = ai_handicap(pplayer, H_MAP);
 
   pplayer->government = ai->goal.govt.gov;
@@ -133,38 +132,35 @@ void cityresult_fill(struct player *pplayer,
 
   if (!pcity) {
     pcity = create_city_virtual(pplayer, result->tile, "Virtuaville");
-    saved_owner = tile_owner(result->tile);
-    tile_set_owner(result->tile, pplayer); /* temporarily */
-    city_choose_build_default(pcity);  /* ?? */
     virtual_city = TRUE;
   }
 
-  city_tile_iterate_cxy(result->tile, ptile, i, j) {
+  city_map_checked_iterate(result->tile, i, j, ptile) {
     int reserved = citymap_read(ptile);
-    bool city_center = (result->tile == ptile); /*is_city_center()*/
+    bool city_center = is_city_center(i, j);
 
     if (reserved < 0
         || (handicap && !map_is_known(ptile, pplayer))
-        || NULL != tile_worked(ptile)) {
+        || ptile->worked != NULL) {
       /* Tile is reserved or we can't see it */
       result->citymap[i][j].shield = 0;
       result->citymap[i][j].trade = 0;
       result->citymap[i][j].food = 0;
       sum = 0;
-    } else if (cachemap[tile_index(ptile)].sum <= 0 || city_center) {
+    } else if (cachemap[ptile->index].sum <= 0 || city_center) {
       /* We cannot read city center from cache */
 
       /* Food */
       result->citymap[i][j].food
-	= city_tile_output(pcity, ptile, FALSE, O_FOOD);
+	= base_city_get_output_tile(i, j, pcity, FALSE, O_FOOD);
 
       /* Shields */
       result->citymap[i][j].shield
-	= city_tile_output(pcity, ptile, FALSE, O_SHIELD);
+	= base_city_get_output_tile(i, j, pcity, FALSE, O_SHIELD);
 
       /* Trade */
       result->citymap[i][j].trade
-	= city_tile_output(pcity, ptile, FALSE, O_TRADE);
+	= base_city_get_output_tile(i, j, pcity, FALSE, O_TRADE);
 
       sum = result->citymap[i][j].food * ai->food_priority
             + result->citymap[i][j].trade * ai->science_priority
@@ -179,16 +175,16 @@ void cityresult_fill(struct player *pplayer,
       if (!city_center && virtual_city) {
         /* real cities and any city center will give us spossibly
          * skewed results */
-        cachemap[tile_index(ptile)].sum = sum;
-        cachemap[tile_index(ptile)].trade = result->citymap[i][j].trade;
-        cachemap[tile_index(ptile)].shield = result->citymap[i][j].shield;
-        cachemap[tile_index(ptile)].food = result->citymap[i][j].food;
+        cachemap[ptile->index].sum = sum;
+        cachemap[ptile->index].trade = result->citymap[i][j].trade;
+        cachemap[ptile->index].shield = result->citymap[i][j].shield;
+        cachemap[ptile->index].food = result->citymap[i][j].food;
       }
     } else {
-      sum = cachemap[tile_index(ptile)].sum;
-      result->citymap[i][j].shield = cachemap[tile_index(ptile)].shield;
-      result->citymap[i][j].trade = cachemap[tile_index(ptile)].trade;
-      result->citymap[i][j].food = cachemap[tile_index(ptile)].food;
+      sum = cachemap[ptile->index].sum;
+      result->citymap[i][j].shield = cachemap[ptile->index].shield;
+      result->citymap[i][j].trade = cachemap[ptile->index].trade;
+      result->citymap[i][j].food = cachemap[ptile->index].food;
     }
     result->citymap[i][j].reserved = reserved;
 
@@ -214,7 +210,7 @@ void cityresult_fill(struct player *pplayer,
        * of the area and the emphasis placed on space for growth. */
       result->remaining += sum / GROWTH_POTENTIAL_DEEMPHASIS;
     }
-  } city_tile_iterate_cxy_end;
+  } city_map_checked_iterate_end;
 
   if (virtual_city) {
     /* Baseline is a size one city (city center + best extra tile). */
@@ -265,8 +261,7 @@ void cityresult_fill(struct player *pplayer,
 
   pplayer->government = curr_govt;
   if (virtual_city) {
-    destroy_city_virtual(pcity);
-    tile_set_owner(result->tile, saved_owner);
+    remove_city_virtual(pcity);
   }
 
   assert(result->city_center >= 0);
@@ -301,7 +296,7 @@ static int defense_bonus(struct cityresult *result, struct ai_data *ai)
 {
   /* Defense modification (as tie breaker mostly) */
   int defense_bonus = 
-    10 + tile_terrain(result->tile)->defense_bonus / 10;
+    10 + tile_get_terrain(result->tile)->defense_bonus / 10;
   if (tile_has_special(result->tile, S_RIVER)) {
     defense_bonus +=
         (defense_bonus * terrain_control.river_defense_bonus) / 100;
@@ -331,7 +326,7 @@ static int naval_bonus(struct cityresult *result, struct ai_data *ai)
 void print_cityresult(struct player *pplayer, struct cityresult *cr,
                       struct ai_data *ai)
 {
-  freelog(LOG_TEST, "Result=(%d, %d)\nReservations:\n"
+  freelog(LOG_NORMAL, "Result=(%d, %d)\nReservations:\n"
           "     %4d %4d %4d   \n"
           "%4d %4d %4d %4d %4d\n"
           "%4d %4d %4d %4d %4d\n"
@@ -349,7 +344,7 @@ void print_cityresult(struct player *pplayer, struct cityresult *cr,
           cr->citymap[1][4].reserved, cr->citymap[2][4].reserved,
           cr->citymap[3][4].reserved);
 #define M(a,b) cr->citymap[a][b].food, cr->citymap[a][b].shield, cr->citymap[a][b].trade
-  freelog(LOG_TEST, "Tiles (food/shield/trade):\n"
+  freelog(LOG_NORMAL, "Tiles (food/shield/trade):\n"
           "      %d-%d-%d %d-%d-%d %d-%d-%d\n"
           "%d-%d-%d %d-%d-%d %d-%d-%d %d-%d-%d %d-%d-%d\n"
           "%d-%d-%d %d-%d-%d %d-%d-%d %d-%d-%d %d-%d-%d\n"
@@ -359,7 +354,7 @@ void print_cityresult(struct player *pplayer, struct cityresult *cr,
           M(0,2), M(1,2), M(2,2), M(3,2), M(4,2), M(0,3), M(1,3), M(2,3),
           M(3,3), M(4,3), M(1,4), M(2,4), M(3,4));
 #undef M
-  freelog(LOG_TEST, "city center %d + best other(%d, %d) %d - corr %d "
+  freelog(LOG_NORMAL, "city center %d + best other(%d, %d) %d - corr %d "
           "- waste %d\n"
           "+ remaining %d + defense bonus %d + naval bonus %d = %d (%d)", 
           cr->city_center, cr->other_tile->x, cr->other_tile->y,
@@ -367,10 +362,10 @@ void print_cityresult(struct player *pplayer, struct cityresult *cr,
           cr->corruption, cr->waste, cr->remaining, defense_bonus(cr, ai), 
           naval_bonus(cr, ai), cr->total, cr->result);
   if (food_starvation(cr)) {
-    freelog(LOG_TEST, " ** FOOD STARVATION **");
+    freelog(LOG_NORMAL, " ** FOOD STARVATION **");
   }
   if (shield_starvation(cr)) {
-    freelog(LOG_TEST, " ** RESOURCE STARVATION **");
+    freelog(LOG_NORMAL, " ** RESOURCE STARVATION **");
   }
 }
 
@@ -383,7 +378,7 @@ static void city_desirability(struct player *pplayer, struct ai_data *ai,
                               struct unit *punit, struct tile *ptile,
                               struct cityresult *result)
 {  
-  struct city *pcity = tile_city(ptile);
+  struct city *pcity = tile_get_city(ptile);
 
   assert(punit && ai && pplayer && result);
 
@@ -407,7 +402,7 @@ static void city_desirability(struct player *pplayer, struct ai_data *ai,
     return;
   }
 
-  if (pcity && (pcity->size + unit_pop_value(punit)
+  if (pcity && (pcity->size + unit_pop_value(unit_type(punit))
 		> game.info.add_to_size_limit)) {
     /* Can't exceed population limit. */
     return;
@@ -482,16 +477,16 @@ static bool settler_map_iterate(struct pf_parameter *parameter,
     int turns;
     struct tile *ptile = pos.tile;
 
-    if (is_ocean_tile(ptile)) {
+    if (is_ocean(ptile->terrain)) {
       continue; /* This can happen if there is a ferry near shore. */
     }
     if (boat_cost == 0
-        && tile_continent(ptile) != tile_continent(punit->tile)) {
+        && ptile->continent != punit->tile->continent) {
       /* We have an accidential land bridge. Ignore it. It will in all
        * likelihood go away next turn, or even in a few nanoseconds. */
       continue;
     }
-    if (game.info.borders_sq > 0) {
+    if (game.info.borders > 0) {
       struct player *powner = tile_owner(ptile);
       if (NULL != powner
        && powner != pplayer
@@ -517,7 +512,7 @@ static bool settler_map_iterate(struct pf_parameter *parameter,
      * weeds out very small wants. ie we create a threshold here. */
     /* We also penalise here for using a boat (either virtual or real)
      * it's crude but what isn't? */
-    result.result -= unit_build_shield_cost(punit) + boat_cost;
+    result.result -= unit_build_shield_cost(unit_type(punit)) + boat_cost;
 
     /* Find best spot */
     if (result.result > best->result) {
@@ -559,7 +554,6 @@ void find_best_city_placement(struct unit *punit, struct cityresult *best,
   struct pf_parameter parameter;
   struct player *pplayer = unit_owner(punit);
   struct unit *ferry = NULL;
-  struct unit_class *ferry_class = NULL;
 
   assert(pplayer->ai.control);
   /* Only virtual units may use virtual boats: */
@@ -590,7 +584,7 @@ void find_best_city_placement(struct unit *punit, struct cityresult *best,
 
   if (ferry 
       || (use_virt_boat && is_ocean_near_tile(punit->tile) 
-          && tile_city(punit->tile))) {
+          && tile_get_city(punit->tile))) {
     if (!ferry) {
       /* No boat?  Get a virtual one! */
       struct unit_type *boattype
@@ -598,13 +592,13 @@ void find_best_city_placement(struct unit *punit, struct cityresult *best,
 
       if (boattype == NULL) {
         /* Sea travel not possible yet. Bump tech want for ferries. */
-        boattype = get_role_unit(L_FERRYBOAT, 0);
+        struct unit_type *boattype = get_role_unit(L_FERRYBOAT, 0);
 
-        if (NULL != boattype
-         && A_NEVER != boattype->require_advance) {
-          pplayer->ai.tech_want[advance_index(boattype->require_advance)] += FERRY_TECH_WANT;
-          TECH_LOG(LOG_DEBUG, pplayer, boattype->require_advance,
-                   "+ %d for %s to ferry settler",
+        if (boattype != NULL) {
+          Tech_type_id tech_req = boattype->tech_requirement;
+
+          pplayer->ai.tech_want[tech_req] += FERRY_TECH_WANT;
+          TECH_LOG(LOG_DEBUG, pplayer, tech_req, "+ %d for %s to ferry settler",
                    FERRY_TECH_WANT,
                    utype_rule_name(boattype));
         }
@@ -614,9 +608,7 @@ void find_best_city_placement(struct unit *punit, struct cityresult *best,
       ferry->tile = punit->tile;
     }
 
-    ferry_class = unit_class(ferry);
-
-    assert(ferry_class->ai.sea_move != MOVE_NONE);
+    assert(LAND_MOVING != unit_type(ferry)->move_type);
     pft_fill_unit_overlap_param(&parameter, ferry);
     parameter.get_TB = no_fights_or_unknown;
 
@@ -625,7 +617,7 @@ void find_best_city_placement(struct unit *punit, struct cityresult *best,
      * Building a new boat is like a war against a weaker enemy -- 
      * good for the economy. (c) Bush family */
     if (settler_map_iterate(&parameter, punit, best,
-			    unit_build_shield_cost(ferry))) {
+			    unit_build_shield_cost(unit_type(ferry)))) {
       best->overseas = TRUE;
       best->virt_boat = (ferry->id == 0);
     }

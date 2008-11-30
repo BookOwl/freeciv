@@ -17,7 +17,7 @@ description="Civilization I governments data for Freeciv"
 options="1.9"
 
 [governments]
-during_revolution="Anarchy"
+when_anarchy="Anarchy"
 
 ; Below: The individual government types, one per section.
 ;

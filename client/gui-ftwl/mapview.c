@@ -145,10 +145,6 @@ static struct {
 
 struct ct_string *text_templates[FONT_COUNT];
 
-static bool all_dirty = FALSE;
-
-struct region_list *region_list;
-
 /****************************************************************************
   Return the dimensions of the area (container widget; maximum size) for
   the overview.
@@ -302,7 +298,7 @@ void refresh_overview_canvas(void)
 
   struct ct_rect rect;
 
-  freelog(LOG_DEBUG, "refresh_overview_canvas()");
+  freelog(LOG_NORMAL, "refresh_overview_canvas()");
   whole_map_iterate(x, y) {
     overview_update_tile0(x, y);
   } whole_map_iterate_end;
@@ -369,7 +365,7 @@ void show_city_desc(struct canvas *pcanvas, int canvas_x, int canvas_y,
 
 #if 0
   /* try to trace that hard-to-find assert that we sometimes get */
-  freelog(LOG_TEST, "show_city_desc(%s) pcx=%d->%d (%d) pcy=%d->%d (%d)", city_name(pcity),
+  freelog(LOG_NORMAL, "show_city_desc(%s) pcx=%d->%d (%d) pcy=%d->%d (%d)", city_name(pcity),
           canvas_x, canvas_x+tileset_tile_width(tileset) / 2, all_rect.width,
           canvas_y, canvas_y+tileset_tile_height(tileset), all_rect.height);
 #endif
@@ -387,7 +383,7 @@ void show_city_desc(struct canvas *pcanvas, int canvas_x, int canvas_y,
   line1_b = ct_string_clone4(style->growth_template, buffer2,
 			    enum_color_to_be_color(color));
 
-  if (draw_city_productions && (city_owner(pcity) == client.conn.playing)) {
+  if (draw_city_productions && (city_owner(pcity) == game.player_idx)) {
     get_city_mapview_production(pcity, buffer, sizeof(buffer));
     line2 =
 	ct_string_clone4(style->prod_template, buffer,
@@ -454,7 +450,8 @@ void flush_mapcanvas(int canvas_x, int canvas_y,
   freelog(LOG_DEBUG, "flush_mapcanvas=%s", ct_rect_to_string(&rect));
   be_copy_osda_to_osda(sw_window_get_canvas_background(mapview_window),
 		       mapview.store->osda, &size, &pos, &pos);
-  sw_window_canvas_background_region_needs_repaint(mapview_window, &rect);
+  sw_window_canvas_background_region_needs_repaint(mapview_window,
+						   &rect);
 }
 
 /**************************************************************************
@@ -464,14 +461,10 @@ void flush_mapcanvas(int canvas_x, int canvas_y,
 void dirty_rect(int canvas_x, int canvas_y,
 		int pixel_width, int pixel_height)
 {
-  if (!all_dirty) {
-    struct ct_rect *rect = fc_malloc(sizeof(*rect));
-  
-    *rect = (struct ct_rect){ canvas_x, canvas_y, pixel_width, pixel_height };
-  
-    //freelog(LOG_TEST, "dirty_rect(...)");
-    region_list_append(region_list, rect);
-  }
+  struct ct_rect rect = { canvas_x, canvas_y, pixel_width, pixel_height };
+
+  //freelog(LOG_NORMAL, "dirty_rect(...)");
+  sw_window_canvas_background_region_needs_repaint(mapview_window, &rect);
 }
 
 /**************************************************************************
@@ -480,7 +473,11 @@ void dirty_rect(int canvas_x, int canvas_y,
 **************************************************************************/
 void dirty_all(void)
 {
-  all_dirty = TRUE;
+  struct ct_rect rect;
+
+  sw_widget_get_bounds(mapview_window, &rect);
+  sw_window_canvas_background_region_needs_repaint(mapview_window, 
+                                                   &rect);
 }
 
 /**************************************************************************
@@ -490,22 +487,7 @@ void dirty_all(void)
 **************************************************************************/
 void flush_dirty(void)
 {
-  if (all_dirty) {
-    region_list_iterate(region_list, region) {
-      free(region);
-    } region_list_iterate_end;
-    region_list_clear(region_list);
-    
-    flush_mapcanvas(0, 0, mapview.width, mapview.height);
-    all_dirty = FALSE;
-  } else {
-    region_list_iterate(region_list, region) {
-      flush_mapcanvas(region->x, region->y, region->width, region->height);
-      free(region);
-    } region_list_iterate_end;
-    region_list_clear(region_list);
-  }
-  sw_paint_all();
+  flush_mapcanvas(0, 0, mapview.width, mapview.height);
 }
 
 /**************************************************************************
@@ -671,7 +653,7 @@ static void update_focus_tile_list2(void)
 
   ptile = get_focus_tile();
   unit_list_iterate(ptile->units, aunit) {
-    if (unit_owner(aunit) == client.conn.playing) {
+    if (game.info.player_idx == unit_owner(aunit)->player_no) {
       set_unit_focus(aunit);
       break;
     }
@@ -699,8 +681,8 @@ static void update_focus_tile_list2(void)
     item->info_text=mystrdup(popup_info_text(ptile));
   }
 
-  if (tile_city(ptile)) {
-    struct city *pcity=tile_city(ptile);
+  if (tile_get_city(ptile)) {
+    struct city *pcity=tile_get_city(ptile);
     struct tile_list2_item *item = &tile_list2.item[tile_list2.items];
 
     tile_list2.items++;
@@ -872,64 +854,7 @@ static void action_button_callback(struct sw_widget *widget, void *data)
 {
   char *action = (char *) data;
 
-  freelog(LOG_VERBOSE, "action_button_callback(): action '%s' requested", action);  
-  
-  if (strcmp(action, "unit_fortifying") == 0) {
-    key_unit_fortify();
-  } else if (strcmp(action, "unit_add_to_city") == 0) {
-    key_unit_build_city();
-  } else if (strcmp(action, "unit_build_city") == 0) {
-    key_unit_build_city();
-  } else if (strcmp(action, "unit_auto_explore") == 0) {
-    key_unit_auto_explore();
-  } else if (strcmp(action, "unit_irrigate") == 0) {
-    key_unit_irrigate();
-  } else if (strcmp(action, "unit_sentry") == 0) {
-    key_unit_sentry();
-  } else if (strcmp(action, "unit_return_nearest") == 0) {
-/*    key_? */
-  } else if (strcmp(action, "unit_disband") == 0) {
-    key_unit_disband();
-  } else if (strcmp(action, "unit_mine") == 0) {
-    key_unit_mine();
-  } else if (strcmp(action, "unit_road") == 0) {
-    key_unit_road();
-  } else if (strcmp(action, "unit_auto_settler") == 0) {
-    key_unit_auto_settle();
-  } else if (strcmp(action, "unit_connect") == 0) {
-/*    key_unit_connect(enum unit_activity activity);*/
-  } else if (strcmp(action, "unit_auto_attack") == 0) {
-/*    key_? */    
-  } else if (strcmp(action, "unit_homecity") == 0) {
-    key_unit_homecity();
-  } else if (strcmp(action, "unit_fortress") == 0) {
-    key_unit_fortress();
-  } else if (strcmp(action, "unit_pillage") == 0) {
-    key_unit_pillage();
-  } else if (strcmp(action, "unit_airbase") == 0) {
-    key_unit_airbase();
-  } else if (strcmp(action, "unit_transform") == 0) {
-    key_unit_transform();
-  } else if (strcmp(action, "unit_unload") == 0) {
-    key_unit_unload_all();
-  } else if (strcmp(action, "unit_goto") == 0) {
-    key_unit_goto();
-  } else if (strcmp(action, "unit_goto_city") == 0) {
-/*    key_? */
-  } else if (strcmp(action, "unit_airlift") == 0) {
-/*    key_? */
-  } else if (strcmp(action, "unit_patrol") == 0) {
-    key_unit_patrol();
-  } else if (strcmp(action, "unit_wait") == 0) {
-    key_unit_wait();
-  } else if (strcmp(action, "unit_railroad") == 0) {
-/*    key_? */
-  } else if (strcmp(action, "unit_done") == 0) {
-    key_unit_done();
-  } else {
-    freelog(LOG_VERBOSE,
-      "action_button_callback(): action request '%s' not handled", action);    
-  }
+  freelog(LOG_NORMAL, "action '%s' requested", action);
 }
 
 /**************************************************************************
@@ -1068,7 +993,7 @@ static void action_callback(const char *action)
       redraw_selection_rectangle();
     }
   } else {
-    freelog(LOG_VERBOSE, "action_callback() action '%s' requested", action);
+    freelog(LOG_NORMAL, "action '%s' requested", action);
   }
 }
 
@@ -1196,24 +1121,23 @@ static const char *info_get_value(const char *id)
     return textyear(game.info.year);
   } else if (strcmp(id, "gold") == 0) {
     my_snprintf(buffer, sizeof(buffer),
-		"%d", client.conn.playing->economic.gold);
+		"%d", game.player_ptr->economic.gold);
     return buffer;
   } else if (strcmp(id, "nation_name") == 0) {
-      return nation_plural_for_player(client.conn.playing);
+      return nation_plural_for_player(game.player_ptr);
   } else if (strcmp(id, "population") == 0) {
-      return population_to_text(civ_population(client.conn.playing));
+      return population_to_text(civ_population(game.player_ptr));
   } else if (strcmp(id, "general") == 0) {
       my_snprintf(buffer, sizeof(buffer),
 		  _("Population: %s\n"
 		"Year: %s\n"
 		"Gold %d\n"
 		"Tax: %d Lux: %d Sci: %d"),
-	      population_to_text(civ_population(client.conn.playing)),
-	      textyear(game.info.year),
-	      client.conn.playing->economic.gold,
-	      client.conn.playing->economic.tax,
-	      client.conn.playing->economic.luxury,
-	      client.conn.playing->economic.science);
+	      population_to_text(civ_population(game.player_ptr)),
+	      textyear(game.info.year), game.player_ptr->economic.gold,
+	      game.player_ptr->economic.tax,
+	      game.player_ptr->economic.luxury,
+	      game.player_ptr->economic.science);
       return buffer;
   } else if (strcmp(id, "focus_item") == 0) {
       return tile_list2.item[tile_list2.selected].info_text;
@@ -1223,12 +1147,11 @@ static const char *info_get_value(const char *id)
 		"Year: %s "
 		"Gold %d "
 		"Tax: %d Lux: %d Sci: %d"),
-	      population_to_text(civ_population(client.conn.playing)),
-	      textyear(game.info.year),
-	      client.conn.playing->economic.gold,
-	      client.conn.playing->economic.tax,
-	      client.conn.playing->economic.luxury,
-	      client.conn.playing->economic.science);
+	      population_to_text(civ_population(game.player_ptr)),
+	      textyear(game.info.year), game.player_ptr->economic.gold,
+	      game.player_ptr->economic.tax,
+	      game.player_ptr->economic.luxury,
+	      game.player_ptr->economic.science);
       return buffer;
 #endif
   } else {
@@ -1246,8 +1169,6 @@ void popup_mapcanvas(void)
   struct ct_rect rect;
   struct ct_size screen_size;
 
-  region_list = region_list_new();
-  
   be_screen_get_size(&screen_size);
 
   env.info_get_value = info_get_value;
@@ -1290,11 +1211,6 @@ void popup_mapcanvas(void)
 **************************************************************************/
 void popdown_mapcanvas(void)
 {
-  region_list_iterate(region_list, region) {
-    free(region);
-  } region_list_iterate_end;
-  region_list_free(region_list);
-  
   te_destroy_screen(screen);
 }
 
@@ -1311,13 +1227,9 @@ void draw_selection_rectangle(int canvas_x, int canvas_y, int w, int h)
 **************************************************************************/
 static void unshow_actions(void)
 {
-  struct ct_rect rect;
   int i;
 
   for (i = 0; i < actions_shown.actions; i++) {
-    sw_widget_get_bounds(actions_shown.action[i].widget, &rect);    
-    be_draw_region(sw_widget_get_osda(screen->window), &rect,
-                                       be_get_color(0, 0, 0, MIN_OPACITY));
     sw_window_remove(actions_shown.action[i].widget);
     actions_shown.action[i].widget = NULL;
     free(actions_shown.action[i].name);
@@ -1412,7 +1324,7 @@ static void fill_actions(void)
     }
 
     if (can_unit_add_or_build_city(punit)) {
-      if (tile_city(punit->tile)) {
+      if (tile_get_city(punit->tile)) {
 	ADD("unit_add_to_city");
       } else {
 	ADD("unit_build_city");
@@ -1436,7 +1348,7 @@ static void fill_actions(void)
     if (can_unit_do_connect(punit, ACTIVITY_IDLE)) {
       ADD("unit_connect");
     }
-    if (!(is_air_unit(punit))) {
+    if (!(is_air_unit(punit) || is_heli_unit(punit))) {
       ADD("unit_return_nearest");
     }
     if (!unit_has_type_flag(punit, F_UNDISBANDABLE)) {
@@ -1462,7 +1374,7 @@ static void fill_actions(void)
     struct city *pcity = item->pcity;
     int i;
 
-    if (city_production_buy_gold_cost(pcity) <= client.conn.playing->economic.gold) {
+    if (game.player_ptr->economic.gold >= city_buy_cost(pcity)) {
       ADD("city_buy");
     } else {
       ADD_DIS("city_buy");
@@ -1616,12 +1528,4 @@ void set_city_names_font_sizes(int my_city_names_font_size,
 {
   freelog(LOG_ERROR, "Ignore set_city_names_font_sizes call.");
   /* PORTME */
-}
-
-/**************************************************************************
-  This function will change the current mouse cursor.
-**************************************************************************/
-void update_mouse_cursor(enum cursor_type new_cursor_type)
-{
-  /* PORT ME */
 }

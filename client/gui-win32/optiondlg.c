@@ -80,9 +80,6 @@ static LONG CALLBACK option_proc(HWND dlg,UINT message,
 	    }
 	  }
 	  break;
-        case COT_FONT:
-          /* FIXME: */
-          break;
 	}
       } client_options_iterate_end;
       DestroyWindow(dlg);
@@ -156,10 +153,7 @@ static void create_option_dialog(void)
 	    (void *) fcwin_box_add_edit(vbox, "", 40, 0, 0, TRUE, TRUE, 0);
 	break;
       }
-     case COT_FONT:
-       /* FIXME: */
-       break;
-    }
+    } 
   } client_options_iterate_end;
   fcwin_box_add_box(hbox,vbox_labels,TRUE,TRUE,0);
   fcwin_box_add_box(hbox,vbox,TRUE,TRUE,0);
@@ -204,9 +198,6 @@ void popup_option_dialog(void)
 	ComboBox_SetCurSel(o->p_gui_data, i);
       } 
       SetWindowText((HWND)(o->p_gui_data), o->p_string_value);
-      break;
-    case COT_FONT:
-      /* FIXME: */
       break;
     }
   } client_options_iterate_end;

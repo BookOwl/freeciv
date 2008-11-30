@@ -17,8 +17,6 @@ pkgdata_DATA =          \
 	colors.tilespec \
 	cursors.png	\
 	cursors.spec	\
-	editor.png	\
-	editor.spec	\
 	flags.spec	\
 	icons.spec	\
 	intro.png	\

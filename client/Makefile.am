@@ -37,7 +37,9 @@ if MINGW32
 CLIENTICON=../win32/clienticon.o
 endif
 
-EXTRA_DIST= $(ALL_AUDIO_SDL_FILES)
+EXTRA_DIST= \
+	$(ALL_AUDIO_SDL_FILES)
+
 
 ## This is usually false, so "include" is not recursed into 
 ## by 'make', but it can be enabled in configure, and it is
@@ -53,7 +55,9 @@ SUBDIRS = $(GUI_SUBDIR) $(CLI_INCLUDE) agents
 
 bin_PROGRAMS = civclient
 
-AM_CPPFLAGS = -I$(top_srcdir)/utility -I$(srcdir)/include -I$(top_srcdir)/common -I$(top_srcdir)/common/aicore -I$(srcdir)/agents $(CLIENT_CFLAGS) $(SOUND_CFLAGS) $(LIBGGZ_INCLUDES) $(GGZMOD_INCLUDES) $(GGZ_GTK_INCLUDES)
+AM_CPPFLAGS = -I$(top_srcdir)/utility -I$(srcdir)/include -I$(top_srcdir)/common -I$(top_srcdir)/common/aicore -I../intl -I$(srcdir)/agents $(CLIENT_CFLAGS) $(SOUND_CFLAGS) $(LIBGGZ_INCLUDES) $(GGZMOD_INCLUDES) $(GGZ_GTK_INCLUDES)
+
+## Above, note -I../intl instead of -I$(top_srdir/intl) is deliberate.
 
 civclient_SOURCES = $(AUDIO_SDL_FILES) \
 	attribute.h	\
@@ -78,8 +82,6 @@ civclient_SOURCES = $(AUDIO_SDL_FILES) \
 	colors_common.h		\
 	control.c	\
 	control.h	\
-	editor.c 		\
-	editor.h 		\
 	ggzclient.c	\
 	ggzclient.h	\
 	goto.c		\
@@ -118,10 +120,6 @@ civclient_SOURCES = $(AUDIO_SDL_FILES) \
 	audio.h         \
 	audio_none.c    \
 	audio_none.h
-
-# packhand_gen.c & packhand_gen.h are generated files, but as they are
-# generated outside this directory (when building common) there's no point in
-# setting them to BUILT_SOURCES.
 
 civclient_LDFLAGS = $(CLIENT_LDFLAGS) $(GGZMOD_LDFLAGS)
 fc_civclient_libs =	../utility/libcivutility.a	\

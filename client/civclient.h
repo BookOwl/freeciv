@@ -13,10 +13,9 @@
 #ifndef FC__CIVCLIENT_H
 #define FC__CIVCLIENT_H
 
-#include "fc_types.h"
-
+#include "game.h"		/* enum client_states */
 #include "packets.h"		/* enum report_type */
-#include "worklist.h"
+#include "shared.h"		/* MAX_LEN_NAME */
 
 /*
  * Every TIMER_INTERVAL milliseconds real_timer_callback is
@@ -24,14 +23,6 @@
  * also updates the timeout info.
  */
 #define TIMER_INTERVAL (int)(real_timer_callback() * 1000)
-
-/* independent parallel of server_states */
-enum client_states { 
-  C_S_INITIAL,    /* Client boot, only used once on program start. */
-  C_S_PREPARING,  /* Main menu (disconnected) and connected in pregame. */
-  C_S_RUNNING,    /* Connected with game in progress. */
-  C_S_OVER,       /* Connected with game over. */
-};
 
 void client_packet_input(void *packet, int type);
 
@@ -63,25 +54,11 @@ extern bool waiting_for_end_turn;
 extern bool turn_done_sent;
 extern bool in_ggz;
 
-/* Structure for holding global client data.
- *
- * TODO: Lots more variables could be added here. */
-extern struct civclient {
-  /* this is the client's connection to the server */
-  struct connection conn;
-  struct worklist worklists[MAX_NUM_WORKLISTS];
-} client;
-
 void wait_till_request_got_processed(int request_id);
 bool client_is_observer(void);
-bool client_is_global_observer(void);
-int client_player_number(void);
-bool client_has_player(void);
-struct player *client_player(void);
 void set_seconds_to_turndone(double seconds);
 int get_seconds_to_turndone(void);
 double real_timer_callback(void);
-bool can_client_control(void);
 bool can_client_issue_orders(void);
 bool can_client_change_view(void);
 bool can_meet_with_player(const struct player *pplayer);

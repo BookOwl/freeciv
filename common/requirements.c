@@ -24,13 +24,11 @@
 #include "government.h"
 #include "improvement.h"
 #include "map.h"
-#include "specialist.h"
-
 #include "requirements.h"
 
-/* Names of source types.  These must correspond to enum universals_n in
- * fc_types.h.  Do not change these unless you know what you're doing! */
-static const char *universal_names[] = {
+/* Names of source types.  These must correspond to enum req_source_type in
+ * requirements.h.  Do not change these unless you know what you're doing! */
+static const char *req_source_type_names[] = {
   "None",
   "Tech",
   "Gov",
@@ -41,13 +39,9 @@ static const char *universal_names[] = {
   "UnitType",
   "UnitFlag",
   "UnitClass",
-  "UnitClassFlag",
   "OutputType",
   "Specialist",
-  "MinSize",
-  "AI",
-  "TerrainClass",
-  "Base"
+  "MinSize"
 };
 
 /* Names of requirement ranges. These must correspond to enum req_range in
@@ -83,300 +77,231 @@ enum req_range req_range_from_str(const char *str)
 }
 
 /**************************************************************************
-  Parse requirement type (kind) and value strings into a universal
-  structure.  Passing in a NULL type is considered VUT_NONE (not an error).
+  Parse a requirement type and value string into a requirement source
+  structure.  Passing in a NULL type is considered REQ_NONE (not an error).
 
   Pass this some values like "Building", "Factory".
-  FIXME: ensure that every caller checks error return!
 **************************************************************************/
-struct universal universal_by_rule_name(const char *kind,
-					const char *value)
+struct req_source req_source_from_str(const char *type, const char *value)
 {
-  struct universal source;
+  struct req_source source;
 
-  assert(ARRAY_SIZE(universal_names) == VUT_LAST);
-
-  if (kind) {
-    for (source.kind = 0;
-	 source.kind < ARRAY_SIZE(universal_names);
-	 source.kind++) {
-      if (0 == mystrcasecmp(universal_names[source.kind], kind)) {
+  assert(ARRAY_SIZE(req_source_type_names) == REQ_LAST);
+  if (type) {
+    for (source.type = 0;
+	 source.type < ARRAY_SIZE(req_source_type_names);
+	 source.type++) {
+      if (0 == mystrcasecmp(req_source_type_names[source.type], type)) {
 	break;
       }
     }
   } else {
-    source.kind = VUT_NONE;
+    source.type = REQ_NONE;
   }
 
   /* Finally scan the value string based on the type of the source. */
-  switch (source.kind) {
-  case VUT_NONE:
+  switch (source.type) {
+  case REQ_NONE:
     return source;
-  case VUT_ADVANCE:
-    source.value.advance = find_advance_by_rule_name(value);
-    if (source.value.advance != NULL) {
+  case REQ_TECH:
+    source.value.tech = find_advance_by_rule_name(value);
+    if (source.value.tech != A_LAST) {
       return source;
     }
     break;
-  case VUT_GOVERNMENT:
-    source.value.govern = find_government_by_rule_name(value);
-    if (source.value.govern != NULL) {
+  case REQ_GOV:
+    source.value.gov = find_government_by_rule_name(value);
+    if (source.value.gov != NULL) {
       return source;
     }
     break;
-  case VUT_IMPROVEMENT:
+  case REQ_BUILDING:
     source.value.building = find_improvement_by_rule_name(value);
-    if (source.value.building != NULL) {
+    if (source.value.building != B_LAST) {
       return source;
     }
     break;
-  case VUT_SPECIAL:
+  case REQ_SPECIAL:
     source.value.special = find_special_by_rule_name(value);
     if (source.value.special != S_LAST) {
       return source;
     }
     break;
-  case VUT_TERRAIN:
+  case REQ_TERRAIN:
     source.value.terrain = find_terrain_by_rule_name(value);
     if (source.value.terrain != T_UNKNOWN) {
       return source;
     }
     break;
-  case VUT_NATION:
+  case REQ_NATION:
     source.value.nation = find_nation_by_rule_name(value);
     if (source.value.nation != NO_NATION_SELECTED) {
       return source;
     }
     break;
-  case VUT_UTYPE:
-    source.value.utype = find_unit_type_by_rule_name(value);
-    if (source.value.utype) {
+  case REQ_UNITTYPE:
+    source.value.unittype = find_unit_type_by_rule_name(value);
+    if (source.value.unittype) {
       return source;
     }
     break;
-  case VUT_UTFLAG:
+  case REQ_UNITFLAG:
     source.value.unitflag = find_unit_flag_by_rule_name(value);
     if (source.value.unitflag != F_LAST) {
       return source;
     }
     break;
-  case VUT_UCLASS:
-    source.value.uclass = find_unit_class_by_rule_name(value);
-    if (source.value.uclass) {
+  case REQ_UNITCLASS:
+    source.value.unitclass = find_unit_class_by_rule_name(value);
+    if (source.value.unitclass) {
       return source;
     }
     break;
-  case VUT_UCFLAG:
-    source.value.unitclassflag = find_unit_class_flag_by_rule_name(value);
-    if (source.value.unitclassflag != UCF_LAST) {
-      return source;
-    }
-    break;
-  case VUT_OTYPE:
+  case REQ_OUTPUTTYPE:
     source.value.outputtype = find_output_type_by_identifier(value);
     if (source.value.outputtype != O_LAST) {
       return source;
     }
     break;
-  case VUT_SPECIALIST:
-    source.value.specialist = find_specialist_by_rule_name(value);
-    if (source.value.specialist) {
+  case REQ_SPECIALIST:
+    source.value.specialist = find_specialist_by_name(value);
+    if (source.value.specialist != SP_MAX) {
       return source;
     }
-  case VUT_MINSIZE:
+  case REQ_MINSIZE:
     source.value.minsize = atoi(value);
     if (source.value.minsize > 0) {
       return source;
     }
     break;
-  case VUT_AI_LEVEL:
-    source.value.ai_level = find_ai_level_by_name(value);
-    if (source.value.ai_level != AI_LEVEL_LAST) {
-      return source;
-    }
-    break;
-  case VUT_TERRAINCLASS:
-    source.value.terrainclass = find_terrain_class_by_rule_name(value);
-    if (source.value.terrainclass != TC_LAST) {
-      return source;
-    }
-    break;
-  case VUT_BASE:
-    source.value.base = find_base_type_by_rule_name(value);
-    if (source.value.base != NULL) {
-      return source;
-    }
-    break;
-  case VUT_LAST:
-  default:
+  case REQ_LAST:
     break;
   }
 
   /* If we reach here there's been an error. */
-  source.kind = VUT_LAST;
+  source.type = REQ_LAST;
   return source;
 }
 
 /**************************************************************************
-  Combine values into a universal structure.  This is for serialization
-  and is the opposite of universal_extraction().
-  FIXME: ensure that every caller checks error return!
+  Parse some integer values into a req source.  This is for serialization
+  of req sources and is the opposite of req_source_get_values().
 **************************************************************************/
-struct universal universal_by_number(const enum universals_n kind,
-				     const int value)
+struct req_source req_source_from_values(int type, int value)
 {
-  struct universal source;
+  struct req_source source;
 
-  source.kind = kind;
+  source.type = type;
 
-  switch (source.kind) {
-  case VUT_NONE:
+  switch (source.type) {
+  case REQ_NONE:
     return source;
-  case VUT_ADVANCE:
-    source.value.advance = advance_by_number(value);
-    if (source.value.advance != NULL) {
-      return source;
-    }
-    break;
-  case VUT_GOVERNMENT:
-    source.value.govern = government_by_number(value);
-    if (source.value.govern != NULL) {
-      return source;
-    }
-    break;
-  case VUT_IMPROVEMENT:
-    source.value.building = improvement_by_number(value);
-    if (source.value.building != NULL) {
-      return source;
-    }
-    break;
-  case VUT_SPECIAL:
+  case REQ_TECH:
+    source.value.tech = value;
+    return source;
+  case REQ_GOV:
+    source.value.gov = government_by_number(value);
+    return source;
+  case REQ_BUILDING:
+    source.value.building = value;
+    return source;
+  case REQ_SPECIAL:
     source.value.special = value;
     return source;
-  case VUT_TERRAIN:
+  case REQ_TERRAIN:
     source.value.terrain = terrain_by_number(value);
-    if (source.value.terrain != NULL) {
-      return source;
-    }
-    break;
-  case VUT_NATION:
+    return source;
+  case REQ_NATION:
     source.value.nation = nation_by_number(value);
-    if (source.value.nation != NULL) {
-      return source;
-    }
-    break;
-  case VUT_UTYPE:
-    source.value.utype = utype_by_number(value);
-    if (source.value.utype != NULL) {
-      return source;
-    }
-    break;
-  case VUT_UTFLAG:
+    return source;
+  case REQ_UNITTYPE:
+    source.value.unittype = utype_by_number(value);
+    return source;
+  case REQ_UNITFLAG:
     source.value.unitflag = value;
     return source;
-  case VUT_UCLASS:
-    source.value.uclass = uclass_by_number(value);
-    if (source.value.uclass != NULL) {
-      return source;
-    }
-    break;
-  case VUT_UCFLAG:
-    source.value.unitclassflag = value;
+  case REQ_UNITCLASS:
+    source.value.unitclass = uclass_by_number(value);
     return source;
-  case VUT_OTYPE:
+  case REQ_OUTPUTTYPE:
     source.value.outputtype = value;
     return source;
-  case VUT_SPECIALIST:
-    source.value.specialist = specialist_by_number(value);
+  case REQ_SPECIALIST:
+    source.value.specialist = value;
     return source;
-  case VUT_MINSIZE:
+  case REQ_MINSIZE:
     source.value.minsize = value;
     return source;
-  case VUT_AI_LEVEL:
-    source.value.ai_level = value;
+  case REQ_LAST:
     return source;
-  case VUT_TERRAINCLASS:
-    source.value.terrainclass = value;
-    return source;
-   case VUT_BASE:
-    source.value.base = base_by_number(value);
-    return source;
-  case VUT_LAST:
-    return source;
-  default:
-    assert(0);
-    break;
   }
 
-  /* If we reach here there's been an error. */
-  source.kind = VUT_LAST;
+  source.type = REQ_LAST;
+  assert(0);
   return source;
 }
 
 /**************************************************************************
-  Extract universal structure into its components for serialization;
-  the opposite of universal_by_number().
+  Look at a req source and return some integer values describing it.  This
+  is for serialization of req sources and is the opposite of
+  req_source_from_values().
 **************************************************************************/
-void universal_extraction(const struct universal *source,
-			  int *kind, int *value)
+void req_source_get_values(const struct req_source *source,
+			   int *type, int *value)
 {
-  *kind = source->kind;
-  *value = universal_number(source);
-}
+  *type = source->type;
 
-/**************************************************************************
-  Return the universal number of the constituent.
-**************************************************************************/
-int universal_number(const struct universal *source)
-{
-  switch (source->kind) {
-  case VUT_NONE:
-    return 0;
-  case VUT_ADVANCE:
-    return advance_number(source->value.advance);
-  case VUT_GOVERNMENT:
-    return government_number(source->value.govern);
-  case VUT_IMPROVEMENT:
-    return improvement_number(source->value.building);
-  case VUT_SPECIAL:
-    return source->value.special;
-  case VUT_TERRAIN:
-    return terrain_number(source->value.terrain);
-  case VUT_NATION:
-    return nation_number(source->value.nation);
-  case VUT_UTYPE:
-    return utype_number(source->value.utype);
-  case VUT_UTFLAG:
-    return source->value.unitflag;
-  case VUT_UCLASS:
-    return uclass_number(source->value.uclass);
-  case VUT_UCFLAG:
-    return source->value.unitclassflag;
-  case VUT_OTYPE:
-    return source->value.outputtype;
-  case VUT_SPECIALIST:
-    return specialist_number(source->value.specialist);
-  case VUT_MINSIZE:
-    return source->value.minsize;
-  case VUT_AI_LEVEL:
-    return source->value.ai_level;
-  case VUT_TERRAINCLASS:
-    return source->value.terrainclass;
-  case VUT_BASE:
-    return base_number(source->value.base);
-  case VUT_LAST:
-  default:
+  switch (source->type) {
+  case REQ_NONE:
+    *value = 0;
+    return;
+  case REQ_TECH:
+    *value = source->value.tech;
+    return;
+  case REQ_GOV:
+    *value = source->value.gov->index;
+    return;
+  case REQ_BUILDING:
+    *value = source->value.building;
+    return;
+  case REQ_SPECIAL:
+    *value = source->value.special;
+    return;
+  case REQ_TERRAIN:
+    *value = source->value.terrain->index;
+    return;
+  case REQ_NATION:
+    *value = nation_number(source->value.nation);
+    return;
+  case REQ_UNITTYPE:
+    *value = source->value.unittype->index;
+    return;
+  case REQ_UNITFLAG:
+    *value = source->value.unitflag;
+    return;
+  case REQ_UNITCLASS:
+    *value = source->value.unitclass->id;
+    return;
+  case REQ_OUTPUTTYPE:
+    *value = source->value.outputtype;
+    return;
+  case REQ_SPECIALIST:
+    *value = source->value.specialist;
+    return;
+  case REQ_MINSIZE:
+    *value = source->value.minsize;
+    return;
+  case REQ_LAST:
     break;
   }
 
-  /* If we reach here there's been an error. */
   assert(0);
-  return 0;
+  *value = 0;
 }
 
 /****************************************************************************
   Parse a requirement type and value string into a requrement structure.
-  Returns VUT_LAST on error.  Passing in a NULL type is considered VUT_NONE
+  Returns REQ_LAST on error.  Passing in a NULL type is considered REQ_NONE
   (not an error).
 
   Pass this some values like "Building", "Factory".
@@ -388,36 +313,32 @@ struct requirement req_from_str(const char *type, const char *range,
   struct requirement req;
   bool invalid = TRUE;
 
-  req.source = universal_by_rule_name(type, value);
+  req.source = req_source_from_str(type, value);
 
   /* Scan the range string to find the range.  If no range is given a
    * default fallback is used rather than giving an error. */
   req.range = req_range_from_str(range);
   if (req.range == REQ_RANGE_LAST) {
-    switch (req.source.kind) {
-    case VUT_NONE:
-    case VUT_LAST:
+    switch (req.source.type) {
+    case REQ_NONE:
+    case REQ_LAST:
       break;
-    case VUT_IMPROVEMENT:
-    case VUT_SPECIAL:
-    case VUT_TERRAIN:
-    case VUT_UTYPE:
-    case VUT_UTFLAG:
-    case VUT_UCLASS:
-    case VUT_UCFLAG:
-    case VUT_OTYPE:
-    case VUT_SPECIALIST:
-    case VUT_TERRAINCLASS:
-    case VUT_BASE:
+    case REQ_BUILDING:
+    case REQ_SPECIAL:
+    case REQ_TERRAIN:
+    case REQ_UNITTYPE:
+    case REQ_UNITFLAG:
+    case REQ_UNITCLASS:
+    case REQ_OUTPUTTYPE:
+    case REQ_SPECIALIST:
       req.range = REQ_RANGE_LOCAL;
       break;
-    case VUT_MINSIZE:
+    case REQ_MINSIZE:
       req.range = REQ_RANGE_CITY;
       break;
-    case VUT_GOVERNMENT:
-    case VUT_ADVANCE:
-    case VUT_NATION:
-    case VUT_AI_LEVEL:
+    case REQ_GOV:
+    case REQ_TECH:
+    case REQ_NATION:
       req.range = REQ_RANGE_PLAYER;
       break;
     }
@@ -428,46 +349,42 @@ struct requirement req_from_str(const char *type, const char *range,
 
   /* These checks match what combinations are supported inside
    * is_req_active(). */
-  switch (req.source.kind) {
-  case VUT_SPECIAL:
-  case VUT_TERRAIN:
-  case VUT_TERRAINCLASS:
-  case VUT_BASE:
+  switch (req.source.type) {
+  case REQ_SPECIAL:
+  case REQ_TERRAIN:
     invalid = (req.range != REQ_RANGE_LOCAL
 	       && req.range != REQ_RANGE_ADJACENT);
     break;
-  case VUT_ADVANCE:
+  case REQ_TECH:
     invalid = (req.range < REQ_RANGE_PLAYER);
     break;
-  case VUT_GOVERNMENT:
-  case VUT_AI_LEVEL:
+  case REQ_GOV:
     invalid = (req.range != REQ_RANGE_PLAYER);
     break;
-  case VUT_IMPROVEMENT:
+  case REQ_BUILDING:
     invalid = ((req.range == REQ_RANGE_WORLD
 		&& !is_great_wonder(req.source.value.building))
 	       || (req.range > REQ_RANGE_CITY
 		   && !is_wonder(req.source.value.building)));
     break;
-  case VUT_MINSIZE:
+  case REQ_MINSIZE:
     invalid = (req.range != REQ_RANGE_CITY);
     break;
-  case VUT_NATION:
+  case REQ_NATION:
     invalid = (req.range != REQ_RANGE_PLAYER
 	       && req.range != REQ_RANGE_WORLD);
     break;
-  case VUT_UTYPE:
-  case VUT_UTFLAG:
-  case VUT_UCLASS:
-  case VUT_UCFLAG:
-  case VUT_OTYPE:
-  case VUT_SPECIALIST:
+  case REQ_UNITTYPE:
+  case REQ_UNITFLAG:
+  case REQ_UNITCLASS:
+  case REQ_OUTPUTTYPE:
+  case REQ_SPECIALIST:
     invalid = (req.range != REQ_RANGE_LOCAL);
     break;
-  case VUT_NONE:
+  case REQ_NONE:
     invalid = FALSE;
     break;
-  case VUT_LAST:
+  case REQ_LAST:
     break;
   }
   if (invalid) {
@@ -475,7 +392,7 @@ struct requirement req_from_str(const char *type, const char *range,
 	    type, range,
 	    survives ? "survives" : "",
 	    negated ? "negated" : "", value);
-    req.source.kind = VUT_LAST;
+    req.source.type = REQ_LAST;
   }
 
   return req;
@@ -491,7 +408,7 @@ struct requirement req_from_values(int type, int range,
 {
   struct requirement req;
 
-  req.source = universal_by_number(type, value);
+  req.source = req_source_from_values(type, value);
   req.range = range;
   req.survives = survives;
   req.negated = negated;
@@ -507,7 +424,7 @@ void req_get_values(const struct requirement *req,
 		    bool *survives, bool *negated,
 		    int *value)
 {
-  universal_extraction(&req->source, type, value);
+  req_source_get_values(&req->source, type, value);
   *range = req->range;
   *survives = req->survives;
   *negated = req->negated;
@@ -519,7 +436,7 @@ void req_get_values(const struct requirement *req,
 bool are_requirements_equal(const struct requirement *req1,
 			    const struct requirement *req2)
 {
-  return (are_universals_equal(&req1->source, &req2->source)
+  return (are_req_sources_equal(&req1->source, &req2->source)
 	  && req1->range == req2->range
 	  && req1->survives == req2->survives
 	  && req1->negated == req2->negated);
@@ -529,7 +446,7 @@ bool are_requirements_equal(const struct requirement *req1,
   Returns the number of total world buildings (this includes buildings
   that have been destroyed).
 ****************************************************************************/
-static int num_world_buildings_total(const struct impr_type *building)
+static int num_world_buildings_total(Impr_type_id building)
 {
   if (is_great_wonder(building)) {
     return (great_wonder_was_built(building) ? 1 : 0);
@@ -544,10 +461,10 @@ static int num_world_buildings_total(const struct impr_type *building)
 /****************************************************************************
   Returns the number of buildings of a certain type in the world.
 ****************************************************************************/
-static int num_world_buildings(const struct impr_type *building)
+static int num_world_buildings(Impr_type_id id)
 {
-  if (is_great_wonder(building)) {
-    return (find_city_from_great_wonder(building) ? 1 : 0);
+  if (is_great_wonder(id)) {
+    return (find_city_from_great_wonder(id) ? 1 : 0);
   } else {
     freelog(LOG_ERROR,
 	    /* TRANS: Obscure ruleset error. */
@@ -560,15 +477,15 @@ static int num_world_buildings(const struct impr_type *building)
   Returns the player city with the given wonder.
 **************************************************************************/
 static struct city *player_find_city_from_wonder(const struct player *plr,
-						 const struct impr_type *building)
+						 Impr_type_id id)
 {
   int city_id;
   struct city *pcity;
 
-  if (is_great_wonder(building)) {
-    city_id = game.info.great_wonders[improvement_index(building)];
-  } else if (is_small_wonder(building)) {
-    city_id = plr->small_wonders[improvement_index(building)];
+  if (is_great_wonder(id)) {
+    city_id = game.info.great_wonders[id];
+  } else if (is_small_wonder(id)) {
+    city_id = plr->small_wonders[id];
   } else {
     return NULL;
   }
@@ -585,7 +502,7 @@ static struct city *player_find_city_from_wonder(const struct player *plr,
   Returns the number of buildings of a certain type owned by plr.
 ****************************************************************************/
 static int num_player_buildings(const struct player *pplayer,
-				const struct impr_type *building)
+				Impr_type_id building)
 {
   if (is_wonder(building)) {
     return (player_find_city_from_wonder(pplayer, building) ? 1 : 0);
@@ -601,14 +518,13 @@ static int num_player_buildings(const struct player *pplayer,
   Returns the number of buildings of a certain type on a continent.
 ****************************************************************************/
 static int num_continent_buildings(const struct player *pplayer,
-				   int continent,
-				   const struct impr_type *building)
+				   int continent, Impr_type_id building)
 {
   if (is_wonder(building)) {
     const struct city *pcity;
 
     pcity = player_find_city_from_wonder(pplayer, building);
-    if (pcity && tile_continent(pcity->tile) == continent) {
+    if (pcity && tile_get_continent(pcity->tile) == continent) {
       return 1;
     }
   } else {
@@ -622,10 +538,9 @@ static int num_continent_buildings(const struct player *pplayer,
 /****************************************************************************
   Returns the number of buildings of a certain type in a city.
 ****************************************************************************/
-static int num_city_buildings(const struct city *pcity,
-			      const struct impr_type *building)
+static int num_city_buildings(const struct city *pcity, Impr_type_id id)
 {
-  return (city_has_building(pcity, building) ? 1 : 0);
+  return (city_got_building(pcity, id) ? 1 : 0);
 }
 
 /****************************************************************************
@@ -648,10 +563,9 @@ static int num_city_buildings(const struct city *pcity,
 ****************************************************************************/
 static int count_buildings_in_range(const struct player *target_player,
 				    const struct city *target_city,
-				    const struct impr_type *target_building,
-				    enum req_range range,
-				    bool survives,
-				    const struct impr_type *source)
+				    const struct impr_type * target_building,
+				    enum req_range range, bool survives,
+				    Impr_type_id source)
 {
   if (improvement_obsolete(target_player, source)) {
     return 0;
@@ -677,7 +591,7 @@ static int count_buildings_in_range(const struct player *target_player,
     return target_player ? num_player_buildings(target_player, source) : 0;
   case REQ_RANGE_CONTINENT:
     if (target_player && target_city) {
-      int continent = tile_continent(target_city->tile);
+      int continent = tile_get_continent(target_city->tile);
 
       return num_continent_buildings(target_player, continent, source);
     } else {
@@ -688,7 +602,7 @@ static int count_buildings_in_range(const struct player *target_player,
   case REQ_RANGE_CITY:
     return target_city ? num_city_buildings(target_city, source) : 0;
   case REQ_RANGE_LOCAL:
-    if (target_building && target_building == source) {
+    if (target_building && target_building->index == source) {
       return num_city_buildings(target_city, source);
     } else {
       /* TODO: other local targets */
@@ -713,7 +627,7 @@ static bool is_tech_in_range(const struct player *target_player,
   switch (range) {
   case REQ_RANGE_PLAYER:
     return (target_player
-	    && player_invention_state(target_player, tech) == TECH_KNOWN);
+	    && get_invention(target_player, tech) == TECH_KNOWN);
   case REQ_RANGE_WORLD:
     return game.info.global_advances[tech];
   case REQ_RANGE_LOCAL:
@@ -767,67 +681,9 @@ static bool is_terrain_in_range(const struct tile *target_tile,
   switch (range) {
   case REQ_RANGE_LOCAL:
     /* The requirement is filled if the tile has the terrain. */
-    return pterrain && tile_terrain(target_tile) == pterrain;
+    return pterrain && target_tile->terrain == pterrain;
   case REQ_RANGE_ADJACENT:
     return pterrain && is_terrain_near_tile(target_tile, pterrain, TRUE);
-  case REQ_RANGE_CITY:
-  case REQ_RANGE_CONTINENT:
-  case REQ_RANGE_PLAYER:
-  case REQ_RANGE_WORLD:
-  case REQ_RANGE_LAST:
-    break;
-  }
-
-  assert(0);
-  return FALSE;
-}
-
-/****************************************************************************
-  Is there a source terrain class within range of the target?
-****************************************************************************/
-static bool is_terrain_class_in_range(const struct tile *target_tile,
-                                      enum req_range range, bool survives,
-                                      enum terrain_class class)
-{
-  if (!target_tile) {
-    return FALSE;
-  }
-
-  switch (range) {
-  case REQ_RANGE_LOCAL:
-    /* The requirement is filled if the tile has the terrain of correct class. */
-    return terrain_belongs_to_class(tile_terrain(target_tile), class);
-  case REQ_RANGE_ADJACENT:
-    return is_terrain_class_near_tile(target_tile, class);
-  case REQ_RANGE_CITY:
-  case REQ_RANGE_CONTINENT:
-  case REQ_RANGE_PLAYER:
-  case REQ_RANGE_WORLD:
-  case REQ_RANGE_LAST:
-    break;
-  }
-
-  assert(0);
-  return FALSE;
-}
-
-/****************************************************************************
-  Is there a source base type within range of the target?
-****************************************************************************/
-static bool is_base_type_in_range(const struct tile *target_tile,
-                                  enum req_range range, bool survives,
-                                  struct base_type *pbase)
-{
-  if (!target_tile) {
-    return FALSE;
-  }
-
-  switch (range) {
-  case REQ_RANGE_LOCAL:
-    /* The requirement is filled if the tile has base of requested type. */
-    return tile_has_base(target_tile, pbase);
-  case REQ_RANGE_ADJACENT:
-    return is_base_near_tile(target_tile, pbase);
   case REQ_RANGE_CITY:
   case REQ_RANGE_CONTINENT:
   case REQ_RANGE_PLAYER:
@@ -921,22 +777,7 @@ static bool is_unitclass_in_range(const struct unit_type *target_unittype,
    * walls) without actually knowing the target unit. */
   return (range == REQ_RANGE_LOCAL
 	  && (!target_unittype
-	      || utype_class(target_unittype) == pclass));
-}
-
-/****************************************************************************
-  Is there a unit with the given flag within range of the target?
-****************************************************************************/
-static bool is_unitclassflag_in_range(const struct unit_type *target_unittype,
-				      enum req_range range, bool survives,
-				      enum unit_class_flag_id ucflag)
-{
-  /* If no target_unittype is given, we allow the req to be met.  This is
-   * to allow querying of certain effect types (like the presence of city
-   * walls) without actually knowing the target unit. */
-  return (range == REQ_RANGE_LOCAL
-	  && (!target_unittype
-	      || uclass_has_flag(utype_class(target_unittype), ucflag)));
+	      || target_unittype->uclass == pclass));
 }
 
 /****************************************************************************
@@ -963,23 +804,23 @@ bool is_req_active(const struct player *target_player,
   bool eval = FALSE;
 
   /* Note the target may actually not exist.  In particular, effects that
-   * have a VUT_SPECIAL or VUT_TERRAIN may often be passed to this function
+   * have a REQ_SPECIAL or REQ_TERRAIN may often be passed to this function
    * with a city as their target.  In this case the requirement is simply
    * not met. */
-  switch (req->source.kind) {
-  case VUT_NONE:
+  switch (req->source.type) {
+  case REQ_NONE:
     eval = TRUE;
     break;
-  case VUT_ADVANCE:
+  case REQ_TECH:
     /* The requirement is filled if the player owns the tech. */
     eval = is_tech_in_range(target_player, req->range,
-			    advance_number(req->source.value.advance));
+			    req->source.value.tech);
     break;
-  case VUT_GOVERNMENT:
+  case REQ_GOV:
     /* The requirement is filled if the player is using the government. */
-    eval = (government_of_player(target_player) == req->source.value.govern);
+    eval = (government_of_player(target_player) == req->source.value.gov);
     break;
-  case VUT_IMPROVEMENT:
+  case REQ_BUILDING:
     /* The requirement is filled if there's at least one of the building
      * in the city.  (This is a slightly nonstandard use of
      * count_sources_in_range.) */
@@ -988,68 +829,48 @@ bool is_req_active(const struct player *target_player,
 				     req->range, req->survives,
 				     req->source.value.building) > 0);
     break;
-  case VUT_SPECIAL:
+  case REQ_SPECIAL:
     eval = is_special_in_range(target_tile,
 			       req->range, req->survives,
 			       req->source.value.special);
     break;
-  case VUT_TERRAIN:
+  case REQ_TERRAIN:
     eval = is_terrain_in_range(target_tile,
 			       req->range, req->survives,
 			       req->source.value.terrain);
     break;
-  case VUT_NATION:
+  case REQ_NATION:
     eval = is_nation_in_range(target_player, req->range, req->survives,
 			      req->source.value.nation);
     break;
-  case VUT_UTYPE:
+  case REQ_UNITTYPE:
     eval = is_unittype_in_range(target_unittype,
 				req->range, req->survives,
-				req->source.value.utype);
+				req->source.value.unittype);
     break;
-  case VUT_UTFLAG:
+  case REQ_UNITFLAG:
     eval = is_unitflag_in_range(target_unittype,
 				req->range, req->survives,
 				req->source.value.unitflag,
                                 prob_type);
     break;
-  case VUT_UCLASS:
+  case REQ_UNITCLASS:
     eval = is_unitclass_in_range(target_unittype,
 				 req->range, req->survives,
-				 req->source.value.uclass);
+				 req->source.value.unitclass);
     break;
-  case VUT_UCFLAG:
-    eval = is_unitclassflag_in_range(target_unittype,
-				     req->range, req->survives,
-				     req->source.value.unitclassflag);
-    break;
-  case VUT_OTYPE:
+  case REQ_OUTPUTTYPE:
     eval = (target_output
 	    && target_output->index == req->source.value.outputtype);
     break;
-  case VUT_SPECIALIST:
+  case REQ_SPECIALIST:
     eval = (target_specialist
-	    && target_specialist == req->source.value.specialist);
+	    && target_specialist->index == req->source.value.specialist);
     break;
-  case VUT_MINSIZE:
+  case REQ_MINSIZE:
     eval = target_city && target_city->size >= req->source.value.minsize;
     break;
-  case VUT_AI_LEVEL:
-    eval = target_player
-      && target_player->ai.control
-      && target_player->ai.skill_level == req->source.value.ai_level;
-    break;
-  case VUT_TERRAINCLASS:
-    eval = is_terrain_class_in_range(target_tile,
-                                     req->range, req->survives,
-                                     req->source.value.terrainclass);
-    break;
-  case VUT_BASE:
-    eval = is_base_type_in_range(target_tile,
-                                 req->range, req->survives,
-                                 req->source.value.base);
-    break;
-  case VUT_LAST:
+  case REQ_LAST:
     assert(0);
     return FALSE;
   }
@@ -1107,32 +928,28 @@ bool are_reqs_active(const struct player *target_player,
 *****************************************************************************/
 bool is_req_unchanging(const struct requirement *req)
 {
-  switch (req->source.kind) {
-  case VUT_NATION:
-  case VUT_NONE:
-  case VUT_OTYPE:
-  case VUT_SPECIALIST:	/* Only so long as it's at local range only */
-  case VUT_AI_LEVEL:
+  switch (req->source.type) {
+  case REQ_NATION:
+  case REQ_NONE:
+  case REQ_OUTPUTTYPE:
+  case REQ_SPECIALIST: /* Only so long as it's at local range only */
     return TRUE;
-  case VUT_ADVANCE:
-  case VUT_GOVERNMENT:
-  case VUT_IMPROVEMENT:
-  case VUT_MINSIZE:
-  case VUT_UTYPE:	/* Not sure about this one */
-  case VUT_UTFLAG:	/* Not sure about this one */
-  case VUT_UCLASS:	/* Not sure about this one */
-  case VUT_UCFLAG:	/* Not sure about this one */
+  case REQ_TECH:
+  case REQ_GOV:
+  case REQ_BUILDING:
+  case REQ_MINSIZE:
+  case REQ_UNITTYPE: /* Not sure about this one */
+  case REQ_UNITFLAG: /* Not sure about this one */
+  case REQ_UNITCLASS: /* Not sure about this one */
     return FALSE;
-  case VUT_SPECIAL:
-  case VUT_TERRAIN:
-  case VUT_TERRAINCLASS:
-  case VUT_BASE:
-    /* Terrains, specials and bases aren't really unchanging; in fact they're
+  case REQ_SPECIAL:
+  case REQ_TERRAIN:
+    /* Terrains and specials aren't really unchanging; in fact they're
      * practically guaranteed to change.  We return TRUE here for historical
      * reasons and so that the AI doesn't get confused (since the AI
      * doesn't know how to meet special and terrain requirements). */
     return TRUE;
-  case VUT_LAST:
+  case REQ_LAST:
     break;
   }
   assert(0);
@@ -1143,48 +960,40 @@ bool is_req_unchanging(const struct requirement *req)
   Return TRUE iff the two sources are equivalent.  Note this isn't the
   same as an == or memcmp check.
 *****************************************************************************/
-bool are_universals_equal(const struct universal *psource1,
-			  const struct universal *psource2)
+bool are_req_sources_equal(const struct req_source *psource1,
+			   const struct req_source *psource2)
 {
-  if (psource1->kind != psource2->kind) {
+  if (psource1->type != psource2->type) {
     return FALSE;
   }
-  switch (psource1->kind) {
-  case VUT_NONE:
+  switch (psource1->type) {
+  case REQ_NONE:
     return TRUE;
-  case VUT_ADVANCE:
-    return psource1->value.advance == psource2->value.advance;
-  case VUT_GOVERNMENT:
-    return psource1->value.govern == psource2->value.govern;
-  case VUT_IMPROVEMENT:
+  case REQ_TECH:
+    return psource1->value.tech == psource2->value.tech;
+  case REQ_GOV:
+    return psource1->value.gov == psource2->value.gov;
+  case REQ_BUILDING:
     return psource1->value.building == psource2->value.building;
-  case VUT_SPECIAL:
+  case REQ_SPECIAL:
     return psource1->value.special == psource2->value.special;
-  case VUT_TERRAIN:
+  case REQ_TERRAIN:
     return psource1->value.terrain == psource2->value.terrain;
-  case VUT_NATION:
+  case REQ_NATION:
     return psource1->value.nation == psource2->value.nation;
-  case VUT_UTYPE:
-    return psource1->value.utype == psource2->value.utype;
-  case VUT_UTFLAG:
+  case REQ_UNITTYPE:
+    return psource1->value.unittype == psource2->value.unittype;
+  case REQ_UNITFLAG:
     return psource1->value.unitflag == psource2->value.unitflag;
-  case VUT_UCLASS:
-    return psource1->value.uclass == psource2->value.uclass;
-  case VUT_UCFLAG:
-    return psource1->value.unitclassflag == psource2->value.unitclassflag;
-  case VUT_OTYPE:
+  case REQ_UNITCLASS:
+    return psource1->value.unitclass == psource2->value.unitclass;
+  case REQ_OUTPUTTYPE:
     return psource1->value.outputtype == psource2->value.outputtype;
-  case VUT_SPECIALIST:
+  case REQ_SPECIALIST:
     return psource1->value.specialist == psource2->value.specialist;
-  case VUT_MINSIZE:
+  case REQ_MINSIZE:
     return psource1->value.minsize == psource2->value.minsize;
-  case VUT_AI_LEVEL:
-    return psource1->value.ai_level == psource2->value.ai_level;
-  case VUT_TERRAINCLASS:
-    return psource1->value.terrainclass == psource2->value.terrainclass;
-  case VUT_BASE:
-    return psource1->value.base == psource2->value.base;
-  case VUT_LAST:
+  case REQ_LAST:
     break;
   }
   assert(0);
@@ -1192,140 +1001,58 @@ bool are_universals_equal(const struct universal *psource1,
 }
 
 /****************************************************************************
-  Return the (untranslated) rule name of the kind of universal.
-  You don't have to free the return pointer.
-*****************************************************************************/
-const char *universal_kind_name(const struct universal *psource)
-{
-  assert(psource->kind >= 0 && psource->kind < ARRAY_SIZE(universal_names));
-  return universal_names[psource->kind];
-}
-
-/****************************************************************************
-  Return the (untranslated) rule name of the universal.
-  You don't have to free the return pointer.
-*****************************************************************************/
-const char *universal_rule_name(const struct universal *psource)
-{
-  switch (psource->kind) {
-  case VUT_NONE:
-    /* TRANS: missing value */
-    return N_("(none)");
-  case VUT_ADVANCE:
-    return advance_rule_name(psource->value.advance);
-  case VUT_GOVERNMENT:
-    return government_rule_name(psource->value.govern);
-  case VUT_IMPROVEMENT:
-    return improvement_rule_name(psource->value.building);
-  case VUT_SPECIAL:
-    return special_rule_name(psource->value.special);
-  case VUT_TERRAIN:
-    return terrain_rule_name(psource->value.terrain);
-  case VUT_NATION:
-    return nation_rule_name(psource->value.nation);
-  case VUT_UTYPE:
-    return utype_rule_name(psource->value.utype);
-  case VUT_UTFLAG:
-    return unit_flag_rule_name(psource->value.unitflag);
-  case VUT_UCLASS:
-    return uclass_rule_name(psource->value.uclass);
-  case VUT_UCFLAG:
-    return unit_class_flag_rule_name(psource->value.unitclassflag);
-  case VUT_OTYPE:
-    return get_output_name(psource->value.outputtype);
-  case VUT_SPECIALIST:
-    return specialist_rule_name(psource->value.specialist);
-  case VUT_MINSIZE:
-    return N_("Size %d");
-  case VUT_AI_LEVEL:
-    return ai_level_name(psource->value.ai_level);
-  case VUT_TERRAINCLASS:
-    return terrain_class_rule_name(psource->value.terrainclass);
-  case VUT_BASE:
-    return base_rule_name(psource->value.base);
-  case VUT_LAST:
-  default:
-    assert(0);
-    break;
-  }
-
-  return NULL;
-}
-
-/****************************************************************************
   Make user-friendly text for the source.  The text is put into a user
   buffer which is also returned.
 *****************************************************************************/
-const char *universal_name_translation(const struct universal *psource,
-				       char *buf, size_t bufsz)
+char *get_req_source_text(const struct req_source *psource,
+			  char *buf, size_t bufsz)
 {
   buf[0] = '\0'; /* to be safe. */
-  switch (psource->kind) {
-  case VUT_NONE:
+  switch (psource->type) {
+  case REQ_NONE:
     /* TRANS: missing value */
     mystrlcat(buf, _("(none)"), bufsz);
     break;
-  case VUT_ADVANCE:
-    mystrlcat(buf, advance_name_translation(psource->value.advance), bufsz);
+  case REQ_TECH:
+    mystrlcat(buf, advance_name_translation(psource->value.tech), bufsz);
     break;
-  case VUT_GOVERNMENT:
-    mystrlcat(buf, government_name_translation(psource->value.govern), bufsz);
+  case REQ_GOV:
+    mystrlcat(buf, government_name_translation(psource->value.gov), bufsz);
     break;
-  case VUT_IMPROVEMENT:
+  case REQ_BUILDING:
     mystrlcat(buf, improvement_name_translation(psource->value.building), bufsz);
     break;
-  case VUT_SPECIAL:
+  case REQ_SPECIAL:
     mystrlcat(buf, special_name_translation(psource->value.special), bufsz);
     break;
-  case VUT_TERRAIN:
+  case REQ_TERRAIN:
     mystrlcat(buf, terrain_name_translation(psource->value.terrain), bufsz);
     break;
-  case VUT_NATION:
+  case REQ_NATION:
     mystrlcat(buf, nation_adjective_translation(psource->value.nation), bufsz);
     break;
-  case VUT_UTYPE:
-    mystrlcat(buf, utype_name_translation(psource->value.utype), bufsz);
+  case REQ_UNITTYPE:
+    mystrlcat(buf, utype_name_translation(psource->value.unittype), bufsz);
     break;
-  case VUT_UTFLAG:
-    cat_snprintf(buf, bufsz, _("\"%s\" units"),
-		 /* flag names are never translated */
-		 unit_flag_rule_name(psource->value.unitflag));
-    break;
-  case VUT_UCLASS:
+  case REQ_UNITFLAG:
     cat_snprintf(buf, bufsz, _("%s units"),
-		 uclass_name_translation(psource->value.uclass));
-    break;
-  case VUT_UCFLAG:
-    cat_snprintf(buf, bufsz, _("\"%s\" units"),
-		 /* flag names are never translated */
 		 unit_flag_rule_name(psource->value.unitflag));
     break;
-  case VUT_OTYPE:
-    mystrlcat(buf, get_output_name(psource->value.outputtype), bufsz); /* FIXME */
+  case REQ_UNITCLASS:
+    cat_snprintf(buf, bufsz, _("%s units"),
+		 uclass_name_translation(psource->value.unitclass));
     break;
-  case VUT_SPECIALIST:
-    mystrlcat(buf, specialist_name_translation(psource->value.specialist), bufsz);
+  case REQ_OUTPUTTYPE:
+    mystrlcat(buf, get_output_name(psource->value.outputtype), bufsz);
     break;
-  case VUT_MINSIZE:
+  case REQ_SPECIALIST:
+    mystrlcat(buf, get_specialist(psource->value.specialist)->name, bufsz);
+    break;
+  case REQ_MINSIZE:
     cat_snprintf(buf, bufsz, _("Size %d"),
 		 psource->value.minsize);
     break;
-  case VUT_AI_LEVEL:
-    /* TRANS: "Hard AI" */
-    cat_snprintf(buf, bufsz, _("%s AI"),
-                 ai_level_name(psource->value.ai_level)); /* FIXME */
-    break;
-  case VUT_TERRAINCLASS:
-    /* TRANS: "Land terrain" */
-    cat_snprintf(buf, bufsz, _("%s terrain"),
-                 terrain_class_name_translation(psource->value.terrainclass));
-    break;
-  case VUT_BASE:
-    /* TRANS: "Fortress base" */
-    cat_snprintf(buf, bufsz, _("%s base"),
-                 base_name_translation(psource->value.base));
-    break;
-  case VUT_LAST:
+  case REQ_LAST:
     assert(0);
     break;
   }
@@ -1333,26 +1060,11 @@ const char *universal_name_translation(const struct universal *psource,
   return buf;
 }
 
-/****************************************************************************
-  Return untranslated name of the universal source name.
-*****************************************************************************/
-const char *universal_type_rule_name(const struct universal *psource)
-{
-  return universal_names[psource->kind];
-}
 
-/**************************************************************************
-  Return the number of shields it takes to build this universal.
-**************************************************************************/
-int universal_build_shield_cost(const struct universal *target)
+/****************************************************************************
+  Return untranslated name of the requirement source name.
+*****************************************************************************/
+const char *get_req_source_type_name_orig(const struct req_source *psource)
 {
-  switch (target->kind) {
-  case VUT_IMPROVEMENT:
-    return impr_build_shield_cost(target->value.building);
-  case VUT_UTYPE:
-    return utype_build_shield_cost(target->value.utype);
-  default:
-    break;
-  }
-  return FC_INFINITY;
+  return req_source_type_names[psource->type];
 }

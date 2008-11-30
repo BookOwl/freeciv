@@ -22,20 +22,12 @@ struct conn_list;
 struct cm_result;
 
 void city_refresh(struct city *pcity);          /* call if city has changed */
-void city_refresh_for_player(struct player *pplayer); /* tax/govt changed */
-
-void city_refresh_queue_add(struct city *pcity);
-void city_refresh_queue_processing(void);
+void global_city_refresh(struct player *pplayer); /* tax/govt changed */
 
 void auto_arrange_workers(struct city *pcity); /* will arrange the workers */
-void apply_cmresult_to_city(struct city *pcity,
-			    const struct cm_result *const cmr);
+void apply_cmresult_to_city(struct city *pcity, struct cm_result *cmr);
 
-bool city_change_size(struct city *pcity, int new_size);
-bool city_reduce_size(struct city *pcity, int pop_loss,
-                      struct player *destroyer);
-void city_repair_size(struct city *pcity, int change);
-
+bool city_reduce_size(struct city *pcity, int pop_loss);
 void send_global_city_turn_notifications(struct conn_list *dest);
 void send_city_turn_notifications(struct conn_list *dest, struct city *pcity);
 void update_city_activities(struct player *pplayer);

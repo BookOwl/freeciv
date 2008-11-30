@@ -35,6 +35,7 @@
 /* client */
 #include "civclient.h"
 #include "climisc.h"
+#include "clinet.h"
 #include "overview_common.h"
 
 /* gui-sdl */
@@ -2175,8 +2176,8 @@ void button_up_on_map(struct mouse_button_behavior *button_behavior)
               popup_advanced_terrain_dialog(ptile, button_behavior->event->x,
                                                    button_behavior->event->y);
             } else {
-              if(((pCity = tile_city(ptile)) != NULL) &&
-                (city_owner(pCity) == client.conn.playing)) {
+              if(((pCity = ptile->city) != NULL) &&
+                (city_owner(pCity) == game.player_ptr)) {
                 if(LCTRL) {
                   popup_worklist_editor(pCity, &(pCity->worklist));
                 } else {
@@ -2375,15 +2376,10 @@ bool map_event_handler(SDL_keysym Key)
 
       /* *** some additional shortcuts that work in the SDL client only *** */
         
-      /* show city traderoutes	- Ctrl+t 
-       * show terrain 		- Ctrl+Shift+t  */ 
+      /* show terrain - Ctrl+t */ 
       case SDLK_t:
         if (LCTRL || RCTRL) {
-          if (LSHIFT || RSHIFT) {
-            key_terrain_toggle();
-          } else {
-            key_city_traderoutes_toggle();
-          }
+          key_terrain_toggle();
         }
         return FALSE;
   
@@ -2444,15 +2440,10 @@ bool map_event_handler(SDL_keysym Key)
   
       /* (show focus unit) */
       
-      /* show city output - Ctrl+w
-       * show fog of war - Ctrl+Shift+w */
+      /* show fog of war - Ctrl+w */
       case SDLK_w:
         if (LCTRL || RCTRL) {
-          if (LSHIFT || RSHIFT) {
-            key_fog_of_war_toggle();
-          } else {
-            key_city_output_toggle();
-          }
+          key_fog_of_war_toggle();
         }
         return FALSE;
   
@@ -2500,7 +2491,7 @@ static int newcity_ok_callback(struct widget *pOk_Button)
     char *input =
             convert_to_chars(pNewCity_Dlg->pBeginWidgetList->string16->text);
     
-    dsend_packet_unit_build_city(&client.conn, pOk_Button->data.unit->id,
+    dsend_packet_unit_build_city(&aconnection, pOk_Button->data.unit->id,
                                  input);
     FC_FREE(input);
   

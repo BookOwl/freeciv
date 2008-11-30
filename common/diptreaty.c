@@ -91,6 +91,7 @@ void clear_treaty(struct Treaty *ptreaty)
   clause_list_iterate(ptreaty->clauses, pclause) {
     free(pclause);
   } clause_list_iterate_end;
+  clause_list_unlink_all(ptreaty->clauses);
   clause_list_free(ptreaty->clauses);
 }
 
@@ -132,7 +133,7 @@ bool add_clause(struct Treaty *ptreaty, struct player *pfrom,
     return FALSE;
   }
 
-  if (type == CLAUSE_ADVANCE && !valid_advance_by_number(val)) {
+  if (type == CLAUSE_ADVANCE && !tech_exists(val)) {
     freelog(LOG_ERROR, "Illegal tech value %i in clause.", val);
     return FALSE;
   }

@@ -19,7 +19,6 @@
 #include <string.h>
 
 #include "astring.h"
-#include "fcintl.h"
 #include "log.h"
 #include "packets.h"
 #include "support.h"
@@ -27,8 +26,7 @@
 #include "chatline_g.h"
 
 #include "chatline_common.h"
-#include "civclient.h"
-
+#include "clinet.h"
 
 /* Stored up buffer of lines for the chatline */
 struct remaining {
@@ -64,27 +62,8 @@ void chatline_common_done(void)
 **************************************************************************/
 void send_chat(const char *message)
 {
-  dsend_packet_chat_msg_req(&client.conn, message);
+  dsend_packet_chat_msg_req(&aconnection, message);
 }
-
-/**************************************************************************
-  Send the message as a chat to the server. Message is constructed
-  in printf style.
-**************************************************************************/
-void send_chat_printf(const char *format, ...)
-{
-  char msg[250];
-  int maxlen = sizeof(msg);
-
-  va_list ap;
-  va_start(ap, format);
-  /* FIXME: terminating like this can lead to invalid utf-8, a major no-no. */
-  my_vsnprintf(msg, maxlen, format, ap);
-  msg[maxlen - 1] = '\0'; /* Make sure there is always ending zero */
-  send_chat(msg);
-  va_end(ap);
-}
-
 
 static int frozen_level = 0;
 
@@ -116,7 +95,7 @@ void output_window_thaw()
       free(pline->text);
       free(pline);
     } remaining_list_iterate_end;
-    remaining_list_clear(remains);
+    remaining_list_unlink_all(remains);
   }
 }
 
@@ -154,15 +133,4 @@ void append_output_window_full(const char *astring, int conn_id)
     premain->text = mystrdup(astring);
     premain->conn_id = conn_id;
   }
-}
-
-/****************************************************************************
-  Standard welcome message.
-****************************************************************************/
-void chat_welcome_message(void)
-{
-  append_output_window(_("Freeciv is free software and you are welcome to "
-			 "distribute copies of it under certain conditions;"));
-  append_output_window(_("See the \"Copying\" item on the Help menu."));
-  append_output_window(_("Now ... Go give 'em hell!"));
 }

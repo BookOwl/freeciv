@@ -26,6 +26,7 @@
 #include "timing.h"
 
 #include "civclient.h"
+#include "clinet.h"
 #include "cma_core.h"
 #include "cma_fec.h"
 #include "mapctrl_g.h"
@@ -154,7 +155,7 @@ static void enqueue_call(struct my_agent *agent,
   call_list_prepend(agents.calls, pcall2);
 
   if (DEBUG_TODO_LISTS) {
-    freelog(LOG_TEST, "A: adding call");
+    freelog(LOG_NORMAL, "A: adding call");
   }
 
   update_turn_done_button_state();
@@ -190,7 +191,7 @@ static struct call *remove_and_return_a_call(void)
   call_list_unlink(agents.calls, result);
 
   if (DEBUG_TODO_LISTS) {
-    freelog(LOG_TEST, "A: removed call");
+    freelog(LOG_NORMAL, "A: removed call");
   }
   return result;
 }
@@ -260,7 +261,7 @@ static void freeze(void)
     initialized = TRUE;
   }
   if (DEBUG_FREEZE) {
-    freelog(LOG_TEST, "A: freeze() current level=%d", frozen_level);
+    freelog(LOG_NORMAL, "A: freeze() current level=%d", frozen_level);
   }
   frozen_level++;
 }
@@ -272,7 +273,7 @@ static void freeze(void)
 static void thaw(void)
 {
   if (DEBUG_FREEZE) {
-    freelog(LOG_TEST, "A: thaw() current level=%d", frozen_level);
+    freelog(LOG_NORMAL, "A: thaw() current level=%d", frozen_level);
   }
   frozen_level--;
   assert(frozen_level >= 0);
@@ -304,17 +305,17 @@ static struct my_agent *find_agent_by_name(const char *agent_name)
 static bool is_outstanding_request(struct my_agent *agent)
 {
   if (agent->first_outstanding_request_id != 0 &&
-      client.conn.client.request_id_of_currently_handled_packet != 0 &&
+      aconnection.client.request_id_of_currently_handled_packet != 0 &&
       agent->first_outstanding_request_id <=
-      client.conn.client.request_id_of_currently_handled_packet &&
+      aconnection.client.request_id_of_currently_handled_packet &&
       agent->last_outstanding_request_id >=
-      client.conn.client.request_id_of_currently_handled_packet) {
+      aconnection.client.request_id_of_currently_handled_packet) {
     freelog(LOG_DEBUG,
 	    "A:%s: ignoring packet; outstanding [%d..%d] got=%d",
 	    agent->agent.name,
 	    agent->first_outstanding_request_id,
 	    agent->last_outstanding_request_id,
-	    client.conn.client.request_id_of_currently_handled_packet);
+	    aconnection.client.request_id_of_currently_handled_packet);
     return TRUE;
   }
   return FALSE;
@@ -602,10 +603,10 @@ void agents_city_changed(struct city *pcity)
 {
   int i;
 
-  freelog(LOG_DEBUG, "A: agents_city_changed(city %d=\"%s\") owner=%s",
-	  pcity->id,
+  freelog(LOG_DEBUG, "A: agents_city_changed(city='%s'(%d)) owner=%s",
 	  city_name(pcity),
-	  nation_rule_name(nation_of_city(pcity)));
+	  pcity->id,
+	  player_name(city_owner(pcity)));
 
   for (i = 0; i < agents.entries_used; i++) {
     struct my_agent *agent = &agents.entries[i];
@@ -630,11 +631,9 @@ void agents_city_new(struct city *pcity)
   int i;
 
   freelog(LOG_DEBUG,
-	  "A: agents_city_new(city %d=\"%s\") pos=(%d,%d) owner=%s",
-	  pcity->id,
-	  city_name(pcity),
-	  TILE_XY(pcity->tile),
-	  nation_rule_name(nation_of_city(pcity)));
+	  "A: agents_city_new(city='%s'(%d)) pos=(%d,%d) owner=%s",
+	  city_name(pcity), pcity->id, TILE_XY(pcity->tile),
+	  player_name(city_owner(pcity)));
 
   for (i = 0; i < agents.entries_used; i++) {
     struct my_agent *agent = &agents.entries[i];
@@ -659,11 +658,9 @@ void agents_city_remove(struct city *pcity)
   int i;
 
   freelog(LOG_DEBUG,
-	  "A: agents_city_remove(city %d=\"%s\") pos=(%d,%d) owner=%s",
-	  pcity->id,
-	  city_name(pcity),
-	  TILE_XY(pcity->tile),
-	  nation_rule_name(nation_of_city(pcity)));
+	  "A: agents_city_remove(city='%s'(%d)) pos=(%d,%d) owner=%s",
+	  city_name(pcity), pcity->id, TILE_XY(pcity->tile),
+	  player_name(city_owner(pcity)));
 
   for (i = 0; i < agents.entries_used; i++) {
     struct my_agent *agent = &agents.entries[i];
@@ -762,7 +759,7 @@ void wait_for_requests(const char *agent_name, int first_request_id,
   struct my_agent *agent = find_agent_by_name(agent_name);
 
   if (DEBUG_REQUEST_IDS) {
-    freelog(LOG_TEST, "A:%s: wait_for_request(ids=[%d..%d])",
+    freelog(LOG_NORMAL, "A:%s: wait_for_request(ids=[%d..%d])",
 	    agent->agent.name, first_request_id, last_request_id);
   }
 
@@ -781,7 +778,7 @@ void wait_for_requests(const char *agent_name, int first_request_id,
       (1 + (last_request_id - first_request_id));
 
   if (DEBUG_REQUEST_IDS) {
-    freelog(LOG_TEST, "A:%s: wait_for_request: ids=[%d..%d]; got it",
+    freelog(LOG_NORMAL, "A:%s: wait_for_request: ids=[%d..%d]; got it",
 	    agent->agent.name, first_request_id, last_request_id);
   }
 

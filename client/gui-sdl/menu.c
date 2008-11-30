@@ -30,7 +30,6 @@
 #include "log.h"
 
 /* common */
-#include "game.h"
 #include "unitlist.h"
 
 /* client */
@@ -950,7 +949,7 @@ void update_menus(void)
       hide_group(pBeginOrderWidgetList, pEndOrderWidgetList);
     }
 
-  } else if (NULL == client.conn.playing) {
+  } else if (!game.player_ptr) {
     
     /* running state, but AI is playing */
     
@@ -1003,9 +1002,6 @@ void update_menus(void)
       struct city *pHomecity;
       int time;
       struct tile *pTile = pUnit->tile;
-      struct city *pCity = tile_city(pTile);
-      struct terrain *pTerrain = tile_terrain(pTile);
-      struct base_type *pbase;
       
       if (!counter) {
 	local_show(ID_UNIT_ORDER_GOTO);
@@ -1019,7 +1015,7 @@ void update_menus(void)
        * get an eventual error message from the server if we try. */
 
       if (can_unit_add_or_build_city(pUnit)) {
-	if(pCity) {
+	if(pTile->city) {
 	  my_snprintf(cBuf, sizeof(cBuf),"%s (%s)", _("Add to City"), "B");
 	} else {
 	  my_snprintf(cBuf, sizeof(cBuf),"%s (%s)", _("Build New City"), "B");
@@ -1058,17 +1054,17 @@ void update_menus(void)
       }
       
 	/* unit_can_est_traderoute_here(pUnit) */
-      if (pCity && unit_has_type_flag(pUnit, F_TRADE_ROUTE)
+      if (pTile->city && unit_has_type_flag(pUnit, F_TRADE_ROUTE)
         && (pHomecity = game_find_city_by_number(pUnit->homecity))
-	&& can_cities_trade(pHomecity, pCity)) {
-	int revenue = get_caravan_enter_city_trade_bonus(pHomecity, pCity);
+	&& can_cities_trade(pHomecity, pTile->city)) {
+	int revenue = get_caravan_enter_city_trade_bonus(pHomecity, pTile->city);
 	
-        if (can_establish_trade_route(pHomecity, pCity)) {
+        if (can_establish_trade_route(pHomecity, pTile->city)) {
           my_snprintf(cBuf, sizeof(cBuf),
                       _("Form Traderoute with %s ( %d R&G + %d trade ) (R)"),
                       city_name(pHomecity),
                       revenue,
-                      trade_between_cities(pHomecity, pCity));
+                      trade_between_cities(pHomecity, pTile->city));
         } else {
           revenue = (revenue + 2) / 3;
           my_snprintf(cBuf, sizeof(cBuf),
@@ -1085,18 +1081,18 @@ void update_menus(void)
       if (can_unit_do_activity(pUnit, ACTIVITY_IRRIGATE)) {
 	time = tile_activity_time(ACTIVITY_IRRIGATE, pUnit->tile);
 
-        if (!strcmp(terrain_rule_name(pTerrain), "Forest") ||
-          !strcmp(terrain_rule_name(pTerrain), "Jungle")) {
+        if (!strcmp(terrain_rule_name(pTile->terrain), "Forest") ||
+          !strcmp(terrain_rule_name(pTile->terrain), "Jungle")) {
 	  /* set Crop Forest Icon */
 	  my_snprintf(cBuf, sizeof(cBuf),"%s %s (%s) %d %s",
 			_("Cut Down to"),
-                terrain_name_translation(pTerrain->irrigation_result)
+                terrain_name_translation(pTile->terrain->irrigation_result)
 			,"I", time , PL_("turn", "turns", time));
 	  pOrder_Irrigation_Button->theme = pTheme->OCutDownForest_Icon;
-        }	else if (!strcmp(terrain_rule_name(pTerrain), "Swamp")) {
+        }	else if (!strcmp(terrain_rule_name(pTile->terrain), "Swamp")) {
 	  my_snprintf(cBuf, sizeof(cBuf),"%s %s (%s) %d %s",
 			_("Irrigate to"),
-                terrain_name_translation(pTerrain->irrigation_result)
+                terrain_name_translation(pTile->terrain->irrigation_result)
 			,"I", time , PL_("turn", "turns", time));
 	  pOrder_Irrigation_Button->theme = pTheme->OIrrigation_Icon;
         } else {
@@ -1116,18 +1112,17 @@ void update_menus(void)
       if (can_unit_do_activity(pUnit, ACTIVITY_MINE)) {
 	time = tile_activity_time(ACTIVITY_MINE, pUnit->tile);
 
-	/* FIXME: THIS CODE IS WRONG */
-   if (!strcmp(terrain_rule_name(pTerrain), "Forest")) {  
+   if (!strcmp(terrain_rule_name(pTile->terrain), "Forest")) {  
 	  /* set Irrigate Icon -> make swamp */
 	  my_snprintf(cBuf, sizeof(cBuf),"%s %s (%s) %d %s",
 			_("Irrigate to"),
-			terrain_name_translation(pTerrain->mining_result)
+			terrain_name_translation(pTile->terrain->mining_result)
 			,"M", time , PL_("turn", "turns", time));
 	  pOrder_Mine_Button->theme = pTheme->OIrrigation_Icon;
-   } else if (!strcmp(terrain_rule_name(pTerrain), "Jungle") ||
-              !strcmp(terrain_rule_name(pTerrain), "Plains") ||
-              !strcmp(terrain_rule_name(pTerrain), "Grassland") ||
-              !strcmp(terrain_rule_name(pTerrain), "Swamp")) {
+   } else if (!strcmp(terrain_rule_name(pTile->terrain), "Jungle") ||
+              !strcmp(terrain_rule_name(pTile->terrain), "Plains") ||
+              !strcmp(terrain_rule_name(pTile->terrain), "Grassland") ||
+              !strcmp(terrain_rule_name(pTile->terrain), "Swamp")) {
 	  /* set Forest Icon -> plant Forrest*/
 	  my_snprintf(cBuf, sizeof(cBuf),"%s (%s) %d %s",
 			_("Plant Forest"), "M", time , 
@@ -1152,7 +1147,7 @@ void update_menus(void)
 	time = tile_activity_time(ACTIVITY_TRANSFORM, pUnit->tile);
 	my_snprintf(cBuf, sizeof(cBuf),"%s %s (%s) %d %s",
 	  _("Transform to"),
-	  terrain_name_translation(pTerrain->transform_result),
+	  terrain_name_translation(pTile->terrain->transform_result),
 			"M", time , 
 			PL_("turn", "turns", time));
 	copy_chars_to_string16(pOrder_Transform_Button->string16, cBuf);
@@ -1161,8 +1156,7 @@ void update_menus(void)
 	set_wflag(pOrder_Transform_Button, WF_HIDDEN);
       }
 
-      pbase = get_base_by_gui_type(BASE_GUI_FORTRESS, pUnit, pUnit->tile);
-      if (!pCity && pbase) {
+      if (!pTile->city && can_unit_do_activity(pUnit, ACTIVITY_FORTRESS)) {
 	local_show(ID_UNIT_ORDER_FORTRESS);
       } else {
 	local_hide(ID_UNIT_ORDER_FORTRESS);
@@ -1174,8 +1168,7 @@ void update_menus(void)
 	local_hide(ID_UNIT_ORDER_FORTIFY);
       }
 
-      pbase = get_base_by_gui_type(BASE_GUI_AIRBASE, pUnit, pUnit->tile);
-      if (!pCity && pbase) {
+      if (!pTile->city && can_unit_do_activity(pUnit, ACTIVITY_AIRBASE)) {
 	local_show(ID_UNIT_ORDER_AIRBASE);
       } else {
 	local_hide(ID_UNIT_ORDER_AIRBASE);
@@ -1211,8 +1204,8 @@ void update_menus(void)
 	local_hide(ID_UNIT_ORDER_PILLAGE);
       }
 
-      if (pCity && can_unit_change_homecity(pUnit)
-	&& pCity->id != pUnit->homecity) {
+      if (pTile->city && can_unit_change_homecity(pUnit)
+	&& pTile->city->id != pUnit->homecity) {
 	local_show(ID_UNIT_ORDER_HOMECITY);
       } else {
 	local_hide(ID_UNIT_ORDER_HOMECITY);
@@ -1298,8 +1291,8 @@ void update_menus(void)
 	local_hide(ID_UNIT_ORDER_NUKE);
       }
 
-/*      if (pCity && has_city_airport(pCity) && pCity->airlift) {*/
-      if (pCity && pCity->airlift) {      
+/*      if (pTile->city && has_city_airport(pTile->city) && pTile->city->airlift) {*/
+      if (pTile->city && pTile->city->airlift) {      
 	local_show(ID_UNIT_ORDER_AIRLIFT);
 	hide(ID_UNIT_ORDER_GOTO_CITY);
       } else {
@@ -1307,7 +1300,7 @@ void update_menus(void)
 	local_hide(ID_UNIT_ORDER_AIRLIFT);
       }
 
-      if (pCity && can_upgrade_unittype(client.conn.playing, unit_type(pUnit))) {
+      if (pTile->city && can_upgrade_unittype(game.player_ptr, unit_type(pUnit))) {
 	local_show(ID_UNIT_ORDER_UPGRADE);
       } else {
 	local_hide(ID_UNIT_ORDER_UPGRADE);

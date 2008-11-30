@@ -27,6 +27,7 @@
 #include <png.h>
 
 #include "fcintl.h"
+#include "game.h"
 #include "log.h"
 #include "mem.h"
 #include "movement.h"
@@ -35,7 +36,6 @@
 #include "unit.h"
 #include "version.h"
 
-#include "civclient.h"
 #include "climisc.h"
 #include "colors.h"
 #include "gui_main.h"
@@ -340,24 +340,24 @@ struct sprite *load_gfxfile(const char *filename)
 
   fp = fopen(filename, "rb");
   if (!fp) {
-    freelog(LOG_FATAL, "Failed reading PNG file: \"%s\"", filename);
+    freelog(LOG_FATAL, _("Failed reading PNG file: %s"), filename);
     exit(EXIT_FAILURE);
   }
 
   pngp = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
   if (!pngp) {
-    freelog(LOG_FATAL, "Failed creating PNG struct");
+    freelog(LOG_FATAL, _("Failed creating PNG struct"));
     exit(EXIT_FAILURE);
   }
 
   infop = png_create_info_struct(pngp);
   if (!infop) {
-    freelog(LOG_FATAL, "Failed creating PNG struct");
+    freelog(LOG_FATAL, _("Failed creating PNG struct"));
     exit(EXIT_FAILURE);
   }
   
   if (setjmp(pngp->jmpbuf)) {
-    freelog(LOG_FATAL, "Failed while reading PNG file: \"%s\"", filename);
+    freelog(LOG_FATAL, _("Failed while reading PNG file: %s"), filename);
     exit(EXIT_FAILURE);
   }
 
@@ -394,7 +394,7 @@ struct sprite *load_gfxfile(const char *filename)
 
       free(mycolors);
     } else {
-      freelog(LOG_FATAL, "PNG file has no palette: \"%s\"", filename);
+      freelog(LOG_FATAL, _("PNG file has no palette: %s"), filename);
       exit(EXIT_FAILURE);
     }
 
@@ -411,7 +411,7 @@ struct sprite *load_gfxfile(const char *filename)
 	  ptransarray[trans[i]] = TRUE;
 	} else if (!reported) {
 	  freelog(LOG_VERBOSE,
-		  "PNG: Transparent array entry is out of palette: \"%s\"",
+		  "PNG: Trasparent array entry is out of palette. File: %s",
 		  filename);
 	  reported = TRUE;
 	}
@@ -455,7 +455,7 @@ struct sprite *load_gfxfile(const char *filename)
       png_destroy_read_struct(&pngp, &infop, (png_infopp)NULL);
     } else {
       freelog(LOG_ERROR,
-	      "PNG info struct is NULL (non-fatal): \"%s\"",
+	      "Error: PNG info struct is NULL (non-fatal). File: %s",
 	      filename);
       png_destroy_read_struct(&pngp, (png_infopp)NULL, (png_infopp)NULL);
     }
@@ -579,23 +579,12 @@ Pixmap create_overlay_unit(const struct unit_type *punittype)
 
   /* Give tile a background color, based on the type of unit */
   /* Should there be colors like COLOR_MAPVIEW_LAND etc? -ev */
-  switch (unit_color_type(punittype)) {
-    case UNIT_BG_LAND:
-      bg_color = COLOR_OVERVIEW_LAND;
-      break;
-    case UNIT_BG_SEA:
-      bg_color = COLOR_OVERVIEW_OCEAN;
-      break;
-    case UNIT_BG_HP_LOSS:
-    case UNIT_BG_AMPHIBIOUS:
-      bg_color = COLOR_OVERVIEW_MY_UNIT;
-      break;
-    case UNIT_BG_FLYING:
-      bg_color = COLOR_OVERVIEW_ENEMY_CITY;
-      break;
-    default:
-      bg_color = COLOR_OVERVIEW_UNKNOWN;
-      break;
+  switch (punittype->move_type) {
+    case LAND_MOVING: bg_color = COLOR_OVERVIEW_LAND; break;
+    case SEA_MOVING:  bg_color = COLOR_OVERVIEW_OCEAN; break;
+    case HELI_MOVING: bg_color = COLOR_OVERVIEW_MY_UNIT; break;
+    case AIR_MOVING:  bg_color = COLOR_OVERVIEW_ENEMY_CITY; break;
+    default:          bg_color = COLOR_OVERVIEW_UNKNOWN; break;
   }
   XSetForeground(display, fill_bg_gc,
 		 get_color(tileset, bg_color)->color.pixel);
@@ -604,7 +593,7 @@ Pixmap create_overlay_unit(const struct unit_type *punittype)
 
   /* If we're using flags, put one on the tile */
   if(!solid_color_behind_units)  {
-    struct sprite *flag = get_nation_flag_sprite(tileset, nation_of_player(client.conn.playing));
+    struct sprite *flag=get_nation_flag_sprite(tileset,nation_of_player(game.player_ptr));
 
     XSetClipOrigin(display, civ_gc, 0,0);
     XSetClipMask(display, civ_gc, flag->mask);
@@ -614,7 +603,7 @@ Pixmap create_overlay_unit(const struct unit_type *punittype)
   }
 
   /* Finally, put a picture of the unit in the tile */
-/*  if(i<utype_count()) */ {
+/*  if(i<game.control.num_unit_types) { */
     struct sprite *s = get_unittype_sprite(tileset, punittype);
 
     XSetClipOrigin(display,civ_gc,0,0);
@@ -622,7 +611,8 @@ Pixmap create_overlay_unit(const struct unit_type *punittype)
     XCopyArea(display, s->pixmap, pm, civ_gc,
 	      0,0, s->width,s->height, 0,0 );
     XSetClipMask(display,civ_gc,None);
-  }
+/*  } */
+
   return(pm);
 }
 

@@ -42,8 +42,7 @@
 #include "spaceship.h"
 #include "support.h"
 
-#include "civclient.h"
-#include "climisc.h"
+#include "clinet.h"
 #include "colors.h"
 #include "dialogs.h"
 #include "graphics.h"
@@ -56,6 +55,7 @@
 #include "repodlgs.h"
 #include "text.h"
 #include "tilespec.h"
+#include "climisc.h"
 
 #include "spaceshipdlg.h"
 
@@ -124,7 +124,7 @@ void refresh_spaceship_dialog(struct player *pplayer)
   pship=&(pdialog->pplayer->spaceship);
 
   if (game.info.spacerace
-     && pplayer == client.conn.playing
+     && pplayer->player_no == game.info.player_idx
      && pship->state == SSHIP_STARTED
      && pship->success_rate > 0) {
     XtSetSensitive(pdialog->launch_command, TRUE);
@@ -323,6 +323,6 @@ void spaceship_close_callback(Widget w, XtPointer client_data, XtPointer call_da
 void spaceship_launch_callback(Widget w, XtPointer client_data,
 			       XtPointer call_data)
 {
-  send_packet_spaceship_launch(&client.conn);
+  send_packet_spaceship_launch(&aconnection);
   /* close_spaceship_dialog((struct spaceship_dialog *)client_data); */
 }
