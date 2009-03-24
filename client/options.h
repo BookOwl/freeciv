@@ -38,7 +38,6 @@ extern bool do_combat_animation;
 extern bool ai_manual_turn_done;
 extern bool auto_center_on_unit;
 extern bool auto_center_on_combat;
-extern bool auto_center_each_turn;
 extern bool wakeup_focus;
 extern bool goto_into_unknown;
 extern bool center_when_popup_city;
@@ -57,24 +56,10 @@ extern bool enable_cursor_changes;
 extern bool separate_unit_selection;
 extern bool unit_selection_clears_orders;
 
-extern char font_city_label[512];
-extern char font_notify_label[512];
-extern char font_spaceship_label[512];
-extern char font_help_label[512];
-extern char font_help_link[512];
-extern char font_help_text[512];
-extern char font_chatline[512];
-extern char font_beta_label[512];
-extern char font_small[512];
-extern char font_comment_label[512];
-extern char font_city_names[512];
-extern char font_city_productions[512];
-
 enum client_option_type {
   COT_BOOL,
   COT_INT,
-  COT_STR,
-  COT_FONT
+  COT_STR
 };
 
 enum client_option_class {
@@ -83,7 +68,6 @@ enum client_option_class {
   COC_SOUND,
   COC_INTERFACE,
   COC_NETWORK,
-  COC_FONT,
   COC_MAX
 };
 
@@ -122,9 +106,6 @@ typedef struct client_option {
 #define GEN_STR_OPTION(oname, desc, help, category, str_defaults, callback) \
   { #oname, desc, help, category, COT_STR,			    \
       NULL, NULL, oname, sizeof(oname), callback, str_defaults, NULL }
-#define GEN_FONT_OPTION(value, oname, desc, help, category) \
-  { #oname, desc, help, category, COT_FONT,		    \
-      NULL, NULL, value, sizeof(value), NULL, NULL, NULL }
 
 /* Initialization and iteration */
 struct client_option *client_option_array_first(void);
@@ -148,7 +129,6 @@ extern client_option gui_options[];
 /** View Options: **/
 
 extern bool draw_city_outlines;
-extern bool draw_city_output;
 extern bool draw_map_grid;
 extern bool draw_city_names;
 extern bool draw_city_growth;
@@ -173,7 +153,6 @@ extern bool draw_unit_shields;
 
 extern bool player_dlg_show_dead_players;
 extern bool reqtree_show_icons;
-extern bool reqtree_curved_lines;
 
 typedef struct {
   const char *name;

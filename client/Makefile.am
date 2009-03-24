@@ -4,8 +4,6 @@
 ##    SUBDIRS = $(gui_sources)
 ## but that doesn't work properly for "make dist"
 
-noinst_LTLIBRARIES = libfreeciv-client.la
-
 if CLIENT_GUI_SDL
 GUI_SUBDIR = gui-sdl
 endif
@@ -26,7 +24,7 @@ GUI_SUBDIR = gui-win32
 endif
 if CLIENT_GUI_FTWL
 GUI_SUBDIR = gui-ftwl
-LIBFTWL = $(top_builddir)/utility/ftwl/libftwl.la
+LIBFTWL = ../utility/ftwl/libftwl.a
 endif
 
 ALL_AUDIO_SDL_FILES=audio_sdl.c audio_sdl.h
@@ -39,7 +37,9 @@ if MINGW32
 CLIENTICON=../win32/clienticon.o
 endif
 
-EXTRA_DIST= $(ALL_AUDIO_SDL_FILES)
+EXTRA_DIST= \
+	$(ALL_AUDIO_SDL_FILES)
+
 
 ## This is usually false, so "include" is not recursed into 
 ## by 'make', but it can be enabled in configure, and it is
@@ -55,20 +55,19 @@ SUBDIRS = $(GUI_SUBDIR) $(CLI_INCLUDE) agents
 
 bin_PROGRAMS = civclient
 
-AM_CPPFLAGS = -I$(top_srcdir)/utility -I$(srcdir)/include -I$(top_srcdir)/common -I$(top_srcdir)/common/aicore -I$(srcdir)/agents $(CLIENT_CFLAGS) $(SOUND_CFLAGS) $(LIBGGZ_INCLUDES) $(GGZMOD_INCLUDES) $(GGZ_GTK_INCLUDES)
+AM_CPPFLAGS = -I$(top_srcdir)/utility -I$(srcdir)/include -I$(top_srcdir)/common -I$(top_srcdir)/common/aicore -I../intl -I$(srcdir)/agents $(CLIENT_CFLAGS) $(SOUND_CFLAGS) $(LIBGGZ_INCLUDES) $(GGZMOD_INCLUDES) $(GGZ_GTK_INCLUDES)
 
-# Build client common functionality in to library
-# instead linking them directly to civclient. This is necessary
-# for static linking.
-libfreeciv_client_la_SOURCES = $(AUDIO_SDL_FILES) \
+## Above, note -I../intl instead of -I$(top_srdir/intl) is deliberate.
+
+civclient_SOURCES = $(AUDIO_SDL_FILES) \
 	attribute.h	\
 	attribute.c	\
 	citydlg_common.c \
 	citydlg_common.h \
 	cityrepdata.c	\
 	cityrepdata.h	\
-	client_main.c	\
-	client_main.h	\
+	civclient.c	\
+	civclient.h	\
 	chatline_common.c \
 	chatline_common.h \
 	connectdlg_common.c \
@@ -83,8 +82,6 @@ libfreeciv_client_la_SOURCES = $(AUDIO_SDL_FILES) \
 	colors_common.h		\
 	control.c	\
 	control.h	\
-	editor.c 		\
-	editor.h 		\
 	ggzclient.c	\
 	ggzclient.h	\
 	goto.c		\
@@ -124,37 +121,16 @@ libfreeciv_client_la_SOURCES = $(AUDIO_SDL_FILES) \
 	audio_none.c    \
 	audio_none.h
 
-# packhand_gen.c & packhand_gen.h are generated files, but as they are
-# generated outside this directory (when building common) there's no point in
-# setting them to BUILT_SOURCES.
-
-# Automake requires binary to have some sources directly.
-civclient_SOURCES = \
-	civclient.c
-
-# There is no dependency against changes to gui_sources -variable.
-# There might be no relinking with correct gui, if it already exist
-# and is not recompiled.
-libfreeciv_client_la_DEPENDENCIES = \
- $(top_builddir)/client/agents/libagents.la \
- $(gui_sources)/libguiclient.la
-
-libfreeciv_client_la_LIBADD = \
- $(top_builddir)/client/agents/libagents.la \
- $(gui_sources)/libguiclient.la
-
-fc_civclient_libs = \
- ./libfreeciv-client.la		\
- $(LIBFTWL)			\
- $(top_builddir)/common/libfreeciv.la
 civclient_LDFLAGS = $(CLIENT_LDFLAGS) $(GGZMOD_LDFLAGS)
+fc_civclient_libs =	../utility/libcivutility.a	\
+			$(LIBFTWL)			\
+			../common/libcivcommon.a	\
+			../common/aicore/libaicore.a	\
+			agents/libagents.a		\
+		 	$(gui_sources)/libguiclient.a
 civclient_DEPENDENCIES = $(fc_civclient_libs)
-civclient_LDADD = \
- $(fc_civclient_libs) \
- $(fc_civclient_libs) \
- $(INTLLIBS) $(CLIENT_LIBS) $(SOUND_LIBS) $(LIB_GGZMOD) \
- $(fc_civclient_libs) \
- $(INTLLIBS) $(CLIENT_LIBS) $(SOUND_LIBS) $(LIB_GGZMOD) $(CLIENTICON)
+civclient_LDADD        = $(fc_civclient_libs) $(fc_civclient_libs) \
+	$(INTLLIBS) $(CLIENT_LIBS) $(SOUND_LIBS) $(LIB_GGZMOD) $(CLIENTICON)
 desktopfiledir = $(prefix)/share/applications
 desktopfile_DATA = \
 	freeciv.desktop

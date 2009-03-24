@@ -1,10 +1,12 @@
 ## Process this file with automake to produce Makefile.in
 
-noinst_LTLIBRARIES = libguiclient.la
+noinst_LIBRARIES = libguiclient.a
 
-AM_CPPFLAGS = -I$(srcdir)/.. -I$(srcdir)/../include -I$(top_srcdir)/utility -I$(top_srcdir)/common -I$(top_srcdir)/common/aicore -I$(srcdir)/../agents $(CLIENT_CFLAGS) $(SOUND_CFLAGS)
+AM_CPPFLAGS = -I$(srcdir)/.. -I$(srcdir)/../include -I$(top_srcdir)/utility -I$(top_srcdir)/common -I$(top_srcdir)/common/aicore -I../../intl -I$(srcdir)/../agents $(CLIENT_CFLAGS)
 
-libguiclient_la_SOURCES = \
+## Above, note -I../../intl instead of -I$(top_srdir/intl) is deliberate.
+
+libguiclient_a_SOURCES = \
 	SDL_rotozoom.c	\
 	SDL_rotozoom.h	\
 	SDL_ttf.c	\

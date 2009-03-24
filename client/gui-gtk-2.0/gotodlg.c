@@ -22,7 +22,6 @@
 #include <gtk/gtk.h>
 #include <gdk/gdkkeysyms.h>
 
-/* common & utility */
 #include "fcintl.h"
 #include "game.h"
 #include "map.h"
@@ -32,8 +31,8 @@
 #include "unit.h"
 #include "unitlist.h"
 
-/* client */
-#include "client_main.h"
+#include "clinet.h"
+#include "civclient.h"
 #include "control.h"
 #include "goto.h"
 #include "options.h"
@@ -238,6 +237,7 @@ static struct city *get_selected_city(void)
 **************************************************************************/
 static void update_goto_dialog(GtkToggleButton *button)
 {
+  int i, j;
   GtkTreeIter it;
   gboolean all_cities;
 
@@ -245,18 +245,18 @@ static void update_goto_dialog(GtkToggleButton *button)
 
   gtk_list_store_clear(store);
 
-  players_iterate(pplayer) {
-    if (!all_cities && pplayer != client.conn.playing) {
+  for(i = 0, j = 0; i < game.info.nplayers; i++) {
+    if (!all_cities && i != game.info.player_idx)
       continue;
-    }
 
-    city_list_iterate(pplayer->cities, pcity) {
+    city_list_iterate(game.players[i].cities, pcity) {
       gtk_list_store_append(store, &it);
 
       /* FIXME: should use unit_can_airlift_to(). */
       gtk_list_store_set(store, &it, 0, city_name(pcity), 1, pcity->airlift, -1);
-    } city_list_iterate_end;
-  } players_iterate_end;
+    }
+    city_list_iterate_end;
+  }
 }
 
 /**************************************************************************

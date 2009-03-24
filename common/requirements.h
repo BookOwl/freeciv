@@ -15,10 +15,28 @@
 #define FC__REQUIREMENTS_H
 
 #include "fc_types.h"
-
 #include "tech.h"
 #include "terrain.h"
 #include "unittype.h"
+
+/* The type of a requirement source.  This must correspond to req_type_names[]
+ * in requirements.c. */
+enum req_source_type {
+  REQ_NONE,
+  REQ_TECH,
+  REQ_GOV,
+  REQ_BUILDING,
+  REQ_SPECIAL,
+  REQ_TERRAIN,
+  REQ_NATION,
+  REQ_UNITTYPE,
+  REQ_UNITFLAG,
+  REQ_UNITCLASS,
+  REQ_OUTPUTTYPE,
+  REQ_SPECIALIST,
+  REQ_MINSIZE, /* Minimum size: at city range means city size */
+  REQ_LAST
+};
 
 /* Range of requirements.  This must correspond to req_range_names[]
  * in requirements.c. */
@@ -32,13 +50,33 @@ enum req_range {
   REQ_RANGE_LAST   /* keep this last */
 };
 
+/* A requirement source. */
+struct req_source {
+  enum req_source_type type;            /* source type */
+
+  union {
+    Tech_type_id tech;                  /* source tech */
+    struct government *gov;             /* source government */
+    Impr_type_id building;              /* source building */
+    enum tile_special_type special;     /* source special */
+    struct terrain *terrain;            /* source terrain type */
+    struct nation_type *nation;         /* source nation type */
+    struct unit_type *unittype;         /* source unittype */
+    enum unit_flag_id unitflag;         /* source unit flag */
+    struct unit_class *unitclass;       /* source unit class */
+    Output_type_id outputtype;          /* source output type */
+    Specialist_type_id specialist;      /* specialist type */
+    int minsize;                        /* source minsize type */
+  } value;                              /* source value */
+};
+
 /* A requirement. This requirement is basically a conditional; it may or
  * may not be active on a target.  If it is active then something happens.
  * For instance units and buildings have requirements to be built, techs
  * have requirements to be researched, and effects have requirements to be
  * active. */
 struct requirement {
-  struct universal source;		/* requirement source */
+  struct req_source source;		/* requirement source */
   enum req_range range;			/* requirement range */
   bool survives; /* set if destroyed sources satisfy the req*/
   bool negated;	 /* set if the requirement is to be negated */
@@ -58,7 +96,11 @@ struct requirement {
   TYPED_VECTOR_ITERATE(struct requirement, req_vec, preq)
 #define requirement_vector_iterate_end VECTOR_ITERATE_END
 
-/* General requirement functions. */
+struct req_source req_source_from_str(const char *type, const char *value);
+struct req_source req_source_from_values(int type, int value);
+void req_source_get_values(const struct req_source *source,
+			   int *type, int *value);
+
 enum req_range req_range_from_str(const char *str);
 struct requirement req_from_str(const char *type, const char *range,
 				bool survives, bool negated,
@@ -94,25 +136,12 @@ bool are_reqs_active(const struct player *target_player,
 
 bool is_req_unchanging(const struct requirement *req);
 
-/* General universal functions. */
-int universal_number(const struct universal *source);
+/* Req-source helper functions. */
+bool are_req_sources_equal(const struct req_source *psource1,
+			   const struct req_source *psource2);
+char *get_req_source_text(const struct req_source *psource,
+			  char *buf, size_t bufsz);
 
-struct universal universal_by_number(const enum universals_n kind,
-				     const int value);
-struct universal universal_by_rule_name(const char *kind,
-					const char *value);
-void universal_extraction(const struct universal *source,
-			  int *kind, int *value);
-
-bool are_universals_equal(const struct universal *psource1,
-			  const struct universal *psource2);
-
-const char *universal_kind_name(const struct universal *psource);
-const char *universal_rule_name(const struct universal *psource);
-const char *universal_name_translation(const struct universal *psource,
-				       char *buf, size_t bufsz);
-const char *universal_type_rule_name(const struct universal *psource);
-
-int universal_build_shield_cost(const struct universal *target);
+const char *get_req_source_type_name_orig(const struct req_source *psource);
 
 #endif  /* FC__REQUIREMENTS_H */

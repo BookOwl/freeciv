@@ -14,13 +14,6 @@
 description="Civ2-style game rules for Freeciv"
 options="1.11.1"
 
-[about]
-; Ruleset name
-name = _("Civ2 ruleset")
-; Description of the ruleset
-description = _("You are playing with civ2 style rules.\
-These are quite close to Freeciv default rules, but with some additions.")
-
 [options]
 global_init_techs=""
 global_init_buildings="Palace"
@@ -30,8 +23,6 @@ min_city_center_food	= 1
 min_city_center_shield	= 1
 min_city_center_trade	= 0
 
-; Number of veteran levels lost when upgrading a unit
-upgrade_veteran_loss     = 255
 ; Number of veteran levels lost when auto-upgrading a unit
 autoupgrade_veteran_loss = 255
 
@@ -41,6 +32,11 @@ min_dist_bw_cities	= 2
 
 ; Square of initially visible radius (true distance).
 init_vis_radius_sq	= 5
+
+; What happens when a hut is overflown:
+;   "Nothing"  - Just fly over; hut remains.
+;   "Frighten" - Tribe frightened and disbands; hut disappears.
+hut_overflight		= "Frighten"
 
 ; Whether player gets to select which terrain improvement to pillage.
 pillage_select		= 1
@@ -98,19 +94,7 @@ total_factor = 100
 ;not inside a city, fortress or airbase, all units in the same tile are
 ;destroyed along with the defender. This is the freeciv default.
 ;If this options is set to 0, only the defender unit is destroyed.
-killstack = 1
-
-;If tired_attack is set to 1, units that attack with only 1/3 or 2/3 moves
-;left will have their attack power reduced by 2/3 or 1/3 respectively. If
-;this is set to 0 units will attack with full strength even if they have
-;only fractional moves left.
-tired_attack = 1
-
-[borders]
-; Base border radius from city.
-radius_sq_city = 17
-; Border radius square increased by this amount / point of city size
-size_effect    = 1
+killstack               = 1
 
 [teams]
 names =

@@ -18,17 +18,15 @@
 #include <windows.h>
 #include <windowsx.h>
 
-/* common & utility */
 #include "events.h"
 #include "fcintl.h"
 #include "game.h"
 #include "mem.h"
 #include "support.h"
 
-/* client */
 #include "chatline_g.h"
 #include "citydlg_g.h"
-#include "client_main.h"
+#include "civclient.h"
 #include "cma_fec.h"
 #include "messagewin_g.h"
 
@@ -258,7 +256,7 @@ void refresh_cma_dialog(struct city *pcity, enum cma_refresh refresh)
   if (!pdialog)
     return;
   /* fill in result label */
-  cm_result_from_main_map(&result, pcity, TRUE);
+  cm_copy_result_from_city(pcity, &result);
   SetWindowText(pdialog->result_label,
 		(char *) cmafec_get_result_descr(pcity, &result, &param));
   /* if called from a hscale, we _don't_ want to do this */

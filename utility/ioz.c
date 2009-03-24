@@ -33,7 +33,6 @@
 #include <config.h>
 #endif
 
-#include <assert.h>
 #include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -43,11 +42,6 @@
 #include <zlib.h>
 #endif
 
-#ifdef HAVE_BZLIB_H
-#include <bzlib.h>
-#endif
-
-#include "fcintl.h"
 #include "log.h"
 #include "mem.h"
 #include "shared.h"
@@ -55,26 +49,12 @@
 
 #include "ioz.h"
 
-#ifdef HAVE_LIBBZ2
-struct bzip2_struct {
-  BZFILE *file;
-  FILE *plain;
-  int error;
-  int firstbyte;
-  bool eof;
-};
-#endif
-
 struct fz_FILE_s {
   enum fz_method method;
-  char mode;
   union {
     FILE *plain;		/* FZ_PLAIN */
 #ifdef HAVE_LIBZ
     gzFile zlib;		/* FZ_ZLIB */
-#endif
-#ifdef HAVE_LIBBZ2
-    struct bzip2_struct bz2;
 #endif
   } u;
 };
@@ -103,84 +83,18 @@ fz_FILE *fz_from_file(const char *filename, const char *in_mode,
 
   if (mode[0] == 'w') {
     /* Writing: */
-    fp->mode = 'w';
-
+    if (compress_level == 0) {
+      method = FZ_PLAIN;
+    }
 #ifndef HAVE_LIBZ
+    /* In theory this shouldn't happen, but check anyway. */
     if (method == FZ_ZLIB) {
-      freelog(LOG_ERROR, "Not compiled with zlib support, reverting to plain.");
+      freelog(LOG_NORMAL, "Not compiled with zlib support, reverting to plain.");
       method = FZ_PLAIN;
     }
 #endif
-#ifndef HAVE_LIBBZ2
-    if (method == FZ_BZIP2) {
-      freelog(LOG_ERROR, "Not compiled with bzib2 support, reverting to plain.");
-      method = FZ_PLAIN;
-    }
-#endif
-
   } else {
     /* Reading: ignore specified method and try best: */
-    fp->mode = 'r';
-#ifdef HAVE_LIBBZ2
-    /* Try to open as bzip2 file */
-    method = FZ_BZIP2;
-    sz_strlcat(mode,"b");
-    fp->u.bz2.plain = fopen(filename, mode);
-    if (fp->u.bz2.plain) {
-      fp->u.bz2.file = BZ2_bzReadOpen(&fp->u.bz2.error, fp->u.bz2.plain, 1, 0,
-                                      NULL, 0);
-    }
-    if (!fp->u.bz2.file) {
-      if (fp->u.bz2.plain) {
-        fclose(fp->u.bz2.plain);
-      }
-      free(fp);
-      return NULL;
-    } else {
-      /* Try to read first byte out of stream so we can figure out if this
-         really is bzip2 file or not. Store byte for later use */
-      char tmp;
-      int read_len;
-
-      /* We put error to tmp variable when we don't want to overwrite
-       * error already in fp->u.bz2.error. So calls to fz_ferror() or
-       * fz_strerror() will later return what originally went wrong,
-       * and not what happened in error recovery. */
-      int tmp_err;
-
-      read_len = BZ2_bzRead(&fp->u.bz2.error, fp->u.bz2.file, &tmp, 1);
-      if (fp->u.bz2.error != BZ_DATA_ERROR_MAGIC) {
-        /* bzip2 file */
-        if (fp->u.bz2.error == BZ_STREAM_END) {
-          /* We already reached end of file with our read of one byte */
-          if (read_len == 0) {
-            /* 0 byte file */
-            fp->u.bz2.firstbyte = -1;
-          } else {
-            fp->u.bz2.firstbyte = tmp;
-          }
-          fp->u.bz2.eof = TRUE;
-        } else if (fp->u.bz2.error != BZ_OK) {
-          /* Read failed */
-          BZ2_bzReadClose(&tmp_err, fp->u.bz2.file);
-          fclose(fp->u.bz2.plain);
-          free(fp);
-          return NULL;
-        } else {
-          /* Read success and we can continue reading */
-          fp->u.bz2.firstbyte = tmp;
-          fp->u.bz2.eof = FALSE;
-        }
-        fp->method = FZ_BZIP2;
-        return fp;
-      }
-
-      /* Not bzip2 file */
-      BZ2_bzReadClose(&tmp_err, fp->u.bz2.file);
-      fclose(fp->u.bz2.plain);
-    }
-#endif
-
 #ifdef HAVE_LIBZ
     method = FZ_ZLIB;
 #else
@@ -191,32 +105,6 @@ fz_FILE *fz_from_file(const char *filename, const char *in_mode,
   fp->method = method;
 
   switch (fp->method) {
-#ifdef HAVE_LIBBZ2
-  case FZ_BZIP2:
-    /*  bz2 files are binary files, so we should add "b" to mode! */
-    sz_strlcat(mode,"b");
-    fp->u.bz2.plain = fopen(filename, mode);
-    if (fp->u.bz2.plain) {
-      /*  Open for read handled earlier */
-      assert(mode[0] == 'w');
-      fp->u.bz2.file = BZ2_bzWriteOpen(&fp->u.bz2.error, fp->u.bz2.plain,
-                                       compress_level, 1, 15);
-      if (fp->u.bz2.error != BZ_OK) {
-        int tmp_err; /* See comments for similar variable
-                      * near BZ2_bzReadOpen() */
-        BZ2_bzWriteClose(&tmp_err, fp->u.bz2.file, 0, NULL, NULL);
-        fp->u.bz2.file = NULL;
-      }
-    }
-    if (!fp->u.bz2.file) {
-      if (fp->u.bz2.plain) {
-        fclose(fp->u.bz2.plain);
-      }
-      free(fp);
-      fp = NULL;
-    }
-    break;
-#endif
 #ifdef HAVE_LIBZ
   case FZ_ZLIB:
     /*  gz files are binary files, so we should add "b" to mode! */
@@ -275,21 +163,6 @@ int fz_fclose(fz_FILE *fp)
   int retval = 0;
   
   switch(fp->method) {
-#ifdef HAVE_LIBBZ2
-  case FZ_BZIP2:
-    if(fp->mode == 'w') {
-      BZ2_bzWriteClose(&fp->u.bz2.error, fp->u.bz2.file, 0, NULL, NULL);
-    } else {
-      BZ2_bzReadClose(&fp->u.bz2.error, fp->u.bz2.file);
-    }
-    if(fp->u.bz2.error == BZ_OK) {
-      retval = 0;
-    } else {
-      retval = 1;
-    }
-    fclose(fp->u.bz2.plain);
-    break;
-#endif
 #ifdef HAVE_LIBZ
   case FZ_ZLIB:
     retval = gzclose(fp->u.zlib);
@@ -316,50 +189,9 @@ int fz_fclose(fz_FILE *fp)
 ***************************************************************/
 char *fz_fgets(char *buffer, int size, fz_FILE *fp)
 {
-  char *retval = NULL;
+  char *retval = 0;
   
-  switch (fp->method) {
-#ifdef HAVE_LIBBZ2
-  case FZ_BZIP2:
-    {
-      int i = 0;
-      int last_read;
-
-      /* See if first byte is already read and stored */
-      if (fp->u.bz2.firstbyte >= 0) {
-        buffer[0] = fp->u.bz2.firstbyte;
-        fp->u.bz2.firstbyte = -1;
-        i++;
-      } else {
-        if (!fp->u.bz2.eof) {
-          last_read = BZ2_bzRead(&fp->u.bz2.error, fp->u.bz2.file, buffer + i, 1);
-          i += last_read; /* 0 or 1 */
-        }
-      }
-      if (!fp->u.bz2.eof) {
-        /* Leave space for trailing zero */
-        for (; i < size - 1
-               && fp->u.bz2.error == BZ_OK && buffer[i - 1] != '\n' ;
-             i += last_read) {
-          last_read = BZ2_bzRead(&fp->u.bz2.error, fp->u.bz2.file,
-                                 buffer + i, 1);
-        }
-        if (fp->u.bz2.error != BZ_OK &&
-            (fp->u.bz2.error != BZ_STREAM_END ||
-             i == 0)) {
-          retval = NULL;
-        } else {
-          retval = buffer;
-        } 
-        if (fp->u.bz2.error == BZ_STREAM_END) {
-          /* EOF reached. Do not BZ2_bzRead() any more. */
-          fp->u.bz2.eof = TRUE;
-        }
-      }
-      buffer[i] = '\0';
-      break;
-    }
-#endif
+  switch(fp->method) {
 #ifdef HAVE_LIBZ
   case FZ_ZLIB:
     retval = gzgets(fp->u.zlib, buffer, size);
@@ -392,27 +224,8 @@ int fz_fprintf(fz_FILE *fp, const char *format, ...)
   int retval = 0;
   
   va_start(ap, format);
-
-  switch (fp->method) {
-#ifdef HAVE_LIBBZ2
-  case FZ_BZIP2:
-    {
-      char buffer[65536];
-      int num;
-      num = my_vsnprintf(buffer, sizeof(buffer), format, ap);
-      if (num == -1) {
-	  freelog(LOG_ERROR, "Too much data: truncated in fz_fprintf (%lu)",
-		  (unsigned long) sizeof(buffer));
-      }
-      BZ2_bzWrite(&fp->u.bz2.error, fp->u.bz2.file, buffer, strlen(buffer));
-      if (fp->u.bz2.error != BZ_OK) {
-        retval = 0;
-      } else {
-        retval = strlen(buffer);
-      }
-    }
-    break;
-#endif
+  
+  switch(fp->method) {
 #ifdef HAVE_LIBZ
   case FZ_ZLIB:
     {
@@ -445,18 +258,8 @@ int fz_fprintf(fz_FILE *fp, const char *format, ...)
 int fz_ferror(fz_FILE *fp)
 {
   int retval = 0;
-
-  switch (fp->method) {
-#ifdef HAVE_LIBBZ2
-  case FZ_BZIP2:
-    if (fp->u.bz2.error != BZ_OK &&
-        fp->u.bz2.error != BZ_STREAM_END) {
-      retval = 1;
-    } else {
-      retval = 0;
-    }
-    break;
-#endif
+  
+  switch(fp->method) {
 #ifdef HAVE_LIBZ
   case FZ_ZLIB:
     (void) gzerror(fp->u.zlib, &retval);	/* ignore string result here */
@@ -488,74 +291,6 @@ const char *fz_strerror(fz_FILE *fp)
   const char *retval = 0;
   
   switch(fp->method) {
-#ifdef HAVE_LIBBZ2
-  case FZ_BZIP2:
-    {
-      static char bzip2error[50];
-      char *cleartext = NULL;
-
-      /* Rationale for translating these:
-       * - Some of them provide usable information to user
-       * - Messages still contain numerical error code for developers
-       */
-      switch(fp->u.bz2.error) {
-       case BZ_OK:
-         cleartext = _("OK");
-         break;
-       case BZ_RUN_OK:
-         cleartext = _("Run ok");
-         break;
-       case BZ_FLUSH_OK:
-         cleartext = _("Flush ok");
-         break;
-       case BZ_FINISH_OK:
-         cleartext = _("Finish ok");
-         break;
-       case BZ_STREAM_END:
-         cleartext = _("Stream end");
-         break;
-       case BZ_CONFIG_ERROR:
-         cleartext = _("Config error");
-         break;
-       case BZ_SEQUENCE_ERROR:
-         cleartext = _("Sequence error");
-         break;
-       case BZ_PARAM_ERROR:
-         cleartext = _("Parameter error");
-         break;
-       case BZ_MEM_ERROR:
-         cleartext = _("Mem error");
-         break;
-       case BZ_DATA_ERROR:
-         cleartext = _("Data error");
-         break;
-       case BZ_DATA_ERROR_MAGIC:
-         cleartext = _("Not bzip2 file");
-         break;
-       case BZ_IO_ERROR:
-         cleartext = _("IO error");
-         break;
-       case BZ_UNEXPECTED_EOF:
-         cleartext = _("Unexpected EOF");
-         break;
-       case BZ_OUTBUFF_FULL:
-         cleartext = _("Output buffer full");
-         break;
-       default:
-         break;
-      }
-
-      if (cleartext != NULL) {
-        my_snprintf(bzip2error, sizeof(bzip2error), _("Bz2: \"%s\" (%d)"),
-                    cleartext, fp->u.bz2.error);
-      } else {
-        my_snprintf(bzip2error, sizeof(bzip2error), _("Bz2 error %d"),
-                    fp->u.bz2.error);
-      }
-      retval = bzip2error;
-      break;
-    }
-#endif
 #ifdef HAVE_LIBZ
   case FZ_ZLIB:
     {

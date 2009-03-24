@@ -1,10 +1,12 @@
 ## Process this file with automake to produce Makefile.in
 
-noinst_LTLIBRARIES = libcivai.la
+noinst_LIBRARIES = libcivai.a
 
-AM_CPPFLAGS = -I$(top_srcdir)/utility -I$(srcdir)/../common -I$(srcdir)/../server -I$(top_srcdir)/common/aicore -I$(top_srcdir)/server/generator
+AM_CPPFLAGS = -I$(top_srcdir)/utility -I$(srcdir)/../common -I$(srcdir)/../server -I../intl -I$(top_srcdir)/common/aicore
 
-libcivai_la_SOURCES = \
+## Above, note -I../intl instead of -I$(top_srdir/intl) is deliberate.
+
+libcivai_a_SOURCES = \
 		advdomestic.c	\
 		advdomestic.h	\
 		advmilitary.c	\

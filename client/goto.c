@@ -18,19 +18,17 @@
 #include <assert.h>
 #include <string.h>
 
-/* utility */
 #include "log.h"
 #include "mem.h"
 
-/* common */
 #include "map.h"
 #include "packets.h"
 #include "pf_tools.h"
 #include "unit.h"
 #include "unitlist.h"
 
-/* client */
-#include "client_main.h"
+#include "civclient.h"
+#include "clinet.h"
 #include "control.h"
 #include "mapview_g.h"
 
@@ -140,6 +138,7 @@ void free_client_goto(void)
     goto_map_list_iterate(goto_maps, goto_map) {
       goto_map_free(goto_map);
     } goto_map_list_iterate_end;
+    goto_map_list_unlink_all(goto_maps);
     goto_map_list_free(goto_maps);
     goto_maps = NULL;
   }
@@ -390,7 +389,7 @@ bool goto_pop_waypoint(void)
   all shortest paths).
 ***********************************************************************/
 static int get_EC(const struct tile *ptile, enum known_type known,
-                  const struct pf_parameter *param)
+		  struct pf_parameter *param)
 {
   return 1;
 }
@@ -400,8 +399,8 @@ static int get_EC(const struct tile *ptile, enum known_type known,
   don't plan our route through enemy city/tile.
 ***********************************************************************/
 static enum tile_behavior get_TB_aggr(const struct tile *ptile,
-                                      enum known_type known,
-                                      const struct pf_parameter *param)
+				      enum known_type known,
+                                      struct pf_parameter *param)
 {
   if (known == TILE_UNKNOWN) {
     if (!goto_into_unknown) {
@@ -420,8 +419,8 @@ static enum tile_behavior get_TB_aggr(const struct tile *ptile,
   don't attack enemy units but enter enemy cities.
 ***********************************************************************/
 static enum tile_behavior get_TB_caravan(const struct tile *ptile,
-                                         enum known_type known,
-                                         const struct pf_parameter *param)
+					 enum known_type known,
+					 struct pf_parameter *param)
 {
   if (known == TILE_UNKNOWN) {
     if (!goto_into_unknown) {
@@ -447,7 +446,7 @@ static enum tile_behavior get_TB_caravan(const struct tile *ptile,
 static int get_activity_time(const struct tile *ptile,
 			     struct player *pplayer)
 {
-  struct terrain *pterrain = tile_terrain(ptile);
+  struct terrain *pterrain = ptile->terrain;
   int activity_mc = 0;
 
   assert(hover_state == HOVER_CONNECT);
@@ -521,10 +520,10 @@ static bool is_non_allied_city_adjacent(struct player *pplayer,
   get_activity_rate(punit) / ACTIVITY_FACTOR.
 ****************************************************************************/
 static int get_connect_road(const struct tile *src_tile, enum direction8 dir,
-                            const struct tile *dest_tile,
-                            int src_cost, int src_extra,
-                            int *dest_cost, int *dest_extra,
-                            const struct pf_parameter *param)
+			    const struct tile *dest_tile,
+			    int src_cost, int src_extra,
+			    int *dest_cost, int *dest_extra,
+			    struct pf_parameter *param)
 {
   int activity_time, move_cost, moves_left;
   int total_cost, total_extra;
@@ -621,11 +620,11 @@ static int get_connect_road(const struct tile *src_tile, enum direction8 dir,
   param->data should contain the result of get_activity_rate(punit) / 10.
 ****************************************************************************/
 static int get_connect_irrig(const struct tile *src_tile,
-                             enum direction8 dir,
-                             const struct tile *dest_tile,
+			     enum direction8 dir,
+			     const struct tile *dest_tile,
                              int src_cost, int src_extra,
                              int *dest_cost, int *dest_extra,
-                             const struct pf_parameter *param)
+                             struct pf_parameter *param)
 {
   int activity_time, move_cost, moves_left, total_cost;
 
@@ -691,10 +690,9 @@ static int get_connect_irrig(const struct tile *src_tile,
   PF callback to prohibit going into the unknown (conditionally).  Also
   makes sure we don't plan to attack anyone.
 ***********************************************************************/
-static enum tile_behavior
-no_fights_or_unknown_goto(const struct tile *ptile,
-                          enum known_type known,
-                          const struct pf_parameter *p)
+static enum tile_behavior no_fights_or_unknown_goto(const struct tile *ptile,
+						    enum known_type known,
+						    struct pf_parameter *p)
 {
   if (known == TILE_UNKNOWN && goto_into_unknown) {
     /* Special case allowing goto into the unknown. */
@@ -725,7 +723,7 @@ static void fill_client_goto_parameter(struct unit *punit,
     } else {
       parameter->get_costs = get_connect_road;
     }
-    parameter->get_moves_left_req = NULL;
+    parameter->is_pos_dangerous = NULL;
 
     *connect_speed = get_activity_rate(punit) / ACTIVITY_FACTOR;
     parameter->data = connect_speed;
@@ -744,7 +742,7 @@ static void fill_client_goto_parameter(struct unit *punit,
     }
     break;
   case HOVER_NUKE:
-    parameter->get_moves_left_req = NULL; /* nuclear safety? pwah! */
+    parameter->is_pos_dangerous = NULL; /* nuclear safety? pwah! */
     /* FALLTHRU */
   default:
     *connect_initial = 0;
@@ -810,7 +808,7 @@ void exit_goto_state(void)
   goto_map_list_iterate(goto_maps, goto_map) {
     goto_map_free(goto_map);
   } goto_map_list_iterate_end;
-  goto_map_list_clear(goto_maps);
+  goto_map_list_unlink_all(goto_maps);
 
   goto_destination = NULL;
 }
@@ -928,7 +926,7 @@ void request_orders_cleared(struct unit *punit)
   p.length = 0;
   p.dest_x = punit->tile->x;
   p.dest_y = punit->tile->y;
-  send_packet_unit_orders(&client.conn, &p);
+  send_packet_unit_orders(&aconnection, &p);
 }
 
 /**************************************************************************
@@ -990,7 +988,7 @@ static void send_path_orders(struct unit *punit, struct pf_path *path,
   p.dest_x = old_tile->x;
   p.dest_y = old_tile->y;
 
-  send_packet_unit_orders(&client.conn, &p);
+  send_packet_unit_orders(&aconnection, &p);
 }
 
 /**************************************************************************
@@ -1058,9 +1056,7 @@ void send_patrol_route(void)
     map = pf_create_map(&parameter);
     return_path = pf_get_path(map, goto_map->parts[0].start_tile);
     if (!return_path) {
-      /* Cannot make a path */
-      pf_destroy_map(map);
-      continue;
+      die("No return path found!");
     }
 
     for (i = 0; i < goto_map->num_parts; i++) {
@@ -1159,7 +1155,7 @@ void send_connect_route(enum unit_activity activity)
     p.dest_x = old_tile->x;
     p.dest_y = old_tile->y;
 
-    send_packet_unit_orders(&client.conn, &p);
+    send_packet_unit_orders(&aconnection, &p);
   } goto_map_unit_iterate_end;
 }
 
@@ -1194,11 +1190,6 @@ void send_goto_route(void)
       order.order = goto_last_order;
       order.dir = -1;
       order.activity = ACTIVITY_LAST;
-
-      /* ORDER_MOVE would require real direction,
-       * ORDER_ACTIVITY would require real activity */
-      assert(goto_last_order != ORDER_MOVE
-	     && goto_last_order != ORDER_ACTIVITY);
 
       send_goto_path(punit, path, &order);
     }

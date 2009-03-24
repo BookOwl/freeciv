@@ -18,6 +18,7 @@
 
 void auto_settlers_init(void);
 void auto_settlers_player(struct player *pplayer);
+int find_boat(struct player *pplayer, struct tile **boat_tile, int cap);
 
 #define MORT 24
 
@@ -26,12 +27,16 @@ void ai_manage_settler(struct player *pplayer, struct unit *punit);
 
 void init_settlers(void);
 
+int city_tile_value(struct city *pcity, int x, int y,
+		    int foodneed, int prodneed);
 void initialize_infrastructure_cache(struct player *pplayer);
 
 void contemplate_terrain_improvements(struct city *pcity);
 void contemplate_new_city(struct city *pcity);
 
+struct unit *other_passengers(struct unit *punit);
+
 extern signed int *minimap;
-#define MINIMAP(_tile) minimap[tile_index(_tile)]
+#define MINIMAP(ptile) minimap[(ptile)->index]
 
 #endif   /* FC__SETTLERS_H */

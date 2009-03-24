@@ -34,7 +34,6 @@
 
 #include "fciconv.h"
 #include "fcintl.h"
-#include "game.h"
 #include "log.h"
 #include "shared.h"
 #include "support.h"
@@ -74,15 +73,9 @@ static void sigint_handler(int sig)
   }
   if (timer && read_timer_seconds(timer) <= 1.0) {
     exit(EXIT_SUCCESS);
-  } else {
-    if (game.info.timeout == -1) {
-      freelog(LOG_NORMAL, _("Setting timeout to 0. Autogame will stop.\n"));
-      game.info.timeout = 0;
-    }
-    if (!timer) {
-      freelog(LOG_NORMAL, _("You must interrupt Freeciv twice"
-                            " within one second to make it exit.\n"));
-    }
+  } else if (!timer) {
+    freelog(LOG_NORMAL, _("You must interrupt Freeciv twice"
+			  " within one second to make it exit.\n"));
   }
   timer = renew_timer_start(timer, TIMER_USER, TIMER_ACTIVE);
 }
@@ -123,8 +116,6 @@ int main(int argc, char *argv[])
 #ifdef GENERATING_MAC
   Mac_options(argc);
 #endif
-  srvarg.announce = ANNOUNCE_DEFAULT;
-
   /* no  we don't use GNU's getopt or even the "standard" getopt */
   /* yes we do have reasons ;)                                   */
   inx = 1;
@@ -192,22 +183,9 @@ int main(int argc, char *argv[])
       free(option);
     } else if ((option = get_option_malloc("--saves", argv, &inx, argc))) {
       srvarg.saves_pathname = option; /* Never freed. */
-    } else if (is_option("--version", argv[inx])) {
+    } else if (is_option("--version", argv[inx]))
       showvers = TRUE;
-    } else if ((option = get_option_malloc("--Announce", argv, &inx, argc))) {
-      if (!strcasecmp(option, "ipv4")) {
-        srvarg.announce = ANNOUNCE_IPV4;
-      } else if(!strcasecmp(option, "none")) {
-        srvarg.announce= ANNOUNCE_NONE;
-#ifdef IPV6_SUPPORT
-      } else if (!strcasecmp(option, "ipv6")) {
-        srvarg.announce = ANNOUNCE_IPV6;
-#endif /* IPv6 support */
-      } else {
-        freelog(LOG_ERROR, _("Illegal value \"%s\" for --Announce"), option);
-      }
-      free(option);
-    } else {
+    else {
       fc_fprintf(stderr, _("Error: unknown option '%s'\n"), argv[inx]);
       showhelp = TRUE;
       break;
@@ -220,14 +198,12 @@ int main(int argc, char *argv[])
     exit(EXIT_SUCCESS);
   }
   con_write(C_VERSION, _("This is the server for %s"), freeciv_name_version());
-  /* TRANS: No full stop after the URL, could cause confusion. */
   con_write(C_COMMENT, _("You can learn a lot about Freeciv at %s"),
-	    WIKI_URL);
+	    WEBSITE_URL);
 
   if (showhelp) {
     fc_fprintf(stderr,
 	       _("Usage: %s [option ...]\nValid options are:\n"), argv[0]);
-    fc_fprintf(stderr, _("  -A  --announce PROTO\tAnnounce game in LAN using protocol PROTO (IPv4/IPv6/none)\n"));
 #ifdef HAVE_AUTH
     fc_fprintf(stderr, _("  -a  --auth FILE\tEnable server authentication "
                          "with configuration from FILE.\n"));
@@ -269,8 +245,7 @@ int main(int argc, char *argv[])
     fc_fprintf(stderr,
 	       _("  -R, --Ranklog FILE\tUse FILE as ranking logfile\n"));
     fc_fprintf(stderr, _("  -v, --version\t\tPrint the version number\n"));
-    /* TRANS: No full stop after the URL, could cause confusion. */
-    fc_fprintf(stderr, _("Report bugs at %s\n"), BUG_URL);
+    fc_fprintf(stderr, _("Report bugs at %s.\n"), BUG_URL);
     exit(EXIT_SUCCESS);
   }
 

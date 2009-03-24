@@ -15,19 +15,12 @@
 #include <config.h>
 #endif
 
-#ifdef SDL
-#include "SDL.h"
-#endif
-
 #include <stdio.h>
 
-/* utility */
 #include "fciconv.h"
 #include "log.h"
 
-/* client */
-#include "client_main.h"
-#include "editgui_g.h"
+#include "civclient.h"
 #include "options.h"
 
 #include "gui_main.h"
@@ -60,14 +53,6 @@ void set_city_names_font_sizes(int my_city_names_font_size,
 void ui_init(void)
 {
   /* PORTME */
-}
-
-/**************************************************************************
-  Entry point for whole freeciv client program.
-**************************************************************************/
-int main(int argc, char **argv)
-{
-  return client_main(argc, argv);
 }
 
 /**************************************************************************
@@ -185,33 +170,3 @@ void add_idle_callback(void (callback)(void *), void *data)
   freelog(LOG_ERROR, "Unimplemented add_idle_callback.");
   (callback)(data);
 }
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_tileset_changed(void)
-{}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_refresh(void)
-{}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_popup_properties(const struct tile_list *tiles)
-{}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_notify_object_changed(int objtype, int object_id, bool remove)
-{}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_notify_object_created(int tag, int id)
-{}

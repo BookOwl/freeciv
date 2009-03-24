@@ -15,7 +15,6 @@
 #include <config.h>
 #endif
 
-/* common & utility */
 #include "fcintl.h"
 #include "game.h"
 #include "government.h"
@@ -24,9 +23,8 @@
 #include "shared.h"
 #include "support.h"
 
-/* client */
 #include "chatline_common.h"
-#include "client_main.h"
+#include "clinet.h"
 #include "gui_main.h"
 #include "widget.h"
 
@@ -75,7 +73,7 @@ static void connect_callback(struct sw_widget *list, void *data)
     return;
   }
 
-  dsend_packet_nation_select_req(&client.conn, selected_nation,
+  dsend_packet_nation_select_req(&aconnection, selected_nation,
 				 sw_list_get_selected_row(leaders_sex_list)==0,
 				 leaders[leader].name,1);
 }
@@ -355,8 +353,7 @@ void popup_sabotage_dialog(struct city *pcity)
   Popup a dialog asking the unit which improvement they would like to
   pillage.
 **************************************************************************/
-void popup_pillage_dialog(struct unit *punit, bv_special may_pillage,
-                          struct base_type *pbase)
+void popup_pillage_dialog(struct unit *punit, bv_special may_pillage)
 {
   /* PORTME */
 }

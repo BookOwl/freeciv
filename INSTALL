@@ -101,9 +101,9 @@ contains the generated files.
 
 The Freeciv client comes in the following forms:
 * Gtk+ 2.0 widget library ("Gtk+ 2.0").
+* AmigaOS MUI ("Mui").
 * Native Microsoft Windows Common Controls ("Win32").
 * X Athena Widgets library ("Xaw").
-* SDL
 
 These forms have different prerequisites, explained separately below.
 
@@ -456,10 +456,17 @@ Freeciv, there are a few work-arounds you can try:
       % ./configure --disable-nls
       % make
 
-2. You can try to install the latest version of GNU gettext.
+2. If you want Native Language Support, try the version of gettext that
+   is included with Freeciv by specifying the "--with-included-gettext"
+   ./configure option:
+
+      % ./configure --with-included-gettext
+      % make
+
+3. Finally, you can try to install the latest version of GNU gettext.
    It may be obtained from here:
 
-      ftp://ftp.gnu.org/pub/gnu/gettext/gettext-0.16.1.tar.gz
+      ftp://ftp.gnu.org/pub/gnu/gettext/gettext-0.14.6.tar.gz
 
 
 6. Readline Support:
@@ -523,7 +530,7 @@ libraries are on their own in the nonstandard location /path/to/xpm:
   % setenv PATH /opt/SUNWspro/bin:/usr/ccs/bin:/bin
   % unsetenv LD_LIBRARY_PATH
   % ./configure --with-xpm-prefix=/path/to/xpm
-                --disable-auto-deps
+                --disable-auto-deps --with-included-gettext
   % make
 
 The "--disable-auto-deps" prevents ./configure from creating Makefiles

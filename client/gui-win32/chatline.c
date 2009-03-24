@@ -18,7 +18,6 @@
 #include <windows.h>
 #include <windowsx.h>
 
-/* common & utility */
 #include "fcintl.h"
 #include "game.h"
 #include "log.h"
@@ -28,10 +27,10 @@
 #include "support.h"
 #include "version.h"
 
-/* client */
 #include "chatline.h"
-#include "client_main.h"
+#include "civclient.h"
 #include "climisc.h"
+#include "clinet.h"
 #include "colors.h"
 #include "connectdlg.h"
 #include "control.h"

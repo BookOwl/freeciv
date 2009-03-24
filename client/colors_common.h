@@ -51,15 +51,14 @@ enum color_std {
   /* Reqtree colors */
   COLOR_REQTREE_RESEARCHING, /* cyan */
   COLOR_REQTREE_KNOWN, /* ground/green */
-  COLOR_REQTREE_GOAL_PREREQS_KNOWN, /* race8 */
-  COLOR_REQTREE_GOAL_UNKNOWN, /* race3 */
-  COLOR_REQTREE_PREREQS_KNOWN, /* yellow */
-  COLOR_REQTREE_UNKNOWN, /* red */
-  COLOR_REQTREE_UNREACHABLE,
+  COLOR_REQTREE_REACHABLE_GOAL, /* race8 */
+  COLOR_REQTREE_UNREACHABLE_GOAL, /* race3 */
+  COLOR_REQTREE_REACHABLE, /* yellow */
+  COLOR_REQTREE_UNREACHABLE, /* red */
   COLOR_REQTREE_BACKGROUND, /* black */
   COLOR_REQTREE_TEXT, /* black */
   COLOR_REQTREE_EDGE, /* gray */
-
+  
   /* Player dialog */
   COLOR_PLAYER_COLOR_BACKGROUND, /* black */
 
@@ -75,8 +74,7 @@ struct color *get_terrain_color(const struct tileset *t,
 /* Functions used by the tileset to allocate the color system. */
 struct color_system *color_system_read(struct section_file *file);
 void color_system_setup_terrain(struct color_system *colors,
-				const struct terrain *pterrain,
-				const char *tag);
+				const struct terrain *pterrain);
 void color_system_free(struct color_system *colors);
 
 #endif /* FC__COLORS_COMMON_H */

@@ -20,7 +20,6 @@
 #include "mem.h"
 
 #include "genlist.h"
-#include "shared.h"  /* array_shuffle */
 
 static struct genlist_link *find_genlist_position(const struct genlist *pgenlist,
 						  int pos);
@@ -58,14 +57,10 @@ struct genlist *genlist_copy(struct genlist *pgenlist)
 }
 
 /************************************************************************
-  Free all memory allocated by the genlist.
+  Remove a genlist.  The list must be empty first!
 ************************************************************************/
 void genlist_free(struct genlist *pgenlist)
 {
-  if (!pgenlist) {
-    return;
-  }
-  genlist_clear(pgenlist);
   free(pgenlist);
 }
 
@@ -101,7 +96,7 @@ void *genlist_get(const struct genlist *pgenlist, int idx)
   the user-data).  At the end the state of the genlist will be the
   same as when genlist_init() is called on a new genlist.
 ************************************************************************/
-void genlist_clear(struct genlist *pgenlist)
+void genlist_unlink_all(struct genlist *pgenlist)
 {
   if(pgenlist->nelements > 0) {
     struct genlist_link *plink=pgenlist->head_link, *plink2;
@@ -301,38 +296,5 @@ void genlist_sort(struct genlist *pgenlist,
   myiter = find_genlist_position(pgenlist, 0);  
   for(i=0; i<n; i++, ITERATOR_NEXT(myiter)) {
     myiter->dataptr = sortbuf[i];
-  }
-}
-
-/************************************************************************
-  Randomize the elements of a genlist using the Fisher-Yates shuffle.
-
-  see: genlist_sort() and shared.c:array_shuffle()
-************************************************************************/
-void genlist_shuffle(struct genlist *pgenlist)
-{
-  const int n = genlist_size(pgenlist);
-  void *sortbuf[n];
-  struct genlist_link *myiter;
-  int i, shuffle[n];
-
-  if (n <= 1) {
-    return;
-  }
-
-  myiter = find_genlist_position(pgenlist, 0);
-  for (i = 0; i < n; i++, ITERATOR_NEXT(myiter)) {
-    sortbuf[i] = ITERATOR_PTR(myiter);
-    /* also create the shuffle list */
-    shuffle[i] = i;
-  }
-
-  /* randomize it */
-  array_shuffle(shuffle, n);
-
-  /* create the shuffled list */
-  myiter = find_genlist_position(pgenlist, 0);
-  for (i = 0; i < n; i++, ITERATOR_NEXT(myiter)) {
-    myiter->dataptr = sortbuf[shuffle[i]];
   }
 }

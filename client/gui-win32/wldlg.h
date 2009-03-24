@@ -28,7 +28,7 @@ struct worklist_window_init {
 
 void popup_worklist(struct worklist_window_init *init);
 
-void popup_worklists_report(void);
+void popup_worklists_report(struct player *pplr);
                                         /* The global worklist view */ 
 void update_worklist_report_dialog(void);
 void update_worklist_editor_win(HWND win);

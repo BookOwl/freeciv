@@ -8,7 +8,6 @@ options = "+spec3"
 
 artists = "
      Freim <...>
-     Madeline Book <madeline.book@gmail.com> (citybar.trade)
 "
 
 [file]
@@ -26,7 +25,6 @@ tiles = { "row", "column", "tag"
 
   0,  0, "citybar.shields"
   0,  1, "citybar.food"
-  0,  2, "citybar.trade"
 
 }
 

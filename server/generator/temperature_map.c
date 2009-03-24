@@ -24,7 +24,7 @@
 
 static int *temperature_map;
 
-#define tmap(_tile) (temperature_map[tile_index(_tile)])
+#define tmap(ptile) (temperature_map[(ptile)->index])
 
 /**************************************************************
   Return TRUE if temperateure_map is initialized

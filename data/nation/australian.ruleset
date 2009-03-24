@@ -3,11 +3,8 @@
 name=_("Australian")
 plural=_("?plural:Australians")
 groups="Modern", "Oceanian"
-legend=_("Australia was founded as a British penal colony in 1788AD.\
- Originally comprising of several colonies (New South Wales, Victoria,\
- Queensland, South Australia, Western Australia and Tasmania) it\
- became a single country in 1902.\
- It is the only country on earth to occupy an entire continent.")
+legend=_("Australia was founded as a British penal colony in 1788AD. It is\
+ the only country on earth to occupy an entire continent.")
 leader =
  "Robert Menzies",
  "Mary Reibey",
@@ -24,8 +21,8 @@ flag="australia"
 flag_alt = "-"
 city_style = "European"
 
-ruler_titles = { "government",      "male_title",        "female_title"
-                "Democracy", _("Prime Minister"), _("?female:Prime Minister")
+ruler_titles = { "government",      "male_title",      "female_title"
+                 "Democracy",       _("Prime Minister"), _("Prime Minister")
                }
 
 init_techs=""

@@ -45,12 +45,44 @@
 
 
 /****************************************************************************
-  Get unit_type for given role character
+  Initialize the game.id variable to a random string of characters.
 ****************************************************************************/
-struct unit_type *crole_to_unit_type(char crole,struct player *pplayer)
+static void init_game_id(void)
 {
-  struct unit_type *utype = NULL;
+  static const char chars[] =
+    "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  int i;
+
+  for (i = 0; i < ARRAY_SIZE(game.id) - 1; i++) {
+    game.id[i] = chars[myrand(sizeof(chars) - 1)];
+  }
+  game.id[i] = '\0';
+}
+
+/****************************************************************************
+  Place a starting unit for the player.
+****************************************************************************/
+static void place_starting_unit(struct tile *ptile, struct player *pplayer,
+				char crole)
+{
+  struct unit_type *utype;
   enum unit_flag_id role;
+
+  assert(!is_non_allied_unit_tile(ptile, pplayer));
+
+  /* For scenarios or dispersion, huts may coincide with player starts (in 
+   * other cases, huts are avoided as start positions).  Remove any such hut,
+   * and make sure to tell the client, since we may have already sent this
+   * tile (with the hut) earlier: */
+  if (tile_has_special(ptile, S_HUT)) {
+    tile_clear_special(ptile, S_HUT);
+    update_tile_knowledge(ptile);
+    freelog(LOG_VERBOSE, "Removed hut on start position for %s",
+	    player_name(pplayer));
+  }
+
+  /* Expose visible area. */
+  map_show_circle(pplayer, ptile, game.info.init_vis_radius_sq);
 
   switch(crole) {
   case 'c':
@@ -85,68 +117,19 @@ struct unit_type *crole_to_unit_type(char crole,struct player *pplayer)
     break;
   default: 
     assert(FALSE);
-    return NULL;
+    return;
   }
 
   /* Create the unit of an appropriate type, if it exists */
   if (num_role_units(role) > 0) {
-    if (pplayer != NULL) {
-      utype = first_role_unit_for_player(pplayer, role);
-    }
+    utype = first_role_unit_for_player(pplayer, role);
     if (utype == NULL) {
       utype = get_role_unit(role, 0);
     }
-  }
 
-  return utype;
-}
-
-/****************************************************************************
-  Place a starting unit for the player. Returns tile where unit was really
-  placed.
-****************************************************************************/
-static struct tile *place_starting_unit(struct tile *starttile,
-                                        struct player *pplayer,
-                                        char crole)
-{
-  struct tile *ptile = NULL;
-  struct unit_type *utype = crole_to_unit_type(crole, pplayer);
-
-  if (utype != NULL) {
-    iterate_outward(starttile, map.xsize + map.ysize, itertile) {
-      if (!is_non_allied_unit_tile(itertile, pplayer)
-          && is_native_tile(utype, itertile)) {
-        ptile = itertile;
-        break;
-      }
-    } iterate_outward_end;
-  }
-
-  if (ptile == NULL) {
-    /* No place where unit may exist. */
-    return NULL;
-  }
-
-  assert(!is_non_allied_unit_tile(ptile, pplayer));
-
-  /* For scenarios or dispersion, huts may coincide with player starts (in 
-   * other cases, huts are avoided as start positions).  Remove any such hut,
-   * and make sure to tell the client, since we may have already sent this
-   * tile (with the hut) earlier: */
-  if (tile_has_special(ptile, S_HUT)) {
-    tile_clear_special(ptile, S_HUT);
-    update_tile_knowledge(ptile);
-    freelog(LOG_VERBOSE, "Removed hut on start position for %s",
-	    player_name(pplayer));
-  }
-
-  /* Expose visible area. */
-  map_show_circle(pplayer, ptile, game.info.init_vis_radius_sq);
-
-  if (utype != NULL) {
     /* We cannot currently handle sea units as start units.
      * TODO: remove this code block when we can. */
-    if (utype_move_type(utype) == SEA_MOVING) {
+    if (utype->move_type == SEA_MOVING) {
       freelog(LOG_ERROR, "Sea moving start units are not yet supported, "
                            "%s not created.",
                          utype_rule_name(utype));
@@ -154,14 +137,11 @@ static struct tile *place_starting_unit(struct tile *starttile,
 		    _("Sea moving start units are not yet supported. "
 		      "Nobody gets %s."),
 		    utype_name_translation(utype));
-      return NULL;
+      return;
     }
 
     (void) create_unit(pplayer, ptile, utype, FALSE, 0, 0);
-    return ptile;
   }
-
-  return NULL;
 }
 
 /****************************************************************************
@@ -179,8 +159,8 @@ static struct tile *find_dispersed_position(struct player *pplayer,
     y = p->tile->y + myrand(2 * game.info.dispersion + 1)
         - game.info.dispersion;
   } while (!((ptile = map_pos_to_tile(x, y))
-             && tile_continent(p->tile) == tile_continent(ptile)
-             && !is_ocean_tile(ptile)
+             && tile_get_continent(p->tile) == tile_get_continent(ptile)
+             && !is_ocean(tile_get_terrain(ptile))
              && !is_non_allied_unit_tile(ptile, pplayer)));
 
   return ptile;
@@ -192,13 +172,11 @@ static struct tile *find_dispersed_position(struct player *pplayer,
 void init_new_game(void)
 {
   const int NO_START_POS = -1;
-  int start_pos[player_slot_count()];
-  int placed_units[player_slot_count()];
+  int start_pos[game.info.nplayers];
   bool pos_used[map.num_start_positions];
   int i, num_used = 0;
 
-  randomize_base64url_string(server.game_identifier,
-                             sizeof(server.game_identifier));
+  init_game_id();
 
   /* Shuffle starting positions around so that they match up with the
    * desired players. */
@@ -214,10 +192,10 @@ void init_new_game(void)
 	    map.start_positions[i].tile->x,
 	    map.start_positions[i].tile->y,
 	    n ? nation_rule_name(n) : "",
-	    n ? nation_number(n) : -1);
+	    n ? n->index : -1);
   }
   players_iterate(pplayer) {
-    start_pos[player_index(pplayer)] = NO_START_POS;
+    start_pos[pplayer->player_no] = NO_START_POS;
   } players_iterate_end;
 
   /* Second, assign a nation to a start position for that nation. */
@@ -228,9 +206,9 @@ void init_new_game(void)
       if (pplayer->nation == map.start_positions[i].nation) {
 	freelog(LOG_VERBOSE, "Start_pos %d matches player %d (%s).",
 		i,
-		player_number(pplayer),
+		pplayer->player_no,
 		nation_rule_name(nation_of_player(pplayer)));
-	start_pos[player_index(pplayer)] = i;
+	start_pos[pplayer->player_no] = i;
 	pos_used[i] = TRUE;
 	num_used++;
       }
@@ -240,7 +218,7 @@ void init_new_game(void)
   /* Third, assign players randomly to the remaining start positions. */
   freelog(LOG_VERBOSE, "Assigning random nations.");
   players_iterate(pplayer) {
-    if (start_pos[player_index(pplayer)] == NO_START_POS) {
+    if (start_pos[pplayer->player_no] == NO_START_POS) {
       int which = myrand(map.num_start_positions - num_used);
 
       for (i = 0; i < map.num_start_positions; i++) {
@@ -248,10 +226,10 @@ void init_new_game(void)
 	  if (which == 0) {
 	    freelog(LOG_VERBOSE,
 		    "Randomly assigning player %d (%s) to pos %d.",
-		    player_number(pplayer),
+		    pplayer->player_no,
 		    nation_rule_name(nation_of_player(pplayer)),
 		    i);
-	    start_pos[player_index(pplayer)] = i;
+	    start_pos[pplayer->player_no] = i;
 	    pos_used[i] = TRUE;
 	    num_used++;
 	    break;
@@ -260,21 +238,16 @@ void init_new_game(void)
 	}
       }
     }
-    assert(start_pos[player_index(pplayer)] != NO_START_POS);
+    assert(start_pos[pplayer->player_no] != NO_START_POS);
   } players_iterate_end;
 
   /* Loop over all players, creating their initial units... */
   players_iterate(pplayer) {
     struct start_position pos
-      = map.start_positions[start_pos[player_index(pplayer)]];
+      = map.start_positions[start_pos[pplayer->player_no]];
 
     /* Place the first unit. */
-    if (place_starting_unit(pos.tile, pplayer,
-                            game.info.start_units[0]) != NULL) {
-      placed_units[player_index(pplayer)] = 1;
-    } else {
-      placed_units[player_index(pplayer)] = 0;
-    }
+    place_starting_unit(pos.tile, pplayer, game.info.start_units[0]);
   } players_iterate_end;
 
   /* Place all other units. */
@@ -283,17 +256,14 @@ void init_new_game(void)
     struct tile *ptile;
     struct nation_type *nation = nation_of_player(pplayer);
     struct start_position p
-      = map.start_positions[start_pos[player_index(pplayer)]];
+      = map.start_positions[start_pos[pplayer->player_no]];
 
     /* Place global start units */
     for (i = 1; i < strlen(game.info.start_units); i++) {
       ptile = find_dispersed_position(pplayer, &p);
 
       /* Create the unit of an appropriate type. */
-      if (place_starting_unit(ptile, pplayer,
-                              game.info.start_units[i]) != NULL) {
-        placed_units[player_index(pplayer)]++;
-      }
+      place_starting_unit(ptile, pplayer, game.info.start_units[i]);
     }
 
     /* Place nation specific start units (not role based!) */
@@ -301,19 +271,21 @@ void init_new_game(void)
     while (nation->init_units[i] != NULL && i < MAX_NUM_UNIT_LIST) {
       ptile = find_dispersed_position(pplayer, &p);
       create_unit(pplayer, ptile, nation->init_units[i], FALSE, 0, 0);
-      placed_units[player_index(pplayer)]++;
       i++;
     }
   } players_iterate_end;
 
-  players_iterate(pplayer) {
-    if (placed_units[player_index(pplayer)] == 0) {
-      /* No units at all for some player! */
-      die(_("No units placed for %s!"), player_name(pplayer));
-    }
-  } players_iterate_end;
-
   shuffle_players();
+}
+
+/**************************************************************************
+  This is called once at the start of each phase to alert the clients to
+  the new phase.  game.info.phase should be incremented before calling it.
+**************************************************************************/
+void send_start_phase_to_clients(void)
+{
+  /* This function is so simple it could probably be dropped... */
+  dlsend_packet_start_phase(game.est_connections, game.info.phase);
 }
 
 /**************************************************************************
@@ -323,10 +295,12 @@ void init_new_game(void)
 void send_year_to_clients(int year)
 {
   struct packet_new_year apacket;
+  int i;
   
-  players_iterate(pplayer) {
+  for(i=0; i<game.info.nplayers; i++) {
+    struct player *pplayer = &game.players[i];
     pplayer->nturns_idle++;
-  } players_iterate_end;
+  }
 
   apacket.year = year;
   apacket.turn = game.info.turn;
@@ -336,6 +310,17 @@ void send_year_to_clients(int year)
   notify_conn(game.est_connections, NULL, E_NEXT_YEAR, _("Year: %s"),
 		 textyear(year));
 }
+
+
+/**************************************************************************
+  Send specified state; should be a CLIENT_GAME_*_STATE ?
+  (But note client also changes state from other events.)
+**************************************************************************/
+void send_game_state(struct conn_list *dest, int state)
+{
+  dlsend_packet_game_state(dest, state);
+}
+
 
 /**************************************************************************
   Send game_info packet; some server options and various stuff...
@@ -368,6 +353,8 @@ void send_game_info(struct conn_list *dest)
   }
 
   conn_list_iterate(dest, pconn) {
+    /* ? fixme: check for non-players: */
+    ginfo.player_idx = (pconn->player ? pconn->player->player_no : -1);
     send_packet_game_info(pconn, &ginfo);
   }
   conn_list_iterate_end;
@@ -520,7 +507,7 @@ opens a file specified by the packet and compares the packet values with
 the file values. Sends an answer to the client once it's done.
 **************************************************************************/
 void handle_single_want_hack_req(struct connection *pc,
-    				 struct packet_single_want_hack_req *packet)
+                                 struct packet_single_want_hack_req *packet)
 {
   struct section_file file;
   char *token = NULL;

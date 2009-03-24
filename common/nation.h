@@ -69,7 +69,7 @@ struct nation_group {
 
 /* Pointer values are allocated on load then freed in free_nations(). */
 struct nation_type {
-  Nation_type_id item_number;
+  Nation_type_id index;
   struct name_translation adjective;
   struct name_translation noun_plural;
   char flag_graphic_str[MAX_LEN_NAME];
@@ -80,8 +80,7 @@ struct nation_type {
   struct nation_city *city_names;	/* The default city names. */
   char *legend;				/* may be empty */
 
-  bool is_playable;
-  enum barbarian_type barb_type;
+  bool is_playable, is_barbarian;
 
   /* civilwar_nations is a NO_NATION_SELECTED-terminated list of index of
    * the nations that can fork from this one.  parent_nations is the inverse
@@ -134,7 +133,7 @@ int city_style_of_nation(const struct nation_type *nation);
 
 /* Ancillary nation routines */
 bool is_nation_playable(const struct nation_type *nation);
-enum barbarian_type nation_barbarian_type(const struct nation_type *nation);
+bool is_nation_barbarian(const struct nation_type *nation);
 bool can_conn_edit_players_nation(const struct connection *pconn,
 				  const struct player *pplayer);
 

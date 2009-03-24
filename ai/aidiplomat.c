@@ -72,11 +72,11 @@ static int count_sabotagable_improvements(struct city *pcity)
 {
   int count = 0;
 
-  city_built_iterate(pcity, pimprove) {
-    if (pimprove->sabotage > 0) {
+  built_impr_iterate(pcity, index) {
+    if (improvement_by_number(index)->sabotage > 0) {
       count++;
     }
-  } city_built_iterate_end;
+  } built_impr_iterate_end;
 
   return count;
 }
@@ -88,12 +88,12 @@ static int count_stealable_techs(struct player *pplayer, struct player *tplayer)
 {
   int count = 0;
 
-  advance_index_iterate(A_FIRST, index) {
-    if ((player_invention_state(pplayer, index) != TECH_KNOWN)
-        && (player_invention_state(tplayer, index) == TECH_KNOWN)) {
+  tech_type_iterate(index) {
+    if ((get_invention(pplayer, index) != TECH_KNOWN)
+        && (get_invention(tplayer, index) == TECH_KNOWN)) {
       count++;
     }
-  } advance_index_iterate_end;
+  } tech_type_iterate_end;
 
   return count;
 }
@@ -121,7 +121,7 @@ void ai_choose_diplomat_defensive(struct player *pplayer,
        choice->want = 16000; /* diplomat more important than soldiers */
        pcity->ai.urgency = 1;
        choice->type = CT_DEFENDER;
-       choice->value.utype = ut;
+       choice->choice = ut->index;
        choice->need_boat = FALSE;
     } else if (num_role_units(F_DIPLOMAT) > 0) {
       /* We don't know diplomats yet... */
@@ -130,8 +130,10 @@ void ai_choose_diplomat_defensive(struct player *pplayer,
               city_name(pcity));
       ut = get_role_unit(F_DIPLOMAT, 0);
       if (ut) {
-        pplayer->ai.tech_want[advance_index(ut->require_advance)] += DIPLO_DEFENSE_WANT;
-        TECH_LOG(LOG_DEBUG, pplayer, ut->require_advance,
+        Tech_type_id tech_req = ut->tech_requirement;
+
+        pplayer->ai.tech_want[tech_req] += DIPLO_DEFENSE_WANT;
+        TECH_LOG(LOG_DEBUG, pplayer, tech_req,
                  "ai_choose_diplomat_defensive() + %d for %s",
                  DIPLO_DEFENSE_WANT,
                  utype_rule_name(ut));
@@ -206,7 +208,7 @@ void ai_choose_diplomat_offensive(struct player *pplayer,
       gain_theft = total_bulbs_required(pplayer) * TRADE_WEIGHTING;
     }
     gain = MAX(gain_incite, gain_theft);
-    loss = utype_build_shield_cost(ut) * SHIELD_WEIGHTING;
+    loss = unit_build_shield_cost(ut) * SHIELD_WEIGHTING;
 
     /* Probability to succeed, assuming no defending diplomat */
     p_success = game.info.diplchance;
@@ -226,7 +228,7 @@ void ai_choose_diplomat_offensive(struct player *pplayer,
     }
 
     want = military_amortize(pplayer, pcity, want, time_to_dest, 
-                             utype_build_shield_cost(ut));
+                             unit_build_shield_cost(ut));
 
     if (!player_has_embassy(pplayer, city_owner(acity))
         && want < 99) {
@@ -253,8 +255,8 @@ void ai_choose_diplomat_offensive(struct player *pplayer,
               gain_theft,
               time_to_dest);
       choice->want = want;
-      choice->type = CT_CIVILIAN; /* so we don't build barracks for it */
-      choice->value.utype = ut;
+      choice->type = CT_NONMIL; /* so we don't build barracks for it */
+      choice->choice = ut->index;
       choice->need_boat = FALSE;
       BV_SET(ai->stats.diplomat_reservations, acity->id);
     }
@@ -285,7 +287,7 @@ static void ai_diplomat_city(struct unit *punit, struct city *ctarget)
     UNIT_LOG(LOG_ERROR, punit, "no moves left in ai_diplomat_city()!");
   }
 
-  unit_activity_handling(punit, ACTIVITY_IDLE);
+  handle_unit_activity_request(punit, ACTIVITY_IDLE);
 
 #define T(my_act,my_val)                                            \
   if (diplomat_can_do_action(punit, my_act, ctarget->tile)) {       \
@@ -354,7 +356,7 @@ static void find_city_to_diplomat(struct player *pplayer, struct unit *punit,
     struct player *aplayer;
     bool can_incite;
 
-    acity = tile_city(pos.tile);
+    acity = tile_get_city(pos.tile);
 
     if (!acity) {
       continue;
@@ -402,7 +404,7 @@ static struct city *ai_diplomat_defend(struct player *pplayer,
   int best_dist = 30; /* any city closer than this is better than none */
   int best_urgency = 0;
   struct city *ctarget = NULL;
-  struct city *pcity = tile_city(punit->tile);
+  struct city *pcity = tile_get_city(punit->tile);
 
   if (pcity 
       && count_diplomats_on_tile(pcity->tile) == 1
@@ -416,7 +418,7 @@ static struct city *ai_diplomat_defend(struct player *pplayer,
     struct player *aplayer;
     int dipls, urgency;
 
-    acity = tile_city(pos.tile);
+    acity = tile_get_city(pos.tile);
     if (!acity) {
       continue;
     }
@@ -480,8 +482,7 @@ static bool ai_diplomat_bribe_nearby(struct player *pplayer,
     if (!pvictim
         || !HOSTILE_PLAYER(pplayer, ai, unit_owner(pvictim))
         || unit_list_size(ptile->units) > 1
-        || (tile_city(ptile)
-         && get_city_bonus(tile_city(ptile), EFT_NO_INCITE) > 0)
+        || (ptile->city && get_city_bonus(ptile->city, EFT_NO_INCITE) > 0)
         || get_player_bonus(unit_owner(pvictim), EFT_NO_INCITE) > 0) {
       continue;
     }
@@ -580,7 +581,7 @@ void ai_manage_diplomat(struct player *pplayer, struct unit *punit)
   parameter.get_zoc = NULL; /* kludge */
   map = pf_create_map(&parameter);
 
-  pcity = tile_city(punit->tile);
+  pcity = tile_get_city(punit->tile);
 
   /* Look for someone to bribe */
   if (!ai_diplomat_bribe_nearby(pplayer, punit, map)) {
@@ -590,7 +591,7 @@ void ai_manage_diplomat(struct player *pplayer, struct unit *punit)
   }
 
   /* If we are the only diplomat in a threatened city, then stay to defend */
-  pcity = tile_city(punit->tile); /* we may have moved */
+  pcity = tile_get_city(punit->tile); /* we may have moved */
   if (pcity && count_diplomats_on_tile(punit->tile) == 1
       && (pcity->ai.diplomat_threat || pcity->ai.urgency > 0)) {
     UNIT_LOG(LOG_DIPLOMAT, punit, "stays to protect %s (urg %d)", 
@@ -606,7 +607,7 @@ void ai_manage_diplomat(struct player *pplayer, struct unit *punit)
       || punit->ai.ai_role == AIUNIT_DEFEND_HOME) {
     bool failure = FALSE;
 
-    ctarget = tile_city(punit->goto_tile);
+    ctarget = tile_get_city(punit->goto_tile);
     if (pf_get_position(map, punit->goto_tile, &pos)
         && ctarget) {
       if (same_pos(ctarget->tile, punit->tile)) {

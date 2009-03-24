@@ -71,11 +71,6 @@
                           "~/.freeciv"
 #endif
 
-/* environment */
-#ifndef FREECIV_PATH
-#define FREECIV_PATH "FREECIV_PATH"
-#endif
-
 /* Both of these are stored in the local encoding.  The grouping_sep must
  * be converted to the internal encoding when it's used. */
 static char *grouping = NULL;
@@ -249,7 +244,7 @@ static size_t my_strcspn(const char *s, const char *reject)
  num_tokens are extracted.
 
  The user has the responsiblity to free the memory allocated by
- **tokens using free_tokens().
+ **tokens.
 ***************************************************************/
 int get_tokens(const char *str, char **tokens, size_t num_tokens,
 	       const char *delimiterset)
@@ -293,19 +288,6 @@ int get_tokens(const char *str, char **tokens, size_t num_tokens,
   }
 
   return token;
-}
-
-/***************************************************************
-  Frees a set of tokens created by get_tokens().
-***************************************************************/
-void free_tokens(char **tokens, size_t ntokens)
-{
-  size_t i;
-  for (i = 0; i < ntokens; i++) {
-    if (tokens[i]) {
-      free(tokens[i]);
-    }
-  }
 }
 
 /***************************************************************
@@ -935,14 +917,12 @@ const char **get_data_dirs(int *num_dirs)
     return dirs;
   }
 
-  path = getenv(FREECIV_PATH);
+  path = getenv("FREECIV_PATH");
   if (!path) {
     path = DEFAULT_DATA_PATH;
   } else if (*path == '\0') {
-    freelog(LOG_ERROR,
-            /* TRANS: <FREECIV_PATH> configuration error */
-            _("\"%s\" is set but empty; using default \"%s\" instead."),
-            FREECIV_PATH, DEFAULT_DATA_PATH);
+    freelog(LOG_ERROR, _("FREECIV_PATH is set but empty; "
+			 "using default path instead."));
     path = DEFAULT_DATA_PATH;
   }
   assert(path != NULL);
@@ -1045,8 +1025,7 @@ char **datafilelist(const char* suffix)
 	freelog(LOG_VERBOSE, "Skipping non-existing data directory %s.",
 		dirs[dir_num]);
       } else {
-	/* TRANS: "...: <externally translated error string>."*/
-        freelog(LOG_ERROR, _("Could not read data directory %s: %s."),
+	freelog(LOG_ERROR, _("Could not read data directory %s: %s."),
 		dirs[dir_num], mystrerror());
       }
       continue;
@@ -1297,21 +1276,17 @@ char *datafilename_required(const char *filename)
   if (dname) {
     return dname;
   } else {
-    freelog(LOG_ERROR,
-            /* TRANS: <FREECIV_PATH> configuration error */
-            _("The data path may be set via the \"%s\" environment variable."),
-            FREECIV_PATH);
-    freelog(LOG_ERROR,
-            _("Current data path is: \"%s\""),
-            datafilename(NULL));
+    freelog(LOG_ERROR, _("The data path may be set via"
+			 " the environment variable FREECIV_PATH."));
+    freelog(LOG_ERROR, _("Current data path is: \"%s\""), datafilename(NULL));
     freelog(LOG_FATAL,
-            _("The \"%s\" file is required ... aborting!"), filename);
+		 _("The \"%s\" file is required ... aborting!"), filename);
     exit(EXIT_FAILURE);
   }
 }
 
 /***************************************************************************
-  Language environmental variable (with emulation).
+  Language environmental variable.
 ***************************************************************************/
 char *get_langname(void)
 {
@@ -1512,41 +1487,20 @@ const char *m_pre_description(enum m_pre_result result)
 }
 
 /***************************************************************************
-  See match_prefix_full().
-***************************************************************************/
-enum m_pre_result match_prefix(m_pre_accessor_fn_t accessor_fn,
-                               size_t n_names,
-                               size_t max_len_name,
-                               m_pre_strncmp_fn_t cmp_fn,
-                               m_strlen_fn_t len_fn,
-                               const char *prefix,
-                               int *ind_result)
-{
-  return match_prefix_full(accessor_fn, n_names, max_len_name, cmp_fn,
-                           len_fn, prefix, ind_result, NULL, 0, NULL);
-}
-
-/***************************************************************************
   Given n names, with maximum length max_len_name, accessed by
   accessor_fn(0) to accessor_fn(n-1), look for matching prefix
   according to given comparison function.
   Returns type of match or fail, and for return <= M_PRE_AMBIGUOUS
   sets *ind_result with matching index (or for ambiguous, first match).
   If max_len_name==0, treat as no maximum.
-  If the int array 'matches' is non-NULL, up to 'max_matches' ambiguous
-  matching names indices will be inserted into it. If 'pnum_matches' is
-  non-NULL, it will be set to the number of indices inserted into 'matches'.
 ***************************************************************************/
-enum m_pre_result match_prefix_full(m_pre_accessor_fn_t accessor_fn,
-                                    size_t n_names,
-                                    size_t max_len_name,
-                                    m_pre_strncmp_fn_t cmp_fn,
-                                    m_strlen_fn_t len_fn,
-                                    const char *prefix,
-                                    int *ind_result,
-                                    int *matches,
-                                    int max_matches,
-                                    int *pnum_matches)
+enum m_pre_result match_prefix(m_pre_accessor_fn_t accessor_fn,
+			       size_t n_names,
+			       size_t max_len_name,
+			       m_pre_strncmp_fn_t cmp_fn,
+                               m_strlen_fn_t len_fn,
+			       const char *prefix,
+			       int *ind_result)
 {
   int i, len, nmatches;
 
@@ -1573,9 +1527,6 @@ enum m_pre_result match_prefix_full(m_pre_accessor_fn_t accessor_fn,
       if (nmatches==0) {
 	*ind_result = i;	/* first match */
       }
-      if (matches != NULL && nmatches < max_matches) {
-        matches[nmatches] = i;
-      }
       nmatches++;
     }
   }
@@ -1583,9 +1534,6 @@ enum m_pre_result match_prefix_full(m_pre_accessor_fn_t accessor_fn,
   if (nmatches == 1) {
     return M_PRE_ONLY;
   } else if (nmatches > 1) {
-    if (pnum_matches != NULL) {
-      *pnum_matches = MIN(max_matches, nmatches);
-    }
     return M_PRE_AMBIGUOUS;
   } else {
     return M_PRE_FAIL;
@@ -1636,29 +1584,18 @@ bool bv_are_equal(const unsigned char *vec1, const unsigned char *vec2,
   servers on the LAN, as specified by $FREECIV_MULTICAST_GROUP.
   Gets value once, and then caches result.
 ***************************************************************************/
-char *get_multicast_group(bool ipv6_prefered)
+char *get_multicast_group(void)
 {
   static bool init = FALSE;
   static char *group = NULL;
-  static char *default_multicast_group_ipv4 = "225.1.1.1";
-#ifdef IPV6_SUPPORT
-  /* TODO: Get useful group (this is node local) */
-  static char *default_multicast_group_ipv6 = "FF31::8000:15B4";
-#endif
-
+  static char *default_multicast_group = "225.1.1.1";
+  
   if (!init) {
     char *env = getenv("FREECIV_MULTICAST_GROUP");
     if (env) {
       group = mystrdup(env);	        
     } else {
-#ifdef IPV6_SUPPORT
-      if (ipv6_prefered) {
-        group = mystrdup(default_multicast_group_ipv6);
-      } else
-#endif /* IPv6 support */
-      {
-        group = mystrdup(default_multicast_group_ipv4);
-      }
+      group = mystrdup(default_multicast_group);
     }
     init = TRUE;
   }
@@ -1823,22 +1760,4 @@ char scanin(char **buf, char *delimiters, char *dest, int size)
   }
 
   return found;
-}
-
-/************************************************************************
-  Randomize the elements of an array using the Fisher-Yates shuffle.
-
-  see: http://benpfaff.org/writings/clc/shuffle.html
-************************************************************************/
-void array_shuffle(int *array, int n)
-{
-  if (n > 1 && array != NULL) {
-    int i, j, t;
-    for (i = 0; i < n - 1; i++) {
-      j = i + myrand(n - i);
-      t = array[j];
-      array[j] = array[i];
-      array[i] = t;
-    }
-  }
 }

@@ -1,8 +1,9 @@
 ## Process this file with automake to produce Makefile.in
 
-noinst_LTLIBRARIES = libguiclient.la
-AM_CPPFLAGS = -I. -I$(srcdir)/.. -I$(srcdir)/../include -I$(top_srcdir)/utility -I$(top_srcdir)/common -I$(top_srcdir)/common/aicore -I$(srcdir)/../agents $(CLIENT_CFLAGS) $(SOUND_CFLAGS) $(GGZ_GTK_INCLUDES)
+noinst_LIBRARIES = libguiclient.a
+AM_CPPFLAGS = -I. -I$(srcdir)/.. -I$(srcdir)/../include -I$(top_srcdir)/utility -I$(top_srcdir)/common -I$(top_srcdir)/common/aicore -I../../intl -I$(srcdir)/../agents $(CLIENT_CFLAGS) $(GGZ_GTK_INCLUDES)
 
+## Above, note -I../../intl instead of -I$(top_srdir/intl) is deliberate.
 # The AM_CPPFLAGS "-I." is so resources.c includes the locally generated 
 # Freeciv.h in the builddir, in preference to the one 
 # in the source dir (when compiling from another dir). --dwp
@@ -16,9 +17,9 @@ Freeciv.h: $(top_srcdir)/data/freeciv.rc-2.0
 	echo '/*********************************************************/' >> Freeciv.h
 	$(srcdir)/rc2c $(top_srcdir)/data/freeciv.rc-2.0 >> Freeciv.h
 
-libguiclient_la_DEPENDENCIES = rc2c
+libguiclient_a_DEPENDENCIES = rc2c
 
-libguiclient_la_SOURCES = \
+libguiclient_a_SOURCES = \
 	rc2c		\
 	Freeciv.h	\
 	canvas.c	\
@@ -42,10 +43,6 @@ libguiclient_la_SOURCES = \
 	dialogs.h	\
 	diplodlg.c	\
 	diplodlg.h	\
-	editgui.c	\
-	editgui.h	\
-	editprop.c	\
-	editprop.h	\
 	diplomat_dialog.c \
 	finddlg.c	\
 	finddlg.h	\

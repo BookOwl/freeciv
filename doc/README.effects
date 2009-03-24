@@ -40,9 +40,8 @@ survives destruction (wonders only).
 
 A requirement type is the type of the requirement and can be one of "None" 
 (default), "Tech", "Gov", "Building", "Special", "Terrain", "UnitType", 
-"UnitFlag", "UnitClass", "Nation", "OutputType", "MinSize", "AI" and
-"TerrainClass". MinSize is the minimum size of a city required. AI is ai
-player difficulty level. TerrainClass is either "Land" or "Oceanic".
+"UnitFlag", "UnitClass", "Nation", "OutputType" and "MinSize". MinSize is the 
+minimum size of a city required.
 
 Effect types 
 ============
@@ -120,6 +119,9 @@ Make_Happy
 
 No_Anarchy
     No period of anarchy between government changes.
+
+No_Sink_Deep
+    Triremes no longer sink when on dangerous seas.
 
 Nuke_Proof
     City is nuke proof.
@@ -287,11 +289,6 @@ Output_Penalty_Tile
 
 Output_Inc_Tile_Celebrate
     Tiles get amount extra output when city working them is celebrating.
-
-Upgrade_Price_Pct
-    Increases unit upgrade cost by amount percent. This effect works at
-    player level. You cannot adjust upgrade costs for certain unit type or
-    for units upgraded in certain city.
 
 Visible_Wall
     Positive amount only instructs clients to use wall graphics for city.

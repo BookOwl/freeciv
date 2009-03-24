@@ -273,11 +273,11 @@ int send_packet_data(struct connection *pc, unsigned char *data, int len)
 		packets_stats[i].size / packets_stats[i].counter,
 		get_packet_name(i),i);
       }
-      freelog(LOG_TEST,
+      freelog(LOG_NORMAL,
 	      "turn=%d; transmitted %d bytes in %d packets;average size "
 	      "per packet %d bytes", game.turn, sum, packet_counter,
 	      sum / packet_counter);
-      freelog(LOG_TEST, "turn=%d; transmitted %d bytes", game.turn,
+      freelog(LOG_NORMAL, "turn=%d; transmitted %d bytes", game.turn,
 	      pc->statistics.bytes_send);
     }    
     if (clear) {
@@ -473,19 +473,19 @@ void *get_packet_from_connection(struct connection *pc,
     if (packet_counter % 100 == 0) {
       int i, sum = 0;
 
-      freelog(LOG_TEST, "Received packets:");
+      freelog(LOG_NORMAL, "Received packets:");
       for (i = 0; i < PACKET_LAST; i++) {
 	if (packets_stats[i].counter == 0)
 	  continue;
 	sum += packets_stats[i].size;
-	freelog(LOG_TEST,
+	freelog(LOG_NORMAL,
 		"  [%-25.25s %3d]: %6d packets; %8d bytes total; "
 		"%5d bytes/packet average",
 		get_packet_name(i), i, packets_stats[i].counter,
 		packets_stats[i].size,
 		packets_stats[i].size / packets_stats[i].counter);
       }
-      freelog(LOG_TEST,
+      freelog(LOG_NORMAL,
 	      "received %d bytes in %d packets;average size "
 	      "per packet %d bytes",
 	      sum, packet_counter, sum / packet_counter);
@@ -721,8 +721,8 @@ void pre_send_packet_player_attribute_chunk(struct connection *pc,
 /**************************************************************************
   ...
 **************************************************************************/
-void post_receive_packet_ruleset_control(struct connection *pc,
-					 struct packet_ruleset_control *packet)
+void post_receive_packet_game_state(struct connection *pc,
+				    struct packet_game_state *packet)
 {
   conn_clear_packet_cache(pc);
 }
@@ -730,8 +730,8 @@ void post_receive_packet_ruleset_control(struct connection *pc,
 /**************************************************************************
   ...
 **************************************************************************/
-void post_send_packet_ruleset_control(struct connection *pc,
-				      const struct packet_ruleset_control *packet)
+void post_send_packet_game_state(struct connection *pc,
+				 const struct packet_game_state *packet)
 {
   conn_clear_packet_cache(pc);
 }

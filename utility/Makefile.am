@@ -1,10 +1,14 @@
 ## Process this file with automake to produce Makefile.in
 
-SUBDIRS = ftwl
+SUBDIRS=        ftwl
 
-noinst_LTLIBRARIES = libcivutility.la
+noinst_LIBRARIES = libcivutility.a
 
-libcivutility_la_SOURCES = \
+AM_CPPFLAGS = -I../intl
+
+## Above, note -I../intl instead of -I$(top_srdir/intl) is deliberate.
+
+libcivutility_a_SOURCES = \
 		astring.c       \
 		astring.h       \
 		capability.c	\

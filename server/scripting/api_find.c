@@ -25,7 +25,7 @@
 **************************************************************************/
 Player *api_find_player(int player_id)
 {
-  return player_by_number(player_id);
+  return get_player(player_id);
 }
 
 /**************************************************************************
@@ -49,26 +49,6 @@ Unit *api_find_unit(Player *pplayer, int unit_id)
     return player_find_unit_by_id(pplayer, unit_id);
   } else {
     return idex_lookup_unit(unit_id);
-  }
-}
-
-/************************************************************************** 
-  Return a unit type for given role.
-**************************************************************************/
-Unit_Type *api_find_role_unit_type(const char *role_name, Player *pplayer)
-{
-  enum unit_role_id role = find_unit_role_by_rule_name(role_name);
-
-  if (role == L_LAST) {
-    return NULL;
-  }
-
-  if (pplayer) {
-    return best_role_unit_for_player(pplayer, role);
-  } else if (num_role_units(role) > 0) {
-    return get_role_unit(role, 0);
-  } else {
-    return NULL;
   }
 }
 
@@ -125,7 +105,8 @@ Building_Type *api_find_building_type(int building_type_id)
 **************************************************************************/
 Building_Type *api_find_building_type_by_name(const char *name_orig)
 {
-  return find_improvement_by_rule_name(name_orig);
+  Impr_type_id id = find_improvement_by_rule_name(name_orig);
+  return api_find_building_type(id);
 }
 
 /**************************************************************************
@@ -149,7 +130,7 @@ Unit_Type *api_find_unit_type_by_name(const char *name_orig)
 **************************************************************************/
 Tech_Type *api_find_tech_type(int tech_type_id)
 {
-  return advance_by_number(tech_type_id);
+  return &advances[tech_type_id];
 }
 
 /**************************************************************************
@@ -157,7 +138,8 @@ Tech_Type *api_find_tech_type(int tech_type_id)
 **************************************************************************/
 Tech_Type *api_find_tech_type_by_name(const char *name_orig)
 {
-  return find_advance_by_rule_name(name_orig);
+  Tech_type_id id = find_advance_by_rule_name(name_orig);
+  return api_find_tech_type(id);
 }
 
 /**************************************************************************
@@ -173,6 +155,8 @@ Terrain *api_find_terrain(int terrain_id)
 **************************************************************************/
 Terrain *api_find_terrain_by_name(const char *name_orig)
 {
-  return find_terrain_by_rule_name(name_orig);
+  struct terrain *pterrain = find_terrain_by_rule_name(name_orig);
+
+  return pterrain;
 }
 

@@ -58,7 +58,13 @@ static int start_new_game_callback(struct widget *pWidget)
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
     popdown_start_menu();
     if (is_server_running() || client_start_server()) {
-      /* saved settings are sent in client/options.c load_settable_options() */
+      char buf[512];
+  
+      /* Send new game defaults. */
+      send_chat("/set aifill 5");
+  
+      my_snprintf(buf, sizeof(buf), "/%s", skill_level_names[0]);
+      send_chat(buf);
     }
   }
   return -1;
@@ -300,7 +306,12 @@ static void show_main_page()
 	  map_rgba(pWindow->dst->surface->format, line_color));
   
   set_output_window_text(_("SDLClient welcomes you..."));
-  chat_welcome_message();
+  set_output_window_text(_("Freeciv is free software and you are welcome "
+			   "to distribute copies of "
+			   "it under certain conditions;"));
+  set_output_window_text(_("See the \"Copying\" item on the Help"
+			   " menu."));
+  set_output_window_text(_("Now.. Go give'em hell!"));
 
   popup_meswin_dialog(true);  
 

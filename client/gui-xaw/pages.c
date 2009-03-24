@@ -23,15 +23,12 @@
 #include <X11/Xaw/Command.h>
 #include <X11/Xaw/List.h>
 
-/* utility */
+#include "game.h"
+
 #include "fcintl.h"
 #include "support.h"
 
-/* common */
-#include "game.h"
-
-/* client */
-#include "client_main.h"
+#include "civclient.h"
 #include "connectdlg_g.h"
 #include "dialogs_g.h"
 
@@ -230,13 +227,13 @@ void update_start_page(void)
 		  is_ready ? " Yes " : " No  ",
 		  leader,
 		  nation,
-		  player_number(pplayer));
+		  pplayer->player_no);
 
       namelist_ptrs[j]=namelist_text[j];
       j++;
     } players_iterate_end;
     conn_list_iterate(game.est_connections, pconn) {
-      if (NULL != pconn->playing && !pconn->observer) {
+      if (pconn->player && !pconn->observer) {
 	continue; /* Already listed above. */
       }
       name = pconn->username;
@@ -276,8 +273,8 @@ void start_page_cancel_callback(Widget w, XtPointer client_data,
 void start_page_nation_callback(Widget w, XtPointer client_data,
 				XtPointer call_data)
 {
-  if (NULL != client.conn.playing) {
-    popup_races_dialog(client.conn.playing);
+  if (game.player_ptr) {
+    popup_races_dialog(game.player_ptr);
   }
 }
 

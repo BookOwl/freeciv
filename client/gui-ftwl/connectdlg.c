@@ -18,15 +18,13 @@
 #include <errno.h>
 #include <stdio.h>		/* sscanf */
 
-/* utility */
 #include "fcintl.h"
 #include "log.h"
 #include "support.h"
 
-/* client */
 #include "chatline_common.h"	/* for append_output_window */
-#include "client_main.h"
-#include "clinet.h"		/* connect_to_server() */
+#include "civclient.h"
+#include "clinet.h"		/* for get_server_address */
 #include "gui_main.h"
 
 #include "connectdlg.h"

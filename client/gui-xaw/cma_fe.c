@@ -36,7 +36,6 @@
 #include "pixcomm.h"
 #include "canvas.h"
 
-/* common & utility */
 #include "city.h"
 #include "fcintl.h"
 #include "game.h"
@@ -48,8 +47,7 @@
 #include "shared.h"
 #include "support.h"
 
-/* client */
-#include "client_main.h"
+#include "civclient.h"
 #include "cma_fec.h"
 
 #include "cityrep.h"
@@ -358,7 +356,7 @@ void show_cma_dialog(struct city *pcity, Widget citydlg)
   XtRealizeWidget(cma_dialog);
 
   update_stat_labels(True);
-  cm_result_from_main_map(&result, pcity, TRUE);
+  cm_copy_result_from_city(pcity, &result);
   xaw_set_label(result_label, 
        (char *) cmafec_get_result_descr(current_city, &result, &parameter));
 
@@ -501,7 +499,7 @@ static void select_preset(Widget w, XtPointer list,
     }
 
     cmafec_get_fe_parameter(current_city, &parameter);
-    cm_result_from_main_map(&result, current_city, TRUE);
+    cm_copy_result_from_city(current_city, &result);
     xaw_set_label(result_label,
         (char *) cmafec_get_result_descr(current_city, &result, &parameter));
 
@@ -611,7 +609,7 @@ static void sliders_scroll_callback(Widget w, XtPointer client_data,
   }
 
   cmafec_get_fe_parameter(current_city, &parameter);
-  cm_result_from_main_map(&result, current_city, TRUE);
+  cm_copy_result_from_city(current_city, &result);
   xaw_set_label(result_label,
         (char *) cmafec_get_result_descr(current_city, &result, &parameter));
 
@@ -668,7 +666,7 @@ void sliders_jump_callback(Widget w, XtPointer client_data,
   }
 
   cmafec_get_fe_parameter(current_city, &parameter);
-  cm_result_from_main_map(&result, current_city, TRUE);
+  cm_copy_result_from_city(current_city, &result);
   xaw_set_label(result_label,
         (char *) cmafec_get_result_descr(current_city, &result, &parameter));
 
@@ -784,7 +782,7 @@ void celebrate_callback(Widget w, XtPointer client_data, XtPointer call_data)
   }
 
   cmafec_get_fe_parameter(current_city, &parameter);
-  cm_result_from_main_map(&result, current_city, TRUE);
+  cm_copy_result_from_city(current_city, &result);
   xaw_set_label(result_label,
         (char *) cmafec_get_result_descr(current_city, &result, &parameter));
 

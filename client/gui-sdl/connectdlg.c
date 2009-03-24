@@ -32,8 +32,8 @@
 #include "log.h"
 
 /* client */
-#include "client_main.h"
-#include "clinet.h"		/* connect_to_server() */
+#include "civclient.h"
+#include "clinet.h"
 #include "packhand.h"
 #include "servers.h"
 
@@ -744,7 +744,7 @@ static int send_passwd_callback(struct widget *pWidget)
     
     flush_dirty();
     
-    send_packet_authentication_reply(&client.conn, &reply);
+    send_packet_authentication_reply(&aconnection, &reply);
   }
   return -1;
 }
@@ -1102,7 +1102,7 @@ void handle_authentication_req(enum authentication_type type, char *message)
       struct packet_authentication_reply reply;
 
       sz_strlcpy(reply.password, password);
-      send_packet_authentication_reply(&client.conn, &reply);
+      send_packet_authentication_reply(&aconnection, &reply);
       return;
     } else {
       popup_user_passwd_dialog(message);

@@ -27,8 +27,9 @@
 #include "packets.h"
 #include "support.h"
 
-#include "client_main.h"
+#include "civclient.h"
 #include "climisc.h"
+#include "clinet.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
 

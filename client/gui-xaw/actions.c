@@ -16,14 +16,13 @@
 #include <config.h>
 #endif
 
-/* common */
+#include "game.h"
 #include "unitlist.h"
 
-/* client */
 #include "chatline.h"
 #include "citydlg.h"
 #include "cityrep.h"
-#include "client_main.h"
+#include "civclient.h"
 #include "connectdlg.h"
 #include "control.h"
 #include "dialogs.h"
@@ -293,7 +292,7 @@ static void xaw_key_open_spaceship(Widget w, XEvent *event, String *argv, Cardin
 {
   if (can_client_change_view() &&
      is_menu_item_active(MENU_REPORT, MENU_REPORT_SPACESHIP))
-    popup_spaceship_dialog(client.conn.playing);
+    popup_spaceship_dialog(game.player_ptr);
 }
 
 /****************************************************************************
@@ -338,7 +337,7 @@ static void xaw_key_open_worklists(Widget w, XEvent *event,
 {
   if (can_client_change_view()
       && is_menu_item_active(MENU_GOVERNMENT, MENU_GOVERNMENT_WORKLISTS)) {
-    popup_worklists_dialog(client.conn.playing);
+    popup_worklists_dialog(game.player_ptr);
   }
 }
 
@@ -461,9 +460,7 @@ static void xaw_key_unit_fortify(Widget w, XEvent *event, String *argv, Cardinal
 static void xaw_key_unit_fortify_or_fortress(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
   unit_list_iterate(get_units_in_focus(), punit) {
-    struct base_type *pbase = get_base_by_gui_type(BASE_GUI_FORTRESS,
-                                                   punit, punit->tile);
-    if (pbase != NULL) {
+    if (can_unit_do_activity(punit, ACTIVITY_FORTRESS)) {
       key_unit_fortress();
     } else {
       key_unit_fortify();

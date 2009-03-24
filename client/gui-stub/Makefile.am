@@ -1,9 +1,11 @@
 ## Process this file with automake to produce Makefile.in
 
-noinst_LTLIBRARIES = libguiclient.la
-AM_CPPFLAGS = -I. -I$(srcdir)/.. -I$(srcdir)/../include -I$(top_srcdir)/utility -I$(top_srcdir)/common $(CLIENT_CFLAGS) $(SOUND_CFLAGS)
+noinst_LIBRARIES = libguiclient.a
+AM_CPPFLAGS = -I. -I$(srcdir)/.. -I$(srcdir)/../include -I$(top_srcdir)/utility -I$(top_srcdir)/common -I../../intl $(CLIENT_CFLAGS)
 
-libguiclient_la_SOURCES = \
+## Above, note -I../../intl instead of -I$(top_srdir)/intl is deliberate.
+
+libguiclient_a_SOURCES = \
 	canvas.c	\
 	canvas.h	\
 	chatline.c	\

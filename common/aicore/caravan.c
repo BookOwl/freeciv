@@ -193,7 +193,7 @@ static void caravan_search_from(const struct unit *caravan,
       break;
     }
 
-    pcity = tile_city(p.tile);
+    pcity = tile_get_city(p.tile);
     if (pcity) {
       bool stop = callback(callback_data, pcity, turns_before + p.turn,
                            p.moves_left);
@@ -326,18 +326,18 @@ static double wonder_benefit(const struct unit *caravan, int arrival_time,
 
   if (!param->consider_wonders
       || unit_owner(caravan) != city_owner(dest)
-      || VUT_UTYPE == dest->production.kind
-      || !is_wonder(dest->production.value.building)) {
+      || dest->production.is_unit
+      || !is_wonder(dest->production.value)) {
     return 0;
   }
 
   shields_at_arrival = dest->shield_stock
     + arrival_time * dest->surplus[O_SHIELD];
 
-  costwithout = impr_buy_gold_cost(dest->production.value.building,
+  costwithout = impr_buy_gold_cost(dest->production.value,
       shields_at_arrival);
-  costwith = impr_buy_gold_cost(dest->production.value.building,
-      shields_at_arrival + unit_build_shield_cost(caravan));
+  costwith = impr_buy_gold_cost(dest->production.value,
+      shields_at_arrival + unit_build_shield_cost(unit_type(caravan)));
 
   assert(costwithout >= costwith);
   return costwithout - costwith;
