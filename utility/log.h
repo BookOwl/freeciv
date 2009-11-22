@@ -24,10 +24,6 @@
 #define LOG_DEBUG   4		/* suppressed unless DEBUG defined;
 				   may be enabled on file/line basis */
 
-/* Used by game debug command */
-#define LOG_TEST LOG_NORMAL
-#define LOG_PACKET LOG_VERBOSE
-
 /* Some variables local to each file which includes log.h,
    to record whether LOG_DEBUG messages apply for that file
    and if so for which lines (min,max) :
@@ -59,7 +55,7 @@ int log_parse_level_str(const char *level_str);
 void log_init(const char *filename, int initial_level,
 	      log_callback_fn callback);
 void log_set_level(int level);
-log_callback_fn log_set_callback(log_callback_fn callback);
+void log_set_callback(log_callback_fn callback);
 
 void real_freelog(int level, const char *message, ...)
                   fc__attribute((__format__ (__printf__, 2, 3)));
@@ -99,33 +95,5 @@ static inline int logdebug_check(const char *file, int line)
     }                                                                       \
   } while(FALSE) 
 #endif  /* DEBUG */
-
-#define RETURN_IF_FAIL(condition)                                           \
-if (!(condition)) {                                                         \
-  freelog(LOG_ERROR, "In %s() (%s, line %d): assertion '%s' failed.",       \
-          __FUNCTION__, __FILE__, __LINE__, #condition);                    \
-  return;                                                                   \
-}
-
-#define RETURN_VAL_IF_FAIL(condition, val)                                  \
-if (!(condition)) {                                                         \
-  freelog(LOG_ERROR, "In %s() (%s, line %d): assertion '%s' failed.",       \
-          __FUNCTION__, __FILE__, __LINE__, #condition);                    \
-  return val;                                                               \
-}
-
-#define RETURN_IF_FAIL_MSG(condition, format, ...)                          \
-if (!(condition)) {                                                         \
-  freelog(LOG_ERROR, "In %s() (%s, line %d): " format,                      \
-          __FUNCTION__, __FILE__, __LINE__, ## __VA_ARGS__);                \
-  return;                                                                   \
-}
-
-#define RETURN_VAL_IF_FAIL_MSG(condition, val, format, ...)                 \
-if (!(condition)) {                                                         \
-  freelog(LOG_ERROR, "In %s() (%s, line %d): " format,                      \
-          __FUNCTION__, __FILE__, __LINE__, ## __VA_ARGS__);                \
-  return val;                                                               \
-}
 
 #endif  /* FC__LOG_H */

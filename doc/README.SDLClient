@@ -50,11 +50,9 @@ In-game controls:
 -----------------
 
     - <Tab> to show input dialog (chatline)
-    - <ctrl - shift - w> hide/show fog of war
-    - <ctrl - w> hide/show city worker output on map
+    - <ctrl - w> hide/show fog of war
     - <ctrl - r> hide/show road/railroad
-    - <ctrl - shift - t> hide/show terrain
-    - <ctrl - t> hide/show city traderoutes
+    - <ctrl - t> hide/show terrain
     - <ctrl - i> hide/show irrigation/farmlands
     - <ctrl - u> hide/show units    
     - <ctrl - o> hide/show pollution

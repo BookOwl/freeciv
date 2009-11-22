@@ -1,10 +1,10 @@
 ## Process this file with automake to produce Makefile.in
 
-noinst_LTLIBRARIES = libaicore.la
+noinst_LIBRARIES = libaicore.a
 
-AM_CPPFLAGS = -I$(top_srcdir)/utility -I.. -I$(top_srcdir)/common
+AM_CPPFLAGS = -I$(top_srcdir)/utility -I.. -I$(top_srcdir)/common -I../../intl
 
-libaicore_la_SOURCES = 		\
+libaicore_a_SOURCES = 		\
 	aisupport.c		\
 	aisupport.h		\
 	path_finding.c		\

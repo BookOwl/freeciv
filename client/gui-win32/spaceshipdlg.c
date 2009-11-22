@@ -20,22 +20,17 @@
 
 #include <windows.h>
 
-/* utility */
 #include "fcintl.h"
-#include "log.h"
+#include "game.h"
+#include "map.h"
 #include "mem.h"
+#include "packets.h"
+#include "player.h"
 #include "shared.h"
 #include "support.h"
 
-/* common */
-#include "game.h"
-#include "map.h"
-#include "packets.h"
-#include "player.h"
-
-/* client */
 #include "canvas.h"
-#include "client_main.h"
+#include "clinet.h"
 #include "climisc.h"
 #include "colors.h"
 #include "dialogs.h"
@@ -110,7 +105,7 @@ void refresh_spaceship_dialog(struct player *pplayer)
   pship=&(pdialog->pplayer->spaceship);
 
   if(game.info.spacerace
-     && pplayer == client.conn.playing
+     && player_number(pplayer) == game.info.player_idx
      && pship->state == SSHIP_STARTED
      && pship->success_rate > 0) {
     EnableWindow(GetDlgItem(pdialog->mainwin,IDOK),TRUE);
@@ -184,7 +179,7 @@ static LONG CALLBACK spaceship_proc(HWND dlg,UINT message,
   case WM_COMMAND:
     switch(LOWORD(wParam)) {
     case IDOK: {
-      send_packet_spaceship_launch(&client.conn);
+      send_packet_spaceship_launch(&aconnection);
     }
     break;
     case IDCANCEL:

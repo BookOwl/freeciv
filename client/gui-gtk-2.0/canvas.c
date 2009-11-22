@@ -265,105 +265,15 @@ void canvas_put_line(struct canvas *pcanvas,
   }
 }
 
-/****************************************************************************
-  Draw a colored curved line for the Technology Tree connectors
-  A curved line is: 1 horizontal line, 2 arcs, 1 horizontal line
-****************************************************************************/
-void canvas_put_curved_line(struct canvas *pcanvas,
-                            struct color *pcolor,
-                            enum line_type ltype, int start_x, int start_y,
-                            int dx, int dy)
-{
-  if (pcanvas->type == CANVAS_PIXMAP) {
-    GdkGC *gc = NULL;
-    
-    switch (ltype) {
-    case LINE_NORMAL:
-      gc = thin_line_gc;
-      break;
-    case LINE_BORDER:
-      gc = border_line_gc;
-      break;
-    case LINE_TILE_FRAME:
-      gc = thick_line_gc;
-      break;
-    case LINE_GOTO:
-      gc = thick_line_gc;
-      break;
-    }
-
-    gdk_gc_set_foreground(gc, &pcolor->color);
-
-    /* To begin, work out the endpoints of the curve */
-    /* and initial horizontal stroke */
-    int line1end_x = start_x + 10;
-    int end_x = start_x + dx;
-    int end_y = start_y + dy;
-    
-    int arcwidth = dx - 10;
-    /* draw a short horizontal line */
-    gdk_draw_line(pcanvas->v.pixmap, gc,
-                  start_x, start_y, line1end_x, start_y);
-
-    if (end_y < start_y) {
-      /* if end_y is above start_y then the first curve is rising */
-      int archeight = -dy + 1;
-
-      /* position the BB of the arc */
-      int arcstart_x = line1end_x-arcwidth/2 -1;
-      int arcstart_y = end_y-1;
-
-      /* Draw arc curving up */
-      gdk_draw_arc(pcanvas->v.pixmap, gc, FALSE,
-                   arcstart_x, arcstart_y, 
-                   arcwidth, archeight, 0, -90*64);
-
-      /* Shift BB to the right */
-      arcstart_x = arcstart_x + arcwidth;
-
-      /* draw arc curving across */
-      gdk_draw_arc(pcanvas->v.pixmap, gc, FALSE,
-                   arcstart_x, arcstart_y, 
-                   arcwidth, archeight, 180*64, -90*64);
-
-    } else { /* end_y is below start_y */
-
-      int archeight = dy + 1;
-
-      /* position BB */
-      int arcstart_x = line1end_x - arcwidth/2 -1;
-      int arcstart_y = start_y-1;
-
-      /* Draw arc curving down */
-      gdk_draw_arc(pcanvas->v.pixmap, gc, FALSE,
-                   arcstart_x, arcstart_y, 
-                   arcwidth, archeight, 0, 90*64);
-
-      /* shift BB right */
-      arcstart_x = arcstart_x + arcwidth;
-
-      /* Draw arc curving across */
-      gdk_draw_arc(pcanvas->v.pixmap, gc, FALSE,
-                   arcstart_x, arcstart_y, 
-                   arcwidth, archeight, 270*64, -90*64);
-
-    }
-    /* Draw short horizontal line */
-    gdk_draw_line(pcanvas->v.pixmap, gc,
-                  end_x - 10, start_y + dy, end_x, end_y);
-  }
-}
-
 static PangoLayout *layout;
 static struct {
-  GtkStyle **styles;
+  PangoFontDescription **font;
   bool shadowed;
 } fonts[FONT_COUNT] = {
-  {&city_names_style, TRUE},
-  {&city_productions_style, TRUE},
-  {&reqtree_text_style, FALSE}
+  {&main_font, TRUE},
+  {&city_productions_font, TRUE},
+  {&city_productions_font, FALSE} /* FIXME: should use separate font */
 };
-#define FONT(font) ((*fonts[font].styles)->font_desc)
 
 /****************************************************************************
   Return the size of the given text in the given font.  This size should
@@ -379,7 +289,7 @@ void get_text_size(int *width, int *height,
     layout = pango_layout_new(gdk_pango_context_get());
   }
 
-  pango_layout_set_font_description(layout, FONT(font));
+  pango_layout_set_font_description(layout, *fonts[font].font);
   pango_layout_set_text(layout, text, -1);
 
   pango_layout_get_pixel_extents(layout, &rect, NULL);
@@ -411,7 +321,7 @@ void canvas_put_text(struct canvas *pcanvas, int canvas_x, int canvas_y,
   }
 
   gdk_gc_set_foreground(civ_gc, &pcolor->color);
-  pango_layout_set_font_description(layout, FONT(font));
+  pango_layout_set_font_description(layout, *fonts[font].font);
   pango_layout_set_text(layout, text, -1);
 
   pango_layout_get_pixel_extents(layout, &rect, NULL);

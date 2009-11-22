@@ -31,11 +31,11 @@ bool diplomacy_possible(const struct player *pplayer,
 {
   return  (game.info.diplomacy == 0      /* Unlimited diplomacy */
 	   || (game.info.diplomacy == 1  /* Human diplomacy only */
-               && !pplayer->ai_data.control 
-               && !aplayer->ai_data.control)
+	       && !pplayer->ai.control 
+	       && !aplayer->ai.control)
 	   || (game.info.diplomacy == 2  /* AI diplomacy only */
-               && pplayer->ai_data.control
-               && aplayer->ai_data.control)
+	       && pplayer->ai.control
+	       && aplayer->ai.control)
 	   || (game.info.diplomacy == 3  /* Team diplomacy only */
 	       && players_on_same_team(pplayer, aplayer)));
 }
@@ -91,6 +91,7 @@ void clear_treaty(struct Treaty *ptreaty)
   clause_list_iterate(ptreaty->clauses, pclause) {
     free(pclause);
   } clause_list_iterate_end;
+  clause_list_unlink_all(ptreaty->clauses);
   clause_list_free(ptreaty->clauses);
 }
 
@@ -134,7 +135,7 @@ bool add_clause(struct Treaty *ptreaty, struct player *pfrom,
     return FALSE;
   }
 
-  if (type == CLAUSE_ADVANCE && !valid_advance_by_number(val)) {
+  if (type == CLAUSE_ADVANCE && !tech_exists(val)) {
     freelog(LOG_ERROR, "Illegal tech value %i in clause.", val);
     return FALSE;
   }
@@ -152,7 +153,10 @@ bool add_clause(struct Treaty *ptreaty, struct player *pfrom,
     return FALSE;
   }
 
-  if (type == CLAUSE_EMBASSY && player_has_real_embassy(pto, pfrom)) {
+  /* Don't use player_has_embassy() here, because it also checks for the
+   * embassy effect, and we should always be able to make an embassy. */
+  if (type == CLAUSE_EMBASSY
+      && BV_ISSET(pto->embassy, player_index(pfrom))) {
     /* we already have embassy */
     freelog(LOG_ERROR,
             "Illegal embassy clause: %s already have embassy with %s.",

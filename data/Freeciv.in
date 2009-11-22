@@ -1589,7 +1589,7 @@ Freeciv*reportcityviewport.allowHoriz:          False
 Freeciv*reportcityviewport.forceColumns:        true
 Freeciv*reportcityviewport.defaultColumns:      1
 Freeciv*reportcityviewport.verticalList:        true
-Freeciv*reportcityviewport.background:          white
+Freeciv*reportcityviewport.background:          white 
 Freeciv*reportcityviewport.resizable:           True
 Freeciv*reportcityviewport.top:                 chainTop
 Freeciv*reportcityviewport.bottom:              chainBottom
@@ -2028,7 +2028,6 @@ Freeciv*governmentmenu.label:           _("Government")
 Freeciv*viewmenu.label:                 _("View")
 Freeciv*ordersmenu.label:               _("Orders")
 Freeciv*reportsmenu.label:              _("Reports")
-Freeciv*editormenu.label:               _("Editor")
 Freeciv*helpmenu.label:                 _("Help")
 Freeciv*gamemenu.background:            gray84
 Freeciv*gamemenu.foreground:            black
@@ -2040,8 +2039,6 @@ Freeciv*ordersmenu.background:          gray84
 Freeciv*ordersmenu.foreground:          black
 Freeciv*reportsmenu.background:         gray84
 Freeciv*reportsmenu.foreground:         black
-Freeciv*editormenu.background:          gray84
-Freeciv*editormenu.foreground:          black
 Freeciv*helpmenu.background:            gray84
 Freeciv*helpmenu.foreground:            black
 Freeciv*gamemenu.borderWidth:           0
@@ -2049,7 +2046,6 @@ Freeciv*governmentmenu.borderWidth:     0
 Freeciv*viewmenu.borderWidth:           0
 Freeciv*ordersmenu.borderWidth:         0
 Freeciv*reportsmenu.borderWidth:        0
-Freeciv*editormenu.borderWidth:         0
 Freeciv*helpmenu.borderWidth:           0
 Freeciv*gamemenu.left:                  chainLeft
 Freeciv*gamemenu.right:                 chainLeft
@@ -2065,10 +2061,7 @@ Freeciv*ordersmenu.right:               chainLeft
 Freeciv*reportsmenu.fromHoriz:          ordersmenu
 Freeciv*reportsmenu.left:               chainLeft
 Freeciv*reportsmenu.right:              chainLeft
-Freeciv*editormenu.fromHoriz:           reportsmenu
-Freeciv*editormenu.left:                chainLeft
-Freeciv*editormenu.right:               chainLeft
-Freeciv*helpmenu.fromHoriz:             editormenu
+Freeciv*helpmenu.fromHoriz:             reportsmenu
 Freeciv*helpmenu.left:                  chainLeft
 Freeciv*helpmenu.right:                 chainLeft
 Freeciv*menu.background:                gray84
@@ -2265,7 +2258,7 @@ Freeciv*buynodialog.*.button0.fromVert:  dlabel
 !
 Freeciv*caravandialog.title: _("Your Caravan Has Arrived")
 Freeciv*caravandialog.*.dlabel.borderWidth:  0
-Freeciv*caravandialog.*.button0.label:     _("Establish trade route")
+Freeciv*caravandialog.*.button0.label:     _("Establish traderoute")
 Freeciv*caravandialog.*.button0.fromVert:  dlabel
 Freeciv*caravandialog.*.button1.label:     _("Help build Wonder")
 Freeciv*caravandialog.*.button1.fromVert:  dlabel
@@ -2883,7 +2876,7 @@ Freeciv*mapcanvas.translations:\
    <Key>o:            key-unit-transform()             \n\
    <Key>p:            key-unit-paradrop-or-pollution() \n\
    <Key>q:            key-unit-patrol()                \n\
-   <Key>r:            key-unit-road-or-trade-route()   \n\
+   <Key>r:            key-unit-road-or-traderoute()    \n\
    <Key>s:            key-unit-sentry()                \n\
    <Key>t:            key-city-workers()               \n\
    <Key>u:            key-unit-unload()                \n\
@@ -2966,7 +2959,7 @@ Freeciv*overviewcanvas.translations:\
    <Key>o:            key-unit-transform()             \n\
    <Key>p:            key-unit-paradrop-or-pollution() \n\
    <Key>q:            key-unit-patrol()                \n\
-   <Key>r:            key-unit-road-or-trade-route()   \n\
+   <Key>r:            key-unit-road-or-traderoute()    \n\
    <Key>s:            key-unit-sentry()                \n\
    <Key>t:            key-city-workers()               \n\
    <Key>u:            key-unit-unload()                \n\

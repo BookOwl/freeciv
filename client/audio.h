@@ -30,9 +30,8 @@ struct audio_plugin {
   bool (*play) (const char *const tag, const char *const path, bool repeat);
 };
 
-struct strvec;
-const struct strvec *get_soundplugin_list(void);
-const struct strvec *get_soundset_list(void);
+const char **get_soundplugin_list(void);
+const char **get_soundset_list(void);
 
 void audio_init(void);
 void audio_real_init(const char *const spec_name,

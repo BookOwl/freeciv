@@ -17,16 +17,12 @@
 
 #include <assert.h>
 
-/* utility */
 #include "fcintl.h"
 #include "log.h"
 #include "mem.h"
 #include "rand.h"
 #include "support.h"
 
-/* common */
-#include "base.h"
-#include "borders.h"
 #include "events.h"
 #include "game.h"
 #include "map.h"
@@ -35,27 +31,163 @@
 #include "packets.h"
 #include "unit.h"
 #include "unitlist.h"
-#include "vision.h"
 
-/* generator */
-#include "utilities.h"
-
-/* server */
 #include "citytools.h"
 #include "cityturn.h"
-#include "notify.h"
-#include "plrhand.h"
+#include "maphand.h"
+#include "plrhand.h"           /* notify_player */
 #include "sernet.h"
 #include "srv_main.h"
 #include "unithand.h"
 #include "unittools.h"
 
-#include "maphand.h"
-
 #define MAXIMUM_CLAIMED_OCEAN_SIZE (20)
 
-/* Suppress send_tile_info() during game_load() */
-static bool send_tile_suppressed = FALSE;
+/* These arrays are indexed by continent number (or negative of the
+ * ocean number) so the 0th element is unused and the array is 1 element
+ * larger than you'd expect.
+ *
+ * The lake surrounders array tells how many land continents surround each
+ * ocean (or -1 if the ocean touches more than one continent).
+ *
+ * The _sizes arrays give the sizes (in tiles) of each continent and
+ * ocean.
+ */
+static Continent_id *lake_surrounders;
+static int *continent_sizes, *ocean_sizes;
+
+/**************************************************************************
+  Number this tile and nearby tiles (recursively) with the specified
+  continent number nr, using a flood-fill algorithm.
+
+  is_land tells us whether we are assigning continent numbers or ocean 
+  numbers.
+
+  if skip_unsafe is specified then "unsafe" terrains are skipped.  This
+  is useful for mapgen algorithms.
+**************************************************************************/
+static void assign_continent_flood(struct tile *ptile, bool is_land,
+				   int nr, bool skip_unsafe)
+{
+  if (tile_get_continent(ptile) != 0) {
+    return;
+  }
+
+  if (ptile->terrain == T_UNKNOWN) {
+    return;
+  }
+
+  if (skip_unsafe && terrain_has_flag(tile_get_terrain(ptile), TER_UNSAFE)) {
+    /* FIXME: This should check a specialized flag, not the TER_UNSAFE
+     * flag which may not even be present. */
+    return;
+  }
+
+  if (!XOR(is_land, is_ocean(tile_get_terrain(ptile)))) {
+    return;
+  }
+
+  tile_set_continent(ptile, nr);
+  
+  /* count the tile */
+  if (nr < 0) {
+    ocean_sizes[-nr]++;
+  } else {
+    continent_sizes[nr]++;
+  }
+
+  adjc_iterate(ptile, tile1) {
+    assign_continent_flood(tile1, is_land, nr, skip_unsafe);
+  } adjc_iterate_end;
+}
+
+/**************************************************************************
+  Calculate lake_surrounders[] array
+**************************************************************************/
+static void recalculate_lake_surrounders(void)
+{
+  const size_t size = (map.num_oceans + 1) * sizeof(*lake_surrounders);
+
+  lake_surrounders = fc_realloc(lake_surrounders, size);
+  memset(lake_surrounders, 0, size);
+  
+  whole_map_iterate(ptile) {
+    Continent_id cont = tile_get_continent(ptile);
+    if (ptile->terrain != T_UNKNOWN && !is_ocean(tile_get_terrain(ptile))) {
+      adjc_iterate(ptile, tile2) {
+        Continent_id cont2 = tile_get_continent(tile2);
+	if (is_ocean(tile_get_terrain(tile2))) {
+	  if (lake_surrounders[-cont2] == 0) {
+	    lake_surrounders[-cont2] = cont;
+	  } else if (lake_surrounders[-cont2] != cont) {
+	    lake_surrounders[-cont2] = -1;
+	  }
+	}
+      } adjc_iterate_end;
+    }
+  } whole_map_iterate_end;
+}
+
+/**************************************************************************
+  Assigns continent and ocean numbers to all tiles, and set
+  map.num_continents and map.num_oceans.  Recalculates continent and
+  ocean sizes, and lake_surrounders[] arrays.
+
+  Continents have numbers 1 to map.num_continents _inclusive_.
+  Oceans have (negative) numbers -1 to -map.num_oceans _inclusive_.
+
+  If skip_unsafe is specified then unsafe terrains are not used to
+  connect continents.  This is useful for generator code so that polar
+  regions don't connect landmasses.
+**************************************************************************/
+void assign_continent_numbers(bool skip_unsafe)
+{
+  
+  /* Initialize */
+  map.num_continents = 0;
+  map.num_oceans = 0;
+
+  whole_map_iterate(ptile) {
+    tile_set_continent(ptile, 0);
+  } whole_map_iterate_end;
+
+  /* Assign new numbers */
+  whole_map_iterate(ptile) {
+    const struct terrain *pterrain = tile_get_terrain(ptile);
+
+    if (tile_get_continent(ptile) != 0) {
+      /* Already assigned. */
+      continue;
+    }
+
+    if (ptile->terrain == T_UNKNOWN) {
+      continue; /* Can't assign this. */
+    }
+
+    if (!skip_unsafe || !terrain_has_flag(pterrain, TER_UNSAFE)) {
+      if (!is_ocean(pterrain)) {
+	map.num_continents++;
+	continent_sizes
+	  = fc_realloc(continent_sizes,
+		       (map.num_continents + 1) * sizeof(*continent_sizes));
+	continent_sizes[map.num_continents] = 0;
+	assign_continent_flood(ptile, TRUE, map.num_continents, skip_unsafe);
+      } else {
+	map.num_oceans++;
+	ocean_sizes
+	  = fc_realloc(ocean_sizes,
+		       (map.num_oceans + 1) * sizeof(*ocean_sizes));
+	ocean_sizes[map.num_oceans] = 0;
+	assign_continent_flood(ptile, FALSE, -map.num_oceans, skip_unsafe);
+      }
+    }
+  } whole_map_iterate_end;
+
+  recalculate_lake_surrounders();
+
+  freelog(LOG_VERBOSE, "Map has %d continents and %d oceans", 
+	  map.num_continents, map.num_oceans);
+}
 
 static void player_tile_init(struct tile *ptile, struct player *pplayer);
 static void give_tile_info_from_player_to_player(struct player *pfrom,
@@ -94,7 +226,7 @@ void global_warming(int effect)
     struct tile *ptile;
 
     ptile = rand_map_pos();
-    old = tile_terrain(ptile);
+    old = tile_get_terrain(ptile);
     if (is_terrain_ecologically_wet(ptile)) {
       new = old->warmer_wetter_result;
     } else {
@@ -107,7 +239,7 @@ void global_warming(int effect)
       update_tile_knowledge(ptile);
       unit_list_iterate(ptile->units, punit) {
 	if (!can_unit_continue_current_activity(punit)) {
-	  unit_activity_handling(punit, ACTIVITY_IDLE);
+	  handle_unit_activity_request(punit, ACTIVITY_IDLE);
 	}
       } unit_list_iterate_end;
     } else if (old == new) {
@@ -116,11 +248,11 @@ void global_warming(int effect)
     }
   }
 
-  notify_player(NULL, NULL, E_GLOBAL_ECO, ftc_server,
-                _("Global warming has occurred!"));
-  notify_player(NULL, NULL, E_GLOBAL_ECO, ftc_server,
-                _("Coastlines have been flooded and vast "
-                  "ranges of grassland have become deserts."));
+  notify_player(NULL, NULL, E_GLOBAL_ECO,
+		   _("Global warming has occurred!"));
+  notify_player(NULL, NULL, E_GLOBAL_ECO,
+		_("Coastlines have been flooded and vast "
+		  "ranges of grassland have become deserts."));
 }
 
 /**************************************************************************
@@ -138,7 +270,7 @@ void nuclear_winter(int effect)
     struct tile *ptile;
 
     ptile = rand_map_pos();
-    old = tile_terrain(ptile);
+    old = tile_get_terrain(ptile);
     if (is_terrain_ecologically_wet(ptile)) {
       new = old->cooler_wetter_result;
     } else {
@@ -151,7 +283,7 @@ void nuclear_winter(int effect)
       update_tile_knowledge(ptile);
       unit_list_iterate(ptile->units, punit) {
 	if (!can_unit_continue_current_activity(punit)) {
-	  unit_activity_handling(punit, ACTIVITY_IDLE);
+	  handle_unit_activity_request(punit, ACTIVITY_IDLE);
 	}
       } unit_list_iterate_end;
     } else if (old == new) {
@@ -160,11 +292,11 @@ void nuclear_winter(int effect)
     }
   }
 
-  notify_player(NULL, NULL, E_GLOBAL_ECO, ftc_server,
-                _("Nuclear winter has occurred!"));
-  notify_player(NULL, NULL, E_GLOBAL_ECO, ftc_server,
-                _("Wetlands have dried up and vast "
-                  "ranges of grassland have become tundra."));
+  notify_player(NULL, NULL, E_GLOBAL_ECO,
+		   _("Nuclear winter has occurred!"));
+  notify_player(NULL, NULL, E_GLOBAL_ECO,
+		_("Wetlands have dried up and vast "
+		  "ranges of grassland have become tundra."));
 }
 
 /***************************************************************
@@ -183,17 +315,17 @@ void upgrade_city_rails(struct player *pplayer, bool discovery)
   conn_list_do_buffer(pplayer->connections);
 
   if (discovery) {
-    notify_player(pplayer, NULL, E_TECH_GAIN, ftc_server,
-                  _("New hope sweeps like fire through the country as "
-                    "the discovery of railroad is announced.\n"
-                    "      Workers spontaneously gather and upgrade all "
-                    "cities with railroads."));
+    notify_player(pplayer, NULL, E_TECH_GAIN,
+		  _("New hope sweeps like fire through the country as "
+		    "the discovery of railroad is announced.\n"
+		    "      Workers spontaneously gather and upgrade all "
+		    "cities with railroads."));
   } else {
-    notify_player(pplayer, NULL, E_TECH_GAIN, ftc_server,
-                  _("The people are pleased to hear that your "
-                    "scientists finally know about railroads.\n"
-                    "      Workers spontaneously gather and upgrade all "
-                    "cities with railroads."));
+    notify_player(pplayer, NULL, E_TECH_GAIN,
+		  _("The people are pleased to hear that your "
+		    "scientists finally know about railroads.\n"
+		    "      Workers spontaneously gather and upgrade all "
+		    "cities with railroads."));
   }
   
   city_list_iterate(pplayer->cities, pcity) {
@@ -208,7 +340,7 @@ void upgrade_city_rails(struct player *pplayer, bool discovery)
 /**************************************************************************
 Return TRUE iff the player me really gives shared vision to player them.
 **************************************************************************/
-bool really_gives_vision(struct player *me, struct player *them)
+static bool really_gives_vision(struct player *me, struct player *them)
 {
   return TEST_BIT(me->really_gives_vision, player_index(them));
 }
@@ -243,14 +375,10 @@ static void unbuffer_shared_vision(struct player *pplayer)
 void give_map_from_player_to_player(struct player *pfrom, struct player *pdest)
 {
   buffer_shared_vision(pdest);
-
   whole_map_iterate(ptile) {
     give_tile_info_from_player_to_player(pfrom, pdest, ptile);
   } whole_map_iterate_end;
-
   unbuffer_shared_vision(pdest);
-  city_thaw_workers_queue();
-  sync_cities();
 }
 
 /**************************************************************************
@@ -259,16 +387,12 @@ void give_map_from_player_to_player(struct player *pfrom, struct player *pdest)
 void give_seamap_from_player_to_player(struct player *pfrom, struct player *pdest)
 {
   buffer_shared_vision(pdest);
-
   whole_map_iterate(ptile) {
-    if (is_ocean_tile(ptile)) {
+    if (is_ocean(tile_get_terrain(ptile))) {
       give_tile_info_from_player_to_player(pfrom, pdest, ptile);
     }
   } whole_map_iterate_end;
-
   unbuffer_shared_vision(pdest);
-  city_thaw_workers_queue();
-  sync_cities();
 }
 
 /**************************************************************************
@@ -277,17 +401,11 @@ void give_seamap_from_player_to_player(struct player *pfrom, struct player *pdes
 void give_citymap_from_player_to_player(struct city *pcity,
 					struct player *pfrom, struct player *pdest)
 {
-  struct tile *pcenter = city_tile(pcity);
-
   buffer_shared_vision(pdest);
-
-  city_tile_iterate(pcenter, ptile) {
+  map_city_radius_iterate(pcity->tile, ptile) {
     give_tile_info_from_player_to_player(pfrom, pdest, ptile);
-  } city_tile_iterate_end;
-
+  } map_city_radius_iterate_end;
   unbuffer_shared_vision(pdest);
-  city_thaw_workers_queue();
-  sync_cities();
 }
 
 /**************************************************************************
@@ -299,7 +417,7 @@ void give_citymap_from_player_to_player(struct city *pcity,
   calculations, so it will be correct before this, for each connection
   during this, and at end.
 **************************************************************************/
-void send_all_known_tiles(struct conn_list *dest, bool force)
+void send_all_known_tiles(struct conn_list *dest)
 {
   int tiles_sent;
 
@@ -320,22 +438,11 @@ void send_all_known_tiles(struct conn_list *dest, bool force)
       conn_list_do_buffer(dest);
     }
 
-    send_tile_info(dest, ptile, FALSE, force);
+    send_tile_info(dest, ptile);
   } whole_map_iterate_end;
 
   conn_list_do_unbuffer(dest);
   flush_packets();
-}
-
-/**************************************************************************
-  Suppress send_tile_info() during game_load()
-**************************************************************************/
-bool send_tile_suppression(bool now)
-{
-  bool formerly = send_tile_suppressed;
-
-  send_tile_suppressed = now;
-  return formerly;
 }
 
 /**************************************************************************
@@ -346,111 +453,54 @@ bool send_tile_suppression(bool now)
   Note that this function does not update the playermap.  For that call
   update_tile_knowledge().
 **************************************************************************/
-void send_tile_info(struct conn_list *dest, struct tile *ptile,
-                    bool send_unknown, bool force)
+void send_tile_info(struct conn_list *dest, struct tile *ptile)
 {
   struct packet_tile_info info;
-  const struct nation_type *pnation;
-  const struct player *owner;
-
-  if (send_tile_suppressed) {
-    return;
-  }
 
   if (!dest) {
     dest = game.est_connections;
   }
 
-  info.tile = tile_index(ptile);
-
+  info.x = ptile->x;
+  info.y = ptile->y;
+  info.owner = tile_owner(ptile) ? player_number(tile_owner(ptile)) : MAP_TILE_OWNER_NULL;
   if (ptile->spec_sprite) {
     sz_strlcpy(info.spec_sprite, ptile->spec_sprite);
   } else {
     info.spec_sprite[0] = '\0';
   }
 
-  if (game.info.is_edit_mode) {
-    pnation = map_get_startpos(ptile);
-    info.nation_start = pnation ? nation_number(pnation)
-      : map_has_startpos(ptile) ? NATION_ANY : NATION_NONE;
-  } else {
-    info.nation_start = NATION_NONE;
-  }
-
-  info.special[S_OLD_FORTRESS] = FALSE;
-  info.special[S_OLD_AIRBASE] = FALSE;
-
   conn_list_iterate(dest, pconn) {
-    struct player *pplayer = pconn->playing;
+    struct player *pplayer = pconn->player;
 
-    if (NULL == pplayer && !pconn->observer) {
+    if (!pplayer && !pconn->observer) {
       continue;
     }
-
     if (!pplayer || map_is_known_and_seen(ptile, pplayer, V_MAIN)) {
-      info.known = TILE_KNOWN_SEEN;
-      info.continent = tile_continent(ptile);
-      owner = tile_owner(ptile);
-      info.owner = (owner ? player_number(owner) : MAP_TILE_OWNER_NULL);
-      info.worked = (NULL != tile_worked(ptile))
-                     ? tile_worked(ptile)->id
-                     : IDENTITY_NUMBER_ZERO;
-
-      info.terrain = (NULL != tile_terrain(ptile))
-                      ? terrain_number(tile_terrain(ptile))
-                      : terrain_count();
-      info.resource = (NULL != tile_resource(ptile))
-                       ? resource_number(tile_resource(ptile))
-                       : resource_count();
+      info.known = TILE_KNOWN;
+      info.type = ptile->terrain ? ptile->terrain->index : -1;
 
       tile_special_type_iterate(spe) {
 	info.special[spe] = BV_ISSET(ptile->special, spe);
       } tile_special_type_iterate_end;
-      info.bases = ptile->bases;
 
-      send_packet_tile_info(pconn, force, &info);
-    } else if (pplayer && map_is_known(ptile, pplayer)) {
+      info.resource = ptile->resource ? ptile->resource->index : -1;
+      info.continent = ptile->continent;
+      send_packet_tile_info(pconn, &info);
+    } else if (pplayer && map_is_known(ptile, pplayer)
+	       && map_get_seen(ptile, pplayer, V_MAIN) == 0) {
       struct player_tile *plrtile = map_get_player_tile(ptile, pplayer);
-      struct vision_site *psite = map_get_player_site(ptile, pplayer);
 
-      info.known = TILE_KNOWN_UNSEEN;
-      info.continent = tile_continent(ptile);
-      owner = (game.server.foggedborders
-               ? plrtile->owner
-               : tile_owner(ptile));
-      info.owner = (owner ? player_number(owner) : MAP_TILE_OWNER_NULL);
-      info.worked = (NULL != psite)
-                    ? psite->identity
-                    : IDENTITY_NUMBER_ZERO;
-
-      info.terrain = (NULL != plrtile->terrain)
-                      ? terrain_number(plrtile->terrain)
-                      : terrain_count();
-      info.resource = (NULL != plrtile->resource)
-                       ? resource_number(plrtile->resource)
-                       : resource_count();
+      info.known = TILE_KNOWN_FOGGED;
+      info.type = plrtile->terrain ? plrtile->terrain->index : -1;
 
       tile_special_type_iterate(spe) {
 	info.special[spe] = BV_ISSET(plrtile->special, spe);
       } tile_special_type_iterate_end;
-      info.bases = plrtile->bases;
 
-      send_packet_tile_info(pconn, force, &info);
-    } else if (send_unknown) {
-      info.known = TILE_UNKNOWN;
-      info.continent = 0;
-      info.owner = MAP_TILE_OWNER_NULL;
-      info.worked = IDENTITY_NUMBER_ZERO;
-
-      info.terrain = terrain_count();
-      info.resource = resource_count();
-
-      tile_special_type_iterate(spe) {
-        info.special[spe] = FALSE;
-      } tile_special_type_iterate_end;
-      BV_CLR_ALL(info.bases);
-
-      send_packet_tile_info(pconn, force, &info);
+      info.resource = plrtile->resource ? plrtile->resource->index : -1;
+      info.continent = ptile->continent;
+      send_packet_tile_info(pconn, &info);
     }
   }
   conn_list_iterate_end;
@@ -474,6 +524,7 @@ static void really_unfog_tile(struct player *pplayer, struct tile *ptile,
 			      enum vision_layer vlayer)
 {
   struct city *pcity;
+  bool old_known = map_is_known(ptile, pplayer);
 
   freelog(LOG_DEBUG, "really unfogging %d,%d\n", TILE_XY(ptile));
 
@@ -485,7 +536,7 @@ static void really_unfog_tile(struct player *pplayer, struct tile *ptile,
      * continent number before it can handle following packets
      */
     update_player_tile_knowledge(pplayer, ptile);
-    send_tile_info(pplayer->connections, ptile, FALSE, FALSE);
+    send_tile_info(pplayer->connections, ptile);
     /* NOTE: because the V_INVIS case doesn't fall into this if statement,
      * changes to V_INVIS fogging won't send a new info packet to the client
      * and the client's tile_seen[V_INVIS] bitfield may end up being out
@@ -502,9 +553,19 @@ static void really_unfog_tile(struct player *pplayer, struct tile *ptile,
   if (vlayer == V_MAIN) {
     /* discover cities */ 
     reality_check_city(pplayer, ptile);
-
-    if (NULL != (pcity = tile_city(ptile))) {
+    if ((pcity=tile_get_city(ptile)))
       send_city_info(pplayer, pcity);
+
+    /* If the tile was not known before we need to refresh the cities that
+       can use the tile. */
+    if (!old_known) {
+      map_city_radius_iterate(ptile, tile1) {
+	pcity = tile_get_city(tile1);
+	if (pcity && city_owner(pcity) == pplayer) {
+	  update_city_tile_status_map(pcity, ptile);
+	}
+      } map_city_radius_iterate_end;
+      sync_cities();
     }
   }
 }
@@ -558,7 +619,7 @@ static void really_fog_tile(struct player *pplayer, struct tile *ptile,
 
   if (vlayer == V_MAIN) {
     update_player_tile_last_seen(pplayer, ptile);
-    send_tile_info(pplayer->connections, ptile, FALSE, FALSE);
+    send_tile_info(pplayer->connections, ptile);
   }
 }
 
@@ -575,14 +636,9 @@ static void map_fog_tile(struct player *pplayer, struct tile *ptile,
   if (map_is_known(ptile, pplayer)) {
     players_iterate(pplayer2) {
       if (pplayer2 == pplayer || really_gives_vision(pplayer, pplayer2)) {
-        if (map_get_seen(ptile, pplayer2, vlayer) == 0) {
-          if (game.server.foggedborders) {
-            struct player_tile *plrtile = map_get_player_tile(ptile,
-                                                              pplayer2);
-            plrtile->owner = tile_owner(ptile);
-          }
-          really_fog_tile(pplayer2, ptile, vlayer);
-        }
+	if (map_get_seen(ptile, pplayer2, vlayer) == 0) {
+	  really_fog_tile(pplayer2, ptile, vlayer);
+	}
       }
     } players_iterate_end;
   }
@@ -619,12 +675,12 @@ static void shared_vision_change_seen(struct tile *ptile,
 }
 
 /**************************************************************************
-  There doesn't have to be a city.
+There doesn't have to be a city.
 **************************************************************************/
-void map_refog_circle(struct player *pplayer, struct tile *ptile,
-                      int old_radius_sq, int new_radius_sq,
-                      bool can_reveal_tiles,
-                      enum vision_layer vlayer)
+static void map_refog_circle(struct player *pplayer, struct tile *ptile,
+			     int old_radius_sq, int new_radius_sq,
+			     bool can_reveal_tiles,
+			     enum vision_layer vlayer)
 {
   if (old_radius_sq != new_radius_sq) {
     int max_radius = MAX(old_radius_sq, new_radius_sq);
@@ -660,8 +716,9 @@ void map_show_tile(struct player *src_player, struct tile *ptile)
   recurse++;
 
   players_iterate(pplayer) {
-    if (pplayer == src_player || really_gives_vision(src_player, pplayer)) {
+    if (pplayer == src_player || really_gives_vision(pplayer, src_player)) {
       struct city *pcity;
+      bool old_known = map_is_known(ptile, pplayer);
 
       if (!map_is_known_and_seen(ptile, pplayer, V_MAIN)) {
 	map_set_known(ptile, pplayer);
@@ -670,12 +727,11 @@ void map_show_tile(struct player *src_player, struct tile *ptile)
 	update_player_tile_knowledge(pplayer, ptile);
 	update_player_tile_last_seen(pplayer, ptile);
 
-	send_tile_info(pplayer->connections, ptile, FALSE, FALSE);
+	send_tile_info(pplayer->connections, ptile);
 
 	/* remove old cities that exist no more */
 	reality_check_city(pplayer, ptile);
-
-	if ((pcity = tile_city(ptile))) {
+	if ((pcity = tile_get_city(ptile))) {
 	  /* as the tile may be fogged send_city_info won't do this for us */
 	  update_dumb_city(pplayer, pcity);
 	  send_city_info(pplayer, pcity);
@@ -690,53 +746,19 @@ void map_show_tile(struct player *src_player, struct tile *ptile)
 	    unit_list_iterate_end;
 	  }
 	} vision_layer_iterate_end;
+
+	/* If the tile was not known before we need to refresh the cities that
+	   can use the tile. */
+	if (!old_known) {
+	  map_city_radius_iterate(ptile, tile1) {
+	    pcity = tile_get_city(tile1);
+	    if (pcity && city_owner(pcity) == pplayer) {
+	      update_city_tile_status_map(pcity, ptile);
+	    }
+	  } map_city_radius_iterate_end;
+	  sync_cities();
+	}
       }
-    }
-  } players_iterate_end;
-
-  recurse--;
-}
-
-/****************************************************************************
-  Hides the area to the player.
-
-  Callers may wish to buffer_shared_vision before calling this function.
-****************************************************************************/
-void map_hide_tile(struct player *src_player, struct tile *ptile)
-{
-  static int recurse = 0;
-
-  freelog(LOG_DEBUG, "Hiding %d,%d to %s",
-          TILE_XY(ptile), player_name(src_player));
-
-  assert(recurse == 0);
-  recurse++;
-
-  players_iterate(pplayer) {
-    if (pplayer == src_player || really_gives_vision(src_player, pplayer)) {
-      if (map_is_known(ptile, pplayer)) {
-        if (map_get_seen(ptile, pplayer, V_MAIN) > 0) {
-          update_player_tile_last_seen(pplayer, ptile);
-        }
-
-        /* Remove city. */
-        remove_dumb_city(pplayer, ptile);
-
-        if (map_get_seen(ptile, pplayer, V_MAIN) > 0) {
-          /* Remove units. */
-          vision_layer_iterate(v) {
-            unit_list_iterate(ptile->units, punit) {
-              if (unit_is_visible_on_layer(punit, v)) {
-                unit_goes_out_of_sight(pplayer, punit);
-              }
-            } unit_list_iterate_end;
-          } vision_layer_iterate_end;
-        }
-      }
-
-      map_clear_known(ptile, pplayer);
-
-      send_tile_info(pplayer->connections, ptile, TRUE, FALSE);
     }
   } players_iterate_end;
 
@@ -855,25 +877,6 @@ static void map_change_own_seen(struct tile *ptile, struct player *pplayer,
 }
 
 /***************************************************************
- Changes site information for player tile.
-***************************************************************/
-void change_playertile_site(struct player_tile *ptile,
-                            struct vision_site *new_site)
-{
-  if (ptile->site == new_site) {
-    /* Do nothing. */
-    return;
-  }
-
-  if (ptile->site != NULL) {
-    /* Releasing old site from tile */
-    free_vision_site(ptile->site);
-  }
-
-  ptile->site = new_site;
-}
-
-/***************************************************************
 ...
 ***************************************************************/
 void map_set_known(struct tile *ptile, struct player *pplayer)
@@ -892,11 +895,6 @@ void map_set_known(struct tile *ptile, struct player *pplayer)
 void map_clear_known(struct tile *ptile, struct player *pplayer)
 {
   BV_CLR(ptile->tile_known, player_index(pplayer));
-  vision_layer_iterate(v) {
-    if (0 == map_get_player_tile(ptile, pplayer)->seen_count[v]) {
-      BV_CLR(ptile->tile_seen[v], player_index(pplayer));
-    }
-  } vision_layer_iterate_end;
 }
 
 /****************************************************************************
@@ -950,12 +948,11 @@ void player_map_free(struct player *pplayer)
     return;
   }
 
-  /* only after removing borders! */
   whole_map_iterate(ptile) {
-    struct vision_site *psite = map_get_player_site(ptile, pplayer);
+    struct player_tile *plrtile = map_get_player_tile(ptile, pplayer);
 
-    if (NULL != psite) {
-      free_vision_site(psite);
+    if (plrtile->vision_source) {
+      free(plrtile->vision_source);
     }
   } whole_map_iterate_end;
 
@@ -974,48 +971,48 @@ static void player_tile_init(struct tile *ptile, struct player *pplayer)
   plrtile->terrain = T_UNKNOWN;
   clear_all_specials(&plrtile->special);
   plrtile->resource = NULL;
-  plrtile->owner = NULL;
-  plrtile->site = NULL;
-  BV_CLR_ALL(plrtile->bases);
+  plrtile->vision_source = NULL;
 
   vision_layer_iterate(v) {
     plrtile->seen_count[v] = 0;
     BV_CLR(ptile->tile_seen[v], player_index(pplayer));
   } vision_layer_iterate_end;
 
-  if (!game.server.fogofwar_old) {
+  if (!game.fogofwar_old) {
     plrtile->seen_count[V_MAIN] = 1;
     if (map_is_known(ptile, pplayer)) {
       BV_SET(ptile->tile_seen[V_MAIN], player_index(pplayer));
     }
   }
 
-  plrtile->last_updated = game.info.year;
+  plrtile->last_updated = GAME_START_YEAR;
   vision_layer_iterate(v) {
     plrtile->own_seen[v] = plrtile->seen_count[v];
   } vision_layer_iterate_end;
 }
 
 /****************************************************************************
-  Returns city located at given tile from player map.
+  ...
 ****************************************************************************/
-struct vision_site *map_get_player_city(const struct tile *ptile,
+struct vision_base *map_get_player_base(const struct tile *ptile,
 					const struct player *pplayer)
 {
-  struct vision_site *psite = map_get_player_site(ptile, pplayer);
-
-  assert(psite == NULL || psite->location == ptile);
- 
-  return psite;
+  return map_get_player_tile(ptile, pplayer)->vision_source;
 }
 
 /****************************************************************************
-  Returns site located at given tile from player map.
+  ...
 ****************************************************************************/
-struct vision_site *map_get_player_site(const struct tile *ptile,
+struct vision_base *map_get_player_city(const struct tile *ptile,
 					const struct player *pplayer)
 {
-  return map_get_player_tile(ptile, pplayer)->site;
+  struct player_tile *playtile = map_get_player_tile(ptile, pplayer);
+  struct vision_base *vision_source = playtile->vision_source;
+
+  if (vision_source && ptile == vision_source->location) {
+    return vision_source;
+  }
+  return NULL;
 }
 
 /****************************************************************************
@@ -1026,7 +1023,7 @@ struct vision_site *map_get_player_site(const struct tile *ptile,
 struct player_tile *map_get_player_tile(const struct tile *ptile,
 					const struct player *pplayer)
 {
-  return pplayer->private_map + tile_index(ptile);
+  return pplayer->private_map + ptile->index;
 }
 
 /****************************************************************************
@@ -1040,21 +1037,13 @@ struct player_tile *map_get_player_tile(const struct tile *ptile,
 bool update_player_tile_knowledge(struct player *pplayer, struct tile *ptile)
 {
   struct player_tile *plrtile = map_get_player_tile(ptile, pplayer);
-  struct player *owner = (game.server.foggedborders
-                          && !map_is_known_and_seen(ptile, pplayer, V_MAIN)
-                          ? plrtile->owner
-                          : tile_owner(ptile));
 
   if (plrtile->terrain != ptile->terrain
       || !BV_ARE_EQUAL(plrtile->special, ptile->special)
-      || plrtile->resource != ptile->resource
-      || plrtile->owner != owner
-      || !BV_ARE_EQUAL(plrtile->bases, ptile->bases)) {
+      || plrtile->resource != ptile->resource) {
     plrtile->terrain = ptile->terrain;
     plrtile->special = ptile->special;
     plrtile->resource = ptile->resource;
-    plrtile->owner = owner;
-    plrtile->bases = ptile->bases;
     return TRUE;
   }
   return FALSE;
@@ -1075,17 +1064,16 @@ void update_tile_knowledge(struct tile *ptile)
   players_iterate(pplayer) {
     if (map_is_known_and_seen(ptile, pplayer, V_MAIN)) {
       if (update_player_tile_knowledge(pplayer, ptile)) {
-        send_tile_info(pplayer->connections, ptile, FALSE, FALSE);
+        send_tile_info(pplayer->connections, ptile);
       }
     }
   } players_iterate_end;
 
   /* Global observers */
   conn_list_iterate(game.est_connections, pconn) {
-    struct player *pplayer = pconn->playing;
-
-    if (NULL == pplayer && pconn->observer) {
-      send_tile_info(pconn->self, ptile, FALSE, FALSE);
+    struct player *pplayer = pconn->player;
+    if (!pplayer && pconn->observer) {
+      send_tile_info(pconn->self, ptile);
     }
   } conn_list_iterate_end;
 }
@@ -1126,40 +1114,40 @@ static void really_give_tile_info_from_player_to_player(struct player *pfrom,
       dest_tile->terrain = from_tile->terrain;
       dest_tile->special = from_tile->special;
       dest_tile->resource = from_tile->resource;
-      dest_tile->bases    = from_tile->bases;
       dest_tile->last_updated = from_tile->last_updated;
-      send_tile_info(pdest->connections, ptile, FALSE, FALSE);
-
+      send_tile_info(pdest->connections, ptile);
+	
       /* update and send city knowledge */
       /* remove outdated cities */
-      if (dest_tile->site) {
-	if (!from_tile->site) {
+      if (dest_tile->vision_source) {
+	if (!from_tile->vision_source) {
 	  /* As the city was gone on the newer from_tile
 	     it will be removed by this function */
 	  reality_check_city(pdest, ptile);
 	} else /* We have a dest_city. update */
-	  if (from_tile->site->identity
-              != dest_tile->site->identity) {
+	  if (from_tile->vision_source->identity
+	   != dest_tile->vision_source->identity)
 	    /* As the city was gone on the newer from_tile
 	       it will be removed by this function */
 	    reality_check_city(pdest, ptile);
-          }
       }
-
       /* Set and send new city info */
-      if (from_tile->site) {
-	if (!dest_tile->site) {
-          /* We cannot assign new vision site with change_playertile_site(),
-           * since location is not yet set up for new site */
-          dest_tile->site = create_vision_site(0, ptile, NULL);
-          *dest_tile->site = *from_tile->site;
+      if (from_tile->vision_source) {
+	if (!dest_tile->vision_source) {
+	  dest_tile->vision_source = fc_calloc(1, sizeof(*dest_tile->vision_source));
 	}
-        /* Note that we don't care if receiver knows vision source city
-         * or not. */
+	/* struct assignment copy */
+	*dest_tile->vision_source = *from_tile->vision_source;
 	send_city_info_at_tile(pdest, pdest->connections, NULL, ptile);
       }
 
-      city_map_update_tile_frozen(ptile);
+      map_city_radius_iterate(ptile, tile1) {
+	struct city *pcity = tile_get_city(tile1);
+	if (pcity && city_owner(pcity) == pdest) {
+	  update_city_tile_status_map(pcity, ptile);
+	}
+      } map_city_radius_iterate_end;
+      sync_cities();
     }
   }
 }
@@ -1174,9 +1162,9 @@ static void give_tile_info_from_player_to_player(struct player *pfrom,
   really_give_tile_info_from_player_to_player(pfrom, pdest, ptile);
 
   players_iterate(pplayer2) {
-    if (really_gives_vision(pdest, pplayer2)) {
-      really_give_tile_info_from_player_to_player(pfrom, pplayer2, ptile);
-    }
+    if (!really_gives_vision(pdest, pplayer2))
+      continue;
+    really_give_tile_info_from_player_to_player(pfrom, pplayer2, ptile);
   } players_iterate_end;
 }
 
@@ -1267,6 +1255,9 @@ void give_shared_vision(struct player *pfrom, struct player *pto)
 	  } vision_layer_iterate_end;
 	} whole_map_iterate_end;
 
+        /* Refresh cities in case new tiles were revealed from their area. */
+        check_city_workers(pplayer2);
+
 	/* squares that are not seen, but which pfrom may have more recent
 	   knowledge of */
 	give_map_from_player_to_player(pplayer, pplayer2);
@@ -1338,7 +1329,7 @@ void remove_shared_vision(struct player *pfrom, struct player *pto)
 /*************************************************************************
 ...
 *************************************************************************/
-void enable_fog_of_war_player(struct player *pplayer)
+static void enable_fog_of_war_player(struct player *pplayer)
 {
   buffer_shared_vision(pplayer);
   whole_map_iterate(ptile) {
@@ -1360,7 +1351,7 @@ void enable_fog_of_war(void)
 /*************************************************************************
 ...
 *************************************************************************/
-void disable_fog_of_war_player(struct player *pplayer)
+static void disable_fog_of_war_player(struct player *pplayer)
 {
   buffer_shared_vision(pplayer);
   whole_map_iterate(ptile) {
@@ -1396,7 +1387,7 @@ static void ocean_to_land_fix_rivers(struct tile *ptile)
     if (tile_has_special(tile1, S_RIVER)) {
       bool ocean_near = FALSE;
       cardinal_adjc_iterate(tile1, tile2) {
-        if (is_ocean_tile(tile2))
+        if (is_ocean(tile_get_terrain(tile2)))
           ocean_near = TRUE;
       } cardinal_adjc_iterate_end;
       if (!ocean_near) {
@@ -1429,13 +1420,13 @@ static void bounce_units_on_terrain_change(struct tile *ptile)
 		  nation_rule_name(nation_of_unit(punit)),
 		  unit_rule_name(punit),
 		  TILE_XY(punit->tile));
-          notify_player(unit_owner(punit), unit_tile(punit),
-                        E_UNIT_RELOCATED, ftc_server,
-                        _("Moved your %s due to changing terrain."),
-                        unit_link(punit));
+	  notify_player(unit_owner(punit),
+			   punit->tile, E_UNIT_RELOCATED,
+			   _("Moved your %s due to changing terrain."),
+			   unit_name_translation(punit));
 	  unit_alive = move_unit(punit, ptile2, 0);
 	  if (unit_alive && punit->activity == ACTIVITY_SENTRY) {
-	    unit_activity_handling(punit, ACTIVITY_IDLE);
+	    handle_unit_activity_request(punit, ACTIVITY_IDLE);
 	  }
 	  break;
 	}
@@ -1447,51 +1438,14 @@ static void bounce_units_on_terrain_change(struct tile *ptile)
 		nation_rule_name(nation_of_unit(punit)),
 		unit_rule_name(punit),
 		TILE_XY(punit->tile));
-        notify_player(unit_owner(punit), unit_tile(punit),
-                      E_UNIT_LOST_MISC, ftc_server,
-                      _("Disbanded your %s due to changing terrain."),
-                      unit_link(punit));
+	notify_player(unit_owner(punit),
+			 punit->tile, E_UNIT_LOST,
+			 _("Disbanded your %s due to changing terrain."),
+			 unit_name_translation(punit));
 	wipe_unit(punit);
       }
     }
   } unit_list_iterate_safe_end;
-}
-
-/****************************************************************************
-  Returns TRUE if the terrain change from 'oldter' to 'newter' requires
-  extra (potentially expensive) fixing (e.g. of the surroundings).
-****************************************************************************/
-bool need_to_fix_terrain_change(const struct terrain *oldter,
-                                const struct terrain *newter)
-{
-  bool old_is_ocean, new_is_ocean;
-  
-  if (!oldter || !newter) {
-    return FALSE;
-  }
-
-  old_is_ocean = is_ocean(oldter);
-  new_is_ocean = is_ocean(newter);
-
-  return (old_is_ocean && !new_is_ocean)
-    || (!old_is_ocean && new_is_ocean);
-}
-
-/****************************************************************************
-  Assumes that need_to_fix_terrain_change == TRUE.
-  For in-game terrain changes 'extend_rivers' should
-  be TRUE, for edits it should be FALSE.
-****************************************************************************/
-void fix_tile_on_terrain_change(struct tile *ptile,
-                                bool extend_rivers)
-{
-  if (!is_ocean_tile(ptile)) {
-    if (extend_rivers) {
-      ocean_to_land_fix_rivers(ptile);
-    }
-    city_landlocked_sell_coastal_improvements(ptile);
-  }
-  bounce_units_on_terrain_change(ptile);
 }
 
 /****************************************************************************
@@ -1500,15 +1454,26 @@ void fix_tile_on_terrain_change(struct tile *ptile,
 ****************************************************************************/
 void check_terrain_change(struct tile *ptile, struct terrain *oldter)
 {
-  struct terrain *newter = tile_terrain(ptile);
+  struct terrain *newter = tile_get_terrain(ptile);
+  bool ocean_toggled = FALSE;
 
-  if (!need_to_fix_terrain_change(oldter, newter)) {
-    return;
+  if (is_ocean(oldter) && !is_ocean(newter)) {
+    /* ocean to land ... */
+    ocean_to_land_fix_rivers(ptile);
+    city_landlocked_sell_coastal_improvements(ptile);
+    ocean_toggled = TRUE;
+  } else if (!is_ocean(oldter) && is_ocean(newter)) {
+    /* land to ocean ... */
+    ocean_toggled = TRUE;
   }
 
-  fix_tile_on_terrain_change(ptile, TRUE);
-  assign_continent_numbers();
-  send_all_known_tiles(NULL, FALSE);
+  if (ocean_toggled) {
+    bounce_units_on_terrain_change(ptile);
+    assign_continent_numbers(FALSE);
+
+    /* New continent numbers for all tiles to all players */
+    send_all_known_tiles(NULL);
+  }
 }
 
 /*************************************************************************
@@ -1519,22 +1484,23 @@ void check_terrain_change(struct tile *ptile, struct terrain *oldter)
   The source which claims the ocean has to be placed on the correct continent.
   in case a) The continent which surrounds the inland lake
   in case b) The only continent which is adjacent to the tile
+  The correct continent is returned in *contp.
 *************************************************************************/
 static bool is_claimable_ocean(struct tile *ptile, struct tile *source)
 {
-  Continent_id cont = tile_continent(ptile);
-  Continent_id source_cont = tile_continent(source);
+  Continent_id cont = tile_get_continent(ptile);
+  Continent_id source_cont = tile_get_continent(source);
   Continent_id cont2;
   int ocean_tiles;
 
   if (get_ocean_size(-cont) <= MAXIMUM_CLAIMED_OCEAN_SIZE
-      && get_lake_surrounders(cont) == source_cont) {
+      && lake_surrounders[-cont] == source_cont) {
     return TRUE;
   }
   
   ocean_tiles = 0;
   adjc_iterate(ptile, tile2) {
-    cont2 = tile_continent(tile2);
+    cont2 = tile_get_continent(tile2);
     if (tile2 == source) {
       return TRUE;
     }
@@ -1552,184 +1518,276 @@ static bool is_claimable_ocean(struct tile *ptile, struct tile *source)
 }
 
 /*************************************************************************
-  For each unit at the tile, queue any unique home city.
-*************************************************************************/
-static void map_unit_homecity_enqueue(struct tile *ptile)
-{
-  unit_list_iterate(ptile->units, punit) {
-    struct city *phome = game_find_city_by_number(punit->homecity);
+  Update tile worker states for all cities that have the given map tile
+  within their radius. Does not sync with client.
 
-    if (NULL == phome) {
+  This function is inefficient and so should only be called when the
+  owner actually changes.
+*************************************************************************/
+static void tile_update_owner(struct tile *ptile)
+{
+  /* This implementation is horribly inefficient, but this doesn't cause
+   * problems since it's not called often. */
+  cities_iterate(pcity) {
+    update_city_tile_status_map(pcity, ptile);
+  } cities_iterate_end;
+}
+
+/*************************************************************************
+  Add any unique home city not found in list but found on tile to the 
+  list.
+*************************************************************************/
+static void add_unique_homecities(struct city_list *cities_to_refresh, 
+                           struct tile *tile1)
+{
+  /* Update happiness */
+ unit_list_iterate(tile1->units, unit) {
+   struct city* homecity = game_find_city_by_number(unit->homecity);
+   bool already_listed = FALSE;
+
+    if (!homecity) {
       continue;
     }
-
-    city_refresh_queue_add(phome);
+    city_list_iterate(cities_to_refresh, city2) {
+      if (city2 == homecity) {
+        already_listed = TRUE;
+        break;
+      }
+      if (!already_listed) {
+        city_list_prepend(cities_to_refresh, homecity);
+      }
+    } city_list_iterate_end;
   } unit_list_iterate_end;
 }
 
 /*************************************************************************
-  Claim ownership of a single tile.
+  Claim ownership of a single tile.  This does no checks.
 *************************************************************************/
-void map_claim_ownership(struct tile *ptile, struct player *powner,
-                         struct tile *psource)
+void map_claim_ownership(struct tile *ptile, struct player *owner,
+                         struct tile *source)
 {
-  struct player *ploser = tile_owner(ptile);
-
-  if (game.info.borders >= 2) {
-    if (ploser != powner) {
-      if (ploser) {
-        map_fog_tile(ploser, ptile, V_MAIN);
-      }
-      if (powner) {
-        map_unfog_tile(powner, ptile, TRUE, V_MAIN);
-      }
-    }
-  }
-
-  if (ploser != powner) {
-    base_type_iterate(pbase) {
-      if (tile_has_base(ptile, pbase)) {
-        if (pbase->vision_main_sq >= 0) {
-          /* Transfer base provided vision to new owner */
-          if (powner) {
-            map_refog_circle(powner, ptile, -1, pbase->vision_main_sq,
-                             game.info.vision_reveal_tiles, V_MAIN);
-          }
-          if (ploser) {
-            map_refog_circle(ploser, ptile, pbase->vision_main_sq, -1,
-                             game.info.vision_reveal_tiles, V_MAIN);
-          }
-        }
-        if (pbase->vision_invis_sq >= 0) {
-          /* Transfer base provided vision to new owner */
-          if (powner) {
-            map_refog_circle(powner, ptile, -1, pbase->vision_invis_sq,
-                             game.info.vision_reveal_tiles, V_INVIS);
-          }
-          if (ploser) {
-            map_refog_circle(ploser, ptile, pbase->vision_invis_sq, -1,
-                             game.info.vision_reveal_tiles, V_INVIS);
-          }
-        }
-      }
-    } base_type_iterate_end;
-  }
-
-  tile_set_owner(ptile, powner, psource);
-
-  if (ploser != powner) {
-    if (S_S_RUNNING == server_state() && game.info.happyborders > 0) {
-      map_unit_homecity_enqueue(ptile);
-    }
-
-    if (!city_map_update_tile_frozen(ptile)) {
-      send_tile_info(NULL, ptile, FALSE, FALSE);
-    }
-  }
+  ptile->owner_source = source;
+  tile_set_owner(ptile, owner);
+  send_tile_info(NULL, ptile);
+  tile_update_owner(ptile);
 }
 
 /*************************************************************************
-  Remove border for this source.
+  Establish range of a border source.
 *************************************************************************/
-void map_clear_border(struct tile *ptile)
+static int tile_border_range(struct tile *ptile)
 {
-  int radius_sq = tile_border_source_radius_sq(ptile);
+  int range;
 
-  circle_dxyr_iterate(ptile, radius_sq, dtile, dx, dy, dr) {
-    struct tile *claimer = tile_claimer(dtile);
-
-    if (claimer == ptile) {
-      map_claim_ownership(dtile, NULL, NULL);
+  if (ptile->city) {
+    range = MIN(ptile->city->size + 1, game.info.borders);
+    if (ptile->city->size > game.info.borders) {
+      range += (ptile->city->size - game.info.borders) / 2;
     }
-  } circle_dxyr_iterate_end;
+  } else {
+    range = game.info.borders;
+  }
+  return range;
 }
 
 /*************************************************************************
-  Update borders for this source. Call this for each new source.
-*************************************************************************/
-void map_claim_border(struct tile *ptile, struct player *owner)
-{
-  int radius_sq = tile_border_source_radius_sq(ptile);
+  Update borders for all sources.  Call this on turn end.
 
-  circle_dxyr_iterate(ptile, radius_sq, dtile, dx, dy, dr) {
-    struct tile *dclaimer = tile_claimer(dtile);
-
-    if (dr != 0 && is_border_source(dtile)) {
-      /* Do not claim border sources other than self */
-      continue;
-    }
-
-    if (!map_is_known(dtile, owner) && game.info.borders < 3) {
-      continue;
-    }
-
-    if (NULL != dclaimer && dclaimer != ptile) {
-      struct city *ccity = tile_city(dclaimer);
-      int strength_old, strength_new;
-
-      if (ccity != NULL) {
-        /* Previously claimed by city */
-        int city_x, city_y;
-
-        map_distance_vector(&city_x, &city_y, ccity->tile, dtile);
-        city_x += CITY_MAP_RADIUS;
-        city_y += CITY_MAP_RADIUS;
-
-        if (is_valid_city_coords(city_x, city_y)) {
-          /* Tile is within city radius */
-          continue;
-        }
-      }
-
-      strength_old = tile_border_strength(dtile, dclaimer);
-      strength_new = tile_border_strength(dtile, ptile);
-
-      if (strength_new <= strength_old) {
-        /* Stronger shall prevail,cd 
-         * in case of equel strength older shall prevail */
-        continue;
-      }
-    }
-
-    if (is_ocean_tile(dtile)) {
-      if (is_claimable_ocean(dtile, ptile)) {
-        map_claim_ownership(dtile, owner, ptile);
-      }
-    } else {
-      if (tile_continent(dtile) == tile_continent(ptile)) {
-        map_claim_ownership(dtile, owner, ptile);
-      }
-    }
-  } circle_dxyr_iterate_end;
-}
-
-/*************************************************************************
-  Update borders for all sources. Call this on turn end.
+  We will remove claim to land whose source is gone, and claim
+  more land to sources in range, unless there are enemy units within
+  this range.
 *************************************************************************/
 void map_calculate_borders(void)
 {
+  struct city_list *cities_to_refresh = NULL;
+
   if (game.info.borders == 0) {
     return;
   }
 
-  freelog(LOG_VERBOSE,"map_calculate_borders()");
+  if (game.info.happyborders > 0) {
+    cities_to_refresh = city_list_new();
+  }
 
+  /* First transfer ownership for sources that have changed hands. */
   whole_map_iterate(ptile) {
-    if (is_border_source(ptile)) {
-      map_claim_border(ptile, ptile->owner);
+    if (tile_owner(ptile) 
+        && ptile->owner_source
+        && ptile->owner_source->owner != tile_owner(ptile)
+        && (ptile->owner_source->city
+            || tile_has_special(ptile->owner_source, S_FORTRESS))) {
+      /* Claim ownership of tiles previously owned by someone else */
+      map_claim_ownership(ptile, ptile->owner_source->owner, 
+                          ptile->owner_source);
     }
   } whole_map_iterate_end;
 
-  freelog(LOG_VERBOSE,"map_calculate_borders() workers");
-  city_thaw_workers_queue();
-  city_refresh_queue_processing();
+  /* Second transfer ownership to city closer than current source 
+   * but with the same owner. */
+  whole_map_iterate(ptile) {
+    if (tile_owner(ptile)) {
+      city_list_iterate(tile_owner(ptile)->cities, pcity) {
+        int r_curr, r_city = sq_map_distance(ptile, pcity->tile);
+        int max_range = tile_border_range(pcity->tile);
+
+        /* Repair tile ownership */
+        if (!ptile->owner_source) {
+          assert(FALSE);
+          ptile->owner_source = pcity->tile;
+        }
+        r_curr = sq_map_distance(ptile, ptile->owner_source);
+        max_range *= max_range; /* we are dealing with square distances */
+        /* Transfer tile to city if closer than current source */
+        if (r_curr > r_city && max_range >= r_city) {
+          freelog(LOG_DEBUG, "%s %s(%d,%d) acquired tile (%d,%d) from "
+                  "(%d,%d)",
+                  nation_rule_name(nation_of_player(tile_owner(ptile))),
+                  city_name(pcity),
+                  TILE_XY(pcity->tile),
+                  TILE_XY(ptile),
+                  TILE_XY(ptile->owner_source));
+          ptile->owner_source = pcity->tile;
+        }
+      } city_list_iterate_end;
+    }
+  } whole_map_iterate_end;
+
+  /* Third remove undue ownership. */
+  whole_map_iterate(ptile) {
+    if (tile_owner(ptile)
+        && (tile_owner(ptile) != ptile->owner_source->owner
+            || (!ptile->owner_source->city
+                && !tile_has_special(ptile->owner_source, S_FORTRESS)))) {
+      /* Ownership source gone */
+      map_claim_ownership(ptile, NULL, NULL);
+    }
+  } whole_map_iterate_end;
+
+  /* Now claim ownership of unclaimed tiles for all sources; we
+   * grab one circle each turn as long as we have range left
+   * to better visually display expansion. */
+  whole_map_iterate(ptile) {
+    if (tile_owner(ptile)
+        && (ptile->city || tile_has_special(ptile, S_FORTRESS))) {
+      /* We have an ownership source */
+      int expand_range = 99;
+      int found_unclaimed = 99;
+      int range = tile_border_range(ptile);
+
+      freelog(LOG_DEBUG, "source at %d,%d", ptile->x, ptile->y);
+      range *= range; /* due to sq dist */
+      freelog(LOG_DEBUG, "borders range for source is %d", range);
+
+      circle_dxyr_iterate(ptile, range, atile, dx, dy, dist) {
+        if (expand_range > dist) {
+          unit_list_iterate(atile->units, punit) {
+            if (!pplayers_allied(unit_owner(punit), tile_owner(ptile))) {
+              /* We cannot expand borders further when enemy units are
+               * standing in the way. */
+              expand_range = dist - 1;
+            }
+          } unit_list_iterate_end;
+        }
+        if (found_unclaimed > dist
+            && tile_owner(atile) == NULL
+            && map_is_known(atile, tile_owner(ptile))
+            && (!is_ocean(atile->terrain)
+                || is_claimable_ocean(atile, ptile))) {
+          found_unclaimed = dist;
+        }
+      } circle_dxyr_iterate_end;
+      freelog(LOG_DEBUG, "expand_range=%d found_unclaimed=%d", expand_range,
+              found_unclaimed);
+
+      circle_dxyr_iterate(ptile, range, atile, dx, dy, dist) {
+        if (dist > expand_range || dist > found_unclaimed) {
+          continue; /* only expand one extra circle radius each turn */
+        }
+        if (map_is_known(atile, tile_owner(ptile))
+            && tile_owner(atile) == NULL
+            && ((!is_ocean(atile->terrain) 
+                 && atile->continent == ptile->continent)
+                || (is_ocean(atile->terrain)
+                    && is_claimable_ocean(atile, ptile)))) {
+          map_claim_ownership(atile, tile_owner(ptile), ptile);
+          atile->owner_source = ptile;
+          if (game.info.happyborders > 0) {
+            add_unique_homecities(cities_to_refresh, atile);
+          }
+        }
+      } circle_dxyr_iterate_end;
+    }
+  } whole_map_iterate_end;
+
+  /* Update happiness in all homecities we have collected */ 
+  if (game.info.happyborders > 0) {
+    city_list_iterate(cities_to_refresh, to_refresh) {
+      city_refresh(to_refresh);
+      send_city_info(city_owner(to_refresh), to_refresh);
+    } city_list_iterate_end;
+    
+    city_list_unlink_all(cities_to_refresh);
+    city_list_free(cities_to_refresh);
+  }
+}
+
+/*************************************************************************
+  Return size in tiles of the given continent(not ocean)
+*************************************************************************/
+int get_continent_size(Continent_id id)
+{
+  assert(id > 0);
+  return continent_sizes[id];
+}
+
+/*************************************************************************
+  Return size in tiles of the given ocean. You should use positive ocean
+  number.
+*************************************************************************/
+int get_ocean_size(Continent_id id) 
+{
+  assert(id > 0);
+  return ocean_sizes[id];
+}
+
+/* Vision structure - see documentation in maphand.h */
+
+
+/****************************************************************************
+  Create a new vision source.
+
+  See documentation in maphand.h.
+****************************************************************************/
+struct vision *vision_new(struct player *pplayer, struct tile *ptile,
+			  bool can_reveal_tiles)
+{
+  struct vision *vision = fc_malloc(sizeof(*vision));
+
+  vision->player = pplayer;
+  vision->tile = ptile;
+  vision->can_reveal_tiles = can_reveal_tiles;
+  vision_layer_iterate(v) {
+    vision->radius_sq[v] = -1;
+  } vision_layer_iterate_end;
+
+  return vision;
+}
+
+/****************************************************************************
+  Returns the sight points (radius_sq) that this vision source has.
+
+  See documentation in maphand.h.
+****************************************************************************/
+int vision_get_sight(const struct vision *vision, enum vision_layer vlayer)
+{
+  return vision->radius_sq[vlayer];
 }
 
 /****************************************************************************
   Change the sight points for the vision source, fogging or unfogging tiles
   as needed.
 
-  See documentation in vision.h.
+  See documentation in maphand.h.
 ****************************************************************************/
 void vision_change_sight(struct vision *vision, enum vision_layer vlayer,
 			 int radius_sq)
@@ -1743,7 +1801,7 @@ void vision_change_sight(struct vision *vision, enum vision_layer vlayer,
 /****************************************************************************
   Clear all sight points from this vision source.
 
-  See documentation in vision.h.
+  See documentation in maphand.h.
 ****************************************************************************/
 void vision_clear_sight(struct vision *vision)
 {
@@ -1754,56 +1812,13 @@ void vision_clear_sight(struct vision *vision)
 }
 
 /****************************************************************************
-  Create base to tile.
+  Free the vision source.
+
+  See documentation in maphand.h.
 ****************************************************************************/
-void create_base(struct tile *ptile, struct base_type *pbase,
-                 struct player *pplayer)
+void vision_free(struct vision *vision)
 {
-  base_type_iterate(old_base) {
-    if (tile_has_base(ptile, old_base)
-        && !can_bases_coexist(old_base, pbase)) {
-      if (territory_claiming_base(old_base)) {
-        map_clear_border(ptile);
-        map_claim_ownership(ptile, NULL, NULL);
-      } else {
-        struct player *owner = tile_owner(ptile);
-
-        if (old_base->vision_main_sq >= 0 && owner) {
-          /* Base provides vision, but no borders. */
-          map_refog_circle(owner, ptile, old_base->vision_main_sq, -1,
-                           game.info.vision_reveal_tiles, V_MAIN);
-        }
-        if (old_base->vision_invis_sq >= 0 && owner) {
-          map_refog_circle(owner, ptile, old_base->vision_invis_sq, -1,
-                           game.info.vision_reveal_tiles, V_INVIS);
-        }
-      }
-      tile_remove_base(ptile, old_base);
-    }
-  } base_type_iterate_end;
-
-  tile_add_base(ptile, pbase);
-
-  /* Watchtower might become effective
-   * FIXME: Reqs on other specials will not be updated immediately. */
-  unit_list_refresh_vision(ptile->units);
-
-  /* Claim base if it has "ClaimTerritory" flag */
-  if (territory_claiming_base(pbase) && pplayer) {
-    map_claim_ownership(ptile, pplayer, ptile);
-    map_claim_border(ptile, pplayer);
-    city_thaw_workers_queue();
-    city_refresh_queue_processing();
-  } else {
-    struct player *owner = tile_owner(ptile);
-
-    if (pbase->vision_main_sq > 0 && owner) {
-      map_refog_circle(owner, ptile, -1, pbase->vision_main_sq,
-                       game.info.vision_reveal_tiles, V_MAIN);
-    }
-    if (pbase->vision_invis_sq > 0 && owner) {
-      map_refog_circle(owner, ptile, -1, pbase->vision_invis_sq,
-                       game.info.vision_reveal_tiles, V_INVIS);
-    }
-  }
+  assert(S_S_RUNNING != server_state() || vision->radius_sq[V_MAIN] < 0);
+  assert(S_S_RUNNING != server_state() || vision->radius_sq[V_INVIS] < 0);
+  free(vision);
 }

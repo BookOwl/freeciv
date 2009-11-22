@@ -33,4 +33,15 @@ void set_ruleset(const char *ruleset);
 
 extern char leader_name[MAX_LEN_NAME];
 
+enum skill_levels { 
+  NOVICE, 
+  EASY, 
+  NORMAL, 
+  HARD, 
+  EXPERIMENTAL,
+  NUM_SKILL_LEVELS
+};
+
+extern const char *skill_level_names[NUM_SKILL_LEVELS];
+
 #endif  /* FC__CONNECTDLG_COMMON_H */ 

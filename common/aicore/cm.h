@@ -31,12 +31,12 @@
 
 /* A description of the goal. */
 struct cm_parameter {
-  int minimal_surplus[O_LAST];
+  int minimal_surplus[O_MAX];
   bool require_happy;
   bool allow_disorder;
   bool allow_specialists;
 
-  int factor[O_LAST];
+  int factor[O_MAX];
   int happy_factor;
 };
 
@@ -44,16 +44,18 @@ struct cm_parameter {
 struct cm_result {
   bool found_a_valid, disorder, happy;
 
-  int surplus[O_LAST];
+  int surplus[O_MAX];
 
   bool worker_positions_used[CITY_MAP_SIZE][CITY_MAP_SIZE];
   int specialists[SP_MAX];
 };
 
-
 void cm_init(void);
 void cm_init_citymap(void);
 
+/*
+ * ...
+ */
 void cm_free(void);
 
 /*
@@ -80,12 +82,12 @@ void cm_init_parameter(struct cm_parameter *dest);
 void cm_init_emergency_parameter(struct cm_parameter *dest);
 
 void cm_print_city(const struct city *pcity);
-void cm_print_result(const struct cm_result *result);
-
-int cm_result_citizens(const struct cm_result *result);
-int cm_result_specialists(const struct cm_result *result);
-int cm_result_workers(const struct cm_result *result);
-
-void cm_result_from_main_map(struct cm_result *result,
-                             const struct city *pcity, bool main_map);
+void cm_print_result(const struct city *pcity,
+		     const struct cm_result *result);
+int cm_count_worker(const struct city * pcity,
+		    const struct cm_result *result);
+int cm_count_specialist(const struct city *pcity,
+			const struct cm_result *result);
+void cm_copy_result_from_city(const struct city *pcity,
+			      struct cm_result *result);
 #endif

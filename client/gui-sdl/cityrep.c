@@ -23,9 +23,6 @@
 /* common */
 #include "game.h"
 
-/* client */
-#include "client_main.h"
-
 /* gui-sdl */
 #include "citydlg.h"
 #include "cma_fe.h"
@@ -90,7 +87,7 @@ static int popup_citydlg_from_city_report_callback(struct widget *pWidget)
 static int popup_worklist_from_city_report_callback(struct widget *pWidget)
 {
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
-    popup_worklist_editor(pWidget->data.city, NULL);
+    popup_worklist_editor(pWidget->data.city, &pWidget->data.city->worklist);
   }
   return -1;
 }
@@ -259,7 +256,7 @@ static void real_info_city_report_dialog_update(void)
   
   pLast = pBuf;
   count = 0; 
-  city_list_iterate(client.conn.playing->cities, pCity) {
+  city_list_iterate(game.player_ptr->cities, pCity) {
     
     pStr = create_str16_from_char(city_name(pCity), adj_font(12));
     pStr->style |= TTF_STYLE_BOLD;
@@ -496,20 +493,19 @@ static void real_info_city_report_dialog_update(void)
     add_to_gui_list(MAX_ID - pCity->id, pBuf);
 
     /* ----------- */
-    if(VUT_UTYPE == pCity->production.kind) {
-      struct unit_type *pUnitType = pCity->production.value.utype;
+    if(pCity->production.is_unit) {
+      struct unit_type *pUnitType = utype_by_number(pCity->production.value);
       pLogo = ResizeSurfaceBox(get_unittype_surface(pUnitType),
                                adj_size(36), adj_size(24), 1,
-                               TRUE, TRUE);
-      togrow = utype_build_shield_cost(pUnitType);
+                               TRUE, TRUE);      
+      togrow = unit_build_shield_cost(pUnitType);
       pName = utype_name_translation(pUnitType);
     } else {
-      struct impr_type *pImprove = pCity->production.value.building;
-      pLogo = ResizeSurfaceBox(get_building_surface(pCity->production.value.building),
+      pLogo = ResizeSurfaceBox(get_building_surface(pCity->production.value),
                                adj_size(36), adj_size(24), 1,
                                TRUE, TRUE);
-      togrow = impr_build_shield_cost(pImprove);
-      pName = improvement_name_translation(pImprove);
+      togrow = impr_build_shield_cost(pCity->production.value);
+      pName = improvement_name_translation(pCity->production.value);
     }
     
     if(!worklist_is_empty(&(pCity->worklist))) {
@@ -517,7 +513,9 @@ static void real_info_city_report_dialog_update(void)
       dst.y = 0;
       alphablit(pIcons->pWorklist, NULL, pLogo, &dst);
       my_snprintf(cBuf, sizeof(cBuf), "%s\n(%d/%d)\n%s",
-      	pName, pCity->shield_stock, togrow, _("worklist"));
+      	pName, pCity->shield_stock, togrow,
+		pCity->worklist.name[0] != '\0' ?
+			      pCity->worklist.name : _("worklist"));
     } else {
       my_snprintf(cBuf, sizeof(cBuf), "%s\n(%d/%d)%s",
       	pName, pCity->shield_stock, togrow,
@@ -528,7 +526,8 @@ static void real_info_city_report_dialog_update(void)
     pStr = create_str16_from_char(cBuf, adj_font(10));
     pStr->style |= SF_CENTER;
     
-    togrow = city_production_turns_to_build(pCity, TRUE);
+    togrow = city_turns_to_build(pCity,
+    	pCity->production, TRUE);
     if(togrow == 999)
     {
       my_snprintf(cBuf, sizeof(cBuf), "%s", _("never"));
@@ -1019,18 +1018,16 @@ static struct widget * real_city_report_dialog_update_city(struct widget *pWidge
   copy_chars_to_string16(pWidget->string16, cBuf);
   
   /* change production */
-  if(VUT_UTYPE == pCity->production.kind) {
-    struct unit_type *pUnitType = pCity->production.value.utype;
-    pLogo = ResizeSurface(get_unittype_surface(pUnitType),
+  if(pCity->production.is_unit) {
+    struct unit_type *pUnitType = utype_by_number(pCity->production.value);
+    pLogo = ResizeSurface(get_unittype_surface(utype_by_number(pCity->production.value)),
               adj_size(36), adj_size(24), 1);
-    togrow = utype_build_shield_cost(pUnitType);
+    togrow = unit_build_shield_cost(pUnitType);
     pName = utype_name_translation(pUnitType);
   } else {
-    struct impr_type *pImprove = pCity->production.value.building;
-    pLogo = ResizeSurface(get_building_surface(pCity->production.value.building),
-              adj_size(36), adj_size(24), 1);
-    togrow = impr_build_shield_cost(pImprove);
-    pName = improvement_name_translation(pImprove);
+    pLogo = ResizeSurface(get_building_surface(pCity->production.value), adj_size(36), adj_size(24), 1);
+    togrow = impr_build_shield_cost(pCity->production.value);
+    pName = improvement_name_translation(pCity->production.value);
   }
     
   if(!worklist_is_empty(&(pCity->worklist))) {
@@ -1038,7 +1035,9 @@ static struct widget * real_city_report_dialog_update_city(struct widget *pWidge
     dst.y = 0;
     alphablit(pIcons->pWorklist, NULL, pLogo, &dst);
     my_snprintf(cBuf, sizeof(cBuf), "%s\n(%d/%d)\n%s",
-      	pName, pCity->shield_stock, togrow, _("worklist"));
+      	pName, pCity->shield_stock, togrow,
+		pCity->worklist.name[0] != '\0' ?
+			      pCity->worklist.name : _("worklist"));
   } else {
     my_snprintf(cBuf, sizeof(cBuf), "%s\n(%d/%d)",
       		pName, pCity->shield_stock, togrow);
@@ -1052,7 +1051,8 @@ static struct widget * real_city_report_dialog_update_city(struct widget *pWidge
   
   /* hurry productions */
   pWidget = pWidget->prev;
-  togrow = city_production_turns_to_build(pCity, TRUE);
+  togrow = city_turns_to_build(pCity,
+    	pCity->production, TRUE);
   if(togrow == 999)
   {
     my_snprintf(cBuf, sizeof(cBuf), "%s", _("never"));
@@ -1095,7 +1095,7 @@ void city_report_dialog_update(void)
   
     /* find if the lists are identical (if not then rebuild all) */
     pWidget = pCityRep->pEndActiveWidgetList;/* name of first city */
-    city_list_iterate(client.conn.playing->cities, pCity) {
+    city_list_iterate(game.player_ptr->cities, pCity) {
       if (pCity->id == MAX_ID - pWidget->ID) {
         count = COL;
         while(count) {
@@ -1115,7 +1115,7 @@ void city_report_dialog_update(void)
 
     /* update widget city list (widget list is the same that city list) */
     pWidget = pCityRep->pEndActiveWidgetList;
-    city_list_iterate(client.conn.playing->cities, pCity) {
+    city_list_iterate(game.player_ptr->cities, pCity) {
       pWidget = real_city_report_dialog_update_city(pWidget, pCity);  
     } city_list_iterate_end;
 

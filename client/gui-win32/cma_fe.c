@@ -18,20 +18,15 @@
 #include <windows.h>
 #include <windowsx.h>
 
-/* utility */
+#include "events.h"
 #include "fcintl.h"
-#include "log.h"
+#include "game.h"
 #include "mem.h"
 #include "support.h"
 
-/* common */
-#include "events.h"
-#include "game.h"
-
-/* client */
 #include "chatline_g.h"
 #include "citydlg_g.h"
-#include "client_main.h"
+#include "civclient.h"
 #include "cma_fec.h"
 #include "messagewin_g.h"
 
@@ -57,9 +52,9 @@ struct cma_dialog {
   HWND change;
   HWND perm;
   HWND release;
-  HWND minimal_surplus[O_LAST];
+  HWND minimal_surplus[O_MAX];
   HWND happy;
-  HWND factor[O_LAST + 1];
+  HWND factor[O_MAX + 1];
   int id;
 };
 
@@ -241,7 +236,7 @@ static void set_hscales(const struct cm_parameter *const parameter,
   } output_type_iterate_end;
   Button_SetCheck(pdialog->happy,
 		  parameter->require_happy ? BST_CHECKED : BST_UNCHECKED);
-  handle_hscroll(pdialog->mainwin, pdialog->factor[O_LAST],
+  handle_hscroll(pdialog->mainwin, pdialog->factor[O_COUNT],
 		 SB_THUMBTRACK, parameter->happy_factor);
   allow_refreshes = 1;
 }
@@ -261,7 +256,7 @@ void refresh_cma_dialog(struct city *pcity, enum cma_refresh refresh)
   if (!pdialog)
     return;
   /* fill in result label */
-  cm_result_from_main_map(&result, pcity, TRUE);
+  cm_copy_result_from_city(pcity, &result);
   SetWindowText(pdialog->result_label,
 		(char *) cmafec_get_result_descr(pcity, &result, &param));
   /* if called from a hscale, we _don't_ want to do this */
@@ -525,7 +520,7 @@ static void hscale_changed(struct cma_dialog *pdialog)
   } output_type_iterate_end;
   
   param.require_happy = (Button_GetCheck(pdialog->happy) == BST_CHECKED) ? 1 : 0;
-  param.happy_factor = ScrollBar_GetPos(pdialog->factor[O_LAST]);
+  param.happy_factor = ScrollBar_GetPos(pdialog->factor[O_COUNT]);
   
   /* save the change */
   cmafec_set_fe_parameter(pdialog->pcity, &param);

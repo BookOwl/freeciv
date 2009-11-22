@@ -31,18 +31,15 @@
       struct foo_list;
    and prototypes for the following functions:
       struct foolist *foo_list_new();
-      void foo_list_free(struct foo_list *This);
       int  foo_list_size(struct foo_list *This);
       foo_t *foo_list_get(struct foo_list *This, int index);
       void foo_list_prepend(struct foo_list *This, foo_t *pfoo);
       void foo_list_append(struct foo_list *This, foo_t *pfoo);
       void foo_list_unlink(struct foo_list *This, foo_t *pfoo);
-      void foo_list_clear(struct foo_list *This);
+      void foo_list_unlink_all(struct foo_list *This);
       bool foo_list_search(struct foo_list *this, foo_t *pfoo);
       void foo_list_sort(struct foo_list *This, 
          int (*compar)(const void *, const void *));
-      void foo_list_shuffle(struct foo_list *This);
-      const struct genlist *foo_list_base(const struct foo_list *This);
 
    You should also define yourself:  (this file cannot do this for you)
    
@@ -71,61 +68,67 @@
 #define SPECLIST_TYPE struct SPECLIST_TAG
 #endif
 
-#define SPECLIST_PASTE_(x, y) x ## y
-#define SPECLIST_PASTE(x, y) SPECLIST_PASTE_(x,y)
+#define SPECLIST_PASTE_(x,y) x ## y
+#define SPECLIST_PASTE(x,y) SPECLIST_PASTE_(x,y)
 
 #define SPECLIST_LIST struct SPECLIST_PASTE(SPECLIST_TAG, _list)
 #define SPECLIST_FOO(suffix) SPECLIST_PASTE(SPECLIST_TAG, suffix)
 
-/* Opaque type.  Actually a genlist, but not defined anywhere. */
-SPECLIST_LIST;
-
-#define GENLIST(speclist) ((struct genlist *) (speclist))
-#define SPECLIST(genlist) ((SPECLIST_LIST *) (genlist))
+SPECLIST_LIST {
+  struct genlist *list;
+};
 
 static inline SPECLIST_LIST *SPECLIST_FOO(_list_new) (void)
 {
-  return SPECLIST(genlist_new());
+  SPECLIST_LIST *speclist = (SPECLIST_LIST *)fc_malloc(sizeof(*speclist));
+
+  speclist->list = genlist_new();
+  return speclist;
 }
 
-static inline SPECLIST_LIST *SPECLIST_FOO(_list_copy) (const SPECLIST_LIST *plist)
+static inline SPECLIST_LIST *SPECLIST_FOO(_list_copy) (SPECLIST_LIST *plist)
 {
-  return SPECLIST(genlist_copy(GENLIST(plist)));
+  SPECLIST_LIST *newlist = (SPECLIST_LIST *)fc_malloc(sizeof(*newlist));
+
+  newlist->list = genlist_copy(plist ? plist->list : NULL);
+
+  return newlist;
 }
 
 static inline void SPECLIST_FOO(_list_prepend) (SPECLIST_LIST *tthis, SPECLIST_TYPE *pfoo)
 {
-  genlist_prepend(GENLIST(tthis), pfoo);
+  genlist_prepend(tthis->list, pfoo);
 }
 
 static inline void SPECLIST_FOO(_list_unlink) (SPECLIST_LIST *tthis, SPECLIST_TYPE *pfoo)
 {
-  genlist_unlink(GENLIST(tthis), pfoo);
+  genlist_unlink(tthis->list, pfoo);
 }
 
 static inline int SPECLIST_FOO(_list_size) (const SPECLIST_LIST *tthis)
 {
-  return genlist_size(GENLIST(tthis));
+  return genlist_size(tthis->list);
 }
 
 static inline SPECLIST_TYPE *SPECLIST_FOO(_list_get) (const SPECLIST_LIST *tthis, int index)
 {
-  return (SPECLIST_TYPE *) genlist_get(GENLIST(tthis), index);
+  return (SPECLIST_TYPE *)genlist_get(tthis->list, index);
 }
 
 static inline void SPECLIST_FOO(_list_append) (SPECLIST_LIST *tthis, SPECLIST_TYPE *pfoo)
 {
-  genlist_append(GENLIST(tthis), pfoo);
+  genlist_append(tthis->list, pfoo);
 }
 
-static inline void SPECLIST_FOO(_list_clear) (SPECLIST_LIST *tthis)
+static inline void SPECLIST_FOO(_list_unlink_all) (SPECLIST_LIST *tthis)
 {
-  genlist_clear(GENLIST(tthis));
+  genlist_unlink_all(tthis->list);
 }
 
 static inline void SPECLIST_FOO(_list_free) (SPECLIST_LIST *tthis)
 {
-  genlist_free(GENLIST(tthis));
+  genlist_free(tthis->list);
+  free(tthis);
 }
 
 /****************************************************************************
@@ -134,30 +137,15 @@ static inline void SPECLIST_FOO(_list_free) (SPECLIST_LIST *tthis)
   This is an O(n) operation.  Hence, "search".
 ****************************************************************************/
 static inline bool SPECLIST_FOO(_list_search) (SPECLIST_LIST *tthis,
-                                               const SPECLIST_TYPE *pfoo)
+					       const SPECLIST_TYPE *pfoo)
 {
-  return genlist_search(GENLIST(tthis), pfoo);
+  return genlist_search(tthis->list, pfoo);
 }
 
-static inline void SPECLIST_FOO(_list_sort) (SPECLIST_LIST * tthis,
-                                             int (*compar) (const SPECLIST_TYPE *const *,
-                                                            const SPECLIST_TYPE *const *))
+static inline void SPECLIST_FOO(_list_sort) (SPECLIST_LIST * tthis, int (*compar) (const void *, const void *))
 {
-  genlist_sort(GENLIST(tthis), (int (*)(const void *, const void *)) compar);
+  genlist_sort(tthis->list, compar);
 }
-
-static inline void SPECLIST_FOO(_list_shuffle) (SPECLIST_LIST *tthis)
-{
-  genlist_shuffle(GENLIST(tthis));
-}
-
-static inline const struct genlist *SPECLIST_FOO(_list_base) (const SPECLIST_LIST *tthis)
-{
-  return GENLIST(tthis);
-}
-
-#undef SPECLIST
-#undef GENLIST
 
 #undef SPECLIST_TAG
 #undef SPECLIST_TYPE

@@ -1,10 +1,12 @@
 ## Process this file with automake to produce Makefile.in
 
-noinst_LTLIBRARIES = libgui-win32.la
+noinst_LIBRARIES = libguiclient.a
 
-AM_CPPFLAGS = -I. -I$(srcdir)/.. -I$(srcdir)/../agents -I$(top_srcdir)/utility -I$(srcdir)/../include -I$(top_srcdir)/common/aicore -I$(top_srcdir)/common $(GUI_win32_CFLAGS) $(SOUND_CFLAGS)
+AM_CPPFLAGS = -I. -I$(srcdir)/.. -I$(srcdir)/../agents -I$(top_srcdir)/utility -I$(srcdir)/../include -I$(top_srcdir)/common/aicore -I$(top_srcdir)/common -I../../intl $(CLIENT_CFLAGS)
 
-libgui_win32_la_SOURCES = \
+## Above, note -I../../intl instead of -I$(top_srdir)/intl is deliberate.
+
+libguiclient_a_SOURCES = \
 	canvas.c	\
 	canvas.h	\
 	chatline.c	\
@@ -66,7 +68,5 @@ libgui_win32_la_SOURCES = \
 	sprite.c	\
 	sprite.h	\
 	themes.c	\
-	voteinfo_bar.c	\
-	voteinfo_bar.h	\
 	wldlg.c		\
 	wldlg.h

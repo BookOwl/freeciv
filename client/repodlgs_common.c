@@ -17,21 +17,18 @@
 
 #include <assert.h>
 
-/* utility */
 #include "fcintl.h"
 #include "log.h"
 #include "mem.h"		/* free */
 #include "support.h"		/* my_snprintf */
 
-/* common */
 #include "game.h"
 #include "government.h"
 #include "unitlist.h"
 
 #include "repodlgs_g.h"
 
-/* client */
-#include "client_main.h"
+#include "civclient.h"		/* can_client_issue_orders */
 #include "connectdlg_common.h"	/* is_server_running */
 #include "control.h"
 #include "options.h"
@@ -45,6 +42,8 @@ struct options_settable *settable_options = NULL;
 int num_options_categories = 0;
 int num_settable_options = 0;
 
+static bool settable_options_loaded = FALSE;	/* desired options from file */
+
 
 /****************************************************************
   Fills out the array of struct improvement_entry given by
@@ -56,19 +55,18 @@ void get_economy_report_data(struct improvement_entry *entries,
 {
   *num_entries_used = 0;
   *total_cost = 0;
-  *total_income = 0;
 
-  if (NULL == client.conn.playing) {
+  if (!game.player_ptr) {
     return;
   }
 
-  improvement_iterate(pimprove) {
-    if (is_improvement(pimprove)) {
+  impr_type_iterate(impr_id) {
+    if (is_improvement(impr_id)) {
       int count = 0, cost = 0;
-      city_list_iterate(client.conn.playing->cities, pcity) {
-	if (city_has_building(pcity, pimprove)) {
+      city_list_iterate(game.player_ptr->cities, pcity) {
+	if (city_got_building(pcity, impr_id)) {
 	  count++;
-	  cost += city_improvement_upkeep(pcity, pimprove);
+	  cost += improvement_upkeep(pcity, impr_id);
 	}
       }
       city_list_iterate_end;
@@ -77,7 +75,7 @@ void get_economy_report_data(struct improvement_entry *entries,
 	continue;
       }
 
-      entries[*num_entries_used].type = pimprove;
+      entries[*num_entries_used].type = impr_id;
       entries[*num_entries_used].count = count;
       entries[*num_entries_used].total_cost = cost;
       entries[*num_entries_used].cost = cost / count;
@@ -86,16 +84,18 @@ void get_economy_report_data(struct improvement_entry *entries,
       /* Currently there is no building expense under anarchy.  It's
        * not a good idea to hard-code this in the client, but what
        * else can we do? */
-      if (government_of_player(client.conn.playing) !=
-          game.government_during_revolution) {
+      if (government_of_player(game.player_ptr) != game.government_when_anarchy) {
         *total_cost += cost;
       }
     }
-  } improvement_iterate_end;
+  } impr_type_iterate_end;
 
-  city_list_iterate(client.conn.playing->cities, pcity) {
+  *total_income = 0;
+
+  city_list_iterate(game.player_ptr->cities, pcity) {
     *total_income += pcity->prod[O_GOLD];
-    if (city_production_has_flag(pcity, IF_GOLD)) {
+    if (!pcity->production.is_unit
+	&& improvement_has_flag(pcity->production.value, IF_GOLD)) {
       *total_income += MAX(0, pcity->surplus[O_SHIELD]);
     }
   } city_list_iterate_end;
@@ -113,12 +113,13 @@ void get_economy_report_units_data(struct unit_entry *entries,
   *num_entries_used = 0;
   *total_cost = 0;
 
-  if (NULL == client.conn.playing) {
+  if (!game.player_ptr) {
     return;
   }
 
   unit_type_iterate(unittype) {
-    cost = utype_upkeep_cost(unittype, client.conn.playing, O_GOLD);
+    cost = utype_upkeep_cost(unittype, game.player_ptr,
+                             government_of_player(game.player_ptr), O_GOLD);
 
     if (cost == 0) {
       /* Short-circuit all of the following checks. */
@@ -128,8 +129,9 @@ void get_economy_report_units_data(struct unit_entry *entries,
     count = 0;
     partial_cost = 0;
 
-    city_list_iterate(client.conn.playing->cities, pcity) {
+    city_list_iterate(game.player_ptr->cities, pcity) {
       unit_list_iterate(pcity->units_supported, punit) {
+
 	if (unit_type(punit) == unittype) {
 	  count++;
 	  partial_cost += punit->upkeep[O_GOLD];
@@ -197,6 +199,8 @@ bool is_report_dialogs_frozen(void)
 *******************************************************************/
 void settable_options_init(void)
 {
+  settable_options_loaded = FALSE;
+
   settable_options = NULL;
   num_settable_options = 0;
 
@@ -239,7 +243,14 @@ void settable_options_free(void)
   int i;
 
   for (i = 0; i < num_settable_options; i++) {
-    settable_option_strings_free(settable_options + i);
+    struct options_settable *o = &settable_options[i];
+    settable_option_strings_free(o);
+
+    /* special handling for non-packet strings */
+    if (NULL != o->desired_strval) {
+      free(o->desired_strval);
+      o->desired_strval = NULL;
+    }
   }
   free(settable_options);
 
@@ -260,9 +271,7 @@ void handle_options_settable_control(
 {
   int i; 
 
-  if (settable_options) {
-    settable_options_free();
-  }
+  settable_options_free();
 
   /* avoid a malloc of size 0 warning */
   if (0 == packet->num_categories
@@ -305,6 +314,10 @@ void handle_options_settable(struct packet_options_settable *packet)
 
   o->val = packet->val;
   o->default_val = packet->default_val;
+  if (!settable_options_loaded) {
+    o->desired_val = packet->default_val;
+    /* desired_val is loaded later */
+  }
   o->min = packet->min;
   o->max = packet->max;
 
@@ -336,17 +349,16 @@ void handle_options_settable(struct packet_options_settable *packet)
   o->short_help = mystrdup(packet->short_help);
   o->extra_help = mystrdup(packet->extra_help);
 
-  if (!o->desired_sent
-      && o->is_visible
-      && is_server_running()
+  /* have no proper final packet, test for the last instead */
+  if (i == (num_settable_options - 1) && !settable_options_loaded
       && packet->initial_setting) {
     /* Only send our private settings if we are running
      * on a forked local server, i.e. started by the
      * client with the "Start New Game" button.
      * Do now override settings that are already saved to savegame
      * and now loaded. */
-    desired_settable_option_send(o);
-    o->desired_sent = TRUE;
+    load_settable_options(is_server_running());
+    settable_options_loaded = TRUE;
   }
 }
 
@@ -357,7 +369,7 @@ void handle_options_settable(struct packet_options_settable *packet)
   The "message" string will be filled with a GUI-friendly message about
   what was sold.
 ****************************************************************************/
-void sell_all_improvements(struct impr_type *pimprove, bool obsolete_only,
+void sell_all_improvements(Impr_type_id impr, bool obsolete_only,
 			   char *message, size_t message_sz)
 {
   int count = 0, gold = 0;
@@ -367,25 +379,25 @@ void sell_all_improvements(struct impr_type *pimprove, bool obsolete_only,
     return;
   }
 
-  city_list_iterate(client.conn.playing->cities, pcity) {
-    if (!pcity->did_sell && city_has_building(pcity, pimprove)
+  city_list_iterate(game.player_ptr->cities, pcity) {
+    if (!pcity->did_sell && city_got_building(pcity, impr)
 	&& (!obsolete_only
-	    || improvement_obsolete(client.conn.playing, pimprove)
-	    || is_building_replaced(pcity, pimprove, RPT_CERTAIN))) {
+	    || improvement_obsolete(game.player_ptr, impr)
+	    || is_building_replaced(pcity, impr, RPT_CERTAIN))) {
       count++;
-      gold += impr_sell_gold(pimprove);
-      city_sell_improvement(pcity, improvement_number(pimprove));
+      gold += impr_sell_gold(impr);
+      city_sell_improvement(pcity, impr);
     }
   } city_list_iterate_end;
 
   if (count > 0) {
     my_snprintf(message, message_sz, _("Sold %d %s for %d gold."),
 		count,
-		improvement_name_translation(pimprove),
+		improvement_name_translation(impr),
 		gold);
   } else {
     my_snprintf(message, message_sz, _("No %s could be sold."),
-		improvement_name_translation(pimprove));
+		improvement_name_translation(impr));
   }
 }
 
@@ -413,15 +425,15 @@ void disband_all_units(struct unit_type *punittype, bool in_cities_only,
     return;
   }
 
-  city_list_iterate(client.conn.playing->cities, pcity) {
+  city_list_iterate(game.player_ptr->cities, pcity) {
     /* Only supported units are disbanded.  Units with no homecity have no
      * cost and are not disbanded. */
     unit_list_iterate(pcity->units_supported, punit) {
-      struct city *incity = tile_city(punit->tile);
+      struct city *incity = tile_get_city(punit->tile);
 
       if (unit_type(punit) == punittype
 	  && (!in_cities_only
-	      || (incity && city_owner(incity) == client.conn.playing))) {
+	      || (incity && city_owner(incity) == game.player_ptr))) {
 	count++;
 	request_unit_disband(punit);
       }

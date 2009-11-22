@@ -16,13 +16,6 @@ options="1.0"
 ; /* <-- avoid gettext warnings
 ; */ <-- avoid gettext warnings
 
-; Cheating AI effects are in separate file
-*include "default/ai_effects.ruleset"
-
-[effect_unhappysize]
-name    = "City_Unhappy_Size"
-value   = 4
-
 [effect_gov_tile_bonus_0]
 name    = "Output_Penalty_Tile"
 value   = 2
@@ -318,7 +311,7 @@ name	= "HP_Regen"
 value	= 100
 reqs	=
     { "type", "name", "range"
-      "Base", "Fortress", "Tile"
+      "Special", "Fortress", "Tile"
       "UnitClass", "Land", "Local"
     }
 
@@ -484,49 +477,42 @@ reqs    =
       "Gov", "Democracy", "Player"
     }
 
-[effect_empire_size_base_0]
-name    = "Empire_Size_Base"
-value   = 9
+[effect_empire_size_mod_0]
+; base value
+name    = "Empire_Size_Mod"
+value   = -6
 reqs    =
     { "type",       "name",      "range"
       "Gov", "Anarchy",   "Player"
     }
 
-[effect_empire_size_base_1]
-name    = "Empire_Size_Base"
-value   = 10
+[effect_empire_size_mod_1]
+name    = "Empire_Size_Mod"
+value   = -6
 reqs    =
     { "type",       "name",      "range"
       "Gov", "Despotism", "Player"
     }
 
-[effect_empire_size_base_2]
-name    = "Empire_Size_Base"
-value   = 11
+[effect_empire_size_mod_2]
+name    = "Empire_Size_Mod"
+value   = -3
 reqs    =
     { "type",       "name",      "range"
       "Gov", "Monarchy",  "Player"
     }
 
-[effect_empire_size_base_3]
-name    = "Empire_Size_Base"
-value   = 14
-reqs	=
+[effect_empire_size_mod_3]
+name    = "Empire_Size_Mod"
+value   = 127 ; unlimited
+reqs    =
     { "type",       "name",      "range"
       "Gov", "Communism", "Player"
     }
 
-[effect_empire_size_base_4]
-name    = "Empire_Size_Base"
-value   = 14
-reqs    =
-    { "type",       "name",      "range"
-      "Gov", "Republic",  "Player"
-    }
-
-[effect_empire_size_base_5]
-name    = "Empire_Size_Base"
-value   = 17
+[effect_empire_size_mod_4]
+name    = "Empire_Size_Mod"
+value   = 3
 reqs    =
     { "type",       "name",      "range"
       "Gov", "Democracy",  "Player"
@@ -561,18 +547,10 @@ name    = "Empire_Size_Step"
 value   = 12
 reqs    =
     { "type",       "name",      "range"
-      "Gov", "Communism",  "Player"
-    }
-
-[effect_empire_size_step_4]
-name    = "Empire_Size_Step"
-value   = 12
-reqs    =
-    { "type",       "name",      "range"
       "Gov", "Republic",  "Player"
     }
 
-[effect_empire_size_step_5]
+[effect_empire_size_step_4]
 name    = "Empire_Size_Step"
 value   = 12
 reqs    =
@@ -1133,7 +1111,7 @@ name	= "Output_Add_Tile"
 value	= 1
 reqs	=
     { "type", "name", "range"
-      "TerrainClass", "Oceanic", "Local"
+      "Terrain", "Ocean", "Local"
       "Building", "Harbour", "City"
       "OutputType", "food", "local"
     }
@@ -1151,7 +1129,6 @@ nreqs	=
     { "type", "name", "range"
       "Building", "Hoover Dam", "Player"
       "Building", "Nuclear Plant", "City"
-      "Building", "Solar Plant", "City"
     }
 
 [effect_hydro_plant_1]
@@ -1167,7 +1144,6 @@ nreqs	=
     { "type", "name", "range"
       "Building", "Hoover Dam", "Player"
       "Building", "Nuclear Plant", "City"
-      "Building", "Solar Plant", "City"
     }
 
 [effect_hydro_plant_2]
@@ -1182,7 +1158,6 @@ nreqs	=
       "Building", "Recycling Center", "City"
       "Building", "Hoover Dam", "Player"
       "Building", "Nuclear Plant", "City"
-      "Building", "Solar Plant", "City"
     }
 
 [effect_library]
@@ -1242,7 +1217,6 @@ reqs	=
 nreqs	=
     { "type", "name", "range"
       "Building", "Hoover Dam", "Player"
-      "Building", "Solar Plant", "City"
     }
 
 [effect_nuclear_plant_1]
@@ -1257,7 +1231,6 @@ reqs	=
 nreqs	=
     { "type", "name", "range"
       "Building", "Hoover Dam", "Player"
-      "Building", "Solar Plant", "City"
     }
 
 [effect_nuclear_plant_2]
@@ -1271,7 +1244,6 @@ nreqs	=
     { "type", "name", "range"
       "Building", "Recycling Center", "City"
       "Building", "Hoover Dam", "Player"
-      "Building", "Solar Plant", "City"
     }
 
 [effect_offshore_platform]
@@ -1279,7 +1251,7 @@ name	= "Output_Add_Tile"
 value	= 1
 reqs	=
     { "type", "name", "range"
-      "TerrainClass", "Oceanic", "Local"
+      "Terrain", "Ocean", "Local"
       "Building", "Offshore Platform", "City"
       "OutputType", "shield", "local"
     }
@@ -1384,7 +1356,6 @@ nreqs	=
       "Building", "Hoover Dam", "Player"
       "Building", "Nuclear Plant", "City"
       "Building", "Hydro Plant", "City"
-      "Building", "Solar Plant", "City"
     }
 
 [effect_power_plant_1]
@@ -1401,7 +1372,6 @@ nreqs	=
       "Building", "Hoover Dam", "Player"
       "Building", "Nuclear Plant", "City"
       "Building", "Hydro Plant", "City"
-      "Building", "Solar Plant", "City"
     }
 
 [effect_recycling_center]
@@ -1410,10 +1380,6 @@ value	= -66
 reqs	=
     { "type", "name", "range"
       "Building", "Recycling Center", "City"
-    }
-nreqs	=
-    { "type", "name", "range"
-      "Building", "Solar Plant", "City"
     }
 
 [effect_research_lab]
@@ -1463,34 +1429,6 @@ reqs	=
     { "type", "name", "range"
       "Building", "Aqueduct", "City"
       "Building", "Sewer System", "City"
-    }
-
-[effect_solar_plant]
-name	= "Output_Bonus"
-value	= 25
-reqs	=
-    { "type", "name", "range"
-      "Building", "Factory", "City"
-      "Building", "Solar Plant", "City"
-      "OutputType", "Shield", "Local"
-    }
-
-[effect_solar_plant_1]
-name	= "Output_Bonus"
-value	= 25
-reqs	=
-    { "type", "name", "range"
-      "Building", "Mfg. Plant", "City"
-      "Building", "Solar Plant", "City"
-      "OutputType", "Shield", "Local"
-    }
-
-[effect_solar_plant_2]
-name	= "Pollu_Prod_Pct"
-value	= -100
-reqs	=
-    { "type", "name", "range"
-      "Building", "Solar Plant", "City"
     }
 
 [effect_space_component]
@@ -1555,21 +1493,6 @@ reqs	=
       "Special", "Farmland", "Local"
       "Building", "Supermarket", "City"
       "OutputType", "food", "local"
-    }
-nreqs   =
-    { "type", "name", "range"
-      "CityTile", "Center", "Local"
-    }
-
-[effect_supermarket_2]
-name	= "Output_Per_Tile"
-value	= 50
-reqs	=
-    { "type", "name", "range"
-      "CityTile", "Center", "Local"
-      "TerrainAlter", "CanIrrigate", "Local"
-      "Building", "Supermarket", "City"
-      "OutputType", "Food", "Local"
     }
 
 [effect_temple]
@@ -1732,10 +1655,6 @@ reqs	=
       "Building", "Hoover Dam", "Player"
       "OutputType", "shield", "local"
     }
-nreqs	=
-    { "type", "name", "range"
-      "Building", "Solar Plant", "City"
-    }
 
 [effect_hoover_dam_1]
 name	= "Output_Bonus"
@@ -1745,10 +1664,6 @@ reqs	=
       "Building", "Mfg. Plant", "City"
       "Building", "Hoover Dam", "Player"
       "OutputType", "shield", "local"
-    }
-nreqs	=
-    { "type", "name", "range"
-      "Building", "Solar Plant", "City"
     }
 
 [effect_hoover_dam_2]
@@ -1761,7 +1676,6 @@ reqs	=
 nreqs	=
     { "type", "name", "range"
       "Building", "Recycling Center", "City"
-      "Building", "Solar Plant", "City"
     }
 
 [effect_isaac_newtons_college]
@@ -1805,6 +1719,14 @@ reqs	=
     { "type", "name", "range"
       "Building", "Lighthouse", "Player"
       "UnitClass", "Sea", "Local"
+    }
+
+[effect_lighthouse_1]
+name	= "No_Sink_Deep"
+value	= 1
+reqs	=
+    { "type", "name", "range"
+      "Building", "Lighthouse", "Player"
     }
 
 [effect_lighthouse_2]
@@ -1993,80 +1915,3 @@ reqs    =
     { "type", "name", "range" 
       "Gov", "Fundamentalism", "Player" 
     }
-
-; FIXME: Calendar effects are copied from default rulesets and are
-; probably wrong for civ2 ruleset.
-[effect_calendar_base]
-name    = "Turn_Years"
-value   = 50
-
-; 50 - 25 = 25
-[effect_calendar_1]
-name    = "Turn_Years"
-value   = -25
-reqs    =
-    { "type", "name", "range"
-      "MinYear", "-1000", "World"
-    }
-
-; 25 - 5 = 20
-[effect_calendar_2]
-name    = "Turn_Years"
-value   = -5
-reqs    =
-    { "type", "name", "range"
-      "MinYear", "0", "World"
-    }
-
-; 20 - 10 = 10
-[effect_calendar_3]
-name    = "Turn_Years"
-value   = -10
-reqs    =
-    { "type", "name", "range"
-      "MinYear", "1000", "World"
-    }
-
-; 10 - 5 = 5
-[effect_calendar_4]
-name    = "Turn_Years"
-value   = -5
-reqs    =
-    { "type", "name", "range"
-      "MinYear", "1500", "World"
-    }
-
-; 5 - 3 = 2
-[effect_calendar_5]
-name    = "Turn_Years"
-value   = -3
-reqs    =
-    { "type", "name", "range"
-      "MinYear", "1750", "World"
-    }
-
-; 2 - 1 = 1
-[effect_calendar_6]
-name    = "Turn_Years"
-value   = -1
-reqs    =
-    { "type", "name", "range"
-      "MinYear", "1900", "World"
-    }
-
-[effect_tech_cost_base]
-name    = "Tech_Cost_Factor"
-value   = 1
-
-[effect_tech_cost_double]
-name    = "Tech_Cost_Factor"
-value   = 1
-reqs    =
-    { "type", "name", "range"
-      "MinYear", "1", "World"
-    }
-
-; Cities can always work tiles
-[effect_tile_workable]
-name    = "Tile_Workable"
-value   = 1

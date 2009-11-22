@@ -37,21 +37,18 @@ Freeciv - Copyright (C) 2004 - The Freeciv Project
 #include <sys/wait.h>
 #endif
 
-/* common & utility */
 #include "capability.h"
 #include "fcintl.h"
-#include "ioz.h"
 #include "log.h"
 #include "mem.h"
 #include "netintf.h"
-#include "rand.h"
 #include "registry.h"
+#include "shared.h"
 #include "support.h"
 
-/* client */
-#include "client_main.h"
+#include "civclient.h"
 #include "climisc.h"
-#include "clinet.h"		/* connect_to_server() */
+#include "clinet.h"
 #include "packhand_gen.h"
 
 #include "chatline_common.h"
@@ -76,6 +73,14 @@ static char challenge_fullname[MAX_LEN_PATH];
 static bool client_has_hack = FALSE;
 
 int internal_server_port;
+
+const char *skill_level_names[NUM_SKILL_LEVELS] = { 
+  N_("novice"),
+  N_("easy"), 
+  N_("normal"), 
+  N_("hard")
+ ,N_("experimental")
+};
 
 /************************************************************************** 
 The general chain of events:
@@ -132,7 +137,7 @@ bool can_client_access_hack(void)
 void client_kill_server(bool force)
 {
   if (is_server_running()) {
-    if (client.conn.used) {
+    if (aconnection.used) {
       /* This does a "soft" shutdown of the server by sending a /quit.
        *
        * This is useful when closing the client or disconnecting because it
@@ -184,7 +189,7 @@ bool client_start_server(void)
 #if !defined(HAVE_WORKING_FORK) && !defined(WIN32_NATIVE)
   /* Can't do much without fork */
   return FALSE;
-#else /* HAVE_WORKING_FORK || WIN32_NATIVE */
+#else
   char buf[512];
   int connect_tries = 0;
 # ifdef WIN32_NATIVE
@@ -198,13 +203,13 @@ bool client_start_server(void)
   char cmdline3[512];
   char logcmdline[512];
   char scriptcmdline[512];
-# endif /* WIN32_NATIVE */
+# endif
 
   /* only one server (forked from this client) shall be running at a time */
   /* This also resets client_has_hack. */
   client_kill_server(TRUE);
   
-  output_window_append(ftc_client, _("Starting server..."));
+  append_output_window(_("Starting server..."));
 
   /* find a free port */ 
   internal_server_port = find_next_free_port(DEFAULT_SOCK_PORT);
@@ -221,7 +226,7 @@ bool client_start_server(void)
 
     /* Set up the command-line parameters. */
     my_snprintf(port_buf, sizeof(port_buf), "%d", internal_server_port);
-    argv[argc++] = "freeciv-server";
+    argv[argc++] = "civserver";
     argv[argc++] = "-p";
     argv[argc++] = port_buf;
     argv[argc++] = "-q";
@@ -229,8 +234,6 @@ bool client_start_server(void)
     argv[argc++] = "-e";
     argv[argc++] = "--saves";
     argv[argc++] = "~/.freeciv/saves";
-    argv[argc++] = "--scenarios";
-    argv[argc++] = "~/.freeciv/scenarios";
     if (logfile) {
       argv[argc++] = "--debug";
       argv[argc++] = "3";
@@ -262,7 +265,7 @@ bool client_start_server(void)
     }
 
     /* If it's still attatched to our terminal, things get messed up, 
-      but freeciv-server needs *something* */ 
+      but civserver needs *something* */ 
     fclose(stdin);
     fd = open("/dev/null", O_RDONLY);
     if (fd != 0) {
@@ -271,15 +274,15 @@ bool client_start_server(void)
 
     /* these won't return on success */ 
     execvp("./ser", argv);
-    execvp("./server/freeciv-server", argv);
-    execvp("freeciv-server", argv);
+    execvp("./server/civserver", argv);
+    execvp("civserver", argv);
     
-    /* This line is only reached if freeciv-server cannot be started, 
+    /* This line is only reached if civserver cannot be started, 
      * so we kill the forked process.
      * Calling exit here is dangerous due to X11 problems (async replies) */ 
     _exit(1);
   } 
-# else /* HAVE_WORKING_FORK */
+# else
 #  ifdef WIN32_NATIVE
   if (logfile) {
     loghandle = CreateFile(logfile, GENERIC_WRITE,
@@ -313,10 +316,8 @@ bool client_start_server(void)
   my_snprintf(options, sizeof(options), "-p %d -q 1 -e%s%s --saves \"%s\"",
 	      internal_server_port, logcmdline, scriptcmdline, savesdir);
   my_snprintf(cmdline1, sizeof(cmdline1), "./ser %s", options);
-  my_snprintf(cmdline2, sizeof(cmdline2),
-              "./server/freeciv-server %s", options);
-  my_snprintf(cmdline3, sizeof(cmdline3),
-              "freeciv-server %s", options);
+  my_snprintf(cmdline2, sizeof(cmdline2), "./server/civserver %s", options);
+  my_snprintf(cmdline3, sizeof(cmdline3), "civserver %s", options);
 
   if (!CreateProcess(NULL, cmdline1, NULL, NULL, TRUE,
 		     DETACHED_PROCESS | NORMAL_PRIORITY_CLASS,
@@ -327,16 +328,15 @@ bool client_start_server(void)
       && !CreateProcess(NULL, cmdline3, NULL, NULL, TRUE,
 			DETACHED_PROCESS | NORMAL_PRIORITY_CLASS,
 			NULL, NULL, &si, &pi)) {
-    output_window_append(ftc_client, _("Couldn't start the server."));
-    output_window_append(ftc_client,
-                         _("You'll have to start one manually. Sorry..."));
+    append_output_window(_("Couldn't start the server."));
+    append_output_window(_("You'll have to " "start one manually. Sorry..."));
     return FALSE;
   }
   
   server_process = pi.hProcess;
 
-#  endif /* WIN32_NATIVE */
-# endif /* HAVE_WORKING_FORK */
+#  endif
+# endif
  
   /* a reasonable number of tries */ 
   while (connect_to_server(user_name, "localhost", internal_server_port, 
@@ -347,8 +347,8 @@ bool client_start_server(void)
     if (waitpid(server_pid, NULL, WNOHANG) != 0) {
       break;
     }
-#endif /* WIN32_NATIVE */
-#endif /* HAVE_WORKING_FORK */
+#endif
+#endif
     if (connect_tries++ > NUMBER_OF_TRIES) {
       break;
     }
@@ -356,15 +356,13 @@ bool client_start_server(void)
 
   /* weird, but could happen, if server doesn't support new startup stuff
    * capabilities won't help us here... */ 
-  if (!client.conn.used) {
+  if (!aconnection.used) {
     /* possible that server is still running. kill it */ 
     client_kill_server(TRUE);
 
-    output_window_append(ftc_client, _("Couldn't connect to the server."));
-    output_window_append(ftc_client,
-                         _("We probably couldn't start it from here."));
-    output_window_append(ftc_client,
-                         _("You'll have to start one manually. Sorry..."));
+    append_output_window(_("Couldn't connect to the server."));
+    append_output_window(_("We probably couldn't start it from here."));
+    append_output_window(_("You'll have to start one manually. Sorry..."));
     return FALSE;
   }
 
@@ -383,39 +381,17 @@ bool client_start_server(void)
    * Setting the option here is a bit of a hack, but so long as the client
    * has sufficient permissions to do so (it doesn't have HACK access yet) it
    * is safe enough.  Note that if you load a savegame the topology will be
-   * set but then overwritten during the load.
-   *
-   * Don't send it now, it will be sent to the server when receiving the
-   * server setting infos. */
-  {
-    char buf[16];
-
-    my_snprintf(buf, sizeof(buf), "%d",
-                (TF_WRAPX
-                 | ((tileset_is_isometric(tileset)
-                    && tileset_hex_height(tileset) == 0) ? TF_ISO : 0)
-                 | ((tileset_hex_width(tileset) != 0
-                    || tileset_hex_height(tileset) != 0) ? TF_HEX : 0)));
-    desired_settable_option_update("topology", buf, FALSE);
-  }
+   * set but then overwritten during the load. */
+  my_snprintf(buf, sizeof(buf), "/set topology %d",
+	      (TF_WRAPX
+	       | ((tileset_is_isometric(tileset)
+		   && tileset_hex_height(tileset) == 0) ? TF_ISO : 0)
+	       | ((tileset_hex_width(tileset) != 0
+		   || tileset_hex_height(tileset) != 0) ? TF_HEX : 0)));
+  send_chat(buf);
 
   return TRUE;
-#endif /* HAVE_WORKING_FORK || WIN32_NATIVE */
-}
-
-/*************************************************************************
-  generate a random string.
-*************************************************************************/
-static void randomize_string(char *str, size_t n)
-{
-  const char chars[] =
-    "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-  int i;
-
-  for (i = 0; i < n - 1; i++) {
-    str[i] = chars[myrand(sizeof(chars) - 1)];
-  }
-  str[i] = '\0';
+#endif
 }
 
 /*************************************************************************
@@ -460,23 +436,23 @@ void send_client_wants_hack(const char *filename)
     sz_strlcat(challenge_fullname, filename);
 
     /* generate an authentication token */ 
-    randomize_string(req.token, sizeof(req.token));
+    randomize_base64url_string(req.token, sizeof(req.token));
 
     section_file_init(&file);
     secfile_insert_str(&file, req.token, "challenge.token");
-    if (!section_file_save(&file, challenge_fullname, 0, FZ_PLAIN)) {
+    if (!section_file_save(&file, challenge_fullname, 0)) {
       freelog(LOG_ERROR, "Couldn't write token to temporary file: %s",
 	      challenge_fullname);
     }
     section_file_free(&file);
 
     /* tell the server what we put into the file */ 
-    send_packet_single_want_hack_req(&client.conn, &req);
+    send_packet_single_want_hack_req(&aconnection, &req);
   }
 }
 
 /**************************************************************** 
-handle response (by the server) if the client has got hack or not.
+  client has hack (or not).
 *****************************************************************/ 
 void handle_single_want_hack_reply(bool you_have_hack)
 {
@@ -490,14 +466,12 @@ void handle_single_want_hack_reply(bool you_have_hack)
   }
 
   if (you_have_hack) {
-    output_window_append(ftc_client,
-                         _("Established control over the server. "
+    append_output_window(_("Established control over the server. "
                            "You have command access level 'hack'."));
     client_has_hack = TRUE;
   } else if (is_server_running()) {
     /* only output this if we started the server and we NEED hack */
-    output_window_append(ftc_client,
-                         _("Failed to obtain the required access "
+    append_output_window(_("Failed to obtain the required access "
                            "level to take control of the server. "
                            "The server will now be shutdown."));
     client_kill_server(TRUE);
@@ -509,8 +483,12 @@ send server commands to start a saved game.
 *****************************************************************/ 
 void send_start_saved_game(void)
 {   
+  char buf[MAX_LEN_MSG];
+
   send_chat("/set timeout 0");
-  send_chat_printf("/take \"%s\" \"%s\"", user_name, leader_name);
+  my_snprintf(buf, sizeof(buf), "/take \"%s\" \"%s\"",
+      	      user_name, leader_name);
+  send_chat(buf);
   send_chat("/start");
 }
 
@@ -519,11 +497,15 @@ send server command to save game.
 *****************************************************************/ 
 void send_save_game(char *filename)
 {   
+  char message[MAX_LEN_MSG];
+
   if (filename) {
-    send_chat_printf("/save %s", filename);
+    my_snprintf(message, MAX_LEN_MSG, "/save %s", filename);
   } else {
-    send_chat("/save");
+    my_snprintf(message, MAX_LEN_MSG, "/save");
   }
+
+  send_chat(message);
 }
 
 /**************************************************************************

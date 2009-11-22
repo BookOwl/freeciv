@@ -13,17 +13,14 @@
 #ifndef FC__OPTIONS_H
 #define FC__OPTIONS_H
 
-/* utility */
-#include "support.h"            /* bool type */
-
-/* common */
 #include "events.h"
-#include "fc_types.h"           /* enum gui_type */
+#include "shared.h"		/* bool type */
 
 extern char default_user_name[512];
 extern char default_server_host[512];
 extern int default_server_port; 
 extern char default_metaserver[512];
+extern char default_theme_name[512];
 extern char default_tileset_name[512];
 extern char default_sound_set_name[512];
 extern char default_sound_plugin_name[512];
@@ -41,36 +38,103 @@ extern bool do_combat_animation;
 extern bool ai_manual_turn_done;
 extern bool auto_center_on_unit;
 extern bool auto_center_on_combat;
-extern bool auto_center_each_turn;
 extern bool wakeup_focus;
 extern bool goto_into_unknown;
 extern bool center_when_popup_city;
 extern bool concise_city_production;
 extern bool auto_turn_done;
 extern bool meta_accelerators;
+extern bool map_scrollbars;
+extern bool dialogs_on_top;
 extern bool ask_city_name;
 extern bool popup_new_cities;
 extern bool popup_caravan_arrival;
 extern bool update_city_text_in_refresh_tile;
 extern bool keyboardless_goto;
+extern bool show_task_icons;
 extern bool enable_cursor_changes;
 extern bool separate_unit_selection;
 extern bool unit_selection_clears_orders;
-extern char highlight_our_names[128];
 
-extern bool voteinfo_bar_use;
-extern bool voteinfo_bar_always_show;
-extern bool voteinfo_bar_hide_when_not_player;
-extern bool voteinfo_bar_new_at_front;
+enum client_option_type {
+  COT_BOOL,
+  COT_INT,
+  COT_STR
+};
+
+enum client_option_class {
+  COC_GRAPHICS,
+  COC_OVERVIEW,
+  COC_SOUND,
+  COC_INTERFACE,
+  COC_NETWORK,
+  COC_MAX
+};
+
+extern const char *client_option_class_names[];
+
+typedef struct client_option {
+  const char *name; /* Short name - used as an identifier */
+  const char *description; /* One-line description */
+  const char *helptext; /* Paragraph-length help text */
+  enum client_option_class category;
+  enum client_option_type type;
+  int *p_int_value;
+  bool *p_bool_value;
+  char *p_string_value;
+  size_t string_length;
+  void (*change_callback) (struct client_option * option);
+
+  /* 
+   * A function to return a static NULL-terminated list of possible
+   * string values, or NULL for none. 
+   */
+  const char **(*p_string_vals)(void);
+
+  /* volatile */
+  void *p_gui_data;
+} client_option;
+
+#define GEN_INT_OPTION(oname, desc, help, category)			    \
+  { #oname, desc, help, category, COT_INT,				    \
+      &oname, NULL, NULL, 0, NULL, NULL, NULL }
+#define GEN_BOOL_OPTION(oname, desc, help, category)	                    \
+  GEN_BOOL_OPTION_CB(oname, desc, help, category, NULL)
+#define GEN_BOOL_OPTION_CB(oname, desc, help, category, callback)	    \
+  { #oname, desc, help, category, COT_BOOL,				    \
+      NULL, &oname, NULL, 0, callback, NULL, NULL }
+#define GEN_STR_OPTION(oname, desc, help, category, str_defaults, callback) \
+  { #oname, desc, help, category, COT_STR,			    \
+      NULL, NULL, oname, sizeof(oname), callback, str_defaults, NULL }
+
+/* Initialization and iteration */
+struct client_option *client_option_array_first(void);
+const struct client_option *client_option_array_last(void);
+
+#define client_options_iterate(_p)					\
+{									\
+  struct client_option *_p = client_option_array_first();		\
+  if (NULL != _p) {							\
+    for (; _p <= client_option_array_last(); _p++) {
+
+#define client_options_iterate_end					\
+    }									\
+  }									\
+}
+
+/* GUI-specific options declared in gui-xxx but handled by common code. */
+extern const int num_gui_options;
+extern client_option gui_options[];
+
+/** View Options: **/
 
 extern bool draw_city_outlines;
-extern bool draw_city_output;
 extern bool draw_map_grid;
 extern bool draw_city_names;
 extern bool draw_city_growth;
 extern bool draw_city_productions;
 extern bool draw_city_buycost;
-extern bool draw_city_trade_routes;
+extern bool draw_city_traderoutes;
 extern bool draw_terrain;
 extern bool draw_coastline;
 extern bool draw_roads_rails;
@@ -89,142 +153,12 @@ extern bool draw_unit_shields;
 
 extern bool player_dlg_show_dead_players;
 extern bool reqtree_show_icons;
-extern bool reqtree_curved_lines;
 
-/* gui-gtk-2.0 client specific options. */
-#define FC_GTK_DEFAULT_THEME_NAME "Freeciv"
-extern char gui_gtk2_default_theme_name[512];
-extern bool gui_gtk2_map_scrollbars;
-extern bool gui_gtk2_dialogs_on_top;
-extern bool gui_gtk2_show_task_icons;
-extern bool gui_gtk2_enable_tabs;
-extern bool gui_gtk2_better_fog;
-extern bool gui_gtk2_show_chat_message_time;
-extern bool gui_gtk2_split_bottom_notebook;
-extern bool gui_gtk2_new_messages_go_to_top;
-extern bool gui_gtk2_show_message_window_buttons;
-extern bool gui_gtk2_metaserver_tab_first;
-extern bool gui_gtk2_allied_chat_only;
-extern bool gui_gtk2_small_display_layout;
-extern bool gui_gtk2_mouse_over_map_focus;
-extern char gui_gtk2_font_city_label[512];
-extern char gui_gtk2_font_notify_label[512];
-extern char gui_gtk2_font_spaceship_label[512];
-extern char gui_gtk2_font_help_label[512];
-extern char gui_gtk2_font_help_link[512];
-extern char gui_gtk2_font_help_text[512];
-extern char gui_gtk2_font_chatline[512];
-extern char gui_gtk2_font_beta_label[512];
-extern char gui_gtk2_font_small[512];
-extern char gui_gtk2_font_comment_label[512];
-extern char gui_gtk2_font_city_names[512];
-extern char gui_gtk2_font_city_productions[512];
-extern char gui_gtk2_font_reqtree_text[512];
-
-/* gui-sdl client specific options. */
-#define FC_SDL_DEFAULT_THEME_NAME "human"
-extern char gui_sdl_default_theme_name[512];
-extern bool gui_sdl_fullscreen;
-extern int gui_sdl_screen_width;
-extern int gui_sdl_screen_height;
-
-/* gui-win32 client specific options. */
-extern bool gui_win32_better_fog;
-extern bool gui_win32_enable_alpha;
-
-enum client_option_type {
-  COT_BOOLEAN,
-  COT_INTEGER,
-  COT_STRING,
-  COT_FONT
-};
-
-enum client_option_class {
-  COC_GRAPHICS,
-  COC_OVERVIEW,
-  COC_SOUND,
-  COC_INTERFACE,
-  COC_NETWORK,
-  COC_FONT,
-  COC_MAX
-};
-
-struct client_option;           /* Opaque type. */
-
-#define client_options_iterate(_p)                                          \
-{                                                                           \
-  struct client_option *_p = option_first();                                \
-  for (; _p; _p = option_next(_p)) {                                        \
-
-#define client_options_iterate_end                                          \
-  }                                                                         \
-}
-
-/* Main functions. */
-void options_init(void);
-void options_free(void);
-void options_load(void);
-void options_load_ruleset_specific(void);
-void options_save(void);
-
-
-/* Option function accessors. */
-struct client_option *option_by_number(int id);
-struct client_option *option_by_name(const char *name);
-struct client_option *option_first(void);
-struct client_option *option_next(struct client_option *poption);
-
-void option_set_changed_callback(struct client_option *poption,
-                                 void (*callback) (struct client_option *));
-void option_changed(struct client_option *poption);
-bool option_reset(struct client_option *poption);
-struct section_file;
-bool option_load(struct client_option *poption, struct section_file *sf);
-
-int option_number(const struct client_option *poption);
-const char *option_name(const struct client_option *poption);
-const char *option_description(const struct client_option *poption);
-const char *option_help_text(const struct client_option *poption);
-enum client_option_type option_type(const struct client_option *poption);
-enum client_option_class option_class(const struct client_option *poption);
-const char *option_class_name(enum client_option_class option_class);
-
-/* Option gui functions. */
-void option_set_gui_data(struct client_option *poption, void *data);
-void *option_get_gui_data(const struct client_option *poption);
-
-/* Option type COT_BOOLEAN functions. */
-bool option_bool_get(const struct client_option *poption);
-bool option_bool_def(const struct client_option *poption);
-bool option_bool_set(struct client_option *poption, bool val);
-
-/* Option type COT_INTEGER functions. */
-int option_int_get(const struct client_option *poption);
-int option_int_def(const struct client_option *poption);
-int option_int_min(const struct client_option *poption);
-int option_int_max(const struct client_option *poption);
-bool option_int_set(struct client_option *poption, int val);
-
-/* Option type COT_STRING functions. */
-const char *option_str_get(const struct client_option *poption);
-const char *option_str_def(const struct client_option *poption);
-const struct strvec *option_str_values(const struct client_option *poption);
-bool option_str_set(struct client_option *poption, const char *str);
-
-/* Option type COT_FONT functions. */
-const char *option_font_get(const struct client_option *poption);
-const char *option_font_def(const struct client_option *poption);
-const char *option_font_target(const struct client_option *poption);
-bool option_font_set(struct client_option *poption, const char *str);
-
-
-/** Desired settable options. **/
-struct options_settable;
-void desired_settable_options_update(void);
-void desired_settable_option_update(const char *op_name, const char *op_value,
-                                    bool allow_replace);
-void desired_settable_option_send(struct options_settable *pset);
-
+typedef struct {
+  const char *name;
+  bool *p_value;
+} view_option;
+extern view_option view_options[];
 
 /** Message Options: **/
 
@@ -235,5 +169,16 @@ void desired_settable_option_send(struct options_settable *pset);
 #define MW_POPUP     4		/* popup an individual window */
 
 extern unsigned int messages_where[];	/* OR-ed MW_ values [E_LAST] */
+
+void message_options_init(void);
+void message_options_free(void);
+
+void load_general_options(void);
+void load_ruleset_specific_options(void);
+void load_settable_options(bool send_it);
+void save_options(void);
+
+/* Callback functions for changing options. */
+void mapview_redraw_callback(struct client_option *option);
 
 #endif  /* FC__OPTIONS_H */

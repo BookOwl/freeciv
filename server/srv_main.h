@@ -13,13 +13,13 @@
 #ifndef FC__SRV_MAIN_H
 #define FC__SRV_MAIN_H
 
-/* utility */
-#include "netintf.h"
-
-/* common */
 #include "fc_types.h"
+#include "game.h"
+#include "packets.h"
 
-struct conn_list;
+struct connection;
+
+BV_DEFINE(bv_draw, MAX_NUM_PLAYERS);
 
 struct server_arguments {
   /* metaserver information */
@@ -39,7 +39,6 @@ struct server_arguments {
   char load_filename[512]; /* FIXME: may not be long enough? use MAX_PATH? */
   char *script_filename;
   char *saves_pathname;
-  char *scenarios_pathname;
   char serverid[256];
   /* save a ppm of the map? */
   bool save_ppm;
@@ -52,33 +51,7 @@ struct server_arguments {
   char *auth_conf;              /* auth configuration file */
   bool auth_allow_guests;       /* defaults to TRUE */
   bool auth_allow_newusers;     /* defaults to TRUE */
-  enum announce_type announce;
 };
-
-/* used in savegame values */
-#define SPECENUM_NAME server_states
-#define SPECENUM_VALUE0 S_S_INITIAL
-#define SPECENUM_VALUE1 S_S_RUNNING
-#define SPECENUM_VALUE2 S_S_OVER
-#include "specenum_gen.h"
-
-/* Structure for holding global server data.
- *
- * TODO: Lots more variables could be added here. */
-extern struct civserver {
-  int playable_nations;
-  int nbarbarians;
-
-  /* this counter creates all the city and unit numbers used.
-   * arbitrarily starts at 101, but at 65K wraps to 1.
-   * use identity_number()
-   */
-#define IDENTITY_NUMBER_SKIP (100)
-  unsigned short identity_number;
-
-  char game_identifier[MAX_LEN_GAME_IDENTIFIER];
-} server;
-
 
 void init_game_seed(void);
 void srv_init(void);
@@ -94,19 +67,21 @@ bool check_for_game_over(void);
 
 bool server_packet_input(struct connection *pconn, void *packet, int type);
 void start_game(void);
-void save_game(char *orig_filename, const char *save_reason, bool scenario);
+void save_game(char *orig_filename, const char *save_reason);
 void pick_random_player_name(const struct nation_type *pnation,
 			     char *newname);
-void send_all_info(struct conn_list *dest, bool force);
+void send_all_info(struct conn_list *dest);
 
-void identity_number_release(int id);
-void identity_number_reserve(int id);
-int identity_number(void);
+void dealloc_id(int id);
+void alloc_id(int id);
+int get_next_id_number(void);
 void server_game_init(void);
 void server_game_free(void);
 void aifill(int amount);
 
 extern struct server_arguments srvarg;
+
+extern bool nocity_send;
 
 extern bool force_end_of_sniff;
 

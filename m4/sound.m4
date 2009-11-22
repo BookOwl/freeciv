@@ -31,6 +31,7 @@ AC_DEFUN([FC_CHECK_SOUND],[
         SOUND_CFLAGS="$SOUND_CFLAGS $SDL_CFLAGS"
         SOUND_LIBS="$SOUND_LIBS -lSDL_mixer $SDL_LIBS"
         AC_DEFINE(AUDIO_SDL, 1, [SDL_Mixer support])
+        AC_DEFINE(SDL, 1, [SDL is used])
         AC_MSG_RESULT(yes)
         SOUND_SDL_OK=true
       else

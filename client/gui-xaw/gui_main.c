@@ -16,10 +16,6 @@
 #include <config.h>
 #endif
 
-#ifdef AUDIO_SDL
-#include "SDL.h"
-#endif
-
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -41,36 +37,31 @@
 #include "canvas.h"
 #include "pixcomm.h"
 
-/* utility */
 #include "fciconv.h"
 #include "fcintl.h"
 #include "log.h"
 #include "support.h"
 
-/* common */
 #include "game.h"
 #include "government.h"
 #include "map.h"
 #include "unitlist.h"
 #include "version.h"
 
-/* client */
-#include "client_main.h"
+#include "civclient.h"
 #include "climisc.h"
 #include "clinet.h"
 #include "control.h"
-#include "editgui_g.h"
-#include "ggz_g.h"
 #include "options.h"
 #include "text.h"
 #include "tilespec.h"
 
-/* gui-xaw */
 #include "actions.h"
 #include "colors.h"
 #include "dialogs.h"
 #include "graphics.h"
 #include "gui_stuff.h"		/* I_SW() */
+#include "helpdata.h"		/* boot_help_texts() */
 #include "mapview.h"
 #include "menu.h"
 #include "optiondlg.h"
@@ -83,6 +74,11 @@ const char *client_string = "gui-xaw";
 
 const char * const gui_character_encoding = NULL;
 const bool gui_use_transliteration = TRUE;
+
+client_option gui_options[] = {
+  /* None. */
+};
+const int num_gui_options = ARRAY_SIZE(gui_options);
 
 static AppResources appResources;
 
@@ -248,8 +244,7 @@ static void print_usage(const char *argv0)
   /* add client-specific usage information here */
   fc_fprintf(stderr, _("This client has no special command line options\n\n"));
 
-  /* TRANS: No full stop after the URL, could cause confusion. */
-  fc_fprintf(stderr, _("Report bugs at %s\n"), BUG_URL);
+  fc_fprintf(stderr, _("Report bugs at %s.\n"), BUG_URL);
 }
 
 /**************************************************************************
@@ -279,7 +274,7 @@ static Boolean toplevel_work_proc(XtPointer client_data)
   /* This will cause the connect dialog to pop-up.
      We do it here so that the main window exists when that happens,
      so that the connect dialog can position itself relative to it. */
-  set_client_state(C_S_DISCONNECTED);
+  set_client_state(C_S_PREPARING);
   return (True);
 }
 
@@ -291,24 +286,8 @@ void ui_init(void)
 
 }
 
-/****************************************************************************
-  Extra initializers for client options.
-****************************************************************************/
-void gui_options_extra_init(void)
-{
-  /* Nothing to do. */
-}
-
 /**************************************************************************
-  Entry point for whole freeciv client program.
-**************************************************************************/
-int main(int argc, char **argv)
-{
-  return client_main(argc, argv);
-}
-
-/**************************************************************************
-  Entry point for GUI specific portion. Called from client_main()
+...
 **************************************************************************/
 void ui_main(int argc, char *argv[])
 {
@@ -529,14 +508,6 @@ void ui_exit()
 }
 
 /**************************************************************************
-  Return our GUI type
-**************************************************************************/
-enum gui_type get_gui_type(void)
-{
-  return GUI_XAW;
-}
-
-/**************************************************************************
   Callack for when user clicks one of the unit icons on left hand side
   (units on same square as current unit).  Use unit_ids[] data and change
   focus to clicked unit.
@@ -552,7 +523,7 @@ static void unit_icon_callback(Widget w, XtPointer client_data,
     return;
   punit=game_find_unit_by_number(unit_ids[i]);
   if(punit) { /* should always be true at this point */
-    if (unit_owner(punit) == client.conn.playing) {
+    if (unit_owner(punit) == game.player_ptr) {
       /* may be non-true if alliance */
       set_unit_focus(punit);
     }
@@ -821,7 +792,7 @@ static void set_wait_for_writable_socket(struct connection *pc,
     return;
   freelog(LOG_DEBUG, "set_wait_for_writable_socket(%d)", socket_writable);
   XtRemoveInput(x_input_id);
-  x_input_id = XtAppAddInput(app_context, client.conn.sock,
+  x_input_id = XtAppAddInput(app_context, aconnection.sock,
 			     (XtPointer) (XtInputReadMask |
 					  (socket_writable ?
 					   XtInputWriteMask : 0) |
@@ -840,7 +811,7 @@ void add_net_input(int sock)
 			     (XtPointer) (XtInputReadMask |
 					  XtInputExceptMask),
 			     (XtInputCallbackProc) get_net_input, NULL);
-  client.conn.notify_of_writable_data = set_wait_for_writable_socket;
+  aconnection.notify_of_writable_data = set_wait_for_writable_socket;
 }
 
 /**************************************************************************
@@ -929,8 +900,7 @@ void set_unit_icons_more_arrow(bool onoff)
 
   if (onoff && !showing) {
     /* FIXME: what about the mask? */
-    xaw_set_bitmap(more_arrow_label,
-		   get_arrow_sprite(tileset, ARROW_RIGHT)->pixmap);
+    xaw_set_bitmap(more_arrow_label, get_arrow_sprite(tileset)->pixmap);
     showing = TRUE;
   }
   else if(!onoff && showing) {
@@ -1066,7 +1036,7 @@ void select_battlegroup(int battlegroup)
 ****************************************************************************/
 void add_unit_to_battlegroup(int battlegroup)
 {
-  if (NULL != client.conn.playing && can_client_issue_orders()) {
+  if (game.player_ptr && can_client_issue_orders()) {
     struct unit *punit;
 
     punit = head_of_units_in_focus();
@@ -1078,55 +1048,4 @@ void add_unit_to_battlegroup(int battlegroup)
       key_unit_assign_battlegroup(battlegroup, TRUE);
     }
   }
-}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_tileset_changed(void)
-{}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_refresh(void)
-{}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_popup_properties(const struct tile_list *tiles, int objtype)
-{}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_notify_object_changed(int objtype, int object_id, bool remove)
-{}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_notify_object_created(int tag, int id)
-{}
-
-/****************************************************************************
-  Stub for ggz function
-****************************************************************************/
-void gui_ggz_embed_leave_table(void)
-{}
-
-/****************************************************************************
-  Stub for ggz function
-****************************************************************************/
-void gui_ggz_embed_ensure_server(void)
-{}
-
-
-/**************************************************************************
-  Updates a gui font style.
-**************************************************************************/
-void gui_update_font(const char *font_name, const char *font_value)
-{
-  /* PORTME */
 }

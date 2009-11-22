@@ -5,24 +5,20 @@
 
 AC_DEFUN([FC_GTK2_CLIENT],
 [
-  if test "x$gui_gtk2" = "xyes" || test "x$client" = "xauto" ||
-     test "x$client" = "xall" ; then
+  if test "$client" = "gtk-2.0" || test "$client" = yes ; then
     AM_PATH_GTK_2_0(2.4.0,
       [
-        gui_gtk2=yes
-        if test "x$client" = "xauto" ; then
-          client=yes
-        fi
-        GUI_gtk2_CFLAGS="$GTK_CFLAGS"
-        GUI_gtk2_LIBS="$GTK_LIBS"
-        if test "x$MINGW32" = "xyes"; then
+        client="gtk-2.0"
+        CLIENT_CFLAGS="$GTK_CFLAGS"
+        CLIENT_LIBS="$GTK_LIBS"
+        if test x"$MINGW32" = "xyes"; then
           dnl Required to compile gtk2 on Windows platform
-          GUI_gtk2_CFLAGS="$GUI_gtk2_CFLAGS -mms-bitfields"
-          GUI_gtk2_LDFLAGS="$GUI_gtk2_LDFLAGS -mwindows"
+          CFLAGS="$CFLAGS -mms-bitfields"
+          CLIENT_LDFLAGS="$LDFLAGS -mwindows"
         fi
       ],
       [
-        FC_NO_CLIENT([gtk2], [GTK+-2.0 libraries not found])
+        FC_NO_CLIENT([gtk-2.0], [GTK+-2.0 libraries not found])
       ])
   fi
 ])

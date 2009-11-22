@@ -20,27 +20,21 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* utility */
-#include "fcintl.h"
-#include "log.h"
-#include "rand.h"
-#include "support.h"
-
-/* common */
 #include "city.h"
 #include "events.h"
+#include "fcintl.h"
 #include "game.h"
 #include "idex.h"
+#include "log.h"
 #include "map.h"
 #include "player.h"
-#include "specialist.h"
+#include "rand.h"
+#include "support.h"
 #include "unit.h"
 #include "worklist.h"
 
-/* server */
 #include "citytools.h"
 #include "cityturn.h"
-#include "notify.h"
 #include "plrhand.h"
 #include "sanitycheck.h"
 
@@ -79,8 +73,8 @@ void handle_city_change_specialist(struct player *pplayer, int city_id,
     return;
   }
 
-  if (to < 0 || to >= specialist_count()
-      || from < 0 || from >= specialist_count()
+  if (to < 0 || to >= SP_COUNT
+      || from < 0 || from >= SP_COUNT
       || !city_can_use_specialist(pcity, to)
       || pcity->specialists[from] == 0) {
     /* This could easily just be due to clicking faster on the specialist
@@ -103,52 +97,25 @@ void handle_city_change_specialist(struct player *pplayer, int city_id,
 void handle_city_make_specialist(struct player *pplayer, int city_id,
 				 int worker_x, int worker_y)
 {
-  struct tile *ptile;
-  struct tile *pcenter;
   struct city *pcity = player_find_city_by_id(pplayer, city_id);
 
-  if (NULL == pcity) {
-    /* Probably lost. */
-    freelog(LOG_VERBOSE, "handle_city_make_specialist() bad city number %d.",
-            city_id);
+  if (!pcity) {
     return;
   }
-  
-  if (!is_valid_city_coords(worker_x, worker_y)) {
-    freelog(LOG_ERROR,
-            "handle_city_make_specialist() invalid city map {%d,%d} \"%s\".",
-            worker_x, worker_y,
-            city_name(pcity));
-    return;
-  }
-  pcenter = city_tile(pcity);
-
-  if (NULL == (ptile = city_map_to_tile(pcenter, worker_x, worker_y))) {
-    freelog(LOG_VERBOSE,
-            "handle_city_make_specialist() unavailable city map {%d,%d} \"%s\".",
-            worker_x, worker_y,
-            city_name(pcity));
-    return;
-  }
-
-  if (is_free_worked(pcity, ptile)) {
+  if (is_free_worked_tile(worker_x, worker_y)) {
     auto_arrange_workers(pcity);
     sync_cities();
     return;
   }
-
-  if (tile_worked(ptile) == pcity) {
-    city_map_update_empty(pcity, ptile, worker_x, worker_y);
+  if (is_worker_here(pcity, worker_x, worker_y)) {
+    server_remove_worker_city(pcity, worker_x, worker_y);
     pcity->specialists[DEFAULT_SPECIALIST]++;
     city_refresh(pcity);
     sync_cities();
   } else {
-    freelog(LOG_VERBOSE,
-            "handle_city_make_specialist() not working {%d,%d} \"%s\".",
-            worker_x, worker_y,
-            city_name(pcity));
+    notify_player(pplayer, pcity->tile, E_BAD_COMMAND,
+		     _("You don't have a worker here.")); 
   }
-
   sanity_check_city(pcity);
 }
 
@@ -158,72 +125,38 @@ void handle_city_make_specialist(struct player *pplayer, int city_id,
 void handle_city_make_worker(struct player *pplayer, int city_id,
 			     int worker_x, int worker_y)
 {
-  struct tile *ptile;
-  struct tile *pcenter;
   struct city *pcity = player_find_city_by_id(pplayer, city_id);
-
-  if (NULL == pcity) {
-    /* Probably lost. */
-    freelog(LOG_VERBOSE, "handle_city_make_worker() bad city number %d.",
-            city_id);
-    return;
-  }
+  int i;
 
   if (!is_valid_city_coords(worker_x, worker_y)) {
-    freelog(LOG_ERROR,
-            "handle_city_make_worker() invalid city map {%d,%d} \"%s\".",
-            worker_x, worker_y,
-            city_name(pcity));
+    freelog(LOG_ERROR, "invalid city coords %d,%d in package",
+	    worker_x, worker_y);
     return;
   }
-  pcenter = city_tile(pcity);
-
-  if (NULL == (ptile = city_map_to_tile(pcenter, worker_x, worker_y))) {
-    freelog(LOG_VERBOSE,
-            "handle_city_make_worker() unavailable city map {%d,%d} \"%s\".",
-            worker_x, worker_y,
-            city_name(pcity));
+  
+  if (!pcity) {
     return;
   }
 
-  if (is_free_worked(pcity, ptile)) {
+  if (is_free_worked_tile(worker_x, worker_y)) {
     auto_arrange_workers(pcity);
     sync_cities();
     return;
   }
 
-  if (tile_worked(ptile) == pcity) {
-    freelog(LOG_VERBOSE,
-            "handle_city_make_worker() already working {%d,%d} \"%s\".",
-            worker_x, worker_y,
-            city_name(pcity));
+  if (city_specialists(pcity) == 0
+      || get_worker_city(pcity, worker_x, worker_y) != C_TILE_EMPTY)
     return;
-  }
 
-  if (0 == city_specialists(pcity)) {
-    freelog(LOG_VERBOSE,
-            "handle_city_make_worker() no specialists {%d,%d} \"%s\".",
-            worker_x, worker_y,
-            city_name(pcity));
-    return;
-  }
+  server_set_worker_city(pcity, worker_x, worker_y);
 
-  if (!city_can_work_tile(pcity, ptile)) {
-    freelog(LOG_VERBOSE,
-            "handle_city_make_worker() cannot work here {%d,%d} \"%s\".",
-            worker_x, worker_y,
-            city_name(pcity));
-    return;
-  }
-
-  city_map_update_worker(pcity, ptile, worker_x, worker_y);
-
-  specialist_type_iterate(i) {
+  for (i = 0; i < SP_COUNT; i++) {
     if (pcity->specialists[i] > 0) {
       pcity->specialists[i]--;
       break;
     }
-  } specialist_type_iterate_end;
+  }
+  assert(i < SP_COUNT);
 
   sanity_check_city(pcity);
   city_refresh(pcity);
@@ -234,24 +167,24 @@ void handle_city_make_worker(struct player *pplayer, int city_id,
 ...
 **************************************************************************/
 void really_handle_city_sell(struct player *pplayer, struct city *pcity,
-			     struct impr_type *pimprove)
-{
+			     Impr_type_id id)
+{  
   if (pcity->did_sell) {
-    notify_player(pplayer, pcity->tile, E_BAD_COMMAND, ftc_server,
+    notify_player(pplayer, pcity->tile, E_BAD_COMMAND, 
 		  _("You have already sold something here this turn."));
     return;
   }
 
-  if (!can_city_sell_building(pcity, pimprove))
+  if (!can_city_sell_building(pcity, id))
     return;
 
   pcity->did_sell=TRUE;
-  notify_player(pplayer, pcity->tile, E_IMP_SOLD, ftc_server,
-                _("You sell %s in %s for %d gold."), 
-                improvement_name_translation(pimprove),
-                city_link(pcity),
-                impr_sell_gold(pimprove));
-  do_sell_building(pplayer, pcity, pimprove);
+  notify_player(pplayer, pcity->tile, E_IMP_SOLD,
+		   _("You sell %s in %s for %d gold."), 
+		   improvement_name_translation(id),
+		   city_name(pcity),
+		   impr_sell_gold(id));
+  do_sell_building(pplayer, pcity, id);
 
   city_refresh(pcity);
 
@@ -266,12 +199,11 @@ void really_handle_city_sell(struct player *pplayer, struct city *pcity,
 void handle_city_sell(struct player *pplayer, int city_id, int build_id)
 {
   struct city *pcity = player_find_city_by_id(pplayer, city_id);
-  struct impr_type *pimprove = improvement_by_number(build_id);
 
-  if (!pcity || !pimprove) {
+  if (!pcity || build_id >= game.control.num_impr_types) {
     return;
   }
-  really_handle_city_sell(pplayer, pcity, pimprove);
+  really_handle_city_sell(pplayer, pcity, build_id);
 }
 
 /**************************************************************************
@@ -279,6 +211,7 @@ void handle_city_sell(struct player *pplayer, int city_id, int build_id)
 **************************************************************************/
 void really_handle_city_buy(struct player *pplayer, struct city *pcity)
 {
+  /*const char *name;*/
   int cost, total;
 
   /* This function corresponds to city_can_buy() in the client. */
@@ -286,41 +219,48 @@ void really_handle_city_buy(struct player *pplayer, struct city *pcity)
   assert(pcity && player_owns_city(pplayer, pcity));
  
   if (pcity->turn_founded == game.info.turn) {
-    notify_player(pplayer, pcity->tile, E_BAD_COMMAND, ftc_server,
-                  _("Cannot buy in city created this turn."));
+    notify_player(pplayer, pcity->tile, E_BAD_COMMAND,
+		  _("Cannot buy in city created this turn."));
     return;
   }
 
   if (pcity->did_buy) {
-    notify_player(pplayer, pcity->tile, E_BAD_COMMAND, ftc_server,
+    notify_player(pplayer, pcity->tile, E_BAD_COMMAND,
 		  _("You have already bought this turn."));
     return;
   }
 
-  if (city_production_has_flag(pcity, IF_GOLD)) {
-    notify_player(pplayer, pcity->tile, E_BAD_COMMAND, ftc_server,
-                  _("You don't buy %s!"),
-                  improvement_name_translation(pcity->production.value.building));
+  if (!pcity->production.is_unit
+      && improvement_has_flag(pcity->production.value, IF_GOLD)) {
+    notify_player(pplayer, pcity->tile, E_BAD_COMMAND,
+                     _("You don't buy %s!"),
+		     improvement_name_translation(pcity->production.value));
     return;
   }
 
-  if (VUT_UTYPE == pcity->production.kind && pcity->anarchy != 0) {
-    notify_player(pplayer, pcity->tile, E_BAD_COMMAND, ftc_server,
-                  _("Can't buy units when city is in disorder."));
+  if (pcity->production.is_unit && pcity->anarchy != 0) {
+    notify_player(pplayer, pcity->tile, E_BAD_COMMAND, 
+		     _("Can't buy units when city is in disorder."));
     return;
   }
 
-  total = city_production_build_shield_cost(pcity);
-  cost = city_production_buy_gold_cost(pcity);
+  if (pcity->production.is_unit) {
+    /*name = utype_name_translation(utype_by_number(pcity->production.value));*/
+    total = unit_build_shield_cost(utype_by_number(pcity->production.value));
+  } else {
+    /*name = improvement_name_translation(pcity->production.value);*/
+    total = impr_build_shield_cost(pcity->production.value);
+  }
+  cost = city_buy_cost(pcity);
   if (cost <= 0) {
     return; /* sanity */
   }
   if (cost > pplayer->economic.gold) {
     /* In case something changed while player tried to buy, or player 
      * tried to cheat! */
-    notify_player(pplayer, pcity->tile, E_BAD_COMMAND, ftc_server,
-                  _("%d gold required.  You only have %d gold."), cost,
-                  pplayer->economic.gold);
+    notify_player(pplayer, pcity->tile, E_BAD_COMMAND,
+		     _("%d gold required.  You only have %d gold."), cost,
+                     pplayer->economic.gold);
     return;
   }
 
@@ -344,7 +284,7 @@ void really_handle_city_buy(struct player *pplayer, struct city *pcity)
 ...
 **************************************************************************/
 void handle_city_worklist(struct player *pplayer, int city_id,
-                          const struct worklist *worklist)
+			  struct worklist *worklist)
 {
   struct city *pcity = player_find_city_by_id(pplayer, city_id);
 
@@ -386,52 +326,41 @@ void handle_city_refresh(struct player *pplayer, int city_id)
     city_refresh(pcity);
     send_city_info(pplayer, pcity);
   } else {
-    city_refresh_for_player(pplayer);
+    global_city_refresh(pplayer);
   }
 }
 
 /**************************************************************************
 ...
 **************************************************************************/
-void handle_city_change(struct player *pplayer, int city_id,
-			int production_kind, int production_value)
+void handle_city_change(struct player *pplayer, int city_id, int build_id,
+			bool is_build_id_unit_id)
 {
-  struct universal prod;
   struct city *pcity = player_find_city_by_id(pplayer, city_id);
-
-  if (production_kind < VUT_NONE || production_kind >= VUT_LAST) {
-    freelog(LOG_ERROR, "handle_city_change()"
-            " bad production_kind %d.",
-            production_kind);
-    prod.kind = VUT_NONE;
-    return;
-  } else {
-    prod = universal_by_number(production_kind, production_value);
-    if (prod.kind < VUT_NONE || prod.kind >= VUT_LAST) {
-      freelog(LOG_ERROR, "handle_city_change()"
-              " production_kind %d with bad production_value %d.",
-              production_kind,
-              production_value);
-      prod.kind = VUT_NONE;
-      return;
-    }
-  }
+  struct city_production prod = {
+    .is_unit = is_build_id_unit_id,
+    .value = build_id
+  };
 
   if (!pcity) {
     return;
   }
 
-  if (are_universals_equal(&pcity->production, &prod)) {
+  if (pcity->production.is_unit == is_build_id_unit_id
+      && pcity->production.value == build_id) {
     /* The client probably shouldn't send such a packet. */
     return;
   }
 
-  if (!can_city_build_now(pcity, prod)) {
+  if (is_build_id_unit_id
+      && !can_build_unit(pcity, utype_by_number(build_id))) {
     return;
   }
+   if (!is_build_id_unit_id && !can_build_improvement(pcity, build_id))
+     return;
   if (!city_can_change_build(pcity)) {
-    notify_player(pplayer, pcity->tile, E_BAD_COMMAND, ftc_server,
-                  _("You have bought this turn, can't change."));
+    notify_player(pplayer, pcity->tile, E_BAD_COMMAND,
+		     _("You have bought this turn, can't change."));
     return;
   }
 
@@ -455,8 +384,8 @@ void handle_city_rename(struct player *pplayer, int city_id, char *name)
   }
 
   if (!is_allowed_city_name(pplayer, name, message, sizeof(message))) {
-    notify_player(pplayer, pcity->tile, E_BAD_COMMAND,
-                  ftc_server, "%s", message);
+    notify_player(pplayer, pcity->tile, E_BAD_COMMAND, "%s",
+		  message);
     return;
   }
 

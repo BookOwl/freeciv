@@ -19,27 +19,20 @@
 
 struct connection;
 struct conn_list;
-struct packet_authentication_reply;
-struct packet_login_request;
-struct packet_server_join_req;
-
-void conn_set_access(struct connection *pconn, enum cmdlevel_id new_level,
-                     bool granted);
 
 void establish_new_connection(struct connection *pconn);
-void reject_new_connection(const char *msg, struct connection *pconn);
+void reject_new_connection(struct connection *pconn, const char *message);
 
-bool handle_login_request(struct connection *pconn,
-                          struct packet_server_join_req *req);
+bool server_join_request(struct connection *pconn, void *packet);
 
 void lost_connection_to_client(struct connection *pconn);
 
 void send_conn_info(struct conn_list *src, struct conn_list *dest);
 void send_conn_info_remove(struct conn_list *src, struct conn_list *dest);
 
-struct player *find_uncontrolled_player(void);
-bool connection_attach(struct connection *pconn, struct player *pplayer,
-                       bool observing);
-void connection_detach(struct connection *pconn);
+bool attach_connection_to_player(struct connection *pconn, 
+                                 struct player *pplayer);
+bool unattach_connection_from_player(struct connection *pconn);
+void restore_access_level(struct connection *pconn);
 
 #endif /* FC__CONNECTHAND_H */

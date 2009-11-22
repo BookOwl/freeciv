@@ -154,7 +154,6 @@
 #include <string.h>
 
 #include "astring.h"
-#include "fcintl.h"
 #include "genlist.h"
 #include "hash.h"
 #include "inputfile.h"
@@ -284,8 +283,10 @@ void section_file_free(struct section_file *file)
      just free the list meta-data:
   */
   section_list_iterate(file->sections, psection) {
+    entry_list_unlink_all(psection->entries);
     entry_list_free(psection->entries);
   } section_list_iterate_end;
+  section_list_unlink_all(file->sections);
   section_list_free(file->sections);
   file->sections = NULL;
 
@@ -642,14 +643,6 @@ bool section_file_load(struct section_file *my_section_file,
   return section_file_load_section(my_section_file, filename, NULL);
 }
 
-/***************************************************************************
-  Simplification of fileinfoname().
-***************************************************************************/
-static const char *datafilename(const char *filename)
-{
-  return fileinfoname(get_data_dirs(), filename);
-}
-
 /**************************************************************************
   Like section_file_load, but this function will only load one "part" of
   the section file.  For instance if you pass in "tutorial", then it will
@@ -742,21 +735,19 @@ bool section_file_load_from_stream(struct section_file *my_section_file,
 **************************************************************************/
 bool section_file_save(struct section_file *my_section_file,
                        const char *filename,
-                       int compression_level,
-                       enum fz_method compression_method)
+		       int compression_level)
 {
   char real_filename[1024];
   fz_FILE *fs;
-  const struct genlist_link *ent_iter, *save_iter, *col_iter;
+  struct genlist_link *ent_iter, *save_iter, *col_iter;
   struct entry *pentry, *col_pentry;
   int i;
   
   interpret_tilde(real_filename, sizeof(real_filename), filename);
-  fs = fz_from_file(real_filename, "w", compression_method, compression_level);
+  fs = fz_from_file(real_filename, "w", FZ_ZLIB, compression_level);
 
-  if (!fs) {
+  if (!fs)
     return FALSE;
-  }
 
   section_list_iterate(my_section_file->sections, psection) {
     fz_fprintf(fs, "\n[%s]\n", psection->name);
@@ -764,9 +755,9 @@ bool section_file_save(struct section_file *my_section_file,
     /* Following doesn't use entry_list_iterate() because we want to do
      * tricky things with the iterators...
      */
-    for (ent_iter = genlist_head(entry_list_base(psection->entries));
-         ent_iter && (pentry = genlist_link_data(ent_iter));
-         ent_iter = genlist_link_next(ent_iter)) {
+    for(ent_iter = psection->entries->list->head_link;
+        ent_iter && (pentry = ITERATOR_PTR(ent_iter));
+	ITERATOR_NEXT(ent_iter)) {
 
       /* Tables: break out of this loop if this is a non-table
        * entry (pentry and ent_iter unchanged) or after table (pentry
@@ -810,8 +801,7 @@ bool section_file_save(struct section_file *my_section_file,
 	/* write the column names, and calculate ncol: */
 	ncol = 0;
 	col_iter = save_iter;
-        for(; (col_pentry = genlist_link_data(col_iter));
-            col_iter = genlist_link_next(col_iter)) {
+	for( ; (col_pentry = ITERATOR_PTR(col_iter)); ITERATOR_NEXT(col_iter)) {
 	  if(strncmp(col_pentry->name, first, offset) != 0)
 	    break;
 	  fz_fprintf(fs, "%c\"%s\"", (ncol==0?' ':','), col_pentry->name+offset);
@@ -828,8 +818,8 @@ bool section_file_save(struct section_file *my_section_file,
 	for(;;) {
 	  char expect[128];	/* pentry->name we're expecting */
 
-	  pentry = genlist_link_data(ent_iter);
-	  col_pentry = genlist_link_data(col_iter);
+	  pentry = ITERATOR_PTR(ent_iter);
+	  col_pentry = ITERATOR_PTR(col_iter);
 
 	  my_snprintf(expect, sizeof(expect), "%s%d.%s",
 		      base, irow, col_pentry->name+offset);
@@ -848,15 +838,12 @@ bool section_file_save(struct section_file *my_section_file,
 	       * format without an error message. */
 	      freelog(LOG_ERROR,
 		      "In file %s, there is no entry in the registry for \n"
-		      "%s.%s (or the entries are out of order. This means a \n"
+		      "%s (or the entries are out of order. This means a \n"
 		      "less efficient non-tabular format will be used. To\n"
 		      "avoid this make sure all rows of a table are filled\n"
-		      "out with an entry for every column.",
-		      real_filename, psection->name, expect);
-	      freelog(LOG_ERROR,
-                      /* TRANS: No full stop after the URL, could cause confusion. */
-                      _("Please report this message at %s"),
-		      BUG_URL);
+		      "out with an entry for every column.  This is surely\n"
+		      "a bug so if you're reading this message, report it\n"
+		      "at %s", real_filename, expect, BUG_URL);
 	      fz_fprintf(fs, "\n");
 	    }
 	    fz_fprintf(fs, "}\n");
@@ -869,9 +856,9 @@ bool section_file_save(struct section_file *my_section_file,
 	    fz_fprintf(fs, "%s", moutstr(pentry->svalue, pentry->escaped));
 	  else
 	    fz_fprintf(fs, "%d", pentry->ivalue);
-
-          ent_iter = genlist_link_next(ent_iter);
-          col_iter = genlist_link_next(col_iter);
+	  
+	  ITERATOR_NEXT(ent_iter);
+	  ITERATOR_NEXT(col_iter);
 	  
 	  icol++;
 	  if(icol==ncol) {
@@ -1192,47 +1179,6 @@ int secfile_lookup_int_default(struct section_file *my_section_file,
     exit(EXIT_FAILURE);
   }
   return pentry->ivalue;
-}
-
-/**************************************************************************
-  As secfile_lookup_int_default(), but also check the range [min/max].
-**************************************************************************/
-int secfile_lookup_int_default_min_max(error_func_t error_handle,
-                                       struct section_file *my_section_file,
-                                       int def, int minval, int maxval,
-                                       const char *path, ...)
-{
-  assert(error_handle != NULL);
-
-  char buf[MAX_LEN_BUFFER];
-  va_list ap;
-  int ival;
-
-  va_start(ap, path);
-  my_vsnprintf(buf, sizeof(buf), path, ap);
-  va_end(ap);
-
-  ival = secfile_lookup_int_default(my_section_file, def, "%s", buf);
-
-  if(ival < minval) {
-    error_handle(LOG_ERROR, "sectionfile %s: '%s' should be in the "
-                            "interval [%d, %d] but is %d; using the "
-                            "minimal value.",
-                 secfile_filename(my_section_file), buf, minval, maxval,
-                 ival);
-    ival = minval;
-  }
-
-  if(ival > maxval) {
-    error_handle(LOG_ERROR, "sectionfile %s: '%s' should be in the "
-                            "interval [%d, %d] but is %d; using the "
-                            "maximal value.",
-                 secfile_filename(my_section_file), buf, minval, maxval,
-                 ival);
-    ival = maxval;
-  }
-
-  return ival;
 }
 
 /**************************************************************************
@@ -1825,20 +1771,4 @@ char **secfile_get_section_entries(struct section_file *my_section_file,
   } entry_list_iterate_end;
 
   return ret;
-}
-
-/****************************************************************************
-  Returns TRUE if the given section exists in the secfile.
-****************************************************************************/
-bool secfile_has_section(const struct section_file *sf,
-                         const char *section_name_fmt, ...)
-{
-  char name[MAX_LEN_BUFFER];
-  va_list ap;
-
-  va_start(ap, section_name_fmt);
-  my_vsnprintf(name, sizeof(name), section_name_fmt, ap);
-  va_end(ap);
-
-  return hash_key_exists(sf->hash_sections, name);
 }

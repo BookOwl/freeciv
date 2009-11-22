@@ -17,26 +17,22 @@
 
 #include <math.h>
 
-/* utility */
 #include "fcintl.h"
 #include "log.h"
 #include "support.h"
 
-/* common */
 #include "capability.h"
 #include "connection.h"
 #include "packets.h"
 #include "player.h"
 
-/* server */
 #include "commands.h"
 #include "console.h"
-#include "hand_gen.h"
-#include "notify.h"
+#include "plrhand.h"
 #include "settings.h"
 #include "stdinhand.h"
-
 #include "voting.h"
+
 
 struct vote_list *vote_list = NULL;
 int vote_number_sequence = 0;
@@ -90,7 +86,8 @@ static void lsend_vote_new(struct conn_list *dest, struct vote *pvote)
   }
 
   conn_list_iterate(dest, conn) {
-    if (!conn_can_see_vote(conn, pvote)) {
+    if (!has_capability("voteinfo", conn->capability)
+        || !conn_can_vote(conn, pvote)) {
       continue;
     }
     send_packet_vote_new(conn, &packet);
@@ -129,7 +126,8 @@ static void lsend_vote_update(struct conn_list *dest, struct vote *pvote,
   }
 
   conn_list_iterate(dest, aconn) {
-    if (!conn_can_see_vote(aconn, pvote)) {
+    if (!has_capability("voteinfo", aconn->capability)
+        || !conn_can_vote(aconn, pvote)) {
       continue;
     }
     send_packet_vote_update(aconn, &packet);
@@ -154,6 +152,9 @@ static void lsend_vote_remove(struct conn_list *dest, struct vote *pvote)
   }
 
   conn_list_iterate(dest, pconn) {
+    if (!has_capability("voteinfo", pconn->capability)) {
+      continue;
+    }
     send_packet_vote_remove(pconn, &packet);
   } conn_list_iterate_end;
 }
@@ -178,7 +179,8 @@ static void lsend_vote_resolve(struct conn_list *dest,
   }
 
   conn_list_iterate(dest, pconn) {
-    if (!conn_can_see_vote(pconn, pvote)) {
+    if (!has_capability("voteinfo", pconn->capability)
+        || !conn_can_vote(pconn, pvote)) {
       continue;
     }
     send_packet_vote_resolve(pconn, &packet);
@@ -228,7 +230,7 @@ void clear_all_votes(void)
     lsend_vote_remove(NULL, pvote);
     free_vote(pvote);
   } vote_list_iterate_end;
-  vote_list_clear(vote_list);
+  vote_list_unlink_all(vote_list);
 }
 
 /***************************************************************************
@@ -355,9 +357,9 @@ struct vote *vote_new(struct connection *caller,
   pvote = fc_malloc(sizeof(struct vote));
   pvote->caller_id = caller->id;
   pvote->command_id = command_id;
-  pcmd = command_by_number(command_id);
+  pcmd = &commands[command_id];
 
-  sz_strlcpy(pvote->cmdline, command_name(pcmd));
+  sz_strlcpy(pvote->cmdline, pcmd->name);
   if (allargs != NULL && allargs[0] != '\0') {
     sz_strlcat(pvote->cmdline, " ");
     sz_strlcat(pvote->cmdline, allargs);
@@ -369,8 +371,8 @@ struct vote *vote_new(struct connection *caller,
 
   vote_list_append(vote_list, pvote);
 
-  pvote->flags = command_vote_flags(pcmd);
-  pvote->need_pc = (double) command_vote_percent(pcmd) / 100.0;
+  pvote->flags = pcmd->vote_flags;
+  pvote->need_pc = (double) pcmd->vote_percent / 100.0;
 
   if (pvote->flags & VCF_NOPASSALONE) {
     int num_voters = count_voters(pvote);
@@ -516,13 +518,13 @@ static void check_vote(struct vote *pvote)
   }
 
   if (passed) {
-    notify_team(callplr, NULL, E_VOTE_RESOLVED, ftc_vote_passed,
+    notify_team(callplr, NULL, E_CHAT_MSG,
                 _("%s %d \"%s\" is passed %d to %d with "
                   "%d abstentions and %d who did not vote."),
                 title, pvote->vote_no, pvote->cmdline, pvote->yes,
                 pvote->no, pvote->abstain, num_voters - num_cast);
   } else {
-    notify_team(callplr, NULL, E_VOTE_RESOLVED, ftc_vote_failed,
+    notify_team(callplr, NULL, E_CHAT_MSG,
                 _("%s %d \"%s\" failed with %d against, %d for, "
                   "%d abstentions and %d who did not vote."),
                 title, pvote->vote_no, pvote->cmdline, pvote->no,
@@ -542,17 +544,17 @@ static void check_vote(struct vote *pvote)
 
     switch (pvc->vote_cast) {
     case VOTE_YES:
-      notify_team(callplr, NULL, E_VOTE_RESOLVED, ftc_vote_yes,
+      notify_team(callplr, NULL, E_CHAT_MSG,
                   _("%s %d: %s voted yes."),
                   title, pvote->vote_no, pconn->username);
       break;
     case VOTE_NO:
-      notify_team(callplr, NULL, E_VOTE_RESOLVED, ftc_vote_no,
+      notify_team(callplr, NULL, E_CHAT_MSG,
                   _("%s %d: %s voted no."),
                   title, pvote->vote_no, pconn->username);
       break;
     case VOTE_ABSTAIN:
-      notify_team(callplr, NULL, E_VOTE_RESOLVED, ftc_vote_abstain,
+      notify_team(callplr, NULL, E_CHAT_MSG,
                   _("%s %d: %s chose to abstain."),
                   title, pvote->vote_no, pconn->username);
       break;
@@ -770,11 +772,16 @@ void handle_vote_submit(struct connection *pconn, int vote_no, int value)
 }
 
 /**************************************************************************
-  Sends a packet_vote_new to pconn for every currently running vote.
+  Sends a packet_vote_new to pconn (if voteinfo capable) for every
+  currently running vote.
 **************************************************************************/
 void send_running_votes(struct connection *pconn)
 {
-  if (!pconn || !vote_list || vote_list_size(vote_list) < 1) {
+  if (!pconn || !has_capability("voteinfo", pconn->capability)) {
+    return;
+  }
+
+  if (!vote_list || vote_list_size(vote_list) < 1) {
     return;
   }
 
@@ -783,17 +790,16 @@ void send_running_votes(struct connection *pconn)
 
   connection_do_buffer(pconn);
   vote_list_iterate(vote_list, pvote) {
-    if (conn_can_see_vote(pconn, pvote)) {
+    if (conn_can_vote(pconn, pvote)) {
       lsend_vote_new(pconn->self, pvote);
-      lsend_vote_update(pconn->self, pvote, count_voters(pvote));
     }
   } vote_list_iterate_end;
   connection_do_unbuffer(pconn);
 }
 
 /**************************************************************************
-  Sends a packet_vote_update to every conn in dest. If dest is NULL, then
-  sends to all established connections.
+  Sends a packet_vote_update to every voteinfo-capabale conn in dest. If
+  dest is NULL, then sends to all established connections.
 **************************************************************************/
 void send_updated_vote_totals(struct conn_list *dest)
 {

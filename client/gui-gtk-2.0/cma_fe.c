@@ -19,20 +19,15 @@
 
 #include <gdk/gdkkeysyms.h>
 
-/* utility */
+#include "events.h"
 #include "fcintl.h"
-#include "log.h"
+#include "game.h"
 #include "mem.h"
 #include "support.h"
 
-/* common */
-#include "events.h"
-#include "game.h"
-
-/* client */
 #include "chatline_g.h"
 #include "citydlg_g.h"
-#include "client_main.h"
+#include "civclient.h"
 #include "cma_fec.h"
 #include "messagewin_g.h"
 
@@ -212,7 +207,7 @@ struct cma_dialog *create_cma_dialog(struct city *pcity)
   struct cma_dialog *pdialog;
   struct cm_parameter param;
   GtkWidget *frame, *page, *hbox, *label, *table;
-  GtkWidget *vbox, *sw, *hscale, *button, *align, *image;
+  GtkWidget *vbox, *sw, *hscale, *button, *align;
   GtkListStore *store;
   GtkCellRenderer *rend;
   GtkWidget *view;
@@ -271,7 +266,7 @@ struct cma_dialog *create_cma_dialog(struct city *pcity)
   label = g_object_new(GTK_TYPE_LABEL,
                        "use-underline", TRUE,
                        "mnemonic-widget", view,
-                       "label", _("Prese_ts:"),
+                       "label", _("_Presets:"),
                        "xalign", 0.0, "yalign", 0.5, NULL);
   gtk_box_pack_start(GTK_BOX(vbox), label, FALSE, FALSE, 0);
 
@@ -287,13 +282,10 @@ struct cma_dialog *create_cma_dialog(struct city *pcity)
   gtk_button_box_set_layout(GTK_BUTTON_BOX(hbox), GTK_BUTTONBOX_EDGE);
   gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 0);
 
-  button = gtk_button_new_with_mnemonic(_("Ne_w"));
-  image = gtk_image_new_from_stock(GTK_STOCK_NEW, GTK_ICON_SIZE_BUTTON);
-  gtk_button_set_image(GTK_BUTTON(button), image);
-  gtk_container_add(GTK_CONTAINER(hbox), button);
-  g_signal_connect(button, "clicked",
-                   G_CALLBACK(cma_add_preset_callback), pdialog);
-  pdialog->add_preset_command = button;
+  pdialog->add_preset_command = gtk_button_new_from_stock(GTK_STOCK_NEW);
+  gtk_container_add(GTK_CONTAINER(hbox), pdialog->add_preset_command);
+  g_signal_connect(pdialog->add_preset_command, "clicked",
+		   G_CALLBACK(cma_add_preset_callback), pdialog);
 
   pdialog->del_preset_command = gtk_button_new_from_stock(GTK_STOCK_DELETE);
   gtk_container_add(GTK_CONTAINER(hbox), pdialog->del_preset_command);
@@ -312,13 +304,13 @@ struct cma_dialog *create_cma_dialog(struct city *pcity)
 
   pdialog->result_label =
       gtk_label_new("food\n prod\n trade\n\n people\n grow\n prod\n name");
-  gtk_widget_set_name(pdialog->result_label, "city_label");
+  gtk_widget_set_name(pdialog->result_label, "city label");
   gtk_container_add(GTK_CONTAINER(frame), pdialog->result_label);
   gtk_label_set_justify(GTK_LABEL(pdialog->result_label), GTK_JUSTIFY_LEFT);
 
   /* Minimal Surplus and Factor */
 
-  table = gtk_table_new(O_LAST + 2, 3, TRUE);
+  table = gtk_table_new(O_COUNT + 2, 3, TRUE);
   gtk_box_pack_start(GTK_BOX(vbox), table, FALSE, FALSE, 2);
 
   label = gtk_label_new(_("Minimal Surplus"));
@@ -361,12 +353,12 @@ struct cma_dialog *create_cma_dialog(struct city *pcity)
 
   label = gtk_label_new(_("Celebrate"));
   gtk_table_attach_defaults(GTK_TABLE(table), label, 0, 1,
-			    O_LAST + 1, O_LAST + 2);
+			    O_COUNT + 1, O_COUNT + 2);
   gtk_misc_set_alignment(GTK_MISC(label), 0, 0.5);
 
   hbox = gtk_hbox_new(FALSE, 0);
   gtk_table_attach_defaults(GTK_TABLE(table), hbox, 1, 2,
-			    O_LAST + 1, O_LAST + 2);
+			    O_COUNT + 1, O_COUNT + 2);
 
   pdialog->happy_button = gtk_check_button_new();
   gtk_box_pack_start(GTK_BOX(hbox), pdialog->happy_button, FALSE, FALSE,
@@ -377,16 +369,16 @@ struct cma_dialog *create_cma_dialog(struct city *pcity)
   g_signal_connect(pdialog->happy_button, "toggled",
 		   G_CALLBACK(hscale_changed), pdialog);
 
-  pdialog->factor[O_LAST] =
+  pdialog->factor[O_COUNT] =
       GTK_ADJUSTMENT(gtk_adjustment_new(0, 0, 50, 1, 0, 0));
 
-  hscale = gtk_hscale_new(GTK_ADJUSTMENT(pdialog->factor[O_LAST]));
+  hscale = gtk_hscale_new(GTK_ADJUSTMENT(pdialog->factor[O_COUNT]));
   gtk_table_attach_defaults(GTK_TABLE(table), hscale, 2, 3,
-			    O_LAST + 1, O_LAST + 2);
+			    O_COUNT + 1, O_COUNT + 2);
   gtk_scale_set_digits(GTK_SCALE(hscale), 0);
   gtk_scale_set_value_pos(GTK_SCALE(hscale), GTK_POS_LEFT);
 
-  g_signal_connect(pdialog->factor[O_LAST],
+  g_signal_connect(pdialog->factor[O_COUNT],
 		   "value_changed",
 		   G_CALLBACK(hscale_changed), pdialog);
 
@@ -414,7 +406,7 @@ struct cma_dialog *create_cma_dialog(struct city *pcity)
   gtk_box_pack_start(GTK_BOX(vbox), pdialog->active_image, FALSE, FALSE, 0);
 
   pdialog->active_label = gtk_label_new(NULL);
-  gtk_widget_set_name(pdialog->active_label, "comment_label");
+  gtk_widget_set_name(pdialog->active_label, "comment label");
   gtk_box_pack_end(GTK_BOX(vbox), pdialog->active_label, FALSE, FALSE, 0);
 
   gtk_widget_show_all(pdialog->shell);
@@ -443,7 +435,7 @@ void refresh_cma_dialog(struct city *pcity, enum cma_refresh refresh)
   cmafec_get_fe_parameter(pcity, &param);
 
   /* fill in result label */
-  cm_result_from_main_map(&result, pcity, TRUE);
+  cm_copy_result_from_city(pcity, &result);
   gtk_label_set_text(GTK_LABEL(pdialog->result_label),
 		     cmafec_get_result_descr(pcity, &result, &param));
 
@@ -720,7 +712,7 @@ static void set_hscales(const struct cm_parameter *const parameter,
   } output_type_iterate_end;
   gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(pdialog->happy_button),
 			       parameter->require_happy);
-  gtk_adjustment_set_value(pdialog->factor[O_LAST],
+  gtk_adjustment_set_value(pdialog->factor[O_COUNT],
 			   parameter->happy_factor);
   allow_refreshes = 1;
 }
@@ -744,7 +736,7 @@ static void hscale_changed(GtkAdjustment *get, gpointer data)
   } output_type_iterate_end;
   param.require_happy =
       (GTK_TOGGLE_BUTTON(pdialog->happy_button)->active ? 1 : 0);
-  param.happy_factor = (int) (pdialog->factor[O_LAST]->value);
+  param.happy_factor = (int) (pdialog->factor[O_COUNT]->value);
 
   /* save the change */
   cmafec_set_fe_parameter(pdialog->pcity, &param);

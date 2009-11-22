@@ -16,21 +16,15 @@
 #include <config.h>
 #endif
 
-/* utility */
-#include "log.h"
-
-/* common */
+#include "game.h"
 #include "unitlist.h"
 
-/* client */
-#include "client_main.h"
-#include "control.h"
-
-/* gui-xaw */
 #include "chatline.h"
 #include "citydlg.h"
 #include "cityrep.h"
+#include "civclient.h"
 #include "connectdlg.h"
+#include "control.h"
 #include "dialogs.h"
 #include "diplodlg.h"
 #include "finddlg.h"
@@ -298,7 +292,7 @@ static void xaw_key_open_spaceship(Widget w, XEvent *event, String *argv, Cardin
 {
   if (can_client_change_view() &&
      is_menu_item_active(MENU_REPORT, MENU_REPORT_SPACESHIP))
-    popup_spaceship_dialog(client.conn.playing);
+    popup_spaceship_dialog(game.player_ptr);
 }
 
 /****************************************************************************
@@ -343,7 +337,7 @@ static void xaw_key_open_worklists(Widget w, XEvent *event,
 {
   if (can_client_change_view()
       && is_menu_item_active(MENU_GOVERNMENT, MENU_GOVERNMENT_WORKLISTS)) {
-    popup_worklists_dialog(client.conn.playing);
+    popup_worklists_dialog(game.player_ptr);
   }
 }
 
@@ -466,9 +460,7 @@ static void xaw_key_unit_fortify(Widget w, XEvent *event, String *argv, Cardinal
 static void xaw_key_unit_fortify_or_fortress(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
   unit_list_iterate(get_units_in_focus(), punit) {
-    struct base_type *pbase = get_base_by_gui_type(BASE_GUI_FORTRESS,
-                                                   punit, punit->tile);
-    if (pbase != NULL) {
+    if (can_unit_do_activity(punit, ACTIVITY_FORTRESS)) {
       key_unit_fortress();
     } else {
       key_unit_fortify();
@@ -553,11 +545,11 @@ static void xaw_key_unit_road(Widget w, XEvent *event, String *argv, Cardinal *a
     key_unit_road();
 }
 
-static void xaw_key_unit_road_or_trade_route(Widget w, XEvent *event, String *argv, Cardinal *argc)
+static void xaw_key_unit_road_or_traderoute(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
   unit_list_iterate(get_units_in_focus(), punit) {
-    if (unit_can_est_trade_route_here(punit)) {
-      key_unit_trade_route();
+    if (unit_can_est_traderoute_here(punit)) {
+      key_unit_traderoute();
     } else {
       key_unit_road();
     }
@@ -578,11 +570,11 @@ static void xaw_key_unit_sentry(Widget w, XEvent *event,
 /****************************************************************************
   Invoked when the key binding for orders->make_traderout is pressed.
 ****************************************************************************/
-static void xaw_key_unit_trade_route(Widget w, XEvent *event,
-                                     String *argv, Cardinal *argc)
+static void xaw_key_unit_traderoute(Widget w, XEvent *event,
+				    String *argv, Cardinal *argc)
 {
-  if (is_menu_item_active(MENU_ORDER, MENU_ORDER_TRADE_ROUTE)) {
-    key_unit_trade_route();
+  if (is_menu_item_active(MENU_ORDER, MENU_ORDER_TRADEROUTE)) {
+    key_unit_traderoute();
   }
 }
 
@@ -916,8 +908,8 @@ static XtActionsRec Actions[] = {
   { "key-unit-pollution", xaw_key_unit_pollution },
   { "key-unit-patrol", xaw_key_unit_patrol },
   { "key-unit-road", xaw_key_unit_road },
-  { "key-unit-road-or-trade-route", xaw_key_unit_road_or_trade_route },
-  { "key-unit-trade-route", xaw_key_unit_trade_route },
+  { "key-unit-road-or-traderoute", xaw_key_unit_road_or_traderoute },
+  { "key-unit-traderoute", xaw_key_unit_traderoute },
   { "key-unit-sentry", xaw_key_unit_sentry },
   { "key-unit-transform", xaw_key_unit_transform },
   { "key-unit-unload-all", xaw_key_unit_unload_all },

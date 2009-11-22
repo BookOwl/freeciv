@@ -23,17 +23,11 @@
 #include <readline/readline.h>
 #endif
 
-/* utility */
 #include "fciconv.h"
 #include "fcintl.h"
 #include "log.h"
 #include "support.h"
 
-/* common */
-#include "game.h"
-
-/* server */
-#include "notify.h"
 #include "srv_main.h"
 
 #include "console.h"
@@ -53,21 +47,6 @@ This must match the log_callback_fn typedef signature.
 ************************************************************************/
 static void con_handle_log(int level, const char *message, bool file_too)
 {
-  if (LOG_ERROR == level) {
-    notify_conn(NULL, NULL, E_LOG_ERROR, ftc_warning, "%s", message);
-  } else if (LOG_FATAL >= level) {
-    /* Make sure that message is not left to buffers when server dies */
-    conn_list_iterate(game.est_connections, pconn) {
-      pconn->send_buffer->do_buffer_sends = 0;
-      pconn->compression.frozen_level = 0;
-    } conn_list_iterate_end;
-
-    notify_conn(NULL, NULL, E_LOG_FATAL, ftc_warning, "%s", message);
-    notify_conn(NULL, NULL, E_LOG_FATAL, ftc_warning,
-                _("Please report this message at %s"),
-                BUG_URL);
-  }
-
   /* Write debug/verbose message to console only when not written to file. */
   if (!file_too || level <= LOG_NORMAL) {
     if (console_rfcstyle) {
@@ -139,18 +118,14 @@ Write to console and add line-break, and show prompt if required.
 ************************************************************************/
 void con_write(enum rfc_status rfc_status, const char *message, ...)
 {
-  /* First buffer contains featured text tags */
-  static char buf1[(MAX_LEN_CONSOLE_LINE * 3) / 2];
-  static char buf2[MAX_LEN_CONSOLE_LINE];
+  static char buf[MAX_LEN_CONSOLE_LINE];
   va_list args;
-
+  
   va_start(args, message);
-  my_vsnprintf(buf1, sizeof(buf1), message, args);
+  my_vsnprintf(buf, sizeof(buf), message, args);
   va_end(args);
 
-  /* remove all format tags */
-  featured_text_to_plain_text(buf1, buf2, sizeof(buf2), NULL);
-  con_puts(rfc_status, buf2);
+  con_puts(rfc_status, buf);
 }
 
 /************************************************************************

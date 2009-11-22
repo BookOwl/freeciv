@@ -23,25 +23,21 @@
   #include <mysql/mysql.h>
 #endif
 
-/* utility */
+#include "auth.h"
+#include "connection.h"
 #include "fcintl.h"
 #include "log.h"
 #include "md5.h"
+#include "packets.h"
 #include "registry.h"
 #include "shared.h"
 #include "support.h"
 
-/* common */
-#include "connection.h"
-#include "packets.h"
-
-/* server */
+#include "auth.h"
 #include "connecthand.h"
-#include "notify.h"
+#include "plrhand.h"
 #include "sernet.h"
 #include "srv_main.h"
-
-#include "auth.h"
 
 /* where our mysql database is located and how to get to it */
 #define DEFAULT_AUTH_HOST     "localhost"
@@ -375,7 +371,7 @@ void auth_free(void)
 }
 
 /**************************************************************************
-  handle authentication of a user; called by handle_login_request()
+  handle authentication of a user; called only by server_join_request()
   if authentication is enabled.
 
   if the connection is rejected right away, return FALSE, otherwise return TRUE
@@ -392,15 +388,16 @@ bool authenticate_user(struct connection *pconn, char *username)
       get_unique_guest_name(username);
 
       if (strncmp(tmpname, username, MAX_LEN_NAME) != 0) {
-        notify_conn(pconn->self, NULL, E_CONNECTION, ftc_warning,
+        notify_conn(pconn->self, NULL, E_CONNECTION,
                     _("Warning: the guest name '%s' has been "
                       "taken, renaming to user '%s'."), tmpname, username);
       }
       sz_strlcpy(pconn->username, username);
       establish_new_connection(pconn);
     } else {
-      reject_new_connection(_("Guests are not allowed on this server. "
-                              "Sorry."), pconn);
+      reject_new_connection(pconn,
+                            N_("Guests are not allowed on this server."
+                              " Sorry."));
       freelog(LOG_NORMAL, _("%s was rejected: Guests not allowed."), username);
       return FALSE;
     }
@@ -419,15 +416,15 @@ bool authenticate_user(struct connection *pconn, char *username)
         sz_strlcpy(pconn->username, tmpname);
 
         freelog(LOG_ERROR, "Error reading database; connection -> guest");
-        notify_conn(pconn->self, NULL, E_CONNECTION, ftc_warning,
+        notify_conn(pconn->self, NULL, E_CONNECTION,
                     _("There was an error reading the user "
                       "database, logging in as guest connection '%s'."), 
                     pconn->username);
         establish_new_connection(pconn);
       } else {
-        reject_new_connection(_("There was an error reading the user database "
-                                "and guest logins are not allowed. Sorry"), 
-                              pconn);
+        reject_new_connection(pconn,
+                              N_("There was an error reading the user database"
+                                 " and guest logins are not allowed. Sorry"));
         freelog(LOG_NORMAL, 
                 _("%s was rejected: Database error and guests not allowed."),
                 pconn->username);
@@ -450,10 +447,11 @@ bool authenticate_user(struct connection *pconn, char *username)
         pconn->server.auth_settime = time(NULL);
         pconn->server.status = AS_REQUESTING_NEW_PASS;
       } else {
-        reject_new_connection(_("This server allows only preregistered "
-                                "users. Sorry."), pconn);
+        reject_new_connection(pconn,
+                              N_("This server allows only preregistered users."
+                                 " Sorry."));
         freelog(LOG_NORMAL,
-                _("%s was rejected: Only preregistered users allowed."),
+                _("%s was rejected: Only preregister users allowed."),
                 pconn->username);
 
         return FALSE;
@@ -481,7 +479,8 @@ bool handle_authentication_reply(struct connection *pconn, char *password)
     /* check if the new password is acceptable */
     if (!is_good_password(password, msg)) {
       if (pconn->server.auth_tries++ >= MAX_AUTH_TRIES) {
-        reject_new_connection(_("Sorry, too many wrong tries..."), pconn);
+        reject_new_connection(pconn,
+                              N_("Sorry, too many wrong tries..."));
         freelog(LOG_NORMAL, _("%s was rejected: Too many wrong password "
                 "verifies for new user."), pconn->username);
 
@@ -497,7 +496,7 @@ bool handle_authentication_reply(struct connection *pconn, char *password)
     sz_strlcpy(pconn->server.password, password);
 
     if (!auth_db_save(pconn)) {
-      notify_conn(pconn->self, NULL, E_CONNECTION, ftc_warning,
+      notify_conn(pconn->self, NULL, E_CONNECTION,
 		  _("Warning: There was an error in saving to the database. "
                     "Continuing, but your stats will not be saved."));
       freelog(LOG_ERROR, "Error writing to database for: %s", pconn->username);
@@ -539,7 +538,8 @@ void process_authentication_status(struct connection *pconn)
 
       if (pconn->server.auth_tries >= MAX_AUTH_TRIES) {
         pconn->server.status = AS_NOT_ESTABLISHED;
-        reject_new_connection(_("Sorry, too many wrong tries..."), pconn);
+        reject_new_connection(pconn,
+                              N_("Sorry, too many wrong tries..."));
         freelog(LOG_NORMAL,
                 _("%s was rejected: Too many wrong password tries."),
                 pconn->username);
@@ -560,7 +560,8 @@ void process_authentication_status(struct connection *pconn)
     /* waiting on the client to send us a password... don't wait too long */
     if (time(NULL) >= pconn->server.auth_settime + MAX_WAIT_TIME) {
       pconn->server.status = AS_NOT_ESTABLISHED;
-      reject_new_connection(_("Sorry, your connection timed out..."), pconn);
+      reject_new_connection(pconn,
+                            N_("Sorry, your connection timed out..."));
       freelog(LOG_NORMAL,
               _("%s was rejected: Connection timeout waiting for password."),
               pconn->username);

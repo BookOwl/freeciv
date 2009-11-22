@@ -22,20 +22,9 @@
 #include "commands.h"
 #include "voting.h"
 
-struct command {
-  const char *name;       /* name - will be matched by unique prefix   */
-  enum cmdlevel_id level; /* access level required to use the command  */
-  const char *synopsis;	  /* one or few-line summary of usage */
-  const char *short_help; /* one line (about 70 chars) description */
-  const char *extra_help; /* extra help information; will be line-wrapped */
-  int vote_flags;         /* how to handle votes */
-  int vote_percent;       /* percent required, meaning depends on flags */
-};
-
 /* Commands must match the values in enum command_id. */
-static struct command commands[] = {
+const struct command commands[] = {
   {"start",	ALLOW_BASIC,
-   /* no translatable parameters */
    "start",
    N_("Start the game, or restart after loading a savegame."),
    N_("This command starts the game.  When starting a new game, "
@@ -69,7 +58,6 @@ static struct command commands[] = {
   },
 
   {"list",	ALLOW_INFO,
-   /* no translatable parameters */
    "list\n"
    "list players\n"
    "list teams\n"
@@ -82,7 +70,6 @@ static struct command commands[] = {
    VCF_NONE, 0
   },
   {"quit",	ALLOW_HACK,
-   /* no translatable parameters */
    "quit",
    N_("Quit the game and shutdown the server."), NULL,
    VCF_NONE, 0
@@ -116,56 +103,44 @@ static struct command commands[] = {
    N_("Show server options."),
    N_("With no arguments, shows all server options (or available options, when "
       "used by clients).  With an argument, show only the named option, "
-      "or options with that prefix.")
+      "or options with that prefix."),
+   VCF_NONE, 0
   },
   {"wall",	ALLOW_ADMIN,
-   /* TRANS: translate text between <> only */
    N_("wall <message>"),
    N_("Send message to all connections."),
    N_("For each connected client, pops up a window showing the message "
       "entered."),
    VCF_NONE, 0
   },
-  {"connectmsg", ALLOW_ADMIN,
-   /* TRANS: translate text between <> only */
-   N_("connectmsg <message>"),
-   N_("Set message to show to connecting players."),
-   N_("Set message to sends to clients when they connect.\n"
-      "Empty message means that no message is sent.")
-  },
   {"vote",	ALLOW_BASIC,
-   /* TRANS: translate text between [] only */
-   N_("vote yes|no|abstain [vote number]"),
+   N_("vote yes|no [vote number]"),
    N_("Cast a vote."),
       /* xgettext:no-c-format */
-   N_("A player with info level access issuing a control level command "
+   N_("A player with basic level access issuing a control level command "
       "starts a new vote for the command.  The /vote command followed by "
-      "\"yes\", \"no\", or \"abstain\", and optionally a vote number, "
+      "\"yes\" or \"no\", and optionally a vote number, "
       "gives your vote.  If you do not add a vote number, your vote applies "
-      "to the latest vote.  You can only suggest one vote at a time.  "
-      "The vote will pass immediately if more than half of the voters "
-      "who have not abstained vote for it, or fail immediately if at "
-      "least half of the voters who have not abstained vote against it."),
+      "to the latest command.  You can only suggest one vote at a time.  "
+      "The vote will pass immediately if more than half of the players "
+      "vote for it, or fail immediately if at least half of the players "
+      "vote against it."),
    VCF_NONE, 0
   },
   {"debug",	ALLOW_CTRL,
-   /* no translatable parameters */
-   "debug [ diplomacy | ferries | player <player> | tech <player>"
-   " | city <x> <y> | units <x> <y> | unit <id> "
-   " | timing | info ]",
+   N_("debug [ player <player> | city <x> <y> | units <x> <y> | unit <id> "
+      "| tech <player> | timing | info]"),
    N_("Turn on or off AI debugging of given entity."),
    N_("Print AI debug information about given entity and turn continous "
       "debugging output for this entity on or off."),
-   VCF_NONE, 0
+   VCF_NONE, 50
   },
   {"set",	ALLOW_CTRL,
-   /* TRANS: translate text between <> only */
    N_("set <option-name> <value>"),
    N_("Set server option."), NULL,
    VCF_NONE, 50
   },
   {"team",	ALLOW_CTRL,
-   /* TRANS: translate text between <> and [] only */
    N_("team <player> [team]"),
    N_("Change, add or remove a player's team affiliation."),
    N_("Sets a player as member of a team. If no team specified, the "
@@ -176,7 +151,6 @@ static struct command commands[] = {
    VCF_NONE, 50
   },
   {"rulesetdir", ALLOW_CTRL,
-   /* TRANS: translate text between <> only */
    N_("rulesetdir <directory>"),
    N_("Choose new ruleset directory or modpack."),
    N_("Choose new ruleset directory or modpack. Calling this\n "
@@ -201,7 +175,6 @@ static struct command commands[] = {
    VCF_NONE, 0
   },
   {"metaconnection",	ALLOW_ADMIN,
-   /* no translatable parameters */
    "metaconnection u|up\n"
    "metaconnection d|down\n"
    "metaconnection ?",
@@ -262,11 +235,11 @@ static struct command commands[] = {
    VCF_NONE, 50
   },
   {"away",	ALLOW_BASIC,
-   /* no translatable parameters */
-   "away",
+   N_("away\n"
+      "away"),
    N_("Set yourself in away mode. The AI will watch your back."),
    N_("The AI will govern your nation but do minimal changes."),
-   VCF_NONE, 50
+   VCF_NONE, 0
   },
   {"novice",	ALLOW_CTRL,
    /* TRANS: translate text between <> only */
@@ -305,16 +278,6 @@ static struct command commands[] = {
    N_("Set one or all AI players to 'hard'."),
    N_("With no arguments, sets all AI players to skill level 'hard', and "
       "sets the default level for any new AI players to 'hard'.  With an "
-      "argument, sets the skill level for that player only."),
-   VCF_NONE, 50
-  },
-  {"cheating",  ALLOW_CTRL,
-   /* TRANS: translate text between <> only */
-   N_("cheating\n"
-      "cheating <player-name>"),
-   N_("Set one or all AI players to 'cheating'."),
-   N_("With no arguments, sets all AI players to skill level 'cheating', and "
-      "sets the default level for any new AI players to 'cheating'.  With an "
       "argument, sets the skill level for that player only."),
    VCF_NONE, 50
   },
@@ -358,13 +321,13 @@ static struct command commands[] = {
       "Command access levels do not persist if a client disconnects, "
       "because some untrusted person could reconnect with the same name.  "
       "Note that this command now takes connection names, not player names."
-      )
+      ),
+   VCF_NONE, 0
   },
-  {"first", ALLOW_BASIC,
-   /* no translatable parameters */
-   "first",
+  {"first", ALLOW_BASIC, "first",
    N_("If there is none, become the game organizer with increased permissions."),
    NULL,
+   VCF_NONE, 0
   },
   {"timeoutincrease", ALLOW_CTRL, 
    /* TRANS: translate text between <> only */
@@ -387,14 +350,14 @@ static struct command commands[] = {
     VCF_NONE, 0
   },
   {"endgame",	ALLOW_ADMIN,
-   /* no translatable parameters */
-   "endgame",
+   /* TRANS: translate text between <> only */
+   N_("endgame"),
    N_("End the game immediately in a draw."), NULL,
    VCF_NONE, 0
   },
   {"surrender",	ALLOW_BASIC,
-   /* no translatable parameters */
-   "surrender",
+   /* TRANS: translate text between <> only */
+   N_("surrender"),
    N_("Concede the game."),
    N_("This tells everyone else that you concede the game, and if all "
       "but one player (or one team) have conceded the game in this way "
@@ -443,97 +406,25 @@ static struct command commands[] = {
    N_("Write current settings as server commands to file."), NULL,
    VCF_NONE, 0
   },
-  {"reset",	ALLOW_CTRL,
-   N_("reset"),
-   N_("Reset all server settings."),
-   N_("Reset all settings and re-read the server start script, "
-      "if there was one given with the --read server argument. "),
-   VCF_NONE, 50
-  },
   {"rfcstyle",	ALLOW_HACK,
-   /* no translatable parameters */
    "rfcstyle",
    N_("Switch server output between 'RFC-style' and normal style."), NULL,
    VCF_NONE, 0
   },
   {"serverid",	ALLOW_INFO,
-   /* no translatable parameters */
    "serverid",
    N_("Simply returns the id of the server."),
    VCF_NONE, 0
   }
 };
 
-
 /**************************************************************************
-  ...
+  Returns the access level of a command, or ALLOW_NONE if 'cmd' is invalid.
 **************************************************************************/
-const struct command *command_by_number(int i)
+enum cmdlevel_id command_access_level(enum command_id cmd)
 {
-  assert(i >= 0 && i < CMD_NUM);
-  return &commands[i];
-}
-
-/**************************************************************************
-  ...
-**************************************************************************/
-const char *command_name(const struct command *pcommand)
-{
-  return pcommand->name;
-}
-
-/**************************************************************************
-  ...
-**************************************************************************/
-const char *command_name_by_number(int i)
-{
-  return command_by_number(i)->name;
-}
-
-/**************************************************************************
-  ...
-**************************************************************************/
-const char *command_synopsis(const struct command *pcommand)
-{
-  return pcommand->synopsis;
-}
-
-/**************************************************************************
-  ...
-**************************************************************************/
-const char *command_short_help(const struct command *pcommand)
-{
-  return pcommand->short_help;
-}
-
-/**************************************************************************
-  ...
-**************************************************************************/
-const char *command_extra_help(const struct command *pcommand)
-{
-  return pcommand->extra_help;
-}
-
-/**************************************************************************
-  ...
-**************************************************************************/
-enum cmdlevel_id command_level(const struct command *pcommand)
-{
-  return pcommand->level;
-}
-
-/**************************************************************************
-  Returns a bit-wise combination of all vote flags set for this command.
-**************************************************************************/
-int command_vote_flags(const struct command *pcommand)
-{
-  return pcommand ? pcommand->vote_flags : 0;
-}
-
-/**************************************************************************
-  Returns the vote percent required for this command to pass in a vote.
-**************************************************************************/
-int command_vote_percent(const struct command *pcommand)
-{
-  return pcommand ? pcommand->vote_percent : 0;
+  if (!(0 <= cmd && cmd < CMD_NUM)) {
+    return ALLOW_NONE;
+  }
+  return commands[cmd].level;
 }

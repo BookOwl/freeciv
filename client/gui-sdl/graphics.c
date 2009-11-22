@@ -1019,7 +1019,7 @@ void init_sdl(int iFlags)
   /* Initialize the TTF library */
   if (TTF_Init() < 0) {
     freelog(LOG_FATAL, _("Unable to initialize SDL_ttf library: %s"),
-	    SDL_GetError());
+            SDL_GetError());
     exit(2);
   }
 

@@ -19,7 +19,8 @@
 #include "fcintl.h"
 
 /* client */
-#include "client_main.h"
+#include "civclient.h"
+#include "clinet.h"
 #include "control.h"
 
 /* gui-sdl */
@@ -57,7 +58,7 @@ static int caravan_dlg_window_callback(struct widget *pWindow)
 static int caravan_establish_trade_callback(struct widget *pWidget)
 {
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
-    dsend_packet_unit_establish_trade(&client.conn, pWidget->data.cont->id0);
+    dsend_packet_unit_establish_trade(&aconnection, pWidget->data.cont->id0);
     
     popdown_caravan_dialog();
   }
@@ -71,7 +72,7 @@ static int caravan_establish_trade_callback(struct widget *pWidget)
 static int caravan_help_build_wonder_callback(struct widget *pWidget)
 {
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
-    dsend_packet_unit_help_build_wonder(&client.conn, pWidget->data.cont->id0);
+    dsend_packet_unit_help_build_wonder(&aconnection, pWidget->data.cont->id0);
     
     popdown_caravan_dialog();  
   }
@@ -101,7 +102,7 @@ void popdown_caravan_dialog(void)
 /**************************************************************************
   Popup a dialog giving a player choices when their caravan arrives at
   a city (other than its home city).  Example:
-    - Establish trade route.
+    - Establish traderoute.
     - Help build wonder.
     - Keep moving.
 **************************************************************************/
@@ -153,7 +154,7 @@ void popup_caravan_dialog(struct unit *pUnit,
     
     if (can_establish_trade_route(pHomecity, pDestcity)) {
       my_snprintf(cBuf, sizeof(cBuf),
-                  _("Establish Trade route with %s ( %d R&G + %d trade )"),
+                  _("Establish Traderoute with %s ( %d R&G + %d trade )"),
                   city_name(pHomecity),
                   revenue,
                   trade_between_cities(pHomecity, pDestcity));

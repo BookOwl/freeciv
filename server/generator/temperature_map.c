@@ -24,7 +24,7 @@
 
 static int *temperature_map;
 
-#define tmap(_tile) (temperature_map[tile_index(_tile)])
+#define tmap(ptile) (temperature_map[(ptile)->index])
 
 /**************************************************************
   Return TRUE if temperateure_map is initialized
@@ -92,12 +92,10 @@ void create_tmap(bool real)
       float height = - 0.3 * MAX(0, hmap(ptile) - hmap_shore_level) 
 	  / (hmap_max_level - hmap_shore_level); 
       /* near ocean temperature can be 15 % more "temperate" */
-      float temperate = (0.15 * (map.server.temperature / 100 - t
-                                 / MAX_COLATITUDE)
-                         * 2 * MIN(50 , count_ocean_near_tile(ptile,
-                                                              FALSE, TRUE))
-                         / 100);
-
+      float temperate = 0.15 * (map.temperature / 100 - t / MAX_COLATITUDE) * 
+	  2 * MIN (50 ,count_ocean_near_tile(ptile, FALSE, TRUE)) /
+	  100;
+      
       tmap(ptile) =  t * (1.0 + temperate) * (1.0 + height);
     }
   } whole_map_iterate_end;
@@ -105,7 +103,7 @@ void create_tmap(bool real)
   /* Notice: if colatitude is load from a scenario never call adjust has
              scenario maybe has a odd colatitude ditribution and adjust will
 	     brack it */
-  if (!map.server.alltemperate) {
+  if (!map.alltemperate) {
     adjust_int_map(temperature_map, MAX_COLATITUDE);
   }
   /* now simplify to 4 base values */ 

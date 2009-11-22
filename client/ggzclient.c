@@ -15,14 +15,11 @@
 #include <config.h>
 #endif
 
-/* utility */
 #include "fciconv.h"
 #include "fcintl.h"
 #include "rand.h"
 
-/* client */
 #include "gui_main_g.h"
-#include "ggz_g.h"
 
 #include "clinet.h"
 #include "ggzclient.h"
@@ -30,6 +27,11 @@
 #ifdef GGZ_CLIENT
 #  include <ggzmod.h>
 #endif
+
+#ifdef GGZ_GTK
+#  include <ggz-embed.h>
+#endif
+
 
 bool with_ggz;
 
@@ -47,7 +49,16 @@ void ggz_initialize(void)
   }
 #endif
 
-  gui_ggz_embed_ensure_server();
+#ifdef GGZ_GTK
+  {
+    char buf[128];
+
+    user_username(buf, sizeof(buf));
+    cat_snprintf(buf, sizeof(buf), "%d", myrand(100));
+    ggz_embed_ensure_server("Pubserver", "freeciv.ggzgamingzone.org",
+                           5688, buf);
+  }
+#endif
 }
 
 #ifdef GGZ_CLIENT

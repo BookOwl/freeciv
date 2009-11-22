@@ -399,7 +399,7 @@ static bool check_include(struct inputfile *inf)
   }
   inf->cur_line_pos = inf->cur_line.n-1;
 
-  full_name = (char *) inf->datafn(bare_name);
+  full_name = inf->datafn(bare_name);
   if (!full_name) {
     freelog(LOG_ERROR, "Could not find included file \"%s\"", bare_name);
     return FALSE;
@@ -592,7 +592,7 @@ static const char *get_token(struct inputfile *inf,
   func = tok_tab[type].func;
   
   if (!func) {
-    freelog(LOG_ERROR, "token type %d (%s) not supported yet", type, name);
+    freelog(LOG_NORMAL, "token type %d (%s) not supported yet", type, name);
     c = NULL;
   } else {
     if (!have_line(inf))

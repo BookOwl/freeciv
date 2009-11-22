@@ -6,7 +6,7 @@ groups="Modern", "Medieval", "European"
 legend=_("Romania as a nation was formed at the beginning of the 20th\
  century, when the states of Transylvania, Wallachia, and Moldavia merged.\
  It is a country inhabited by people speaking a language reminiscent from\
- the time of ancient Rome. Its history is convoluted as it was always at\
+ the time of ancient Rome. It's history is convoluted as it was always at\
  the borders of great empires: Roman, Ottoman, Austro-Hungarian, and\
  Russian.")
 
@@ -30,13 +30,11 @@ flag_alt = "-"
 city_style = "Classical"
 
 ruler_titles = { "government",      "male_title",      "female_title"
-		 ; /* TRANS: Voievod/Doamna = Prince/Lady */
                  "Despotism",       _("Voievod"),     	_("Doamna")
-		 ; /* TRANS: Rege/Regina = King/Queen */
                  "Monarchy",        _("Rege"),    	_("Regina")
-		 ; /* TRANS: Tovaras/Tovarasa = Comrade */
+                 "Democracy",       _("Presedinte"),    _("Presedinte")
                  "Communism",       _("Tovaras"),     	_("Tovarasa")
-           "Fundamentalism", _("Director-President"), _("Director-President")
+	"Fundamentalism", _("Director-President"), _("Director-President")
                }
 
 init_techs=""

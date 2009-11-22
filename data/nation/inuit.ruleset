@@ -3,7 +3,7 @@
 name=_("Inuit")
 plural=_("?plural:Inuits")
 groups="American"
-legend=_("The Inuit people inhabit northern Canada and Greenland.\
+legend=_("The Inuit people inhabits northern Canada and Greenland.\
  Legend says that the Great Shaman Qitdlarssuaq lead his people to Thule\
  (Qaanaaq) on the west coast of Greenland in the 10th century. All Inuit\
  of today are descendents of the Thule culture.")
@@ -17,8 +17,8 @@ flag_alt = "-"
 city_style = "European"
 
 ruler_titles = { "government",      "male_title",      "female_title"
-                 "Despotism",       _("Shaman"),        _("?female:Shaman")
-                 "Monarchy",    _("Great Shaman"),  _("?female:Great Shaman")
+                 "Despotism",       _("Shaman"),        _("Shaman")
+                 "Monarchy",        _("Great Shaman"),  _("Great Shaman")
                }
 
 init_techs=""

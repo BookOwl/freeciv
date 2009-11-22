@@ -26,16 +26,7 @@
   location.
 **************************************************************************/
 void popup_notify_goto_dialog(const char *headline, const char *lines,
-                              const struct text_tag_list *tags,
-                              struct tile *ptile)
-{
-  /* PORTME */
-}
-
-/**************************************************************************
-  Popup a dialog to display connection message from server.
-**************************************************************************/
-void popup_connect_msg(const char *headline, const char *message)
+			      struct tile *ptile)
 {
   /* PORTME */
 }
@@ -94,7 +85,7 @@ void popup_revolution_dialog(void)
 /**************************************************************************
   Popup a dialog giving a player choices when their caravan arrives at
   a city (other than its home city).  Example:
-    - Establish trade route.
+    - Establish traderoute.
     - Help build wonder.
     - Keep moving.
 **************************************************************************/
@@ -154,8 +145,7 @@ void popup_sabotage_dialog(struct city *pcity)
   Popup a dialog asking the unit which improvement they would like to
   pillage.
 **************************************************************************/
-void popup_pillage_dialog(struct unit *punit, bv_special may_pillage,
-                          bv_bases bases)
+void popup_pillage_dialog(struct unit *punit, bv_special may_pillage)
 {
   /* PORTME */
 }

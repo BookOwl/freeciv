@@ -43,16 +43,13 @@
 #include <winsock.h>
 #endif
 
-/* utility */
 #include "capability.h"
+#include "events.h"
 #include "log.h"
 #include "mem.h"
-#include "support.h"
-
-/* common */
-#include "events.h"
 #include "player.h"
 #include "requirements.h"
+#include "support.h"
 #include "tech.h"
 #include "worklist.h"
 
@@ -391,14 +388,16 @@ void dio_put_tech_list(struct data_out *dout, const int *value)
 **************************************************************************/
 void dio_put_worklist(struct data_out *dout, const struct worklist *pwl)
 {
-  int i, length = worklist_length(pwl);
+  dio_put_bool8(dout, pwl->is_valid);
 
-  dio_put_uint8(dout, length);
-  for (i = 0; i < length; i++) {
-    const struct universal *pcp = &(pwl->entries[i]);
+  if (pwl->is_valid) {
+    int i, length = worklist_length(pwl);
 
-    dio_put_uint8(dout, pcp->kind);
-    dio_put_uint8(dout, universal_number(pcp));
+    dio_put_uint8(dout, length);
+    for (i = 0; i < length; i++) {
+      dio_put_bool8(dout, pwl->entries[i].is_unit);
+      dio_put_uint8(dout, pwl->entries[i].value);
+    }
   }
 }
 
@@ -600,7 +599,7 @@ void dio_get_bit_string(struct data_in *din, char *dest,
 
   dio_get_uint16(din, &npack);
   if (npack >= max_dest_size) {
-      freelog(LOG_ERROR, "Have size for %lu, got %d",
+      freelog(LOG_NORMAL, "Have size for %lu, got %d",
               (unsigned long)max_dest_size, npack);
     din->bad_bit_string = TRUE;
     dest[0] = '\0';
@@ -651,19 +650,21 @@ void dio_get_tech_list(struct data_in *din, int *dest)
 **************************************************************************/
 void dio_get_worklist(struct data_in *din, struct worklist *pwl)
 {
-  int i, length;
+  dio_get_bool8(din, &pwl->is_valid);
 
-  worklist_init(pwl);
+  if (pwl->is_valid) {
+    int i, length;
 
-  dio_get_uint8(din, &length);
-  for (i = 0; i < length; i++) {
-    int identifier;
-    int kind;
+    worklist_init(pwl);
 
-    dio_get_uint8(din, &kind);
-    dio_get_uint8(din, &identifier);
+    dio_get_uint8(din, &length);
+    for (i = 0; i < length; i++) {
+      struct city_production prod;
 
-    worklist_append(pwl, universal_by_number(kind, identifier));
+      dio_get_bool8(din, &prod.is_unit);
+      dio_get_uint8(din, &prod.value);
+      worklist_append(pwl, prod);
+    }
   }
 }
 

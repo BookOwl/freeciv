@@ -14,14 +14,15 @@
 #define FC__AICITY_H
 
 #include "fc_types.h"
+#include "unit.h"		/* enum unit_move_type */
+#include "city.h"
 #include "aidata.h"
+
+struct ai_choice;
 
 void ai_manage_cities(struct player *pplayer);
 void ai_manage_buildings(struct player *pplayer);
 
 int ai_eval_calc_city(struct city *pcity, struct ai_data *ai);
-
-void ai_init_city(struct city *pcity);
-void ai_close_city(struct city *pcity);
 
 #endif  /* FC__AICITY_H */

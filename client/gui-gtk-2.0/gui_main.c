@@ -15,10 +15,6 @@
 #include <config.h>
 #endif
 
-#ifdef AUDIO_SDL
-#include "SDL.h"
-#endif
-
 #include <assert.h>
 #ifdef HAVE_LOCALE_H
 #include <locale.h>
@@ -40,61 +36,51 @@
 #  include <ggz-gtk.h>
 #endif
 
-/* utility */
+#include "dataio.h"
 #include "fciconv.h"
 #include "fcintl.h"
+#include "game.h"
+#include "government.h"
 #include "log.h"
+#include "map.h"
 #include "mem.h"
 #include "shared.h"
 #include "support.h"
-
-/* common */
-#include "dataio.h"
-#include "featured_text.h"
-#include "game.h"
-#include "government.h"
-#include "map.h"
 #include "unitlist.h"
 #include "version.h"
 
-/* client */
-#include "client_main.h"
+#include "chatline.h"
+#include "civclient.h"
 #include "climisc.h"
 #include "clinet.h"
 #include "colors.h"
+#include "connectdlg.h"
 #include "connectdlg_common.h"
 #include "control.h"
-#include "editor.h"
-#include "ggzclient.h"
-#include "options.h"
-#include "text.h"
-#include "tilespec.h"
-
-/* gui-gtk-2.0 */
-#include "chatline.h"
-#include "connectdlg.h"
 #include "cma_fe.h"
 #include "dialogs.h"
 #include "diplodlg.h"
-#include "editgui.h"
 #include "gotodlg.h"
+#include "ggzclient.h"
 #include "graphics.h"
+#include "gui_main.h"
 #include "gui_stuff.h"
 #include "happiness.h"
+#include "helpdata.h"                   /* boot_help_texts() */
 #include "inteldlg.h"
 #include "mapctrl.h"
 #include "mapview.h"
 #include "menu.h"
 #include "messagewin.h"
 #include "optiondlg.h"
+#include "options.h"
 #include "pages.h"
 #include "plrdlg.h"
 #include "spaceshipdlg.h"
-#include "repodlgs.h"
 #include "resources.h"
-#include "voteinfo_bar.h"
+#include "text.h"
+#include "tilespec.h"
 
-#include "gui_main.h"
 
 const char *client_string = "gui-gtk-2.0";
 
@@ -108,6 +94,16 @@ GdkPixmap *overview_canvas_store;       /* this pixmap acts as a backing store
 int overview_canvas_store_width = 2 * 80;
 int overview_canvas_store_height = 2 * 50;
 
+bool enable_tabs = TRUE;
+bool better_fog = TRUE;
+bool show_chat_message_time = FALSE;
+bool split_bottom_notebook = FALSE;
+bool new_messages_go_to_top = FALSE;
+bool show_message_window_buttons = TRUE;
+bool metaserver_tab_first = FALSE;
+bool allied_chat_only = FALSE;
+bool small_display_layout = FALSE;
+
 GtkWidget *toplevel;
 GdkWindow *root_window;
 GtkWidget *toplevel_tabs;
@@ -117,9 +113,8 @@ GtkWidget *map_widget;
 static GtkWidget *bottom_hpaned;
 
 int city_names_font_size = 0, city_productions_font_size = 0;
-GtkStyle *city_names_style = NULL;
-GtkStyle *city_productions_style = NULL;
-GtkStyle *reqtree_text_style = NULL;
+PangoFontDescription *main_font;
+PangoFontDescription *city_productions_font;
 
 GdkGC *civ_gc;
 GdkGC *mask_fg_gc;
@@ -137,10 +132,8 @@ GtkWidget *main_frame_civ_name;
 GtkWidget *main_label_info;
 
 GtkWidget *avbox, *ahbox, *vbox, *conn_box;
+GtkTreeStore *conn_model;
 GtkWidget* scroll_panel;
-
-GtkTreeStore *connection_list_store;
-GtkTreeView *connection_list_view;
 
 GtkWidget *econ_label[10];
 GtkWidget *bulb_label;
@@ -151,7 +144,6 @@ GtkWidget *timeout_label;
 GtkWidget *turn_done_button;
 
 GtkWidget *unit_info_label;
-GtkWidget *unit_info_box;
 GtkWidget *unit_info_frame;
 
 GtkTooltips *main_tips;
@@ -163,6 +155,104 @@ GtkWidget *government_ebox;
 
 const char * const gui_character_encoding = "UTF-8";
 const bool gui_use_transliteration = FALSE;
+
+static void split_bottom_notebook_callback(struct client_option *op);
+static void allied_chat_only_callback(struct client_option *op);
+
+client_option gui_options[] = {
+  /* This option is the same as the one in gui-gtk */
+  GEN_BOOL_OPTION(map_scrollbars, N_("Show Map Scrollbars"),
+		  N_("Disable this option to hide the scrollbars on the "
+		     "map view."),
+		  COC_INTERFACE),
+  /* This option is the same as the one in gui-gtk */
+  GEN_BOOL_OPTION(keyboardless_goto, N_("Keyboardless goto"),
+		  N_("If this option is set then a goto may be initiated "
+		     "by left-clicking and then holding down the mouse "
+		     "button while dragging the mouse onto a different "
+		     "tile."),
+		  COC_INTERFACE),
+  GEN_BOOL_OPTION(dialogs_on_top, N_("Keep dialogs on top"),
+		  N_("If this option is set then dialog windows will always "
+		     "remain in front of the main Freeciv window. "
+		     "Disabling this has no effect in fullscreen mode."),
+		  COC_INTERFACE),
+  GEN_BOOL_OPTION(show_task_icons, N_("Show worklist task icons"),
+		  N_("Disabling this will turn off the unit and building "
+		     "icons in the worklist dialog and the production "
+		     "tab of the city dialog."),
+		  COC_GRAPHICS),
+  GEN_BOOL_OPTION(enable_tabs, N_("Enable status report tabs"),
+		  N_("If this option is enabled then report dialogs will "
+		     "be shown as separate tabs rather than in popup "
+		     "dialogs."),
+		  COC_INTERFACE),
+  GEN_BOOL_OPTION_CB(better_fog,
+		     N_("Better fog-of-war drawing"),
+		     N_("If this is enabled then a better method is used "
+			"for drawing fog-of-war.  It is not any slower but "
+			"will consume about twice as much memory."),
+		     COC_GRAPHICS, mapview_redraw_callback),
+  GEN_BOOL_OPTION(show_chat_message_time,
+                  N_("Show time for each chat message"),
+                  N_("If this option is enabled then all chat messages "
+                     "will be prefixed by a time string of the form "
+                     "[hour:minute:second]."),
+                  COC_INTERFACE),
+  GEN_BOOL_OPTION_CB(split_bottom_notebook,
+                     N_("Split bottom notebook area"),
+                     N_("Enabling this option will split the bottom "
+                        "notebook into a left and right notebook so that "
+                        "two tabs may be viewed at once."),
+                     COC_INTERFACE, split_bottom_notebook_callback),
+  GEN_BOOL_OPTION(new_messages_go_to_top,
+                  N_("New message events go to top of list"),
+                  N_("If this option is enabled, new events in the "
+                     "message window will appear at the top of the list, "
+                     "rather than being appended at the bottom."),
+                  COC_INTERFACE),
+  GEN_BOOL_OPTION(show_message_window_buttons,
+                  N_("Show extra message window buttons"),
+                  N_("If this option is enabled, there will be two "
+                     "buttons displayed in the message window for "
+                     "inspecting a city and going to a location. If this "
+                     "option is disabled, these buttons will not appear "
+                     "(you can still double-click with the left mouse "
+                     "button or right-click on a row to inspect or goto "
+                     "respectively). This option will only take effect "
+                     "once the message window is closed and reopened."),
+                  COC_INTERFACE),
+  GEN_BOOL_OPTION(metaserver_tab_first,
+                  N_("Metaserver tab first in network page"),
+                  N_("If this option is enabled, the metaserver tab will "
+                     "be the first notebook tab in the network page. This "
+                     "option requires a restart in order to take effect."),
+                  COC_NETWORK),
+  GEN_BOOL_OPTION_CB(allied_chat_only,
+                     N_("Plain chat messages are sent to allies only"),
+                     N_("If this option is enabled, then plain messages "
+                        "typed into the chat entry while the game is "
+                        "running will only be sent to your allies. "
+                        "Otherwise plain messages will be sent as "
+                        "public chat messages. To send a public chat "
+                        "message with this option enabled, prefix the "
+                        "message with a single colon ':'. This option "
+                        "can also be set using a toggle button beside "
+                        "the chat entry (only visible in multiplayer "
+                        "games)."),
+                     COC_NETWORK, allied_chat_only_callback),
+  GEN_BOOL_OPTION(small_display_layout,
+                  N_("Arrange widgets for small displays"),
+                  N_("If this option is enabled, widgets in the main "
+                     "window will be arrange so that they take up the "
+                     "least amount of total screen space. Specifically, "
+                     "the left panel containing the overview, player "
+                     "status, and the unit information box will be "
+                     "extended over the entire left side of the window. "
+                     "This option requires a restart in order to take "
+                     "effect."), COC_INTERFACE)
+};
+const int num_gui_options = ARRAY_SIZE(gui_options);
 
 static GtkWidget *main_menubar;
 static GtkWidget *unit_pixmap_table;
@@ -177,6 +267,7 @@ static int unit_ids[MAX_NUM_UNITS_BELOW];  /* ids of the units icons in
                                             * information display: (or 0) */
 GtkTextView *main_message_area;
 GtkTextBuffer *message_buffer;
+static GtkWidget *inputline;
 static GtkWidget *allied_chat_toggle_button;
 
 static enum Display_color_type display_color_type;  /* practically unused */
@@ -195,8 +286,7 @@ static void set_wait_for_writable_socket(struct connection *pc,
 
 static void print_usage(const char *argv0);
 static void parse_options(int argc, char **argv);
-static gboolean toplevel_key_press_handler(GtkWidget *w, GdkEventKey *ev, gpointer data);
-static gboolean toplevel_key_release_handler(GtkWidget *w, GdkEventKey *ev, gpointer data);
+static gboolean keyboard_handler(GtkWidget *w, GdkEventKey *ev, gpointer data);
 static gboolean mouse_scroll_mapcanvas(GtkWidget *w, GdkEventScroll *ev);
 
 static void tearoff_callback(GtkWidget *b, gpointer data);
@@ -221,13 +311,11 @@ void set_city_names_font_sizes(int my_city_names_font_size,
    * save the values for later. */
   city_names_font_size = my_city_names_font_size;
   city_productions_font_size = my_city_productions_font_size;
-  if (city_names_style) {
-    pango_font_description_set_size(city_names_style->font_desc,
-                                    PANGO_SCALE * city_names_font_size);
-  }
-  if (city_productions_style) {
-    pango_font_description_set_size(city_productions_style->font_desc,
-                                    PANGO_SCALE * city_productions_font_size);
+  if (main_font) {
+    pango_font_description_set_size(main_font,
+				    PANGO_SCALE * city_names_font_size);
+    pango_font_description_set_size(city_productions_font,
+				    PANGO_SCALE * city_productions_font_size);
   }
 }
 
@@ -263,8 +351,7 @@ static void print_usage(const char *argv0)
   /* add client-specific usage information here */
   fc_fprintf(stderr, _("This client has no special command line options\n\n"));
 
-  /* TRANS: No full stop after the URL, could cause confusion. */
-  fc_fprintf(stderr, _("Report bugs at %s\n"), BUG_URL);
+  fc_fprintf(stderr, _("Report bugs at %s.\n"), BUG_URL);
 }
 
 /**************************************************************************
@@ -310,24 +397,6 @@ static gboolean toplevel_focus(GtkWidget *w, GtkDirectionType arg)
 }
 
 /**************************************************************************
-  When the chatline text view is resized, scroll it to the bottom. This
-  prevents users from accidentally missing messages when the chatline
-  gets scrolled up a small amount and stops scrolling down automatically.
-**************************************************************************/
-static void main_message_area_size_allocate(GtkWidget *widget,
-                                            GtkAllocation *allocation,
-                                            gpointer data)
-{
-  static int old_width = 0, old_height = 0;
-  if (allocation->width != old_width
-      || allocation->height != old_height) {
-    chatline_scroll_to_bottom(TRUE);
-    old_width = allocation->width;
-    old_height = allocation->height;
-  }
-}
-
-/**************************************************************************
 ...
 **************************************************************************/
 gboolean map_canvas_focus(void)
@@ -336,6 +405,43 @@ gboolean map_canvas_focus(void)
   gtk_notebook_set_current_page(GTK_NOTEBOOK(top_notebook), 0);
   gtk_widget_grab_focus(map_canvas);
   return TRUE;
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+gboolean inputline_handler(GtkWidget *w, GdkEventKey *ev)
+{
+  void *data = NULL;
+  gint keypress = FALSE;
+
+  if (ev->keyval == GDK_Up) {
+    keypress = TRUE;
+
+    if (history_pos < genlist_size(history_list) - 1)
+      history_pos++;
+
+    data = genlist_get(history_list, history_pos);
+  }
+
+  if (ev->keyval == GDK_Down) {
+    keypress = TRUE;
+
+    if (history_pos >= 0)
+      history_pos--;
+
+    if (history_pos >= 0) {
+      data = genlist_get(history_list, history_pos);
+    } else {
+      data = "";
+    }
+  }
+
+  if (data) {
+    gtk_entry_set_text(GTK_ENTRY(w), data);
+    gtk_editable_set_position(GTK_EDITABLE(w), -1);
+  }
+  return keypress;
 }
 
 /**************************************************************************
@@ -353,9 +459,7 @@ static gboolean toplevel_handler(GtkWidget *w, GdkEventKey *ev, gpointer data)
 
   focus = gtk_window_get_focus(GTK_WINDOW(toplevel));
   if (focus) {
-    if (GTK_IS_ENTRY(focus)
-        || (GTK_IS_TEXT_VIEW(focus)
-            && gtk_text_view_get_editable(GTK_TEXT_VIEW(focus)))) {
+    if (GTK_IS_ENTRY(focus)) {
       /* Propagate event to currently focused entry widget. */
       if (gtk_widget_event(focus, (GdkEvent *) ev)) {
 	/* Do not propagate event to our children. */
@@ -368,11 +472,52 @@ static gboolean toplevel_handler(GtkWidget *w, GdkEventKey *ev, gpointer data)
   return FALSE;
 }
 
+
+/**************************************************************************
+  Idle callback for scrolling down the chatline.
+  NB: Only to be used by queue_chatline_scroll_to_bottom().
+**************************************************************************/
+static gboolean chatline_scroll_callback(gpointer data)
+{
+  guint *pid = data;
+  chatline_scroll_to_bottom();
+  *pid = 0;
+  return FALSE; /* Remove this idle function. */
+}
+
+/**************************************************************************
+  Adds an idle callback to scroll the chatline to the bottom.
+**************************************************************************/
+static void queue_chatline_scroll_to_bottom(void)
+{
+  static guint id = 0;
+  if (id == 0) {
+    id = g_idle_add(chatline_scroll_callback, &id);
+  }
+}
+
+/**************************************************************************
+  When the chatline text view is resized, scroll it to the bottom. This
+  prevents users from accidentally missing messages when the chatline
+  gets scrolled up a small amount and stops scrolling down automatically.
+**************************************************************************/
+static void main_message_area_size_allocate(GtkWidget *widget,
+                                            GtkAllocation *allocation,
+                                            gpointer data)
+{
+  static int old_width = 0, old_height = 0;
+  if (allocation->width != old_width
+      || allocation->height != old_height) {
+    queue_chatline_scroll_to_bottom();
+    old_width = allocation->width;
+    old_height = allocation->height;
+  }
+}
+
 /**************************************************************************
 ...
 **************************************************************************/
-static gboolean key_press_map_canvas(GtkWidget *w, GdkEventKey *ev,
-                                     gpointer data)
+static gboolean keyboard_map_canvas(GtkWidget *w, GdkEventKey *ev, gpointer data)
 {
   if ((ev->state & GDK_SHIFT_MASK)) {
     switch (ev->keyval) {
@@ -550,34 +695,11 @@ static gboolean key_press_map_canvas(GtkWidget *w, GdkEventKey *ev,
 /**************************************************************************
 ...
 **************************************************************************/
-static gboolean toplevel_key_release_handler(GtkWidget *w, GdkEventKey *ev,
-                                             gpointer data)
+static gboolean keyboard_handler(GtkWidget *w, GdkEventKey *ev, gpointer data)
 {
   /* inputline history code */
-  if (!GTK_WIDGET_MAPPED(top_vbox) || inputline_has_focus()) {
+  if (!GTK_WIDGET_MAPPED(top_vbox) || GTK_WIDGET_HAS_FOCUS(inputline)) {
     return FALSE;
-  }
-
-  if (editor_is_active()) {
-    return handle_edit_key_release(ev);
-  }
-
-  return FALSE;
-}
-
-/**************************************************************************
-  Handle a keyboard key press made in the client's toplevel window.
-**************************************************************************/
-static gboolean toplevel_key_press_handler(GtkWidget *w, GdkEventKey *ev,
-                                           gpointer data)
-{
-  /* inputline history code */
-  if (!GTK_WIDGET_MAPPED(top_vbox) || inputline_has_focus()) {
-    return FALSE;
-  }
-
-  if (editor_is_active()) {
-    return handle_edit_key_press(ev);
   }
 
   if ((ev->state & GDK_SHIFT_MASK)) {
@@ -603,7 +725,7 @@ static gboolean toplevel_key_press_handler(GtkWidget *w, GdkEventKey *ev,
      * at the bottom of other dialogs.
      */
     gtk_notebook_set_current_page(GTK_NOTEBOOK(bottom_notebook), 0);
-    inputline_grab_focus();
+    gtk_widget_grab_focus(inputline);
     return TRUE;
 
   default:
@@ -611,7 +733,7 @@ static gboolean toplevel_key_press_handler(GtkWidget *w, GdkEventKey *ev,
   };
 
   if (GTK_WIDGET_HAS_FOCUS(map_canvas)) {
-    return key_press_map_canvas(w, ev, data);
+    return keyboard_map_canvas(w, ev, data);
   }
 
 #if 0
@@ -813,8 +935,7 @@ static void populate_unit_pixmap_table(void)
   }
 
   more_arrow_pixmap
-    = gtk_image_new_from_pixbuf(sprite_get_pixbuf(get_arrow_sprite(tileset,
-						   ARROW_RIGHT)));
+    = gtk_image_new_from_pixbuf(sprite_get_pixbuf(get_arrow_sprite(tileset)));
   gtk_widget_ref(more_arrow_pixmap);
   gtk_table_attach_defaults(GTK_TABLE(table), more_arrow_pixmap, 4, 5, 1, 2);
 
@@ -872,9 +993,9 @@ void reset_unit_table(void)
 void enable_menus(bool enable)
 {
   if (enable) {
-    main_menubar = setup_menus(toplevel);
+    setup_menus(toplevel, &main_menubar);
     gtk_box_pack_start(GTK_BOX(top_vbox), main_menubar, FALSE, FALSE, 0);
-    menus_init();
+    update_menus();
     gtk_widget_show_all(main_menubar);
   } else {
     gtk_widget_destroy(main_menubar);
@@ -911,7 +1032,7 @@ static void setup_widgets(void)
 {
   GtkWidget *page, *box, *ebox, *hbox, *sbox, *align, *label;
   GtkWidget *frame, *table, *table2, *paned, *hpaned, *sw, *text;
-  GtkWidget *button, *view;
+  GtkWidget *button;
   int i;
   char buf[256];
   struct sprite *sprite;
@@ -951,8 +1072,6 @@ static void setup_widgets(void)
 
   main_tips = gtk_tooltips_new();
 
-  editgui_create_widgets();
-
   /* *** everything in the top *** */
 
   page = gtk_scrolled_window_new(NULL, NULL);
@@ -966,7 +1085,7 @@ static void setup_widgets(void)
   hbox = gtk_hbox_new(FALSE, 0);
   paned = gtk_vpaned_new();
 
-  if (gui_gtk2_small_display_layout) {
+  if (small_display_layout) {
     /* The window is divided into two horizontal panels: overview +
      * civinfo + unitinfo, main view + message window. */
     gtk_scrolled_window_add_with_viewport(GTK_SCROLLED_WINDOW(page),
@@ -1141,17 +1260,8 @@ static void setup_widgets(void)
 
   /* Selected unit status */
 
-  unit_info_box = gtk_vbox_new(FALSE, 0);
-  gtk_box_pack_start(GTK_BOX(avbox), unit_info_box, FALSE, FALSE, 0);
-
-  /* In edit mode the unit_info_box widget is replaced by the
-   * editinfobox, so we need to add a ref here so that it is
-   * not destroyed when removed from its container.
-   * See editinfobox_refresh(). */
-  g_object_ref(unit_info_box);
-
   unit_info_frame = gtk_frame_new("");
-  gtk_box_pack_start(GTK_BOX(unit_info_box), unit_info_frame, FALSE, FALSE, 0);
+  gtk_box_pack_start(GTK_BOX(avbox), unit_info_frame, FALSE, FALSE, 0);
     
   label = gtk_label_new(NULL);
   gtk_misc_set_alignment(GTK_MISC(label), 0.0, 0.5);
@@ -1160,7 +1270,7 @@ static void setup_widgets(void)
   unit_info_label = label;
 
   box = gtk_hbox_new(FALSE,0);
-  gtk_box_pack_start(GTK_BOX(unit_info_box), box, FALSE, FALSE, 0);
+  gtk_box_pack_start(GTK_BOX(avbox), box, FALSE, FALSE, 0);
 
   table = gtk_table_new(0, 0, FALSE);
   gtk_box_pack_start(GTK_BOX(box), table, FALSE, FALSE, 5);
@@ -1170,31 +1280,24 @@ static void setup_widgets(void)
 
   unit_pixmap_table = table;
 
-  /* Map canvas, editor toolbar, and scrollbars */
-
   /* The top notebook containing the map view and dialogs. */
 
   top_notebook = gtk_notebook_new();  
   gtk_notebook_set_tab_pos(GTK_NOTEBOOK(top_notebook), GTK_POS_BOTTOM);
   gtk_notebook_set_scrollable(GTK_NOTEBOOK(top_notebook), TRUE);
 
-  if (gui_gtk2_small_display_layout) {
+  if (small_display_layout) {
     gtk_paned_pack1(GTK_PANED(paned), top_notebook, TRUE, TRUE);
   } else {
     gtk_box_pack_start(GTK_BOX(hbox), top_notebook, TRUE, TRUE, 0);
   }
 
+  /* Map canvas and scrollbars */
+
   map_widget = gtk_table_new(2, 2, FALSE);
 
-  vbox = gtk_vbox_new(FALSE, 0);
-  gtk_box_pack_start(GTK_BOX(vbox), map_widget, TRUE, TRUE, 0);
-
-  gtk_box_pack_start(GTK_BOX(vbox),
-                     editgui_get_editbar()->widget,
-                     FALSE, FALSE, 4);
-
   label = gtk_label_new(_("View"));
-  gtk_notebook_append_page(GTK_NOTEBOOK(top_notebook), vbox, label);
+  gtk_notebook_append_page(GTK_NOTEBOOK(top_notebook), map_widget, label);
 
   frame = gtk_frame_new(NULL);
   gtk_table_attach(GTK_TABLE(map_widget), frame, 0, 1, 0, 1,
@@ -1251,10 +1354,7 @@ static void setup_widgets(void)
                    G_CALLBACK(mouse_scroll_mapcanvas), NULL);
 
   g_signal_connect(toplevel, "key_press_event",
-                   G_CALLBACK(toplevel_key_press_handler), NULL);
-
-  g_signal_connect(toplevel, "key_release_event",
-                   G_CALLBACK(toplevel_key_release_handler), NULL);
+                   G_CALLBACK(keyboard_handler), NULL);
 
   /* *** The message window -- this is a detachable widget *** */
 
@@ -1262,15 +1362,8 @@ static void setup_widgets(void)
   gtk_paned_pack2(GTK_PANED(paned), sbox, TRUE, TRUE);
   avbox = detached_widget_fill(sbox);
 
-  vbox = gtk_vbox_new(FALSE, 0);
-  if (ingame_votebar == NULL) {
-    ingame_votebar = voteinfo_bar_new();
-  }
-  gtk_box_pack_start(GTK_BOX(vbox), ingame_votebar, FALSE, FALSE, 2);
-  gtk_box_pack_start(GTK_BOX(avbox), vbox, TRUE, TRUE, 0);
-
   hpaned = gtk_hpaned_new();
-  gtk_box_pack_start(GTK_BOX(vbox), hpaned, TRUE, TRUE, 4);
+  gtk_box_pack_start(GTK_BOX(avbox), hpaned, TRUE, TRUE, 0);
   bottom_hpaned = hpaned;
 
   bottom_notebook = gtk_notebook_new();
@@ -1284,7 +1377,7 @@ static void setup_widgets(void)
   gtk_notebook_set_scrollable(GTK_NOTEBOOK(right_notebook), TRUE);
   g_signal_connect(right_notebook, "button-release-event",
                    G_CALLBACK(right_notebook_button_release), NULL);
-  if (gui_gtk2_split_bottom_notebook) {
+  if (split_bottom_notebook) {
     gtk_paned_pack2(GTK_PANED(hpaned), right_notebook, TRUE, TRUE);
   }
 
@@ -1301,7 +1394,6 @@ static void setup_widgets(void)
   gtk_notebook_append_page(GTK_NOTEBOOK(bottom_notebook), vbox, label);
 
   text = gtk_text_view_new_with_buffer(message_buffer);
-  set_message_buffer_view_link_handlers(text);
   gtk_text_view_set_editable(GTK_TEXT_VIEW(text), FALSE);
   gtk_container_add(GTK_CONTAINER(sw), text);
   g_signal_connect(text, "size-allocate",
@@ -1315,38 +1407,43 @@ static void setup_widgets(void)
 
   main_message_area = GTK_TEXT_VIEW(text);
 
-  chat_welcome_message();
+  set_output_window_text(
+      _("Freeciv is free software and you are welcome to distribute copies of"
+      " it\nunder certain conditions; See the \"Copying\" item on the Help"
+      " menu.\nNow.. Go give'em hell!") );
 
   /* the chat line */
-  view = inputline_toolkit_view_new();
-  gtk_box_pack_start(GTK_BOX(vbox), view, FALSE, FALSE, 3);
+  hbox = gtk_hbox_new(FALSE, 4);
+  gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 3);
+
+  inputline = gtk_entry_new();
+  g_signal_connect(inputline, "activate",
+		   G_CALLBACK(inputline_return), NULL);
+  g_signal_connect(inputline, "key_press_event",
+                   G_CALLBACK(inputline_handler), NULL);
+  gtk_box_pack_start(GTK_BOX(hbox), inputline, TRUE, TRUE, 0);
 
   button = gtk_toggle_button_new_with_label(_("Allies Only"));
   gtk_button_set_focus_on_click(GTK_BUTTON(button), FALSE);
   gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(button),
-                               gui_gtk2_allied_chat_only);
+                               allied_chat_only);
   g_signal_connect(button, "toggled",
                    G_CALLBACK(allied_chat_button_toggled), NULL);
-  inputline_toolkit_view_append_button(view, button);
+  gtk_box_pack_start(GTK_BOX(hbox), button, FALSE, FALSE, 2);
   allied_chat_toggle_button = button;
-
-  button = gtk_button_new_with_label(_("Clear links"));
-  g_signal_connect(button, "clicked",
-                   G_CALLBACK(link_marks_clear_all), NULL);
-  inputline_toolkit_view_append_button(view, button);
 
   /* Other things to take care of */
 
   gtk_widget_show_all(gtk_bin_get_child(GTK_BIN(toplevel)));
 
-  if (gui_gtk2_enable_tabs) {
+  if (enable_tabs) {
     popup_meswin_dialog(FALSE);
   }
 
   gtk_notebook_set_current_page(GTK_NOTEBOOK(top_notebook), 0);
   gtk_notebook_set_current_page(GTK_NOTEBOOK(bottom_notebook), 0);
 
-  if (!gui_gtk2_map_scrollbars) {
+  if (!map_scrollbars) {
     gtk_widget_hide(map_horizontal_scrollbar);
     gtk_widget_hide(map_vertical_scrollbar);
   }
@@ -1400,20 +1497,13 @@ void ui_init(void)
 }
 
 /**************************************************************************
-  Entry point for whole freeciv client program.
-**************************************************************************/
-int main(int argc, char **argv)
-{
-  return client_main(argc, argv);
-}
-
-/**************************************************************************
-  Called from client_main(), is what it's named.
+ called from main(), is what it's named.
 **************************************************************************/
 void ui_main(int argc, char **argv)
 {
   const gchar *home;
   guint sig;
+  GtkStyle *style;
 
   parse_options(argc, argv);
 
@@ -1465,28 +1555,24 @@ void ui_main(int argc, char **argv)
 
   civ_gc = gdk_gc_new(root_window);
 
-  client_options_iterate(poption) {
-    if (COT_FONT == option_type(poption)) {
-      /* Force to call the appropriated callback. */
-      option_changed(poption);
-    }
-  } client_options_iterate_end;
+  /* font names shouldn't be in spec files! */
+  style = gtk_rc_get_style_by_paths(gtk_settings_get_default(),
+				    "Freeciv*.city names",
+				    NULL, G_TYPE_NONE);
+  if (!style) {
+    style = gtk_style_new();
+  }
+  g_object_ref(style);
+  main_font = style->font_desc;
 
-  if (NULL == city_names_style) {
-    city_names_style = gtk_style_new();
-    freelog(LOG_ERROR,
-            "city_names_style should have been set by options.");
+  style = gtk_rc_get_style_by_paths(gtk_settings_get_default(),
+				    "Freeciv*.city productions",
+				    NULL, G_TYPE_NONE);
+  if (!style) {
+    style = gtk_style_new();
   }
-  if (NULL == city_productions_style) {
-    city_productions_style = gtk_style_new();
-    freelog(LOG_ERROR,
-            "city_productions_style should have been set by options.");
-  }
-  if (NULL == reqtree_text_style) {
-    reqtree_text_style = gtk_style_new();
-    freelog(LOG_ERROR,
-            "reqtree_text_style should have been set by options.");
-  }
+  g_object_ref(style);
+  city_productions_font = style->font_desc;
 
   set_city_names_font_sizes(city_names_font_size, city_productions_font_size);
 
@@ -1557,7 +1643,10 @@ void ui_main(int argc, char **argv)
   happiness_dialog_init();
   intel_dialog_init();
   spaceship_dialog_init();
-  chatline_init();
+
+  history_list = genlist_new();
+  history_pos = -1;
+
   init_mapcanvas_and_overview();
 
   tileset_use_prefered_theme(tileset);
@@ -1565,7 +1654,7 @@ void ui_main(int argc, char **argv)
   gtk_widget_show(toplevel);
 
   /* assumes toplevel showing */
-  set_client_state(C_S_DISCONNECTED);
+  set_client_state(C_S_PREPARING);
   
   /* assumes client_state is set */
   timer_id = g_timeout_add(TIMER_INTERVAL, timer_callback, NULL);
@@ -1589,28 +1678,22 @@ void ui_exit()
 }
 
 /**************************************************************************
-  Return our GUI type
-**************************************************************************/
-enum gui_type get_gui_type(void)
-{
-  return GUI_GTK2;
-}
-
-/**************************************************************************
  Update the connected users list at pregame state.
 **************************************************************************/
 void update_conn_list_dialog(void)
 {
-  if (client_has_player()) {
+  GtkTreeIter iter, parent;
+
+  if (game.player_ptr) {
     char *text;
 
-    if (client_player()->is_ready) {
+    if (game.player_ptr->is_ready) {
       text = _("Not _ready");
     } else {
       int num_unready = 0;
 
       players_iterate(pplayer) {
-        if (!pplayer->ai_data.control && !pplayer->is_ready) {
+	if (!pplayer->ai.control && !pplayer->is_ready) {
 	  num_unready++;
 	}
       } players_iterate_end;
@@ -1629,115 +1712,90 @@ void update_conn_list_dialog(void)
     gtk_stockbutton_set_label(ready_button, _("_Start"));
   }
 
-  /* Sensitive only if client can control player */
-  gtk_widget_set_sensitive(ready_button, can_client_control());
+  /* Observers and detached connections cannot start game. */
+  gtk_widget_set_sensitive(ready_button,
+                           (!aconnection.observer && game.player_ptr));
 
-  if (!client_has_player()) {
-    /* Nation button will attach to player */
+  if (!game.player_ptr) {
     gtk_stockbutton_set_label(nation_button, _("_Take Player"));
     gtk_widget_set_sensitive(nation_button, TRUE);
   } else {
-    /* Nation button will go to Nation selection */
     gtk_stockbutton_set_label(nation_button, _("Pick _Nation"));
-
-    /* Sensitive iff client is controlling a player. */
-    gtk_widget_set_sensitive(nation_button, game.info.is_new_game
-                             && can_client_control());
+    /* Sensitive iff client can select nation. */
+    gtk_widget_set_sensitive(nation_button,
+                             game.info.is_new_game && !aconnection.observer);
   }
 
-  if (!client_is_observer()) {
+  if (aconnection.player || !aconnection.observer) {
     gtk_stockbutton_set_label(take_button, _("_Observe"));
   } else {
     gtk_stockbutton_set_label(take_button, _("Do not _observe"));
   }
 
-  if (connection_list_view != NULL) {
-    GObject *view;
-    GtkTreeViewColumn *col;
-    bool visible;
+  gtk_tree_view_column_set_visible(record_col, (with_ggz || in_ggz));
+  gtk_tree_view_column_set_visible(rating_col, (with_ggz || in_ggz));
 
-    view = G_OBJECT(connection_list_view);
-    visible = (with_ggz || in_ggz);
-
-    col = g_object_get_data(view, "record_col");
-    if (col != NULL) {
-      gtk_tree_view_column_set_visible(col, visible);
-    }
-    col = g_object_get_data(view, "rating_col");
-    if (col != NULL) {
-      gtk_tree_view_column_set_visible(col, visible);
-    }
-  }
-
-  if (client_state() == C_S_PREPARING
-      && get_client_page() == PAGE_START
-      && connection_list_store != NULL) {
-    GtkTreeStore *store;
-    GtkTreeIter iter, parent;
-    GdkPixbuf *pixbuf;
+  if (C_S_RUNNING != client_state()) {
     bool is_ready;
-    const char *nation, *plr_name, *team;
-    char user_name[MAX_LEN_NAME + 8], rating_text[128], record_text[128];
+    const char *nation, *leader, *team;
+    char name[MAX_LEN_NAME + 4], rating_text[128], record_text[128];
     int rating, wins, losses, ties, forfeits;
-    enum cmdlevel_id access_level;
-    int conn_id;
 
-    /* Clear the old list. */
-    store = connection_list_store;
-    gtk_tree_store_clear(store);
-
-    /* Insert players into the connection list. */
+    gtk_tree_store_clear(conn_model);
     players_iterate(pplayer) {
-      conn_id = -1;
-      access_level = ALLOW_NONE;
-      pixbuf = pplayer->nation ? get_flag(pplayer->nation) : NULL;;
+      GdkPixbuf *pixbuf = pplayer->nation ? get_flag(pplayer->nation) : NULL;
+      enum cmdlevel_id access_level = ALLOW_NONE;
+      int conn_id = -1;
 
       conn_list_iterate(pplayer->connections, pconn) {
-        if (pconn->playing == pplayer && !pconn->observer) {
-          conn_id = pconn->id;
-          access_level = pconn->access_level;
-          break;
-        }
+        access_level = MAX(pconn->access_level, access_level);
       } conn_list_iterate_end;
 
-      if (pplayer->ai_data.control && !pplayer->was_created
-          && !pplayer->is_connected) {
-        /* TRANS: "<Novice AI>" */
-        my_snprintf(user_name, sizeof(user_name), _("<%s AI>"),
-                    ai_level_name(pplayer->ai_data.skill_level));
+      if (pplayer->ai.control) {
+	sz_strlcpy(name, _("<AI>"));
+	switch (pplayer->ai.skill_level) {
+	case 2:
+	  sz_strlcpy(name, _("<Novice AI>"));
+	  break;
+	case 3:
+	  sz_strlcpy(name, _("<Easy AI>"));
+	  break;
+	case 5:
+	  sz_strlcpy(name, _("<Normal AI>"));
+	  break;
+	case 7:
+	  sz_strlcpy(name, _("<Hard AI>"));
+	  break;
+	}
+      } else if (access_level <= ALLOW_BASIC) {
+	sz_strlcpy(name, pplayer->username);
       } else {
-        sz_strlcpy(user_name, pplayer->username);
-        if (access_level > ALLOW_BASIC) {
-          sz_strlcat(user_name, "*");
-        }
+        my_snprintf(name, sizeof(name), "%s*", pplayer->username);
       }
-
-      is_ready = pplayer->ai_data.control ? TRUE : pplayer->is_ready;
-
+      is_ready = pplayer->ai.control ? TRUE: pplayer->is_ready;
       if (pplayer->nation == NO_NATION_SELECTED) {
 	nation = _("Random");
         if (pplayer->was_created) {
-          plr_name = player_name(pplayer);
+          leader = player_name(pplayer);
         } else {
-          plr_name = "";
+          leader = "";
         }
       } else {
 	nation = nation_adjective_for_player(pplayer);
-	plr_name = player_name(pplayer);
+	leader = player_name(pplayer);
       }
-
-      team = pplayer->team ? team_name_translation(pplayer->team) : "";
+      team = pplayer->team ? team_get_name(pplayer->team) : "";
 
       rating_text[0] = '\0';
       if ((in_ggz || with_ggz)
-          && !pplayer->ai_data.control
+	  && !pplayer->ai.control
 	  && user_get_rating(pplayer->username, &rating)) {
 	my_snprintf(rating_text, sizeof(rating_text), "%d", rating);
       }
 
       record_text[0] = '\0';
       if ((in_ggz || with_ggz)
-          && !pplayer->ai_data.control
+	  && !pplayer->ai.control
 	  && user_get_record(pplayer->username,
 			       &wins, &losses, &ties, &forfeits)) {
 	if (forfeits == 0 && ties == 0) {
@@ -1752,18 +1810,26 @@ void update_conn_list_dialog(void)
 	}
       }
 
-      gtk_tree_store_append(store, &iter, NULL);
-      gtk_tree_store_set(store, &iter, 
-                         CL_COL_PLAYER_NUMBER, player_number(pplayer),
-                         CL_COL_USER_NAME, user_name,
-                         CL_COL_READY_STATE, is_ready,
-                         CL_COL_PLAYER_NAME, plr_name,
-			 CL_COL_FLAG, pixbuf,
-                         CL_COL_NATION, nation,
-                         CL_COL_TEAM, team,
-                         CL_COL_GGZ_RECORD, record_text,
-                         CL_COL_GGZ_RATING, rating_text,
-                         CL_COL_CONN_ID, conn_id, -1);
+      conn_list_iterate(game.est_connections, pconn) {
+	if (pconn->player == pplayer && !pconn->observer) {
+	  assert(conn_id == -1);
+	  conn_id = pconn->id;
+	}
+      } conn_list_iterate_end;
+
+      gtk_tree_store_append(conn_model, &iter, NULL);
+      gtk_tree_store_set(conn_model, &iter,
+			 0, player_number(pplayer),
+			 1, name,
+			 2, is_ready,
+			 3, leader,
+			 4, nation,
+			 5, team,
+			 6, record_text,
+			 7, rating_text,
+			 8, conn_id,
+			 9, pixbuf,
+			 -1);
       parent = iter;
 
       /* Insert observers of this player as child nodes. */
@@ -1771,37 +1837,32 @@ void update_conn_list_dialog(void)
         if (pconn->id == conn_id) {
           continue;
         }
-        gtk_tree_store_append(store, &iter, &parent);
-        gtk_tree_store_set(store, &iter,
-                           CL_COL_PLAYER_NUMBER, -1,
-                           CL_COL_USER_NAME, pconn->username,
-                           CL_COL_TEAM, _("Observer"),
-                           CL_COL_CONN_ID, pconn->id, -1);
+        gtk_tree_store_append(conn_model, &iter, &parent);
+        gtk_tree_store_set(conn_model, &iter,
+                           0, -1,
+                           1, pconn->username,
+                           5, _("Observer"),
+                           8, pconn->id, -1);
       } conn_list_iterate_end;
 
       if (pixbuf) {
-	g_object_unref(pixbuf);
+  	g_object_unref(pixbuf);
       }
     } players_iterate_end;
 
     /* Finally, insert global observers and detached connections. */
     conn_list_iterate(game.est_connections, pconn) {
-      if (pconn->playing != NULL) {
+      if (pconn->player != NULL) {
 	continue; /* Already listed above. */
       }
       team = pconn->observer ? _("Observer") : _("Detached");
-      gtk_tree_store_append(store, &iter, NULL);
-      gtk_tree_store_set(store, &iter,
-			 CL_COL_PLAYER_NUMBER, -1,
-			 CL_COL_USER_NAME, pconn->username,
-			 CL_COL_TEAM, team,
-			 CL_COL_CONN_ID, pconn->id, -1);
+      gtk_tree_store_append(conn_model, &iter, NULL);
+      gtk_tree_store_set(conn_model, &iter,
+			 0, -1,
+			 1, pconn->username,
+			 5, team,
+			 8, pconn->id, -1);
     } conn_list_iterate_end;
-
-    if (connection_list_view != NULL) {
-      GtkTreeView *view = connection_list_view;
-      gtk_tree_view_expand_all(view);
-    }
   }
 }
 
@@ -1894,7 +1955,7 @@ static gboolean select_unit_pixmap_callback(GtkWidget *w, GdkEvent *ev,
     return TRUE;
 
   punit = game_find_unit_by_number(unit_ids[i]);
-  if (NULL != punit && unit_owner(punit) == client.conn.playing) {
+  if (punit && unit_owner(punit) == game.player_ptr) {
     /* Unit shouldn't be NULL but may be owned by an ally. */
     set_unit_focus(punit);
   }
@@ -1975,14 +2036,14 @@ static void set_wait_for_writable_socket(struct connection *pc,
 {
   static bool previous_state = FALSE;
 
-  assert(pc == &client.conn);
+  assert(pc == &aconnection);
 
   if (previous_state == socket_writable)
     return;
 
   freelog(LOG_DEBUG, "set_wait_for_writable_socket(%d)", socket_writable);
   gtk_input_remove(input_id);
-  input_id = gtk_input_add_full(client.conn.sock, GDK_INPUT_READ
+  input_id = gtk_input_add_full(aconnection.sock, GDK_INPUT_READ 
 				| (socket_writable ? GDK_INPUT_WRITE : 0)
 				| GDK_INPUT_EXCEPTION,
 				get_net_input, NULL, NULL, NULL);
@@ -1997,7 +2058,7 @@ void add_net_input(int sock)
 {
   input_id = gtk_input_add_full(sock, GDK_INPUT_READ | GDK_INPUT_EXCEPTION,
 				get_net_input, NULL, NULL, NULL);
-  client.conn.notify_of_writable_data = set_wait_for_writable_socket;
+  aconnection.notify_of_writable_data = set_wait_for_writable_socket;
 }
 
 /**************************************************************************
@@ -2109,12 +2170,12 @@ void add_idle_callback(void (callback)(void *), void *data)
 }
 
 /****************************************************************************
-  Option callback for the 'gui_gtk2_split_bottom_notebook' option.
+  Option callback for the 'split_bottom_notebook' option.
 ****************************************************************************/
-static void split_bottom_notebook_callback(struct client_option *poption)
+static void split_bottom_notebook_callback(struct client_option *op)
 {
   popdown_meswin_dialog();
-  if (option_bool_get(poption)) {
+  if (*op->p_bool_value) {
     gtk_paned_pack2(GTK_PANED(bottom_hpaned), right_notebook, TRUE, TRUE);
     gtk_widget_show_all(right_notebook);
   } else {
@@ -2124,10 +2185,10 @@ static void split_bottom_notebook_callback(struct client_option *poption)
 }
 
 /****************************************************************************
-  Option callback for the 'gui_gtk2_allied_chat_only' option.
-  This updates the state of the associated toggle button.
+  Option callback for the 'allied_chat_only' option. This updates the state
+  of the associated toggle button.
 ****************************************************************************/
-static void allied_chat_only_callback(struct client_option *poption)
+static void allied_chat_only_callback(struct client_option *op)
 {
   GtkWidget *button;
 
@@ -2136,70 +2197,7 @@ static void allied_chat_only_callback(struct client_option *poption)
   g_return_if_fail(GTK_IS_TOGGLE_BUTTON(button));
 
   gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(button),
-                               option_bool_get(poption));
-}
-
-/****************************************************************************
-  Change the city names font.
-****************************************************************************/
-static void apply_city_names_font(struct client_option *poption)
-{
-  gui_update_font_full(option_font_target(poption),
-                       option_font_get(poption),
-                       &city_names_style);
-  update_city_descriptions();
-}
-
-/****************************************************************************
-  Change the city productions font.
-****************************************************************************/
-static void apply_city_productions_font(struct client_option *poption)
-{
-  gui_update_font_full(option_font_target(poption),
-                       option_font_get(poption),
-                       &city_productions_style);
-  update_city_descriptions();
-}
-
-/****************************************************************************
-  Change the city productions font.
-****************************************************************************/
-static void apply_reqtree_text_font(struct client_option *poption)
-{
-  gui_update_font_full(option_font_target(poption),
-                       option_font_get(poption),
-                       &reqtree_text_style);
-  science_dialog_update();
-}
-
-/****************************************************************************
-  Extra initializers for client options.  Here we make set the callback
-  for the specific gui-gtk-2.0 options.
-****************************************************************************/
-void gui_options_extra_init(void)
-{
-
-  struct client_option *poption;
-
-#define option_var_set_callback(var, callback)                              \
-  if ((poption = option_by_name(#var))) {                                   \
-    option_set_changed_callback(poption, callback);                         \
-  } else {                                                                  \
-    freelog(LOG_ERROR, "Didn't find option %s!", #var);                     \
-  }
-
-  option_var_set_callback(gui_gtk2_allied_chat_only,
-                          allied_chat_only_callback);
-  option_var_set_callback(gui_gtk2_split_bottom_notebook,
-                          split_bottom_notebook_callback);
-
-  option_var_set_callback(gui_gtk2_font_city_names,
-                          apply_city_names_font);
-  option_var_set_callback(gui_gtk2_font_city_productions,
-                          apply_city_productions_font);
-  option_var_set_callback(gui_gtk2_font_reqtree_text,
-                          apply_reqtree_text_font);
-#undef option_var_set_callback
+                               *op->p_bool_value);
 }
 
 /**************************************************************************
@@ -2220,7 +2218,7 @@ void refresh_chat_buttons(void)
   } else {
     gtk_widget_show(button);
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(button),
-                                 gui_gtk2_allied_chat_only);
+                                 allied_chat_only);
   }
 }
 
@@ -2230,5 +2228,5 @@ void refresh_chat_buttons(void)
 static void allied_chat_button_toggled(GtkToggleButton *button,
                                        gpointer user_data)
 {
-  gui_gtk2_allied_chat_only = gtk_toggle_button_get_active(button);
+  allied_chat_only = gtk_toggle_button_get_active(button);
 }

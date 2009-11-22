@@ -15,23 +15,15 @@
 
 #include <gtk/gtk.h>
 
-/* include */
 #include "chatline_g.h"
 
-void chatline_init(void);
+#define	MAX_CHATLINE_HISTORY 20
 
-void inputline_make_chat_link(struct tile *ptile, bool unit);
-bool inputline_has_focus(void);
-void inputline_grab_focus(void);
+extern struct genlist *history_list;
+extern int history_pos;
 
+void inputline_return(GtkEntry *w, gpointer data);
 void set_output_window_text(const char *text);
-bool chatline_is_scrolled_to_bottom(void);
-void chatline_scroll_to_bottom(bool delayed);
-
-void set_message_buffer_view_link_handlers(GtkWidget *view);
-
-GtkWidget *inputline_toolkit_view_new(void);
-void inputline_toolkit_view_append_button(GtkWidget *toolkit_view,
-                                          GtkWidget *button);
+void chatline_scroll_to_bottom(void);
 
 #endif  /* FC__CHATLINE_H */

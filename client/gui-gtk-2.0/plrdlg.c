@@ -23,20 +23,19 @@
 #include <gtk/gtk.h>
 #include <gdk/gdkkeysyms.h>
 
-/* common & utility */
 #include "diptreaty.h"
 #include "fcintl.h"
+#include "game.h"
 #include "packets.h"
 #include "nation.h"
 #include "player.h"
 #include "support.h"
 
-/* client */
 #include "chatline.h"
-#include "client_main.h"
+#include "civclient.h"
 #include "climisc.h"
+#include "clinet.h"
 #include "connectdlg_common.h"
-#include "dialogs.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "inteldlg.h"
@@ -101,7 +100,7 @@ void popdown_players_dialog(void)
 /**************************************************************************
 ...
 **************************************************************************/
-static GdkPixbuf *create_player_icon(const struct player *plr)
+static GdkPixbuf *create_player_icon(struct player *plr)
 {
   int width, height;
   GdkPixbuf *tmp;
@@ -147,8 +146,8 @@ static void update_players_menu(void)
       gtk_widget_set_sensitive(players_sship_command, FALSE);
     }
 
-    if (NULL != client.conn.playing) {
-      switch (pplayer_get_diplstate(client.conn.playing,
+    if (game.player_ptr) {
+      switch (pplayer_get_diplstate(game.player_ptr,
 				    player_by_number(plrno))->type) {
       case DS_WAR:
       case DS_NO_CONTACT:
@@ -157,7 +156,7 @@ static void update_players_menu(void)
       default:
 	gtk_widget_set_sensitive(players_war_command,
 				 can_client_issue_orders()
-				 && player_by_number(plrno) != client.conn.playing);
+				 && game.info.player_idx != plrno);
       }
     } else {
       gtk_widget_set_sensitive(players_war_command, FALSE);
@@ -165,7 +164,7 @@ static void update_players_menu(void)
 
     gtk_widget_set_sensitive(players_vision_command,
 			     can_client_issue_orders()
-			     && gives_shared_vision(client.conn.playing, plr));
+			     && gives_shared_vision(game.player_ptr, plr));
 
     gtk_widget_set_sensitive(players_meet_command, can_meet_with_player(plr));
     gtk_widget_set_sensitive(players_int_command, can_intel_with_player(plr));
@@ -206,11 +205,11 @@ static gboolean button_press_callback(GtkTreeView *view, GdkEventButton *ev)
       plr = player_by_number(id);
 
       if (ev->button == 1) {
-        if (can_intel_with_player(plr)) {
+	if (can_intel_with_player(plr)) {
 	  popup_intel_dialog(plr);
 	}
       } else {
-	dsend_packet_diplomacy_init_meeting_req(&client.conn, id);
+	dsend_packet_diplomacy_init_meeting_req(&aconnection, id);
       }
     }
   }
@@ -231,11 +230,11 @@ static gint plrdlg_sort_func(GtkTreeModel *model,
   n = GPOINTER_TO_INT(data);
 
   gtk_tree_model_get_value(model, a, num_player_dlg_columns + 2, &value);
-  player1 = player_by_number(g_value_get_int(&value));
+  player1 = &game.players[g_value_get_int(&value)];
   g_value_unset(&value);
   
   gtk_tree_model_get_value(model, b, num_player_dlg_columns + 2, &value);
-  player2 = player_by_number(g_value_get_int(&value));
+  player2 = &game.players[g_value_get_int(&value)];
   g_value_unset(&value);
   
   return player_dlg_columns[n].sort_func(player1, player2);
@@ -401,7 +400,6 @@ void create_players_dialog(void)
   int i;
   GtkWidget *sep, *sw;
   GtkWidget *menubar, *menu, *item, *vbox;
-  enum ai_level level;
 
   gui_dialog_new(&players_dialog_shell, GTK_NOTEBOOK(top_notebook), NULL);
   /* TRANS: Nations report title */
@@ -416,7 +414,7 @@ void create_players_dialog(void)
 
   players_list = gtk_tree_view_new_with_model(GTK_TREE_MODEL(store));
   g_object_unref(store);
-  gtk_widget_set_name(players_list, "small_font");
+  gtk_widget_set_name(players_list, "small font");
 
   players_selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(players_list));
   g_signal_connect(players_selection, "changed",
@@ -539,16 +537,11 @@ void create_players_dialog(void)
   sep = gtk_separator_menu_item_new();
   gtk_menu_shell_append(GTK_MENU_SHELL(menu), sep);
 
-  for (level = 0; level < AI_LEVEL_LAST; level++) {
-    if (is_settable_ai_level(level)) {
-      const char *level_name = ai_level_name(level);
-
-      item = gtk_menu_item_new_with_label(level_name);
-      g_signal_connect(item, "activate",
-                       G_CALLBACK(players_ai_skill_callback),
-                       GUINT_TO_POINTER(level));
-      gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
-    }
+  for (i = 0; i < NUM_SKILL_LEVELS; i++) {
+    item = gtk_menu_item_new_with_label(_(skill_level_names[i]));
+    g_signal_connect(item, "activate",
+	G_CALLBACK(players_ai_skill_callback), GUINT_TO_POINTER(i));
+    gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
   }
   gtk_widget_show_all(menu);
 
@@ -609,54 +602,49 @@ GdkPixbuf *get_flag(const struct nation_type *nation)
 
 
 /**************************************************************************
-  Fills the player list with the information for 'pplayer' at the row
-  given by 'it'.
+ Builds the text for the cells of a row in the player report. If
+ update is TRUE, only the changable entries are build.
 **************************************************************************/
-static void fill_row(GtkTreeIter *it, const struct player *pplayer)
+static void build_row(GtkTreeIter *it, int i)
 {
-  struct player_dlg_column* pcol;
+  struct player *plr = player_by_number(i);
   GdkPixbuf *pixbuf;
-  int style = PANGO_STYLE_NORMAL, weight = PANGO_WEIGHT_NORMAL;
+  gint style = PANGO_STYLE_NORMAL, weight = PANGO_WEIGHT_NORMAL;
   int k;
-
-  if (!it || !pplayer) {
-    return;
-  }
+  gchar *p;
 
   for (k = 0; k < num_player_dlg_columns; k++) {
-    pcol = &player_dlg_columns[k];
-    switch (pcol->type) {
-    case COL_TEXT:
-    case COL_RIGHT_TEXT:
-      gtk_list_store_set(store, it, k, pcol->func(pplayer), -1);
-      break;
-    case COL_FLAG:
-      pixbuf = get_flag(nation_of_player(pplayer));
-      if (pixbuf != NULL) {
+    struct player_dlg_column* pcol = &player_dlg_columns[k];
+    switch(pcol->type) {
+      case COL_TEXT:
+      case COL_RIGHT_TEXT:
+        p = (gchar*)(pcol->func(plr));
+	gtk_list_store_set(store, it, k, p, -1);
+	break;
+      case COL_FLAG:
+        pixbuf = get_flag(nation_of_player(plr));
         gtk_list_store_set(store, it, k, pixbuf, -1);
         g_object_unref(pixbuf);
-      }
-      break;
-    case COL_COLOR:
-      pixbuf = create_player_icon(pplayer);
-      if (pixbuf != NULL) {
+	break;
+      case COL_COLOR:
+	pixbuf = create_player_icon(plr);
         gtk_list_store_set(store, it, k, pixbuf, -1);
-        g_object_unref(pixbuf);
-      }
-      break;
-    case COL_BOOLEAN:
-      gtk_list_store_set(store, it, k, pcol->bool_func(pplayer), -1);
-      break;
+	g_object_unref(pixbuf);
+	break;
+      case COL_BOOLEAN:
+        gtk_list_store_set(store, it, k, (gboolean)pcol->bool_func(plr), -1);
+	break;
     }
   }
 
   /* The playerid */
-  gtk_list_store_set(store, it, ncolumns - 1,
-                     player_number(pplayer), -1);
+  gtk_list_store_set(store, it,
+    ncolumns - 1, (gint)i,
+    -1);
 
    /* now add some eye candy ... */
-  if (client_has_player()) {
-    switch (pplayer_get_diplstate(client_player(), pplayer)->type) {
+  if (game.player_ptr) {
+    switch (pplayer_get_diplstate(game.player_ptr, plr)->type) {
     case DS_WAR:
       weight = PANGO_WEIGHT_NORMAL;
       style = PANGO_STYLE_ITALIC;
@@ -674,49 +662,83 @@ static void fill_row(GtkTreeIter *it, const struct player *pplayer)
       style = PANGO_STYLE_NORMAL;
       break;
     case DS_LAST:
-    default:
       assert(0);
       break;
     }
   }
-
-  gtk_list_store_set(store, it, num_player_dlg_columns, style,
-                     num_player_dlg_columns + 1, weight, -1);
+   gtk_list_store_set(store, it,
+       num_player_dlg_columns, style,
+       num_player_dlg_columns + 1, weight,
+       -1);
 }
 
 /**************************************************************************
-  Return TRUE if the player should be shown in the player list.
+...
 **************************************************************************/
-static bool player_should_be_shown(const struct player *pplayer)
-{
-  return NULL != pplayer && player_slot_is_used(pplayer)
+static bool player_should_be_shown(int plrno) {
+  return is_valid_player_id(plrno)
 	 && (player_dlg_show_dead_players
-	     || pplayer->is_alive)
-	 && (!is_barbarian(pplayer));
+	     || game.players[plrno].is_alive)
+	 && (!is_barbarian(&game.players[plrno]));
 }
 
 /**************************************************************************
-  Clear and refill the entire player list.
+...
 **************************************************************************/
 void update_players_dialog(void)
 {
-  GtkTreeIter iter;
+  if (players_dialog_shell && !is_plrdlg_frozen()) {
+    gboolean exists[game.info.nplayers];
+    gint i;
+    GtkTreeIter it, it_next;
 
-  if (!players_dialog_shell || is_plrdlg_frozen()) {
-    return;
-  }
-
-  gtk_list_store_clear(store);
-  players_iterate(pplayer) {
-    if (!player_should_be_shown(pplayer)) {
-      continue;
+    for (i = 0; i < game.info.nplayers; i++) {
+      exists[i] = FALSE;
     }
-    gtk_list_store_append(store, &iter);
-    fill_row(&iter, pplayer);
-  } players_iterate_end;
 
-  update_players_menu();
-  update_views();
+    if (gtk_tree_model_get_iter_first(model, &it)) {
+      gint plrno;
+      bool more;
+
+      do {
+	it_next = it;
+	more = gtk_tree_model_iter_next(model, &it_next);
+
+	gtk_tree_model_get(model, &it, ncolumns - 1, &plrno, -1);
+
+	/*
+	 * The nation already had a row in the player report. In that
+	 * case we just update the row. If player is dead we remove him
+	 * if necessary.
+	 */
+	if (player_should_be_shown(plrno)) {
+	  exists[plrno] = TRUE;
+	  build_row(&it, plrno);
+	} else {
+	  gtk_list_store_remove(store, &it);
+	}
+	it = it_next;
+      } while (more);
+    }
+
+    players_iterate(pplayer) {
+      /* skip barbarians */
+      if (player_should_be_shown(pplayer->player_no)) {
+	if (!exists[pplayer->player_no]) {
+	  /* 
+	   * A nation is not in the player report yet. This happens when
+	   * the report is just opened and after a split.
+	   */
+	  gtk_list_store_append(store, &it);
+
+	  build_row(&it, pplayer->player_no);
+	}
+      }
+    } players_iterate_end;
+
+    update_players_menu();
+    update_views();
+  }
 }
 
 /**************************************************************************
@@ -733,7 +755,7 @@ void players_meet_callback(GtkMenuItem *item, gpointer data)
 
     gtk_tree_model_get(model, &it, ncolumns - 1, &plrno, -1);
 
-    dsend_packet_diplomacy_init_meeting_req(&client.conn, plrno);
+    dsend_packet_diplomacy_init_meeting_req(&aconnection, plrno);
   }
 }
 
@@ -751,7 +773,7 @@ void players_war_callback(GtkMenuItem *item, gpointer data)
     gtk_tree_model_get(model, &it, ncolumns - 1, &plrno, -1);
 
     /* can be any pact clause */
-    dsend_packet_diplomacy_cancel_pact(&client.conn, plrno,
+    dsend_packet_diplomacy_cancel_pact(&aconnection, plrno,
 				       CLAUSE_CEASEFIRE);
   }
 }
@@ -768,7 +790,7 @@ void players_vision_callback(GtkMenuItem *item, gpointer data)
     gint plrno;
 
     gtk_tree_model_get(model, &it, ncolumns - 1, &plrno, -1);
-    dsend_packet_diplomacy_cancel_pact(&client.conn, plrno, CLAUSE_VISION);
+    dsend_packet_diplomacy_cancel_pact(&aconnection, plrno, CLAUSE_VISION);
   }
 }
 
@@ -785,8 +807,8 @@ void players_intel_callback(GtkMenuItem *item, gpointer data)
 
     gtk_tree_model_get(model, &it, ncolumns - 1, &plrno, -1);
 
-    if (can_intel_with_player(player_by_number(plrno))) {
-      popup_intel_dialog(player_by_number(plrno));
+    if (can_intel_with_player(&game.players[plrno])) {
+      popup_intel_dialog(&game.players[plrno]);
     }
   }
 }
@@ -803,7 +825,7 @@ void players_sship_callback(GtkMenuItem *item, gpointer data)
     gint plrno;
 
     gtk_tree_model_get(model, &it, ncolumns - 1, &plrno, -1);
-    popup_spaceship_dialog(player_by_number(plrno));
+    popup_spaceship_dialog(&game.players[plrno]);
   }
 }
 
@@ -817,10 +839,13 @@ static void players_ai_toggle_callback(GtkMenuItem *item, gpointer data)
 
   if (gtk_tree_selection_get_selected(players_selection, &model, &it)) {
     gint plrno;
+    char buf[512];
 
     gtk_tree_model_get(model, &it, ncolumns - 1, &plrno, -1);
 
-    send_chat_printf("/aitoggle \"%s\"", player_name(player_by_number(plrno)));
+    my_snprintf(buf, sizeof(buf), "/aitoggle \"%s\"",
+                player_name(player_by_number(plrno)));
+    send_chat(buf);
   }
 }
 
@@ -834,12 +859,14 @@ static void players_ai_skill_callback(GtkMenuItem *item, gpointer data)
 
   if (gtk_tree_selection_get_selected(players_selection, &model, &it)) {
     gint plrno;
+    char buf[512];
 
     gtk_tree_model_get(model, &it, ncolumns - 1, &plrno, -1);
 
-    send_chat_printf("/%s %s",
-                     ai_level_cmd(GPOINTER_TO_UINT(data)),
-                     player_name(player_by_number(plrno)));
+    my_snprintf(buf, sizeof(buf), "/%s %s",
+                skill_level_names[GPOINTER_TO_UINT(data)],
+                player_name(player_by_number(plrno)));
+    send_chat(buf);
   }
 }
 

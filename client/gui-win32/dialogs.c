@@ -23,7 +23,6 @@
 #include <windowsx.h>
 #include <commctrl.h>
 
-/* common & utility */
 #include "capability.h"
 #include "fcintl.h"
 #include "game.h"
@@ -37,8 +36,8 @@
 #include "support.h"
 #include "unitlist.h"
  
-/* client */
-#include "client_main.h"
+#include "civclient.h"
+#include "clinet.h"
 #include "control.h"
 #include "tilespec.h"
 #include "packhand.h"
@@ -173,8 +172,7 @@ static LONG CALLBACK notify_goto_proc(HWND dlg,UINT message,
   location.
 **************************************************************************/
 void popup_notify_goto_dialog(const char *headline, const char *lines,
-                              const struct text_tag_list *tags,
-                              struct tile *ptile)
+			      struct tile *ptile)
 {
   struct fcwin_box *hbox;
   struct fcwin_box *vbox;
@@ -194,17 +192,6 @@ void popup_notify_goto_dialog(const char *headline, const char *lines,
   fcwin_box_add_box(vbox,hbox,FALSE,FALSE,10);
   fcwin_set_box(dlg,vbox);
   ShowWindow(dlg,SW_SHOWNORMAL);
-}
-
-/**************************************************************************
-  Popup a dialog to display connection message from server.
-**************************************************************************/
-void popup_connect_msg(const char *headline, const char *message)
-{
-  /* FIXME: Needs proper implementation.
-   *        Now just puts to chat window so message is not completely lost. */
-
-  output_window_append(ftc_client, message);
 }
 
 /**************************************************************************
@@ -297,15 +284,13 @@ static void update_radio_buttons(int id)
 **************************************************************************/
 static void update_nation_info()
 {
-  /*
+/*
   int i;
   char buf[255];
   struct nation_type *nation = nation_by_number(selected_nation);
  
   buf[0] = '\0';
-  */
 
-/*
   for (i = 0; i < nation->num_groups; i++) {
     sz_strlcat(buf, nation->groups[i]->name);
     if (i != nation->num_groups - 1) {
@@ -324,7 +309,7 @@ static void update_nation_info()
 **************************************************************************/
 static void select_random_race(HWND hWnd)
 {
-  selected_nation = myrand(nation_count());
+  selected_nation = myrand(game.control.nation_count);
   update_nation_info();
   update_radio_buttons(0);
 }
@@ -370,10 +355,10 @@ static void do_select(HWND hWnd)
 		   name,MAX_LEN_NAME);
 
   if (strlen(name) == 0) {
-    output_window_append(ftc_client, _("You must type a legal name."));
+    append_output_window(_("You must type a legal name."));
     return;
   }
-  dsend_packet_nation_select_req(&client.conn, player_number(races_player),
+  dsend_packet_nation_select_req(&aconnection, races_player->player_no,
 				 selected_nation, is_male, name, city_style);
 
   popdown_races_dialog();
@@ -499,8 +484,8 @@ static void populate_nation_listview(struct nation_group* group, HWND listview)
      *        const strings. Now we just cast const away */
     strings[0] = (char *) nation_adjective_translation(pnation);
 
-    fcwin_listview_add_row(listview, nation_index(pnation), 1, strings);
-    visible_nations[n++] = nation_index(pnation);
+    fcwin_listview_add_row(listview, pnation->index, 1, strings);
+    visible_nations[n++] = pnation->index;
 
   } nations_iterate_end;
 
@@ -706,7 +691,7 @@ static LONG APIENTRY unitselect_proc(HWND hWnd, UINT message,
 	  break;
 	case UNITSELECT_READY_ALL:
 	  for(i=0; i<unit_select_no; i++) {
-	    struct unit *punit = player_find_unit_by_id(client.conn.playing,
+	    struct unit *punit = player_find_unit_by_id(game.player_ptr,
 							unit_select_ids[i]);
 	    if(punit) {
 	      set_unit_focus(punit);
@@ -717,9 +702,9 @@ static LONG APIENTRY unitselect_proc(HWND hWnd, UINT message,
 	  id-=UNITSELECT_UNITS_BASE;
 	  if ((id>=0)&&(id<100))
 	    {
-	      struct unit *punit = player_find_unit_by_id(client.conn.playing,
-							  unit_select_ids[id]);
-	      if (NULL != punit && unit_owner(punit) == client.conn.playing) {
+	      struct unit *punit=player_find_unit_by_id(game.player_ptr,
+							unit_select_ids[id]);
+	      if (punit && unit_owner(punit) == game.player_ptr) {
 		set_unit_focus(punit);
 	      }   
 	    }
@@ -812,10 +797,9 @@ popup_unit_select_dialog(struct tile *ptile)
     {
       struct unit *punit = unit_list[i];
       struct unit_type *punittemp=unit_type(punit);
-      struct city *pcity = player_find_city_by_id(client.conn.playing, punit->homecity);
-
+      struct city *pcity;
       unit_select_ids[i]=punit->id;
-
+      pcity=player_find_city_by_id(game.player_ptr, punit->homecity);
       my_snprintf(buffer, sizeof(buffer), "%s(%s)\n%s",
 		  utype_name_translation(punittemp),
 		  pcity ? city_name(pcity) : "",
@@ -842,7 +826,7 @@ popup_unit_select_dialog(struct tile *ptile)
       struct canvas canvas_store;
       struct unit *punit=unit_list[i];
       struct unit_type *punittemp=unit_type(punit);
-      struct city *pcity = player_find_city_by_id(client.conn.playing, punit->homecity);
+      struct city *pcity;
 
       canvas_store.type = CANVAS_DC;
       canvas_store.hdc = unitsel_dc;
@@ -850,6 +834,7 @@ popup_unit_select_dialog(struct tile *ptile)
       canvas_store.wnd = NULL;
       canvas_store.tmp = NULL;
 
+      pcity=player_find_city_by_id(game.player_ptr, punit->homecity);
       my_snprintf(buffer, sizeof(buffer), "%s(%s)\n%s",
 		  utype_name_translation(punittemp),
 		  pcity ? city_name(pcity) : "",
@@ -932,22 +917,25 @@ void races_toggles_set_sensitive(void)
   int i;
   BOOL changed;
 
-  for (i = 0; i < nation_count(); i++) {
+  for (i = 0; i < game.control.nation_count; i++) {
     EnableWindow(GetDlgItem(races_dlg, ID_RACESDLG_NATION_BASE + i), TRUE);
   }
 
   changed = FALSE;
 
-  nations_iterate(nation) {
-    if (!nation->is_available || nation->player) {
+  for (i = 0; i < game.control.nation_count; i++) {
+    struct nation_type *nation;
+    nation = nation_by_number(i);
+
+    if (!(nation->is_unavailable || nation->is_used)) {
       continue;
     }
 
-    EnableWindow(GetDlgItem(races_dlg, ID_RACESDLG_NATION_BASE + nation_index(nation)),
+    EnableWindow(GetDlgItem(races_dlg, ID_RACESDLG_NATION_BASE + i),
 		 FALSE);
 
     changed = TRUE;
-  } nations_iterate_end;
+  }
 
   if (changed) {
     select_random_race(races_dlg);
@@ -983,7 +971,7 @@ static void revolution_callback_no(HWND w, void * data)
 *****************************************************************/
 void popup_revolution_dialog(struct government *gov)
 {
-  if (client.conn.playing->revolution_finishes < game.info.turn) {
+  if (game.player_ptr->revolution_finishes < game.info.turn) {
     popup_message_dialog(NULL, _("Revolution!"),
 			 _("You say you wanna revolution?"),
 			 _("_Yes"),revolution_callback_yes, gov,
@@ -1003,7 +991,7 @@ void popup_revolution_dialog(struct government *gov)
 *****************************************************************/
 static void caravan_establish_trade_callback(HWND w, void * data)
 {
-  dsend_packet_unit_establish_trade(&client.conn, caravan_unit_id);
+  dsend_packet_unit_establish_trade(&aconnection, caravan_unit_id);
  
   destroy_message_dialog(w);
   caravan_dialog = 0;
@@ -1016,7 +1004,7 @@ static void caravan_establish_trade_callback(HWND w, void * data)
 *****************************************************************/
 static void caravan_help_build_wonder_callback(HWND w, void * data)
 {
-  dsend_packet_unit_help_build_wonder(&client.conn, caravan_unit_id);
+  dsend_packet_unit_help_build_wonder(&aconnection, caravan_unit_id);
  
   destroy_message_dialog(w);
   caravan_dialog = 0;
@@ -1060,7 +1048,7 @@ popup_caravan_dialog(struct unit *punit,
   caravan_dialog=popup_message_dialog(NULL,
                            /*"caravandialog"*/_("Your Caravan Has Arrived"),
                            buf,
-                           (can_establish ? _("Establish _Trade route") :
+                           (can_establish ? _("Establish _Traderoute") :
   			   _("Enter Marketplace")),caravan_establish_trade_callback, 0,
                            _("Help build _Wonder"),caravan_help_build_wonder_callback, 0,
                            _("_Keep moving"),caravan_keep_moving_callback, 0,
@@ -1186,19 +1174,20 @@ static void spy_poison_callback(HWND w, void * data)
 static void create_advances_list(struct player *pplayer,
                                 struct player *pvictim, HWND lb)
 {
-  int j = 0;
-
+  int i, j;
+  j = 0;
   advance_type[j] = -1;
   
   if (pvictim) { /* you don't want to know what lag can do -- Syela */
-    advance_index_iterate(A_FIRST, i) {
-      if(player_invention_state(pvictim, i)==TECH_KNOWN && 
-         (player_invention_state(pplayer, i)==TECH_UNKNOWN || 
-          player_invention_state(pplayer, i)==TECH_PREREQS_KNOWN)) {
-	ListBox_AddString(lb,advance_name_translation(advance_by_number(i)));
+    
+    for(i=A_FIRST; i<game.control.num_tech_types; i++) {
+      if(get_invention(pvictim, i)==TECH_KNOWN && 
+         (get_invention(pplayer, i)==TECH_UNKNOWN || 
+          get_invention(pplayer, i)==TECH_REACHABLE)) {
+	ListBox_AddString(lb,advance_name_translation(i));
         advance_type[j++] = i;
       }
-    } advance_index_iterate_end;
+    }
     
     if(j > 0) {
       ListBox_AddString(lb,_("At Spy's Discretion"));
@@ -1303,7 +1292,7 @@ pvictim to NULL and account for !pvictim in create_advances_list. -- Syela */
     fcwin_box_add_button(hbox,_("Steal"),IDOK,0,TRUE,TRUE,10);
     EnableWindow(GetDlgItem(spy_tech_dialog,IDOK),FALSE);
     fcwin_box_add_box(vbox,hbox,FALSE,FALSE,5);
-    create_advances_list(client.conn.playing, pvictim, lb);
+    create_advances_list(game.player_ptr, pvictim, lb);
     fcwin_set_box(spy_tech_dialog,vbox);
     ShowWindow(spy_tech_dialog,SW_SHOWNORMAL);
   }
@@ -1374,10 +1363,10 @@ void popup_bribe_dialog(struct unit *punit, int cost)
     popup_message_dialog(root_window, _("Ooops..."),
                          _("This unit cannot be bribed!"),
                          diplomat_bribe_no_callback, 0, 0);
-  } else if (cost <= client.conn.playing->economic.gold) {
+  } else if (game.player_ptr->economic.gold >= cost) {
     my_snprintf(buf, sizeof(buf),
                 _("Bribe unit for %d gold?\nTreasury contains %d gold."), 
-                cost, client.conn.playing->economic.gold);
+                cost, game.player_ptr->economic.gold);
     popup_message_dialog(root_window, /*"diplomatbribedialog"*/_("Bribe Enemy Unit"
 ), buf,
                         _("_Yes"), diplomat_bribe_yes_callback, 0,
@@ -1386,7 +1375,7 @@ void popup_bribe_dialog(struct unit *punit, int cost)
     my_snprintf(buf, sizeof(buf),
                 _("Bribing the unit costs %d gold.\n"
                   "Treasury contains %d gold."), 
-                cost, client.conn.playing->economic.gold);
+                cost, game.player_ptr->economic.gold);
     popup_message_dialog(root_window, /*"diplomatnogolddialog"*/
 	    	_("Traitors Demand Too Much!"), buf, _("Darn"),
 		diplomat_bribe_no_callback, 0, 0);
@@ -1404,12 +1393,12 @@ static void create_improvements_list(struct player *pplayer,
   ListBox_AddString(lb,_("City Production"));
   improvement_type[j++] = -1;
   
-  improvement_iterate(pimprove) {
-    if (pimprove->sabotage > 0) {
-      ListBox_AddString(lb,city_improvement_name_translation(pcity, pimprove));
-      improvement_type[j++] = improvement_index(pimprove);
+  impr_type_iterate(i) {
+    if (improvement_by_number(i)->sabotage > 0) {
+      ListBox_AddString(lb,get_impr_name_ex(pcity,i));
+      improvement_type[j++] = i;
     }  
-  } improvement_iterate_end;
+  } impr_type_iterate_end;
 
   if(j > 1) {
     ListBox_AddString(lb,_("At Spy's Discretion"));
@@ -1503,7 +1492,7 @@ void popup_sabotage_dialog(struct city *pcity)
     fcwin_box_add_button(hbox,_("Sabotage"),IDOK,0,TRUE,TRUE,10);
     EnableWindow(GetDlgItem(spy_sabotage_dialog,IDOK),FALSE);
     fcwin_box_add_box(vbox,hbox,FALSE,FALSE,5);
-    create_improvements_list(client.conn.playing, pcity, lb);
+    create_improvements_list(game.player_ptr, pcity, lb);
     fcwin_set_box(spy_sabotage_dialog,vbox);
     ShowWindow(spy_sabotage_dialog,SW_SHOWNORMAL);
   }
@@ -1560,10 +1549,10 @@ void popup_incite_dialog(struct city *pcity, int cost)
 		city_name(pcity));
     popup_message_dialog(root_window, _("City can't be incited!"), buf,
 			 _("Darn"), diplomat_incite_no_callback, 0, 0);
-  } else if (cost <= client.conn.playing->economic.gold) {
+  } else if (game.player_ptr->economic.gold >= cost) {
     my_snprintf(buf, sizeof(buf),
 		_("Incite a revolt for %d gold?\nTreasury contains %d gold."), 
-		cost, client.conn.playing->economic.gold);
+		cost, game.player_ptr->economic.gold);
    diplomat_target_id = pcity->id;
    popup_message_dialog(root_window, /*"diplomatrevoltdialog"*/_("Incite a Revolt!"), buf,
 		       _("_Yes"), diplomat_incite_yes_callback, 0,
@@ -1572,7 +1561,7 @@ void popup_incite_dialog(struct city *pcity, int cost)
     my_snprintf(buf, sizeof(buf),
 		_("Inciting a revolt costs %d gold.\n"
 		  "Treasury contains %d gold."), 
-		cost, client.conn.playing->economic.gold);
+		cost, game.player_ptr->economic.gold);
    popup_message_dialog(root_window, /*"diplomatnogolddialog"*/_("Traitors Demand Too Much!"), buf,
 		       _("Darn"), diplomat_incite_no_callback, 0, 
 		       0);
@@ -1604,7 +1593,7 @@ void popup_diplomat_dialog(struct unit *punit, struct tile *ptile)
 
   diplomat_id=punit->id;
 
-  if ((pcity = tile_city(ptile))){
+  if ((pcity = tile_get_city(ptile))){
     /* Spy/Diplomat acting against a city */
 
     diplomat_target_id=pcity->id;
@@ -1727,20 +1716,12 @@ static LONG CALLBACK pillage_proc(HWND dlg,UINT message,
     id=LOWORD(wParam);
     if (id==IDCANCEL) {
       DestroyWindow(dlg);
-    } else if (id >= ID_PILLAGE_BASE) {
-      struct unit *punit = game_find_unit_by_number(unit_to_use_to_pillage);
+    } else if (id>=ID_PILLAGE_BASE) {
+      struct unit *punit=game_find_unit_by_number(unit_to_use_to_pillage);
       if (punit) {
-        Base_type_id pillage_base = -1;
-        int what = id - ID_PILLAGE_BASE;
-
-        if (what > S_LAST) {
-          pillage_base = what - S_LAST - 1;
-          what = S_LAST;
-        }
-
 	request_new_unit_activity_targeted(punit,
 					   ACTIVITY_PILLAGE,
-					   what, pillage_base);
+					   id-ID_PILLAGE_BASE);
 	DestroyWindow(dlg);
       }
     }
@@ -1755,16 +1736,14 @@ static LONG CALLBACK pillage_proc(HWND dlg,UINT message,
 
 **************************************************************************/
 void popup_pillage_dialog(struct unit *punit,
-			  bv_special may_pillage,
-                          bv_bases bases)
+			  bv_special may_pillage)
 {
   HWND dlg;
   struct fcwin_box *vbox;
-  int what;
-  enum tile_special_type prereq;
+  enum tile_special_type what, prereq;
 
   if (!is_showing_pillage_dialog) {
-    is_showing_pillage_dialog = TRUE;
+    is_showing_pillage_dialog = TRUE;   
     unit_to_use_to_pillage = punit->id;
     dlg=fcwin_create_layouted_window(pillage_proc,_("What To Pillage"),
 				     WS_OVERLAPPEDWINDOW,
@@ -1775,30 +1754,19 @@ void popup_pillage_dialog(struct unit *punit,
     vbox=fcwin_vbox_new(dlg,FALSE);
     fcwin_box_add_static(vbox,_("Select what to pillage:"),0,SS_LEFT,
 			 FALSE,FALSE,10);
-    while ((what = get_preferred_pillage(may_pillage, bases)) != S_LAST) {
+    while ((what = get_preferred_pillage(may_pillage)) != S_LAST) {
       bv_special what_bv;
-      bv_bases what_base;
 
       BV_CLR_ALL(what_bv);
-      BV_CLR_ALL(what_base);
+      BV_SET(what_bv, what);
 
-      if (what > S_LAST) {
-        BV_SET(what_base, what - S_LAST - 1);
-      } else {
-        BV_SET(what_bv, what);
-      }
+      fcwin_box_add_button(vbox, get_infrastructure_text(what_bv),
+			   ID_PILLAGE_BASE+what,0,TRUE,FALSE,5);
 
-      fcwin_box_add_button(vbox, get_infrastructure_text(what_bv, what_base),
-                           ID_PILLAGE_BASE+what,0,TRUE,FALSE,5);
-
-      if (what > S_LAST) {
-        BV_CLR(bases, what - S_LAST - 1);
-      } else {
-        clear_special(&may_pillage, what);
-        prereq = get_infrastructure_prereq(what);
-        if (prereq != S_LAST) {
-          clear_special(&may_pillage, prereq);
-        }
+      clear_special(&may_pillage, what);
+      prereq = get_infrastructure_prereq(what);
+      if (prereq != S_LAST) {
+	clear_special(&may_pillage, prereq);
       }
     }
     fcwin_box_add_button(vbox,_("Cancel"),IDCANCEL,0,TRUE,FALSE,5);

@@ -6,8 +6,9 @@
 AC_DEFUN([FC_XAW_CLIENT],
 [
   AC_REQUIRE([AC_PATH_XTRA])
-  if test "x$gui_xaw" = "xyes" || test "x$client" = "xall" ||
-     test "x$client" = "xauto" ; then
+  if test "$client" = yes ; then
+    AC_MSG_WARN([Not checking for XAW; use --enable-client=xaw to enable])
+  elif test "$client" = xaw ; then
     dnl Checks for X:
     AC_PATH_XTRA
 
@@ -34,15 +35,13 @@ AC_DEFUN([FC_XAW_CLIENT],
       [
         AC_CHECK_LIB([png], [png_read_image], [X_LIBS="$X_LIBS -lpng -lm"],
         [
-          FC_NO_CLIENT([xaw], [Could not find PNG library.])
-          no_png=yes
+          AC_MSG_ERROR([Could not find PNG library.])
         ])
       ])
       AC_CHECK_HEADER([png.h],,
       [
-        FC_NO_CLIENT([xaw], [libpng found but not png.h.
+	AC_MSG_ERROR([libpng found but not png.h.
 You may need to install a libpng \"development\" package.])
-        no_png=yes
       ])
     ])
 
@@ -84,23 +83,26 @@ You may need to install a libpng \"development\" package.])
 	dnl Xaw or Xaw3d:
 	if test -n "$WITH_XAW3D"; then
 	  FC_CHECK_X_LIB(Xaw3d, main, , AC_MSG_ERROR(did not find Xaw3d library))
-        else
+	elif test "$client" = "xaw"; then
 	  FC_CHECK_X_LIB(Xaw, main, , AC_MSG_ERROR(did not find Xaw library))
+	else
+	  FC_CHECK_X_LIB(Xaw3d, main, , noXaw3d=1)
+	  if test -n "$noXaw3d"; then
+	    FC_CHECK_X_LIB(Xaw, main, ,
+	      AC_MSG_ERROR(did not find either Xaw or Xaw3d library))
+	  fi
 	fi
 
-	GUI_xaw_CFLAGS="$X_CFLAGS"
-	GUI_xaw_LIBS="$X_LIBS $X_EXTRA_LIBS"
+	CLIENT_CFLAGS="$X_CFLAGS"
+	CLIENT_LIBS="$X_LIBS $X_EXTRA_LIBS"
 
 	found_client=yes
       fi
     fi
 
-    if test "x$found_client" = "xyes" && test "x$no_png" != "xyes"; then
-      gui_xaw=yes
-      if test "x$client" = "xauto" ; then
-        client=yes
-      fi
-    elif test "x$gui_xaw" = "xyes"; then
+    if test "x$found_client" = "xyes"; then
+      client=xaw
+    elif test "$client" = "xaw"; then
       if test "x$haveXpm" = "xno"; then
 	AC_MSG_ERROR(specified client 'xaw' not configurable -- need Xpm library and development headers; perhaps try/adjust --with-xpm-lib)
       else

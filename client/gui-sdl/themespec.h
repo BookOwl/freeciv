@@ -38,10 +38,12 @@ void theme_free_sprites(struct theme *t);
 
 void themespec_try_read(const char *theme_name);
 void themespec_reread(const char *theme_name);
+void themespec_reread_callback(struct client_option *option);
 
-struct sprite* theme_lookup_sprite_tag_alt(struct theme *t, int loglevel,
-					   const char *tag, const char *alt,
-					   const char *what, const char *name);
+struct sprite* theme_lookup_sprite_tag_alt(struct theme *t,
+					    const char *tag, const char *alt,
+					    bool required, const char *what,
+					    const char *name);
 
 struct theme_color_system;
 struct theme_color_system *theme_get_color_system(const struct theme *t);

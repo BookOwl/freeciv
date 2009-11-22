@@ -31,6 +31,7 @@
 #include "support.h"
 
 #include "climisc.h"
+#include "clinet.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
 
@@ -57,9 +58,7 @@ void chatline_key_send(Widget w)
   Appends the string to the chat output window.  The string should be
   inserted on its own line, although it will have no newline.
 **************************************************************************/
-void real_output_window_append(const char *astring,
-                               const struct text_tag_list *tags,
-                               int conn_id)
+void real_append_output_window(const char *astring, int conn_id)
 {
   /* this is properly a bad way to append to a text widget. Using the 
    * "useStringInPlace" resource and doubling mem alloc'ing would be better.  

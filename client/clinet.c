@@ -58,33 +58,32 @@
 #include <winsock.h>
 #endif
 
-/* utility */
+#ifdef GGZ_GTK
+#  include <ggz-embed.h>
+#endif
+
 #include "capstr.h"
 #include "dataio.h"
 #include "fcintl.h"
+#include "game.h"
 #include "hash.h"
 #include "log.h"
 #include "mem.h"
 #include "netintf.h"
+#include "packets.h"
 #include "registry.h"
 #include "support.h"
-
-/* common */
-#include "game.h"
-#include "packets.h"
 #include "version.h"
 
-/* client */
 #include "agents.h"
 #include "attribute.h"
 #include "chatline_g.h"
-#include "client_main.h"
+#include "civclient.h"
 #include "climisc.h"
 #include "connectdlg_common.h"
 #include "connectdlg_g.h"
 #include "dialogs_g.h"		/* popdown_races_dialog() */
 #include "ggzclient.h"
-#include "ggz_g.h"
 #include "gui_main_g.h"		/* add_net_input(), remove_net_input() */
 #include "mapview_common.h"	/* unqueue_mapview_update */
 #include "menu_g.h"
@@ -97,13 +96,8 @@
 
 #include "clinet.h"
 
-/* In autoconnect mode, try to connect to once a second */
-#define AUTOCONNECT_INTERVAL		500
-
-/* In autoconnect mode, try to connect 100 times */
-#define MAX_AUTOCONNECT_ATTEMPTS	100
-
-static union fc_sockaddr server_addr;
+struct connection aconnection;
+static union my_sockaddr server_addr;
 
 /*************************************************************************
   Close socket and cleanup.  This one doesn't print a message, so should
@@ -115,16 +109,27 @@ static void close_socket_nomessage(struct connection *pc)
     remove_ggz_input();
   }
   if (in_ggz) {
-    gui_ggz_embed_leave_table();
+#ifdef GGZ_GTK
+    ggz_embed_leave_table();
+#endif
   }
   connection_common_close(pc);
   remove_net_input();
   popdown_races_dialog(); 
   close_connection_dialog();
 
+  if (C_S_PREPARING == client_state()) {
+    if (!with_ggz) {
+      set_client_page(in_ggz ? PAGE_GGZ : PAGE_MAIN);
+    }
+  }
+
   reports_force_thaw();
   
-  set_client_state(C_S_DISCONNECTED);
+  set_client_state(C_S_PREPARING);
+  agents_disconnect();
+  update_menus();
+  client_remove_all_cli_conn();
 }
 
 /**************************************************************************
@@ -135,11 +140,28 @@ static void close_socket_callback(struct connection *pc)
   close_socket_nomessage(pc);
   /* If we lost connection to the internal server - kill him */
   client_kill_server(TRUE);
-  freelog(LOG_ERROR, "Lost connection to server!");
-  output_window_append(ftc_client, _("Lost connection to server!"));
+  append_output_window(_("Lost connection to server!"));
+  freelog(LOG_NORMAL, "lost connection to server");
   if (with_ggz) {
     client_exit();
   }
+}
+
+/**************************************************************************
+  Connect to a civserver instance -- or at least try to.  On success,
+  return 0; on failure, put an error message in ERRBUF and return -1.
+**************************************************************************/
+int connect_to_server(const char *username, const char *hostname, int port,
+		      char *errbuf, int errbufsize)
+{
+  if (get_server_address(hostname, port, errbuf, errbufsize) != 0) {
+    return -1;
+  }
+
+  if (try_to_connect(username, errbuf, errbufsize) != 0) {
+    return -1;
+  }
+  return 0;
 }
 
 /**************************************************************************
@@ -150,8 +172,8 @@ static void close_socket_callback(struct connection *pc)
    - return 0 on success
      or put an error message in ERRBUF and return -1 on failure
 **************************************************************************/
-static int get_server_address(const char *hostname, int port,
-                              char *errbuf, int errbufsize)
+int get_server_address(const char *hostname, int port, char *errbuf,
+		       int errbufsize)
 {
   if (port == 0)
     port = DEFAULT_SOCK_PORT;
@@ -160,7 +182,7 @@ static int get_server_address(const char *hostname, int port,
   if (!hostname)
     hostname = "localhost";
 
-  if (!net_lookup_service(hostname, port, &server_addr, FALSE)) {
+  if (!net_lookup_service(hostname, port, &server_addr)) {
     (void) mystrlcpy(errbuf, _("Failed looking up host."), errbufsize);
     return -1;
   }
@@ -179,27 +201,26 @@ static int get_server_address(const char *hostname, int port,
      message in ERRBUF and return the Unix error code (ie., errno, which
      will be non-zero).
 **************************************************************************/
-static int try_to_connect(const char *username, char *errbuf, int errbufsize)
+int try_to_connect(const char *username, char *errbuf, int errbufsize)
 {
   close_socket_set_callback(close_socket_callback);
 
   /* connection in progress? wait. */
-  if (client.conn.used) {
+  if (aconnection.used) {
     (void) mystrlcpy(errbuf, _("Connection in progress."), errbufsize);
     return -1;
   }
   
-  if ((client.conn.sock = socket(server_addr.saddr.sa_family,
-                                 SOCK_STREAM, 0)) == -1) {
-    (void) mystrlcpy(errbuf, fc_strerror(fc_get_errno()), errbufsize);
+  if ((aconnection.sock = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+    (void) mystrlcpy(errbuf, mystrerror(), errbufsize);
     return -1;
   }
 
-  if (fc_connect(client.conn.sock, &server_addr.saddr,
-                 sockaddr_size(&server_addr)) == -1) {
-    (void) mystrlcpy(errbuf, fc_strerror(fc_get_errno()), errbufsize);
-    fc_closesocket(client.conn.sock);
-    client.conn.sock = -1;
+  if (my_connect(aconnection.sock, &server_addr.sockaddr,
+      sizeof(server_addr)) == -1) {
+    (void) mystrlcpy(errbuf, mystrerror(), errbufsize);
+    my_closesocket(aconnection.sock);
+    aconnection.sock = -1;
 #ifdef HAVE_WINSOCK
     return -1;
 #else
@@ -207,29 +228,11 @@ static int try_to_connect(const char *username, char *errbuf, int errbufsize)
 #endif
   }
 
-  make_connection(client.conn.sock, username);
+  make_connection(aconnection.sock, username);
 
   return 0;
 }
-
-/**************************************************************************
-  Connect to a freeciv-server instance -- or at least try to.  On success,
-  return 0; on failure, put an error message in ERRBUF and return -1.
-**************************************************************************/
-int connect_to_server(const char *username, const char *hostname, int port,
-		      char *errbuf, int errbufsize)
-{
-  if (0 != get_server_address(hostname, port, errbuf, errbufsize)) {
-    return -1;
-  }
-
-  if (0 != try_to_connect(username, errbuf, errbufsize)) {
-    return -1;
-  }
-
-  return 0;
-}
-
+ 
 /**************************************************************************
   Called after a connection is completed (e.g., in try_to_connect).
 **************************************************************************/
@@ -237,17 +240,17 @@ void make_connection(int socket, const char *username)
 {
   struct packet_server_join_req req;
 
-  connection_common_init(&client.conn);
-  client.conn.sock = socket;
-  client.conn.is_server = FALSE;
-  client.conn.client.last_request_id_used = 0;
-  client.conn.client.last_processed_request_id_seen = 0;
-  client.conn.client.request_id_of_currently_handled_packet = 0;
-  client.conn.incoming_packet_notify = notify_about_incoming_packet;
-  client.conn.outgoing_packet_notify = notify_about_outgoing_packet;
+  connection_common_init(&aconnection);
+  aconnection.sock = socket;
+  aconnection.is_server = FALSE;
+  aconnection.client.last_request_id_used = 0;
+  aconnection.client.last_processed_request_id_seen = 0;
+  aconnection.client.request_id_of_currently_handled_packet = 0;
+  aconnection.incoming_packet_notify = notify_about_incoming_packet;
+  aconnection.outgoing_packet_notify = notify_about_outgoing_packet;
 
   /* call gui-dependent stuff in gui_main.c */
-  add_net_input(client.conn.sock);
+  add_net_input(aconnection.sock);
 
   /* now send join_request package */
 
@@ -258,7 +261,7 @@ void make_connection(int socket, const char *username)
   sz_strlcpy(req.capability, our_capability);
   sz_strlcpy(req.username, username);
   
-  send_packet_server_join_req(&client.conn, &req);
+  send_packet_server_join_req(&aconnection, &req);
 }
 
 /**************************************************************************
@@ -266,7 +269,7 @@ void make_connection(int socket, const char *username)
 **************************************************************************/
 void disconnect_from_server(void)
 {
-  const bool force = !client.conn.used;
+  const bool force = !aconnection.used;
 
   attribute_flush();
   /* If it's internal server - kill him 
@@ -274,16 +277,16 @@ void disconnect_from_server(void)
   if (!force) {
     client_kill_server(FALSE);
   }
-  close_socket_nomessage(&client.conn);
+  close_socket_nomessage(&aconnection);
   if (force) {
     client_kill_server(TRUE);
   }
-  output_window_append(ftc_client, _("Disconnected from server."));
+  append_output_window(_("Disconnected from server."));
   if (with_ggz) {
     client_exit();
   }
   if (save_options_on_exit) {
-    options_save();
+    save_options();
   }
 }  
 
@@ -320,11 +323,11 @@ static int read_from_connection(struct connection *pc, bool block)
       MY_FD_ZERO(&writefs);
       FD_SET(socket_fd, &writefs);
       n =
-	  fc_select(socket_fd + 1, &readfs, &writefs, &exceptfs,
+	  my_select(socket_fd + 1, &readfs, &writefs, &exceptfs,
 		    block ? NULL : &tv);
     } else {
       n =
-	  fc_select(socket_fd + 1, &readfs, NULL, &exceptfs,
+	  my_select(socket_fd + 1, &readfs, NULL, &exceptfs,
 		    block ? NULL : &tv);
     }
 
@@ -342,8 +345,8 @@ static int read_from_connection(struct connection *pc, bool block)
 	continue;
       }
 
-      freelog(LOG_ERROR, "select() return=%d errno=%d (%s)",
-	      n, errno, fc_strerror(fc_get_errno()));
+      freelog(LOG_NORMAL, "error in select() return=%d errno=%d (%s)",
+	      n, errno, mystrerror());
       return -1;
     }
 
@@ -367,16 +370,16 @@ static int read_from_connection(struct connection *pc, bool block)
 **************************************************************************/
 void input_from_server(int fd)
 {
-  assert(fd == client.conn.sock);
+  assert(fd == aconnection.sock);
 
-  if (read_from_connection(&client.conn, FALSE) >= 0) {
+  if (read_from_connection(&aconnection, FALSE) >= 0) {
     enum packet_type type;
 
     reports_freeze();
     agents_freeze_hint();
     while (TRUE) {
       bool result;
-      void *packet = get_packet_from_connection(&client.conn,
+      void *packet = get_packet_from_connection(&aconnection,
 						&type, &result);
 
       if (result) {
@@ -391,7 +394,7 @@ void input_from_server(int fd)
     agents_thaw_hint();
     reports_thaw();
   } else {
-    close_socket_callback(&client.conn);
+    close_socket_callback(&aconnection);
   }
 }
 
@@ -405,19 +408,19 @@ void input_from_server_till_request_got_processed(int fd,
 						  int expected_request_id)
 {
   assert(expected_request_id);
-  assert(fd == client.conn.sock);
+  assert(fd == aconnection.sock);
 
   freelog(LOG_DEBUG,
 	  "input_from_server_till_request_got_processed("
 	  "expected_request_id=%d)", expected_request_id);
 
   while (TRUE) {
-    if (read_from_connection(&client.conn, TRUE) >= 0) {
+    if (read_from_connection(&aconnection, TRUE) >= 0) {
       enum packet_type type;
 
       while (TRUE) {
 	bool result;
-	void *packet = get_packet_from_connection(&client.conn,
+	void *packet = get_packet_from_connection(&aconnection,
 						  &type, &result);
 	if (!result) {
 	  assert(packet == NULL);
@@ -431,8 +434,8 @@ void input_from_server_till_request_got_processed(int fd,
 	if (type == PACKET_PROCESSING_FINISHED) {
 	  freelog(LOG_DEBUG, "ifstrgp: expect=%d, seen=%d",
 		  expected_request_id,
-		  client.conn.client.last_processed_request_id_seen);
-	  if (client.conn.client.last_processed_request_id_seen >=
+		  aconnection.client.last_processed_request_id_seen);
+	  if (aconnection.client.last_processed_request_id_seen >=
 	      expected_request_id) {
 	    freelog(LOG_DEBUG, "ifstrgp: got it; returning");
 	    return;
@@ -440,7 +443,7 @@ void input_from_server_till_request_got_processed(int fd,
 	}
       }
     } else {
-      close_socket_callback(&client.conn);
+      close_socket_callback(&aconnection);
       break;
     }
   }
@@ -482,10 +485,10 @@ double try_to_autoconnect(void)
   /* See PR#4042 for more info on issues with try_to_connect() and errno. */
   case ECONNREFUSED:		/* Server not available (yet) */
     if (!warning_shown) {
-      freelog(LOG_ERROR, "Connection to server refused. "
-                         "Please start the server.");
-      output_window_append(ftc_client, _("Connection to server refused. "
-                                         "Please start the server."));
+      freelog(LOG_NORMAL, _("Connection to server refused. "
+			    "Please start the server."));
+      append_output_window(_("Connection to server refused. "
+			     "Please start the server."));
       warning_shown = 1;
     }
     /* Try again in 0.5 seconds */
@@ -501,7 +504,7 @@ double try_to_autoconnect(void)
 }
 
 /**************************************************************************
-  Start trying to autoconnect to freeciv-server.  Calls
+  Start trying to autoconnect to civserver.  Calls
   get_server_address(), then arranges for try_to_autoconnect(), which
   calls try_to_connect(), to be called roughly every
   AUTOCONNECT_INTERVAL milliseconds, until success, fatal error or
@@ -511,18 +514,19 @@ void start_autoconnecting_to_server(void)
 {
   char buf[512];
 
-  output_window_printf(ftc_client,
-                       _("Auto-connecting to server \"%s\" at port %d "
-                         "as \"%s\" every %f second(s) for %d times"),
-                       server_host, server_port, user_name,
-                       0.001 * AUTOCONNECT_INTERVAL,
-                       MAX_AUTOCONNECT_ATTEMPTS);
+  my_snprintf(buf, sizeof(buf),
+	      _("Auto-connecting to server \"%s\" at port %d "
+		"as \"%s\" every %f second(s) for %d times"),
+	      server_host, server_port, user_name,
+	      0.001 * AUTOCONNECT_INTERVAL,
+	      MAX_AUTOCONNECT_ATTEMPTS);
+  append_output_window(buf);
 
   if (get_server_address(server_host, server_port, buf, sizeof(buf)) < 0) {
     freelog(LOG_FATAL,
-            _("Error contacting server \"%s\" at port %d "
-              "as \"%s\":\n %s\n"),
-            server_host, server_port, user_name, buf);
+	    _("Error contacting server \"%s\" at port %d "
+	      "as \"%s\":\n %s\n"),
+	    server_host, server_port, user_name, buf);
     exit(EXIT_FAILURE);
   }
   autoconnecting = TRUE;

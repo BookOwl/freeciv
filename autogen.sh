@@ -8,7 +8,7 @@ export WANT_AUTOMAKE
 
 DIE=0
 package=freeciv
-srcfile=client/civclient.c
+srcfile=client/civclient.h
 
 SRCDIR=`dirname $0`
 BUILDDIR=`pwd`
@@ -17,6 +17,7 @@ BUILDDIR=`pwd`
 #DEBUG=defined
 
 FC_USE_NLS=yes
+FC_USE_NEWAUTOCONF=yes
 FC_HELP=no
 FC_RUN_CONFIGURE=yes
 
@@ -232,9 +233,9 @@ cd $SRCDIR
 }
 
 # autoconf and autoheader version numbers must be kept in sync
-real_package_name "autoconf" "ftp://ftp.gnu.org/pub/gnu/autoconf/" 2 58 || DIE=1
+real_package_name "autoconf" "ftp://ftp.gnu.org/pub/gnu/autoconf/" 2 55 || DIE=1
 AUTOCONF=$REALPKGNAME
-real_package_name "autoheader" "ftp://ftp.gnu.org/pub/gnu/autoconf/" 2 58 || DIE=1
+real_package_name "autoheader" "ftp://ftp.gnu.org/pub/gnu/autoconf/" 2 55 || DIE=1
 AUTOHEADER=$REALPKGNAME
 
 # automake and aclocal version numbers must be kept in sync
@@ -242,8 +243,6 @@ real_package_name "automake" "ftp://ftp.gnu.org/pub/gnu/automake/" 1 6 || DIE=1
 AUTOMAKE=$REALPKGNAME
 real_package_name "aclocal" "ftp://ftp.gnu.org/pub/gnu/automake/" 1 6 || DIE=1
 ACLOCAL=$REALPKGNAME
-real_package_name "libtoolize" "ftp://ftp.gnu.org/pub/gnu/libtool/" 1 4 3 || DIE=1
-LIBTOOLIZE=$REALPKGNAME
 
 if [ "$FC_USE_NLS" = "yes" ]; then
   DIE2=0
@@ -262,7 +261,7 @@ if [ "$DIE" -eq 1 ]; then
 fi
 
 echo "+ running $ACLOCAL ..."
-$ACLOCAL -I m4 -I dependencies/m4 $ACLOCAL_FLAGS || {
+$ACLOCAL -I m4 $ACLOCAL_FLAGS || {
   echo
   echo "$ACLOCAL failed - check that all needed development files are present on system"
   exit 1
@@ -278,12 +277,6 @@ echo "+ running $AUTOCONF ... "
 $AUTOCONF || {
   echo
   echo "$AUTOCONF failed"
-  exit 1
-}
-echo "+ running $LIBTOOLIZE ... "
-$LIBTOOLIZE -f || {
-  echo
-  echo "$LIBTOOLIZE failed"
   exit 1
 }
 echo "+ running $AUTOMAKE ... "

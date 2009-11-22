@@ -18,7 +18,6 @@
 #include <windows.h>
 #include <windowsx.h>
 
-/* common & utility */
 #include "fcintl.h"
 #include "game.h"
 #include "log.h"
@@ -28,10 +27,10 @@
 #include "support.h"
 #include "version.h"
 
-/* client */
 #include "chatline.h"
-#include "client_main.h"
+#include "civclient.h"
 #include "climisc.h"
+#include "clinet.h"
 #include "colors.h"
 #include "connectdlg.h"
 #include "control.h"
@@ -89,9 +88,7 @@ static void append_output_window_real(const char *astring)
   Appends the string to the chat output window.  The string should be
   inserted on its own line, although it will have no newline.
 **************************************************************************/
-void real_output_window_append(const char *astring,
-                               const struct text_tag_list *tags,
-                               int conn_id)
+void real_append_output_window(const char *astring, int conn_id)
 {
   const char *str;
   char *str2;
@@ -134,5 +131,5 @@ void
 clear_output_window(void)
 {
   SetWindowText(logoutput_win,"");
-  output_window_append(ftc_client, _("Cleared output window."));
+  append_output_window(_("Cleared output window."));
 }

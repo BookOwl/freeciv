@@ -14,10 +14,10 @@
 #define FC__UNITTOOLS_H
 
 #include "fc_types.h"
+#include "packets.h"		/* enum unit_info_use */
+#include "unit.h"
 
 #include "gotohand.h"
-#include "packets.h"		/* enum unit_info_use */
-#include "unitlist.h"
 
 /* battle related */
 struct unit_type *find_a_unit_type(enum unit_role_id role,
@@ -50,11 +50,12 @@ int get_unit_vision_at(struct unit *punit, struct tile *ptile,
 		       enum vision_layer vlayer);
 void unit_refresh_vision(struct unit *punit);
 void unit_list_refresh_vision(struct unit_list *punitlist);
+void pay_for_units(struct player *pplayer, struct city *pcity);
 void bounce_unit(struct unit *punit, bool verbose);
 
 /* creation/deletion/upgrading */
-void transform_unit(struct unit *punit, struct unit_type *to_unit,
-                    bool has_to_pay);
+void upgrade_unit(struct unit *punit, struct unit_type *to_unit,
+		  bool has_to_pay);
 struct unit *create_unit(struct player *pplayer, struct tile *ptile,
 			 struct unit_type *punittype,
 			 int veteran_level, int homecity_id, int moves_left);

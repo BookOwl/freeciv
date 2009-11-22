@@ -56,7 +56,8 @@ const char blank_addr_str[] = "---.---.---.---";
    a connection list might corrupt the list. */
 int delayed_disconnect = 0;
 
-
+struct connection *current_connection;
+  
 /**************************************************************************
   Command access levels for client-side use; at present, they are only
   used to control access to server commands typed at the client chatline.
@@ -163,7 +164,7 @@ int read_socket_data(int sock, struct socket_packet_buffer *buffer)
   }
 
   freelog(LOG_DEBUG, "try reading %d bytes", buffer->nsize - buffer->ndata);
-  didget = fc_readsocket(sock, (char *) (buffer->data + buffer->ndata),
+  didget = my_readsocket(sock, (char *) (buffer->data + buffer->ndata),
 			 buffer->nsize - buffer->ndata);
 
   if (didget > 0) {
@@ -214,7 +215,7 @@ static int write_socket_data(struct connection *pc,
 
     tv.tv_sec = 0; tv.tv_usec = 0;
 
-    if (fc_select(pc->sock+1, NULL, &writefs, &exceptfs, &tv) <= 0) {
+    if (my_select(pc->sock+1, NULL, &writefs, &exceptfs, &tv) <= 0) {
       if (errno != EINTR) {
 	break;
       } else {
@@ -239,7 +240,7 @@ static int write_socket_data(struct connection *pc,
     if (FD_ISSET(pc->sock, &writefs)) {
       nblock=MIN(buf->ndata-start, MAX_LEN_PACKET);
       freelog(LOG_DEBUG,"trying to write %d limit=%d",nblock,limit);
-      if((nput=fc_writesocket(pc->sock, 
+      if((nput=my_writesocket(pc->sock, 
 			      (const char *)buf->data+start, nblock)) == -1) {
 #ifdef NONBLOCKING_SOCKETS
 	if (errno == EWOULDBLOCK || errno == EAGAIN) {
@@ -501,10 +502,10 @@ static void free_socket_packet_buffer(struct socket_packet_buffer *buf)
 /**************************************************************************
   Return pointer to static string containing a description for this
   connection, based on pconn->name, pconn->addr, and (if applicable)
-  pconn->playing->name.  (Also pconn->established and pconn->observer.)
+  pconn->player->name.  (Also pconn->established and pconn->observer.)
 
-  Note that when pconn is client.conn (connection to server),
-  pconn->name and pconn->addr contain empty string, and pconn->playing
+  Note that if pconn is client's aconnection (connection to server),
+  pconn->name and pconn->addr contain empty string, and pconn->player
   is NULL: in this case return string "server".
 **************************************************************************/
 const char *conn_description(const struct connection *pconn)
@@ -523,30 +524,14 @@ const char *conn_description(const struct connection *pconn)
     sz_strlcat(buffer, _(" (connection incomplete)"));
     return buffer;
   }
-  if (NULL != pconn->playing) {
+  if (pconn->player) {
     cat_snprintf(buffer, sizeof(buffer), _(" (player %s)"),
-		 player_name(pconn->playing));
+		 player_name(pconn->player));
   }
   if (pconn->observer) {
     sz_strlcat(buffer, _(" (observer)"));
   }
   return buffer;
-}
-
-/****************************************************************************
-  Return TRUE iff the connection is currently allowed to edit.
-****************************************************************************/
-bool can_conn_edit(const struct connection *pconn)
-{
-  return can_conn_enable_editing(pconn) && game.info.is_edit_mode;
-}
-
-/****************************************************************************
-  Return TRUE iff the connection is allowed to start editing.
-****************************************************************************/
-bool can_conn_enable_editing(const struct connection *pconn)
-{
-  return pconn->access_level == ALLOW_HACK;
 }
 
 /**************************************************************************
@@ -558,7 +543,7 @@ int get_next_request_id(int old_request_id)
   int result = old_request_id + 1;
 
   if ((result & 0xffff) == 0) {
-    freelog(LOG_PACKET,
+    freelog(LOG_NORMAL,
 	    "INFORMATION: request_id has wrapped around; "
 	    "setting from %d to 2", result);
     result = 2;
@@ -660,7 +645,7 @@ void connection_common_close(struct connection *pconn)
   if (!pconn->used) {
     freelog(LOG_ERROR, "WARNING: Trying to close already closed connection");
   } else {
-    fc_closesocket(pconn->sock);
+    my_closesocket(pconn->sock);
     pconn->used = FALSE;
     pconn->established = FALSE;
 
@@ -714,7 +699,7 @@ void conn_clear_packet_cache(struct connection *pc)
 **************************************************************************/
 bool conn_controls_player(const struct connection *pconn)
 {
-  return pconn && pconn->playing && !pconn->observer;
+  return pconn && pconn->player && !pconn->observer;
 }
 
 /**************************************************************************
@@ -722,7 +707,7 @@ bool conn_controls_player(const struct connection *pconn)
 **************************************************************************/
 bool conn_is_global_observer(const struct connection *pconn)
 {
-  return pconn && !pconn->playing && pconn->observer;
+  return pconn && !pconn->player && pconn->observer;
 }
 
 /**************************************************************************
@@ -735,7 +720,7 @@ struct player *conn_get_player(const struct connection *pconn)
   if (!pconn) {
     return NULL;
   }
-  return pconn->playing;
+  return pconn->player;
 }
 
 /**************************************************************************

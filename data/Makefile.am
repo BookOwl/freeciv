@@ -1,7 +1,7 @@
 ## Process this file with automake to produce Makefile.in
 
 if CLIENT
-CLIENT_FILES =				\
+COMMON_CLIENT_FILES =			\
 	hex2t.tilespec			\
 	amplio.tilespec			\
 	isophex.tilespec		\
@@ -10,13 +10,12 @@ CLIENT_FILES =				\
 	stdsounds.soundspec		\
 	helpdata.txt
 if CLIENT_GUI_XAW
-CLIENT_FILES += Freeciv
+CLIENT_EXTRA_FILES = Freeciv
 endif
 if CLIENT_GUI_GTK_2_0
-CLIENT_FILES += \
-	freeciv.rc-2.0	\
-	gtk_menus.xml
+CLIENT_EXTRA_FILES = freeciv.rc-2.0
 endif
+CLIENT_FILES = $(COMMON_CLIENT_FILES) $(CLIENT_EXTRA_FILES)
 else
 CLIENT_FILES =
 endif
@@ -38,7 +37,6 @@ EXTRA_DIST = \
 	freeciv-client.png \
 	freeciv.rc	\
 	freeciv.rc-2.0	\
-	gtk_menus.xml	\
 	civserver.dsc.in	\
 	civclient.dsc.in	\
 	civserver.room.in	\

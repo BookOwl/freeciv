@@ -94,12 +94,6 @@
 ***************************************************************/
 int mystrcasecmp(const char *str0, const char *str1)
 {
-  if (str0 == NULL) {
-    return -1;
-  }
-  if (str1 == NULL) {
-    return 1;
-  }
 #ifdef HAVE_STRCASECMP
   return strcasecmp (str0, str1);
 #else
@@ -120,12 +114,6 @@ int mystrcasecmp(const char *str0, const char *str1)
 ***************************************************************/
 int mystrncasecmp(const char *str0, const char *str1, size_t n)
 {
-  if (str0 == NULL) {
-    return -1;
-  }
-  if (str1 == NULL) {
-    return 1;
-  }
 #ifdef HAVE_STRNCASECMP
   return strncasecmp (str0, str1, n);
 #else
@@ -151,12 +139,7 @@ int mystrncasecmp(const char *str0, const char *str1, size_t n)
 ***************************************************************/
 size_t effectivestrlenquote(const char *str)
 {
-  int len;
-  if (!str) {
-    return 0;
-  }
-
-  len = strlen(str);
+  int len = strlen(str);
 
   if (str[0] == '"' && str[len-1] == '"') {
     return len - 2;
@@ -172,19 +155,9 @@ size_t effectivestrlenquote(const char *str)
 int mystrncasequotecmp(const char *str0, const char *str1, size_t n)
 {
   size_t i;
-  size_t len0;
-  size_t len1;
+  size_t len0 = strlen(str0); /* TODO: We iterate string once already here, */
+  size_t len1 = strlen(str1); /*       could iterate only once */
   size_t cmplen;
-
-  if (str0 == NULL) {
-    return -1;
-  }
-  if (str1 == NULL) {
-    return 1;
-  }
-
-  len0 = strlen(str0); /* TODO: We iterate string once already here, */
-  len1 = strlen(str1); /*       could iterate only once */
 
   if (str0[0] == '"') {
     if (str0[len0 - 1] == '"') {
@@ -226,52 +199,6 @@ int mystrncasequotecmp(const char *str0, const char *str1, size_t n)
 }
 
 /***************************************************************
-  Return the needle in the haystack (or NULL).
-  Naive implementation.
-***************************************************************/
-char *mystrcasestr(const char *haystack, const char *needle)
-{
-#ifdef HAVE_STRCASESTR
-  return strcasestr(haystack, needle);
-#else
-  size_t haystacks;
-  size_t needles;
-  const char *p;
-
-  if (NULL == needle || '\0' == *needle) {
-    return (char *)haystack;
-  }
-  if (NULL == haystack || '\0' == *haystack) {
-    return NULL;
-  }
-  haystacks = strlen(haystack);
-  needles = strlen(needle);
-  if (haystacks < needles) {
-    return NULL;
-  }
-
-  for (p = haystack; p <= &haystack[haystacks - needles]; p++) {
-    if (0 == mystrncasecmp(p, needle, needles)) {
-      return (char *)p;
-    }
-  }
-  return NULL;
-#endif
-}
-
-/***************************************************************
-  Returns last error code.
-***************************************************************/
-fc_errno fc_get_errno(void)
-{
-#ifdef WIN32_NATIVE
-  return GetLastError();
-#else
-  return errno;
-#endif
-}
-
-/***************************************************************
   Return a string which describes a given error (errno-style.)
   The string is converted as necessary from the local_encoding
   to internal_encoding, for inclusion in translations.  May be
@@ -279,28 +206,30 @@ fc_errno fc_get_errno(void)
 
   Note that this is not the reentrant form.
 ***************************************************************/
-const char *fc_strerror(fc_errno err)
+const char *mystrerror(void)
 {
 #ifdef WIN32_NATIVE
   static char buf[256];
+  long int error;
 
+  error = GetLastError();
   if (!FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-		     NULL, err, 0, buf, sizeof(buf), NULL)) {
+		     NULL, error, 0, buf, sizeof(buf), NULL)) {
     my_snprintf(buf, sizeof(buf),
-		_("error %ld (failed FormatMessage)"), err);
+		_("error %ld (failed FormatMessage)"), error);
   }
   return buf;
 #else
 #ifdef HAVE_STRERROR
   static char buf[256];
 
-  return local_to_internal_string_buffer(strerror(err),
+  return local_to_internal_string_buffer(strerror(errno),
                                          buf, sizeof(buf));
 #else
   static char buf[64];
 
   my_snprintf(buf, sizeof(buf),
-	      _("error %d (compiled without strerror)"), err);
+	      _("error %d (compiled without strerror)"), errno);
   return buf;
 #endif
 #endif

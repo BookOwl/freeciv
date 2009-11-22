@@ -15,7 +15,7 @@ description="Civ2 style governments data for Freeciv (Fundamentalism incomplete)
 options="1.9"
 
 [governments]
-during_revolution="Anarchy"
+when_anarchy="Anarchy"
 
 ; Below: The individual government types, one per section.
 ;
@@ -152,8 +152,8 @@ In a fundamentalist society, the people and the rulers are entirely\
  devoted to their beliefs, and are usually willing to die to\
  preserve them.\
 \n\n\
-Improvements that normally convert unhappy citizens to content\
- citizens, produce `tithes' (gold) equivalent to the number\
+Improvement that normally convert unhappy citizens to content\
+ citizens, produces `tithes' (gold) equivalent to the number\
  of people they would convert, and require no maintenance.\
 ")
 

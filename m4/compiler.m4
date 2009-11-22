@@ -2,7 +2,7 @@
 #
 
 # Helper function that adds flags (words) to variable listing them.
-# Makes sure there is no extra spaces in any situation
+# Makes sure there is no extra spaces even in any situation
 #
 # $1 - Name of the target variable
 # $2 - Flags to add
@@ -49,7 +49,7 @@ $2="$flags_save"
 AC_LANG_POP([$1])
 ])
 
-# Commandline flag tests for C and C++
+# Commandling flag tests for C and C++
 #
 #
 # $1 - Parameters to test
@@ -65,26 +65,4 @@ FC_COMPILER_FLAGS([C], [CFLAGS], [$1], [$2], [$3])
 AC_DEFUN([FC_CXX_FLAGS],
 [
 FC_COMPILER_FLAGS([C++], [CXXFLAGS], [$1], [$2], [$3])
-])
-
-# Commandline flag tests for linker
-#
-#
-# $1 - Parameters to test
-# $2 - Additional parameters
-# $3 - Variable where to add
-AC_DEFUN([FC_LD_FLAGS],
-[
-flags_save=$LDFLAGS
-accepted_flags=""
-
-for flag in $1
-do
-  LDFLAGS="$flags_save $accepted_flags $flag $2"
-  AC_LINK_IFELSE([AC_LANG_PROGRAM([], [int a;])],
-                 [FC_ADD_WORDS_TO_VAR([accepted_flags], [$flag])])
-done
-FC_ADD_WORDS_TO_VAR([$3], [$accepted_flags])
-
-LDFLAGS="$flags_save"
 ])

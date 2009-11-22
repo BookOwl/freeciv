@@ -21,8 +21,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* utility */
-#include "capability.h"
+#include "astring.h"
 #include "fciconv.h"
 #include "fcintl.h"
 #include "log.h"
@@ -31,8 +30,7 @@
 #include "shared.h"
 #include "support.h"
 
-/* common */
-#include "connection.h"
+#include "capability.h"
 #include "events.h"
 #include "game.h"
 #include "improvement.h"
@@ -40,13 +38,10 @@
 #include "player.h"
 #include "version.h"
 
-/* client */
 #include "helpdata.h"
 #include "helpdlg_g.h"
 
-/* server */
 #include "citytools.h"
-#include "commands.h"
 #include "connecthand.h"
 #include "console.h"
 #include "diplhand.h"
@@ -55,9 +50,11 @@
 #include "report.h"
 #include "ruleset.h"
 #include "savegame.h"
-#include "settings.h"
 #include "srv_main.h"
+
 #include "stdinhand.h"
+#include "commands.h"
+#include "settings.h"
 
 enum manuals {
   MANUAL_SETTINGS,
@@ -110,14 +107,8 @@ static bool manual_command(void)
   FILE *doc;
   char filename[40];
   enum manuals manuals;
-  struct connection my_conn;
 
-  /* Default client access. */
-  connection_common_init(&my_conn);
-  my_conn.access_level = ALLOW_CTRL;
-
-  /* Reset aifill to zero */
-  game.info.aifill = 0;
+  game_init();
   load_rulesets();
   for (manuals = 0; manuals < MANUAL_COUNT; manuals++) {
     int i;
@@ -135,76 +126,90 @@ static bool manual_command(void)
     switch (manuals) {
     case MANUAL_SETTINGS:
       fprintf(doc, _("<h1>Freeciv %s server options</h1>\n\n"), VERSION_STRING);
-      settings_iterate(pset) {
-        const char *help = _(setting_extra_help(pset));
+      for (i = 0; settings[i].name; i++) {
+        struct settings_s *op = &settings[i];
+        static struct astring abuf = ASTRING_INIT;
+        const char *help = _(op->extra_help);
 
+        astr_minsize(&abuf, strlen(help) + 10);
+        strcpy(abuf.str, help);
+        wordwrap_string(abuf.str, 76);
         fprintf(doc, SEPARATOR);
-        fprintf(doc, "%s%s - %s%s\n\n", SECTION_BEGIN, setting_name(pset),
-                _(setting_short_help(pset)), SECTION_END);
-        if (strlen(setting_extra_help(pset)) > 0) {
-          fprintf(doc, "<pre>%s</pre>\n\n", help);
+        fprintf(doc, "%s%s - %s%s\n\n", SECTION_BEGIN, op->name,
+                _(op->short_help), SECTION_END);
+        if (strlen(op->extra_help) > 0) {
+          fprintf(doc, "<pre>%s</pre>\n\n", abuf.str);
         }
         fprintf(doc, "<p class=\"misc\">");
-        fprintf(doc, _("Level: %s.<br>"), _(setting_level_name(pset)));
-        fprintf(doc, _("Category: %s.<br>"), _(setting_category_name(pset)));
-        
-        if (!setting_is_changeable(pset, &my_conn, NULL)) {
+        fprintf(doc, _("Level: %s.<br>"), _(sset_level_names[op->slevel]));
+        fprintf(doc, _("Category: %s.<br>"),
+                _(sset_category_names[op->scategory]));
+        if (op->to_client == SSET_SERVER_ONLY) {
           fprintf(doc, _("Can only be used in server console. "));
         }
+        if (setting_is_changeable(i)) {
+          fprintf(doc, _("Can be changed during a game. "));
+        } else {
+          fprintf(doc, _("Can <b>not</b> be changed during a game. "));
+        }
         fprintf(doc, "</p>\n\n");
-        switch (setting_type(pset)) {
+        switch (op->stype) {
         case SSET_BOOL:
-          fprintf(doc, "<p class=\"bounds\">%s 0, %s %d, %s 1</p>\n\n",
-                  _("Minimum:"), _("Default:"),
-                  setting_bool_def(pset) ? 1 : 0, _("Maximum:"));
-          if (setting_bool_get(pset) != setting_bool_def(pset)) {
+          fprintf(doc, _("<p class=\"bounds\">Minimum: 0, Default: %d, "
+                         "Maximum: 1</p>\n\n"),
+                  op->bool_default_value ? 1 : 0);
+          if (*(op->bool_value) != op->bool_default_value) {
             fprintf(doc, _("<p class=\"changed\">Value set to %d</p>\n\n"),
-                    setting_bool_get(pset) ? 1 : 0);
+                    *(op->bool_value));
           }
           break;
         case SSET_INT:
-          fprintf(doc, "<p class=\"bounds\">%s %d, %s %d, %s %d</p>\n\n",
-                  _("Minimum:"), setting_int_min(pset),
-                  _("Default:"), setting_int_def(pset),
-                  _("Maximum:"), setting_int_max(pset));
-          if (setting_int_get(pset) != setting_int_def(pset)) {
+          fprintf(doc, _("<p class=\"bounds\">Minimum: %d, Default: %d, "
+                         "Maximum: %d</p>\n\n"),
+                  op->int_min_value, op->int_default_value,
+                  op->int_max_value);
+          if (*(op->int_value) != op->int_default_value) {
             fprintf(doc, _("<p class=\"changed\">Value set to %d</p>\n\n"),
-                    setting_int_get(pset));
+                    *(op->int_value));
           }
           break;
         case SSET_STRING:
-          fprintf(doc, "<p class=\"bounds\">%s \"%s\"</p>\n\n",
-                  _("Default:"), setting_str_def(pset));
-          if (strcmp(setting_str_get(pset), setting_str_def(pset)) != 0) {
+          fprintf(doc, _("<p class=\"bounds\">Default: \"%s\"</p>\n\n"),
+                  op->string_default_value);
+          if (strcmp(op->string_value, op->string_default_value) != 0) {
             fprintf(doc, _("<p class=\"changed\">Value set to %s</p>\n\n"),
-                    setting_str_get(pset));
+                    op->string_value);
           }
           break;
         }
-      } settings_iterate_end;
+      }
       break;
 
     case MANUAL_COMMANDS:
       fprintf(doc, _("<h1>Freeciv %s server commands</h1>\n\n"),
               VERSION_STRING);
       for (i = 0; i < CMD_NUM; i++) {
-        const struct command *cmd = command_by_number(i);
+        const struct command *cmd = &commands[i];
 
         fprintf(doc, SEPARATOR);
-        fprintf(doc, "%s%s  -  %s%s\n\n", SECTION_BEGIN, command_name(cmd),
-                _(command_short_help(cmd)), SECTION_END);
-        if (command_synopsis(cmd)) {
+        fprintf(doc, "%s%s  -  %s%s\n\n", SECTION_BEGIN, cmd->name,
+                _(cmd->short_help), SECTION_END);
+        if (cmd->synopsis) {
           fprintf(doc, _("<table>\n<tr>\n<td valign=\"top\">"
                          "<pre>Synopsis:</pre></td>\n<td>"));
-          fprintf(doc, "<pre>%s</pre></td></tr></table>", _(command_synopsis(cmd)));
+          fprintf(doc, "<pre>%s</pre></td></tr></table>", _(cmd->synopsis));
         }
         fprintf(doc, _("<p class=\"level\">Level: %s</p>\n\n"),
-                cmdlevel_name(command_level(cmd)));
-        if (command_extra_help(cmd)) {
-          const char *help = _(command_extra_help(cmd));
+                cmdlevel_name(cmd->level));
+        if (cmd->extra_help) {
+          static struct astring abuf = ASTRING_INIT;
+          const char *help = _(cmd->extra_help);
 
+          astr_minsize(&abuf, strlen(help)+1);
+          strcpy(abuf.str, help);
+          wordwrap_string(abuf.str, 76);
           fprintf(doc, _("<p>Description:</p>\n\n"));
-          fprintf(doc, "<pre>%s</pre>\n\n", help);
+          fprintf(doc, "<pre>%s</pre>\n\n", abuf.str);
         }
       }
       break;
@@ -217,8 +222,8 @@ static bool manual_command(void)
       fprintf(doc, "<th>%s<br/>%s</th>", _("Move cost"), _("Defense bonus"));
       fprintf(doc, "<th>%s<br/>%s<br/>%s<br/>%s<br/>(%s)</th>",
               _("Irrigation"), _("Mining"), _("Road"), _("Transform"), _("turns"));
-      fprintf(doc, "<th>%s<br/>%s<br/>%s</th></tr>\n\n",
-              _("Rail"),
+      fprintf(doc, "<th>%s<br/>%s<br/>%s<br/>%s<br/>%s</th></tr>\n\n",
+              _("Airbase"), _("Fortress"), _("Rail"),
               _("Clean pollution"), _("Clean fallout"));
       terrain_type_iterate(pterrain) {
         struct resource **r;
@@ -272,17 +277,12 @@ static bool manual_command(void)
         }
         fprintf(doc, "<tr><td>+%d T</td><td align=\"right\">(%d)</td></tr>\n",
                 pterrain->road_trade_incr, pterrain->road_time);
+        fprintf(doc, "<tr><td>%s</td><td align=\"right\">(%d)</td></tr>\n</table></td>\n",
+                terrain_name_translation(pterrain->transform_result),
+                pterrain->transform_time);
 
-        if (pterrain->transform_result) {
-          fprintf(doc, "<tr><td>%s</td><td align=\"right\">(%d)</td></tr>\n</table></td>\n",
-                  terrain_name_translation(pterrain->transform_result),
-                  pterrain->transform_time);
-        } else {
-          fprintf(doc, "<tr><td>-</td><td align=\"right\">(-)</td></tr>\n</table></td>\n");
-        }
-
-        fprintf(doc, "<td align=\"center\">%d / %d / %d</td></tr>\n\n",
-                pterrain->rail_time,
+        fprintf(doc, "<td align=\"center\">%d / %d / %d / %d / %d</td></tr>\n\n",
+                pterrain->airbase_time, pterrain->fortress_time, pterrain->rail_time,
                 pterrain->clean_pollution_time, pterrain->clean_fallout_time);
       } terrain_type_iterate_end;
       fprintf(doc, "</table>\n");
@@ -302,37 +302,37 @@ static bool manual_command(void)
               _("Name"), _("Cost"), _("Upkeep"),
               _("Requirement"), _("Obsolete by"), _("More info"));
 
-      improvement_iterate(pimprove) {
+      impr_type_iterate(id) {
+        struct impr_type *pimpr = improvement_by_number(id);
         char buf[64000];
 
-        if (!valid_improvement(pimprove)
-         || is_great_wonder(pimprove) == (manuals == MANUAL_BUILDINGS)) {
+        if (is_great_wonder(id) == (manuals == MANUAL_BUILDINGS)) {
           continue;
         }
 
-        helptext_building(buf, sizeof(buf), NULL, NULL, pimprove);
+        helptext_building(buf, sizeof(buf), id, NULL);
 
         fprintf(doc, "<tr><td>" IMAGE_BEGIN "%s" IMAGE_END "</td><td>%s</td>\n"
                      "<td align=\"center\"><b>%d</b><br/>%d</td>\n<td>",
-                pimprove->graphic_str,
-                improvement_name_translation(pimprove),
-                pimprove->build_cost,
-                pimprove->upkeep);
+                pimpr->graphic_str,
+                improvement_name_translation(id),
+                pimpr->build_cost,
+                pimpr->upkeep);
 
-        requirement_vector_iterate(&pimprove->reqs, req) {
+        requirement_vector_iterate(&pimpr->reqs, req) {
           char text[512];
           fprintf(doc, "%s<br/>",
-                  VUT_NONE != req->source.kind
-                  ? universal_name_translation(&req->source, text, sizeof(text))
+                  req->source.type != REQ_NONE
+                  ? get_req_source_text(&req->source, text, sizeof(text))
                   : _("None"));
         } requirement_vector_iterate_end;
 
         fprintf(doc, "<em>%s</em></td>\n",
-                valid_advance(pimprove->obsolete_by)
-                ? advance_name_translation(pimprove->obsolete_by)
+                tech_exists(pimpr->obsolete_by)
+                ? advance_name_translation(pimpr->obsolete_by)
                 : _("None"));
         fprintf(doc, "<td>%s</td>\n</tr>\n\n", buf);
-      } improvement_iterate_end;
+      } impr_type_iterate_end;
       break;
 
     case MANUAL_COUNT:
@@ -357,14 +357,11 @@ int main(int argc, char **argv)
   init_nls();
   init_character_encodings(FC_DEFAULT_DATA_ENCODING, FALSE);
 
-  /* Initialize game with default values */
-  game_init();
-
   /* parse command-line arguments... */
   inx = 1;
   while (inx < argc) {
-    if ((option = get_option_malloc("--ruleset", argv, &inx, argc))) {
-      sz_strlcpy(game.server.rulesetdir, option);
+    if ((option = get_option_malloc("--file", argv, &inx, argc))) {
+      sz_strlcpy(srvarg.load_filename, option);
       free(option);
     } else if (is_option("--help", argv[inx])) {
       showhelp = TRUE;
@@ -382,13 +379,9 @@ int main(int argc, char **argv)
     fc_fprintf(stderr,
          _("Usage: %s [option ...]\nValid options are:\n"), argv[0]);
     fc_fprintf(stderr,
-         _("  -r, --ruleset RULESET  Make manual for RULESET\n"));
-    fc_fprintf(stderr,
-         _("  -h, --help             Print a summary of the options\n"));
-    fc_fprintf(stderr,
-         _("  -v, --version          Print the version number\n"));
-    /* TRANS: No full stop after the URL, could cause confusion. */
-    fc_fprintf(stderr, _("Report bugs at %s\n"), BUG_URL);
+         _("  -h, --help\t\tPrint a summary of the options\n"));
+    fc_fprintf(stderr, _("  -v, --version\t\tPrint the version number\n"));
+    fc_fprintf(stderr, _("Report bugs at %s.\n"), BUG_URL);
     exit(EXIT_SUCCESS);
   }
 

@@ -20,18 +20,14 @@
 #include <string.h>
 #include <sys/stat.h>
 
-/* utility */
-#include "log.h"
+
 #include "mem.h"
 #include "shared.h"
-#include "string_vector.h"
 #include "support.h"
 
-/* include */
-#include "themes_g.h"
-
-/* client */
 #include "themes_common.h"
+
+#include "themes_g.h"
 
 /***************************************************************************
   A theme is a portion of client data, which for following reasons should
@@ -86,32 +82,37 @@ void init_themes(void)
 }
 
 /****************************************************************************
-  Return a static string vector of useable theme names.
+  Return an array of useable theme names. The array is NULL terminated and 
+  the caller is responsible for freeing the array.
 ****************************************************************************/
-const struct strvec *get_themes_list(void)
+const char **get_themes_list(void)
 {
-  static struct strvec *themes_list = NULL;
+  int size = 0;
+  int i, j, k, c;
+  const char **themes;
 
-  if (NULL == themes_list) {
-    int i, j, k;
+  for (i = 0; i < num_directories; i++) {
+    size += directories[i].num_themes;
+  }
 
-    themes_list = strvec_new();
-    for (i = 0; i < num_directories; i++) {
-      for (j = 0; j < directories[i].num_themes; j++) {
-        for (k = 0; k < strvec_size(themes_list); k++) {
-          if (strcmp(strvec_get(themes_list, k),
-                     directories[i].themes[j]) == 0) {
-            break;
-          }
-        }
-        if (k == strvec_size(themes_list)) {
-          strvec_append(themes_list, directories[i].themes[j]);
-        }
+  themes = fc_malloc(sizeof(char *) * (size + 1));
+
+  /* Copy theme names from all directories, but remove duplicates */
+  c = 0;
+  for (i = 0; i < num_directories; i++) {
+    for (j = 0; j < directories[i].num_themes; j++) {
+      for (k = 0; k < c; k++) {
+	if (strcmp(themes[k], directories[i].themes[j]) == 0) {
+	  break;
+	}
+      }
+      if (k == c) {
+	themes[c++] = directories[i].themes[j];
       }
     }
   }
-
-  return themes_list;
+  themes[c] = NULL;
+  return themes;
 }
 
 /****************************************************************************
@@ -135,10 +136,8 @@ bool load_theme(const char *theme_name)
 /****************************************************************************
   Wrapper for load_theme. It's is used by local options dialog
 ****************************************************************************/
-void theme_reread_callback(struct client_option *poption)
+void theme_reread_callback(struct client_option *option)
 {
-  const char *theme_name = option_str_get(poption);
-
-  RETURN_IF_FAIL(NULL != theme_name && theme_name[0] != '\0');
-  load_theme(theme_name);
+  assert(option->p_string_value && *option->p_string_value != '\0');
+  load_theme(option->p_string_value);
 }

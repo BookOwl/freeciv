@@ -18,20 +18,15 @@
 #include <stdarg.h>
 #include <string.h>
 
-/* utility */
-#include "log.h"
 #include "mem.h"
 #include "support.h"
 
-/* common */
 #include "city.h"
-#include "requirements.h"
 #include "unit.h"
-
 #include "worklist.h"
 
 /****************************************************************
-  Initialize a worklist to be empty.
+  Initialize a worklist to be empty and have a default name.
   For elements, only really need to set [0], but initialize the
   rest to avoid junk values in savefile.
 ****************************************************************/
@@ -39,13 +34,13 @@ void worklist_init(struct worklist *pwl)
 {
   int i;
 
+  pwl->is_valid = TRUE;
   pwl->length = 0;
+  strcpy(pwl->name, "a worklist");
 
   for (i = 0; i < MAX_LEN_WORKLIST; i++) {
-    /* just setting the entry to zero: */
-    pwl->entries[i].kind = VUT_NONE;
-    /* all the union pointers should be in the same place: */ 
-    pwl->entries[i].value.building = NULL;
+    pwl->entries[i].is_unit = FALSE;
+    pwl->entries[i].value = -1;
   }
 }
 
@@ -73,7 +68,7 @@ bool worklist_is_empty(const struct worklist *pwl)
   if the worklist is non-empty.  Return 1 iff id and is_unit
   are valid.
 ****************************************************************/
-bool worklist_peek(const struct worklist *pwl, struct universal *prod)
+bool worklist_peek(const struct worklist *pwl, struct city_production *prod)
 {
   return worklist_peek_ith(pwl, prod, 0);
 }
@@ -84,12 +79,12 @@ bool worklist_peek(const struct worklist *pwl, struct universal *prod)
   return FALSE.
 ****************************************************************/
 bool worklist_peek_ith(const struct worklist *pwl,
-		       struct universal *prod, int idx)
+		       struct city_production *prod, int idx)
 {
   /* Out of possible bounds. */
   if (idx < 0 || pwl->length <= idx) {
-    prod->kind = VUT_NONE;
-    prod->value.building = NULL;
+    prod->is_unit = FALSE;
+    prod->value = -1;
     return FALSE;
   }
 
@@ -131,10 +126,8 @@ void worklist_remove(struct worklist *pwl, int idx)
   for (i = idx; i < pwl->length - 1; i++) {
     pwl->entries[i] = pwl->entries[i + 1];
   }
-  /* just setting the entry to zero: */
-  pwl->entries[pwl->length - 1].kind = VUT_NONE;
-  /* all the union pointers should be in the same place: */ 
-  pwl->entries[pwl->length - 1].value.building = NULL;
+  pwl->entries[pwl->length - 1].is_unit = FALSE;
+  pwl->entries[pwl->length - 1].value = -1;
   pwl->length--;
 }
 
@@ -143,7 +136,7 @@ void worklist_remove(struct worklist *pwl, int idx)
   the unit/building to be produced; is_unit specifies whether it's a unit or
   a building.  Returns TRUE if successful.
 ****************************************************************************/
-bool worklist_append(struct worklist *pwl, struct universal prod)
+bool worklist_append(struct worklist *pwl, struct city_production prod)
 {
   int next_index = worklist_length(pwl);
 
@@ -164,7 +157,7 @@ bool worklist_append(struct worklist *pwl, struct universal prod)
   if successful.
 ****************************************************************************/
 bool worklist_insert(struct worklist *pwl,
-		     struct universal prod, int idx)
+		     struct city_production prod, int idx)
 {
   int new_len = MIN(pwl->length + 1, MAX_LEN_WORKLIST), i;
 
@@ -193,15 +186,126 @@ bool are_worklists_equal(const struct worklist *wlist1,
 {
   int i;
 
+  if (wlist1->is_valid != wlist2->is_valid) {
+    return FALSE;
+  }
   if (wlist1->length != wlist2->length) {
     return FALSE;
   }
 
   for (i = 0; i < wlist1->length; i++) {
-    if (!are_universals_equal(&wlist1->entries[i], &wlist2->entries[i])) {
+    if (wlist1->entries[i].is_unit != wlist2->entries[i].is_unit ||
+	wlist1->entries[i].value != wlist2->entries[i].value) {
       return FALSE;
     }
   }
 
   return TRUE;
+}
+
+/****************************************************************************
+  Load the worklist elements specified by path to the worklist pointed to
+  by pwl.
+
+  pwl should be a pointer to an existing worklist.
+
+  path and ... give the prefix to load from, printf-style.
+****************************************************************************/
+void worklist_load(struct section_file *file, struct worklist *pwl,
+		   const char *path, ...)
+{
+  int i;
+  const char* name;
+  char path_str[1024];
+  va_list ap;
+
+  /* The first part of the registry path is taken from the varargs to the
+   * function. */
+  va_start(ap, path);
+  vsnprintf(path_str, sizeof(path_str), path, ap);
+  va_end(ap);
+
+  worklist_init(pwl);
+  pwl->length = secfile_lookup_int_default(file, 0,
+					   "%s.wl_length", path_str);
+  name = secfile_lookup_str_default(file, "a worklist",
+				    "%s.wl_name", path_str);
+  sz_strlcpy(pwl->name, name);
+  pwl->is_valid = secfile_lookup_bool_default(file, FALSE,
+					      "%s.wl_is_valid", path_str);
+
+  for (i = 0; i < pwl->length; i++) {
+    bool is_unit = secfile_lookup_bool_default(file, FALSE, "%s.wl_is_unit%d",
+					       path_str, i);
+
+    /* We lookup the production value by name.  An invalid entry isn't a
+     * fatal error; we just drop the worklist. */
+    name = secfile_lookup_str_default(file, "-", "%s.wl_value%d",
+				      path_str, i);
+    if (is_unit) {
+      struct unit_type *punittype = find_unit_type_by_rule_name(name);
+
+      if (!punittype) {
+	pwl->length = i;
+	break;
+      }
+      pwl->entries[i].value = punittype->index;
+    } else {
+      Impr_type_id building = find_improvement_by_rule_name(name);
+
+      if (building == B_LAST) {
+	pwl->length = i;
+	break;
+      }
+      pwl->entries[i].value = building;
+    }
+    pwl->entries[i].is_unit = is_unit;
+  }
+}
+
+/****************************************************************************
+  Save the worklist elements specified by path from the worklist pointed to
+  by pwl.
+
+  pwl should be a pointer to an existing worklist.
+
+  path and ... give the prefix to load from, printf-style.
+****************************************************************************/
+void worklist_save(struct section_file *file, struct worklist *pwl,
+                   int max_length, const char *path, ...)
+{
+  char path_str[1024];
+  int i;
+  va_list ap;
+
+  /* The first part of the registry path is taken from the varargs to the
+   * function. */
+  va_start(ap, path);
+  vsnprintf(path_str, sizeof(path_str), path, ap);
+  va_end(ap);
+
+  secfile_insert_int(file, pwl->length, "%s.wl_length", path_str);
+  secfile_insert_str(file, pwl->name, "%s.wl_name", path_str);
+  secfile_insert_bool(file, pwl->is_valid, "%s.wl_is_valid", path_str);
+
+  for (i = 0; i < pwl->length; i++) {
+    struct city_production *entry = pwl->entries + i;
+    const char *name = (entry->is_unit
+			? utype_rule_name(utype_by_number(entry->value))
+			: improvement_rule_name(entry->value));
+
+    secfile_insert_bool(file, entry->is_unit,
+			"%s.wl_is_unit%d", path_str, i);
+    secfile_insert_str(file, name,
+		       "%s.wl_value%d", path_str, i);
+  }
+
+  assert(max_length <= MAX_LEN_WORKLIST);
+
+  /* We want to keep savegame in tabular format, so each line has to be
+   * of equal length. Fill table up to maximum worklist size. */
+  for (i = pwl->length ; i < max_length; i++) {
+    secfile_insert_bool(file, false, "%s.wl_is_unit%d", path_str, i);
+    secfile_insert_str(file, "", "%s.wl_value%d", path_str, i);
+  }
 }

@@ -24,6 +24,6 @@ init_units=""
 cities = "Barbaricum"
 
 is_playable = 0
-barbarian_type = "Land"
+is_barbarian = 1
 
 ; nothing more needed for barbarians

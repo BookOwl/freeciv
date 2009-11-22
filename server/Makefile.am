@@ -1,26 +1,28 @@
 ## Process this file with automake to produce Makefile.in
 
-SUBDIRS = generator scripting
+SUBDIRS=	generator scripting
 
-bin_PROGRAMS = freeciv-server
-lib_LTLIBRARIES = libfreeciv-srv.la
+bin_PROGRAMS = civserver
+noinst_LIBRARIES = libcivserver.a
 AM_CPPFLAGS = \
 	-I$(top_srcdir)/utility -I$(srcdir)/../common -I$(srcdir)/../ai \
-	-I$(top_srcdir)/common/aicore \
+	-I../intl -I$(top_srcdir)/common/aicore \
 	-I$(srcdir)/generator -I$(srcdir)/scripting \
 	$(LIBGGZ_INCLUDES) $(GGZDMOD_INCLUDES) @AUTH_CFLAGS@
+
+## Above, note -I../intl instead of -I$(top_srdir/intl) is deliberate.
 
 if MINGW32
 SERVERICON=../win32/servericon.o
 endif
 
-freeciv_server_SOURCES = \
+civserver_SOURCES = \
 		civserver.c	\
 		civserver.h
 
-libfreeciv_srv_la_SOURCES = \
-		aiiface.c	\
-		aiiface.h	\
+libcivserver_a_SOURCES = \
+		airgoto.c	\
+		airgoto.h	\
 		auth.c		\
 		auth.h		\
 		barbarian.c	\
@@ -41,8 +43,6 @@ libfreeciv_srv_la_SOURCES = \
 		diplhand.h	\
 		diplomats.c	\
 		diplomats.h	\
-		edithand.c	\
-		edithand.h	\
 		gamehand.c	\
 		gamehand.h	\
 		gotohand.c	\
@@ -57,8 +57,6 @@ libfreeciv_srv_la_SOURCES = \
 		maphand.h	\
 		meta.c		\
 		meta.h		\
-		notify.c	\
-		notify.h	\
 		plrhand.c	\
 		plrhand.h	\
 		report.c	\
@@ -92,38 +90,27 @@ libfreeciv_srv_la_SOURCES = \
 		voting.c	\
 		voting.h
 
-# hand_gen.c & hand_gen.h are generated files, but as they are generated
-# outside this directory (when building common) there's no point in
-# setting them to BUILT_SOURCES.
-
-# FIXME: Server library is calling AI functions.
-#        We should get rid of this dependency.
-libfreeciv_srv_la_DEPENDENCIES = \
- $(top_builddir)/ai/libcivai.la
-
-libfreeciv_srv_la_LIBADD = \
- $(top_builddir)/ai/libcivai.la
-
-freeciv_server_DEPENDENCIES = \
- $(top_builddir)/common/libfreeciv.la \
- ./libfreeciv-srv.la \
- ./scripting/libscripting.la \
- $(LUA_AS_DEPENDENCY) $(TOLUA_AS_DEPENDENCY) \
- ./generator/libgenerator.la
-
-freeciv_server_LDFLAGS = $(GGZDMOD_LDFLAGS)
-
-freeciv_server_LDADD = \
- $(top_builddir)/common/libfreeciv.la \
- ./libfreeciv-srv.la \
- $(top_builddir)/common/libfreeciv.la \
- ./libfreeciv-srv.la \
- $(top_builddir)/common/libfreeciv.la \
- ./generator/libgenerator.la \
- ./scripting/libscripting.la $(INTLLIBS) \
- $(LUA_LIBS) $(TOLUA_LIBS) \
- $(AUTH_LIBS) $(SERVER_LIBS) $(LIB_GGZDMOD) $(SERVERICON)
+civserver_DEPENDENCIES = ../utility/libcivutility.a ../common/libcivcommon.a \
+      ../ai/libcivai.a ../utility/libcivutility.a ./libcivserver.a \
+      ../utility/libcivutility.a ../common/aicore/libaicore.a \
+      ./scripting/libscripting.a \
+      ../dependencies/lua/src/liblua.a \
+      ../dependencies/lua/src/lib/liblualib.a \
+      ../dependencies/tolua/libtolua.a \
+      ./generator/libgenerator.a
+civserver_LDFLAGS = $(GGZDMOD_LDFLAGS)
+civserver_LDADD        = ../utility/libcivutility.a ../common/libcivcommon.a \
+      ../ai/libcivai.a ../utility/libcivutility.a ./libcivserver.a $(INTLLIBS) \
+      ../utility/libcivutility.a ../common/libcivcommon.a ../ai/libcivai.a \
+      ../utility/libcivutility.a ./libcivserver.a ../utility/libcivutility.a \
+      ../common/aicore/libaicore.a ./generator/libgenerator.a \
+      ./scripting/libscripting.a \
+      ../dependencies/lua/src/liblua.a \
+      ../dependencies/lua/src/lib/liblualib.a \
+      ../dependencies/tolua/libtolua.a \
+      $(AUTH_LIBS) $(SERVER_LIBS) $(LIB_GGZDMOD) $(SERVERICON)
 
 desktopfiledir = $(prefix)/share/applications
 desktopfile_DATA = \
 	freeciv-server.desktop
+

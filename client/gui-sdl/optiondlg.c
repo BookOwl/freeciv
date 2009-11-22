@@ -36,11 +36,10 @@
 #include "game.h"
 
 /* client */
-#include "client_main.h"
+#include "civclient.h"
 #include "climisc.h"
 #include "clinet.h"
 #include "connectdlg_common.h"
-#include "global_worklist.h"
 
 /* gui-sdl */
 #include "colors.h"
@@ -114,46 +113,64 @@ static int sound_callback(struct widget *pWidget)
   ...
 **************************************************************************/
 static int edit_worklist_callback(struct widget *pWidget)
-{
-  struct global_worklist *pGWL = global_worklist_by_id(MAX_ID - pWidget->ID);
-
-  if (!pGWL) {
-    return -1;
-  }
-
-  switch (Main.event.button.button) {
+{  
+  switch(Main.event.button.button) {
     case SDL_BUTTON_LEFT:
-      if (!(pGWL = global_worklist_by_id(MAX_ID - pWidget->ID))) {
-        break;
-      }
-
       pEdited_WorkList_Name = pWidget;
-      popup_worklist_editor(NULL, pGWL);
+      popup_worklist_editor(NULL,
+		  &game.player_ptr->worklists[MAX_ID - pWidget->ID]);
     break;
     case SDL_BUTTON_MIDDLE:
       /* nothing */
     break;
     case SDL_BUTTON_RIGHT:
     {
-      /* Delete. */
+      int i = MAX_ID - pWidget->ID;
       bool scroll = (pOption_Dlg->pADlg->pActiveWidgetList != NULL);
-
-      global_worklist_destroy(pGWL);
+      
+      for(; i < MAX_NUM_WORKLISTS; i++) {
+	if (!game.player_ptr->worklists[i].is_valid) {
+      	  break;
+	}
+	if (i + 1 < MAX_NUM_WORKLISTS &&
+	    game.player_ptr->worklists[i + 1].is_valid) {
+	  worklist_copy(&game.player_ptr->worklists[i],
+			  &game.player_ptr->worklists[i + 1]);
+	} else {
+	  game.player_ptr->worklists[i].is_valid = FALSE;
+	  strcpy(game.player_ptr->worklists[i].name, "\n");
+	}
+      
+      }
+    
       del_widget_from_vertical_scroll_widget_list(pOption_Dlg->pADlg, pWidget);
-
+      
       /* find if there was scrollbar hide */
-      if (scroll && pOption_Dlg->pADlg->pActiveWidgetList == NULL) {
+      if(scroll && pOption_Dlg->pADlg->pActiveWidgetList == NULL) {
         int len = pOption_Dlg->pADlg->pScroll->pUp_Left_Button->size.w;
-        pWidget = pOption_Dlg->pADlg->pEndActiveWidgetList->next;
+	pWidget = pOption_Dlg->pADlg->pEndActiveWidgetList->next;
         do {
           pWidget = pWidget->prev;
           pWidget->size.w += len;
           FREESURFACE(pWidget->gfx);
         } while(pWidget != pOption_Dlg->pADlg->pBeginActiveWidgetList);
       }   
+      
+      /* find if that was no empty list */
+      for (i = 0; i < MAX_NUM_WORKLISTS; i++)
+        if (!game.player_ptr->worklists[i].is_valid)
+          break;
 
+      /* No more worklist slots free. */
+      if (i < MAX_NUM_WORKLISTS &&
+	(get_wstate(pOption_Dlg->pADlg->pBeginActiveWidgetList) == FC_WS_DISABLED)) {
+        set_wstate(pOption_Dlg->pADlg->pBeginActiveWidgetList, FC_WS_NORMAL);
+        pOption_Dlg->pADlg->pBeginActiveWidgetList->string16->fgcol =
+	                  *get_game_colorRGB(COLOR_THEME_OPTIONDLG_WORKLISTLIST_TEXT);
+      }
+      
       redraw_group(pOption_Dlg->pBeginOptionsWidgetList,
-                   pOption_Dlg->pEndOptionsWidgetList, 0);
+  				pOption_Dlg->pEndOptionsWidgetList, 0);
       widget_mark_dirty(pOption_Dlg->pEndOptionsWidgetList);
       flush_dirty();
     }
@@ -174,19 +191,33 @@ static int add_new_worklist_callback(struct widget *pWidget)
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
     struct widget *pNew_WorkList_Widget = NULL;
     struct widget *pWindow = pOption_Dlg->pEndOptionsWidgetList;
-    struct global_worklist *pGWL = global_worklist_new(_("empty worklist"));
     bool scroll = pOption_Dlg->pADlg->pActiveWidgetList == NULL;
     bool redraw_all = FALSE;
-
+    int j;
+  
     set_wstate(pWidget, FC_WS_NORMAL);
     pSellected_Widget = NULL;
-
+    
+    /* Find the next free worklist for this player */
+  
+    for (j = 0; j < MAX_NUM_WORKLISTS; j++)
+      if (!game.player_ptr->worklists[j].is_valid)
+        break;
+  
+    /* No more worklist slots free.  (!!!Maybe we should tell the user?) */
+    if (j == MAX_NUM_WORKLISTS) {
+      return -2;
+    }
+    
+    /* Validate this slot. */
+    worklist_init(&game.player_ptr->worklists[j]);
+    game.player_ptr->worklists[j].is_valid = TRUE;
+    strcpy(game.player_ptr->worklists[j].name, _("empty worklist"));
+    
     /* create list element */
-    pNew_WorkList_Widget =
-      create_iconlabel_from_chars(NULL, pWidget->dst, 
-                                  global_worklist_name(pGWL),
-                                  adj_font(12), WF_RESTORE_BACKGROUND);
-    pNew_WorkList_Widget->ID = MAX_ID - global_worklist_id(pGWL);
+    pNew_WorkList_Widget = create_iconlabel_from_chars(NULL, pWidget->dst, 
+                  game.player_ptr->worklists[j].name, adj_font(12), WF_RESTORE_BACKGROUND);
+    pNew_WorkList_Widget->ID = MAX_ID - j;
     pNew_WorkList_Widget->string16->style |= SF_CENTER;
     set_wstate(pNew_WorkList_Widget, FC_WS_NORMAL);
     pNew_WorkList_Widget->size.w = pWidget->size.w;
@@ -210,6 +241,18 @@ static int add_new_worklist_callback(struct widget *pWidget)
         FREESURFACE(pWindow->gfx);
       } while(pWindow != pOption_Dlg->pADlg->pBeginActiveWidgetList);
     }
+    
+    /* find if that was last empty list */
+    for (j = 0; j < MAX_NUM_WORKLISTS; j++)
+      if (!game.player_ptr->worklists[j].is_valid)
+        break;
+  
+    /* No more worklist slots free. */
+    if (j == MAX_NUM_WORKLISTS) {
+      set_wstate(pWidget, FC_WS_DISABLED);
+      pWidget->string16->fgcol = *(get_game_colorRGB(COLOR_THEME_WIDGET_DISABLED_TEXT));
+    }
+    
     
     if(redraw_all) {
       redraw_group(pOption_Dlg->pBeginOptionsWidgetList,
@@ -238,7 +281,8 @@ static int add_new_worklist_callback(struct widget *pWidget)
 
 /**************************************************************************
  * The Worklist Report part of Options dialog shows all the global
- * worklists that the player has defined.
+ * worklists that the player has defined.  There can be at most
+ * MAX_NUM_WORKLISTS global worklists.
 **************************************************************************/
 static int work_lists_callback(struct widget *pWidget)
 {
@@ -247,7 +291,7 @@ static int work_lists_callback(struct widget *pWidget)
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
     struct widget *pBuf = NULL;
     struct widget *pWindow = pOption_Dlg->pEndOptionsWidgetList;
-    int count = 0, scrollbar_width = 0;
+    int i , count = 0, scrollbar_width = 0;
     SDL_Rect area = {pWindow->area.x + adj_size(12),
                      pWindow->area.y + adj_size(12),
                      pWindow->area.w - adj_size(12) - adj_size(12),
@@ -272,32 +316,35 @@ static int work_lists_callback(struct widget *pWidget)
     add_to_gui_list(ID_LABEL, pBuf);
     
     /* ----------------------------- */
-    global_worklists_iterate(pGWL) {
-      pBuf = create_iconlabel_from_chars(NULL, pWindow->dst,
-                                         global_worklist_name(pGWL),
-                                         adj_font(12),
-                                         WF_RESTORE_BACKGROUND);
+    for (i = 0; i < MAX_NUM_WORKLISTS; i++) {
+      if (game.player_ptr->worklists[i].is_valid) {
+        pBuf = create_iconlabel_from_chars(NULL, pWindow->dst, 
+                  game.player_ptr->worklists[i].name, adj_font(12),
+                                                WF_RESTORE_BACKGROUND);
+        set_wstate(pBuf, FC_WS_NORMAL);
+        add_to_gui_list(MAX_ID - i, pBuf);
+        pBuf->action = edit_worklist_callback;
+        pBuf->string16->style |= SF_CENTER;
+        count++;
+      
+        if(count>13) {
+          set_wflag(pBuf, WF_HIDDEN);
+        }
+      }
+    }
+    
+    if(count < MAX_NUM_WORKLISTS) {
+      pBuf = create_iconlabel_from_chars(NULL, pWindow->dst, 
+                  _("Add new worklist"), adj_font(12), WF_RESTORE_BACKGROUND);
       set_wstate(pBuf, FC_WS_NORMAL);
-      add_to_gui_list(MAX_ID - global_worklist_id(pGWL), pBuf);
-      pBuf->action = edit_worklist_callback;
+      add_to_gui_list(ID_ADD_NEW_WORKLIST, pBuf);
+      pBuf->action = add_new_worklist_callback;
       pBuf->string16->style |= SF_CENTER;
       count++;
-
-      if (count > 13) {
+      
+      if(count>13) {
         set_wflag(pBuf, WF_HIDDEN);
       }
-    } global_worklists_iterate_end;
-
-    pBuf = create_iconlabel_from_chars(NULL, pWindow->dst, 
-                _("Add new worklist"), adj_font(12), WF_RESTORE_BACKGROUND);
-    set_wstate(pBuf, FC_WS_NORMAL);
-    add_to_gui_list(ID_ADD_NEW_WORKLIST, pBuf);
-    pBuf->action = add_new_worklist_callback;
-    pBuf->string16->style |= SF_CENTER;
-    count++;
-    
-    if (count > 13) {
-      set_wflag(pBuf, WF_HIDDEN);
     }
     /* ----------------------------- */
     
@@ -1256,34 +1303,6 @@ static int draw_city_productions_callback(struct widget *pWidget)
 /**************************************************************************
   ...
 **************************************************************************/
-static int draw_city_output_callback(struct widget *pWidget)
-{
-  if (Main.event.button.button == SDL_BUTTON_LEFT) {
-    widget_redraw(pWidget);
-    widget_flush(pWidget);
-    draw_city_output ^= 1;
-    update_map_canvas_visible();
-  }
-  return -1;
-}
-
-/**************************************************************************
-  ...
-**************************************************************************/
-static int draw_city_trade_routes_callback(struct widget *pWidget)
-{
-  if (Main.event.button.button == SDL_BUTTON_LEFT) {
-    widget_redraw(pWidget);
-    widget_flush(pWidget);
-    draw_city_trade_routes ^= 1;
-    update_map_canvas_visible();
-  }
-  return -1;
-}
-
-/**************************************************************************
-  ...
-**************************************************************************/
 static int borders_callback(struct widget *pWidget)
 {
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
@@ -1568,65 +1587,11 @@ static int map_setting_callback(struct widget *pWidget)
     
     pTmpGui->size.x = pWindow->size.x + adj_size(55);
   
-    add_to_gui_list(ID_OPTIONS_MAP_CITY_PROD_LABEL, pTmpGui);
+    add_to_gui_list(ID_OPTIONS_MAP_CITY_NAMES_LABEL, pTmpGui);
   
     pTmpGui->size.y = pTmpGui->next->size.y +
         ((pTmpGui->next->size.h - pTmpGui->size.h) / 2);
   
-    /* 'draw city worker output on map' */
-    /* check box */
-    pTmpGui = create_checkbox(pWindow->dst, draw_city_output,
-                              WF_RESTORE_BACKGROUND);
-  
-    pTmpGui->action = draw_city_output_callback;
-    set_wstate(pTmpGui, FC_WS_NORMAL);
-  
-    pTmpGui->size.x = pWindow->size.x + adj_size(15);
-  
-    add_to_gui_list(ID_OPTIONS_MAP_CITY_OUTPUT_CHECKBOX, pTmpGui);
-    pTmpGui->size.y = pTmpGui->next->next->size.y + pTmpGui->size.h + adj_size(4);
-  
-    /* label */
-    pStr = create_str16_from_char(_("City Output"), adj_font(10));
-    pStr->style |= TTF_STYLE_BOLD;
-    pStr->fgcol = text_color;
-    pTmpGui = create_iconlabel(NULL, pWindow->dst, pStr, 0);
-    
-    pTmpGui->size.x = pWindow->size.x + adj_size(55);
-  
-    add_to_gui_list(ID_OPTIONS_MAP_CITY_OUTPUT_LABEL, pTmpGui);
-  
-    pTmpGui->size.y = pTmpGui->next->size.y +
-        ((pTmpGui->next->size.h - pTmpGui->size.h) / 2);
-
-    
-    /* 'show city trade routes' */
-    /* check box */
-    pTmpGui = create_checkbox(pWindow->dst, draw_city_trade_routes,
-                              WF_RESTORE_BACKGROUND);
-  
-    pTmpGui->action = draw_city_trade_routes_callback;
-    set_wstate(pTmpGui, FC_WS_NORMAL);
-  
-    pTmpGui->size.x = pWindow->size.x + adj_size(15);
-  
-    add_to_gui_list(ID_OPTIONS_MAP_CITY_TRADE_ROUTES_CHECKBOX, pTmpGui);
-    pTmpGui->size.y = pTmpGui->next->next->size.y + pTmpGui->size.h + adj_size(4);
-  
-    /* label */
-    pStr = create_str16_from_char(_("City Trade Routes"), adj_font(10));
-    pStr->style |= TTF_STYLE_BOLD;
-    pStr->fgcol = text_color;
-    pTmpGui = create_iconlabel(NULL, pWindow->dst, pStr, 0);
-    
-    pTmpGui->size.x = pWindow->size.x + adj_size(55);
-  
-    add_to_gui_list(ID_OPTIONS_MAP_CITY_TRADE_ROUTES_LABEL, pTmpGui);
-  
-    pTmpGui->size.y = pTmpGui->next->size.y +
-        ((pTmpGui->next->size.h - pTmpGui->size.h) / 2);
-
-    
     /* 'draw borders' */
     /* check box */
     pTmpGui = create_checkbox(pWindow->dst, draw_borders,
@@ -1870,7 +1835,33 @@ static int map_setting_callback(struct widget *pWidget)
   
     pTmpGui->size.y = pTmpGui->next->size.y +
         (pTmpGui->next->size.h - pTmpGui->size.h) / 2;
+  
+    /* 'draw fog of war' */
+  
+    /* check box */
+    pTmpGui = create_checkbox(pWindow->dst,
+                          draw_fog_of_war, WF_RESTORE_BACKGROUND);
+  
+    pTmpGui->action = draw_fog_of_war_callback;
+    set_wstate(pTmpGui, FC_WS_NORMAL);
+  
+    pTmpGui->size.x = pWindow->size.x + adj_size(15);
+  
+    add_to_gui_list(ID_OPTIONS_MAP_TERRAIN_FOG_CHECKBOX, pTmpGui);
+    pTmpGui->size.y = pTmpGui->next->next->size.y + pTmpGui->size.h + adj_size(3);
+  
+    /* label */
+    pStr = create_str16_from_char(_("Fog of War"), adj_font(10));
+    pStr->style |= TTF_STYLE_BOLD;
+    pStr->fgcol = text_color;
+    pTmpGui = create_iconlabel(NULL, pWindow->dst, pStr, 0);
     
+    pTmpGui->size.x = pWindow->size.x + adj_size(55);
+  
+    add_to_gui_list(ID_OPTIONS_MAP_TERRAIN_FOG_LABEL, pTmpGui);
+  
+    pTmpGui->size.y = pTmpGui->next->size.y +
+        (pTmpGui->next->size.h - pTmpGui->size.h) / 2;
     
     /* 'draw road / rails' */
     /* check box */
@@ -1976,34 +1967,6 @@ static int map_setting_callback(struct widget *pWidget)
   
     pTmpGui->size.y = pTmpGui->next->size.y +
         (pTmpGui->next->size.h - pTmpGui->size.h) / 2;
-    
-    /* 'draw fog of war' */
-  
-    /* check box */
-    pTmpGui = create_checkbox(pWindow->dst,
-                              draw_fog_of_war, WF_RESTORE_BACKGROUND);
-  
-    pTmpGui->action = draw_fog_of_war_callback;
-    set_wstate(pTmpGui, FC_WS_NORMAL);
-  
-    pTmpGui->size.x = pWindow->size.x + adj_size(170);
-  
-    add_to_gui_list(ID_OPTIONS_MAP_TERRAIN_FOG_CHECKBOX, pTmpGui);
-    pTmpGui->size.y = pTmpGui->next->next->size.y + pTmpGui->size.h + adj_size(4);
-  
-    /* label */
-    pStr = create_str16_from_char(_("Fog of War"), adj_font(10));
-    pStr->style |= TTF_STYLE_BOLD;
-    pStr->fgcol = text_color;
-    pTmpGui = create_iconlabel(NULL, pWindow->dst, pStr, 0);
-    
-    pTmpGui->size.x = pWindow->size.x + adj_size(210);
-  
-    add_to_gui_list(ID_OPTIONS_MAP_TERRAIN_FOG_LABEL, pTmpGui);
-  
-    pTmpGui->size.y = pTmpGui->next->size.y +
-        (pTmpGui->next->size.h - pTmpGui->size.h) / 2;
-
   
   #if 0
     /* Civ3 / Classic CITY Text Style */
@@ -2073,7 +2036,7 @@ static int back_callback(struct widget *pWidget)
     
     if (SDL_Client_Flags & CF_OPTION_MAIN) {
       popdown_optiondlg();
-      if (client.conn.established) {
+      if(aconnection.established) {
         enable_options_button();
         widget_redraw(pOptions_Button);
         widget_mark_dirty(pOptions_Button);
@@ -2325,7 +2288,7 @@ void popup_optiondlg(void)
   pTmp_GUI->action = disconnect_callback;
   pTmp_GUI->key = SDLK_q;
     
-  if (client.conn.established) {
+  if(aconnection.established) {
     set_wstate(pTmp_GUI, FC_WS_NORMAL);
   }
 
@@ -2402,20 +2365,17 @@ void popdown_optiondlg(void)
 **************************************************************************/
 void update_worklist_report_dialog(void)
 {
-  struct global_worklist *pGWL;
-
-  if (pOption_Dlg) {
+  if(pOption_Dlg) {
     
     /* this is no NULL when inside worklist editors */
-    if (pEdited_WorkList_Name
-        && (pGWL = global_worklist_by_id(MAX_ID - pEdited_WorkList_Name->ID))) {
+    if(pEdited_WorkList_Name) {
       copy_chars_to_string16(pEdited_WorkList_Name->string16,
-                             global_worklist_name(pGWL));
+        game.player_ptr->worklists[MAX_ID - pEdited_WorkList_Name->ID].name);
       pEdited_WorkList_Name = NULL;
     }
   
     redraw_group(pOption_Dlg->pBeginOptionsWidgetList,
-                 pOption_Dlg->pEndOptionsWidgetList, 0);
+  				pOption_Dlg->pEndOptionsWidgetList, 0);
     widget_mark_dirty(pOption_Dlg->pEndOptionsWidgetList);
   }
 }

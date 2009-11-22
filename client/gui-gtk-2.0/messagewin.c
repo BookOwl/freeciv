@@ -30,6 +30,7 @@
 #include "player.h"
 #include "chatline.h"
 #include "citydlg.h"
+#include "clinet.h"
 #include "colors.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
@@ -176,7 +177,7 @@ static void create_meswin_dialog(void)
   GtkTreeViewColumn *col;
   GtkWidget *view, *sw, *cmd, *notebook;
 
-  if (gui_gtk2_split_bottom_notebook) {
+  if (split_bottom_notebook) {
     notebook = right_notebook;
   } else {
     notebook = bottom_notebook;
@@ -216,7 +217,7 @@ static void create_meswin_dialog(void)
   g_signal_connect(view, "button-press-event",
                    G_CALLBACK(meswin_button_press_callback), NULL);
 
-  if (gui_gtk2_show_message_window_buttons) {
+  if (show_message_window_buttons) {
     cmd = gui_dialog_add_stockbutton(meswin_shell, GTK_STOCK_JUMP_TO,
                                      _("Goto _Location"), CMD_GOTO);
     gtk_widget_set_sensitive(cmd, FALSE);
@@ -253,7 +254,7 @@ void real_update_meswin_dialog(void)
   for (i = 0; i < num; i++) {
     pmsg = get_message(i);
 
-    if (gui_gtk2_new_messages_go_to_top) {
+    if (new_messages_go_to_top) {
       gtk_list_store_prepend(store, &it);
     } else {
       gtk_list_store_append(store, &it);

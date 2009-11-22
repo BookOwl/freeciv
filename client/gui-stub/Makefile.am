@@ -1,9 +1,11 @@
 ## Process this file with automake to produce Makefile.in
 
-noinst_LTLIBRARIES = libgui-stub.la
-AM_CPPFLAGS = -I. -I$(srcdir)/.. -I$(srcdir)/../include -I$(top_srcdir)/utility -I$(top_srcdir)/common $(GUI_stub_CFLAGS) $(SOUND_CFLAGS)
+noinst_LIBRARIES = libguiclient.a
+AM_CPPFLAGS = -I. -I$(srcdir)/.. -I$(srcdir)/../include -I$(top_srcdir)/utility -I$(top_srcdir)/common -I../../intl $(CLIENT_CFLAGS)
 
-libgui_stub_la_SOURCES = \
+## Above, note -I../../intl instead of -I$(top_srdir)/intl is deliberate.
+
+libguiclient_a_SOURCES = \
 	canvas.c	\
 	canvas.h	\
 	chatline.c	\
@@ -55,7 +57,5 @@ libgui_stub_la_SOURCES = \
 	sprite.c	\
 	sprite.h	\
 	themes.c	\
-	voteinfo_bar.c	\
-	voteinfo_bar.h	\
 	wldlg.c		\
 	wldlg.h

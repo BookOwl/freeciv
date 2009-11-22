@@ -34,12 +34,6 @@
 
 static struct nation_type *nations = NULL;
 
-struct nation_iter {
-  struct iterator vtable;
-  struct nation_type *p, *end;
-};
-#define NATION_ITER(p) ((struct nation_iter *)(p))
-
 static int num_nation_groups;
 static struct nation_group nation_groups[MAX_NUM_NATION_GROUPS];
 
@@ -59,11 +53,11 @@ static bool bounds_check_nation(const struct nation_type *pnation,
     freelog(loglevel, "%s() has NULL nation", func_name);
     return FALSE;
   }
-  if (pnation->item_number < 0
-      || pnation->item_number >= nation_count()
+  if (pnation->index < 0
+      || pnation->index >= nation_count()
       || &nations[nation_index(pnation)] != pnation) {
     freelog(loglevel, "%s() has bad nation number %d (count %d)",
-	    func_name, pnation->item_number, nation_count());
+	    func_name, pnation->index, nation_count());
     return FALSE;
   }
   return TRUE;
@@ -182,16 +176,17 @@ bool is_nation_playable(const struct nation_type *nation)
 }
 
 /****************************************************************************
-  Returns which kind of barbarians can use this nation.
+  Return whether a nation is usable as a barbarian.  If true then barbarians
+  can use this nation.
 
   This does not check whether a nation is "used" or "available".
 ****************************************************************************/
-enum barbarian_type nation_barbarian_type(const struct nation_type *nation)
+bool is_nation_barbarian(const struct nation_type *nation)
 {
-  if (!bounds_check_nation(nation, LOG_FATAL, "nation_barbarian_type")) {
+  if (!bounds_check_nation(nation, LOG_FATAL, "is_nation_barbarian")) {
     die("bad nation");
   }
-  return nation->barb_type;
+  return nation->is_barbarian;
 }
 
 /***************************************************************
@@ -309,7 +304,7 @@ struct nation_type *nation_by_number(const Nation_type_id nation)
 Nation_type_id nation_number(const struct nation_type *pnation)
 {
   assert(pnation);
-  return pnation->item_number;
+  return pnation->index;
 }
 
 /**************************************************************************
@@ -332,50 +327,26 @@ Nation_type_id nation_count(void)
   return game.control.nation_count;
 }
 
-/****************************************************************************
-  Implementation of iterator 'sizeof' function.
-****************************************************************************/
-size_t nation_iter_sizeof(void)
+/**************************************************************************
+  Return the last item of nations.
+**************************************************************************/
+const struct nation_type *nation_array_last(void)
 {
-  return sizeof(struct nation_iter);
+  if (game.control.nation_count > 0) {
+    return &nations[game.control.nation_count - 1];
+  }
+  return NULL;
 }
 
-/****************************************************************************
-  Implementation of iterator 'next' function.
-****************************************************************************/
-static void nation_iter_next(struct iterator *iter)
+/**************************************************************************
+  Return the first item of nations.
+**************************************************************************/
+struct nation_type *nation_array_first(void)
 {
-  NATION_ITER(iter)->p++;
-}
-
-/****************************************************************************
-  Implementation of iterator 'get' function.
-****************************************************************************/
-static void *nation_iter_get(const struct iterator *iter)
-{
-  return NATION_ITER(iter)->p;
-}
-
-/****************************************************************************
-  Implementation of iterator 'valid' function.
-****************************************************************************/
-static bool nation_iter_valid(const struct iterator *iter)
-{
-  struct nation_iter *it = NATION_ITER(iter);
-  return it->p < it->end;
-}
-
-/****************************************************************************
-  Implementation of iterator 'init' function.
-****************************************************************************/
-struct iterator *nation_iter_init(struct nation_iter *it)
-{
-  it->vtable.next = nation_iter_next;
-  it->vtable.get = nation_iter_get;
-  it->vtable.valid = nation_iter_valid;
-  it->p = nations;
-  it->end = nations + nation_count();
-  return ITERATOR(it);
+  if (game.control.nation_count > 0) {
+    return nations;
+  }
+  return NULL;
 }
 
 /***************************************************************
@@ -389,7 +360,7 @@ void nations_alloc(int num)
   game.control.nation_count = num;
 
   for (i = 0; i < num; i++) {
-    nations[i].item_number = i;
+    nations[i].index = i;
   }
 }
 
@@ -636,8 +607,7 @@ void nation_groups_free(void)
 bool can_conn_edit_players_nation(const struct connection *pconn,
 				  const struct player *pplayer)
 {
-  return (can_conn_edit(pconn)
-          || (game.info.is_new_game
-	      && ((!pconn->observer && pconn->playing == pplayer)
-	           || pconn->access_level >= ALLOW_CTRL)));
+  return (game.info.is_new_game
+	  && ((!pconn->observer && pconn->player == pplayer)
+	      || pconn->access_level >= ALLOW_CTRL));
 }

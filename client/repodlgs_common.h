@@ -22,7 +22,7 @@
 
 struct improvement_entry
 {
-  struct impr_type *type;
+  Impr_type_id type;
   int count, cost, total_cost;
 };
 
@@ -57,17 +57,17 @@ struct options_settable {
 
   int val;
   int default_val;
+  int desired_val;
   int min;
   int max;
 
   char *strval;
   char *default_strval;
+  char *desired_strval;
 
   char *name;
   char *short_help;
   char *extra_help;
-
-  bool desired_sent;
 };
 
 extern struct options_settable *settable_options;
@@ -79,7 +79,7 @@ extern int num_options_categories;
 void settable_options_init(void);
 void settable_options_free(void);
 
-void sell_all_improvements(struct impr_type *pimprove, bool obsolete_only,
+void sell_all_improvements(Impr_type_id impr, bool obsolete_only,
 			   char *message, size_t message_sz);
 void disband_all_units(struct unit_type *punittype, bool in_cities_only,
 		       char *message, size_t message_sz);

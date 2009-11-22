@@ -23,17 +23,13 @@
 #include <gtk/gtk.h>
 #include <gdk/gdkkeysyms.h>
 
-/* utility */
 #include "fcintl.h"
 #include "log.h"
 #include "mem.h"
 #include "support.h"
 
-/* client */
-#include "options.h"
-
-/* gui-gtk-2.0 */
 #include "colors.h"
+#include "options.h"
 #include "gui_main.h"
 
 #include "gui_stuff.h"
@@ -277,7 +273,7 @@ static void close_callback(GtkDialog *dialog, gpointer data)
 ***********************************************************************/
 void setup_dialog(GtkWidget *shell, GtkWidget *parent)
 {
-  if (gui_gtk2_dialogs_on_top || fullscreen_mode) {
+  if (dialogs_on_top || fullscreen_mode) {
     gtk_window_set_transient_for(GTK_WINDOW(shell),
                                  GTK_WINDOW(parent));
     gtk_window_set_type_hint(GTK_WINDOW(shell),
@@ -495,7 +491,7 @@ static gboolean click_on_tab_callback(GtkWidget* w,
 
 /**************************************************************************
   Creates a new dialog. It will be a tab or a window depending on the
-  current user setting of 'gui_gtk2_enable_tabs'.
+  current user setting of 'enable_tabs'.
   Sets pdlg to point to the dialog once it is create, Zeroes pdlg on
   dialog destruction.
   user_data will be passed through response function
@@ -518,7 +514,7 @@ void gui_dialog_new(struct gui_dialog **pdlg, GtkNotebook *notebook,
   dlg->default_width = 200;
   dlg->default_height = 300;
 
-  if (gui_gtk2_enable_tabs) {
+  if (enable_tabs) {
     dlg->type = GUI_DIALOG_TAB;
   } else {
     dlg->type = GUI_DIALOG_WINDOW;
@@ -529,7 +525,7 @@ void gui_dialog_new(struct gui_dialog **pdlg, GtkNotebook *notebook,
   }
   dlg->gui_button = gtk_size_group_new(GTK_SIZE_GROUP_BOTH);
 
-  if (gui_gtk2_enable_tabs && notebook == GTK_NOTEBOOK(bottom_notebook)) {
+  if (enable_tabs && notebook == GTK_NOTEBOOK(bottom_notebook)) {
     vbox = gtk_hbox_new(FALSE, 0);
     action_area = gtk_vbox_new(FALSE, 2);
   } else {
@@ -981,88 +977,6 @@ void gui_dialog_set_return_dialog(struct gui_dialog *dlg,
   } else {
     dlg->return_dialog_id = return_dialog->id;
   }
-}
-
-/**************************************************************************
-  Updates a gui font style.
-**************************************************************************/
-void gui_update_font(const char *font_name, const char *font_value)
-{
-  char str[512];
-
-  my_snprintf(str, sizeof(str),
-              "style \"ext-%s\" {\n"
-              "  font_name = \"%s\"\n"
-              "}\n"
-              "\n"
-              "widget \"Freeciv*.%s\" style \"ext-%s\"",
-              font_name, font_value, font_name, font_name);
-
-  gtk_rc_parse_string(str);
-}
-
-/****************************************************************************
-  Update a font option which is not attached to a widget.
-****************************************************************************/
-void gui_update_font_full(const char *font_name, const char *font_value,
-                          GtkStyle **pstyle)
-{
-  GtkSettings *settings;
-  GdkScreen *screen;
-  GtkStyle *style;
-  char buf[64];
-
-  gui_update_font(font_name, font_value);
-
-  screen = gdk_screen_get_default();
-  settings = gtk_settings_get_for_screen(screen);
-
-  my_snprintf(buf, sizeof(buf), "Freeciv*.%s", font_name);
-  style = gtk_rc_get_style_by_paths(settings, buf, NULL, G_TYPE_NONE);
-
-  if (style) {
-    g_object_ref(style);
-  } else {
-    style = gtk_style_new();
-  }
-
-  if (*pstyle) {
-    g_object_unref(*pstyle);
-  }
-  *pstyle = style;
-}
-
-/****************************************************************************
-  Temporarily disable signal invocation of the given callback for the given
-  GObject. Re-enable the signal with enable_gobject_callback.
-****************************************************************************/
-void disable_gobject_callback(GObject *obj, GCallback cb)
-{
-  gulong hid;
-
-  if (!obj || !cb) {
-    return;
-  }
-
-  hid = g_signal_handler_find(obj, G_SIGNAL_MATCH_FUNC,
-                              0, 0, NULL, cb, NULL);
-  g_signal_handler_block(obj, hid);
-}
-
-/****************************************************************************
-  Re-enable a signal callback blocked by disable_gobject_callback.
-****************************************************************************/
-void enable_gobject_callback(GObject *obj, GCallback cb)
-{
-  gulong hid;
-
-  if (!obj || !cb) {
-    return;
-  }
-
-  hid = g_signal_handler_find(obj, G_SIGNAL_MATCH_FUNC,
-                              0, 0, NULL, cb, NULL);
-  g_signal_handler_unblock(obj, hid);
 }
 
 /**************************************************************************

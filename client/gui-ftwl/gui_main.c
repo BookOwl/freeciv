@@ -15,43 +15,38 @@
 #include <config.h>
 #endif
 
-#ifdef AUDIO_SDL
-#include "SDL.h"
-#endif
-
 #include <stdio.h>
 #include <assert.h>
 
-/* utility */
 #include "fcintl.h"
 #include "fciconv.h"
 #include "log.h"
 #include "registry.h"
-#include "shared.h"
-#include "support.h"
-
-/* client */
-#include "clinet.h"
-#include "editgui_g.h"
-#include "ggz_g.h"
-#include "graphics_g.h"
 
 #include "chatline.h"
 #include "colors_common.h"
 #include "colors.h"
 #include "back_end.h"
 #include "widget.h"
-#include "client_main.h"
+#include "graphics_g.h"
+#include "civclient.h"
+#include "shared.h"
+#include "support.h"
 #include "tilespec.h"
 #include "theme_engine.h"
 #include "chat.h"
 #include "mapview.h"
 #include "control.h"
+#include "clinet.h"
 
 #include "gui_main.h"
 
 const char * const gui_character_encoding = "UTF-8";
 const bool gui_use_transliteration = FALSE;
+
+client_option gui_options[] = {
+};
+const int num_gui_options = ARRAY_SIZE(gui_options);
 
 struct sw_widget *root_window;
 
@@ -68,14 +63,6 @@ static be_color all_colors[COLOR_EXT_LAST];
 void ui_init(void)
 {
   /* PORTME */
-}
-
-/****************************************************************************
-  Extra initializers for client options.
-****************************************************************************/
-void gui_options_extra_init(void)
-{
-  /* Nothing to do. */
 }
 
 /**************************************************************************
@@ -183,15 +170,7 @@ static bool my_key_handler(struct sw_widget *widget,
 }
 
 /**************************************************************************
-  Entry point for whole freeciv client program.
-**************************************************************************/
-int main(int argc, char **argv)
-{
-  return client_main(argc, argv);
-}
-
-/**************************************************************************
-  The main loop for the UI.  This is called from client_main(), and when it
+  The main loop for the UI.  This is called from main(), and when it
   exits the client will exit.
 **************************************************************************/
 void ui_main(int argc, char *argv[])
@@ -206,9 +185,7 @@ void ui_main(int argc, char *argv[])
 
   while (i < argc) {
     if (is_option("--help", argv[i])) {
-      fc_fprintf(stderr,
-                 "  -d, --dump\t\t%s\n",
-                 _("Enable screen dumper"));
+      fc_fprintf(stderr, _("  -d, --dump\t\tEnable screen dumper\n"));
       if (be_supports_fullscreen()) {
 	fc_fprintf(stderr,
 		   _("  -f, --fullscreen\t"
@@ -225,7 +202,7 @@ void ui_main(int argc, char *argv[])
 		 DEFAULT_THEME);
       exit(EXIT_SUCCESS);
     } else if (is_option("--dump", argv[i])) {
-      freelog(LOG_VERBOSE, "Enable screen dumper");
+      freelog(LOG_NORMAL, "enabling screen dumper");
       sw_set_dump_screen(TRUE);
     } else if (is_option("--fullscreen", argv[i])) {
       fullscreen = TRUE;
@@ -238,13 +215,13 @@ void ui_main(int argc, char *argv[])
       theme = mystrdup(option);
       free(option);
     } else {
-      freelog(LOG_ERROR, _("Unknown option \"%s\""), argv[i]);
+      freelog(LOG_ERROR, "unknown option '%s'", argv[i]);
     }
     i++;
   }
 
   if (sscanf(resolution, "%dx%d", &res.width, &res.height) != 2) {
-    freelog(LOG_ERROR, _("Resolution \"%s\" doesn't parse"), resolution);
+    freelog(LOG_ERROR, "The resolution '%s' doesn't parse", resolution);
   }
   free(resolution);
 
@@ -276,7 +253,7 @@ void ui_main(int argc, char *argv[])
   timer_callback(NULL);
   sw_window_set_key_notify(root_window, my_key_handler, NULL);
 
-  set_client_state(C_S_DISCONNECTED);
+  set_client_state(C_S_PREPARING);
   sw_mainloop(input_from_server);
 }
 
@@ -286,14 +263,6 @@ void ui_main(int argc, char *argv[])
 void ui_exit()
 {
   /* PORTME */
-}
-
-/**************************************************************************
-  Return our GUI type
-**************************************************************************/
-enum gui_type get_gui_type(void)
-{
-  return GUI_FTWL;
 }
 
 /**************************************************************************
@@ -373,54 +342,4 @@ void update_conn_list_dialog(void)
 void add_idle_callback(void (callback) (void *), void *data)
 {
   sw_add_timeout(-1, callback, data);
-}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_tileset_changed(void)
-{}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_refresh(void)
-{}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_popup_properties(const struct tile_list *tiles, int objtype)
-{}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_notify_object_changed(int objtype, int object_id, bool remove)
-{}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_notify_object_created(int tag, int id)
-{}
-
-/****************************************************************************
-  Stub for ggz function
-****************************************************************************/
-void gui_ggz_embed_leave_table(void)
-{}
-
-/****************************************************************************
-  Stub for ggz function
-****************************************************************************/
-void gui_ggz_embed_ensure_server(void)
-{}
-
-/**************************************************************************
-  Updates a gui font style.
-**************************************************************************/
-void gui_update_font(const char *font_name, const char *font_value)
-{
-  /* PORTME */
 }

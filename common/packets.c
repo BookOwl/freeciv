@@ -273,11 +273,11 @@ int send_packet_data(struct connection *pc, unsigned char *data, int len)
 		packets_stats[i].size / packets_stats[i].counter,
 		get_packet_name(i),i);
       }
-      freelog(LOG_TEST,
+      freelog(LOG_NORMAL,
 	      "turn=%d; transmitted %d bytes in %d packets;average size "
 	      "per packet %d bytes", game.turn, sum, packet_counter,
 	      sum / packet_counter);
-      freelog(LOG_TEST, "turn=%d; transmitted %d bytes", game.turn,
+      freelog(LOG_NORMAL, "turn=%d; transmitted %d bytes", game.turn,
 	      pc->statistics.bytes_send);
     }    
     if (clear) {
@@ -473,19 +473,19 @@ void *get_packet_from_connection(struct connection *pc,
     if (packet_counter % 100 == 0) {
       int i, sum = 0;
 
-      freelog(LOG_TEST, "Received packets:");
+      freelog(LOG_NORMAL, "Received packets:");
       for (i = 0; i < PACKET_LAST; i++) {
 	if (packets_stats[i].counter == 0)
 	  continue;
 	sum += packets_stats[i].size;
-	freelog(LOG_TEST,
+	freelog(LOG_NORMAL,
 		"  [%-25.25s %3d]: %6d packets; %8d bytes total; "
 		"%5d bytes/packet average",
 		get_packet_name(i), i, packets_stats[i].counter,
 		packets_stats[i].size,
 		packets_stats[i].size / packets_stats[i].counter);
       }
-      freelog(LOG_TEST,
+      freelog(LOG_NORMAL,
 	      "received %d bytes in %d packets;average size "
 	      "per packet %d bytes",
 	      sum, packet_counter, sum / packet_counter);
@@ -660,6 +660,45 @@ void send_attribute_block(const struct player *pplayer,
 }
 
 /**************************************************************************
+  This function is a hack to convert the internal form for storing
+  connection IDs and map positions into the network form.  It's called
+  directly on a packet before it's written to the network.
+**************************************************************************/
+void pre_send_packet_chat_msg(struct connection *pc,
+			      struct packet_chat_msg *packet)
+{
+  if (packet->conn_id == -1) {
+    /* since we can currently only send unsigned ints... */
+    packet->conn_id = 255;
+  }
+
+  if (packet->x == -1 && packet->y == -1) {
+    /* since we can currently only send unsigned ints... */
+    assert(!is_normal_map_pos(255, 255));
+    packet->x = 255;
+    packet->y = 255;
+  }
+}
+
+/**************************************************************************
+  This function is a hack to convert the network form for storing
+  connection IDs and map positions into the internal form.  It's
+  called directly on a packet after it's been received from the network.
+**************************************************************************/
+void post_receive_packet_chat_msg(struct connection *pc,
+				  struct packet_chat_msg *packet)
+{
+  if (packet->x == 255 && packet->y == 255) {
+    /* unsigned encoding for no position */
+    packet->x = -1;
+    packet->y = -1;
+  }
+  if (packet->conn_id == 255) {
+    packet->conn_id = -1;
+  }
+}
+
+/**************************************************************************
   Test and log for sending player attribute_block
 **************************************************************************/
 void pre_send_packet_player_attribute_chunk(struct connection *pc,
@@ -682,8 +721,8 @@ void pre_send_packet_player_attribute_chunk(struct connection *pc,
 /**************************************************************************
   ...
 **************************************************************************/
-void post_receive_packet_ruleset_control(struct connection *pc,
-                                         struct packet_ruleset_control *packet)
+void post_receive_packet_game_state(struct connection *pc,
+				    struct packet_game_state *packet)
 {
   conn_clear_packet_cache(pc);
 }
@@ -691,8 +730,8 @@ void post_receive_packet_ruleset_control(struct connection *pc,
 /**************************************************************************
   ...
 **************************************************************************/
-void post_send_packet_ruleset_control(struct connection *pc,
-                                      const struct packet_ruleset_control *packet)
+void post_send_packet_game_state(struct connection *pc,
+				 const struct packet_game_state *packet)
 {
   conn_clear_packet_cache(pc);
 }

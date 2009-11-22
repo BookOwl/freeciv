@@ -15,42 +15,32 @@
 #include <config.h>
 #endif
 
-#ifdef AUDIO_SDL
-#include "SDL.h"
-#endif
-
 #include <windows.h>
 #include <winsock.h>
 #include <windowsx.h>
 #include <commctrl.h>
 #include <richedit.h>
 
-/* utility */
 #include "fciconv.h"
 #include "fcintl.h"
+#include "game.h"
 #include "log.h"
+#include "map.h"
 #include "mem.h"
 #include "netintf.h"
 #include "shared.h"
 #include "support.h"
-
-/* common */
-#include "game.h"
-#include "map.h"
 #include "version.h"
 #include "timing.h"
 
-/* client */
 #include "chatline.h"
-#include "client_main.h"
+#include "civclient.h"
 #include "climisc.h"
 #include "clinet.h"
 #include "colors.h"
 #include "connectdlg.h"
 #include "control.h"
 #include "dialogs.h"
-#include "editgui_g.h"
-#include "ggz_g.h"
 #include "gotodlg.h"
 #include "gui_stuff.h"
 #include "graphics.h"
@@ -104,6 +94,9 @@ HFONT city_descriptions_font;
 
 extern int seconds_to_turndone;   
 
+bool better_fog = TRUE;
+bool enable_alpha = TRUE;
+
 const static RECT textwin_size={0,1,0,100};
 
 struct fcwin_box *main_win_box;
@@ -111,6 +104,23 @@ struct fcwin_box *output_box;
 
 const char * const gui_character_encoding = NULL;
 const bool gui_use_transliteration = TRUE;
+
+client_option gui_options[] = {
+  GEN_BOOL_OPTION_CB(better_fog,
+		     N_("Better fog-of-war drawing"),
+		     N_("If this is enabled then a better method is used for "
+			"drawing fog-of-war.  It is not any slower but will "
+			"consume about twice as much memory."),
+		     COC_GRAPHICS, mapview_redraw_callback),
+  GEN_BOOL_OPTION_CB(enable_alpha,
+		     N_("Enable alpha blending"),
+		     N_("If this is enabled, then alpha blending will be "
+			"used in rendering, instead of an ordered dither.  "
+			"If there is no hardware support for alpha "
+			"blending, this is much slower."),
+		     COC_GRAPHICS, mapview_redraw_callback)
+};
+const int num_gui_options = ARRAY_SIZE(gui_options);
 
 bool process_net_input(void);
 
@@ -525,7 +535,9 @@ static void create_main_window(void)
 	      WM_SETFONT,(WPARAM) font_12arial,MAKELPARAM(TRUE,0)); 
   SendMessage(unit_info_label,
 	      WM_SETFONT,(WPARAM) font_12arial,MAKELPARAM(TRUE,0)); 
-  chat_welcome_message();
+  append_output_window(_("Freeciv is free software and you are welcome to distribute copies of"
+			 " it\nunder certain conditions; See the \"Copying\" item on the Help"
+			 " menu.\nNow.. Go give'em hell!") );
   hchatline=fcwin_box_add_edit(main_win_box,"",40,
 			       IDOK, 
 			       ES_WANTRETURN | ES_AUTOVSCROLL | ES_MULTILINE,
@@ -554,7 +566,7 @@ bool process_net_input()
     FD_SET(net_input, &civfdset);
     tv.tv_sec = 0;
     tv.tv_usec = 0;
-    if (fc_select(1, &civfdset, NULL, NULL, &tv)) {
+    if (my_select(1, &civfdset, NULL, NULL, &tv)) {
       if (FD_ISSET(net_input, &civfdset)) {
 	input_from_server(net_input);
 	processed = TRUE;
@@ -588,14 +600,6 @@ void ui_init(void)
 
 }
 
-/****************************************************************************
-  Extra initializers for client options.
-****************************************************************************/
-void gui_options_extra_init(void)
-{
-  /* Nothing to do. */
-}
-
 static HINSTANCE hmsimg32;
 
 /**************************************************************************
@@ -617,18 +621,18 @@ static bool test_alphablend()
     if ((AlphaBlend = GetProcAddress(hmsimg32, "AlphaBlend"))) {
       /* fall through, do nothing */
     } else {
-      freelog(LOG_TEST, "No AlphaBlend() in msimg32.dll, alpha blending disabled");
+      freelog(LOG_NORMAL, "No AlphaBlend() in msimg32.dll, alpha blending disabled");
       return FALSE;
     }
   } else {
-    freelog(LOG_TEST, "No msimg32.dll, alpha blending disabled");
+    freelog(LOG_NORMAL, "No msimg32.dll, alpha blending disabled");
     return FALSE;
   }
 
   hdc = GetDC(map_window);
 
   if (GetDeviceCaps(hdc, BITSPIXEL) < 32) {
-    freelog(LOG_TEST, "Not running in 32 bit color, alpha blending disabled");
+    freelog(LOG_NORMAL, "Not running in 32 bit color, alpha blending disabled");
     ReleaseDC(map_window, hdc);
     return FALSE;
   }
@@ -638,7 +642,7 @@ static bool test_alphablend()
 #define SB_NONE 0
 
   if (GetDeviceCaps(hdc, SHADEBLENDCAPS) == SB_NONE) {
-    freelog(LOG_TEST, "Device does not support alpha blending, alpha blending disabled");
+    freelog(LOG_NORMAL, "Device does not support alpha blending, alpha blending disabled");
     ReleaseDC(map_window, hdc);
     return FALSE;
   }
@@ -708,18 +712,8 @@ static bool test_alphablend()
   return TRUE;
 }
 
-extern void anim_cursor(float time);
-
 /**************************************************************************
-  Entry point for whole freeciv client program.
-**************************************************************************/
-int main(int argc, char **argv)
-{
-  return client_main(argc, argv);
-}
 
-/**************************************************************************
-  Entry point for GUI specific portion. Called from client_main()
 **************************************************************************/
 void
 ui_main(int argc, char *argv[])
@@ -738,7 +732,7 @@ ui_main(int argc, char *argv[])
   InitCommonControls();
 
   have_AlphaBlend = test_alphablend();
-  gui_win32_enable_alpha = have_AlphaBlend;
+  enable_alpha = have_AlphaBlend;
 
   unitselect_init(freecivhinst);
   init_mapwindow();
@@ -758,7 +752,7 @@ ui_main(int argc, char *argv[])
 
   freecivaccel=my_create_menu_acceltable();
  
-  set_client_state(C_S_DISCONNECTED);
+  set_client_state(C_S_PREPARING);
 
   callbacks = callback_list_new();
 
@@ -814,7 +808,8 @@ ui_main(int argc, char *argv[])
 
   free_timer(anim_timer);
   free_timer(callback_timer);
-  callback_list_free(callbacks);
+  callback_list_unlink_all(callbacks);
+  free(callbacks);
 
   FreeLibrary(hmsimg32);
 }
@@ -825,14 +820,6 @@ ui_main(int argc, char *argv[])
 void ui_exit()
 {
 
-}
-
-/**************************************************************************
-  Return our GUI type
-**************************************************************************/
-enum gui_type get_gui_type(void)
-{
-  return GUI_WIN32;
 }
 
 /**************************************************************************
@@ -918,55 +905,4 @@ void add_idle_callback(void (callback)(void *), void *data)
   cb->data = data;
 
   callback_list_prepend(callbacks, cb);
-}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_tileset_changed(void)
-{}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_refresh(void)
-{}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_popup_properties(const struct tile_list *tiles, int objtype)
-{}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_notify_object_changed(int objtype, int object_id, bool remove)
-{}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_notify_object_created(int tag, int id)
-{}
-
-/****************************************************************************
-  Stub for ggz function
-****************************************************************************/
-void gui_ggz_embed_leave_table(void)
-{}
-
-/****************************************************************************
-  Stub for ggz function
-****************************************************************************/
-void gui_ggz_embed_ensure_server(void)
-{}
-
-
-/**************************************************************************
-  Updates a gui font style.
-**************************************************************************/
-void gui_update_font(const char *font_name, const char *font_value)
-{
-  /* PORTME */
 }

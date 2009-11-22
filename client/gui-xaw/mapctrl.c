@@ -31,7 +31,6 @@
 #include <X11/Xaw/SmeBSB.h>
 #include <X11/Xaw/SmeLine.h>
 
-/* common & utility */
 #include "climap.h"
 #include "fcintl.h"
 #include "game.h"
@@ -41,10 +40,10 @@
 #include "support.h"
 #include "unit.h"
 
-/* client */
 #include "chatline.h"
 #include "citydlg.h"
-#include "client_main.h"
+#include "civclient.h"
+#include "clinet.h"
 #include "colors.h"
 #include "control.h"
 #include "dialogs.h"
@@ -72,7 +71,7 @@ static void name_new_city_callback(Widget w, XtPointer client_data,
   size_t unit_id=(size_t)client_data;
   
   if (unit_id) {
-    dsend_packet_unit_build_city(&client.conn, unit_id,
+    dsend_packet_unit_build_city(&aconnection, unit_id,
 				 input_dialog_get_input(w));
   }
     
@@ -107,7 +106,7 @@ static void popit(int xin, int yin, struct tile *ptile)
   char *content;
   static bool is_orders;
   
-  if (TILE_UNKNOWN != client_tile_get_known(ptile)) {
+  if (client_tile_get_known(ptile)>=TILE_KNOWN_FOGGED) {
     Widget p=XtCreatePopupShell("popupinfo", simpleMenuWidgetClass,
 				map_canvas, NULL, 0);
     content = (char *) popup_info_text(ptile);

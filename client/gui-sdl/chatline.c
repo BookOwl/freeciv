@@ -34,7 +34,7 @@
 #include "packets.h"
 
 /* client */
-#include "client_main.h"
+#include "civclient.h"
 #include "clinet.h"
 #include "connectdlg_common.h"
 
@@ -129,7 +129,10 @@ static int load_selected_game_callback(struct widget *pWidget)
     char *filename = (char*)pWidget->data.ptr;
 
     if (is_server_running()) {
-      send_chat_printf("/load %s", filename);
+      char message[MAX_LEN_MSG];
+
+      my_snprintf(message, sizeof(message), "/load %s", filename);
+      send_chat(message);
       
       if (get_client_page() == PAGE_LOAD) {
         set_client_page(PAGE_START);
@@ -153,7 +156,7 @@ static void popup_load_game_dialog(void)
   struct widget *pNextLabel = NULL; 
   SDL_String16 *pTitle, *pFilename;
   SDL_Rect area;
-  struct fileinfo_list *files;
+  struct datafile_list *files;
   int count = 0;
   int scrollbar_width = 0;
   int max_label_width = 0;
@@ -211,8 +214,9 @@ static void popup_load_game_dialog(void)
   hide_scrollbar(pLoadDialog->pScroll);
 
   /* search for user saved games. */
-  files = fileinfolist_infix(get_save_dirs(), ".sav", FALSE);
-  fileinfo_list_iterate(files, pfile) {
+  files = datafilelist_infix("saves", ".sav", FALSE);
+  datafile_list_iterate(files, pfile) {
+    
     count++;
     
     pFilename = create_str16_from_char(pfile->name, adj_font(13));
@@ -239,8 +243,52 @@ static void popup_load_game_dialog(void)
     }
 
     max_label_width = MAX(max_label_width, pFilenameLabel->size.w);
-  } fileinfo_list_iterate_end;
-  fileinfo_list_free_all(files);
+        
+    free(pfile->name);
+    free(pfile->fullname);
+    free(pfile);
+  } datafile_list_iterate_end;
+
+  datafile_list_unlink_all(files);
+  datafile_list_free(files);
+
+  files = datafilelist_infix(NULL, ".sav", FALSE);
+  datafile_list_iterate(files, pfile) {
+    
+    count++;
+    
+    pFilename = create_str16_from_char(pfile->name, adj_font(13));
+    pFilename->style |= SF_CENTER;
+    pFilenameLabel = create_iconlabel(NULL, pWindow->dst, pFilename,
+      (WF_FREE_DATA | WF_SELLECT_WITHOUT_BAR | WF_RESTORE_BACKGROUND));
+     
+    /* store filename */
+    pFilenameLabel->data.ptr = fc_calloc(1, strlen(pfile->fullname) + 1);
+    mystrlcpy((char*)pFilenameLabel->data.ptr, pfile->fullname, strlen(pfile->fullname) + 1);
+    
+    pFilenameLabel->action = load_selected_game_callback;
+     
+    set_wstate(pFilenameLabel, FC_WS_NORMAL);
+    
+    /* FIXME: this was supposed to be add_widget_to_vertical_scroll_widget_list(), but
+     * add_widget_to_vertical_scroll_widget_list() needs the scrollbar area to be defined
+     * for updating the scrollbar position, but the area is not known yet (depends on
+     * maximum label width) */ 
+    add_to_gui_list(ID_LABEL, pFilenameLabel);
+
+    if (count == 1) {
+      pFirstLabel = pFilenameLabel;
+    }
+
+    max_label_width = MAX(max_label_width, pFilenameLabel->size.w);
+        
+    free(pfile->name);
+    free(pfile->fullname);
+    free(pfile);
+  } datafile_list_iterate_end;
+
+  datafile_list_unlink_all(files);
+  datafile_list_free(files);
 
   pLastLabel = pFilenameLabel;
 
@@ -327,7 +375,7 @@ static int inputline_return_callback(struct widget *pWidget)
     if (theinput && *theinput) {
       send_chat(theinput);
   
-      output_window_append(ftc_any, theinput);
+      append_output_window(theinput);
       FC_FREE(theinput);
     }
   }  
@@ -362,9 +410,7 @@ void popup_input_line(void)
   Appends the string to the chat output window.  The string should be
   inserted on its own line, although it will have no newline.
 **************************************************************************/
-void real_output_window_append(const char *astring,
-                               const struct text_tag_list *tags,
-                               int conn_id)
+void real_append_output_window(const char *astring, int conn_id)
 {
   /* Currently this is a wrapper to the message subsystem. */
   if (pConnDlg) {
@@ -380,7 +426,7 @@ void real_output_window_append(const char *astring,
     char message[MAX_LEN_MSG];
     my_snprintf(message , MAX_LEN_MSG, "%s" , astring);
     
-    add_notify_window(message, tags, NULL, E_CHAT_MSG);
+    add_notify_window(message, NULL, E_CHAT_MSG);
   }
 }
 
@@ -498,7 +544,7 @@ static int input_edit_conn_callback(struct widget *pWidget)
     
       if (*theinput != '\0') {
         send_chat(theinput);
-        /*real_output_window_append(theinput);*/
+        /*real_append_output_window(theinput);*/
       }
       
       FC_FREE(pWidget->string16->text);
@@ -525,7 +571,7 @@ static int start_game_callback(struct widget *pWidget)
 static int select_nation_callback(struct widget *pWidget)
 {
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
-    popup_races_dialog(client.conn.playing);
+    popup_races_dialog(game.player_ptr);
   }  
   return -1;
 }
@@ -623,8 +669,8 @@ void update_conn_list_dialog(void)
 
 /* FIXME: implement the server settings dialog and then reactivate this part */
 #if 0
-      if (ALLOW_CTRL == client.conn.access_level
-         || ALLOW_HACK == client.conn.access_level) {
+      if (aconnection.access_level == ALLOW_CTRL
+         || aconnection.access_level == ALLOW_HACK) {
 	set_wstate(pConnDlg->pConfigure, FC_WS_NORMAL);
       } else {
 	set_wstate(pConnDlg->pConfigure, FC_WS_DISABLED);
@@ -668,7 +714,7 @@ static void popup_conn_list_dialog(void)
   SDL_Rect area;
   SDL_Surface *pSurf;
     
-  if (pConnDlg || !client.conn.established) {
+  if (pConnDlg || !aconnection.established) {
     return;
   }
   

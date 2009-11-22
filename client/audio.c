@@ -20,17 +20,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* utility */
 #include "capability.h"
 #include "fcintl.h"
 #include "log.h"
 #include "mem.h"
 #include "registry.h"
 #include "shared.h"
-#include "string_vector.h"
 #include "support.h"
 
-/* client */
 #include "audio_none.h"
 #ifdef AUDIO_SDL
 #include "audio_sdl.h"
@@ -49,38 +46,37 @@ static int num_plugins_used = 0;
 static int selected_plugin = -1;
 
 /**********************************************************************
-  Returns a static string vector of all sound plugins
+  Returns a static, NULL-terminated list of all sound plugins
   available on the system.  This function is unfortunately similar to
   audio_get_all_plugin_names().
 ***********************************************************************/
-const struct strvec *get_soundplugin_list(void)
+const char **get_soundplugin_list(void)
 {
-  static struct strvec *plugin_list = NULL;
-
-  if (NULL == plugin_list) {
-    int i;
-
-    plugin_list = strvec_new();
-    strvec_reserve(plugin_list, num_plugins_used);
-    for (i = 0; i < num_plugins_used; i++) {
-      strvec_set(plugin_list, i, plugins[i].name);
-    }
+  static const char* plugin_list[MAX_NUM_PLUGINS + 1];
+  int i;
+  
+  for (i = 0; i < num_plugins_used; i++) {
+    plugin_list[i] = plugins[i].name;
   }
+  assert(i <= MAX_NUM_PLUGINS);
+  plugin_list[i] = NULL;
 
   return plugin_list;
 }
 
 /**********************************************************************
-  Returns a static string vector of soundsets available on the system by
+  Returns a static list of soundsets available on the system by
   searching all data directories for files matching SNDSPEC_SUFFIX.
   The list is NULL-terminated.
 ***********************************************************************/
-const struct strvec *get_soundset_list(void)
+const char **get_soundset_list(void)
 {
-  static struct strvec *audio_list = NULL;
+  static const char **audio_list = NULL;
 
-  if (NULL == audio_list) {
-    audio_list = fileinfolist(get_data_dirs(), SNDSPEC_SUFFIX);
+  if (!audio_list) {
+    /* Note: this means you must restart the client after installing a new
+       soundset. */
+    audio_list = (const char **)datafilelist(SNDSPEC_SUFFIX);
   }
 
   return audio_list;
@@ -126,7 +122,7 @@ bool audio_select_plugin(const char *const name)
   }
 
   if (!plugins[i].init()) {
-    freelog(LOG_ERROR, "Plugin %s found, but can't be initialized.", name);
+    freelog(LOG_ERROR, _("Plugin %s found but can't be initialized."), name);
     return FALSE;
   }
 
@@ -159,11 +155,11 @@ static const char *soundspec_fullname(const char *soundset_name)
 {
   const char *soundset_default = "stdsounds";	/* Do not i18n! */
   char *fname = fc_malloc(strlen(soundset_name) + strlen(SNDSPEC_SUFFIX) + 1);
-  const char *dname;
+  char *dname;
 
   sprintf(fname, "%s%s", soundset_name, SNDSPEC_SUFFIX);
 
-  dname = fileinfoname(get_data_dirs(), fname);
+  dname = datafilename(fname);
   free(fname);
 
   if (dname) {
@@ -175,7 +171,7 @@ static const char *soundspec_fullname(const char *soundset_name)
     return NULL;
   }
 
-  freelog(LOG_ERROR, "Couldn't find soundset \"%s\", trying \"%s\".",
+  freelog(LOG_ERROR, _("Couldn't find soundset \"%s\" trying \"%s\"."),
 	  soundset_name, soundset_default);
   return soundspec_fullname(soundset_default);
 }
@@ -192,31 +188,31 @@ void audio_real_init(const char *const spec_name,
 
   if (strcmp(prefered_plugin_name, "none") == 0) {
     /* We explicitly choose none plugin, silently skip the code below */
-    freelog(LOG_VERBOSE, "Proceeding with sound support disabled.");
+    freelog(LOG_VERBOSE, "Proceeding with sound support disabled");
     tagfile = NULL;
     return;
   }
   if (num_plugins_used == 1) {
     /* We only have the dummy plugin, skip the code but issue an advertise */
     freelog(LOG_NORMAL, _("No real audio plugin present."));
-    freelog(LOG_NORMAL, _("Proceeding with sound support disabled."));
+    freelog(LOG_NORMAL, _("Proceeding with sound support disabled"));
     freelog(LOG_NORMAL, _("For sound support, install SDL_mixer"));
     freelog(LOG_NORMAL, "http://www.libsdl.org/projects/SDL_mixer/index.html");
     tagfile = NULL;
     return;
   }
   if (!spec_name) {
-    freelog(LOG_FATAL, "No sound spec-file given!");
+    freelog(LOG_FATAL, _("No sound spec-file given!"));
     exit(EXIT_FAILURE);
   }
   freelog(LOG_VERBOSE, "Initializing sound using %s...", spec_name);
   filename = soundspec_fullname(spec_name);
   if (!filename) {
-    freelog(LOG_ERROR, "Cannot find sound spec-file \"%s\".", spec_name);
+    freelog(LOG_ERROR, _("Cannot find sound spec-file \"%s\"."), spec_name);
     freelog(LOG_NORMAL, _("To get sound you need to download a sound set!"));
     freelog(LOG_NORMAL, _("Get sound sets from <%s>."),
 	    "ftp://ftp.freeciv.org/freeciv/contrib/audio/soundsets");
-    freelog(LOG_NORMAL, _("Proceeding with sound support disabled."));
+    freelog(LOG_NORMAL, _("Proceeding with sound support disabled"));
     tagfile = NULL;
     return;
   }
@@ -248,17 +244,18 @@ void audio_real_init(const char *const spec_name,
 
   if (prefered_plugin_name[0] != '\0') {
     if (!audio_select_plugin(prefered_plugin_name))
-      freelog(LOG_NORMAL, _("Proceeding with sound support disabled."));
+      freelog(LOG_NORMAL, _("Proceeding with sound support disabled"));
     return;
   }
 
 #ifdef AUDIO_SDL
   if (audio_select_plugin("sdl")) return; 
 #endif
-  freelog(LOG_NORMAL, _("No real audio subsystem managed to initialize!"));
   freelog(LOG_NORMAL,
-          _("Perhaps there is some misconfiguration or bad permissions."));
-  freelog(LOG_NORMAL, _("Proceeding with sound support disabled."));
+    _("No real audio subsystem managed to initialize!"));
+  freelog(LOG_NORMAL,
+    _("Perhaps there is some misconfiguration or bad permissions"));
+  freelog(LOG_NORMAL, _("Proceeding with sound support disabled"));
 }
 
 /**************************************************************************
@@ -266,8 +263,7 @@ void audio_real_init(const char *const spec_name,
 **************************************************************************/
 static bool audio_play_tag(const char *tag, bool repeat)
 {
-  char *soundfile;
-  const char *fullpath = NULL;
+  char *soundfile, *fullpath = NULL;
 
   if (!tag || strcmp(tag, "-") == 0) {
     return FALSE;
@@ -279,9 +275,9 @@ static bool audio_play_tag(const char *tag, bool repeat)
       freelog(LOG_VERBOSE, "No sound file for tag %s (file %s)", tag,
 	      soundfile);
     } else {
-      fullpath = fileinfoname(get_data_dirs(), soundfile);
+      fullpath = datafilename(soundfile);
       if (!fullpath) {
-	freelog(LOG_ERROR, "Cannot find audio file %s", soundfile);
+	freelog(LOG_ERROR, _("Cannot find audio file %s"), soundfile);
       }
     }
   }
