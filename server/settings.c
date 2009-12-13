@@ -209,31 +209,35 @@ static bool phasemode_callback(int value, struct connection *caller,
   return TRUE;
 }
 
-#define GEN_BOOL(name, value, sclass, scateg, slevel, to_client,        \
-                 short_help, extra_help, func_validate,                 \
-                 _default)                                              \
-  {name, sclass, to_client, short_help, extra_help, SSET_BOOL,          \
-      scateg, slevel,                                                   \
-      {.boolean = {&value, _default, func_validate}}},
+#define GEN_BOOL(name, value, sclass, scateg, slevel, to_client,	\
+		 short_help, extra_help, func, _default)		\
+  {name, sclass, to_client, short_help, extra_help, SSET_BOOL,		\
+      scateg, slevel, &value, _default, func,				\
+      NULL, 0, NULL, 0, 0,						\
+      NULL, NULL, NULL, 0},
 
-#define GEN_INT(name, value, sclass, scateg, slevel, to_client,         \
-                short_help, extra_help, func_validate,                  \
-                _min, _max, _default)                                   \
-  {name, sclass, to_client, short_help, extra_help, SSET_INT,           \
-      scateg, slevel,                                                   \
-      {.integer = {&value, _default, _min, _max, func_validate}}},
+#define GEN_INT(name, value, sclass, scateg, slevel, to_client,		\
+		short_help, extra_help, func, _min, _max, _default)	\
+  {name, sclass, to_client, short_help, extra_help, SSET_INT,		\
+      scateg, slevel,							\
+      NULL, FALSE, NULL,						\
+      &value, _default, func, _min, _max,				\
+      NULL, NULL, NULL, 0},
 
-#define GEN_STRING(name, value, sclass, scateg, slevel, to_client,      \
-                   short_help, extra_help, func_validate,               \
-                   _default)                                            \
-  {name, sclass, to_client, short_help, extra_help, SSET_STRING,        \
-      scateg, slevel,                                                   \
-      {.string = {value, _default, sizeof(value), func_validate}}},
+#define GEN_STRING(name, value, sclass, scateg, slevel, to_client,	\
+		   short_help, extra_help, func, _default)		\
+  {name, sclass, to_client, short_help, extra_help, SSET_STRING,	\
+      scateg, slevel,							\
+      NULL, FALSE, NULL,						\
+      NULL, 0, NULL, 0, 0,						\
+      value, _default, func, sizeof(value)},
 
-#define GEN_END                                                         \
-  {NULL, SSET_LAST, SSET_SERVER_ONLY, NULL, NULL, SSET_INT,             \
-      SSET_NUM_CATEGORIES, SSET_NONE,                                   \
-      {.boolean = {FALSE, FALSE, NULL}}},
+#define GEN_END							\
+  {NULL, SSET_LAST, SSET_SERVER_ONLY, NULL, NULL, SSET_INT,	\
+      SSET_NUM_CATEGORIES, SSET_NONE,				\
+      NULL, FALSE, NULL,					\
+      NULL, 0, NULL, 0, 0,					\
+      NULL, NULL, NULL},
 
 struct setting settings[] = {
 
@@ -842,13 +846,6 @@ struct setting settings[] = {
 	  GAME_MIN_CIVILWARSIZE, GAME_MAX_CIVILWARSIZE, 
 	  GAME_DEFAULT_CIVILWARSIZE)
 
-  GEN_BOOL("restrictinfra", game.info.restrictinfra,
-           SSET_RULES_FLEXIBLE, SSET_MILITARY, SSET_RARE, SSET_TO_CLIENT,
-           N_("Restrict the use of the infrastructure for enemy units"),
-           N_("If this option is set to 1, the use of roads and rails "
-              "will be restricted for enemy units."), NULL,
-           GAME_DEFAULT_RESTRICTINFRA)
-
   GEN_INT("contactturns", game.info.contactturns,
 	  SSET_RULES_FLEXIBLE, SSET_MILITARY, SSET_RARE, SSET_TO_CLIENT,
 	  N_("Turns until player contact is lost"),
@@ -1297,7 +1294,7 @@ bool setting_is_visible(const struct setting *pset,
 bool setting_bool_get(const struct setting *pset)
 {
   assert(pset->stype == SSET_BOOL);
-  return *pset->boolean.pvalue;
+  return *pset->bool_value;
 }
 
 /****************************************************************************
@@ -1306,7 +1303,7 @@ bool setting_bool_get(const struct setting *pset)
 bool setting_bool_def(const struct setting *pset)
 {
   assert(pset->stype == SSET_BOOL);
-  return pset->boolean.default_value;
+  return pset->bool_default_value;
 }
 
 /****************************************************************************
@@ -1322,7 +1319,7 @@ bool setting_bool_set(struct setting *pset, bool val,
     return FALSE;
   }
 
-  *pset->boolean.pvalue = val;
+  *pset->bool_value = val;
   return TRUE;
 }
 
@@ -1338,8 +1335,8 @@ bool setting_bool_validate(const struct setting *pset, bool val,
 {
   assert(pset->stype == SSET_BOOL);
   return (setting_is_changeable(pset, caller, reject_msg)
-          && (!pset->boolean.validate
-              || pset->boolean.validate(val, caller, reject_msg)));
+          && (!pset->bool_validate
+              || pset->bool_validate(val, caller, reject_msg)));
 }
 
 /****************************************************************************
@@ -1348,7 +1345,7 @@ bool setting_bool_validate(const struct setting *pset, bool val,
 int setting_int_get(const struct setting *pset)
 {
   assert(pset->stype == SSET_INT);
-  return *pset->integer.pvalue;
+  return *pset->int_value;
 }
 
 /****************************************************************************
@@ -1357,7 +1354,7 @@ int setting_int_get(const struct setting *pset)
 int setting_int_def(const struct setting *pset)
 {
   assert(pset->stype == SSET_INT);
-  return pset->integer.default_value;
+  return pset->int_default_value;
 }
 
 /****************************************************************************
@@ -1366,7 +1363,7 @@ int setting_int_def(const struct setting *pset)
 int setting_int_min(const struct setting *pset)
 {
   assert(pset->stype == SSET_INT);
-  return pset->integer.min_value;
+  return pset->int_min_value;
 }
 
 /****************************************************************************
@@ -1375,7 +1372,7 @@ int setting_int_min(const struct setting *pset)
 int setting_int_max(const struct setting *pset)
 {
   assert(pset->stype == SSET_INT);
-  return pset->integer.max_value;
+  return pset->int_max_value;
 }
 
 /****************************************************************************
@@ -1391,7 +1388,7 @@ bool setting_int_set(struct setting *pset, int val,
     return FALSE;
   }
 
-  *pset->integer.pvalue = val;
+  *pset->int_value = val;
   return TRUE;
 }
 
@@ -1406,14 +1403,14 @@ bool setting_int_validate(const struct setting *pset, int val,
 {
   assert(pset->stype == SSET_INT);
 
-  if (val < pset->integer.min_value || val > pset->integer.max_value) {
+  if (val < pset->int_min_value || val > pset->int_max_value) {
     *reject_msg = _("Value out of range.");
     return FALSE;
   }
 
   return (setting_is_changeable(pset, caller, reject_msg)
-          && (!pset->integer.validate
-              || pset->integer.validate(val, caller, reject_msg)));
+          && (!pset->int_validate
+              || pset->int_validate(val, caller, reject_msg)));
 }
 
 /****************************************************************************
@@ -1422,7 +1419,7 @@ bool setting_int_validate(const struct setting *pset, int val,
 const char *setting_str_get(const struct setting *pset)
 {
   assert(pset->stype == SSET_STRING);
-  return pset->string.value;
+  return pset->string_value;
 }
 
 /****************************************************************************
@@ -1431,7 +1428,7 @@ const char *setting_str_get(const struct setting *pset)
 const char *setting_str_def(const struct setting *pset)
 {
   assert(pset->stype == SSET_STRING);
-  return pset->string.default_value;
+  return pset->string_default_value;
 }
 
 /****************************************************************************
@@ -1447,7 +1444,7 @@ bool setting_str_set(struct setting *pset, const char *val,
     return FALSE;
   }
 
-  mystrlcpy(pset->string.value, val, pset->string.value_size);
+  mystrlcpy(pset->string_value, val, pset->string_value_size);
   return TRUE;
 }
 
@@ -1462,14 +1459,14 @@ bool setting_str_validate(const struct setting *pset, const char *val,
 {
   assert(pset->stype == SSET_STRING);
 
-  if (strlen(val) > pset->string.value_size) {
+  if (strlen(val) > pset->string_value_size) {
     *reject_msg = _("String value too long.");
     return FALSE;
   }
 
   return (setting_is_changeable(pset, caller, reject_msg)
-          && (!pset->string.validate
-              || pset->string.validate(val, caller, reject_msg)));
+          && (!pset->string_validate
+              || pset->string_validate(val, caller, reject_msg)));
 }
 
 /********************************************************************
@@ -1479,22 +1476,22 @@ static void setting_set_to_default(struct setting *pset)
 {
   switch (pset->stype) {
   case SSET_BOOL:
-    (*pset->boolean.pvalue) = pset->boolean.default_value;
+    (*pset->bool_value) = pset->bool_default_value;
     break;
   case SSET_INT:
-    (*pset->integer.pvalue) = pset->integer.default_value;
+    (*pset->int_value) = pset->int_default_value;
     break;
   case SSET_STRING:
-    mystrlcpy(pset->string.value, pset->string.default_value,
-              pset->string.value_size);
+    mystrlcpy(pset->string_value, pset->string_default_value,
+              pset->string_value_size);
     break;
   }
 
   /* FIXME: duplicates stdinhand.c:set_command() */
-  if (pset->integer.pvalue == &game.info.aifill) {
-    aifill(*pset->integer.pvalue);
-  } else if (pset->boolean.pvalue == &game.info.auto_ai_toggle) {
-    if (*pset->boolean.pvalue) {
+  if (pset->int_value == &game.info.aifill) {
+    aifill(*pset->int_value);
+  } else if (pset->bool_value == &game.info.auto_ai_toggle) {
+    if (*pset->bool_value) {
       players_iterate(pplayer) {
         if (!pplayer->ai_data.control && !pplayer->is_connected) {
            toggle_ai_player_direct(NULL, pplayer);

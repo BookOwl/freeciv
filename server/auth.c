@@ -258,12 +258,13 @@ static bool set_auth_option(struct auth_option *target, const char *value,
 /**************************************************************************
   Load value for one auth option from section_file.
 **************************************************************************/
-static void load_auth_option(struct section_file *secfile,
+static void load_auth_option(struct section_file *file,
                              struct auth_option *target)
 {
-  const char *value = secfile_lookup_str(secfile, "auth.%s", target->name);
+  const char *value;
 
-  if (NULL != value) {
+  value = secfile_lookup_str_default(file, "", "auth.%s", target->name);
+  if (value[0] != '\0') {
     /* We really loaded something from file */
     set_auth_option(target, value, AOS_FILE);
   }
@@ -276,25 +277,25 @@ static void load_auth_option(struct section_file *secfile,
 **************************************************************************/
 static bool load_auth_config(const char *filename)
 {
-  struct section_file *secfile;
+  struct section_file file;
 
   assert(filename != NULL);
 
-  if (!(secfile = secfile_load(filename, FALSE))) {
+  if (!section_file_load_nodup(&file, filename)) {
     freelog(LOG_ERROR, _("Cannot load auth config file \"%s\"!"), filename);
     return FALSE;
   }
 
-  load_auth_option(secfile, &auth_config.host);
-  load_auth_option(secfile, &auth_config.port);
-  load_auth_option(secfile, &auth_config.user);
-  load_auth_option(secfile, &auth_config.password);
-  load_auth_option(secfile, &auth_config.database);
-  load_auth_option(secfile, &auth_config.table);
-  load_auth_option(secfile, &auth_config.login_table);
+  load_auth_option(&file, &auth_config.host);
+  load_auth_option(&file, &auth_config.port);
+  load_auth_option(&file, &auth_config.user);
+  load_auth_option(&file, &auth_config.password);
+  load_auth_option(&file, &auth_config.database);
+  load_auth_option(&file, &auth_config.table);
+  load_auth_option(&file, &auth_config.login_table);
 
-  secfile_check_unused(secfile);
-  secfile_destroy(secfile);
+  section_file_check_unused(&file, filename);
+  section_file_free(&file);
 
   return TRUE;
 }

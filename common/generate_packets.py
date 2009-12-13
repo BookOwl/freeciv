@@ -305,23 +305,13 @@ class Field:
         if fold_bool_into_header and self.struct_type=="bool" and \
            not self.is_array:
             b="packet->%(name)s"%self.get_dict(vars())
-            return '''%s
-  if(differ) {
-    different++;
-  }
-  if (%s) {
-    BV_SET(fields, %d);
-  }
+        else:
+            b="differ"
+        return '''%s
+  if(differ) {different++;}
+  if(%s) {BV_SET(fields, %d);}
 
 '''%(cmp,b,i)
-        else:
-            return '''%s
-  if (differ) {
-    different++;
-    BV_SET(fields, %d);
-  }
-
-'''%(cmp,i)
 
     # Returns a code fragement which will put this field if the
     # content has changed. Does nothing for bools-in-header.    
@@ -527,7 +517,6 @@ class Variant:
         self.type=packet.type
         self.delta=packet.delta
         self.is_action=packet.is_action
-        self.cancel=packet.cancel
         
         self.poscaps=poscaps
         self.negcaps=negcaps
@@ -555,6 +544,7 @@ class Variant:
         if len(self.fields)>5 or string.split(self.name,"_")[1]=="ruleset":
             self.handle_via_packet=1
 
+        self.extra_force_arg=""
         self.extra_send_args=""
         self.extra_send_args2=""
         self.extra_send_args3=string.join(
@@ -566,9 +556,10 @@ class Variant:
         if not self.no_packet:
             self.extra_send_args=', const struct %(packet_name)s *packet'%self.__dict__+self.extra_send_args
             self.extra_send_args2=', packet'+self.extra_send_args2
-
+        if not self.is_action:
+            self.extra_force_arg=', bool force_send'
         self.receive_prototype='static struct %(packet_name)s *receive_%(name)s(struct connection *pc, enum packet_type type)'%self.__dict__
-        self.send_prototype='static int send_%(name)s(struct connection *pc%(extra_send_args)s)'%self.__dict__
+        self.send_prototype='static int send_%(name)s(struct connection *pc%(extra_force_arg)s%(extra_send_args)s)'%self.__dict__
 
     # See Field.get_dict
     def get_dict(self,vars):
@@ -724,9 +715,13 @@ static char *stats_%(name)s_names[] = {%(names)s};
         if not self.no_packet:
             if self.delta:
                 body=self.get_delta_send_body()
+                if self.is_action:
+                    force_send_var="\n  bool force_send = TRUE;"
+                else:
+                    force_send_var=""
                 delta_header='''  %(name)s_fields fields;
-  struct %(packet_name)s *old;
-  bool differ;
+  struct %(packet_name)s *old, *clone;
+  bool differ, old_from_hash;%(force_send_var)s
   struct hash_table **hash = &pc->phs.sent[%(type)s];
   int different = 0;
 '''
@@ -760,16 +755,16 @@ static char *stats_%(name)s_names[] = {%(names)s};
     def get_delta_send_body(self):
         intro='''
   if (!*hash) {
-    *hash = hash_new_full(hash_%(name)s, cmp_%(name)s, NULL, free);
+    *hash = hash_new(hash_%(name)s, cmp_%(name)s);
   }
   BV_CLR_ALL(fields);
 
-  if (!hash_lookup(*hash, real_packet, (const void **) &old, NULL)) {
+  old = hash_lookup_data(*hash, real_packet);
+  old_from_hash = (old != NULL);
+  if (!old) {
     old = fc_malloc(sizeof(*old));
-    *old = *real_packet;
-    hash_insert(*hash, old, old);
     memset(old, 0, sizeof(*old));
-    different = 1;      /* Force to send. */
+    force_send = TRUE;
   }
 
 '''
@@ -785,17 +780,12 @@ static char *stats_%(name)s_names[] = {%(names)s};
             s='    stats_%(name)s_discarded++;\n'
         else:
             s=""
-
-        if not self.is_action:
-            body=body+'''
-  if (different == 0) {
+        body=body+'''  if (different == 0 && !force_send) {
 %(fl)s%(s)s<pre2>    return 0;
   }
-'''%self.get_dict(vars())
 
-        body=body+'''
   DIO_BV_PUT(&dout, fields);
-'''
+'''%self.get_dict(vars())
 
         for field in self.key_fields:
             body=body+field.get_put()+"\n"
@@ -805,18 +795,16 @@ static char *stats_%(name)s_names[] = {%(names)s};
             field=self.other_fields[i]
             body=body+field.get_put_wrapper(self,i)
         body=body+'''
-  *old = *real_packet;
-'''
 
-        # Cancel some is-info packets.
-        for i in self.cancel:
-            body=body+'''
-  hash = &pc->phs.sent[%s];
-  if (NULL != *hash) {
-    hash_delete_entry(*hash, real_packet);
+  if (old_from_hash) {
+    hash_delete_entry(*hash, old);
   }
-'''%i
 
+  clone = old;
+
+  *clone = *real_packet;
+  hash_insert(*hash, clone, clone);
+'''
         return intro+body
 
     # Returns a code fragement which is the implementation of the receive
@@ -834,6 +822,7 @@ static char *stats_%(name)s_names[] = {%(names)s};
             delta_header='''  %(name)s_fields fields;
   struct %(packet_name)s *old;
   struct hash_table **hash = &pc->phs.received[type];
+  struct %(packet_name)s *clone;
 '''
             delta_body1="\n  DIO_BV_GET(&din, fields);\n"
             body1=""
@@ -880,10 +869,11 @@ static char *stats_%(name)s_names[] = {%(names)s};
             fl=""
         body='''
   if (!*hash) {
-    *hash = hash_new_full(hash_%(name)s, cmp_%(name)s, NULL, free);
+    *hash = hash_new(hash_%(name)s, cmp_%(name)s);
   }
+  old = hash_delete_entry(*hash, real_packet);
 
-  if (hash_lookup(*hash, real_packet, (const void **) &old, NULL)) {
+  if (old) {
     *real_packet = *old;
   } else {
 %(key1)s%(fl)s    memset(real_packet, 0, sizeof(*real_packet));%(key2)s
@@ -895,13 +885,12 @@ static char *stats_%(name)s_names[] = {%(names)s};
             body=body+field.get_get_wrapper(self,i)
 
         extro='''
-  if (NULL == old) {
-    old = fc_malloc(sizeof(*old));
-    *old = *real_packet;
-    hash_insert(*hash, old, old);
-  } else {
-    *old = *real_packet;
+  clone = fc_malloc(sizeof(*clone));
+  *clone = *real_packet;
+  if (old) {
+    free(old);
   }
+  hash_insert(*hash, clone, clone);
 
 '''%self.get_dict(vars())
         return body+extro
@@ -939,7 +928,7 @@ class Packet:
             self.dirs.append("cs")
             arr.remove("cs")
         assert len(self.dirs)>0,repr(self.name)+repr(self.dirs)
-            
+
         self.is_action="is-info" not in arr
         if not self.is_action: arr.remove("is-info")
         
@@ -973,19 +962,8 @@ class Packet:
         self.want_lsend="lsend" in arr
         if self.want_lsend: arr.remove("lsend")
 
-        self.cancel=[]
-        removes=[]
-        remaining=[]
-        for i in arr:
-            mo=re.search("^cancel\((.*)\)$",i)
-            if mo:
-                self.cancel.append(mo.group(1))
-                continue
-            remaining.append(i)
-        arr=remaining
-
         assert len(arr)==0,repr(arr)
-
+        
         if disable_delta:
             self.delta=0
 
@@ -1025,11 +1003,16 @@ class Packet:
             self.extra_send_args2=', packet'+self.extra_send_args2
 
         self.receive_prototype='struct %(name)s *receive_%(name)s(struct connection *pc, enum packet_type type)'%self.__dict__
-        self.send_prototype='int send_%(name)s(struct connection *pc%(extra_send_args)s)'%self.__dict__
+        self.force_arg=""
+        self.force_value=""
+        if not self.is_action:
+            self.force_arg=", bool force_send"
+            self.force_value=", force_send"
+        self.send_prototype='int send_%(name)s(struct connection *pc%(force_arg)s%(extra_send_args)s)'%self.__dict__
         if self.want_lsend:
-            self.lsend_prototype='void lsend_%(name)s(struct conn_list *dest%(extra_send_args)s)'%self.__dict__
+            self.lsend_prototype='void lsend_%(name)s(struct conn_list *dest%(force_arg)s%(extra_send_args)s)'%self.__dict__
         if self.want_dsend:
-            self.dsend_prototype='int dsend_%(name)s(struct connection *pc%(extra_send_args3)s)'%self.__dict__
+            self.dsend_prototype='int dsend_%(name)s(struct connection *pc%(force_arg)s%(extra_send_args3)s)'%self.__dict__
             if self.want_lsend:
                 self.dlsend_prototype='void dlsend_%(name)s(struct conn_list *dest%(extra_send_args3)s)'%self.__dict__
 
@@ -1189,10 +1172,11 @@ class Packet:
 
   switch(pc->phs.variant[%(type)s]) {
 '''%self.get_dict(vars())
+        args="pc"
+        if not self.is_action:
+            args=args+', force_send'
         if not self.no_packet:
-            args="pc, packet"
-        else:
-            args="pc"
+            args=args+', packet'
         for v in self.variants:
             name2=v.name
             no=v.no
@@ -1219,7 +1203,7 @@ class Packet:
         return '''%(lsend_prototype)s
 {
   conn_list_iterate(dest, pconn) {
-    send_%(name)s(pconn%(extra_send_args2)s);
+    send_%(name)s(pconn%(force_value)s%(extra_send_args2)s);
   } conn_list_iterate_end;
 }
 
@@ -1236,7 +1220,7 @@ class Packet:
 
 %(fill)s
   
-  return send_%(name)s(pc, real_packet);
+  return send_%(name)s(pc, real_packet%(force_value)s);
 }
 
 '''%self.get_dict(vars())
@@ -1295,7 +1279,7 @@ void delta_stats_reset(void) {
 def get_get_packet_helper(packets):
     intro='''void *get_packet_from_connection_helper(struct connection *pc,\n    enum packet_type type)
 {
-  switch (type) {
+  switch(type) {
 
 '''
     body=""
@@ -1313,11 +1297,11 @@ def get_get_packet_helper(packets):
     return intro+body+extro
 
 # Returns a code fragement which is the implementation of the
-# packet_name() function.
-def get_packet_name(packets):
-    intro='''const char *packet_name(enum packet_type type)
+# get_packet_name() function.
+def get_get_packet_name(packets):
+    intro='''const char *get_packet_name(enum packet_type type)
 {
-  switch (type) {
+  switch(type) {
 
 '''
     body=""
@@ -1325,29 +1309,6 @@ def get_packet_name(packets):
         body=body+'  case %(type)s:\n    return "%(type)s";\n\n'%p.__dict__
     extro='''  default:
     return "unknown";
-  }
-}
-
-'''
-    return intro+body+extro
-
-# Returns a code fragement which is the implementation of the
-# packet_has_info_flag() function.
-def get_packet_has_info_flag(packets):
-    intro='''bool packet_has_info_flag(enum packet_type type)
-{
-  switch (type) {
-
-'''
-    body=""
-    for p in packets:
-        body=body+'  case %(type)s:\n'%p.__dict__
-        if p.is_action:
-            body=body+'    return FALSE;\n\n'
-        else:
-            body=body+'    return TRUE;\n\n'
-    extro='''  default:
-    return FALSE;
   }
 }
 
@@ -1515,8 +1476,7 @@ static int stats_total_sent;
     output_c.write(get_reset(packets))
 
     output_c.write(get_get_packet_helper(packets))
-    output_c.write(get_packet_name(packets))
-    output_c.write(get_packet_has_info_flag(packets))
+    output_c.write(get_get_packet_name(packets))
 
     # write hash, cmp, send, receive
     for p in packets:

@@ -954,10 +954,12 @@ void request_orders_cleared(struct unit *punit)
   /* Clear the orders by sending an empty orders path. */
   freelog(PACKET_LOG_LEVEL, "Clearing orders for unit %d.", punit->id);
   p.unit_id = punit->id;
-  p.src_tile = tile_index(unit_tile(punit));
+  p.src_x = punit->tile->x;
+  p.src_y = punit->tile->y;
   p.repeat = p.vigilant = FALSE;
   p.length = 0;
-  p.dest_tile = tile_index(unit_tile(punit));
+  p.dest_x = punit->tile->x;
+  p.dest_y = punit->tile->y;
   send_packet_unit_orders(&client.conn, &p);
 }
 
@@ -973,7 +975,8 @@ static void send_path_orders(struct unit *punit, struct pf_path *path,
   struct tile *old_tile;
 
   p.unit_id = punit->id;
-  p.src_tile = tile_index(unit_tile(punit));
+  p.src_x = punit->tile->x;
+  p.src_y = punit->tile->y;
   p.repeat = repeat;
   p.vigilant = vigilant;
 
@@ -1016,7 +1019,8 @@ static void send_path_orders(struct unit *punit, struct pf_path *path,
     p.length++;
   }
 
-  p.dest_tile = tile_index(old_tile);
+  p.dest_x = old_tile->x;
+  p.dest_y = old_tile->y;
 
   send_packet_unit_orders(&client.conn, &p);
 }
@@ -1126,7 +1130,8 @@ void send_connect_route(enum unit_activity activity)
     }
 
     p.unit_id = punit->id;
-    p.src_tile = tile_index(unit_tile(punit));
+    p.src_x = punit->tile->x;
+    p.src_y = punit->tile->y;
     p.repeat = FALSE;
     p.vigilant = FALSE; /* Should be TRUE? */
 
@@ -1178,7 +1183,8 @@ void send_connect_route(enum unit_activity activity)
       }
     }
 
-    p.dest_tile = tile_index(old_tile);
+    p.dest_x = old_tile->x;
+    p.dest_y = old_tile->y;
 
     send_packet_unit_orders(&client.conn, &p);
   } goto_map_unit_iterate_end;

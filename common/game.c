@@ -278,7 +278,6 @@ void game_init(void)
   game.info.dispersion    = GAME_DEFAULT_DISPERSION;
   game.info.citymindist   = GAME_DEFAULT_CITYMINDIST;
   game.info.civilwarsize  = GAME_DEFAULT_CIVILWARSIZE;
-  game.info.restrictinfra = GAME_DEFAULT_RESTRICTINFRA;
   game.info.contactturns  = GAME_DEFAULT_CONTACTTURNS;
   game.info.rapturedelay  = GAME_DEFAULT_RAPTUREDELAY;
   game.info.celebratesize = GAME_DEFAULT_CELEBRATESIZE;

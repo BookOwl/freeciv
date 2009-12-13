@@ -42,7 +42,7 @@
 #define SNDSPEC_SUFFIX		".soundspec"
 
 /* keep it open throughout */
-static struct section_file *tagfile = NULL;
+static struct section_file tagstruct, *tagfile = &tagstruct;
 
 static struct audio_plugin plugins[MAX_NUM_PLUGINS];
 static int num_plugins_used = 0;
@@ -80,7 +80,15 @@ const struct strvec *get_soundset_list(void)
   static struct strvec *audio_list = NULL;
 
   if (NULL == audio_list) {
-    audio_list = fileinfolist(get_data_dirs(), SNDSPEC_SUFFIX);
+    char **list, **file;
+
+    audio_list = strvec_new();
+    list = datafilelist(SNDSPEC_SUFFIX);
+    for (file = list; NULL != *file; file++) {
+      strvec_append(audio_list, *file);
+      free(*file);
+    }
+    free(list);
   }
 
   return audio_list;
@@ -159,11 +167,11 @@ static const char *soundspec_fullname(const char *soundset_name)
 {
   const char *soundset_default = "stdsounds";	/* Do not i18n! */
   char *fname = fc_malloc(strlen(soundset_name) + strlen(SNDSPEC_SUFFIX) + 1);
-  const char *dname;
+  char *dname;
 
   sprintf(fname, "%s%s", soundset_name, SNDSPEC_SUFFIX);
 
-  dname = fileinfoname(get_data_dirs(), fname);
+  dname = datafilename(fname);
   free(fname);
 
   if (dname) {
@@ -187,7 +195,7 @@ void audio_real_init(const char *const spec_name,
 		     const char *const prefered_plugin_name)
 {
   const char *filename;
-  const char *file_capstr;
+  char *file_capstr;
   char us_capstr[] = "+soundspec";
 
   if (strcmp(prefered_plugin_name, "none") == 0) {
@@ -220,17 +228,12 @@ void audio_real_init(const char *const spec_name,
     tagfile = NULL;
     return;
   }
-  if (!(tagfile = secfile_load(filename, TRUE))) {
+  if (!section_file_load(tagfile, filename)) {
     freelog(LOG_FATAL, _("Could not load sound spec-file: %s"), filename);
     exit(EXIT_FAILURE);
   }
 
   file_capstr = secfile_lookup_str(tagfile, "soundspec.options");
-  if (NULL == file_capstr) {
-    freelog(LOG_FATAL, "Audio spec-file \"%s\" doesn't have capability"
-            " string.", filename);
-    exit(EXIT_FAILURE);
-  }
   if (!has_capabilities(us_capstr, file_capstr)) {
     freelog(LOG_FATAL, "sound spec-file appears incompatible:");
     freelog(LOG_FATAL, "  file: \"%s\"", filename);
@@ -271,20 +274,19 @@ void audio_real_init(const char *const spec_name,
 **************************************************************************/
 static bool audio_play_tag(const char *tag, bool repeat)
 {
-  const char *soundfile;
-  const char *fullpath = NULL;
+  char *soundfile, *fullpath = NULL;
 
   if (!tag || strcmp(tag, "-") == 0) {
     return FALSE;
   }
 
   if (tagfile) {
-    soundfile = secfile_lookup_str(tagfile, "files.%s", tag);
-    if (NULL == soundfile) {
+    soundfile = secfile_lookup_str_default(tagfile, "-", "files.%s", tag);
+    if (strcmp(soundfile, "-") == 0) {
       freelog(LOG_VERBOSE, "No sound file for tag %s (file %s)", tag,
-              soundfile);
+	      soundfile);
     } else {
-      fullpath = fileinfoname(get_data_dirs(), soundfile);
+      fullpath = datafilename(soundfile);
       if (!fullpath) {
 	freelog(LOG_ERROR, "Cannot find audio file %s", soundfile);
       }
@@ -366,8 +368,8 @@ void audio_shutdown()
   plugins[selected_plugin].wait();
   plugins[selected_plugin].shutdown();
 
-  if (NULL != tagfile) {
-    secfile_destroy(tagfile);
+  if (tagfile) {
+    section_file_free(tagfile);
     tagfile = NULL;
   }
 }

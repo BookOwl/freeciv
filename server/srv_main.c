@@ -399,7 +399,7 @@ bool check_for_game_over(void)
   Initial packets should have been sent before calling this function.
   See comment in connecthand.c::establish_new_connection().
 **************************************************************************/
-void send_all_info(struct conn_list *dest)
+void send_all_info(struct conn_list *dest, bool force)
 {
   conn_list_iterate(dest, pconn) {
     if (conn_controls_player(pconn)) {
@@ -410,7 +410,7 @@ void send_all_info(struct conn_list *dest)
   /* Resend player info because it could have more infos (e.g. embassy). */
   send_player_info_c(NULL, dest);
   send_map_info(dest);
-  send_all_known_tiles(dest);
+  send_all_known_tiles(dest, force);
   send_all_known_cities(dest);
   send_all_known_units(dest);
   send_spaceship_info(NULL, dest);
@@ -1037,7 +1037,7 @@ void save_game(char *orig_filename, const char *save_reason, bool scenario)
 {
   char filepath[600];
   char *dot, *filename;
-  struct section_file *file;
+  struct section_file file;
   struct timer *timer_cpu, *timer_user;
 
   if (!orig_filename) {
@@ -1073,8 +1073,8 @@ void save_game(char *orig_filename, const char *save_reason, bool scenario)
   timer_cpu = new_timer_start(TIMER_CPU, TIMER_ACTIVE);
   timer_user = new_timer_start(TIMER_USER, TIMER_ACTIVE);
 
-  file = secfile_new(FALSE);
-  game_save(file, save_reason, scenario);
+  section_file_init(&file);
+  game_save(&file, save_reason, scenario);
 
   /* Append ".sav" to filename. */
   sz_strlcat(filepath, ".sav");
@@ -1127,14 +1127,13 @@ void save_game(char *orig_filename, const char *save_reason, bool scenario)
     sz_strlcpy(filepath, tmpname);
   }
 
-  if (!secfile_save(file, filepath, game.info.save_compress_level,
-                    game.info.save_compress_type)) {
+  if (!section_file_save(&file, filepath, game.info.save_compress_level,
+                         game.info.save_compress_type))
     con_write(C_FAIL, _("Failed saving game as %s"), filepath);
-  } else {
+  else
     con_write(C_OK, _("Game saved as %s"), filepath);
-  }
 
-  secfile_destroy(file);
+  section_file_free(&file);
 
   freelog(LOG_VERBOSE, "Save time: %g seconds (%g apparent)",
 	  read_timer_seconds_free(timer_cpu),
@@ -1183,6 +1182,7 @@ void start_game(void)
   /* Prevent problems with commands that only make sense in pregame. */
   clear_all_votes();
 
+  set_server_state(S_S_GENERATING_WAITING); /* loaded ??? */
   force_end_of_sniff = TRUE;
   /* There's no stateful packet set to client until srv_ready(). */
 }
@@ -1408,7 +1408,7 @@ bool server_packet_input(struct connection *pconn, void *packet, int type)
   if (NULL == pplayer) {
     /* don't support these yet */
     freelog(LOG_ERROR, "Received packet %s from non-player connection %s",
-            packet_name(type), conn_description(pconn));
+            get_packet_name(type), conn_description(pconn));
     return TRUE;
   }
 
@@ -2358,7 +2358,7 @@ static void srv_ready(void)
   }
 
   lsend_packet_freeze_hint(game.est_connections);
-  send_all_info(game.est_connections);
+  send_all_info(game.est_connections, FALSE);
   lsend_packet_thaw_hint(game.est_connections);
 
   if (game.info.is_new_game) {
@@ -2430,13 +2430,11 @@ void srv_main(void)
   /* Run server loop */
   do {
     freelog(LOG_NORMAL, _("Now accepting new client connections."));
-    /* Remain in S_S_INITIAL until all players are ready. */
-    while (S_E_FORCE_END_OF_SNIFF != server_sniff_all_input()) {
-      /* When force_end_of_sniff is used in pregame, it means that the server
-       * is ready to start (usually set within start_game()). */
+    while (S_S_INITIAL == server_state()) {
+      server_sniff_all_input(); /* Accepting commands. */
     }
 
-    srv_ready(); /* srv_ready() sets server state to S_S_RUNNING. */
+    srv_ready();
     srv_running();
     srv_scores();
 

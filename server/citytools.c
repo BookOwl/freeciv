@@ -1558,7 +1558,8 @@ static void package_dumb_city(struct player* pplayer, struct tile *ptile,
   packet->id = pdcity->identity;
   packet->owner = player_number(vision_owner(pdcity));
 
-  packet->tile = tile_index(ptile);
+  packet->x = ptile->x;
+  packet->y = ptile->y;
   sz_strlcpy(packet->name, pdcity->name);
 
   packet->size = pdcity->size;
@@ -1792,7 +1793,8 @@ void package_city(struct city *pcity, struct packet_city_info *packet,
 
   packet->id=pcity->id;
   packet->owner = player_number(city_owner(pcity));
-  packet->tile = tile_index(city_tile(pcity));
+  packet->x = pcity->tile->x;
+  packet->y = pcity->tile->y;
   sz_strlcpy(packet->name, city_name(pcity));
 
   packet->size=pcity->size;
@@ -2267,7 +2269,7 @@ void city_map_update_empty(struct city *pcity, struct tile *ptile,
 			   int city_x, int city_y)
 {
   tile_set_worked(ptile, NULL);
-  send_tile_info(NULL, ptile, FALSE);
+  send_tile_info(NULL, ptile, FALSE, FALSE);
   pcity->city_map[city_x][city_y] = C_TILE_EMPTY;
   pcity->server.synced = FALSE;
 }
@@ -2281,7 +2283,7 @@ void city_map_update_worker(struct city *pcity, struct tile *ptile,
 			    int city_x, int city_y)
 {
   tile_set_worked(ptile, pcity);
-  send_tile_info(NULL, ptile, FALSE);
+  send_tile_info(NULL, ptile, FALSE, FALSE);
   pcity->city_map[city_x][city_y] = C_TILE_WORKER;
   pcity->server.synced = FALSE;
 }
@@ -2299,7 +2301,7 @@ static bool city_map_update_tile_direct(struct tile *ptile, bool queued)
    && !is_free_worked(pwork, ptile)
    && !city_can_work_tile(pwork, ptile)) {
     tile_set_worked(ptile, NULL);
-    send_tile_info(NULL, ptile, FALSE);
+    send_tile_info(NULL, ptile, FALSE, FALSE);
 
     pwork->specialists[DEFAULT_SPECIALIST]++; /* keep city sanity */
     pwork->server.synced = FALSE;

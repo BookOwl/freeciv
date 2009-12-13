@@ -109,22 +109,17 @@ struct color_system *color_system_read(struct section_file *file)
 
   assert(ARRAY_SIZE(color_names) == COLOR_LAST);
   for (i = 0; i < COLOR_LAST; i++) {
-    if (!secfile_lookup_int(file, &colors->colors[i].r,
-                            "colors.%s0.r", color_names[i])
-        || !secfile_lookup_int(file, &colors->colors[i].g,
-                               "colors.%s0.g", color_names[i])
-        || !secfile_lookup_int(file, &colors->colors[i].b,
-                               "colors.%s0.b", color_names[i])) {
-      freelog(LOG_ERROR, "Color %s: %s", color_names[i], secfile_error());
-      colors->colors[i].r = 0;
-      colors->colors[i].g = 0;
-      colors->colors[i].b = 0;
-    }
+    colors->colors[i].r
+      = secfile_lookup_int(file, "colors.%s0.r", color_names[i]);
+    colors->colors[i].g
+      = secfile_lookup_int(file, "colors.%s0.g", color_names[i]);
+    colors->colors[i].b
+      = secfile_lookup_int(file, "colors.%s0.b", color_names[i]);
     colors->colors[i].color = NULL;
   }
 
   for (i = 0; i < MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS; i++) {
-    if (NULL == secfile_entry_lookup(file, "colors.player%d.r", i)) {
+    if (!section_file_lookup(file, "colors.player%d.r", i)) {
       break;
     }
   }
@@ -143,14 +138,9 @@ struct color_system *color_system_read(struct section_file *file)
     for (i = 0; i < colors->num_player_colors; i++) {
       struct rgbcolor *rgb = &colors->player_colors[i];
 
-      if (!secfile_lookup_int(file, &rgb->r, "colors.player%d.r", i)
-          || !secfile_lookup_int(file, &rgb->g, "colors.player%d.g", i)
-          || !secfile_lookup_int(file, &rgb->b, "colors.player%d.b", i)) {
-        freelog(LOG_ERROR, "Player color %d: %s", i, secfile_error());
-        rgb->r = 0;
-        rgb->g = 0;
-        rgb->b = 0;
-      }
+      rgb->r = secfile_lookup_int(file, "colors.player%d.r", i);
+      rgb->g = secfile_lookup_int(file, "colors.player%d.g", i);
+      rgb->b = secfile_lookup_int(file, "colors.player%d.b", i);
       rgb->color = NULL;
     }
   }
@@ -163,26 +153,20 @@ struct color_system *color_system_read(struct section_file *file)
   }
   colors->terrain_hash = hash_new(hash_fval_string, hash_fcmp_string);
   for (i = 0; ; i++) {
-    struct rgbcolor rgb;
-    struct rgbcolor *prgb;
-    const char *key;
+    struct rgbcolor *rgb;
+    char *key;
 
-    if (!secfile_lookup_int(file, &rgb.r, "colors.tiles%d.r", i)
-        || !secfile_lookup_int(file, &rgb.g, "colors.tiles%d.g", i)
-        || !secfile_lookup_int(file, &rgb.b, "colors.tiles%d.b", i)) {
+    if (!section_file_lookup(file, "colors.tiles%d.r", i)) {
       break;
     }
-
-    prgb = fc_malloc(sizeof(*prgb));
-    rgb.color = NULL;
-    *prgb = rgb;
+    rgb = fc_malloc(sizeof(*rgb));
+    rgb->r = secfile_lookup_int(file, "colors.tiles%d.r", i);
+    rgb->g = secfile_lookup_int(file, "colors.tiles%d.g", i);
+    rgb->b = secfile_lookup_int(file, "colors.tiles%d.b", i);
+    rgb->color = NULL;
     key = secfile_lookup_str(file, "colors.tiles%d.tag", i);
 
-    if (NULL == key) {
-      freelog(LOG_ERROR, "warning: tag for tiles %d: %s",
-              i, secfile_error());
-      free(prgb);
-    } else if (!hash_insert(colors->terrain_hash, mystrdup(key), prgb)) {
+    if (!hash_insert(colors->terrain_hash, mystrdup(key), rgb)) {
       freelog(LOG_ERROR, "warning: already have a color for %s", key);
     }
   }

@@ -901,7 +901,7 @@ static bool read_init_script_real(struct connection *caller,
   const char extension[] = ".serv";
   char serv_filename[strlen(extension) + strlen(script_filename) + 2];
   char tilde_filename[4096];
-  const char *real_filename;
+  char *real_filename;
 
   /* increase the number of calls to read */
   read_recursion++;
@@ -934,7 +934,7 @@ static bool read_init_script_real(struct connection *caller,
     interpret_tilde(tilde_filename, sizeof(tilde_filename), serv_filename);
   }
 
-  real_filename = fileinfoname(get_data_dirs(), tilde_filename);
+  real_filename = datafilename(tilde_filename);
   if (!real_filename) {
     if (is_restricted(caller) && !from_cmdline) {
       cmd_reply(CMD_READ_SCRIPT, caller, C_FAIL,
@@ -2602,13 +2602,13 @@ static bool set_command(struct connection *caller, char *str, bool check)
     /* Handle immediate side-effects of special setting changes. */
     /* FIXME: Redesign setting data structures so that this can
      * be done in a less brittle way. */
-    if (pset->integer.pvalue == &game.info.aifill) {
-      aifill(*pset->integer.pvalue);
-    } else if (pset->boolean.pvalue == &game.info.auto_ai_toggle) {
-      if (*pset->boolean.pvalue) {
+    if (pset->int_value == &game.info.aifill) {
+      aifill(setting_int_get(pset));
+    } else if (pset->bool_value == &game.info.auto_ai_toggle) {
+      if (setting_bool_get(pset)) {
         players_iterate(pplayer) {
           if (!pplayer->ai_data.control && !pplayer->is_connected) {
-             toggle_ai_player_direct(NULL, pplayer);
+            toggle_ai_player_direct(NULL, pplayer);
             send_player_info_c(pplayer, game.est_connections);
           }
         } players_iterate_end;
@@ -3245,7 +3245,7 @@ static void send_load_game_info(bool load_successful)
 bool load_command(struct connection *caller, const char *filename, bool check)
 {
   struct timer *loadtimer, *uloadtimer;  
-  struct section_file *file;
+  struct section_file file;
   char arg[MAX_LEN_PATH];
   struct conn_list *global_observers;
 
@@ -3270,19 +3270,17 @@ bool load_command(struct connection *caller, const char *filename, bool check)
   {
     /* it is a normal savegame or maybe a scenario */
     char testfile[MAX_LEN_PATH];
-    const struct strvec *pathes[] = {
-      get_save_dirs(), get_scenario_dirs(), NULL
-    };
+    const char *paths[] = { "", "scenario/", NULL };
     const char *exts[] = {
       "sav", "gz", "bz2", "sav.gz", "sav.bz2", NULL
     };
-    const char **ext, *found = NULL;
-    const struct strvec **path;
+    const char **path, **ext, *found = NULL;
 
-    for (path = pathes; !found && *path; path++) {
+    for (path = paths; !found && *path; path++) {
       for (ext = exts; !found && *ext; ext++) {
-        my_snprintf(testfile, sizeof(testfile), "%s.%s", filename, *ext);
-        if ((found = fileinfoname(*path, testfile))) {
+        my_snprintf(testfile, sizeof(testfile), "%s%s.%s",
+                    *path, filename, *ext);
+        if ((found = datafilename(testfile))) {
           sz_strlcpy(arg, found);
         }
       }
@@ -3301,7 +3299,7 @@ bool load_command(struct connection *caller, const char *filename, bool check)
 
   /* attempt to parse the file */
 
-  if (!(file = secfile_load(arg, FALSE))) {
+  if (!section_file_load_nodup(&file, arg)) {
     cmd_reply(CMD_LOAD, caller, C_FAIL, _("Could not load savefile: %s"), arg);
     send_load_game_info(FALSE);
     return FALSE;
@@ -3336,9 +3334,9 @@ bool load_command(struct connection *caller, const char *filename, bool check)
 
   sz_strlcpy(srvarg.load_filename, arg);
 
-  game_load(file);
-  secfile_check_unused(file);
-  secfile_destroy(file);
+  game_load(&file);
+  section_file_check_unused(&file, arg);
+  section_file_free(&file);
 
   freelog(LOG_VERBOSE, "Load time: %g seconds (%g apparent)",
           read_timer_seconds_free(loadtimer),
@@ -3392,9 +3390,7 @@ bool load_command(struct connection *caller, const char *filename, bool check)
 **************************************************************************/
 static bool set_rulesetdir(struct connection *caller, char *str, bool check)
 {
-  char filename[512];
-  const char *pfilename;
-
+  char filename[512], *pfilename;
   if ((str == NULL) || (strlen(str)==0)) {
     cmd_reply(CMD_RULESETDIR, caller, C_SYNTAX,
              _("Current ruleset directory is \"%s\""),
@@ -3415,7 +3411,7 @@ static bool set_rulesetdir(struct connection *caller, char *str, bool check)
   }  
 
   my_snprintf(filename, sizeof(filename), "%s", str);
-  pfilename = fileinfoname(get_data_dirs(), filename);
+  pfilename = datafilename(filename);
   if (!pfilename) {
     cmd_reply(CMD_RULESETDIR, caller, C_SYNTAX,
              _("Ruleset directory \"%s\" not found"), str);
@@ -3921,6 +3917,7 @@ bool start_command(struct connection *caller, bool check, bool notify)
                       "to disconnect."));
     return FALSE;
   case S_S_RUNNING:
+  case S_S_GENERATING_WAITING:
     /* TRANS: given when /start is invoked while the game is running. */
     start_cmd_reply(caller, notify,
                     _("Cannot start the game: it is already running."));
@@ -4440,18 +4437,36 @@ static void show_connections(struct connection *caller)
 static void show_scenarios(struct connection *caller)
 {
   char buf[MAX_LEN_CONSOLE_LINE];
-  struct fileinfo_list *files;
+  struct datafile_list *files;
 
   cmd_reply(CMD_LIST, caller, C_COMMENT, _("List of scenarios available:"));
   cmd_reply(CMD_LIST, caller, C_COMMENT, horiz_line);
 
-  files = fileinfolist_infix(get_scenario_dirs(), ".sav", TRUE);
+  files = datafilelist_infix("scenario", ".sav", TRUE);
   
-  fileinfo_list_iterate(files, pfile) {
+  datafile_list_iterate(files, pfile) {
     my_snprintf(buf, sizeof(buf), "%s", pfile->name);
     cmd_reply(CMD_LIST, caller, C_COMMENT, "%s", buf);
-  } fileinfo_list_iterate_end;
-  fileinfo_list_free_all(files);
+
+    free(pfile->name);
+    free(pfile->fullname);
+    free(pfile);
+  } datafile_list_iterate_end;
+
+  datafile_list_free(files);
+
+  files = datafilelist_infix(NULL, ".sav", TRUE);
+
+  datafile_list_iterate(files, pfile) {
+    my_snprintf(buf, sizeof(buf), "%s", pfile->name);
+    cmd_reply(CMD_LIST, caller, C_COMMENT, "%s", buf);
+
+    free(pfile->name);
+    free(pfile->fullname);
+    free(pfile); 
+  } datafile_list_iterate_end;
+
+  datafile_list_free(files);
 
   cmd_reply(CMD_LIST, caller, C_COMMENT, horiz_line);
 }

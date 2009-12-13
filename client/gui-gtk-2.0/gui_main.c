@@ -874,7 +874,7 @@ void enable_menus(bool enable)
   if (enable) {
     main_menubar = setup_menus(toplevel);
     gtk_box_pack_start(GTK_BOX(top_vbox), main_menubar, FALSE, FALSE, 0);
-    menus_init();
+    update_menus();
     gtk_widget_show_all(main_menubar);
   } else {
     gtk_widget_destroy(main_menubar);

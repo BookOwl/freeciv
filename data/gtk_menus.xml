@@ -90,7 +90,6 @@
       <separator />
       <menuitem action="UNIT_HOMECITY" />
       <menuitem action="UNIT_UPGRADE" />
-      <menuitem action="UNIT_TRANSFORM" />
       <menuitem action="UNIT_DISBAND" />
     </menu>
 

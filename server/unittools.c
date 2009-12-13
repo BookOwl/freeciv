@@ -261,7 +261,7 @@ static void do_upgrade_effects(struct player *pplayer)
     struct unit_type *type_from = unit_type(punit);
     struct unit_type *type_to = can_upgrade_unittype(pplayer, type_from);
 
-    transform_unit(punit, type_to, TRUE);
+    upgrade_unit(punit, type_to, TRUE);
     notify_player(pplayer, unit_tile(punit), E_UNIT_UPGRADED, ftc_server,
                   _("%s was upgraded for free to %s."),
                   utype_name_translation(type_from),
@@ -1281,20 +1281,23 @@ bool is_airunit_refuel_point(struct tile *ptile, struct player *pplayer,
 }
 
 /**************************************************************************
-  Really transforms a single unit.
+  Really upgrades a single unit.
 
-  If calling this function for upgrade, you should use unit_upgrade
-  before to test if this is possible.
+  Before calling this function you should use unit_upgrade to test if
+  this is possible.
 
-  is_free: Does unit owner need to pay upgrade price.
+  is_free: Leonardo upgrade for free, in all other cases the unit
+  owner has to pay
 
   Note that this function is strongly tied to unit.c:test_unit_upgrade().
 **************************************************************************/
-void transform_unit(struct unit *punit, struct unit_type *to_unit,
-                    bool is_free)
+void upgrade_unit(struct unit *punit, struct unit_type *to_unit,
+		  bool is_free)
 {
   struct player *pplayer = unit_owner(punit);
   int old_mr = unit_move_rate(punit), old_hp = unit_type(punit)->hp;
+
+  assert(test_unit_upgrade(punit, is_free) == UR_OK);
 
   if (!is_free) {
     pplayer->economic.gold -=
@@ -1824,7 +1827,8 @@ void package_unit(struct unit *punit, struct packet_unit_info *packet)
 {
   packet->id = punit->id;
   packet->owner = player_number(unit_owner(punit));
-  packet->tile = tile_index(unit_tile(punit));
+  packet->x = punit->tile->x;
+  packet->y = punit->tile->y;
   packet->homecity = punit->homecity;
   output_type_iterate(o) {
     packet->upkeep[o] = punit->upkeep[o];
@@ -1838,8 +1842,14 @@ void package_unit(struct unit *punit, struct packet_unit_info *packet)
   packet->activity_count = punit->activity_count;
   packet->ai = punit->ai.control;
   packet->fuel = punit->fuel;
-  packet->goto_tile = (NULL != punit->goto_tile
-                       ? tile_index(punit->goto_tile) : -1);
+  if (punit->goto_tile) {
+    packet->goto_dest_x = punit->goto_tile->x;
+    packet->goto_dest_y = punit->goto_tile->y;
+  } else {
+    packet->goto_dest_x = 255;
+    packet->goto_dest_y = 255;
+    assert(!is_normal_map_pos(255, 255));
+  }
   packet->activity_target = punit->activity_target;
   packet->activity_base = punit->activity_base;
   packet->paradropped = punit->paradropped;
@@ -1899,7 +1909,8 @@ void package_short_unit(struct unit *punit,
 
   packet->id = punit->id;
   packet->owner = player_number(unit_owner(punit));
-  packet->tile = tile_index(unit_tile(punit));
+  packet->x = punit->tile->x;
+  packet->y = punit->tile->y;
   packet->veteran = punit->veteran;
   packet->type = utype_number(unit_type(punit));
   packet->hp = punit->hp;
