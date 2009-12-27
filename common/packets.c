@@ -88,7 +88,7 @@ int send_packet_data(struct connection *pc, unsigned char *data, int len)
   int result = 0;
 
   freelog(BASIC_PACKET_LOG_LEVEL, "sending packet type=%s(%d) len=%d",
-          packet_name(data[2]), data[2], len);
+	  get_packet_name(data[2]), data[2], len);
 
   if (!pc->is_server) {
     pc->client.last_request_id_used =
@@ -139,12 +139,11 @@ int send_packet_data(struct connection *pc, unsigned char *data, int len)
       byte_vector_reserve(&pc->compression.queue, old_size + len);
       memcpy(pc->compression.queue.p + old_size, data, len);
       freelog(COMPRESS2_LOG_LEVEL, "COMPRESS: putting %s into the queue",
-              packet_name(packet_type));
+	      get_packet_name(packet_type));
     } else {
       stat_size_alone += size;
-      freelog(COMPRESS_LOG_LEVEL,
-              "COMPRESS: sending %s alone (%d bytes total)",
-              packet_name(packet_type), stat_size_alone);
+      freelog(COMPRESS_LOG_LEVEL, "COMPRESS: sending %s alone (%d bytes total)",
+	      get_packet_name(packet_type), stat_size_alone);
       send_connection_data(pc, data, len);
     }
 
@@ -272,7 +271,7 @@ int send_packet_data(struct connection *pc, unsigned char *data, int len)
 	freelog(ll, "%8d %8d %8d %s(%i)",
 		packets_stats[i].counter, packets_stats[i].size,
 		packets_stats[i].size / packets_stats[i].counter,
-                packet_name(i),i);
+		get_packet_name(i),i);
       }
       freelog(LOG_TEST,
 	      "turn=%d; transmitted %d bytes in %d packets;average size "
@@ -438,7 +437,7 @@ void *get_packet_from_connection(struct connection *pc,
   dio_get_uint8(&din, &utype.itype);
 
   freelog(BASIC_PACKET_LOG_LEVEL, "got packet type=(%s)%d len=%d",
-          packet_name(utype.type), utype.itype, whole_packet_len);
+	  get_packet_name(utype.type), utype.itype, whole_packet_len);
 
   *ptype = utype.type;
   *presult = TRUE;
@@ -482,7 +481,7 @@ void *get_packet_from_connection(struct connection *pc,
 	freelog(LOG_TEST,
 		"  [%-25.25s %3d]: %6d packets; %8d bytes total; "
 		"%5d bytes/packet average",
-                packet_name(i), i, packets_stats[i].counter,
+		get_packet_name(i), i, packets_stats[i].counter,
 		packets_stats[i].size,
 		packets_stats[i].size / packets_stats[i].counter);
       }
@@ -661,6 +660,45 @@ void send_attribute_block(const struct player *pplayer,
 }
 
 /**************************************************************************
+  This function is a hack to convert the internal form for storing
+  connection IDs and map positions into the network form.  It's called
+  directly on a packet before it's written to the network.
+**************************************************************************/
+void pre_send_packet_chat_msg(struct connection *pc,
+			      struct packet_chat_msg *packet)
+{
+  if (packet->conn_id == -1) {
+    /* since we can currently only send unsigned ints... */
+    packet->conn_id = 255;
+  }
+
+  if (packet->x == -1 && packet->y == -1) {
+    /* since we can currently only send unsigned ints... */
+    assert(!is_normal_map_pos(255, 255));
+    packet->x = 255;
+    packet->y = 255;
+  }
+}
+
+/**************************************************************************
+  This function is a hack to convert the network form for storing
+  connection IDs and map positions into the internal form.  It's
+  called directly on a packet after it's been received from the network.
+**************************************************************************/
+void post_receive_packet_chat_msg(struct connection *pc,
+				  struct packet_chat_msg *packet)
+{
+  if (packet->x == 255 && packet->y == 255) {
+    /* unsigned encoding for no position */
+    packet->x = -1;
+    packet->y = -1;
+  }
+  if (packet->conn_id == 255) {
+    packet->conn_id = -1;
+  }
+}
+
+/**************************************************************************
   Test and log for sending player attribute_block
 **************************************************************************/
 void pre_send_packet_player_attribute_chunk(struct connection *pc,
@@ -678,4 +716,22 @@ void pre_send_packet_player_attribute_chunk(struct connection *pc,
   freelog(BASIC_PACKET_LOG_LEVEL, "sending attribute chunk %d/%d %d",
 	  packet->offset, packet->total_length, packet->chunk_length);
 
+}
+
+/**************************************************************************
+  ...
+**************************************************************************/
+void post_receive_packet_ruleset_control(struct connection *pc,
+                                         struct packet_ruleset_control *packet)
+{
+  conn_clear_packet_cache(pc);
+}
+
+/**************************************************************************
+  ...
+**************************************************************************/
+void post_send_packet_ruleset_control(struct connection *pc,
+                                      const struct packet_ruleset_control *packet)
+{
+  conn_clear_packet_cache(pc);
 }

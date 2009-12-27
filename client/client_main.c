@@ -603,7 +603,7 @@ void set_client_state(enum client_states newstate)
   if (C_S_PREPARING == newstate
       && (client_has_player() || client_is_observer())) {
     /* Reset the delta-state. */
-    conn_reset_delta_state(&client.conn);
+    conn_clear_packet_cache(&client.conn);
   }
 
   if (oldstate == newstate) {
@@ -737,7 +737,7 @@ void set_client_state(enum client_states newstate)
     break;
   }
 
-  menus_update();
+  update_menus();
   update_turn_done_button_state();
   update_conn_list_dialog();
   if (can_client_change_view()) {

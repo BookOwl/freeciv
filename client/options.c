@@ -1103,39 +1103,30 @@ bool option_load(struct client_option *poption, struct section_file *sf)
   RETURN_VAL_IF_FAIL(NULL != poption, FALSE);
   RETURN_VAL_IF_FAIL(NULL != sf, FALSE);
 
+  if (!section_file_lookup(sf, "client.%s", option_name(poption))) {
+    return FALSE;
+  }
+
   switch (option_type(poption)) {
   case COT_BOOLEAN:
-    {
-      bool value;
-
-      return (secfile_lookup_bool(sf, &value, "client.%s",
-                                  option_name(poption))
-              && option_bool_set(poption, value));
-    }
+    return option_bool_set(poption,
+                           secfile_lookup_bool(sf, "client.%s",
+                                               option_name(poption)));
   case COT_INTEGER:
-    {
-      int value;
-
-      return (secfile_lookup_int(sf, &value, "client.%s",
-                                 option_name(poption))
-              && option_int_set(poption, value));
-    }
+    return option_int_set(poption,
+                          secfile_lookup_int_default_min_max(real_freelog,
+                              sf, option_int_def(poption),
+                              option_int_min(poption),
+                              option_int_max(poption),
+                              "client.%s", option_name(poption)));
   case COT_STRING:
-    {
-      const char *string;
-
-      return ((string = secfile_lookup_str(sf, "client.%s",
-                                           option_name(poption)))
-              && option_str_set(poption, string));
-    }
+    return option_str_set(poption,
+                          secfile_lookup_str(sf, "client.%s",
+                                             option_name(poption)));
   case COT_FONT:
-    {
-      const char *string;
-
-      return ((string = secfile_lookup_str(sf, "client.%s",
-                                           option_name(poption)))
-              && option_font_set(poption, string));
-    }
+    return option_font_set(poption,
+                           secfile_lookup_str(sf, "client.%s",
+                                              option_name(poption)));
   }
   return FALSE;
 }
@@ -1461,7 +1452,7 @@ bool option_font_set(struct client_option *poption, const char *str)
 
 /** Message Options: **/
 
-int messages_where[E_LAST];
+unsigned int messages_where[E_LAST];
 
 
 /****************************************************************
@@ -1519,46 +1510,14 @@ static void message_options_load(struct section_file *file,
 {
   enum event_type event;
   int i, num_events;
-  const char *p;
+  char *p;
 
-  if (!secfile_lookup_int(file, &num_events, "messages.count")) {
+  num_events = secfile_lookup_int_default(file, -1, "messages.count");
+  if (num_events == -1) {
     /* version < 2.2 */
-    /* Order of the events in 2.1. */
-    const enum event_type old_events[] = {
-      E_CITY_CANTBUILD, E_CITY_LOST, E_CITY_LOVE, E_CITY_DISORDER,
-      E_CITY_FAMINE, E_CITY_FAMINE_FEARED, E_CITY_GROWTH,
-      E_CITY_MAY_SOON_GROW, E_CITY_AQUEDUCT, E_CITY_AQ_BUILDING,
-      E_CITY_NORMAL, E_CITY_NUKED, E_CITY_CMA_RELEASE, E_CITY_GRAN_THROTTLE,
-      E_CITY_TRANSFER, E_CITY_BUILD, E_CITY_PRODUCTION_CHANGED,
-      E_WORKLIST, E_UPRISING, E_CIVIL_WAR, E_ANARCHY, E_FIRST_CONTACT,
-      E_NEW_GOVERNMENT, E_LOW_ON_FUNDS, E_POLLUTION, E_REVOLT_DONE,
-      E_REVOLT_START, E_SPACESHIP, E_MY_DIPLOMAT_BRIBE,
-      E_DIPLOMATIC_INCIDENT, E_MY_DIPLOMAT_ESCAPE, E_MY_DIPLOMAT_EMBASSY,
-      E_MY_DIPLOMAT_FAILED, E_MY_DIPLOMAT_INCITE, E_MY_DIPLOMAT_POISON,
-      E_MY_DIPLOMAT_SABOTAGE, E_MY_DIPLOMAT_THEFT, E_ENEMY_DIPLOMAT_BRIBE,
-      E_ENEMY_DIPLOMAT_EMBASSY, E_ENEMY_DIPLOMAT_FAILED,
-      E_ENEMY_DIPLOMAT_INCITE, E_ENEMY_DIPLOMAT_POISON,
-      E_ENEMY_DIPLOMAT_SABOTAGE, E_ENEMY_DIPLOMAT_THEFT,
-      E_CARAVAN_ACTION, E_SCRIPT, E_BROADCAST_REPORT, E_GAME_END,
-      E_GAME_START, E_NATION_SELECTED, E_DESTROYED, E_REPORT, E_TURN_BELL,
-      E_NEXT_YEAR, E_GLOBAL_ECO, E_NUKE, E_HUT_BARB, E_HUT_CITY, E_HUT_GOLD,
-      E_HUT_BARB_KILLED, E_HUT_MERC, E_HUT_SETTLER, E_HUT_TECH,
-      E_HUT_BARB_CITY_NEAR, E_IMP_BUY, E_IMP_BUILD, E_IMP_AUCTIONED,
-      E_IMP_AUTO, E_IMP_SOLD, E_TECH_GAIN, E_TECH_LEARNED, E_TREATY_ALLIANCE,
-      E_TREATY_BROKEN, E_TREATY_CEASEFIRE, E_TREATY_PEACE,
-      E_TREATY_SHARED_VISION, E_UNIT_LOST_ATT, E_UNIT_WIN_ATT, E_UNIT_BUY,
-      E_UNIT_BUILT, E_UNIT_LOST_DEF, E_UNIT_WIN, E_UNIT_BECAME_VET,
-      E_UNIT_UPGRADED, E_UNIT_RELOCATED, E_UNIT_ORDERS, E_WONDER_BUILD,
-      E_WONDER_OBSOLETE, E_WONDER_STARTED, E_WONDER_STOPPED,
-      E_WONDER_WILL_BE_BUILT, E_DIPLOMACY, E_TREATY_EMBASSY,
-      E_BAD_COMMAND, E_SETTING, E_CHAT_MSG, E_MESSAGE_WALL, E_CHAT_ERROR,
-      E_CONNECTION, E_AI_DEBUG
-    };
-    const size_t old_events_num = ARRAY_SIZE(old_events);
-
-    for (i = 0; i < old_events_num; i++) {
-      messages_where[old_events[i]] =
-        secfile_lookup_int_default(file, messages_where[old_events[i]],
+    for (i = 0; i < E_LAST; i++) {
+      messages_where[i] =
+        secfile_lookup_int_default(file, messages_where[i],
                                    "%s.message_where_%02d", prefix, i);
     }
     return;
@@ -1566,14 +1525,9 @@ static void message_options_load(struct section_file *file,
 
   for (i = 0; i < num_events; i++) {
     p = secfile_lookup_str(file, "messages.event%d.name", i);
-    if (NULL == p) {
-      freelog(LOG_ERROR, "Corruption in file %s: %s",
-              secfile_name(file), secfile_error());
-      continue;
-    }
     event = event_type_by_name(p, strcmp);
     if (!event_type_is_valid(event)) {
-      freelog(LOG_ERROR, "Event not supported: %s", p);
+      freelog(LOG_ERROR, "Invalid event: %s", p);
       continue;
     }
 
@@ -1582,11 +1536,8 @@ static void message_options_load(struct section_file *file,
       continue;
     }
 
-    if (!secfile_lookup_int(file, &messages_where[event],
-                            "messages.event%d.where", i)) {
-      freelog(LOG_ERROR, "Corruption in file %s: %s",
-              secfile_name(file), secfile_error());
-    }
+    messages_where[event]
+      = secfile_lookup_int(file, "messages.event%d.where", i);
   }
 }
 
@@ -1807,54 +1758,31 @@ static const char *get_last_option_file_name(void)
 static void settable_options_load(struct section_file *sf)
 {
   char buf[64];
-  const struct section *psection;
-  const struct entry_list *entries;
+  char **entries, **entry;
   const char *string;
-  bool bval;
-  int ival;
+  int value;
+  int num;
 
   RETURN_IF_FAIL(NULL != settable_options_hash);
 
   hash_delete_all_entries(settable_options_hash);
 
-  psection = secfile_section_by_name(sf, "server");
-  if (NULL == psection) {
-    /* Does not exist! */
-    return;
+  entries = secfile_get_section_entries(sf, "server", &num);
+
+  if (NULL != entries) {
+    for (entry = entries; 0 < num--; entry++) {
+      /* Before 2.2, some were saved as numbers. */
+      string = secfile_lookup_str_int(sf, &value, "server.%s", *entry);
+
+      if (NULL == string) {
+        my_snprintf(buf, sizeof(buf), "%d", value);
+        string = buf;
+      }
+
+      hash_insert(settable_options_hash, mystrdup(*entry), mystrdup(string));
+    }
+    free(entries);
   }
-
-  entries = section_entries(psection);
-  entry_list_iterate(entries, pentry) {
-    string = NULL;
-    switch (entry_type(pentry)) {
-    case ENTRY_BOOL:
-      if (entry_bool_get(pentry, &bval)) {
-        my_snprintf(buf, sizeof(buf), "%d", bval);
-        string = buf;
-      }
-      break;
-
-    case ENTRY_INT:
-      if (entry_int_get(pentry, &ival)) {
-        my_snprintf(buf, sizeof(buf), "%d", ival);
-        string = buf;
-      }
-      break;
-
-    case ENTRY_STR:
-      (void) entry_str_get(pentry, &string);
-      break;
-    }
-
-    if (NULL == string) {
-      freelog(LOG_ERROR, "Entry type variant of \"%s.%s\" is not supported.",
-              section_name(psection), entry_name(pentry));
-      continue;
-    }
-
-    hash_insert(settable_options_hash,
-                mystrdup(entry_name(pentry)), mystrdup(string));
-  } entry_list_iterate_end;
 }
 
 /****************************************************************
@@ -1908,8 +1836,7 @@ void desired_settable_options_update(void)
       continue;
     }
 
-    hash_replace(settable_options_hash,
-                 mystrdup(pset->name), mystrdup(value));
+    hash_replace(settable_options_hash, mystrdup(pset->name), mystrdup(value));
   }
 }
 
@@ -1973,27 +1900,27 @@ void desired_settable_option_send(struct options_settable *pset)
 *****************************************************************/
 static void options_dialogs_load(struct section_file *sf)
 {
-  const struct entry_list *entries;
+  char **entries, **entry;
   const char *prefixes[] = { "player_dlg_", "city_report_", NULL };
   const char **prefix;
-  bool visible;
+  int num;
 
   RETURN_IF_FAIL(NULL != dialog_options_hash);
 
-  entries = section_entries(secfile_section_by_name(sf, "client"));
+  entries = secfile_get_section_entries(sf, "client", &num);
 
   if (NULL != entries) {
-    entry_list_iterate(entries, pentry) {
+    for (entry = entries; 0 < num--; entry++) {
       for (prefix = prefixes; NULL != *prefix; prefix++) {
-        if (0 == strncmp(*prefix, entry_name(pentry), strlen(*prefix))
-            && secfile_lookup_bool(sf, &visible, "client.%s",
-                                   entry_name(pentry))) {
-          hash_replace(dialog_options_hash, mystrdup(entry_name(pentry)),
-                       FC_INT_TO_PTR(visible));
+        if (0 == strncmp(*prefix, *entry, strlen(*prefix))) {
+          hash_replace(dialog_options_hash, mystrdup(*entry),
+                       FC_INT_TO_PTR(secfile_lookup_bool(sf, "client.%s",
+                                                         *entry)));
           break;
         }
       }
-    } entry_list_iterate_end;
+    }
+    free(entries);
   }
 }
 
@@ -2080,7 +2007,7 @@ void options_dialogs_set(void)
 *****************************************************************/
 void options_load(void)
 {
-  struct section_file *sf;
+  struct section_file sf;
   int i, num;
   const char *name;
   const char * const prefix = "client";
@@ -2092,57 +2019,58 @@ void options_load(void)
     create_default_cma_presets();
     return;
   }
-  if (!(sf = secfile_load(name, TRUE))) {
+  if (!section_file_load(&sf, name)) {
     /* try to create the rc file */
-    sf = secfile_new(TRUE);
-    secfile_insert_str(sf, VERSION_STRING, "client.version");
+    section_file_init(&sf);
+    secfile_insert_str(&sf, VERSION_STRING, "client.version");
 
     create_default_cma_presets();
-    save_cma_presets(sf);
+    save_cma_presets(&sf);
 
     /* FIXME: need better messages */
-    if (!secfile_save(sf, name, 0, FZ_PLAIN)) {
+    if (!section_file_save(&sf, name, 0, FZ_PLAIN)) {
       freelog(LOG_ERROR, _("Save failed, cannot write to file %s"), name);
     } else {
       freelog(LOG_NORMAL, _("Saved settings to file %s"), name);
     }
-    secfile_destroy(sf);
+    section_file_free(&sf);
     options_fully_initialized = TRUE;
     return;
   }
 
   /* a "secret" option for the lazy. TODO: make this saveable */
-  sz_strlcpy(password,
-             secfile_lookup_str_default(sf, "", "%s.password", prefix));
+  sz_strlcpy(password, 
+             secfile_lookup_str_default(&sf, "", "%s.password", prefix));
 
   save_options_on_exit =
-    secfile_lookup_bool_default(sf, save_options_on_exit,
-                                "%s.save_options_on_exit", prefix);
+    secfile_lookup_bool_default(&sf, save_options_on_exit,
+				"%s.save_options_on_exit", prefix);
   fullscreen_mode =
-    secfile_lookup_bool_default(sf, fullscreen_mode,
-                                "%s.fullscreen_mode", prefix);
+    secfile_lookup_bool_default(&sf, fullscreen_mode,
+				"%s.fullscreen_mode", prefix);
 
   client_options_iterate_all(poption) {
-    option_load(poption, sf);
+    option_load(poption, &sf);
   } client_options_iterate_all_end;
 
-  message_options_load(sf, prefix);
-  options_dialogs_load(sf);
+  message_options_load(&sf, prefix);
+  options_dialogs_load(&sf);
 
   /* Load cma presets. If cma.number_of_presets doesn't exist, don't load 
    * any, the order here should be reversed to keep the order the same */
-  if (secfile_lookup_int(sf, &num, "cma.number_of_presets")) {
-    for (i = num - 1; i >= 0; i--) {
-      load_cma_preset(sf, i);
-    }
-  } else {
+  num = secfile_lookup_int_default(&sf, -1, "cma.number_of_presets");
+  if (num == -1) {
     create_default_cma_presets();
+  } else {
+    for (i = num - 1; i >= 0; i--) {
+      load_cma_preset(&sf, i);
+    }
   }
 
-  settable_options_load(sf);
-  global_worklists_load(sf);
+  settable_options_load(&sf);
+  global_worklists_load(&sf);
 
-  secfile_destroy(sf);
+  section_file_free(&sf);
   options_fully_initialized = TRUE;
 }
 
@@ -2151,7 +2079,7 @@ void options_load(void)
 **************************************************************************/
 void options_save(void)
 {
-  struct section_file *sf;
+  struct section_file sf;
   const char *name = get_current_option_file_name();
 
   if (!name) {
@@ -2160,51 +2088,51 @@ void options_save(void)
     return;
   }
 
-  sf = secfile_new(TRUE);
-  secfile_insert_str(sf, VERSION_STRING, "client.version");
+  section_file_init(&sf);
+  secfile_insert_str(&sf, VERSION_STRING, "client.version");
 
-  secfile_insert_bool(sf, save_options_on_exit, "client.save_options_on_exit");
-  secfile_insert_bool(sf, fullscreen_mode, "client.fullscreen_mode");
+  secfile_insert_bool(&sf, save_options_on_exit, "client.save_options_on_exit");
+  secfile_insert_bool(&sf, fullscreen_mode, "client.fullscreen_mode");
 
   client_options_iterate_all(poption) {
     switch (option_type(poption)) {
     case COT_BOOLEAN:
-      secfile_insert_bool(sf, option_bool_get(poption),
+      secfile_insert_bool(&sf, option_bool_get(poption),
                           "client.%s", option_name(poption));
       break;
     case COT_INTEGER:
-      secfile_insert_int(sf, option_int_get(poption),
+      secfile_insert_int(&sf, option_int_get(poption),
                          "client.%s", option_name(poption));
       break;
     case COT_STRING:
-      secfile_insert_str(sf, option_str_get(poption),
+      secfile_insert_str(&sf, option_str_get(poption),
                          "client.%s", option_name(poption));
       break;
     case COT_FONT:
-      secfile_insert_str(sf, option_font_get(poption),
+      secfile_insert_str(&sf, option_font_get(poption),
                          "client.%s", option_name(poption));
       break;
     }
   } client_options_iterate_all_end;
 
-  message_options_save(sf, "client");
-  options_dialogs_save(sf);
+  message_options_save(&sf, "client");
+  options_dialogs_save(&sf);
 
   /* server settings */
-  save_cma_presets(sf);
-  settable_options_save(sf);
+  save_cma_presets(&sf);
+  settable_options_save(&sf);
 
   /* insert global worklists */
-  global_worklists_save(sf);
+  global_worklists_save(&sf);
 
   /* save to disk */
-  if (!secfile_save(sf, name, 0, FZ_PLAIN)) {
+  if (!section_file_save(&sf, name, 0, FZ_PLAIN)) {
     output_window_printf(ftc_client,
                          _("Save failed, cannot write to file %s"), name);
   } else {
     output_window_printf(ftc_client, _("Saved settings to file %s"), name);
   }
-  secfile_destroy(sf);
+  section_file_free(&sf);
 }
 
 
@@ -2315,7 +2243,7 @@ static void reqtree_show_icons_callback(struct client_option *poption)
 ****************************************************************************/
 static void view_option_changed_callback(struct client_option *poption)
 {
-  menus_init();
+  update_menus();
   update_map_canvas_visible();
 }
 

@@ -138,7 +138,7 @@ static struct unit * unpackage_unit(struct packet_unit_info *packet)
   /* Owner, veteran, and type fields are already filled in by
    * create_unit_virtual. */
   punit->id = packet->id;
-  punit->tile = index_to_tile(packet->tile);
+  punit->tile = map_pos_to_tile(packet->x, packet->y);
   punit->homecity = packet->homecity;
   output_type_iterate(o) {
     punit->upkeep[o] = packet->upkeep[o];
@@ -149,7 +149,12 @@ static struct unit * unpackage_unit(struct packet_unit_info *packet)
   punit->activity_count = packet->activity_count;
   punit->ai.control = packet->ai;
   punit->fuel = packet->fuel;
-  punit->goto_tile = index_to_tile(packet->goto_tile);
+  if (is_normal_map_pos(packet->goto_dest_x, packet->goto_dest_y)) {
+    punit->goto_tile = map_pos_to_tile(packet->goto_dest_x,
+				       packet->goto_dest_y);
+  } else {
+    punit->goto_tile = NULL;
+  }
   punit->activity_target = packet->activity_target;
   punit->activity_base = packet->activity_base;
   punit->paradropped = packet->paradropped;
@@ -198,7 +203,7 @@ static struct unit *unpackage_short_unit(struct packet_unit_short_info *packet)
 
   /* Owner and type fields are already filled in by create_unit_virtual. */
   punit->id = packet->id;
-  punit->tile = index_to_tile(packet->tile);
+  punit->tile = map_pos_to_tile(packet->x, packet->y);
   punit->veteran = packet->veteran;
   punit->hp = packet->hp;
   punit->activity = packet->activity;
@@ -234,7 +239,7 @@ void handle_server_join_reply(bool you_can_join, char *message,
     client.conn.id = conn_id;
 
     agents_game_joined();
-    menus_init();
+    update_menus();
     set_server_busy(FALSE);
     
     if (get_client_page() == PAGE_MAIN
@@ -294,7 +299,7 @@ void handle_city_remove(int city_id)
 
   /* update menus if the focus unit is on the tile. */
   if (get_num_units_in_focus() > 0) {
-    menus_update();
+    update_menus();
   }
 }
 
@@ -332,9 +337,9 @@ void handle_unit_remove(int unit_id)
 /****************************************************************************
   The tile (x,y) has been nuked!
 ****************************************************************************/
-void handle_nuke_tile_info(int tile)
+void handle_nuke_tile_info(int x, int y)
 {
-  put_nuke_mushroom_pixmaps(index_to_tile(tile));
+  put_nuke_mushroom_pixmaps(map_pos_to_tile(x, y));
 }
 
 /****************************************************************************
@@ -432,7 +437,7 @@ void handle_city_info(struct packet_city_info *packet)
   struct unit_list *pfocus_units = get_units_in_focus();
   struct city *pcity = game_find_city_by_number(packet->id);
   struct tile_list *worked_tiles = NULL;
-  struct tile *pcenter = index_to_tile(packet->tile);
+  struct tile *pcenter = map_pos_to_tile(packet->x, packet->y);
   struct tile *ptile = NULL;
   struct player *powner = valid_player_by_number(packet->owner);
 
@@ -444,8 +449,9 @@ void handle_city_info(struct packet_city_info *packet)
   }
 
   if (NULL == pcenter) {
-    freelog(LOG_ERROR, "handle_city_info() invalid tile index %d.",
-            packet->tile);
+    freelog(LOG_ERROR,
+            "handle_city_info() invalid tile (%d,%d).",
+            TILE_XY(packet));
     return;
   }
 
@@ -510,8 +516,9 @@ void handle_city_info(struct packet_city_info *packet)
     return;
   } else if (ptile != pcenter) {
     freelog(LOG_ERROR, "handle_city_info()"
-            " city tile (%d, %d) != (%d, %d).",
-            TILE_XY(ptile), TILE_XY(pcenter));
+            " city tile (%d,%d) != (%d,%d).",
+            TILE_XY(ptile),
+            TILE_XY(packet));
     return;
   } else {
     name_changed = (0 != strncmp(packet->name, pcity->name,
@@ -767,7 +774,7 @@ static void city_packet_common(struct city *pcity, struct tile *pcenter,
       && NULL != client.conn.playing
       && !client.conn.playing->ai_data.control
       && can_client_issue_orders()) {
-    menus_update();
+    update_menus();
     if (!city_dialog_is_open(pcity)) {
       popup_city_dialog(pcity);
     }
@@ -780,7 +787,7 @@ static void city_packet_common(struct city *pcity, struct tile *pcenter,
 
   /* update menus if the focus unit is on the tile. */
   if (get_focus_unit_on_tile(pcenter)) {
-    menus_update();
+    update_menus();
   }
 
   if (is_new) {
@@ -806,7 +813,7 @@ void handle_city_short_info(struct packet_city_short_info *packet)
   bool name_changed = FALSE;
   bool update_descriptions = FALSE;
   struct city *pcity = game_find_city_by_number(packet->id);
-  struct tile *pcenter = index_to_tile(packet->tile);
+  struct tile *pcenter = map_pos_to_tile(packet->x, packet->y);
   struct tile *ptile = NULL;
   struct tile_list *worked_tiles = NULL;
   struct player *powner = valid_player_by_number(packet->owner);
@@ -819,8 +826,9 @@ void handle_city_short_info(struct packet_city_short_info *packet)
   }
 
   if (NULL == pcenter) {
-    freelog(LOG_ERROR, "handle_city_short_info() invalid tile index %d.",
-            packet->tile);
+    freelog(LOG_ERROR,
+            "handle_city_short_info() invalid tile (%d,%d).",
+            TILE_XY(packet));
     return;
   }
 
@@ -866,8 +874,9 @@ void handle_city_short_info(struct packet_city_short_info *packet)
     return;
   } else if (city_tile(pcity) != pcenter) {
     freelog(LOG_ERROR, "handle_city_short_info()"
-            " city tile (%d, %d) != (%d, %d).",
-            TILE_XY(city_tile(pcity)), TILE_XY(pcenter));
+            " city tile (%d,%d) != (%d,%d).",
+            TILE_XY(city_tile(pcity)),
+            TILE_XY(packet));
     return;
   } else {
     name_changed = (0 != strncmp(packet->name, pcity->name,
@@ -978,7 +987,7 @@ void handle_new_year(int year, int turn)
   auto_center_on_focus_unit();
 
   update_unit_info_label(get_units_in_focus());
-  menus_update();
+  update_menus();
 
   set_seconds_to_turndone(game.info.timeout);
 
@@ -1117,10 +1126,16 @@ void play_sound_for_event(enum event_type type)
   Handle a message packet.  This includes all messages - both
   in-game messages and chats from other players.
 **************************************************************************/
-void handle_chat_msg(char *message, int tile,
-                     enum event_type event, int conn_id)
+void handle_chat_msg(char *message, int x, int y,
+		     enum event_type event, int conn_id)
 {
-  handle_event(message, index_to_tile(tile), event, conn_id);
+  struct tile *ptile = NULL;
+
+  if (is_normal_map_pos(x, y)) {
+    ptile = map_pos_to_tile(x, y);
+  }
+
+  handle_event(message, ptile, event, conn_id);
 }
 
 /**************************************************************************
@@ -1202,7 +1217,7 @@ static bool handle_unit_packet_common(struct unit *packet_unit)
 {
   struct city *pcity;
   struct unit *punit;
-  bool need_menus_update = FALSE;
+  bool need_update_menus = FALSE;
   bool repaint_unit = FALSE;
   bool repaint_city = FALSE;	/* regards unit's homecity */
   struct tile *old_tile = NULL;
@@ -1274,11 +1289,11 @@ static bool handle_unit_packet_common(struct unit *packet_unit)
 
       punit->transported_by = packet_unit->transported_by;
       if (punit->occupy != packet_unit->occupy
-          && get_focus_unit_on_tile(packet_unit->tile)) {
-        /* Special case: (un)loading a unit in a transporter on the
-         * same tile as the focus unit may (dis)allow the focus unit to be
-         * loaded.  Thus the orders->(un)load menu item needs updating. */
-        need_menus_update = TRUE;
+	  && get_focus_unit_on_tile(packet_unit->tile)) {
+	/* Special case: (un)loading a unit in a transporter on the
+	 * same tile as the focus unit may (dis)allow the focus unit to be
+	 * loaded.  Thus the orders->(un)load menu item needs updating. */
+	need_update_menus = TRUE;
       }
       punit->occupy = packet_unit->occupy;
     
@@ -1304,7 +1319,7 @@ static bool handle_unit_packet_common(struct unit *packet_unit)
     /* These two lines force the menus to be updated as appropriate when
      * the focus unit changes. */
     if (unit_is_in_focus(punit)) {
-      need_menus_update = TRUE;
+      need_update_menus = TRUE;
     }
 
     if (punit->homecity != packet_unit->homecity) {
@@ -1340,7 +1355,7 @@ static bool handle_unit_packet_common(struct unit *packet_unit)
       }
       if (unit_is_in_focus(punit)) {
         /* Update the orders menu -- the unit might have new abilities */
-        need_menus_update = TRUE;
+	need_update_menus = TRUE;
       }
     }
 
@@ -1504,8 +1519,8 @@ static bool handle_unit_packet_common(struct unit *packet_unit)
     update_unit_focus();
   }
 
-  if (need_menus_update) {
-    menus_update();
+  if (need_update_menus) {
+    update_menus();
   }
 
   return ret;
@@ -1649,7 +1664,7 @@ void handle_game_info(struct packet_game_info *pinfo)
     boot_help_texts(client.conn.playing); /* reboot, after setting game.spacerace */
   }
   update_unit_focus();
-  menus_update();
+  update_menus();
   update_players_dialog();
   if (update_aifill_button) {
     update_start_page();
@@ -1687,8 +1702,9 @@ static bool read_player_info_techs(struct player *pplayer,
   } advance_index_iterate_end;
 
   if (need_effect_update) {
-    menus_update();
+    update_menus();
   }
+
   player_research_update(pplayer);
   return need_effect_update;
 }
@@ -1945,8 +1961,7 @@ void handle_player_info(struct packet_player_info *pinfo)
          on a river the road menu item will remain disabled unless we
          do this. (applys in other cases as well.) */
       if (get_num_units_in_focus() > 0) {
-        
-        menus_update();
+        update_menus();
       }
     }
     if (turn_done_changed) {
@@ -2065,7 +2080,7 @@ void handle_conn_info(struct packet_conn_info *pinfo)
   if (pinfo->used && pconn == &client.conn) {
     /* For updating the sensitivity of the "Edit Mode" menu item,
      * among other things. */
-    menus_update();
+    update_menus();
   }
 
   if (preparing_client_state) {
@@ -2290,7 +2305,7 @@ void handle_spaceship_info(struct packet_spaceship_info *p)
     refresh_spaceship_dialog(pplayer);
     return;
   }
-  menus_update();
+  update_menus();
 
   if (!spaceship_autoplace(pplayer, ship)) {
     refresh_spaceship_dialog(pplayer);
@@ -2309,12 +2324,13 @@ void handle_tile_info(struct packet_tile_info *packet)
   struct player *powner = valid_player_by_number(packet->owner);
   struct resource *presource = resource_by_number(packet->resource);
   struct terrain *pterrain = terrain_by_number(packet->terrain);
-  struct tile *ptile = index_to_tile(packet->tile);
+  struct tile *ptile = map_pos_to_tile(packet->x, packet->y);
   const struct nation_type *pnation;
 
   if (NULL == ptile) {
-    freelog(LOG_ERROR, "handle_tile_info() invalid tile index %d.",
-            packet->tile);
+    freelog(LOG_ERROR,
+            "handle_tile_info() invalid tile (%d,%d).",
+            TILE_XY(packet));
     return;
   }
   old_known = client_tile_get_known(ptile);
@@ -2331,8 +2347,9 @@ void handle_tile_info(struct packet_tile_info *packet)
         tile_set_terrain(ptile, pterrain);
       } else {
         tile_changed = FALSE;
-        freelog(LOG_ERROR, "handle_tile_info() unknown terrain (%d, %d).",
-                TILE_XY(ptile));
+        freelog(LOG_ERROR,
+                "handle_tile_info() unknown terrain (%d,%d).",
+                TILE_XY(packet));
       }
       break;
     };
@@ -2524,7 +2541,7 @@ void handle_tile_info(struct packet_tile_info *packet)
   /* update menus if the focus unit is on the tile. */
   if (tile_changed) {
     if (get_focus_unit_on_tile(ptile)) {
-      menus_update();
+      update_menus();
     }
   }
 }
@@ -2665,8 +2682,7 @@ void handle_ruleset_unit(struct packet_ruleset_unit *p)
   u->transport_capacity = p->transport_capacity;
   u->hp                 = p->hp;
   u->firepower          = p->firepower;
-  u->obsoleted_by       = utype_by_number(p->obsoleted_by);
-  u->transformed_to     = utype_by_number(p->transformed_to);
+  u->obsoleted_by = utype_by_number(p->obsoleted_by);
   u->fuel               = p->fuel;
   u->flags              = p->flags;
   u->roles              = p->roles;
