@@ -426,8 +426,9 @@ char *city_name_suggestion(struct player *pplayer, struct tile *ptile)
    * New nations are just added onto the end.
    */
 
-  log_verbose("Suggesting city name for %s at (%d,%d)",
-              player_name(pplayer), TILE_XY(ptile));
+  freelog(LOG_VERBOSE, "Suggesting city name for %s at (%d,%d)",
+	  player_name(pplayer),
+	  TILE_XY(ptile));
   
   memset(nations_selected, 0, sizeof(nations_selected));
 
@@ -452,7 +453,7 @@ char *city_name_suggestion(struct player *pplayer, struct tile *ptile)
       nation = nation_list[i];
       name = search_for_city_name(ptile, nation->city_names, pplayer);
 
-      log_debug("Looking through %s.", nation_rule_name(nation));
+      freelog(LOG_DEBUG, "Looking through %s.", nation_rule_name(nation));
 
       if (name) {
 	return name;
@@ -466,7 +467,7 @@ char *city_name_suggestion(struct player *pplayer, struct tile *ptile)
 	  nation_list[queue_size] = n;
 	  nations_selected[nation_index(n)] = TRUE;
 	  queue_size++;
-          log_debug("Parent %s.", nation_rule_name(n));
+	  freelog(LOG_DEBUG, "Parent %s.", nation_rule_name(n));
 	}
       }
 
@@ -478,7 +479,7 @@ char *city_name_suggestion(struct player *pplayer, struct tile *ptile)
 	  nation_list[queue_size] = n;
 	  nations_selected[nation_index(n)] = TRUE;
 	  queue_size++;
-          log_debug("Child %s.", nation_rule_name(n));
+	  freelog(LOG_DEBUG, "Child %s.", nation_rule_name(n));
 	}
       }
     }
@@ -489,7 +490,7 @@ char *city_name_suggestion(struct player *pplayer, struct tile *ptile)
 	nation_list[queue_size] = n;
 	nations_selected[nation_index(n)] = TRUE;
 	queue_size++;
-        log_debug("Misc nation %s.", nation_rule_name(n));
+	freelog(LOG_DEBUG, "Misc nation %s.", nation_rule_name(n));
       }
     } nations_iterate_end;
   }
@@ -548,10 +549,10 @@ static void transfer_unit(struct unit *punit, struct city *tocity,
   struct player *to_player = city_owner(tocity);
 
   if (from_player == to_player) {
-    log_verbose("Changed homecity of %s %s to %s",
-                nation_rule_name(nation_of_player(from_player)),
-                unit_rule_name(punit),
-                city_name(tocity));
+    freelog(LOG_VERBOSE, "Changed homecity of %s %s to %s",
+	    nation_rule_name(nation_of_player(from_player)),
+	    unit_rule_name(punit),
+	    city_name(tocity));
     if (verbose) {
       notify_player(from_player, unit_tile(punit),
                     E_UNIT_RELOCATED, ftc_server,
@@ -562,10 +563,11 @@ static void transfer_unit(struct unit *punit, struct city *tocity,
   } else {
     struct city *in_city = tile_city(punit->tile);
     if (in_city) {
-      log_verbose("Transfered %s in %s from %s to %s",
-                  unit_rule_name(punit), city_name(in_city),
-                  nation_rule_name(nation_of_player(from_player)),
-                  nation_rule_name(nation_of_player(to_player)));
+      freelog(LOG_VERBOSE, "Transfered %s in %s from %s to %s",
+	      unit_rule_name(punit),
+	      city_name(in_city),
+	      nation_rule_name(nation_of_player(from_player)),
+	      nation_rule_name(nation_of_player(to_player)));
       if (verbose) {
         notify_player(from_player, unit_tile(punit),
                       E_UNIT_RELOCATED, ftc_server,
@@ -576,10 +578,10 @@ static void transfer_unit(struct unit *punit, struct city *tocity,
 		      nation_plural_for_player(to_player));
       }
     } else if (can_unit_exist_at_tile(punit, tocity->tile)) {
-      log_verbose("Transfered %s from %s to %s",
-                  unit_rule_name(punit),
-                  nation_rule_name(nation_of_player(from_player)),
-                  nation_rule_name(nation_of_player(to_player)));
+      freelog(LOG_VERBOSE, "Transfered %s from %s to %s",
+	      unit_rule_name(punit),
+	      nation_rule_name(nation_of_player(from_player)),
+	      nation_rule_name(nation_of_player(to_player)));
       if (verbose) {
         notify_player(from_player, unit_tile(punit),
                       E_UNIT_RELOCATED, ftc_server,
@@ -589,10 +591,10 @@ static void transfer_unit(struct unit *punit, struct city *tocity,
 		      nation_plural_for_player(to_player));
       }
     } else {
-      log_verbose("Could not transfer %s from %s to %s",
-                  unit_rule_name(punit),
-                  nation_rule_name(nation_of_player(from_player)),
-                  nation_rule_name(nation_of_player(to_player)));
+      freelog(LOG_VERBOSE, "Could not transfer %s from %s to %s",
+	      unit_rule_name(punit),
+	      nation_rule_name(nation_of_player(from_player)),
+	      nation_rule_name(nation_of_player(to_player)));
       if (verbose) {
         notify_player(from_player, unit_tile(punit),
                       E_UNIT_LOST_MISC, ftc_server,
@@ -683,9 +685,11 @@ void transfer_city_units(struct player *pplayer, struct player *pvictim,
     } else {
       /* The unit is lost.  Call notify_player (in all other cases it is
        * called automatically). */
-      log_verbose("Lost %s %s at (%d,%d) when %s was lost.",
-                  nation_rule_name(nation_of_unit(vunit)),
-                  unit_rule_name(vunit), TILE_XY(unit_tile(vunit)), name);
+      freelog(LOG_VERBOSE, "Lost %s %s at (%d,%d) when %s was lost.",
+	      nation_rule_name(nation_of_unit(vunit)),
+	      unit_rule_name(vunit),
+	      TILE_XY(vunit->tile),
+	      name);
       if (verbose) {
         notify_player(unit_owner(vunit), unit_tile(vunit),
                       E_UNIT_LOST_MISC, ftc_server,
@@ -1053,7 +1057,7 @@ void create_city(struct player *pplayer, struct tile *ptile,
   struct city *pcity = create_city_virtual(pplayer, ptile, name);
   bool has_small_wonders = FALSE, has_great_wonders = FALSE;
 
-  log_debug("create_city() %s", name);
+  freelog(LOG_DEBUG, "create_city() %s", name);
 
   tile_set_owner(ptile, pplayer, ptile); /* temporarily */
   city_choose_build_default(pcity);
@@ -1554,7 +1558,8 @@ static void package_dumb_city(struct player* pplayer, struct tile *ptile,
   packet->id = pdcity->identity;
   packet->owner = player_number(vision_owner(pdcity));
 
-  packet->tile = tile_index(ptile);
+  packet->x = ptile->x;
+  packet->y = ptile->y;
   sz_strlcpy(packet->name, pdcity->name);
 
   packet->size = pdcity->size;
@@ -1788,7 +1793,8 @@ void package_city(struct city *pcity, struct packet_city_info *packet,
 
   packet->id=pcity->id;
   packet->owner = player_number(city_owner(pcity));
-  packet->tile = tile_index(city_tile(pcity));
+  packet->x = pcity->tile->x;
+  packet->y = pcity->tile->y;
   sz_strlcpy(packet->name, city_name(pcity));
 
   packet->size=pcity->size;
@@ -1817,13 +1823,13 @@ void package_city(struct city *pcity, struct packet_city_info *packet,
     if (recursion) {
       /* Recursion didn't help. Do not enter infinite recursive loop.
        * Package city as it is. */
-      log_error("Failed to fix inconsistent city size.");
+      freelog(LOG_ERROR, "Failed to fix inconsistent city size.");
       recursion = FALSE;
     } else {
       /* Note: If you get this error and try to debug the cause, you may find
        *       using sanity_check_feelings() in some key points useful. */
-      log_error("City size %d, citizen count %d for %s",
-                packet->size, ppl, city_name(pcity));
+      freelog(LOG_ERROR, "City size %d, citizen count %d for %s",
+              packet->size, ppl, city_name(pcity));
       /* Try to fix */
       city_refresh(pcity);
 
@@ -1922,14 +1928,16 @@ bool update_dumb_city(struct player *pplayer, struct city *pcity)
     pdcity = create_vision_site_from_city(pcity);
     change_playertile_site(map_get_player_tile(pcenter, pplayer), pdcity);
   } else if (pdcity->location != pcenter) {
-    log_error("Trying to update bad city (wrong location) "
-              "at %i,%i for player %s",
-              TILE_XY(pcity->tile), player_name(pplayer));
+    freelog(LOG_ERROR, "Trying to update bad city (wrong location)"
+	    " at %i,%i for player %s",
+	    TILE_XY(pcity->tile),
+	    player_name(pplayer));
     pdcity->location = pcenter;   /* ?? */
   } else if (pdcity->identity != pcity->id) {
-    log_error("Trying to update old city (wrong identity) "
-              "at %i,%i for player %s",
-              TILE_XY(city_tile(pcity)), player_name(pplayer));
+    freelog(LOG_ERROR, "Trying to update old city (wrong identity)"
+	    " at %i,%i for player %s",
+	    TILE_XY(pcity->tile),
+	    player_name(pplayer));
     pdcity->identity = pcity->id;   /* ?? */
   } else if (pdcity->occupied == occupied
 	  && pdcity->walls == walls
@@ -2261,7 +2269,7 @@ void city_map_update_empty(struct city *pcity, struct tile *ptile,
 			   int city_x, int city_y)
 {
   tile_set_worked(ptile, NULL);
-  send_tile_info(NULL, ptile, FALSE);
+  send_tile_info(NULL, ptile, FALSE, FALSE);
   pcity->city_map[city_x][city_y] = C_TILE_EMPTY;
   pcity->server.synced = FALSE;
 }
@@ -2275,7 +2283,7 @@ void city_map_update_worker(struct city *pcity, struct tile *ptile,
 			    int city_x, int city_y)
 {
   tile_set_worked(ptile, pcity);
-  send_tile_info(NULL, ptile, FALSE);
+  send_tile_info(NULL, ptile, FALSE, FALSE);
   pcity->city_map[city_x][city_y] = C_TILE_WORKER;
   pcity->server.synced = FALSE;
 }
@@ -2293,7 +2301,7 @@ static bool city_map_update_tile_direct(struct tile *ptile, bool queued)
    && !is_free_worked(pwork, ptile)
    && !city_can_work_tile(pwork, ptile)) {
     tile_set_worked(ptile, NULL);
-    send_tile_info(NULL, ptile, FALSE);
+    send_tile_info(NULL, ptile, FALSE, FALSE);
 
     pwork->specialists[DEFAULT_SPECIALIST]++; /* keep city sanity */
     pwork->server.synced = FALSE;

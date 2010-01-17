@@ -408,7 +408,7 @@ void save_ppm(void)
   fp = fopen(filename, "w");
 
   if (!fp) {
-    log_error("couldn't open file ppm save: %s\n", filename);
+    freelog(LOG_ERROR, "couldn't open file ppm save: %s\n", filename);
     return;
   }
 
@@ -487,8 +487,8 @@ void rank_users(void)
 
   /* don't fail silently, at least print an error */
   if (!fp) {
-    log_error("couldn't open ranking log file: \"%s\"",
-              srvarg.ranklog_filename);
+    freelog(LOG_ERROR, "couldn't open ranking log file: \"%s\"",
+            srvarg.ranklog_filename);
     return;
   }
 

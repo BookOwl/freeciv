@@ -108,20 +108,20 @@ extern enum announce_type announce;
 static struct server_list *parse_metaserver_data(fz_FILE *f)
 {
   struct server_list *server_list;
-  struct section_file *file;
+  struct section_file the_file, *file = &the_file;
   int nservers, i, j;
 
   server_list = server_list_new();
 
   /* This call closes f. */
-  if (!(file = secfile_from_stream(f, TRUE))) {
+  if (!section_file_load_from_stream(file, f)) {
     return server_list;
   }
 
   nservers = secfile_lookup_int_default(file, 0, "main.nservers");
 
   for (i = 0; i < nservers; i++) {
-    const char *host, *port, *version, *state, *message, *nplayers;
+    char *host, *port, *version, *state, *message, *nplayers;
     int n;
     struct server *pserver = (struct server*)fc_malloc(sizeof(struct server));
 
@@ -151,7 +151,7 @@ static struct server_list *parse_metaserver_data(fz_FILE *f)
     }
       
     for (j = 0; j < n; j++) {
-      const char *name, *nation, *type, *host;
+      char *name, *nation, *type, *host;
 
       name = secfile_lookup_str_default(file, "", 
                                         "server%d.player%d.name", i, j);
@@ -173,7 +173,7 @@ static struct server_list *parse_metaserver_data(fz_FILE *f)
     server_list_append(server_list, pserver);
   }
 
-  secfile_destroy(file);
+  section_file_free(file);
   return server_list;
 }
 
@@ -578,13 +578,13 @@ static bool begin_lanserver_scan(struct server_scan *scan)
 
   /* Create a socket for broadcasting to servers. */
   if ((sock = socket(family, SOCK_DGRAM, 0)) < 0) {
-    log_error("socket failed: %s", fc_strerror(fc_get_errno()));
+    freelog(LOG_ERROR, "socket failed: %s", fc_strerror(fc_get_errno()));
     return FALSE;
   }
 
   if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR,
                  (char *)&opt, sizeof(opt)) == -1) {
-    log_error("SO_REUSEADDR failed: %s", fc_strerror(fc_get_errno()));
+    freelog(LOG_ERROR, "SO_REUSEADDR failed: %s", fc_strerror(fc_get_errno()));
   }
 
   /* Set the UDP Multicast group IP address. */
@@ -617,14 +617,14 @@ static bool begin_lanserver_scan(struct server_scan *scan)
   ttl = SERVER_LAN_TTL;
   if (setsockopt(sock, IPPROTO_IP, IP_MULTICAST_TTL, (const char*)&ttl, 
                  sizeof(ttl))) {
-    log_error("setsockopt failed: %s", fc_strerror(fc_get_errno()));
+    freelog(LOG_ERROR, "setsockopt failed: %s", fc_strerror(fc_get_errno()));
     return FALSE;
   }
 #endif /* HAVE_WINSOCK */
 
   if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (const char*)&opt, 
                  sizeof(opt))) {
-    log_error("setsockopt failed: %s", fc_strerror(fc_get_errno()));
+    freelog(LOG_ERROR, "setsockopt failed: %s", fc_strerror(fc_get_errno()));
     return FALSE;
   }
 
@@ -637,11 +637,11 @@ static bool begin_lanserver_scan(struct server_scan *scan)
              sockaddr_size(&addr)) < 0) {
     /* This can happen when there's no network connection - it should
      * give an in-game message. */
-    log_error("lanserver scan sendto failed: %s",
-              fc_strerror(fc_get_errno()));
+    freelog(LOG_ERROR, "lanserver scan sendto failed: %s",
+	    fc_strerror(fc_get_errno()));
     return FALSE;
   } else {
-    log_debug("Sending request for server announcement on LAN.");
+    freelog(LOG_DEBUG, ("Sending request for server announcement on LAN."));
   }
 
   fc_closesocket(sock);
@@ -656,9 +656,9 @@ static bool begin_lanserver_scan(struct server_scan *scan)
 
   if (setsockopt(scan->sock, SOL_SOCKET, SO_REUSEADDR,
                  (char *)&opt, sizeof(opt)) == -1) {
-    log_error("SO_REUSEADDR failed: %s", fc_strerror(fc_get_errno()));
+    freelog(LOG_ERROR, "SO_REUSEADDR failed: %s", fc_strerror(fc_get_errno()));
   }
-
+                                                                               
   memset(&addr, 0, sizeof(addr));
 
 #ifdef IPV6_SUPPORT
@@ -808,8 +808,9 @@ get_lan_server_list(struct server_scan *scan)
       continue;
     }
 
-    log_debug("Received a valid announcement from a server on the LAN.");
-
+    freelog(LOG_DEBUG,
+            ("Received a valid announcement from a server on the LAN."));
+    
     pserver = fc_malloc(sizeof(*pserver));
     pserver->host = mystrdup(servername);
     pserver->port = port;

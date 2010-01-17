@@ -38,11 +38,11 @@
 #include <assert.h>
 
 #include "log.h"
-#include "support.h"            /* TRUE, FALSE */
+#include "shared.h"		/* TRUE, FALSE */
 
 #include "rand.h"
 
-#define log_rand log_debug
+#define LOG_RAND LOG_DEBUG
 
 /* A global random state:
  * Initialized by mysrand(), updated by myrand(),
@@ -110,9 +110,8 @@ RANDOM_TYPE myrand_debug(RANDOM_TYPE size, const char *called_as,
     rand_state.v[rand_state.x] = new_rand;
 
     if (++bailout > 10000) {
-      log_error("%s(%lu) = %lu bailout at %s:%d", 
-                called_as, (unsigned long) size,
-                (unsigned long) new_rand, file, line);
+      freelog(LOG_ERROR, "%s(%lu) = %lu bailout at %s:%d", 
+	    called_as, (unsigned long)size, (unsigned long)new_rand, file, line);
       new_rand = 0;
       break;
     }
@@ -125,9 +124,8 @@ RANDOM_TYPE myrand_debug(RANDOM_TYPE size, const char *called_as,
     new_rand = 0;
   }
 
-  log_rand("%s(%lu) = %lu at %s:%d",
-           called_as, (unsigned long) size,
-           (unsigned long) new_rand, file, line);
+  freelog(LOG_RAND, "%s(%lu) = %lu at %s:%d",
+	    called_as, (unsigned long)size, (unsigned long)new_rand, file, line);
 
   return new_rand;
 } 
@@ -178,14 +176,14 @@ RANDOM_STATE get_myrand_state(void)
 {
   int i;
 
-  log_rand("get_myrand_state J=%d K=%d X=%d",
-           rand_state.j, rand_state.k, rand_state.x);
+  freelog(LOG_RAND, "get_myrand_state J=%d K=%d X=%d",
+    rand_state.j, rand_state.k, rand_state.x);
   for (i  = 0; i < 8; i++) {
-    log_rand("get_myrand_state %d, %08x %08x %08x %08x %08x %08x %08x",
-             i, rand_state.v[7 * i],
-             rand_state.v[7 * i + 1], rand_state.v[7 * i + 2],
-             rand_state.v[7 * i + 3], rand_state.v[7 * i + 4],
-             rand_state.v[7 * i + 5], rand_state.v[7 * i + 6]);
+    freelog(LOG_RAND, "get_myrand_state %d, %08x %08x %08x %08x %08x %08x %08x",
+      i, rand_state.v[7 * i],
+      rand_state.v[7 * i + 1], rand_state.v[7 * i + 2],
+      rand_state.v[7 * i + 3], rand_state.v[7 * i + 4],
+      rand_state.v[7 * i + 5], rand_state.v[7 * i + 6]);
   }
 
   return rand_state;
@@ -201,14 +199,14 @@ void set_myrand_state(RANDOM_STATE state)
 
   rand_state = state;
 
-  log_rand("set_myrand_state J=%d K=%d X=%d",
-           rand_state.j, rand_state.k, rand_state.x);
+  freelog(LOG_RAND, "set_myrand_state J=%d K=%d X=%d",
+    rand_state.j, rand_state.k, rand_state.x);
   for (i  = 0; i < 8; i++) {
-    log_rand("set_myrand_state %d, %08x %08x %08x %08x %08x %08x %08x",
-             i, rand_state.v[7 * i],
-             rand_state.v[7 * i + 1], rand_state.v[7 * i + 2],
-             rand_state.v[7 * i + 3], rand_state.v[7 * i + 4],
-             rand_state.v[7 * i + 5], rand_state.v[7 * i + 6]);
+    freelog(LOG_RAND, "set_myrand_state %d, %08x %08x %08x %08x %08x %08x %08x",
+      i, rand_state.v[7 * i],
+      rand_state.v[7 * i + 1], rand_state.v[7 * i + 2],
+      rand_state.v[7 * i + 3], rand_state.v[7 * i + 4],
+      rand_state.v[7 * i + 5], rand_state.v[7 * i + 6]);
   }
 }
 
@@ -244,8 +242,8 @@ void test_random1(int n)
     }
     old_value = new_value;
   }
-  log_test("test_random1(%d) same: %d, change: %d",
-           n, behavioursame, behaviourchange);
+  freelog(LOG_TEST, "test_random1(%d) same: %d, change: %d",
+	  n, behavioursame, behaviourchange);
 
   /* restore state: */
   set_myrand_state(saved_state);
@@ -272,9 +270,9 @@ RANDOM_TYPE myrandomly_debug(RANDOM_TYPE seed, RANDOM_TYPE size,
   assert(size > 0);
   result = ((seed * LARGE_PRIME) % SMALL_PRIME) % size;
 
-  log_rand("%s(%lu,%lu) = %lu at %s:%d",
-           called_as, (unsigned long) seed, (unsigned long) size,
-           (unsigned long) result, file, line);
+  freelog(LOG_RAND, "%s(%lu,%lu) = %lu at %s:%d",
+	  called_as, (unsigned long)seed, (unsigned long)size,
+	  (unsigned long)result, file, line);
 
   return result;
 }

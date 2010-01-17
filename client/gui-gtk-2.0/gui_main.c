@@ -234,10 +234,9 @@ void set_city_names_font_sizes(int my_city_names_font_size,
 /**************************************************************************
 ...
 **************************************************************************/
-static void log_callback_utf8(enum log_level level, const char *message,
-                              bool file_too)
+static void log_callback_utf8(int level, const char *message, bool file_too)
 {
-  if (!file_too || level <= LOG_FATAL) {
+  if (! file_too || level <= LOG_FATAL) {
     fc_fprintf(stderr, "%d: %s\n", level, message);
   }
 }
@@ -875,7 +874,7 @@ void enable_menus(bool enable)
   if (enable) {
     main_menubar = setup_menus(toplevel);
     gtk_box_pack_start(GTK_BOX(top_vbox), main_menubar, FALSE, FALSE, 0);
-    menus_init();
+    update_menus();
     gtk_widget_show_all(main_menubar);
   } else {
     gtk_widget_destroy(main_menubar);
@@ -1473,15 +1472,18 @@ void ui_main(int argc, char **argv)
 
   if (NULL == city_names_style) {
     city_names_style = gtk_style_new();
-    log_error("city_names_style should have been set by options.");
+    freelog(LOG_ERROR,
+            "city_names_style should have been set by options.");
   }
   if (NULL == city_productions_style) {
     city_productions_style = gtk_style_new();
-    log_error("city_productions_style should have been set by options.");
+    freelog(LOG_ERROR,
+            "city_productions_style should have been set by options.");
   }
   if (NULL == reqtree_text_style) {
     reqtree_text_style = gtk_style_new();
-    log_error("reqtree_text_style should have been set by options.");
+    freelog(LOG_ERROR,
+            "reqtree_text_style should have been set by options.");
   }
 
   set_city_names_font_sizes(city_names_font_size, city_productions_font_size);
@@ -1976,7 +1978,7 @@ static void set_wait_for_writable_socket(struct connection *pc,
   if (previous_state == socket_writable)
     return;
 
-  log_debug("set_wait_for_writable_socket(%d)", socket_writable);
+  freelog(LOG_DEBUG, "set_wait_for_writable_socket(%d)", socket_writable);
   gtk_input_remove(input_id);
   input_id = gtk_input_add_full(client.conn.sock, GDK_INPUT_READ
 				| (socket_writable ? GDK_INPUT_WRITE : 0)
@@ -2181,7 +2183,7 @@ void gui_options_extra_init(void)
   if ((poption = option_by_name(#var))) {                                   \
     option_set_changed_callback(poption, callback);                         \
   } else {                                                                  \
-    log_error("Didn't find option %s!", #var);                              \
+    freelog(LOG_ERROR, "Didn't find option %s!", #var);                     \
   }
 
   option_var_set_callback(gui_gtk2_allied_chat_only,

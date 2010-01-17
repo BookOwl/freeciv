@@ -13,7 +13,6 @@ pkgdata_DATA = \
 		american.ruleset \
 		antarctican.ruleset \
 		arab.ruleset \
-		aragonese.ruleset \
 		aramean.ruleset \
 		argentine.ruleset \
 		armenian.ruleset \
@@ -68,7 +67,6 @@ pkgdata_DATA = \
 		filipino.ruleset \
 		finnish.ruleset \
 		french.ruleset \
-		frisian.ruleset \
 		galician.ruleset \
 		gallic.ruleset \
 		georgian.ruleset \
@@ -121,7 +119,6 @@ pkgdata_DATA = \
 		mexican.ruleset \
 		moldovan.ruleset \
 		mongol.ruleset \
-		motswana.ruleset \
 		muskogee.ruleset \
 		newzealand.ruleset \
 		nigerian.ruleset \
@@ -184,7 +181,6 @@ pkgdata_DATA = \
 		tupi.ruleset \
 		turkmen.ruleset \
 		turk.ruleset \
-		ugandan.ruleset \
 		ukrainian.ruleset \
 		un.ruleset \
 		uruguayan.ruleset \

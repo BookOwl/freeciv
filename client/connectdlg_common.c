@@ -444,7 +444,7 @@ void send_client_wants_hack(const char *filename)
 {
   if (filename[0] != '\0') {
     struct packet_single_want_hack_req req;
-    struct section_file *file;
+    struct section_file file;
 
     if (!is_filename_safe(filename)) {
       return;
@@ -460,13 +460,13 @@ void send_client_wants_hack(const char *filename)
     /* generate an authentication token */ 
     randomize_string(req.token, sizeof(req.token));
 
-    file = secfile_new(FALSE);
-    secfile_insert_str(file, req.token, "challenge.token");
-    if (!secfile_save(file, challenge_fullname, 0, FZ_PLAIN)) {
-      log_error("Couldn't write token to temporary file: %s",
-                challenge_fullname);
+    section_file_init(&file);
+    secfile_insert_str(&file, req.token, "challenge.token");
+    if (!section_file_save(&file, challenge_fullname, 0, FZ_PLAIN)) {
+      freelog(LOG_ERROR, "Couldn't write token to temporary file: %s",
+	      challenge_fullname);
     }
-    secfile_destroy(file);
+    section_file_free(&file);
 
     /* tell the server what we put into the file */ 
     send_packet_single_want_hack_req(&client.conn, &req);
@@ -481,7 +481,8 @@ void handle_single_want_hack_reply(bool you_have_hack)
   /* remove challenge file */
   if (challenge_fullname[0] != '\0') {
     if (remove(challenge_fullname) == -1) {
-      log_error("Couldn't remove temporary file: %s", challenge_fullname);
+      freelog(LOG_ERROR, "Couldn't remove temporary file: %s",
+	      challenge_fullname);
     }
     challenge_fullname[0] = '\0';
   }
@@ -547,7 +548,8 @@ void set_ruleset(const char *ruleset)
 {
   char buf[4096];
 
-  my_snprintf(buf, sizeof(buf), "/read %s%s", ruleset, RULESET_SUFFIX);
-  log_debug("Executing '%s'", buf);
+  my_snprintf(buf, sizeof(buf), "/read %s%s",
+	      ruleset, RULESET_SUFFIX);
+  freelog(LOG_DEBUG, "Executing '%s'", buf);
   send_chat(buf);
 }

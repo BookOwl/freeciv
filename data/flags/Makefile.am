@@ -11,7 +11,6 @@ flag_files =				\
 		algeria.png		\
 		antarctica.png		\
 		arab.png		\
-		aragon.png		\
 		aram.png		\
 		argentina.png		\
 		armenia.png		\
@@ -29,7 +28,6 @@ flag_files =				\
 		belgium.png		\
 		boer.png		\
 		bosnia.png		\
-		botswana.png		\
 		brasil.png		\
 		brittany.png		\
 		bulgaria.png		\
@@ -62,7 +60,6 @@ flag_files =				\
 		finland.png		\
 		france_old.png		\
 		france.png		\
-		frisia.png		\
 		galicia.png		\
 		gaul.png		\
 		georgia.png		\
@@ -189,7 +186,6 @@ flag_files =				\
 		turkey.png		\
 		turkmenistan.png	\
 		uae.png			\
-		uganda.png		\
 		ukraine.png		\
 		united_kingdom.png	\
 		united_nations.png	\
@@ -213,7 +209,6 @@ shield_files =					\
 		algeria-shield.png		\
 		antarctica-shield.png		\
 		arab-shield.png			\
-		aragon-shield.png			\
 		aram-shield.png			\
 		argentina-shield.png		\
 		armenia-shield.png		\
@@ -231,7 +226,6 @@ shield_files =					\
 		belgium-shield.png		\
 		boer-shield.png			\
 		bosnia-shield.png		\
-		botswana-shield.png		\
 		brasil-shield.png		\
 		brittany-shield.png		\
 		bulgaria-shield.png		\
@@ -264,7 +258,6 @@ shield_files =					\
 		finland-shield.png		\
 		france_old-shield.png		\
 		france-shield.png		\
-		frisia-shield.png		\
 		galicia-shield.png		\
 		gaul-shield.png			\
 		georgia-shield.png		\
@@ -391,7 +384,6 @@ shield_files =					\
 		turkey-shield.png		\
 		turkmenistan-shield.png		\
 		uae-shield.png			\
-		uganda-shield.png		\
 		ukraine-shield.png		\
 		united_kingdom-shield.png	\
 		united_nations-shield.png	\
@@ -415,7 +407,6 @@ svg_files = 				\
 		algeria.svg		\
 		antarctica.svg		\
 		arab.svg		\
-		aragon.svg		\
 		aram.svg		\
 		argentina.svg		\
 		armenia.svg		\
@@ -432,7 +423,6 @@ svg_files = 				\
 		belarus.svg		\
 		belgium.svg		\
 		boer.svg		\
-		botswana.svg		\
 		bosnia.svg		\
 		brasil.svg		\
 		brittany.svg		\
@@ -466,7 +456,6 @@ svg_files = 				\
 		finland.svg		\
 		france_old.svg		\
 		france.svg		\
-		frisia.svg		\
 		galicia.svg		\
 		gaul.svg		\
 		georgia.svg		\
@@ -593,7 +582,6 @@ svg_files = 				\
 		turkey.svg		\
 		turkmenistan.svg	\
 		uae.svg			\
-		uganda.svg		\
 		ukraine.svg		\
 		united_kingdom.svg	\
 		united_nations.svg	\

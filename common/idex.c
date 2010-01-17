@@ -24,7 +24,7 @@
    Note id values should probably be unsigned int: here leave as plain int
    so can use pointers to pcity->id etc.
 
-   On probable errors, print log_error messages and persevere,
+   On probable errors, print LOG_ERROR messages and persevere,
    unless IDEX_DIE set.
 ***************************************************************************/
 
@@ -42,11 +42,10 @@
 #include "idex.h"
 
 
-#ifdef IDEX_DIE
-#define log_idex die
-#else
-#define log_idex log_error
-#endif /* IDEX_DIE */
+#ifndef IDEX_DIE
+#define IDEX_DIE FALSE
+#endif
+#define LOG_IDEX_ERR (IDEX_DIE ? LOG_FATAL : LOG_ERROR)
 
 
 /* "Global" data: */
@@ -87,9 +86,12 @@ void idex_register_city(struct city *pcity)
     hash_replace(idex_city_hash, FC_INT_TO_PTR(pcity->id), pcity);
   if (old) {
     /* error */
-    log_idex("IDEX: city collision: new %d %p %s, old %d %p %s",
-             pcity->id, (void *) pcity, city_name(pcity),
-             old->id, (void *) old, city_name(old));
+    freelog(LOG_IDEX_ERR, "IDEX: city collision: new %d %p %s, old %d %p %s",
+	    pcity->id, (void*)pcity, city_name(pcity),
+	    old->id, (void*)old, city_name(old));
+    if (IDEX_DIE) {
+      die("byebye");
+    }
   }
 }
 
@@ -103,9 +105,14 @@ void idex_register_unit(struct unit *punit)
     hash_replace(idex_unit_hash, FC_INT_TO_PTR(punit->id), punit);
   if (old) {
     /* error */
-    log_idex("IDEX: unit collision: new %d %p %s, old %d %p %s",
-             punit->id, (void *) punit, unit_rule_name(punit),
-             old->id, (void *) old, unit_rule_name(old));
+    freelog(LOG_IDEX_ERR, "IDEX: unit collision: new %d %p %s, old %d %p %s",
+	    punit->id, (void*)punit,
+	    unit_rule_name(punit),
+	    old->id, (void*)old,
+	    unit_rule_name(old));
+    if (IDEX_DIE) {
+      die("byebye");
+    }
   }
 }
 
@@ -119,13 +126,20 @@ void idex_unregister_city(struct city *pcity)
     hash_delete_entry(idex_city_hash, FC_INT_TO_PTR(pcity->id));
   if (!old) {
     /* error */
-    log_idex("IDEX: city unreg missing: %d %p %s",
-             pcity->id, (void *) pcity, city_name(pcity));
+    freelog(LOG_IDEX_ERR, "IDEX: city unreg missing: %d %p %s",
+	    pcity->id, (void*)pcity, city_name(pcity));
+    if (IDEX_DIE) {
+      die("byebye");
+    }
   } else if (old != pcity) {
     /* error */
-    log_idex("IDEX: city unreg mismatch: unreg %d %p %s, old %d %p %s",
-             pcity->id, (void *) pcity, city_name(pcity),
-             old->id, (void *) old, city_name(old));
+    freelog(LOG_IDEX_ERR,
+	    "IDEX: city unreg mismatch: unreg %d %p %s, old %d %p %s",
+	    pcity->id, (void*)pcity, city_name(pcity),
+	    old->id, (void*)old, city_name(old));
+    if (IDEX_DIE) {
+      die("byebye");
+    }
   }
 }
 
@@ -139,13 +153,23 @@ void idex_unregister_unit(struct unit *punit)
     hash_delete_entry(idex_unit_hash, FC_INT_TO_PTR(punit->id));
   if (!old) {
     /* error */
-    log_idex("IDEX: unit unreg missing: %d %p %s",
-             punit->id, (void *) punit, unit_rule_name(punit));
+    freelog(LOG_IDEX_ERR, "IDEX: unit unreg missing: %d %p %s",
+	    punit->id, (void*)punit,
+	    unit_rule_name(punit));
+    if (IDEX_DIE) {
+      die("byebye");
+    }
   } else if (old != punit) {
     /* error */
-    log_idex("IDEX: unit unreg mismatch: unreg %d %p %s, old %d %p %s",
-             punit->id, (void *) punit, unit_rule_name(punit),
-             old->id, (void*) old, unit_rule_name(old));
+    freelog(LOG_IDEX_ERR,
+	    "IDEX: unit unreg mismatch: unreg %d %p %s, old %d %p %s",
+	    punit->id, (void*)punit,
+	    unit_rule_name(punit),
+	    old->id, (void*)old,
+	    unit_rule_name(old));
+    if (IDEX_DIE) {
+      die("byebye");
+    }
   }
 }
 

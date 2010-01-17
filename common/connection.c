@@ -158,26 +158,26 @@ int read_socket_data(int sock, struct socket_packet_buffer *buffer)
   int didget;
 
   if (!buffer_ensure_free_extra_space(buffer, MAX_LEN_PACKET)) {
-    log_error("can't grow buffer");
+    freelog(LOG_ERROR, "can't grow buffer");
     return -1;
   }
 
-  log_debug("try reading %d bytes", buffer->nsize - buffer->ndata);
+  freelog(LOG_DEBUG, "try reading %d bytes", buffer->nsize - buffer->ndata);
   didget = fc_readsocket(sock, (char *) (buffer->data + buffer->ndata),
 			 buffer->nsize - buffer->ndata);
 
   if (didget > 0) {
     buffer->ndata+=didget;
-    log_debug("didget:%d", didget);
+    freelog(LOG_DEBUG, "didget:%d", didget);
     return didget;
   }
   else if (didget == 0) {
-    log_debug("EOF on socket read");
+    freelog(LOG_DEBUG, "EOF on socket read");
     return -1;
   }
 #ifdef NONBLOCKING_SOCKETS
   else if (errno == EWOULDBLOCK || errno == EAGAIN) {
-    log_debug("EGAIN on socket read");
+    freelog(LOG_DEBUG, "EGAIN on socket read");
     return 0;
   }
 #endif
@@ -238,7 +238,7 @@ static int write_socket_data(struct connection *pc,
 
     if (FD_ISSET(pc->sock, &writefs)) {
       nblock=MIN(buf->ndata-start, MAX_LEN_PACKET);
-      log_debug("trying to write %d limit=%d", nblock, limit);
+      freelog(LOG_DEBUG,"trying to write %d limit=%d",nblock,limit);
       if((nput=fc_writesocket(pc->sock, 
 			      (const char *)buf->data+start, nblock)) == -1) {
 #ifdef NONBLOCKING_SOCKETS
@@ -320,8 +320,8 @@ static bool add_connection_data(struct connection *pc,
 
     buf = pc->send_buffer;
 
-    log_debug("add %d bytes to %d (space=%d)",
-              len, buf->ndata, buf->nsize);
+    freelog(LOG_DEBUG, "add %d bytes to %d (space=%d)", len, buf->ndata,
+	    buf->nsize);
     if (!buffer_ensure_free_extra_space(buf, len)) {
       if (delayed_disconnect > 0) {
 	pc->delayed_disconnect = TRUE;
@@ -351,16 +351,16 @@ void send_connection_data(struct connection *pc, const unsigned char *data,
     if(pc->send_buffer->do_buffer_sends > 0) {
       flush_connection_send_buffer_packets(pc);
       if (!add_connection_data(pc, data, len)) {
-        log_error("cut connection %s due to huge send buffer (1)",
-                  conn_description(pc));
+	freelog(LOG_ERROR, "cut connection %s due to huge send buffer (1)",
+		conn_description(pc));
       }
       flush_connection_send_buffer_packets(pc);
     }
     else {
       flush_connection_send_buffer_all(pc);
       if (!add_connection_data(pc, data, len)) {
-        log_error("cut connection %s due to huge send buffer (2)",
-                  conn_description(pc));
+	freelog(LOG_ERROR, "cut connection %s due to huge send buffer (2)",
+		conn_description(pc));
       }
       flush_connection_send_buffer_all(pc);
     }
@@ -387,7 +387,7 @@ void connection_do_unbuffer(struct connection *pc)
   if (pc && pc->used) {
     pc->send_buffer->do_buffer_sends--;
     if (pc->send_buffer->do_buffer_sends < 0) {
-      log_error("Too many calls to unbuffer %s!", pc->username);
+      freelog(LOG_ERROR, "Too many calls to unbuffer %s!", pc->username);
       pc->send_buffer->do_buffer_sends = 0;
     }
     if(pc->send_buffer->do_buffer_sends == 0)
@@ -558,8 +558,9 @@ int get_next_request_id(int old_request_id)
   int result = old_request_id + 1;
 
   if ((result & 0xffff) == 0) {
-    log_packet("INFORMATION: request_id has wrapped around; "
-               "setting from %d to 2", result);
+    freelog(LOG_PACKET,
+	    "INFORMATION: request_id has wrapped around; "
+	    "setting from %d to 2", result);
     result = 2;
   }
   assert(result);
@@ -601,10 +602,13 @@ static void free_packet_hashes(struct connection *pc)
 {
   int i;
 
+  conn_clear_packet_cache(pc);
+
   if (pc->phs.sent) {
     for (i = 0; i < PACKET_LAST; i++) {
       if (pc->phs.sent[i] != NULL) {
 	hash_free(pc->phs.sent[i]);
+	pc->phs.sent[i] = NULL;
       }
     }
     free(pc->phs.sent);
@@ -615,6 +619,7 @@ static void free_packet_hashes(struct connection *pc)
     for (i = 0; i < PACKET_LAST; i++) {
       if (pc->phs.received[i] != NULL) {
 	hash_free(pc->phs.received[i]);
+	pc->phs.received[i] = NULL;
       }
     }
     free(pc->phs.received);
@@ -653,7 +658,7 @@ void connection_common_init(struct connection *pconn)
 void connection_common_close(struct connection *pconn)
 {
   if (!pconn->used) {
-    log_error("WARNING: Trying to close already closed connection");
+    freelog(LOG_ERROR, "WARNING: Trying to close already closed connection");
   } else {
     fc_closesocket(pconn->sock);
     pconn->used = FALSE;
@@ -676,20 +681,28 @@ void connection_common_close(struct connection *pconn)
 }
 
 /**************************************************************************
-  Remove all is-info cached packets from the connection. This resets the
-  delta-state partially.
+ Remove all cached packets from the connection. This resets the
+ delta-state.
 **************************************************************************/
-void conn_reset_delta_state(struct connection *pc)
+void conn_clear_packet_cache(struct connection *pc)
 {
   int i;
 
   for (i = 0; i < PACKET_LAST; i++) {
-    if (packet_has_info_flag(i)) {
-      if (NULL != pc->phs.sent && NULL != pc->phs.sent[i]) {
-        hash_delete_all_entries(pc->phs.sent[i]);
+    if (pc->phs.sent != NULL && pc->phs.sent[i] != NULL) {
+      struct hash_table *hash = pc->phs.sent[i];
+      while (hash_num_entries(hash) > 0) {
+	const void *key = hash_key_by_number(hash, 0);
+	hash_delete_entry(hash, key);
+	free((void *) key);
       }
-      if (NULL != pc->phs.received && NULL != pc->phs.received[i]) {
-        hash_delete_all_entries(pc->phs.received[i]);
+    }
+    if (pc->phs.received != NULL && pc->phs.received[i] != NULL) {
+      struct hash_table *hash = pc->phs.received[i];
+      while (hash_num_entries(hash) > 0) {
+	const void *key = hash_key_by_number(hash, 0);
+	hash_delete_entry(hash, key);
+	free((void *) key);
       }
     }
   }

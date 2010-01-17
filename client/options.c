@@ -1000,7 +1000,7 @@ static const int num_options = ARRAY_SIZE(options);
 **************************************************************************/
 struct client_option *option_by_number(int id)
 {
-  log_assert_ret_val(0 <= id && id < num_options, NULL);
+  RETURN_VAL_IF_FAIL(0 <= id && id < num_options, NULL);
   return options + id;
 }
 
@@ -1056,7 +1056,7 @@ struct client_option *option_next(struct client_option *poption)
 void option_set_changed_callback(struct client_option *poption,
                                  void (*callback) (struct client_option *))
 {
-  log_assert_ret(NULL != poption);
+  RETURN_IF_FAIL(NULL != poption);
 
   poption->changed_callback = callback;
 }
@@ -1066,7 +1066,7 @@ void option_set_changed_callback(struct client_option *poption,
 **************************************************************************/
 void option_changed(struct client_option *poption)
 {
-  log_assert_ret(NULL != poption);
+  RETURN_IF_FAIL(NULL != poption);
 
   /* Prevent to use non-initialized datas. */
   if (options_fully_initialized
@@ -1080,7 +1080,7 @@ void option_changed(struct client_option *poption)
 **************************************************************************/
 bool option_reset(struct client_option *poption)
 {
-  log_assert_ret_val(NULL != poption, FALSE);
+  RETURN_VAL_IF_FAIL(NULL != poption, FALSE);
 
   switch (option_type(poption)) {
   case COT_BOOLEAN:
@@ -1100,42 +1100,33 @@ bool option_reset(struct client_option *poption)
 **************************************************************************/
 bool option_load(struct client_option *poption, struct section_file *sf)
 {
-  log_assert_ret_val(NULL != poption, FALSE);
-  log_assert_ret_val(NULL != sf, FALSE);
+  RETURN_VAL_IF_FAIL(NULL != poption, FALSE);
+  RETURN_VAL_IF_FAIL(NULL != sf, FALSE);
+
+  if (!section_file_lookup(sf, "client.%s", option_name(poption))) {
+    return FALSE;
+  }
 
   switch (option_type(poption)) {
   case COT_BOOLEAN:
-    {
-      bool value;
-
-      return (secfile_lookup_bool(sf, &value, "client.%s",
-                                  option_name(poption))
-              && option_bool_set(poption, value));
-    }
+    return option_bool_set(poption,
+                           secfile_lookup_bool(sf, "client.%s",
+                                               option_name(poption)));
   case COT_INTEGER:
-    {
-      int value;
-
-      return (secfile_lookup_int(sf, &value, "client.%s",
-                                 option_name(poption))
-              && option_int_set(poption, value));
-    }
+    return option_int_set(poption,
+                          secfile_lookup_int_default_min_max(real_freelog,
+                              sf, option_int_def(poption),
+                              option_int_min(poption),
+                              option_int_max(poption),
+                              "client.%s", option_name(poption)));
   case COT_STRING:
-    {
-      const char *string;
-
-      return ((string = secfile_lookup_str(sf, "client.%s",
-                                           option_name(poption)))
-              && option_str_set(poption, string));
-    }
+    return option_str_set(poption,
+                          secfile_lookup_str(sf, "client.%s",
+                                             option_name(poption)));
   case COT_FONT:
-    {
-      const char *string;
-
-      return ((string = secfile_lookup_str(sf, "client.%s",
-                                           option_name(poption)))
-              && option_font_set(poption, string));
-    }
+    return option_font_set(poption,
+                           secfile_lookup_str(sf, "client.%s",
+                                              option_name(poption)));
   }
   return FALSE;
 }
@@ -1145,7 +1136,7 @@ bool option_load(struct client_option *poption, struct section_file *sf)
 **************************************************************************/
 int option_number(const struct client_option *poption)
 {
-  log_assert_ret_val(NULL != poption, -1);
+  RETURN_VAL_IF_FAIL(NULL != poption, -1);
 
   return poption - options;
 }
@@ -1155,7 +1146,7 @@ int option_number(const struct client_option *poption)
 **************************************************************************/
 const char *option_name(const struct client_option *poption)
 {
-  log_assert_ret_val(NULL != poption, NULL);
+  RETURN_VAL_IF_FAIL(NULL != poption, NULL);
 
   return poption->name;
 }
@@ -1165,7 +1156,7 @@ const char *option_name(const struct client_option *poption)
 **************************************************************************/
 const char *option_description(const struct client_option *poption)
 {
-  log_assert_ret_val(NULL != poption, NULL);
+  RETURN_VAL_IF_FAIL(NULL != poption, NULL);
 
   return _(poption->description);
 }
@@ -1175,7 +1166,7 @@ const char *option_description(const struct client_option *poption)
 **************************************************************************/
 const char *option_help_text(const struct client_option *poption)
 {
-  log_assert_ret_val(NULL != poption, NULL);
+  RETURN_VAL_IF_FAIL(NULL != poption, NULL);
 
   return _(poption->help_text);
 }
@@ -1185,7 +1176,7 @@ const char *option_help_text(const struct client_option *poption)
 **************************************************************************/
 enum client_option_type option_type(const struct client_option *poption)
 {
-  log_assert_ret_val(NULL != poption, -1);
+  RETURN_VAL_IF_FAIL(NULL != poption, -1);
 
   return poption->type;
 }
@@ -1195,7 +1186,7 @@ enum client_option_type option_type(const struct client_option *poption)
 **************************************************************************/
 enum client_option_class option_class(const struct client_option *poption)
 {
-  log_assert_ret_val(NULL != poption, COC_MAX);
+  RETURN_VAL_IF_FAIL(NULL != poption, COC_MAX);
 
   return poption->category;
 }
@@ -1222,8 +1213,8 @@ const char *option_class_name(enum client_option_class option_class)
     break;
   }
 
-  log_error("option_class_name(): invalid option class number %d.",
-            option_class);
+  freelog(LOG_ERROR, "option_class_name(): invalid option class number %d.",
+          option_class);
   return NULL;
 }
 
@@ -1232,7 +1223,7 @@ const char *option_class_name(enum client_option_class option_class)
 **************************************************************************/
 void option_set_gui_data(struct client_option *poption, void *data)
 {
-  log_assert_ret(NULL != poption);
+  RETURN_IF_FAIL(NULL != poption);
 
   poption->gui_data = data;
 }
@@ -1242,7 +1233,7 @@ void option_set_gui_data(struct client_option *poption, void *data)
 **************************************************************************/
 void *option_get_gui_data(const struct client_option *poption)
 {
-  log_assert_ret_val(NULL != poption, NULL);
+  RETURN_VAL_IF_FAIL(NULL != poption, NULL);
 
   return poption->gui_data;
 }
@@ -1252,8 +1243,8 @@ void *option_get_gui_data(const struct client_option *poption)
 **************************************************************************/
 bool option_bool_get(const struct client_option *poption)
 {
-  log_assert_ret_val(NULL != poption, FALSE);
-  log_assert_ret_val(COT_BOOLEAN == poption->type, FALSE);
+  RETURN_VAL_IF_FAIL(NULL != poption, FALSE);
+  RETURN_VAL_IF_FAIL(COT_BOOLEAN == poption->type, FALSE);
 
   return *poption->boolean.pvalue;
 }
@@ -1263,8 +1254,8 @@ bool option_bool_get(const struct client_option *poption)
 **************************************************************************/
 bool option_bool_def(const struct client_option *poption)
 {
-  log_assert_ret_val(NULL != poption, FALSE);
-  log_assert_ret_val(COT_BOOLEAN == poption->type, FALSE);
+  RETURN_VAL_IF_FAIL(NULL != poption, FALSE);
+  RETURN_VAL_IF_FAIL(COT_BOOLEAN == poption->type, FALSE);
 
   return poption->boolean.def;
 }
@@ -1275,8 +1266,8 @@ bool option_bool_def(const struct client_option *poption)
 **************************************************************************/
 bool option_bool_set(struct client_option *poption, bool val)
 {
-  log_assert_ret_val(NULL != poption, FALSE);
-  log_assert_ret_val(COT_BOOLEAN == poption->type, FALSE);
+  RETURN_VAL_IF_FAIL(NULL != poption, FALSE);
+  RETURN_VAL_IF_FAIL(COT_BOOLEAN == poption->type, FALSE);
 
   if (*poption->boolean.pvalue == val) {
     return FALSE;
@@ -1292,8 +1283,8 @@ bool option_bool_set(struct client_option *poption, bool val)
 **************************************************************************/
 int option_int_get(const struct client_option *poption)
 {
-  log_assert_ret_val(NULL != poption, 0);
-  log_assert_ret_val(COT_INTEGER == poption->type, 0);
+  RETURN_VAL_IF_FAIL(NULL != poption, 0);
+  RETURN_VAL_IF_FAIL(COT_INTEGER == poption->type, 0);
 
   return *poption->integer.pvalue;
 }
@@ -1303,8 +1294,8 @@ int option_int_get(const struct client_option *poption)
 **************************************************************************/
 int option_int_def(const struct client_option *poption)
 {
-  log_assert_ret_val(NULL != poption, 0);
-  log_assert_ret_val(COT_INTEGER == poption->type, 0);
+  RETURN_VAL_IF_FAIL(NULL != poption, 0);
+  RETURN_VAL_IF_FAIL(COT_INTEGER == poption->type, 0);
 
   return poption->integer.def;
 }
@@ -1314,8 +1305,8 @@ int option_int_def(const struct client_option *poption)
 **************************************************************************/
 int option_int_min(const struct client_option *poption)
 {
-  log_assert_ret_val(NULL != poption, 0);
-  log_assert_ret_val(COT_INTEGER == poption->type, 0);
+  RETURN_VAL_IF_FAIL(NULL != poption, 0);
+  RETURN_VAL_IF_FAIL(COT_INTEGER == poption->type, 0);
 
   return poption->integer.min;
 }
@@ -1325,8 +1316,8 @@ int option_int_min(const struct client_option *poption)
 **************************************************************************/
 int option_int_max(const struct client_option *poption)
 {
-  log_assert_ret_val(NULL != poption, 0);
-  log_assert_ret_val(COT_INTEGER == poption->type, 0);
+  RETURN_VAL_IF_FAIL(NULL != poption, 0);
+  RETURN_VAL_IF_FAIL(COT_INTEGER == poption->type, 0);
 
   return poption->integer.max;
 }
@@ -1337,8 +1328,8 @@ int option_int_max(const struct client_option *poption)
 **************************************************************************/
 bool option_int_set(struct client_option *poption, int val)
 {
-  log_assert_ret_val(NULL != poption, FALSE);
-  log_assert_ret_val(COT_INTEGER == poption->type, FALSE);
+  RETURN_VAL_IF_FAIL(NULL != poption, FALSE);
+  RETURN_VAL_IF_FAIL(COT_INTEGER == poption->type, FALSE);
 
   if (val < poption->integer.min
       || val > poption->integer.max
@@ -1356,8 +1347,8 @@ bool option_int_set(struct client_option *poption, int val)
 **************************************************************************/
 const char *option_str_get(const struct client_option *poption)
 {
-  log_assert_ret_val(NULL != poption, NULL);
-  log_assert_ret_val(COT_STRING == poption->type, NULL);
+  RETURN_VAL_IF_FAIL(NULL != poption, NULL);
+  RETURN_VAL_IF_FAIL(COT_STRING == poption->type, NULL);
 
   return poption->string.pvalue;
 }
@@ -1367,8 +1358,8 @@ const char *option_str_get(const struct client_option *poption)
 **************************************************************************/
 const char *option_str_def(const struct client_option *poption)
 {
-  log_assert_ret_val(NULL != poption, NULL);
-  log_assert_ret_val(COT_STRING == poption->type, NULL);
+  RETURN_VAL_IF_FAIL(NULL != poption, NULL);
+  RETURN_VAL_IF_FAIL(COT_STRING == poption->type, NULL);
 
   return poption->string.def;
 }
@@ -1378,8 +1369,8 @@ const char *option_str_def(const struct client_option *poption)
 **************************************************************************/
 const struct strvec *option_str_values(const struct client_option *poption)
 {
-  log_assert_ret_val(NULL != poption, NULL);
-  log_assert_ret_val(COT_STRING == poption->type, NULL);
+  RETURN_VAL_IF_FAIL(NULL != poption, NULL);
+  RETURN_VAL_IF_FAIL(COT_STRING == poption->type, NULL);
 
   return (poption->string.val_accessor
           ? poption->string.val_accessor() : NULL);
@@ -1391,9 +1382,9 @@ const struct strvec *option_str_values(const struct client_option *poption)
 **************************************************************************/
 bool option_str_set(struct client_option *poption, const char *str)
 {
-  log_assert_ret_val(NULL != poption, FALSE);
-  log_assert_ret_val(COT_STRING == poption->type, FALSE);
-  log_assert_ret_val(NULL != str, FALSE);
+  RETURN_VAL_IF_FAIL(NULL != poption, FALSE);
+  RETURN_VAL_IF_FAIL(COT_STRING == poption->type, FALSE);
+  RETURN_VAL_IF_FAIL(NULL != str, FALSE);
 
   if (strlen(str) >= poption->string.size
       || 0 == strcmp(poption->string.pvalue, str)) {
@@ -1410,8 +1401,8 @@ bool option_str_set(struct client_option *poption, const char *str)
 **************************************************************************/
 const char *option_font_get(const struct client_option *poption)
 {
-  log_assert_ret_val(NULL != poption, NULL);
-  log_assert_ret_val(COT_FONT == poption->type, NULL);
+  RETURN_VAL_IF_FAIL(NULL != poption, NULL);
+  RETURN_VAL_IF_FAIL(COT_FONT == poption->type, NULL);
 
   return poption->font.pvalue;
 }
@@ -1421,8 +1412,8 @@ const char *option_font_get(const struct client_option *poption)
 **************************************************************************/
 const char *option_font_def(const struct client_option *poption)
 {
-  log_assert_ret_val(NULL != poption, NULL);
-  log_assert_ret_val(COT_FONT == poption->type, NULL);
+  RETURN_VAL_IF_FAIL(NULL != poption, NULL);
+  RETURN_VAL_IF_FAIL(COT_FONT == poption->type, NULL);
 
   return poption->font.def;
 }
@@ -1432,8 +1423,8 @@ const char *option_font_def(const struct client_option *poption)
 **************************************************************************/
 const char *option_font_target(const struct client_option *poption)
 {
-  log_assert_ret_val(NULL != poption, FALSE);
-  log_assert_ret_val(COT_FONT == poption->type, FALSE);
+  RETURN_VAL_IF_FAIL(NULL != poption, FALSE);
+  RETURN_VAL_IF_FAIL(COT_FONT == poption->type, FALSE);
 
   return poption->font.target;
 }
@@ -1444,9 +1435,9 @@ const char *option_font_target(const struct client_option *poption)
 **************************************************************************/
 bool option_font_set(struct client_option *poption, const char *str)
 {
-  log_assert_ret_val(NULL != poption, FALSE);
-  log_assert_ret_val(COT_FONT == poption->type, FALSE);
-  log_assert_ret_val(NULL != str, FALSE);
+  RETURN_VAL_IF_FAIL(NULL != poption, FALSE);
+  RETURN_VAL_IF_FAIL(COT_FONT == poption->type, FALSE);
+  RETURN_VAL_IF_FAIL(NULL != str, FALSE);
 
   if (strlen(str) >= poption->font.size
       || 0 == strcmp(poption->font.pvalue, str)) {
@@ -1461,7 +1452,7 @@ bool option_font_set(struct client_option *poption, const char *str)
 
 /** Message Options: **/
 
-int messages_where[E_LAST];
+unsigned int messages_where[E_LAST];
 
 
 /****************************************************************
@@ -1519,46 +1510,14 @@ static void message_options_load(struct section_file *file,
 {
   enum event_type event;
   int i, num_events;
-  const char *p;
+  char *p;
 
-  if (!secfile_lookup_int(file, &num_events, "messages.count")) {
+  num_events = secfile_lookup_int_default(file, -1, "messages.count");
+  if (num_events == -1) {
     /* version < 2.2 */
-    /* Order of the events in 2.1. */
-    const enum event_type old_events[] = {
-      E_CITY_CANTBUILD, E_CITY_LOST, E_CITY_LOVE, E_CITY_DISORDER,
-      E_CITY_FAMINE, E_CITY_FAMINE_FEARED, E_CITY_GROWTH,
-      E_CITY_MAY_SOON_GROW, E_CITY_AQUEDUCT, E_CITY_AQ_BUILDING,
-      E_CITY_NORMAL, E_CITY_NUKED, E_CITY_CMA_RELEASE, E_CITY_GRAN_THROTTLE,
-      E_CITY_TRANSFER, E_CITY_BUILD, E_CITY_PRODUCTION_CHANGED,
-      E_WORKLIST, E_UPRISING, E_CIVIL_WAR, E_ANARCHY, E_FIRST_CONTACT,
-      E_NEW_GOVERNMENT, E_LOW_ON_FUNDS, E_POLLUTION, E_REVOLT_DONE,
-      E_REVOLT_START, E_SPACESHIP, E_MY_DIPLOMAT_BRIBE,
-      E_DIPLOMATIC_INCIDENT, E_MY_DIPLOMAT_ESCAPE, E_MY_DIPLOMAT_EMBASSY,
-      E_MY_DIPLOMAT_FAILED, E_MY_DIPLOMAT_INCITE, E_MY_DIPLOMAT_POISON,
-      E_MY_DIPLOMAT_SABOTAGE, E_MY_DIPLOMAT_THEFT, E_ENEMY_DIPLOMAT_BRIBE,
-      E_ENEMY_DIPLOMAT_EMBASSY, E_ENEMY_DIPLOMAT_FAILED,
-      E_ENEMY_DIPLOMAT_INCITE, E_ENEMY_DIPLOMAT_POISON,
-      E_ENEMY_DIPLOMAT_SABOTAGE, E_ENEMY_DIPLOMAT_THEFT,
-      E_CARAVAN_ACTION, E_SCRIPT, E_BROADCAST_REPORT, E_GAME_END,
-      E_GAME_START, E_NATION_SELECTED, E_DESTROYED, E_REPORT, E_TURN_BELL,
-      E_NEXT_YEAR, E_GLOBAL_ECO, E_NUKE, E_HUT_BARB, E_HUT_CITY, E_HUT_GOLD,
-      E_HUT_BARB_KILLED, E_HUT_MERC, E_HUT_SETTLER, E_HUT_TECH,
-      E_HUT_BARB_CITY_NEAR, E_IMP_BUY, E_IMP_BUILD, E_IMP_AUCTIONED,
-      E_IMP_AUTO, E_IMP_SOLD, E_TECH_GAIN, E_TECH_LEARNED, E_TREATY_ALLIANCE,
-      E_TREATY_BROKEN, E_TREATY_CEASEFIRE, E_TREATY_PEACE,
-      E_TREATY_SHARED_VISION, E_UNIT_LOST_ATT, E_UNIT_WIN_ATT, E_UNIT_BUY,
-      E_UNIT_BUILT, E_UNIT_LOST_DEF, E_UNIT_WIN, E_UNIT_BECAME_VET,
-      E_UNIT_UPGRADED, E_UNIT_RELOCATED, E_UNIT_ORDERS, E_WONDER_BUILD,
-      E_WONDER_OBSOLETE, E_WONDER_STARTED, E_WONDER_STOPPED,
-      E_WONDER_WILL_BE_BUILT, E_DIPLOMACY, E_TREATY_EMBASSY,
-      E_BAD_COMMAND, E_SETTING, E_CHAT_MSG, E_MESSAGE_WALL, E_CHAT_ERROR,
-      E_CONNECTION, E_AI_DEBUG
-    };
-    const size_t old_events_num = ARRAY_SIZE(old_events);
-
-    for (i = 0; i < old_events_num; i++) {
-      messages_where[old_events[i]] =
-        secfile_lookup_int_default(file, messages_where[old_events[i]],
+    for (i = 0; i < E_LAST; i++) {
+      messages_where[i] =
+        secfile_lookup_int_default(file, messages_where[i],
                                    "%s.message_where_%02d", prefix, i);
     }
     return;
@@ -1566,14 +1525,9 @@ static void message_options_load(struct section_file *file,
 
   for (i = 0; i < num_events; i++) {
     p = secfile_lookup_str(file, "messages.event%d.name", i);
-    if (NULL == p) {
-      log_error("Corruption in file %s: %s",
-                secfile_name(file), secfile_error());
-      continue;
-    }
     event = event_type_by_name(p, strcmp);
     if (!event_type_is_valid(event)) {
-      log_error("Event not supported: %s", p);
+      freelog(LOG_ERROR, "Invalid event: %s", p);
       continue;
     }
 
@@ -1582,11 +1536,8 @@ static void message_options_load(struct section_file *file,
       continue;
     }
 
-    if (!secfile_lookup_int(file, &messages_where[event],
-                            "messages.event%d.where", i)) {
-      log_error("Corruption in file %s: %s",
-                secfile_name(file), secfile_error());
-    }
+    messages_where[event]
+      = secfile_lookup_int(file, "messages.event%d.where", i);
   }
 }
 
@@ -1718,7 +1669,7 @@ static const char *get_current_option_file_name(void)
 #else
     name = user_home_dir();
     if (!name) {
-      log_error(_("Cannot find your home directory"));
+      freelog(LOG_ERROR, _("Cannot find your home directory"));
       return NULL;
     }
     my_snprintf(name_buffer, sizeof(name_buffer),
@@ -1726,7 +1677,7 @@ static const char *get_current_option_file_name(void)
                 MAJOR_NEW_OPTION_FILE_NAME, MINOR_NEW_OPTION_FILE_NAME);
 #endif /* OPTION_FILE_NAME */
   }
-  log_verbose("settings file is %s", name_buffer);
+  freelog(LOG_VERBOSE, "settings file is %s", name_buffer);
   return name_buffer;
 }
 
@@ -1754,7 +1705,7 @@ static const char *get_last_option_file_name(void)
 
     name = user_home_dir();
     if (!name) {
-      log_error(_("Cannot find your home directory"));
+      freelog(LOG_ERROR, _("Cannot find your home directory"));
       return NULL;
     }
     for (major = MAJOR_NEW_OPTION_FILE_NAME,
@@ -1768,10 +1719,10 @@ static const char *get_last_option_file_name(void)
         if (0 == stat(name_buffer, &buf)) {
           if (MAJOR_NEW_OPTION_FILE_NAME != major
               || MINOR_NEW_OPTION_FILE_NAME != minor) {
-            log_normal(_("Didn't find '%s' option file, "
-                         "loading from '%s' instead."),
-                       get_current_option_file_name() + strlen(name) + 1,
-                       name_buffer + strlen(name) + 1);
+            freelog(LOG_NORMAL, _("Didn't find '%s' option file, "
+                                  "loading from '%s' instead."),
+                    get_current_option_file_name() + strlen(name) + 1,
+                    name_buffer + strlen(name) + 1);
           }
           return name_buffer;
         }
@@ -1782,17 +1733,17 @@ static const char *get_last_option_file_name(void)
     my_snprintf(name_buffer, sizeof(name_buffer),
                 "%s/" OLD_OPTION_FILE_NAME, name);
     if (0 == stat(name_buffer, &buf)) {
-      log_normal(_("Didn't find '%s' option file, "
-                   "loading from '%s' instead."),
-                 get_current_option_file_name() + strlen(name) + 1,
-                 OLD_OPTION_FILE_NAME);
+      freelog(LOG_NORMAL, _("Didn't find '%s' option file, "
+                            "loading from '%s' instead."),
+              get_current_option_file_name() + strlen(name) + 1,
+              OLD_OPTION_FILE_NAME);
       return name_buffer;
     } else {
       return NULL;
     }
 #endif /* OPTION_FILE_NAME */
   }
-  log_verbose("settings file is %s", name_buffer);
+  freelog(LOG_VERBOSE, "settings file is %s", name_buffer);
   return name_buffer;
 }
 #undef OLD_OPTION_FILE_NAME
@@ -1807,54 +1758,31 @@ static const char *get_last_option_file_name(void)
 static void settable_options_load(struct section_file *sf)
 {
   char buf[64];
-  const struct section *psection;
-  const struct entry_list *entries;
+  char **entries, **entry;
   const char *string;
-  bool bval;
-  int ival;
+  int value;
+  int num;
 
-  log_assert_ret(NULL != settable_options_hash);
+  RETURN_IF_FAIL(NULL != settable_options_hash);
 
   hash_delete_all_entries(settable_options_hash);
 
-  psection = secfile_section_by_name(sf, "server");
-  if (NULL == psection) {
-    /* Does not exist! */
-    return;
+  entries = secfile_get_section_entries(sf, "server", &num);
+
+  if (NULL != entries) {
+    for (entry = entries; 0 < num--; entry++) {
+      /* Before 2.2, some were saved as numbers. */
+      string = secfile_lookup_str_int(sf, &value, "server.%s", *entry);
+
+      if (NULL == string) {
+        my_snprintf(buf, sizeof(buf), "%d", value);
+        string = buf;
+      }
+
+      hash_insert(settable_options_hash, mystrdup(*entry), mystrdup(string));
+    }
+    free(entries);
   }
-
-  entries = section_entries(psection);
-  entry_list_iterate(entries, pentry) {
-    string = NULL;
-    switch (entry_type(pentry)) {
-    case ENTRY_BOOL:
-      if (entry_bool_get(pentry, &bval)) {
-        my_snprintf(buf, sizeof(buf), "%d", bval);
-        string = buf;
-      }
-      break;
-
-    case ENTRY_INT:
-      if (entry_int_get(pentry, &ival)) {
-        my_snprintf(buf, sizeof(buf), "%d", ival);
-        string = buf;
-      }
-      break;
-
-    case ENTRY_STR:
-      (void) entry_str_get(pentry, &string);
-      break;
-    }
-
-    if (NULL == string) {
-      log_error("Entry type variant of \"%s.%s\" is not supported.",
-                section_name(psection), entry_name(pentry));
-      continue;
-    }
-
-    hash_insert(settable_options_hash,
-                mystrdup(entry_name(pentry)), mystrdup(string));
-  } entry_list_iterate_end;
 }
 
 /****************************************************************
@@ -1862,7 +1790,7 @@ static void settable_options_load(struct section_file *sf)
 *****************************************************************/
 static void settable_options_save(struct section_file *sf)
 {
-  log_assert_ret(NULL != settable_options_hash);
+  RETURN_IF_FAIL(NULL != settable_options_hash);
 
   hash_iterate(settable_options_hash, iter) {
     secfile_insert_str(sf, (const char *) hash_iter_get_value(iter),
@@ -1881,7 +1809,7 @@ void desired_settable_options_update(void)
   const char *value;
   int i;
 
-  log_assert_ret(NULL != settable_options_hash);
+  RETURN_IF_FAIL(NULL != settable_options_hash);
 
   for (i = 0; i < num_settable_options; i++) {
     pset = settable_options + i;
@@ -1903,13 +1831,12 @@ void desired_settable_options_update(void)
     }
 
     if (NULL == value) {
-      log_error("Wrong setting type (%d) for '%s'.",
-                pset->stype, pset->name);
+      freelog(LOG_ERROR, "Wrong setting type (%d) for '%s'.",
+              pset->stype, pset->name);
       continue;
     }
 
-    hash_replace(settable_options_hash,
-                 mystrdup(pset->name), mystrdup(value));
+    hash_replace(settable_options_hash, mystrdup(pset->name), mystrdup(value));
   }
 }
 
@@ -1920,7 +1847,7 @@ void desired_settable_options_update(void)
 void desired_settable_option_update(const char *op_name, const char *op_value,
                                     bool allow_replace)
 {
-  log_assert_ret(NULL != settable_options_hash);
+  RETURN_IF_FAIL(NULL != settable_options_hash);
 
   if (allow_replace) {
     hash_delete_entry(settable_options_hash, op_name);
@@ -1937,7 +1864,7 @@ void desired_settable_option_send(struct options_settable *pset)
   const char *desired;
   const char *value;
 
-  log_assert_ret(NULL != settable_options_hash);
+  RETURN_IF_FAIL(NULL != settable_options_hash);
 
   desired = hash_lookup_data(settable_options_hash, pset->name);
   if (NULL == desired) {
@@ -1962,8 +1889,8 @@ void desired_settable_option_send(struct options_settable *pset)
       send_chat_printf("/set %s %s", pset->name, desired);
     }
   } else {
-    log_error("Wrong setting type (%d) for '%s'.",
-              pset->stype, pset->name);
+    freelog(LOG_ERROR, "Wrong setting type (%d) for '%s'.",
+            pset->stype, pset->name);
   }
 }
 
@@ -1973,27 +1900,27 @@ void desired_settable_option_send(struct options_settable *pset)
 *****************************************************************/
 static void options_dialogs_load(struct section_file *sf)
 {
-  const struct entry_list *entries;
+  char **entries, **entry;
   const char *prefixes[] = { "player_dlg_", "city_report_", NULL };
   const char **prefix;
-  bool visible;
+  int num;
 
-  log_assert_ret(NULL != dialog_options_hash);
+  RETURN_IF_FAIL(NULL != dialog_options_hash);
 
-  entries = section_entries(secfile_section_by_name(sf, "client"));
+  entries = secfile_get_section_entries(sf, "client", &num);
 
   if (NULL != entries) {
-    entry_list_iterate(entries, pentry) {
+    for (entry = entries; 0 < num--; entry++) {
       for (prefix = prefixes; NULL != *prefix; prefix++) {
-        if (0 == strncmp(*prefix, entry_name(pentry), strlen(*prefix))
-            && secfile_lookup_bool(sf, &visible, "client.%s",
-                                   entry_name(pentry))) {
-          hash_replace(dialog_options_hash, mystrdup(entry_name(pentry)),
-                       FC_INT_TO_PTR(visible));
+        if (0 == strncmp(*prefix, *entry, strlen(*prefix))) {
+          hash_replace(dialog_options_hash, mystrdup(*entry),
+                       FC_INT_TO_PTR(secfile_lookup_bool(sf, "client.%s",
+                                                         *entry)));
           break;
         }
       }
-    } entry_list_iterate_end;
+    }
+    free(entries);
   }
 }
 
@@ -2002,7 +1929,7 @@ static void options_dialogs_load(struct section_file *sf)
 *****************************************************************/
 static void options_dialogs_save(struct section_file *sf)
 {
-  log_assert_ret(NULL != dialog_options_hash);
+  RETURN_IF_FAIL(NULL != dialog_options_hash);
 
   options_dialogs_update();
   hash_iterate(dialog_options_hash, iter) {
@@ -2021,7 +1948,7 @@ void options_dialogs_update(void)
   char buf[64];
   int i;
 
-  log_assert_ret(NULL != dialog_options_hash);
+  RETURN_IF_FAIL(NULL != dialog_options_hash);
 
   /* Player report dialog options. */
   for (i = 1; i < num_player_dlg_columns; i++) {
@@ -2050,7 +1977,7 @@ void options_dialogs_set(void)
   const void *data;
   int i;
 
-  log_assert_ret(NULL != dialog_options_hash);
+  RETURN_IF_FAIL(NULL != dialog_options_hash);
 
   /* Player report dialog options. */
   for (i = 1; i < num_player_dlg_columns; i++) {
@@ -2073,76 +2000,77 @@ void options_dialogs_set(void)
 
 
 /****************************************************************
-  Load from the rc file any options that are not ruleset specific.
-  It is called after ui_init(), yet before ui_main().
-  Unfortunately, this means that some clients cannot display.
-  Instead, use log_*().
+ Load from the rc file any options that are not ruleset specific.
+ It is called after ui_init(), yet before ui_main().
+ Unfortunately, this means that some clients cannot display.
+ Instead, use freelog().
 *****************************************************************/
 void options_load(void)
 {
-  struct section_file *sf;
+  struct section_file sf;
   int i, num;
   const char *name;
   const char * const prefix = "client";
 
   name = get_last_option_file_name();
   if (!name) {
-    log_normal(_("Didn't find the option file."));
+    freelog(LOG_NORMAL, _("Didn't find the option file."));
     options_fully_initialized = TRUE;
     create_default_cma_presets();
     return;
   }
-  if (!(sf = secfile_load(name, TRUE))) {
+  if (!section_file_load(&sf, name)) {
     /* try to create the rc file */
-    sf = secfile_new(TRUE);
-    secfile_insert_str(sf, VERSION_STRING, "client.version");
+    section_file_init(&sf);
+    secfile_insert_str(&sf, VERSION_STRING, "client.version");
 
     create_default_cma_presets();
-    save_cma_presets(sf);
+    save_cma_presets(&sf);
 
     /* FIXME: need better messages */
-    if (!secfile_save(sf, name, 0, FZ_PLAIN)) {
-      log_error(_("Save failed, cannot write to file %s"), name);
+    if (!section_file_save(&sf, name, 0, FZ_PLAIN)) {
+      freelog(LOG_ERROR, _("Save failed, cannot write to file %s"), name);
     } else {
-      log_normal(_("Saved settings to file %s"), name);
+      freelog(LOG_NORMAL, _("Saved settings to file %s"), name);
     }
-    secfile_destroy(sf);
+    section_file_free(&sf);
     options_fully_initialized = TRUE;
     return;
   }
 
   /* a "secret" option for the lazy. TODO: make this saveable */
-  sz_strlcpy(password,
-             secfile_lookup_str_default(sf, "", "%s.password", prefix));
+  sz_strlcpy(password, 
+             secfile_lookup_str_default(&sf, "", "%s.password", prefix));
 
   save_options_on_exit =
-    secfile_lookup_bool_default(sf, save_options_on_exit,
-                                "%s.save_options_on_exit", prefix);
+    secfile_lookup_bool_default(&sf, save_options_on_exit,
+				"%s.save_options_on_exit", prefix);
   fullscreen_mode =
-    secfile_lookup_bool_default(sf, fullscreen_mode,
-                                "%s.fullscreen_mode", prefix);
+    secfile_lookup_bool_default(&sf, fullscreen_mode,
+				"%s.fullscreen_mode", prefix);
 
   client_options_iterate_all(poption) {
-    option_load(poption, sf);
+    option_load(poption, &sf);
   } client_options_iterate_all_end;
 
-  message_options_load(sf, prefix);
-  options_dialogs_load(sf);
+  message_options_load(&sf, prefix);
+  options_dialogs_load(&sf);
 
   /* Load cma presets. If cma.number_of_presets doesn't exist, don't load 
    * any, the order here should be reversed to keep the order the same */
-  if (secfile_lookup_int(sf, &num, "cma.number_of_presets")) {
-    for (i = num - 1; i >= 0; i--) {
-      load_cma_preset(sf, i);
-    }
-  } else {
+  num = secfile_lookup_int_default(&sf, -1, "cma.number_of_presets");
+  if (num == -1) {
     create_default_cma_presets();
+  } else {
+    for (i = num - 1; i >= 0; i--) {
+      load_cma_preset(&sf, i);
+    }
   }
 
-  settable_options_load(sf);
-  global_worklists_load(sf);
+  settable_options_load(&sf);
+  global_worklists_load(&sf);
 
-  secfile_destroy(sf);
+  section_file_free(&sf);
   options_fully_initialized = TRUE;
 }
 
@@ -2151,7 +2079,7 @@ void options_load(void)
 **************************************************************************/
 void options_save(void)
 {
-  struct section_file *sf;
+  struct section_file sf;
   const char *name = get_current_option_file_name();
 
   if (!name) {
@@ -2160,51 +2088,51 @@ void options_save(void)
     return;
   }
 
-  sf = secfile_new(TRUE);
-  secfile_insert_str(sf, VERSION_STRING, "client.version");
+  section_file_init(&sf);
+  secfile_insert_str(&sf, VERSION_STRING, "client.version");
 
-  secfile_insert_bool(sf, save_options_on_exit, "client.save_options_on_exit");
-  secfile_insert_bool(sf, fullscreen_mode, "client.fullscreen_mode");
+  secfile_insert_bool(&sf, save_options_on_exit, "client.save_options_on_exit");
+  secfile_insert_bool(&sf, fullscreen_mode, "client.fullscreen_mode");
 
   client_options_iterate_all(poption) {
     switch (option_type(poption)) {
     case COT_BOOLEAN:
-      secfile_insert_bool(sf, option_bool_get(poption),
+      secfile_insert_bool(&sf, option_bool_get(poption),
                           "client.%s", option_name(poption));
       break;
     case COT_INTEGER:
-      secfile_insert_int(sf, option_int_get(poption),
+      secfile_insert_int(&sf, option_int_get(poption),
                          "client.%s", option_name(poption));
       break;
     case COT_STRING:
-      secfile_insert_str(sf, option_str_get(poption),
+      secfile_insert_str(&sf, option_str_get(poption),
                          "client.%s", option_name(poption));
       break;
     case COT_FONT:
-      secfile_insert_str(sf, option_font_get(poption),
+      secfile_insert_str(&sf, option_font_get(poption),
                          "client.%s", option_name(poption));
       break;
     }
   } client_options_iterate_all_end;
 
-  message_options_save(sf, "client");
-  options_dialogs_save(sf);
+  message_options_save(&sf, "client");
+  options_dialogs_save(&sf);
 
   /* server settings */
-  save_cma_presets(sf);
-  settable_options_save(sf);
+  save_cma_presets(&sf);
+  settable_options_save(&sf);
 
   /* insert global worklists */
-  global_worklists_save(sf);
+  global_worklists_save(&sf);
 
   /* save to disk */
-  if (!secfile_save(sf, name, 0, FZ_PLAIN)) {
+  if (!section_file_save(&sf, name, 0, FZ_PLAIN)) {
     output_window_printf(ftc_client,
                          _("Save failed, cannot write to file %s"), name);
   } else {
     output_window_printf(ftc_client, _("Saved settings to file %s"), name);
   }
-  secfile_destroy(sf);
+  section_file_free(&sf);
 }
 
 
@@ -2234,11 +2162,11 @@ void options_init(void)
                                   option_int_max(poption)),
                               option_int_min(poption));
 
-        log_error("option %s has default value of %d, which is "
-                  "out of its range [%d; %d], changing to %d.",
-                  option_name(poption), option_int_def(poption),
-                  option_int_min(poption), option_int_max(poption),
-                  new_default);
+        freelog(LOG_ERROR, "option %s has default value of %d, which is "
+                "out of its range [%d; %d], changing to %d.",
+                option_name(poption), option_int_def(poption),
+                option_int_min(poption), option_int_max(poption),
+                new_default);
         *((int *) &poption->integer.def) = new_default;
       }
       break;
@@ -2254,8 +2182,8 @@ void options_init(void)
         const struct strvec *values = option_str_values(poption);
 
         if (NULL == values || strvec_size(values) == 0) {
-          log_error("Invalid NULL default string for option %s.",
-                    option_name(poption));
+          freelog(LOG_ERROR, "Invalid NULL default string for option %s.",
+                  option_name(poption));
         } else {
           *((const char **) &poption->string.def) = strvec_get(values, 0);
         }
@@ -2315,7 +2243,7 @@ static void reqtree_show_icons_callback(struct client_option *poption)
 ****************************************************************************/
 static void view_option_changed_callback(struct client_option *poption)
 {
-  menus_init();
+  update_menus();
   update_map_canvas_visible();
 }
 
@@ -2332,6 +2260,6 @@ static void voteinfo_bar_callback(struct client_option *poption)
 ****************************************************************************/
 static void font_changed_callback(struct client_option *poption)
 {
-  log_assert_ret(COT_FONT == option_type(poption));
+  RETURN_IF_FAIL(COT_FONT == option_type(poption));
   gui_update_font(option_font_target(poption), option_font_get(poption));
 }

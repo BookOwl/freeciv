@@ -554,13 +554,13 @@ static int video_callback(struct widget *pWidget)
       
     /* Check is there are any modes available */
     if (!pModes_Rect) {
-      log_debug(_("No modes available!"));
+      freelog(LOG_DEBUG, _("No modes available!"));
       return 0;
     }
     
     /* Check if or resolution is restricted */
     if (pModes_Rect == (SDL_Rect **) - 1) {
-      log_debug(_("All resolutions available."));
+      freelog(LOG_DEBUG, _("All resolutions available."));
       return 0;
       /* fix ME */
     }

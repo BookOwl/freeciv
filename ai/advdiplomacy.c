@@ -850,8 +850,9 @@ static void ai_diplomacy_suggest(struct player *pplayer,
                                  int value)
 {
   if (!could_meet_with_player(pplayer, aplayer)) {
-    log_base(LOG_DIPL2, "%s tries to do diplomacy to %s without contact",
-             player_name(pplayer), player_name(aplayer));
+    freelog(LOG_DIPL2, "%s tries to do diplomacy to %s without contact",
+            player_name(pplayer),
+            player_name(aplayer));
     return;
   }
 
@@ -990,8 +991,8 @@ void ai_diplomacy_begin_new_phase(struct player *pplayer,
 
   /* Can we win by space race? */
   if (ai->diplomacy.spacerace_leader == pplayer) {
-    log_base(LOG_DIPL2, "%s going for space race victory!",
-             player_name(pplayer));
+    freelog(LOG_DIPL2, "%s going for space race victory!",
+            player_name(pplayer));
     ai->diplomacy.strategy = WIN_SPACE; /* Yes! */
   } else {
     if (ai->diplomacy.strategy == WIN_SPACE) {

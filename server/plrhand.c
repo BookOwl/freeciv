@@ -188,8 +188,8 @@ void handle_player_rates(struct player *pplayer,
   int maxrate;
 
   if (S_S_RUNNING != server_state()) {
-    log_error("received player_rates packet from %s before start",
-              player_name(pplayer));
+    freelog(LOG_ERROR, "received player_rates packet from %s before start",
+	    player_name(pplayer));
     notify_player(pplayer, NULL, E_BAD_COMMAND, ftc_server,
                   _("Cannot change rates before game start."));
     return;
@@ -253,10 +253,11 @@ static void finish_revolution(struct player *pplayer)
   pplayer->government = government;
   pplayer->target_government = NULL;
 
-  log_debug("Revolution finished for %s. Government is %s. "
-            "Revofin %d (%d).", player_name(pplayer),
-            government_rule_name(government),
-            pplayer->revolution_finishes, game.info.turn);
+  freelog(LOG_DEBUG,
+	  "Revolution finished for %s.  Government is %s.  Revofin %d (%d).",
+	  player_name(pplayer),
+	  government_rule_name(government),
+	  pplayer->revolution_finishes, game.info.turn);
   notify_player(pplayer, NULL, E_REVOLT_DONE, ftc_server,
                 _("%s now governs the %s as a %s."), 
                 player_name(pplayer), 
@@ -292,11 +293,13 @@ void handle_player_change_government(struct player *pplayer, int government)
     return;
   }
 
-  log_debug("Government changed for %s. Target government is %s; "
-            "old %s. Revofin %d, Turn %d.", player_name(pplayer),
-            government_rule_name(gov),
-            government_rule_name(government_of_player(pplayer)),
-            pplayer->revolution_finishes, game.info.turn);
+  freelog(LOG_DEBUG,
+	  "Government changed for %s.  Target government is %s; "
+	  "old %s.  Revofin %d, Turn %d.",
+	  player_name(pplayer),
+	  government_rule_name(gov),
+	  government_rule_name(government_of_player(pplayer)),
+	  pplayer->revolution_finishes, game.info.turn);
 
   /* Set revolution_finishes value. */
   if (pplayer->revolution_finishes > 0) {
@@ -320,10 +323,12 @@ void handle_player_change_government(struct player *pplayer, int government)
   pplayer->target_government = gov;
   pplayer->revolution_finishes = game.info.turn + turns;
 
-  log_debug("Revolution started for %s. Target government is %s. "
-            "Revofin %d (%d).", player_name(pplayer),
-            government_rule_name(pplayer->target_government),
-            pplayer->revolution_finishes, game.info.turn);
+  freelog(LOG_DEBUG,
+	  "Revolution started for %s.  Target government is %s.  "
+	  "Revofin %d (%d).",
+	  player_name(pplayer),
+	  government_rule_name(pplayer->target_government),
+	  pplayer->revolution_finishes, game.info.turn);
 
   /* Now see if the revolution is instantaneous. */
   if (turns <= 0
@@ -354,11 +359,13 @@ void handle_player_change_government(struct player *pplayer, int government)
   city_refresh_for_player(pplayer);
   send_player_info(pplayer, pplayer);
 
-  log_debug("Government change complete for %s. Target government is %s; "
-            "now %s. Turn %d; revofin %d.", player_name(pplayer),
-            government_rule_name(pplayer->target_government),
-            government_rule_name(government_of_player(pplayer)),
-            game.info.turn, pplayer->revolution_finishes);
+  freelog(LOG_DEBUG,
+	  "Government change complete for %s.  Target government is %s; "
+	  "now %s.  Turn %d; revofin %d.",
+	  player_name(pplayer),
+	  government_rule_name(pplayer->target_government),
+	  government_rule_name(government_of_player(pplayer)),
+	  game.info.turn, pplayer->revolution_finishes);
 }
 
 /**************************************************************************
@@ -386,18 +393,21 @@ void update_revolution(struct player *pplayer)
    *       is reset at the end of any turn when a non-anarchy government is
    *       chosen.
    */
-  log_debug("Update revolution for %s. Current government %s, "
-            "target %s, revofin %d, turn %d.", player_name(pplayer),
-            government_rule_name(government_of_player(pplayer)),
-            pplayer->target_government
-            ? government_rule_name(pplayer->target_government) : "(none)",
-            pplayer->revolution_finishes, game.info.turn);
+  freelog(LOG_DEBUG, "Update revolution for %s.  Current government %s, "
+	  "target %s, revofin %d, turn %d.",
+	  player_name(pplayer),
+	  government_rule_name(government_of_player(pplayer)),
+	  pplayer->target_government
+	  ? government_rule_name(pplayer->target_government)
+	  : "(none)",
+	  pplayer->revolution_finishes, game.info.turn);
   if (government_of_player(pplayer) == game.government_during_revolution
       && pplayer->revolution_finishes <= game.info.turn) {
     if (pplayer->target_government != game.government_during_revolution) {
       /* If the revolution is over and a target government is set, go into
        * the new government. */
-      log_debug("Update: finishing revolution for %s.", player_name(pplayer));
+      freelog(LOG_DEBUG, "Update: finishing revolution for %s.",
+	      player_name(pplayer));
       finish_revolution(pplayer);
     } else {
       /* If the revolution is over but there's no target government set,
@@ -410,7 +420,8 @@ void update_revolution(struct player *pplayer)
 	     && pplayer->revolution_finishes < game.info.turn) {
     /* Reset the revolution counter.  If the player has another revolution
      * they'll have to re-enter anarchy. */
-    log_debug("Update: resetting revofin for %s.", player_name(pplayer));
+    freelog(LOG_DEBUG, "Update: resetting revofin for %s.",
+	    player_name(pplayer));
     pplayer->revolution_finishes = -1;
     send_player_info(pplayer, pplayer);
   }
@@ -528,7 +539,7 @@ void handle_diplomacy_cancel_pact(struct player *pplayer,
     new_type = DS_ARMISTICE;
     break;
   default:
-    log_error("non-pact diplstate in handle_player_cancel_pact");
+    freelog(LOG_ERROR, "non-pact diplstate in handle_player_cancel_pact");
     assert(FALSE);
     return;
   }
@@ -905,8 +916,9 @@ static void package_player_info(struct player *plr,
   packet->inventions[A_NONE] = research->inventions[A_NONE].state + '0';
   packet->inventions[advance_count()] = '\0';
 #ifdef DEBUG
-  log_verbose("Player%d inventions:%s",
-              player_number(plr), packet->inventions);
+  freelog(LOG_VERBOSE, "Player%d inventions:%s",
+          player_number(plr),
+          packet->inventions);
 #endif
 
   if (info_level >= INFO_FULL
@@ -1037,7 +1049,7 @@ void server_remove_player(struct player *pplayer)
     return;
   }
 
-  log_normal(_("Removing player %s."), player_name(pplayer));
+  freelog(LOG_NORMAL, _("Removing player %s."), player_name(pplayer));
 
   notify_conn(pplayer->connections, NULL, E_CONNECTION, ftc_server,
               _("You've been removed from the game!"));
@@ -1172,7 +1184,7 @@ void shuffle_players(void)
   int n = player_slot_count();
   int i;
 
-  log_debug("shuffle_players: creating shuffled order");
+  freelog(LOG_DEBUG, "shuffle_players: creating shuffled order");
 
   for (i = 0; i < n; i++) {
     shuffled_order[i] = i;
@@ -1183,7 +1195,7 @@ void shuffle_players(void)
 
 #ifdef DEBUG
   for (i = 0; i < n; i++) {
-    log_debug("shuffled_order[%d] = %d", i, shuffled_order[i]);
+    freelog(LOG_DEBUG, "shuffled_order[%d] = %d", i, shuffled_order[i]);
   }
 #endif
 }
@@ -1195,12 +1207,12 @@ void set_shuffled_players(int *shuffled_players)
 {
   int i;
 
-  log_debug("set_shuffled_players: loading shuffled array %p",
-            shuffled_players);
+  freelog(LOG_DEBUG, "set_shuffled_players: loading shuffled array %p",
+          shuffled_players);
 
   for (i = 0; i < player_slot_count(); i++) {
     shuffled_order[i] = shuffled_players[i];
-    log_debug("shuffled_order[%d] = %d", i, shuffled_order[i]);
+    freelog(LOG_DEBUG, "shuffled_order[%d] = %d", i, shuffled_order[i]);
   }
 }
 
@@ -1214,8 +1226,8 @@ struct player *shuffled_player(int i)
   struct player *pplayer;
 
   pplayer = valid_player_by_number(shuffled_order[i]);
-  log_debug("shuffled_player(%d) = %d (%p %s)",
-            i, shuffled_order[i], pplayer, player_name(pplayer));
+  freelog(LOG_DEBUG, "shuffled_player(%d) = %d (%p %s)",
+          i, shuffled_order[i], pplayer, player_name(pplayer));
   return pplayer;
 }
 
@@ -1536,10 +1548,10 @@ bool civil_war_triggered(struct player *pplayer)
     }
   city_list_iterate_end;
 
-  log_verbose("Civil war chance for %s: prob %d, dice %d",
-              player_name(pplayer), prob, dice);
+  freelog(LOG_VERBOSE, "Civil war chance for %s: prob %d, dice %d",
+	  player_name(pplayer), prob, dice);
   
-  return (dice < prob);
+  return(dice < prob);
 }
 
 /**********************************************************************
@@ -1583,14 +1595,16 @@ void civil_war(struct player *pplayer)
 
   if (player_count() >= MAX_NUM_PLAYERS) {
     /* No space to make additional player */
-    log_normal(_("Could not throw %s into civil war - too many players"),
-               nation_plural_for_player(pplayer));
+    freelog(LOG_NORMAL,
+            _("Could not throw %s into civil war - too many players"),
+            nation_plural_for_player(pplayer));
     return;
   }
   if (normal_player_count() >= server.playable_nations) {
     /* No nation for additional player */
-    log_normal(_("Could not throw %s into civil war - no available nations"),
-               nation_plural_for_player(pplayer));
+    freelog(LOG_NORMAL,
+            _("Could not throw %s into civil war - no available nations"),
+            nation_plural_for_player(pplayer));
     return;
   }
 
@@ -1604,9 +1618,10 @@ void civil_war(struct player *pplayer)
   
   /* Now split the empire */
 
-  log_verbose("%s civil war; created AI %s",
-              nation_rule_name(nation_of_player(pplayer)),
-              nation_rule_name(nation_of_player(cplayer)));
+  freelog(LOG_VERBOSE,
+	  "%s civil war; created AI %s",
+	  nation_rule_name(nation_of_player(pplayer)),
+	  nation_rule_name(nation_of_player(cplayer)));
   notify_player(pplayer, NULL, E_CIVIL_WAR, ftc_server,
                 _("Your nation is thrust into civil war."));
 
@@ -1621,21 +1636,23 @@ void civil_war(struct player *pplayer)
   city_list_iterate(pplayer->cities, pcity) {
     if (!is_capital(pcity)) {
       if (i >= j || (i > 0 && myrand(2) == 1)) {
-        /* Transfer city and units supported by this city to the new owner.
-         * We do NOT resolve stack conflicts here, but rather later.
-         * Reason: if we have a transporter from one city which is carrying
-         * a unit from another city, and both cities join the rebellion. We
-         * resolved stack conflicts for each city we would teleport the first
-         * of the units we met since the other would have another owner. */
-        transfer_city(cplayer, pcity, -1, FALSE, FALSE, FALSE);
-        log_verbose("%s declares allegiance to the %s.", city_name(pcity),
-                    nation_rule_name(nation_of_player(cplayer)));
-        notify_player(pplayer, pcity->tile, E_CITY_LOST, ftc_server,
+	/* Transfer city and units supported by this city to the new owner
+
+	 We do NOT resolve stack conflicts here, but rather later.
+	 Reason: if we have a transporter from one city which is carrying
+	 a unit from another city, and both cities join the rebellion. We
+	 resolved stack conflicts for each city we would teleport the first
+	 of the units we met since the other would have another owner */
+	transfer_city(cplayer, pcity, -1, FALSE, FALSE, FALSE);
+	freelog(LOG_VERBOSE, "%s declares allegiance to the %s.",
+		city_name(pcity),
+		nation_rule_name(nation_of_player(cplayer)));
+	notify_player(pplayer, pcity->tile, E_CITY_LOST, ftc_server,
                       /* TRANS: <city> ... the Poles. */
                       _("%s declares allegiance to the %s."),
                       city_link(pcity),
                       nation_plural_for_player(cplayer));
-        i--;
+	i--;
       }
     }
     j--;

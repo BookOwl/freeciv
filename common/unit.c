@@ -966,8 +966,9 @@ bool can_unit_do_activity_targeted_at(const struct unit *punit,
   case ACTIVITY_UNKNOWN:
     break;
   }
-  log_error("can_unit_do_activity_targeted_at() unknown activity %d",
-            activity);
+  freelog(LOG_ERROR,
+	  "can_unit_do_activity_targeted_at() unknown activity %d",
+	  activity);
   return FALSE;
 }
 
@@ -1554,14 +1555,6 @@ enum unit_upgrade_result test_unit_upgrade(const struct unit *punit,
   }
 
   return UR_OK;
-}
-
-/**************************************************************************
-  Tests if unit can be transformed.
-**************************************************************************/
-bool test_unit_transform(const struct unit *punit)
-{
-  return unit_type(punit)->transformed_to != NULL;
 }
 
 /**************************************************************************

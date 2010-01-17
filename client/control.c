@@ -400,7 +400,7 @@ void set_unit_focus(struct unit *punit)
   }
 
   update_unit_info_label(current_focus);
-  menus_update();
+  update_menus();
 }
 
 /**************************************************************************
@@ -431,7 +431,7 @@ void add_unit_focus(struct unit *punit)
 
   current_focus_append(punit, unit_selection_clears_orders);
   update_unit_info_label(current_focus);
-  menus_update();
+  update_menus();
 }
 
 /**************************************************************************
@@ -1375,7 +1375,8 @@ void request_move_unit_direction(struct unit *punit, int dir)
   }
 
   if (punit->moves_left > 0) {
-    dsend_packet_unit_move(&client.conn, punit->id, tile_index(dest_tile));
+    dsend_packet_unit_move(&client.conn, punit->id,
+			   dest_tile->x, dest_tile->y);
   } else {
     /* Initiate a "goto" with direction keys for exhausted units. */
     send_goto_tile(punit, dest_tile);
@@ -1453,14 +1454,6 @@ void request_unit_upgrade(struct unit *punit)
   }
 }
 
-/**************************************************************************
-  Sends unit transform packet.
-**************************************************************************/
-void request_unit_transform(struct unit *punit)
-{
-  dsend_packet_unit_transform(&client.conn, punit->id);
-}
-
 /****************************************************************************
   Call to request (from the server) that the settler unit is put into
   autosettler mode.
@@ -1535,7 +1528,8 @@ void request_unit_caravan_action(struct unit *punit, enum packet_type action)
   } else if (action == PACKET_UNIT_HELP_BUILD_WONDER) {
     dsend_packet_unit_help_build_wonder(&client.conn, punit->id);
   } else {
-    log_error("request_unit_caravan_action() Bad action (%d)", action);
+    freelog(LOG_ERROR, "request_unit_caravan_action() Bad action (%d)",
+	    action);
   }
 }
 
@@ -2068,7 +2062,7 @@ void do_move_unit(struct unit *punit, struct unit *target_unit)
   }
 
   if (unit_is_in_focus(punit)) {
-    menus_update();
+    update_menus();
   }
 }
 
@@ -2330,7 +2324,7 @@ void do_unit_nuke(struct unit *punit)
 **************************************************************************/
 void do_unit_paradrop_to(struct unit *punit, struct tile *ptile)
 {
-  dsend_packet_unit_paradrop_to(&client.conn, punit->id, tile_index(ptile));
+  dsend_packet_unit_paradrop_to(&client.conn, punit->id, ptile->x, ptile->y);
 }
  
 /**************************************************************************
@@ -2639,16 +2633,6 @@ void key_unit_disband(void)
 {
   unit_list_iterate(get_units_in_focus(), punit) {
     request_unit_disband(punit);
-  } unit_list_iterate_end;
-}
-
-/**************************************************************************
-  Unit transform key pressed or respective menu entry selected.
-**************************************************************************/
-void key_unit_transform_unit(void)
-{
-  unit_list_iterate(get_units_in_focus(), punit) {
-    request_unit_transform(punit);
   } unit_list_iterate_end;
 }
 

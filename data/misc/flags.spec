@@ -19,7 +19,6 @@ artists = "
    Algeria 		Lauris Kaplinski
    Antarctica		Tobias Jakobs
    Arab			Daniel Markstedt and Andrew Duhan
-   Aragon		J.M. Maalderink
    Aram			Daniel Markstedt
    Argentina		Sigge Kotliar
    Armenia		Jason Short
@@ -37,7 +36,6 @@ artists = "
    Belgium		Daniel McRae
    Boer			Caleb Moore
    Bosnia		Daniel McRae
-   Botswana		SKopp (Wikimedia user)
    Brasil		Cezary Biele
    Brittany		Lexicon
    Bulgaria		Daniel McRae
@@ -70,7 +68,6 @@ artists = "
    Finland		Daniel McRae
    France (old)		Patricia Fidi
    France		Tobias Jakobs
-   Frisia		GeeKaa (Wikimedia user)
    Galicia		Miguel Rodríguez
    Gaul			Daniel Markstedt and Kilian Valkhof
    Georgia		Christian Schaller
@@ -197,7 +194,6 @@ artists = "
    Turkey		David Benbennick
    Turkmenistan		Caleb Moore
    UAE			Bratt Roper
-   Uganda		Tobias Jakobs
    Ukraine		Lauris Kaplinski
    United Kingdom	Daniel McRae
    United Nations	Tobias Jakobs
@@ -224,7 +220,6 @@ sprites =
 		"f.algeria", "flags/algeria"
 		"f.antarctica", "flags/antarctica"
 		"f.arab", "flags/arab"
-		"f.aragon", "flags/aragon"
 		"f.aram", "flags/aram"
 		"f.argentina", "flags/argentina"
 		"f.armenia", "flags/armenia"
@@ -242,7 +237,6 @@ sprites =
 		"f.belgium", "flags/belgium"
 		"f.boer", "flags/boer"			; old south african
 		"f.bosnia", "flags/bosnia"
-		"f.botswana", "flags/botswana"
 		"f.brasil", "flags/brasil"
 		"f.brittany", "flags/brittany"
 		"f.bulgaria", "flags/bulgaria"
@@ -276,7 +270,6 @@ sprites =
 		"f.finland", "flags/finland"
 		"f.france", "flags/france"
 		"f.france_old", "flags/france_old"	; alt Gallic
-		"f.frisia", "flags/frisia"
 		"f.galicia", "flags/galicia"
 		"f.gaul", "flags/gaul"
 		"f.georgia", "flags/georgia"
@@ -404,7 +397,6 @@ sprites =
 		"f.turkey", "flags/turkey"
 		"f.turkmenistan", "flags/turkmenistan"
 		"f.uae", "flags/uae"
-		"f.uganda", "flags/uganda"
 		"f.ukraine", "flags/ukraine"
 		"f.united_kingdom", "flags/united_kingdom"
 		"f.united_nations", "flags/united_nations"

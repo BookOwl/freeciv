@@ -751,7 +751,7 @@ static int improvement_effect_value(struct player *pplayer,
     } iterate_outward_end;
     break;
   case EFT_LAST:
-    log_error("Bad effect type.");
+    freelog(LOG_ERROR, "Bad effect type.");
     break;
   }
 
@@ -1421,7 +1421,7 @@ static void ai_barbarian_choose_build(struct player *pplayer,
     choice->want   = 101;
     choice->type   = CT_ATTACKER;
   } else {
-    log_base(LOG_WANT, "Barbarians don't know what to build!");
+    freelog(LOG_WANT, "Barbarians don't know what to build!");
   }
 }
 
@@ -1750,8 +1750,8 @@ static void ai_spend_gold(struct player *pplayer)
     } city_list_iterate_end;
   }
 
-  log_base(LOG_BUY, "%s wants to keep %d in reserve (tax factor %d)", 
-           player_name(pplayer), cached_limit, pplayer->ai_data.maxbuycost);
+  freelog(LOG_BUY, "%s wants to keep %d in reserve (tax factor %d)", 
+          player_name(pplayer), cached_limit, pplayer->ai_data.maxbuycost);
 }
 
 /**************************************************************************
@@ -1878,14 +1878,14 @@ static void resolve_city_emergency(struct player *pplayer, struct city *pcity)
 {
   struct tile *pcenter = city_tile(pcity);
 
-  log_base(LOG_EMERGENCY,
-           "Emergency in %s (%s, angry%d, unhap%d food%d, prod%d)",
-           city_name(pcity),
-           city_unhappy(pcity) ? "unhappy" : "content",
-           pcity->feel[CITIZEN_ANGRY][FEELING_FINAL],
-           pcity->feel[CITIZEN_UNHAPPY][FEELING_FINAL],
-           pcity->surplus[O_FOOD],
-           pcity->surplus[O_SHIELD]);
+  freelog(LOG_EMERGENCY,
+          "Emergency in %s (%s, angry%d, unhap%d food%d, prod%d)",
+          city_name(pcity),
+          city_unhappy(pcity) ? "unhappy" : "content",
+          pcity->feel[CITIZEN_ANGRY][FEELING_FINAL],
+          pcity->feel[CITIZEN_UNHAPPY][FEELING_FINAL],
+          pcity->surplus[O_FOOD],
+          pcity->surplus[O_SHIELD]);
 
   city_tile_iterate(pcenter, atile) {
     struct city *acity = tile_worked(atile);
@@ -1894,8 +1894,10 @@ static void resolve_city_emergency(struct player *pplayer, struct city *pcity)
       int ax, ay;
       bool is_valid = city_base_to_city_map(&ax, &ay, acity, atile);
 
-      log_base(LOG_EMERGENCY, "%s taking over %s square in (%d, %d)",
-               city_name(pcity), city_name(acity), TILE_XY(atile));
+      freelog(LOG_EMERGENCY, "%s taking over %s square in (%d, %d)",
+              city_name(pcity),
+              city_name(acity),
+              TILE_XY(atile));
 
       if (!is_valid) {
         assert(is_valid);
@@ -1916,7 +1918,8 @@ static void resolve_city_emergency(struct player *pplayer, struct city *pcity)
   auto_arrange_workers(pcity);
 
   if (!CITY_EMERGENCY(pcity)) {
-    log_base(LOG_EMERGENCY, "Emergency in %s resolved", city_name(pcity));
+    freelog(LOG_EMERGENCY, "Emergency in %s resolved",
+            city_name(pcity));
     goto cleanup;
   }
 
@@ -1932,12 +1935,12 @@ static void resolve_city_emergency(struct player *pplayer, struct city *pcity)
   } unit_list_iterate_safe_end;
 
   if (CITY_EMERGENCY(pcity)) {
-    log_base(LOG_EMERGENCY, "Emergency in %s remains unresolved",
-             city_name(pcity));
+    freelog(LOG_EMERGENCY, "Emergency in %s remains unresolved", 
+            city_name(pcity));
   } else {
-    log_base(LOG_EMERGENCY,
-             "Emergency in %s resolved by disbanding unit(s)",
-             city_name(pcity));
+    freelog(LOG_EMERGENCY, 
+            "Emergency in %s resolved by disbanding unit(s)",
+            city_name(pcity));
   }
 
   cleanup:

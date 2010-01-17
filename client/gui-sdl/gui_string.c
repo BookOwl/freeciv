@@ -170,7 +170,7 @@ SDL_String16 * create_string16(Uint16 *pInTextString,
   }
   
   if ((str->font = load_font(str->ptsize)) == NULL) {
-    log_error("create_string16: load_font failed");
+    freelog(LOG_ERROR, "create_string16: load_font failed");
     FC_FREE(str);
     return str;
   }
@@ -222,8 +222,8 @@ int write_text16(SDL_Surface * pDest, Sint16 x, Sint16 y,
   SDL_Surface *pText = create_text_surf_from_str16(pString);
 
   if (alphablit(pText, NULL, pDest, &dst_rect) < 0) {
-    log_error("write_text16: couldn't blit text to display: %s",
-              SDL_GetError());
+    freelog(LOG_ERROR, "write_text16: couldn't blit text to display: %s",
+	    SDL_GetError());
     FREESURFACE(pText);
     return -1;
   }
@@ -259,8 +259,9 @@ static SDL_Surface *create_str16_surf(SDL_String16 * pString)
 				    pString->text, pString->fgcol);
 
     if ((pText = SDL_DisplayFormat(pTmp)) == NULL) {
-      log_error("SDL_create_str16_surf: couldn't convert text "
-                "to display format: %s", SDL_GetError());
+      freelog(LOG_ERROR,
+	      "SDL_create_str16_surf: couldn't convert text "
+	      "to display format: %s", SDL_GetError());
       pText = pTmp;
     } else {
       FREESURFACE( pTmp );
@@ -275,11 +276,13 @@ static SDL_Surface *create_str16_surf(SDL_String16 * pString)
   }
 
   if (pText != NULL) {
-    log_debug("SDL_create_str16_surf: Font is generally %d big, and "
+    freelog(LOG_DEBUG,
+            "SDL_create_str16_surf: Font is generally %d big, and "
               "string is %hd big", TTF_FontHeight(pString->font), pText->h);
-    log_debug("SDL_create_str16_surf: String is %d length", pText->w);
+    freelog(LOG_DEBUG, "SDL_create_str16_surf: String is %d length",
+            pText->w);
   } else {
-    log_debug("SDL_create_str16_surf: pText NULL");
+    freelog(LOG_DEBUG, "SDL_create_str16_surf: pText NULL");
     pText = create_surf_alpha(0, 0, SDL_SWSURFACE);
   }
 
@@ -523,7 +526,7 @@ bool convert_string_to_const_surface_width(SDL_String16 *pString,
 	  change_ptsize16(pString, pString->ptsize - 1);
 	  w = str16size(pString).w;
 	} else {
-          log_error("Can't convert string to const width");
+	  freelog(LOG_ERROR, "Can't convert string to const width");
           break;
 	}
       }  
@@ -566,7 +569,7 @@ void change_ptsize16(SDL_String16 *pString, Uint16 new_ptsize)
   }
   
   if ((pBuf = load_font(new_ptsize)) == NULL) {
-    log_error("change_ptsize: load_font failed");
+    freelog(LOG_ERROR, "change_ptsize: load_font failed");
     return;
   }
 
@@ -604,8 +607,9 @@ static TTF_Font * load_font(Uint16 ptsize)
 
   /* Load Font */
   if ((font_tmp = TTF_OpenFont(pFont_with_FullPath, ptsize)) == NULL) {
-    log_error("load_font: Couldn't load %d pt font from %s: %s",
-              ptsize, pFont_with_FullPath, SDL_GetError());
+    freelog(LOG_ERROR,
+	    "load_font: Couldn't load %d pt font from %s: %s",
+	    ptsize, pFont_with_FullPath, SDL_GetError());
     return font_tmp;
   }
   
@@ -644,7 +648,8 @@ void unload_font(Uint16 ptsize)
   struct TTF_Font_Chain *Font_TAB_TMP = Font_TAB;
 
   if (Sizeof_Font_TAB == 0) {
-    log_error("unload_font: Trying unload from empty Font ARRAY");
+    freelog(LOG_ERROR,
+	    "unload_font: Trying unload from empty Font ARRAY");
     return;
   }
 
@@ -657,8 +662,9 @@ void unload_font(Uint16 ptsize)
   }
 
   if (index == Sizeof_Font_TAB) {
-    log_error("unload_font: Trying unload Font which is "
-              "not included in Font ARRAY");
+    freelog(LOG_ERROR,
+	    "unload_font: Trying unload Font which is "
+	    "not included in Font ARRAY");
     return;
   }
 

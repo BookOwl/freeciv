@@ -707,24 +707,24 @@ BITMAP *bmp_load_png(const char *filename)
 
   if (!(fp = fopen(filename, "rb"))) {
     MessageBox(NULL, "failed reading", filename, MB_OK);
-    log_fatal("Failed reading PNG file: \"%s\"", filename);
+    freelog(LOG_FATAL, "Failed reading PNG file: \"%s\"", filename);
     exit(EXIT_FAILURE);
   }
     
   if (!(pngp = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL,
 				      NULL))) {
 
-    log_fatal("Failed creating PNG struct");
+    freelog(LOG_FATAL, "Failed creating PNG struct");
     exit(EXIT_FAILURE);
   }
  
   if (!(infop = png_create_info_struct(pngp))) {
-    log_fatal("Failed creating PNG struct");
+    freelog(LOG_FATAL, "Failed creating PNG struct");
     exit(EXIT_FAILURE);
   }
    
   if (setjmp(pngp->jmpbuf)) {
-    log_fatal("Failed while reading PNG file: \"%s\"", filename);
+    freelog(LOG_FATAL, "Failed while reading PNG file: \"%s\"", filename);
     exit(EXIT_FAILURE);
   }
 

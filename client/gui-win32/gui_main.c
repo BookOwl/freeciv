@@ -617,18 +617,18 @@ static bool test_alphablend()
     if ((AlphaBlend = GetProcAddress(hmsimg32, "AlphaBlend"))) {
       /* fall through, do nothing */
     } else {
-      log_test("No AlphaBlend() in msimg32.dll, alpha blending disabled");
+      freelog(LOG_TEST, "No AlphaBlend() in msimg32.dll, alpha blending disabled");
       return FALSE;
     }
   } else {
-    log_test("No msimg32.dll, alpha blending disabled");
+    freelog(LOG_TEST, "No msimg32.dll, alpha blending disabled");
     return FALSE;
   }
 
   hdc = GetDC(map_window);
 
   if (GetDeviceCaps(hdc, BITSPIXEL) < 32) {
-    log_test("Not running in 32 bit color, alpha blending disabled");
+    freelog(LOG_TEST, "Not running in 32 bit color, alpha blending disabled");
     ReleaseDC(map_window, hdc);
     return FALSE;
   }
@@ -638,7 +638,7 @@ static bool test_alphablend()
 #define SB_NONE 0
 
   if (GetDeviceCaps(hdc, SHADEBLENDCAPS) == SB_NONE) {
-    log_test("Device does not support alpha blending, alpha blending disabled");
+    freelog(LOG_TEST, "Device does not support alpha blending, alpha blending disabled");
     ReleaseDC(map_window, hdc);
     return FALSE;
   }

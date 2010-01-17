@@ -25,5 +25,5 @@
 **************************************************************************/
 void popup_messageopt_dialog(void)
 {
-  log_debug("popup_messageopt_dialog : PORT ME");
+  freelog(LOG_DEBUG, "popup_messageopt_dialog : PORT ME");
 }
