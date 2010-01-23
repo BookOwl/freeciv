@@ -20,7 +20,6 @@
 #include "city.h"
 #include "fcintl.h"
 #include "game.h"
-#include "hash.h"
 #include "log.h"
 #include "mem.h"
 #include "movement.h"
@@ -35,12 +34,6 @@
 
 /* the very map */
 struct civ_map map;
-
-/* An entry in the start position table. */
-struct startpos_entry {
-  int key;
-  const struct nation_type *nation;
-};
 
 /* these are initialized from the terrain ruleset */
 struct terrain_misc terrain_control;
@@ -62,9 +55,6 @@ struct terrain_misc terrain_control;
  */
 const int DIR_DX[8] = { -1, 0, 1, -1, 1, -1, 0, 1 };
 const int DIR_DY[8] = { -1, -1, -1, 0, 0, 1, 1, 1 };
-
-static bool restrict_infra(const struct unit *punit, const struct tile *t1,
-                           const struct tile *t2);
 
 /****************************************************************************
   Return a bitfield of the specials on the tile that are infrastructure.
@@ -105,10 +95,7 @@ bool map_is_empty(void)
 void map_init(void)
 {
   map.topology_id = MAP_DEFAULT_TOPO;
-  map.num_continents = 0;
-  map.num_oceans = 0;
-  map.tiles = NULL;
-  map.startpos_table = NULL;
+  map.size = MAP_DEFAULT_SIZE;
 
   /* The [xy]size values are set in map_init_topology.  It is initialized
    * to a non-zero value because some places erronously use these values
@@ -116,25 +103,25 @@ void map_init(void)
   map.xsize = MAP_MIN_LINEAR_SIZE;  
   map.ysize = MAP_MIN_LINEAR_SIZE;
 
-  if (is_server()) {
-    map.server.size = MAP_DEFAULT_SIZE;
-    map.server.seed = MAP_DEFAULT_SEED;
-    map.server.riches = MAP_DEFAULT_RICHES;
-    map.server.huts = MAP_DEFAULT_HUTS;
-    map.server.landpercent = MAP_DEFAULT_LANDMASS;
-    map.server.wetness = MAP_DEFAULT_WETNESS;
-    map.server.steepness = MAP_DEFAULT_STEEPNESS;
-    map.server.generator = MAP_DEFAULT_GENERATOR;
-    map.server.startpos = MAP_DEFAULT_STARTPOS;
-    map.server.tinyisles = MAP_DEFAULT_TINYISLES;
-    map.server.separatepoles = MAP_DEFAULT_SEPARATE_POLES;
-    map.server.alltemperate = MAP_DEFAULT_ALLTEMPERATE;
-    map.server.temperature = MAP_DEFAULT_TEMPERATURE;
-    map.server.num_start_positions = 0;
-    map.server.have_resources = FALSE;
-    map.server.have_rivers_overlay = FALSE;
-    map.server.have_huts = FALSE;
-  }
+  map.seed = MAP_DEFAULT_SEED;
+  map.riches                = MAP_DEFAULT_RICHES;
+  map.huts                  = MAP_DEFAULT_HUTS;
+  map.landpercent           = MAP_DEFAULT_LANDMASS;
+  map.wetness               = MAP_DEFAULT_WETNESS;
+  map.steepness             = MAP_DEFAULT_STEEPNESS;
+  map.generator             = MAP_DEFAULT_GENERATOR;
+  map.startpos              = MAP_DEFAULT_STARTPOS;
+  map.tinyisles             = MAP_DEFAULT_TINYISLES;
+  map.separatepoles         = MAP_DEFAULT_SEPARATE_POLES;
+  map.alltemperate          = MAP_DEFAULT_ALLTEMPERATE;
+  map.temperature           = MAP_DEFAULT_TEMPERATURE;
+  map.tiles                 = NULL;
+  map.num_continents        = 0;
+  map.num_oceans            = 0;
+  map.num_start_positions   = 0;
+  map.have_resources = FALSE;
+  map.have_rivers_overlay   = FALSE;
+  map.have_huts             = FALSE;
 }
 
 /**************************************************************************
@@ -220,8 +207,8 @@ static void generate_map_indices(void)
 
 #if 0
   for (i = 0; i < tiles; i++) {
-    log_debug("%5d : (%3d,%3d) : %d", i,
-              array[i].dx, array[i].dy, array[i].dist);
+    freelog(LOG_DEBUG, "%5d : (%3d,%3d) : %d",
+	    i, array[i].dx, array[i].dy, array[i].dist);
   }
 #endif
 
@@ -244,9 +231,9 @@ void map_init_topology(bool set_sizes)
 {
   enum direction8 dir;
 
-  if (!set_sizes && is_server()) {
+  if (!set_sizes) {
     /* Set map.size based on map.xsize and map.ysize. */
-    map.server.size = (float)(map_num_tiles()) / 1000.0 + 0.5;
+    map.size = (float)(map_num_tiles()) / 1000.0 + 0.5;
   }
   
   /* sanity check for iso topologies*/
@@ -290,10 +277,11 @@ static void tile_init(struct tile *ptile)
   tile_clear_all_specials (ptile);
   ptile->resource = NULL;
   ptile->terrain  = T_UNKNOWN;
+  ptile->city     = NULL;
   ptile->units    = unit_list_new();
-  ptile->owner    = NULL; /* Not claimed by any player. */
-  ptile->claimer  = NULL;
-  ptile->worked   = NULL; /* No city working here. */
+  ptile->worked   = NULL; /* pointer to city working tile */
+  ptile->owner    = NULL; /* Tile not claimed by any nation. */
+  ptile->owner_source = NULL;
   ptile->spec_sprite = NULL;
 }
 
@@ -393,6 +381,7 @@ struct tile *index_to_tile(int index)
 ***************************************************************/
 static void tile_free(struct tile *ptile)
 {
+  unit_list_unlink_all(ptile->units);
   unit_list_free(ptile->units);
   if (ptile->spec_sprite) {
     free(ptile->spec_sprite);
@@ -406,20 +395,20 @@ static void tile_free(struct tile *ptile)
 **************************************************************************/
 void map_allocate(void)
 {
-  log_debug("map_allocate (was %p) (%d,%d)",
-            (void *) map.tiles, map.xsize, map.ysize);
+  freelog(LOG_DEBUG, "map_allocate (was %p) (%d,%d)",
+	  (void *)map.tiles, map.xsize, map.ysize);
 
   assert(map.tiles == NULL);
-  map.tiles = fc_calloc(MAP_INDEX_SIZE, sizeof(*map.tiles));
+  map.tiles = fc_malloc(MAP_INDEX_SIZE * sizeof(*map.tiles));
 
   /* Note this use of whole_map_iterate may be a bit sketchy, since the
    * tile values (ptile->index, etc.) haven't been set yet.  It might be
    * better to do a manual loop here. */
   whole_map_iterate(ptile) {
     ptile->index = ptile - map.tiles;
-    index_to_map_pos(&ptile->x, &ptile->y, tile_index(ptile));
-    index_to_native_pos(&ptile->nat_x, &ptile->nat_y, tile_index(ptile));
-    CHECK_INDEX(tile_index(ptile));
+    index_to_map_pos(&ptile->x, &ptile->y, ptile->index);
+    index_to_native_pos(&ptile->nat_x, &ptile->nat_y, ptile->index);
+    CHECK_INDEX(ptile->index);
     CHECK_MAP_POS(ptile->x, ptile->y);
     CHECK_NATIVE_POS(ptile->nat_x, ptile->nat_y);
 
@@ -428,12 +417,6 @@ void map_allocate(void)
 
   generate_city_map_indices();
   generate_map_indices();
-
-  if (map.startpos_table != NULL) {
-    hash_free(map.startpos_table);
-  }
-  map.startpos_table = hash_new_full(hash_fval_int, hash_fcmp_int,
-                                     NULL, free);
 }
 
 /***************************************************************
@@ -450,11 +433,6 @@ void map_free(void)
 
     free(map.tiles);
     map.tiles = NULL;
-
-    if (map.startpos_table) {
-      hash_free(map.startpos_table);
-      map.startpos_table = NULL;
-    }
   }
 }
 
@@ -577,13 +555,8 @@ bool is_cardinally_adj_to_ocean(const struct tile *ptile)
 ****************************************************************************/
 bool is_safe_ocean(const struct tile *ptile)
 {
-  adjc_iterate(ptile, adjc_tile) {
-    if (tile_terrain(adjc_tile) != T_UNKNOWN
-        && !terrain_has_flag(tile_terrain(adjc_tile), TER_UNSAFE_COAST)) {
-      return TRUE;
-    }
-  } adjc_iterate_end;
-  return FALSE;
+  return count_terrain_flag_near_tile(ptile, FALSE, TRUE,
+				      TER_UNSAFE_COAST) < 100;
 }
 
 /***************************************************************
@@ -591,28 +564,18 @@ bool is_safe_ocean(const struct tile *ptile)
 ***************************************************************/
 bool is_water_adjacent_to_tile(const struct tile *ptile)
 {
-  struct terrain* pterrain = tile_terrain(ptile);
-
-  if (T_UNKNOWN == pterrain) {
-    return FALSE;
-  }
-
-  if (tile_has_special(ptile, S_RIVER)
-   || tile_has_special(ptile, S_IRRIGATION)
-   || terrain_has_flag(pterrain, TER_OCEANIC)) {
+  if (ptile->terrain != T_UNKNOWN
+      && (is_ocean(ptile->terrain)
+	  || tile_has_special(ptile, S_RIVER)
+	  || tile_has_special(ptile, S_IRRIGATION))) {
     return TRUE;
   }
 
   cardinal_adjc_iterate(ptile, tile1) {
-    struct terrain* pterrain1 = tile_terrain(tile1);
-
-    if (T_UNKNOWN == pterrain1) {
-      continue;
-    }
-
-    if (tile_has_special(tile1, S_RIVER)
-     || tile_has_special(tile1, S_IRRIGATION)
-     || terrain_has_flag(pterrain1, TER_OCEANIC)) {
+    if (ptile->terrain != T_UNKNOWN
+	&& (is_ocean(tile1->terrain)
+	    || tile_has_special(tile1, S_RIVER)
+	    || tile_has_special(tile1, S_IRRIGATION))) {
       return TRUE;
     }
   } cardinal_adjc_iterate_end;
@@ -662,22 +625,20 @@ static int tile_move_cost_ptrs(struct unit *punit,
 
   if (punit) {
     pclass = unit_class(punit);
-    native = is_native_tile(unit_type(punit), t2);
+    native = is_native_terrain(punit, t2->terrain);
   }
 
   if (game.info.slow_invasions
-      && punit
-      && tile_city(t1) == NULL
-      && !is_native_tile(unit_type(punit), t1)
-      && is_native_tile(unit_type(punit), t2)) {
-    /* If "slowinvasions" option is turned on, units moving from
-     * non-native terrain (from transport) to native terrain lose all their
-     * movement.
-     * e.g. ground units moving from sea to land */
+      && punit 
+      && is_ground_unit(punit) 
+      && is_ocean(t1->terrain)
+      && !is_ocean(t2->terrain)) {
+    /* Ground units moving from sea to land lose all their movement
+     * if "slowinvasions" server option is turned on. */
     return punit->moves_left;
   }
 
-  if (punit && !uclass_has_flag(pclass, UCF_TERRAIN_SPEED)) {
+  if (punit && !pclass->move.terrain_affects) {
     return SINGLE_MOVE;
   }
 
@@ -686,18 +647,16 @@ static int tile_move_cost_ptrs(struct unit *punit,
    * leaving ships, so F_IGTER check has to be before native terrain
    * check. We want to give railroad bonus only to native units. */
   if (tile_has_special(t1, S_RAILROAD) && tile_has_special(t2, S_RAILROAD)
-      && native && !restrict_infra(punit, t1, t2)) {
+      && native) {
     return MOVE_COST_RAIL;
   }
   if (punit && unit_has_type_flag(punit, F_IGTER)) {
     return SINGLE_MOVE/3;
   }
   if (!native) {
-    /* Loading to transport or entering port */
     return SINGLE_MOVE;
   }
-  if (tile_has_special(t1, S_ROAD) && tile_has_special(t2, S_ROAD)
-      && !restrict_infra(punit, t1, t2)) {
+  if (tile_has_special(t1, S_ROAD) && tile_has_special(t2, S_ROAD)) {
     return MOVE_COST_ROAD;
   }
 
@@ -722,30 +681,7 @@ static int tile_move_cost_ptrs(struct unit *punit,
     }
   }
 
-  return tile_terrain(t2)->movement_cost * SINGLE_MOVE;
-}
-
-/****************************************************************************
-  Returns TRUE if there is a restriction with regard to the infrastructure,
-  i.e. at least one of the tiles t1 and t2 is claimed by a unfriendly
-  nation. This means that one can not use of the infrastructure (road,
-  railroad) on this tile.
-****************************************************************************/
-static bool restrict_infra(const struct unit *punit, const struct tile *t1,
-                           const struct tile *t2)
-{
-  struct player *plr1 = tile_owner(t1), *plr2 = tile_owner(t2);
-
-  if (!punit || !game.info.restrictinfra) {
-    return FALSE;
-  }
-
-  if ((plr1 && pplayers_at_war(plr1, unit_owner(punit)))
-      || (plr2 && pplayers_at_war(plr2, unit_owner(punit)))) {
-    return TRUE;
-  }
-
-  return FALSE;
+  return t2->terrain->movement_cost * SINGLE_MOVE;
 }
 
 /****************************************************************************
@@ -765,30 +701,29 @@ int map_move_cost_ai(const struct tile *tile0, const struct tile *tile1)
 {
   const int maxcost = 72; /* Arbitrary. */
 
-  assert(!is_server()
-	 || (tile_terrain(tile0) != T_UNKNOWN 
-	  && tile_terrain(tile1) != T_UNKNOWN));
+  assert(!is_server
+	 || (tile0->terrain != T_UNKNOWN && tile1->terrain != T_UNKNOWN));
 
   /* A ship can take the step if:
    * - both tiles are ocean or
    * - one of the tiles is ocean and the other is a city or is unknown
    *
    * Note tileX->terrain will only be T_UNKNOWN at the client. */
-  if (is_ocean_tile(tile0) && is_ocean_tile(tile1)) {
+  if (is_ocean(tile0->terrain) && is_ocean(tile1->terrain)) {
     return MOVE_COST_FOR_VALID_SEA_STEP;
   }
 
-  if (is_ocean_tile(tile0)
-      && (tile_city(tile1) || tile_terrain(tile1) == T_UNKNOWN)) {
+  if (is_ocean(tile0->terrain)
+      && (tile1->city || tile1->terrain == T_UNKNOWN)) {
     return MOVE_COST_FOR_VALID_SEA_STEP;
   }
 
-  if (is_ocean_tile(tile1)
-      && (tile_city(tile0) || tile_terrain(tile0) == T_UNKNOWN)) {
+  if (is_ocean(tile1->terrain)
+      && (tile0->city || tile0->terrain == T_UNKNOWN)) {
     return MOVE_COST_FOR_VALID_SEA_STEP;
   }
 
-  if (is_ocean_tile(tile0) || is_ocean_tile(tile1)) {
+  if (is_ocean(tile0->terrain) || is_ocean(tile1->terrain)) {
     /* FIXME: Shouldn't this return MOVE_COST_FOR_VALID_AIR_STEP?
      * Note that MOVE_COST_FOR_VALID_AIR_STEP is currently equal to
      * MOVE_COST_FOR_VALID_SEA_STEP. */
@@ -802,17 +737,9 @@ int map_move_cost_ai(const struct tile *tile0, const struct tile *tile1)
   The cost to move punit from where it is to tile x,y.
   It is assumed the move is a valid one, e.g. the tiles are adjacent.
 ***************************************************************/
-int map_move_cost_unit(struct unit *punit, const struct tile *ptile)
+int map_move_cost(struct unit *punit, const struct tile *ptile)
 {
   return tile_move_cost_ptrs(punit, punit->tile, ptile);
-}
-
-/***************************************************************
-  Move cost between two tiles
-***************************************************************/
-int map_move_cost(const struct tile *src_tile, const struct tile *dst_tile)
-{
-  return tile_move_cost_ptrs(NULL, src_tile, dst_tile);
 }
 
 /***************************************************************
@@ -1037,7 +964,7 @@ struct tile *rand_map_pos_filtered(void *data,
 
     whole_map_iterate(ptile) {
       if (filter(ptile, data)) {
-	positions[count] = tile_index(ptile);
+	positions[count] = ptile->index;
 	count++;
       }
     } whole_map_iterate_end;
@@ -1253,92 +1180,4 @@ bool is_singular_tile(const struct tile *ptile, int dist)
 	    || (!topo_has_flag(TF_WRAPY)
 		&& (ntl_y < dist || ntl_y >= NATURAL_HEIGHT - dist)));
   } do_in_natural_pos_end;
-}
-
-/****************************************************************************
-  Is there start positions set for map
-****************************************************************************/
-bool map_startpositions_set(void)
-{
-  if (!map.startpos_table) {
-    return FALSE;
-  }
-
-  return hash_num_entries(map.startpos_table) != 0;
-}
-
-/****************************************************************************
-  Set a start position at the given tile for the given nation. Clears any
-  existing start position at the tile.
-****************************************************************************/
-void map_set_startpos(const struct tile *ptile,
-                      const struct nation_type *pnation)
-{
-  struct startpos_entry *spe;
-
-  if (!map.startpos_table || !ptile) {
-    return;
-  }
-  map_clear_startpos(ptile);
-
-  spe = fc_calloc(1, sizeof(*spe));
-  spe->key = tile_index(ptile);
-  spe->nation = pnation;
-
-  hash_insert(map.startpos_table, FC_INT_TO_PTR(spe->key), spe);
-}
-
-/****************************************************************************
-  Returns the nation of the start position at the given tile, or NULL if
-  none exists there.
-****************************************************************************/
-bool map_has_startpos(const struct tile *ptile)
-{
-  struct startpos_entry *spe;
-
-  if (!map.startpos_table || !ptile) {
-    return FALSE;
-  }
-
-  spe = hash_lookup_data(map.startpos_table,
-                         FC_INT_TO_PTR(tile_index(ptile)));
-  if (!spe) {
-    return FALSE;
-  }
-
-  return TRUE;
-}
-
-/****************************************************************************
-  Returns the nation of the start position at the given tile, or NULL if
-  none exists there.
-****************************************************************************/
-const struct nation_type *map_get_startpos(const struct tile *ptile)
-{
-  struct startpos_entry *spe;
-
-  if (!map.startpos_table || !ptile) {
-    return NULL;
-  }
-
-  spe = hash_lookup_data(map.startpos_table,
-                         FC_INT_TO_PTR(tile_index(ptile)));
-  if (!spe) {
-    return NULL;
-  }
-
-  return spe->nation;
-}
-
-/****************************************************************************
-  Remove a start position at the given tile.
-****************************************************************************/
-void map_clear_startpos(const struct tile *ptile)
-{
-  if (!map.startpos_table || !ptile) {
-    return;
-  }
-
-  hash_delete_entry(map.startpos_table,
-                    FC_INT_TO_PTR(tile_index(ptile)));
 }

@@ -2,7 +2,7 @@
 [tilespec]
 
 ; Format and options of this tilespec file:
-options = "+tilespec4+2007.Oct.26"
+options = "+tilespec4"
 
 ; A simple name for the tileset specified by this file:
 name = "MacroIsoTrident"
@@ -17,17 +17,16 @@ normal_tile_height = 32
 small_tile_width   = 15
 small_tile_height  = 20
 
-; Basic tile style.
-is_hex = 0
 is_isometric = 1
+is_hex = 0
 
 ; Use roadstyle 0 (old iso style)
 roadstyle = 0
 
-; Was fogstyle 0 (old iso style)
+; Use fogstyle  (old iso style)
 fogstyle = 2
 
-; Was darkness style 1 (single-sprite)
+; Use darkness style 1 (single-sprite)
 darkness_style = 4
  
 ; offset the flags by this amount when drawing units
@@ -62,7 +61,6 @@ files =
   "misc/citybar.spec",
   "isotrident/terrain1.spec",
   "isotrident/terrain2.spec",
-  "isotrident/water.spec",
   "isotrident/tiles.spec",
   "isotrident/grid.spec",
   "misc/small.spec",
@@ -77,7 +75,6 @@ files =
   "misc/techs.spec",
   "misc/treaty.spec",
   "misc/icons.spec",
-  "misc/editor.spec",
   "isotrident/fog.spec",
   "isotrident/nuke.spec",
   "trident/explosions.spec",
@@ -91,115 +88,76 @@ files =
 ; Terrain info - see README.graphics
 
 [layer0]
-match_types = "land", "water"
+match_style = "BOOL"
+match_types = "ocean", "other"
 
 [layer1]
-match_types = "forest", "hills", "mountains", "ridge"
+match_style = "BOOL"
+match_types = "forest", "hills", "mountains"
 
-; Water graphics referenced by terrain.ruleset
-;
-[tile_coast]
+[terrain_arctic]
 is_blended = 1
 num_layers = 1
-layer0_match_type = "water"
-layer0_match_with = "water"
-layer0_sprite_type = "corner"
-
-[tile_shelf]
-is_blended = 0
-num_layers = 1
-layer0_match_type = "water"
-layer0_match_with = "water"
-layer0_sprite_type = "corner"
-
-[tile_floor]
-is_blended = 0
-num_layers = 1
-layer0_match_type = "water"
-layer0_match_with = "water"
-layer0_sprite_type = "corner"
-
-[tile_trench]
-is_blended = 0
-num_layers = 1
-layer0_match_type = "water"
-layer0_match_with = "water"
-layer0_sprite_type = "corner"
-
-[tile_ridge]
-is_blended = 0
-num_layers = 2
-layer0_match_type = "water"
-layer0_match_with = "water"
-layer0_sprite_type = "corner"
-layer1_match_type = "ridge"
-layer1_match_with = "ridge"
-
-[tile_vent]
-is_blended = 0
-num_layers = 1
-layer0_match_type = "water"
-layer0_match_with = "water"
-layer0_sprite_type = "corner"
-
-; Land graphics referenced by terrain.ruleset
-;
-[tile_arctic]
-is_blended = 1
-num_layers = 1
-layer0_match_type = "land"
+layer0_match_type = "other"
 mine_sprite = "tx.oil_mine"
 
-[tile_desert]
+[terrain_desert]
 is_blended = 1
 num_layers = 1
-layer0_match_type = "land"
+layer0_match_type = "other"
 mine_sprite = "tx.oil_mine"
 
-[tile_forest]
+[terrain_forest]
 is_blended = 1
 num_layers = 2
-layer0_match_type = "land"
+layer0_match_type = "other"
 layer1_match_type = "forest"
-layer1_match_with = "forest"
+layer1_match_style = "bool"
 
-[tile_grassland]
+[terrain_grassland]
 is_blended = 1
 num_layers = 1
-layer0_match_type = "land"
+layer0_match_type = "other"
 
-[tile_hills]
+[terrain_hills]
 is_blended = 1
 num_layers = 2
-layer0_match_type = "land"
+layer0_match_type = "other"
 layer1_match_type = "hills"
-layer1_match_with = "hills"
+layer1_match_style = "bool"
 mine_sprite = "tx.mine"
 
-[tile_jungle]
+[terrain_jungle]
 is_blended = 1
 num_layers = 1
-layer0_match_type = "land"
+layer0_match_type = "other"
 
-[tile_mountains]
+[terrain_mountains]
 is_blended = 1
 num_layers = 2
-layer0_match_type = "land"
+layer0_match_type = "other"
 layer1_match_type = "mountains"
-layer1_match_with = "mountains"
+layer1_match_style = "bool"
 mine_sprite = "tx.mine"
 
-[tile_plains]
+[terrain_ocean]
 is_blended = 1
 num_layers = 1
-layer0_match_type = "land"
+layer0_match_style = "bool"
+layer0_match_type = "ocean"
+layer0_cell_type = "rect"
 
-[tile_swamp]
+[terrain_plains]
 is_blended = 1
 num_layers = 1
-layer0_match_type = "land"
+layer0_match_type = "other"
 
-[tile_tundra]
+[terrain_swamp]
 is_blended = 1
 num_layers = 1
-layer0_match_type = "land"
+layer0_match_type = "other"
+
+[terrain_tundra]
+is_blended = 1
+num_layers = 1
+layer0_match_type = "other"

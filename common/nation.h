@@ -23,9 +23,6 @@
 /* Changing this value will break network compatibility. */
 #define NO_NATION_SELECTED (NULL)
 
-#define NATION_NONE -1
-#define NATION_ANY  -2
-
 /* 
  * Purpose of this constant is to catch invalid ruleset and network
  * data and to allow static allocation of the nation_info packet.
@@ -72,7 +69,7 @@ struct nation_group {
 
 /* Pointer values are allocated on load then freed in free_nations(). */
 struct nation_type {
-  Nation_type_id item_number;
+  Nation_type_id index;
   struct name_translation adjective;
   struct name_translation noun_plural;
   char flag_graphic_str[MAX_LEN_NAME];
@@ -83,8 +80,7 @@ struct nation_type {
   struct nation_city *city_names;	/* The default city names. */
   char *legend;				/* may be empty */
 
-  bool is_playable;
-  enum barbarian_type barb_type;
+  bool is_playable, is_barbarian;
 
   /* civilwar_nations is a NO_NATION_SELECTED-terminated list of index of
    * the nations that can fork from this one.  parent_nations is the inverse
@@ -137,7 +133,7 @@ int city_style_of_nation(const struct nation_type *nation);
 
 /* Ancillary nation routines */
 bool is_nation_playable(const struct nation_type *nation);
-enum barbarian_type nation_barbarian_type(const struct nation_type *nation);
+bool is_nation_barbarian(const struct nation_type *nation);
 bool can_conn_edit_players_nation(const struct connection *pconn,
 				  const struct player *pplayer);
 
@@ -183,16 +179,20 @@ void nations_alloc(int num);
 void nations_free(void);
 void nation_city_names_free(struct nation_city *city_names);
 
-#include "iterator.h"
-struct nation_iter;
-size_t nation_iter_sizeof(void);
-struct iterator *nation_iter_init(struct nation_iter *it);
+struct nation_type *nation_array_first(void);
+const struct nation_type *nation_array_last(void);
 
 /* Iterate over nations.  This iterates over all nations, including
  * unplayable ones (use is_nation_playable to filter if necessary). */
-#define nations_iterate(NAME_pnation)\
-  generic_iterate(struct nation_iter, struct nation_type *,\
-                  NAME_pnation, nation_iter_sizeof, nation_iter_init)
-#define nations_iterate_end generic_iterate_end
+#define nations_iterate(_p)						\
+{									\
+  struct nation_type *_p = nation_array_first();			\
+  if (NULL != _p) {							\
+    for (; _p <= nation_array_last(); _p++) {
+
+#define nations_iterate_end						\
+    }									\
+  }									\
+}
 
 #endif  /* FC__NATION_H */

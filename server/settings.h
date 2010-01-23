@@ -61,7 +61,7 @@ typedef bool (*string_validate_func_t)(const char * value,
                                        struct connection *pconn,
                                        const char **reject_message);
 
-struct setting {
+struct settings_s {
   const char *name;
   enum sset_class sclass;
   bool to_client;
@@ -89,95 +89,27 @@ struct setting {
    * legal. The char * is an error message in the case of reject. 
    */
 
-  union {
-    /*** bool part ***/
-    struct {
-      bool *const pvalue;
-      const bool default_value;
-      const bool_validate_func_t validate;
-    } boolean;
-    /*** int part ***/
-    struct {
-      int *const pvalue;
-      const int default_value;
-      const int min_value;
-      const int max_value;
-      const int_validate_func_t validate;
-    } integer;
-    /*** string part ***/
-    struct {
-      char *const value;
-      const char *const default_value;
-      const size_t value_size;
-      const string_validate_func_t validate;
-    } string;
-  };
+  /*** bool part ***/
+  bool *bool_value;
+  bool bool_default_value;
+  bool_validate_func_t bool_validate;
+
+  /*** int part ***/
+  int *int_value;
+  int int_default_value;
+  int_validate_func_t int_validate;
+  int int_min_value, int_max_value;
+
+  /*** string part ***/
+  char *string_value;
+  const char *string_default_value;
+  string_validate_func_t string_validate;
+  size_t string_value_size;	/* max size we can write into string_value */
 };
 
+extern struct settings_s settings[];
 extern const int SETTINGS_NUM;
 
-struct setting *setting_by_number(int id);
-int setting_number(const struct setting *pset);
-
-const char *setting_name(const struct setting *pset);
-const char *setting_short_help(const struct setting *pset);
-const char *setting_extra_help(const struct setting *pset);
-enum sset_type setting_type(const struct setting *pset);
-enum sset_level setting_level(const struct setting *pset);
-
-const char *setting_category_name(const struct setting *pset);
-const char *setting_level_name(const struct setting *pset);
-
-bool setting_is_changeable(const struct setting *pset,
-                           struct connection *caller,
-                           const char **reject_msg);
-bool setting_is_visible(const struct setting *pset,
-                        struct connection *caller);
-
-bool setting_bool_get(const struct setting *pset);
-bool setting_bool_def(const struct setting *pset);
-bool setting_bool_set(struct setting *pset, bool val,
-                      struct connection *caller, const char **reject_msg);
-bool setting_bool_validate(const struct setting *pset, bool val,
-                           struct connection *caller,
-                           const char **reject_msg);
-
-int setting_int_get(const struct setting *pset);
-int setting_int_def(const struct setting *pset);
-int setting_int_min(const struct setting *pset);
-int setting_int_max(const struct setting *pset);
-bool setting_int_set(struct setting *pset, int val,
-                     struct connection *caller, const char **reject_msg);
-bool setting_int_validate(const struct setting *pset, int val,
-                          struct connection *caller,
-                          const char **reject_msg);
-
-const char *setting_str_get(const struct setting *pset);
-const char *setting_str_def(const struct setting *pset);
-bool setting_str_set(struct setting *pset, const char *val,
-                     struct connection *caller, const char **reject_msg);
-bool setting_str_validate(const struct setting *pset, const char *val,
-                          struct connection *caller,
-                          const char **reject_msg);
-
-/* iterate over all settings */
-#define settings_iterate(_pset)                                            \
-{                                                                          \
-  int id;                                                                  \
-  for (id = 0; id < SETTINGS_NUM; id++) {                                  \
-    struct setting *_pset = setting_by_number(id);
-
-#define settings_iterate_end                                               \
-  }                                                                        \
-}
-
-void settings_init(void);
-void settings_reset(void);
-void settings_turn(void);
-void settings_free(void);
-
-void send_server_settings(struct conn_list *dest);
-void send_server_hack_level_settings(struct conn_list *dest);
-void send_server_setting(struct conn_list *dest, const struct setting *pset);
+bool setting_is_changeable(int setting_id);
 
 #endif				/* FC__SETTINGS_H */

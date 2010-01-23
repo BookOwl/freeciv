@@ -23,16 +23,12 @@
 #include <X11/Xaw/Command.h>
 #include <X11/Xaw/List.h>
 
-/* utility */
-#include "fcintl.h"
-#include "log.h"
-#include "support.h"
-
-/* common */
 #include "game.h"
 
-/* client */
-#include "client_main.h"
+#include "fcintl.h"
+#include "support.h"
+
+#include "civclient.h"
 #include "connectdlg_g.h"
 #include "dialogs_g.h"
 
@@ -73,25 +69,15 @@ enum client_pages get_client_page(void)
 **************************************************************************/
 void set_client_page(enum client_pages page)
 {
-  /* PORTME, PORTME, PORTME */
-  switch (page) {
-  case PAGE_MAIN:
-    /* FIXME: call main/intro page rather than falling to network page */
-    gui_server_connect();
-    break;
-  case PAGE_GAME:
+  /* PORTME */
+  if (page == PAGE_GAME) {
     if (old_page == PAGE_START) {
       popdown_start_page();
     }
-    break;
-  case PAGE_START:
-    popup_start_page();
-    break;
-  case PAGE_SCENARIO:
-  case PAGE_LOAD:
-  case PAGE_NETWORK:
-  case PAGE_GGZ:
-    break;
+  } else {
+    if (page == PAGE_START) {
+      popup_start_page();
+    }
   }
 
   old_page = page;
@@ -221,12 +207,12 @@ void update_start_page(void)
 
     j = 0;
     players_iterate(pplayer) {
-      if (pplayer->ai_data.control) {
+      if (pplayer->ai.control) {
 	name = _("<AI>");
       } else {
 	name = pplayer->username;
       }
-      is_ready = pplayer->ai_data.control ? TRUE: pplayer->is_ready;
+      is_ready = pplayer->ai.control ? TRUE: pplayer->is_ready;
       if (pplayer->nation == NO_NATION_SELECTED) {
 	nation = _("Random");
 	leader = "";
@@ -241,13 +227,13 @@ void update_start_page(void)
 		  is_ready ? " Yes " : " No  ",
 		  leader,
 		  nation,
-		  player_number(pplayer));
+		  pplayer->player_no);
 
       namelist_ptrs[j]=namelist_text[j];
       j++;
     } players_iterate_end;
     conn_list_iterate(game.est_connections, pconn) {
-      if (NULL != pconn->playing && !pconn->observer) {
+      if (pconn->player && !pconn->observer) {
 	continue; /* Already listed above. */
       }
       name = pconn->username;
@@ -287,8 +273,8 @@ void start_page_cancel_callback(Widget w, XtPointer client_data,
 void start_page_nation_callback(Widget w, XtPointer client_data,
 				XtPointer call_data)
 {
-  if (NULL != client.conn.playing) {
-    popup_races_dialog(client.conn.playing);
+  if (game.player_ptr) {
+    popup_races_dialog(game.player_ptr);
   }
 }
 
@@ -308,4 +294,13 @@ void start_page_start_callback(Widget w, XtPointer client_data,
 void start_page_msg_close(Widget w)
 {
   popdown_start_page();
+}
+
+/****************************************************************************
+  Refresh all vote related GUI widgets. Called by the voteinfo module when
+  the client receives new vote information from the server.
+****************************************************************************/
+void voteinfo_gui_update(void)
+{
+  /* PORTME */
 }

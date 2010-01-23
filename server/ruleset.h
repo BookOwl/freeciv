@@ -15,7 +15,6 @@
 
 struct conn_list;
 
-/* functions */
 void load_rulesets(void);
 void send_rulesets(struct conn_list *dest);
 

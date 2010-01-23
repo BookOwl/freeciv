@@ -4,7 +4,7 @@ name=_("American")
 plural=_("?plural:Americans")
 groups="Modern", "American"
 legend=_("Formally named the United States of America.  Independent from\
- Great Britain after a revolution in 1776-1783 AD.")
+ Great Britain after a revolution in 1776-1783AD.")
 leader="George Washington",
        "Alexander Hamilton",
        "Benjamin Franklin",
@@ -48,8 +48,8 @@ flag_alt = "-"
 city_style = "Celtic"
 
 ruler_titles = { "government",      "male_title",      "female_title"
-                 "Republic",        _("Speaker"),      _("?female:Speaker")
-                 "Fundamentalism",  _("Reverend"),     _("?female:Reverend")
+                 "Republic",        _("Speaker"),      _("Speaker")
+                 "Fundamentalism",  _("Reverend"),     _("Reverend")
                }
 
 init_techs=""

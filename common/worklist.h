@@ -23,31 +23,43 @@
 
 /* a worklist */
 struct worklist {
+  bool is_valid;
   int length;
-  struct universal entries[MAX_LEN_WORKLIST];
+  char name[MAX_LEN_NAME];
+  struct city_production entries[MAX_LEN_WORKLIST];
 };
 
 void worklist_init(struct worklist *pwl);
 
 int worklist_length(const struct worklist *pwl);
 bool worklist_is_empty(const struct worklist *pwl);
-bool worklist_peek(const struct worklist *pwl, struct universal *prod);
+bool worklist_peek(const struct worklist *pwl, struct city_production *prod);
 bool worklist_peek_ith(const struct worklist *pwl,
-		       struct universal *prod, int idx);
+		       struct city_production *prod, int idx);
 void worklist_advance(struct worklist *pwl);
 
 void worklist_copy(struct worklist *dst, const struct worklist *src);
 void worklist_remove(struct worklist *pwl, int idx);
-bool worklist_append(struct worklist *pwl, struct universal prod);
-bool worklist_insert(struct worklist *pwl, struct universal prod,
+bool worklist_append(struct worklist *pwl, struct city_production prod);
+bool worklist_insert(struct worklist *pwl, struct city_production prod,
 		     int idx);
 bool are_worklists_equal(const struct worklist *wlist1,
 			 const struct worklist *wlist2);
 
+/* Functions to load and save a worklist from a registry file.  The path
+ * is a printf-style string giving the registry prefix (which must be
+ * the same for saving and loading). */
+void worklist_load(struct section_file *file, struct worklist *pwl,
+		   const char *path, ...)
+  fc__attribute((__format__ (__printf__, 3, 4)));
+void worklist_save(struct section_file *file, struct worklist *pwl,
+                   int max_length, const char *path, ...)
+  fc__attribute((__format__ (__printf__, 4, 5)));
+
 /* Iterate over all entries in the worklist. */
 #define worklist_iterate(_list, _p)					\
 {									\
-  struct universal _p;						\
+  struct city_production _p;						\
   int _p##_index = 0;							\
 									\
   while (_p##_index < worklist_length(_list)) {				\

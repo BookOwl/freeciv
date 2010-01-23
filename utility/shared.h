@@ -81,13 +81,6 @@
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 #define ADD_TO_POINTER(p, n) ((void *)((char *)(p)+(n)))
 
-#define FC_INT_TO_PTR(i) ((void *) (unsigned long) (i))
-#define FC_PTR_TO_INT(p) ((int) (unsigned long) (p))
-#define FC_UINT_TO_PTR(u) ((void *) (unsigned long) (u))
-#define FC_PTR_TO_UINT(p) ((unsigned int) (unsigned long) (p))
-#define FC_SIZE_TO_PTR(s) ((void *) (unsigned long) (s))
-#define FC_PTR_TO_SIZE(p) ((size_t) (unsigned long) (p))
-
 /****************************************************************************
   Used to initialize an array 'a' of size 'size' with value 'val' in each
   element. Note that the value is evaluated for each element.
@@ -156,12 +149,10 @@ bool is_ascii_name(const char *name);
 bool is_base64url(const char *s);
 bool is_safe_filename(const char *name);
 void randomize_base64url_string(char *s, size_t n);
+const char *textyear(int year);
 
-int base_compare_strings(const char *first, const char *second);
 int compare_strings(const void *first, const void *second);
 int compare_strings_ptrs(const void *first, const void *second);
-int compare_strings_strvec(const char *const *first,
-                           const char *const *second);
 
 char *skip_leading_spaces(char *s);
 void remove_leading_trailing_spaces(char *s);
@@ -178,44 +169,37 @@ char *end_of_strn(char *str, int *nleft);
 int cat_snprintf(char *str, size_t n, const char *format, ...)
      fc__attribute((__format__ (__printf__, 3, 4)));
 
-#define die(format, ...) \
-  real_die(__FILE__, __FUNCTION__, __LINE__, format, ## __VA_ARGS__)
-void real_die(const char *file, const char *function, int line,
-              const char *format, ...)
-              fc__attribute((__format__ (__printf__, 4, 5)));
+#define die(...) real_die(__FILE__, __LINE__, __VA_ARGS__)
+void real_die(const char *file, int line, const char *format, ...)
+      fc__attribute((__format__ (__printf__, 3, 4)));
 
 /**************************************************************************
 ...
 **************************************************************************/
-struct fileinfo {
-  char *name;           /* descriptive file name string */
-  char *fullname;       /* full absolute filename */
-  time_t mtime;         /* last modification time  */
+struct datafile {
+  char *name;		/* descriptive file name string */
+  char *fullname;	/* full absolute filename */
+  time_t mtime;		/* last modification time  */
 };
 
-#define SPECLIST_TAG fileinfo
-#define SPECLIST_TYPE struct fileinfo
+#define SPECLIST_TAG datafile
+#define SPECLIST_TYPE struct datafile
 #include "speclist.h"
-#define fileinfo_list_iterate(list, pnode) \
-  TYPED_LIST_ITERATE(struct fileinfo, list, pnode)
-#define fileinfo_list_iterate_end LIST_ITERATE_END
-
+#define datafile_list_iterate(list, pnode) \
+  TYPED_LIST_ITERATE(struct datafile, list, pnode)
+#define datafile_list_iterate_end LIST_ITERATE_END
+                                                                               
 char *user_home_dir(void);
 char *user_username(char *buf, size_t bufsz);
   
-const struct strvec *get_data_dirs(void);
-const struct strvec *get_save_dirs(void);
-const struct strvec *get_scenario_dirs(void);
-
-struct strvec *fileinfolist(const struct strvec *dirs, const char *suffix);
-struct fileinfo_list *fileinfolist_infix(const struct strvec *dirs,
+const char **get_data_dirs(int *num_dirs);
+  
+char **datafilelist(const char *suffix);
+struct datafile_list *datafilelist_infix(const char *subpath,
                                          const char *infix, bool nodups);
-void fileinfo_list_free_all(struct fileinfo_list *files);
-const char *fileinfoname(const struct strvec *dirs, const char *filename);
-struct strvec *fileinfonames(const struct strvec *dirs,
-                             const char *filename);
-const char *fileinfoname_required(const struct strvec *dirs,
-                                  const char *filename);
+char *datafilename(const char *filename);
+char **datafilenames(const char *filename);
+char *datafilename_required(const char *filename);
 
 char *get_langname(void);
 void init_nls(void);
@@ -252,26 +236,13 @@ enum m_pre_result match_prefix(m_pre_accessor_fn_t accessor_fn,
                                m_strlen_fn_t len_fn,
 			       const char *prefix,
 			       int *ind_result);
-enum m_pre_result match_prefix_full(m_pre_accessor_fn_t accessor_fn,
-                                    size_t n_names,
-                                    size_t max_len_name,
-                                    m_pre_strncmp_fn_t cmp_fn,
-                                    m_strlen_fn_t len_fn,
-                                    const char *prefix,
-                                    int *ind_result,
-                                    int *matches,
-                                    int max_matches,
-                                    int *pnum_matches);
 
-char *get_multicast_group(bool ipv6_prefered);
+char *get_multicast_group(void);
 void interpret_tilde(char* buf, size_t buf_size, const char* filename);
 char *interpret_tilde_alloc(const char* filename);
 
 bool make_dir(const char *pathname);
 bool path_is_absolute(const char *filename);
 
-char scanin(const char **buf, char *delimiters, char *dest, int size);
-
-void array_shuffle(int *array, int n);
-
+char scanin(char **buf, char *delimiters, char *dest, int size);
 #endif  /* FC__SHARED_H */

@@ -15,7 +15,7 @@ sprites =
 		"b.airport", "buildings/airport"
 		"b.aqueduct", "buildings/aqueduct"
 		"b.bank", "buildings/bank"
-		"b.barracks_i", "buildings/barracks_i"
+		"b.barracks", "buildings/barracks_i"
 		"b.barracks_ii", "buildings/barracks_ii"
 		"b.barracks_iii", "buildings/barracks_iii"
 		"b.capitalization", "buildings/capitalization"

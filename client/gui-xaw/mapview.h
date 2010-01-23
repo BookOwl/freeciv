@@ -27,8 +27,7 @@ Pixmap get_thumb_pixmap(int onoff);
 Pixmap get_citizen_pixmap(enum citizen_category type, int cnum,
 			  struct city *pcity);
 
-void put_unit_pixmap_city_overlays(struct unit *punit, Pixmap pm,
-                                   int *upkeep_cost, int happy_cost);
+void put_unit_pixmap_city_overlays(struct unit *punit, Pixmap pm);
 
 void overview_canvas_expose(Widget w, XEvent *event, Region exposed, 
 			    void *client_data);

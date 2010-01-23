@@ -1,10 +1,12 @@
 ## Process this file with automake to produce Makefile.in
 
-noinst_LTLIBRARIES = libgui-sdl.la
+noinst_LIBRARIES = libguiclient.a
 
-AM_CPPFLAGS = -I$(srcdir)/.. -I$(srcdir)/../include -I$(top_srcdir)/utility -I$(top_srcdir)/common -I$(top_srcdir)/common/aicore -I$(srcdir)/../agents $(GUI_sdl_CFLAGS) $(SOUND_CFLAGS)
+AM_CPPFLAGS = -I$(srcdir)/.. -I$(srcdir)/../include -I$(top_srcdir)/utility -I$(top_srcdir)/common -I$(top_srcdir)/common/aicore -I../../intl -I$(srcdir)/../agents $(CLIENT_CFLAGS)
 
-libgui_sdl_la_SOURCES = \
+## Above, note -I../../intl instead of -I$(top_srdir/intl) is deliberate.
+
+libguiclient_a_SOURCES = \
 	SDL_rotozoom.c	\
 	SDL_rotozoom.h	\
 	SDL_ttf.c	\
@@ -88,8 +90,6 @@ libgui_sdl_la_SOURCES = \
 	themespec.h	\
 	unistring.c	\
 	unistring.h	\
-	voteinfo_bar.c	\
-	voteinfo_bar.h	\
 	widget.c	\
 	widget.h	\
 	widget_button.c \

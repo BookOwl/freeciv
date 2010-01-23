@@ -16,19 +16,16 @@
 #include "shared.h"		/* bool type */
 
 #include "fc_types.h"
-#include "featured_text.h"      /* struct text_tag_list */
 #include "nation.h"		/* Nation_type_id */
 #include "terrain.h"		/* enum tile_special_type */
-#include "unitlist.h"
+#include "unitlist.h"           /* struct unit_list */
 
 struct packet_nations_selected_info;
 
 void popup_notify_goto_dialog(const char *headline, const char *lines,
-			      const struct text_tag_list *tags,
-                              struct tile *ptile);
+			      struct tile *ptile);
 void popup_notify_dialog(const char *caption, const char *headline,
-                         const char *lines);
-void popup_connect_msg(const char *headline, const char *message);
+			 const char *lines);
 
 void popup_races_dialog(struct player *pplayer);
 void popdown_races_dialog(void);
@@ -48,8 +45,7 @@ void close_diplomat_dialog(void);
 void popup_incite_dialog(struct city *pcity, int cost);
 void popup_bribe_dialog(struct unit *punit, int cost);
 void popup_sabotage_dialog(struct city *pcity);
-void popup_pillage_dialog(struct unit *punit, bv_special may_pillage,
-                          bv_bases bases);
+void popup_pillage_dialog(struct unit *punit, bv_special may_pillage);
 void popup_upgrade_dialog(struct unit_list *punits);
 void popup_tileset_suggestion_dialog(void);
 bool popup_theme_suggestion_dialog(const char *theme_name);

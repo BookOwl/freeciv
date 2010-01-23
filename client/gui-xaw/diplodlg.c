@@ -32,26 +32,20 @@
 #include <X11/Xaw/AsciiText.h>  
 #include <X11/Xaw/Viewport.h>
 
-/* utility */
 #include "fcintl.h"
-#include "log.h"
+#include "game.h"
+#include "government.h"
+#include "map.h"
 #include "mem.h"
+#include "packets.h"
+#include "player.h"
 #include "shared.h"
 #include "support.h"
 
-/* common */
-#include "diptreaty.h"
-#include "government.h"
-#include "map.h"
-#include "packets.h"
-#include "player.h"
-
-/* client */
-#include "client_main.h"
-#include "climisc.h"
-
-/* gui-xaw */
 #include "chatline.h"
+#include "climisc.h"
+#include "clinet.h"
+#include "diptreaty.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "mapview.h"
@@ -226,7 +220,7 @@ static void popup_diplomacy_dialog(int other_player_id)
 {
   struct Diplomacy_dialog *pdialog = find_diplomacy_dialog(other_player_id);
 
-  if (NULL == client.conn.playing || client.conn.playing->ai_data.control) {
+  if (game.player_ptr->ai.control) {
     return;			/* Don't show if we are AI controlled. */
   }
 
@@ -234,7 +228,7 @@ static void popup_diplomacy_dialog(int other_player_id)
     Position x, y;
     Dimension width, height;
 
-    pdialog = create_diplomacy_dialog(client.conn.playing,
+    pdialog = create_diplomacy_dialog(game.player_ptr,
 				      player_by_number(other_player_id));
     XtVaGetValues(toplevel, XtNwidth, &width, XtNheight, &height, NULL);
     XtTranslateCoords(toplevel, (Position) width / 10,
@@ -252,25 +246,23 @@ static void popup_diplomacy_dialog(int other_player_id)
 static int fill_diplomacy_tech_menu(Widget popupmenu, 
 				    struct player *plr0, struct player *plr1)
 {
-  int flag = 0;
+  int i, flag;
   
-  advance_index_iterate(A_FIRST, i) {
-    if (player_invention_state(plr0, i) == TECH_KNOWN
-        && player_invention_reachable(plr1, i)
-        && (player_invention_state(plr1, i) == TECH_UNKNOWN
-	    || player_invention_state(plr1, i) == TECH_PREREQS_KNOWN)) {
+  for(i=A_FIRST, flag=0; i<game.control.num_tech_types; i++) {
+    if (get_invention(plr0, i) == TECH_KNOWN
+        && (get_invention(plr1, i) == TECH_UNKNOWN
+	    || get_invention(plr1, i) == TECH_REACHABLE)
+        && tech_is_available(plr1, i)) {
       Widget entry=
-	XtVaCreateManagedWidget(advance_name_translation(advance_by_number(i)),
-				smeBSBObjectClass,
-				popupmenu,
-				NULL);
+	XtVaCreateManagedWidget(advance_name_translation(i), smeBSBObjectClass, 
+				popupmenu, NULL);
       XtAddCallback(entry, XtNcallback, diplomacy_dialog_tech_callback,
 			 INT_TO_XTPOINTER((player_number(plr0) << 24) |
 					 (player_number(plr1) << 16) |
 					 i));
       flag=1;
     }
-  } advance_index_iterate_end;
+  }
   return flag;
 }
 
@@ -700,13 +692,13 @@ void diplomacy_dialog_tech_callback(Widget w, XtPointer client_data,
   int giver = (choice >> 24) & 0xff, dest = (choice >> 16) & 0xff, other;
   int tech = choice & 0xffff;
 
-  if (player_by_number(giver) == client.conn.playing) {
+  if (giver == game.info.player_idx) {
     other = dest;
   } else {
     other = giver;
   }
 
-  dsend_packet_diplomacy_create_clause_req(&client.conn, other, giver,
+  dsend_packet_diplomacy_create_clause_req(&aconnection, other, giver,
 					   CLAUSE_ADVANCE, tech);
 }
 
@@ -721,13 +713,13 @@ void diplomacy_dialog_city_callback(Widget w, XtPointer client_data,
   int giver = (choice >> 24) & 0xff, dest = (choice >> 16) & 0xff, other;
   int city = choice & 0xffff;
 
-  if (player_by_number(giver) == client.conn.playing) {
+  if (giver == game.info.player_idx) {
     other = dest;
   } else {
     other = giver;
   }
 
-  dsend_packet_diplomacy_create_clause_req(&client.conn, other, giver,
+  dsend_packet_diplomacy_create_clause_req(&aconnection, other, giver,
 					   CLAUSE_CITY, city);
 }
 
@@ -745,7 +737,7 @@ void diplomacy_dialog_erase_clause_callback(Widget w, XtPointer client_data,
 
     clause_list_iterate(pdialog->treaty.clauses, pclause) {
       if (i == ret->list_index) {
-	dsend_packet_diplomacy_remove_clause_req(&client.conn,
+	dsend_packet_diplomacy_remove_clause_req(&aconnection,
 						 player_number(pdialog->treaty.plr1),
 						 player_number(pclause->from),
 						 pclause->type,
@@ -769,7 +761,7 @@ void diplomacy_dialog_map_callback(Widget w, XtPointer client_data,
        pdialog->dip_map_menubutton0) ? pdialog->treaty.plr0 : pdialog->
       treaty.plr1;
 
-  dsend_packet_diplomacy_create_clause_req(&client.conn,
+  dsend_packet_diplomacy_create_clause_req(&aconnection,
 					   player_number(pdialog->treaty.plr1),
 					   player_number(pgiver), CLAUSE_MAP, 0);
 }
@@ -786,7 +778,7 @@ void diplomacy_dialog_seamap_callback(Widget w, XtPointer client_data,
        pdialog->dip_map_menubutton0) ? pdialog->treaty.plr0 : pdialog->
       treaty.plr1;
 
-  dsend_packet_diplomacy_create_clause_req(&client.conn,
+  dsend_packet_diplomacy_create_clause_req(&aconnection,
 					   player_number(pdialog->treaty.plr1),
 					   player_number(pgiver), CLAUSE_SEAMAP,
 					   0);
@@ -802,7 +794,7 @@ void diplomacy_dialog_vision_callback(Widget w, XtPointer client_data,
   struct player *pgiver = (w == pdialog->dip_vision_button0) ?
       pdialog->treaty.plr0 : pdialog->treaty.plr1;
 
-  dsend_packet_diplomacy_create_clause_req(&client.conn,
+  dsend_packet_diplomacy_create_clause_req(&aconnection,
 					   player_number(pdialog->treaty.plr1),
 					   player_number(pgiver), CLAUSE_VISION,
 					   0);
@@ -818,7 +810,7 @@ static void diplomacy_dialog_add_pact_clause(Widget w, XtPointer client_data,
   struct player *pgiver = (w == pdialog->dip_vision_button0) ?
       pdialog->treaty.plr0 : pdialog->treaty.plr1;
 
-  dsend_packet_diplomacy_create_clause_req(&client.conn,
+  dsend_packet_diplomacy_create_clause_req(&aconnection,
 					   player_number(pdialog->treaty.plr1),
 					   player_number(pgiver), type, 0);
 }
@@ -865,7 +857,7 @@ void diplomacy_dialog_close_callback(Widget w, XtPointer client_data,
 {
   struct Diplomacy_dialog *pdialog = (struct Diplomacy_dialog *) client_data;
 
-  dsend_packet_diplomacy_cancel_meeting_req(&client.conn,
+  dsend_packet_diplomacy_cancel_meeting_req(&aconnection,
 					    player_number(pdialog->treaty.plr1));
   close_diplomacy_dialog(pdialog);
 }
@@ -879,7 +871,7 @@ void diplomacy_dialog_accept_callback(Widget w, XtPointer client_data,
 {
   struct Diplomacy_dialog *pdialog = (struct Diplomacy_dialog *) client_data;
 
-  dsend_packet_diplomacy_accept_treaty_req(&client.conn,
+  dsend_packet_diplomacy_accept_treaty_req(&aconnection,
 					   player_number(pdialog->treaty.plr1));
 }
 
@@ -900,8 +892,7 @@ void close_diplomacy_dialog(struct Diplomacy_dialog *pdialog)
 *****************************************************************/
 static struct Diplomacy_dialog *find_diplomacy_dialog(int other_player_id)
 {
-  struct player *plr0 = client.conn.playing;
-  struct player *plr1 = player_by_number(other_player_id);
+  struct player *plr0 = game.player_ptr, *plr1 = player_by_number(other_player_id);
 
   if (!dialog_list_list_has_been_initialised) {
     dialog_list = dialog_list_new();
@@ -948,15 +939,14 @@ void diplodlg_key_gold(Widget w)
     XtVaGetValues(w, XtNstring, &dp, NULL);
     if (sscanf(dp, "%d", &amount) == 1 && amount >= 0
 	&& amount <= pgiver->economic.gold) {
-      dsend_packet_diplomacy_create_clause_req(&client.conn,
+      dsend_packet_diplomacy_create_clause_req(&aconnection,
 					       player_number(pdialog->treaty.plr1),
 					       player_number(pgiver),
 					       CLAUSE_GOLD, amount);
       XtVaSetValues(w, XtNstring, "", NULL);
-    } else {
-      output_window_append(ftc_client,
-                           _("Invalid amount of gold specified."));
     }
+    else
+      append_output_window(_("Invalid amount of gold specified."));
   }
 }
 

@@ -151,15 +151,7 @@ static void signals_create(void)
 		       3, API_TYPE_TECH_TYPE, API_TYPE_PLAYER,
 		       API_TYPE_STRING);
 
-  /* First player is city owner, second is enemy. */
-  script_signal_create("city_destroyed",
-                       3, API_TYPE_CITY, API_TYPE_PLAYER, API_TYPE_PLAYER);
-  script_signal_create("city_lost",
-                       3, API_TYPE_CITY, API_TYPE_PLAYER, API_TYPE_PLAYER);
-
   script_signal_create("hut_enter", 1, API_TYPE_UNIT);
-
-  script_signal_create("unit_lost", 2, API_TYPE_UNIT, API_TYPE_PLAYER);
 }
 
 /**************************************************************************
@@ -197,7 +189,7 @@ static void internal_signal_create(const char *signal_name,
 				   int nargs, enum api_types args[])
 {
   if (hash_key_exists(signals, signal_name)) {
-    log_error("Signal \"%s\" was already created.", signal_name);
+    freelog(LOG_ERROR, "Signal \"%s\" was already created.", signal_name);
   } else {
     char *name;
     struct signal *signal;
@@ -227,11 +219,12 @@ static void internal_signal_free(const char *signal_name)
       internal_signal_callback_remove(signal->callbacks, pcallback);
     } signal_callback_list_iterate_end;
 
+    signal_callback_list_unlink_all(signal->callbacks);
     signal_callback_list_free(signal->callbacks);
     free(signal);
   } else {
-    log_error("Signal \"%s\" does not exist, so cannot be freed.",
-              signal_name);
+    freelog(LOG_ERROR, "Signal \"%s\" does not exist, so cannot be freed.",
+	    signal_name);
   }
 }
 
@@ -249,8 +242,9 @@ void script_signal_emit(const char *signal_name, int nargs, ...)
 
   if (signal) {
     if (signal->nargs != nargs) {
-      log_error("Signal \"%s\" requires %d args, was passed %d on invoke.",
-                signal_name, signal->nargs, nargs);
+      freelog(LOG_ERROR,
+	      "Signal \"%s\" requires %d args, was passed %d on invoke.",
+	      signal_name, signal->nargs, nargs);
     } else {
       signal_callback_list_iterate(signal->callbacks, pcallback) {
         va_start(args, nargs);
@@ -262,8 +256,8 @@ void script_signal_emit(const char *signal_name, int nargs, ...)
       } signal_callback_list_iterate_end;
     }
   } else {
-    log_error("Signal \"%s\" does not exist, so cannot be invoked.",
-              signal_name);
+    freelog(LOG_ERROR, "Signal \"%s\" does not exist, so cannot be invoked.",
+	    signal_name);
   }
 }
 
@@ -277,7 +271,7 @@ void script_signal_create_valist(const char *signal_name,
 
   signal = hash_lookup_data(signals, signal_name);
   if (signal) {
-    log_error("Signal \"%s\" was already created.", signal_name);
+    freelog(LOG_ERROR, "Signal \"%s\" was already created.", signal_name);
   } else {
     enum api_types args_array[nargs];
     int i;

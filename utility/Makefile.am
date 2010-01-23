@@ -1,10 +1,14 @@
 ## Process this file with automake to produce Makefile.in
 
-SUBDIRS = ftwl
+SUBDIRS=        ftwl
 
-noinst_LTLIBRARIES = libcivutility.la
+noinst_LIBRARIES = libcivutility.a
 
-libcivutility_la_SOURCES = \
+AM_CPPFLAGS = -I../intl
+
+## Above, note -I../intl instead of -I$(top_srdir/intl) is deliberate.
+
+libcivutility_a_SOURCES = \
 		astring.c       \
 		astring.h       \
 		capability.c	\
@@ -15,7 +19,6 @@ libcivutility_la_SOURCES = \
 		distribute.h	\
 		fcintl.c	\
 		fcintl.h	\
-		generate_specenum.py	\
 		genlist.c	\
 		genlist.h	\
 		hash.c		\
@@ -24,7 +27,6 @@ libcivutility_la_SOURCES = \
 		inputfile.h	\
 		ioz.c		\
 		ioz.h		\
-		iterator.c	\
 		iterator.h	\
 		log.c		\
 		log.h		\
@@ -42,25 +44,11 @@ libcivutility_la_SOURCES = \
 		sbuffer.h	\
 		shared.c	\
 		shared.h	\
-		specenum_gen.h	\
 		speclist.h	\
 		specvec.h	\
-		string_vector.c	\
-		string_vector.h	\
 		support.c	\
 		support.h	\
 		timing.c	\
 		timing.h	\
 		md5.c		\
 		md5.h
-
-BUILT_SOURCES = specenum_gen.h
-
-# specenum.h must be generated before it can be included.
-%.o : specenum_gen.h
-
-specenum_gen.h: specenum_generate
-.INTERMEDIATE: specenum_generate
-specenum_generate: generate_specenum.py
-	cd $(srcdir) && ./generate_specenum.py
-	touch specenum_generate

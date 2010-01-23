@@ -80,30 +80,28 @@ bool caravan_parameter_is_legal(const struct caravan_parameter *parameter) {
 
 /***************************************************************************
   For debugging, print out the parameter.
-***************************************************************************/
-void caravan_parameter_log_real(const struct caravan_parameter *parameter,
-                                enum log_level level, const char *file,
-                                const char *function, int line)
-{
-  do_log(file, function, line, FALSE, level,
-         "parameter {\n"
-         "  horizon   = %d\n"
-         "  discount  = %g\n"
-         "  objective = <%s,%s,%s>\n"
-         "  account-broken = %s\n"
-         "  allow-foreign  = %s\n"
-         "  ignore-transit = %s\n"
-         "  convert-trade  = %s\n"
-         "}\n",
-         parameter->horizon,
-         parameter->discount,
-         parameter->consider_windfall ? "windfall" : "-",
-         parameter->consider_trade ? "trade" : "-",
-         parameter->consider_wonders ? "wonders" : "-",
-         parameter->account_for_broken_routes ? "yes" : "no",
-         parameter->allow_foreign_trade ? "yes" : "no",
-         parameter->ignore_transit_time ? "yes" : "no",
-         parameter->convert_trade ? "yes" : "no");
+ ***************************************************************************/
+void caravan_parameter_log(const struct caravan_parameter *parameter,
+                           int loglevel) {
+  freelog(loglevel, "parameter {\n"
+      "  horizon   = %d\n"
+      "  discount  = %g\n"
+      "  objective = <%s,%s,%s>\n"
+      "  account-broken = %s\n"
+      "  allow-foreign  = %s\n"
+      "  ignore-transit = %s\n"
+      "  convert-trade  = %s\n"
+      "}\n"
+      , parameter->horizon
+      , parameter->discount
+      , parameter->consider_windfall ? "windfall" : "-"
+      , parameter->consider_trade ? "trade" : "-"
+      , parameter->consider_wonders ? "wonders" : "-"
+      , parameter->account_for_broken_routes ? "yes" : "no"
+      , parameter->allow_foreign_trade ? "yes" : "no"
+      , parameter->ignore_transit_time ? "yes" : "no"
+      , parameter->convert_trade ? "yes" : "no"
+      );
 }
 
 
@@ -168,17 +166,17 @@ static void caravan_search_from(const struct unit *caravan,
                                 int turns_before, int moves_left_before,
                                 search_callback callback,
                                 void *callback_data) {
-  struct pf_map *pfm;
+  struct pf_map *map;
   struct pf_parameter pfparam;
   int end_time;
 
   end_time = param->horizon - turns_before;
 
   /* Initialize the pf run. */
-  pft_fill_unit_parameter(&pfparam, (struct unit *) caravan);
+  pft_fill_unit_parameter(&pfparam, (struct unit*) caravan);
   pfparam.start_tile = start_tile;
   pfparam.moves_left_initially = moves_left_before;
-  pfm = pf_map_new(&pfparam);
+  map = pf_create_map(&pfparam);
 
   /* For every tile in distance order:
      quit if we've exceeded the maximum number of turns
@@ -186,21 +184,24 @@ static void caravan_search_from(const struct unit *caravan,
      Do-while loop rather than while loop to make sure to process the
      start tile.
    */
-  pf_map_iterate_positions(pfm, pos, TRUE) {
+  do {
+    struct pf_position p;
     struct city *pcity;
 
-    if (pos.turn > end_time) {
+    pf_next_get_position(map, &p);
+    if (p.turn > end_time) {
       break;
     }
 
-    pcity = tile_city(pos.tile);
-    if (pcity && callback(callback_data, pcity, turns_before + pos.turn,
-			  pos.moves_left)) {
-      break;
+    pcity = tile_get_city(p.tile);
+    if (pcity) {
+      bool stop = callback(callback_data, pcity, turns_before + p.turn,
+                           p.moves_left);
+      if(stop) break;
     }
-  } pf_map_iterate_positions_end;
+  } while (pf_next(map));
 
-  pf_map_destroy(pfm);
+  pf_destroy_map(map);
 }
 
 
@@ -253,7 +254,7 @@ static int one_city_trade_benefit(const struct city *pcity,
     newtrade = 0;
   }
 
-  if (city_num_trade_routes(pcity) < NUM_TRADE_ROUTES) {
+  if (city_num_trade_routes(pcity) < NUM_TRADEROUTES) {
     /* if the city can handle this route, we don't break any old routes */
     losttrade = 0;
   } else {
@@ -325,18 +326,18 @@ static double wonder_benefit(const struct unit *caravan, int arrival_time,
 
   if (!param->consider_wonders
       || unit_owner(caravan) != city_owner(dest)
-      || VUT_UTYPE == dest->production.kind
-      || !is_wonder(dest->production.value.building)) {
+      || dest->production.is_unit
+      || !is_wonder(dest->production.value)) {
     return 0;
   }
 
   shields_at_arrival = dest->shield_stock
     + arrival_time * dest->surplus[O_SHIELD];
 
-  costwithout = impr_buy_gold_cost(dest->production.value.building,
+  costwithout = impr_buy_gold_cost(dest->production.value,
       shields_at_arrival);
-  costwith = impr_buy_gold_cost(dest->production.value.building,
-      shields_at_arrival + unit_build_shield_cost(caravan));
+  costwith = impr_buy_gold_cost(dest->production.value,
+      shields_at_arrival + unit_build_shield_cost(unit_type(caravan)));
 
   assert(costwithout >= costwith);
   return costwithout - costwith;

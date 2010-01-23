@@ -22,15 +22,11 @@
 #ifndef FC__WLDLG_H
 #define FC__WLDLG_H
 
-/* common */
 #include "worklist.h"
-
-/* client */
-#include "global_worklist.h"
 
 #include "wldlg_g.h"
 
-void popup_worklist_editor(struct city *pCity, struct global_worklist *pGWL);
+void popup_worklist_editor(struct city *pCity, struct worklist *pWorkList);
 void popdown_worklist_editor(void);
 
 #endif	/* FC__WLDLG_H */

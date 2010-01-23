@@ -24,39 +24,32 @@
 #include <stdio.h>
 #include <string.h>
 
-/* utility */
 #include "astring.h"
-#include "fcintl.h"
-#include "genlist.h"
-#include "log.h"
-#include "mem.h"
-#include "registry.h"
-#include "support.h"
-
-/* common */
 #include "city.h"
 #include "effects.h"
+#include "fcintl.h"
 #include "game.h"
+#include "genlist.h"
 #include "government.h"
+#include "log.h"
 #include "map.h"
+#include "mem.h"
 #include "movement.h"
 #include "packets.h"
+#include "registry.h"
 #include "requirements.h"
 #include "specialist.h"
+#include "support.h"
 #include "unit.h"
-
-/* client */
-#include "client_main.h"
 
 #include "helpdata.h"
 
 /* helper macro for easy conversion from snprintf and cat_snprintf */
 #define CATLSTR(_b, _s, _t) mystrlcat(_b, _t, _s)
 
-/* This must be in same order as enum in helpdlg_g.h */
 static const char * const help_type_names[] = {
   "(Any)", "(Text)", "Units", "Improvements", "Wonders",
-  "Techs", "Terrain", "Governments", "Ruleset", NULL
+  "Techs", "Terrain", "Governments", NULL
 };
 
 /*define MAX_LAST (MAX(MAX(MAX(A_LAST,B_LAST),U_LAST),terrain_count()))*/
@@ -69,7 +62,7 @@ static const char * const help_type_names[] = {
     TYPED_LIST_ITERATE(struct help_item, helplist, phelp)
 #define help_list_iterate_end  LIST_ITERATE_END
 
-static const struct genlist_link *help_nodes_iterator;
+static struct genlist_link *help_nodes_iterator;
 static struct help_list *help_nodes;
 static bool help_nodes_init = FALSE;
 /* helpnodes_init is not quite the same as booted in boot_help_texts();
@@ -117,7 +110,7 @@ void free_help_texts(void)
     free(ptmp->text);
     free(ptmp);
   } help_list_iterate_end;
-  help_list_clear(help_nodes);
+  help_list_unlink_all(help_nodes);
 }
 
 /****************************************************************************
@@ -128,99 +121,33 @@ void free_help_texts(void)
 static void insert_generated_table(char *outbuf, size_t outlen, const char *name)
 {
   if (0 == strcmp (name, "TerrainAlterations")) {
-    int rail_time = -1, clean_pollution_time = -1, clean_fallout_time = -1;
-    int buildable_bases = 0;
-
     CATLSTR(outbuf, outlen,
             _("Terrain     Road   Irrigation     Mining         Transform\n"));
     CATLSTR(outbuf, outlen,
             "---------------------------------------------------------------\n");
     terrain_type_iterate(pterrain) {
       if (0 != strlen(terrain_rule_name(pterrain))) {
-	char road_time[4], irrigation_time[4],
-	     mining_time[4], transform_time[4];
-	snprintf(road_time, sizeof(road_time), "%d", pterrain->road_time);
-	snprintf(irrigation_time, sizeof(irrigation_time),
-		 "%d", pterrain->irrigation_time);
-	snprintf(mining_time, sizeof(mining_time),
-		 "%d", pterrain->mining_time);
-	snprintf(transform_time, sizeof(transform_time),
-		 "%d", pterrain->transform_time);
 	cat_snprintf(outbuf, outlen,
-		"%-10s %3s    %3s %-10s %3s %-10s %3s %-10s\n",
+		"%-10s %3d    %3d %-10s %3d %-10s %3d %-10s\n",
 		terrain_name_translation(pterrain),
-		(pterrain->road_time == 0) ? "-" : road_time,
-		(pterrain->irrigation_result == T_NONE) ? "-" : irrigation_time,
+		pterrain->road_time,
+		pterrain->irrigation_time,
 		((pterrain->irrigation_result == pterrain
 		  || pterrain->irrigation_result == T_NONE) ? ""
 		 : terrain_name_translation(pterrain->irrigation_result)),
-		(pterrain->mining_result == T_NONE) ? "-" : mining_time,
+		pterrain->mining_time,
 		((pterrain->mining_result == pterrain
 		  || pterrain->mining_result == T_NONE) ? ""
 		 : terrain_name_translation(pterrain->mining_result)),
-		(pterrain->transform_result == T_NONE) ? "-" : transform_time,
+		pterrain->transform_time,
 		((pterrain->transform_result == pterrain
 		 || pterrain->transform_result == T_NONE) ? ""
 		 : terrain_name_translation(pterrain->transform_result)));
-
-	/* FIXME: properly handle the (uncommon) case where these are
-	 * terrain-dependent, instead of just silence */
-	if (rail_time != 0 && pterrain->road_time > 0) {
-	  if (rail_time < 0)
-	    rail_time = pterrain->rail_time;
-	  else
-	    if (rail_time != pterrain->rail_time)
-	      rail_time = 0; /* give up */
-	}
-	if (clean_pollution_time != 0 &&
-	    !terrain_has_flag(pterrain, TER_NO_POLLUTION)) {
-	  if (clean_pollution_time < 0)
-	    clean_pollution_time = pterrain->clean_pollution_time;
-	  else
-	    if (clean_pollution_time != pterrain->clean_pollution_time)
-	      clean_pollution_time = 0; /* give up */
-	}
-	if (clean_fallout_time != 0 &&
-	    !terrain_has_flag(pterrain, TER_NO_POLLUTION)) {
-	  if (clean_fallout_time < 0)
-	    clean_fallout_time = pterrain->clean_fallout_time;
-	  else
-	    if (clean_fallout_time != pterrain->clean_fallout_time)
-	      clean_fallout_time = 0; /* give up */
-	}
       }
     } terrain_type_iterate_end;
-
-    base_type_iterate(b) {
-      if (b->buildable)
-	buildable_bases++;
-    } base_type_iterate_end;
-
-    if (rail_time > 0 || clean_pollution_time > 0 || clean_fallout_time > 0 ||
-	buildable_bases > 0) {
-      CATLSTR(outbuf, outlen, "\n");
-      CATLSTR(outbuf, outlen,
-	      _("Time taken for the following activities is independent of terrain:\n"));
-      CATLSTR(outbuf, outlen, "\n");
-      CATLSTR(outbuf, outlen,
-	      _("Activity            Time\n"));
-      CATLSTR(outbuf, outlen,
-	      "---------------------------");
-      if (rail_time > 0)
-	cat_snprintf(outbuf, outlen,
-		     _("\nRailroad           %3d"), rail_time);
-      if (clean_pollution_time > 0)
-	cat_snprintf(outbuf, outlen,
-		     _("\nClean pollution    %3d"), clean_pollution_time);
-      if (clean_fallout_time > 0)
-	cat_snprintf(outbuf, outlen,
-		     _("\nClean fallout      %3d"), clean_fallout_time);
-      base_type_iterate(b) {
-	if (b->buildable)
-	  cat_snprintf(outbuf, outlen,
-		       "\n%-18s %3d", base_name_translation(b), b->build_time);
-      } base_type_iterate_end;
-    }
+    CATLSTR(outbuf, outlen, "\n");
+    CATLSTR(outbuf, outlen,
+            _("(Railroads and fortresses require 3 turns, regardless of terrain.)"));
   }
   return;
 }
@@ -228,333 +155,66 @@ static void insert_generated_table(char *outbuf, size_t outlen, const char *name
 /****************************************************************
   Append text for the requirement.  Something like
 
-    "Requires the Communism technology.\n"
-
-  pplayer may be NULL.  Note that it must be updated everytime
-  a new requirement type or range is defined.
+    "Requires the Communism technology.\n\n"
 *****************************************************************/
-static bool insert_requirement(char *buf, size_t bufsz,
-                               struct player *pplayer,
-                               const struct requirement *preq)
+static void insert_requirement(struct requirement *req,
+			       char *buf, size_t bufsz)
 {
-  switch (preq->source.kind) {
-  case VUT_NONE:
-    return FALSE;
-
-  case VUT_ADVANCE:
-    switch (preq->range) {
-    case REQ_RANGE_PLAYER:
-      cat_snprintf(buf, bufsz,
-                   _("Requires to have researched the %s technology.\n"),
-                   advance_name_for_player(pplayer, advance_number
-                                           (preq->source.value.advance)));
-      return TRUE;
-    case REQ_RANGE_WORLD:
-      cat_snprintf(buf, bufsz,
-                   _("Requires that any player has researched "
-                     "the %s technology.\n"),
-                   advance_name_for_player(pplayer, advance_number
-                                           (preq->source.value.advance)));
-      return TRUE;
-    case REQ_RANGE_LOCAL:
-    case REQ_RANGE_ADJACENT:
-    case REQ_RANGE_CITY:
-    case REQ_RANGE_CONTINENT:
-    case REQ_RANGE_LAST:
-      /* Not supported. */
-      break;
-    }
+  switch (req->source.type) {
+  case REQ_NONE:
+    return;
+  case REQ_LAST:
     break;
-
-  case VUT_GOVERNMENT:
+  case REQ_TECH:
+    cat_snprintf(buf, bufsz, _("Requires the %s technology.\n"),
+		 advance_name_for_player(game.player_ptr, req->source.value.tech));
+    return;
+  case REQ_GOV:
     cat_snprintf(buf, bufsz, _("Requires the %s government.\n"),
-                 government_name_translation(preq->source.value.govern));
-    return TRUE;
-
-  case VUT_IMPROVEMENT:
-    switch (preq->range) {
-    case REQ_RANGE_WORLD:
-      if (is_great_wonder(preq->source.value.building)) {
-        cat_snprintf(buf, bufsz,
-                     _("Requires that the %s wonder is built.\n"),
-                     improvement_name_translation
-                     (preq->source.value.building));
-        return TRUE;
-      }
-      break;
-    case REQ_RANGE_PLAYER:
-      if (is_wonder(preq->source.value.building)) {
-        cat_snprintf(buf, bufsz, _("Requires the %s wonder.\n"),
-                     improvement_name_translation
-                     (preq->source.value.building));
-        return TRUE;
-      }
-      break;
-    case REQ_RANGE_CONTINENT:
-      if (is_wonder(preq->source.value.building)) {
-        cat_snprintf(buf, bufsz,
-                     _("Requires the %s wonder on the continent.\n"),
-                     improvement_name_translation
-                     (preq->source.value.building));
-        return TRUE;
-      }
-      break;
-    case REQ_RANGE_CITY:
-      cat_snprintf(buf, bufsz,
-                   _("Requires the %s building in the city.\n"),
-                   improvement_name_translation
-                   (preq->source.value.building));
-      return TRUE;
-    case REQ_RANGE_LOCAL:
-      cat_snprintf(buf, bufsz,
-                   _("Only applies to \"%s\" buildings.\n"),
-                   improvement_name_translation
-                   (preq->source.value.building));
-      return TRUE;
-    case REQ_RANGE_ADJACENT:
-    case REQ_RANGE_LAST:
-      /* Not supported. */
-      break;
-    }
-    break;
-
-  case VUT_SPECIAL:
-    switch (preq->range) {
-    case REQ_RANGE_LOCAL:
-      cat_snprintf(buf, bufsz,
-                   _("Requires the %s terrain special on the tile.\n"),
-                   special_name_translation(preq->source.value.special));
-      return TRUE;
-    case REQ_RANGE_ADJACENT:
-      cat_snprintf(buf, bufsz,
-                   _("Requires the %s terrain special near the tile.\n"),
-                   special_name_translation(preq->source.value.special));
-      return TRUE;
-    case REQ_RANGE_CITY:
-    case REQ_RANGE_CONTINENT:
-    case REQ_RANGE_PLAYER:
-    case REQ_RANGE_WORLD:
-    case REQ_RANGE_LAST:
-      /* Not supported. */
-      break;
-    }
-    break;
-
-  case VUT_TERRAIN:
-    switch (preq->range) {
-    case REQ_RANGE_LOCAL:
-      cat_snprintf(buf, bufsz, _("Requires the %s terrain on the tile.\n"),
-                   terrain_name_translation(preq->source.value.terrain));
-      return TRUE;
-    case REQ_RANGE_ADJACENT:
-      cat_snprintf(buf, bufsz,_("Requires the %s terrain near the tile.\n"),
-                   terrain_name_translation(preq->source.value.terrain));
-      return TRUE;
-    case REQ_RANGE_CITY:
-    case REQ_RANGE_CONTINENT:
-    case REQ_RANGE_PLAYER:
-    case REQ_RANGE_WORLD:
-    case REQ_RANGE_LAST:
-      /* Not supported. */
-      break;
-    }
-    break;
-
-  case VUT_NATION:
-    switch (preq->range) {
-    case REQ_RANGE_PLAYER:
-      cat_snprintf(buf, bufsz, _("Requires that you are playing the %s nation.\n"),
-                   nation_adjective_translation(preq->source.value.nation));
-      return TRUE;
-    case REQ_RANGE_WORLD:
-      cat_snprintf(buf, bufsz, _("Requires the %s nation in the game.\n"),
-                   nation_adjective_translation(preq->source.value.nation));
-      return TRUE;
-    case REQ_RANGE_LOCAL:
-    case REQ_RANGE_ADJACENT:
-    case REQ_RANGE_CITY:
-    case REQ_RANGE_CONTINENT:
-    case REQ_RANGE_LAST:
-      /* Not supported. */
-      break;
-    }
-    break;
-
-  case VUT_UTYPE:
-    switch (preq->range) {
-    case REQ_RANGE_LOCAL:
-      cat_snprintf(buf, bufsz, _("Only applies to %s units.\n"),
-                   utype_name_translation(preq->source.value.utype));
-      return TRUE;
-    case REQ_RANGE_ADJACENT:
-    case REQ_RANGE_CITY:
-    case REQ_RANGE_CONTINENT:
-    case REQ_RANGE_PLAYER:
-    case REQ_RANGE_WORLD:
-    case REQ_RANGE_LAST:
-      /* Not supported. */
-      break;
-    }
-    break;
-
-  case VUT_UTFLAG:
-    switch (preq->range) {
-    case REQ_RANGE_LOCAL:
-      cat_snprintf(buf, bufsz, _("Only applies to \"%s\" units.\n"),
-                   /* flag names are never translated */
-                   unit_flag_rule_name(preq->source.value.unitflag));
-      return TRUE;
-    case REQ_RANGE_ADJACENT:
-    case REQ_RANGE_CITY:
-    case REQ_RANGE_CONTINENT:
-    case REQ_RANGE_PLAYER:
-    case REQ_RANGE_WORLD:
-    case REQ_RANGE_LAST:
-      /* Not supported. */
-      break;
-    }
-    break;
-
-  case VUT_UCLASS:
-    switch (preq->range) {
-    case REQ_RANGE_LOCAL:
-      cat_snprintf(buf, bufsz, _("Only applies to %s units.\n"),
-                   uclass_name_translation(preq->source.value.uclass));
-      return TRUE;
-    case REQ_RANGE_ADJACENT:
-    case REQ_RANGE_CITY:
-    case REQ_RANGE_CONTINENT:
-    case REQ_RANGE_PLAYER:
-    case REQ_RANGE_WORLD:
-    case REQ_RANGE_LAST:
-      /* Not supported. */
-      break;
-    }
-    break;
-
-  case VUT_UCFLAG:
-    switch (preq->range) {
-    case REQ_RANGE_LOCAL:
-      cat_snprintf(buf, bufsz, _("Only applies to \"%s\" units.\n"),
-                   /* flag names are never translated */
-                   unit_class_flag_rule_name
-                   (preq->source.value.unitclassflag));
-      return TRUE;
-    case REQ_RANGE_ADJACENT:
-    case REQ_RANGE_CITY:
-    case REQ_RANGE_CONTINENT:
-    case REQ_RANGE_PLAYER:
-    case REQ_RANGE_WORLD:
-    case REQ_RANGE_LAST:
-      /* Not supported. */
-      break;
-    }
-    break;
-
-  case VUT_OTYPE:
+		 government_name_translation(req->source.value.gov));
+    return;
+  case REQ_BUILDING:
+    cat_snprintf(buf, bufsz, _("Requires the %s building.\n"),
+		 improvement_name_translation(req->source.value.building));
+    return;
+  case REQ_SPECIAL:
+    cat_snprintf(buf, bufsz, _("Requires the %s terrain special.\n"),
+		 special_name_translation(req->source.value.special));
+    return;
+  case REQ_TERRAIN:
+    cat_snprintf(buf, bufsz, _("Requires the %s terrain.\n"),
+		 terrain_name_translation(req->source.value.terrain));
+    return;
+  case REQ_NATION:
+    cat_snprintf(buf, bufsz, _("Requires the %s nation.\n"),
+		 nation_adjective_translation(req->source.value.nation));
+    return;
+  case REQ_UNITTYPE:
+    cat_snprintf(buf, bufsz, _("Only applies to %s units.\n"),
+		 utype_name_translation(req->source.value.unittype));
+    return;
+  case REQ_UNITFLAG:
+    cat_snprintf(buf, bufsz, _("Only applies to %s units.\n"),
+                unit_flag_rule_name(req->source.value.unitflag));
+    return;
+  case REQ_UNITCLASS:
+    cat_snprintf(buf, bufsz, _("Only applies to %s units.\n"),
+		 uclass_name_translation(req->source.value.unitclass));
+    return;
+  case REQ_OUTPUTTYPE:
     cat_snprintf(buf, bufsz, _("Applies only to %s.\n"),
-                 get_output_name(preq->source.value.outputtype));
-    return TRUE;
-
-  case VUT_SPECIALIST:
+		 get_output_name(req->source.value.outputtype));
+    return;
+  case REQ_SPECIALIST:
     cat_snprintf(buf, bufsz, _("Applies only to %s.\n"),
-                 specialist_name_translation(preq->source.value.specialist));
-    return TRUE;
-
-  case VUT_MINSIZE:
+		 _(get_specialist(req->source.value.specialist)->name));
+    return;
+  case REQ_MINSIZE:
     cat_snprintf(buf, bufsz, _("Requires a minimum size of %d.\n"),
-                 preq->source.value.minsize);
-    return TRUE;
-
-  case VUT_AI_LEVEL:
-    cat_snprintf(buf, bufsz, _("Requires AI player of level %s.\n"),
-                 ai_level_name(preq->source.value.ai_level));
-    return TRUE;
-
-  case VUT_TERRAINCLASS:
-    switch (preq->range) {
-    case REQ_RANGE_LOCAL:
-      cat_snprintf(buf, bufsz, _("Requires %s terrain class on the tile.\n"),
-                   terrain_class_name_translation
-                   (preq->source.value.terrainclass));
-      return TRUE;
-    case REQ_RANGE_ADJACENT:
-      cat_snprintf(buf, bufsz,
-                   _("Requires %s terrain class near the tile.\n"),
-                   terrain_class_name_translation
-                   (preq->source.value.terrainclass));
-      return TRUE;
-    case REQ_RANGE_CITY:
-    case REQ_RANGE_CONTINENT:
-    case REQ_RANGE_PLAYER:
-    case REQ_RANGE_WORLD:
-    case REQ_RANGE_LAST:
-      /* Not supported. */
-      break;
-    }
-    break;
-
-  case VUT_BASE:
-    switch (preq->range) {
-    case REQ_RANGE_LOCAL:
-      cat_snprintf(buf, bufsz, _("Requires a %s on the tile.\n"),
-                   base_name_translation(preq->source.value.base));
-      return TRUE;
-    case REQ_RANGE_ADJACENT:
-      cat_snprintf(buf, bufsz, _("Requires a %s near the tile.\n"),
-                   base_name_translation(preq->source.value.base));
-      return TRUE;
-    case REQ_RANGE_CITY:
-    case REQ_RANGE_CONTINENT:
-    case REQ_RANGE_PLAYER:
-    case REQ_RANGE_WORLD:
-    case REQ_RANGE_LAST:
-      /* Not supported. */
-      break;
-    }
-    break;
-
-  case VUT_MINYEAR:
-    cat_snprintf(buf, bufsz, _("Requires we reached the year %d.\n"),
-                 preq->source.value.minyear);
-    return TRUE;
-
-  case VUT_TERRAINALTER:
-    switch (preq->range) {
-    case REQ_RANGE_LOCAL:
-      cat_snprintf(buf, bufsz,
-                   _("Requires terrain on which %s can be built on tile.\n"),
-                   terrain_alteration_name_translation
-                   (preq->source.value.terrainalter));
-      return TRUE;
-    case REQ_RANGE_ADJACENT:
-    case REQ_RANGE_CITY:
-    case REQ_RANGE_CONTINENT:
-    case REQ_RANGE_PLAYER:
-    case REQ_RANGE_WORLD:
-    case REQ_RANGE_LAST:
-      /* Not supported. */
-      break;
-    }
-    break;
-
-  case VUT_CITYTILE:
-     cat_snprintf(buf, bufsz, _("Applies only to city centers.\n"));
-    return TRUE;
-
-  case VUT_LAST:
-    break;
+		 req->source.value.minsize);
+    return;
   }
-
-  {
-    char text[256];
-
-    log_error("Requirement %s in range %d is not supported in helpdata.c.",
-              universal_name_translation(&preq->source, text, sizeof(text)),
-              preq->range);
-  }
-
-  return FALSE;
+  assert(0);
 }
 
 /****************************************************************************
@@ -571,24 +231,25 @@ static bool insert_requirement(char *buf, size_t bufsz,
   generated text to the start of the given 'buf' pointer (i.e. it does
   NOT append like cat_snprintf).
 ****************************************************************************/
-static void insert_allows(struct universal *psource,
+static void insert_allows(struct req_source *psource,
 			  char *buf, size_t bufsz)
 {
   buf[0] = '\0';
 
   /* FIXME: show other data like range and survives. */
 
-  improvement_iterate(pimprove) {
-    requirement_vector_iterate(&pimprove->reqs, req) {
-      if (are_universals_equal(psource, &req->source)) {
+  impr_type_iterate(impr_id) {
+    struct impr_type *building = improvement_by_number(impr_id);
+
+    requirement_vector_iterate(&building->reqs, req) {
+      if (are_req_sources_equal(psource, &req->source)) {
         char coreq_buf[512] = "";
 
-        requirement_vector_iterate(&pimprove->reqs, coreq) {
-          if (!are_universals_equal(psource, &coreq->source)) {
+        requirement_vector_iterate(&building->reqs, coreq) {
+          if (!are_req_sources_equal(psource, &coreq->source)) {
             char buf2[512] = "";
 
-            universal_name_translation(&coreq->source, buf2,
-                                       sizeof(buf2));
+            get_req_source_text(&coreq->source, buf2, sizeof(buf2));
             if (coreq_buf[0] == '\0') {
               sz_strlcpy(coreq_buf, buf2);
             } else {
@@ -600,16 +261,16 @@ static void insert_allows(struct universal *psource,
 
         if (coreq_buf[0] == '\0') {
           cat_snprintf(buf, bufsz, _("Allows %s."),
-                       improvement_name_translation(pimprove));
+                       improvement_name_translation(impr_id));
         } else {
           cat_snprintf(buf, bufsz, _("Allows %s (with %s)."),
-                       improvement_name_translation(pimprove),
+                       improvement_name_translation(impr_id),
                        coreq_buf);
         }
         cat_snprintf(buf, bufsz, "\n");
       }
     } requirement_vector_iterate_end;
-  } improvement_iterate_end;
+  } impr_type_iterate_end;
 }
 
 /****************************************************************
@@ -630,13 +291,12 @@ static struct help_item *new_help_item(int type)
  for help_list_sort(); sort by topic via compare_strings()
  (sort topics with more leading spaces after those with fewer)
 *****************************************************************/
-static int help_item_compar(const struct help_item *const *ppa,
-                            const struct help_item *const *ppb)
+static int help_item_compar(const void *a, const void *b)
 {
   const struct help_item *ha, *hb;
   char *ta, *tb;
-  ha = *ppa;
-  hb = *ppb;
+  ha = (const struct help_item*) *(const void**)a;
+  hb = (const struct help_item*) *(const void**)b;
   for (ta = ha->topic, tb = hb->topic; *ta != '\0' && *tb != '\0'; ta++, tb++) {
     if (*ta != ' ') {
       if (*tb == ' ') return -1;
@@ -650,19 +310,18 @@ static int help_item_compar(const struct help_item *const *ppa,
 }
 
 /****************************************************************
-  pplayer may be NULL.
+...
 *****************************************************************/
-void boot_help_texts(struct player *pplayer)
+void boot_help_texts(void)
 {
   static bool booted = FALSE;
 
-  struct section_file *sf;
-  const char *filename;
+  struct section_file file, *sf = &file;
+  char *filename;
   struct help_item *pitem;
-  int i;
-  struct section_list *sec;
-  const char **paras;
-  size_t npara;
+  int i, isec;
+  char **sec, **paras;
+  int nsec, npara;
   char long_buffer[64000]; /* HACK: this may be overrun. */
 
   check_help_nodes_init();
@@ -671,189 +330,171 @@ void boot_help_texts(struct player *pplayer)
   popdown_help_dialog();
 
   if(!booted) {
-    log_verbose("Booting help texts");
+    freelog(LOG_VERBOSE, "Booting help texts");
   } else {
     /* free memory allocated last time booted */
     free_help_texts();
-    log_verbose("Rebooting help texts");
-  }
+    freelog(LOG_VERBOSE, "Rebooting help texts");
+  }    
 
-  filename = fileinfoname(get_data_dirs(), "helpdata.txt");
+  filename = datafilename("helpdata.txt");
   if (!filename) {
-    log_error("Did not read help texts");
+    freelog(LOG_ERROR, "Did not read help texts");
     return;
   }
   /* after following call filename may be clobbered; use sf->filename instead */
-  if (!(sf = secfile_load(filename, FALSE))) {
+  if (!section_file_load(sf, filename)) {
     /* this is now unlikely to happen */
-    log_error("failed reading help-texts");
+    freelog(LOG_ERROR, "failed reading help-texts");
     return;
   }
 
-  sec = secfile_sections_by_name_prefix(sf, "help_");
+  sec = secfile_get_secnames_prefix(sf, "help_", &nsec);
 
-  if (NULL != sec) {
-    section_list_iterate(sec, psection) {
-      const char *sec_name = section_name(psection);
-      const char *gen_str = secfile_lookup_str(sf, "%s.generate", sec_name);
-      
-      if (gen_str) {
-        enum help_page_type current_type = HELP_ANY;
-        if (!booted) {
-          continue; /* on initial boot data tables are empty */
-        }
-        for(i=2; help_type_names[i]; i++) {
-          if(strcmp(gen_str, help_type_names[i])==0) {
-            current_type = i;
-            break;
-          }
-        }
-        if (current_type == HELP_ANY) {
-          log_error("bad help-generate category \"%s\"", gen_str);
-          continue;
-        }
-        {
-          /* Note these should really fill in pitem->text from auto-gen
-             data instead of doing it later on the fly, but I don't want
-             to change that now.  --dwp
-          */
-          char name[2048];
-          struct help_list *category_nodes = help_list_new();
-
-          switch (current_type) {
-          case HELP_UNIT:
-            unit_type_iterate(punittype) {
-              pitem = new_help_item(current_type);
-              my_snprintf(name, sizeof(name), " %s",
-                          utype_name_translation(punittype));
-              pitem->topic = mystrdup(name);
-              pitem->text = mystrdup("");
-              help_list_append(category_nodes, pitem);
-            } unit_type_iterate_end;
-            break;
-          case HELP_TECH:
-            advance_index_iterate(A_FIRST, i) {
-              if (valid_advance_by_number(i)) {
-                pitem = new_help_item(current_type);
-                my_snprintf(name, sizeof(name), " %s",
-                            advance_name_for_player(pplayer, i));
-                pitem->topic = mystrdup(name);
-                pitem->text = mystrdup("");
-                help_list_append(category_nodes, pitem);
-              }
-            } advance_index_iterate_end;
-            break;
-          case HELP_TERRAIN:
-            terrain_type_iterate(pterrain) {
-              if (0 != strlen(terrain_rule_name(pterrain))) {
-                pitem = new_help_item(current_type);
-                my_snprintf(name, sizeof(name), " %s",
-                            terrain_name_translation(pterrain));
-                pitem->topic = mystrdup(name);
-                pitem->text = mystrdup("");
-                help_list_append(category_nodes, pitem);
-              }
-            } terrain_type_iterate_end;
-            /* Add special Civ2-style river help text if it's supplied. */
-            if (terrain_control.river_help_text) {
-              pitem = new_help_item(HELP_TEXT);
-              /* TRANS: preserve single space at beginning */
-              pitem->topic = mystrdup(_(" Rivers"));
-              sz_strlcpy(long_buffer, _(terrain_control.river_help_text));
-              pitem->text = mystrdup(long_buffer);
-              help_list_append(category_nodes, pitem);
-            }
-            break;
-          case HELP_GOVERNMENT:
-            government_iterate(gov) {
-              pitem = new_help_item(current_type);
-              my_snprintf(name, sizeof(name), " %s",
-                          government_name_translation(gov));
-              pitem->topic = mystrdup(name);
-              pitem->text = mystrdup("");
-              help_list_append(category_nodes, pitem);
-            } government_iterate_end;
-            break;
-          case HELP_IMPROVEMENT:
-            improvement_iterate(pimprove) {
-              if (valid_improvement(pimprove) && !is_great_wonder(pimprove)) {
-                pitem = new_help_item(current_type);
-                my_snprintf(name, sizeof(name), " %s",
-                            improvement_name_translation(pimprove));
-                pitem->topic = mystrdup(name);
-                pitem->text = mystrdup("");
-                help_list_append(category_nodes, pitem);
-              }
-            } improvement_iterate_end;
-            break;
-          case HELP_WONDER:
-            improvement_iterate(pimprove) {
-              if (valid_improvement(pimprove) && is_great_wonder(pimprove)) {
-                pitem = new_help_item(current_type);
-                my_snprintf(name, sizeof(name), " %s",
-                            improvement_name_translation(pimprove));
-                pitem->topic = mystrdup(name);
-                pitem->text = mystrdup("");
-                help_list_append(category_nodes, pitem);
-              }
-            } improvement_iterate_end;
-            break;
-          case HELP_RULESET:
-            pitem = new_help_item(HELP_RULESET);
-            /*           pitem->topic = mystrdup(game.control.name); */
-            pitem->topic = mystrdup(HELP_RULESET_ITEM);
-            if (game.control.description[0] != '\0') {
-              pitem->text = mystrdup(game.control.description);
-            } else {
-              pitem->text = mystrdup(_("Current ruleset contains no description."));
-            }
-            help_list_append(help_nodes, pitem);
-            break;
-          default:
-            die("Bad current_type %d", current_type);
-            break;
-          }
-          help_list_sort(category_nodes, help_item_compar);
-          help_list_iterate(category_nodes, ptmp) {
-            help_list_append(help_nodes, ptmp);
-          } help_list_iterate_end;
-          help_list_free(category_nodes);
-          continue;
-        }
+  for(isec=0; isec<nsec; isec++) {
+    const char *gen_str =
+      secfile_lookup_str_default(sf, NULL, "%s.generate", sec[isec]);
+    
+    if (gen_str) {
+      enum help_page_type current_type = HELP_ANY;
+      if (!booted) {
+	continue; /* on initial boot data tables are empty */
       }
-      
-      /* It wasn't a "generate" node: */
-      
-      pitem = new_help_item(HELP_TEXT);
-      pitem->topic = mystrdup(_(secfile_lookup_str(sf, "%s.name", sec_name)));
-
-      paras = secfile_lookup_str_vec(sf, &npara, "%s.text", sec_name);
-
-      long_buffer[0] = '\0';
-      for (i=0; i<npara; i++) {
-        const char *para = paras[i];
-        if(strncmp(para, "$", 1)==0) {
-          insert_generated_table(long_buffer, sizeof(long_buffer), para+1);
-        } else {
-          sz_strlcat(long_buffer, _(para));
-        }
-        if (i!=npara-1) {
-          sz_strlcat(long_buffer, "\n\n");
-        }
+      for(i=2; help_type_names[i]; i++) {
+	if(strcmp(gen_str, help_type_names[i])==0) {
+	  current_type = i;
+	  break;
+	}
       }
-      free(paras);
-      paras = NULL;
-      pitem->text=mystrdup(long_buffer);
-      help_list_append(help_nodes, pitem);
-    } section_list_iterate_end;
-
-    section_list_free(sec);
+      if (current_type == HELP_ANY) {
+	freelog(LOG_ERROR, "bad help-generate category \"%s\"", gen_str);
+	continue;
+      }
+      {
+	/* Note these should really fill in pitem->text from auto-gen
+	   data instead of doing it later on the fly, but I don't want
+	   to change that now.  --dwp
+	*/
+	char name[2048];
+	struct help_list *category_nodes = help_list_new();
+	
+	if (current_type == HELP_UNIT) {
+	  unit_type_iterate(punittype) {
+	    pitem = new_help_item(current_type);
+	    my_snprintf(name, sizeof(name), " %s",
+			utype_name_translation(punittype));
+	    pitem->topic = mystrdup(name);
+	    pitem->text = mystrdup("");
+	    help_list_append(category_nodes, pitem);
+	  } unit_type_iterate_end;
+	} else if (current_type == HELP_TECH) {
+	  tech_type_iterate(i) {
+	    if (i != A_NONE && tech_exists(i)) {
+	      pitem = new_help_item(current_type);
+	      my_snprintf(name, sizeof(name), " %s",
+			  advance_name_for_player(game.player_ptr, i));
+	      pitem->topic = mystrdup(name);
+	      pitem->text = mystrdup("");
+	      help_list_append(category_nodes, pitem);
+	    }
+	  } tech_type_iterate_end;
+	} else if (current_type == HELP_TERRAIN) {
+	  terrain_type_iterate(pterrain) {
+	    if (0 != strlen(terrain_rule_name(pterrain))) {
+	      pitem = new_help_item(current_type);
+	      my_snprintf(name, sizeof(name), " %s",
+			  terrain_name_translation(pterrain));
+	      pitem->topic = mystrdup(name);
+	      pitem->text = mystrdup("");
+	      help_list_append(category_nodes, pitem);
+	    }
+	  } terrain_type_iterate_end;
+	  /* Add special Civ2-style river help text if it's supplied. */
+	  if (terrain_control.river_help_text) {
+	    pitem = new_help_item(HELP_TEXT);
+	    /* TRANS: preserve single space at beginning */
+	    pitem->topic = mystrdup(_(" Rivers"));
+	    sz_strlcpy(long_buffer, _(terrain_control.river_help_text));
+	    wordwrap_string(long_buffer, 68);
+	    pitem->text = mystrdup(long_buffer);
+	    help_list_append(category_nodes, pitem);
+	  }
+	} else if (current_type == HELP_GOVERNMENT) {
+	  government_iterate(gov) {
+	    pitem = new_help_item(current_type);
+	    my_snprintf(name, sizeof(name), " %s",
+	                government_name_translation(gov));
+	    pitem->topic = mystrdup(name);
+	    pitem->text = mystrdup("");
+	    help_list_append(category_nodes, pitem);
+	  } government_iterate_end;
+	} else if (current_type == HELP_IMPROVEMENT) {
+	  impr_type_iterate(i) {
+	    if (improvement_exists(i) && !is_great_wonder(i)) {
+	      pitem = new_help_item(current_type);
+	      my_snprintf(name, sizeof(name), " %s",
+			  improvement_name_translation(i));
+	      pitem->topic = mystrdup(name);
+	      pitem->text = mystrdup("");
+	      help_list_append(category_nodes, pitem);
+	    }
+	  } impr_type_iterate_end;
+	} else if (current_type == HELP_WONDER) {
+	  impr_type_iterate(i) {
+	    if (improvement_exists(i) && is_great_wonder(i)) {
+	      pitem = new_help_item(current_type);
+	      my_snprintf(name, sizeof(name), " %s",
+			  improvement_name_translation(i));
+	      pitem->topic = mystrdup(name);
+	      pitem->text = mystrdup("");
+	      help_list_append(category_nodes, pitem);
+	    }
+	  } impr_type_iterate_end;
+	} else {
+	  die("Bad current_type %d", current_type);
+	}
+	help_list_sort(category_nodes, help_item_compar);
+	help_list_iterate(category_nodes, ptmp) {
+	  help_list_append(help_nodes, ptmp);
+	} help_list_iterate_end;
+	help_list_unlink_all(category_nodes);
+        help_list_free(category_nodes);
+	continue;
+      }
+    }
+    
+    /* It wasn't a "generate" node: */
+    
+    pitem = new_help_item(HELP_TEXT);
+    pitem->topic = mystrdup(_(secfile_lookup_str(sf, "%s.name", sec[isec])));
+    
+    paras = secfile_lookup_str_vec(sf, &npara, "%s.text", sec[isec]);
+    
+    long_buffer[0] = '\0';
+    for (i=0; i<npara; i++) {
+      char *para = paras[i];
+      if(strncmp(para, "$", 1)==0) {
+        insert_generated_table(long_buffer, sizeof(long_buffer), para+1);
+      } else {
+        sz_strlcat(long_buffer, _(para));
+      }
+      if (i!=npara-1) {
+        sz_strlcat(long_buffer, "\n\n");
+      }
+    }
+    free(paras);
+    paras = NULL;
+    wordwrap_string(long_buffer, 68);
+    pitem->text=mystrdup(long_buffer);
+    help_list_append(help_nodes, pitem);
   }
 
-  secfile_check_unused(sf);
-  secfile_destroy(sf);
+  free(sec);
+  sec = NULL;
+  section_file_check_unused(sf, sf->filename);
+  section_file_free(sf);
   booted = TRUE;
-  log_verbose("Booted help texts ok");
+  freelog(LOG_VERBOSE, "Booted help texts ok");
 }
 
 /****************************************************************
@@ -884,7 +525,7 @@ const struct help_item *get_help_item(int pos)
   check_help_nodes_init();
   size = help_list_size(help_nodes);
   if (pos < 0 || pos > size) {
-    log_error("Bad index %d to get_help_item (size %d)", pos, size);
+    freelog(LOG_ERROR, "Bad index %d to get_help_item (size %d)", pos, size);
     return NULL;
   }
   if (pos == size) {
@@ -954,7 +595,7 @@ get_help_item_spec(const char *name, enum help_page_type htype, int *pos)
 void help_iter_start(void)
 {
   check_help_nodes_init();
-  help_nodes_iterator = genlist_head(help_list_base(help_nodes));
+  help_nodes_iterator = help_nodes->list->head_link;
 }
 
 /****************************************************************
@@ -966,9 +607,9 @@ const struct help_item *help_iter_next(void)
   const struct help_item *pitem;
   
   check_help_nodes_init();
-  pitem = genlist_link_data(help_nodes_iterator);
+  pitem = ITERATOR_PTR(help_nodes_iterator);
   if (pitem) {
-    help_nodes_iterator = genlist_link_next(help_nodes_iterator);
+    ITERATOR_NEXT(help_nodes_iterator);
   }
 
   return pitem;
@@ -990,60 +631,67 @@ const struct help_item *help_iter_next(void)
   Write dynamic text for buildings (including wonders).  This includes
   the ruleset helptext as well as any automatically generated text.
 
-  pplayer may be NULL.
   user_text, if non-NULL, will be appended to the text.
 **************************************************************************/
-char *helptext_building(char *buf, size_t bufsz, struct player *pplayer,
-                        const char *user_text, struct impr_type *pimprove)
+char *helptext_building(char *buf, size_t bufsz, Impr_type_id which,
+			const char *user_text)
 {
-  bool reqs = FALSE;
-  struct universal source = {
-    .kind = VUT_IMPROVEMENT,
-    .value = {.building = pimprove}
+  struct impr_type *imp;
+  struct req_source source = {
+    .type = REQ_BUILDING,
+    .value = {.building = which}
   };
+  bool has_req = FALSE;
 
   assert(NULL != buf && 0 < bufsz);
   buf[0] = '\0';
 
-  if (NULL == pimprove) {
+  if (!improvement_exists(which)) {
+    freelog(LOG_ERROR, "Unknown building %d.", which);
     return buf;
   }
 
-  if (pimprove->helptext && pimprove->helptext[0] != '\0') {
-    cat_snprintf(buf, bufsz, "%s\n\n", _(pimprove->helptext));
+  imp = improvement_by_number(which);
+
+  if (imp->helptext && imp->helptext[0] != '\0') {
+    cat_snprintf(buf, bufsz, "%s\n\n", _(imp->helptext));
   }
 
-  /* Add requirement text for improvement itself */
-  requirement_vector_iterate(&pimprove->reqs, preq) {
-    if (insert_requirement(buf, bufsz, pplayer, preq)) {
-      reqs = TRUE;
-    }
+  requirement_vector_iterate(&imp->reqs, preq) {
+    insert_requirement(preq, buf, bufsz);
+    has_req = TRUE;
   } requirement_vector_iterate_end;
-  if (reqs) {
-    mystrlcat(buf, "\n", bufsz);
+
+  if (has_req) {
+    cat_snprintf(buf, bufsz, "\n");
+  } else {
+    cat_snprintf(buf, bufsz, _("Requires: Nothing\n\n"));
   }
 
-
-  if (valid_advance(pimprove->obsolete_by)) {
+  if (tech_exists(improvement_by_number(which)->obsolete_by)) {
     cat_snprintf(buf, bufsz,
 		 _("* The discovery of %s will make %s obsolete.\n"),
-		 advance_name_for_player(pplayer,
-					 advance_number(pimprove->obsolete_by)),
-		 improvement_name_translation(pimprove));
+		 advance_name_for_player(game.player_ptr,
+			       improvement_by_number(which)->obsolete_by),
+		 improvement_name_translation(which));
   }
 
-  if (building_has_effect(pimprove, EFT_ENABLE_NUKE)
+  if (building_has_effect(which, EFT_ENABLE_NUKE)
       && num_role_units(F_NUCLEAR) > 0) {
-    struct unit_type *u = get_role_unit(F_NUCLEAR, 0);
+    struct unit_type *u;
+    Tech_type_id t;
+
+    u = get_role_unit(F_NUCLEAR, 0);
     CHECK_UNIT_TYPE(u);
+    t = u->tech_requirement;
+    assert(t < game.control.num_tech_types);
 
     /* TRANS: 'Allows all players with knowledge of atomic power to
      * build nuclear units.' */
     cat_snprintf(buf, bufsz,
 		 _("* Allows all players with knowledge of %s "
 		   "to build %s units.\n"),
-		 advance_name_for_player(pplayer,
-					 advance_number(u->require_advance)),
+		 advance_name_for_player(game.player_ptr, t),
 		 utype_name_translation(u));
     cat_snprintf(buf, bufsz, "  ");
   }
@@ -1051,12 +699,11 @@ char *helptext_building(char *buf, size_t bufsz, struct player *pplayer,
   insert_allows(&source, buf + strlen(buf), bufsz - strlen(buf));
 
   unit_type_iterate(u) {
-    if (u->need_improvement == pimprove) {
-      if (A_NEVER != u->require_advance) {
+    if (u->impr_requirement == which) {
+      if (u->tech_requirement != A_LAST) {
 	cat_snprintf(buf, bufsz, _("* Allows %s (with %s).\n"),
 		     utype_name_translation(u),
-		     advance_name_for_player(pplayer,
-					     advance_number(u->require_advance)));
+		     advance_name_for_player(game.player_ptr, u->tech_requirement));
       } else {
 	cat_snprintf(buf, bufsz, _("* Allows %s.\n"),
 		     utype_name_translation(u));
@@ -1067,6 +714,8 @@ char *helptext_building(char *buf, size_t bufsz, struct player *pplayer,
   if (user_text && user_text[0] != '\0') {
     cat_snprintf(buf, bufsz, "\n\n%s", user_text);
   }
+
+  wordwrap_string(buf, 68);
   return buf;
 }
 
@@ -1084,12 +733,9 @@ char *helptext_building(char *buf, size_t bufsz, struct player *pplayer,
 /****************************************************************************
   Return a string containing the techs that have the flag.  Returns the
   number of techs found.
-
-  pplayer may be NULL.
 ****************************************************************************/
-static int techs_with_flag_string(char *buf, size_t bufsz,
-				  struct player *pplayer,
-				  enum tech_flag_id flag)
+static int techs_with_flag_string(enum tech_flag_id flag,
+				  char *buf, size_t bufsz)
 {
   int count = 0;
 
@@ -1097,7 +743,7 @@ static int techs_with_flag_string(char *buf, size_t bufsz,
   buf[0] = '\0';
 
   techs_with_flag_iterate(flag, tech_id) {
-    const char *name = advance_name_for_player(pplayer, tech_id);
+    const char *name = advance_name_for_player(game.player_ptr, tech_id);
 
     if (buf[0] == '\0') {
       CATLSTR(buf, bufsz, name);
@@ -1114,79 +760,33 @@ static int techs_with_flag_string(char *buf, size_t bufsz,
 /****************************************************************
   Append misc dynamic text for units.
   Transport capacity, unit flags, fuel.
-
-  pplayer may be NULL.
 *****************************************************************/
-char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
-		    const char *user_text, struct unit_type *utype)
+char *helptext_unit(char *buf, size_t bufsz, struct unit_type *utype,
+		    const char *user_text)
 {
   assert(NULL != buf && 0 < bufsz && NULL != user_text);
 
   if (!utype) {
-    log_error("Unknown unit!");
+    freelog(LOG_ERROR, "Unknown unit!");
     mystrlcpy(buf, user_text, bufsz);
     return buf;
   }
   buf[0] = '\0';
 
-  cat_snprintf(buf, bufsz,
-               _("* Belongs to %s unit class.\n"),
-               uclass_name_translation(utype_class(utype)));
-  if (uclass_has_flag(utype_class(utype), UCF_CAN_OCCUPY_CITY)
-      && !utype_has_flag(utype, F_CIVILIAN)) {
-    CATLSTR(buf, bufsz, _("  * Can occupy empty enemy cities.\n"));
-  }
-  if (!uclass_has_flag(utype_class(utype), UCF_TERRAIN_SPEED)) {
-    CATLSTR(buf, bufsz, _("  * Speed is not affected by terrain.\n"));
-  }
-  if (!uclass_has_flag(utype_class(utype), UCF_TERRAIN_DEFENSE)) {
-    CATLSTR(buf, bufsz, _("  * Does not get defense bonuses from terrain.\n"));
-  }
-  if (!uclass_has_flag(utype_class(utype), UCF_ZOC)) {
-    CATLSTR(buf, bufsz, _("  * Not subject to zones of control.\n"));
-  }
-  if (uclass_has_flag(utype_class(utype), UCF_DAMAGE_SLOWS)) {
-    CATLSTR(buf, bufsz, _("  * Slowed down while damaged.\n"));
-  }
-  if (uclass_has_flag(utype_class(utype), UCF_MISSILE)) {
-    CATLSTR(buf, bufsz, _("  * Gets used up in making an attack.\n"));
-  }
-  if (uclass_has_flag(utype_class(utype), UCF_CAN_FORTIFY)
-      && !utype_has_flag(utype, F_SETTLERS)) {
-    CATLSTR(buf, bufsz,
-            /* xgettext:no-c-format */
-            _("  * May fortify, granting a 50% defensive bonus.\n"));
-  }
-  if (uclass_has_flag(utype_class(utype), UCF_UNREACHABLE)) {
-    CATLSTR(buf, bufsz,
-	    _("  * Is unreachable. Most units cannot attack this one.\n"));
-  }
-  if (uclass_has_flag(utype_class(utype), UCF_CAN_PILLAGE)) {
-    CATLSTR(buf, bufsz,
-	    _("  * Can pillage tile improvements.\n"));
-  }
-  if (uclass_has_flag(utype_class(utype), UCF_DOESNT_OCCUPY_TILE)) {
-    CATLSTR(buf, bufsz,
-	    _("  * Doesn't prevent enemy cities from working the tile it's on.\n"));
-  }
-
-  if (utype->need_improvement) {
+  if (utype->impr_requirement != B_LAST) {
     cat_snprintf(buf, bufsz,
                  _("* Can only be built if there is %s in the city.\n"),
-                 improvement_name_translation(utype->need_improvement));
+                 improvement_name_translation(utype->impr_requirement));
   }
 
-  if (utype->need_government) {
+  if (utype->gov_requirement) {
     cat_snprintf(buf, bufsz,
                  _("* Can only be built with %s as government.\n"),
-                 government_name_translation(utype->need_government));
+                 government_name_translation(utype->gov_requirement));
   }
   
   if (utype_has_flag(utype, F_NOBUILD)) {
     CATLSTR(buf, bufsz, _("* May not be built in cities.\n"));
-  }
-  if (utype_has_flag(utype, F_BARBARIAN_ONLY)) {
-    CATLSTR(buf, bufsz, _("* Only barbarians may build this.\n"));
   }
   if (utype_has_flag(utype, F_NOHOME)) {
     CATLSTR(buf, bufsz, _("* Never has a home city.\n"));
@@ -1203,54 +803,51 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
                  _("* Requires %d population to build.\n"),
                  utype->pop_cost);
   }
-  if (utype->transport_capacity > 0) {
-    cat_snprintf(buf, bufsz,
-                 PL_("* Can carry and refuel %d unit from classes:\n",
-                     "* Can carry and refuel up to %d units from classes:\n",
-                     utype->transport_capacity),
-                 utype->transport_capacity);
-    unit_class_iterate(uclass) {
-      if (can_unit_type_transport(utype, uclass)) {
-        cat_snprintf(buf, bufsz,
-                     _("  * %s units\n"),
-                     uclass_name_translation(uclass));
-      }
-    } unit_class_iterate_end
-  }
-  if (utype_has_flag(utype, F_TRIREME)) {
-    CATLSTR(buf, bufsz, "* Must stay next to coast.\n");
+  if (utype->transport_capacity>0) {
+    if (utype_has_flag(utype, F_CARRIER)) {
+      cat_snprintf(buf, bufsz,
+	      PL_("* Can carry and refuel %d air unit.\n",
+		  "* Can carry and refuel %d air units.\n",
+		  utype->transport_capacity), utype->transport_capacity);
+    } else if (utype_has_flag(utype, F_MISSILE_CARRIER)) {
+      cat_snprintf(buf, bufsz,
+	      PL_("* Can carry and refuel %d missile unit.\n",
+		  "* Can carry and refuel %d missile units.\n",
+		  utype->transport_capacity), utype->transport_capacity);
+    } else {
+      cat_snprintf(buf, bufsz,
+	      PL_("* Can carry %d ground unit across water.\n",
+		  "* Can carry %d ground units across water.\n",
+		  utype->transport_capacity), utype->transport_capacity);
+    }
   }
   if (utype_has_flag(utype, F_TRADE_ROUTE)) {
     /* TRANS: "Manhattan" distance is the distance along gridlines, with
      * no diagonals allowed. */
-    cat_snprintf(buf, bufsz,
-                 _("* Can establish trade routes (must travel to target"
-                   " city and must be at least %d tiles [in Manhattan"
-                   " distance] from this unit's home city).\n"),
-                 game.info.trademindist);
+    CATLSTR(buf, bufsz,
+	    _("* Can establish trade routes (must travel to target city"
+	      " and must be at least 9 tiles [in Manhattan distance] from"
+	      " this unit's home city).\n"));
   }
   if (utype_has_flag(utype, F_HELP_WONDER)) {
     cat_snprintf(buf, bufsz,
 		 _("* Can help build wonders (adds %d production).\n"),
-		 utype_build_shield_cost(utype));
+		 unit_build_shield_cost(utype));
   }
   if (utype_has_flag(utype, F_UNDISBANDABLE)) {
     CATLSTR(buf, bufsz, _("* May not be disbanded.\n"));
   } else {
-    CATLSTR(buf, bufsz,
-	    /* xgettext:no-c-format */
-	    _("* May be disbanded in a city to recover 50% of the"
-	      " production cost.\n"));
+    cat_snprintf(buf, bufsz, _("* May be disbanded in a city to "
+				 "recover 50%% of the production cost.\n"));
   }
   if (utype_has_flag(utype, F_CITIES)) {
     CATLSTR(buf, bufsz, _("* Can build new cities.\n"));
   }
   if (utype_has_flag(utype, F_ADD_TO_CITY)) {
-    cat_snprintf(buf, bufsz,
-		 _("* Can add on %d population to cities of no more than"
-		   " size %d.\n"),
-		 utype_pop_value(utype),
-		 game.info.add_to_size_limit - utype_pop_value(utype));
+    cat_snprintf(buf, bufsz, _("* Can add on %d population to "
+				 "cities of no more than size %d.\n"),
+	    unit_pop_value(utype),
+	    game.info.add_to_size_limit - unit_pop_value(utype));
   }
   if (utype_has_flag(utype, F_SETTLERS)) {
     char buf2[1024];
@@ -1261,7 +858,7 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
     CATLSTR(buf, bufsz, _("* Can build irrigation on tiles.\n"));
 
     /* Farmland. */
-    switch (techs_with_flag_string(buf2, sizeof(buf2), pplayer, TF_FARMLAND)) {
+    switch (techs_with_flag_string(TF_FARMLAND, buf2, sizeof(buf2))) {
     case 0:
       CATLSTR(buf, bufsz, _("* Can build farmland.\n"));
       break;
@@ -1277,14 +874,37 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
     }
 
     /* Fortress. */
-    CATLSTR(buf, bufsz, _("* Can build fortresses.\n"));
- 
+    switch (techs_with_flag_string(TF_FORTRESS, buf2, sizeof(buf2))) {
+    case 0:
+      cat_snprintf(buf, bufsz, _("* Can build fortresses.\n"));
+      break;
+    case 1:
+      cat_snprintf(buf, bufsz,
+	      _("* Can build fortresses (if %s is known).\n"), buf2);
+      break;
+    default:
+      cat_snprintf(buf, bufsz,
+	      _("* Can build fortresses (if any of the following are "
+		"known: %s).\n"), buf2);
+      break;
+    }
+
     /* Pollution, fallout. */
     CATLSTR(buf, bufsz, _("* Can clean pollution from tiles.\n"));
     CATLSTR(buf, bufsz, _("* Can clean nuclear fallout from tiles.\n"));
   }
   if (utype_has_flag(utype, F_TRANSFORM)) {
     CATLSTR(buf, bufsz, _("* Can transform tiles.\n"));
+  }
+  if (utype_has_flag(utype, F_AIRBASE)) {
+    CATLSTR(buf, bufsz, _("* Can build airbases.\n"));
+  }
+  if (is_ground_unittype(utype) && !utype_has_flag(utype, F_SETTLERS)) {
+    cat_snprintf(buf, bufsz,
+	    _("* May fortify, granting a 50%% defensive bonus.\n"));
+  }
+  if (is_ground_unittype(utype)) {
+    CATLSTR(buf, bufsz, _("* May pillage to destroy infrastructure from tiles.\n"));
   }
   if (utype_has_flag(utype, F_DIPLOMAT)) {
     if (utype_has_flag(utype, F_SPY)) {
@@ -1294,15 +914,14 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
       CATLSTR(buf, bufsz, _("* Can perform diplomatic actions.\n"));
     }
   }
-  if (utype_has_flag(utype, F_DIPLOMAT)
-      || utype_has_flag(utype, F_SUPERSPY)) {
-    CATLSTR(buf, bufsz, _("* Defends cities against diplomatic actions.\n"));
-  }
   if (utype_has_flag(utype, F_SUPERSPY)) {
     CATLSTR(buf, bufsz, _("* Will never lose a diplomat-versus-diplomat fight.\n"));
   }
   if (utype_has_flag(utype, F_UNBRIBABLE)) {
     CATLSTR(buf, bufsz, _("* May not be bribed.\n"));
+  }
+  if (utype_has_flag(utype, F_FIGHTER)) {
+    CATLSTR(buf, bufsz, _("* Can attack enemy air units.\n"));
   }
   if (utype_has_flag(utype, F_PARTIAL_INVIS)) {
     CATLSTR(buf, bufsz,
@@ -1310,17 +929,17 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
   }
   if (utype_has_flag(utype, F_NO_LAND_ATTACK)) {
     CATLSTR(buf, bufsz,
-            _("* Can only attack units on ocean tiles (no land attacks).\n"));
+            _("* Can only attack units on ocean squares (no land attacks).\n"));
   }
   if (utype_has_flag(utype, F_MARINES)) {
     CATLSTR(buf, bufsz,
 	    _("* Can attack from aboard sea units: against"
-	      " enemy cities and onto land tiles.\n"));
+	      " enemy cities and onto land squares.\n"));
   }
   if (utype_has_flag(utype, F_PARATROOPERS)) {
     cat_snprintf(buf, bufsz,
-		 _("* Can be paradropped from a friendly city or airbase"
-		   " (range: %d tiles).\n"),
+		 _("* Can be paradropped from a friendly city"
+		   " (Range: %d).\n"),
 		 utype->paratroopers_range);
   }
   if (utype_has_flag(utype, F_PIKEMEN)) {
@@ -1331,20 +950,10 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
     CATLSTR(buf, bufsz,
 	    _("* Counts as 'mounted' against certain defenders.\n"));
   }
-  if (utype_has_flag(utype, F_HELICOPTER)) {
+  if (utype_has_flag(utype, F_MISSILE)) {
     CATLSTR(buf, bufsz,
-            _("* Counts as 'helicopter' against certain attackers.\n"));
-  }
-  if (utype_has_flag(utype, F_FIGHTER)) {
-    CATLSTR(buf, bufsz,
-            _("* Very good at attacking 'helicopter' units.\n"));
-  }
-  if (utype_has_flag(utype, F_AIRUNIT)) {
-    CATLSTR(buf, bufsz,
-            _("* Very bad at attacking AEGIS units.\n"));
-  }
-  if (!uclass_has_flag(utype_class(utype), UCF_MISSILE)
-      && utype_has_flag(utype, F_ONEATTACK)) {
+	    _("* A missile unit: gets used up in making an attack.\n"));
+  } else if(utype_has_flag(utype, F_ONEATTACK)) {
     CATLSTR(buf, bufsz,
 	    _("* Making an attack ends this unit's turn.\n"));
   }
@@ -1372,12 +981,12 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
   }
   if (utype_has_flag(utype, F_IGTER)) {
     CATLSTR(buf, bufsz,
-	    _("* Ignores terrain effects (treats all tiles as roads).\n"));
+	    _("* Ignores terrain effects (treats all squares as roads).\n"));
   }
   if (utype_has_flag(utype, F_IGZOC)) {
     CATLSTR(buf, bufsz, _("* Ignores zones of control.\n"));
   }
-  if (utype_has_flag(utype, F_CIVILIAN)) {
+  if (utype_has_flag(utype, F_NONMIL)) {
     CATLSTR(buf, bufsz,
             _("* A non-military unit (cannot attack; no martial law).\n"));
   }
@@ -1388,91 +997,61 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
   if (utype_has_flag(utype, F_NO_VETERAN)) {
     CATLSTR(buf, bufsz, _("* Will never achieve veteran status.\n"));
   } else {
-    /* Some units can never become veteran through combat in practice. */
-    bool veteran_through_combat =
-      !((utype->attack_strength == 0
-         || uclass_has_flag(utype_class(utype), UCF_MISSILE))
-        && utype->defense_strength == 0);
-    switch(utype_move_type(utype)) {
-      case BOTH_MOVING:
-        if (!utype_has_flag(utype, F_NOBUILD))
-          CATLSTR(buf, bufsz,
-                  _("* Will be built as a veteran in cities with appropriate"
-                    " training facilities (see Airport).\n"));
-        if (veteran_through_combat)
-          CATLSTR(buf, bufsz,
-                  _("* May be promoted after defeating an enemy unit.\n"));
-        break;
-      case LAND_MOVING:
-        if (utype_has_flag(utype, F_DIPLOMAT)||utype_has_flag(utype, F_SPY)) {
-          CATLSTR(buf, bufsz,
-                  _("* Will be built as a veteran under communist governments.\n"));
-          if (veteran_through_combat)
-            CATLSTR(buf, bufsz,
-                    _("* May be promoted after a successful mission.\n"));
-        } else {
-          if (!utype_has_flag(utype, F_NOBUILD))
-            CATLSTR(buf, bufsz,
-                    _("* Will be built as a veteran in cities with appropriate"
-                      " training facilities (see Barracks).\n"));
-          if (veteran_through_combat)
-            CATLSTR(buf, bufsz,
-                    _("* May be promoted after defeating an enemy unit.\n"));
-        }
-        break;
-      case SEA_MOVING:
-        if (!utype_has_flag(utype, F_NOBUILD))
-          CATLSTR(buf, bufsz,
-                  _("* Will be built as a veteran in cities with appropriate"
-                    " training facilities (see Port Facility).\n"));
-        if (veteran_through_combat)
-          CATLSTR(buf, bufsz,
-                  _("* May be promoted after defeating an enemy unit.\n"));
-        break;
-      default:          /* should never happen in default rulesets */
-        if (veteran_through_combat)
-          CATLSTR(buf, bufsz,
-                  _("* May be promoted through combat or training.\n"));
-        else
-          CATLSTR(buf, bufsz,
-                  _("* May be built as a veteran through training.\n"));
-        break;
+    CATLSTR(buf, bufsz, _("* May become veteran through training or combat.\n"));
+  }
+  if (utype_has_flag(utype, F_TRIREME)) {
+    Tech_type_id tech1 = find_advance_by_flag(0, TF_REDUCE_TRIREME_LOSS1);
+    Tech_type_id tech2 = find_advance_by_flag(0, TF_REDUCE_TRIREME_LOSS2);
+    cat_snprintf(buf, bufsz,
+	    _("* Must end turn in a city or next to land,"
+	      " or has a 50%% risk of being lost at sea.\n"));
+    if (tech1 != A_LAST) {
+      cat_snprintf(buf, bufsz,
+	      _("* The discovery of %s reduces the risk to 25%%.\n"),
+	      advance_name_for_player(game.player_ptr, tech1));
+    }
+    if (tech2 != A_LAST) {
+      cat_snprintf(buf, bufsz,
+	      _("* %s reduces the risk to 12%%.\n"),
+	      advance_name_for_player(game.player_ptr, tech2));
     }
   }
-  if (utype_has_flag(utype, F_SHIELD2GOLD)) {
-    /* FIXME: the conversion shield => gold is activated if
-     *        EFT_SHIELD2GOLD_FACTOR is not equal null; how to determine
-     *        possible sources? */
-    CATLSTR(buf, bufsz,
-            _("* Under certain conditions the shield upkeep of this unit can "
-              " be converted to gold upkeep.\n"));
-  }
-
-  unit_class_iterate(pclass) {
-    if (uclass_has_flag(pclass, UCF_UNREACHABLE)
-        && BV_ISSET(utype->targets, uclass_index(pclass))) {
-      cat_snprintf(buf, bufsz, "* Can attack against %s units, which are usually not reachable.\n",
-                   uclass_name_translation(pclass));
-    }
-  } unit_class_iterate_end;
-  if (utype_fuel(utype)) {
+  if (utype->fuel > 0) {
     char allowed_units[10][64];
     int num_allowed_units = 0;
-    int j;
+    int j, n;
     struct astring astr;
 
     astr_init(&astr);
     astr_minsize(&astr,1);
     astr.str[0] = '\0';
 
-    unit_type_iterate(transport) {
-      if (can_unit_type_transport(transport, utype_class(utype))) {
-        mystrlcpy(allowed_units[num_allowed_units],
-                  utype_name_translation(transport),
-                  sizeof(allowed_units[num_allowed_units]));
-        num_allowed_units++;
+    n = num_role_units(F_CARRIER);
+    for (j = 0; j < n; j++) {
+      struct unit_type *punittype = get_role_unit(F_CARRIER, j);
+
+      mystrlcpy(allowed_units[num_allowed_units],
+		utype_name_translation(punittype),
+		sizeof(allowed_units[num_allowed_units]));
+      num_allowed_units++;
+      assert(num_allowed_units < ARRAY_SIZE(allowed_units));
+    }
+
+    if (utype_has_flag(utype, F_MISSILE)) {
+      n = num_role_units(F_MISSILE_CARRIER);
+
+      for (j = 0; j < n; j++) {
+	struct unit_type *punittype = get_role_unit(F_MISSILE_CARRIER, j);
+
+	if (punittype->transport_capacity > 0) {
+	  mystrlcpy(allowed_units[num_allowed_units],
+		    utype_name_translation(punittype),
+		    sizeof(allowed_units[num_allowed_units]));
+	  num_allowed_units++;
+	  assert(num_allowed_units < ARRAY_SIZE(allowed_units));
+	}
       }
-    } unit_type_iterate_end;
+    }
 
     for (j = 0; j < num_allowed_units; j++) {
       const char *deli_str = NULL;
@@ -1501,17 +1080,17 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
                        " after %d turn.\n",
                        "* Unit has to be in a city, or a base"
                        " after %d turns.\n",
-                       utype_fuel(utype)),
-                  utype_fuel(utype));
+                       utype->fuel),
+                  utype->fuel);
     } else {
       cat_snprintf(buf, bufsz,
                    PL_("* Unit has to be in a city, a base, or on a %s"
                        " after %d turn.\n",
                        "* Unit has to be in a city, a base, or on a %s"
                        " after %d turns.\n",
-                       utype_fuel(utype)),
+                       utype->fuel),
                    astr.str,
-                   utype_fuel(utype));
+                   utype->fuel);
     }
     astr_free(&astr);
   }
@@ -1522,51 +1101,48 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
     cat_snprintf(buf, bufsz, "%s\n\n", _(utype->helptext));
   }
   CATLSTR(buf, bufsz, user_text);
+  wordwrap_string(buf, 68);
   return buf;
 }
 
 /****************************************************************
-  Append misc dynamic text for advance/technology.
-
-  pplayer may be NULL.
+  Append misc dynamic text for techs.
 *****************************************************************/
-void helptext_advance(char *buf, size_t bufsz, struct player *pplayer,
-		      const char *user_text, int i)
+void helptext_tech(char *buf, size_t bufsz, int i, const char *user_text)
 {
-  struct advance *vap = valid_advance_by_number(i);
-  struct universal source = {
-    .kind = VUT_ADVANCE,
-    .value = {.advance = vap}
+  struct req_source source = {
+    .type = REQ_TECH,
+    .value = {.tech = i}
   };
 
   assert(NULL != buf && 0 < bufsz && NULL != user_text);
   mystrlcpy(buf, user_text, bufsz);
 
-  if (NULL == vap) {
-    log_error("Unknown tech %d.", i);
+  if (!tech_exists(i)) {
+    freelog(LOG_ERROR, "Unknown tech %d.", i);
+    strcpy(buf, user_text);
     return;
   }
 
-  if (player_invention_state(pplayer, i) != TECH_KNOWN) {
-    if (player_invention_state(pplayer, i) == TECH_PREREQS_KNOWN) {
+  if (get_invention(game.player_ptr, i) != TECH_KNOWN) {
+    if (get_invention(game.player_ptr, i) == TECH_REACHABLE) {
       cat_snprintf(buf, bufsz,
 		   _("If we would now start with %s we would need %d bulbs."),
-		   advance_name_for_player(pplayer, i),
-		   base_total_bulbs_required(pplayer, i));
-    } else if (player_invention_reachable(pplayer, i)) {
+		   advance_name_for_player(game.player_ptr, i),
+		   base_total_bulbs_required(game.player_ptr, i));
+    } else if (tech_is_available(game.player_ptr, i)) {
       cat_snprintf(buf, bufsz,
 		   _("To reach %s we need to obtain %d other"
 		     " technologies first. The whole project"
 		     " will require %d bulbs to complete."),
-		   advance_name_for_player(pplayer, i),
-		   num_unknown_techs_for_goal(pplayer, i) - 1,
-		   total_bulbs_required_for_goal(pplayer, i));
+		   advance_name_for_player(game.player_ptr, i),
+		   num_unknown_techs_for_goal(game.player_ptr, i) - 1,
+		   total_bulbs_required_for_goal(game.player_ptr, i));
     } else {
       CATLSTR(buf, bufsz,
 	      _("You cannot research this technology."));
     }
-    if (!techs_have_fixed_costs()
-     && player_invention_reachable(pplayer, i)) {
+    if (!techs_have_fixed_costs() && tech_is_available(game.player_ptr, i)) {
       CATLSTR(buf, bufsz,
 	      _(" This number may vary depending on what "
 		"other players will research.\n"));
@@ -1582,8 +1158,14 @@ void helptext_advance(char *buf, size_t bufsz, struct player *pplayer,
     cat_snprintf(buf, bufsz,
 		 _("* The first player to research %s gets"
 		   " an immediate advance.\n"),
-		 advance_name_for_player(pplayer, i));
+		 advance_name_for_player(game.player_ptr, i));
   }
+  if (advance_has_flag(i, TF_REDUCE_TRIREME_LOSS1))
+    cat_snprintf(buf, bufsz, _("* Reduces the chance of losing boats "
+				 "on the high seas to 25%%.\n"));
+  if (advance_has_flag(i, TF_REDUCE_TRIREME_LOSS2))
+    cat_snprintf(buf, bufsz, _("* Reduces the chance of losing boats "
+				 "on the high seas to 12%%.\n"));
   if (advance_has_flag(i, TF_POPULATION_POLLUTION_INC))
     CATLSTR(buf, bufsz,
             _("* Increases the pollution generated by the population.\n"));
@@ -1591,9 +1173,25 @@ void helptext_advance(char *buf, size_t bufsz, struct player *pplayer,
   if (advance_has_flag(i, TF_BRIDGE)) {
     const char *units_str = role_units_translations(F_SETTLERS);
     cat_snprintf(buf, bufsz,
-		 _("* Allows %s to build roads on river tiles.\n"),
+		 _("* Allows %s to build roads on river squares.\n"),
 		 units_str);
     free((void *) units_str);
+  }
+
+  if (advance_has_flag(i, TF_FORTRESS)) {
+    const char *units_str = role_units_translations(F_SETTLERS);
+    cat_snprintf(buf, bufsz, _("* Allows %s to build fortresses.\n"),
+		 units_str);
+    free((void *) units_str);
+  }
+
+  if (advance_has_flag(i, TF_AIRBASE)) {
+    const char *units_str = role_units_translations(F_AIRBASE);
+    if (units_str) {
+      cat_snprintf(buf, bufsz, _("* Allows %s to build airbases.\n"),
+		   units_str);
+      free((void *) units_str);
+    }
   }
 
   if (advance_has_flag(i, TF_RAILROAD)) {
@@ -1611,22 +1209,22 @@ void helptext_advance(char *buf, size_t bufsz, struct player *pplayer,
 		 units_str);
     free((void *) units_str);
   }
-  if (vap->helptext && vap->helptext[0] != '\0') {
+  if (advances[i].helptext && advances[i].helptext[0] != '\0') {
     if (strlen(buf) > 0) {
       CATLSTR(buf, bufsz, "\n");
     }
-    cat_snprintf(buf, bufsz, "%s\n", _(vap->helptext));
+    cat_snprintf(buf, bufsz, "%s\n", _(advances[i].helptext));
   }
 }
 
 /****************************************************************
   Append text for terrain.
 *****************************************************************/
-void helptext_terrain(char *buf, size_t bufsz, struct player *pplayer,
-		      const char *user_text, struct terrain *pterrain)
+void helptext_terrain(char *buf, size_t bufsz, struct terrain *pterrain,
+		      const char *user_text)
 {
-  struct universal source = {
-    .kind = VUT_TERRAIN,
+  struct req_source source = {
+    .type = REQ_TERRAIN,
     .value = {.terrain = pterrain}
   };
 
@@ -1634,7 +1232,7 @@ void helptext_terrain(char *buf, size_t bufsz, struct player *pplayer,
   buf[0] = '\0';
 
   if (!pterrain) {
-    log_error("Unknown terrain!");
+    freelog(LOG_ERROR, "Unknown terrain!");
     return;
   }
 
@@ -1644,20 +1242,20 @@ void helptext_terrain(char *buf, size_t bufsz, struct player *pplayer,
 	    _("* Pollution cannot be generated on this terrain."));
     CATLSTR(buf, bufsz, "\n");
   }
-  if (is_ocean(pterrain)) {
-    CATLSTR(buf, bufsz,
-	    _("* Fallout cannot be generated on this terrain."));
-    CATLSTR(buf, bufsz, "\n");
-  }
   if (terrain_has_flag(pterrain, TER_NO_CITIES)) {
     CATLSTR(buf, bufsz,
 	    _("* You cannot build cities on this terrain."));
     CATLSTR(buf, bufsz, "\n");
   }
   if (terrain_has_flag(pterrain, TER_UNSAFE_COAST)
-      && !terrain_has_flag(pterrain, TER_OCEANIC)) {
+      && !is_ocean(pterrain)) {
     CATLSTR(buf, bufsz,
 	    _("* The coastline of this terrain is unsafe."));
+    CATLSTR(buf, bufsz, "\n");
+  }
+  if (terrain_has_flag(pterrain, TER_UNSAFE)) {
+    CATLSTR(buf, bufsz,
+	    _("* This terrain is unsafe for units to travel on."));
     CATLSTR(buf, bufsz, "\n");
   }
   if (terrain_has_flag(pterrain, TER_OCEANIC)) {
@@ -1676,24 +1274,23 @@ void helptext_terrain(char *buf, size_t bufsz, struct player *pplayer,
     CATLSTR(buf, bufsz, "\n\n");
     CATLSTR(buf, bufsz, user_text);
   }
+  wordwrap_string(buf, 68);
 }
 
 /****************************************************************
   Append text for government.
 
-  pplayer may be NULL.
-
   TODO: Generalize the effects code for use elsewhere. Add
   other requirements.
 *****************************************************************/
-void helptext_government(char *buf, size_t bufsz, struct player *pplayer,
-                         const char *user_text, struct government *gov)
+void helptext_government(char *buf, size_t bufsz, struct government *gov,
+			 const char *user_text)
 {
-  bool reqs = FALSE;
-  struct universal source = {
-    .kind = VUT_GOVERNMENT,
-    .value = {.govern = gov}
+  struct req_source source = {
+    .type = REQ_GOV,
+    .value = {.gov = gov }
   };
+  bool has_req = FALSE;
 
   assert(NULL != buf && 0 < bufsz);
   buf[0] = '\0';
@@ -1704,12 +1301,12 @@ void helptext_government(char *buf, size_t bufsz, struct player *pplayer,
 
   /* Add requirement text for government itself */
   requirement_vector_iterate(&gov->reqs, preq) {
-    if (insert_requirement(buf, bufsz, pplayer, preq)) {
-      reqs = TRUE;
-    }
+    insert_requirement(preq, buf, bufsz);
+    has_req = TRUE;
   } requirement_vector_iterate_end;
-  if (reqs) {
-    mystrlcat(buf, "\n", bufsz);
+
+  if (has_req) {
+    cat_snprintf(buf, bufsz, "\n");
   }
 
   /* Effects */
@@ -1729,8 +1326,8 @@ void helptext_government(char *buf, size_t bufsz, struct player *pplayer,
 
     /* Grab output type, if there is one */
     requirement_list_iterate(peffect->reqs, preq) {
-      switch (preq->source.kind) {
-       case VUT_OTYPE:
+      switch (preq->source.type) {
+       case REQ_OUTPUTTYPE:
          if (output_type == O_LAST) {
            /* We should never have multiple outputtype requirements
             * in one list in the first place (it simply makes no sense,
@@ -1744,24 +1341,24 @@ void helptext_government(char *buf, size_t bufsz, struct player *pplayer,
            astr_add(&outputs_and, "%s", oname);
          }
          break;
-       case VUT_UCLASS:
+       case REQ_UNITCLASS:
          if (unitclass == NULL) {
-           unitclass = preq->source.value.uclass;
+           unitclass = preq->source.value.unitclass;
          }
          break;
-       case VUT_UTYPE:
-         if (unittype == NULL) {
-           unittype = preq->source.value.utype;
-         }
-         break;
-       case VUT_UTFLAG:
+       case REQ_UNITFLAG:
          if (unitflag == F_LAST) {
            /* FIXME: We should list all the unit flag requirements,
             *        not only first one. */
            unitflag = preq->source.value.unitflag;
          }
          break;
-       case VUT_GOVERNMENT:
+       case REQ_UNITTYPE:
+         if (unittype == NULL) {
+           unittype = preq->source.value.unittype;
+         }
+         break;
+       case REQ_GOV:
          /* This is government we are generating helptext for.
           * ...or if not, it's ruleset bug that should never make it
           * this far. Fix ruleset loading code. */
@@ -1769,7 +1366,7 @@ void helptext_government(char *buf, size_t bufsz, struct player *pplayer,
        default:
          extra_reqs = TRUE;
          break;
-      };
+      }
     } requirement_list_iterate_end;
 
     if (!extra_reqs) {
@@ -1868,49 +1465,49 @@ void helptext_government(char *buf, size_t bufsz, struct player *pplayer,
                        /* TRANS: %s is the output type, like 'shield' or 'gold'.
                         * There is currently no way to control the
                         * singular/plural version of these. */
-                       _("* Each of your cities will avoid paying %d %s"
-                         " upkeep for your units.\n"),
+                       _("* Each of your cities will avoid "
+                  "paying %d %s towards unit upkeep.\n"),
                        peffect->value,
                        outputs_and.str);
         } else {
           cat_snprintf(buf, bufsz,
                        /* TRANS: Amount is subtracted from upkeep cost
                         * for each upkeep type. */
-                       _("* Each of your cities will avoid paying %d"
-                         " upkeep for your units.\n"),
+                       _("* Each of your cities will avoid "
+                  "paying %d towards unit upkeep.\n"),
                        peffect->value);
         }
         break;
       case EFT_CIVIL_WAR_CHANCE:
         cat_snprintf(buf, bufsz,
-                     _("* If you lose your capital,"
-                       " chance of civil war is %d%%.\n"),
+                     _("* Chance of civil war is %d%% if you "
+                "lose your capital.\n"),
                      peffect->value);
         break;
-      case EFT_EMPIRE_SIZE_BASE:
+      case EFT_EMPIRE_SIZE_MOD:
         cat_snprintf(buf, bufsz,
                      /* TRANS: %d should always be greater than 2. */
-                     _("* When you have %d cities, the first unhappy citizen"
-                       " will appear in each city due to civilization size.\n"),
-                     peffect->value);
+                     _("* The first unhappy citizen in each "
+        	      "city due to civilization size will appear when you have %d"
+ 	              " cities.\n"), game.info.cityfactor + peffect->value);
         break;
       case EFT_EMPIRE_SIZE_STEP:
         cat_snprintf(buf, bufsz,
                      /* TRANS: %d should always be greater than 2. */
-                     _("* After the first unhappy citizen due to"
-                       " civilization size, for each %d additional cities"
-                       " another unhappy citizen will appear.\n"),
+                     _("* After the first unhappy citizen "
+                "due to city size, for each %d additional cities, another "
+                "unhappy citizen will appear.\n"),
                      peffect->value);
         break;
       case EFT_MAX_RATES:
         if (peffect->value < 100 && game.info.changable_tax) {
           cat_snprintf(buf, bufsz,
-                       _("* The maximum rate you can set for science,"
-                          " gold, or luxuries is %d%%.\n"),
+                  _("The maximum rate you can set for science, "
+	                  "gold, or luxuries is %d%%.\n"),
                        peffect->value);
         } else if (game.info.changable_tax) {
           CATLSTR(buf, bufsz,
-                  _("* Has unlimited science/gold/luxuries rates.\n"));
+                  _("Has unlimited science/gold/luxuries rates.\n"));
         }
         break;
       case EFT_MARTIAL_LAW_EACH:
@@ -1938,8 +1535,9 @@ void helptext_government(char *buf, size_t bufsz, struct player *pplayer,
       case EFT_RAPTURE_GROW:
         cat_snprintf(buf, bufsz,
                      /* TRANS: %d should always be greater than 2. */
-                     _("* You may grow your cities by means of celebrations."
-                       " Your cities must be at least size %d.\n"),
+                     _("* You may grow your cities by "
+                "means of celebrations.  Your cities must be at least "
+                "size %d before they can grow in this manner.\n"),
                      peffect->value);
         break;
       case EFT_UNBRIBABLE_UNITS:
@@ -1950,8 +1548,9 @@ void helptext_government(char *buf, size_t bufsz, struct player *pplayer,
         break;
       case EFT_REVOLUTION_WHEN_UNHAPPY:
         CATLSTR(buf, bufsz,
-                _("* If any city is in disorder for more than two turns in a row,"
-                  " government will fall into anarchy.\n"));
+                _("* Government will fall into anarchy "
+                "if any city is in disorder for more than two turns in "
+                "a row.\n"));
         break;
       case EFT_HAS_SENATE:
         CATLSTR(buf, bufsz,
@@ -1997,16 +1596,17 @@ void helptext_government(char *buf, size_t bufsz, struct player *pplayer,
       case EFT_OUTPUT_PENALTY_TILE:
         cat_snprintf(buf, bufsz,
                      /* TRANS: %s is list of output types, with 'or' */
-                     _("* Each worked tile that gives more than %d %s will"
-                       " suffer a -1 penalty unless celebrating.\n"),
+                     _("* Each worked tile that gives more "
+                "than %d %s will suffer a -1 penalty when not "
+                "celebrating.\n"),
                      peffect->value,
                      outputs_or.str);
         break;
       case EFT_OUTPUT_INC_TILE_CELEBRATE:
         cat_snprintf(buf, bufsz,
                      /* TRANS: %s is list of output types, with 'or' */
-                     _("* Each worked tile with at least 1 %s will yield"
-                       " %d more of it while celebrating.\n"),
+                     _("* Each worked tile with at least 1 "
+                "%s will yield %d more of it when celebrating.\n"),
                      outputs_or.str,
                      peffect->value);
         break;
@@ -2044,15 +1644,6 @@ void helptext_government(char *buf, size_t bufsz, struct player *pplayer,
                        outputs_and.str);
         }
         break;
-      case EFT_HEALTH_PCT:
-        if (peffect->value > 0) {
-          CATLSTR(buf, bufsz, _("* Increases the possibility of plague"
-                                " within your cities.\n"));
-        } else if (peffect->value < 0) {
-          CATLSTR(buf, bufsz, _("* Decreases the possibility of plague"
-                                " within your cities.\n"));
-        }
-        break;
       case EFT_OUTPUT_WASTE_BY_DISTANCE:
         if (peffect->value >= 3) {
           cat_snprintf(buf, bufsz,
@@ -2073,15 +1664,6 @@ void helptext_government(char *buf, size_t bufsz, struct player *pplayer,
                          " with distance from capital.\n"),
                        outputs_and.str);
         }
-      case EFT_MIGRATION_PCT:
-        if (peffect->value > 0) {
-          CATLSTR(buf, bufsz, _("* Increases the possibility of migration"
-                                " into Your cities.\n"));
-        } else if (peffect->value < 0) {
-          CATLSTR(buf, bufsz, _("* Decreases the possibility of migration"
-                                " into Your cities.\n"));
-        }
-        break;
       default:
         break;
       };
@@ -2093,7 +1675,7 @@ void helptext_government(char *buf, size_t bufsz, struct player *pplayer,
   } effect_list_iterate_end;
 
   unit_type_iterate(utype) {
-    if (utype->need_government == gov) {
+    if (utype->gov_requirement == gov) {
       cat_snprintf(buf, bufsz,
                    _("* Allows you to build %s.\n"),
                    utype_name_translation(utype));
@@ -2101,6 +1683,7 @@ void helptext_government(char *buf, size_t bufsz, struct player *pplayer,
   } unit_type_iterate_end;
 
   CATLSTR(buf, bufsz, user_text);
+  wordwrap_string(buf, 68);
 }
 
 /****************************************************************
@@ -2112,7 +1695,7 @@ char *helptext_unit_upkeep_str(struct unit_type *utype)
   int any = 0;
 
   if (!utype) {
-    log_error("Unknown unit!");
+    freelog(LOG_ERROR, "Unknown unit!");
     return "";
   }
 
@@ -2120,7 +1703,7 @@ char *helptext_unit_upkeep_str(struct unit_type *utype)
   buf[0] = '\0';
   output_type_iterate(o) {
     if (utype->upkeep[o] > 0) {
-      /* TRANS: "2 Food" or ", 1 Shield" */
+      /* TRANS: "2 Food" or ", 1 shield" */
       cat_snprintf(buf, sizeof(buf), _("%s%d %s"),
 	      (any > 0 ? Q_("?blistmore:, ") : ""), utype->upkeep[o],
 	      get_output_name(o));
@@ -2128,8 +1711,8 @@ char *helptext_unit_upkeep_str(struct unit_type *utype)
     }
   } output_type_iterate_end;
   if (utype->happy_cost > 0) {
-    /* TRANS: "2 Unhappy" or ", 1 Unhappy" */
-    cat_snprintf(buf, sizeof(buf), _("%s%d Unhappy"),
+    /* TRANS: "2 unhappy" or ", 1 unhappy" */
+    cat_snprintf(buf, sizeof(buf), _("%s%d unhappy"),
 	    (any > 0 ? Q_("?blistmore:, ") : ""), utype->happy_cost);
     any++;
   }

@@ -25,8 +25,8 @@ flag_alt = "-"
 city_style = "Celtic"
 
 ruler_titles = { "government",      "male_title",      "female_title"
-                 "Despotism",       _("Chief"),        _("?female:Chief")
-                 "Monarchy",        _("Great Chief"),_("?female:Great Chief")
+                 "Despotism",       _("Chief"),        _("Chief")
+                 "Monarchy",        _("Great Chief"),  _("Great Chief")
                  "Republic",        _("Spokesman"),    _("Spokeswoman")
                }
 
@@ -34,7 +34,7 @@ init_techs=""
 init_buildings=""
 init_government="Despotism"
 init_units=""
-civilwar_nations = "iroquois", "hopi", "cree"
+civilwar_nations = "iroquois", "american", "canadian"
 
 ; City names are tribes. List based on data from this page:
 ; http://www.accessgenealogy.com/native/tribes/siouan/siouanfamilyhist.htm

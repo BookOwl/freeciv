@@ -7,8 +7,6 @@ pkgdata_DATA =          \
 	auto_ll.spec	\
 	cities.png	\
 	cities.spec	\
-	earth.png	\
-	earth.spec	\
 	explosions.png	\
 	explosions.spec	\
 	fog.png		\

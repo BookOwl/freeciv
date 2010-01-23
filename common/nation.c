@@ -34,12 +34,6 @@
 
 static struct nation_type *nations = NULL;
 
-struct nation_iter {
-  struct iterator vtable;
-  struct nation_type *p, *end;
-};
-#define NATION_ITER(p) ((struct nation_iter *)(p))
-
 static int num_nation_groups;
 static struct nation_group nation_groups[MAX_NUM_NATION_GROUPS];
 
@@ -48,37 +42,22 @@ static struct nation_group nation_groups[MAX_NUM_NATION_GROUPS];
   If returning 0, prints log message with given loglevel
   quoting given func name, explaining problem.
 ***************************************************************/
-#define bounds_check_nation(pnation, loglevel)                              \
-    real_bounds_check_nation(pnation, loglevel,                             \
-                             log_do_output_for_level(loglevel), __FILE__,   \
-                             __FUNCTION__, __LINE__)
-static bool real_bounds_check_nation(const struct nation_type *pnation,
-                                     enum log_level level, bool do_output,
-                                     const char *file, const char *function,
-                                     int line)
+static bool bounds_check_nation(const struct nation_type *pnation,
+				int loglevel, const char *func_name)
 {
   if (0 == nation_count()) {
-    if (do_output) {
-      do_log(file, function, line, TRUE, level,
-             "Function called before nations setup.");
-    }
+    freelog(loglevel, "%s() called before nations setup", func_name);
     return FALSE;
   }
   if (NULL == pnation) {
-    if (do_output) {
-      do_log(file, function, line, TRUE, level,
-             "This function has NULL nation argument.");
-    }
+    freelog(loglevel, "%s() has NULL nation", func_name);
     return FALSE;
   }
-  if (pnation->item_number < 0
-      || pnation->item_number >= nation_count()
+  if (pnation->index < 0
+      || pnation->index >= nation_count()
       || &nations[nation_index(pnation)] != pnation) {
-    if (do_output) {
-      do_log(file, function, line, TRUE, level,
-             "This function has bad nation number %d (count %d).",
-             pnation->item_number, nation_count());
-    }
+    freelog(loglevel, "%s() has bad nation number %d (count %d)",
+	    func_name, pnation->index, nation_count());
     return FALSE;
   }
   return TRUE;
@@ -122,7 +101,7 @@ struct nation_type *find_nation_by_rule_name(const char *name)
 ****************************************************************************/
 const char *nation_rule_name(const struct nation_type *pnation)
 {
-  if (!bounds_check_nation(pnation, LOG_ERROR)) {
+  if (!bounds_check_nation(pnation, LOG_ERROR, "nation_rule_name")) {
     return "";
   }
   return Qn_(pnation->adjective.vernacular);
@@ -134,7 +113,7 @@ const char *nation_rule_name(const struct nation_type *pnation)
 ****************************************************************************/
 const char *nation_adjective_translation(struct nation_type *pnation)
 {
-  if (!bounds_check_nation(pnation, LOG_ERROR)) {
+  if (!bounds_check_nation(pnation, LOG_ERROR, "nation_adjective_translation")) {
     return "";
   }
   if (NULL == pnation->adjective.translated) {
@@ -152,7 +131,7 @@ const char *nation_adjective_translation(struct nation_type *pnation)
 ****************************************************************************/
 const char *nation_plural_translation(struct nation_type *pnation)
 {
-  if (!bounds_check_nation(pnation, LOG_ERROR)) {
+  if (!bounds_check_nation(pnation, LOG_ERROR, "nation_plural_translation")) {
     return "";
   }
   if (NULL == pnation->noun_plural.translated) {
@@ -190,23 +169,24 @@ const char *nation_plural_for_player(const struct player *pplayer)
 ****************************************************************************/
 bool is_nation_playable(const struct nation_type *nation)
 {
-  if (!bounds_check_nation(nation, LOG_FATAL)) {
+  if (!bounds_check_nation(nation, LOG_FATAL, "is_nation_playable")) {
     die("bad nation");
   }
   return nation->is_playable;
 }
 
 /****************************************************************************
-  Returns which kind of barbarians can use this nation.
+  Return whether a nation is usable as a barbarian.  If true then barbarians
+  can use this nation.
 
   This does not check whether a nation is "used" or "available".
 ****************************************************************************/
-enum barbarian_type nation_barbarian_type(const struct nation_type *nation)
+bool is_nation_barbarian(const struct nation_type *nation)
 {
-  if (!bounds_check_nation(nation, LOG_FATAL)) {
+  if (!bounds_check_nation(nation, LOG_FATAL, "is_nation_barbarian")) {
     die("bad nation");
   }
-  return nation->barb_type;
+  return nation->is_barbarian;
 }
 
 /***************************************************************
@@ -215,7 +195,7 @@ sets dim to number of leaders.
 ***************************************************************/
 struct nation_leader *get_nation_leaders(const struct nation_type *nation, int *dim)
 {
-  if (!bounds_check_nation(nation, LOG_FATAL)) {
+  if (!bounds_check_nation(nation, LOG_FATAL, "get_nation_leader_names")) {
     die("bad nation");
   }
   *dim = nation->leader_count;
@@ -239,7 +219,7 @@ bool get_nation_leader_sex(const struct nation_type *nation, const char *name)
 {
   int i;
   
-  if (!bounds_check_nation(nation, LOG_ERROR)) {
+  if (!bounds_check_nation(nation, LOG_ERROR, "get_nation_leader_sex")) {
     return FALSE;
   }
   for (i = 0; i < nation->leader_count; i++) {
@@ -258,7 +238,7 @@ bool check_nation_leader_name(const struct nation_type *pnation,
 {
   int i;
   
-  if (!bounds_check_nation(pnation, LOG_ERROR)) {
+  if (!bounds_check_nation(pnation, LOG_ERROR, "check_nation_leader_name")) {
     return TRUE;			/* ? */
   }
   for (i = 0; i < pnation->leader_count; i++) {
@@ -275,7 +255,7 @@ bool check_nation_leader_name(const struct nation_type *pnation,
 struct nation_type *nation_of_player(const struct player *pplayer)
 {
   assert(NULL != pplayer);
-  if (!bounds_check_nation(pplayer->nation, LOG_FATAL)) {
+  if (!bounds_check_nation(pplayer->nation, LOG_FATAL, "nation_of_player")) {
 #if defined(__APPLE__)
     /* force trace log */
     return ((struct nation_type **)pplayer)[0];
@@ -324,7 +304,7 @@ struct nation_type *nation_by_number(const Nation_type_id nation)
 Nation_type_id nation_number(const struct nation_type *pnation)
 {
   assert(pnation);
-  return pnation->item_number;
+  return pnation->index;
 }
 
 /**************************************************************************
@@ -347,50 +327,26 @@ Nation_type_id nation_count(void)
   return game.control.nation_count;
 }
 
-/****************************************************************************
-  Implementation of iterator 'sizeof' function.
-****************************************************************************/
-size_t nation_iter_sizeof(void)
+/**************************************************************************
+  Return the last item of nations.
+**************************************************************************/
+const struct nation_type *nation_array_last(void)
 {
-  return sizeof(struct nation_iter);
+  if (game.control.nation_count > 0) {
+    return &nations[game.control.nation_count - 1];
+  }
+  return NULL;
 }
 
-/****************************************************************************
-  Implementation of iterator 'next' function.
-****************************************************************************/
-static void nation_iter_next(struct iterator *iter)
+/**************************************************************************
+  Return the first item of nations.
+**************************************************************************/
+struct nation_type *nation_array_first(void)
 {
-  NATION_ITER(iter)->p++;
-}
-
-/****************************************************************************
-  Implementation of iterator 'get' function.
-****************************************************************************/
-static void *nation_iter_get(const struct iterator *iter)
-{
-  return NATION_ITER(iter)->p;
-}
-
-/****************************************************************************
-  Implementation of iterator 'valid' function.
-****************************************************************************/
-static bool nation_iter_valid(const struct iterator *iter)
-{
-  struct nation_iter *it = NATION_ITER(iter);
-  return it->p < it->end;
-}
-
-/****************************************************************************
-  Implementation of iterator 'init' function.
-****************************************************************************/
-struct iterator *nation_iter_init(struct nation_iter *it)
-{
-  it->vtable.next = nation_iter_next;
-  it->vtable.get = nation_iter_get;
-  it->vtable.valid = nation_iter_valid;
-  it->p = nations;
-  it->end = nations + nation_count();
-  return ITERATOR(it);
+  if (game.control.nation_count > 0) {
+    return nations;
+  }
+  return NULL;
 }
 
 /***************************************************************
@@ -404,7 +360,7 @@ void nations_alloc(int num)
   game.control.nation_count = num;
 
   for (i = 0; i < num; i++) {
-    nations[i].item_number = i;
+    nations[i].index = i;
   }
 }
 
@@ -498,7 +454,7 @@ Returns nation's city style
 ***************************************************************/
 int city_style_of_nation(const struct nation_type *pnation)
 {
-  if (!bounds_check_nation(pnation, LOG_FATAL)) {
+  if (!bounds_check_nation(pnation, LOG_FATAL, "city_style_of_nation")) {
     die("bad nation");
   }
   return pnation->city_style;
@@ -513,19 +469,20 @@ struct nation_group *add_new_nation_group(const char *name)
   struct nation_group *group;
 
   if (strlen(name) >= ARRAY_SIZE(group->name)) {
-    log_fatal("Too-long group name %s.", name);
+    freelog(LOG_FATAL, "Too-long group name %s.", name);
     exit(EXIT_FAILURE);
   }
 
   for (i = 0; i < num_nation_groups; i++) {
     if (mystrcasecmp(Qn_(name), Qn_(nation_groups[i].name)) == 0) {
-      log_fatal("Duplicate group name %s.", Qn_(name));
+      freelog(LOG_FATAL, "Duplicate group name %s.",
+	      Qn_(name));
       exit(EXIT_FAILURE);
     }
   }
   if (num_nation_groups == MAX_NUM_NATION_GROUPS) {
-    log_fatal("Too many groups of nations (%d is the maximum)",
-              MAX_NUM_NATION_GROUPS);
+    freelog(LOG_FATAL, "Too many groups of nations (%d is the maximum)",
+	    MAX_NUM_NATION_GROUPS);
     exit(EXIT_FAILURE);
   }
 
@@ -650,8 +607,7 @@ void nation_groups_free(void)
 bool can_conn_edit_players_nation(const struct connection *pconn,
 				  const struct player *pplayer)
 {
-  return (can_conn_edit(pconn)
-          || (game.info.is_new_game
-	      && ((!pconn->observer && pconn->playing == pplayer)
-	           || pconn->access_level >= ALLOW_CTRL)));
+  return (game.info.is_new_game
+	  && ((!pconn->observer && pconn->player == pplayer)
+	      || pconn->access_level >= ALLOW_CTRL));
 }

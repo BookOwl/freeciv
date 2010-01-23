@@ -17,16 +17,15 @@
 
 #include <errno.h>
 
-/* utility */
 #include "fcintl.h"
 #include "log.h"
 #include "support.h"
 
 #include "connectdlg_g.h"
 
-/* client */
 #include "chatline_common.h"	/* for append_output_window */
-#include "client_main.h"
+#include "civclient.h"
+#include "clinet.h"		/* for get_server_address */
 #include "connectdlg.h"
 #include "packhand_gen.h"
 
@@ -67,7 +66,7 @@ void handle_authentication_req(enum authentication_type type, char *message)
       struct packet_authentication_reply reply;
 
       sz_strlcpy(reply.password, password);
-      send_packet_authentication_reply(&client.conn, &reply);
+      send_packet_authentication_reply(&aconnection, &reply);
       return;
     } else {
      /* PORTME: switch configs if need be */
@@ -89,7 +88,7 @@ void handle_authentication_req(enum authentication_type type, char *message)
  This regenerates the player information from a loaded game on the
  server.
 **************************************************************************/
-void handle_game_load(bool load_successful, char *filename)
+void handle_game_load(struct packet_game_load *packet)
 { 
   /* PORTME */
 }

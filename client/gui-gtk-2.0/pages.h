@@ -21,16 +21,18 @@
 
 extern GtkWidget *start_message_area;
 extern GtkWidget *take_button, *ready_button, *nation_button;
+extern GtkTreeViewColumn *rating_col, *record_col;
 
 GtkWidget *create_main_page(void);
 GtkWidget *create_start_page(void);
 GtkWidget *create_scenario_page(void);
 GtkWidget *create_load_page(void);
 GtkWidget *create_network_page(void);
+GtkWidget *create_nation_page(void);
 
 GtkWidget *create_statusbar(void);
 void append_network_statusbar(const char *text, bool force);
-void popup_save_dialog(bool scenario);
+void popup_save_dialog(void);
 
 #endif  /* FC__PAGES_H */
 

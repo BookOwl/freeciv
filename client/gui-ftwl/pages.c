@@ -24,8 +24,7 @@ static enum client_pages old_page = PAGE_MAIN;
 
 static void show_main_page()
 {
-  output_window_append(ftc_client,
-                       "Connection dialog not yet implemented. Start client "
+  append_output_window("Connection dialog not yet implemented. Start client "
                        "using the -a option.");
 }
 
@@ -63,4 +62,13 @@ enum client_pages get_client_page(void)
 void update_start_page(void)
 {
   /* PORTME*/    
+}
+
+/****************************************************************************
+  Refresh all vote related GUI widgets. Called by the voteinfo module when
+  the client receives new vote information from the server.
+****************************************************************************/
+void voteinfo_gui_update(void)
+{
+  /* PORTME */
 }

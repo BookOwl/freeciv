@@ -23,8 +23,6 @@ void set_city_names_font_sizes(int city_names_font_size,
 void ui_init(void);
 void ui_main(int argc, char *argv[]);
 void ui_exit(void);
-void gui_options_extra_init(void);
-
 void update_conn_list_dialog(void);
 void sound_bell(void);
 void add_net_input(int);
@@ -36,10 +34,6 @@ void set_unit_icon(int idx, struct unit *punit);
 void set_unit_icons_more_arrow(bool onoff);
 
 void add_idle_callback(void (callback)(void *), void *data);
-
-enum gui_type get_gui_type(void);
-
-void gui_update_font(const char *font_name, const char *font_value);
 
 extern const char *client_string;
 

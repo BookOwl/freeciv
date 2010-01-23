@@ -21,21 +21,17 @@
 #include <windows.h>
 #include <windowsx.h>
 
-/* utility */
 #include "fcintl.h"
-#include "log.h"
-#include "support.h"
-
-/* common */
 #include "game.h"
 #include "map.h"
 #include "packets.h"
 #include "player.h"
+#include "support.h"
 #include "unit.h"
 #include "unitlist.h"
 
-/* client */
-#include "client_main.h"
+#include "clinet.h"
+#include "civclient.h"
 #include "control.h"
 #include "dialogs.h"
 #include "goto.h"
@@ -184,17 +180,17 @@ popup_goto_dialog(void)
 **************************************************************************/
 static void update_goto_dialog(HWND list)
 {
-  int    j;
+  int    i, j;
   char   name[MAX_LEN_NAME+3];
 
   ListBox_ResetContent(list);
   Button_SetState(GetDlgItem(goto_dialog,ID_ALL),show_all_cities);
 
-  players_iterate(pplayer) {
-    if (!show_all_cities && pplayer != client.conn.playing) {
+  for(i=0; i<game.info.nplayers; i++) {
+    if (!show_all_cities && i != game.info.player_idx) {
       continue;
     }
-    city_list_iterate(pplayer->cities, pcity) {
+    city_list_iterate(game.players[i].cities, pcity) {
       sz_strlcpy(name, city_name(pcity));
       /* FIXME: should use unit_can_airlift_to(). */
       if (pcity->airlift) {
@@ -202,8 +198,9 @@ static void update_goto_dialog(HWND list)
       }
       j=ListBox_AddString(list,name);
       ListBox_SetItemData(list,j,pcity->id);
-    } city_list_iterate_end;
-  } players_iterate_end;
+    }
+    city_list_iterate_end;
+  }
 }
 
 /**************************************************************************

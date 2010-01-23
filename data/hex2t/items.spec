@@ -12,8 +12,6 @@ artists = "
     Marco Saupe <msaupe@saale-net.de> (reworked classic, industrial and modern)
 ; converted to hex:
     Tommy <yobbo3@hotmail.com>
-    Eleazar (buoy)
-    Vincent Croisier <vincent.croisier@advalvas.be> (ruins)
 "
 
 [file]
@@ -34,12 +32,10 @@ tiles = { "row", "column", "tag"
 ; used by all city styles
 
  1,  0, "city.disorder"
- 1,  1, "base.airbase_mg"
+ 1,  1, "tx.airbase"
  1,  2, "tx.airbase_full"
- 1,  3, "base.fortress_fg"
- 1,  4, "base.fortress_bg"
- 1,  5, "base.buoy_mg"
- 1,  6, "base.ruins_mg"
+ 1,  3, "tx.fortress"
+ 1,  4, "tx.fortress_back"
 
 ; default city tiles
  2,  2, "cd.city"

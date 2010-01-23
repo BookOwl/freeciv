@@ -18,7 +18,7 @@ flag="netherlands"
 flag_alt = "holland"
 city_style = "European"
 ruler_titles = { "government",      "male_title",      "female_title"
-                 "Democracy", _("Prime Minister"),_("?female:Prime Minister")
+                 "Democracy",       _("Prime Minister"), _("Prime Minister")
                }
 
 init_techs=""
@@ -26,7 +26,7 @@ init_buildings=""
 
 init_government="Despotism"
 init_units=""
-civilwar_nations="boer", "belgian", "frisian"
+civilwar_nations="boer", "belgian"
 
 ;names from the Golden Age, from Holland circling outward
 ;later important towns added at the end

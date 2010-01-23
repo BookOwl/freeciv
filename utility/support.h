@@ -73,19 +73,11 @@ typedef unsigned int fc_bool;
 #define fc__attribute(x)
 #endif
 
-#ifdef WIN32_NATIVE
-typedef long int fc_errno;
-#else
-typedef int fc_errno;
-#endif
-
 int mystrcasecmp(const char *str0, const char *str1);
 int mystrncasecmp(const char *str0, const char *str1, size_t n);
 int mystrncasequotecmp(const char *str0, const char *str1, size_t n);
 
 size_t effectivestrlenquote(const char *str);
-
-char *mystrcasestr(const char *haystack, const char *needle);
 
 FILE *fc_fopen(const char *filename, const char *opentype);
 #ifdef HAVE_LIBZ
@@ -95,8 +87,7 @@ DIR *fc_opendir(const char *dirname);
 int fc_remove(const char *filename);
 int fc_stat(const char *filename, struct stat *buf);
 
-fc_errno fc_get_errno(void);
-const char *fc_strerror(fc_errno err);
+const char *mystrerror(void);
 void myusleep(unsigned long usec);
 
 size_t mystrlcpy(char *dest, const char *src, size_t n);

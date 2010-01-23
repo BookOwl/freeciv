@@ -18,21 +18,16 @@
 #include <assert.h>
 #include <string.h>
 
-/* utility */
 #include "fcintl.h"
+#include "game.h"
+#include "map.h"
 #include "mem.h"
 
-/* common */
-#include "featured_text.h"
-#include "map.h"
-
-/* include */
 #include "citydlg_g.h"
 #include "mapview_g.h"
 #include "messagewin_g.h"
 
-/* client */
-#include "client_main.h"
+#include "civclient.h"
 #include "messagewin_common.h"
 #include "options.h"
 
@@ -82,8 +77,8 @@ void update_meswin_dialog(void)
 
   if (!is_meswin_open() && messages_total > 0
       && !client_is_observer()
-      && NULL != client.conn.playing
-      && !client.conn.playing->ai_data.control) {
+      && game.player_ptr
+      && !game.player_ptr->ai.control) {
     popup_meswin_dialog(FALSE);
     change = FALSE;
     return;
@@ -106,10 +101,6 @@ void clear_notify_window(void)
   for (i = 0; i < messages_total; i++) {
     free(messages[i].descr);
     messages[i].descr = NULL;
-
-    text_tag_list_clear_all(messages[i].tags);
-    text_tag_list_free(messages[i].tags);
-    messages[i].tags = NULL;
   }
   messages_total = 0;
   update_meswin_dialog();
@@ -118,8 +109,8 @@ void clear_notify_window(void)
 /**************************************************************************
 ...
 **************************************************************************/
-void add_notify_window(const char *message, const struct text_tag_list *tags,
-                       struct tile *ptile, enum event_type event)
+void add_notify_window(char *message, struct tile *ptile,
+		       enum event_type event)
 {
   const size_t min_msg_len = 50;
   size_t msg_len = strlen(message);
@@ -143,7 +134,6 @@ void add_notify_window(const char *message, const struct text_tag_list *tags,
   messages[messages_total].tile = ptile;
   messages[messages_total].event = event;
   messages[messages_total].descr = s;
-  messages[messages_total].tags = text_tag_list_dup(tags);
   messages[messages_total].location_ok = (ptile != NULL);
   messages[messages_total].visited = FALSE;
   messages_total++;
@@ -154,10 +144,11 @@ void add_notify_window(const char *message, const struct text_tag_list *tags,
    */
   for (i = 0; i < messages_total; i++) {
     if (messages[i].location_ok) {
-      struct city *pcity = tile_city(messages[i].tile);
+      struct city *pcity = tile_get_city(messages[i].tile);
 
-      messages[i].city_ok =
-        (pcity && can_player_see_city_internals(client.conn.playing, pcity));
+      messages[i].city_ok
+	= (pcity
+	   && can_player_see_city_internals(game.player_ptr, pcity));
     } else {
       messages[i].city_ok = FALSE;
     }
@@ -204,14 +195,14 @@ void meswin_popup_city(int message_index)
 
   if (messages[message_index].city_ok) {
     struct tile *ptile = messages[message_index].tile;
-    struct city *pcity = tile_city(ptile);
+    struct city *pcity = tile_get_city(ptile);
 
     if (center_when_popup_city) {
       center_tile_mapcanvas(ptile);
     }
 
     if (pcity
-	&& can_player_see_units_in_city(client.conn.playing, pcity)) {
+	&& can_player_see_units_in_city(game.player_ptr, pcity)) {
       /* If the event was the city being destroyed, pcity will be NULL
        * and we'd better not try to pop it up.  It's also possible that
        * events will happen on enemy cities; we generally don't want to pop

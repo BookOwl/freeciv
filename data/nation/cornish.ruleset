@@ -7,7 +7,7 @@ legend=_("Cornwall is a region in the extreme southwest of England,\
  traditionally the home of the legendary King Arthur.")
 leader =
  "Arthur",
- "Jonathan Trelawny",
+ "Jonathen Trelawny",
  "Thomas Flamank",
  "Michael Joseph",
  "William Bligh"
@@ -17,7 +17,7 @@ flag_alt = "england"
 city_style = "Celtic"
 
 ruler_titles = { "government",      "male_title",      "female_title"
-                 "Despotism",       _("Chieftain"),    _("?female:Chieftain")
+                 "Despotism",       _("Chieftain"),    _("Chieftain")
                }
 
 init_techs=""

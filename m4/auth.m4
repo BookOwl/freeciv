@@ -8,22 +8,22 @@ AC_DEFUN([FC_CHECK_AUTH],
   AC_ARG_ENABLE([auth], 
   [  --enable-auth[[=no/yes/try]] compile in authentication [[default=no]]],
   [case "${enableval}" in
-    yes) auth=yes
-         must_auth=yes ;;
-    no)  auth=no ;;
-    try) auth=yes ;;
+    yes) auth=true
+         must_auth=true ;;
+    no)  auth=false ;;
+    try) auth=true ;;
     *)   AC_MSG_ERROR([bad value ${enableval} for --enable-auth]) ;;
-   esac], [auth=no])
+   esac], [auth=false])
 
   AC_ARG_WITH(mysql-prefix,[  --with-mysql-prefix=PFX Prefix where MySQL is installed (optional)],
               mysql_prefix="$withval", mysql_prefix="")
 
-  if test x$auth = xyes ; then
+  if test x$auth = xtrue; then
 
-    if test x$mysql_prefix = x ; then
+    if test x$mysql_prefix = x; then
       AC_CHECK_HEADER(mysql/mysql.h, , 
                       [AC_MSG_WARN([couldn't find mysql header: disabling auth]);
-                       auth=no])
+                       auth=false])
 
       dnl we need to set -L correctly, we will check once in standard locations
       dnl then we will check with other LDFLAGS. if none of these work, we fail.
@@ -31,9 +31,9 @@ AC_DEFUN([FC_CHECK_AUTH],
       AC_CHECK_LIB(mysqlclient, mysql_query, 
 		   [AUTH_LIBS="-lmysqlclient $AUTH_LIBS"],
                    [AC_MSG_WARN([couldn't find mysql libs in normal locations]);
-                    auth=no])
+                    auth=false])
 
-      if test x$auth = xno ; then
+      if test x$auth = xfalse ; then
         fc_preauth_LDFLAGS="$LDFLAGS"
         fc_mysql_lib_loc="-L/usr/lib/mysql -L/usr/local/lib/mysql"
 
@@ -44,17 +44,17 @@ AC_DEFUN([FC_CHECK_AUTH],
           AC_CHECK_LIB(mysqlclient, mysql_query,
                        [AUTH_LIBS="-lmysqlclient $AUTH_LIBS";
                         AC_MSG_WARN([had to add $__ldpath to LDFLAGS])
-                        auth=yes],
+                        auth=true],
                         [AC_MSG_WARN([couldn't find mysql libs in $__ldpath])])
 
-          if test x$auth = xyes; then
+          if test x$auth = xtrue; then
             break
           else
             LDFLAGS="$fc_preauth_LDFLAGS"
           fi
         done
 
-        if test x$auth = xno ; then
+        if test x$auth = xfalse ; then
           AC_MSG_ERROR([couldn't find mysql libs at all])
         fi
       fi
@@ -69,19 +69,19 @@ AC_DEFUN([FC_CHECK_AUTH],
       LIBS="$LIBS $AUTH_LIBS"
       AC_CHECK_HEADER(mysql/mysql.h, , 
                       [AC_MSG_WARN([couldn't find mysql header in $mysql_prefix/include]);
-                       auth=no])
-      if test x$auth = xyes; then
+                       auth=false])
+      if test x$auth = xtrue; then
         AC_CHECK_LIB(mysqlclient, mysql_query, ,
                      [AC_MSG_WARN([couldn't find mysql libs in $mysql_prefix/lib/mysql]);
-                      auth=no])
+                      auth=false])
       fi
       CFLAGS="$auth_saved_cflags"
       CPPFLAGS="$auth_saved_cppflags"
       LIBS="$auth_saved_libs"
     fi
 
-    if test x$auth = xno; then
-      if test x$must_auth = xyes; then
+    if test x$auth = xfalse; then
+      if test x$must_auth = xtrue; then
         AC_MSG_ERROR([can't find mysql: cannot build authentication support])
       else
         AC_MSG_WARN([can't find mysql -- disabling authentication])
@@ -94,7 +94,7 @@ AC_DEFUN([FC_CHECK_AUTH],
   fi
 
 
-  if test x$auth = xyes; then
+  if test x$auth = xtrue; then
     AC_DEFINE(HAVE_AUTH, 1, [compile with authentication])
   fi
 

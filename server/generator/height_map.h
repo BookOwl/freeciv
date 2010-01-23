@@ -14,7 +14,7 @@
 #define FC__HEIGHT_MAP_H
 
 /* Wrappers for easy access.  They are a macros so they can be a lvalues.*/
-#define hmap(_tile) (height_map[tile_index(_tile)])
+#define hmap(ptile) (height_map[(ptile)->index])
 
 /* shore_level safe unit of height */
 #define H_UNIT MIN(1, (hmap_max_level - hmap_shore_level) / 100)

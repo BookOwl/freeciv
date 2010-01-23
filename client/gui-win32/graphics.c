@@ -90,7 +90,8 @@ void load_intro_gfx(void)
   Load the cursors (mouse substitute sprites), including a goto cursor,
   an airdrop cursor, a nuke cursor, and a patrol cursor.
 **************************************************************************/
-void load_cursors(void)
+void
+load_cursors(void)
 {
   enum cursor_type cursor;
   ICONINFO ii;
@@ -309,7 +310,10 @@ static void flush_hbmp_cache()
     crect_list_iterate(free_rects, pcrect) {
       free(pcrect);
     } crect_list_iterate_end;
-    crect_list_free(free_rects);
+
+    crect_list_unlink_all(free_rects);
+
+    free(free_rects);
   }
 
   free_rects = crect_list_new();
@@ -319,7 +323,10 @@ static void flush_hbmp_cache()
     crect_list_iterate(used_rects, pcrect) {
       free(pcrect);
     } crect_list_iterate_end;
-    crect_list_free(used_rects);
+
+    crect_list_unlink_all(used_rects);
+
+    free(used_rects);
   }
 
   used_rects = crect_list_new();
@@ -707,24 +714,24 @@ BITMAP *bmp_load_png(const char *filename)
 
   if (!(fp = fc_fopen(filename, "rb"))) {
     MessageBox(NULL, "failed reading", filename, MB_OK);
-    log_fatal("Failed reading PNG file: \"%s\"", filename);
+    freelog(LOG_FATAL, "Failed reading PNG file: %s", filename);
     exit(EXIT_FAILURE);
   }
     
   if (!(pngp = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL,
 				      NULL))) {
 
-    log_fatal("Failed creating PNG struct");
+    freelog(LOG_FATAL, "Failed creating PNG struct");
     exit(EXIT_FAILURE);
   }
  
   if (!(infop = png_create_info_struct(pngp))) {
-    log_fatal("Failed creating PNG struct");
+    freelog(LOG_FATAL, "Failed creating PNG struct");
     exit(EXIT_FAILURE);
   }
    
   if (setjmp(pngp->jmpbuf)) {
-    log_fatal("Failed while reading PNG file: \"%s\"", filename);
+    freelog(LOG_FATAL, "Failed while reading PNG file: %s", filename);
     exit(EXIT_FAILURE);
   }
 

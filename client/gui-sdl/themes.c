@@ -18,15 +18,15 @@
 #include <sys/stat.h>
 
 /* utility */
-#include "fcintl.h"
 #include "log.h"
-#include "string_vector.h"
 
 /* gui-sdl */
 #include "themespec.h"
 
 #include "themes_common.h"
 #include "themes_g.h"
+
+char gui_sdl_theme_name[512] = "human";
 
 /*****************************************************************************
   Loads a gui-sdl theme directory/theme_name
@@ -50,10 +50,10 @@ void gui_load_theme(const char *directory, const char *theme_name)
 void gui_clear_theme(void)
 {
   theme_free(theme);
-  if (!load_theme(gui_sdl_default_theme_name)) {
-    /* TRANS: No full stop after the URL, could cause confusion. */
-    log_fatal(_("No gui-sdl theme was found. For instructions on how to "
-                "get one, please visit %s"), WIKI_URL);
+  if (!load_theme(gui_sdl_theme_name)) {
+    freelog(LOG_FATAL, "No gui-sdl theme was found. Please visit");
+    freelog(LOG_FATAL, "http://www.freeciv.org/index.php/Themes");
+    freelog(LOG_FATAL, "for instructions on how to get one.");
     exit(EXIT_FAILURE);
   }
 }
@@ -66,18 +66,19 @@ void gui_clear_theme(void)
 *****************************************************************************/
 char **get_gui_specific_themes_directories(int *count)
 {
-  const struct strvec *data_dirs = get_data_dirs();
-  char **directories = fc_malloc(strvec_size(data_dirs) * sizeof(char *));  
-  int i = 0;
+  int i;
 
-  *count = strvec_size(data_dirs);
-  strvec_iterate(data_dirs, data_dir) {
-    char buf[strlen(data_dir) + strlen("/themes/gui-sdl") + 1];
+  const char **data_directories = get_data_dirs(count);
+
+  char **directories = fc_malloc(sizeof(char *) * *count);  
+
+  for (i = 0; i < *count; i++) {
+    char buf[strlen(data_directories[i]) + strlen("/themes/gui-sdl") + 1];
     
-    my_snprintf(buf, sizeof(buf), "%s/themes/gui-sdl", data_dir);
+    my_snprintf(buf, sizeof(buf), "%s/themes/gui-sdl", data_directories[i]);
 
-    directories[i++] = mystrdup(buf);
-  } strvec_iterate_end;
+    directories[i] = mystrdup(buf);
+  }
 
   return directories;
 }

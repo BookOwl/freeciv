@@ -18,8 +18,6 @@
 #include <assert.h>
 #include <stdio.h>
 
-/* uitlity */
-#include "log.h"
 #include "mem.h"
 #include "support.h"
 

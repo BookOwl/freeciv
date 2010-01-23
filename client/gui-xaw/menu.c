@@ -25,24 +25,19 @@
 #include <X11/Xaw/SmeBSB.h>
 #include <X11/Xaw/SmeLine.h>
 
-/* utility */
 #include "fcintl.h"
-#include "log.h"
 #include "mem.h"
 #include "movement.h"
 #include "support.h"
 
-/* common */
-#include "game.h"
 #include "government.h"
 #include "map.h"
 #include "unit.h"
 #include "unitlist.h"
 
-/* client */
 #include "chatline.h"
 #include "cityrep.h"
-#include "client_main.h"
+#include "civclient.h"
 #include "climisc.h"	/* can_units_do_connect */
 #include "clinet.h"
 #include "control.h" /* request_xxx and get_unit_in_focus */
@@ -123,17 +118,17 @@ static struct MenuEntry game_menu_entries[]={
     { { N_("Clear Log"), 0            },      "", MENU_GAME_CLEAR_OUTPUT, 0 },
     { { 0                             },      "", MENU_SEPARATOR_LINE, 0 },
     { { N_("Disconnect"), 0           },      "", MENU_GAME_DISCONNECT, 0 },
-    { { N_("Quit"), 0                 },      "Ctl-Q", MENU_GAME_QUIT, 0 },
+    { { N_("Quit"), 0                 },      "", MENU_GAME_QUIT, 0 },
     { { 0,                            },       0, MENU_END_OF_LIST, 0 }
 };
 
 static struct MenuEntry government_menu_entries[]={
-    { { N_("Tax Rates..."), 0         },     "Ctl-T", MENU_GOVERNMENT_RATES, 0 },
+    { { N_("Tax Rates"), 0            },     "T", MENU_GOVERNMENT_RATES, 0 },
     { { 0                             },      "", MENU_SEPARATOR_LINE, 0 },
-    { { N_("Find City"), 0            },     "Ctl-F", MENU_GOVERNMENT_FIND_CITY, 0 },
-    { { N_("Worklists"), 0            },     "Ctl-L", MENU_GOVERNMENT_WORKLISTS, 0 },
+    { { N_("Find City"), 0            },     "F", MENU_GOVERNMENT_FIND_CITY, 0 },
+    { { N_("Worklists"), 0            },     "Ctl-W", MENU_GOVERNMENT_WORKLISTS, 0 },
     { { 0                             },      "", MENU_SEPARATOR_LINE, 0 },
-    { { N_("Revolution..."), 0        },     "Ctl-Shift-R", MENU_GOVERNMENT_REVOLUTION, 0 },
+    { { N_("Revolution"), 0           },     "R", MENU_GOVERNMENT_REVOLUTION, 0 },
     { { 0,                            },       0, MENU_END_OF_LIST, 0 }
 };
 
@@ -148,14 +143,14 @@ static struct MenuEntry view_menu_entries[]={
     { { N_("City Names"), 0           }, "ctl-n", MENU_VIEW_SHOW_CITY_NAMES, 0 },
     { { N_("City Growth"), 0          }, "ctl-r",
       MENU_VIEW_SHOW_CITY_GROWTH, 0 },
-    { { N_("City Production Levels"), 0 }, "ctl-p", MENU_VIEW_SHOW_CITY_PRODUCTIONS, 0 },
+    { { N_("City Productions"), 0     }, "ctl-p", MENU_VIEW_SHOW_CITY_PRODUCTIONS, 0 },
     { { 0                             },      "", MENU_SEPARATOR_LINE, 0 },
     { { N_("Terrain"), 0              },      "", MENU_VIEW_SHOW_TERRAIN, 0 },
     { { N_("Coastline"), 0            },      "", MENU_VIEW_SHOW_COASTLINE, 0 },
-    { { N_("Roads & Rails"), 0        },      "", MENU_VIEW_SHOW_ROADS_RAILS, 0 },
+    { { N_("Roads and Rails"), 0      },      "", MENU_VIEW_SHOW_ROADS_RAILS, 0 },
     { { N_("Irrigation"), 0           },      "", MENU_VIEW_SHOW_IRRIGATION, 0 },
     { { N_("Mines"), 0                },      "", MENU_VIEW_SHOW_MINES, 0 },
-    { { N_("Fortress & Airbase"), 0   },      "", MENU_VIEW_SHOW_FORTRESS_AIRBASE, 0 },
+    { { N_("Fortress and Airbase"), 0 },      "", MENU_VIEW_SHOW_FORTRESS_AIRBASE, 0 },
     { { N_("Specials"), 0             },      "", MENU_VIEW_SHOW_SPECIALS, 0 },
     { { N_("Pollution & Fallout"), 0  },      "", MENU_VIEW_SHOW_POLLUTION, 0 },
     { { N_("Cities"), 0               },      "", MENU_VIEW_SHOW_CITIES, 0 },
@@ -182,63 +177,57 @@ static struct MenuEntry order_menu_entries[]={
     { { N_("Build Fortress"), 0       },     "f", MENU_ORDER_FORTRESS, 0 },
     { { N_("Build Airbase"), 0        },     "e", MENU_ORDER_AIRBASE, 0 },
     { { N_("Clean Pollution"),
-	N_("Drop Paratrooper"), 0             },     "p", MENU_ORDER_POLLUTION, 0 },
+	N_("Paradrop"), 0             },     "p", MENU_ORDER_POLLUTION, 0 },
     { { N_("Clean Nuclear Fallout"), 0},     "n", MENU_ORDER_FALLOUT, 0 },
     { { 0                             },      "", MENU_SEPARATOR_LINE, 0 },
-    { { N_("Fortify Unit"), 0         },     "f", MENU_ORDER_FORTIFY, 0 },
-    { { N_("Sentry Unit"), 0          },     "s", MENU_ORDER_SENTRY, 0 },
+    { { N_("Fortify"), 0              },     "f", MENU_ORDER_FORTIFY, 0 },
+    { { N_("Sentry"), 0               },     "s", MENU_ORDER_SENTRY, 0 },
     { { N_("Pillage"), 0              },     "P", MENU_ORDER_PILLAGE, 0 },
     { { 0                             },      "", MENU_SEPARATOR_LINE, 0 },
-    { { N_("Set Home City"), 0        },     "h", MENU_ORDER_HOMECITY, 0 },
-    { { N_("Unload All From Transporter"), 0 }, "T",
+    { { N_("Make Homecity"), 0        },     "h", MENU_ORDER_HOMECITY, 0 },
+    { { N_("Unload Transporter"), 0   },     "U",
       MENU_ORDER_UNLOAD_TRANSPORTER, 0 },
-    { { N_("Load Unit"), 0            },     "l", MENU_ORDER_LOAD, 0 },
-    { { N_("Unload Unit"), 0          },     "u", MENU_ORDER_UNLOAD, 0 },
-    { { N_("Unsentry All On Tile"), 0 },     "S", MENU_ORDER_WAKEUP_OTHERS, 0 },
+    { { N_("Load"), 0                 },     "l", MENU_ORDER_LOAD, 0 },
+    { { N_("Unload"), 0               },     "u", MENU_ORDER_UNLOAD, 0 },
+    { { N_("Wake up others"), 0       },     "W", MENU_ORDER_WAKEUP_OTHERS, 0 },
     { { 0                             },      "", MENU_SEPARATOR_LINE, 0 },
     { { N_("Auto Settler"), 0         },     "a", MENU_ORDER_AUTO_SETTLER, 0 },
     { { N_("Auto Attack"), 0          },     "a", MENU_ORDER_AUTO_ATTACK, 0 },
     { { N_("Auto Explore"), 0         },     "x", MENU_ORDER_AUTO_EXPLORE, 0 },
-    { { N_("Connect With Road"), 0    },     "R", MENU_ORDER_CONNECT_ROAD, 0 },
-    { { N_("Connect With Rail"), 0    },     "L", MENU_ORDER_CONNECT_RAIL, 0 },
-    { { N_("Connect With Irrigation"), 0 },  "I", MENU_ORDER_CONNECT_IRRIGATE, 0 },
+    { { N_("Connect/Road"), 0         }, "ctl-R", MENU_ORDER_CONNECT_ROAD, 0 },
+    { { N_("Connect/Rail"), 0         }, "ctl-L", MENU_ORDER_CONNECT_RAIL, 0 },
+    { { N_("Connect/Irrigation"), 0   }, "ctl-I", MENU_ORDER_CONNECT_IRRIGATE, 0 },
     { { N_("Patrol"), 0               },     "q", MENU_ORDER_PATROL, 0 },
-    { { N_("Go to Tile"), 0           },     "g", MENU_ORDER_GOTO, 0 },
-    { { N_("Go to/Airlift to City..."), 0 }, "t", MENU_ORDER_GOTO_CITY, 0 },
-    { { N_("Return to Nearest City"), 0 },   "G", MENU_ORDER_RETURN, 0 },
+    { { N_("Go to"), 0                },     "g", MENU_ORDER_GOTO, 0 },
+    { { N_("Go/Airlift to City"), 0   },     "L", MENU_ORDER_GOTO_CITY, 0 },
+    { { N_("Return to nearest city"), 0 },    "", MENU_ORDER_RETURN, 0 },
     { { 0                             },      "", MENU_SEPARATOR_LINE, 0 },
     { { N_("Disband Unit"), 0         },     "D", MENU_ORDER_DISBAND, 0 },
     { { N_("Help Build Wonder"), 0    },     "b", MENU_ORDER_BUILD_WONDER, 0 },
-    { { N_("Establish Trade Route"), 0 },    "r", MENU_ORDER_TRADE_ROUTE, 0 },
+    { { N_("Make Trade Route"), 0     },     "r", MENU_ORDER_TRADEROUTE, 0 },
     { { N_("Diplomat/Spy Actions"), 0 },     "d", MENU_ORDER_DIPLOMAT_DLG, 0},
     { { N_("Explode Nuclear"), 0      },     "N", MENU_ORDER_NUKE, 0 },
     { { 0                             },      "", MENU_SEPARATOR_LINE, 0 },
-    { { N_("Select Same Type Everywhere"), 0 }, "X", MENU_ORDER_SELECT_SAME_TYPE, 0 },
+    { { N_("Select Same Type"), 0     },      "", MENU_ORDER_SELECT_SAME_TYPE, 0 },
     { { N_("Wait"), 0                 },     "w", MENU_ORDER_WAIT, 0 },
     { { N_("Done"), 0                 },   "spc", MENU_ORDER_DONE, 0 },
     { { 0,                            },       0, MENU_END_OF_LIST, 0 }
 };
 
 static struct MenuEntry reports_menu_entries[]={
+    { { N_("Cities"), 0               },    "F1", MENU_REPORT_CITIES, 0 },
     { { N_("Units"), 0                },    "F2", MENU_REPORT_UNITS, 0 },
     /* TRANS: Nations report action */
     { { N_("Nations"), 0              },    "F3", MENU_REPORT_PLAYERS, 0 },
-    { { N_("Cities"), 0               },    "F4", MENU_REPORT_CITIES, 0 },
     { { N_("Economy"), 0              },    "F5", MENU_REPORT_ECONOMY, 0 },
     /* TRANS: Research report action */
     { { N_("Research"), 0             },    "F6", MENU_REPORT_SCIENCE, 0 },
     { { 0                             },      "", MENU_SEPARATOR_LINE, 0 },
     { { N_("Wonders of the World"), 0 },    "F7", MENU_REPORT_WOW, 0 },
     { { N_("Top Five Cities"), 0      },    "F8", MENU_REPORT_TOP_CITIES, 0 },
-    { { N_("Messages"), 0             },    "F9", MENU_REPORT_MESSAGES, 0 },
+    { { N_("Messages"), 0             },   "F10", MENU_REPORT_MESSAGES, 0 },
     { { N_("Demographics"), 0         },   "F11", MENU_REPORT_DEMOGRAPHIC, 0 },
     { { N_("Spaceship"), 0            },   "F12", MENU_REPORT_SPACESHIP, 0 },
-    { { 0,                            },       0, MENU_END_OF_LIST, 0 }
-};
-
-static struct MenuEntry editor_menu_entries[] = {
-    { { N_("Editing Mode"), 0         },      "", MENU_EDITOR_TOGGLE, 0 },
-    { { N_("Tools"), 0                },      "", MENU_EDITOR_TOOLS, 0 },
     { { 0,                            },       0, MENU_END_OF_LIST, 0 }
 };
 
@@ -257,7 +246,6 @@ static struct MenuEntry help_menu_entries[]={
     { { N_("Terrain"), 0              },      "", MENU_HELP_TERRAIN, 0 },
     { { N_("Wonders"), 0              },      "", MENU_HELP_WONDERS, 0 },
     { { N_("Government"), 0           },      "", MENU_HELP_GOVERNMENT, 0 },
-    { { N_("Diplomacy"), 0            },      "", MENU_HELP_DIPLOMACY, 0 },
     { { N_("Happiness"), 0            },      "", MENU_HELP_HAPPINESS, 0 },
     { { N_("Space Race"), 0           },      "", MENU_HELP_SPACE_RACE, 0 },
     { { 0                             },      "", MENU_SEPARATOR_LINE, 0 },
@@ -279,19 +267,10 @@ static char *menu_entry_text(enum MenuIndex menu, int ent, int var,
 static void revolution_menu_callback(Widget w, XtPointer client_data,
 				     XtPointer garbage);
 
-/**************************************************************************
-  Initialize menus (sensitivity, name, etc.) based on the
-  current state and current ruleset, etc.  Call menus_update().
-**************************************************************************/
-void menus_init(void)
-{
-  menus_update();
-}
-
 /****************************************************************
 ...
 *****************************************************************/
-void menus_update(void)
+void update_menus(void)
 {
   if (!can_client_change_view()) {
     XtSetSensitive(menus[MENU_REPORT]->button, False);
@@ -309,12 +288,12 @@ void menus_update(void)
     int i;
     int any_cities = FALSE;
 
-    players_iterate(pplayer) {
-      if (city_list_size(pplayer->cities)) {
+    for(i=0; i<game.info.nplayers; i++) {
+      if (city_list_size(game.players[i].cities)) {
 	any_cities = TRUE;
 	break;
       }
-    } players_iterate_end;
+    }
 
     XtSetSensitive(menus[MENU_REPORT]->button, True);
     XtSetSensitive(menus[MENU_VIEW]->button, True);
@@ -337,7 +316,7 @@ void menus_update(void)
     government_iterate(pgovernment) {
       Widget w;
 
-      if (pgovernment == game.government_during_revolution) {
+      if (pgovernment == game.government_when_anarchy) {
 	continue;
       }
 
@@ -345,7 +324,7 @@ void menus_update(void)
 				smeBSBObjectClass,
 				menus[MENU_GOVERNMENT]->shell, NULL, 0);
       XtAddCallback(w, XtNcallback, revolution_menu_callback, pgovernment);
-      XtSetSensitive(w, can_change_to_government(client.conn.playing,
+      XtSetSensitive(w, can_change_to_government(game.player_ptr,
 						 pgovernment));
 
       government_widgets[i] = w;
@@ -376,14 +355,15 @@ void menus_update(void)
     menu_entry_sensitive(MENU_GAME, MENU_GAME_CLEAR_OUTPUT, 1);
     menu_entry_sensitive(MENU_GAME, MENU_GAME_DISCONNECT, 1);
 
-    if (NULL != client.conn.playing) {
+    if (game.player_ptr) {
       menu_entry_sensitive(MENU_REPORT, MENU_REPORT_SPACESHIP,
-			   (SSHIP_NONE != client.conn.playing->spaceship.state));
+			   (game.player_ptr->spaceship.state!=SSHIP_NONE));
     } else {
       menu_entry_sensitive(MENU_REPORT, MENU_REPORT_SPACESHIP, 0);
     }
 
     if ((get_num_units_in_focus() > 0) && can_client_issue_orders()) {
+      Terrain_type_id ttype;
       struct terrain *tinfo;
       struct tile *ptile = NULL;
       bool can_build;
@@ -406,9 +386,9 @@ void menus_update(void)
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_TRANSFORM, 
 			   can_units_do_activity(punits, ACTIVITY_TRANSFORM));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_FORTRESS, 
-			   can_units_do_base_gui(punits, BASE_GUI_FORTRESS));
+			   can_units_do_activity(punits, ACTIVITY_FORTRESS));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_AIRBASE,
-			   can_units_do_base_gui(punits, BASE_GUI_AIRBASE));
+			   can_units_do_activity(punits, ACTIVITY_AIRBASE));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_POLLUTION, 
 			   can_units_do_activity(punits, ACTIVITY_POLLUTION)
 			   || can_units_do(punits, can_unit_paradrop));
@@ -449,23 +429,23 @@ void menus_update(void)
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_BUILD_WONDER,
 			   can_units_do(punits,
 				        unit_can_help_build_wonder_here));
-      menu_entry_sensitive(MENU_ORDER, MENU_ORDER_TRADE_ROUTE,
+      menu_entry_sensitive(MENU_ORDER, MENU_ORDER_TRADEROUTE,
 			   can_units_do(punits,
-				        unit_can_est_trade_route_here));
+				        unit_can_est_traderoute_here));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_DIPLOMAT_DLG,
 			   can_units_do_diplomat_action(punits,
 							DIPLOMAT_ANY_ACTION));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_NUKE,
                            units_have_flag(punits, F_NUCLEAR, TRUE));
 
-      /* FiXME: very odd, iterating for the first entry! */
       unit_list_iterate(punits, punit) {
 	ptile = punit->tile;
 	break;
       } unit_list_iterate_end;
 
-      tinfo = tile_terrain(ptile);
-      can_build = !(tile_city(ptile));
+      tinfo = ptile->terrain;
+      ttype = tinfo->index;
+      can_build = !(ptile->city);
 
       if (units_have_flag(punits, F_CITIES, TRUE)) {
 	if (!can_build) {
@@ -478,13 +458,13 @@ void menus_update(void)
       }
 
       if ((tinfo->irrigation_result != T_NONE)
-	  && (tinfo->irrigation_result != tinfo)) {
+	  && (tinfo->irrigation_result->index != ttype)) {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_IRRIGATE,
 			  TEXT_ORDER_IRRIGATE_CHANGE_TO,
 			  terrain_name_translation(tinfo->irrigation_result));
       }
       else if (tile_has_special(ptile, S_IRRIGATION) &&
-	       player_knows_techs_with_flag(client.conn.playing, TF_FARMLAND)) {
+	       player_knows_techs_with_flag(game.player_ptr, TF_FARMLAND)) {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_IRRIGATE,
 			  TEXT_ORDER_IRRIGATE_FARMLAND, NULL);
       } else {
@@ -493,7 +473,7 @@ void menus_update(void)
       }
 
       if ((tinfo->mining_result != T_NONE)
-	  && (tinfo->mining_result != tinfo)) {
+	  && (tinfo->mining_result->index != ttype)) {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_MINE,
 			  TEXT_ORDER_MINE_CHANGE_TO,
 			  terrain_name_translation(tinfo->mining_result));
@@ -503,7 +483,7 @@ void menus_update(void)
       }
 
       if ((tinfo->transform_result != T_NONE)
-	  && (tinfo->transform_result != tinfo)) {
+	  && (tinfo->transform_result->index != ttype)) {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_TRANSFORM,
 			  TEXT_ORDER_TRANSFORM_TRANSFORM_TO,
 			  terrain_name_translation(tinfo->transform_result));
@@ -547,7 +527,7 @@ static void game_menu_callback(Widget w, XtPointer client_data,
     popup_messageopt_dialog();
     break;
   case MENU_GAME_SAVE_SETTINGS:
-    options_save();
+    save_options();
     break;
   case MENU_GAME_SERVER_OPTIONS:
     popup_settable_options_dialog();
@@ -583,7 +563,7 @@ static void government_menu_callback(Widget w, XtPointer client_data,
     popup_rates_dialog();
     break;
   case MENU_GOVERNMENT_WORKLISTS:
-    popup_worklists_dialog(client.conn.playing);
+    popup_worklists_dialog(game.player_ptr);
     break;
   case MENU_GOVERNMENT_REVOLUTION:
     popup_revolution_dialog(NULL);
@@ -602,7 +582,7 @@ static void revolution_menu_callback(Widget w, XtPointer client_data,
   if (!can_client_issue_orders()) {
     return;
   }
-  if (-1 == client.conn.playing->revolution_finishes) {
+  if (game.player_ptr->revolution_finishes == -1) {
     popup_revolution_dialog(pgovernment);
   } else {
     /* Player already has a revolution and should just choose a government */
@@ -786,8 +766,8 @@ static void orders_menu_callback(Widget w, XtPointer client_data,
   case MENU_ORDER_BUILD_WONDER:
     key_unit_build_wonder();
     break;
-  case MENU_ORDER_TRADE_ROUTE:
-    key_unit_trade_route();
+  case MENU_ORDER_TRADEROUTE:
+    key_unit_traderoute();
     break;
   case MENU_ORDER_DIPLOMAT_DLG:
     key_unit_diplomat_actions();
@@ -844,26 +824,9 @@ static void reports_menu_callback(Widget w, XtPointer client_data,
     send_report_request(REPORT_DEMOGRAPHIC);
     break;
    case MENU_REPORT_SPACESHIP:
-    if (NULL != client.conn.playing) {
-      popup_spaceship_dialog(client.conn.playing);
+    if (game.player_ptr) {
+      popup_spaceship_dialog(game.player_ptr);
     }
-    break;
-  }
-}
-
-/****************************************************************
-  Callback for Editor menu entries.
-*****************************************************************/
-static void editor_menu_callback(Widget w, XtPointer client_data,
-				 XtPointer garbage)
-{
-  size_t pane_num = (size_t)client_data;
-
-  switch(pane_num) {
-  case MENU_EDITOR_TOGGLE:
-    key_editor_toggle();
-    break;
-  case MENU_EDITOR_TOOLS:
     break;
   }
 }
@@ -916,9 +879,6 @@ static void help_menu_callback(Widget w, XtPointer client_data,
   case MENU_HELP_GOVERNMENT:
     popup_help_dialog_string(HELP_GOVERNMENT_ITEM);
     break;
-  case MENU_HELP_DIPLOMACY:
-    popup_help_dialog_string(HELP_DIPLOMACY_ITEM);
-    break;
   case MENU_HELP_HAPPINESS:
     popup_help_dialog_string(HELP_HAPPINESS_ITEM);
     break;
@@ -953,9 +913,6 @@ void setup_menus(Widget parent_form)
 	      parent_form);
   create_menu(MENU_REPORT, "reportsmenu", 
 	      reports_menu_entries, reports_menu_callback, 
-	      parent_form);
-  create_menu(MENU_EDITOR, "editormenu",
-	      editor_menu_entries, editor_menu_callback,
 	      parent_form);
   create_menu(MENU_HELP, "helpmenu", 
 	      help_menu_entries, help_menu_callback, 

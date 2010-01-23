@@ -5,7 +5,7 @@ plural=_("?plural:Scots")
 groups="Medieval", "European"
 legend=_("Scotland, originally settled in late Roman times by Irish\
  raiders who displaced the native Picts, was an independent kingdom from\
- around 1034 AD to the Union of Crowns with England in 1701.")
+ around 1034AD to the Union of Crowns with England in 1701.")
 leader=
  "Henry McLeish",
  "Donald Dewar",
@@ -21,9 +21,9 @@ flag_alt = "united_kingdom"
 city_style = "Celtic"
 
 ruler_titles = { "government",  "male_title",         "female_title"
-                 "Despotism",   _("Chieftain"),       _("?female:Chieftain")
-                 "Republic",    _("Speaker"),         _("?female:Speaker")
-                 "Democracy",_("First Minister"), _("?female:First Minister")
+                 "Despotism",   _("Chieftain"),       _("Chieftain")
+                 "Republic",    _("Speaker"),         _("Speaker")
+                 "Democracy",   _("First Minister"),  _("First Minister")
                }
 
 init_techs=""
@@ -36,11 +36,11 @@ cities =
 "Edinburgh", "Glasgow (river)", "Aberdeen (ocean, river)", 
 "Perth (river)", "Dundee (ocean, river)", "Stirling (hills)", 
 "Inverness (river)", "Hamilton", "Motherwell", "Dunfermline", "Falkirk",
-"Kilmarnock", "Dumfries (river)", "East Kilbride (hills)", "Coatbridge (river)", 
+"Kilmarnock", "Dumfries (river)", "Eastkilbride (hills)", "Coatbridge (river)", 
 "Dumbarton (ocean)", "Irvine (ocean, river)", "Lanark (river)", 
 "St Andrews (ocean,river)", "Kirkcaldy (ocean)", "Fort William (ocean)", 
-"Bathgate", "Cumbernauld", "Port Glasgow (ocean)", "Johnstone",
-"Livingston (river)", "Lockerbie", "Oban (ocean)", "Leven (ocean)",
+"Bathgate", "Cumbernauld", "PortGlasgow (ocean)", "Johnstone",
+"Livingstone (river)", "Lockerbie", "Oban (ocean)", "Leven (ocean)",
 "Paisley (ocean, river)", "Peterhead (ocean)", "Prestwick (ocean)",
 "Stranraer (ocean)", "Airdrie (hills)", "Troon (ocean)", "Ullapool (ocean)", 
 "Ayr (ocean, river)", "Aviemore (mountains)", "Lerwick (ocean)", 
@@ -53,12 +53,12 @@ cities =
 "Mallaig (ocean)", "Braemar (hills)", "Jedburgh (river)", "Alloa (river)",
 "Newton Stewart (river)", "Wigtown", "Girvan (ocean, river)", 
 "Fort Augustus (ocean, river)", "Arbroath (ocean)", "Bothwell (river)", 
-"Grantown-on-Spey (river)", "Shotts (hills)", "Dornoch (ocean)",
-"Kinghorn (ocean)", "Coldstream (river)", "Eyemouth (ocean, river)",
+"Granton on spey (river)", "Shotts (hills)", "Dornoch (ocean)",
+"Kinghorn (ocean)", "ColdStream (river)", "Eyemouth (ocean, river)",
 "Wishaw", "Kirkwall (ocean)", "Haddington (grassland)", "Strathavon (river)", 
 "Glencoe (river, hills)", "Rothesay (ocean)", "Lennoxtown (hills)", 
 "Biggar (grassland)", "Culross (ocean)", "Gourock (ocean)",
-"Newcastleton (hills)", "Durness (ocean)", "Bo'ness (ocean)",
+"Newcastleton (hills)", "Durness (ocean)", "Boness (ocean)",
 "Fraserburgh (ocean)", "Nairn (ocean, river)", "Grangemouth (ocean, river)", 
 "Annan (ocean, river)", "Darvel (hills)", "Huntly (hills)",
 "Inverurie (river)", "Thornhill (hills)", "Peebles (river)", 

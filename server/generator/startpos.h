@@ -21,7 +21,6 @@ enum start_mode {
   MT_VARIABLE
 };
 
-bool create_start_positions(enum start_mode mode,
-			    struct unit_type *initial_unit);
+bool create_start_positions(enum start_mode mode);
 
 #endif

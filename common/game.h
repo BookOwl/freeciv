@@ -24,21 +24,30 @@
 
 #include "connection.h"		/* struct conn_list */
 #include "fc_types.h"
+#include "improvement.h"	/* Impr_Status */
 #include "player.h"
 #include "packets.h"
+#include "specialist.h"
 
-enum debug_globals {
-  DEBUG_FERRIES,
-  DEBUG_LAST
+/* used in savegame values */
+enum server_states { 
+  S_S_INITIAL = 0, 
+  S_S_GENERATING_WAITING = 1,
+  S_S_RUNNING = 2,
+  S_S_OVER = 3,
 };
 
-/* NB: Must match phasemode setting
- * help text in server/settings.c */
-enum phase_mode_types {
-  PMT_CONCURRENT = 0,
-  PMT_PLAYERS_ALTERNATE = 1,
-  PMT_TEAMS_ALTERNATE = 2
+/* used in network values */
+enum client_states { 
+  C_S_INITIAL = 0,
+  C_S_PREPARING = 1,
+  C_S_STARTING_UNUSED = 2,
+  C_S_RUNNING = 3,
+  C_S_OVER = 4,
 };
+
+#define OVERFLIGHT_NOTHING  1
+#define OVERFLIGHT_FRIGHTEN 2
 
 #define CONTAMINATION_POLLUTION 1
 #define CONTAMINATION_FALLOUT   2
@@ -49,80 +58,67 @@ enum phase_mode_types {
 
 struct civ_game {
   struct packet_game_info info;
-  struct government *government_during_revolution;
+  struct government *government_when_anarchy;
 
   struct packet_ruleset_control control;
-  struct packet_scenario_info scenario;
+  int version;
+  char id[MAX_ID_LEN];		/* server only */
+  int timeoutint;     /* increase timeout every N turns... */
+  int timeoutinc;     /* ... by this amount ... */
+  int timeoutincmult; /* ... and multiply timeoutinc by this amount ... */
+  int timeoutintinc;  /* ... and increase timeoutint by this amount */
+  int timeoutcounter; /* timeoutcounter - timeoutint = turns to next inc. */
+  int timeoutaddenemymove; /* minimum timeout after an enemy move is seen */
+  time_t last_ping;
+  struct timer *phase_timer; /* Time since seconds_to_phase_done was set. */
 
+  /* The .info.simultaneous_phases value indicates the phase mode currently in
+   * use.  The "stored" value is a value the player can change; it won't
+   * take effect until the next turn. */
+  bool simultaneous_phases_stored;
+  char *startmessage;
+  struct player *player_ptr; /* Client-only; may be NULL */
   struct player players[MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS];
-  int nplayers;
   struct conn_list *all_connections;        /* including not yet established */
   struct conn_list *est_connections;        /* all established client conns */
+  char save_name[MAX_LEN_NAME];
+  bool scorelog;
+  int scoreturn;			/* next make_history_report() */
+  int seed;
+  int playable_nations;
+  bool fogofwar_old;	/* as the fog_of_war bit get changed by setting
+			   the server we need to remember the old setting */
+  int ai_goal_government;	/* kludge */
 
+  char rulesetdir[MAX_LEN_NAME];
+
+  /* values from game.info.t */
+  struct {
+    /* Items given to all players at game start.  Server only. */
+    int global_init_techs[MAX_NUM_TECH_LIST];
+    int global_init_buildings[MAX_NUM_BUILDING_LIST];
+  } rgame;
+  
+  char demography[MAX_LEN_DEMOGRAPHY];
+  char allow_take[MAX_LEN_ALLOW_TAKE];
+
+  /* used by the map editor to control game_save; could be used by the server too */
+  struct {
+    bool save_random;
+    bool save_players;
+    bool save_known; /* loading will just reveal the squares around cities and units */
+    bool save_starts; /* start positions will be auto generated */
+    bool save_private_map; /* FoW map; will be created if not saved */
+  } save_options;
+
+  int trireme_loss_chance[MAX_VET_LEVELS];
   int work_veteran_chance[MAX_VET_LEVELS];
   int veteran_chance[MAX_VET_LEVELS];
 
-  union {
-    struct {
-      /* Nothing yet. */
-    } client;
-
-    struct {
-      bool debug[DEBUG_LAST];
-      int timeoutint;     /* increase timeout every N turns... */
-      int timeoutinc;     /* ... by this amount ... */
-      int timeoutincmult; /* ... and multiply timeoutinc by this amount ... */
-      int timeoutintinc;  /* ... and increase timeoutint by this amount */
-      int timeoutcounter; /* timeoutcounter - timeoutint = turns to next inc. */
-      int timeoutaddenemymove; /* minimum timeout after an enemy move is seen */
-      time_t last_ping;
-      struct timer *phase_timer; /* Time since seconds_to_phase_done was set. */
-      /* The .info.phase_mode value indicates the phase mode currently in
-       * use.  The "stored" value is a value the player can change; it won't
-       * take effect until the next turn. */
-      int phase_mode_stored;
-      char connectmsg[MAX_LEN_MSG];
-      char save_name[MAX_LEN_NAME];
-      bool scorelog;
-      int scoreturn;    /* next make_history_report() */
-      int seed;
-      bool fogofwar_old; /* as the fog_of_war bit get changed by setting
-                          * the server we need to remember the old setting */
-      bool foggedborders;
-      char rulesetdir[MAX_LEN_NAME];
-      char demography[MAX_LEN_DEMOGRAPHY];
-      char allow_take[MAX_LEN_ALLOW_TAKE];
-
-      struct {
-        int turns;
-        int max_size;
-        bool chat;
-        bool info;
-      } event_cache;
-
-      /* values from game.info.t */
-      struct {
-        /* Items given to all players at game start.  Server only. */
-        int global_init_techs[MAX_NUM_TECH_LIST];
-        int global_init_buildings[MAX_NUM_BUILDING_LIST];
-      } rgame;
-
-      /* used by the map editor to control game_save. */
-      struct {
-        bool save_random;
-  
-        bool save_known; /* loading will just reveal the squares around
-                          * cities and units */
-        bool save_starts; /* start positions will be auto generated */
-        bool save_private_map; /* FoW map; will be created if not saved */
-      } save_options;
-
-      struct {
-        bool user_message_set;
-        char user_message[256];
-      } meta_info;
-    } server;
-  };
+  struct {
+    bool user_message_set;
+    char user_message[256];
+  } meta_info;
 
   struct {
     /* Function to be called in game_remove_unit when a unit is deleted. */
@@ -130,17 +126,10 @@ struct civ_game {
   } callbacks;
 };
 
-bool is_server(void);
-void i_am_server(void);
-void i_am_client(void);
-
 void game_init(void);
 void game_map_init(void);
 void game_free(void);
-void game_reset(void);
-
-void game_ruleset_init(void);
-void game_ruleset_free(void);
+void ruleset_data_free(void);
 
 int game_next_year(int);
 void game_advance_year(void);
@@ -152,20 +141,21 @@ struct city *game_find_city_by_number(int id);
 struct unit *game_find_unit_by_number(int id);
 
 void game_remove_player(struct player *pplayer);
+void game_renumber_players(int plrno);
 
 void game_remove_unit(struct unit *punit);
 void game_remove_city(struct city *pcity);
 void initialize_globals(void);
 
+struct player *get_player(int player_id);
+bool is_valid_player_id(int player_id);
+int get_num_human_and_ai_players(void);
 bool is_player_phase(const struct player *pplayer, int phase);
 
 const char *population_to_text(int thousand_citizen);
 
-const char *gui_name(enum gui_type);
-
-const char *textyear(int year);
-
 extern struct civ_game game;
+extern bool is_server;
 
 bool setting_class_is_changeable(enum sset_class class);
 
@@ -175,7 +165,7 @@ bool setting_class_is_changeable(enum sset_class class);
 
 #define GAME_DEFAULT_GOLD        50
 #define GAME_MIN_GOLD            0
-#define GAME_MAX_GOLD            50000
+#define GAME_MAX_GOLD            5000
 
 #define GAME_DEFAULT_START_UNITS  "ccwwx"
 
@@ -185,13 +175,17 @@ bool setting_class_is_changeable(enum sset_class class);
 
 #define GAME_DEFAULT_TECHLEVEL   0
 #define GAME_MIN_TECHLEVEL       0
-#define GAME_MAX_TECHLEVEL       100
+#define GAME_MAX_TECHLEVEL       50
+
+#define GAME_DEFAULT_UNHAPPYSIZE 4
+#define GAME_MIN_UNHAPPYSIZE     1
+#define GAME_MAX_UNHAPPYSIZE     6
 
 #define GAME_DEFAULT_ANGRYCITIZEN TRUE
 
-#define GAME_DEFAULT_END_TURN    5000
-#define GAME_MIN_END_TURN        -32768
-#define GAME_MAX_END_TURN        32767
+#define GAME_DEFAULT_END_YEAR    5000
+#define GAME_MIN_END_YEAR        GAME_START_YEAR
+#define GAME_MAX_END_YEAR        5000
 
 #define GAME_DEFAULT_MIN_PLAYERS     1
 #define GAME_MIN_MIN_PLAYERS         0
@@ -201,7 +195,7 @@ bool setting_class_is_changeable(enum sset_class class);
 #define GAME_MIN_MAX_PLAYERS         1
 #define GAME_MAX_MAX_PLAYERS         MAX_NUM_PLAYERS
 
-#define GAME_DEFAULT_AIFILL          5
+#define GAME_DEFAULT_AIFILL          0
 #define GAME_MIN_AIFILL              0
 #define GAME_MAX_AIFILL              GAME_MAX_MAX_PLAYERS
 
@@ -223,14 +217,14 @@ bool setting_class_is_changeable(enum sset_class class);
 
 #define GAME_DEFAULT_FOGOFWAR        TRUE
 
-#define GAME_DEFAULT_FOGGEDBORDERS   FALSE
-
 /* 0 means no national borders. */
-#define GAME_DEFAULT_BORDERS         1
+#define GAME_DEFAULT_BORDERS         4
 #define GAME_MIN_BORDERS             0
-#define GAME_MAX_BORDERS             3
+#define GAME_MAX_BORDERS             12
 
 #define GAME_DEFAULT_HAPPYBORDERS    TRUE
+
+#define GAME_DEFAULT_SLOW_INVASIONS  TRUE
 
 #define GAME_DEFAULT_DIPLOMACY       0
 #define GAME_MIN_DIPLOMACY           0
@@ -248,6 +242,10 @@ bool setting_class_is_changeable(enum sset_class class);
 #define GAME_MIN_CONQUERCOST         0
 #define GAME_MAX_CONQUERCOST         100
 
+#define GAME_DEFAULT_CITYFACTOR      14
+#define GAME_MIN_CITYFACTOR          6
+#define GAME_MAX_CITYFACTOR          100
+
 #define GAME_DEFAULT_CITYMINDIST     0
 #define GAME_MIN_CITYMINDIST         0 /* if 0, ruleset will overwrite this */
 #define GAME_MAX_CITYMINDIST         5
@@ -255,8 +253,6 @@ bool setting_class_is_changeable(enum sset_class class);
 #define GAME_DEFAULT_CIVILWARSIZE    10
 #define GAME_MIN_CIVILWARSIZE        6
 #define GAME_MAX_CIVILWARSIZE        1000
-
-#define GAME_DEFAULT_RESTRICTINFRA   FALSE
 
 #define GAME_DEFAULT_CONTACTTURNS    20
 #define GAME_MIN_CONTACTTURNS        0
@@ -272,33 +268,13 @@ bool setting_class_is_changeable(enum sset_class class);
 
 #define GAME_DEFAULT_NATURALCITYNAMES TRUE
 
-#define GAME_DEFAULT_MIGRATION        FALSE
-
-#define GAME_DEFAULT_MGR_TURNINTERVAL 5
-#define GAME_MIN_MGR_TURNINTERVAL     1
-#define GAME_MAX_MGR_TURNINTERVAL     100
-
-#define GAME_DEFAULT_MGR_FOODNEEDED   TRUE
-
-#define GAME_DEFAULT_MGR_DISTANCE     3
-#define GAME_MIN_MGR_DISTANCE         1
-#define GAME_MAX_MGR_DISTANCE         7
-
-#define GAME_DEFAULT_MGR_NATIONCHANCE 50
-#define GAME_MIN_MGR_NATIONCHANCE     0
-#define GAME_MAX_MGR_NATIONCHANCE     100
-
-#define GAME_DEFAULT_MGR_WORLDCHANCE  10
-#define GAME_MIN_MGR_WORLDCHANCE      0
-#define GAME_MAX_MGR_WORLDCHANCE      100
-
 #define GAME_DEFAULT_AQUEDUCTLOSS    0
 #define GAME_MIN_AQUEDUCTLOSS        0
 #define GAME_MAX_AQUEDUCTLOSS        100
 
 #define GAME_DEFAULT_KILLCITIZEN     1
 #define GAME_MIN_KILLCITIZEN         0
-#define GAME_MAX_KILLCITIZEN         ((1 << MOVETYPE_LAST) - 1)
+#define GAME_MAX_KILLCITIZEN         15
 
 #define GAME_DEFAULT_TECHPENALTY     100
 #define GAME_MIN_TECHPENALTY         0
@@ -308,11 +284,14 @@ bool setting_class_is_changeable(enum sset_class class);
 #define GAME_MIN_RAZECHANCE          0
 #define GAME_MAX_RAZECHANCE          100
 
+#define GAME_DEFAULT_CIVSTYLE        2
+#define GAME_MIN_CIVSTYLE            1
+#define GAME_MAX_CIVSTYLE            2
+
 #define GAME_DEFAULT_SCORELOG        FALSE
 #define GAME_DEFAULT_SCORETURN       20
 
 #define GAME_DEFAULT_SPACERACE       TRUE
-#define GAME_DEFAULT_END_SPACESHIP   TRUE
 
 #define GAME_DEFAULT_TURNBLOCK       TRUE
 
@@ -328,9 +307,7 @@ bool setting_class_is_changeable(enum sset_class class);
 #define GAME_MIN_TIMEOUT             -1
 #define GAME_MAX_TIMEOUT             8639999
 
-#define GAME_DEFAULT_PHASE_MODE 0
-#define GAME_MIN_PHASE_MODE 0
-#define GAME_MAX_PHASE_MODE 2
+#define GAME_DEFAULT_SIMULTANEOUS_PHASES TRUE
 
 #define GAME_DEFAULT_TCPTIMEOUT      10
 #define GAME_MIN_TCPTIMEOUT          0
@@ -356,17 +333,14 @@ bool setting_class_is_changeable(enum sset_class class);
 #define GAME_MIN_FULLTRADESIZE       1
 #define GAME_MAX_FULLTRADESIZE       50
 
-#define GAME_DEFAULT_TRADEMINDIST    9
-#define GAME_MIN_TRADEMINDIST        1
-#define GAME_MAX_TRADEMINDIST        999
-
 #define GAME_DEFAULT_BARBARIANRATE   2
 #define GAME_MIN_BARBARIANRATE       0
 #define GAME_MAX_BARBARIANRATE       4
 
-#define GAME_DEFAULT_ONSETBARBARIAN  60
-#define GAME_MIN_ONSETBARBARIAN      0
-#define GAME_MAX_ONSETBARBARIAN      GAME_MAX_END_TURN
+#define GAME_DEFAULT_ONSETBARBARIAN  (GAME_START_YEAR+ \
+				      ((GAME_DEFAULT_END_YEAR-(GAME_START_YEAR))/3))
+#define GAME_MIN_ONSETBARBARIAN      GAME_START_YEAR
+#define GAME_MAX_ONSETBARBARIAN      GAME_MAX_END_YEAR
 
 #define GAME_DEFAULT_OCCUPYCHANCE    0
 #define GAME_MIN_OCCUPYCHANCE        0
@@ -377,9 +351,7 @@ bool setting_class_is_changeable(enum sset_class class);
 #define GAME_DEFAULT_RULESETDIR      "default"
 
 #define GAME_DEFAULT_SAVE_NAME       "civgame"
-#define GAME_DEFAULT_SAVETURNS       1
-#define GAME_MIN_SAVETURNS           0
-#define GAME_MAX_SAVETURNS           200
+#define GAME_DEFAULT_SAVETURNS       10
 
 #define GAME_DEFAULT_SKILL_LEVEL 3      /* easy */
 #define GAME_OLD_DEFAULT_SKILL_LEVEL 5  /* normal; for old save games */
@@ -387,35 +359,10 @@ bool setting_class_is_changeable(enum sset_class class);
 #define GAME_DEFAULT_DEMOGRAPHY      "NASRLPEMOqrb"
 #define GAME_DEFAULT_ALLOW_TAKE      "HAhadOo"
 
-#define GAME_DEFAULT_EVENT_CACHE_TURNS    1
-#define GAME_MIN_EVENT_CACHE_TURNS        0
-#define GAME_MAX_EVENT_CACHE_TURNS        9
-
-#define GAME_DEFAULT_EVENT_CACHE_MAX_SIZE   256
-#define GAME_MIN_EVENT_CACHE_MAX_SIZE        10
-#define GAME_MAX_EVENT_CACHE_MAX_SIZE      1000
-
-#define GAME_DEFAULT_EVENT_CACHE_CHAT     TRUE
-
-#define GAME_DEFAULT_EVENT_CACHE_INFO     FALSE
-
 #define GAME_DEFAULT_COMPRESS_LEVEL 6    /* if we have compression */
-#define GAME_MIN_COMPRESS_LEVEL     1
+#define GAME_MIN_COMPRESS_LEVEL     0
 #define GAME_MAX_COMPRESS_LEVEL     9
-
-#if defined(HAVE_LIBBZ2)
-#  define GAME_MIN_COMPRESS_TYPE FZ_PLAIN
-#  define GAME_MAX_COMPRESS_TYPE FZ_BZIP2
-#  define GAME_DEFAULT_COMPRESS_TYPE FZ_BZIP2
-#elif defined(HAVE_LIBZ)
-#  define GAME_MIN_COMPRESS_TYPE FZ_PLAIN
-#  define GAME_MAX_COMPRESS_TYPE FZ_ZLIB
-#  define GAME_DEFAULT_COMPRESS_TYPE FZ_ZLIB
-#else
-#  define GAME_MIN_COMPRESS_TYPE FZ_PLAIN
-#  define GAME_MAX_COMPRESS_TYPE FZ_PLAIN
-#  define GAME_DEFAULT_COMPRESS_TYPE FZ_PLAIN
-#endif
+#define GAME_NO_COMPRESS_LEVEL      0
 
 #define GAME_DEFAULT_ALLOWED_CITY_NAMES 1
 #define GAME_MIN_ALLOWED_CITY_NAMES 0
@@ -426,125 +373,5 @@ bool setting_class_is_changeable(enum sset_class class);
 #define GAME_MAX_REVOLUTION_LENGTH 10
 
 #define GAME_START_YEAR -4000
-
-#define GAME_MAX_READ_RECURSION 10 /* max recursion for the read command */
-
-/* ruleset settings */
-
-#define RS_MAX_VALUE                             10000
-
-#define RS_DEFAULT_POS_YEAR_LABEL                "AD"
-#define RS_DEFAULT_NEG_YEAR_LABEL                "BC"
-
-#define RS_DEFAULT_ILLNESS_ON                    FALSE
-
-#define RS_DEFAULT_ILLNESS_BASE_FACTOR           25
-#define RS_MIN_ILLNESS_BASE_FACTOR               0
-#define RS_MAX_ILLNESS_BASE_FACTOR               RS_MAX_VALUE
-
-#define RS_DEFAULT_ILLNESS_MIN_SIZE              3
-#define RS_MIN_ILLNESS_MIN_SIZE                  1
-#define RS_MAX_ILLNESS_MIN_SIZE                  100
-
-#define RS_DEFAULT_ILLNESS_TRADE_INFECTION_PCT   50
-#define RS_MIN_ILLNESS_TRADE_INFECTION_PCT       0
-#define RS_MAX_ILLNESS_TRADE_INFECTION_PCT       500
-
-#define RS_DEFAULT_ILLNESS_POLLUTION_PCT         50
-#define RS_MIN_ILLNESS_POLLUTION_PCT             0
-#define RS_MAX_ILLNESS_POLLUTION_PCT             500
-
-#define RS_DEFAULT_CALENDAR_SKIP_0               TRUE
-
-#define RS_DEFAULT_BORDER_RADIUS_SQ_CITY         17 /* city radius 4 */
-#define RS_MIN_BORDER_RADIUS_SQ_CITY             0
-#define RS_MAX_BORDER_RADIUS_SQ_CITY             401 /* city radius 20 */
-
-#define RS_DEFAULT_BORDER_SIZE_EFFECT            1
-#define RS_MIN_BORDER_SIZE_EFFECT                0
-#define RS_MAX_BORDER_SIZE_EFFECT                100
-
-#define RS_DEFAULT_INCITE_BASE_COST              1000
-#define RS_MIN_INCITE_BASE_COST                  0
-#define RS_MAX_INCITE_BASE_COST                  RS_MAX_VALUE
-
-#define RS_DEFAULT_INCITE_IMPROVEMENT_FCT        1
-#define RS_MIN_INCITE_IMPROVEMENT_FCT            0
-#define RS_MAX_INCITE_IMPROVEMENT_FCT            RS_MAX_VALUE
-
-#define RS_DEFAULT_INCITE_UNIT_FCT               2
-#define RS_MIN_INCITE_UNIT_FCT                   0
-#define RS_MAX_INCITE_UNIT_FCT                   RS_MAX_VALUE
-
-#define RS_DEFAULT_INCITE_TOTAL_FCT              100
-#define RS_MIN_INCITE_TOTAL_FCT                  0
-#define RS_MAX_INCITE_TOTAL_FCT                  RS_MAX_VALUE
-
-#define RS_DEFAULT_GRANARY_FOOD_INI              20
-
-#define RS_DEFAULT_GRANARY_FOOD_INC              10
-#define RS_MIN_GRANARY_FOOD_INC                  0
-#define RS_MAX_GRANARY_FOOD_INC                  RS_MAX_VALUE
-
-#define RS_DEFAULT_CITY_CENTER_OUTPUT            0
-#define RS_MIN_CITY_CENTER_OUTPUT                0
-#define RS_MAX_CITY_CENTER_OUTPUT                RS_MAX_VALUE
-
-#define RS_DEFAULT_CITIES_MIN_DIST               2
-#define RS_MIN_CITIES_MIN_DIST                   1
-#define RS_MAX_CITIES_MIN_DIST                   RS_MAX_VALUE
-
-#define RS_DEFAULT_VIS_RADIUS_SQ                 5 /* city radius 2 */
-#define RS_MIN_VIS_RADIUS_SQ                     0
-#define RS_MAX_VIS_RADIUS_SQ                     401 /* city radius 20 */
-
-#define RS_DEFAULT_BASE_POLLUTION                -20
-/* no min / max values as it can be set to high negative values to
- * deactiveate pollution and high positive values to create much
- * pollution */
-
-#define RS_DEFAULT_HAPPY_COST                    2
-#define RS_MIN_HAPPY_COST                        0
-#define RS_MAX_HAPPY_COST                        100
-
-#define RS_DEFAULT_FOOD_COST                     2
-#define RS_MIN_FOOD_COST                         0
-#define RS_MAX_FOOD_COST                         100
-
-#define RS_DEFAULT_GOLD_UPKEEP_STYLE             0
-#define RS_MIN_GOLD_UPKEEP_STYLE                 0
-#define RS_MAX_GOLD_UPKEEP_STYLE                 2
-
-#define RS_DEFAULT_SLOW_INVASIONS                TRUE
-
-#define RS_DEFAULT_TIRED_ATTACK                  FALSE
-
-#define RS_DEFAULT_KILLSTACK                     TRUE
-
-#define RS_DEFAULT_BASE_BRIBE_COST               750
-#define RS_MIN_BASE_BRIBE_COST                   0
-#define RS_MAX_BASE_BRIBE_COST                   RS_MAX_VALUE
-
-#define RS_DEFAULT_RANSOM_GOLD                   100
-#define RS_MIN_RANSOM_GOLD                       0
-#define RS_MAX_RANSOM_GOLD                       RS_MAX_VALUE
-
-#define RS_DEFAULT_PILLAGE_SELECT                TRUE
-
-#define RS_DEFAULT_UPGRADE_VETERAN_LOSS          0
-#define RS_MIN_UPGRADE_VETERAN_LOSS              0
-#define RS_MAX_UPGRADE_VETERAN_LOSS              MAX_VET_LEVELS
-
-#define RS_DEFAULT_BASE_TECH_COST                20
-#define RS_MIN_BASE_TECH_COST                    0
-#define RS_MAX_BASE_TECH_COST                    200
-
-#define RS_DEFAULT_TECH_COST_STYLE               0
-#define RS_MIN_TECH_COST_STYLE                   0
-#define RS_MAX_TECH_COST_STYLE                   2
-
-#define RS_DEFAULT_TECH_LEAKAGE                  0
-#define RS_MIN_TECH_LEAKAGE                      0
-#define RS_MAX_TECH_LEAKAGE                      3
 
 #endif  /* FC__GAME_H */

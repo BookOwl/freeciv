@@ -18,15 +18,13 @@
 #include <errno.h>
 #include <stdio.h>		/* sscanf */
 
-/* utility */
 #include "fcintl.h"
 #include "log.h"
 #include "support.h"
 
-/* client */
-#include "chatline_common.h"	/* for output_window_append */
-#include "client_main.h"
-#include "clinet.h"		/* connect_to_server() */
+#include "chatline_common.h"	/* for append_output_window */
+#include "civclient.h"
+#include "clinet.h"		/* for get_server_address */
 #include "gui_main.h"
 
 #include "connectdlg.h"
@@ -42,7 +40,7 @@ static struct te_screen *screen;
 /**************************************************************************
   this regenerates the player information from a loaded game on the server.
 **************************************************************************/
-void handle_game_load(bool load_successful, char *filename)
+void handle_game_load(struct packet_game_load *packet)
 {
   /* PORT ME */
 }
@@ -63,7 +61,7 @@ static void connect_callback(void)
     te_destroy_screen(screen);
     screen = NULL;
   } else {
-    output_window_append(ftc_client, errbuf);
+    append_output_window(errbuf);
   }
 }
 

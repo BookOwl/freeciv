@@ -15,20 +15,12 @@
 #include <config.h>
 #endif
 
-#ifdef AUDIO_SDL
-#include "SDL.h"
-#endif
-
 #include <stdio.h>
 
-/* utility */
 #include "fciconv.h"
 #include "log.h"
 
-/* client */
-#include "client_main.h"
-#include "editgui_g.h"
-#include "ggz_g.h"
+#include "civclient.h"
 #include "options.h"
 
 #include "gui_main.h"
@@ -38,6 +30,12 @@ const char *client_string = "gui-stub";
 const char * const gui_character_encoding = "UTF-8";
 const bool gui_use_transliteration = FALSE;
 
+client_option gui_options[] = {
+  /* None. */
+};
+const int num_gui_options = ARRAY_SIZE(gui_options);
+
+
 /****************************************************************************
   Called by the tileset code to set the font size that should be used to
   draw the city names and productions.
@@ -45,7 +43,7 @@ const bool gui_use_transliteration = FALSE;
 void set_city_names_font_sizes(int my_city_names_font_size,
 			       int my_city_productions_font_size)
 {
-  log_error("Unimplemented set_city_names_font_sizes.");
+  freelog(LOG_ERROR, "Unimplemented set_city_names_font_sizes.");
   /* PORTME */
 }
 
@@ -58,14 +56,6 @@ void ui_init(void)
 }
 
 /**************************************************************************
-  Entry point for whole freeciv client program.
-**************************************************************************/
-int main(int argc, char **argv)
-{
-  return client_main(argc, argv);
-}
-
-/**************************************************************************
   The main loop for the UI.  This is called from main(), and when it
   exits the client will exit.
 **************************************************************************/
@@ -75,28 +65,12 @@ void ui_main(int argc, char *argv[])
   fc_fprintf(stderr, "Freeciv rules!\n");
 }
 
-/****************************************************************************
-  Extra initializers for client options.
-****************************************************************************/
-void gui_options_extra_init(void)
-{
-  /* Nothing to do. */
-}
-
 /**************************************************************************
   Do any necessary UI-specific cleanup
 **************************************************************************/
 void ui_exit()
 {
   /* PORTME */
-}
-
-/**************************************************************************
-  Return our GUI type
-**************************************************************************/
-enum gui_type get_gui_type(void)
-{
-  return GUI_STUB;
 }
 
 /**************************************************************************
@@ -193,57 +167,6 @@ void add_idle_callback(void (callback)(void *), void *data)
   /* PORTME */
 
   /* This is a reasonable fallback if it's not ported. */
-  log_error("Unimplemented add_idle_callback.");
+  freelog(LOG_ERROR, "Unimplemented add_idle_callback.");
   (callback)(data);
-}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_tileset_changed(void)
-{}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_refresh(void)
-{}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_popup_properties(const struct tile_list *tiles, int objtype)
-{}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_notify_object_changed(int objtype, int object_id, bool remove)
-{}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_notify_object_created(int tag, int id)
-{}
-
-/****************************************************************************
-  Stub for ggz function
-****************************************************************************/
-void gui_ggz_embed_leave_table(void)
-{}
-
-/****************************************************************************
-  Stub for ggz function
-****************************************************************************/
-void gui_ggz_embed_ensure_server(void)
-{}
-
-
-/**************************************************************************
-  Updates a gui font style.
-**************************************************************************/
-void gui_update_font(const char *font_name, const char *font_value)
-{
-  /* PORTME */
 }

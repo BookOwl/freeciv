@@ -14,15 +14,11 @@
 #ifndef FC__MAPVIEW_COMMON_H
 #define FC__MAPVIEW_COMMON_H
 
-/* utility */
-#include "shared.h"             /* bool type */
+#include "shared.h"		/* bool type */
 
-/* common */
 #include "fc_types.h"
-#include "featured_text.h"      /* enum text_link_type type */
 #include "map.h"
 
-/* include */
 #include "colors_g.h"
 
 #include "tilespec.h"
@@ -121,8 +117,8 @@ extern bool can_slide;
     const int _t##_count = (_t##_x1 - _t##_x0) * (_t##_y1 - _t##_y0);	\
     int _t##_index = 0;							\
 									\
-    log_debug("Iterating over %d-%d x %d-%d rectangle.",		\
-	      _t##_x1, _t##_x0, _t##_y1, _t##_y0);			\
+    freelog(LOG_DEBUG, "Iterating over %d-%d x %d-%d rectangle.",	\
+	    _t##_x1, _t##_x0, _t##_y1, _t##_y0);			\
     for (; _t##_index < _t##_count; _t##_index++) {			\
       struct tile *_t = NULL;						\
       struct tile_edge *_e = NULL;					\
@@ -261,9 +257,8 @@ void put_terrain(struct tile *ptile,
 		 struct canvas *pcanvas, int canvas_x, int canvas_y);
 
 void put_unit_city_overlays(struct unit *punit,
-                            struct canvas *pcanvas,
-                            int canvas_x, int canvas_y, int *upkeep_cost,
-                            int happy_cost);
+			    struct canvas *pcanvas,
+			    int canvas_x, int canvas_y);
 void toggle_city_color(struct city *pcity);
 void toggle_unit_color(struct unit *punit);
 
@@ -276,11 +271,6 @@ void put_one_element(struct canvas *pcanvas, enum mapview_layer layer,
 		     const struct unit *punit, struct city *pcity,
 		     int canvas_x, int canvas_y,
 		     const struct city *citymode);
-
-void put_drawn_sprites(struct canvas *pcanvas,
-                       int canvas_x, int canvas_y,
-                       int count, struct drawn_sprite *pdrawn,
-                       bool fog);
 
 void update_map_canvas(int canvas_x, int canvas_y, int width, int height);
 void update_map_canvas_visible(void);
@@ -310,10 +300,6 @@ void get_city_mapview_name_and_growth(struct city *pcity,
 				      char *growth_buffer,
 				      size_t growth_buffer_len,
 				      enum color_std *grwoth_color);
-void get_city_mapview_trade_routes(struct city *pcity,
-                                   char *trade_routes_buffer,
-                                   size_t trade_routes_buffer_len,
-                                   enum color_std *trade_routes_color);
 
 bool map_canvas_resized(int width, int height);
 void init_mapcanvas_and_overview(void);
@@ -321,15 +307,5 @@ void init_mapcanvas_and_overview(void);
 void get_spaceship_dimensions(int *width, int *height);
 void put_spaceship(struct canvas *pcanvas, int canvas_x, int canvas_y,
 		   const struct player *pplayer);
-
-void link_marks_init(void);
-void link_marks_free(void);
-
-void link_marks_draw_all(void);
-void link_marks_clear_all(void);
-void link_marks_decrease_turn_counters(void);
-
-void link_mark_add_new(enum text_link_type type, int id);
-void link_mark_restore(enum text_link_type type, int id);
 
 #endif /* FC__MAPVIEW_COMMON_H */

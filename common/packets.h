@@ -18,9 +18,8 @@ struct data_in;
 
 #include "connection.h"		/* struct connection, MAX_LEN_* */
 #include "diptreaty.h"
-#include "effects.h"
 #include "events.h"
-#include "improvement.h"	/* bv_imprs */
+#include "improvement.h"
 #include "map.h"
 #include "player.h"
 #include "requirements.h"
@@ -83,12 +82,19 @@ void generic_handle_player_attribute_chunk(struct player *pplayer,
 					   const struct
 					   packet_player_attribute_chunk
 					   *chunk);
-const char *packet_name(enum packet_type type);
-bool packet_has_info_flag(enum packet_type type);
+const char *get_packet_name(enum packet_type type);
 
+void pre_send_packet_chat_msg(struct connection *pc,
+			      struct packet_chat_msg *packet);
+void post_receive_packet_chat_msg(struct connection *pc,
+				  struct packet_chat_msg *packet);
 void pre_send_packet_player_attribute_chunk(struct connection *pc,
 					    struct packet_player_attribute_chunk
 					    *packet);
+void post_receive_packet_game_state(struct connection *pc,
+				    struct packet_game_state *packet);
+void post_send_packet_game_state(struct connection *pc,
+				 const struct packet_game_state *packet);
 
 #define SEND_PACKET_START(type) \
   unsigned char buffer[MAX_LEN_PACKET]; \

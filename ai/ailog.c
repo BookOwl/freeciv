@@ -17,26 +17,19 @@
 
 #include <stdarg.h>
 
-/* utility */
 #include "astring.h"
+#include "city.h"
 #include "log.h"
 #include "shared.h"
 #include "support.h"
+#include "unit.h"
 #include "timing.h"
 
-/* common */
-#include "city.h"
-#include "game.h"
-#include "unit.h"
-
-/* server */
 #include "gotohand.h"
-#include "notify.h"
+#include "plrhand.h"
 #include "srv_main.h"
 
-/* ai */
 #include "aidata.h"
-
 #include "ailog.h"
 
 static struct timer *aitimer[AIT_LAST][2];
@@ -47,34 +40,39 @@ static int recursion[AIT_LAST];
 /**************************************************************************
   Log player tech messages.
 **************************************************************************/
-void real_tech_log(const char *file, const char *function, int line,
-                   enum log_level level, bool notify,
-                   const struct player *pplayer, struct advance *padvance,
-                   const char *msg, ...)
+void TECH_LOG(int level, const struct player *pplayer, Tech_type_id id,
+              const char *msg, ...)
 {
   char buffer[500];
   char buffer2[500];
   va_list ap;
+  int minlevel = MIN(LOGLEVEL_TECH, level);
 
-  if (!valid_advance(padvance) || advance_by_number(A_NONE) == padvance) {
+  if (!tech_exists(id) || id == A_NONE) {
+    return;
+  }
+
+  if (BV_ISSET(pplayer->debug, PLAYER_DEBUG_TECH)) {
+    minlevel = LOG_NORMAL;
+  } else if (minlevel > fc_log_level) {
     return;
   }
 
   my_snprintf(buffer, sizeof(buffer), "%s::%s (want %d, dist %d) ", 
               player_name(pplayer),
-              advance_name_by_player(pplayer, advance_number(padvance)), 
-              pplayer->ai_data.tech_want[advance_index(padvance)], 
-              num_unknown_techs_for_goal(pplayer, advance_number(padvance)));
+              advance_name_by_player(pplayer, id), 
+              pplayer->ai.tech_want[id], 
+              num_unknown_techs_for_goal(pplayer, id));
 
   va_start(ap, msg);
   my_vsnprintf(buffer2, sizeof(buffer2), msg, ap);
   va_end(ap);
 
   cat_snprintf(buffer, sizeof(buffer), "%s", buffer2);
-  if (notify) {
-    notify_conn(NULL, NULL, E_AI_DEBUG, ftc_log, "%s", buffer);
+  if (BV_ISSET(pplayer->debug, PLAYER_DEBUG_TECH)) {
+    notify_conn(NULL, NULL, E_AI_DEBUG, "%s", buffer);
   }
-  do_log(file, function, line, FALSE, level, "%s", buffer);
+  freelog(minlevel, "%s", buffer);
 }
 
 /**************************************************************************
@@ -82,15 +80,20 @@ void real_tech_log(const char *file, const char *function, int line,
     
   where ti is timer, co countdown and lo love for target, who is e.
 **************************************************************************/
-void real_diplo_log(const char *file, const char *function, int line,
-                    enum log_level level, bool notify,
-                    const struct player *pplayer,
-                    const struct player *aplayer, const char *msg, ...)
+void DIPLO_LOG(int level, const struct player *pplayer,
+	       const struct player *aplayer, const char *msg, ...)
 {
   char buffer[500];
   char buffer2[500];
   va_list ap;
+  int minlevel = MIN(LOGLEVEL_PLAYER, level);
   const struct ai_dip_intel *adip;
+
+  if (BV_ISSET(pplayer->debug, PLAYER_DEBUG_DIPLOMACY)) {
+    minlevel = LOG_NORMAL;
+  } else if (minlevel > fc_log_level) {
+    return;
+  }
 
   /* Don't use ai_data_get since it can have side effects. */
   adip = ai_diplomacy_get(pplayer, aplayer);
@@ -98,7 +101,7 @@ void real_diplo_log(const char *file, const char *function, int line,
   my_snprintf(buffer, sizeof(buffer), "%s->%s(l%d,c%d,d%d%s): ", 
               player_name(pplayer),
               player_name(aplayer), 
-              pplayer->ai_data.love[player_index(aplayer)],
+              pplayer->ai.love[player_index(aplayer)],
               adip->countdown, 
               adip->distance,
               adip->is_allied_with_enemy ? "?" :
@@ -109,40 +112,45 @@ void real_diplo_log(const char *file, const char *function, int line,
   va_end(ap);
 
   cat_snprintf(buffer, sizeof(buffer), "%s", buffer2);
-  if (notify) {
-    notify_conn(NULL, NULL, E_AI_DEBUG, ftc_log, "%s", buffer);
+  if (BV_ISSET(pplayer->debug, PLAYER_DEBUG_DIPLOMACY)) {
+    notify_conn(NULL, NULL, E_AI_DEBUG, "%s", buffer);
   }
-  do_log(file, function, line, FALSE, level, "%s", buffer);
+  freelog(minlevel, "%s", buffer);
 }
 
 /**************************************************************************
   Log city messages, they will appear like this
     2: Polish Romenna(5,35) [s1 d106 u11 g1] must have Archers ...
 **************************************************************************/
-void real_city_log(const char *file, const char *function, int line,
-                   enum log_level level, bool notify,
-                   const struct city *pcity, const char *msg, ...)
+void CITY_LOG(int level, const struct city *pcity, const char *msg, ...)
 {
   char buffer[500];
   char buffer2[500];
   va_list ap;
+  int minlevel = MIN(LOGLEVEL_CITY, level);
+
+  if (pcity->debug) {
+    minlevel = LOG_NORMAL;
+  } else if (minlevel > fc_log_level) {
+    return;
+  }
 
   my_snprintf(buffer, sizeof(buffer), "%s %s(%d,%d) [s%d d%d u%d g%d] ",
               nation_rule_name(nation_of_city(pcity)),
               city_name(pcity),
               TILE_XY(pcity->tile), pcity->size,
-              pcity->ai->danger, pcity->ai->urgency,
-              pcity->ai->grave_danger);
+              pcity->ai.danger, pcity->ai.urgency,
+              pcity->ai.grave_danger);
 
   va_start(ap, msg);
   my_vsnprintf(buffer2, sizeof(buffer2), msg, ap);
   va_end(ap);
 
   cat_snprintf(buffer, sizeof(buffer), "%s", buffer2);
-  if (notify) {
-    notify_conn(NULL, NULL, E_AI_DEBUG, ftc_log, "%s", buffer);
+  if (pcity->debug) {
+    notify_conn(NULL, NULL, E_AI_DEBUG, "%s", buffer);
   }
-  do_log(file, function, line, FALSE, level, "%s", buffer);
+  freelog(minlevel, "%s", buffer);
 }
 
 /**************************************************************************
@@ -151,14 +159,31 @@ void real_city_log(const char *file, const char *function, int line,
   where [] is unit id, ()->() are coordinates present and goto, and
   {,} contains bodyguard and ferryboat ids.
 **************************************************************************/
-void real_unit_log(const char *file, const char *function, int line,
-                   enum log_level level,  bool notify,
-                   const struct unit *punit, const char *msg, ...)
+void UNIT_LOG(int level, const struct unit *punit, const char *msg, ...)
 {
   char buffer[500];
   char buffer2[500];
   va_list ap;
+  int minlevel = MIN(LOGLEVEL_UNIT, level);
   int gx, gy;
+  bool messwin = FALSE; /* output to message window */
+
+  if (punit->debug) {
+    minlevel = LOG_NORMAL;
+  } else {
+    /* Are we a virtual unit evaluated in a debug city?. */
+    if (punit->id == 0) {
+      struct city *pcity = tile_get_city(punit->tile);
+
+      if (pcity && pcity->debug) {
+        minlevel = LOG_NORMAL;
+        messwin = TRUE;
+      }
+    }
+    if (minlevel > fc_log_level) {
+      return;
+    }
+  }
 
   if (punit->goto_tile) {
     gx = punit->goto_tile->x;
@@ -182,10 +207,10 @@ void real_unit_log(const char *file, const char *function, int line,
   va_end(ap);
 
   cat_snprintf(buffer, sizeof(buffer), "%s", buffer2);
-  if (notify) {
-    notify_conn(NULL, NULL, E_AI_DEBUG, ftc_log, "%s", buffer);
+  if (punit->debug || messwin) {
+    notify_conn(NULL, NULL, E_AI_DEBUG, "%s", buffer);
   }
-  do_log(file, function, line, FALSE, level, "%s", buffer);
+  freelog(minlevel, "%s", buffer);
 }
 
 /**************************************************************************
@@ -193,13 +218,10 @@ void real_unit_log(const char *file, const char *function, int line,
     2: Polish Mech. Inf.[485] bodyguard (38,22){Riflemen:574@37,23} was ...
   note that these messages are likely to wrap if long.
 **************************************************************************/
-void real_bodyguard_log(const char *file, const char *function, int line,
-                        enum log_level level,  bool notify,
-                        const struct unit *punit, const char *msg, ...)
+void BODYGUARD_LOG(int level, const struct unit *punit, const char *msg)
 {
   char buffer[500];
-  char buffer2[500];
-  va_list ap;
+  int minlevel = MIN(LOGLEVEL_BODYGUARD, level);
   const struct unit *pcharge;
   const struct city *pcity;
   int id = -1;
@@ -207,6 +229,12 @@ void real_bodyguard_log(const char *file, const char *function, int line,
   int charge_y = -1;
   const char *type = "guard";
   const char *s = "none";
+
+  if (punit->debug) {
+    minlevel = LOG_NORMAL;
+  } else if (minlevel > fc_log_level) {
+    return;
+  }
 
   pcity = game_find_city_by_number(punit->ai.charge);
   pcharge = game_find_unit_by_number(punit->ai.charge);
@@ -232,17 +260,12 @@ void real_bodyguard_log(const char *file, const char *function, int line,
               punit->id,
               type,
               TILE_XY(punit->tile),
-              s, id, charge_x, charge_y);
-
-  va_start(ap, msg);
-  my_vsnprintf(buffer2, sizeof(buffer2), msg, ap);
-  va_end(ap);
-
-  cat_snprintf(buffer, sizeof(buffer), "%s", buffer2);
-  if (notify) {
-    notify_conn(NULL, NULL, E_AI_DEBUG, ftc_log, "%s", buffer);
+	      s, id, charge_x, charge_y);
+  cat_snprintf(buffer, sizeof(buffer), "%s", msg);
+  if (punit->debug) {
+    notify_conn(NULL, NULL, E_AI_DEBUG, "%s", buffer);
   }
-  do_log(file, function, line, FALSE, level, "%s", buffer);
+  freelog(minlevel, "%s", buffer);
 }
 
 /**************************************************************************
@@ -288,16 +311,15 @@ void TIMING_RESULTS(void)
 {
   char buf[200];
 
-#define AILOG_OUT(text, which)                                              \
-  my_snprintf(buf, sizeof(buf), "  %s: %g sec turn, %g sec game", text,     \
-              read_timer_seconds(aitimer[which][0]),                        \
-              read_timer_seconds(aitimer[which][1]));                       \
-  log_test("%s", buf);                                                      \
-  notify_conn(NULL, NULL, E_AI_DEBUG, ftc_log, "%s", buf);
+#define AILOG_OUT(text, which)                                                 \
+  my_snprintf(buf, sizeof(buf), "  %s: %g sec turn, %g sec game", text,  \
+           read_timer_seconds(aitimer[which][0]),                        \
+           read_timer_seconds(aitimer[which][1]));                       \
+  freelog(LOG_NORMAL, "%s", buf);                                        \
+  notify_conn(NULL, NULL, E_AI_DEBUG, "%s", buf);
 
-  log_test("  --- AI timing results ---");
-  notify_conn(NULL, NULL, E_AI_DEBUG, ftc_log,
-              "  --- AI timing results ---");
+  freelog(LOG_NORMAL, "  --- AI timing results ---");
+  notify_conn(NULL, NULL, E_AI_DEBUG, "  --- AI timing results ---");
   AILOG_OUT("Total AI time", AIT_ALL);
   AILOG_OUT("Movemap", AIT_MOVEMAP);
   AILOG_OUT("Units", AIT_UNITS);

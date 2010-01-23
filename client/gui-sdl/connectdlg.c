@@ -32,8 +32,8 @@
 #include "log.h"
 
 /* client */
-#include "client_main.h"
-#include "clinet.h"		/* connect_to_server() */
+#include "civclient.h"
+#include "clinet.h"
 #include "packhand.h"
 #include "servers.h"
 
@@ -80,7 +80,7 @@ void really_close_connection_dialog(void)
 /**************************************************************************
  provide a packet handler for packet_game_load
 **************************************************************************/
-void handle_game_load(bool load_successful, char *filename)
+void handle_game_load(struct packet_game_load *packet)
 { 
   /* PORTME */
 }
@@ -96,7 +96,7 @@ static int connect_callback(struct widget *pWidget)
     if (connect_to_server(user_name, server_host, server_port,
                           errbuf, sizeof(errbuf)) != -1) {
     } else {
-      output_window_append(ftc_any, errbuf);
+      append_output_window(errbuf);
       real_update_meswin_dialog();
   
       /* button up */
@@ -161,8 +161,8 @@ static int sellect_meta_severs_callback(struct widget *pWidget)
 static void server_scan_error(struct server_scan *scan,
 			      const char *message)
 {
-  output_window_append(ftc_client, message);
-  log_normal("%s", message);
+  append_output_window(message);
+  freelog(LOG_NORMAL, "%s", message);
 
   switch (server_scan_get_type(scan)) {
   case SERVER_SCAN_LOCAL:
@@ -277,9 +277,9 @@ void popup_connection_dialog(bool lan_scan)
   
   if(!pServer_list) {
     if (lan_scan) {
-      output_window_append(ftc_client, _("No LAN servers found")); 
+      append_output_window(_("No LAN servers found")); 
     } else {
-      output_window_append(ftc_client, _("No public servers found")); 
+      append_output_window(_("No public servers found")); 
     }        
     real_update_meswin_dialog();
     set_client_page(PAGE_NETWORK);
@@ -341,10 +341,10 @@ void popup_connection_dialog(bool lan_scan)
 
   if(!count) {
     if (lan_scan) {
-      output_window_append(ftc_client, _("No LAN servers found")); 
+      append_output_window(_("No LAN servers found")); 
     } else {
-      output_window_append(ftc_client, _("No public servers found"));
-    }
+      append_output_window(_("No public servers found")); 
+    }        
     real_update_meswin_dialog();
     set_client_page(PAGE_NETWORK);
     return;
@@ -744,7 +744,7 @@ static int send_passwd_callback(struct widget *pWidget)
     
     flush_dirty();
     
-    send_packet_authentication_reply(&client.conn, &reply);
+    send_packet_authentication_reply(&aconnection, &reply);
   }
   return -1;
 }
@@ -1102,7 +1102,7 @@ void handle_authentication_req(enum authentication_type type, char *message)
       struct packet_authentication_reply reply;
 
       sz_strlcpy(reply.password, password);
-      send_packet_authentication_reply(&client.conn, &reply);
+      send_packet_authentication_reply(&aconnection, &reply);
       return;
     } else {
       popup_user_passwd_dialog(message);

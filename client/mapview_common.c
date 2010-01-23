@@ -17,7 +17,6 @@
 
 #include <assert.h>
 
-/* utility */
 #include "fcintl.h"
 #include "hash.h"
 #include "log.h"
@@ -25,23 +24,18 @@
 #include "support.h"
 #include "timing.h"
 
-/* common */
-#include "featured_text.h"
 #include "game.h"
 #include "map.h"
 #include "unitlist.h"
 
-/* include */
 #include "graphics_g.h"
 #include "gui_main_g.h"
 #include "mapctrl_g.h"
 #include "mapview_g.h"
 
-/* client */
-#include "client_main.h"
+#include "civclient.h"
 #include "climap.h"
 #include "control.h"
-#include "editor.h"
 #include "goto.h"
 #include "citydlg_common.h"
 #include "mapview_common.h"
@@ -83,13 +77,13 @@ static void queue_mapview_update(enum update_type update);
 static void queue_mapview_tile_update(struct tile *ptile,
 				      enum tile_update_type type);
 
-/* Helper struct for drawing trade routes. */
-struct trade_route_line {
+/* Helper struct for drawing traderoutes. */
+struct traderoute_line {
   int x, y, width, height;
 };
 
-/* A trade route line might need to be drawn in two parts. */
-static const int MAX_TRADE_ROUTE_DRAW_LINES = 2;
+/* A traderoute line might need to be drawn in two parts. */
+static const int MAX_TRADEROUTE_DRAW_LINES = 2;
 
 
 /**************************************************************************
@@ -618,9 +612,9 @@ void set_mapview_origin(int gui_x0, int gui_y0)
     currtime = read_timer_seconds(anim_timer);
     total_frames += frames;
     total_time += currtime;
-    log_debug("Got %d frames in %f seconds: %f FPS (avg %f).",
-              frames, currtime, (double)frames / currtime,
-              total_frames / total_time);
+    freelog(LOG_DEBUG, "Got %d frames in %f seconds: %f FPS (avg %f).",
+	    frames, currtime, (double)frames / currtime,
+	    total_frames / total_time);
 
     /* A very small decay factor to make things more accurate when something
      * changes (mapview size, tileset change, etc.).  This gives a
@@ -734,8 +728,8 @@ void get_mapview_scroll_window(int *xmin, int *ymin, int *xmax, int *ymax,
     *ymax += (diff + 1) / 2;
   }
 
-  log_debug("x: %d<-%d->%d; y: %d<-%d->%d",
-            *xmin, *xsize, *xmax, *ymin, *ymax, *ysize);
+  freelog(LOG_DEBUG, "x: %d<-%d->%d; y: %d<-%d->%d",
+	  *xmin, *xsize, *xmax, *ymin, *ymax, *ysize);
 }
 
 /****************************************************************************
@@ -872,10 +866,10 @@ bool tile_visible_and_not_on_border_mapcanvas(struct tile *ptile)
 /**************************************************************************
   Draw an array of drawn sprites onto the canvas.
 **************************************************************************/
-void put_drawn_sprites(struct canvas *pcanvas,
-                       int canvas_x, int canvas_y,
-                       int count, struct drawn_sprite *pdrawn,
-                       bool fog)
+static void put_drawn_sprites(struct canvas *pcanvas,
+			      int canvas_x, int canvas_y,
+			      int count, struct drawn_sprite *pdrawn,
+			      bool fog)
 {
   int i;
 
@@ -920,7 +914,7 @@ void put_one_element(struct canvas *pcanvas, enum mapview_layer layer,
 				ptile, pedge, pcorner,
 				punit, pcity, citymode);
   bool fog = (ptile && draw_fog_of_war
-	      && TILE_KNOWN_UNSEEN == client_tile_get_known(ptile));
+	      && client_tile_get_known(ptile) == TILE_KNOWN_FOGGED);
 
   /*** Draw terrain and specials ***/
   put_drawn_sprites(pcanvas, canvas_x, canvas_y, count, tile_sprs, fog);
@@ -980,18 +974,17 @@ void put_terrain(struct tile *ptile,
 ****************************************************************************/
 void put_unit_city_overlays(struct unit *punit,
 			    struct canvas *pcanvas,
-			    int canvas_x, int canvas_y, int *upkeep_cost,
-                            int happy_cost)
+			    int canvas_x, int canvas_y)
 {
   struct sprite *sprite;
 
-  sprite = get_unit_unhappy_sprite(tileset, punit, happy_cost);
+  sprite = get_unit_unhappy_sprite(tileset, punit);
   if (sprite) {
     canvas_put_sprite_full(pcanvas, canvas_x, canvas_y, sprite);
   }
 
   output_type_iterate(o) {
-    sprite = get_unit_upkeep_sprite(tileset, o, punit, upkeep_cost);
+    sprite = get_unit_upkeep_sprite(tileset, o, punit);
     if (sprite) {
       canvas_put_sprite_full(pcanvas, canvas_x, canvas_y, sprite);
     }
@@ -1088,28 +1081,27 @@ static void put_one_tile(struct canvas *pcanvas, enum mapview_layer layer,
 			 struct tile *ptile, int canvas_x, int canvas_y,
 			 const struct city *citymode)
 {
-  if (client_tile_get_known(ptile) != TILE_UNKNOWN
-      || (editor_is_active() && editor_tile_is_selected(ptile))) {
+  if (client_tile_get_known(ptile) != TILE_UNKNOWN) {
     put_one_element(pcanvas, layer, ptile, NULL, NULL,
 		    get_drawable_unit(tileset, ptile, citymode),
-		    tile_city(ptile), canvas_x, canvas_y, citymode);
+		    ptile->city, canvas_x, canvas_y, citymode);
   }
 }
 
 /**************************************************************************
-  Depending on where ptile1 and ptile2 are on the map canvas, a trade route
+  Depending on where ptile1 and ptile2 are on the map canvas, a traderoute
   line may need to be drawn as two disjointed line segments. This function
   fills the given line array 'lines' with the necessary line segments.
 
   The return value is the number of line segments that need to be drawn.
 
   NB: It is assumed ptile1 and ptile2 are already consistently ordered.
-  NB: 'lines' must be able to hold least MAX_TRADE_ROUTE_DRAW_LINES
+  NB: 'lines' must be able to hold least MAX_TRADEROUTE_DRAW_LINES
   elements.
 **************************************************************************/
-static int trade_route_to_canvas_lines(const struct tile *ptile1,
-                                       const struct tile *ptile2,
-                                       struct trade_route_line *lines)
+static int traderoute_to_canvas_lines(const struct tile *ptile1,
+                                      const struct tile *ptile2,
+                                      struct traderoute_line *lines)
 {
   int dx, dy;
 
@@ -1135,13 +1127,13 @@ static int trade_route_to_canvas_lines(const struct tile *ptile1,
 }
 
 /**************************************************************************
-  Draw a colored trade route line from one tile to another.
+  Draw a colored traderoute line from one tile to another.
 **************************************************************************/
-static void draw_trade_route_line(const struct tile *ptile1,
-                                  const struct tile *ptile2,
-                                  enum color_std color)
+static void draw_traderoute_line(const struct tile *ptile1,
+                                 const struct tile *ptile2,
+                                 enum color_std color)
 {
-  struct trade_route_line lines[MAX_TRADE_ROUTE_DRAW_LINES];
+  struct traderoute_line lines[MAX_TRADEROUTE_DRAW_LINES];
   int line_count, i;
   struct color *pcolor;
 
@@ -1157,14 +1149,14 @@ static void draw_trade_route_line(const struct tile *ptile1,
   /* Order the source and destination tiles consistently
    * so that if a line is drawn twice it does not produce
    * ugly effects due to dashes not lining up. */
-  if (tile_index(ptile2) > tile_index(ptile1)) {
+  if (ptile2->index > ptile1->index) {
     const struct tile *tmp;
     tmp = ptile1;
     ptile1 = ptile2;
     ptile2 = tmp;
   }
 
-  line_count = trade_route_to_canvas_lines(ptile1, ptile2, lines);
+  line_count = traderoute_to_canvas_lines(ptile1, ptile2, lines);
   for (i = 0; i < line_count; i++) {
     canvas_put_line(mapview.store, pcolor, LINE_BORDER,
                     lines[i].x + tileset_tile_width(tileset) / 2,
@@ -1174,9 +1166,9 @@ static void draw_trade_route_line(const struct tile *ptile1,
 }
 
 /**************************************************************************
-  Draw all trade routes for the given city.
+  Draw all traderoutes for the given city.
 **************************************************************************/
-static void draw_trade_routes_for_city(const struct city *pcity_src)
+static void draw_traderoutes_for_city(const struct city *pcity_src)
 {
   int i;
   const struct city *pcity_dest;
@@ -1185,36 +1177,37 @@ static void draw_trade_routes_for_city(const struct city *pcity_src)
     return;
   }
 
-  for (i = 0; i < NUM_TRADE_ROUTES; i++) {
+  for (i = 0; i < NUM_TRADEROUTES; i++) {
     pcity_dest = game_find_city_by_number(pcity_src->trade[i]);
     if (!pcity_dest) {
       continue;
     }
-    draw_trade_route_line(city_tile(pcity_src), city_tile(pcity_dest),
-                          COLOR_MAPVIEW_TRADE_ROUTE_LINE);
+    draw_traderoute_line(pcity_src->tile, pcity_dest->tile,
+                         COLOR_MAPVIEW_GOTO); /* Cyan. */
   }
 }
 
 /**************************************************************************
-  Draw trade routes between cities as lines on the main map canvas.
+  Draw traderoutes between cities as lines on the main map canvas.
 **************************************************************************/
-static void draw_trade_routes(void)
+static void draw_traderoutes(void)
 {
-  if (!draw_city_trade_routes) {
+  struct player *pplayer = game.player_ptr;
+
+  if (!draw_city_traderoutes) {
     return;
   }
 
-  if (client_is_global_observer()) {
+  if (client_is_observer() && !pplayer) {
     cities_iterate(pcity) {
-      draw_trade_routes_for_city(pcity);
+      draw_traderoutes_for_city(pcity);
     } cities_iterate_end;
   } else {
-    struct player *pplayer = client_player();
     if (!pplayer) {
       return;
     }
     city_list_iterate(pplayer->cities, pcity) {
-      draw_trade_routes_for_city(pcity);
+      draw_traderoutes_for_city(pcity);
     } city_list_iterate_end;
   }
 }
@@ -1251,8 +1244,9 @@ void update_map_canvas(int canvas_x, int canvas_y, int width, int height)
 	  && width == mapview.store_width
 	  && height == mapview.store_height);
 
-  log_debug("update_map_canvas(pos=(%d,%d), size=(%d,%d))",
-            canvas_x, canvas_y, width, height);
+  freelog(LOG_DEBUG,
+	  "update_map_canvas(pos=(%d,%d), size=(%d,%d))",
+	  canvas_x, canvas_y, width, height);
 
   /* If a full redraw is done, we just draw everything onto the canvas.
    * However if a partial redraw is done we draw everything onto the
@@ -1300,8 +1294,7 @@ void update_map_canvas(int canvas_x, int canvas_y, int width, int height)
     } gui_rect_iterate_end;
   } mapview_layer_iterate_end;
 
-  draw_trade_routes();
-  link_marks_draw_all();
+  draw_traderoutes();
 
   /* Draw the goto lines on top of the whole thing. This is done last as
    * we want it completely on top.
@@ -1370,16 +1363,15 @@ static void show_full_citybar(struct canvas *pcanvas,
 			      struct city *pcity, int *width, int *height)
 {
   const struct citybar_sprites *citybar = get_citybar_sprites(tileset);
-  static char name[512], growth[32], prod[512], size[32], trade_routes[32];
-  enum color_std growth_color, trade_routes_color;
+  static char name[512], growth[32], prod[512], size[32];
+  enum color_std growth_color;
   struct color *owner_color;
   struct {
     int x, y, w, h;
   } name_rect = {0, 0, 0, 0}, growth_rect = {0, 0, 0, 0},
     prod_rect = {0, 0, 0, 0}, size_rect = {0, 0, 0, 0},
     flag_rect = {0, 0, 0, 0}, occupy_rect = {0, 0, 0, 0},
-    food_rect = {0, 0, 0, 0}, shield_rect = {0, 0, 0, 0},
-    trade_routes_rect = {0,}, trade_rect = {0,};
+    food_rect = {0, 0, 0, 0}, shield_rect = {0, 0, 0, 0};
   int width1 = 0, width2 = 0, height1 = 0, height2 = 0;
   struct sprite *bg = citybar->background;
   struct sprite *flag = get_city_flag_sprite(tileset, pcity);
@@ -1392,16 +1384,13 @@ static void show_full_citybar(struct canvas *pcanvas,
 
   /* We can see the city's production or growth values if
    * we are observing or playing as the owner of the city. */
-  const bool can_see_inside
-    = (client_is_global_observer() || city_owner(pcity) == client_player());
-  const bool should_draw_productions
-    = can_see_inside && draw_city_productions;
-  const bool should_draw_growth = can_see_inside && draw_city_growth;
-  const bool should_draw_trade_routes = can_see_inside
-    && draw_city_trade_routes;
-  const bool should_draw_lower_bar
-    = should_draw_productions || should_draw_growth
-    || should_draw_trade_routes;
+  const bool can_see_inside = (!game.player_ptr
+                               || city_owner(pcity) == game.player_ptr);
+  const bool should_draw_productions = (can_see_inside
+                                        && draw_city_productions);
+  const bool should_draw_growth = (can_see_inside && draw_city_growth);
+  const bool should_draw_lower_bar = (should_draw_productions
+                                      || should_draw_growth);
 
 
   if (width != NULL) {
@@ -1428,7 +1417,7 @@ static void show_full_citybar(struct canvas *pcanvas,
     get_text_size(&size_rect.w, &size_rect.h, FONT_CITY_SIZE, size);
     get_text_size(&name_rect.w, &name_rect.h, FONT_CITY_NAME, name);
 
-    if (can_player_see_units_in_city(client.conn.playing, pcity)) {
+    if (can_player_see_units_in_city(game.player_ptr, pcity)) {
       int count = unit_list_size(pcity->tile->units);
 
       count = CLIP(0, count, citybar->occupancy.size - 1);
@@ -1453,38 +1442,25 @@ static void show_full_citybar(struct canvas *pcanvas,
   }
 
   if (should_draw_lower_bar) {
-    width2 = 0;
-    height2 = 0;
 
     if (should_draw_productions) {
       get_city_mapview_production(pcity, prod, sizeof(prod));
       get_text_size(&prod_rect.w, &prod_rect.h, FONT_CITY_PROD, prod);
 
       get_sprite_dimensions(citybar->shields, &shield_rect.w, &shield_rect.h);
-      width2 += shield_rect.w + prod_rect.w + border;
-      height2 = MAX(height2, shield_rect.h);
-      height2 = MAX(height2, prod_rect.h + border);
     }
 
     if (should_draw_growth) {
       get_text_size(&growth_rect.w, &growth_rect.h, FONT_CITY_PROD, growth);
       get_sprite_dimensions(citybar->food, &food_rect.w, &food_rect.h);
-      width2 += food_rect.w + growth_rect.w + border;
-      height2 = MAX(height2, food_rect.h);
-      height2 = MAX(height2, growth_rect.h + border);
     }
 
-    if (should_draw_trade_routes) {
-      get_city_mapview_trade_routes(pcity, trade_routes,
-                                    sizeof(trade_routes),
-                                    &trade_routes_color);
-      get_text_size(&trade_routes_rect.w, &trade_routes_rect.h,
-                    FONT_CITY_PROD, trade_routes);
-      get_sprite_dimensions(citybar->trade, &trade_rect.w, &trade_rect.h);
-      width2 += trade_rect.w + trade_routes_rect.w + border;
-      height2 = MAX(height2, trade_rect.h);
-      height2 = MAX(height2, trade_routes_rect.h + border);
-    }
+    width2 = (prod_rect.w + growth_rect.w + shield_rect.w + food_rect.w
+	      + 2 * border);
+    height2 = MAX(shield_rect.h,
+		  MAX(prod_rect.h + border,
+		      MAX(growth_rect.h + border,
+			  food_rect.h)));
   }
 
   *width = MAX(width1, width2);
@@ -1517,23 +1493,8 @@ static void show_full_citybar(struct canvas *pcanvas,
       prod_rect.y = canvas_y + height1 + (height2 - prod_rect.h) / 2;
     }
 
-    if (should_draw_trade_routes) {
-      trade_routes_rect.x = canvas_x + (*width + 1) / 2
-        - trade_routes_rect.w - border / 2;
-      trade_routes_rect.y = canvas_y + height1
-        + (height2 - trade_routes_rect.h) / 2;
-
-      trade_rect.x = trade_routes_rect.x - border / 2 - trade_rect.w;
-      trade_rect.y = canvas_y + height1 + (height2 - trade_rect.h) / 2;
-    }
-
     if (should_draw_growth) {
-      growth_rect.x = canvas_x + (*width + 1) / 2
-        - growth_rect.w - border / 2;
-      if (trade_routes_rect.w > 0) {
-        growth_rect.x = growth_rect.x
-          - trade_routes_rect.w - border / 2 - trade_rect.w - border / 2;
-      }
+      growth_rect.x = canvas_x + (*width + 1) / 2 - growth_rect.w - border / 2;
       growth_rect.y = canvas_y + height1 + (height2 - growth_rect.h) / 2;
 
       food_rect.x = growth_rect.x - border / 2 - food_rect.w;
@@ -1583,14 +1544,6 @@ static void show_full_citybar(struct canvas *pcanvas,
                       get_color(tileset, COLOR_MAPVIEW_CITYTEXT), prod);
     }
 
-    if (should_draw_trade_routes) {
-      canvas_put_sprite_full(pcanvas, trade_rect.x, trade_rect.y,
-                             citybar->trade);
-      canvas_put_text(pcanvas, trade_routes_rect.x, trade_routes_rect.y,
-                      FONT_CITY_PROD,
-                      get_color(tileset, trade_routes_color), trade_routes);
-    }
-
     if (should_draw_growth) {
       canvas_put_sprite_full(pcanvas, food_rect.x, food_rect.y, citybar->food);
       canvas_put_text(pcanvas, growth_rect.x, growth_rect.y,
@@ -1612,7 +1565,7 @@ static void show_full_citybar(struct canvas *pcanvas,
   canvas_put_line(pcanvas, owner_color, LINE_NORMAL,
 		  canvas_x - *width / 2 + *width, canvas_y,
 		  0, *height);
-  
+
   /* Draw the dividing line if we drew both the
    * upper and lower parts. */
   if (draw_city_names && should_draw_lower_bar) {
@@ -1631,16 +1584,13 @@ static void show_small_citybar(struct canvas *pcanvas,
 			   int canvas_x, int canvas_y,
 			   struct city *pcity, int *width, int *height)
 {
-  static char name[512], growth[32], prod[512], trade_routes[32];
-  enum color_std growth_color, trade_routes_color;
+  static char name[512], growth[32], prod[512];
+  enum color_std growth_color;
   struct {
     int x, y, w, h;
   } name_rect = {0, 0, 0, 0}, growth_rect = {0, 0, 0, 0},
-    prod_rect = {0, 0, 0, 0}, trade_routes_rect = {0,};
-  int total_width, total_height;
-  int spacer_width = 0;
-  const bool can_see_inside = (client_is_global_observer()
-                               || city_owner(pcity) == client_player());
+    prod_rect = {0, 0, 0, 0};
+  int extra_width = 0, total_width, total_height;
 
   *width = *height = 0;
 
@@ -1648,69 +1598,36 @@ static void show_small_citybar(struct canvas *pcanvas,
   canvas_y += tileset_citybar_offset_y(tileset);
 
   if (draw_city_names) {
-    int drawposx;
-
-    /* HACK: put a character's worth of space between the two
-     * strings if needed. */
-    get_text_size(&spacer_width, NULL, FONT_CITY_NAME, "M");
-
-    total_width = 0;
-    total_height = 0;
-
     get_city_mapview_name_and_growth(pcity, name, sizeof(name),
                                     growth, sizeof(growth), &growth_color);
 
     get_text_size(&name_rect.w, &name_rect.h, FONT_CITY_NAME, name);
-    total_width += name_rect.w;
-    total_height = MAX(total_height, name_rect.h);
 
-    if (draw_city_growth && can_see_inside) {
+    if (draw_city_growth) {
       get_text_size(&growth_rect.w, &growth_rect.h, FONT_CITY_PROD, growth);
-      total_width += spacer_width + growth_rect.w;
-      total_height = MAX(total_height, growth_rect.h);
+      /* HACK: put a character's worth of space between the two strings. */
+      get_text_size(&extra_width, NULL, FONT_CITY_NAME, "M");
     }
-
-    if (draw_city_trade_routes && can_see_inside) {
-      get_city_mapview_trade_routes(pcity, trade_routes,
-                                    sizeof(trade_routes),
-                                    &trade_routes_color);
-      get_text_size(&trade_routes_rect.w, &trade_routes_rect.h,
-                    FONT_CITY_PROD, trade_routes);
-      total_width += spacer_width + trade_routes_rect.w;
-      total_height = MAX(total_height, trade_routes_rect.h);
-    }
-
-    drawposx = canvas_x;
-    drawposx -= total_width / 2;
-    canvas_put_text(pcanvas, drawposx, canvas_y,
+    total_width = name_rect.w + extra_width + growth_rect.w;
+    total_height = MAX(name_rect.h, growth_rect.h);
+    canvas_put_text(pcanvas,
+		    canvas_x - total_width / 2, canvas_y,
 		    FONT_CITY_NAME,
 		    get_color(tileset, COLOR_MAPVIEW_CITYTEXT), name);
-    drawposx += name_rect.w;
-
-    if (draw_city_growth && can_see_inside) {
-      drawposx += spacer_width;
-      canvas_put_text(pcanvas, drawposx,
+    if (draw_city_growth) {
+      canvas_put_text(pcanvas,
+		      canvas_x - total_width / 2 + name_rect.w + extra_width,
 		      canvas_y + total_height - growth_rect.h,
 		      FONT_CITY_PROD,
 		      get_color(tileset, growth_color), growth);
-      drawposx += growth_rect.w;
     }
-
-    if (draw_city_trade_routes && can_see_inside) {
-      drawposx += spacer_width;
-      canvas_put_text(pcanvas, drawposx,
-		      canvas_y + total_height - trade_routes_rect.h,
-		      FONT_CITY_PROD,
-		      get_color(tileset, trade_routes_color), trade_routes);
-      drawposx += trade_routes_rect.w;
-    }
-
     canvas_y += total_height + 3;
 
     *width = MAX(*width, total_width);
     *height += total_height + 3;
   }
-  if (draw_city_productions && can_see_inside) {
+  if (draw_city_productions
+      && (city_owner(pcity) == game.player_ptr || !game.player_ptr)) {
     get_city_mapview_production(pcity, prod, sizeof(prod));
     get_text_size(&prod_rect.w, &prod_rect.h, FONT_CITY_PROD, prod);
 
@@ -1796,21 +1713,21 @@ void show_city_descriptions(int canvas_x, int canvas_y,
     const int canvas_x = gui_x - mapview.gui_x0;
     const int canvas_y = gui_y - mapview.gui_y0;
 
-    if (ptile && tile_city(ptile)) {
+    if (ptile && ptile->city) {
       int width = 0, height = 0;
-      struct city *pcity = tile_city(ptile);
+      struct city *pcity = ptile->city;
 
       show_city_desc(mapview.store, canvas_x, canvas_y,
 		     pcity, &width, &height);
-      log_debug("Drawing %s.", city_name(pcity));
+      freelog(LOG_DEBUG, "Drawing %s.", city_name(pcity));
 
       if (width > max_desc_width || height > max_desc_height) {
-        /* The update was incomplete! We queue a new update. Note that
-         * this is recursively queueing an update within a dequeuing of an
-         * update. This is allowed specifically because of the code in
-         * unqueue_mapview_updates. See that function for more. */
-        log_debug("Re-queuing %s.", city_name(pcity));
-        update_city_description(pcity);
+	/* The update was incomplete!  We queue a new update.  Note that
+	 * this is recursively queueing an update within a dequeuing of an
+	 * update.  This is allowed specifically because of the code in
+	 * unqueue_mapview_updates.  See that function for more. */
+	freelog(LOG_DEBUG, "Re-queuing %s.", city_name(pcity));
+	update_city_description(pcity);
       }
       new_max_width = MAX(width, new_max_width);
       new_max_height = MAX(height, new_max_height);
@@ -2067,7 +1984,7 @@ void move_unit_map_canvas(struct unit *punit,
 
 /**************************************************************************
   Find the "best" city/settlers to associate with the selected tile.
-    a.  If a visible city is working the tile, return that city.
+    a.  If a city is working the tile, return that city.
     b.  If another player's city is working the tile, return NULL.
     c.  If any selected cities are within range, return the closest one.
     d.  If any cities are within range, return the closest one.
@@ -2080,19 +1997,20 @@ void move_unit_map_canvas(struct unit *punit,
 struct city *find_city_or_settler_near_tile(const struct tile *ptile,
 					    struct unit **punit)
 {
-  struct city *closest_city;
-  struct city *pcity;
+  struct city *pcity = NULL, *closest_city;
   struct unit *closest_settler = NULL, *best_settler = NULL;
 
   if (punit) {
     *punit = NULL;
   }
 
-  /* Check if there is visible city working that tile */
-  pcity = tile_worked(ptile);
-  if (pcity && pcity->tile) {
-    if (NULL == client.conn.playing
-        || city_owner(pcity) == client.conn.playing) {
+  if (ptile && ptile->worked) {
+    /* Make sure the city exists. */
+    pcity = game_find_city_by_number(ptile->worked->id);
+  }
+
+  if (pcity) {
+    if (!game.player_ptr || city_owner(pcity) == game.player_ptr) {
       /* rule a */
       return pcity;
     } else {
@@ -2104,19 +2022,20 @@ struct city *find_city_or_settler_near_tile(const struct tile *ptile,
   /* rule e */
   closest_city = NULL;
 
-  city_tile_iterate(ptile, tile1) {
-    pcity = tile_city(tile1);
+  city_map_checked_iterate(ptile, city_x, city_y, tile1) {
+    pcity = tile_get_city(tile1);
     if (pcity
-	&& (NULL == client.conn.playing
-	    || city_owner(pcity) == client.conn.playing)
-	&& city_can_work_tile(pcity, tile1)) {
+	&& (!game.player_ptr || city_owner(pcity) == game.player_ptr)
+	&& get_worker_city(pcity, CITY_MAP_SIZE - 1 - city_x,
+			   CITY_MAP_SIZE - 1 - city_y) == C_TILE_EMPTY) {
       /*
        * Note, we must explicitly check if the tile is workable (with
-       * city_can_work_tile() above), since it is possible that another
-       * city (perhaps an UNSEEN city) may be working it!
+       * get_worker_city(), above) since it is possible that another
+       * city (perhaps an unseen enemy city) may be working it,
+       * causing it to be marked as C_TILE_UNAVAILABLE.
        */
       
-      if (mapdeco_is_highlight_set(city_tile(pcity))) {
+      if (mapdeco_is_highlight_set(pcity->tile)) {
 	/* rule c */
 	return pcity;
       }
@@ -2124,17 +2043,19 @@ struct city *find_city_or_settler_near_tile(const struct tile *ptile,
 	closest_city = pcity;
       }
     }
-  } city_tile_iterate_end;
+  } city_map_checked_iterate_end;
 
   /* rule d */
   if (closest_city || !punit) {
     return closest_city;
   }
 
-  city_tile_iterate(ptile, tile1) {
+  city_map_iterate_outwards(city_x, city_y) {
+    struct tile *tile1 = base_city_map_to_map(ptile, city_x, city_y);;
+
+    if (tile1) {
       unit_list_iterate(tile1->units, psettler) {
-	if ((NULL == client.conn.playing
-	     || unit_owner(psettler) == client.conn.playing)
+	if ((!game.player_ptr || unit_owner(psettler) == game.player_ptr)
 	    && unit_has_type_flag(psettler, F_CITIES)
 	    && city_can_be_built_here(psettler->tile, psettler)) {
 	  if (!closest_settler) {
@@ -2145,7 +2066,8 @@ struct city *find_city_or_settler_near_tile(const struct tile *ptile,
 	  }
 	}
       } unit_list_iterate_end;
-  } city_tile_iterate_end;
+    }
+  } city_map_iterate_outwards_end;
 
   if (best_settler) {
     /* Rule e */
@@ -2184,8 +2106,7 @@ static void append_city_buycost_string(const struct city *pcity,
     return;
   }
 
-  cat_snprintf(buffer, buffer_len, "/%d",
-               city_production_buy_gold_cost(pcity));
+  cat_snprintf(buffer, buffer_len, "/%d", city_buy_cost(pcity));
 }
 
 /**************************************************************************
@@ -2195,71 +2116,37 @@ static void append_city_buycost_string(const struct city *pcity,
 void get_city_mapview_production(struct city *pcity,
                                  char *buffer, size_t buffer_len)
 {
-  int turns;
-
-  universal_name_translation(&pcity->production, buffer, buffer_len);
-
-  if (city_production_has_flag(pcity, IF_GOLD)) {
-    return;
-  }
-  turns = city_production_turns_to_build(pcity, TRUE);
-
-  if (999 < turns) {
-    cat_snprintf(buffer, buffer_len, " -");
+  int turns = city_turns_to_build(pcity, pcity->production, TRUE);
+				
+  if (pcity->production.is_unit) {
+    struct unit_type *punit_type =
+		utype_by_number(pcity->production.value);
+    if (turns < 999) {
+      my_snprintf(buffer, buffer_len, "%s %d",
+                  utype_name_translation(punit_type),
+                  turns);
+    } else {
+      my_snprintf(buffer, buffer_len, "%s -",
+                  utype_name_translation(punit_type));
+    }
   } else {
-    cat_snprintf(buffer, buffer_len, " %d", turns);
+    if (!pcity->production.is_unit
+	&& improvement_has_flag(pcity->production.value, IF_GOLD)) {
+      my_snprintf(buffer, buffer_len, "%s",
+		  improvement_name_translation(pcity->production.value));
+    } else if (turns < 999) {
+      my_snprintf(buffer, buffer_len, "%s %d",
+		  improvement_name_translation(pcity->production.value),
+		  turns);
+    } else {
+      my_snprintf(buffer, buffer_len, "%s -",
+		  improvement_name_translation(pcity->production.value));
+    }
   }
 
   append_city_buycost_string(pcity, buffer, buffer_len);
 }
 
-/**************************************************************************
-  Find the mapview city trade routes text for the given city, and place it
-  into the buffer. Sets 'pcolor' to the preferred color the text should
-  be drawn in if it is non-NULL.
-**************************************************************************/
-void get_city_mapview_trade_routes(struct city *pcity,
-                                   char *trade_routes_buffer,
-                                   size_t trade_routes_buffer_len,
-                                   enum color_std *pcolor)
-{
-  int num_trade_routes = 0, i;
-
-  if (!trade_routes_buffer || trade_routes_buffer_len <= 0) {
-    return;
-  }
-
-  if (!pcity) {
-    trade_routes_buffer[0] = '\0';
-    if (pcolor) {
-      *pcolor = COLOR_MAPVIEW_CITYTEXT;
-    }
-    return;
-  }
-
-  for (i = 0; i < NUM_TRADE_ROUTES; i++) {
-    if (pcity->trade[i] <= 0) {
-      /* NB: pcity->trade_value[i] == 0 is a valid case. */
-      continue;
-    }
-    num_trade_routes++;
-  }
-
-  my_snprintf(trade_routes_buffer, trade_routes_buffer_len,
-              "%d/%d", num_trade_routes, NUM_TRADE_ROUTES);
-
-  if (pcolor) {
-    if (num_trade_routes == NUM_TRADE_ROUTES) {
-      *pcolor = COLOR_MAPVIEW_TRADE_ROUTES_ALL_BUILT;
-    } else if (num_trade_routes == 0) {
-      *pcolor = COLOR_MAPVIEW_TRADE_ROUTES_NO_BUILT;
-    } else {
-      *pcolor = COLOR_MAPVIEW_TRADE_ROUTES_SOME_BUILT;
-    }
-  }
-}
-
-/***************************************************************************/
 static enum update_type needed_updates = UPDATE_NONE;
 static bool callback_queued = FALSE;
 
@@ -2380,8 +2267,8 @@ void unqueue_mapview_updates(bool write_to_screen)
     return;
   }
 
-  log_debug("unqueue_mapview_update: needed_updates=%d",
-            needed_updates);
+  freelog(LOG_DEBUG, "unqueue_mapview_update: needed_updates=%d",
+	  needed_updates);
 
   /* This code "pops" the lists of tile updates off of the static array and
    * stores them locally.  This allows further updates to be queued within
@@ -2439,6 +2326,7 @@ void unqueue_mapview_updates(bool write_to_screen)
   }
   for (i = 0; i < TILE_UPDATE_COUNT; i++) {
     if (my_tile_updates[i]) {
+      tile_list_unlink_all(my_tile_updates[i]);
       tile_list_free(my_tile_updates[i]);
     }
   }
@@ -2463,8 +2351,7 @@ void get_city_mapview_name_and_growth(struct city *pcity,
 {
   mystrlcpy(name_buffer, city_name(pcity), name_buffer_len);
 
-  if (NULL == client.conn.playing
-      || city_owner(pcity) == client.conn.playing) {
+  if (!game.player_ptr || city_owner(pcity) == game.player_ptr) {
     int turns = city_turns_to_grow(pcity);
 
     if (turns == 0) {
@@ -2787,12 +2674,12 @@ void mapdeco_set_gotoroute(const struct unit *punit)
   const struct tile *ptile;
   int i, ind;
 
-  if (!punit || !unit_tile(punit) || !unit_has_orders(punit)
+  if (!punit || !punit->tile || !unit_has_orders(punit)
       || punit->orders.length < 1) {
     return;
   }
 
-  ptile = unit_tile(punit);
+  ptile = punit->tile;
 
   for (i = 0; ptile != NULL && i < punit->orders.length; i++) {
     if (punit->orders.index + i >= punit->orders.length
@@ -3007,11 +2894,6 @@ void put_spaceship(struct canvas *pcanvas, int canvas_x, int canvas_y,
 	      : get_spaceship_sprite(t, SPACESHIP_PROPULSION));
 
     canvas_put_sprite_full(pcanvas, x, y, sprite);
-
-    if (k && ship->state == SSHIP_LAUNCHED) {
-      sprite = get_spaceship_sprite(t, SPACESHIP_EXHAUST);
-      canvas_put_sprite_full(pcanvas, x + w, y, sprite);
-    }
   }
 
   for (i = 0; i < NUM_SS_STRUCTURALS; i++) {
@@ -3023,240 +2905,5 @@ void put_spaceship(struct canvas *pcanvas, int canvas_x, int canvas_y,
 
     sprite = get_spaceship_sprite(t, SPACESHIP_STRUCTURAL);
     canvas_put_sprite_full(pcanvas, x, y, sprite);
-  }
-}
-
-/****************************************************************************
-  Map link mark module: it makes link marks when a link is sent by chating,
-  or restore a mark with clicking a link on the chatline.
-****************************************************************************/
-struct link_mark {
-  enum text_link_type type;     /* The target type. */
-  int id;                       /* The city or unit id, or tile index. */
-  int turn_counter;             /* The turn counter before it disappears. */
-};
-
-#define SPECLIST_TAG link_mark
-#define SPECLIST_TYPE struct link_mark
-#include "speclist.h"
-#define link_marks_iterate(pmark) \
-  TYPED_LIST_ITERATE(struct link_mark, link_marks, pmark)
-#define link_marks_iterate_end LIST_ITERATE_END
-
-static struct link_mark_list *link_marks = NULL;
-
-/********************************************************************** 
-  Find a link mark in the list.
-***********************************************************************/
-static struct link_mark *link_mark_find(enum text_link_type type, int id)
-{
-  link_marks_iterate(pmark) {
-    if (pmark->type == type && pmark->id == id) {
-      return pmark;
-    }
-  } link_marks_iterate_end;
-
-  return NULL;
-}
-
-/********************************************************************** 
-  Create a new link mark.
-***********************************************************************/
-static struct link_mark *link_mark_new(enum text_link_type type,
-                                       int id, int turns)
-{
-  struct link_mark *pmark = fc_malloc(sizeof(struct link_mark));
-
-  pmark->type = type;
-  pmark->id = id;
-  pmark->turn_counter = turns;
-  link_mark_list_append(link_marks, pmark);
-
-  return pmark;
-}
-
-/********************************************************************** 
-  Remove a link mark.
-***********************************************************************/
-static void link_mark_remove(struct link_mark *pmark)
-{
-  link_mark_list_unlink(link_marks, pmark);
-  free(pmark);
-}
-
-/********************************************************************** 
-  Returns the location of the pointed mark.
-***********************************************************************/
-static struct tile *link_mark_tile(const struct link_mark *pmark)
-{
-  switch (pmark->type) {
-  case TLT_CITY:
-    {
-      struct city *pcity = game_find_city_by_number(pmark->id);
-      return pcity ? pcity->tile : NULL;
-    }
-  case TLT_TILE:
-    return index_to_tile(pmark->id);
-  case TLT_UNIT:
-    {
-      struct unit *punit = game_find_unit_by_number(pmark->id);
-      return punit ? punit->tile : NULL;
-    }
-  }
-  return NULL;
-}
-
-/********************************************************************** 
-  Returns the color of the pointed mark.
-***********************************************************************/
-static struct color *link_mark_color(const struct link_mark *pmark)
-{
-  switch (pmark->type) {
-  case TLT_CITY:
-    return get_color(tileset, COLOR_MAPVIEW_CITY_LINK);
-  case TLT_TILE:
-    return get_color(tileset, COLOR_MAPVIEW_TILE_LINK);
-  case TLT_UNIT:
-    return get_color(tileset, COLOR_MAPVIEW_UNIT_LINK);
-  }
-  return NULL;
-}
-
-/********************************************************************** 
-  Print a link mark.
-***********************************************************************/
-static void link_mark_draw(const struct link_mark *pmark)
-{
-  int width = tileset_tile_width(tileset);
-  int height = tileset_tile_height(tileset);
-  int xd = width / 20, yd = height / 20;
-  int xlen = width / 3, ylen = height / 3;
-  int canvas_x, canvas_y, x0, x1, y0, y1;
-  struct tile *ptile = link_mark_tile(pmark);
-  struct color *pcolor = link_mark_color(pmark);
-
-  if (!ptile || !tile_to_canvas_pos(&canvas_x, &canvas_y, ptile)) {
-    return;
-  }
-
-  x0 = canvas_x + xd;
-  x1 = canvas_x + width - xd;
-  y0 = canvas_y + yd;
-  y1 = canvas_y + height - yd;
-
-  canvas_put_line(mapview.store, pcolor, LINE_TILE_FRAME, x0, y0, xlen, 0);
-  canvas_put_line(mapview.store, pcolor, LINE_TILE_FRAME, x0, y0, 0, ylen);
-  
-  canvas_put_line(mapview.store, pcolor, LINE_TILE_FRAME, x1, y0, -xlen, 0);
-  canvas_put_line(mapview.store, pcolor, LINE_TILE_FRAME, x1, y0, 0, ylen);
-  
-  canvas_put_line(mapview.store, pcolor, LINE_TILE_FRAME, x0, y1, xlen, 0);
-  canvas_put_line(mapview.store, pcolor, LINE_TILE_FRAME, x0, y1, 0, -ylen);
-  
-  canvas_put_line(mapview.store, pcolor, LINE_TILE_FRAME, x1, y1, -xlen, 0);
-  canvas_put_line(mapview.store, pcolor, LINE_TILE_FRAME, x1, y1, 0, -ylen);
-}
-
-/********************************************************************** 
-  Initialize the link marks.
-***********************************************************************/
-void link_marks_init(void)
-{
-  if (link_marks) {
-    link_marks_free();
-  }
-
-  link_marks = link_mark_list_new();
-}
-
-/********************************************************************** 
-  Free the link marks.
-***********************************************************************/
-void link_marks_free(void)
-{
-  if (!link_marks) {
-    return;
-  }
-
-  link_marks_iterate(pmark) {
-    free(pmark);
-  } link_marks_iterate_end;
-  link_mark_list_free(link_marks);
-  link_marks = NULL;
-}
-
-/********************************************************************** 
-  Draw all link marks.
-***********************************************************************/
-void link_marks_draw_all(void)
-{
-  link_marks_iterate(pmark) {
-    link_mark_draw(pmark);
-  } link_marks_iterate_end;
-}
-
-/********************************************************************** 
-  Clear all visible links.
-***********************************************************************/
-void link_marks_clear_all(void)
-{
-  link_marks_iterate(pmark) {
-    link_mark_remove(pmark);
-  } link_marks_iterate_end;
-
-  update_map_canvas_visible();
-}
-
-/********************************************************************** 
-  Clear all visible links.
-***********************************************************************/
-void link_marks_decrease_turn_counters(void)
-{
-  link_marks_iterate(pmark) {
-    if (--pmark->turn_counter <= 0) {
-      link_mark_remove(pmark);
-    }
-  } link_marks_iterate_end;
-
-  /* update_map_canvas_visible(); not needed here. */
-}
-
-/********************************************************************** 
-  Add a visible link for 2 turns.
-***********************************************************************/
-void link_mark_add_new(enum text_link_type type, int id)
-{
-  struct link_mark *pmark = link_mark_find(type, id);
-  struct tile *ptile;
-
-  if (pmark) {
-    /* Already displayed, but maybe increase the turn counter. */
-    pmark->turn_counter = MAX(pmark->turn_counter, 2);
-    return;
-  }
-
-  pmark = link_mark_new(type, id, 2);
-  ptile = link_mark_tile(pmark);
-  if (ptile && tile_visible_mapcanvas(ptile)) {
-    refresh_tile_mapcanvas(ptile, FALSE, FALSE);
-  }
-}
-
-/********************************************************************** 
-  Add a visible link for 1 turn.
-***********************************************************************/
-void link_mark_restore(enum text_link_type type, int id)
-{
-  struct link_mark *pmark;
-  struct tile *ptile;
-
-  if (link_mark_find(type, id)) {
-    return;
-  }
-
-  pmark = link_mark_new(type, id, 1);
-  ptile = link_mark_tile(pmark);
-  if (ptile && tile_visible_mapcanvas(ptile)) {
-    refresh_tile_mapcanvas(ptile, FALSE, FALSE);
   }
 }

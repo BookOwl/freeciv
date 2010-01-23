@@ -24,7 +24,6 @@
 #include <gtk/gtk.h>
 #include <gdk/gdkkeysyms.h>
 
-/* common & utility */
 #include "fcintl.h"
 #include "game.h"
 #include "government.h"
@@ -37,12 +36,12 @@
 #include "support.h"
 #include "unitlist.h"
 
-/* client */
 #include "chatline.h"
 #include "choice_dialog.h"
 #include "citydlg.h"
-#include "client_main.h"
+#include "civclient.h"
 #include "climisc.h"
+#include "clinet.h"
 #include "connectdlg_common.h"
 #include "control.h"
 #include "goto.h"
@@ -57,12 +56,11 @@
 #include "tilespec.h"
 
 #include "dialogs.h"
-#include "editprop.h"
 #include "wldlg.h"
 
 /******************************************************************/
 static GtkWidget  *races_shell;
-struct player *races_player;
+static char races_player_name[MAX_LEN_NAME];
 static GtkWidget  *races_nation_list[MAX_NUM_NATION_GROUPS + 1];
 static GtkWidget  *races_leader;
 static GList      *races_leader_list;
@@ -73,7 +71,6 @@ static GtkTextBuffer *races_text;
 /******************************************************************/
 #define SELECT_UNIT_READY  1
 #define SELECT_UNIT_SENTRY 2
-#define SELECT_UNIT_ALL    3
 
 static GtkWidget *unit_select_dialog_shell;
 static GtkTreeStore *unit_select_store;
@@ -91,6 +88,7 @@ static void races_city_style_callback(GtkTreeSelection *select, gpointer data);
 static gboolean races_selection_func(GtkTreeSelection *select,
 				     GtkTreeModel *model, GtkTreePath *path,
 				     gboolean selected, gpointer data);
+static const struct player *get_races_player(void);
 
 static int selected_nation;
 static int selected_sex;
@@ -119,7 +117,7 @@ void popup_notify_dialog(const char *caption, const char *headline,
 
   headline_label = gtk_label_new(headline);   
   gtk_box_pack_start(GTK_BOX(vbox), headline_label, FALSE, FALSE, 0);
-  gtk_widget_set_name(headline_label, "notify_label");
+  gtk_widget_set_name(headline_label, "notify label");
 
   gtk_label_set_justify(GTK_LABEL(headline_label), GTK_JUSTIFY_LEFT);
   gtk_misc_set_alignment(GTK_MISC(headline_label), 0.0, 0.0);
@@ -132,7 +130,7 @@ void popup_notify_dialog(const char *caption, const char *headline,
   label = gtk_label_new(lines);
   gtk_scrolled_window_add_with_viewport(GTK_SCROLLED_WINDOW(sw), label);
 
-  gtk_widget_set_name(label, "notify_label");
+  gtk_widget_set_name(label, "notify label");
   gtk_label_set_justify(GTK_LABEL(label), GTK_JUSTIFY_LEFT);
   gtk_misc_set_alignment(GTK_MISC(label), 0.0, 0.0);
 
@@ -159,7 +157,7 @@ static void notify_goto_response(GtkWidget *w, gint response)
     center_tile_mapcanvas(ptile);
     break;
   case 2:
-    pcity = tile_city(ptile);
+    pcity = tile_get_city(ptile);
 
     if (center_when_popup_city) {
       center_tile_mapcanvas(ptile);
@@ -173,22 +171,13 @@ static void notify_goto_response(GtkWidget *w, gint response)
   gtk_widget_destroy(w);
 }
 
-/****************************************************************
-  User clicked close for connect message dialog
-*****************************************************************/
-static void notify_connect_msg_response(GtkWidget *w, gint response)
-{
-  gtk_widget_destroy(w);
-}
-
 /**************************************************************************
   Popup a dialog to display information about an event that has a
   specific location.  The user should be given the option to goto that
   location.
 **************************************************************************/
 void popup_notify_goto_dialog(const char *headline, const char *lines,
-                              const struct text_tag_list *tags,
-                              struct tile *ptile)
+			      struct tile *ptile)
 {
   GtkWidget *shell, *label, *goto_command, *popcity_command;
   
@@ -223,43 +212,14 @@ void popup_notify_goto_dialog(const char *headline, const char *lines,
   } else {
     struct city *pcity;
 
-    pcity = tile_city(ptile);
+    pcity = tile_get_city(ptile);
     gtk_widget_set_sensitive(popcity_command,
-      (NULL != pcity && city_owner(pcity) == client.conn.playing));
+      (pcity && city_owner(pcity) == game.player_ptr));
   }
 
   g_object_set_data(G_OBJECT(shell), "tile", ptile);
 
   g_signal_connect(shell, "response", G_CALLBACK(notify_goto_response), NULL);
-  gtk_widget_show(shell);
-}
-
-/**************************************************************************
-  Popup a dialog to display connection message from server.
-**************************************************************************/
-void popup_connect_msg(const char *headline, const char *message)
-{
-  GtkWidget *shell, *label;
-  
-  shell = gtk_dialog_new_with_buttons(headline,
-        NULL,
-        0,
-        NULL);
-  setup_dialog(shell, toplevel);
-  gtk_dialog_set_default_response(GTK_DIALOG(shell), GTK_RESPONSE_CLOSE);
-  gtk_window_set_position(GTK_WINDOW(shell), GTK_WIN_POS_CENTER_ON_PARENT);
-
-  label = gtk_label_new(message);
-  gtk_label_set_selectable(GTK_LABEL(label), 1);
-
-  gtk_container_add(GTK_CONTAINER(GTK_DIALOG(shell)->vbox), label);
-  gtk_widget_show(label);
-
-  gtk_dialog_add_button(GTK_DIALOG(shell), GTK_STOCK_CLOSE,
-			GTK_RESPONSE_CLOSE);
-
-  g_signal_connect(shell, "response", G_CALLBACK(notify_connect_msg_response),
-                   NULL);
   gtk_widget_show(shell);
 }
 
@@ -289,7 +249,7 @@ void popup_revolution_dialog(struct government *government)
 {
   static GtkWidget *shell = NULL;
 
-  if (0 > client.conn.playing->revolution_finishes) {
+  if (game.player_ptr->revolution_finishes < 0) {
     if (!shell) {
       shell = gtk_message_dialog_new(NULL,
 	  0,
@@ -312,25 +272,18 @@ void popup_revolution_dialog(struct government *government)
 }
 
 
-/***********************************************************************
-  NB: 'data' is a value of enum tile_special_type casted to a pointer.
-***********************************************************************/
+/****************************************************************
+...
+*****************************************************************/
 static void pillage_callback(GtkWidget *w, gpointer data)
 {
-  struct unit *punit;
-  int what = GPOINTER_TO_INT(data);
-
-  punit = game_find_unit_by_number(unit_to_use_to_pillage);
-  if (punit) {
-    Base_type_id pillage_base = -1;
-
-    if (what > S_LAST) {
-      pillage_base = what - S_LAST - 1;
-      what = S_LAST;
+  if (data) {
+    struct unit *punit = game_find_unit_by_number(unit_to_use_to_pillage);
+    if (punit) {
+      request_new_unit_activity_targeted(punit,
+					 ACTIVITY_PILLAGE,
+					 GPOINTER_TO_INT(data));
     }
-
-    request_new_unit_activity_targeted(punit, ACTIVITY_PILLAGE,
-                                       what, pillage_base);
   }
 }
 
@@ -343,15 +296,13 @@ static void pillage_destroy_callback(GtkWidget *w, gpointer data)
 }
 
 /****************************************************************
-  Opens pillage dialog listing possible pillage targets.
+...
 *****************************************************************/
 void popup_pillage_dialog(struct unit *punit,
-			  bv_special may_pillage,
-                          bv_bases bases)
+			  bv_special may_pillage)
 {
   GtkWidget *shl;
-  int what;
-  enum tile_special_type prereq;
+  enum tile_special_type what, prereq;
 
   if (!is_showing_pillage_dialog) {
     is_showing_pillage_dialog = TRUE;
@@ -361,30 +312,18 @@ void popup_pillage_dialog(struct unit *punit,
 			       _("What To Pillage"),
 			       _("Select what to pillage:"));
 
-    while ((what = get_preferred_pillage(may_pillage, bases)) != S_LAST) {
+    while ((what = get_preferred_pillage(may_pillage)) != S_LAST) {
       bv_special what_bv;
-      bv_bases what_base;
 
       BV_CLR_ALL(what_bv);
-      BV_CLR_ALL(what_base);
+      BV_SET(what_bv, what);
+      choice_dialog_add(shl, get_infrastructure_text(what_bv),
+			G_CALLBACK(pillage_callback), GINT_TO_POINTER(what));
 
-      if (what > S_LAST) {
-        BV_SET(what_base, what - S_LAST - 1);
-      } else {
-        BV_SET(what_bv, what);
-      }
-
-      choice_dialog_add(shl, get_infrastructure_text(what_bv, what_base),
-                        G_CALLBACK(pillage_callback), GINT_TO_POINTER(what));
-
-      if (what > S_LAST) {
-        BV_CLR(bases, what - S_LAST - 1);
-      } else {
-        clear_special(&may_pillage, what);
-        prereq = get_infrastructure_prereq(what);
-        if (prereq != S_LAST) {
-          clear_special(&may_pillage, prereq);
-        }
+      clear_special(&may_pillage, what);
+      prereq = get_infrastructure_prereq(what);
+      if (prereq != S_LAST) {
+	clear_special(&may_pillage, prereq);
       }
     }
 
@@ -409,7 +348,7 @@ static void unit_select_row_activated(GtkTreeView *view, GtkTreePath *path)
   gtk_tree_model_get_iter(GTK_TREE_MODEL(unit_select_store), &it, path);
   gtk_tree_model_get(GTK_TREE_MODEL(unit_select_store), &it, 0, &id, -1);
  
-  if ((punit = player_find_unit_by_id(client.conn.playing, id))) {
+  if ((punit = player_find_unit_by_id(game.player_ptr, id))) {
     set_unit_focus(punit);
   }
 
@@ -509,7 +448,7 @@ static void unit_select_cmd_callback(GtkWidget *w, gint rid, gpointer data)
       struct unit *pmyunit = NULL;
 
       unit_list_iterate(ptile->units, punit) {
-        if (unit_owner(punit) == client.conn.playing) {
+        if (game.player_ptr == unit_owner(punit)) {
           pmyunit = punit;
 
           /* Activate this unit. */
@@ -534,25 +473,11 @@ static void unit_select_cmd_callback(GtkWidget *w, gint rid, gpointer data)
   case SELECT_UNIT_SENTRY:
     {
       unit_list_iterate(ptile->units, punit) {
-        if (unit_owner(punit) == client.conn.playing) {
+        if (game.player_ptr == unit_owner(punit)) {
           if ((punit->activity == ACTIVITY_IDLE) &&
               !punit->ai.control &&
               can_unit_do_activity(punit, ACTIVITY_SENTRY)) {
             request_new_unit_activity(punit, ACTIVITY_SENTRY);
-          }
-        }
-      } unit_list_iterate_end;
-    }
-    break;
-
-  case SELECT_UNIT_ALL:
-    {
-      unit_list_iterate(ptile->units, punit) {
-        if (unit_owner(punit) == client.conn.playing) {
-          if (punit->activity == ACTIVITY_IDLE &&
-              !punit->ai.control) {
-            /* Give focus to it */
-            add_unit_focus(punit);
           }
         }
       } unit_list_iterate_end;
@@ -576,7 +501,7 @@ void popup_unit_select_dialog(struct tile *ptile)
   if (!unit_select_dialog_shell) {
     GtkTreeStore *store;
     GtkWidget *shell, *view, *sw, *hbox;
-    GtkWidget *ready_cmd, *sentry_cmd, *select_all_cmd, *close_cmd;
+    GtkWidget *ready_cmd, *sentry_cmd, *close_cmd;
 
     static const char *titles[NUM_UNIT_SELECT_COLUMNS] = {
       N_("Unit"),
@@ -669,14 +594,6 @@ void popup_unit_select_dialog(struct tile *ptile)
       GTK_BUTTON_BOX(GTK_DIALOG(shell)->action_area),
       sentry_cmd, TRUE);
 
-    select_all_cmd =
-    gtk_dialog_add_button(GTK_DIALOG(shell),
-      _("Select _all"), SELECT_UNIT_ALL);
-
-    gtk_button_box_set_child_secondary(
-      GTK_BUTTON_BOX(GTK_DIALOG(shell)->action_area),
-      select_all_cmd, TRUE);
-
     close_cmd =
     gtk_dialog_add_button(GTK_DIALOG(shell),
       GTK_STOCK_CLOSE, GTK_RESPONSE_CLOSE);
@@ -709,6 +626,7 @@ static GtkWidget* create_list_of_nations_in_group(struct nation_group* group,
   GtkTreeSelection *select;
   GtkCellRenderer *render;
   GtkTreeViewColumn *column;
+  const struct player *races_player = get_races_player();
 
   store = gtk_list_store_new(5, G_TYPE_INT, G_TYPE_BOOLEAN,
       GDK_TYPE_PIXBUF, G_TYPE_STRING, G_TYPE_STRING);
@@ -767,6 +685,7 @@ static GtkWidget* create_list_of_nations_in_group(struct nation_group* group,
       gtk_list_store_set(store, &it, 2, img, -1);
       g_object_unref(img);
     }
+
     if (pnation->player == races_player) {
       /* FIXME: should select this one by default. */
     }
@@ -843,9 +762,7 @@ static void create_races_dialog(struct player *pplayer)
   int i;
   char *title;
 
-  if (C_S_RUNNING == client_state()) {
-    title = _("Edit Nation");
-  } else if (NULL != pplayer && pplayer == client.conn.playing) {
+  if (pplayer && pplayer == game.player_ptr) {
     title = _("What Nation Will You Be?");
   } else {
     title = _("Pick Nation");
@@ -862,7 +779,11 @@ static void create_races_dialog(struct player *pplayer)
 				      GTK_RESPONSE_ACCEPT,
 				      NULL);
   races_shell = shell;
-  races_player = pplayer;
+  if (pplayer) {
+    sz_strlcpy(races_player_name, player_name(pplayer));
+  } else {
+    races_player_name[0] = '\0';
+  }
   setup_dialog(shell, toplevel);
 
   gtk_window_set_position(GTK_WINDOW(shell), GTK_WIN_POS_CENTER_ON_PARENT);
@@ -1318,21 +1239,33 @@ static void races_city_style_callback(GtkTreeSelection *select, gpointer data)
 **************************************************************************/
 static void races_response(GtkWidget *w, gint response, gpointer data)
 {
+  const struct player *races_player;
+  int plrno;
+
+  races_player = get_races_player();
+  if (!races_player) {
+    popdown_races_dialog();
+    return;
+  }
+  plrno = player_number(races_player);
+
   if (response == GTK_RESPONSE_ACCEPT) {
     const char *s;
 
-    /* This shouldn't be possible but... */
     if (selected_nation == -1) {
+      dsend_packet_nation_select_req(&aconnection, plrno,
+                                     -1, FALSE, "", 0);
+      popdown_races_dialog();
       return;
     }
 
     if (selected_sex == -1) {
-      output_window_append(ftc_client, _("You must select your sex."));
+      append_output_window(_("You must select your sex."));
       return;
     }
 
     if (selected_city_style == -1) {
-      output_window_append(ftc_client, _("You must select your city style."));
+      append_output_window(_("You must select your city style."));
       return;
     }
 
@@ -1341,19 +1274,18 @@ static void races_response(GtkWidget *w, gint response, gpointer data)
     /* Perform a minimum of sanity test on the name. */
     /* This could call is_allowed_player_name if it were available. */
     if (strlen(s) == 0) {
-      output_window_append(ftc_client, _("You must type a legal name."));
+      append_output_window(_("You must type a legal name."));
       return;
     }
 
-    dsend_packet_nation_select_req(&client.conn,
-				   player_number(races_player), selected_nation,
-				   selected_sex, s, selected_city_style);
+    dsend_packet_nation_select_req(&aconnection, plrno, selected_nation,
+                                   selected_sex, s, selected_city_style);
   } else if (response == GTK_RESPONSE_NO) {
-    dsend_packet_nation_select_req(&client.conn,
-				   player_number(races_player),
-				   -1, FALSE, "", 0);
+    dsend_packet_nation_select_req(&aconnection, plrno, -1, FALSE, "", 0);
+  } else if (response == GTK_RESPONSE_CANCEL) {
+    /* Nothing - this allows the player to keep his currently selected
+     * nation. */
   }
-
   popdown_races_dialog();
 }
 
@@ -1412,5 +1344,18 @@ void popup_upgrade_dialog(struct unit_list *punits)
 void popdown_all_game_dialogs(void)
 {
   gui_dialog_destroy_all();
-  property_editor_popdown(editprop_get_property_editor());
 }
+
+/**************************************************************************
+  Helper function to work-around the fact that players may be renumbered
+  over the life-time of the nation selection dialog. It uses player names
+  ('races_player_name') to try to uniquely determine the player that the
+  user wants to modify.
+
+  NB: May return NULL.
+**************************************************************************/
+static const struct player *get_races_player(void)
+{
+  return find_player_by_name(races_player_name);
+}
+

@@ -113,16 +113,13 @@ struct connection {
   int sock;
   bool used;
   bool established;		/* have negotiated initial packets */
-
-  /* connection is "observer", not controller; may be observing
+  struct player *player;	/* NULL for connections not yet associated
+				   with a specific player */
+  /* 
+   * connection is "observer", not controller; may be observing
    * specific player, or all (implementation incomplete).
    */
   bool observer;
-
-  /* NULL for connections not yet associated with a specific player.
-   */
-  struct player *playing;
-
   struct socket_packet_buffer *buffer;
   struct socket_packet_buffer *send_buffer;
   struct timer *last_write;
@@ -274,7 +271,7 @@ struct socket_packet_buffer *new_socket_packet_buffer(void);
 void connection_common_init(struct connection *pconn);
 void connection_common_close(struct connection *pconn);
 void free_compression_queue(struct connection *pconn);
-void conn_reset_delta_state(struct connection *pconn);
+void conn_clear_packet_cache(struct connection *pconn);
 
 const char *conn_description(const struct connection *pconn);
 bool conn_controls_player(const struct connection *pconn);
@@ -283,9 +280,6 @@ enum cmdlevel_id conn_get_access(const struct connection *pconn);
 
 struct player;
 struct player *conn_get_player(const struct connection *pconn);
-
-bool can_conn_edit(const struct connection *pconn);
-bool can_conn_enable_editing(const struct connection *pconn);
 
 int get_next_request_id(int old_request_id);
 

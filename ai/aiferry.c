@@ -43,11 +43,7 @@
 /* 
  * This one is used only by ferryboats in ai.passenger field 
  */
-#define FERRY_AVAILABLE    -1     /* Boat is looking for a passenger */
-#define FERRY_ABANDON_BOSS  0     /* Passenger is assigned for boat, but boat
-                                   * might take another passenger. Probably
-                                   * passenger already left the boat*/
-
+#define FERRY_AVAILABLE   -1      /* Boat is looking for a passenger */
 /* 
  * The below is used only by passengers in ai.ferryboat field 
  */ 
@@ -81,18 +77,11 @@ void aiferry_init_stats(struct player *pplayer)
   ai->stats.available_boats = 0;
  
   unit_list_iterate(pplayer->units, punit) {
-    if (is_sailing_unit(punit)) {
-        unit_class_iterate(punitclass) {
-          if (punitclass->move_type == LAND_MOVING
-              && can_unit_type_transport(unit_type(punit), punitclass)) {
-            /* Can transport some land units. */
-            ai->stats.boats++;
-            if (punit->ai.passenger == FERRY_AVAILABLE) {
-              ai->stats.available_boats++;
-            }
-            break;
-          }
-        } unit_class_iterate_end;
+    if (is_sailing_unit(punit) && is_ground_units_transport(punit)) {
+      ai->stats.boats++;
+      if (punit->ai.passenger == FERRY_AVAILABLE) {
+	ai->stats.available_boats++;
+      }
     }
     if (punit->ai.ferryboat == FERRY_WANTED) {
       UNIT_LOG(LOG_DEBUG, punit, "wants a boat.");
@@ -110,49 +99,23 @@ static void aiferry_print_stats(struct player *pplayer)
   struct ai_data *ai = ai_data_get(pplayer);
   int n = 1;
 
-  log_base(LOGLEVEL_FERRY_STATS, "Boat stats for %s[%d]",
-           player_name(pplayer), player_number(pplayer));
-  log_base(LOGLEVEL_FERRY_STATS, "Registered: %d free out of total %d",
-           ai->stats.available_boats, ai->stats.boats);
+  freelog(LOGLEVEL_FERRY_STATS, "Boat stats for %s[%d]", 
+	  player_name(pplayer),
+	  player_number(pplayer));
+  freelog(LOGLEVEL_FERRY_STATS, "Registered: %d free out of total %d",
+	  ai->stats.available_boats, ai->stats.boats);
   unit_list_iterate(pplayer->units, punit) {
-    if (is_sailing_unit(punit)) {
-        unit_class_iterate(punitclass) {
-          if (punitclass->move_type == LAND_MOVING
-              && can_unit_type_transport(unit_type(punit), punitclass)) {
-            /* Can transport some land units. */
-            log_base(LOGLEVEL_FERRY_STATS, "#%d. %s[%d], psngr=%d", n,
-                     unit_rule_name(punit), punit->id, punit->ai.passenger);
-            n++;
-            break;
-          }
-        } unit_class_iterate_end;
+    if (is_sailing_unit(punit) && is_ground_units_transport(punit)) {
+      freelog(LOGLEVEL_FERRY_STATS, "#%d. %s[%d], psngr=%d", 
+	      n,
+	      unit_rule_name(punit),
+	      punit->id,
+	      punit->ai.passenger);
+      n++;
     }
   } unit_list_iterate_end;
 }
 #endif /* LOGLEVEL_FERRY_STATS */
-
-/**************************************************************************
-  Initialize new ferry when player gets it
-**************************************************************************/
-void aiferry_init_ferry(struct unit *ferry)
-{
-  if (is_sailing_unit(ferry)) {
-    unit_class_iterate(punitclass) {
-      if (punitclass->move_type == LAND_MOVING
-          && can_unit_type_transport(unit_type(ferry), punitclass)) {
-        /* Can transport some land units, so is consider ferry */
-        struct ai_data *ai = ai_data_get(unit_owner(ferry));
-
-        ferry->ai.passenger = FERRY_AVAILABLE;
-        ai->stats.boats++;
-        ai->stats.available_boats++;
-
-        break;
-      }
-    } unit_class_iterate_end;
-  }
-}
-
 
 /**************************************************************************
   Use on a unit which no longer needs a boat. 
@@ -245,23 +208,15 @@ static int aiferry_avail_boats(struct player *pplayer)
   int boats = 0;
 
   unit_list_iterate(pplayer->units, punit) {
-    if (is_sailing_unit(punit)
+    if (is_sailing_unit(punit) && is_ground_units_transport(punit) 
 	&& punit->ai.passenger == FERRY_AVAILABLE) {
-      unit_class_iterate(punitclass) {
-        if (punitclass->move_type == LAND_MOVING
-            && can_unit_type_transport(unit_type(punit), punitclass)) {
-          /* Can transport some land units. */
-          boats++;
-          break;
-        }
-      } unit_class_iterate_end;
+      boats++;
     }
   } unit_list_iterate_end;
 
   if (boats != ai->stats.available_boats) {
-    log_base(LOGLEVEL_FERRY_STATS,
-             "Player[%d] in turn %d: boats miscounted.",
-             player_number(pplayer), game.info.turn);
+    freelog(LOGLEVEL_FERRY_STATS, "Player[%d] in turn %d: boats miscounted.",
+	    player_number(pplayer), game.info.turn);
     aiferry_print_stats(pplayer);
   }
 #endif /* LOGLEVEL_FERRY_STATS */
@@ -292,10 +247,10 @@ static int combined_land_sea_move(const struct tile *src_tile,
 {
   int move_cost;
 
-  if (is_ocean_tile(tgt_tile)) {
+  if (is_ocean(tgt_tile->terrain)) {
     /* Any-to-Sea */
     move_cost = 0;
-  } else if (is_ocean_tile(src_tile)) {
+  } else if (is_ocean(src_tile->terrain)) {
     /* Sea-to-Land */
     move_cost = PF_IMPOSSIBLE_MC;
   } else {
@@ -313,7 +268,7 @@ static int combined_land_sea_move(const struct tile *src_tile,
 static int sea_move(const struct tile *ptile, enum known_type known,
                     const struct pf_parameter *param)
 {
-  if (is_ocean_tile(ptile)) {
+  if (is_ocean(ptile->terrain)) {
     /* Approximately TURN_FACTOR / average ferry move rate 
      * we can pass a better guess of the move rate through param->data
      * but we don't know which boat we will find out there */
@@ -336,10 +291,10 @@ bool is_boat_free(struct unit *boat, struct unit *punit, int cap)
    * - Only available boats or boats that are already dedicated to this unit
    *   are eligible.
    * - Only boats with enough remaining capacity are eligible.
-   * - Only units that can travel at sea are eligible.
-   * - Units that require fuel are lose hitpoints are not eligible.
+   * - Land moving units cannot transport others over sea
+   * - Units that require fuel are lose hitpoints are not eligible
    */
-  struct unit_class *ferry_class = unit_class(boat);
+  enum unit_move_type boat_move_type = unit_type(boat)->move_type;
 
   return (can_unit_transport(boat, punit)
 	  && !unit_has_orders(boat)
@@ -348,31 +303,9 @@ bool is_boat_free(struct unit *boat, struct unit *punit, int cap)
 	      || boat->ai.passenger == punit->id)
 	  && (get_transporter_capacity(boat) 
 	      - get_transporter_occupancy(boat) >= cap)
-          && ferry_class->ai.sea_move != MOVE_NONE
+          && boat_move_type != LAND_MOVING
           && !unit_type(boat)->fuel
-          && !is_losing_hp(boat));
-}
-
-/****************************************************************************
-  Check if unit is boss in ferry
-****************************************************************************/
-bool is_boss_of_boat(struct unit *punit)
-{
-  struct unit *ferry;
-
-  if (punit->transported_by == -1) {
-    /* Not even in boat */
-    return FALSE;
-  }
-
-  ferry = player_find_unit_by_id(unit_owner(punit), punit->transported_by);
-
-  if (ferry != NULL
-      && ferry->ai.passenger == punit->id) {
-    return TRUE;
-  }
-
-  return FALSE;
+          && unit_class(boat)->hp_loss_pct <= 0);
 }
 
 /****************************************************************************
@@ -390,14 +323,6 @@ int aiferry_find_boat(struct unit *punit, int cap, struct pf_path **path)
   struct pf_parameter param;
   struct pf_map *search_map;
   int ferryboat = punit->ai.ferryboat; /*currently assigned ferry*/
-
-  /* We may end calling pf_destroy_path for *path if it's not NULL.
-   * Most likely you are passing garbage or path you don't want
-   * destroyed if this assert fails.
-   * Don't try to be clever and pass 'fallback' path that will be returned
-   * if no path is found. Instead check for NULL return value and then
-   * use fallback path in calling function. */
-  assert(path == NULL || *path == NULL);
 
   assert(0 < ferryboat
 	 || FERRY_NONE == ferryboat
@@ -417,13 +342,10 @@ int aiferry_find_boat(struct unit *punit, int cap, struct pf_path **path)
   param.get_EC = sea_move;
   param.get_MC = combined_land_sea_move;
 
-  search_map = pf_map_new(&param);
+  search_map = pf_create_map(&param);
 
-  pf_map_iterate_positions(search_map, pos, TRUE) {
-   /* Should this be !can_unit_exist_at_tile() instead of is_ocean() some day?
-    * That would allow special units to wade in shallow coast waters to meet
-    * ferry where deep sea starts. */
-    int radius = (is_ocean_tile(pos.tile) ? 1 : 0);
+  pf_iterator(search_map, pos) {
+    int radius = (is_ocean(pos.tile->terrain) ? 1 : 0);
 
     if (pos.turn + pos.total_EC/PF_TURN_FACTOR > best_turns) {
       /* Won't find anything better */
@@ -452,9 +374,9 @@ int aiferry_find_boat(struct unit *punit, int cap, struct pf_path **path)
 		     aunit->moves_left);
 	    if (path) {
              if (*path) {
-                pf_path_destroy(*path);
+                pf_destroy_path(*path);
               }
-	      *path = pf_map_iterator_get_path(search_map);
+	      *path = pf_next_get_path(search_map);
 	    }
             best_turns = turns;
             best_id = aunit->id;
@@ -462,8 +384,8 @@ int aiferry_find_boat(struct unit *punit, int cap, struct pf_path **path)
         }
       } unit_list_iterate_end;
     } square_iterate_end;
-  } pf_map_iterate_positions_end;
-  pf_map_destroy(search_map);
+  } pf_iterator_end;
+  pf_destroy_map(search_map);
 
   return best_id;
 }
@@ -498,7 +420,7 @@ static void ai_activate_passengers(struct unit *ferry)
 {
   unit_list_iterate_safe(ferry->tile->units, aunit) {
     if (aunit->transported_by == ferry->id) {
-      unit_activity_handling(aunit, ACTIVITY_IDLE);
+      handle_unit_activity_request(aunit, ACTIVITY_IDLE);
       aunit->ai.done = FALSE;
       ai_manage_unit(unit_owner(aunit), aunit);
     }
@@ -519,10 +441,10 @@ bool ai_amphibious_goto_constrained(struct unit *ferry,
 {
   bool alive = TRUE;
   struct player *pplayer = unit_owner(passenger);
-  struct pf_map *pfm;
-  struct pf_path *path;
+  struct pf_map *map = NULL;
+  struct pf_path *path = NULL;
 
-  assert(pplayer->ai_data.control);
+  assert(pplayer->ai.control);
   assert(!unit_has_orders(passenger));
   assert(ferry->tile == passenger->tile);
 
@@ -538,8 +460,8 @@ bool ai_amphibious_goto_constrained(struct unit *ferry,
     return TRUE;
   }
 
-  pfm = pf_map_new(&parameter->combined);
-  path = pf_map_get_path(pfm, ptile);
+  map = pf_create_map(&parameter->combined);
+  path = pf_get_path(map, ptile);
 
   if (path) {
     ai_log_path(passenger, path, &parameter->combined);
@@ -556,7 +478,7 @@ bool ai_amphibious_goto_constrained(struct unit *ferry,
         return alive;
       }
       next_tile = path->positions[1].tile;
-      if (!is_ocean_tile(next_tile)) {
+      if (!is_ocean(next_tile->terrain)) {
 	UNIT_LOG(LOG_DEBUG, passenger, "Our boat has arrived "
 		 "[%d](moves left: %d)", ferry->id, ferry->moves_left);
 	UNIT_LOG(LOG_DEBUG, passenger, "Disembarking to (%d,%d)",
@@ -584,8 +506,8 @@ bool ai_amphibious_goto_constrained(struct unit *ferry,
     UNIT_LOG(LOG_DEBUG, passenger, "no path to destination");
   }
 
-  pf_path_destroy(path);
-  pf_map_destroy(pfm);
+  pf_destroy_path(path);
+  pf_destroy_map(map);
 
   return alive;
 }
@@ -655,10 +577,10 @@ bool aiferry_gobyboat(struct player *pplayer, struct unit *punit,
        * It might not lead _onto_ the boat. */
       if (!ai_unit_execute_path(punit, path_to_ferry)) { 
         /* Died. */
-	pf_path_destroy(path_to_ferry);
+	pf_destroy_path(path_to_ferry);
         return FALSE;
       }
-      pf_path_destroy(path_to_ferry);
+      pf_destroy_path(path_to_ferry);
     }
 
     if (!is_ocean_near_tile(punit->tile)) {
@@ -744,7 +666,7 @@ bool aiferry_gobyboat(struct player *pplayer, struct unit *punit,
       }
       if (same_pos(punit->tile, dest_tile)) {
         /* Arrived */
-        unit_activity_handling(punit, ACTIVITY_IDLE);
+        handle_unit_activity_request(punit, ACTIVITY_IDLE);
       } else {
         /* We are in still transit */
         punit->ai.done = TRUE;
@@ -775,7 +697,7 @@ bool aiferry_gobyboat(struct player *pplayer, struct unit *punit,
 static bool aiferry_findcargo(struct unit *pferry)
 {
   /* Path-finding stuff */
-  struct pf_map *pfm;
+  struct pf_map *map;
   struct pf_parameter parameter;
   int passengers = ai_data_get(unit_owner(pferry))->stats.passengers;
 
@@ -791,9 +713,13 @@ static bool aiferry_findcargo(struct unit *pferry)
    * might be "blocked" by unknown.  We don't want to fight though */
   parameter.get_TB = no_fights;
   
-  pfm = pf_map_new(&parameter);
-  pf_map_iterate_tiles(pfm, ptile, TRUE) {
-    unit_list_iterate(ptile->units, aunit) {
+  map = pf_create_map(&parameter);
+  while (pf_next(map)) {
+    struct pf_position pos;
+
+    pf_next_get_position(map, &pos);
+    
+    unit_list_iterate(pos.tile->units, aunit) {
       if (unit_owner(pferry) == unit_owner(aunit) 
 	  && (aunit->ai.ferryboat == FERRY_WANTED
 	      || aunit->ai.ferryboat == pferry->id)) {
@@ -805,17 +731,17 @@ static bool aiferry_findcargo(struct unit *pferry)
 	pferry->goto_tile = aunit->tile;
         /* Exchange phone numbers */
         aiferry_psngr_meet_boat(aunit, pferry);
-        pf_map_destroy(pfm);
+        pf_destroy_map(map);
         return TRUE;
       }
     } unit_list_iterate_end;
-  } pf_map_iterate_tiles_end;
+  }
 
   /* False positive can happen if we cannot find a route to the passenger
    * because of an internal sea or enemy blocking the route */
   UNIT_LOG(LOGLEVEL_FERRY, pferry,
            "AI Passengers counting reported false positive %d", passengers);
-  pf_map_destroy(pfm);
+  pf_destroy_map(map);
   return FALSE;
 }
 
@@ -834,7 +760,7 @@ static bool aiferry_findcargo(struct unit *pferry)
 static bool aiferry_find_interested_city(struct unit *pferry)
 {
   /* Path-finding stuff */
-  struct pf_map *pfm;
+  struct pf_map *map;
   struct pf_parameter parameter;
   /* Early termination condition */
   int turns_horizon = FC_INFINITY;
@@ -848,33 +774,37 @@ static bool aiferry_find_interested_city(struct unit *pferry)
   parameter.get_TB = no_fights_or_unknown;
   parameter.omniscience = FALSE;
   
-  pfm = pf_map_new(&parameter);
+  map = pf_create_map(&parameter);
   parameter.turn_mode = TM_WORST_TIME;
 
-  pf_map_iterate_positions(pfm, pos, TRUE) {
+  /* We want to consider the place we are currently in too, hence the 
+   * do-while loop */
+  do { 
+    struct pf_position pos;
     struct city *pcity;
 
+    pf_next_get_position(map, &pos);
     if (pos.turn >= turns_horizon) {
       /* Won't be able to find anything better than what we have */
       break;
     }
 
-    pcity = tile_city(pos.tile);
+    pcity = tile_get_city(pos.tile);
     
     if (pcity && city_owner(pcity) == unit_owner(pferry)
-        && (pcity->ai->choice.need_boat 
-            || (VUT_UTYPE == pcity->production.kind
-		&& utype_has_role(pcity->production.value.utype,
-				  L_FERRYBOAT)))) {
+        && (pcity->ai.choice.need_boat 
+            || (pcity->production.is_unit
+		&& utype_has_role(utype_by_number(pcity->production.value),
+				 L_FERRYBOAT)))) {
       bool really_needed = TRUE;
-      int turns = city_production_turns_to_build(pcity, TRUE);
+      int turns = city_turns_to_build(pcity, pcity->production, TRUE);
 
       UNIT_LOG(LOGLEVEL_FERRY, pferry, "%s (%d, %d) looks promising...", 
                city_name(pcity), TILE_XY(pcity->tile));
 
-      if (pos.turn > turns
-          && VUT_UTYPE == pcity->production.kind
-          && utype_has_role(pcity->production.value.utype, L_FERRYBOAT)) {
+      if (pos.turn > turns && pcity->production.is_unit
+          && utype_has_role(utype_by_number(pcity->production.value),
+			   L_FERRYBOAT)) {
         UNIT_LOG(LOGLEVEL_FERRY, pferry, "%s is NOT suitable: "
                  "will finish building its own ferry too soon",
                  city_name(pcity));
@@ -909,9 +839,9 @@ static bool aiferry_find_interested_city(struct unit *pferry)
         needed = TRUE;
       }
     }
-  } pf_map_iterate_positions_end;
+  } while (pf_next(map));
 
-  pf_map_destroy(pfm);
+  pf_destroy_map(map);
   return needed;
 }
 
@@ -934,7 +864,7 @@ void ai_manage_ferryboat(struct player *pplayer, struct unit *punit)
 
   /* Try to recover hitpoints if we are in a city, before we do anything */
   if (punit->hp < unit_type(punit)->hp 
-      && (pcity = tile_city(punit->tile))) {
+      && (pcity = tile_get_city(punit->tile))) {
     UNIT_LOG(LOGLEVEL_FERRY, punit, "waiting in %s to recover hitpoints", 
              city_name(pcity));
     punit->ai.done = TRUE;
@@ -961,12 +891,11 @@ void ai_manage_ferryboat(struct player *pplayer, struct unit *punit)
 	UNIT_LOG(LOGLEVEL_FERRY, punit, 
 		 "recorded passenger[%d] is not on board, checking for others",
 		 punit->ai.passenger);
-	punit->ai.passenger = FERRY_ABANDON_BOSS;
+	punit->ai.passenger = 0;
       }
     }
 
-    if (punit->ai.passenger == FERRY_AVAILABLE
-        || punit->ai.passenger == FERRY_ABANDON_BOSS) {
+    if (punit->ai.passenger <= 0) {
       struct unit *candidate = NULL;
     
       /* Try to select passanger-in-charge from among our passengers */
@@ -1026,7 +955,7 @@ void ai_manage_ferryboat(struct player *pplayer, struct unit *punit)
 	} else if (get_transporter_occupancy(punit) != 0) {
 	  /* The boss isn't on the ferry, and we have other passengers?
 	   * Forget about him. */
-	  punit->ai.passenger = FERRY_ABANDON_BOSS;
+	  punit->ai.passenger = 0;
 	}
       }
     } else {
@@ -1049,7 +978,7 @@ void ai_manage_ferryboat(struct player *pplayer, struct unit *punit)
   UNIT_LOG(LOGLEVEL_FERRY, punit, "Ferryboat is not carrying anyone "
 	   "(moves left: %d).", punit->moves_left);
   aiferry_make_available(punit);
-  unit_activity_handling(punit, ACTIVITY_IDLE);
+  handle_unit_activity_request(punit, ACTIVITY_IDLE);
   ai_unit_new_role(punit, AIUNIT_NONE, NULL);
   CHECK_UNIT(punit);
 

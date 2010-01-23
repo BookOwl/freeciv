@@ -49,11 +49,9 @@
 #include "unitlist.h"
 
 /* client */
-#include "client_main.h"
+#include "civclient.h"
 #include "clinet.h"
-#include "editgui_g.h"
 #include "ggzclient.h"
-#include "ggz_g.h"
 #include "tilespec.h"
 
 /* gui-sdl */
@@ -90,6 +88,17 @@ const char * const gui_character_encoding = "UTF-8";
 const bool gui_use_transliteration = FALSE;
 
 Uint32 SDL_Client_Flags = 0;
+
+bool gui_sdl_fullscreen = FALSE;
+
+/* default screen resolution */
+#ifdef SMALL_SCREEN
+int gui_sdl_screen_width = 320;
+int gui_sdl_screen_height = 240;
+#else
+int gui_sdl_screen_width = 640;
+int gui_sdl_screen_height = 480;
+#endif
 
 Uint32 widget_info_counter = 0;
 int MOVE_STEP_X = DEFAULT_MOVE_STEP;
@@ -137,6 +146,29 @@ enum USER_EVENT_ID {
   EXIT_FROM_EVENT_LOOP
 };
 
+client_option gui_options[] = {
+  GEN_BOOL_OPTION(gui_sdl_fullscreen, N_("Full Screen"), 
+                  N_("If this option is set the client will use the "
+                     "whole screen area for drawing"),
+                  COC_INTERFACE),
+  GEN_INT_OPTION(gui_sdl_screen_width, N_("Screen width"),
+                 N_("This option saves the width of the selected screen "
+                    "resolution"),
+                 COC_INTERFACE),
+  GEN_INT_OPTION(gui_sdl_screen_height, N_("Screen height"),
+                 N_("This option saves the height of the selected screen "
+                    "resolution"),
+                 COC_INTERFACE),
+  GEN_STR_OPTION(gui_sdl_theme_name, N_("Theme"),
+		 N_("By changing this option you change the active theme. "
+		    "This is the same as using the -- --theme command-line "
+		    "parameter."),
+		 COC_GRAPHICS,
+		 get_theme_list, themespec_reread_callback),
+};
+
+const int num_gui_options = ARRAY_SIZE(gui_options);
+
 struct callback {
   void (*callback)(void *data);
   void *data;
@@ -174,8 +206,7 @@ static void print_usage(const char *argv0)
 		       "other thread (only Linux and BeOS)\n"));
   fc_fprintf(stderr, _("  -t,  --theme THEME\tUse GUI theme THEME\n"));
 
-  /* TRANS: No full stop after the URL, could cause confusion. */
-  fc_fprintf(stderr, _("Report bugs at %s\n"), BUG_URL);
+  fc_fprintf(stderr, _("Report bugs at %s.\n"), BUG_URL);
 }
 
 /**************************************************************************
@@ -197,7 +228,7 @@ static void parse_options(int argc, char **argv)
       /* init events in other thread ( only linux and BeOS ) */  
       SDL_InitSubSystem(SDL_INIT_EVENTTHREAD);
     } else if ((option = get_option_malloc("--theme", argv, &i, argc))) {
-      sz_strlcpy(gui_sdl_default_theme_name, option);
+      sz_strlcpy(gui_sdl_theme_name, option);
     }
     i++;
   }
@@ -229,21 +260,21 @@ static Uint16 main_key_down_handler(SDL_keysym Key, void *pData)
               struct unit *pUnit;
               struct city *pCity;
               if (NULL != (pUnit = head_of_units_in_focus()) && 
-                (pCity = tile_city(pUnit->tile)) != NULL &&
-                city_owner(pCity) == client.conn.playing) {
+                (pCity = pUnit->tile->city) != NULL &&
+                city_owner(pCity) == game.player_ptr) {
                 popup_city_dialog(pCity);
               }
 	    }
           return ID_ERROR;
 
+	  case SDLK_F1:
+            popup_city_report_dialog(FALSE);
+	  return ID_ERROR;
+	    
 	  case SDLK_F2:
 	    popup_activeunits_report_dialog(FALSE);
 	  return ID_ERROR;
 	   
-	  case SDLK_F4:
-            popup_city_report_dialog(FALSE);
-	  return ID_ERROR;
-	    
 	  case SDLK_F7:
             send_report_request(REPORT_WONDERS_OF_THE_WORLD);
           return ID_ERROR;
@@ -252,7 +283,7 @@ static Uint16 main_key_down_handler(SDL_keysym Key, void *pData)
             send_report_request(REPORT_TOP_5_CITIES);
           return ID_ERROR;
 	    
-	  case SDLK_F9:
+	  case SDLK_F10:
             if(is_meswin_open()) {
               popdown_meswin_dialog();
             } else {
@@ -266,7 +297,7 @@ static Uint16 main_key_down_handler(SDL_keysym Key, void *pData)
           return ID_ERROR;
 	    
 	  case SDLK_F12:
-            popup_spaceship_dialog(client.conn.playing);
+            popup_spaceship_dialog(game.player_ptr);
           return ID_ERROR;
 	  
 	  default:
@@ -533,7 +564,7 @@ Uint16 gui_event_loop(void *pData,
       tv.tv_sec = 0;
       tv.tv_usec = 10000;/* 10ms*/
     
-      result = fc_select(MAX(net_socket, ggz_socket) + 1, &civfdset, NULL, NULL, &tv);
+      result = my_select(MAX(net_socket, ggz_socket) + 1, &civfdset, NULL, NULL, &tv);
       if (result < 0) {
         if (errno != EINTR) {
 	  break;
@@ -631,8 +662,8 @@ Uint16 gui_event_loop(void *pData,
         case SDL_KEYDOWN:
           switch(Main.event.key.keysym.sym) {
             case SDLK_PRINT:
+              freelog(LOG_NORMAL, _("Making screenshot fc_%05d.bmp"), schot_nr);
               my_snprintf(schot, sizeof(schot), "fc_%05d.bmp", schot_nr++);
-              log_normal(_("Making screenshot %s"), schot);
               SDL_SaveBMP(Main.screen, schot);
             break;
             
@@ -763,20 +794,19 @@ void ui_init(void)
   putenv((char *)"SDL_VIDEO_CENTERED=yes");
   
   init_sdl(iSDL_Flags);
-
-  log_normal(_("Using Video Output: %s"),
-             SDL_VideoDriverName(device, sizeof(device)));
+  
+  freelog(LOG_NORMAL, _("Using Video Output: %s"),
+	  SDL_VideoDriverName(device, sizeof(device)));
   
   /* create splash screen */  
 #ifdef SMALL_SCREEN
   {
-    SDL_Surface *pTmpSurf = load_surf(fileinfoname(get_data_dirs(),
-                                                   "misc/intro.png"));
+    SDL_Surface *pTmpSurf = load_surf(datafilename("misc/intro.png"));
     pBgd = zoomSurface(pTmpSurf, DEFAULT_ZOOM, DEFAULT_ZOOM, 0);
     FREESURFACE(pTmpSurf);
   }
 #else
-  pBgd = load_surf(fileinfoname(get_data_dirs(), "misc/intro.png"));
+  pBgd = load_surf(datafilename("misc/intro.png"));
 #endif
   
   if(pBgd && SDL_GetVideoInfo()->wm_available) {
@@ -836,14 +866,6 @@ void ui_init(void)
   flush_all();
 }
 
-/****************************************************************************
-  Extra initializers for client options.
-****************************************************************************/
-void gui_options_extra_init(void)
-{
-  /* Nothing to do. */
-}
-
 /**************************************************************************
 ...
 **************************************************************************/
@@ -857,16 +879,6 @@ static void clear_double_messages_call(void)
       messages_where[i] &= ~MW_OUTPUT;
     }
   }
-}
-
-/**************************************************************************
-  Entry point for freeciv client program. SDL has macro magic to turn
-  this in to function named SDL_main() and it provides actual main()
-  itself.
-**************************************************************************/
-int main(int argc, char **argv)
-{
-  return client_main(argc, argv);
 }
 
 /**************************************************************************
@@ -987,7 +999,7 @@ void ui_main(int argc, char *argv[])
   /* this need correct Main.screen size */
   init_mapcanvas_and_overview();    
   
-  set_client_state(C_S_DISCONNECTED);
+  set_client_state(C_S_PREPARING);
 
   /* Main game loop */
   gui_event_loop(NULL, NULL, main_key_down_handler, main_key_up_handler,
@@ -1013,6 +1025,7 @@ void ui_exit()
   diplomacy_dialog_done();
   intel_dialog_done();  
 
+  callback_list_unlink_all(callbacks);
   callback_list_free(callbacks);
   
   unload_cursors();
@@ -1030,20 +1043,12 @@ void ui_exit()
 }
 
 /**************************************************************************
-  Return our GUI type
-**************************************************************************/
-enum gui_type get_gui_type(void)
-{
-  return GUI_SDL;
-}
-
-/**************************************************************************
   Make a bell noise (beep).  This provides low-level sound alerts even
   if there is no real sound support.
 **************************************************************************/
 void sound_bell(void)
 {
-  log_debug("sound_bell : PORT ME");
+  freelog(LOG_DEBUG, "sound_bell : PORT ME");
 }
 
 /**************************************************************************
@@ -1069,7 +1074,7 @@ void disable_focus_animation(void)
 **************************************************************************/
 void add_net_input(int sock)
 {
-  log_debug("Connection UP (%d)", sock);
+  freelog(LOG_DEBUG, "Connection UP (%d)", sock);
   net_socket = sock;
   autoconnect = FALSE;
   enable_focus_animation();
@@ -1080,7 +1085,7 @@ void add_net_input(int sock)
 **************************************************************************/
 void remove_net_input(void)
 {
-  log_debug("Connection DOWN... ");
+  freelog(LOG_DEBUG, "Connection DOWN... ");
   net_socket = (-1);
   disable_focus_animation();
   draw_goto_patrol_lines = FALSE;
@@ -1092,7 +1097,7 @@ void remove_net_input(void)
 **************************************************************************/
 void add_ggz_input(int sock)
 {
-  log_debug("GGZ Connection UP (%d)", sock);
+  freelog(LOG_DEBUG, "GGZ Connection UP (%d)", sock);
   ggz_socket = sock;
 }
 
@@ -1102,7 +1107,7 @@ void add_ggz_input(int sock)
 **************************************************************************/
 void remove_ggz_input(void)
 {
-  log_debug("GGZ Connection DOWN... ");
+  freelog(LOG_DEBUG, "GGZ Connection DOWN... ");
   ggz_socket = (-1);
 }
 
@@ -1119,55 +1124,4 @@ void add_idle_callback(void (callback)(void *), void *data)
   cb->data = data;
 
   callback_list_prepend(callbacks, cb);
-}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_tileset_changed(void)
-{}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_refresh(void)
-{}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_popup_properties(const struct tile_list *tiles, int objtype)
-{}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_notify_object_changed(int objtype, int object_id, bool remove)
-{}
-
-/****************************************************************************
-  Stub for editor function
-****************************************************************************/
-void editgui_notify_object_created(int tag, int id)
-{}
-
-/****************************************************************************
-  Stub for ggz function
-****************************************************************************/
-void gui_ggz_embed_leave_table(void)
-{}
-
-/****************************************************************************
-  Stub for ggz function
-****************************************************************************/
-void gui_ggz_embed_ensure_server(void)
-{}
-
-
-/**************************************************************************
-  Updates a gui font style.
-**************************************************************************/
-void gui_update_font(const char *font_name, const char *font_value)
-{
-  /* PORTME */
 }

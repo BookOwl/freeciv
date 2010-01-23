@@ -15,7 +15,6 @@
 #include <config.h>
 #endif
 
-/* common & utility */
 #include "fcintl.h"
 #include "game.h"
 #include "government.h"
@@ -24,9 +23,8 @@
 #include "shared.h"
 #include "support.h"
 
-/* client */
 #include "chatline_common.h"
-#include "client_main.h"
+#include "clinet.h"
 #include "gui_main.h"
 #include "widget.h"
 
@@ -47,21 +45,9 @@ static Nation_type_id selected_nation;
   location.
 **************************************************************************/
 void popup_notify_goto_dialog(const char *headline, const char *lines,
-                              const struct text_tag_list *tags,
-                              struct tile *ptile)
+			      struct tile *ptile)
 {
   /* PORTME */
-}
-
-/**************************************************************************
-  Popup a dialog to display connection message from server.
-**************************************************************************/
-void popup_connect_msg(const char *headline, const char *message)
-{
-  /* FIXME: Needs proper implementation.
-   *        Now just puts to chat window so message is not completely lost. */
-
-  output_window_append(ftc_client, message);
 }
 
 /**************************************************************************
@@ -83,11 +69,11 @@ static void connect_callback(struct sw_widget *list, void *data)
   struct nation_leader *leaders = get_nation_leaders(selected_nation, &leader_count);
 
   if (strlen(leaders[leader].name) == 0) {
-    output_window_append(ftc_client, _("You must type a legal name."));
+    append_output_window(_("You must type a legal name."));
     return;
   }
 
-  dsend_packet_nation_select_req(&client.conn, selected_nation,
+  dsend_packet_nation_select_req(&aconnection, selected_nation,
 				 sw_list_get_selected_row(leaders_sex_list)==0,
 				 leaders[leader].name,1);
 }
@@ -134,7 +120,7 @@ static void nations_list_selection_changed(struct sw_widget *widget,
 
   selected_nation = row;
 
-  log_debug("selected %s\n", nation_rule_name(nation));
+  freelog(LOG_DEBUG, "selected %s\n", nation_rule_name(nation));
   sw_list_clear(leaders_list);
 
   for (i = 0; i < leader_count; i++) {
@@ -282,7 +268,7 @@ void races_toggles_set_sensitive(void)
 /**************************************************************************
   Popup a dialog giving a player choices when their caravan arrives at
   a city (other than its home city).  Example:
-    - Establish trade route.
+    - Establish traderoute.
     - Help build wonder.
     - Keep moving.
 **************************************************************************/
@@ -367,8 +353,7 @@ void popup_sabotage_dialog(struct city *pcity)
   Popup a dialog asking the unit which improvement they would like to
   pillage.
 **************************************************************************/
-void popup_pillage_dialog(struct unit *punit, bv_special may_pillage,
-                          bv_bases bases)
+void popup_pillage_dialog(struct unit *punit, bv_special may_pillage)
 {
   /* PORTME */
 }

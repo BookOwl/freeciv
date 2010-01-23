@@ -19,13 +19,10 @@
 
 /* utility */
 #include "fcintl.h"
-#include "log.h"
 
 /* common */
+#include "game.h"
 #include "government.h"
-
-/* client */
-#include "client_main.h"
 
 /* gui-sdl */
 #include "graphics.h"
@@ -203,7 +200,7 @@ void update_intel_dialog(struct player *p)
   SDL_String16 *pStr;
   SDL_Rect dst;
   char cBuf[256];
-  int n = 0, count = 0, col;
+  int i, n = 0, count = 0, col;
   struct city *pCapital;
   SDL_Rect area;
   struct player_research* research;
@@ -326,19 +323,17 @@ void update_intel_dialog(struct player *p)
     FREESURFACE(pTmpSurf);
     n = 0;
     pLast = pBuf;
-    advance_index_iterate(A_FIRST, i) {
-      if (TECH_KNOWN == player_invention_state(p, i)
-       && player_invention_reachable(client.conn.playing, i)
-       && TECH_KNOWN != player_invention_state(client.conn.playing, i)) {
-
+    for(i = A_FIRST; i<game.control.num_tech_types; i++) {
+      if(get_invention(p, i) == TECH_KNOWN &&
+        tech_is_available(game.player_ptr, i) &&
+        get_invention(game.player_ptr, i) != TECH_KNOWN) {
+        
         pBuf = create_icon2(get_tech_icon(i), pWindow->dst,
           (WF_RESTORE_BACKGROUND|WF_WIDGET_HAS_INFO_LABEL|WF_FREE_STRING | WF_FREE_THEME));
         pBuf->action = tech_callback;
         set_wstate(pBuf, FC_WS_NORMAL);
   
-        pBuf->string16 = create_str16_from_char(
-                           advance_name_translation(advance_by_number(i)),
-                           adj_font(12));
+        pBuf->string16 = create_str16_from_char(advance_name_translation(i), adj_font(12));
           
         add_to_gui_list(ID_ICON, pBuf);
           
@@ -348,7 +343,7 @@ void update_intel_dialog(struct player *p)
         
         n++;	
       }
-    }  advance_index_iterate_end;
+    }
     
     pdialog->pdialog->pBeginWidgetList = pBuf;
     

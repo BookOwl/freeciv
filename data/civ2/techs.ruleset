@@ -187,10 +187,9 @@ graphic_alt = "-"
 name     = _("Construction")
 req1     = "Masonry"
 req2     = "Currency"
-flags    = ""
+flags    = "Fortress"
 graphic     = "a.construction"
 graphic_alt = "-"
-helptext = _("Allows Settlers and Engineers to build fortresses.")
 
 [advance_currency]
 name     = _("Currency")
@@ -243,8 +242,8 @@ graphic_alt = "-"
 
 [advance_environmentalism]
 name     = _("Environmentalism")
-req1     = "Recycling"
-req2     = "Space Flight"
+req1     = "Never"		; "Recycling"
+req2     = "Never"		; "Space Flight"
 flags    = ""
 graphic     = "a.environmentalism"
 graphic_alt = "-"
@@ -280,7 +279,6 @@ req2     = "Theory of Gravity"
 flags    = ""
 graphic     = "a.flight"
 graphic_alt = "-"
-helptext = _("Decreases one-time revenue from new trade routes.")
 
 [advance_fundamentalism]
 name     = _("Fundamentalism")
@@ -495,7 +493,7 @@ helptext = _("Improves the effect of Temples.")
 name     = _("Navigation")
 req1     = "Seafaring"
 req2     = "Astronomy"
-flags    = ""
+flags    = "Reduce_Trireme_Loss2"
 graphic     = "a.navigation"
 graphic_alt = "-"
 
@@ -521,8 +519,6 @@ name     = _("Philosophy")
 req1     = "Mysticism"
 req2     = "Literacy"
 flags    = "Bonus_Tech"
-bonus_message = _("Great philosophers from all the world join \
-your civilization: you get an immediate advance.")
 graphic     = "a.philosophy"
 graphic_alt = "-"
 
@@ -562,10 +558,9 @@ graphic_alt = "-"
 name     = _("Radio")
 req1     = "Flight"
 req2     = "Electricity"
-flags    = ""
+flags    = "Airbase"
 graphic     = "a.radio"
 graphic_alt = "-"
-helptext = _("Allows Settlers and Engineers to build airbases.")
 
 [advance_railroad]
 name     = _("Railroad")
@@ -574,7 +569,6 @@ req2     = "Bridge Building"
 flags    = "Railroad"
 graphic     = "a.railroad"
 graphic_alt = "-"
-helptext = _("Decreases one-time revenue from new trade routes.")
 
 [advance_recycling]
 name     = _("Recycling")
@@ -628,7 +622,7 @@ graphic_alt = "-"
 name     = _("Seafaring")
 req1     = "Pottery"
 req2     = "Map Making"
-flags    = ""
+flags    = "Reduce_Trireme_Loss1"
 graphic     = "a.seafaring"
 graphic_alt = "-"
 

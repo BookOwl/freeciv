@@ -3,32 +3,31 @@
 name=_("Mongol")
 plural=_("?plural:Mongols")
 groups="Medieval", "Modern", "Asian"
-legend=_("In the centuries after their unification by Chinggis Khan, the\
+legend=_("In the centuries after their unification by Genghis Khan, the\
  Mongols conquered the largest empire in human history, encompassing most\
- of the continent of Asia.  They became notorious for their utter\
- ruthlessness in warfare.")
+ of the continent of Asia.  They became notorious for the utter ruthlessness\
+ in warfare.")
 leader=
- "Chinggis",
+ "Genghis",
+ "Bortai",
  "Ogedei",
+ "Dayan",
+ "Timur Lenk",
  "Batu",
- "Chagadai",
- "Tului",
- "Godan",
- "Subetei",
- "Teregene",
- "Kuyuk",
- "Mengke",
- "Khubilai",
- "Hulegu"
-leader_sex="Male", "Male", "Male", "Male", "Male", "Male", "Male",
-           "Female", "Male", "Male", "Male", "Male"
+ "Tokhtamysh",
+ "Kublai",
+ "Altan",
+ "Toregene",
+ "Hulagu",
+ "Kara Nogai"
+leader_sex="Male", "Female", "Male", "Male", "Male", "Male", "Male",
+           "Male", "Male", "Female", "Male", "Male"
 flag="mongolia"
 flag_alt = "-"
 city_style = "Asian"
 ruler_titles = { "government",      "male_title",      "female_title"
-                 "Despotism",       _("Khan"),         _("?female:Khan")
-		 ; /* TRANS: Khagan = Great Khan */
-                 "Monarchy",        _("Khagan"),       _("?female:Khagan")
+                 "Despotism",       _("Khan"),         _("Khan")
+                 "Monarchy",        _("Khagan"),       _("Khagan")
                }
 
 init_techs=""

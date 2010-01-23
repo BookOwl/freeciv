@@ -9,9 +9,7 @@ noinst_HEADERS = \
 	connectdlg_g.h	\
 	dialogs_g.h	\
 	diplodlg_g.h	\
-	editgui_g.h	\
 	finddlg_g.h	\
-	ggz_g.h		\
 	gotodlg_g.h	\
 	graphics_g.h	\
 	gui_main_g.h	\
@@ -29,5 +27,4 @@ noinst_HEADERS = \
 	spaceshipdlg_g.h	\
 	sprite_g.h		\
 	themes_g.h		\
-	voteinfo_bar_g.h	\
 	wldlg_g.h

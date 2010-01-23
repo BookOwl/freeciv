@@ -16,7 +16,5 @@
 
 int api_utilities_random(int min, int max);
 
-void api_utilities_error_log(const char *msg);
-void api_utilities_debug_log(const char *msg);
-
 #endif
+

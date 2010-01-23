@@ -29,16 +29,15 @@
 #include <X11/Xaw/List.h>
 #include <X11/Xaw/Viewport.h>
 
-/* common & utility */
+
 #include "fcintl.h"
 #include "log.h"
 #include "mem.h"     /* mystrdup() */
 #include "support.h"
 #include "version.h"
 
-/* client */
-#include "client_main.h"
-#include "clinet.h"		/* connect_to_server() */
+#include "civclient.h"
+#include "clinet.h"
 #include "packhand.h"
 #include "servers.h"
 
@@ -161,7 +160,7 @@ void handle_authentication_req(enum authentication_type type, char *message)
       struct packet_authentication_reply reply;
 
       sz_strlcpy(reply.password, password);
-      send_packet_authentication_reply(&client.conn, &reply);
+      send_packet_authentication_reply(&aconnection, &reply);
       return;
     } else {
       dialog_config = ENTER_PASSWORD_TYPE;
@@ -253,7 +252,7 @@ void gui_server_connect(void)
   this regenerates the player information from a loaded game on the server.
   currently a stub. TODO
 **************************************************************************/
-void handle_game_load(bool load_successful, char *filename)
+void handle_game_load(struct packet_game_load *packet)
 { 
   /* PORTME */
 }
@@ -304,7 +303,7 @@ void connect_callback(Widget w, XtPointer client_data,
       popup_start_page();
       return;
     } else {
-      output_window_append(ftc_client, errbuf);
+      append_output_window(errbuf);
     }
   case NEW_PASSWORD_TYPE:
     XtVaGetValues(iinput, XtNstring, &dp, NULL);
@@ -320,7 +319,7 @@ void connect_callback(Widget w, XtPointer client_data,
       XtSetSensitive(connw, FALSE);
       memset(password, 0, MAX_LEN_NAME);
       password[0] = '\0';
-      send_packet_authentication_reply(&client.conn, &reply);
+      send_packet_authentication_reply(&aconnection, &reply);
     } else {
       XtVaSetValues(iinput, XtNstring, "", NULL);
       XtVaSetValues(imsg, XtNlabel, 
@@ -333,7 +332,7 @@ void connect_callback(Widget w, XtPointer client_data,
     XtSetSensitive(connw, FALSE);
     XtVaGetValues(iinput, XtNstring, &dp, NULL);
     sz_strlcpy(reply.password, (char*)dp);
-    send_packet_authentication_reply(&client.conn, &reply);
+    send_packet_authentication_reply(&aconnection, &reply);
     break;
   default:
     assert(0);
@@ -346,8 +345,8 @@ void connect_callback(Widget w, XtPointer client_data,
 static void server_scan_error(struct server_scan *scan,
 			      const char *message)
 {
-  output_window_append(ftc_client, message);
-  log_normal("%s", message);
+  append_output_window(message);
+  freelog(LOG_NORMAL, "%s", message);
   switch (server_scan_get_type(scan)) {
   case SERVER_SCAN_LOCAL:
     server_scan_finish(lan);
@@ -412,7 +411,7 @@ static void server_list_timer(XtPointer meta_list, XtIntervalId * id)
   if (get_server_list(server_list, errbuf, sizeof(errbuf))!=-1)  {
     XawListChange(meta_list, server_list, 0, 0, True);
   } else if (!lan_mode) {
-    output_window_append(ftc_client, errbuf);
+    append_output_window(errbuf);
   }
   num_lanservers_timer++;
 

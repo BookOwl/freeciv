@@ -171,23 +171,24 @@ static void zero_htable(struct hash_table *h)
 
 
 /**************************************************************************
-  A supplied hash function where key is integers.
+  A supplied hash function where key is pointer to int.  
   Prefers table sizes that are prime numbers.
 **************************************************************************/
 unsigned int hash_fval_int(const void *vkey, unsigned int num_buckets)
 {
-  return (FC_PTR_TO_INT(vkey) % num_buckets);
+  const unsigned int key = (unsigned int) *(const int*)vkey;
+  return (key % num_buckets);
 }
 
 /**************************************************************************
-  A supplied function for comparison of integers:
+  A supplied function for comparison of pointers to int:
 **************************************************************************/
 int hash_fcmp_int(const void *vkey1, const void *vkey2)
 {
-  const int key1 = FC_PTR_TO_INT(vkey1), key2 = FC_PTR_TO_INT(vkey2);
+  const int *key1 = vkey1, *key2 = vkey2;
 
   /* avoid overflow issues: */
-  return (key1 < key2) ? -1 : (key1 > key2) ? 1 : 0;
+  return (*key1 < *key2) ? -1 : (*key1 > *key2) ? 1 : 0;
 }
 
 
@@ -294,9 +295,6 @@ static unsigned int calc_appropriate_nbuckets(unsigned int num_entries)
   Allows to specify functions to free the memory allocated for the key and
   user-data that get called when removing the bucket from the hash table or
   changing key/user-data values.
-
-  NB: Be sure to check the "copy constructor" hash_copy() if you change
-  this function significantly.
 **************************************************************************/
 static struct hash_table *hash_new_nbuckets(hash_val_fn_t fval,
 					    hash_cmp_fn_t fcmp,
@@ -307,7 +305,7 @@ static struct hash_table *hash_new_nbuckets(hash_val_fn_t fval,
   struct hash_table *h;
   unsigned i;
 
-  log_debug("New hash table with %u buckets", nbuckets);
+  freelog(LOG_DEBUG, "New hash table with %u buckets", nbuckets);
   
   h = (struct hash_table *)fc_malloc(sizeof(struct hash_table));
   zero_htable(h);
@@ -470,12 +468,12 @@ static void hash_maybe_resize(struct hash_table *h, bool expandingp)
   
   new_nbuckets = calc_appropriate_nbuckets(h->num_entries);
   
-  log_debug("%s hash table "
-            "(entry %u del %u used %u nbuck %u new %u %slimit %u)",
-            (new_nbuckets<h->num_buckets) ? "Shrinking" :
-              (new_nbuckets>h->num_buckets) ? "Expanding" : "Rehashing",
-              h->num_entries, h->num_deleted, num_used, 
-              h->num_buckets, new_nbuckets, expandingp?"up":"dn", limit);
+  freelog(LOG_DEBUG, "%s hash table "
+	  "(entry %u del %u used %u nbuck %u new %u %slimit %u)",
+	  (new_nbuckets<h->num_buckets) ? "Shrinking" :
+	  (new_nbuckets>h->num_buckets) ? "Expanding" : "Rehashing",
+	  h->num_entries, h->num_deleted, num_used, 
+	  h->num_buckets, new_nbuckets, expandingp?"up":"dn", limit);
   hash_resize_table(h, new_nbuckets);
 }
 
@@ -868,10 +866,6 @@ static bool hash_iter_valid(const struct iterator *iter)
 struct iterator *hash_iter_init(struct hash_iter *it,
                                 const struct hash_table *h)
 {
-  if (!h) {
-    return invalid_iter_init(ITERATOR(it));
-  }
-
   it->vtable.next = hash_iter_next;
   it->vtable.get = hash_iter_get;
   it->vtable.valid = hash_iter_valid;
@@ -890,13 +884,7 @@ struct iterator *hash_iter_init(struct hash_iter *it,
 struct iterator *hash_key_iter_init(struct hash_iter *it,
                                     const struct hash_table *h)
 {
-  struct iterator *ret;
-
-  if (!h) {
-    return invalid_iter_init(ITERATOR(it));
-  }
-
-  ret = hash_iter_init(it, h);
+  struct iterator *ret = hash_iter_init(it, h);
   it->vtable.get = hash_iter_get_key;
   return ret;
 }
@@ -907,82 +895,7 @@ struct iterator *hash_key_iter_init(struct hash_iter *it,
 struct iterator *hash_value_iter_init(struct hash_iter *it,
                                       const struct hash_table *h)
 {
-  struct iterator *ret;
-
-  if (!h) {
-    return invalid_iter_init(ITERATOR(it));
-  }
-
-  ret = hash_iter_init(it, h);
+  struct iterator *ret = hash_iter_init(it, h);
   it->vtable.get = hash_iter_get_value;
   return ret;
-}
-
-/**************************************************************************
-  Returns a newly allocated mostly deep copy of the given hash table.
-
-  NB: This just copies the key and value pointers (it does NOT make a deep
-  copy of those). So using this function with allocated keys/values or with
-  a hash_free_fn_t should be avoided, unless you know what you are doing.
-**************************************************************************/
-struct hash_table *hash_copy(const struct hash_table *other)
-{
-  struct hash_table *h;
-  size_t size;
-
-  if (!other) {
-    return NULL;
-  }
-
-  h = fc_malloc(sizeof(*h));
-
-  /* Copy fields. */
-  *h = *other;
-
-  /* But make fresh buckets. */
-  size = h->num_buckets * sizeof(struct hash_bucket);
-  h->buckets = fc_malloc(size);
-
-  /* NB: Shallow copy. */
-  memcpy(h->buckets, other->buckets, size);
-
-  return h;
-}
-
-/**************************************************************************
-  Returns TRUE if the two hash tables are equal. If the hash tables do
-  not have the same number of elements, or have different hashing, compare
-  or free functions, they will be "unequal". Otherwise this function will
-  compare key and value pointers.
-**************************************************************************/
-bool hash_equal(const struct hash_table *a, const struct hash_table *b)
-{
-  struct hash_iter hita, hitb;
-  struct iterator *ita, *itb;
-
-  if (a == b) {
-    return TRUE;
-  }
-  if (!a || !b) {
-    return FALSE;
-  }
-  if (a->fval != b->fval || a->fcmp != b->fcmp
-      || a->free_key_func != b->free_key_func
-      || a->free_data_func != b->free_data_func
-      || hash_num_entries(a) != hash_num_entries(b)) {
-    return FALSE;
-  }
-
-  ita = hash_iter_init(&hita, a);
-  itb = hash_iter_init(&hitb, b);
-  while (iterator_valid(ita) && iterator_valid(itb)) {
-    if (hash_iter_get_key(ita) != hash_iter_get_key(itb)
-        || hash_iter_get_value(ita) != hash_iter_get_value(itb)) {
-      return FALSE;
-    }
-    iterator_next(ita);
-    iterator_next(itb);
-  }
-
-  return TRUE;
 }

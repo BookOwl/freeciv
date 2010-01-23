@@ -57,13 +57,6 @@ char *color_names[] = {
   "mapview_cityblocked",
   "mapview_goto",
   "mapview_selection",
-  "mapview_trade_route_line",
-  "mapview_trade_routes_all_built",
-  "mapview_trade_routes_some_built",
-  "mapview_trade_routes_no_built",
-  "mapview_city_link",
-  "mapview_tile_link",
-  "mapview_unit_link",
 
   /* Spaceship */
   "spaceship_background",
@@ -83,10 +76,9 @@ char *color_names[] = {
   /* Reqtree */
   "reqtree_researching",
   "reqtree_known",
-  "reqtree_goal_prereqs_known",
-  "reqtree_goal_unknown",
-  "reqtree_prereqs_known",
-  "reqtree_unknown",
+  "reqtree_reachablegoal",
+  "reqtree_unreachablegoal",
+  "reqtree_reachable",
   "reqtree_unreachable",
   "reqtree_background",
   "reqtree_text",
@@ -109,22 +101,17 @@ struct color_system *color_system_read(struct section_file *file)
 
   assert(ARRAY_SIZE(color_names) == COLOR_LAST);
   for (i = 0; i < COLOR_LAST; i++) {
-    if (!secfile_lookup_int(file, &colors->colors[i].r,
-                            "colors.%s0.r", color_names[i])
-        || !secfile_lookup_int(file, &colors->colors[i].g,
-                               "colors.%s0.g", color_names[i])
-        || !secfile_lookup_int(file, &colors->colors[i].b,
-                               "colors.%s0.b", color_names[i])) {
-      log_error("Color %s: %s", color_names[i], secfile_error());
-      colors->colors[i].r = 0;
-      colors->colors[i].g = 0;
-      colors->colors[i].b = 0;
-    }
+    colors->colors[i].r
+      = secfile_lookup_int(file, "colors.%s0.r", color_names[i]);
+    colors->colors[i].g
+      = secfile_lookup_int(file, "colors.%s0.g", color_names[i]);
+    colors->colors[i].b
+      = secfile_lookup_int(file, "colors.%s0.b", color_names[i]);
     colors->colors[i].color = NULL;
   }
 
   for (i = 0; i < MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS; i++) {
-    if (NULL == secfile_entry_lookup(file, "colors.player%d.r", i)) {
+    if (!section_file_lookup(file, "colors.player%d.r", i)) {
       break;
     }
   }
@@ -133,7 +120,8 @@ struct color_system *color_system_read(struct section_file *file)
 				    * sizeof(*colors->player_colors));
   if (i == 0) {
     /* Use a simple fallback. */
-    log_error("Missing colors.player. See misc/colors.tilespec.");
+    freelog(LOG_ERROR,
+	    "Missing colors.player.  See misc/colors.tilespec.");
     colors->player_colors[0].r = 128;
     colors->player_colors[0].g = 0;
     colors->player_colors[0].b = 0;
@@ -142,14 +130,9 @@ struct color_system *color_system_read(struct section_file *file)
     for (i = 0; i < colors->num_player_colors; i++) {
       struct rgbcolor *rgb = &colors->player_colors[i];
 
-      if (!secfile_lookup_int(file, &rgb->r, "colors.player%d.r", i)
-          || !secfile_lookup_int(file, &rgb->g, "colors.player%d.g", i)
-          || !secfile_lookup_int(file, &rgb->b, "colors.player%d.b", i)) {
-        log_error("Player color %d: %s", i, secfile_error());
-        rgb->r = 0;
-        rgb->g = 0;
-        rgb->b = 0;
-      }
+      rgb->r = secfile_lookup_int(file, "colors.player%d.r", i);
+      rgb->g = secfile_lookup_int(file, "colors.player%d.g", i);
+      rgb->b = secfile_lookup_int(file, "colors.player%d.b", i);
       rgb->color = NULL;
     }
   }
@@ -162,26 +145,21 @@ struct color_system *color_system_read(struct section_file *file)
   }
   colors->terrain_hash = hash_new(hash_fval_string, hash_fcmp_string);
   for (i = 0; ; i++) {
-    struct rgbcolor rgb;
-    struct rgbcolor *prgb;
-    const char *key;
+    struct rgbcolor *rgb;
+    char *key;
 
-    if (!secfile_lookup_int(file, &rgb.r, "colors.tiles%d.r", i)
-        || !secfile_lookup_int(file, &rgb.g, "colors.tiles%d.g", i)
-        || !secfile_lookup_int(file, &rgb.b, "colors.tiles%d.b", i)) {
+    if (!section_file_lookup(file, "colors.terrains%d.r", i)) {
       break;
     }
+    rgb = fc_malloc(sizeof(*rgb));
+    rgb->r = secfile_lookup_int(file, "colors.terrains%d.r", i);
+    rgb->g = secfile_lookup_int(file, "colors.terrains%d.g", i);
+    rgb->b = secfile_lookup_int(file, "colors.terrains%d.b", i);
+    rgb->color = NULL;
+    key = secfile_lookup_str(file, "colors.terrains%d.terrain", i);
 
-    prgb = fc_malloc(sizeof(*prgb));
-    rgb.color = NULL;
-    *prgb = rgb;
-    key = secfile_lookup_str(file, "colors.tiles%d.tag", i);
-
-    if (NULL == key) {
-      log_error("warning: tag for tiles %d: %s", i, secfile_error());
-      free(prgb);
-    } else if (!hash_insert(colors->terrain_hash, mystrdup(key), prgb)) {
-      log_error("warning: already have a color for %s", key);
+    if (!hash_insert(colors->terrain_hash, mystrdup(key), rgb)) {
+      freelog(LOG_ERROR, "warning: already have a color for %s", key);
     }
   }
 
@@ -192,17 +170,15 @@ struct color_system *color_system_read(struct section_file *file)
   Called when terrain info is received from the server.
 ****************************************************************************/
 void color_system_setup_terrain(struct color_system *colors,
-				const struct terrain *pterrain,
-				const char *tag)
+				const struct terrain *pterrain)
 {
   struct rgbcolor *rgb
-    = hash_lookup_data(colors->terrain_hash, tag);
+    = hash_lookup_data(colors->terrain_hash, terrain_rule_name(pterrain));
 
   if (rgb) {
-    colors->terrain_colors[terrain_index(pterrain)] = *rgb;
+    colors->terrain_colors[pterrain->index] = *rgb;
   } else {
-    log_error("[colors] missing [tile_%s] for \"%s\".",
-              tag, terrain_rule_name(pterrain));
+    freelog(LOG_ERROR, "No color for terrain '%s'", terrain_rule_name(pterrain));
     /* Fallback: the color remains black. */
   }
 }
@@ -275,7 +251,7 @@ struct color *get_player_color(const struct tileset *t,
 {
   if (pplayer) {
     struct color_system *colors = get_color_system(t);
-    int index = player_index(pplayer);
+    int index = pplayer->player_no;
 
     assert(index >= 0 && colors->num_player_colors > 0);
     index %= colors->num_player_colors;
@@ -298,7 +274,7 @@ struct color *get_terrain_color(const struct tileset *t,
   if (pterrain) {
     struct color_system *colors = get_color_system(t);
 
-    return ensure_color(&colors->terrain_colors[terrain_index(pterrain)]);
+    return ensure_color(&colors->terrain_colors[pterrain->index]);
   } else {
     assert(0);
     return NULL;

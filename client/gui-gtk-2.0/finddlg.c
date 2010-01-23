@@ -21,22 +21,15 @@
 
 #include <gtk/gtk.h>
 
-/* utility */
 #include "fcintl.h"
-#include "log.h"
-
-/* common */
 #include "game.h"
 #include "player.h"
 
-/* client */
-#include "options.h"
-
-/* gui-gtk-2.0 */
 #include "dialogs.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "mapview.h"
+#include "options.h"
 
 #include "finddlg.h"
 
@@ -135,12 +128,13 @@ void popup_find_dialog(void)
 **************************************************************************/
 static void update_find_dialog(GtkListStore *store)
 {
+  int i;
   GtkTreeIter it;
 
   gtk_list_store_clear(store);
 
-  players_iterate(pplayer) {
-    city_list_iterate(pplayer->cities, pcity) {
+  for(i = 0; i < game.info.nplayers; i++) {
+    city_list_iterate(game.players[i].cities, pcity) {
 	GValue value = { 0, };
 
 	gtk_list_store_append(store, &it);
@@ -152,7 +146,7 @@ static void update_find_dialog(GtkListStore *store)
 
 	gtk_list_store_set(store, &it, 1, pcity, -1);
     } city_list_iterate_end;
-  } players_iterate_end;
+  }
 }
 
 /**************************************************************************

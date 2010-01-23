@@ -15,53 +15,22 @@
 #***********************************************************************/
 
 BUILDDIR=`dirname $0`
-PROGNAME=freeciv
-EXENAME=${PROGNAME}@EXEEXT@
 
-gui=`echo "$1" | awk -F= '$1 ~ /^--gui$/ { print $2 }'`
-if test "x$gui" != "x" ; then
-  EXENAME=${PROGNAME}-${gui}@EXEEXT@
-  shift
+# Use cd + pwd instead of manual concatentation in case of absolute paths
+BUILDDATA=$(cd $BUILDDIR/data ; pwd)
+SRCDATA=$(cd $BUILDDIR ; cd @top_srcdir@/data ; pwd)
+
+if [ "x$FREECIV_PATH" = "x" ] ; then
+  FREECIV_PATH=".:data:~/.freeciv"
 fi
+export FREECIV_PATH="$FREECIV_PATH:$BUILDDATA:$SRCDATA"
 
-if test -x "$BUILDDIR/client/$EXENAME" ; then
-  EXE=$BUILDDIR/client/$EXENAME
-elif test -x "$BUILDDIR/$EXENAME" ; then
-  EXE=$BUILDDIR/$EXENAME
-else
-  EXE=`ls -1 "$BUILDDIR/${PROGNAME}-"*@EXEEXT@ "$BUILDDIR/client/${PROGNAME}-"*@EXEEXT@ 2> /dev/null |\
-  while read program ; do
-    if test -x "$program" ; then
-      echo $program
-      break
-    fi
-  done`
-fi
+[ -x $BUILDDIR/client/civclient ] && EXE=$BUILDDIR/client/civclient
+[ -x $BUILDDIR/civclient ] && EXE=$BUILDDIR/civclient
 
-if test "x$EXE" = "x"; then
-  echo $0: Unable to find client executable: $EXENAME
+if [ "$EXE" = "" ]; then
+  echo $0: Unable to find civclient.
   exit 1
 fi
 
-if test "x$FREECIV_PATH" = "x" ; then
-  FREECIV_PATH=".@HOST_PATH_SEPARATOR@data@HOST_PATH_SEPARATOR@~/.freeciv@HOST_PATH_SEPARATOR@~/.freeciv/@DATASUBDIR@"
-fi
-export FREECIV_PATH="${FREECIV_PATH}@HOST_PATH_SEPARATOR@@abs_top_builddir@"
-
-if test "x$FREECIV_DATA_PATH" = "x" ; then
-  FREECIV_DATA_PATH=".@HOST_PATH_SEPARATOR@data@HOST_PATH_SEPARATOR@~/.freeciv/@DATASUBDIR@"
-fi
-export FREECIV_DATA_PATH="${FREECIV_DATA_PATH}@HOST_PATH_SEPARATOR@@abs_top_builddir@/data@HOST_PATH_SEPARATOR@@abs_top_srcdir@/data"
-
-if test "x$FREECIV_SAVE_PATH" = "x" ; then
-  FREECIV_SAVE_PATH=".@HOST_PATH_SEPARATOR@~/.freeciv/saves"
-fi
-export FREECIV_SAVE_PATH="${FREECIV_SAVE_PATH}@HOST_PATH_SEPARATOR@@abs_top_builddir@@HOST_PATH_SEPARATOR@@abs_top_srcdir@"
-
-if test "x$FREECIV_SCENARIO_PATH" = "x" ; then
-  FREECIV_SCENARIO_PATH=".@HOST_PATH_SEPARATOR@data/scenario@HOST_PATH_SEPARATOR@~/.freeciv/scenarios"
-fi
-export FREECIV_SCENARIO_PATH="${FREECIV_SCENARIO_PATH}@HOST_PATH_SEPARATOR@@abs_top_builddir@/data/scenario@HOST_PATH_SEPARATOR@@abs_top_srcdir@/data/scenario"
-
-echo "Running $EXE"
-exec "$EXE" ${1+"$@"}
+exec $EXE ${1+"$@"}

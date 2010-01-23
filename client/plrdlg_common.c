@@ -17,17 +17,11 @@
 
 #include <assert.h>
 
-/* utility */
+#include "connection.h"
 #include "fcintl.h"
-#include "log.h"
+#include "game.h"
 #include "support.h"
 
-/* common */
-#include "connection.h"
-#include "game.h"
-
-/* client */
-#include "client_main.h"
 #include "climisc.h"
 #include "text.h"
 
@@ -103,7 +97,7 @@ static const char *col_nation(const struct player *player)
 *******************************************************************/
 static const char *col_team(const struct player *player)
 {
-  return team_name_translation(player->team);
+  return team_get_name(player->team);
 }
 
 /******************************************************************
@@ -111,7 +105,7 @@ static const char *col_team(const struct player *player)
 *******************************************************************/
 static bool col_ai(const struct player *plr)
 {
-  return plr->ai_data.control;
+  return plr->ai.control;
 }
 
 /******************************************************************
@@ -120,7 +114,7 @@ static bool col_ai(const struct player *plr)
 *******************************************************************/
 static const char *col_embassy(const struct player *player)
 {
-  return get_embassy_status(client.conn.playing, player);
+  return get_embassy_status(game.player_ptr, player);
 }
 
 /******************************************************************
@@ -132,10 +126,10 @@ static const char *col_diplstate(const struct player *player)
   static char buf[100];
   const struct player_diplstate *pds;
 
-  if (NULL == client.conn.playing || player == client.conn.playing) {
+  if (!game.player_ptr || player == game.player_ptr) {
     return "-";
   } else {
-    pds = pplayer_get_diplstate(client.conn.playing, player);
+    pds = pplayer_get_diplstate(game.player_ptr, player);
     if (pds->type == DS_CEASEFIRE || pds->type == DS_ARMISTICE) {
       my_snprintf(buf, sizeof(buf), "%s (%d)",
 		  diplstate_text(pds->type), pds->turns_left);
@@ -151,11 +145,10 @@ static const char *col_diplstate(const struct player *player)
 *******************************************************************/
 static const char *col_love(const struct player *player)
 {
-  if (NULL == client.conn.playing || player == client.conn.playing
-      || !player->ai_data.control) {
+  if (!game.player_ptr || player == game.player_ptr || !player->ai.control) {
     return "-";
   } else {
-    return love_text(player->ai_data.love[player_index(client.conn.playing)]);
+    return love_text(player->ai.love[player_index(game.player_ptr)]);
   }
 }
 
@@ -163,24 +156,24 @@ static const char *col_love(const struct player *player)
   Compares ai's attitude toward the player
 ******************************************************************/
 static int cmp_love(const struct player *player1,
-                    const struct player *player2)
+                          const struct player *player2)
 {
   int love1, love2;
 
-  if (NULL == client.conn.playing) {
+  if (!game.player_ptr) {
     return player_number(player1) - player_number(player2);
   }
 
-  if (player1 == client.conn.playing || !player1->ai_data.control) {
+  if (player1 == game.player_ptr || !player1->ai.control) {
     love1 = MAX_AI_LOVE + 999;
   } else {
-    love1 = player1->ai_data.love[player_index(client.conn.playing)];
+    love1 = player1->ai.love[player_index(game.player_ptr)];
   }
 
-  if (player2 == client.conn.playing || !player2->ai_data.control) {
+  if (player2 == game.player_ptr || !player2->ai.control) {
     love2 = MAX_AI_LOVE + 999;
   } else {
-    love2 = player2->ai_data.love[player_index(client.conn.playing)];
+    love2 = player2->ai.love[player_index(game.player_ptr)];
   }
   
   return love1 - love2;
@@ -191,7 +184,7 @@ static int cmp_love(const struct player *player1,
 *******************************************************************/
 static const char *col_vision(const struct player *player)
 {
-  return get_vision_status(client.conn.playing, player);
+  return get_vision_status(game.player_ptr, player);
 }
 
 /******************************************************************
@@ -199,11 +192,10 @@ static const char *col_vision(const struct player *player)
 
   FIXME: These terms aren't very intuitive for new players.
 *******************************************************************/
-const char *plrdlg_col_state(const struct player *plr)
+static const char *col_state(const struct player *plr)
 {
   if (!plr->is_alive) {
-    /* TRANS: Dead -- Rest In Peace -- Reqia In Pace */
-    return _("R.I.P.");
+    return _("R.I.P");
   } else if (!plr->is_connected) {
     return "";
   } else if (!is_player_phase(plr, game.info.phase)) {
@@ -266,7 +258,7 @@ struct player_dlg_column player_dlg_columns[] = {
   {TRUE, COL_TEXT, N_("Embassy"), col_embassy, NULL, NULL,  "embassy"},
   {TRUE, COL_TEXT, N_("Dipl.State"), col_diplstate, NULL, NULL,  "diplstate"},
   {TRUE, COL_TEXT, N_("Vision"), col_vision, NULL, NULL,  "vision"},
-  {TRUE, COL_TEXT, N_("State"), plrdlg_col_state, NULL, NULL,  "state"},
+  {TRUE, COL_TEXT, N_("State"), col_state, NULL, NULL,  "state"},
   {FALSE, COL_TEXT, N_("?Player_dlg:Host"), col_host, NULL, NULL,  "host"},
   {FALSE, COL_RIGHT_TEXT, N_("?Player_dlg:Idle"), col_idle, NULL, NULL,  "idle"},
   {FALSE, COL_RIGHT_TEXT, N_("Ping"), get_ping_time_text, NULL, NULL,  "ping"}
