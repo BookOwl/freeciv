@@ -59,8 +59,8 @@ void handle_city_name_suggestion_req(struct player *pplayer, int value)
     return;
   }
 
-  log_verbose("handle_city_name_suggest_req(unit_pos=(%d,%d))",
-              TILE_XY(unit_tile(punit)));
+  freelog(LOG_VERBOSE, "handle_city_name_suggest_req(unit_pos=(%d,%d))",
+	  punit->tile->x, punit->tile->y);
 
   dlsend_packet_city_name_suggestion_info(pplayer->connections, value, 
       city_name_suggestion(pplayer, punit->tile));
@@ -85,7 +85,7 @@ void handle_city_change_specialist(struct player *pplayer, int city_id,
       || pcity->specialists[from] == 0) {
     /* This could easily just be due to clicking faster on the specialist
      * than the server can cope with. */
-    log_verbose("Error in specialist change request from client.");
+    freelog(LOG_VERBOSE, "Error in specialist change request from client.");
     return;
   }
 
@@ -109,21 +109,25 @@ void handle_city_make_specialist(struct player *pplayer, int city_id,
 
   if (NULL == pcity) {
     /* Probably lost. */
-    log_verbose("handle_city_make_specialist() bad city number %d.",
-                city_id);
+    freelog(LOG_VERBOSE, "handle_city_make_specialist() bad city number %d.",
+            city_id);
     return;
   }
   
   if (!is_valid_city_coords(worker_x, worker_y)) {
-    log_error("handle_city_make_specialist() invalid city map {%d,%d} "
-              "\"%s\".", worker_x, worker_y, city_name(pcity));
+    freelog(LOG_ERROR,
+            "handle_city_make_specialist() invalid city map {%d,%d} \"%s\".",
+            worker_x, worker_y,
+            city_name(pcity));
     return;
   }
   pcenter = city_tile(pcity);
 
   if (NULL == (ptile = city_map_to_tile(pcenter, worker_x, worker_y))) {
-    log_verbose("handle_city_make_specialist() unavailable city map {%d,%d} "
-                "\"%s\".", worker_x, worker_y, city_name(pcity));
+    freelog(LOG_VERBOSE,
+            "handle_city_make_specialist() unavailable city map {%d,%d} \"%s\".",
+            worker_x, worker_y,
+            city_name(pcity));
     return;
   }
 
@@ -139,8 +143,10 @@ void handle_city_make_specialist(struct player *pplayer, int city_id,
     city_refresh(pcity);
     sync_cities();
   } else {
-    log_verbose("handle_city_make_specialist() not working {%d,%d} \"%s\".",
-                worker_x, worker_y, city_name(pcity));
+    freelog(LOG_VERBOSE,
+            "handle_city_make_specialist() not working {%d,%d} \"%s\".",
+            worker_x, worker_y,
+            city_name(pcity));
   }
 
   sanity_check_city(pcity);
@@ -158,20 +164,25 @@ void handle_city_make_worker(struct player *pplayer, int city_id,
 
   if (NULL == pcity) {
     /* Probably lost. */
-    log_verbose("handle_city_make_worker() bad city number %d.",city_id);
+    freelog(LOG_VERBOSE, "handle_city_make_worker() bad city number %d.",
+            city_id);
     return;
   }
 
   if (!is_valid_city_coords(worker_x, worker_y)) {
-    log_error("handle_city_make_worker() invalid city map {%d,%d} \"%s\".",
-              worker_x, worker_y, city_name(pcity));
+    freelog(LOG_ERROR,
+            "handle_city_make_worker() invalid city map {%d,%d} \"%s\".",
+            worker_x, worker_y,
+            city_name(pcity));
     return;
   }
   pcenter = city_tile(pcity);
 
   if (NULL == (ptile = city_map_to_tile(pcenter, worker_x, worker_y))) {
-    log_verbose("handle_city_make_worker() unavailable city map {%d,%d} "
-                "\"%s\".", worker_x, worker_y, city_name(pcity));
+    freelog(LOG_VERBOSE,
+            "handle_city_make_worker() unavailable city map {%d,%d} \"%s\".",
+            worker_x, worker_y,
+            city_name(pcity));
     return;
   }
 
@@ -182,20 +193,26 @@ void handle_city_make_worker(struct player *pplayer, int city_id,
   }
 
   if (tile_worked(ptile) == pcity) {
-    log_verbose("handle_city_make_worker() already working {%d,%d} \"%s\".",
-                worker_x, worker_y, city_name(pcity));
+    freelog(LOG_VERBOSE,
+            "handle_city_make_worker() already working {%d,%d} \"%s\".",
+            worker_x, worker_y,
+            city_name(pcity));
     return;
   }
 
   if (0 == city_specialists(pcity)) {
-    log_verbose("handle_city_make_worker() no specialists {%d,%d} \"%s\".",
-                worker_x, worker_y, city_name(pcity));
+    freelog(LOG_VERBOSE,
+            "handle_city_make_worker() no specialists {%d,%d} \"%s\".",
+            worker_x, worker_y,
+            city_name(pcity));
     return;
   }
 
   if (!city_can_work_tile(pcity, ptile)) {
-    log_verbose("handle_city_make_worker() cannot work here {%d,%d} \"%s\".",
-                worker_x, worker_y, city_name(pcity));
+    freelog(LOG_VERBOSE,
+            "handle_city_make_worker() cannot work here {%d,%d} \"%s\".",
+            worker_x, worker_y,
+            city_name(pcity));
     return;
   }
 
@@ -383,15 +400,18 @@ void handle_city_change(struct player *pplayer, int city_id,
   struct city *pcity = player_find_city_by_id(pplayer, city_id);
 
   if (production_kind < VUT_NONE || production_kind >= VUT_LAST) {
-    log_error("handle_city_change() bad production_kind %d.",
-              production_kind);
+    freelog(LOG_ERROR, "handle_city_change()"
+            " bad production_kind %d.",
+            production_kind);
     prod.kind = VUT_NONE;
     return;
   } else {
     prod = universal_by_number(production_kind, production_value);
     if (prod.kind < VUT_NONE || prod.kind >= VUT_LAST) {
-      log_error("handle_city_change() production_kind %d with bad "
-                "production_value %d.", production_kind, production_value);
+      freelog(LOG_ERROR, "handle_city_change()"
+              " production_kind %d with bad production_value %d.",
+              production_kind,
+              production_value);
       prod.kind = VUT_NONE;
       return;
     }

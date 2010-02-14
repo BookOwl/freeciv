@@ -47,15 +47,65 @@ enum sset_level {
   SSET_VITAL,
   SSET_SITUATIONAL,
   SSET_RARE,
-  SSET_CHANGED,
-  SSET_LOCKED
+  SSET_CHANGED
 };
 
 extern const char *sset_level_names[];
 extern const int OLEVELS_NUM;
 
-/* forward declaration */
-struct setting;
+typedef bool (*bool_validate_func_t)(bool value, struct connection *pconn,
+                                     const char **reject_message);
+typedef bool (*int_validate_func_t)(int value, struct connection *pconn,
+                                    const char **reject_message);
+typedef bool (*string_validate_func_t)(const char * value,
+                                       struct connection *pconn,
+                                       const char **reject_message);
+
+struct setting {
+  const char *name;
+  enum sset_class sclass;
+  bool to_client;
+
+  /*
+   * Sould be less than 42 chars (?), or shorter if the values may
+   * have more than about 4 digits.  Don't put "." on the end.
+   */
+  const char *short_help;
+
+  /*
+   * May be empty string, if short_help is sufficient.  Need not
+   * include embedded newlines (but may, for formatting); lines will
+   * be wrapped (and indented) automatically.  Should have punctuation
+   * etc, and should end with a "."
+   */
+  const char *extra_help;
+  enum sset_type stype;
+  enum sset_category scategory;
+  enum sset_level slevel;
+
+  /* 
+   * About the *_validate functions: If the function is non-NULL, it
+   * is called with the new value, and returns whether the change is
+   * legal. The char * is an error message in the case of reject. 
+   */
+
+  /*** bool part ***/
+  bool *bool_value;
+  bool bool_default_value;
+  bool_validate_func_t bool_validate;
+
+  /*** int part ***/
+  int *int_value;
+  int int_default_value;
+  int_validate_func_t int_validate;
+  int int_min_value, int_max_value;
+
+  /*** string part ***/
+  char *string_value;
+  const char *string_default_value;
+  string_validate_func_t string_validate;
+  size_t string_value_size;	/* max size we can write into string_value */
+};
 
 extern const int SETTINGS_NUM;
 
@@ -102,10 +152,6 @@ bool setting_str_set(struct setting *pset, const char *val,
 bool setting_str_validate(const struct setting *pset, const char *val,
                           struct connection *caller,
                           const char **reject_msg);
-void setting_action(const struct setting *pset);
-
-bool setting_locked(const struct setting *pset);
-void setting_lock_set(struct setting *pset, bool lock);
 
 /* iterate over all settings */
 #define settings_iterate(_pset)                                            \
@@ -123,11 +169,8 @@ void settings_reset(void);
 void settings_turn(void);
 void settings_free(void);
 
-bool settings_ruleset(struct section_file *file, const char *section);
-
-void send_server_setting(struct conn_list *dest, const struct setting *pset);
 void send_server_settings(struct conn_list *dest);
 void send_server_hack_level_settings(struct conn_list *dest);
-void send_server_setting_control(struct connection *pconn);
+void send_server_setting(struct conn_list *dest, const struct setting *pset);
 
 #endif				/* FC__SETTINGS_H */

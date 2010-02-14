@@ -1030,7 +1030,7 @@ static const char *get_tile_change_menu_text(struct tile *ptile,
   Update the status and names of all menu items.
 **************************************************************************/
 void
-menus_update(void)
+update_menus(void)
 {
   enum MenuID id;
   HMENU menu;

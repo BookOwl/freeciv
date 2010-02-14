@@ -76,9 +76,11 @@ void client_remove_unit(struct unit *punit)
   int old = get_num_units_in_focus();
   bool update;
 
-  log_debug("removing unit %d, %s %s (%d %d) hcity %d",
-            punit->id, nation_rule_name(nation_of_unit(punit)),
-            unit_rule_name(punit), TILE_XY(unit_tile(punit)), hc);
+  freelog(LOG_DEBUG, "removing unit %d, %s %s (%d %d) hcity %d",
+	  punit->id,
+	  nation_rule_name(nation_of_unit(punit)),
+	  unit_rule_name(punit),
+	  TILE_XY(punit->tile), hc);
 
   update = (get_focus_unit_on_tile(punit->tile) != NULL);
   control_unit_killed(punit);
@@ -99,9 +101,10 @@ void client_remove_unit(struct unit *punit)
     }
 
     refresh_city_dialog(pcity);
-    log_debug("map city %s, %s, (%d %d)",
-              city_name(pcity), nation_rule_name(nation_of_city(pcity)),
-              TILE_XY(city_tile(pcity)));
+    freelog(LOG_DEBUG, "map city %s, %s, (%d %d)",
+	    city_name(pcity),
+	    nation_rule_name(nation_of_city(pcity)),
+	    TILE_XY(pcity->tile));
   }
 
   /* FIXME: this can cause two refreshes to be done? */
@@ -109,9 +112,10 @@ void client_remove_unit(struct unit *punit)
     pcity = player_find_city_by_id(client.conn.playing, hc);
     if (pcity) {
       refresh_city_dialog(pcity);
-      log_debug("home city %s, %s, (%d %d)",
-                city_name(pcity), nation_rule_name(nation_of_city(pcity)),
-                TILE_XY(city_tile(pcity)));
+      freelog(LOG_DEBUG, "home city %s, %s, (%d %d)",
+	      city_name(pcity),
+	      nation_rule_name(nation_of_city(pcity)),
+	      TILE_XY(pcity->tile));
     }
   }
 
@@ -127,7 +131,9 @@ void client_remove_city(struct city *pcity)
   struct tile *ptile = city_tile(pcity);
   struct city old_city = *pcity;
 
-  log_debug("client_remove_city() %d, %s", pcity->id, city_name(pcity));
+  freelog(LOG_DEBUG, "client_remove_city() %d, %s",
+	  pcity->id,
+	  city_name(pcity));
 
   /* Explicitly remove all improvements, to properly remove any global effects
      and to handle the preservation of "destroyed" effects. */
@@ -919,7 +925,7 @@ void handle_event(const char *featured_text, struct tile *ptile,
 
   if (event >= E_LAST)  {
     /* Server may have added a new event; leave as MW_OUTPUT */
-    log_verbose("Unknown event type %d!", event);
+    freelog(LOG_VERBOSE, "Unknown event type %d!", event);
   } else if (event >= 0)  {
     where = messages_where[event];
   }
@@ -1063,7 +1069,7 @@ void write_chatline_content(const char *txt)
 **************************************************************************/
 void reports_freeze(void)
 {
-  log_debug("reports_freeze");
+  freelog(LOG_DEBUG, "reports_freeze");
 
   meswin_freeze();
   plrdlg_freeze();
@@ -1088,7 +1094,7 @@ void reports_freeze_till(int request_id)
 **************************************************************************/
 void reports_thaw(void)
 {
-  log_debug("reports_thaw");
+  freelog(LOG_DEBUG, "reports_thaw");
 
   meswin_thaw();
   plrdlg_thaw();

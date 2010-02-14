@@ -33,7 +33,7 @@ int map_colatitude(const struct tile *ptile)
 {
   double x, y;
 
-  log_assert_ret_val(ptile != NULL, MAX_COLATITUDE / 2);
+  RETURN_VAL_IF_FAIL(ptile != NULL, MAX_COLATITUDE / 2);
 
   if (map.server.alltemperate) {
     /* An all-temperate map has "average" temperature everywhere.
@@ -219,12 +219,14 @@ static void set_sizes(double size, int Xratio, int Yratio)
    * this error is to set the maximum size smaller for all topologies! */
   if (map.server.size > size + 0.9) {
     /* Warning when size is set uselessly big */ 
-    log_error("Requested size of %d is too big for this topology.",
-              map.server.size);
+    freelog(LOG_ERROR,
+	    "Requested size of %d is too big for this topology.",
+	    map.server.size);
   }
-  log_verbose("Creating a map of size %d x %d = %d tiles (%d requested).",
-              map.xsize, map.ysize, map.xsize * map.ysize,
-              map.server.size * 1000);
+  freelog(LOG_VERBOSE,
+	  "Creating a map of size %d x %d = %d tiles (%d requested).",
+	  map.xsize, map.ysize, map.xsize * map.ysize,
+          map.server.size * 1000);
 }
 
 /*

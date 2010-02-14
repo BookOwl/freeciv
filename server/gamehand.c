@@ -26,7 +26,6 @@
 #include "rand.h"
 #include "registry.h"
 #include "shared.h"
-#include "string_vector.h"
 #include "support.h"
 
 /* common */
@@ -142,8 +141,8 @@ static struct tile *place_starting_unit(struct tile *starttile,
   if (tile_has_special(ptile, S_HUT)) {
     tile_clear_special(ptile, S_HUT);
     update_tile_knowledge(ptile);
-    log_verbose("Removed hut on start position for %s",
-                player_name(pplayer));
+    freelog(LOG_VERBOSE, "Removed hut on start position for %s",
+	    player_name(pplayer));
   }
 
   /* Expose visible area. */
@@ -153,9 +152,9 @@ static struct tile *place_starting_unit(struct tile *starttile,
     /* We cannot currently handle sea units as start units.
      * TODO: remove this code block when we can. */
     if (utype_move_type(utype) == SEA_MOVING) {
-      log_error("Sea moving start units are not yet supported, "
-                "%s not created.",
-                utype_rule_name(utype));
+      freelog(LOG_ERROR, "Sea moving start units are not yet supported, "
+                           "%s not created.",
+                         utype_rule_name(utype));
       notify_player(pplayer, NULL, E_BAD_COMMAND, ftc_server,
                     _("Sea moving start units are not yet supported. "
                       "Nobody gets %s."),
@@ -210,28 +209,29 @@ void init_new_game(void)
    * desired players. */
 
   /* First set up some data fields. */
-  log_verbose("Placing players at start positions.");
+  freelog(LOG_VERBOSE, "Placing players at start positions.");
   for (i = 0; i < map.server.num_start_positions; i++) {
     struct nation_type *n = map.server.start_positions[i].nation;
 
     pos_used[i] = FALSE;
-    log_verbose("%3d : (%2d,%2d) : \"%s\" (%d)",
-                i, TILE_XY(map.server.start_positions[i].tile),
-                n ? nation_rule_name(n) : "", n ? nation_number(n) : -1);
+    freelog(LOG_VERBOSE, "%3d : (%2d,%2d) : \"%s\" (%d)",
+	    i, TILE_XY(map.server.start_positions[i].tile),
+	    n ? nation_rule_name(n) : "", n ? nation_number(n) : -1);
   }
   players_iterate(pplayer) {
     start_pos[player_index(pplayer)] = NO_START_POS;
   } players_iterate_end;
 
   /* Second, assign a nation to a start position for that nation. */
-  log_verbose("Assigning matching nations.");
+  freelog(LOG_VERBOSE, "Assigning matching nations.");
   players_iterate(pplayer) {
     for (i = 0; i < map.server.num_start_positions; i++) {
       assert(pplayer->nation != NO_NATION_SELECTED);
       if (pplayer->nation == map.server.start_positions[i].nation) {
-        log_verbose("Start_pos %d matches player %d (%s).",
-                    i, player_number(pplayer),
-                    nation_rule_name(nation_of_player(pplayer)));
+	freelog(LOG_VERBOSE, "Start_pos %d matches player %d (%s).",
+		i,
+		player_number(pplayer),
+		nation_rule_name(nation_of_player(pplayer)));
 	start_pos[player_index(pplayer)] = i;
 	pos_used[i] = TRUE;
 	num_used++;
@@ -240,7 +240,7 @@ void init_new_game(void)
   } players_iterate_end;
 
   /* Third, assign players randomly to the remaining start positions. */
-  log_verbose("Assigning random nations.");
+  freelog(LOG_VERBOSE, "Assigning random nations.");
   players_iterate(pplayer) {
     if (start_pos[player_index(pplayer)] == NO_START_POS) {
       int which = myrand(map.server.num_start_positions - num_used);
@@ -248,9 +248,11 @@ void init_new_game(void)
       for (i = 0; i < map.server.num_start_positions; i++) {
 	if (!pos_used[i]) {
 	  if (which == 0) {
-            log_verbose("Randomly assigning player %d (%s) to pos %d.",
-                        player_number(pplayer),
-                        nation_rule_name(nation_of_player(pplayer)), i);
+	    freelog(LOG_VERBOSE,
+		    "Randomly assigning player %d (%s) to pos %d.",
+		    player_number(pplayer),
+		    nation_rule_name(nation_of_player(pplayer)),
+		    i);
 	    start_pos[player_index(pplayer)] = i;
 	    pos_used[i] = TRUE;
 	    num_used++;
@@ -419,7 +421,7 @@ int update_timeout(void)
       notify_conn(game.est_connections, NULL, E_SETTING, ftc_server,
                   _("The turn timeout has exceeded its maximum value, "
                     "fixing at its maximum."));
-      log_debug("game.info.timeout exceeded maximum value");
+      freelog(LOG_DEBUG, "game.info.timeout exceeded maximum value");
       game.info.timeout = GAME_MAX_TIMEOUT;
       game.server.timeoutint = 0;
       game.server.timeoutinc = 0;
@@ -427,19 +429,19 @@ int update_timeout(void)
       notify_conn(game.est_connections, NULL, E_SETTING, ftc_server,
                   _("The turn timeout is smaller than zero, "
                     "fixing at zero."));
-      log_debug("game.info.timeout less than zero");
+      freelog(LOG_DEBUG, "game.info.timeout less than zero");
       game.info.timeout = 0;
     }
   } else {
     game.server.timeoutcounter++;
   }
 
-  log_debug("timeout=%d, inc=%d incmult=%d\n   "
-            "int=%d, intinc=%d, turns till next=%d",
-            game.info.timeout, game.server.timeoutinc,
-            game.server.timeoutincmult, game.server.timeoutint,
-            game.server.timeoutintinc,
-            game.server.timeoutint - game.server.timeoutcounter);
+  freelog(LOG_DEBUG, "timeout=%d, inc=%d incmult=%d\n   "
+	  "int=%d, intinc=%d, turns till next=%d",
+	  game.info.timeout, game.server.timeoutinc,
+          game.server.timeoutincmult, game.server.timeoutint,
+          game.server.timeoutintinc,
+          game.server.timeoutint - game.server.timeoutcounter);
 
   return game.info.timeout;
 }
@@ -516,19 +518,19 @@ const char *new_challenge_filename(struct connection *pc)
 static void send_ruleset_choices(struct connection *pc)
 {
   struct packet_ruleset_choices packet;
-  static struct strvec *rulesets = NULL;
-  size_t i;
+  static char **rulesets = NULL;
+  int i;
 
   if (!rulesets) {
     /* This is only read once per server invocation.  Add a new ruleset
      * and you have to restart the server. */
-    rulesets = fileinfolist(get_data_dirs(), RULESET_SUFFIX);
+    rulesets = datafilelist(RULESET_SUFFIX);
   }
 
-  packet.ruleset_count = MIN(MAX_NUM_RULESETS, strvec_size(rulesets));
-  for (i = 0; i < packet.ruleset_count; i++) {
-    sz_strlcpy(packet.rulesets[i], strvec_get(rulesets, i));
+  for (i = 0; i < MAX_NUM_RULESETS && rulesets[i]; i++) {
+    sz_strlcpy(packet.rulesets[i], rulesets[i]);
   }
+  packet.ruleset_count = i;
 
   send_packet_ruleset_choices(pc, &packet);
 }
@@ -541,22 +543,19 @@ the file values. Sends an answer to the client once it's done.
 void handle_single_want_hack_req(struct connection *pc,
     				 struct packet_single_want_hack_req *packet)
 {
-  struct section_file *secfile;
-  const char *token = NULL;
+  struct section_file file;
+  char *token = NULL;
   bool you_have_hack = FALSE;
 
   if (!with_ggz) {
-    if ((secfile = secfile_load(get_challenge_fullname(pc), FALSE))) {
-      token = secfile_lookup_str(secfile, "challenge.token");
+    if (section_file_load_nodup(&file, get_challenge_fullname(pc))) {
+      token = secfile_lookup_str_default(&file, NULL, "challenge.token");
       you_have_hack = (token && strcmp(token, packet->token) == 0);
-      secfile_destroy(secfile);
-    } else {
-      log_debug("Error reading '%s':\n%s", get_challenge_fullname(pc),
-                secfile_error());
+      section_file_free(&file);
     }
 
     if (!token) {
-      log_debug("Failed to read authentication token");
+      freelog(LOG_DEBUG, "Failed to read authentication token");
     }
   }
 

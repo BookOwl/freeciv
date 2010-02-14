@@ -3,10 +3,9 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl Initialize with some random file to ensure the source is here.
 AC_INIT
-AC_PREREQ(2.58)
+AC_PREREQ(2.55)
 AC_CONFIG_SRCDIR([common/game.c])
 AC_CONFIG_AUX_DIR(bootstrap) # This can't be quoted or automake will fail
-AC_CONFIG_MACRO_DIR([m4])
 AM_CONFIG_HEADER([config.h]) # Compatible with automake 1.6 and earlier
 AC_CANONICAL_HOST
 AC_GNU_SOURCE
@@ -53,11 +52,6 @@ AC_DEFINE_UNQUOTED([NETWORK_CAPSTRING_OPTIONAL],
 		   ["$NETWORK_CAPSTRING_OPTIONAL"],
 		   [Additional optional network capabilities])
 AC_SUBST([NETWORK_CAPSTRING_OPTIONAL])
-
-AC_DEFINE_UNQUOTED([DATASUBDIR],
-                   ["$DATASUBDIR"],
-                   [Version specific subdir for default data path])
-AC_SUBST([DATASUBDIR])
 
 dnl Initialize automake stuff
 AM_INIT_AUTOMAKE($PACKAGE, $VERSION)
@@ -816,17 +810,11 @@ dnl export where the datadir is going to be installed
 FC_EXPAND_DIR(FREECIV_DATADIR, "$datadir/freeciv")
 
 if test x"$MINGW32" = xyes; then
-  DEFAULT_DATA_PATH=".;data;~/.freeciv/$DATASUBDIR;$datadir/freeciv"
-  DEFAULT_SAVE_PATH=".;~/.freeciv/saves"
-  DEFAULT_SCENARIO_PATH=".;data/scenario;~/.freeciv/scenario;$datadir/freeciv/scenario"
+  DEFAULT_DATA_PATH=".;data;~/.freeciv;$datadir/freeciv"
 else
-  DEFAULT_DATA_PATH=".:data:~/.freeciv/$DATASUBDIR:$datadir/freeciv"
-  DEFAULT_SAVE_PATH=".:~/.freeciv/saves"
-  DEFAULT_SCENARIO_PATH=".:data/scenario:~/.freeciv/scenarios:$datadir/freeciv/scenario"
+  DEFAULT_DATA_PATH=".:data:~/.freeciv:$datadir/freeciv"
 fi
 CPPFLAGS="$CPPFLAGS -DDEFAULT_DATA_PATH=\"\\\"$DEFAULT_DATA_PATH\\\"\""
-CPPFLAGS="$CPPFLAGS -DDEFAULT_SAVES_PATH=\"\\\"$DEFAULT_SAVES_PATH\\\"\""
-CPPFLAGS="$CPPFLAGS -DDEFAULT_SCENARIO_PATH=\"\\\"$DEFAULT_SCENARIO_PATH\\\"\""
 
 dnl This has to be last library
 if test -n "$WITH_EFENCE"; then

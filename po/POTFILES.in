@@ -227,18 +227,14 @@ data/nation/aborigines.ruleset
 data/nation/afghani.ruleset
 data/nation/ainu.ruleset
 data/nation/akwe.ruleset
-data/nation/alandalus.ruleset
 data/nation/algerian.ruleset
-data/nation/amazonian.ruleset
 data/nation/american.ruleset
 data/nation/antarctican.ruleset
 data/nation/arab.ruleset
-data/nation/aragonese.ruleset
 data/nation/aramean.ruleset
 data/nation/argentine.ruleset
 data/nation/armenian.ruleset
 data/nation/assyrian.ruleset
-data/nation/asturian.ruleset
 data/nation/australian.ruleset
 data/nation/austrian.ruleset
 data/nation/aymara.ruleset
@@ -289,7 +285,6 @@ data/nation/european.ruleset
 data/nation/filipino.ruleset
 data/nation/finnish.ruleset
 data/nation/french.ruleset
-data/nation/frisian.ruleset
 data/nation/galician.ruleset
 data/nation/gallic.ruleset
 data/nation/georgian.ruleset
@@ -342,8 +337,6 @@ data/nation/mayan.ruleset
 data/nation/mexican.ruleset
 data/nation/moldovan.ruleset
 data/nation/mongol.ruleset
-data/nation/motswana.ruleset
-data/nation/moroccan.ruleset
 data/nation/muskogee.ruleset
 data/nation/newzealand.ruleset
 data/nation/nigerian.ruleset
@@ -407,7 +400,6 @@ data/nation/tupi.ruleset
 data/nation/turkmen.ruleset
 data/nation/turk.ruleset
 data/nation/ukrainian.ruleset
-data/nation/ugandan.ruleset
 data/nation/un.ruleset
 data/nation/uruguayan.ruleset
 data/nation/uyghur.ruleset

@@ -124,10 +124,10 @@ static void ai_select_tech(struct player *pplayer,
        * it's supposed to be doing; it just looks strange. -- Syela */
       goal_values[i] /= steps;
       if (steps < 6) {
-        log_debug("%s: want = %d, value = %d, goal_value = %d",
-                  advance_name_by_player(pplayer, i),
-                  pplayer->ai_data.tech_want[i],
-                  values[i], goal_values[i]);
+	freelog(LOG_DEBUG, "%s: want = %d, value = %d, goal_value = %d",
+                advance_name_by_player(pplayer, i),
+                pplayer->ai_data.tech_want[i],
+		values[i], goal_values[i]);
       }
     }
   } advance_index_iterate_end;
@@ -168,12 +168,13 @@ static void ai_select_tech(struct player *pplayer,
     goal->want = goal_values[newgoal] / num_cities_nonzero;
     goal->current_want
       = (goal_values[get_player_research(pplayer)->tech_goal]
-         / num_cities_nonzero);
-    log_debug("Goal->choice = %s, goal->want = %d, goal_value = %d, "
-              "num_cities_nonzero = %d",
-              advance_name_by_player(pplayer, goal->choice), goal->want,
-              goal_values[newgoal],
-              num_cities_nonzero);
+	 / num_cities_nonzero);
+    freelog(LOG_DEBUG,
+	    "Goal->choice = %s, goal->want = %d, goal_value = %d, "
+	    "num_cities_nonzero = %d",
+	    advance_name_by_player(pplayer, goal->choice), goal->want,
+	    goal_values[newgoal],
+	    num_cities_nonzero);
   }
 
   /* we can't have this, which will happen in the circumstance 
@@ -223,12 +224,12 @@ void ai_manage_tech(struct player *pplayer)
   /* It worked, in particular, because the value it sets (research->tech_goal)
    * is practically never used, see the comment for ai_next_tech_goal */
   if (goal.choice != research->tech_goal) {
-    log_debug("%s change goal from %s (want=%d) to %s (want=%d)",
-              player_name(pplayer),
-              advance_name_by_player(pplayer, research->tech_goal), 
-              goal.current_want,
-              advance_name_by_player(pplayer, goal.choice),
-              goal.want);
+    freelog(LOG_DEBUG, "%s change goal from %s (want=%d) to %s (want=%d)",
+	    player_name(pplayer),
+	    advance_name_by_player(pplayer, research->tech_goal), 
+	    goal.current_want,
+	    advance_name_by_player(pplayer, goal.choice),
+	    goal.want);
     choose_tech_goal(pplayer, goal.choice);
   }
 }

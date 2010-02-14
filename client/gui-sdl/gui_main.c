@@ -632,7 +632,7 @@ Uint16 gui_event_loop(void *pData,
           switch(Main.event.key.keysym.sym) {
             case SDLK_PRINT:
               my_snprintf(schot, sizeof(schot), "fc_%05d.bmp", schot_nr++);
-              log_normal(_("Making screenshot %s"), schot);
+              freelog(LOG_NORMAL, _("Making screenshot %s"), schot);
               SDL_SaveBMP(Main.screen, schot);
             break;
             
@@ -763,20 +763,19 @@ void ui_init(void)
   putenv((char *)"SDL_VIDEO_CENTERED=yes");
   
   init_sdl(iSDL_Flags);
-
-  log_normal(_("Using Video Output: %s"),
-             SDL_VideoDriverName(device, sizeof(device)));
+  
+  freelog(LOG_NORMAL, _("Using Video Output: %s"),
+	  SDL_VideoDriverName(device, sizeof(device)));
   
   /* create splash screen */  
 #ifdef SMALL_SCREEN
   {
-    SDL_Surface *pTmpSurf = load_surf(fileinfoname(get_data_dirs(),
-                                                   "misc/intro.png"));
+    SDL_Surface *pTmpSurf = load_surf(datafilename("misc/intro.png"));
     pBgd = zoomSurface(pTmpSurf, DEFAULT_ZOOM, DEFAULT_ZOOM, 0);
     FREESURFACE(pTmpSurf);
   }
 #else
-  pBgd = load_surf(fileinfoname(get_data_dirs(), "misc/intro.png"));
+  pBgd = load_surf(datafilename("misc/intro.png"));
 #endif
   
   if(pBgd && SDL_GetVideoInfo()->wm_available) {
@@ -1043,7 +1042,7 @@ enum gui_type get_gui_type(void)
 **************************************************************************/
 void sound_bell(void)
 {
-  log_debug("sound_bell : PORT ME");
+  freelog(LOG_DEBUG, "sound_bell : PORT ME");
 }
 
 /**************************************************************************
@@ -1069,7 +1068,7 @@ void disable_focus_animation(void)
 **************************************************************************/
 void add_net_input(int sock)
 {
-  log_debug("Connection UP (%d)", sock);
+  freelog(LOG_DEBUG, "Connection UP (%d)", sock);
   net_socket = sock;
   autoconnect = FALSE;
   enable_focus_animation();
@@ -1080,7 +1079,7 @@ void add_net_input(int sock)
 **************************************************************************/
 void remove_net_input(void)
 {
-  log_debug("Connection DOWN... ");
+  freelog(LOG_DEBUG, "Connection DOWN... ");
   net_socket = (-1);
   disable_focus_animation();
   draw_goto_patrol_lines = FALSE;
@@ -1092,7 +1091,7 @@ void remove_net_input(void)
 **************************************************************************/
 void add_ggz_input(int sock)
 {
-  log_debug("GGZ Connection UP (%d)", sock);
+  freelog(LOG_DEBUG, "GGZ Connection UP (%d)", sock);
   ggz_socket = sock;
 }
 
@@ -1102,7 +1101,7 @@ void add_ggz_input(int sock)
 **************************************************************************/
 void remove_ggz_input(void)
 {
-  log_debug("GGZ Connection DOWN... ");
+  freelog(LOG_DEBUG, "GGZ Connection DOWN... ");
   ggz_socket = (-1);
 }
 

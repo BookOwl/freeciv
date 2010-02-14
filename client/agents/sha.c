@@ -42,8 +42,8 @@ static struct unit_list *previous_units;
 **************************************************************************/
 static void sha_tile_update(struct tile *ptile)
 {
-  log_debug("sha got tile: %d ~= (%d, %d)",
-            tile_index(ptile), TILE_XY(ptile));
+  freelog(LOG_DEBUG, "sha got tile: %d ~= (%d, %d)",
+	  tile_index(ptile), TILE_XY(ptile));
 
 #if 0
   previous_tiles[tile_index(ptile)] = *ptile;
@@ -58,7 +58,7 @@ static void sha_unit_change(int id)
   struct unit *punit = game_find_unit_by_number(id);
   struct unit *pold_unit = unit_list_find(previous_units, id);
 
-  log_debug("sha got unit: %d", id);
+  freelog(LOG_DEBUG, "sha got unit: %d", id);
 
   assert(pold_unit);
   *pold_unit = *punit;
@@ -72,7 +72,7 @@ static void sha_unit_new(int id)
   struct unit *punit = game_find_unit_by_number(id);
   struct unit *pold_unit = create_unit_virtual(unit_owner(punit), NULL, 0, 0);
 
-  log_debug("sha got unit: %d", id);
+  freelog(LOG_DEBUG, "sha got unit: %d", id);
 
   *pold_unit = *punit;
   unit_list_prepend(previous_units, pold_unit);
@@ -85,7 +85,7 @@ static void sha_unit_remove(int id)
 {
   struct unit *pold_unit = unit_list_find(previous_units, id);;
 
-  log_debug("sha got unit: %d", id);
+  freelog(LOG_DEBUG, "sha got unit: %d", id);
 
   assert(pold_unit);
   unit_list_unlink(previous_units, pold_unit);

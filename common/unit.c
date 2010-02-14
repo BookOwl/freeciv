@@ -137,71 +137,38 @@ bool is_diplomat_action_available(const struct unit *pdiplomat,
   return FALSE;
 }
 
-/****************************************************************************
-  Determines if punit can be airlifted to dest_city now!  So punit needs
-  to be in a city now.
-****************************************************************************/
-bool unit_can_airlift_to(const struct unit *punit,
-                         const struct city *pdest_city)
+/**************************************************************************
+FIXME: Maybe we should allow airlifts between allies
+**************************************************************************/
+bool unit_can_airlift_to(const struct unit *punit, const struct city *pcity)
 {
-  const struct city *psrc_city = tile_city(punit->tile);
-  const struct player *punit_owner;
-  const struct player *pdest_city_owner;
-  const struct player *psrc_city_owner;
+  struct city *acity = tile_city(punit->tile);
 
   if (0 == punit->moves_left) {
-    /* No moves left. */
     return FALSE;
   }
 
   if (!is_ground_unit(punit)) {
-    /* Only ground units can be airlifted currently. */
     return FALSE;
   }
 
-  if (NULL == psrc_city) {
-    /* No city there. */
+  if (NULL == acity) {
     return FALSE;
   }
 
-  if (psrc_city == pdest_city) {
-    /* Airlifting to our current position doesn't make sense. */
+  if (acity == pcity) {
     return FALSE;
   }
 
-  if (0 >= psrc_city->airlift) {
-    /* The source cannot airlift for this turn (maybe already airlifed
-     * or no airport).
-     *
-     * Note that (game.info.airlifting_style & AIRLIFTING_UNLIMITED_SRC)
-     * is not handled here because it always needs an airport to airlift.
-     * See also do_airline() in server/unittools.h. */
+  if (city_owner(acity) != unit_owner(punit)) {
     return FALSE;
   }
 
-  if (0 >= pdest_city->airlift
-      && !(game.info.airlifting_style & AIRLIFTING_UNLIMITED_DEST)) {
-    /* The destination cannot support airlifted units for this turn
-     * (maybe already airlifed or no airport).
-     * See also do_airline() in server/unittools.h. */
+  if (city_owner(acity) != city_owner(pcity)) {
     return FALSE;
   }
 
-  punit_owner = unit_owner(punit);
-  psrc_city_owner = city_owner(psrc_city);
-  pdest_city_owner = city_owner(pdest_city);
-
-  if (punit_owner != psrc_city_owner
-      && !(game.info.airlifting_style & AIRLIFTING_ALLIED_SRC
-           && pplayers_allied(punit_owner, psrc_city_owner))) {
-    /* Not allowed to airlift from this source. */
-    return FALSE;
-  }
-
-  if (punit_owner != pdest_city_owner
-      && !(game.info.airlifting_style & AIRLIFTING_ALLIED_DEST
-           && pplayers_allied(punit_owner, pdest_city_owner))) {
-    /* Not allowed to airlift to this destination. */
+  if (acity->airlift <= 0 || pcity->airlift <= 0) {
     return FALSE;
   }
 
@@ -1010,8 +977,9 @@ bool can_unit_do_activity_targeted_at(const struct unit *punit,
   case ACTIVITY_UNKNOWN:
     break;
   }
-  log_error("can_unit_do_activity_targeted_at() unknown activity %d",
-            activity);
+  freelog(LOG_ERROR,
+	  "can_unit_do_activity_targeted_at() unknown activity %d",
+	  activity);
   return FALSE;
 }
 
@@ -1598,14 +1566,6 @@ enum unit_upgrade_result test_unit_upgrade(const struct unit *punit,
   }
 
   return UR_OK;
-}
-
-/**************************************************************************
-  Tests if unit can be transformed.
-**************************************************************************/
-bool test_unit_transform(const struct unit *punit)
-{
-  return unit_type(punit)->transformed_to != NULL;
 }
 
 /**************************************************************************
