@@ -20,20 +20,9 @@
 #include "menu.h"
 
 /**************************************************************************
-  Initialize menus (sensitivity, name, etc.) based on the
-  current state and current ruleset, etc.  Call menus_update().
-**************************************************************************/
-void menus_init(void)
-{
-  /* PORTME */
-
-  menus_update();
-}
-
-/**************************************************************************
   Update all of the menus (sensitivity, etc.) based on the current state.
 **************************************************************************/
-void menus_update(void)
+void update_menus(void)
 {
   mapview_update_actions();
   /* PORTME */

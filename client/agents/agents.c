@@ -39,11 +39,11 @@
 
 #include "agents.h"
 
-#define log_request_ids(...)            /* log_test(__VA_ARGS__) */
-#define log_todo_lists(...)             /* log_test(__VA_ARGS__) */
-#define log_meta_callback(...)          log_debug(__VA_ARGS__)
-#define log_debug_freeze(...)           /* log_test(__VA_ARGS__) */
-
+#define DEBUG_REQUEST_IDS		FALSE
+#define DEBUG_TODO_LISTS		FALSE
+#define META_CALLBACKS_LOGLEVEL		LOG_DEBUG
+#define PRINT_STATS_LOGLEVEL		LOG_DEBUG
+#define DEBUG_FREEZE			FALSE
 #define MAX_AGENTS			10
 
 struct my_agent;
@@ -163,7 +163,9 @@ static void enqueue_call(struct my_agent *agent,
 
   call_list_prepend(agents.calls, pcall2);
 
-  log_todo_lists("A: adding call");
+  if (DEBUG_TODO_LISTS) {
+    freelog(LOG_TEST, "A: adding call");
+  }
 
   update_turn_done_button_state();
 }
@@ -195,7 +197,9 @@ static struct call *remove_and_return_a_call(void)
   result = call_list_get(agents.calls, 0);
   call_list_unlink(agents.calls, result);
 
-  log_todo_lists("A: removed call");
+  if (DEBUG_TODO_LISTS) {
+    freelog(LOG_TEST, "A: removed call");
+  }
   return result;
 }
 
@@ -263,7 +267,9 @@ static void freeze(void)
     frozen_level = 0;
     initialized = TRUE;
   }
-  log_debug_freeze("A: freeze() current level=%d", frozen_level);
+  if (DEBUG_FREEZE) {
+    freelog(LOG_TEST, "A: freeze() current level=%d", frozen_level);
+  }
   frozen_level++;
 }
 
@@ -273,7 +279,9 @@ static void freeze(void)
 ***********************************************************************/
 static void thaw(void)
 {
-  log_debug_freeze("A: thaw() current level=%d", frozen_level);
+  if (DEBUG_FREEZE) {
+    freelog(LOG_TEST, "A: thaw() current level=%d", frozen_level);
+  }
   frozen_level--;
   assert(frozen_level >= 0);
   if (0 == frozen_level && C_S_RUNNING == client_state()) {
@@ -309,13 +317,29 @@ static bool is_outstanding_request(struct my_agent *agent)
       client.conn.client.request_id_of_currently_handled_packet &&
       agent->last_outstanding_request_id >=
       client.conn.client.request_id_of_currently_handled_packet) {
-    log_debug("A:%s: ignoring packet; outstanding [%d..%d] got=%d",
-              agent->agent.name, agent->first_outstanding_request_id,
-              agent->last_outstanding_request_id,
-              client.conn.client.request_id_of_currently_handled_packet);
+    freelog(LOG_DEBUG,
+	    "A:%s: ignoring packet; outstanding [%d..%d] got=%d",
+	    agent->agent.name,
+	    agent->first_outstanding_request_id,
+	    agent->last_outstanding_request_id,
+	    client.conn.client.request_id_of_currently_handled_packet);
     return TRUE;
   }
   return FALSE;
+}
+
+/***********************************************************************
+ Print statistics for the given agent.
+***********************************************************************/
+static void print_stats(struct my_agent *agent)
+{
+  freelog(PRINT_STATS_LOGLEVEL,
+	  "A:%s: waited %fs in total for network; "
+	  "requests=%d; waited %d times",
+	  agent->agent.name,
+	  read_timer_seconds(agent->stats.network_wall_timer),
+	  agent->stats.wait_at_network_requests,
+	  agent->stats.wait_at_network);
 }
 
 /***********************************************************************
@@ -391,7 +415,7 @@ void register_agent(const struct agent *agent)
 ***********************************************************************/
 void agents_disconnect(void)
 {
-  log_meta_callback("agents_disconnect()");
+  freelog(META_CALLBACKS_LOGLEVEL, "agents_disconnect()");
   initialized = FALSE;
 }
 
@@ -400,7 +424,7 @@ void agents_disconnect(void)
 ***********************************************************************/
 void agents_processing_started(void)
 {
-  log_meta_callback("agents_processing_started()");
+  freelog(META_CALLBACKS_LOGLEVEL, "agents_processing_started()");
   freeze();
 }
 
@@ -409,7 +433,7 @@ void agents_processing_started(void)
 ***********************************************************************/
 void agents_processing_finished(void)
 {
-  log_meta_callback("agents_processing_finished()");
+  freelog(META_CALLBACKS_LOGLEVEL, "agents_processing_finished()");
   thaw();
 }
 
@@ -418,7 +442,7 @@ void agents_processing_finished(void)
 ***********************************************************************/
 void agents_freeze_hint(void)
 {
-  log_meta_callback("agents_freeze_hint()");
+  freelog(META_CALLBACKS_LOGLEVEL, "agents_freeze_hint()");
   freeze();
 }
 
@@ -427,7 +451,7 @@ void agents_freeze_hint(void)
 ***********************************************************************/
 void agents_thaw_hint(void)
 {
-  log_meta_callback("agents_thaw_hint()");
+  freelog(META_CALLBACKS_LOGLEVEL, "agents_thaw_hint()");
   thaw();
 }
 
@@ -436,7 +460,7 @@ void agents_thaw_hint(void)
 ***********************************************************************/
 void agents_game_joined(void)
 {
-  log_meta_callback("agents_game_joined()");
+  freelog(META_CALLBACKS_LOGLEVEL, "agents_game_joined()");
 }
 
 /***********************************************************************
@@ -444,7 +468,7 @@ void agents_game_joined(void)
 ***********************************************************************/
 void agents_game_start(void)
 {
-  log_meta_callback("agents_game_start()");
+  freelog(META_CALLBACKS_LOGLEVEL, "agents_game_start()");
   call_handle_methods();
 }
 
@@ -453,7 +477,7 @@ void agents_game_start(void)
 ***********************************************************************/
 void agents_before_new_turn(void)
 {
-  log_meta_callback("agents_before_new_turn()");
+  freelog(META_CALLBACKS_LOGLEVEL, "agents_before_new_turn()");
 }
 
 /***********************************************************************
@@ -461,7 +485,7 @@ void agents_before_new_turn(void)
 ***********************************************************************/
 void agents_start_turn(void)
 {
-  log_meta_callback("agents_start_turn()");
+  freelog(META_CALLBACKS_LOGLEVEL, "agents_start_turn()");
 }
 
 /***********************************************************************
@@ -500,9 +524,12 @@ void agents_unit_changed(struct unit *punit)
 {
   int i;
 
-  log_debug("A: agents_unit_changed(unit=%d) type=%s pos=(%d,%d) owner=%s",
-            punit->id, unit_rule_name(punit), TILE_XY(punit->tile),
-            player_name(unit_owner(punit)));
+  freelog(LOG_DEBUG,
+	  "A: agents_unit_changed(unit=%d) type=%s pos=(%d,%d) owner=%s",
+	  punit->id,
+	  unit_rule_name(punit),
+	  TILE_XY(punit->tile),
+	  player_name(unit_owner(punit)));
 
   for (i = 0; i < agents.entries_used; i++) {
     struct my_agent *agent = &agents.entries[i];
@@ -525,9 +552,12 @@ void agents_unit_new(struct unit *punit)
 {
   int i;
 
-  log_debug("A: agents_new_unit(unit=%d) type=%s pos=(%d,%d) owner=%s",
-            punit->id, unit_rule_name(punit), TILE_XY(punit->tile),
-            player_name(unit_owner(punit)));
+  freelog(LOG_DEBUG,
+	  "A: agents_new_unit(unit=%d) type=%s pos=(%d,%d) owner=%s",
+	  punit->id,
+	  unit_rule_name(punit),
+	  TILE_XY(punit->tile),
+	  player_name(unit_owner(punit)));
 
   for (i = 0; i < agents.entries_used; i++) {
     struct my_agent *agent = &agents.entries[i];
@@ -551,9 +581,12 @@ void agents_unit_remove(struct unit *punit)
 {
   int i;
 
-  log_debug("A: agents_remove_unit(unit=%d) type=%s pos=(%d,%d) owner=%s",
-            punit->id, unit_rule_name(punit), TILE_XY(punit->tile),
-            player_name(unit_owner(punit)));
+  freelog(LOG_DEBUG,
+	  "A: agents_remove_unit(unit=%d) type=%s pos=(%d,%d) owner=%s",
+	  punit->id,
+	  unit_rule_name(punit),
+	  TILE_XY(punit->tile),
+	  player_name(unit_owner(punit)));
 
   for (i = 0; i < agents.entries_used; i++) {
     struct my_agent *agent = &agents.entries[i];
@@ -577,9 +610,10 @@ void agents_city_changed(struct city *pcity)
 {
   int i;
 
-  log_debug("A: agents_city_changed(city %d=\"%s\") owner=%s",
-            pcity->id, city_name(pcity),
-            nation_rule_name(nation_of_city(pcity)));
+  freelog(LOG_DEBUG, "A: agents_city_changed(city %d=\"%s\") owner=%s",
+	  pcity->id,
+	  city_name(pcity),
+	  nation_rule_name(nation_of_city(pcity)));
 
   for (i = 0; i < agents.entries_used; i++) {
     struct my_agent *agent = &agents.entries[i];
@@ -603,9 +637,12 @@ void agents_city_new(struct city *pcity)
 {
   int i;
 
-  log_debug("A: agents_city_new(city %d=\"%s\") pos=(%d,%d) owner=%s",
-            pcity->id, city_name(pcity), TILE_XY(pcity->tile),
-            nation_rule_name(nation_of_city(pcity)));
+  freelog(LOG_DEBUG,
+	  "A: agents_city_new(city %d=\"%s\") pos=(%d,%d) owner=%s",
+	  pcity->id,
+	  city_name(pcity),
+	  TILE_XY(pcity->tile),
+	  nation_rule_name(nation_of_city(pcity)));
 
   for (i = 0; i < agents.entries_used; i++) {
     struct my_agent *agent = &agents.entries[i];
@@ -629,9 +666,12 @@ void agents_city_remove(struct city *pcity)
 {
   int i;
 
-  log_debug("A: agents_city_remove(city %d=\"%s\") pos=(%d,%d) owner=%s",
-            pcity->id, city_name(pcity), TILE_XY(pcity->tile),
-            nation_rule_name(nation_of_city(pcity)));
+  freelog(LOG_DEBUG,
+	  "A: agents_city_remove(city %d=\"%s\") pos=(%d,%d) owner=%s",
+	  pcity->id,
+	  city_name(pcity),
+	  TILE_XY(pcity->tile),
+	  nation_rule_name(nation_of_city(pcity)));
 
   for (i = 0; i < agents.entries_used; i++) {
     struct my_agent *agent = &agents.entries[i];
@@ -656,7 +696,7 @@ void agents_tile_remove(struct tile *ptile)
 {
   int i;
 
-  log_debug("A: agents_tile_remove(tile=(%d, %d))", TILE_XY(ptile));
+  freelog(LOG_DEBUG, "A: agents_tile_remove(tile=(%d, %d))", TILE_XY(ptile));
 
   for (i = 0; i < agents.entries_used; i++) {
     struct my_agent *agent = &agents.entries[i];
@@ -680,7 +720,7 @@ void agents_tile_changed(struct tile *ptile)
 {
   int i;
 
-  log_debug("A: agents_tile_changed(tile=(%d, %d))", TILE_XY(ptile));
+  freelog(LOG_DEBUG, "A: agents_tile_changed(tile=(%d, %d))", TILE_XY(ptile));
 
   for (i = 0; i < agents.entries_used; i++) {
     struct my_agent *agent = &agents.entries[i];
@@ -704,7 +744,7 @@ void agents_tile_new(struct tile *ptile)
 {
   int i;
 
-  log_debug("A: agents_tile_new(tile=(%d, %d))", TILE_XY(ptile));
+  freelog(LOG_DEBUG, "A: agents_tile_new(tile=(%d, %d))", TILE_XY(ptile));
 
   for (i = 0; i < agents.entries_used; i++) {
     struct my_agent *agent = &agents.entries[i];
@@ -729,8 +769,10 @@ void wait_for_requests(const char *agent_name, int first_request_id,
 {
   struct my_agent *agent = find_agent_by_name(agent_name);
 
-  log_request_ids("A:%s: wait_for_request(ids=[%d..%d])",
-                  agent->agent.name, first_request_id, last_request_id);
+  if (DEBUG_REQUEST_IDS) {
+    freelog(LOG_TEST, "A:%s: wait_for_request(ids=[%d..%d])",
+	    agent->agent.name, first_request_id, last_request_id);
+  }
 
   assert(first_request_id != 0 && last_request_id != 0
 	 && first_request_id <= last_request_id);
@@ -746,17 +788,14 @@ void wait_for_requests(const char *agent_name, int first_request_id,
   agent->stats.wait_at_network_requests +=
       (1 + (last_request_id - first_request_id));
 
-  log_request_ids("A:%s: wait_for_request: ids=[%d..%d]; got it",
-                  agent->agent.name, first_request_id, last_request_id);
+  if (DEBUG_REQUEST_IDS) {
+    freelog(LOG_TEST, "A:%s: wait_for_request: ids=[%d..%d]; got it",
+	    agent->agent.name, first_request_id, last_request_id);
+  }
 
   agent->first_outstanding_request_id = 0;
 
-  log_debug("A:%s: waited %fs in total for network; "
-            "requests=%d; waited %d times",
-            agent->agent.name,
-            read_timer_seconds(agent->stats.network_wall_timer),
-            agent->stats.wait_at_network_requests,
-            agent->stats.wait_at_network);
+  print_stats(agent);
 }
 
 /***********************************************************************

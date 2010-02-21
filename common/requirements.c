@@ -74,7 +74,7 @@ enum req_range req_range_from_str(const char *str)
 {
   enum req_range range;
 
-  log_assert_ret_val(ARRAY_SIZE(req_range_names) == REQ_RANGE_LAST,
+  RETURN_VAL_IF_FAIL(ARRAY_SIZE(req_range_names) == REQ_RANGE_LAST,
                      REQ_RANGE_LAST);
 
   for (range = 0; range < REQ_RANGE_LAST; range++) {
@@ -98,7 +98,7 @@ struct universal universal_by_rule_name(const char *kind,
 {
   struct universal source = { .kind = VUT_LAST };
 
-  log_assert_ret_val(ARRAY_SIZE(universal_names) == VUT_LAST, source);
+  RETURN_VAL_IF_FAIL(ARRAY_SIZE(universal_names) == VUT_LAST, source);
 
   if (kind) {
     for (source.kind = 0;
@@ -402,8 +402,8 @@ int universal_number(const struct universal *source)
   }
 
   /* If we reach here there's been an error. */
-  log_assert_msg(FALSE, "universal_number(): invalid source kind %d.",
-                 source->kind);
+  freelog(LOG_ERROR, "universal_number(): invalid source kind %d.",
+          source->kind);
   return 0;
 }
 
@@ -514,9 +514,10 @@ struct requirement req_from_str(const char *type, const char *range,
     break;
   }
   if (invalid) {
-    log_error("Invalid requirement %s | %s | %s | %s | %s",
-              type, range, survives ? "survives" : "",
-              negated ? "negated" : "", value);
+    freelog(LOG_ERROR, "Invalid requirement %s | %s | %s | %s | %s",
+	    type, range,
+	    survives ? "survives" : "",
+	    negated ? "negated" : "", value);
     req.source.kind = VUT_LAST;
   }
 
@@ -577,9 +578,9 @@ static int num_world_buildings_total(const struct impr_type *building)
     return (great_wonder_is_built(building)
             || great_wonder_is_destroyed(building) ? 1 : 0);
   } else {
-    /* TRANS: Obscure ruleset error. */
-    log_error(_("World-ranged requirements are only supported "
-                "for wonders."));
+    freelog(LOG_ERROR,
+	    /* TRANS: Obscure ruleset error. */
+	    _("World-ranged requirements are only supported for wonders."));
     return 0;
   }
 }
@@ -592,9 +593,9 @@ static int num_world_buildings(const struct impr_type *building)
   if (is_great_wonder(building)) {
     return (great_wonder_is_built(building) ? 1 : 0);
   } else {
-    /* TRANS: Obscure ruleset error. */
-    log_error(_("World-ranged requirements are only supported "
-                "for wonders."));
+    freelog(LOG_ERROR,
+	    /* TRANS: Obscure ruleset error. */
+	    _("World-ranged requirements are only supported for wonders."));
     return 0;
   }
 }
@@ -608,9 +609,9 @@ static int num_player_buildings(const struct player *pplayer,
   if (is_wonder(building)) {
     return (wonder_is_built(pplayer, building) ? 1 : 0);
   } else {
-    /* TRANS: Obscure ruleset error. */
-    log_error(_("Player-ranged requirements are only supported "
-                "for wonders."));
+    freelog(LOG_ERROR,
+	    /* TRANS: Obscure ruleset error. */
+	    _("Player-ranged requirements are only supported for wonders."));
     return 0;
   }
 }
@@ -630,9 +631,9 @@ static int num_continent_buildings(const struct player *pplayer,
       return 1;
     }
   } else {
-    /* TRANS: Obscure ruleset error. */
-    log_error(_("Island-ranged requirements are only supported "
-                "for wonders."));
+    freelog(LOG_ERROR,
+	    /* TRANS: Obscure ruleset error. */
+	    _("Island-ranged requirements are only supported for wonders."));
   }
   return 0;
 }
@@ -680,9 +681,10 @@ static int count_buildings_in_range(const struct player *target_player,
       return num_world_buildings_total(source);
     } else {
       /* There is no sources cache for this. */
-      /* TRANS: Obscure ruleset error. */
-      log_error(_("Surviving requirements are only supported "
-                  "at world range."));
+      freelog(LOG_ERROR,
+	      /* TRANS: Obscure ruleset error. */
+	      _("Surviving requirements are only "
+		"supported at world range."));
       return 0;
     }
   }
@@ -717,7 +719,7 @@ static int count_buildings_in_range(const struct player *target_player,
     break;
   }
 
-  log_assert_msg(FALSE, "Invalid range %d.", range);
+  freelog(LOG_ERROR, "count_buildings_in_range(): invalid range %d.", range);
   return 0;
 }
 
@@ -748,7 +750,7 @@ static bool is_tech_in_range(const struct player *target_player,
     break;
   }
 
-  log_assert_msg(FALSE, "Invalid range %d.", range);
+  freelog(LOG_ERROR, "is_tech_in_range(): invalid range %d.", range);
   return FALSE;
 }
 
@@ -773,7 +775,7 @@ static bool is_special_in_range(const struct tile *target_tile,
     break;
   }
 
-  log_assert_msg(FALSE, "Invalid range %d.", range);
+  freelog(LOG_ERROR, "is_special_in_range(): invalid range %d.", range);
   return FALSE;
 }
 
@@ -802,7 +804,7 @@ static bool is_terrain_in_range(const struct tile *target_tile,
     break;
   }
 
-  log_assert_msg(FALSE, "Invalid range %d.", range);
+  freelog(LOG_ERROR, "is_terrain_in_range(): invalid range %d.", range);
   return FALSE;
 }
 
@@ -831,7 +833,8 @@ static bool is_terrain_class_in_range(const struct tile *target_tile,
     break;
   }
 
-  log_assert_msg(FALSE, "Invalid range %d.", range);
+  freelog(LOG_ERROR, "is_terrain_class_in_range(): invalid range %d.",
+          range);
   return FALSE;
 }
 
@@ -860,7 +863,7 @@ static bool is_base_type_in_range(const struct tile *target_tile,
     break;
   }
 
-  log_assert_msg(FALSE, "Invalid range %d.", range);
+  freelog(LOG_ERROR, "is_base_type_in_range(): invalid range %d.", range);
   return FALSE;
 }
 
@@ -889,7 +892,8 @@ static bool is_terrain_alter_possible_in_range(const struct tile *target_tile,
     break;
   }
 
-  log_assert_msg(FALSE, "Invalid range %d.", range);
+  freelog(LOG_ERROR,
+          "is_terrain_alter_possible_in_range(): invalid range %d.", range);
   return FALSE;
 }
 
@@ -919,7 +923,7 @@ static bool is_nation_in_range(const struct player *target_player,
     break;
   }
 
-  log_assert_msg(FALSE, "Invalid range %d.", range);
+  freelog(LOG_ERROR, "is_nation_in_range(): invalid range %d.", range);
   return FALSE;
 }
 
@@ -1121,8 +1125,8 @@ bool is_req_active(const struct player *target_player,
         }
       } else {
         /* Not implemented */
-        log_error("is_req_active(): citytile %d not supported.",
-                  req->source.value.citytile);
+        freelog(LOG_ERROR, "is_req_active(): citytile %d not supported.",
+                req->source.value.citytile);
         return FALSE;
       }
     } else {
@@ -1130,7 +1134,8 @@ bool is_req_active(const struct player *target_player,
     }
     break;
   case VUT_LAST:
-    log_error("is_req_active(): invalid source kind %d.", req->source.kind);
+    freelog(LOG_ERROR, "is_req_active(): invalid source kind %d.",
+            req->source.kind);
     return FALSE;
   }
 
@@ -1220,7 +1225,8 @@ bool is_req_unchanging(const struct requirement *req)
   case VUT_LAST:
     break;
   }
-  log_assert_msg(FALSE, "Invalid source kind %d.", req->source.kind);
+  freelog(LOG_ERROR, "is_req_unchanging(): invalid source kind %d.",
+          req->source.kind);
   return TRUE;
 }
 
@@ -1278,7 +1284,8 @@ bool are_universals_equal(const struct universal *psource1,
   case VUT_LAST:
     break;
   }
-  log_assert_msg(FALSE, "Invalid source kind %d.", psource1->kind);
+  freelog(LOG_ERROR, "are_universals_equal(): invalid source kind %d.",
+          psource1->kind);
   return FALSE;
 }
 
@@ -1288,7 +1295,7 @@ bool are_universals_equal(const struct universal *psource1,
 *****************************************************************************/
 const char *universal_kind_name(const enum universals_n kind)
 {
-  log_assert_ret_val(kind >= 0 && kind < ARRAY_SIZE(universal_names), NULL);
+  RETURN_VAL_IF_FAIL(kind >= 0 && kind < ARRAY_SIZE(universal_names), NULL);
   return universal_names[kind];
 }
 
@@ -1342,7 +1349,8 @@ const char *universal_rule_name(const struct universal *psource)
     break;
   }
 
-  log_assert_msg(FALSE, "Invalid source kind %d.", psource->kind);
+  freelog(LOG_ERROR, "universal_rule_name: invalid source kind %d.",
+          psource->kind);
   return NULL;
 }
 
@@ -1434,7 +1442,10 @@ const char *universal_name_translation(const struct universal *psource,
   case VUT_LAST:
     break;
   }
-  log_assert_msg(FALSE, "Invalid source kind %d.", psource->kind);
+
+  freelog(LOG_ERROR, "universal_rule_name: invalid source kind %d.",
+          psource->kind);
+
   return buf;
 }
 

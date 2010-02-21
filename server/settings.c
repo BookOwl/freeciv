@@ -15,120 +15,19 @@
 #include <config.h>
 #endif
 
-/* utility */
 #include "fcintl.h"
 #include "game.h"
 #include "ioz.h"
 #include "log.h"
-#include "registry.h"
 
-/* common */
 #include "map.h"
 
-/* server */
 #include "ggzserver.h"
 #include "plrhand.h"
 #include "report.h"
 #include "settings.h"
 #include "srv_main.h"
 #include "stdinhand.h"
-
-/* The following classes determine what can be changed when.
- * Actually, some of them have the same "changeability", but
- * different types are separated here in case they have
- * other uses.
- * Also, SSET_GAME_INIT/SSET_RULES separate the two sections
- * of server settings sent to the client.
- * See the settings[] array and setting_is_changeable() for what
- * these correspond to and explanations.
- */
-enum sset_class {
-  SSET_MAP_SIZE,
-  SSET_MAP_GEN,
-  SSET_MAP_ADD,
-  SSET_PLAYERS,
-  SSET_GAME_INIT,
-  SSET_RULES,
-  SSET_RULES_FLEXIBLE,
-  SSET_META,
-  SSET_LAST
-};
-
-typedef bool (*bool_validate_func_t)(bool value, struct connection *pconn,
-                                     char *reject_msg,
-                                     size_t reject_msg_len);
-typedef bool (*int_validate_func_t)(int value, struct connection *pconn,
-                                    char *reject_msg,
-                                    size_t reject_msg_len);
-typedef bool (*string_validate_func_t)(const char * value,
-                                       struct connection *pconn,
-                                       char *reject_msg,
-                                       size_t reject_msg_len);
-
-struct setting;
-typedef void (*action_callback_func_t)(const struct setting *pset);
-
-struct setting {
-  const char *name;
-  enum sset_class sclass;
-  bool to_client;
-
-  /*
-   * Sould be less than 42 chars (?), or shorter if the values may
-   * have more than about 4 digits. Don't put "." on the end.
-   */
-  const char *short_help;
-
-  /*
-   * May be empty string, if short_help is sufficient. Need not
-   * include embedded newlines (but may, for formatting); lines will
-   * be wrapped (and indented) automatically. Should have punctuation
-   * etc, and should end with a "."
-   */
-  const char *extra_help;
-  enum sset_type stype;
-  enum sset_category scategory;
-  enum sset_level slevel;
-
-  /*
-   * About the *_validate functions: If the function is non-NULL, it
-   * is called with the new value, and returns whether the change is
-   * legal. The char * is an error message in the case of reject.
-   */
-
-  union {
-    /*** bool part ***/
-    struct {
-      bool *const pvalue;
-      const bool default_value;
-      const bool_validate_func_t validate;
-      bool game_value;
-    } boolean;
-    /*** int part ***/
-    struct {
-      int *const pvalue;
-      const int default_value;
-      const int min_value;
-      const int max_value;
-      const int_validate_func_t validate;
-      int game_value;
-    } integer;
-    /*** string part ***/
-    struct {
-      char *const value;
-      const char *const default_value;
-      const size_t value_size;
-      const string_validate_func_t validate;
-      char *game_value;
-    } string;
-  };
-
-  /* action function */
-  const action_callback_func_t action;
-
-  /* ruleset lock for game settings */
-  bool locked;
-};
 
 /* Category names must match the values in enum sset_category. */
 const char *sset_category_names[] = {N_("Geological"),
@@ -145,74 +44,8 @@ const char *sset_level_names[] = {N_("None"),
 				  N_("Vital"),
 				  N_("Situational"),
 				  N_("Rare"),
-				  N_("Changed"),
-				  N_("Locked")};
+				  N_("Changed")};
 const int OLEVELS_NUM = ARRAY_SIZE(sset_level_names);
-
-static void setting_set_to_default(struct setting *pset);
-static bool setting_ruleset_one(struct section_file *file,
-                                const char *name, const char *path);
-static void setting_game_set(struct setting *pset, bool init);
-static void setting_game_free(struct setting *pset);
-static void setting_game_restore(struct setting *pset);
-
-#define settings_snprintf(_buf, _buf_len, format, ...)                      \
-  if (_buf != NULL) {                                                       \
-    my_snprintf(_buf, _buf_len, format, ## __VA_ARGS__);                    \
-  }
-
-/*************************************************************************
-  Action callback functions. 'caller' and 'message' are not used and
-  should be set to NULL by the calling function.
-*************************************************************************/
-
-/*************************************************************************
-  Create the selected number of AI's.
-*************************************************************************/
-static void aifill_action(const struct setting *pset)
-{
-  aifill(*pset->integer.pvalue);
-}
-
-/*************************************************************************
-  Toggle player AI status.
-*************************************************************************/
-static void autotoggle_action(const struct setting *pset)
-{
-  if (*pset->boolean.pvalue) {
-    players_iterate(pplayer) {
-      if (!pplayer->ai_data.control && !pplayer->is_connected) {
-        toggle_ai_player_direct(NULL, pplayer);
-        send_player_info_c(pplayer, game.est_connections);
-      }
-    } players_iterate_end;
-  }
-}
-
-/*************************************************************************
-  Validation callback functions.
-*************************************************************************/
-
-/*************************************************************************
-  Verify that a given demography string is valid. See
-  game.demography.
-*************************************************************************/
-static bool demography_callback(const char *value,
-                                struct connection *caller,
-                                char *reject_msg,
-                                size_t reject_msg_len)
-{
-  int error;
-
-  if (is_valid_demography(value, &error)) {
-    return TRUE;
-  } else {
-    settings_snprintf(reject_msg, reject_msg_len,
-                      _("Demography string validation failed at character: "
-                        "'%c'. Try \"help demography\"."), value[error]);
-    return FALSE;
-  }
-}
 
 /*************************************************************************
   Verify that a given allowtake string is valid.  See
@@ -220,8 +53,7 @@ static bool demography_callback(const char *value,
 *************************************************************************/
 static bool allowtake_callback(const char *value,
                                struct connection *caller,
-                               char *reject_msg,
-                               size_t reject_msg_len)
+                               const char **error_string)
 {
   int len = strlen(value), i;
   bool havecharacter_state = FALSE;
@@ -249,14 +81,13 @@ static bool allowtake_callback(const char *value,
     }
 
     /* Looks like the character was invalid. */
-    settings_snprintf(reject_msg, reject_msg_len,
-                      _("Allowed take string validation failed at "
-                        "character: '%c'. Try \"help allowtake\"."),
-                      value[i]);
+    *error_string = _("Allowed take string contains invalid\n"
+		      "characters.  Try \"help allowtake\".");
     return FALSE;
   }
 
   /* All characters were valid. */
+  *error_string = NULL;
   return TRUE;
 }
 
@@ -266,8 +97,7 @@ static bool allowtake_callback(const char *value,
 *************************************************************************/
 static bool startunits_callback(const char *value,
                                 struct connection *caller,
-                                char *reject_msg,
-                                size_t reject_msg_len)
+                                const char **error_string)
 {
   int len = strlen(value), i;
   bool have_founder = FALSE;
@@ -287,21 +117,19 @@ static bool startunits_callback(const char *value,
     }
 
     /* Looks like the character was invalid. */
-    settings_snprintf(reject_msg, reject_msg_len,
-                      _("Starting units string validation failed at "
-                        "characters '%c'. Try \"help startunits\"."),
-                      value[i]);
+    *error_string = _("Starting units string contains invalid\n"
+		      "characters.  Try \"help startunits\".");
     return FALSE;
   }
 
   if (!have_founder) {
-    settings_snprintf(reject_msg, reject_msg_len,
-                      _("No city founder ('c') within the starting units "
-                        "string: '%s'. Try \"help startunits\"."), value);
+    *error_string = _("Starting units string does not contain\n"
+		      "at least one city founder.  Try \n"
+		      "\"help startunits\".");
     return FALSE;
   }
-
   /* All characters were valid. */
+  *error_string = NULL;
   return TRUE;
 }
 
@@ -309,12 +137,11 @@ static bool startunits_callback(const char *value,
   Verify that a given endturn is valid.
 *************************************************************************/
 static bool endturn_callback(int value, struct connection *caller,
-                             char *reject_msg, size_t reject_msg_len)
+                             const char **error_string)
 {
   if (value < game.info.turn) {
     /* Tried to set endturn earlier than current turn */
-    settings_snprintf(reject_msg, reject_msg_len,
-                      _("Cannot set endturn earlier than current turn."));
+    *error_string = _("Cannot set endturn earlier than current turn.");
     return FALSE;
   }
   return TRUE;
@@ -324,26 +151,24 @@ static bool endturn_callback(int value, struct connection *caller,
   Verify that a given maxplayers string is valid.
 *************************************************************************/
 static bool maxplayers_callback(int value, struct connection *caller,
-                                char *reject_msg, size_t reject_msg_len)
+                                const char **error_string)
 {
 #ifdef GGZ_SERVER
   if (with_ggz) {
     /* In GGZ mode the maxplayers is the number of actual players - set
      * when the game is lauched and not changed thereafter.  This may be
      * changed in future. */
-    settings_snprintf(reject_msg, reject_msg_len,
-                      _("Cannot change maxplayers in GGZ mode."));
+    *error_string = _("Cannot change maxplayers in GGZ mode.");
     return FALSE;
   }
 #endif
   if (value < player_count()) {
-    settings_snprintf(reject_msg, reject_msg_len,
-                      _("Number of players (%d) is higher than requested "
-                        "value (%d). Keeping old value."), player_count(),
-                      value);
+    *error_string =_("Number of players is higher than requested value;\n"
+		     "Keeping old value.");
     return FALSE;
   }
 
+  *error_string = NULL;
   return TRUE;
 }
 
@@ -351,15 +176,15 @@ static bool maxplayers_callback(int value, struct connection *caller,
   Disallow low timeout values for non-hack connections.
 *************************************************************************/
 static bool timeout_callback(int value, struct connection *caller,
-                             char *reject_msg, size_t reject_msg_len)
+                             const char **error_string)
 {
   if (caller && caller->access_level < ALLOW_HACK && value < 30) {
-    settings_snprintf(reject_msg, reject_msg_len,
-                      _("You are not allowed to set timeout values less "
-                        "than 30 seconds."));
+    *error_string = _("You are not allowed to set timeout values less "
+                      "than 30 seconds.");
     return FALSE;
   }
 
+  *error_string = NULL;
   return TRUE;
 }
 
@@ -369,54 +194,52 @@ static bool timeout_callback(int value, struct connection *caller,
   alternating phase mode then make teamless players.
 *************************************************************************/
 static bool phasemode_callback(int value, struct connection *caller,
-                               char *reject_msg, size_t reject_msg_len)
+                               const char **error_string)
 {
   if (value == PMT_TEAMS_ALTERNATE) {
     players_iterate(pplayer) {
       if (!pplayer->team) {
-        settings_snprintf(reject_msg, reject_msg_len,
-                          _("All players must have a team if this option "
-                            "value is used."));
+        *error_string = _("All players must have a team if this option "
+                          "value is used.");
         return FALSE;
       }
     } players_iterate_end;
   }
-
+  *error_string = NULL;
   return TRUE;
 }
 
-#define GEN_BOOL(name, value, sclass, scateg, slevel, to_client,        \
-                 short_help, extra_help, func_validate, func_action,    \
-                 _default)                                              \
-  {name, sclass, to_client, short_help, extra_help, SSET_BOOL,          \
-      scateg, slevel,                                                   \
-      {.boolean = {&value, _default, func_validate, FALSE}},            \
-      func_action, FALSE},
+#define GEN_BOOL(name, value, sclass, scateg, slevel, to_client,	\
+		 short_help, extra_help, func, _default)		\
+  {name, sclass, to_client, short_help, extra_help, SSET_BOOL,		\
+      scateg, slevel, &value, _default, func,				\
+      NULL, 0, NULL, 0, 0,						\
+      NULL, NULL, NULL, 0},
 
-#define GEN_INT(name, value, sclass, scateg, slevel, to_client,         \
-                short_help, extra_help, func_validate, func_action,     \
-                _min, _max, _default)                                   \
-  {name, sclass, to_client, short_help, extra_help, SSET_INT,           \
-      scateg, slevel,                                                   \
-      {.integer = {(int *) &value, _default, _min, _max, func_validate, \
-                   0}},                                                 \
-      func_action, FALSE},
+#define GEN_INT(name, value, sclass, scateg, slevel, to_client,		\
+		short_help, extra_help, func, _min, _max, _default)	\
+  {name, sclass, to_client, short_help, extra_help, SSET_INT,		\
+      scateg, slevel,							\
+      NULL, FALSE, NULL,						\
+      &value, _default, func, _min, _max,				\
+      NULL, NULL, NULL, 0},
 
-#define GEN_STRING(name, value, sclass, scateg, slevel, to_client,      \
-                   short_help, extra_help, func_validate, func_action,  \
-                   _default)                                            \
-  {name, sclass, to_client, short_help, extra_help, SSET_STRING,        \
-      scateg, slevel,                                                   \
-      {.string = {value, _default, sizeof(value), func_validate, ""}},  \
-      func_action, FALSE},
+#define GEN_STRING(name, value, sclass, scateg, slevel, to_client,	\
+		   short_help, extra_help, func, _default)		\
+  {name, sclass, to_client, short_help, extra_help, SSET_STRING,	\
+      scateg, slevel,							\
+      NULL, FALSE, NULL,						\
+      NULL, 0, NULL, 0, 0,						\
+      value, _default, func, sizeof(value)},
 
-#define GEN_END                                                         \
-  {NULL, SSET_LAST, SSET_SERVER_ONLY, NULL, NULL, SSET_INT,             \
-      SSET_NUM_CATEGORIES, SSET_NONE,                                   \
-      {.boolean = {FALSE, FALSE, NULL, FALSE}}, NULL, FALSE},
+#define GEN_END							\
+  {NULL, SSET_LAST, SSET_SERVER_ONLY, NULL, NULL, SSET_INT,	\
+      SSET_NUM_CATEGORIES, SSET_NONE,				\
+      NULL, FALSE, NULL,					\
+      NULL, 0, NULL, 0, 0,					\
+      NULL, NULL, NULL},
 
-/* game settings */
-static struct setting settings[] = {
+struct setting settings[] = {
 
   /* These should be grouped by sclass */
   
@@ -426,7 +249,7 @@ static struct setting settings[] = {
           N_("Map size (in thousands of tiles)"),
           N_("This value is used to determine the map dimensions.\n"
              "  size = 4 is a normal map of 4,000 tiles (default)\n"
-             "  size = 20 is a huge map of 20,000 tiles"), NULL, NULL,
+             "  size = 20 is a huge map of 20,000 tiles"), NULL,
           MAP_MIN_SIZE, MAP_MAX_SIZE, MAP_DEFAULT_SIZE)
   GEN_INT("topology", map.topology_id, SSET_MAP_SIZE,
 	  SSET_GEOLOGY, SSET_VITAL, SSET_TO_CLIENT,
@@ -466,25 +289,25 @@ static struct setting settings[] = {
 	     "  \\/\\/\\/\\/\\/\\/\\             \\_/ \\_/ \\_/ \\_/ \\_/  \n"
 	     "   | | | | | | |            / \\_/ \\_/ \\_/ \\_/ \\      \n"
 	     "   \\/\\/\\/\\/\\/\\/             \\_/ \\_/ \\_/ \\_/ \\_/    \n"
-          ), NULL, NULL,
+          ), NULL,
 	  MAP_MIN_TOPO, MAP_MAX_TOPO, MAP_DEFAULT_TOPO)
 
   /* Map generation parameters: once we have a map these are of historical
    * interest only, and cannot be changed.
    */
   GEN_INT("generator", map.server.generator,
-          SSET_MAP_GEN, SSET_GEOLOGY, SSET_VITAL,  SSET_TO_CLIENT,
-          N_("Method used to generate map"),
-          N_("0 = Scenario map - no generator\n"
-             "1 = Fully random height generator              [4]\n"
-             "2 = Pseudo-fractal height generator            [3]\n"
-             "3 = Island-based generator (fairer but boring) [1]\n"
-             "\n"
-             "Numbers in [] give the default values for placement of "
-             "starting positions.  If the default value of startpos is "
-             "used then a startpos setting will be chosen based on the "
-             "generator.  See the \"startpos\" setting."), NULL, NULL,
-          MAP_MIN_GENERATOR, MAP_MAX_GENERATOR, MAP_DEFAULT_GENERATOR)
+	  SSET_MAP_GEN, SSET_GEOLOGY, SSET_VITAL,  SSET_TO_CLIENT,
+	  N_("Method used to generate map"),
+	  N_("0 = Scenario map - no generator;\n"
+	     "1 = Fully random height generator;              [4]\n"
+	     "2 = Pseudo-fractal height generator;             [3]\n"
+	     "3 = Island-based generator (fairer but boring)   [1]\n"
+	     "\n"
+	     "Numbers in [] give the default values for placement of "
+	     "starting positions.  If the default value of startpos is "
+	     "used then a startpos setting will be chosen based on the "
+	     "generator.  See the \"startpos\" setting."), NULL,
+	  MAP_MIN_GENERATOR, MAP_MAX_GENERATOR, MAP_DEFAULT_GENERATOR)
 
   GEN_INT("startpos", map.server.startpos,
 	  SSET_MAP_GEN, SSET_GEOLOGY, SSET_VITAL,  SSET_TO_CLIENT,
@@ -498,57 +321,57 @@ static struct setting settings[] = {
 	     "4 = Place players depending on size of continents.\n"
 	     "Note: generators try to create the right number of continents "
 	     "for the choice of start pos and to the number of players"),
-          NULL, NULL, MAP_MIN_STARTPOS, MAP_MAX_STARTPOS, MAP_DEFAULT_STARTPOS)
+	  NULL, MAP_MIN_STARTPOS, MAP_MAX_STARTPOS, MAP_DEFAULT_STARTPOS)
 
   GEN_BOOL("tinyisles", map.server.tinyisles,
 	   SSET_MAP_GEN, SSET_GEOLOGY, SSET_RARE, SSET_TO_CLIENT,
 	   N_("Presence of 1x1 islands"),
-           N_("0 = no 1x1 islands; 1 = some 1x1 islands"), NULL, NULL,
+	   N_("0 = no 1x1 islands; 1 = some 1x1 islands"), NULL,
 	   MAP_DEFAULT_TINYISLES)
 
   GEN_BOOL("separatepoles", map.server.separatepoles,
 	   SSET_MAP_GEN, SSET_GEOLOGY, SSET_SITUATIONAL, SSET_TO_CLIENT,
 	   N_("Whether the poles are separate continents"),
 	   N_("0 = continents may attach to poles; 1 = poles will "
-              "usually be separate"), NULL, NULL,
+	      "usually be separate"), NULL, 
 	   MAP_DEFAULT_SEPARATE_POLES)
 
   GEN_BOOL("alltemperate", map.server.alltemperate, 
            SSET_MAP_GEN, SSET_GEOLOGY, SSET_RARE, SSET_TO_CLIENT,
 	   N_("All the map is temperate"),
 	   N_("0 = normal Earth-like planet; 1 = all-temperate planet "),
-           NULL, NULL, MAP_DEFAULT_ALLTEMPERATE)
+	   NULL, MAP_DEFAULT_ALLTEMPERATE)
 
   GEN_INT("temperature", map.server.temperature,
-          SSET_MAP_GEN, SSET_GEOLOGY, SSET_SITUATIONAL, SSET_TO_CLIENT,
-          N_("Average temperature of the planet"),
-          N_("Small values will give a cold map, while larger values will "
+ 	  SSET_MAP_GEN, SSET_GEOLOGY, SSET_SITUATIONAL, SSET_TO_CLIENT,
+ 	  N_("Average temperature of the planet"),
+ 	  N_("Small values will give a cold map, while larger values will "
              "give a hotter map.\n"
-             "\n"
-             "100 means a very dry and hot planet with no polar arctic "
-             "zones, only tropical and dry zones.\n"
-             " 70 means a hot planet with little polar ice.\n"
-             " 50 means a temperate planet with normal polar, cold, "
-             "temperate, and tropical zones; a desert zone overlaps "
-             "tropical and temperate zones.\n"
-             " 30 means a cold planet with small tropical zones.\n"
-             "  0 means a very cold planet with large polar zones and no "
-             "tropics"),
-          NULL, NULL,
-          MAP_MIN_TEMPERATURE, MAP_MAX_TEMPERATURE, MAP_DEFAULT_TEMPERATURE)
+	     "\n"
+	     "100 means a very dry and hot planet with no polar arctic "
+	     "zones, only tropical and dry zones.\n\n"
+	     "70 means a hot planet with little polar ice.\n\n"
+             "50 means a temperate planet with normal polar, cold, "
+	     "temperate, and tropical zones; a desert zone overlaps "
+	     "tropical and temperate zones.\n\n"
+	     "30 means a cold planet with small tropical zones.\n\n"
+	     "0 means a very cold planet with large polar zones and no "
+	     "tropics"), 
+          NULL,
+  	  MAP_MIN_TEMPERATURE, MAP_MAX_TEMPERATURE, MAP_DEFAULT_TEMPERATURE)
  
   GEN_INT("landmass", map.server.landpercent,
 	  SSET_MAP_GEN, SSET_GEOLOGY, SSET_SITUATIONAL, SSET_TO_CLIENT,
 	  N_("Percentage of the map that is land"),
 	  N_("This setting gives the approximate percentage of the map "
-             "that will be made into land."), NULL, NULL,
+	     "that will be made into land."), NULL,
 	  MAP_MIN_LANDMASS, MAP_MAX_LANDMASS, MAP_DEFAULT_LANDMASS)
 
   GEN_INT("steepness", map.server.steepness,
 	  SSET_MAP_GEN, SSET_GEOLOGY, SSET_SITUATIONAL, SSET_TO_CLIENT,
 	  N_("Amount of hills/mountains"),
 	  N_("Small values give flat maps, while higher values give a "
-             "steeper map with more hills and mountains."), NULL, NULL,
+	     "steeper map with more hills and mountains."), NULL,
 	  MAP_MIN_STEEPNESS, MAP_MAX_STEEPNESS, MAP_DEFAULT_STEEPNESS)
 
   GEN_INT("wetness", map.server.wetness,
@@ -556,8 +379,8 @@ static struct setting settings[] = {
  	  N_("Amount of water on lands"), 
 	  N_("Small values mean lots of dry, desert-like land; "
 	     "higher values give a wetter map with more swamps, "
-             "jungles, and rivers."), NULL, NULL,
-          MAP_MIN_WETNESS, MAP_MAX_WETNESS, MAP_DEFAULT_WETNESS)
+	     "jungles, and rivers."), NULL, 
+ 	  MAP_MIN_WETNESS, MAP_MAX_WETNESS, MAP_DEFAULT_WETNESS)
 
   GEN_INT("mapseed", map.server.seed,
 	  SSET_MAP_GEN, SSET_INTERNAL, SSET_RARE, SSET_SERVER_ONLY,
@@ -565,7 +388,7 @@ static struct setting settings[] = {
 	  N_("The same seed will always produce the same map; "
 	     "for zero (the default) a seed will be chosen based on "
 	     "the time to give a random map. This setting is usually "
-             "only of interest while debugging the game."), NULL, NULL,
+	     "only of interest while debugging the game."), NULL, 
 	  MAP_MIN_SEED, MAP_MAX_SEED, MAP_DEFAULT_SEED)
 
   /* Map additional stuff: huts and specials.  gameseed also goes here
@@ -578,7 +401,7 @@ static struct setting settings[] = {
 	  N_("Game random seed"),
 	  N_("For zero (the default) a seed will be chosen based "
 	     "on the time. This setting is usually "
-             "only of interest while debugging the game"), NULL, NULL,
+	     "only of interest while debugging the game"), NULL, 
 	  GAME_MIN_SEED, GAME_MAX_SEED, GAME_DEFAULT_SEED)
 
   GEN_INT("specials", map.server.riches,
@@ -586,7 +409,7 @@ static struct setting settings[] = {
 	  N_("Amount of \"special\" resource tiles"),
 	  N_("Special resources improve the basic terrain type they "
 	     "are on. The server variable's scale is parts per "
-             "thousand."), NULL, NULL,
+	     "thousand."), NULL,
 	  MAP_MIN_RICHES, MAP_MAX_RICHES, MAP_DEFAULT_RICHES)
 
   GEN_INT("huts", map.server.huts,
@@ -594,8 +417,8 @@ static struct setting settings[] = {
 	  N_("Amount of huts (minor tribe villages)"),
 	  N_("This setting gives the exact number of huts that will be "
 	     "placed on the entire map. Huts are small tribal villages "
-             "that may be investigated by units."), NULL, NULL,
-          MAP_MIN_HUTS, MAP_MAX_HUTS, MAP_DEFAULT_HUTS)
+	     "that may be investigated by units."),
+	  NULL, MAP_MIN_HUTS, MAP_MAX_HUTS, MAP_DEFAULT_HUTS)
 
   /* Options affecting numbers of players and AI players.  These only
    * affect the start of the game and can not be adjusted after that.
@@ -608,7 +431,7 @@ static struct setting settings[] = {
 	  N_("Minimum number of players"),
 	  N_("There must be at least this many players (connected "
 	     "human players) before the game can start."),
-          NULL, NULL,
+	  NULL,
 	  GAME_MIN_MIN_PLAYERS, GAME_MAX_MIN_PLAYERS, GAME_DEFAULT_MIN_PLAYERS)
 
   GEN_INT("maxplayers", game.info.max_players,
@@ -617,7 +440,7 @@ static struct setting settings[] = {
           N_("The maximal number of human and AI players who can be in "
              "the game. When this number of players are connected in "
              "the pregame state, any new players who try to connect "
-             "will be rejected."), maxplayers_callback, NULL,
+             "will be rejected."), maxplayers_callback,
 	  GAME_MIN_MAX_PLAYERS, GAME_MAX_MAX_PLAYERS, GAME_DEFAULT_MAX_PLAYERS)
 
   GEN_INT("aifill", game.info.aifill,
@@ -627,37 +450,36 @@ static struct setting settings[] = {
 	     "automatically created or removed to keep the total "
 	     "number of players at this amount.  As more players join, "
 	     "these AI players will be replaced.  When set to zero, "
-             "all AI players will be removed."), NULL,
-          aifill_action, GAME_MIN_AIFILL, GAME_MAX_AIFILL,
-          GAME_DEFAULT_AIFILL)
+	     "all AI players will be removed."), NULL,
+	  GAME_MIN_AIFILL, GAME_MAX_AIFILL, GAME_DEFAULT_AIFILL)
 
   GEN_INT("ec_turns", game.server.event_cache.turns,
           SSET_RULES_FLEXIBLE, SSET_INTERNAL, SSET_SITUATIONAL, SSET_TO_CLIENT,
           N_("Event cache for this number of turns"),
           N_("Event messages are saved for this number of turns. A value of "
              "0 deactivates the event cache."),
-          NULL, NULL, GAME_MIN_EVENT_CACHE_TURNS, GAME_MAX_EVENT_CACHE_TURNS,
+          NULL, GAME_MIN_EVENT_CACHE_TURNS, GAME_MAX_EVENT_CACHE_TURNS,
           GAME_DEFAULT_EVENT_CACHE_TURNS)
 
   GEN_INT("ec_max_size", game.server.event_cache.max_size,
           SSET_RULES_FLEXIBLE, SSET_INTERNAL, SSET_SITUATIONAL, SSET_TO_CLIENT,
           N_("Size of the event cache"),
           N_("This defines the maximal number of events in the event cache."),
-          NULL, NULL, GAME_MIN_EVENT_CACHE_MAX_SIZE, GAME_MAX_EVENT_CACHE_MAX_SIZE,
+          NULL, GAME_MIN_EVENT_CACHE_MAX_SIZE, GAME_MAX_EVENT_CACHE_MAX_SIZE,
           GAME_DEFAULT_EVENT_CACHE_MAX_SIZE)
 
   GEN_BOOL("ec_chat", game.server.event_cache.chat,
            SSET_RULES_FLEXIBLE, SSET_INTERNAL, SSET_SITUATIONAL, SSET_TO_CLIENT,
            N_("Save chat messages in the event cache"),
            N_("If set to 1 chat messages will be saved in the event cache."),
-           NULL, NULL, GAME_DEFAULT_EVENT_CACHE_CHAT)
+           NULL, GAME_DEFAULT_EVENT_CACHE_CHAT)
 
   GEN_BOOL("ec_info", game.server.event_cache.info,
            SSET_RULES_FLEXIBLE, SSET_INTERNAL, SSET_SITUATIONAL, SSET_TO_CLIENT,
            N_("Print turn and time for each cached event"),
            N_("If set to 1 all cached events will be marked by the turn and time "
               "of the event like '(T2 - 15:29:52)'."),
-           NULL, NULL, GAME_DEFAULT_EVENT_CACHE_INFO)
+           NULL, GAME_DEFAULT_EVENT_CACHE_INFO)
 
   /* Game initialization parameters (only affect the first start of the game,
    * and not reloads).  Can not be changed after first start of game.
@@ -680,20 +502,20 @@ static struct setting settings[] = {
 		"    D   = Good defense unit (eg., Phalanx)\n"
 		"    a   = Fast attack unit (eg., Horsemen)\n"
 		"    A   = Strong attack unit (eg., Catapult)\n"),
-             startunits_callback, NULL, GAME_DEFAULT_START_UNITS)
+		startunits_callback, GAME_DEFAULT_START_UNITS)
 
   GEN_INT("dispersion", game.info.dispersion,
 	  SSET_GAME_INIT, SSET_SOCIOLOGY, SSET_SITUATIONAL, SSET_TO_CLIENT,
 	  N_("Area where initial units are located"),
 	  N_("This is the radius within "
-             "which the initial units are dispersed."), NULL, NULL,
+	     "which the initial units are dispersed."), NULL,
 	  GAME_MIN_DISPERSION, GAME_MAX_DISPERSION, GAME_DEFAULT_DISPERSION)
 
   GEN_INT("gold", game.info.gold,
 	  SSET_GAME_INIT, SSET_ECONOMICS, SSET_VITAL, SSET_TO_CLIENT,
 	  N_("Starting gold per player"), 
 	  N_("At the beginning of the game, each player is given this "
-             "much gold."), NULL, NULL,
+	     "much gold."), NULL,
 	  GAME_MIN_GOLD, GAME_MAX_GOLD, GAME_DEFAULT_GOLD)
 
   GEN_INT("techlevel", game.info.tech,
@@ -703,7 +525,7 @@ static struct setting settings[] = {
 	     "many technologies. The technologies chosen are random for "
 	     "each player. Depending on the value of tech_cost_style in "
              "the ruleset, a big value for techlevel can make the next "
-             "techs really expensive."), NULL, NULL,
+             "techs really expensive."), NULL,
 	  GAME_MIN_TECHLEVEL, GAME_MAX_TECHLEVEL, GAME_DEFAULT_TECHLEVEL)
 
   GEN_INT("sciencebox", game.info.sciencebox,
@@ -713,7 +535,7 @@ static struct setting settings[] = {
 	     "technology. All tech costs are multiplied by this amount "
 	     "(as a percentage). The base tech costs are determined by "
 	     "the ruleset or other game settings."),
-          NULL, NULL, GAME_MIN_SCIENCEBOX, GAME_MAX_SCIENCEBOX,
+	  NULL, GAME_MIN_SCIENCEBOX, GAME_MAX_SCIENCEBOX, 
 	  GAME_DEFAULT_SCIENCEBOX)
 
   GEN_INT("techpenalty", game.info.techpenalty,
@@ -722,7 +544,7 @@ static struct setting settings[] = {
 	  N_("If you change your current research technology, and you have "
 	     "positive research points, you lose this percentage of those "
 	     "research points. This does not apply when you have just gained "
-             "a technology this turn."), NULL, NULL,
+	     "a technology this turn."), NULL,
 	  GAME_MIN_TECHPENALTY, GAME_MAX_TECHPENALTY,
 	  GAME_DEFAULT_TECHPENALTY)
 
@@ -734,7 +556,7 @@ static struct setting settings[] = {
 	     "research a new technology. If this is non-zero, you can end up "
 	     "with negative research points. Also applies to gold "
              "transfers in diplomatic treaties."),
-          NULL, NULL,
+          NULL,
 	  GAME_MIN_DIPLCOST, GAME_MAX_DIPLCOST, GAME_DEFAULT_DIPLCOST)
 
   GEN_INT("conquercost", game.info.conquercost,
@@ -744,7 +566,7 @@ static struct setting settings[] = {
 	     "lose research points equal to this percentage of the cost to "
 	     "research a new technology. If this is non-zero, you can end up "
 	     "with negative research points."),
-          NULL, NULL,
+	  NULL,
 	  GAME_MIN_CONQUERCOST, GAME_MAX_CONQUERCOST,
 	  GAME_DEFAULT_CONQUERCOST)
 
@@ -756,8 +578,8 @@ static struct setting settings[] = {
 	     "or from Great Library effects), you lose research points "
 	     "equal to this percentage of the cost to research a new "
 	     "technology. If this is non-zero, you can end up "
-             "with negative research points."),
-          NULL, NULL,
+	     "with negative research points."), 
+	  NULL, 
 	  GAME_MIN_FREECOST, GAME_MAX_FREECOST, GAME_DEFAULT_FREECOST)
 
   GEN_INT("foodbox", game.info.foodbox,
@@ -766,7 +588,7 @@ static struct setting settings[] = {
 	  N_("This is the base amount of food required to grow a city. "
 	     "This value is multiplied by another factor that comes from "
 	     "the ruleset and is dependent on the size of the city."),
-          NULL, NULL,
+	  NULL,
 	  GAME_MIN_FOODBOX, GAME_MAX_FOODBOX, GAME_DEFAULT_FOODBOX)
 
   GEN_INT("aqueductloss", game.info.aqueductloss,
@@ -775,7 +597,7 @@ static struct setting settings[] = {
 	  N_("If a city would expand, but it can't because it needs "
 	     "an Aqueduct (or Sewer System), it loses this percentage "
 	     "of its foodbox (or half that amount when it has a "
-             "Granary)."), NULL, NULL,
+	     "Granary)."), NULL, 
 	  GAME_MIN_AQUEDUCTLOSS, GAME_MAX_AQUEDUCTLOSS, 
 	  GAME_DEFAULT_AQUEDUCTLOSS)
 
@@ -785,7 +607,7 @@ static struct setting settings[] = {
 	  N_("This affects how quickly units and buildings can be "
 	     "produced.  The base costs are multiplied by this value (as "
 	     "a percentage)."),
-          NULL, NULL, GAME_MIN_SHIELDBOX, GAME_MAX_SHIELDBOX,
+	  NULL, GAME_MIN_SHIELDBOX, GAME_MAX_SHIELDBOX,
 	  GAME_DEFAULT_SHIELDBOX)
 
   /* Notradesize and fulltradesize used to have callbacks to prevent them
@@ -801,7 +623,7 @@ static struct setting settings[] = {
 	     "The penalty is 100% (no trade at all) for sizes up to "
 	     "notradesize, and decreases gradually to 0% (no penalty "
 	     "except the normal corruption) for size=fulltradesize. "
-             "See also notradesize."), NULL, NULL,
+	     "See also notradesize."), NULL, 
 	  GAME_MIN_FULLTRADESIZE, GAME_MAX_FULLTRADESIZE, 
 	  GAME_DEFAULT_FULLTRADESIZE)
 
@@ -811,7 +633,7 @@ static struct setting settings[] = {
 	  N_("Cities do not produce any trade at all unless their size "
 	     "is larger than this amount. The produced trade increases "
 	     "gradually for cities larger than notradesize and smaller "
-             "than fulltradesize. See also fulltradesize."), NULL, NULL,
+	     "than fulltradesize. See also fulltradesize."), NULL,
 	  GAME_MIN_NOTRADESIZE, GAME_MAX_NOTRADESIZE,
 	  GAME_DEFAULT_NOTRADESIZE)
 
@@ -823,7 +645,7 @@ static struct setting settings[] = {
 	     "this value is 3, there have to be at least two empty "
 	     "fields between two cities in every direction. If set "
 	     "to 0 (default), the ruleset value will be used."),
-          NULL, NULL,
+	  NULL,
 	  GAME_MIN_CITYMINDIST, GAME_MAX_CITYMINDIST,
 	  GAME_DEFAULT_CITYMINDIST)
 
@@ -833,7 +655,7 @@ static struct setting settings[] = {
           N_("In order to establish a trade route, cities must be at "
              "least this far apart on the map. The distance is calculated "
              "as \"manhattan distance\", that is, the sum of the "
-             "displacements along the x and y directions."), NULL, NULL,
+             "displacements along the x and y directions."), NULL,
           GAME_MIN_TRADEMINDIST, GAME_MAX_TRADEMINDIST,
           GAME_DEFAULT_TRADEMINDIST)
 
@@ -842,8 +664,8 @@ static struct setting settings[] = {
           N_("Number of turns between rapture effect"),
           N_("Sets the number of turns between rapture growth of a city. "
              "If set to n a city will grow after celebrating for n+1 "
-             "turns."),
-          NULL, NULL,
+	     "turns."),
+	  NULL,
           GAME_MIN_RAPTUREDELAY, GAME_MAX_RAPTUREDELAY,
           GAME_DEFAULT_RAPTUREDELAY)
 
@@ -851,7 +673,7 @@ static struct setting settings[] = {
 	  SSET_RULES, SSET_MILITARY, SSET_RARE, SSET_TO_CLIENT,
 	  N_("Chance for conquered building destruction"),
 	  N_("When a player conquers a city, each city improvement has this "
-             "percentage chance to be destroyed."), NULL, NULL,
+	     "percentage chance to be destroyed."), NULL, 
 	  GAME_MIN_RAZECHANCE, GAME_MAX_RAZECHANCE, GAME_DEFAULT_RAZECHANCE)
 
   GEN_INT("occupychance", game.info.occupychance,
@@ -862,7 +684,7 @@ static struct setting settings[] = {
 	     "will always move into the tile they attacked when they win "
 	     "the combat (and no enemy units remain in the tile). If "
 	     "set to a value between 0 and 100, this will be used as "
-             "the percent chance of \"occupying\" territory."), NULL, NULL,
+	     "the percent chance of \"occupying\" territory."), NULL, 
 	  GAME_MIN_OCCUPYCHANCE, GAME_MAX_OCCUPYCHANCE, 
 	  GAME_DEFAULT_OCCUPYCHANCE)
 
@@ -870,8 +692,8 @@ static struct setting settings[] = {
          SSET_SITUATIONAL, SSET_TO_CLIENT,
          N_("Turn on/off server-side autoattack"),
          N_("If set to on, units with move left will automatically "
-            "consider attacking enemy units that move adjacent to them."),
-         NULL, NULL, GAME_DEFAULT_AUTOATTACK)
+            "consider attacking enemy units that move adjacent to them."), 
+         NULL, GAME_DEFAULT_AUTOATTACK)
 
   GEN_INT("killcitizen", game.info.killcitizen,
           SSET_RULES, SSET_MILITARY, SSET_RARE, SSET_TO_CLIENT,
@@ -881,7 +703,7 @@ static struct setting settings[] = {
              "its movement type (OR-ed):\n"
              "  1 = land moving units\n"
              "  2 = sea moving units\n"
-             "  4 = units able to move both on land and sea"), NULL, NULL,
+             "  4 = units able to move both on land and sea"), NULL,
           GAME_MIN_KILLCITIZEN, GAME_MAX_KILLCITIZEN,
           GAME_DEFAULT_KILLCITIZEN)
 
@@ -894,7 +716,7 @@ static struct setting settings[] = {
              "  1 = Enabled\n"
              "  2 = See everything inside borders\n"
              "  3 = Borders expand to unknown, revealing tiles"),
-          NULL, NULL,
+	  NULL,
 	  GAME_MIN_BORDERS, GAME_MAX_BORDERS, GAME_DEFAULT_BORDERS)
 
   GEN_BOOL("happyborders", game.info.happyborders,
@@ -902,7 +724,7 @@ static struct setting settings[] = {
 	   SSET_TO_CLIENT,
 	   N_("Units inside borders cause no unhappiness"),
 	   N_("If this is set, units will not cause unhappiness when "
-              "inside your own borders."), NULL, NULL,
+	      "inside your own borders."), NULL,
 	   GAME_DEFAULT_HAPPYBORDERS)
 
   GEN_INT("diplomacy", game.info.diplomacy,
@@ -912,25 +734,25 @@ static struct setting settings[] = {
 	     "1 = diplomacy is only allowed between human players.\n"
 	     "2 = diplomacy is only allowed between AI players.\n"
              "3 = diplomacy is restricted to teams.\n"
-             "4 = diplomacy is disabled for everyone."), NULL, NULL,
+             "4 = diplomacy is disabled for everyone."), NULL,
 	  GAME_MIN_DIPLOMACY, GAME_MAX_DIPLOMACY, GAME_DEFAULT_DIPLOMACY)
 
   GEN_INT("citynames", game.info.allowed_city_names,
-          SSET_RULES, SSET_SOCIOLOGY, SSET_RARE, SSET_TO_CLIENT,
-          N_("Allowed city names"),
-          N_("0 = There are no restrictions: players can have "
-             "multiple cities with the same names.\n"
-             "1 = City names have to be unique to a player: "
-             "one player can't have multiple cities with the same name.\n"
-             "2 = City names have to be globally unique: "
-             "all cities in a game have to have different names.\n"
-             "3 = Like setting 2, but a player isn't allowed to use a "
-             "default city name of another nations unless it is a default "
-             "for their nation also."),
-          NULL, NULL,
-          GAME_MIN_ALLOWED_CITY_NAMES, GAME_MAX_ALLOWED_CITY_NAMES,
-          GAME_DEFAULT_ALLOWED_CITY_NAMES)
-
+	  SSET_RULES, SSET_SOCIOLOGY, SSET_RARE, SSET_TO_CLIENT,
+	  N_("Allowed city names"),
+	  N_("0 = There are no restrictions: players can have "
+	     "multiple cities with the same names.\n\n"
+	     "1 = City names have to be unique to a player: "
+	     "one player can't have multiple cities with the same name.\n\n"
+	     "2 = City names have to be globally unique: "
+	     "all cities in a game have to have different names.\n\n"
+	     "3 = Like setting 2, but a player isn't allowed to use a "
+	     "default city name of another nations unless it is a default "
+	     "for their nation also."),
+	  NULL,
+	  GAME_MIN_ALLOWED_CITY_NAMES, GAME_MAX_ALLOWED_CITY_NAMES, 
+	  GAME_DEFAULT_ALLOWED_CITY_NAMES)
+  
   /* Flexible rules: these can be changed after the game has started.
    *
    * The distinction between "rules" and "flexible rules" is not always
@@ -951,14 +773,14 @@ static struct setting settings[] = {
 	     "1 = barbarians only in huts \n"
 	     "2 = normal rate of barbarian appearance \n"
 	     "3 = frequent barbarian uprising \n"
-             "4 = raging hordes, lots of barbarians"), NULL, NULL,
+	     "4 = raging hordes, lots of barbarians"), NULL, 
 	  GAME_MIN_BARBARIANRATE, GAME_MAX_BARBARIANRATE, 
 	  GAME_DEFAULT_BARBARIANRATE)
 
   GEN_INT("onsetbarbs", game.info.onsetbarbarian,
 	  SSET_RULES_FLEXIBLE, SSET_MILITARY, SSET_VITAL, SSET_TO_CLIENT,
 	  N_("Barbarian onset turn"),
-          N_("Barbarians will not appear before this turn."), NULL, NULL,
+	  N_("Barbarians will not appear before this turn."), NULL,
 	  GAME_MIN_ONSETBARBARIAN, GAME_MAX_ONSETBARBARIAN, 
 	  GAME_DEFAULT_ONSETBARBARIAN)
 
@@ -968,7 +790,7 @@ static struct setting settings[] = {
 	  N_("When changing governments, a period of anarchy lasting this "
 	     "many turns will occur. "
              "Setting this value to 0 will give a random "
-             "length of 1-6 turns."), NULL, NULL,
+             "length of 1-6 turns."), NULL, 
 	  GAME_MIN_REVOLUTION_LENGTH, GAME_MAX_REVOLUTION_LENGTH, 
 	  GAME_DEFAULT_REVOLUTION_LENGTH)
 
@@ -978,7 +800,7 @@ static struct setting settings[] = {
 	   N_("If this is set to 1, only those units and cities within "
 	      "the vision range of your own units and cities will be "
 	      "revealed to you. You will not see new cities or terrain "
-              "changes in tiles not observed."), NULL, NULL,
+	      "changes in tiles not observed."), NULL, 
 	   GAME_DEFAULT_FOGOFWAR)
 
   GEN_BOOL("foggedborders", game.server.foggedborders,
@@ -988,26 +810,8 @@ static struct setting settings[] = {
               "to see changes in tile ownership if they do not have "
               "direct sight of the affected tiles. Otherwise, players "
               "can see any or all changes to borders as long as they "
-              "have previously seen the tiles."), NULL, NULL,
+              "have previously seen the tiles."), NULL,
            GAME_DEFAULT_FOGGEDBORDERS)
-
-  GEN_INT("airliftingstyle", game.info.airlifting_style,
-          SSET_RULES_FLEXIBLE, SSET_MILITARY, SSET_SITUATIONAL,
-          SSET_TO_CLIENT, N_("Airlifting style"),
-          N_("This settings affects airlifting units between cities. "
-             "The value of this setting is a OR-ed value from:\n"
-             "  0 = Like classical Freeciv, only as many units per turn "
-             "to source or to destination the ruleset allows between your "
-             "own cities.\n"
-             "  1 = Allows units to be airlifted from allied cities.\n"
-             "  2 = Allows units to be airlifted to allied cities.\n"
-             "  4 = Unlimited units from source. Airlifting from a city "
-             "doesn't reduce the airlifted counter, but still needs at "
-             "least 1.\n"
-             "  8 = Unlimited units to destination. Airlifting to a city "
-             "doesn't reduce the airlifted counter, and doesn't need any."),
-          NULL, NULL, GAME_MIN_AIRLIFTINGSTYLE, GAME_MAX_AIRLIFTINGSTYLE,
-          GAME_DEFAULT_AIRLIFTINGSTYLE)
 
   GEN_INT("diplchance", game.info.diplchance,
 	  SSET_RULES_FLEXIBLE, SSET_MILITARY, SSET_SITUATIONAL, SSET_TO_CLIENT,
@@ -1015,21 +819,21 @@ static struct setting settings[] = {
 	  /* xgettext:no-c-format */
 	  N_("The chance of a spy returning from a successful mission and "
 	     "the base chance of success for diplomats and spies."),
-          NULL, NULL,
+          NULL,
 	  GAME_MIN_DIPLCHANCE, GAME_MAX_DIPLCHANCE, GAME_DEFAULT_DIPLCHANCE)
 
   GEN_BOOL("spacerace", game.info.spacerace,
 	   SSET_RULES_FLEXIBLE, SSET_SCIENCE, SSET_VITAL, SSET_TO_CLIENT,
 	   N_("Whether to allow space race"),
 	   N_("If this option is set to 1, players can build spaceships."),
-           NULL, NULL,
+	   NULL, 
 	   GAME_DEFAULT_SPACERACE)
 
   GEN_BOOL("endspaceship", game.info.endspaceship, SSET_RULES_FLEXIBLE,
            SSET_SCIENCE, SSET_VITAL, SSET_TO_CLIENT,
            N_("Should the game end if the spaceship arrives?"),
            N_("If this option is set to 1, the game will end with the "
-              "arrival of a spaceship at Alpha Centauri."), NULL, NULL,
+              "arrival of a spaceship at Alpha Centauri."), NULL,
            GAME_DEFAULT_END_SPACESHIP)
 
   GEN_INT("civilwarsize", game.info.civilwarsize,
@@ -1038,16 +842,9 @@ static struct setting settings[] = {
 	  N_("A civil war is triggered when a player has at least this "
 	     "many cities and the player's capital is captured. If "
 	     "this option is set to the maximum value, civil wars are "
-             "turned off altogether."), NULL, NULL,
+	     "turned off altogether."), NULL, 
 	  GAME_MIN_CIVILWARSIZE, GAME_MAX_CIVILWARSIZE, 
 	  GAME_DEFAULT_CIVILWARSIZE)
-
-  GEN_BOOL("restrictinfra", game.info.restrictinfra,
-           SSET_RULES_FLEXIBLE, SSET_MILITARY, SSET_RARE, SSET_TO_CLIENT,
-           N_("Restrict the use of the infrastructure for enemy units"),
-           N_("If this option is set to 1, the use of roads and rails "
-              "will be restricted for enemy units."), NULL, NULL,
-           GAME_DEFAULT_RESTRICTINFRA)
 
   GEN_INT("contactturns", game.info.contactturns,
 	  SSET_RULES_FLEXIBLE, SSET_MILITARY, SSET_RARE, SSET_TO_CLIENT,
@@ -1056,7 +853,7 @@ static struct setting settings[] = {
 	     "after their units have last met, even when they do not have "
 	     "an embassy. If set to zero, then players cannot meet unless "
 	     "they have an embassy."),
-          NULL, NULL,
+	  NULL,
 	  GAME_MIN_CONTACTTURNS, GAME_MAX_CONTACTTURNS, 
 	  GAME_DEFAULT_CONTACTTURNS)
 
@@ -1067,7 +864,7 @@ static struct setting settings[] = {
 	      "palace is automatically rebuilt for free in another randomly "
 	      "choosen city. This is significant because the technology "
 	      "requirement for building a palace will be ignored."),
-           NULL, NULL,
+	   NULL,
 	   GAME_DEFAULT_SAVEPALACE)
 
   GEN_BOOL("naturalcitynames", game.info.natural_city_names,
@@ -1075,7 +872,7 @@ static struct setting settings[] = {
            N_("Whether to use natural city names"),
            N_("If enabled, the default city names will be determined based "
               "on the surrounding terrain."),
-           NULL, NULL, GAME_DEFAULT_NATURALCITYNAMES)
+           NULL, GAME_DEFAULT_NATURALCITYNAMES)
 
   GEN_BOOL("migration", game.info.migration,
            SSET_RULES_FLEXIBLE, SSET_SOCIOLOGY, SSET_RARE, SSET_TO_CLIENT,
@@ -1094,7 +891,7 @@ static struct setting settings[] = {
               "  mgr_distance     - How far citizens will migrate.\n"
               "  mgr_worldchance  - Chance for inter-nation migration.\n"
               "  mgr_nationchance - Chance for intra-nation migration."),
-           NULL, NULL, GAME_DEFAULT_MIGRATION)
+           NULL, GAME_DEFAULT_MIGRATION)
 
   GEN_INT("mgr_turninterval", game.info.mgr_turninterval,
           SSET_RULES_FLEXIBLE, SSET_SOCIOLOGY, SSET_RARE, SSET_TO_CLIENT,
@@ -1107,7 +904,7 @@ static struct setting settings[] = {
              "current city. Migration will never occur the same turn "
              "that a city is built. This setting has no effect unless "
              "migration is enabled by the 'migration' setting."), NULL,
-          NULL, GAME_MIN_MGR_TURNINTERVAL, GAME_MAX_MGR_TURNINTERVAL,
+          GAME_MIN_MGR_TURNINTERVAL, GAME_MAX_MGR_TURNINTERVAL,
           GAME_DEFAULT_MGR_TURNINTERVAL)
 
   GEN_BOOL("mgr_foodneeded", game.info.mgr_foodneeded,
@@ -1116,7 +913,7 @@ static struct setting settings[] = {
            N_("If this setting is enabled, citizens will not migrate to "
               "cities which would not have enough food to support them. "
               "This setting has no effect unless migration is enabled by "
-              "the 'migration' setting."), NULL, NULL,
+              "the 'migration' setting."), NULL,
            GAME_DEFAULT_MGR_FOODNEEDED)
 
   GEN_INT("mgr_distance", game.info.mgr_distance,
@@ -1127,7 +924,7 @@ static struct setting settings[] = {
              "to migrate to. For example, with a value of 3, there can "
              "be at most a 2 tile distance between cities undergoing "
              "migration. This setting has no effect unless migration "
-             "is activated by the 'migration' setting."), NULL, NULL,
+             "is activated by the 'migration' setting."), NULL,
           GAME_MIN_MGR_DISTANCE, GAME_MAX_MGR_DISTANCE,
           GAME_DEFAULT_MGR_DISTANCE)
 
@@ -1139,7 +936,7 @@ static struct setting settings[] = {
              "indicates migration will never occur, 100 means that "
              "migration will always occur if the citizens find a suitable "
              "destination. This setting has no effect unless migration "
-             "is activated by the 'migration' setting."), NULL, NULL,
+             "is activated by the 'migration' setting."), NULL,
           GAME_MIN_MGR_NATIONCHANCE, GAME_MAX_MGR_NATIONCHANCE,
           GAME_DEFAULT_MGR_NATIONCHANCE)
 
@@ -1151,7 +948,7 @@ static struct setting settings[] = {
              "Zero indicates migration will never occur, 100 means "
              "that citizens will always migrate if they find a suitable "
              "destination. This setting has no effect if migration is "
-             "not enabled by the 'migration' setting."), NULL, NULL,
+             "not enabled by the 'migration' setting."), NULL,
           GAME_MIN_MGR_WORLDCHANCE, GAME_MAX_MGR_WORLDCHANCE,
           GAME_DEFAULT_MGR_WORLDCHANCE)
 
@@ -1163,15 +960,15 @@ static struct setting settings[] = {
    * players stop playing and look at the score.)
    */
   GEN_STRING("allowtake", game.server.allow_take,
-             SSET_META, SSET_NETWORK, SSET_RARE, SSET_TO_CLIENT,
+	     SSET_META, SSET_NETWORK, SSET_RARE, SSET_TO_CLIENT,
              N_("Players that users are allowed to take"),
              N_("This should be a string of characters, each of which "
-                "specifies a type or status of a civilization (player).\n"
-                "Clients will only be permitted to take or observe those "
-                "players which match one of the specified letters. This "
-                "only affects future uses of the take or observe command; "
-                "it is not retroactive. The characters and their meanings "
-                "are:\n"
+                "specifies a type or status of a civilization (player). "
+                "Clients will only be permitted to take "
+                "or observe those players which match one of the specified "
+                "letters. This only affects future uses of the take or "
+                "observe command; it is not retroactive. The characters "
+		"and their meanings are:\n"
                 "    o,O = Global observer\n"
                 "    b   = Barbarian players\n"
                 "    d   = Dead players\n"
@@ -1181,35 +978,35 @@ static struct setting settings[] = {
                 "player is the one which applies. Thus 'd' does not "
                 "include dead barbarians, 'a' does not include dead AI "
                 "players, and so on. Upper case letters apply before "
-                "the game has started, lower case letters afterwards.\n"
+                "the game has started, lower case letters afterwards.\n\n"
                 "Each character above may be followed by one of the "
                 "following numbers to allow or restrict the manner "
-                "of connection:\n"
+                "of connection:\n\n"
                 "(none) = Controller allowed, observers allowed, "
                 "can displace connections. (Displacing a connection means "
-                "that you may take over a player, even when another user "
-                "already controls that player.)\n"
-                "     1 = Controller allowed, observers allowed, "
-                "can't displace connections;\n"
-                "     2 = Controller allowed, no observers allowed, "
-                "can displace connections;\n"
-                "     3 = Controller allowed, no observers allowed, "
-                "can't displace connections;\n"
-                "     4 = No controller allowed, observers allowed"),
-             allowtake_callback, NULL, GAME_DEFAULT_ALLOW_TAKE)
+		"that you may take over a player, even when another user "
+		"already controls that player.)\n\n"
+                "1 = Controller allowed, observers allowed, "
+                "can't displace connections;\n\n"
+                "2 = Controller allowed, no observers allowed, "
+                "can displace connections;\n\n"
+                "3 = Controller allowed, no observers allowed, "
+                "can't displace connections;\n\n"
+                "4 = No controller allowed, observers allowed;\n\n"),
+                allowtake_callback, GAME_DEFAULT_ALLOW_TAKE)
 
   GEN_BOOL("autotoggle", game.info.auto_ai_toggle,
 	   SSET_META, SSET_NETWORK, SSET_SITUATIONAL, SSET_TO_CLIENT,
 	   N_("Whether AI-status toggles with connection"),
 	   N_("If this is set to 1, AI status is turned off when a player "
 	      "connects, and on when a player disconnects."),
-           NULL, autotoggle_action, GAME_DEFAULT_AUTO_AI_TOGGLE)
+	   NULL, GAME_DEFAULT_AUTO_AI_TOGGLE)
 
   GEN_INT("endturn", game.info.end_turn,
 	  SSET_META, SSET_SOCIOLOGY, SSET_VITAL, SSET_TO_CLIENT,
 	  N_("Turn the game ends"),
           N_("The game will end at the end of the given turn."),
-          endturn_callback, NULL,
+          endturn_callback,
           GAME_MIN_END_TURN, GAME_MAX_END_TURN, GAME_DEFAULT_END_TURN)
 
   GEN_INT("timeout", game.info.timeout,
@@ -1222,7 +1019,7 @@ static struct setting settings[] = {
              "Only connections with hack level access may set the "
              "timeout to lower than 30 seconds. Use this with the "
              "command \"timeoutincrease\" to have a dynamic timer."),
-          timeout_callback, NULL,
+          timeout_callback,
           GAME_MIN_TIMEOUT, GAME_MAX_TIMEOUT, GAME_DEFAULT_TIMEOUT)
 
   GEN_INT("timeaddenemymove", game.server.timeoutaddenemymove,
@@ -1230,8 +1027,8 @@ static struct setting settings[] = {
 	  N_("Timeout at least n seconds when enemy moved"),
 	  N_("Any time a unit moves while in sight of an enemy player, "
 	     "the remaining timeout is increased to this value."),
-          NULL, NULL, 0, GAME_MAX_TIMEOUT, GAME_DEFAULT_TIMEOUTADDEMOVE)
-
+	  NULL, 0, GAME_MAX_TIMEOUT, GAME_DEFAULT_TIMEOUTADDEMOVE)
+  
   /* This setting points to the "stored" value; changing it won't have
    * an effect until the next synchronization point (i.e., the start of
    * the next turn). */
@@ -1245,7 +1042,7 @@ static struct setting settings[] = {
              "  0 = All players move concurrently.\n"
              "  1 = All players alternate movement.\n"
              "  2 = Only players on the same team move concurrently."),
-          phasemode_callback, NULL, GAME_MIN_PHASE_MODE,
+          phasemode_callback, GAME_MIN_PHASE_MODE,
           GAME_MAX_PHASE_MODE, GAME_DEFAULT_PHASE_MODE)
 
   GEN_INT("nettimeout", game.info.tcptimeout,
@@ -1255,7 +1052,7 @@ static struct setting settings[] = {
 	     "this value, then the connection is closed. Zero "
 	     "means there is no timeout (although connections will be "
 	     "automatically disconnected eventually)."),
-          NULL, NULL,
+	  NULL,
 	  GAME_MIN_TCPTIMEOUT, GAME_MAX_TCPTIMEOUT, GAME_DEFAULT_TCPTIMEOUT)
 
   GEN_INT("netwait", game.info.netwait,
@@ -1264,14 +1061,14 @@ static struct setting settings[] = {
 	  N_("The server will wait for up to the value of this "
 	     "parameter in seconds, for all client connection network "
 	     "buffers to unblock. Zero means the server will not "
-             "wait at all."), NULL, NULL,
+	     "wait at all."), NULL, 
 	  GAME_MIN_NETWAIT, GAME_MAX_NETWAIT, GAME_DEFAULT_NETWAIT)
 
   GEN_INT("pingtime", game.info.pingtime,
 	  SSET_META, SSET_NETWORK, SSET_RARE, SSET_TO_CLIENT,
 	  N_("Seconds between PINGs"),
 	  N_("The civserver will poll the clients with a PING request "
-             "each time this period elapses."), NULL, NULL,
+	     "each time this period elapses."), NULL, 
 	  GAME_MIN_PINGTIME, GAME_MAX_PINGTIME, GAME_DEFAULT_PINGTIME)
 
   GEN_INT("pingtimeout", game.info.pingtimeout,
@@ -1279,7 +1076,7 @@ static struct setting settings[] = {
           SSET_TO_CLIENT,
 	  N_("Time to cut a client"),
 	  N_("If a client doesn't reply to a PING in this time the "
-             "client is disconnected."), NULL, NULL,
+	     "client is disconnected."), NULL, 
 	  GAME_MIN_PINGTIMEOUT, GAME_MAX_PINGTIMEOUT, GAME_DEFAULT_PINGTIMEOUT)
 
   GEN_BOOL("turnblock", game.info.turnblock,
@@ -1287,7 +1084,7 @@ static struct setting settings[] = {
 	   N_("Turn-blocking game play mode"),
 	   N_("If this is set to 1 the game turn is not advanced "
 	      "until all players have finished their turn, including "
-              "disconnected players."), NULL, NULL,
+	      "disconnected players."), NULL, 
 	   GAME_DEFAULT_TURNBLOCK)
 
   GEN_BOOL("fixedlength", game.info.fixedlength,
@@ -1295,7 +1092,7 @@ static struct setting settings[] = {
 	   N_("Fixed-length turns play mode"),
 	   N_("If this is set to 1 the game turn will not advance "
 	      "until the timeout has expired, even after all players "
-              "have clicked on \"Turn Done\"."), NULL, NULL,
+	      "have clicked on \"Turn Done\"."), NULL,
 	   FALSE)
 
   GEN_STRING("demography", game.server.demography,
@@ -1321,13 +1118,13 @@ static struct setting settings[] = {
 		"    b = display \"best nation\" column\n"
 		"The order of characters is not significant, but "
 		"their capitalization is."),
-             demography_callback, NULL, GAME_DEFAULT_DEMOGRAPHY)
+	     is_valid_demography, GAME_DEFAULT_DEMOGRAPHY)
 
   GEN_INT("saveturns", game.info.save_nturns,
 	  SSET_META, SSET_INTERNAL, SSET_VITAL, SSET_SERVER_ONLY,
 	  N_("Turns per auto-save"),
 	  N_("The game will be automatically saved per this number of "
-             "turns. Zero means never auto-save."), NULL, NULL,
+	     "turns. Zero means never auto-save."), NULL, 
           GAME_MIN_SAVETURNS, GAME_MAX_SAVETURNS, GAME_DEFAULT_SAVETURNS)
 
   GEN_INT("compress", game.info.save_compress_level,
@@ -1335,7 +1132,7 @@ static struct setting settings[] = {
 	  N_("Savegame compression level"),
 	  N_("If non-zero, saved games will be compressed using zlib "
 	     "(gzip format) or bzip2. Larger values will give better "
-             "compression but take longer."), NULL, NULL,
+	     "compression but take longer."), NULL,
 	  GAME_MIN_COMPRESS_LEVEL, GAME_MAX_COMPRESS_LEVEL,
 	  GAME_DEFAULT_COMPRESS_LEVEL)
 
@@ -1347,7 +1144,7 @@ static struct setting settings[] = {
              " 1 - zlib (gzip format)\n"
              " 2 - bzip2\n"
              "Not all servers support all compression methods."), NULL,
-          NULL, GAME_MIN_COMPRESS_TYPE, GAME_MAX_COMPRESS_TYPE,
+	  GAME_MIN_COMPRESS_TYPE, GAME_MAX_COMPRESS_TYPE,
 	  GAME_DEFAULT_COMPRESS_TYPE)
 
   GEN_STRING("savename", game.server.save_name,
@@ -1355,7 +1152,7 @@ static struct setting settings[] = {
 	     N_("Auto-save name prefix"),
 	     N_("Automatically saved games will have name "
 		"\"<prefix>-T<turn>-Y<year>.sav\". This setting sets "
-                "the <prefix> part."), NULL, NULL,
+		"the <prefix> part."), NULL,
 	     GAME_DEFAULT_SAVE_NAME)
 
   GEN_BOOL("scorelog", game.server.scorelog,
@@ -1364,7 +1161,7 @@ static struct setting settings[] = {
 	   N_("If this is set to 1, player statistics are appended to "
 	      "the file \"civscore.log\" every turn. These statistics "
 	      "can be used to create power graphs after the game."), NULL,
-           NULL, GAME_DEFAULT_SCORELOG)
+	   GAME_DEFAULT_SCORELOG)
 
   GEN_END
 };
@@ -1454,74 +1251,29 @@ const char *setting_level_name(const struct setting *pset)
 
 /****************************************************************************
   Returns whether the specified server setting (option) can currently
-  be changed by the caller. If it returns FALSE, the reason of the failure
-  is available by the function setting_error().
+  be changed by the caller.  If it returns FALSE, then a reject message is
+  stored into the 'reject_msg' argument, if not NULL.
 ****************************************************************************/
 bool setting_is_changeable(const struct setting *pset,
-                           struct connection *caller, char *reject_msg,
-                           size_t reject_msg_len)
+                           struct connection *caller,
+                           const char **reject_msg)
 {
   if (caller
       && (caller->access_level < ALLOW_BASIC
           || (caller->access_level < ALLOW_HACK && !pset->to_client))) {
-    settings_snprintf(reject_msg, reject_msg_len,
-                      _("You are not allowed to change the setting '%s'."),
-                      setting_name(pset));
-    return FALSE;
-  }
-
-  if (setting_locked(pset)) {
-    /* setting is locked by the ruleset */
-    settings_snprintf(reject_msg, reject_msg_len,
-                      _("The setting '%s' is locked by the ruleset."),
-                      setting_name(pset));
-    return FALSE;
-  }
-
-  switch (pset->sclass) {
-  case SSET_MAP_SIZE:
-  case SSET_MAP_GEN:
-    /* Only change map options if we don't yet have a map: */
-    if (map_is_empty()) {
-      return TRUE;
+    if (reject_msg) {
+      *reject_msg = _("You are not allowed to set this option.");
     }
-
-    settings_snprintf(reject_msg, reject_msg_len,
-                      _("The setting '%s' can't be modified after the map "
-                        "is fixed."), setting_name(pset));
     return FALSE;
-
-  case SSET_MAP_ADD:
-  case SSET_PLAYERS:
-  case SSET_GAME_INIT:
-  case SSET_RULES:
-    /* Only change start params and most rules if we don't yet have a map,
-     * or if we do have a map but its a scenario one (ie, the game has
-     * never actually been started).
-     */
-    if (map_is_empty() || game.info.is_new_game) {
-      return TRUE;
+  } else if (!setting_class_is_changeable(pset->sclass)) {
+    if (reject_msg) {
+      *reject_msg = _("This setting can't be modified "
+                      "after the game has started.");
     }
-
-    settings_snprintf(reject_msg, reject_msg_len,
-                      _("The setting '%s' can't be modified after the game "
-                        "has started."), setting_name(pset));
     return FALSE;
-
-  case SSET_RULES_FLEXIBLE:
-  case SSET_META:
-    /* These can always be changed: */
+  } else {
     return TRUE;
-
-  case SSET_LAST:
-    break;
   }
-
-  log_error("Wrong class variant for setting %s (%d): %d.",
-            setting_name(pset), setting_number(pset), pset->sclass);
-  settings_snprintf(reject_msg, reject_msg_len, _("Internal error."));
-
-  return FALSE;
 }
 
 /****************************************************************************
@@ -1542,7 +1294,7 @@ bool setting_is_visible(const struct setting *pset,
 bool setting_bool_get(const struct setting *pset)
 {
   assert(pset->stype == SSET_BOOL);
-  return *pset->boolean.pvalue;
+  return *pset->bool_value;
 }
 
 /****************************************************************************
@@ -1551,44 +1303,40 @@ bool setting_bool_get(const struct setting *pset)
 bool setting_bool_def(const struct setting *pset)
 {
   assert(pset->stype == SSET_BOOL);
-  return pset->boolean.default_value;
+  return pset->bool_default_value;
 }
 
 /****************************************************************************
-  Set the setting to 'val'. Returns TRUE on success. If it fails, the
-  reason of the failure is available by the function setting_error().
+  Set the setting to 'val'.  Returns TRUE on success.  If it fails, then
+  the 'reject_msg' argument will point to the reason of the failure.
 ****************************************************************************/
 bool setting_bool_set(struct setting *pset, bool val,
-                      struct connection *caller, char *reject_msg,
-                      size_t reject_msg_len)
+                      struct connection *caller, const char **reject_msg)
 {
   assert(pset->stype == SSET_BOOL);
 
-  if (!setting_bool_validate(pset, val, caller, reject_msg,
-                             reject_msg_len)) {
+  if (!setting_bool_validate(pset, val, caller, reject_msg)) {
     return FALSE;
   }
 
-  *pset->boolean.pvalue = val;
+  *pset->bool_value = val;
   return TRUE;
 }
 
 /****************************************************************************
-  Returns TRUE if 'val' is a valid value for this setting. If it's not,
-  the reason of the failure is available by the function setting_error().
+  Returns TRUE if 'val' is a valid value for this setting.  If it's not,
+  then reject_msg' argument will point to the reason.
 
   FIXME: also check the access level of pconn.
 ****************************************************************************/
 bool setting_bool_validate(const struct setting *pset, bool val,
-                           struct connection *caller, char *reject_msg,
-                           size_t reject_msg_len)
+                           struct connection *caller,
+                           const char **reject_msg)
 {
   assert(pset->stype == SSET_BOOL);
-
-  return (setting_is_changeable(pset, caller, reject_msg, reject_msg_len)
-          && (!pset->boolean.validate
-              || pset->boolean.validate(val, caller, reject_msg,
-                                        reject_msg_len)));
+  return (setting_is_changeable(pset, caller, reject_msg)
+          && (!pset->bool_validate
+              || pset->bool_validate(val, caller, reject_msg)));
 }
 
 /****************************************************************************
@@ -1597,7 +1345,7 @@ bool setting_bool_validate(const struct setting *pset, bool val,
 int setting_int_get(const struct setting *pset)
 {
   assert(pset->stype == SSET_INT);
-  return *pset->integer.pvalue;
+  return *pset->int_value;
 }
 
 /****************************************************************************
@@ -1606,7 +1354,7 @@ int setting_int_get(const struct setting *pset)
 int setting_int_def(const struct setting *pset)
 {
   assert(pset->stype == SSET_INT);
-  return pset->integer.default_value;
+  return pset->int_default_value;
 }
 
 /****************************************************************************
@@ -1615,7 +1363,7 @@ int setting_int_def(const struct setting *pset)
 int setting_int_min(const struct setting *pset)
 {
   assert(pset->stype == SSET_INT);
-  return pset->integer.min_value;
+  return pset->int_min_value;
 }
 
 /****************************************************************************
@@ -1624,51 +1372,45 @@ int setting_int_min(const struct setting *pset)
 int setting_int_max(const struct setting *pset)
 {
   assert(pset->stype == SSET_INT);
-  return pset->integer.max_value;
+  return pset->int_max_value;
 }
 
 /****************************************************************************
-  Set the setting to 'val'. Returns TRUE on success. If it fails, the
-  reason of the failure is available by the function setting_error().
+  Set the setting to 'val'.  Returns TRUE on success.  If it fails, then
+  the 'reject_msg' argument will point to the reason of the failure.
 ****************************************************************************/
 bool setting_int_set(struct setting *pset, int val,
-                     struct connection *caller, char *reject_msg,
-                     size_t reject_msg_len)
+                     struct connection *caller, const char **reject_msg)
 {
   assert(pset->stype == SSET_INT);
 
-  if (!setting_int_validate(pset, val, caller, reject_msg,
-                            reject_msg_len)) {
+  if (!setting_int_validate(pset, val, caller, reject_msg)) {
     return FALSE;
   }
 
-  *pset->integer.pvalue = val;
+  *pset->int_value = val;
   return TRUE;
 }
 
 /****************************************************************************
-  Returns TRUE if 'val' is a valid value for this setting. If it's not,
-  the reason of the failure is available by the function setting_error().
+  Returns TRUE if 'val' is a valid value for this setting.  If it's not,
+  then reject_msg' argument will point to the reason.
 
   FIXME: also check the access level of pconn.
 ****************************************************************************/
 bool setting_int_validate(const struct setting *pset, int val,
-                          struct connection *caller, char *reject_msg,
-                          size_t reject_msg_len)
+                          struct connection *caller, const char **reject_msg)
 {
   assert(pset->stype == SSET_INT);
 
-  if (val < pset->integer.min_value || val > pset->integer.max_value) {
-    settings_snprintf(reject_msg, reject_msg_len,
-                      _("Value out of range: %d (min: %d; max: %d)."),
-                      val, pset->integer.min_value, pset->integer.max_value);
+  if (val < pset->int_min_value || val > pset->int_max_value) {
+    *reject_msg = _("Value out of range.");
     return FALSE;
   }
 
-  return (setting_is_changeable(pset, caller, reject_msg, reject_msg_len)
-          && (!pset->integer.validate
-              || pset->integer.validate(val, caller, reject_msg,
-                                        reject_msg_len)));
+  return (setting_is_changeable(pset, caller, reject_msg)
+          && (!pset->int_validate
+              || pset->int_validate(val, caller, reject_msg)));
 }
 
 /****************************************************************************
@@ -1677,7 +1419,7 @@ bool setting_int_validate(const struct setting *pset, int val,
 const char *setting_str_get(const struct setting *pset)
 {
   assert(pset->stype == SSET_STRING);
-  return pset->string.value;
+  return pset->string_value;
 }
 
 /****************************************************************************
@@ -1686,51 +1428,45 @@ const char *setting_str_get(const struct setting *pset)
 const char *setting_str_def(const struct setting *pset)
 {
   assert(pset->stype == SSET_STRING);
-  return pset->string.default_value;
+  return pset->string_default_value;
 }
 
 /****************************************************************************
-  Set the setting to 'val'. Returns TRUE on success. If it fails, the
-  reason of the failure is available by the function setting_error().
+  Set the setting to 'val'.  Returns TRUE on success.  If it fails, then
+  the 'reject_msg' argument will point to the reason of the failure.
 ****************************************************************************/
 bool setting_str_set(struct setting *pset, const char *val,
-                     struct connection *caller, char *reject_msg,
-                     size_t reject_msg_len)
+                     struct connection *caller, const char **reject_msg)
 {
   assert(pset->stype == SSET_STRING);
 
-  if (!setting_str_validate(pset, val, caller, reject_msg,
-                            reject_msg_len)) {
+  if (!setting_str_validate(pset, val, caller, reject_msg)) {
     return FALSE;
   }
 
-  mystrlcpy(pset->string.value, val, pset->string.value_size);
+  mystrlcpy(pset->string_value, val, pset->string_value_size);
   return TRUE;
 }
 
 /****************************************************************************
-  Returns TRUE if 'val' is a valid value for this setting. If it's not,
-  the reason of the failure is available by the function setting_error().
+  Returns TRUE if 'val' is a valid value for this setting.  If it's not,
+  then reject_msg' argument will point to the reason.
 
   FIXME: also check the access level of pconn.
 ****************************************************************************/
 bool setting_str_validate(const struct setting *pset, const char *val,
-                          struct connection *caller, char *reject_msg,
-                          size_t reject_msg_len)
+                          struct connection *caller, const char **reject_msg)
 {
   assert(pset->stype == SSET_STRING);
 
-  if (strlen(val) > pset->string.value_size) {
-    settings_snprintf(reject_msg, reject_msg_len,
-                      _("String value too long (max length: %lu)."),
-                      (unsigned long)pset->string.value_size);
+  if (strlen(val) > pset->string_value_size) {
+    *reject_msg = _("String value too long.");
     return FALSE;
   }
 
-  return (setting_is_changeable(pset, caller, reject_msg, reject_msg_len)
-          && (!pset->string.validate
-              || pset->string.validate(val, caller, reject_msg,
-                                       reject_msg_len)));
+  return (setting_is_changeable(pset, caller, reject_msg)
+          && (!pset->string_validate
+              || pset->string_validate(val, caller, reject_msg)));
 }
 
 /********************************************************************
@@ -1740,319 +1476,30 @@ static void setting_set_to_default(struct setting *pset)
 {
   switch (pset->stype) {
   case SSET_BOOL:
-    (*pset->boolean.pvalue) = pset->boolean.default_value;
+    (*pset->bool_value) = pset->bool_default_value;
     break;
   case SSET_INT:
-    (*pset->integer.pvalue) = pset->integer.default_value;
+    (*pset->int_value) = pset->int_default_value;
     break;
   case SSET_STRING:
-    mystrlcpy(pset->string.value, pset->string.default_value,
-              pset->string.value_size);
+    mystrlcpy(pset->string_value, pset->string_default_value,
+              pset->string_value_size);
     break;
   }
 
-  setting_action(pset);
-}
-
-/********************************************************************
-  Execute the action callback if needed.
-*********************************************************************/
-void setting_action(const struct setting *pset) {
-  if (pset->action != NULL) {
-    pset->action(pset);
-  }
-}
-
-/**************************************************************************
-  Load game settings from ruleset file 'game.ruleset'.
-**************************************************************************/
-bool settings_ruleset(struct section_file *file, const char *section)
-{
-  const char *name;
-  int j;
-
-  /* set all settings to their default values and unlock them */
-  settings_init();
-
-  /* settings */
-  if (NULL == secfile_section_by_name(file, section)) {
-    /* no settings in ruleset file */
-    log_verbose("no [%s] section for game settings in %s", section,
-                secfile_name(file));
-    return FALSE;
-  }
-
-  for (j = 0; (name = secfile_lookup_str_default(file, NULL, "%s.set%d.name",
-                                                 section, j)); j++) {
-    char path[256];
-    my_snprintf(path, sizeof(path), "%s.set%d", section, j);
-
-    if (!setting_ruleset_one(file, name, path)) {
-      log_error("unknown setting in '%s': %s", secfile_name(file), name);
+  /* FIXME: duplicates stdinhand.c:set_command() */
+  if (pset->int_value == &game.info.aifill) {
+    aifill(*pset->int_value);
+  } else if (pset->bool_value == &game.info.auto_ai_toggle) {
+    if (*pset->bool_value) {
+      players_iterate(pplayer) {
+        if (!pplayer->ai_data.control && !pplayer->is_connected) {
+           toggle_ai_player_direct(NULL, pplayer);
+          send_player_info_c(pplayer, game.est_connections);
+        }
+      } players_iterate_end;
     }
   }
-
-  /* send game settings */
-  send_server_settings(NULL);
-
-  return TRUE;
-}
-
-/**************************************************************************
-  Set one setting from the game.ruleset file.
-**************************************************************************/
-static bool setting_ruleset_one(struct section_file *file,
-                                const char *name, const char *path)
-{
-  bool bval, lock;
-  int ival;
-  const char *sval = NULL;
-  char reject_msg[258] = "";
-  struct setting *pset = NULL;
-
-  settings_iterate(pset_check) {
-    if (0 == strcmp(setting_name(pset_check), name)) {
-      pset = pset_check;
-      break;
-    }
-  } settings_iterate_end;
-
-  if (pset == NULL) {
-    /* no setting found */
-    return FALSE;
-  }
-
-  /* FIXME: mostly a duplicate of parts of stdinhand:set_command() */
-  switch (pset->stype) {
-  case SSET_BOOL:
-    if (!secfile_lookup_bool(file, &bval, "%s.value", path)) {
-        log_error("Can't read value for setting '%s': %s", name,
-                  secfile_error());
-    } else if (bval != setting_bool_get(pset)) {
-      if (setting_bool_set(pset, bval, NULL, reject_msg,
-                           sizeof(reject_msg))) {
-        log_normal(_("Option: %s has been set to %d."),
-                   setting_name(pset), setting_bool_get(pset) ? 1 : 0);
-      } else {
-        log_error("%s", reject_msg);
-      }
-    }
-    break;
-
-  case SSET_INT:
-    if (!secfile_lookup_int(file, &ival, "%s.value", path)) {
-        log_error("Can't read value for setting '%s': %s", name,
-                  secfile_error());
-    } else if (ival != setting_int_get(pset)) {
-      if (setting_int_set(pset, ival, NULL, reject_msg,
-                          sizeof(reject_msg))) {
-        log_normal(_("Option: %s has been set to %d."),
-                   setting_name(pset), setting_int_get(pset));
-      } else {
-        log_error("%s", reject_msg);
-      }
-    }
-    break;
-
-  case SSET_STRING:
-    if (!(sval = secfile_lookup_str(file, "%s.value", path))) {
-        log_error("Can't read value for setting '%s': %s", name,
-                  secfile_error());
-    } else if (strcmp(sval, setting_str_get(pset)) != 0) {
-      if (setting_str_set(pset, sval, NULL, reject_msg,
-                          sizeof(reject_msg))) {
-        log_normal(_("Option: %s has been set to \"%s\"."),
-                   setting_name(pset), setting_str_get(pset));
-      } else {
-        log_error("%s", reject_msg);
-      }
-    }
-    break;
-  }
-
-  if (!secfile_lookup_bool(file, &lock, "%s.lock", path)) {
-    log_error("Can't read lock status for setting '%s': %s", name,
-              secfile_error());
-  } else if (lock) {
-    /* set lock */
-    setting_lock_set(pset, lock);
-    log_normal(_("Option: %s has been locked by the ruleset."),
-               setting_name(pset));
-  }
-
-  return TRUE;
-}
-
-/**************************************************************************
-  Returns if the setting is locked by the ruleset.
-**************************************************************************/
-bool setting_locked(const struct setting *pset)
-{
-  return pset->locked;
-}
-
-/**************************************************************************
-  Set the value for the lock of a setting.
-**************************************************************************/
-void setting_lock_set(struct setting *pset, bool lock)
-{
-  pset->locked = lock;
-}
-
-/**************************************************************************
-  Save the setting value of the current game.
-**************************************************************************/
-static void setting_game_set(struct setting *pset, bool init)
-{
-  switch (setting_type(pset)) {
-  case SSET_BOOL:
-    pset->boolean.game_value = setting_bool_get(pset);
-    break;
-
-  case SSET_INT:
-    pset->integer.game_value = setting_int_get(pset);
-    break;
-
-  case SSET_STRING:
-    if (init) {
-      pset->string.game_value
-        = fc_calloc(1, pset->string.value_size
-                       * sizeof(pset->string.game_value));
-    }
-    mystrlcpy(pset->string.game_value, setting_str_get(pset),
-              pset->string.value_size);
-    break;
-  }
-}
-
-/**************************************************************************
-  Free the memory used for the settings at game start.
-**************************************************************************/
-static void setting_game_free(struct setting *pset)
-{
-  if (setting_type(pset) == SSET_STRING) {
-    FC_FREE(pset->string.game_value);
-  }
-}
-
-/**************************************************************************
-  Restore the setting to the value used at the start of the current game.
-**************************************************************************/
-static void setting_game_restore(struct setting *pset)
-{
-  bool res = FALSE;
-  char reject_msg[258] = "";
-
-  if (!setting_is_changeable(pset, NULL, reject_msg, sizeof(reject_msg))) {
-    log_debug("Can't restore '%s': %s", setting_name(pset),
-              reject_msg);
-    return;
-  }
-
-  switch (setting_type(pset)) {
-  case SSET_BOOL:
-    res = setting_bool_set(pset, pset->boolean.game_value, NULL, reject_msg,
-                           sizeof(reject_msg));
-    break;
-
-  case SSET_INT:
-    res = setting_int_set(pset, pset->integer.game_value, NULL, reject_msg,
-                          sizeof(reject_msg));
-    break;
-
-  case SSET_STRING:
-    res = setting_str_set(pset, pset->string.game_value, NULL, reject_msg,
-                          sizeof(reject_msg));
-    break;
-  }
-
-  if (!res) {
-    log_error("Error restoring game setting '%s': %s", setting_name(pset),
-              reject_msg);
-  }
-}
-
-/**************************************************************************
-  Initialize stuff related to this code module.
-**************************************************************************/
-void settings_game_start(void)
-{
-  settings_iterate(pset) {
-    setting_game_set(pset, FALSE);
-  } settings_iterate_end;
-}
-
-/********************************************************************
-  Save game settings.
-*********************************************************************/
-void settings_game_save(struct section_file *file, const char *section)
-{
-  settings_iterate(pset) {
-    switch (setting_type(pset)) {
-    case SSET_BOOL:
-      secfile_insert_bool(file, pset->boolean.game_value,
-                          "%s.%s", section, setting_name(pset));
-      break;
-    case SSET_INT:
-      secfile_insert_int(file, pset->integer.game_value,
-                         "%s.%s", section, setting_name(pset));
-      break;
-    case SSET_STRING:
-      secfile_insert_str(file, pset->string.game_value,
-                         "%s.%s", section, setting_name(pset));
-      break;
-    }
-  } settings_iterate_end;
-}
-
-/********************************************************************
-  Restore all settings from a savegame.
-*********************************************************************/
-void settings_game_load(struct section_file *file, const char *section)
-{
-  bool bval;
-  int ival;
-  const char *sval = NULL;
-
-  if (NULL == secfile_section_by_name(file, section)) {
-    log_verbose("No initial game settings to read.");
-    return;
-  }
-
-  settings_iterate(pset) {
-    switch (pset->stype) {
-    case SSET_BOOL:
-      if (secfile_lookup_bool(file, &bval, "%s.%s", section,
-                              setting_name(pset))) {
-        pset->boolean.game_value = bval;
-      }
-      break;
-
-    case SSET_INT:
-      if (secfile_lookup_int(file, &ival, "%s.%s",
-                             section, setting_name(pset))) {
-        pset->integer.game_value = ival;
-      }
-      break;
-
-    case SSET_STRING:
-      if ((sval = secfile_lookup_str(file, "%s.%s",
-                                     section, setting_name(pset)))) {
-        mystrlcpy(pset->string.game_value, sval, pset->string.value_size);
-      }
-      break;
-    }
-  } settings_iterate_end;
-}
-
-/********************************************************************
-  Reset all settings to the values at game start.
-*********************************************************************/
-void settings_game_reset(void)
-{
-  settings_iterate(pset) {
-    setting_game_restore(pset);
-  } settings_iterate_end;
 }
 
 /**************************************************************************
@@ -2061,9 +1508,7 @@ void settings_game_reset(void)
 void settings_init(void)
 {
   settings_iterate(pset) {
-    setting_lock_set(pset, FALSE);
     setting_set_to_default(pset);
-    setting_game_set(pset, TRUE);
   } settings_iterate_end;
 }
 
@@ -2073,7 +1518,7 @@ void settings_init(void)
 void settings_reset(void)
 {
   settings_iterate(pset) {
-    if (setting_is_changeable(pset, NULL, NULL, 0)) {
+    if (setting_is_changeable(pset, NULL, NULL)) {
       setting_set_to_default(pset);
     }
   } settings_iterate_end;
@@ -2093,9 +1538,7 @@ void settings_turn(void)
 **************************************************************************/
 void settings_free(void)
 {
-  settings_iterate(pset) {
-    setting_game_free(pset);
-  } settings_iterate_end;
+  /* Nothing at the moment. */
 }
 
 /****************************************************************************
@@ -2120,7 +1563,7 @@ void send_server_setting(struct conn_list *dest, const struct setting *pset)
 
     packet.stype = setting_type(pset);
     packet.scategory = pset->scategory;
-    packet.is_changeable = setting_is_changeable(pset, pconn, NULL, 0);
+    packet.sclass = pset->sclass;
     packet.is_visible = setting_is_visible(pset, pconn);
 
     if (packet.is_visible) {
@@ -2151,16 +1594,6 @@ void send_server_setting(struct conn_list *dest, const struct setting *pset)
 }
 
 /****************************************************************************
-  Tell the client about all server settings.
-****************************************************************************/
-void send_server_settings(struct conn_list *dest)
-{
-  settings_iterate(pset) {
-    send_server_setting(dest, pset);
-  } settings_iterate_end;
-}
-
-/****************************************************************************
   Send the ALLOW_HACK server settings.  Usually called when the access level
   of the user changes.
 ****************************************************************************/
@@ -2176,10 +1609,14 @@ void send_server_hack_level_settings(struct conn_list *dest)
 /****************************************************************************
   Tell the client about all server settings.
 ****************************************************************************/
-void send_server_setting_control(struct connection *pconn)
+void send_server_settings(struct conn_list *dest)
 {
   struct packet_options_settable_control control;
   int i;
+
+  if (!dest) {
+    dest = game.est_connections;
+  }
 
   /* count the number of settings */
   control.num_settings = SETTINGS_NUM;
@@ -2191,5 +1628,9 @@ void send_server_setting_control(struct connection *pconn)
   }
 
   /* send off the control packet */
-  send_packet_options_settable_control(pconn, &control);
+  lsend_packet_options_settable_control(dest, &control);
+
+  settings_iterate(pset) {
+    send_server_setting(dest, pset);
+  } settings_iterate_end;
 }

@@ -163,30 +163,32 @@ void game_remove_unit(struct unit *punit)
   if (pcity) {
     unit_list_unlink(pcity->units_supported, punit);
 
-    log_debug("game_remove_unit()"
-              " at (%d,%d) unit %d, %s %s home (%d,%d) city %d, %s %s",
-              TILE_XY(punit->tile),
-              punit->id, 
-              nation_rule_name(nation_of_unit(punit)),
-              unit_rule_name(punit),
-              TILE_XY(pcity->tile),
-              punit->homecity,
-              nation_rule_name(nation_of_city(pcity)),
-              city_name(pcity));
+    freelog(LOG_DEBUG, "game_remove_unit()"
+	    " at (%d,%d) unit %d, %s %s home (%d,%d) city %d, %s %s",
+	    TILE_XY(punit->tile),
+	    punit->id, 
+	    nation_rule_name(nation_of_unit(punit)),
+	    unit_rule_name(punit),
+	    TILE_XY(pcity->tile),
+	    punit->homecity,
+	    nation_rule_name(nation_of_city(pcity)),
+	    city_name(pcity));
   } else if (IDENTITY_NUMBER_ZERO == punit->homecity) {
-    log_debug("game_remove_unit() at (%d,%d) unit %d, %s %s home %d",
-              TILE_XY(punit->tile),
-              punit->id, 
-              nation_rule_name(nation_of_unit(punit)),
-              unit_rule_name(punit),
-              punit->homecity);
+    freelog(LOG_DEBUG, "game_remove_unit()"
+	    " at (%d,%d) unit %d, %s %s home %d",
+	    TILE_XY(punit->tile),
+	    punit->id, 
+	    nation_rule_name(nation_of_unit(punit)),
+	    unit_rule_name(punit),
+	    punit->homecity);
   } else {
-    log_error("game_remove_unit() at (%d,%d) unit %d, %s %s home %d invalid",
-              TILE_XY(punit->tile),
-              punit->id, 
-              nation_rule_name(nation_of_unit(punit)),
-              unit_rule_name(punit),
-              punit->homecity);
+    freelog(LOG_ERROR, "game_remove_unit()"
+	    " at (%d,%d) unit %d, %s %s home %d invalid",
+	    TILE_XY(punit->tile),
+	    punit->id, 
+	    nation_rule_name(nation_of_unit(punit)),
+	    unit_rule_name(punit),
+	    punit->homecity);
   }
 
   unit_list_unlink(punit->tile->units, punit);
@@ -214,15 +216,17 @@ void game_remove_city(struct city *pcity)
   }
 
   if (NULL == pcenter) {
-    log_debug("game_remove_city() virtual city %d, %s",
-              pcity->id,
-              city_name(pcity));
+    freelog(LOG_DEBUG, "game_remove_city()"
+            " virtual city %d, %s",
+            pcity->id,
+            city_name(pcity));
   } else {
-    log_debug("game_remove_city() at (%d,%d) city %d, %s %s",
-              TILE_XY(pcenter),
-              pcity->id,
-              nation_rule_name(nation_of_player(powner)),
-              city_name(pcity));
+    freelog(LOG_DEBUG, "game_remove_city()"
+            " at (%d,%d) city %d, %s %s",
+            TILE_XY(pcenter),
+            pcity->id,
+            nation_rule_name(nation_of_player(powner)),
+            city_name(pcity));
 
     city_tile_iterate(pcenter, ptile) {
       if (tile_worked(ptile) == pcity) {
@@ -274,7 +278,6 @@ void game_init(void)
   game.info.dispersion    = GAME_DEFAULT_DISPERSION;
   game.info.citymindist   = GAME_DEFAULT_CITYMINDIST;
   game.info.civilwarsize  = GAME_DEFAULT_CIVILWARSIZE;
-  game.info.restrictinfra = GAME_DEFAULT_RESTRICTINFRA;
   game.info.contactturns  = GAME_DEFAULT_CONTACTTURNS;
   game.info.rapturedelay  = GAME_DEFAULT_RAPTUREDELAY;
   game.info.celebratesize = GAME_DEFAULT_CELEBRATESIZE;
@@ -323,7 +326,6 @@ void game_init(void)
   game.info.save_compress_type = FZ_PLAIN;
 #endif
   game.info.government_during_revolution_id = G_MAGIC;   /* flag */
-  game.info.airlifting_style = GAME_DEFAULT_AIRLIFTINGSTYLE;
 
   game.info.calendar_skip_0 = FALSE;
 
@@ -453,18 +455,18 @@ static void game_player_reset(struct player *pplayer)
     game_remove_unit(punit);
   } unit_list_iterate_end;
   if (0 != unit_list_size(pplayer->units)) {
-    log_error("game_remove_player() failed to remove %d %s units",
-              unit_list_size(pplayer->units),
-              nation_rule_name(nation_of_player(pplayer)));
+    freelog(LOG_ERROR, "game_remove_player() failed to remove %d %s units",
+            unit_list_size(pplayer->units),
+            nation_rule_name(nation_of_player(pplayer)));
   }
 
   city_list_iterate(pplayer->cities, pcity) {
     game_remove_city(pcity);
   } city_list_iterate_end;
   if (0 != city_list_size(pplayer->cities)) {
-    log_error("game_remove_player() failed to remove %d %s cities",
-              city_list_size(pplayer->cities),
-              nation_rule_name(nation_of_player(pplayer)));
+    freelog(LOG_ERROR, "game_remove_player() failed to remove %d %s cities",
+            city_list_size(pplayer->cities),
+            nation_rule_name(nation_of_player(pplayer)));
   }
 }
 
@@ -688,7 +690,8 @@ bool is_player_phase(const struct player *pplayer, int phase)
     break;
   }
 
-  log_fatal("Unrecognized phase mode %d in is_player_phase().", phase);
+  freelog(LOG_FATAL, "Unrecognized phase mode %d in is_player_phase().",
+          phase);
   assert(FALSE);
   return TRUE;
 }
@@ -719,6 +722,41 @@ const char *gui_name(enum gui_type gui)
   } else {
     return "Unknown";
   }
+}
+
+/****************************************************************************
+  Returns whether the specified server setting class can currently
+  be changed.  Does not indicate whether it can be changed by clients.
+****************************************************************************/
+bool setting_class_is_changeable(enum sset_class class)
+{
+  switch (class) {
+  case SSET_MAP_SIZE:
+  case SSET_MAP_GEN:
+    /* Only change map options if we don't yet have a map: */
+    return map_is_empty();
+
+  case SSET_MAP_ADD:
+  case SSET_PLAYERS:
+  case SSET_GAME_INIT:
+  case SSET_RULES:
+    /* Only change start params and most rules if we don't yet have a map,
+     * or if we do have a map but its a scenario one (ie, the game has
+     * never actually been started).
+     */
+    return (map_is_empty() || game.info.is_new_game);
+
+  case SSET_RULES_FLEXIBLE:
+  case SSET_META:
+    /* These can always be changed: */
+    return TRUE;
+
+  case SSET_LAST:
+    break;
+  }
+  freelog(LOG_ERROR, "Unexpected case %d in %s line %d",
+	  class, __FILE__, __LINE__);
+  return FALSE;
 }
 
 /****************************************************************************

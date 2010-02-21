@@ -167,6 +167,8 @@ const char *textyear(int year);
 
 extern struct civ_game game;
 
+bool setting_class_is_changeable(enum sset_class class);
+
 #define GAME_DEFAULT_SEED        0
 #define GAME_MIN_SEED            0
 #define GAME_MAX_SEED            (MAX_UINT32 >> 1)
@@ -253,8 +255,6 @@ extern struct civ_game game;
 #define GAME_DEFAULT_CIVILWARSIZE    10
 #define GAME_MIN_CIVILWARSIZE        6
 #define GAME_MAX_CIVILWARSIZE        1000
-
-#define GAME_DEFAULT_RESTRICTINFRA   FALSE
 
 #define GAME_DEFAULT_CONTACTTURNS    20
 #define GAME_MIN_CONTACTTURNS        0
@@ -424,10 +424,6 @@ extern struct civ_game game;
 #define GAME_MAX_REVOLUTION_LENGTH 10
 
 #define GAME_START_YEAR -4000
-
-#define GAME_DEFAULT_AIRLIFTINGSTYLE AIRLIFTING_CLASSICAL
-#define GAME_MIN_AIRLIFTINGSTYLE     AIRLIFTING_CLASSICAL
-#define GAME_MAX_AIRLIFTINGSTYLE     ((AIRLIFTING_UNLIMITED_DEST << 1) - 1)
 
 #define GAME_MAX_READ_RECURSION 10 /* max recursion for the read command */
 

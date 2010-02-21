@@ -186,11 +186,12 @@ const char *ruler_title_translation(const struct player *pp)
   }
 
   if (NULL == best_match) {
-    log_error("Missing title for government \"%s\" (%d) nation \"%s\" (%d).",
-              government_rule_name(gp),
-              government_number(gp),
-              nation_rule_name(np),
-              nation_number(np));
+    freelog(LOG_ERROR,
+	    "Missing title for government \"%s\" (%d) nation \"%s\" (%d).",
+	    government_rule_name(gp),
+	    government_number(gp),
+	    nation_rule_name(np),
+	    nation_number(np));
     return pp->is_male ? "Mr." : "Ms.";
   }
 

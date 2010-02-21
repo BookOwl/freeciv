@@ -3639,7 +3639,7 @@ void popup_city_dialog(struct city *pCity)
     return;
   }
 
-  menus_update();
+  update_menus();
 
   pCityDlg = fc_calloc(1, sizeof(struct city_dialog));
   pCityDlg->pCity = pCity;
@@ -3890,7 +3890,7 @@ void popdown_city_dialog(struct city *pCity)
     flush_dirty();
 	  
     SDL_Client_Flags &= ~CF_CITY_STATUS_SPECIAL;
-    menus_update();
+    update_menus();
   }
 }
 

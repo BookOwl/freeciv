@@ -99,8 +99,6 @@ fc_errno fc_get_errno(void);
 const char *fc_strerror(fc_errno err);
 void myusleep(unsigned long usec);
 
-char *fc_strrep(const char *string, const char *search, const char *replace);
-
 size_t mystrlcpy(char *dest, const char *src, size_t n);
 size_t mystrlcat(char *dest, const char *src, size_t n);
 
@@ -122,8 +120,6 @@ char *my_read_console(void);
 #endif
 
 bool is_reg_file_for_access(const char *name, bool write_access);
-
-void fc_break_lines(char *str, size_t desired_len);
 
 bool my_isalnum(char c);
 bool my_isalpha(char c);

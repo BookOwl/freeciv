@@ -104,7 +104,7 @@ static int script_report(lua_State *L, int status, const char *code)
       }
     }
 
-    log_error("%s", str.str);
+    freelog(LOG_ERROR, "%s", str.str);
 
     astr_free(&str);
 
@@ -239,7 +239,7 @@ bool script_callback_invoke(const char *callback_name,
   lua_getglobal(state, callback_name);
 
   if (!lua_isfunction(state, -1)) {
-    log_error("lua error: Unknown callback '%s'", callback_name);
+    freelog(LOG_ERROR, "lua error: Unknown callback '%s'", callback_name);
     lua_pop(state, 1);
     return FALSE;
   }
@@ -316,7 +316,7 @@ static void script_vars_save(struct section_file *file)
       }
     } else {
       /* _freeciv_state_dump in api.pkg is busted */
-      log_error("lua error: Failed to dump variables");
+      freelog(LOG_ERROR, "lua error: Failed to dump variables");
     }
   }
 }

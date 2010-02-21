@@ -17,16 +17,12 @@ artists = "
    Ainu			Daniel Markstedt
    Akwe			Dan Cottrell and Daniel Markstedt
    Algeria 		Lauris Kaplinski
-   Almohad		Ch1902 (Wikimedia user)
-   Amazon		Ann Barcomb
    Antarctica		Tobias Jakobs
    Arab			Daniel Markstedt and Andrew Duhan
-   Aragon		J.M. Maalderink
    Aram			Daniel Markstedt
    Argentina		Sigge Kotliar
    Armenia		Jason Short
    Assyria		Clevelander and Daniel Markstedt
-   Asturias		Banderas (Wikimedia user)
    Australia		Daniel McRae
    Austria		Christoph Breitler
    Aymara		Daniel Markstedt
@@ -40,7 +36,6 @@ artists = "
    Belgium		Daniel McRae
    Boer			Caleb Moore
    Bosnia		Daniel McRae
-   Botswana		SKopp (Wikimedia user)
    Brasil		Cezary Biele
    Brittany		Lexicon
    Bulgaria		Daniel McRae
@@ -73,12 +68,11 @@ artists = "
    Finland		Daniel McRae
    France (old)		Patricia Fidi
    France		Tobias Jakobs
-   Frisia		GeeKaa (Wikimedia user)
    Galicia		Miguel Rodríguez
    Gaul			Daniel Markstedt and Kilian Valkhof
    Georgia		Christian Schaller
    Germany		Philipp Sadleder
-   Greece (ancient)	Daniel Markstedt and Vzb83 (Wikimedia user)
+   Greece (ancient)	Daniel Markstedt and Vzb83 (Wikipedia)
    Greece		Daniel McRae
    Greenland		Daniel McRae
    Gupta		Daniel Markstedt
@@ -131,7 +125,6 @@ artists = "
    Mexico		Cezary Biele
    Moldova		Caleb Moore and Reisio
    Mongolia		Sebastian Koppehel
-   Morocco		Xiquet, Flad (Wikimedia users)
    Muskogee		Daniel Markstedt
    Myanmar		Caleb Moore
    NATO			Christian Schaller
@@ -201,7 +194,6 @@ artists = "
    Turkey		David Benbennick
    Turkmenistan		Caleb Moore
    UAE			Bratt Roper
-   Uganda		Tobias Jakobs
    Ukraine		Lauris Kaplinski
    United Kingdom	Daniel McRae
    United Nations	Tobias Jakobs
@@ -226,16 +218,12 @@ sprites =
 		"f.ainu", "flags/ainu"
 		"f.akwe", "flags/akwe"
 		"f.algeria", "flags/algeria"
-		"f.almohad", "flags/almohad"
-		"f.amazon", "flags/amazon"
 		"f.antarctica", "flags/antarctica"
 		"f.arab", "flags/arab"
-		"f.aragon", "flags/aragon"
 		"f.aram", "flags/aram"
 		"f.argentina", "flags/argentina"
 		"f.armenia", "flags/armenia"
 		"f.assyria", "flags/assyria"
-		"f.asturias", "flags/asturias"
 		"f.australia", "flags/australia"
 		"f.austria", "flags/austria"
 		"f.aymara", "flags/aymara"
@@ -249,7 +237,6 @@ sprites =
 		"f.belgium", "flags/belgium"
 		"f.boer", "flags/boer"			; old south african
 		"f.bosnia", "flags/bosnia"
-		"f.botswana", "flags/botswana"
 		"f.brasil", "flags/brasil"
 		"f.brittany", "flags/brittany"
 		"f.bulgaria", "flags/bulgaria"
@@ -283,7 +270,6 @@ sprites =
 		"f.finland", "flags/finland"
 		"f.france", "flags/france"
 		"f.france_old", "flags/france_old"	; alt Gallic
-		"f.frisia", "flags/frisia"
 		"f.galicia", "flags/galicia"
 		"f.gaul", "flags/gaul"
 		"f.georgia", "flags/georgia"
@@ -342,7 +328,6 @@ sprites =
 		"f.mexico", "flags/mexico"
 		"f.moldova", "flags/moldova"
 		"f.mongolia", "flags/mongolia"
-		"f.morocco", "flags/morocco"
 		"f.muskogee", "flags/muskogee"
 		"f.myanmar", "flags/myanmar"
 		"f.nato", "flags/nato"
@@ -412,7 +397,6 @@ sprites =
 		"f.turkey", "flags/turkey"
 		"f.turkmenistan", "flags/turkmenistan"
 		"f.uae", "flags/uae"
-		"f.uganda", "flags/uganda"
 		"f.ukraine", "flags/ukraine"
 		"f.united_kingdom", "flags/united_kingdom"
 		"f.united_nations", "flags/united_nations"

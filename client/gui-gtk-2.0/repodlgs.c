@@ -24,17 +24,14 @@
 #include <gtk/gtk.h>
 #include <gdk/gdkkeysyms.h>
 
-/* utility */
+/* common & utility */
 #include "fcintl.h"
+#include "game.h" /* setting_class_is_changeable() */
+#include "government.h"
 #include "log.h"
+#include "packets.h"
 #include "shared.h"
 #include "support.h"
-
-/* common */
-#include "fc_types.h" /* LINE_BREAK */
-#include "game.h"
-#include "government.h"
-#include "packets.h"
 #include "unitlist.h"
 
 /* client */
@@ -1544,17 +1541,17 @@ static void create_settable_options_dialog(void)
     gtk_container_add(GTK_CONTAINER(ebox), label);
 
     /* if we have extra help, use that as a tooltip */
-    if (strlen(o->extra_help) > 0) {
-      char *help = mystrdup(_(o->extra_help));
+    if ('\0' != o->extra_help[0]) {
       char buf[4096];
 
-      fc_break_lines(help, LINE_BREAK);
-      my_snprintf(buf, sizeof(buf), "%s\n\n%s", o->name, help);
+      my_snprintf(buf, sizeof(buf), "%s\n\n%s",
+		  o->name,
+		  _(o->extra_help));
       gtk_tooltips_set_tip(tips, ebox, buf, NULL);
-      FC_FREE(help);
     }
 
-    if (o->is_changeable && o->is_visible) {
+    if (setting_class_is_changeable(o->sclass)
+	&& o->is_visible) {
       double step, max, min;
 
       /* create the proper entry method depending on the type */

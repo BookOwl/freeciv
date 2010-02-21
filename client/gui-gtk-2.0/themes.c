@@ -21,17 +21,12 @@
 
 #include <gtk/gtk.h>
 
-/* utility */
 #include "mem.h"
-#include "string_vector.h"
 #include "support.h"
 
-/* client */
-#include "themes_common.h"
-
-/* gui-gtk-2.0 */
 #include "gui_main.h"
 
+#include "themes_common.h"
 #include "themes_g.h"
 
 /* Array of default files. First num_default_files positions
@@ -142,24 +137,25 @@ char **get_gui_specific_themes_directories(int *count)
 {
   gchar *standard_dir;
   char *home_dir;
-  const struct strvec *data_dirs = get_data_dirs();
-  char **directories = fc_malloc((2 + strvec_size(data_dirs))
-                                 * sizeof(char *));
+  int i;
 
-  *count = 0;
-
+  const char **data_directories = get_data_dirs(count);
+    
+  char **directories = fc_malloc(sizeof(char *) * (*count + 2));
+    
   /* Freeciv-specific GTK+ themes directories */
-  strvec_iterate(data_dirs, dir_name) {
-    char buf[strlen(dir_name) + strlen("/themes/gui-gtk-2.0") + 1];
+  for (i = 0; i < *count; i++) {
+    char buf[strlen(data_directories[i]) + strlen("/themes/gui-gtk-2.0") + 1];
+    
+    my_snprintf(buf, sizeof(buf), "%s/themes/gui-gtk-2.0", data_directories[i]);
 
-    my_snprintf(buf, sizeof(buf), "%s/themes/gui-gtk-2.0", dir_name);
-
-    directories[(*count)++] = mystrdup(buf);
-  } strvec_iterate_end;
-
+    directories[i] = mystrdup(buf);
+  }
+    
   /* standard GTK+ themes directory (e.g. /usr/share/themes) */
   standard_dir = gtk_rc_get_theme_dir();
-  directories[(*count)++] = mystrdup(standard_dir);
+  directories[*count] = mystrdup(standard_dir);
+  (*count)++;
   g_free(standard_dir);
 
   /* user GTK+ themes directory (~/.themes) */
@@ -168,7 +164,8 @@ char **get_gui_specific_themes_directories(int *count)
     char buf[strlen(home_dir) + 16];
     
     my_snprintf(buf, sizeof(buf), "%s/.themes/", home_dir);
-    directories[(*count)++] = mystrdup(buf);
+    directories[*count] = mystrdup(buf);
+    (*count)++;
   }
 
   return directories;

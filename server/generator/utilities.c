@@ -325,8 +325,8 @@ void regenerate_lakes(tile_knowledge_cb knowledge_cb)
 
   num_laketypes = terrains_by_flag(TER_FRESHWATER, lakes, sizeof(lakes));
   if (num_laketypes > MAX_ALT_TER_TYPES) {
-    log_normal("Number of lake types in ruleset %d, considering "
-               "only %d ones.", num_laketypes, MAX_ALT_TER_TYPES);
+    freelog(LOG_NORMAL, "Number of lake types in ruleset %d, considering only %d ones.",
+            num_laketypes, MAX_ALT_TER_TYPES);
     num_laketypes = MAX_ALT_TER_TYPES;
   }
 
@@ -432,8 +432,8 @@ void assign_continent_numbers(void)
 
   recalculate_lake_surrounders();
 
-  log_verbose("Map has %d continents and %d oceans", 
-              map.num_continents, map.num_oceans);
+  freelog(LOG_VERBOSE, "Map has %d continents and %d oceans", 
+	  map.num_continents, map.num_oceans);
 }
 
 /**************************************************************************
@@ -547,10 +547,10 @@ void smooth_water_depth(void)
       /* Overwrite the terrain. */
       ocean = pick_ocean(dist * OCEAN_DEPTH_STEP + myrand(OCEAN_DEPTH_RAND));
       if (NULL != ocean && ocean != tile_terrain(ptile)) {
-        log_debug("Replacing %s by %s at (%d, %d) "
-                  "to have shallow ocean on coast.",
-                  terrain_rule_name(tile_terrain(ptile)),
-                  terrain_rule_name(ocean), TILE_XY(ptile));
+        freelog(LOG_DEBUG, "Replacing %s by %s at (%d, %d) "
+                "to have shallow ocean on coast.",
+                terrain_rule_name(tile_terrain(ptile)),
+                terrain_rule_name(ocean), TILE_XY(ptile));
         tile_set_terrain(ptile, ocean);
       }
     }
@@ -564,10 +564,10 @@ void smooth_water_depth(void)
 
     ocean = most_adjacent_ocean_type(ptile);
     if (NULL != ocean && ocean != tile_terrain(ptile)) {
-      log_debug("Replacing %s by %s at (%d, %d) "
-                "to smooth the ocean types.",
-                terrain_rule_name(tile_terrain(ptile)),
-                terrain_rule_name(ocean), TILE_XY(ptile));
+      freelog(LOG_DEBUG, "Replacing %s by %s at (%d, %d) "
+              "to smooth the ocean types.",
+              terrain_rule_name(tile_terrain(ptile)),
+              terrain_rule_name(ocean), TILE_XY(ptile));
       tile_set_terrain(ptile, ocean);
     }
   } whole_map_iterate_end;

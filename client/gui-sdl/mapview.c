@@ -152,10 +152,13 @@ void queue_flush(void)
       /* We don't want to set is_flush_queued in this case, since then
        * the flush code would simply stop working.  But this means the
        * below message may be repeated many times. */
-      log_error(_("The SDL event buffer is full;"
-                  " you may see drawing errors as a result."));
-      /* TRANS: No full stop after the URL, could cause confusion. */
-      log_error(_("Please report this message at %s"), BUG_URL);
+      freelog(LOG_ERROR,
+              _("The SDL event buffer is full;"
+                " you may see drawing errors as a result."));
+      freelog(LOG_ERROR,
+              /* TRANS: No full stop after the URL, could cause confusion. */
+              _("Please report this message at %s"),
+              BUG_URL);
     }
   }
 }
@@ -968,12 +971,12 @@ void update_unit_info_label(struct unit_list *punitlist)
 
 void update_timeout_label(void)
 {
-  log_debug("MAPVIEW: update_timeout_label : PORT ME");
+  freelog(LOG_DEBUG, "MAPVIEW: update_timeout_label : PORT ME");
 }
 
 void update_turn_done_button(bool do_restore)
 {
-  log_debug("MAPVIEW: update_turn_done_button : PORT ME");
+  freelog(LOG_DEBUG, "MAPVIEW: update_turn_done_button : PORT ME");
 }
 
 /* ===================================================================== */
@@ -1086,7 +1089,7 @@ void update_map_canvas_scrollbars(void)
 **************************************************************************/
 void put_cross_overlay_tile(struct tile *ptile)
 {
-  log_debug("MAPVIEW: put_cross_overlay_tile : PORT ME");
+  freelog(LOG_DEBUG, "MAPVIEW: put_cross_overlay_tile : PORT ME");
 }
 
 /**************************************************************************

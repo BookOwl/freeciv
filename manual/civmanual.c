@@ -34,7 +34,6 @@
 /* common */
 #include "connection.h"
 #include "events.h"
-#include "fc_types.h" /* LINE_BREAK */
 #include "game.h"
 #include "improvement.h"
 #include "map.h"
@@ -91,21 +90,6 @@ enum manuals {
 #endif
 
 /**************************************************************************
-  Replace html special characters ('&', '<' and '>').
-**************************************************************************/
-static char *html_special_chars(const char *str)
-{
-  char *buf1, *buf2;
-
-  buf1 = fc_strrep(str, "&", "&amp;");
-  buf2 = fc_strrep(buf1, "<", "&lt;");
-  FC_FREE(buf1);
-  buf1 = fc_strrep(buf2, ">", "&gt;");
-
-  return buf1;
-}
-
-/**************************************************************************
   Useless stubs for compiling client code.
 **************************************************************************/
 void popup_help_dialog_string(const char *item)
@@ -152,28 +136,21 @@ static bool manual_command(void)
     case MANUAL_SETTINGS:
       fprintf(doc, _("<h1>Freeciv %s server options</h1>\n\n"), VERSION_STRING);
       settings_iterate(pset) {
+        const char *help = _(setting_extra_help(pset));
+
         fprintf(doc, SEPARATOR);
         fprintf(doc, "%s%s - %s%s\n\n", SECTION_BEGIN, setting_name(pset),
                 _(setting_short_help(pset)), SECTION_END);
         if (strlen(setting_extra_help(pset)) > 0) {
-          char *help = mystrdup(_(setting_extra_help(pset)));
-
-          fc_break_lines(help, LINE_BREAK);
-          fprintf(doc, "<pre>%s</pre>\n\n", html_special_chars(help));
-          FC_FREE(help);
+          fprintf(doc, "<pre>%s</pre>\n\n", help);
         }
         fprintf(doc, "<p class=\"misc\">");
         fprintf(doc, _("Level: %s.<br>"), _(setting_level_name(pset)));
         fprintf(doc, _("Category: %s.<br>"), _(setting_category_name(pset)));
-
-        /* first check if the setting is locked because this is include in
-         * the function setting_is_changeable() */
-        if (!setting_locked(pset)) {
-          fprintf(doc, _("Is locked by the ruleset."));
-        } else if (!setting_is_changeable(pset, &my_conn, NULL, 0)) {
-          fprintf(doc, _("Can only be used in server console."));
+        
+        if (!setting_is_changeable(pset, &my_conn, NULL)) {
+          fprintf(doc, _("Can only be used in server console. "));
         }
-
         fprintf(doc, "</p>\n\n");
         switch (setting_type(pset)) {
         case SSET_BOOL:
@@ -219,18 +196,13 @@ static bool manual_command(void)
         if (command_synopsis(cmd)) {
           fprintf(doc, _("<table>\n<tr>\n<td valign=\"top\">"
                          "<pre>Synopsis:</pre></td>\n<td>"));
-          fprintf(doc, "<pre>%s</pre></td></tr></table>",
-                  html_special_chars(command_synopsis(cmd)));
+          fprintf(doc, "<pre>%s</pre></td></tr></table>", command_synopsis(cmd));
         }
         fprintf(doc, _("<p class=\"level\">Level: %s</p>\n\n"),
                 cmdlevel_name(command_level(cmd)));
         if (command_extra_help(cmd)) {
-          char *help = mystrdup(command_extra_help(cmd));
-
-          fc_break_lines(help, LINE_BREAK);
           fprintf(doc, _("<p>Description:</p>\n\n"));
-          fprintf(doc, "<pre>%s</pre>\n\n", html_special_chars(help));
-          FC_FREE(help);
+          fprintf(doc, "<pre>%s</pre>\n\n", command_extra_help(cmd));
         }
       }
       break;

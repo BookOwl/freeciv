@@ -40,25 +40,14 @@
 
 #ifdef SANITY_CHECKING
 
-#ifdef DEBUG
-#  define SANITY_(_s, ...)                                                  \
-  if (log_do_output_for_level(LOG_ERROR)                                    \
-      || log_do_output_for_level_at_location(LOG_ERROR, file, line)) {      \
-    do_log(file, function, line, TRUE, LOG_ERROR, "Failed at [%s::%d]:" _s, \
-           __FILE__, __LINE__, ## __VA_ARGS__);                             \
-  }
-#else
-#  define SANITY_(_s, ...)                                                  \
-  if (log_do_output_for_level(LOG_ERROR)) {                                 \
-    do_log(file, function, line, TRUE, LOG_ERROR, "Failed at [%s::%d]:" _s, \
-           __FILE__, __LINE__, ## __VA_ARGS__);                             \
-  }
-#endif /* DEBUG */
+#define SANITY_(_s)							\
+      freelog(LOG_ERROR, "Failed %s:%d at %s:%d! " _s,			\
+	      __FILE__,__LINE__, file, line
 
 #define SANITY_CHECK(check)						\
   do {									\
     if (!(check)) {							\
-      SANITY_("!(%s)",							\
+      SANITY_("!(%s)"),							\
       #check);								\
     }									\
   } while(0)
@@ -66,7 +55,7 @@
 #define SANITY_CITY(_city, check)					\
   do {									\
     if (!(check)) {							\
-      SANITY_("(%4d,%4d) !(%s) in \"%s\"[%d]",				\
+      SANITY_("(%4d,%4d) !(%s) in \"%s\"[%d]"),				\
 	      TILE_XY((_city)->tile),					\
 	      #check,							\
 	      city_name(_city),						\
@@ -77,7 +66,7 @@
 #define SANITY_TERRAIN(_tile, check)					\
   do {									\
     if (!(check)) {							\
-      SANITY_("(%4d,%4d) !(%s) at \"%s\"",				\
+      SANITY_("(%4d,%4d) !(%s) at \"%s\""),				\
 	      TILE_XY(_tile),						\
 	      #check,							\
 	      terrain_rule_name(tile_terrain(_tile)));			\
@@ -98,7 +87,7 @@
 /**************************************************************************
   Sanity checking on map (tile) specials.
 **************************************************************************/
-static void check_specials(const char *file, const char *function, int line)
+static void check_specials(const char *file, int line)
 {
   whole_map_iterate(ptile) {
     const struct terrain *pterrain = tile_terrain(ptile);
@@ -124,7 +113,7 @@ static void check_specials(const char *file, const char *function, int line)
 /**************************************************************************
   Sanity checking on fog-of-war (visibility, shared vision, etc.).
 **************************************************************************/
-static void check_fow(const char *file, const char *function, int line)
+static void check_fow(const char *file, int line)
 {
   whole_map_iterate(ptile) {
     players_iterate(pplayer) {
@@ -165,7 +154,7 @@ static void check_fow(const char *file, const char *function, int line)
 /**************************************************************************
   Miscellaneous sanity checks.
 **************************************************************************/
-static void check_misc(const char *file, const char *function, int line)
+static void check_misc(const char *file, int line)
 {
   int nbarbs = 0;
   players_iterate(pplayer) {
@@ -182,7 +171,7 @@ static void check_misc(const char *file, const char *function, int line)
 /**************************************************************************
   Sanity checks on the map itself.  See also check_specials.
 **************************************************************************/
-static void check_map(const char *file, const char *function, int line)
+static void check_map(const char *file, int line)
 {
   whole_map_iterate(ptile) {
     struct city *pcity = tile_city(ptile);
@@ -240,8 +229,7 @@ static void check_map(const char *file, const char *function, int line)
 /**************************************************************************
   Verify that the city itself has sane values.
 **************************************************************************/
-static bool check_city_good(struct city *pcity, const char *file,
-                            const char *function, int line)
+static bool check_city_good(struct city *pcity, const char *file, int line)
 {
   struct player *pplayer = city_owner(pcity);
   struct tile *pcenter = city_tile(pcity);
@@ -249,7 +237,7 @@ static bool check_city_good(struct city *pcity, const char *file,
   if (NULL == pcenter) {
     /* Editor! */
     SANITY_("(----,----) city has no tile (skipping remaining tests), "
-            "at %s \"%s\"[%d]%s",
+            "at %s \"%s\"[%d]%s"),
             nation_rule_name(nation_of_player(pplayer)),
             city_name(pcity), pcity->size,
             "{city center}");
@@ -265,7 +253,7 @@ static bool check_city_good(struct city *pcity, const char *file,
   if (NULL != tile_owner(pcenter)) {
     if (tile_owner(pcenter) != pplayer) {
       SANITY_("(%4d,%4d) tile owned by %s, "
-              "at %s \"%s\"[%d]%s",
+              "at %s \"%s\"[%d]%s"),
               TILE_XY(pcenter),
               nation_rule_name(nation_of_player(tile_owner(pcenter))),
               nation_rule_name(nation_of_player(pplayer)),
@@ -293,8 +281,7 @@ static bool check_city_good(struct city *pcity, const char *file,
 /**************************************************************************
   Verify that the city_map has sane values.
 **************************************************************************/
-static void check_city_map(struct city *pcity, const char *file,
-                           const char *function, int line)
+static void check_city_map(struct city *pcity, const char *file, int line)
 {
   struct player *pplayer = city_owner(pcity);
   struct tile *pcenter = city_tile(pcity);
@@ -315,7 +302,7 @@ static void check_city_map(struct city *pcity, const char *file,
 	if (NULL != pwork) {
 	  SANITY_("(%4d,%4d) marked as empty, "
 		  "but worked by \"%s\"[%d]! "
-		  "\"%s\"[%d]%s",
+		  "\"%s\"[%d]%s"),
 		  TILE_XY(ptile),
 		  city_name(pwork), pwork->size,
 		  city_name(pcity), pcity->size,
@@ -324,7 +311,7 @@ static void check_city_map(struct city *pcity, const char *file,
 	if (unit_occupies_tile(ptile, pplayer)) {
 	  SANITY_("(%4d,%4d) marked as empty, "
 		  "but occupied by an enemy unit! "
-		  "\"%s\"[%d]%s",
+		  "\"%s\"[%d]%s"),
 		  TILE_XY(ptile),
 		  city_name(pcity), pcity->size,
 		  is_city_center(pcity, ptile) ? "{city center}" : "");
@@ -332,7 +319,7 @@ static void check_city_map(struct city *pcity, const char *file,
 	if (game.info.borders > 0 && owner && owner != city_owner(pcity)) {
 	  SANITY_("(%4d,%4d) marked as empty, "
 		  "but in enemy territory! "
-		  "\"%s\"[%d]%s",
+		  "\"%s\"[%d]%s"),
 		  TILE_XY(ptile),
 		  city_name(pcity), pcity->size,
 		  is_city_center(pcity, ptile) ? "{city center}" : "");
@@ -341,7 +328,7 @@ static void check_city_map(struct city *pcity, const char *file,
 	  /* Complete check. */
 	  SANITY_("(%4d,%4d) marked as empty, "
 		  "but is unavailable! "
-		  "\"%s\"[%d]%s",
+		  "\"%s\"[%d]%s"),
 		  TILE_XY(ptile),
 		  city_name(pcity), pcity->size,
 		  is_city_center(pcity, ptile) ? "{city center}" : "");
@@ -352,7 +339,7 @@ static void check_city_map(struct city *pcity, const char *file,
 	if (pwork != pcity) {
 	  SANITY_("(%4d,%4d) marked as worked, "
 		  "but main map disagrees! "
-		  "\"%s\"[%d]%s",
+		  "\"%s\"[%d]%s"),
 		  TILE_XY(ptile),
 		  city_name(pcity), pcity->size,
 		  is_city_center(pcity, ptile) ? "{city center}" : "");
@@ -360,7 +347,7 @@ static void check_city_map(struct city *pcity, const char *file,
 	if (unit_occupies_tile(ptile, pplayer)) {
 	  SANITY_("(%4d,%4d) marked as worked, "
 		  "but occupied by an enemy unit! "
-		  "\"%s\"[%d]%s",
+		  "\"%s\"[%d]%s"),
 		  TILE_XY(ptile),
 		  city_name(pcity), pcity->size,
 		  is_city_center(pcity, ptile) ? "{city center}" : "");
@@ -368,7 +355,7 @@ static void check_city_map(struct city *pcity, const char *file,
         if (game.info.borders > 0 && owner && owner != city_owner(pcity)) {
 	  SANITY_("(%4d,%4d) marked as worked, "
 		  "but in enemy territory! "
-		  "\"%s\"[%d]%s",
+		  "\"%s\"[%d]%s"),
 		  TILE_XY(ptile),
 		  city_name(pcity), pcity->size,
 		  is_city_center(pcity, ptile) ? "{city center}" : "");
@@ -377,7 +364,7 @@ static void check_city_map(struct city *pcity, const char *file,
 	  /* Complete check. */
 	  SANITY_("(%4d,%4d) marked as worked, "
 		  "but is unavailable! "
-		  "\"%s\"[%d]%s",
+		  "\"%s\"[%d]%s"),
 		  TILE_XY(ptile),
 		  city_name(pcity), pcity->size,
 		  is_city_center(pcity, ptile) ? "{city center}" : "");
@@ -388,7 +375,7 @@ static void check_city_map(struct city *pcity, const char *file,
 	if (city_can_work_tile(pcity, ptile)) {
 	  SANITY_("(%4d,%4d) marked as unavailable, "
 		  "but seems to be available! "
-		  "\"%s\"[%d]%s",
+		  "\"%s\"[%d]%s"),
 		  TILE_XY(ptile),
 		  city_name(pcity), pcity->size,
 		  is_city_center(pcity, ptile) ? "{city center}" : "");
@@ -398,7 +385,7 @@ static void check_city_map(struct city *pcity, const char *file,
       case C_TILE_UNUSABLE:
       default:
 	SANITY_("(%4d,%4d) marked as unusable (%d)? "
-		"\"%s\"[%d]%s",
+		"\"%s\"[%d]%s"),
 		pcity->city_map[x][y],
 		TILE_XY(ptile),
 		city_name(pcity), pcity->size,
@@ -412,8 +399,7 @@ static void check_city_map(struct city *pcity, const char *file,
 /**************************************************************************
   Sanity check city size versus worker and specialist counts.
 **************************************************************************/
-static void check_city_size(struct city *pcity, const char *file,
-                            const char *function, int line)
+static void check_city_size(struct city *pcity, const char *file, int line)
 {
   int delta;
   int citizens = 0;
@@ -431,7 +417,7 @@ static void check_city_size(struct city *pcity, const char *file,
   delta = pcity->size - citizens;
   if (0 != delta) {
     SANITY_("(%4d,%4d) %d citizens not equal [size], "
-            "repairing \"%s\"[%d]",
+            "repairing \"%s\"[%d]"),
             TILE_XY(pcity->tile),
             citizens,
             city_name(pcity), pcity->size);
@@ -446,8 +432,7 @@ static void check_city_size(struct city *pcity, const char *file,
   city size.
 **************************************************************************/
 void real_sanity_check_feelings(const struct city *pcity,
-                                const char *file,
-                                const char *function, int line)
+                                const char *file, int line)
 {
   int ccategory;
   int spe = city_specialists(pcity);
@@ -467,12 +452,11 @@ void real_sanity_check_feelings(const struct city *pcity,
 /**************************************************************************
   Verify that the city has sane values.
 **************************************************************************/
-void real_sanity_check_city_all(struct city *pcity, const char *file,
-                                const char *function, int line)
+void real_sanity_check_city_all(struct city *pcity, const char *file, int line)
 {
-  if (check_city_good(pcity, file, function, line)) {
-    check_city_map(pcity, file, function, line);
-    check_city_size(pcity, file, function, line);
+  if (check_city_good(pcity, file, line)) {
+    check_city_map(pcity, file, line);
+    check_city_size(pcity, file, line);
     /* TODO: check_feelings. Currently fails far too often to be included. */
   }
 }
@@ -480,24 +464,23 @@ void real_sanity_check_city_all(struct city *pcity, const char *file,
 /**************************************************************************
   Verify that the city has sane values.
 **************************************************************************/
-void real_sanity_check_city(struct city *pcity, const char *file,
-                            const char *function, int line)
+void real_sanity_check_city(struct city *pcity, const char *file, int line)
 {
-  if (check_city_good(pcity, file, function, line)) {
-    check_city_size(pcity, file, function, line);
+  if (check_city_good(pcity, file, line)) {
+    check_city_size(pcity, file, line);
   }
 }
 
 /**************************************************************************
   Sanity checks on all cities in the world.
 **************************************************************************/
-static void check_cities(const char *file, const char *function, int line)
+static void check_cities(const char *file, int line)
 {
   players_iterate(pplayer) {
     city_list_iterate(pplayer->cities, pcity) {
       SANITY_CITY(pcity, city_owner(pcity) == pplayer);
 
-      real_sanity_check_city(pcity, file, function, line);
+      real_sanity_check_city(pcity, file, line);
     } city_list_iterate_end;
   } players_iterate_end;
 
@@ -514,7 +497,7 @@ static void check_cities(const char *file, const char *function, int line)
       if (pwork->city_map[city_x][city_y] != C_TILE_WORKER) {
 	SANITY_("(%4d,%4d) marked as worked, "
 		"but its {%d,%d} has status %d in "
-		"\"%s\"[%d]%s",
+		"\"%s\"[%d]%s"),
 		TILE_XY(ptile),
 		city_x, city_y,
 		pwork->city_map[city_x][city_y],
@@ -529,8 +512,7 @@ static void check_cities(const char *file, const char *function, int line)
 /**************************************************************************
   Sanity checks on all units in the world.
 **************************************************************************/
-static void check_units(const char *file, const char *function, int line)
-{
+static void check_units(const char *file, int line) {
   players_iterate(pplayer) {
     unit_list_iterate(pplayer->units, punit) {
       struct tile *ptile = punit->tile;
@@ -549,7 +531,7 @@ static void check_units(const char *file, const char *function, int line)
 
       if (!can_unit_continue_current_activity(punit)) {
 	SANITY_("(%4d,%4d) %s has activity %s, "
-		"but it can't continue at %s",
+		"but it can't continue at %s"),
 		TILE_XY(ptile),
 		unit_rule_name(punit),
 		get_activity_text(punit->activity),
@@ -601,7 +583,7 @@ static void check_units(const char *file, const char *function, int line)
 /**************************************************************************
   Sanity checks on all players.
 **************************************************************************/
-static void check_players(const char *file, const char *function, int line)
+static void check_players(const char *file, int line)
 {
   int player_no;
 
@@ -642,7 +624,7 @@ static void check_players(const char *file, const char *function, int line)
 
     if (pplayer->revolution_finishes == -1) {
       if (government_of_player(pplayer) == game.government_during_revolution) {
-        SANITY_("%s government is anarchy, but does not finish!",
+        SANITY_("%s government is anarchy, but does not finish!"),
                 nation_rule_name(nation_of_player(pplayer)));
       }
       SANITY_CHECK(government_of_player(pplayer) != game.government_during_revolution);
@@ -676,7 +658,7 @@ static void check_players(const char *file, const char *function, int line)
 /****************************************************************************
   Sanity checking on teams.
 ****************************************************************************/
-static void check_teams(const char *file, const char *function, int line)
+static void check_teams(const char *file, int line)
 {
   int count[MAX_NUM_TEAMS], i;
 
@@ -697,8 +679,7 @@ static void check_teams(const char *file, const char *function, int line)
 /**************************************************************************
   Sanity checking on connections.
 **************************************************************************/
-static void check_connections(const char *file, const char *function,
-                              int line)
+static void check_connections(const char *file, int line)
 {
   /* est_connections is a subset of all_connections */
   SANITY_CHECK(conn_list_size(game.all_connections)
@@ -714,21 +695,21 @@ static void check_connections(const char *file, const char *function,
   can't call it in the middle of an operation that is supposed to be
   atomic.
 **************************************************************************/
-void real_sanity_check(const char *file, const char *function, int line)
+void real_sanity_check(const char *file, int line)
 {
   if (!map_is_empty()) {
     /* Don't sanity-check the map if it hasn't been created yet (this
      * happens when loading scenarios). */
-    check_specials(file, function, line);
-    check_map(file, function, line);
-    check_cities(file, function, line);
-    check_units(file, function, line);
-    check_fow(file, function, line);
+    check_specials(file, line);
+    check_map(file, line);
+    check_cities(file, line);
+    check_units(file, line);
+    check_fow(file, line);
   }
-  check_misc(file, function, line);
-  check_players(file, function, line);
-  check_teams(file, function, line);
-  check_connections(file, function, line);
+  check_misc(file, line);
+  check_players(file, line);
+  check_teams(file, line);
+  check_connections(file, line);
 }
 
 #endif /* SANITY_CHECKING */

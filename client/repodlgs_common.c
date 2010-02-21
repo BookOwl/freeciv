@@ -292,13 +292,16 @@ void handle_options_settable(struct packet_options_settable *packet)
   int i = packet->id;
 
   if (i < 0 || i > num_settable_options) {
-    log_error("handle_options_settable() bad id %d.", packet->id);
+    freelog(LOG_ERROR,
+	    "handle_options_settable() bad id %d.",
+	    packet->id);
     return;
   }
   o = &settable_options[i];
 
   o->stype = packet->stype;
   o->scategory = packet->scategory;
+  o->sclass = packet->sclass;
 
   o->val = packet->val;
   o->default_val = packet->default_val;
@@ -321,20 +324,20 @@ void handle_options_settable(struct packet_options_settable *packet)
     /* desired_strval is loaded later */
     break;
   default:
-    log_error("handle_options_settable() bad type %d.", packet->stype);
+    freelog(LOG_ERROR,
+	    "handle_options_settable() bad type %d.",
+	    packet->stype);
     return;
   };
 
   /* only set for valid type */
   o->is_visible = packet->is_visible;
-  o->is_changeable = packet->is_changeable;
   o->name = mystrdup(packet->name);
   o->short_help = mystrdup(packet->short_help);
   o->extra_help = mystrdup(packet->extra_help);
 
   if (!o->desired_sent
       && o->is_visible
-      && o->is_changeable
       && is_server_running()
       && packet->initial_setting) {
     /* Only send our private settings if we are running

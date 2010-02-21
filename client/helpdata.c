@@ -553,9 +553,10 @@ static bool insert_requirement(char *buf, size_t bufsz,
   {
     char text[256];
 
-    log_error("Requirement %s in range %d is not supported in helpdata.c.",
-              universal_name_translation(&preq->source, text, sizeof(text)),
-              preq->range);
+    freelog(LOG_ERROR,
+            "Requirement %s in range %d is not supported in helpdata.c.",
+            universal_name_translation(&preq->source, text, sizeof(text)),
+            preq->range);
   }
 
   return FALSE;
@@ -660,13 +661,12 @@ void boot_help_texts(struct player *pplayer)
 {
   static bool booted = FALSE;
 
-  struct section_file *sf;
-  const char *filename;
+  struct section_file file, *sf = &file;
+  char *filename;
   struct help_item *pitem;
-  int i;
-  struct section_list *sec;
-  const char **paras;
-  size_t npara;
+  int i, isec;
+  char **sec, **paras;
+  int nsec, npara;
   char long_buffer[64000]; /* HACK: this may be overrun. */
 
   check_help_nodes_init();
@@ -675,190 +675,187 @@ void boot_help_texts(struct player *pplayer)
   popdown_help_dialog();
 
   if(!booted) {
-    log_verbose("Booting help texts");
+    freelog(LOG_VERBOSE, "Booting help texts");
   } else {
     /* free memory allocated last time booted */
     free_help_texts();
-    log_verbose("Rebooting help texts");
-  }
+    freelog(LOG_VERBOSE, "Rebooting help texts");
+  }    
 
-  filename = fileinfoname(get_data_dirs(), "helpdata.txt");
+  filename = datafilename("helpdata.txt");
   if (!filename) {
-    log_error("Did not read help texts");
+    freelog(LOG_ERROR, "Did not read help texts");
     return;
   }
   /* after following call filename may be clobbered; use sf->filename instead */
-  if (!(sf = secfile_load(filename, FALSE))) {
+  if (!section_file_load(sf, filename)) {
     /* this is now unlikely to happen */
-    log_error("failed reading help-texts from '%s':\n%s", filename,
-              secfile_error());
+    freelog(LOG_ERROR, "failed reading help-texts");
     return;
   }
 
-  sec = secfile_sections_by_name_prefix(sf, "help_");
+  sec = secfile_get_secnames_prefix(sf, "help_", &nsec);
 
-  if (NULL != sec) {
-    section_list_iterate(sec, psection) {
-      const char *sec_name = section_name(psection);
-      const char *gen_str = secfile_lookup_str(sf, "%s.generate", sec_name);
-      
-      if (gen_str) {
-        enum help_page_type current_type = HELP_ANY;
-        if (!booted) {
-          continue; /* on initial boot data tables are empty */
-        }
-        for(i=2; help_type_names[i]; i++) {
-          if(strcmp(gen_str, help_type_names[i])==0) {
-            current_type = i;
-            break;
-          }
-        }
-        if (current_type == HELP_ANY) {
-          log_error("bad help-generate category \"%s\"", gen_str);
-          continue;
-        }
-        {
-          /* Note these should really fill in pitem->text from auto-gen
-             data instead of doing it later on the fly, but I don't want
-             to change that now.  --dwp
-          */
-          char name[2048];
-          struct help_list *category_nodes = help_list_new();
-
-          switch (current_type) {
-          case HELP_UNIT:
-            unit_type_iterate(punittype) {
-              pitem = new_help_item(current_type);
-              my_snprintf(name, sizeof(name), " %s",
-                          utype_name_translation(punittype));
-              pitem->topic = mystrdup(name);
-              pitem->text = mystrdup("");
-              help_list_append(category_nodes, pitem);
-            } unit_type_iterate_end;
-            break;
-          case HELP_TECH:
-            advance_index_iterate(A_FIRST, i) {
-              if (valid_advance_by_number(i)) {
-                pitem = new_help_item(current_type);
-                my_snprintf(name, sizeof(name), " %s",
-                            advance_name_for_player(pplayer, i));
-                pitem->topic = mystrdup(name);
-                pitem->text = mystrdup("");
-                help_list_append(category_nodes, pitem);
-              }
-            } advance_index_iterate_end;
-            break;
-          case HELP_TERRAIN:
-            terrain_type_iterate(pterrain) {
-              if (0 != strlen(terrain_rule_name(pterrain))) {
-                pitem = new_help_item(current_type);
-                my_snprintf(name, sizeof(name), " %s",
-                            terrain_name_translation(pterrain));
-                pitem->topic = mystrdup(name);
-                pitem->text = mystrdup("");
-                help_list_append(category_nodes, pitem);
-              }
-            } terrain_type_iterate_end;
-            /* Add special Civ2-style river help text if it's supplied. */
-            if (terrain_control.river_help_text) {
-              pitem = new_help_item(HELP_TEXT);
-              /* TRANS: preserve single space at beginning */
-              pitem->topic = mystrdup(_(" Rivers"));
-              sz_strlcpy(long_buffer, _(terrain_control.river_help_text));
-              pitem->text = mystrdup(long_buffer);
-              help_list_append(category_nodes, pitem);
-            }
-            break;
-          case HELP_GOVERNMENT:
-            government_iterate(gov) {
-              pitem = new_help_item(current_type);
-              my_snprintf(name, sizeof(name), " %s",
-                          government_name_translation(gov));
-              pitem->topic = mystrdup(name);
-              pitem->text = mystrdup("");
-              help_list_append(category_nodes, pitem);
-            } government_iterate_end;
-            break;
-          case HELP_IMPROVEMENT:
-            improvement_iterate(pimprove) {
-              if (valid_improvement(pimprove) && !is_great_wonder(pimprove)) {
-                pitem = new_help_item(current_type);
-                my_snprintf(name, sizeof(name), " %s",
-                            improvement_name_translation(pimprove));
-                pitem->topic = mystrdup(name);
-                pitem->text = mystrdup("");
-                help_list_append(category_nodes, pitem);
-              }
-            } improvement_iterate_end;
-            break;
-          case HELP_WONDER:
-            improvement_iterate(pimprove) {
-              if (valid_improvement(pimprove) && is_great_wonder(pimprove)) {
-                pitem = new_help_item(current_type);
-                my_snprintf(name, sizeof(name), " %s",
-                            improvement_name_translation(pimprove));
-                pitem->topic = mystrdup(name);
-                pitem->text = mystrdup("");
-                help_list_append(category_nodes, pitem);
-              }
-            } improvement_iterate_end;
-            break;
-          case HELP_RULESET:
-            pitem = new_help_item(HELP_RULESET);
-            /*           pitem->topic = mystrdup(game.control.name); */
-            pitem->topic = mystrdup(HELP_RULESET_ITEM);
-            if (game.control.description[0] != '\0') {
-              pitem->text = mystrdup(game.control.description);
-            } else {
-              pitem->text = mystrdup(_("Current ruleset contains no description."));
-            }
-            help_list_append(help_nodes, pitem);
-            break;
-          default:
-            die("Bad current_type %d", current_type);
-            break;
-          }
-          help_list_sort(category_nodes, help_item_compar);
-          help_list_iterate(category_nodes, ptmp) {
-            help_list_append(help_nodes, ptmp);
-          } help_list_iterate_end;
-          help_list_free(category_nodes);
-          continue;
-        }
+  for(isec=0; isec<nsec; isec++) {
+    const char *gen_str =
+      secfile_lookup_str_default(sf, NULL, "%s.generate", sec[isec]);
+    
+    if (gen_str) {
+      enum help_page_type current_type = HELP_ANY;
+      if (!booted) {
+	continue; /* on initial boot data tables are empty */
       }
-      
-      /* It wasn't a "generate" node: */
-      
-      pitem = new_help_item(HELP_TEXT);
-      pitem->topic = mystrdup(_(secfile_lookup_str(sf, "%s.name", sec_name)));
-
-      paras = secfile_lookup_str_vec(sf, &npara, "%s.text", sec_name);
-
-      long_buffer[0] = '\0';
-      for (i=0; i<npara; i++) {
-        const char *para = paras[i];
-        if(strncmp(para, "$", 1)==0) {
-          insert_generated_table(long_buffer, sizeof(long_buffer), para+1);
-        } else {
-          sz_strlcat(long_buffer, _(para));
-        }
-        if (i!=npara-1) {
-          sz_strlcat(long_buffer, "\n\n");
-        }
+      for(i=2; help_type_names[i]; i++) {
+	if(strcmp(gen_str, help_type_names[i])==0) {
+	  current_type = i;
+	  break;
+	}
       }
-      free(paras);
-      paras = NULL;
-      pitem->text=mystrdup(long_buffer);
-      help_list_append(help_nodes, pitem);
-    } section_list_iterate_end;
+      if (current_type == HELP_ANY) {
+	freelog(LOG_ERROR, "bad help-generate category \"%s\"", gen_str);
+	continue;
+      }
+      {
+	/* Note these should really fill in pitem->text from auto-gen
+	   data instead of doing it later on the fly, but I don't want
+	   to change that now.  --dwp
+	*/
+	char name[2048];
+	struct help_list *category_nodes = help_list_new();
 
-    section_list_free(sec);
+        switch (current_type) {
+	 case HELP_UNIT:
+           unit_type_iterate(punittype) {
+             pitem = new_help_item(current_type);
+             my_snprintf(name, sizeof(name), " %s",
+                         utype_name_translation(punittype));
+             pitem->topic = mystrdup(name);
+             pitem->text = mystrdup("");
+             help_list_append(category_nodes, pitem);
+           } unit_type_iterate_end;
+           break;
+         case HELP_TECH:
+           advance_index_iterate(A_FIRST, i) {
+             if (valid_advance_by_number(i)) {
+               pitem = new_help_item(current_type);
+               my_snprintf(name, sizeof(name), " %s",
+                           advance_name_for_player(pplayer, i));
+               pitem->topic = mystrdup(name);
+               pitem->text = mystrdup("");
+               help_list_append(category_nodes, pitem);
+             }
+           } advance_index_iterate_end;
+           break;
+         case HELP_TERRAIN:
+           terrain_type_iterate(pterrain) {
+             if (0 != strlen(terrain_rule_name(pterrain))) {
+               pitem = new_help_item(current_type);
+               my_snprintf(name, sizeof(name), " %s",
+                           terrain_name_translation(pterrain));
+               pitem->topic = mystrdup(name);
+               pitem->text = mystrdup("");
+               help_list_append(category_nodes, pitem);
+             }
+           } terrain_type_iterate_end;
+           /* Add special Civ2-style river help text if it's supplied. */
+           if (terrain_control.river_help_text) {
+             pitem = new_help_item(HELP_TEXT);
+             /* TRANS: preserve single space at beginning */
+             pitem->topic = mystrdup(_(" Rivers"));
+             sz_strlcpy(long_buffer, _(terrain_control.river_help_text));
+             pitem->text = mystrdup(long_buffer);
+             help_list_append(category_nodes, pitem);
+           }
+           break;
+         case HELP_GOVERNMENT:
+           government_iterate(gov) {
+             pitem = new_help_item(current_type);
+             my_snprintf(name, sizeof(name), " %s",
+                         government_name_translation(gov));
+             pitem->topic = mystrdup(name);
+             pitem->text = mystrdup("");
+             help_list_append(category_nodes, pitem);
+           } government_iterate_end;
+           break;
+         case HELP_IMPROVEMENT:
+           improvement_iterate(pimprove) {
+             if (valid_improvement(pimprove) && !is_great_wonder(pimprove)) {
+               pitem = new_help_item(current_type);
+               my_snprintf(name, sizeof(name), " %s",
+                           improvement_name_translation(pimprove));
+               pitem->topic = mystrdup(name);
+               pitem->text = mystrdup("");
+               help_list_append(category_nodes, pitem);
+             }
+           } improvement_iterate_end;
+           break;
+         case HELP_WONDER:
+           improvement_iterate(pimprove) {
+             if (valid_improvement(pimprove) && is_great_wonder(pimprove)) {
+               pitem = new_help_item(current_type);
+               my_snprintf(name, sizeof(name), " %s",
+                           improvement_name_translation(pimprove));
+               pitem->topic = mystrdup(name);
+               pitem->text = mystrdup("");
+               help_list_append(category_nodes, pitem);
+             }
+           } improvement_iterate_end;
+           break;
+         case HELP_RULESET:
+           pitem = new_help_item(HELP_RULESET);
+           /*           pitem->topic = mystrdup(game.control.name); */
+           pitem->topic = mystrdup(HELP_RULESET_ITEM);
+           if (game.control.description[0] != '\0') {
+             pitem->text = mystrdup(game.control.description);
+           } else {
+             pitem->text = mystrdup(_("Current ruleset contains no description."));
+           }
+           help_list_append(help_nodes, pitem);
+           break;
+         default:
+           die("Bad current_type %d", current_type);
+           break;
+        }
+	help_list_sort(category_nodes, help_item_compar);
+	help_list_iterate(category_nodes, ptmp) {
+	  help_list_append(help_nodes, ptmp);
+	} help_list_iterate_end;
+        help_list_free(category_nodes);
+	continue;
+      }
+    }
+    
+    /* It wasn't a "generate" node: */
+    
+    pitem = new_help_item(HELP_TEXT);
+    pitem->topic = mystrdup(_(secfile_lookup_str(sf, "%s.name", sec[isec])));
+
+    paras = secfile_lookup_str_vec(sf, &npara, "%s.text", sec[isec]);
+
+    long_buffer[0] = '\0';
+    for (i=0; i<npara; i++) {
+      char *para = paras[i];
+      if(strncmp(para, "$", 1)==0) {
+        insert_generated_table(long_buffer, sizeof(long_buffer), para+1);
+      } else {
+        sz_strlcat(long_buffer, _(para));
+      }
+      if (i!=npara-1) {
+        sz_strlcat(long_buffer, "\n\n");
+      }
+    }
+    free(paras);
+    paras = NULL;
+    pitem->text=mystrdup(long_buffer);
+    help_list_append(help_nodes, pitem);
   }
 
-  secfile_check_unused(sf);
-  secfile_destroy(sf);
+  free(sec);
+  sec = NULL;
+  section_file_check_unused(sf, sf->filename);
+  section_file_free(sf);
   booted = TRUE;
-  log_verbose("Booted help texts ok");
+  freelog(LOG_VERBOSE, "Booted help texts ok");
 }
 
 /****************************************************************
@@ -889,7 +886,7 @@ const struct help_item *get_help_item(int pos)
   check_help_nodes_init();
   size = help_list_size(help_nodes);
   if (pos < 0 || pos > size) {
-    log_error("Bad index %d to get_help_item (size %d)", pos, size);
+    freelog(LOG_ERROR, "Bad index %d to get_help_item (size %d)", pos, size);
     return NULL;
   }
   if (pos == size) {
@@ -1128,7 +1125,7 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
   assert(NULL != buf && 0 < bufsz && NULL != user_text);
 
   if (!utype) {
-    log_error("Unknown unit!");
+    freelog(LOG_ERROR, "Unknown unit!");
     mystrlcpy(buf, user_text, bufsz);
     return buf;
   }
@@ -1548,7 +1545,7 @@ void helptext_advance(char *buf, size_t bufsz, struct player *pplayer,
   mystrlcpy(buf, user_text, bufsz);
 
   if (NULL == vap) {
-    log_error("Unknown tech %d.", i);
+    freelog(LOG_ERROR, "Unknown tech %d.", i);
     return;
   }
 
@@ -1643,7 +1640,7 @@ void helptext_terrain(char *buf, size_t bufsz, struct player *pplayer,
   buf[0] = '\0';
 
   if (!pterrain) {
-    log_error("Unknown terrain!");
+    freelog(LOG_ERROR, "Unknown terrain!");
     return;
   }
 
@@ -2126,7 +2123,7 @@ char *helptext_unit_upkeep_str(struct unit_type *utype)
   int any = 0;
 
   if (!utype) {
-    log_error("Unknown unit!");
+    freelog(LOG_ERROR, "Unknown unit!");
     return "";
   }
 

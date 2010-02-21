@@ -150,8 +150,9 @@ static struct player *create_barbarian_player(enum barbarian_type type)
     }
   } players_iterate_end;
 
-  log_verbose("Created barbarian %s, player %d", player_name(barbarians),
-              player_number(barbarians));
+  freelog(LOG_VERBOSE, "Created barbarian %s, player %d",
+          player_name(barbarians),
+          player_number(barbarians));
   notify_player(NULL, NULL, E_UPRISING, ftc_server,
                 _("%s gain a leader by the name %s. Dangerous "
                   "times may lie ahead."),
@@ -274,7 +275,8 @@ bool unleash_barbarians(struct tile *ptile)
       struct unit *barb_unit;
 
       barb_unit = create_unit(barbarians, ptile, punittype, 0, 0, -1);
-      log_debug("Created barbarian unit %s", utype_rule_name(punittype));
+      freelog(LOG_DEBUG, "Created barbarian unit %s",
+              utype_rule_name(punittype));
       send_unit_info(NULL, barb_unit);
     }
   }
@@ -312,8 +314,8 @@ bool unleash_barbarians(struct tile *ptile)
 
           if (can_unit_move_to_tile(punit2, dir_tiles[rdir], TRUE)) {
             (void) unit_move_handling(punit2, dir_tiles[rdir], TRUE, FALSE);
-            log_debug("Moved barbarian unit from (%d, %d) to (%d, %d)", 
-                      TILE_XY(ptile), TILE_XY(dir_tiles[rdir]));
+            freelog(LOG_DEBUG, "Moved barbarian unit from %d %d to %d, %d", 
+                    ptile->x, ptile->y, dir_tiles[rdir]->x, dir_tiles[rdir]->y);
             dest_found = TRUE;
           }
 
@@ -489,8 +491,8 @@ static void try_summon_barbarians(void)
   victim = city_owner(pc);
 
   dist = real_map_distance(ptile, pc->tile);
-  log_debug("Closest city (to %d,%d) is %s (at %d,%d) distance %d.",
-            TILE_XY(ptile), city_name(pc), TILE_XY(pc->tile), dist);
+  freelog(LOG_DEBUG,"Closest city (to %d,%d) is %s (at %d,%d) distance %d.", 
+          TILE_XY(ptile), city_name(pc), TILE_XY(pc->tile), dist);
   if (dist > MAX_UNREST_DIST || dist < MIN_UNREST_DIST) {
     return;
   }
@@ -510,7 +512,7 @@ static void try_summon_barbarians(void)
       || myrand(100) > get_player_bonus(victim, EFT_CIVIL_WAR_CHANCE)) {
     return;
   }
-  log_debug("Barbarians are willing to fight");
+  freelog(LOG_DEBUG, "Barbarians are willing to fight");
 
   if (tile_has_special(utile, S_HUT)) {
     /* remove the hut in place of uprising */
@@ -540,7 +542,8 @@ static void try_summon_barbarians(void)
       if (is_native_tile(punittype, utile)) {
         (void) create_unit(barbarians, utile, punittype, 0, 0, -1);
         really_created++;
-        log_debug("Created barbarian unit %s",utype_rule_name(punittype));
+        freelog(LOG_DEBUG, "Created barbarian unit %s",
+                utype_rule_name(punittype));
       }
     }
  
@@ -578,7 +581,8 @@ static void try_summon_barbarians(void)
           (void) create_unit_full(barbarians, utile, barb, 0, 0, -1, -1,
                                   ptrans);
           really_created++;
-          log_debug("Created barbarian unit %s", utype_rule_name(barb));
+          freelog(LOG_DEBUG, "Created barbarian unit %s",
+                  utype_rule_name(barb));
         }
       }
 

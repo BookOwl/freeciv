@@ -20,7 +20,6 @@ flag_alt = "-"
 city_style = "European"
 ruler_titles = { "government",      "male_title",      "female_title"
                  "Fundamentalism",  _("Pope"),         _("Popess")
-                 "Democracy",  _("Commissioner"), _("?female:Commissioner")
                }
 
 init_techs=""
