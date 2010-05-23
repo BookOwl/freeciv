@@ -15,6 +15,7 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,17 +24,14 @@
 #include <gtk/gtk.h>
 #include <gdk/gdkkeysyms.h>
 
-/* utility */
+/* common & utility */
 #include "fcintl.h"
+#include "game.h" /* setting_class_is_changeable() */
+#include "government.h"
 #include "log.h"
+#include "packets.h"
 #include "shared.h"
 #include "support.h"
-
-/* common */
-#include "fc_types.h" /* LINE_BREAK */
-#include "game.h"
-#include "government.h"
-#include "packets.h"
 #include "unitlist.h"
 
 /* client */
@@ -116,6 +114,11 @@ static GtkWidget *scores_list;
 static GtkWidget *sw;
 
 #define NUM_SCORE_COLS 14                
+
+/******************************************************************/
+static GtkWidget *settable_options_dialog_shell;
+
+/******************************************************************/
 
 /******************************************************************
 ...
@@ -445,7 +448,7 @@ static gint cmp_func(gconstpointer a_p, gconstpointer b_p)
   a_str = advance_name_for_player(client.conn.playing, a);
   b_str = advance_name_for_player(client.conn.playing, b);
 
-  return base_compare_strings(a_str, b_str);
+  return compare_strings(a_str, b_str);
 }
 
 /****************************************************************
@@ -529,9 +532,9 @@ void science_dialog_update(void)
       data = advance_name_for_player(client.conn.playing,
 			GPOINTER_TO_INT(g_list_nth_data(sorting_list, i)));
     } else {
-      fc_snprintf(text, sizeof(text), _("Future Tech. %d"),
-                  GPOINTER_TO_INT(g_list_nth_data(sorting_list, i))
-                  - advance_count());
+      my_snprintf(text, sizeof(text), _("Future Tech. %d"),
+		  GPOINTER_TO_INT(g_list_nth_data(sorting_list, i))
+		  - advance_count());
       data=text;
     }
 
@@ -601,8 +604,8 @@ void science_dialog_update(void)
     gtk_box_pack_start(GTK_BOX(hbox), label, TRUE, TRUE, 0);
     gtk_size_group_add_widget(group1, label);
 
-    fc_snprintf(text, sizeof(text), "%d",
-                num_unknown_techs_for_goal(client_player(), tech));
+    my_snprintf(text, sizeof(text), "%d",
+	num_unknown_techs_for_goal(client.conn.playing, tech));
 
     label = gtk_label_new(text);
     gtk_misc_set_alignment(GTK_MISC(label), 1.0, 0.5);
@@ -800,7 +803,7 @@ static void economy_selection_callback(GtkTreeSelection *selection,
       gtk_widget_set_sensitive(sellall_command, can_client_issue_orders());
       break;
     default:
-      log_error("Not supported type: %d.", economy_row_type[row].kind);
+      assert(0);
       break;
     };
   } else {
@@ -860,7 +863,7 @@ static void economy_command_callback(struct gui_dialog *dlg, int response,
     disband_all_units(economy_row_type[row].value.utype, FALSE, buf, sizeof(buf));
     break;
   default:
-    log_error("Not supported type: %d.", economy_row_type[row].kind);
+    assert(0);
     break;
   };
 
@@ -931,9 +934,8 @@ void economy_report_dialog_update(void)
       economy_row_type[i + nbr_impr].value.utype = entries_units[i].type;
     }
 
-    fc_snprintf(economy_total, sizeof(economy_total),
-                _("Income: %d    Total Costs: %d"),
-                tax, total_impr + total_unit); 
+    my_snprintf(economy_total, sizeof(economy_total),
+		_("Income: %d    Total Costs: %d"), tax, total_impr + total_unit); 
     gtk_label_set_text(GTK_LABEL(economy_label2), economy_total);
   }  
 }
@@ -1178,6 +1180,8 @@ static void activeunits_command_callback(struct gui_dialog *dlg, int response,
     gtk_tree_model_get(model, &it, AU_COL + 1, &ut, -1);
     utype1 = utype_by_number(ut);
   }
+
+  CHECK_UNIT_TYPE(utype1);
 
   if (response == ACTIVEUNITS_NEAREST) {
     struct tile *ptile;
@@ -1436,3 +1440,245 @@ void popup_endgame_report_dialog(struct packet_endgame_report *packet)
   }
   gui_dialog_present(endgame_report_shell);
 }
+
+/*************************************************************************
+  helper function for server options dialog
+*************************************************************************/
+static void option_changed_callback(GtkWidget *widget, gpointer data) 
+{
+  /* pass along the pointer to the changed option */
+  g_object_set_data(G_OBJECT(widget), "changed", data); 
+}
+
+/*************************************************************************
+  helper function for server options dialog
+*************************************************************************/
+static void settable_options_processing(GtkWidget *final, gboolean local_update)
+{
+  const char *desired_string;
+  GtkWidget *w = final;
+
+  while (NULL != w) {
+    struct options_settable *o =
+      (struct options_settable *)g_object_get_data(G_OBJECT(w), "changed");
+
+    /* If the entry has been changed, then send the changes to the server. */
+    if (NULL != o) {
+      desired_string = NULL;
+
+      /* Get the setting string value. */
+      switch (o->stype) {
+      case SSET_BOOL:
+        desired_string = (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(w))
+                          ? "1" : "0");
+        break;
+      case SSET_INT:
+      case SSET_STRING:
+        desired_string = gtk_entry_get_text(GTK_ENTRY(w));
+        break;
+      };
+
+      if (NULL != desired_string) {
+        /* Send to server. */
+        send_chat_printf("/set %s %s", gtk_widget_get_name(w), desired_string);
+        if (local_update) {
+          /* Make a local change of the desired value for this option,
+           * probably because we want to save it before the server send its
+           * new value to us. */
+          desired_settable_option_update(gtk_widget_get_name(w),
+                                         desired_string, TRUE);
+        }
+      }
+    }
+
+    /* using the linked list, work backwards and check the previous widget */
+    w = (GtkWidget *)g_object_get_data(G_OBJECT(w), "prev");
+  }
+}
+
+/****************************************************************
+...
+*****************************************************************/
+static void settable_options_callback(GtkWidget *win, gint rid, GtkWidget *w)
+{
+  switch (rid) {
+  case GTK_RESPONSE_ACCEPT:
+    desired_settable_options_update();
+    settable_options_processing(w, TRUE);
+    options_save();
+    break;
+  case GTK_RESPONSE_APPLY:
+    settable_options_processing(w, FALSE);
+    break;
+  default:
+    break;
+  };
+  gtk_widget_destroy(win);
+}
+
+/*************************************************************************
+  Server options dialog.
+*************************************************************************/
+static void create_settable_options_dialog(void)
+{
+  int i;
+  GtkWidget *win, *book, **vbox, *label;
+  GtkWidget *prev_widget = NULL;
+  GtkTooltips *tips = gtk_tooltips_new();
+  bool *used = fc_calloc(num_options_categories, sizeof(*used));
+
+  settable_options_dialog_shell =
+    gtk_dialog_new_with_buttons(_("Game Settings"),
+      NULL, 0,
+      GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
+      GTK_STOCK_APPLY, GTK_RESPONSE_APPLY,
+      GTK_STOCK_SAVE, GTK_RESPONSE_ACCEPT,
+      NULL);
+  win = settable_options_dialog_shell;
+
+  gtk_dialog_set_has_separator(GTK_DIALOG(win), FALSE);
+  g_signal_connect(settable_options_dialog_shell, "destroy",
+		   G_CALLBACK(gtk_widget_destroyed), &settable_options_dialog_shell);
+  setup_dialog(win, toplevel);
+
+  /* create a notebook for the options */
+  book = gtk_notebook_new();
+  gtk_box_pack_start(GTK_BOX(GTK_DIALOG(win)->vbox), book, FALSE, FALSE, 2);
+
+  /* create a number of notebook pages for each category */
+  vbox = fc_calloc(num_options_categories, sizeof(*vbox));
+
+  for (i = 0; i < num_options_categories; i++) {
+    vbox[i] = gtk_vbox_new(FALSE, 2);
+    gtk_container_set_border_width(GTK_CONTAINER(vbox[i]), 6);
+    label = gtk_label_new(_(options_categories[i]));
+    gtk_notebook_append_page(GTK_NOTEBOOK(book), vbox[i], label);
+  }
+
+  /* fill each category */
+  for (i = 0; i < num_settable_options; i++) {
+    GtkWidget *ebox, *hbox, *ent = NULL;
+    struct options_settable *o = &settable_options[i];
+
+    /* create a box for the new option and insert it in the correct page */
+    hbox = gtk_hbox_new(FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(vbox[o->scategory]), hbox, FALSE, FALSE, 0);
+    used[o->scategory] = TRUE;
+
+    /* create an event box for the option label */
+    ebox = gtk_event_box_new();
+    gtk_box_pack_start(GTK_BOX(hbox), ebox, FALSE, FALSE, 5);
+
+    /* insert the option short help as the label into the event box */
+    label = gtk_label_new(_(o->short_help));
+    gtk_container_add(GTK_CONTAINER(ebox), label);
+
+    /* if we have extra help, use that as a tooltip */
+    if ('\0' != o->extra_help[0]) {
+      char buf[4096];
+
+      my_snprintf(buf, sizeof(buf), "%s\n\n%s",
+		  o->name,
+		  _(o->extra_help));
+      gtk_tooltips_set_tip(tips, ebox, buf, NULL);
+    }
+
+    if (setting_class_is_changeable(o->sclass)
+	&& o->is_visible) {
+      double step, max, min;
+
+      /* create the proper entry method depending on the type */
+      switch (o->stype) {
+      case SSET_BOOL:
+	/* boolean */
+	ent = gtk_check_button_new();
+	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(ent), o->val);
+
+	g_signal_connect(ent, "toggled", 
+			 G_CALLBACK(option_changed_callback), o);
+	break;
+
+      case SSET_INT:
+	/* integer */
+
+	min = o->min;
+	max = o->max;
+ 
+	/* pick a reasonable step size */
+	step = ceil((max - min) / 100.0);
+	if (step > 100.0) {
+	  /* this is ridiculous, the bounds must be meaningless */
+	  step = 5.0;
+	}
+
+	ent = gtk_spin_button_new_with_range(min, max, step);
+	gtk_spin_button_set_value(GTK_SPIN_BUTTON(ent), o->val);
+
+	g_signal_connect(ent, "changed", 
+			 G_CALLBACK(option_changed_callback), o);
+	break;
+      case SSET_STRING:
+	/* string */
+	ent = gtk_entry_new();
+	gtk_entry_set_text(GTK_ENTRY(ent), o->strval);
+
+	g_signal_connect(ent, "changed", 
+			 G_CALLBACK(option_changed_callback), o);
+	break;
+      }
+    } else {
+      char buf[1024];
+
+      if (o->is_visible) {
+	switch (o->stype) {
+	case SSET_BOOL:
+	  my_snprintf(buf, sizeof(buf), "%s",
+		      o->val != 0 ? _("true") : _("false"));
+	  break;
+	case SSET_INT:
+	  my_snprintf(buf, sizeof(buf), "%d", o->val);
+	  break;
+	case SSET_STRING:
+	  my_snprintf(buf, sizeof(buf), "%s", o->strval);
+	  break;
+	}
+      } else {
+	my_snprintf(buf, sizeof(buf), "%s", _("(hidden)"));
+      }
+      ent = gtk_label_new(buf);
+    }
+    gtk_box_pack_end(GTK_BOX(hbox), ent, FALSE, FALSE, 0);
+
+    /* set up a linked list so we can work our way through the widgets */
+    gtk_widget_set_name(ent, o->name);
+    g_object_set_data(G_OBJECT(ent), "prev", prev_widget);
+    g_object_set_data(G_OBJECT(ent), "changed", NULL);
+    prev_widget = ent;
+  }
+
+  /* remove any unused categories pages */
+  for (i = num_options_categories - 1; i >= 0; i--) {
+    if (!used[i]) {
+      gtk_notebook_remove_page(GTK_NOTEBOOK(book), i);
+    }
+  }
+  free(used);
+
+  g_signal_connect(win, "response",
+		   G_CALLBACK(settable_options_callback), prev_widget);
+
+  gtk_widget_show_all(GTK_DIALOG(win)->vbox);
+}
+
+/**************************************************************************
+  Show a dialog with the server options.
+**************************************************************************/
+void popup_settable_options_dialog(void)
+{
+  if (!settable_options_dialog_shell) {
+    create_settable_options_dialog();
+    gtk_window_set_position(GTK_WINDOW(settable_options_dialog_shell), GTK_WIN_POS_MOUSE);
+  }
+  gtk_window_present(GTK_WINDOW(settable_options_dialog_shell));
+}
+

@@ -3,10 +3,9 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl Initialize with some random file to ensure the source is here.
 AC_INIT
-AC_PREREQ(2.58)
+AC_PREREQ(2.55)
 AC_CONFIG_SRCDIR([common/game.c])
 AC_CONFIG_AUX_DIR(bootstrap) # This can't be quoted or automake will fail
-AC_CONFIG_MACRO_DIR([m4])
 AM_CONFIG_HEADER([config.h]) # Compatible with automake 1.6 and earlier
 AC_CANONICAL_HOST
 AC_GNU_SOURCE
@@ -54,17 +53,8 @@ AC_DEFINE_UNQUOTED([NETWORK_CAPSTRING_OPTIONAL],
 		   [Additional optional network capabilities])
 AC_SUBST([NETWORK_CAPSTRING_OPTIONAL])
 
-AC_DEFINE_UNQUOTED([DATASUBDIR],
-                   ["$DATASUBDIR"],
-                   [Version specific subdir for default data path])
-AC_SUBST([DATASUBDIR])
-
 dnl Initialize automake stuff
 AM_INIT_AUTOMAKE($PACKAGE, $VERSION)
-
-dnl Use Automake 1.11 silent rules by default if available
-dnl verbose build using  make V=1
-ifdef([AM_SILENT_RULES],[AM_SILENT_RULES([yes])])
 
 dnl checks for mysql, sets AUTH_LIBS, AUTH_CFLAGS
 FC_CHECK_AUTH
@@ -119,10 +109,8 @@ dnl auto: Autodetect one.
 dnl all:  Autodetect as many as possible.
 dnl comma-separated-list: Detect these or abort.
 AC_ARG_ENABLE(client,
-[  --enable-client[=auto/all/gtk/sdl/xaw/win32/ftwl/stub]
-                          clients to compile [[auto]] (or list for multiple)
-                          maintained clients: gtk/sdl/xaw/stub
-                          unmaintained clients: win32/ftwl],
+[  --enable-client[=auto/all/gtk/sdl/xaw/win32/ftwl/stub)]
+                          clients to compile [[auto]] (or list for multiple)],
 [clients=${enableval}],
 [client=auto])
 
@@ -417,10 +405,7 @@ FC_C_FLAGS([-Wall -Wpointer-arith -Wcast-align -Wmissing-prototypes -Wmissing-de
 FC_CXX_FLAGS([-Wall -Wpointer-arith -Wcast-align],
  [], [EXTRA_DEBUG_CXXFLAGS])
 
-dnl check debugging
 FC_DEBUG
-dnl check profiling
-FC_GPROF
 AC_C99_VARIADIC_MACROS
 AC_C99_VARIABLE_ARRAYS
 AC_C99_INITIALIZERS
@@ -840,17 +825,11 @@ dnl export where the datadir is going to be installed
 FC_EXPAND_DIR(FREECIV_DATADIR, "$datadir/freeciv")
 
 if test x"$MINGW32" = xyes; then
-  DEFAULT_DATA_PATH=".;data;~/.freeciv/$DATASUBDIR;$datadir/freeciv"
-  DEFAULT_SAVE_PATH=".;~/.freeciv/saves"
-  DEFAULT_SCENARIO_PATH=".;data/scenario;~/.freeciv/scenario;$datadir/freeciv/scenario"
+  DEFAULT_DATA_PATH=".;data;~/.freeciv;$datadir/freeciv"
 else
-  DEFAULT_DATA_PATH=".:data:~/.freeciv/$DATASUBDIR:$datadir/freeciv"
-  DEFAULT_SAVE_PATH=".:~/.freeciv/saves"
-  DEFAULT_SCENARIO_PATH=".:data/scenario:~/.freeciv/scenarios:$datadir/freeciv/scenario"
+  DEFAULT_DATA_PATH=".:data:~/.freeciv:$datadir/freeciv"
 fi
 CPPFLAGS="$CPPFLAGS -DDEFAULT_DATA_PATH=\"\\\"$DEFAULT_DATA_PATH\\\"\""
-CPPFLAGS="$CPPFLAGS -DDEFAULT_SAVES_PATH=\"\\\"$DEFAULT_SAVES_PATH\\\"\""
-CPPFLAGS="$CPPFLAGS -DDEFAULT_SCENARIO_PATH=\"\\\"$DEFAULT_SCENARIO_PATH\\\"\""
 
 dnl This has to be last library
 if test -n "$WITH_EFENCE"; then
@@ -990,7 +969,6 @@ AC_CONFIG_FILES([Makefile
 	  data/isotrident/Makefile
 	  data/stdsounds/Makefile
 	  data/default/Makefile
-	  data/experimental/Makefile
 	  data/civ1/Makefile
 	  data/civ2/Makefile
 	  data/scenario/Makefile
@@ -1102,24 +1080,19 @@ AC_OUTPUT
 AC_MSG_NOTICE([
 ****************** Configuration Summary ******************
 
-  Build freeciv client:  $client
-    Debugging support:     $enable_debug
-    Profiling support:     $enable_gprof
+  Build freeciv client: $client
+    Debugging support:  $enable_debug
 
-  Maintained client frontends:
+  Client frontends:
     Gtk-2.0: $gui_gtk2
     SDL:     $gui_sdl
     Xaw:     $gui_xaw
-    Stub:    $gui_stub
-
-  Not maintained client frontends:
-  (no guarantee that they even compile)
     Win32:   $gui_win32
     FTWL:    $gui_ftwl
+    Stub:    $gui_stub
 
-  Build freeciv server:  $server
+  Build freeciv server:    $server
     Debugging support:     $enable_debug
-    Profiling support:     $enable_gprof
     Auth database support: $auth
 ])
 

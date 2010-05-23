@@ -47,7 +47,7 @@ bool placed_map_is_initialized(void)
 ****************************************************************************/
 void create_placed_map(void)                               
 {                                                          
-  fc_assert_ret(!placed_map_is_initialized());
+  assert(!placed_map_is_initialized());                              
   placed_map = fc_malloc (sizeof(bool) * MAP_INDEX_SIZE);   
   INITIALIZE_ARRAY(placed_map, MAP_INDEX_SIZE, FALSE );     
 }
@@ -57,7 +57,7 @@ void create_placed_map(void)
 ****************************************************************************/
 void destroy_placed_map(void)   
 {                              
-  fc_assert_ret(placed_map_is_initialized());
+  assert(placed_map_is_initialized()); 
   free(placed_map);            
   placed_map = NULL;           
 }
@@ -192,7 +192,7 @@ bool is_normal_nat_pos(int x, int y)
   int alt_int_map[MAP_INDEX_SIZE];
   int *target_map, *source_map;
 
-  fc_assert_ret(NULL != int_map);
+  assert(int_map != NULL);
 
   target_map = alt_int_map;
   source_map = int_map;
@@ -325,8 +325,8 @@ void regenerate_lakes(tile_knowledge_cb knowledge_cb)
 
   num_laketypes = terrains_by_flag(TER_FRESHWATER, lakes, sizeof(lakes));
   if (num_laketypes > MAX_ALT_TER_TYPES) {
-    log_normal("Number of lake types in ruleset %d, considering "
-               "only %d ones.", num_laketypes, MAX_ALT_TER_TYPES);
+    freelog(LOG_NORMAL, "Number of lake types in ruleset %d, considering only %d ones.",
+            num_laketypes, MAX_ALT_TER_TYPES);
     num_laketypes = MAX_ALT_TER_TYPES;
   }
 
@@ -346,7 +346,7 @@ void regenerate_lakes(tile_knowledge_cb knowledge_cb)
       }
       if (0 < lake_surrounders[-here]) {
         if (terrain_control.lake_max_size >= ocean_sizes[-here]) {
-          tile_change_terrain(ptile, lakes[fc_rand(num_laketypes)]);
+          tile_change_terrain(ptile, lakes[myrand(num_laketypes)]);
         }
         if (knowledge_cb) {
           knowledge_cb(ptile);
@@ -370,7 +370,7 @@ int get_lake_surrounders(Continent_id cont)
 *************************************************************************/
 int get_continent_size(Continent_id id)
 {
-  fc_assert_ret_val(id > 0, -1);
+  assert(id > 0);
   return continent_sizes[id];
 }
 
@@ -380,7 +380,7 @@ int get_continent_size(Continent_id id)
 *************************************************************************/
 int get_ocean_size(Continent_id id) 
 {
-  fc_assert_ret_val(id > 0, -1);
+  assert(id > 0);
   return ocean_sizes[id];
 }
 
@@ -432,8 +432,8 @@ void assign_continent_numbers(void)
 
   recalculate_lake_surrounders();
 
-  log_verbose("Map has %d continents and %d oceans", 
-              map.num_continents, map.num_oceans);
+  freelog(LOG_VERBOSE, "Map has %d continents and %d oceans", 
+	  map.num_continents, map.num_oceans);
 }
 
 /**************************************************************************
@@ -545,13 +545,12 @@ void smooth_water_depth(void)
     dist = real_distance_to_land(ptile, OCEAN_DIST_MAX);
     if (dist <= OCEAN_DIST_MAX) {
       /* Overwrite the terrain. */
-      ocean = pick_ocean(dist * OCEAN_DEPTH_STEP
-                         + fc_rand(OCEAN_DEPTH_RAND));
+      ocean = pick_ocean(dist * OCEAN_DEPTH_STEP + myrand(OCEAN_DEPTH_RAND));
       if (NULL != ocean && ocean != tile_terrain(ptile)) {
-        log_debug("Replacing %s by %s at (%d, %d) "
-                  "to have shallow ocean on coast.",
-                  terrain_rule_name(tile_terrain(ptile)),
-                  terrain_rule_name(ocean), TILE_XY(ptile));
+        freelog(LOG_DEBUG, "Replacing %s by %s at (%d, %d) "
+                "to have shallow ocean on coast.",
+                terrain_rule_name(tile_terrain(ptile)),
+                terrain_rule_name(ocean), TILE_XY(ptile));
         tile_set_terrain(ptile, ocean);
       }
     }
@@ -565,10 +564,10 @@ void smooth_water_depth(void)
 
     ocean = most_adjacent_ocean_type(ptile);
     if (NULL != ocean && ocean != tile_terrain(ptile)) {
-      log_debug("Replacing %s by %s at (%d, %d) "
-                "to smooth the ocean types.",
-                terrain_rule_name(tile_terrain(ptile)),
-                terrain_rule_name(ocean), TILE_XY(ptile));
+      freelog(LOG_DEBUG, "Replacing %s by %s at (%d, %d) "
+              "to smooth the ocean types.",
+              terrain_rule_name(tile_terrain(ptile)),
+              terrain_rule_name(ocean), TILE_XY(ptile));
       tile_set_terrain(ptile, ocean);
     }
   } whole_map_iterate_end;

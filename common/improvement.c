@@ -15,16 +15,15 @@
 #include <config.h>
 #endif
 
-/* utility */
-#include "fcintl.h"
-#include "log.h"
-#include "mem.h"
-#include "shared.h"     /* ARRAY_SIZE */
-#include "support.h"
+#include <assert.h>
 
-/* common */
+#include "fcintl.h"
 #include "game.h"
+#include "log.h"
 #include "map.h"
+#include "mem.h"
+#include "shared.h" /* ARRAY_SIZE */
+#include "support.h"
 #include "tech.h"
 
 #include "improvement.h"
@@ -57,7 +56,7 @@ enum impr_genus_id find_genus_by_rule_name(const char *s)
   enum impr_genus_id i;
 
   for(i = 0; i < ARRAY_SIZE(genus_names); i++) {
-    if (fc_strcasecmp(genus_names[i], s) == 0) {
+    if (mystrcasecmp(genus_names[i], s) == 0) {
       break;
     }
   }
@@ -140,7 +139,7 @@ Impr_type_id improvement_count(void)
 **************************************************************************/
 Impr_type_id improvement_index(const struct impr_type *pimprove)
 {
-  fc_assert_ret_val(NULL != pimprove, -1);
+  assert(pimprove);
   return pimprove - improvement_types;
 }
 
@@ -149,7 +148,7 @@ Impr_type_id improvement_index(const struct impr_type *pimprove)
 **************************************************************************/
 Impr_type_id improvement_number(const struct impr_type *pimprove)
 {
-  fc_assert_ret_val(NULL != pimprove, -1);
+  assert(pimprove);
   return pimprove->item_number;
 }
 
@@ -206,9 +205,15 @@ struct impr_type *valid_improvement_by_number(const Impr_type_id id)
   Return the (translated) name of the given improvement. 
   You don't have to free the return pointer.
 **************************************************************************/
-const char *improvement_name_translation(const struct impr_type *pimprove)
+const char *improvement_name_translation(struct impr_type *pimprove)
 {
-  return name_translation(&pimprove->name);
+  if (NULL == pimprove->name.translated) {
+    /* delayed (unified) translation */
+    pimprove->name.translated = ('\0' == pimprove->name.vernacular[0])
+				? pimprove->name.vernacular
+				: Q_(pimprove->name.vernacular);
+  }
+  return pimprove->name.translated;
 }
 
 /****************************************************************************
@@ -217,7 +222,7 @@ const char *improvement_name_translation(const struct impr_type *pimprove)
 ****************************************************************************/
 const char *improvement_rule_name(const struct impr_type *pimprove)
 {
-  return rule_name(&pimprove->name);
+  return Qn_(pimprove->name.vernacular); 
 }
 
 /****************************************************************************
@@ -296,7 +301,7 @@ struct impr_type *find_improvement_by_rule_name(const char *name)
   const char *qname = Qn_(name);
 
   improvement_iterate(pimprove) {
-    if (0 == fc_strcasecmp(improvement_rule_name(pimprove), qname)) {
+    if (0 == mystrcasecmp(improvement_rule_name(pimprove), qname)) {
       return pimprove;
     }
   } improvement_iterate_end;
@@ -310,7 +315,7 @@ struct impr_type *find_improvement_by_rule_name(const char *name)
 bool improvement_has_flag(const struct impr_type *pimprove,
 			  enum impr_flag_id flag)
 {
-  fc_assert_ret_val(flag >= 0 && flag < IF_LAST, FALSE);
+  assert(flag >= 0 && flag < IF_LAST);
   return TEST_BIT(pimprove->flags, flag);
 }
 
@@ -322,10 +327,10 @@ enum impr_flag_id find_improvement_flag_by_rule_name(const char *s)
 {
   enum impr_flag_id i;
 
-  fc_assert_ret_val(ARRAY_SIZE(flag_names) == IF_LAST, IF_LAST);
+  assert(ARRAY_SIZE(flag_names) == IF_LAST);
   
   for(i = 0; i < IF_LAST; i++) {
-    if (fc_strcasecmp(flag_names[i], s) == 0) {
+    if (mystrcasecmp(flag_names[i], s) == 0) {
       return i;
     }
   }
@@ -527,8 +532,8 @@ void wonder_built(const struct city *pcity, const struct impr_type *pimprove)
   struct player *pplayer;
   int index = improvement_number(pimprove);
 
-  fc_assert_ret(NULL != pcity);
-  fc_assert_ret(is_wonder(pimprove));
+  RETURN_IF_FAIL(NULL != pcity);
+  RETURN_IF_FAIL(is_wonder(pimprove));
 
   pplayer = city_owner(pcity);
   pplayer->wonders[index] = pcity->id;
@@ -548,15 +553,15 @@ void wonder_destroyed(const struct city *pcity,
   struct player *pplayer;
   int index = improvement_number(pimprove);
 
-  fc_assert_ret(NULL != pcity);
-  fc_assert_ret(is_wonder(pimprove));
+  RETURN_IF_FAIL(NULL != pcity);
+  RETURN_IF_FAIL(is_wonder(pimprove));
 
   pplayer = city_owner(pcity);
-  fc_assert_ret(pplayer->wonders[index] == pcity->id);
+  RETURN_IF_FAIL(pplayer->wonders[index] == pcity->id);
   pplayer->wonders[index] = WONDER_NOT_BUILT;
 
   if (is_great_wonder(pimprove)) {
-    fc_assert_ret(game.info.great_wonder_owners[index]
+    RETURN_IF_FAIL(game.info.great_wonder_owners[index]
                    == player_number(pplayer));
     game.info.great_wonder_owners[index] = WONDER_DESTROYED;
   }
@@ -568,8 +573,8 @@ void wonder_destroyed(const struct city *pcity,
 bool wonder_is_built(const struct player *pplayer,
                      const struct impr_type *pimprove)
 {
-  fc_assert_ret_val(NULL != pplayer, NULL);
-  fc_assert_ret_val(is_wonder(pimprove), NULL);
+  RETURN_VAL_IF_FAIL(NULL != pplayer, NULL);
+  RETURN_VAL_IF_FAIL(is_wonder(pimprove), NULL);
 
   return WONDER_BUILT(pplayer->wonders[improvement_index(pimprove)]);
 }
@@ -583,8 +588,8 @@ struct city *find_city_from_wonder(const struct player *pplayer,
 {
   int city_id = pplayer->wonders[improvement_index(pimprove)];
 
-  fc_assert_ret_val(NULL != pplayer, NULL);
-  fc_assert_ret_val(is_wonder(pimprove), NULL);
+  RETURN_VAL_IF_FAIL(NULL != pplayer, NULL);
+  RETURN_VAL_IF_FAIL(is_wonder(pimprove), NULL);
 
   if (!WONDER_BUILT(city_id)) {
     return NULL;
@@ -596,17 +601,17 @@ struct city *find_city_from_wonder(const struct player *pplayer,
     struct city *pcity = player_find_city_by_id(pplayer, city_id);
 
     if (NULL == pcity) {
-      log_error("Player %s (nb %d) has outdated wonder info for "
-                "%s (nb %d), it points to city nb %d.",
-                player_name(pplayer), player_number(pplayer),
-                improvement_rule_name(pimprove),
-                improvement_number(pimprove), pcity->id);
+      freelog(LOG_ERROR, "Player %s (nb %d) has outdated wonder info for "
+              "%s (nb %d), it points to city nb %d.",
+              player_name(pplayer), player_number(pplayer),
+              improvement_rule_name(pimprove), improvement_number(pimprove),
+              pcity->id);
     } else if (!city_has_building(pcity, pimprove)) {
-      log_error("Player %s (nb %d) has outdated wonder info for "
-                "%s (nb %d), the city %s (nb %d) doesn't have this wonder.",
-                player_name(pplayer), player_number(pplayer),
-                improvement_rule_name(pimprove),
-                improvement_number(pimprove), city_name(pcity), pcity->id);
+      freelog(LOG_ERROR, "Player %s (nb %d) has outdated wonder info for "
+              "%s (nb %d), the city %s (nb %d) doesn't have this wonder.",
+              player_name(pplayer), player_number(pplayer),
+              improvement_rule_name(pimprove), improvement_number(pimprove),
+              city_name(pcity), pcity->id);
       return NULL;
     }
 
@@ -622,7 +627,7 @@ struct city *find_city_from_wonder(const struct player *pplayer,
 **************************************************************************/
 bool great_wonder_is_built(const struct impr_type *pimprove)
 {
-  fc_assert_ret_val(is_great_wonder(pimprove), FALSE);
+  RETURN_VAL_IF_FAIL(is_great_wonder(pimprove), FALSE);
 
   return WONDER_OWNED(game.info.great_wonder_owners
                       [improvement_index(pimprove)]);
@@ -633,7 +638,7 @@ bool great_wonder_is_built(const struct impr_type *pimprove)
 **************************************************************************/
 bool great_wonder_is_destroyed(const struct impr_type *pimprove)
 {
-  fc_assert_ret_val(is_great_wonder(pimprove), FALSE);
+  RETURN_VAL_IF_FAIL(is_great_wonder(pimprove), FALSE);
 
   return (WONDER_DESTROYED
           == game.info.great_wonder_owners[improvement_index(pimprove)]);
@@ -644,7 +649,7 @@ bool great_wonder_is_destroyed(const struct impr_type *pimprove)
 **************************************************************************/
 bool great_wonder_is_available(const struct impr_type *pimprove)
 {
-  fc_assert_ret_val(is_great_wonder(pimprove), FALSE);
+  RETURN_VAL_IF_FAIL(is_great_wonder(pimprove), FALSE);
 
   return (WONDER_NOT_OWNED
           == game.info.great_wonder_owners[improvement_index(pimprove)]);
@@ -658,7 +663,7 @@ struct city *find_city_from_great_wonder(const struct impr_type *pimprove)
 {
   int player_id = game.info.great_wonder_owners[improvement_index(pimprove)];
 
-  fc_assert_ret_val(is_great_wonder(pimprove), NULL);
+  RETURN_VAL_IF_FAIL(is_great_wonder(pimprove), NULL);
 
   if (WONDER_OWNED(player_id)) {
 #ifdef DEBUG
@@ -666,11 +671,10 @@ struct city *find_city_from_great_wonder(const struct impr_type *pimprove)
     struct city *pcity = find_city_from_wonder(pplayer, pimprove);
 
     if (is_server() && NULL == pcity) {
-      log_error("Game has outdated wonder info for %s (nb %d), "
-                "the player %s (nb %d) doesn't have this wonder.",
-                improvement_rule_name(pimprove),
-                improvement_number(pimprove),
-                player_name(pplayer), player_number(pplayer));
+      freelog(LOG_ERROR, "Game has outdated wonder info for %s (nb %d), "
+              "the player %s (nb %d) doesn't have this wonder.",
+              improvement_rule_name(pimprove), improvement_number(pimprove),
+              player_name(pplayer), player_number(pplayer));
     }
 
     return pcity;
@@ -690,7 +694,7 @@ struct player *great_wonder_owner(const struct impr_type *pimprove)
 {
   int player_id = game.info.great_wonder_owners[improvement_index(pimprove)];
 
-  fc_assert_ret_val(is_great_wonder(pimprove), NULL);
+  RETURN_VAL_IF_FAIL(is_great_wonder(pimprove), NULL);
 
   if (WONDER_OWNED(player_id)) {
     return player_by_number(player_id);
@@ -705,7 +709,7 @@ struct player *great_wonder_owner(const struct impr_type *pimprove)
 bool small_wonder_is_built(const struct player *pplayer,
                            const struct impr_type *pimprove)
 {
-  fc_assert_ret_val(is_small_wonder(pimprove), FALSE);
+  RETURN_VAL_IF_FAIL(is_small_wonder(pimprove), FALSE);
 
   return (NULL != pplayer
           && wonder_is_built(pplayer, pimprove));
@@ -717,7 +721,7 @@ bool small_wonder_is_built(const struct player *pplayer,
 struct city *find_city_from_small_wonder(const struct player *pplayer,
                                          const struct impr_type *pimprove)
 {
-  fc_assert_ret_val(is_small_wonder(pimprove), NULL);
+  RETURN_VAL_IF_FAIL(is_small_wonder(pimprove), NULL);
 
   if (NULL == pplayer) {
     return NULL; /* Used in some places in the client. */

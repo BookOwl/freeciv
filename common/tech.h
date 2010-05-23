@@ -13,12 +13,9 @@
 #ifndef FC__TECH_H
 #define FC__TECH_H
 
-/* utility */
 #include "shared.h"
 
-/* common */
 #include "fc_types.h"
-#include "name_translation.h"
 
 /*
   [kept for amusement and posterity]
@@ -63,7 +60,6 @@ typedef int Tech_type_id;
 */
 
 /* Changing these breaks network compatibility. */
-/* If a new flag is added techtools.c:player_tech_lost() should be checked */
 enum tech_flag_id {
   TF_BONUS_TECH, /* player gets extra tech if rearched first */
   TF_BRIDGE,    /* "Settler" unit types can build bridges over rivers */
@@ -171,9 +167,6 @@ struct player_research {
    * Cached values. Updated by player_research_update.
    */
   int num_known_tech_with_flag[TF_LAST];
-
-  /* Tech upkeep in bulbs. Updated by player_research_update. */
-  int tech_upkeep;
 };
 
 /* General advance/technology accessor functions. */
@@ -196,7 +189,7 @@ const char *advance_name_for_player(const struct player *pplayer,
 const char *advance_name_researching(const struct player *pplayer);
 
 const char *advance_rule_name(const struct advance *padvance);
-const char *advance_name_translation(const struct advance *padvance);
+const char *advance_name_translation(struct advance *padvance);
 
 /* General advance/technology flag accessor routines */
 bool advance_has_flag(Tech_type_id tech, enum tech_flag_id flag);

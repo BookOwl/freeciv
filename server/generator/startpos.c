@@ -16,15 +16,12 @@
 
 #include <math.h> /* sqrt, HUGE_VAL */
 
-/* utility */
 #include "log.h"
 #include "fcintl.h"
-
-/* common */
-#include "map.h"
 #include "movement.h"
 
-/* server */
+#include "map.h"
+
 #include "maphand.h"
 
 #include "mapgen_topology.h"
@@ -115,7 +112,7 @@ static bool is_valid_start_pos(const struct tile *ptile, const void *dataptr)
       return FALSE;
   } 
 
-  fc_assert_ret_val(cont > 0, FALSE);
+  assert(cont > 0);
   if (islands[islands_index[cont]].starters == 0) {
     return FALSE;
   }
@@ -243,12 +240,11 @@ bool create_start_positions(enum start_mode mode,
     int this_tile_value = tile_value_aux[tile_index(ptile)];
     int lcount = 0, bcount = 0;
 
-    /* check all tiles within the default city radius */
-    city_tile_iterate(CITY_MAP_DEFAULT_RADIUS_SQ, ptile, ptile1) {
+    city_tile_iterate(ptile, ptile1) {
       if (this_tile_value > tile_value_aux[tile_index(ptile1)]) {
-        lcount++;
+	lcount++;
       } else if (this_tile_value < tile_value_aux[tile_index(ptile1)]) {
-        bcount++;
+	bcount++;
       }
     } city_tile_iterate_end;
 
@@ -365,10 +361,10 @@ bool create_start_positions(enum start_mode mode,
   for (k = 1; k <= map.num_continents; k++) {
     sum += islands[islands_index[k]].starters;
     if (islands[islands_index[k]].starters != 0) {
-      log_verbose("starters on isle %i", k);
+      freelog(LOG_VERBOSE, "starters on isle %i", k);
     }
   }
-  fc_assert_ret_val(player_count() <= data.count + sum, FALSE);
+  assert(player_count() <= data.count + sum);
 
   /* now search for the best place and set start_positions */
   map.server.start_positions =
@@ -379,21 +375,25 @@ bool create_start_positions(enum start_mode mode,
       islands[islands_index[(int) tile_continent(ptile)]].starters--;
       map.server.start_positions[data.count].tile = ptile;
       map.server.start_positions[data.count].nation = NO_NATION_SELECTED;
-      log_debug("Adding %d,%d as starting position %d, %d goodies on "
-                "islands.", TILE_XY(ptile), data.count,
-                islands[islands_index[(int) tile_continent(ptile)]].goodies);
+      freelog(LOG_DEBUG,
+	      "Adding %d,%d as starting position %d, %d goodies on islands.",
+	      TILE_XY(ptile), data.count,
+	      islands[islands_index[(int) tile_continent(ptile)]].goodies);
       data.count++;
 
     } else {
       data.min_value *= 0.95;
       if (data.min_value <= 10) {
-        log_error(_("The server appears to have gotten into an infinite "
-                    "loop in the allocation of starting positions.\n Maybe "
-                    "the number of players is too high for this map."));
-        /* TRANS: No full stop after the URL, could cause confusion. */
-        log_error(_("Please report this message at %s"), BUG_URL);
-        failure = TRUE;
-        break;
+	freelog(LOG_ERROR,
+	        _("The server appears to have gotten into an infinite loop "
+	          "in the allocation of starting positions.\n"
+	          "Maybe the number of players is too high for this map."));
+	freelog(LOG_ERROR,
+		/* TRANS: No full stop after the URL, could cause confusion. */
+		_("Please report this message at %s"),
+		BUG_URL);
+	failure = TRUE;
+	break;
       }
     }
   }

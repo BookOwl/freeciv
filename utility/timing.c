@@ -44,6 +44,7 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <time.h>
 
 #ifdef HAVE_GETTIMEOFDAY
@@ -110,7 +111,7 @@ static void report_clock_failed(struct timer *t)
   static bool first = TRUE;
 
   if (first) {
-    log_test("clock() returned -1, ignoring timer");
+    freelog(LOG_TEST, "clock() returned -1, ignoring timer");
     first = FALSE;
   }
   t->use = TIMER_IGNORE;
@@ -126,7 +127,7 @@ static void report_gettimeofday_failed(struct timer *t)
   static bool first = TRUE;
 
   if (first) {
-    log_test("gettimeofday() returned -1, ignoring timer");
+    freelog(LOG_TEST, "gettimeofday() returned -1, ignoring timer");
     first = FALSE;
   }
   t->use = TIMER_IGNORE;
@@ -141,7 +142,7 @@ static void report_time_failed(struct timer *t)
   static bool first = TRUE;
 
   if (first) {
-    log_test("time() returned -1, ignoring timer");
+    freelog(LOG_TEST, "time() returned -1, ignoring timer");
     first = FALSE;
   }
   t->use = TIMER_IGNORE;
@@ -177,7 +178,7 @@ struct timer *new_timer_start(enum timer_timetype type, enum timer_use use)
      static struct timer *t = NULL; 
      t = renew_timer_start(t, TIMER_CPU, TIMER_USE);
      ... stuff ...
-     log_verbose("That took %g seconds.", read_timer_seconds(t));
+     freelog(LOG_VERBOSE, "That took %g seconds.", read_timer_seconds(t));
      ... never free t ...
   }
 ***********************************************************************/
@@ -233,7 +234,7 @@ bool timer_in_use(struct timer *t)
 ***********************************************************************/
 void clear_timer(struct timer *t)
 {
-  fc_assert_ret(NULL != t);
+  assert(t != NULL);
   t->state = TIMER_STOPPED;
   t->sec = 0.0;
   t->usec = 0;
@@ -245,13 +246,13 @@ void clear_timer(struct timer *t)
 ***********************************************************************/
 void start_timer(struct timer *t)
 {
-  fc_assert_ret(NULL != t);
+  assert(t != NULL);
 
   if (t->use == TIMER_IGNORE) {
     return;
   }
   if (t->state == TIMER_STARTED) {
-    log_error("tried to start already started timer");
+    freelog(LOG_ERROR, "tried to start already started timer");
     return;
   }
   if (t->type == TIMER_CPU) {
@@ -297,13 +298,13 @@ void clear_timer_start(struct timer *t)
 ***********************************************************************/
 void stop_timer(struct timer *t)
 {
-  fc_assert_ret(NULL != t);
-
+  assert(t != NULL);
+  
   if (t->use == TIMER_IGNORE) {
     return;
   }
   if (t->state == TIMER_STOPPED) {
-    log_error("tried to stop already stopped timer");
+    freelog(LOG_ERROR, "tried to stop already stopped timer");
     return;
   }
   if (t->type == TIMER_CPU) {
@@ -368,8 +369,8 @@ void stop_timer(struct timer *t)
 ***********************************************************************/
 double read_timer_seconds(struct timer *t)
 {
-  fc_assert_ret_val(NULL != t, -1.0);
-
+  assert(t != NULL);
+  
   if (t->use == TIMER_IGNORE) {
     return 0.0;
   }
@@ -378,6 +379,24 @@ double read_timer_seconds(struct timer *t)
     t->state = TIMER_STARTED;
   }
   return t->sec + t->usec / (double)N_USEC_PER_SEC;
+}
+
+/********************************************************************** 
+  Read the timer, then free it.
+  This is intended to be useful for a simple one-off timing, eg:
+  {
+      struct timer *t = new_timer_start();
+      ...do stuff...
+      freelog(LOG_TEST, "That took %g seconds", read_timer_seconds_free(t));
+  }
+  (BUT: make sure the _free call really happens!
+  eg, freelog(LOG_DEBUG,...) might not actually evaluate its args.)
+***********************************************************************/
+double read_timer_seconds_free(struct timer *t)
+{
+  double val = read_timer_seconds(t);
+  free_timer(t);
+  return val;
 }
 
 /********************************************************************** 
@@ -394,7 +413,7 @@ void usleep_since_timer_start(struct timer *t, long usec)
   long elapsed_usec;
   long wait_usec;
 
-  fc_assert_ret(NULL != t);
+  assert(t != NULL);
 
   ret = gettimeofday(&tv_now, NULL);
 
@@ -402,7 +421,7 @@ void usleep_since_timer_start(struct timer *t, long usec)
       (t->type != TIMER_USER) ||
       (t->use != TIMER_ACTIVE) ||
       (t->state != TIMER_STARTED)) {
-    fc_usleep(usec);
+    myusleep(usec);
     return;
   }
 
@@ -412,7 +431,7 @@ void usleep_since_timer_start(struct timer *t, long usec)
   wait_usec = usec - elapsed_usec;
 
   if (wait_usec > 0)
-    fc_usleep(wait_usec);
+    myusleep(wait_usec);
 #elif HAVE_FTIME
   struct timeb now;
   long elapsed_usec, wait_usec;
@@ -424,10 +443,10 @@ void usleep_since_timer_start(struct timer *t, long usec)
   wait_usec = usec - elapsed_usec;
 
   if (wait_usec > 0) {
-    fc_usleep(wait_usec);
+    myusleep(wait_usec);
   }
 #else
-  fc_usleep(usec);
+  myusleep(usec);
 #endif
 }
 

@@ -15,15 +15,14 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <stdlib.h>
 
-/* utility */
 #include "fcintl.h"
 #include "log.h"
 #include "shared.h"
 #include "support.h"
 
-/* common */
 #include "game.h"
 #include "player.h"
 #include "team.h"
@@ -86,7 +85,7 @@ int team_count(void)
 ****************************************************************************/
 Team_type_id team_index(const struct team *pteam)
 {
-  fc_assert_ret_val(NULL != pteam, -1);
+  assert(pteam);
   return pteam - teams;
 }
 
@@ -95,7 +94,7 @@ Team_type_id team_index(const struct team *pteam)
 ****************************************************************************/
 Team_type_id team_number(const struct team *pteam)
 {
-  fc_assert_ret_val(NULL != pteam, -1);
+  assert(pteam);
   return pteam->item_number;
 }
 
@@ -116,11 +115,12 @@ struct team *team_by_number(const Team_type_id id)
 ****************************************************************************/
 void team_add_player(struct player *pplayer, struct team *pteam)
 {
-  fc_assert_ret(pplayer != NULL);
-  fc_assert_ret(pteam != NULL);
+  assert(pplayer != NULL);
+  assert(pteam != NULL);
 
-  log_debug("Adding player %d/%s to team %s.", player_number(pplayer),
-            pplayer->username, team_rule_name(pteam));
+  freelog(LOG_DEBUG, "Adding player %d/%s to team %s.",
+	  player_number(pplayer), pplayer->username,
+	  team_rule_name(pteam));
 
   /* Remove the player from the old team, if any.  The player's team should
    * only be NULL for a few instants after the player was created; after
@@ -133,7 +133,7 @@ void team_add_player(struct player *pplayer, struct team *pteam)
   pplayer->team = pteam;
   
   pteam->players++;
-  fc_assert_ret(pteam->players <= MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS);
+  assert(pteam->players <= MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS);
 }
 
 /****************************************************************************
@@ -146,11 +146,13 @@ void team_add_player(struct player *pplayer, struct team *pteam)
 void team_remove_player(struct player *pplayer)
 {
   if (pplayer->team) {
-    log_debug("Removing player %d/%s from team %s (%d)",
-              player_number(pplayer), pplayer->username,
-              team_rule_name(pplayer->team), pplayer->team->players);
+    freelog(LOG_DEBUG, "Removing player %d/%s from team %s (%d)",
+	    player_number(pplayer),
+	    pplayer->username,
+	    team_rule_name(pplayer->team),
+	    pplayer->team->players);
     pplayer->team->players--;
-    fc_assert(pplayer->team->players >= 0);
+    assert(pplayer->team->players >= 0);
   }
   pplayer->team = NULL;
 }
@@ -183,14 +185,14 @@ struct team *find_team_by_rule_name(const char *team_name)
 {
   int index;
 
-  fc_assert_ret_val(team_name != NULL, NULL);
-  fc_assert_ret_val(game.info.num_teams <= MAX_NUM_TEAMS, NULL);
+  assert(team_name != NULL);
+  assert(game.info.num_teams <= MAX_NUM_TEAMS);
 
   /* Can't use team_iterate here since it skips empty teams. */
   for (index = 0; index < game.info.num_teams; index++) {
     struct team *pteam = team_by_number(index);
 
-    if (0 == fc_strcasecmp(team_rule_name(pteam), team_name)) {
+    if (0 == mystrcasecmp(team_rule_name(pteam), team_name)) {
       return pteam;
     }
   }

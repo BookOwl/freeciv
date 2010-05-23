@@ -15,14 +15,14 @@
 #include <config.h>
 #endif
 
-/* utility */
+#include <assert.h>
+
 #include "astring.h"
 #include "fcintl.h"
 #include "mem.h"
 #include "shared.h"
 #include "support.h"
 
-/* common */
 #include "base.h"
 #include "city.h"
 #include "game.h"
@@ -32,9 +32,8 @@
 #include "packets.h"
 #include "player.h"
 #include "tech.h"
-#include "unitlist.h"
-
 #include "unit.h"
+#include "unitlist.h"
 
 /**************************************************************************
 bribe unit
@@ -138,91 +137,42 @@ bool is_diplomat_action_available(const struct unit *pdiplomat,
   return FALSE;
 }
 
-/****************************************************************************
-  Determines if punit can be airlifted to dest_city now!  So punit needs
-  to be in a city now.  The 'restriction' parameter simulate the client
-  knownledge (one player only).
-****************************************************************************/
-bool base_unit_can_airlift_to(const struct player *restriction,
-                              const struct unit *punit,
-                              const struct city *pdest_city)
+/**************************************************************************
+FIXME: Maybe we should allow airlifts between allies
+**************************************************************************/
+bool unit_can_airlift_to(const struct unit *punit, const struct city *pcity)
 {
-  const struct city *psrc_city = tile_city(punit->tile);
-  const struct player *punit_owner;
-  const struct player *pdest_city_owner;
-  const struct player *psrc_city_owner;
+  struct city *acity = tile_city(punit->tile);
 
   if (0 == punit->moves_left) {
-    /* No moves left. */
     return FALSE;
   }
 
   if (!is_ground_unit(punit)) {
-    /* Only ground units can be airlifted currently. */
     return FALSE;
   }
 
-  if (NULL == psrc_city) {
-    /* No city there. */
+  if (NULL == acity) {
     return FALSE;
   }
 
-  if (psrc_city == pdest_city) {
-    /* Airlifting to our current position doesn't make sense. */
+  if (acity == pcity) {
     return FALSE;
   }
 
-   psrc_city_owner = city_owner(psrc_city);
-
-  if ((NULL == restriction || psrc_city_owner == restriction)
-      && 0 >= psrc_city->airlift) {
-    /* The source cannot airlift for this turn (maybe already airlifed
-     * or no airport).
-     *
-     * Note that (game.info.airlifting_style & AIRLIFTING_UNLIMITED_SRC)
-     * is not handled here because it always needs an airport to airlift.
-     * See also do_airline() in server/unittools.h. */
+  if (city_owner(acity) != unit_owner(punit)) {
     return FALSE;
   }
 
-  pdest_city_owner = city_owner(pdest_city);
-
-  if ((NULL == restriction || pdest_city_owner == restriction)
-      && 0 >= pdest_city->airlift
-      && !(game.info.airlifting_style & AIRLIFTING_UNLIMITED_DEST)) {
-    /* The destination cannot support airlifted units for this turn
-     * (maybe already airlifed or no airport).
-     * See also do_airline() in server/unittools.h. */
+  if (city_owner(acity) != city_owner(pcity)) {
     return FALSE;
   }
 
-  punit_owner = unit_owner(punit);
-
-  if (punit_owner != psrc_city_owner
-      && !(game.info.airlifting_style & AIRLIFTING_ALLIED_SRC
-           && pplayers_allied(punit_owner, psrc_city_owner))) {
-    /* Not allowed to airlift from this source. */
-    return FALSE;
-  }
-
-  if (punit_owner != pdest_city_owner
-      && !(game.info.airlifting_style & AIRLIFTING_ALLIED_DEST
-           && pplayers_allied(punit_owner, pdest_city_owner))) {
-    /* Not allowed to airlift to this destination. */
+  if (acity->airlift <= 0 || pcity->airlift <= 0) {
     return FALSE;
   }
 
   return TRUE;
-}
-
-/****************************************************************************
-  Determines if punit can be airlifted to dest_city now!  So punit needs
-  to be in a city now.
-****************************************************************************/
-bool unit_can_airlift_to(const struct unit *punit,
-                         const struct city *pdest_city)
-{
-  return base_unit_can_airlift_to(NULL, punit, pdest_city);
 }
 
 /****************************************************************************
@@ -439,7 +389,7 @@ enum add_build_city_result test_unit_add_or_build_city(const struct unit *
   if (punit->moves_left == 0)
     return AB_NO_MOVES_ADD;
 
-  fc_assert(unit_pop_value(punit) > 0);
+  assert(unit_pop_value(punit) > 0);
   new_pop = pcity->size + unit_pop_value(punit);
 
   if (new_pop > game.info.add_to_size_limit)
@@ -617,7 +567,7 @@ const char *get_activity_text(enum unit_activity activity)
     break;
   }
 
-  fc_assert(FALSE);
+  assert(0);
   return _("Unknown");
 }
 
@@ -1002,7 +952,7 @@ bool can_unit_do_activity_targeted_at(const struct unit *punit,
             /* Needs to match what unit_activity_assign_target chooses */
             int pre_target = get_preferred_pillage(pspossible, bspossible);
             Base_type_id pre_base = BASE_NONE;
-            fc_assert_ret_val(pre_target != S_LAST, FALSE);
+            assert(pre_target != S_LAST);
             if (pre_target > S_LAST) {
               pre_base = pre_target - S_LAST - 1;
               pre_target = S_LAST;
@@ -1048,8 +998,9 @@ bool can_unit_do_activity_targeted_at(const struct unit *punit,
   case ACTIVITY_UNKNOWN:
     break;
   }
-  log_error("can_unit_do_activity_targeted_at() unknown activity %d",
-            activity);
+  freelog(LOG_ERROR,
+	  "can_unit_do_activity_targeted_at() unknown activity %d",
+	  activity);
   return FALSE;
 }
 
@@ -1076,8 +1027,8 @@ void set_unit_activity_targeted(struct unit *punit,
 				enum tile_special_type new_target,
                                 Base_type_id base)
 {
-  fc_assert_ret(new_target != ACTIVITY_FORTRESS
-                && new_target != ACTIVITY_AIRBASE);
+  assert(new_target != ACTIVITY_FORTRESS
+         && new_target != ACTIVITY_AIRBASE);
 
   set_unit_activity(punit, new_activity);
   punit->activity_target = new_target;
@@ -1120,7 +1071,7 @@ bv_special get_unit_tile_pillage_set(const struct tile *ptile)
   unit_list_iterate(ptile->units, punit) {
     if (punit->activity == ACTIVITY_PILLAGE
         && punit->activity_target != S_LAST) {
-      fc_assert_action(punit->activity_target < S_LAST, continue);
+      assert(punit->activity_target < S_LAST);
       BV_SET(tgt_ret, punit->activity_target);
     }
   } unit_list_iterate_end;
@@ -1141,7 +1092,7 @@ bv_bases get_unit_tile_pillage_base_set(const struct tile *ptile)
     if (punit->activity == ACTIVITY_PILLAGE
         && punit->activity_target == S_LAST
         && punit->activity_base != BASE_NONE) {
-      fc_assert(punit->activity_base < base_count());
+      assert(punit->activity_base < base_count());
       BV_SET(tgt_ret, punit->activity_base);
     }
   } unit_list_iterate_end;
@@ -1161,7 +1112,7 @@ const char *unit_activity_text(const struct unit *punit) {
   astr_clear(&str);
   unit_activity_astr(punit, &str);
 
-  return astr_str(&str);
+  return str.str;
 }
 
 /**************************************************************************
@@ -1211,7 +1162,7 @@ void unit_activity_astr(const struct unit *punit, struct astring *astr)
                       punit->moves_left / SINGLE_MOVE);
       }
     }
-    return;
+    break;
   case ACTIVITY_POLLUTION:
   case ACTIVITY_FALLOUT:
   case ACTIVITY_ROAD:
@@ -1227,7 +1178,7 @@ void unit_activity_astr(const struct unit *punit, struct astring *astr)
   case ACTIVITY_GOTO:
   case ACTIVITY_EXPLORE:
     astr_add_line(astr, "%s", get_activity_text(punit->activity));
-    return;
+    break;
   case ACTIVITY_PILLAGE:
     if (punit->activity_target == S_LAST) {
       astr_add_line(astr, "%s", get_activity_text(punit->activity));
@@ -1244,7 +1195,7 @@ void unit_activity_astr(const struct unit *punit, struct astring *astr)
       astr_add_line(astr, "%s: %s", get_activity_text(punit->activity),
                     get_infrastructure_text(pset, bases));
     }
-    return;
+    break;
   case ACTIVITY_BASE:
     {
       struct base_type *pbase;
@@ -1252,15 +1203,11 @@ void unit_activity_astr(const struct unit *punit, struct astring *astr)
       astr_add_line(astr, "%s: %s", get_activity_text(punit->activity),
                     base_name_translation(pbase));
     }
-    return;
-  case ACTIVITY_UNKNOWN:
-  case ACTIVITY_PATROL_UNUSED:
-  case ACTIVITY_LAST:
     break;
+  default:
+    die("Unknown unit activity %d in unit_activity_text()",
+        punit->activity);
   }
-
-  log_error("Unknown unit activity %d for %s (nb %d) in %s()",
-            punit->activity, unit_rule_name(punit), punit->id, __FUNCTION__);
 }
 
 /**************************************************************************
@@ -1285,8 +1232,8 @@ void unit_upkeep_astr(const struct unit *punit, struct astring *astr)
 **************************************************************************/
 struct player *unit_owner(const struct unit *punit)
 {
-  fc_assert_ret_val(NULL != punit, NULL);
-  fc_assert(NULL != punit->owner);
+  assert(NULL != punit);
+  assert(NULL != punit->owner);
   return punit->owner;
 }
 
@@ -1296,7 +1243,7 @@ struct player *unit_owner(const struct unit *punit)
 **************************************************************************/
 struct tile *unit_tile(const struct unit *punit)
 {
-  fc_assert_ret_val(NULL != punit, NULL);
+  assert(NULL != punit);
   return punit->tile;
 }
 
@@ -1509,10 +1456,10 @@ struct unit *create_unit_virtual(struct player *pplayer, struct city *pcity,
   /* It does not register the unit so the id is set to 0. */
   punit->id = IDENTITY_NUMBER_ZERO;
 
-  fc_assert_ret_val(NULL != punittype, NULL);   /* No untyped units! */
+  CHECK_UNIT_TYPE(punittype); /* No untyped units! */
   punit->utype = punittype;
 
-  fc_assert_ret_val(NULL != pplayer, NULL);     /* No unowned units! */
+  assert(pplayer != NULL); /* No unowned units! */
   punit->owner = pplayer;
 
   if (pcity) {
@@ -1554,8 +1501,6 @@ struct unit *create_unit_virtual(struct player *pplayer, struct city *pcity,
   punit->battlegroup = BATTLEGROUP_NONE;
   punit->client.colored = FALSE;
   punit->server.vision = NULL; /* No vision. */
-  punit->server.action_timestamp = 0;
-  punit->server.action_turn = 0;
   punit->has_orders = FALSE;
 
   return punit;
@@ -1666,14 +1611,6 @@ enum unit_upgrade_result test_unit_upgrade(const struct unit *punit,
 }
 
 /**************************************************************************
-  Tests if unit can be transformed.
-**************************************************************************/
-bool test_unit_transform(const struct unit *punit)
-{
-  return unit_type(punit)->transformed_to != NULL;
-}
-
-/**************************************************************************
   Find the result of trying to upgrade the unit, and a message that
   most callers can use directly.
 **************************************************************************/
@@ -1691,35 +1628,35 @@ enum unit_upgrade_result get_unit_upgrade_info(char *buf, size_t bufsz,
   case UR_OK:
     upgrade_cost = unit_upgrade_price(pplayer, from_unittype, to_unittype);
     /* This message is targeted toward the GUI callers. */
-    fc_snprintf(buf, bufsz, _("Upgrade %s to %s for %d gold?\n"
-                              "Treasury contains %d gold."),
-                utype_name_translation(from_unittype),
-                utype_name_translation(to_unittype),
-                upgrade_cost, pplayer->economic.gold);
+    my_snprintf(buf, bufsz, _("Upgrade %s to %s for %d gold?\n"
+			      "Treasury contains %d gold."),
+		utype_name_translation(from_unittype),
+		utype_name_translation(to_unittype),
+		upgrade_cost, pplayer->economic.gold);
     break;
   case UR_NO_UNITTYPE:
-    fc_snprintf(buf, bufsz,
-                _("Sorry, cannot upgrade %s (yet)."),
-                utype_name_translation(from_unittype));
+    my_snprintf(buf, bufsz,
+		_("Sorry, cannot upgrade %s (yet)."),
+		utype_name_translation(from_unittype));
     break;
   case UR_NO_MONEY:
     upgrade_cost = unit_upgrade_price(pplayer, from_unittype, to_unittype);
-    fc_snprintf(buf, bufsz,
-                _("Upgrading %s to %s costs %d gold.\n"
-                  "Treasury contains %d gold."),
-                utype_name_translation(from_unittype),
-                utype_name_translation(to_unittype),
-                upgrade_cost, pplayer->economic.gold);
+    my_snprintf(buf, bufsz,
+		_("Upgrading %s to %s costs %d gold.\n"
+		  "Treasury contains %d gold."),
+		utype_name_translation(from_unittype),
+		utype_name_translation(to_unittype),
+		upgrade_cost, pplayer->economic.gold);
     break;
   case UR_NOT_IN_CITY:
   case UR_NOT_CITY_OWNER:
-    fc_snprintf(buf, bufsz,
-                _("You can only upgrade units in your cities."));
+    my_snprintf(buf, bufsz,
+		_("You can only upgrade units in your cities."));
     break;
   case UR_NOT_ENOUGH_ROOM:
-    fc_snprintf(buf, bufsz,
-                _("Upgrading this %s would strand units it transports."),
-                utype_name_translation(from_unittype));
+    my_snprintf(buf, bufsz,
+		_("Upgrading this %s would strand units it transports."),
+		utype_name_translation(from_unittype));
     break;
   }
 

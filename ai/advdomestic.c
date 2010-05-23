@@ -69,7 +69,7 @@ static void ai_choose_help_wonder(struct city *pcity,
 
   if (pcity == wonder_city 
       || wonder_city == NULL
-      || pcity->server.ai->distance_to_wonder_city <= 0
+      || pcity->ai->distance_to_wonder_city <= 0
       || VUT_UTYPE == wonder_city->production.kind
       || !is_wonder(wonder_city->production.value.building)) {
     /* A distance of zero indicates we are very far away, possibly
@@ -105,11 +105,11 @@ static void ai_choose_help_wonder(struct city *pcity,
   if (build_points_left(wonder_city) 
       > utype_build_shield_cost(unit_type) * caravans) {
     struct impr_type *wonder = wonder_city->production.value.building;
-    int want = wonder_city->server.ai->building_want[improvement_index(wonder)];
-    int dist = pcity->server.ai->distance_to_wonder_city /
+    int want = wonder_city->ai->building_want[improvement_index(wonder)];
+    int dist = pcity->ai->distance_to_wonder_city /
                unit_type->move_rate;
 
-    fc_assert_ret(VUT_IMPROVEMENT == wonder_city->production.kind);
+    assert(VUT_IMPROVEMENT == wonder_city->production.kind);
 
     want /= MAX(dist, 1);
     CITY_LOG(LOG_DEBUG, pcity, "want %s to help wonder in %s with %d", 
@@ -264,7 +264,7 @@ void domestic_advisor_choose_build(struct player *pplayer, struct city *pcity,
    * ai_manage_cities.  The expand value is the % that the AI should
    * value expansion (basically to handicap easier difficutly levels)
    * and is set when the difficulty level is changed (stdinhand.c). */
-  settler_want = pcity->server.ai->settler_want * pplayer->ai_data.expand / 100;
+  settler_want = pcity->ai->settler_want * pplayer->ai_data.expand / 100;
 
   if (ai->wonder_city == pcity->id) {
     settler_want /= 5;
@@ -292,7 +292,7 @@ void domestic_advisor_choose_build(struct player *pplayer, struct city *pcity,
   founder_type = best_role_unit(pcity, F_CITIES);
 
   /* founder_want calculated in aisettlers.c */
-  founder_want = pcity->server.ai->founder_want;
+  founder_want = pcity->ai->founder_want;
 
   if (ai->wonder_city == pcity->id) {
     founder_want /= 5;
@@ -313,7 +313,7 @@ void domestic_advisor_choose_build(struct player *pplayer, struct city *pcity,
                founder_want);
       ai_choose_role_unit(pplayer, pcity, choice, CT_CIVILIAN,
                           F_CITIES, founder_want,
-                          pcity->server.ai->founder_boat);
+                          pcity->ai->founder_boat);
 
     } else if (founder_want < -choice->want) {
       /* We need boats to colonize! */

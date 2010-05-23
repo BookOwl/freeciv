@@ -15,6 +15,8 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
+
 /* utility */
 #include "fcintl.h"
 #include "log.h"
@@ -49,7 +51,7 @@ void plrdlg_freeze(void)
 void plrdlg_thaw(void)
 {
   frozen_level--;
-  fc_assert(frozen_level >= 0);
+  assert(frozen_level >= 0);
   if (frozen_level == 0) {
     update_players_dialog();
   }
@@ -135,8 +137,8 @@ static const char *col_diplstate(const struct player *player)
   } else {
     pds = pplayer_get_diplstate(client.conn.playing, player);
     if (pds->type == DS_CEASEFIRE || pds->type == DS_ARMISTICE) {
-      fc_snprintf(buf, sizeof(buf), "%s (%d)",
-                  diplstate_text(pds->type), pds->turns_left);
+      my_snprintf(buf, sizeof(buf), "%s (%d)",
+		  diplstate_text(pds->type), pds->turns_left);
       return buf;
     } else {
       return diplstate_text(pds->type);
@@ -235,7 +237,7 @@ static const char *col_idle(const struct player *plr)
   } else {
     idle = 0;
   }
-  fc_snprintf(buf, sizeof(buf), "%d", idle);
+  my_snprintf(buf, sizeof(buf), "%d", idle);
   return buf;
 }
 

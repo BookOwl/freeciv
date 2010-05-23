@@ -130,8 +130,8 @@ static void rates_set_values(int tax, int no_tax_scroll,
 
   }
 
-  if (tax!=rates_tax_value) {
-    fc_snprintf(buf, sizeof(buf), "%3d%%", tax);
+  if(tax!=rates_tax_value) {
+    my_snprintf(buf, sizeof(buf), "%3d%%", tax);
     if (strcmp(buf, GTK_LABEL(rates_tax_label)->label) != 0)
 	gtk_label_set_text(GTK_LABEL(rates_tax_label), buf);
     if(!no_tax_scroll)
@@ -144,7 +144,7 @@ static void rates_set_values(int tax, int no_tax_scroll,
   }
 
   if(lux!=rates_lux_value) {
-    fc_snprintf(buf, sizeof(buf), "%3d%%", lux);
+    my_snprintf(buf, sizeof(buf), "%3d%%", lux);
     if (strcmp(buf, GTK_LABEL(rates_lux_label)->label) != 0)
 	gtk_label_set_text(GTK_LABEL(rates_lux_label), buf);
     if(!no_lux_scroll)
@@ -157,7 +157,7 @@ static void rates_set_values(int tax, int no_tax_scroll,
   }
 
   if(sci!=rates_sci_value) {
-    fc_snprintf(buf, sizeof(buf), "%3d%%", sci);
+    my_snprintf(buf, sizeof(buf), "%3d%%", sci);
     if (strcmp(buf, GTK_LABEL(rates_sci_label)->label) != 0)
 	gtk_label_set_text(GTK_LABEL(rates_sci_label),buf);
     if(!no_sci_scroll)
@@ -354,10 +354,268 @@ void popup_rates_dialog(void)
     return;
   }
 
-  fc_snprintf(buf, sizeof(buf), _("%s max rate: %d%%"),
+  my_snprintf(buf, sizeof(buf), _("%s max rate: %d%%"),
       government_name_for_player(client.conn.playing),
       get_player_bonus(client.conn.playing, EFT_MAX_RATES));
   gtk_label_set_text(GTK_LABEL(rates_gov_label), buf);
   
   gtk_window_present(GTK_WINDOW(rates_dialog_shell));
+}
+
+
+/**************************************************************************
+  Option dialog 
+**************************************************************************/
+
+static GtkWidget *option_dialog_shell;
+
+/**************************************************************************
+...
+**************************************************************************/
+static void option_command_processing(void)
+{
+  GtkWidget *w;
+
+  client_options_iterate(poption) {
+    w = GTK_WIDGET(option_get_gui_data(poption));
+    switch (option_type(poption)) {
+    case COT_BOOLEAN:
+      (void) option_bool_set(poption, gtk_toggle_button_get_active
+                             (GTK_TOGGLE_BUTTON(w)));
+      break;
+
+    case COT_INTEGER:
+      {
+        int val;
+
+        if (1 == sscanf(gtk_entry_get_text(GTK_ENTRY(w)), "%d", &val)) {
+          (void) option_int_set(poption, val);
+        }
+      }
+      break;
+
+    case COT_STRING:
+      if (option_str_values(poption) != NULL) {
+        (void) option_str_set(poption, gtk_entry_get_text
+                              (GTK_ENTRY(GTK_COMBO(w)->entry)));
+      } else {
+        (void) option_str_set(poption, gtk_entry_get_text(GTK_ENTRY(w)));
+      }
+      break;
+
+    case COT_FONT:
+      (void) option_font_set(poption, gtk_font_button_get_font_name
+                             (GTK_FONT_BUTTON(w)));
+      break;
+    }
+  } client_options_iterate_end;
+
+  if (gui_gtk2_map_scrollbars) {
+    gtk_widget_show(map_horizontal_scrollbar);
+    gtk_widget_show(map_vertical_scrollbar);
+  } else {
+    gtk_widget_hide(map_horizontal_scrollbar);
+    gtk_widget_hide(map_vertical_scrollbar);
+  }
+  if (fullscreen_mode) {
+    gtk_window_fullscreen(GTK_WINDOW(toplevel));
+  } else {
+    gtk_window_unfullscreen(GTK_WINDOW(toplevel));
+  }
+
+  gtk_rc_reset_styles(gtk_settings_get_default());
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+static void option_command_callback(GtkWidget *win, gint rid)
+{
+  switch (rid) {
+  case GTK_RESPONSE_ACCEPT:
+    option_command_processing();
+    options_save();
+    break;
+  case GTK_RESPONSE_APPLY:
+    option_command_processing();
+    break;
+  default:
+    break;
+  };
+  gtk_widget_destroy(win);
+}
+
+/****************************************************************
+... 
+*****************************************************************/
+static void create_option_dialog(void)
+{
+  GtkWidget *ebox, *label, *notebook, *align, *vbox[COC_MAX], *sw;
+  int i, len[COC_MAX];
+  GtkSizeGroup *group[2][COC_MAX];
+  GtkTooltips *tips;
+
+  option_dialog_shell = gtk_dialog_new_with_buttons(_("Set local options"),
+  	NULL,
+	0,
+	GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
+	GTK_STOCK_APPLY, GTK_RESPONSE_APPLY,
+	GTK_STOCK_SAVE, GTK_RESPONSE_ACCEPT,
+	NULL);
+  setup_dialog(option_dialog_shell, toplevel);
+  gtk_window_set_position(GTK_WINDOW(option_dialog_shell),
+                          GTK_WIN_POS_MOUSE);
+  gtk_window_set_default_size(GTK_WINDOW(option_dialog_shell), -1, 400);
+
+  notebook = gtk_notebook_new();
+  gtk_box_pack_start(GTK_BOX(GTK_DIALOG(option_dialog_shell)->vbox),
+                     notebook, TRUE, TRUE, 0);
+
+  for (i = 0; i < COC_MAX; i++) {
+    label = gtk_label_new_with_mnemonic(option_class_name(i));
+
+    sw = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sw),
+                                   GTK_POLICY_NEVER,
+                                   GTK_POLICY_AUTOMATIC);
+    gtk_notebook_append_page(GTK_NOTEBOOK(notebook), sw, label);
+
+    align = gtk_alignment_new(0.0, 0.0, 1.0, 0.0);
+    gtk_container_set_border_width(GTK_CONTAINER(align), 8);
+    gtk_scrolled_window_add_with_viewport(GTK_SCROLLED_WINDOW(sw), align);
+
+    vbox[i] = gtk_vbox_new(TRUE, 0);
+    gtk_container_add(GTK_CONTAINER(align), vbox[i]);
+
+    group[0][i] = gtk_size_group_new(GTK_SIZE_GROUP_BOTH);
+    group[1][i] = gtk_size_group_new(GTK_SIZE_GROUP_BOTH);
+
+    len[i] = 0;
+  }
+
+  tips = gtk_tooltips_new();
+
+  client_options_iterate(poption) {
+    GtkWidget *hbox, *w = NULL;
+    enum client_option_class oclass = option_class(poption);
+
+    if (oclass == COC_MAX) {
+      continue;
+    }
+
+    i = len[oclass];
+
+    hbox = gtk_hbox_new(FALSE, 2);
+    gtk_container_add(GTK_CONTAINER(vbox[oclass]), hbox);
+
+    ebox = gtk_event_box_new();
+    gtk_container_add(GTK_CONTAINER(hbox), ebox);
+    gtk_size_group_add_widget(group[0][oclass], ebox);
+
+    label = gtk_label_new(option_description(poption));
+    gtk_misc_set_alignment(GTK_MISC(label), 0.0, 0.5);
+    gtk_container_add(GTK_CONTAINER(ebox), label);
+
+    gtk_tooltips_set_tip(tips, ebox, option_help_text(poption), NULL);
+
+    switch (option_type(poption)) {
+    case COT_BOOLEAN:
+      w = gtk_check_button_new();
+      break;
+
+    case COT_INTEGER:
+      w = gtk_entry_new();
+      gtk_entry_set_max_length(GTK_ENTRY(w), 5);
+      gtk_widget_set_size_request(w, 45, -1);
+      break;
+
+    case COT_STRING:
+      if (option_str_values(poption) != NULL) {
+        w = gtk_combo_new();
+      } else {
+        w = gtk_entry_new();
+      }
+      gtk_widget_set_size_request(w, 150, -1);
+      break;
+
+    case COT_FONT:
+      w = gtk_font_button_new();
+      g_object_set(G_OBJECT(w), "use-font", TRUE, NULL);
+      break;
+    }
+
+    option_set_gui_data(poption, w);
+    if (w == NULL) {
+      freelog(LOG_ERROR, "Failed to create a widget for option %d \"%s\".",
+              option_number(poption), option_name(poption));
+      continue;
+    }
+
+    gtk_container_add(GTK_CONTAINER(hbox), w);
+    gtk_size_group_add_widget(group[1][oclass], w);
+
+    len[oclass]++;
+  } client_options_iterate_end;
+
+  g_signal_connect(option_dialog_shell, "response",
+		   G_CALLBACK(option_command_callback), NULL);
+  g_signal_connect(option_dialog_shell, "destroy",
+		   G_CALLBACK(gtk_widget_destroyed), &option_dialog_shell);
+
+  gtk_widget_show_all(GTK_DIALOG(option_dialog_shell)->vbox);
+}
+
+/****************************************************************
+... 
+*****************************************************************/
+void popup_option_dialog(void)
+{
+  char valstr[64];
+  const struct strvec *vals;
+  GtkWidget *w;
+
+  if (!option_dialog_shell) {
+    create_option_dialog();
+  }
+
+  client_options_iterate(poption) {
+    w = GTK_WIDGET(option_get_gui_data(poption));
+
+    switch (option_type(poption)) {
+    case COT_BOOLEAN:
+      gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(w),
+                                   option_bool_get(poption));
+      break;
+
+    case COT_INTEGER:
+      my_snprintf(valstr, sizeof(valstr), "%d", option_int_get(poption));
+      gtk_entry_set_text(GTK_ENTRY(w), valstr);
+      break;
+
+    case COT_STRING:
+      if ((vals = option_str_values(poption))) {
+        GList *items = NULL;
+        const char *current_val = option_str_get(poption);
+
+        strvec_iterate(vals, val) {
+          if (strcmp(val, current_val) != 0) {
+            items = g_list_prepend(items, (gpointer) val);
+            continue;
+          }
+        } strvec_iterate_end;
+        items = g_list_prepend(items, (gpointer) current_val);
+        gtk_combo_set_popdown_strings(GTK_COMBO(w), items);
+      } else {
+        gtk_entry_set_text(GTK_ENTRY(w), option_str_get(poption));
+      }
+      break;
+
+    case COT_FONT:
+      gtk_font_button_set_font_name(GTK_FONT_BUTTON(w),
+                                    option_font_get(poption));
+      break;
+    }
+  } client_options_iterate_end;
+
+  gtk_widget_show(option_dialog_shell);
 }

@@ -50,13 +50,10 @@ min_city_center_trade   = 0
 
 ; Minimum distance between cities (move distance).
 ; (Minimum value for this is 1, which means adjacent is okay.)
-min_dist_bw_cities	= 2
-
-; Square of initially city radius
-init_city_radius_sq     = 5
+min_dist_bw_cities      = 2
 
 ; Square of initially visible radius (true distance).
-init_vis_radius_sq	= 5
+init_vis_radius_sq      = 5
 
 ; The type of collateral contamination produced by a nuclear attack.
 ;   "Pollution" - Pollution (same as industrial/population-generated).
@@ -176,16 +173,6 @@ radius_sq_city = 17
 ; Border radius square increased by this amount / point of city size
 size_effect    = 1
 
-[research]
-; Method of paying tech upkeep
-; 0 - no upkeep
-; 1 - upkeep is calculated as:
-;     <Cost of technology> / tech_upkeep_divider + tech_upkeep_free
-tech_upkeep_style = 0
-
-; upkeep cost is divided by this value
-tech_upkeep_divider = 1000
-
 [calendar]
 ; Year in the beginning of the game
 start_year = -4000
@@ -231,13 +218,3 @@ names =
  _("Team 29"),
  _("Team 30"),
  _("Team 31")
-
-[settings]
-; freeciv game settings for the default ruleset
-;
-; set =
-;     { "name", "value", "lock"
-;       "bool_set", TRUE, FALSE
-;       "int_set", 123, FALSE
-;       "str_set", "test", FALSE
-;     }

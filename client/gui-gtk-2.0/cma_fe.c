@@ -15,6 +15,8 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
+
 #include <gdk/gdkkeysyms.h>
 
 /* utility */
@@ -93,7 +95,7 @@ void cma_fe_init()
 **************************************************************************/
 void cma_fe_done()
 {
-  dialog_list_destroy(dialog_list);
+  dialog_list_free(dialog_list);
 }
 
 /**************************************************************************
@@ -119,7 +121,7 @@ static void cma_dialog_destroy_callback(GtkWidget *w, gpointer data)
 
   g_object_unref(pdialog->tips);
 
-  dialog_list_remove(dialog_list, pdialog);
+  dialog_list_unlink(dialog_list, pdialog);
   free(pdialog);
 }
 
@@ -433,7 +435,7 @@ struct cma_dialog *create_cma_dialog(struct city *pcity)
 **************************************************************************/
 void refresh_cma_dialog(struct city *pcity, enum cma_refresh refresh)
 {
-  struct cm_result *result = cm_result_new(pcity);
+  struct cm_result result;
   struct cm_parameter param;
   struct cma_dialog *pdialog = get_cma_dialog(pcity);
   int controlled = cma_is_city_under_agent(pcity, NULL);
@@ -441,9 +443,9 @@ void refresh_cma_dialog(struct city *pcity, enum cma_refresh refresh)
   cmafec_get_fe_parameter(pcity, &param);
 
   /* fill in result label */
-  cm_result_from_main_map(result, pcity);
+  cm_result_from_main_map(&result, pcity, TRUE);
   gtk_label_set_text(GTK_LABEL(pdialog->result_label),
-                     cmafec_get_result_descr(pcity, result, &param));
+		     cmafec_get_result_descr(pcity, &result, &param));
 
   /* if called from a hscale, we _don't_ want to do this */
   if (refresh != DONT_REFRESH_HSCALES) {
@@ -474,8 +476,6 @@ void refresh_cma_dialog(struct city *pcity, enum cma_refresh refresh)
 	_("Governor Disabl_ed"));
   }
   gtk_widget_set_sensitive(pdialog->result_label, controlled);
-
-  cm_result_destroy(result);
 }
 
 /**************************************************************************
@@ -495,7 +495,7 @@ static void update_cma_preset_list(struct cma_dialog *pdialog)
     gtk_tooltips_disable(pdialog->tips);
 
     for (i = 0; i < cmafec_preset_num(); i++) {
-      fc_strlcpy(buf, cmafec_preset_get_descr(i), sizeof(buf));
+      mystrlcpy(buf, cmafec_preset_get_descr(i), sizeof(buf));
       gtk_list_store_append(pdialog->store, &it);
       gtk_list_store_set(pdialog->store, &it, 0, buf, -1);
     }

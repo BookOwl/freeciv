@@ -13,12 +13,9 @@
 #ifndef FC__UNITTYPE_H
 #define FC__UNITTYPE_H
 
-/* utility */
 #include "shared.h"
 
-/* common */
 #include "fc_types.h"
-#include "name_translation.h"
 
 #define U_LAST MAX_NUM_ITEMS
 /*
@@ -204,7 +201,6 @@ struct unit_type {
 
 #define U_NOT_OBSOLETED (NULL)
   struct unit_type *obsoleted_by;
-  struct unit_type *transformed_to;
   int fuel;
 
   bv_flags flags;
@@ -235,6 +231,9 @@ struct unit_type {
   char *helptext;
 };
 
+#define CHECK_UNIT_TYPE(ut) (assert((ut) != NULL			    \
+			     && (utype_by_number((ut)->item_number) == (ut))))
+
 /* General unit and unit type (matched) routines */
 Unit_type_id utype_count(void);
 Unit_type_id utype_index(const struct unit_type *punittype);
@@ -250,10 +249,10 @@ const char *unit_rule_name(const struct unit *punit);
 const char *utype_rule_name(const struct unit_type *punittype);
 
 const char *unit_name_translation(const struct unit *punit);
-const char *utype_name_translation(const struct unit_type *punittype);
+const char *utype_name_translation(struct unit_type *punittype);
 
 const char *utype_values_string(const struct unit_type *punittype);
-const char *utype_values_translation(const struct unit_type *punittype);
+const char *utype_values_translation(struct unit_type *punittype);
 
 /* General unit type flag and role routines */
 bool unit_has_type_flag(const struct unit *punit, enum unit_flag_id flag);
@@ -293,7 +292,7 @@ struct unit_class *uclass_by_number(const Unit_Class_id id);
 struct unit_class *find_unit_class_by_rule_name(const char *s);
 
 const char *uclass_rule_name(const struct unit_class *pclass);
-const char *uclass_name_translation(const struct unit_class *pclass);
+const char *uclass_name_translation(struct unit_class *pclass);
 
 bool uclass_has_flag(const struct unit_class *punitclass,
 		     enum unit_class_flag_id flag);

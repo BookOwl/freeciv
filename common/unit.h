@@ -189,8 +189,6 @@ struct unit {
   } client;
   struct {
     struct vision *vision;
-    time_t action_timestamp;
-    int action_turn;
   } server;
 
   bool has_orders;
@@ -228,9 +226,6 @@ bool unit_can_help_build_wonder(const struct unit *punit,
 				const struct city *pcity);
 bool unit_can_help_build_wonder_here(const struct unit *punit);
 bool unit_can_est_trade_route_here(const struct unit *punit);
-bool base_unit_can_airlift_to(const struct player *restriction,
-                              const struct unit *punit,
-                              const struct city *pcity);
 bool unit_can_airlift_to(const struct unit *punit, const struct city *pcity);
 bool unit_has_orders(const struct unit *punit);
 
@@ -332,8 +327,6 @@ enum unit_upgrade_result test_unit_upgrade(const struct unit *punit,
 					   bool is_free);
 enum unit_upgrade_result get_unit_upgrade_info(char *buf, size_t bufsz,
 					       const struct unit *punit);
-bool test_unit_transform(const struct unit *punit);
-
 bool is_losing_hp(const struct unit *punit);
 bool unit_type_is_losing_hp(const struct player *pplayer,
                             const struct unit_type *punittype);

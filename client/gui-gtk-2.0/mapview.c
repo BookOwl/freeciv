@@ -15,6 +15,7 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <stdio.h>
 
 #ifdef HAVE_UNISTD_H
@@ -338,7 +339,7 @@ void mapview_thaw(void)
   if (1 < mapview_frozen_level) {
     mapview_frozen_level--;
   } else {
-    fc_assert(0 < mapview_frozen_level);
+    assert(0 < mapview_frozen_level);
     mapview_frozen_level = 0;
     dirty_all();
   }
@@ -608,8 +609,8 @@ static void pixmap_put_sprite(GdkDrawable *pixmap,
 #ifdef DEBUG
   sprites++;
   if (sprites % 1000 == 0) {
-    log_debug("%5d / %5d pixbufs = %d%%",
-              pixbufs, sprites, 100 * pixbufs / sprites);
+    freelog(LOG_DEBUG, "%5d / %5d pixbufs = %d%%",
+	    pixbufs, sprites, 100 * pixbufs / sprites);
   }
 #endif
 }
@@ -673,8 +674,9 @@ void pixmap_put_overlay_tile_draw(GdkDrawable *pixmap,
 	  || (!ssprite->pixmap && !ssprite->pixbuf_fogged))) {
     fog_sprite(ssprite);
     if ((ssprite->pixmap && !ssprite->pixmap_fogged)
-        || (!ssprite->pixmap && !ssprite->pixbuf_fogged)) {
-      log_normal(_("Better fog will only work in truecolor. Disabling it"));
+	|| (!ssprite->pixmap && !ssprite->pixbuf_fogged)) {
+      freelog(LOG_NORMAL,
+	      _("Better fog will only work in truecolor.  Disabling it"));
       gui_gtk2_better_fog = FALSE;
     }
   }

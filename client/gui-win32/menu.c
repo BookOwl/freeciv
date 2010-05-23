@@ -253,19 +253,19 @@ static void my_add_menu_accelerator(char *item,int cmd)
   plus++;
   tab++;
   /* fkeys */
-  if ((*plus == 'F') && (fc_isdigit(plus[1]))) {
-    if (fc_isdigit(plus[2]))
+  if ((*plus == 'F') && (my_isdigit(plus[1]))) {
+    if (my_isdigit(plus[2]))
       newaccel.key=VK_F10+(plus[2]-'0');
     else
       newaccel.key=VK_F1+(plus[1]-'1');
     newaccel.fVirt=FVIRTKEY;
   } else if (*plus) { /* standard ascii */
-    newaccel.key = fc_toupper(*plus);
+    newaccel.key = my_toupper(*plus);
     newaccel.fVirt=FVIRTKEY;
   } else {
     return;
   }
-  if (fc_strncasecmp(plus,"Space",5)==0)
+  if (mystrncasecmp(plus,"Space",5)==0)
     newaccel.key=VK_SPACE;
   /* Modifiers (Alt,Shift,Ctl) */
   if (strstr(tab, "Shift") != NULL) {
@@ -1030,7 +1030,7 @@ static const char *get_tile_change_menu_text(struct tile *ptile,
   Update the status and names of all menu items.
 **************************************************************************/
 void
-menus_update(void)
+update_menus(void)
 {
   enum MenuID id;
   HMENU menu;
@@ -1265,7 +1265,7 @@ menus_update(void)
         pterrain = tile_terrain(punit->tile);
         if (pterrain->irrigation_result != T_NONE
             && pterrain->irrigation_result != pterrain) {
-          fc_snprintf(irrtext, sizeof(irrtext), irrfmt,
+          my_snprintf(irrtext, sizeof(irrtext), irrfmt,
                       get_tile_change_menu_text(punit->tile,
                                                 ACTIVITY_IRRIGATE));
           sz_strlcat(irrtext, "\tI");
@@ -1276,13 +1276,13 @@ menus_update(void)
         }
         if (pterrain->mining_result != T_NONE
             && pterrain->mining_result != pterrain) {
-          fc_snprintf(mintext, sizeof(mintext), minfmt,
+          my_snprintf(mintext, sizeof(mintext), minfmt,
                       get_tile_change_menu_text(punit->tile, ACTIVITY_MINE));
           sz_strlcat(mintext, "\tM");
         }
         if (pterrain->transform_result != T_NONE
             && pterrain->transform_result != pterrain) {
-          fc_snprintf(transtext, sizeof(transtext), transfmt,
+          my_snprintf(transtext, sizeof(transtext), transfmt,
                       get_tile_change_menu_text(punit->tile,
                                                 ACTIVITY_TRANSFORM));
           sz_strlcat(transtext, "\tO");

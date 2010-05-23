@@ -13,12 +13,10 @@
 #ifndef FC__TERRAIN_H
 #define FC__TERRAIN_H
 
-/* utility */
 #include "shared.h"
 
-/* common */
 #include "fc_types.h"
-#include "name_translation.h"
+
 #include "unittype.h"
 
 struct base_type;
@@ -120,19 +118,23 @@ enum terrain_flag_id {
 
 BV_DEFINE(bv_terrain_flags, TER_MAX);
 
-#define SPECENUM_NAME mapgen_terrain_property
-#define SPECENUM_VALUE0   MG_MOUNTAINOUS
-#define SPECENUM_VALUE1   MG_GREEN
-#define SPECENUM_VALUE2   MG_FOLIAGE
-#define SPECENUM_VALUE3   MG_TROPICAL
-#define SPECENUM_VALUE4   MG_TEMPERATE
-#define SPECENUM_VALUE5   MG_COLD
-#define SPECENUM_VALUE6   MG_FROZEN
-#define SPECENUM_VALUE7   MG_WET
-#define SPECENUM_VALUE8   MG_DRY
-#define SPECENUM_VALUE9   MG_OCEAN_DEPTH
-#define SPECENUM_VALUE10  MG_LAST
-#include "specenum_gen.h"
+enum mapgen_terrain_property {
+  MG_MOUNTAINOUS,
+  MG_GREEN,
+  MG_FOLIAGE,
+
+  MG_TROPICAL,
+  MG_TEMPERATE,
+  MG_COLD,
+  MG_FROZEN,
+
+  MG_WET,
+  MG_DRY,
+
+  MG_OCEAN_DEPTH,
+
+  MG_LAST
+};
 
 /* Types of alterations available to terrain.
  * This enum is only used in the effects system; the relevant information
@@ -221,7 +223,7 @@ struct terrain *rand_terrain_by_flag(enum terrain_flag_id flag);
 
 char terrain_identifier(const struct terrain *pterrain);
 const char *terrain_rule_name(const struct terrain *pterrain);
-const char *terrain_name_translation(const struct terrain *pterrain);
+const char *terrain_name_translation(struct terrain *pterrain);
 
 /* Functions to operate on a terrain flag. */
 enum terrain_flag_id find_terrain_flag_by_rule_name(const char *s);
@@ -269,7 +271,7 @@ struct resource *find_resource_by_identifier(const char identifier);
 struct resource *find_resource_by_rule_name(const char *name);
 
 const char *resource_rule_name(const struct resource *presource);
-const char *resource_name_translation(const struct resource *presource);
+const char *resource_name_translation(struct resource *presource);
 
 /* General special accessor functions. */
 enum tile_special_type find_special_by_rule_name(const char *name);

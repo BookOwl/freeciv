@@ -100,8 +100,7 @@ bool can_units_do_activity(const struct unit_list *punits,
 			   enum unit_activity activity)
 {
   /* Make sure nobody uses these old activities any more */
-  fc_assert_ret_val(activity != ACTIVITY_FORTRESS
-                    && activity != ACTIVITY_AIRBASE, FALSE);
+  assert(activity != ACTIVITY_FORTRESS && activity != ACTIVITY_AIRBASE);
 
   unit_list_iterate(punits, punit) {
     if (can_unit_do_activity(punit, activity)) {
@@ -231,20 +230,6 @@ bool units_have_activity_on_tile(const struct unit_list *punits,
 {
   unit_list_iterate(punits, punit) {
     if (is_unit_activity_on_tile(activity, punit->tile)) {
-      return TRUE;
-    }
-  } unit_list_iterate_end;
-
-  return FALSE;
-}
-
-/****************************************************************************
-  Return TRUE iff any of the units can transform to another unit
-****************************************************************************/
-bool units_can_transform(const struct unit_list *punits)
-{
-  unit_list_iterate(punits, punit) {
-    if (test_unit_transform(punit)) {
       return TRUE;
     }
   } unit_list_iterate_end;

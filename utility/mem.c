@@ -35,11 +35,10 @@
  At the moment this just prints a log message and calls exit(EXIT_FAILURE)
 **********************************************************************/ 
 static void handle_alloc_failure(size_t size, const char *called_as,
-                                 int line, const char *file)
+				 int line, const char *file)
 {
-  log_fatal("Out of memory trying to %s %lu bytes at line %d of %s.",
-            called_as, (unsigned long) size, line, file);
-  exit(EXIT_FAILURE);
+  die("Out of memory trying to %s %lu bytes at line %d of %s.", called_as,
+      (unsigned long) size, line, file);
 }
 
 /****************************************************************************
@@ -56,8 +55,8 @@ static void sanity_check_size(size_t size, const char *called_as,
    * preventing a large number of smaller allocations. */
 
   if (size == 0) {
-    log_verbose("Warning: %s with size %lu at line %d of %s",
-                called_as, (unsigned long) size, line, file);
+    freelog(LOG_VERBOSE, "Warning: %s with size %lu at line %d of %s",
+	    called_as, (unsigned long)size, line, file);
   }
 }
 
@@ -131,11 +130,11 @@ void *fc_real_calloc(size_t nelem, size_t elsize,
 }
 
 /***************************************************************
- Function used by fc_strdup macro, strdup() replacement
+ Function used by mystrdup macro, strdup() replacement
  No need to check return value.
 ***************************************************************/
-char *real_fc_strdup(const char *str,
-                     const char *called_as, int line, const char *file)
+char *real_mystrdup(const char *str, 
+		    const char *called_as, int line, const char *file)
 {
   char *dest = fc_real_malloc(strlen(str)+1, called_as, line, file);
 

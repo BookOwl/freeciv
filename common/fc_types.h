@@ -43,13 +43,35 @@
 #define MAX_LEN_GAME_IDENTIFIER 33
 #define MAX_GRANARY_INIS 24
 #define MAX_LEN_STARTUNIT (20+1)
-#define MAX_LEN_ENUM     64
-
-/* Line breaks after this number of characters; be carefull and use only 70 */
-#define LINE_BREAK 70
 
 /* symbol to flag missing numbers for better debugging */
 #define IDENTITY_NUMBER_ZERO (0)
+
+/* Server setting types.  Changing these will break network compatability. */
+enum sset_type {
+  SSET_BOOL, SSET_INT, SSET_STRING
+};
+
+/* The following classes determine what can be changed when.
+ * Actually, some of them have the same "changeability", but
+ * different types are separated here in case they have
+ * other uses.
+ * Also, SSET_GAME_INIT/SSET_RULES separate the two sections
+ * of server settings sent to the client.
+ * See the settings[] array for what these correspond to and
+ * explanations.
+ */
+enum sset_class {
+  SSET_MAP_SIZE,
+  SSET_MAP_GEN,
+  SSET_MAP_ADD,
+  SSET_PLAYERS,
+  SSET_GAME_INIT,
+  SSET_RULES,
+  SSET_RULES_FLEXIBLE,
+  SSET_META,
+  SSET_LAST
+};
 
 /* Changing this breaks network compatibility. */
 enum output_type_id {
@@ -197,6 +219,15 @@ enum req_problem_type {
 #define REVERSED_RPT(x) \
   (x == RPT_CERTAIN ? RPT_POSSIBLE : RPT_CERTAIN)
 
+/* ruleset strings (such as names) are kept in their original vernacular, 
+ * translated upon first use.  The translation is cached for future use.
+ */
+struct name_translation
+{
+  const char *translated;		/* string doesn't need freeing */
+  char vernacular[MAX_LEN_NAME];	/* original string for comparisons */
+};
+
 /* Originally in requirements.h, bumped up and revised to unify with
  * city_production and worklists.  Functions remain in requirements.c
  */
@@ -268,21 +299,5 @@ enum gui_type {
   GUI_FTWL,
   GUI_LAST
 };
-
-#define SPECENUM_NAME airlifting_style
-#define SPECENUM_BITWISE
-/* Like classical Freeciv.  One unit per turn. */
-#define SPECENUM_ZERO   AIRLIFTING_CLASSICAL
-/* Allow airlifting from allied cities. */
-#define SPECENUM_VALUE0 AIRLIFTING_ALLIED_SRC
-/* Allow airlifting to allied cities. */
-#define SPECENUM_VALUE1 AIRLIFTING_ALLIED_DEST
-/* Unlimited units to airlift from the source (but always needs an Airport
- * or equivalent). */
-#define SPECENUM_VALUE2 AIRLIFTING_UNLIMITED_SRC
-/* Unlimited units to airlift to the destination (doesn't require any
- * Airport or equivalent). */
-#define SPECENUM_VALUE3 AIRLIFTING_UNLIMITED_DEST
-#include "specenum_gen.h"
 
 #endif /* FC__FC_TYPES_H */

@@ -33,6 +33,7 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -106,13 +107,13 @@ fz_FILE *fz_from_file(const char *filename, const char *in_mode,
 
 #ifndef HAVE_LIBZ
     if (method == FZ_ZLIB) {
-      log_error("Not compiled with zlib support, reverting to plain.");
+      freelog(LOG_ERROR, "Not compiled with zlib support, reverting to plain.");
       method = FZ_PLAIN;
     }
 #endif
 #ifndef HAVE_LIBBZ2
     if (method == FZ_BZIP2) {
-      log_error("Not compiled with bzib2 support, reverting to plain.");
+      freelog(LOG_ERROR, "Not compiled with bzib2 support, reverting to plain.");
       method = FZ_PLAIN;
     }
 #endif
@@ -197,7 +198,7 @@ fz_FILE *fz_from_file(const char *filename, const char *in_mode,
     fp->u.bz2.plain = fc_fopen(filename, mode);
     if (fp->u.bz2.plain) {
       /*  Open for read handled earlier */
-      fc_assert_ret_val('w' == mode[0], NULL);
+      assert(mode[0] == 'w');
       fp->u.bz2.file = BZ2_bzWriteOpen(&fp->u.bz2.error, fp->u.bz2.plain,
                                        compress_level, 1, 15);
       if (fp->u.bz2.error != BZ_OK) {
@@ -239,7 +240,7 @@ fz_FILE *fz_from_file(const char *filename, const char *in_mode,
     break;
   default:
     /* Should never happen */
-    log_error("Internal error: Bad fz_fromFile method: %d", fp->method);
+    die("Internal error: Bad fz_fromFile method: %d", fp->method);
   }
   return fp;
 }
@@ -302,7 +303,7 @@ int fz_fclose(fz_FILE *fp)
     break;
   default:
     /* Should never happen */
-    log_error("Internal error: Bad fz_fclose method: %d", fp->method);
+    die("Internal error: Bad fz_fclose method: %d", fp->method);
   }
   free(fp);
   return retval;
@@ -369,7 +370,7 @@ char *fz_fgets(char *buffer, int size, fz_FILE *fp)
     break;
   default:
     /* Should never happen */
-    log_error("Internal error: Bad fz_fgets method: %d", fp->method);
+    die("Internal error: Bad fz_fgets method: %d", fp->method);
   }
   return retval;
 }
@@ -398,10 +399,10 @@ int fz_fprintf(fz_FILE *fp, const char *format, ...)
     {
       char buffer[65536];
       int num;
-      num = fc_vsnprintf(buffer, sizeof(buffer), format, ap);
+      num = my_vsnprintf(buffer, sizeof(buffer), format, ap);
       if (num == -1) {
-        log_error("Too much data: truncated in fz_fprintf (%lu)",
-                  (unsigned long) sizeof(buffer));
+	  freelog(LOG_ERROR, "Too much data: truncated in fz_fprintf (%lu)",
+		  (unsigned long) sizeof(buffer));
       }
       BZ2_bzWrite(&fp->u.bz2.error, fp->u.bz2.file, buffer, strlen(buffer));
       if (fp->u.bz2.error != BZ_OK) {
@@ -417,10 +418,10 @@ int fz_fprintf(fz_FILE *fp, const char *format, ...)
     {
       char buffer[65536];
       int num;
-      num = fc_vsnprintf(buffer, sizeof(buffer), format, ap);
+      num = my_vsnprintf(buffer, sizeof(buffer), format, ap);
       if (num == -1) {
-        log_error("Too much data: truncated in fz_fprintf (%lu)",
-                  (unsigned long) sizeof(buffer));
+	  freelog(LOG_ERROR, "Too much data: truncated in fz_fprintf (%lu)",
+		  (unsigned long) sizeof(buffer));
       }
       retval = gzwrite(fp->u.zlib, buffer, (unsigned int)strlen(buffer));
     }
@@ -431,7 +432,7 @@ int fz_fprintf(fz_FILE *fp, const char *format, ...)
     break;
   default:
     /* Should never happen */
-    log_error("Internal error: Bad fz_fprintf method: %d", fp->method);
+    die("Internal error: Bad fz_fprintf method: %d", fp->method);
   }
   va_end(ap);
   return retval;
@@ -469,7 +470,7 @@ int fz_ferror(fz_FILE *fp)
     break;
   default:
     /* Should never happen */
-    log_error("Internal error: Bad fz_ferror method: %d", fp->method);
+    die("Internal error: Bad fz_ferror method: %d", fp->method);
   }
   return retval;
 }
@@ -545,10 +546,10 @@ const char *fz_strerror(fz_FILE *fp)
       }
 
       if (cleartext != NULL) {
-        fc_snprintf(bzip2error, sizeof(bzip2error), _("Bz2: \"%s\" (%d)"),
+        my_snprintf(bzip2error, sizeof(bzip2error), _("Bz2: \"%s\" (%d)"),
                     cleartext, fp->u.bz2.error);
       } else {
-        fc_snprintf(bzip2error, sizeof(bzip2error), _("Bz2 error %d"),
+        my_snprintf(bzip2error, sizeof(bzip2error), _("Bz2 error %d"),
                     fp->u.bz2.error);
       }
       retval = bzip2error;
@@ -573,7 +574,7 @@ const char *fz_strerror(fz_FILE *fp)
     break;
   default:
     /* Should never happen */
-    log_error("Internal error: Bad fz_strerror method: %d", fp->method);
+    die("Internal error: Bad fz_strerror method: %d", fp->method);
   }
   return retval;
 }

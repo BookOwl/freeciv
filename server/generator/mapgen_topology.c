@@ -35,7 +35,7 @@ int map_colatitude(const struct tile *ptile)
 {
   double x, y;
 
-  fc_assert_ret_val(ptile != NULL, MAX_COLATITUDE / 2);
+  RETURN_VAL_IF_FAIL(ptile != NULL, MAX_COLATITUDE / 2);
 
   if (map.server.alltemperate) {
     /* An all-temperate map has "average" temperature everywhere.
@@ -166,7 +166,7 @@ int map_colatitude(const struct tile *ptile)
 ****************************************************************************/
 bool near_singularity(const struct tile *ptile)
 {
-  return is_singular_tile(ptile, CITY_MAP_MAX_RADIUS);
+  return is_singular_tile(ptile, CITY_MAP_RADIUS);
 }
 
 
@@ -212,7 +212,7 @@ static void set_sizes(double size, int Xratio, int Yratio)
   /* Now make sure the size isn't too large for this ratio.  If it is
    * then decrease the size and try again. */
   if (MAX(MAP_WIDTH, MAP_HEIGHT) > MAP_MAX_LINEAR_SIZE ) {
-    fc_assert(size > 0.1);
+    assert(size > 0.1);
     set_sizes(size - 0.1, Xratio, Yratio);
     return;
   }
@@ -221,12 +221,14 @@ static void set_sizes(double size, int Xratio, int Yratio)
    * this error is to set the maximum size smaller for all topologies! */
   if (map.server.size > size + 0.9) {
     /* Warning when size is set uselessly big */ 
-    log_error("Requested size of %d is too big for this topology.",
-              map.server.size);
+    freelog(LOG_ERROR,
+	    "Requested size of %d is too big for this topology.",
+	    map.server.size);
   }
-  log_verbose("Creating a map of size %d x %d = %d tiles (%d requested).",
-              map.xsize, map.ysize, map.xsize * map.ysize,
-              map.server.size * 1000);
+  freelog(LOG_VERBOSE,
+	  "Creating a map of size %d x %d = %d tiles (%d requested).",
+	  map.xsize, map.ysize, map.xsize * map.ysize,
+          map.server.size * 1000);
 }
 
 /*
@@ -257,7 +259,7 @@ void generator_init_topology(bool autosize)
        AUTO_RATIO_URANUS, AUTO_RATIO_TORUS};
     const int id = 0x3 & map.topology_id;
 
-    fc_assert(TF_WRAPX == 0x1 && TF_WRAPY == 0x2);
+    assert(TF_WRAPX == 0x1 && TF_WRAPY == 0x2);
 
     /* Set map.xsize and map.ysize based on map.size. */
     set_sizes(map.server.size, default_ratios[id][0], default_ratios[id][1]);

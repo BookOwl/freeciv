@@ -15,6 +15,7 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <stdarg.h>
 #include <string.h>
 
@@ -63,7 +64,7 @@ void chatline_common_init(void)
 **************************************************************************/
 void chatline_common_done(void)
 {
-  remaining_list_destroy(remains);
+  remaining_list_free(remains);
 }
 
 /**************************************************************************
@@ -86,7 +87,7 @@ void send_chat_printf(const char *format, ...)
   va_list ap;
   va_start(ap, format);
   /* FIXME: terminating like this can lead to invalid utf-8, a major no-no. */
-  fc_vsnprintf(msg, maxlen, format, ap);
+  my_vsnprintf(msg, maxlen, format, ap);
   msg[maxlen - 1] = '\0'; /* Make sure there is always ending zero */
   send_chat(msg);
   va_end(ap);
@@ -103,7 +104,7 @@ void output_window_freeze(void)
   frozen_level++;
 
   if (frozen_level == 1) {
-    fc_assert(remaining_list_size(remains) == 0);
+    assert(remaining_list_size(remains) == 0);
   }
 }
 
@@ -115,13 +116,14 @@ void output_window_freeze(void)
 void output_window_thaw(void)
 {
   frozen_level--;
-  fc_assert(frozen_level >= 0);
+  assert(frozen_level >= 0);
 
   if (frozen_level == 0) {
     remaining_list_iterate(remains, pline) {
       real_output_window_append(pline->text, pline->tags, pline->conn_id);
       free(pline->text);
-      text_tag_list_destroy(pline->tags);
+      text_tag_list_clear_all(pline->tags);
+      text_tag_list_free(pline->tags);
       free(pline);
     } remaining_list_iterate_end;
     remaining_list_clear(remains);
@@ -147,11 +149,11 @@ void output_window_append(const struct ft_color color,
                           const char *featured_text)
 {
   char plain_text[MAX_LEN_MSG];
-  struct text_tag_list *tags;
+  struct text_tag_list *tags = text_tag_list_new();
 
   /* Separate the text and the tags. */
   featured_text_to_plain_text(featured_text, plain_text,
-                              sizeof(plain_text), &tags);
+                              sizeof(plain_text), tags);
 
   if (ft_color_requested(color)) {
     /* A color is requested. */
@@ -162,20 +164,22 @@ void output_window_append(const struct ft_color color,
       /* Prepends to the list, to avoid to overwrite inside colors. */
       text_tag_list_prepend(tags, ptag);
     } else {
-      log_error("Failed to create a color text tag (fg = %s, bg = %s).",
-                (NULL != color.foreground ? color.foreground : "NULL"),
-                (NULL != color.background ? color.background : "NULL"));
+      freelog(LOG_ERROR,
+              "Failed to create a color text tag (fg = %s, bg = %s).",
+              (NULL != color.foreground ? color.foreground : "NULL"),
+              (NULL != color.background ? color.background : "NULL"));
     }
   }
 
   if (frozen_level == 0) {
     real_output_window_append(plain_text, tags, -1);
-    text_tag_list_destroy(tags);
+    text_tag_list_clear_all(tags);
+    text_tag_list_free(tags);
   } else {
     struct remaining *premain = fc_malloc(sizeof(*premain));
 
     remaining_list_append(remains, premain);
-    premain->text = fc_strdup(plain_text);
+    premain->text = mystrdup(plain_text);
     premain->tags = tags;
     premain->conn_id = -1;
   }
@@ -190,7 +194,7 @@ void output_window_vprintf(const struct ft_color color,
 {
   char featured_text[MAX_LEN_MSG];
 
-  fc_vsnprintf(featured_text, sizeof(featured_text), format, args);
+  my_vsnprintf(featured_text, sizeof(featured_text), format, args);
   output_window_append(color, featured_text);
 }
 
@@ -221,8 +225,8 @@ void output_window_event(const char *plain_text,
     struct remaining *premain = fc_malloc(sizeof(*premain));
 
     remaining_list_append(remains, premain);
-    premain->text = fc_strdup(plain_text);
-    premain->tags = text_tag_list_copy(tags);
+    premain->text = mystrdup(plain_text);
+    premain->tags = text_tag_list_dup(tags);
     premain->conn_id = conn_id;
   }
 }

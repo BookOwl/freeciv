@@ -15,6 +15,8 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
+
 /* utility */
 #include "fcintl.h"
 #include "log.h"
@@ -203,19 +205,6 @@ bool player_can_invade_tile(const struct player *pplayer,
           || !players_non_invade(pplayer, ptile_owner));
 }
 
-/****************************************************************************
-  ...
-****************************************************************************/
-void player_diplstate_init(struct player_diplstate *diplstate)
-{
-  diplstate->type = DS_NO_CONTACT;
-  diplstate->max_state = DS_NO_CONTACT;
-  diplstate->first_contact_turn = 0;
-  diplstate->turns_left = 0;
-  diplstate->has_reason_to_cancel = 0;
-  diplstate->contact_turns_left = 0;
-}
-
 /***************************************************************
   In the server you must use server_player_init.  Note that
   this function is matched by game_remove_player() in game.c,
@@ -238,7 +227,7 @@ void player_init(struct player *plr)
 
   plr->revolution_finishes = -1;
   plr->capital = FALSE;
-  plr->city_style = 0;            /* should be first basic style */
+  plr->city_style=0;            /* should be first basic style */
   plr->cities = city_list_new();
   plr->units = unit_list_new();
 
@@ -247,14 +236,15 @@ void player_init(struct player *plr)
   plr->is_connected = FALSE;
 
   plr->was_created = FALSE;
-  plr->nturns_idle = 0;
   plr->is_alive=TRUE;
   plr->is_dying = FALSE;
   plr->is_winner = FALSE;
   plr->surrendered = FALSE;
   BV_CLR_ALL(plr->real_embassy);
   for(i = 0; i < MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS; i++) {
-    player_diplstate_init(&plr->diplstates[i]);
+    plr->diplstates[i].type = DS_NO_CONTACT;
+    plr->diplstates[i].has_reason_to_cancel = 0;
+    plr->diplstates[i].contact_turns_left = 0;
   }
   plr->ai = NULL;
   plr->ai_data.control=FALSE;
@@ -263,11 +253,9 @@ void player_init(struct player *plr)
   plr->ai_data.fuzzy = 0;
   plr->ai_data.expand = 100;
   plr->ai_data.barbarian_type = NOT_A_BARBARIAN;
-
-  plr->economic.gold = 0;
-  plr->economic.tax = PLAYER_DEFAULT_TAX_RATE;
-  plr->economic.science = PLAYER_DEFAULT_SCIENCE_RATE;
-  plr->economic.luxury = PLAYER_DEFAULT_LUXURY_RATE;
+  plr->economic.tax=PLAYER_DEFAULT_TAX_RATE;
+  plr->economic.science=PLAYER_DEFAULT_SCIENCE_RATE;
+  plr->economic.luxury=PLAYER_DEFAULT_LUXURY_RATE;
 
   plr->economic = player_limit_to_max_rates(plr);
   spaceship_init(&plr->spaceship);
@@ -318,7 +306,7 @@ int player_index(const struct player *pplayer)
 **************************************************************************/
 int player_number(const struct player *pplayer)
 {
-  fc_assert_ret_val(NULL != pplayer, -1);
+  assert(pplayer);
   return pplayer - game.players;
 }
 
@@ -356,11 +344,11 @@ bool player_set_nation(struct player *pplayer, struct nation_type *pnation)
 {
   if (pplayer->nation != pnation) {
     if (pplayer->nation) {
-      fc_assert(pplayer->nation->player == pplayer);
+      assert(pplayer->nation->player == pplayer);
       pplayer->nation->player = NULL;
     }
     if (pnation) {
-      fc_assert(pnation->player == NULL);
+      assert(pnation->player == NULL);
       pnation->player = pplayer;
     }
     pplayer->nation = pnation;
@@ -385,7 +373,7 @@ void player_set_unit_focus_status(struct player *pplayer)
 struct player *find_player_by_name(const char *name)
 {
   players_iterate(pplayer) {
-    if (fc_strcasecmp(name, pplayer->name) == 0) {
+    if (mystrcasecmp(name, pplayer->name) == 0) {
       return pplayer;
     }
   } players_iterate_end;
@@ -428,7 +416,7 @@ struct player *find_player_by_name_prefix(const char *name,
 
   *result = match_prefix(player_slot_name_by_number,
                          player_slot_count(), MAX_LEN_NAME-1,
-                         fc_strncasequotecmp, effectivestrlenquote,
+                         mystrncasequotecmp, effectivestrlenquote,
                          name, &ind);
 
   if (*result < M_PRE_AMBIGUOUS) {
@@ -444,7 +432,7 @@ Find player by its user name (not player/leader name)
 struct player *find_player_by_user(const char *name)
 {
   players_iterate(pplayer) {
-    if (fc_strcasecmp(name, pplayer->username) == 0) {
+    if (mystrcasecmp(name, pplayer->username) == 0) {
       return pplayer;
     }
   } players_iterate_end;
@@ -611,17 +599,15 @@ struct unit *player_find_unit_by_id(const struct player *pplayer,
 }
 
 /*************************************************************************
-  Return true iff x,y is inside any of the player's city map.
+Return 1 if x,y is inside any of the player's city radii.
 **************************************************************************/
-bool player_in_city_map(const struct player *pplayer,
-                        const struct tile *ptile)
+bool player_in_city_radius(const struct player *pplayer,
+			   const struct tile *ptile)
 {
-  city_tile_iterate(CITY_MAP_MAX_RADIUS_SQ, ptile, ptile1) {
+  city_tile_iterate(ptile, ptile1) {
     struct city *pcity = tile_city(ptile1);
 
-    if (pcity && city_owner(pcity) == pplayer
-        && city_map_radius_sq_get(pcity) >= sq_map_distance(ptile,
-                                                            ptile1)) {
+    if (pcity && city_owner(pcity) == pplayer) {
       return TRUE;
     }
   } city_tile_iterate_end;
@@ -736,7 +722,7 @@ struct player_economic player_limit_to_max_rates(struct player *pplayer)
     economic.science = maxrate;
   }
 
-  fc_assert(surplus % 10 == 0);
+  assert(surplus % 10 == 0);
   while (surplus > 0) {
     if (economic.science < maxrate) {
       economic.science += 10;
@@ -745,8 +731,7 @@ struct player_economic player_limit_to_max_rates(struct player *pplayer)
     } else if (economic.luxury < maxrate) {
       economic.luxury += 10;
     } else {
-      fc_assert_msg(FALSE, "Failed to distribute the surplus. "
-                    "maxrate = %d.", maxrate);
+      die("byebye");
     }
     surplus -= 10;
   }
@@ -806,7 +791,7 @@ bool ai_fuzzy(const struct player *pplayer, bool normal_decision)
   if (!pplayer->ai_data.control || pplayer->ai_data.fuzzy == 0) {
     return normal_decision;
   }
-  if (fc_rand(1000) >= pplayer->ai_data.fuzzy) {
+  if (myrand(1000) >= pplayer->ai_data.fuzzy) {
     return normal_decision;
   }
   return !normal_decision;
@@ -843,7 +828,7 @@ const char *love_text(const int love)
   } else if (love <= MAX_AI_LOVE * 90 / 100) {
     return Q_("?attitude:Admiring");
   } else {
-    fc_assert(love > MAX_AI_LOVE * 90 / 100);
+    assert(love > MAX_AI_LOVE * 90 / 100);
     return Q_("?attitude:Worshipful");
   }
 }
@@ -864,9 +849,11 @@ const char *diplstate_text(const enum diplstate_type type)
     N_("?diplomatic_state:Team")
   };
 
-  fc_assert_ret_val_msg(0 <= type && type < DS_LAST, NULL,
-                        "Bad diplstate_type: %d.", type);
-  return Q_(ds_names[type]);
+  if (type < DS_LAST) {
+    return Q_(ds_names[type]);
+  }
+  die("Bad diplstate_type in diplstate_text: %d", type);
+  return NULL;
 }
 
 /***************************************************************
@@ -1030,9 +1017,9 @@ int player_in_territory(const struct player *pplayer,
 bool is_valid_username(const char *name)
 {
   return (strlen(name) > 0
-          && !fc_isdigit(name[0])
-          && is_ascii_name(name)
-          && fc_strcasecmp(name, ANON_USER_NAME) != 0);
+	  && !my_isdigit(name[0])
+	  && is_ascii_name(name)
+	  && mystrcasecmp(name, ANON_USER_NAME) != 0);
 }
 
 /****************************************************************************
@@ -1066,7 +1053,7 @@ enum ai_level find_ai_level_by_name(const char *name)
   for (level = 0; level < AI_LEVEL_LAST; level++) {
     if (ai_level_names[level] != NULL) {
       /* Only consider levels that really have names */
-      if (fc_strcasecmp(ai_level_names[level], name) == 0) {
+      if (mystrcasecmp(ai_level_names[level], name) == 0) {
         return level;
       }
     }
@@ -1081,7 +1068,7 @@ enum ai_level find_ai_level_by_name(const char *name)
 ***************************************************************/
 const char *ai_level_name(enum ai_level level)
 {
-  fc_assert_ret_val(level >= 0 && level < AI_LEVEL_LAST, NULL);
+  assert(level >= 0 && level < AI_LEVEL_LAST);
 
   if (ai_level_names[level] == NULL) {
     return NULL;
@@ -1095,7 +1082,7 @@ const char *ai_level_name(enum ai_level level)
 ***************************************************************/
 const char *ai_level_cmd(enum ai_level level)
 {
-  fc_assert_ret_val(level >= 0 && level < AI_LEVEL_LAST, NULL);
+  assert(level >= 0 && level < AI_LEVEL_LAST);
 
   if (ai_level_names[level] == NULL) {
     return NULL;

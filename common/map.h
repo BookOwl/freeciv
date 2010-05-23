@@ -13,12 +13,9 @@
 #ifndef FC__MAP_H
 #define FC__MAP_H
 
+#include <assert.h>
 #include <math.h> /* sqrt */
 
-/* utility */
-#include "log.h"                /* fc_assert */
-
-/* common */
 #include "fc_types.h"
 
 #include "tile.h"
@@ -135,12 +132,10 @@ void map_clear_startpos(const struct tile *ptile);
 #define MAP_INDEX_SIZE (map.xsize * map.ysize)
 
 #ifdef DEBUG
-#define CHECK_MAP_POS(x,y) \
-  fc_assert(is_normal_map_pos((x),(y)))
-#define CHECK_NATIVE_POS(x, y) \
-  fc_assert((x) >= 0 && (x) < map.xsize && (y) >= 0 && (y) < map.ysize)
-#define CHECK_INDEX(index) \
-  fc_assert((index) >= 0 && (index) < MAP_INDEX_SIZE)
+#define CHECK_MAP_POS(x,y) assert(is_normal_map_pos((x),(y)))
+#define CHECK_NATIVE_POS(x, y) assert((x) >= 0 && (x) < map.xsize \
+				      && (y) >= 0 && (y) < map.ysize)
+#define CHECK_INDEX(index) assert((index) >= 0 && (index) < MAP_INDEX_SIZE)
 #else
 #define CHECK_MAP_POS(x,y) ((void)0)
 #define CHECK_NATIVE_POS(x, y) ((void)0)
@@ -492,6 +487,8 @@ extern const int DIR_DY[8];
 
 #define MAP_ORIGINAL_TOPO        TF_WRAPX
 #define MAP_DEFAULT_TOPO         TF_WRAPX
+#define MAP_MIN_TOPO             0
+#define MAP_MAX_TOPO             15
 
 #define MAP_DEFAULT_SEED         0
 #define MAP_MIN_SEED             0
@@ -514,8 +511,12 @@ extern const int DIR_DY[8];
 #define MAP_MAX_WETNESS          100
 
 #define MAP_DEFAULT_GENERATOR    1
+#define MAP_MIN_GENERATOR        1
+#define MAP_MAX_GENERATOR        3
 
 #define MAP_DEFAULT_STARTPOS     0
+#define MAP_MIN_STARTPOS         0
+#define MAP_MAX_STARTPOS         4
 
 #define MAP_DEFAULT_TINYISLES    FALSE
 #define MAP_MIN_TINYISLES        FALSE

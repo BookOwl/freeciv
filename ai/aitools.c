@@ -15,8 +15,10 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
+
 /* utility */
-#include "log.h"
+#include "government.h"
 #include "mem.h"
 #include "shared.h"
 
@@ -24,7 +26,7 @@
 #include "city.h"
 #include "combat.h"
 #include "game.h"
-#include "government.h"
+#include "log.h"
 #include "map.h"
 #include "movement.h"
 #include "packets.h"
@@ -50,6 +52,7 @@
 
 /* ai */
 #include "advmilitary.h"
+#include "aicity.h"
 #include "aidata.h"
 #include "aiferry.h"
 #include "aiguard.h"
@@ -86,7 +89,7 @@ const char *ai_unit_task_rule_name(const enum ai_unit_task task)
      return "Hunter";
   }
   /* no default, ensure all types handled somehow */
-  log_error("Unsupported ai_unit_task %d.", task);
+  assert(FALSE);
   return NULL;
 }
 
@@ -109,7 +112,7 @@ const char *ai_choice_rule_name(const struct ai_choice *choice)
     return "(unknown)";
   };
   /* no default, ensure all types handled somehow */
-  log_error("Unsupported ai_unit_task %d.", choice->type);
+  assert(FALSE);
   return NULL;
 }
 
@@ -398,13 +401,13 @@ struct tile *immediate_destination(struct unit *punit,
     }
 
     pf_map_destroy(pfm);
-    log_verbose("Did not find an air-route for "
-                "%s %s[%d] (%d,%d)->(%d,%d)",
-                nation_rule_name(nation_of_unit(punit)),
-                unit_rule_name(punit),
-                punit->id,
-                TILE_XY(punit->tile),
-                TILE_XY(dest_tile));
+    freelog(LOG_VERBOSE, "Did not find an air-route for "
+            "%s %s[%d] (%d,%d)->(%d,%d)",
+            nation_rule_name(nation_of_unit(punit)),
+            unit_rule_name(punit),
+            punit->id,
+            TILE_XY(punit->tile),
+            TILE_XY(dest_tile));
     /* Prevent take off */
     return punit->tile;
   }
@@ -643,6 +646,7 @@ void ai_avoid_risks(struct pf_parameter *parameter,
 
   parameter->data = risk_cost;
   parameter->get_EC = prefer_short_stacks;
+  parameter->turn_mode = TM_WORST_TIME;
   risk_cost->base_value = unit_build_shield_cost(punit);
   risk_cost->fearfulness = fearfulness * linger_fraction;
 
@@ -809,6 +813,8 @@ void ai_fill_unit_param(struct pf_parameter *parameter,
   }
 
   if (is_ferry) {
+    /* Must use TM_WORST_TIME, so triremes move safely */
+    parameter->turn_mode = TM_WORST_TIME;
     /* Show the destination in the client when watching an AI: */
     punit->goto_tile = ptile;
   }
@@ -842,7 +848,7 @@ void ai_unit_new_role(struct unit *punit, enum ai_unit_task task,
 
   /* If the unit is under (human) orders we shouldn't control it.
    * Allow removal of old role with AIUNIT_NONE. */
-  fc_assert_ret(!unit_has_orders(punit) || task == AIUNIT_NONE);
+  assert(!unit_has_orders(punit) || task == AIUNIT_NONE);
 
   UNIT_LOG(LOG_DEBUG, punit, "changing role from %s to %s",
            ai_unit_task_rule_name(punit->ai.ai_role),
@@ -866,8 +872,8 @@ void ai_unit_new_role(struct unit *punit, enum ai_unit_task task,
        * This probably means that some city spot reservation has not been
        * properly cleared; bad for the AI, as it will leave that area
        * uninhabited. */
-      log_error("%s was on city founding mission without target tile.",
-                unit_rule_name(punit));
+      freelog(LOG_ERROR, "%s was on city founding mission without target tile.",
+              unit_rule_name(punit));
     }
   }
 
@@ -906,7 +912,7 @@ void ai_unit_new_role(struct unit *punit, enum ai_unit_task task,
     /* Set victim's hunted bit - the hunt is on! */
     struct unit *target = game_find_unit_by_number(punit->ai.target);
 
-    fc_assert_ret(target != NULL);
+    assert(target != NULL);
     target->ai.hunted |= (1 << player_index(unit_owner(punit)));
     UNIT_LOG(LOGLEVEL_HUNT, target, "is being hunted");
 
@@ -932,7 +938,7 @@ void ai_unit_new_role(struct unit *punit, enum ai_unit_task task,
 bool ai_unit_make_homecity(struct unit *punit, struct city *pcity)
 {
   CHECK_UNIT(punit);
-  fc_assert_ret_val(unit_owner(punit) == city_owner(pcity), TRUE);
+  assert(unit_owner(punit) == city_owner(pcity));
 
   if (punit->homecity == 0 && !unit_has_type_role(punit, L_EXPLORER)) {
     /* This unit doesn't pay any upkeep while it doesn't have a homecity,
@@ -962,11 +968,11 @@ static void ai_unit_bodyguard_move(struct unit *bodyguard, struct tile *ptile)
   struct unit *punit;
   struct player *pplayer;
 
-  fc_assert_ret(bodyguard != NULL);
+  assert(bodyguard != NULL);
   pplayer = unit_owner(bodyguard);
-  fc_assert_ret(pplayer != NULL);
+  assert(pplayer != NULL);
   punit = aiguard_charge_unit(bodyguard);
-  fc_assert_ret(punit != NULL);
+  assert(punit != NULL);
 
   CHECK_GUARD(bodyguard);
   CHECK_CHARGE_UNIT(punit);
@@ -995,8 +1001,8 @@ bool ai_unit_attack(struct unit *punit, struct tile *ptile)
   bool alive;
 
   CHECK_UNIT(punit);
-  fc_assert_ret_val(unit_owner(punit)->ai_data.control, TRUE);
-  fc_assert_ret_val(is_tiles_adjacent(punit->tile, ptile), TRUE);
+  assert(unit_owner(punit)->ai_data.control);
+  assert(is_tiles_adjacent(punit->tile, ptile));
 
   unit_activity_handling(punit, ACTIVITY_IDLE);
   (void) unit_move_handling(punit, ptile, FALSE, FALSE);
@@ -1029,11 +1035,11 @@ bool ai_unit_move(struct unit *punit, struct tile *ptile)
   const bool is_ai = pplayer->ai_data.control;
 
   CHECK_UNIT(punit);
-  fc_assert_ret_val_msg(is_tiles_adjacent(unit_tile(punit), ptile), FALSE,
-                        "Tiles not adjacent: Unit = %d, "
-                        "from = (%d, %d]) to = (%d, %d).",
-                        punit->id, TILE_XY(unit_tile(punit)),
-                        TILE_XY(ptile));
+  RETURN_VAL_IF_FAIL_MSG(is_tiles_adjacent(unit_tile(punit), ptile), FALSE,
+                         "Tiles not adjacent: Unit = %d, "
+                         "from = (%d, %d]) to = (%d, %d).",
+                         punit->id, TILE_XY(unit_tile(punit)),
+                         TILE_XY(ptile));
 
   /* if enemy, stop and give a chance for the ai attack function
    * or the human player to handle this case */
@@ -1081,6 +1087,46 @@ bool ai_unit_move(struct unit *punit, struct tile *ptile)
   }
   return FALSE;
 }
+
+/**************************************************************************
+This looks for the nearest city:
+If (x,y) is the land, it looks for cities only on the same continent
+unless (everywhere != 0)
+If (enemy != 0) it looks only for enemy cities
+If (pplayer != NULL) it looks for cities known to pplayer
+**************************************************************************/
+struct city *dist_nearest_city(struct player *pplayer, struct tile *ptile,
+                               bool everywhere, bool enemy)
+{ 
+  struct city *pc=NULL;
+  int best_dist = -1;
+  Continent_id con = tile_continent(ptile);
+
+  players_iterate(pplay) {
+    /* If "enemy" is set, only consider cities whose owner we're at
+     * war with. */
+    if (enemy && pplayer && !pplayers_at_war(pplayer, pplay)) {
+      continue;
+    }
+
+    city_list_iterate(pplay->cities, pcity) {
+      int city_dist = real_map_distance(ptile, pcity->tile);
+
+      /* Find the closest city known to the player with a matching
+       * continent. */
+      if ((best_dist == -1 || city_dist < best_dist)
+	  && (everywhere || con == 0
+	      || con == tile_continent(pcity->tile))
+	  && (!pplayer || map_is_known(pcity->tile, pplayer))) {
+	best_dist = city_dist;
+        pc = pcity;
+      }
+    } city_list_iterate_end;
+  } players_iterate_end;
+
+  return(pc);
+}
+
 
 /**************************************************************************
   Calculate the value of the target unit including the other units which
@@ -1213,9 +1259,9 @@ void ai_advisor_choose_building(struct city *pcity, struct ai_choice *choice)
     if (!plr->ai_data.control && is_wonder(pimprove)) {
       continue; /* Humans should not be advised to build wonders or palace */
     }
-    if (pcity->server.ai->building_want[improvement_index(pimprove)] > want
+    if (pcity->ai->building_want[improvement_index(pimprove)] > want
         && can_city_build_improvement_now(pcity, pimprove)) {
-      want = pcity->server.ai->building_want[improvement_index(pimprove)];
+      want = pcity->ai->building_want[improvement_index(pimprove)];
       chosen = pimprove;
     }
   } improvement_iterate_end;

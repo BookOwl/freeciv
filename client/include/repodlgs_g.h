@@ -27,5 +27,6 @@ void popup_economy_report_dialog(bool raise);
 void activeunits_report_dialog_update(void);
 void popup_activeunits_report_dialog(bool raise);
 void popup_endgame_report_dialog(struct packet_endgame_report *packet);
+void popup_settable_options_dialog(void);
 
 #endif  /* FC__REPODLGS_G_H */

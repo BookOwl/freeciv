@@ -45,7 +45,6 @@ libfreeciv_la_SOURCES = \
 		map.h		\
 		movement.c	\
 		movement.h	\
-		name_translation.h \
 		nation.c        \
 		nation.h        \
 		packets.c	\

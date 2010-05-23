@@ -119,7 +119,7 @@ static bool is_plain_public_message(const char *s)
    * a private message (or explicit public message if the
    * first character is :). */
   while (p != NULL && *p != '\0') {
-    if (fc_isspace(*p)) {
+    if (my_isspace(*p)) {
       return TRUE;
     } else if (*p == MESSAGE_PREFIX) {
       return FALSE;
@@ -143,7 +143,7 @@ static void inputline_return(GtkEntry *w, gpointer data)
     if (client_state() == C_S_RUNNING && gui_gtk2_allied_chat_only
         && is_plain_public_message(theinput)) {
       char buf[MAX_LEN_MSG];
-      fc_snprintf(buf, sizeof(buf), ". %s", theinput);
+      my_snprintf(buf, sizeof(buf), ". %s", theinput);
       send_chat(buf);
     } else {
       send_chat(theinput);
@@ -153,11 +153,11 @@ static void inputline_return(GtkEntry *w, gpointer data)
       void *data;
 
       data = genlist_get(history_list, -1);
-      genlist_remove(history_list, data);
+      genlist_unlink(history_list, data);
       free(data);
     }
 
-    genlist_prepend(history_list, fc_strdup(theinput));
+    genlist_prepend(history_list, mystrdup(theinput));
     history_pos=-1;
   }
 
@@ -374,12 +374,12 @@ static void scroll_if_necessary(GtkTextView *textview,
   GtkAdjustment *vadj;
   gdouble val, max, upper, page_size;
 
-  fc_assert_ret(textview != NULL);
-  fc_assert_ret(scroll_target != NULL);
+  g_return_if_fail(textview != NULL);
+  g_return_if_fail(scroll_target != NULL);
 
   sw = gtk_widget_get_parent(GTK_WIDGET(textview));
-  fc_assert_ret(sw != NULL);
-  fc_assert_ret(GTK_IS_SCROLLED_WINDOW(sw));
+  g_return_if_fail(sw != NULL);
+  g_return_if_fail(GTK_IS_SCROLLED_WINDOW(sw));
 
   vadj = gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(sw));
   val = gtk_adjustment_get_value(GTK_ADJUSTMENT(vadj));
@@ -956,7 +956,7 @@ static void select_color_callback(GtkToolButton *button, gpointer data)
   GdkColor *current_color = g_object_get_data(G_OBJECT(data), color_target);
 
   /* TRANS: "text" or "background". */
-  fc_snprintf(buf, sizeof(buf), _("Select the %s color"),
+  my_snprintf(buf, sizeof(buf), _("Select the %s color"),
               (const char *) g_object_get_data(G_OBJECT(button),
                                                "color_info"));
   dialog = gtk_dialog_new_with_buttons(buf, NULL, GTK_DIALOG_MODAL,
@@ -1211,9 +1211,8 @@ void chatline_init(void)
   /* Foreground selector. */
   item = gtk_tool_button_new(NULL, "");
   gtk_toolbar_insert(GTK_TOOLBAR(toolbar), item, -1);
-  g_object_set_data(G_OBJECT(item), "color_target", fc_strdup("fg_color"));
-  g_object_set_data(G_OBJECT(item), "color_info",
-                    fc_strdup(_("foreground")));
+  g_object_set_data(G_OBJECT(item), "color_target", mystrdup("fg_color"));
+  g_object_set_data(G_OBJECT(item), "color_info", mystrdup(_("foreground")));
   g_signal_connect(item, "clicked",
                    G_CALLBACK(select_color_callback), entry);
   gtk_tooltips_set_tip(tooltips, GTK_WIDGET(item),
@@ -1222,15 +1221,14 @@ void chatline_init(void)
     /* Set default foreground color. */
     color_set(G_OBJECT(entry), "fg_color", &color, GTK_TOOL_BUTTON(item));
   } else {
-    log_error("Failed to set the default foreground color.");
+    freelog(LOG_ERROR, "Failed to set the default foreground color.");
   }
 
   /* Background selector. */
   item = gtk_tool_button_new(NULL, "");
   gtk_toolbar_insert(GTK_TOOLBAR(toolbar), item, -1);
-  g_object_set_data(G_OBJECT(item), "color_target", fc_strdup("bg_color"));
-  g_object_set_data(G_OBJECT(item), "color_info",
-                    fc_strdup(_("background")));
+  g_object_set_data(G_OBJECT(item), "color_target", mystrdup("bg_color"));
+  g_object_set_data(G_OBJECT(item), "color_info", mystrdup(_("background")));
   g_signal_connect(item, "clicked",
                    G_CALLBACK(select_color_callback), entry);
   gtk_tooltips_set_tip(tooltips, GTK_WIDGET(item),
@@ -1239,7 +1237,7 @@ void chatline_init(void)
     /* Set default background color. */
     color_set(G_OBJECT(entry), "bg_color", &color, GTK_TOOL_BUTTON(item));
   } else {
-    log_error("Failed to set the default background color.");
+    freelog(LOG_ERROR, "Failed to set the default background color.");
   }
 
   gtk_toolbar_insert(GTK_TOOLBAR(toolbar),

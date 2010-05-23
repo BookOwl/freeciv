@@ -15,6 +15,7 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -244,11 +245,11 @@ static void historian_generic(enum historian_type which_news)
 		 _(ranking[rank]),
 		 i + 1,
 		 nation_plural_for_player(size[i].player));
-    fc_strlcat(buffer, "\n", sizeof(buffer));
+    mystrlcat(buffer, "\n", sizeof(buffer));
   }
-  fc_snprintf(title, sizeof(title), _(historian_message[which_news]),
+  my_snprintf(title, sizeof(title), _(historian_message[which_news]),
               textyear(game.info.year),
-              _(historian_name[fc_rand(ARRAY_SIZE(historian_name))]));
+              _(historian_name[myrand(ARRAY_SIZE(historian_name))]));
   page_conn_etype(game.est_connections, _("Historian Publishes!"),
 		  title, buffer, E_BROADCAST_REPORT);
 }
@@ -581,8 +582,8 @@ static const char *value_units(int val, const char *uni)
 {
   static char buf[64];
 
-  if (fc_snprintf(buf, sizeof(buf), "%s%s", int_to_text(val), uni) == -1) {
-    log_error("String truncated in value_units()!");
+  if (my_snprintf(buf, sizeof(buf), "%s%s", int_to_text(val), uni) == -1) {
+    die("String truncated in value_units()!");
   }
 
   return buf;
@@ -639,16 +640,16 @@ static const char *number_to_ordinal_string(int num)
   static char buf[16];
   char fmt[] = "(%d%s)";
 
-  fc_assert_action(num > 0, num = (num % 10) + 10);
+  assert(num > 0);
 
   if ((num % 10) == 1 && num != 11) {
-    fc_snprintf(buf, sizeof(buf), fmt, num, _("st"));
+    my_snprintf(buf, sizeof(buf), fmt, num, _("st"));
   } else if ((num % 10) == 2 && num != 12) {
-    fc_snprintf(buf, sizeof(buf), fmt, num, _("nd"));
+    my_snprintf(buf, sizeof(buf), fmt, num, _("nd"));
   } else if ((num % 10) == 3 && num != 13) {
-    fc_snprintf(buf, sizeof(buf), fmt, num, _("rd"));
+    my_snprintf(buf, sizeof(buf), fmt, num, _("rd"));
   } else {
-    fc_snprintf(buf, sizeof(buf), fmt, num, _("th"));
+    my_snprintf(buf, sizeof(buf), fmt, num, _("th"));
   }
 
   return buf;
@@ -712,13 +713,14 @@ static void dem_line_item(char *outptr, size_t out_size,
 
 /*************************************************************************
   Verify that a given demography string is valid.  See
-  game.demography. If the string is not valid the index of the _first_
-  invalid character is return as 'error'.
+  game.demography.
 
   Other settings callback functions are in settings.c, but this one uses
   static values from this file so it's done separately.
 *************************************************************************/
-bool is_valid_demography(const char *demography, int *error)
+bool is_valid_demography(const char *demography,
+                         struct connection *caller,
+                         const char **error_string)
 {
   int len = strlen(demography), i;
 
@@ -749,15 +751,15 @@ bool is_valid_demography(const char *demography, int *error)
     }
 
     if (!found) {
-      if (error != NULL) {
-        (*error) = i;
-      }
       /* The character is invalid. */
+      *error_string = _("Demography string contains invalid characters. "
+			"Try \"help demography\".");
       return FALSE;
     }
   }
 
   /* Looks like all characters were valid. */
+  *error_string = NULL;
   return TRUE;
 }
 
@@ -776,7 +778,7 @@ void report_demographics(struct connection *pconn)
   struct player *pplayer = pconn->playing;
 
   BV_CLR_ALL(selcols);
-  fc_assert_ret(ARRAY_SIZE(coltable) == DEM_COL_LAST);
+  assert(ARRAY_SIZE(coltable) == DEM_COL_LAST);
   for (i = 0; i < DEM_COL_LAST; i++) {
     if (strchr(game.server.demography, coltable[i].key)) {
       BV_SET(selcols, i);
@@ -800,7 +802,7 @@ void report_demographics(struct connection *pconn)
 
   /* TRANS: <nation adjective> <government name> (<year>).
    * E.g. "Polish Despotism (200 AD)". */
-  fc_snprintf(civbuf, sizeof(civbuf), _("%s %s (%s)"),
+  my_snprintf(civbuf, sizeof(civbuf), _("%s %s (%s)"),
               nation_adjective_for_player(pplayer),
               government_name_for_player(pplayer),
               textyear(game.info.year));
@@ -841,36 +843,36 @@ static bool scan_score_log(FILE * fp, int *last_turn, char *id,
   for (line_nr = 1;; line_nr++) {
     if (!fgets(line, sizeof(line), fp)) {
       if (feof(fp) != 0) {
-        break;
+	break;
       }
-      log_error("Can't read scorelog file header!");
+      freelog(LOG_ERROR, "Can't read scorelog file header!");
       return FALSE;
     }
 
     ptr = strchr(line, '\n');
     if (!ptr) {
-      log_error("Scorelog file line is too long!");
+      freelog(LOG_ERROR, "Scorelog file line is too long!");
       return FALSE;
     }
     *ptr = '\0';
 
     if (line_nr == 1) {
       if (strncmp(line, scorelog_magic, strlen(scorelog_magic)) != 0) {
-        log_error("Bad magic in file line %d!", line_nr);
-        return FALSE;
+	freelog(LOG_ERROR, "Bad magic in file line %d!", line_nr);
+	return FALSE;
       }
     }
 
     if (strncmp(line, "id ", strlen("id ")) == 0) {
       if (strlen(id) > 0) {
-        log_error("Multiple ID entries!");
-        return FALSE;
+	freelog(LOG_ERROR, "Multiple ID entries!");
+	return FALSE;
       }
-      fc_strlcpy(id, line + strlen("id "), MAX_LEN_GAME_IDENTIFIER);
+      mystrlcpy(id, line + strlen("id "), MAX_LEN_GAME_IDENTIFIER);
       if (strcmp(id, server.game_identifier) != 0) {
-        log_error("IDs don't match! game='%s' scorelog='%s'",
-                  server.game_identifier, id);
-        return FALSE;
+	freelog(LOG_ERROR, "IDs don't match! game='%s' scorelog='%s'",
+		server.game_identifier, id);
+	return FALSE;
       }
     }
 
@@ -878,11 +880,11 @@ static bool scan_score_log(FILE * fp, int *last_turn, char *id,
       int turn;
 
       if (sscanf(line + strlen("turn "), "%d", &turn) != 1) {
-        log_error("Scorelog file line is bad!");
-        return FALSE;
+	freelog(LOG_ERROR, "Scorelog file line is bad!");
+	return FALSE;
       }
 
-      fc_assert_ret_val(turn > *last_turn, FALSE);
+      assert(turn > *last_turn);
       *last_turn = turn;
     }
 
@@ -890,22 +892,22 @@ static bool scan_score_log(FILE * fp, int *last_turn, char *id,
       int turn, plr_no;
       char plr_name[MAX_LEN_NAME];
 
-      if (3 != sscanf(line + strlen("addplayer "), "%d %d %s",
-                      &turn, &plr_no, plr_name)) {
-        log_error("Scorelog file line is bad!");
-        return FALSE;
+      if (sscanf
+	  (line + strlen("addplayer "), "%d %d %s", &turn, &plr_no,
+	   plr_name) != 3) {
+	freelog(LOG_ERROR, "Scorelog file line is bad!");
+	return FALSE;
       }
 
-      fc_strlcpy(player_names[plr_no], plr_name, MAX_LEN_NAME);
+      mystrlcpy(player_names[plr_no], plr_name, MAX_LEN_NAME);
     }
 
     if (strncmp(line, "delplayer ", strlen("delplayer ")) == 0) {
       int turn, plr_no;
 
-      if (2 != sscanf(line + strlen("delplayer "), "%d %d",
-                      &turn, &plr_no)) {
-        log_error("Scorelog file line is bad!");
-        return FALSE;
+      if (sscanf(line + strlen("delplayer "), "%d %d", &turn, &plr_no) != 2) {
+	freelog(LOG_ERROR, "Scorelog file line is bad!");
+	return FALSE;
       }
 
       player_names[plr_no][0] = '\0';
@@ -913,17 +915,17 @@ static bool scan_score_log(FILE * fp, int *last_turn, char *id,
   }
 
   if (*last_turn == -1) {
-    log_error("Scorelog contains no turn!");
+    freelog(LOG_ERROR, "Scorelog contains no turn!");
     return FALSE;
   }
 
   if (strlen(id) == 0) {
-    log_error("Scorelog contains no ID!");
+    freelog(LOG_ERROR, "Scorelog contains no ID!");
     return FALSE;
   }
 
   if (*last_turn + 1 != game.info.turn) {
-    log_error("Scorelog doesn't match savegame!");
+    freelog(LOG_ERROR, "Scorelog doesn't match savegame!");
     return FALSE;
   }
 
@@ -1025,8 +1027,8 @@ void log_civ_score(void)
     case SL_CREATE:
       fp = fc_fopen(logname, "w");
       if (!fp) {
-        log_error("Can't open scorelog file for creation!");
-        goto log_civ_score_disable;
+	freelog(LOG_ERROR, "Can't open scorelog file for creation!");
+	goto log_civ_score_disable;
       }
       fprintf(fp, "%s%s\n", scorelog_magic, VERSION_STRING);
       fprintf(fp, 
@@ -1043,12 +1045,12 @@ void log_civ_score(void)
     case SL_APPEND:
       fp = fc_fopen(logname, "a");
       if (!fp) {
-        log_error("Can't open scorelog file for appending!");
-        goto log_civ_score_disable;
+	freelog(LOG_ERROR, "Can't open scorelog file for appending!");
+	goto log_civ_score_disable;
       }
       break;
     default:
-      log_error("log_civ_score: bad operation %d", (int) oper);
+      freelog(LOG_ERROR, "log_civ_score: bad operation %d", (int) oper);
       goto log_civ_score_disable;
     }
   }
@@ -1072,8 +1074,8 @@ void log_civ_score(void)
       fprintf(fp, "addplayer %d %d %s\n", game.info.turn,
 	      player_number(pplayer),
 	      player_name(pplayer));
-      fc_strlcpy(player_name_ptrs[player_index(pplayer)],
-                 player_name(pplayer), MAX_LEN_NAME);
+      mystrlcpy(player_name_ptrs[player_index(pplayer)], player_name(pplayer),
+		MAX_LEN_NAME);
     }
   } players_iterate_end;
 
@@ -1084,8 +1086,8 @@ void log_civ_score(void)
       fprintf(fp, "addplayer %d %d %s\n", game.info.turn,
 	      player_number(pplayer),
 	      player_name(pplayer));
-      fc_strlcpy(player_names[player_index(pplayer)],
-                 player_name(pplayer), MAX_LEN_NAME);
+      mystrlcpy(player_names[player_index(pplayer)], player_name(pplayer),
+		MAX_LEN_NAME);
     }
   } players_iterate_end;
 
@@ -1128,7 +1130,7 @@ void make_history_report(void)
   }
 
   game.server.scoreturn = (game.info.turn + GAME_DEFAULT_SCORETURN
-                           + fc_rand(GAME_DEFAULT_SCORETURN));
+                           + myrand(GAME_DEFAULT_SCORETURN));
 
   historian_generic(game.server.scoreturn % HISTORIAN_LAST);
 }
@@ -1205,10 +1207,10 @@ static void page_conn_etype(struct conn_list *dest, const char *caption,
   int len;
   struct packet_page_msg genmsg;
 
-  len = fc_snprintf(genmsg.message, sizeof(genmsg.message),
-                    "%s\n%s\n%s", caption, headline, lines);
+  len = my_snprintf(genmsg.message, sizeof(genmsg.message),
+		    "%s\n%s\n%s", caption, headline, lines);
   if (len == -1) {
-    log_error("Message truncated in page_conn_etype()!");
+    freelog(LOG_ERROR, "Message truncated in page_conn_etype()!");
   }
   genmsg.event = event;
   

@@ -100,7 +100,7 @@ void diplhand_free(void)
 {
   free_treaties();
 
-  treaty_list_destroy(treaties);
+  treaty_list_free(treaties);
   treaties = NULL;
 }
 
@@ -176,9 +176,10 @@ void handle_diplomacy_accept_treaty_req(struct player *pplayer,
 	switch(pclause->type) {
 	case CLAUSE_EMBASSY:
           if (player_has_real_embassy(pother, pplayer)) {
-            log_error("%s tried to give embassy to %s, who already "
-                      "has an embassy",
-                      player_name(pplayer), player_name(pother));
+            freelog(LOG_ERROR, "%s tried to give embassy to %s, who already "
+                    "has an embassy",
+                    player_name(pplayer),
+                    player_name(pother));
             return;
           }
           break;
@@ -186,9 +187,9 @@ void handle_diplomacy_accept_treaty_req(struct player *pplayer,
           if (!player_invention_reachable(pother, pclause->value)) {
 	    /* It is impossible to give a technology to a civilization that
 	     * can never possess it (the client should enforce this). */
-            log_error("Treaty: %s can't have tech %s",
-                      nation_rule_name(nation_of_player(pother)),
-                      advance_name_by_player(pplayer, pclause->value));
+	    freelog(LOG_ERROR, "Treaty: %s can't have tech %s",
+                    nation_rule_name(nation_of_player(pother)),
+		    advance_name_by_player(pplayer, pclause->value));
             notify_player(pplayer, NULL, E_DIPLOMACY, ftc_server,
                           _("The %s can't accept %s."),
                           nation_plural_for_player(pother),
@@ -196,10 +197,11 @@ void handle_diplomacy_accept_treaty_req(struct player *pplayer,
 	    return;
           }
 	  if (player_invention_state(pplayer, pclause->value) != TECH_KNOWN) {
-            log_error("Nation %s try to give unknown tech %s to nation %s.",
-                      nation_rule_name(nation_of_player(pplayer)),
-                      advance_name_by_player(pplayer, pclause->value),
-                      nation_rule_name(nation_of_player(pother)));
+	    freelog(LOG_ERROR,
+                    "Nation %s try to give unknown tech %s to nation %s.",
+		    nation_rule_name(nation_of_player(pplayer)),
+		    advance_name_by_player(pplayer, pclause->value),
+		    nation_rule_name(nation_of_player(pother)));
             notify_player(pplayer, NULL, E_DIPLOMACY, ftc_server,
 			  _("You don't have tech %s, you can't accept treaty."),
 			  advance_name_for_player(pplayer, pclause->value));
@@ -402,39 +404,36 @@ void handle_diplomacy_accept_treaty_req(struct player *pplayer,
          * and try to give us the same tech at the same time. This
          * should be handled discreetly instead of giving a core dump. */
         if (player_invention_state(pdest, pclause->value) == TECH_KNOWN) {
-          log_verbose("Nation %s already know tech %s, "
-                      "that %s want to give them.",
-                      nation_rule_name(nation_of_player(pdest)),
-                      advance_name_by_player(pplayer, pclause->value),
-                      nation_rule_name(nation_of_player(pgiver)));
+	  freelog(LOG_VERBOSE,
+                  "Nation %s already know tech %s, that %s want to give them.",
+		  nation_rule_name(nation_of_player(pdest)),
+		  advance_name_by_player(pplayer, pclause->value),
+		  nation_rule_name(nation_of_player(pgiver)));
           break;
         }
         notify_player(pdest, NULL, E_TECH_GAIN, ftc_server,
                       _("You are taught the knowledge of %s."),
                       advance_name_for_player(pdest, pclause->value));
 
-        if (tech_transfer(pdest, pgiver, pclause->value)) {
-          notify_embassies(pdest, pgiver, NULL, E_TECH_GAIN, ftc_server,
-                           _("The %s have acquired %s from the %s."),
-                           nation_plural_for_player(pdest),
-                           advance_name_for_player(pdest, pclause->value),
-                           nation_plural_for_player(pgiver));
+        notify_embassies(pdest, pgiver, NULL, E_TECH_GAIN, ftc_server,
+                         _("The %s have acquired %s from the %s."),
+                         nation_plural_for_player(pdest),
+                         advance_name_for_player(pdest, pclause->value),
+                         nation_plural_for_player(pgiver));
 
-          script_signal_emit("tech_researched", 3,
-                             API_TYPE_TECH_TYPE,
-                             advance_by_number(pclause->value),
-                             API_TYPE_PLAYER, pdest,
-                             API_TYPE_STRING, "traded");
-          do_dipl_cost(pdest, pclause->value);
-          found_new_tech(pdest, pclause->value, FALSE, TRUE);
-        }
-        break;
+	script_signal_emit("tech_researched", 3,
+			   API_TYPE_TECH_TYPE, advance_by_number(pclause->value),
+			   API_TYPE_PLAYER, pdest,
+			   API_TYPE_STRING, "traded");
+	do_dipl_cost(pdest, pclause->value);
+
+	found_new_tech(pdest, pclause->value, FALSE, TRUE);
+	break;
       case CLAUSE_GOLD:
           notify_player(pdest, NULL, E_DIPLOMACY, ftc_server,
                         _("You get %d gold."), pclause->value);
-        pgiver->economic.gold -= pclause->value;
-        pdest->economic.gold += pclause->value
-                                * (100 - game.server.diplcost) / 100;
+	pgiver->economic.gold -= pclause->value;
+	pdest->economic.gold += pclause->value * (100 - game.info.diplcost) / 100;
 	break;
       case CLAUSE_MAP:
 	give_map_from_player_to_player(pgiver, pdest);
@@ -459,8 +458,9 @@ void handle_diplomacy_accept_treaty_req(struct player *pplayer,
 	  struct city *pcity = game_find_city_by_number(pclause->value);
 
 	  if (!pcity) {
-            log_error("Treaty city id %d not found - skipping clause.",
-                      pclause->value);
+	    freelog(LOG_ERROR,
+		    "Treaty city id %d not found - skipping clause.",
+		    pclause->value);
 	    break;
 	  }
 
@@ -561,7 +561,7 @@ void handle_diplomacy_accept_treaty_req(struct player *pplayer,
         worker_refresh_required = TRUE;
 	break;
       case CLAUSE_LAST:
-        log_error("Received bad clause type");
+        freelog(LOG_ERROR, "Received bad clause type");
         break;
       }
 
@@ -579,7 +579,7 @@ void handle_diplomacy_accept_treaty_req(struct player *pplayer,
     }
 
   cleanup:
-    treaty_list_remove(treaties, ptreaty);
+    treaty_list_unlink(treaties, ptreaty);
     clear_treaty(ptreaty);
     free(ptreaty);
     send_player_info(pplayer, NULL);
@@ -702,7 +702,7 @@ static void really_diplomacy_cancel_meeting(struct player *pplayer,
     notify_player(pplayer, NULL, E_DIPLOMACY, ftc_server,
                   _("Meeting with %s canceled."), 
                   player_name(pother));
-    treaty_list_remove(treaties, ptreaty);
+    treaty_list_unlink(treaties, ptreaty);
     clear_treaty(ptreaty);
     free(ptreaty);
   }
@@ -777,7 +777,7 @@ void send_diplomatic_meetings(struct connection *dest)
     struct Treaty *ptreaty = find_treaty(pplayer, other);
 
     if (ptreaty) {
-      fc_assert_action(pplayer != other, continue);
+      assert(pplayer != other);
       dsend_packet_diplomacy_init_meeting(dest, player_number(other),
                                           player_number(pplayer));
       clause_list_iterate(ptreaty->clauses, pclause) {

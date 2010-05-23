@@ -17,15 +17,11 @@
 
 #include "citydlg_common.h"
 
-void real_city_dialog_popup(struct city *pcity);
+void popup_city_dialog(struct city *pcity);
 void popdown_city_dialog(struct city *pcity);
 void popdown_all_city_dialogs(void);
-void real_city_dialog_refresh(struct city *pcity);
+void refresh_city_dialog(struct city *pcity);
 void refresh_unit_city_dialogs(struct unit *punit);
 bool city_dialog_is_open(struct city *pcity);
-
-/* Actually defined in update_queue.c */
-void popup_city_dialog(struct city *pcity);
-void refresh_city_dialog(struct city *pcity);
 
 #endif  /* FC__CITYDLG_G_H */

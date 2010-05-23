@@ -15,6 +15,7 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -271,11 +272,12 @@ static const char *convert_intl_marking(const char *str)
   static struct astring buf = ASTRING_INIT;
   int len = strlen(str);
 
-  fc_assert_ret_val(len >= 5, str);
-  astr_set(&buf, "%s", str + 3);
-  *((char *) &astr_str(&buf)[len - 5]) = '\0';
+  assert(len>=5);
+  astr_minsize(&buf, len-2);	/* +1 nul, -3 start */
+  strcpy(buf.str, str+3);
+  buf.str[len-5] = '\0';
 
-  return _(astr_str(&buf));
+  return _(buf.str);
 }
 
 /**************************************************************************

@@ -41,14 +41,13 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <stdarg.h>
 
-/* utility */
 #include "hash.h"
 #include "log.h"
 #include "registry.h"
 
-/* scripting */
 #include "script.h"
 
 #include "script_signal.h"
@@ -173,7 +172,7 @@ internal_signal_callback_append(struct signal_callback_list *list,
   struct signal_callback *callback;
 
   callback = fc_malloc(sizeof(*callback));
-  callback->name = fc_strdup(callback_name);
+  callback->name = mystrdup(callback_name);
 
   signal_callback_list_append(list, callback);
   return callback;
@@ -185,7 +184,7 @@ internal_signal_callback_append(struct signal_callback_list *list,
 static void internal_signal_callback_remove(struct signal_callback_list *list,
 					    struct signal_callback *callback)
 {
-  signal_callback_list_remove(list, callback);
+  signal_callback_list_unlink(list, callback);
 
   free(callback->name);
   free(callback);
@@ -198,12 +197,12 @@ static void internal_signal_create(const char *signal_name,
 				   int nargs, enum api_types args[])
 {
   if (hash_key_exists(signals, signal_name)) {
-    log_error("Signal \"%s\" was already created.", signal_name);
+    freelog(LOG_ERROR, "Signal \"%s\" was already created.", signal_name);
   } else {
     char *name;
     struct signal *signal;
 
-    name = fc_strdup(signal_name);
+    name = mystrdup(signal_name);
 
     signal = fc_malloc(sizeof(*signal));
     signal->nargs = nargs;
@@ -228,11 +227,11 @@ static void internal_signal_free(const char *signal_name)
       internal_signal_callback_remove(signal->callbacks, pcallback);
     } signal_callback_list_iterate_end;
 
-    signal_callback_list_destroy(signal->callbacks);
+    signal_callback_list_free(signal->callbacks);
     free(signal);
   } else {
-    log_error("Signal \"%s\" does not exist, so cannot be freed.",
-              signal_name);
+    freelog(LOG_ERROR, "Signal \"%s\" does not exist, so cannot be freed.",
+	    signal_name);
   }
 }
 
@@ -250,8 +249,9 @@ void script_signal_emit(const char *signal_name, int nargs, ...)
 
   if (signal) {
     if (signal->nargs != nargs) {
-      log_error("Signal \"%s\" requires %d args, was passed %d on invoke.",
-                signal_name, signal->nargs, nargs);
+      freelog(LOG_ERROR,
+	      "Signal \"%s\" requires %d args, was passed %d on invoke.",
+	      signal_name, signal->nargs, nargs);
     } else {
       signal_callback_list_iterate(signal->callbacks, pcallback) {
         va_start(args, nargs);
@@ -263,8 +263,8 @@ void script_signal_emit(const char *signal_name, int nargs, ...)
       } signal_callback_list_iterate_end;
     }
   } else {
-    log_error("Signal \"%s\" does not exist, so cannot be invoked.",
-              signal_name);
+    freelog(LOG_ERROR, "Signal \"%s\" does not exist, so cannot be invoked.",
+	    signal_name);
   }
 }
 
@@ -278,7 +278,7 @@ void script_signal_create_valist(const char *signal_name,
 
   signal = hash_lookup_data(signals, signal_name);
   if (signal) {
-    log_error("Signal \"%s\" was already created.", signal_name);
+    freelog(LOG_ERROR, "Signal \"%s\" was already created.", signal_name);
   } else {
     enum api_types args_array[nargs];
     int i;
@@ -307,10 +307,11 @@ void script_signal_create(const char *signal_name, int nargs, ...)
 **************************************************************************/
 void script_signal_connect(const char *signal_name, const char *callback_name)
 {
-  SCRIPT_CHECK_ARG_NIL(signal_name, 1, string);
-  SCRIPT_CHECK_ARG_NIL(callback_name, 2, string);
-
-  {
+  if (!signal_name) {
+    script_error("nil string argument 'signal_name'.");
+  } else if (!callback_name) {
+    script_error("nil string argument 'callback_name'.");
+  } else {
     struct signal *signal;
     bool duplicate = FALSE;
 
@@ -344,7 +345,7 @@ void script_signals_init(void)
   if (!signals) {
     signals = hash_new(hash_fval_string, hash_fcmp_string);
 
-    fc_assert(ARRAY_SIZE(api_type_names) == API_TYPE_LAST);
+    assert(ARRAY_SIZE(api_type_names) == API_TYPE_LAST);
 
     signals_create();
   }

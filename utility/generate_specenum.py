@@ -100,19 +100,19 @@ def make_documentation(file):
  *    enum test e;
  *    int i;
  *
- *    log_verbose("enum test [%d; %d]%s",
- *                test_min(), test_max(), test_bitwise ? " bitwise" : "");
+ *    freelog(LOG_VERBOSE, "enum test [%d; %d]%s",
+ *            test_min(), test_max(), test_bitwise ? " bitwise" : "");
  *
  *    for (e = test_begin(); e != test_end(); e = test_next(e)) {
- *      log_verbose("Value %d is %s", e, test_name(e));
+ *      freelog(LOG_VERBOSE, "Value %d is %s", e, test_name(e));
  *    }
  *
  *    for (i = 0; strings[i]; i++) {
- *      e = test_by_name(strings[i], mystrcasecmp);
+ *      e = test_by_name(strings[i], strcasecmp);
  *      if (test_is_valid(e)) {
- *        log_verbose("Value is %d for %s", e, strings[i]);
+ *        freelog(LOG_VERBOSE, "Value is %d for %s", e, strings[i]);
  *      } else {
- *        log_verbose("%s is not a valid name", strings[i]);
+ *        freelog(LOG_VERBOSE, "%s is not a valid name", strings[i]);
  *      }
  *    }
  *  }
@@ -130,8 +130,9 @@ def make_documentation(file):
 
 def make_macros(file):
     file.write('''
-#include "log.h"        /* fc_assert. */
 #include "support.h"    /* bool type. */
+
+#include <assert.h>     /* assert() */
 
 #ifndef SPECENUM_NAME
 #error Must define a SPECENUM_NAME to use this header
@@ -275,7 +276,7 @@ def make_invalid(file):
 **************************************************************************/
 static inline enum SPECENUM_NAME SPECENUM_FOO(_invalid)(void)
 {
-  fc_assert(!SPECENUM_FOO(_is_valid(SPECENUM_INVALID)));
+  assert(!SPECENUM_FOO(_is_valid(SPECENUM_INVALID)));
   return SPECENUM_INVALID;
 }
 ''')

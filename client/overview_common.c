@@ -334,8 +334,10 @@ void overview_to_map_pos(int *map_x, int *map_y,
   }
 
   NATURAL_TO_MAP_POS(map_x, map_y, ntl_x, ntl_y);
-  /* All positions on the overview should be valid. */
-  fc_assert(normalize_map_pos(map_x, map_y));
+  if (!normalize_map_pos(map_x, map_y)) {
+    /* All positions on the overview should be valid. */
+    assert(FALSE);
+  }
 }
 
 /**************************************************************************
@@ -427,7 +429,8 @@ void calculate_overview_dimensions(void)
 
   get_overview_area_dimensions(&w, &h);
 
-  log_debug("Map size %d,%d - area size %d,%d", map.xsize, map.ysize, w, h);
+  freelog(LOG_DEBUG, "Map size %d,%d - area size %d,%d",
+	  map.xsize, map.ysize, w, h);
 
   /* Set the scale of the overview map.  This attempts to limit the
    * overview to the size of the area available.
@@ -466,7 +469,7 @@ void calculate_overview_dimensions(void)
 /****************************************************************************
   Callback to be called when an overview option is changed.
 ****************************************************************************/
-void overview_redraw_callback(struct option *option)
+void overview_redraw_callback(struct client_option *option)
 {
   /* This is called once for each option changed so it is slower than
    * necessary.  If this becomes a problem it could be switched to use a
