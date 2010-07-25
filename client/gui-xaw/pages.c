@@ -64,7 +64,7 @@ void start_page_start_callback(Widget w, XtPointer client_data,
 /***************************************************************************
   Returns current client page
 ***************************************************************************/
-enum client_pages get_current_client_page(void)
+enum client_pages get_client_page(void)
 {
   return old_page;
 }
@@ -73,7 +73,7 @@ enum client_pages get_current_client_page(void)
   Sets the "page" that the client should show.  See documentation in
   pages_g.h.
 **************************************************************************/
-void real_set_client_page(enum client_pages page)
+void set_client_page(enum client_pages page)
 {
   /* PORTME, PORTME, PORTME */
   switch (page) {
@@ -241,7 +241,7 @@ void update_start_page(void)
 	leader = player_name(pplayer);
       }
 
-      fc_snprintf(namelist_text[j], sizeof(namelist_text[j]),
+      my_snprintf(namelist_text[j], sizeof(namelist_text[j]),
 		  "%-16s %-5s %-16s %-16s %4d",
 		  name,
 		  is_ready ? " Yes " : " No  ",
@@ -260,7 +260,7 @@ void update_start_page(void)
       nation = "";
       leader = "";
 
-      fc_snprintf(namelist_text[j], sizeof(namelist_text[j]),
+      my_snprintf(namelist_text[j], sizeof(namelist_text[j]),
 		  "%-16s %-5s %-16s %-16s %4d",
 		  name,
 		  " No   ",

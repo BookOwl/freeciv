@@ -15,6 +15,7 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h> /* sqrt */
@@ -280,7 +281,7 @@ static void create_tech_tree(Widget tree, Widget parent, int tech, int levels)
      return;
   }
   
-  fc_snprintf(label, sizeof(label),
+  my_snprintf(label, sizeof(label),
 	      "%s:%d", advance_name_translation(advance_by_number(tech)),
 	      num_unknown_techs_for_goal(client.conn.playing, tech));
 
@@ -954,7 +955,7 @@ static void help_update_tech(const struct help_item *pitem, char *title)
     create_tech_tree(help_tech_tree, 0, advance_count(), 3);
     strcpy(buf, pitem->text);
   }
-  fc_break_lines(buf, 68);
+  wordwrap_string(buf, 68);
   XtVaSetValues(help_text, XtNstring, buf, NULL);
 }
 

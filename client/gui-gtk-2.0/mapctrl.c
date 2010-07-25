@@ -15,6 +15,7 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <gtk/gtk.h>
 
 /* common & utility */

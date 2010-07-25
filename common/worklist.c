@@ -56,7 +56,7 @@ void worklist_init(struct worklist *pwl)
 ****************************************************************************/
 int worklist_length(const struct worklist *pwl)
 {
-  fc_assert_ret_val(pwl->length >= 0 && pwl->length <= MAX_LEN_WORKLIST, -1);
+  assert(pwl->length >= 0 && pwl->length <= MAX_LEN_WORKLIST);
   return pwl->length;
 }
 
@@ -111,7 +111,7 @@ void worklist_advance(struct worklist *pwl)
 ****************************************************************/
 void worklist_copy(struct worklist *dst, const struct worklist *src)
 {
-  fc_assert_ret(sizeof(*dst) == sizeof(*src));
+  assert(sizeof(*dst) == sizeof(*src));
   memcpy(dst, src, sizeof(*dst));
 }
 

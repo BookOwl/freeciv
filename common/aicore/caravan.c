@@ -17,17 +17,11 @@
 
 #include <math.h>
 
-/* utility */
-#include "log.h"
-
-/* common */
+#include "caravan.h"
 #include "game.h"
-
-/* aicore */
+#include "log.h"
 #include "path_finding.h"
 #include "pf_tools.h"
-
-#include "caravan.h"
 
 /***************************************************************************
   Create a valid parameter with default values.
@@ -86,30 +80,28 @@ bool caravan_parameter_is_legal(const struct caravan_parameter *parameter) {
 
 /***************************************************************************
   For debugging, print out the parameter.
-***************************************************************************/
-void caravan_parameter_log_real(const struct caravan_parameter *parameter,
-                                enum log_level level, const char *file,
-                                const char *function, int line)
-{
-  do_log(file, function, line, FALSE, level,
-         "parameter {\n"
-         "  horizon   = %d\n"
-         "  discount  = %g\n"
-         "  objective = <%s,%s,%s>\n"
-         "  account-broken = %s\n"
-         "  allow-foreign  = %s\n"
-         "  ignore-transit = %s\n"
-         "  convert-trade  = %s\n"
-         "}\n",
-         parameter->horizon,
-         parameter->discount,
-         parameter->consider_windfall ? "windfall" : "-",
-         parameter->consider_trade ? "trade" : "-",
-         parameter->consider_wonders ? "wonders" : "-",
-         parameter->account_for_broken_routes ? "yes" : "no",
-         parameter->allow_foreign_trade ? "yes" : "no",
-         parameter->ignore_transit_time ? "yes" : "no",
-         parameter->convert_trade ? "yes" : "no");
+ ***************************************************************************/
+void caravan_parameter_log(const struct caravan_parameter *parameter,
+                           int loglevel) {
+  freelog(loglevel, "parameter {\n"
+      "  horizon   = %d\n"
+      "  discount  = %g\n"
+      "  objective = <%s,%s,%s>\n"
+      "  account-broken = %s\n"
+      "  allow-foreign  = %s\n"
+      "  ignore-transit = %s\n"
+      "  convert-trade  = %s\n"
+      "}\n"
+      , parameter->horizon
+      , parameter->discount
+      , parameter->consider_windfall ? "windfall" : "-"
+      , parameter->consider_trade ? "trade" : "-"
+      , parameter->consider_wonders ? "wonders" : "-"
+      , parameter->account_for_broken_routes ? "yes" : "no"
+      , parameter->allow_foreign_trade ? "yes" : "no"
+      , parameter->ignore_transit_time ? "yes" : "no"
+      , parameter->convert_trade ? "yes" : "no"
+      );
 }
 
 
@@ -309,11 +301,9 @@ static double trade_benefit(const struct player *caravan_owner,
 
     return one_city_trade_benefit(src, caravan_owner, countloser, newtrade)
          + one_city_trade_benefit(dest, caravan_owner, countloser, newtrade);
-  } else {
-    /* Always fails. */
-    fc_assert_msg(FALSE == param->convert_trade,
-                  "Unimplemented functionality: "
-                  "using CM to calculate trade.");
+  }
+  else {
+    die("unimplemented functionality: using CM to calculate trade");
     return 0;
   }
 }
@@ -346,7 +336,7 @@ static double wonder_benefit(const struct unit *caravan, int arrival_time,
   costwith = impr_buy_gold_cost(dest->production.value.building,
       shields_at_arrival + unit_build_shield_cost(caravan));
 
-  fc_assert_ret_val(costwithout >= costwith, -1.0);
+  assert(costwithout >= costwith);
   return costwithout - costwith;
 }
 

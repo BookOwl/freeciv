@@ -15,6 +15,7 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <stdarg.h>
 #include <string.h>
 
@@ -44,12 +45,9 @@
 #include "diplhand.h"
 #include "maphand.h"
 #include "notify.h"
-
-/* server/advisors */
-#include "autosettlers.h"  /* amortize */
+#include "settlers.h"  /* amortize */
 
 /* ai */
-#include "aicity.h"
 #include "aidata.h"
 #include "ailog.h"
 #include "aiunit.h"
@@ -123,16 +121,16 @@ static int greed(int missing_love)
 ****************************************************************************/
 static enum diplstate_type pact_clause_to_diplstate_type(enum clause_type type)
 {
-  switch (type) {
-  case CLAUSE_ALLIANCE:
-    return DS_ALLIANCE;
-  case CLAUSE_PEACE:
-    return DS_PEACE;
-  case CLAUSE_CEASEFIRE:
-    return DS_CEASEFIRE;
-  default:
-    log_error("Invalid diplomatic clause %d.", type)
-    return DS_WAR;
+  switch(type) {
+    case CLAUSE_ALLIANCE:
+	return DS_ALLIANCE;
+    case CLAUSE_PEACE:
+        return DS_PEACE;
+    case CLAUSE_CEASEFIRE:
+	return DS_CEASEFIRE;
+    default:
+	assert(0);
+	return DS_WAR;
   }
 }
 
@@ -288,8 +286,8 @@ static int ai_goldequiv_clause(struct player *pplayer,
   struct ai_dip_intel *adip = &ai->diplomacy.player_intel[player_index(aplayer)];
   bool is_dangerous;
 
-  fc_assert_ret_val(pplayer != aplayer, 0);
-
+  assert(pplayer != aplayer);
+  
   diplomacy_verbose = verbose;
   ds_after = MAX(ds_after, pplayer->diplstates[player_index(aplayer)].type);
   giver = pclause->from;
@@ -674,8 +672,8 @@ void ai_treaty_accepted(struct player *pplayer, struct player *aplayer,
   enum diplstate_type ds_after =
     pplayer_get_diplstate(pplayer, aplayer)->type;
 
-  fc_assert_ret(pplayer != aplayer);
-
+  assert(pplayer != aplayer);
+  
   clause_list_iterate(ptreaty->clauses, pclause) {
     if (is_pact_clause(pclause->type)) {
       ds_after = pact_clause_to_diplstate_type(pclause->type);
@@ -852,8 +850,9 @@ static void ai_diplomacy_suggest(struct player *pplayer,
                                  int value)
 {
   if (!could_meet_with_player(pplayer, aplayer)) {
-    log_base(LOG_DIPL2, "%s tries to do diplomacy to %s without contact",
-             player_name(pplayer), player_name(aplayer));
+    freelog(LOG_DIPL2, "%s tries to do diplomacy to %s without contact",
+            player_name(pplayer),
+            player_name(aplayer));
     return;
   }
 
@@ -895,7 +894,7 @@ void ai_diplomacy_begin_new_phase(struct player *pplayer,
 
   memset(war_desire, 0, sizeof(war_desire));
 
-  fc_assert_ret(pplayer->ai_data.control);
+  assert(pplayer->ai_data.control);
   if (!pplayer->is_alive) {
     return; /* duh */
   }
@@ -992,8 +991,8 @@ void ai_diplomacy_begin_new_phase(struct player *pplayer,
 
   /* Can we win by space race? */
   if (ai->diplomacy.spacerace_leader == pplayer) {
-    log_base(LOG_DIPL2, "%s going for space race victory!",
-             player_name(pplayer));
+    freelog(LOG_DIPL2, "%s going for space race victory!",
+            player_name(pplayer));
     ai->diplomacy.strategy = WIN_SPACE; /* Yes! */
   } else {
     if (ai->diplomacy.strategy == WIN_SPACE) {
@@ -1146,8 +1145,8 @@ static void ai_go_to_war(struct player *pplayer, struct ai_data *ai,
 {
   struct ai_dip_intel *adip = &ai->diplomacy.player_intel[player_index(target)];
 
-  fc_assert_ret(pplayer != target);
-  fc_assert_ret(target->is_alive);
+  assert(pplayer != target);
+  assert(target->is_alive);
 
   switch (reason) {
   case WAR_REASON_SPACE:
@@ -1196,7 +1195,7 @@ static void ai_go_to_war(struct player *pplayer, struct ai_data *ai,
     break;
   }
 
-  fc_assert_ret(adip->countdown < 0);
+  assert(adip->countdown < 0);
 
   if (gives_shared_vision(pplayer, target)) {
     remove_shared_vision(pplayer, target);
@@ -1224,7 +1223,7 @@ static void ai_go_to_war(struct player *pplayer, struct ai_data *ai,
   }
   pplayer->ai_data.love[player_index(target)] -= MAX_AI_LOVE / 8;
 
-  fc_assert(!gives_shared_vision(pplayer, target));
+  assert(!gives_shared_vision(pplayer, target));
   DIPLO_LOG(LOG_DIPL, pplayer, target, "war declared");
 }
 
@@ -1249,7 +1248,7 @@ void static war_countdown(struct player *pplayer, struct player *target,
   DIPLO_LOG(LOG_DIPL, pplayer, target, "countdown to war in %d", countdown);
 
   /* Otherwise we're resetting an existing countdown, which is very bad */
-  fc_assert_ret(adip->countdown == -1);
+  assert(adip->countdown == -1);
 
   adip->countdown = countdown;
   adip->war_reason = reason;
@@ -1343,7 +1342,7 @@ void static war_countdown(struct player *pplayer, struct player *target,
 	       player_name(target),
 	       countdown);
       } else {
-        fc_assert(FALSE); /* Huh? */
+        assert(FALSE); /* Huh? */
       }
       break;
     }
@@ -1363,7 +1362,7 @@ void ai_diplomacy_actions(struct player *pplayer)
   struct player *target = NULL;
   int most_hatred = MAX_AI_LOVE;
 
-  fc_assert_ret(pplayer->ai_data.control);
+  assert(pplayer->ai_data.control);
   if (!pplayer->is_alive) {
     return;
   }
@@ -1413,7 +1412,7 @@ void ai_diplomacy_actions(struct player *pplayer)
       } else if (ship->state == SSHIP_STARTED 
 		 && adip->warned_about_space == 0) {
         pplayer->ai_data.love[player_index(aplayer)] -= MAX_AI_LOVE / 10;
-        adip->warned_about_space = 10 + fc_rand(6);
+        adip->warned_about_space = 10 + myrand(6);
         notify(aplayer, _("*%s (AI)* Your attempt to unilaterally "
                "dominate outer space is highly offensive."),
                player_name(pplayer));
@@ -1482,8 +1481,8 @@ void ai_diplomacy_actions(struct player *pplayer)
         && adip->countdown == -1
         && !adip->is_allied_with_ally
         && !pplayers_at_war(pplayer, aplayer)
-        && (pplayer_get_diplstate(pplayer, aplayer)->type != DS_CEASEFIRE
-            || fc_rand(5) < 1)) {
+	&& (pplayer_get_diplstate(pplayer, aplayer)->type != DS_CEASEFIRE || 
+	    myrand(5) < 1)) {
       DIPLO_LOG(LOG_DEBUG, pplayer, aplayer, "plans war to help ally %s",
                 player_name(adip->at_war_with_ally));
       war_countdown(pplayer, aplayer, 2 + map.server.size, WAR_REASON_ALLIANCE);
@@ -1562,9 +1561,9 @@ void ai_diplomacy_actions(struct player *pplayer)
      * we spam them with our gibbering chatter. */
     if (!aplayer->ai_data.control) {
       if (!pplayers_allied(pplayer, aplayer)) {
-        adip->spam = fc_rand(4) + 3; /* Bugger allies often. */
+        adip->spam = myrand(4) + 3; /* Bugger allies often. */
       } else {
-        adip->spam = fc_rand(8) + 6; /* Others are less important. */
+        adip->spam = myrand(8) + 6; /* Others are less important. */
       }
     }
 
@@ -1632,7 +1631,7 @@ void ai_diplomacy_actions(struct player *pplayer)
           if (gives_shared_vision(pplayer, aplayer)) {
             remove_shared_vision(pplayer, aplayer);
           }
-          fc_assert(!gives_shared_vision(pplayer, aplayer));
+          assert(!gives_shared_vision(pplayer, aplayer));
           break;
       }
       break;
@@ -1685,7 +1684,7 @@ void ai_diplomacy_actions(struct player *pplayer)
     case DS_ARMISTICE:
       break;
     default:
-      fc_assert_msg(FALSE, "Unknown pact type %d.", ds);
+      die("Unknown pact type");
       break;
     }
   } players_iterate_end;
@@ -1730,7 +1729,7 @@ void ai_incident(enum incident_type type, struct player *violator,
       break;
     case INCIDENT_LAST:
       /* Assert that always fails, but with meaningfull message */
-      fc_assert(type != INCIDENT_LAST);
+      assert(type != INCIDENT_LAST);
       break;
   }
 }

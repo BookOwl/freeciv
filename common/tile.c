@@ -15,6 +15,8 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
+
 /* utility */
 #include "log.h"
 #include "support.h"
@@ -112,14 +114,15 @@ struct terrain *tile_terrain(const struct tile *ptile)
 ****************************************************************************/
 void tile_set_terrain(struct tile *ptile, struct terrain *pterrain)
 {
-  fc_assert_msg(NULL == pterrain
-                || !terrain_has_flag(pterrain, TER_NO_CITIES)
-                || NULL == tile_city(ptile),
-                "At (%d, %d), the terrain \"%s\" (nb %d) doesn't "
-                "support cities, whereas \"%s\" (nb %d) is built there.",
-                TILE_XY(ptile), terrain_rule_name(pterrain),
-                terrain_number(pterrain), city_name(tile_city(ptile)),
-                tile_city(ptile)->id);
+  if (NULL != pterrain
+      && terrain_has_flag(pterrain, TER_NO_CITIES)
+      && NULL != tile_city(ptile)) {
+    freelog(LOG_ERROR, "At (%d, %d), the terrain \"%s\" (nb %d) doesn't "
+            "support cities, whereas \"%s\" (nb %d) is built there.",
+            TILE_XY(ptile), terrain_rule_name(pterrain),
+            terrain_number(pterrain), city_name(tile_city(ptile)),
+            tile_city(ptile)->id);
+  }
 
   ptile->terrain = pterrain;
   if (NULL != pterrain
@@ -397,11 +400,10 @@ int tile_activity_time(enum unit_activity activity, const struct tile *ptile)
   struct terrain *pterrain = tile_terrain(ptile);
 
   /* Make sure nobody uses old activities */
-  fc_assert_ret_val(activity != ACTIVITY_FORTRESS
-                    && activity != ACTIVITY_AIRBASE, FC_INFINITY);
+  assert(activity != ACTIVITY_FORTRESS && activity != ACTIVITY_AIRBASE);
 
   /* ACTIVITY_BASE not handled here */
-  fc_assert_ret_val(activity != ACTIVITY_BASE, FC_INFINITY);
+  assert(activity != ACTIVITY_BASE);
 
   switch (activity) {
   case ACTIVITY_POLLUTION:
@@ -497,7 +499,7 @@ void tile_change_terrain(struct tile *ptile, struct terrain *pterrain)
 ****************************************************************************/
 void tile_add_special(struct tile *ptile, enum tile_special_type special)
 {
-  fc_assert_ret(special != S_OLD_FORTRESS && special != S_OLD_AIRBASE);
+  assert(special != S_OLD_FORTRESS && special != S_OLD_AIRBASE);
 
   tile_set_special(ptile, special);
 
@@ -532,7 +534,7 @@ void tile_add_special(struct tile *ptile, enum tile_special_type special)
 ****************************************************************************/
 void tile_remove_special(struct tile *ptile, enum tile_special_type special)
 {
-  fc_assert_ret(special != S_OLD_FORTRESS && special != S_OLD_AIRBASE);
+  assert(special != S_OLD_FORTRESS && special != S_OLD_AIRBASE);
 
   tile_clear_special(ptile, special);
 
@@ -669,7 +671,7 @@ bool tile_apply_activity(struct tile *ptile, Activity_type_id act)
        on terrain type or tile specials */
     return FALSE;
   }
-  fc_assert(FALSE);
+  assert(0);
   return FALSE;
 }
 
@@ -685,15 +687,15 @@ static bool tile_info_pollution(char *buf, int bufsz,
   if (tile_has_special(ptile, special)) {
     if (!prevp) {
       if (linebreak) {
-        fc_strlcat(buf, "\n[", bufsz);
+        mystrlcat(buf, "\n[", bufsz);
       } else {
-        fc_strlcat(buf, " [", bufsz);
+        mystrlcat(buf, " [", bufsz);
       }
     } else {
-      fc_strlcat(buf, "/", bufsz);
+      mystrlcat(buf, "/", bufsz);
     }
 
-    fc_strlcat(buf, special_name_translation(special), bufsz);
+    mystrlcat(buf, special_name_translation(special), bufsz);
 
     return TRUE;
   }
@@ -816,7 +818,7 @@ void destroy_tile_virtual(struct tile *vtile)
         destroy_unit_virtual(vunit);
       }
     } unit_list_iterate_end;
-    unit_list_destroy(vtile->units);
+    unit_list_free(vtile->units);
     vtile->units = NULL;
   }
 

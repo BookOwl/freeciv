@@ -64,13 +64,9 @@ def make_documentation(file):
  * - SPECENUM_ZERO: can be defined only if SPECENUM_BITWISE was also defined.
  * It defines a 0 value.  Note that if you don't declare this value, 0 passed
  * to the 'foo_is_valid()' function will return 0.
- * - SPECENUM_COUNT: The number of elements in the enum for use in static
- * structs. It can not be used in combination with SPECENUM_BITWISE.
- * SPECENUM_is_valid() will return the invalid element for it.
- *
- * SPECENUM_VALUE%dNAME, SPECENUM_ZERONAME, SPECENUM_COUNTNAME: Can be used
- * to bind the name of the particular enumerator.  If not defined, the
- * default name for 'FOO_FIRST' is '"FOO_FIRST"'.
+ * SPECENUM_VALUE%dNAME and SPECENUM_ZERONAME: Can be used to bind the name
+ * of the particular enumerator.  If not defined, the default name for
+ * 'FOO_FIRST' is '"FOO_FIRST"'.
  *
  * Assuming SPECENUM_NAME were 'foo', including this file would provide
  * the definition for the enumeration type 'enum foo', and prototypes for
@@ -104,19 +100,19 @@ def make_documentation(file):
  *    enum test e;
  *    int i;
  *
- *    log_verbose("enum test [%d; %d]%s",
- *                test_min(), test_max(), test_bitwise ? " bitwise" : "");
+ *    freelog(LOG_VERBOSE, "enum test [%d; %d]%s",
+ *            test_min(), test_max(), test_bitwise ? " bitwise" : "");
  *
  *    for (e = test_begin(); e != test_end(); e = test_next(e)) {
- *      log_verbose("Value %d is %s", e, test_name(e));
+ *      freelog(LOG_VERBOSE, "Value %d is %s", e, test_name(e));
  *    }
  *
  *    for (i = 0; strings[i]; i++) {
- *      e = test_by_name(strings[i], mystrcasecmp);
+ *      e = test_by_name(strings[i], strcasecmp);
  *      if (test_is_valid(e)) {
- *        log_verbose("Value is %d for %s", e, strings[i]);
+ *        freelog(LOG_VERBOSE, "Value is %d for %s", e, strings[i]);
  *      } else {
- *        log_verbose("%s is not a valid name", strings[i]);
+ *        freelog(LOG_VERBOSE, "%s is not a valid name", strings[i]);
  *      }
  *    }
  *  }
@@ -134,8 +130,9 @@ def make_documentation(file):
 
 def make_macros(file):
     file.write('''
-#include "log.h"        /* fc_assert. */
 #include "support.h"    /* bool type. */
+
+#include <assert.h>     /* assert() */
 
 #ifndef SPECENUM_NAME
 #error Must define a SPECENUM_NAME to use this header
@@ -154,9 +151,6 @@ def make_macros(file):
 #endif
 
 #ifdef SPECENUM_BITWISE
-#ifdef SPECENUM_COUNT
-#error Cannot define SPECENUM_COUNT when SPECENUM_BITWISE is defined.
-#endif
 #define SPECENUM_VALUE(value) (1 << value)
 #else /* SPECENUM_BITWISE */
 #ifdef SPECENUM_ZERO
@@ -204,14 +198,9 @@ enum SPECENUM_NAME {
 #endif /* SPECENUM_VALUE%d */
 '''%(i,i,i,i,i,i))
 
-    file.write('''
-#ifdef SPECENUM_COUNT
-  SPECENUM_COUNT = (SPECENUM_MAX_VALUE + 1),
-#endif /* SPECENUM_COUNT */
-};
+    file.write('''};
 ''')
 
-    macros.append("SPECENUM_COUNT")
     for i in range(max_enum_values):
         macros.append("SPECENUM_VALUE%d"%i)
 
@@ -274,10 +263,6 @@ static inline bool SPECENUM_FOO(_is_valid)(enum SPECENUM_NAME enumerator)
 
     file.write('''
     return TRUE;
-#ifdef SPECENUM_COUNT
-  case SPECENUM_COUNT:
-    return FALSE;
-#endif /* SPECENUM_COUNT */
   }
 
   return FALSE;
@@ -291,7 +276,7 @@ def make_invalid(file):
 **************************************************************************/
 static inline enum SPECENUM_NAME SPECENUM_FOO(_invalid)(void)
 {
-  fc_assert(!SPECENUM_FOO(_is_valid(SPECENUM_INVALID)));
+  assert(!SPECENUM_FOO(_is_valid(SPECENUM_INVALID)));
   return SPECENUM_INVALID;
 }
 ''')
@@ -375,14 +360,6 @@ static inline const char *SPECENUM_FOO(_name)(enum SPECENUM_NAME enumerator)
         macros.append("SPECENUM_VALUE%dNAME"%i)
 
     file.write('''
-#ifdef SPECENUM_COUNT
-  case SPECENUM_COUNT:
-#ifdef SPECENUM_COUNTNAME
-    return SPECENUM_COUNTNAME;
-#else
-    return SPECENUM_STRING(SPECENUM_COUNT);
-#endif
-#endif /* SPECENUM_COUNT */
   }
 
   return NULL;

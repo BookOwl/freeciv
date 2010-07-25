@@ -15,10 +15,11 @@
 #include <config.h>
 #endif
 
-#include <string.h>
+#include <assert.h>
 
 /* utility */
-#include "log.h"                /* fc_assert */
+#include "fcintl.h"
+#include "log.h"
 
 /* common */
 #include "ai.h"
@@ -31,7 +32,7 @@ static struct ai_type default_ai;
 ***************************************************************/
 struct ai_type *get_ai_type(int id)
 {
-  fc_assert(id == AI_DEFAULT);
+  assert(id == AI_DEFAULT);
 
   return &default_ai;
 }

@@ -94,3 +94,11 @@ void popup_endgame_report_dialog(struct packet_endgame_report *packet)
 {
   /* PORTME */
 }
+
+/*************************************************************************
+  Show a dialog with the server options.
+*************************************************************************/
+void popup_settable_options_dialog(void)
+{
+  /* PORTME */
+}

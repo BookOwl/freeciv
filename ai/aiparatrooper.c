@@ -15,36 +15,26 @@
 #include <config.h>
 #endif
 
-/* utility */
-#include "log.h"
+#include <assert.h>
 
-/* common */
 #include "city.h"
+#include "citytools.h"
 #include "game.h"
+#include "log.h"
+#include "maphand.h"
+#include "pf_tools.h"
 #include "player.h"
 #include "unit.h"
 #include "unitlist.h"
-
-/* aicore */
-#include "pf_tools.h"
-
-/* server */
-#include "citytools.h"
-#include "maphand.h"
 #include "unittools.h"
 
-/* generator */
-#include "utilities.h"
-
-/* ai */
-#include "aicity.h"
 #include "aidata.h"
 #include "ailog.h"
+#include "aiparatrooper.h"
 #include "aiunit.h"
 #include "aitools.h"
 
-#include "aiparatrooper.h"
-
+#include "utilities.h"
 
 #define LOGLEVEL_PARATROOPER LOG_DEBUG
 
@@ -69,7 +59,7 @@ static struct tile* find_best_tile_to_paradrop_to(struct unit *punit)
     acity = tile_city(ptile);
     if (acity && city_owner(acity) == unit_owner(punit)
         && unit_list_size(ptile->units) == 0) {
-      val = acity->size * acity->server.ai->urgency;
+      val = acity->size * acity->ai->urgency;
       if (val > best) {
 	best = val;
 	best_tile = ptile;
@@ -374,8 +364,10 @@ void ai_choose_paratrooper(struct player *pplayer, struct city *pcity,
       choice->value.utype = u_type;
       choice->type = CT_ATTACKER;
       choice->need_boat = FALSE;
-      log_base(LOGLEVEL_PARATROOPER, "%s wants to build %s (want=%d)",
-               city_name(pcity), utype_rule_name(u_type), profit);
+      freelog(LOGLEVEL_PARATROOPER, "%s wants to build %s (want=%d)",
+	      city_name(pcity),
+	      utype_rule_name(u_type),
+	      profit);
     }
   } unit_type_iterate_end;
 
@@ -383,13 +375,13 @@ void ai_choose_paratrooper(struct player *pplayer, struct city *pcity,
   for (i = 0; i < num_requirements; i++) {
     tech_req = requirements[i];
     pplayer->ai_data.tech_want[tech_req] += 2;
-    log_base(LOGLEVEL_PARATROOPER, "Raising tech want in city %s for %s "
-             "stimulating %s with %d (%d) and req",
-             city_name(pcity),
-             player_name(pplayer),
-             advance_name_by_player(pplayer, tech_req),
-             2,
-             pplayer->ai_data.tech_want[tech_req]);
+    freelog(LOGLEVEL_PARATROOPER, "Raising tech want in city %s for %s "
+	      "stimulating %s with %d (%d) and req",
+	    city_name(pcity),
+	    player_name(pplayer),
+	    advance_name_by_player(pplayer, tech_req),
+	    2,
+	    pplayer->ai_data.tech_want[tech_req]);
 
     /* now, we raise want for prerequisites */
     advance_index_iterate(A_FIRST, k) {

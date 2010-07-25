@@ -22,7 +22,6 @@ noinst_HEADERS = \
 	menu_g.h	\
 	messagedlg_g.h	\
 	messagewin_g.h	\
-	optiondlg_g.h	\
 	pages_g.h	\
 	plrdlg_g.h	\
 	ratesdlg_g.h	\

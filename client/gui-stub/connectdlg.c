@@ -56,10 +56,10 @@ void handle_authentication_req(enum authentication_type type, char *message)
   switch (type) {
   case AUTH_NEWUSER_FIRST:
      /* PORTME: switch configs if need be */
-    return;
+    break;
   case AUTH_NEWUSER_RETRY:
      /* PORTME: switch configs if need be */
-    return;
+    break;
   case AUTH_LOGIN_FIRST:
     /* if we magically have a password already present in 'password'
      * then, use that and skip the password entry dialog */
@@ -72,13 +72,15 @@ void handle_authentication_req(enum authentication_type type, char *message)
     } else {
      /* PORTME: switch configs if need be */
     }
-    return;
+    break;
   case AUTH_LOGIN_RETRY:
      /* PORTME: switch configs if need be */
-    return;
+    break;
+  default:
+    assert(0);
   }
 
-  log_error("Unsupported authentication type %d: %s.", type, message);
+  /* PORTME etc. */
 }
 
 /**************************************************************************
@@ -87,7 +89,7 @@ void handle_authentication_req(enum authentication_type type, char *message)
  This regenerates the player information from a loaded game on the
  server.
 **************************************************************************/
-void handle_game_load(bool load_successful, char *filename)
+void handle_game_load(struct packet_game_load *packet)
 { 
   /* PORTME */
 }

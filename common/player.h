@@ -61,21 +61,6 @@ struct player_economic {
   int luxury;
 };
 
-#define SPECENUM_NAME player_status
-/* 'normal' status */
-#define SPECENUM_VALUE0      PSTATUS_NORMAL
-/* set once the player is in the process of dying */
-#define SPECENUM_VALUE1      PSTATUS_DYING
-/* this player is winner in scenario game */
-#define SPECENUM_VALUE2      PSTATUS_WINNER
-/* has indicated willingness to surrender */
-#define SPECENUM_VALUE3      PSTATUS_SURRENDER
-/* keep this last */
-#define SPECENUM_COUNT       PSTATUS_COUNT
-#include "specenum_gen.h"
-
-BV_DEFINE(bv_pstatus, PSTATUS_COUNT);
-
 struct player_score {
   int happy;
   int content;
@@ -187,10 +172,14 @@ struct player {
   bool phase_done;
   int nturns_idle;
   bool is_alive;
+  bool is_dying; /* set once the player is in the process of dying */
+  bool is_winner; /* This player is winner in scenario game */
+  bool surrendered; /* has indicated willingness to surrender */
 
   /* Turn in which the player's revolution is over; see update_revolution. */
   int revolution_finishes;
 
+  bool capital; /* used to give player init_buildings in first city. */
   bv_player real_embassy;
   struct player_diplstate diplstates[MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS];
   int city_style;
@@ -207,31 +196,13 @@ struct player {
   bool is_connected;
   struct connection *current_conn;     /* non-null while handling packet */
   struct conn_list *connections;       /* will replace conn */
-  bv_player gives_shared_vision;       /* bitvector those that give you
-                                        * shared vision */
+  struct player_tile *private_map;
+  unsigned int gives_shared_vision; /* bitvector those that give you shared vision */
+  unsigned int really_gives_vision; /* takes into account that p3 may see what p1 has via p2 */
   int wonders[B_LAST];              /* contains city id's or WONDER_NOT_BUILT */
   struct attribute_block_s attribute_block;
   struct attribute_block_s attribute_block_buffer;
-
-  union {
-    struct {
-      /* Only used in the server (./ai/ and ./server/). */
-      bv_pstatus status;
-
-      bool capital; /* used to give player init_buildings in first city. */
-
-      struct player_tile *private_map;
-
-      bv_player really_gives_vision; /* takes into account that p3 may see
-                                      * what p1 has via p2 */
-
-      bv_debug debug;
-    } server;
-
-    struct {
-      /* Only used at the client (the server is omniscient; ./client/). */
-    } client;
-  };
+  bv_debug debug;
 };
 
 /* A slot is a possibly uninitialized player. */
@@ -257,6 +228,7 @@ struct player *find_player_by_name_prefix(const char *name,
 struct player *find_player_by_user(const char *name);
 
 bool player_set_nation(struct player *pplayer, struct nation_type *pnation);
+void player_set_unit_focus_status(struct player *pplayer);
 
 bool player_has_embassy(const struct player *pplayer,
                         const struct player *pplayer2);
@@ -286,8 +258,8 @@ struct city *player_find_city_by_id(const struct player *pplayer,
 struct unit *player_find_unit_by_id(const struct player *pplayer,
 				    int unit_id);
 
-bool player_in_city_map(const struct player *pplayer,
-                        const struct tile *ptile);
+bool player_in_city_radius(const struct player *pplayer,
+			   const struct tile *ptile);
 bool player_knows_techs_with_flag(const struct player *pplayer,
 				  enum tech_flag_id flag);
 int num_known_tech_with_flag(const struct player *pplayer,
@@ -336,8 +308,9 @@ bool gives_shared_vision(const struct player *me, const struct player *them);
 
 struct player_research *get_player_research(const struct player *p1);
 
+void player_set_winner(struct player *plr);
+
 /* Initialization and iteration */
-void player_diplstate_init(struct player_diplstate *diplstate);
 void player_init(struct player *plr);
 
 #define player_slots_iterate(NAME_pslot)\

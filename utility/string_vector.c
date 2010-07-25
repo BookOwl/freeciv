@@ -14,7 +14,6 @@
 #include <config.h>
 #endif
 
-#include <stdlib.h>             /* qsort() */
 #include <string.h>
 
 #include "mem.h"
@@ -45,7 +44,7 @@ static void string_free(char *string)
 static char *string_duplicate(const char *string)
 {
   if (string) {
-    return fc_strdup(string);
+    return mystrdup(string);
   }
   return NULL;
 }
@@ -143,33 +142,6 @@ void strvec_clear(struct strvec *psv)
 }
 
 /**************************************************************************
-  Remove strings which are duplicated inside the vector.
-**************************************************************************/
-void strvec_remove_duplicate(struct strvec *psv,
-                             int (*cmp_func) (const char *, const char *))
-{
-  size_t i, j;
-  const char *str1, *str2;
-
-  if (!psv->vec || 1 == psv->size) {
-    return;
-  }
-
-  for (i = 1; i < psv->size; i++) {
-    if ((str1 = psv->vec[i])) {
-      for (j = 0; j < i; j++) {
-        if ((str2 = psv->vec[j])
-            && 0 == cmp_func(str2, str1)) {
-          strvec_remove(psv, i);
-          i--;
-          break;
-        }
-      }
-    }
-  }
-}
-
-/**************************************************************************
   Remove all empty strings from the vector and removes all leading and
   trailing spaces.
 **************************************************************************/
@@ -219,16 +191,6 @@ void strvec_copy(struct strvec *dest, const struct strvec *src)
     string_free(*p);
     *p = string_duplicate(*l);
   }
-}
-
-/**************************************************************************
-  Sort the string vector, using qsort().
-**************************************************************************/
-void strvec_sort(struct strvec *psv, int (*sort_func) (const char *const *,
-                                                       const char *const *))
-{
-  qsort(psv->vec, psv->size, sizeof(const char *),
-        (int (*) (const void *, const void *)) sort_func);
 }
 
 /**************************************************************************

@@ -15,15 +15,10 @@
 #include <config.h>
 #endif
 
-/* utility */
-#include "fcintl.h"
-#include "log.h"
-
-/* common */
 #include "city.h"
 #include "effects.h"
+#include "fcintl.h"
 #include "game.h"
-
 #include "specialist.h"
 
 struct specialist specialists[SP_MAX];
@@ -75,7 +70,7 @@ Specialist_type_id specialist_count(void)
 ****************************************************************************/
 Specialist_type_id specialist_index(const struct specialist *sp)
 {
-  fc_assert_ret_val(NULL != sp, -1);
+  assert(sp);
   return sp - specialists;
 }
 
@@ -84,7 +79,7 @@ Specialist_type_id specialist_index(const struct specialist *sp)
 ****************************************************************************/
 Specialist_type_id specialist_number(const struct specialist *sp)
 {
-  fc_assert_ret_val(NULL != sp, -1);
+  assert(sp);
   return sp->item_number;
 }
 
@@ -109,7 +104,7 @@ struct specialist *find_specialist_by_rule_name(const char *name)
 
   specialist_type_iterate(i) {
     struct specialist *sp = specialist_by_number(i);
-    if (0 == fc_strcasecmp(specialist_rule_name(sp), qname)) {
+    if (0 == mystrcasecmp(specialist_rule_name(sp), qname)) {
       return sp;
     }
   } specialist_type_iterate_end;
@@ -123,46 +118,37 @@ struct specialist *find_specialist_by_rule_name(const char *name)
 **************************************************************************/
 const char *specialist_rule_name(const struct specialist *sp)
 {
-  return rule_name(&sp->name);
+  return Qn_(sp->name.vernacular);
 }
 
 /**************************************************************************
   Return the (translated) name of the specialist type.
   You don't have to free the return pointer.
 **************************************************************************/
-const char *specialist_name_translation(const struct specialist *sp)
+const char *specialist_name_translation(struct specialist *sp)
 {
-  return name_translation(&sp->name);
+  if (NULL == sp->name.translated) {
+    /* delayed (unified) translation */
+    sp->name.translated = ('\0' == sp->name.vernacular[0])
+			  ? sp->name.vernacular
+			  : Q_(sp->name.vernacular);
+  }
+  return sp->name.translated;
 }
 
 /**************************************************************************
   Return the (translated) abbreviation of the specialist type.
   You don't have to free the return pointer.
 **************************************************************************/
-const char *specialist_abbreviation_translation(const struct specialist *sp)
+const char *specialist_abbreviation_translation(struct specialist *sp)
 {
-  return name_translation(&sp->abbreviation);
-}
-
-/****************************************************************************
-  Return a string containing all the specialist abbreviations, for instance
-  "E/S/T".
-  You don't have to free the return pointer.
-****************************************************************************/
-const char *specialists_abbreviation_string(void)
-{
-  static char buf[5 * SP_MAX];
-
-  buf[0] = '\0';
-
-  specialist_type_iterate(sp) {
-    char *separator = (buf[0] == '\0') ? "" : "/";
-
-    cat_snprintf(buf, sizeof(buf), "%s%s", separator,
-                 specialist_abbreviation_translation(specialist_by_number(sp)));
-  } specialist_type_iterate_end;
-
-  return buf;
+  if (NULL == sp->abbreviation.translated) {
+    /* delayed (unified) translation */
+    sp->abbreviation.translated = ('\0' == sp->abbreviation.vernacular[0])
+				  ? sp->abbreviation.vernacular
+				  : Q_(sp->abbreviation.vernacular);
+  }
+  return sp->abbreviation.translated;
 }
 
 /****************************************************************************

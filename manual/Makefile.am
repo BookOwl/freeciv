@@ -14,9 +14,7 @@ civmanual_DEPENDENCIES = \
  $(top_builddir)/client/helpdata.lo \
  $(top_builddir)/server/scripting/libscripting.la \
  $(LUA_AS_DEPENDENCY) $(TOLUA_AS_DEPENDENCY) \
- $(top_builddir)/server/generator/libgenerator.la \
- $(top_builddir)/server/advisors/libadvisors.la
-
+ $(top_builddir)/server/generator/libgenerator.la
 civmanual_LDFLAGS = $(GGZDMOD_LDFLAGS)
 civmanual_LDADD = \
  $(top_builddir)/server/libfreeciv-srv.la \
@@ -24,6 +22,5 @@ civmanual_LDADD = \
  $(top_builddir)/server/scripting/libscripting.la \
  $(LUA_LIBS) $(TOLUA_LIBS) \
  $(top_builddir)/server/generator/libgenerator.la \
- $(top_builddir)/server/advisors/libadvisors.la \
  $(top_builddir)/common/libfreeciv.la $(INTLLIBS) \
  $(SERVER_LIBS) $(AUTH_LIBS) $(LIB_GGZDMOD)

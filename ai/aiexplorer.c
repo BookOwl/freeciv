@@ -298,7 +298,7 @@ enum unit_move_result ai_manage_explorer(struct unit *punit)
     double log_desirable;
 
     /* Our callback should insure this. */
-    fc_assert_action(map_is_known(ptile, pplayer), continue);
+    assert(map_is_known(ptile, pplayer));
 
     desirable = explorer_desirable(ptile, pplayer, punit);
 

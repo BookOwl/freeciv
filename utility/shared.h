@@ -113,8 +113,8 @@
 #define _BV_BYTE_INDEX(bits)	((bits) / 8)
 #define _BV_BITMASK(bit)	(1u << ((bit) & 0x7))
 #ifdef DEBUG
-#  define _BV_ASSERT(bv, bit) fc_assert((bit) >= 0 \
-                                        && (bit) < sizeof((bv).vec) * 8)
+#  define _BV_ASSERT(bv, bit) assert((bit) >= 0 \
+                                     && (bit) < sizeof((bv).vec) * 8)
 #else
 #  define _BV_ASSERT(bv, bit) (void)0
 #endif
@@ -163,14 +163,12 @@ bool is_base64url(const char *s);
 bool is_safe_filename(const char *name);
 void randomize_base64url_string(char *s, size_t n);
 
-int base_compare_strings(const char *first, const char *second);
 int compare_strings(const void *first, const void *second);
 int compare_strings_ptrs(const void *first, const void *second);
-int compare_strings_strvec(const char *const *first,
-                           const char *const *second);
 
 char *skip_leading_spaces(char *s);
 void remove_leading_trailing_spaces(char *s);
+int wordwrap_string(char *s, int len);
 
 bool check_strlen(const char *str, size_t len, const char *errmsg);
 size_t loud_strlcpy(char *buffer, const char *str, size_t len,
@@ -180,38 +178,40 @@ size_t loud_strlcpy(char *buffer, const char *str, size_t len,
     loud_strlcpy(buffer, str, sizeof(buffer), errmsg)
 
 char *end_of_strn(char *str, int *nleft);
+int cat_snprintf(char *str, size_t n, const char *format, ...)
+     fc__attribute((__format__ (__printf__, 3, 4)));
+
+#define die(...) real_die(__FILE__, __LINE__, __VA_ARGS__)
+void real_die(const char *file, int line, const char *format, ...)
+      fc__attribute((__format__ (__printf__, 3, 4)));
 
 /**************************************************************************
 ...
 **************************************************************************/
-struct fileinfo {
-  char *name;           /* descriptive file name string */
-  char *fullname;       /* full absolute filename */
-  time_t mtime;         /* last modification time  */
+struct datafile {
+  char *name;		/* descriptive file name string */
+  char *fullname;	/* full absolute filename */
+  time_t mtime;		/* last modification time  */
 };
 
-#define SPECLIST_TAG fileinfo
-#define SPECLIST_TYPE struct fileinfo
+#define SPECLIST_TAG datafile
+#define SPECLIST_TYPE struct datafile
 #include "speclist.h"
-#define fileinfo_list_iterate(list, pnode) \
-  TYPED_LIST_ITERATE(struct fileinfo, list, pnode)
-#define fileinfo_list_iterate_end LIST_ITERATE_END
-
+#define datafile_list_iterate(list, pnode) \
+  TYPED_LIST_ITERATE(struct datafile, list, pnode)
+#define datafile_list_iterate_end LIST_ITERATE_END
+                                                                               
 char *user_home_dir(void);
 char *user_username(char *buf, size_t bufsz);
   
-const struct strvec *get_data_dirs(void);
-const struct strvec *get_save_dirs(void);
-const struct strvec *get_scenario_dirs(void);
-
-struct strvec *fileinfolist(const struct strvec *dirs, const char *suffix);
-struct fileinfo_list *fileinfolist_infix(const struct strvec *dirs,
+const char **get_data_dirs(int *num_dirs);
+  
+char **datafilelist(const char *suffix);
+struct datafile_list *datafilelist_infix(const char *subpath,
                                          const char *infix, bool nodups);
-const char *fileinfoname(const struct strvec *dirs, const char *filename);
-struct strvec *fileinfonames(const struct strvec *dirs,
-                             const char *filename);
-const char *fileinfoname_required(const struct strvec *dirs,
-                                  const char *filename);
+char *datafilename(const char *filename);
+char **datafilenames(const char *filename);
+char *datafilename_required(const char *filename);
 
 char *get_langname(void);
 void init_nls(void);
@@ -267,13 +267,9 @@ char *skip_to_basename(char *filepath);
 bool make_dir(const char *pathname);
 bool path_is_absolute(const char *filename);
 
-char scanin(const char **buf, char *delimiters, char *dest, int size);
+char scanin(char **buf, char *delimiters, char *dest, int size);
 
 void array_shuffle(int *array, int n);
-
-void format_time_duration(time_t t, char *buf, int maxlen);
-
-bool wildcard_fit_string(const char *pattern, const char *test);
 
 /* Custom format strings. */
 struct cf_sequence;

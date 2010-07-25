@@ -28,9 +28,6 @@
 
 #include "events.h"
 
-/* utility */
-#include "genlist.h"
-
 /* Classes. */
 typedef struct player Player;
 typedef struct player_ai Player_ai;
@@ -45,14 +42,6 @@ typedef struct advance Tech_Type;
 typedef struct terrain Terrain;
 
 typedef void Nonexistent;
-
-/* List Classes.
- * NOTE: These should not to be exposed since the pointers
- * are not safe. They are only used by the API internally.
- * Separate types makes use from lua type safe.
- */
-typedef const struct genlist_link Unit_List_Link;
-typedef const struct genlist_link City_List_Link;
 
 #endif
 

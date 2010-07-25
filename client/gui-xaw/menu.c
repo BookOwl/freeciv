@@ -284,19 +284,10 @@ static char *menu_entry_text(enum MenuIndex menu, int ent, int var,
 static void revolution_menu_callback(Widget w, XtPointer client_data,
 				     XtPointer garbage);
 
-/**************************************************************************
-  Initialize menus (sensitivity, name, etc.) based on the
-  current state and current ruleset, etc.  Call menus_update().
-**************************************************************************/
-void real_menus_init(void)
-{
-  /* PORTME */
-}
-
 /****************************************************************
 ...
 *****************************************************************/
-void real_menus_update(void)
+void update_menus(void)
 {
   if (!can_client_change_view()) {
     XtSetSensitive(menus[MENU_REPORT]->button, False);
@@ -546,7 +537,7 @@ static void game_menu_callback(Widget w, XtPointer client_data,
 
   switch(pane_num) {
   case MENU_GAME_OPTIONS:
-    option_dialog_popup(_("Local Options"), client_optset);
+    popup_option_dialog();
     break;
   case MENU_GAME_MSG_OPTIONS:
     popup_messageopt_dialog();
@@ -555,7 +546,7 @@ static void game_menu_callback(Widget w, XtPointer client_data,
     options_save();
     break;
   case MENU_GAME_SERVER_OPTIONS:
-    option_dialog_popup(_("Game Settings"), server_optset);
+    popup_settable_options_dialog();
     break;
   case MENU_GAME_OUTPUT_LOG:
     log_output_window();
@@ -1118,11 +1109,11 @@ static char *menu_entry_text(enum MenuIndex menu, int ent, int var,
   xlt=_(pmenu->entries[ent].text[var]);
 
   if (strstr(xlt, "%s")) {
-    fc_snprintf(tmp, sizeof(tmp), xlt, terr);
+    my_snprintf(tmp, sizeof(tmp), xlt, terr);
     xlt=tmp;
   }
 
-  fc_snprintf(retbuf, sizeof(retbuf), "%*.*s%*.*s",
+  my_snprintf(retbuf, sizeof(retbuf), "%*.*s%*.*s",
 	  -pmenu->maxitemlen, pmenu->maxitemlen, xlt,
 	  pmenu->maxacellen, pmenu->maxacellen, pmenu->entries[ent].acel);
 

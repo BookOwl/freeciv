@@ -38,7 +38,7 @@
 #define SEQ_END '/'
 
 #define MAX_LEN_STR 32
-#define log_featured_text log_verbose
+#define LOG_FEATURED_TEXT LOG_VERBOSE
 
 #define text_tag_list_rev_iterate(tags, ptag) \
   TYPED_LIST_ITERATE_REV(struct text_tag, tags, ptag)
@@ -69,6 +69,7 @@ enum sequence_type {
 };
 
 /* Predefined colors. */
+#define FT_COLOR(fg, bg) { .foreground = fg, .background = bg }
 const struct ft_color ftc_any           = FT_COLOR(NULL,        NULL);
 
 const struct ft_color ftc_warning       = FT_COLOR("#FF0000",   NULL);
@@ -171,7 +172,7 @@ static bool find_option(const char *read, const char *option,
   size_t option_len = strlen(option);
 
   while (*read != '\0') {
-    while (fc_isspace(*read) && *read != '\0') {
+    while (my_isspace(*read) && *read != '\0') {
       read++;
     }
 
@@ -179,7 +180,7 @@ static bool find_option(const char *read, const char *option,
       /* This is this one. */
       read += option_len;
 
-      while ((fc_isspace(*read) || *read == '=') && *read != '\0') {
+      while ((my_isspace(*read) || *read == '=') && *read != '\0') {
         read++;
       }
       if (*read == '"') {
@@ -190,13 +191,13 @@ static bool find_option(const char *read, const char *option,
           return FALSE;
         }
         if (end - read + 1 > 0) {
-          fc_strlcpy(write, read, MIN(end - read + 1, write_len));
+          mystrlcpy(write, read, MIN(end - read + 1, write_len));
         } else {
           *write = '\0';
         }
         return TRUE;
       } else {
-        while (fc_isalnum(*read) && write_len > 1) {
+        while (my_isalnum(*read) && write_len > 1) {
           *write++ = *read++;
           write_len--;
         }
@@ -253,21 +254,21 @@ static bool text_tag_init_from_sequence(struct text_tag *ptag,
 
       if (!find_option(sequence, "target", buf, sizeof(buf))
           && !find_option(sequence, "tgt", buf, sizeof(buf))) {
-        log_featured_text("text_tag_init_from_sequence(): "
-                          "target link type not set.");
+        freelog(LOG_FEATURED_TEXT,
+                "text_tag_init_from_sequence: target link type not set.");
         return FALSE;
       }
 
       ptag->link.type = -1;
       for (i = 0; (name = text_link_type_name(i)); i++) {
-        if (0 == fc_strncasecmp(buf, name, strlen(name))) {
+        if (0 == mystrncasecmp(buf, name, strlen(name))) {
           ptag->link.type = i;
           break;
         }
       }
       if (ptag->link.type == -1) {
-        log_featured_text("text_tag_init_from_sequence(): "
-                          "target link type not supported (\"%s\").", buf);
+        freelog(LOG_FEATURED_TEXT, "text_tag_init_from_sequence: "
+                "target link type not supported (\"%s\").", buf);
         return FALSE;
       }
 
@@ -275,20 +276,20 @@ static bool text_tag_init_from_sequence(struct text_tag *ptag,
       case TLT_CITY:
         {
           if (!find_option(sequence, "id", buf, sizeof(buf))) {
-            log_featured_text("text_tag_init_from_sequence(): "
-                              "city link without id.");
+            freelog(LOG_FEATURED_TEXT,
+                    "text_tag_init_from_sequence: city link without id.");
             return FALSE;
           }
           if (1 != sscanf(buf, "%d", &ptag->link.id)) {
-            log_featured_text("text_tag_init_from_sequence(): "
-                              "city link without valid id (\"%s\").", buf);
+            freelog(LOG_FEATURED_TEXT, "text_tag_init_from_sequence: "
+                    "city link without valid id (\"%s\").", buf);
             return FALSE;
           }
 
           if (!find_option(sequence, "name", ptag->link.name,
                            sizeof(ptag->link.name))) {
             /* Set something as name. */
-            fc_snprintf(ptag->link.name, sizeof(ptag->link.name),
+            my_snprintf(ptag->link.name, sizeof(ptag->link.name),
                         "CITY_ID%d", ptag->link.id);
           }
         }
@@ -299,58 +300,56 @@ static bool text_tag_init_from_sequence(struct text_tag *ptag,
           int x, y;
 
           if (!find_option(sequence, "x", buf, sizeof(buf))) {
-            log_featured_text("text_tag_init_from_sequence(): "
-                              "tile link without x coordinate.");
+            freelog(LOG_FEATURED_TEXT, "text_tag_init_from_sequence: "
+                    "tile link without x coordinate.");
             return FALSE;
           }
           if (1 != sscanf(buf, "%d", &x)) {
-            log_featured_text("text_tag_init_from_sequence(): "
-                              "tile link without valid x coordinate "
-                              "(\"%s\").", buf);
+            freelog(LOG_FEATURED_TEXT, "text_tag_init_from_sequence: "
+                    "tile link without valid x coordinate (\"%s\").", buf);
             return FALSE;
           }
 
           if (!find_option(sequence, "y", buf, sizeof(buf))) {
-            log_featured_text("text_tag_init_from_sequence(): "
-                              "tile link without y coordinate.");
+            freelog(LOG_FEATURED_TEXT, "text_tag_init_from_sequence: "
+                    "tile link without y coordinate.");
             return FALSE;
           }
           if (1 != sscanf(buf, "%d", &y)) {
-            log_featured_text("text_tag_init_from_sequence(): "
-                              "tile link without valid y coordinate "
-                              "(\"%s\").", buf);
+            freelog(LOG_FEATURED_TEXT, "text_tag_init_from_sequence: "
+                    "tile link without valid y coordinate (\"%s\").", buf);
             return FALSE;
           }
 
           ptile = map_pos_to_tile(x, y);
           if (!ptile) {
-            log_featured_text("text_tag_init_from_sequence(): "
-                              "(%d, %d) are not valid coordinates "
-                              "in this game.", x, y);
+            freelog(LOG_FEATURED_TEXT, "text_tag_init_from_sequence: "
+                    "(%d, %d) are not valid coordinates in this game.",
+                    x, y);
             return FALSE;
           }
           ptag->link.id = tile_index(ptile);
-          fc_snprintf(ptag->link.name, sizeof(ptag->link.name),
+          my_snprintf(ptag->link.name, sizeof(ptag->link.name),
                       "(%d, %d)", TILE_XY(ptile));
         }
         return TRUE;
       case TLT_UNIT:
         {
           if (!find_option(sequence, "id", buf, sizeof(buf))) {
-            log_featured_text("text_tag_init_from_sequence(): "
-                              "unit link without id.");
+            freelog(LOG_FEATURED_TEXT,
+                    "text_tag_init_from_sequence: unit link without id.");
             return FALSE;
           }
           if (1 != sscanf(buf, "%d", &ptag->link.id)) {
-            log_featured_text("text_tag_init_from_sequence(): "
-                              "unit link without valid id (\"%s\").", buf);
+            freelog(LOG_FEATURED_TEXT, "text_tag_init_from_sequence: "
+                    "unit link without valid id (\"%s\").", buf);
             return FALSE;
           }
 
           if (!find_option(sequence, "name", ptag->link.name,
                            sizeof(ptag->link.name))) {
             /* Set something as name. */
-            fc_snprintf(ptag->link.name, sizeof(ptag->link.name),
+            my_snprintf(ptag->link.name, sizeof(ptag->link.name),
                         "UNIT_ID%d", ptag->link.id);
           }
         }
@@ -437,7 +436,7 @@ static bool text_tag_initv(struct text_tag *ptag, enum text_tag_type type,
             return FALSE;
           }
           ptag->link.id = tile_index(ptile);
-          fc_snprintf(ptag->link.name, sizeof(ptag->link.name),
+          my_snprintf(ptag->link.name, sizeof(ptag->link.name),
                       "(%d, %d)", TILE_XY(ptile));
         }
         return TRUE;
@@ -469,26 +468,26 @@ static size_t text_tag_start_sequence(const struct text_tag *ptag,
   case TTT_ITALIC:
   case TTT_STRIKE:
   case TTT_UNDERLINE:
-    return fc_snprintf(buf, len, "%c%s%c", SEQ_START,
+    return my_snprintf(buf, len, "%c%s%c", SEQ_START,
                        text_tag_type_short_name(ptag->type), SEQ_STOP);
   case TTT_COLOR:
     {
-      size_t ret = fc_snprintf(buf, len, "%c%s", SEQ_START,
+      size_t ret = my_snprintf(buf, len, "%c%s", SEQ_START,
                                text_tag_type_short_name(ptag->type));
 
       if (ptag->color.foreground[0] != '\0') {
-        ret += fc_snprintf(buf + ret, len - ret, " fg=\"%s\"",
+        ret += my_snprintf(buf + ret, len - ret, " fg=\"%s\"",
                            ptag->color.foreground);
       }
       if (ptag->color.background[0] != '\0') {
-        ret += fc_snprintf(buf + ret, len - ret, " bg=\"%s\"",
+        ret += my_snprintf(buf + ret, len - ret, " bg=\"%s\"",
                            ptag->color.background);
       }
-      return ret + fc_snprintf(buf + ret, len - ret, "%c", SEQ_STOP);
+      return ret + my_snprintf(buf + ret, len - ret, "%c", SEQ_STOP);
     }
   case TTT_LINK:
     {
-      size_t ret = fc_snprintf(buf, len, "%c%s tgt=\"%s\"", SEQ_START,
+      size_t ret = my_snprintf(buf, len, "%c%s tgt=\"%s\"", SEQ_START,
                                text_tag_type_short_name(ptag->type),
                                text_link_type_name(ptag->link.type));
 
@@ -498,11 +497,11 @@ static size_t text_tag_start_sequence(const struct text_tag *ptag,
           struct city *pcity = game_find_city_by_number(ptag->link.id);
 
           if (pcity) {
-            ret += fc_snprintf(buf + ret, len - ret,
+            ret += my_snprintf(buf + ret, len - ret,
                                " id=%d name=\"%s\"",
                                pcity->id, city_name(pcity));
           } else {
-            ret += fc_snprintf(buf + ret, len - ret,
+            ret += my_snprintf(buf + ret, len - ret,
                                " id=%d", ptag->link.id);
           }
         }
@@ -512,10 +511,10 @@ static size_t text_tag_start_sequence(const struct text_tag *ptag,
           struct tile *ptile = index_to_tile(ptag->link.id);
 
           if (ptile) {
-            ret += fc_snprintf(buf + ret, len - ret,
+            ret += my_snprintf(buf + ret, len - ret,
                                " x=%d y=%d", TILE_XY(ptile));
           } else {
-            ret += fc_snprintf(buf + ret, len - ret,
+            ret += my_snprintf(buf + ret, len - ret,
                                " id=%d", ptag->link.id);
           }
         }
@@ -525,11 +524,11 @@ static size_t text_tag_start_sequence(const struct text_tag *ptag,
           struct unit *punit = game_find_unit_by_number(ptag->link.id);
 
           if (punit) {
-            ret += fc_snprintf(buf + ret, len - ret,
+            ret += my_snprintf(buf + ret, len - ret,
                                " id=%d name=\"%s\"",
                                punit->id, unit_rule_name(punit));
           } else {
-            ret += fc_snprintf(buf + ret, len - ret,
+            ret += my_snprintf(buf + ret, len - ret,
                                " id=%d", ptag->link.id);
           }
         }
@@ -538,10 +537,10 @@ static size_t text_tag_start_sequence(const struct text_tag *ptag,
 
       if (ptag->stop_offset == ptag->start_offset) {
         /* This is a single sequence like [link ... /]. */
-        ret += fc_snprintf(buf + ret, len - ret, "%c", SEQ_END);
+        ret += my_snprintf(buf + ret, len - ret, "%c", SEQ_END);
       }
 
-      return ret + fc_snprintf(buf + ret, len - ret, "%c", SEQ_STOP);
+      return ret + my_snprintf(buf + ret, len - ret, "%c", SEQ_STOP);
     }
   };
   return 0;
@@ -558,7 +557,7 @@ static size_t text_tag_stop_sequence(const struct text_tag *ptag,
     return 0;
   }
 
-  return fc_snprintf(buf, len, "%c%c%s%c", SEQ_START, SEQ_END,
+  return my_snprintf(buf, len, "%c%c%s%c", SEQ_START, SEQ_END,
                      text_tag_type_short_name(ptag->type), SEQ_STOP);
 }
 
@@ -584,7 +583,7 @@ static size_t text_tag_replace_text(const struct text_tag *ptag,
          * use the current city name which is usually not complete,
          * a dumb string using the city id. */
         if (NULL != pcity && NULL != city_tile(pcity)) {
-          return fc_snprintf(buf, len, "%s", city_name(pcity));
+          return my_snprintf(buf, len, "%s", city_name(pcity));
         }
       }
       break;
@@ -595,7 +594,7 @@ static size_t text_tag_replace_text(const struct text_tag *ptag,
         struct unit *punit = game_find_unit_by_number(ptag->link.id);
 
         if (punit) {
-          return fc_snprintf(buf, len, "%s", unit_name_translation(punit));
+          return my_snprintf(buf, len, "%s", unit_name_translation(punit));
         }
       }
       break;
@@ -604,9 +603,9 @@ static size_t text_tag_replace_text(const struct text_tag *ptag,
 
   if (ptag->link.type == TLT_UNIT) {
     /* Attempt to translate the link name (it should be a unit type name). */
-    return fc_snprintf(buf, len, "%s", _(ptag->link.name));
+    return my_snprintf(buf, len, "%s", _(ptag->link.name));
   } else {
-    return fc_snprintf(buf, len, "%s", ptag->link.name);
+    return my_snprintf(buf, len, "%s", ptag->link.name);
   }
 }
 
@@ -649,24 +648,6 @@ struct text_tag *text_tag_new(enum text_tag_type tag_type,
 }
 
 /**************************************************************************
-  This function returns a new pointer to a text_tag which is similar
-  to the 'ptag' argument.
-**************************************************************************/
-struct text_tag *text_tag_copy(const struct text_tag *ptag)
-{
-  struct text_tag *pnew_tag;
-
-  if (!ptag) {
-    return NULL;
-  }
-
-  pnew_tag = fc_malloc(sizeof(struct text_tag));
-  *pnew_tag = *ptag;
-
-  return pnew_tag;
-}
-
-/**************************************************************************
   Free a text_tag structure.
 **************************************************************************/
 void text_tag_destroy(struct text_tag *ptag)
@@ -705,7 +686,7 @@ ft_offset_t text_tag_stop_offset(const struct text_tag *ptag)
 const char *text_tag_color_foreground(const struct text_tag *ptag)
 {
   if (ptag->type != TTT_COLOR) {
-    log_error("text_tag_color_foreground(): incompatible tag type.");
+    freelog(LOG_ERROR, "text_tag_color_foreground: incompatible tag type.");
     return NULL;
   }
 
@@ -719,7 +700,7 @@ const char *text_tag_color_foreground(const struct text_tag *ptag)
 const char *text_tag_color_background(const struct text_tag *ptag)
 {
   if (ptag->type != TTT_COLOR) {
-    log_error("text_tag_color_background(): incompatible tag type.");
+    freelog(LOG_ERROR, "text_tag_color_background: incompatible tag type.");
     return NULL;
   }
 
@@ -733,7 +714,7 @@ const char *text_tag_color_background(const struct text_tag *ptag)
 enum text_link_type text_tag_link_type(const struct text_tag *ptag)
 {
   if (ptag->type != TTT_LINK) {
-    log_error("text_tag_link_type(): incompatible tag type.");
+    freelog(LOG_ERROR, "text_tag_link_type: incompatible tag type.");
     return -1;
   }
 
@@ -748,11 +729,51 @@ enum text_link_type text_tag_link_type(const struct text_tag *ptag)
 int text_tag_link_id(const struct text_tag *ptag)
 {
   if (ptag->type != TTT_LINK) {
-    log_error("text_tag_link_id(): incompatible tag type.");
+    freelog(LOG_ERROR, "text_tag_link_id: incompatible tag type.");
     return -1;
   }
 
   return ptag->link.id;
+}
+
+/**************************************************************************
+  Clear and free all tags inside the tag list.  It doesn't free the list
+  itself.  It just should be used instead of text_tag_list_clear() which
+  doesn't free the tags.
+**************************************************************************/
+void text_tag_list_clear_all(struct text_tag_list *tags)
+{
+  if (!tags) {
+    return;
+  }
+
+  text_tag_list_iterate(tags, ptag) {
+    text_tag_destroy(ptag);
+  } text_tag_list_iterate_end;
+  text_tag_list_clear(tags);
+}
+
+/**************************************************************************
+  This function returns a new pointer to a text_tag_list which is similar
+  to the 'tags' argument.
+**************************************************************************/
+struct text_tag_list *text_tag_list_dup(const struct text_tag_list *tags)
+{
+  struct text_tag_list *new_tags;
+
+  if (!tags) {
+    return NULL;
+  }
+
+  new_tags = text_tag_list_new();
+  text_tag_list_iterate(tags, ptag) {
+    struct text_tag *pnew_tag = fc_malloc(sizeof(struct text_tag));
+
+    *pnew_tag = *ptag;
+    text_tag_list_append(new_tags, pnew_tag);
+  } text_tag_list_iterate_end;
+
+  return new_tags;
 }
 
 /**************************************************************************
@@ -777,30 +798,30 @@ static size_t extract_sequence_text(const char *featured_text,
   }
 
   /* Check sequence type. */
-  for (read++; fc_isspace(*read); read++);
+  for (read++; my_isspace(*read); read++);
 
   if (*read == SEQ_END) {
     *seq_type = ST_STOP;
     read++;
   } else {
-    for (end--; fc_isspace(*end); end--);
+    for (end--; my_isspace(*end); end--);
 
     if (*end == SEQ_END) {
       *seq_type = ST_SINGLE;
 
-      for (end--; fc_isspace(*end); end--);
+      for (end--; my_isspace(*end); end--);
     } else {
       *seq_type = ST_START;
     }
   }
 
-  while (fc_isspace(*read)) {
+  while (my_isspace(*read)) {
     read++;
   }
 
   /* Check the length of the type name. */
   for (name = read; name < stop; name++) {
-    if (!fc_isalpha(*name)) {
+    if (!my_isalpha(*name)) {
       break;
     }
   }
@@ -809,7 +830,7 @@ static size_t extract_sequence_text(const char *featured_text,
   *type = -1;
   for (i = 0; (name = text_tag_type_name(i)); i++) {
     name_len = strlen(name);
-    if (name_len == type_len && 0 == fc_strncasecmp(name, read, name_len)) {
+    if (name_len == type_len && 0 == mystrncasecmp(name, read, name_len)) {
       read += name_len;
       *type = i;
       break;
@@ -819,8 +840,7 @@ static size_t extract_sequence_text(const char *featured_text,
     /* Try with short names. */
     for (i = 0; (name = text_tag_type_short_name(i)); i++) {
       name_len = strlen(name);
-      if (name_len == type_len
-          && 0 == fc_strncasecmp(name, read, name_len)) {
+      if (name_len == type_len && 0 == mystrncasecmp(name, read, name_len)) {
         read += name_len;
         *type = i;
         break;
@@ -831,12 +851,12 @@ static size_t extract_sequence_text(const char *featured_text,
     }
   }
 
-  while (fc_isspace(*read)) {
+  while (my_isspace(*read)) {
     read++;
   }
 
   if (end - read + 2 > 0) {
-    fc_strlcpy(buf, read, MIN(end - read + 2, len));
+    mystrlcpy(buf, read, MIN(end - read + 2, len));
   } else {
     buf[0] = '\0';
   }
@@ -849,14 +869,14 @@ static size_t extract_sequence_text(const char *featured_text,
 **************************************************************************/
 size_t featured_text_to_plain_text(const char *featured_text,
                                    char *plain_text, size_t plain_text_len,
-                                   struct text_tag_list **tags)
+                                   struct text_tag_list *tags)
 {
   const char *read = featured_text;
   char *write = plain_text;
   size_t write_len = plain_text_len;
 
   if (tags) {
-    *tags = text_tag_list_new();
+    text_tag_list_clear_all(tags);
   }
 
   while (*read != '\0' && write_len > 1) {
@@ -879,11 +899,11 @@ size_t featured_text_to_plain_text(const char *featured_text,
 
             if (text_tag_init_from_sequence(ptag, type,
                                             write - plain_text, buf)) {
-              text_tag_list_append(*tags, ptag);
+              text_tag_list_append(tags, ptag);
             } else {
               text_tag_destroy(ptag);
-              log_featured_text("Couldn't create a text tag with \"%s\".",
-                                buf);
+              freelog(LOG_FEATURED_TEXT,
+                      "Couldn't create a text tag with \"%s\".", buf);
             }
           }
           break;
@@ -893,7 +913,7 @@ size_t featured_text_to_plain_text(const char *featured_text,
             struct text_tag *ptag = NULL;
 
             /* Look up on reversed order. */
-            text_tag_list_rev_iterate(*tags, piter) {
+            text_tag_list_rev_iterate(tags, piter) {
               if (piter->type == type
                   && piter->stop_offset == FT_OFFSET_UNSET) {
                 ptag = piter;
@@ -904,8 +924,8 @@ size_t featured_text_to_plain_text(const char *featured_text,
             if (ptag) {
               ptag->stop_offset = write - plain_text;
             } else {
-              log_featured_text("Extra text tag end for \"%s\".",
-                                text_tag_type_name(type));
+              freelog(LOG_FEATURED_TEXT, "Extra text tag end for \"%s\".",
+                      text_tag_type_name(type));
             }
           }
           break;
@@ -916,8 +936,8 @@ size_t featured_text_to_plain_text(const char *featured_text,
 
             if (!text_tag_init_from_sequence(&tag, type,
                                              write - plain_text, buf)) {
-              log_featured_text("Couldn't create a text tag with \"%s\".",
-                                buf);
+              freelog(LOG_FEATURED_TEXT,
+                      "Couldn't create a text tag with \"%s\".", buf);
             } else {
               len = text_tag_replace_text(&tag, write, write_len);
               write += len;
@@ -928,7 +948,7 @@ size_t featured_text_to_plain_text(const char *featured_text,
 
                 *ptag = tag;
                 ptag->stop_offset = write - plain_text;
-                text_tag_list_append(*tags, ptag);
+                text_tag_list_append(tags, ptag);
               }
             }
           }
@@ -980,7 +1000,7 @@ size_t featured_text_apply_tag(const char *text_source,
       || start_offset > strlen(text_source)
       || (stop_offset != FT_OFFSET_UNSET
           && stop_offset < start_offset)) {
-    log_featured_text("featured_text_apply_tag(): invalid offsets.");
+    freelog(LOG_FEATURED_TEXT, "featured_text_apply_tag: invalid offsets.");
     return 0;
   }
 
@@ -1048,7 +1068,7 @@ const char *city_link(const struct city *pcity)
 {
   static char buf[MAX_LEN_LINK];
 
-  fc_snprintf(buf, sizeof(buf), "%c%s tgt=\"%s\" id=%d name=\"%s\" %c%c",
+  my_snprintf(buf, sizeof(buf), "%c%s tgt=\"%s\" id=%d name=\"%s\" %c%c",
               SEQ_START, text_tag_type_short_name(TTT_LINK),
               text_link_type_name(TLT_CITY), pcity->id,
               city_name(pcity), SEQ_END, SEQ_STOP);
@@ -1066,7 +1086,7 @@ const char *city_tile_link(const struct city *pcity)
   static char buf[MAX_LEN_LINK];
   const char *tag_name = text_tag_type_short_name(TTT_LINK);
 
-  fc_snprintf(buf, sizeof(buf), "%c%s tgt=\"%s\" x=%d y=%d%c%s%c%c%s%c",
+  my_snprintf(buf, sizeof(buf), "%c%s tgt=\"%s\" x=%d y=%d%c%s%c%c%s%c",
               SEQ_START, tag_name, text_link_type_name(TLT_TILE),
               TILE_XY(city_tile(pcity)), SEQ_STOP, city_name(pcity),
               SEQ_START, SEQ_END, tag_name, SEQ_STOP);
@@ -1082,7 +1102,7 @@ const char *tile_link(const struct tile *ptile)
 {
   static char buf[MAX_LEN_LINK];
 
-  fc_snprintf(buf, sizeof(buf), "%c%s tgt=\"%s\" x=%d y=%d %c%c",
+  my_snprintf(buf, sizeof(buf), "%c%s tgt=\"%s\" x=%d y=%d %c%c",
               SEQ_START, text_tag_type_short_name(TTT_LINK),
               text_link_type_name(TLT_TILE), TILE_XY(ptile),
               SEQ_END, SEQ_STOP);
@@ -1100,7 +1120,7 @@ const char *unit_link(const struct unit *punit)
 
   /* We use the rule name of the unit, it will be translated in every
    * local sides in the function text_tag_replace_text(). */
-  fc_snprintf(buf, sizeof(buf), "%c%s tgt=\"%s\" id=%d name=\"%s\" %c%c",
+  my_snprintf(buf, sizeof(buf), "%c%s tgt=\"%s\" id=%d name=\"%s\" %c%c",
               SEQ_START, text_tag_type_short_name(TTT_LINK),
               text_link_type_name(TLT_UNIT), punit->id,
               unit_rule_name(punit), SEQ_END, SEQ_STOP);
@@ -1118,7 +1138,7 @@ const char *unit_tile_link(const struct unit *punit)
   static char buf[MAX_LEN_LINK];
   const char *tag_name = text_tag_type_short_name(TTT_LINK);
 
-  fc_snprintf(buf, sizeof(buf), "%c%s tgt=\"%s\" x=%d y=%d%c%s%c%c%s%c",
+  my_snprintf(buf, sizeof(buf), "%c%s tgt=\"%s\" x=%d y=%d%c%s%c%c%s%c",
               SEQ_START, tag_name, text_link_type_name(TLT_TILE),
               TILE_XY(unit_tile(punit)), SEQ_STOP,
               unit_name_translation(punit),

@@ -21,9 +21,7 @@
 
 /* server */
 #include "aiiface.h"
-
-/* server/advisors */
-#include "autosettlers.h"
+#include "settlers.h"
 
 /* ai */
 #include "aicity.h"
@@ -31,7 +29,6 @@
 #include "aihand.h"
 #include "aisettler.h"
 #include "aitools.h"
-#include "aiunit.h"
 
 /**************************************************************************
   Initialize player ai_funcs function pointers.
@@ -42,13 +39,8 @@ void ai_init(void)
 
   init_ai(ai);
 
-  ai->funcs.city_init = ai_city_init;
-  ai->funcs.city_update = ai_city_update;
-  ai->funcs.city_close = ai_city_close;
-
-  ai->funcs.unit_init = ai_unit_init;
-  ai->funcs.unit_close = ai_unit_close;
-
+  ai->funcs.init_city = ai_init_city;
+  ai->funcs.close_city = ai_close_city;
   ai->funcs.auto_settlers = auto_settlers_player;
   ai->funcs.building_advisor_init = ai_manage_buildings;
   ai->funcs.building_advisor = ai_advisor_choose_building;

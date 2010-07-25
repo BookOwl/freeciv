@@ -109,8 +109,9 @@ enum unit_upgrade_result {
   UR_NOT_CITY_OWNER,
   UR_NOT_ENOUGH_ROOM
 };
-
+    
 struct unit_ai {
+  bool control; /* 0: not automated    1: automated */
   enum ai_unit_task ai_role;
   /* The following are unit ids or special indicator values (<=0) */
   int ferryboat; /* the ferryboat assigned to us */
@@ -146,7 +147,8 @@ struct unit {
   int hp;
   int veteran;
   int fuel;
-
+  int birth_turn;
+  struct unit_ai ai;
   enum unit_activity activity;
   struct tile *goto_tile; /* May be NULL. */
 
@@ -157,8 +159,11 @@ struct unit {
 
   enum tile_special_type activity_target;
   Base_type_id           activity_base;
-
-  bool ai_controlled; /* 0: not automated; 1: automated */
+  enum unit_focus_status focus_status;
+  int ord_map, ord_city;
+  /* ord_map and ord_city are the order index of this unit in tile.units
+     and city.units_supported; they are only used for save/reload */
+  bool debug;
   bool moved;
   bool paradropped;
 
@@ -177,43 +182,22 @@ struct unit {
 #define BATTLEGROUP_NONE (-1)
   int battlegroup;
 
+  struct {
+    /* Equivalent to pcity->client.color.  Only for F_CITIES units. */
+    bool colored;
+    int color_index;
+  } client;
+  struct {
+    struct vision *vision;
+  } server;
+
   bool has_orders;
   struct {
     int length, index;
-    bool repeat;   /* The path is to be repeated on completion. */
-    bool vigilant; /* Orders should be cleared if an enemy is met. */
+    bool repeat;	/* The path is to be repeated on completion. */
+    bool vigilant;	/* Orders should be cleared if an enemy is met. */
     struct unit_order *list;
   } orders;
-
-  union {
-    struct {
-      /* Only used at the client (the server is omniscient; ./client/). */
-
-      enum unit_focus_status focus_status;
-
-      /* Equivalent to pcity->client.color. Only for F_CITIES units. */
-      bool colored;
-      int color_index;
-    } client;
-
-    struct {
-      /* Only used in the server (./ai/ and ./server/). */
-
-      bool debug;
-
-      struct unit_ai *ai;
-      int birth_turn;
-
-      /* ord_map and ord_city are the order index of this unit in tile.units
-       * and city.units_supported; they are only used for save/reload */
-      int ord_map;
-      int ord_city;
-
-      struct vision *vision;
-      time_t action_timestamp;
-      int action_turn;
-    } server;
-  };
 };
 
 bool is_real_activity(enum unit_activity activity);
@@ -242,9 +226,6 @@ bool unit_can_help_build_wonder(const struct unit *punit,
 				const struct city *pcity);
 bool unit_can_help_build_wonder_here(const struct unit *punit);
 bool unit_can_est_trade_route_here(const struct unit *punit);
-bool base_unit_can_airlift_to(const struct player *restriction,
-                              const struct unit *punit,
-                              const struct city *pcity);
 bool unit_can_airlift_to(const struct unit *punit, const struct city *pcity);
 bool unit_has_orders(const struct unit *punit);
 
@@ -346,8 +327,6 @@ enum unit_upgrade_result test_unit_upgrade(const struct unit *punit,
 					   bool is_free);
 enum unit_upgrade_result get_unit_upgrade_info(char *buf, size_t bufsz,
 					       const struct unit *punit);
-bool test_unit_transform(const struct unit *punit);
-
 bool is_losing_hp(const struct unit *punit);
 bool unit_type_is_losing_hp(const struct player *pplayer,
                             const struct unit_type *punittype);

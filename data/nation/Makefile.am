@@ -9,27 +9,20 @@ pkgdata_DATA = \
 		afghani.ruleset \
 		ainu.ruleset \
 		akwe.ruleset \
-		alandalus.ruleset \
 		algerian.ruleset \
-		amazigh.ruleset \
-		amazonian.ruleset \
 		american.ruleset \
-		andorran.ruleset \
 		antarctican.ruleset \
 		arab.ruleset \
-		aragonese.ruleset \
 		aramean.ruleset \
 		argentine.ruleset \
 		armenian.ruleset \
 		assyrian.ruleset \
-		asturian.ruleset \
 		australian.ruleset \
 		austrian.ruleset \
 		aymara.ruleset \
 		azeri.ruleset \
 		aztec.ruleset \
 		babylonian.ruleset \
-		badian.ruleset \
 		barbarian.ruleset \
 		basque.ruleset \
 		bavarian.ruleset \
@@ -49,9 +42,7 @@ pkgdata_DATA = \
 		cambodian.ruleset \
 		canadian.ruleset \
 		carthaginian.ruleset \
-		castilian.ruleset \
 		catalan.ruleset \
-		chananean.ruleset \
 		cherokee.ruleset \
 		chilean.ruleset \
 		chinese.ruleset \
@@ -65,35 +56,26 @@ pkgdata_DATA = \
 		czech.ruleset \
 		danish.ruleset \
 		dominican.ruleset \
-		dryad.ruleset \
 		dutch.ruleset \
 		egyptian.ruleset \
-		eastgerman.ruleset \
 		emirati.ruleset \
 		english.ruleset \
 		esperant.ruleset \
 		estonian.ruleset \
-		eritrean.ruleset \
 		ethiopian.ruleset \
 		european.ruleset \
 		filipino.ruleset \
 		finnish.ruleset \
 		french.ruleset \
-		frisian.ruleset \
 		galician.ruleset \
 		gallic.ruleset \
 		georgian.ruleset \
 		german.ruleset \
 		greek.ruleset \
-		grenadian.ruleset \
 		gupta.ruleset \
 		hacker.ruleset \
-		haitian.ruleset \
-		hanoverian.ruleset \
-		hansa.ruleset \
 		hawaiian.ruleset \
 		hellenic.ruleset \
-		hessian.ruleset \
 		himyarite.ruleset \
 		hittite.ruleset \
 		hopi.ruleset \
@@ -122,7 +104,6 @@ pkgdata_DATA = \
 		lankese.ruleset \
 		laotian.ruleset \
 		latvian.ruleset \
-		leonese.ruleset \
 		libyan.ruleset \
 		lithuanian.ruleset \
 		lojbanistani.ruleset \
@@ -138,8 +119,6 @@ pkgdata_DATA = \
 		mexican.ruleset \
 		moldovan.ruleset \
 		mongol.ruleset \
-		moroccan.ruleset \
-		motswana.ruleset \
 		muskogee.ruleset \
 		newzealand.ruleset \
 		nigerian.ruleset \
@@ -149,9 +128,7 @@ pkgdata_DATA = \
 		nubian.ruleset \
 		numidian.ruleset \
 		nuu-chah-nulth.ruleset \
-		occitan.ruleset \
 		ottoman.ruleset \
-		ozite.ruleset \
 		pakistani.ruleset \
 		papuan.ruleset \
 		persian.ruleset \
@@ -164,7 +141,6 @@ pkgdata_DATA = \
 		prussian.ruleset \
 		purhepecha.ruleset \
 		quebecois.ruleset \
-		riffian.ruleset \
 		romanian.ruleset \
 		roman.ruleset \
 		russian.ruleset \
@@ -205,19 +181,16 @@ pkgdata_DATA = \
 		tupi.ruleset \
 		turkmen.ruleset \
 		turk.ruleset \
-		ugandan.ruleset \
 		ukrainian.ruleset \
 		un.ruleset \
 		uruguayan.ruleset \
 		uyghur.ruleset \
 		uzbek.ruleset \
-		vampire.ruleset \
 		venezuelan.ruleset \
 		vietnamese.ruleset \
 		viking.ruleset \
 		welsh.ruleset \
 		westphalian.ruleset \
-		wuerttembergian.ruleset \
 		zulu.ruleset 
 
 EXTRA_DIST = $(pkgdata_DATA) Makefile.am.sh

@@ -18,12 +18,10 @@
 #include <stdio.h>
 #include <string.h>
 
-/* utility */
 #include "log.h"
 #include "mem.h"
 #include "shared.h"
 
-/* common */
 #include "game.h"
 #include "improvement.h"
 #include "map.h"
@@ -32,11 +30,10 @@
 #include "unit.h"
 #include "unitlist.h"
 
-/* server */
-#include "plrhand.h"
 #include "score.h"
 #include "srv_main.h"
 
+static int get_civ_score(const struct player *pplayer);
 static int get_spaceship_score(const struct player *pplayer);
 
 /**************************************************************************
@@ -156,7 +153,7 @@ static void build_landarea_map(struct claim_map *pcmap)
     city_list_iterate(pplayer->cities, pcity) {
       struct tile *pcenter = city_tile(pcity);
 
-      city_tile_iterate(city_map_radius_sq_get(pcity), pcenter, tile1) {
+      city_tile_iterate(pcenter, tile1) {
 	BV_SET(claims[tile_index(tile1)], player_index(city_owner(pcity)));
       } city_tile_iterate_end;
     } city_list_iterate_end;
@@ -320,7 +317,7 @@ void calc_civ_score(struct player *pplayer)
 /**************************************************************************
   Return the civilization score (a numerical value) for the player.
 **************************************************************************/
-int get_civ_score(const struct player *pplayer)
+static int get_civ_score(const struct player *pplayer)
 {
   /* We used to count pplayer->score.happy here too, but this is too easily
    * manipulated by players at the endrturn. */
@@ -395,7 +392,7 @@ void save_ppm(void)
   }
 
   /* put this file in the same place we put savegames */
-  fc_snprintf(filename, sizeof(filename),
+  my_snprintf(filename, sizeof(filename),
               "%s%+05d.int.ppm", game.server.save_name, game.info.year);
 
   /* Ensure the saves directory exists. */
@@ -411,7 +408,7 @@ void save_ppm(void)
   fp = fc_fopen(filename, "w");
 
   if (!fp) {
-    log_error("couldn't open ppm file: %s", filename);
+    freelog(LOG_ERROR, "couldn't open file ppm save: %s\n", filename);
     return;
   }
 
@@ -477,7 +474,7 @@ void rank_users(void)
   struct player *spacerace_winner = NULL;
 
   /* game ending via endturn results in a draw. We don't rank. */
-  if (game.info.turn > game.server.end_turn) {
+  if (game.info.turn > game.info.end_turn) {
     return;
   }
 
@@ -490,8 +487,8 @@ void rank_users(void)
 
   /* don't fail silently, at least print an error */
   if (!fp) {
-    log_error("couldn't open ranking log file: \"%s\"",
-              srvarg.ranklog_filename);
+    freelog(LOG_ERROR, "couldn't open ranking log file: \"%s\"",
+            srvarg.ranklog_filename);
     return;
   }
 
@@ -513,7 +510,7 @@ void rank_users(void)
   if (spacerace_winner) {
     players_iterate(pplayer) {
       if (pplayer != spacerace_winner) {
-        player_status_add(pplayer, PSTATUS_SURRENDER);
+        pplayer->surrendered = TRUE;
       }
     } players_iterate_end;
   }
@@ -523,8 +520,7 @@ void rank_users(void)
   players_iterate(pplayer) {
     if (is_barbarian(pplayer)) {
       plr_state[player_index(pplayer)] = VS_NONE;
-    } else if (pplayer->is_alive
-               && !player_status_check(pplayer, PSTATUS_SURRENDER)) {
+    } else if (pplayer->is_alive && !pplayer->surrendered) {
       plr_state[player_index(pplayer)] = VS_WINNER;
     } else {
       plr_state[player_index(pplayer)] = VS_LOSER;

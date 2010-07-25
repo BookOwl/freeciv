@@ -136,14 +136,18 @@ struct ft_color {
   const char *foreground;
   const char *background;
 };
-#define FT_COLOR(fg, bg) { .foreground = fg, .background = bg }
+
 /**************************************************************************
-  Constructor.
+  Builds a featured text color.
 **************************************************************************/
 static inline struct ft_color ft_color(const char *foreground,
                                        const char *background)
 {
-  struct ft_color color = FT_COLOR(foreground, background);
+  struct ft_color color = {
+    .foreground = foreground,
+    .background = background
+  };
+
   return color;
 }
 
@@ -185,7 +189,7 @@ extern const struct ft_color ftc_vote_abstain;
 /* Main functions. */
 size_t featured_text_to_plain_text(const char *featured_text,
                                    char *plain_text, size_t plain_text_len,
-                                   struct text_tag_list **tags);
+                                   struct text_tag_list *tags);
 size_t featured_text_apply_tag(const char *text_source,
                                char *featured_text, size_t featured_text_len,
                                enum text_tag_type tag_type,
@@ -193,19 +197,15 @@ size_t featured_text_apply_tag(const char *text_source,
                                ft_offset_t stop_offset,
                                ...);
 
-/* Text tag list functions. NB: Overwrite the ones defined in speclist.h. */
-#define text_tag_list_new() \
-  text_tag_list_new_full(text_tag_destroy)
-#define text_tag_list_copy(tags) \
-  text_tag_list_copy_full(tags, text_tag_copy, text_tag_destroy)
-
+/* Text tag list functions. */
+void text_tag_list_clear_all(struct text_tag_list *tags);
+struct text_tag_list *text_tag_list_dup(const struct text_tag_list *tags);
 
 /* Text tag functions. */
 struct text_tag *text_tag_new(enum text_tag_type tag_type,
                               ft_offset_t start_offset,
                               ft_offset_t stop_offset,
                               ...);
-struct text_tag *text_tag_copy(const struct text_tag *ptag);
 void text_tag_destroy(struct text_tag *ptag);
 
 enum text_tag_type text_tag_type(const struct text_tag *ptag);

@@ -251,7 +251,7 @@ static void set_hscales(const struct cm_parameter *const parameter,
 **************************************************************************/
 void refresh_cma_dialog(struct city *pcity, enum cma_refresh refresh)
 {
-  struct cm_result *result = cm_result_new(pcity);
+  struct cm_result result;
   struct cm_parameter param;
   struct cma_dialog *pdialog = get_cma_dialog(pcity);
  
@@ -261,9 +261,9 @@ void refresh_cma_dialog(struct city *pcity, enum cma_refresh refresh)
   if (!pdialog)
     return;
   /* fill in result label */
-  cm_result_from_main_map(result, pcity);
+  cm_result_from_main_map(&result, pcity, TRUE);
   SetWindowText(pdialog->result_label,
-		(char *) cmafec_get_result_descr(pcity, result, &param));
+		(char *) cmafec_get_result_descr(pcity, &result, &param));
   /* if called from a hscale, we _don't_ want to do this */
   if (refresh != DONT_REFRESH_HSCALES) {
     set_hscales(&param, pdialog);
@@ -291,8 +291,6 @@ void refresh_cma_dialog(struct city *pcity, enum cma_refresh refresh)
   EnableWindow(pdialog->release,
 	       can_client_issue_orders() &&
 	       controlled);
-
-  cm_result_destroy(result);
 }
 
 /**************************************************************************
@@ -418,14 +416,12 @@ static void cma_del_preset_callback(struct cma_dialog *pdialog)
 **************************************************************************/
 static void cma_change_to_callback(struct cma_dialog *pdialog)
 {
-  struct cm_result *result = cm_result_new(pdialog->pcity);
+  struct cm_result result;
   struct cm_parameter param;
 
   cmafec_get_fe_parameter(pdialog->pcity, &param);
-  cm_query_result(pdialog->pcity, &param, result);
-  cma_apply_result(pdialog->pcity, result);
-
-  cm_result_destroy(result);
+  cm_query_result(pdialog->pcity, &param, &result);
+  cma_apply_result(pdialog->pcity, &result);
 }
 
 
@@ -577,7 +573,7 @@ static void handle_hscroll(HWND win, HWND winctl, UINT code, int pos)
   if (poscur < posmin) poscur = posmin;
   if (poscur > posmax) poscur = posmax;
   ScrollBar_SetPos(winctl, poscur, TRUE);
-  fc_snprintf(buf, sizeof(buf), "%d", poscur);
+  my_snprintf(buf, sizeof(buf), "%d", poscur);
   SetWindowText(GetNextSibling(winctl), buf);
 
 }
@@ -600,7 +596,7 @@ LONG CALLBACK cma_proc(HWND win, UINT message,
     case WM_DESTROY:
       break;
       if (guidata) {
-	dialog_list_remove(dialog_list, guidata->pdialog);
+	dialog_list_unlink(dialog_list, guidata->pdialog);
 	free(guidata->pdialog);
 	free(guidata);
       }

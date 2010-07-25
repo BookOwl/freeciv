@@ -91,7 +91,7 @@ void clear_treaty(struct Treaty *ptreaty)
   clause_list_iterate(ptreaty->clauses, pclause) {
     free(pclause);
   } clause_list_iterate_end;
-  clause_list_destroy(ptreaty->clauses);
+  clause_list_free(ptreaty->clauses);
 }
 
 /****************************************************************
@@ -103,7 +103,7 @@ bool remove_clause(struct Treaty *ptreaty, struct player *pfrom,
   clause_list_iterate(ptreaty->clauses, pclause) {
     if(pclause->type==type && pclause->from==pfrom &&
        pclause->value==val) {
-      clause_list_remove(ptreaty->clauses, pclause);
+      clause_list_unlink(ptreaty->clauses, pclause);
       free(pclause);
 
       ptreaty->accept0 = FALSE;
@@ -130,12 +130,12 @@ bool add_clause(struct Treaty *ptreaty, struct player *pfrom,
                      pplayer_get_diplstate(ptreaty->plr0, ptreaty->plr1)->type;
 
   if (type < 0 || type >= CLAUSE_LAST) {
-    log_error("Illegal clause type encountered.");
+    freelog(LOG_ERROR, "Illegal clause type encountered.");
     return FALSE;
   }
 
   if (type == CLAUSE_ADVANCE && !valid_advance_by_number(val)) {
-    log_error("Illegal tech value %i in clause.", val);
+    freelog(LOG_ERROR, "Illegal tech value %i in clause.", val);
     return FALSE;
   }
   
@@ -145,31 +145,22 @@ bool add_clause(struct Treaty *ptreaty, struct player *pfrom,
           || (ds == DS_ALLIANCE && type == CLAUSE_ALLIANCE)
           || (ds == DS_CEASEFIRE && type == CLAUSE_CEASEFIRE))) {
     /* we already have this diplomatic state */
-    log_error("Illegal treaty suggested between %s and %s - they "
-              "already have this treaty level.",
-              nation_rule_name(nation_of_player(ptreaty->plr0)), 
-              nation_rule_name(nation_of_player(ptreaty->plr1)));
+    freelog(LOG_ERROR, "Illegal treaty suggested between %s and %s - they "
+                       "already have this treaty level.",
+                       nation_rule_name(nation_of_player(ptreaty->plr0)), 
+                       nation_rule_name(nation_of_player(ptreaty->plr1)));
     return FALSE;
   }
 
   if (type == CLAUSE_EMBASSY && player_has_real_embassy(pto, pfrom)) {
     /* we already have embassy */
-    log_error("Illegal embassy clause: %s already have embassy with %s.",
-              nation_rule_name(nation_of_player(pto)),
-              nation_rule_name(nation_of_player(pfrom)));
+    freelog(LOG_ERROR,
+            "Illegal embassy clause: %s already have embassy with %s.",
+            nation_rule_name(nation_of_player(pto)),
+            nation_rule_name(nation_of_player(pfrom)));
     return FALSE;
   }
-
-  if (!game.info.trading_gold && type == CLAUSE_GOLD) {
-    return FALSE;
-  }
-  if (!game.info.trading_tech && type == CLAUSE_ADVANCE) {
-    return FALSE;
-  }
-  if (!game.info.trading_city && type == CLAUSE_CITY) {
-    return FALSE;
-  }
-
+      
   clause_list_iterate(ptreaty->clauses, pclause) {
     if(pclause->type==type
        && pclause->from==pfrom

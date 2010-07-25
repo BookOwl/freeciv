@@ -15,6 +15,7 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -367,7 +368,7 @@ void popup_pillage_dialog(struct unit *punit,
       BV_CLR_ALL(what_base);
 
       if (what > S_LAST) {
-        BV_SET(what_base, what % (S_LAST + 1));
+        BV_SET(what_base, what - S_LAST - 1);
       } else {
         BV_SET(what_bv, what);
       }
@@ -376,7 +377,7 @@ void popup_pillage_dialog(struct unit *punit,
                         G_CALLBACK(pillage_callback), GINT_TO_POINTER(what));
 
       if (what > S_LAST) {
-        BV_CLR(bases, what % (S_LAST + 1));
+        BV_CLR(bases, what - S_LAST - 1);
       } else {
         clear_special(&may_pillage, what);
       }
@@ -507,12 +508,12 @@ static void unit_select_cmd_callback(GtkWidget *w, gint rid, gpointer data)
           pmyunit = punit;
 
           /* Activate this unit. */
-	  punit->client.focus_status = FOCUS_AVAIL;
+	  punit->focus_status = FOCUS_AVAIL;
 	  if (unit_has_orders(punit)) {
 	    request_orders_cleared(punit);
 	  }
-	  if (punit->activity != ACTIVITY_IDLE || punit->ai_controlled) {
-	    punit->ai_controlled = FALSE;
+	  if (punit->activity != ACTIVITY_IDLE || punit->ai.control) {
+	    punit->ai.control = FALSE;
 	    request_new_unit_activity(punit, ACTIVITY_IDLE);
 	  }
         }
@@ -530,7 +531,7 @@ static void unit_select_cmd_callback(GtkWidget *w, gint rid, gpointer data)
       unit_list_iterate(ptile->units, punit) {
         if (unit_owner(punit) == client.conn.playing) {
           if ((punit->activity == ACTIVITY_IDLE) &&
-              !punit->ai_controlled &&
+              !punit->ai.control &&
               can_unit_do_activity(punit, ACTIVITY_SENTRY)) {
             request_new_unit_activity(punit, ACTIVITY_SENTRY);
           }
@@ -544,7 +545,7 @@ static void unit_select_cmd_callback(GtkWidget *w, gint rid, gpointer data)
       unit_list_iterate(ptile->units, punit) {
         if (unit_owner(punit) == client.conn.playing) {
           if (punit->activity == ACTIVITY_IDLE &&
-              !punit->ai_controlled) {
+              !punit->ai.control) {
             /* Give focus to it */
             add_unit_focus(punit);
           }
@@ -1117,7 +1118,7 @@ static void select_random_leader(void)
   if (unique) {
     gtk_entry_set_text(GTK_ENTRY(text), name);
   } else {
-    i = fc_rand(nleaders);
+    i = myrand(nleaders);
     gtk_entry_set_text(GTK_ENTRY(text), g_list_nth_data(items, i));
   }
 

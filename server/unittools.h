@@ -39,8 +39,7 @@ void update_unit_activities(struct player *pplayer);
 
 /* various */
 enum goto_move_restriction get_activity_move_restriction(enum unit_activity activity);
-void place_partisans(struct tile *pcenter, struct player *powner,
-                     int count, int sq_radius);
+void make_partisans(struct city *pcity);
 bool enemies_at(struct unit *punit, struct tile *ptile);
 bool teleport_unit_to_city(struct unit *punit, struct city *pcity, int move_cost,
 			  bool verbose);
@@ -58,8 +57,8 @@ void unit_activity_assign_target(struct unit *punit,
                                  Base_type_id *base);
 
 /* creation/deletion/upgrading */
-void transform_unit(struct unit *punit, struct unit_type *to_unit,
-                    bool has_to_pay);
+void upgrade_unit(struct unit *punit, struct unit_type *to_unit,
+		  bool has_to_pay);
 struct unit *create_unit(struct player *pplayer, struct tile *ptile,
 			 struct unit_type *punittype,
 			 int veteran_level, int homecity_id, int moves_left);
@@ -91,8 +90,5 @@ void load_unit_onto_transporter(struct unit *punit, struct unit *ptrans);
 void unload_unit_from_transporter(struct unit *punit);
 bool move_unit(struct unit *punit, struct tile *ptile, int move_cost);
 bool execute_orders(struct unit *punit);
-
-bool unit_can_do_action_now(const struct unit *punit);
-void unit_did_action(struct unit *punit);
 
 #endif  /* FC__UNITTOOLS_H */

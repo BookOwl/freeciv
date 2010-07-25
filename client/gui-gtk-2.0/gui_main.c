@@ -19,6 +19,7 @@
 #include "SDL.h"
 #endif
 
+#include <assert.h>
 #ifdef HAVE_LOCALE_H
 #include <locale.h>
 #endif
@@ -236,10 +237,9 @@ void set_city_names_font_sizes(int my_city_names_font_size,
 /**************************************************************************
 ...
 **************************************************************************/
-static void log_callback_utf8(enum log_level level, const char *message,
-                              bool file_too)
+static void log_callback_utf8(int level, const char *message, bool file_too)
 {
-  if (!file_too || level <= LOG_FATAL) {
+  if (! file_too || level <= LOG_FATAL) {
     fc_fprintf(stderr, "%d: %s\n", level, message);
   }
 }
@@ -420,8 +420,8 @@ static gboolean key_press_map_canvas(GtkWidget *w, GdkEventKey *ev,
     return FALSE;
   }
 
-  fc_assert(MAX_NUM_BATTLEGROUPS == 4);
-
+  assert(MAX_NUM_BATTLEGROUPS == 4);
+  
   if ((ev->state & GDK_CONTROL_MASK)) {
     switch (ev->keyval) {
 
@@ -780,15 +780,11 @@ static GtkWidget *detached_widget_fill(GtkWidget *ahbox)
 **************************************************************************/
 static void populate_unit_pixmap_table(void)
 {
-  int i, width, height;
+  int i;
   GtkWidget *table = unit_pixmap_table;
-
-  /* get width of the overview window */
-  gdk_drawable_get_size(overview_canvas->window, &width, &height);
-  width = (width > GUI_GTK_OVERVIEW_MIN_XSIZE) ? width
-                                               : GUI_GTK_OVERVIEW_MIN_XSIZE;
-
-  num_units_below = width / (int) tileset_tile_width(tileset);
+ 
+  /* 135 below is rough value (could be more intelligent) --dwp */
+  num_units_below = 135 / (int) tileset_tile_width(tileset);
   num_units_below = CLIP(1, num_units_below, MAX_NUM_UNITS_BELOW);
 
   gtk_table_resize(GTK_TABLE(table), 2, num_units_below);
@@ -905,7 +901,7 @@ void enable_menus(bool enable)
   if (enable) {
     main_menubar = setup_menus(toplevel);
     gtk_box_pack_start(GTK_BOX(top_vbox), main_menubar, FALSE, FALSE, 0);
-    menus_init();
+    update_menus();
     gtk_widget_show_all(main_menubar);
   } else {
     gtk_widget_destroy(main_menubar);
@@ -1166,8 +1162,7 @@ static void setup_widgets(void)
   g_signal_connect(turn_done_button, "clicked",
                    G_CALLBACK(end_turn_callback), NULL);
 
-  fc_snprintf(buf, sizeof(buf), "%s:\n%s",
-              _("Turn Done"), _("Shift+Return"));
+  my_snprintf(buf, sizeof(buf), "%s:\n%s", _("Turn Done"), _("Shift+Return"));
   gtk_tooltips_set_tip(main_tips, turn_done_button, buf, "");
 
   /* Selected unit status */
@@ -1501,24 +1496,27 @@ void ui_main(int argc, char **argv)
 
   civ_gc = gdk_gc_new(root_window);
 
-  options_iterate(client_optset, poption) {
-    if (OT_FONT == option_type(poption)) {
+  client_options_iterate(poption) {
+    if (COT_FONT == option_type(poption)) {
       /* Force to call the appropriated callback. */
       option_changed(poption);
     }
-  } options_iterate_end;
+  } client_options_iterate_end;
 
   if (NULL == city_names_style) {
     city_names_style = gtk_style_new();
-    log_error("city_names_style should have been set by options.");
+    freelog(LOG_ERROR,
+            "city_names_style should have been set by options.");
   }
   if (NULL == city_productions_style) {
     city_productions_style = gtk_style_new();
-    log_error("city_productions_style should have been set by options.");
+    freelog(LOG_ERROR,
+            "city_productions_style should have been set by options.");
   }
   if (NULL == reqtree_text_style) {
     reqtree_text_style = gtk_style_new();
-    log_error("reqtree_text_style should have been set by options.");
+    freelog(LOG_ERROR,
+            "reqtree_text_style should have been set by options.");
   }
 
   set_city_names_font_sizes(city_names_font_size, city_productions_font_size);
@@ -1736,7 +1734,7 @@ void update_conn_list_dialog(void)
       if (pplayer->ai_data.control && !pplayer->was_created
           && !pplayer->is_connected) {
         /* TRANS: "<Novice AI>" */
-        fc_snprintf(user_name, sizeof(user_name), _("<%s AI>"),
+        my_snprintf(user_name, sizeof(user_name), _("<%s AI>"),
                     ai_level_name(pplayer->ai_data.skill_level));
       } else {
         sz_strlcpy(user_name, pplayer->username);
@@ -1764,25 +1762,25 @@ void update_conn_list_dialog(void)
       rating_text[0] = '\0';
       if ((in_ggz || with_ggz)
           && !pplayer->ai_data.control
-          && user_get_rating(pplayer->username, &rating)) {
-        fc_snprintf(rating_text, sizeof(rating_text), "%d", rating);
+	  && user_get_rating(pplayer->username, &rating)) {
+	my_snprintf(rating_text, sizeof(rating_text), "%d", rating);
       }
 
       record_text[0] = '\0';
       if ((in_ggz || with_ggz)
           && !pplayer->ai_data.control
-          && user_get_record(pplayer->username,
-                             &wins, &losses, &ties, &forfeits)) {
-        if (forfeits == 0 && ties == 0) {
-          fc_snprintf(record_text, sizeof(record_text), "%d-%d",
-                      wins, losses);
-        } else if (forfeits == 0) {
-          fc_snprintf(record_text, sizeof(record_text), "%d-%d-%d",
-                      wins, losses, ties);
-        } else {
-          fc_snprintf(record_text, sizeof(record_text), "%d-%d-%d-%d",
-                      wins, losses, ties, forfeits);
-        }
+	  && user_get_record(pplayer->username,
+			       &wins, &losses, &ties, &forfeits)) {
+	if (forfeits == 0 && ties == 0) {
+	  my_snprintf(record_text, sizeof(record_text), "%d-%d",
+		      wins, losses);
+	} else if (forfeits == 0) {
+	  my_snprintf(record_text, sizeof(record_text), "%d-%d-%d",
+		      wins, losses, ties);
+	} else {
+	  my_snprintf(record_text, sizeof(record_text), "%d-%d-%d-%d",
+		      wins, losses, ties, forfeits);
+	}
       }
 
       gtk_tree_store_append(store, &iter, NULL);
@@ -1855,8 +1853,8 @@ void sound_bell(void)
 void set_unit_icon(int idx, struct unit *punit)
 {
   GtkWidget *w;
-
-  fc_assert_ret(idx >= -1 && idx < num_units_below);
+  
+  assert(idx >= -1 && idx < num_units_below);
 
   if (idx == -1) {
     w = unit_pixmap;
@@ -2024,12 +2022,12 @@ static void set_wait_for_writable_socket(struct connection *pc,
 {
   static bool previous_state = FALSE;
 
-  fc_assert_ret(pc == &client.conn);
+  assert(pc == &client.conn);
 
   if (previous_state == socket_writable)
     return;
 
-  log_debug("set_wait_for_writable_socket(%d)", socket_writable);
+  freelog(LOG_DEBUG, "set_wait_for_writable_socket(%d)", socket_writable);
   gtk_input_remove(input_id);
   input_id = gtk_input_add_full(client.conn.sock, GDK_INPUT_READ
 				| (socket_writable ? GDK_INPUT_WRITE : 0)
@@ -2160,7 +2158,7 @@ void add_idle_callback(void (callback)(void *), void *data)
 /****************************************************************************
   Option callback for the 'gui_gtk2_split_bottom_notebook' option.
 ****************************************************************************/
-static void split_bottom_notebook_callback(struct option *poption)
+static void split_bottom_notebook_callback(struct client_option *poption)
 {
   popdown_meswin_dialog();
   if (option_bool_get(poption)) {
@@ -2176,13 +2174,13 @@ static void split_bottom_notebook_callback(struct option *poption)
   Option callback for the 'gui_gtk2_allied_chat_only' option.
   This updates the state of the associated toggle button.
 ****************************************************************************/
-static void allied_chat_only_callback(struct option *poption)
+static void allied_chat_only_callback(struct client_option *poption)
 {
   GtkWidget *button;
 
   button = allied_chat_toggle_button;
-  fc_assert_ret(button != NULL);
-  fc_assert_ret(GTK_IS_TOGGLE_BUTTON(button));
+  g_return_if_fail(button != NULL);
+  g_return_if_fail(GTK_IS_TOGGLE_BUTTON(button));
 
   gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(button),
                                option_bool_get(poption));
@@ -2191,7 +2189,7 @@ static void allied_chat_only_callback(struct option *poption)
 /****************************************************************************
   Change the city names font.
 ****************************************************************************/
-static void apply_city_names_font(struct option *poption)
+static void apply_city_names_font(struct client_option *poption)
 {
   gui_update_font_full(option_font_target(poption),
                        option_font_get(poption),
@@ -2202,7 +2200,7 @@ static void apply_city_names_font(struct option *poption)
 /****************************************************************************
   Change the city productions font.
 ****************************************************************************/
-static void apply_city_productions_font(struct option *poption)
+static void apply_city_productions_font(struct client_option *poption)
 {
   gui_update_font_full(option_font_target(poption),
                        option_font_get(poption),
@@ -2213,7 +2211,7 @@ static void apply_city_productions_font(struct option *poption)
 /****************************************************************************
   Change the city productions font.
 ****************************************************************************/
-static void apply_reqtree_text_font(struct option *poption)
+static void apply_reqtree_text_font(struct client_option *poption)
 {
   gui_update_font_full(option_font_target(poption),
                        option_font_get(poption),
@@ -2228,13 +2226,13 @@ static void apply_reqtree_text_font(struct option *poption)
 void gui_options_extra_init(void)
 {
 
-  struct option *poption;
+  struct client_option *poption;
 
 #define option_var_set_callback(var, callback)                              \
-  if ((poption = optset_option_by_name(client_optset, #var))) {             \
+  if ((poption = option_by_name(#var))) {                                   \
     option_set_changed_callback(poption, callback);                         \
   } else {                                                                  \
-    log_error("Didn't find option %s!", #var);                              \
+    freelog(LOG_ERROR, "Didn't find option %s!", #var);                     \
   }
 
   option_var_set_callback(gui_gtk2_allied_chat_only,
@@ -2260,8 +2258,8 @@ void refresh_chat_buttons(void)
   GtkWidget *button;
 
   button = allied_chat_toggle_button;
-  fc_assert_ret(button != NULL);
-  fc_assert_ret(GTK_IS_TOGGLE_BUTTON(button));
+  g_return_if_fail(button != NULL);
+  g_return_if_fail(GTK_IS_TOGGLE_BUTTON(button));
 
   /* Hide the "Allies Only" button for local games. */
   if (is_server_running()) {

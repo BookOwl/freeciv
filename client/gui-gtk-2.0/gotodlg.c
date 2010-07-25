@@ -41,15 +41,13 @@
 #include "goto.h"
 #include "options.h"
 
-/* clien/gui-gtk-2.0 */
-#include "plrdlg.h"
+/* gui-gtk-2.0 */
 #include "dialogs.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "mapview.h"
 
 #include "gotodlg.h"
-
 
 static GtkWidget *dshell;
 static GtkWidget *view;
@@ -65,15 +63,6 @@ static struct city *get_selected_city(void);
 
 enum {
   CMD_AIRLIFT = 1, CMD_GOTO
-};
-
-enum {
-  GD_COL_CITY_ID = 0,   /* Not shown if not compiled with --enable-debug. */
-  GD_COL_CITY_NAME,
-  GD_COL_FLAG,
-  GD_COL_NATION,
-
-  GD_COL_NUM
 };
 
 /****************************************************************
@@ -99,10 +88,8 @@ static void goto_cmd_callback(GtkWidget *dlg, gint arg)
       struct city *pdestcity = get_selected_city();
 
       if (pdestcity) {
-        unit_list_iterate(get_units_in_focus(), punit) {
-          if (base_unit_can_airlift_to(client_player(), punit, pdestcity)) {
-            request_unit_airlift(punit, pdestcity);
-          }
+	unit_list_iterate(get_units_in_focus(), punit) {
+          request_unit_airlift(punit, pdestcity);
         } unit_list_iterate_end;
       }
     }
@@ -162,42 +149,24 @@ static void create_goto_dialog(void)
   vbox = gtk_vbox_new(FALSE, 6);
   gtk_container_add(GTK_CONTAINER(label), vbox);
 
-  store = gtk_list_store_new(GD_COL_NUM, G_TYPE_INT, G_TYPE_STRING,
-                             GDK_TYPE_PIXBUF, G_TYPE_STRING);
+  store = gtk_list_store_new(3, G_TYPE_STRING, G_TYPE_BOOLEAN, G_TYPE_INT);
   gtk_tree_sortable_set_sort_column_id(GTK_TREE_SORTABLE(store),
-    GD_COL_CITY_NAME, GTK_SORT_ASCENDING);
+    0, GTK_SORT_ASCENDING);
 
   view = gtk_tree_view_new_with_model(GTK_TREE_MODEL(store));
   g_object_unref(store);
   selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(view));
-  gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(view), TRUE);
-  gtk_tree_view_set_search_column(GTK_TREE_VIEW(view), GD_COL_CITY_NAME);
-  gtk_tree_view_set_enable_search(GTK_TREE_VIEW(view), TRUE);
-
-#ifdef DEBUG
-  rend = gtk_cell_renderer_text_new();
-  col = gtk_tree_view_column_new_with_attributes(_("Id"), rend,
-    "text", GD_COL_CITY_ID, NULL);
-  gtk_tree_view_append_column(GTK_TREE_VIEW(view), col);
-  gtk_tree_view_column_set_sort_column_id(col, GD_COL_CITY_ID);
-#endif
+  gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(view), FALSE);
 
   rend = gtk_cell_renderer_text_new();
-  col = gtk_tree_view_column_new_with_attributes(_("City"), rend,
-    "text", GD_COL_CITY_NAME, NULL);
-  gtk_tree_view_append_column(GTK_TREE_VIEW(view), col);
-  gtk_tree_view_column_set_sort_column_id(col, GD_COL_CITY_NAME);
-
-  rend = gtk_cell_renderer_pixbuf_new();
   col = gtk_tree_view_column_new_with_attributes(NULL, rend,
-    "pixbuf", GD_COL_FLAG, NULL);
+    "text", 0, NULL);
   gtk_tree_view_append_column(GTK_TREE_VIEW(view), col);
 
-  rend = gtk_cell_renderer_text_new();
-  col = gtk_tree_view_column_new_with_attributes(_("Nation"), rend,
-    "text", GD_COL_NATION, NULL);
+  rend = gtk_cell_renderer_toggle_new();
+  col = gtk_tree_view_column_new_with_attributes(NULL, rend,
+    "active", 1, NULL);
   gtk_tree_view_append_column(GTK_TREE_VIEW(view), col);
-  gtk_tree_view_column_set_sort_column_id(col, GD_COL_NATION);
 
   sw = gtk_scrolled_window_new(NULL, NULL);
   gtk_container_add(GTK_CONTAINER(sw), view);
@@ -259,37 +228,13 @@ static struct city *get_selected_city(void)
   GtkTreeIter it;
   int city_id;
 
-  if (!gtk_tree_selection_get_selected(selection, NULL, &it)) {
+  if (!gtk_tree_selection_get_selected(selection, NULL, &it))
     return NULL;
-  }
 
   model = gtk_tree_view_get_model(GTK_TREE_VIEW(view));
 
-  gtk_tree_model_get(model, &it, GD_COL_CITY_ID, &city_id, -1);
+  gtk_tree_model_get(model, &it, 2, &city_id, -1);
   return game_find_city_by_number(city_id);
-}
-
-/**************************************************************************
-  Appends the list of the city owned by the player in the goto dialog.
-**************************************************************************/
-static void list_store_append_player_cities(GtkListStore *store,
-                                            const struct player *pplayer)
-{
-  GtkTreeIter it;
-  struct nation_type *pnation = nation_of_player(pplayer);
-  const char *nation = nation_adjective_translation(pnation);
-  GdkPixbuf *pixbuf = get_flag(pnation);
-
-  city_list_iterate(pplayer->cities, pcity) {
-    gtk_list_store_append(store, &it);
-    gtk_list_store_set(store, &it,
-                       GD_COL_CITY_ID, pcity->id,
-                       GD_COL_CITY_NAME, city_name(pcity),
-                       GD_COL_FLAG, pixbuf,
-                       GD_COL_NATION, nation,
-                       -1);
-  } city_list_iterate_end;
-  g_object_unref(pixbuf);
 }
 
 /**************************************************************************
@@ -297,45 +242,51 @@ static void list_store_append_player_cities(GtkListStore *store,
 **************************************************************************/
 static void update_goto_dialog(GtkToggleButton *button)
 {
+  GtkTreeIter it;
+  gboolean all_cities;
+
+  all_cities = gtk_toggle_button_get_active(button);
+
   gtk_list_store_clear(store);
 
-  if (!client_has_player()) {
-    /* Case global observer. */
-    return;
-  }
+  players_iterate(pplayer) {
+    if (!all_cities && pplayer != client.conn.playing) {
+      continue;
+    }
 
-  if (gtk_toggle_button_get_active(button)) {
-    players_iterate(pplayer) {
-      list_store_append_player_cities(store, pplayer);
-    } players_iterate_end;
-  } else {
-    list_store_append_player_cities(store, client_player());
-  }
+    city_list_iterate(pplayer->cities, pcity) {
+      gtk_list_store_append(store, &it);
+
+      /* FIXME: should use unit_can_airlift_to(). */
+      gtk_list_store_set(store, &it,
+                         0, city_name(pcity),
+                         1, pcity->airlift,
+                         2, pcity->id,
+                         -1);
+    } city_list_iterate_end;
+  } players_iterate_end;
 }
 
 /**************************************************************************
 ...
 **************************************************************************/
-static void goto_selection_callback(GtkTreeSelection *selection,
-                                    gpointer data)
+static void goto_selection_callback(GtkTreeSelection *selection, gpointer data)
 {
-  struct city *pdestcity = get_selected_city();
+  struct city *pdestcity;
 
-  if (NULL != pdestcity) {
+  if((pdestcity = get_selected_city())) {
     bool can_airlift = FALSE;
 
-    center_tile_mapcanvas(city_tile(pdestcity));
-
     unit_list_iterate(get_units_in_focus(), punit) {
-      if (base_unit_can_airlift_to(client_player(), punit, pdestcity)) {
-        can_airlift = TRUE;
-        break;
+      if (unit_can_airlift_to(punit, pdestcity)) {
+	can_airlift = TRUE;
+	break;
       }
     } unit_list_iterate_end;
 
+    center_tile_mapcanvas(pdestcity->tile);
     if (can_airlift) {
-      gtk_dialog_set_response_sensitive(GTK_DIALOG(dshell),
-                                        CMD_AIRLIFT, TRUE);
+      gtk_dialog_set_response_sensitive(GTK_DIALOG(dshell), CMD_AIRLIFT, TRUE);
       return;
     }
   }

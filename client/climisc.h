@@ -131,6 +131,4 @@ enum unit_bg_color_type unit_color_type(const struct unit_type *punittype);
 
 void buy_production_in_selected_cities(void);
 
-void set_unit_focus_status(struct player *pplayer);
-
 #endif  /* FC__CLIMISC_H */

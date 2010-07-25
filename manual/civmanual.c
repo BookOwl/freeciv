@@ -34,7 +34,6 @@
 /* common */
 #include "connection.h"
 #include "events.h"
-#include "fc_types.h" /* LINE_BREAK */
 #include "game.h"
 #include "improvement.h"
 #include "map.h"
@@ -55,8 +54,8 @@
 #include "plrhand.h"
 #include "report.h"
 #include "ruleset.h"
+#include "savegame.h"
 #include "settings.h"
-#include "sernet.h"
 #include "srv_main.h"
 #include "stdinhand.h"
 
@@ -137,11 +136,11 @@ static bool manual_command(void)
   for (manuals = 0; manuals < MANUAL_COUNT; manuals++) {
     int i;
 
-    fc_snprintf(filename, sizeof(filename), "manual%d.html", manuals + 1);
+    my_snprintf(filename, sizeof(filename), "manual%d.html", manuals + 1);
 
     if (!is_reg_file_for_access(filename, TRUE)
         || !(doc = fc_fopen(filename, "w"))) {
-      log_error(_("Could not write manual file %s."), filename);
+      die(_("Could not write manual file %s."), filename);
       return FALSE;
     }
 
@@ -155,38 +154,29 @@ static bool manual_command(void)
         fprintf(doc, "%s%s - %s%s\n\n", SECTION_BEGIN, setting_name(pset),
                 _(setting_short_help(pset)), SECTION_END);
         if (strlen(setting_extra_help(pset)) > 0) {
-          char *help = fc_strdup(_(setting_extra_help(pset)));
+          char *help = mystrdup(_(setting_extra_help(pset)));
           size_t help_len = strlen(help) + 1;
 
-          fc_break_lines(help, LINE_BREAK);
           help = html_special_chars(help, &help_len);
           fprintf(doc, "<pre>%s</pre>\n\n", help);
           FC_FREE(help);
         }
         fprintf(doc, "<p class=\"misc\">");
-        fprintf(doc, _("Level: %s.<br>"),
-                _(sset_level_name(setting_number(pset))));
-        fprintf(doc, _("Category: %s.<br>"),
-                _(sset_category_name(setting_number(pset))));
+        fprintf(doc, _("Level: %s.<br>"), _(setting_level_name(pset)));
+        fprintf(doc, _("Category: %s.<br>"), _(setting_category_name(pset)));
 
-        /* first check if the setting is locked because this is include in
-         * the function setting_is_changeable() */
-        if (!setting_locked(pset)) {
-          fprintf(doc, _("Is locked by the ruleset."));
-        } else if (!setting_is_changeable(pset, &my_conn, NULL, 0)) {
-          fprintf(doc, _("Can only be used in server console."));
+        if (!setting_is_changeable(pset, &my_conn, NULL)) {
+          fprintf(doc, _("Can only be used in server console. "));
         }
-
         fprintf(doc, "</p>\n\n");
         switch (setting_type(pset)) {
         case SSET_BOOL:
-          fprintf(doc, "<p class=\"bounds\">%s %s (%d)</p>\n\n",
-                  _("Default:"), _(setting_bool_def_str(pset)),
-                  setting_bool_def(pset) ? 1 : 0);
+          fprintf(doc, "<p class=\"bounds\">%s 0, %s %d, %s 1</p>\n\n",
+                  _("Minimum:"), _("Default:"),
+                  setting_bool_def(pset) ? 1 : 0, _("Maximum:"));
           if (setting_bool_get(pset) != setting_bool_def(pset)) {
-            fprintf(doc,
-                    _("<p class=\"changed\">Value set to %s (%d)</p>\n\n"),
-                    _(setting_bool_get_str(pset)), setting_bool_get(pset));
+            fprintf(doc, _("<p class=\"changed\">Value set to %d</p>\n\n"),
+                    setting_bool_get(pset) ? 1 : 0);
           }
           break;
         case SSET_INT:
@@ -207,27 +197,6 @@ static bool manual_command(void)
                     setting_str_get(pset));
           }
           break;
-        case SSET_ENUM:
-          {
-            const char *value;
-
-            fprintf(doc, "<p class=\"bounds\">%s</p>\n",
-                    _("Possible values:"));
-            for (i = 0; (value = setting_enum_int_to_str(pset, i)); i++) {
-              fprintf(doc, "<p class=\"bounds\"><li/> %d: \"%s\"</p>\n",
-                      i, _(value));
-            }
-            fprintf(doc, "<p class=\"bounds\">%s \"%s\" (%d)</p>\n\n",
-                    _("Default:"), _(setting_enum_def_str(pset)),
-                    setting_enum_def_int(pset));
-            if (setting_enum_get_int(pset) != setting_enum_def_int(pset)) {
-              fprintf(doc,
-                      _("<p class=\"changed\">Value set to %s (%d)</p>\n\n"),
-                      _(setting_enum_get_str(pset)),
-                      setting_enum_get_int(pset));
-            }
-          }
-          break;
         }
       } settings_iterate_end;
       break;
@@ -242,7 +211,7 @@ static bool manual_command(void)
         fprintf(doc, "%s%s  -  %s%s\n\n", SECTION_BEGIN, command_name(cmd),
                 command_short_help(cmd), SECTION_END);
         if (command_synopsis(cmd)) {
-          char *cmdstr = fc_strdup(command_synopsis(cmd));
+          char *cmdstr = mystrdup(command_synopsis(cmd));
           size_t cmdstr_len = strlen(cmdstr) + 1;
 
           cmdstr = html_special_chars(cmdstr, &cmdstr_len);
@@ -254,10 +223,9 @@ static bool manual_command(void)
         fprintf(doc, _("<p class=\"level\">Level: %s</p>\n\n"),
                 cmdlevel_name(command_level(cmd)));
         if (command_extra_help(cmd)) {
-          char *help = fc_strdup(command_extra_help(cmd));
+          char *help = mystrdup(command_extra_help(cmd));
           size_t help_len = strlen(help) + 1;
 
-          fc_break_lines(help, LINE_BREAK);
           help = html_special_chars(help, &help_len);
           fprintf(doc, _("<p>Description:</p>\n\n"));
           fprintf(doc, "<pre>%s</pre>\n\n", help);
@@ -413,12 +381,6 @@ int main(int argc, char **argv)
 
   init_nls();
   init_character_encodings(FC_DEFAULT_DATA_ENCODING, FALSE);
-
-  /* must be before con_log_init() */
-  init_connections();
-  con_log_init(srvarg.log_filename, srvarg.loglevel,
-               srvarg.fatal_assertions);
-  /* logging available after this point */
 
   /* Initialize game with default values */
   game_init();

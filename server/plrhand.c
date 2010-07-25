@@ -15,6 +15,7 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <stdarg.h>
 
 /* utility */
@@ -49,6 +50,7 @@
 #include "notify.h"
 #include "plrhand.h"
 #include "sernet.h"
+#include "settlers.h"
 #include "srv_main.h"
 #include "stdinhand.h"
 #include "spaceship.h"
@@ -56,9 +58,6 @@
 #include "techtools.h"
 #include "unittools.h"
 #include "voting.h"
-
-/* server/advisors */
-#include "autosettlers.h"
 
 /* ai */
 #include "advdiplomacy.h"
@@ -120,16 +119,13 @@ void kill_player(struct player *pplayer)
 
   pplayer->is_alive = FALSE;
 
-  /* reset player status */
-  player_status_reset(pplayer);
-
   /* Remove shared vision from dead player to friends. */
   players_iterate(aplayer) {
     if (gives_shared_vision(pplayer, aplayer)) {
       remove_shared_vision(pplayer, aplayer);
     }
   } players_iterate_end;
-
+    
   cancel_all_meetings(pplayer);
 
   /* Show entire map for players who are *not* in a team. */
@@ -145,8 +141,8 @@ void kill_player(struct player *pplayer)
 
   /* Transfer back all cities not originally owned by player to their
      rightful owners, if they are still around */
-  palace = game.server.savepalace;
-  game.server.savepalace = FALSE; /* moving it around is dumb */
+  palace = game.info.savepalace;
+  game.info.savepalace = FALSE; /* moving it around is dumb */
   city_list_iterate(pplayer->cities, pcity) {
     if (pcity->original != pplayer && pcity->original->is_alive) {
       /* Transfer city to original owner, kill all its units outside of
@@ -165,7 +161,7 @@ void kill_player(struct player *pplayer)
   city_list_iterate(pplayer->cities, pcity) {
     remove_city(pcity);
   } city_list_iterate_end;
-  game.server.savepalace = palace;
+  game.info.savepalace = palace;
 
   /* Remove ownership of tiles */
   whole_map_iterate(ptile) {
@@ -192,8 +188,8 @@ void handle_player_rates(struct player *pplayer,
   int maxrate;
 
   if (S_S_RUNNING != server_state()) {
-    log_error("received player_rates packet from %s before start",
-              player_name(pplayer));
+    freelog(LOG_ERROR, "received player_rates packet from %s before start",
+	    player_name(pplayer));
     notify_player(pplayer, NULL, E_BAD_COMMAND, ftc_server,
                   _("Cannot change rates before game start."));
     return;
@@ -241,18 +237,27 @@ static void finish_revolution(struct player *pplayer)
 {
   struct government *government = pplayer->target_government;
 
-  fc_assert_ret(pplayer->target_government
-                != game.government_during_revolution
-                && NULL != pplayer->target_government);
-  fc_assert_ret(pplayer->revolution_finishes <= game.info.turn);
+  if (pplayer->target_government == game.government_during_revolution
+      || pplayer->target_government == NULL) {
+    /* More descriptive assert than just assert(FALSE) */
+    assert(pplayer->target_government != game.government_during_revolution
+           && pplayer->target_government != NULL);
+    return;
+  }
+  if (pplayer->revolution_finishes > game.info.turn) {
+    /* More descriptive assert than just assert(FALSE) */
+    assert(pplayer->revolution_finishes <= game.info.turn);
+    return;
+  }
 
   pplayer->government = government;
   pplayer->target_government = NULL;
 
-  log_debug("Revolution finished for %s. Government is %s. "
-            "Revofin %d (%d).", player_name(pplayer),
-            government_rule_name(government),
-            pplayer->revolution_finishes, game.info.turn);
+  freelog(LOG_DEBUG,
+	  "Revolution finished for %s.  Government is %s.  Revofin %d (%d).",
+	  player_name(pplayer),
+	  government_rule_name(government),
+	  pplayer->revolution_finishes, game.info.turn);
   notify_player(pplayer, NULL, E_REVOLT_DONE, ftc_server,
                 _("%s now governs the %s as a %s."), 
                 player_name(pplayer), 
@@ -289,7 +294,6 @@ static void finish_revolution(struct player *pplayer)
 
   check_player_max_rates(pplayer);
   city_refresh_for_player(pplayer);
-  player_research_update(pplayer);
   send_player_info(pplayer, pplayer);
 }
 
@@ -305,11 +309,13 @@ void handle_player_change_government(struct player *pplayer, int government)
     return;
   }
 
-  log_debug("Government changed for %s. Target government is %s; "
-            "old %s. Revofin %d, Turn %d.", player_name(pplayer),
-            government_rule_name(gov),
-            government_rule_name(government_of_player(pplayer)),
-            pplayer->revolution_finishes, game.info.turn);
+  freelog(LOG_DEBUG,
+	  "Government changed for %s.  Target government is %s; "
+	  "old %s.  Revofin %d, Turn %d.",
+	  player_name(pplayer),
+	  government_rule_name(gov),
+	  government_rule_name(government_of_player(pplayer)),
+	  pplayer->revolution_finishes, game.info.turn);
 
   /* Set revolution_finishes value. */
   if (pplayer->revolution_finishes > 0) {
@@ -323,20 +329,22 @@ void handle_player_change_government(struct player *pplayer, int government)
 	     || get_player_bonus(pplayer, EFT_NO_ANARCHY)) {
     /* AI players without the H_REVOLUTION handicap can skip anarchy */
     turns = 0;
-  } else if (game.server.revolution_length == 0) {
-    turns = fc_rand(5) + 1;
+  } else if (game.info.revolution_length == 0) {
+    turns = myrand(5) + 1;
   } else {
-    turns = game.server.revolution_length;
+    turns = game.info.revolution_length;
   }
 
   pplayer->government = game.government_during_revolution;
   pplayer->target_government = gov;
   pplayer->revolution_finishes = game.info.turn + turns;
 
-  log_debug("Revolution started for %s. Target government is %s. "
-            "Revofin %d (%d).", player_name(pplayer),
-            government_rule_name(pplayer->target_government),
-            pplayer->revolution_finishes, game.info.turn);
+  freelog(LOG_DEBUG,
+	  "Revolution started for %s.  Target government is %s.  "
+	  "Revofin %d (%d).",
+	  player_name(pplayer),
+	  government_rule_name(pplayer->target_government),
+	  pplayer->revolution_finishes, game.info.turn);
 
   /* Now see if the revolution is instantaneous. */
   if (turns <= 0
@@ -358,7 +366,7 @@ void handle_player_change_government(struct player *pplayer, int government)
                   turns,
                   government_name_translation(pplayer->target_government));
   } else {
-    fc_assert(pplayer->target_government == game.government_during_revolution);
+    assert(pplayer->target_government == game.government_during_revolution);
     notify_player(pplayer, NULL, E_REVOLT_START, ftc_server,
                   _("Revolution: returning to anarchy."));
   }
@@ -367,11 +375,13 @@ void handle_player_change_government(struct player *pplayer, int government)
   city_refresh_for_player(pplayer);
   send_player_info(pplayer, pplayer);
 
-  log_debug("Government change complete for %s. Target government is %s; "
-            "now %s. Turn %d; revofin %d.", player_name(pplayer),
-            government_rule_name(pplayer->target_government),
-            government_rule_name(government_of_player(pplayer)),
-            game.info.turn, pplayer->revolution_finishes);
+  freelog(LOG_DEBUG,
+	  "Government change complete for %s.  Target government is %s; "
+	  "now %s.  Turn %d; revofin %d.",
+	  player_name(pplayer),
+	  government_rule_name(pplayer->target_government),
+	  government_rule_name(government_of_player(pplayer)),
+	  game.info.turn, pplayer->revolution_finishes);
 }
 
 /**************************************************************************
@@ -399,18 +409,21 @@ void update_revolution(struct player *pplayer)
    *       is reset at the end of any turn when a non-anarchy government is
    *       chosen.
    */
-  log_debug("Update revolution for %s. Current government %s, "
-            "target %s, revofin %d, turn %d.", player_name(pplayer),
-            government_rule_name(government_of_player(pplayer)),
-            pplayer->target_government
-            ? government_rule_name(pplayer->target_government) : "(none)",
-            pplayer->revolution_finishes, game.info.turn);
+  freelog(LOG_DEBUG, "Update revolution for %s.  Current government %s, "
+	  "target %s, revofin %d, turn %d.",
+	  player_name(pplayer),
+	  government_rule_name(government_of_player(pplayer)),
+	  pplayer->target_government
+	  ? government_rule_name(pplayer->target_government)
+	  : "(none)",
+	  pplayer->revolution_finishes, game.info.turn);
   if (government_of_player(pplayer) == game.government_during_revolution
       && pplayer->revolution_finishes <= game.info.turn) {
     if (pplayer->target_government != game.government_during_revolution) {
       /* If the revolution is over and a target government is set, go into
        * the new government. */
-      log_debug("Update: finishing revolution for %s.", player_name(pplayer));
+      freelog(LOG_DEBUG, "Update: finishing revolution for %s.",
+	      player_name(pplayer));
       finish_revolution(pplayer);
     } else {
       /* If the revolution is over but there's no target government set,
@@ -423,7 +436,8 @@ void update_revolution(struct player *pplayer)
 	     && pplayer->revolution_finishes < game.info.turn) {
     /* Reset the revolution counter.  If the player has another revolution
      * they'll have to re-enter anarchy. */
-    log_debug("Update: resetting revofin for %s.", player_name(pplayer));
+    freelog(LOG_DEBUG, "Update: resetting revofin for %s.",
+	    player_name(pplayer));
     pplayer->revolution_finishes = -1;
     send_player_info(pplayer, pplayer);
   }
@@ -541,7 +555,8 @@ void handle_diplomacy_cancel_pact(struct player *pplayer,
     new_type = DS_ARMISTICE;
     break;
   default:
-    log_error("non-pact diplstate in handle_player_cancel_pact");
+    freelog(LOG_ERROR, "non-pact diplstate in handle_player_cancel_pact");
+    assert(FALSE);
     return;
   }
 
@@ -849,10 +864,10 @@ static void package_player_info(struct player *plr,
     if (receiver && player_has_real_embassy(plr, receiver)) {
       packet->real_embassy[player_index(receiver)] = TRUE;
     }
-
-    BV_CLR_ALL(packet->gives_shared_vision);
-    if (receiver && gives_shared_vision(plr, receiver)) {
-      BV_SET(packet->gives_shared_vision, player_index(receiver));
+    if (!receiver || !gives_shared_vision(plr, receiver)) {
+      packet->gives_shared_vision = 0;
+    } else {
+      packet->gives_shared_vision = 1 << player_index(receiver);
     }
 
     for (i = 0; i < MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS; i++) {
@@ -917,8 +932,9 @@ static void package_player_info(struct player *plr,
   packet->inventions[A_NONE] = research->inventions[A_NONE].state + '0';
   packet->inventions[advance_count()] = '\0';
 #ifdef DEBUG
-  log_verbose("Player%d inventions:%s",
-              player_number(plr), packet->inventions);
+  freelog(LOG_VERBOSE, "Player%d inventions:%s",
+          player_number(plr),
+          packet->inventions);
 #endif
 
   if (info_level >= INFO_FULL
@@ -933,14 +949,14 @@ static void package_player_info(struct player *plr,
    * This may be an odd time to check these values but we can be sure
    * to have a consistent state here.
    */
-  fc_assert(S_S_RUNNING != server_state()
-            || A_UNSET == research->researching
-            || is_future_tech(research->researching)
-            || (A_NONE != research->researching
-                && valid_advance_by_number(research->researching)));
-  fc_assert(A_UNSET == research->tech_goal
-            || (A_NONE != research->tech_goal
-                && valid_advance_by_number(research->tech_goal)));
+  assert(S_S_RUNNING != server_state()
+         || A_UNSET == research->researching
+	 || is_future_tech(research->researching)
+	 || (A_NONE != research->researching
+	     && valid_advance_by_number(research->researching)));
+  assert(A_UNSET == research->tech_goal
+	 || (A_NONE != research->tech_goal
+	     && valid_advance_by_number(research->tech_goal)));
 }
 
 /**************************************************************************
@@ -996,16 +1012,8 @@ static void call_first_contact(struct player *pplayer, struct player *aplayer)
   a team.  They will be put on their own newly-created team.
 ****************************************************************************/
 void server_player_init(struct player *pplayer,
-                        bool initmap, bool needs_team)
+			bool initmap, bool needs_team)
 {
-  player_status_reset(pplayer);
-  pplayer->server.capital = FALSE;
-  BV_CLR_ALL(pplayer->server.really_gives_vision);
-  BV_CLR_ALL(pplayer->server.debug);
-
-  player_map_free(pplayer);
-  pplayer->server.private_map = NULL;
-
   pplayer->ai = get_ai_type(AI_DEFAULT);
 
   if (initmap) {
@@ -1057,7 +1065,7 @@ void server_remove_player(struct player *pplayer)
     return;
   }
 
-  log_normal(_("Removing player %s."), player_name(pplayer));
+  freelog(LOG_NORMAL, _("Removing player %s."), player_name(pplayer));
 
   notify_conn(pplayer->connections, NULL, E_CONNECTION, ftc_server,
               _("You've been removed from the game!"));
@@ -1077,14 +1085,6 @@ void server_remove_player(struct player *pplayer)
 
   script_remove_exported_object(pplayer);
   team_remove_player(pplayer);
-  /* Clear data saved in the other player structs. */
-  players_iterate(aplayer) {
-    player_diplstate_init(&aplayer->diplstates[player_index(pplayer)]);
-    BV_CLR(aplayer->real_embassy, player_index(pplayer));
-    if (gives_shared_vision(aplayer, pplayer)) {
-      remove_shared_vision(aplayer, pplayer);
-    }
-  } players_iterate_end;
   game_remove_player(pplayer);
   player_init(pplayer);
   player_map_free(pplayer);
@@ -1135,8 +1135,8 @@ void make_contact(struct player *pplayer1, struct player *pplayer2,
   }
   if (get_player_bonus(pplayer1, EFT_NO_DIPLOMACY) == 0
       && get_player_bonus(pplayer2, EFT_NO_DIPLOMACY) == 0) {
-    pplayer1->diplstates[player2].contact_turns_left = game.server.contactturns;
-    pplayer2->diplstates[player1].contact_turns_left = game.server.contactturns;
+    pplayer1->diplstates[player2].contact_turns_left = game.info.contactturns;
+    pplayer2->diplstates[player1].contact_turns_left = game.info.contactturns;
   }
   if (pplayer_get_diplstate(pplayer1, pplayer2)->type == DS_NO_CONTACT) {
     enum diplstate_type new_state = get_default_diplstate(pplayer1,
@@ -1166,7 +1166,7 @@ void make_contact(struct player *pplayer1, struct player *pplayer2,
     send_player_info(pplayer2, pplayer2);
     return;
   } else {
-    fc_assert(pplayer_get_diplstate(pplayer2, pplayer1)->type != DS_NO_CONTACT);
+    assert(pplayer_get_diplstate(pplayer2, pplayer1)->type != DS_NO_CONTACT);
   }
   if (player_has_embassy(pplayer1, pplayer2)
       || player_has_embassy(pplayer2, pplayer1)) {
@@ -1201,7 +1201,7 @@ void shuffle_players(void)
   int n = player_slot_count();
   int i;
 
-  log_debug("shuffle_players: creating shuffled order");
+  freelog(LOG_DEBUG, "shuffle_players: creating shuffled order");
 
   for (i = 0; i < n; i++) {
     shuffled_order[i] = i;
@@ -1212,7 +1212,7 @@ void shuffle_players(void)
 
 #ifdef DEBUG
   for (i = 0; i < n; i++) {
-    log_debug("shuffled_order[%d] = %d", i, shuffled_order[i]);
+    freelog(LOG_DEBUG, "shuffled_order[%d] = %d", i, shuffled_order[i]);
   }
 #endif
 }
@@ -1224,12 +1224,12 @@ void set_shuffled_players(int *shuffled_players)
 {
   int i;
 
-  log_debug("set_shuffled_players: loading shuffled array %p",
-            shuffled_players);
+  freelog(LOG_DEBUG, "set_shuffled_players: loading shuffled array %p",
+          shuffled_players);
 
   for (i = 0; i < player_slot_count(); i++) {
     shuffled_order[i] = shuffled_players[i];
-    log_debug("shuffled_order[%d] = %d", i, shuffled_order[i]);
+    freelog(LOG_DEBUG, "shuffled_order[%d] = %d", i, shuffled_order[i]);
   }
 }
 
@@ -1243,15 +1243,49 @@ struct player *shuffled_player(int i)
   struct player *pplayer;
 
   pplayer = valid_player_by_number(shuffled_order[i]);
-  log_debug("shuffled_player(%d) = %d (%p %s)",
-            i, shuffled_order[i], pplayer, player_name(pplayer));
+  freelog(LOG_DEBUG, "shuffled_player(%d) = %d (%p %s)",
+          i, shuffled_order[i], pplayer, player_name(pplayer));
   return pplayer;
+}
+
+/**************************************************************************
+  Returns how much two nations looks good in the same game.
+  Negative return value means that we really really don't want these
+  nations together.
+**************************************************************************/
+static int nations_match(struct nation_type* n1, struct nation_type* n2,
+                         bool ignore_conflicts)
+{
+  int i, sum = 0;
+  
+  /* Scottish is a good civil war nation for British */
+  if (!ignore_conflicts) {
+    struct nation_type **p;
+
+    for (p = n1->conflicts_with; *p != NO_NATION_SELECTED; p++) {
+      if (*p == n2) {
+        return -1;
+      }
+    }
+
+    for (p = n2->conflicts_with; *p != NO_NATION_SELECTED; p++) {
+      if (*p == n1) {
+        return -1;
+      }
+    }
+  }
+  for (i = 0; i < n1->num_groups; i++) {
+    if (is_nation_in_group(n2, n1->groups[i])) {
+      sum += n1->groups[i]->match;
+    }
+  }
+  return sum;
 }
 
 /****************************************************************************
   This function return one of the nations available from the
   NO_NATION_SELECTED-terminated choices list. If no available nations in this
-  file were found, return a random nation.
+  file were found, return a random nation. If no nations are available, die.
 
   choices may be NULL; if so it's ignored.
   If only_available is set choose only nations that have is_available bit set.
@@ -1318,14 +1352,14 @@ struct nation_type *pick_a_nation(struct nation_type **choices,
     }
   } nations_iterate_end;
 
-  fc_assert_ret_val(num_nations_avail > 0, NO_NATION_SELECTED);
-  fc_assert_ret_val(pref_nations_avail >= 0, NO_NATION_SELECTED);
+  assert(num_nations_avail > 0);
+  assert(pref_nations_avail >= 0);
 
   if (pref_nations_avail == 0) {
-    pick = fc_rand(num_nations_avail);
+    pick = myrand(num_nations_avail);
     looking_for = AVAILABLE; /* Use any available nation. */
   } else {
-    pick = fc_rand(pref_nations_avail);
+    pick = myrand(pref_nations_avail);
     looking_for = PREFERRED; /* Use a preferred nation only. */
   }
 
@@ -1339,7 +1373,7 @@ struct nation_type *pick_a_nation(struct nation_type **choices,
     }
   } nations_iterate_end;
 
-  log_error("No nation found!");
+  assert(0);
   return NO_NATION_SELECTED;
 }
 
@@ -1389,8 +1423,8 @@ static struct player *split_player(struct player *pplayer)
   sz_strlcpy(cplayer->username, ANON_USER_NAME);
   cplayer->is_connected = FALSE;
   cplayer->government = nation_of_player(cplayer)->init_government;
-  fc_assert(cplayer->revolution_finishes < 0);
-  cplayer->server.capital = TRUE;
+  assert(cplayer->revolution_finishes < 0);
+  cplayer->capital = TRUE;
 
   /* cplayer is not yet part of players_iterate which goes only
      to player_count(). */
@@ -1518,7 +1552,7 @@ bool civil_war_triggered(struct player *pplayer)
 {
   /* Get base probabilities */
 
-  int dice = fc_rand(100); /* Throw the dice */
+  int dice = myrand(100); /* Throw the dice */
   int prob = get_player_bonus(pplayer, EFT_CIVIL_WAR_CHANCE);
 
   /* Now compute the contribution of the cities. */
@@ -1532,10 +1566,10 @@ bool civil_war_triggered(struct player *pplayer)
     }
   city_list_iterate_end;
 
-  log_verbose("Civil war chance for %s: prob %d, dice %d",
-              player_name(pplayer), prob, dice);
+  freelog(LOG_VERBOSE, "Civil war chance for %s: prob %d, dice %d",
+	  player_name(pplayer), prob, dice);
   
-  return (dice < prob);
+  return(dice < prob);
 }
 
 /**********************************************************************
@@ -1579,14 +1613,16 @@ void civil_war(struct player *pplayer)
 
   if (player_count() >= MAX_NUM_PLAYERS) {
     /* No space to make additional player */
-    log_normal(_("Could not throw %s into civil war - too many players"),
-               nation_plural_for_player(pplayer));
+    freelog(LOG_NORMAL,
+            _("Could not throw %s into civil war - too many players"),
+            nation_plural_for_player(pplayer));
     return;
   }
   if (normal_player_count() >= server.playable_nations) {
     /* No nation for additional player */
-    log_normal(_("Could not throw %s into civil war - no available nations"),
-               nation_plural_for_player(pplayer));
+    freelog(LOG_NORMAL,
+            _("Could not throw %s into civil war - no available nations"),
+            nation_plural_for_player(pplayer));
     return;
   }
 
@@ -1600,9 +1636,10 @@ void civil_war(struct player *pplayer)
   
   /* Now split the empire */
 
-  log_verbose("%s civil war; created AI %s",
-              nation_rule_name(nation_of_player(pplayer)),
-              nation_rule_name(nation_of_player(cplayer)));
+  freelog(LOG_VERBOSE,
+	  "%s civil war; created AI %s",
+	  nation_rule_name(nation_of_player(pplayer)),
+	  nation_rule_name(nation_of_player(cplayer)));
   notify_player(pplayer, NULL, E_CIVIL_WAR, ftc_server,
                 _("Your nation is thrust into civil war."));
 
@@ -1616,22 +1653,24 @@ void civil_war(struct player *pplayer)
   j = city_list_size(pplayer->cities);	    /* number left to process */
   city_list_iterate(pplayer->cities, pcity) {
     if (!is_capital(pcity)) {
-      if (i >= j || (i > 0 && fc_rand(2) == 1)) {
-        /* Transfer city and units supported by this city to the new owner.
-         * We do NOT resolve stack conflicts here, but rather later.
-         * Reason: if we have a transporter from one city which is carrying
-         * a unit from another city, and both cities join the rebellion. We
-         * resolved stack conflicts for each city we would teleport the first
-         * of the units we met since the other would have another owner. */
-        transfer_city(cplayer, pcity, -1, FALSE, FALSE, FALSE);
-        log_verbose("%s declares allegiance to the %s.", city_name(pcity),
-                    nation_rule_name(nation_of_player(cplayer)));
-        notify_player(pplayer, pcity->tile, E_CITY_LOST, ftc_server,
+      if (i >= j || (i > 0 && myrand(2) == 1)) {
+	/* Transfer city and units supported by this city to the new owner
+
+	 We do NOT resolve stack conflicts here, but rather later.
+	 Reason: if we have a transporter from one city which is carrying
+	 a unit from another city, and both cities join the rebellion. We
+	 resolved stack conflicts for each city we would teleport the first
+	 of the units we met since the other would have another owner */
+	transfer_city(cplayer, pcity, -1, FALSE, FALSE, FALSE);
+	freelog(LOG_VERBOSE, "%s declares allegiance to the %s.",
+		city_name(pcity),
+		nation_rule_name(nation_of_player(cplayer)));
+	notify_player(pplayer, pcity->tile, E_CITY_LOST, ftc_server,
                       /* TRANS: <city> ... the Poles. */
                       _("%s declares allegiance to the %s."),
                       city_link(pcity),
                       nation_plural_for_player(cplayer));
-        i--;
+	i--;
       }
     }
     j--;
@@ -1642,7 +1681,7 @@ void civil_war(struct player *pplayer)
   i = city_list_size(cplayer->cities);
 
   /* Choose a capital (random). */
-  city_build_free_buildings(city_list_get(cplayer->cities, fc_rand(i)));
+  city_build_free_buildings(city_list_get(cplayer->cities, myrand(i)));
 
   notify_player(NULL, NULL, E_CIVIL_WAR, ftc_server,
                 /* TRANS: ... Danes ... Poles ... <7> cities. */
@@ -1708,29 +1747,4 @@ int barbarian_count(void)
 int normal_player_count(void)
 {
   return player_count() - server.nbarbarians;
-}
-
-/****************************************************************************
-  Add a status flag to a player.
-****************************************************************************/
-void player_status_add(struct player *plr, enum player_status pstatus)
-{
-  BV_SET(plr->server.status, pstatus);
-}
-
-/****************************************************************************
-  Add a status flag to a player.
-****************************************************************************/
-bool player_status_check(struct player *plr, enum player_status pstatus)
-{
-  return BV_ISSET(plr->server.status, pstatus);
-}
-
-/****************************************************************************
-  Reset player status to 'normal'.
-****************************************************************************/
-void player_status_reset(struct player *plr)
-{
-  BV_CLR_ALL(plr->server.status);
-  player_status_add(plr, PSTATUS_NORMAL);
 }

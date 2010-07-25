@@ -10,17 +10,28 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 ***********************************************************************/
-#ifndef FC__OPTIONDLG_G_H
-#define FC__OPTIONDLG_G_H
+#ifndef FC__SETTLERS_H
+#define FC__SETTLERS_H
 
-struct option;
-struct option_set;
+#include "fc_types.h"
+#include "map.h"
 
-void option_dialog_popup(const char *name, const struct option_set *poptset);
-void option_dialog_popdown(const struct option_set *poptset);
+void auto_settlers_init(void);
+void auto_settlers_player(struct player *pplayer);
 
-void option_gui_update(struct option *poption);
-void option_gui_add(struct option *poption);
-void option_gui_remove(struct option *poption);
+#define MORT 24
 
-#endif  /* FC__OPTIONDLG_G_H */
+int amortize(int benefit, int delay);
+void ai_manage_settler(struct player *pplayer, struct unit *punit);
+
+void init_settlers(void);
+
+void initialize_infrastructure_cache(struct player *pplayer);
+
+void contemplate_terrain_improvements(struct city *pcity);
+void contemplate_new_city(struct city *pcity);
+
+extern signed int *minimap;
+#define MINIMAP(_tile) minimap[tile_index(_tile)]
+
+#endif   /* FC__SETTLERS_H */

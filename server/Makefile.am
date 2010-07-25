@@ -1,6 +1,6 @@
 ## Process this file with automake to produce Makefile.in
 
-SUBDIRS = advisors generator scripting
+SUBDIRS = generator scripting
 
 bin_PROGRAMS = freeciv-server
 lib_LTLIBRARIES = libfreeciv-srv.la
@@ -8,7 +8,6 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/utility -I$(srcdir)/../common -I$(srcdir)/../ai \
 	-I$(top_srcdir)/common/aicore \
 	-I$(srcdir)/generator -I$(srcdir)/scripting \
-	-I$(srcdir)/advisors \
 	$(LIBGGZ_INCLUDES) $(GGZDMOD_INCLUDES) @AUTH_CFLAGS@
 
 if MINGW32
@@ -70,14 +69,14 @@ libfreeciv_srv_la_SOURCES = \
 		sanitycheck.h	\
 		savegame.c	\
 		savegame.h	\
-		savegame2.c	\
-		savegame2.h	\
 		score.c		\
 		score.h		\
 		sernet.c	\
 		sernet.h	\
 		settings.c	\
 		settings.h	\
+		settlers.c	\
+		settlers.h	\
 		spacerace.c	\
 		spacerace.h	\
 		srv_main.c	\
@@ -110,8 +109,7 @@ freeciv_server_DEPENDENCIES = \
  ./libfreeciv-srv.la \
  ./scripting/libscripting.la \
  $(LUA_AS_DEPENDENCY) $(TOLUA_AS_DEPENDENCY) \
- ./generator/libgenerator.la \
- ./advisors/libadvisors.la
+ ./generator/libgenerator.la
 
 freeciv_server_LDFLAGS = $(GGZDMOD_LDFLAGS)
 
@@ -122,9 +120,7 @@ freeciv_server_LDADD = \
  ./libfreeciv-srv.la \
  $(top_builddir)/common/libfreeciv.la \
  ./generator/libgenerator.la \
- ./scripting/libscripting.la \
- ./advisors/libadvisors.la \
- $(INTLLIBS) \
+ ./scripting/libscripting.la $(INTLLIBS) \
  $(LUA_LIBS) $(TOLUA_LIBS) \
  $(AUTH_LIBS) $(SERVER_LIBS) $(LIB_GGZDMOD) $(SERVERICON)
 

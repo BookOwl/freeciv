@@ -13,15 +13,10 @@
 #ifndef FC__AITOOLS_H
 #define FC__AITOOLS_H
 
-/* utility */
 #include "shared.h"		/* bool type */
 
-/* common */
 #include "fc_types.h"
 #include "unit.h"		/* enum ai_unit_task */
-
-/* ai */
-#include "aicity.h"
 
 struct pf_path;
 struct pf_parameter;
@@ -35,14 +30,13 @@ struct pft_amphibious;
 
 #ifdef DEBUG
 #define CHECK_UNIT(punit)                                                   \
-  (fc_assert(punit != NULL),                                                \
-   fc_assert(unit_type(punit) != NULL),                                     \
-   fc_assert(unit_owner(punit) != NULL),                                    \
-   fc_assert(valid_player_by_number(player_index(unit_owner(punit)))        \
-             == unit_owner(punit)),                                         \
-   fc_assert(game_find_unit_by_number(punit->id) != NULL))
+  (assert(punit != NULL),						    \
+   assert(unit_type(punit) != NULL),						    \
+   assert(unit_owner(punit) != NULL),					    \
+   assert(valid_player_by_number(player_index(unit_owner(punit))) == unit_owner(punit)),	    \
+   assert(game_find_unit_by_number(punit->id) != NULL))
 #else
-#define CHECK_UNIT(punit) /* Do nothing */
+#define CHECK_UNIT(punit) assert(TRUE)
 #endif
 
 /*
@@ -88,6 +82,9 @@ bool ai_unit_make_homecity(struct unit *punit, struct city *pcity);
 bool ai_unit_attack(struct unit *punit, struct tile *ptile);
 bool ai_unit_move(struct unit *punit, struct tile *ptile);
 
+struct city *dist_nearest_city(struct player *pplayer, struct tile *ptile,
+                               bool everywhere, bool enemy);
+
 void ai_government_change(struct player *pplayer, struct government *gov);
 int ai_gold_reserve(struct player *pplayer);
 
@@ -106,5 +103,7 @@ bool ai_assess_military_unhappiness(struct city *pcity);
 bool ai_wants_no_science(struct player *pplayer);
 
 bool is_player_dangerous(struct player *pplayer, struct player *aplayer);
+
+void ai_reinit(struct unit *punit);
 
 #endif  /* FC__AITOOLS_H */

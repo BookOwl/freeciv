@@ -15,6 +15,7 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <errno.h>
 #include <string.h>
 #include <time.h>
@@ -33,17 +34,14 @@
 #include <winsock.h>
 #endif
 
-/* utility */
 #include "fcintl.h"
+#include "game.h"		/* game.all_connections */
 #include "hash.h"
 #include "log.h"
 #include "mem.h"
 #include "netintf.h"
-#include "support.h"            /* mystr(n)casecmp */
-
-/* common */
-#include "game.h"               /* game.all_connections */
 #include "packets.h"
+#include "support.h"		/* mystr(n)casecmp */
 
 #include "connection.h"
 
@@ -79,7 +77,7 @@ static const char *levelnames[] = {
 **************************************************************************/
 const char *cmdlevel_name(enum cmdlevel_id lvl)
 {
-  fc_assert_ret_val(lvl >= 0 && lvl < ALLOW_NUM, NULL);
+  assert (lvl >= 0 && lvl < ALLOW_NUM);
   return levelnames[lvl];
 }
 
@@ -160,26 +158,26 @@ int read_socket_data(int sock, struct socket_packet_buffer *buffer)
   int didget;
 
   if (!buffer_ensure_free_extra_space(buffer, MAX_LEN_PACKET)) {
-    log_error("can't grow buffer");
+    freelog(LOG_ERROR, "can't grow buffer");
     return -1;
   }
 
-  log_debug("try reading %d bytes", buffer->nsize - buffer->ndata);
+  freelog(LOG_DEBUG, "try reading %d bytes", buffer->nsize - buffer->ndata);
   didget = fc_readsocket(sock, (char *) (buffer->data + buffer->ndata),
 			 buffer->nsize - buffer->ndata);
 
   if (didget > 0) {
     buffer->ndata+=didget;
-    log_debug("didget:%d", didget);
+    freelog(LOG_DEBUG, "didget:%d", didget);
     return didget;
   }
   else if (didget == 0) {
-    log_debug("EOF on socket read");
+    freelog(LOG_DEBUG, "EOF on socket read");
     return -1;
   }
 #ifdef NONBLOCKING_SOCKETS
   else if (errno == EWOULDBLOCK || errno == EAGAIN) {
-    log_debug("EGAIN on socket read");
+    freelog(LOG_DEBUG, "EGAIN on socket read");
     return 0;
   }
 #endif
@@ -209,8 +207,8 @@ static int write_socket_data(struct connection *pc,
     fd_set writefs, exceptfs;
     struct timeval tv;
 
-    FC_FD_ZERO(&writefs);
-    FC_FD_ZERO(&exceptfs);
+    MY_FD_ZERO(&writefs);
+    MY_FD_ZERO(&exceptfs);
     FD_SET(pc->sock, &writefs);
     FD_SET(pc->sock, &exceptfs);
 
@@ -240,7 +238,7 @@ static int write_socket_data(struct connection *pc,
 
     if (FD_ISSET(pc->sock, &writefs)) {
       nblock=MIN(buf->ndata-start, MAX_LEN_PACKET);
-      log_debug("trying to write %d limit=%d", nblock, limit);
+      freelog(LOG_DEBUG,"trying to write %d limit=%d",nblock,limit);
       if((nput=fc_writesocket(pc->sock, 
 			      (const char *)buf->data+start, nblock)) == -1) {
 #ifdef NONBLOCKING_SOCKETS
@@ -322,8 +320,8 @@ static bool add_connection_data(struct connection *pc,
 
     buf = pc->send_buffer;
 
-    log_debug("add %d bytes to %d (space=%d)",
-              len, buf->ndata, buf->nsize);
+    freelog(LOG_DEBUG, "add %d bytes to %d (space=%d)", len, buf->ndata,
+	    buf->nsize);
     if (!buffer_ensure_free_extra_space(buf, len)) {
       if (delayed_disconnect > 0) {
 	pc->delayed_disconnect = TRUE;
@@ -353,16 +351,16 @@ void send_connection_data(struct connection *pc, const unsigned char *data,
     if(pc->send_buffer->do_buffer_sends > 0) {
       flush_connection_send_buffer_packets(pc);
       if (!add_connection_data(pc, data, len)) {
-        log_error("cut connection %s due to huge send buffer (1)",
-                  conn_description(pc));
+	freelog(LOG_ERROR, "cut connection %s due to huge send buffer (1)",
+		conn_description(pc));
       }
       flush_connection_send_buffer_packets(pc);
     }
     else {
       flush_connection_send_buffer_all(pc);
       if (!add_connection_data(pc, data, len)) {
-        log_error("cut connection %s due to huge send buffer (2)",
-                  conn_description(pc));
+	freelog(LOG_ERROR, "cut connection %s due to huge send buffer (2)",
+		conn_description(pc));
       }
       flush_connection_send_buffer_all(pc);
     }
@@ -389,7 +387,7 @@ void connection_do_unbuffer(struct connection *pc)
   if (pc && pc->used) {
     pc->send_buffer->do_buffer_sends--;
     if (pc->send_buffer->do_buffer_sends < 0) {
-      log_error("Too many calls to unbuffer %s!", pc->username);
+      freelog(LOG_ERROR, "Too many calls to unbuffer %s!", pc->username);
       pc->send_buffer->do_buffer_sends = 0;
     }
     if(pc->send_buffer->do_buffer_sends == 0)
@@ -420,7 +418,7 @@ void conn_list_do_unbuffer(struct conn_list *dest)
 struct connection *find_conn_by_user(const char *user_name)
 {
   conn_list_iterate(game.all_connections, pconn) {
-    if (fc_strcasecmp(user_name, pconn->username)==0) {
+    if (mystrcasecmp(user_name, pconn->username)==0) {
       return pconn;
     }
   } conn_list_iterate_end;
@@ -444,8 +442,8 @@ struct connection *find_conn_by_user_prefix(const char *user_name,
   int ind;
 
   *result = match_prefix(connection_accessor,
-                         conn_list_size(game.all_connections),
-                         MAX_LEN_NAME-1, fc_strncasequotecmp,
+			 conn_list_size(game.all_connections),
+			 MAX_LEN_NAME-1, mystrncasequotecmp,
                          effectivestrlenquote, user_name, &ind);
   
   if (*result < M_PRE_AMBIGUOUS) {
@@ -516,8 +514,8 @@ const char *conn_description(const struct connection *pconn)
   buffer[0] = '\0';
 
   if (*pconn->username != '\0') {
-    fc_snprintf(buffer, sizeof(buffer), _("%s from %s"),
-                pconn->username, pconn->addr); 
+    my_snprintf(buffer, sizeof(buffer), _("%s from %s"),
+		pconn->username, pconn->addr); 
   } else {
     sz_strlcpy(buffer, "server");
   }
@@ -560,11 +558,12 @@ int get_next_request_id(int old_request_id)
   int result = old_request_id + 1;
 
   if ((result & 0xffff) == 0) {
-    log_packet("INFORMATION: request_id has wrapped around; "
-               "setting from %d to 2", result);
+    freelog(LOG_PACKET,
+	    "INFORMATION: request_id has wrapped around; "
+	    "setting from %d to 2", result);
     result = 2;
   }
-  fc_assert(0 != result);
+  assert(result);
   return result;
 }
 
@@ -603,10 +602,13 @@ static void free_packet_hashes(struct connection *pc)
 {
   int i;
 
+  conn_clear_packet_cache(pc);
+
   if (pc->phs.sent) {
     for (i = 0; i < PACKET_LAST; i++) {
       if (pc->phs.sent[i] != NULL) {
 	hash_free(pc->phs.sent[i]);
+	pc->phs.sent[i] = NULL;
       }
     }
     free(pc->phs.sent);
@@ -617,6 +619,7 @@ static void free_packet_hashes(struct connection *pc)
     for (i = 0; i < PACKET_LAST; i++) {
       if (pc->phs.received[i] != NULL) {
 	hash_free(pc->phs.received[i]);
+	pc->phs.received[i] = NULL;
       }
     }
     free(pc->phs.received);
@@ -655,7 +658,7 @@ void connection_common_init(struct connection *pconn)
 void connection_common_close(struct connection *pconn)
 {
   if (!pconn->used) {
-    log_error("WARNING: Trying to close already closed connection");
+    freelog(LOG_ERROR, "WARNING: Trying to close already closed connection");
   } else {
     fc_closesocket(pconn->sock);
     pconn->used = FALSE;
@@ -678,75 +681,31 @@ void connection_common_close(struct connection *pconn)
 }
 
 /**************************************************************************
-  Remove all is-game-info cached packets from the connection. This resets
-  the delta-state partially.
+ Remove all cached packets from the connection. This resets the
+ delta-state.
 **************************************************************************/
-void conn_reset_delta_state(struct connection *pc)
+void conn_clear_packet_cache(struct connection *pc)
 {
   int i;
 
   for (i = 0; i < PACKET_LAST; i++) {
-    if (packet_has_game_info_flag(i)) {
-      if (NULL != pc->phs.sent && NULL != pc->phs.sent[i]) {
-        hash_delete_all_entries(pc->phs.sent[i]);
+    if (pc->phs.sent != NULL && pc->phs.sent[i] != NULL) {
+      struct hash_table *hash = pc->phs.sent[i];
+      while (hash_num_entries(hash) > 0) {
+	const void *key = hash_key_by_number(hash, 0);
+	hash_delete_entry(hash, key);
+	free((void *) key);
       }
-      if (NULL != pc->phs.received && NULL != pc->phs.received[i]) {
-        hash_delete_all_entries(pc->phs.received[i]);
+    }
+    if (pc->phs.received != NULL && pc->phs.received[i] != NULL) {
+      struct hash_table *hash = pc->phs.received[i];
+      while (hash_num_entries(hash) > 0) {
+	const void *key = hash_key_by_number(hash, 0);
+	hash_delete_entry(hash, key);
+	free((void *) key);
       }
     }
   }
-}
-
-/****************************************************************************
-  Freeze the connection. Then the packets sent to it won't be sent
-  immediatly, but later, using a compression method. See futher details in
-  common/packets.[ch].
-****************************************************************************/
-void conn_compression_freeze(struct connection *pconn)
-{
-#ifdef USE_COMPRESSION
-  if (0 == pconn->compression.frozen_level) {
-    byte_vector_reserve(&pconn->compression.queue, 0);
-  }
-  pconn->compression.frozen_level++;
-#endif /* USE_COMPRESSION */
-}
-
-/****************************************************************************
-  Returns TRUE if the connection is frozen. See also
-  conn_compression_freeze().
-****************************************************************************/
-bool conn_compression_frozen(const struct connection *pconn)
-{
-#ifdef USE_COMPRESSION
-  return 0 < pconn->compression.frozen_level;
-#else
-  return FALSE;
-#endif /* USE_COMPRESSION */
-}
-
-/****************************************************************************
-  Freeze a connection list.
-****************************************************************************/
-void conn_list_compression_freeze(const struct conn_list *pconn_list)
-{
-#ifdef USE_COMPRESSION
-  conn_list_iterate(pconn_list, pconn) {
-    conn_compression_freeze(pconn);
-  } conn_list_iterate_end;
-#endif /* USE_COMPRESSION */
-}
-
-/****************************************************************************
-  Thaw a connection list.
-****************************************************************************/
-void conn_list_compression_thaw(const struct conn_list *pconn_list)
-{
-#ifdef USE_COMPRESSION
-  conn_list_iterate(pconn_list, pconn) {
-    conn_compression_thaw(pconn);
-  } conn_list_iterate_end;
-#endif /* USE_COMPRESSION */
 }
 
 /**************************************************************************

@@ -42,7 +42,7 @@ static struct te_screen *screen;
 /**************************************************************************
   this regenerates the player information from a loaded game on the server.
 **************************************************************************/
-void handle_game_load(bool load_successful, char *filename)
+void handle_game_load(struct packet_game_load *packet)
 {
   /* PORT ME */
 }
@@ -87,7 +87,7 @@ static const char *edit_get_initial_value(const char *id)
   if (strcmp(id, "port") == 0) {
     static char buf[10];
 
-    fc_snprintf(buf, sizeof(buf), "%d", server_port);
+    my_snprintf(buf, sizeof(buf), "%d", server_port);
     return buf;
   } else if (strcmp(id, "username") == 0) {
     return user_name;

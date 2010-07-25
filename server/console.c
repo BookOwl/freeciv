@@ -51,8 +51,7 @@ static int con_dump(enum rfc_status rfc_status, const char *message, ...);
 Function to handle log messages.
 This must match the log_callback_fn typedef signature.
 ************************************************************************/
-static void con_handle_log(enum log_level level, const char *message,
-                           bool file_too)
+static void con_handle_log(int level, const char *message, bool file_too)
 {
   if (LOG_ERROR == level) {
     notify_conn(NULL, NULL, E_LOG_ERROR, ftc_warning, "%s", message);
@@ -104,10 +103,9 @@ static void con_update_prompt(void)
 /************************************************************************
   Initialize logging via console.
 ************************************************************************/
-void con_log_init(const char *log_filename, enum log_level level,
-                  int fatal_assertions)
+void con_log_init(const char *log_filename, int log_level)
 {
-  log_init(log_filename, level, con_handle_log, fatal_assertions);
+  log_init(log_filename, log_level, con_handle_log);
 }
 
 #ifndef HAVE_LIBREADLINE
@@ -120,7 +118,7 @@ static int con_dump(enum rfc_status rfc_status, const char *message, ...)
   va_list args;
   
   va_start(args, message);
-  fc_vsnprintf(buf, sizeof(buf), message, args);
+  my_vsnprintf(buf, sizeof(buf), message, args);
   va_end(args);
 
   if (console_prompt_is_showing) {
@@ -147,7 +145,7 @@ void con_write(enum rfc_status rfc_status, const char *message, ...)
   va_list args;
 
   va_start(args, message);
-  fc_vsnprintf(buf1, sizeof(buf1), message, args);
+  my_vsnprintf(buf1, sizeof(buf1), message, args);
   va_end(args);
 
   /* remove all format tags */

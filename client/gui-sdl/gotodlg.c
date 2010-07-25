@@ -134,7 +134,7 @@ static void update_goto_dialog(void)
 	continue;
       }
       
-      fc_snprintf(cBuf, sizeof(cBuf), "%s (%d)", city_name(pCity), pCity->size);
+      my_snprintf(cBuf, sizeof(cBuf), "%s (%d)", city_name(pCity), pCity->size);
       
       pStr = create_str16_from_char(cBuf, adj_font(12));
       pStr->style |= TTF_STYLE_BOLD;
@@ -160,7 +160,7 @@ static void update_goto_dialog(void)
         set_wstate(pBuf, FC_WS_NORMAL);
       }
       
-      fc_assert((MAX_ID - pCity->id) > 0);
+      assert((MAX_ID - pCity->id) > 0);
       pBuf->ID = MAX_ID - pCity->id;
       
       DownAdd(pBuf, pAdd_Dock);
@@ -247,9 +247,8 @@ static void popup_goto_airlift_dialog(void)
   /* ---------- */
   /* create exit button */
   pBuf = create_themeicon(pTheme->Small_CANCEL_Icon, pWindow->dst,
-                          WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
-  pBuf->info_label = create_str16_from_char(_("Close Dialog (Esc)"),
-                                            adj_font(12));
+  			  WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
+  pBuf->string16 = create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
   pBuf->action = exit_goto_dialog_callback;
   set_wstate(pBuf, FC_WS_NORMAL);
   pBuf->key = SDLK_ESCAPE;
@@ -274,15 +273,14 @@ static void popup_goto_airlift_dialog(void)
     FREESURFACE(pFlag);
     
     pBuf = create_checkbox(pWindow->dst,
-                           TEST_BIT(all_players, player_index(pPlayer)),
-                           WF_FREE_THEME | WF_RESTORE_BACKGROUND
-                           | WF_WIDGET_HAS_INFO_LABEL);
+      TEST_BIT(all_players, player_index(pPlayer)),
+    	(WF_FREE_STRING|WF_FREE_THEME|WF_RESTORE_BACKGROUND|WF_WIDGET_HAS_INFO_LABEL));
     set_new_checkbox_theme(pBuf, pEnabled, pDisabled);
-
-    pBuf->info_label =
-        create_str16_from_char(nation_adjective_for_player(pPlayer),
-                               adj_font(12));
-    pBuf->info_label->style &= ~SF_CENTER;
+    
+    pBuf->string16 = create_str16_from_char(
+    			nation_adjective_for_player(pPlayer),
+    			adj_font(12));
+    pBuf->string16->style &= ~SF_CENTER;
     set_wstate(pBuf, FC_WS_NORMAL);
     
     pBuf->action = toggle_goto_nations_cities_dialog_callback;

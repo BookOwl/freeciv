@@ -13,12 +13,9 @@
 #ifndef FC__TECH_H
 #define FC__TECH_H
 
-/* utility */
 #include "shared.h"
 
-/* common */
 #include "fc_types.h"
-#include "name_translation.h"
 
 /*
   [kept for amusement and posterity]
@@ -63,29 +60,15 @@ typedef int Tech_type_id;
 */
 
 /* Changing these breaks network compatibility. */
-/* If a new flag is added techtools.c:player_tech_lost() should be checked */
-#define SPECENUM_NAME tech_flag_id
-/* player gets extra tech if rearched first */
-#define SPECENUM_VALUE0 TF_BONUS_TECH
-#define SPECENUM_VALUE0NAME "Bonus_Tech"
-/* "Settler" unit types can build bridges over rivers */
-#define SPECENUM_VALUE1 TF_BRIDGE
-#define SPECENUM_VALUE1NAME "Bridge"
-/* "Settler" unit types can build rail roads */
-#define SPECENUM_VALUE2 TF_RAILROAD
-#define SPECENUM_VALUE2NAME "Railroad"
-/* Increase the pollution factor created by population by one */
-#define SPECENUM_VALUE3 TF_POPULATION_POLLUTION_INC
-#define SPECENUM_VALUE3NAME "Population_Pollution_Inc"
-/* "Settler" unit types can build farmland */
-#define SPECENUM_VALUE4 TF_FARMLAND
-#define SPECENUM_VALUE4NAME "Farmland"
-/* Player can build air units */
-#define SPECENUM_VALUE5 TF_BUILD_AIRBORNE
-#define SPECENUM_VALUE5NAME "Build_Airborne"
-/* Keep this last. */
-#define SPECENUM_COUNT TF_COUNT
-#include "specenum_gen.h"
+enum tech_flag_id {
+  TF_BONUS_TECH, /* player gets extra tech if rearched first */
+  TF_BRIDGE,    /* "Settler" unit types can build bridges over rivers */
+  TF_RAILROAD,  /* "Settler" unit types can build rail roads */
+  TF_POPULATION_POLLUTION_INC,  /* Increase the pollution factor created by population by one */
+  TF_FARMLAND,  /* "Settler" unit types can build farmland */
+  TF_BUILD_AIRBORNE, /* Player can build air units */
+  TF_LAST
+};
 
 /* TECH_KNOWN is self-explanatory, TECH_PREREQS_KNOWN are those for which all 
  * requirements are fulfilled; all others (including those which can never 
@@ -183,10 +166,7 @@ struct player_research {
   /*
    * Cached values. Updated by player_research_update.
    */
-  int num_known_tech_with_flag[TF_COUNT];
-
-  /* Tech upkeep in bulbs. Updated by player_research_update. */
-  int tech_upkeep;
+  int num_known_tech_with_flag[TF_LAST];
 };
 
 /* General advance/technology accessor functions. */
@@ -209,10 +189,11 @@ const char *advance_name_for_player(const struct player *pplayer,
 const char *advance_name_researching(const struct player *pplayer);
 
 const char *advance_rule_name(const struct advance *padvance);
-const char *advance_name_translation(const struct advance *padvance);
+const char *advance_name_translation(struct advance *padvance);
 
 /* General advance/technology flag accessor routines */
 bool advance_has_flag(Tech_type_id tech, enum tech_flag_id flag);
+enum tech_flag_id find_advance_flag_by_rule_name(const char *s);
 
 /* FIXME: oddball function used in one place */
 Tech_type_id find_advance_by_flag(Tech_type_id index, enum tech_flag_id flag);

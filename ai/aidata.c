@@ -15,35 +15,27 @@
 #include <config.h>
 #endif
 
-/* utility */
-#include "log.h"
-#include "mem.h"
-
-/* common */
+#include "aisupport.h"
 #include "city.h"
 #include "effects.h"
 #include "game.h"
 #include "government.h"
+#include "log.h"
 #include "map.h"
+#include "mem.h"
 #include "movement.h"
 #include "unit.h"
 #include "unitlist.h"
 
-/* common/aicore */
-#include "aisupport.h"
-#include "path_finding.h"
-#include "pf_tools.h"
-
-/* server */
 #include "citytools.h"
 #include "diplhand.h"
 #include "maphand.h"
+#include "settlers.h"
 #include "unittools.h"
 
-/* server/advisors */
-#include "autosettlers.h"
+#include "path_finding.h"
+#include "pf_tools.h"
 
-/* ai */
 #include "advdiplomacy.h"
 #include "advmilitary.h"
 #include "aicity.h"
@@ -371,8 +363,8 @@ void ai_data_phase_init(struct player *pplayer, bool is_new_phase)
     for(i = 1; i <= ai->num_oceans; i++) {
       for(j = 1; j <= ai->num_oceans; j++) {
         if (ai->channels[i * ai->num_oceans + j]) {
-          log_test("%s: oceans %d and %d are connected",
-                   player_name(pplayer), i, j);
+          freelog(LOG_TEST, "%s: oceans %d and %d are connected",
+                  player_name(pplayer), i, j);
        }
       }
     }
@@ -435,7 +427,7 @@ void ai_data_phase_init(struct player *pplayer, bool is_new_phase)
     if (!is_ocean_tile(ptile) && unit_has_type_flag(punit, F_SETTLERS)) {
       ai->stats.workers[(int)tile_continent(punit->tile)]++;
     }
-    if (unit_has_type_flag(punit, F_DIPLOMAT) && punit->server.ai->ai_role == AIUNIT_ATTACK) {
+    if (unit_has_type_flag(punit, F_DIPLOMAT) && punit->ai.ai_role == AIUNIT_ATTACK) {
       /* Heading somewhere on a mission, reserve target. */
       struct city *pcity = tile_city(punit->goto_tile);
 
@@ -516,7 +508,7 @@ void ai_data_phase_init(struct player *pplayer, bool is_new_phase)
 
   /*** Interception engine ***/
 
-  /* We are tracking a unit if punit->server.ai->cur_pos is not NULL. If we
+  /* We are tracking a unit if punit->ai.cur_pos is not NULL. If we
    * are not tracking, start tracking by setting cur_pos. If we are, 
    * fill prev_pos with previous cur_pos. This way we get the 
    * necessary coordinates to calculate a probably trajectory. */
@@ -525,15 +517,15 @@ void ai_data_phase_init(struct player *pplayer, bool is_new_phase)
       continue;
     }
     unit_list_iterate(aplayer->units, punit) {
-      if (!punit->server.ai->cur_pos) {
+      if (!punit->ai.cur_pos) {
         /* Start tracking */
-        punit->server.ai->cur_pos = &punit->server.ai->cur_struct;
-        punit->server.ai->prev_pos = NULL;
+        punit->ai.cur_pos = &punit->ai.cur_struct;
+        punit->ai.prev_pos = NULL;
       } else {
-        punit->server.ai->prev_struct = punit->server.ai->cur_struct;
-        punit->server.ai->prev_pos = &punit->server.ai->prev_struct;
+        punit->ai.prev_struct = punit->ai.cur_struct;
+        punit->ai.prev_pos = &punit->ai.prev_struct;
       }
-      *punit->server.ai->cur_pos = punit->tile;
+      *punit->ai.cur_pos = punit->tile;
     } unit_list_iterate_end;
   } players_iterate_end;
   
