@@ -6,7 +6,6 @@ pkgdatadir = $(datadir)/$(PACKAGE)/misc
 pkgdata_DATA =          \
 	buildings.png	\
 	buildings.spec	\
-	buildings-large.spec	\
 	chiefs.png	\
 	chiefs.spec	\
 	citybar.png	\
@@ -34,7 +33,6 @@ pkgdata_DATA =          \
 	techs.png	\
 	techs.spec	\
 	treaty.png	\
-	treaty.spec	\
-	wonders-large.spec
+	treaty.spec
 
 EXTRA_DIST = $(pkgdata_DATA)

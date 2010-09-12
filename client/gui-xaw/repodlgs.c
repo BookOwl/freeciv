@@ -15,6 +15,7 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -44,7 +45,6 @@
 #include "game.h"
 #include "government.h"
 #include "packets.h"
-#include "research.h"
 #include "unitlist.h"
 
 /* client */
@@ -53,7 +53,6 @@
 #include "climisc.h"
 #include "text.h"
 
-/* client/gui-xaw */
 #include "cityrep.h"
 #include "dialogs.h"
 #include "gui_main.h"
@@ -118,6 +117,24 @@ void activeunits_refresh_callback(Widget w, XtPointer client_data,
 			 XtPointer call_data);
 void activeunits_list_callback(Widget w, XtPointer client_data, 
                            XtPointer call_data);
+/******************************************************************/
+static Widget settable_options_dialog_shell;
+static Widget settable_options_form;
+static Widget settable_options_label;
+static Widget settable_options_viewport;
+static Widget settable_options_scrollform;
+static Widget *settable_options_widgets = NULL;
+static Widget settable_options_ok_command;
+static Widget settable_options_cancel_command;
+
+void create_settable_options_dialog(void);
+void update_settable_options_dialog(void);
+void settable_options_toggle_callback(Widget w, XtPointer client_data,
+				      XtPointer call_data);
+void settable_options_ok_callback(Widget w, XtPointer client_data,
+				  XtPointer call_data);
+void settable_options_cancel_callback(Widget w, XtPointer client_data,
+				      XtPointer call_data);
 
 /******************************************************************
 ...
@@ -147,7 +164,7 @@ static const char *get_report_title_plus(const char *report_name,
 {
   char buf[512];
   
-  fc_snprintf(buf, sizeof(buf), "%s%s", get_report_title(report_name),
+  my_snprintf(buf, sizeof(buf), "%s%s", get_report_title(report_name),
 	      additional);
 
   return create_centered_string(buf);
@@ -209,16 +226,16 @@ void create_science_dialog(bool make_modal)
   int num_list, j = 0, flag = 0;
 
   if (NULL != client.conn.playing) {
-    struct player_research *research = player_research_get(client.conn.playing);
+    struct player_research *research = get_player_research(client.conn.playing);
 
     if (research->researching == A_UNSET) {
-      fc_snprintf(current_text, sizeof(current_text),
+      my_snprintf(current_text, sizeof(current_text),
 		  _("Researching %s: %d/%s"),
 		  advance_name_translation(advance_by_number(A_NONE)),
 		  research->bulbs_researched,
 		  _("unknown"));
     } else {
-      fc_snprintf(current_text, sizeof(current_text),
+      my_snprintf(current_text, sizeof(current_text),
 		  _("Researching %s: %d/%d"),
 		  advance_name_researching(client.conn.playing),
 		  research->bulbs_researched,
@@ -226,12 +243,12 @@ void create_science_dialog(bool make_modal)
     }
 
     if (research->tech_goal == A_UNSET) {
-      fc_snprintf(goal_text, sizeof(goal_text),
+      my_snprintf(goal_text, sizeof(goal_text),
 		  _("Goal: %s (%d steps)"),
 		  advance_name_translation(advance_by_number(A_NONE)),
 		  0);
     } else {
-      fc_snprintf(goal_text, sizeof(goal_text),
+      my_snprintf(goal_text, sizeof(goal_text),
 		  _("Goal: %s (%d steps)"),
 		  advance_name_translation(advance_by_number(research->tech_goal)),
 		  num_unknown_techs_for_goal(client.conn.playing,
@@ -258,7 +275,7 @@ void create_science_dialog(bool make_modal)
 					   formWidgetClass,
 					   science_dialog_shell,
 					   NULL);
-    fc_snprintf(rate_text, sizeof(rate_text), "\ntext not set yet");
+    my_snprintf(rate_text, sizeof(rate_text), "\ntext not set yet");
     /* TRANS: Research report title */
     report_title = get_report_title_plus(_("Research"), rate_text);
     science_label = XtVaCreateManagedWidget("sciencelabel",
@@ -481,7 +498,7 @@ void science_dialog_update(void)
     static const char *tech_list_names_ptrs[A_LAST + 1];
     int j, flag;
     const char *report_title;
-    struct player_research *research = player_research_get(client.conn.playing);
+    struct player_research *research = get_player_research(client.conn.playing);
     
     /* TRANS: Research report title */
     report_title = get_report_title_plus(_("Research"), science_dialog_text());
@@ -489,13 +506,13 @@ void science_dialog_update(void)
     free((void *) report_title);
 
     if (research->researching == A_UNSET) {
-      fc_snprintf(text, sizeof(text),
+      my_snprintf(text, sizeof(text),
 		  _("Researching %s: %d/%s"),
 		  advance_name_translation(advance_by_number(A_NONE)),
 		  research->bulbs_researched,
 		  _("unknown"));
     } else {
-      fc_snprintf(text, sizeof(text),
+      my_snprintf(text, sizeof(text),
 		  _("Researching %s: %d/%d"),
 		  advance_name_researching(client.conn.playing),
 		  research->bulbs_researched,
@@ -505,12 +522,12 @@ void science_dialog_update(void)
     xaw_set_label(science_current_label, text);
 
     if (research->tech_goal == A_UNSET) {
-      fc_snprintf(text, sizeof(text),
+      my_snprintf(text, sizeof(text),
 		  _("Goal: %s (%d steps)"),
 		  advance_name_translation(advance_by_number(A_NONE)),
 		  0);
     } else {
-      fc_snprintf(text, sizeof(text),
+      my_snprintf(text, sizeof(text),
 		  _("Goal: %s (%d steps)"),
 		  advance_name_translation(advance_by_number(research->tech_goal)),
 		  num_unknown_techs_for_goal(client.conn.playing,
@@ -790,7 +807,7 @@ void economy_report_dialog_update(void)
     for (i = 0; i < entries_used; i++) {
       struct improvement_entry *p = &entries[i];
 
-      fc_snprintf(economy_list_names[i], sizeof(economy_list_names[i]),
+      my_snprintf(economy_list_names[i], sizeof(economy_list_names[i]),
 		  "%-20s%5d%5d%6d",
 		  improvement_name_translation(p->type),
 		  p->count, p->cost, p->total_cost);
@@ -806,7 +823,7 @@ void economy_report_dialog_update(void)
     }
     economy_list_names_ptrs[entries_used] = NULL;
 
-    fc_snprintf(economy_total, sizeof(economy_total),
+    my_snprintf(economy_total, sizeof(economy_total),
 		_("Income:%6d    Total Costs: %6d"), tax, total); 
     xaw_set_label(economy_label2, economy_total); 
     
@@ -1003,11 +1020,13 @@ void activeunits_upgrade_callback(Widget w, XtPointer client_data,
   XawListReturnStruct *ret;
   ret=XawListShowCurrent(activeunits_list);
 
-  if (ret->list_index != XAW_LIST_NONE) {
+  if(ret->list_index!=XAW_LIST_NONE) {
     punittype1 = utype_by_number(activeunits_type[ret->list_index]);
+    CHECK_UNIT_TYPE(punittype1);
+
     punittype2 = can_upgrade_unittype(client.conn.playing, punittype1);
 
-    fc_snprintf(buf, sizeof(buf),
+    my_snprintf(buf, sizeof(buf),
 		_("Upgrade as many %s to %s as possible for %d gold each?\n"
 		  "Treasury contains %d gold."),
 		utype_name_translation(punittype1),
@@ -1110,7 +1129,7 @@ void activeunits_report_dialog_update(void)
     unit_type_iterate(punittype) {
       i = utype_index(punittype);
       if ((unitarray[i].active_count > 0) || (unitarray[i].building_count > 0)) {
-	fc_snprintf
+	my_snprintf
 	  (
 	   activeunits_list_names[k],
 	   sizeof(activeunits_list_names[k]),
@@ -1140,7 +1159,7 @@ void activeunits_report_dialog_update(void)
       k=1;
     }
 
-    fc_snprintf(activeunits_total, sizeof(activeunits_total),
+    my_snprintf(activeunits_total, sizeof(activeunits_total),
 	    _("Totals:                     %9d%9d%9d%9d"),
 	    unittotals.building_count, unittotals.active_count,
            unittotals.upkeep[O_SHIELD], unittotals.upkeep[O_FOOD]);
@@ -1167,19 +1186,349 @@ void popup_endgame_report_dialog(struct packet_endgame_report *packet)
 {
   char buffer[150 * MAX_NUM_PLAYERS];
   int i;
-
+ 
   buffer[0] = '\0';
-  for (i = 0; i < packet->player_num; i++) {
-    const struct player *pplayer = player_by_number(packet->player_id[i]);
-
+  for (i = 0; i < packet->nscores; i++) {
     cat_snprintf(buffer, sizeof(buffer),
                  PL_("%2d: The %s ruler %s scored %d point\n",
                      "%2d: The %s ruler %s scored %d points\n",
                      packet->score[i]),
-                 i + 1, nation_adjective_for_player(pplayer),
-                 player_name(pplayer), packet->score[i]);
+                 i + 1,
+                 nation_adjective_for_player(player_by_number(packet->id[i])),
+                 player_name(player_by_number(packet->id[i])),
+                 packet->score[i]);
   }
   popup_notify_dialog(_("Final Report:"),
                       _("The Greatest Civilizations in the world."),
                       buffer);
+}
+
+/****************************************************************************
+			SERVER OPTIONS DIALOG
+****************************************************************************/
+
+/****************************************************************************
+  Show a dialog with the server options.
+****************************************************************************/
+void popup_settable_options_dialog(void)
+{
+  if (!settable_options_dialog_shell) {
+    create_settable_options_dialog();
+  }
+
+  update_settable_options_dialog();
+
+  XtPopup(settable_options_dialog_shell, XtGrabNone);
+}
+
+/****************************************************************************
+  Popdown server options dialog.
+****************************************************************************/
+void popdown_settable_options_dialog(void)
+{
+  if (settable_options_dialog_shell) {
+    XtDestroyWidget(settable_options_dialog_shell);
+    settable_options_dialog_shell = NULL;
+  }
+}
+
+/****************************************************************************
+  Server options dialog.
+****************************************************************************/
+void create_settable_options_dialog(void)
+{
+  Widget prev_widget, longest_label = NULL;
+  size_t longest_len = 0;
+  Dimension width;
+  int i;
+
+  settable_options_dialog_shell =
+    I_T(XtCreatePopupShell("settableoptionspopup", transientShellWidgetClass,
+			   toplevel, NULL, 0));
+  settable_options_form =
+    XtVaCreateManagedWidget("settableoptionsform", formWidgetClass,
+			    settable_options_dialog_shell, NULL);
+
+  settable_options_label =
+    I_L(XtVaCreateManagedWidget("settableoptionslabel", labelWidgetClass,
+				settable_options_form, NULL));
+
+  settable_options_viewport =
+    XtVaCreateManagedWidget("settableoptionsviewport", viewportWidgetClass,
+			    settable_options_form, NULL);
+  settable_options_scrollform =
+    XtVaCreateManagedWidget("settableoptionsscrollform", formWidgetClass, 
+			    settable_options_viewport, NULL);
+
+  if (!settable_options_widgets) {
+    settable_options_widgets = fc_calloc(num_settable_options, sizeof(Widget));
+  }
+
+  prev_widget = NULL; /* init the prev-Widget */
+
+  for (i = 0; i < num_settable_options; i++) {
+    char buf[256];
+    size_t len;
+    struct options_settable *o = &settable_options[i];
+
+    my_snprintf(buf, sizeof(buf), "%s: %s", o->name,
+		_(o->short_help));
+    len = strlen(buf);
+
+    /* 
+     * Remember widget so we can reset the vertical position.
+     */
+    settable_options_widgets[i] = prev_widget;
+
+    if (prev_widget) {
+      prev_widget =
+	XtVaCreateManagedWidget("label", labelWidgetClass,
+				settable_options_scrollform,
+				XtNlabel, buf,
+				XtNfromVert, prev_widget,
+				NULL);
+    } else {
+      prev_widget =
+	XtVaCreateManagedWidget("label", labelWidgetClass,
+				settable_options_scrollform,
+				XtNlabel, buf,
+				NULL);
+    }
+
+    if (len > longest_len) {
+      longest_len = len;
+      longest_label = prev_widget;
+    }
+
+    /* 
+     * The addition of a scrollbar screws things up. There must be a
+     * better way to do this.
+     */
+    XtVaGetValues(prev_widget, XtNwidth, &width, NULL);
+    XtVaSetValues(prev_widget, XtNwidth, width + 15, NULL);
+  }
+
+  XtVaGetValues(longest_label, XtNwidth, &width, NULL);
+  XtVaSetValues(settable_options_label, XtNwidth, width + 15, NULL);
+
+  for (i = 0; i < num_settable_options; i++) {
+    struct options_settable *o = &settable_options[i];
+
+    if (setting_class_is_changeable(o->sclass)
+	&& o->is_visible) {
+      switch (o->stype) {
+      case SSET_BOOL:
+	if (settable_options_widgets[i]) {
+	  prev_widget =
+	    XtVaCreateManagedWidget("toggle", toggleWidgetClass,
+				    settable_options_scrollform,
+				    XtNfromHoriz, settable_options_label,
+				    XtNfromVert, settable_options_widgets[i],
+				    NULL);
+	} else {
+	  prev_widget =
+	    XtVaCreateManagedWidget("toggle", toggleWidgetClass,
+				    settable_options_scrollform,
+				    XtNfromHoriz, settable_options_label,
+				    NULL);
+	}
+	XtAddCallback(prev_widget, XtNcallback,
+		      settable_options_toggle_callback, NULL);
+	break;
+      case SSET_INT:
+      case SSET_STRING:
+	if (settable_options_widgets[i]) {
+	  prev_widget =
+	    XtVaCreateManagedWidget("input", asciiTextWidgetClass,
+				    settable_options_scrollform,
+				    XtNfromHoriz, settable_options_label,
+				    XtNfromVert, settable_options_widgets[i],
+				    NULL);
+	} else {
+	  prev_widget =
+	    XtVaCreateManagedWidget("input", asciiTextWidgetClass,
+				    settable_options_scrollform,
+				    XtNfromHoriz, settable_options_label,
+				    NULL);
+	}
+	break;
+      }
+
+    } else {
+      if (settable_options_widgets[i]) {
+	prev_widget =
+	  XtVaCreateManagedWidget("rlabel", labelWidgetClass,
+				  settable_options_scrollform,
+				  XtNfromHoriz, settable_options_label,
+				  XtNfromVert, settable_options_widgets[i],
+				  NULL);
+      } else {
+	prev_widget =
+	  XtVaCreateManagedWidget("rlabel", labelWidgetClass,
+				  settable_options_scrollform,
+				  XtNfromHoriz, settable_options_label,
+				  NULL);
+      }
+    }
+    /* store the final widget */
+    settable_options_widgets[i] = prev_widget;
+  }
+
+  settable_options_ok_command =
+    I_L(XtVaCreateManagedWidget("settableoptionsokcommand",
+				commandWidgetClass,
+				settable_options_form,
+				NULL));
+
+  settable_options_cancel_command =
+    I_L(XtVaCreateManagedWidget("settableoptionscancelcommand",
+				commandWidgetClass,
+				settable_options_form,
+				NULL));
+
+  XtAddCallback(settable_options_ok_command, XtNcallback,
+		settable_options_ok_callback, NULL);
+  XtAddCallback(settable_options_cancel_command, XtNcallback,
+		settable_options_cancel_callback, NULL);
+
+  XtRealizeWidget(settable_options_dialog_shell);
+
+  XSetWMProtocols(display, XtWindow(settable_options_dialog_shell),
+		  &wm_delete_window, 1);
+  XtOverrideTranslations(settable_options_dialog_shell,
+    XtParseTranslationTable("<Message>WM_PROTOCOLS: msg-close-settable-options()"));
+
+  xaw_horiz_center(settable_options_label);
+}
+
+/****************************************************************************
+  Update server options dialog.
+****************************************************************************/
+void update_settable_options_dialog(void)
+{
+  if (settable_options_dialog_shell) {
+    char buf[256];
+    int i;
+
+    for (i = 0; i < num_settable_options; i++) {
+      struct options_settable *o = &settable_options[i];
+
+      if (setting_class_is_changeable(o->sclass)
+	  && o->is_visible) {
+	switch (o->stype) {
+	case SSET_BOOL:
+	  XtVaSetValues(settable_options_widgets[i],
+			XtNstate, o->val ? True : False,
+			XtNlabel,
+			o->val ? _("Yes") : _("No"), NULL);
+	  break;
+	case SSET_INT:
+	  my_snprintf(buf, sizeof(buf), "%d", o->val);
+	  XtVaSetValues(settable_options_widgets[i], XtNstring, buf, NULL);
+	  break;
+	case SSET_STRING:
+	  my_snprintf(buf, sizeof(buf), "%s", o->strval);
+	  XtVaSetValues(settable_options_widgets[i], XtNstring, buf, NULL);
+	  break;
+	}
+      } else {
+	if (o->is_visible) {
+	  switch (o->stype) {
+	  case SSET_BOOL:
+	    my_snprintf(buf, sizeof(buf), "%s",
+	      o->val != 0 ? _("true") : _("false"));
+	    break;
+	  case SSET_INT:
+	    my_snprintf(buf, sizeof(buf), "%d", o->val);
+	    break;
+	  case SSET_STRING:
+	    my_snprintf(buf, sizeof(buf), "%s", o->strval);
+	    break;
+	  }
+	} else {
+	  my_snprintf(buf, sizeof(buf), _("(hidden)"));
+	}
+	XtVaSetValues(settable_options_widgets[i], XtNlabel, buf, NULL);
+      }
+    }
+  }
+}
+
+/****************************************************************************
+  Changes the label of the toggle widget to Yes/No depending on the state of
+  the toggle.
+****************************************************************************/
+void settable_options_toggle_callback(Widget w, XtPointer client_data,
+				      XtPointer call_data)
+{
+  Boolean b;
+
+  XtVaGetValues(w, XtNstate, &b, NULL);
+  XtVaSetValues(w, XtNlabel, b ? _("Yes") : _("No"), NULL);
+}
+
+/****************************************************************************
+  OK button callback.
+****************************************************************************/
+void settable_options_ok_callback(Widget w, XtPointer client_data,
+				  XtPointer call_data)
+{
+  if (settable_options_dialog_shell) {
+    Boolean b, old_b;
+    int val, i;
+    XtPointer dp;
+
+    for (i = 0; i < num_settable_options; i++) {
+      struct options_settable *o = &settable_options[i];
+
+      if (setting_class_is_changeable(o->sclass)
+	  && o->is_visible) {
+
+	switch (o->stype) {
+	case SSET_BOOL:
+	  old_b = o->val ? True: False;
+	  XtVaGetValues(settable_options_widgets[i], XtNstate, &b, NULL);
+	  if (b != old_b) {
+	    send_chat_printf("/set %s %s",
+                             o->name, b ? "1" : "0");
+	  }
+	  break;
+	case SSET_INT:
+	  XtVaGetValues(settable_options_widgets[i], XtNstring, &dp, NULL);
+	  sscanf(dp, "%d", &val);
+	  if (val != o->val) {
+	    send_chat_printf("/set %s %d",
+                             o->name, val);
+	  }
+	  break;
+	case SSET_STRING:
+	  XtVaGetValues(settable_options_widgets[i], XtNstring, &dp, NULL);
+	  if (strcmp(o->strval, dp)) {
+	    send_chat_printf("/set %s %s",
+                             o->name, (char *)dp);
+	  }
+	  break;
+	}
+      }
+    }
+
+    popdown_settable_options_dialog();
+  }
+}
+
+/****************************************************************************
+  Cancel button callback.
+****************************************************************************/
+void settable_options_cancel_callback(Widget w, XtPointer client_data,
+				      XtPointer call_data)
+{
+  popdown_settable_options_dialog();
+}
+
+/****************************************************************************
+  Callback for overrided wm_delete_window of server options dialog.
+****************************************************************************/
+void settable_options_msg_close(Widget w)
+{
+  popdown_settable_options_dialog();
 }

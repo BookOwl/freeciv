@@ -14,18 +14,18 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <ctype.h>
 #include <string.h>
 
-/* utility */
 #include "fcintl.h"
 #include "log.h"
 #include "mem.h"
 #include "support.h"
 #include "shared.h" /* ARRAY_SIZE */
 
-/* common */
 #include "city.h"
+#include "effects.h"
 #include "game.h"
 #include "government.h"
 #include "improvement.h"
@@ -33,9 +33,7 @@
 #include "packets.h"
 #include "player.h"
 #include "tech.h"
-
-#include "effects.h"
-
+ 
 /* Names of effect types.
  * (These must correspond to enum effect_type_id in effects.h.) */
 static const char *effect_type_names[EFT_LAST] = {
@@ -86,7 +84,6 @@ static const char *effect_type_names[EFT_LAST] = {
   "Unit_Recover",
   "Upgrade_Unit",
   "Upkeep_Free",
-  "Tech_Upkeep_Free",
   "No_Unhappy",
   "Veteran_Build",
   "Veteran_Combat",
@@ -122,8 +119,6 @@ static const char *effect_type_names[EFT_LAST] = {
   "Output_Penalty_Tile",
   "Output_Inc_Tile_Celebrate",
   "City_Unhappy_Size",
-  "City_Radius_Sq",
-  "City_Build_Slots",
   "Upgrade_Price_Pct",
   "Visible_Walls",
   "Tech_Cost_Factor",
@@ -141,10 +136,10 @@ enum effect_type effect_type_from_str(const char *str)
 {
   enum effect_type effect_type;
 
-  fc_assert_ret_val(ARRAY_SIZE(effect_type_names) == EFT_LAST, EFT_LAST);
+  assert(ARRAY_SIZE(effect_type_names) == EFT_LAST);
 
   for (effect_type = 0; effect_type < EFT_LAST; effect_type++) {
-    if (0 == fc_strcasecmp(effect_type_names[effect_type], str)) {
+    if (0 == mystrcasecmp(effect_type_names[effect_type], str)) {
       return effect_type;
     }
   }
@@ -158,11 +153,11 @@ enum effect_type effect_type_from_str(const char *str)
 **************************************************************************/
 const char *effect_type_name(enum effect_type effect_type)
 {
-  fc_assert_ret_val(ARRAY_SIZE(effect_type_names) == EFT_LAST, NULL);
+  assert(ARRAY_SIZE(effect_type_names) == EFT_LAST);
   if (effect_type >= 0 && effect_type < EFT_LAST) {
     return effect_type_names[effect_type];
   } else {
-    fc_assert(FALSE);
+    assert(0);
     return NULL;
   }
 }
@@ -311,12 +306,12 @@ static void effect_free(struct effect *peffect)
   requirement_list_iterate(peffect->reqs, preq) {
     free(preq);
   } requirement_list_iterate_end;
-  requirement_list_destroy(peffect->reqs);
+  requirement_list_free(peffect->reqs);
 
   requirement_list_iterate(peffect->nreqs, preq) {
     free(preq);
   } requirement_list_iterate_end;
-  requirement_list_destroy(peffect->nreqs);
+  requirement_list_free(peffect->nreqs);
 
   free(peffect);
 }
@@ -385,7 +380,7 @@ void ruleset_cache_free(void)
     effect_list_iterate(plist, peffect) {
       effect_free(peffect);
     } effect_list_iterate_end;
-    effect_list_destroy(plist);
+    effect_list_free(plist);
     ruleset_cache.tracker = NULL;
   }
 
@@ -393,7 +388,7 @@ void ruleset_cache_free(void)
     struct effect_list *plist = ruleset_cache.effects[i];
 
     if (plist) {
-      effect_list_destroy(plist);
+      effect_list_free(plist);
       ruleset_cache.effects[i] = NULL;
     }
   }
@@ -402,7 +397,7 @@ void ruleset_cache_free(void)
     struct effect_list *plist = ruleset_cache.reqs.buildings[i];
 
     if (plist) {
-      effect_list_destroy(plist);
+      effect_list_free(plist);
       ruleset_cache.reqs.buildings[i] = NULL;
     }
   }
@@ -411,7 +406,7 @@ void ruleset_cache_free(void)
     struct effect_list *plist = ruleset_cache.reqs.govs[i];
 
     if (plist) {
-      effect_list_destroy(plist);
+      effect_list_free(plist);
       ruleset_cache.reqs.govs[i] = NULL;
     }
   }
@@ -435,7 +430,7 @@ void recv_ruleset_effect(struct packet_ruleset_effect *packet)
 void recv_ruleset_effect_req(struct packet_ruleset_effect_req *packet)
 {
   if (packet->effect_id != effect_list_size(ruleset_cache.tracker) - 1) {
-    log_error("Bug in recv_ruleset_effect_req.");
+    freelog(LOG_ERROR, "Bug in recv_ruleset_effect_req.");
   } else {
     struct effect *peffect = effect_list_get(ruleset_cache.tracker, -1);
     struct requirement req, *preq;
@@ -519,7 +514,7 @@ Impr_type_id ai_find_source_building(struct city *pcity,
 
   /* There's no point in defining both of these as uclass is more restrictive
    * than move_type */
-  fc_assert_ret_val(uclass == NULL || move == MOVETYPE_LAST, B_LAST);
+  assert(uclass == NULL || move == MOVETYPE_LAST);
 
   effect_list_iterate(get_effects(effect_type), peffect) {
     if (peffect->value > greatest_value) {
@@ -855,9 +850,9 @@ int get_city_specialist_output_bonus(const struct city *pcity,
 				     const struct output_type *poutput,
 				     enum effect_type effect_type)
 {
-  fc_assert_ret_val(pcity != NULL, 0);
-  fc_assert_ret_val(pspecialist != NULL, 0);
-  fc_assert_ret_val(poutput != NULL, 0);
+  assert(pcity != NULL);
+  assert(pspecialist != NULL);
+  assert(poutput != NULL);
   return get_target_bonus_effects(NULL,
 				  city_owner(pcity), pcity, NULL,
 				  NULL, NULL, poutput, pspecialist,
@@ -878,7 +873,7 @@ int get_city_tile_output_bonus(const struct city *pcity,
 			       const struct output_type *poutput,
 			       enum effect_type effect_type)
 {
-  fc_assert_ret_val(pcity != NULL, 0);
+  assert(pcity != NULL);
   return get_target_bonus_effects(NULL,
 			 	  city_owner(pcity), pcity, NULL,
 				  ptile, NULL, poutput, NULL,
@@ -896,9 +891,9 @@ int get_player_output_bonus(const struct player *pplayer,
     return 0;
   }
 
-  fc_assert_ret_val(pplayer != NULL, 0);
-  fc_assert_ret_val(poutput != NULL, 0);
-  fc_assert_ret_val(effect_type != EFT_LAST, 0);
+  assert(pplayer != NULL);
+  assert(poutput != NULL);
+  assert(effect_type != EFT_LAST);
   return get_target_bonus_effects(NULL, pplayer, NULL, NULL, NULL,
                                   NULL, poutput, NULL, effect_type);
 }
@@ -914,9 +909,9 @@ int get_city_output_bonus(const struct city *pcity,
     return 0;
   }
 
-  fc_assert_ret_val(pcity != NULL, 0);
-  fc_assert_ret_val(poutput != NULL, 0);
-  fc_assert_ret_val(effect_type != EFT_LAST, 0);
+  assert(pcity != NULL);
+  assert(poutput != NULL);
+  assert(effect_type != EFT_LAST);
   return get_target_bonus_effects(NULL, city_owner(pcity), pcity, NULL,
                                   NULL, NULL, poutput, NULL, effect_type);
 }
@@ -932,7 +927,7 @@ int get_building_bonus(const struct city *pcity,
     return 0;
   }
 
-  fc_assert_ret_val(NULL != pcity && NULL != building, 0);
+  assert(NULL != pcity && NULL != building);
   return get_target_bonus_effects(NULL,
 			 	  city_owner(pcity), pcity,
 				  building,
@@ -957,8 +952,7 @@ int get_unittype_bonus(const struct player *pplayer,
     return 0;
   }
 
-  fc_assert_ret_val(pplayer != NULL && ptile != NULL && punittype != NULL,
-                    0);
+  assert(pplayer != NULL && ptile != NULL && punittype != NULL);
   return get_target_bonus_effects(NULL,
                                  pplayer, tile_city(ptile), NULL, ptile,
                                  punittype, NULL, NULL, effect_type);
@@ -973,7 +967,7 @@ int get_unit_bonus(const struct unit *punit, enum effect_type effect_type)
     return 0;
   }
 
-  fc_assert_ret_val(punit != NULL, 0);
+  assert(punit != NULL);
   return get_target_bonus_effects(NULL,
 				  unit_owner(punit),
 				  punit->tile ? tile_city(punit->tile) : NULL,
@@ -996,7 +990,7 @@ int get_player_bonus_effects(struct effect_list *plist,
     return 0;
   }
 
-  fc_assert_ret_val(pplayer != NULL, 0);
+  assert(pplayer != NULL);
   return get_target_bonus_effects(plist,
 			  	  pplayer, NULL, NULL,
 				  NULL, NULL, NULL, NULL,
@@ -1018,7 +1012,7 @@ int get_city_bonus_effects(struct effect_list *plist,
     return 0;
   }
 
-  fc_assert_ret_val(pcity != NULL, 0);
+  assert(pcity != NULL);
   return get_target_bonus_effects(plist,
 			 	  city_owner(pcity), pcity, NULL,
 				  NULL, NULL, poutput, NULL,
@@ -1080,7 +1074,7 @@ void get_effect_req_text(struct effect *peffect, char *buf, size_t buf_len)
 
   requirement_list_iterate(peffect->reqs, preq) {
     if (buf[0] != '\0') {
-      fc_strlcat(buf, "+", buf_len);
+      mystrlcat(buf, "+", buf_len);
     }
 
     universal_name_translation(&preq->source,
@@ -1096,7 +1090,7 @@ void get_effect_req_text(struct effect *peffect, char *buf, size_t buf_len)
 **************************************************************************/
 bool iterate_effect_cache(iec_cb cb)
 {
-  fc_assert_ret_val(cb != NULL, FALSE);
+  assert(cb != NULL);
 
   effect_list_iterate(ruleset_cache.tracker, peffect) {
     if (!cb(peffect)) {

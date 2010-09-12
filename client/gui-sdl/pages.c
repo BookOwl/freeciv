@@ -34,7 +34,6 @@
 #include "gui_tilespec.h"
 #include "mapctrl.h"
 #include "mapview.h"
-#include "menu.h"
 #include "messagewin.h"
 #include "optiondlg.h"
 #include "themespec.h"
@@ -127,7 +126,7 @@ static int quit_callback(struct widget *pWidget)
 /**************************************************************************
   ...
 **************************************************************************/
-static void show_main_page(void)
+static void show_main_page()
 {
   SDL_Color bg_color = {255, 255, 255, 96};
   SDL_Color *line_color = &(SDL_Color){128, 128, 128, 255};
@@ -326,7 +325,7 @@ static void popdown_start_menu()
   Sets the "page" that the client should show.  See documentation in
   pages_g.h.
 **************************************************************************/
-void real_set_client_page(enum client_pages page)
+void set_client_page(enum client_pages page)
 {
   switch (old_page) {
     case PAGE_MAIN:
@@ -358,19 +357,9 @@ void real_set_client_page(enum client_pages page)
     case PAGE_NETWORK:
       popup_join_game_dialog();
       break;
-    case PAGE_START:
-      update_conn_list_dialog();
-      break;
     case PAGE_GAME:
       show_game_page();
       enable_main_widgets();
-      update_info_label();
-      update_unit_focus();
-      update_unit_info_label(get_units_in_focus());
-      update_turn_done_button_state();
-      refresh_overview();
-      menus_update();
-      break;
     default:
       break;
   }  
@@ -391,7 +380,7 @@ void gui_set_rulesets(int num_rulesets, char **rulesets)
 /**************************************************************************
   Returns current client page
 **************************************************************************/
-enum client_pages get_current_client_page(void)
+enum client_pages get_client_page(void)
 {
   return old_page;
 }

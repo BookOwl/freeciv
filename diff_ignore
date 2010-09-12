@@ -63,6 +63,3 @@ undep.sh
 civmanual
 freeciv.spec
 tolua
-freeciv-*sav*
-freeciv-score.log
-freeciv-chat.log

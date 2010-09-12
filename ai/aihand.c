@@ -15,49 +15,40 @@
 #include <config.h>
 #endif
 
-/* utility */
-#include "distribute.h"
-#include "log.h"
-#include "shared.h"
-#include "timing.h"
+#include <assert.h>
 
-/* common */
 #include "city.h"
+#include "distribute.h"
 #include "game.h"
 #include "government.h"
+#include "log.h"
 #include "map.h"
 #include "nation.h"
 #include "packets.h"
 #include "player.h"
+#include "shared.h"
 #include "unit.h"
+#include "timing.h"
 
-/* aicore */
 #include "cm.h"
 
-/* server */
 #include "citytools.h"
 #include "cityturn.h"
 #include "plrhand.h"
-#include "sernet.h"
+#include "settlers.h" /* amortize */
 #include "spacerace.h"
-#include "srv_log.h"
 #include "unithand.h"
 
-/* server/advisors */
-#include "advdata.h"
-#include "advtools.h"
-
-/* ai */
 #include "advmilitary.h"
 #include "advspace.h"
 #include "aicity.h"
+#include "aidata.h"
+#include "ailog.h"
 #include "aitech.h"
 #include "aitools.h"
 #include "aiunit.h"
-#include "defaultai.h"
 
 #include "aihand.h"
-
 
 /****************************************************************************
   A man builds a city
@@ -196,6 +187,7 @@ static void ai_manage_taxes(struct player *pplayer)
     int luxrate = pplayer->economic.luxury;
     int scirate = pplayer->economic.science;
     struct cm_parameter cmp;
+    struct cm_result cmr;
 
     while (pplayer->economic.luxury < maxrate
            && pplayer->economic.science > 0) {
@@ -211,45 +203,37 @@ static void ai_manage_taxes(struct player *pplayer)
     cmp.minimal_surplus[O_GOLD] = -FC_INFINITY;
 
     city_list_iterate(pplayer->cities, pcity) {
-      struct cm_result *cmr = cm_result_new(pcity);
-      struct ai_city *city_data = def_ai_city_data(pcity);
-
       cm_clear_cache(pcity);
-      cm_query_result(pcity, &cmp, cmr); /* burn some CPU */
+      cm_query_result(pcity, &cmp, &cmr); /* burn some CPU */
 
       total_cities++;
 
-      if (cmr->found_a_valid
+      if (cmr.found_a_valid
           && pcity->surplus[O_FOOD] > 0
           && pcity->size >= game.info.celebratesize
 	  && city_can_grow_to(pcity, pcity->size + 1)) {
-        city_data->celebrate = TRUE;
+        pcity->ai->celebrate = TRUE;
         can_celebrate++;
       } else {
-        city_data->celebrate = FALSE;
+        pcity->ai->celebrate = FALSE;
       }
-      cm_result_destroy(cmr);
     } city_list_iterate_end;
     /* If more than half our cities can celebrate, go for it! */
     celebrate = (can_celebrate * 2 > total_cities);
     if (celebrate) {
-      log_base(LOGLEVEL_TAX, "*** %s CELEBRATES! ***", player_name(pplayer));
+      freelog(LOGLEVEL_TAX, "*** %s CELEBRATES! ***", player_name(pplayer));
       city_list_iterate(pplayer->cities, pcity) {
-        struct cm_result *cmr = cm_result_new(pcity);
-
-        if (def_ai_city_data(pcity)->celebrate == TRUE) {
-          log_base(LOGLEVEL_TAX, "setting %s to celebrate",
-                   city_name(pcity));
-          cm_query_result(pcity, &cmp, cmr);
-          if (cmr->found_a_valid) {
-            apply_cmresult_to_city(pcity, cmr);
-            city_refresh_from_main_map(pcity, NULL);
+        if (pcity->ai->celebrate == TRUE) {
+          freelog(LOGLEVEL_TAX, "setting %s to celebrate", city_name(pcity));
+          cm_query_result(pcity, &cmp, &cmr);
+          if (cmr.found_a_valid) {
+            apply_cmresult_to_city(pcity, &cmr);
+            city_refresh_from_main_map(pcity, TRUE);
             if (!city_happy(pcity)) {
               CITY_LOG(LOG_ERROR, pcity, "is NOT happy when it should be!");
             }
           }
         }
-        cm_result_destroy(cmr);
       } city_list_iterate_end;
     } else {
       pplayer->economic.luxury = luxrate;
@@ -258,7 +242,7 @@ static void ai_manage_taxes(struct player *pplayer)
         /* KLUDGE: Must refresh to restore the original values which
          * were clobbered in cm_query_result(), after the tax rates
          * were changed. */
-        city_refresh_from_main_map(pcity, NULL);
+        city_refresh_from_main_map(pcity, TRUE);
       } city_list_iterate_end;
     }
   }
@@ -277,14 +261,13 @@ static void ai_manage_taxes(struct player *pplayer)
     pplayer->economic.tax = science;
   }
 
-  fc_assert(pplayer->economic.tax + pplayer->economic.luxury
-            + pplayer->economic.science == 100);
-  log_base(LOGLEVEL_TAX, "%s rates: Sci=%d Lux=%d Tax=%d "
-           "trade=%d expenses=%d  celeb=(%d/%d)",
-           player_name(pplayer), pplayer->economic.science,
-           pplayer->economic.luxury, pplayer->economic.tax,
-           trade, expenses, can_celebrate, total_cities);
-  send_player_info_c(pplayer, pplayer->connections);
+  assert(pplayer->economic.tax + pplayer->economic.luxury 
+         + pplayer->economic.science == 100);
+  freelog(LOGLEVEL_TAX, "%s rates: Sci=%d Lux=%d Tax=%d trade=%d expenses=%d"
+          " celeb=(%d/%d)", player_name(pplayer), pplayer->economic.science,
+          pplayer->economic.luxury, pplayer->economic.tax, trade, expenses,
+          can_celebrate, total_cities);
+  send_player_info(pplayer, pplayer);
 }
 
 /**************************************************************************
@@ -429,7 +412,7 @@ static void ai_manage_government(struct player *pplayer)
        * We want something better pretty soon! */
       want += 25 * game.info.turn;
     }
-    pplayer->ai_common.tech_want[ai->goal.govt.req] += want;
+    pplayer->ai_data.tech_want[ai->goal.govt.req] += want;
     TECH_LOG(LOG_DEBUG, pplayer, advance_by_number(ai->goal.govt.req), 
              "ai_manage_government() + %d for %s",
              want,
@@ -455,8 +438,6 @@ void ai_do_first_activities(struct player *pplayer)
   /* STOP.  Everything else is at end of turn. */
 
   TIMING_LOG(AIT_ALL, TIMER_STOP);
-
-  flush_packets(); /* AIs can be such spammers... */
 }
 
 /**************************************************************************

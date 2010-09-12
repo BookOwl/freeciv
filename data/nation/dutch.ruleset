@@ -36,7 +36,6 @@ flag="netherlands"
 flag_alt = "holland"
 city_style = "European"
 ruler_titles = { "government",      "male_title",      "female_title"
-		 "Republic",	    _("Stadtholder"),    _("Stadtholdress")
                  "Democracy", _("Prime Minister"),_("?female:Prime Minister")
                  "Fundamentalism",       _("Reverend"), _("?female:Reverend")
                }
@@ -47,7 +46,7 @@ init_buildings=""
 init_government="Despotism"
 init_units=""
 conflicts_with="burgundian"
-civilwar_nations="boer", "belgian", "frisian", "indonesian"
+civilwar_nations="boer", "belgian", "indonesian"
 
 cities =
  "Amsterdam (ocean, lake, grassland)",
@@ -71,7 +70,6 @@ cities =
  "Gouda (grassland)",
  "Arnhem (river, forest, hills)",
  "'s-Hertogenbosch (forest, swamp)",
- "Tilburg (forest)",
  "Schiedam (river)",
  "Vlissingen (ocean)",
  "Kampen (river)",
@@ -106,7 +104,6 @@ cities =
  "Geleen (hills)",
  "Roosendaal (forest)",
  "Ede (forest)",
- "Brielle (river, plains)",
  "Wageningen (forest, river)",
  "Hilversum (forest)",
  "Brouwershaven (ocean)",
@@ -118,39 +115,23 @@ cities =
  "Terneuzen (ocean)",
  "Oss (plains)",
  "Woerden (grassland)",
- "Gorinchem (river, plains)",
  "Delfzijl (ocean)",
  "Alphen a/d Rijn (river, grassland)",
  "Veendam (swamp)",
  "Beverwijk (ocean, forest)",
  "Velsen (ocean)",
  "Almere (ocean)",
- "Coevorden (forest, swamp)",
  "Zoetermeer (grassland)",
  "Capelle a/d IJssel (river)",
- "Goes (grassland)",
- "Zaandam (river)",
  "Spijkenisse (river)",
  "Emmeloord (ocean)",
  "Appingedam (swamp)",
  "Harlingen (ocean)",
  "Hoofddorp (grassland)",
  "Bussum (forest)",
- "Medemblik (ocean, lake, plains)",
  "Naaldwijk (grassland)",
  "Nieuwegein (river)",
- "Hattem (river)",
  "Leidschendam (grassland)",
- "Zierikzee (ocean)",
  "Den Helder (ocean)",
  "Zeist (forest)",
- "Tiel (grassland, river)",
- "Amstelveen (grassland)",
- "Zevenaar (grassland, hills)",
- "Vianen (river)",
- "Edam (ocean, lake)",
- "Diemen (lake, grassland)",
- "Willemstad (jungle, ocean)",
- "Oranjestad (jungle, ocean)",
- "Kralendijk (jungle, ocean)",
- "Philipsburg (jungle, ocean)"
+ "Vianen (river)"

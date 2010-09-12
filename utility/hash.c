@@ -97,6 +97,7 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <string.h>
 
 #include "log.h"
@@ -285,7 +286,7 @@ static struct hash_table *hash_new_nbuckets(hash_val_fn_t fval,
   struct hash_table *h;
   unsigned i;
 
-  log_debug("New hash table with %u buckets", nbuckets);
+  freelog(LOG_DEBUG, "New hash table with %u buckets", nbuckets);
   
   h = (struct hash_table *)fc_malloc(sizeof(struct hash_table));
   zero_htable(h);
@@ -388,7 +389,7 @@ static void hash_resize_table(struct hash_table *h, unsigned int new_nbuckets)
   struct hash_table *h_new;
   unsigned i;
 
-  fc_assert_ret(new_nbuckets >= h->num_entries);
+  assert(new_nbuckets >= h->num_entries);
 
   h_new = hash_new_nbuckets(h->fval, h->fcmp,
 			    h->free_key_func, h->free_data_func,
@@ -399,7 +400,9 @@ static void hash_resize_table(struct hash_table *h, unsigned int new_nbuckets)
     struct hash_bucket *bucket = &h->buckets[i];
 
     if (bucket->used == BUCKET_USED) {
-      fc_assert_ret(hash_insert(h_new, bucket->key, bucket->data));
+      if (!hash_insert(h_new, bucket->key, bucket->data)) {
+	assert(0);
+      }
     }
   }
   h_new->frozen = FALSE;
@@ -446,12 +449,12 @@ static void hash_maybe_resize(struct hash_table *h, bool expandingp)
   
   new_nbuckets = calc_appropriate_nbuckets(h->num_entries);
   
-  log_debug("%s hash table "
-            "(entry %u del %u used %u nbuck %u new %u %slimit %u)",
-            (new_nbuckets<h->num_buckets) ? "Shrinking" :
-              (new_nbuckets>h->num_buckets) ? "Expanding" : "Rehashing",
-              h->num_entries, h->num_deleted, num_used, 
-              h->num_buckets, new_nbuckets, expandingp?"up":"dn", limit);
+  freelog(LOG_DEBUG, "%s hash table "
+	  "(entry %u del %u used %u nbuck %u new %u %slimit %u)",
+	  (new_nbuckets<h->num_buckets) ? "Shrinking" :
+	  (new_nbuckets>h->num_buckets) ? "Expanding" : "Rehashing",
+	  h->num_entries, h->num_deleted, num_used, 
+	  h->num_buckets, new_nbuckets, expandingp?"up":"dn", limit);
   hash_resize_table(h, new_nbuckets);
 }
 
@@ -489,7 +492,7 @@ static struct hash_bucket *internal_lookup(const struct hash_table *h,
       }
       break;
     default:
-      log_error("Bad value %d in switch(bucket->used)", (int) bucket->used);
+      die("Bad value %d in switch(bucket->used)", (int) bucket->used);
     }
     i++;
     if (i == h->num_buckets) {
@@ -500,7 +503,7 @@ static struct hash_bucket *internal_lookup(const struct hash_table *h,
   if (deleted) {
     return deleted;
   }
-  log_error("Full hash table -- and somehow did not resize!!");
+  die("Full hash table -- and somehow did not resize!!");
   return NULL;
 }
 
@@ -520,7 +523,7 @@ bool hash_insert(struct hash_table *h, const void *key, const void *data)
     return FALSE;
   }
   if (bucket->used == BUCKET_DELETED) {
-    fc_assert_ret_val(0 < h->num_deleted, FALSE);
+    assert(h->num_deleted>0);
     h->num_deleted--;
   }
 
@@ -558,7 +561,7 @@ void *hash_replace(struct hash_table *h, const void *key, const void *data)
   } else {
     ret = NULL;
     if (bucket->used == BUCKET_DELETED) {
-      fc_assert_ret_val(0 < h->num_deleted, NULL);
+      assert(h->num_deleted>0);
       h->num_deleted--;
     }
     h->num_entries++;
@@ -606,7 +609,7 @@ static void hash_delete_bucket(struct hash_table *h,
     zero_hbucket(bucket);
     bucket->used = BUCKET_DELETED;
     h->num_deleted++;
-    fc_assert_ret(0 < h->num_entries);
+    assert(h->num_entries > 0);
     h->num_entries--;
   } else {
     if (old_key) {
@@ -741,11 +744,10 @@ unsigned int hash_num_deleted(const struct hash_table *h)
   random order.
 **************************************************************************/
 const void *hash_key_by_number(const struct hash_table *h,
-                               unsigned int entry_number)
+			       unsigned int entry_number)
 {
   unsigned int bucket_nr, counter = 0;
-
-  fc_assert_ret_val(entry_number < h->num_entries, NULL);
+  assert(entry_number < h->num_entries);
 
   for (bucket_nr = 0; bucket_nr < h->num_buckets; bucket_nr++) {
     struct hash_bucket *bucket = &h->buckets[bucket_nr];
@@ -757,8 +759,7 @@ const void *hash_key_by_number(const struct hash_table *h,
       return bucket->key;
     counter++;
   }
-  /* Never reached. */
-  log_error("Error in %s().", __FUNCTION__);
+  die("never reached");
   return NULL;
 }
 

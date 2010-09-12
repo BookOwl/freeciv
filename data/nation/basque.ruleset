@@ -11,7 +11,6 @@ legend=_("The Basques have lived since times immemorial by the western\
  oldest living language in Europe.")
 leader=
  "Antso III.a Gartzes Nagusia",
- "Katalina I.a Nafarroakoa",
  "Eneko Aritza",
  "José Antonio Aguirre",
  "Sabino Arana",
@@ -21,11 +20,10 @@ leader=
  "Jesús María de Leizaola",
  "Mario Onaindia",
  "Ramón Rubial Cavia",
- "Tomas Zumalakarregi Imaz",
- "Dolores Ibarruri"
+ "Tomas Zumalakarregi Imaz"
 
-leader_sex="Male", "Female", "Male", "Male", "Male", "Male", "Male", "Male",
-           "Male", "Male", "Male", "Male", "Female"
+leader_sex="Male", "Male", "Male", "Male", "Male", "Male", "Male",
+           "Male", "Male", "Male", "Male"
 flag="euskadi"
 flag_alt = "-"
 city_style = "Celtic"

@@ -15,6 +15,7 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -57,9 +58,9 @@ static void form_chat_name(struct connection *pconn, char *buffer, size_t len)
   if (!pplayer
       || pconn->observer
       || strcmp(player_name(pplayer), ANON_PLAYER_NAME) == 0) {
-    fc_snprintf(buffer, len, "(%s)", pconn->username);
+    my_snprintf(buffer, len, "(%s)", pconn->username);
   } else {
-    fc_snprintf(buffer, len, "%s", player_name(pplayer));
+    my_snprintf(buffer, len, "%s", player_name(pplayer));
   }
 }
 
@@ -103,7 +104,7 @@ static void complain_ambiguous(struct connection *pconn, const char *name,
                 _("%s is an anonymous name. Use connection name"), name);
     break;
   default:
-    log_error("Unkown variant in %s(): %d.", __FUNCTION__, player_conn);
+    assert(0);
   }
 }
 
@@ -356,7 +357,8 @@ void handle_chat_msg_req(struct connection *pconn, char *message)
     char name[MAX_LEN_NAME];
     char *cpblank;
 
-    (void) fc_strlcpy(name, message, MIN(sizeof(name), cp - message + 1));
+    (void) mystrlcpy(name, message,
+		     MIN(sizeof(name), cp - message + 1));
 
     double_colon = (*(cp+1) == ':');
     if (double_colon) {

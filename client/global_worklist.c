@@ -87,7 +87,7 @@ void global_worklists_free(void)
     global_worklists_iterate_all(pgwl) {
       global_worklist_destroy(pgwl);
     } global_worklists_iterate_all_end;
-    global_worklist_list_destroy(client.worklists);
+    global_worklist_list_free(client.worklists);
     client.worklists = NULL;
   }
 }
@@ -110,7 +110,7 @@ void global_worklists_build(void)
 
         puni_name = pgwl->unbuilt.entries + i;
         source = universal_by_rule_name(puni_name->kind, puni_name->name);
-        if (source.kind == universals_n_invalid()) {
+        if (source.kind == VUT_LAST) {
           /* This worklist is not valid on this ruleset.
            * N.B.: Don't remove it to resave it in client rc file. */
           break;
@@ -156,9 +156,9 @@ void global_worklists_unbuild(void)
       for (i = 0; i < worklist_length(&worklist); i++) {
         puni_name = pgwl->unbuilt.entries + i;
         puni_name->kind =
-          fc_strdup(universal_type_rule_name(worklist.entries + i));
+          mystrdup(universal_type_rule_name(worklist.entries + i));
         puni_name->name =
-          fc_strdup(universal_rule_name(worklist.entries + i));
+          mystrdup(universal_rule_name(worklist.entries + i));
       }
     }
   } global_worklists_iterate_all_end;
@@ -211,9 +211,9 @@ global_worklist_alloc(enum global_worklist_status type)
 ***********************************************************************/
 void global_worklist_destroy(struct global_worklist *pgwl)
 {
-  fc_assert_ret(NULL != pgwl);
+  RETURN_IF_FAIL(NULL != pgwl);
 
-  global_worklist_list_remove(client.worklists, pgwl);
+  global_worklist_list_unlink(client.worklists, pgwl);
 
   /* Specific descturctor. */
   switch (pgwl->status) {
@@ -285,7 +285,7 @@ const struct worklist *global_worklist_get(const struct global_worklist *pgwl)
 ***********************************************************************/
 int global_worklist_id(const struct global_worklist *pgwl)
 {
-  fc_assert_ret_val(NULL != pgwl, -1);
+  RETURN_VAL_IF_FAIL(NULL != pgwl, -1);
   return pgwl->id;
 }
 
@@ -320,7 +320,7 @@ void global_worklist_set_name(struct global_worklist *pgwl,
 ***********************************************************************/
 const char *global_worklist_name(const struct global_worklist *pgwl)
 {
-  fc_assert_ret_val(NULL != pgwl, NULL);
+  RETURN_VAL_IF_FAIL(NULL != pgwl, NULL);
   return pgwl->name;
 }
 
@@ -341,7 +341,7 @@ static bool global_worklist_load(struct section_file *file,
   /* The first part of the registry path is taken from the varargs to the
    * function. */
   va_start(ap, path);
-  fc_vsnprintf(path_str, sizeof(path_str), path, ap);
+  my_vsnprintf(path_str, sizeof(path_str), path, ap);
   va_end(ap);
 
   length = secfile_lookup_int_default(file, -1, "%s.wl_length", path_str);
@@ -365,7 +365,7 @@ static bool global_worklist_load(struct section_file *file,
       bool is_unit = secfile_lookup_bool_default(file, FALSE,
                                                  "%s.wl_is_unit%d",
                                                  path_str, i);
-      kind = universals_n_name(is_unit ? VUT_UTYPE : VUT_IMPROVEMENT);
+      kind = universal_kind_name(is_unit ? VUT_UTYPE : VUT_IMPROVEMENT);
     }
 
     name = secfile_lookup_str_default(file, NULL, "%s.wl_value%d",
@@ -373,8 +373,8 @@ static bool global_worklist_load(struct section_file *file,
     if (NULL == kind || '\0' == kind[0] || NULL == name || '\0' == name[0]) {
       break;
     } else {
-      pgwl->unbuilt.entries[i].kind = fc_strdup(kind);
-      pgwl->unbuilt.entries[i].name = fc_strdup(name);
+      pgwl->unbuilt.entries[i].kind = mystrdup(kind);
+      pgwl->unbuilt.entries[i].name = mystrdup(name);
       pgwl->unbuilt.length++;
     }
   }
@@ -418,7 +418,7 @@ static void global_worklist_save(const struct global_worklist *pgwl,
   /* The first part of the registry path is taken from the varargs to the
    * function. */
   va_start(ap, path);
-  fc_vsnprintf(path_str, sizeof(path_str), path, ap);
+  my_vsnprintf(path_str, sizeof(path_str), path, ap);
   va_end(ap);
 
   secfile_insert_str(file, pgwl->name, "%s.wl_name", path_str);  

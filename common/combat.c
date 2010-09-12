@@ -15,16 +15,14 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <math.h>
 
-/* utility */
-#include "bitvector.h"
 #include "rand.h"
-#include "log.h"
 
-/* common */
 #include "base.h"
 #include "game.h"
+#include "log.h"
 #include "map.h"
 #include "movement.h"
 #include "packets.h"
@@ -334,10 +332,8 @@ struct city *sdi_try_defend(const struct player *owner,
 {
   square_iterate(ptile, 2, ptile1) {
     struct city *pcity = tile_city(ptile1);
-
-    if (pcity
-        && !pplayers_allied(city_owner(pcity), owner)
-        && fc_rand(100) < get_city_bonus(pcity, EFT_NUKE_PROOF)) {
+    if (pcity && (!pplayers_allied(city_owner(pcity), owner))
+	&& myrand(100) < get_city_bonus(pcity, EFT_NUKE_PROOF)) {
       return pcity;
     }
   } square_iterate_end;
@@ -431,9 +427,11 @@ static int defense_multiplication(const struct unit_type *att_type,
   struct city *pcity = tile_city(ptile);
   int mod;
 
-  fc_assert_ret_val(NULL != def_type, 0);
+  CHECK_UNIT_TYPE(def_type);
 
-  if (NULL != att_type) {
+  if (att_type) {
+    CHECK_UNIT_TYPE(att_type);
+
     if (utype_has_flag(def_type, F_PIKEMEN)
 	&& utype_has_flag(att_type, F_HORSE)) {
       defensepower *= 2;
@@ -567,13 +565,12 @@ struct unit *get_defender(const struct unit *attacker,
       int unit_def 
         = (int) (100000 * (1 - unit_win_chance(attacker, defender)));
 
-      fc_assert_action(0 <= unit_def, continue);
+      assert(unit_def >= 0);
 
       if (unit_has_type_flag(defender, F_GAMELOSS)
           && !is_stack_vulnerable(defender->tile)) {
-        unit_def = -1; /* then always use leader as last defender. */
-        /* FIXME: multiple gameloss units with varying defense value
-         * not handled. */
+        unit_def = -1; // then always use leader as last defender
+        // FIXME: multiple gameloss units with varying defense value not handled
       }
 
       if (unit_def > bestvalue) {
@@ -600,15 +597,15 @@ struct unit *get_defender(const struct unit *attacker,
   if (unit_list_size(ptile->units) > 0 && !bestdef) {
     struct unit *punit = unit_list_get(ptile->units, 0);
 
-    log_error("get_defender bug: %s %s vs %s %s (total %d"
-              " units) on \"%s\" at (%d,%d). ",
-              nation_rule_name(nation_of_unit(attacker)),
-              unit_rule_name(attacker),
-              nation_rule_name(nation_of_unit(punit)),
-              unit_rule_name(punit),
-              unit_list_size(ptile->units), 
-              terrain_rule_name(tile_terrain(ptile)),
-              TILE_XY(ptile));
+    freelog(LOG_ERROR, "get_defender bug: %s %s vs %s %s (total %d"
+            " units) on \"%s\" at (%d,%d). ",
+            nation_rule_name(nation_of_unit(attacker)),
+            unit_rule_name(attacker),
+            nation_rule_name(nation_of_unit(punit)),
+            unit_rule_name(punit),
+            unit_list_size(ptile->units), 
+            terrain_rule_name(tile_terrain(ptile)),
+            TILE_XY(ptile));
   }
 
   return bestdef;

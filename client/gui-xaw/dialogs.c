@@ -15,6 +15,7 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -33,7 +34,6 @@
 #include <X11/Xaw/Viewport.h>	/* for racesdlg */
 
 /* utility */
-#include "bitvector.h"
 #include "fcintl.h"
 #include "log.h"
 #include "mem.h"
@@ -176,7 +176,7 @@ static void select_random_race(void)
   /* try to find a free nation */
   /* FIXME: this code should be done another way. -ev */
   while (1) {
-    unsigned int race_toggle_index = fc_rand(nation_count());
+    unsigned int race_toggle_index = myrand(nation_count());
 
     if (!is_nation_playable(nation_by_number(race_toggle_index))
 	|| !nation_by_number(race_toggle_index)->is_available
@@ -451,7 +451,7 @@ void popup_caravan_dialog(struct unit *punit,
 {
   char buf[128];
   
-  fc_snprintf(buf, sizeof(buf),
+  my_snprintf(buf, sizeof(buf),
 	      _("Your caravan from %s reaches the city of %s.\nWhat now?"),
 	      city_name(phomecity), city_name(pdestcity));
   
@@ -658,7 +658,7 @@ Widget popup_message_dialog(Widget parent, const char *dialogname,
   while((fcb=((void(*)(Widget, XtPointer, XtPointer))(va_arg(args, void *))))) {
     client_data=va_arg(args, XtPointer);
     fixed_width=va_arg(args, int);
-    fc_snprintf(button_name, sizeof(button_name), "button%d", i++);
+    my_snprintf(button_name, sizeof(button_name), "button%d", i++);
     
     button=XtVaCreateManagedWidget(button_name, commandWidgetClass, 
 				   dform, NULL);
@@ -701,7 +701,7 @@ static int number_of_columns(int n)
   double sqrt(); double ceil();
   return ceil(sqrt((double)n/5.0));
 #else
-  fc_assert(MAX_SELECT_UNITS == 100);
+  assert(MAX_SELECT_UNITS == 100);
   if(n<=5) return 1;
   else if(n<=20) return 2;
   else if(n<=45) return 3;
@@ -767,7 +767,7 @@ void popup_unit_select_dialog(struct tile *ptile)
 
     pcity = player_find_city_by_id(client.conn.playing, punit->homecity);
     
-    fc_snprintf(buffer, sizeof(buffer), "%s(%s)\n%s", 
+    my_snprintf(buffer, sizeof(buffer), "%s(%s)\n%s", 
 	    utype_name_translation(punittemp), 
 	    pcity ? city_name(pcity) : "",
 	    unit_activity_text(punit));
@@ -933,7 +933,7 @@ void create_races_dialog(struct player *pplayer)
     }
   } nations_iterate_end;
   maxracelen = MIN(maxracelen, MAX_LEN_NAME-1);
-  fc_snprintf(maxracename, sizeof(maxracename), "%*s", maxracelen+2, "W");
+  my_snprintf(maxracename, sizeof(maxracename), "%*s", maxracelen+2, "W");
 
   races_dialog_shell = I_T(XtCreatePopupShell("racespopup", 
 					  transientShellWidgetClass,
@@ -976,7 +976,7 @@ void create_races_dialog(struct player *pplayer)
 
     if (j == 0) {
       index = i * per_row;
-      fc_snprintf(namebuf, sizeof(namebuf), "racestoggle%d", index);
+      my_snprintf(namebuf, sizeof(namebuf), "racestoggle%d", index);
       if (i == 0) {
 	races_toggles[index] =
 	  XtVaCreateManagedWidget(namebuf,
@@ -998,7 +998,7 @@ void create_races_dialog(struct player *pplayer)
       }
     } else {
       index = i * per_row + j;
-      fc_snprintf(namebuf, sizeof(namebuf), "racestoggle%d", index);
+      my_snprintf(namebuf, sizeof(namebuf), "racestoggle%d", index);
       if (i == 0) {
 	races_toggles[index] =
 	  XtVaCreateManagedWidget(namebuf,
@@ -1125,7 +1125,7 @@ void create_races_dialog(struct player *pplayer)
 
   for( i = 0; i < ((b_s_num-1)/per_row)+1; i++) {
     index = i * per_row;
-    fc_snprintf(namebuf, sizeof(namebuf), "racesstyle%d", index);
+    my_snprintf(namebuf, sizeof(namebuf), "racesstyle%d", index);
     if( i == 0 ) {
       races_style_toggles[index] =
 	XtVaCreateManagedWidget(namebuf,
@@ -1149,7 +1149,7 @@ void create_races_dialog(struct player *pplayer)
     for( j = 1; j < per_row; j++) {
       index = i * per_row + j;
       if( index >= b_s_num ) break;
-      fc_snprintf(namebuf, sizeof(namebuf), "racesstyle%d", index);
+      my_snprintf(namebuf, sizeof(namebuf), "racesstyle%d", index);
       if( i == 0 ) {
 	races_style_toggles[index] =
 	  XtVaCreateManagedWidget(namebuf,
@@ -1306,8 +1306,10 @@ void races_toggles_set_sensitive(void)
         nation_index(races_toggles_to_nations[races_buttons_get_current()]);
     }
 
-    log_debug("  [%d]: %d = %s", selected_nation,
-              nation_number(nation), nation_rule_name(nation));
+    freelog(LOG_DEBUG, "  [%d]: %d = %s",
+	    selected_nation,
+	    nation_number(nation),
+	    nation_rule_name(nation));
 
     if (this_index == selected_nation) {
       XawToggleUnsetCurrent(races_toggles[0]);
@@ -1356,7 +1358,7 @@ void races_toggles_callback(Widget w, XtPointer client_data,
 		  INT_TO_XTPOINTER(local_nation_count * j + nation_index(race)));
   }
 
-  races_leader_set_values(race, fc_rand(leader_count));
+  races_leader_set_values(race, myrand(leader_count));
 
   x_simulate_button_click
   (
@@ -1485,7 +1487,7 @@ int races_indirect_compare(const void *first, const void *second)
   first_string = nation_adjective_translation(first_nation);
   second_string = nation_adjective_translation(second_nation);
 
-  return fc_strcasecmp(first_string, second_string);
+  return mystrcasecmp(first_string, second_string);
 }
 
 /**************************************************************************

@@ -21,27 +21,22 @@
 #include <windows.h>
 #include <windowsx.h>
 
-/* utility */
+/* common & utility */
 #include "fcintl.h"
-#include "shared.h"
-#include "support.h"
-
-/* common */
 #include "government.h"
 #include "packets.h"
 #include "player.h"
-#include "research.h"
+#include "shared.h"
+#include "support.h"
 
 /* client */
 #include "client_main.h"
-
-/* client/gui-win32 */
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "mapview.h"
 
-#include "inteldlg.h"
 
+#include "inteldlg.h"
 
 static HWND intel_dialog;
 
@@ -71,14 +66,6 @@ static LONG CALLBACK intel_proc(HWND dlg,UINT message,WPARAM wParam,LPARAM lPara
   return 0;
 }
 
-/**************************************************************************
-  Close an intelligence dialog for the given player.
-**************************************************************************/
-void close_intel_dialog(struct player *p)
-{
-  DestroyWindow(intel_dialog);
-}
-
 /****************************************************************
 
 *****************************************************************/
@@ -104,59 +91,59 @@ static void intel_create_dialog(struct player *p)
 					    NULL);
   vbox=fcwin_vbox_new(intel_dialog,FALSE);
 
-  fc_snprintf(buf, sizeof(buf),
+  my_snprintf(buf, sizeof(buf),
               _("Intelligence Information for the %s Empire"), 
               nation_adjective_for_player(p));
   fcwin_box_add_static(vbox,buf,0,SS_LEFT,FALSE,FALSE,5);
   hbox=fcwin_hbox_new(intel_dialog,FALSE);
   
-  fc_snprintf(buf, sizeof(buf), _("Ruler: %s %s"), 
+  my_snprintf(buf, sizeof(buf), _("Ruler: %s %s"), 
               ruler_title_translation(p),
               player_name(p));
   fcwin_box_add_static(hbox,buf,0,SS_CENTER,TRUE,TRUE,10);
 
-  fc_snprintf(buf, sizeof(buf), _("Government: %s"),  
+  my_snprintf(buf, sizeof(buf), _("Government: %s"),  
 	      government_name_for_player(p));
   fcwin_box_add_static(hbox,buf,0,SS_CENTER,TRUE,TRUE,10);
   fcwin_box_add_box(vbox,hbox,FALSE,FALSE,5);
   
   hbox=fcwin_hbox_new(intel_dialog,FALSE);
   
-  fc_snprintf(buf, sizeof(buf), _("Gold: %d"), p->economic.gold);
+  my_snprintf(buf, sizeof(buf), _("Gold: %d"), p->economic.gold);
   fcwin_box_add_static(hbox,buf,0,SS_CENTER,TRUE,TRUE,10);
   
-  fc_snprintf(buf, sizeof(buf), _("Tax: %d%%"), p->economic.tax);
+  my_snprintf(buf, sizeof(buf), _("Tax: %d%%"), p->economic.tax);
   fcwin_box_add_static(hbox,buf,0,SS_CENTER,TRUE,TRUE,10);
   
-  fc_snprintf(buf, sizeof(buf), _("Science: %d%%"), p->economic.science);
+  my_snprintf(buf, sizeof(buf), _("Science: %d%%"), p->economic.science);
   fcwin_box_add_static(hbox,buf,0,SS_CENTER,TRUE,TRUE,10);
   
-  fc_snprintf(buf, sizeof(buf), _("Luxury: %d%%"), p->economic.luxury);
+  my_snprintf(buf, sizeof(buf), _("Luxury: %d%%"), p->economic.luxury);
   fcwin_box_add_static(hbox,buf,0,SS_CENTER,TRUE,TRUE,10);
   
   fcwin_box_add_box(vbox,hbox,FALSE,FALSE,5);
   
   hbox=fcwin_hbox_new(intel_dialog,FALSE);
    
-  switch (player_research_get(p)->researching) {
+  switch (get_player_research(p)->researching) {
   case A_UNKNOWN:
-    fc_snprintf(buf, sizeof(buf), _("Researching: (Unknown)"));
+    my_snprintf(buf, sizeof(buf), _("Researching: (Unknown)"));
     break;
   case A_UNSET:
-    fc_snprintf(buf, sizeof(buf), _("Researching: Unknown(%d/-)"),
-		player_research_get(p)->bulbs_researched);
+    my_snprintf(buf, sizeof(buf), _("Researching: Unknown(%d/-)"),
+		get_player_research(p)->bulbs_researched);
     break;
   default:
-    fc_snprintf(buf, sizeof(buf), _("Researching: %s(%d/%d)"),
+    my_snprintf(buf, sizeof(buf), _("Researching: %s(%d/%d)"),
 	        advance_name_researching(p),
-	        player_research_get(p)->bulbs_researched,
+	        get_player_research(p)->bulbs_researched,
 	        total_bulbs_required(p));
     break;
   };
   fcwin_box_add_static(hbox,buf,0,SS_CENTER,TRUE,TRUE,10);
   
   pcity = find_palace(p);
-  fc_snprintf(buf, sizeof(buf), _("Capital: %s"),
+  my_snprintf(buf, sizeof(buf), _("Capital: %s"),
               /* TRANS: "unknown" location */
               (!pcity) ? _("(unknown)") : city_name(pcity));
   fcwin_box_add_static(hbox,buf,0,SS_CENTER,TRUE,TRUE,10);
@@ -171,7 +158,7 @@ static void intel_create_dialog(struct player *p)
       if (TECH_KNOWN == player_invention_state(client.conn.playing, i)) {
         sz_strlcpy(tech_list_names[j], advance_name_translation(advance_by_number(i)));
       } else {
-        fc_snprintf(tech_list_names[j], sizeof(tech_list_names[j]),
+        my_snprintf(tech_list_names[j], sizeof(tech_list_names[j]),
                     "%s*", advance_name_translation(advance_by_number(i)));
       }
       ListBox_AddString(lb,tech_list_names[j]);

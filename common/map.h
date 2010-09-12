@@ -13,13 +13,9 @@
 #ifndef FC__MAP_H
 #define FC__MAP_H
 
+#include <assert.h>
 #include <math.h> /* sqrt */
 
-/* utility */
-#include "bitvector.h"
-#include "log.h"                /* fc_assert */
-
-/* common */
 #include "fc_types.h"
 
 #include "tile.h"
@@ -57,9 +53,7 @@ struct civ_map {
     } client;
 
     struct {
-      int mapsize; /* how the map size is defined */
       int size; /* used to calculate [xy]size */
-      int tilesperplayer; /* tiles per player; used to calculate size */
       int seed;
       int riches;
       int huts;
@@ -138,12 +132,10 @@ void map_clear_startpos(const struct tile *ptile);
 #define MAP_INDEX_SIZE (map.xsize * map.ysize)
 
 #ifdef DEBUG
-#define CHECK_MAP_POS(x,y) \
-  fc_assert(is_normal_map_pos((x),(y)))
-#define CHECK_NATIVE_POS(x, y) \
-  fc_assert((x) >= 0 && (x) < map.xsize && (y) >= 0 && (y) < map.ysize)
-#define CHECK_INDEX(index) \
-  fc_assert((index) >= 0 && (index) < MAP_INDEX_SIZE)
+#define CHECK_MAP_POS(x,y) assert(is_normal_map_pos((x),(y)))
+#define CHECK_NATIVE_POS(x, y) assert((x) >= 0 && (x) < map.xsize \
+				      && (y) >= 0 && (y) < map.ysize)
+#define CHECK_INDEX(index) assert((index) >= 0 && (index) < MAP_INDEX_SIZE)
 #else
 #define CHECK_MAP_POS(x,y) ((void)0)
 #define CHECK_NATIVE_POS(x, y) ((void)0)
@@ -478,35 +470,25 @@ extern const int DIR_DY[8];
 #define MAP_MIN_HUTS             0
 #define MAP_MAX_HUTS             500
 
-/* How the map size is defined:
- * 0: using the number of tiles / 1000
- * 1: define the number of (land) tiles per player; the setting 'landmass'
- *    and the number of players are used to calculate the map size
- * 2: xsize and ysize are defined */
-#define MAP_DEFAULT_MAPSIZE  0
-
 /* Size of the map in thousands of tiles.  Setting the maximal size over
  * than 30 is dangerous, because some parts of the code (e.g. path finding)
  * assume the tile index is of type (signed short int). */
 #define MAP_DEFAULT_SIZE         4
 #define MAP_MIN_SIZE             1
-#define MAP_MAX_SIZE             128
-
-#define MAP_DEFAULT_TILESPERPLAYER      100
-#define MAP_MIN_TILESPERPLAYER            1
-#define MAP_MAX_TILESPERPLAYER         1000
+#define MAP_MAX_SIZE             30
 
 /* This defines the maximum linear size in _map_ coordinates.
  * This must be smaller than 255 because of the way coordinates are sent
  * across the network. */
-#define MAP_DEFAULT_LINEAR_SIZE  64
-#define MAP_MAX_LINEAR_SIZE      512
+#define MAP_MAX_LINEAR_SIZE      254
 #define MAP_MIN_LINEAR_SIZE      8
 #define MAP_MAX_WIDTH            MAP_MAX_LINEAR_SIZE
 #define MAP_MAX_HEIGHT           MAP_MAX_LINEAR_SIZE
 
 #define MAP_ORIGINAL_TOPO        TF_WRAPX
 #define MAP_DEFAULT_TOPO         TF_WRAPX
+#define MAP_MIN_TOPO             0
+#define MAP_MAX_TOPO             15
 
 #define MAP_DEFAULT_SEED         0
 #define MAP_MIN_SEED             0
@@ -529,8 +511,12 @@ extern const int DIR_DY[8];
 #define MAP_MAX_WETNESS          100
 
 #define MAP_DEFAULT_GENERATOR    1
+#define MAP_MIN_GENERATOR        1
+#define MAP_MAX_GENERATOR        3
 
 #define MAP_DEFAULT_STARTPOS     0
+#define MAP_MIN_STARTPOS         0
+#define MAP_MAX_STARTPOS         4
 
 #define MAP_DEFAULT_TINYISLES    FALSE
 #define MAP_MIN_TINYISLES        FALSE

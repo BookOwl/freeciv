@@ -13,13 +13,8 @@
 #ifndef FC__UNIT_H
 #define FC__UNIT_H
 
-/* utility */
-#include "bitvector.h"
-
-/* common */
-#include "ai.h"                 /* FC_AI_LAST */
-#include "base.h"
 #include "fc_types.h"
+#include "base.h"
 #include "terrain.h"		/* enum tile_special_type */
 #include "unittype.h"
 #include "vision.h"
@@ -114,9 +109,22 @@ enum unit_upgrade_result {
   UR_NOT_CITY_OWNER,
   UR_NOT_ENOUGH_ROOM
 };
+    
+struct unit_ai {
+  bool control; /* 0: not automated    1: automated */
+  enum ai_unit_task ai_role;
+  /* The following are unit ids or special indicator values (<=0) */
+  int ferryboat; /* the ferryboat assigned to us */
+  int passenger; /* the unit assigned to this ferryboat */
+  int bodyguard; /* the unit bodyguarding us */
+  int charge; /* the unit this unit is bodyguarding */
 
-struct unit_adv {
-  enum ai_unit_task role;
+  struct tile *prev_struct, *cur_struct;
+  struct tile **prev_pos, **cur_pos;
+
+  int target; /* target we hunt */
+  int hunted; /* if a player is hunting us, set by that player */
+  bool done;  /* we are done controlling this unit this turn */
 };
 
 struct unit_order {
@@ -139,10 +147,10 @@ struct unit {
   int hp;
   int veteran;
   int fuel;
-
-  struct tile *goto_tile; /* May be NULL. */
-
+  int birth_turn;
+  struct unit_ai ai;
   enum unit_activity activity;
+  struct tile *goto_tile; /* May be NULL. */
 
   /* The amount of work that has been done on the current activity.  This
    * is counted in turns but is multiplied by ACTIVITY_COUNT (which allows
@@ -151,15 +159,11 @@ struct unit {
 
   enum tile_special_type activity_target;
   Base_type_id           activity_base;
-
-  /* Previous activity, so it can be resumed without loss of progress
-   * if the user changes their mind during a turn. */
-  enum unit_activity changed_from;
-  int changed_from_count;
-  enum tile_special_type changed_from_target;
-  Base_type_id           changed_from_base;
-
-  bool ai_controlled; /* 0: not automated; 1: automated */
+  enum unit_focus_status focus_status;
+  int ord_map, ord_city;
+  /* ord_map and ord_city are the order index of this unit in tile.units
+     and city.units_supported; they are only used for save/reload */
+  bool debug;
   bool moved;
   bool paradropped;
 
@@ -178,44 +182,22 @@ struct unit {
 #define BATTLEGROUP_NONE (-1)
   int battlegroup;
 
+  struct {
+    /* Equivalent to pcity->client.color.  Only for F_CITIES units. */
+    bool colored;
+    int color_index;
+  } client;
+  struct {
+    struct vision *vision;
+  } server;
+
   bool has_orders;
   struct {
     int length, index;
-    bool repeat;   /* The path is to be repeated on completion. */
-    bool vigilant; /* Orders should be cleared if an enemy is met. */
+    bool repeat;	/* The path is to be repeated on completion. */
+    bool vigilant;	/* Orders should be cleared if an enemy is met. */
     struct unit_order *list;
   } orders;
-
-  union {
-    struct {
-      /* Only used at the client (the server is omniscient; ./client/). */
-
-      enum unit_focus_status focus_status;
-
-      /* Equivalent to pcity->client.color. Only for F_CITIES units. */
-      bool colored;
-      int color_index;
-    } client;
-
-    struct {
-      /* Only used in the server (./ai/ and ./server/). */
-
-      bool debug;
-
-      struct unit_adv *adv;
-      void *ais[FC_AI_LAST];
-      int birth_turn;
-
-      /* ord_map and ord_city are the order index of this unit in tile.units
-       * and city.units_supported; they are only used for save/reload */
-      int ord_map;
-      int ord_city;
-
-      struct vision *vision;
-      time_t action_timestamp;
-      int action_turn;
-    } server;
-  };
 };
 
 bool is_real_activity(enum unit_activity activity);
@@ -244,9 +226,6 @@ bool unit_can_help_build_wonder(const struct unit *punit,
 				const struct city *pcity);
 bool unit_can_help_build_wonder_here(const struct unit *punit);
 bool unit_can_est_trade_route_here(const struct unit *punit);
-bool base_unit_can_airlift_to(const struct player *restriction,
-                              const struct unit *punit,
-                              const struct city *pcity);
 bool unit_can_airlift_to(const struct unit *punit, const struct city *pcity);
 bool unit_has_orders(const struct unit *punit);
 
@@ -285,7 +264,6 @@ int get_activity_rate_this_turn(const struct unit *punit);
 int get_turns_for_activity_at(const struct unit *punit,
 			      enum unit_activity activity,
 			      const struct tile *ptile);
-bool activity_requires_target(enum unit_activity activity);
 bool can_unit_do_autosettlers(const struct unit *punit); 
 bool is_unit_activity_on_tile(enum unit_activity activity,
 			      const struct tile *ptile);
@@ -349,16 +327,10 @@ enum unit_upgrade_result test_unit_upgrade(const struct unit *punit,
 					   bool is_free);
 enum unit_upgrade_result get_unit_upgrade_info(char *buf, size_t bufsz,
 					       const struct unit *punit);
-bool test_unit_transform(const struct unit *punit);
-
 bool is_losing_hp(const struct unit *punit);
 bool unit_type_is_losing_hp(const struct player *pplayer,
                             const struct unit_type *punittype);
 
 bool unit_alive(int id);
-
-void *unit_ai_data(const struct unit *punit, const struct ai_type *ai);
-void unit_set_ai_data(struct unit *punit, const struct ai_type *ai,
-                      void *data);
 
 #endif  /* FC__UNIT_H */

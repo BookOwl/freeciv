@@ -45,7 +45,7 @@ const bool gui_use_transliteration = FALSE;
 void set_city_names_font_sizes(int my_city_names_font_size,
 			       int my_city_productions_font_size)
 {
-  log_error("Unimplemented set_city_names_font_sizes.");
+  freelog(LOG_ERROR, "Unimplemented set_city_names_font_sizes.");
   /* PORTME */
 }
 
@@ -102,7 +102,7 @@ enum gui_type get_gui_type(void)
 /**************************************************************************
  Update the connected users list at pregame state.
 **************************************************************************/
-void real_update_conn_list_dialog(void)
+void update_conn_list_dialog(void)
 {
   /* PORTME */
 }
@@ -193,7 +193,7 @@ void add_idle_callback(void (callback)(void *), void *data)
   /* PORTME */
 
   /* This is a reasonable fallback if it's not ported. */
-  log_error("Unimplemented add_idle_callback.");
+  freelog(LOG_ERROR, "Unimplemented add_idle_callback.");
   (callback)(data);
 }
 

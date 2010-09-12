@@ -4,7 +4,6 @@ if CLIENT
 CLIENT_FILES =				\
 	hex2t.tilespec			\
 	amplio.tilespec			\
-	amplio2.tilespec		\
 	isophex.tilespec		\
 	isotrident.tilespec		\
 	trident.tilespec		\
@@ -26,9 +25,7 @@ if SERVER
 SERVER_FILES = \
 	civ1.serv \
 	civ2.serv \
-	default.serv \
-	experimental.serv \
-	multiplayer.serv
+	default.serv
 else
 SERVER_FILES =
 endif
@@ -47,7 +44,6 @@ EXTRA_DIST = \
 	civserver.room.in	\
 	hex2t.tilespec	\
 	amplio.tilespec	\
-	amplio2.tilespec \
 	isophex.tilespec	\
 	isotrident.tilespec \
 	trident.tilespec	\
@@ -55,19 +51,17 @@ EXTRA_DIST = \
 	helpdata.txt	\
 	civ1.serv	\
 	civ2.serv	\
-	default.serv	\
-	experimental.serv \
-	multiplayer.serv
+	default.serv
 
 if CLIENT
-CLIENTDATADIRS = amplio amplio2 misc flags buildings isotrident trident\
- isophex hex2t stdsounds themes wonders
+CLIENTDATADIRS = amplio misc flags buildings isotrident trident isophex \
+ hex2t stdsounds themes wonders
 else
 CLIENTDATADIRS = 
 endif
 
 if SERVER
-SERVERDATADIRS = default civ1 civ2 experimental multiplayer scenario nation
+SERVERDATADIRS = default civ1 civ2 scenario nation
 else
 SERVERDATADIRS = 
 endif

@@ -181,9 +181,6 @@ Upkeep_Free
     Improvements with amount or less upkeep cost become free to upkeep (others 
 are unaffected).
 
-Tech_Upkeep_Free
-    If this value is greater than 0, the tech upkeep is reduced by this value.
-
 No_Unhappy
     No citizens in the city are ever unhappy.
 
@@ -327,10 +324,3 @@ Tile_Workable
 Migration_Pct
     Increase the calculated migration score for the a city by amount in
     percent.
-
-City_Radius_Sq
-    Increase the squared city radius by amount.
-
-City_Build_Slots
-    Increase the number of units with no population cost a city can build in
-    a turn if there are enough shields.

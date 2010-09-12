@@ -15,9 +15,7 @@
 #include <config.h>
 #endif
 
-/* utility */
 #include "log.h"
-#include "shared.h"
 
 #include "sprite.h"
 
@@ -197,7 +195,7 @@ struct sprite *load_gfxfile(const char *filename)
   GdkPixbuf *im;
 
   if (!(im = gdk_pixbuf_new_from_file(filename, NULL))) {
-    log_fatal("Failed reading graphics file: \"%s\"", filename);
+    freelog(LOG_FATAL, "Failed reading graphics file: \"%s\"", filename);
     exit(EXIT_FAILURE);
   }
 

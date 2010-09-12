@@ -20,7 +20,6 @@
 /* utility */
 #include "fcintl.h"
 #include "log.h"
-#include "string_vector.h"
 
 /* gui-sdl */
 #include "themespec.h"
@@ -38,7 +37,7 @@ void gui_load_theme(const char *directory, const char *theme_name)
   /* free previous loaded theme, if any */
   theme_free(theme);
   
-  fc_snprintf(buf, sizeof(buf), "%s/%s/theme", directory, theme_name);
+  my_snprintf(buf, sizeof(buf), "%s/%s/theme", directory, theme_name);
   
   themespec_try_read(buf);
   theme_load_sprites(theme);
@@ -51,9 +50,11 @@ void gui_clear_theme(void)
 {
   theme_free(theme);
   if (!load_theme(gui_sdl_default_theme_name)) {
-    /* TRANS: No full stop after the URL, could cause confusion. */
-    log_fatal(_("No gui-sdl theme was found. For instructions on how to "
-                "get one, please visit %s"), WIKI_URL);
+    freelog(LOG_FATAL,
+            /* TRANS: No full stop after the URL, could cause confusion. */
+            _("No gui-sdl theme was found. For instructions on how to get one,"
+              " please visit %s"),
+            WIKI_URL);
     exit(EXIT_FAILURE);
   }
 }
@@ -66,18 +67,19 @@ void gui_clear_theme(void)
 *****************************************************************************/
 char **get_gui_specific_themes_directories(int *count)
 {
-  const struct strvec *data_dirs = get_data_dirs();
-  char **directories = fc_malloc(strvec_size(data_dirs) * sizeof(char *));  
-  int i = 0;
+  int i;
 
-  *count = strvec_size(data_dirs);
-  strvec_iterate(data_dirs, data_dir) {
-    char buf[strlen(data_dir) + strlen("/themes/gui-sdl") + 1];
+  const char **data_directories = get_data_dirs(count);
+
+  char **directories = fc_malloc(sizeof(char *) * *count);  
+
+  for (i = 0; i < *count; i++) {
+    char buf[strlen(data_directories[i]) + strlen("/themes/gui-sdl") + 1];
     
-    fc_snprintf(buf, sizeof(buf), "%s/themes/gui-sdl", data_dir);
+    my_snprintf(buf, sizeof(buf), "%s/themes/gui-sdl", data_directories[i]);
 
-    directories[i++] = fc_strdup(buf);
-  } strvec_iterate_end;
+    directories[i] = mystrdup(buf);
+  }
 
   return directories;
 }
@@ -109,7 +111,7 @@ char **get_useable_themes_in_directory(const char *directory, int *count)
     char buf[strlen(directory) + strlen(entry->d_name) + 32];
     struct stat stat_result;
 
-    fc_snprintf(buf, sizeof(buf),
+    my_snprintf(buf, sizeof(buf),
 		"%s/%s/theme.themespec", directory, entry->d_name);
     
     if (fc_stat(buf, &stat_result) != 0) {
@@ -130,7 +132,7 @@ char **get_useable_themes_in_directory(const char *directory, int *count)
       t_size *= 2;
     }
 
-    theme_names[*count] = fc_strdup(entry->d_name);
+    theme_names[*count] = mystrdup(entry->d_name);
     (*count)++;
   }
 

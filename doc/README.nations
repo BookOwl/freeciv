@@ -29,7 +29,7 @@ data/nation/<nationname>.ruleset
   ok though.
   - The name should be the same as the name of the nation inside the
   ruleset file.
-  - The file must be encoded in UTF-8.
+  - The file must be encoded in Unicode.
 
 data/default/nations.ruleset
 
@@ -242,7 +242,7 @@ Leaders
 =======
 
 A leader should be a historically notable political leader of the
-nation. Two living persons per nation is permitted - one of each sex.
+nation. Only one living person per nation is permitted.
 
 An ideal leader list should contain between five and ten names.
 

@@ -21,14 +21,12 @@
 #include <gdk/gdkkeysyms.h>
 
 /* utility */
-#include "bitvector.h"
 #include "fcintl.h"
 #include "hash.h"
 #include "log.h"
 #include "mem.h"
 
 /* common */
-#include "fc_interface.h"
 #include "game.h"
 #include "map.h"
 #include "movement.h"
@@ -620,8 +618,8 @@ static const char *objtype_get_name(int objtype)
     break;
 
   default:
-    log_error("Unhandled request to get name of object type %d "
-              "in objtype_get_name().", objtype);
+    freelog(LOG_ERROR, "Unhandled request to get name of object type %d "
+            "in objtype_get_name().", objtype);
     break;
   }
 
@@ -667,9 +665,9 @@ static int objtype_get_id_from_object(int objtype, gpointer object)
     break;
 
   default:
-    log_error("Unhandled request to get object ID from "
-              "object %p of type %d (%s) in objtype_get_id_from_object().",
-              object, objtype, objtype_get_name(objtype));
+    freelog(LOG_ERROR, "Unhandled request to get object ID from "
+            "object %p of type %d (%s) in objtype_get_id_from_object().",
+            object, objtype, objtype_get_name(objtype));
     break;
   }
 
@@ -692,15 +690,15 @@ static gpointer objtype_get_object_from_id(int objtype, int id)
     return game_find_city_by_number(id);
     break;
   case OBJTYPE_PLAYER:
-    return player_by_number(id);
+    return valid_player_by_number(id);
     break;
   case OBJTYPE_GAME:
     return &game;
     break;
   default:
-    log_error("Unhandled request to get object of type %d (%s) "
-              "with ID %d in objtype_get_object_from_id().",
-              objtype, objtype_get_name(objtype), id);
+    freelog(LOG_ERROR, "Unhandled request to get object of type %d (%s) "
+            "with ID %d in objtype_get_object_from_id().",
+            objtype, objtype_get_name(objtype), id);
     break;
   }
 
@@ -725,9 +723,9 @@ static bool objtype_is_conserved(int objtype)
     return FALSE;
     break;
   default:
-    log_error("Unhandled request for object type "
-              "%d (%s) in objtype_is_conserved().",
-              objtype, objtype_get_name(objtype));
+    freelog(LOG_ERROR, "Unhandled request for object type "
+            "%d (%s) in objtype_is_conserved().",
+            objtype, objtype_get_name(objtype));
     break;
   }
 
@@ -854,7 +852,7 @@ static int propval_as_string(struct propval *pv, char *buf, int buflen)
     } improvement_iterate_end;
     /* TRANS: "Number of buildings, number of small
      * wonders (e.g. palace), number of great wonders." */
-    ret = fc_snprintf(buf, buflen, _("%db %ds %dW"),
+    ret = my_snprintf(buf, buflen, _("%db %ds %dW"),
                       building_count, small_wonder_count,
                       great_wonder_count);
     break;
@@ -866,7 +864,7 @@ static int propval_as_string(struct propval *pv, char *buf, int buflen)
       }
     } advance_index_iterate_end;
     /* TRANS: "Number of technologies known". */
-    ret = fc_snprintf(buf, buflen, _("%d known"), count);
+    ret = my_snprintf(buf, buflen, _("%d known"), count);
     break;
 
   case VALTYPE_BV_SPECIAL:
@@ -877,7 +875,7 @@ static int propval_as_string(struct propval *pv, char *buf, int buflen)
     } tile_special_type_iterate_end;
     /* TRANS: "The number of terrain specials (e.g. road,
      * rail, hut, etc.) present on a tile." */
-    ret = fc_snprintf(buf, buflen, _("%d present"), count);
+    ret = my_snprintf(buf, buflen, _("%d present"), count);
     break;
 
   case VALTYPE_BV_BASES:
@@ -886,13 +884,13 @@ static int propval_as_string(struct propval *pv, char *buf, int buflen)
         count++;
       }
     } base_type_iterate_end;
-    ret = fc_snprintf(buf, buflen, _("%d present"), count);
+    ret = my_snprintf(buf, buflen, _("%d present"), count);
     break;
 
   case VALTYPE_STRING:
     /* Assume it is a very long string. */
     count = strlen(pv->data.v_const_string);
-    ret = fc_snprintf(buf, buflen, PL_("%d byte", "%d bytes", count),
+    ret = my_snprintf(buf, buflen, PL_("%d byte", "%d bytes", count),
                       count);
     break;
 
@@ -916,12 +914,12 @@ static int built_status_to_string(char *buf, int buflen,
 
   if (turn_built == I_NEVER) {
     /* TRANS: Improvement never built. */
-    ret = fc_snprintf(buf, buflen, "%s", _("(never)"));
+    ret = my_snprintf(buf, buflen, "%s", _("(never)"));
   } else if (turn_built == I_DESTROYED) {
     /* TRANS: Improvement was destroyed. */
-    ret = fc_snprintf(buf, buflen, "%s", _("(destroyed)"));
+    ret = my_snprintf(buf, buflen, "%s", _("(destroyed)"));
   } else {
-    ret = fc_snprintf(buf, buflen, "%d", turn_built);
+    ret = my_snprintf(buf, buflen, "%d", turn_built);
   }
 
   return ret;
@@ -988,7 +986,7 @@ static struct propval *propval_copy(struct propval *pv)
 
   switch (pv->valtype) {
   case VALTYPE_STRING:
-    pv_copy->data.v_string = fc_strdup(pv->data.v_string);
+    pv_copy->data.v_string = mystrdup(pv->data.v_string);
     pv_copy->must_free = TRUE;
     break;
   case VALTYPE_PIXBUF:
@@ -1062,9 +1060,10 @@ static void propval_free_data(struct propval *pv)
     free(pv->data.v_pointer);
     break;
   default:
-    log_error("Unhandled request to free data %p "
-              "(type %s) in propval_free_data().",
-              pv->data.v_pointer, valtype_get_name(pv->valtype));
+    freelog(LOG_FATAL, "Unhandled request to free data %p "
+            "(type %s) in propval_free_data().",
+            pv->data.v_pointer, valtype_get_name(pv->valtype));
+    assert(FALSE);
     break;
   }
   pv->data.v_pointer = NULL;
@@ -1306,10 +1305,10 @@ static void objbind_request_destroy_object(struct objbind *ob)
     dsend_packet_edit_player_remove(my_conn, id);
     break;
   default:
-    log_error("Unhandled request to destroy object %p (ID %d) "
-              "of type %d (%s) in objbind_request_destroy_object().",
-              objbind_get_object(ob), id, objtype,
-              objtype_get_name(objtype));
+    freelog(LOG_ERROR, "Unhandled request to destroy object %p (ID %d) "
+            "of type %d (%s) in objbind_request_destroy_object().",
+            objbind_get_object(ob), id, objtype,
+            objtype_get_name(objtype));
     break;
   }
 }
@@ -1404,35 +1403,17 @@ static struct propval *objbind_get_value_from_object(struct objbind *ob,
     case OPID_TILE_VISION:
       size = sizeof(struct tile_vision_data);
       pv->data.v_tile_vision = fc_malloc(size);
-
-      /* The server saves the known tiles and the player vision in special
-         bitvectors with the number of tiles as index. Here we want the
-         information for one tile. Thus, the data is transformed to
-         bitvectors with the number of player slots as index. */
-      BV_CLR_ALL(pv->data.v_tile_vision->tile_known);
-      players_iterate(pplayer) {
-        if (dbv_isset(&pplayer->tile_known, tile_index(ptile))) {
-          BV_SET(pv->data.v_tile_vision->tile_known,
-                 player_index(pplayer));
-        }
-      } players_iterate_end;
-
+      pv->data.v_tile_vision->tile_known = ptile->tile_known;
       vision_layer_iterate(v) {
-        BV_CLR_ALL(pv->data.v_tile_vision->tile_seen[v]);
-        players_iterate(pplayer) {
-          if (fc_funcs->player_tile_vision_get(ptile, pplayer, v)) {
-            BV_SET(pv->data.v_tile_vision->tile_seen[v],
-                   player_index(pplayer));
-          }
-        } players_iterate_end;
+        pv->data.v_tile_vision->tile_seen[v] = ptile->tile_seen[v];
       } vision_layer_iterate_end;
       pv->must_free = TRUE;
       break;
     default:
-      log_error("Unhandled request for value of property %d "
-                "(%s) from object of type \"%s\" in "
-                "objbind_get_value_from_object().",
-                propid, objprop_get_name(op), objtype_get_name(objtype));
+      freelog(LOG_ERROR, "Unhandled request for value of property %d "
+              "(%s) from object of type \"%s\" in "
+              "objbind_get_value_from_object().",
+              propid, objprop_get_name(op), objtype_get_name(objtype));
       goto FAILED;
       break;
     }
@@ -1485,10 +1466,10 @@ static struct propval *objbind_get_value_from_object(struct objbind *ob,
       pv->data.v_int = punit->veteran;
       break;
     default:
-      log_error("Unhandled request for value of property %d "
-                "(%s) from object of type \"%s\" in "
-                "objbind_get_value_from_object().",
-                propid, objprop_get_name(op), objtype_get_name(objtype));
+      freelog(LOG_ERROR, "Unhandled request for value of property %d "
+              "(%s) from object of type \"%s\" in "
+              "objbind_get_value_from_object().",
+              propid, objprop_get_name(op), objtype_get_name(objtype));
       goto FAILED;
       break;
     }
@@ -1533,10 +1514,10 @@ static struct propval *objbind_get_value_from_object(struct objbind *ob,
       pv->data.v_int = pcity->shield_stock;
       break;
     default:
-      log_error("Unhandled request for value of property %d "
-                "(%s) from object of type \"%s\" in "
-                "objbind_get_value_from_object().",
-                propid, objprop_get_name(op), objtype_get_name(objtype));
+      freelog(LOG_ERROR, "Unhandled request for value of property %d "
+              "(%s) from object of type \"%s\" in "
+              "objbind_get_value_from_object().",
+              propid, objprop_get_name(op), objtype_get_name(objtype));
       goto FAILED;
       break;
     }
@@ -1570,10 +1551,10 @@ static struct propval *objbind_get_value_from_object(struct objbind *ob,
       pv->data.v_int = pplayer->economic.gold;
       break;
     default:
-      log_error("Unhandled request for value of property %d "
-                "(%s) from object of type \"%s\" in "
-                "objbind_get_value_from_object().",
-                propid, objprop_get_name(op), objtype_get_name(objtype));
+      freelog(LOG_ERROR, "Unhandled request for value of property %d "
+              "(%s) from object of type \"%s\" in "
+              "objbind_get_value_from_object().",
+              propid, objprop_get_name(op), objtype_get_name(objtype));
       goto FAILED;
       break;
     }
@@ -1602,10 +1583,10 @@ static struct propval *objbind_get_value_from_object(struct objbind *ob,
       pv->data.v_bool = pgame->scenario.players;
       break;
     default:
-      log_error("Unhandled request for value of property %d "
-                "(%s) from object of type \"%s\" in "
-                "objbind_get_value_from_object().",
-                propid, objprop_get_name(op), objtype_get_name(objtype));
+      freelog(LOG_ERROR, "Unhandled request for value of property %d "
+              "(%s) from object of type \"%s\" in "
+              "objbind_get_value_from_object().",
+              propid, objprop_get_name(op), objtype_get_name(objtype));
       goto FAILED;
       break;
     }
@@ -1693,10 +1674,10 @@ static bool objbind_get_allowed_value_span(struct objbind *ob,
       big_step = 3;
       break;
     default:
-      log_error("Unhandled request for value range of "
-                "property %d (%s) from object of type \"%s\" in "
-                "objbind_get_allowed_value_span().",
-                propid, objprop_get_name(op), objtype_get_name(objtype));
+      freelog(LOG_ERROR, "Unhandled request for value range of "
+              "property %d (%s) from object of type \"%s\" in "
+              "objbind_get_allowed_value_span().",
+              propid, objprop_get_name(op), objtype_get_name(objtype));
       ok = FALSE;
       break;
     }
@@ -1728,10 +1709,10 @@ static bool objbind_get_allowed_value_span(struct objbind *ob,
       big_step = 10;
       break;
     default:
-      log_error("Unhandled request for value range of "
-                "property %d (%s) from object of type \"%s\" in "
-                "objbind_get_allowed_value_span().",
-                propid, objprop_get_name(op), objtype_get_name(objtype));
+      freelog(LOG_ERROR, "Unhandled request for value range of "
+              "property %d (%s) from object of type \"%s\" in "
+              "objbind_get_allowed_value_span().",
+              propid, objprop_get_name(op), objtype_get_name(objtype));
       ok = FALSE;
       break;
     }
@@ -1746,10 +1727,10 @@ static bool objbind_get_allowed_value_span(struct objbind *ob,
       big_step = 100;
       break;
     default:
-      log_error("Unhandled request for value range of "
-                "property %d (%s) from object of type \"%s\" in "
-                "objbind_get_allowed_value_span().",
-                propid, objprop_get_name(op), objtype_get_name(objtype));
+      freelog(LOG_ERROR, "Unhandled request for value range of "
+              "property %d (%s) from object of type \"%s\" in "
+              "objbind_get_allowed_value_span().",
+              propid, objprop_get_name(op), objtype_get_name(objtype));
       ok = FALSE;
       break;
     }
@@ -1764,10 +1745,10 @@ static bool objbind_get_allowed_value_span(struct objbind *ob,
       big_step = 25;
       break;
     default:
-      log_error("Unhandled request for value range of "
-                "property %d (%s) from object of type \"%s\" in "
-                "objbind_get_allowed_value_span().",
-                propid, objprop_get_name(op), objtype_get_name(objtype));
+      freelog(LOG_ERROR, "Unhandled request for value range of "
+              "property %d (%s) from object of type \"%s\" in "
+              "objbind_get_allowed_value_span().",
+              propid, objprop_get_name(op), objtype_get_name(objtype));
       ok = FALSE;
       break;
     }
@@ -1993,7 +1974,7 @@ static void objbind_pack_current_values(struct objbind *ob,
       return;
     }
 
-    packet->tile = tile_index(ptile);
+    packet->id = tile_index(ptile);
     packet->specials = tile_specials(ptile);
     packet->bases = tile_bases(ptile);
     /* TODO: Set more packet fields. */
@@ -2114,10 +2095,10 @@ static void objbind_pack_modified_value(struct objbind *ob,
       packet->bases = pv->data.v_bv_bases;
       break;
     default:
-      log_error("Unhandled request to pack value of "
-                "property %d (%s) from object of type \"%s\" in "
-                "objbind_pack_modified_value().",
-                propid, objprop_get_name(op), objtype_get_name(objtype));
+      freelog(LOG_ERROR, "Unhandled request to pack value of "
+              "property %d (%s) from object of type \"%s\" in "
+              "objbind_pack_modified_value().",
+              propid, objprop_get_name(op), objtype_get_name(objtype));
       break;
     }
 
@@ -2149,10 +2130,10 @@ static void objbind_pack_modified_value(struct objbind *ob,
       packet->veteran = pv->data.v_int;
       break;
     default:
-      log_error("Unhandled request to pack value of "
-                "property %d (%s) from object of type \"%s\" in "
-                "objbind_pack_modified_value().",
-                propid, objprop_get_name(op), objtype_get_name(objtype));
+      freelog(LOG_ERROR, "Unhandled request to pack value of "
+              "property %d (%s) from object of type \"%s\" in "
+              "objbind_pack_modified_value().",
+              propid, objprop_get_name(op), objtype_get_name(objtype));
       break;
     }
 
@@ -2183,10 +2164,10 @@ static void objbind_pack_modified_value(struct objbind *ob,
       }
       break;
     default:
-      log_error("Unhandled request to pack value of "
-                "property %d (%s) from object of type \"%s\" in "
-                "objbind_pack_modified_value().",
-                propid, objprop_get_name(op), objtype_get_name(objtype));
+      freelog(LOG_ERROR, "Unhandled request to pack value of "
+              "property %d (%s) from object of type \"%s\" in "
+              "objbind_pack_modified_value().",
+              propid, objprop_get_name(op), objtype_get_name(objtype));
       break;
     }
   } else if (objtype == OBJTYPE_PLAYER) {
@@ -2213,10 +2194,10 @@ static void objbind_pack_modified_value(struct objbind *ob,
       packet->gold = pv->data.v_int;
       break;
     default:
-      log_error("Unhandled request to pack value of "
-                "property %d (%s) from object of type \"%s\" in "
-                "objbind_pack_modified_value().",
-                propid, objprop_get_name(op), objtype_get_name(objtype));
+      freelog(LOG_ERROR, "Unhandled request to pack value of "
+              "property %d (%s) from object of type \"%s\" in "
+              "objbind_pack_modified_value().",
+              propid, objprop_get_name(op), objtype_get_name(objtype));
       break;
     }
 
@@ -2240,10 +2221,10 @@ static void objbind_pack_modified_value(struct objbind *ob,
       packet->scenario_players = pv->data.v_bool;
       break;
     default:
-      log_error("Unhandled request to pack value of "
-                "property %d (%s) from object of type \"%s\" in "
-                "objbind_pack_modified_value().",
-                propid, objprop_get_name(op), objtype_get_name(objtype));
+      freelog(LOG_ERROR, "Unhandled request to pack value of "
+              "property %d (%s) from object of type \"%s\" in "
+              "objbind_pack_modified_value().",
+              propid, objprop_get_name(op), objtype_get_name(objtype));
       break;
     }
   }
@@ -2667,9 +2648,9 @@ static void objprop_setup_widget(struct objprop *op)
     break;
 
   default:
-    log_error("Unhandled request to create widget for "
-              "property %d (%s) in objprop_setup_widget().",
-              propid, objprop_get_name(op));
+    freelog(LOG_ERROR, "Unhandled request to create widget for "
+            "property %d (%s) in objprop_setup_widget().",
+            propid, objprop_get_name(op));
     break;
   }
 
@@ -2773,7 +2754,7 @@ static void objprop_refresh_widget(struct objprop *op,
     label = objprop_get_child_widget(op, "value-label");
     if (pv) {
       char buf[16];
-      fc_snprintf(buf, sizeof(buf), "%d", pv->data.v_int);
+      my_snprintf(buf, sizeof(buf), "%d", pv->data.v_int);
       gtk_label_set_text(GTK_LABEL(label), buf);
     } else {
       gtk_label_set_text(GTK_LABEL(label), NULL);
@@ -2828,7 +2809,7 @@ static void objprop_refresh_widget(struct objprop *op,
         gtk_spin_button_set_range(GTK_SPIN_BUTTON(spin), min, max);
         gtk_spin_button_set_increments(GTK_SPIN_BUTTON(spin),
                                        step, big_step);
-        fc_snprintf(buf, sizeof(buf), "/%d", (int) max);
+        my_snprintf(buf, sizeof(buf), "/%d", (int) max);
         gtk_label_set_text(GTK_LABEL(label), buf);
       } else {
         gtk_label_set_text(GTK_LABEL(label), NULL);
@@ -2876,9 +2857,9 @@ static void objprop_refresh_widget(struct objprop *op,
     break;
 
   default:
-    log_error("Widget refresh missing in "
-              "objprop_refresh_widget() for objprop id=%d "
-              "name \"%s\".", propid, objprop_get_name(op));
+    freelog(LOG_ERROR, "Widget refresh missing in "
+            "objprop_refresh_widget() for objprop id=%d "
+            "name \"%s\".", propid, objprop_get_name(op));
     break;
   }
 
@@ -2891,7 +2872,7 @@ static void objprop_refresh_widget(struct objprop *op,
     const char *name = objprop_get_name(op);
     if (modified) {
       char buf[128];
-      fc_snprintf(buf, sizeof(buf),
+      my_snprintf(buf, sizeof(buf),
                   "<span foreground=\"red\">%s</span>", name);
       gtk_label_set_markup(GTK_LABEL(label), buf);
     } else {
@@ -2931,11 +2912,12 @@ static void objprop_set_child_widget(struct objprop *op,
 
   w = objprop_get_widget(op);
   if (!w) {
-    log_error("Cannot store child widget %p under name "
-              "\"%s\" using objprop_set_child_widget for object "
-              "property %d (%s) because objprop_get_widget does "
-              "not return a valid widget.",
-              widget, widget_name, objprop_get_id(op), objprop_get_name(op));
+    freelog(LOG_ERROR, "Cannot store child widget %p under name "
+            "\"%s\" using objprop_set_child_widget for object "
+            "property %d (%s) because objprop_get_widget does "
+            "not return a valid widget.",
+            widget, widget_name, objprop_get_id(op),
+            objprop_get_name(op));
     return;
   }
 
@@ -2957,19 +2939,19 @@ static GtkWidget *objprop_get_child_widget(struct objprop *op,
 
   w = objprop_get_widget(op);
   if (!w) {
-    log_error("Cannot retrieve child widget under name "
-              "\"%s\" using objprop_get_child_widget for object "
-              "property %d (%s) because objprop_get_widget does "
-              "not return a valid widget.",
-              widget_name, objprop_get_id(op), objprop_get_name(op));
+    freelog(LOG_ERROR, "Cannot retrieve child widget under name "
+            "\"%s\" using objprop_get_child_widget for object "
+            "property %d (%s) because objprop_get_widget does "
+            "not return a valid widget.",
+            widget_name, objprop_get_id(op), objprop_get_name(op));
     return NULL;
   }
 
   child = g_object_get_data(G_OBJECT(w), widget_name);
   if (!child) {
-    log_error("Child widget \"%s\" not found for object "
-              "property %d (%s) via objprop_get_child_widget.",
-              widget_name, objprop_get_id(op), objprop_get_name(op));
+    freelog(LOG_ERROR, "Child widget \"%s\" not found for object "
+            "property %d (%s) via objprop_get_child_widget.",
+            widget_name, objprop_get_id(op), objprop_get_name(op));
     return NULL;
   }
 
@@ -3100,9 +3082,9 @@ static struct extviewer *extviewer_new(struct objprop *op)
     break;
 
   default:
-   log_error("Unhandled request to create panel widget "
-             "for property %d (%s) in extviewer_new().",
-             propid, objprop_get_name(op));
+    freelog(LOG_ERROR, "Unhandled request to create panel widget "
+            "for property %d (%s) in extviewer_new().",
+            propid, objprop_get_name(op));
     hbox = gtk_hbox_new(FALSE, 4);
     ev->panel_widget = hbox;
     break;
@@ -3153,9 +3135,9 @@ static struct extviewer *extviewer_new(struct objprop *op)
     textbuf = gtk_text_buffer_new(NULL);
     break;
   default:
-    log_error("Unhandled request to create data store "
-              "for property %d (%s) in extviewer_new().",
-              propid, objprop_get_name(op));
+    freelog(LOG_ERROR, "Unhandled request to create data store "
+            "for property %d (%s) in extviewer_new().",
+            propid, objprop_get_name(op));
     break;
   }
 
@@ -3265,9 +3247,9 @@ static struct extviewer *extviewer_new(struct objprop *op)
     break;
 
   default:
-    log_error("Unhandled request to configure view widget "
-              "for property %d (%s) in extviewer_new().",
-              propid, objprop_get_name(op));
+    freelog(LOG_ERROR, "Unhandled request to configure view widget "
+            "for property %d (%s) in extviewer_new().",
+            propid, objprop_get_name(op));
     break;
   }
 
@@ -3380,11 +3362,10 @@ static void extviewer_refresh_widgets(struct extviewer *ev,
   case OPID_TILE_VISION:
     gtk_list_store_clear(store);
     player_slots_iterate(pslot) {
-      id = player_slot_index(pslot);
+      id = player_number(pslot);
       if (player_slot_is_used(pslot)) {
-        struct player *pplayer = player_slot_get_player(pslot);
-        name = player_name(pplayer);
-        pixbuf = get_flag(pplayer->nation);
+        name = player_name(pslot);
+        pixbuf = get_flag(pslot->nation);
       } else {
         name = "";
         pixbuf = NULL;
@@ -3473,9 +3454,9 @@ static void extviewer_refresh_widgets(struct extviewer *ev,
     break;
 
   default:
-    log_error("Unhandled request to refresh widgets "
-              "extviewer_refresh_widgets() for objprop id=%d "
-              "name \"%s\".", propid, objprop_get_name(op));
+    freelog(LOG_ERROR, "Unhandled request to refresh widgets "
+            "extviewer_refresh_widgets() for objprop id=%d "
+            "name \"%s\".", propid, objprop_get_name(op));
     break;
   }
 }
@@ -3524,9 +3505,9 @@ static void extviewer_clear_widgets(struct extviewer *ev)
     gtk_widget_set_sensitive(ev->view_widget, FALSE);
     break;
   default:
-    log_error("Unhandled request to clear widgets "
-              "in extviewer_clear_widgets() for objprop id=%d "
-              "name \"%s\".", propid, objprop_get_name(op));
+    freelog(LOG_ERROR, "Unhandled request to clear widgets "
+            "in extviewer_clear_widgets() for objprop id=%d "
+            "name \"%s\".", propid, objprop_get_name(op));
     break;
   }
 }
@@ -3669,9 +3650,9 @@ static void extviewer_view_cell_toggled(GtkCellRendererToggle *cell,
     break;
 
   default:
-    log_error("Unhandled widget toggled signal in "
-              "extviewer_view_cell_toggled() for objprop id=%d "
-              "name \"%s\".", propid, objprop_get_name(op));
+    freelog(LOG_ERROR, "Unhandled widget toggled signal in "
+            "extviewer_view_cell_toggled() for objprop id=%d "
+            "name \"%s\".", propid, objprop_get_name(op));
     return;
     break;
   }
@@ -3714,9 +3695,9 @@ static void extviewer_textbuf_changed(GtkTextBuffer *textbuf,
     gtk_label_set_text(GTK_LABEL(ev->panel_label), buf);
     break;
   default:
-    log_error("Unhandled widget modified signal in "
-              "extviewer_textbuf_changed() for objprop id=%d "
-              "name \"%s\".", propid, objprop_get_name(op));
+    freelog(LOG_ERROR, "Unhandled widget modified signal in "
+            "extviewer_textbuf_changed() for objprop id=%d "
+            "name \"%s\".", propid, objprop_get_name(op));
     return;
     break;
   }
@@ -4191,7 +4172,7 @@ property_page_new(int objtype, struct property_editor *pe)
 
   /* Now create the properties panel. */
 
-  fc_snprintf(title, sizeof(title), _("%s Properties"),
+  my_snprintf(title, sizeof(title), _("%s Properties"),
               objtype_get_name(objtype));
   frame = gtk_frame_new(title);
   gtk_widget_set_size_request(frame, 256, -1);
@@ -4531,7 +4512,7 @@ static bool property_page_set_store_value(struct property_page *pp,
     gtk_list_store_set(store, iter, col_id, pv->data.v_bool, -1);
     break;
   case VALTYPE_STRING:
-    if (fc_strlcpy(buf, pv->data.v_string, 28) >= 28) {
+    if (mystrlcpy(buf, pv->data.v_string, 28) >= 28) {
       sz_strlcat(buf, "...");
     }
     for (p = buf; *p; p++) {
@@ -5002,13 +4983,13 @@ static void property_page_create_objects(struct property_page *pp,
     apno = editor_tool_get_applied_player(ETT_UNIT);
     count = editor_tool_get_count(ETT_UNIT);
     value = editor_tool_get_value(ETT_UNIT);
-    dsend_packet_edit_unit_create(my_conn, apno, tile_index(ptile),
+    dsend_packet_edit_unit_create(my_conn, apno, ptile->x, ptile->y,
                                   value, count, tag);
     break;
 
   case OBJTYPE_CITY:
     apno = editor_tool_get_applied_player(ETT_CITY);
-    pplayer = player_by_number(apno);
+    pplayer = valid_player_by_number(apno);
     if (pplayer && hint_tiles) {
       tile_list_iterate(hint_tiles, atile) {
         if (!is_enemy_unit_tile(atile, pplayer)
@@ -5028,7 +5009,7 @@ static void property_page_create_objects(struct property_page *pp,
     }
 
     size = editor_tool_get_size(ETT_CITY);
-    dsend_packet_edit_city_create(my_conn, apno, tile_index(ptile),
+    dsend_packet_edit_city_create(my_conn, apno, ptile->x, ptile->y,
                                   size, tag);
     break;
 
@@ -5037,9 +5018,9 @@ static void property_page_create_objects(struct property_page *pp,
     break;
 
   default:
-    log_error("Unhandled request to create objects of type "
-              "%d (%s) in property_page_create_objects().",
-              objtype, objtype_get_name(objtype));
+    freelog(LOG_ERROR, "Unhandled request to create objects of type "
+            "%d (%s) in property_page_create_objects().",
+            objtype, objtype_get_name(objtype));
     return;
     break;
   }
@@ -5188,10 +5169,10 @@ static void property_page_store_creation_tag(struct property_page *pp,
   key = GINT_TO_POINTER(tag);
 
   if (hash_key_exists(pp->tag_table, key)) {
-    log_error("Attempted to insert object creation tag %d "
-              "twice into tag table for property page %p (%d %s).",
-              tag, pp, property_page_get_objtype(pp),
-              property_page_get_name(pp));
+    freelog(LOG_ERROR, "Attempted to insert object creation tag %d "
+            "twice into tag table for property page %p (%d %s).",
+            tag, pp, property_page_get_objtype(pp),
+            property_page_get_name(pp));
     return;
   }
 
@@ -5301,7 +5282,7 @@ static void property_page_create_button_clicked(GtkButton *button,
   } property_page_objbind_iterate_end;
 
   property_page_create_objects(pp, tiles);
-  tile_list_destroy(tiles);
+  tile_list_free(tiles);
 }
 
 /****************************************************************************
@@ -5620,10 +5601,10 @@ static struct property_filter *property_filter_new(const char *filter)
       switch (pattern[0]) {
       case '!':
         pfp->negate = TRUE;
-        pfp->text = fc_strdup(pattern + 1);
+        pfp->text = mystrdup(pattern + 1);
         break;
       default:
-        pfp->text = fc_strdup(pattern);
+        pfp->text = mystrdup(pattern);
         break;
       }
       pfc->count++;
@@ -5687,7 +5668,7 @@ static bool property_filter_match(struct property_filter *pf,
     for (j = 0; j < pfc->count; j++) {
       pfp = &pfc->conjunction[j];
       match = (pfp->text[0] == '\0'
-               || fc_strcasestr(name, pfp->text));
+               || mystrcasestr(name, pfp->text));
       if (pfp->negate) {
         match = !match;
       }
@@ -5748,8 +5729,8 @@ const char *vision_layer_get_name(enum vision_layer vl)
     return _("Seen (Invis)");
     break;
   default:
-    log_error("Unrecognized vision layer %d in vision_layer_get_name().",
-              vl);
+    freelog(LOG_ERROR, "Unrecognized vision layer %d in "
+            "vision_layer_get_name().", vl);
     break;
   }
 

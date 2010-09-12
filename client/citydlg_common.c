@@ -15,6 +15,8 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
+
 /* utility */
 #include "fcintl.h"
 #include "log.h"
@@ -63,12 +65,11 @@ void generate_citydlg_dimensions(void)
 {
   int min_x = 0, max_x = 0, min_y = 0, max_y = 0;
 
-  /* use maximum possible squared city radius. */
-  city_map_iterate(CITY_MAP_MAX_RADIUS_SQ, city_index, city_x, city_y) {
+  city_map_iterate(city_x, city_y) {
     int canvas_x, canvas_y;
 
-    map_to_gui_vector(tileset, &canvas_x, &canvas_y, CITY_ABS2REL(city_x),
-                      CITY_ABS2REL(city_y));
+    map_to_gui_vector(tileset, &canvas_x, &canvas_y,
+		      city_x - CITY_MAP_RADIUS, city_y - CITY_MAP_RADIUS);
 
     min_x = MIN(canvas_x, min_x);
     max_x = MAX(canvas_x, max_x);
@@ -84,21 +85,21 @@ void generate_citydlg_dimensions(void)
   Converts a (cartesian) city position to citymap canvas coordinates.
   Returns TRUE if the city position is valid.
 **************************************************************************/
-bool city_to_canvas_pos(int *canvas_x, int *canvas_y, int city_x,
-                        int city_y, int city_radius_sq)
+bool city_to_canvas_pos(int *canvas_x, int *canvas_y, int city_x, int city_y)
 {
+  const int x0 = CITY_MAP_RADIUS, y0 = CITY_MAP_RADIUS;
   const int width = get_citydlg_canvas_width();
   const int height = get_citydlg_canvas_height();
 
   /* The citymap is centered over the center of the citydlg canvas. */
-  map_to_gui_vector(tileset, canvas_x, canvas_y, CITY_ABS2REL(city_x),
-                    CITY_ABS2REL(city_y));
+  map_to_gui_vector(tileset, canvas_x, canvas_y, city_x - x0, city_y - y0);
   *canvas_x += (width - tileset_tile_width(tileset)) / 2;
   *canvas_y += (height - tileset_tile_height(tileset)) / 2;
 
-  fc_assert_ret_val(is_valid_city_coords(city_radius_sq, city_x, city_y),
-                    FALSE);
-
+  if (!is_valid_city_coords(city_x, city_y)) {
+    assert(FALSE);
+    return FALSE;
+  }
   return TRUE;
 }
 
@@ -106,12 +107,9 @@ bool city_to_canvas_pos(int *canvas_x, int *canvas_y, int city_x,
   Converts a citymap canvas position to a (cartesian) city coordinate
   position.  Returns TRUE iff the city position is valid.
 **************************************************************************/
-bool canvas_to_city_pos(int *city_x, int *city_y, int city_radius_sq,
-                        int canvas_x, int canvas_y)
+bool canvas_to_city_pos(int *city_x, int *city_y, int canvas_x, int canvas_y)
 {
-#ifdef DEBUG
   int orig_canvas_x = canvas_x, orig_canvas_y = canvas_y;
-#endif
   const int width = get_citydlg_canvas_width();
   const int height = get_citydlg_canvas_height();
 
@@ -137,13 +135,13 @@ bool canvas_to_city_pos(int *city_x, int *city_y, int city_radius_sq,
 
   /* Add on the offset of the top-left corner to get the final
    * coordinates (like in canvas_to_map_pos). */
-  *city_x += CITY_MAP_MAX_RADIUS;
-  *city_y += CITY_MAP_MAX_RADIUS;
+  *city_x += CITY_MAP_RADIUS;
+  *city_y += CITY_MAP_RADIUS;
 
-  log_debug("canvas_to_city_pos(pos=(%d,%d))=(%d,%d)@radius=%d",
-            orig_canvas_x, orig_canvas_y, *city_x, *city_y, city_radius_sq);
+  freelog(LOG_DEBUG, "canvas_to_city_pos(pos=(%d,%d))=(%d,%d)",
+	  orig_canvas_x, orig_canvas_y, *city_x, *city_y);
 
-  return is_valid_city_coords(city_radius_sq, *city_x, *city_y);
+  return is_valid_city_coords(*city_x, *city_y);
 }
 
 /* Iterate over all known tiles in the city.  This iteration follows the
@@ -158,8 +156,8 @@ bool canvas_to_city_pos(int *city_x, int *city_y, int city_radius_sq,
 		    (pcity)->tile->x, (pcity)->tile->y);		\
   _x##_0 -= (_x##_w - tileset_tile_width(tileset)) / 2;			\
   _y##_0 -= (_y##_h - tileset_tile_height(tileset)) / 2;		\
-  log_debug("citydlg: %d,%d + %dx%d",					\
-	    _x##_0, _y##_0, _x##_w, _y##_h);				\
+  freelog(LOG_DEBUG, "citydlg: %d,%d + %dx%d",				\
+	  _x##_0, _y##_0, _x##_w, _y##_h);				\
 									\
   gui_rect_iterate(_x##_0, _y##_0, _x##_w, _y##_h,			\
 		   ptile, pedge, pcorner, _x##_g, _y##_g) {		\
@@ -198,40 +196,6 @@ void city_dialog_redraw_map(struct city *pcity,
 }
 
 /**************************************************************************
-  Return a string describing the the cost for the production of the city
-  considerung several build slots for units.
-**************************************************************************/
-char *city_production_cost_str(const struct city *pcity)
-{
-  static char cost_str[50];
-  int cost = city_production_build_shield_cost(pcity);
-  int build_slots = get_city_bonus(pcity, EFT_CITY_BUILD_SLOTS);
-  int num_units;
-
-  if (build_slots > 1
-      && city_production_build_units(pcity, TRUE, &num_units)) {
-    /* the city could build more than one unit of the selected type */
-    if (num_units == 0) {
-      /* no unit will be finished this turn but one is build */
-      num_units++;
-    }
-
-    if (build_slots > num_units) {
-      /* some build slots for units will be unused */
-      fc_snprintf(cost_str, sizeof(cost_str), "{%d*%d}", num_units, cost);
-    } else {
-      /* maximal number of units will be build */
-      fc_snprintf(cost_str, sizeof(cost_str), "[%d*%d]", num_units, cost);
-    }
-  } else {
-    /* nothing special */
-    fc_snprintf(cost_str, sizeof(cost_str), "%3d", cost);
-  }
-
-  return cost_str;
-}
-
-/**************************************************************************
   Find the city dialog city production text for the given city, and
   place it into the buffer.  This will check the
   concise_city_production option.  pcity may be NULL; in this case a
@@ -240,11 +204,11 @@ char *city_production_cost_str(const struct city *pcity)
 void get_city_dialog_production(struct city *pcity,
 				char *buffer, size_t buffer_len)
 {
-  char time_str[50], *cost_str;
-  int turns, stock;
+  char time[50];
+  int turns, cost, stock;
 
   if (pcity == NULL) {
-    /*
+    /* 
      * Some GUIs use this to build a "filler string" so that they can
      * properly size the widget to hold the string.  This has some
      * obvious problems; the big one is that we have two forms of time
@@ -253,39 +217,36 @@ void get_city_dialog_production(struct city *pcity,
      * translators can fudge it by changing this "filler" string. 
      */
     /* TRANS: Use longer of "XXX turns" and "never" */
-    fc_strlcpy(buffer, Q_("?filler:XXX/XXX XXX turns"), buffer_len);
+    mystrlcpy(buffer, Q_("?filler:XXX/XXX XXX turns"), buffer_len);
 
     return;
   }
 
   if (city_production_has_flag(pcity, IF_GOLD)) {
-    fc_snprintf(buffer, buffer_len, _("%3d gold per turn"),
+    my_snprintf(buffer, buffer_len, _("%3d gold per turn"),
                 MAX(0, pcity->surplus[O_SHIELD]));
     return;
   }
-
   turns = city_production_turns_to_build(pcity, TRUE);
   stock = pcity->shield_stock;
-  cost_str = city_production_cost_str(pcity);
+  cost = city_production_build_shield_cost(pcity);
 
   if (turns < FC_INFINITY) {
     if (concise_city_production) {
-      fc_snprintf(time_str, sizeof(time_str), "%3d", turns);
+      my_snprintf(time, sizeof(time), "%3d", turns);
     } else {
-      fc_snprintf(time_str, sizeof(time_str),
+      my_snprintf(time, sizeof(time),
                   PL_("%3d turn", "%3d turns", turns), turns);
     }
   } else {
-    fc_snprintf(time_str, sizeof(time_str), "%s",
+    my_snprintf(time, sizeof(time), "%s",
                 concise_city_production ? "-" : _("never"));
   }
 
   if (concise_city_production) {
-    fc_snprintf(buffer, buffer_len, _("%3d/%s:%s"), stock, cost_str,
-                time_str);
+    my_snprintf(buffer, buffer_len, _("%3d/%3d:%s"), stock, cost, time);
   } else {
-    fc_snprintf(buffer, buffer_len, _("%3d/%s %s"), stock, cost_str,
-                time_str);
+    my_snprintf(buffer, buffer_len, _("%3d/%3d %s"), stock, cost, time);
   }
 }
 
@@ -309,8 +270,9 @@ void get_city_dialog_production_full(char *buffer, size_t buffer_len,
 
   switch (target.kind) {
   case VUT_IMPROVEMENT:
-    fc_strlcpy(buffer, city_improvement_name_translation
-               (pcity, target.value.building), buffer_len);
+    mystrlcpy(buffer,
+	      city_improvement_name_translation(pcity, target.value.building),
+	      buffer_len);
 
     if (improvement_has_flag(target.value.building, IF_GOLD)) {
       cat_snprintf(buffer, buffer_len, " (--) ");
@@ -350,8 +312,8 @@ void get_city_dialog_production_row(char *buf[], size_t column_size,
   {
     struct unit_type *ptype = target.value.utype;
 
-    fc_strlcpy(buf[1], utype_values_string(ptype), column_size);
-    fc_snprintf(buf[2], column_size, "(%d)", utype_build_shield_cost(ptype));
+    mystrlcpy(buf[1], utype_values_string(ptype), column_size);
+    my_snprintf(buf[2], column_size, "(%d)", utype_build_shield_cost(ptype));
     break;
   }
   case VUT_IMPROVEMENT:
@@ -362,13 +324,13 @@ void get_city_dialog_production_row(char *buf[], size_t column_size,
     /* Total & turns left meaningless on capitalization */
     if (improvement_has_flag(pimprove, IF_GOLD)) {
       buf[1][0] = '\0';
-      fc_snprintf(buf[2], column_size, "---");
+      my_snprintf(buf[2], column_size, "---");
     } else {
       int upkeep = pcity ? city_improvement_upkeep(pcity, pimprove)
                          : pimprove->upkeep;
       /* from city.c city_improvement_name_translation() */
       if (pcity && is_building_replaced(pcity, pimprove, RPT_CERTAIN)) {
-        fc_snprintf(buf[1], column_size, "%d*", upkeep);
+	my_snprintf(buf[1], column_size, "%d*", upkeep);
       } else {
 	const char *state = NULL;
 
@@ -390,16 +352,16 @@ void get_city_dialog_production_row(char *buf[], size_t column_size,
           } else {
             state = _("Small Wonder");
           }
-        }
+	}
         if (state) {
-          fc_strlcpy(buf[1], state, column_size);
+          mystrlcpy(buf[1], state, column_size);
         } else {
-          fc_snprintf(buf[1], column_size, "%d", upkeep);
+          my_snprintf(buf[1], column_size, "%d", upkeep);
         }
       }
 
-      fc_snprintf(buf[2], column_size, "%d",
-                  impr_build_shield_cost(pimprove));
+      my_snprintf(buf[2], column_size, "%d",
+		  impr_build_shield_cost(pimprove));
     }
     break;
   }
@@ -413,19 +375,19 @@ void get_city_dialog_production_row(char *buf[], size_t column_size,
   if (pcity) {
     if (VUT_IMPROVEMENT == target.kind
      && improvement_has_flag(target.value.building, IF_GOLD)) {
-      fc_snprintf(buf[3], column_size, _("%d/turn"),
-                  MAX(0, pcity->surplus[O_SHIELD]));
+      my_snprintf(buf[3], column_size, _("%d/turn"),
+		  MAX(0, pcity->surplus[O_SHIELD]));
     } else {
       int turns = city_turns_to_build(pcity, target, FALSE);
 
       if (turns < FC_INFINITY) {
-        fc_snprintf(buf[3], column_size, "%d", turns);
+	my_snprintf(buf[3], column_size, "%d", turns);
       } else {
-        fc_snprintf(buf[3], column_size, _("never"));
+	my_snprintf(buf[3], column_size, _("never"));
       }
     }
   } else {
-    fc_snprintf(buf[3], column_size, "---");
+    my_snprintf(buf[3], column_size, "---");
   }
 }
 
@@ -510,7 +472,7 @@ void get_city_dialog_output_text(const struct city *pcity,
 		     peffect->value);
 	total = new_total;
       } effect_list_iterate_end;
-      effect_list_destroy(plist);
+      effect_list_free(plist);
     }
   }
 
@@ -566,11 +528,11 @@ void get_city_dialog_illness_text(const struct city *pcity,
   illness = city_illness_calc(pcity, &ill_base, &ill_size, &ill_trade,
                               &ill_pollution);
 
-  cat_snprintf(buf, bufsz, _("%+5.1f : Risk from overcrowding\n"),
+  cat_snprintf(buf, bufsz, _("%+2.1f : Risk from overcrowding\n"),
                ((float)(ill_size) / 10.0));
-  cat_snprintf(buf, bufsz, _("%+5.1f : Risk from trade\n"),
+  cat_snprintf(buf, bufsz, _("%+2.1f : Risk from trade\n"),
                ((float)(ill_trade) / 10.0));
-  cat_snprintf(buf, bufsz, _("%+5.1f : Risk from pollution\n"),
+  cat_snprintf(buf, bufsz, _("%+2.1f : Risk from pollution\n"),
                ((float)(ill_pollution) / 10.0));
 
   plist = effect_list_new();
@@ -583,13 +545,13 @@ void get_city_dialog_illness_text(const struct city *pcity,
     get_effect_req_text(peffect, buf2, sizeof(buf2));
 
     cat_snprintf(buf, bufsz,
-                 _("%+5.1f : Bonus from %s\n"),
+                 _("%+2.1f : Bonus from %s\n"),
                  -(0.1 * ill_base * peffect->value / 100), buf2);
   } effect_list_iterate_end;
-  effect_list_destroy(plist);
+  effect_list_free(plist);
 
   cat_snprintf(buf, bufsz, _("==== : Adds up to\n"));
-  cat_snprintf(buf, bufsz, _("%5.1f : Total chance for a plague"),
+  cat_snprintf(buf, bufsz, _("%2.1f : Total chance for a plague"),
                ((float)(illness) / 10.0));
 }
 
@@ -627,7 +589,7 @@ int get_city_citizen_types(struct city *pcity, enum citizen_feeling index,
 			   enum citizen_category *citizens)
 {
   int i = 0, n;
-  fc_assert(index >= 0 && index < FEELING_LAST);
+  assert(index >= 0 && index < FEELING_LAST);
 
   for (n = 0; n < pcity->feel[CITIZEN_HAPPY][index]; n++, i++) {
     citizens[i] = CITIZEN_HAPPY;
@@ -649,9 +611,11 @@ int get_city_citizen_types(struct city *pcity, enum citizen_feeling index,
   } specialist_type_iterate_end;
 
   if (pcity->size != i) {
-    log_error("get_city_citizen_types() %d citizens "
-              "not equal %d city size in \"%s\".",
-              i, pcity->size, city_name(pcity));
+    freelog(LOG_ERROR, "get_city_citizen_types()"
+            " %d citizens not equal %d city size in \"%s\".",
+            i,
+            pcity->size,
+            city_name(pcity));
   }
   return i;
 }
@@ -674,7 +638,7 @@ void city_rotate_specialist(struct city *pcity, int citizen_index)
   /* Loop through all specialists in order until we find a usable one
    * (or run out of choices). */
   to = from;
-  fc_assert(to >= 0 && to < specialist_count());
+  assert(to >= 0 && to < specialist_count());
   do {
     to = (to + 1) % specialist_count();
   } while (to != from && !city_can_use_specialist(pcity, to));
@@ -993,17 +957,9 @@ int city_change_specialist(struct city *pcity, Specialist_type_id from,
 **************************************************************************/
 int city_toggle_worker(struct city *pcity, int city_x, int city_y)
 {
-  int city_radius_sq;
-  struct tile *ptile;
+  struct tile *ptile = city_map_to_tile(city_tile(pcity), city_x, city_y);
 
-  if (city_owner(pcity) != client_player()) {
-    return 0;
-  }
-
-  city_radius_sq = city_map_radius_sq_get(pcity);
-  fc_assert(is_valid_city_coords(city_radius_sq, city_x, city_y));
-  ptile = city_map_to_tile(city_tile(pcity), city_radius_sq,
-                           city_x, city_y);
+  assert(is_valid_city_coords(city_x, city_y));
   if (NULL == ptile) {
     return 0;
   }

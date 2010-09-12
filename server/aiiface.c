@@ -21,15 +21,17 @@
 
 /* server */
 #include "aiiface.h"
-
-/* server/advisors */
-#include "autosettlers.h"
+#include "settlers.h"
 
 /* ai */
-#include "defaultai.h"
+#include "aicity.h"
+#include "aiexplorer.h"
+#include "aihand.h"
+#include "aisettler.h"
+#include "aitools.h"
 
 /**************************************************************************
-  Initialize ai_type.
+  Initialize player ai_funcs function pointers.
 **************************************************************************/
 void ai_init(void)
 {
@@ -37,14 +39,32 @@ void ai_init(void)
 
   init_ai(ai);
 
-  fc_ai_default_setup(ai);
+  ai->funcs.init_city = ai_init_city;
+  ai->funcs.close_city = ai_close_city;
+  ai->funcs.auto_settlers = auto_settlers_player;
+  ai->funcs.building_advisor_init = ai_manage_buildings;
+  ai->funcs.building_advisor = ai_advisor_choose_building;
+  ai->funcs.auto_explorer = ai_manage_explorer;
+  ai->funcs.first_activities = ai_do_first_activities;
+  ai->funcs.diplomacy_actions = ai_diplomacy_actions;
+  ai->funcs.last_activities = ai_do_last_activities;
+  ai->funcs.before_auto_settlers = ai_settler_init;
+  ai->funcs.treaty_evaluate = ai_treaty_evaluate;
+  ai->funcs.treaty_accepted = ai_treaty_accepted;
+  ai->funcs.first_contact = ai_diplomacy_first_contact;
+  ai->funcs.incident = ai_incident;
 }
 
 /**************************************************************************
-  Call incident function of victim.
+  Call incident function of victim, or failing that, incident function
+  of violator.
 **************************************************************************/
 void call_incident(enum incident_type type, struct player *violator,
                    struct player *victim)
 {
-  CALL_PLR_AI_FUNC(incident, victim, type, violator, victim);
+  if (victim && victim->ai->funcs.incident) {
+    victim->ai->funcs.incident(type, violator, victim);
+  } else if (violator && violator->ai->funcs.incident) {
+    violator->ai->funcs.incident(type, violator, victim);
+  }
 }

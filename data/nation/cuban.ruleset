@@ -8,19 +8,16 @@ legend=_("Cuba came under Spanish control in the 16th century. In the\
  tobacco, sugar and coffee in the world. Cuba was granted nominal\
  independence in 1902.")
 leader=
-  "José Martí",
-  "Fulgencio Batista",
-  "Camilo Cienfuegos",
+  "Fidel Castro",
   "Ernesto Che Guevara",
-  "Fidel Castro"
-
-leader_sex="Male", "Male", "Male", "Male", "Male"
+  "José Martí",
+  "Camilo Cienfuegos"
+leader_sex="Male", "Male", "Male", "Male"
 flag="cuba"
 flag_alt = "-"
 city_style = "Classical"
 
 ruler_titles = { "government",      "male_title",      "female_title"
-                 "Communism",      _("Comandante"),    _("Comandanta")
                  "Despotism",      _("Caudillo"),      _("Caudilla")
                  "Democracy",      _("Presidente"),    _("Presidenta")
                  "Fundamentalism", _("Cardinal"),     _("?female:Cardinal")
@@ -30,7 +27,7 @@ init_techs=""
 init_buildings=""
 init_government="Despotism"
 init_units=""
-civilwar_nations = "dominicano", "venezuelan", "taino"
+civilwar_nations = "colombian", "venezuelan"
 
 cities =
   "La Habana",
@@ -49,20 +46,4 @@ cities =
   "Cienfuegos",
   "Holguín",
   "Pinar del Río",
-  "Placetas",
-  "Bayamo",
-  "Ciego de Ávila",
-  "Sancti Spíritus",
-  "Manzanillo",
-  "Cárdenas",
-  "Palma Soriano",
-  "Moa",
-  "Mayarí",
-  "Nueva Gerona",
-  "Contramaestre",
-  "Consolación del Sur",
-  "Florida",
-  "Puerto Padre",
-  "Güines",
-  "San Luis",
-  "San Cristóbal"
+  "Placetas"

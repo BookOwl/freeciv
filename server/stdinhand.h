@@ -23,21 +23,12 @@ void stdinhand_init(void);
 void stdinhand_turn(void);
 void stdinhand_free(void);
 
-bool handle_stdin_input(struct connection *caller, const char *str,
-                        bool check);
+bool handle_stdin_input(struct connection *caller, char *str, bool check);
 void set_ai_level_direct(struct player *pplayer, enum ai_level level);
 void set_ai_level_directer(struct player *pplayer, enum ai_level level);
 bool read_init_script(struct connection *caller, char *script_filename,
                       bool from_cmdline, bool check);
 void show_players(struct connection *caller);
-
-enum rfc_status create_command_newcomer(const char *name, bool check,
-                                        struct nation_type *pnation,
-                                        struct player **newplayer,
-                                        char *buf, size_t buflen);
-enum rfc_status create_command_pregame(const char *name, bool check,
-                                       struct player **newplayer,
-                                       char *buf, size_t buflen);
 
 bool load_command(struct connection *caller,
 		  const char *filename, bool check);

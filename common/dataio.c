@@ -23,6 +23,7 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -43,7 +44,6 @@
 #endif
 
 /* utility */
-#include "bitvector.h"
 #include "capability.h"
 #include "log.h"
 #include "mem.h"
@@ -203,7 +203,7 @@ void dio_put_uint8(struct data_out *dout, int value)
   if (enough_space(dout, 1)) {
     uint8_t x = value;
 
-    fc_assert(sizeof(x) == 1);
+    assert(sizeof(x) == 1);
     memcpy(ADD_TO_POINTER(dout->dest, dout->current), &x, 1);
     dout->current++;
   }
@@ -217,7 +217,7 @@ void dio_put_uint16(struct data_out *dout, int value)
   if (enough_space(dout, 2)) {
     uint16_t x = htons(value);
 
-    fc_assert(sizeof(x) == 2);
+    assert(sizeof(x) == 2);
     memcpy(ADD_TO_POINTER(dout->dest, dout->current), &x, 2);
     dout->current += 2;
   }
@@ -231,7 +231,7 @@ void dio_put_uint32(struct data_out *dout, int value)
   if (enough_space(dout, 4)) {
     uint32_t x = htonl(value);
 
-    fc_assert(sizeof(x) == 4);
+    assert(sizeof(x) == 4);
     memcpy(ADD_TO_POINTER(dout->dest, dout->current), &x, 4);
     dout->current += 4;
   }
@@ -243,7 +243,7 @@ void dio_put_uint32(struct data_out *dout, int value)
 void dio_put_bool8(struct data_out *dout, bool value)
 {
   if (value != TRUE && value != FALSE) {
-    log_error("Trying to put a non-boolean: %d", (int) value);
+    freelog(LOG_ERROR, "Trying to put a non-boolean: %d", (int) value);
     value = FALSE;
   }
 
@@ -256,7 +256,7 @@ void dio_put_bool8(struct data_out *dout, bool value)
 void dio_put_bool32(struct data_out *dout, bool value)
 {
   if (value != TRUE && value != FALSE) {
-    log_error("Trying to put a non-boolean: %d", (int) value);
+    freelog(LOG_ERROR, "Trying to put a non-boolean: %d", (int) value);
     value = FALSE;
   }
 
@@ -347,8 +347,8 @@ void dio_put_bit_string(struct data_out *dout, const char *value)
   size_t max = (unsigned short)(-1);
 
   if (bits > max) {
-    fc_assert_msg(FALSE, "Bit string too long: %lu bits.",
-                  (unsigned long) bits);
+    freelog(LOG_ERROR, "Bit string too long: %lu bits.", (unsigned long)bits);
+    assert(FALSE);
     bits = max;
   }
   bytes = (bits + 7) / 8;
@@ -412,7 +412,7 @@ void dio_get_uint8(struct data_in *din, int *dest)
     if (dest) {
       uint8_t x;
 
-      fc_assert(sizeof(x) == 1);
+      assert(sizeof(x) == 1);
       memcpy(&x, ADD_TO_POINTER(din->src, din->current), 1);
       *dest = x;
     }
@@ -432,7 +432,7 @@ void dio_get_uint16(struct data_in *din, int *dest)
     if (dest) {
       uint16_t x;
 
-      fc_assert(sizeof(x) == 2);
+      assert(sizeof(x) == 2);
       memcpy(&x, ADD_TO_POINTER(din->src, din->current), 2);
       *dest = ntohs(x);
     }
@@ -452,7 +452,7 @@ void dio_get_uint32(struct data_in *din, int *dest)
     if (dest) {
       uint32_t x;
 
-      fc_assert(sizeof(x) == 4);
+      assert(sizeof(x) == 4);
       memcpy(&x, ADD_TO_POINTER(din->src, din->current), 4);
       *dest = ntohl(x);
     }
@@ -472,7 +472,7 @@ void dio_get_bool8(struct data_in *din, bool * dest)
   dio_get_uint8(din, &ival);
 
   if (ival != 0 && ival != 1) {
-    log_error("Received value isn't boolean: %d", ival);
+    freelog(LOG_ERROR, "Received value isn't boolean: %d", ival);
     ival = 1;
   }
 
@@ -489,7 +489,7 @@ void dio_get_bool32(struct data_in *din, bool * dest)
   dio_get_uint32(din, &ival);
 
   if (ival != 0 && ival != 1) {
-    log_error("Received value isn't boolean: %d", ival);
+    freelog(LOG_ERROR, "Received value isn't boolean: %d", ival);
     ival = 1;
   }
 
@@ -550,7 +550,7 @@ void dio_get_string(struct data_in *din, char *dest, size_t max_dest_size)
   size_t ps_len;		/* length in packet, not including null */
   size_t offset, remaining;
 
-  fc_assert(max_dest_size > 0 || dest == NULL);
+  assert(max_dest_size > 0 || dest == NULL);
 
   if (!enough_data(din, 1)) {
     dest[0] = '\0';
@@ -591,7 +591,7 @@ void dio_get_bit_string(struct data_in *din, char *dest,
   int npack = 0;		/* number claimed in packet */
   int i;			/* iterate the bytes */
 
-  fc_assert(dest != NULL && max_dest_size > 0);
+  assert(dest != NULL && max_dest_size > 0);
 
   if (!enough_data(din, 1)) {
     dest[0] = '\0';
@@ -600,8 +600,8 @@ void dio_get_bit_string(struct data_in *din, char *dest,
 
   dio_get_uint16(din, &npack);
   if (npack >= max_dest_size) {
-      log_error("Have size for %lu, got %d",
-                (unsigned long) max_dest_size, npack);
+      freelog(LOG_ERROR, "Have size for %lu, got %d",
+              (unsigned long)max_dest_size, npack);
     din->bad_bit_string = TRUE;
     dest[0] = '\0';
     return;
@@ -703,6 +703,40 @@ void dio_get_uint16_vec8(struct data_in *din, int **values, int stop_value)
   if (values) {
     (*values)[inx] = stop_value;
   }
+}
+
+/**************************************************************************
+  De-serialize a player diplomatic state.
+**************************************************************************/
+void dio_get_diplstate(struct data_in *din, struct player_diplstate *pds)
+{
+  int value = 0;
+
+  /* backward compatible order defined for this transaction */
+  dio_get_uint8(din, &value);
+  pds->type = value;
+  dio_get_uint16(din, &pds->turns_left);
+  dio_get_uint16(din, &pds->contact_turns_left);
+  dio_get_uint8(din, &pds->has_reason_to_cancel);
+  dio_get_uint16(din, &pds->first_contact_turn);
+  value = 0;
+  dio_get_uint8(din, &value);
+  pds->max_state = value;
+}
+
+/**************************************************************************
+  Serialize a player diplomatic state.
+**************************************************************************/
+void dio_put_diplstate(struct data_out *dout,
+		       const struct player_diplstate *pds)
+{
+  /* backward compatible order defined for this transaction */
+  dio_put_uint8(dout, pds->type);
+  dio_put_uint16(dout, pds->turns_left);
+  dio_put_uint16(dout, pds->contact_turns_left);
+  dio_put_uint8(dout, pds->has_reason_to_cancel);
+  dio_put_uint16(dout, pds->first_contact_turn);
+  dio_put_uint8(dout, pds->max_state);
 }
 
 /**************************************************************************

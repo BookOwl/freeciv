@@ -17,7 +17,6 @@ city_style = "Asian"
 
 ruler_titles = { "government",      "male_title",      "female_title"
                  "Despotism",       _("Raja"),         _("Rani")
-                 "Fundamentalism",  _("Guru"),         _("?female:Guru")
                  "Monarchy",        _("Maharaja"),     _("Maharani")
                  "Republic",        _("Mahatma"),      _("?female:Mahatma")
                }
@@ -26,7 +25,7 @@ init_techs=""
 init_buildings=""
 init_government="Despotism"
 init_units=""
-civilwar_nations = "lankese", "bengali", "sikh"
+civilwar_nations = "lankese", "bengali"
 
 cities =
  "Delhi",

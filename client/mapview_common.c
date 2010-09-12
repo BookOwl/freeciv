@@ -15,6 +15,8 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
+
 /* utility */
 #include "fcintl.h"
 #include "hash.h"
@@ -206,14 +208,14 @@ static void gui_to_map_pos(const struct tileset *t,
     int x, y, dx, dy;
     int xmult, ymult, mod, compar;
 
-    fc_assert(tileset_is_isometric(t));
+    assert(tileset_is_isometric(t));
 
     x = DIVIDE(gui_x, W);
     y = DIVIDE(gui_y, H);
     dx = gui_x - x * W;
     dy = gui_y - y * H;
-    fc_assert(dx >= 0 && dx < W);
-    fc_assert(dy >= 0 && dy < H);
+    assert(dx >= 0 && dx < W);
+    assert(dy >= 0 && dy < H);
 
     /* Now fold so we consider only one-quarter tile. */
     xmult = (dx >= W / 2) ? -1 : 1;
@@ -616,9 +618,9 @@ void set_mapview_origin(int gui_x0, int gui_y0)
     currtime = read_timer_seconds(anim_timer);
     total_frames += frames;
     total_time += currtime;
-    log_debug("Got %d frames in %f seconds: %f FPS (avg %f).",
-              frames, currtime, (double)frames / currtime,
-              total_frames / total_time);
+    freelog(LOG_DEBUG, "Got %d frames in %f seconds: %f FPS (avg %f).",
+	    frames, currtime, (double)frames / currtime,
+	    total_frames / total_time);
 
     /* A very small decay factor to make things more accurate when something
      * changes (mapview size, tileset change, etc.).  This gives a
@@ -732,8 +734,8 @@ void get_mapview_scroll_window(int *xmin, int *ymin, int *xmax, int *ymax,
     *ymax += (diff + 1) / 2;
   }
 
-  log_debug("x: %d<-%d->%d; y: %d<-%d->%d",
-            *xmin, *xsize, *xmax, *ymin, *ymax, *ysize);
+  freelog(LOG_DEBUG, "x: %d<-%d->%d; y: %d<-%d->%d",
+	  *xmin, *xsize, *xmax, *ymin, *ymax, *ysize);
 }
 
 /****************************************************************************
@@ -1074,7 +1076,7 @@ void put_nuke_mushroom_pixmaps(struct tile *ptile)
   flush_dirty();
   gui_flush();
 
-  fc_usleep(1000000);
+  myusleep(1000000);
 
   update_map_canvas_visible();
 }
@@ -1249,8 +1251,9 @@ void update_map_canvas(int canvas_x, int canvas_y, int width, int height)
 	  && width == mapview.store_width
 	  && height == mapview.store_height);
 
-  log_debug("update_map_canvas(pos=(%d,%d), size=(%d,%d))",
-            canvas_x, canvas_y, width, height);
+  freelog(LOG_DEBUG,
+	  "update_map_canvas(pos=(%d,%d), size=(%d,%d))",
+	  canvas_x, canvas_y, width, height);
 
   /* If a full redraw is done, we just draw everything onto the canvas.
    * However if a partial redraw is done we draw everything onto the
@@ -1421,7 +1424,7 @@ static void show_full_citybar(struct canvas *pcanvas,
 				   growth, sizeof(growth), &growth_color);
 
   if (draw_city_names) {
-    fc_snprintf(size, sizeof(size), "%d", pcity->size);
+    my_snprintf(size, sizeof(size), "%d", pcity->size);
 
     get_text_size(&size_rect.w, &size_rect.h, FONT_CITY_SIZE, size);
     get_text_size(&name_rect.w, &name_rect.h, FONT_CITY_NAME, name);
@@ -1800,15 +1803,15 @@ void show_city_descriptions(int canvas_x, int canvas_y,
 
       show_city_desc(mapview.store, canvas_x, canvas_y,
 		     pcity, &width, &height);
-      log_debug("Drawing %s.", city_name(pcity));
+      freelog(LOG_DEBUG, "Drawing %s.", city_name(pcity));
 
       if (width > max_desc_width || height > max_desc_height) {
-        /* The update was incomplete! We queue a new update. Note that
-         * this is recursively queueing an update within a dequeuing of an
-         * update. This is allowed specifically because of the code in
-         * unqueue_mapview_updates. See that function for more. */
-        log_debug("Re-queuing %s.", city_name(pcity));
-        update_city_description(pcity);
+	/* The update was incomplete!  We queue a new update.  Note that
+	 * this is recursively queueing an update within a dequeuing of an
+	 * update.  This is allowed specifically because of the code in
+	 * unqueue_mapview_updates.  See that function for more. */
+	freelog(LOG_DEBUG, "Re-queuing %s.", city_name(pcity));
+	update_city_description(pcity);
       }
       new_max_width = MAX(width, new_max_width);
       new_max_height = MAX(height, new_max_height);
@@ -1851,7 +1854,7 @@ bool show_unit_orders(struct unit *punit)
 	  /* This shouldn't happen unless the server gives us invalid
 	   * data.  To avoid disaster we need to break out of the
 	   * switch and the enclosing for loop. */
-          fc_assert(NULL != ptile);
+	  assert(0);
 	  i = punit->orders.length;
 	}
 	break;
@@ -1929,7 +1932,7 @@ void decrease_unit_hp_smooth(struct unit *punit0, int hp0,
 
     anim_timer = renew_timer_start(anim_timer, TIMER_USER, TIMER_ACTIVE);
 
-    if (fc_rand(diff0 + diff1) < diff0) {
+    if (myrand(diff0 + diff1) < diff0) {
       punit0->hp--;
       refresh_unit_mapcanvas(punit0, punit0->tile, FALSE, FALSE);
     } else {
@@ -2017,7 +2020,7 @@ void move_unit_map_canvas(struct unit *punit,
     int canvas_dx, canvas_dy;
     double timing_sec = (double)smooth_move_unit_msec / 1000.0, mytime;
 
-    fc_assert(smooth_move_unit_msec > 0);
+    assert(smooth_move_unit_msec > 0);
 
     map_to_gui_vector(tileset, &canvas_dx, &canvas_dy, dx, dy);
 
@@ -2102,8 +2105,7 @@ struct city *find_city_or_settler_near_tile(const struct tile *ptile,
   /* rule e */
   closest_city = NULL;
 
-  /* check within maximum (squared) city radius */
-  city_tile_iterate(CITY_MAP_MAX_RADIUS_SQ, ptile, tile1) {
+  city_tile_iterate(ptile, tile1) {
     pcity = tile_city(tile1);
     if (pcity
 	&& (NULL == client.conn.playing
@@ -2130,8 +2132,7 @@ struct city *find_city_or_settler_near_tile(const struct tile *ptile,
     return closest_city;
   }
 
-  /* check within maximum (squared) city radius */
-  city_tile_iterate(CITY_MAP_MAX_RADIUS_SQ, ptile, tile1) {
+  city_tile_iterate(ptile, tile1) {
       unit_list_iterate(tile1->units, psettler) {
 	if ((NULL == client.conn.playing
 	     || unit_owner(psettler) == client.conn.playing)
@@ -2245,7 +2246,7 @@ void get_city_mapview_trade_routes(struct city *pcity,
     num_trade_routes++;
   }
 
-  fc_snprintf(trade_routes_buffer, trade_routes_buffer_len,
+  my_snprintf(trade_routes_buffer, trade_routes_buffer_len,
               "%d/%d", num_trade_routes, NUM_TRADE_ROUTES);
 
   if (pcolor) {
@@ -2380,8 +2381,8 @@ void unqueue_mapview_updates(bool write_to_screen)
     return;
   }
 
-  log_debug("unqueue_mapview_update: needed_updates=%d",
-            needed_updates);
+  freelog(LOG_DEBUG, "unqueue_mapview_update: needed_updates=%d",
+	  needed_updates);
 
   /* This code "pops" the lists of tile updates off of the static array and
    * stores them locally.  This allows further updates to be queued within
@@ -2439,7 +2440,7 @@ void unqueue_mapview_updates(bool write_to_screen)
   }
   for (i = 0; i < TILE_UPDATE_COUNT; i++) {
     if (my_tile_updates[i]) {
-      tile_list_destroy(my_tile_updates[i]);
+      tile_list_free(my_tile_updates[i]);
     }
   }
   needed_updates = UPDATE_NONE;
@@ -2461,20 +2462,20 @@ void get_city_mapview_name_and_growth(struct city *pcity,
 				      size_t growth_buffer_len,
 				      enum color_std *growth_color)
 {
-  fc_strlcpy(name_buffer, city_name(pcity), name_buffer_len);
+  mystrlcpy(name_buffer, city_name(pcity), name_buffer_len);
 
   if (NULL == client.conn.playing
       || city_owner(pcity) == client.conn.playing) {
     int turns = city_turns_to_grow(pcity);
 
     if (turns == 0) {
-      fc_snprintf(growth_buffer, growth_buffer_len, "X");
+      my_snprintf(growth_buffer, growth_buffer_len, "X");
     } else if (turns == FC_INFINITY) {
-      fc_snprintf(growth_buffer, growth_buffer_len, "-");
+      my_snprintf(growth_buffer, growth_buffer_len, "-");
     } else {
       /* Negative turns means we're shrinking, but that's handled
          down below. */
-      fc_snprintf(growth_buffer, growth_buffer_len, "%d", abs(turns));
+      my_snprintf(growth_buffer, growth_buffer_len, "%d", abs(turns));
     }
 
     if (turns <= 0) {
@@ -3070,6 +3071,7 @@ static struct link_mark *link_mark_new(enum text_link_type type,
   pmark->type = type;
   pmark->id = id;
   pmark->turn_counter = turns;
+  link_mark_list_append(link_marks, pmark);
 
   return pmark;
 }
@@ -3077,8 +3079,9 @@ static struct link_mark *link_mark_new(enum text_link_type type,
 /********************************************************************** 
   Remove a link mark.
 ***********************************************************************/
-static void link_mark_destroy(struct link_mark *pmark)
+static void link_mark_remove(struct link_mark *pmark)
 {
+  link_mark_list_unlink(link_marks, pmark);
   free(pmark);
 }
 
@@ -3164,7 +3167,7 @@ void link_marks_init(void)
     link_marks_free();
   }
 
-  link_marks = link_mark_list_new_full(link_mark_destroy);
+  link_marks = link_mark_list_new();
 }
 
 /********************************************************************** 
@@ -3176,7 +3179,10 @@ void link_marks_free(void)
     return;
   }
 
-  link_mark_list_destroy(link_marks);
+  link_marks_iterate(pmark) {
+    free(pmark);
+  } link_marks_iterate_end;
+  link_mark_list_free(link_marks);
   link_marks = NULL;
 }
 
@@ -3195,7 +3201,10 @@ void link_marks_draw_all(void)
 ***********************************************************************/
 void link_marks_clear_all(void)
 {
-  link_mark_list_clear(link_marks);
+  link_marks_iterate(pmark) {
+    link_mark_remove(pmark);
+  } link_marks_iterate_end;
+
   update_map_canvas_visible();
 }
 
@@ -3206,7 +3215,7 @@ void link_marks_decrease_turn_counters(void)
 {
   link_marks_iterate(pmark) {
     if (--pmark->turn_counter <= 0) {
-      link_mark_list_remove(link_marks, pmark);
+      link_mark_remove(pmark);
     }
   } link_marks_iterate_end;
 
@@ -3228,7 +3237,6 @@ void link_mark_add_new(enum text_link_type type, int id)
   }
 
   pmark = link_mark_new(type, id, 2);
-  link_mark_list_append(link_marks, pmark);
   ptile = link_mark_tile(pmark);
   if (ptile && tile_visible_mapcanvas(ptile)) {
     refresh_tile_mapcanvas(ptile, FALSE, FALSE);
@@ -3248,7 +3256,6 @@ void link_mark_restore(enum text_link_type type, int id)
   }
 
   pmark = link_mark_new(type, id, 1);
-  link_mark_list_append(link_marks, pmark);
   ptile = link_mark_tile(pmark);
   if (ptile && tile_visible_mapcanvas(ptile)) {
     refresh_tile_mapcanvas(ptile, FALSE, FALSE);

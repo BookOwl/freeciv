@@ -19,14 +19,13 @@
 #include <windows.h>	/* LoadLibrary() */
 #endif
 
+#include <assert.h>
 #include <math.h>
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 
 /* utility */
-#include "bitvector.h"
 #include "capstr.h"
 #include "dataio.h"
 #include "fciconv.h"
@@ -40,13 +39,11 @@
 /* common */
 #include "ai.h"
 #include "diptreaty.h"
-#include "fc_interface.h"
 #include "game.h"
 #include "idex.h"
 #include "map.h"
 #include "netintf.h"
 #include "packets.h"
-#include "player.h"
 #include "version.h"
 
 /* include */
@@ -87,12 +84,9 @@
 #include "packhand.h"
 #include "tilespec.h"
 #include "themes_common.h"
-#include "update_queue.h"
 #include "voteinfo.h"
 
 #include "client_main.h"
-
-static void fc_interface_init_client(void);
 
 char *logfile = NULL;
 char *scriptfile = NULL;
@@ -183,7 +177,6 @@ static void at_exit(void)
 {
   client_kill_server(TRUE);
   fc_shutdown_network();
-  update_queue_free();
 }
 
 /**************************************************************************
@@ -200,8 +193,7 @@ static void client_game_init(void)
   control_init();
   link_marks_init();
   voteinfo_queue_init();
-  server_options_init();
-  update_queue_init();
+  settable_options_init();
 }
 
 /**************************************************************************
@@ -212,7 +204,7 @@ static void client_game_free(void)
   editgui_popdown_all();
 
   packhand_free();
-  server_options_free();
+  settable_options_free();
   voteinfo_queue_free();
   link_marks_free();
   control_free();
@@ -220,10 +212,6 @@ static void client_game_free(void)
   attribute_free();
   agents_free();
   game_free();
-  /* update_queue_init() is correct at this point. The queue is reset to
-     a clean state which is also needed if the client is not connected to
-     the server! */
-  update_queue_init();
 
   client.conn.playing = NULL;
   client.conn.observer = FALSE;
@@ -256,13 +244,11 @@ static void client_game_reset(void)
 **************************************************************************/
 int client_main(int argc, char *argv[])
 {
-  int i;
-  enum log_level loglevel = LOG_NORMAL;
+  int i, loglevel;
   int ui_options = 0;
   bool ui_separator = FALSE;
   char *option=NULL;
   bool user_tileset = FALSE;
-  int fatal_assertions = -1;
 
   /* Load win32 post-crash debugger */
 #ifdef WIN32_NATIVE
@@ -277,8 +263,6 @@ int client_main(int argc, char *argv[])
 
   i_am_client(); /* Tell to libfreeciv that we are client */
 
-  fc_interface_init_client();
-
   /* Ensure that all AIs are initialized to unused state */
   ai_type_iterate(ai) {
     init_ai(ai);
@@ -287,6 +271,9 @@ int client_main(int argc, char *argv[])
   init_nls();
   audio_init();
   init_character_encodings(gui_character_encoding, gui_use_transliteration);
+
+  /* default argument values are set in options.c */
+  loglevel=LOG_NORMAL;
 
   i = 1;
 
@@ -302,16 +289,11 @@ int client_main(int argc, char *argv[])
       fc_fprintf(stderr, _("  -A, --Announce PROTO\tAnnounce game in LAN using protocol PROTO (IPv4/IPv6/none)\n"));
       fc_fprintf(stderr, _("  -a, --autoconnect\tSkip connect dialog\n"));
 #ifdef DEBUG
-      fc_fprintf(stderr, _("  -d, --debug NUM\tSet debug log level (%d to "
-                           "%d, or %d:file1,min,max:...)\n"),
-                 LOG_FATAL, LOG_DEBUG, LOG_DEBUG);
+      fc_fprintf(stderr, _("  -d, --debug NUM\tSet debug log level (0 to 4,"
+			   " or 4:file1,min,max:...)\n"));
 #else
-      fc_fprintf(stderr, _("  -d, --debug NUM\tSet debug log level (%d to "
-                           "%d)\n"), LOG_FATAL, LOG_VERBOSE);
-#endif
-#ifndef NDEBUG
-      fc_fprintf(stderr, _("  -F, --Fatal [SIGNAL]\t"
-                           "Raise a signal on failed assertion\n"));
+      fc_fprintf(stderr,
+		 _("  -d, --debug NUM\tSet debug log level (0 to 3)\n"));
 #endif
       fc_fprintf(stderr,
 		 _("  -h, --help\t\tPrint a summary of the options\n"));
@@ -346,19 +328,6 @@ int client_main(int argc, char *argv[])
       exit(EXIT_SUCCESS);
     } else if ((option = get_option_malloc("--log", argv, &i, argc))) {
       logfile = option; /* never free()d */
-#ifndef NDEBUG
-    } else if (is_option("--Fatal", argv[i])) {
-      if (i + 1 >= argc || '-' == argv[i + 1][0]) {
-        fatal_assertions = SIGABRT;
-      } else if (1 == sscanf(argv[i + 1], "%d", &fatal_assertions)) {
-        i++;
-      } else {
-        fc_fprintf(stderr, _("Invalid signal number \"%s\".\n"),
-                   argv[i + 1]);
-        fc_fprintf(stderr, _("Try using --help.\n"));
-        exit(EXIT_FAILURE);
-      }
-#endif
     } else  if ((option = get_option_malloc("--read", argv, &i, argc))) {
       scriptfile = option; /* never free()d */
     } else if ((option = get_option_malloc("--name", argv, &i, argc))) {
@@ -388,11 +357,12 @@ int client_main(int argc, char *argv[])
     } else if (is_option("--autoconnect", argv[i])) {
       auto_connect = TRUE;
     } else if ((option = get_option_malloc("--debug", argv, &i, argc))) {
-      if (!log_parse_level_str(option, &loglevel)) {
-        fc_fprintf(stderr,
-                   _("Invalid debug level \"%s\" specified with --debug "
-                     "option.\n"), option);
-        fc_fprintf(stderr, _("Try using --help.\n"));
+      loglevel = log_parse_level_str(option);
+      if (loglevel == -1) {
+	fc_fprintf(stderr,
+		   _("Invalid debug level \"%s\" specified with --debug "
+		     "option.\n"), option);
+	fc_fprintf(stderr, _("Try using --help.\n"));
         exit(EXIT_FAILURE);
       }
       free(option);
@@ -430,7 +400,7 @@ int client_main(int argc, char *argv[])
   /* disallow running as root -- too dangerous */
   dont_run_as_root(argv[0], "freeciv_client");
 
-  log_init(logfile, loglevel, NULL, fatal_assertions);
+  log_init(logfile, loglevel, NULL);
 
   /* after log_init: */
 
@@ -438,12 +408,12 @@ int client_main(int argc, char *argv[])
   if (!is_valid_username(default_user_name)) {
     char buf[sizeof(default_user_name)];
 
-    fc_snprintf(buf, sizeof(buf), "_%s", default_user_name);
+    my_snprintf(buf, sizeof(buf), "_%s", default_user_name);
     if (is_valid_username(buf)) {
       sz_strlcpy(default_user_name, buf);
     } else {
-      fc_snprintf(default_user_name, sizeof(default_user_name),
-                  "player%d", fc_rand(10000));
+      my_snprintf(default_user_name, sizeof(default_user_name),
+		  "player%d", myrand(10000));
     }
   }
 
@@ -455,7 +425,6 @@ int client_main(int argc, char *argv[])
   ui_init();
   charsets_init();
   fc_init_network();
-  update_queue_init();
 
   /* register exit handler */ 
   atexit(at_exit);
@@ -483,9 +452,11 @@ int client_main(int argc, char *argv[])
     /* FIXME: Find a cleaner way to achieve this. */
     const char *oldaddr = "http://www.cazfi.net/freeciv/metaserver/";
     if (0 == strcmp(default_metaserver, oldaddr)) {
-      log_normal(_("Updating old metaserver address \"%s\"."), oldaddr);
+      freelog(LOG_NORMAL, _("Updating old metaserver address \"%s\"."),
+              oldaddr);
       sz_strlcpy(default_metaserver, META_URL);
-      log_normal(_("Default metaserver has been set to \"%s\"."), META_URL);
+      freelog(LOG_NORMAL, _("Default metaserver has been set to \"%s\"."),
+              META_URL);
     }
     sz_strlcpy(metaserver, default_metaserver);
   }
@@ -493,7 +464,7 @@ int client_main(int argc, char *argv[])
 
   /* This seed is not saved anywhere; randoms in the client should
      have cosmetic effects only (eg city name suggestions).  --dwp */
-  fc_srand(time(NULL));
+  mysrand(time(NULL));
   helpdata_init();
   boot_help_texts(NULL);
 
@@ -541,8 +512,8 @@ void client_exit(void)
   }
 
   helpdata_done(); /* client_exit() unlinks help text list */
-  conn_list_destroy(game.all_connections);
-  conn_list_destroy(game.est_connections);
+  conn_list_free(game.all_connections);
+  conn_list_free(game.est_connections);
 
   free_nls();
 
@@ -555,17 +526,9 @@ void client_exit(void)
 **************************************************************************/
 void client_packet_input(void *packet, int type)
 {
-  if (!client.conn.established
-      && PACKET_CONN_PING != type
-      && PACKET_PROCESSING_STARTED != type
-      && PACKET_PROCESSING_FINISHED != type
-      && PACKET_SERVER_JOIN_REPLY != type) {
-    log_error("Received packet %s (%d) before establishing connection!",
-              packet_name(type), type);
-    disconnect_from_server();
-  } else if (!client_handle_packet(type, packet)) {
-    log_error("Received unknown packet (type %d) from server!", type);
-    disconnect_from_server();
+  if (!client_handle_packet(type, packet)) {
+    freelog(LOG_ERROR, "Received unknown packet (type %d) from server!",
+	    type);
   }
 }
 
@@ -582,8 +545,8 @@ void user_ended_turn(void)
 **************************************************************************/
 void send_turn_done(void)
 {
-  log_debug("send_turn_done() turn_done_button_state=%d",
-            get_turn_done_button_state());
+  freelog(LOG_DEBUG, "send_turn_done() turn_done_button_state=%d",
+	  get_turn_done_button_state());
 
   if (!get_turn_done_button_state()) {
     /*
@@ -625,7 +588,8 @@ void set_client_state(enum client_states newstate)
 
   if (auto_connect && newstate == C_S_DISCONNECTED) {
     if (oldstate == C_S_DISCONNECTED) {
-      log_fatal(_("There was an error while auto connecting; aborting."));
+      freelog(LOG_FATAL,
+              _("There was an error while auto connecting; aborting."));
         exit(EXIT_FAILURE);
     } else {
       start_autoconnecting_to_server();
@@ -636,7 +600,7 @@ void set_client_state(enum client_states newstate)
   if (C_S_PREPARING == newstate
       && (client_has_player() || client_is_observer())) {
     /* Reset the delta-state. */
-    conn_reset_delta_state(&client.conn);
+    conn_clear_packet_cache(&client.conn);
   }
 
   if (oldstate == newstate) {
@@ -647,7 +611,7 @@ void set_client_state(enum client_states newstate)
 
   switch (newstate) {
   case C_S_INITIAL:
-    log_error("%d is not a valid client state to set.", C_S_INITIAL);
+    die("%d is not a valid client state to set", C_S_INITIAL);
     break;
 
   case C_S_DISCONNECTED:
@@ -691,7 +655,7 @@ void set_client_state(enum client_states newstate)
 
     if (get_client_page() != PAGE_SCENARIO
         && get_client_page() != PAGE_LOAD) {
-    set_client_page(PAGE_START);
+      set_client_page(PAGE_START);
     }
     break;
 
@@ -770,7 +734,7 @@ void set_client_state(enum client_states newstate)
     break;
   }
 
-  menus_update();
+  update_menus();
   update_turn_done_button_state();
   update_conn_list_dialog();
   if (can_client_change_view()) {
@@ -795,11 +759,11 @@ enum client_states client_state(void)
 void client_remove_cli_conn(struct connection *pconn)
 {
   if (NULL != pconn->playing) {
-    conn_list_remove(pconn->playing->connections, pconn);
+    conn_list_unlink(pconn->playing->connections, pconn);
   }
-  conn_list_remove(game.all_connections, pconn);
-  conn_list_remove(game.est_connections, pconn);
-  fc_assert_ret(pconn != &client.conn);
+  conn_list_unlink(game.all_connections, pconn);
+  conn_list_unlink(game.est_connections, pconn);
+  RETURN_IF_FAIL(pconn != &client.conn);
   free(pconn);
 }
 
@@ -1045,29 +1009,4 @@ bool client_has_player(void)
 struct player *client_player(void)
 {
   return client.conn.playing;
-}
-
-/****************************************************************************
-  Return the vision of the player on a tile. Client version of
-  ./server/maphand/map_is_known_and_seen().
-****************************************************************************/
-static bool client_map_is_known_and_seen(const struct tile *ptile,
-                                         const struct player *pplayer,
-                                         enum vision_layer vlayer)
-{
-  return dbv_isset(&pplayer->client.tile_vision[vlayer], tile_index(ptile));
-}
-
-/***************************************************************
-  Initialize client specific functions.
-***************************************************************/
-static void fc_interface_init_client(void)
-{
-  struct functions *funcs = fc_interface_funcs();
-
-  funcs->player_tile_vision_get = client_map_is_known_and_seen;
-
-  /* Keep this function call at the end. It checks if all required functions
-     are defined. */
-  fc_interface_init();
 }

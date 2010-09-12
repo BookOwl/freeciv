@@ -21,14 +21,13 @@ city_style = "European"
 ruler_titles = { "government",      "male_title",          "female_title"
                  "Despotism",       _("Jarl"),             _("?female:Jarl")
                  "Monarchy",        _("Duke"),             _("Duchess")
-                 "Republic",        _("Bailiff"),             _("?Female:Bailiff")
                }
 
 init_techs=""
 init_buildings=""
 init_government="Despotism"
 init_units=""
-civilwar_nations = "viking", "french", "english", "sicilian"
+civilwar_nations = "viking", "french", "english"
 
 cities =
 ; Major cities in Normandy

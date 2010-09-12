@@ -9,24 +9,20 @@ legend=_("Brazil was founded as a colony of Portugal but became\
  Portuguese royal family. The empire lasted until the establishment of a\
  republican government in 1889.")
 leader=
- "Pedro I",
+ "Dom Pedro I",
  "Isabel",
  "Deodoro da Fonseca",
- "Getúlio Vargas",
- "Juscelino Kubitscheck",
- "João Goulart",
- "Ernesto Geisel",
  "Tancredo Neves",
- "Lula"
-leader_sex="Male", "Female", "Male", "Male",
- "Male", "Male", "Male", "Male", "Male"
+ "Juscelino Kubitscheck",
+ "Getúlio Vargas"
+leader_sex="Male", "Female", "Male", "Male", "Male", "Male"
 flag = "brasil"
 flag_alt = "-"
 city_style = "Tropical"
 
 ruler_titles = { "government",      "male_title",      "female_title"
                  "Despotism",       _("Dictator"),     _("Dictatrix")
-                 "Monarchy",        _("Emperor"),    _("Empress")
+                 "Monarchy",        _("Imperator"),    _("Imperatrix")
                  "Communism",       _("Chairman"),     _("Chairperson")
  "Fundamentalism", _("Director-President"), _("?female:Director-President")
 }

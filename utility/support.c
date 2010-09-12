@@ -41,6 +41,7 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <ctype.h>
 #include <errno.h>
 #include <math.h> /* ceil() */
@@ -97,7 +98,7 @@
 /***************************************************************
   Compare strings like strcmp(), but ignoring case.
 ***************************************************************/
-int fc_strcasecmp(const char *str0, const char *str1)
+int mystrcasecmp(const char *str0, const char *str1)
 {
   if (str0 == NULL) {
     return -1;
@@ -108,14 +109,14 @@ int fc_strcasecmp(const char *str0, const char *str1)
 #ifdef HAVE_STRCASECMP
   return strcasecmp (str0, str1);
 #else
-  for (; fc_tolower(*str0) == fc_tolower(*str1); str0++, str1++) {
+  for (; my_tolower(*str0) == my_tolower(*str1); str0++, str1++) {
     if (*str0 == '\0') {
       return 0;
     }
   }
 
-  return ((int) (unsigned char) fc_tolower(*str0))
-    - ((int) (unsigned char) fc_tolower(*str1));
+  return ((int) (unsigned char) my_tolower(*str0))
+    - ((int) (unsigned char) my_tolower(*str1));
 #endif
 }
 
@@ -123,7 +124,7 @@ int fc_strcasecmp(const char *str0, const char *str1)
   Compare strings like strncmp(), but ignoring case.
   ie, only compares first n chars.
 ***************************************************************/
-int fc_strncasecmp(const char *str0, const char *str1, size_t n)
+int mystrncasecmp(const char *str0, const char *str1, size_t n)
 {
   if (str0 == NULL) {
     return -1;
@@ -136,7 +137,7 @@ int fc_strncasecmp(const char *str0, const char *str1, size_t n)
 #else
   size_t i;
   
-  for (i = 0; i < n && fc_tolower(*str0) == fc_tolower(*str1);
+  for (i = 0; i < n && my_tolower(*str0) == my_tolower(*str1);
        i++, str0++, str1++) {
     if (*str0 == '\0') {
       return 0;
@@ -146,8 +147,8 @@ int fc_strncasecmp(const char *str0, const char *str1, size_t n)
   if (i == n)
     return 0;
   else
-    return ((int) (unsigned char) fc_tolower(*str0))
-      - ((int) (unsigned char) fc_tolower(*str1));
+    return ((int) (unsigned char) my_tolower(*str0))
+      - ((int) (unsigned char) my_tolower(*str1));
 #endif
 }
 
@@ -174,7 +175,7 @@ size_t effectivestrlenquote(const char *str)
   Compare strings like strncasecmp() but ignoring surrounding
   quotes in either string.
 ***************************************************************/
-int fc_strncasequotecmp(const char *str0, const char *str1, size_t n)
+int mystrncasequotecmp(const char *str0, const char *str1, size_t n)
 {
   size_t i;
   size_t len0;
@@ -220,9 +221,9 @@ int fc_strncasequotecmp(const char *str0, const char *str1, size_t n)
   }
 
   for (i = 0; i < cmplen ; i++, str0++, str1++) {
-    if (fc_tolower(*str0) != fc_tolower(*str1)) {
-      return ((int) (unsigned char) fc_tolower(*str0))
-             - ((int) (unsigned char) fc_tolower(*str1));
+    if (my_tolower(*str0) != my_tolower(*str1)) {
+      return ((int) (unsigned char) my_tolower(*str0))
+             - ((int) (unsigned char) my_tolower(*str1));
     }
   }
 
@@ -234,7 +235,7 @@ int fc_strncasequotecmp(const char *str0, const char *str1, size_t n)
   Return the needle in the haystack (or NULL).
   Naive implementation.
 ***************************************************************/
-char *fc_strcasestr(const char *haystack, const char *needle)
+char *mystrcasestr(const char *haystack, const char *needle)
 {
 #ifdef HAVE_STRCASESTR
   return strcasestr(haystack, needle);
@@ -256,41 +257,11 @@ char *fc_strcasestr(const char *haystack, const char *needle)
   }
 
   for (p = haystack; p <= &haystack[haystacks - needles]; p++) {
-    if (0 == fc_strncasecmp(p, needle, needles)) {
+    if (0 == mystrncasecmp(p, needle, needles)) {
       return (char *)p;
     }
   }
   return NULL;
-#endif
-}
-
-/****************************************************************************
-  Wrapper function for strcoll().
-****************************************************************************/
-int fc_strcoll(const char *str0, const char *str1)
-{
-#if defined(ENABLE_NLS) && defined(HAVE_STRCOLL)
-  return strcoll(str0, str1);
-#elif defined(ENABLE_NLS) && defined(HAVE__STRCOLL)
-  return _strcoll(str0, str1);
-#else
-  return strcmp(str0, str1);
-#endif
-}
-
-/****************************************************************************
-  Wrapper function for stricoll().
-****************************************************************************/
-int fc_stricoll(const char *str0, const char *str1)
-{
-#if defined(ENABLE_NLS) && defined(HAVE_STRICOLL)
-  return stricoll(str0, str1);
-#elif defined(ENABLE_NLS) && defined(HAVE__STRICOLL)
-  return _stricoll(str0, str1);
-#elif defined(ENABLE_NLS) && defined(HAVE_STRCASECOLL)
-  return strcasecoll(str0, str1);
-#else
-  return fc_strcasecmp(str0, str1);
 #endif
 }
 
@@ -413,7 +384,7 @@ const char *fc_strerror(fc_errno err)
 
   if (!FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
 		     NULL, err, 0, buf, sizeof(buf), NULL)) {
-    fc_snprintf(buf, sizeof(buf),
+    my_snprintf(buf, sizeof(buf),
 		_("error %ld (failed FormatMessage)"), err);
   }
   return buf;
@@ -426,7 +397,7 @@ const char *fc_strerror(fc_errno err)
 #else
   static char buf[64];
 
-  fc_snprintf(buf, sizeof(buf),
+  my_snprintf(buf, sizeof(buf),
 	      _("error %d (compiled without strerror)"), err);
   return buf;
 #endif
@@ -437,7 +408,7 @@ const char *fc_strerror(fc_errno err)
 /***************************************************************
   Suspend execution for the specified number of microseconds.
 ***************************************************************/
-void fc_usleep(unsigned long usec)
+void myusleep(unsigned long usec)
 {
 #ifdef HAVE_USLEEP
   usleep(usec);
@@ -477,8 +448,8 @@ char *fc_strrep_resize(char *str, size_t *len, const char *search,
 {
   size_t len_max;
 
-  fc_assert_ret_val(str != NULL, NULL);
-  fc_assert_ret_val(len != NULL, NULL);
+  RETURN_VAL_IF_FAIL(str != NULL, NULL);
+  RETURN_VAL_IF_FAIL(len != NULL, NULL);
   if (search == NULL || replace == NULL) {
     return str;
   }
@@ -492,10 +463,10 @@ char *fc_strrep_resize(char *str, size_t *len, const char *search,
   }
 
   /* should never happen */
-  fc_assert_ret_val_msg(fc_strrep(str, (*len), search, replace), NULL,
-                        "Can't replace '%s' by '%s' in '%s'. To small "
-                        "size after reallocation: %lu.", search, replace,
-                        str, (long unsigned int)*len);
+  RETURN_VAL_IF_FAIL_MSG(fc_strrep(str, (*len), search, replace), NULL,
+                         "Can't replace '%s' by '%s' in '%s'. To small "
+                         "size after reallocation: %lu.", search, replace,
+                         str, (long unsigned int)*len);
 
   return str;
 }
@@ -511,7 +482,7 @@ bool fc_strrep(char *str, size_t len, const char *search,
   size_t len_search, len_replace;
   char *s, *p;
 
-  fc_assert_ret_val(str != NULL, FALSE);
+  RETURN_VAL_IF_FAIL(str != NULL, FALSE);
   if (search == NULL || replace == NULL) {
     return TRUE;
   }
@@ -540,40 +511,38 @@ bool fc_strrep(char *str, size_t len, const char *search,
   return TRUE;
 }
 
-/****************************************************************************
-  fc_strlcpy() and fc_strlcat() provide (non-standard) functions
-  strlcpy() and strlcat(), with semantics following OpenBSD (and
-  maybe others).  They are intended as more user-friendly
-  versions of strncpy and strncat, in particular easier to
-  use safely and correctly, and ensuring nul-terminated results
-  while being able to detect truncation.
+/**********************************************************************
+ mystrlcpy() and mystrlcat() provide (non-standard) functions
+ strlcpy() and strlcat(), with semantics following OpenBSD (and
+ maybe others).  They are intended as more user-friendly
+ versions of strncpy and strncat, in particular easier to
+ use safely and correctly, and ensuring nul-terminated results
+ while being able to detect truncation.
 
-  n is the full size of the destination buffer, including
-  space for trailing nul, and including the pre-existing
-  string for fc_strlcat().  Thus can eg use sizeof(buffer),
-  or exact size malloc-ed.
+ n is the full size of the destination buffer, including
+ space for trailing nul, and including the pre-existing
+ string for mystrlcat().  Thus can eg use sizeof(buffer),
+ or exact size malloc-ed.
 
-  Result is always nul-terminated, whether or not truncation occurs,
-  and the return value is the strlen the destination would have had
-  without truncation.  I.e., a return value >= input n indicates
-  truncation occurred.
+ Result is always nul-terminated, whether or not truncation occurs,
+ and the return value is the strlen the destination would have had
+ without truncation.  I.e., a return value >= input n indicates
+ truncation occurred.
 
-  Will assume that if configure found strlcpy/strlcat they are ok.
-  For replacement implementations, will keep it simple rather
-  than try for super-efficiency.
+ Will assume that if configure found strlcpy/strlcat they are ok.
+ For replacement implementations, will keep it simple rather
+ than try for super-efficiency.
 
-  Not sure about the asserts below, but they are easier than
-  trying to ensure correct behaviour on strange inputs.
-  In particular note that n == 0 is prohibited (e.g., since there
-  must at least be room for a nul); could consider other options.
-
-  See also fc_utf8_strlcpy_trunc(), fc_utf8_strlcpy_rep().
-****************************************************************************/
-size_t fc_strlcpy(char *dest, const char *src, size_t n)
+ Not sure about the asserts below, but they are easier than
+ trying to ensure correct behaviour on strange inputs.
+ In particular note that n==0 is prohibited (eg, since there
+ must at least be room for a nul); could consider other options.
+***********************************************************************/
+size_t mystrlcpy(char *dest, const char *src, size_t n)
 {
-  fc_assert_ret_val(NULL != dest, -1);
-  fc_assert_ret_val(NULL != src, -1);
-  fc_assert_ret_val(0 < n, -1);
+  assert(dest != NULL);
+  assert(src != NULL);
+  assert(n>0);
 #ifdef HAVE_STRLCPY
   return strlcpy(dest, src, n);
 #else
@@ -588,14 +557,14 @@ size_t fc_strlcpy(char *dest, const char *src, size_t n)
 #endif
 }
 
-/****************************************************************************
-  See also fc_utf8_strlcat_trunc(), fc_utf8_strlcat_rep().
-****************************************************************************/
-size_t fc_strlcat(char *dest, const char *src, size_t n)
+/**********************************************************************
+ ...
+***********************************************************************/
+size_t mystrlcat(char *dest, const char *src, size_t n)
 {
-  fc_assert_ret_val(NULL != dest, -1);
-  fc_assert_ret_val(NULL != src, -1);
-  fc_assert_ret_val(0 < n, -1);
+  assert(dest != NULL);
+  assert(src != NULL);
+  assert(n>0);
 #ifdef HAVE_STRLCAT
   return strlcat(dest, src, n);
 #else
@@ -603,10 +572,10 @@ size_t fc_strlcat(char *dest, const char *src, size_t n)
     size_t num_to_copy, len_dest, len_src;
     
     len_dest = strlen(dest);
-    fc_assert_ret_val(len_dest < n, -1);
+    assert(len_dest<n);
     /* Otherwise have bad choice of leaving dest not nul-terminated
      * within the specified length n (which should be assumable as
-     * a post-condition of fc_strlcat), or modifying dest before end
+     * a post-condition of mystrlcat), or modifying dest before end
      * of existing string (which breaks strcat semantics).
      */
        
@@ -623,69 +592,68 @@ size_t fc_strlcat(char *dest, const char *src, size_t n)
 #endif
 }
 
-/****************************************************************************
-  vsnprintf() replacement using a big malloc()ed internal buffer,
-  originally by David Pfitzner <dwp@mso.anu.edu.au>
+/**********************************************************************
+ vsnprintf() replacement using a big malloc()ed internal buffer,
+ originally by David Pfitzner <dwp@mso.anu.edu.au>
 
-  Parameter n specifies the maximum number of characters to produce.
-  This includes the trailing null, so n should be the actual number
-  of characters allocated (or sizeof for char array).  If truncation
-  occurs, the result will still be null-terminated.  (I'm not sure
-  whether all native vsnprintf() functions null-terminate on
-  truncation; this does so even if calls native function.)
+ Parameter n specifies the maximum number of characters to produce.
+ This includes the trailing null, so n should be the actual number
+ of characters allocated (or sizeof for char array).  If truncation
+ occurs, the result will still be null-terminated.  (I'm not sure
+ whether all native vsnprintf() functions null-terminate on
+ truncation; this does so even if calls native function.)
 
-  Return value: if there is no truncation, returns the number of
-  characters printed, not including the trailing null.  If truncation
-  does occur, returns the number of characters which would have been
-  produced without truncation.
-  (Linux man page says returns -1 on truncation, but glibc seems to
-  do as above nevertheless; check_native_vsnprintf() above tests this.)
+ Return value: if there is no truncation, returns the number of
+ characters printed, not including the trailing null.  If truncation
+ does occur, returns the number of characters which would have been
+ produced without truncation.
+ (Linux man page says returns -1 on truncation, but glibc seems to
+ do as above nevertheless; check_native_vsnprintf() above tests this.)
 
-  [glibc is correct.  Viz.
+ [glibc is correct.  Viz.
 
-  PRINTF(3)           Linux Programmer's Manual           PRINTF(3)
+ PRINTF(3)           Linux Programmer's Manual           PRINTF(3)
+ 
+ (Thus until glibc 2.0.6.  Since glibc 2.1 these functions follow the
+ C99 standard and return the number of characters (excluding the
+ trailing '\0') which would have been written to the final string if
+ enough space had been available.)]
+ 
+ The method is simply to malloc (first time called) a big internal
+ buffer, longer than any result is likely to be (for non-malicious
+ usage), then vsprintf to that buffer, and copy the appropriate
+ number of characters to the destination.  Thus, this is not 100%
+ safe.  But somewhat safe, and at least safer than using raw snprintf!
+ :-) (And of course if you have the native version it is safe.)
 
-  (Thus until glibc 2.0.6.  Since glibc 2.1 these functions follow the
-  C99 standard and return the number of characters (excluding the
-  trailing '\0') which would have been written to the final string if
-  enough space had been available.)]
+ Before rushing to provide a 100% safe replacement version, consider
+ the following advantages of this method:
+ 
+ - It is very simple, so not likely to have many bugs (other than
+ arguably the core design bug regarding absolute safety), nor need
+ maintenance.
 
-  The method is simply to malloc (first time called) a big internal
-  buffer, longer than any result is likely to be (for non-malicious
-  usage), then vsprintf to that buffer, and copy the appropriate
-  number of characters to the destination.  Thus, this is not 100%
-  safe.  But somewhat safe, and at least safer than using raw snprintf!
-  :-) (And of course if you have the native version it is safe.)
+ - It uses native vsprintf() (which is required), thus exactly
+ duplicates the native format-string parsing/conversions.
 
-  Before rushing to provide a 100% safe replacement version, consider
-  the following advantages of this method:
+ - It is *very* portable.  Eg, it does not require mprotect(), nor
+ does it do any of its own parsing of the format string, nor use
+ any tricks to go through the va_list twice.
 
-  - It is very simple, so not likely to have many bugs (other than
-  arguably the core design bug regarding absolute safety), nor need
-  maintenance.
-
-  - It uses native vsprintf() (which is required), thus exactly
-  duplicates the native format-string parsing/conversions.
-
-  - It is *very* portable.  Eg, it does not require mprotect(), nor
-  does it do any of its own parsing of the format string, nor use
-  any tricks to go through the va_list twice.
-
-  See also fc_utf8_vsnprintf_trunc(), fc_utf8_vsnprintf_rep().
-****************************************************************************/
+***********************************************************************/
 
 /* "64k should be big enough for anyone" ;-) */
 #define VSNP_BUF_SIZE (64*1024)
-int fc_vsnprintf(char *str, size_t n, const char *format, va_list ap)
+int my_vsnprintf(char *str, size_t n, const char *format, va_list ap)
 {
   int r;
 
   /* This may be overzealous, but I suspect any triggering of these to
    * be bugs.  */
 
-  fc_assert_ret_val(NULL != str, -1);
-  fc_assert_ret_val(0 < n, -1);
-  fc_assert_ret_val(NULL != format, -1);
+  assert(str != NULL);
+  assert(n>0);
+  assert(format != NULL);
 
 #ifdef HAVE_WORKING_VSNPRINTF
   r = vsnprintf(str, n, format, ap);
@@ -698,8 +666,8 @@ int fc_vsnprintf(char *str, size_t n, const char *format, va_list ap)
   return r;
 #else
   {
-    /* Don't use fc_malloc() or log_*() here, since they may call
-       fc_vsnprintf() if it fails.  */
+    /* Don't use fc_malloc() or freelog() here, since they may call
+       my_vsnprintf() if it fails.  */
  
     static char *buf;
     size_t len;
@@ -738,59 +706,23 @@ int fc_vsnprintf(char *str, size_t n, const char *format, va_list ap)
 #endif  
 }
 
-/****************************************************************************
-  See also fc_utf8_snprintf_trunc(), fc_utf8_snprintf_rep().
-****************************************************************************/
-int fc_snprintf(char *str, size_t n, const char *format, ...)
+int my_snprintf(char *str, size_t n, const char *format, ...)
 {
   int ret;
   va_list ap;
 
-  fc_assert_ret_val(NULL != format, -1);
-
+  assert(format != NULL);
+  
   va_start(ap, format);
-  ret = fc_vsnprintf(str, n, format, ap);
+  ret = my_vsnprintf(str, n, format, ap);
   va_end(ap);
   return ret;
-}
-
-/****************************************************************************
-  cat_snprintf is like a combination of fc_snprintf and fc_strlcat;
-  it does snprintf to the end of an existing string.
-
-  Like fc_strlcat, n is the total length available for str, including
-  existing contents and trailing nul.  If there is no extra room
-  available in str, does not change the string.
-
-  Also like fc_strlcat, returns the final length that str would have
-  had without truncation, or -1 if the end of the buffer is reached.
-  I.e., if return is >= n, truncation occurred.
-
-  See also cat_utf8_snprintf(), cat_utf8_snprintf_rep().
-****************************************************************************/
-int cat_snprintf(char *str, size_t n, const char *format, ...)
-{
-  size_t len;
-  int ret;
-  va_list ap;
-
-  fc_assert_ret_val(NULL != format, -1);
-  fc_assert_ret_val(NULL != str, -1);
-  fc_assert_ret_val(0 < n, -1);
-
-  len = strlen(str);
-  fc_assert_ret_val(len < n, -1);
-
-  va_start(ap, format);
-  ret = fc_vsnprintf(str+len, n-len, format, ap);
-  va_end(ap);
-  return (-1 == ret ? -1 : ret + len);
 }
 
 /**********************************************************************
   Call gethostname() if supported, else just returns -1.
 ***********************************************************************/
-int fc_gethostname(char *buf, size_t len)
+int my_gethostname(char *buf, size_t len)
 {
 #ifdef HAVE_GETHOSTNAME
   return gethostname(buf, len);
@@ -826,7 +758,7 @@ static unsigned int WINAPI thread_proc(LPVOID data)
 /**********************************************************************
   Initialize console I/O in case SOCKET_ZERO_ISNT_STDIN.
 ***********************************************************************/
-void fc_init_console(void)
+void my_init_console(void)
 {
 #ifdef WIN32_NATIVE
   unsigned int threadid;
@@ -851,10 +783,10 @@ void fc_init_console(void)
   Read a line from console I/O in case SOCKET_ZERO_ISNT_STDIN.
 
   This returns a pointer to a statically allocated buffer.
-  Subsequent calls to fc_read_console() or fc_init_console() will
+  Subsequent calls to my_read_console() or my_init_console() will
   overwrite it.
 ***********************************************************************/
-char *fc_read_console(void)
+char *my_read_console(void)
 {
 #ifdef WIN32_NATIVE
   if (WaitForSingleObject(mythread, 0) == WAIT_OBJECT_0) {
@@ -867,7 +799,7 @@ char *fc_read_console(void)
   if (!feof(stdin)) {    /* input from server operator */
     static char *bufptr = mybuf;
     /* fetch chars until \n, or run out of space in buffer */
-    /* blocks if fc_nonblock() in fc_init_console() failed */
+    /* blocks if fc_nonblock() in my_init_console() failed */
     while ((*bufptr = fgetc(stdin)) != EOF) {
       if (*bufptr == '\n') *bufptr = '\0';
       if (*bufptr == '\0') {
@@ -899,56 +831,6 @@ bool is_reg_file_for_access(const char *name, bool write_access)
 }
 
 /****************************************************************************
-  Replace the spaces by line breaks when the line lenght is over the desired
-  one. 'str' is modified. Returns number of lines in modified s.
-****************************************************************************/
-int fc_break_lines(char *str, size_t desired_len)
-{
-  size_t slen = (size_t)strlen(str);
-  int num_lines = 0;
-
-  /* At top of this loop, s points to the rest of string,
-   * either at start or after inserted newline: */
- top:
-  if (str && *str != '\0' && slen > desired_len) {
-    char *c;
-
-    num_lines++;
-
-    /* check if there is already a newline: */
-    for (c = str; c < str + desired_len; c++) {
-      if (*c == '\n') {
-        slen -= c + 1 - str;
-        str = c + 1;
-        goto top;
-      }
-    }
-
-    /* find space and break: */
-    for(c = str + desired_len; c > str; c--) {
-      if (fc_isspace(*c)) {
-        *c = '\n';
-        slen -= c + 1 - str;
-        str = c + 1;
-        goto top;
-      }
-    }
-
-    /* couldn't find a good break; settle for a bad one... */
-    for (c = str + desired_len + 1; *c != '\0'; c++) {
-      if (fc_isspace(*c)) {
-        *c = '\n';
-        slen -= c + 1 - str;
-        str = c + 1;
-        goto top;
-      }
-    }
-  }
-
-  return num_lines;
-}
-
-/****************************************************************************
   Character function wrappers
 
   These functions are wrappers for the libc character class functions,
@@ -963,87 +845,87 @@ int fc_break_lines(char *str, size_t desired_len)
 /****************************************************************************
   Wrapper function to work around broken libc implementations. See above.
 ****************************************************************************/
-bool fc_isalnum(char c)
+bool my_isalnum(char c)
 {
-  if (128 <= (unsigned char) c) {
+  if (c < 0 || c >= 128) {
     return FALSE;
   }
-  return isalnum((int) ((unsigned char) c)) != 0;
+  return isalnum((int)((unsigned char)c)) != 0;
 }
 
 /****************************************************************************
   Wrapper function to work around broken libc implementations. See above.
 ****************************************************************************/
-bool fc_isalpha(char c)
+bool my_isalpha(char c)
 {
-  if (128 <= (unsigned char) c) {
+  if (c < 0 || c >= 128) {
     return FALSE;
   }
-  return isalpha((int) ((unsigned char) c)) != 0;
+  return isalpha((int)((unsigned char)c)) != 0;
 }
 
 /****************************************************************************
   Wrapper function to work around broken libc implementations. See above.
 ****************************************************************************/
-bool fc_isdigit(char c)
+bool my_isdigit(char c)
 {
-  if (128 <= (unsigned char) c) {
+  if (c < 0 || c >= 128) {
     return FALSE;
   }
-  return isdigit((int) ((unsigned char) c)) != 0;
+  return isdigit((int)((unsigned char)c)) != 0;
 }
 
 /****************************************************************************
   Wrapper function to work around broken libc implementations. See above.
 ****************************************************************************/
-bool fc_isprint(char c)
+bool my_isprint(char c)
 {
-  if (128 <= (unsigned char) c) {
+  if (c < 0 || c >= 128) {
     return FALSE;
   }
-  return isprint((int) ((unsigned char) c)) != 0;
+  return isprint((int)((unsigned char)c)) != 0;
 }
 
 /****************************************************************************
   Wrapper function to work around broken libc implementations. See above.
 ****************************************************************************/
-bool fc_isspace(char c)
+bool my_isspace(char c)
 {
-  if (128 <= (unsigned char) c) {
+  if (c < 0 || c >= 128) {
     return FALSE;
   }
-  return isspace((int) ((unsigned char) c)) != 0;
+  return isspace((int)((unsigned char)c)) != 0;
 }
 
 /****************************************************************************
   Wrapper function to work around broken libc implementations. See above.
 ****************************************************************************/
-bool fc_isupper(char c)
+bool my_isupper(char c)
 {
-  if (128 <= (unsigned char) c) {
+  if (c < 0 || c >= 128) {
     return FALSE;
   }
-  return isupper((int) ((unsigned char) c)) != 0;
+  return isupper((int)((unsigned char)c)) != 0;
 }
 
 /****************************************************************************
   Wrapper function to work around broken libc implementations. See above.
 ****************************************************************************/
-char fc_toupper(char c)
+char my_toupper(char c)
 {
-  if (128 <= (unsigned char) c) {
+  if (c < 0 || c >= 128) {
     return c;
   }
-  return (char) toupper((int) ((unsigned char) c));
+  return (char) toupper((int)((unsigned char)c));
 }
 
 /****************************************************************************
   Wrapper function to work around broken libc implementations. See above.
 ****************************************************************************/
-char fc_tolower(char c)
+char my_tolower(char c)
 {
-  if (128 <= (unsigned char) c) {
+  if (c < 0 || c >= 128) {
     return c;
   }
-  return (char) tolower((int) ((unsigned char) c));
+  return (char) tolower((int)((unsigned char)c));
 }

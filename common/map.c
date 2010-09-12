@@ -14,22 +14,20 @@
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
-#include <string.h>             /* strlen */
+#include <assert.h>
+#include <string.h>		/* strlen */
 
-/* utility */
+#include "city.h"
 #include "fcintl.h"
+#include "game.h"
 #include "hash.h"
 #include "log.h"
 #include "mem.h"
+#include "movement.h"
+#include "packets.h"
 #include "rand.h"
 #include "shared.h"
 #include "support.h"
-
-/* common */
-#include "city.h"
-#include "game.h"
-#include "movement.h"
-#include "packets.h"
 #include "unit.h"
 #include "unitlist.h"
 
@@ -64,9 +62,6 @@ struct terrain_misc terrain_control;
  */
 const int DIR_DX[8] = { -1, 0, 1, -1, 1, -1, 0, 1 };
 const int DIR_DY[8] = { -1, -1, -1, 0, 0, 1, 1, 1 };
-
-static bool restrict_infra(const struct unit *punit, const struct tile *t1,
-                           const struct tile *t2);
 
 /****************************************************************************
   Return a bitfield of the specials on the tile that are infrastructure.
@@ -139,13 +134,11 @@ void map_init(void)
   /* The [xy]size values are set in map_init_topology.  It is initialized
    * to a non-zero value because some places erronously use these values
    * before they're initialized. */
-  map.xsize = MAP_DEFAULT_LINEAR_SIZE;
-  map.ysize = MAP_DEFAULT_LINEAR_SIZE;
+  map.xsize = MAP_MIN_LINEAR_SIZE;  
+  map.ysize = MAP_MIN_LINEAR_SIZE;
 
   if (is_server()) {
-    map.server.mapsize = MAP_DEFAULT_MAPSIZE;
     map.server.size = MAP_DEFAULT_SIZE;
-    map.server.tilesperplayer = MAP_DEFAULT_TILESPERPLAYER;
     map.server.seed = MAP_DEFAULT_SEED;
     map.server.riches = MAP_DEFAULT_RICHES;
     map.server.huts = MAP_DEFAULT_HUTS;
@@ -220,7 +213,7 @@ static void generate_map_indices(void)
 	       : (nat_center_y + map.ysize - 1));
   tiles = (nat_max_x - nat_min_x + 1) * (nat_max_y - nat_min_y + 1);
 
-  fc_assert(NULL == map.iterate_outwards_indices);
+  assert(map.iterate_outwards_indices == NULL);
   map.iterate_outwards_indices =
       fc_malloc(tiles * sizeof(*map.iterate_outwards_indices));
 
@@ -244,17 +237,17 @@ static void generate_map_indices(void)
       i++;
     }
   }
-  fc_assert(i == tiles);
+  assert(i == tiles);
 
   qsort(map.iterate_outwards_indices, tiles,
         sizeof(*map.iterate_outwards_indices), compare_iter_index);
 
 #if 0
   for (i = 0; i < tiles; i++) {
-    log_debug("%5d : (%3d,%3d) : %d", i,
-              map.iterate_outwards_indices[i].dx,
-              map.iterate_outwards_indices[i].dy,
-              map.iterate_outwards_indices[i].dist);
+    freelog(LOG_DEBUG, "%5d : (%3d,%3d) : %d", i,
+            map.iterate_outwards_indices[i].dx,
+            map.iterate_outwards_indices[i].dy,
+            map.iterate_outwards_indices[i].dist);
   }
 #endif
 
@@ -282,14 +275,14 @@ void map_init_topology(bool set_sizes)
   }
   
   /* sanity check for iso topologies*/
-  fc_assert(!MAP_IS_ISOMETRIC || (map.ysize % 2) == 0);
+  assert(!MAP_IS_ISOMETRIC || (map.ysize % 2) == 0);
 
   /* The size and ratio must satisfy the minimum and maximum *linear*
    * restrictions on width */
-  fc_assert(MAP_WIDTH >= MAP_MIN_LINEAR_SIZE);
-  fc_assert(MAP_HEIGHT >= MAP_MIN_LINEAR_SIZE);
-  fc_assert(MAP_WIDTH <= MAP_MAX_LINEAR_SIZE);
-  fc_assert(MAP_HEIGHT <= MAP_MAX_LINEAR_SIZE);
+  assert(MAP_WIDTH >= MAP_MIN_LINEAR_SIZE);
+  assert(MAP_HEIGHT >= MAP_MIN_LINEAR_SIZE);
+  assert(MAP_WIDTH <= MAP_MAX_LINEAR_SIZE);
+  assert(MAP_HEIGHT <= MAP_MAX_LINEAR_SIZE);
 
   map.num_valid_dirs = map.num_cardinal_dirs = 0;
   for (dir = 0; dir < 8; dir++) {
@@ -302,9 +295,9 @@ void map_init_topology(bool set_sizes)
       map.num_cardinal_dirs++;
     }
   }
-  fc_assert(map.num_valid_dirs > 0 && map.num_valid_dirs <= 8);
-  fc_assert(map.num_cardinal_dirs > 0
-            && map.num_cardinal_dirs <= map.num_valid_dirs);
+  assert(map.num_valid_dirs > 0 && map.num_valid_dirs <= 8);
+  assert(map.num_cardinal_dirs > 0
+	 && map.num_cardinal_dirs <= map.num_valid_dirs);
 }
 
 /***************************************************************
@@ -313,6 +306,11 @@ void map_init_topology(bool set_sizes)
 static void tile_init(struct tile *ptile)
 {
   ptile->continent = 0;
+
+  BV_CLR_ALL(ptile->tile_known);
+  vision_layer_iterate(v) {
+    BV_CLR_ALL(ptile->tile_seen[v]);
+  } vision_layer_iterate_end;
 
   tile_clear_all_specials (ptile);
   ptile->resource = NULL;
@@ -420,7 +418,7 @@ struct tile *index_to_tile(int index)
 ***************************************************************/
 static void tile_free(struct tile *ptile)
 {
-  unit_list_destroy(ptile->units);
+  unit_list_free(ptile->units);
   if (ptile->spec_sprite) {
     free(ptile->spec_sprite);
     ptile->spec_sprite = NULL;
@@ -433,10 +431,10 @@ static void tile_free(struct tile *ptile)
 **************************************************************************/
 void map_allocate(void)
 {
-  log_debug("map_allocate (was %p) (%d,%d)",
-            (void *) map.tiles, map.xsize, map.ysize);
+  freelog(LOG_DEBUG, "map_allocate (was %p) (%d,%d)",
+	  (void *)map.tiles, map.xsize, map.ysize);
 
-  fc_assert_ret(NULL == map.tiles);
+  assert(map.tiles == NULL);
   map.tiles = fc_calloc(MAP_INDEX_SIZE, sizeof(*map.tiles));
 
   /* Note this use of whole_map_iterate may be a bit sketchy, since the
@@ -716,7 +714,7 @@ static int tile_move_cost_ptrs(struct unit *punit,
    * leaving ships, so F_IGTER check has to be before native terrain
    * check. We want to give railroad bonus only to native units. */
   if (tile_has_special(t1, S_RAILROAD) && tile_has_special(t2, S_RAILROAD)
-      && native && !restrict_infra(punit, t1, t2)) {
+      && native) {
     return MOVE_COST_RAIL;
   }
   if (punit && unit_has_type_flag(punit, F_IGTER)) {
@@ -726,8 +724,7 @@ static int tile_move_cost_ptrs(struct unit *punit,
     /* Loading to transport or entering port */
     return SINGLE_MOVE;
   }
-  if (tile_has_special(t1, S_ROAD) && tile_has_special(t2, S_ROAD)
-      && !restrict_infra(punit, t1, t2)) {
+  if (tile_has_special(t1, S_ROAD) && tile_has_special(t2, S_ROAD)) {
     return MOVE_COST_ROAD;
   }
 
@@ -756,29 +753,6 @@ static int tile_move_cost_ptrs(struct unit *punit,
 }
 
 /****************************************************************************
-  Returns TRUE if there is a restriction with regard to the infrastructure,
-  i.e. at least one of the tiles t1 and t2 is claimed by a unfriendly
-  nation. This means that one can not use of the infrastructure (road,
-  railroad) on this tile.
-****************************************************************************/
-static bool restrict_infra(const struct unit *punit, const struct tile *t1,
-                           const struct tile *t2)
-{
-  struct player *plr1 = tile_owner(t1), *plr2 = tile_owner(t2);
-
-  if (!punit || !game.info.restrictinfra) {
-    return FALSE;
-  }
-
-  if ((plr1 && pplayers_at_war(plr1, unit_owner(punit)))
-      || (plr2 && pplayers_at_war(plr2, unit_owner(punit)))) {
-    return TRUE;
-  }
-
-  return FALSE;
-}
-
-/****************************************************************************
   map_move_cost_ai returns the move cost as
   calculated by tile_move_cost_ptrs (with no unit pointer to get
   unit-independent results) EXCEPT if either of the source or
@@ -795,9 +769,9 @@ int map_move_cost_ai(const struct tile *tile0, const struct tile *tile1)
 {
   const int maxcost = 72; /* Arbitrary. */
 
-  fc_assert_ret_val(!is_server()
-                    || (tile_terrain(tile0) != T_UNKNOWN
-                        && tile_terrain(tile1) != T_UNKNOWN), FC_INFINITY);
+  assert(!is_server()
+	 || (tile_terrain(tile0) != T_UNKNOWN 
+	  && tile_terrain(tile1) != T_UNKNOWN));
 
   /* A ship can take the step if:
    * - both tiles are ocean or
@@ -859,7 +833,7 @@ bool is_tiles_adjacent(const struct tile *tile0, const struct tile *tile1)
 ***************************************************************/
 bool same_pos(const struct tile *tile1, const struct tile *tile2)
 {
-  fc_assert_ret_val(tile1 != NULL && tile2 != NULL, FALSE);
+  assert(tile1 != NULL && tile2 != NULL);
   return (tile1 == tile2);
 }
 
@@ -1012,7 +986,7 @@ struct tile *rand_neighbour(const struct tile *ptile)
   /* This clever loop by Trent Piepho will take no more than
    * 8 tries to find a valid direction. */
   for (n = 8; n > 0; n--) {
-    enum direction8 choice = (enum direction8) fc_rand(n);
+    enum direction8 choice = (enum direction8) myrand(n);
 
     /* this neighbour's OK */
     tile1 = mapstep(ptile, dirs[choice]);
@@ -1025,7 +999,7 @@ struct tile *rand_neighbour(const struct tile *ptile)
     dirs[choice] = dirs[n - 1];
   }
 
-  fc_assert(FALSE);     /* Are we on a 1x1 map with no wrapping??? */
+  assert(0);			/* Are we on a 1x1 map with no wrapping??? */
   return NULL;
 }
 
@@ -1035,7 +1009,7 @@ struct tile *rand_neighbour(const struct tile *ptile)
 **************************************************************************/
 struct tile *rand_map_pos(void)
 {
-  int nat_x = fc_rand(map.xsize), nat_y = fc_rand(map.ysize);
+  int nat_x = myrand(map.xsize), nat_y = myrand(map.ysize);
 
   return native_pos_to_tile(nat_x, nat_y);
 }
@@ -1057,7 +1031,7 @@ struct tile *rand_map_pos_filtered(void *data,
   /* First do a few quick checks to find a spot.  The limit on number of
    * tries could use some tweaking. */
   do {
-    ptile = map.tiles + fc_rand(MAP_INDEX_SIZE);
+    ptile = map.tiles + myrand(MAP_INDEX_SIZE);
   } while (filter && !filter(ptile, data) && ++tries < max_tries);
 
   /* If that fails, count all available spots and pick one.
@@ -1076,7 +1050,7 @@ struct tile *rand_map_pos_filtered(void *data,
       return NULL;
     }
 
-    return map.tiles + positions[fc_rand(count)];
+    return map.tiles + positions[myrand(count)];
   } else {
     return ptile;
   }
@@ -1134,7 +1108,7 @@ enum direction8 dir_cw(enum direction8 dir)
   case DIR8_NORTHWEST:
     return DIR8_NORTH;
   default:
-    fc_assert(FALSE);
+    assert(0);
     return -1;
   }
 }
@@ -1163,7 +1137,7 @@ enum direction8 dir_ccw(enum direction8 dir)
   case DIR8_NORTHWEST:
     return DIR8_WEST;
   default:
-    fc_assert(FALSE);
+    assert(0);
     return -1;
   }
 }
@@ -1250,7 +1224,7 @@ int get_direction_for_step(const struct tile *start_tile,
     return dir;
   }
 
-  fc_assert(FALSE);
+  assert(0);
   return -1;
 }
 

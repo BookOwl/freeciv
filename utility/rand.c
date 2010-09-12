@@ -35,17 +35,19 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
+
 #include "log.h"
-#include "support.h"            /* TRUE, FALSE */
+#include "shared.h"		/* TRUE, FALSE */
 
 #include "rand.h"
 
-#define log_rand log_debug
+#define LOG_RAND LOG_DEBUG
 
 /* A global random state:
- * Initialized by fc_srand(), updated by fc_rand(),
- * Can be duplicated/saved/restored via fc_rand_state()
- * and fc_rand_set_state().
+ * Initialized by mysrand(), updated by myrand(),
+ * Can be duplicated/saved/restored via get_myrand_state()
+ * and set_myrand_state().
  */
 static RANDOM_STATE rand_state;
 
@@ -76,13 +78,13 @@ static RANDOM_STATE rand_state;
   directly representable in type RANDOM_TYPE, so we do instead:
          divisor = MAX_UINT32/size
 *************************************************************************/
-RANDOM_TYPE fc_rand_debug(RANDOM_TYPE size, const char *called_as,
-                          int line, const char *file) 
+RANDOM_TYPE myrand_debug(RANDOM_TYPE size, const char *called_as,
+			 int line, const char *file) 
 {
   RANDOM_TYPE new_rand, divisor, max;
   int bailout = 0;
 
-  fc_assert_ret_val(rand_state.is_init, 0);
+  assert(rand_state.is_init);
 
   if (size > 1) {
     divisor = MAX_UINT32 / size;
@@ -108,9 +110,8 @@ RANDOM_TYPE fc_rand_debug(RANDOM_TYPE size, const char *called_as,
     rand_state.v[rand_state.x] = new_rand;
 
     if (++bailout > 10000) {
-      log_error("%s(%lu) = %lu bailout at %s:%d", 
-                called_as, (unsigned long) size,
-                (unsigned long) new_rand, file, line);
+      freelog(LOG_ERROR, "%s(%lu) = %lu bailout at %s:%d", 
+	    called_as, (unsigned long)size, (unsigned long)new_rand, file, line);
       new_rand = 0;
       break;
     }
@@ -123,9 +124,8 @@ RANDOM_TYPE fc_rand_debug(RANDOM_TYPE size, const char *called_as,
     new_rand = 0;
   }
 
-  log_rand("%s(%lu) = %lu at %s:%d",
-           called_as, (unsigned long) size,
-           (unsigned long) new_rand, file, line);
+  freelog(LOG_RAND, "%s(%lu) = %lu at %s:%d",
+	    called_as, (unsigned long)size, (unsigned long)new_rand, file, line);
 
   return new_rand;
 } 
@@ -133,7 +133,7 @@ RANDOM_TYPE fc_rand_debug(RANDOM_TYPE size, const char *called_as,
 /*************************************************************************
   Initialize the generator; see comment at top of file.
 *************************************************************************/
-void fc_srand(RANDOM_TYPE seed) 
+void mysrand(RANDOM_TYPE seed) 
 { 
     int  i; 
 
@@ -150,21 +150,21 @@ void fc_srand(RANDOM_TYPE seed)
     rand_state.is_init = TRUE;
 
     /* Heat it up a bit:
-     * Using modulus in fc_rand() this was important to pass
-     * test_random1().  Now using divisor in fc_rand() that particular
+     * Using modulus in myrand() this was important to pass
+     * test_random1().  Now using divisor in myrand() that particular
      * test no longer indicates problems, but this seems a good idea
      * anyway -- eg, other tests could well reveal other initial
      * problems even using divisor.
      */
     for (i=0; i<10000; i++) {
-      (void) fc_rand(MAX_UINT32);
+      (void) myrand(MAX_UINT32);
     }
 } 
 
 /*************************************************************************
   Return whether the current state has been initialized.
 *************************************************************************/
-bool fc_rand_is_init(void)
+bool myrand_is_init(void)
 {
   return rand_state.is_init;
 }
@@ -172,18 +172,18 @@ bool fc_rand_is_init(void)
 /*************************************************************************
   Return a copy of the current rand_state; eg for save/restore.
 *************************************************************************/
-RANDOM_STATE fc_rand_state(void)
+RANDOM_STATE get_myrand_state(void)
 {
   int i;
 
-  log_rand("fc_rand_state J=%d K=%d X=%d",
-           rand_state.j, rand_state.k, rand_state.x);
+  freelog(LOG_RAND, "get_myrand_state J=%d K=%d X=%d",
+    rand_state.j, rand_state.k, rand_state.x);
   for (i  = 0; i < 8; i++) {
-    log_rand("fc_rand_state %d, %08x %08x %08x %08x %08x %08x %08x",
-             i, rand_state.v[7 * i],
-             rand_state.v[7 * i + 1], rand_state.v[7 * i + 2],
-             rand_state.v[7 * i + 3], rand_state.v[7 * i + 4],
-             rand_state.v[7 * i + 5], rand_state.v[7 * i + 6]);
+    freelog(LOG_RAND, "get_myrand_state %d, %08x %08x %08x %08x %08x %08x %08x",
+      i, rand_state.v[7 * i],
+      rand_state.v[7 * i + 1], rand_state.v[7 * i + 2],
+      rand_state.v[7 * i + 3], rand_state.v[7 * i + 4],
+      rand_state.v[7 * i + 5], rand_state.v[7 * i + 6]);
   }
 
   return rand_state;
@@ -193,20 +193,20 @@ RANDOM_STATE fc_rand_state(void)
   Replace current rand_state with user-supplied; eg for save/restore.
   Caller should take care to set state.is_init beforehand if necessary.
 *************************************************************************/
-void fc_rand_set_state(RANDOM_STATE state)
+void set_myrand_state(RANDOM_STATE state)
 {
   int i;
 
   rand_state = state;
 
-  log_rand("fc_rand_set_state J=%d K=%d X=%d",
-           rand_state.j, rand_state.k, rand_state.x);
+  freelog(LOG_RAND, "set_myrand_state J=%d K=%d X=%d",
+    rand_state.j, rand_state.k, rand_state.x);
   for (i  = 0; i < 8; i++) {
-    log_rand("fc_rand_set_state %d, %08x %08x %08x %08x %08x %08x %08x",
-             i, rand_state.v[7 * i],
-             rand_state.v[7 * i + 1], rand_state.v[7 * i + 2],
-             rand_state.v[7 * i + 3], rand_state.v[7 * i + 4],
-             rand_state.v[7 * i + 5], rand_state.v[7 * i + 6]);
+    freelog(LOG_RAND, "set_myrand_state %d, %08x %08x %08x %08x %08x %08x %08x",
+      i, rand_state.v[7 * i],
+      rand_state.v[7 * i + 1], rand_state.v[7 * i + 2],
+      rand_state.v[7 * i + 3], rand_state.v[7 * i + 4],
+      rand_state.v[7 * i + 5], rand_state.v[7 * i + 6]);
   }
 }
 
@@ -224,11 +224,11 @@ void test_random1(int n)
   bool didchange, olddidchange = FALSE;
   int behaviourchange = 0, behavioursame = 0;
 
-  saved_state = fc_rand_state();
-  /* fc_srand(time(NULL)); */  /* use current state */
+  saved_state = get_myrand_state();
+  /* mysrand(time(NULL)); */  /* use current state */
 
   for (i = 0; i < n+2; i++) {
-    new_value = fc_rand(2);
+    new_value = myrand(2);
     if (i > 0) {		/* have old */
       didchange = (new_value != old_value);
       if (i > 1) {		/* have olddidchange */
@@ -242,23 +242,22 @@ void test_random1(int n)
     }
     old_value = new_value;
   }
-  log_test("test_random1(%d) same: %d, change: %d",
-           n, behavioursame, behaviourchange);
+  freelog(LOG_TEST, "test_random1(%d) same: %d, change: %d",
+	  n, behavioursame, behaviourchange);
 
   /* restore state: */
-  fc_rand_set_state(saved_state);
+  set_myrand_state(saved_state);
 }
 
 /*************************************************************************
   Local pseudo-random function for repeatedly reaching the same result,
-  instead of fc_rand().  Primarily needed for tiles.
+  instead of myrand().  Primarily needed for tiles.
 
   Use an invariant equation for seed.
   Result is 0 to (size - 1).
 *************************************************************************/
-RANDOM_TYPE fc_randomly_debug(RANDOM_TYPE seed, RANDOM_TYPE size,
-                              const char *called_as,
-                              int line, const char *file)
+RANDOM_TYPE myrandomly_debug(RANDOM_TYPE seed, RANDOM_TYPE size,
+			     const char *called_as, int line, const char *file)
 {
   RANDOM_TYPE result;
 
@@ -266,14 +265,14 @@ RANDOM_TYPE fc_randomly_debug(RANDOM_TYPE seed, RANDOM_TYPE size,
 #define SMALL_PRIME (1009)
 
   /* Check for overflow and underflow */
-  fc_assert_ret_val(seed < MAX_UINT32 / LARGE_PRIME, 0);
-  fc_assert_ret_val(size < SMALL_PRIME, 0);
-  fc_assert_ret_val(size > 0, 0);
+  assert(seed < MAX_UINT32 / LARGE_PRIME);
+  assert(size < SMALL_PRIME);
+  assert(size > 0);
   result = ((seed * LARGE_PRIME) % SMALL_PRIME) % size;
 
-  log_rand("%s(%lu,%lu) = %lu at %s:%d",
-           called_as, (unsigned long) seed, (unsigned long) size,
-           (unsigned long) result, file, line);
+  freelog(LOG_RAND, "%s(%lu,%lu) = %lu at %s:%d",
+	  called_as, (unsigned long)seed, (unsigned long)size,
+	  (unsigned long)result, file, line);
 
   return result;
 }

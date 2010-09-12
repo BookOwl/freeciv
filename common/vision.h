@@ -86,7 +86,7 @@ struct vision {
 
 #define ASSERT_VISION(v)						\
  do {									\
-   fc_assert((v)->radius_sq[V_MAIN] >= (v)->radius_sq[V_INVIS]);	\
+   assert((v)->radius_sq[V_MAIN] >= (v)->radius_sq[V_INVIS]);		\
  } while(FALSE);
 
 struct vision *vision_new(struct player *pplayer, struct tile *ptile);
@@ -102,6 +102,20 @@ bool vision_reveal_tiles(struct vision *vision, bool reveal_tiles);
 
 #define vision_layer_iterate_end					\
   }									\
+}
+
+/* Using vision_layer_iterate at server side is dangerous when fogging
+ * tiles because it iterates V_MAIN first, able to crash the clients in
+ * handle_tile_info() in client/packhand.c on a failed assertion if the
+ * tile info is received before the units on the V_INVIS layer aren't gone
+ * out sight yet. */
+#define vision_layer_reverse_iterate(vision)                                \
+{                                                                           \
+  int vision = V_COUNT - 1;                                                 \
+  for (; vision >= 0; vision--) {
+
+#define vision_layer_reverse_iterate_end                                    \
+  }                                                                         \
 }
 
 

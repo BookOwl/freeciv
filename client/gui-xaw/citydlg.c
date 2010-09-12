@@ -33,7 +33,6 @@
 #include <X11/IntrinsicP.h>
 
 /* utility */
-#include "bitvector.h"
 #include "fcintl.h"
 #include "log.h"
 #include "mem.h"
@@ -206,7 +205,7 @@ static void get_contents_of_pollution(struct city_dialog *pdialog,
     pollution=pcity->pollution;
   }
 
-  fc_snprintf(retbuf, n, _("Pollution:    %3d"), pollution);
+  my_snprintf(retbuf, n, _("Pollution:    %3d"), pollution);
 }
 
 /****************************************************************
@@ -226,7 +225,7 @@ static void get_contents_of_storage(struct city_dialog *pdialog,
   }
 
   /* We used to mark cities with a granary with a "*" here. */
-  fc_snprintf(retbuf, n, _("Granary:  %3d/%-3d"),
+  my_snprintf(retbuf, n, _("Granary:  %3d/%-3d"),
 	      foodstock, foodbox);
 }
 
@@ -254,7 +253,7 @@ static void get_contents_of_production(struct city_dialog *pdialog,
     tradesurplus = pcity->surplus[O_TRADE];
   }
 
-  fc_snprintf(retbuf, n,
+  my_snprintf(retbuf, n,
 	  _("Food:  %3d (%+-4d)\n"
 	    "Prod:  %3d (%+-4d)\n"
 	    "Trade: %3d (%+-4d)"),
@@ -283,7 +282,7 @@ static void get_contents_of_output(struct city_dialog *pdialog,
     scitotal=pcity->prod[O_SCIENCE];
   }
 
-  fc_snprintf(retbuf, n, 
+  my_snprintf(retbuf, n, 
 	  _("Gold:  %3d (%+-4d)\n"
 	    "Lux:   %3d\n"
 	    "Sci:   %3d"),
@@ -310,9 +309,9 @@ static void get_contents_of_worklist(struct city_dialog *pdialog,
   struct city *pcity = pdialog ? pdialog->pcity : NULL;
 
   if (pcity && worklist_is_empty(&pcity->worklist)) {
-    fc_strlcpy(retbuf, _("(is empty)"), n);
+    mystrlcpy(retbuf, _("(is empty)"), n);
   } else {
-    fc_strlcpy(retbuf, _("(in prog.)"), n);
+    mystrlcpy(retbuf, _("(in prog.)"), n);
   }
 }
 
@@ -346,7 +345,7 @@ bool city_dialog_is_open(struct city *pcity)
 /****************************************************************
 ...
 *****************************************************************/
-void real_city_dialog_refresh(struct city *pcity)
+void refresh_city_dialog(struct city *pcity)
 {
   struct city_dialog *pdialog;
   
@@ -418,7 +417,7 @@ void refresh_unit_city_dialogs(struct unit *punit)
 /****************************************************************
 popup the dialog 10% inside the main-window 
 *****************************************************************/
-void real_city_dialog_popup(struct city *pcity)
+void popup_city_dialog(struct city *pcity)
 {
   struct city_dialog *pdialog;
   
@@ -1060,7 +1059,7 @@ struct city_dialog *create_city_dialog(struct city *pcity)
 
   XtRealizeWidget(pdialog->shell);
 
-  real_city_dialog_refresh(pdialog->pcity);
+  refresh_city_dialog(pdialog->pcity);
 /*
   if(make_modal)
     XtSetSensitive(toplevel, FALSE);
@@ -1445,7 +1444,7 @@ void trade_callback(Widget w, XtPointer client_data, XtPointer call_data)
 
   pdialog=(struct city_dialog *)client_data;
 
-  fc_snprintf(buf, sizeof(buf),
+  my_snprintf(buf, sizeof(buf),
 	      _("These trade routes have been established with %s:\n"),
 	      city_name(pdialog->pcity));
   bptr = end_of_strn(bptr, &nleft);
@@ -1456,19 +1455,19 @@ void trade_callback(Widget w, XtPointer client_data, XtPointer call_data)
       x=1;
       total+=pdialog->pcity->trade_value[i];
       if((pcity=game_find_city_by_number(pdialog->pcity->trade[i]))) {
-	fc_snprintf(bptr, nleft, _("%32s: %2d Trade/Year\n"),
+	my_snprintf(bptr, nleft, _("%32s: %2d Trade/Year\n"),
 		    city_name(pcity), pdialog->pcity->trade_value[i]);
 	bptr = end_of_strn(bptr, &nleft);
       } else {	
-	fc_snprintf(bptr, nleft, _("%32s: %2d Trade/Year\n"), _("Unknown"),
+	my_snprintf(bptr, nleft, _("%32s: %2d Trade/Year\n"), _("Unknown"),
 		    pdialog->pcity->trade_value[i]);
 	bptr = end_of_strn(bptr, &nleft);
       }
     }
   if (!x) {
-    fc_strlcpy(bptr, _("No trade routes exist.\n"), nleft);
+    mystrlcpy(bptr, _("No trade routes exist.\n"), nleft);
   } else {
-    fc_snprintf(bptr, nleft, _("\nTotal trade %d Trade/Year\n"), total);
+    my_snprintf(bptr, nleft, _("\nTotal trade %d Trade/Year\n"), total);
   }
   
   popup_message_dialog(pdialog->shell, 
@@ -1559,7 +1558,7 @@ static void citizen_callback(Widget w, XtPointer client_data,
       break;
     }
   }
-  fc_assert(i < pdialog->pcity->size);
+  assert(i < pdialog->pcity->size);
 
   city_rotate_specialist(pdialog->pcity, i);
 }
@@ -1694,7 +1693,7 @@ void city_dialog_update_supported_units(struct city_dialog *pdialog,
 
   if (NULL != client.conn.playing
       && city_owner(pdialog->pcity) != client.conn.playing) {
-    plist = pdialog->pcity->client.info_units_supported;
+    plist = pdialog->pcity->info_units_supported;
   } else {
     plist = pdialog->pcity->units_supported;
   }
@@ -1757,7 +1756,7 @@ void city_dialog_update_present_units(struct city_dialog *pdialog, int unitid)
 
   if (NULL != client.conn.playing
       && city_owner(pdialog->pcity) != client.conn.playing) {
-    plist = pdialog->pcity->client.info_units_present;
+    plist = pdialog->pcity->info_units_present;
   } else {
     plist = pdialog->pcity->tile->units;
   }
@@ -1813,7 +1812,7 @@ void city_dialog_update_title(struct city_dialog *pdialog)
   char buf[512];
   String now;
   
-  fc_snprintf(buf, sizeof(buf), _("%s - %s citizens  Governor: %s"),
+  my_snprintf(buf, sizeof(buf), _("%s - %s citizens  Governor: %s"),
 	      city_name(pdialog->pcity),
 	      population_to_text(city_population(pdialog->pcity)),
                    cmafec_get_short_descr_of_city(pdialog->pcity));
@@ -1879,9 +1878,8 @@ void citydlg_btn_select_citymap(Widget w, XEvent *event)
     if (!cma_is_city_under_agent(pcity, NULL)) {
       int xtile, ytile;
 
-      if (canvas_to_city_pos(&xtile, &ytile,
-                             city_map_radius_sq_get(pcity), ev->x, ev->y)) {
-        city_toggle_worker(pcity, xtile, ytile);
+      if (canvas_to_city_pos(&xtile, &ytile, ev->x, ev->y)) {
+	city_toggle_worker(pcity, xtile, ytile);
       }
     }
   }
@@ -1926,7 +1924,7 @@ void buy_callback(Widget w, XtPointer client_data, XtPointer call_data)
   }
 
   if (value <= client.conn.playing->economic.gold) {
-    fc_snprintf(buf, sizeof(buf),
+    my_snprintf(buf, sizeof(buf),
 		_("Buy %s for %d gold?\nTreasury contains %d gold."), 
 		name, value, client.conn.playing->economic.gold);
     popup_message_dialog(pdialog->shell, "buydialog", buf,
@@ -1935,7 +1933,7 @@ void buy_callback(Widget w, XtPointer client_data, XtPointer call_data)
 			 NULL);
   }
   else {
-    fc_snprintf(buf, sizeof(buf),
+    my_snprintf(buf, sizeof(buf),
 		_("%s costs %d gold.\nTreasury contains %d gold."), 
 		name, value, client.conn.playing->economic.gold);
     popup_message_dialog(pdialog->shell, "buynodialog", buf,
@@ -2292,7 +2290,7 @@ void sell_callback(Widget w, XtPointer client_data, XtPointer call_data)
 	}
 
 	pdialog->sell_id = improvement_number(pimprove);
-	fc_snprintf(buf, sizeof(buf), _("Sell %s for %d gold?"),
+	my_snprintf(buf, sizeof(buf), _("Sell %s for %d gold?"),
 		    city_improvement_name_translation(pdialog->pcity, pimprove),
 		    impr_sell_gold(pimprove));
 
@@ -2316,12 +2314,21 @@ void close_city_dialog(struct city_dialog *pdialog)
     XtDestroyWidget(pdialog->worklist_shell);
 
   XtDestroyWidget(pdialog->shell);
-  dialog_list_remove(dialog_list, pdialog);
+  dialog_list_unlink(dialog_list, pdialog);
 
   free(pdialog->citizen_labels);
 
   free(pdialog->support_unit_pixcomms);
   free(pdialog->present_unit_pixcomms);
+
+  unit_list_iterate(pdialog->pcity->info_units_supported, psunit) {
+    free(psunit);
+  } unit_list_iterate_end;
+  unit_list_clear(pdialog->pcity->info_units_supported);
+  unit_list_iterate(pdialog->pcity->info_units_present, psunit) {
+    free(psunit);
+  } unit_list_iterate_end;
+  unit_list_clear(pdialog->pcity->info_units_present);
 
 /*
   if(pdialog->is_modal)
@@ -2547,7 +2554,7 @@ void cityopt_ok_command_callback(Widget w, XtPointer client_data,
     bv_city_options new_options;
     Boolean b;
 
-    fc_assert(CITYO_LAST == 3);
+    assert(CITYO_LAST == 3);
 
     BV_CLR_ALL(new_options);
 /*    for(i=0; i<NUM_CITYOPT_TOGGLES; i++)  {

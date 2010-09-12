@@ -15,8 +15,9 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
+
 /* utility */
-#include "bitvector.h"
 #include "log.h"
 #include "mem.h"
 #include "pqueue.h"
@@ -38,7 +39,7 @@
 
 /* Since speed is quite important to us and alloccation of large arrays is
  * slow, we try to pack info in the smallest types possible */
-typedef int mapindex_t;
+typedef short mapindex_t;
 typedef unsigned char utiny_t;
 
 /* ===================== Internal structures ===================== */
@@ -182,30 +183,37 @@ static inline int get_total_CC(const struct pf_parameter *param,
 static inline void finalize_position(const struct pf_parameter *param,
                                      struct pf_position *pos)
 {
-  int move_rate = param->move_rate;
+  int move_rate;
 
-  pos->turn *= param->fuel;
-  if (move_rate > 0) {
-    pos->turn += ((move_rate - pos->moves_left) / move_rate);
+  if (param->turn_mode == TM_BEST_TIME
+      || param->turn_mode == TM_WORST_TIME) {
+    pos->turn *= param->fuel;
+    move_rate = param->move_rate;
+    if (move_rate > 0) {
+      pos->turn += ((move_rate - pos->moves_left) / move_rate);
 
-    /* We add 1 because a fuel of 1 means "no" fuel left; e.g. fuel
-     * ranges from [1,ut->fuel] not from [0,ut->fuel) as one may think. */
-    pos->fuel_left = pos->moves_left / move_rate + 1;
+      /* We add 1 because a fuel of 1 means "no" fuel left; e.g. fuel
+       * ranges from [1,ut->fuel] not from [0,ut->fuel) as one may think. */
+      pos->fuel_left = pos->moves_left / move_rate + 1;
 
-    pos->moves_left %= move_rate;
-  } else {
-    /* This unit cannot move by itself. */
-    pos->turn = same_pos(pos->tile, param->start_tile) ? 0 : FC_INFINITY;
-    pos->fuel_left = 0;
+      pos->moves_left %= move_rate;
+    } else {
+      /* This unit cannot move by itself. */
+      pos->turn = same_pos(pos->tile, param->start_tile) ? 0 : FC_INFINITY;
+      pos->fuel_left = 0;
+    }
   }
 }
+
 
 
 /* ============ Specific pf_normal_* mode structures ============= */
 
 /* Some comments on implementation:
- * 1. dir_to_here is for backtracking along the tree of shortest paths
- * 2. node_known_type, behavior, zoc_number and extra_tile are all cached
+ * 1. cost (aka total_MC) is sum of MCs altered to fit to the turn_mode
+ *    see adjust_cost
+ * 2. dir_to_here is for backtracking along the tree of shortest paths
+ * 3. node_known_type, behavior, zoc_number and extra_tile are all cached
  *    values.
  * It is possible to shove them into a separate array which is allocated
  * only if a corresponding option in the parameter is set.  A less drastic
@@ -239,16 +247,14 @@ struct pf_normal_map {
 /* Up-cast macro. */
 #ifdef PF_DEBUG
 static inline struct pf_normal_map *
-pf_normal_map_check(struct pf_map *pfm, const char *file, 
-                    const char *function, int line)
+pf_normal_map_check(struct pf_map *pfm, const char *file, int line)
 {
-  fc_assert_full(file, function, line,
-                 NULL != pfm && pfm->mode == PF_NORMAL,
-                 return NULL, "Wrong pf_map to pf_normal_map conversion.");
+  if (!pfm || pfm->mode != PF_NORMAL) {
+    real_die(file, line, "Wrong pf_map to pf_normal_map conversion");
+  }
   return (struct pf_normal_map *) pfm;
 }
-#define PF_NORMAL_MAP(pfm) \
-  pf_normal_map_check(pfm, __FILE__, __FUNCTION__, __LINE__)
+#define PF_NORMAL_MAP(pfm) pf_normal_map_check(pfm, __FILE__, __LINE__)
 #else
 #define PF_NORMAL_MAP(pfm) ((struct pf_normal_map *) (pfm))
 #endif /* PF_DEBUG */
@@ -334,19 +340,33 @@ static void pf_normal_map_fill_position(const struct pf_normal_map *pfnm,
   const struct pf_parameter *params = pf_map_get_parameter(PF_MAP(pfnm));
 
 #ifdef PF_DEBUG
-  fc_assert_ret_msg(NS_PROCESSED == node->status
-                    || same_pos(ptile, PF_MAP(pfnm)->tile),
-                    "Unreached destination (%d, %d).", TILE_XY(ptile));
+  if (node->status != NS_PROCESSED
+      && !same_pos(ptile, PF_MAP(pfnm)->tile)) {
+    die("pf_normal_map_fill_position to an unreached destination");
+    return;
+  }
 #endif /* PF_DEBUG */
 
   pos->tile = ptile;
   pos->total_EC = node->extra_cost;
   pos->total_MC = (node->cost - get_move_rate(params)
                    + get_moves_left_initially(params));
-  pos->turn = get_turn(params, node->cost);
-  pos->moves_left = get_moves_left(params, node->cost);
+  if (params->turn_mode == TM_BEST_TIME
+      || params->turn_mode == TM_WORST_TIME) {
+    pos->turn = get_turn(params, node->cost);
+    pos->moves_left = get_moves_left(params, node->cost);
+  } else if (params->turn_mode == TM_NONE
+             || params->turn_mode == TM_CAPPED) {
+    pos->turn = -1;
+    pos->moves_left = -1;
+    pos->fuel_left = -1;
+  } else {
+    die("unknown TC");
+  }
+
   pos->dir_to_here = node->dir_to_here;
-  pos->dir_to_next_pos = -1;    /* This field does not apply. */
+  /* This field does not apply */
+  pos->dir_to_next_pos = -1;
 
   finalize_position(params, pos);
 }
@@ -367,10 +387,11 @@ pf_normal_map_construct_path(const struct pf_normal_map *pfnm,
   int i;
 
 #ifdef PF_DEBUG
-  fc_assert_ret_val_msg(NS_PROCESSED == node->status
-                        || same_pos(dest_tile, PF_MAP(pfnm)->tile), NULL,
-                        "Unreached destination (%d, %d).",
-                        TILE_XY(dest_tile));
+  if (node->status != NS_PROCESSED
+      && !same_pos(dest_tile, PF_MAP(pfnm)->tile)) {
+    die("construct_path to an unreached destination");
+    return NULL;
+  }
 #endif /* PF_DEBUG */
 
   ptile = dest_tile;
@@ -414,7 +435,7 @@ pf_normal_map_construct_path(const struct pf_normal_map *pfnm,
 }
 
 /*********************************************************************
-  Adjust MC to reflect the move_rate.
+  Adjust MC to reflect the turn mode and the move_rate.
 *********************************************************************/
 static int pf_normal_map_adjust_cost(const struct pf_normal_map *pfnm,
                                      int cost)
@@ -423,13 +444,33 @@ static int pf_normal_map_adjust_cost(const struct pf_normal_map *pfnm,
   const struct pf_normal_node *node;
   int moves_left;
 
-  fc_assert_ret_val(cost >= 0, PF_IMPOSSIBLE_MC);
+  assert(cost >= 0);
 
   params = pf_map_get_parameter(PF_MAP(pfnm));
   node = &pfnm->lattice[tile_index(PF_MAP(pfnm)->tile)];
-  moves_left = get_moves_left(params, node->cost);
-  if (cost > moves_left) {
-    cost = moves_left;
+
+  switch (params->turn_mode) {
+  case TM_NONE:
+    break;
+  case TM_CAPPED:
+    cost = MIN(cost, get_move_rate(params));
+    break;
+  case TM_WORST_TIME:
+    cost = MIN(cost, get_move_rate(params));
+    moves_left = get_moves_left(params, node->cost);
+    if (cost > moves_left) {
+      cost += moves_left;
+    }
+    break;
+  case TM_BEST_TIME:
+    moves_left = get_moves_left(params, node->cost);
+    if (cost > moves_left) {
+      cost = moves_left;
+    }
+    break;
+  default:
+    die("unknown TM");
+    break;
   }
   return cost;
 }
@@ -714,7 +755,7 @@ static struct pf_map *pf_normal_map_new(const struct pf_parameter *parameter)
   pfnm->queue = pq_create(INITIAL_QUEUE_SIZE);
 
   /* MC callback must be set */
-  fc_assert_ret_val(parameter->get_MC != NULL, NULL);
+  assert(parameter->get_MC != NULL);
 
   /* Copy parameters */
   *params = *parameter;
@@ -752,8 +793,10 @@ static struct pf_map *pf_normal_map_new(const struct pf_parameter *parameter)
 /* ============ Specific pf_danger_* mode structures ============= */
 
 /* Some comments on implementation:
- * 1. dir_to_here is for backtracking along the tree of shortest paths
- * 2. node_known_type, behavior, zoc_number, extra_tile and waited
+ * 1. cost (aka total_MC) is sum of MCs altered to fit to the turn_mode
+ * see adjust_cost
+ * 2. dir_to_here is for backtracking along the tree of shortest paths
+ * 3. node_known_type, behavior, zoc_number, extra_tile and waited
  * are all cached values.
  * It is possible to shove them into a separate array which is allocated
  * only if a corresponding option in the parameter is set.  A less drastic
@@ -798,16 +841,14 @@ struct pf_danger_map {
 /* Up-cast macro. */
 #ifdef PF_DEBUG
 static inline struct pf_danger_map *
-pf_danger_map_check(struct pf_map *pfm, const char *file,
-                    const char *function, int line)
+pf_danger_map_check(struct pf_map *pfm, const char *file, int line)
 {
-  fc_assert_full(file, function, line,
-                 NULL != pfm && pfm->mode == PF_DANGER,
-                 return NULL, "Wrong pf_map to pf_danger_map conversion.");
+  if (!pfm || pfm->mode != PF_DANGER) {
+    real_die(file, line, "Wrong pf_map to pf_danger_map conversion");
+  }
   return (struct pf_danger_map *) pfm;
 }
-#define PF_DANGER_MAP(pfm) \
-  pf_danger_map_check(pfm, __FILE__, __FUNCTION__, __LINE__)
+#define PF_DANGER_MAP(pfm) pf_danger_map_check(pfm, __FILE__, __LINE__)
 #else
 #define PF_DANGER_MAP(pfm) ((struct pf_danger_map *) (pfm))
 #endif /* PF_DEBUG */
@@ -897,19 +938,33 @@ static void pf_danger_map_fill_position(const struct pf_danger_map *pfdm,
   const struct pf_parameter *params = pf_map_get_parameter(PF_MAP(pfdm));
 
 #ifdef PF_DEBUG
-  fc_assert_ret_msg(NS_PROCESSED == node->status
-                    || same_pos(ptile, PF_MAP(pfdm)->tile),
-                    "Unreached destination (%d, %d).", TILE_XY(ptile));
+  if (node->status != NS_PROCESSED
+      && !same_pos(ptile, PF_MAP(pfdm)->tile)) {
+    die("pf_normal_map_fill_position to an unreached destination");
+    return;
+  }
 #endif /* PF_DEBUG */
 
   pos->tile = ptile;
   pos->total_EC = node->extra_cost;
   pos->total_MC = (node->cost - get_move_rate(params)
                    + get_moves_left_initially(params));
-  pos->turn = get_turn(params, node->cost);
-  pos->moves_left = get_moves_left(params, node->cost);
+  if (params->turn_mode == TM_BEST_TIME
+      || params->turn_mode == TM_WORST_TIME) {
+    pos->turn = get_turn(params, node->cost);
+    pos->moves_left = get_moves_left(params, node->cost);
+  } else if (params->turn_mode == TM_NONE
+             || params->turn_mode == TM_CAPPED) {
+    pos->turn = -1;
+    pos->moves_left = -1;
+    pos->fuel_left = -1;
+  } else {
+    die("unknown TC");
+  }
+
   pos->dir_to_here = node->dir_to_here;
-  pos->dir_to_next_pos = -1;    /* This field does not apply. */
+  /* This field does not apply */
+  pos->dir_to_next_pos = -1;
 
   finalize_position(params, pos);
 }
@@ -950,6 +1005,12 @@ pf_danger_map_construct_path(const struct pf_danger_map *pfdm,
   const struct pf_parameter *params = pf_map_get_parameter(PF_MAP(pfdm));
   struct pf_position *pos;
   int i;
+
+  if (params->turn_mode != TM_BEST_TIME
+      && params->turn_mode != TM_WORST_TIME) {
+    die("illegal TM in path-finding with danger");
+    return NULL;
+  }
 
   /* First iterate to find path length */
   while (!same_pos(iter_tile, params->start_tile)) {
@@ -1024,7 +1085,7 @@ pf_danger_map_construct_path(const struct pf_danger_map *pfdm,
       pos->total_EC = node->extra_cost;
     } else {
       /* When on dangerous tiles, must have a valid danger segment. */
-      fc_assert_ret_val(danger_seg != NULL, NULL);
+      assert(danger_seg != NULL);
       pos->total_MC = danger_seg->cost;
       pos->total_EC = danger_seg->extra_cost;
     }
@@ -1038,7 +1099,7 @@ pf_danger_map_construct_path(const struct pf_danger_map *pfdm,
     /* 3: Check if we finished */
     if (i == 0) {
       /* We should be back at the start now! */
-      fc_assert_ret_val(same_pos(iter_tile, params->start_tile), NULL);
+      assert(same_pos(iter_tile, params->start_tile));
       return path;
     }
 
@@ -1061,7 +1122,7 @@ pf_danger_map_construct_path(const struct pf_danger_map *pfdm,
     node = &pfdm->lattice[tile_index(iter_tile)];
   }
 
-  fc_assert_msg(FALSE, "Cannot get to the starting point!");
+  die("pf_danger_map_construct_path: cannot get to the starting point!");
   return NULL;
 }
 
@@ -1079,7 +1140,8 @@ static void pf_danger_map_create_segment(struct pf_danger_map *pfdm,
 
   /* Allocating memory */
   if (node1->danger_segment) {
-    log_error("Possible memory leak in pf_danger_map_create_segment().");
+    freelog(LOG_ERROR, "Possible memory leak in "
+            "pf_danger_map_create_segment().");
   }
 
   /* First iteration for determining segment length */
@@ -1113,7 +1175,7 @@ static void pf_danger_map_create_segment(struct pf_danger_map *pfdm,
   }
 
   /* Make sure we reached a safe node or the start point */
-  fc_assert_ret(!node->is_dangerous || !is_valid_dir(node->dir_to_here));
+  assert(!node->is_dangerous || !is_valid_dir(node->dir_to_here));
 }
 
 /**********************************************************************
@@ -1129,12 +1191,23 @@ pf_danger_map_adjust_cost(const struct pf_parameter *params,
 
   cost = MIN(cost, get_move_rate(params));
 
-  if (to_danger && cost >= moves_left) {
-    /* We would have to end the turn on a dangerous tile! */
-    return PF_IMPOSSIBLE_MC;
+  if (params->turn_mode == TM_BEST_TIME) {
+    if (to_danger && cost >= moves_left) {
+      /* We would have to end the turn on a dangerous tile! */
+      return PF_IMPOSSIBLE_MC;
+    }
   } else {
-    return cost;
+    /* Default is TM_WORST_TIME.  
+     * It should be specified explicitly though! */
+    if (cost > moves_left
+        || (to_danger && cost == moves_left)) {
+      /* This move is impossible (at least without waiting) 
+       * or we would end our turn on a dangerous tile */
+      return PF_IMPOSSIBLE_MC;
+    }
   }
+
+  return cost;
 }
 
 /*****************************************************************************
@@ -1154,7 +1227,12 @@ pf_danger_map_adjust_cost(const struct pf_parameter *params,
   problems.
   3. For some purposes, NS_WAITING is just another flavour of NS_PROCESSED,
   since the path to a NS_WAITING tile has already been found.
-  4. This algorithm cannot guarantee the best safe segments across 
+  4. The code is arranged so that if the turn-mode is TM_WORST_TIME, a 
+  cavalry with non-full MP will get to a safe mountain tile only after 
+  waiting.  This waiting, although realised through NS_WAITING, is 
+  different from waiting before going into the danger area, so it will not 
+  be marked as "waiting" on the resulting paths.
+  5. This algorithm cannot guarantee the best safe segments across 
   dangerous region.  However it will find a safe segment if there 
   is one.  To gurantee the best (in terms of total_CC) safe segments 
   across danger, supply get_EC which returns small extra on 
@@ -1313,15 +1391,15 @@ static bool pf_danger_map_iterate(struct pf_map *pfm)
   pfm->tile = tile;
   node = &pfdm->lattice[index];
 
-  fc_assert(node->status > NS_INIT);
+  assert(node->status > NS_INIT);
 
   if (node->status == NS_WAITING) {
     /* We've already returned this node once, skip it */
-    log_debug("Considering waiting at (%d, %d)", TILE_XY(tile));
+    freelog(LOG_DEBUG, "Considering waiting at (%d, %d)", TILE_XY(tile));
     return pf_map_iterate(pfm);
   } else if (node->is_dangerous) {
     /* We don't return dangerous tiles */
-    log_debug("Reached dangerous tile (%d, %d)", TILE_XY(tile));
+    freelog(LOG_DEBUG, "Reached dangerous tile (%d, %d)", TILE_XY(tile));
     return pf_map_iterate(pfm);
   }
 
@@ -1457,10 +1535,10 @@ static struct pf_map *pf_danger_map_new(const struct pf_parameter *parameter)
   pfdm->danger_queue = pq_create(INITIAL_QUEUE_SIZE);
 
   /* MC callback must be set */
-  fc_assert_ret_val(parameter->get_MC != NULL, NULL);
+  assert(parameter->get_MC != NULL);
 
   /* is_pos_dangerous callback must be set */
-  fc_assert_ret_val(parameter->is_pos_dangerous != NULL, NULL);
+  assert(parameter->is_pos_dangerous != NULL);
 
   /* Copy parameters */
   *params = *parameter;
@@ -1494,8 +1572,10 @@ static struct pf_map *pf_danger_map_new(const struct pf_parameter *parameter)
 /* ================ Specific pf_fuel_* mode structures ================= */
 
 /* Some comments on implementation:
- * 1. dir_to_here is for backtracking along the tree of shortest paths.
- * 2. node_known_type, behavior, zoc_number, extra_tile, is_enemy_tile,
+ * 1. cost (aka total_MC) is sum of MCs altered to fit to the turn_mode
+ *    see adjust_cost.
+ * 2. dir_to_here is for backtracking along the tree of shortest paths.
+ * 3. node_known_type, behavior, zoc_number, extra_tile, is_enemy_tile,
  *    moves_left_req and waited are all cached values.
  * It is possible to shove them into a separate array which is allocated
  * only if a corresponding option in the parameter is set. A less drastic
@@ -1543,16 +1623,14 @@ struct pf_fuel_map {
 /* Up-cast macro. */
 #ifdef PF_DEBUG
 static inline struct pf_fuel_map *
-pf_fuel_map_check(struct pf_map *pfm, const char *file,
-                  const char *function, int line)
+pf_fuel_map_check(struct pf_map *pfm, const char *file, int line)
 {
-  fc_assert_full(file, function, line,
-                 NULL != pfm && pfm->mode == PF_FUEL,
-                 return NULL, "Wrong pf_map to pf_fuel_map conversion.");
+  if (!pfm || pfm->mode != PF_FUEL) {
+    real_die(file, line, "Wrong pf_map to pf_fuel_map conversion");
+  }
   return (struct pf_fuel_map *) pfm;
 }
-#define PF_FUEL_MAP(pfm) \
-  pf_fuel_map_check(pfm, __FILE__, __FUNCTION__, __LINE__)
+#define PF_FUEL_MAP(pfm) pf_fuel_map_check(pfm, __FILE__, __LINE__)
 #else
 #define PF_FUEL_MAP(pfm) ((struct pf_fuel_map *) (pfm))
 #endif /* PF_DEBUG */
@@ -1707,18 +1785,32 @@ static void pf_fuel_map_fill_position(const struct pf_fuel_map *pffm,
   const struct pf_parameter *params = pf_map_get_parameter(PF_MAP(pffm));
 
 #ifdef PF_DEBUG
-  fc_assert_ret_msg(NS_PROCESSED == node->status
-                    || same_pos(ptile, PF_MAP(pffm)->tile),
-                    "Unreached destination (%d, %d).", TILE_XY(ptile));
+  if ((node->status != NS_PROCESSED
+       && !same_pos(ptile, PF_MAP(pffm)->tile)) || !head) {
+    die("pf_normal_map_fill_position to an unreached destination");
+    return;
+  }
 #endif /* PF_DEBUG */
 
   pos->tile = ptile;
   pos->total_EC = head->extra_cost;
   pos->total_MC = (head->cost - get_move_rate(params)
                    + get_moves_left_initially(params));
+  if (params->turn_mode == TM_BEST_TIME
+      || params->turn_mode == TM_WORST_TIME) {
+    pf_fuel_finalize_position(pos, params, node, head);
+  } else if (params->turn_mode == TM_NONE
+             || params->turn_mode == TM_CAPPED) {
+    pos->turn = -1;
+    pos->moves_left = -1;
+    pos->fuel_left = -1;
+  } else {
+    die("unknown TC");
+  }
+
   pos->dir_to_here = head->dir;
-  pos->dir_to_next_pos = -1;    /* This field does not apply. */
-  pf_fuel_finalize_position(pos, params, node, head);
+  /* This field does not apply */
+  pos->dir_to_next_pos = -1;
 }
 
 /*****************************************************************************
@@ -1752,6 +1844,12 @@ pf_fuel_map_construct_path(const struct pf_fuel_map *pffm,
   const struct pf_parameter *params = pf_map_get_parameter(PF_MAP(pffm));
   struct pf_position *pos;
   int i;
+
+  if (params->turn_mode != TM_BEST_TIME
+      && params->turn_mode != TM_WORST_TIME) {
+    die("illegal TM in path-finding with danger");
+    return NULL;
+  }
 
   /* First iterate to find path length */
   /* Note: the start point could be reached in the middle of a segment. */
@@ -1861,7 +1959,7 @@ pf_fuel_map_construct_path(const struct pf_fuel_map *pffm,
     /* 3: Check if we finished */
     if (i == 0) {
       /* We should be back at the start now! */
-      fc_assert_ret_val(same_pos(iter_tile, params->start_tile), NULL);
+      assert(same_pos(iter_tile, params->start_tile));
       return path;
     }
 
@@ -1880,7 +1978,7 @@ pf_fuel_map_construct_path(const struct pf_fuel_map *pffm,
     node = &pffm->lattice[tile_index(iter_tile)];
   }
 
-  fc_assert_msg(FALSE, "Cannot get to the starting point!");
+  die("pf_fuel_map_construct_path: cannot get to the starting point!");
   return NULL;
 }
 
@@ -1937,8 +2035,7 @@ static void pf_fuel_map_create_segment(struct pf_fuel_map *pffm,
   }
 
   /* Make sure we reached a safe node, or the start tile */
-  fc_assert_ret(node->moves_left_req == 0
-                || !is_valid_dir(node->dir_to_here));
+  assert(node->moves_left_req == 0 || !is_valid_dir(node->dir_to_here));
 }
 
 /***************************************************************************
@@ -1994,7 +2091,13 @@ pf_fuel_map_attack_is_possible(const struct pf_parameter *param,
   3. For some purposes, NS_WAITING is just another flavour of NS_PROCESSED,
   since the path to a NS_WAITING tile has already been found.
 
-  4. This algorithm cannot guarantee the best safe segments across dangerous
+  4. The code is arranged so that if the turn-mode is TM_WORST_TIME, a
+  cavalry with non-full MP will get to a safe mountain tile only after
+  waiting.  This waiting, although realised through NS_WAITING, is different
+  from waiting before going into the danger area, so it will not be marked
+  as "waiting" on the resulting paths.
+
+  5. This algorithm cannot guarantee the best safe segments across dangerous
   region.  However it will find a safe segment if there is one.  To gurantee
   the best (in terms of total_CC) safe segments across danger, supply get_EC
   which returns small extra on dangerous tiles.
@@ -2215,15 +2318,15 @@ static bool pf_fuel_map_iterate(struct pf_map *pfm)
   pfm->tile = tile;
   node = &pffm->lattice[index];
 
-  fc_assert(node->status > NS_INIT);
+  assert(node->status > NS_INIT);
 
   if (node->status == NS_WAITING) {
     /* We've already returned this node once, skip it */
-    log_debug("Considering waiting at (%d, %d)", TILE_XY(tile));
+    freelog(LOG_DEBUG, "Considering waiting at (%d, %d)", TILE_XY(tile));
     return pf_map_iterate(pfm);
   } else if (pf_fuel_node_dangerous(node)) {
     /* We don't return dangerous tiles */
-    log_debug("Reached dangerous tile (%d, %d)", TILE_XY(tile));
+    freelog(LOG_DEBUG, "Reached dangerous tile (%d, %d)", TILE_XY(tile));
     return pf_map_iterate(pfm);
   } else {
     /* Just return it */
@@ -2362,10 +2465,10 @@ static struct pf_map *pf_fuel_map_new(const struct pf_parameter *parameter)
   pffm->out_of_fuel_queue = pq_create(INITIAL_QUEUE_SIZE);
 
   /* MC callback must be set */
-  fc_assert_ret_val(parameter->get_MC != NULL, NULL);
+  assert(parameter->get_MC != NULL);
 
   /* get_moves_left_req callback must be set */
-  fc_assert_ret_val(parameter->get_moves_left_req != NULL, NULL);
+  assert(parameter->get_moves_left_req != NULL);
 
   /* Copy parameters */
   *params = *parameter;
@@ -2407,16 +2510,18 @@ struct pf_map *pf_map_new(const struct pf_parameter *parameter)
 {
   if (parameter->is_pos_dangerous) {
     if (parameter->get_moves_left_req) {
-      log_error("path finding code cannot deal with dangers "
-                "and fuel together.");
+      freelog(LOG_ERROR, "path finding code cannot deal with dangers "
+              "and fuel together.");
     }
     if (parameter->get_costs) {
-      log_error("jumbo callbacks for danger maps are not yet implemented.");
+      freelog(LOG_ERROR, "jumbo callbacks for danger maps are not yet "
+              "implemented.");
     }
     return pf_danger_map_new(parameter);
   } else if (parameter->get_moves_left_req) {
     if (parameter->get_costs) {
-      log_error("jumbo callbacks for fuel maps are not yet implemented.");
+      freelog(LOG_ERROR, "jumbo callbacks for fuel maps are not yet "
+              "implemented.");
     }
     return pf_fuel_map_new(parameter);
   }
@@ -2491,8 +2596,7 @@ void pf_map_iterator_get_position(struct pf_map *pfm,
                                   struct pf_position *pos)
 {
   if (!pfm->get_position(pfm, pfm->tile, pos)) {
-    /* Always fails. */
-    fc_assert(pfm->get_position(pfm, pfm->tile, pos));
+    die("pf: get_postion() at current iterator failed!");
   }
 }
 
@@ -2518,27 +2622,25 @@ const struct pf_parameter *pf_map_get_parameter(const struct pf_map *pfm)
 /************************************************************************
   Printing a path.
 ************************************************************************/
-void pf_path_print_real(const struct pf_path *path, enum log_level level,
-                        const char *file, const char *function, int line)
+void pf_path_print(const struct pf_path *path, int log_level)
 {
   struct pf_position *pos;
   int i;
 
   if (path) {
-    do_log(file, function, line, TRUE, level,
-           "PF: path (at %p) consists of %d positions:",
-           (void *) path, path->length);
+    freelog(log_level, "PF: path (at %p) consists of %d positions:",
+            (void *)path, path->length);
   } else {
-    do_log(file, function, line, TRUE, level, "PF: path is NULL");
+    freelog(log_level, "PF: path is NULL");
     return;
   }
 
   for (i = 0, pos = path->positions; i < path->length; i++, pos++) {
-    do_log(file, function, line, FALSE, level,
-           "PF:   %2d/%2d: (%2d,%2d) dir=%-2s cost=%2d (%2d, %d) EC=%d",
-           i + 1, path->length, TILE_XY(pos->tile),
-           dir_get_name(pos->dir_to_next_pos), pos->total_MC,
-           pos->turn, pos->moves_left, pos->total_EC);
+    freelog(log_level,
+            "PF:   %2d/%2d: (%2d,%2d) dir=%-2s cost=%2d (%2d, %d) EC=%d",
+            i + 1, path->length, TILE_XY(pos->tile),
+            dir_get_name(pos->dir_to_next_pos), pos->total_MC,
+            pos->turn, pos->moves_left, pos->total_EC);
   }
 }
 
@@ -2645,7 +2747,7 @@ void pf_city_map_destroy(struct pf_city_map *pfcm)
 {
   size_t i;
 
-  fc_assert_ret(NULL != pfcm);
+  assert(NULL != pfcm);
 
   for (i = 0; i < utype_count(); i++) {
     if (pfcm->maps[i]) {

@@ -15,6 +15,7 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -171,10 +172,10 @@ static void get_city_table_header(char **text, int n)
   struct city_report_spec *spec;
   int i;
 
-  for (i = 0, spec = city_report_specs; i < NUM_CREPORT_COLS; i++, spec++) {
-    fc_snprintf(text[i], n, "%*s\n%*s",
-                NEG_VAL(spec->width), spec->title1 ? spec->title1 : "",
-                NEG_VAL(spec->width), spec->title2 ? spec->title2 : "");
+  for(i=0, spec=city_report_specs; i<NUM_CREPORT_COLS; i++, spec++) {
+    my_snprintf(text[i], n, "%*s\n%*s",
+	    NEG_VAL(spec->width), spec->title1 ? spec->title1 : "",
+	    NEG_VAL(spec->width), spec->title2 ? spec->title2 : "");
   }
 }
 
@@ -310,8 +311,8 @@ static void append_impr_or_unit_to_menu_item(GtkMenuItem *parent_item,
         continue;
       }
 
-      fc_snprintf(txt, ARRAY_SIZE(txt), "<span %s>%s</span>",
-                  markup[i], row[i]);
+      my_snprintf(txt, ARRAY_SIZE(txt), "<span %s>%s</span>",
+		  markup[i], row[i]);
 
       label = gtk_label_new(NULL);
       gtk_label_set_markup(GTK_LABEL(label), txt);
@@ -526,7 +527,7 @@ static void select_impr_or_unit_callback(GtkWidget *w, gpointer data)
                                           GINT_TO_POINTER(cid_encode(target)));
       break;
     case CO_SELL:
-      fc_assert_action(target.kind == VUT_IMPROVEMENT, break);
+      assert(target.kind == VUT_IMPROVEMENT);
       {
         struct impr_type *building = target.value.building;
         struct sell_data sd = { 0, 0, building };
@@ -536,7 +537,7 @@ static void select_impr_or_unit_callback(GtkWidget *w, gpointer data)
         const char *imprname = improvement_name_translation(building);
 
         /* Ask confirmation */
-        fc_snprintf(buf, sizeof(buf),
+        my_snprintf(buf, sizeof(buf),
                     _("Are you sure you want to sell those %s?"), imprname);
         w = gtk_message_dialog_new(NULL, GTK_DIALOG_MODAL,
                                    GTK_MESSAGE_QUESTION,
@@ -550,10 +551,10 @@ static void select_impr_or_unit_callback(GtkWidget *w, gpointer data)
         gtk_tree_selection_selected_foreach(city_selection,
                                             sell_impr_iterate, &sd);
         if (sd.count > 0) {
-          fc_snprintf(buf, sizeof(buf), _("Sold %d %s for %d gold."),
+          my_snprintf(buf, sizeof(buf), _("Sold %d %s for %d gold."),
                       sd.count, imprname, sd.gold);
         } else {
-          fc_snprintf(buf, sizeof(buf), _("No %s could be sold."),
+          my_snprintf(buf, sizeof(buf), _("No %s could be sold."),
                       imprname);
         }
         w = gtk_message_dialog_new(NULL, GTK_DIALOG_MODAL,
@@ -678,15 +679,15 @@ static void append_cma_to_menu_item(GtkMenuItem *parent_item, bool change_cma)
     w = gtk_menu_item_new_with_label(_("none"));
     gtk_menu_shell_append(GTK_MENU_SHELL(menu), w);
     g_signal_connect(w, "activate", G_CALLBACK(select_cma_callback),
-                     GINT_TO_POINTER(CMA_NONE));
-    fc_assert(GPOINTER_TO_INT(GINT_TO_POINTER(CMA_NONE)) == CMA_NONE);
+		     GINT_TO_POINTER(CMA_NONE));
+    assert(GPOINTER_TO_INT(GINT_TO_POINTER(CMA_NONE)) == CMA_NONE);
 
     for (i = 0; i < cmafec_preset_num(); i++) {
       w = gtk_menu_item_new_with_label(cmafec_preset_get_descr(i));
       gtk_menu_shell_append(GTK_MENU_SHELL(menu), w);
       g_signal_connect(w, "activate", G_CALLBACK(select_cma_callback),
-                       GINT_TO_POINTER(i));
-      fc_assert(GPOINTER_TO_INT(GINT_TO_POINTER(i)) == i);
+		       GINT_TO_POINTER(i));
+      assert(GPOINTER_TO_INT(GINT_TO_POINTER(i)) == i);
     }
   } else {
     /* search for a "none" */
@@ -767,7 +768,7 @@ static void append_worklist_foreach(GtkTreeModel *model, GtkTreePath *path,
   struct city *pcity;
 
   pwl = data;
-  fc_assert_ret(pwl != NULL);
+  g_return_if_fail(pwl != NULL);
 
   gtk_tree_model_get(model, it, 0, &pcity, -1);
   if (!pcity || !game_find_city_by_number(pcity->id)) {
@@ -786,7 +787,7 @@ static void append_worklist_callback(GtkMenuItem *menuitem, gpointer data)
   struct global_worklist *pgwl =
     global_worklist_by_id(GPOINTER_TO_INT(data));
 
-  fc_assert_ret(city_selection != NULL);
+  g_return_if_fail(city_selection != NULL);
 
   if (!pgwl) {
     /* Maybe removed by an other way, not an error. */
@@ -809,7 +810,7 @@ static void set_worklist_foreach(GtkTreeModel *model, GtkTreePath *path,
   struct city *pcity;
 
   pwl = data;
-  fc_assert_ret(pwl != NULL);
+  g_return_if_fail(pwl != NULL);
 
   gtk_tree_model_get(model, it, 0, &pcity, -1);
   if (!pcity || !game_find_city_by_number(pcity->id)) {
@@ -827,7 +828,7 @@ static void set_worklist_callback(GtkMenuItem *menuitem, gpointer data)
   struct global_worklist *pgwl =
     global_worklist_by_id(GPOINTER_TO_INT(data));
 
-  fc_assert_ret(city_selection != NULL);
+  g_return_if_fail(city_selection != NULL);
   gtk_tree_selection_selected_foreach(city_selection, set_worklist_foreach,
                                       (gpointer) global_worklist_get(pgwl));
 
@@ -853,11 +854,11 @@ static void production_menu_shown(GtkWidget *widget, gpointer data)
   int count = 0;
 
   parent_item = data;
-  fc_assert_ret(parent_item != NULL);
-  fc_assert_ret(GTK_IS_MENU_ITEM(parent_item));
+  g_return_if_fail(parent_item != NULL);
+  g_return_if_fail(GTK_IS_MENU_ITEM(parent_item));
 
   callback = g_object_get_data(G_OBJECT(parent_item), "item_callback");
-  fc_assert_ret(callback != NULL);
+  g_return_if_fail(callback != NULL);
 
   menu = gtk_menu_item_get_submenu(parent_item);
   if (menu != NULL && GTK_WIDGET_VISIBLE(menu)) {
@@ -903,7 +904,7 @@ static void city_report_update_views(void)
   GList *columns, *p;
 
   view = GTK_TREE_VIEW(city_view);
-  fc_assert_ret(view != NULL);
+  g_return_if_fail(view != NULL);
 
   columns = gtk_tree_view_get_columns(view);
 
@@ -1048,8 +1049,8 @@ static void cityrep_cell_data_func(GtkTreeViewColumn *col,
   g_value_unset(&value);
 
   sp = &city_report_specs[n];
-  fc_snprintf(buf, sizeof(buf), "%*s", NEG_VAL(sp->width),
-              (sp->func) (pcity, sp->data));
+  my_snprintf(buf, sizeof(buf), "%*s", NEG_VAL(sp->width),
+	      (sp->func)(pcity, sp->data));
 
   g_value_init(&value, G_TYPE_STRING);
   g_value_set_string(&value, buf);
@@ -1081,10 +1082,10 @@ static gint cityrep_sort_func(GtkTreeModel *model,
   g_value_unset(&value);
 
   sp = &city_report_specs[n];
-  fc_snprintf(buf1, sizeof(buf1), "%*s", NEG_VAL(sp->width),
-              (sp->func) (pcity1, sp->data));
-  fc_snprintf(buf2, sizeof(buf2), "%*s", NEG_VAL(sp->width),
-              (sp->func) (pcity2, sp->data));
+  my_snprintf(buf1, sizeof(buf1), "%*s", NEG_VAL(sp->width),
+	      (sp->func)(pcity1, sp->data));
+  my_snprintf(buf2, sizeof(buf2), "%*s", NEG_VAL(sp->width),
+	      (sp->func)(pcity2, sp->data));
 
   return cityrepfield_compare(buf1, buf2);
 }
@@ -1516,7 +1517,7 @@ void city_report_dialog_update(void)
 /****************************************************************
   Update the text for a single city in the city report
 *****************************************************************/
-void real_city_report_update_city(struct city *pcity)
+void city_report_dialog_update_city(struct city *pcity)
 {
   if (city_dialog_shell && !is_report_dialogs_frozen()) {
     ITree it;
@@ -1761,7 +1762,7 @@ static void popup_next_to_last_menu(GtkMenuShell *menu, gpointer data)
   GCallback callback;
   int n;
 
-  fc_assert_ret(city_selection != NULL);
+  g_return_if_fail(city_selection != NULL);
 
   n = gtk_tree_selection_count_selected_rows(city_selection);
   callback = G_CALLBACK(select_impr_or_unit_callback);
@@ -2049,7 +2050,7 @@ static void update_total_buy_cost(void)
 
   if (total > 0) {
     char buf[128];
-    fc_snprintf(buf, sizeof(buf), _("Total Buy Cost: %d"), total);
+    my_snprintf(buf, sizeof(buf), _("Total Buy Cost: %d"), total);
     gtk_label_set_text(GTK_LABEL(label), buf);
   } else {
     gtk_label_set_text(GTK_LABEL(label), NULL);
@@ -2108,7 +2109,7 @@ static void city_clear_worklist_callback(GtkMenuItem *item, gpointer data)
 {
   struct connection *pconn = &client.conn;
 
-  fc_assert_ret(city_selection != NULL);
+  g_return_if_fail(city_selection != NULL);
 
   connection_do_buffer(pconn);
   gtk_tree_selection_selected_foreach(city_selection,

@@ -17,10 +17,10 @@ flag_alt = "-"
 city_style = "Classical"
 
 ruler_titles = { "government",      "male_title",      "female_title"
-                 "Despotism",       _("Sheikh"),	_("Shaykha")
-                 "Monarchy",        _("Malik"),		_("Malika")
+                 "Despotism",       _("Sheikh"),	_("Shaykhah")
+                 "Monarchy",        _("Malik"),		_("Malikah")
                  "Republic",        _("Sultan"),	_("Sultana")
-                 "Communism",       _("Caliph"),	_("Calipha")
+                 "Communism",       _("Caliph"),	_("?female:Caliph")
                }
 
 init_techs=""
@@ -29,11 +29,9 @@ init_government="Despotism"
 init_units=""
 
 ; Should not appear with other Arabic nations from the beginning but...
-conflicts_with="iraqi", "libyan", "sudanese", "syrian", "egyptian arab",
- "moroccan", "tunisian", "algerian", "al-andalus", "saudi", "palestinian"
+conflicts_with="iraqi", "libyan", "sudanese"
 ; ...civil war to them.
-civilwar_nations="iraqi", "libyan", "sudanese", "syrian", "egyptian arab",
- "moroccan", "tunisian", "algerian", "al-andalus", "saudi", "palestinian"
+civilwar_nations="iraqi", "libyan", "sudanese"
 
 ; Arab Peninsula and Near East.  City names are mostly from the Ummayyad 
 ; and Abbasid periods.  These are Arab spellings rather than Anglicized ones;

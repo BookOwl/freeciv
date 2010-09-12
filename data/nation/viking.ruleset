@@ -40,7 +40,7 @@ civilwar_nations=
 ; Scandinavian nations
  "danish", "icelandic", "norwegian", "swedish",
 ; Other nations claiming viking heritage
- "finnish", "ruthenian", "scottish", "norman"
+ "finnish", "russian", "scottish", "ukrainian"
 
 cities =
  "Skiringssal",		; Viking era name for Kaupang, Norway

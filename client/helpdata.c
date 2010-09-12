@@ -20,12 +20,12 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <stdio.h>
 #include <string.h>
 
 /* utility */
 #include "astring.h"
-#include "bitvector.h"
 #include "fcintl.h"
 #include "genlist.h"
 #include "log.h"
@@ -51,7 +51,7 @@
 #include "helpdata.h"
 
 /* helper macro for easy conversion from snprintf and cat_snprintf */
-#define CATLSTR(_b, _s, _t) fc_strlcat(_b, _t, _s)
+#define CATLSTR(_b, _s, _t) mystrlcat(_b, _t, _s)
 
 /* This must be in same order as enum in helpdlg_g.h */
 static const char * const help_type_names[] = {
@@ -89,7 +89,7 @@ void helpdata_init(void)
 *****************************************************************/
 void helpdata_done(void)
 {
-  help_list_destroy(help_nodes);
+  help_list_free(help_nodes);
 }
 
 /****************************************************************
@@ -137,16 +137,15 @@ static void insert_generated_table(char *outbuf, size_t outlen, const char *name
             "---------------------------------------------------------------\n");
     terrain_type_iterate(pterrain) {
       if (0 != strlen(terrain_rule_name(pterrain))) {
-        char road_time[4], irrigation_time[4],
-             mining_time[4], transform_time[4];
-
-        fc_snprintf(road_time, sizeof(road_time), "%d", pterrain->road_time);
-        fc_snprintf(irrigation_time, sizeof(irrigation_time),
-                    "%d", pterrain->irrigation_time);
-        fc_snprintf(mining_time, sizeof(mining_time),
-                    "%d", pterrain->mining_time);
-        fc_snprintf(transform_time, sizeof(transform_time),
-                    "%d", pterrain->transform_time);
+	char road_time[4], irrigation_time[4],
+	     mining_time[4], transform_time[4];
+	my_snprintf(road_time, sizeof(road_time), "%d", pterrain->road_time);
+	my_snprintf(irrigation_time, sizeof(irrigation_time),
+		 "%d", pterrain->irrigation_time);
+	my_snprintf(mining_time, sizeof(mining_time),
+		 "%d", pterrain->mining_time);
+	my_snprintf(transform_time, sizeof(transform_time),
+		 "%d", pterrain->transform_time);
 	cat_snprintf(outbuf, outlen,
 		"%-10s %3s    %3s %-10s %3s %-10s %3s %-10s\n",
 		terrain_name_translation(pterrain),
@@ -261,7 +260,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
     case REQ_RANGE_ADJACENT:
     case REQ_RANGE_CITY:
     case REQ_RANGE_CONTINENT:
-    case REQ_RANGE_COUNT:
+    case REQ_RANGE_LAST:
       /* Not supported. */
       break;
     }
@@ -315,7 +314,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
                    (preq->source.value.building));
       return TRUE;
     case REQ_RANGE_ADJACENT:
-    case REQ_RANGE_COUNT:
+    case REQ_RANGE_LAST:
       /* Not supported. */
       break;
     }
@@ -338,7 +337,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
     case REQ_RANGE_CONTINENT:
     case REQ_RANGE_PLAYER:
     case REQ_RANGE_WORLD:
-    case REQ_RANGE_COUNT:
+    case REQ_RANGE_LAST:
       /* Not supported. */
       break;
     }
@@ -359,7 +358,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
     case REQ_RANGE_CONTINENT:
     case REQ_RANGE_PLAYER:
     case REQ_RANGE_WORLD:
-    case REQ_RANGE_COUNT:
+    case REQ_RANGE_LAST:
       /* Not supported. */
       break;
     }
@@ -379,7 +378,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
     case REQ_RANGE_ADJACENT:
     case REQ_RANGE_CITY:
     case REQ_RANGE_CONTINENT:
-    case REQ_RANGE_COUNT:
+    case REQ_RANGE_LAST:
       /* Not supported. */
       break;
     }
@@ -396,7 +395,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
     case REQ_RANGE_CONTINENT:
     case REQ_RANGE_PLAYER:
     case REQ_RANGE_WORLD:
-    case REQ_RANGE_COUNT:
+    case REQ_RANGE_LAST:
       /* Not supported. */
       break;
     }
@@ -414,7 +413,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
     case REQ_RANGE_CONTINENT:
     case REQ_RANGE_PLAYER:
     case REQ_RANGE_WORLD:
-    case REQ_RANGE_COUNT:
+    case REQ_RANGE_LAST:
       /* Not supported. */
       break;
     }
@@ -431,7 +430,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
     case REQ_RANGE_CONTINENT:
     case REQ_RANGE_PLAYER:
     case REQ_RANGE_WORLD:
-    case REQ_RANGE_COUNT:
+    case REQ_RANGE_LAST:
       /* Not supported. */
       break;
     }
@@ -442,7 +441,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
     case REQ_RANGE_LOCAL:
       cat_snprintf(buf, bufsz, _("Only applies to \"%s\" units.\n"),
                    /* flag names are never translated */
-                   unit_class_flag_id_name
+                   unit_class_flag_rule_name
                    (preq->source.value.unitclassflag));
       return TRUE;
     case REQ_RANGE_ADJACENT:
@@ -450,7 +449,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
     case REQ_RANGE_CONTINENT:
     case REQ_RANGE_PLAYER:
     case REQ_RANGE_WORLD:
-    case REQ_RANGE_COUNT:
+    case REQ_RANGE_LAST:
       /* Not supported. */
       break;
     }
@@ -493,7 +492,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
     case REQ_RANGE_CONTINENT:
     case REQ_RANGE_PLAYER:
     case REQ_RANGE_WORLD:
-    case REQ_RANGE_COUNT:
+    case REQ_RANGE_LAST:
       /* Not supported. */
       break;
     }
@@ -513,7 +512,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
     case REQ_RANGE_CONTINENT:
     case REQ_RANGE_PLAYER:
     case REQ_RANGE_WORLD:
-    case REQ_RANGE_COUNT:
+    case REQ_RANGE_LAST:
       /* Not supported. */
       break;
     }
@@ -537,7 +536,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
     case REQ_RANGE_CONTINENT:
     case REQ_RANGE_PLAYER:
     case REQ_RANGE_WORLD:
-    case REQ_RANGE_COUNT:
+    case REQ_RANGE_LAST:
       /* Not supported. */
       break;
     }
@@ -547,16 +546,17 @@ static bool insert_requirement(char *buf, size_t bufsz,
      cat_snprintf(buf, bufsz, _("Applies only to city centers.\n"));
     return TRUE;
 
-  case VUT_COUNT:
+  case VUT_LAST:
     break;
   }
 
   {
     char text[256];
 
-    log_error("Requirement %s in range %d is not supported in helpdata.c.",
-              universal_name_translation(&preq->source, text, sizeof(text)),
-              preq->range);
+    freelog(LOG_ERROR,
+            "Requirement %s in range %d is not supported in helpdata.c.",
+            universal_name_translation(&preq->source, text, sizeof(text)),
+            preq->range);
   }
 
   return FALSE;
@@ -661,13 +661,12 @@ void boot_help_texts(struct player *pplayer)
 {
   static bool booted = FALSE;
 
-  struct section_file *sf;
-  const char *filename;
+  struct section_file file, *sf = &file;
+  char *filename;
   struct help_item *pitem;
-  int i;
-  struct section_list *sec;
-  const char **paras;
-  size_t npara;
+  int i, isec;
+  char **sec, **paras;
+  int nsec, npara;
   char long_buffer[64000]; /* HACK: this may be overrun. */
 
   check_help_nodes_init();
@@ -676,197 +675,188 @@ void boot_help_texts(struct player *pplayer)
   popdown_help_dialog();
 
   if(!booted) {
-    log_verbose("Booting help texts");
+    freelog(LOG_VERBOSE, "Booting help texts");
   } else {
     /* free memory allocated last time booted */
     free_help_texts();
-    log_verbose("Rebooting help texts");
-  }
+    freelog(LOG_VERBOSE, "Rebooting help texts");
+  }    
 
-  filename = fileinfoname(get_data_dirs(), "helpdata.txt");
+  filename = datafilename("helpdata.txt");
   if (!filename) {
-    log_error("Did not read help texts");
+    freelog(LOG_ERROR, "Did not read help texts");
     return;
   }
   /* after following call filename may be clobbered; use sf->filename instead */
-  if (!(sf = secfile_load(filename, FALSE))) {
+  if (!section_file_load(sf, filename)) {
     /* this is now unlikely to happen */
-    log_error("failed reading help-texts from '%s':\n%s", filename,
-              secfile_error());
+    freelog(LOG_ERROR, "failed reading help-texts");
     return;
   }
 
-  sec = secfile_sections_by_name_prefix(sf, "help_");
+  sec = secfile_get_secnames_prefix(sf, "help_", &nsec);
 
-  if (NULL != sec) {
-    section_list_iterate(sec, psection) {
-      const char *sec_name = section_name(psection);
-      const char *gen_str = secfile_lookup_str(sf, "%s.generate", sec_name);
-      
-      if (gen_str) {
-        enum help_page_type current_type = HELP_ANY;
-        int level = strspn(gen_str, " ");
-        gen_str += level;
-        if (!booted) {
-          continue; /* on initial boot data tables are empty */
-        }
-        for(i=2; help_type_names[i]; i++) {
-          if(strcmp(gen_str, help_type_names[i])==0) {
-            current_type = i;
-            break;
-          }
-        }
-        if (current_type == HELP_ANY) {
-          log_error("bad help-generate category \"%s\"", gen_str);
-          continue;
-        }
-        {
-          /* Note these should really fill in pitem->text from auto-gen
-             data instead of doing it later on the fly, but I don't want
-             to change that now.  --dwp
-          */
-          char name[2048];
-          struct help_list *category_nodes = help_list_new();
-
-          switch (current_type) {
-          case HELP_UNIT:
-            unit_type_iterate(punittype) {
-              pitem = new_help_item(current_type);
-              fc_snprintf(name, sizeof(name), "%*s%s", level, "",
-                          utype_name_translation(punittype));
-              pitem->topic = fc_strdup(name);
-              pitem->text = fc_strdup("");
-              help_list_append(category_nodes, pitem);
-            } unit_type_iterate_end;
-            break;
-          case HELP_TECH:
-            advance_index_iterate(A_FIRST, i) {
-              if (valid_advance_by_number(i)) {
-                pitem = new_help_item(current_type);
-                fc_snprintf(name, sizeof(name), "%*s%s", level, "",
-                            advance_name_for_player(pplayer, i));
-                pitem->topic = fc_strdup(name);
-                pitem->text = fc_strdup("");
-                help_list_append(category_nodes, pitem);
-              }
-            } advance_index_iterate_end;
-            break;
-          case HELP_TERRAIN:
-            terrain_type_iterate(pterrain) {
-              if (0 != strlen(terrain_rule_name(pterrain))) {
-                pitem = new_help_item(current_type);
-                fc_snprintf(name, sizeof(name), "%*s%s", level, "",
-                            terrain_name_translation(pterrain));
-                pitem->topic = fc_strdup(name);
-                pitem->text = fc_strdup("");
-                help_list_append(category_nodes, pitem);
-              }
-            } terrain_type_iterate_end;
-            /* Add special Civ2-style river help text if it's supplied. */
-            if (terrain_control.river_help_text) {
-              pitem = new_help_item(HELP_TEXT);
-              /* TRANS: "%*s" is replaced with spaces */
-              fc_snprintf(name, sizeof(name), _("%*sRivers"), level, "");
-              pitem->topic = fc_strdup(name);
-              sz_strlcpy(long_buffer, _(terrain_control.river_help_text));
-              pitem->text = fc_strdup(long_buffer);
-              help_list_append(category_nodes, pitem);
-            }
-            break;
-          case HELP_GOVERNMENT:
-            government_iterate(gov) {
-              pitem = new_help_item(current_type);
-              fc_snprintf(name, sizeof(name), "%*s%s", level, "",
-                          government_name_translation(gov));
-              pitem->topic = fc_strdup(name);
-              pitem->text = fc_strdup("");
-              help_list_append(category_nodes, pitem);
-            } government_iterate_end;
-            break;
-          case HELP_IMPROVEMENT:
-            improvement_iterate(pimprove) {
-              if (valid_improvement(pimprove) && !is_great_wonder(pimprove)) {
-                pitem = new_help_item(current_type);
-                fc_snprintf(name, sizeof(name), "%*s%s", level, "",
-                            improvement_name_translation(pimprove));
-                pitem->topic = fc_strdup(name);
-                pitem->text = fc_strdup("");
-                help_list_append(category_nodes, pitem);
-              }
-            } improvement_iterate_end;
-            break;
-          case HELP_WONDER:
-            improvement_iterate(pimprove) {
-              if (valid_improvement(pimprove) && is_great_wonder(pimprove)) {
-                pitem = new_help_item(current_type);
-                fc_snprintf(name, sizeof(name), "%*s%s", level, "",
-                            improvement_name_translation(pimprove));
-                pitem->topic = fc_strdup(name);
-                pitem->text = fc_strdup("");
-                help_list_append(category_nodes, pitem);
-              }
-            } improvement_iterate_end;
-            break;
-          case HELP_RULESET:
-            pitem = new_help_item(HELP_RULESET);
-            /*           pitem->topic = fc_strdup(_(game.control.name)); */
-            fc_snprintf(name, sizeof(name), "%*s%s", level, "",
-                        _(HELP_RULESET_ITEM));
-            pitem->topic = fc_strdup(name);
-            if (game.control.description[0] != '\0') {
-              pitem->text = fc_strdup(_(game.control.description));
-            } else {
-              pitem->text =
-                  fc_strdup(_("Current ruleset contains no description."));
-            }
-            help_list_append(help_nodes, pitem);
-            break;
-          default:
-            log_error("Bad current_type: %d.", current_type);
-            break;
-          }
-          help_list_sort(category_nodes, help_item_compar);
-          help_list_iterate(category_nodes, ptmp) {
-            help_list_append(help_nodes, ptmp);
-          } help_list_iterate_end;
-          help_list_destroy(category_nodes);
-          continue;
-        }
+  for(isec=0; isec<nsec; isec++) {
+    const char *gen_str =
+      secfile_lookup_str_default(sf, NULL, "%s.generate", sec[isec]);
+    
+    if (gen_str) {
+      enum help_page_type current_type = HELP_ANY;
+      if (!booted) {
+	continue; /* on initial boot data tables are empty */
       }
-      
-      /* It wasn't a "generate" node: */
-      
-      pitem = new_help_item(HELP_TEXT);
-      pitem->topic = fc_strdup(_(secfile_lookup_str(sf, "%s.name",
-                                                    sec_name)));
-
-      paras = secfile_lookup_str_vec(sf, &npara, "%s.text", sec_name);
-
-      long_buffer[0] = '\0';
-      for (i=0; i<npara; i++) {
-        const char *para = paras[i];
-        if(strncmp(para, "$", 1)==0) {
-          insert_generated_table(long_buffer, sizeof(long_buffer), para+1);
-        } else {
-          sz_strlcat(long_buffer, _(para));
-        }
-        if (i!=npara-1) {
-          sz_strlcat(long_buffer, "\n\n");
-        }
+      for(i=2; help_type_names[i]; i++) {
+	if(strcmp(gen_str, help_type_names[i])==0) {
+	  current_type = i;
+	  break;
+	}
       }
-      free(paras);
-      paras = NULL;
-      pitem->text=fc_strdup(long_buffer);
-      help_list_append(help_nodes, pitem);
-    } section_list_iterate_end;
+      if (current_type == HELP_ANY) {
+	freelog(LOG_ERROR, "bad help-generate category \"%s\"", gen_str);
+	continue;
+      }
+      {
+	/* Note these should really fill in pitem->text from auto-gen
+	   data instead of doing it later on the fly, but I don't want
+	   to change that now.  --dwp
+	*/
+	char name[2048];
+	struct help_list *category_nodes = help_list_new();
 
-    section_list_destroy(sec);
+        switch (current_type) {
+	 case HELP_UNIT:
+           unit_type_iterate(punittype) {
+             pitem = new_help_item(current_type);
+             my_snprintf(name, sizeof(name), " %s",
+                         utype_name_translation(punittype));
+             pitem->topic = mystrdup(name);
+             pitem->text = mystrdup("");
+             help_list_append(category_nodes, pitem);
+           } unit_type_iterate_end;
+           break;
+         case HELP_TECH:
+           advance_index_iterate(A_FIRST, i) {
+             if (valid_advance_by_number(i)) {
+               pitem = new_help_item(current_type);
+               my_snprintf(name, sizeof(name), " %s",
+                           advance_name_for_player(pplayer, i));
+               pitem->topic = mystrdup(name);
+               pitem->text = mystrdup("");
+               help_list_append(category_nodes, pitem);
+             }
+           } advance_index_iterate_end;
+           break;
+         case HELP_TERRAIN:
+           terrain_type_iterate(pterrain) {
+             if (0 != strlen(terrain_rule_name(pterrain))) {
+               pitem = new_help_item(current_type);
+               my_snprintf(name, sizeof(name), " %s",
+                           terrain_name_translation(pterrain));
+               pitem->topic = mystrdup(name);
+               pitem->text = mystrdup("");
+               help_list_append(category_nodes, pitem);
+             }
+           } terrain_type_iterate_end;
+           /* Add special Civ2-style river help text if it's supplied. */
+           if (terrain_control.river_help_text) {
+             pitem = new_help_item(HELP_TEXT);
+             /* TRANS: preserve single space at beginning */
+             pitem->topic = mystrdup(_(" Rivers"));
+             sz_strlcpy(long_buffer, _(terrain_control.river_help_text));
+             pitem->text = mystrdup(long_buffer);
+             help_list_append(category_nodes, pitem);
+           }
+           break;
+         case HELP_GOVERNMENT:
+           government_iterate(gov) {
+             pitem = new_help_item(current_type);
+             my_snprintf(name, sizeof(name), " %s",
+                         government_name_translation(gov));
+             pitem->topic = mystrdup(name);
+             pitem->text = mystrdup("");
+             help_list_append(category_nodes, pitem);
+           } government_iterate_end;
+           break;
+         case HELP_IMPROVEMENT:
+           improvement_iterate(pimprove) {
+             if (valid_improvement(pimprove) && !is_great_wonder(pimprove)) {
+               pitem = new_help_item(current_type);
+               my_snprintf(name, sizeof(name), " %s",
+                           improvement_name_translation(pimprove));
+               pitem->topic = mystrdup(name);
+               pitem->text = mystrdup("");
+               help_list_append(category_nodes, pitem);
+             }
+           } improvement_iterate_end;
+           break;
+         case HELP_WONDER:
+           improvement_iterate(pimprove) {
+             if (valid_improvement(pimprove) && is_great_wonder(pimprove)) {
+               pitem = new_help_item(current_type);
+               my_snprintf(name, sizeof(name), " %s",
+                           improvement_name_translation(pimprove));
+               pitem->topic = mystrdup(name);
+               pitem->text = mystrdup("");
+               help_list_append(category_nodes, pitem);
+             }
+           } improvement_iterate_end;
+           break;
+         case HELP_RULESET:
+           pitem = new_help_item(HELP_RULESET);
+           /*           pitem->topic = mystrdup(_(game.control.name)); */
+           pitem->topic = mystrdup(_(HELP_RULESET_ITEM));
+           if (game.control.description[0] != '\0') {
+             pitem->text = mystrdup(_(game.control.description));
+           } else {
+             pitem->text =
+                 mystrdup(_("Current ruleset contains no description."));
+           }
+           help_list_append(help_nodes, pitem);
+           break;
+         default:
+           die("Bad current_type %d", current_type);
+           break;
+        }
+	help_list_sort(category_nodes, help_item_compar);
+	help_list_iterate(category_nodes, ptmp) {
+	  help_list_append(help_nodes, ptmp);
+	} help_list_iterate_end;
+        help_list_free(category_nodes);
+	continue;
+      }
+    }
+    
+    /* It wasn't a "generate" node: */
+    
+    pitem = new_help_item(HELP_TEXT);
+    pitem->topic = mystrdup(_(secfile_lookup_str(sf, "%s.name", sec[isec])));
+
+    paras = secfile_lookup_str_vec(sf, &npara, "%s.text", sec[isec]);
+
+    long_buffer[0] = '\0';
+    for (i=0; i<npara; i++) {
+      char *para = paras[i];
+      if(strncmp(para, "$", 1)==0) {
+        insert_generated_table(long_buffer, sizeof(long_buffer), para+1);
+      } else {
+        sz_strlcat(long_buffer, _(para));
+      }
+      if (i!=npara-1) {
+        sz_strlcat(long_buffer, "\n\n");
+      }
+    }
+    free(paras);
+    paras = NULL;
+    pitem->text=mystrdup(long_buffer);
+    help_list_append(help_nodes, pitem);
   }
 
-  secfile_check_unused(sf);
-  secfile_destroy(sf);
+  free(sec);
+  sec = NULL;
+  section_file_check_unused(sf, sf->filename);
+  section_file_free(sf);
   booted = TRUE;
-  log_verbose("Booted help texts ok");
+  freelog(LOG_VERBOSE, "Booted help texts ok");
 }
 
 /****************************************************************
@@ -897,7 +887,7 @@ const struct help_item *get_help_item(int pos)
   check_help_nodes_init();
   size = help_list_size(help_nodes);
   if (pos < 0 || pos > size) {
-    log_error("Bad index %d to get_help_item (size %d)", pos, size);
+    freelog(LOG_ERROR, "Bad index %d to get_help_item (size %d)", pos, size);
     return NULL;
   }
   if (pos == size) {
@@ -942,11 +932,11 @@ get_help_item_spec(const char *name, enum help_page_type htype, int *pos)
     sz_strlcpy(vtopic, name);
     vitem.text = vtext;
     if(htype==HELP_ANY || htype==HELP_TEXT) {
-      fc_snprintf(vtext, sizeof(vtext),
+      my_snprintf(vtext, sizeof(vtext),
 		  _("Sorry, no help topic for %s.\n"), vitem.topic);
       vitem.type = HELP_TEXT;
     } else {
-      fc_snprintf(vtext, sizeof(vtext),
+      my_snprintf(vtext, sizeof(vtext),
 		  _("Sorry, no help topic for %s.\n"
 		    "This page was auto-generated.\n\n"),
 		  vitem.topic);
@@ -1015,7 +1005,7 @@ char *helptext_building(char *buf, size_t bufsz, struct player *pplayer,
     .value = {.building = pimprove}
   };
 
-  fc_assert_ret_val(NULL != buf && 0 < bufsz, NULL);
+  assert(NULL != buf && 0 < bufsz);
   buf[0] = '\0';
 
   if (NULL == pimprove) {
@@ -1033,7 +1023,7 @@ char *helptext_building(char *buf, size_t bufsz, struct player *pplayer,
     }
   } requirement_vector_iterate_end;
   if (reqs) {
-    fc_strlcat(buf, "\n", bufsz);
+    mystrlcat(buf, "\n", bufsz);
   }
 
 
@@ -1048,6 +1038,7 @@ char *helptext_building(char *buf, size_t bufsz, struct player *pplayer,
   if (building_has_effect(pimprove, EFT_ENABLE_NUKE)
       && num_role_units(F_NUCLEAR) > 0) {
     struct unit_type *u = get_role_unit(F_NUCLEAR, 0);
+    CHECK_UNIT_TYPE(u);
 
     cat_snprintf(buf, bufsz,
 		 /* TRANS: 'Allows all players with knowledge of atomic
@@ -1105,7 +1096,7 @@ static int techs_with_flag_string(char *buf, size_t bufsz,
 {
   int count = 0;
 
-  fc_assert_ret_val(NULL != buf && 0 < bufsz, 0);
+  assert(NULL != buf && 0 < bufsz);
   buf[0] = '\0';
 
   techs_with_flag_iterate(flag, tech_id) {
@@ -1132,11 +1123,11 @@ static int techs_with_flag_string(char *buf, size_t bufsz,
 char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
 		    const char *user_text, struct unit_type *utype)
 {
-  fc_assert_ret_val(NULL != buf && 0 < bufsz && NULL != user_text, NULL);
+  assert(NULL != buf && 0 < bufsz && NULL != user_text);
 
   if (!utype) {
-    log_error("Unknown unit!");
-    fc_strlcpy(buf, user_text, bufsz);
+    freelog(LOG_ERROR, "Unknown unit!");
+    mystrlcpy(buf, user_text, bufsz);
     return buf;
   }
   buf[0] = '\0';
@@ -1473,11 +1464,15 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
     char allowed_units[10][64];
     int num_allowed_units = 0;
     int j;
-    struct astring astr = ASTRING_INIT;
+    struct astring astr;
+
+    astr_init(&astr);
+    astr_minsize(&astr,1);
+    astr.str[0] = '\0';
 
     unit_type_iterate(transport) {
       if (can_unit_type_transport(transport, utype_class(utype))) {
-        fc_strlcpy(allowed_units[num_allowed_units],
+        mystrlcpy(allowed_units[num_allowed_units],
                   utype_name_translation(transport),
                   sizeof(allowed_units[num_allowed_units]));
         num_allowed_units++;
@@ -1487,16 +1482,22 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
     for (j = 0; j < num_allowed_units; j++) {
       const char *deli_str = NULL;
 
+      /* there should be something like astr_append() */
+      astr_minsize(&astr, astr.n + strlen(allowed_units[j]));
+      strcat(astr.str, allowed_units[j]);
+
       if (j == num_allowed_units - 2) {
         /* TRANS: List of possible unit types has this between
          *        last two elements */
-        deli_str = Q_(" or ");
+	deli_str = Q_(" or ");
       } else if (j < num_allowed_units - 1) {
-        deli_str = Q_("?or:, ");
+	deli_str = Q_("?or:, ");
       }
 
-      astr_add(&astr, "%s%s", allowed_units[j],
-               NULL != deli_str ? deli_str : "");
+      if (deli_str) {
+	astr_minsize(&astr, astr.n + strlen(deli_str));
+	strcat(astr.str, deli_str);
+      }
     }
 
     if (num_allowed_units == 0) {
@@ -1514,7 +1515,8 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
                        "* Unit has to be in a city, a base, or on a %s"
                        " after %d turns.\n",
                        utype_fuel(utype)),
-                   astr_str(&astr), utype_fuel(utype));
+                   astr.str,
+                   utype_fuel(utype));
     }
     astr_free(&astr);
   }
@@ -1542,11 +1544,11 @@ void helptext_advance(char *buf, size_t bufsz, struct player *pplayer,
     .value = {.advance = vap}
   };
 
-  fc_assert_ret(NULL != buf && 0 < bufsz && NULL != user_text);
-  fc_strlcpy(buf, user_text, bufsz);
+  assert(NULL != buf && 0 < bufsz && NULL != user_text);
+  mystrlcpy(buf, user_text, bufsz);
 
   if (NULL == vap) {
-    log_error("Unknown tech %d.", i);
+    freelog(LOG_ERROR, "Unknown tech %d.", i);
     return;
   }
 
@@ -1618,20 +1620,12 @@ void helptext_advance(char *buf, size_t bufsz, struct player *pplayer,
 		 units_str);
     free((void *) units_str);
   }
-
-  if (game.info.tech_upkeep_style == 1) {
-    CATLSTR(buf, bufsz,
-            _("* To preserve this technology for our nation some bulbs "
-              "are needed each turn.\n"));
-  }
-
   if (vap->helptext && vap->helptext[0] != '\0') {
     if (strlen(buf) > 0) {
       CATLSTR(buf, bufsz, "\n");
     }
     cat_snprintf(buf, bufsz, "%s\n", _(vap->helptext));
   }
-
 }
 
 /****************************************************************
@@ -1645,11 +1639,11 @@ void helptext_terrain(char *buf, size_t bufsz, struct player *pplayer,
     .value = {.terrain = pterrain}
   };
 
-  fc_assert_ret(NULL != buf && 0 < bufsz);
+  assert(NULL != buf && 0 < bufsz);
   buf[0] = '\0';
 
   if (!pterrain) {
-    log_error("Unknown terrain!");
+    freelog(LOG_ERROR, "Unknown terrain!");
     return;
   }
 
@@ -1710,7 +1704,7 @@ void helptext_government(char *buf, size_t bufsz, struct player *pplayer,
     .value = {.govern = gov}
   };
 
-  fc_assert_ret(NULL != buf && 0 < bufsz);
+  assert(NULL != buf && 0 < bufsz);
   buf[0] = '\0';
 
   if (gov->helptext[0] != '\0') {
@@ -1724,7 +1718,7 @@ void helptext_government(char *buf, size_t bufsz, struct player *pplayer,
     }
   } requirement_vector_iterate_end;
   if (reqs) {
-    fc_strlcat(buf, "\n", bufsz);
+    mystrlcat(buf, "\n", bufsz);
   }
 
   /* Effects */
@@ -1866,7 +1860,8 @@ void helptext_government(char *buf, size_t bufsz, struct player *pplayer,
           cat_snprintf(buf, bufsz,
                        /* TRANS: %s is the output type, like 'shield' or 'gold'. */
                        _("* You pay %d times normal %s upkeep for your units.\n"),
-                       peffect->value, astr_str(&outputs_and));
+                       peffect->value,
+                       outputs_and.str);
         } else if (peffect->value > 1) {
           cat_snprintf(buf, bufsz,
                        _("* You pay %d times normal upkeep for your units.\n"),
@@ -1875,7 +1870,7 @@ void helptext_government(char *buf, size_t bufsz, struct player *pplayer,
           cat_snprintf(buf, bufsz,
                        /* TRANS: %s is the output type, like 'shield' or 'gold'. */
                        _("* You pay no %s upkeep for your units.\n"),
-                       astr_str(&outputs_and));
+                       outputs_and.str);
         } else if (peffect->value == 0) {
           CATLSTR(buf, bufsz,
                   _("* You pay no upkeep for your units.\n"));
@@ -1889,7 +1884,8 @@ void helptext_government(char *buf, size_t bufsz, struct player *pplayer,
                         * singular/plural version of these. */
                        _("* Each of your cities will avoid paying %d %s"
                          " upkeep for your units.\n"),
-                       peffect->value, astr_str(&outputs_and));
+                       peffect->value,
+                       outputs_and.str);
         } else {
           cat_snprintf(buf, bufsz,
                        /* TRANS: Amount is subtracted from upkeep cost
@@ -2017,45 +2013,49 @@ void helptext_government(char *buf, size_t bufsz, struct player *pplayer,
                      /* TRANS: %s is list of output types, with 'or' */
                      _("* Each worked tile that gives more than %d %s will"
                        " suffer a -1 penalty unless celebrating.\n"),
-                     peffect->value, astr_str(&outputs_or));
+                     peffect->value,
+                     outputs_or.str);
         break;
       case EFT_OUTPUT_INC_TILE_CELEBRATE:
         cat_snprintf(buf, bufsz,
                      /* TRANS: %s is list of output types, with 'or' */
                      _("* Each worked tile with at least 1 %s will yield"
                        " %d more of it while celebrating.\n"),
-                     astr_str(&outputs_or), peffect->value);
+                     outputs_or.str,
+                     peffect->value);
         break;
       case EFT_OUTPUT_INC_TILE:
         cat_snprintf(buf, bufsz,
                      /* TRANS: %s is list of output types, with 'or' */
                      _("* Each worked tile with at least 1 %s will yield"
                        " %d more of it.\n"),
-                     astr_str(&outputs_or), peffect->value);
+                     outputs_or.str,
+                     peffect->value);
         break;
       case EFT_OUTPUT_BONUS:
       case EFT_OUTPUT_BONUS_2:
         cat_snprintf(buf, bufsz,
                      /* TRANS: %s is list of output types, with 'and' */
                      _("* %s production is increased %d%%.\n"),
-                     astr_str(&outputs_and), peffect->value);
+                     outputs_and.str,
+                     peffect->value);
         break;
       case EFT_OUTPUT_WASTE:
         if (peffect->value > 30) {
           cat_snprintf(buf, bufsz,
                        /* TRANS: %s is list of output types, with 'and' */
                        _("* %s production will suffer massive losses.\n"),
-                       astr_str(&outputs_and));
+                       outputs_and.str);
         } else if (peffect->value >= 15) {
           cat_snprintf(buf, bufsz,
                        /* TRANS: %s is list of output types, with 'and' */
                        _("* %s production will suffer some losses.\n"),
-                       astr_str(&outputs_and));
+                       outputs_and.str);
         } else {
           cat_snprintf(buf, bufsz,
                        /* TRANS: %s is list of output types, with 'and' */
                        _("* %s production will suffer a small amount of losses.\n"),
-                       astr_str(&outputs_and));
+                       outputs_and.str);
         }
         break;
       case EFT_HEALTH_PCT:
@@ -2073,19 +2073,19 @@ void helptext_government(char *buf, size_t bufsz, struct player *pplayer,
                        /* TRANS: %s is list of output types, with 'and' */
                        _("* %s losses will increase quickly"
                          " with distance from capital.\n"),
-                       astr_str(&outputs_and));
+                       outputs_and.str);
         } else if (peffect->value == 2) {
           cat_snprintf(buf, bufsz,
                        /* TRANS: %s is list of output types, with 'and' */
                        _("* %s losses will increase"
                          " with distance from capital.\n"),
-                       astr_str(&outputs_and));
+                       outputs_and.str);
         } else {
           cat_snprintf(buf, bufsz,
                        /* TRANS: %s is list of output types, with 'and' */
                        _("* %s losses will increase slowly"
                          " with distance from capital.\n"),
-                       astr_str(&outputs_and));
+                       outputs_and.str);
         }
       case EFT_MIGRATION_PCT:
         if (peffect->value > 0) {
@@ -2126,7 +2126,7 @@ char *helptext_unit_upkeep_str(struct unit_type *utype)
   int any = 0;
 
   if (!utype) {
-    log_error("Unknown unit!");
+    freelog(LOG_ERROR, "Unknown unit!");
     return "";
   }
 
@@ -2150,7 +2150,7 @@ char *helptext_unit_upkeep_str(struct unit_type *utype)
 
   if (any == 0) {
     /* strcpy(buf, _("None")); */
-    fc_snprintf(buf, sizeof(buf), "%d", 0);
+    my_snprintf(buf, sizeof(buf), "%d", 0);
   }
   return buf;
 }

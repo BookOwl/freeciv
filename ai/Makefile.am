@@ -2,7 +2,7 @@
 
 noinst_LTLIBRARIES = libcivai.la
 
-AM_CPPFLAGS = -I$(top_srcdir)/utility -I$(srcdir)/../common -I$(top_srcdir)/server -I$(top_srcdir)/server/advisors -I$(top_srcdir)/common/aicore -I$(top_srcdir)/server/generator
+AM_CPPFLAGS = -I$(top_srcdir)/utility -I$(srcdir)/../common -I$(srcdir)/../server -I$(top_srcdir)/common/aicore -I$(top_srcdir)/server/generator
 
 libcivai_la_SOURCES = \
 		advdomestic.c	\
@@ -17,6 +17,10 @@ libcivai_la_SOURCES = \
 		aiair.h		\
 		aicity.c	\
 		aicity.h	\
+		aidata.c	\
+		aidata.h	\
+		aiexplorer.c	\
+		aiexplorer.h	\
 		aiferry.c	\
 		aiferry.h	\
 		aiguard.c	\
@@ -25,6 +29,8 @@ libcivai_la_SOURCES = \
 		aihand.h	\
 		aihunt.c	\
 		aihunt.h	\
+		ailog.c		\
+		ailog.h		\
 		aiparatrooper.c \
 		aiparatrooper.h \
 		aisettler.c	\
@@ -36,8 +42,7 @@ libcivai_la_SOURCES = \
 		aiunit.c	\
 		aiunit.h	\
 		aidiplomat.c	\
-		aidiplomat.h	\
-		defaultai.c	\
-		defaultai.h
+		aidiplomat.h
 
 libcivai_la_LIBADD = -lm
+

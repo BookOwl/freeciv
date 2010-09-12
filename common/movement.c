@@ -15,24 +15,22 @@
 #include <config.h>
 #endif
 
-/* utility */
-#include "bitvector.h"
+#include <assert.h>
+
 #include "fcintl.h"
 #include "log.h"
 #include "shared.h"
 #include "support.h"
 
-/* common */
 #include "base.h"
 #include "effects.h"
 #include "fc_types.h"
 #include "map.h"
+#include "movement.h"
 #include "unit.h"
 #include "unitlist.h"
 #include "unittype.h"
 #include "terrain.h"
-
-#include "movement.h"
 
 static const char *move_type_names[] = {
   "Land", "Sea", "Both"
@@ -529,7 +527,7 @@ enum unit_move_type move_type_from_str(const char *s)
   int i;
 
   for (i = 0; i < MOVETYPE_LAST; i++) {
-    if (fc_strcasecmp(move_type_names[i], s)==0) {
+    if (mystrcasecmp(move_type_names[i], s)==0) {
       return i;
     }
   }

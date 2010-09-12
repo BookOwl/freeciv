@@ -23,7 +23,6 @@
 
 /* common */
 #include "government.h"
-#include "research.h"
 
 /* client */
 #include "client_main.h"
@@ -71,7 +70,7 @@ void intel_dialog_init()
 *****************************************************************/
 void intel_dialog_done()
 {
-  dialog_list_destroy(dialog_list);
+  dialog_list_free(dialog_list);
 }
 
 /****************************************************************
@@ -127,14 +126,6 @@ static int exit_intel_dlg_callback(struct widget *pWidget)
   return -1;
 }
 
-/**************************************************************************
-  Close an intelligence dialog for the given player.
-**************************************************************************/
-void close_intel_dialog(struct player *p)
-{
-  popdown_intel_dialog(p);
-}
-
 static struct intel_dialog *create_intel_dialog(struct player *pPlayer) {
 
   struct intel_dialog *pdialog = fc_calloc(1, sizeof(struct intel_dialog));
@@ -181,7 +172,7 @@ void popdown_intel_dialog(struct player *p)
     popdown_window_group_dialog(pdialog->pdialog->pBeginWidgetList,
 			                  pdialog->pdialog->pEndWidgetList);
       
-    dialog_list_remove(dialog_list, pdialog);
+    dialog_list_unlink(dialog_list, pdialog);
       
     FC_FREE(pdialog->pdialog->pScroll);
     FC_FREE(pdialog->pdialog);  
@@ -245,10 +236,8 @@ void update_intel_dialog(struct player *p)
     /* ---------- */
     /* exit button */
     pBuf = create_themeicon(pTheme->Small_CANCEL_Icon, pWindow->dst,
-                            WF_WIDGET_HAS_INFO_LABEL
-                            | WF_RESTORE_BACKGROUND);
-    pBuf->info_label = create_str16_from_char(_("Close Dialog (Esc)"),
-                                              adj_font(12));
+                            WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
+    pBuf->string16 = create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
     area.w = MAX(area.w, pBuf->size.w + adj_size(10));
     pBuf->action = exit_intel_dlg_callback;
     set_wstate(pBuf, FC_WS_NORMAL);
@@ -263,20 +252,20 @@ void update_intel_dialog(struct player *p)
     pLogo = pText1;
           
     pBuf = create_icon2(pLogo, pWindow->dst,
-                        WF_RESTORE_BACKGROUND | WF_WIDGET_HAS_INFO_LABEL
-                        | WF_FREE_THEME);
+          (WF_RESTORE_BACKGROUND|WF_WIDGET_HAS_INFO_LABEL|
+                                          WF_FREE_STRING|WF_FREE_THEME));
     pBuf->action = spaceship_callback;
     set_wstate(pBuf, FC_WS_NORMAL);
     pBuf->data.player = p;
-    fc_snprintf(cBuf, sizeof(cBuf),
+    my_snprintf(cBuf, sizeof(cBuf),
                 _("Intelligence Information about the %s Spaceship"), 
                 nation_adjective_for_player(p));
-    pBuf->info_label = create_str16_from_char(cBuf, adj_font(12));
-
+    pBuf->string16 = create_str16_from_char(cBuf, adj_font(12));
+          
     add_to_gui_list(ID_ICON, pBuf);
           
     /* ---------- */
-    fc_snprintf(cBuf, sizeof(cBuf),
+    my_snprintf(cBuf, sizeof(cBuf),
                 _("Intelligence Information for the %s Empire"), 
                 nation_adjective_for_player(p));
     
@@ -291,7 +280,7 @@ void update_intel_dialog(struct player *p)
     /* ---------- */
     
     pCapital = find_palace(p);
-    research = player_research_get(p);
+    research = get_player_research(p);
     change_ptsize16(pStr, adj_font(10));
     pStr->style &= ~TTF_STYLE_BOLD;
 
@@ -299,7 +288,7 @@ void update_intel_dialog(struct player *p)
     switch (research->researching) {
     case A_UNKNOWN:
     case A_UNSET:
-      fc_snprintf(cBuf, sizeof(cBuf),
+      my_snprintf(cBuf, sizeof(cBuf),
         _("Ruler: %s %s  Government: %s\nCapital: %s  Gold: %d\nTax: %d%%"
           " Science: %d%% Luxury: %d%%\nResearching: unknown"),
         ruler_title_translation(p),
@@ -311,7 +300,7 @@ void update_intel_dialog(struct player *p)
         p->economic.tax, p->economic.science, p->economic.luxury);
       break;
     default:
-      fc_snprintf(cBuf, sizeof(cBuf),
+      my_snprintf(cBuf, sizeof(cBuf),
         _("Ruler: %s %s  Government: %s\nCapital: %s  Gold: %d\nTax: %d%%"
           " Science: %d%% Luxury: %d%%\nResearching: %s(%d/%d)"),
         ruler_title_translation(p),
@@ -343,15 +332,14 @@ void update_intel_dialog(struct player *p)
        && TECH_KNOWN != player_invention_state(client.conn.playing, i)) {
 
         pBuf = create_icon2(get_tech_icon(i), pWindow->dst,
-                            WF_RESTORE_BACKGROUND | WF_WIDGET_HAS_INFO_LABEL
-                            | WF_FREE_THEME);
+          (WF_RESTORE_BACKGROUND|WF_WIDGET_HAS_INFO_LABEL|WF_FREE_STRING | WF_FREE_THEME));
         pBuf->action = tech_callback;
         set_wstate(pBuf, FC_WS_NORMAL);
-
-        pBuf->info_label =
-            create_str16_from_char(advance_name_translation
-                                   (advance_by_number(i)), adj_font(12));
-
+  
+        pBuf->string16 = create_str16_from_char(
+                           advance_name_translation(advance_by_number(i)),
+                           adj_font(12));
+          
         add_to_gui_list(ID_ICON, pBuf);
           
         if(n > ((2 * col) - 1)) {
@@ -381,7 +369,7 @@ void update_intel_dialog(struct player *p)
       
       area.w = MAX(area.w, col * pBuf->size.w + count);
       
-      fc_snprintf(cBuf, sizeof(cBuf), _("Their techs that we don't have :"));
+      my_snprintf(cBuf, sizeof(cBuf), _("Their techs that we don't have :"));
       copy_chars_to_string16(pStr, cBuf);
       pStr->style |= TTF_STYLE_BOLD;
       pText2 = create_text_surf_from_str16(pStr);

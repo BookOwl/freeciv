@@ -15,6 +15,7 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <string.h>
 #include <math.h> /* ceil */
 
@@ -43,6 +44,11 @@ static struct unit_class unit_classes[UCL_LAST];
    client/packhand.c (for the client)
 */
 
+static const char *unit_class_flag_names[] = {
+  "TerrainSpeed", "TerrainDefense", "DamageSlows", "CanOccupyCity", "Missile",
+  "RoadNative", "RiverNative", "BuildAnywhere", "Unreachable",
+  "CollectRansom", "ZOC", "CanFortify", "CanPillage", "DoesntOccupyTile"
+};
 static const char *flag_names[] = {
   "TradeRoute", "HelpWonder", "IgZOC", "NonMil", "IgTer", 
   "OneAttack", "Pikemen", "Horse", "IgWall", "FieldUnit", 
@@ -54,8 +60,7 @@ static const char *flag_names[] = {
   "CityBuster", "NoBuild", "BadWallAttacker", "BadCityDefender",
   "Helicopter", "AirUnit", "Fighter", "BarbarianOnly", "Shield2Gold"
 };
-static char *user_flag_names[MAX_NUM_USER_UNIT_FLAGS]
-  = { NULL, NULL, NULL, NULL };
+static char *user_flag_names[MAX_NUM_USER_UNIT_FLAGS] = { NULL, NULL, NULL, NULL };
 static const char *role_names[] = {
   "FirstBuild", "Explorer", "Hut", "HutTech", "Partisan",
   "DefendOk", "DefendGood", "AttackFast", "AttackStrong",
@@ -103,7 +108,7 @@ Unit_type_id utype_count(void)
 **************************************************************************/
 Unit_type_id utype_index(const struct unit_type *punittype)
 {
-  fc_assert_ret_val(punittype, -1);
+  assert(punittype);
   return punittype - unit_types;
 }
 
@@ -112,7 +117,7 @@ Unit_type_id utype_index(const struct unit_type *punittype)
 **************************************************************************/
 Unit_type_id utype_number(const struct unit_type *punittype)
 {
-  fc_assert_ret_val(punittype, -1);
+  assert(punittype);
   return punittype->item_number;
 }
 
@@ -193,9 +198,9 @@ int utype_happy_cost(const struct unit_type *ut,
   Return whether the given unit class has the flag.
 **************************************************************************/
 bool uclass_has_flag(const struct unit_class *punitclass,
-                     enum unit_class_flag_id flag)
+		     enum unit_class_flag_id flag)
 {
-  fc_assert_ret_val(unit_class_flag_id_is_valid(flag), FALSE);
+  assert(flag >= 0 && flag < UCF_LAST);
   return BV_ISSET(punitclass->flags, flag);
 }
 
@@ -204,7 +209,7 @@ bool uclass_has_flag(const struct unit_class *punitclass,
 **************************************************************************/
 bool utype_has_flag(const struct unit_type *punittype, int flag)
 {
-  fc_assert_ret_val(flag >= 0 && flag < F_LAST, FALSE);
+  assert(flag>=0 && flag<F_LAST);
   return BV_ISSET(punittype->flags, flag);
 }
 
@@ -222,7 +227,7 @@ bool unit_has_type_flag(const struct unit *punit, enum unit_flag_id flag)
 **************************************************************************/
 bool utype_has_role(const struct unit_type *punittype, int role)
 {
-  fc_assert_ret_val(role >= L_FIRST && role < L_LAST, FALSE);
+  assert(role>=L_FIRST && role<L_LAST);
   return BV_ISSET(punittype->roles, role - L_FIRST);
 }
 
@@ -320,9 +325,15 @@ enum unit_move_type utype_move_type(const struct unit_type *punittype)
   Return the (translated) name of the unit type.
   You don't have to free the return pointer.
 **************************************************************************/
-const char *utype_name_translation(const struct unit_type *punittype)
+const char *utype_name_translation(struct unit_type *punittype)
 {
-  return name_translation(&punittype->name);
+  if (NULL == punittype->name.translated) {
+    /* delayed (unified) translation */
+    punittype->name.translated = ('\0' == punittype->name.vernacular[0])
+				 ? punittype->name.vernacular
+				 : Q_(punittype->name.vernacular);
+  }
+  return punittype->name.translated;
 }
 
 /**************************************************************************
@@ -340,7 +351,7 @@ const char *unit_name_translation(const struct unit *punit)
 **************************************************************************/
 const char *utype_rule_name(const struct unit_type *punittype)
 {
-  return rule_name(&punittype->name);
+  return Qn_(punittype->name.vernacular);
 }
 
 /**************************************************************************
@@ -360,16 +371,18 @@ const char *utype_values_string(const struct unit_type *punittype)
   static char buffer[256];
 
   if (utype_fuel(punittype)) {
-    fc_snprintf(buffer, sizeof(buffer), "%d/%d/%d(%d)",
-                punittype->attack_strength,
-                punittype->defense_strength,
-                punittype->move_rate / 3,
-                punittype->move_rate / 3 * utype_fuel(punittype));
+    my_snprintf(buffer, sizeof(buffer),
+		"%d/%d/%d(%d)",
+		punittype->attack_strength,
+		punittype->defense_strength,
+		punittype->move_rate / 3,
+		punittype->move_rate / 3 * utype_fuel(punittype));
   } else {
-    fc_snprintf(buffer, sizeof(buffer), "%d/%d/%d",
-                punittype->attack_strength,
-                punittype->defense_strength,
-                punittype->move_rate / 3);
+    my_snprintf(buffer, sizeof(buffer),
+		"%d/%d/%d",
+		punittype->attack_strength,
+		punittype->defense_strength,
+		punittype->move_rate / 3);
   }
   return buffer;
 }
@@ -377,11 +390,11 @@ const char *utype_values_string(const struct unit_type *punittype)
 /**************************************************************************
 ...
 **************************************************************************/
-const char *utype_values_translation(const struct unit_type *punittype)
+const char *utype_values_translation(struct unit_type *punittype)
 {
   static char buffer[256];
 
-  fc_snprintf(buffer, sizeof(buffer),
+  my_snprintf(buffer, sizeof(buffer),
               "%s [%s]",
               utype_name_translation(punittype),
               utype_values_string(punittype));
@@ -392,9 +405,15 @@ const char *utype_values_translation(const struct unit_type *punittype)
   Return the (translated) name of the unit class.
   You don't have to free the return pointer.
 **************************************************************************/
-const char *uclass_name_translation(const struct unit_class *pclass)
+const char *uclass_name_translation(struct unit_class *pclass)
 {
-  return name_translation(&pclass->name);
+  if (NULL == pclass->name.translated) {
+    /* delayed (unified) translation */
+    pclass->name.translated = ('\0' == pclass->name.vernacular[0])
+			      ? pclass->name.vernacular
+			      : Q_(pclass->name.vernacular);
+  }
+  return pclass->name.translated;
 }
 
 /**************************************************************************
@@ -403,7 +422,7 @@ const char *uclass_name_translation(const struct unit_class *pclass)
 **************************************************************************/
 const char *uclass_rule_name(const struct unit_class *pclass)
 {
-  return rule_name(&pclass->name);
+  return Qn_(pclass->name.vernacular);
 }
 
 /**************************************************************************
@@ -419,27 +438,38 @@ const char *role_units_translations(int flag)
   int count = num_role_units(flag);
 
   if (count == 1) {
-    return fc_strdup(utype_name_translation(get_role_unit(flag, 0)));
+    return mystrdup(utype_name_translation(get_role_unit(flag, 0)));
   }
 
   if (count > 0) {
-    struct astring astr = ASTRING_INIT;
+    struct astring astr;
+
+    astr_init(&astr);
+    astr_minsize(&astr, 1);
+    astr.str[0] = 0;
 
     while ((count--) > 0) {
       struct unit_type *u = get_role_unit(flag, count);
       const char *unitname = utype_name_translation(u);
 
       /* there should be something like astr_append() */
-      astr_add(&astr, "%s", unitname);
+      astr_minsize(&astr, astr.n + strlen(unitname));
+      strcat(astr.str, unitname);
 
       if (count == 1) {
-        astr_add(&astr, "%s", _(" and "));
+	const char *and_str = _(" and ");
+
+        astr_minsize(&astr, astr.n + strlen(and_str));
+        strcat(astr.str, and_str);
       } else {
         if (count != 0) {
-          astr_add(&astr, "%s", Q_("?and:, "));
+	  const char *and_comma = Q_("?and:, ");
+
+	  astr_minsize(&astr, astr.n + strlen(and_comma));
+	  strcat(astr.str, and_comma);
         } else {
-          return astr_str(&astr);
-        }
+	  return astr.str;
+	}
       }
     }
   }
@@ -509,7 +539,7 @@ struct unit_type *find_unit_type_by_rule_name(const char *name)
   const char *qname = Qn_(name);
 
   unit_type_iterate(punittype) {
-    if (0 == fc_strcasecmp(utype_rule_name(punittype), qname)) {
+    if (0 == mystrcasecmp(utype_rule_name(punittype), qname)) {
       return punittype;
     }
   } unit_type_iterate_end;
@@ -526,11 +556,39 @@ struct unit_class *find_unit_class_by_rule_name(const char *s)
   const char *qs = Qn_(s);
 
   unit_class_iterate(pclass) {
-    if (0 == fc_strcasecmp(uclass_rule_name(pclass), qs)) {
+    if (0 == mystrcasecmp(uclass_rule_name(pclass), qs)) {
       return pclass;
     }
   } unit_class_iterate_end;
   return NULL;
+}
+
+/**************************************************************************
+  Convert unit class flag names to enum; case insensitive;
+  returns UCF_LAST if can't match.
+**************************************************************************/
+enum unit_class_flag_id find_unit_class_flag_by_rule_name(const char *s)
+{
+  enum unit_class_flag_id i;
+
+  assert(ARRAY_SIZE(unit_class_flag_names) == UCF_LAST);
+  
+  for(i = 0; i < UCF_LAST; i++) {
+    if (mystrcasecmp(unit_class_flag_names[i], s)==0) {
+      return i;
+    }
+  }
+  return UCF_LAST;
+}
+
+/**************************************************************************
+  Return the (untranslated) rule name of the unit class flag.
+**************************************************************************/
+const char *unit_class_flag_rule_name(enum unit_class_flag_id id)
+{
+  assert(ARRAY_SIZE(unit_class_flag_names) == UCF_LAST);
+  assert(id >= 0 && id < UCF_LAST);
+  return unit_class_flag_names[id];
 }
 
 /**************************************************************************
@@ -540,7 +598,7 @@ void set_user_unit_flag_name(enum unit_flag_id id, const char *name)
 {
   int ufid = id - F_USER_FLAG_1;
 
-  fc_assert_ret(id >= F_USER_FLAG_1 && id < F_LAST);
+  assert(id >= F_USER_FLAG_1 && id < F_LAST);
 
   if (user_flag_names[ufid] != NULL) {
     free(user_flag_names[ufid]);
@@ -548,7 +606,7 @@ void set_user_unit_flag_name(enum unit_flag_id id, const char *name)
   }
 
   if (name && name[0] != '\0') {
-    user_flag_names[ufid] = fc_strdup(name);
+    user_flag_names[ufid] = mystrdup(name);
   }
 }
 
@@ -560,16 +618,16 @@ enum unit_flag_id find_unit_flag_by_rule_name(const char *s)
 {
   enum unit_flag_id i;
 
-  fc_assert_ret_val(ARRAY_SIZE(flag_names) == F_USER_FLAG_1, F_LAST);
-
+  assert(ARRAY_SIZE(flag_names) == F_USER_FLAG_1);
+  
   for (i = 0; i < F_USER_FLAG_1; i++) {
-    if (fc_strcasecmp(flag_names[i], s) == 0) {
+    if (mystrcasecmp(flag_names[i], s) == 0) {
       return i;
     }
   }
   for (i = 0; i < MAX_NUM_USER_UNIT_FLAGS; i++) {
     if (user_flag_names[i] != NULL
-        && fc_strcasecmp(user_flag_names[i], s) == 0) {
+        && mystrcasecmp(user_flag_names[i], s) == 0) {
       return i + F_USER_FLAG_1;
     }
   }
@@ -582,8 +640,8 @@ enum unit_flag_id find_unit_flag_by_rule_name(const char *s)
 **************************************************************************/
 const char *unit_flag_rule_name(enum unit_flag_id id)
 {
-  fc_assert_ret_val(ARRAY_SIZE(flag_names) == F_USER_FLAG_1, NULL);
-  fc_assert_ret_val(id >= 0 && id < F_LAST, NULL);
+  assert(ARRAY_SIZE(flag_names) == F_USER_FLAG_1);
+  assert(id >= 0 && id < F_LAST);
 
   if (id < F_USER_FLAG_1) {
     return flag_names[id];
@@ -600,10 +658,10 @@ enum unit_role_id find_unit_role_by_rule_name(const char *s)
 {
   enum unit_role_id i;
 
-  fc_assert_ret_val(ARRAY_SIZE(role_names) == (L_LAST - L_FIRST), L_LAST);
+  assert(ARRAY_SIZE(role_names) == (L_LAST - L_FIRST));
 
-  for(i = L_FIRST; i < L_LAST; i++) {
-    if (fc_strcasecmp(role_names[i - L_FIRST], s) == 0) {
+  for(i=L_FIRST; i<L_LAST; i++) {
+    if (mystrcasecmp(role_names[i-L_FIRST], s)==0) {
       return i;
     }
   }
@@ -615,8 +673,8 @@ enum unit_role_id find_unit_role_by_rule_name(const char *s)
 **************************************************************************/
 const char *unit_role_rule_name(enum unit_role_id id)
 {
-  fc_assert_ret_val(ARRAY_SIZE(role_names) == L_LAST, NULL);
-  fc_assert_ret_val(id >= 0 && id < L_LAST, NULL);
+  assert(ARRAY_SIZE(role_names) == L_LAST);
+  assert(id >= 0 && id < L_LAST);
   return role_names[id];
 }
 
@@ -626,9 +684,9 @@ ignoring whether unit is obsolete and assuming the
 player has a coastal city.
 **************************************************************************/
 bool can_player_build_unit_direct(const struct player *p,
-                                  const struct unit_type *punittype)
+				  const struct unit_type *punittype)
 {
-  fc_assert_ret_val(NULL != punittype, FALSE);
+  CHECK_UNIT_TYPE(punittype);
 
   if (is_barbarian(p)
       && !utype_has_role(punittype, L_BARBARIAN_BUILD)
@@ -669,8 +727,7 @@ bool can_player_build_unit_direct(const struct player *p,
        * In the beginning of this function we checked that
        * barbarian player tries to build only role
        * L_BARBARIAN_BUILD or L_BARBARIAN_BUILD_TECH units. */
-      fc_assert_ret_val(utype_has_role(punittype, L_BARBARIAN_BUILD_TECH),
-                        FALSE);
+      assert(utype_has_role(punittype, L_BARBARIAN_BUILD_TECH));
 
       /* Client does not know all the advances other players have
        * got. So following gives wrong answer in the client.
@@ -744,9 +801,9 @@ returns TRUE if unit is available with current tech OR will be available
 with future tech. Returns FALSE if unit is obsolete.
 **************************************************************************/
 bool can_player_build_unit_later(const struct player *p,
-                                 const struct unit_type *punittype)
+				 const struct unit_type *punittype)
 {
-  fc_assert_ret_val(NULL != punittype, FALSE);
+  CHECK_UNIT_TYPE(punittype);
   if (utype_has_flag(punittype, F_NOBUILD)) {
     return FALSE;
   }
@@ -792,7 +849,7 @@ static void precalc_one(int i,
 	with_role[i][j++] = u;
       }
     } unit_type_iterate_end;
-    fc_assert(j == n_with_role[i]);
+    assert(j==n_with_role[i]);
   }
 }
 
@@ -841,9 +898,8 @@ How many unit types have specified role/flag.
 **************************************************************************/
 int num_role_units(int role)
 {
-  fc_assert_ret_val((role >= 0 && role < F_LAST)
-                    || (role >= L_FIRST && role < L_LAST), -1);
-  fc_assert_ret_val(!first_init, -1);
+  assert((role>=0 && role<F_LAST) || (role>=L_FIRST && role<L_LAST));
+  assert(!first_init);
   return n_with_role[role];
 }
 
@@ -853,13 +909,10 @@ Index -1 means (n-1), ie last one.
 **************************************************************************/
 struct unit_type *get_role_unit(int role, int index)
 {
-  fc_assert_ret_val((role >= 0 && role < F_LAST)
-                    || (role >= L_FIRST && role < L_LAST), NULL);
-  fc_assert_ret_val(!first_init, NULL);
-  if (index==-1) {
-    index = n_with_role[role]-1;
-  }
-  fc_assert_ret_val(index >= 0 && index < n_with_role[role], NULL);
+  assert((role>=0 && role<F_LAST) || (role>=L_FIRST && role<L_LAST));
+  assert(!first_init);
+  if (index==-1) index = n_with_role[role]-1;
+  assert(index>=0 && index<n_with_role[role]);
   return with_role[role][index];
 }
 
@@ -871,10 +924,9 @@ struct unit_type *best_role_unit(const struct city *pcity, int role)
 {
   struct unit_type *u;
   int j;
-
-  fc_assert_ret_val((role >= 0 && role < F_LAST)
-                    || (role >= L_FIRST && role < L_LAST), NULL);
-  fc_assert_ret_val(!first_init, NULL);
+  
+  assert((role>=0 && role<F_LAST) || (role>=L_FIRST && role<L_LAST));
+  assert(!first_init);
 
   for(j=n_with_role[role]-1; j>=0; j--) {
     u = with_role[role][j];
@@ -896,9 +948,8 @@ struct unit_type *best_role_unit_for_player(const struct player *pplayer,
 {
   int j;
 
-  fc_assert_ret_val((role >= 0 && role < F_LAST)
-                    || (role >= L_FIRST && role < L_LAST), NULL);
-  fc_assert_ret_val(!first_init, NULL);
+  assert((role >= 0 && role < F_LAST) || (role >= L_FIRST && role < L_LAST));
+  assert(!first_init);
 
   for(j = n_with_role[role]-1; j >= 0; j--) {
     struct unit_type *utype = with_role[role][j];
@@ -920,9 +971,8 @@ struct unit_type *first_role_unit_for_player(const struct player *pplayer,
 {
   int j;
 
-  fc_assert_ret_val((role >= 0 && role < F_LAST)
-                    || (role >= L_FIRST && role < L_LAST), NULL);
-  fc_assert_ret_val(!first_init, NULL);
+  assert((role >= 0 && role < F_LAST) || (role >= L_FIRST && role < L_LAST));
+  assert(!first_init);
 
   for(j = 0; j < n_with_role[role]; j++) {
     struct unit_type *utype = with_role[role][j];
@@ -1021,7 +1071,7 @@ Unit_Class_id uclass_count(void)
 **************************************************************************/
 Unit_Class_id uclass_index(const struct unit_class *pclass)
 {
-  fc_assert_ret_val(pclass, -1);
+  assert(pclass);
   return pclass - unit_classes;
 }
 
@@ -1030,7 +1080,7 @@ Unit_Class_id uclass_index(const struct unit_class *pclass)
 **************************************************************************/
 Unit_Class_id uclass_number(const struct unit_class *pclass)
 {
-  fc_assert_ret_val(pclass, -1);
+  assert(pclass);
   return pclass->item_number;
 }
 
@@ -1050,7 +1100,7 @@ struct unit_class *uclass_by_number(const Unit_Class_id id)
 ***************************************************************/
 struct unit_class *utype_class(const struct unit_type *punittype)
 {
-  fc_assert(NULL != punittype->uclass);
+  assert(punittype->uclass);
   return punittype->uclass;
 }
 

@@ -272,13 +272,7 @@ struct socket_packet_buffer *new_socket_packet_buffer(void);
 void connection_common_init(struct connection *pconn);
 void connection_common_close(struct connection *pconn);
 void free_compression_queue(struct connection *pconn);
-void conn_reset_delta_state(struct connection *pconn);
-
-void conn_compression_freeze(struct connection *pconn);
-bool conn_compression_thaw(struct connection *pconn);
-bool conn_compression_frozen(const struct connection *pconn);
-void conn_list_compression_freeze(const struct conn_list *pconn_list);
-void conn_list_compression_thaw(const struct conn_list *pconn_list);
+void conn_clear_packet_cache(struct connection *pconn);
 
 const char *conn_description(const struct connection *pconn);
 bool conn_controls_player(const struct connection *pconn);
@@ -296,40 +290,5 @@ int get_next_request_id(int old_request_id);
 extern const char blank_addr_str[];
 
 extern int delayed_disconnect;
-
-/* Connection patterns. */
-struct conn_pattern;
-
-#define SPECLIST_TAG conn_pattern
-#define SPECLIST_TYPE struct conn_pattern
-#include "speclist.h"
-#define conn_pattern_list_iterate(plist, ppatern) \
-  TYPED_LIST_ITERATE(struct conn_pattern, plist, ppatern)
-#define conn_pattern_list_iterate_end LIST_ITERATE_END
-
-#define SPECENUM_NAME conn_pattern_type
-#define SPECENUM_VALUE0 CPT_USER
-#define SPECENUM_VALUE0NAME "user"
-#define SPECENUM_VALUE1 CPT_HOST
-#define SPECENUM_VALUE1NAME "host"
-#define SPECENUM_VALUE2 CPT_IP
-#define SPECENUM_VALUE2NAME "ip"
-#include "specenum_gen.h"
-
-struct conn_pattern *conn_pattern_new(enum conn_pattern_type type,
-                                      const char *wildcard);
-void conn_pattern_destroy(struct conn_pattern *ppattern);
-
-bool conn_pattern_match(const struct conn_pattern *ppattern,
-                        const struct connection *pconn);
-bool conn_pattern_list_match(const struct conn_pattern_list *plist,
-                             const struct connection *pconn);
-
-size_t conn_pattern_to_string(const struct conn_pattern *ppattern,
-                              char *buf, size_t buf_len);
-struct conn_pattern *conn_pattern_from_string(const char *pattern,
-                                              enum conn_pattern_type prefer,
-                                              char *error_buf,
-                                              size_t error_buf_len);
 
 #endif  /* FC__CONNECTION_H */

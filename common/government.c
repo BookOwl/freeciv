@@ -15,21 +15,22 @@
 #include <config.h>
 #endif
 
-/* utility */
+#include <assert.h>
+
 #include "fcintl.h"
+#include "game.h"
 #include "log.h"
 #include "mem.h"
+#include "player.h"
 #include "shared.h"
 #include "support.h"
-
-/* common */
-#include "game.h"
-#include "player.h"
 #include "tech.h"
 
 #include "government.h"
 
 struct government *governments = NULL;
+
+#define CHECK_GOVERNMENT(gp) assert((NULL != gp) && ((gp) == &governments[(gp)->item_number]))
 
 /****************************************************************************
   Returns the government that has the given (translated) name.
@@ -55,7 +56,7 @@ struct government *find_government_by_rule_name(const char *name)
   const char *qname = Qn_(name);
 
   government_iterate(gov) {
-    if (0 == fc_strcasecmp(government_rule_name(gov), qname)) {
+    if (0 == mystrcasecmp(government_rule_name(gov), qname)) {
       return gov;
     }
   } government_iterate_end;
@@ -79,7 +80,7 @@ int government_count(void)
 **************************************************************************/
 int government_index(const struct government *pgovern)
 {
-  fc_assert_ret_val(NULL != pgovern, -1);
+  assert(pgovern);
   return pgovern - governments;
 }
 
@@ -88,7 +89,7 @@ int government_index(const struct government *pgovern)
 **************************************************************************/
 int government_number(const struct government *pgovern)
 {
-  fc_assert_ret_val(NULL != pgovern, -1);
+  assert(pgovern);
   return pgovern->item_number;
 }
 
@@ -111,7 +112,7 @@ struct government *government_by_number(const int gov)
 ****************************************************************************/
 struct government *government_of_player(const struct player *pplayer)
 {
-  fc_assert_ret_val(NULL != pplayer, NULL);
+  assert(pplayer != NULL);
   return pplayer->government;
 }
 
@@ -120,7 +121,7 @@ struct government *government_of_player(const struct player *pplayer)
 ****************************************************************************/
 struct government *government_of_city(const struct city *pcity)
 {
-  fc_assert_ret_val(NULL != pcity, NULL);
+  assert(pcity != NULL);
   return government_of_player(city_owner(pcity));
 }
 
@@ -130,18 +131,24 @@ struct government *government_of_city(const struct city *pcity)
 ****************************************************************************/
 const char *government_rule_name(const struct government *pgovern)
 {
-  fc_assert_ret_val(NULL != pgovern, NULL);
-  return rule_name(&pgovern->name);
+  CHECK_GOVERNMENT(pgovern);
+  return Qn_(pgovern->name.vernacular);
 }
 
 /****************************************************************************
   Return the (translated) name of the given government. 
   You don't have to free the return pointer.
 ****************************************************************************/
-const char *government_name_translation(const struct government *pgovern)
+const char *government_name_translation(struct government *pgovern)
 {
-  fc_assert_ret_val(NULL != pgovern, NULL);
-  return name_translation(&pgovern->name);
+  CHECK_GOVERNMENT(pgovern);
+  if (NULL == pgovern->name.translated) {
+    /* delayed (unified) translation */
+    pgovern->name.translated = ('\0' == pgovern->name.vernacular[0])
+				? pgovern->name.vernacular
+				: Q_(pgovern->name.vernacular);
+  }
+  return pgovern->name.translated;
 }
 
 /****************************************************************************
@@ -162,9 +169,10 @@ const char *ruler_title_translation(const struct player *pp)
   struct government *gp = government_of_player(pp);
   struct nation_type *np = nation_of_player(pp);
   struct ruler_title *best_match = NULL;
+  struct name_translation *sex;
   int i;
 
-  fc_assert_ret_val(NULL != pp, NULL);
+  CHECK_GOVERNMENT(gp);
 
   for(i=0; i<gp->num_ruler_titles; i++) {
     struct ruler_title *title = &gp->ruler_titles[i];
@@ -178,16 +186,24 @@ const char *ruler_title_translation(const struct player *pp)
   }
 
   if (NULL == best_match) {
-    log_error("Missing title for government \"%s\" (%d) nation \"%s\" (%d).",
-              government_rule_name(gp),
-              government_number(gp),
-              nation_rule_name(np),
-              nation_number(np));
+    freelog(LOG_ERROR,
+	    "Missing title for government \"%s\" (%d) nation \"%s\" (%d).",
+	    government_rule_name(gp),
+	    government_number(gp),
+	    nation_rule_name(np),
+	    nation_number(np));
     return pp->is_male ? "Mr." : "Ms.";
   }
 
-  return name_translation(pp->is_male ? &best_match->male
-                          : &best_match->female);
+  sex = pp->is_male ? &best_match->male : &best_match->female;
+
+  if (NULL == sex->translated) {
+    /* delayed (unified) translation */
+    sex->translated = ('\0' == sex->vernacular[0])
+                      ? sex->vernacular
+                      : Q_(sex->vernacular);
+  }
+  return sex->translated;
 }
 
 /***************************************************************
@@ -198,9 +214,9 @@ const char *ruler_title_translation(const struct player *pp)
   Returns FALSE if pplayer is NULL (used for observers).
 ***************************************************************/
 bool can_change_to_government(struct player *pplayer,
-                              const struct government *gov)
+			      const struct government *gov)
 {
-  fc_assert_ret_val(NULL != gov, FALSE);
+  CHECK_GOVERNMENT(gov);
 
   if (!pplayer) {
     return FALSE;

@@ -17,21 +17,6 @@
 #include "fc_types.h"
 #include "unittype.h"
 
-struct unit_ai {
-  /* The following are unit ids or special indicator values (<=0) */
-  int ferryboat; /* the ferryboat assigned to us */
-  int passenger; /* the unit assigned to this ferryboat */
-  int bodyguard; /* the unit bodyguarding us */
-  int charge; /* the unit this unit is bodyguarding */
-
-  struct tile *prev_struct, *cur_struct;
-  struct tile **prev_pos, **cur_pos;
-
-  int target; /* target we hunt */
-  bv_player hunted; /* if a player is hunting us, set by that player */
-  bool done;  /* we are done controlling this unit this turn */
-};
-
 /*
  * To prevent integer overflows the product "power * hp * firepower"
  * is divided by POWER_DIVIDER.
@@ -45,9 +30,9 @@ struct unit_ai {
 /* pplayers_at_war() thinks no contacts equals war, which often is
  * very annoying. */
 #define WAR(plr1, plr2) \
-  (player_diplstate_get(plr1, plr2)->type == DS_WAR)
+  (plr1->diplstates[player_index(plr2)].type == DS_WAR)
 #define NEVER_MET(plr1, plr2) \
-  (player_diplstate_get(plr1, plr2)->type == DS_NO_CONTACT)
+  (plr1->diplstates[player_index(plr2)].type == DS_NO_CONTACT)
 #define DEFENCE_POWER(punit) \
  (unit_type(punit)->defense_strength * unit_type(punit)->hp \
   * unit_type(punit)->firepower)
@@ -57,9 +42,9 @@ struct unit_ai {
 #define IS_ATTACKER(punit) \
   (unit_type(punit)->attack_strength \
         > unit_type(punit)->transport_capacity)
-#define HOSTILE_PLAYER(pplayer, aplayer)                                    \
-  (WAR(pplayer, aplayer)                                                    \
-   || ai_diplomacy_get(pplayer, aplayer)->countdown >= 0)
+#define HOSTILE_PLAYER(pplayer, ai, aplayer) \
+  (WAR(pplayer, aplayer)         \
+   || ai->diplomacy.player_intel[player_index(aplayer)].countdown >= 0)
 #define UNITTYPE_COSTS(ut)						\
   (ut->pop_cost * 3 + ut->happy_cost					\
    + ut->upkeep[O_SHIELD] + ut->upkeep[O_FOOD] + ut->upkeep[O_GOLD])
@@ -110,14 +95,8 @@ bool is_on_unit_upgrade_path(const struct unit_type *test,
 
 void update_simple_ai_types(void);
 
-bool enemies_at(struct unit *punit, struct tile *ptile);
-
 /* Call this after rulesets are loaded */
 void unit_class_ai_init(void);
-
-void ai_unit_init(struct unit *punit);
-void ai_unit_turn_end(struct unit *punit);
-void ai_unit_close(struct unit *punit);
 
 #define simple_ai_unit_type_iterate(_ut)				\
 {									\

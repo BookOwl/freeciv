@@ -14,6 +14,8 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
+
 /* utility */
 #include "fcintl.h"
 #include "log.h"
@@ -27,7 +29,6 @@
 #include "government.h"
 #include "movement.h"
 #include "player.h"
-#include "research.h"
 #include "tech.h"
 #include "unit.h"
 
@@ -45,23 +46,17 @@
 
 #include "techtools.h"
 
-/* Define this to add information about tech upkeep. */
-#undef TECH_UPKEEP_DEBUGGING
-
-static Tech_type_id pick_random_tech_researched(struct player* plr);
 static Tech_type_id pick_random_tech(struct player* plr);
-static void player_tech_lost(struct player* plr, Tech_type_id tech);
-static void forget_tech_transfered(struct player *pplayer, Tech_type_id tech);
 
 /**************************************************************************
 ...
 **************************************************************************/
 void do_dipl_cost(struct player *pplayer, Tech_type_id tech)
 {
-  struct player_research * research = player_research_get(pplayer);
+  struct player_research * research = get_player_research(pplayer);
 
   research->bulbs_researched
-    -= (base_total_bulbs_required(pplayer, tech) * game.server.diplcost) / 100;
+    -= (base_total_bulbs_required(pplayer, tech) * game.info.diplcost) / 100;
   research->researching_saved = A_UNKNOWN;
 }
 
@@ -70,10 +65,10 @@ void do_dipl_cost(struct player *pplayer, Tech_type_id tech)
 **************************************************************************/
 void do_free_cost(struct player *pplayer, Tech_type_id tech)
 {
-  struct player_research * research = player_research_get(pplayer);
+  struct player_research * research = get_player_research(pplayer);
 
   research->bulbs_researched
-    -= (base_total_bulbs_required(pplayer, tech) * game.server.freecost) / 100;
+    -= (base_total_bulbs_required(pplayer, tech) * game.info.freecost) / 100;
   research->researching_saved = A_UNKNOWN;
 }
 
@@ -82,10 +77,10 @@ void do_free_cost(struct player *pplayer, Tech_type_id tech)
 **************************************************************************/
 void do_conquer_cost(struct player *pplayer, Tech_type_id tech)
 {
-  struct player_research * research = player_research_get(pplayer);  
+  struct player_research * research = get_player_research(pplayer);  
 
   research->bulbs_researched
-    -= (base_total_bulbs_required(pplayer, tech) * game.server.conquercost) / 100;
+    -= (base_total_bulbs_required(pplayer, tech) * game.info.conquercost) / 100;
   research->researching_saved = A_UNKNOWN;
 }
 
@@ -95,7 +90,7 @@ void do_conquer_cost(struct player *pplayer, Tech_type_id tech)
 ****************************************************************************/
 Tech_type_id choose_goal_tech(struct player *plr)
 {
-  struct player_research *research = player_research_get(plr);
+  struct player_research *research = get_player_research(plr);
   Tech_type_id sub_goal = player_research_step(plr, research->tech_goal);
 
   if (sub_goal != A_UNSET) {
@@ -109,7 +104,7 @@ Tech_type_id choose_goal_tech(struct player *plr)
 ****************************************************************************/
 static void tech_researched(struct player *plr)
 {
-  struct player_research *research = player_research_get(plr);
+  struct player_research *research = get_player_research(plr);
   /* plr will be notified when new tech is chosen */
 
   if (!is_future_tech(research->researching)) {
@@ -169,14 +164,14 @@ void do_tech_parasite_effect(struct player *pplayer)
     advance_index_iterate(A_FIRST, i) {
       if (player_invention_reachable(pplayer, i)
           && player_invention_state(pplayer, i) != TECH_KNOWN) {
-        int num_research = 0;
+        int num_teams = 0;
 
-        player_researches_iterate(presearch) {
-          if (presearch->inventions[i].state == TECH_KNOWN) {
-            num_research++;
+        team_iterate(pteam) {
+          if (pteam->research.inventions[i].state == TECH_KNOWN) {
+            num_teams++;
           }
-        } player_researches_iterate_end;
-        if (num_research >= mod) {
+        } team_iterate_end;
+        if (num_teams >= mod) {
           notify_player(pplayer, NULL, E_TECH_GAIN, ftc_server,
                         _("%s acquired from %s!"),
                         advance_name_for_player(pplayer, i),
@@ -200,7 +195,7 @@ void do_tech_parasite_effect(struct player *pplayer)
       }
     } advance_index_iterate_end;
   }
-  effect_list_destroy(plist);
+  effect_list_free(plist);
 }
 
 /****************************************************************************
@@ -239,8 +234,10 @@ static void update_player_after_tech_researched(struct player* plr,
     }
   } government_iterate_end;
 
-  /* Inform player about his new tech. */
-  send_player_info_c(plr, plr->connections);
+  /*
+   * Inform player about his new tech.
+   */
+  send_player_info(plr, plr);
 }
 
 /****************************************************************************
@@ -279,21 +276,21 @@ void found_new_tech(struct player *plr, Tech_type_id tech_found,
 {
   bool bonus_tech_hack = FALSE;
   bool was_first = FALSE;
-  int had_embassies[player_slot_count()];
+  int had_embassies[MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS];
   struct city *pcity;
-  bool can_switch[player_slot_count()][government_count()];
-  struct player_research *research = player_research_get(plr);
+  bool can_switch[MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS]
+                 [government_count()];
+  struct player_research *research = get_player_research(plr);
   struct advance *vap = valid_advance_by_number(tech_found);
 
   /* HACK: A_FUTURE doesn't "exist" and is thus not "available".  This may
    * or may not be the correct thing to do.  For these sanity checks we
    * just special-case it. */
-  fc_assert_ret(tech_found == A_FUTURE
-                || (vap && player_invention_state(plr, tech_found)
-                    != TECH_KNOWN));
+  assert(tech_found == A_FUTURE
+	 || (vap && player_invention_state(plr, tech_found) != TECH_KNOWN));
 
   /* got_tech allows us to change research without applying techpenalty
-   * (without losing bulbs) */
+   * (without loosing bulbs) */
   if (tech_found == research->researching) {
     research->got_tech = TRUE;
   }
@@ -364,7 +361,7 @@ void found_new_tech(struct player *plr, Tech_type_id tech_found,
                   advance_name_researching(plr),
                   advance_name_for_player(plr, research->tech_goal));
     } else {
-      if (plr->ai_controlled) {
+      if (plr->ai_data.control) {
         choose_random_tech(plr);
       } else if (is_future_tech(tech_found)) {
         /* Continue researching future tech. */
@@ -380,13 +377,13 @@ void found_new_tech(struct player *plr, Tech_type_id tech_found,
                     advance_name_for_player(plr, tech_found),
                     advance_name_researching(plr));
       } else if (research->researching != A_UNSET) {
-        char buffer1[300], buffer2[300];
+	char buffer1[300], buffer2[300];
 
-        fc_snprintf(buffer1, sizeof(buffer1), _("Learned %s. "),
-                    advance_name_researching(plr));
-        research->future_tech++;
-        fc_snprintf(buffer2, sizeof(buffer2), _("Researching %s."),
-                    advance_name_researching(plr));
+	my_snprintf(buffer1, sizeof(buffer1), _("Learned %s. "),
+		    advance_name_researching(plr));
+	research->future_tech++;
+	my_snprintf(buffer2, sizeof(buffer2), _("Researching %s."),
+		    advance_name_researching(plr));
         notify_team(plr, NULL, E_TECH_LEARNED, ftc_server,
                     "%s%s", buffer1, buffer2);
       } else {
@@ -431,8 +428,6 @@ void found_new_tech(struct player *plr, Tech_type_id tech_found,
    * techs aren't researched that often.
    */
   cities_iterate(pcity) {
-    /* update squared city radius */
-    city_map_update_radius_sq(pcity, TRUE);
     city_refresh(pcity);
     send_city_info(city_owner(pcity), pcity);
   } cities_iterate_end;
@@ -443,226 +438,41 @@ void found_new_tech(struct player *plr, Tech_type_id tech_found,
    */
   players_iterate(owner) {
     if (had_embassies[player_index(owner)]  > 0
-        && get_player_bonus(owner, EFT_HAVE_EMBASSIES) == 0) {
+	&& get_player_bonus(owner, EFT_HAVE_EMBASSIES) == 0) {
       players_iterate(other_player) {
-        send_player_all_c(owner, other_player->connections);
+	send_player_info(owner, other_player);
       } players_iterate_end;
     }
   } players_iterate_end;
 }
 
 /****************************************************************************
-  Adds the given number of bulbs into the player's tech and (if necessary and
-  'check_tech' is TRUE) completes the research. If the total number of bulbs
-  is negative due to tech upkeep, one (randomly chosen) tech is lost.
-
+  Adds the given number of  bulbs into the player's tech and 
+  (if necessary) completes the research.
   The caller is responsible for sending updated player information.
-
-  This is called from each city every turn, from caravan revenue, and at the
-  end of the phase.
+  This is called from each city every turn and from caravan revenue
 ****************************************************************************/
-bool update_bulbs(struct player *plr, int bulbs, bool check_tech)
+void update_tech(struct player *plr, int bulbs)
 {
-  struct player_research *research = player_research_get(plr);
+  int excessive_bulbs;
+  struct player_research *research = get_player_research(plr);
 
   /* count our research contribution this turn */
   plr->bulbs_last_turn += bulbs;
+
   research->bulbs_researched += bulbs;
 
-  /* if we have a negative number of bulbs we do
-   * - try to reduce the number of future techs
-   * - or lose one random tech
-   * after that the number of bulbs available is set to zero */
-  if (research->bulbs_researched < 0
-      && (research->techs_researched > 0 || research->future_tech > 0)) {
-    if (research->future_tech > 0) {
-      notify_player(plr, NULL, E_TECH_GAIN, ftc_server,
-                    _("Too low science output. We lost Future Tech. %d."),
-                    research->future_tech);
-      research->future_tech--;
-    } else {
-      Tech_type_id tech = pick_random_tech_researched(plr);
-      if (tech != A_NONE) {
-        notify_player(plr, NULL, E_TECH_GAIN, ftc_server,
-                      _("Too low science output. We lost %s."),
-                      advance_name_for_player(plr, tech));
-        player_tech_lost(plr, tech);
-      }
-    }
-    player_research_update(plr);
+  if (research->researching != A_UNSET) {  
+    excessive_bulbs =
+      (research->bulbs_researched - total_bulbs_required(plr));
 
-    research->bulbs_researched = 0;
-  }
-
-  /* now we should have a positive balance */
-  fc_assert_ret_val(research->bulbs_researched >= 0, FALSE);
-
-  if (check_tech && research->researching != A_UNSET) {
-    /* check for finished research */
-    if (research->bulbs_researched - total_bulbs_required(plr) >= 0) {
+    if (excessive_bulbs >= 0) {
       tech_researched(plr);
-
       if (research->researching != A_UNSET) {
-        /* check research again */
-        update_bulbs(plr, 0, TRUE);
-        return TRUE;
+        update_tech(plr, 0);
       }
     }
   }
-
-  return FALSE;
-}
-
-/****************************************************************************
-  Returns a random researched tech.
-****************************************************************************/
-static Tech_type_id pick_random_tech_researched(struct player* plr)
-{
-  int chosen, researched = 0;
-
-  advance_index_iterate(A_FIRST, i) {
-    if (player_invention_state(plr, i) == TECH_KNOWN) {
-      researched++;
-    }
-  } advance_index_iterate_end;
-
-  if (researched == 0) {
-    /* no technology at all */
-    return A_NONE;
-  }
-
-  chosen = fc_rand(researched) + 1;
-
-  advance_index_iterate(A_FIRST, i) {
-    if (player_invention_state(plr, i) == TECH_KNOWN) {
-      chosen--;
-      if (chosen == 0) {
-        return i;
-      }
-    }
-  } advance_index_iterate_end;
-
-  /* should never be reached */
-  return A_NONE;
-}
-
-/****************************************************************************
-  Remove one tech from the player.
-****************************************************************************/
-static void player_tech_lost(struct player* plr, Tech_type_id tech)
-{
-  bool old_gov[government_count()];
-
-  fc_assert_ret(valid_advance_by_number(tech));
-
-  /* old available governments */
-  fill_can_switch_to_government_array(plr, old_gov);
-
-  /* remove technology */
-  player_invention_set(plr, tech, TECH_UNKNOWN);
-  log_debug("%s lost tech id %d", player_name(plr), tech);
-
-  /* check governments */
-  government_iterate(gov) {
-    if (government_of_player(plr) == gov
-        && old_gov[government_index(gov)]
-        && !can_change_to_government(plr, gov)) {
-      /* Lost the technology for the government; switch to first
-       * available government */
-      bool new_gov_found = FALSE;
-      government_iterate(gov_new) {
-        if (can_change_to_government(plr, gov_new)) {
-          notify_player(plr, NULL, E_NEW_GOVERNMENT, ftc_server,
-                        _("The required technology for our government '%s' "
-                          "was lost. The citizens have started a "
-                          "revolution into '%s'."),
-                        government_name_translation(gov),
-                        government_name_translation(gov_new));
-          handle_player_change_government(plr, government_number(gov_new));
-          new_gov_found = TRUE;
-          break;
-        }
-      } government_iterate_end;
-
-      /* Do we have a government? */
-      fc_assert_ret(new_gov_found);
-      break;
-    } else if (plr->target_government
-               && plr->target_government == gov
-               && !can_change_to_government(plr, gov)) {
-      /* lost the technology for the target government; use the first
-       * available government as new target government */
-      bool new_gov_found = FALSE;
-      government_iterate(gov_new) {
-        if (can_change_to_government(plr, gov_new)) {
-          notify_player(plr, NULL, E_NEW_GOVERNMENT, ftc_server,
-                        _("The required technology for our new government "
-                          "'%s' was lost. The citizens chose '%s' as new "
-                          "target government."),
-                        government_name_translation(gov),
-                        government_name_translation(gov_new));
-          plr->target_government = gov_new;
-          new_gov_found = TRUE;
-          break;
-        }
-      } government_iterate_end;
-
-      /* Do we have a new traget government? */
-      fc_assert_ret(new_gov_found);
-      break;
-    }
-  } government_iterate_end;
-
-  /* check all settlers for valid activities */
-  if (advance_has_flag(tech, TF_BRIDGE)
-      || advance_has_flag(tech, TF_RAILROAD)
-      || advance_has_flag(tech, TF_FARMLAND)) {
-    unit_list_iterate(plr->units, punit) {
-      if (!can_unit_continue_current_activity(punit)) {
-        log_debug("lost technology for activity of unit %s of %s (%d, %d)",
-                  unit_name_translation(punit), player_name(plr),
-                  TILE_XY(punit->tile));
-        set_unit_activity(punit, ACTIVITY_IDLE);
-      }
-    } unit_list_iterate_end;
-  }
-
-  /* check city production */
-  city_list_iterate(plr->cities, pcity) {
-    bool update = FALSE;
-
-    if (pcity->production.kind == VUT_UTYPE
-        && !can_city_build_unit_now(pcity, pcity->production.value.utype)) {
-      notify_player(plr, pcity->tile, E_CITY_CANTBUILD, ftc_server,
-                    _("%s can't build %s. The required technology was lost."),
-                    city_name(pcity),
-                    utype_name_translation(pcity->production.value.utype));
-      choose_build_target(plr, pcity);
-
-      update = TRUE;
-    }
-
-    if (pcity->production.kind == VUT_IMPROVEMENT
-        && !can_city_build_improvement_now(pcity,
-                                           pcity->production.value.building)) {
-      notify_player(plr, pcity->tile, E_CITY_CANTBUILD, ftc_server,
-                    _("%s can't build %s. The required technology was lost."),
-                    city_name(pcity),
-                    improvement_name_translation(pcity->production.value.building));
-      choose_build_target(plr, pcity);
-
-      update = TRUE;
-    }
-
-    if (advance_has_flag(tech, TF_POPULATION_POLLUTION_INC)) {
-      update = TRUE;
-    }
-
-    if (update) {
-      city_refresh(pcity);
-      send_city_info(plr, pcity);
-    }
-  } city_list_iterate_end;
 }
 
 /****************************************************************************
@@ -681,7 +491,7 @@ static Tech_type_id pick_random_tech(struct player* plr)
   if (researchable == 0) {
     return A_FUTURE;
   }
-  chosen = fc_rand(researchable) + 1;
+  chosen = myrand(researchable) + 1;
   
   advance_index_iterate(A_FIRST, i) {
     if (player_invention_state(plr, i) == TECH_PREREQS_KNOWN) {
@@ -691,7 +501,7 @@ static Tech_type_id pick_random_tech(struct player* plr)
       }
     }
   } advance_index_iterate_end;
-  log_error("Failed to pick a random tech.");
+  assert(0);
   return A_FUTURE;
 }
 
@@ -706,7 +516,7 @@ static Tech_type_id pick_random_tech(struct player* plr)
 ****************************************************************************/
 void choose_random_tech(struct player *plr)
 {
-  struct player_research* research = player_research_get(plr);
+  struct player_research* research = get_player_research(plr);
   do {
     choose_tech(plr, pick_random_tech(plr));
   } while (research->researching == A_UNSET);
@@ -722,7 +532,7 @@ void choose_random_tech(struct player *plr)
 ****************************************************************************/
 void choose_tech(struct player *plr, Tech_type_id tech)
 {
-  struct player_research *research = player_research_get(plr);
+  struct player_research *research = get_player_research(plr);
 
   if (research->researching == tech) {
     return;
@@ -737,8 +547,8 @@ void choose_tech(struct player *plr, Tech_type_id tech)
     /* subtract a penalty because we changed subject */
     if (research->bulbs_researched > 0) {
       research->bulbs_researched
-        -= ((research->bulbs_researched * game.server.techpenalty) / 100);
-      fc_assert(research->bulbs_researched >= 0);
+	-= ((research->bulbs_researched * game.info.techpenalty) / 100);
+      assert(research->bulbs_researched >= 0);
     }
   } else if (tech == research->researching_saved) {
     research->bulbs_researched = research->bulbs_researching_saved;
@@ -756,7 +566,7 @@ void choose_tech(struct player *plr, Tech_type_id tech)
 ****************************************************************************/
 void choose_tech_goal(struct player *plr, Tech_type_id tech)
 {
-  struct player_research *research = player_research_get(plr);
+  struct player_research *research = get_player_research(plr);
 
   if (research && tech != research->tech_goal) {
     /* It's been suggested that if the research target is empty then
@@ -773,47 +583,13 @@ void choose_tech_goal(struct player *plr, Tech_type_id tech)
 ****************************************************************************/
 void init_tech(struct player *plr, bool update)
 {
-  struct player_research *research = player_research_get(plr);
-
   player_invention_set(plr, A_NONE, TECH_KNOWN);
 
   advance_index_iterate(A_FIRST, i) {
     player_invention_set(plr, i, TECH_UNKNOWN);
   } advance_index_iterate_end;
 
-#ifdef TECH_UPKEEP_DEBUGGING
-  /* Print a list of the needed upkeep if 'i' techs are researched. */
-  {
-    bool global_state[A_LAST];
-
-    /* Save the game research state. */
-    advance_index_iterate(A_FIRST, i) {
-      global_state[i] = game.info.global_advances[i];
-    } advance_index_iterate_end;
-
-    research->techs_researched = 1;
-
-    /* Update step for step each tech as known and print the upkeep. */
-    advance_index_iterate(A_FIRST, i) {
-      research->inventions[i].state = TECH_KNOWN;
-      research->techs_researched++;
-
-      /* This will change the game state! */
-      player_research_update(plr);
-
-      log_debug("[player %d] techs: %3d upkeep: %4d", player_number(plr),
-                research->techs_researched, research->tech_upkeep);
-    } advance_index_iterate_end;
-
-    /* Reset the changes done. */
-    advance_index_iterate(A_FIRST, i) {
-      player_invention_set(plr, i, TECH_UNKNOWN);
-      game.info.global_advances[i] = global_state[i];
-    } advance_index_iterate_end;
-  }
-#endif
-
-  research->techs_researched = 1;
+  get_player_research(plr)->techs_researched = 1;
 
   if (update) {
     /* Mark the reachable techs */
@@ -905,8 +681,8 @@ Tech_type_id steal_a_tech(struct player *pplayer, struct player *victim,
   
     if (j == 0)  {
       /* we've moved on to future tech */
-      if (player_research_get(victim)->future_tech
-        > player_research_get(pplayer)->future_tech) {
+      if (get_player_research(victim)->future_tech
+        > get_player_research(pplayer)->future_tech) {
         found_new_tech(pplayer, A_FUTURE, FALSE, TRUE);	
         stolen_tech = A_FUTURE;
       } else {
@@ -914,7 +690,7 @@ Tech_type_id steal_a_tech(struct player *pplayer, struct player *victim,
       }
     } else {
       /* pick random tech */
-      j = fc_rand(j) + 1;
+      j = myrand(j) + 1;
       stolen_tech = A_NONE; /* avoid compiler warning */
       advance_index_iterate(A_FIRST, i) {
         if (player_invention_reachable(pplayer, i)
@@ -927,15 +703,13 @@ Tech_type_id steal_a_tech(struct player *pplayer, struct player *victim,
 	  break;
         }
       } advance_index_iterate_end;
-      fc_assert(stolen_tech != A_NONE);
+      assert(stolen_tech != A_NONE);
     }
   } else { /* preferred != A_UNSET */
-    fc_assert((preferred == A_FUTURE
-               && (player_invention_state(victim, A_FUTURE)
-                   == TECH_PREREQS_KNOWN))
-              || (valid_advance_by_number(preferred)
-                  && (player_invention_state(victim, preferred)
-                      == TECH_KNOWN)));
+    assert((preferred == A_FUTURE
+            && player_invention_state(victim, A_FUTURE) == TECH_PREREQS_KNOWN)
+	   || (valid_advance_by_number(preferred)
+	       && player_invention_state(victim, preferred) == TECH_KNOWN));
     stolen_tech = preferred;
   }
 
@@ -955,18 +729,16 @@ Tech_type_id steal_a_tech(struct player *pplayer, struct player *victim,
                    advance_name_for_player(pplayer, stolen_tech),
                    nation_plural_for_player(victim));
 
-  if (tech_transfer(pplayer, victim, stolen_tech)) {
-    do_conquer_cost(pplayer, stolen_tech);
-    found_new_tech(pplayer, stolen_tech, FALSE, TRUE);
+  do_conquer_cost(pplayer, stolen_tech);
+  found_new_tech(pplayer, stolen_tech, FALSE, TRUE);
 
-    script_signal_emit("tech_researched", 3, API_TYPE_TECH_TYPE,
-                       advance_by_number(stolen_tech),
-                       API_TYPE_PLAYER, pplayer, API_TYPE_STRING, "stolen");
+  script_signal_emit("tech_researched", 3,
+		     API_TYPE_TECH_TYPE,
+		     advance_by_number(stolen_tech),
+		     API_TYPE_PLAYER, pplayer,
+		     API_TYPE_STRING, "stolen");
 
-    return stolen_tech;
-  };
-
-  return A_NONE;
+  return stolen_tech;
 }
 
 /****************************************************************************
@@ -988,16 +760,16 @@ void handle_player_research(struct player *pplayer, int tech)
   }
 
   choose_tech(pplayer, tech);
-  send_player_info_c(pplayer, pplayer->connections);
+  send_player_info(pplayer, pplayer);
 
   /* Notify Team members. 
    * They share same research struct.
    */
   players_iterate(aplayer) {
     if (pplayer != aplayer
-        && player_diplstate_get(pplayer, aplayer)->type == DS_TEAM
-        && aplayer->is_alive) {
-      send_player_info_c(aplayer, aplayer->connections);
+	&& pplayer->diplstates[player_index(aplayer)].type == DS_TEAM
+	&& aplayer->is_alive) {
+      send_player_info(aplayer, aplayer);
     }
   } players_iterate_end;
 }
@@ -1026,14 +798,14 @@ void handle_player_tech_goal(struct player *pplayer, int tech_goal)
   }
 
   choose_tech_goal(pplayer, tech_goal);
-  send_player_info_c(pplayer, pplayer->connections);
+  send_player_info(pplayer, pplayer);
 
   /* Notify Team members */
   players_iterate(aplayer) {
     if (pplayer != aplayer
-        && player_diplstate_get(pplayer, aplayer)->type == DS_TEAM
+        && pplayer->diplstates[player_index(aplayer)].type == DS_TEAM
         && aplayer->is_alive
-        && player_research_get(aplayer)->tech_goal != tech_goal) {
+        && get_player_research(aplayer)->tech_goal != tech_goal) {
       handle_player_tech_goal(aplayer, tech_goal);
     }
   } players_iterate_end;
@@ -1059,42 +831,11 @@ Tech_type_id give_random_free_tech(struct player* pplayer)
 Tech_type_id give_immediate_free_tech(struct player* pplayer)
 {
   Tech_type_id tech;
-  if (player_research_get(pplayer)->researching == A_UNSET) {
+  if (get_player_research(pplayer)->researching == A_UNSET) {
     return give_random_free_tech(pplayer);
   }
-  tech = player_research_get(pplayer)->researching;
+  tech = get_player_research(pplayer)->researching;
   do_free_cost(pplayer, tech);
   found_new_tech(pplayer, tech, FALSE, TRUE);
   return tech;
-}
-
-/****************************************************************************
-  Let the player forget one tech.
-****************************************************************************/
-static void forget_tech_transfered(struct player *pplayer, Tech_type_id tech)
-{
-  notify_player(pplayer, NULL, E_TECH_GAIN, ftc_server,
-                _("Too bad! You made a mistake transferring the tech %s and "
-                  "lost it."), advance_name_for_player(pplayer, tech));
-  player_tech_lost(pplayer, tech);
-  player_research_update(pplayer);
-}
-
-/****************************************************************************
-  Check if the tech is lost by the donor or receiver. Returns if the
-  receiver gets a new tech.
-****************************************************************************/
-bool tech_transfer(struct player *plr_recv, struct player *plr_donor,
-                   Tech_type_id tech)
-{
-  if (fc_rand(100) < game.server.techlost_donor) {
-    forget_tech_transfered(plr_donor, tech);
-  }
-
-  if (fc_rand(100) < game.server.techlost_recv) {
-    forget_tech_transfered(plr_recv, tech);
-    return FALSE;
-  }
-
-  return TRUE;
 }

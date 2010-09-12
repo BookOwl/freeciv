@@ -15,6 +15,7 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <string.h>
 
 /* utility */
@@ -55,7 +56,7 @@ void meswin_freeze(void)
 void meswin_thaw(void)
 {
   frozen_level--;
-  fc_assert(frozen_level >= 0);
+  assert(frozen_level >= 0);
   if (frozen_level == 0) {
     update_meswin_dialog();
   }
@@ -82,7 +83,7 @@ void update_meswin_dialog(void)
   if (!is_meswin_open() && messages_total > 0
       && !client_is_observer()
       && NULL != client.conn.playing
-      && !client.conn.playing->ai_controlled) {
+      && !client.conn.playing->ai_data.control) {
     popup_meswin_dialog(FALSE);
     change = FALSE;
     return;
@@ -106,7 +107,8 @@ void clear_notify_window(void)
     free(messages[i].descr);
     messages[i].descr = NULL;
 
-    text_tag_list_destroy(messages[i].tags);
+    text_tag_list_clear_all(messages[i].tags);
+    text_tag_list_free(messages[i].tags);
     messages[i].tags = NULL;
   }
   messages_total = 0;
@@ -141,7 +143,7 @@ void add_notify_window(const char *message, const struct text_tag_list *tags,
   messages[messages_total].tile = ptile;
   messages[messages_total].event = event;
   messages[messages_total].descr = s;
-  messages[messages_total].tags = text_tag_list_copy(tags);
+  messages[messages_total].tags = text_tag_list_dup(tags);
   messages[messages_total].location_ok = (ptile != NULL);
   messages[messages_total].visited = FALSE;
   messages_total++;
@@ -198,7 +200,7 @@ void set_message_visited_state(int message_index, bool state)
 **************************************************************************/
 void meswin_popup_city(int message_index)
 {
-  fc_assert_ret(message_index < messages_total);
+  assert(message_index < messages_total);
 
   if (messages[message_index].city_ok) {
     struct tile *ptile = messages[message_index].tile;
@@ -227,7 +229,7 @@ void meswin_popup_city(int message_index)
 **************************************************************************/
 void meswin_goto(int message_index)
 {
-  fc_assert_ret(message_index < messages_total);
+  assert(message_index < messages_total);
 
   if (messages[message_index].location_ok) {
     center_tile_mapcanvas(messages[message_index].tile);
@@ -239,7 +241,7 @@ void meswin_goto(int message_index)
 **************************************************************************/
 void meswin_double_click(int message_index)
 {
-  fc_assert_ret(message_index < messages_total);
+  assert(message_index < messages_total);
 
   if (messages[message_index].city_ok
       && is_city_event(messages[message_index].event)) {

@@ -15,32 +15,27 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-/* utility */
 #include "log.h"
 #include "mem.h"
 #include "rand.h"
 
-/* common */
 #include "combat.h"
 #include "game.h"
 #include "map.h"
 #include "movement.h"
 #include "unitlist.h"
 
-/* server */
 #include "maphand.h"
+#include "settlers.h"
 #include "unithand.h"
 #include "unittools.h"
 
-/* server/advisors */
-#include "advdata.h"
-#include "autosettlers.h"
-
-/* ai */
+#include "aidata.h"
 #include "aitools.h"
 
 #include "gotohand.h"
@@ -162,7 +157,7 @@ static void add_to_mapqueue(int cost, struct tile *ptile)
 {
   struct mappos_array *our_array;
 
-  fc_assert(cost < MAXCOST && cost >= 0);
+  assert(cost < MAXCOST && cost >= 0);
 
   our_array = cost_lookup[cost].last_array;
   if (!our_array) {
@@ -176,10 +171,9 @@ static void add_to_mapqueue(int cost, struct tile *ptile)
   }
 
   our_array->tile[++(our_array->last_pos)] = ptile;
-  if (cost > highest_cost) {
+  if (cost > highest_cost)
     highest_cost = cost;
-  }
-  log_debug("adding cost:%i at %i,%i", cost, ptile->x, ptile->y);
+  freelog(LOG_DEBUG, "adding cost:%i at %i,%i", cost, ptile->x, ptile->y);
 }
 
 /**************************************************************************
@@ -190,7 +184,7 @@ static struct tile *get_from_mapqueue(void)
   struct mappos_array *our_array;
   struct tile *ptile;
 
-  log_debug("trying get");
+  freelog(LOG_DEBUG, "trying get");
   while (lowest_cost < MAXCOST) {
     if (lowest_cost > highest_cost)
       return FALSE;
@@ -236,17 +230,17 @@ static void init_warmap(struct tile *orig_tile, enum unit_move_type move_type)
   switch (move_type) {
   case LAND_MOVING:
   case BOTH_MOVING:
-    fc_assert(sizeof(*warmap.cost) == sizeof(char));
+    assert(sizeof(*warmap.cost) == sizeof(char));
     memset(warmap.cost, MAXCOST, MAP_INDEX_SIZE * sizeof(char));
     warmap.cost[tile_index(orig_tile)] = 0;
     break;
   case SEA_MOVING:
-    fc_assert(sizeof(*warmap.seacost) == sizeof(char));
+    assert(sizeof(*warmap.seacost) == sizeof(char));
     memset(warmap.seacost, MAXCOST, MAP_INDEX_SIZE * sizeof(char));
     warmap.seacost[tile_index(orig_tile)] = 0;
     break;
   default:
-    log_error("Bad move_type in init_warmap().");
+    freelog(LOG_ERROR, "Bad move_type in init_warmap().");
   }
 }  
 
@@ -438,7 +432,8 @@ static void really_generate_warmap(struct city *pcity, struct unit *punit,
     } adjc_dir_iterate_end;
   }
 
-  log_debug("Generated warmap for (%d,%d).", TILE_XY(orig_tile)); 
+  freelog(LOG_DEBUG, "Generated warmap for (%d,%d).",
+	  TILE_XY(orig_tile)); 
 }
 
 /**************************************************************************
@@ -450,9 +445,9 @@ for now.
 **************************************************************************/
 void generate_warmap(struct city *pcity, struct unit *punit)
 {
-  log_debug("Generating warmap, pcity = %s, punit = %s",
-            (pcity ? city_name(pcity) : "NULL"),
-            (punit ? unit_rule_name(punit) : "NULL"));
+  freelog(LOG_DEBUG, "Generating warmap, pcity = %s, punit = %s",
+	  (pcity ? city_name(pcity) : "NULL"),
+	  (punit ? unit_rule_name(punit) : "NULL"));
 
   if (punit) {
     /* 
@@ -513,7 +508,7 @@ static int straightest_direction(struct tile *src_tile,
   } else if (diff_x < 0) {
     best_dir = (diff_y > 0) ? DIR8_SOUTHWEST : DIR8_NORTHWEST;
   } else {
-    fc_assert(0);
+    assert(0);
     best_dir = 0;
   }
 
@@ -663,16 +658,17 @@ int air_can_move_between(int moves, struct tile *src_tile,
   struct tile *ptile;
   int dist, total_distance = real_map_distance(src_tile, dest_tile);
 
-  log_debug("air_can_move_between(moves=%d, src=(%i,%i), "
-            "dest=(%i,%i), player=%s)", moves, TILE_XY(src_tile),
-            TILE_XY(dest_tile), player_name(pplayer));
+  freelog(LOG_DEBUG,
+	  "air_can_move_between(moves=%d, src=(%i,%i), "
+	  "dest=(%i,%i), player=%s)", moves, TILE_XY(src_tile),
+	  TILE_XY(dest_tile), player_name(pplayer));
 
   /* First we do some very simple O(1) checks. */
   if (total_distance > moves) {
     return -1;
   }
   if (total_distance == 0) {
-    fc_assert(moves >= 0);
+    assert(moves >= 0);
     return moves;
   }
 
@@ -703,8 +699,8 @@ int air_can_move_between(int moves, struct tile *src_tile,
   }
   if (dist == 1) {
     /* Looks like the O(n) quicksearch worked. */
-    fc_assert(real_map_distance(ptile, dest_tile) == 1);
-    fc_assert(moves - total_distance >= 0);
+    assert(real_map_distance(ptile, dest_tile) == 1);
+    assert(moves - total_distance >= 0);
     return moves - total_distance;
   }
 
@@ -719,8 +715,8 @@ int air_can_move_between(int moves, struct tile *src_tile,
    * finding because planes always take 1 movement unit to move -
    * which is not true of land units.
    */
-  log_debug("air_can_move_between: quick search didn't work. "
-            "Lets try full.");
+  freelog(LOG_DEBUG,
+	  "air_can_move_between: quick search didn't work. Lets try full.");
 
   warmap.warunit = NULL;
   warmap.warcity = NULL;
@@ -741,12 +737,12 @@ int air_can_move_between(int moves, struct tile *src_tile,
        * okay to goto into an enemy. 
        */
       if (same_pos(tile1, dest_tile)) {
-        /* We're there! */
-        log_debug("air_can_move_between: movecost: %i",
-                  WARMAP_COST(ptile) + 1);
+	/* We're there! */
+	freelog(LOG_DEBUG, "air_can_move_between: movecost: %i",
+		WARMAP_COST(ptile) + 1);
 	/* The -1 is because we haven't taken the final
 	   step yet. */
-        fc_assert(moves - WARMAP_COST(ptile) - 1 >= 0);
+	assert(moves - WARMAP_COST(ptile) - 1 >= 0);
 	return moves - WARMAP_COST(ptile) - 1;
       }
 
@@ -765,6 +761,6 @@ int air_can_move_between(int moves, struct tile *src_tile,
     } adjc_dir_iterate_end;
   }
 
-  log_debug("air_can_move_between: no route found");
+  freelog(LOG_DEBUG, "air_can_move_between: no route found");
   return -1;
 }

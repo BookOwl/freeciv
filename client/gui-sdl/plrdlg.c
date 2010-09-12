@@ -228,9 +228,9 @@ void update_players_dialog(void)
           }
         }
       }
-
-      copy_chars_to_string16(pPlayer0->string16, astr_str(&astr));
-
+      
+      copy_chars_to_string16(pPlayer0->string16, astr.str);
+      
       astr_free(&astr);
           
       /* now add some eye candy ... */
@@ -244,9 +244,8 @@ void update_players_dialog(void)
 	     have_diplomat_info_about(pPlayer1->data.player)) {
             dst1.x = pPlayer1->size.x + pPlayer1->size.w / 2;
             dst1.y = pPlayer1->size.y + pPlayer1->size.h / 2;
-
-            switch (player_diplstate_get(pPlayer,
-                                         pPlayer1->data.player)->type) {
+               
+            switch (pplayer_get_diplstate(pPlayer, pPlayer1->data.player)->type) {
 	      case DS_ARMISTICE:
 	        if(SDL_Client_Flags & CF_DRAW_PLAYERS_NEUTRAL_STATUS) {
 	          putline(pPlayer1->dst->surface,
@@ -347,9 +346,8 @@ void popup_players_dialog(bool raise)
   /* ---------- */
   /* exit button */
   pBuf = create_themeicon(pTheme->Small_CANCEL_Icon, pWindow->dst,
-                          WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
-  pBuf->info_label = create_str16_from_char(_("Close Dialog (Esc)"),
-                                            adj_font(12));
+  			  WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
+  pBuf->string16 = create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
   pBuf->action = exit_players_dlg_callback;
   set_wstate(pBuf, FC_WS_NORMAL);
   pBuf->key = SDLK_ESCAPE;
@@ -416,10 +414,10 @@ void popup_players_dialog(bool raise)
     pZoomed = zoomSurface(pLogo, DEFAULT_ZOOM * (3.0 - n * 0.05), DEFAULT_ZOOM * (3.0 - n * 0.05), 1);
             
     pBuf = create_icon2(pZoomed, pWindow->dst,
-                        WF_RESTORE_BACKGROUND | WF_WIDGET_HAS_INFO_LABEL
-                        | WF_FREE_THEME);
-    pBuf->info_label = pStr;
-
+    	(WF_RESTORE_BACKGROUND|WF_WIDGET_HAS_INFO_LABEL|WF_FREE_THEME));
+    
+    pBuf->string16 = pStr;
+      
     if(!pPlayer->is_alive) {
       pStr = create_str16_from_char(_("R.I.P.") , adj_font(10));
       pStr->style |= TTF_STYLE_BOLD;
@@ -626,9 +624,8 @@ void popup_players_nations_dialog(void)
   /* ---------- */
   /* exit button */
   pBuf = create_themeicon(pTheme->Small_CANCEL_Icon, pWindow->dst,
-                          WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
-  pBuf->info_label = create_str16_from_char(_("Close Dialog (Esc)"),
-                                            adj_font(12));
+  			  WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
+  pBuf->string16 = create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
   area.w = MAX(area.w, pBuf->size.w + adj_size(10));
   pBuf->action = exit_players_nations_dlg_callback;
   set_wstate(pBuf, FC_WS_NORMAL);
@@ -643,9 +640,9 @@ void popup_players_nations_dialog(void)
         continue;
       }
       
-      pDS = player_diplstate_get(client.conn.playing, pPlayer);
+      pDS = pplayer_get_diplstate(client.conn.playing, pPlayer);
             
-      if(pPlayer->ai_controlled) {
+      if(pPlayer->ai_data.control) {
 	state = _("AI");
       } else {
         if (pPlayer->is_connected) {
@@ -660,12 +657,12 @@ void popup_players_nations_dialog(void)
       }
      
       if(pDS->type == DS_CEASEFIRE) {
-	fc_snprintf(cBuf, sizeof(cBuf), "%s(%s) - %d %s",
+	my_snprintf(cBuf, sizeof(cBuf), "%s(%s) - %d %s",
                     nation_adjective_for_player(pPlayer),
                     state,
 		pDS->turns_left, PL_("turn", "turns", pDS->turns_left));
       } else {
-	fc_snprintf(cBuf, sizeof(cBuf), "%s(%s)",
+	my_snprintf(cBuf, sizeof(cBuf), "%s(%s)",
                     nation_adjective_for_player(pPlayer),
                     state);
       }

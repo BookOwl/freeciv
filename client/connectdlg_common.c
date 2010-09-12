@@ -14,6 +14,7 @@ Freeciv - Copyright (C) 2004 - The Freeciv Project
 #include <config.h>
 #endif
 
+#include <assert.h>  
 #include <fcntl.h>
 #include <stdio.h>
 #include <signal.h>             /* SIGTERM and kill */
@@ -219,7 +220,7 @@ bool client_start_server(void)
     /* inside the child */
 
     /* Set up the command-line parameters. */
-    fc_snprintf(port_buf, sizeof(port_buf), "%d", internal_server_port);
+    my_snprintf(port_buf, sizeof(port_buf), "%d", internal_server_port);
     argv[argc++] = "freeciv-server";
     argv[argc++] = "-p";
     argv[argc++] = port_buf;
@@ -241,7 +242,7 @@ bool client_start_server(void)
       argv[argc++] = scriptfile;
     }
     argv[argc] = NULL;
-    fc_assert(argc <= max_nargs);
+    assert(argc <= max_nargs);
 
     /* avoid terminal spam, but still make server output available */ 
     fclose(stdout);
@@ -300,31 +301,27 @@ bool client_start_server(void)
 
   /* the server expects command line arguments to be in local encoding */ 
   if (logfile) {
-    char *logfile_in_local_encoding =
-        internal_to_local_string_malloc(logfile);
-
-    fc_snprintf(logcmdline, sizeof(logcmdline), " --debug 3 --log %s",
-                logfile_in_local_encoding);
+    char *logfile_in_local_encoding = internal_to_local_string_malloc(logfile);
+    my_snprintf(logcmdline, sizeof(logcmdline), " --debug 3 --log %s",
+		logfile_in_local_encoding);
     free(logfile_in_local_encoding);
   }
   if (scriptfile) {
-    char *scriptfile_in_local_encoding =
-        internal_to_local_string_malloc(scriptfile);
-
-    fc_snprintf(scriptcmdline, sizeof(scriptcmdline),  " --read %s",
-                scriptfile_in_local_encoding);
+    char *scriptfile_in_local_encoding = internal_to_local_string_malloc(scriptfile);
+    my_snprintf(scriptcmdline, sizeof(scriptcmdline),  " --read %s",
+		scriptfile_in_local_encoding);
     free(scriptfile_in_local_encoding);
   }
 
   interpret_tilde(savesdir, sizeof(savesdir), "~/.freeciv/saves");
   internal_to_local_string_buffer(savesdir, savescmdline, sizeof(savescmdline));
 
-  fc_snprintf(options, sizeof(options), "-p %d -q 1 -e%s%s --saves \"%s\"",
-              internal_server_port, logcmdline, scriptcmdline, savescmdline);
-  fc_snprintf(cmdline1, sizeof(cmdline1), "./ser %s", options);
-  fc_snprintf(cmdline2, sizeof(cmdline2),
+  my_snprintf(options, sizeof(options), "-p %d -q 1 -e%s%s --saves \"%s\"",
+	      internal_server_port, logcmdline, scriptcmdline, savescmdline);
+  my_snprintf(cmdline1, sizeof(cmdline1), "./ser %s", options);
+  my_snprintf(cmdline2, sizeof(cmdline2),
               "./server/freeciv-server %s", options);
-  fc_snprintf(cmdline3, sizeof(cmdline3),
+  my_snprintf(cmdline3, sizeof(cmdline3),
               "freeciv-server %s", options);
 
   if (!CreateProcess(NULL, cmdline1, NULL, NULL, TRUE,
@@ -350,7 +347,7 @@ bool client_start_server(void)
   /* a reasonable number of tries */ 
   while (connect_to_server(user_name, "localhost", internal_server_port, 
                            buf, sizeof(buf)) == -1) {
-    fc_usleep(WAIT_BETWEEN_TRIES);
+    myusleep(WAIT_BETWEEN_TRIES);
 #ifdef HAVE_WORKING_FORK
 #ifndef WIN32_NATIVE
     if (waitpid(server_pid, NULL, WNOHANG) != 0) {
@@ -399,7 +396,7 @@ bool client_start_server(void)
   {
     char buf[16];
 
-    fc_snprintf(buf, sizeof(buf), "%d",
+    my_snprintf(buf, sizeof(buf), "%d",
                 (TF_WRAPX
                  | ((tileset_is_isometric(tileset)
                     && tileset_hex_height(tileset) == 0) ? TF_ISO : 0)
@@ -422,7 +419,7 @@ static void randomize_string(char *str, size_t n)
   int i;
 
   for (i = 0; i < n - 1; i++) {
-    str[i] = chars[fc_rand(sizeof(chars) - 1)];
+    str[i] = chars[myrand(sizeof(chars) - 1)];
   }
   str[i] = '\0';
 }
@@ -455,7 +452,7 @@ void send_client_wants_hack(const char *filename)
 {
   if (filename[0] != '\0') {
     struct packet_single_want_hack_req req;
-    struct section_file *file;
+    struct section_file file;
 
     if (!is_filename_safe(filename)) {
       return;
@@ -471,13 +468,13 @@ void send_client_wants_hack(const char *filename)
     /* generate an authentication token */ 
     randomize_string(req.token, sizeof(req.token));
 
-    file = secfile_new(FALSE);
-    secfile_insert_str(file, req.token, "challenge.token");
-    if (!secfile_save(file, challenge_fullname, 0, FZ_PLAIN)) {
-      log_error("Couldn't write token to temporary file: %s",
-                challenge_fullname);
+    section_file_init(&file);
+    secfile_insert_str(&file, req.token, "challenge.token");
+    if (!section_file_save(&file, challenge_fullname, 0, FZ_PLAIN)) {
+      freelog(LOG_ERROR, "Couldn't write token to temporary file: %s",
+	      challenge_fullname);
     }
-    secfile_destroy(file);
+    section_file_free(&file);
 
     /* tell the server what we put into the file */ 
     send_packet_single_want_hack_req(&client.conn, &req);
@@ -492,7 +489,8 @@ void handle_single_want_hack_reply(bool you_have_hack)
   /* remove challenge file */
   if (challenge_fullname[0] != '\0') {
     if (fc_remove(challenge_fullname) == -1) {
-      log_error("Couldn't remove temporary file: %s", challenge_fullname);
+      freelog(LOG_ERROR, "Couldn't remove temporary file: %s",
+	      challenge_fullname);
     }
     challenge_fullname[0] = '\0';
   }
@@ -536,7 +534,7 @@ void handle_ruleset_choices(struct packet_ruleset_choices *packet)
   for (i = 0; i < packet->ruleset_count; i++) {
     size_t len = strlen(packet->rulesets[i]);
 
-    rulesets[i] = fc_strdup(packet->rulesets[i]);
+    rulesets[i] = mystrdup(packet->rulesets[i]);
 
     if (len > suf_len
 	&& strcmp(rulesets[i] + len - suf_len, RULESET_SUFFIX) == 0) {
@@ -558,7 +556,8 @@ void set_ruleset(const char *ruleset)
 {
   char buf[4096];
 
-  fc_snprintf(buf, sizeof(buf), "/read %s%s", ruleset, RULESET_SUFFIX);
-  log_debug("Executing '%s'", buf);
+  my_snprintf(buf, sizeof(buf), "/read %s%s",
+	      ruleset, RULESET_SUFFIX);
+  freelog(LOG_DEBUG, "Executing '%s'", buf);
   send_chat(buf);
 }

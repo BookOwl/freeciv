@@ -27,8 +27,7 @@
 #include "client_main.h"
 #include "control.h"
 
-/* client/gui-sdl */
-#include "citydlg.h"
+/* gui-sdl */
 #include "colors.h"
 #include "dialogs.h"
 #include "graphics.h"
@@ -81,20 +80,13 @@ static int diplomat_dlg_window_callback(struct widget *pWindow)
 static int diplomat_embassy_callback(struct widget *pWidget)
 {
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
-    struct city *pcity =
-        game_find_city_by_number(pDiplomat_Dlg->diplomat_target_id);
-
-    if (NULL != pcity
-        && NULL != game_find_unit_by_number(pDiplomat_Dlg->diplomat_id)) {
-      request_diplomat_action(DIPLOMAT_INVESTIGATE,
-                              pDiplomat_Dlg->diplomat_id,
-                              pDiplomat_Dlg->diplomat_target_id, 0);
-      /* We open the city dialog now to be sure to open something if
-       * the city_info packet is not received if not changed. */
-      popup_city_dialog(pcity);
+    if (game_find_unit_by_number(pDiplomat_Dlg->diplomat_id)
+       && game_find_city_by_number(pDiplomat_Dlg->diplomat_target_id)) {  
+      request_diplomat_action(DIPLOMAT_EMBASSY, pDiplomat_Dlg->diplomat_id,
+                                         pDiplomat_Dlg->diplomat_target_id, 0);
     }
-
-    popdown_diplomat_dialog();
+  
+    popdown_diplomat_dialog();  
   }
   return -1;
 }
@@ -159,8 +151,7 @@ static int diplomat_sabotage_callback(struct widget *pWidget)
     if (game_find_unit_by_number(pDiplomat_Dlg->diplomat_id)
        && game_find_city_by_number(pDiplomat_Dlg->diplomat_target_id)) {  
       request_diplomat_action(DIPLOMAT_SABOTAGE, pDiplomat_Dlg->diplomat_id,
-                                         pDiplomat_Dlg->diplomat_target_id,
-                                         B_LAST + 1);
+                                         pDiplomat_Dlg->diplomat_target_id, 0);
     }
     
     popdown_diplomat_dialog();
@@ -274,9 +265,8 @@ static int spy_steal_popup(struct widget *pWidget)
   /* ------------------ */
   /* exit button */
   pBuf = create_themeicon(pTheme->Small_CANCEL_Icon, pWindow->dst,
-                          WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
-  pBuf->info_label = create_str16_from_char(_("Close Dialog (Esc)"),
-                                            adj_font(12));
+  			  WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
+  pBuf->string16 = create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
   area.w += pBuf->size.w + adj_size(10);
   pBuf->action = exit_spy_steal_dlg_callback;
   set_wstate(pBuf, FC_WS_NORMAL);
@@ -872,9 +862,8 @@ void popup_sabotage_dialog(struct city *pCity)
   /* ---------- */
   /* exit button */
   pBuf = create_themeicon(pTheme->Small_CANCEL_Icon, pWindow->dst,
-                          WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
-  pBuf->info_label = create_str16_from_char(_("Close Dialog (Esc)"),
-                                            adj_font(12));
+  			  WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
+  pBuf->string16 = create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
   area.w += pBuf->size.w + adj_size(10);
   pBuf->action = diplomat_close_callback;
   set_wstate(pBuf, FC_WS_NORMAL);
@@ -1166,10 +1155,8 @@ void popup_incite_dialog(struct city *pCity, int cost)
     
     /* exit button */
     pBuf = create_themeicon(pTheme->Small_CANCEL_Icon, pWindow->dst,
-                            WF_WIDGET_HAS_INFO_LABEL
-                            | WF_RESTORE_BACKGROUND);
-    pBuf->info_label = create_str16_from_char(_("Close Dialog (Esc)"),
-                                              adj_font(12));
+  			    WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);  
+    pBuf->string16 = create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
     area.w += pBuf->size.w + adj_size(10);
     pBuf->action = exit_incite_dlg_callback;
     set_wstate(pBuf, FC_WS_NORMAL);
@@ -1179,7 +1166,7 @@ void popup_incite_dialog(struct city *pCity, int cost)
     exit = TRUE;
     /* --------------- */
     
-    fc_snprintf(cBuf, sizeof(cBuf), _("You can't incite a revolt in %s."),
+    my_snprintf(cBuf, sizeof(cBuf), _("You can't incite a revolt in %s."),
 		city_name(pCity));
 
     create_active_iconlabel(pBuf, pWindow->dst, pStr, cBuf, NULL);
@@ -1198,7 +1185,7 @@ void popup_incite_dialog(struct city *pCity, int cost)
     area.h += pBuf->size.h;
     
   } else if (cost <= client.conn.playing->economic.gold) {
-    fc_snprintf(cBuf, sizeof(cBuf),
+    my_snprintf(cBuf, sizeof(cBuf),
 		_("Incite a revolt for %d gold?\nTreasury contains %d gold."), 
 		cost, client.conn.playing->economic.gold);
     
@@ -1236,10 +1223,8 @@ void popup_incite_dialog(struct city *pCity, int cost)
   } else {
     /* exit button */
     pBuf = create_themeicon(pTheme->Small_CANCEL_Icon, pWindow->dst,
-                            WF_WIDGET_HAS_INFO_LABEL
-                            | WF_RESTORE_BACKGROUND);
-    pBuf->info_label = create_str16_from_char(_("Close Dialog (Esc)"),
-                                              adj_font(12));
+  			    WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
+  pBuf->string16 = create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
     area.w += pBuf->size.w + adj_size(10);
     pBuf->action = exit_incite_dlg_callback;
     set_wstate(pBuf, FC_WS_NORMAL);
@@ -1249,7 +1234,7 @@ void popup_incite_dialog(struct city *pCity, int cost)
     exit = TRUE;
     /* --------------- */
 
-    fc_snprintf(cBuf, sizeof(cBuf),
+    my_snprintf(cBuf, sizeof(cBuf),
 		_("Inciting a revolt costs %d gold.\n"
 		  "Treasury contains %d gold."), 
 		cost, client.conn.playing->economic.gold);
@@ -1408,7 +1393,7 @@ void popup_bribe_dialog(struct unit *pUnit, int cost)
   area.h = MAX(area.h, adj_size(2));
   
   if (cost <= client.conn.playing->economic.gold) {
-    fc_snprintf(cBuf, sizeof(cBuf),
+    my_snprintf(cBuf, sizeof(cBuf),
 		_("Bribe unit for %d gold?\nTreasury contains %d gold."), 
 		cost, client.conn.playing->economic.gold);
     
@@ -1444,10 +1429,8 @@ void popup_bribe_dialog(struct unit *pUnit, int cost)
   } else {
     /* exit button */
     pBuf = create_themeicon(pTheme->Small_CANCEL_Icon, pWindow->dst,
-                            WF_WIDGET_HAS_INFO_LABEL
-                            | WF_RESTORE_BACKGROUND);
-    pBuf->info_label = create_str16_from_char(_("Close Dialog (Esc)"),
-                                              adj_font(12));
+  			    WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
+    pBuf->string16 = create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
     area.w += pBuf->size.w + adj_size(10);
     pBuf->action = exit_bribe_dlg_callback;
     set_wstate(pBuf, FC_WS_NORMAL);
@@ -1457,7 +1440,7 @@ void popup_bribe_dialog(struct unit *pUnit, int cost)
     exit = TRUE;
     /* --------------- */
 
-    fc_snprintf(cBuf, sizeof(cBuf),
+    my_snprintf(cBuf, sizeof(cBuf),
 		_("Bribing the unit costs %d gold.\n"
 		  "Treasury contains %d gold."), 
 		cost, client.conn.playing->economic.gold);

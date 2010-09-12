@@ -454,7 +454,7 @@ static LONG CALLBACK diplomacy_proc(HWND dlg,UINT message,WPARAM wParam,LPARAM l
   case WM_DESTROY:
     if (pdialog->menu_shown)
       DestroyMenu(pdialog->menu_shown);
-    dialog_list_remove(dialog_list, pdialog);
+    dialog_list_unlink(dialog_list, pdialog);
     free(pdialog);
     break;
   case WM_COMMAND:
@@ -608,7 +608,7 @@ static struct Diplomacy_dialog *create_diplomacy_dialog(int other_player_id)
 						FAKE_CHILD,
 						pdialog);
   vbox=fcwin_vbox_new(pdialog->mainwin,FALSE);
-  fc_snprintf(buf, sizeof(buf),
+  my_snprintf(buf, sizeof(buf),
               _("The %s offerings"),
               nation_adjective_for_player(plr0));
   fcwin_box_add_static(vbox,buf,0,SS_LEFT,FALSE,FALSE,5);
@@ -617,7 +617,7 @@ static struct Diplomacy_dialog *create_diplomacy_dialog(int other_player_id)
   fcwin_box_add_button(vbox,_("Cities"),ID_CITY0,0,FALSE,FALSE,5);
   fcwin_box_add_button(vbox,_("Embassy"), ID_EMBASSY0, 0, FALSE, FALSE, 5);
   
-  fc_snprintf(buf, sizeof(buf), _("Gold(max %d)"), plr0->economic.gold); 
+  my_snprintf(buf, sizeof(buf), _("Gold(max %d)"), plr0->economic.gold); 
   pdialog->gold0_label=fcwin_box_add_static(vbox,buf,0,SS_LEFT,FALSE,FALSE,5);
   fcwin_box_add_edit(vbox,"",6,ID_GOLD0,ES_WANTRETURN | ES_MULTILINE | ES_AUTOVSCROLL,
 		     FALSE,FALSE,5);
@@ -628,7 +628,7 @@ static struct Diplomacy_dialog *create_diplomacy_dialog(int other_player_id)
   fcwin_box_add_box(hbox,vbox,FALSE,FALSE,5);
   vbox=fcwin_vbox_new(pdialog->mainwin,FALSE);
     
-  fc_snprintf(buf, sizeof(buf),
+  my_snprintf(buf, sizeof(buf),
 	      _("This Eternal Treaty\n"
 		"marks the results of the diplomatic work between\n"
 		"The %s %s %s\nand\nThe %s %s %s"),
@@ -642,13 +642,13 @@ static struct Diplomacy_dialog *create_diplomacy_dialog(int other_player_id)
   pdialog->list=fcwin_box_add_list(vbox,6,ID_LIST,WS_VSCROLL,TRUE,TRUE,5);
   hbox2=fcwin_hbox_new(pdialog->mainwin,FALSE);
 
-  fc_snprintf(buf, sizeof(buf), _("%s view:"),
+  my_snprintf(buf, sizeof(buf), _("%s view:"),
               nation_adjective_for_player(plr0));
   fcwin_box_add_static(hbox2,buf,0,SS_LEFT,FALSE,FALSE,5);
   fcwin_box_add_generic(hbox2,thumb_minsize,thumb_setsize,NULL,
 			&pdialog->thumb0_pos,FALSE,FALSE,5);
   
-  fc_snprintf(buf, sizeof(buf), _("%s view:"),
+  my_snprintf(buf, sizeof(buf), _("%s view:"),
               nation_adjective_for_player(plr1));
   fcwin_box_add_static(hbox2,buf,0,SS_LEFT,FALSE,FALSE,5);
   fcwin_box_add_generic(hbox2,thumb_minsize,thumb_setsize,NULL,
@@ -660,7 +660,7 @@ static struct Diplomacy_dialog *create_diplomacy_dialog(int other_player_id)
   fcwin_box_add_box(hbox,vbox,TRUE,TRUE,5);
   
   vbox=fcwin_vbox_new(pdialog->mainwin,FALSE);
-  fc_snprintf(buf, sizeof(buf),
+  my_snprintf(buf, sizeof(buf),
               _("The %s offerings"),
               nation_adjective_for_player(plr1));
   fcwin_box_add_static(vbox,buf,0,SS_LEFT,FALSE,FALSE,5);
@@ -669,7 +669,7 @@ static struct Diplomacy_dialog *create_diplomacy_dialog(int other_player_id)
   fcwin_box_add_button(vbox,_("Cities"),ID_CITY1,0,FALSE,FALSE,5);
   fcwin_box_add_button(vbox,_("Embassy"), ID_EMBASSY1, 0, FALSE, FALSE, 5);
   
-  fc_snprintf(buf, sizeof(buf), _("Gold(max %d)"), plr1->economic.gold); 
+  my_snprintf(buf, sizeof(buf), _("Gold(max %d)"), plr1->economic.gold); 
   pdialog->gold1_label=fcwin_box_add_static(vbox,buf,0,SS_LEFT,FALSE,FALSE,5);
   fcwin_box_add_edit(vbox, "", 6, ID_GOLD1, ES_WANTRETURN | ES_MULTILINE
 		     | ES_AUTOVSCROLL, FALSE, FALSE, 5);
@@ -724,7 +724,7 @@ static void popup_diplomacy_dialog(int other_player_id)
 {
   struct Diplomacy_dialog *pdialog;
 
-  if (client.conn.playing->ai_controlled) {
+  if (client.conn.playing->ai_data.control) {
     return;			/* Don't show if we are AI controlled. */
   }
 

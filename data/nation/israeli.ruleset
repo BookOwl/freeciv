@@ -27,7 +27,7 @@ init_buildings=""
 
 init_government="Despotism"
 init_units=""
-civilwar_nations = "palestinian"
+civilwar_nations = "arab"
 
 cities =
   "Jerusalem", "Zephath", "Jericho", "Beersheba", "Gat", "Tiberias",

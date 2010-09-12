@@ -19,7 +19,7 @@ which $RENDERER >/dev/null \
   || (echo "You need ImageMagick to manipulate the images."; err=yes)
 
 for file0 in $files; do
-  filebase=`echo $file0 | sed 's/.[Ss][Vv][Gg]$//'`
+  filebase=`echo $file0 | sed s/.svg$//i`
 
   file1="$filebase-1.png"
   file2="$filebase-2.png"
@@ -52,16 +52,7 @@ for file0 in $files; do
   WIDTH=$(($SHIELD_WIDTH-2))
   HEIGHT=$(($SHIELD_HEIGHT-2))
 
-  # The following assumes that the drawing has the same dimensions as the page
-  DRAWING_WIDTH=$($RENDERER -f $file0 -W)
-  DRAWING_HEIGHT=$($RENDERER -f $file0 -H)
-  X0=$(awk -v drawing_width=${DRAWING_WIDTH} 'BEGIN { print int((drawing_width / 6) + 0.5) }')
-  X1=$(awk -v x0=${X0} 'BEGIN{ print int((x0 * 5) + 0.5) }')
-  Y0=0
-  Y1=$(awk -v drawing_height=${DRAWING_HEIGHT} 'BEGIN { print int(drawing_height + 0.5) }')
-  AREA=$X0":"$Y0":"$X1":"$Y1
-
-  $RENDERER -f $file0 -w $WIDTH -h $HEIGHT -e $file1 -a=$AREA > /dev/null
+  $RENDERER -f $file0 -w $WIDTH -h $HEIGHT -e $file1 > /dev/null
 
   composite -gravity center -compose src-over $file1 mask.png $file2
   composite -gravity center -compose src-over mask.png $file2 $file3

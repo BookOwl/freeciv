@@ -14,10 +14,6 @@
 #ifndef FC__TILE_H
 #define FC__TILE_H
 
-/* utility */
-#include "bitvector.h"
-
-/* common */
 #include "base.h"
 #include "fc_types.h"
 #include "player.h"
@@ -41,6 +37,7 @@ struct tile {
   int nat_x, nat_y; /* Native coordinates of the tile. */
   int index; /* Index coordinate of the tile. */
   Continent_id continent;
+  bv_player tile_known, tile_seen[V_COUNT];
   bv_special special;
   bv_bases bases;
   struct resource *resource;		/* NULL for no resource */

@@ -51,11 +51,11 @@ void give_map_from_player_to_player(struct player *pfrom, struct player *pdest);
 void give_seamap_from_player_to_player(struct player *pfrom, struct player *pdest);
 void give_citymap_from_player_to_player(struct city *pcity,
 					struct player *pfrom, struct player *pdest);
-void send_all_known_tiles(struct conn_list *dest);
+void send_all_known_tiles(struct conn_list *dest, bool force);
 
 bool send_tile_suppression(bool now);
 void send_tile_info(struct conn_list *dest, struct tile *ptile,
-                    bool send_unknown);
+                    bool send_unknown, bool force);
 
 void send_map_info(struct conn_list *dest);
 
@@ -64,14 +64,13 @@ void map_hide_tile(struct player *pplayer, struct tile *ptile);
 void map_show_circle(struct player *pplayer,
 		     struct tile *ptile, int radius_sq);
 void map_refog_circle(struct player *pplayer, struct tile *ptile,
-                      int old_radius_sq, int new_radius_sq,
-                      bool can_reveal_tiles,
-                      enum vision_layer vlayer);
+                      int old_main_radius_sq, int new_main_radius_sq,
+                      int old_invis_radius_sq, int new_invis_radius_sq,
+                      bool can_reveal_tiles);
 void map_show_all(struct player *pplayer);
 
-bool map_is_known_and_seen(const struct tile *ptile,
-                           const struct player *pplayer,
-                           enum vision_layer vlayer);
+bool map_is_known_and_seen(const struct tile *ptile, struct player *pplayer,
+			   enum vision_layer vlayer);
 void map_change_seen(struct tile *ptile, struct player *pplayer, int change,
 		     enum vision_layer vlayer);
 bool map_is_known(const struct tile *ptile, const struct player *pplayer);
@@ -80,7 +79,7 @@ void map_clear_known(struct tile *ptile, struct player *pplayer);
 void map_know_and_see_all(struct player *pplayer);
 void show_map_to_all(void);
 
-void player_map_init(struct player *pplayer);
+void player_map_allocate(struct player *pplayer);
 void player_map_free(struct player *pplayer);
 
 struct vision_site *map_get_player_city(const struct tile *ptile,
@@ -114,8 +113,8 @@ bool need_to_fix_terrain_change(const struct terrain *oldter,
 void fix_tile_on_terrain_change(struct tile *ptile,
                                 bool extend_rivers);
 
-void vision_change_sight(struct vision *vision, enum vision_layer vlayer,
-			 int radius_sq);
+void vision_change_sight(struct vision *vision, int radius_main_sq,
+                         int radius_invis_sq);
 void vision_clear_sight(struct vision *vision);
 
 void change_playertile_site(struct player_tile *ptile,

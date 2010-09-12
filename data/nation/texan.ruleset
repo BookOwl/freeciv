@@ -8,16 +8,14 @@ legend=_("Texas is second largest and second most populous state of the\
 leader=
  "Sam Houston",
  "Stephen F. Austin",
- "James P. Henderson",
  "Ma Ferguson",
  "Lyndon B. Johnson",
- "George W. Bush"
-leader_sex="Male", "Male", "Female", "Male", "Male", "Male"
+ "James P. Henderson"
+leader_sex="Male", "Male", "Female", "Male", "Male"
 flag="texas"
 flag_alt = "usa"
 city_style = "European"
 ruler_titles = { "government",      "male_title",      "female_title"
-                 "Despotism",        _("Sheriff"),      _("?female:Sheriff")
                  "Republic",        _("Governor"),      _("?female:Governor")
                  "Fundamentalism",  _("Reverend"),      _("?female:Reverend")
                }
@@ -28,7 +26,7 @@ init_government="Despotism"
 init_units=""
 
 conflicts_with="american", "chilean" ; Latter because of similar flags
-civilwar_nations="american", "mexican", "hasinay"
+civilwar_nations="american", "mexican"
 
 cities =
  "Austin",

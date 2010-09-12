@@ -20,10 +20,10 @@
 # have to call delta_stats_report to get these.
 generate_stats=0
 
-# generate_logs will generate log calls to debug the delta code.
-generate_logs=1
-use_log_macro="log_packet"
-generate_variant_logs=1
+# generate_freelogs will generate freelog calls to debug the delta code.
+generate_freelogs=0
+freelog_log_level="LOG_PACKET"
+generate_variant_freelogs=0
 
 ### The following parameters CHANGE the protocol. You have been warned.
 fold_bool_into_header=1
@@ -305,23 +305,13 @@ class Field:
         if fold_bool_into_header and self.struct_type=="bool" and \
            not self.is_array:
             b="packet->%(name)s"%self.get_dict(vars())
-            return '''%s
-  if(differ) {
-    different++;
-  }
-  if (%s) {
-    BV_SET(fields, %d);
-  }
+        else:
+            b="differ"
+        return '''%s
+  if(differ) {different++;}
+  if(%s) {BV_SET(fields, %d);}
 
 '''%(cmp,b,i)
-        else:
-            return '''%s
-  if (differ) {
-    different++;
-    BV_SET(fields, %d);
-  }
-
-'''%(cmp,i)
 
     # Returns a code fragement which will put this field if the
     # content has changed. Does nothing for bools-in-header.    
@@ -331,9 +321,9 @@ class Field:
             return "  /* field %(i)d is folded into the header */\n"%vars()
         put=self.get_put()
         packet_name=packet.name
-        log_macro=packet.log_macro
-        if packet.gen_log:
-            f='    %(log_macro)s("  field \'%(name)s\' has changed");\n'%self.get_dict(vars())
+        log_level=packet.log_level
+        if packet.gen_freelog:
+            f='    freelog(%(log_level)s, "  field \'%(name)s\' has changed");\n'%self.get_dict(vars())
         else:
             f=""
         if packet.gen_stats:
@@ -364,39 +354,18 @@ class Field:
            (self.dataio_type not in arr_types and self.is_array==0):
             return "  dio_put_%(dataio_type)s(&dout, real_packet->%(name)s);"%self.__dict__
         if self.is_struct:
-            if self.is_array==2:
-                c="dio_put_%(dataio_type)s(&dout, &real_packet->%(name)s[i][j]);"%self.__dict__
-            else:
-                c="dio_put_%(dataio_type)s(&dout, &real_packet->%(name)s[i]);"%self.__dict__
+            c="dio_put_%(dataio_type)s(&dout, &real_packet->%(name)s[i]);"%self.__dict__
         elif self.dataio_type=="string":
             c="dio_put_%(dataio_type)s(&dout, real_packet->%(name)s[i]);"%self.__dict__
             array_size_u=self.array_size1_u
 
         elif self.struct_type=="float":
-            if self.is_array==2:
-                c="  dio_put_uint32(&dout, (int)(real_packet->%(name)s[i][j] * %(float_factor)d));"%self.__dict__
-            else:
-                c="  dio_put_uint32(&dout, (int)(real_packet->%(name)s[i] * %(float_factor)d));"%self.__dict__
+            c="  dio_put_uint32(&dout, (int)(real_packet->%(name)s[i] * %(float_factor)d));"%self.__dict__
         else:
-            if self.is_array==2:
-                c="dio_put_%(dataio_type)s(&dout, real_packet->%(name)s[i][j]);"%self.__dict__
-            else:
-                c="dio_put_%(dataio_type)s(&dout, real_packet->%(name)s[i]);"%self.__dict__
+            c="dio_put_%(dataio_type)s(&dout, real_packet->%(name)s[i]);"%self.__dict__
 
         if not self.diff:
-            if self.is_array==2 and self.dataio_type!="string":
-                return '''
-    {
-      int i, j;
-
-      for (i = 0; i < %(array_size1_u)s; i++) {
-        for (j = 0; j < %(array_size2_u)s; j++) {
-          %(c)s
-        }
-      }
-    } '''%self.get_dict(vars())
-            else:
-                return '''
+            return '''
     {
       int i;
 
@@ -409,7 +378,7 @@ class Field:
     {
       int i;
 
-      fc_assert(%(array_size_u)s < 255);
+      assert(%(array_size_u)s < 255);
 
       for (i = 0; i < %(array_size_u)s; i++) {
         if(old->%(name)s[i] != real_packet->%(name)s[i]) {
@@ -428,9 +397,9 @@ class Field:
            not self.is_array:
             return  "  real_packet->%(name)s = BV_ISSET(fields, %(i)d);\n"%self.get_dict(vars())
         get=prefix("    ",get)
-        log_macro=packet.log_macro
-        if packet.gen_log:
-            f="    %(log_macro)s(\"  got field '%(name)s'\");\n"%self.get_dict(vars())
+        log_level=packet.log_level
+        if packet.gen_freelog:
+            f="    freelog(%(log_level)s, \"  got field '%(name)s'\");\n"%self.get_dict(vars())
         else:
             f=""
         return '''  if (BV_ISSET(fields, %(i)d)) {
@@ -468,35 +437,16 @@ class Field:
 }'''%self.__dict__
 
         if self.is_struct:
-            if self.is_array==2:
-                c="dio_get_%(dataio_type)s(&din, &real_packet->%(name)s[i][j]);"%self.__dict__
-            else:
-                c="dio_get_%(dataio_type)s(&din, &real_packet->%(name)s[i]);"%self.__dict__
+            c="dio_get_%(dataio_type)s(&din, &real_packet->%(name)s[i]);"%self.__dict__
         elif self.dataio_type=="string":
             c="dio_get_%(dataio_type)s(&din, real_packet->%(name)s[i], sizeof(real_packet->%(name)s[i]));"%self.__dict__
         elif self.struct_type=="float":
-            if self.is_array==2:
-                c='''int tmp;
-
-    dio_get_uint32(&din, &tmp);
-    real_packet->%(name)s[i][j] = (float)(tmp) / %(float_factor)d.0;'''%self.__dict__
-            else:
-                c='''int tmp;
+            c='''int tmp;
 
     dio_get_uint32(&din, &tmp);
     real_packet->%(name)s[i] = (float)(tmp) / %(float_factor)d.0;'''%self.__dict__
         elif self.struct_type=="bool":
-            if self.is_array==2:
-                c="dio_get_%(dataio_type)s(&din, &real_packet->%(name)s[i][j]);"%self.__dict__
-            else:
-                c="dio_get_%(dataio_type)s(&din, &real_packet->%(name)s[i]);"%self.__dict__
-        elif self.is_array==2:
-            c='''{
-  int readin;
-
-  dio_get_%(dataio_type)s(&din, &readin);
-  real_packet->%(name)s[i][j] = readin;
-}'''%self.__dict__
+            c="dio_get_%(dataio_type)s(&din, &real_packet->%(name)s[i]);"%self.__dict__
         else:
             c='''{
   int readin;
@@ -515,7 +465,7 @@ class Field:
             if array_size_u != array_size_d:
                 extra='''
   if(%(array_size_u)s > %(array_size_d)s) {
-    log_error("packets_gen.c: WARNING: truncation array");
+    freelog(LOG_ERROR, "packets_gen.c: WARNING: truncation array");
     %(array_size_u)s = %(array_size_d)s;
   }'''%self.get_dict(vars())
             else:
@@ -523,19 +473,7 @@ class Field:
             if self.dataio_type=="memory":
                 return '''%(extra)s
   dio_get_%(dataio_type)s(&din, real_packet->%(name)s, %(array_size_u)s);'''%self.get_dict(vars())
-            elif self.is_array==2 and self.dataio_type!="string":
-                return '''
-{
-  int i, j;
-%(extra)s
-  for (i = 0; i < %(array_size1_u)s; i++) {
-    for (j = 0; j < %(array_size2_u)s; j++) {
-      %(c)s
-    }
-  }
-}'''%self.get_dict(vars())
-            else:
-                return '''
+            return '''
 {
   int i;
 %(extra)s
@@ -553,7 +491,7 @@ for (;;) {
     break;
   }
   if(i > %(array_size_u)s) {
-    log_error("packets_gen.c: WARNING: ignoring intra array diff");
+    freelog(LOG_ERROR, "packets_gen.c: WARNING: ignoring intra array diff");
   } else {
     %(c)s
   }
@@ -564,9 +502,9 @@ for (;;) {
 # Class which represents a capability variant.
 class Variant:
     def __init__(self,poscaps,negcaps,name,fields,packet,no):
-        self.log_macro=use_log_macro
+        self.log_level=freelog_log_level
         self.gen_stats=generate_stats
-        self.gen_log=generate_logs
+        self.gen_freelog=generate_freelogs
         self.name=name
         self.packet_name=packet.name
         self.fields=fields
@@ -578,8 +516,7 @@ class Variant:
         self.want_post_send=packet.want_post_send
         self.type=packet.type
         self.delta=packet.delta
-        self.is_info=packet.is_info
-        self.cancel=packet.cancel
+        self.is_action=packet.is_action
         
         self.poscaps=poscaps
         self.negcaps=negcaps
@@ -607,6 +544,7 @@ class Variant:
         if len(self.fields)>5 or string.split(self.name,"_")[1]=="ruleset":
             self.handle_via_packet=1
 
+        self.extra_force_arg=""
         self.extra_send_args=""
         self.extra_send_args2=""
         self.extra_send_args3=string.join(
@@ -618,9 +556,10 @@ class Variant:
         if not self.no_packet:
             self.extra_send_args=', const struct %(packet_name)s *packet'%self.__dict__+self.extra_send_args
             self.extra_send_args2=', packet'+self.extra_send_args2
-
+        if not self.is_action:
+            self.extra_force_arg=', bool force_send'
         self.receive_prototype='static struct %(packet_name)s *receive_%(name)s(struct connection *pc, enum packet_type type)'%self.__dict__
-        self.send_prototype='static int send_%(name)s(struct connection *pc%(extra_send_args)s)'%self.__dict__
+        self.send_prototype='static int send_%(name)s(struct connection *pc%(extra_force_arg)s%(extra_send_args)s)'%self.__dict__
 
     # See Field.get_dict
     def get_dict(self,vars):
@@ -653,11 +592,11 @@ static char *stats_%(name)s_names[] = {%(names)s};
         return '''
   if (stats_%(name)s_sent > 0 &&
       stats_%(name)s_discarded != stats_%(name)s_sent) {
-    log_test(\"%(name)s %%d out of %%d got discarded\",
+    freelog(LOG_TEST, \"%(name)s %%d out of %%d got discarded\",
       stats_%(name)s_discarded, stats_%(name)s_sent);
     for (i = 0; i < %(bits)d; i++) {
       if(stats_%(name)s_counters[i] > 0) {
-        log_test(\"  %%4d / %%4d: %%2d = %%s\",
+        freelog(LOG_TEST, \"  %%4d / %%4d: %%2d = %%s\",
           stats_%(name)s_counters[i],
           (stats_%(name)s_sent - stats_%(name)s_discarded),
           i, stats_%(name)s_names[i]);
@@ -734,7 +673,7 @@ static char *stats_%(name)s_names[] = {%(names)s};
         temp='''%(send_prototype)s
 {
 <real_packet1><delta_header>  SEND_PACKET_START(%(type)s);
-<log><report><pre1><body><pre2>  <post>SEND_PACKET_END;
+<freelog><report><pre1><body><pre2>  <post>SEND_PACKET_END;
 }
 
 '''
@@ -745,10 +684,10 @@ static char *stats_%(name)s_names[] = {%(names)s};
 '''
         else:
             report=""
-        if self.gen_log:
-            log='\n  %(log_macro)s("%(name)s: sending info about (%(keys_format)s)"%(keys_arg)s);\n'
+        if self.gen_freelog:
+            freelog='\n  freelog(%(log_level)s, "%(name)s: sending info about (%(keys_format)s)"%(keys_arg)s);\n'
         else:
-            log=""
+            freelog=""
         if self.want_pre_send:
             pre1='''
   {
@@ -776,9 +715,13 @@ static char *stats_%(name)s_names[] = {%(names)s};
         if not self.no_packet:
             if self.delta:
                 body=self.get_delta_send_body()
+                if self.is_action:
+                    force_send_var="\n  bool force_send = TRUE;"
+                else:
+                    force_send_var=""
                 delta_header='''  %(name)s_fields fields;
-  struct %(packet_name)s *old;
-  bool differ;
+  struct %(packet_name)s *old, *clone;
+  bool differ, old_from_hash;%(force_send_var)s
   struct hash_table **hash = &pc->phs.sent[%(type)s];
   int different = 0;
 '''
@@ -812,17 +755,16 @@ static char *stats_%(name)s_names[] = {%(names)s};
     def get_delta_send_body(self):
         intro='''
   if (!*hash) {
-    *hash = hash_new_full(hash_%(name)s, cmp_%(name)s, NULL, free);
+    *hash = hash_new(hash_%(name)s, cmp_%(name)s);
   }
   BV_CLR_ALL(fields);
 
-  if (!hash_lookup(*hash, real_packet,
-                   (const void **) (void *) &old, NULL)) {
+  old = hash_lookup_data(*hash, real_packet);
+  old_from_hash = (old != NULL);
+  if (!old) {
     old = fc_malloc(sizeof(*old));
-    *old = *real_packet;
-    hash_insert(*hash, old, old);
     memset(old, 0, sizeof(*old));
-    different = 1;      /* Force to send. */
+    force_send = TRUE;
   }
 
 '''
@@ -830,25 +772,20 @@ static char *stats_%(name)s_names[] = {%(names)s};
         for i in range(len(self.other_fields)):
             field=self.other_fields[i]
             body=body+field.get_cmp_wrapper(i)
-        if self.gen_log:
-            fl='    %(log_macro)s("  no change -> discard");\n'
+        if self.gen_freelog:
+            fl='    freelog(%(log_level)s, "  no change -> discard");\n'
         else:
             fl=""
         if self.gen_stats:
             s='    stats_%(name)s_discarded++;\n'
         else:
             s=""
-
-        if self.is_info != "no":
-            body=body+'''
-  if (different == 0) {
+        body=body+'''  if (different == 0 && !force_send) {
 %(fl)s%(s)s<pre2>    return 0;
   }
-'''%self.get_dict(vars())
 
-        body=body+'''
   DIO_BV_PUT(&dout, fields);
-'''
+'''%self.get_dict(vars())
 
         for field in self.key_fields:
             body=body+field.get_put()+"\n"
@@ -858,18 +795,16 @@ static char *stats_%(name)s_names[] = {%(names)s};
             field=self.other_fields[i]
             body=body+field.get_put_wrapper(self,i)
         body=body+'''
-  *old = *real_packet;
-'''
 
-        # Cancel some is-info packets.
-        for i in self.cancel:
-            body=body+'''
-  hash = &pc->phs.sent[%s];
-  if (NULL != *hash) {
-    hash_delete_entry(*hash, real_packet);
+  if (old_from_hash) {
+    hash_delete_entry(*hash, old);
   }
-'''%i
 
+  clone = old;
+
+  *clone = *real_packet;
+  hash_insert(*hash, clone, clone);
+'''
         return intro+body
 
     # Returns a code fragement which is the implementation of the receive
@@ -879,7 +814,7 @@ static char *stats_%(name)s_names[] = {%(names)s};
         temp='''%(receive_prototype)s
 {
 <delta_header>  RECEIVE_PACKET_START(%(packet_name)s, real_packet);
-<delta_body1><body1><log><body2><post>  RECEIVE_PACKET_END(real_packet);
+<delta_body1><body1><freelog><body2><post>  RECEIVE_PACKET_END(real_packet);
 }
 
 '''
@@ -887,6 +822,7 @@ static char *stats_%(name)s_names[] = {%(names)s};
             delta_header='''  %(name)s_fields fields;
   struct %(packet_name)s *old;
   struct hash_table **hash = &pc->phs.received[type];
+  struct %(packet_name)s *clone;
 '''
             delta_body1="\n  DIO_BV_GET(&din, fields);\n"
             body1=""
@@ -903,10 +839,10 @@ static char *stats_%(name)s_names[] = {%(names)s};
             body1=body1+"\n"
             body2=""
 
-        if self.gen_log:
-            log='  %(log_macro)s("%(name)s: got info about (%(keys_format)s)"%(keys_arg)s);\n'
+        if self.gen_freelog:
+            freelog='  freelog(%(log_level)s, "%(name)s: got info about (%(keys_format)s)"%(keys_arg)s);\n'
         else:
-            log=""
+            freelog=""
         
         if self.want_post_recv:
             post="  post_receive_%(packet_name)s(pc, real_packet);\n"
@@ -927,16 +863,17 @@ static char *stats_%(name)s_names[] = {%(names)s};
         key2=string.join(key2,"\n")
         if key1: key1=key1+"\n\n"
         if key2: key2="\n\n"+key2
-        if self.gen_log:
-            fl='    %(log_macro)s("  no old info");\n'
+        if self.gen_freelog:
+            fl='    freelog(%(log_level)s, "  no old info");\n'
         else:
             fl=""
         body='''
   if (!*hash) {
-    *hash = hash_new_full(hash_%(name)s, cmp_%(name)s, NULL, free);
+    *hash = hash_new(hash_%(name)s, cmp_%(name)s);
   }
+  old = hash_delete_entry(*hash, real_packet);
 
-  if (hash_lookup(*hash, real_packet, (const void **) (void *) &old, NULL)) {
+  if (old) {
     *real_packet = *old;
   } else {
 %(key1)s%(fl)s    memset(real_packet, 0, sizeof(*real_packet));%(key2)s
@@ -948,13 +885,12 @@ static char *stats_%(name)s_names[] = {%(names)s};
             body=body+field.get_get_wrapper(self,i)
 
         extro='''
-  if (NULL == old) {
-    old = fc_malloc(sizeof(*old));
-    *old = *real_packet;
-    hash_insert(*hash, old, old);
-  } else {
-    *old = *real_packet;
+  clone = fc_malloc(sizeof(*clone));
+  *clone = *real_packet;
+  if (old) {
+    free(old);
   }
+  hash_insert(*hash, clone, clone);
 
 '''%self.get_dict(vars())
         return body+extro
@@ -964,9 +900,9 @@ static char *stats_%(name)s_names[] = {%(names)s};
 class Packet:
     def __init__(self,str, types):
         self.types=types
-        self.log_macro=use_log_macro
+        self.log_level=freelog_log_level
         self.gen_stats=generate_stats
-        self.gen_log=generate_logs
+        self.gen_freelog=generate_freelogs
         str=string.strip(str)
         lines=string.split(str,"\n")
         
@@ -993,17 +929,9 @@ class Packet:
             arr.remove("cs")
         assert len(self.dirs)>0,repr(self.name)+repr(self.dirs)
 
-        # "no" means normal packet
-        # "yes" means is-info packet
-        # "game" means is-game-info packet
-        self.is_info="no"
-        if "is-info" in arr:
-            self.is_info="yes"
-            arr.remove("is-info")
-        if "is-game-info" in arr:
-            self.is_info="game"
-            arr.remove("is-game-info")
-
+        self.is_action="is-info" not in arr
+        if not self.is_action: arr.remove("is-info")
+        
         self.want_pre_send="pre-send" in arr
         if self.want_pre_send: arr.remove("pre-send")
         
@@ -1034,19 +962,8 @@ class Packet:
         self.want_lsend="lsend" in arr
         if self.want_lsend: arr.remove("lsend")
 
-        self.cancel=[]
-        removes=[]
-        remaining=[]
-        for i in arr:
-            mo=re.search("^cancel\((.*)\)$",i)
-            if mo:
-                self.cancel.append(mo.group(1))
-                continue
-            remaining.append(i)
-        arr=remaining
-
         assert len(arr)==0,repr(arr)
-
+        
         if disable_delta:
             self.delta=0
 
@@ -1086,11 +1003,16 @@ class Packet:
             self.extra_send_args2=', packet'+self.extra_send_args2
 
         self.receive_prototype='struct %(name)s *receive_%(name)s(struct connection *pc, enum packet_type type)'%self.__dict__
-        self.send_prototype='int send_%(name)s(struct connection *pc%(extra_send_args)s)'%self.__dict__
+        self.force_arg=""
+        self.force_value=""
+        if not self.is_action:
+            self.force_arg=", bool force_send"
+            self.force_value=", force_send"
+        self.send_prototype='int send_%(name)s(struct connection *pc%(force_arg)s%(extra_send_args)s)'%self.__dict__
         if self.want_lsend:
-            self.lsend_prototype='void lsend_%(name)s(struct conn_list *dest%(extra_send_args)s)'%self.__dict__
+            self.lsend_prototype='void lsend_%(name)s(struct conn_list *dest%(force_arg)s%(extra_send_args)s)'%self.__dict__
         if self.want_dsend:
-            self.dsend_prototype='int dsend_%(name)s(struct connection *pc%(extra_send_args3)s)'%self.__dict__
+            self.dsend_prototype='int dsend_%(name)s(struct connection *pc%(force_arg)s%(extra_send_args3)s)'%self.__dict__
             if self.want_lsend:
                 self.dlsend_prototype='void dlsend_%(name)s(struct conn_list *dest%(extra_send_args3)s)'%self.__dict__
 
@@ -1169,13 +1091,12 @@ class Packet:
             name2=v.name
             no=v.no
             result=result+'  } else if(%(cond)s) {\n    variant = %(no)s;\n'%self.get_dict(vars())
-        if generate_variant_logs and len(self.variants)>1:
-            log='  log_test("%(name)s: using variant=%%d cap=%%s", variant, pc->capability);\n'%self.get_dict(vars())
+        if generate_variant_freelogs and len(self.variants)>1:
+            log='  freelog(LOG_TEST, "%(name)s: using variant=%%d cap=%%s", variant, pc->capability);\n'%self.get_dict(vars())
         else:
             log=""
         result=result+'''  } else {
-    log_error("Unknown %(type)s variant for connection %%s", conn_description(pc));
-    variant = -2;       /* Keep something invalid. */
+    die("unknown variant");
   }
 %(log)s  pc->phs.variant[%(type)s] = variant;
 }
@@ -1191,12 +1112,12 @@ class Packet:
         only_server=len(self.dirs)==1 and self.dirs[0]=="cs"
         if only_client:
             restrict='''  if (is_server()) {
-    log_error("Receiving %(name)s at the server.");
+    freelog(LOG_ERROR, "Receiving %(name)s at the server.");
   }
 '''%self.get_dict(vars())
         elif only_server:
             restrict='''  if (!is_server()) {
-    log_error("Receiving %(name)s at the client.");
+    freelog(LOG_ERROR, "Receiving %(name)s at the client.");
   }
 '''%self.get_dict(vars())
         else:
@@ -1205,27 +1126,21 @@ class Packet:
         result='''%(receive_prototype)s
 {
   if(!pc->used) {
-    log_error("WARNING: trying to read data from the closed connection %%s",
-              conn_description(pc));
+    freelog(LOG_ERROR,
+	    "WARNING: trying to read data from the closed connection %%s",
+	    conn_description(pc));
     return NULL;
   }
-  fc_assert_ret_val(NULL != pc->phs.variant, NULL);
+  assert(pc->phs.variant != NULL);
 %(restrict)s  ensure_valid_variant_%(name)s(pc);
 
-  switch(pc->phs.variant[%(type)s]) {'''%self.get_dict(vars())
+  switch(pc->phs.variant[%(type)s]) {
+'''%self.get_dict(vars())
         for v in self.variants:
             name2=v.name
             no=v.no
-            result=result+'''
-  case %(no)s:
-    return receive_%(name2)s(pc, type);'''%self.get_dict(vars())
-        result=result+'''
-  default:
-    log_debug("Unknown %(type)s variant for connection %%s", conn_description(pc));
-    return NULL;
-  }
-}
-'''%self.get_dict(vars())
+            result=result+'    case %(no)s: return receive_%(name2)s(pc, type);\n'%self.get_dict(vars())
+        result=result+'    default: die("unknown variant"); return NULL;\n  }\n}\n\n'
         return result
 
     def get_send(self):
@@ -1233,12 +1148,12 @@ class Packet:
         only_server=len(self.dirs)==1 and self.dirs[0]=="sc"
         if only_client:
             restrict='''  if (is_server()) {
-    log_error("Sending %(name)s from the server.");
+    freelog(LOG_ERROR, "Sending %(name)s from the server.");
   }
 '''%self.get_dict(vars())
         elif only_server:
             restrict='''  if (!is_server()) {
-    log_error("Sending %(name)s from the client.");
+    freelog(LOG_ERROR, "Sending %(name)s from the client.");
   }
 '''%self.get_dict(vars())
         else:
@@ -1247,35 +1162,26 @@ class Packet:
         result='''%(send_prototype)s
 {
   if(!pc->used) {
-    log_error("WARNING: trying to send data to the closed connection %%s",
-              conn_description(pc));
+    freelog(LOG_ERROR,
+	    "WARNING: trying to send data to the closed connection %%s",
+	    conn_description(pc));
     return -1;
   }
-  fc_assert_ret_val(NULL != pc->phs.variant, -1);
+  assert(pc->phs.variant != NULL);
 %(restrict)s  ensure_valid_variant_%(name)s(pc);
 
   switch(pc->phs.variant[%(type)s]) {
 '''%self.get_dict(vars())
+        args="pc"
+        if not self.is_action:
+            args=args+', force_send'
         if not self.no_packet:
-            args="pc, packet"
-        else:
-            args="pc"
+            args=args+', packet'
         for v in self.variants:
             name2=v.name
             no=v.no
-
-
-
-            result=result+'''
-  case %(no)s:
-    return send_%(name2)s(%(args)s);'''%self.get_dict(vars())
-        result=result+'''
-  default:
-    log_debug("Unknown %(type)s variant for connection %%s", conn_description(pc));
-    return -1;
-  }
-}
-'''%self.get_dict(vars())
+            result=result+'    case %(no)s: return send_%(name2)s(%(args)s);\n'%self.get_dict(vars())
+        result=result+'    default: die("unknown variant"); return -1;\n  }\n}\n\n'
         return result
 
     def get_variants(self):
@@ -1297,7 +1203,7 @@ class Packet:
         return '''%(lsend_prototype)s
 {
   conn_list_iterate(dest, pconn) {
-    send_%(name)s(pconn%(extra_send_args2)s);
+    send_%(name)s(pconn%(force_value)s%(extra_send_args2)s);
   } conn_list_iterate_end;
 }
 
@@ -1314,7 +1220,7 @@ class Packet:
 
 %(fill)s
   
-  return send_%(name)s(pc, real_packet);
+  return send_%(name)s(pc, real_packet%(force_value)s);
 }
 
 '''%self.get_dict(vars())
@@ -1373,15 +1279,15 @@ void delta_stats_reset(void) {
 def get_get_packet_helper(packets):
     intro='''void *get_packet_from_connection_helper(struct connection *pc,\n    enum packet_type type)
 {
-  switch (type) {
+  switch(type) {
 
 '''
     body=""
     for p in packets:
         body=body+"  case %(type)s:\n    return receive_%(name)s(pc, type);\n\n"%p.__dict__
     extro='''  default:
-    log_error("unknown packet type %d received from %s",
-              type, conn_description(pc));
+    freelog(LOG_ERROR, "unknown packet type %d received from %s",
+	    type, conn_description(pc));
     remove_packet_from_buffer(pc->buffer);
     return NULL;
   };
@@ -1391,11 +1297,11 @@ def get_get_packet_helper(packets):
     return intro+body+extro
 
 # Returns a code fragement which is the implementation of the
-# packet_name() function.
-def get_packet_name(packets):
-    intro='''const char *packet_name(enum packet_type type)
+# get_packet_name() function.
+def get_get_packet_name(packets):
+    intro='''const char *get_packet_name(enum packet_type type)
 {
-  switch (type) {
+  switch(type) {
 
 '''
     body=""
@@ -1403,29 +1309,6 @@ def get_packet_name(packets):
         body=body+'  case %(type)s:\n    return "%(type)s";\n\n'%p.__dict__
     extro='''  default:
     return "unknown";
-  }
-}
-
-'''
-    return intro+body+extro
-
-# Returns a code fragement which is the implementation of the
-# packet_has_game_info_flag() function.
-def get_packet_has_game_info_flag(packets):
-    intro='''bool packet_has_game_info_flag(enum packet_type type)
-{
-  switch (type) {
-
-'''
-    body=""
-    for p in packets:
-        body=body+'  case %(type)s:\n'%p.__dict__
-        if p.is_info != "game":
-            body=body+'    return FALSE;\n\n'
-        else:
-            body=body+'    return TRUE;\n\n'
-    extro='''  default:
-    return FALSE;
   }
 }
 
@@ -1552,10 +1435,10 @@ void *get_packet_from_connection_helper(struct connection *pc, enum packet_type 
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <string.h>
 
 /* utility */
-#include "bitvector.h"
 #include "capability.h"
 #include "hash.h"
 #include "log.h"
@@ -1597,8 +1480,7 @@ static int stats_total_sent;
     output_c.write(get_reset(packets))
 
     output_c.write(get_get_packet_helper(packets))
-    output_c.write(get_packet_name(packets))
-    output_c.write(get_packet_has_game_info_flag(packets))
+    output_c.write(get_get_packet_name(packets))
 
     # write hash, cmp, send, receive
     for p in packets:
@@ -1627,10 +1509,8 @@ static int stats_total_sent;
 #ifndef FC__HAND_GEN_H
 #define FC__HAND_GEN_H
 
-/* utility */
 #include "shared.h"
 
-/* common */
 #include "fc_types.h"
 #include "packets.h"
 
@@ -1671,11 +1551,8 @@ bool server_handle_packet(enum packet_type type, void *packet,
 #ifndef FC__PACKHAND_GEN_H
 #define FC__PACKHAND_GEN_H
 
-/* utility */
-#include "shared.h"
-
-/* common */
 #include "packets.h"
+#include "shared.h"
 
 bool client_handle_packet(enum packet_type type, void *packet);
 
@@ -1707,7 +1584,6 @@ bool client_handle_packet(enum packet_type type, void *packet);
 #include <config.h>
 #endif
 
-/* common */
 #include "packets.h"
 
 #include "hand_gen.h"
@@ -1763,7 +1639,6 @@ bool server_handle_packet(enum packet_type type, void *packet,
 #include <config.h>
 #endif
 
-/* common */
 #include "packets.h"
 
 #include "packhand_gen.h"

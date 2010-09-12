@@ -38,8 +38,6 @@
 #include "mapview.h"
 #include "packhand.h"
 
-/* client/gui-gtk-2.0 */
-#include "citydlg.h"
 #include "dialogs.h"
 #include "wldlg.h"
 
@@ -120,7 +118,7 @@ static void diplomat_sabotage_callback(GtkWidget *w, gpointer data)
   if(game_find_unit_by_number(diplomat_id) && 
      game_find_city_by_number(diplomat_target_id)) { 
     request_diplomat_action(DIPLOMAT_SABOTAGE, diplomat_id,
-			    diplomat_target_id, B_LAST + 1);
+			    diplomat_target_id, -1);
   }
   gtk_widget_destroy(diplomat_dialog);
 }
@@ -130,14 +128,10 @@ static void diplomat_sabotage_callback(GtkWidget *w, gpointer data)
 *****************************************************************/
 static void diplomat_investigate_callback(GtkWidget *w, gpointer data)
 {
-  struct city *pcity = game_find_city_by_number(diplomat_target_id);
-
-  if (NULL != pcity && NULL != game_find_unit_by_number(diplomat_id)) {
+  if(game_find_unit_by_number(diplomat_id) && 
+     (game_find_city_by_number(diplomat_target_id))) { 
     request_diplomat_action(DIPLOMAT_INVESTIGATE, diplomat_id,
-                            diplomat_target_id, 0);
-    /* We open the city dialog now to be sure to open something if
-     * the city_info packet is not received if not changed. */
-    popup_city_dialog(pcity);
+			    diplomat_target_id, 0);
   }
   gtk_widget_destroy(diplomat_dialog);
 }
@@ -627,10 +621,10 @@ void popup_diplomat_dialog(struct unit *punit, struct tile *dest_tile)
     /* Spy/Diplomat acting against a city */
 
     diplomat_target_id = pcity->id;
-    fc_snprintf(buf, sizeof(buf),
-                _("Your %s has arrived at %s.\nWhat is your command?"),
-                unit_name_translation(punit),
-                city_name(pcity));
+    my_snprintf(buf, sizeof(buf),
+		_("Your %s has arrived at %s.\nWhat is your command?"),
+		unit_name_translation(punit),
+		city_name(pcity));
 
     if (!unit_has_type_flag(punit, F_SPY)){
       shl = popup_choice_dialog(GTK_WINDOW(toplevel),

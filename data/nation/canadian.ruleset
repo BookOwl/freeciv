@@ -3,23 +3,19 @@
 name=_("Canadian")
 plural=_("?plural:Canadians")
 groups="Modern", "American"
-conflicts_with="quebecois", "inuit", "acadian"
+conflicts_with="quebecois", "inuit"
 legend=_("Geographically, Canada is the second largest country in world.\
  The magnetic north pole currently lies on Canadian territory.")
 leader=
- "Laura Secord",
- "John A. MacDonald",
- "Nellie McClung",
- "William Lyon Mackenzie King",
- "John Diefenbaker",
- "Tommy Douglas",
- "Lester B. Pearson",
  "Pierre Trudeau",
+ "John A. MacDonald",
+ "John Diefenbaker",
+ "Mackenzie King",
  "Brian Mulroney",
  "Kim Campbell"
-leader_sex="Female", "Male", "Female", "Male", "Male", "Male", "Male", "Male", "Male", "Female"
+leader_sex="Male", "Male", "Male", "Male", "Male", "Female"
 flag="canada"
-flag_alt = "canada_old"
+flag_alt = "united_kingdom"
 city_style = "Celtic"
 
 ruler_titles = { "government",      "male_title",         "female_title"
@@ -32,9 +28,9 @@ init_government="Despotism"
 init_units=""
 civilwar_nations=
 ; Sub-national nations
- "quebecois", "acadian", "newfoundland",
+ "quebecois",
 ; First Nations
- "inuit", "iroquois", "cree", "anishinaabe"
+ "inuit", "iroquois"
 
 ; Terrains:  desert, plains, grassland, river, forest, hills, mountains, tundra, swamp, jungle, ocean
 ; Capitals of provinces and territories are listed first in this list

@@ -15,6 +15,8 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
+
 /* utility */
 #include "log.h"
 #include "mem.h"
@@ -49,8 +51,8 @@ struct vision *vision_new(struct player *pplayer, struct tile *ptile)
 ****************************************************************************/
 void vision_free(struct vision *vision)
 {
-  fc_assert_ret(vision->radius_sq[V_MAIN] < 0);
-  fc_assert_ret(vision->radius_sq[V_INVIS] < 0);
+  assert(vision->radius_sq[V_MAIN] < 0);
+  assert(vision->radius_sq[V_INVIS] < 0);
   free(vision);
 }
 

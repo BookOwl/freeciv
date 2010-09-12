@@ -35,13 +35,13 @@ const char *freeciv_name_version(void)
   static char msgbuf[128];
 
 #if IS_BETA_VERSION
-  fc_snprintf(msgbuf, sizeof (msgbuf), _("Freeciv version %s %s"),
+  my_snprintf(msgbuf, sizeof (msgbuf), _("Freeciv version %s %s"),
               VERSION_STRING, _("(beta version)"));
 #elif defined(SVNREV) && !defined(FC_SVNREV_OFF)
-  fc_snprintf(msgbuf, sizeof (msgbuf), _("Freeciv version %s (%s)"),
+  my_snprintf(msgbuf, sizeof (msgbuf), _("Freeciv version %s (%s)"),
               VERSION_STRING, fc_svn_revision());
 #else
-  fc_snprintf(msgbuf, sizeof (msgbuf), _("Freeciv version %s"),
+  my_snprintf(msgbuf, sizeof (msgbuf), _("Freeciv version %s"),
               VERSION_STRING);
 #endif
 
@@ -97,11 +97,13 @@ const char *beta_message(void)
     N_("November"),
     N_("December")
   };
-  fc_snprintf (msgbuf, sizeof (msgbuf),
-               /* TRANS: No full stop after the URL, could cause confusion. */
-               _("THIS IS A BETA VERSION\n"
-                 "Freeciv %s will be released in %s, at %s"),
-               NEXT_STABLE_VERSION, _(NEXT_RELEASE_MONTH), WIKI_URL);
+  my_snprintf (msgbuf, sizeof (msgbuf),
+	       /* TRANS: No full stop after the URL, could cause confusion. */
+	       _("THIS IS A BETA VERSION\n"
+		 "Freeciv %s will be released in %s, at %s"),
+	       NEXT_STABLE_VERSION,
+	       _(NEXT_RELEASE_MONTH),
+	       WIKI_URL);
   return msgbuf;
 #else
   return NULL;

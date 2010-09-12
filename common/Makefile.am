@@ -31,8 +31,6 @@ libfreeciv_la_SOURCES = \
 		events.h	\
 		featured_text.c	\
 		featured_text.h	\
-		fc_interface.c	\
-		fc_interface.h	\
 		fc_types.h	\
 		game.c		\
 		game.h		\
@@ -47,7 +45,6 @@ libfreeciv_la_SOURCES = \
 		map.h		\
 		movement.c	\
 		movement.h	\
-		name_translation.h \
 		nation.c        \
 		nation.h        \
 		packets.c	\
@@ -59,8 +56,6 @@ libfreeciv_la_SOURCES = \
 		player.h	\
 		requirements.c	\
 		requirements.h	\
-		research.c	\
-		research.h	\
 		spaceship.c	\
 		spaceship.h	\
 		specialist.c	\

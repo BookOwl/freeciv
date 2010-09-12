@@ -13,13 +13,9 @@
 #ifndef FC__UNITTYPE_H
 #define FC__UNITTYPE_H
 
-/* utility */
-#include "bitvector.h"
 #include "shared.h"
 
-/* common */
 #include "fc_types.h"
-#include "name_translation.h"
 
 #define U_LAST MAX_NUM_ITEMS
 /*
@@ -29,48 +25,26 @@
   to hold full number of unit types.
 */
 
-#define SPECENUM_NAME unit_class_flag_id
-#define SPECENUM_VALUE0 UCF_TERRAIN_SPEED
-#define SPECENUM_VALUE0NAME "TerrainSpeed"
-#define SPECENUM_VALUE1 UCF_TERRAIN_DEFENSE
-#define SPECENUM_VALUE1NAME "TerrainDefense"
-#define SPECENUM_VALUE2 UCF_DAMAGE_SLOWS
-#define SPECENUM_VALUE2NAME "DamageSlows"
-/* Can occupy enemy cities */
-#define SPECENUM_VALUE3 UCF_CAN_OCCUPY_CITY
-#define SPECENUM_VALUE3NAME "CanOccupyCity"
-#define SPECENUM_VALUE4 UCF_MISSILE
-#define SPECENUM_VALUE4NAME "Missile"
-/* Considers any road tile native terrain */
-#define SPECENUM_VALUE5 UCF_ROAD_NATIVE
-#define SPECENUM_VALUE5NAME "RoadNative"
-/* Considers any river tile native terrain */
-#define SPECENUM_VALUE6 UCF_RIVER_NATIVE
-#define SPECENUM_VALUE6NAME "RiverNative"
-#define SPECENUM_VALUE7 UCF_BUILD_ANYWHERE
-#define SPECENUM_VALUE7NAME "BuildAnywhere"
-#define SPECENUM_VALUE8 UCF_UNREACHABLE
-#define SPECENUM_VALUE8NAME "Unreachable"
-/* Can collect ransom from barbarian leader */
-#define SPECENUM_VALUE9 UCF_COLLECT_RANSOM
-#define SPECENUM_VALUE9NAME "CollectRansom"
-/* Is subject to ZOC */
-#define SPECENUM_VALUE10 UCF_ZOC
-#define SPECENUM_VALUE10NAME "ZOC"
-/* Can fortify on land squares */
-#define SPECENUM_VALUE11 UCF_CAN_FORTIFY
-#define SPECENUM_VALUE11NAME "CanFortify"
-#define SPECENUM_VALUE12 UCF_CAN_PILLAGE
-#define SPECENUM_VALUE12NAME "CanPillage"
-/* Cities can still work tile when enemy unit on it */
-#define SPECENUM_VALUE13 UCF_DOESNT_OCCUPY_TILE
-#define SPECENUM_VALUE13NAME "DoesntOccupyTile"
-/* keep this last */
-#define SPECENUM_COUNT UCF_COUNT
-#include "specenum_gen.h"
+enum unit_class_flag_id {
+  UCF_TERRAIN_SPEED = 0,
+  UCF_TERRAIN_DEFENSE,
+  UCF_DAMAGE_SLOWS,
+  UCF_CAN_OCCUPY_CITY,    /* Can occupy enemy cities */
+  UCF_MISSILE,
+  UCF_ROAD_NATIVE,        /* Considers any road tile native terrain */
+  UCF_RIVER_NATIVE,       /* Considers any river tile native terrain */
+  UCF_BUILD_ANYWHERE,
+  UCF_UNREACHABLE,
+  UCF_COLLECT_RANSOM,     /* Can collect ransom from barbarian leader */
+  UCF_ZOC,                /* Is subject to ZOC */
+  UCF_CAN_FORTIFY,        /* Can fortify on land squares */
+  UCF_CAN_PILLAGE,
+  UCF_DOESNT_OCCUPY_TILE, /* Cities can still work tile when enemy unit on it */
+  UCF_LAST
+};
 
 BV_DEFINE(bv_unit_classes, UCL_LAST);
-BV_DEFINE(bv_unit_class_flags, UCF_COUNT);
+BV_DEFINE(bv_unit_class_flags, UCF_LAST);
 
 enum hut_behavior { HUT_NORMAL, HUT_NOTHING, HUT_FRIGHTEN };
 
@@ -189,8 +163,8 @@ enum unit_role_id {
 };
 #define L_MAX 64
 
-BV_DEFINE(bv_unit_type_flags, F_MAX);
-BV_DEFINE(bv_unit_type_roles, L_MAX);
+BV_DEFINE(bv_flags, F_MAX);
+BV_DEFINE(bv_roles, L_MAX);
 
 struct veteran_type {
     /* client */
@@ -228,11 +202,10 @@ struct unit_type {
 
 #define U_NOT_OBSOLETED (NULL)
   struct unit_type *obsoleted_by;
-  struct unit_type *transformed_to;
   int fuel;
 
-  bv_unit_type_flags flags;
-  bv_unit_type_roles roles;
+  bv_flags flags;
+  bv_roles roles;
 
   int happy_cost;  /* unhappy people in home city */
   int upkeep[O_LAST];
@@ -259,6 +232,9 @@ struct unit_type {
   char *helptext;
 };
 
+#define CHECK_UNIT_TYPE(ut) (assert((ut) != NULL			    \
+			     && (utype_by_number((ut)->item_number) == (ut))))
+
 /* General unit and unit type (matched) routines */
 Unit_type_id utype_count(void);
 Unit_type_id utype_index(const struct unit_type *punittype);
@@ -274,10 +250,10 @@ const char *unit_rule_name(const struct unit *punit);
 const char *utype_rule_name(const struct unit_type *punittype);
 
 const char *unit_name_translation(const struct unit *punit);
-const char *utype_name_translation(const struct unit_type *punittype);
+const char *utype_name_translation(struct unit_type *punittype);
 
 const char *utype_values_string(const struct unit_type *punittype);
-const char *utype_values_translation(const struct unit_type *punittype);
+const char *utype_values_translation(struct unit_type *punittype);
 
 /* General unit type flag and role routines */
 bool unit_has_type_flag(const struct unit *punit, enum unit_flag_id flag);
@@ -317,10 +293,12 @@ struct unit_class *uclass_by_number(const Unit_Class_id id);
 struct unit_class *find_unit_class_by_rule_name(const char *s);
 
 const char *uclass_rule_name(const struct unit_class *pclass);
-const char *uclass_name_translation(const struct unit_class *pclass);
+const char *uclass_name_translation(struct unit_class *pclass);
 
 bool uclass_has_flag(const struct unit_class *punitclass,
-                     enum unit_class_flag_id flag);
+		     enum unit_class_flag_id flag);
+enum unit_class_flag_id find_unit_class_flag_by_rule_name(const char *s);
+const char *unit_class_flag_rule_name(enum unit_class_flag_id id);
 
 /* Ancillary routines */
 int unit_build_shield_cost(const struct unit *punit);

@@ -14,144 +14,118 @@
 #define FC__LOG_H
 
 #include <stdarg.h>
-#include <stdlib.h>
 
-#include "fcintl.h"             /* _() */
-#include "support.h"            /* bool type and fc__attribute */
+#include "shared.h"		/* bool type and fc__attribute */
 
-enum log_level {
-  LOG_FATAL = 0,
-  LOG_ERROR,                    /* non-fatal errors */
-  LOG_NORMAL,
-  LOG_VERBOSE,                  /* not shown by default */
-  LOG_DEBUG                     /* suppressed unless DEBUG defined */
+#define LOG_FATAL   0
+#define LOG_ERROR   1		/* non-fatal errors */
+#define LOG_NORMAL  2
+#define LOG_VERBOSE 3		/* not shown by default */
+#define LOG_DEBUG   4		/* suppressed unless DEBUG defined;
+				   may be enabled on file/line basis */
+
+/* Used by game debug command */
+#define LOG_TEST LOG_NORMAL
+#define LOG_PACKET LOG_VERBOSE
+
+/* Some variables local to each file which includes log.h,
+   to record whether LOG_DEBUG messages apply for that file
+   and if so for which lines (min,max) :
+*/
+struct logdebug_afile_info {
+  int tthis;
+  int min;
+  int max;
 };
+#ifdef DEBUG
+static int logdebug_this_init;
+static struct logdebug_afile_info logdebug_thisfile;
+#endif
+
+extern int logd_init_counter;   /* increment this to force re-init */
+extern int fc_log_level;
+
+/* Return an updated struct logdebug_afile_info: */
+struct logdebug_afile_info logdebug_update(const char *file);
 
 
 /* A function type to enable custom output of log messages other than
  * via fputs(stderr).  Eg, to the server console while handling prompts,
  * rfcstyle, client notifications; Eg, to the client window output window?
  */
-typedef void (*log_callback_fn)(enum log_level, const char *, bool file_too);
+typedef void (*log_callback_fn)(int, const char*, bool file_too);
 
-void log_init(const char *filename, enum log_level initial_level,
-              log_callback_fn callback, int fatal_assertions);
-bool log_parse_level_str(const char *level_str, enum log_level *ret_level);
-
+int log_parse_level_str(const char *level_str);
+void log_init(const char *filename, int initial_level,
+	      log_callback_fn callback);
+void log_set_level(int level);
 log_callback_fn log_set_callback(log_callback_fn callback);
-void log_set_level(enum log_level level);
-enum log_level log_get_level(void);
+
+void real_freelog(int level, const char *message, ...)
+                  fc__attribute((__format__ (__printf__, 2, 3)));
+void vreal_freelog(int level, const char *message, va_list ap);
+
+
 #ifdef DEBUG
-bool log_do_output_for_level_at_location(enum log_level level,
-                                         const char *file, int line);
+/* A static (per-file) function to use/update the above per-file vars.
+ * This should only be called for LOG_DEBUG messages.
+ * It returns whether such a LOG_DEBUG message should be sent on
+ * to real_freelog.
+ */
+static inline int logdebug_check(const char *file, int line)
+{
+  if (logdebug_this_init < logd_init_counter) {  
+    logdebug_thisfile = logdebug_update(file);
+    logdebug_this_init = logd_init_counter;
+  } 
+  return (logdebug_thisfile.tthis && (logdebug_thisfile.max==0 
+				      || (line >= logdebug_thisfile.min 
+					  && line <= logdebug_thisfile.max))); 
+}
 #endif
 
-void vdo_log(const char *file, const char *function, int line,
-             bool print_from_where, enum log_level level,
-             const char *message, va_list args);
-void do_log(const char *file, const char *function, int line,
-            bool print_from_where, enum log_level level,
-            const char *message, ...)
-            fc__attribute((__format__ (__printf__, 6, 7)));
-
 #ifdef DEBUG
-#define log_do_output_for_level(level) \
-  log_do_output_for_level_at_location(level, __FILE__, __LINE__)
+#  define freelog(level, ...)                                             \
+  do {                                                                      \
+    if ((level) != LOG_DEBUG || logdebug_check(__FILE__, __LINE__)) {       \
+      real_freelog((level), __VA_ARGS__);                                   \
+    }                                                                       \
+  } while(FALSE)
 #else
-#define log_do_output_for_level(level) (log_get_level() >= level)
-#endif /* DEBUG */
+#  define freelog(level, ...)                                             \
+  do {                                                                      \
+    if ((level) != LOG_DEBUG) {                                             \
+      real_freelog((level), __VA_ARGS__);                                   \
+    }                                                                       \
+  } while(FALSE) 
+#endif  /* DEBUG */
 
+#define RETURN_IF_FAIL(condition)                                           \
+if (!(condition)) {                                                         \
+  freelog(LOG_ERROR, "In %s() (%s, line %d): assertion '%s' failed.",       \
+          __FUNCTION__, __FILE__, __LINE__, #condition);                    \
+  return;                                                                   \
+}
 
-/* The log macros */
-#define log_base(level, message, ...)                                       \
-  if (log_do_output_for_level(level)) {                                     \
-    do_log(__FILE__, __FUNCTION__, __LINE__, FALSE,                         \
-           level, message, ## __VA_ARGS__);                                 \
-  }
-/* This one doesn't need check, fatal messages are always displayed. */
-#define log_fatal(message, ...)                                             \
-  do_log(__FILE__, __FUNCTION__, __LINE__, FALSE,                           \
-         LOG_FATAL, message, ## __VA_ARGS__);
-#define log_error(message, ...)                                             \
-  log_base(LOG_ERROR, message, ## __VA_ARGS__)
-#define log_normal(message, ...)                                            \
-  log_base(LOG_NORMAL, message, ## __VA_ARGS__)
-#define log_verbose(message, ...)                                           \
-  log_base(LOG_VERBOSE, message, ## __VA_ARGS__)
-#ifdef DEBUG
-#  define log_debug(message, ...)                                           \
-  log_base(LOG_DEBUG, message, ## __VA_ARGS__)
-#else
-#  define log_debug(message, ...) /* Do nothing. */
-#endif /* DEBUG */
+#define RETURN_VAL_IF_FAIL(condition, val)                                  \
+if (!(condition)) {                                                         \
+  freelog(LOG_ERROR, "In %s() (%s, line %d): assertion '%s' failed.",       \
+          __FUNCTION__, __FILE__, __LINE__, #condition);                    \
+  return val;                                                               \
+}
 
-/* Used by game debug command */
-#define log_test log_normal
-#define log_packet log_verbose
-#define LOG_TEST LOG_NORMAL /* needed by citylog_*() functions */
+#define RETURN_IF_FAIL_MSG(condition, format, ...)                          \
+if (!(condition)) {                                                         \
+  freelog(LOG_ERROR, "In %s() (%s, line %d): " format,                      \
+          __FUNCTION__, __FILE__, __LINE__, ## __VA_ARGS__);                \
+  return;                                                                   \
+}
 
-
-/* Assertions. */
-void fc_assert_set_fatal(int fatal_assertions);
-#ifdef NDEBUG
-/* Disable the assertion failures, but not the tests! */
-#define fc_assert_fail(...) (void) 0
-#else
-void fc_assert_fail(const char *file, const char *function, int line,
-                    const char *assertion, const char *message, ...)
-                    fc__attribute((__format__ (__printf__, 5, 6)));
-#endif /* NDEBUG */
-
-#define fc_assert_full(file, function, line,                                \
-                       condition, action, message, ...)                     \
-  if (!(condition)) {                                                       \
-    fc_assert_fail(file, function, line, #condition,                        \
-                   message, ## __VA_ARGS__);                                \
-    action;                                                                 \
-  }
-
-#ifdef NDEBUG
-/* Disabled. */
-#define fc_assert(...) (void) 0
-#define fc_assert_msg(...) (void) 0
-#else
-/* Like assert(). */
-#define fc_assert(condition)                                                \
-  ((condition) ? (void) 0                                                   \
-   : fc_assert_fail(__FILE__, __FUNCTION__, __LINE__, #condition, NULL))
-/* Like assert() with extra message. */
-#define fc_assert_msg(condition, message, ...)                              \
-  ((condition) ? (void) 0                                                   \
-   : fc_assert_fail(__FILE__, __FUNCTION__, __LINE__,                       \
-                    #condition, message, ## __VA_ARGS__))
-#endif /* NDEBUG */
-
-/* Do action on failure. */
-#define fc_assert_action(condition, action)                                 \
-  fc_assert_full(__FILE__, __FUNCTION__, __LINE__, condition, action, NULL)
-/* Return on failure. */
-#define fc_assert_ret(condition)                                            \
-  fc_assert_action(condition, return)
-/* Return a value on failure. */
-#define fc_assert_ret_val(condition, val)                                   \
-  fc_assert_action(condition, return val)
-/* Exit on failure. */
-#define fc_assert_exit(condition)                                           \
-  fc_assert_action(condition, exit(EXIT_FAILURE))
-
-/* Do action on failure with extra message. */
-#define fc_assert_action_msg(condition, action, message, ...)               \
-  fc_assert_full(__FILE__, __FUNCTION__, __LINE__, condition, action,       \
-                 message, ## __VA_ARGS__)
-/* Return on failure with extra message. */
-#define fc_assert_ret_msg(condition, message, ...)                          \
-  fc_assert_action_msg(condition, return, message, ## __VA_ARGS__)
-/* Return a value on failure with extra message. */
-#define fc_assert_ret_val_msg(condition, val, message, ...)                 \
-  fc_assert_action_msg(condition, return val, message, ## __VA_ARGS__)
-/* Exit on failure with extra message. */
-#define fc_assert_exit_msg(condition, message, ...)                         \
-  fc_assert_action(condition,                                               \
-                   log_fatal(message, ## __VA_ARGS__); exit(EXIT_FAILURE));
+#define RETURN_VAL_IF_FAIL_MSG(condition, val, format, ...)                 \
+if (!(condition)) {                                                         \
+  freelog(LOG_ERROR, "In %s() (%s, line %d): " format,                      \
+          __FUNCTION__, __FILE__, __LINE__, ## __VA_ARGS__);                \
+  return val;                                                               \
+}
 
 #endif  /* FC__LOG_H */

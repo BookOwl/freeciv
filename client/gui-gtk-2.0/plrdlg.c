@@ -15,6 +15,7 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -147,8 +148,8 @@ static void update_players_menu(void)
     }
 
     if (NULL != client.conn.playing) {
-      switch (player_diplstate_get(client.conn.playing,
-                                   player_by_number(plrno))->type) {
+      switch (pplayer_get_diplstate(client.conn.playing,
+				    player_by_number(plrno))->type) {
       case DS_WAR:
       case DS_NO_CONTACT:
 	gtk_widget_set_sensitive(players_war_command, FALSE);
@@ -584,16 +585,16 @@ GdkPixbuf *get_flag(const struct nation_type *nation)
   /* calculate the bounding box ... */
   sprite_get_bounding_box(flag, &x0, &y0, &x1, &y1);
 
-  fc_assert_ret_val(x0 != -1, NULL);
-  fc_assert_ret_val(y0 != -1, NULL);
-  fc_assert_ret_val(x1 != -1, NULL);
-  fc_assert_ret_val(y1 != -1, NULL);
+  assert(x0 != -1);
+  assert(y0 != -1);
+  assert(x1 != -1);
+  assert(y1 != -1);
 
   w = (x1 - x0) + 1;
   h = (y1 - y0) + 1;
 
   /* if the flag is smaller then 5 x 5, something is wrong */
-  fc_assert_ret_val(w >= MIN_DIMENSION && h >= MIN_DIMENSION, NULL);
+  assert(w >= MIN_DIMENSION && h >= MIN_DIMENSION);
 
   /* croping */
   im = gdk_pixbuf_new(GDK_COLORSPACE_RGB, TRUE, 8, w, h);
@@ -655,7 +656,7 @@ static void fill_row(GtkTreeIter *it, const struct player *pplayer)
 
    /* now add some eye candy ... */
   if (client_has_player()) {
-    switch (player_diplstate_get(client_player(), pplayer)->type) {
+    switch (pplayer_get_diplstate(client_player(), pplayer)->type) {
     case DS_WAR:
       weight = PANGO_WEIGHT_NORMAL;
       style = PANGO_STYLE_ITALIC;
@@ -673,6 +674,8 @@ static void fill_row(GtkTreeIter *it, const struct player *pplayer)
       style = PANGO_STYLE_NORMAL;
       break;
     case DS_LAST:
+    default:
+      assert(0);
       break;
     }
   }
@@ -686,9 +689,10 @@ static void fill_row(GtkTreeIter *it, const struct player *pplayer)
 **************************************************************************/
 static bool player_should_be_shown(const struct player *pplayer)
 {
-  return NULL != pplayer && (player_dlg_show_dead_players
-                             || pplayer->is_alive)
-         && (!is_barbarian(pplayer));
+  return NULL != pplayer && player_slot_is_used(pplayer)
+	 && (player_dlg_show_dead_players
+	     || pplayer->is_alive)
+	 && (!is_barbarian(pplayer));
 }
 
 /**************************************************************************

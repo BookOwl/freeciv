@@ -228,7 +228,7 @@ void update_players_dialog(void)
 
       /* text for idleness */
       if(pplayer->nturns_idle>3) {
-	fc_snprintf(idlebuf, sizeof(idlebuf),
+	my_snprintf(idlebuf, sizeof(idlebuf),
 		    PL_("(idle %d turn)",
 			"(idle %d turns)",
 			pplayer->nturns_idle - 1),
@@ -238,10 +238,10 @@ void update_players_dialog(void)
       }
 
       /* text for name, plus AI marker */       
-      if (pplayer->ai_controlled) {
-        fc_snprintf(namebuf, sizeof(namebuf), "*%-15s",player_name(pplayer));
+      if (pplayer->ai_data.control) {
+        my_snprintf(namebuf, sizeof(namebuf), "*%-15s",player_name(pplayer));
       } else {
-        fc_snprintf(namebuf, sizeof(namebuf), "%-16s",player_name(pplayer));
+        my_snprintf(namebuf, sizeof(namebuf), "%-16s",player_name(pplayer));
       }
       namebuf[16] = '\0';
 
@@ -250,18 +250,18 @@ void update_players_dialog(void)
           || pplayer == client.conn.playing) {
 	strcpy(dsbuf, "-");
       } else {
-	pds = player_diplstate_get(client.conn.playing, pplayer);
+	pds = pplayer_get_diplstate(client.conn.playing, pplayer);
 	if (pds->type == DS_CEASEFIRE) {
-	  fc_snprintf(dsbuf, sizeof(dsbuf), "%s (%d)",
+	  my_snprintf(dsbuf, sizeof(dsbuf), "%s (%d)",
 		      diplstate_text(pds->type), pds->turns_left);
 	} else {
-	  fc_snprintf(dsbuf, sizeof(dsbuf), "%s",
+	  my_snprintf(dsbuf, sizeof(dsbuf), "%s",
 		      diplstate_text(pds->type));
 	}
       }
 
       /* assemble the whole lot */
-      fc_snprintf(namelist_text[j], sizeof(namelist_text[j]),
+      my_snprintf(namelist_text[j], sizeof(namelist_text[j]),
 	      "%-16s %-12s %-8s %-15s %-8s %-6s   %-15s%s", 
 	      namebuf,
 	      nation_adjective_for_player(pplayer), 

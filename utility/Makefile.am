@@ -7,16 +7,12 @@ noinst_LTLIBRARIES = libcivutility.la
 libcivutility_la_SOURCES = \
 		astring.c       \
 		astring.h       \
-		bitvector.c     \
-		bitvector.h     \
 		capability.c	\
 		capability.h	\
-		distribute.c	\
-		distribute.h	\
-		fc_utf8.c	\
-		fc_utf8.h	\
 		fciconv.c	\
 		fciconv.h	\
+		distribute.c	\
+		distribute.h	\
 		fcintl.c	\
 		fcintl.h	\
 		generate_specenum.py	\

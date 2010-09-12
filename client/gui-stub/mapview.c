@@ -38,17 +38,17 @@ void update_info_label(void)
   /* PORTME */
   char buffer[512];
 
-  fc_snprintf(buffer, sizeof(buffer),
-              _("Population: %s\n"
-                "Year: %s\n"
-                "Gold %d\n"
-                "Tax: %d Lux: %d Sci: %d"),
-              population_to_text(civ_population(client_player())),
-              textyear(game.info.year),
-              client.conn.playing->economic.gold,
-              client.conn.playing->economic.tax,
-              client.conn.playing->economic.luxury,
-              client.conn.playing->economic.science);
+  my_snprintf(buffer, sizeof(buffer),
+	      _("Population: %s\n"
+		"Year: %s\n"
+		"Gold %d\n"
+		"Tax: %d Lux: %d Sci: %d"),
+	      population_to_text(civ_population(client.conn.playing)),
+	      textyear(game.info.year),
+	      client.conn.playing->economic.gold,
+	      client.conn.playing->economic.tax,
+	      client.conn.playing->economic.luxury,
+	      client.conn.playing->economic.science);
 
   /* ... */
 }
@@ -251,12 +251,4 @@ void get_overview_area_dimensions(int *width, int *height)
 void overview_size_changed(void)
 {
   /* PORTME */
-}
-
-/**************************************************************************
- Sets the position of the overview scroll window based on mapview position.
-**************************************************************************/
-void update_overview_scroll_window_pos(int x, int y)
-{
-  /* TODO: PORTME. */
 }

@@ -83,7 +83,7 @@ static void grow_printf(char **buffer, size_t *buffer_size,
   size_t new_len;
   static char buf[GROW_TMP_SIZE];
 
-  if (fc_vsnprintf(buf, sizeof(buf), format, ap) == -1) {
+  if (my_vsnprintf(buf, sizeof(buf), format, ap) == -1) {
     die("Formatted string bigger than %lu", (unsigned long)sizeof(buf));
   }
 
@@ -94,13 +94,13 @@ static void grow_printf(char **buffer, size_t *buffer_size,
      * overhead adds up quickly. */
     size_t new_size = MAX(new_len, *buffer_size * 2);
 
-    log_verbose("expand from %lu to %lu to add '%s'",
-                (unsigned long)*buffer_size, (unsigned long)new_size, buf);
+    freelog(LOG_VERBOSE, "expand from %lu to %lu to add '%s'",
+	    (unsigned long)*buffer_size, (unsigned long)new_size, buf);
 
     *buffer_size = new_size;
     *buffer = fc_realloc(*buffer, *buffer_size);
   }
-  fc_strlcat(*buffer, buf, *buffer_size);
+  mystrlcat(*buffer, buf, *buffer_size);
 }
 
 /****************************************************************************
@@ -212,17 +212,17 @@ static const char *format_effect(enum unit_activity activity,
   calc_effect(activity, punit->tile, diff);
 
   if (diff[0] != 0) {
-    fc_snprintf(parts[n], sizeof(parts[n]), _("%+d food"), diff[0]);
+    my_snprintf(parts[n], sizeof(parts[n]), _("%+d food"), diff[0]);
     n++;
   }
 
   if (diff[1] != 0) {
-    fc_snprintf(parts[n], sizeof(parts[n]), _("%+d shield"), diff[1]);
+    my_snprintf(parts[n], sizeof(parts[n]), _("%+d shield"), diff[1]);
     n++;
   }
 
   if (diff[2] != 0) {
-    fc_snprintf(parts[n], sizeof(parts[n]), _("%+d trade"), diff[2]);
+    my_snprintf(parts[n], sizeof(parts[n]), _("%+d trade"), diff[2]);
     n++;
   }
   if (n == 0) {
@@ -250,9 +250,9 @@ const char *mapview_get_unit_action_tooltip(struct unit *punit,
   INIT;
 
   if (shortcut_) {
-    fc_snprintf(shortcut, sizeof(shortcut), " (%s)", shortcut_);
+    my_snprintf(shortcut, sizeof(shortcut), " (%s)", shortcut_);
   } else {
-    fc_snprintf(shortcut, sizeof(shortcut), "%s", "");
+    my_snprintf(shortcut, sizeof(shortcut), "%s", "");
   }
 
   if (strcmp(action, "unit_fortifying") == 0) {
@@ -305,19 +305,19 @@ const char *mapview_get_unit_action_tooltip(struct unit *punit,
   tinfo = terrain_by_number(ttype);
   if ((tinfo->irrigation_result != T_LAST)
       && (tinfo->irrigation_result != ttype)) {
-    fc_snprintf(irrtext, sizeof(irrtext), irrfmt,
+    my_snprintf(irrtext, sizeof(irrtext), irrfmt,
 		terrain_name_translation(tinfo->irrigation_result));
   } else if (tile_has_special(punit->tile, S_IRRIGATION)
 	     && player_knows_techs_with_flag(client.conn.playing, TF_FARMLAND)) {
     sz_strlcpy(irrtext, _("Bu_ild Farmland"));
   }
   if ((tinfo->mining_result != T_LAST) && (tinfo->mining_result != ttype)) {
-    fc_snprintf(mintext, sizeof(mintext), minfmt,
+    my_snprintf(mintext, sizeof(mintext), minfmt,
 		terrain_name_translation(tinfo->mining_result));
   }
   if ((tinfo->transform_result != T_LAST)
       && (tinfo->transform_result != ttype)) {
-    fc_snprintf(transtext, sizeof(transtext), transfmt,
+    my_snprintf(transtext, sizeof(transtext), transfmt,
 		terrain_name_translation(tinfo->transform_result));
   }
 
@@ -327,8 +327,9 @@ const char *mapview_get_unit_action_tooltip(struct unit *punit,
 #endif
     add_line("tooltip for action %s isn't written yet",
 	     action);
-    log_verbose("warning: get_unit_action_tooltip: unknown action %s",
-                action);
+    freelog(LOG_VERBOSE,
+	    "warning: get_unit_action_tooltip: unknown action %s",
+	    action);
   }
   RETURN;
 }
@@ -352,8 +353,8 @@ const char *mapview_get_city_action_tooltip(struct city *pcity,
 	     city_production_turns_to_build(pcity, TRUE));
   } else {
     add_line("tooltip for action %s isn't written yet", action);
-    log_verbose("warning: get_city_action_tooltip: unknown action %s",
-                action);
+    freelog(LOG_VERBOSE,
+	    "warning: get_city_action_tooltip: unknown action %s", action);
   }
   RETURN;
 }  

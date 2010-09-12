@@ -21,7 +21,7 @@ enum plr_info_level { INFO_MINIMUM, INFO_MEETING, INFO_EMBASSY, INFO_FULL };
 
 void server_player_init(struct player *pplayer,
 			bool initmap, bool needs_team);
-struct player *server_create_player(int player_id);
+struct player *server_create_player(void);
 void server_remove_player(struct player *pplayer);
 void kill_player(struct player *pplayer);
 void update_revolution(struct player *pplayer);
@@ -36,9 +36,9 @@ void make_contact(struct player *pplayer1, struct player *pplayer2,
 		  struct tile *ptile);
 void maybe_make_contact(struct tile *ptile, struct player *pplayer);
 
-void send_player_all_c(struct player *src, struct conn_list *dest);
+void send_player_info(struct player *src, struct player *dest);
 void send_player_info_c(struct player *src, struct conn_list *dest);
-void send_player_diplstate_c(struct player *src, struct conn_list *dest);
+void send_player_slot_info_c(struct player *src, struct conn_list *dest);
 
 struct conn_list *player_reply_dest(struct player *pplayer);
 
@@ -53,8 +53,8 @@ void reset_all_start_commands(void);
 do {\
   int MY_i;\
   struct player *NAME_pplayer;\
-  log_debug("shuffled_players_iterate @ %s line %d",\
-            __FILE__, __LINE__);\
+  freelog(LOG_DEBUG, "shuffled_players_iterate @ %s line %d",\
+          __FILE__, __LINE__);\
   for (MY_i = 0; MY_i < player_slot_count(); MY_i++) {\
     NAME_pplayer = shuffled_player(MY_i);\
     if (NAME_pplayer != NULL) {\
@@ -83,9 +83,5 @@ void update_players_after_alliance_breakup(struct player* pplayer,
 /* Player counts, total player_count() is in common/player.c */
 int barbarian_count(void);
 int normal_player_count(void);
-
-void player_status_add(struct player *plr, enum player_status status);
-bool player_status_check(struct player *plr, enum player_status status);
-void player_status_reset(struct player *plr);
 
 #endif  /* FC__PLRHAND_H */
