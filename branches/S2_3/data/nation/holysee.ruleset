@@ -1,0 +1,78 @@
+[nation_holysee]
+
+name = _("Holy")
+plural = _("?plural:Holy See")
+groups="Medieval", "Early Modern", "Modern", "European"
+legend=_("The Holy See is the episcopal jurisdiction of the Bishop of\
+ Rome commonly known as the Pope, and is the preeminent episcopal see\
+ of the Catholic Church, forming the central government of the Church.")
+
+leaders = {
+ "name",                "sex"
+ "Petrus",              "Male"
+ "Clemens I",           "Male"
+ "Leo I",               "Male"
+ "Gregorius I",         "Male"
+ "Ioanna",              "Female"
+ "Innocentius III",     "Male"
+ "Adrianus VI",         "Male"
+ "Pius IX",             "Male"
+ "Ioannes Paulus II",   "Male"
+ "Benedictus XVI",      "Male"
+}
+
+ruler_titles = {
+ "government",     "male_title",      "female_title"
+ "Anarchy",        _("Antipope %s"),  _("Antipopess %s")
+ "Fundamentalism", _("Patriarch %s"), _("?female:Patriarch %s")
+ "Monarchy",       _("Pope %s"),      _("Popess %s")
+ "Republic",       _("Cardinal %s"),  _("?female:Cardinal %s")
+}
+
+flag = "vatican"
+flag_alt = "constantine"
+city_style = "Classical"
+
+init_techs=""
+init_buildings=""
+init_government="Despotism"
+init_units=""
+
+conflicts_with = "Roman"
+civilwar_nations = "Roman", "Holy Roman", "Swiss"
+
+cities =
+ "Sanctus Petrus",
+ "Sanctus Georgius",
+ "Sanctus Daniel",
+ "Sancta Lucia",
+ "Sancta Monica",
+ "Sancti Ancheli",
+ "Sancti Martyres",
+ "Sancts Severinus",
+ "Sanctus Marcus",
+ "Sanctus Andreas",
+ "Sanctus Paulus",
+ "Sanctus Lucas",
+ "Sanctus Matthaeus",
+ "Sanctus Archangelus",
+ "Sanctus Patricius",
+ "Sanctus Vitus",
+ "Sanctus Ioannis",
+ "Sanctus Bernardus",
+ "Sancta Rosalia",
+ "Sanctus Julius",
+ "Sancti Gemini",
+ "Sanctus Anthonius",
+ "Sancta Rosa",
+ "Sanctus Faustus",
+ "Sanctus Tiberius",
+ "Sancta Maria",
+ "Sanctus Iosephus",
+ "Sancta Martha",
+ "Sancto Renatus",
+ "Sanctus Remus",
+ "Sancta Clara",
+ "Sanctus Franciscus", 
+ "Sanctus Laurentius",
+ "Sanctus Achilles"

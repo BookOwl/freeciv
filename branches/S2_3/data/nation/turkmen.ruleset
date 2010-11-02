@@ -1,0 +1,55 @@
+[nation_turkmen]
+
+name=_("Turkmen")
+plural=_("?plural:Turkmens")
+groups="Modern", "Asian"
+legend=_("Nation in Central Asia. Conquered by the Russian Empire\
+ in 19th century, Turkmenistan got independence\
+ from the Soviet Union in 1991.")
+
+leaders = {
+ "name",                "sex"
+ "Arsaces I",           "Male" ; Founder of the Parthian Empire.
+ "Mithridates II",      "Male" ; Ruler of Pathria.
+ "Ardashir-i Papagan",  "Male" ; Founder of Sassanid Empire
+                               ; (see persian.ruleset).
+ "Seljuk",              "Male" ; Founder of Seljuk dynasty and the state.
+ "Saparmyrat Nyýazow",  "Male" ; Post-independence president.
+}
+
+ruler_titles = {
+ "government",      "male_title",      "female_title"
+ "Despotism",       _("%s Khan"),      _("%s Khatan")
+ "Monarchy",        _("%s Khagan"),    _("?female:%s Khagan")
+}
+
+flag="turkmenistan"
+flag_alt = "-"
+city_style = "Classical"
+
+init_techs=""
+init_buildings=""
+init_government="Despotism"
+init_units=""
+
+civilwar_nations = "uzbek", "kazakh", "iranian", "persian", "Afghani"
+
+cities =
+ "Ashgabat",
+ "Mary",
+ "Nebitdag",
+ "Dashhowuz",
+ "Chärjew",
+ "Yerbent",
+ "Gyzylgaya",
+ "Kerki",
+ "Gowurdak",
+ "Gushgy",
+ "Tejen",
+ "Saragt",
+ "Bayramaly",
+ "Esenguly",
+ "Gumdag",
+ "Gyzylarbat",
+ "Turkmenbashi",
+ "Bekdash"

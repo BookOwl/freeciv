@@ -1,0 +1,216 @@
+[nation_basque]
+
+name=_("Basque")
+plural=_("?plural:Basques")
+groups="Ancient", "Medieval", "European"
+legend=_("The Basques have lived since times immemorial by the western\
+ foothills of the Pyrenees.\
+ By maintaining their age-old cultural traditions, and keeping their\
+ historic identity alive, the Basques provide a link with man's distant\
+ past. Euskara, the language spoken by the Basque people, is probably the\
+ oldest living language in Europe and has no known relatives.")
+
+leaders = {
+ "name",                        "sex"
+ "Eneko Aritza",                "Male"
+ "Antso III.a Gartzes Nagusia", "Male"
+ "Katalina I.a Nafarroakoa",    "Female"
+ "Tomas Zumalakarregi",         "Male"
+ "Sabino Arana",                "Male"
+ "Dolores Ibarruri",            "Female"
+ "Jose Antonio Agirre",         "Male"
+ "Fernando Buesa",              "Male"
+ "Patxi Iturrioz",              "Male"
+ "Federiko Krutwig",            "Male"
+ "Jesus Maria Leizaola",        "Male"
+ "Mario Onaindia",              "Male"
+ "Ramón Rubial Cavia",          "Male"
+ "Juan José Ibarretxe",         "Male"
+}
+
+ruler_titles = {
+ "government",     "male_title",        "female_title"
+ ; /* TRANS: Lehendakari = Basque neologism equivalent with President */
+ "Democracy",      _("Lehendakari %s"), _("?female:Lehendakari %s")
+}
+
+flag="euskadi"
+flag_alt = "-"
+city_style = "Celtic"
+
+init_techs=""
+init_buildings=""
+init_government="Despotism"
+init_units=""
+
+civilwar_nations="spanish", "french"
+
+cities =
+;traditional capital
+ "Gernika",		;Guernica
+
+;traditional provincial capitals
+ "Bilbao (ocean)",	;Bilbao
+ "Gasteiz",		;Vitoria
+ "Iruñea",		;Pamplona
+ "Donostia (ocean)",	;San Sebastián
+ "Baiona (ocean)",	;Bayonne
+ "Maule-Lextarre",	;Mauléon-Licharre
+ "Donibane Garazi",	;Saint-Jean-Pied-de-Port
+
+;other large towns
+ "Barakaldo",		;Baracaldo
+ "Getxo",		;Guecho
+ "Irun",		;Irún
+ "Portugalete",		;Portugalete
+ "Santurtzi",		;Santurce
+ "Basauri",		;Basauri
+ "Errenteria",		;Rentería
+ "Angelu",		;Anglet
+ "Leioa",		;Lejoa
+ "Sestao",		;Sestao
+ "Galdakao",		;Galdácano
+ "Durango",		;Durango
+ "Eibar",		;Éibar
+ "Biarritz",		;Biarritz
+ "Erandio",		;Erandio
+ "Zarautz",		;Zarauz
+ "Barañain",		;Barañáin
+ "Arrasate",		;Mondragón
+ "Hernani",		;Hernani
+ "Burlata",		;Burlada
+
+;other towns
+ "Lasarte-Oria",
+ "Hondarribia",
+ "Bergara",
+ "Andoain",
+ "Azpeitia",
+ "Lizarra",
+ "Hendaia",
+ "Donibane Lohizune",
+ "Zizur Nagusia",
+ "Elgoibar",
+ "Donapaleu",
+ "Oñati",
+ "Antsoain",
+ "Zumarraga",
+ "Oiartzun",
+ "Etxebarri",
+ "Zalla",
+ "Urruña",
+ "Altsasu",
+ "Baigorri",
+ "Aretxabaleta",
+ "Kanbo",
+ "Bidarte",
+ "Lazkao",
+ "Bidaxune",
+ "Orio",
+ "Arreaga",
+ "Laudio",
+ "Tolosa",
+ "Pasaia",
+ "Beasain",
+ "Atarrabia",
+ "Ansoain",
+ "Amurrio",
+ "Ordizia",
+ "Donazaharre",
+ "Legazpi",
+ "Zumaia",
+ "Berriozar",
+ "Baztan",
+ "Urretxu",
+ "Aretxabaleta",
+ "Lezo",
+ "Aranguren",
+ "Peralta",
+ "Urnieta",
+ "Ibarra",
+ "Uharte",
+ "Soraluze",
+ "Agurain",
+ "Eskoriatza",
+ "Atharratze-Sorholüze",
+ "Astigarraga",
+ "Azagra",
+ "Plentzia",
+ "Urruña",
+ "Bera",
+ "Viana",
+ "Zestoa",
+ "Zizurkil",
+ "Etxarri-Aranatz",
+ "Barkoxe",
+ "Getaria",
+ "Irurtzun",
+ "Bokale",
+ "Aiara",
+ "Agoitz",
+ "Gorlitz",
+ "Idiazabal",
+ "Larraga",
+ "Iruña Oka",
+ "Zuia",
+ "Olazagutia",
+ "Anoeta",
+ "Ultzama",
+ "Esteribar",
+ "Ainhoa",
+ "Deierri",
+ "Ataun",
+ "Zaldibia",
+ "Doneztebe",
+ "Sohüta",
+ "Uztaritze",
+ "Aramaio",
+ "Biasteri",
+ "Mendaro",
+ "Liginaga-Astüe",
+ "Ziburru",
+ "Legutiano",
+ "Lumbier",
+ "Galar",
+ "Arnegi",
+ "Ormaiztegi",
+ "Lekunberri",
+ "Irura",
+ "Oibar",
+ "Oteiza",
+ "Olaberria",
+ "Okondo",
+ "Urkabustaiz",
+ "Goizueta",
+ "Etxalar",
+ "Uharte-Arakil",
+ "Erro",
+ "Arraia-Maeztu",
+ "Arrazua-Ubarrundia",
+ "Berbinzana",
+ "Bertizarana",
+ "Errezil",
+ "Igantzi",
+ "Bildoze-Onizepea",
+ "Lizartza",
+ "Bidegoian",
+ "Gabiria",
+ "Imotz",
+ "Donamaria",
+ "Samaniego",
+ "Irisarri",
+ "Larraine",
+ "Iholdi",
+ "Ollo",
+ "Erronkari",
+ "Azkaine",
+ "Zubieta",
+ "Sara",
+ "Elorrio",
+ "Orduña",
+ "Senperre",
+ "Ürrustoi-Larrabile"
+
+
+
+

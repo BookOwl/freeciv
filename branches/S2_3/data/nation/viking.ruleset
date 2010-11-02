@@ -1,0 +1,99 @@
+[nation_viking]
+
+name=_("Viking")
+plural=_("?plural:Vikings")
+groups="Medieval", "European"
+legend=_("The Vikings raided and traded along the coasts of Europe\
+ between 800 AD and 1100 AD. Viking raiders eventually became the rulers\
+ of Normandy, Russia, and a short-lived kingdom in Sicily.")
+
+leaders = {
+ "name",                "sex"
+ "Aud Ivarsdottir",     "Female" ; Danish royalty (7th century)
+ "Rørik",               "Male" ; Swedish viking and founder of Kiev
+                               ; (9th century)
+ "Gudfred",             "Male" ; Danish royalty (9th century)
+ "Harald Hårfagre",     "Male" ; Norwegian king (9th century)
+ "Hrolf Gangr",         "Male" ; Viking king of Normandy a.k.a "Rollo"
+                               ; (9th century)
+ "Styrbjörn Sterki",    "Male" ; Swedish royalty (10th century)
+ "Erik Blodøks",        "Male" ; Norwegian king (10th century)
+ "Olav Trygvasson",     "Male" ; Norwegian royalty (10th century)
+ "Olav Haraldsson",     "Male" ; Norwegian king (11th century)
+ "Harald Hardråde",     "Male" ; Norwegian king (11th century)
+ "Sigurd Jorsalfare",   "Male" ; Norwegian king (12th century)
+ "Magnus Berrføtt",     "Male" ; Norwegian king (12th century)
+ "Magnus Lagabøter",    "Male" ; Norwegian king (13th century)
+}
+
+ruler_titles = {
+ "government",   "male_title",           "female_title"
+ "Despotism",    _("%s Jarl"),           _("?female:%s Jarl")
+ "Democracy",    _("Prime Minister %s"), _("?female:Prime Minister %s")
+}
+
+flag="viking"
+flag_alt="norway"	; Used previously
+city_style="European"
+
+init_techs=""
+init_buildings=""
+init_government="Despotism"
+init_units=""
+
+; We do not want the Vikings to start together with any Scandinavian nation.
+conflicts_with="danish", "icelandic", "norwegian", "swedish"
+
+civilwar_nations=
+; Scandinavian nations
+ "danish", "icelandic", "norwegian", "swedish",
+; Other nations claiming viking heritage
+ "finnish", "ruthenian", "scottish", "norman"
+
+cities =
+ "Skiringssal",		; Viking era name for Kaupang, Norway
+ "Birka",
+ "Ribe",
+ "Hedeby",
+ "Nidaros",
+ "Reykjavik (ocean)",
+ "Torshavn (ocean)",
+ "Bjørgvin",
+ "Jorvik (ocean)",
+ "Fjaler",
+ "Vikarskeid",
+ "Hvitaby",
+ "Torsberg (mountains)",
+ "Bålagardsida",
+ "Odinsøy",
+ "Trasvik (ocean)",
+ "Steinvågen",
+ "Folland",
+ "Medalhus",
+ "Vendelskage",
+ "Vigra",
+ "Haugseid",
+ "Sudatorp",
+ "Omd",
+ "Håstein",
+ "Fyrileiv",
+ "Kjarrekstader",
+ "Gresvik (ocean)",
+ "Valsnes (river)",
+ "Lusbrei",
+ "Åros",
+ "Rossanes",
+ "Kantaraborg (grassland)",
+ "Lejre",
+ "Kongssund (ocean)",
+ "Anger",
+ "Gaular",
+ "Vardynjar",
+ "Dimun",
+ "Dingenes (ocean)",
+ "Brekke",
+ "Florvåg",
+ "Aldeigjuborg (grassland)",
+ "Bøle",
+ "Jungufurda",
+ "Apardjon"

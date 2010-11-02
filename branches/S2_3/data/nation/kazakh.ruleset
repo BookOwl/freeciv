@@ -1,0 +1,80 @@
+[nation_kazakh]
+
+name=_("Kazakh")
+plural=_("?plural:Kazakhs")
+groups="Early Modern", "Modern", "Asian"
+legend=_("Kazakhs are descendants of Turkic and Mongolian nomadic tribes.\
+ Conquered by Russia in the 18th century, Kazahstan became independent in\
+ 1991 with the dissolution of the Soviet Union. It is one of ten largest\
+ states in the world by area.")
+
+leaders = {
+ "name",                "sex"
+ "Kerei",               "Male" ; Khan of Kazakh Khanate.
+ "Zhanibek",            "Male" ; Khan of Kazakh Khanate.
+ "Kasym",               "Male" ; Khan of Kazakh Khanate.
+ "Abul Khair",          "Male" ; Ruler of Junior Jüz.
+ "Ablai",               "Male" ; Ruler of Middle Jüz.
+ "Kenesary Kasymov",   "Male"  ; Leader of uprising against Russians.
+ "Dinmukhamed Konayev","Male"  ; Soviet time leader.
+}
+
+ruler_titles = {
+ "government",      "male_title",      "female_title"
+ "Despotism",       _("%s Khan"),      _("%s Khatan")
+ "Monarchy",        _("%s Khagan"),    _("?female:%s Khagan")
+}
+
+flag="kazakhstan"
+flag_alt = "-"
+city_style = "Asian"
+
+init_techs=""
+init_buildings=""
+init_government="Despotism"
+init_units=""
+
+civilwar_nations="uzbek", "turkmen", "tajik", "kyrgyz", "russian"
+
+cities =
+  "Taraz",
+  "Turkistan",
+  "Shymkent",
+  "Oral",
+  "Pavlodar", 
+  "Semey",
+  "Petropavlovsk",
+  "Almaty",
+  "Astana",
+  "Kokshetau", 
+  "Qyzylorda",
+  "Oskemen",
+  "Aqtobe",
+  "Qostanay",
+  "Atyrau", 
+  "Qaraghandy",
+  "Zharkent",
+  "Atbasar",
+  "Temirtau",
+  "Balqash", 
+  "Taldyqorghan",
+  "Ayakoz",
+  "Aral",
+  "Ekibastuz",
+  "Zhezqazghan",
+  "Rudnyy",
+  "Aqtau",
+  "Bayqongyr",
+  "Zaysan", 
+  "Arqalyq",
+  "Qapshaghay",
+  "Esil",
+  "Aqsay",
+  "Zhangatas", 
+  "Embi",
+  "Beyneu",
+  "Shu",
+  "Maqat",
+  "Lepsi",
+  "Shalqar",
+  "Saryshaghan"

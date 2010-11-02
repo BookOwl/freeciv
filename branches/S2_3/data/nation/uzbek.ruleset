@@ -1,0 +1,79 @@
+[nation_uzbek]
+
+name=_("Uzbek")
+plural=_("?plural:Uzbeks")
+groups="Modern", "Asian"
+legend=_("Nation in Central Asia. Uzbekistan was the center of\
+ ancient states such as Khoresm, the Khanate of Bukhara, the Khanate of\
+ Kokand, and others. Conquered by the Russian Empire in 19th century,\
+ Uzbekistan got independence from the Soviet Union in 1991.")
+
+leaders = {
+ "name",                        "sex"
+ "Shohruh",                     "Male" ; Khan of Kokand
+ "Shayboniy",                   "Male"
+ "Temur",                       "Male" ; Founder of Timurid dynasty
+ "Ulug'bek",                    "Male" ; Timurid ruler
+ "Abdulla II",                  "Male" ; Khan of Bukhara
+ "Ilbars I",                    "Male" ; Founder of Khanate of Kiva
+}
+
+ruler_titles = {
+ "government",      "male_title",      "female_title"
+ "Despotism",       _("%s Khan"),      _("%s Khatan")
+ "Monarchy",        _("Emir %s"),      _("Emira %s")
+}
+
+flag="uzbekistan"
+flag_alt = "-"
+city_style = "Classical"
+
+init_techs=""
+init_buildings=""
+init_government="Despotism"
+init_units=""
+
+conflicts_with="Timurid" ; Uzbeks considers Timur their founding father
+civilwar_nations="Turkmen", "Tajik", "Kazakh", "Kyrgyz", "Afghani"
+
+cities =
+ "Buxoro", ; Bukhara
+ "Samarqand", ; Samarkand
+ "Qo'qon", ; Kokand
+ "Xiva", ; Khiva
+ "Toshkent", ; Tashkent
+ "Namangan",
+ "Andijon", ; Andijan
+ "Nukus",
+ "Farg'ona", ; Fergana
+ "Qarshi",
+ "Chirchiq", ; Chirchik
+ "Marg'ilon", ; Margilan
+ "Urganch", ; Urgench
+ "Jizzax", ; Jizzakh
+ "Olmaliq", ; Almalyk
+ "Angren",
+ "Navoiy",
+ "Kattaqo'rg'on", ; Kattakurgan
+ "Bekobod", ; Bekabad
+ "Juma",
+ "Zarafshon", ; Zarafshan
+ "Yangiyo'l", ; Yangiyul
+ "Guliston",
+ "Shahrisabz",
+ "To'rtko'l", ; Turtkul
+ "Urgut",
+ "Kosonsoy", ; Kasansay
+ "Asaka",
+ "Termiz", ; Termez
+ "Chimboy",
+ "Beruniy",
+ "Nurota", ; Nurata
+ "Yangiyer",
+ "Uchquduq", ; Uchkuduk
+ "Rishton",
+ "To'ytepa", ; Toytepa
+ "G'ijduvon", ; Gijduvan
+ "Vobkent", ; Vabkent
+ "Qo'ng'irot", ; Kungrad
+ "Mo'ynoq" ; Muynak
